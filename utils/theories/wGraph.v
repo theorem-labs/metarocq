@@ -1546,17 +1546,66 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
     Definition bf_relax_edges (m : bf_state) : bf_state :=
       EdgeSet.fold bf_relax_edge (E G) m.
 
+    Definition nbar_eqb (a b : Nbar.t) : bool :=
+      match a, b with
+      | Some x, Some y => Z.eqb x y
+      | None, None => true
+      | _, _ => false
+      end.
+
+    Definition bf_state_eqb (m1 m2 : bf_state) : bool :=
+      VMap.equal nbar_eqb m1 m2.
+
     Fixpoint bf_relax (fuel : nat) (m : bf_state) : bf_state :=
       match fuel with
       | 0%nat => m
       | Datatypes.S fuel => bf_relax fuel (bf_relax_edges m)
       end.
 
+    Fixpoint bf_relax_early (fuel : nat) (m : bf_state) : bf_state :=
+      match fuel with
+      | 0%nat => m
+      | Datatypes.S fuel =>
+        let m' := bf_relax_edges m in
+        if bf_state_eqb m m' then m
+        else bf_relax_early fuel m'
+      end.
+
     Definition bf_initial (x : V.t) : bf_state :=
       VMap.add x (Some 0) (@VMap.empty Nbar.t).
 
+    Lemma nbar_eqb_eq a b : nbar_eqb a b = true <-> a = b.
+    Proof using Type.
+      destruct a as [x|], b as [y|]; simpl; try (split; intro H; [discriminate|congruence]).
+      - rewrite Z.eqb_eq. split; intro H; congruence.
+      - split; reflexivity.
+    Qed.
+
+    Lemma bf_state_eqb_lookup m1 m2 :
+      bf_state_eqb m1 m2 = true ->
+      forall x, bf_lookup m1 x = bf_lookup m2 x.
+    Proof using Type.
+      unfold bf_state_eqb, bf_lookup.
+      intro Heq. intro x.
+      assert (Hequiv := VMap.equal_2 Heq).
+      destruct Hequiv as [Hin Hcmp].
+      destruct (VMapFact.In_dec m1 x) as [[v1 Hmt1]|Hin1].
+      - assert (Hin2 : VMap.In x m2) by (apply Hin; exists v1; exact Hmt1).
+        destruct Hin2 as [v2 Hmt2].
+        rewrite (VMap.find_1 Hmt1).
+        rewrite (VMap.find_1 Hmt2).
+        f_equal. apply nbar_eqb_eq. exact (Hcmp x v1 v2 Hmt1 Hmt2).
+      - assert (Hni2 : ~ VMap.In x m2).
+        { intro H2. apply Hin1. apply Hin. exact H2. }
+        apply VMapFact.not_find_in_iff in Hin1.
+        apply VMapFact.not_find_in_iff in Hni2.
+        rewrite Hin1.
+        rewrite Hni2. reflexivity.
+    Qed.
+
+
     Definition bf_distances (x : V.t) : bf_state :=
-      bf_relax (VSet.cardinal (V G)) (bf_initial x).
+      bf_relax_early (VSet.cardinal (V G)) (bf_initial x).
 
     Definition bf_distance (x y : V.t) : Nbar.t :=
       bf_lookup (bf_distances x) y.
@@ -1763,6 +1812,50 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
       rewrite bf_relax_add.
       apply bf_relax_increases.
     Qed.
+    Lemma bf_relax_monotone fuel m m' :
+      bf_le m m' -> bf_le (bf_relax fuel m) (bf_relax fuel m').
+    Proof using Type.
+      revert m m'; induction fuel; cbn; intros m m' H.
+      - exact H.
+      - apply IHfuel. apply bf_relax_edges_monotone. exact H.
+    Qed.
+
+    Lemma bf_relax_edges_idempotent m :
+      bf_state_eqb m (bf_relax_edges m) = true ->
+      forall fuel, bf_le (bf_relax fuel m) m.
+    Proof using Type.
+      intros Heq.
+      assert (Hlookup : forall x, bf_lookup m x = bf_lookup (bf_relax_edges m) x).
+      { apply bf_state_eqb_lookup; exact Heq. }
+      assert (Hle_back : bf_le (bf_relax_edges m) m).
+      { intro x. rewrite <- Hlookup. apply Nbar.le_refl. }
+      induction fuel; cbn.
+      - apply bf_le_refl.
+      - intro x. etransitivity.
+        + apply (bf_relax_monotone fuel _ _ Hle_back x).
+        + apply IHfuel.
+    Qed.
+
+    Lemma bf_relax_early_eq fuel m :
+      bf_le (bf_relax fuel m) (bf_relax_early fuel m) /\
+      bf_le (bf_relax_early fuel m) (bf_relax fuel m).
+    Proof using Type.
+      revert m; induction fuel; cbn; intro m.
+      - split; apply bf_le_refl.
+      - destruct (bf_state_eqb m (bf_relax_edges m)) eqn:Heq.
+        + split.
+          * (* bf_relax fuel (bf_relax_edges m) <= m *)
+            assert (Hle_back : bf_le (bf_relax_edges m) m).
+            { intro x. rewrite <- (bf_state_eqb_lookup _ _ Heq x). apply Nbar.le_refl. }
+            intro x. etransitivity.
+            -- apply (bf_relax_monotone fuel _ _ Hle_back x).
+            -- apply (bf_relax_edges_idempotent m Heq fuel x).
+          * (* m <= bf_relax fuel (bf_relax_edges m) *)
+            intro x. etransitivity.
+            -- apply (bf_relax_edges_increases m x).
+            -- apply (bf_relax_increases fuel (bf_relax_edges m) x).
+        + exact (IHfuel (bf_relax_edges m)).
+    Qed.
 
     Fixpoint bf_path_steps {x y} (p : PathOf x y) : nat :=
       match p with
@@ -1863,7 +1956,9 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
       eapply Nbar.le_trans.
       - rewrite <- Hp, sweight_weight.
         apply bf_path_lower_initial.
-      - apply (bf_relax_le_fuel _ _ (bf_initial x) Hb y).
+      - eapply Nbar.le_trans.
+        + apply (bf_relax_le_fuel _ _ (bf_initial x) Hb y).
+        + apply (proj1 (bf_relax_early_eq (VSet.cardinal (V G)) (bf_initial x)) y).
     Qed.
     Definition bf_bounded (x : V.t) (m : bf_state) :=
       forall y, Nbar.le (bf_lookup m y) (lsp x y).
@@ -1936,7 +2031,9 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
       Nbar.le (bf_distance x y) (lsp x y).
     Proof using HI.
       unfold bf_distance, bf_distances.
-      apply bf_relax_bounded, bf_initial_bounded.
+      eapply Nbar.le_trans.
+      - apply (proj2 (bf_relax_early_eq (VSet.cardinal (V G)) (bf_initial x)) y).
+      - apply bf_relax_bounded. apply bf_initial_bounded.
     Qed.
 
     Lemma bf_distance_eq {HG : acyclic_no_loop} x y :
