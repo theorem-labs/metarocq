@@ -3771,6 +3771,16 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
       let bs := border_set G1 ext in
       VSet.for_all (fun x => VSet.for_all (fun y => lsp G1 x y == lsp G2 x y) bs) bs.
 
+    Definition is_full_extension' (G1 G2 : t) : bool :=
+      let ext := EdgeSet.diff (E G2) (E G1) in
+      let bs := border_set G1 ext in
+      VSet.for_all
+        (fun x =>
+           let d1 := bf_distances G1 x in
+           let d2 := bf_distances G2 x in
+           VSet.for_all (fun y => bf_lookup d1 y == bf_lookup d2 y) bs) bs.
+
+
     Lemma lsp_eq_is_full_extension (G1 G2 : t) :
       full_subgraph G1 G2 -> is_full_extension G1 G2.
     Proof.
@@ -3812,6 +3822,48 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
       - move=> ext; constructor=> //; by apply: is_full_extension_lsp_dominate.
       - apply: lsp_eq_is_full_extension.
     Qed.
+    Lemma is_full_extension'_spec (G1 G2 : t)
+          `{invariants G1, invariants G2, acyclic_no_loop G2} :
+      subgraph G1 G2 ->
+      is_full_extension' G1 G2 <-> full_subgraph G1 G2.
+    Proof.
+      intro Hsub.
+      assert (Hac1 : acyclic_no_loop G1).
+      { apply (subgraph_acyclic G1 G2 Hsub); assumption. }
+      rewrite <- (is_full_extension_spec G1 G2 Hsub).
+      unfold is_full_extension', is_full_extension.
+      set (ext := EdgeSet.diff (E G2) (E G1)).
+      set (bs := border_set G1 ext).
+      split.
+      - intro Hfast.
+        apply/VSet.for_all_spec=> x Hx.
+        apply/VSet.for_all_spec=> y Hy.
+        apply/ReflectEq.eqb_spec.
+        move: Hfast=> /VSet.for_all_spec/(_ x Hx)/VSet.for_all_spec/(_ y Hy).
+        move=> /(@ReflectEq.eqb_spec _ reflectEq_nbar) Hbf.
+        change (bf_distance G1 x y = bf_distance G2 x y) in Hbf.
+        assert (Hbf1 : bf_distance G1 x y = lsp G1 x y).
+        { apply bf_distance_eq; [exact H | exact Hac1]. }
+        assert (Hbf2 : bf_distance G2 x y = lsp G2 x y).
+        { apply bf_distance_eq; [exact H0 | exact H1]. }
+        rewrite Hbf1 in Hbf.
+        rewrite Hbf2 in Hbf.
+        exact Hbf.
+      - intro Hslow.
+        apply/VSet.for_all_spec=> x Hx.
+        apply/VSet.for_all_spec=> y Hy.
+        apply/ReflectEq.eqb_spec.
+        change (bf_distance G1 x y = bf_distance G2 x y).
+        assert (Hbf1 : bf_distance G1 x y = lsp G1 x y).
+        { apply bf_distance_eq; [exact H | exact Hac1]. }
+        assert (Hbf2 : bf_distance G2 x y = lsp G2 x y).
+        { apply bf_distance_eq; [exact H0 | exact H1]. }
+        rewrite Hbf1.
+        rewrite Hbf2.
+        move: Hslow=> /VSet.for_all_spec/(_ x Hx)/VSet.for_all_spec/(_ y Hy).
+        now move=> /(@ReflectEq.eqb_spec _ reflectEq_nbar).
+    Qed.
+
 
     (* Remove ? *)
     (* Defined for completeness, but clearly not what should be used in practice *)
