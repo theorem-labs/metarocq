@@ -87,10 +87,7 @@ In addition to this representation of terms, Template Rocq includes:
   the style of MTac. Monadic programs `p : TemplateMonad A` can be run using `MetaRocq Run p`.
 
 - A formalization of the typing rules reflecting the ones of Rocq, covering all of Rocq
-  except eta-expansion and native template-polymorphism rules. Before SafeCheck runs, its
-  OCaml quoter translates template-polymorphic inductives into ordinary universe-polymorphic
-  declarations; that translation is trusted, while the resulting program remains in the
-  formalized PCUIC calculus.
+  except eta-expansion and template polymorphism.
 
 ### [PCUIC](https://github.com/MetaRocq/metarocq/blob/-/pcuic/theories)
 

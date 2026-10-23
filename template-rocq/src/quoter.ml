@@ -234,50 +234,37 @@ struct
       (UVars.UContext.constraints
          (UVars.AbstractContext.repr template.template_context))
 
-  type template_universe_scope =
-    | Global_scope
-    | Polymorphic_scope of UVars.AbstractContext.t
-
   type template_universe_context = {
-    scope : template_universe_scope;
     mutable universe_levels : Univ.Level.t Univ.Universe.Map.t;
+    mutable fresh_levels : Univ.Level.Set.t;
     mutable fresh_constraints : Univ.UnivConstraints.t;
     mutable next_fresh_level : int;
-    required_global_levels : Univ.Level.Set.t ref;
   }
 
-  let make_template_universe_context scope required_global_levels = {
-    scope;
+  let make_template_universe_context () = {
     universe_levels = Univ.Universe.Map.empty;
+    fresh_levels = Univ.Level.Set.empty;
     fresh_constraints = Univ.UnivConstraints.empty;
     next_fresh_level = 0;
-    required_global_levels;
   }
 
   let fresh_template_level graph context =
-    match context.scope with
-    | Polymorphic_scope uctx ->
-      let { UVars.univs; _ } = UVars.AbstractContext.names uctx in
-      let index = Array.length univs + context.next_fresh_level in
-      context.next_fresh_level <- context.next_fresh_level + 1;
-      Univ.Level.var index
-    | Global_scope ->
-      let dirpath =
-        Names.DirPath.make [Names.Id.of_string "MetaRocq";
-                            Names.Id.of_string "Template"]
+    let dirpath =
+      Names.DirPath.make [Names.Id.of_string "MetaRocq";
+                          Names.Id.of_string "Template"]
+    in
+    let rec fresh () =
+      let index = context.next_fresh_level in
+      context.next_fresh_level <- index + 1;
+      let level =
+        Univ.Level.make (Univ.UGlobal.make dirpath "algebraic" index)
       in
-      let rec fresh () =
-        let index = context.next_fresh_level in
-        context.next_fresh_level <- index + 1;
-        let level =
-          Univ.Level.make (Univ.UGlobal.make dirpath "algebraic" index)
-        in
-        match UGraph.check_declared_universes graph
-                (Univ.Level.Set.singleton level) with
-        | Ok () -> fresh ()
-        | Error _ -> level
-      in
-      fresh ()
+      match UGraph.check_declared_universes graph
+              (Univ.Level.Set.singleton level) with
+      | Ok () -> fresh ()
+      | Error _ -> level
+    in
+    fresh ()
 
   let template_universe_level ?context env universe =
     match Univ.Universe.level universe with
@@ -309,18 +296,9 @@ struct
           in
           context.universe_levels <-
             Univ.Universe.Map.add universe level context.universe_levels;
-          context.required_global_levels :=
-            Univ.Level.Set.filter
-              (fun component ->
-                 Option.is_empty (Univ.Level.var_index component))
-              (Univ.Universe.levels
-                 ~init:!(context.required_global_levels) universe);
-          begin match context.scope with
-          | Global_scope ->
-            context.required_global_levels :=
-              Univ.Level.Set.add level !(context.required_global_levels)
-          | Polymorphic_scope _ -> ()
-          end;
+          context.fresh_levels <-
+            Univ.Level.Set.add level
+              (Univ.Universe.levels ~init:context.fresh_levels universe);
           context.fresh_constraints <- constraints;
           level
         end
@@ -433,31 +411,6 @@ struct
     match decl with
     | Monomorphic -> Q.mkMonomorphic_ctx ()
     | Polymorphic ctx -> Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context ctx)
-
-  let quote_universes_decl_with_template_levels decl context =
-    match decl, context.scope with
-    | Polymorphic original, Polymorphic_scope _
-      when context.next_fresh_level > 0 ->
-      let { UVars.quals; UVars.univs } =
-        UVars.AbstractContext.names original
-      in
-      let names =
-        Array.init context.next_fresh_level
-          (fun index ->
-             Names.Name
-               (Names.Id.of_string ("algebraic" ^ string_of_int index)))
-      in
-      let univs = Array.append univs names in
-      let constraints =
-        PConstraints.union
-          (UVars.UContext.constraints (UVars.AbstractContext.repr original))
-          context.fresh_constraints
-      in
-      let context = UVars.AbstractContext.make { UVars.quals; UVars.univs }
-          constraints
-      in
-      Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context context)
-    | _ -> quote_universes_decl decl None
 
   let quote_ugraph ?kept ?(extra_constraints = Univ.UnivConstraints.empty)
       (g : UGraph.t) =
