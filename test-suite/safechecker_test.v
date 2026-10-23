@@ -34,6 +34,14 @@ From Stdlib Require Import Ring_theory.
 MetaRocq SafeCheck (prod nat nat).
 MetaRocq SafeCheck (prod True True).
 MetaRocq SafeCheck @Stdlib.setoid_ring.Ring_theory.div_theory.
+From Corelib Require Import CRelationClasses.
+
+(* [iffT] applies template [prod] at [max(i,j)] inside a polymorphic
+   declaration.  It therefore covers scoped algebraic instances, their
+   explicit sort annotations, and the extended universe instance at use. *)
+Definition template_iffT_nat := iffT nat nat.
+MetaRocq SafeCheck template_iffT_nat.
+
 
 
 (* Time MetaRocq SafeCheck @infer_and_print_template_program. *)
