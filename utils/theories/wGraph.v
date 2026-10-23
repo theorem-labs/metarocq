@@ -1955,7 +1955,8 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
 
 
     Definition bf_labelling : labelling :=
-      fun x => to_label (bf_distance (s G) x).
+      let distances := bf_distances (s G) in
+      fun x => to_label (bf_lookup distances x).
 
     Definition correct_labellingb (l : labelling) : bool :=
       Nat.eqb (l (s G)) 0 &&
@@ -1986,10 +1987,13 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
       destruct (lsp_correctness (HG:=HG)) as [Hs He].
       split.
       - unfold bf_labelling.
+        change (to_label (bf_distance (s G) (s G)) = 0%nat).
         rewrite bf_distance_eq.
         exact Hs.
       - intros e Hin.
         unfold bf_labelling.
+        change (Z.of_nat (to_label (bf_distance (s G) e..s)) + e..w <=
+                  Z.of_nat (to_label (bf_distance (s G) e..t))).
         rewrite !bf_distance_eq.
         apply He; exact Hin.
     Qed.
