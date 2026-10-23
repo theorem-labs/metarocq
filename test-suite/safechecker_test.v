@@ -18,6 +18,23 @@ MetaRocq RocqCheck bool_list.
 
 Record template_list_record := { template_list_field : list nat }.
 MetaRocq SafeCheck template_list_record.
+MetaRocq SafeCheck (list nat).
+
+Definition template_list_to_nat : list nat -> nat := fun _ => 0.
+MetaRocq SafeCheck template_list_to_nat.
+
+Definition template_list_match (xs : list nat) : nat :=
+  match xs with
+  | nil => 0
+  | cons x _ => x
+  end.
+MetaRocq SafeCheck template_list_match.
+
+From Stdlib Require Import Ring_theory.
+MetaRocq SafeCheck (prod nat nat).
+MetaRocq SafeCheck (prod True True).
+MetaRocq SafeCheck @Stdlib.setoid_ring.Ring_theory.div_theory.
+
 
 (* Time MetaRocq SafeCheck @infer_and_print_template_program. *)
 (* Uses template polymorphism:

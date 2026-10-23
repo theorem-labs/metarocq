@@ -200,16 +200,12 @@ struct
       UVars.UContext.instance
         (UVars.AbstractContext.repr template.template_context)
     in
-    let bound_qualities, bound_levels =
+    let _, bound_levels =
       UVars.Instance.to_array bound_instance
     in
-    if Array.length bound_qualities <> 0 then
-      CErrors.user_err
-        Pp.(str "Quoting sort-polymorphic template inductives is not supported.");
-    let default_qualities, default_levels =
+    let _, default_levels =
       UVars.Instance.to_array template.template_defaults
     in
-    assert (Array.length default_qualities = 0);
     let level_substitution =
       assert (Array.length default_levels = Array.length bound_levels);
       let rec add_levels index substitution =
@@ -221,10 +217,11 @@ struct
       in
       add_levels 0 Univ.Level.Map.empty
     in
-    ((Sorts.QVar.Map.empty, level_substitution), bound_instance)
+    ((Sorts.QVar.Map.empty, level_substitution),
+     UVars.Instance.of_array ([||], bound_levels))
 
   let named_template_context template =
-    let { UVars.quals; UVars.univs } =
+    let { UVars.quals = _; UVars.univs } =
       UVars.AbstractContext.names template.template_context
     in
     let univs =
@@ -233,9 +230,28 @@ struct
            Names.Name (Names.Id.of_string ("template" ^ string_of_int index)))
         univs
     in
-    UVars.AbstractContext.make { UVars.quals; UVars.univs }
+    UVars.AbstractContext.make { UVars.quals = [||]; UVars.univs }
       (UVars.UContext.constraints
          (UVars.AbstractContext.repr template.template_context))
+
+  let template_universe_level env universe =
+    match Univ.Universe.level universe with
+    | Some level -> level
+    | None ->
+      let graph = Environ.universes (snd env) in
+      let rec find_level = function
+        | [] ->
+          CErrors.user_err
+            Pp.(str "Quoting algebraic template universe "
+                ++ Univ.Universe.pr Univ.Level.raw_pr universe
+                ++ str " is not supported.")
+        | (level, shift) :: rest ->
+          if Int.equal shift 0
+             && UGraph.check_eq graph universe (Univ.Universe.make level)
+          then level
+          else find_level rest
+      in
+      find_level (Univ.Universe.repr universe)
 
   let template_instance env sigma mind args default_instance =
     let mib = Environ.lookup_mind (fst mind) (snd env) in
@@ -246,12 +262,9 @@ struct
         UVars.UContext.instance
           (UVars.AbstractContext.repr template.template_context)
       in
-      let bound_qualities, bound_levels =
+      let _, bound_levels =
         UVars.Instance.to_array bound_instance
       in
-      if Array.length bound_qualities <> 0 then
-        CErrors.user_err
-          Pp.(str "Quoting sort-polymorphic template inductives is not supported.");
       let argument_universe arg ~default:_ =
         let type_of_argument =
           EConstr.to_constr sigma
@@ -279,11 +292,8 @@ struct
              match Univ.Level.var_index bound with
              | None -> assert false
              | Some index ->
-               match Univ.Universe.level (Int.Map.get index universe_substitution) with
-               | Some level -> level
-               | None ->
-                 CErrors.user_err
-                   Pp.(str "Quoting algebraic template universes is not supported."))
+               template_universe_level env
+                 (Int.Map.get index universe_substitution))
           bound_levels
       in
       UVars.Instance.of_array ([||], levels)
@@ -488,7 +498,10 @@ struct
         let npar = Q.quote_int ci.Constr.ci_npar in
         let q_relevance = Q.quote_relevance relevance in
         let acc, q_pars = CArray.fold_left_map (fun acc par -> let (qt, acc) = quote_term acc env sigma par in acc, qt) acc pars in
-        let qu = Q.quote_univ_instance u in
+        let qu =
+          Q.quote_univ_instance
+            (template_instance env sigma ci.Constr.ci_ind pars u)
+        in
         let pctx = CaseCompat.case_predicate_context (snd env) ci u pars predctx in
         let qpctx = quote_name_annots predctx in
         let (qpred,acc) = quote_term acc (push_rel_context pctx env) sigma pred in
