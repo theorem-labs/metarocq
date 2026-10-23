@@ -570,20 +570,22 @@ struct
       let _, bound_levels =
         UVars.Instance.to_array bound_instance
       in
+      (* Mirror the kernel's [make_param_univs] (kernel/typeops.ml:417-431):
+         the template universe bound by a parameter is the conclusion sort of
+         the argument's type viewed as an arity, so a parameter such as
+         [P : A -> Type@{u}] (e.g. [sigT]) binds [u]. *)
       let argument_universe arg ~default:_ =
         let type_of_argument =
           EConstr.to_constr sigma
             (Retyping.get_type_of (snd env) sigma (EConstr.of_constr arg))
         in
-        match Constr.kind (Reduction.whd_all (snd env) type_of_argument) with
-        | Constr.Sort Sorts.Prop -> Inductive.TemplateProp
-        | Constr.Sort Sorts.Set ->
-          Inductive.TemplateUniv Univ.Universe.type0
-        | Constr.Sort (Sorts.Type universe) ->
-          Inductive.TemplateUniv universe
-        | Constr.Sort (Sorts.QSort (quality, universe)) ->
+        match snd (Reduction.dest_arity (snd env) type_of_argument) with
+        | Sorts.Prop -> Inductive.TemplateProp
+        | Sorts.Set -> Inductive.TemplateUniv Univ.Universe.type0
+        | Sorts.Type universe -> Inductive.TemplateUniv universe
+        | Sorts.QSort (quality, universe) ->
           Inductive.TemplateAboveProp (quality, universe)
-        | _ ->
+        | Sorts.SProp | exception Reduction.NotArity ->
           CErrors.user_err
             Pp.(str "Could not infer a template-inductive universe from its parameter.")
       in

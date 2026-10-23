@@ -41,6 +41,11 @@ From Corelib Require Import CRelationClasses.
    explicit sort annotations, and the extended universe instance at use. *)
 Definition template_iffT_nat := iffT nat nat.
 MetaRocq SafeCheck template_iffT_nat.
+
+(* [sigT]'s second template parameter is a family [A -> Type@{u}], not a sort;
+   the kernel binds [u] from the arity's conclusion (make_param_univs). *)
+Definition template_sigT_nat := {n : nat & nat}.
+MetaRocq SafeCheck template_sigT_nat.
 Set Universe Polymorphism.
 
 (* This nested use gives [list] the algebraic template instance [max(i,j)].
