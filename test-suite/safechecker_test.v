@@ -41,6 +41,24 @@ From Corelib Require Import CRelationClasses.
    explicit sort annotations, and the extended universe instance at use. *)
 Definition template_iffT_nat := iffT nat nat.
 MetaRocq SafeCheck template_iffT_nat.
+Set Universe Polymorphism.
+
+(* This nested use gives [list] the algebraic template instance [max(i,j)].
+   It exercises the shared representative in both the list instance and the
+   explicit result-sort annotation. *)
+Polymorphic Definition template_list_prod@{i j}
+  (A : Type@{i}) (B : Type@{j}) : Type@{max(i,j)} :=
+  list (prod A B).
+Definition template_list_prod_nat := template_list_prod nat nat.
+MetaRocq SafeCheck template_list_prod_nat.
+
+(* Negative control: [list Type@{i}] lives in [Type@{i+1}], so it must not
+   typecheck at [Type@{i}]. *)
+Fail Polymorphic Definition template_successor_too_low@{i} : Type@{i} :=
+  list Type@{i}.
+
+Unset Universe Polymorphism.
+
 
 
 

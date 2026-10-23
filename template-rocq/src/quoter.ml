@@ -236,6 +236,7 @@ struct
 
   type template_universe_context = {
     mutable universe_levels : Univ.Level.t Univ.Universe.Map.t;
+    mutable fresh_definitions : Univ.Universe.t Univ.Level.Map.t;
     mutable fresh_levels : Univ.Level.Set.t;
     mutable fresh_constraints : Univ.UnivConstraints.t;
     mutable next_fresh_level : int;
@@ -243,6 +244,7 @@ struct
 
   let make_template_universe_context () = {
     universe_levels = Univ.Universe.Map.empty;
+    fresh_definitions = Univ.Level.Map.empty;
     fresh_levels = Univ.Level.Set.empty;
     fresh_constraints = Univ.UnivConstraints.empty;
     next_fresh_level = 0;
@@ -388,9 +390,33 @@ struct
            (fun (level, _) -> not (Univ.Level.equal level Univ.Level.set))
            components)
     else universe
+  let normalize_global_universe context universe =
+    let rec expand_component shift level =
+      match
+        try Some (Univ.Level.Map.find level context.fresh_definitions)
+        with Not_found -> None
+      with
+      | Some definition ->
+        List.concat_map
+          (fun (component, component_shift) ->
+             expand_component (shift + component_shift) component)
+          (Univ.Universe.repr definition)
+      | None -> [level, shift]
+    in
+    Univ.Universe.unrepr
+      (List.concat_map
+         (fun (level, shift) -> expand_component shift level)
+         (Univ.Universe.repr universe))
+
 
 
   let template_universe_level ?context env universe =
+    let universe = simplify_template_universe universe in
+    let universe =
+      match context with
+      | Some context -> normalize_global_universe context universe
+      | None -> universe
+    in
     let universe = simplify_template_universe universe in
     match Univ.Universe.level universe with
     | Some level -> level
@@ -467,6 +493,8 @@ struct
               in
               context.universe_levels <-
                 Univ.Universe.Map.add universe level context.universe_levels;
+              context.fresh_definitions <-
+                Univ.Level.Map.add level universe context.fresh_definitions;
               context.fresh_levels <-
                 Univ.Universe.levels
                   ~init:(Univ.Level.Set.add level context.fresh_levels)
@@ -695,8 +723,24 @@ struct
     in Array.map cofix_arity ts
 
   let quote_term_remember ?universe_context
+      ?(remember_universe_levels = fun _ -> ())
       (add_constant : KerName.t -> 'a -> 'a)
       (add_inductive : Names.inductive -> Declarations.mutual_inductive_body -> 'a -> 'a) =
+    let remember_instance instance =
+      let _, levels = UVars.Instance.to_array instance in
+      let universe_levels =
+        Array.fold_left
+          (fun levels level -> Univ.Level.Set.add level levels)
+          Univ.Level.Set.empty levels
+      in
+      remember_universe_levels universe_levels
+    in
+    let remember_sort = function
+      | Sorts.Type universe | Sorts.QSort (_, universe) ->
+        remember_universe_levels
+          (Univ.Universe.levels ~init:Univ.Level.Set.empty universe)
+      | _ -> ()
+    in
     let rec quote_term (acc : 'a) env sigma trm =
       let aux acc env trm =
       match Constr.kind trm with
@@ -707,6 +751,7 @@ struct
 	      let (args',acc) = quote_terms quote_term acc env sigma (Array.of_list args) in
          (Q.mkEvar (Q.quote_int (Evar.repr n)) args', acc)
       | Constr.Sort s ->
+        let () = remember_sort s in
         (Q.mkSort (quote_sort_with_template ?universe_context env s), acc)
       | Constr.Cast (c,k,t) ->
               let (c',acc) = quote_term acc env sigma c in
@@ -734,6 +779,7 @@ struct
       | Constr.App (f,xs) ->
         begin match Constr.kind f with
         | Constr.Ind (mind, pu) ->
+          let () = remember_instance pu in
           let mib = Environ.lookup_mind (fst mind) (snd env) in
           let acc = add_inductive mind mib acc in
           let pu =
@@ -742,12 +788,14 @@ struct
           let pu =
             extend_instance_for_inductive ?context:universe_context env mind pu
           in
+          let () = remember_instance pu in
           let xs', acc = quote_terms quote_term acc env sigma xs in
           (Q.mkApp
              (Q.mkInd (quote_inductive' mind) (Q.quote_univ_instance pu))
              xs',
            acc)
         | Constr.Construct ((mind, c), pu) ->
+          let () = remember_instance pu in
           let mib = Environ.lookup_mind (fst mind) (snd env) in
           let acc = add_inductive mind mib acc in
           let pu =
@@ -756,6 +804,7 @@ struct
           let pu =
             extend_instance_for_inductive ?context:universe_context env mind pu
           in
+          let () = remember_instance pu in
           let xs', acc = quote_terms quote_term acc env sigma xs in
           (Q.mkApp
              (Q.mkConstruct
@@ -770,15 +819,18 @@ struct
         end
 
       | Constr.Const (c,pu) ->
+        let () = remember_instance pu in
         let kn = Constant.canonical c in
         (* Quote the declaration first so that, if its abstract context was
            extended with extra bound levels, [extend_instance_for_decl] can
            supply them here. *)
         let acc = add_constant kn acc in
         let pu = extend_instance_for_decl ?context:universe_context env kn pu in
+        let () = remember_instance pu in
         (Q.mkConst (Q.quote_kn kn) (Q.quote_univ_instance pu), acc)
 
       | Constr.Construct ((mind,c),pu) ->
+        let () = remember_instance pu in
         let mib = Environ.lookup_mind (fst mind) (snd env) in
         let acc = add_inductive mind mib acc in
         let pu =
@@ -787,12 +839,14 @@ struct
         let pu =
           extend_instance_for_inductive ?context:universe_context env mind pu
         in
+        let () = remember_instance pu in
         (Q.mkConstruct
            (quote_inductive' mind, Q.quote_int (c - 1))
            (Q.quote_univ_instance pu),
          acc)
 
       | Constr.Ind (mind,pu) ->
+        let () = remember_instance pu in
         let mib = Environ.lookup_mind (fst mind) (snd env) in
         let acc = add_inductive mind mib acc in
         let pu =
@@ -801,9 +855,11 @@ struct
         let pu =
           extend_instance_for_inductive ?context:universe_context env mind pu
         in
+        let () = remember_instance pu in
         (Q.mkInd (quote_inductive' mind) (Q.quote_univ_instance pu), acc)
 
       | Constr.Case (ci,u,pars, ((predctx, pred), relevance), iv, discr, brs) ->
+        let () = remember_instance u in
         let mind = ci.Constr.ci_ind in
         let mib = Environ.lookup_mind (fst mind) (snd env) in
         let acc = add_inductive mind mib acc in
@@ -816,6 +872,7 @@ struct
         let pu =
           extend_instance_for_inductive ?context:universe_context env mind pu
         in
+        let () = remember_instance pu in
         let qu = Q.quote_univ_instance pu in
         let pctx = CaseCompat.case_predicate_context (snd env) ci u pars predctx in
         let qpctx = quote_name_annots predctx in
@@ -845,6 +902,7 @@ struct
       | Constr.String s -> (Q.mkString (Q.quote_pstring s), acc)
       | Constr.Meta _ -> failwith "Meta not supported by TemplateRocq"
       | Constr.Array (u, ar, def, ty) ->
+        let () = remember_instance u in
         let u = match UVars.Instance.to_array u with (_, [| u |]) -> u | _ -> assert false in
         let def', acc = quote_term acc env sigma def in
         let ty', acc = quote_term acc env sigma ty in
@@ -1078,13 +1136,26 @@ struct
   let universes_of_mib mib =
     let pars = mib.mind_params_ctxt in
     let univs = universes_of_ctx pars in
-      Array.fold_left (fun univs oib ->
-        let univsty = universes_of_ctx oib.mind_arity_ctxt in
-        Array.fold_left (fun univs cty ->
-          let univscty = Vars.universes_of_constr cty in
-          Univ.Level.Set.union univs univscty)
-          univsty oib.mind_user_lc)
-        univs mib.mind_packets
+    Array.fold_left
+      (fun univs oib ->
+         let univs =
+           Univ.Level.Set.union univs
+             (universes_of_ctx oib.mind_arity_ctxt)
+         in
+         let univs =
+           Array.fold_left
+             (fun univs cty ->
+                Univ.Level.Set.union univs (Vars.universes_of_constr cty))
+             univs oib.mind_user_lc
+         in
+         Array.fold_left
+           (fun univs (ctx, cty) ->
+              let univs =
+                Univ.Level.Set.union univs (universes_of_ctx ctx)
+              in
+              Univ.Level.Set.union univs (Vars.universes_of_constr cty))
+           univs oib.mind_nf_lc)
+      univs mib.mind_packets
 
   let quote_term_rec ~bypass ~opaque_access ?(with_universes=true) ?(with_restriction=true) env sigma trm =
     let visited_terms = ref Names.KNset.empty in
@@ -1282,6 +1353,8 @@ struct
       let b = ref (fun _ _ _ -> assert false) in
       let (x,y) =
 	      quote_term_remember ~universe_context:template_universe_context
+          ~remember_universe_levels:(fun levels ->
+            universes := Univ.Level.Set.union levels !universes)
           (fun x () -> add !a !b (Const x) ())
           (fun y mib () -> add !a !b (Ind (y, mib)) ())
       in
