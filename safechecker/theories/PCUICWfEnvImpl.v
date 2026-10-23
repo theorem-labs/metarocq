@@ -330,12 +330,12 @@ Next Obligation.
   pose proof (HG' := is_graph_of_uctx_add Hudecl' HG).
   assert (Hinv : wGraph.invariants gph).
   { apply (global_uctx_graph_invariants HG H0). }
-  assert (Hinv' : wGraph.invariants (add_uctx s gph)).
+  assert (Hinv' : wGraph.invariants (add_uctx (t1, t2) gph)).
   { apply (global_uctx_graph_invariants HG' H1). }
-  assert (Hsub : wGraph.subgraph gph (add_uctx s gph)).
+  assert (Hsub : wGraph.subgraph gph (add_uctx (t1, t2) gph)).
   { apply add_uctx_subgraph. }
   rewrite (wGraph.IsFullSubgraph.is_acyclic_full_extension'_iff
-             gph (add_uctx s gph) Hinv Hinv' Hsub).
+             gph (add_uctx (t1, t2) gph) Hsub).
   rewrite andb_and.
   pose (global_ext_uctx := ContextSet.union udecl (global_uctx X)).
   pose (wf_consistent_extension_on_consistent udecl.2 s).
@@ -348,7 +348,6 @@ Next Obligation.
   cbn.
   change (CS.union _ _) with global_ext_uctx.2.
   apply: consistent_ext_on_full_ext=> //.
-  apply: add_uctx_subgraph.
 Qed.
 Next Obligation. apply guard_correct. Qed.
 
