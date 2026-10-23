@@ -372,8 +372,26 @@ struct
     UVars.AbstractContext.make
       { UVars.quals; UVars.univs = Array.append univs extra } new_pcon
 
+  (* Every universe level is at least [Set], so [max(Set, u1, ..., un)]
+     equals [max(u1, ..., un)] when a non-[Set] component is present.  Removing
+     the redundant component before minting representatives prevents list's
+     intrinsic [max(Set, u)] result sort from introducing a spurious second
+     universe parameter. *)
+  let simplify_template_universe universe =
+    let components = Univ.Universe.repr universe in
+    if List.exists
+         (fun (level, _) -> not (Univ.Level.equal level Univ.Level.set))
+         components
+    then
+      Univ.Universe.unrepr
+        (List.filter
+           (fun (level, _) -> not (Univ.Level.equal level Univ.Level.set))
+           components)
+    else universe
+
 
   let template_universe_level ?context env universe =
+    let universe = simplify_template_universe universe in
     match Univ.Universe.level universe with
     | Some level -> level
     | None ->
