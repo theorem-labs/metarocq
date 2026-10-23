@@ -234,26 +234,113 @@ struct
       (UVars.UContext.constraints
          (UVars.AbstractContext.repr template.template_context))
 
-  let template_universe_level env universe =
+  type template_universe_scope =
+    | Global_scope
+    | Polymorphic_scope of UVars.AbstractContext.t
+
+  type template_universe_context = {
+    scope : template_universe_scope;
+    mutable universe_levels : Univ.Level.t Univ.Universe.Map.t;
+    mutable fresh_constraints : Univ.UnivConstraints.t;
+    mutable next_fresh_level : int;
+    required_global_levels : Univ.Level.Set.t ref;
+  }
+
+  let make_template_universe_context scope required_global_levels = {
+    scope;
+    universe_levels = Univ.Universe.Map.empty;
+    fresh_constraints = Univ.UnivConstraints.empty;
+    next_fresh_level = 0;
+    required_global_levels;
+  }
+
+  let fresh_template_level graph context =
+    match context.scope with
+    | Polymorphic_scope uctx ->
+      let { UVars.univs; _ } = UVars.AbstractContext.names uctx in
+      let index = Array.length univs + context.next_fresh_level in
+      context.next_fresh_level <- context.next_fresh_level + 1;
+      Univ.Level.var index
+    | Global_scope ->
+      let dirpath =
+        Names.DirPath.make [Names.Id.of_string "MetaRocq";
+                            Names.Id.of_string "Template"]
+      in
+      let rec fresh () =
+        let index = context.next_fresh_level in
+        context.next_fresh_level <- index + 1;
+        let level =
+          Univ.Level.make (Univ.UGlobal.make dirpath "algebraic" index)
+        in
+        match UGraph.check_declared_universes graph
+                (Univ.Level.Set.singleton level) with
+        | Ok () -> fresh ()
+        | Error _ -> level
+      in
+      fresh ()
+
+  let template_universe_level ?context env universe =
     match Univ.Universe.level universe with
     | Some level -> level
     | None ->
-      let graph = Environ.universes (snd env) in
-      let rec find_level = function
-        | [] ->
-          CErrors.user_err
-            Pp.(str "Quoting algebraic template universe "
-                ++ Univ.Universe.pr Univ.Level.raw_pr universe
-                ++ str " is not supported.")
-        | (level, shift) :: rest ->
-          if Int.equal shift 0
-             && UGraph.check_eq graph universe (Univ.Universe.make level)
-          then level
-          else find_level rest
-      in
-      find_level (Univ.Universe.repr universe)
+      match context with
+      | Some context ->
+        begin match
+          try Some (Univ.Universe.Map.find universe context.universe_levels)
+          with Not_found -> None
+        with
+        | Some level -> level
+        | None ->
+          let graph = Environ.universes (snd env) in
+          let level = fresh_template_level graph context in
+          let constraints =
+            List.fold_left
+              (fun constraints (component, shift) ->
+                 let kind =
+                   match shift with
+                   | 0 -> Univ.UnivConstraint.Le
+                   | 1 -> Univ.UnivConstraint.Lt
+                   | _ ->
+                     CErrors.user_err
+                       Pp.(str "Quoting template universe offsets above one is not supported.")
+                 in
+                 Univ.UnivConstraints.add (component, kind, level) constraints)
+              context.fresh_constraints (Univ.Universe.repr universe)
+          in
+          context.universe_levels <-
+            Univ.Universe.Map.add universe level context.universe_levels;
+          context.required_global_levels :=
+            Univ.Level.Set.filter
+              (fun component ->
+                 Option.is_empty (Univ.Level.var_index component))
+              (Univ.Universe.levels
+                 ~init:!(context.required_global_levels) universe);
+          begin match context.scope with
+          | Global_scope ->
+            context.required_global_levels :=
+              Univ.Level.Set.add level !(context.required_global_levels)
+          | Polymorphic_scope _ -> ()
+          end;
+          context.fresh_constraints <- constraints;
+          level
+        end
+      | None ->
+        let graph = Environ.universes (snd env) in
+        let rec find_level = function
+          | [] ->
+            CErrors.user_err
+              Pp.(str "Quoting algebraic template universe "
+                  ++ Univ.Universe.pr Univ.Level.raw_pr universe
+                  ++ str " is not supported.")
+          | (level, shift) :: rest ->
+            if Int.equal shift 0
+               && UGraph.check_eq graph universe (Univ.Universe.make level)
+            then level
+            else find_level rest
+        in
+        find_level (Univ.Universe.repr universe)
 
-  let template_instance env sigma mind args default_instance =
+  let template_instance ?universe_context env sigma mind args default_instance =
     let mib = Environ.lookup_mind (fst mind) (snd env) in
     match mib.Declarations.mind_template with
     | None -> default_instance
@@ -292,19 +379,20 @@ struct
              match Univ.Level.var_index bound with
              | None -> assert false
              | Some index ->
-               template_universe_level env
+               template_universe_level ?context:universe_context env
                  (Int.Map.get index universe_substitution))
           bound_levels
       in
       UVars.Instance.of_array ([||], levels)
 
-  let template_default_substitution env sigma mind args =
+  let template_default_substitution ?universe_context env sigma mind args =
     let mib = Environ.lookup_mind (fst mind) (snd env) in
     match mib.Declarations.mind_template with
     | None -> None
     | Some template ->
       let actual_instance =
-        template_instance env sigma mind args UVars.Instance.empty
+        template_instance ?universe_context env sigma mind args
+          UVars.Instance.empty
       in
       let _, defaults = UVars.Instance.to_array template.template_defaults in
       let _, actuals = UVars.Instance.to_array actual_instance in
@@ -318,16 +406,20 @@ struct
       Some (Sorts.QVar.Map.empty,
             add_levels 0 Univ.Level.Map.empty)
 
-  let normalize_template_type env sigma body ty =
+  let normalize_template_type ?universe_context env sigma body ty =
     let head, args = Constr.decompose_app body in
     match Constr.kind head with
     | Constr.Ind (mind, _) ->
-      begin match template_default_substitution env sigma mind args with
+      begin match
+        template_default_substitution ?universe_context env sigma mind args
+      with
       | None -> ty
       | Some substitution -> Vars.subst_univs_level_constr substitution ty
       end
     | Constr.Construct ((mind, _), _) ->
-      begin match template_default_substitution env sigma mind args with
+      begin match
+        template_default_substitution ?universe_context env sigma mind args
+      with
       | None -> ty
       | Some substitution -> Vars.subst_univs_level_constr substitution ty
       end
@@ -341,6 +433,31 @@ struct
     match decl with
     | Monomorphic -> Q.mkMonomorphic_ctx ()
     | Polymorphic ctx -> Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context ctx)
+
+  let quote_universes_decl_with_template_levels decl context =
+    match decl, context.scope with
+    | Polymorphic original, Polymorphic_scope _
+      when context.next_fresh_level > 0 ->
+      let { UVars.quals; UVars.univs } =
+        UVars.AbstractContext.names original
+      in
+      let names =
+        Array.init context.next_fresh_level
+          (fun index ->
+             Names.Name
+               (Names.Id.of_string ("algebraic" ^ string_of_int index)))
+      in
+      let univs = Array.append univs names in
+      let constraints =
+        PConstraints.union
+          (UVars.UContext.constraints (UVars.AbstractContext.repr original))
+          context.fresh_constraints
+      in
+      let context = UVars.AbstractContext.make { UVars.quals; UVars.univs }
+          constraints
+      in
+      Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context context)
+    | _ -> quote_universes_decl decl None
 
   let quote_ugraph ?kept ?(extra_constraints = Univ.UnivConstraints.empty)
       (g : UGraph.t) =
@@ -412,7 +529,7 @@ struct
       Context.Rel.nhyps ctx
     in Array.map cofix_arity ts
 
-  let quote_term_remember
+  let quote_term_remember ?universe_context
       (add_constant : KerName.t -> 'a -> 'a)
       (add_inductive : Names.inductive -> Declarations.mutual_inductive_body -> 'a -> 'a) =
     let rec quote_term (acc : 'a) env sigma trm =
@@ -452,7 +569,9 @@ struct
         begin match Constr.kind f with
         | Constr.Ind (mind, pu) ->
           let mib = Environ.lookup_mind (fst mind) (snd env) in
-          let pu = template_instance env sigma mind xs pu in
+          let pu =
+            template_instance ?universe_context env sigma mind xs pu
+          in
           let xs', acc = quote_terms quote_term acc env sigma xs in
           (Q.mkApp
              (Q.mkInd (quote_inductive' mind) (Q.quote_univ_instance pu))
@@ -460,7 +579,9 @@ struct
            add_inductive mind mib acc)
         | Constr.Construct ((mind, c), pu) ->
           let mib = Environ.lookup_mind (fst mind) (snd env) in
-          let pu = template_instance env sigma mind xs pu in
+          let pu =
+            template_instance ?universe_context env sigma mind xs pu
+          in
           let xs', acc = quote_terms quote_term acc env sigma xs in
           (Q.mkApp
              (Q.mkConstruct
@@ -480,7 +601,9 @@ struct
 
       | Constr.Construct ((mind,c),pu) ->
         let mib = Environ.lookup_mind (fst mind) (snd env) in
-        let pu = template_instance env sigma mind [||] pu in
+        let pu =
+          template_instance ?universe_context env sigma mind [||] pu
+        in
         (Q.mkConstruct
            (quote_inductive' mind, Q.quote_int (c - 1))
            (Q.quote_univ_instance pu),
@@ -488,7 +611,9 @@ struct
 
       | Constr.Ind (mind,pu) ->
         let mib = Environ.lookup_mind (fst mind) (snd env) in
-        let pu = template_instance env sigma mind [||] pu in
+        let pu =
+          template_instance ?universe_context env sigma mind [||] pu
+        in
         (Q.mkInd (quote_inductive' mind) (Q.quote_univ_instance pu),
          add_inductive mind mib acc)
 
@@ -500,7 +625,8 @@ struct
         let acc, q_pars = CArray.fold_left_map (fun acc par -> let (qt, acc) = quote_term acc env sigma par in acc, qt) acc pars in
         let qu =
           Q.quote_univ_instance
-            (template_instance env sigma ci.Constr.ci_ind pars u)
+            (template_instance ?universe_context env sigma ci.Constr.ci_ind
+               pars u)
         in
         let pctx = CaseCompat.case_predicate_context (snd env) ci u pars predctx in
         let qpctx = quote_name_annots predctx in
@@ -728,6 +854,7 @@ struct
     let universes = ref Univ.Level.Set.empty in
     let constants = ref [] in
     let template_defaults = ref Univ.Level.Set.empty in
+    let template_universe_context = make_template_universe_context () in
     let add quote_term quote_type trm acc =
       match trm with
       | Ind ((mi,idx), mib) ->
@@ -811,8 +938,9 @@ struct
                       (Retyping.get_type_of global_env global_evm
                          (EConstr.of_constr body))
                   in
-                  normalize_template_type (false, global_env) global_evm body
-                    type_of_body
+                  normalize_template_type
+                    ~universe_context:template_universe_context
+                    (false, global_env) global_evm body type_of_body
               in
               let univs = Vars.universes_of_constr ty in
               let () = universes := Univ.Level.Set.union univs !universes in
@@ -831,7 +959,8 @@ struct
       let a = ref (fun _ _ _ -> assert false) in
       let b = ref (fun _ _ _ -> assert false) in
       let (x,y) =
-	      quote_term_remember (fun x () -> add !a !b (Const x) ())
+	      quote_term_remember ~universe_context:template_universe_context
+          (fun x () -> add !a !b (Const x) ())
           (fun y mib () -> add !a !b (Ind (y, mib)) ())
       in
       a := x ;
@@ -843,15 +972,24 @@ struct
     let univs =
       if with_universes then
         if with_restriction then
-          let univs = Univ.Level.Set.union (Vars.universes_of_constr trm) !universes in
-          let univs = Univ.Level.Set.filter (fun l -> Option.is_empty (Univ.Level.var_index l)) univs in
+          let univs =
+            Univ.Level.Set.union (Vars.universes_of_constr trm) !universes
+          in
+          let univs =
+            Univ.Level.Set.union univs template_universe_context.fresh_levels
+          in
+          let univs =
+            Univ.Level.Set.filter
+              (fun l -> Option.is_empty (Univ.Level.var_index l)) univs
+          in
           let template_constraints =
             Univ.Level.Set.fold
               (fun level constraints ->
                  Univ.UnivConstraints.add
                    (Univ.Level.set, Univ.UnivConstraint.Le, level)
                    constraints)
-              !template_defaults Univ.UnivConstraints.empty
+              !template_defaults
+              template_universe_context.fresh_constraints
           in
           quote_ugraph ~kept:univs ~extra_constraints:template_constraints
             (Environ.universes env)
