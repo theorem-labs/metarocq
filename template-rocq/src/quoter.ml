@@ -412,15 +412,22 @@ struct
         (* Prefer reusing an already-declared level when the universe graph
            proves the algebraic expression equal to one of its components. *)
         let graph_equal_level =
-          let rec find = function
-            | [] -> None
-            | (level, shift) :: rest ->
-              if Int.equal shift 0
-                 && UGraph.check_eq graph universe (Univ.Universe.make level)
-              then Some level
-              else find rest
-          in
-          find components
+          match
+            UGraph.check_declared_universes graph
+              (Univ.Universe.levels
+                 ~init:Univ.Level.Set.empty universe)
+          with
+          | Error _ -> None
+          | Ok () ->
+            let rec find = function
+              | [] -> None
+              | (level, shift) :: rest ->
+                if Int.equal shift 0
+                   && UGraph.check_eq graph universe (Univ.Universe.make level)
+                then Some level
+                else find rest
+            in
+            find components
         in
         match graph_equal_level with
         | Some level -> level
@@ -461,7 +468,9 @@ struct
               context.universe_levels <-
                 Univ.Universe.Map.add universe level context.universe_levels;
               context.fresh_levels <-
-                Univ.Level.Set.add level context.fresh_levels;
+                Univ.Universe.levels
+                  ~init:(Univ.Level.Set.add level context.fresh_levels)
+                  universe;
               context.fresh_constraints <- constraints;
               level
       end
