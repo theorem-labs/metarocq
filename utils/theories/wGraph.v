@@ -1939,6 +1939,16 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
       apply bf_relax_bounded, bf_initial_bounded.
     Qed.
 
+    Lemma bf_distance_eq {HG : acyclic_no_loop} x y :
+      bf_distance x y = lsp x y.
+    Proof using HI.
+      apply Nbar.le_antisymm.
+      - apply bf_distance_upper.
+      - destruct (lsp x y) eqn:Hxy.
+        + apply bf_distance_lower; exact Hxy.
+        + exact I.
+    Qed.
+
 
 
 
@@ -1969,6 +1979,33 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
     Qed.
 
     Definition is_acyclic' := correct_labellingb bf_labelling.
+
+    Lemma bf_labelling_correct {HG : acyclic_no_loop} :
+      correct_labelling bf_labelling.
+    Proof using HI.
+      destruct (lsp_correctness (HG:=HG)) as [Hs He].
+      split.
+      - unfold bf_labelling.
+        rewrite bf_distance_eq.
+        exact Hs.
+      - intros e Hin.
+        unfold bf_labelling.
+        rewrite !bf_distance_eq.
+        apply He; exact Hin.
+    Qed.
+
+    Lemma is_acyclic'_spec :
+      is_acyclic' <-> acyclic_no_loop.
+    Proof using HI.
+      split.
+      - intro H.
+        apply (acyclic_labelling bf_labelling).
+        apply (proj1 (correct_labellingb_spec bf_labelling)).
+        exact H.
+      - intro HG.
+        apply (proj2 (correct_labellingb_spec bf_labelling)).
+        apply bf_labelling_correct; exact HG.
+    Qed.
 
     Definition is_acyclic := VSet.for_all (fun x => match lsp x x with
                                                  | Some 0 => true
