@@ -3862,6 +3862,30 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
         rewrite Hbf2.
         move: Hslow=> /VSet.for_all_spec/(_ x Hx)/VSet.for_all_spec/(_ y Hy).
         now move=> /(@ReflectEq.eqb_spec _ reflectEq_nbar).
+
+    Qed.
+    Lemma is_acyclic_full_extension'_spec (G1 G2 : t)
+          `{invariants G1, invariants G2} :
+      subgraph G1 G2 ->
+      (is_acyclic' G2 && is_full_extension' G1 G2) <->
+      acyclic_no_loop G2 /\ full_subgraph G1 G2.
+    Proof.
+      intro Hsub.
+      rewrite andb_and.
+      split.
+      - intros [Hacy Hext].
+        assert (Hac : acyclic_no_loop G2).
+        { apply (proj1 (is_acyclic'_spec G2)); exact Hacy. }
+        assert (Hextspec : is_full_extension' G1 G2 <-> full_subgraph G1 G2).
+        { apply is_full_extension'_spec; [exact H | exact H0 | exact Hac | exact Hsub]. }
+        split; [exact Hac|].
+        apply (proj1 Hextspec); exact Hext.
+      - intros [Hac Hfull].
+        assert (Hextspec : is_full_extension' G1 G2 <-> full_subgraph G1 G2).
+        { apply is_full_extension'_spec; [exact H | exact H0 | exact Hac | exact Hsub]. }
+        split.
+        + apply (proj2 (is_acyclic'_spec G2)); exact Hac.
+        + apply (proj2 Hextspec); exact Hfull.
     Qed.
 
 
