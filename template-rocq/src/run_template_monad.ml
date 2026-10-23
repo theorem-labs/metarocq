@@ -300,7 +300,7 @@ let unquote_mutual_inductive_entry env evm trm (* of type mutual_inductive_entry
               mind_entry_params = params;
               mind_entry_inds = inds;
               mind_entry_universes = univs;
-              mind_entry_variance = variance;
+              mind_entry_variance = Option.map (fun v -> ([||], v)) variance;
               mind_entry_private = priv }
     | _ -> bad_term_verb trm "unquote_mutual_inductive_entry"
   else

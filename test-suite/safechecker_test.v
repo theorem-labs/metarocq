@@ -16,6 +16,9 @@ Definition bool_list := List.map negb (cons true (cons false nil)).
 (* MetaRocq SafeCheck bool_list. *)
 MetaRocq RocqCheck bool_list.
 
+Record template_list_record := { template_list_field : list nat }.
+MetaRocq SafeCheck template_list_record.
+
 (* Time MetaRocq SafeCheck @infer_and_print_template_program. *)
 (* Uses template polymorphism:
 Error:
