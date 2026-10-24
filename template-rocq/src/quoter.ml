@@ -240,6 +240,10 @@ struct
     mutable fresh_levels : Univ.Level.Set.t;
     mutable fresh_constraints : Univ.UnivConstraints.t;
     mutable next_fresh_level : int;
+    (* One global level strictly above every level of the quoted program
+       ([quote_term_rec] adds [l < top] for each), used by
+       [template_instance ~canonical]. *)
+    mutable top_level : Univ.Level.t option;
   }
 
   let make_template_universe_context () = {
@@ -248,6 +252,7 @@ struct
     fresh_levels = Univ.Level.Set.empty;
     fresh_constraints = Univ.UnivConstraints.empty;
     next_fresh_level = 0;
+    top_level = None;
   }
 
   let fresh_template_level graph context =
@@ -475,6 +480,24 @@ struct
     UVars.AbstractContext.make
       { UVars.quals; UVars.univs = Array.append univs extra } new_pcon
 
+  (* [auctx] with [Var k <= top] for each of its bound levels.  Every instance
+     the quoted program gives a polymorphic declaration is made of levels at
+     most [top]: [top] itself (canonical template instances), global levels
+     below it (constrained in [quote_term_rec]), and bound levels of other
+     polymorphic declarations (constrained here).  So the extra constraints
+     reject no use site, and inside the declaration they let PCUIC derive
+     [Type@{Var k} <= Type@{top}] where a canonical instance needs it. *)
+  let constrain_below_top top auctx =
+    let repr = UVars.AbstractContext.repr auctx in
+    let _, levels = UVars.Instance.to_array (UVars.UContext.instance repr) in
+    let pcon =
+      Array.fold_left
+        (fun pcon level ->
+           PConstraints.add_univ (level, Univ.UnivConstraint.Le, top) pcon)
+        (UVars.UContext.constraints repr) levels
+    in
+    UVars.AbstractContext.make (UVars.AbstractContext.names auctx) pcon
+
   (* Every universe level is at least [Set], so [max(Set, u1, ..., un)]
      equals [max(u1, ..., un)] when a non-[Set] component is present.  Removing
      the redundant component before minting representatives prevents list's
@@ -519,6 +542,21 @@ struct
       | None -> universe
     in
     let universe = simplify_template_universe universe in
+    let is_top level =
+      match context with
+      | Some { top_level = Some top; _ } -> Univ.Level.equal level top
+      | _ -> false
+    in
+    (* Every level of the program other than [top] is at most [top], so a
+       maximum with a [top] component and no [top+n] component is [top].  This
+       keeps [top] out of the fresh levels. *)
+    let components = Univ.Universe.repr universe in
+    if List.exists (fun (level, shift) -> Int.equal shift 0 && is_top level)
+         components
+       && not (List.exists (fun (level, shift) -> shift > 0 && is_top level)
+                 components)
+    then Option.get (Option.get context).top_level
+    else
     match Univ.Universe.level universe with
     | Some level -> level
     | None ->
@@ -664,7 +702,23 @@ struct
     | sort -> Q.quote_sort sort
 
 
-  let template_instance ?universe_context env sigma mind args default_instance =
+  (* [~canonical] is for an occurrence where PCUIC compares the instance
+     exactly: a [Case] ([`Case]), or an [Ind]/[Construct] applied to fewer
+     arguments than its full arity ([`Partial]; [global_variance_gen],
+     PCUICEquality.v:46-74).  The kernel stores no instance there, and the
+     instance inferred from the arguments' types is fixed at quotation: after
+     PCUIC substitutes into the arguments, one kernel term can carry two
+     instances (LemmaPin_23's [match .. in prod _ _]; [eq@{Set} Z] against
+     [eq@{RelationClasses.21} Z] in [Z.eq_equiv]).  So a level bound by a given
+     argument becomes the program's top level, which is above every argument
+     type and does not depend on it.
+     - [`Case]: every bound level.  The instance only types the predicate's
+       binder and the parameters, which are below [top].
+     - [`Partial]: the levels that are not in the inductive's conclusion sort.
+       A level in the conclusion reaches the occurrence's type, where [top]
+       could exceed what the context allows, so it keeps the inferred level. *)
+  let template_instance ?universe_context ?canonical env sigma mind
+      args default_instance =
     let mib = Environ.lookup_mind (fst mind) (snd env) in
     match mib.Declarations.mind_template with
     | None -> default_instance
@@ -675,6 +729,49 @@ struct
       in
       let _, bound_levels =
         UVars.Instance.to_array bound_instance
+      in
+      let concl_levels = Sorts.levels template.template_concl in
+      (* A template constraint bounds its level from above by a global level
+         (kernel/inductive.ml, [instantiate_template_constraints]), which [top]
+         would violate.  Such levels keep the inferred instance. *)
+      let constrained_levels =
+        Univ.UnivConstraints.fold
+          (fun (u, _, v) levels ->
+             Univ.Level.Set.add u (Univ.Level.Set.add v levels))
+          (UVars.UContext.univ_constraints
+             (UVars.AbstractContext.repr template.template_context))
+          Univ.Level.Set.empty
+      in
+      let keeps_inference kind bound =
+        Univ.Level.Set.mem bound constrained_levels
+        || (kind = `Partial && Univ.Level.Set.mem bound concl_levels)
+      in
+      (* The canonical substitution maps each level bound by a given argument
+         to [top] and each level bound by a missing argument to its default,
+         as the kernel does.  It reads no argument. *)
+      let canonical_level =
+        match canonical, universe_context with
+        | Some kind, Some { top_level = Some top; _ } ->
+          let _, _, (_, substitution) =
+            Inductive.instantiate_template_universes mib
+              (List.map
+                 (fun _ ~default:_ ->
+                    Inductive.TemplateUniv (Univ.Universe.make top))
+                 (Array.to_list args))
+          in
+          (fun bound ->
+             match Univ.Level.var_index bound with
+             | _ when keeps_inference kind bound -> None
+             | None -> assert false
+             | Some index ->
+               Some
+                 (template_universe_level ?context:universe_context env
+                    (Int.Map.get index substitution)))
+        | _ -> (fun _ -> None)
+      in
+      let needs_inference =
+        Array.exists (fun bound -> Option.is_empty (canonical_level bound))
+          bound_levels
       in
       (* Mirror the kernel's [make_param_univs] (kernel/typeops.ml:417-431):
          the template universe bound by a parameter is the conclusion sort of
@@ -696,18 +793,27 @@ struct
           CErrors.user_err
             Pp.(str "Could not infer a template-inductive universe from its parameter.")
       in
-      let _, _, (_, universe_substitution) =
-        Inductive.instantiate_template_universes mib
-          (List.map argument_universe (Array.to_list args))
+      (* Retype the arguments only when some level is inferred from them. *)
+      let universe_substitution =
+        if needs_inference then
+          let _, _, (_, substitution) =
+            Inductive.instantiate_template_universes mib
+              (List.map argument_universe (Array.to_list args))
+          in
+          substitution
+        else Int.Map.empty
       in
       let levels =
         Array.map
           (fun bound ->
-             match Univ.Level.var_index bound with
-             | None -> assert false
-             | Some index ->
-               template_universe_level ?context:universe_context env
-                 (Int.Map.get index universe_substitution))
+             match canonical_level bound with
+             | Some level -> level
+             | None ->
+               match Univ.Level.var_index bound with
+               | None -> assert false
+               | Some index ->
+                 template_universe_level ?context:universe_context env
+                   (Int.Map.get index universe_substitution))
           bound_levels
       in
       UVars.Instance.of_array ([||], levels)
@@ -1034,7 +1140,13 @@ struct
           let mib = Environ.lookup_mind (fst mind) (snd env) in
           let acc = add_inductive mind mib acc in
           let pu =
-            template_instance ?universe_context env sigma mind xs pu
+            let mip = mib.Declarations.mind_packets.(snd mind) in
+            let canonical =
+              Array.length xs
+              < mib.Declarations.mind_nparams + mip.Declarations.mind_nrealargs
+            in
+            let canonical = if canonical then Some `Partial else None in
+            template_instance ?universe_context ?canonical env sigma mind xs pu
           in
           let pu =
             extend_instance_for_inductive ?context:universe_context env mind pu
@@ -1050,7 +1162,14 @@ struct
           let mib = Environ.lookup_mind (fst mind) (snd env) in
           let acc = add_inductive mind mib acc in
           let pu =
-            template_instance ?universe_context env sigma mind xs pu
+            let mip = mib.Declarations.mind_packets.(snd mind) in
+            let canonical =
+              Array.length xs
+              < mib.Declarations.mind_nparams
+                + mip.Declarations.mind_consnrealargs.(c - 1)
+            in
+            let canonical = if canonical then Some `Partial else None in
+            template_instance ?universe_context ?canonical env sigma mind xs pu
           in
           let pu =
             extend_instance_for_inductive ?context:universe_context env mind pu
@@ -1119,7 +1238,10 @@ struct
         let npar = Q.quote_int ci.Constr.ci_npar in
         let q_relevance = Q.quote_relevance relevance in
         let acc, q_pars = CArray.fold_left_map (fun acc par -> let (qt, acc) = quote_term acc env sigma par in acc, qt) acc pars in
-        let pu = template_instance ?universe_context env sigma mind pars u in
+        let pu =
+          template_instance ?universe_context ~canonical:`Case env sigma mind
+            pars u
+        in
         let pu =
           extend_instance_for_inductive ?context:universe_context env mind pu
         in
@@ -1318,14 +1440,21 @@ struct
         quote_rel_context quote_term acc env sigma
           (substitute_context mib.Declarations.mind_params_ctxt)
       in
+      let constrain auctx =
+        match mib.Declarations.mind_template, universe_context with
+        | None, Some { top_level = Some top; _ } -> constrain_below_top top auctx
+        | _ -> auctx
+      in
       let uctx =
         match base_auctx, !current_local_scope with
         | Some auctx, Some scope when scope.ls_next > 0 ->
-          let new_auctx = extend_abstract_context auctx scope in
+          let new_auctx = constrain (extend_abstract_context auctx scope) in
           extended_inductives :=
             Names.KerName.Map.add (MutInd.canonical t)
               (List.rev scope.ls_exprs) !extended_inductives;
           Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context new_auctx)
+        | Some auctx, _ when Option.is_empty mib.Declarations.mind_template ->
+          Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context (constrain auctx))
         | _ -> quoted_universes
       in
       let var =
@@ -1421,7 +1550,15 @@ struct
       extended_constants := Names.KerName.Map.empty;
       extended_inductives := Names.KerName.Map.empty;
       declarations_in_progress := Names.KNset.empty;
-      current_quote_dependencies := new_quote_dependencies Environ.empty_env
+      current_quote_dependencies := new_quote_dependencies Environ.empty_env;
+      template_universe_context.top_level <-
+        Some (fresh_template_level (Environ.universes env)
+                template_universe_context)
+    in
+    let top =
+      match template_universe_context.top_level with
+      | Some top -> top
+      | None -> assert false
     in
     (* Quote declaration [kn] with [f], from a fresh dependency root: what the
        declaration reads is not a dependency of the subterm whose quotation
@@ -1603,7 +1740,12 @@ struct
                   UVars.AbstractContext.make
                     { UVars.quals; UVars.univs = new_univs } new_pcon
                 in
-                Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context new_auctx)
+                Q.mkPolymorphic_ctx
+                  (Q.quote_abstract_univ_context
+                     (constrain_below_top top new_auctx))
+              | Declarations.Polymorphic auctx, _ ->
+                Q.mkPolymorphic_ctx
+                  (Q.quote_abstract_univ_context (constrain_below_top top auctx))
               | _ -> quote_universes_decl cd.const_universes None
             in
             let () =
@@ -1659,6 +1801,18 @@ struct
               !template_defaults
               template_universe_context.fresh_constraints
           in
+          (* [top] is a new level with only incoming edges, so adding it keeps
+             the graph acyclic: a conservative extension. *)
+          let template_constraints =
+            Univ.Level.Set.fold
+              (fun level constraints ->
+                 Univ.UnivConstraints.add
+                   (level, Univ.UnivConstraint.Lt, top) constraints)
+              (Univ.Level.Set.remove top
+                 (Univ.Level.Set.add Univ.Level.set univs))
+              template_constraints
+          in
+          let univs = Univ.Level.Set.add top univs in
           quote_ugraph ~kept:univs ~extra_constraints:template_constraints
             (Environ.universes env)
         else quote_ugraph (Environ.universes env)
