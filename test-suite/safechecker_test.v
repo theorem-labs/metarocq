@@ -76,6 +76,21 @@ Definition template_partial_instance (P : (nat -> nat -> Prop) -> Prop)
   (g : forall R, P R -> nat) (h : P (@eq nat)) : nat :=
   g (template_partial_rel nat) h.
 MetaRocq SafeCheck @template_partial_instance.
+
+(* A record whose field has an algebraic sort below the record's algebraic
+   sort.  Each algebraic sort is quoted as a fresh level; the inductive-sort
+   check needs [template_alg_inner]'s level below [template_alg_outer]'s,
+   which the kernel derives from [max(a+1, b+1) <= max(a+1, b+1, c+1)]
+   (LinuxProcessSem.State.Model, whose field [FdState] has sort
+   [max(Fs.path.u0, PipeBuf.u0)]). *)
+Universes template_alg_a template_alg_b template_alg_c.
+Record template_alg_inner := {
+  template_alg_ia : Type@{template_alg_a};
+  template_alg_ib : Type@{template_alg_b} }.
+Record template_alg_outer := {
+  template_alg_oi : template_alg_inner;
+  template_alg_oc : Type@{template_alg_c} }.
+MetaRocq SafeCheck @template_alg_outer.
 Set Universe Polymorphism.
 
 (* This nested use gives [list] the algebraic template instance [max(i,j)].
