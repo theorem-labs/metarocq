@@ -1829,16 +1829,22 @@ struct
                   raise e
             in
             let ty, acc =
+              (* The declaration's own type, never a type inferred from its
+                 body: the checker must be given the obligation "this body has
+                 this declared type", which is what it is asked to decide.
+                 Retyping assumes a well-typable input and checks nothing
+                 (Rocq pretyping/retyping.mli), so an inferred type would
+                 replace a rejected declaration by a repaired one.
+                 [normalize_template_type] only substitutes the template
+                 defaults of the body's head inductive by the instance that
+                 body uses, inside the declared type. *)
               let ty =
                 match body, universe_context with
                 | Some body, Some universe_context ->
                   let global_env = Global.env () in
                   let global_evm = Evd.from_env global_env in
-                  let type_of_body =
-                    retype_template_argument global_env global_evm body
-                  in
                   normalize_template_type ~universe_context
-                    (false, global_env) global_evm body type_of_body
+                    (false, global_env) global_evm body cd.const_type
                 | _ -> cd.const_type
               in
               let univs = Vars.universes_of_constr ty in

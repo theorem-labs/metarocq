@@ -142,6 +142,21 @@ Fail Polymorphic Definition template_successor_too_low@{i} : Type@{i} :=
    the rejected source definition above. *)
 MetaRocq Test SafeCheck Rejects nat.
 
+(* Input-side negative fixtures: the obligation each one breaks exists in the
+   environment before quotation, and each goes through the production
+   SafeCheck path.  Both assert the rejection's reason and its subject, so a
+   rejection for an unrelated cause fails the test. *)
+
+(* [Set : Type@{Set+1}], so this declaration's claimed type is wrong.  The
+   quoter must hand the checker this declared type, not a type inferred from
+   the body, which would be the type of a repaired declaration. *)
+Unset Universe Checking.
+Definition template_declared_type_is_checked : Set := Set.
+Set Universe Checking.
+MetaRocq Test SafeCheck Rejects Source
+  "Type([Set+1])" "template_declared_type_is_checked"
+  template_declared_type_is_checked.
+
 Unset Universe Polymorphism.
 
 
