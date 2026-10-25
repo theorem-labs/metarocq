@@ -15,32 +15,74 @@ let pr_string l =
   (* We allow utf8 encoding *)
   str (caml_string_of_bytestring l)
 
-let check ~opaque_access env evm poly (c, ustate) =
-  debug (fun () -> str"Quoting");
+(* The production SafeCheck path: quote the term with the template
+   translation, then run the extracted checker on the quoted program.  The
+   negative fixtures below go through this same function, so what they test is
+   what [MetaRocq SafeCheck] does. *)
+let safecheck_program ~opaque_access env evm poly term =
   let env = if poly then env else
     let (qs, us), (qcst, ucst) = Evd.sort_context_set evm in
     Environ.push_context_set ~strict:true (us, ucst) @@
     Environ.push_qualities ~rigid:true (qs, qcst) env
   in
-  let prog = time (str"Quoting") (Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm) (EConstr.to_constr evm c) in
+  let prog = time (str"Quoting") (Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm) term in
   let uctx =
     if poly then
       let uctx = Evd.to_universe_context evm in
-      let inst, auctx = UVars.abstract_universes uctx in
+      let _inst, auctx = UVars.abstract_universes uctx in
       Ast_quoter.mkPolymorphic_ctx (Ast_quoter.quote_abstract_univ_context auctx)
     else Ast_quoter.mkMonomorphic_ctx ()
   in
-  let check =
-    time (str"Checking")
-      (Extraction.infer_and_print_template_program_with_guard
-        Config0.default_checker_flags
-        (* Config0.type_in_type *)
-         prog)
-      uctx
-  in
-  match check with
+  time (str"Checking")
+    (Extraction.infer_and_print_template_program_with_guard
+      Config0.default_checker_flags
+      (* Config0.type_in_type *)
+       prog)
+    uctx
+
+let check ~opaque_access env evm poly (c, _ustate) =
+  debug (fun () -> str"Quoting");
+  match safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c) with
   | Coq_inl s -> Feedback.msg_info (pr_string s)
   | Coq_inr s -> CErrors.user_err (pr_string s)
+
+let string_contains ~where ~what =
+  let n = String.length where and m = String.length what in
+  let rec search i =
+    i + m <= n && (String.equal (String.sub where i m) what || search (i + 1))
+  in
+  Int.equal m 0 || search 0
+
+(* A negative fixture must be rejected, and rejected for its own reason: the
+   checker's message has to contain [reason], which says why the program is
+   ill-typed, and [subject], which says of what.  Accepting the program, or
+   refusing it for an unrelated reason, fails the test. *)
+let expect_safecheck_rejection what reason subject = function
+  | Coq_inr s ->
+    let message = caml_string_of_bytestring s in
+    let missing part =
+      not (string_contains ~where:message ~what:part)
+    in
+    if missing reason || missing subject then
+      CErrors.user_err
+        (str what ++ str " was rejected, but not for the expected reason."
+         ++ fnl () ++ str "expected a message containing: " ++ str reason
+         ++ fnl () ++ str "and: " ++ str subject
+         ++ fnl () ++ str "got: " ++ str message)
+    else
+      Feedback.msg_info (str what ++ str " was rejected as expected.")
+  | Coq_inl s ->
+    CErrors.user_err
+      (str what ++ str " was accepted, but it is ill-typed: "
+       ++ str (caml_string_of_bytestring s))
+
+(* The declaration is already in the environment and already invalid, so the
+   obligation it breaks exists before quotation. *)
+let test_safecheck_rejects_source ~opaque_access env evm poly reason subject c =
+  expect_safecheck_rejection "The quoted source declaration" reason subject
+    (safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c))
+
+
 let quote_with_cache quote env term =
   fst (quote () env (Evd.from_env env) term)
 
@@ -135,6 +177,15 @@ VERNAC COMMAND EXTEND MetaRocqTestSafeCheckRejection CLASSIFIED AS QUERY STATE o
     let evm = Evd.from_env env in
     let c, _ = Constrintern.interp_constr env evm c in
     test_safecheck_rejection env evm c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestSafeCheckRejectsSource CLASSIFIED AS QUERY STATE opaque_access
+| #[ poly = polymorphic ] [ "MetaRocq" "Test" "SafeCheck" "Rejects" "Source" string(reason) string(subject) constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_safecheck_rejects_source env evm poly reason subject c
   }
 END
 
