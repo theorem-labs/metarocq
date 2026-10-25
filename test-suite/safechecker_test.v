@@ -144,7 +144,7 @@ MetaRocq Test SafeCheck Rejects nat.
 
 (* Input-side negative fixtures: the obligation each one breaks exists in the
    environment before quotation, and each goes through the production
-   SafeCheck path.  Both assert the rejection's reason and its subject, so a
+   SafeCheck path.  Each asserts the rejection's reason and its subject, so a
    rejection for an unrelated cause fails the test. *)
 
 (* [Set : Type@{Set+1}], so this declaration's claimed type is wrong.  The
@@ -164,6 +164,16 @@ MetaRocq Test SafeCheck Rejects Source
    declaration in the kernel environment the quoter reads. *)
 MetaRocq Test Quoter Set Successor Cast
   "Types are not convertible" "set_successor_cast".
+
+(* [bad : Type@{d} := list Type@{d}], where [d] is [list]'s own template
+   default universe.  [Type@{d} : Type@{d+1}], so the declaration needs
+   [d+1 <= d] and must be rejected.  Its body is headed by a template
+   inductive, so it reaches the path where a substitution keyed on the body's
+   instance could replace the declared [d] by the body's larger
+   representative and repair the declaration.  The default is read from the
+   inductive's metadata, not named here. *)
+MetaRocq Test Quoter Declared Default
+  "Types are not convertible" "declared_type_successor" list.
 
 Unset Universe Polymorphism.
 

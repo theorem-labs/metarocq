@@ -913,46 +913,6 @@ struct
       in
       UVars.Instance.of_array ([||], levels)
 
-  let template_default_substitution ?universe_context env sigma mind args =
-    let mib = Environ.lookup_mind (fst mind) (snd env) in
-    match universe_context, mib.Declarations.mind_template with
-    | None, _ | _, None -> None
-    | Some _, Some template ->
-      let actual_instance =
-        template_instance ?universe_context env sigma mind args
-          UVars.Instance.empty
-      in
-      let _, defaults = UVars.Instance.to_array template.template_defaults in
-      let _, actuals = UVars.Instance.to_array actual_instance in
-      assert (Array.length defaults = Array.length actuals);
-      let rec add_levels index substitution =
-        if index = Array.length defaults then substitution
-        else
-          add_levels (index + 1)
-            (Univ.Level.Map.add defaults.(index) actuals.(index) substitution)
-      in
-      Some (Sorts.QVar.Map.empty,
-            add_levels 0 Univ.Level.Map.empty)
-
-  let normalize_template_type ?universe_context env sigma body ty =
-    let head, args = Constr.decompose_app body in
-    match Constr.kind head with
-    | Constr.Ind (mind, _) ->
-      begin match
-        template_default_substitution ?universe_context env sigma mind args
-      with
-      | None -> ty
-      | Some substitution -> Vars.subst_univs_level_constr substitution ty
-      end
-    | Constr.Construct ((mind, _), _) ->
-      begin match
-        template_default_substitution ?universe_context env sigma mind args
-      with
-      | None -> ty
-      | Some substitution -> Vars.subst_univs_level_constr substitution ty
-      end
-    | _ -> ty
-
   let quote_universes_entry = function
     | Monomorphic_entry -> Q.mkMonomorphic_entry ()
     | Polymorphic_entry ctx -> Q.mkPolymorphic_entry (Q.quote_univ_context ctx)
@@ -1835,24 +1795,19 @@ struct
                   raise e
             in
             let ty, acc =
-              (* The declaration's own type, never a type inferred from its
-                 body: the checker must be given the obligation "this body has
-                 this declared type", which is what it is asked to decide.
+              (* The declaration's own type, as the kernel stores it: neither a
+                 type inferred from the body, nor one whose universes this
+                 code rewrites.  The checker is asked whether this body has
+                 this declared type, and that is the question it must get.
                  Retyping assumes a well-typable input and checks nothing
-                 (Rocq pretyping/retyping.mli), so an inferred type would
-                 replace a rejected declaration by a repaired one.
-                 [normalize_template_type] only substitutes the template
-                 defaults of the body's head inductive by the instance that
-                 body uses, inside the declared type. *)
-              let ty =
-                match body, universe_context with
-                | Some body, Some universe_context ->
-                  let global_env = Global.env () in
-                  let global_evm = Evd.from_env global_env in
-                  normalize_template_type ~universe_context
-                    (false, global_env) global_evm body cd.const_type
-                | _ -> cd.const_type
-              in
+                 (Rocq pretyping/retyping.mli), so an inferred type would hand
+                 the checker a repaired declaration; a level substitution over
+                 the declared type would restate the claim, and being keyed on
+                 level identity it would also reach occurrences that have
+                 nothing to do with the body's head.  Template inductives
+                 inside the type are translated where they occur, by the same
+                 instance inference as anywhere else. *)
+              let ty = cd.const_type in
               let univs = Vars.universes_of_constr ty in
               let () = universes := Univ.Level.Set.union univs !universes in
               (try quote_term acc (Global.env ()) (Evd.from_env @@ Global.env ()) ty

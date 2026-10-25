@@ -142,6 +142,76 @@ let test_set_successor_cast ~opaque_access env evm reason subject =
   expect_safecheck_rejection "The max(Set+1, u) cast" reason subject
     (safecheck_program ~opaque_access env evm false term)
 
+(* [bad : Type@{d} := I Type@{d}], where [d] is the template default universe
+   of the template inductive [I], read from [I]'s own metadata rather than
+   named here.  [Type@{d} : Type@{d+1}], so [I Type@{d}] lives in
+   [Type@{d+1}] and the declaration is invalid: checking it needs
+   [d+1 <= d].
+
+   The body's head is a template inductive, which is the path where a
+   substitution keyed on the body's inferred instance could rewrite the
+   declared [d] into the body's larger representative and hand the checker a
+   repaired declaration.  The declaration is stored in the environment the
+   quoter reads, so the obligation exists before quotation. *)
+let declared_default_declaration env ind =
+  let mib = Environ.lookup_mind (fst ind) env in
+  let template =
+    match mib.Declarations.mind_template with
+    | Some template -> template
+    | None ->
+      CErrors.user_err
+        (str "This test needs a template-polymorphic inductive.")
+  in
+  let _, defaults =
+    UVars.Instance.to_array template.Declarations.template_defaults
+  in
+  let default =
+    if Int.equal (Array.length defaults) 0 then
+      CErrors.user_err
+        (str "This test needs a template inductive with a universe parameter.")
+    else defaults.(0)
+  in
+  let declared =
+    Constr.mkSort
+      (Sorts.make Sorts.Quality.qtype (Univ.Universe.make default))
+  in
+  let body =
+    Constr.mkApp (Constr.mkIndU (ind, UVars.Instance.empty), [| declared |])
+  in
+  let kn =
+    Names.KerName.make
+      (Names.ModPath.MPfile
+         (Names.DirPath.make
+            [Names.Id.of_string "MetaRocq";
+             Names.Id.of_string "Regression"]))
+      (Names.Label.of_id (Names.Id.of_string "declared_type_successor"))
+  in
+  let constant_body =
+    { Declarations.const_hyps = [];
+      const_univ_hyps = UVars.Instance.empty;
+      const_body = Declarations.Def body;
+      const_type = declared;
+      const_relevance = Sorts.Relevant;
+      const_body_code = None;
+      const_universes = Declarations.Monomorphic;
+      const_inline_code = false;
+      const_typing_flags = Environ.typing_flags env }
+  in
+  let constant = Names.Constant.make1 kn in
+  (Environ.add_constant constant constant_body env,
+   Constr.mkConstU (constant, UVars.Instance.empty))
+
+let test_declared_default ~opaque_access env evm reason subject c =
+  let ind =
+    match EConstr.kind evm c with
+    | Constr.Ind (ind, _) -> ind
+    | _ -> CErrors.user_err (str "This test needs an inductive type.")
+  in
+  let env, term = declared_default_declaration env ind in
+  expect_safecheck_rejection
+    "The declaration typed at its inductive's default universe" reason subject
+    (safecheck_program ~opaque_access env evm false term)
+
 let quote_with_cache quote env term =
   fst (quote () env (Evd.from_env env) term)
 
@@ -253,6 +323,15 @@ VERNAC COMMAND EXTEND MetaRocqTestQuoterSetSuccessorCast CLASSIFIED AS QUERY STA
     let env = Global.env () in
     let evm = Evd.from_env env in
     test_set_successor_cast env evm reason subject
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestQuoterDeclaredDefault CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "Quoter" "Declared" "Default" string(reason) string(subject) constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_declared_default env evm reason subject c
   }
 END
 
