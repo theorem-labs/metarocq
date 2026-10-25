@@ -797,7 +797,7 @@ struct
      PCUICEquality.v:46-74).  The kernel stores no instance there, and the
      instance inferred from the arguments' types is fixed at quotation: after
      PCUIC substitutes into the arguments, one kernel term can carry two
-     instances (LemmaPin_23's [match .. in prod _ _]; [eq@{Set} Z] against
+     instances (a [match .. in prod _ _] reached two ways; [eq@{Set} Z] against
      [eq@{RelationClasses.21} Z] in [Z.eq_equiv]).  So a level bound by a given
      argument becomes the program's top level, which is above every argument
      type and does not depend on it.
@@ -1103,7 +1103,7 @@ struct
        The cache is direct-mapped: a slot holds one subterm and a collision
        evicts it, so a lookup costs O(1) whatever the hash quality. With a
        chained table and a bounded hash, bucket scans took 78% of quotation time
-       on BET's objects. The arrays start filled with the first entry, which is
+       on large objects. The arrays start filled with the first entry, which is
        a valid entry in every slot, and double up to [max_quote_cache_size] as
        entries are added. *)
     let cache_keys = ref [||] and cache_values = ref [||] and cache_adds = ref 0 in
@@ -1920,7 +1920,7 @@ struct
              extension stays conservative.  Without them PCUIC cannot derive
              what the kernel checks on [D_a] itself, such as a record field of
              sort [max(u, v)] below the record's sort [max(u, v, w)]
-             (LinuxProcessSem.State.Model). *)
+             (a record whose field sort is a strict sub-maximum). *)
           let template_constraints =
             let graph =
               UGraph.set_type_in_type false (read_universe_graph env)

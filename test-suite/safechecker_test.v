@@ -52,8 +52,8 @@ MetaRocq SafeCheck template_sigT_nat.
    on the context.  Typing [f h] converts [template_case_eq nat p] with
    [template_case_eq_nat p]; both unfold to the stuck match on [p], quoted
    once with [C : Type@{template_case_u}] and once with [nat : Set]
-   (LemmaPin_23: Ring_polynom's [cdiv] match, at [Ring_polynom.22] and
-   [Ring_theory.98]).  The quoter types a constant by retyping its body, so
+   (seen in the wild on a [cdiv] match in [Ring_polynom], at [Ring_polynom.22]
+   and [Ring_theory.98]).  The quoter types a constant by retyping its body, so
    the conversion has to occur inside the body.  A named universe keeps
    minimization from turning [template_case_u] into [Set]. *)
 Universe template_case_u.
@@ -81,8 +81,8 @@ MetaRocq SafeCheck @template_partial_instance.
    sort.  Each algebraic sort is quoted as a fresh level; the inductive-sort
    check needs [template_alg_inner]'s level below [template_alg_outer]'s,
    which the kernel derives from [max(a+1, b+1) <= max(a+1, b+1, c+1)]
-   (LinuxProcessSem.State.Model, whose field [FdState] has sort
-   [max(Fs.path.u0, PipeBuf.u0)]). *)
+   (seen in the wild on a record whose field sort is a strict sub-maximum of
+   the record's own sort). *)
 Universes template_alg_a template_alg_b template_alg_c.
 Record template_alg_inner := {
   template_alg_ia : Type@{template_alg_a};
