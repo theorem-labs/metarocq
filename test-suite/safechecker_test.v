@@ -106,15 +106,20 @@ Unset Universe Checking.
 MetaRocq SafeCheck @template_alg_outer.
 Set Universe Checking.
 
-(* The test command injects a declaration quotation failure after installing a
-   local universe scope, then calls the same nonrecursive quotation path as
-   [tmQuote] on a bound universe.  It fails if that path can read the abandoned
-   scope or mint one of its bound levels. *)
-MetaRocq Test Quoter Restores State.
+(* The compound product has a scope-dependent child.  The test confirms a hit
+   in the same scope, a miss in another scope, and rejection outside a scope. *)
+MetaRocq Test Quoter Scope Cache.
+
+Set Universe Polymorphism.
+Polymorphic Definition template_state_restore_source@{u}
+  (A : Type@{u}) := list A.
+(* The test hook raises after [quote_term_rec] → [quote_declaration] has
+   installed name, scope, dependency root and in-progress state.  The command
+   then uses the same nonrecursive quoter as [tmQuote]. *)
+MetaRocq Test Quoter Restores State @template_state_restore_source.
 
 (* The upper-bound pass must let [Control.Timeout] leave its graph query. *)
 MetaRocq Test Quoter Propagates Timeout.
-Set Universe Polymorphism.
 
 (* This nested use gives [list] the algebraic template instance [max(i,j)].
    It exercises the shared representative in both the list instance and the

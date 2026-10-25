@@ -374,6 +374,12 @@ struct
     dependencies.qd_scope <- state.ds_scope;
     state.ds_scope
 
+  let same_local_scope left right =
+    match left, right with
+    | None, None -> true
+    | Some left, Some right -> left == right
+    | _ -> false
+
   let read_universe_graph env =
     (current_dependencies ()).qd_graph <- true;
     Environ.universes env
@@ -421,7 +427,8 @@ struct
          && (deps.qd_max_rel <= 0
              || rel_contexts_agree (Environ.rel_context env)
                   (Environ.rel_context deps.qd_env))))
-    && (not deps.qd_reads_scope || read_local_scope () == deps.qd_scope)
+    && (not deps.qd_reads_scope
+        || same_local_scope (read_local_scope ()) deps.qd_scope)
     && (not deps.qd_graph
         || read_universe_graph env == Environ.universes deps.qd_env)
 
@@ -430,7 +437,10 @@ struct
     let max_rel = child.qd_max_rel - (depth - parent.qd_depth) in
     if max_rel > parent.qd_max_rel then parent.qd_max_rel <- max_rel;
     if child.qd_retypes then parent.qd_retypes <- true;
-    if child.qd_reads_scope then parent.qd_reads_scope <- true;
+    if child.qd_reads_scope then begin
+      parent.qd_reads_scope <- true;
+      parent.qd_scope <- child.qd_scope
+    end;
     if child.qd_graph then parent.qd_graph <- true;
     if child.qd_unstable then parent.qd_unstable <- true
 
@@ -1055,6 +1065,9 @@ struct
 
   let quote_term_remember ?universe_context
       ?(remember_universe_levels = fun _ -> ())
+      ?(on_cache_hit = fun _ -> ())
+      ?(on_cache_candidate = fun _ _ -> ())
+      ?(on_cache_store = fun _ _ -> ())
       (add_constant : KerName.t -> 'a -> 'a)
       (add_inductive : Names.inductive -> Declarations.mutual_inductive_body -> 'a -> 'a) =
     (* Kernel terms are hash-consed DAGs; quoting them as trees duplicates every
@@ -1149,12 +1162,16 @@ struct
       let hit =
         if not usable then None
         else match cache_find trm with
-          | Some (quoted, deps) when quote_dependencies_hold deps (snd env) ->
-            Some (quoted, deps)
-          | _ -> None
+          | Some (quoted, deps) ->
+            on_cache_candidate trm deps;
+            if quote_dependencies_hold deps (snd env) then
+              Some (quoted, deps)
+            else None
+          | None -> None
       in
       match hit with
       | Some (quoted, deps) ->
+        on_cache_hit trm;
         add_quote_dependencies parent deps depth;
         quoted, acc
       | None ->
@@ -1167,7 +1184,8 @@ struct
         add_quote_dependencies parent deps depth;
         if usable && not deps.qd_unstable then begin
           release_quote_dependencies deps;
-          cache_add trm (quoted, deps)
+          cache_add trm (quoted, deps);
+          on_cache_store trm deps
         end;
         quoted, acc
     and quote_term_uncached (acc : 'a) env sigma trm =
@@ -1573,48 +1591,7 @@ struct
     let (fn,_) = quote_term_remember (fun _ () -> ()) (fun _ _ () -> ()) in
     fst (fn () env sigma trm)
 
-  let test_declaration_state_restore env sigma =
-    let state = !current_declaration_state in
-    with_declaration_state
-      { state with
-        ds_name = "<toplevel>";
-        ds_scope = None;
-        ds_dependencies = new_quote_dependencies env }
-      (fun () ->
-         let scope =
-           Some { ls_n_orig = 2;
-                  ls_memo = Univ.Universe.Map.empty;
-                  ls_definitions = [||];
-                  ls_exprs = [];
-                  ls_constraints = Univ.UnivConstraints.empty;
-                  ls_next = 0 }
-         in
-         let failed =
-           try
-             ignore
-               (with_declaration_state
-                  { (!current_declaration_state) with
-                    ds_name = "failing declaration";
-                    ds_scope = scope;
-                    ds_dependencies = new_quote_dependencies env }
-                  (fun () ->
-                     raise (Invalid_argument "Injected declaration quotation failure.")));
-             false
-           with Invalid_argument _ -> true
-         in
-         if not failed then false
-         else
-           let universe =
-             Univ.Universe.unrepr
-               [Univ.Level.var 0, 0; Univ.Level.var 1, 0]
-           in
-           let bound_universe =
-             Constr.mkSort (Sorts.make Sorts.Quality.qtype universe)
-           in
-           try
-             ignore (quote_term env sigma bound_universe);
-             false
-           with CErrors.UserError _ -> true)
+
 
   let test_upper_bound_timeout env =
     let graph = UGraph.set_type_in_type false (read_universe_graph env) in
@@ -1674,7 +1651,7 @@ struct
            univs oib.mind_nf_lc)
       univs mib.mind_packets
 
-  let quote_term_rec ~bypass ~opaque_access ?(with_universes=true) ?(with_restriction=true) env sigma trm =
+  let quote_term_rec ?after_declaration_state ~bypass ~opaque_access ?(with_universes=true) ?(with_restriction=true) env sigma trm =
     let visited_terms = ref Names.KNset.empty in
     let visited_types = ref Mindset.empty in
     let universes = ref Univ.Level.Set.empty in
@@ -1710,6 +1687,9 @@ struct
           ds_in_progress = Names.KNset.add kn state.ds_in_progress }
         f
     in
+    let run_after_declaration_state () =
+      Option.iter (fun f -> f ()) after_declaration_state
+    in
     let add quote_term quote_type trm acc =
       match trm with
       | Ind ((mi,idx), mib) ->
@@ -1742,6 +1722,7 @@ struct
               { state with
                 ds_name = Pp.string_of_ppcmds (MutInd.print mi);
                 ds_scope = scope };
+            run_after_declaration_state ();
             let univs = universes_of_mib mib in
             let () = universes := Univ.Level.Set.union univs !universes in
             begin match mib.Declarations.mind_template with
@@ -1787,6 +1768,7 @@ struct
               { state with
                 ds_name = Pp.string_of_ppcmds (KerName.print kn);
                 ds_scope = scope };
+            run_after_declaration_state ();
             let body = match cd.const_body with
               | Undef _ -> None
               | Primitive t ->
@@ -1978,6 +1960,54 @@ struct
     let env = Q.mk_global_env univs decls retro in
     Q.mk_program env tm
 
+  let test_declaration_state_restore ~opaque_access env sigma trm =
+    let active_dependencies = ref None in
+    let hook_ran = ref false in
+    let after_declaration_state () =
+      let state = !current_declaration_state in
+      if String.equal state.ds_name "<toplevel>"
+         || Option.is_empty state.ds_scope
+         || Names.KNset.is_empty state.ds_in_progress
+      then
+        CErrors.user_err
+          (str "Recursive quotation test hook ran before declaration state was installed.");
+      hook_ran := true;
+      active_dependencies := Some state.ds_dependencies;
+      raise (Invalid_argument "Injected recursive declaration quotation failure.")
+    in
+    let failed =
+      try
+        ignore
+          (quote_term_rec
+             ~after_declaration_state
+             ~bypass:true ~opaque_access ~with_universes:true env sigma trm);
+        false
+      with Invalid_argument _ -> true
+    in
+    let state = !current_declaration_state in
+    let all_state_restored =
+      failed
+      && !hook_ran
+      && String.equal state.ds_name "<toplevel>"
+      && Option.is_empty state.ds_scope
+      && Names.KNset.is_empty state.ds_in_progress
+      && (match !active_dependencies with
+          | Some active -> state.ds_dependencies != active
+          | None -> false)
+    in
+    if not all_state_restored then false
+    else
+      let universe =
+        Univ.Universe.unrepr
+          [Univ.Level.var 0, 0; Univ.Level.var 1, 0]
+      in
+      let bound_universe =
+        Constr.mkSort (Sorts.make Sorts.Quality.qtype universe)
+      in
+      try
+        ignore (quote_term env sigma bound_universe);
+        false
+      with CErrors.UserError _ -> true
   let quote_rel_context env sigma ctx =
     fst (quote_rel_context (fun acc env sigma t -> (quote_term (snd env) sigma t, acc)) () ((), env) sigma ctx)
 
