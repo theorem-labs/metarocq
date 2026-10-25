@@ -1311,8 +1311,8 @@ Section CheckEnv.
         unshelve eapply wf_redp_subterm; eauto.
       Defined.
     (* Private probe regression: this reaches the real checker before any
-       quotation.  The argument [tRel #|Δ|] is outside [Δ], so the existing
-       product-domain check must retain its [Non-positive occurrence.] error. *)
+       quotation.  The argument [tRel 0] is outside the empty context, so the
+       existing product-domain check must retain [Non-positive occurrence.]. *)
     Lemma probe_nonpositive_cstr_arg_rejected mdecl
       (wt : forall Σ, abstract_env_ext_rel X_ext Σ ->
         welltyped Σ []
