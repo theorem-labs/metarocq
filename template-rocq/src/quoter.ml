@@ -550,20 +550,26 @@ struct
     in
     UVars.AbstractContext.make (UVars.AbstractContext.names auctx) pcon
 
-  (* Every universe level is at least [Set], so [max(Set, u1, ..., un)]
-     equals [max(u1, ..., un)] when a non-[Set] component is present.  Removing
-     the redundant component before minting representatives prevents list's
+  (* Every universe level is at least [Set], so [max(Set, u1, ..., un)] equals
+     [max(u1, ..., un)] when a non-[Set] component is present.  Removing that
+     redundant component before minting representatives prevents list's
      intrinsic [max(Set, u)] result sort from introducing a spurious second
-     universe parameter. *)
+     universe parameter.
+
+     Only the component [(Set, 0)] is redundant.  [Set+n] for [n > 0] is not:
+     [max(Set+1, u)] and [u] differ whenever [u] may be [Set], and dropping
+     the offset would turn the obligation of a cast from [Type@{max(Set+1,u)}]
+     to [Type@{u}] into a reflexive one.  A positive offset is kept, and the
+     algebraic universe then gets a representative with its lower bounds. *)
   let simplify_template_universe universe =
     let components = Univ.Universe.repr universe in
-    if List.exists
-         (fun (level, _) -> not (Univ.Level.equal level Univ.Level.set))
-         components
+    let redundant_set (level, shift) =
+      Univ.Level.equal level Univ.Level.set && Int.equal shift 0
+    in
+    if List.exists (fun component -> not (redundant_set component)) components
     then
       Univ.Universe.unrepr
-        (List.filter
-           (fun (level, _) -> not (Univ.Level.equal level Univ.Level.set))
+        (List.filter (fun component -> not (redundant_set component))
            components)
     else universe
   let normalize_global_universe context universe =
