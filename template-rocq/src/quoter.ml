@@ -41,8 +41,6 @@ let toDecl (old: Name.t Constr.binder_annot * ((Constr.constr) option) * Constr.
   | Some value -> Context.Rel.Declaration.LocalDef (name,value,typ)
   | None -> Context.Rel.Declaration.LocalAssum (name,typ)
 
-let getType env (t:Constr.t) : Constr.t =
-    EConstr.to_constr Evd.empty (Retyping.get_type_of env Evd.empty (EConstr.of_constr t))
 
 let hnf_type env ty =
   let rec hnf_type continue ty =
@@ -273,9 +271,9 @@ struct
     in
     fresh ()
 
-  (* Name of the declaration currently being quoted, used for diagnostics and
-     to key the per-declaration extra-level table. *)
-  let current_decl_name = ref "<toplevel>"
+  (* Declaration-scoped state keeps diagnostics, local universe representatives,
+     cache dependencies and in-progress declarations together so one
+     exception-safe swap restores the whole declaration boundary. *)
 
   (* Per-declaration scope for algebraic template universes whose components
      mention bound universe variables of the enclosing polymorphic
@@ -295,7 +293,7 @@ struct
     mutable ls_next : int;
   }
 
-  let current_local_scope : local_scope option ref = ref None
+  (* The active scope is held by [current_declaration_state]. *)
 
   (* What the quoted value of one kernel subterm was computed from, besides the
      subterm itself and the global declarations.  [quote_term_remember] uses it
@@ -308,8 +306,10 @@ struct
      - The flags say that the subterm, or one of its subterms, read that part
        of the context.  [qd_env] and [qd_scope] keep what was read: the
        environment while [qd_retypes] or [qd_graph] holds, the local scope while
-       [qd_reads_scope] holds.  A cached record without those flags keeps
-       neither, so the cache does not retain environments. *)
+       [qd_reads_scope] holds.  Retyping also records [qd_typing_flags], so a
+       cached record is not reused under different typing flags.  A cached
+       record without those flags keeps neither, so the cache does not retain
+       environments. *)
   type quote_dependencies = {
     qd_depth : int;
     mutable qd_env : Environ.env;
@@ -317,9 +317,11 @@ struct
     mutable qd_max_rel : int;
     (* [template_instance] retyped an argument in [qd_env]. *)
     mutable qd_retypes : bool;
-    (* [template_universe_level] read [current_local_scope]. *)
+    (* The exact flags [Retyping] used for this entry. *)
+    qd_typing_flags : Declarations.typing_flags;
+    (* [read_local_scope] read the declaration-local universe scope. *)
     mutable qd_reads_scope : bool;
-    (* [template_universe_level] read the universe graph of [qd_env]. *)
+    (* [read_universe_graph] read the universe graph of [qd_env]. *)
     mutable qd_graph : bool;
     (* The subterm refers to a declaration that was still being quoted, whose
        extra universe levels ([extended_constants], [extended_inductives]) were
@@ -330,22 +332,61 @@ struct
 
   let new_quote_dependencies env =
     { qd_depth = Environ.nb_rel env; qd_env = env;
-      qd_scope = !current_local_scope; qd_max_rel = 0; qd_retypes = false;
-      qd_reads_scope = false; qd_graph = false; qd_unstable = false }
+      qd_scope = None; qd_max_rel = 0; qd_retypes = false;
+      qd_typing_flags = Environ.typing_flags env; qd_reads_scope = false;
+      qd_graph = false; qd_unstable = false }
 
-  (* The record of the subterm being quoted now.  [quote_term_rec] gives each
-     declaration it quotes a fresh one, so a declaration's reads are not
-     charged to the occurrence that triggered its quotation. *)
-  let current_quote_dependencies =
-    ref (new_quote_dependencies Environ.empty_env)
+  type declaration_state = {
+    ds_name : string;
+    ds_scope : local_scope option;
+    ds_dependencies : quote_dependencies;
+    ds_in_progress : Names.KNset.t;
+  }
 
-  (* Declarations, by canonical kernel name, that [quote_term_rec] has started
-     and not finished quoting. *)
-  let declarations_in_progress = ref Names.KNset.empty
+  let current_declaration_state =
+    ref {
+      ds_name = "<toplevel>";
+      ds_scope = None;
+      ds_dependencies = new_quote_dependencies Environ.empty_env;
+      ds_in_progress = Names.KNset.empty;
+    }
+
+  let with_declaration_state state f =
+    let saved = !current_declaration_state in
+    current_declaration_state := state;
+    match f () with
+    | result ->
+      current_declaration_state := saved;
+      result
+    | exception e ->
+      let e = Exninfo.capture e in
+      current_declaration_state := saved;
+      Exninfo.iraise e
+
+
+  let current_dependencies () =
+    (!current_declaration_state).ds_dependencies
+
+  let read_local_scope () =
+    let state = !current_declaration_state in
+    let dependencies = state.ds_dependencies in
+    dependencies.qd_reads_scope <- true;
+    dependencies.qd_scope <- state.ds_scope;
+    state.ds_scope
+
+  let read_universe_graph env =
+    (current_dependencies ()).qd_graph <- true;
+    Environ.universes env
+
+  let retype_template_argument env sigma arg =
+    (current_dependencies ()).qd_retypes <- true;
+    EConstr.to_constr sigma
+      (Retyping.get_type_of env sigma (EConstr.of_constr arg))
 
   let note_declaration_reference kn =
-    if Names.KNset.mem kn !declarations_in_progress then
-      !current_quote_dependencies.qd_unstable <- true
+    let state = !current_declaration_state in
+    if Names.KNset.mem kn state.ds_in_progress then
+      state.ds_dependencies.qd_unstable <- true
 
   (* The cache is used only under an evar map with no evars, no conversion
      problems, no local universes and no flexible universe variables, as made
@@ -374,14 +415,15 @@ struct
      same subterm would compute now, in [env]. *)
   let quote_dependencies_hold deps env =
     (not deps.qd_retypes
-     || (Environ.named_context_val env
-         == Environ.named_context_val deps.qd_env
+     || (Environ.same_flags deps.qd_typing_flags (Environ.typing_flags env)
+         && Environ.named_context_val env
+            == Environ.named_context_val deps.qd_env
          && (deps.qd_max_rel <= 0
              || rel_contexts_agree (Environ.rel_context env)
                   (Environ.rel_context deps.qd_env))))
-    && (not deps.qd_reads_scope || !current_local_scope == deps.qd_scope)
+    && (not deps.qd_reads_scope || read_local_scope () == deps.qd_scope)
     && (not deps.qd_graph
-        || Environ.universes env == Environ.universes deps.qd_env)
+        || read_universe_graph env == Environ.universes deps.qd_env)
 
   (* Charge the reads of a subterm, quoted at rel depth [depth], to [parent]. *)
   let add_quote_dependencies parent child depth =
@@ -532,6 +574,43 @@ struct
          (fun (level, shift) -> expand_component shift level)
          (Univ.Universe.repr universe))
 
+  let fresh_template_upper_bounds leq graph univs definitions constraints =
+    let definition_of level =
+      match Univ.Level.Map.find_opt level definitions with
+      | Some definition -> definition
+      | None -> Univ.Universe.make level
+    in
+    let candidates =
+      Univ.Level.Map.fold
+        (fun level _ candidates -> Univ.Level.Set.add level candidates)
+        definitions
+        (Univ.Level.Set.inter univs (UGraph.domain graph))
+    in
+    let provably_leq u v =
+      let levels =
+        Univ.Level.Set.union
+          (Univ.Universe.levels ~init:Univ.Level.Set.empty u)
+          (Univ.Universe.levels ~init:Univ.Level.Set.empty v)
+      in
+      match UGraph.check_declared_universes graph levels with
+      | Ok () -> leq graph u v
+      | Error _ -> false
+    in
+    time Pp.(str "Computing fresh template upper bounds")
+      (Univ.Level.Map.fold
+         (fun fresh definition constraints ->
+            Univ.Level.Set.fold
+              (fun level constraints ->
+                 if Univ.Level.equal fresh level
+                    || not (provably_leq definition (definition_of level))
+                 then constraints
+                 else
+                   Univ.UnivConstraints.add
+                     (fresh, Univ.UnivConstraint.Le, level) constraints)
+              candidates constraints)
+         definitions)
+      constraints
+
 
 
   let template_universe_level ?context env universe =
@@ -562,19 +641,19 @@ struct
     | None ->
       if universe_has_var_component universe then begin
         (* Polymorphic scope: components include bound universe variables. *)
-        !current_quote_dependencies.qd_reads_scope <- true;
-        match !current_local_scope with
+        match read_local_scope () with
         | Some scope -> local_fresh_var scope universe
         | None ->
           CErrors.user_err
             Pp.(str "Quoting algebraic template universe "
                 ++ Univ.Universe.pr Univ.Level.raw_pr universe
                 ++ str " with bound-variable components, in declaration "
-                ++ str !current_decl_name
+                ++ str (!current_declaration_state).ds_name
                 ++ str ", outside any polymorphic declaration, is not supported.")
       end else begin
-        !current_quote_dependencies.qd_graph <- true;
-        let graph = Environ.universes (snd env) in
+        let graph =
+          UGraph.set_type_in_type false (read_universe_graph (snd env))
+        in
         let components = Univ.Universe.repr universe in
         (* Prefer reusing an already-declared level when the universe graph
            proves the algebraic expression equal to one of its components. *)
@@ -778,10 +857,8 @@ struct
          the argument's type viewed as an arity, so a parameter such as
          [P : A -> Type@{u}] (e.g. [sigT]) binds [u]. *)
       let argument_universe arg ~default:_ =
-        !current_quote_dependencies.qd_retypes <- true;
         let type_of_argument =
-          EConstr.to_constr sigma
-            (Retyping.get_type_of (snd env) sigma (EConstr.of_constr arg))
+          retype_template_argument (snd env) sigma arg
         in
         match snd (Reduction.dest_arity (snd env) type_of_argument) with
         | Sorts.Prop -> Inductive.TemplateProp
@@ -995,11 +1072,11 @@ struct
          [Rel]: the binders inside a closed subterm come from the subterm
          itself. Such a value is reused only under the same named context and
          a rel context with the same declarations ([rel_contexts_agree]).
-       - [current_local_scope], for an algebraic universe over bound
-         variables. Reused only in the same scope, whose memo already holds the
-         levels the first quotation minted.
-       - The environment's universe graph, for an algebraic universe over
-         global levels. Reused only under the same graph.
+       - [read_local_scope], for an algebraic universe over bound variables.
+         Reused only in the same scope, whose memo already holds the levels the
+         first quotation minted.
+       - [read_universe_graph], for an algebraic universe over global levels.
+         Reused only under the same graph.
        - [extended_constants]/[extended_inductives], which gain an entry when a
          declaration finishes quoting. A value that read a declaration still in
          progress is not cached ([qd_unstable]); every other entry is final.
@@ -1065,7 +1142,8 @@ struct
       | _ -> ()
     in
     let rec quote_term (acc : 'a) env sigma trm =
-      let parent = !current_quote_dependencies in
+      let parent_state = !current_declaration_state in
+      let parent = parent_state.ds_dependencies in
       let depth = Environ.nb_rel (snd env) in
       let usable = quote_cache_usable sigma in
       let hit =
@@ -1081,15 +1159,11 @@ struct
         quoted, acc
       | None ->
         let deps = new_quote_dependencies (snd env) in
-        current_quote_dependencies := deps;
         let quoted, acc =
-          try quote_term_uncached acc env sigma trm
-          with e ->
-            let e = Exninfo.capture e in
-            current_quote_dependencies := parent;
-            Exninfo.iraise e
+          with_declaration_state
+            { parent_state with ds_dependencies = deps }
+            (fun () -> quote_term_uncached acc env sigma trm)
         in
-        current_quote_dependencies := parent;
         add_quote_dependencies parent deps depth;
         if usable && not deps.qd_unstable then begin
           release_quote_dependencies deps;
@@ -1100,7 +1174,7 @@ struct
       let aux acc env trm =
       match Constr.kind trm with
       | Constr.Rel i ->
-        !current_quote_dependencies.qd_max_rel <- i;
+        (current_dependencies ()).qd_max_rel <- i;
         (Q.mkRel (Q.quote_int (i - 1)), acc)
       | Constr.Var v -> (Q.mkVar (Q.quote_ident v), acc)
       | Constr.Evar (n,args) ->
@@ -1446,7 +1520,7 @@ struct
         | _ -> auctx
       in
       let uctx =
-        match base_auctx, !current_local_scope with
+        match base_auctx, read_local_scope () with
         | Some auctx, Some scope when scope.ls_next > 0 ->
           let new_auctx = constrain (extend_abstract_context auctx scope) in
           extended_inductives :=
@@ -1475,7 +1549,7 @@ struct
               (Array.to_list univs)
           in
           let extra_variances =
-            match !current_local_scope with
+            match read_local_scope () with
             | Some scope ->
               Array.to_list
                 (Array.make scope.ls_next
@@ -1498,6 +1572,70 @@ struct
   let quote_term env sigma trm =
     let (fn,_) = quote_term_remember (fun _ () -> ()) (fun _ _ () -> ()) in
     fst (fn () env sigma trm)
+
+  let test_declaration_state_restore env sigma =
+    let state = !current_declaration_state in
+    with_declaration_state
+      { state with
+        ds_name = "<toplevel>";
+        ds_scope = None;
+        ds_dependencies = new_quote_dependencies env }
+      (fun () ->
+         let scope =
+           Some { ls_n_orig = 2;
+                  ls_memo = Univ.Universe.Map.empty;
+                  ls_definitions = [||];
+                  ls_exprs = [];
+                  ls_constraints = Univ.UnivConstraints.empty;
+                  ls_next = 0 }
+         in
+         let failed =
+           try
+             ignore
+               (with_declaration_state
+                  { (!current_declaration_state) with
+                    ds_name = "failing declaration";
+                    ds_scope = scope;
+                    ds_dependencies = new_quote_dependencies env }
+                  (fun () ->
+                     raise (Invalid_argument "Injected declaration quotation failure.")));
+             false
+           with Invalid_argument _ -> true
+         in
+         if not failed then false
+         else
+           let universe =
+             Univ.Universe.unrepr
+               [Univ.Level.var 0, 0; Univ.Level.var 1, 0]
+           in
+           let bound_universe =
+             Constr.mkSort (Sorts.make Sorts.Quality.qtype universe)
+           in
+           try
+             ignore (quote_term env sigma bound_universe);
+             false
+           with CErrors.UserError _ -> true)
+
+  let test_upper_bound_timeout env =
+    let graph = UGraph.set_type_in_type false (read_universe_graph env) in
+    let context = make_template_universe_context () in
+    let level = fresh_template_level graph context in
+    let definitions =
+      Univ.Level.Map.add level Univ.Universe.type0 Univ.Level.Map.empty
+    in
+    match
+      Control.timeout 1.
+        (fun () ->
+           fresh_template_upper_bounds
+             (fun _ _ _ -> raise Control.Timeout)
+             graph
+             (Univ.Level.Set.singleton Univ.Level.set)
+             definitions
+             Univ.UnivConstraints.empty)
+        ()
+    with
+    | Error _ -> true
+    | Ok _ -> false
 
   let quote_mind_decl env sigma trm mib =
     let (_,fn) = quote_term_remember (fun _ () -> ()) (fun _ _ () -> ()) in
@@ -1544,14 +1682,15 @@ struct
     let template_defaults = ref Univ.Level.Set.empty in
     let template_universe_context = make_template_universe_context () in
     let () =
-      current_decl_name := "<toplevel>";
-      current_local_scope := None;
+      current_declaration_state :=
+        { ds_name = "<toplevel>";
+          ds_scope = None;
+          ds_dependencies = new_quote_dependencies Environ.empty_env;
+          ds_in_progress = Names.KNset.empty };
       extended_constants := Names.KerName.Map.empty;
       extended_inductives := Names.KerName.Map.empty;
-      declarations_in_progress := Names.KNset.empty;
-      current_quote_dependencies := new_quote_dependencies Environ.empty_env;
       template_universe_context.top_level <-
-        Some (fresh_template_level (Environ.universes env)
+        Some (fresh_template_level (read_universe_graph env)
                 template_universe_context)
     in
     let top =
@@ -1564,20 +1703,12 @@ struct
        reached it.  While [f] runs, [kn] is in progress, so a subterm referring
        to it is not cached (see [quote_dependencies.qd_unstable]). *)
     let quote_declaration kn f =
-      let saved_dependencies = !current_quote_dependencies in
-      let saved_in_progress = !declarations_in_progress in
-      current_quote_dependencies := new_quote_dependencies Environ.empty_env;
-      declarations_in_progress := Names.KNset.add kn saved_in_progress;
-      let restore () =
-        current_quote_dependencies := saved_dependencies;
-        declarations_in_progress := saved_in_progress
-      in
-      match f () with
-      | result -> restore (); result
-      | exception e ->
-        let e = Exninfo.capture e in
-        restore ();
-        Exninfo.iraise e
+      let state = !current_declaration_state in
+      with_declaration_state
+        { state with
+          ds_dependencies = new_quote_dependencies Environ.empty_env;
+          ds_in_progress = Names.KNset.add kn state.ds_in_progress }
+        f
     in
     let add quote_term quote_type trm acc =
       match trm with
@@ -1587,9 +1718,6 @@ struct
         else quote_declaration (MutInd.canonical mi) @@ fun () ->
           begin
             visited_types := Mindset.add t !visited_types;
-            let saved_decl_name = !current_decl_name in
-            current_decl_name := Pp.string_of_ppcmds (MutInd.print mi);
-            let saved_local_scope = !current_local_scope in
             let original_universe_count =
               match mib.Declarations.mind_template,
                     mib.Declarations.mind_universes with
@@ -1599,7 +1727,7 @@ struct
                 snd (UVars.AbstractContext.size auctx)
               | None, Declarations.Monomorphic -> 0
             in
-            current_local_scope :=
+            let scope =
               if Int.equal original_universe_count 0 then None
               else
                 Some { ls_n_orig = original_universe_count;
@@ -1607,7 +1735,13 @@ struct
                        ls_definitions = [||];
                        ls_exprs = [];
                        ls_constraints = Univ.UnivConstraints.empty;
-                       ls_next = 0 };
+                       ls_next = 0 }
+            in
+            let state = !current_declaration_state in
+            current_declaration_state :=
+              { state with
+                ds_name = Pp.string_of_ppcmds (MutInd.print mi);
+                ds_scope = scope };
             let univs = universes_of_mib mib in
             let () = universes := Univ.Level.Set.union univs !universes in
             begin match mib.Declarations.mind_template with
@@ -1628,33 +1762,31 @@ struct
                 Feedback.msg_debug (str"Exception raised while checking " ++ MutInd.print mi);
                 raise e
             in
-            constants := (kn,d) :: !constants;
-            current_local_scope := saved_local_scope;
-            current_decl_name := saved_decl_name
+            constants := (kn,d) :: !constants
           end
       | Const kn ->
         if Names.KNset.mem kn !visited_terms then ()
         else quote_declaration kn @@ fun () ->
           begin
-            visited_terms := Names.KNset.add kn !visited_terms ;
-            let saved_decl_name = !current_decl_name in
-            current_decl_name := Pp.string_of_ppcmds (KerName.print kn);
-            let saved_local_scope = !current_local_scope in
-            let () =
-              current_local_scope :=
-                (match (Environ.lookup_constant (Names.Constant.make kn kn) env)
-                         .const_universes with
-                 | Declarations.Polymorphic auctx ->
-                   Some { ls_n_orig = snd (UVars.AbstractContext.size auctx);
-                          ls_memo = Univ.Universe.Map.empty;
-                          ls_definitions = [||];
-                          ls_exprs = [];
-                          ls_constraints = Univ.UnivConstraints.empty;
-                          ls_next = 0 }
-                 | Declarations.Monomorphic -> None)
-            in
+            visited_terms := Names.KNset.add kn !visited_terms;
             let c = Names.Constant.make kn kn in
             let cd = Environ.lookup_constant c env in
+            let scope =
+              match cd.const_universes with
+              | Declarations.Polymorphic auctx ->
+                Some { ls_n_orig = snd (UVars.AbstractContext.size auctx);
+                       ls_memo = Univ.Universe.Map.empty;
+                       ls_definitions = [||];
+                       ls_exprs = [];
+                       ls_constraints = Univ.UnivConstraints.empty;
+                       ls_next = 0 }
+              | Declarations.Monomorphic -> None
+            in
+            let state = !current_declaration_state in
+            current_declaration_state :=
+              { state with
+                ds_name = Pp.string_of_ppcmds (KerName.print kn);
+                ds_scope = scope };
             let body = match cd.const_body with
               | Undef _ -> None
               | Primitive t ->
@@ -1696,9 +1828,7 @@ struct
                   let global_env = Global.env () in
                   let global_evm = Evd.from_env global_env in
                   let type_of_body =
-                    EConstr.to_constr global_evm
-                      (Retyping.get_type_of global_env global_evm
-                         (EConstr.of_constr body))
+                    retype_template_argument global_env global_evm body
                   in
                   normalize_template_type
                     ~universe_context:template_universe_context
@@ -1713,7 +1843,7 @@ struct
             in
             let rel = Q.quote_relevance cd.const_relevance in
             let uctx =
-              match cd.const_universes, !current_local_scope with
+              match cd.const_universes, read_local_scope () with
               | Declarations.Polymorphic auctx, Some scope when scope.ls_next > 0 ->
                 (* Extend this declaration's abstract universe context with the
                    fresh bound levels introduced for its algebraic template
@@ -1748,7 +1878,7 @@ struct
               | _ -> quote_universes_decl cd.const_universes None
             in
             let () =
-              match !current_local_scope with
+              match read_local_scope () with
               | Some scope when scope.ls_next > 0 ->
                 extended_constants :=
                   Names.KerName.Map.add kn (List.rev scope.ls_exprs)
@@ -1757,9 +1887,7 @@ struct
             in
             let cst_bdy = Q.mk_constant_body ty tm uctx rel in
             let decl = Q.mk_constant_decl cst_bdy in
-            constants := (Q.quote_kn kn, decl) :: !constants;
-            current_local_scope := saved_local_scope;
-            current_decl_name := saved_decl_name
+            constants := (Q.quote_kn kn, decl) :: !constants
           end
     in
     let (quote_rem,quote_typ) =
@@ -1803,44 +1931,19 @@ struct
           (* A fresh level [a] stands for the algebraic universe [D_a] it was
              minted for, and has only the lower bounds [c <= a] of its
              components.  Add its upper bounds: [a <= l] for each kept level
-             or fresh level [l] with [D_a <= D_l] in the environment's graph
-             ([D_l = l] for a kept level).  Under the valuation
-             [v(a) = v(D_a)] each of them holds, so the extension stays
-             conservative.  Without them PCUIC cannot derive what the kernel
-             checks on [D_a] itself, such as a record field of sort
-             [max(u, v)] below the record's sort [max(u, v, w)]
+             or fresh level [l] with [D_a <= D_l] in the source graph, checked
+             with type-in-type disabled ([D_l = l] for a kept level).  Under
+             the valuation [v(a) = v(D_a)] each of them holds, so the
+             extension stays conservative.  Without them PCUIC cannot derive
+             what the kernel checks on [D_a] itself, such as a record field of
+             sort [max(u, v)] below the record's sort [max(u, v, w)]
              (a record whose field sort is a strict sub-maximum). *)
           let template_constraints =
-            let graph = Environ.universes env in
-            let definitions = template_universe_context.fresh_definitions in
-            let definition_of level =
-              match Univ.Level.Map.find_opt level definitions with
-              | Some definition -> definition
-              | None -> Univ.Universe.make level
+            let graph =
+              UGraph.set_type_in_type false (read_universe_graph env)
             in
-            let candidates =
-              Univ.Level.Map.fold
-                (fun level _ candidates -> Univ.Level.Set.add level candidates)
-                definitions
-                (Univ.Level.Set.inter univs (UGraph.domain graph))
-            in
-            let provably_leq u v =
-              try UGraph.check_leq graph u v with _ -> false
-            in
-            time Pp.(str "Computing fresh template upper bounds")
-              (Univ.Level.Map.fold
-                 (fun fresh definition constraints ->
-                    Univ.Level.Set.fold
-                      (fun level constraints ->
-                         if Univ.Level.equal fresh level
-                            || not (provably_leq definition (definition_of level))
-                         then constraints
-                         else
-                           Univ.UnivConstraints.add
-                             (fresh, Univ.UnivConstraint.Le, level) constraints)
-                      candidates constraints)
-                 definitions)
-              template_constraints
+            fresh_template_upper_bounds UGraph.check_leq graph univs
+              template_universe_context.fresh_definitions template_constraints
           in
           (* [top] is a new level with only incoming edges, so adding it keeps
              the graph acyclic: a conservative extension. *)
@@ -1855,8 +1958,8 @@ struct
           in
           let univs = Univ.Level.Set.add top univs in
           quote_ugraph ~kept:univs ~extra_constraints:template_constraints
-            (Environ.universes env)
-        else quote_ugraph (Environ.universes env)
+            (read_universe_graph env)
+        else quote_ugraph (read_universe_graph env)
       else
         (debug Pp.(fun () -> str"Skipping universes: ");
          time (Pp.str"Quoting empty universe context")
