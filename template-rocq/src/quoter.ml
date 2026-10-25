@@ -751,22 +751,22 @@ struct
      extended, append the corresponding extra levels. *)
   let extend_instance_for_decl ?context env kn pu =
     note_declaration_reference kn;
-    match
-      try Some (Names.KerName.Map.find kn !extended_constants)
-      with Not_found -> None
-    with
+    match context with
     | None -> pu
-    | Some exprs -> extend_instance ?context env exprs pu
+    | Some _ ->
+      match Names.KerName.Map.find_opt kn !extended_constants with
+      | None -> pu
+      | Some exprs -> extend_instance ?context env exprs pu
 
   let extend_instance_for_inductive ?context env mind pu =
     let kn = Names.MutInd.canonical (fst mind) in
     note_declaration_reference kn;
-    match
-      try Some (Names.KerName.Map.find kn !extended_inductives)
-      with Not_found -> None
-    with
+    match context with
     | None -> pu
-    | Some exprs -> extend_instance ?context env exprs pu
+    | Some _ ->
+      match Names.KerName.Map.find_opt kn !extended_inductives with
+      | None -> pu
+      | Some exprs -> extend_instance ?context env exprs pu
 
   (* PCUIC sorts can contain algebraic universes, but template-inductive
      instances cannot.  Use the same representative level for both: whenever
@@ -775,20 +775,22 @@ struct
      to [Type@{lambda_u}].  In particular, this keeps the translated type of a
      polymorphic body such as [iffT] aligned with its translated [prod]
      instance. *)
-  let quote_sort_with_template ?universe_context env = function
-    | Sorts.Type universe ->
+  let quote_sort_with_template ?universe_context env sort =
+    match universe_context, sort with
+    | None, _ -> Q.quote_sort sort
+    | Some _, Sorts.Type universe ->
       let level =
         template_universe_level ?context:universe_context env universe
       in
       Q.quote_sort
         (Sorts.make Sorts.Quality.qtype (Univ.Universe.make level))
-    | Sorts.QSort (quality, universe) ->
+    | Some _, Sorts.QSort (quality, universe) ->
       let level =
         template_universe_level ?context:universe_context env universe
       in
       Q.quote_sort
         (Sorts.qsort quality (Univ.Universe.make level))
-    | sort -> Q.quote_sort sort
+    | Some _, sort -> Q.quote_sort sort
 
 
   (* [~canonical] is for an occurrence where PCUIC compares the instance
@@ -809,9 +811,9 @@ struct
   let template_instance ?universe_context ?canonical env sigma mind
       args default_instance =
     let mib = Environ.lookup_mind (fst mind) (snd env) in
-    match mib.Declarations.mind_template with
-    | None -> default_instance
-    | Some template ->
+    match universe_context, mib.Declarations.mind_template with
+    | None, _ | _, None -> default_instance
+    | Some _, Some template ->
       let bound_instance =
         UVars.UContext.instance
           (UVars.AbstractContext.repr template.template_context)
@@ -907,9 +909,9 @@ struct
 
   let template_default_substitution ?universe_context env sigma mind args =
     let mib = Environ.lookup_mind (fst mind) (snd env) in
-    match mib.Declarations.mind_template with
-    | None -> None
-    | Some template ->
+    match universe_context, mib.Declarations.mind_template with
+    | None, _ | _, None -> None
+    | Some _, Some template ->
       let actual_instance =
         template_instance ?universe_context env sigma mind args
           UVars.Instance.empty
@@ -1075,6 +1077,12 @@ struct
        subterm by physical equality, so a shared subterm is quoted once and its
        quoted value is shared. OCaml values are immutable, so sharing changes
        no value.
+
+       Template inductives are translated only when [universe_context] is
+       given, which [quote_term_rec ~translate_template:true] does for
+       SafeCheck. Without it, quotation is the kernel's own syntax: unquoting,
+       [tmQuote], [tmQuoteRec] and erasure keep the template instances the
+       kernel stores, as they expect.
 
        A cached value is returned only where quoting would compute the same
        value. Besides the subterm and the global declarations, quoting reads
@@ -1396,8 +1404,15 @@ struct
     and quote_minductive_type (acc : 'a) env sigma (t : MutInd.t) mib =
       let uctx = get_abstract_inductive_universes mib.Declarations.mind_universes in
       let inst = UVars.UContext.instance uctx in
+      (* Only a quotation with a universe context translates template
+         inductives; any other quotes them as the kernel stores them. *)
+      let mind_template =
+        match universe_context with
+        | None -> None
+        | Some _ -> mib.Declarations.mind_template
+      in
       let template_substitution, output_instance, quoted_universes, base_auctx =
-        match mib.Declarations.mind_template with
+        match mind_template with
         | None ->
           let base_auctx =
             match mib.Declarations.mind_universes with
@@ -1533,7 +1548,7 @@ struct
           (substitute_context mib.Declarations.mind_params_ctxt)
       in
       let constrain auctx =
-        match mib.Declarations.mind_template, universe_context with
+        match mind_template, universe_context with
         | None, Some { top_level = Some top; _ } -> constrain_below_top top auctx
         | _ -> auctx
       in
@@ -1545,12 +1560,12 @@ struct
             Names.KerName.Map.add (MutInd.canonical t)
               (List.rev scope.ls_exprs) !extended_inductives;
           Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context new_auctx)
-        | Some auctx, _ when Option.is_empty mib.Declarations.mind_template ->
+        | Some auctx, _ when Option.is_empty mind_template ->
           Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context (constrain auctx))
         | _ -> quoted_universes
       in
       let var =
-        match mib.Declarations.mind_template with
+        match mind_template with
         | Some template ->
           (* Template universes are irrelevant for conversion in the kernel
              (kernel/indTyping.ml treats them as irrelevant).  Translating the
@@ -1651,13 +1666,21 @@ struct
            univs oib.mind_nf_lc)
       univs mib.mind_packets
 
-  let quote_term_rec ?after_declaration_state ~bypass ~opaque_access ?(with_universes=true) ?(with_restriction=true) env sigma trm =
+  (* [~translate_template:true] gives PCUIC a universe-polymorphic inductive in
+     place of each template-polymorphic one (see [quote_term_remember]), as
+     SafeCheck needs.  By default the program is the kernel's own syntax, which
+     [tmQuoteRec], [MetaRocq Quote Recursively] and the erasure plugin return
+     and which unquoting expects. *)
+  let quote_term_rec ?after_declaration_state ?(translate_template = false) ~bypass ~opaque_access ?(with_universes=true) ?(with_restriction=true) env sigma trm =
     let visited_terms = ref Names.KNset.empty in
     let visited_types = ref Mindset.empty in
     let universes = ref Univ.Level.Set.empty in
     let constants = ref [] in
     let template_defaults = ref Univ.Level.Set.empty in
     let template_universe_context = make_template_universe_context () in
+    let universe_context =
+      if translate_template then Some template_universe_context else None
+    in
     let () =
       current_declaration_state :=
         { ds_name = "<toplevel>";
@@ -1666,14 +1689,16 @@ struct
           ds_in_progress = Names.KNset.empty };
       extended_constants := Names.KerName.Map.empty;
       extended_inductives := Names.KerName.Map.empty;
-      template_universe_context.top_level <-
-        Some (fresh_template_level (read_universe_graph env)
-                template_universe_context)
+      if translate_template then
+        template_universe_context.top_level <-
+          Some (fresh_template_level (read_universe_graph env)
+                  template_universe_context)
     in
-    let top =
-      match template_universe_context.top_level with
-      | Some top -> top
-      | None -> assert false
+    let top = template_universe_context.top_level in
+    let constrain auctx =
+      match top with
+      | Some top -> constrain_below_top top auctx
+      | None -> auctx
     in
     (* Quote declaration [kn] with [f], from a fresh dependency root: what the
        declaration reads is not a dependency of the subterm whose quotation
@@ -1699,7 +1724,8 @@ struct
           begin
             visited_types := Mindset.add t !visited_types;
             let original_universe_count =
-              match mib.Declarations.mind_template,
+              match (if translate_template then mib.Declarations.mind_template
+                     else None),
                     mib.Declarations.mind_universes with
               | Some template, _ ->
                 snd (UVars.AbstractContext.size template.template_context)
@@ -1804,17 +1830,16 @@ struct
             in
             let ty, acc =
               let ty =
-                match body with
-                | None -> cd.const_type
-                | Some body ->
+                match body, universe_context with
+                | Some body, Some universe_context ->
                   let global_env = Global.env () in
                   let global_evm = Evd.from_env global_env in
                   let type_of_body =
                     retype_template_argument global_env global_evm body
                   in
-                  normalize_template_type
-                    ~universe_context:template_universe_context
+                  normalize_template_type ~universe_context
                     (false, global_env) global_evm body type_of_body
+                | _ -> cd.const_type
               in
               let univs = Vars.universes_of_constr ty in
               let () = universes := Univ.Level.Set.union univs !universes in
@@ -1852,11 +1877,10 @@ struct
                     { UVars.quals; UVars.univs = new_univs } new_pcon
                 in
                 Q.mkPolymorphic_ctx
-                  (Q.quote_abstract_univ_context
-                     (constrain_below_top top new_auctx))
+                  (Q.quote_abstract_univ_context (constrain new_auctx))
               | Declarations.Polymorphic auctx, _ ->
                 Q.mkPolymorphic_ctx
-                  (Q.quote_abstract_univ_context (constrain_below_top top auctx))
+                  (Q.quote_abstract_univ_context (constrain auctx))
               | _ -> quote_universes_decl cd.const_universes None
             in
             let () =
@@ -1876,7 +1900,7 @@ struct
       let a = ref (fun _ _ _ -> assert false) in
       let b = ref (fun _ _ _ -> assert false) in
       let (x,y) =
-	      quote_term_remember ~universe_context:template_universe_context
+	      quote_term_remember ?universe_context
           ~remember_universe_levels:(fun levels ->
             universes := Univ.Level.Set.union levels !universes)
           (fun x () -> add !a !b (Const x) ())
@@ -1901,6 +1925,9 @@ struct
             Univ.Level.Set.filter
               (fun l -> Option.is_empty (Univ.Level.var_index l)) univs
           in
+          match top with
+          | None -> quote_ugraph ~kept:univs (read_universe_graph env)
+          | Some top ->
           let template_constraints =
             Univ.Level.Set.fold
               (fun level constraints ->
@@ -1978,7 +2005,7 @@ struct
     let failed =
       try
         ignore
-          (quote_term_rec
+          (quote_term_rec ~translate_template:true
              ~after_declaration_state
              ~bypass:true ~opaque_access ~with_universes:true env sigma trm);
         false
@@ -1997,6 +2024,9 @@ struct
     in
     if not all_state_restored then false
     else
+      (* A leaked scope would let a translating quotation outside any
+         declaration mint a level for a bound-variable universe in it, instead
+         of rejecting the universe. *)
       let universe =
         Univ.Universe.unrepr
           [Univ.Level.var 0, 0; Univ.Level.var 1, 0]
@@ -2004,8 +2034,13 @@ struct
       let bound_universe =
         Constr.mkSort (Sorts.make Sorts.Quality.qtype universe)
       in
+      let quote, _ =
+        quote_term_remember
+          ~universe_context:(make_template_universe_context ())
+          (fun _ () -> ()) (fun _ _ () -> ())
+      in
       try
-        ignore (quote_term env sigma bound_universe);
+        ignore (quote () env sigma bound_universe);
         false
       with CErrors.UserError _ -> true
   let quote_rel_context env sigma ctx =

@@ -115,7 +115,8 @@ Polymorphic Definition template_state_restore_source@{u}
   (A : Type@{u}) := list A.
 (* The test hook raises after [quote_term_rec] → [quote_declaration] has
    installed name, scope, dependency root and in-progress state.  The command
-   then uses the same nonrecursive quoter as [tmQuote]. *)
+   then checks that a translating quotation outside any declaration still
+   rejects a bound-variable universe, as it must when no scope is installed. *)
 MetaRocq Test Quoter Restores State @template_state_restore_source.
 
 (* The upper-bound pass must let [Control.Timeout] leave its graph query. *)

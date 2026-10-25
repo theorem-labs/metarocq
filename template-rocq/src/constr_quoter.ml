@@ -541,6 +541,7 @@ include ConstrQuoter
     let stored_root = ref None in
     let quote, _ =
       quote_term_remember
+        ~universe_context:(make_template_universe_context ())
         ~on_cache_hit:(fun cached_term ->
           if cached_term == term then incr root_hits)
         ~on_cache_candidate:(fun candidate deps ->
@@ -567,7 +568,9 @@ include ConstrQuoter
     let same_scope_candidate = !root_candidates > candidates_after_first in
     let same_scope_hit = !root_hits > hits_after_first in
     let fresh_quote, _ =
-      quote_term_remember (fun _ () -> ()) (fun _ _ () -> ())
+      quote_term_remember
+        ~universe_context:(make_template_universe_context ())
+        (fun _ () -> ()) (fun _ _ () -> ())
     in
     let fresh = run (Some scope1) fresh_quote in
     let scope2 = make_scope () in
@@ -575,7 +578,9 @@ include ConstrQuoter
     let changed_scope = run (Some scope2) quote in
     let changed_scope_missed = Int.equal !root_hits hits_before_changed_scope in
     let fresh_changed_quote, _ =
-      quote_term_remember (fun _ () -> ()) (fun _ _ () -> ())
+      quote_term_remember
+        ~universe_context:(make_template_universe_context ())
+        (fun _ () -> ()) (fun _ _ () -> ())
     in
     let fresh_changed = run (Some scope2) fresh_changed_quote in
     let no_scope_rejected =
