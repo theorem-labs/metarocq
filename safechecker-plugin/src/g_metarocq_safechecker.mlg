@@ -41,7 +41,75 @@ let check ~opaque_access env evm poly (c, ustate) =
   match check with
   | Coq_inl s -> Feedback.msg_info (pr_string s)
   | Coq_inr s -> CErrors.user_err (pr_string s)
+let quote_with_cache quote env term =
+  fst (quote () env (Evd.from_env env) term)
+
+let test_cache_typing_flags env evm c =
+  let term = EConstr.to_constr evm c in
+  let impredicative_env = Environ.set_impredicative_set true env in
+  let predicative_env = Environ.set_impredicative_set false env in
+  let cached_context = Ast_quoter.make_template_universe_context () in
+  let quote, _ =
+    Ast_quoter.quote_term_remember ~universe_context:cached_context
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let first = quote_with_cache quote impredicative_env term in
+  let cached = quote_with_cache quote predicative_env term in
+  let fresh_context = Ast_quoter.make_template_universe_context () in
+  let fresh_quote, _ =
+    Ast_quoter.quote_term_remember ~universe_context:fresh_context
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let fresh = quote_with_cache fresh_quote predicative_env term in
+  if cached = fresh && first <> cached then
+    Feedback.msg_info (str "Cache typing-flag regression passed.")
+  else
+    CErrors.user_err
+      (str "Cache reused a quotation across changed typing flags.")
+
+let test_safecheck_rejection ~opaque_access env evm c =
+  let term = EConstr.to_constr evm c in
+  let prog =
+    Ast_quoter.quote_term_rec ~bypass:true ~opaque_access ~with_universes:true
+      env evm term
+  in
+  let bad_term =
+    Ast_quoter.mkSort
+      (Ast_quoter.quote_sort
+         (Sorts.make Sorts.Quality.qtype Univ.Universe.type0))
+  in
+  let bad_name =
+    Ast_quoter.quote_kn
+      (Names.KerName.make
+         (Names.ModPath.MPfile
+            (Names.DirPath.make
+               [Names.Id.of_string "MetaRocq";
+                Names.Id.of_string "Regression"]))
+         (Names.Label.of_id (Names.Id.of_string "successor_too_low")))
+  in
+  let bad_decl =
+    Ast_quoter.mk_constant_decl
+      (Ast_quoter.mk_constant_body bad_term (Some bad_term)
+         (Ast_quoter.mkMonomorphic_ctx ())
+         (Ast_quoter.quote_relevance Sorts.Relevant))
+  in
+  let global_env, quoted_term = prog in
+  let bad_program =
+    ({ global_env with declarations = (bad_name, bad_decl) :: global_env.declarations },
+     quoted_term)
+  in
+  match
+    Extraction.infer_and_print_template_program_with_guard
+      Config0.default_checker_flags bad_program (Ast_quoter.mkMonomorphic_ctx ())
+  with
+  | Coq_inr _ ->
+    Feedback.msg_info (str "SafeCheck negative regression passed.")
+  | Coq_inl _ ->
+    CErrors.user_err
+      (str "SafeCheck accepted a successor-too-low quoted declaration.")
+
 }
+
 
 VERNAC COMMAND EXTEND MetaRocqSafeCheck CLASSIFIED AS QUERY STATE opaque_access
 | #[ poly = polymorphic ] [ "MetaRocq" "SafeCheck" constr(c) ] -> {
@@ -51,6 +119,25 @@ VERNAC COMMAND EXTEND MetaRocqSafeCheck CLASSIFIED AS QUERY STATE opaque_access
     check env evm poly c
   }
 END
+
+VERNAC COMMAND EXTEND MetaRocqTestCacheTypingFlags CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Cache" "Typing" "Flags" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_cache_typing_flags env evm c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestSafeCheckRejection CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "SafeCheck" "Rejects" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_safecheck_rejection env evm c
+  }
+END
+
 
 {
 

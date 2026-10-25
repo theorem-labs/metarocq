@@ -91,6 +91,29 @@ Record template_alg_outer := {
   template_alg_oi : template_alg_inner;
   template_alg_oc : Type@{template_alg_c} }.
 MetaRocq SafeCheck @template_alg_outer.
+
+(* Changing impredicative Set changes the sort retyping assigns to this shared
+   template argument.  The test command uses one quotation cache across both
+   environments and compares the second result with a fresh quotation. *)
+Universe template_cache_flags_u.
+MetaRocq Test Cache Typing Flags
+  (list (forall X : Type@{template_cache_flags_u}, nat)).
+
+(* SafeCheck uses default checker flags even when quotation runs while Rocq
+   universe checking is disabled.  The upper-bound pass must still ask a
+   checking graph what follows from the source graph. *)
+Unset Universe Checking.
+MetaRocq SafeCheck @template_alg_outer.
+Set Universe Checking.
+
+(* The test command injects a declaration quotation failure after installing a
+   local universe scope, then calls the same nonrecursive quotation path as
+   [tmQuote] on a bound universe.  It fails if that path can read the abandoned
+   scope or mint one of its bound levels. *)
+MetaRocq Test Quoter Restores State.
+
+(* The upper-bound pass must let [Control.Timeout] leave its graph query. *)
+MetaRocq Test Quoter Propagates Timeout.
 Set Universe Polymorphism.
 
 (* This nested use gives [list] the algebraic template instance [max(i,j)].
@@ -106,6 +129,12 @@ MetaRocq SafeCheck template_list_prod_nat.
    typecheck at [Type@{i}]. *)
 Fail Polymorphic Definition template_successor_too_low@{i} : Type@{i} :=
   list Type@{i}.
+
+(* This calls the extracted SafeCheck entrypoint after trusted quotation, then
+   adds a quoted declaration whose [Type@{Set}] body is claimed at
+   [Type@{Set}].  The declaration has the same successor-too-low condition as
+   the rejected source definition above. *)
+MetaRocq Test SafeCheck Rejects nat.
 
 Unset Universe Polymorphism.
 
