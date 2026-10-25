@@ -16,6 +16,57 @@ Definition bool_list := List.map negb (cons true (cons false nil)).
 (* MetaRocq SafeCheck bool_list. *)
 MetaRocq RocqCheck bool_list.
 
+Record template_list_record := { template_list_field : list nat }.
+MetaRocq SafeCheck template_list_record.
+MetaRocq SafeCheck (list nat).
+
+Definition template_list_to_nat : list nat -> nat := fun _ => 0.
+MetaRocq SafeCheck template_list_to_nat.
+
+Definition template_list_match (xs : list nat) : nat :=
+  match xs with
+  | nil => 0
+  | cons x _ => x
+  end.
+MetaRocq SafeCheck template_list_match.
+
+From Stdlib Require Import Ring_theory.
+MetaRocq SafeCheck (prod nat nat).
+MetaRocq SafeCheck (prod True True).
+MetaRocq SafeCheck @Stdlib.setoid_ring.Ring_theory.div_theory.
+From Corelib Require Import CRelationClasses.
+
+(* [iffT] applies template [prod] at [max(i,j)] inside a polymorphic
+   declaration.  It therefore covers scoped algebraic instances, their
+   explicit sort annotations, and the extended universe instance at use. *)
+Definition template_iffT_nat := iffT nat nat.
+MetaRocq SafeCheck template_iffT_nat.
+
+(* [sigT]'s second template parameter is a family [A -> Type@{u}], not a sort;
+   the kernel binds [u] from the arity's conclusion (make_param_univs). *)
+Definition template_sigT_nat := {n : nat & nat}.
+MetaRocq SafeCheck template_sigT_nat.
+Set Universe Polymorphism.
+
+(* This nested use gives [list] the algebraic template instance [max(i,j)].
+   It exercises the shared representative in both the list instance and the
+   explicit result-sort annotation. *)
+Polymorphic Definition template_list_prod@{i j}
+  (A : Type@{i}) (B : Type@{j}) : Type@{max(i,j)} :=
+  list (prod A B).
+Definition template_list_prod_nat := template_list_prod nat nat.
+MetaRocq SafeCheck template_list_prod_nat.
+
+(* Negative control: [list Type@{i}] lives in [Type@{i+1}], so it must not
+   typecheck at [Type@{i}]. *)
+Fail Polymorphic Definition template_successor_too_low@{i} : Type@{i} :=
+  list Type@{i}.
+
+Unset Universe Polymorphism.
+
+
+
+
 (* Time MetaRocq SafeCheck @infer_and_print_template_program. *)
 (* Uses template polymorphism:
 Error:
