@@ -157,6 +157,14 @@ MetaRocq Test SafeCheck Rejects Source
   "Type([Set+1])" "template_declared_type_is_checked"
   template_declared_type_is_checked.
 
+(* A bound universe [u] has no lower bound, so a cast from
+   [Type@{max(Set+1,u)}] to [Type@{u}] is not justified.  Dropping the [Set+1]
+   component would make that cast reflexive and erase the obligation.  Rocq
+   cannot write an algebraic sort in a binder, so the command builds the
+   declaration in the kernel environment the quoter reads. *)
+MetaRocq Test Quoter Set Successor Cast
+  "Types are not convertible" "set_successor_cast".
+
 Unset Universe Polymorphism.
 
 

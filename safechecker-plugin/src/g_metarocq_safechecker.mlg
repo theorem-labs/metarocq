@@ -82,6 +82,65 @@ let test_safecheck_rejects_source ~opaque_access env evm poly reason subject c =
   expect_safecheck_rejection "The quoted source declaration" reason subject
     (safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c))
 
+(* A polymorphic declaration whose body is
+   [fun (X : Type@{max(Set+1, u)}) => (X : Type@{u})], with a real kernel
+   [Cast] and with [u] its own bound universe.  Nothing constrains a bound
+   universe, so the cast obligation [max(Set+1, u) <= u] does not hold: an
+   instance may set [u] to [Set].  (A declared global universe cannot show
+   this: Rocq's graph already holds [Set < u] for each of those, which makes
+   [max(Set+1, u) = u] true there.)
+
+   Rocq's surface syntax cannot write an algebraic sort in a binder, so the
+   declaration is built here and added to the environment that the quoter
+   reads.  The invalid obligation therefore exists before quotation, exactly
+   as for a declaration that [Unset Universe Checking] let through. *)
+let set_successor_cast_declaration env =
+  let bound = Univ.Level.var 0 in
+  let algebraic = Univ.Universe.unrepr [Univ.Level.set, 1; bound, 0] in
+  let domain = Constr.mkSort (Sorts.make Sorts.Quality.qtype algebraic) in
+  let target =
+    Constr.mkSort (Sorts.make Sorts.Quality.qtype (Univ.Universe.make bound))
+  in
+  let body =
+    Constr.mkLambda
+      (Context.anonR, domain,
+       Constr.mkCast (Constr.mkRel 1, Constr.DEFAULTcast, target))
+  in
+  let typ = Constr.mkProd (Context.anonR, domain, target) in
+  let auctx =
+    UVars.AbstractContext.make
+      { UVars.quals = [||];
+        UVars.univs = [| Names.Name (Names.Id.of_string "u") |] }
+      PConstraints.empty
+  in
+  let kn =
+    Names.KerName.make
+      (Names.ModPath.MPfile
+         (Names.DirPath.make
+            [Names.Id.of_string "MetaRocq";
+             Names.Id.of_string "Regression"]))
+      (Names.Label.of_id (Names.Id.of_string "set_successor_cast"))
+  in
+  let constant_body =
+    { Declarations.const_hyps = [];
+      const_univ_hyps = UVars.Instance.empty;
+      const_body = Declarations.Def body;
+      const_type = typ;
+      const_relevance = Sorts.Relevant;
+      const_body_code = None;
+      const_universes = Declarations.Polymorphic auctx;
+      const_inline_code = false;
+      const_typing_flags = Environ.typing_flags env }
+  in
+  let constant = Names.Constant.make1 kn in
+  (Environ.add_constant constant constant_body env,
+   Constr.mkConstU
+     (constant, UVars.Instance.of_array ([||], [| Univ.Level.set |])))
+
+let test_set_successor_cast ~opaque_access env evm reason subject =
+  let env, term = set_successor_cast_declaration env in
+  expect_safecheck_rejection "The max(Set+1, u) cast" reason subject
+    (safecheck_program ~opaque_access env evm false term)
 
 let quote_with_cache quote env term =
   fst (quote () env (Evd.from_env env) term)
@@ -186,6 +245,14 @@ VERNAC COMMAND EXTEND MetaRocqTestSafeCheckRejectsSource CLASSIFIED AS QUERY STA
     let evm = Evd.from_env env in
     let c, _ = Constrintern.interp_constr env evm c in
     test_safecheck_rejects_source env evm poly reason subject c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestQuoterSetSuccessorCast CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "Quoter" "Set" "Successor" "Cast" string(reason) string(subject) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    test_set_successor_cast env evm reason subject
   }
 END
 
