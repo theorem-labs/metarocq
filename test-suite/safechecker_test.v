@@ -53,9 +53,11 @@ MetaRocq SafeCheck template_sigT_nat.
    [template_case_eq_nat p]; both unfold to the stuck match on [p], quoted
    once with [C : Type@{template_case_u}] and once with [nat : Set]
    (seen in the wild on a [cdiv] match in [Ring_polynom], at [Ring_polynom.22]
-   and [Ring_theory.98]).  The quoter types a constant by retyping its body, so
-   the conversion has to occur inside the body.  A named universe keeps
-   minimization from turning [template_case_u] into [Set]. *)
+   and [Ring_theory.98]).  The conversion is placed inside the body because
+   that is where the two occurrences meet: the quoter quotes a constant's
+   declared type as the kernel stores it, so the type alone would not bring
+   them together.  A named universe keeps minimization from turning
+   [template_case_u] into [Set]. *)
 Universe template_case_u.
 Definition template_case_eq (C : Type@{template_case_u}) (p : C * C) : Prop :=
   match p with pair a b => a = b end.
