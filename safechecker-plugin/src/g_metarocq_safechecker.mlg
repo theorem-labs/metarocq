@@ -22,7 +22,7 @@ let check ~opaque_access env evm poly (c, ustate) =
     Environ.push_context_set ~strict:true (us, ucst) @@
     Environ.push_qualities ~rigid:true (qs, qcst) env
   in
-  let prog = time (str"Quoting") (Ast_quoter.quote_term_rec ~bypass:true ~opaque_access ~with_universes:true env evm) (EConstr.to_constr evm c) in
+  let prog = time (str"Quoting") (Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm) (EConstr.to_constr evm c) in
   let uctx =
     if poly then
       let uctx = Evd.to_universe_context evm in
@@ -70,8 +70,8 @@ let test_cache_typing_flags env evm c =
 let test_safecheck_rejection ~opaque_access env evm c =
   let term = EConstr.to_constr evm c in
   let prog =
-    Ast_quoter.quote_term_rec ~bypass:true ~opaque_access ~with_universes:true
-      env evm term
+    Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true
+      ~opaque_access ~with_universes:true env evm term
   in
   let bad_term =
     Ast_quoter.mkSort
