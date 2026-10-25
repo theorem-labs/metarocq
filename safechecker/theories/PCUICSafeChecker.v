@@ -1313,11 +1313,14 @@ Section CheckEnv.
     (* Private probe regression: this reaches the real checker before any
        quotation.  The argument [tRel #|Δ|] is outside [Δ], so the existing
        product-domain check must retain its [Non-positive occurrence.] error. *)
-    Lemma probe_nonpositive_cstr_arg_rejected mdecl Δ
+    Lemma probe_nonpositive_cstr_arg_rejected mdecl
       (wt : forall Σ, abstract_env_ext_rel X_ext Σ ->
-        welltyped Σ Δ (tProd nAnon (tRel #|Δ|) (tSort sProp))) :
-      check_positive_cstr_arg mdecl Δ
-        (tProd nAnon (tRel #|Δ|) (tSort sProp)) wt Δ =
+        welltyped Σ []
+          (tProd {| binder_name := nAnon; binder_relevance := Relevant |}
+            (tRel 0) (tSort sProp))) :
+      check_positive_cstr_arg mdecl []
+        (tProd {| binder_name := nAnon; binder_relevance := Relevant |}
+          (tRel 0) (tSort sProp)) wt [] =
       TypeError (Msg "Non-positive occurrence.").
     Proof. reflexivity. Qed.
 
