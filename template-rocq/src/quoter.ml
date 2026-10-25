@@ -1800,6 +1800,48 @@ struct
               !template_defaults
               template_universe_context.fresh_constraints
           in
+          (* A fresh level [a] stands for the algebraic universe [D_a] it was
+             minted for, and has only the lower bounds [c <= a] of its
+             components.  Add its upper bounds: [a <= l] for each kept level
+             or fresh level [l] with [D_a <= D_l] in the environment's graph
+             ([D_l = l] for a kept level).  Under the valuation
+             [v(a) = v(D_a)] each of them holds, so the extension stays
+             conservative.  Without them PCUIC cannot derive what the kernel
+             checks on [D_a] itself, such as a record field of sort
+             [max(u, v)] below the record's sort [max(u, v, w)]
+             (a record whose field sort is a strict sub-maximum). *)
+          let template_constraints =
+            let graph = Environ.universes env in
+            let definitions = template_universe_context.fresh_definitions in
+            let definition_of level =
+              match Univ.Level.Map.find_opt level definitions with
+              | Some definition -> definition
+              | None -> Univ.Universe.make level
+            in
+            let candidates =
+              Univ.Level.Map.fold
+                (fun level _ candidates -> Univ.Level.Set.add level candidates)
+                definitions
+                (Univ.Level.Set.inter univs (UGraph.domain graph))
+            in
+            let provably_leq u v =
+              try UGraph.check_leq graph u v with _ -> false
+            in
+            time Pp.(str "Computing fresh template upper bounds")
+              (Univ.Level.Map.fold
+                 (fun fresh definition constraints ->
+                    Univ.Level.Set.fold
+                      (fun level constraints ->
+                         if Univ.Level.equal fresh level
+                            || not (provably_leq definition (definition_of level))
+                         then constraints
+                         else
+                           Univ.UnivConstraints.add
+                             (fresh, Univ.UnivConstraint.Le, level) constraints)
+                      candidates constraints)
+                 definitions)
+              template_constraints
+          in
           (* [top] is a new level with only incoming edges, so adding it keeps
              the graph acyclic: a conservative extension. *)
           let template_constraints =
