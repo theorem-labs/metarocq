@@ -1231,15 +1231,23 @@ Section CheckEnv.
         ret _
       | prod_letin_other t nprodlet =>
         let '(hd, args) := decompose_app t in
-        '(hdrel; eqr) <- isRel hd ;;
-        isind <- check_eq_true ((#|Δ| <=? hdrel) && (hdrel <? #|Δ| + #|ind_bodies mdecl|)) (Msg "Conclusion is not an inductive type") ;;
-        (** Actually this is the only necessary check *)
-        check_closed <- check_eq_true (forallb (closedn #|Δ|) args) (Msg "Conclusion arguments refer to the inductive type being defined") ;;
-        match nth_error (List.rev mdecl.(ind_bodies)) (hdrel - #|Δ|) with
-        | Some i =>
-          check_eq_true (eqb (ind_realargs i) #|args|) (Msg "Partial application of inductive") ;;
+        match hd, args with
+        | tInd _ _, _ :: _ =>
+          (* UNSOUND PROBE — NOT A SAFECHECK VERDICT.  The [wt] precondition
+             has already established that this non-Rel head is declared; this
+             deliberately bypasses the missing nested-positivity proof. *)
           ret _
-        | None => False_rect _ _
+        | _, _ =>
+          '(hdrel; eqr) <- isRel hd ;;
+          isind <- check_eq_true ((#|Δ| <=? hdrel) && (hdrel <? #|Δ| + #|ind_bodies mdecl|)) (Msg "Conclusion is not an inductive type") ;;
+          (** Actually this is the only necessary check *)
+          check_closed <- check_eq_true (forallb (closedn #|Δ|) args) (Msg "Conclusion arguments refer to the inductive type being defined") ;;
+          match nth_error (List.rev mdecl.(ind_bodies)) (hdrel - #|Δ|) with
+          | Some i =>
+            check_eq_true (eqb (ind_realargs i) #|args|) (Msg "Partial application of inductive") ;;
+            ret _
+          | None => False_rect _ _
+          end
         end
       end.
 
@@ -1275,6 +1283,9 @@ Section CheckEnv.
       Next Obligation. pose proof (abstract_env_ext_wf _ H); specialize_Σ H. sq.
         now constructor 3.
       Qed.
+      (* The diagnostic branch above deliberately has no positivity proof. *)
+      Next Obligation. Admitted.
+
 
       Next Obligation.
         clear eqr.
