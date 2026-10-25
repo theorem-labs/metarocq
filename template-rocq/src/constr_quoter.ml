@@ -507,3 +507,97 @@ module ConstrQuoter = Quoter(ConstrBaseQuoter)
 
 include ConstrBaseQuoter
 include ConstrQuoter
+  let test_scope_dependency_cache env sigma =
+    let make_scope () =
+      { ls_n_orig = 2;
+        ls_memo = Univ.Universe.Map.empty;
+        ls_definitions = [||];
+        ls_exprs = [];
+        ls_constraints = Univ.UnivConstraints.empty;
+        ls_next = 0 }
+    in
+    let universe =
+      Univ.Universe.unrepr
+        [Univ.Level.var 0, 0; Univ.Level.var 1, 0]
+    in
+    let term =
+      Constr.mkProd
+        (Context.anonR,
+         Constr.mkSort (Sorts.make Sorts.Quality.qtype universe),
+         Constr.mkSort Sorts.prop)
+    in
+    let root_state = !current_declaration_state in
+    if not (quote_cache_usable sigma) then
+      CErrors.user_err (str "Scope cache regression received an unusable evar map.");
+    let run scope quote =
+      with_declaration_state
+        { root_state with
+          ds_scope = scope;
+          ds_dependencies = new_quote_dependencies env }
+        (fun () -> fst (quote () env sigma term))
+    in
+    let root_hits = ref 0 in
+    let root_candidates = ref 0 in
+    let stored_root = ref None in
+    let quote, _ =
+      quote_term_remember
+        ~on_cache_hit:(fun cached_term ->
+          if cached_term == term then incr root_hits)
+        ~on_cache_candidate:(fun candidate deps ->
+          if candidate == term then begin
+            incr root_candidates;
+            stored_root := Some deps
+          end)
+        ~on_cache_store:(fun stored deps ->
+          if stored == term then stored_root := Some deps)
+        (fun _ () -> ()) (fun _ _ () -> ())
+    in
+    let scope1 = make_scope () in
+    let first = run (Some scope1) quote in
+    let root_scope_recorded =
+      match !stored_root with
+      | Some deps ->
+        deps.qd_reads_scope
+        && (match deps.qd_scope with Some scope -> scope == scope1 | None -> false)
+      | None -> false
+    in
+    let hits_after_first = !root_hits in
+    let candidates_after_first = !root_candidates in
+    let cached = run (Some scope1) quote in
+    let same_scope_candidate = !root_candidates > candidates_after_first in
+    let same_scope_hit = !root_hits > hits_after_first in
+    let fresh_quote, _ =
+      quote_term_remember (fun _ () -> ()) (fun _ _ () -> ())
+    in
+    let fresh = run (Some scope1) fresh_quote in
+    let scope2 = make_scope () in
+    let hits_before_changed_scope = !root_hits in
+    let changed_scope = run (Some scope2) quote in
+    let changed_scope_missed = Int.equal !root_hits hits_before_changed_scope in
+    let fresh_changed_quote, _ =
+      quote_term_remember (fun _ () -> ()) (fun _ _ () -> ())
+    in
+    let fresh_changed = run (Some scope2) fresh_changed_quote in
+    let no_scope_rejected =
+      try
+        ignore (run None quote);
+        false
+      with CErrors.UserError _ -> true
+    in
+    if not root_scope_recorded then
+      CErrors.user_err (str "Scope-dependent parent cache stored no scope identity.");
+    if not same_scope_candidate then
+      CErrors.user_err (str "Scope-dependent parent cache entry was not retained.");
+    if not same_scope_hit then
+      CErrors.user_err (str "Scope-dependent parent cache missed in the same scope.");
+    if not (Constr.equal first cached) then
+      CErrors.user_err (str "Same-scope cache result changed.");
+    if not (Constr.equal cached fresh) then
+      CErrors.user_err (str "Same-scope cached and fresh quotations differ.");
+    if not changed_scope_missed then
+      CErrors.user_err (str "Scope-dependent parent cache hit after scope changed.");
+    if not (Constr.equal changed_scope fresh_changed) then
+      CErrors.user_err (str "Changed-scope cached and fresh quotations differ.");
+    if not no_scope_rejected then
+      CErrors.user_err (str "No-scope quotation reused a scoped cached result.");
+    true
