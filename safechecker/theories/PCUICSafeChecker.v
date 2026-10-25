@@ -1310,6 +1310,17 @@ Section CheckEnv.
         eapply Wf.measure_wf.
         unshelve eapply wf_redp_subterm; eauto.
       Defined.
+    (* Private probe regression: this reaches the real checker before any
+       quotation.  The argument [tRel #|Δ|] is outside [Δ], so the existing
+       product-domain check must retain its [Non-positive occurrence.] error. *)
+    Lemma probe_nonpositive_cstr_arg_rejected mdecl Δ
+      (wt : forall Σ, abstract_env_ext_rel X_ext Σ ->
+        welltyped Σ Δ (tProd nAnon (tRel #|Δ|) (tSort sProp))) :
+      check_positive_cstr_arg mdecl Δ
+        (tProd nAnon (tRel #|Δ|) (tSort sProp)) wt Δ =
+      TypeError (Msg "Non-positive occurrence.").
+    Proof. reflexivity. Qed.
+
 
     (** We already assume that constructor types are of the form `it_mkProd_or_LetIn (params,,, args) concl` so
         we don't need to reduce further. *)
