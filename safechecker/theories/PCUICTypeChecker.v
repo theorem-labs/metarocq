@@ -12,7 +12,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics
      PCUICConversion PCUICWfUniverses
      PCUICGlobalEnv PCUICSigmaCalculus
      (* Used for support lemmas *)
-     PCUICInductives PCUICWfUniverses
+     PCUICInductives PCUICWfUniverses PCUICFixWitness
      PCUICOnFreeVars PCUICWellScopedCumulativity
      PCUICContexts PCUICSubstitution PCUICSpine PCUICInductiveInversion
      PCUICClosed PCUICClosedTyp
@@ -253,6 +253,109 @@ Lemma substitution_wf_local_rel `{checker_flags} {Σ} {wfΣ : wf Σ} {Γ Γ' s �
           apply lift_typing_f_impl with (1 := l) => // ?? HT.
           now eapply substitution.
    Qed.
+
+(** ** Support for deciding the (co)fixpoint conditions
+
+  The checker finds the (co)inductive block of a fixpoint body by reducing the type
+  of its recursive argument, and of a cofixpoint body by reducing the conclusion of
+  its type, exactly where Rocq's kernel reduces. The lemmas below give the
+  welltypedness of what is reduced, and the uniqueness of the block so found. *)
+
+Lemma wf_local_nth_error_welltyped {cf : checker_flags} {Σ : global_env_ext} {Γ n c} :
+  wf_local Σ Γ ->
+  nth_error Γ n = Some c ->
+  welltyped Σ (skipn (S n) Γ) (decl_type c).
+Proof.
+  induction Γ as [|a Γ ih] in n |- *; intros wf hnth.
+  - now rewrite nth_error_nil in hnth.
+  - depelim wf.
+    + destruct n; cbn in hnth.
+      * noconf hnth. rewrite skipn_S skipn_0.
+        now eapply isTypeRel_welltyped.
+      * rewrite skipn_S. now eapply ih.
+    + destruct n; cbn in hnth.
+      * noconf hnth. rewrite skipn_S skipn_0.
+        apply lift_sorting_forget_body in l.
+        now eapply isTypeRel_welltyped.
+      * rewrite skipn_S. now eapply ih.
+Qed.
+
+(** The type of the [n]-th argument of a declared type is welltyped in the context
+    of the arguments that precede it. *)
+Lemma isType_rec_arg_welltyped {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  {Γ T ctx concl n c} :
+  isType Σ Γ T ->
+  decompose_prod_assum [] T = (ctx, concl) ->
+  nth_error (List.rev (smash_context [] ctx)) n = Some c ->
+  welltyped Σ (Γ ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx)) (decl_type c).
+Proof.
+  intros isty decomp hnth.
+  have eqty := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
+  cbn in eqty. rewrite eqty in isty.
+  apply isType_it_mkProd_or_LetIn_wf_local in isty.
+  apply wf_local_smash_end in isty.
+  have hlt : n < #|smash_context [] ctx|.
+  { have h := nth_error_Some_length hnth. now rewrite List.length_rev in h. }
+  rewrite (nth_error_rev_inv _ _ hlt) in hnth.
+  have hnth' : nth_error (Γ ,,, smash_context [] ctx) (#|smash_context [] ctx| - S n) = Some c.
+  { rewrite /app_context nth_error_app_lt //. lia. }
+  have w := wf_local_nth_error_welltyped isty hnth'.
+  rewrite /app_context in w |- *.
+  have e : S (#|smash_context [] ctx| - S n) = #|smash_context [] ctx| - n by lia.
+  rewrite e skipn_app in w.
+  replace (#|smash_context [] ctx| - n - #|smash_context [] ctx|) with 0 in w by lia.
+  now rewrite skipn_0 in w.
+Qed.
+
+(** The conclusion of a declared type is welltyped under its products. *)
+Lemma isType_concl_welltyped {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  {Γ T ctx concl} :
+  isType Σ Γ T ->
+  decompose_prod_assum [] T = (ctx, concl) ->
+  welltyped Σ (Γ ,,, ctx) concl.
+Proof.
+  intros isty decomp.
+  have eqty := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
+  cbn in eqty. rewrite eqty in isty.
+  now eapply isType_welltyped, isType_it_mkProd_or_LetIn_inv.
+Qed.
+
+(** Two reducts of one declared type give the same inductive block. *)
+Lemma fix_red_ind_unique {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
+  isType Σ Γ (dtype d) ->
+  fix_red_ind Σ Γ m1 d ->
+  fix_red_ind Σ Γ m2 d ->
+  m1 = m2.
+Proof.
+  intros isty [_ [ty1 [hc1 r1]]] [_ [ty2 [hc2 r2]]].
+  have clΓ : is_closed_context Γ.
+  { eapply wf_local_closed_context. now eapply isType_wf_local. }
+  have op : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
+  have c1 : Σ ;;; Γ ⊢ dtype d ⇝ ty1 by now eapply into_closed_red.
+  have c2 : Σ ;;; Γ ⊢ dtype d ⇝ ty2 by now eapply into_closed_red.
+  destruct (closed_red_confluence c1 c2) as [v [rv1 rv2]].
+  have e1 := check_one_fix_closed_red rv1 hc1.
+  have e2 := check_one_fix_closed_red rv2 hc2.
+  congruence.
+Qed.
+
+Lemma cofix_red_ind_unique {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
+  isType Σ Γ (dtype d) ->
+  cofix_red_ind Σ Γ m1 d ->
+  cofix_red_ind Σ Γ m2 d ->
+  m1 = m2.
+Proof.
+  intros isty [ty1 [hc1 r1]] [ty2 [hc2 r2]].
+  have clΓ : is_closed_context Γ.
+  { eapply wf_local_closed_context. now eapply isType_wf_local. }
+  have op : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
+  have c1 : Σ ;;; Γ ⊢ dtype d ⇝ ty1 by now eapply into_closed_red.
+  have c2 : Σ ;;; Γ ⊢ dtype d ⇝ ty2 by now eapply into_closed_red.
+  destruct (closed_red_confluence c1 c2) as [v [rv1 rv2]].
+  have e1 := check_one_cofix_closed_red rv1 hc1.
+  have e2 := check_one_cofix_closed_red rv2 hc2.
+  congruence.
+Qed.
 
 Section Typecheck.
   Context {cf : checker_flags} {nor : normalizing_flags}.
@@ -1626,7 +1729,7 @@ Section Typecheck.
       wf_types <- check_mfix_types infer Γ HΓ mfix ;;
       wf_bodies <- check_mfix_bodies infer Γ HΓ mfix _ (fix_context mfix) _ ;;
       guarded <- check_eq_true (abstract_env_fixguard X Γ mfix) (Msg "Unguarded fixpoint") ;;
-      wffix <- check_eq_true (wf_fixpoint_gen (abstract_env_lookup X) mfix) (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;;
+      wffix <- check_wf_fixpoint Γ mfix wf_types ;;
       ret (dtype decl; _) };
 
   infer Γ HΓ (tCoFix mfix n)
@@ -1636,7 +1739,7 @@ Section Typecheck.
       wf_types <- check_mfix_types infer Γ HΓ mfix ;;
       wf_bodies <- check_mfix_bodies infer Γ HΓ mfix _ (fix_context mfix) _ ;;
       guarded <- check_eq_true (abstract_env_cofixguard X Γ mfix) (Msg "Unguarded cofixpoint") ;;
-      wfcofix <- check_eq_true (wf_cofixpoint_gen (abstract_env_lookup X) mfix) (Msg "Ill-formed cofixpoint: not producing values in a mutually coinductive family") ;;
+      wfcofix <- check_wf_cofixpoint Γ mfix wf_types ;;
       ret (dtype decl; _)
     };
 
@@ -2636,34 +2739,6 @@ Section Typecheck.
     Unshelve. eauto.
   Qed.
 
-  Definition abstract_check_recursivity_kind Finite a Σ (wfΣ: abstract_env_ext_rel X Σ):
-    check_recursivity_kind (abstract_env_lookup X) a Finite
-    = check_recursivity_kind (lookup_env Σ) a Finite.
-  Proof using Type.
-    unfold  check_recursivity_kind.
-    erewrite <- abstract_env_lookup_correct'; eauto.
-  Qed.
-
-  Definition abstract_wf_fixpoint mfix Σ (wfΣ: abstract_env_ext_rel X Σ):
-     wf_fixpoint_gen (abstract_env_lookup X) mfix =
-     wf_fixpoint Σ mfix.
-  Proof using Type.
-    unfold wf_fixpoint, wf_fixpoint_gen.
-    destruct (map_option_out (map check_one_fix mfix)); simpl; eauto.
-    induction l; eauto.
-    erewrite abstract_check_recursivity_kind; eauto.
-  Qed.
-
-  Definition abstract_wf_cofixpoint mfix Σ (wfΣ: abstract_env_ext_rel X Σ):
-     wf_cofixpoint_gen (abstract_env_lookup X) mfix =
-     wf_cofixpoint Σ mfix.
-  Proof using Type.
-    unfold wf_cofixpoint, wf_cofixpoint_gen.
-    destruct (map_option_out (map check_one_cofix mfix)); simpl; eauto.
-    induction l; eauto.
-    erewrite abstract_check_recursivity_kind; eauto.
-  Qed.
-
   (* tFix *)
   Next Obligation.
     pose proof (heΣ _ wfΣ) as [heΣ].
@@ -2681,13 +2756,13 @@ Section Typecheck.
     - eapply All_impl with (1 := wf_bodies); cbn.
       intros.
       apply lift_typing_lift_sorting; eauto.
-    - erewrite abstract_wf_fixpoint in wffix; eauto.
+    - exact wffix.
   Qed.
   Next Obligation.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     cbn in *. specialize_Σ wfΣ ; sq.
-    apply absurd. erewrite abstract_wf_fixpoint; eauto.
-    now inversion X1.
+    apply absurd. intros Σ0 wfΣ0. rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ).
+    sq. now inversion X1.
   Qed.
   Next Obligation.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
@@ -2737,13 +2812,13 @@ Section Typecheck.
     - eapply All_impl with (1 := wf_bodies); cbn.
       intros.
       apply lift_typing_lift_sorting; eauto.
-    - erewrite abstract_wf_cofixpoint in wfcofix; eauto.
+    - exact wfcofix.
   Qed.
   Next Obligation.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     cbn in *. specialize_Σ wfΣ ; sq.
-    apply absurd. erewrite abstract_wf_cofixpoint; eauto.
-    now inversion X1.
+    apply absurd. intros Σ0 wfΣ0. rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ).
+    sq. now inversion X1.
   Qed.
   Next Obligation.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
