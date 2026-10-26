@@ -93,12 +93,14 @@ Module Type QuoteGlobalMapsSig (Import T: Term) (Import E: EnvironmentSig T) (Im
     constructor_univs
     on_constructors
     fresh_global
+    nested_insts
   : quotation.
   #[export] Typeclasses Transparent
     mdecl_at_i
     constructor_univs
     on_constructors
     fresh_global
+    nested_insts
   .
 
   #[export] Declare Instance quote_on_context {P} {qP : quotation_of P} {quoteP : forall Σ Γ j, ground_quotable (P Σ Γ j)} {Σ ctx} : ground_quotable (@on_context P Σ ctx).
@@ -114,8 +116,18 @@ Module Type QuoteGlobalMapsSig (Import T: Term) (Import E: EnvironmentSig T) (Im
   #[export] Declare Instance quote_satisfiable_udecl {univs ϕ} : ground_quotable (@satisfiable_udecl univs ϕ).
   #[export] Declare Instance quote_valid_on_mono_udecl {univs ϕ} : ground_quotable (@valid_on_mono_udecl univs ϕ).
 
-  #[export] Declare Instance quote_positive_cstr_arg {mdecl ctx t} : ground_quotable (@positive_cstr_arg mdecl ctx t).
-  #[export] Declare Instance quote_positive_cstr {mdecl i ctx t} : ground_quotable (@positive_cstr mdecl i ctx t).
+  #[export] Declare Instance quote_nested_inst : ground_quotable nested_inst.
+  #[export] Declare Instance quote_nested_insts : ground_quotable nested_insts.
+  #[export] Declare Instance quote_nested_inst_ok {NI ctx x l} : ground_quotable (@nested_inst_ok NI ctx x l).
+  #[export] Declare Instance quote_nested_uniform_cstr {mdecl k cdecl} : ground_quotable (@nested_uniform_cstr mdecl k cdecl).
+  #[export] Declare Instance quote_nested_uniform {mdecl idecl k} : ground_quotable (@nested_uniform mdecl idecl k).
+  #[export] Declare Instance quote_nested_variance_ok {mdecl} : ground_quotable (@nested_variance_ok mdecl).
+
+  #[export] Declare Instance quote_positive_cstr_arg {Σ mdecl NI ctx t} : ground_quotable (@positive_cstr_arg Σ mdecl NI ctx t).
+  #[export] Declare Instance quote_positive_args {Σ mdecl NI ctx l} : ground_quotable (@positive_args Σ mdecl NI ctx l).
+  #[export] Declare Instance quote_positive_nested_ctors {Σ mdecl NI ctx ps nskip cs} : ground_quotable (@positive_nested_ctors Σ mdecl NI ctx ps nskip cs).
+  #[export] Declare Instance quote_positive_nested_cstr {Σ mdecl NI ctx ps nskip c} : ground_quotable (@positive_nested_cstr Σ mdecl NI ctx ps nskip c).
+  #[export] Declare Instance quote_positive_cstr {Σ mdecl i ctx t} : ground_quotable (@positive_cstr Σ mdecl i ctx t).
 
   #[export] Declare Instance quote_ind_respects_variance {Pcmp} {qPcmp : quotation_of Pcmp} {quotePcmp : forall Σ Γ pb t T, ground_quotable (Pcmp Σ Γ pb t T)} {Σ mdecl v indices} : ground_quotable (@ind_respects_variance Pcmp Σ mdecl v indices).
   #[export] Declare Instance quote_cstr_respects_variance {Pcmp} {qPcmp : quotation_of Pcmp} {quotePcmp : forall Σ Γ pb t T, ground_quotable (Pcmp Σ Γ pb t T)} {Σ mdecl v cs} : ground_quotable (@cstr_respects_variance Pcmp Σ mdecl v cs).

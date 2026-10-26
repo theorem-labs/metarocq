@@ -4114,9 +4114,109 @@ Proof.
     now rewrite shiftnP_add Nat.add_assoc. }
 Qed.
 
-Lemma positive_cstr_smash_middle m n acc Γ Δ T :
-  positive_cstr m n acc (it_mkProd_or_LetIn Γ (it_mkProd_or_LetIn Δ T)) ->
-  positive_cstr m n acc (it_mkProd_or_LetIn Γ (it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T))).
+Definition smash_telescope (t : term) :=
+  let '(Γ, T) := decompose_prod_assum [] t in
+  it_mkProd_or_LetIn (smash_context [] Γ) (expand_lets Γ T).
+
+Definition is_telescope_head (t : term) :=
+  match t with
+  | tProd _ _ _ | tLetIn _ _ _ _ => false
+  | _ => true
+  end.
+
+Lemma decompose_prod_assum_telescope_head ctx t Γ T :
+  decompose_prod_assum ctx t = (Γ, T) ->
+  is_telescope_head T.
+Proof.
+  induction t in ctx, Γ, T |- *; cbn; intros h;
+    try solve [injection h; intros; subst; cbn; auto].
+  - now eapply IHt2.
+  - now eapply IHt3.
+Qed.
+
+Lemma is_telescope_head_mkApps f l :
+  is_telescope_head f -> is_telescope_head (mkApps f l).
+Proof.
+  induction l in f |- *; cbn; auto.
+Qed.
+
+Lemma is_telescope_head_subst_rel i l k T :
+  is_telescope_head T ->
+  is_telescope_head (subst [mkApps (tRel i) l] k T).
+Proof.
+  destruct T; cbn; auto.
+  unfold subst. cbn.
+  destruct (k <=? n); cbn; auto.
+  destruct (n - k); cbn; auto.
+  intros _. rewrite lift_mkApps. apply is_telescope_head_mkApps.
+  unfold lift; cbn. now destruct (k <=? i).
+  all: intros _; destruct n0; reflexivity.
+Qed.
+
+Lemma smash_telescope_it_mkProd_or_LetIn Γ T :
+  is_telescope_head T ->
+  smash_telescope (it_mkProd_or_LetIn Γ T) =
+  it_mkProd_or_LetIn (smash_context [] Γ) (expand_lets Γ T).
+Proof.
+  intros hhead.
+  rewrite /smash_telescope decompose_prod_assum_it_mkProd_or_LetIn'.
+  have -> : decompose_prod_assum [] T = ([], T) by destruct T; cbn in hhead |- *; congruence.
+  now rewrite /app_context /= app_nil_r.
+Qed.
+
+Lemma smash_telescope_subst s k t Γ T :
+  decompose_prod_assum [] t = (Γ, T) ->
+  is_telescope_head T ->
+  is_telescope_head (subst s (#|Γ| + k) T) ->
+  smash_telescope (subst s k t) = subst s k (smash_telescope t).
+Proof.
+  intros hdecomp hhead hsubst.
+  have ht := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ hdecomp.
+  cbn in ht.
+  rewrite ht subst_it_mkProd_or_LetIn.
+  rewrite smash_telescope_it_mkProd_or_LetIn //.
+  rewrite smash_telescope_it_mkProd_or_LetIn // subst_it_mkProd_or_LetIn.
+  rewrite (smash_context_subst []).
+  f_equal. len.
+  now rewrite -(expand_lets_subst_comm Γ k s T).
+Qed.
+
+Lemma smash_telescope_subst_rel i l k t :
+  smash_telescope (subst [mkApps (tRel i) l] k t) =
+  subst [mkApps (tRel i) l] k (smash_telescope t).
+Proof.
+  destruct (decompose_prod_assum [] t) as [Γ T] eqn:hdecomp.
+  eapply smash_telescope_subst; tea.
+  - now eapply decompose_prod_assum_telescope_head in hdecomp.
+  - eapply is_telescope_head_subst_rel.
+    now eapply decompose_prod_assum_telescope_head in hdecomp.
+Qed.
+
+Lemma it_mkProd_or_LetIn_inj_context Γ t u :
+  it_mkProd_or_LetIn Γ t = it_mkProd_or_LetIn Γ u -> t = u.
+Proof.
+  induction Γ using rev_ind; cbn; auto.
+  rewrite !it_mkProd_or_LetIn_app.
+  destruct x as [na [b|] ty]; cbn; intros h; noconf h; now eapply IHΓ.
+Qed.
+
+Lemma closedn_smash_telescope n t :
+  closedn n t -> closedn n (smash_telescope t).
+Proof.
+  destruct (decompose_prod_assum [] t) as [Γ T] eqn:hdecomp.
+  have ht := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ hdecomp.
+  cbn in ht. rewrite /smash_telescope hdecomp; cbv beta iota. rewrite ht.
+  rewrite !closedn_it_mkProd_or_LetIn.
+  move/andP => [] hΓ hT. apply/andP; split.
+  - now eapply closedn_smash_context.
+  - rewrite smash_context_length /=.
+    move: (closedn_expand_lets_eq n Γ 0 T hΓ).
+    rewrite !Nat.add_0_r /expand_lets => ->. exact hT.
+Qed.
+
+Lemma positive_cstr_smash_middle (Σ : global_env) m n acc Γ Δ T :
+  positive_cstr Σ m n acc (it_mkProd_or_LetIn Γ (it_mkProd_or_LetIn Δ T)) ->
+  positive_cstr Σ m n acc (it_mkProd_or_LetIn Γ (it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T))).
 Proof.
   revert Δ acc T.
   induction Γ using ctx_length_rev_ind. cbn.
@@ -4146,6 +4246,80 @@ Proof.
       cbn in p0. eapply X; auto.
 Qed.
 
+Lemma positive_nested_cstr_smash (Σ : global_env) m NI acc ps nskip Δ T :
+  positive_nested_cstr Σ m NI acc ps nskip (it_mkProd_or_LetIn Δ T) ->
+  positive_nested_cstr Σ m NI acc ps nskip
+    (it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T)).
+Proof.
+  induction Δ using ctx_length_rev_ind in acc, ps, nskip, T |- *.
+  - cbn. now rewrite expand_lets_nil.
+  - destruct d as [na [b|] ty].
+    + rewrite it_mkProd_or_LetIn_app /= smash_context_app_def.
+      intros p; depelim p; try solve_discr.
+      rewrite expand_lets_vdef.
+      eapply X. now len.
+      now rewrite subst_it_mkProd_or_LetIn Nat.add_0_r in p.
+    + rewrite it_mkProd_or_LetIn_app /= smash_context_app_ass expand_lets_vass.
+      rewrite it_mkProd_or_LetIn_app /=.
+      intros p; depelim p; try solve_discr.
+      * constructor 1. rewrite subst_it_mkProd_or_LetIn.
+        rewrite -(smash_context_subst []).
+        rewrite subst_context_nil /=.
+        len => /=.
+        replace (context_assumptions Γ) with (context_assumptions Γ + 0) by lia.
+        rewrite -(expand_lets_subst_comm Γ 0 [p] T).
+        eapply X. now len.
+        now rewrite subst_it_mkProd_or_LetIn in p0.
+      * constructor 3. cbn in p. now eapply X.
+      * constructor 4; [exact p|].
+        cbn in p0. now eapply X.
+Qed.
+
+Lemma positive_nested_cstr_smash_middle (Σ : global_env) m NI acc ps nskip Γ Δ T :
+  positive_nested_cstr Σ m NI acc ps nskip
+    (it_mkProd_or_LetIn Γ (it_mkProd_or_LetIn Δ T)) ->
+  positive_nested_cstr Σ m NI acc ps nskip
+    (it_mkProd_or_LetIn Γ
+      (it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T))).
+Proof.
+  revert Δ acc ps nskip T.
+  induction Γ using ctx_length_rev_ind.
+  - cbn. intros. now eapply positive_nested_cstr_smash.
+  - intros Δ acc ps nskip T.
+    destruct d as [na [b|] ty]; rewrite !it_mkProd_or_LetIn_app /=;
+      intros p; depelim p; try solve_discr.
+    + constructor 2. rewrite !subst_it_mkProd_or_LetIn.
+      len => /=. rewrite -(expand_lets_subst_comm _ _ _ _).
+      rewrite -(smash_context_subst []).
+      eapply X. now len.
+      now rewrite !subst_it_mkProd_or_LetIn !Nat.add_0_r in p.
+    + constructor 1. rewrite !subst_it_mkProd_or_LetIn.
+      len => /=. rewrite -(expand_lets_subst_comm _ _ _ _).
+      rewrite -(smash_context_subst []).
+      eapply X. now len.
+      now rewrite !subst_it_mkProd_or_LetIn !Nat.add_0_r in p0.
+    + constructor 3. cbn in p. now eapply X.
+    + constructor 4; [exact p|]. cbn in p0. now eapply X.
+Qed.
+
+Lemma positive_nested_ctors_smash_middle (Σ : global_env) m NI acc ps nskip
+  (dts : list (context * (context * term))) :
+  positive_nested_ctors Σ m NI acc ps nskip
+    (map (fun dt => it_mkProd_or_LetIn dt.1
+      (it_mkProd_or_LetIn dt.2.1 dt.2.2)) dts) ->
+  positive_nested_ctors Σ m NI acc ps nskip
+    (map (fun dt => it_mkProd_or_LetIn dt.1
+      (it_mkProd_or_LetIn (smash_context [] dt.2.1)
+        (expand_lets dt.2.1 dt.2.2))) dts).
+Proof.
+  induction dts as [|[Γ [Δ T]] dts] => /=.
+  - intros p; depelim p. constructor.
+  - intros p; depelim p.
+    constructor.
+    + now eapply positive_nested_cstr_smash_middle.
+    + now eapply IHdts.
+Qed.
+
 Lemma closedn_trans n t : closedn n t -> closedn n (trans t).
 Proof. intros cl; rewrite on_free_vars_closedn. eapply trans_on_free_vars.
   now rewrite -on_free_vars_closedn.
@@ -4171,36 +4345,362 @@ Proof.
   now len.
 Qed.
 
-Lemma positive_cstr_arg_trans m acc p T :
-  positive_cstr_arg m acc T ->
-  on_free_vars p T ->
-  positive_cstr_arg (trans_minductive_body m) (trans_local acc) (trans T).
+(** The translation keeps the length of every context the positivity judgment builds:
+    [trans_local] maps each declaration to one declaration, and the judgment never
+    pushes a let-declaration ([pos_let], [pos_arg_let] and [pos_ncstr_let] substitute).
+    So the levels in [nested_insts] need no re-indexing: [trans_ni] keeps [ni_level]
+    and [ni_npars] and translates only [ni_args]. *)
+Definition trans_ni (e : nested_inst) : nested_inst :=
+  {| ni_level := ni_level e;
+     ni_npars := ni_npars e;
+     ni_args := map trans (ni_args e) |}.
+
+Definition trans_ni_wf (NI : nested_insts) :=
+  All (fun e => All (on_free_vars xpredT) (ni_args e)) NI.
+
+(** What [pos_arg_nested] pushes, translated: the [nested_insts] entry and the context
+    entry of the nesting variable. *)
+Lemma trans_nested_entry Γ k args ind u na :
+  trans_ni {| ni_level := #|Γ|; ni_npars := k; ni_args := firstn k args |} =
+    {| ni_level := #|trans_local Γ|; ni_npars := k; ni_args := firstn k (map trans args) |} ×
+  trans_decl (vass na (mkApps (tInd ind u) (firstn k args))) =
+    vass na (mkApps (tInd ind u) (firstn k (map trans args))).
 Proof.
-  induction 1 in p |- *.
-  - intros ont.
-    constructor; len. now eapply closedn_trans.
-  - destruct m0 as [? [? ?]].
-    rewrite on_free_vars_mkApps => /= /andP[] onk onl.
-    rewrite trans_mkApps. econstructor 2.
-    2: {solve_all. len. now eapply closedn_trans. }
-    2: {repeat (econstructor; [now len|]).
-        len. cbn. rewrite rev_mapi. rewrite nth_error_mapi H1 /= //. }
-    len. now rewrite -trans_ind_realargs.
-  - cbn. move/and3P => [] onb onty ont.
-    constructor 3.
-    rewrite (trans_subst (shiftnP 1 p) p) in IHX => /= //.
-    now rewrite onb. eapply IHX.
-    eapply on_free_vars_subst => /= //. now erewrite onb.
-    exact ont.
-  - cbn. move/andP=> []onty ont.
-    constructor 4. len; now eapply closedn_trans.
-    eapply IHX; tea.
+  split.
+  - rewrite /trans_ni /= firstn_map. now len.
+  - now rewrite /map_decl /= trans_mkApps firstn_map.
 Qed.
 
-Lemma positive_cstr_trans m n acc p T :
-  positive_cstr m n acc T ->
+Lemma nested_inst_ok_trans NI Γ x l :
+  trans_ni_wf NI ->
+  nested_inst_ok NI Γ x l ->
+  nested_inst_ok (map trans_ni NI) (trans_local Γ) x (map trans l).
+Proof.
+  intros hwf [j [e [hnth hlt heqx hargs hclosed]]].
+  exists j, (trans_ni e).
+  have hlen : #|trans_local Γ| = #|Γ| by len.
+  rewrite hlen; cbn [trans_ni ni_level ni_npars ni_args]. split.
+  - now rewrite nth_error_map hnth.
+  - exact hlt.
+  - exact heqx.
+  - have hwfe := nth_error_all hnth hwf.
+    rewrite firstn_map hargs !map_map.
+    eapply All_map_eq, All_impl; [exact hwfe|].
+    intros t ht. exact (trans_lift t xpredT _ 0 ht).
+  - rewrite -map_skipn forallb_map. eapply forallb_impl; [|exact hclosed].
+    intros t _ ht. now eapply closedn_trans.
+Qed.
+
+(** What the translation of a nesting inductive's constructor needs: its type has the
+    declared shape, and its arguments and indices are closed. Every constructor of a
+    declared inductive has them. *)
+Definition nested_cstr_trans_hyps m i c :=
+  [× cstr_type c =
+      it_mkProd_or_LetIn (ind_params m)
+        (it_mkProd_or_LetIn (cstr_args c) (cstr_concl m i c)),
+    on_free_vars_ctx
+      (shiftnP (#|ind_params m| + #|ind_bodies m|) xpred0) (cstr_args c) &
+    on_free_vars_terms
+      (shiftnP (#|cstr_args c| + #|ind_params m| + #|ind_bodies m|) xpred0)
+      (cstr_indices c)].
+
+Lemma declared_inductive_nested_cstr_trans_hyps {cf} {Σ : global_env} {wfΣ : wf Σ}
+  ind mdecl idecl :
+  declared_inductive Σ ind mdecl idecl ->
+  All (nested_cstr_trans_hyps mdecl (inductive_ind ind)) (ind_ctors idecl).
+Proof.
+  intros decl.
+  have hcl := declared_inductive_closed_constructors
+    (Σ := (Σ, ind_universes mdecl)) (wfΣ := wfΣ) decl.
+  have [_ oib] := on_declared_inductive (wfΣ := wfΣ) decl.
+  have heq : All (fun c => cstr_type c =
+      it_mkProd_or_LetIn (ind_params mdecl)
+        (it_mkProd_or_LetIn (cstr_args c) (cstr_concl mdecl (inductive_ind ind) c)))
+      (ind_ctors idecl).
+  { eapply All2_All_left; [exact (onConstructors oib)|].
+    intros c ? onc. exact (cstr_eq onc). }
+  eapply All_impl; [exact (All_mix heq hcl)|]. intros c [hc hclc].
+  move/andP: hclc => [/andP [hargs hidx] _].
+  split.
+  - exact hc.
+  - rewrite Nat.add_comm. now eapply closedn_ctx_on_free_vars.
+  - rewrite /on_free_vars_terms. eapply forallb_impl; [|exact hidx].
+    intros t _ ht. rewrite -on_free_vars_closedn.
+    replace (#|cstr_args c| + #|ind_params mdecl| + #|ind_bodies mdecl|) with
+      (#|ind_bodies mdecl| + #|ind_params mdecl| + #|cstr_args c|) by lia.
+    exact ht.
+Qed.
+
+(** The translated constructor type is the smashed translation of the declared shape. *)
+Lemma trans_cstr_type_smash m i c :
+  nested_cstr_trans_hyps m i c ->
+  cstr_type (trans_constructor_body i m c) =
+  it_mkProd_or_LetIn (trans_local (ind_params m))
+    (it_mkProd_or_LetIn (smash_context [] (trans_local (cstr_args c)))
+      (expand_lets (trans_local (cstr_args c)) (trans (cstr_concl m i c)))).
+Proof.
+  intros [_ onargs onindices].
+  have onindices' : on_free_vars_terms
+      (shiftnP #|cstr_args c| (shiftnP (#|ind_params m| + #|ind_bodies m|) xpred0))
+      (cstr_indices c).
+  { now rewrite shiftnP_add Nat.add_assoc. }
+  rewrite -trans_cstr_concl_eq //.
+  rewrite (trans_smash_context (shiftnP (#|ind_params m| + #|ind_bodies m|) xpred0) []
+    (cstr_args c) eq_refl onargs).
+  rewrite (trans_expand_lets_map _ _ _ onargs onindices').
+  reflexivity.
+Qed.
+
+Lemma nested_uniform_cstr_trans m i k c :
+  nested_cstr_trans_hyps m i c ->
+  nested_uniform_cstr m k c ->
+  nested_uniform_cstr (trans_minductive_body m) k (trans_constructor_body i m c).
+Proof.
+  intros hyps [rest [rest1 [ctype rest_eq clrest1]]].
+  have [hcstr _ _] := hyps.
+  have hrest : rest = it_mkProd_or_LetIn (cstr_args c) (cstr_concl m i c).
+  { eapply (it_mkProd_or_LetIn_inj_context (ind_params m)). now rewrite -ctype hcstr. }
+  have hlen : #|trans_local (ind_params m)| = #|ind_params m| by len.
+  exists (smash_telescope (trans rest)), (smash_telescope (trans rest1)).
+  change (ind_params (trans_minductive_body m)) with (trans_local (ind_params m)).
+  rewrite hlen. split.
+  - rewrite trans_cstr_type_smash // hrest trans_it_mkProd_or_LetIn.
+    rewrite smash_telescope_it_mkProd_or_LetIn; [|reflexivity].
+    rewrite /cstr_concl trans_mkApps. apply is_telescope_head_mkApps. reflexivity.
+  - have hrest1 : on_free_vars (shiftnP (S #|ind_params m|) xpred0) rest1.
+    { eapply closedn_on_free_vars, clrest1. }
+    have hsub : forallb (on_free_vars xpredT)
+        [mkApps (tRel #|ind_params m|) (firstn k (to_extended_list (ind_params m)))].
+    { rewrite /= andb_true_r on_free_vars_mkApps /=.
+      eapply All_forallb, All_firstn, forallb_All, forallb_impl;
+        [|exact (closedn_to_extended_list (ind_params m))].
+      intros t _ ht.
+      eapply on_free_vars_impl; [|exact (closedn_on_free_vars (P := xpred0) ht)].
+      intros; reflexivity. }
+    rewrite rest_eq (trans_subst _ _ _ 0 _ hrest1 hsub).
+    cbn [map]. rewrite trans_mkApps.
+    change (trans (tRel #|ind_params m|)) with (tRel #|ind_params m|).
+    rewrite smash_telescope_subst_rel.
+    rewrite /to_extended_list -firstn_map trans_to_extended_list.
+    reflexivity.
+  - eapply closedn_smash_telescope, closedn_trans, clrest1.
+Qed.
+
+Lemma nested_uniform_trans m idecl k :
+  All (nested_cstr_trans_hyps m 0) (ind_ctors idecl) ->
+  nested_uniform m idecl k ->
+  nested_uniform (trans_minductive_body m) (trans_one_ind_body m 0 idecl) k.
+Proof.
+  intros hctors [hbodies hk huniform]. split.
+  - change (ind_bodies (trans_minductive_body m)) with
+      (mapi (trans_one_ind_body m) (ind_bodies m)).
+    now rewrite hbodies.
+  - change (ind_params (trans_minductive_body m)) with (trans_local (ind_params m)).
+    now rewrite context_assumptions_map.
+  - change (ind_ctors (trans_one_ind_body m 0 idecl)) with
+      (map (trans_constructor_body 0 m) (ind_ctors idecl)).
+    eapply All_map, All_impl; [exact (All_mix hctors huniform)|].
+    intros c [hc hu]. now eapply nested_uniform_cstr_trans.
+Qed.
+
+(** The nested premise of [pos_arg_nested] names the constructor types of the nesting
+    inductive. The translated environment holds their smashed translations, so the
+    translated derivation is moved onto them with [positive_nested_ctors_smash_middle]. *)
+Lemma positive_nested_ctors_trans_ctors (Σg : global_env) m' NI Γ ps nskip mdecl i u ctors :
+  All (nested_cstr_trans_hyps mdecl i) ctors ->
+  positive_nested_ctors Σg m' NI Γ ps nskip
+    (map trans (map (fun c => subst_instance u (cstr_type c)) ctors)) ->
+  positive_nested_ctors Σg m' NI Γ ps nskip
+    (map (fun c => subst_instance u (cstr_type c)) (map (trans_constructor_body i mdecl) ctors)).
+Proof.
+  intros hctors h.
+  pose (dts := map (fun c : constructor_body =>
+      (subst_instance u (trans_local (ind_params mdecl)) : context,
+      (subst_instance u (trans_local (cstr_args c)) : context,
+       subst_instance u (trans (cstr_concl mdecl i c)) : term))) ctors).
+  have h1 : map trans (map (fun c => subst_instance u (cstr_type c)) ctors) =
+    map (fun dt => it_mkProd_or_LetIn dt.1 (it_mkProd_or_LetIn dt.2.1 dt.2.2)) dts.
+  { rewrite /dts !map_map. eapply All_map_eq, All_impl; [exact hctors|].
+    intros c [hc _ _]. cbv beta iota delta [fst snd].
+    rewrite trans_subst_instance hc !trans_it_mkProd_or_LetIn
+      !subst_instance_it_mkProd_or_LetIn.
+    reflexivity. }
+  rewrite h1 in h. eapply positive_nested_ctors_smash_middle in h.
+  enough (heq : map (fun c => subst_instance u (cstr_type c))
+      (map (trans_constructor_body i mdecl) ctors) =
+    map (fun dt => it_mkProd_or_LetIn dt.1
+      (it_mkProd_or_LetIn (smash_context [] dt.2.1) (expand_lets dt.2.1 dt.2.2))) dts).
+  { now rewrite heq. }
+  rewrite /dts !map_map. eapply All_map_eq, All_impl; [exact hctors|].
+  intros c hc. cbv beta iota delta [fst snd].
+  rewrite trans_cstr_type_smash // !subst_instance_it_mkProd_or_LetIn
+    subst_instance_smash subst_instance_expand_lets.
+  reflexivity.
+Qed.
+
+Lemma positive_cstr_arg_trans_gen {cf} (Σ : global_env) (wfΣ : wf Σ) m NI Γ T
+  (h : positive_cstr_arg Σ m NI Γ T) :
+  trans_ni_wf NI ->
+  forall p, on_free_vars p T ->
+  positive_cstr_arg (trans_global_env Σ) (trans_minductive_body m)
+    (map trans_ni NI) (trans_local Γ) (trans T).
+Proof.
+  revert NI Γ T h.
+  apply (positive_cstr_arg_mrect Σ m
+    (fun NI Γ T _ => trans_ni_wf NI -> forall p, on_free_vars p T ->
+      positive_cstr_arg (trans_global_env Σ) (trans_minductive_body m)
+        (map trans_ni NI) (trans_local Γ) (trans T))
+    (fun NI Γ l _ => trans_ni_wf NI -> forall p, on_free_vars_terms p l ->
+      positive_args (trans_global_env Σ) (trans_minductive_body m)
+        (map trans_ni NI) (trans_local Γ) (map trans l))
+    (fun NI Γ ps nskip cs _ => trans_ni_wf NI ->
+      forall p, on_free_vars_terms p ps -> on_free_vars_terms p cs ->
+      positive_nested_ctors (trans_global_env Σ) (trans_minductive_body m)
+        (map trans_ni NI) (trans_local Γ) (map trans ps) nskip (map trans cs))
+    (fun NI Γ ps nskip c _ => trans_ni_wf NI ->
+      forall p, on_free_vars_terms p ps -> on_free_vars p c ->
+      positive_nested_cstr (trans_global_env Σ) (trans_minductive_body m)
+        (map trans_ni NI) (trans_local Γ) (map trans ps) nskip (trans c))).
+  - (* pos_arg_closed *)
+    intros NI Γ ty cl hwf p hty.
+    constructor 1. len. now eapply closedn_trans.
+  - (* pos_arg_concl *)
+    intros NI Γ l k i hlen cl [hk [hk' hnth]] hwf p hty.
+    rewrite trans_mkApps. econstructor 2.
+    2:{ eapply All_map, All_impl; [exact cl|]. intros t ht. len.
+        now eapply closedn_trans. }
+    2:{ repeat (econstructor; [now len|]).
+        len. cbn. rewrite rev_mapi. rewrite nth_error_mapi hnth /= //. }
+    len. now rewrite -trans_ind_realargs.
+  - (* pos_arg_nested_self *)
+    intros NI Γ x l inst hwf p hty.
+    rewrite trans_mkApps. constructor 3.
+    now eapply nested_inst_ok_trans.
+  - (* pos_arg_nested *)
+    intros NI Γ ind u args mdecl' idecl' k na decl uniform variance lenargs cl
+      pargs IHargs nctors IHctors hwf p hty.
+    rewrite on_free_vars_mkApps /= in hty.
+    have hargsk : on_free_vars_terms p (firstn k args).
+    { eapply All_forallb, All_firstn, forallb_All, hty. }
+    have [hbodies _ _] := uniform.
+    have hi : inductive_ind ind = 0.
+    { move: (proj2 decl). rewrite hbodies.
+      destruct (inductive_ind ind) as [|[]]; cbn; intros h; congruence. }
+    have hhyps := declared_inductive_nested_cstr_trans_hyps (wfΣ := wfΣ) _ _ _ decl.
+    have hlen : #|trans_local Γ| = #|Γ| by len.
+    have [hent hdecl] := trans_nested_entry Γ k args ind u na.
+    have hps : on_free_vars_terms (shiftnP 1 p) (map (lift0 1) (firstn k args)).
+    { rewrite /on_free_vars_terms forallb_map.
+      eapply forallb_impl; [|exact hargsk]. intros t _ ht.
+      eapply on_free_vars_lift0. now rewrite addnP_shiftnP. }
+    have hcs : on_free_vars_terms (shiftnP 1 p)
+        (map (fun c => subst_instance u (cstr_type c)) (ind_ctors idecl')).
+    { rewrite /on_free_vars_terms forallb_map.
+      eapply All_forallb, All_impl;
+        [exact (declared_inductive_closed_constructors
+          (Σ := (Σ, ind_universes mdecl')) (wfΣ := wfΣ) decl)|].
+      intros c hc. move/andP: hc => [_ hc]. rewrite hbodies in hc.
+      eapply (closedn_on_free_vars (n := 1)). now rewrite closedn_subst_instance. }
+    have hwf' : trans_ni_wf
+        ({| ni_level := #|Γ|; ni_npars := k; ni_args := firstn k args |} :: NI).
+    { constructor; [|exact hwf]. cbn.
+      eapply All_impl; [exact (forallb_All _ _ hargsk)|].
+      intros t ht. eapply on_free_vars_impl; [|exact ht]. intros; reflexivity. }
+    have hlift : map trans (map (lift0 1) (firstn k args)) =
+      map (lift0 1) (firstn k (map trans args)).
+    { rewrite firstn_map !map_map. eapply All_map_eq, All_impl;
+        [exact (forallb_All _ _ hargsk)|].
+      intros t ht. exact (trans_lift t p 1 0 ht). }
+    rewrite trans_mkApps.
+    eapply (@pos_arg_nested _ _ _ _ ind u (map trans args) (trans_minductive_body mdecl')
+      (trans_one_ind_body mdecl' (inductive_ind ind) idecl') k na).
+    + exact (trans_declared_inductive Σ (wfΣ := wfΣ) ind mdecl' idecl' decl).
+    + rewrite hi. rewrite hi in hhyps.
+      exact (nested_uniform_trans mdecl' idecl' k hhyps uniform).
+    + exact variance.
+    + rewrite length_map. exact lenargs.
+    + rewrite -map_skipn hlen. eapply All_map, All_impl; [exact cl|].
+      intros t ht. now eapply closedn_trans.
+    + rewrite firstn_map. exact (IHargs hwf p hargsk).
+    + rewrite -hent -hdecl -hlift.
+      change (ind_params (trans_minductive_body mdecl')) with
+        (trans_local (ind_params mdecl')).
+      rewrite context_assumptions_map.
+      change (ind_ctors (trans_one_ind_body mdecl' (inductive_ind ind) idecl')) with
+        (map (trans_constructor_body (inductive_ind ind) mdecl') (ind_ctors idecl')).
+      eapply positive_nested_ctors_trans_ctors; [exact hhyps|].
+      exact (IHctors hwf' (shiftnP 1 p) hps hcs).
+  - (* pos_arg_let *)
+    intros NI Γ na b ty ty' pos IHpos hwf p hty.
+    cbn in hty. move/and3P: hty => [hb _ hbody].
+    have hsub : on_free_vars p (ty' {0 := b}) by eapply on_free_vars_subst1.
+    have hb' : forallb (on_free_vars p) [b] by rewrite /= hb.
+    have IH := IHpos hwf p hsub.
+    rewrite (trans_subst _ _ [b] 0 ty' hbody hb') in IH.
+    constructor 5. exact IH.
+  - (* pos_arg_ass *)
+    intros NI Γ na ty ty' cl pos IHpos hwf p hty.
+    cbn in hty. move/andP: hty => [_ hbody].
+    constructor 6.
+    + len. now eapply closedn_trans.
+    + exact (IHpos hwf (shiftnP 1 p) hbody).
+  - (* pos_args_nil *)
+    intros NI Γ hwf p hl. constructor 1.
+  - (* pos_args_cons *)
+    intros NI Γ t l pos IHpos poss IHposs hwf p hl.
+    move/andP: hl => [ht hl].
+    constructor 2; [exact (IHpos hwf p ht)|exact (IHposs hwf p hl)].
+  - (* pos_nctors_nil *)
+    intros NI Γ ps nskip hwf p hps hcs. constructor 1.
+  - (* pos_nctors_cons *)
+    intros NI Γ ps nskip t l pos IHpos poss IHposs hwf p hps hcs.
+    move/andP: hcs => [ht hl].
+    constructor 2; [exact (IHpos hwf p hps ht)|exact (IHposs hwf p hps hl)].
+  - (* pos_ncstr_inst *)
+    intros NI Γ p0 ps nskip na ty t pos IHpos hwf p hps hty.
+    move/andP: hps => [hp0 hps].
+    cbn in hty. move/andP: hty => [_ hbody].
+    have hsub : on_free_vars p (t {0 := p0}) by eapply on_free_vars_subst1.
+    have hp0' : forallb (on_free_vars p) [p0] by rewrite /= hp0.
+    have IH := IHpos hwf p hps hsub.
+    rewrite (trans_subst _ _ [p0] 0 t hbody hp0') in IH.
+    constructor 1. exact IH.
+  - (* pos_ncstr_let *)
+    intros NI Γ ps nskip na b ty t pos IHpos hwf p hps hty.
+    cbn in hty. move/and3P: hty => [hb _ hbody].
+    have hsub : on_free_vars p (t {0 := b}) by eapply on_free_vars_subst1.
+    have hb' : forallb (on_free_vars p) [b] by rewrite /= hb.
+    have IH := IHpos hwf p hps hsub.
+    rewrite (trans_subst _ _ [b] 0 t hbody hb') in IH.
+    constructor 2. exact IH.
+  - (* pos_ncstr_skip *)
+    intros NI Γ nskip na ty t pos IHpos hwf p hps hty.
+    cbn in hty. move/andP: hty => [_ hbody].
+    constructor 3. exact (IHpos hwf (shiftnP 1 p) eq_refl hbody).
+  - (* pos_ncstr_arg *)
+    intros NI Γ na ty t pos IHarg ncstr IHcstr hwf p hps hty.
+    cbn in hty. move/andP: hty => [hty hbody].
+    constructor 4; [exact (IHarg hwf p hty)|exact (IHcstr hwf (shiftnP 1 p) eq_refl hbody)].
+  - (* pos_ncstr_concl *)
+    intros NI Γ x l inst hwf p hps hty.
+    rewrite trans_mkApps. constructor 5.
+    now eapply nested_inst_ok_trans.
+Qed.
+
+Lemma positive_cstr_arg_trans {cf} (Σ : global_env) (wfΣ : wf Σ) m acc p T :
+  positive_cstr_arg Σ m [] acc T ->
   on_free_vars p T ->
-  positive_cstr (trans_minductive_body m) n (trans_local acc) (trans T).
+  positive_cstr_arg (trans_global_env Σ) (trans_minductive_body m) []
+    (trans_local acc) (trans T).
+Proof.
+  intros h ht. exact (positive_cstr_arg_trans_gen Σ wfΣ m [] acc T h All_nil p ht).
+Qed.
+
+Lemma positive_cstr_trans {cf} (Σ : global_env) (wfΣ : wf Σ) m n acc p T :
+  positive_cstr Σ m n acc T ->
+  on_free_vars p T ->
+  positive_cstr (trans_global_env Σ) (trans_minductive_body m) n
+    (trans_local acc) (trans T).
 Proof.
   induction 1 in p |- *.
   - cbn. intros. rewrite trans_mkApps.
@@ -4855,7 +5355,8 @@ Proof.
           rewrite -!trans_it_mkProd_or_LetIn.
           rewrite cstr_eq in on_ctype_positive.
           eapply positive_cstr_smash_middle in on_ctype_positive.
-          eapply (positive_cstr_trans _ _ _ (shiftnP #|ind_bodies m| xpred0)) in on_ctype_positive.
+          eapply (positive_cstr_trans Σ0 X _ _ _ (shiftnP #|ind_bodies m| xpred0))
+            in on_ctype_positive.
           exact on_ctype_positive.
           rewrite cstr_eq in on_ctype.
           destruct on_ctype as (_ & s & Hs & _).
