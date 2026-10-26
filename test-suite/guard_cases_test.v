@@ -142,6 +142,9 @@ Definition exec_check (m : mfixpoint term) : bool := check_guard_impl Fix (empty
 Definition syn_check (m : mfixpoint term) : guard_result :=
   check_guard_gen (lookup_env Σ) Σ.(retroknowledge) guard_fuel Fix 0 (strip_mfix m).
 
+Definition is_reject (r : guard_result) : bool :=
+  match r with Reject _ => true | _ => false end.
+
 (** ** CE-A: a [let] in a branch context that [nat] does not declare
 
     [match O return nat with O (b := f n) => b | S k => O end] inside
@@ -167,7 +170,10 @@ Example ce_a_case_not_wf : wf_cases Σ t_a = false.
 Proof. vm_compute. reflexivity. Qed.
 Example ce_a_block_not_wf : wf_cases_mfix Σ ce_a = false.
 Proof. vm_compute. reflexivity. Qed.
-Example ce_a_syntactic_accepts : syn_check ce_a = Accept.
+(** The syntactic check refuses this block by scope as well: the added [let]
+    body is not closed in the branch context, which is an index outside the
+    block's context. *)
+Example ce_a_syntactic_rejects : is_reject (syn_check ce_a) = true.
 Proof. vm_compute. reflexivity. Qed.
 Example ce_a_refused : exec_check ce_a = false.
 Proof. vm_compute. reflexivity. Qed.
@@ -233,7 +239,10 @@ Example ce_a'_case_not_wf : wf_cases Σ t_a' = false.
 Proof. vm_compute. reflexivity. Qed.
 Example ce_a'_block_not_wf : wf_cases_mfix Σ ce_a' = false.
 Proof. vm_compute. reflexivity. Qed.
-Example ce_a'_syntactic_accepts : syn_check ce_a' = Accept.
+(** The syntactic check refuses this block by scope as well: without
+    parameters, the declared [let] bodies are not closed in the branch
+    context. *)
+Example ce_a'_syntactic_rejects : is_reject (syn_check ce_a') = true.
 Proof. vm_compute. reflexivity. Qed.
 Example ce_a'_refused : exec_check ce_a' = false.
 Proof. vm_compute. reflexivity. Qed.
@@ -283,9 +292,6 @@ Definition sp_block (r : relevance) (ret body : term) : mfixpoint term :=
 
 Definition sp_relevant := sp_block Relevant tNat tO.
 Definition sp_irrelevant := sp_block Irrelevant tsP (tRel 0).
-
-Definition is_reject (r : guard_result) : bool :=
-  match r with Reject _ => true | _ => false end.
 
 Example sp_relevant_wf : wf_cases_mfix Σ sp_relevant = true.
 Proof. vm_compute. reflexivity. Qed.
