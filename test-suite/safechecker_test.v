@@ -19,6 +19,9 @@ Record template_list_record := { template_list_field : list nat }.
 MetaRocq SafeCheck template_list_record.
 MetaRocq SafeCheck (list nat).
 
+(* The command must retain universes minted while elaborating its input. *)
+MetaRocq SafeCheck (fun (A : Type) (B : Type) => prod A B).
+
 Definition template_list_to_nat : list nat -> nat := fun _ => 0.
 MetaRocq SafeCheck template_list_to_nat.
 
@@ -33,7 +36,7 @@ From Stdlib Require Import Ring_theory.
 MetaRocq SafeCheck (prod nat nat).
 MetaRocq SafeCheck (prod True True).
 MetaRocq SafeCheck @Stdlib.setoid_ring.Ring_theory.div_theory.
-From Corelib Require Import CRelationClasses.
+From Stdlib Require Import CRelationClasses.
 
 (* [iffT] applies template [prod] at [max(i,j)] inside a polymorphic
    declaration.  It therefore covers scoped algebraic instances, their

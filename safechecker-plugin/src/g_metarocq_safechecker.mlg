@@ -40,7 +40,7 @@ let safecheck_program ~opaque_access env evm poly term =
        prog)
     uctx
 
-let check ~opaque_access env evm poly (c, _ustate) =
+let check ~opaque_access env evm poly c =
   debug (fun () -> str"Quoting");
   match safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c) with
   | Coq_inl s -> Feedback.msg_info (pr_string s)
@@ -51,7 +51,8 @@ VERNAC COMMAND EXTEND MetaRocqSafeCheck CLASSIFIED AS QUERY STATE opaque_access
 | #[ poly = polymorphic ] [ "MetaRocq" "SafeCheck" constr(c) ] -> {
     let env = Global.env () in
     let evm = Evd.from_env env in
-    let c = Constrintern.interp_constr env evm c in
+    let c, ustate = Constrintern.interp_constr env evm c in
+    let evm = Evd.merge_universe_context evm ustate in
     check env evm poly c
   }
 END
