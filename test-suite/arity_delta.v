@@ -106,6 +106,15 @@ Definition ad_fbar : Type := (let F := fun X : Type => X -> Prop in F) nat.
 Inductive ad_fbind : ad_fbar := ad_fbind_0 : ad_fbind 0.
 MetaRocq SafeCheck (@ad_fbind).
 
+(** A12: A4 with Corelib's template-polymorphic [list], as in stdpp's
+    [base.list_elem_of].  [MetaRocq SafeCheck] on this tree quotes with the
+    template-translating quoter, so the aliased arity [AD_ElemOf A (list A)]
+    must be accepted. *)
+Inductive ad_tlist_elem_of {A} : AD_ElemOf A (list A) :=
+| ad_telem_of_here x l : ad_tlist_elem_of x (cons x l)
+| ad_telem_of_further x y l : ad_tlist_elem_of x l -> ad_tlist_elem_of x (cons y l).
+MetaRocq SafeCheck (@ad_tlist_elem_of).
+
 (** A13: a let-bound variable as a [match] discriminant.  The kernel keeps
     [b := true] and unfolds the discriminant [Rel b] under delta; it stores
     [b := true; _ : nat].  Let-bound variables must also be unfolded in nested
