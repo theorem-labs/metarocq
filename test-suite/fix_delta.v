@@ -7,10 +7,10 @@
    must still reject a recursive argument whose type does not reduce to an
    inductive type, and mutual fixpoints over different inductive blocks.
 
-   The first part must be accepted.  The second part must stay rejected.  This
-   file checks acceptance and refusal only: [Fail] accepts any error.  The lane
-   driver [lanes/fix-delta/run-fix-delta-tests.sh] checks that each [Fail]
-   fails with the "Ill-formed (co)fixpoint" message, not with some other error.
+   The first part must be accepted.  The second part must stay rejected, and
+   each [Fail] there is expected to fail with the "Ill-formed (co)fixpoint"
+   message.  [Fail] itself accepts any error, so when adding a case, check the
+   message it prints rather than relying on [Fail] alone.
    The inductive types are declared here, without template polymorphism, so
    that nothing but the (co)fixpoint rule is exercised. *)
 
