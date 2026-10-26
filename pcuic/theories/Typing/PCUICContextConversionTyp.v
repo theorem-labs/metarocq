@@ -305,7 +305,7 @@ Proof.
       eapply (All_mfix_wf); auto.
       apply (All_impl X1); simpl.
       intros d' Ht. now apply Ht.
-    * eapply wf_fixpoint_context_cumulativity; tea.
+    * eapply (wf_fixpoint_context_cumulativity wfΓ X6 X5); tea.
       eapply (All_impl X0) => d hd.
       now eapply isType_is_open_term, isTypeRel_isType, hd.
   - econstructor.
@@ -322,7 +322,7 @@ Proof.
       eapply (All_mfix_wf); auto.
       apply (All_impl X1); simpl.
       intros d' Ht. now apply Ht.
-    * eapply wf_cofixpoint_context_cumulativity; tea.
+    * eapply (wf_cofixpoint_context_cumulativity wfΓ X6 X5); tea.
       eapply (All_impl X0) => d hd.
       now eapply isType_is_open_term, isTypeRel_isType, hd.
   - econstructor; tea.
