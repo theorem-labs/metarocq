@@ -58,7 +58,27 @@ struct
   type quoted_global_env = global_env
   type quoted_program = program
 
-  let quote_string = bytestring_of_caml_string
+  (* Equal strings get one quoted value.  A bytestring costs three words per
+     character, and the same names (kernel names, binder names, universe
+     levels) are quoted at every occurrence.  Quoted values are immutable, so
+     sharing them changes no value; [Constr_quoter.quote_string] does the same
+     for the Constr quoter. *)
+  let quoted_strings : (string, Bytestring.String.t) Hashtbl.t = Hashtbl.create 4096
+
+  (* Always true outside [with_unshared_quotation], which the sameness test
+     ([MetaRocq Test Quote Sharing]) uses to quote as the quoter did before
+     sharing. *)
+  let share_quoted_values = ref true
+
+  let quote_string s =
+    if not !share_quoted_values then bytestring_of_caml_string s
+    else match Hashtbl.find_opt quoted_strings s with
+    | Some quoted -> quoted
+    | None ->
+      let quoted = bytestring_of_caml_string s in
+      Hashtbl.add quoted_strings s quoted;
+      quoted
+
   let quote_ident id = quote_string (Id.to_string id)
 
   let quote_relevance = function
@@ -74,7 +94,42 @@ struct
     let {Context.binder_name = n; Context.binder_relevance = relevance} = ann_n in
     { BasicAst.binder_name = quote_name n; BasicAst.binder_relevance = quote_relevance relevance }
 
-  let quote_int = Caml_nat.nat_of_caml_int
+  (* A quoted natural is unary: [n] costs [n] blocks, and every de Bruijn index
+     is one.  [quoted_nats.(n)] is the quotation of [n], built once on top of
+     the quotation of [n - 1], so all occurrences of [n] share it.  Quoted
+     values are immutable, so sharing them changes no value.  Past
+     [max_shared_nat] the table would cost more than it saves, and
+     [Caml_nat.nat_of_caml_int] quotes the number unshared.  Like it, a
+     negative number quotes to [O]. *)
+  let max_shared_nat = 1 lsl 16
+
+  let quoted_nats = ref [| Datatypes.O |]
+
+  let quote_int n =
+    if n <= 0 then Datatypes.O
+    else if n > max_shared_nat || not !share_quoted_values then Caml_nat.nat_of_caml_int n
+    else begin
+      let nats = !quoted_nats in
+      let size = Array.length nats in
+      if n >= size then begin
+        let grown = Array.make (min (max_shared_nat + 1) (max (n + 1) (2 * size))) Datatypes.O in
+        Array.blit nats 0 grown 0 size;
+        for k = size to Array.length grown - 1 do
+          grown.(k) <- Datatypes.S grown.(k - 1)
+        done;
+        quoted_nats := grown
+      end;
+      Array.unsafe_get !quoted_nats n
+    end
+
+  (* Run [f] with every quoted natural and string built afresh, as before they
+     were shared.  For the sameness test only. *)
+  let with_unshared_quotation f =
+    share_quoted_values := false;
+    match f () with
+    | result -> share_quoted_values := true; result
+    | exception e -> share_quoted_values := true; raise e
+
   let quote_bool x = x
 
   let quote_int63 x = x
@@ -123,18 +178,64 @@ struct
     let l = DirPath.repr dp in
     List.map quote_ident l
 
-  let rec quote_modpath (mp : ModPath.t) : Kernames.modpath =
+  (* Equal module paths, kernel names and inductives get one quoted value, for
+     the same reason as strings: a kernel name is quoted at every reference to
+     its declaration, and each copy costs its dirpath spine and records.  The
+     keys are compared with the kernel's equality on names, or physically on
+     values these tables already returned; a key they did not return only
+     misses, so the result is always the value quoting builds afresh. *)
+  let quoted_modpaths : Kernames.modpath ModPath.Map.t ref = ref ModPath.Map.empty
+
+  let rec quote_modpath_unshared (mp : ModPath.t) : Kernames.modpath =
     match mp with
     | MPfile dp -> MPfile (quote_dirpath dp)
     | MPbound mbid -> let (i, id, dp) = MBId.repr mbid in
       MPbound (quote_dirpath dp, quote_ident id, quote_int i)
     | MPdot (mp, id) -> MPdot (quote_modpath mp, quote_ident (Label.to_id id))
 
-  let quote_kn (kn : KerName.t) : Kernames.kername =
-    (quote_modpath (KerName.modpath kn),
-     quote_ident (Label.to_id (KerName.label kn)))
+  and quote_modpath (mp : ModPath.t) : Kernames.modpath =
+    if not !share_quoted_values then quote_modpath_unshared mp
+    else match ModPath.Map.find_opt mp !quoted_modpaths with
+    | Some quoted -> quoted
+    | None ->
+      let quoted = quote_modpath_unshared mp in
+      quoted_modpaths := ModPath.Map.add mp quoted !quoted_modpaths;
+      quoted
 
-  let quote_inductive (kn, i) = { inductive_mind = kn ; inductive_ind = i }
+  module KerNameTable = Hashtbl.Make (KerName)
+
+  let quoted_kns : Kernames.kername KerNameTable.t = KerNameTable.create 4096
+
+  let quote_kn (kn : KerName.t) : Kernames.kername =
+    let quote () =
+      (quote_modpath (KerName.modpath kn),
+       quote_ident (Label.to_id (KerName.label kn)))
+    in
+    if not !share_quoted_values then quote ()
+    else match KerNameTable.find_opt quoted_kns kn with
+    | Some quoted -> quoted
+    | None ->
+      let quoted = quote () in
+      KerNameTable.add quoted_kns kn quoted;
+      quoted
+
+  module QuotedInductiveTable = Hashtbl.Make (struct
+    type t = Kernames.kername * Datatypes.nat
+    let equal (kn1, i1) (kn2, i2) = kn1 == kn2 && i1 == i2
+    let hash (kn, i) = Hashtbl.hash (snd kn, i)
+  end)
+
+  let quoted_inductives : inductive QuotedInductiveTable.t = QuotedInductiveTable.create 4096
+
+  let quote_inductive (kn, i) =
+    if not !share_quoted_values then { inductive_mind = kn ; inductive_ind = i }
+    else match QuotedInductiveTable.find_opt quoted_inductives (kn, i) with
+    | Some quoted -> quoted
+    | None ->
+      let quoted = { inductive_mind = kn ; inductive_ind = i } in
+      QuotedInductiveTable.add quoted_inductives (kn, i) quoted;
+      quoted
+
   let quote_proj ind p a = { proj_ind = ind; proj_npars = p; proj_arg = a }
 
   let quote_constraint_type = function

@@ -214,3 +214,23 @@ MetaRocq RocqCheck isequiv_adjointify.
 
 MetaRocq SafeCheck @IsEquiv.
 MetaRocq RocqCheck IsEquiv.
+
+(* Shared quotation: each term above, quoted once with every natural and
+   string built afresh and once shared, gives structurally equal programs. *)
+MetaRocq Test Quote Sharing nat.
+MetaRocq Test Quote Sharing (3 + 1).
+MetaRocq Test Quote Sharing bool_list.
+MetaRocq Test Quote Sharing template_list_record.
+MetaRocq Test Quote Sharing template_list_match.
+MetaRocq Test Quote Sharing @Stdlib.setoid_ring.Ring_theory.div_theory.
+MetaRocq Test Quote Sharing template_iffT_nat.
+MetaRocq Test Quote Sharing template_sigT_nat.
+MetaRocq Test Quote Sharing @template_case_instance.
+MetaRocq Test Quote Sharing @template_partial_instance.
+MetaRocq Test Quote Sharing @template_alg_outer.
+MetaRocq Test Quote Sharing template_list_prod_nat.
+MetaRocq Test Quote Sharing bignat.
+MetaRocq Test Quote Sharing @issect'.
+MetaRocq Test Quote Sharing @ap_pp.
+MetaRocq Test Quote Sharing @isequiv_adjointify.
+MetaRocq Test Quote Sharing @IsEquiv.
