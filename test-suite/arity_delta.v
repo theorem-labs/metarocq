@@ -114,6 +114,19 @@ Inductive ad_tlist_elem_of {A} : AD_ElemOf A (list A) :=
 | ad_telem_of_further x y l : ad_tlist_elem_of x l -> ad_tlist_elem_of x (cons y l).
 MetaRocq SafeCheck (@ad_tlist_elem_of).
 
+(** A13: a let-bound variable as a [match] discriminant.  The kernel keeps
+    [b := true] and unfolds the discriminant [Rel b] under delta; it stores
+    [b := true; _ : nat].  The new flag must reach nested discriminant calls. *)
+Definition ad_dlar : Type := let b := true in if b then nat -> Prop else nat.
+Inductive ad_dlind : ad_dlar := ad_dlind_0 : ad_dlind 0.
+MetaRocq SafeCheck (@ad_dlind).
+
+(** A14: a let-parameter in front of an aliased arity with an inner let.  The
+    kernel stores parameters [n := 0] and indices [Y := nat; _ : Y]. *)
+Definition ad_lpar (k : nat) : Type := let Y := nat in Y -> Prop.
+Inductive ad_lpind (n := 0) : ad_lpar n := ad_lpind_0 : ad_lpind 0.
+MetaRocq SafeCheck (@ad_lpind).
+
 (** C1: the documented call-by-need completeness gap of the head-only design.
     The kernel accepts this block and stores [_ : true = true], because forcing
     [b] in the match updates the shared closure.  A sharing-free relation
@@ -387,8 +400,8 @@ Definition ad_B8_reason :
   ad_error_either "ad_zero is not an arity" ad_indices_mismatch ad_B8 = true := eq_refl.
 
 (** B9: the mirror.  [ad_letar] exposes and retains a let, while [ad_empty]'s
-    kernel-produced index context is only [_ : nat].  The dedicated
-    let-variable-unfolding flag keeps the let without enabling zeta. *)
+    kernel-produced index context is only [_ : nat].  The let is kept because
+    the telescope walk runs with zeta off (no [tRel] head is involved here). *)
 Definition ad_B9 := Eval vm_compute in
   ad_run_on ad_normal ad_empty_kn <% ad_letar %> None.
 Print ad_B9.
