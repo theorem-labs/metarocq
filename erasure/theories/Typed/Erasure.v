@@ -1304,10 +1304,7 @@ Definition erase_ind_body
 Proof.
   unshelve refine (
   let is_propositional :=
-      match destArity [] (ind_type oib) with
-      | Some (_, u) => Sort.is_propositional u
-      | None => false
-      end in
+      Sort.is_propositional (PCUICEnvironment.ind_sort oib) in
   let oib_tvars := erase_ind_arity [] (PCUICEnvironment.ind_type oib) _ in
 
   let ctx := inspect (arities_contexts mind (PCUICEnvironment.ind_bodies mib)) in

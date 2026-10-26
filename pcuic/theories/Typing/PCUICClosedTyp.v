@@ -110,8 +110,7 @@ Proof.
   - rewrite andb_and. split.
     * apply onArity in oib.
       now move/andP: oib => [] /=.
-    * pose proof (onArity oib) as X. unfold on_type_rel in X.
-      rewrite oib.(ind_arity_eq) in X.
+    * pose proof (onArityRed oib) as X. unfold on_type_rel in X.
       cbn in X.
       rewrite !closedn_it_mkProd_or_LetIn /= !andb_true_r in X.
       now move/andP: X.

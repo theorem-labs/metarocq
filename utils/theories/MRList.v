@@ -867,6 +867,15 @@ Proof.
   now rewrite Nat.sub_diag.
 Qed.
 
+Lemma nth_error_split_firstn_skipn {A} (l : list A) n x :
+  nth_error l n = Some x ->
+  l = firstn n l ++ x :: skipn (S n) l /\ #|firstn n l| = n.
+Proof.
+  induction l in n |- *; destruct n; cbn; intros h; try discriminate.
+  - injection h as ->. split; reflexivity.
+  - destruct (IHl _ h) as [e e']. split; f_equal; assumption.
+Qed.
+
 Lemma map_inj :
   forall A B (f : A -> B) l l',
     (forall x y, f x = f y -> x = y) ->

@@ -277,8 +277,6 @@ Proof.
   exists ctx, i, u, args. now rewrite -eq.
 Qed.
 
-
-
 Section OnConstructor.
   Context {cf:checker_flags} {Σ : global_env} {ind mdecl idecl cdecl}
     {wfΣ: wf Σ} (declc : declared_constructor Σ ind mdecl idecl cdecl).
@@ -337,20 +335,24 @@ Section OnConstructor.
     intros [= ->].
     eapply (nth_errror_arities_context (Σ := (Σ, ind_universes mdecl)) declc) in Hdecl; eauto.
     rewrite Hdecl in cum'; clear Hdecl.
-    assert(closed (ind_type idecl)).
-    { pose proof (oib.(onArity)). rewrite (oib.(ind_arity_eq)) in X0 |- *.
-      destruct X0 as (_ & s' & Hs & _). now apply subject_closed in Hs. }
+    assert(clT : closed (ind_type idecl)).
+    { destruct (oib.(onArity)) as (_ & s' & Hs & _). now apply subject_closed in Hs. }
     rewrite lift_closed in cum' => //.
     eapply typing_spine_strengthen in sp; simpl.
     3:tea.
-    move: sp.
-    rewrite (oib.(ind_arity_eq)).
-    rewrite -it_mkProd_or_LetIn_app.
-    move=> sp. simpl in sp.
+    (* [ind_type] reduces to the arity built from the parameters and the indices. *)
+    have hred := closed_red_from_empty (Σ := (Σ, ind_universes mdecl))
+      (wf_local_closed_context wfΓ) clT (declared_inductive_type (proj1 declc)).
+    eapply typing_spine_strengthen in sp.
+    3:{ now eapply red_ws_cumul_pb_inv. }
+    simpl in sp.
     apply (arity_typing_spine (Σ := (Σ, ind_universes mdecl))) in sp as [Hlen' Hleq [inst Hinst]] => //.
     clear Hlen'.
     rewrite [_ ,,, _]app_context_assoc in Hinst.
     now exists inst.
+    apply lift_typing_weaken_ctx with (Γ := []); tas.
+    eapply isTypeRel_isType.
+    exact (declared_inductive_arity_isTypeRel (proj1 declc)).
     apply lift_typing_weaken_ctx with (Γ := []); tas.
     eapply isTypeRel_isType.
     apply oib.(onArity).
@@ -1063,10 +1065,8 @@ Proof.
   destruct isty as (_ & s & Hs & _).
   eapply invert_type_mkApps_ind in Hs as [sp cu]; tea.
   move=> parctx argctx.
-  erewrite ind_arity_eq in sp.
-  2: eapply PCUICInductives.oib ; eauto.
-  rewrite !subst_instance_it_mkProd_or_LetIn in sp.
-  rewrite -it_mkProd_or_LetIn_app /= in sp.
+  eapply (typing_spine_ind_type_inv isdecl) in sp; tea.
+  rewrite subst_instance_it_mkProd_or_LetIn subst_instance_app_ctx /= in sp.
   eapply arity_typing_spine in sp as [hle hs [insts sp]]; tea.
   eapply spine_subst_smash in sp; tea.
   rewrite smash_context_app_expand in sp.
@@ -1665,9 +1665,7 @@ Proof.
       { split; auto. simpl. rewrite -nth nth_error_rev; lia_f_equal. }
       unshelve epose proof (decli' := declared_inductive_to_gen H); eauto.
       rewrite (declared_inductive_lookup_gen decli') //.
-      destruct (on_declared_inductive H) as [onmind onind] => //. simpl in *.
-      len. rewrite e /ind_realargs !onind.(ind_arity_eq).
-      rewrite !destArity_it_mkProd_or_LetIn /=. len; simpl.
+      len. rewrite e /ind_realargs. len.
       rewrite Nat.leb_refl.
       destruct (ind_variance mdecl) eqn:var => /=.
       * change (cmp_opt_variance (compare_universe Σ) Conv (Variance l0) u u').
@@ -1897,10 +1895,7 @@ Proof.
       unfold lookup_inductive.
       unshelve epose proof (H0' := declared_inductive_to_gen H3); eauto.
       rewrite (declared_inductive_lookup_gen H0') //.
-      destruct (on_declared_inductive H3) as [onmind onind] => //. simpl in *.
       rewrite e /ind_realargs.
-      rewrite !onind.(ind_arity_eq).
-      rewrite !destArity_it_mkProd_or_LetIn /=. len; simpl.
       rewrite (Nat.leb_refl) //.
       eapply Nat.leb_nle in eqle. lia.
     * do 2 eapply All2_map. do 2 eapply All2_map_inv in cum.
@@ -2056,18 +2051,6 @@ Proof.
     now epose proof (on_constructor_inst declc _ cu) as [wfarpars _].
   - eapply smash_context_assumption_context. constructor.
   - now rewrite !(subst_instance_smash _ (expand_lets_ctx _ _)).
-Qed.
-
-Lemma red_subst_instance {cf:checker_flags} (Σ : global_env) (Γ : context) (u : Instance.t) (s t : term) :
-  red Σ Γ s t ->
-  red Σ (subst_instance u Γ) (subst_instance u s)
-            (subst_instance u t).
-Proof.
-  intros H; apply clos_rt_rt1n in H.
-  apply clos_rt1n_rt.
-  induction H. constructor.
-  eapply red1_subst_instance in r.
-  econstructor 2. eapply r. auto.
 Qed.
 
 Lemma assumption_context_map f Γ :
@@ -2696,9 +2679,7 @@ Proof.
   unshelve epose proof (decli' := declared_inductive_to_gen decli); eauto.
   unfold cmp_global_instance, cmp_global_instance_gen, global_variance.
   rewrite (declared_inductive_lookup_gen decli').
-  rewrite oib.(ind_arity_eq).
-  rewrite !destArity_it_mkProd_or_LetIn. simpl.
-  rewrite app_context_nil_l context_assumptions_app.
+  simpl. rewrite context_assumptions_app.
   elim: leb_spec_Set => // comp. 2: now right.
   destruct ind_variance eqn:indv => //. 2: now right.
   move/cmp_opt_variance_var_dec => [|H]. 1: now right.
@@ -3523,12 +3504,9 @@ Proof.
     now rewrite declmi. }
   split; auto.
   simpl. unfold lookup_inductive in H; rewrite H.
-  destruct (on_declared_inductive decli) as [onmi oni]; auto.
-  rewrite oni.(ind_arity_eq) in Hargs |- *.
-  rewrite !destArity_it_mkProd_or_LetIn. simpl.
-  rewrite app_context_nil_l.
-  rewrite !subst_instance_it_mkProd_or_LetIn in Hargs.
-  rewrite -it_mkProd_or_LetIn_app in Hargs.
+  simpl.
+  eapply (typing_spine_ind_type_inv decli) in Hargs; tea.
+  rewrite subst_instance_it_mkProd_or_LetIn subst_instance_app_ctx in Hargs.
   eapply arity_typing_spine in Hargs; auto.
   destruct Hargs as [Hl Hleq ?]. rewrite Hl.
   len. now rewrite Nat.leb_refl.
@@ -3549,8 +3527,8 @@ Proof.
   rewrite (declared_inductive_lookup_gen isdecl') in idecl'. noconf idecl'.
   destruct isTy as (_ & ? & ty_args & _).
   eapply invert_type_mkApps_ind in ty_args as [ty_args ?] ; eauto.
-  erewrite ind_arity_eq in ty_args.
-  2: eapply PCUICInductives.oib ; eauto.
+  eapply (typing_spine_ind_type_inv isdecl) in ty_args; tea.
+  rewrite it_mkProd_or_LetIn_app in ty_args.
 
   assert (#|args| = ind_npars mdecl + context_assumptions (ind_indices idecl)).
   {
@@ -4336,10 +4314,10 @@ Proof.
         destruct isdecl. now eapply nth_error_Some_length in H0.
         eapply type_mkApps.
         econstructor; tea.
-        rewrite -[subst_instance _ (ind_type idecl)](lift_closed (#|ind_params mdecl| + #|cstr_args cdecl|) 0).
-        rewrite closedn_subst_instance.
-        eapply (declared_inductive_closed_type _ _ _ _ _ isdecl).
-        rewrite (declared_inductive_type isdecl).
+        eapply (typing_spine_ind_type isdecl); tea.
+        rewrite -[subst_instance _ (it_mkProd_or_LetIn _ _)](lift_closed (#|ind_params mdecl| + #|cstr_args cdecl|) 0).
+        { rewrite closedn_subst_instance closedn_it_mkProd_or_LetIn /= andb_true_r.
+          exact (declared_inductive_closed_pars_indices isdecl). }
         rewrite subst_instance_it_mkProd_or_LetIn subst_instance_app
           it_mkProd_or_LetIn_app.
         have wfs : wf_sort Σ (subst_instance_sort (puinst p) (ind_sort idecl)).
@@ -4698,10 +4676,10 @@ Proof.
         destruct isdecl. now eapply nth_error_Some_length in H0.
         eapply type_mkApps.
         econstructor; tea.
-        rewrite -[subst_instance _ (ind_type idecl)](lift_closed (#|ind_params mdecl| + #|cstr_args cdecl|) 0).
-        rewrite closedn_subst_instance.
-        eapply (declared_inductive_closed_type _ _ _ _ _ isdecl).
-        rewrite (declared_inductive_type isdecl).
+        eapply (typing_spine_ind_type isdecl); tea.
+        rewrite -[subst_instance _ (it_mkProd_or_LetIn _ _)](lift_closed (#|ind_params mdecl| + #|cstr_args cdecl|) 0).
+        { rewrite closedn_subst_instance closedn_it_mkProd_or_LetIn /= andb_true_r.
+          exact (declared_inductive_closed_pars_indices isdecl). }
         rewrite subst_instance_it_mkProd_or_LetIn subst_instance_app
           it_mkProd_or_LetIn_app.
         have wfs : wf_sort Σ (subst_instance_sort (puinst p) (ind_sort idecl)).
@@ -4907,7 +4885,6 @@ Proof.
   eapply relevance_super.
 Qed.
 
-
 Lemma isTypeRel_cstr_type {cf : checker_flags} Σ mdecl idecl cdecl n :
   wf Σ.1 ->
   nth_error (ind_bodies mdecl) n = Some idecl ->
@@ -4917,9 +4894,12 @@ Lemma isTypeRel_cstr_type {cf : checker_flags} Σ mdecl idecl cdecl n :
           (mkApps (tRel (#|mdecl.(ind_params) ,,, cdecl.(cstr_args)| + (#|ind_bodies mdecl| - S n)))
             (to_extended_list_k mdecl.(ind_params) #|cdecl.(cstr_args)| ++
             cdecl.(cstr_indices)))) ->
-    idecl.(ind_type)
-      = it_mkProd_or_LetIn mdecl.(ind_params)
-          (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort))) ->
+    isType Σ [] idecl.(ind_type) ->
+    red Σ.1 [] idecl.(ind_type)
+      (it_mkProd_or_LetIn mdecl.(ind_params)
+          (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort)))) ->
+    isType Σ [] (it_mkProd_or_LetIn mdecl.(ind_params)
+          (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort)))) ->
     isSortRel idecl.(ind_sort) idecl.(ind_relevance) ->
     ctx_inst Σ (arities_context mdecl.(ind_bodies) ,,, mdecl.(ind_params) ,,, cdecl.(cstr_args))
       cdecl.(cstr_indices)
@@ -4927,7 +4907,8 @@ Lemma isTypeRel_cstr_type {cf : checker_flags} Σ mdecl idecl cdecl n :
   isType Σ (arities_context mdecl.(ind_bodies)) (cstr_type cdecl) ->
   isTypeRel Σ (arities_context mdecl.(ind_bodies)) (cstr_type cdecl) idecl.(ind_relevance).
 Proof.
-  intros wfΣ H -> e1 <- c (_ & s & Hs & _ & _).
+  intros wfΣ H -> istyT r istyA <- c (_ & s & Hs & _ & _).
+  have clT : closed idecl.(ind_type) by apply (isType_closed istyT).
   repeat (eexists; tea). cbn in Hs |- *.
   eapply PCUICSpine.inversion_it_mkProd_or_LetIn in Hs.
   eapply PCUICValidity.inversion_mkApps in Hs as [tyapp [Happ Hsp]].
@@ -4939,7 +4920,13 @@ Proof.
   eapply nth_error_arities_context in H. rewrite hnth in H.
   eapply PCUICSpine.typing_spine_strengthen in Hsp; tea. noconf H. clear cum hnth.
   cbn in Hsp.
-  rewrite e1 !PCUICLiftSubst.lift_it_mkProd_or_LetIn -it_mkProd_or_LetIn_app /= in Hsp.
+  (* [ind_type] reduces to the arity built from the parameters and the indices. *)
+  rewrite lift_closed // in Hsp.
+  have hred := closed_red_from_empty (wf_local_closed_context wfΓ) clT r.
+  eapply PCUICSpine.typing_spine_strengthen in Hsp.
+  2:{ now eapply isType_weaken. }
+  2:{ now eapply red_ws_cumul_pb_inv. }
+  rewrite -it_mkProd_or_LetIn_app /= in Hsp.
   eapply PCUICSpine.arity_typing_spine in Hsp as [_ leqs _]. now eapply leq_relevance; tea.
   noconf H. cbn in Hty |- *. now apply isTypeRel_isType in Hty.
 Qed.

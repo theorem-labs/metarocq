@@ -16,7 +16,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICOnOne PCUICCases 
      PCUICConversion PCUICOnFreeVars
      PCUICValidity PCUICArities PCUICInversion
      PCUICCases PCUICWellScopedCumulativity PCUICSpine PCUICSR PCUICFixWitness
-     PCUICSafeLemmata PCUICInductives PCUICInductiveInversion.
+     PCUICSafeLemmata PCUICInductives PCUICInductiveInversion PCUICArityRed.
 From MetaRocq.PCUIC Require Import PCUICExpandLets.
 Set Warnings "+notation-overridden".
 
@@ -581,19 +581,6 @@ Proof.
   destruct (g x) eqn: ?;cbn in *;try congruence.
   do 2 eexists.
   repeat split;eassumption.
-Qed.
-
-Lemma trans_destr_arity x:
-  destArity [] (trans x) =
-  option_map (fun '(xs,u) => (map trans_decl xs,u)) (destArity [] x).
-Proof.
-  set xs := (@nil context_decl). unfold xs at 1.
-  replace (@nil context_decl) with (map trans_decl xs) at 1 by (now subst). clearbody xs.
-  induction x in xs |- *;cbn;trivial;unfold snoc.
-  - rewrite <- IHx2.
-    reflexivity.
-  - rewrite <- IHx3.
-    reflexivity.
 Qed.
 
 Lemma trans_mkProd_or_LetIn a t:
@@ -1888,6 +1875,82 @@ Definition cf' cf :=
 Notation wf_trans Σ := (@wf (cf' _) (trans_global_env Σ.1)).
 Notation wf_ext_trans Σ := (@wf_ext (cf' _) (trans_global Σ)).
 
+(** The translation of an iota contraction on a well-typed case is the iota
+  contraction of the translated case: [trans] rewrites the branches, and typing
+  gives the branch contexts their constructor's shape. *)
+Lemma trans_iota_red {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ ci p c u args brs br} :
+  wt Σ Γ (tCase ci p (mkApps (tConstruct ci.(ci_ind) c u) args) brs) ->
+  nth_error brs c = Some br ->
+  trans (iota_red ci.(ci_npar) p args br) =
+  iota_red ci.(ci_npar) (map_predicate id trans trans (map_context trans) p) (map trans args)
+    (trans_branch (map_predicate id trans trans (map_context trans) p)
+      (map_branch trans (map_context trans) br)).
+Proof.
+  intros wt H.
+  have onargs : forallb (on_free_vars (shiftnP #|Γ| xpred0)) args.
+  { pose proof (wt_inv wt) as [_ [mdecl [idecl [_ _ _ _ _ _ _ wtc _]]]].
+    eapply wt_mkApps_inv in wtc as [_ wtargs].
+    solve_all. now eapply wt_on_free_vars. }
+  have onpars : forallb (on_free_vars (shiftnP #|Γ| xpred0)) (pparams p).
+  { pose proof (wt_inv wt) as [wtpars _].
+    solve_all. now eapply wt_on_free_vars. }
+  destruct wt as [s Hs].
+  eapply inversion_Case in Hs as [mdecl [idecl [decli [indices [[] e]]]]].
+  epose proof (PCUICValidity.inversion_mkApps scrut_ty) as [? [hc hsp]]; tea.
+  eapply inversion_Construct in hc as (mdecl'&idecl'&cdecl&wfΓ&declc&cu&tyc); tea.
+  unshelve epose proof (decli_ := declared_inductive_to_gen decli); eauto.
+  unshelve epose proof (declc_ := declared_inductive_to_gen declc); eauto.
+  destruct (declared_inductive_inj decli_ declc_) as [-> ->]. 2:auto.
+  have lenskip : #|skipn (ci_npar ci) (map trans args)| =
+    context_assumptions (cstr_args cdecl).
+  { destruct (Construct_Ind_ind_eq _ scrut_ty declc) as [[? e'] _].
+    rewrite length_skipn; len; lia. }
+  eapply All2i_nth_error_r in brs_ty; tea.
+  destruct brs_ty as [cdecl' [Hcdecl' [bctxeq [wfbrctx [hbody hbodyty]]]]].
+  rewrite (proj2 declc) in Hcdecl'. noconf Hcdecl'.
+  symmetry. rewrite /iota_red. rewrite length_skipn_map in lenskip.
+  have oninst : on_free_vars_ctx (shiftnP #|Γ| xpred0) (inst_case_branch_context p br).
+  { rewrite -(PCUICCasesContexts.inst_case_branch_context_eq bctxeq).
+    eapply typing_wf_local in hbody. eapply wf_local_closed_context in hbody.
+    rewrite -> on_free_vars_ctx_app in hbody.
+    move/andP: hbody => [] //. }
+  have lenbctx : context_assumptions (cstr_args cdecl) = context_assumptions (bcontext br).
+  { rewrite (alpha_eq_context_assumptions _ _ bctxeq).
+    rewrite cstr_branch_context_assumptions. lia. }
+  have onb : on_free_vars (shiftnP #|inst_case_branch_context p br| (shiftnP #|Γ| xpred0)) (bbody br).
+  { rewrite -(PCUICCasesContexts.inst_case_branch_context_eq bctxeq).
+    eapply subject_is_open_term in hbody. len in hbody. rewrite shiftnP_add //. }
+  rewrite (trans_subst_ctx Γ).
+  { len. rewrite lenskip.
+    rewrite -shiftnP_add.
+    eapply on_free_vars_expand_lets_k => //.
+    rewrite /inst_case_branch_context /inst_case_context.
+    rewrite context_assumptions_subst_context context_assumptions_subst_instance. lia. }
+  { rewrite forallb_rev. now apply forallb_skipn. }
+  rewrite map_rev map_skipn. f_equal.
+  rewrite (trans_expand_lets (shiftnP #|Γ| xpred0)) //.
+  cbn -[expand_lets].
+  rewrite expand_lets_assumption_context.
+  { apply assumption_context_subst_context.
+    apply assumption_context_subst_instance.
+    rewrite trans_bcontext.
+    apply smash_context_assumption_context => //.
+    constructor. }
+  f_equal.
+  rewrite /inst_case_branch_context /inst_case_context.
+  rewrite (trans_subst_context (shiftnP (#|Γ| + #|ind_params mdecl|) xpred0) (shiftnP #|Γ| xpred0)).
+  { rewrite on_free_vars_ctx_subst_instance.
+    eapply alpha_eq_on_free_vars_ctx; [symmetry; tea|].
+    eapply on_free_vars_ctx_impl; [|eapply (on_free_vars_ctx_cstr_branch_context declc)].
+    intros i. rewrite /shiftnP. rewrite !orb_false_r.
+    move/Nat.ltb_lt => H'. apply Nat.ltb_lt.
+    pose proof (context_assumptions_bound (ind_params mdecl)). lia. }
+  { rewrite [on_free_vars_terms _ _]forallb_rev. exact onpars. }
+  rewrite map_rev. f_equal.
+  rewrite trans_subst_instance_ctx //.
+  now rewrite trans_bbody.
+Qed.
+
 Lemma trans_red1 {cf} (Σ : global_env_ext) {wfΣ : wf Σ} {wfΣ' : wf_trans Σ} Γ T U :
   red1 Σ Γ T U ->
   wt Σ Γ T ->
@@ -1913,70 +1976,11 @@ Proof.
     now eapply subject_is_open_term.
     do 2 constructor. now rewrite nth_error_map Heq.
 
-  - pose proof (wt_on_free_vars wt).
-    inv_on_free_vars.
-    destruct wt as [s Hs].
-    eapply inversion_Case in Hs as [mdecl [idecl [decli [indices [[] e]]]]].
-    epose proof (PCUICValidity.inversion_mkApps scrut_ty) as [? [hc hsp]]; tea.
-    eapply inversion_Construct in hc as (mdecl'&idecl'&cdecl&wfΓ&declc&cu&tyc); tea.
-    unshelve epose proof (decli_ := declared_inductive_to_gen decli); eauto.
-    unshelve epose proof (declc_ := declared_inductive_to_gen declc); eauto.
-    destruct (declared_inductive_inj decli_ declc_) as [-> ->]. 2:auto.
-    rewrite trans_mkApps /=.
-    have lenskip : #|skipn (ci_npar ci) (map trans args)| =
-      context_assumptions (cstr_args cdecl).
-    { destruct (Construct_Ind_ind_eq _ scrut_ty declc) as [[? e'] _].
-      rewrite length_skipn; len; lia. }
-    eapply All2i_nth_error_r in brs_ty; tea.
-    destruct brs_ty as [cdecl' [Hcdecl' [bctxeq [wfbrctx [hbody hbodyty]]]]].
-    rewrite (proj2 declc) in Hcdecl'. noconf Hcdecl'.
-    have lenbctx : context_assumptions (cstr_args cdecl) = context_assumptions (bcontext br).
-    { rewrite (alpha_eq_context_assumptions _ _ bctxeq).
-      rewrite cstr_branch_context_assumptions. lia. }
-    relativize (trans (iota_red _ _ _ _)).
-    eapply red1_red; eapply red_iota; tea; eauto. all:auto.
+  - rewrite trans_mkApps /= (trans_iota_red wt H).
+    eapply red1_red, red_iota.
     * rewrite !nth_error_map H; reflexivity.
     * rewrite trans_bcontext (context_assumptions_smash_context []) /= context_assumptions_map.
       len. eauto.
-    * rewrite /iota_red. rewrite length_skipn_map in lenskip.
-      have oninst : on_free_vars_ctx (shiftnP #|Γ| xpred0) (inst_case_branch_context p br).
-      { rewrite -(PCUICCasesContexts.inst_case_branch_context_eq bctxeq).
-        eapply typing_wf_local in hbody. eapply wf_local_closed_context in hbody.
-        rewrite -> on_free_vars_ctx_app in hbody.
-        move/andP: hbody => [] //. }
-      have onb : on_free_vars (shiftnP #|inst_case_branch_context p br| (shiftnP #|Γ| xpred0)) (bbody br).
-      { rewrite -(PCUICCasesContexts.inst_case_branch_context_eq bctxeq).
-        eapply subject_is_open_term in hbody. len in hbody. rewrite shiftnP_add //. }
-      rewrite (trans_subst_ctx Γ).
-      { len. rewrite lenskip.
-        rewrite -shiftnP_add.
-        eapply on_free_vars_expand_lets_k => //.
-        rewrite /inst_case_branch_context /inst_case_context.
-        rewrite context_assumptions_subst_context context_assumptions_subst_instance. lia. }
-      { rewrite forallb_rev forallb_skipn //.
-        rewrite on_free_vars_mkApps in p3. move: p3 => /= //. }
-      rewrite map_rev map_skipn. f_equal.
-      rewrite (trans_expand_lets (shiftnP #|Γ| xpred0)) //.
-      cbn -[expand_lets].
-      rewrite expand_lets_assumption_context.
-      { apply assumption_context_subst_context.
-        apply assumption_context_subst_instance.
-        rewrite trans_bcontext.
-        apply smash_context_assumption_context => //.
-        constructor. }
-      f_equal.
-      rewrite /inst_case_branch_context /inst_case_context.
-      rewrite (trans_subst_context (shiftnP (#|Γ| + #|ind_params mdecl|) xpred0) (shiftnP #|Γ| xpred0)).
-      { rewrite on_free_vars_ctx_subst_instance.
-        eapply alpha_eq_on_free_vars_ctx; [symmetry; tea|].
-        eapply on_free_vars_ctx_impl; [|eapply (on_free_vars_ctx_cstr_branch_context declc)].
-        intros i. rewrite /shiftnP. rewrite !orb_false_r.
-        move/Nat.ltb_lt => H'. apply Nat.ltb_lt.
-        pose proof (context_assumptions_bound (ind_params mdecl)). lia. }
-      { rewrite [on_free_vars_terms _ _]forallb_rev //. }
-      rewrite map_rev. f_equal.
-      rewrite trans_subst_instance_ctx //.
-      now rewrite trans_bbody.
 
   - simpl. rewrite !trans_mkApps /=.
     eapply wt_mkApps_inv in wt as [wtf wtargs].
@@ -2217,6 +2221,247 @@ Proof.
   - cbn; depelim wt. eapply red_primArray_type; cbn; eauto.
 Qed.
 
+(** ** The kernel's arity decomposition under the translation
+
+  [trans] rewrites the branches of a [tCase], so a weak-head step commutes with
+  it only on well-typed terms (as in [trans_red1]): every step of a [whd_rel]
+  derivation on a well-typed term stays well typed by subject reduction, and
+  each contraction is translated with the [on_free_vars] side conditions of
+  [trans_lift], [trans_subst_ctx], [trans_unfold_fix] and [trans_iota_red]. *)
+
+Lemma wt_red_red {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ t u} :
+  wt Σ Γ t -> red Σ Γ t u -> wt Σ Γ u.
+Proof.
+  intros [T ht] r. exists T. eapply subject_reduction; tea.
+Qed.
+
+Lemma whd_trans_stop_head t args :
+  whd_stop_head (trans t) (map trans args) = whd_stop_head t args.
+Proof. destruct t; try reflexivity. destruct args; reflexivity. Qed.
+
+Lemma whd_trans_is_construct t : whd_is_construct (trans t) = whd_is_construct t.
+Proof. now destruct t. Qed.
+
+Lemma whd_trans_is_construct0 t : whd_is_construct0 (trans t) = whd_is_construct0 t.
+Proof. now destruct t. Qed.
+
+Lemma whd_trans_is_cofix t : whd_is_cofix (trans t) = whd_is_cofix t.
+Proof. now destruct t. Qed.
+
+Lemma whd_trans_arity_head h l :
+  whd_arity_head (trans h) (map trans l) = whd_arity_head h l.
+Proof. destruct h; try reflexivity; destruct l; reflexivity. Qed.
+
+Lemma trans_unfold_fix_none mfix idx :
+  unfold_fix mfix idx = None ->
+  unfold_fix (map (map_def trans trans) mfix) idx = None.
+Proof.
+  rewrite /unfold_fix nth_error_map.
+  destruct nth_error; cbn; congruence.
+Qed.
+
+Lemma trans_whd_rel {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {zeta Γ t args h l} :
+  whd_rel zeta Σ.1 Γ t args h l ->
+  wt Σ Γ (mkApps t args) ->
+  whd_rel zeta (trans_global_env Σ.1) (trans_local Γ) (trans t) (map trans args)
+    (trans h) (map trans l).
+Proof.
+  induction 1 as [c args d b h l hn hb w IH|c args d hn hb
+      |na b B t args h l hz w IH|na b B t args hz
+      |c u decl body args h l hd hb w IH|c u decl args hd hb
+      |f a args h l w IH|na A t a args h l w IH
+      |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
+      |mfix idx narg fn args c t cargs hu hn w IH hc
+      |mfix idx narg fn args hu hn|mfix idx args hu
+      |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
+      |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |ci p c brs args t cargs w IH hc hcf
+      |p c args u cargs a h l w1 IH1 ha w2 IH2
+      |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |p c args t cargs w IH hc hcf
+      |t args hs];
+    intros wta; pose proof (wt_mkApps_inv wta) as [wth wtargs]; cbn [trans].
+  - (* let-bound variable *)
+    have onb : on_free_vars (shiftnP #|skipn (S c) Γ| xpred0) b.
+    { pose proof (wt_wf_local wth) as wfΓ.
+      destruct d as [na [b'|] ty]; cbn in hb; noconf hb.
+      eapply All_local_env_nth_error in wfΓ; tea. apply unlift_TermTyp in wfΓ.
+      now eapply subject_is_open_term. }
+    have wt' : wt Σ Γ (mkApps (lift0 (S c) b) args).
+    { eapply wt_red_red; [exact wta|]. apply red_mkApps_f, red1_red, red_rel. now rewrite hn /= hb. }
+    specialize (IH wt'). rewrite (trans_lift _ _ _ _ onb) in IH.
+    eapply whd_rel_unfold with (d := trans_decl d) (b := trans b);
+      [now rewrite nth_error_map hn|cbn; now rewrite hb|exact IH].
+  - eapply whd_rel_assum with (d := trans_decl d); [now rewrite nth_error_map hn|cbn; now rewrite hb].
+  - (* zeta *)
+    pose proof (wt_inv wth) as [wtb _ wtt].
+    have ont : on_free_vars (shiftnP (#|[b]| + #|Γ|) xpred0) t by exact (wt_on_free_vars wtt).
+    have onb : forallb (on_free_vars (shiftnP #|Γ| xpred0)) [b] by rewrite /= (wt_on_free_vars wtb).
+    have wt' : wt Σ Γ (mkApps (t {0 := b}) args).
+    { eapply wt_red_red; [exact wta|]. apply red_mkApps_f, red1_red, red_zeta. }
+    specialize (IH wt'). rewrite (trans_subst_ctx Γ [b] 0 t ont onb) in IH.
+    apply whd_zeta; [exact hz|exact IH].
+  - now apply whd_letin_stop.
+  - (* delta *)
+    have wt' : wt Σ Γ (mkApps (subst_instance u body) args).
+    { eapply wt_red_red; [exact wta|]. apply red_mkApps_f, red1_red.
+      eapply red_delta; [exact (lookup_global_Some_if_In _ _ _ hd)|exact hb]. }
+    specialize (IH wt'). rewrite trans_subst_instance in IH.
+    eapply whd_delta with (decl := trans_constant_body decl) (body := trans body);
+      [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb|exact IH].
+  - eapply whd_axiom with (decl := trans_constant_body decl);
+      [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb].
+  - apply whd_app. exact (IH wta).
+  - (* beta *)
+    have wtapp : wt Σ Γ (tApp (tLambda na A t) a).
+    { exact (wt_mkApps_inv (f := tApp (tLambda na A t) a) (args := args) wta).1. }
+    pose proof (wt_inv wtapp) as [wtlam wta'].
+    pose proof (wt_inv wtlam) as [_ wtt].
+    have ont : on_free_vars (shiftnP (#|[a]| + #|Γ|) xpred0) t by exact (wt_on_free_vars wtt).
+    have ona : forallb (on_free_vars (shiftnP #|Γ| xpred0)) [a] by rewrite /= (wt_on_free_vars wta').
+    have wt' : wt Σ Γ (mkApps (t {0 := a}) args).
+    { eapply wt_red_red; [exact wta|]. cbn. apply red_mkApps_f, red1_red, red_beta. }
+    specialize (IH wt'). rewrite (trans_subst_ctx Γ [a] 0 t ont ona) in IH.
+    cbn [map]. apply whd_beta. exact IH.
+  - (* fix, recursive argument a constructor *)
+    have onfix : on_free_vars (shiftnP #|Γ| xpred0) (tFix mfix idx) by exact (wt_on_free_vars wth).
+    have wtc : wt Σ Γ c by eapply All_nth_error in wtargs; tea.
+    have wt' : wt Σ Γ (mkApps fn (firstn narg args ++ mkApps (tConstruct ind n ui) cargs :: skipn (S narg) args)).
+    { eapply wt_red_red; [exact wta|].
+      eapply red_trans.
+      { apply red_mkApps; [reflexivity|]. eapply whd_red_args; [exact hn|exact (whd_rel_red _ _ w1)]. }
+      apply red1_red. eapply red_fix; [exact hu|].
+      destruct (nth_error_split_firstn_skipn _ _ _ hn) as [_ len].
+      rewrite /is_constructor (nth_error_snoc _ _ _ _ (eq_sym len)) /isConstruct_app.
+      now rewrite decompose_app_mkApps. }
+    specialize (IH2 wt').
+    rewrite map_app /= (trans_mkApps (tConstruct ind n ui) cargs) -firstn_map map_skipn in IH2.
+    eapply whd_fix_iota with (fn := trans fn) (c := trans c) (cargs := map trans cargs).
+    + exact (trans_unfold_fix _ _ _ _ _ onfix hu).
+    + now rewrite nth_error_map hn.
+    + exact (IH1 wtc).
+    + exact IH2.
+  - (* fix, recursive argument stuck *)
+    have onfix : on_free_vars (shiftnP #|Γ| xpred0) (tFix mfix idx) by exact (wt_on_free_vars wth).
+    have wtc : wt Σ Γ c by eapply All_nth_error in wtargs; tea.
+    rewrite map_app /= (trans_mkApps t cargs) -firstn_map map_skipn.
+    eapply whd_fix_stuck with (fn := trans fn) (c := trans c).
+    + exact (trans_unfold_fix _ _ _ _ _ onfix hu).
+    + now rewrite nth_error_map hn.
+    + exact (IH wtc).
+    + now rewrite whd_trans_is_construct.
+  - eapply whd_fix_noarg.
+    + exact (trans_unfold_fix _ _ _ _ _ (wt_on_free_vars wth) hu).
+    + now rewrite nth_error_map hn.
+  - apply whd_fix_nounfold. exact (trans_unfold_fix_none _ _ hu).
+  - (* iota *)
+    pose proof (wt_inv wth) as [_ [mdecl [idecl [_ _ _ _ _ _ _ wtc _]]]].
+    have wtcase : wt Σ Γ (tCase ci p (mkApps (tConstruct ci.(ci_ind) n ui) cargs) brs).
+    { eapply wt_red_red; [exact wth|]. eapply red_case_c. exact (whd_rel_red _ _ w1). }
+    have wt' : wt Σ Γ (mkApps (iota_red ci.(ci_npar) p cargs br) args).
+    { eapply wt_red_red; [exact wta|]. apply red_mkApps_f.
+      eapply red_trans; [eapply red_case_c; exact (whd_rel_red _ _ w1)|].
+      apply red1_red. now apply red_iota. }
+    specialize (IH2 wt'). rewrite (trans_iota_red wtcase hbr) in IH2.
+    eapply whd_iota with (n := n) (ui := ui) (cargs := map trans cargs).
+    + exact (IH1 wtc).
+    + now rewrite !nth_error_map hbr.
+    + rewrite trans_bcontext (context_assumptions_smash_context []) /= context_assumptions_map length_map.
+      exact hlen.
+    + exact IH2.
+  - (* case on a cofixpoint *)
+    pose proof (wt_inv wth) as [_ [mdecl [idecl [_ _ _ _ _ _ _ wtc _]]]].
+    have wtcf : wt Σ Γ (mkApps (tCoFix mfix idx) cargs).
+    { eapply wt_red_red; [exact wtc|exact (whd_rel_red _ _ w1)]. }
+    have oncf : on_free_vars (shiftnP #|Γ| xpred0) (tCoFix mfix idx).
+    { exact (wt_on_free_vars (wt_mkApps_inv wtcf).1). }
+    have wt' : wt Σ Γ (mkApps (tCase ci p (mkApps fn cargs) brs) args).
+    { eapply wt_red_red; [exact wta|]. apply red_mkApps_f.
+      eapply red_trans; [eapply red_case_c; exact (whd_rel_red _ _ w1)|].
+      apply red1_red. eapply red_cofix_case; eauto. }
+    specialize (IH2 wt'). cbn [trans] in IH2. rewrite (trans_mkApps fn cargs) in IH2.
+    eapply whd_case_cofix with (mfix := map (map_def trans trans) mfix) (cargs := map trans cargs)
+      (narg := narg) (fn := trans fn).
+    + exact (IH1 wtc).
+    + exact (trans_unfold_cofix _ _ _ _ _ oncf hu).
+    + exact IH2.
+  - (* stuck case *)
+    pose proof (wt_inv wth) as [_ [mdecl [idecl [_ _ _ _ _ _ _ wtc _]]]].
+    rewrite (trans_mkApps t cargs).
+    eapply whd_case_stuck.
+    + exact (IH wtc).
+    + now rewrite whd_trans_is_construct.
+    + now rewrite whd_trans_is_cofix.
+  - (* projection *)
+    have wtc : wt Σ Γ c by exact (wt_inv wth).
+    have wt' : wt Σ Γ (mkApps a args).
+    { eapply wt_red_red; [exact wta|]. apply red_mkApps_f.
+      eapply red_trans; [eapply red_proj_c; exact (whd_rel_red _ _ w1)|].
+      apply red1_red. now apply red_proj. }
+    eapply whd_proj with (u := u) (cargs := map trans cargs) (a := trans a).
+    + exact (IH1 wtc).
+    + now rewrite nth_error_map ha.
+    + exact (IH2 wt').
+  - (* projection of a cofixpoint *)
+    have wtc : wt Σ Γ c by exact (wt_inv wth).
+    have wtcf : wt Σ Γ (mkApps (tCoFix mfix idx) cargs).
+    { eapply wt_red_red; [exact wtc|exact (whd_rel_red _ _ w1)]. }
+    have oncf : on_free_vars (shiftnP #|Γ| xpred0) (tCoFix mfix idx).
+    { exact (wt_on_free_vars (wt_mkApps_inv wtcf).1). }
+    have wt' : wt Σ Γ (mkApps (tProj p (mkApps fn cargs)) args).
+    { eapply wt_red_red; [exact wta|]. apply red_mkApps_f.
+      eapply red_trans; [eapply red_proj_c; exact (whd_rel_red _ _ w1)|].
+      apply red1_red. eapply red_cofix_proj; eauto. }
+    specialize (IH2 wt'). cbn [trans] in IH2. rewrite (trans_mkApps fn cargs) in IH2.
+    eapply whd_proj_cofix with (mfix := map (map_def trans trans) mfix) (cargs := map trans cargs)
+      (narg := narg) (fn := trans fn).
+    + exact (IH1 wtc).
+    + exact (trans_unfold_cofix _ _ _ _ _ oncf hu).
+    + exact IH2.
+  - (* stuck projection *)
+    have wtc : wt Σ Γ c by exact (wt_inv wth).
+    rewrite (trans_mkApps t cargs).
+    eapply whd_proj_stuck.
+    + exact (IH wtc).
+    + now rewrite whd_trans_is_construct0.
+    + now rewrite whd_trans_is_cofix.
+  - apply whd_stop. now rewrite whd_trans_stop_head.
+Qed.
+
+(** The typed simulation of [arity_red] by the translation. *)
+Lemma trans_arity_red {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ t Δ s} :
+  arity_red Σ.1 Γ t Δ s ->
+  isType Σ Γ t ->
+  arity_red (trans_global_env Σ.1) (trans_local Γ) (trans t) (trans_local Δ) s.
+Proof.
+  induction 1 as [Γ t s w|Γ t na A B Δ s w ar IH|Γ t na b A B Δ s w ar IH
+    |Γ t h l h' l' Δ s w ha w' hne ar IH]; intros ist.
+  - constructor. exact (trans_whd_rel w (isType_wt ist)).
+  - have ist' : isType Σ Γ (tProd na A B) by exact (isType_red ist (whd_rel_red _ _ w)).
+    destruct (fst isType_tProd ist') as [_ istB].
+    rewrite /trans_local map_app /=.
+    eapply arity_red_prod with (A := trans A) (B := trans B).
+    + exact (trans_whd_rel w (isType_wt ist)).
+    + exact (IH istB).
+  - have ist' : isType Σ Γ (tLetIn na b A B) by exact (isType_red ist (whd_rel_red _ _ w)).
+    destruct (fst isType_tLetIn ist') as [_ istB].
+    rewrite /trans_local map_app /=.
+    eapply arity_red_let with (b := trans b) (A := trans A) (B := trans B).
+    + exact (trans_whd_rel w (isType_wt ist)).
+    + exact (IH istB).
+  - have ist1 : isType Σ Γ (mkApps h l) by exact (isType_red ist (whd_rel_red _ _ w)).
+    have ist2 : isType Σ Γ (mkApps h' l') by exact (isType_red ist1 (whd_rel_red _ _ w')).
+    pose proof (trans_whd_rel w (isType_wt ist)) as wT.
+    pose proof (trans_whd_rel w' (isType_wt ist1)) as wT'.
+    have haT : whd_arity_head (trans h) (map trans l) = false by rewrite whd_trans_arity_head.
+    specialize (IH ist2).
+    rewrite (trans_mkApps h l) in wT'. rewrite (trans_mkApps h' l') in IH.
+    (* [trans] is not injective, but the target derivation [IH] itself gives
+       the progress premise. *)
+    eapply arity_red_fallback;
+      [exact wT|exact haT|exact wT'|exact (arity_red_fallback_progress wT haT wT' IH)|exact IH].
+Qed.
+
 Lemma trans_cmp_global_instance {Σ : global_env} Re Rle gref napp u u' :
   cmp_global_instance Σ Re Rle gref napp u u' ->
   cmp_global_instance (trans_global_env Σ) Re Rle gref napp u u'.
@@ -2229,9 +2474,7 @@ Proof.
     rewrite trans_lookup. destruct SE.lookup_env => //; simpl.
     destruct g => /= //. rewrite nth_error_mapi.
     destruct nth_error => /= //.
-    rewrite trans_destr_arity.
-    destruct PCUICAst.destArity as [[ctx ps]|] => /= //.
-    now rewrite context_assumptions_map.
+    now rewrite -trans_local_app context_assumptions_map.
   - unfold S.lookup_constructor, S.lookup_inductive, S.lookup_minductive.
     unfold S.lookup_constructor_gen, S.lookup_inductive_gen, S.lookup_minductive_gen.
     unfold lookup_constructor, lookup_inductive, lookup_minductive.
@@ -4420,24 +4663,11 @@ Proof. intros cl; rewrite on_free_vars_closedn. eapply trans_on_free_vars.
   now rewrite -on_free_vars_closedn.
 Qed.
 
-Lemma trans_destArity ctx t :
-  destArity (trans_local ctx) (trans t) = match destArity ctx t with
-  | Some (ctx, T) => Some (trans_local ctx, T)
-  | None => None
-  end.
-Proof.
-  induction t in ctx |- *; cbn; auto.
-  rewrite (IHt2 (ctx ,, vass na t1)) //.
-  rewrite (IHt3 (ctx ,, vdef na t1 t2)) //.
-Qed.
-
 Lemma trans_ind_realargs m k i :
-  ind_realargs i = ind_realargs (trans_one_ind_body m k i).
+  ind_realargs m i = ind_realargs (trans_minductive_body m) (trans_one_ind_body m k i).
 Proof.
-  unfold ind_realargs.
-  rewrite (trans_destArity []).
-  destruct destArity => //. destruct p.
-  now len.
+  rewrite /ind_realargs /=.
+  now rewrite -trans_local_app context_assumptions_map.
 Qed.
 
 (** The translation keeps the length of every context the positivity judgment builds:
@@ -5254,8 +5484,7 @@ Lemma wf_ind_indices {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {mi
   wf_local Σ (ind_params mdecl ,,, ind_indices idecl).
 Proof.
   intros [].
-  rewrite ind_arity_eq in onArity.
-  destruct onArity as (_ & s & Hs & _).
+  destruct onArityRed as (_ & s & Hs & _).
   eapply type_it_mkProd_or_LetIn_inv in Hs as [Δs [ts [_ Hs]]].
   eapply type_it_mkProd_or_LetIn_inv in Hs as [Δs' [ts' []]].
   eapply typing_wf_local in t. now rewrite app_context_nil_l in t.
@@ -5328,8 +5557,23 @@ Proof.
     + cbn.
       eapply (Alli_mapi _ _ _).1, Alli_impl; tea.
       intros n idecl onind; generalize onind; intros []; econstructor; tea.
-      { cbn. rewrite ind_arity_eq !trans_it_mkProd_or_LetIn //. }
+      { cbn. destruct ind_arity_red as [U [equ ar]].
+        exists (trans U). split.
+        { rewrite equ trans_it_mkProd_or_LetIn //. }
+        have ist : isType (Σ0, ind_universes m) (ind_params m) U.
+        { pose proof (isTypeRel_isType _ _ _ _ onArity) as ist. rewrite equ in ist.
+          eapply (isType_it_mkProd_or_LetIn_inv (Σ := (Σ0, ind_universes m)) (wfΣ := X)) in ist.
+          now rewrite app_context_nil_l in ist. }
+        exact (trans_arity_red (Σ := (Σ0, ind_universes m)) (wfΣ := X) ar ist). }
       { cbn. apply lift_typing_f_impl with (1 := onArity) => // ?? Hty.
+        exact (pcuic_expand_lets (Σ0, ind_universes m) [] _ _ X Hty IHX). }
+      { have e : it_mkProd_or_LetIn (trans_local (ind_params m))
+            (it_mkProd_or_LetIn (trans_local (ind_indices idecl)) (tSort (ind_sort idecl))) =
+          trans (it_mkProd_or_LetIn (ind_params m)
+            (it_mkProd_or_LetIn (ind_indices idecl) (tSort (ind_sort idecl)))).
+        { now rewrite !trans_it_mkProd_or_LetIn. }
+        cbn. rewrite e.
+        apply lift_typing_f_impl with (1 := onArityRed) => // ?? Hty.
         exact (pcuic_expand_lets (Σ0, ind_universes m) [] _ _ X Hty IHX). }
       { instantiate (1 := ind_cunivs).
         red in onConstructors.
@@ -5410,8 +5654,7 @@ Proof.
           rewrite -(trans_expand_lets_map (shiftnP (#|ind_params m| + #|ind_bodies m|) xpred0)) //.
           rewrite shiftnP_add Nat.add_assoc //.
           rewrite -(trans_lift_context (shiftnP #|ind_params m| xpred0)).
-          { rewrite ind_arity_eq in onArity.
-            destruct onArity as (_ & s & Hs & _).
+          { destruct onArityRed as (_ & s & Hs & _).
             eapply subject_is_open_term in Hs.
             move: Hs; rewrite !on_free_vars_it_mkProd_or_LetIn /=.
             move/and3P => [] _. now rewrite shiftnP0. }
@@ -5423,8 +5666,7 @@ Proof.
           { rewrite -app_context_assoc.
             eapply weaken_wf_local; tea.
             eapply wf_arities_context'; tea.
-            rewrite ind_arity_eq in onArity.
-            destruct onArity as (_ & s & Hs & _).
+            destruct onArityRed as (_ & s & Hs & _).
             rewrite -it_mkProd_or_LetIn_app in Hs.
             eapply type_it_mkProd_or_LetIn_inv in Hs as [? [? [Hs _]]].
             eapply PCUICClosedConv.sorts_local_ctx_All_local_env in Hs; eauto.
@@ -6525,9 +6767,7 @@ Proof.
   rewrite /lookup_inductive /lookup_inductive_gen /lookup_minductive_gen trans_lookup.
   destruct lookup_env => //. destruct g => //. cbn. rewrite nth_error_mapi.
   destruct nth_error => //=.
-  rewrite /PCUICFirstorder.isPropositionalArity.
-  rewrite (trans_destArity []). destruct destArity => //.
-  destruct p => //. now intros ->.
+  now intros ->.
 Qed.
 
 Lemma expand_firstorder_type (Σ : global_declarations) n k t :

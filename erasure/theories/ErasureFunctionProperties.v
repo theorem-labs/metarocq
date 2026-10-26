@@ -1205,7 +1205,7 @@ Qed.
 Import EGlobalEnv.
 Lemma erase_global_deps_fresh X_type kn deps X decls normalization_in heq :
   let Σ' := erase_global_deps X_type deps X decls normalization_in heq in
-  PCUICAst.fresh_global kn decls ->
+  PCUICTyping.fresh_global kn decls ->
   fresh_global kn Σ'.1.
 Proof.
   cbn.
@@ -1225,7 +1225,7 @@ Qed.
 
 Lemma erase_global_fresh X_type kn X decls normalization_in heq :
   let Σ' := @erase_global X_type X decls normalization_in heq in
-  PCUICAst.fresh_global kn decls ->
+  PCUICTyping.fresh_global kn decls ->
   fresh_global kn Σ'.
 Proof.
   cbn.
@@ -2350,8 +2350,8 @@ Definition decls_prefix decls (Σ' : global_env) :=
   ∑ Σ'', declarations Σ' = Σ'' ++ decls.
 
 Lemma on_global_decls_prefix {cf} Pcmp P univs retro decls decls' :
-  PCUICAst.on_global_decls Pcmp P univs retro (decls ++ decls') ->
-  PCUICAst.on_global_decls Pcmp P univs retro decls'.
+  PCUICTyping.on_global_decls Pcmp P univs retro (decls ++ decls') ->
+  PCUICTyping.on_global_decls Pcmp P univs retro decls'.
 Proof using Type.
   induction decls => //.
   intros ha; depelim ha.

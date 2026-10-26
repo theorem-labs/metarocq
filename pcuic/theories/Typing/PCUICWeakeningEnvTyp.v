@@ -152,6 +152,7 @@ Proof.
   intros HRext HPΣ wfΣ wfΣ' Hext.
   apply on_global_decl_impl_full; eauto.
   - reflexivity.
+  - intros ????. eapply weakening_env_arity_red; eauto.
   - intros ?????. eapply weakening_env_cumulSpec0; eauto.
   - intro. eapply (extends_wf_sort (Σ:=(Σ,φ)) Σ'); auto.
   - unfold check_constructors_smaller. intros ???.

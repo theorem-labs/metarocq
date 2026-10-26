@@ -2,7 +2,7 @@
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReflect.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReflect PCUICTyping.
 From MetaRocq.SafeChecker Require Import PCUICErrors.
 
 Import MonadNotation.
@@ -182,7 +182,7 @@ Section Check.
         match nth_error (List.rev mdecl.(ind_bodies)) (hdrel - #|Γ|) with
         | Some i =>
           if forallb (closedn #|Γ|) args then
-            if Nat.eqb (ind_realargs i) #|args| then ret tt
+            if Nat.eqb (ind_realargs mdecl i) #|args| then ret tt
             else raise (Msg "Partial application of inductive")
           else raise (Msg "Conclusion arguments refer to the inductive type being defined")
         | None => raise (Msg "Conclusion is not an inductive type")
@@ -326,7 +326,7 @@ Section Check.
       destruct ((#|Γ| <=? n) && (n <? #|Γ| + #|ind_bodies mdecl|)) eqn:isind.
       + destruct nth_error as [i|] eqn:hnth; [|discriminate].
         destruct (forallb (closedn #|Γ|) args) eqn:cla; [|discriminate].
-        destruct (Nat.eqb (ind_realargs i) #|args|) eqn:hra; [|discriminate].
+        destruct (Nat.eqb (ind_realargs mdecl i) #|args|) eqn:hra; [|discriminate].
         intros _. move/andP: isind => [] /Nat.leb_le le /Nat.ltb_lt lt.
         econstructor 2.
         * symmetry. now apply Nat.eqb_eq.

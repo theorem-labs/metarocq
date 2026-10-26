@@ -1424,9 +1424,7 @@ Proof.
     destruct g => /= //.
     rewrite nth_error_map.
     destruct nth_error => /= //.
-    rewrite trans_destr_arity.
-    destruct PCUICAst.destArity as [[ctx ps]|] => /= //.
-    now rewrite context_assumptions_map.
+    now rewrite -trans_local_app context_assumptions_map.
   - unfold S.lookup_constructor, S.lookup_inductive, S.lookup_minductive.
     unfold S.lookup_constructor_gen, S.lookup_inductive_gen, S.lookup_minductive_gen.
     unfold lookup_constructor, lookup_inductive, lookup_minductive.

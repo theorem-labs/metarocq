@@ -15,7 +15,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics
      PCUICContexts PCUICSubstitution PCUICSpine PCUICInductiveInversion
      PCUICClosed PCUICClosedTyp PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp
      PCUICOnFreeVars PCUICWellScopedCumulativity
-     BDTyping BDFromPCUIC BDToPCUIC.
+     BDTyping BDFromPCUIC BDToPCUIC PCUICArityRed.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICSafeReduce PCUICErrors
   PCUICSafeConversion PCUICWfReduction PCUICWfEnv PCUICTypeChecker PCUICPositivityCheck.
@@ -792,13 +792,39 @@ Section CheckEnv.
 
   Arguments eqb : simpl never.
 
+  (** What [check_ind_type] establishes: the declared type is well typed,
+      starts with the parameters syntactically and reduces to the arity of the
+      declaration (the [ind_arity_red] field of [on_ind_body]), and that arity
+      is well typed ([onArityRed]). *)
   Definition wf_ind_type (Σ : global_env_ext) (mdecl : mutual_inductive_body) (idecl : one_inductive_body) :=
     isType Σ [] idecl.(ind_type) ×
-    idecl.(ind_type) = it_mkProd_or_LetIn mdecl.(ind_params) (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort))) ×
+    (∑ U, (idecl.(ind_type) = it_mkProd_or_LetIn mdecl.(ind_params) U) ×
+          arity_red Σ.1 mdecl.(ind_params) U idecl.(ind_indices) idecl.(ind_sort)) ×
+    isTypeRel Σ [] (it_mkProd_or_LetIn mdecl.(ind_params)
+      (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort)))) rel_of_Type ×
     isSortRel idecl.(ind_sort) idecl.(ind_relevance).
 
   Definition wf_ind_types (Σ : global_env_ext) (mdecl : mutual_inductive_body) :=
     All (wf_ind_type Σ mdecl) mdecl.(ind_bodies).
+
+  (** The declared type of an inductive is relevant, as its well-typed reduct,
+      the arity, is. *)
+  Lemma ind_type_relevant {Σ : global_env_ext} {mdecl idecl} :
+    wf Σ.1 -> isType Σ [] idecl.(ind_type) ->
+    PCUICReduction.red Σ.1 [] idecl.(ind_type)
+      (it_mkProd_or_LetIn mdecl.(ind_params) (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort)))) ->
+    isTypeRel Σ [] idecl.(ind_type) rel_of_Type.
+  Proof using Type.
+    intros wfΣ (_ & s & Hs & _ & _) r.
+    repeat (eexists; tea). cbn in Hs |- *.
+    eapply subject_reduction in Hs; tea.
+    rewrite -it_mkProd_or_LetIn_app in Hs.
+    eapply PCUICSpine.inversion_it_mkProd_or_LetIn in Hs.
+    apply inversion_Sort in Hs as (_ & _ & le); tea.
+    apply ws_cumul_pb_Sort_inv in le.
+    eapply leq_relevance; tea.
+    eapply relevance_super.
+  Qed.
 
   Lemma wf_ind_types_wf_arities (Σ : global_env_ext) (wfX : wf Σ) mdecl :
     wf_ind_types Σ mdecl ->
@@ -807,8 +833,8 @@ Section CheckEnv.
     rewrite /wf_ind_types.
     unfold arities_context.
     induction 1; simpl; auto.
-    assert (isty : isTypeRel Σ [] (ind_type x) Relevant)
-    by (destruct p as (a & b & c); rewrite b in a |- *; eapply PCUICInductiveInversion.ind_arity_relevant => //).
+    assert (isty : isTypeRel Σ [] (ind_type x) Relevant).
+    { eapply ind_type_relevant; [exact wfX|exact p.1|exact (ind_arity_sig_red p.2.1)]. }
     rewrite rev_map_cons /=.
     eapply All_local_env_app. constructor; pcuic.
     eapply All_local_env_impl; eauto.
@@ -1152,6 +1178,26 @@ Section CheckEnv.
     (match c with true => vT | false => vF end)
     (at level 200, c, vT, vF at level 200, only parsing).
 
+  Lemma welltyped_prod_inv {Σ : global_env_ext} {Γ na ty ty'} {wfΣ : wf Σ} :
+    welltyped Σ Γ (tProd na ty ty') ->
+    welltyped Σ Γ ty * welltyped Σ (Γ ,, vass na ty) ty'.
+  Proof using Type.
+    intros [s [s1 [s2 [hty [hty' hcum]]]]%inversion_Prod]; auto.
+    apply unlift_TypUniv in hty; cbn in hty.
+    split; eexists; eauto.
+  Qed.
+
+  Lemma welltyped_letin_inv {Σ : global_env_ext} {Γ na b ty t} {wfΣ : wf Σ} :
+    welltyped Σ Γ (tLetIn na b ty t) ->
+    welltyped Σ Γ ty *
+    welltyped Σ Γ b *
+    welltyped Σ (Γ ,, vdef na b ty) t.
+  Proof using Type.
+    intros [s [s1 [hty [hty' hcum]]]%inversion_LetIn]; auto.
+    destruct hty as (hdef & s2 & hty & _); cbn in *.
+    split; [split|]; eexists; eauto.
+  Qed.
+
   Section PositivityCheck.
 
     Context {X_ext : X_env_ext_type}.
@@ -1264,6 +1310,21 @@ Section CheckEnv.
     eapply All2_fold_length in H. len in H.
   Qed.
 
+  (** A spine on a closed well-typed type can use any well-typed reduct of it. *)
+  Lemma typing_spine_lift_closed_red {Σ : global_env_ext} {wfΣ : wf Σ} {Γ k T U args S} :
+    isType Σ [] T -> isType Σ [] U -> PCUICReduction.red Σ.1 [] T U ->
+    typing_spine Σ Γ (lift0 k T) args S -> typing_spine Σ Γ (lift0 k U) args S.
+  Proof using Type.
+    intros isT isU r sp.
+    pose proof (PCUICSpine.typing_spine_wf_local sp) as wfΓ.
+    rewrite (lift_closed k 0 T (isType_closed isT)) in sp.
+    rewrite (lift_closed k 0 U (isType_closed isU)).
+    eapply PCUICSpine.typing_spine_strengthen; tea.
+    - now eapply isType_weaken.
+    - eapply red_ws_cumul_pb_inv, (closed_red_from_empty (wfΣ := wfΣ));
+        [fvs|exact (isType_closed isT)|exact r].
+  Qed.
+
   Lemma get_wt_indices {mdecl cstrs cs} X_ext
     (wfar : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_ind_types Σ mdecl ∥)
     (wfpars : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_local Σ (ind_params mdecl) ∥)
@@ -1278,12 +1339,15 @@ Section CheckEnv.
     solve_all. simpl.
     destruct X as [[[isTy eq] sorts] eq']. simpl in *.
     pose proof (wfars := wfar).
-    eapply nth_error_all in wfar as (wfar & eqind); eauto.
-    rewrite -it_mkProd_or_LetIn_app in eqind.
+    eapply nth_error_all in wfar as wfi; eauto.
+    pose proof (ind_arity_sig_red wfi.2.1) as redar.
+    clear wfar. destruct wfi as (wfar & _ & isar & _).
+    apply isTypeRel_isType in isar.
+    rewrite -it_mkProd_or_LetIn_app in isar redar.
     assert(wf_local Σ (ind_params mdecl,,, idecl.(ind_indices))).
-    { rewrite eqind in wfar.
-      eapply isType_it_mkProd_or_LetIn_wf_local in wfar.
-      now rewrite app_context_nil_l in wfar. }
+    { pose proof isar as isar'.
+      eapply isType_it_mkProd_or_LetIn_wf_local in isar'.
+      now rewrite app_context_nil_l in isar'. }
     red. rewrite eq in isTy.
     eapply isType_it_mkProd_or_LetIn_inv in isTy; eauto.
     eapply isType_mkApps_inv in isTy as [fty [s [Hf Hsp]]]; auto.
@@ -1299,7 +1363,8 @@ Section CheckEnv.
     noconf H1; simpl in *.
     eapply PCUICSpine.typing_spine_strengthen in Hsp; eauto.
     clear cum.
-    move: Hsp. rewrite eqind.
+    pose proof (typing_spine_lift_closed_red wfar isar redar Hsp) as Hsp'. clear Hsp.
+    move: Hsp'.
     rewrite lift_it_mkProd_or_LetIn /= => Hs.
     rewrite closed_ctx_lift in Hs. eapply closed_wf_local; eauto.
     rewrite app_context_assoc in Hs wfctx.
@@ -1636,7 +1701,9 @@ Section CheckEnv.
         rewrite it_mkProd_or_LetIn_app. autorewrite with len. lia_f_equal.
         rewrite /cstr_concl /=. f_equal. rewrite /cstr_concl_head. lia_f_equal.
       - eapply All_nth_error in wfar; tea.
-        destruct wfar as (isty & e & eqrel), wtinds.
+        pose proof (ind_arity_sig_red wfar.2.1) as redar.
+        destruct wfar as (isty & _ & isar & eqrel), wtinds.
+        apply isTypeRel_isType in isar.
         eapply PCUICInductiveInversion.isTypeRel_cstr_type; eauto. apply wfΣ.
       - destruct wtinds as (? & ci).
         apply PCUICEnvTyping.ctx_inst_impl with (1 := ci) => t T HT.
@@ -1924,45 +1991,306 @@ End monad_Alli_nth_forall.
     rewrite -eqvaru in e; discriminate.
   Qed.
 
-  Program Definition check_ind_type X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ} (mdecl : mutual_inductive_body) (idecl : one_inductive_body)
+  (** ** The arity of an inductive type
+
+    As Rocq's kernel ([IndTyping.check_arity], which calls
+    [Reduction.dest_arity] on the user arity), [check_ind_type] strips the
+    parameters syntactically and decomposes the rest, the user arity, into the
+    indices and the sort: each level is reduced with [RedFlags.allnolet] and,
+    when that is not a product, a let or a sort, once more with
+    [RedFlags.default] ([PCUICArityRed.arity_red]). *)
+
+  (** One level of the kernel's [whd_decompose_prod_decls]: [allnolet], or
+      [allnolet] and then one [all] that made progress. *)
+  Inductive arity_head_red (Σ : global_env) (Γ : context) (t r : term) : Type :=
+  | arity_head_red_direct :
+      whd_allnolet_rel Σ Γ t [] r [] -> arity_head_red Σ Γ t r
+  | arity_head_red_fallback h l :
+      whd_allnolet_rel Σ Γ t [] h l -> whd_arity_head h l = false ->
+      whd_all_rel Σ Γ (mkApps h l) [] r [] -> r <> mkApps h l ->
+      arity_head_red Σ Γ t r.
+
+  Lemma arity_head_red_prod {Σ Γ t na A B Δ s} :
+    arity_head_red Σ Γ t (tProd na A B) ->
+    arity_red Σ (Γ ,, vass na A) B Δ s ->
+    arity_red Σ Γ t (Δ ++ [vass na A]) s.
+  Proof using Type.
+    intros [w|h l w hh w' hne] ar.
+    - exact (arity_red_prod Σ Γ t na A B Δ s w ar).
+    - exact (arity_red_fallback Σ Γ t h l (tProd na A B) [] _ s w hh w' hne
+        (arity_red_prod Σ Γ (tProd na A B) na A B Δ s
+          (whd_stop false Σ Γ (tProd na A B) [] eq_refl) ar)).
+  Qed.
+
+  Lemma arity_head_red_let {Σ Γ t na b A B Δ s} :
+    arity_head_red Σ Γ t (tLetIn na b A B) ->
+    arity_red Σ (Γ ,, vdef na b A) B Δ s ->
+    arity_red Σ Γ t (Δ ++ [vdef na b A]) s.
+  Proof using Type.
+    intros [w|h l w hh w' hne] ar.
+    - exact (arity_red_let Σ Γ t na b A B Δ s w ar).
+    - exact (arity_red_fallback Σ Γ t h l (tLetIn na b A B) [] _ s w hh w' hne
+        (arity_red_let Σ Γ (tLetIn na b A B) na b A B Δ s
+          (whd_letin_stop false Σ Γ na b A B [] eq_refl) ar)).
+  Qed.
+
+  Lemma arity_head_red_sort {Σ Γ t s} :
+    arity_head_red Σ Γ t (tSort s) -> arity_red Σ Γ t [] s.
+  Proof using Type.
+    intros [w|h l w hh w' hne].
+    - exact (arity_red_sort Σ Γ t s w).
+    - exact (arity_red_fallback Σ Γ t h l (tSort s) [] [] s w hh w' hne
+        (arity_red_sort Σ Γ (tSort s) s (whd_stop false Σ Γ (tSort s) [] eq_refl))).
+  Qed.
+
+  Lemma mkApps_arity_head_inv {h l r} :
+    mkApps h l = r -> whd_arity_head r [] = true -> l = [] /\ h = r.
+  Proof using Type.
+    intros <- e. rewrite -whd_arity_head_mkApps in e.
+    destruct l; [split; reflexivity|].
+    destruct h; cbn in e; discriminate.
+  Qed.
+
+  Lemma arity_whnf_direct X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ}
+    Γ t wt :
+    whd_arity_head (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) [] = true ->
+    forall Σ, abstract_env_ext_rel X_ext Σ ->
+      ∥ arity_head_red Σ.1 Γ t (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) ∥.
+  Proof using Type.
+    intros eqh Σ wfΣ.
+    destruct (reduce_term_whd_rel RedFlags.allnolet X_impl X_ext
+      eq_refl eq_refl eq_refl eq_refl Γ t wt Σ wfΣ) as (hd & l & e & [w]).
+    destruct (mkApps_arity_head_inv (eq_sym e) eqh) as [-> ->].
+    constructor. apply arity_head_red_direct. exact w.
+  Qed.
+
+  Lemma arity_whnf_fallback X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ}
+    Γ t wt
+    (wtr : forall Σ, abstract_env_ext_rel X_ext Σ ->
+      welltyped Σ Γ (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt)) :
+    whd_arity_head (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) [] = false ->
+    whd_arity_head (reduce_term RedFlags.default X_impl X_ext Γ
+      (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) wtr) [] = true ->
+    forall Σ, abstract_env_ext_rel X_ext Σ ->
+      ∥ arity_head_red Σ.1 Γ t (reduce_term RedFlags.default X_impl X_ext Γ
+          (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) wtr) ∥.
+  Proof using Type.
+    intros eqh eqh' Σ wfΣ.
+    destruct (reduce_term_whd_rel RedFlags.allnolet X_impl X_ext
+      eq_refl eq_refl eq_refl eq_refl Γ t wt Σ wfΣ) as (hd & l & e & [w]).
+    destruct (reduce_term_whd_rel RedFlags.default X_impl X_ext
+      eq_refl eq_refl eq_refl eq_refl Γ _ wtr Σ wfΣ) as (hd' & l' & e' & [w']).
+    destruct (mkApps_arity_head_inv (eq_sym e') eqh') as [-> ->].
+    constructor. eapply arity_head_red_fallback with (h := hd) (l := l).
+    - exact w.
+    - now rewrite whd_arity_head_mkApps -e.
+    - rewrite <- e. exact w'.
+    - intros hr. rewrite hr -e in eqh'. congruence.
+  Qed.
+
+  (** Both components are logical: a [prod] of two propositions has no
+      extraction, so they form a [/\]. *)
+  Definition arity_whnf_result X_ext Γ t :=
+    ∑ r, (forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ r) /\
+         (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_head_red Σ.1 Γ t r ∥).
+
+  (** One level of the decomposition; [T] is the declared type, for the error. *)
+  Definition arity_whnf X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ}
+    (T : term) (Γ : context) (t : term)
+    (wt : forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ t)
+    : typing_result (arity_whnf_result X_ext Γ t) :=
+    let r := reduce_term RedFlags.allnolet X_impl X_ext Γ t wt in
+    let wtr := reduce_term_welltyped RedFlags.allnolet X_impl X_ext Γ t wt in
+    match whd_arity_head r [] as b
+      return whd_arity_head r [] = b -> typing_result (arity_whnf_result X_ext Γ t) with
+    | true => fun eqh =>
+      ret ((r; conj wtr (arity_whnf_direct X_ext Γ t wt eqh)) : arity_whnf_result X_ext Γ t)
+    | false => fun eqh =>
+      let r' := reduce_term RedFlags.default X_impl X_ext Γ r wtr in
+      match whd_arity_head r' [] as b'
+        return whd_arity_head r' [] = b' -> typing_result (arity_whnf_result X_ext Γ t) with
+      | true => fun eqh' =>
+        ret ((r'; conj (reduce_term_welltyped RedFlags.default X_impl X_ext Γ r wtr)
+                   (arity_whnf_fallback X_ext Γ t wt wtr eqh eqh')) : arity_whnf_result X_ext Γ t)
+      | false => fun _ => raise (NotAnArity T)
+      end eq_refl
+    end eq_refl.
+
+  Lemma wt_arity_prod_body {X_ext Γ na A B} :
+    (forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ (tProd na A B)) ->
+    forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ (Γ ,, vass na A) B.
+  Proof using Type.
+    intros wt Σ wfΣ.
+    destruct (abstract_env_ext_sq_wf _ _ _ wfΣ) as [wΣ].
+    exact (snd (welltyped_prod_inv (wt Σ wfΣ))).
+  Qed.
+
+  Lemma wt_arity_let_body {X_ext Γ na b A B} :
+    (forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ (tLetIn na b A B)) ->
+    forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ (Γ ,, vdef na b A) B.
+  Proof using Type.
+    intros wt Σ wfΣ.
+    destruct (abstract_env_ext_sq_wf _ _ _ wfΣ) as [wΣ].
+    exact (snd (welltyped_letin_inv (wt Σ wfΣ))).
+  Qed.
+
+  Lemma reduce_arity_prod {X_ext Γ t na A B d rem s} :
+    (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_head_red Σ.1 Γ t (tProd na A B) ∥) ->
+    eqb d (vass na A) ->
+    (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 (Γ ,, vass na A) B (List.rev rem) s ∥) ->
+    forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev (d :: rem)) s ∥.
+  Proof using Type.
+    intros hr eqd res Σ wfΣ.
+    destruct (hr Σ wfΣ) as [hr'], (res Σ wfΣ) as [res'].
+    apply eqb_eq in eqd. subst d.
+    constructor. exact (arity_head_red_prod hr' res').
+  Qed.
+
+  Lemma reduce_arity_let {X_ext Γ t na b A B d rem s} :
+    (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_head_red Σ.1 Γ t (tLetIn na b A B) ∥) ->
+    eqb d (vdef na b A) ->
+    (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 (Γ ,, vdef na b A) B (List.rev rem) s ∥) ->
+    forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev (d :: rem)) s ∥.
+  Proof using Type.
+    intros hr eqd res Σ wfΣ.
+    destruct (hr Σ wfΣ) as [hr'], (res Σ wfΣ) as [res'].
+    apply eqb_eq in eqd. subst d.
+    constructor. exact (arity_head_red_let hr' res').
+  Qed.
+
+  Lemma reduce_arity_sort {X_ext Γ t s' s} :
+    (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_head_red Σ.1 Γ t (tSort s') ∥) ->
+    eqb s' s ->
+    forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev []) s ∥.
+  Proof using Type.
+    intros hr eqs Σ wfΣ.
+    destruct (hr Σ wfΣ) as [hr'].
+    apply eqb_eq in eqs. subst s'.
+    constructor. exact (arity_head_red_sort hr').
+  Qed.
+
+  Definition ind_indices_mismatch :=
+    Msg "Inductive arity indices do not match the indices of the mutual declaration".
+
+  Definition ind_sort_mismatch :=
+    Msg "Inductive body sort does not match the sort of the inductive type".
+
+  (** [rem] holds the expected indices, outermost first. *)
+  Fixpoint reduce_arity X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ}
+    (T : term) (Γ : context) (t : term)
+    (wt : forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ t)
+    (rem : list context_decl) (s : sort) {struct rem}
+    : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev rem) s ∥) :=
+    '(r; conj wtr hr) <- arity_whnf X_ext T Γ t wt ;;
+    match r as r0 return
+      (forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ r0) ->
+      (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_head_red Σ.1 Γ t r0 ∥) ->
+      typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev rem) s ∥)
+    with
+    | tProd na A B => fun wtr hr =>
+      match rem as rem0 return
+        typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev rem0) s ∥)
+      with
+      | [] => raise ind_indices_mismatch
+      | d :: rem' =>
+        eqd <- check_eq_true (eqb d (vass na A)) ind_indices_mismatch ;;
+        res <- reduce_arity X_ext T (Γ ,, vass na A) B (wt_arity_prod_body wtr) rem' s ;;
+        ret (reduce_arity_prod hr eqd res)
+      end
+    | tLetIn na b A B => fun wtr hr =>
+      match rem as rem0 return
+        typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev rem0) s ∥)
+      with
+      | [] => raise ind_indices_mismatch
+      | d :: rem' =>
+        eqd <- check_eq_true (eqb d (vdef na b A)) ind_indices_mismatch ;;
+        res <- reduce_arity X_ext T (Γ ,, vdef na b A) B (wt_arity_let_body wtr) rem' s ;;
+        ret (reduce_arity_let hr eqd res)
+      end
+    | tSort s' => fun _ hr =>
+      match rem as rem0 return
+        typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev rem0) s ∥)
+      with
+      | [] =>
+        eqs <- check_eq_true (eqb s' s) ind_sort_mismatch ;;
+        ret (reduce_arity_sort hr eqs)
+      | _ :: _ => raise ind_indices_mismatch
+      end
+    | _ => fun _ _ => raise (NotAnArity T)
+    end wtr hr.
+
+  Lemma arity_red_rev_rev {X_ext Γ U indices s} :
+    (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ U (List.rev (List.rev indices)) s ∥) ->
+    forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ U indices s ∥.
+  Proof using Type.
+    intros h Σ wfΣ. rewrite -(List.rev_involutive indices). exact (h Σ wfΣ).
+  Qed.
+
+  (** The parameter prefix of the declared type, found by
+      [decompose_prod_n_assum] and compared with the declaration's. *)
+  Lemma ind_type_params {params T ctx U} :
+    decompose_prod_n_assum [] #|params| T = Some (ctx, U) -> eqb ctx params ->
+    T = it_mkProd_or_LetIn params U.
+  Proof using Type.
+    intros eqd eqp. apply eqb_eq in eqp. subst ctx.
+    exact (decompose_prod_n_assum_inv _ _ _ _ _ eqd).
+  Qed.
+
+  Lemma wt_user_arity {X_ext mdecl idecl sty U}
+    (isty : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ Σ ;;; [] |- idecl.(ind_type) : tSort sty ∥)
+    (eqU : idecl.(ind_type) = it_mkProd_or_LetIn mdecl.(ind_params) U) :
+    forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ mdecl.(ind_params) U.
+  Proof using Type.
+    intros Σ wfΣ.
+    destruct (abstract_env_ext_sq_wf _ _ _ wfΣ) as [wΣ].
+    destruct (isty Σ wfΣ) as [hty].
+    rewrite eqU in hty.
+    eapply PCUICSpine.inversion_it_mkProd_or_LetIn in hty.
+    rewrite app_context_nil_l in hty.
+    exact (iswelltyped hty).
+  Qed.
+
+  Lemma check_ind_type_spec {X_ext mdecl idecl sty U}
+    (isty : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ Σ ;;; [] |- idecl.(ind_type) : tSort sty ∥)
+    (eqU : idecl.(ind_type) = it_mkProd_or_LetIn mdecl.(ind_params) U)
+    (ar : forall Σ, abstract_env_ext_rel X_ext Σ ->
+      ∥ arity_red Σ.1 mdecl.(ind_params) U idecl.(ind_indices) idecl.(ind_sort) ∥)
+    (check : relevance_of_sort (ind_sort idecl) == ind_relevance idecl) :
+    forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_ind_type Σ mdecl idecl ∥.
+  Proof using Type.
+    intros Σ wfΣ.
+    destruct (abstract_env_ext_sq_wf _ _ _ wfΣ) as [wΣ].
+    destruct (isty Σ wfΣ) as [hty], (ar Σ wfΣ) as [ar'].
+    have isT : isType Σ [] (ind_type idecl) by eapply has_sort_isType; exact hty.
+    constructor. refine (isT, ((U; (eqU, ar')), (_, _))).
+    - eapply PCUICInductiveInversion.ind_arity_relevant; [exact wΣ|].
+      exact (PCUICSR.isType_red isT (ind_arity_sig_red (U; (eqU, ar')))).
+    - now apply eqb_eq in check.
+  Qed.
+
+  (** Rocq's kernel infers the type of the user arity before it reduces it
+      ([IndTyping.check_arity]); so does [check_ind_type], so that the
+      reduction machine only ever runs on well-typed terms. *)
+  Definition check_ind_type X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ} (mdecl : mutual_inductive_body) (idecl : one_inductive_body)
     : EnvCheck X_env_ext_type (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_ind_type Σ mdecl idecl ∥) :=
-
-    '(ctxinds; p) <-
-      wrap_error _ X_ext idecl.(ind_name) ((match destArity [] idecl.(ind_type) as da return da = destArity [] idecl.(ind_type) -> typing_result (∑ ctxs, idecl.(ind_type) = it_mkProd_or_LetIn ctxs.1 (tSort ctxs.2)) with
-      | Some (ctx, s) => fun eq => ret ((ctx, s); _)
-      | None => fun _ => raise (NotAnArity idecl.(ind_type))
-      end eq_refl)) ;;
-    let '(indices, params) := split_at (#|ctxinds.1| - #|mdecl.(ind_params)|) ctxinds.1 in
-    eqsort <- wrap_error _ X_ext idecl.(ind_name)
-      (check_eq_true (eqb ctxinds.2 idecl.(ind_sort))
-      (Msg "Inductive body sort does not match the sort of the inductive type"));;
-    check <- wrap_error _ X_ext idecl.(ind_name) (check_eq_true (relevance_of_sort (ind_sort idecl) == (ind_relevance idecl)) (Msg "Wrong relevance")) ;;
-    (* Can probably be deduced instead of checked *)
-    eqpars <- wrap_error _ X_ext idecl.(ind_name)
-      (check_eq_true (eqb params mdecl.(ind_params))
-      (Msg "Inductive arity parameters do not match the parameters of the mutual declaration"));;
-    eqindices <- wrap_error _ X_ext idecl.(ind_name)
-      (check_eq_true (eqb indices idecl.(ind_indices))
-      (Msg "Inductive arity indices do not match the indices of the mutual declaration"));;
-    isty <- wrap_error _ X_ext idecl.(ind_name)
+    '(sty; isty) <- wrap_error _ X_ext idecl.(ind_name)
       (infer_type_wf_env X_ext [] (fun _ _ => sq_wfl_nil _) idecl.(ind_type)) ;;
-    ret _.
-
-  Next Obligation.
-    symmetry in eq.
-    apply destArity_spec_Some in eq. now simpl in eq.
-  Qed.
-  Next Obligation.
-    specialize_Σ H.
-    sq. splits.
-    solve_all.
-    - now exists isty.
-    - destruct (eqb_spec params (ind_params mdecl)); [|discriminate]. subst params.
-      rewrite split_at_firstn_skipn in Heq_anonymous. noconf Heq_anonymous.
-      rewrite -it_mkProd_or_LetIn_app {1}H0. apply eqb_eq in eqindices, eqsort.
-      rewrite -eqindices -eqsort. now rewrite /app_context firstn_skipn.
-    - apply eqb_eq, check.
-  Qed.
+    match decompose_prod_n_assum [] #|mdecl.(ind_params)| idecl.(ind_type) as o
+      return decompose_prod_n_assum [] #|mdecl.(ind_params)| idecl.(ind_type) = o ->
+        EnvCheck X_env_ext_type (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_ind_type Σ mdecl idecl ∥)
+    with
+    | None => fun _ => wrap_error _ X_ext idecl.(ind_name) (raise (NotAnArity idecl.(ind_type)))
+    | Some (ctx, U) => fun eqd =>
+      eqp <- wrap_error _ X_ext idecl.(ind_name)
+        (check_eq_true (eqb ctx mdecl.(ind_params)) (NotAnArity idecl.(ind_type))) ;;
+      let eqU := ind_type_params eqd eqp in
+      ar <- wrap_error _ X_ext idecl.(ind_name)
+        (reduce_arity X_ext idecl.(ind_type) mdecl.(ind_params) U (wt_user_arity isty eqU)
+          (List.rev idecl.(ind_indices)) idecl.(ind_sort)) ;;
+      check <- wrap_error _ X_ext idecl.(ind_name)
+        (check_eq_true (relevance_of_sort (ind_sort idecl) == (ind_relevance idecl)) (Msg "Wrong relevance")) ;;
+      ret (check_ind_type_spec isty eqU (arity_red_rev_rev ar) check)
+    end eq_refl.
 
   Program Definition check_ind_types X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ} (mdecl : mutual_inductive_body)
       : EnvCheck X_env_ext_type (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_ind_types Σ mdecl ∥) :=
@@ -2009,8 +2337,8 @@ End monad_Alli_nth_forall.
   destruct pf as [pf ?]; eauto. specialize_Σ H. specialize_Σ wfΣ0.
   pose proof (abstract_env_ext_wf _ pf). sq.
   eapply nth_error_all in wfars; eauto; simpl in wfars.
-  destruct wfars as ((_ & s & Hs & _) & e & _).
-  clear X0; rewrite e -it_mkProd_or_LetIn_app in Hs.
+  destruct wfars as (_ & _ & (_ & s & Hs & _) & _).
+  clear X0; rewrite -it_mkProd_or_LetIn_app in Hs.
   eapply PCUICSpine.inversion_it_mkProd_or_LetIn in Hs; eauto.
   eapply inversion_Sort in Hs as [_ [? _]]; eauto.
   Qed.
@@ -2025,8 +2353,8 @@ End monad_Alli_nth_forall.
     sq.
     clear onprojs onsorts X0.
     red in wfars. eapply nth_error_all in wfars; eauto; simpl in wfars.
-    destruct wfars as ((_ & s & Hs & _) & e & _).
-    rewrite e -it_mkProd_or_LetIn_app in Hs.
+    destruct wfars as (_ & _ & (_ & s & Hs & _) & _).
+    rewrite -it_mkProd_or_LetIn_app in Hs.
     eapply PCUICSpine.inversion_it_mkProd_or_LetIn in Hs; eauto.
     eapply typing_wf_local in Hs. now rewrite app_context_nil_l in Hs.
   Qed.
@@ -2036,16 +2364,18 @@ End monad_Alli_nth_forall.
     pose proof (abstract_env_ext_wf _ H).
     pose proof (abstract_env_exists X) as [[Σ0 wfΣ0]].
     destruct pf as [pf pf']; eauto. specialize_Σ H. specialize_Σ wfΣ0. sq.
-    eapply All_nth_error in wfars as (isty & e & eqrel); tea.
+    eapply All_nth_error in wfars as wfi; tea.
+    pose proof (ind_arity_sig_red wfi.2.1) as redar.
+    destruct wfi as (isty & ar & isar & eqrel).
     refine
-    {| ind_arity_eq := e; onArity := _;
+    {| ind_arity_red := ar; onArity := _; onArityRed := isar;
        ind_cunivs := cs;
        onConstructors := oncstrs;
        onProjections := onprojs;
        ind_sorts := onsorts;
        ind_relevance_compat := eqrel;
        onIndices := _; |}.
-    - rewrite e in isty |- *; apply PCUICInductiveInversion.ind_arity_relevant => //. apply H0.
+    - eapply ind_type_relevant; [apply H0|exact isty|exact redar].
     - erewrite (abstract_env_ext_irr _ _ pf); eauto.
       destruct (ind_variance mdecl) => //.
     Unshelve. eauto.
@@ -2177,7 +2507,7 @@ End monad_Alli_nth_forall.
                (x : {X : X_env_type | forall Σ : global_env, Σ ∼ X -> Σ = {| universes := univs; declarations := decls'; retroknowledge := retro |}})
                (X : X_env_type)
                (wf_ : forall Σ : global_env, Σ ∼ X -> Σ = {| universes := univs; declarations := decls'; retroknowledge := retro |})
-               (isfresh : ∥ PCUICAst.fresh_global d.1 decls' ∥)
+               (isfresh : ∥ PCUICTyping.fresh_global d.1 decls' ∥)
                (udecl := universes_decl_of_decl d.2 : universes_decl)
                (X' : {X_ext : X_env_ext_type | check_wf_env_ext_prop X X_ext udecl}),
         forall Σ : global_env_ext, wf_ext Σ -> Σ ∼_ext ` X' -> NormalizationIn Σ},

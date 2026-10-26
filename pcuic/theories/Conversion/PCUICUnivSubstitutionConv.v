@@ -1486,6 +1486,16 @@ Proof.
   - cbn. eapply array_red_val. eapply OnOne2_map. cbn. solve_all.
 Qed.
 
+Lemma red_subst_instance {cf:checker_flags} (Σ : global_env) (Γ : context) (u : Instance.t) (s t : term) :
+  red Σ Γ s t ->
+  red Σ (subst_instance u Γ) (subst_instance u s) (subst_instance u t).
+Proof.
+  induction 1.
+  - now apply red1_red, red1_subst_instance.
+  - reflexivity.
+  - etransitivity; eassumption.
+Qed.
+
 Lemma subst_instance_ws_cumul_pb {cf : checker_flags} (Σ : global_env_ext) Γ u A B univs :
 valid_constraints (global_ext_constraints (Σ.1, univs))
                   (subst_instance_cstrs u Σ) ->
