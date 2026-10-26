@@ -631,6 +631,22 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
   Lemma pkey_to_pos_succ p : pkey_to_pos (pkey_succ p) = Pos.succ (pkey_to_pos p).
   Proof. induction p; cbn; congruence. Qed.
 
+  Lemma ix_Forall2_in_left {A B} (R : A -> B -> Prop) l1 l2 x :
+    Forall2 R l1 l2 -> List.In x l1 -> exists y, List.In y l2 /\ R x y.
+  Proof.
+    induction 1 as [|a b l1 l2 Hab Hl IH]; [intros []|].
+    intros [->|Hx]; [now exists b; split; [left|]|].
+    destruct (IH Hx) as [y [Hy Hxy]]. exists y. split; [now right|exact Hxy].
+  Qed.
+
+  Lemma ix_Forall2_in_right {A B} (R : A -> B -> Prop) l1 l2 y :
+    Forall2 R l1 l2 -> List.In y l2 -> exists x, List.In x l1 /\ R x y.
+  Proof.
+    induction 1 as [|a b l1 l2 Hab Hl IH]; [intros []|].
+    intros [->|Hy]; [now exists a; split; [left|]|].
+    destruct (IH Hy) as [x [Hx Hxy]]. exists x. split; [now right|exact Hxy].
+  Qed.
+
   Lemma ix_InA_eqke_In (p : Edge.t * indexed_edge) l :
     InA (@EdgeMap.eq_key_elt indexed_edge) p l <-> List.In p l.
   Proof.
@@ -2673,6 +2689,53 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
 
     Definition is_acyclic' := correct_labellingb bf_labelling.
 
+    (** The same check through an index: the labelling is read from the trie
+        Bellman-Ford, and the edges are the indexed ones. *)
+    Definition is_acyclic_ix (ix : index) : bool :=
+      let d := pf_distances ix ix.(ix_src) in
+      let lab k := to_label (pf_lookup d k) in
+      Nat.eqb (lab ix.(ix_src)) 0 &&
+        forallb (fun p => let '(ks, w, kt) := snd p in
+                          Z.leb (Z.of_nat (lab ks) + w) (Z.of_nat (lab kt)))
+          (EdgeMap.elements ix.(ix_edges)).
+
+    Lemma is_acyclic_ix_eq ix : is_index_of G ix -> is_acyclic_ix ix = is_acyclic'.
+    Proof using HI.
+      intro Hix.
+      assert (Hlab : forall v k, VMap.find v ix.(ix_lookup) = Some k ->
+        to_label (pf_lookup (pf_distances ix ix.(ix_src)) k) = bf_labelling v).
+      { intros v k Hv. unfold bf_labelling.
+        exact (f_equal to_label
+                 (pf_distance_eq ix (s G) v ix.(ix_src) k Hix (@ixo_src G ix Hix) Hv)). }
+      unfold is_acyclic_ix, is_acyclic', correct_labellingb. cbv beta zeta.
+      rewrite (Hlab (s G) ix.(ix_src) (@ixo_src G ix Hix)).
+      f_equal.
+      apply Bool.eq_iff_eq_true. rewrite forallb_forall.
+      rewrite -EdgeSetFact.for_all_iff.
+      pose proof (index_edges_elements ix Hix) as Hl.
+      split.
+      - intros Hall e He.
+        assert (He' : List.In e (EdgeSet.elements (E G))).
+        { apply InA_In_eq, EdgeSet.elements_spec1, He. }
+        destruct (ix_Forall2_in_left _ _ _ _ Hl He') as [p [Hp [Hfst Hsnd]]].
+        specialize (Hall p Hp). rewrite Hsnd in Hall.
+        destruct (edges_vertices e He) as [Vs Vt].
+        destruct (ix_lookup_of_vertex ix _ Hix Vs) as [ks Hks].
+        destruct (ix_lookup_of_vertex ix _ Hix Vt) as [kt Hkt].
+        unfold index_edge in Hall. rewrite Hks Hkt in Hall. cbv beta iota in Hall.
+        now rewrite (Hlab _ _ Hks) (Hlab _ _ Hkt) in Hall.
+      - intros Hall p Hp.
+        destruct (ix_Forall2_in_right _ _ _ _ Hl Hp) as [e [He [Hfst Hsnd]]].
+        rewrite Hsnd.
+        apply InA_In_eq, EdgeSet.elements_spec1 in He.
+        specialize (Hall e He).
+        destruct (edges_vertices e He) as [Vs Vt].
+        destruct (ix_lookup_of_vertex ix _ Hix Vs) as [ks Hks].
+        destruct (ix_lookup_of_vertex ix _ Hix Vt) as [kt Hkt].
+        unfold index_edge. rewrite Hks Hkt. cbv beta iota.
+        now rewrite (Hlab _ _ Hks) (Hlab _ _ Hkt).
+    Qed.
+
     Lemma bf_labelling_correct {HG : acyclic_no_loop} :
       correct_labelling bf_labelling.
     Proof using HI.
@@ -4509,6 +4572,61 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
            let d1 := bf_distances G1 x in
            let d2 := bf_distances G2 x in
            VSet.for_all (fun y => bf_lookup d1 y == bf_lookup d2 y) bs) bs.
+
+    Lemma ix_for_all_ext (f g : V.t -> bool) s :
+      (forall x, VSet.In x s -> f x = g x) -> VSet.for_all f s = VSet.for_all g s.
+    Proof.
+      intro Hfg.
+      assert (Hf : Proper (VSet.E.eq ==> eq) f) by (intros x y []; reflexivity).
+      assert (Hg : Proper (VSet.E.eq ==> eq) g) by (intros x y []; reflexivity).
+      apply Bool.eq_iff_eq_true.
+      rewrite (VSet.for_all_spec _ Hf) (VSet.for_all_spec _ Hg).
+      split; intros H x Hx; [rewrite -(Hfg x Hx)|rewrite (Hfg x Hx)]; exact (H x Hx).
+    Qed.
+
+    (** The same check through indices of [G1] and [G2]. Border vertices are vertices of
+        [G1]; with [G1] a subgraph of [G2] both indices number them, so the [false]
+        branches are never taken (see [is_full_extension_ix_eq]). *)
+    Definition is_full_extension_ix (G1 : t) (ix1 : index) (G2 : t) (ix2 : index) : bool :=
+      let ext := EdgeSet.diff (E G2) (E G1) in
+      let bs := border_set G1 ext in
+      VSet.for_all
+        (fun x =>
+           match VMap.find x ix1.(ix_lookup), VMap.find x ix2.(ix_lookup) with
+           | Some kx1, Some kx2 =>
+             let d1 := pf_distances ix1 kx1 in
+             let d2 := pf_distances ix2 kx2 in
+             VSet.for_all
+               (fun y =>
+                  match VMap.find y ix1.(ix_lookup), VMap.find y ix2.(ix_lookup) with
+                  | Some ky1, Some ky2 => pf_lookup d1 ky1 == pf_lookup d2 ky2
+                  | _, _ => false
+                  end) bs
+           | _, _ => false
+           end) bs.
+
+    Lemma is_full_extension_ix_eq G1 ix1 G2 ix2 `{invariants G1, invariants G2} :
+      subgraph G1 G2 -> is_index_of G1 ix1 -> is_index_of G2 ix2 ->
+      is_full_extension_ix G1 ix1 G2 ix2 = is_full_extension' G1 G2.
+    Proof.
+      intros Hsub Hix1 Hix2. unfold is_full_extension_ix, is_full_extension'. cbv zeta.
+      assert (Hbs : forall v, VSet.In v (border_set G1 (EdgeSet.diff (E G2) (E G1))) ->
+                exists k1 k2, VMap.find v ix1.(ix_lookup) = Some k1 /\
+                              VMap.find v ix2.(ix_lookup) = Some k2).
+      { intros v Hv. apply border_set_spec in Hv as [_ [_ [_ V1]]].
+        destruct (ix_lookup_of_vertex G1 ix1 v Hix1 V1) as [k1 H1].
+        destruct (ix_lookup_of_vertex G2 ix2 v Hix2 (vertices_sub _ _ Hsub v V1)) as [k2 H2].
+        now exists k1, k2. }
+      apply ix_for_all_ext. intros x Hx.
+      destruct (Hbs x Hx) as [kx1 [kx2 [Hx1 Hx2]]]. rewrite Hx1 Hx2.
+      apply ix_for_all_ext. intros y Hy.
+      destruct (Hbs y Hy) as [ky1 [ky2 [Hy1 Hy2]]]. rewrite Hy1 Hy2.
+      change (pf_lookup (pf_distances ix1 kx1) ky1) with (pf_distance ix1 kx1 ky1).
+      change (pf_lookup (pf_distances ix2 kx2) ky2) with (pf_distance ix2 kx2 ky2).
+      rewrite (pf_distance_eq G1 ix1 x y kx1 ky1 Hix1 Hx1 Hy1)
+              (pf_distance_eq G2 ix2 x y kx2 ky2 Hix2 Hx2 Hy2).
+      reflexivity.
+    Qed.
 
 
     Lemma lsp_eq_is_full_extension (G1 G2 : t) :
