@@ -94,15 +94,18 @@ Definition br_O := {| bcontext := []; bbody := v "a" |}.
 Definition br_S := {| bcontext := [vass na tNat]; bbody := tRel 0 |}.
 
 (** [match S n with O => a | S m => m end]: the reduct is the β-redex
-    [(fun m => m) n]; the return type and the other branch are discarded. *)
+    [(fun m => m) n]; the return type and the other branch are discarded,
+    each closed by its own context. *)
 Check eq_refl : hs (tCase ci_nat p_nat (tApp tS (v "n")) [br_O; br_S])
-  = Stepped (tApp (tLambda na tNat (tRel 0)) (v "n")) [v "P"; v "a"].
+  = Stepped (tApp (tLambda na tNat (tRel 0)) (v "n")) [tLambda na tNat (v "P"); v "a"].
 (** The constructor argument then goes through β. *)
 Check eq_refl : whd_steps L R [] 3 (tCase ci_nat p_nat (tApp tS (v "n")) [br_O; br_S])
-  = WhdOk (v "n") [v "P"; v "a"; tNat].
-(** Spine after the match. *)
+  = WhdOk (v "n") [tLambda na tNat (v "P"); v "a"; tNat].
+(** Spine after the match: the discarded branch [S m => m] is returned as
+    [fun m => m], not as its body [tRel 0], which would read [m] as a variable
+    of the match's context. *)
 Check eq_refl : hs (tApp (tCase ci_nat p_nat tO [br_O; br_S]) (v "c"))
-  = Stepped (tApp (v "a") (v "c")) [v "P"; tRel 0].
+  = Stepped (tApp (v "a") (v "c")) [tLambda na tNat (v "P"); tLambda na tNat (tRel 0)].
 (** A missing branch, a constructor of another inductive, a wrong arity. *)
 Check eq_refl : hs (tCase ci_nat p_nat (tApp tS (v "n")) [br_O]) = StepBad err_case_branch.
 Check eq_refl : hs (tCase ci_nat p_nat (tConstruct box_ind 0 []) [br_O; br_S])
@@ -117,7 +120,7 @@ Definition p_box : predicate term :=
   {| pparams := [tNat]; puinst := []; pcontext := [vass na (tInd box_ind [])]; preturn := v "P" |}.
 Definition br_box := {| bcontext := [vass na (tRel 0)]; bbody := tRel 0 |}.
 Check eq_refl : hs (tCase ci_box p_box (mkApps (tConstruct box_ind 0 []) [v "A"; v "x"]) [br_box])
-  = Stepped (tApp (tLambda na tNat (tRel 0)) (v "x")) [tNat; v "P"; v "A"].
+  = Stepped (tApp (tLambda na tNat (tRel 0)) (v "x")) [tNat; tLambda na (tInd box_ind []) (v "P"); v "A"].
 
 (** Congruence on the scrutinee: one step of the scrutinee, rebuilt. *)
 Check eq_refl : hs (tCase ci_nat p_nat (tApp (tLambda na tNat (tApp tS (tRel 0))) (v "n")) [br_O; br_S])
@@ -148,13 +151,13 @@ Check eq_refl : hs (tApp (tFix mfix_rec 0) tO)
   = Stepped (tApp (tLambda na tNat (tApp (tFix mfix_rec 0) (tRel 0))) tO) [].
 
 (** A mutual block whose first body names no function of the block: every
-    type and the other body are discarded. *)
+    type and the other function of the block are discarded. *)
 Definition mfix_mut :=
   [{| dname := na; dtype := v "T0"; dbody := tLambda na tNat (v "r"); rarg := 0 |};
    {| dname := na; dtype := v "T1"; dbody := tLambda na tNat (tApp (tRel 2) (tRel 0)); rarg := 0 |}].
 Check eq_refl : hs (tApp (tFix mfix_mut 0) (tApp tS tO))
   = Stepped (tApp (tLambda na tNat (v "r")) (tApp tS tO))
-      [v "T0"; v "T1"; tLambda na tNat (tApp (tRel 2) (tRel 0))].
+      [v "T0"; v "T1"; tFix mfix_mut 1].
 
 (** The recursive argument is not a constructor but steps: one step of it,
     rebuilt (recursive argument at position 1 of 3). *)

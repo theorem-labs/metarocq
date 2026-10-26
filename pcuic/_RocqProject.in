@@ -53,6 +53,7 @@ theories/PCUICReduction.v
 theories/PCUICRecArgs.v
 theories/PCUICGuardReduce.v
 theories/PCUICGuardResult.v
+theories/PCUICGuardCoFix.v
 theories/PCUICGuardChecker.v
 theories/PCUICGuardCheckerRegress.v
 theories/PCUICGuardClosure.v

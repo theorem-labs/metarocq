@@ -16,6 +16,9 @@ PCUICAstUtils
 PCUICReflect
 PCUICEquality
 PCUICGuardResult
+PCUICRecArgs
+PCUICGuardReduce
+PCUICGuardCoFix
 PCUICGuardChecker
 PCUICGuardClosure
 PCUICTyping

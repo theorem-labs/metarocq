@@ -26,6 +26,9 @@ EqDecInstances
 PCUICEquality
 PCUICReflect
 PCUICGuardResult
+PCUICRecArgs
+PCUICGuardReduce
+PCUICGuardCoFix
 PCUICGuardChecker
 PCUICGuardClosure
 PCUICTyping

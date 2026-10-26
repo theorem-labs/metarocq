@@ -3,6 +3,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Environment.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICClosed.
 From MetaRocq.PCUIC Require Export PCUICGuardResult.
+From MetaRocq.PCUIC Require Import PCUICGuardCoFix.
 
 From Stdlib Require Import ssreflect ssrbool.
 
@@ -37,13 +38,8 @@ Set Default Goal Selector "!".
     included, are not.  Every occurrence of a function of the block must then
     be of the form [mkApps (tRel j) args] with [#|args| > rarg] and
     [nth rarg args] a subterm variable.
-  - CoFix: the body of each definition must be a (possibly empty) prefix of
-    lambdas and [let]s followed by a constructor application; a function of
-    the block may occur only as the head of a recursive argument of such a
-    constructor application (one whose type in the constructor's declaration
-    is an inductive of its own mutual block), or, recursively, under a nested
-    one.  Parameters and non-recursive arguments must not mention the block,
-    as the kernel's [RecCallInNonRecArgOfConstructor] requires.
+  - CoFix: the port of the kernel's cofixpoint guard checker,
+    [check_cofix_block] of [PCUICGuardCoFix].
   - In either case a de Bruijn index at or beyond [n + depth] is outside the
     block's context and is refused, as is a top-level [dtype] that is not
     closed at [n]; [tEvar] and [tVar] are refused, a missing declaration is
@@ -367,8 +363,7 @@ Definition check_guard_gen (lookup : kername -> option global_decl)
   | Fix =>
     gr_list (fun dd =>
       scoped dd (gr_and (fix_eliminable lookup dd) (chk (MFixPrefix dd.(rarg)) [] dd.(dbody)))) mfix
-  | CoFix =>
-    gr_list (fun dd => scoped dd (chk MCoBody [] dd.(dbody))) mfix
+  | CoFix => check_cofix_block lookup retro fuel n mfix
   end.
 
 (** ** Erasure of the data the check does not read

@@ -17,16 +17,21 @@ Set Default Goal Selector "!".
 
   Each step returns, next to its reduct, the list of the subterms of the
   redex that do not occur in the reduct (the discarded parts), so that a
-  caller (the guard checker) can check them before they disappear:
+  caller (the guard checker) can check them before they disappear.  Every
+  discarded part is a term of the redex's own context: a part that lives
+  under binders of the redex is returned closed by those binders, as the
+  kernel's [expand_case] closes the return clause and the branches of a
+  match, and the other functions of an unfolded block are returned as
+  [tFix mfix k] or [tCoFix mfix k]:
 
   | redex                                   | discarded parts                     |
   |-----------------------------------------|-------------------------------------|
   | β [(λ x : A. b) a]                      | [A]; [a] if [x] does not occur in [b] |
   | ζ [let x := v : T in b]                 | [T]; [v] if [x] does not occur in [b] |
   | δ local [let] or constant               | none                                |
-  | ι [match C pars args with brs]          | [pparams], [preturn], [pars], every other branch body |
+  | ι [match C pars args with brs]          | [pparams], [preturn] closed by its context, [pars], every other branch closed by its context |
   | π [(C pars f_1 ... f_n).j]              | every other element of [pars f_1 ... f_n] |
-  | fix / cofix unfolding of [mfix], index [i] | if [dbody] of [i] names no function of [mfix]: every [dtype], every other [dbody]; otherwise none |
+  | fix / cofix unfolding of [mfix], index [i] | if [dbody] of [i] names no function of [mfix]: every [dtype], and [tFix mfix k] / [tCoFix mfix k] for every other [k]; otherwise none |
 
   A congruence step reports the discarded parts of the inner step.
 
@@ -86,18 +91,20 @@ Definition head_cofix (t : term) : option (mfixpoint term * nat * list term) :=
   end.
 
 (** The parts that the unfolding of definition [i] of [mfix], with body
-    [body], discards.  The body lives under the [#|mfix|] binders of the
+    [body], discards; [mk k] is the block's [k]-th function ([tFix mfix k]
+    or [tCoFix mfix k]).  The body lives under the [#|mfix|] binders of the
     block; if it names none of them, the reduct contains no copy of the block,
-    so every type and every other body is discarded.  Otherwise the
+    so every type and every other function is discarded.  Otherwise the
     substituted block carries all of them and nothing is discarded. *)
-Definition block_discarded (mfix : mfixpoint term) (i : nat) (body : term) : list term :=
-  if noccur_between 0 #|mfix| body then map dtype mfix ++ map dbody (except_nth i mfix)
+Definition block_discarded (mk : nat -> term) (mfix : mfixpoint term) (i : nat) (body : term)
+  : list term :=
+  if noccur_between 0 #|mfix| body then map dtype mfix ++ map mk (except_nth i (seq 0 #|mfix|))
   else [].
 
 (** Cofixpoint contraction ([unfold_cofix]) with its discarded parts. *)
 Definition contract_cofix (mfix : mfixpoint term) (idx : nat) : option (term * list term) :=
   match nth_error mfix idx with
-  | Some d => Some (subst0 (cofix_subst mfix) d.(dbody), block_discarded mfix idx d.(dbody))
+  | Some d => Some (subst0 (cofix_subst mfix) d.(dbody), block_discarded (tCoFix mfix) mfix idx d.(dbody))
   | None => None
   end.
 
@@ -114,7 +121,10 @@ Definition iota_step (ci : case_info) (p : predicate term) (brs : list (branch t
     else
       let f := it_mkLambda_or_LetIn (inst_case_branch_context p br) br.(bbody) in
       Stepped (mkApps (mkApps f (skipn ci.(ci_npar) cargs)) args)
-        (p.(pparams) ++ p.(preturn) :: firstn ci.(ci_npar) cargs ++ map bbody (except_nth k brs))
+        (p.(pparams) ++ it_mkLambda_or_LetIn (inst_case_predicate_context p) p.(preturn)
+           :: firstn ci.(ci_npar) cargs
+           ++ map (fun br' => it_mkLambda_or_LetIn (inst_case_branch_context p br') br'.(bbody))
+                (except_nth k brs))
   end.
 
 (** π: [tProj pr (mkApps (tConstruct ind k u) cargs)] applied to [args]. *)
@@ -203,7 +213,7 @@ Fixpoint head_step (lookup : kername -> option global_decl) (retro : Retroknowle
           match head_ctor x with
           | Some _ =>
             (* [subst0 (fix_subst mfix) d.(dbody)] is the body [unfold_fix] returns. *)
-            Stepped (mkApps (subst0 (fix_subst mfix) d.(dbody)) args) (block_discarded mfix i d.(dbody))
+            Stepped (mkApps (subst0 (fix_subst mfix) d.(dbody)) args) (block_discarded (tFix mfix) mfix i d.(dbody))
           | None =>
             (fix at_arg (v : term) (depth : nat) {struct v} : step_result :=
                match v with

@@ -30,6 +30,12 @@ src/pCUICReflect.ml
 src/pCUICReflect.mli
 src/pCUICGuardResult.ml
 src/pCUICGuardResult.mli
+src/pCUICRecArgs.ml
+src/pCUICRecArgs.mli
+src/pCUICGuardReduce.ml
+src/pCUICGuardReduce.mli
+src/pCUICGuardCoFix.ml
+src/pCUICGuardCoFix.mli
 src/pCUICGuardChecker.ml
 src/pCUICGuardChecker.mli
 src/pCUICGuardClosure.ml
