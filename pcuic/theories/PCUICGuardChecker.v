@@ -21,9 +21,9 @@ Set Default Goal Selector "!".
   The rule, for a block [mfix] checked in a context of length [n]:
 
   - Fix: the recursive argument's type in [dtype] must be an inductive type
-    of [lookup] that can be eliminated into the fixpoint's relevance (an
-    [SProp] inductive with only [SProp] elimination refuses a relevant
-    fixpoint, as the kernel's [FixpointOnNonEliminable] does).  The body of
+    of [lookup] that can be eliminated into the fixpoint's relevance (a
+    relevant fixpoint on an inductive declared in [SProp] is refused, as the
+    kernel's [is_allowed_fixpoint] refuses it).  The body of
     each definition [d] must be a prefix of [rarg d + 1] lambda abstractions
     (interleaved [let]s are allowed and do not count, as [rarg] counts
     assumptions only).  The innermost of those binders is the *recursive
@@ -334,8 +334,9 @@ Section Checker.
   Definition err_elim := "the recursive argument's inductive type cannot be eliminated into the fixpoint's sort".
 
   (** The kernel's [is_allowed_fixpoint], as far as relevance shows it: a
-      relevant fixpoint cannot recurse on an inductive whose only allowed
-      elimination is into [SProp]. *)
+      relevant fixpoint cannot recurse on an inductive declared in [SProp],
+      whatever its eliminations (an empty [SProp] inductive eliminates into
+      every sort, and is still refused). *)
   Definition fix_eliminable (d : def term) : guard_result :=
     match fix_rarg_ind d with
     | Some ind =>
@@ -343,8 +344,8 @@ Section Checker.
       | Some (InductiveDecl mib) =>
         match nth_error mib.(ind_bodies) (inductive_ind ind) with
         | Some idecl =>
-          match idecl.(ind_kelim), d.(dname).(binder_relevance) with
-          | IntoSProp, Relevant => Reject err_elim
+          match idecl.(ind_sort), d.(dname).(binder_relevance) with
+          | sSProp, Relevant => Reject err_elim
           | _, _ => Accept
           end
         | None => Reject err_notind

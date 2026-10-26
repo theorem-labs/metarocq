@@ -55,11 +55,14 @@ Inductive sP : SProp :=
 | sp0 : sP
 | spS : sP -> sP.
 
-MetaRocq Quote Recursively Definition q_env := (L, W, sP).
+Inductive sEmpty : SProp := .
+
+MetaRocq Quote Recursively Definition q_env := (L, W, sP, sEmpty).
 MetaRocq Quote Definition q_nat := nat.
 MetaRocq Quote Definition q_L := L.
 MetaRocq Quote Definition q_W := W.
 MetaRocq Quote Definition q_sP := sP.
+MetaRocq Quote Definition q_sEmpty := sEmpty.
 
 Definition Σ : global_env := trans_env_env (trans_global_env q_env.1).
 
@@ -74,6 +77,7 @@ Definition i_nat := ind_of q_nat.
 Definition i_L := ind_of q_L.
 Definition i_W := ind_of q_W.
 Definition i_sP := ind_of q_sP.
+Definition i_sEmpty := ind_of q_sEmpty.
 
 (** The quoted terms are the inductives, and [Σ] declares each of them. *)
 Definition declared (ind : inductive) : bool :=
@@ -86,6 +90,8 @@ Proof. vm_compute. reflexivity. Qed.
 Example i_W_found : declared i_W = true.
 Proof. vm_compute. reflexivity. Qed.
 Example i_sP_found : declared i_sP = true.
+Proof. vm_compute. reflexivity. Qed.
+Example i_sEmpty_found : declared i_sEmpty = true.
 Proof. vm_compute. reflexivity. Qed.
 
 (** The contexts a [match] must carry, read from [Σ] through the same lookup
@@ -290,6 +296,27 @@ Proof. vm_compute. reflexivity. Qed.
 Example sp_irrelevant_syntactic_accepts : syn_check sp_irrelevant = Accept.
 Proof. vm_compute. reflexivity. Qed.
 Example sp_irrelevant_accepted : exec_check sp_irrelevant = true.
+Proof. vm_compute. reflexivity. Qed.
+
+(** [sEmpty : SProp] has no constructor, so it eliminates into every sort;
+    a relevant fixpoint recursing on it is still refused, because the
+    kernel's test is on the inductive's sort, not on its eliminations. *)
+Definition tsEmpty := tInd i_sEmpty [].
+Definition se_block (r : relevance) (ret body : term) : mfixpoint term :=
+  [{| dname := rel_name r "g"; dtype := tProd (rel_name Irrelevant "x") tsEmpty ret;
+      dbody := tLambda (rel_name Irrelevant "x") tsEmpty body; rarg := 0 |}].
+
+Definition se_relevant := se_block Relevant tNat tO.
+Definition se_irrelevant := se_block Irrelevant tsEmpty (tRel 0).
+
+Example sEmpty_eliminates_anywhere :
+  option_map (fun p => p.2.(ind_kelim)) (lookup_inductive Σ i_sEmpty) = Some IntoAny.
+Proof. vm_compute. reflexivity. Qed.
+Example se_relevant_syntactic_rejects : is_reject (syn_check se_relevant) = true.
+Proof. vm_compute. reflexivity. Qed.
+Example se_relevant_refused : exec_check se_relevant = false.
+Proof. vm_compute. reflexivity. Qed.
+Example se_irrelevant_syntactic_accepts : syn_check se_irrelevant = Accept.
 Proof. vm_compute. reflexivity. Qed.
 
 (** ** A recursive call on a value taken out of a coinductive
