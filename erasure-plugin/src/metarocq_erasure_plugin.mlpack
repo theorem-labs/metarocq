@@ -8,6 +8,8 @@ VectorDef
 
 Utils
 ResultMonad
+String2pos
+CanonicalTries
 WGraph
 UGraph0
 EtaExpand

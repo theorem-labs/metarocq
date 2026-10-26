@@ -1,6 +1,6 @@
 From Stdlib Require Import ZArith Zcompare Lia ssrbool.
 From Stdlib Require Import MSetAVL MSetFacts MSetProperties FMapAVL FMapFacts OrdersAlt.
-From MetaRocq.Utils Require Import MRUtils.
+From MetaRocq.Utils Require Import MRUtils CanonicalTries.
 From Stdlib Require Import ssreflect.
 From Equations Require Import Equations.
 
@@ -535,6 +535,67 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
   Module VOT := OrdersAlt.Backport_OT V.
   Module VMap := FMapAVL.Make VOT.
   Module VMapFact := FMapFacts.WFacts_fun VOT VMap.
+  Module EdgeOT := OrdersAlt.Backport_OT Edge.
+  Module EdgeMap := FMapAVL.Make EdgeOT.
+  Module EdgeMapFact := FMapFacts.WFacts_fun EdgeOT EdgeMap.
+
+  (** Vertex numbers. These are [String2pos.positive], the key type of [PTree], and not
+      [BinNums.positive]. *)
+  Definition pkey := String2pos.positive.
+
+  Fixpoint pkey_succ (p : pkey) : pkey :=
+    match p with
+    | String2pos.xH => String2pos.xO String2pos.xH
+    | String2pos.xO q => String2pos.xI q
+    | String2pos.xI q => String2pos.xO (pkey_succ q)
+    end.
+
+  Definition indexed_edge := (pkey * Z * pkey)%type.
+
+  Record index := {
+    ix_lookup : VMap.t pkey;
+    ix_src : pkey;
+    ix_next : pkey;
+    ix_size : nat;
+    ix_edges : EdgeMap.t indexed_edge
+  }.
+
+  Definition index_edge (lookup : VMap.t pkey) (e : Edge.t) : indexed_edge :=
+    match VMap.find e..s lookup, VMap.find e..t lookup with
+    | Some source, Some target => (source, e..w, target)
+    | _, _ => (String2pos.xH, e..w, String2pos.xH)
+    end.
+
+  (** Extend an index by one vertex or one edge, without renumbering. *)
+  Definition ix_add_vertex (v : V.t) (ix : index) : index :=
+    match VMap.find v ix.(ix_lookup) with
+    | Some _ => ix
+    | None =>
+      {| ix_lookup := VMap.add v ix.(ix_next) ix.(ix_lookup);
+         ix_src := ix.(ix_src);
+         ix_next := pkey_succ ix.(ix_next);
+         ix_size := Datatypes.S ix.(ix_size);
+         ix_edges := ix.(ix_edges) |}
+    end.
+
+  Definition ix_add_edge (e : Edge.t) (ix : index) : index :=
+    {| ix_lookup := ix.(ix_lookup);
+       ix_src := ix.(ix_src);
+       ix_next := ix.(ix_next);
+       ix_size := ix.(ix_size);
+       ix_edges := EdgeMap.add e (index_edge ix.(ix_lookup) e) ix.(ix_edges) |}.
+
+  (** The index of the graph with the single vertex [v] and no edge. *)
+  Definition ix_singleton (v : V.t) : index :=
+    {| ix_lookup := VMap.add v String2pos.xH (VMap.empty pkey);
+       ix_src := String2pos.xH;
+       ix_next := pkey_succ String2pos.xH;
+       ix_size := 1%nat;
+       ix_edges := EdgeMap.empty indexed_edge |}.
+
+  Definition index_of (G : t) : index :=
+    EdgeSet.fold ix_add_edge (E G) (VSet.fold ix_add_vertex (V G) (ix_singleton (s G))).
+
 
   #[local]
   Instance reflectEq_Z : ReflectEq Z :=
@@ -1510,6 +1571,53 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
 
     Definition bf_relax_edges (m : bf_state) : bf_state :=
       EdgeSet.fold bf_relax_edge (E G) m.
+
+    (** * Bellman-Ford over an index: the same computation, keyed by vertex numbers *)
+
+    Definition pf_state := PTree.t Nbar.t.
+
+    Definition pf_lookup (m : pf_state) (x : pkey) : Nbar.t :=
+      match PTree.get x m with
+      | Some n => n
+      | None => None
+      end.
+
+    (** Like [bf_relax_edge], the target is always bound afterwards, also to [None]: the
+        simulation with [bf_state] needs the same map support, not only the same values.
+        When the target already holds the new value, the map is returned unchanged. *)
+    Definition pf_relax_edge (e : indexed_edge) (m : pf_state) : pf_state :=
+      let '(source, weight, target) := e in
+      let candidate := Nbar.add (Some weight) (pf_lookup m source) in
+      match PTree.get target m with
+      | Some old =>
+          let value := Nbar.max old candidate in
+          if @ReflectEq.eqb _ reflectEq_nbar old value then m else PTree.set target value m
+      | None => PTree.set target (Nbar.max None candidate) m
+      end.
+
+    Definition pf_relax_edges (ix : index) (m : pf_state) : pf_state :=
+      EdgeMap.fold (fun _ e state => pf_relax_edge e state) ix.(ix_edges) m.
+
+    Definition pf_state_eqb (m1 m2 : pf_state) : bool :=
+      PTree.beq (@ReflectEq.eqb _ reflectEq_nbar) m1 m2.
+
+    Fixpoint pf_relax_early (ix : index) (fuel : nat) (m : pf_state) : pf_state :=
+      match fuel with
+      | 0%nat => m
+      | Datatypes.S fuel =>
+          let m' := pf_relax_edges ix m in
+          if pf_state_eqb m m' then m
+          else pf_relax_early ix fuel m'
+      end.
+
+    Definition pf_initial (x : pkey) : pf_state :=
+      PTree.set x (Some 0) (PTree.empty Nbar.t).
+
+    Definition pf_distances (ix : index) (x : pkey) : pf_state :=
+      pf_relax_early ix ix.(ix_size) (pf_initial x).
+
+    Definition pf_distance (ix : index) (x y : pkey) : Nbar.t :=
+      pf_lookup (pf_distances ix x) y.
 
     Definition bf_state_eqb (m1 m2 : bf_state) : bool :=
       VMap.equal (@ReflectEq.eqb _ reflectEq_nbar) m1 m2.
@@ -2954,6 +3062,24 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
     Definition leqb_vertices z x y : bool :=
       if VSet.mem y (V G) then if is_left (Nbar.le_dec (Some z) (bf_distance G x y)) then true else false
       else (Z.leb z 0 && (V.eq_dec x y || Nbar.le_dec (Some z) (bf_distance G x (s G))))%bool.
+    Definition leqb_vertices_ix (ix : index) z x y : bool :=
+      match VMap.find y ix.(ix_lookup) with
+      | Some yi =>
+          match VMap.find x ix.(ix_lookup) with
+          | Some xi =>
+              if is_left (Nbar.le_dec (Some z) (pf_distance ix xi yi))
+              then true else false
+          | None => false
+          end
+      | None =>
+          (Z.leb z 0 &&
+            (V.eq_dec x y ||
+              match VMap.find x ix.(ix_lookup) with
+              | Some xi =>
+                  Nbar.le_dec (Some z) (pf_distance ix xi ix.(ix_src))
+              | None => false
+              end))%bool
+      end.
 
     Lemma leqb_vertices_correct n x y
       : leq_vertices G n x y <-> leqb_vertices n x y.

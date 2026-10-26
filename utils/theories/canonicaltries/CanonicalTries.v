@@ -757,4 +757,62 @@ Module PTree.
      + apply IHm1_2. intros. specialize (H1 (xI i)); rewrite ! gNode in H1. auto.
    Qed.
 
+   (** ** Boolean equality, given a boolean equality on the values *)
+
+   Section BOOLEAN_EQUALITY.
+
+     Local Open Scope bool_scope.
+
+     Variable A: Type.
+     Variable eqA: A -> A -> bool.
+
+     Fixpoint beq' (m1 m2: tree' A) : bool :=
+       match m1, m2 with
+       | Node001 r1, Node001 r2 => beq' r1 r2
+       | Node010 x1, Node010 x2 => eqA x1 x2
+       | Node011 x1 r1, Node011 x2 r2 => eqA x1 x2 && beq' r1 r2
+       | Node100 l1, Node100 l2 => beq' l1 l2
+       | Node101 l1 r1, Node101 l2 r2 => beq' l1 l2 && beq' r1 r2
+       | Node110 l1 x1, Node110 l2 x2 => beq' l1 l2 && eqA x1 x2
+       | Node111 l1 x1 r1, Node111 l2 x2 r2 => beq' l1 l2 && eqA x1 x2 && beq' r1 r2
+       | _, _ => false
+       end.
+
+     Definition beq (m1 m2: t A) : bool :=
+       match m1, m2 with
+       | Empty, Empty => true
+       | Nodes m1, Nodes m2 => beq' m1 m2
+       | _, _ => false
+       end.
+
+     Hypothesis eqA_spec : forall a b, eqA a b = true <-> a = b.
+
+     Let andb_true_iff2 (a b: bool) : a && b = true <-> a = true /\ b = true.
+     Proof. destruct a, b; cbn; intuition congruence. Qed.
+
+     Lemma beq'_eq (a b: tree' A) : beq' a b = true <-> a = b.
+     Proof.
+       revert b.
+       induction a as [r IHr|x|x r IHr|l IHl|l IHl r IHr|l IHl x|l IHl x r IHr]
+         using tree'_ind;
+         intros [r'|x'|x' r'|l'|l' r'|l' x'|l' x' r']; cbn [beq'];
+         try (split; [discriminate|congruence]);
+         rewrite ?andb_true_iff2, ?eqA_spec, ?IHr, ?IHl;
+         (split;
+          [intros; repeat match goal with H : _ /\ _ |- _ => destruct H end;
+           subst; reflexivity
+          |intros H; injection H; intros; subst; repeat split]).
+     Qed.
+
+     Lemma beq_eq (m1 m2: t A) : beq m1 m2 = true <-> m1 = m2.
+     Proof.
+       destruct m1 as [|a], m2 as [|b]; cbn [beq];
+         try (split; [discriminate|congruence]).
+       - split; intros; reflexivity.
+       - rewrite beq'_eq.
+         split; [intros ->; reflexivity|intros H; injection H; intros; assumption].
+     Qed.
+
+   End BOOLEAN_EQUALITY.
+
 End PTree.

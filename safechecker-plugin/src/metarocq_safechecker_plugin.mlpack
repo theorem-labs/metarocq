@@ -1,5 +1,7 @@
 Utils
 Ssrbool
+String2pos
+CanonicalTries
 WGraph
 UGraph0
 Reflect
