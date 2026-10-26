@@ -32,7 +32,16 @@ let test_quote_sharing () =
     if k = 0 then Constr.mkSet
     else let t = build (k - 1) in Constr.mkProd (Context.anonR, t, t)
   in
-  let quoted = Q.quote_term env sigma (build sharing_depth) in
+  let quoted =
+    match
+      Control.timeout 60.
+        (fun () -> Q.quote_term env sigma (build sharing_depth))
+        ()
+    with
+    | Ok quoted -> quoted
+    | Error _ ->
+      fail "MetaRocq Test Quotation Sharing: quotation did not return in 60 seconds; the quoted value of a repeated subterm is not shared."
+  in
   let rec check level q =
     if level < sharing_depth then begin
       let t, b = quoted_prod_children q in

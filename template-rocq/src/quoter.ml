@@ -293,7 +293,7 @@ struct
     | Constr.Var id -> combinesmall 2 (Id.hash id)
     | Constr.Sort s -> combinesmall 3 (Sorts.hash s)
     | Constr.Cast (c, _, t) -> combinesmall 4 (combine (sub c) (sub t))
-    | Constr.Prod (_, t, b) -> combinesmall 5 (combine (sub t) (sub b))
+    | Constr.Prod (n, t, b) -> combinesmall 5 (combine3 (Names.Name.hash (Context.binder_name n)) (sub t) (sub b))
     | Constr.Lambda (_, t, b) -> combinesmall 6 (combine (sub t) (sub b))
     | Constr.LetIn (_, v, t, b) -> combinesmall 7 (combine3 (sub v) (sub t) (sub b))
     | Constr.App (f, args) -> combinesmall 8 (combine (sub f) (sub_array args))
