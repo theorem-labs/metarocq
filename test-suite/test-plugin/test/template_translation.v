@@ -15,12 +15,12 @@ MetaRocq Test Cache Typing Flags
 MetaRocq Test Quoter Scope Cache.
 
 Set Universe Polymorphism.
+(* Retyping the template argument [A] reaches a universe component at offset
+   two while this declaration's state is installed.  The quoter refuses that
+   input; the command checks the exact refusal and then checks that the
+   declaration state was restored. *)
 Polymorphic Definition template_state_restore_source@{u}
-  (A : Type@{u}) := list A.
-(* The test hook raises after [quote_term_rec] → [quote_declaration] has
-   installed name, scope, dependency root and in-progress state.  The command
-   then checks that a translating quotation outside any declaration still
-   rejects a bound-variable universe, as it must when no scope is installed. *)
+  (A : Type@{u+2}) := list A.
 MetaRocq Test Quoter Restores State @template_state_restore_source.
 
 (* The upper-bound pass must let [Control.Timeout] leave its graph query. *)

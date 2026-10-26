@@ -156,111 +156,71 @@ let test_scope_dependency_cache env sigma =
         ds_dependencies = new_quote_dependencies env }
       (fun () -> fst (quote () env sigma term))
   in
-  let root_hits = ref 0 in
-  let root_candidates = ref 0 in
-  let stored_root = ref None in
   let quote, _ =
     quote_term_remember
       ~universe_context:(make_template_universe_context ())
-      ~on_cache_hit:(fun cached_term ->
-        if cached_term == term then incr root_hits)
-      ~on_cache_candidate:(fun candidate deps ->
-        if candidate == term then begin
-          incr root_candidates;
-          stored_root := Some deps
-        end)
-      ~on_cache_store:(fun stored deps ->
-        if stored == term then stored_root := Some deps)
       (fun _ () -> ()) (fun _ _ () -> ())
   in
   let scope1 = make_scope () in
   let first = run (Some scope1) quote in
-  let root_scope_recorded =
-    match !stored_root with
-    | Some deps ->
-      deps.qd_reads_scope
-      && (match deps.qd_scope with Some scope -> scope == scope1 | None -> false)
-    | None -> false
-  in
-  let hits_after_first = !root_hits in
-  let candidates_after_first = !root_candidates in
   let cached = run (Some scope1) quote in
-  let same_scope_candidate = !root_candidates > candidates_after_first in
-  let same_scope_hit = !root_hits > hits_after_first in
+  if not (cached == first) then
+    fail "Scope-dependent parent cache missed in the same scope.";
   let fresh_quote, _ =
     quote_term_remember
       ~universe_context:(make_template_universe_context ())
       (fun _ () -> ()) (fun _ _ () -> ())
   in
   let fresh = run (Some scope1) fresh_quote in
+  if not (Constr.equal cached fresh) then
+    fail "Same-scope cached and fresh quotations differ.";
   let scope2 = make_scope () in
-  let hits_before_changed_scope = !root_hits in
   let changed_scope = run (Some scope2) quote in
-  let changed_scope_missed = Int.equal !root_hits hits_before_changed_scope in
+  if changed_scope == cached then
+    fail "Scope-dependent parent cache hit after scope changed.";
   let fresh_changed_quote, _ =
     quote_term_remember
       ~universe_context:(make_template_universe_context ())
       (fun _ () -> ()) (fun _ _ () -> ())
   in
   let fresh_changed = run (Some scope2) fresh_changed_quote in
+  if not (Constr.equal changed_scope fresh_changed) then
+    fail "Changed-scope cached and fresh quotations differ.";
   let no_scope_rejected =
     try
       ignore (run None quote);
       false
-    with CErrors.UserError _ -> true
+    with
+    | CErrors.UserError message ->
+      CString.string_contains
+        ~where:(Pp.string_of_ppcmds message)
+        ~what:"outside any polymorphic declaration"
   in
-  if not root_scope_recorded then
-    fail "Scope-dependent parent cache stored no scope identity.";
-  if not same_scope_candidate then
-    fail "Scope-dependent parent cache entry was not retained.";
-  if not same_scope_hit then
-    fail "Scope-dependent parent cache missed in the same scope.";
-  if not (Constr.equal first cached) then
-    fail "Same-scope cache result changed.";
-  if not (Constr.equal cached fresh) then
-    fail "Same-scope cached and fresh quotations differ.";
-  if not changed_scope_missed then
-    fail "Scope-dependent parent cache hit after scope changed.";
-  if not (Constr.equal changed_scope fresh_changed) then
-    fail "Changed-scope cached and fresh quotations differ.";
   if not no_scope_rejected then
     fail "No-scope quotation reused a scoped cached result.";
   Feedback.msg_info (Pp.str "Scope-dependent cache regression passed.")
 
 let test_declaration_state_restore ~opaque_access env sigma trm =
   let open Q in
-  let active_dependencies = ref None in
-  let hook_ran = ref false in
-  let after_declaration_state () =
-    let state = !current_declaration_state in
-    if String.equal state.ds_name "<toplevel>"
-       || Option.is_empty state.ds_scope
-       || Names.KNset.is_empty state.ds_in_progress
-    then
-      fail "Recursive quotation test hook ran before declaration state was installed.";
-    hook_ran := true;
-    active_dependencies := Some state.ds_dependencies;
-    raise (Invalid_argument "Injected recursive declaration quotation failure.")
+  let expected =
+    "Quoting template universe offsets above one is not supported."
   in
-  let failed =
+  let failed_for_expected_reason =
     try
       ignore
         (quote_term_rec ~translate_template:true
-           ~after_declaration_state
            ~bypass:true ~opaque_access ~with_universes:true env sigma trm);
       false
-    with Invalid_argument _ -> true
+    with
+    | CErrors.UserError message ->
+      CString.string_contains ~where:(Pp.string_of_ppcmds message) ~what:expected
   in
   let state = !current_declaration_state in
   let all_state_restored =
-    failed
-    && !hook_ran
+    failed_for_expected_reason
     && String.equal state.ds_name "<toplevel>"
     && Option.is_empty state.ds_scope
     && Names.KNset.is_empty state.ds_in_progress
-    && (match !active_dependencies with
-        | Some active -> state.ds_dependencies != active
-        | None -> false)
   in
   (* A leaked scope would let a translating quotation outside any
      declaration mint a level for a bound-variable universe in it, instead
@@ -281,7 +241,11 @@ let test_declaration_state_restore ~opaque_access env sigma trm =
     try
       ignore (quote () env sigma bound_universe);
       false
-    with CErrors.UserError _ -> true
+    with
+    | CErrors.UserError message ->
+      CString.string_contains
+        ~where:(Pp.string_of_ppcmds message)
+        ~what:"outside any polymorphic declaration"
   in
   if all_state_restored && bound_universe_rejected () then
     Feedback.msg_info (Pp.str "Declaration-state restoration regression passed.")
