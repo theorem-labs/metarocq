@@ -52,6 +52,7 @@ theories/PCUICCasesContexts.v
 theories/PCUICReduction.v
 theories/PCUICRecArgs.v
 theories/PCUICGuardReduce.v
+theories/PCUICGuardResult.v
 theories/PCUICGuardChecker.v
 theories/PCUICGuardClosure.v
 theories/PCUICTyping.v

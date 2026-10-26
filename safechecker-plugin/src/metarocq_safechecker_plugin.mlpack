@@ -15,6 +15,7 @@ PCUICCases
 PCUICAstUtils
 PCUICReflect
 PCUICEquality
+PCUICGuardResult
 PCUICGuardChecker
 PCUICGuardClosure
 PCUICTyping

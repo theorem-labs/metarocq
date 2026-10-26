@@ -2,6 +2,7 @@
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Environment.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICClosed.
+From MetaRocq.PCUIC Require Export PCUICGuardResult.
 
 From Stdlib Require Import ssreflect ssrbool.
 
@@ -56,28 +57,6 @@ Set Default Goal Selector "!".
   lets [OutOfFuel] win over [Reject]; a [Reject] that ends the walk of a
   term early (an escaping index, an illegal call) does not look at the rest
   of that term, so it can stand where the rest would have run out of fuel. *)
-
-Inductive FixCoFix : Type := Fix | CoFix.
-
-Inductive guard_result :=
-| Accept
-| Reject (msg : string)
-| OutOfFuel.
-
-(** [OutOfFuel] dominates, so that a refusal never hides an exhaustion. *)
-Definition gr_and (r1 r2 : guard_result) : guard_result :=
-  match r1, r2 with
-  | OutOfFuel, _ => OutOfFuel
-  | _, OutOfFuel => OutOfFuel
-  | Reject m, _ => Reject m
-  | Accept, r => r
-  end.
-
-Fixpoint gr_list {A} (f : A -> guard_result) (l : list A) : guard_result :=
-  match l with
-  | [] => Accept
-  | a :: l => gr_and (f a) (gr_list f l)
-  end.
 
 Definition gr_prim (f : term -> guard_result) (p : prim_val term) : guard_result :=
   match p with

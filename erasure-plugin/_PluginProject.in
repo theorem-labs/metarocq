@@ -28,6 +28,8 @@ src/pCUICAstUtils.ml
 src/pCUICAstUtils.mli
 src/pCUICReflect.ml
 src/pCUICReflect.mli
+src/pCUICGuardResult.ml
+src/pCUICGuardResult.mli
 src/pCUICGuardChecker.ml
 src/pCUICGuardChecker.mli
 src/pCUICGuardClosure.ml
