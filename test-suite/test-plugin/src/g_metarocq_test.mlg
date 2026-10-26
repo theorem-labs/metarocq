@@ -374,7 +374,7 @@ let safecheck_program = G_metarocq_safechecker.safecheck_program
    they were shared) and once shared, and compare the two programs with
    OCaml's structural equality.  Also check that the shared quoter returns one
    value for repeated naturals and strings. *)
-let test_quote_sharing ~opaque_access env evm poly c =
+let test_quote_value_sharing ~opaque_access env evm poly c =
   let env = G_metarocq_safechecker.safecheck_env env evm poly in
   let term = EConstr.to_constr evm c in
   let quote () =
@@ -649,6 +649,6 @@ VERNAC COMMAND EXTEND MetaRocq_Test_Quote_Sharing CLASSIFIED AS QUERY STATE opaq
 | #[ poly = Attributes.polymorphic ] [ "MetaRocq" "Test" "Quote" "Sharing" constr(c) ] -> {
     let env, evm = empty_evar_map () in
     let c, _ = Constrintern.interp_constr env evm c in
-    test_quote_sharing env evm poly c
+    test_quote_value_sharing env evm poly c
   }
 END
