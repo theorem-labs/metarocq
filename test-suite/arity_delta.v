@@ -108,7 +108,14 @@ MetaRocq SafeCheck (@ad_fbind).
 (** A12: A4 with Corelib's template-polymorphic [list], as in stdpp's
     [base.list_elem_of].  A4 uses a non-template copy; this one checks that
     the quoted [ind_type] and the quoted [ind_indices] agree on how [list]
-    is quoted. *)
+    is quoted.  This tree's [MetaRocq SafeCheck] quotes without
+    [~translate_template] (safechecker-plugin/src/g_metarocq_safechecker.mlg:25)
+    and no command or TemplateMonad entry here exposes the translation, so the
+    template-translated path is exercised by the separate probe
+    lanes/arity-delta/arity_a12_translate.v on image injtyp-base (base
+    73b74755), whose SafeCheck quotes with [~translate_template].  There the
+    base refuses it ("∀ A, AD_ElemOf A (list@{u} A) is not an arity") while a
+    syntactic template-[list] control is accepted. *)
 Inductive ad_tlist_elem_of {A} : AD_ElemOf A (list A) :=
 | ad_telem_of_here x l : ad_tlist_elem_of x (cons x l)
 | ad_telem_of_further x y l : ad_tlist_elem_of x l -> ad_tlist_elem_of x (cons y l).
@@ -126,6 +133,14 @@ MetaRocq SafeCheck (@ad_dlind).
 Definition ad_lpar (k : nat) : Type := let Y := nat in Y -> Prop.
 Inductive ad_lpind (n := 0) : ad_lpar n := ad_lpind_0 : ad_lpind 0.
 MetaRocq SafeCheck (@ad_lpind).
+
+(** A14b (gate 2 note 3): the arity IS a let-parameter, so the telescope walk
+    must unfold the parameter's let-bound [Rel] ([unfold_local]) in the
+    parameter context.  The kernel stores parameters
+    [T := let W := nat in W -> Prop] (npars 0) and indices [W := nat; _ : W]
+    (kernel_shapes_probe3.v). *)
+Inductive ad_lpind2 (T := let W := nat in W -> Prop) : T := ad_lpind2_0 : ad_lpind2 0.
+MetaRocq SafeCheck (@ad_lpind2).
 
 (** A15 (gate note 2): the alias needs fix and iota reduction. *)
 Definition ad_fixar : Type :=
@@ -145,10 +160,21 @@ MetaRocq SafeCheck (@ad_upind).
     The kernel accepts this block and stores [_ : true = true], because forcing
     [b] in the match updates the shared closure.  A sharing-free relation
     substitutes [negb false] and obtains [_ : negb false = true], so the
-    checker intentionally continues to refuse it. *)
+    checker intentionally continues to refuse it, with the index-mismatch
+    message (see [ad_C1] in part B). *)
 Definition ad_shar (b : bool) : Type := if b then (b = true -> Prop) else nat.
 Inductive ad_shind : ad_shar (negb false) := ad_shind_0 : ad_shind eq_refl.
 Fail MetaRocq SafeCheck (@ad_shind).
+
+(** A17 (gate 2 note 1): the same block declared with kernel term sharing off.
+    The kernel then computes the sharing-free relation itself and stores
+    [_ : negb false = true] (observed in kernel_shapes_probe3.v; [ad_shind]
+    stores [_ : true = true]), so the checker must accept it: spec = kernel
+    without sharing. *)
+Unset Kernel Term Sharing.
+Inductive ad_shind_ns : ad_shar (negb false) := ad_shind_ns_0 : ad_shind_ns eq_refl.
+Set Kernel Term Sharing.
+MetaRocq SafeCheck (@ad_shind_ns).
 
 (** * Part B: negative controls on doctored environments
 
@@ -322,9 +348,10 @@ Definition ad_rejected (r : string + string) : bool :=
   match r with inl _ => false | inr _ => true end.
 
 (** Negative controls name the branch that refused them, not merely [inr _].
-    Some slow-path controls allow the base's syntactic [NotAnArity] message or
-    the post-change declaration-mismatch message; phase 2 removes the former
-    alternative after the new path exists. *)
+    The slow-path controls B6, B8, B9, B11, B12 and C1 assert the post-change
+    index-mismatch message only, and that the base's syntactic "is not an
+    arity" message is absent: telescope-shape and declaration mismatches raise
+    the existing index-mismatch error.  They are red on the base. *)
 Definition ad_error_contains (needle : string) (r : string + string) : bool :=
   match r with
   | inl _ => false
@@ -335,13 +362,14 @@ Definition ad_error_contains (needle : string) (r : string + string) : bool :=
       end
   end.
 
-Definition ad_error_either (p q : string) (r : string + string) : bool :=
-  ad_error_contains p r || ad_error_contains q r.
-
 Definition ad_indices_mismatch :=
   "Inductive arity indices do not match the indices of the mutual declaration".
 Definition ad_sort_mismatch :=
   "Inductive body sort does not match the sort of the inductive type".
+
+Definition ad_mismatch_only (r : string + string) : bool :=
+  ad_error_contains ad_indices_mismatch r
+  && negb (ad_error_contains "is not an arity" r).
 
 (** B0: the program with no patch at all is accepted, before and after the
     change: the driver itself is sound. *)
@@ -388,13 +416,13 @@ Definition ad_B5_reason :
   ad_error_contains "ad_opaque is not an arity" ad_B5 = true := eq_refl.
 
 (** B6: an alias of [Prop], so it reaches the slow path, while the declaration
-    still claims one index.  The new checker must reject at telescope shape,
-    not at a constructor. *)
+    still claims one index.  The new checker must reject at telescope shape
+    (index mismatch), not at a constructor and not as "not an arity". *)
 Definition ad_B6 := Eval vm_compute in
   ad_run_on ad_normal ad_empty_kn <% ad_zero %> None.
 Print ad_B6.
 Definition ad_B6_reason :
-  ad_error_either "ad_zero is not an arity" ad_indices_mismatch ad_B6 = true := eq_refl.
+  ad_mismatch_only ad_B6 = true := eq_refl.
 
 (** B7: a bound, earlier constructorless inductive is not an arity.  Inference
     therefore succeeds before reduction, and refusal cannot be [UnboundInd]. *)
@@ -406,21 +434,23 @@ Definition ad_B7_reason :
 
 (** B8: the conversion-only counterexample, forced through the slow path by
     [ad_zero].  The declaration fabricates one let index although the reduct is
-    [Prop], so the post-change branch is the index-shape comparison. *)
+    [Prop], so the post-change branch is the index-shape comparison
+    (index mismatch, not "not an arity"). *)
 Definition ad_B8 := Eval vm_compute in
   ad_run_on ad_normal ad_empty_kn <% ad_zero %> (Some ad_let_idx).
 Print ad_B8.
 Definition ad_B8_reason :
-  ad_error_either "ad_zero is not an arity" ad_indices_mismatch ad_B8 = true := eq_refl.
+  ad_mismatch_only ad_B8 = true := eq_refl.
 
 (** B9: the mirror.  [ad_letar] exposes and retains a let, while [ad_empty]'s
     kernel-produced index context is only [_ : nat].  The let is kept because
-    the telescope walk runs with zeta off (no [tRel] head is involved here). *)
+    the telescope walk runs with zeta off (no [tRel] head is involved here),
+    so the post-change refusal is the index mismatch. *)
 Definition ad_B9 := Eval vm_compute in
   ad_run_on ad_normal ad_empty_kn <% ad_letar %> None.
 Print ad_B9.
 Definition ad_B9_reason :
-  ad_error_either "ad_letar is not an arity" ad_indices_mismatch ad_B9 = true := eq_refl.
+  ad_mismatch_only ad_B9 = true := eq_refl.
 
 (** B10: the kernel never reduces through the parameter prefix.  The declared
     arity must syntactically start with [ad_pempty]'s [A : Type] parameter,
@@ -435,18 +465,32 @@ Definition ad_B10_reason :
     [Z := (let W := nat in W -> Prop); W := nat; _ : W].  Replace it by the
     kernel-produced context of [ad_relbadind],
     [Z := (let W := nat in W -> Prop); _ : nat].  A reducer that leaves
-    let-bound variables stuck and then uses full zeta would accept this twin. *)
+    let-bound variables stuck and then uses full zeta would accept this twin;
+    the exact checker refuses it with the index mismatch. *)
 Definition ad_B11 := Eval vm_compute in
   ad_run_on_prog ad_normal ad_rel_prog ad_rel_empty_kn <% ad_relar %> ad_relbad_idx.
 Print ad_B11.
 Definition ad_B11_reason :
-  ad_error_either "ad_relar is not an arity" ad_indices_mismatch ad_B11 = true := eq_refl.
+  ad_mismatch_only ad_B11 = true := eq_refl.
 
 (** B12: [ad_fbar] needs [whd_all] only because its head is
     [App (LetIn ...)].  Fabricating the exposed-let context of [ad_keepfind]
-    checks that the fallback does not preserve that internal let. *)
+    checks that the fallback does not preserve that internal let: the exact
+    checker refuses it with the index mismatch. *)
 Definition ad_B12 := Eval vm_compute in
   ad_run_on_prog ad_normal ad_f_prog ad_fempty_kn <% ad_fbar %> ad_keepf_idx.
 Print ad_B12.
 Definition ad_B12_reason :
-  ad_error_either "ad_fbar is not an arity" ad_indices_mismatch ad_B12 = true := eq_refl.
+  ad_mismatch_only ad_B12 = true := eq_refl.
+
+(** C1 through the driver: [ad_shind]'s own quoted program, unpatched.  The
+    kernel stored [_ : true = true]; the sharing-free relation gives
+    [_ : negb false = true], so the post-change refusal is the index mismatch,
+    not "not an arity". *)
+Definition ad_sh_witness := (fun (s : ad_shind eq_refl) => s).
+MetaRocq Quote Recursively Definition ad_sh_prog := ad_sh_witness.
+Definition ad_C1 := Eval vm_compute in
+  infer_and_print_template_program (cf := default_checker_flags) (nor := ad_normal)
+    ad_sh_prog Monomorphic_ctx.
+Print ad_C1.
+Definition ad_C1_reason : ad_mismatch_only ad_C1 = true := eq_refl.
