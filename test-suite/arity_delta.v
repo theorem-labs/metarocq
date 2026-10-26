@@ -105,6 +105,15 @@ Definition ad_fbar : Type := (let F := fun X : Type => X -> Prop in F) nat.
 Inductive ad_fbind : ad_fbar := ad_fbind_0 : ad_fbind 0.
 MetaRocq SafeCheck (@ad_fbind).
 
+(** A12: A4 with Corelib's template-polymorphic [list], as in stdpp's
+    [base.list_elem_of].  A4 uses a non-template copy; this one checks that
+    the quoted [ind_type] and the quoted [ind_indices] agree on how [list]
+    is quoted. *)
+Inductive ad_tlist_elem_of {A} : AD_ElemOf A (list A) :=
+| ad_telem_of_here x l : ad_tlist_elem_of x (cons x l)
+| ad_telem_of_further x y l : ad_tlist_elem_of x l -> ad_tlist_elem_of x (cons y l).
+MetaRocq SafeCheck (@ad_tlist_elem_of).
+
 (** C1: the documented call-by-need completeness gap of the head-only design.
     The kernel accepts this block and stores [_ : true = true], because forcing
     [b] in the match updates the shared closure.  A sharing-free relation
