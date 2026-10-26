@@ -92,6 +92,28 @@ Inductive ad_m1 : ad_mar := ad_m1_0 : ad_m1 0 | ad_m1_S n : ad_m2 n -> ad_m1 (S 
 with ad_m2 : ad_mar := ad_m2_S n : ad_m1 n -> ad_m2 (S n).
 MetaRocq SafeCheck (@ad_m1).
 
+(** A10: [whd_allnolet] keeps the outer let, then unfolds its let-bound
+    variable without zeta and exposes a second let.  In telescope order the
+    kernel stores [Z := (let W := nat in W -> Prop); W := nat; _ : W]. *)
+Definition ad_relar : Type := let Z := (let W := nat in W -> Prop) in Z.
+Inductive ad_relind : ad_relar := ad_relind_0 : ad_relind 0.
+MetaRocq SafeCheck (@ad_relind).
+
+(** A11: [whd_allnolet] stops at [App (LetIn ...)], so
+    [whd_decompose_prod_decls] uses its full-[whd_all] fallback. *)
+Definition ad_fbar : Type := (let F := fun X : Type => X -> Prop in F) nat.
+Inductive ad_fbind : ad_fbar := ad_fbind_0 : ad_fbind 0.
+MetaRocq SafeCheck (@ad_fbind).
+
+(** C1: the documented call-by-need completeness gap of the head-only design.
+    The kernel accepts this block and stores [_ : true = true], because forcing
+    [b] in the match updates the shared closure.  A sharing-free relation
+    substitutes [negb false] and obtains [_ : negb false = true], so the
+    checker intentionally continues to refuse it. *)
+Definition ad_shar (b : bool) : Type := if b then (b = true -> Prop) else nat.
+Inductive ad_shind : ad_shar (negb false) := ad_shind_0 : ad_shind eq_refl.
+Fail MetaRocq SafeCheck (@ad_shind).
+
 (** * Part B: negative controls on doctored environments
 
     Rocq's kernel refuses an inductive whose declared arity does not reduce to
@@ -152,30 +174,87 @@ Definition ad_kn (t : Ast.term) : kername :=
   | _ => (MPfile [], "not an inductive")
   end.
 
-(** The source block: [ad_src : nat -> Prop], one index, sort Prop. *)
+(** Constructorless blocks let each negative control reach the arity check:
+    no constructor can mask the intended refusal.  [ad_anchor] is quoted before
+    the patched blocks, so B7 also cannot fail because its [tInd] is unbound. *)
+Inductive ad_anchor : Prop := .
 Inductive ad_src : nat -> Prop := ad_src_0 : ad_src 0.
+Inductive ad_empty : nat -> Prop := .
 
-(** Constants to put in [ind_type].  All of them are in the quoted environment
-    because [ad_witness] mentions them. *)
+(** Sources and kernel-produced index telescopes for the exactness controls. *)
+Inductive ad_rel_empty : ad_relar := .
+Definition ad_relbad : Type :=
+  let Z := (let W := nat in W -> Prop) in nat -> Prop.
+Inductive ad_relbadind : ad_relbad := .
+
+Inductive ad_fempty : ad_fbar := .
+Definition ad_keepf : Type :=
+  let F := fun X : Type => X -> Prop in F nat.
+Inductive ad_keepfind : ad_keepf := .
+
+Definition ad_whole : Type := forall A : Type, nat -> Prop.
+Inductive ad_pempty (A : Type) : nat -> Prop := .
+
+(** Constants to put in [ind_type]. *)
 Definition ad_notar : Type := nat.                 (* does not reduce to an arity *)
 Definition ad_right : Type := nat -> Prop.         (* the arity of [ad_src] *)
 Definition ad_wrongidx : Type := bool -> Prop.     (* an arity, wrong index type *)
 Definition ad_wrongsort : Type := nat -> Set.      (* an arity, wrong sort *)
+Definition ad_zero : Type := Prop.                 (* no products, through slow path *)
 Axiom ad_opaque : Type.                            (* an arity-typed axiom: no body *)
 
-(** A block with no constructors: nothing else pins its indices, so it is the
-    one place where a doctored index context is not caught by [cstr_eq]. *)
-Inductive ad_empty : nat -> Prop := .
-
+(** Keep each aliased source in its own quoted environment.  Otherwise the
+    base checker stops at an earlier unpatched alias and masks the target. *)
 Definition ad_witness :=
-  (fun (a : ad_notar) (b : ad_right) (c : ad_wrongidx) (d : ad_wrongsort) (e : ad_opaque)
-       (f : ad_letar) (g : ad_empty 0) =>
+  (fun (anchor : ad_anchor)
+       (a : ad_notar) (b : ad_right) (c : ad_wrongidx) (d : ad_wrongsort)
+       (z : ad_zero) (e : ad_opaque) (f : ad_letar) (whole : ad_whole)
+       (g : ad_empty 0) (p : ad_pempty nat 0) =>
      ad_src 0).
+Definition ad_rel_witness := (fun (r : ad_rel_empty 0) => r).
+Definition ad_relbad_witness := (fun (r : ad_relbadind 0) => r).
+Definition ad_f_witness := (fun (f : ad_fempty 0) => f).
+Definition ad_keepf_witness := (fun (f : ad_keepfind 0) => f).
 
 MetaRocq Quote Recursively Definition ad_prog := ad_witness.
+MetaRocq Quote Recursively Definition ad_rel_prog := ad_rel_witness.
+MetaRocq Quote Recursively Definition ad_relbad_prog := ad_relbad_witness.
+MetaRocq Quote Recursively Definition ad_f_prog := ad_f_witness.
+MetaRocq Quote Recursively Definition ad_keepf_prog := ad_keepf_witness.
 
 Definition ad_src_kn : kername := Eval vm_compute in ad_kn <% ad_src %>.
 Definition ad_empty_kn : kername := Eval vm_compute in ad_kn <% ad_empty %>.
+Definition ad_anchor_kn : kername := Eval vm_compute in ad_kn <% ad_anchor %>.
+Definition ad_rel_empty_kn : kername := Eval vm_compute in ad_kn <% ad_rel_empty %>.
+Definition ad_relbad_kn : kername := Eval vm_compute in ad_kn <% ad_relbadind %>.
+Definition ad_fempty_kn : kername := Eval vm_compute in ad_kn <% ad_fempty %>.
+Definition ad_keepf_kn : kername := Eval vm_compute in ad_kn <% ad_keepfind %>.
+Definition ad_pempty_kn : kername := Eval vm_compute in ad_kn <% ad_pempty %>.
+
+Fixpoint ad_find_indices (kn : kername)
+    (decls : Ast.Env.global_declarations) : option Ast.Env.context :=
+  match decls with
+  | [] => None
+  | (kn', Ast.Env.InductiveDecl m) :: tl =>
+      if eqb kn kn' then
+        match m.(Ast.Env.ind_bodies) with
+        | ib :: _ => Some ib.(Ast.Env.ind_indices)
+        | [] => None
+        end
+      else ad_find_indices kn tl
+  | _ :: tl => ad_find_indices kn tl
+  end.
+
+Definition ad_indices_of (p : Ast.Env.program) (kn : kername) : option Ast.Env.context :=
+  ad_find_indices kn p.1.(Ast.Env.declarations).
+Definition ad_relbad_idx :=
+  Eval vm_compute in ad_indices_of ad_relbad_prog ad_relbad_kn.
+Definition ad_keepf_idx :=
+  Eval vm_compute in ad_indices_of ad_keepf_prog ad_keepf_kn.
+Definition ad_relbad_idx_found :
+  match ad_relbad_idx with Some _ => true | None => false end = true := eq_refl.
+Definition ad_keepf_idx_found :
+  match ad_keepf_idx with Some _ => true | None => false end = true := eq_refl.
 
 (** An index context made of one let, which [it_mkProd_or_LetIn] turns into a
     [tLetIn] that zeta-reduces away.  Rocq's kernel never produces it for
@@ -191,16 +270,42 @@ Definition ad_normal : @normalizing_flags default_checker_flags.
 now econstructor.
 Defined.
 
+Definition ad_run_on_prog (nor : normalizing_flags) (p : Ast.Env.program)
+    (kn : kername) (ty : Ast.term) (idx : option Ast.Env.context) : string + string :=
+  infer_and_print_template_program (cf := default_checker_flags)
+    (ad_patch_gen kn ty idx p) Monomorphic_ctx.
+
 Definition ad_run_on (nor : normalizing_flags) (kn : kername) (ty : Ast.term)
     (idx : option Ast.Env.context) : string + string :=
-  infer_and_print_template_program (cf := default_checker_flags)
-    (ad_patch_gen kn ty idx ad_prog) Monomorphic_ctx.
+  ad_run_on_prog nor ad_prog kn ty idx.
 
 Definition ad_run (nor : normalizing_flags) (ty : Ast.term) : string + string :=
   ad_run_on nor ad_src_kn ty None.
 
 Definition ad_rejected (r : string + string) : bool :=
   match r with inl _ => false | inr _ => true end.
+
+(** Negative controls name the branch that refused them, not merely [inr _].
+    Some slow-path controls allow the base's syntactic [NotAnArity] message or
+    the post-change declaration-mismatch message; phase 2 removes the former
+    alternative after the new path exists. *)
+Definition ad_error_contains (needle : string) (r : string + string) : bool :=
+  match r with
+  | inl _ => false
+  | inr msg =>
+      match String.index 0 needle msg with
+      | Some _ => true
+      | None => false
+      end
+  end.
+
+Definition ad_error_either (p q : string) (r : string + string) : bool :=
+  ad_error_contains p r || ad_error_contains q r.
+
+Definition ad_indices_mismatch :=
+  "Inductive arity indices do not match the indices of the mutual declaration".
+Definition ad_sort_mismatch :=
+  "Inductive body sort does not match the sort of the inductive type".
 
 (** B0: the program with no patch at all is accepted, before and after the
     change: the driver itself is sound. *)
@@ -216,55 +321,96 @@ Definition ad_B1 := Eval vm_compute in ad_run ad_normal <% ad_right %>.
 Print ad_B1.
 Definition ad_B1_accepted : ad_rejected ad_B1 = false := eq_refl.
 
-(** B2: a constant that does not reduce to an arity.  Rejected, always. *)
-Definition ad_B2 := Eval vm_compute in ad_run ad_normal <% ad_notar %>.
+(** B2: a constant that does not reduce to an arity.  The constructorless
+    source rules out a later constructor failure. *)
+Definition ad_B2 := Eval vm_compute in
+  ad_run_on ad_normal ad_empty_kn <% ad_notar %> None.
 Print ad_B2.
-Definition ad_B2_rejected : ad_rejected ad_B2 = true := eq_refl.
+Definition ad_B2_reason :
+  ad_error_contains "ad_notar is not an arity" ad_B2 = true := eq_refl.
 
-(** B3: an arity with the wrong index type.  Rejected, always. *)
-Definition ad_B3 := Eval vm_compute in ad_run ad_normal <% ad_wrongidx %>.
+(** B3: a syntactic arity with the wrong index type.  This deliberately uses
+    the unchanged fast path and must fail at the index-context comparison. *)
+Definition ad_B3 := Eval vm_compute in
+  ad_run_on ad_normal ad_empty_kn <% bool -> Prop %> None.
 Print ad_B3.
-Definition ad_B3_rejected : ad_rejected ad_B3 = true := eq_refl.
+Definition ad_B3_reason :
+  ad_error_contains ad_indices_mismatch ad_B3 = true := eq_refl.
 
-(** B4: an arity with the wrong sort.  Rejected, always. *)
-Definition ad_B4 := Eval vm_compute in ad_run ad_normal <% ad_wrongsort %>.
+(** B4: a syntactic arity with the wrong sort. *)
+Definition ad_B4 := Eval vm_compute in
+  ad_run_on ad_normal ad_empty_kn <% nat -> Set %> None.
 Print ad_B4.
-Definition ad_B4_rejected : ad_rejected ad_B4 = true := eq_refl.
+Definition ad_B4_reason :
+  ad_error_contains ad_sort_mismatch ad_B4 = true := eq_refl.
 
-(** B5: an axiom of type [Type]: no body, so it reduces to nothing.
-    Rejected, always. *)
-Definition ad_B5 := Eval vm_compute in ad_run ad_normal <% ad_opaque %>.
+(** B5: an axiom of type [Type]: no body, so the slow path cannot progress. *)
+Definition ad_B5 := Eval vm_compute in
+  ad_run_on ad_normal ad_empty_kn <% ad_opaque %> None.
 Print ad_B5.
-Definition ad_B5_rejected : ad_rejected ad_B5 = true := eq_refl.
+Definition ad_B5_reason :
+  ad_error_contains "ad_opaque is not an arity" ad_B5 = true := eq_refl.
 
-(** B6: the inductive's own sort, [Prop]: an arity with no products, while the
-    declaration claims one index.  Rejected, always. *)
-Definition ad_B6 := Eval vm_compute in ad_run ad_normal <% Prop %>.
+(** B6: an alias of [Prop], so it reaches the slow path, while the declaration
+    still claims one index.  The new checker must reject at telescope shape,
+    not at a constructor. *)
+Definition ad_B6 := Eval vm_compute in
+  ad_run_on ad_normal ad_empty_kn <% ad_zero %> None.
 Print ad_B6.
-Definition ad_B6_rejected : ad_rejected ad_B6 = true := eq_refl.
+Definition ad_B6_reason :
+  ad_error_either "ad_zero is not an arity" ad_indices_mismatch ad_B6 = true := eq_refl.
 
-(** B7: the inductive's own reference, [tInd ad_src], as its own arity: not an
-    arity and not even a type of the right shape.  Rejected, always. *)
-Definition ad_B7 := Eval vm_compute in ad_run ad_normal <% ad_src %>.
+(** B7: a bound, earlier constructorless inductive is not an arity.  Inference
+    therefore succeeds before reduction, and refusal cannot be [UnboundInd]. *)
+Definition ad_B7 := Eval vm_compute in
+  ad_run_on ad_normal ad_empty_kn <% ad_anchor %> None.
 Print ad_B7.
-Definition ad_B7_rejected : ad_rejected ad_B7 = true := eq_refl.
+Definition ad_B7_reason :
+  ad_error_contains "ad_anchor is not an arity" ad_B7 = true := eq_refl.
 
-(** B8: the zeta counterexample.  [ad_empty] has no constructors; give it
-    [ind_type = Prop] and an index context made of one let.  The arity built
-    from the declaration is [tLetIn x 0 nat (tSort Prop)], which is *convertible*
-    to [Prop] but not a reduct of it, and Rocq's kernel computes an empty index
-    context for [ind_type = Prop].  Rejected, always. *)
+(** B8: the conversion-only counterexample, forced through the slow path by
+    [ad_zero].  The declaration fabricates one let index although the reduct is
+    [Prop], so the post-change branch is the index-shape comparison. *)
 Definition ad_B8 := Eval vm_compute in
-  ad_run_on ad_normal ad_empty_kn <% Prop %> (Some ad_let_idx).
+  ad_run_on ad_normal ad_empty_kn <% ad_zero %> (Some ad_let_idx).
 Print ad_B8.
-Definition ad_B8_rejected : ad_rejected ad_B8 = true := eq_refl.
+Definition ad_B8_reason :
+  ad_error_either "ad_zero is not an arity" ad_indices_mismatch ad_B8 = true := eq_refl.
 
-(** B9: the mirror.  [ind_type] is a constant whose reduct keeps a let
-    ([let X := nat in X -> Prop]) while the declaration's index context has the
-    zeta-reduced shape [_ : nat].  Rocq's kernel reduces with [whd_allnolet]
-    (kernel/reduction.ml:122-126) and keeps the let, so it never produces this
-    declaration.  Rejected, always: the checker's telescope walk reduces with
-    [RedFlags.zeta := false]. *)
-Definition ad_B9 := Eval vm_compute in ad_run_on ad_normal ad_empty_kn <% ad_letar %> None.
+(** B9: the mirror.  [ad_letar] exposes and retains a let, while [ad_empty]'s
+    kernel-produced index context is only [_ : nat].  The dedicated
+    let-variable-unfolding flag keeps the let without enabling zeta. *)
+Definition ad_B9 := Eval vm_compute in
+  ad_run_on ad_normal ad_empty_kn <% ad_letar %> None.
 Print ad_B9.
-Definition ad_B9_rejected : ad_rejected ad_B9 = true := eq_refl.
+Definition ad_B9_reason :
+  ad_error_either "ad_letar is not an arity" ad_indices_mismatch ad_B9 = true := eq_refl.
+
+(** B10: the kernel never reduces through the parameter prefix.  The declared
+    arity must syntactically start with [ad_pempty]'s [A : Type] parameter,
+    rather than being one constant for the whole arity. *)
+Definition ad_B10 := Eval vm_compute in
+  ad_run_on ad_normal ad_pempty_kn <% ad_whole %> None.
+Print ad_B10.
+Definition ad_B10_reason :
+  ad_error_contains "ad_whole is not an arity" ad_B10 = true := eq_refl.
+
+(** B11: [ad_relar]'s actual kernel context is
+    [Z := (let W := nat in W -> Prop); W := nat; _ : W].  Replace it by the
+    kernel-produced context of [ad_relbadind],
+    [Z := (let W := nat in W -> Prop); _ : nat].  A reducer that leaves
+    let-bound variables stuck and then uses full zeta would accept this twin. *)
+Definition ad_B11 := Eval vm_compute in
+  ad_run_on_prog ad_normal ad_rel_prog ad_rel_empty_kn <% ad_relar %> ad_relbad_idx.
+Print ad_B11.
+Definition ad_B11_reason :
+  ad_error_either "ad_relar is not an arity" ad_indices_mismatch ad_B11 = true := eq_refl.
+
+(** B12: [ad_fbar] needs [whd_all] only because its head is
+    [App (LetIn ...)].  Fabricating the exposed-let context of [ad_keepfind]
+    checks that the fallback does not preserve that internal let. *)
+Definition ad_B12 := Eval vm_compute in
+  ad_run_on_prog ad_normal ad_f_prog ad_fempty_kn <% ad_fbar %> ad_keepf_idx.
+Print ad_B12.
+Definition ad_B12_reason :
+  ad_error_either "ad_fbar is not an arity" ad_indices_mismatch ad_B12 = true := eq_refl.
