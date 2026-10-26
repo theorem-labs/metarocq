@@ -1,0 +1,69 @@
+From MetaRocq.SafeCheckerPlugin Require Import Loader.
+
+(** SafeCheck must refuse every fixpoint and cofixpoint that Rocq's kernel
+    refuses.  Each refused definition below is made with the kernel's guard
+    checking turned off, and each [Fail] asserts that SafeCheck refuses it.
+    Each refused shape has a twin that the kernel accepts, and SafeCheck must
+    accept the twin. *)
+
+(** The recursive parameter itself is not a structural subterm. *)
+Unset Guard Checking.
+Fixpoint loop (n : nat) : False := loop n.
+Set Guard Checking.
+
+Fail MetaRocq SafeCheck loop.
+Definition loop_false : False := loop 0.
+Fail MetaRocq SafeCheck loop_false.
+
+(** A non-recursive constructor argument is not a structural subterm, even
+    when its type is the same inductive at another parameter instance. *)
+Inductive W (A : Type) : Type := w : A -> W A | e : W A.
+
+Unset Guard Checking.
+Fixpoint w_f (x : W (W nat)) : nat :=
+  match x with w _ a => w_g a | e _ => 0 end
+with w_g (y : W nat) : nat := 0.
+Set Guard Checking.
+
+Fail MetaRocq SafeCheck w_f.
+
+(** Twin: the argument of a recursive constructor is a structural subterm. *)
+Inductive R (A : Type) : Type := r : R A -> R A | z : R A.
+
+Fixpoint r_f (x : R nat) : nat :=
+  match x with r _ a => r_f a | z _ => 0 end.
+
+MetaRocq SafeCheck r_f.
+
+(** A cofixpoint may produce a call to its block only in a recursive argument
+    of the constructor, never in a non-recursive one. *)
+CoInductive Stream (A : Type) : Type := Cons : A -> Stream A -> Stream A.
+
+Unset Guard Checking.
+CoFixpoint s_f : Stream (Stream nat) := Cons _ s_g s_f
+with s_g : Stream nat := Cons _ 0 s_g.
+Set Guard Checking.
+
+Fail MetaRocq SafeCheck s_f.
+
+(** Twin: the call in the recursive argument. *)
+CoFixpoint ones : Stream nat := Cons _ 1 ones.
+
+MetaRocq SafeCheck ones.
+
+(** An inductive nested through a coinductive.  The argument of a
+    coinductive constructor is not a subterm, and a cofixpoint cannot put a
+    call to its block in a non-recursive argument: together these two would
+    let [t_f (C t_s)] reduce to itself. *)
+Inductive T : Type := C : Stream T -> T.
+
+Unset Guard Checking.
+CoFixpoint t_s : Stream T := Cons T (C t_s) t_s.
+Fixpoint t_f (x : T) : nat :=
+  match x with C y => match y with Cons _ t _ => t_f t end end.
+Set Guard Checking.
+
+Fail MetaRocq SafeCheck t_s.
+Fail MetaRocq SafeCheck t_f.
+Definition t_loop := t_f (C t_s).
+Fail MetaRocq SafeCheck t_loop.
