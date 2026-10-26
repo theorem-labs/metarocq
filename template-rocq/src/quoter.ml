@@ -296,29 +296,21 @@ struct
   (* The active scope is held by [current_declaration_state]. *)
 
   (* What the quoted value of one kernel subterm was computed from, besides the
-     subterm itself and the global declarations.  [quote_term_remember] uses it
-     to decide whether its cache may return that value at another occurrence of
-     the same physical subterm; the argument is in the comment there.
-     - [qd_depth] is [Environ.nb_rel] of the environment the subterm was quoted
-       in.
-     - [qd_max_rel] is the largest free de Bruijn index of the subterm, 0 if it
-       is closed.  It is a property of the term alone.
+     subterm itself.  [quote_term_remember] uses it to decide whether its cache
+     may return that value at another occurrence of the same physical subterm;
+     the argument is in the comment there.
      - The flags say that the subterm, or one of its subterms, read that part
-       of the context.  [qd_env] and [qd_scope] keep what was read: the
-       environment while [qd_retypes] or [qd_graph] holds, the local scope while
-       [qd_reads_scope] holds.  Retyping also records [qd_typing_flags], so a
-       cached record is not reused under different typing flags.  A cached
-       record without those flags keeps neither, so the cache does not retain
-       environments. *)
+       of the context.  [qd_env] and [qd_scope] keep what was read.  Retyping
+       requires the same environment object because it can inspect every
+       global table as well as the local context; graph reads require the same
+       universe graph.  A cached record without those flags keeps neither
+       environment nor scope. *)
   type quote_dependencies = {
-    qd_depth : int;
     mutable qd_env : Environ.env;
     mutable qd_scope : local_scope option;
-    mutable qd_max_rel : int;
-    (* [template_instance] retyped an argument in [qd_env]. *)
+    (* [template_instance] retyped an argument in [qd_env], whose identity is
+       part of the cache key. *)
     mutable qd_retypes : bool;
-    (* The exact flags [Retyping] used for this entry. *)
-    qd_typing_flags : Declarations.typing_flags;
     (* [read_local_scope] read the declaration-local universe scope. *)
     mutable qd_reads_scope : bool;
     (* [read_universe_graph] read the universe graph of [qd_env]. *)
@@ -331,10 +323,8 @@ struct
   }
 
   let new_quote_dependencies env =
-    { qd_depth = Environ.nb_rel env; qd_env = env;
-      qd_scope = None; qd_max_rel = 0; qd_retypes = false;
-      qd_typing_flags = Environ.typing_flags env; qd_reads_scope = false;
-      qd_graph = false; qd_unstable = false }
+    { qd_env = env; qd_scope = None; qd_retypes = false;
+      qd_reads_scope = false; qd_graph = false; qd_unstable = false }
 
   type declaration_state = {
     ds_name : string;
@@ -402,40 +392,21 @@ struct
   let quote_cache_usable sigma =
     Evd.is_empty sigma && UState.is_empty (Evd.ustate sigma)
 
-  (* Two rel contexts give every retyping the same result when they have the
-     same declarations up to binder names: [Retyping] and [Reduction] read a
-     declaration's type and body, never its name.  The walk stops at the first
-     physically shared tail. *)
-  let rec rel_contexts_agree ctx1 ctx2 =
-    ctx1 == ctx2 ||
-    match ctx1, ctx2 with
-    | Context.Rel.Declaration.LocalAssum (_, t1) :: ctx1,
-      Context.Rel.Declaration.LocalAssum (_, t2) :: ctx2 ->
-      Constr.equal t1 t2 && rel_contexts_agree ctx1 ctx2
-    | Context.Rel.Declaration.LocalDef (_, b1, t1) :: ctx1,
-      Context.Rel.Declaration.LocalDef (_, b2, t2) :: ctx2 ->
-      Constr.equal b1 b2 && Constr.equal t1 t2 && rel_contexts_agree ctx1 ctx2
-    | _ -> false
 
   (* Whether a value cached with dependencies [deps] is the value quoting the
-     same subterm would compute now, in [env]. *)
+     same subterm would compute now, in [env].  Retyping reads global constants,
+     inductives and reduction data, for which [Environ] exposes no stable
+     identity separate from [env], so a retyped value is specific to the exact
+     environment object that produced it. *)
   let quote_dependencies_hold deps env =
-    (not deps.qd_retypes
-     || (Environ.same_flags deps.qd_typing_flags (Environ.typing_flags env)
-         && Environ.named_context_val env
-            == Environ.named_context_val deps.qd_env
-         && (deps.qd_max_rel <= 0
-             || rel_contexts_agree (Environ.rel_context env)
-                  (Environ.rel_context deps.qd_env))))
+    (not deps.qd_retypes || deps.qd_env == env)
     && (not deps.qd_reads_scope
         || same_local_scope (read_local_scope ()) deps.qd_scope)
     && (not deps.qd_graph
         || read_universe_graph env == Environ.universes deps.qd_env)
 
-  (* Charge the reads of a subterm, quoted at rel depth [depth], to [parent]. *)
-  let add_quote_dependencies parent child depth =
-    let max_rel = child.qd_max_rel - (depth - parent.qd_depth) in
-    if max_rel > parent.qd_max_rel then parent.qd_max_rel <- max_rel;
+  (* Charge the reads of a subterm to [parent]. *)
+  let add_quote_dependencies parent child =
     if child.qd_retypes then parent.qd_retypes <- true;
     if child.qd_reads_scope then begin
       parent.qd_reads_scope <- true;
@@ -1038,9 +1009,6 @@ struct
 
   let quote_term_remember ?universe_context
       ?(remember_universe_levels = fun _ -> ())
-      ?(on_cache_hit = fun _ -> ())
-      ?(on_cache_candidate = fun _ _ -> ())
-      ?(on_cache_store = fun _ _ -> ())
       (add_constant : KerName.t -> 'a -> 'a)
       (add_inductive : Names.inductive -> Declarations.mutual_inductive_body -> 'a -> 'a) =
     (* Kernel terms are hash-consed DAGs; quoting them as trees duplicates every
@@ -1056,14 +1024,12 @@ struct
        kernel stores, as they expect.
 
        A cached value is returned only where quoting would compute the same
-       value. Besides the subterm and the global declarations, quoting reads
-       the following (recorded in [quote_dependencies], checked by
-       [quote_dependencies_hold]):
-       - The rel and named contexts, when [template_instance] retypes an
-         argument. The rel context matters only if the subterm has a free
-         [Rel]: the binders inside a closed subterm come from the subterm
-         itself. Such a value is reused only under the same named context and
-         a rel context with the same declarations ([rel_contexts_agree]).
+       value. Besides the subterm, quoting reads the following (recorded in
+       [quote_dependencies], checked by [quote_dependencies_hold]):
+       - The environment, when [template_instance] retypes an argument.
+         Retyping can inspect global declarations, reduction data, typing flags
+         and local contexts, so such a value is reused only with the exact
+         environment object that produced it.
        - [read_local_scope], for an algebraic universe over bound variables.
          Reused only in the same scope, whose memo already holds the levels the
          first quotation minted.
@@ -1137,13 +1103,11 @@ struct
     let rec quote_term (acc : 'a) env sigma trm =
       let parent_state = !current_declaration_state in
       let parent = parent_state.ds_dependencies in
-      let depth = Environ.nb_rel (snd env) in
       let usable = quote_cache_usable sigma in
       let hit =
         if not usable then None
         else match cache_find trm with
           | Some (quoted, deps) ->
-            on_cache_candidate trm deps;
             if quote_dependencies_hold deps (snd env) then
               Some (quoted, deps)
             else None
@@ -1151,8 +1115,7 @@ struct
       in
       match hit with
       | Some (quoted, deps) ->
-        on_cache_hit trm;
-        add_quote_dependencies parent deps depth;
+        add_quote_dependencies parent deps;
         quoted, acc
       | None ->
         let deps = new_quote_dependencies (snd env) in
@@ -1161,18 +1124,16 @@ struct
             { parent_state with ds_dependencies = deps }
             (fun () -> quote_term_uncached acc env sigma trm)
         in
-        add_quote_dependencies parent deps depth;
+        add_quote_dependencies parent deps;
         if usable && not deps.qd_unstable then begin
           release_quote_dependencies deps;
-          cache_add trm (quoted, deps);
-          on_cache_store trm deps
+          cache_add trm (quoted, deps)
         end;
         quoted, acc
     and quote_term_uncached (acc : 'a) env sigma trm =
       let aux acc env trm =
       match Constr.kind trm with
       | Constr.Rel i ->
-        (current_dependencies ()).qd_max_rel <- i;
         (Q.mkRel (Q.quote_int (i - 1)), acc)
       | Constr.Var v -> (Q.mkVar (Q.quote_ident v), acc)
       | Constr.Evar (n,args) ->
@@ -1620,7 +1581,7 @@ struct
      SafeCheck needs.  By default the program is the kernel's own syntax, which
      [tmQuoteRec], [MetaRocq Quote Recursively] and the erasure plugin return
      and which unquoting expects. *)
-  let quote_term_rec ?after_declaration_state ?(translate_template = false) ~bypass ~opaque_access ?(with_universes=true) ?(with_restriction=true) env sigma trm =
+  let quote_term_rec ?(translate_template = false) ~bypass ~opaque_access ?(with_universes=true) ?(with_restriction=true) env sigma trm =
     let visited_terms = ref Names.KNset.empty in
     let visited_types = ref Mindset.empty in
     let universes = ref Univ.Level.Set.empty in
@@ -1661,9 +1622,6 @@ struct
           ds_in_progress = Names.KNset.add kn state.ds_in_progress }
         f
     in
-    let run_after_declaration_state () =
-      Option.iter (fun f -> f ()) after_declaration_state
-    in
     let add quote_term quote_type trm acc =
       match trm with
       | Ind ((mi,idx), mib) ->
@@ -1697,7 +1655,6 @@ struct
               { state with
                 ds_name = Pp.string_of_ppcmds (MutInd.print mi);
                 ds_scope = scope };
-            run_after_declaration_state ();
             let univs = universes_of_mib mib in
             let () = universes := Univ.Level.Set.union univs !universes in
             begin match mib.Declarations.mind_template with
@@ -1743,7 +1700,6 @@ struct
               { state with
                 ds_name = Pp.string_of_ppcmds (KerName.print kn);
                 ds_scope = scope };
-            run_after_declaration_state ();
             let body = match cd.const_body with
               | Undef _ -> None
               | Primitive t ->
