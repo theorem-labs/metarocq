@@ -1203,11 +1203,11 @@ Ltac unf_env :=
 
 Derive Signature for positive_cstr.
 
-Lemma positive_cstr_it_mkProd_or_LetIn mdecl i Γ Δ t :
-  positive_cstr mdecl i Γ (it_mkProd_or_LetIn Δ t) ->
-  All_local_env (fun Δ j => positive_cstr_arg mdecl (Γ ,,, Δ) (j_typ j))
+Lemma positive_cstr_it_mkProd_or_LetIn Σ mdecl i Γ Δ t :
+  positive_cstr Σ mdecl i Γ (it_mkProd_or_LetIn Δ t) ->
+  All_local_env (fun Δ j => positive_cstr_arg Σ mdecl [] (Γ ,,, Δ) (j_typ j))
     (smash_context [] Δ) *
-  positive_cstr mdecl i (Γ ,,, smash_context [] Δ) (expand_lets Δ t).
+  positive_cstr Σ mdecl i (Γ ,,, smash_context [] Δ) (expand_lets Δ t).
 Proof.
   revert Γ t; unfold expand_lets, expand_lets_k;
    induction Δ as [|[na [b|] ty] Δ] using ctx_length_rev_ind; intros Γ t.
@@ -1293,21 +1293,96 @@ Proof.
   exact (declared_inductive_closed_params H).
 Qed.
 
-Lemma positive_cstr_arg_subst_instance {mdecl Γ} {t} u :
-  positive_cstr_arg mdecl Γ t ->
-  positive_cstr_arg mdecl (subst_instance u Γ) (subst_instance u t).
+Definition subst_instance_nested_inst u (e : nested_inst) :=
+  {| ni_level := e.(ni_level);
+     ni_npars := e.(ni_npars);
+     ni_args := map (subst_instance u) e.(ni_args) |}.
+
+Definition subst_instance_nested_insts u (NI : nested_insts) :=
+  map (subst_instance_nested_inst u) NI.
+
+Lemma nested_inst_ok_subst_instance {NI Γ x l} u :
+  nested_inst_ok NI Γ x l ->
+  nested_inst_ok (subst_instance_nested_insts u NI) (subst_instance u Γ) x
+    (map (subst_instance u) l).
 Proof.
-  induction 1.
-  - constructor 1; len.
-    now rewrite closedn_subst_instance.
+  intros [j [e [hnth lev eqx eqargs closed]]].
+  exists j, (subst_instance_nested_inst u e); split; cbn; len => //.
+  - unfold subst_instance_nested_insts. now rewrite nth_error_map hnth.
+  - rewrite firstn_map eqargs !map_map.
+    apply map_ext => t. apply subst_instance_lift.
+  - rewrite skipn_map forallb_map. eapply forallb_impl; tea.
+    intros t _ h. now rewrite closedn_subst_instance.
+Qed.
+
+Lemma positive_cstr_arg_subst_instance {Σ mdecl NI Γ t} u :
+  positive_cstr_arg Σ mdecl NI Γ t ->
+  positive_cstr_arg Σ mdecl (subst_instance_nested_insts u NI)
+    (subst_instance u Γ) (subst_instance u t).
+Proof.
+  intros p; revert NI Γ t p.
+  apply (positive_cstr_arg_mrect Σ mdecl
+    (fun NI Γ t _ =>
+      positive_cstr_arg Σ mdecl (subst_instance_nested_insts u NI)
+        (subst_instance u Γ) (subst_instance u t))
+    (fun NI Γ l _ =>
+      positive_args Σ mdecl (subst_instance_nested_insts u NI)
+        (subst_instance u Γ) (map (subst_instance u) l))
+    (fun NI Γ ps nskip cs _ =>
+      positive_nested_ctors Σ mdecl (subst_instance_nested_insts u NI)
+        (subst_instance u Γ) (map (subst_instance u) ps) nskip
+        (map (subst_instance u) cs))
+    (fun NI Γ ps nskip c _ =>
+      positive_nested_cstr Σ mdecl (subst_instance_nested_insts u NI)
+        (subst_instance u Γ) (map (subst_instance u) ps) nskip
+        (subst_instance u c))); intros.
+  - constructor 1; len. now rewrite closedn_subst_instance.
   - rewrite subst_instance_mkApps.
     econstructor 2; unfold mdecl_at_i in *; len => //; eauto.
-    eapply All_map; solve_all.
-    now rewrite closedn_subst_instance.
-  - simpl. constructor 3; len => //.
-    now rewrite subst_instance_subst in IHX.
-  - simpl. constructor 4; len => //.
-    now rewrite closedn_subst_instance.
+    eapply All_map; solve_all. now rewrite closedn_subst_instance.
+  - rewrite subst_instance_mkApps. constructor 3.
+    now eapply nested_inst_ok_subst_instance.
+  - rewrite subst_instance_mkApps. econstructor 4; tea.
+    + len.
+    + rewrite skipn_map. eapply All_map, (All_impl a); intros x hx.
+      now rewrite subst_instance_length closedn_subst_instance.
+    + now rewrite firstn_map.
+    + unfold subst_instance_nested_inst, subst_instance_nested_insts in X0 |- *.
+      cbn [map_decl] in X0 |- *; len.
+      rewrite subst_instance_cons in X0.
+      change (positive_nested_ctors Σ mdecl
+        (map (subst_instance_nested_inst u)
+          ({| ni_level := #|Γ|; ni_npars := k; ni_args := firstn k args |} :: NI))
+        (vass na ((mkApps (tInd ind u0) (firstn k args))@[u]) :: Γ@[u])
+        (map (subst_instance u) (map (lift0 1) (firstn k args)))
+        (context_assumptions (ind_params mdecl') - k)
+        (map (subst_instance u)
+          (map (fun c : constructor_body => (cstr_type c)@[u0]) (ind_ctors idecl')))) in X0.
+      rewrite subst_instance_mkApps in X0.
+      rewrite firstn_map in X0 |- *.
+      replace (map (subst_instance u) (map (lift0 1) (firstn k args))) with
+        (map (lift0 1) (map (subst_instance u) (firstn k args))) in X0.
+      2:{ rewrite !map_map. apply map_ext => t. symmetry; apply subst_instance_lift. }
+      replace
+        (map (subst_instance u)
+          (map (fun c : constructor_body => (cstr_type c)@[u0]) (ind_ctors idecl')))
+        with
+        (map (fun c : constructor_body =>
+          (cstr_type c)@[subst_instance_instance u u0]) (ind_ctors idecl')) in X0.
+      2:{ rewrite map_map. apply map_ext => c. symmetry; apply subst_instance_two. }
+      exact X0.
+  - cbn. constructor 5. now rewrite subst_instance_subst in X.
+  - cbn. constructor 6; len => //. now rewrite closedn_subst_instance.
+  - constructor.
+  - constructor; auto.
+  - constructor.
+  - constructor; auto.
+  - cbn. constructor. now rewrite subst_instance_subst in X.
+  - cbn. constructor. now rewrite subst_instance_subst in X.
+  - cbn. constructor. exact X.
+  - cbn. constructor; auto.
+  - rewrite subst_instance_mkApps. constructor.
+    now eapply nested_inst_ok_subst_instance.
 Qed.
 
 Import ssrbool.
@@ -1458,6 +1533,254 @@ Proof.
     eapply IHn. eauto.
 Qed.
 
+Lemma cmp_opt_variance_no_covariant cmp_universe v u u' :
+  Forall (fun x => x <> Variance.Covariant) v ->
+  cmp_opt_variance cmp_universe Cumul (Variance v) u u' ->
+  cmp_opt_variance cmp_universe Conv (Variance v) u u'.
+Proof.
+  intros nocov [equ|equ]; [now left|right].
+  induction equ; depelim nocov; constructor; auto.
+  unfold cmp_universe_variance in *.
+  destruct x; cbn in *; auto. contradiction.
+  now apply IHequ.
+Qed.
+
+Lemma closed_ctx_subst_ind_arities {ind mdecl Γ u} :
+  closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+  closed_ctx (subst_context (ind_subst mdecl ind u) 0 Γ@[u]).
+Proof.
+  intros cl.
+  apply (closedn_ctx_subst 0 0). cbn. len.
+  rewrite !closedn_subst_instance_context. rewrite /ind_arities in cl.
+  move: cl. rewrite closedn_subst_instance_context closedn_ctx_app. len.
+  move/andP=> [] //.
+  eapply closed_inds.
+Qed.
+
+Lemma positive_inds_conv {cf} {Σ} {wfΣ : wf Σ}
+  {ind mdecl idecl NI Γ p u u' Δ} :
+  declared_inductive Σ ind mdecl idecl ->
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  cmp_opt_variance (compare_universe Σ) Cumul
+    (match ind_variance mdecl with Some var => Variance var | None => AllEqual end) u u' ->
+  nested_variance_ok mdecl ->
+  closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+  positive_cstr_arg Σ.1 mdecl NI Γ p ->
+  NI = [] ->
+  #|Δ| = #|Γ| ->
+  closed_ctx Δ ->
+  is_open_term Δ
+    (subst (ind_subst mdecl ind u) #|Γ| p@[u']) ->
+  is_open_term Δ
+    (subst (ind_subst mdecl ind u') #|Γ| p@[u']) ->
+  Σ ;;; Δ ⊢
+    subst (ind_subst mdecl ind u) #|Γ| p@[u'] =
+    subst (ind_subst mdecl ind u') #|Γ| p@[u'].
+Proof.
+  intros decli cu ru nv cl pos eqNI lenΔ clΔ onl onr; pose proof (proj1 decli) as declm.
+  revert NI Γ p pos eqNI cl Δ lenΔ clΔ onl onr.
+  apply (positive_cstr_arg_mrect Σ.1 mdecl
+    (fun NI Γ t _ => NI = [] ->
+      closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+      forall Δ, #|Δ| = #|Γ| -> closed_ctx Δ ->
+      is_open_term Δ
+        (subst (ind_subst mdecl ind u) #|Γ| t@[u']) ->
+      is_open_term Δ
+        (subst (ind_subst mdecl ind u') #|Γ| t@[u']) ->
+      Σ ;;; Δ ⊢
+        subst (ind_subst mdecl ind u) #|Γ| t@[u'] =
+        subst (ind_subst mdecl ind u') #|Γ| t@[u'])
+    (fun NI Γ l _ => NI = [] ->
+      closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+      forall Δ, #|Δ| = #|Γ| -> closed_ctx Δ ->
+      forallb (is_open_term Δ)
+        (map (fun p => subst (ind_subst mdecl ind u) #|Γ| p@[u']) l) ->
+      forallb (is_open_term Δ)
+        (map (fun p => subst (ind_subst mdecl ind u') #|Γ| p@[u']) l) ->
+      ws_cumul_pb_terms Σ Δ
+        (map (fun p => subst (ind_subst mdecl ind u) #|Γ| p@[u']) l)
+        (map (fun p => subst (ind_subst mdecl ind u') #|Γ| p@[u']) l))
+    (fun _ _ _ _ _ _ => True)
+    (fun _ _ _ _ _ _ => True)); intros.
+  - subst NI. rewrite !subst_closedn ?closedn_subst_instance //.
+    eapply ws_cumul_pb_refl; eauto with fvs.
+    rewrite -is_closed_ctx_closed. exact H2.
+    move: H3. now rewrite subst_closedn ?closedn_subst_instance.
+  - subst NI.
+    rewrite !subst_instance_mkApps !subst_mkApps /= /ind_subst.
+    destruct m as [le [lt nth]].
+    destruct (Nat.leb #|Γ| k) eqn:eqle; [|apply Nat.leb_nle in eqle; lia].
+    rewrite !inds_spec !rev_mapi !nth_error_mapi nth /=.
+    pose (clsub := H2).
+    eapply (ws_cumul_pb_Ind Σ wfΣ). constructor.
+    + unfold cumul_Ind_univ, cmp_global_instance, cmp_global_instance_gen. simpl.
+      unshelve epose proof (declm' := declared_minductive_to_gen declm); eauto.
+      assert (declared_inductive Σ
+        {| inductive_mind := inductive_mind ind;
+           inductive_ind := Nat.pred #|ind_bodies mdecl| - (k - #|Γ|) |} mdecl i).
+      { split; auto. simpl. rewrite -nth nth_error_rev; lia_f_equal. }
+      unshelve epose proof (decli' := declared_inductive_to_gen H); eauto.
+      rewrite (declared_inductive_lookup_gen decli') //.
+      destruct (on_declared_inductive H) as [onmind onind] => //. simpl in *.
+      len. rewrite e /ind_realargs !onind.(ind_arity_eq).
+      rewrite !destArity_it_mkProd_or_LetIn /=. len; simpl.
+      rewrite Nat.leb_refl.
+      destruct (ind_variance mdecl) eqn:var => /=.
+      * change (cmp_opt_variance (compare_universe Σ) Conv (Variance l0) u u').
+        eapply (cmp_opt_variance_no_covariant (compare_universe Σ)); tea.
+        move: nv. rewrite /nested_variance_ok var //.
+      * exact ru.
+    + rewrite -is_closed_ctx_closed. exact clsub.
+    + do 2 eapply All2_map. eapply All_All2_refl. solve_all.
+      rewrite !subst_closedn ?closedn_subst_instance //.
+      eapply ws_cumul_pb_refl; eauto with fvs.
+      rewrite -is_closed_ctx_closed. exact clsub.
+      rewrite -is_open_term_closed H1.
+      now rewrite closedn_subst_instance.
+  - subst NI. destruct n as [j [e [hnth _ _ _ _]]].
+    rewrite nth_error_nil in hnth; discriminate.
+  - subst NI.
+    rewrite !subst_instance_mkApps !subst_mkApps in H4 H5 |- *.
+    rewrite !on_free_vars_mkApps /= in H4 H5.
+    rewrite !map_map in H4 H5.
+    eapply (ws_cumul_pb_Ind Σ wfΣ). constructor.
+    + eapply cmp_global_instance_refl; typeclasses eauto.
+    + rewrite -is_closed_ctx_closed. exact H3.
+    + rewrite -{1 2}(firstn_skipn k args) !map_app.
+      eapply All2_app.
+      * rewrite !map_map. eapply X; eauto.
+        all: rewrite -firstn_map; eapply All_forallb, All_firstn, forallb_All; assumption.
+      * do 2 eapply All2_map. eapply All_All2_refl. solve_all.
+        rewrite !subst_closedn ?closedn_subst_instance //.
+        eapply ws_cumul_pb_refl; eauto with fvs.
+        rewrite -is_closed_ctx_closed. exact H3.
+        rewrite -is_open_term_closed H2.
+        now rewrite closedn_subst_instance.
+  - subst NI. cbn.
+    eapply ws_cumul_pb_LetIn_subst; eauto with fvs.
+    + rewrite !subst_instance_subst !distr_subst /= /subst1 in X.
+      eapply X; eauto.
+      * eapply closed_red_open_right.
+        eapply (into_closed_red
+          (t := subst (ind_subst mdecl ind u) #|Γ| (tLetIn na b ty ty')@[u'])).
+        { eapply red1_red; econstructor; eauto with fvs. }
+        { rewrite -is_closed_ctx_closed. exact H2. }
+        { exact H3. }
+      * eapply closed_red_open_right.
+        eapply (into_closed_red
+          (t := subst (ind_subst mdecl ind u') #|Γ| (tLetIn na b ty ty')@[u'])).
+        { eapply red1_red; econstructor; eauto with fvs. }
+        { rewrite -is_closed_ctx_closed. exact H2. }
+        { exact H4. }
+  - subst NI. cbn.
+    eapply ws_cumul_pb_Prod.
+    + reflexivity.
+    + rewrite !subst_closedn ?closedn_subst_instance //.
+      eapply ws_cumul_pb_refl; eauto with fvs.
+      rewrite -is_closed_ctx_closed. exact H2.
+      rewrite -is_open_term_closed H1.
+      now rewrite closedn_subst_instance.
+    + cbn -[closedn_ctx] in X.
+      eapply X; eauto.
+      * cbn. apply andb_and; split.
+        { exact H0. }
+        { rewrite closedn_subst_instance. eapply closed_upwards; eauto. len; lia. }
+      * cbn. lia.
+      * cbn. rewrite H2 /=.
+        move: H3. cbn. move/andP=> [h _].
+        move: h. rewrite -is_open_term_closed. len.
+      * move: H3. cbn. move/andP=> [_ h]. by rewrite /= shiftnP_S.
+      * move: H4. cbn. move/andP=> [_ h]. by rewrite /= shiftnP_S.
+  - constructor.
+  - cbn in H3, H4 |- *.
+    move/andP: H3 => [h3 h3']. move/andP: H4 => [h4 h4'].
+    constructor; eauto.
+  - exact I.
+  - exact I.
+  - exact I.
+  - exact I.
+  - exact I.
+  - exact I.
+  - exact I.
+Qed.
+
+Lemma positive_args_All {Σ mdecl NI Γ l} :
+  positive_args Σ mdecl NI Γ l -> All (positive_cstr_arg Σ mdecl NI Γ) l.
+Proof. induction 1; constructor; auto. Qed.
+
+Lemma is_open_term_subst_inds {ind mdecl} {Γ Δ : context} {t v w} :
+  #|Δ| = #|Γ| ->
+  is_open_term ((ind_arities mdecl)@[v] ,,, Γ@[v]) t ->
+  is_open_term Δ (subst (ind_subst mdecl ind w) #|Γ| t).
+Proof.
+  intros hl op.
+  rewrite -is_open_term_closed in op. rewrite -is_open_term_closed hl.
+  eapply (closedn_subst _ 0 #|Γ|). eapply closed_inds.
+  rewrite /ind_subst inds_length. move: op. rewrite /ind_arities. len.
+Qed.
+
+(** The nested case of [positive_cstr_arg_subst]: the arguments of the nested inductive
+    are related by conversion, the block-free tail is untouched by both substitutions,
+    and the positive prefix is moved from [inds u] to [inds u'] by [positive_inds_conv]. *)
+Lemma positive_cstr_arg_subst_nested {cf} {Σ} {wfΣ : wf Σ}
+  {ind mdecl idecl NI Γ ind' ui args k u u'} :
+  declared_inductive Σ ind mdecl idecl ->
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  cmp_opt_variance (compare_universe Σ) Cumul (match ind_variance mdecl with Some var => Variance var | None => AllEqual end) u u' ->
+  nested_variance_ok mdecl ->
+  closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+  NI = [] ->
+  All (closedn #|Γ|) (skipn k args) ->
+  positive_args Σ.1 mdecl NI Γ (firstn k args) ->
+  Σ ;;; subst_instance u (ind_arities mdecl) ,,, subst_instance u Γ ⊢
+    subst_instance u (mkApps (tInd ind' ui) args) ≤ subst_instance u' (mkApps (tInd ind' ui) args) ->
+  Σ ;;; subst_context (ind_subst mdecl ind u) 0 (subst_instance u Γ) ⊢
+    subst (ind_subst mdecl ind u) #|Γ| (subst_instance u (mkApps (tInd ind' ui) args)) ≤
+    subst (ind_subst mdecl ind u') #|Γ| (subst_instance u' (mkApps (tInd ind' ui) args)).
+Proof.
+  intros decli cu ru nv cl eqNI hcl hpa cum.
+  pose proof (proj1 decli) as declm.
+  subst NI. eapply positive_args_All in hpa.
+  have clΔ : closed_ctx (subst_context (ind_subst mdecl ind u) 0 (subst_instance u Γ)).
+  { now eapply closed_ctx_subst_ind_arities. }
+  pose proof (ws_cumul_pb_is_closed_context cum) as clctx.
+  rewrite !subst_instance_mkApps !subst_mkApps /= in cum |- *.
+  pose proof (ws_cumul_pb_is_open_term_right cum) as opr.
+  rewrite on_free_vars_mkApps /= in opr.
+  eapply invert_cumul_ind_ind in cum as [[_ hu] hargs].
+  eapply (ws_cumul_pb_Ind Σ wfΣ). constructor.
+  - rewrite !length_map in hu |- *. exact hu.
+  - rewrite -is_closed_ctx_closed. exact clΔ.
+  - rewrite -(app_context_nil_l (_ ,,, _)) app_context_assoc in hargs.
+    eapply ws_cumul_pb_terms_subst in hargs.
+    3:{ eapply subslet_untyped_subslet, (subslet_inds (u:=u)); eauto. }
+    3:{ eapply subslet_untyped_subslet, (subslet_inds (u:=u)); eauto. }
+    2:{ rewrite app_context_nil_l; eauto with fvs.
+        move: clctx. rewrite on_free_vars_ctx_app => /andP[] //. }
+    2:{ pose proof (inds_is_open_terms [] ind mdecl u).
+        solve_all. eapply All_All2; tea.
+        cbn; intros. eapply ws_cumul_pb_refl; eauto. }
+    rewrite app_context_nil_l in hargs. len in hargs.
+    etransitivity; [exact hargs|].
+    rewrite -{1 2}(firstn_skipn k args) !map_app.
+    eapply All2_app.
+    + have opr' : All (fun p => is_open_term (subst_instance u (ind_arities mdecl) ,,, subst_instance u Γ)
+        (subst_instance u' p)) (firstn k args).
+      { move: opr. rewrite -{1}(firstn_skipn k args) map_app forallb_app => /andP[h _].
+        eapply forallb_All in h. now eapply All_map_inv in h. }
+      rewrite !map_map. eapply All2_map, All_All2_refl.
+      eapply (All_mix hpa) in opr'. eapply All_impl; tea. cbn. intros p [pp op].
+      eapply positive_inds_conv; tea.
+      * reflexivity.
+      * now len.
+      * eapply is_open_term_subst_inds; [now len|exact op].
+      * eapply is_open_term_subst_inds; [now len|exact op].
+    + rewrite !map_map. eapply All2_map, All_All2_refl. solve_all.
+      rewrite !subst_closedn ?closedn_subst_instance //.
+      eapply ws_cumul_pb_refl.
+      * rewrite -is_closed_ctx_closed. exact clΔ.
+      * rewrite -is_open_term_closed. len. now rewrite closedn_subst_instance.
+Qed.
 
 Lemma positive_cstr_arg_subst {cf} {Σ} {wfΣ : wf Σ} {ind mdecl idecl Γ t u u'} :
   declared_inductive Σ ind mdecl idecl ->
@@ -1465,13 +1788,14 @@ Lemma positive_cstr_arg_subst {cf} {Σ} {wfΣ : wf Σ} {ind mdecl idecl Γ t u u
   cmp_opt_variance (compare_universe Σ) Cumul (match ind_variance mdecl with Some var => Variance var | None => AllEqual end) u u' ->
   closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
   Σ ;;; subst_instance u (ind_arities mdecl) ,,, subst_instance u Γ ⊢ (subst_instance u t) ≤ (subst_instance u' t) ->
-  positive_cstr_arg mdecl Γ t ->
+  positive_cstr_arg Σ.1 mdecl [] Γ t ->
   (Σ ;;; subst_context (ind_subst mdecl ind u) 0 (subst_instance u Γ) ⊢
     (subst (ind_subst mdecl ind u) #|Γ| (subst_instance u t)) ≤
      subst (ind_subst mdecl ind u') #|Γ| (subst_instance u' t)).
 Proof.
   intros decli cu ru cl cum pos.
   pose proof (proj1 decli) as declm.
+  remember ([] : nested_insts) as NI eqn:eqNI in pos.
   induction pos.
   - rewrite -(app_context_nil_l (_ ,,, _)) app_context_assoc in cum.
     eapply substitution_ws_cumul_pb in cum; eauto.
@@ -1540,6 +1864,12 @@ Proof.
       solve_all.
       now rewrite !subst_closedn ?closedn_subst_instance // in b |- *.
 
+  - subst NI.
+    match goal with h : nested_inst_ok [] _ _ _ |- _ =>
+      destruct h as [j [e [hnth _ _ _ _]]]; rewrite nth_error_nil in hnth; discriminate end.
+
+  - eapply positive_cstr_arg_subst_nested; eauto.
+
   - simpl. simpl in cum.
     eapply ws_cumul_pb_LetIn_subst. eauto.
     { rewrite -(app_context_nil_l (_ ,,, _)) app_context_assoc in cum.
@@ -1587,7 +1917,7 @@ Lemma positive_cstr_closed_args_subst_arities {cf} {Σ} {wfΣ : wf Σ} {u u' Γ}
   cmp_opt_variance (compare_universe Σ) Cumul (match ind_variance mdecl with Some var => Variance var | None => AllEqual end) u u' ->
   closed_ctx (subst_instance u (ind_params mdecl)) ->
   wf_local Σ (subst_instance u (ind_arities mdecl ,,, smash_context [] (ind_params mdecl) ,,, Γ)) ->
-  All_local_env (fun Γ j => positive_cstr_arg mdecl ([] ,,, (smash_context [] (ind_params mdecl) ,,, Γ)) (j_typ j)) Γ ->
+  All_local_env (fun Γ j => positive_cstr_arg Σ.1 mdecl [] ([] ,,, (smash_context [] (ind_params mdecl) ,,, Γ)) (j_typ j)) Γ ->
   assumption_context Γ ->
   ws_cumul_ctx_pb_rel Cumul Σ (subst_instance u (ind_arities mdecl) ,,,
       subst_instance u

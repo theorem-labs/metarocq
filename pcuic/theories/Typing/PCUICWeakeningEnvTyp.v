@@ -160,6 +160,8 @@ Proof.
     destruct l => //.
     intros [univs' [i [i' []]]]. exists univs', i, i'. split => //.
     all:eapply weakening_env_consistent_instance; tea; eauto.
+  - intros ????. eapply weakening_env_positive_cstr; tea.
+    now apply HRext.
 Qed.
 
 Definition weakening_on_global_decl `{checker_flags} P Σ Σ' φ kn decl :

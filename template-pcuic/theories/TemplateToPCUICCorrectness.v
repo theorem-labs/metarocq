@@ -2609,24 +2609,122 @@ Proof.
   induction 1; constructor; auto.
 Qed.
 
-Lemma trans_closedn {cf} {Σ k t} :
+Lemma wf_mkApps_head {Σ t args} :
+  WfAst.wf Σ (Ast.mkApps t args) -> ~~ Ast.isApp t -> WfAst.wf Σ t.
+Proof. intros w h. exact (WfAst.wf_mkApps_napp _ _ _ h w).1. Qed.
+
+Lemma forallb_trans_closed {P : Ast.term -> Prop} {Pw : Ast.term -> Type} {f : Ast.term -> term} {l k} :
+  Forall P l ->
+  (forall x, P x -> Pw x -> Ast.closedn k x -> closedn k (f x)) ->
+  All Pw l ->
+  forallb (Ast.closedn k) l -> forallb (closedn k) (map f l).
+Proof.
+  intros hP hf. induction hP as [|x l hx hl IH]; cbn; auto.
+  intros w; inversion_clear w as [|? ? wx wl].
+  move/andP => [c1 c2]. apply/andP; split; [exact (hf x hx wx c1)|exact (IH wl c2)].
+Qed.
+
+Lemma forallb_test_def_trans_closed {P : Ast.term -> Prop} {Pt Pb : Ast.term -> Type}
+  {f : Ast.term -> term} {mfix k k'} :
+  tFixProp P P mfix ->
+  (forall x, P x -> Pt x -> Ast.closedn k x -> closedn k (f x)) ->
+  (forall x, P x -> Pb x -> Ast.closedn k' x -> closedn k' (f x)) ->
+  All (fun d => Pt (dtype d) × Pb (dbody d)) mfix ->
+  forallb (test_def (Ast.closedn k) (Ast.closedn k')) mfix ->
+  forallb (test_def (closedn k) (closedn k')) (map (map_def f f) mfix).
+Proof.
+  intros hP ht hb. induction hP as [|d l [hd hd'] hl IH]; cbn; auto.
+  intros w; inversion_clear w as [|? ? wd wl]. destruct wd as [wt wb].
+  unfold test_def; cbn.
+  move/andP => [/andP [c1 c2] c3].
+  apply/andP; split; [apply/andP; split|]; [exact (ht _ hd wt c1)|exact (hb _ hd' wb c2)|exact (IH wl c3)].
+Qed.
+
+(** [trans] preserves closedness of a term of which only a substitution instance,
+    applied to arguments, is known to be well formed.  Substitution leaves the case
+    annotations unchanged, and [trans] flattens applications as [Ast.mkApps] does. *)
+Lemma trans_closedn_subst {cf} {Σ} s :
   Typing.wf Σ ->
   wf (trans_global_env Σ) ->
-  WfAst.wf Σ t ->
+  forall t n k args,
+  WfAst.wf Σ (Ast.mkApps (Ast.subst s n t) args) ->
   Ast.closedn k t ->
   closedn k (trans (trans_global_env Σ) t).
 Proof.
-  intros wfΣ wfΣ' wf. induction wf using WfAst.term_wf_forall_list_ind in k |- *; cbn; auto.
-  1-6:solve_all.
-  - rewrite PCUICClosed.closedn_mkApps. solve_all.
-  - eapply forall_decls_declared_inductive in H; tea.
+  intros wfΣ wfΣ'.
+  apply (Template.Induction.term_forall_list_ind (fun t => forall n k args,
+    WfAst.wf Σ (Ast.mkApps (Ast.subst s n t) args) ->
+    Ast.closedn k t -> closedn k (trans (trans_global_env Σ) t))).
+  - intros i m k args wft cl. exact cl.
+  - intros; reflexivity.
+  - intros ev l IH m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl |- *.
+    exact (forallb_trans_closed IH (fun x hx wx => hx m k [] wx) (All_map_inv _ _ _ w) cl).
+  - intros; reflexivity.
+  - intros c IHc kind t IHt m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl |- *.
+    destruct w as [wc wt]. move/andP: cl => [c1 c2].
+    rewrite (IHt m k [] wt c2) (IHc m k [] wc c1). reflexivity.
+  - intros na A IHA B IHB m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl |- *.
+    destruct w as [wA wB]. move/andP: cl => [c1 c2].
+    apply/andP; split; [exact (IHA m k [] wA c1)|exact (IHB (S m) (S k) [] wB c2)].
+  - intros na A IHA B IHB m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl |- *.
+    destruct w as [wA wB]. move/andP: cl => [c1 c2].
+    apply/andP; split; [exact (IHA m k [] wA c1)|exact (IHB (S m) (S k) [] wB c2)].
+  - intros na b IHb t IHt b' IHb' m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl |- *.
+    destruct w as [[wb wt] wb']. move/andP: cl => [/andP [c1 c2] c3].
+    apply/andP; split; [apply/andP; split|];
+      [exact (IHb m k [] wb c1)|exact (IHt m k [] wt c2)|exact (IHb' (S m) (S k) [] wb' c3)].
+  - intros f IHf l IHl m k args wft cl.
+    change (Ast.subst s m (Ast.tApp f l)) with
+      (Ast.mkApps (Ast.subst s m f) (map (Ast.subst s m) l)) in wft.
+    rewrite -AstUtils.mkApps_app in wft.
+    cbn in cl |- *. move/andP: cl => [c1 c2].
+    rewrite PCUICClosed.closedn_mkApps. apply/andP; split.
+    + exact (IHf m k _ wft c1).
+    + have w := WfAst.wf_mkApps_inv _ _ _ wft. apply All_app in w as [w _].
+      exact (forallb_trans_closed IHl (fun x hx wx => hx m k [] wx) (All_map_inv _ _ _ w) c2).
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros ci p IHp c IHc0 brs IHbrs m k args wft.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w.
+    destruct w as [mdecl [idecl [H H0 X H1 wpars wret wc wbrs]]].
+    rewrite ?length_map in H1.
+    have X0 :
+      (All (fun t => forall k, Ast.closedn k t -> closedn k (trans (trans_global_env Σ) t))
+        (Ast.pparams p) ×
+       (forall k, Ast.closedn k (Ast.preturn p) ->
+          closedn k (trans (trans_global_env Σ) (Ast.preturn p))))%type.
+    { destruct IHp as [IHpars IHret]. split.
+      - apply All_map_inv in wpars.
+        eapply All_impl; [exact (All_mix IHpars wpars)|]. cbv beta.
+        intros x [hx wx] k'. exact (hx m k' [] wx).
+      - intros k'. exact (IHret _ k' [] wret). }
+    have IHc : forall k, Ast.closedn k c -> closedn k (trans (trans_global_env Σ) c).
+    { intros k'. exact (IHc0 m k' [] wc). }
+    have X1 :
+      All2 (fun cdecl br =>
+        (WfAst.wf_nactx (Ast.bcontext br) (Ast.cstr_branch_context ci.(ci_ind) mdecl cdecl) ×
+         (forall k, Ast.closedn k (Ast.bbody br) ->
+            closedn k (trans (trans_global_env Σ) (Ast.bbody br))))%type)
+        (Ast.Env.ind_ctors idecl) brs.
+    { eapply All2_impl; [exact (All2_All_mix_right IHbrs (All2_map_right_inv wbrs))|]. cbv beta.
+      intros cdecl br [[hn wb] hb]. split; [exact hn|].
+      intros k'. exact (hb _ k' [] wb). }
+    clear IHp IHc0 IHbrs wft wpars wret wc wbrs.
+    cbn.
+    eapply forall_decls_declared_inductive in H; tea.
     rewrite trans_lookup_inductive.
     rewrite (declared_inductive_lookup _ H).
     destruct X0.
     cbn.
     unfold test_predicate_k. cbn.
     unfold Ast.test_predicate. cbn.
-    pose proof (All2_length X). len in H2.
+    pose proof (All2_length X) as H2. len in H2.
     intros; rtoProp. intuition auto.
     * solve_all.
     * len. rewrite map2_map2_bias_left.
@@ -2646,7 +2744,7 @@ Proof.
       eapply All2_All_map2, All2_map.
       eapply All2_nth_hyp in X1.
       solve_all.
-      destruct X0 as [c [hnth [[eqb IHb] hbr]]].
+      destruct X0 as [c' [hnth [[eqb IHb] hbr]]].
       assert (hlen := All2_length eqb). len in hlen.
       unfold test_branch_k. unfold Ast.test_branch in hbr.
       unfold trans_branch. cbn -[cstr_branch_context].
@@ -2655,13 +2753,256 @@ Proof.
       { eapply PCUICInstConv.closed_ctx_args; len.
         rewrite H1.
         relativize (Ast.Env.context_assumptions _).
-        eapply (PCUICClosedTyp.closed_cstr_branch_context (Σ := trans_global (Ast.Env.empty_ext Σ)) (i:=c)); cbn; tea.
+        eapply (PCUICClosedTyp.closed_cstr_branch_context (Σ := trans_global (Ast.Env.empty_ext Σ)) (i:=c')); cbn; tea.
         split; cbn; tea. now rewrite nth_error_map hnth.
         cbn. now rewrite context_assumptions_map. }
       rewrite map2_length; len. eauto.
-  - unfold test_def; red in X. solve_all.
-  - unfold test_def; solve_all.
-  - solve_all.
+  - intros pr c IHc m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl |- *.
+    exact (IHc m k [] w cl).
+  - intros mfix idx IH m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl |- *.
+    apply All_map_inv in w. rewrite length_map.
+    exact (forallb_test_def_trans_closed IH (fun x hx wx => hx m k [] wx)
+      (fun x hx wx => hx (#|mfix| + m) (#|mfix| + k) [] wx) w cl).
+  - intros mfix idx IH m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl |- *.
+    apply All_map_inv in w. rewrite length_map.
+    exact (forallb_test_def_trans_closed IH (fun x hx wx => hx m k [] wx)
+      (fun x hx wx => hx (#|mfix| + m) (#|mfix| + k) [] wx) w cl).
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros u arr def ty IHarr IHdef IHty m k args wft cl.
+    have w := WfAst.wf_inv (wf_mkApps_head wft isT). cbn in w, cl.
+    destruct w as [[warr wdef] wty]. move/andP: cl => [/andP [c1 c2] c3].
+    have h1 := forallb_trans_closed IHarr (fun x hx wx => hx m k [] wx) (All_map_inv _ _ _ warr) c1.
+    exact (introT andP (conj (introT andP (conj h1 (IHdef m k [] wdef c2))) (IHty m k [] wty c3))).
+Qed.
+
+Lemma trans_closedn {cf} {Σ k t} :
+  Typing.wf Σ ->
+  wf (trans_global_env Σ) ->
+  WfAst.wf Σ t ->
+  Ast.closedn k t ->
+  closedn k (trans (trans_global_env Σ) t).
+Proof.
+  intros wfΣ wfΣ' wf.
+  apply (trans_closedn_subst [] wfΣ wfΣ' t 0 k []).
+  change (WfAst.wf Σ (Ast.subst [] 0 t)).
+  now rewrite (MetaRocq.Template.LiftSubst.subst_empty Σ).
+Qed.
+
+Definition trans_nested_inst (Σ : global_env_map) (e : ST.nested_inst) : nested_inst :=
+  {| ni_level := ST.ni_level e;
+     ni_npars := ST.ni_npars e;
+     ni_args := map (trans Σ) (ST.ni_args e) |}.
+
+Lemma trans_nested_inst_ok {cf} {Σ NI Γ x l} :
+  Typing.wf Σ ->
+  wf (trans_global_env Σ) ->
+  All (WfAst.wf Σ) l ->
+  ST.nested_inst_ok NI Γ x l ->
+  nested_inst_ok
+    (map (trans_nested_inst (trans_global_env Σ)) NI)
+    (trans_local (trans_global_env Σ) Γ) x
+    (map (trans (trans_global_env Σ)) l).
+Proof.
+  intros wfΣ wfΣ' wfl [j [e [hnth lt lev args closed]]].
+  exists j, (trans_nested_inst (trans_global_env Σ) e).
+  split.
+  - now rewrite nth_error_map hnth.
+  - now rewrite trans_local_length.
+  - now rewrite trans_local_length lev.
+  - rewrite firstn_map args !map_map.
+    apply map_ext => a.
+    rewrite trans_lift. f_equal. now rewrite trans_local_length.
+  - rewrite skipn_map trans_local_length forallb_map.
+    apply All_forallb.
+    eapply All_impl; [exact (All_mix (forallb_All _ _ closed) (All_skipn (n := ST.ni_npars e) wfl))|].
+    cbv beta. intros a [cla wfa]. now eapply trans_closedn.
+Qed.
+
+Lemma trans_nested_uniform {cf} {Σ mdecl idecl k} :
+  Typing.wf Σ ->
+  wf (trans_global_env Σ) ->
+  All (fun c => WfAst.wf Σ (Ast.Env.cstr_type c)) (Ast.Env.ind_ctors idecl) ->
+  ST.nested_uniform mdecl idecl k ->
+  nested_uniform
+    (trans_minductive_body (trans_global_env Σ) mdecl)
+    (trans_one_ind_body (trans_global_env Σ) idecl) k.
+Proof.
+  intros wfΣ wfΣ' wfctors [bodies npars ctors].
+  split.
+  - cbn. now rewrite bodies.
+  - cbn. now rewrite context_assumptions_map.
+  - eapply All_map.
+    eapply All_impl; [exact (All_mix ctors wfctors)|]. cbv beta.
+    intros cdecl [uni wfc].
+    destruct uni as [rest [rest1 [ctype rest_eq closed]]].
+    have hlen :
+      #|ind_params (trans_minductive_body (trans_global_env Σ) mdecl)| =
+      #|Ast.Env.ind_params mdecl| := trans_local_length _.
+    have wfrest : WfAst.wf Σ rest.
+    { rewrite ctype in wfc.
+      now eapply wf_it_mkProd_or_LetIn in wfc as [_ wfrest]. }
+    have closed_trans_rest1 :
+      closedn (S #|Ast.Env.ind_params mdecl|) (trans (trans_global_env Σ) rest1).
+    { rewrite rest_eq in wfrest.
+      exact (trans_closedn_subst _ wfΣ wfΣ' rest1 0 _ [] wfrest closed). }
+    exists (trans (trans_global_env Σ) rest), (trans (trans_global_env Σ) rest1).
+    split.
+    + cbn. now rewrite ctype trans_it_mkProd_or_LetIn.
+    + rewrite rest_eq trans_subst hlen. cbn [map]. f_equal. f_equal.
+      rewrite trans_mkApps -firstn_map. do 2 f_equal.
+      exact (trans_to_extended_list Σ (Ast.Env.ind_params mdecl) 0).
+    + now rewrite hlen.
+Qed.
+
+Lemma trans_positive_cstr_arg {cf} {Σ mdecl NI Γ t} :
+  Typing.wf Σ ->
+  wf (trans_global_env Σ) ->
+  All (wf_inductive_body Σ) (Ast.Env.ind_bodies mdecl) ->
+  ST.positive_cstr_arg Σ mdecl NI Γ t ->
+  WfAst.wf Σ t ->
+  positive_cstr_arg (trans_global_env Σ)
+    (trans_minductive_body (trans_global_env Σ) mdecl)
+    (map (trans_nested_inst (trans_global_env Σ)) NI)
+    (trans_local (trans_global_env Σ) Γ)
+    (trans (trans_global_env Σ) t).
+Proof.
+  intros wfΣ wfΣ' wfbodies p.
+  revert NI Γ t p.
+  apply (ST.positive_cstr_arg_mrect Σ mdecl
+    (fun NI Γ t _ => WfAst.wf Σ t ->
+      positive_cstr_arg (trans_global_env Σ)
+        (trans_minductive_body (trans_global_env Σ) mdecl)
+        (map (trans_nested_inst (trans_global_env Σ)) NI)
+        (trans_local (trans_global_env Σ) Γ)
+        (trans (trans_global_env Σ) t))
+    (fun NI Γ l _ => All (WfAst.wf Σ) l ->
+      positive_args (trans_global_env Σ)
+        (trans_minductive_body (trans_global_env Σ) mdecl)
+        (map (trans_nested_inst (trans_global_env Σ)) NI)
+        (trans_local (trans_global_env Σ) Γ)
+        (map (trans (trans_global_env Σ)) l))
+    (fun NI Γ ps nskip cs _ =>
+      All (WfAst.wf Σ) ps -> All (WfAst.wf Σ) cs ->
+      positive_nested_ctors (trans_global_env Σ)
+        (trans_minductive_body (trans_global_env Σ) mdecl)
+        (map (trans_nested_inst (trans_global_env Σ)) NI)
+        (trans_local (trans_global_env Σ) Γ)
+        (map (trans (trans_global_env Σ)) ps) nskip
+        (map (trans (trans_global_env Σ)) cs))
+    (fun NI Γ ps nskip c _ =>
+      All (WfAst.wf Σ) ps -> WfAst.wf Σ c ->
+      positive_nested_cstr (trans_global_env Σ)
+        (trans_minductive_body (trans_global_env Σ) mdecl)
+        (map (trans_nested_inst (trans_global_env Σ)) NI)
+        (trans_local (trans_global_env Σ) Γ)
+        (map (trans (trans_global_env Σ)) ps) nskip
+        (trans (trans_global_env Σ) c))).
+  - intros NI0 Γ0 ty closed wfty.
+    constructor. rewrite trans_local_length.
+    now eapply trans_closedn.
+  - intros NI0 Γ0 l k i real closed ati wfty.
+    rewrite trans_mkApps.
+    move/WfAst.wf_mkApps_inv: wfty => wfl.
+    destruct ati as [le [lt nth]].
+    eapply pos_arg_concl with (i := trans_one_ind_body (trans_global_env Σ) i).
+    + rewrite length_map.
+      rewrite real /trans_one_ind_body /= /ind_realargs /= /ST.ind_realargs.
+      have wfi := nth_error_all nth (All_rev _ _ _ wfbodies).
+      generalize (trans_destArity Σ [] _ (wf_ind_type _ _ wfi) wfΣ').
+      destruct Ast.destArity as [[args s]|] => /= -> //.
+      len. now rewrite context_assumptions_map.
+    + rewrite trans_local_length.
+      eapply All_map.
+      eapply All_impl; [exact (All_mix closed wfl)|].
+      cbv beta. intros a [cla wfa]. now eapply trans_closedn.
+    + repeat split; rewrite ?trans_local_length ?length_map //.
+      rewrite -map_rev nth_error_map nth //.
+  - intros NI0 Γ0 x l inst wfty.
+    rewrite trans_mkApps.
+    move/WfAst.wf_mkApps_inv: wfty => wfl.
+    econstructor 3. now eapply trans_nested_inst_ok.
+  - intros NI0 Γ0 ind u args mdecl' idecl' k na decl uniform variance lenargs
+      closed pargs IHargs nctors IHctors wfty.
+    rewrite trans_mkApps.
+    move/WfAst.wf_mkApps_inv: wfty => wfargs.
+    have wfind : wf_inductive_body Σ idecl'.
+    { destruct (TypingWf.declared_minductive_wf (wfΣ := wfΣ) (proj1 decl))
+        as [_ wfinds].
+      exact (nth_error_all (proj2 decl) wfinds). }
+    econstructor 4.
+    + now eapply forall_decls_declared_inductive.
+    + eapply trans_nested_uniform; tea. exact (wf_ind_ctors _ _ wfind).
+    + exact variance.
+    + now rewrite length_map.
+    + rewrite skipn_map trans_local_length.
+      eapply All_map.
+      eapply All_impl; [exact (All_mix closed (All_skipn (n := k) wfargs))|].
+      cbv beta. intros a [cla wfa]. now eapply trans_closedn.
+    + rewrite firstn_map. apply IHargs. now apply All_firstn.
+    + have e6 :
+        mkApps (tInd ind u) (map (trans (trans_global_env Σ)) (firstn k args)) =
+        trans (trans_global_env Σ) (Ast.mkApps (Ast.tInd ind u) (firstn k args)).
+      { now rewrite trans_mkApps. }
+      have e3 :
+        map (lift0 1) (map (trans (trans_global_env Σ)) (firstn k args)) =
+        map (trans (trans_global_env Σ)) (map (Ast.lift0 1) (firstn k args)).
+      { rewrite !map_map. apply map_ext => a. now rewrite trans_lift. }
+      have e4 :
+        map (fun c => subst_instance u (cstr_type c))
+          (ind_ctors (trans_one_ind_body (trans_global_env Σ) idecl')) =
+        map (trans (trans_global_env Σ))
+          (map (fun c => subst_instance u (Ast.Env.cstr_type c)) (Ast.Env.ind_ctors idecl')).
+      { rewrite /= !map_map. apply map_ext => c. now rewrite trans_subst_instance. }
+      have e5 :
+        context_assumptions (ind_params (trans_minductive_body (trans_global_env Σ) mdecl')) =
+        Ast.Env.context_assumptions (Ast.Env.ind_params mdecl').
+      { cbn. now rewrite context_assumptions_map. }
+      rewrite firstn_map trans_local_length e6 e3 e4 e5.
+      apply IHctors.
+      * eapply All_map. eapply All_impl; [exact (All_firstn (n := k) wfargs)|].
+        cbv beta. intros a wfa. now eapply WfAst.wf_lift.
+      * eapply All_map. eapply All_impl; [exact (wf_ind_ctors _ _ wfind)|].
+        cbv beta. intros c wfc. now eapply WfAst.wf_subst_instance.
+  - intros NI0 Γ0 na b ty ty' pos IHpos wfty.
+    move/WfAst.wf_inv: wfty => /= [[wfb wfty] wft].
+    constructor 5. rewrite trans_subst in IHpos.
+    apply IHpos. eapply WfAst.wf_subst; auto.
+  - intros NI0 Γ0 na ty ty' closed pos IHpos wfty.
+    move/WfAst.wf_inv: wfty => /= [wfty wft].
+    constructor 6.
+    + rewrite trans_local_length. now eapply trans_closedn.
+    + cbn. now apply IHpos.
+  - intros NI0 Γ0 _. constructor.
+  - intros NI0 Γ0 t0 l pos IHpos poss IHposs wfl.
+    depelim wfl. constructor; auto.
+  - intros NI0 Γ0 ps nskip _ _. constructor.
+  - intros NI0 Γ0 ps nskip t0 l pos IHpos poss IHposs wfps wfcs.
+    depelim wfcs. constructor; eauto.
+  - intros NI0 Γ0 p0 ps nskip na ty t0 pos IHpos wfps wfty.
+    move/WfAst.wf_inv: wfty => /= [wfty wft].
+    depelim wfps. constructor 1. rewrite trans_subst in IHpos.
+    apply IHpos; auto. eapply WfAst.wf_subst; auto.
+  - intros NI0 Γ0 ps nskip na b ty t0 pos IHpos wfps wfty.
+    move/WfAst.wf_inv: wfty => /= [[wfb wfty] wft].
+    constructor 2. rewrite trans_subst in IHpos.
+    apply IHpos; auto. eapply WfAst.wf_subst; auto.
+  - intros NI0 Γ0 nskip na ty t0 pos IHpos _ wfty.
+    move/WfAst.wf_inv: wfty => /= [wfty wft].
+    constructor 3. now apply IHpos.
+  - intros NI0 Γ0 na ty t0 pos IHarg ncstr IHcstr _ wfty.
+    move/WfAst.wf_inv: wfty => /= [wfty wft].
+    constructor 4.
+    + now apply IHarg.
+    + now apply IHcstr.
+  - intros NI0 Γ0 x l inst _ wfty.
+    rewrite trans_mkApps.
+    move/WfAst.wf_mkApps_inv: wfty => wfl.
+    constructor 5. now eapply trans_nested_inst_ok.
 Qed.
 
 From MetaRocq.PCUIC Require Import PCUICOnFreeVars.
@@ -3199,33 +3540,11 @@ Proof.
               constructor. rewrite -(trans_subst _ [b]).
               apply IHon_ctype_positive. eapply WfAst.wf_subst; auto.
               move/WfAst.wf_inv => /= [wfty wft].
-              constructor. clear -onI X0 wfΣg onu IHond p wfty.
-              induction p.
-              { constructor; rewrite length_map; eapply trans_closedn => //. }
-              { destruct m0 as [? [? ?]]. rewrite trans_mkApps /=.
-                move/WfAst.wf_mkApps_inv: wfty => wfl.
-                econstructor 2; tea; repeat econstructor; rewrite ?length_map //.
-                2: solve_all; eapply trans_closedn => //.
-                2: rewrite -map_rev nth_error_map H2//.
-                rewrite e.
-                have wfty : WfAst.wf Σg (Ast.Env.ind_type i).
-                { rewrite nth_error_rev in H2. len. rewrite List.rev_involutive in H2.
-                  eapply nth_error_alli in onI; tea. cbn in onI.
-                  destruct onI as [onI _]. eapply Typing.onArity in onI as (_ & s & Hs & _).
-                  now eapply typing_wf in Hs. }
-                rewrite /trans_one_ind_body /= /ind_realargs /= /ST.ind_realargs.
-                generalize (trans_destArity Σg [] _ wfty wfΣg).
-                destruct Ast.destArity as [[args s]|] => /= -> //.
-                len. now rewrite context_assumptions_map. }
-              { cbn. constructor 3.
-                rewrite trans_subst in IHp. apply IHp.
-                move/WfAst.wf_inv: wfty => /= [[wfb wfty] wft].
-                eapply WfAst.wf_subst; auto. }
-              { cbn -[Σ'].
-                move/WfAst.wf_inv: wfty => /= [wfty wft].
-                constructor 4. len. eapply trans_closedn => //.
-                now apply IHp. }
-              { cbn. now apply IHon_ctype_positive. }
+              constructor.
+              have wfbodies : All (wf_inductive_body Σg) (Ast.Env.ind_bodies m).
+              { eapply Alli_All; [exact onI|]. intros n0 idecl0 [_ w]. exact w. }
+              exact (trans_positive_cstr_arg X0 wfΣg wfbodies p wfty).
+              cbn. now apply IHon_ctype_positive.
             + intros v indv.
               specialize (on_ctype_variance _ indv).
               cbn -[Σg].

@@ -4,6 +4,7 @@ all: bugs plugin-demo
 
 bugs: Makefile.rocq
 	$(MAKE) -f Makefile.rocq TIMED=$(TIMED)
+	bash check_fail_messages.sh nested_positivity.v
 
 Makefile.rocq: Makefile _RocqProject
 	rocq makefile -f _RocqProject -o Makefile.rocq
@@ -34,6 +35,7 @@ TEST_SUITE_BLACKLIST := \
 	self_erasure.v \
 	primitive.v \
 	plugin-demo/.*.v \
+	nested_positivity_stdlib.v \
 	#
 
 space := $(subst ,, )

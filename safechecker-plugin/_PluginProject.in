@@ -59,6 +59,8 @@ src/pCUICSafeConversion.mli
 src/pCUICSafeConversion.ml
 src/pCUICTypeChecker.mli
 src/pCUICTypeChecker.ml
+src/pCUICPositivityCheck.mli
+src/pCUICPositivityCheck.ml
 src/pCUICSafeChecker.mli
 src/pCUICSafeChecker.ml
 src/safeTemplateChecker.mli

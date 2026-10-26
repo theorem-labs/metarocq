@@ -33,6 +33,7 @@ PCUICWfEnvImpl
 PCUICSafeReduce
 PCUICSafeConversion
 PCUICTypeChecker
+PCUICPositivityCheck
 PCUICSafeChecker
 SafeTemplateChecker
 Extraction
