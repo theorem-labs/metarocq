@@ -19,13 +19,18 @@ let pr_string l =
    translation, then run the extracted checker on the quoted program.  The
    negative fixtures below go through this same function, so what they test is
    what [MetaRocq SafeCheck] does. *)
-let safecheck_program ~opaque_access env evm poly term =
-  let env = if poly then env else
+let safecheck_env env evm poly =
+  if poly then env else
     let (qs, us), (qcst, ucst) = Evd.sort_context_set evm in
     Environ.push_context_set ~strict:true (us, ucst) @@
     Environ.push_qualities ~rigid:true (qs, qcst) env
-  in
-  let prog = time (str"Quoting") (Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm) term in
+
+let quote_safecheck_program ~opaque_access env evm term =
+  Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm term
+
+let safecheck_program ~opaque_access env evm poly term =
+  let env = safecheck_env env evm poly in
+  let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
   let uctx =
     if poly then
       let uctx = Evd.to_universe_context evm in
@@ -39,6 +44,33 @@ let safecheck_program ~opaque_access env evm poly term =
       (* Config0.type_in_type *)
        prog)
     uctx
+
+(* Sameness of the shared quotation: quote [c] as [MetaRocq SafeCheck] does,
+   once with every quoted natural and string built afresh (the quoter before
+   they were shared) and once shared, and compare the two programs with
+   OCaml's structural equality.  Also check that the shared quoter returns one
+   value for repeated naturals and strings. *)
+let test_quote_sharing ~opaque_access env evm poly c =
+  let env = safecheck_env env evm poly in
+  let term = EConstr.to_constr evm c in
+  let unshared =
+    time (str"Unshared quoting")
+      (fun () -> Ast_quoter.with_unshared_quotation
+         (fun () -> quote_safecheck_program ~opaque_access env evm term)) ()
+  in
+  let shared = time (str"Shared quoting") (quote_safecheck_program ~opaque_access env evm) term in
+  let equal = time (str"Comparing") (fun () -> unshared = shared) () in
+  let physically_shared =
+    Ast_quoter.quote_int 7 == Ast_quoter.quote_int 7
+    && Ast_quoter.quote_string "x" == Ast_quoter.quote_string "x"
+  in
+  if equal && physically_shared then
+    Feedback.msg_info
+      (str "Quote sharing test passed: the shared and unshared quotations are structurally equal.")
+  else
+    CErrors.user_err
+      (str "Quote sharing test failed: structurally equal = " ++ bool equal
+       ++ str ", repeated values shared = " ++ bool physically_shared ++ str ".")
 
 let check ~opaque_access env evm poly (c, _ustate) =
   debug (fun () -> str"Quoting");
@@ -332,6 +364,15 @@ VERNAC COMMAND EXTEND MetaRocqTestQuoterDeclaredDefault CLASSIFIED AS QUERY STAT
     let evm = Evd.from_env env in
     let c, _ = Constrintern.interp_constr env evm c in
     test_declared_default env evm reason subject c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestQuoteSharing CLASSIFIED AS QUERY STATE opaque_access
+| #[ poly = polymorphic ] [ "MetaRocq" "Test" "Quote" "Sharing" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_quote_sharing env evm poly c
   }
 END
 
