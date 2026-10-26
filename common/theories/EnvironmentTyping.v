@@ -1668,6 +1668,17 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
         (** It must be well-typed in the empty context. *)
         onArity : on_type_rel Σ [] idecl.(ind_type) rel_of_Type;
 
+        (** The arity built from the declaration is well-typed too.  It follows
+            from [onArity] and [ind_arity_red] by subject reduction, but subject
+            reduction itself uses it (through the typing of the parameters and
+            indices), so it is stated: the checker proves it by subject
+            reduction, which is available there. *)
+        onArityRed :
+          on_type_rel Σ []
+            (it_mkProd_or_LetIn mdecl.(ind_params)
+               (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort))))
+            rel_of_Type;
+
         (** The sorts of the arguments contexts of each constructor *)
         ind_cunivs : list constructor_univs;
 
@@ -1836,6 +1847,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
   Arguments ind_arity_red {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments ind_cunivs {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments onArity {_ Pcmp P Σ mind mdecl i idecl}.
+  Arguments onArityRed {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments onConstructors {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments onProjections {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments ind_sorts {_ Pcmp P Σ mind mdecl i idecl}.
@@ -2117,6 +2129,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       refine {| ind_arity_red := let '(U; (eq, ar)) := X.(ind_arity_red) in (U; (eq, Xar _ _ _ _ ar));
                 ind_cunivs := X.(ind_cunivs) |}.
       + eapply XP => //. now apply onArity in X.
+      + eapply XP => //. now apply onArityRed in X.
       + pose proof X.(onConstructors) as X1.
         apply All2_impl with (1 := X1).
         intros ? ? [? ? ? ?]; unshelve econstructor; eauto.

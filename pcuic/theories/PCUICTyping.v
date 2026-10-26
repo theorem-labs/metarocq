@@ -909,6 +909,9 @@ Proof.
           - apply onArity in Xg. apply Xj; tas.
             apply lift_typing_impl with (1 := Xg); intros ?? HT. split; tas.
             apply (IH (_; _; _; HT)).
+          - apply onArityRed in Xg. apply Xj; tas.
+            apply lift_typing_impl with (1 := Xg); intros ?? HT. split; tas.
+            apply (IH (_; _; _; HT)).
           - pose proof Xg.(onConstructors) as Xg'.
             eapply All2_impl; eauto. intros.
             destruct X as [cass tyeq onctyp oncargs oncind].
