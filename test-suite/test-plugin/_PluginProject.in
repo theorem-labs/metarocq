@@ -9,3 +9,4 @@ src/metarocq_test_plugin.mlpack
 theories/Loader.v
 test/quote_cache.v
 test/template_translation.v
+test/quote_value_sharing.v

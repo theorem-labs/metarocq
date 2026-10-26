@@ -369,6 +369,35 @@ let expect_safecheck_rejection what reason subject = function
 
 let safecheck_program = G_metarocq_safechecker.safecheck_program
 
+(* Sameness of the shared quotation: quote [c] as [MetaRocq SafeCheck] does,
+   once with every quoted natural and string built afresh (the quoter before
+   they were shared) and once shared, and compare the two programs with
+   OCaml's structural equality.  Also check that the shared quoter returns one
+   value for repeated naturals and strings. *)
+let test_quote_sharing ~opaque_access env evm poly c =
+  let env = G_metarocq_safechecker.safecheck_env env evm poly in
+  let term = EConstr.to_constr evm c in
+  let quote () =
+    G_metarocq_safechecker.quote_safecheck_program ~opaque_access env evm term
+  in
+  let unshared =
+    Tm_util.time (Pp.str "Unshared quoting")
+      (fun () -> Ast_quoter.with_unshared_quotation quote) ()
+  in
+  let shared = Tm_util.time (Pp.str "Shared quoting") quote () in
+  let equal = Tm_util.time (Pp.str "Comparing") (fun () -> unshared = shared) () in
+  let physically_shared =
+    Ast_quoter.quote_int 7 == Ast_quoter.quote_int 7
+    && Ast_quoter.quote_string "x" == Ast_quoter.quote_string "x"
+  in
+  if equal && physically_shared then
+    Feedback.msg_info
+      (Pp.str "Quote sharing test passed: the shared and unshared quotations are structurally equal.")
+  else
+    CErrors.user_err
+      Pp.(str "Quote sharing test failed: structurally equal = " ++ bool equal
+          ++ str ", repeated values shared = " ++ bool physically_shared ++ str ".")
+
 (* The declaration is already in the environment and already invalid, so the
    obligation it breaks exists before quotation. *)
 let test_safecheck_rejects_source ~opaque_access env evm poly reason subject c =
@@ -613,5 +642,13 @@ VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Declared_Default CLASSIFIED AS QUERY 
     let env, evm = empty_evar_map () in
     let c, _ = Constrintern.interp_constr env evm c in
     test_declared_default env evm reason subject c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quote_Sharing CLASSIFIED AS QUERY STATE opaque_access
+| #[ poly = Attributes.polymorphic ] [ "MetaRocq" "Test" "Quote" "Sharing" constr(c) ] -> {
+    let env, evm = empty_evar_map () in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_quote_sharing env evm poly c
   }
 END

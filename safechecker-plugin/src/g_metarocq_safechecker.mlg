@@ -19,13 +19,18 @@ let pr_string l =
    translation, then run the extracted checker on the quoted program.  The
    negative fixtures of the test suite's test plugin go through this same
    function, so what they test is what [MetaRocq SafeCheck] does. *)
-let safecheck_program ~opaque_access env evm poly term =
-  let env = if poly then env else
+let safecheck_env env evm poly =
+  if poly then env else
     let (qs, us), (qcst, ucst) = Evd.sort_context_set evm in
     Environ.push_context_set ~strict:true (us, ucst) @@
     Environ.push_qualities ~rigid:true (qs, qcst) env
-  in
-  let prog = time (str"Quoting") (Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm) term in
+
+let quote_safecheck_program ~opaque_access env evm term =
+  Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm term
+
+let safecheck_program ~opaque_access env evm poly term =
+  let env = safecheck_env env evm poly in
+  let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
   let uctx =
     if poly then
       let uctx = Evd.to_universe_context evm in
