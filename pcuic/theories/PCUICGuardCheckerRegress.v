@@ -239,10 +239,62 @@ Definition str_decl : global_decl :=
       ind_variance := None
     |}.
 
+(** [CoInductive S := mkS { hd : nat; tl : S }], with primitive projections. *)
+Definition s_decl : global_decl :=
+  InductiveDecl
+    {|
+      ind_finite := CoFinite;
+      ind_npars := 0;
+      ind_params := [];
+      ind_bodies :=
+        [{|
+           ind_name := "S";
+           ind_indices := [];
+           ind_sort := Sort.type0;
+           ind_type := tSort Sort.type0;
+           ind_kelim := IntoAny;
+           ind_ctors :=
+             [{|
+                cstr_name := "mkS";
+                cstr_args := [vass (nm "tl") (tRel 1); vass (nm "hd") (tind "nat")];
+                cstr_indices := [];
+                cstr_type :=
+                  tProd (nm "hd") (tind "nat") (tProd (nm "tl") (tRel 1) (tRel 2));
+                cstr_arity := 2
+              |}];
+           ind_projs :=
+             [{| proj_name := "hd"; proj_relevance := Relevant; proj_type := tind "nat" |};
+              {| proj_name := "tl"; proj_relevance := Relevant; proj_type := tind "S" |}];
+           ind_relevance := Relevant
+         |}];
+      ind_universes := Monomorphic_ctx;
+      ind_variance := None
+    |}.
+
+(** [CoFixpoint zs : S := mkS 0 zs]. *)
+Definition zs_decl : global_decl :=
+  ConstantDecl
+    {|
+      cst_type := tind "S";
+      cst_body :=
+        Some
+          (tCoFix
+             [{|
+                dname := nm "zs";
+                dtype := tind "S";
+                dbody := tApp (tApp (tcstr "S" 0) (tcstr "nat" 0)) (tRel 0);
+                rarg := 0
+              |}]
+             0);
+      cst_universes := Monomorphic_ctx;
+      cst_relevance := Relevant
+    |}.
+
 Definition Σ : global_env :=
   {| universes := ContextSet.empty;
      declarations :=
-       [(kn "Str", str_decl); (kn "T", t_decl); (kn "pr", pr_decl); (kn "box", box_decl);
+       [(kn "zs", zs_decl); (kn "S", s_decl);
+        (kn "Str", str_decl); (kn "T", t_decl); (kn "pr", pr_decl); (kn "box", box_decl);
         (kn "zeros", zeros_decl); (kn "Stream", stream_decl); (kn "nat", nat_decl)];
      retroknowledge := Retroknowledge.empty |}.
 
@@ -307,10 +359,11 @@ Proof. vm_compute. reflexivity. Qed.
 
 (** ** Corecursive calls in parts that a reduction step discards
 
-  In each block the corecursive call [g] sits under a [match], not under a
-  constructor, inside a part of the body that one reduction step throws away.
-  A rule that reduced first and checked only the reduct would never see the
-  call; the call is not guarded, so the block must be refused. *)
+  In each block the corecursive call [g] sits under a [match] or a
+  projection, not under a constructor, inside a part of the body that one
+  reduction step throws away.  A rule that reduced first and checked only the
+  reduct would never see the call; the call is not guarded, so the block must
+  be refused. *)
 
 (** [cofix g : Stream := (fix h (k s : nat) {struct k} : Stream := Cons 0 zeros) O
        (match g with Cons a _ => a end)]: unfolding [h] discards its argument [s]. *)
@@ -422,7 +475,30 @@ Example cofix_call_in_discarded_field_refused :
   = true.
 Proof. vm_compute. reflexivity. Qed.
 
-(** ** Controls: two guarded blocks are accepted
+(** [cofix g : S := (fun _ : nat => mkS 0 zs) (hd g)], where [S] is
+    [CoInductive S := mkS { hd : nat; tl : S }] with primitive projections:
+    a corecursive call under a primitive projection, inside an argument that
+    β discards.  Unfolding [g] under [hd] gives back a term that contains
+    [hd g] again.  Unlike the blocks above, it has no [match] on a coinductive. *)
+Definition g_beta_proj_block : mfixpoint term :=
+  [{|
+     dname := nm "g";
+     dtype := tind "S";
+     dbody :=
+       tApp
+         (tLambda anon (tind "nat")
+            (tApp (tApp (tcstr "S" 0) (tcstr "nat" 0)) (tConst (kn "zs") [])))
+         (tProj {| proj_ind := ind "S"; proj_npars := 0; proj_arg := 0 |} (tRel 0));
+     rarg := 0
+   |}].
+
+Example cofix_call_under_projection_in_discarded_argument_refused :
+  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0
+               (strip_mfix g_beta_proj_block))
+  = true.
+Proof. vm_compute. reflexivity. Qed.
+
+(** ** Controls: three guarded blocks are accepted
 
   So the refusals above are not an artefact of the environment. *)
 
@@ -460,4 +536,21 @@ Definition fnat_block : mfixpoint term :=
 
 Example structural_fix_accepted :
   check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 Fix 0 (strip_mfix fnat_block) = Accept.
+Proof. vm_compute. reflexivity. Qed.
+
+(** [cofix g' : S := (fun _ : nat => mkS 0 g') 0]: the twin of
+    [g_beta_proj_block], where the call is a recursive argument of [mkS] under
+    a β-redex whose discarded argument holds no call. *)
+Definition g'_beta_block : mfixpoint term :=
+  [{|
+     dname := nm "g'";
+     dtype := tind "S";
+     dbody :=
+       tApp (tLambda anon (tind "nat") (tApp (tApp (tcstr "S" 0) (tcstr "nat" 0)) (tRel 1)))
+         (tcstr "nat" 0);
+     rarg := 0
+   |}].
+
+Example guarded_cofix_under_beta_accepted :
+  check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix g'_beta_block) = Accept.
 Proof. vm_compute. reflexivity. Qed.
