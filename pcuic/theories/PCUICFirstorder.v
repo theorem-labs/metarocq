@@ -100,15 +100,9 @@ Section cf.
 
 Context {cf : config.checker_flags}.
 
-Definition isPropositionalArity ar :=
-  match destArity [] ar with
-  | Some (_, s) => Sort.is_propositional s
-  | None => false
-  end.
-
 Definition isPropositional Σ ind :=
   match lookup_inductive Σ ind with
-  | Some (mdecl, idecl) => isPropositionalArity idecl.(ind_type)
+  | Some (mdecl, idecl) => Sort.is_propositional idecl.(ind_sort)
   | _ => false
   end.
 
@@ -151,10 +145,7 @@ Proof using Type.
   eapply forallb_nth_error in H0; tea.
   erewrite d2 in H0. cbn in H0.
   unfold firstorder_oneind in H0. solve_all.
-  destruct (ind_sort oind) eqn:E2; inv H0.
-  eapply PCUICInductives.declared_inductive_type in d.
-  rewrite d. rewrite E2. unfold isPropositionalArity.
-  now rewrite destArity_it_mkProd_or_LetIn.
+  destruct (ind_sort oind) eqn:E2; inv H0. reflexivity.
 Qed.
 
 Inductive firstorder_spine Σ (Γ : context) : term -> list term -> term -> Type :=
@@ -643,9 +634,10 @@ Proof using Type.
       now eapply invert_cumul_sort_ind in Hcumul.
     + exfalso. eapply inversion_Lambda in Hty as (? & ? & ? & Hcumul); eauto.
       now eapply invert_cumul_prod_ind in Hcumul.
-    + exfalso. eapply inversion_Ind in Hty as (? & ? & ? & ? & ? & ?); eauto.
-      eapply PCUICInductives.declared_inductive_type in d.
-      rewrite d in w.
+    + exfalso. eapply inversion_Ind in Hty as (? & ? & ? & d & ? & w); eauto.
+      epose proof (PCUICInductives.declared_inductive_type_ws_cumul d [] _ Hwfl) as e.
+      symmetry in e. eapply PCUICContextConversion.ws_cumul_pb_eq_le in e.
+      eapply (ws_cumul_pb_trans _ _ _ e) in w. clear e.
       destruct (ind_params x ,,, ind_indices x0) as [ | [? [] ?] ? _] using rev_ind.
       * cbn in w. now eapply invert_cumul_sort_ind in w.
       * rewrite it_mkProd_or_LetIn_app in w. cbn in w.
