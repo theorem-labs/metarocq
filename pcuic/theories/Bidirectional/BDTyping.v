@@ -24,6 +24,24 @@ Reserved Notation " Σ ;;; Γ |- t ▹{ ind } ( u , args )" (at level 50, Γ, t,
 Reserved Notation " Σ ;;; Γ |- t ◃ T " (at level 50, Γ, t, T at next level).
 Reserved Notation "'wf_local_bd' Σ Γ " (at level 9, Σ, Γ at next level).
 Reserved Notation "'wf_local_bd_rel' Σ Γ Γ'" (at level 9, Σ, Γ, Γ' at next level).
+(** The bidirectional counterparts of [wf_fixpoint] and [wf_cofixpoint]: the
+    witness is a reduct of the declared type, as in [infer_ind_Ind]. *)
+Definition fix_red_ind (Σ : global_env_ext) Γ mind (d : def term) :=
+  has_rec_arg d ×
+  ∑ ty, (check_one_fix (def_with_type d ty) = Some mind) × red Σ Γ d.(dtype) ty.
+
+Definition wf_fixpoint_red (Σ : global_env_ext) Γ (mfix : mfixpoint term) :=
+  forallb (isLambda ∘ dbody) mfix ×
+  ∑ mind, (mfix <> []) × All (fix_red_ind Σ Γ mind) mfix ×
+          check_recursivity_kind (lookup_env Σ) mind Finite.
+
+Definition cofix_red_ind (Σ : global_env_ext) Γ mind (d : def term) :=
+  ∑ ty, (check_one_cofix (def_with_type d ty) = Some mind) × red Σ Γ d.(dtype) ty.
+
+Definition wf_cofixpoint_red (Σ : global_env_ext) Γ (mfix : mfixpoint term) :=
+  ∑ mind, (mfix <> []) × All (cofix_red_ind Σ Γ mind) mfix ×
+          check_recursivity_kind (lookup_env Σ) mind CoFinite.
+
 
 Inductive infering `{checker_flags} (Σ : global_env_ext) (Γ : context) : term -> term -> Type :=
 | infer_Rel n decl :
@@ -109,7 +127,7 @@ Inductive infering `{checker_flags} (Σ : global_env_ext) (Γ : context) : term 
   nth_error mfix n = Some decl ->
   All (on_def_type (lift_sorting1 (checking Σ) (infering_sort Σ)) Γ) mfix ->
   All (on_def_body (lift_sorting1 (checking Σ) (infering_sort Σ)) (fix_context mfix) Γ) mfix ->
-  wf_fixpoint Σ mfix ->
+  wf_fixpoint_red Σ Γ mfix ->
   Σ ;;; Γ |- tFix mfix n ▹ dtype decl
 
 | infer_CoFix mfix n decl :
@@ -117,7 +135,7 @@ Inductive infering `{checker_flags} (Σ : global_env_ext) (Γ : context) : term 
   nth_error mfix n = Some decl ->
   All (on_def_type (lift_sorting1 (checking Σ) (infering_sort Σ)) Γ) mfix ->
   All (on_def_body (lift_sorting1 (checking Σ) (infering_sort Σ)) (fix_context mfix) Γ) mfix ->
-  wf_cofixpoint Σ mfix ->
+  wf_cofixpoint_red Σ Γ mfix ->
   Σ ;;; Γ |- tCoFix mfix n ▹ dtype decl
 
 | infer_Prim p prim_ty cdecl :
@@ -451,7 +469,7 @@ Section BidirectionalInduction.
       All (on_def_type Pj Γ) mfix ->
       All (on_def_body (lift_sorting1 (checking Σ) (infering_sort Σ)) (fix_context mfix) Γ) mfix ->
       All (on_def_body Pj (fix_context mfix) Γ) mfix ->
-      wf_fixpoint Σ mfix ->
+      wf_fixpoint_red Σ Γ mfix ->
       Pinfer Γ (tFix mfix n) (dtype decl)) ->
 
     (forall (Γ : context) (mfix : mfixpoint term) (n : nat) decl,
@@ -460,7 +478,7 @@ Section BidirectionalInduction.
       All (on_def_type (lift_sorting1 (checking Σ) (infering_sort Σ)) Γ) mfix ->
       All (on_def_type Pj Γ) mfix ->
       All (on_def_body (lift_sorting1 (checking Σ) (infering_sort Σ)) (fix_context mfix) Γ) mfix ->
-      All (on_def_body Pj (fix_context mfix) Γ) mfix ->      wf_cofixpoint Σ mfix ->
+      All (on_def_body Pj (fix_context mfix) Γ) mfix ->      wf_cofixpoint_red Σ Γ mfix ->
       Pinfer Γ (tCoFix mfix n) (dtype decl)) ->
 
     (forall (Γ : context) p prim_ty cdecl,

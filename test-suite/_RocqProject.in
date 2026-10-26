@@ -20,6 +20,7 @@ erasure_live_test.v
 erasure_test.v
 evars.v
 extractable.v
+fix_delta.v
 hnf_ctor.v
 hott_example.v
 inferind.v

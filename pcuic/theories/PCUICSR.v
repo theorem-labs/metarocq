@@ -30,139 +30,144 @@ Arguments Sort.sort_of_product : simpl nomatch.
 
 (* Preservation of wf_*fixpoint *)
 
+(** A reduction of a declared type keeps the recursive argument among its syntactic
+    products: the reduct's [rarg]-th smashed assumption still exists. *)
+Lemma red_has_rec_arg {cf} {Σ} {wfΣ : wf Σ} {Γ} {d : def term} {ty} :
+  Σ ;;; Γ ⊢ dtype d ⇝ ty ->
+  has_rec_arg d -> has_rec_arg (def_with_type d ty).
+Proof.
+  intros r. rewrite /has_rec_arg /def_with_type /=.
+  destruct (decompose_prod_assum [] (dtype d)) as [ctx concl] eqn:decomp.
+  cbn. move/Nat.ltb_lt => hlt.
+  have eqty := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp. cbn in eqty.
+  have hlt' : rarg d < #|List.rev (smash_context [] ctx)| by len.
+  destruct (nth_error (List.rev (smash_context [] ctx)) (rarg d)) as [c|] eqn:hnth.
+  2:{ eapply nth_error_None in hnth. lia. }
+  rewrite eqty in r.
+  destruct (red_it_mkProd_or_LetIn_smash Γ ctx concl ty (rarg d) c r hnth)
+    as [ctx' [t' [d' [decomp' hnth' _]]]].
+  rewrite decomp' /=. apply/Nat.ltb_lt.
+  have hle := nth_error_Some_length hnth'. len in hle.
+Qed.
+
+(** A reduction of a declared type composes with the witness conversion. *)
+Lemma fix_on_ind_red_type {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ mind} {d : def term} {ty} :
+  Σ ;;; Γ ⊢ dtype d ⇝ ty ->
+  fix_on_ind Σ Γ mind d ->
+  fix_on_ind Σ Γ mind (def_with_type d ty).
+Proof.
+  intros r [hr [tw [hcheck [hop hconv]]]].
+  split; [now eapply red_has_rec_arg|].
+  exists tw. split; [exact hcheck|]. split; [exact hop|]. cbn.
+  have hred : Σ ;;; Γ ⊢ ty ≤[Conv] dtype d by eapply red_ws_cumul_pb_inv; tea.
+  eapply (cumul_Trans _ _ _ _ (dtype d)); [exact (clrel_ctx r)|exact (clrel_src r)| |exact hconv].
+  exact (@cumulAlgo_cumulSpec _ _ Conv _ _ _ hred).
+Qed.
+
+Lemma cofix_on_ind_red_type {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ mind} {d : def term} {ty} :
+  Σ ;;; Γ ⊢ dtype d ⇝ ty ->
+  cofix_on_ind Σ Γ mind d ->
+  cofix_on_ind Σ Γ mind (def_with_type d ty).
+Proof.
+  intros r [tw [hcheck [hop hconv]]].
+  exists tw. split; [exact hcheck|]. split; [exact hop|]. cbn.
+  have hred : Σ ;;; Γ ⊢ ty ≤[Conv] dtype d by eapply red_ws_cumul_pb_inv; tea.
+  eapply (cumul_Trans _ _ _ _ (dtype d)); [exact (clrel_ctx r)|exact (clrel_src r)| |exact hconv].
+  exact (@cumulAlgo_cumulSpec _ _ Conv _ _ _ hred).
+Qed.
+
 Lemma wf_fixpoint_red1_type {cf Σ} {wfΣ : wf Σ} Γ mfix mfix1 :
-  wf_fixpoint Σ mfix ->
+  wf_fixpoint Σ Γ mfix ->
   OnOne2
   (fun x y : def term =>
    closed_red1 Σ Γ (dtype x) (dtype y)
    × (dname x, dbody x, rarg x) = (dname y, dbody y, rarg y)) mfix mfix1 ->
-  wf_fixpoint Σ mfix1.
+  wf_fixpoint Σ Γ mfix1.
 Proof.
-  intros wffix o.
-  move: wffix; unfold wf_fixpoint, wf_fixpoint_gen.
-  move/andb_and => [] isl wf. apply/andP; split.
-  { clear wf. solve_all.
-    revert isl.
-    induction o; depelim isl; constructor; auto. destruct p.
-    destruct c. noconf e. congruence. }
-  clear isl. move: wf.
-  enough (forall inds, map_option_out (map check_one_fix mfix) = Some inds ->
-     map_option_out (map check_one_fix mfix1) = Some inds) => //.
-  destruct map_option_out. now specialize (H _ eq_refl) as ->.
-  discriminate.
-  induction o; intros inds.
-  - simpl.
-    destruct p as [redty eqs].
-    destruct hd as [dname dtype dbody rarg], hd' as [dname' dtype' dbody' rarg'].
-    simpl in *.
-    noconf eqs.
-    destruct (decompose_prod_assum [] dtype) eqn:decomp.
-    destruct nth_error eqn:Hnth.
-    apply decompose_prod_assum_it_mkProd_or_LetIn in decomp.
-    simpl in decomp.
-    subst dtype.
-    destruct (red1_it_mkProd_or_LetIn_smash redty Hnth) as
-      (ctx & t' & decomp & d & [hnth di]).
-    rewrite decomp hnth.
-    unfold head in di. destruct decompose_app; simpl in *.
-    destruct destInd as [[ind u]|]; try discriminate.
-    destruct decompose_app. simpl in di. rewrite di. auto.
-    discriminate.
-  - simpl map.
-    simpl map_option_out.
-    destruct check_one_fix => //.
-    destruct map_option_out. specialize (IHo _ eq_refl).
-    move=> [= <-]. now rewrite IHo.
-    discriminate.
+  intros [isl [mind [ne [hall hck]]]] o.
+  split.
+  { move: isl. clear -o. induction o; cbn.
+    - destruct p as [_ eqs].
+      destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs. auto.
+    - move/andP => [] h hs. apply/andP; split => //. now apply IHo. }
+  exists mind. split.
+  { intros eq; subst mfix1. now depelim o. }
+  split; [|exact hck].
+  clear -o hall wfΣ.
+  induction o; depelim hall; constructor; auto.
+  destruct p as [r eqs].
+  destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
+  exact (fix_on_ind_red_type
+    (d := {| dname := na; dtype := ty; dbody := bo; rarg := ra |}) (ty := ty')
+    (closed_red1_red r) f).
 Qed.
 
-Lemma wf_fixpoint_red1_body {cf Σ} {wfΣ : wf Σ} Γ mfix mfix1 :
-  wf_fixpoint Σ mfix ->
+Lemma wf_fixpoint_red1_body {cf Σ} {wfΣ : wf Σ} Γ Δ mfix mfix1 :
+  wf_fixpoint Σ Γ mfix ->
   OnOne2
   (fun x y : def term =>
-   closed_red1 Σ Γ (dbody x) (dbody y)
+   closed_red1 Σ Δ (dbody x) (dbody y)
    × (dname x, dtype x, rarg x) = (dname y, dtype y, rarg y)) mfix mfix1 ->
-  wf_fixpoint Σ mfix1.
+  wf_fixpoint Σ Γ mfix1.
 Proof.
-  intros wffix o.
-  move: wffix; unfold wf_fixpoint, wf_fixpoint_gen.
-  move/andb_and => [] isl wf. apply/andP; split.
-  { clear wf. solve_all.
-    revert isl.
-    induction o; depelim isl; constructor; auto. destruct p.
-    destruct c. noconf e.
-    destruct (dbody hd) => //. depelim clrel_rel; solve_discr.
-    now rewrite H. now rewrite H. }
-  clear isl. move: wf.
-  enough (map check_one_fix mfix = map check_one_fix mfix1) as -> => //.
-  induction o.
-  - simpl. f_equal.
-    destruct p as [redty eqs].
-    destruct hd as [dname dtype dbody rarg], hd' as [dname' dtype' dbody' rarg'].
-    simpl in *.
-    noconf eqs. reflexivity.
-  - simpl. now rewrite IHo.
+  intros [isl [mind [ne [hall hck]]]] o.
+  split.
+  { move: isl. clear -o. induction o; cbn.
+    - destruct p as [r eqs].
+      destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
+      move/andP => [] h hs. apply/andP; split => //.
+      move: h. cbn. intros h.
+      eapply (isLambda_red1 Σ Δ bo bo') => //. exact (clrel_rel r).
+    - move/andP => [] h hs. apply/andP; split => //. now apply IHo. }
+  exists mind. split.
+  { intros eq; subst mfix1. now depelim o. }
+  split; [|exact hck].
+  clear -o hall.
+  induction o; depelim hall; constructor; auto.
+  destruct p as [_ eqs].
+  destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
+  exact f.
 Qed.
 
 Lemma wf_cofixpoint_red1_type {cf:checker_flags} (Σ : global_env_ext) Γ mfix mfix1 :
   wf Σ.1 ->
-  wf_cofixpoint Σ.1 mfix ->
+  wf_cofixpoint Σ Γ mfix ->
   OnOne2
   (fun x y : def term =>
    Σ ;;; Γ ⊢ dtype x ⇝ dtype y
    × (dname x, dbody x, rarg x) = (dname y, dbody y, rarg y)) mfix mfix1 ->
-  wf_cofixpoint Σ.1 mfix1.
+  wf_cofixpoint Σ Γ mfix1.
 Proof.
-  intros wfΣ wffix o.
-  move: wffix; unfold wf_cofixpoint, wf_cofixpoint_gen.
-  enough (forall inds, map_option_out (map check_one_cofix mfix) = Some inds ->
-     map_option_out (map check_one_cofix mfix1) = Some inds) => //.
-  destruct map_option_out. now specialize (H _ eq_refl) as ->.
-  discriminate.
-  induction o; intros inds.
-  - simpl.
-    destruct p as [redty eqs].
-    destruct hd as [dname dtype dbody rarg], hd' as [dname' dtype' dbody' rarg'].
-    simpl in *.
-    noconf eqs.
-    destruct (decompose_prod_assum [] dtype) eqn:decomp.
-    apply decompose_prod_assum_it_mkProd_or_LetIn in decomp.
-    simpl in decomp.
-    subst dtype.
-    destruct (decompose_app t) as [f l] eqn:decomp.
-    destruct f; try discriminate. simpl.
-    apply decompose_app_inv in decomp. subst t.
-    eapply red_it_mkProd_or_LetIn_mkApps_Ind in redty as [ctx' [args' ->]]; auto.
-    erewrite decompose_prod_assum_it_mkProd => //.
-    2:{ now rewrite is_ind_app_head_mkApps. }
-    rewrite decompose_app_mkApps => //.
-  - simpl map.
-    simpl map_option_out.
-    destruct check_one_cofix => //.
-    destruct map_option_out. specialize (IHo _ eq_refl).
-    move=> [= <-]. now rewrite IHo.
-    discriminate.
+  intros wfΣ [mind [ne [hall hck]]] o.
+  exists mind. split.
+  { intros eq; subst mfix1. now depelim o. }
+  split; [|exact hck].
+  clear -o hall wfΣ.
+  induction o; depelim hall; constructor; auto.
+  destruct p as [r eqs].
+  destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
+  exact (cofix_on_ind_red_type
+    (d := {| dname := na; dtype := ty; dbody := bo; rarg := ra |}) (ty := ty') r c).
 Qed.
 
-Lemma wf_cofixpoint_red1_body {cf:checker_flags} (Σ : global_env_ext) Γ mfix mfix1 :
+Lemma wf_cofixpoint_red1_body {cf:checker_flags} (Σ : global_env_ext) Γ Δ mfix mfix1 :
   wf Σ.1 ->
-  wf_cofixpoint Σ.1 mfix ->
+  wf_cofixpoint Σ Γ mfix ->
   OnOne2
   (fun x y : def term =>
-   red1 Σ Γ (dbody x) (dbody y)
+   red1 Σ Δ (dbody x) (dbody y)
    × (dname x, dtype x, rarg x) = (dname y, dtype y, rarg y)) mfix mfix1 ->
-  wf_cofixpoint Σ.1 mfix1.
+  wf_cofixpoint Σ Γ mfix1.
 Proof.
-  intros wfΣ wffix o.
-  move: wffix; unfold wf_cofixpoint, wf_cofixpoint_gen.
-  enough (map check_one_cofix mfix = map check_one_cofix mfix1) as -> => //.
-  induction o.
-  - simpl. f_equal.
-    destruct p as [redty eqs].
-    destruct hd as [dname dtype dbody rarg], hd' as [dname' dtype' dbody' rarg'].
-    simpl in *.
-    noconf eqs. reflexivity.
-  - simpl. now rewrite IHo.
+  intros wfΣ [mind [ne [hall hck]]] o.
+  exists mind. split.
+  { intros eq; subst mfix1. now depelim o. }
+  split; [|exact hck].
+  clear -o hall.
+  induction o; depelim hall; constructor; auto.
+  destruct p as [_ eqs].
+  destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
+  exact c.
 Qed.
 
 #[global] Hint Extern 0 (conv_decls _ _ _ _ _) => constructor : pcuic.
@@ -2840,10 +2845,14 @@ Proof.
       move/isType_is_open_term => /=. now cbn.
 
   - (* Fix congruence *)
-    apply mkApps_Fix_spec in H5. simpl in H5. subst args.
+    match goal with H : mkApps (tFix _ _) _ = _ |- _ =>
+      apply mkApps_Fix_spec in H; simpl in H; subst args end.
     simpl. destruct narg; discriminate.
 
   - (* Fix congruence: type reduction *)
+    (* [wf_fixpoint] is now a sigma type, so it takes an X name: restore the
+       names the rest of this branch uses. *)
+    rename X4 into wffix, X5 into X4, H1 into H2.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : conv_context cumulAlgo_gen Σ (Γ ,,, fix_context mfix) (Γ ,,, fix_context mfix1)).
     { clear -wf wfΓ X X4 H2 fixl.
@@ -2869,7 +2878,9 @@ Proof.
     { apply (OnOne2_All_All X4 X1).
       * intros d HT.
         apply lift_typing_impl with (1 := HT); now intros ?? [Hty _].
-      * intros d d' [[red _] eq] HT'. noconf eq. rewrite /on_def_type -H3.
+      * intros d d' [[red _] eq] HT'.
+        destruct d as [na ty bo ra], d' as [na' ty' bo' ra']; cbn in *; noconf eq.
+        rewrite /on_def_type /=.
         apply lift_sorting_it_impl_gen with HT' => //; now intros [_ IH]. }
     assert (wf_local Σ (Γ ,,, fix_context mfix1)).
     { apply All_mfix_wf; auto. }
@@ -2905,15 +2916,14 @@ Proof.
         eapply (closedn_on_free_vars (P:=xpredT)) in Hs.
         now eapply on_free_vars_any_xpredT.
 
-    * eapply wf_fixpoint_red1_type; eauto.
-      eapply OnOne2_impl; tea; cbn; intuition auto.
-      apply a2. apply a2.
+    * eapply wf_fixpoint_red1_type; [exact wffix|].
+      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e]; split; [exact r|exact e].
     * eapply isTypeRel_isType. eapply All_nth_error in X0; eauto.
     * apply conv_cumul, conv_sym. destruct disj as [<-|[[red Hred] eq]] => //.
       reflexivity. eapply PCUICCumulativity.red_conv.
       apply red1_red, red.
-
   - (* Fix congruence in body *)
+    rename X4 into wffix, X5 into X4, H1 into H2.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : fix_context mfix = fix_context mfix1).
     { clear -wf X4.
@@ -2927,7 +2937,8 @@ Proof.
       * intros d HT.
         apply lift_typing_impl with (1 := HT); now intros ?? [Hty _].
       * intros d d' [[red _] eq] HT'.
-        noconf eq. unfold on_def_type in HT' |- *. rewrite -H3 -H4.
+        destruct d as [na ty bo ra], d' as [na' ty' bo' ra']; cbn in *; noconf eq.
+        unfold on_def_type in HT' |- *; cbn in *.
         apply lift_typing_impl with (1 := HT'); now intros ?? []. }
     assert (wf_local Σ (Γ ,,, fix_context mfix1)).
     { apply All_mfix_wf; auto. }
@@ -2947,14 +2958,15 @@ Proof.
         noconf eq.
         rewrite -convctx.
         apply lift_sorting_it_impl_gen with HB => //= [] [Ht IHt] //. eauto.
-    * eapply wf_fixpoint_red1_body; eauto.
-      eapply OnOne2_impl; tea; cbn; intuition auto.
-      apply a2. apply a2.
+    * eapply wf_fixpoint_red1_body; [exact wffix|].
+      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e]; split; [exact r|exact e].
     * eapply isTypeRel_isType. eapply All_nth_error in X0; eauto.
-    * apply conv_cumul, conv_sym. destruct disj as [<-|[_ eq]].
-      reflexivity. noconf eq. rewrite H4; reflexivity.
+    * apply conv_cumul, conv_sym. destruct disj as [<-|[_ eq]]; [reflexivity|].
+      destruct decl as [na ty bo ra], decl' as [na' ty' bo' ra']; cbn in *; noconf eq.
+      reflexivity.
 
   - (* CoFix congruence: type reduction *)
+    rename X4 into wffix, X5 into X4, H1 into H2.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : conv_context cumulAlgo_gen Σ (Γ ,,, fix_context mfix) (Γ ,,, fix_context mfix1)).
     { clear -wf wfΓ X X4 H2 fixl.
@@ -2979,7 +2991,9 @@ Proof.
       { apply (OnOne2_All_All X4 X1).
       * intros d HT.
         apply lift_typing_impl with (1 := HT); now intros ?? [Hty _].
-      * intros d d' [[red _] eq] HT'. noconf eq. rewrite /on_def_type -H3.
+      * intros d d' [[red _] eq] HT'.
+        destruct d as [na ty bo ra], d' as [na' ty' bo' ra']; cbn in *; noconf eq.
+        rewrite /on_def_type /=.
         apply lift_sorting_it_impl_gen with HT' => //. now intros [_ IH]. }
     assert (wf_local Σ (Γ ,,, fix_context mfix1)).
     { apply All_mfix_wf; auto. }
@@ -3015,15 +3029,16 @@ Proof.
         eapply (closedn_on_free_vars (P:=xpredT)) in Hs.
         now eapply on_free_vars_any_xpredT.
 
-    * eapply (wf_cofixpoint_red1_type _ Γ); eauto.
-      eapply OnOne2_impl; tea; cbn; intuition auto;
-      now eapply closed_red1_red.
+    * eapply (wf_cofixpoint_red1_type _ Γ); [exact wf|exact wffix|].
+      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e];
+        split; [now eapply closed_red1_red|exact e].
     * eapply isTypeRel_isType. eapply All_nth_error in X0; eauto.
     * apply conv_cumul, conv_sym. destruct disj as [<-|[[red Hred] eq]] => //.
       reflexivity. eapply PCUICCumulativity.red_conv.
       apply red1_red, red.
 
   - (* CoFix congruence in body *)
+    rename X4 into wffix, X5 into X4, H1 into H2.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : fix_context mfix = fix_context mfix1).
     { clear -wf X4.
@@ -3037,7 +3052,8 @@ Proof.
       * intros d HT.
         apply lift_typing_impl with (1 := HT); now intros ?? [Hty _].
       * intros d d' [[red _] eq] HT'.
-        noconf eq. unfold on_def_type in HT' |- *. rewrite -H3 -H4.
+        destruct d as [na ty bo ra], d' as [na' ty' bo' ra']; cbn in *; noconf eq.
+        unfold on_def_type in HT' |- *; cbn in *.
         apply lift_typing_impl with (1 := HT'); now intros ?? []. }
     assert (wf_local Σ (Γ ,,, fix_context mfix1)).
     { apply All_mfix_wf; auto. }
@@ -3057,12 +3073,13 @@ Proof.
         noconf eq.
         rewrite -convctx.
         apply lift_sorting_it_impl_gen with HB => //= [] [Ht IHt] //. eauto.
-    * eapply wf_cofixpoint_red1_body; eauto.
-      eapply OnOne2_impl; tea; cbn; intuition auto.
-      apply a2. apply a2.
+    * eapply wf_cofixpoint_red1_body; [exact wf|exact wffix|].
+      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e];
+        split; [exact (clrel_rel r)|exact e].
     * eapply isTypeRel_isType. eapply All_nth_error in X0; eauto.
-    * apply conv_cumul, conv_sym. destruct disj as [<-|[_ eq]].
-      reflexivity. noconf eq. rewrite H4; reflexivity.
+    * apply conv_cumul, conv_sym. destruct disj as [<-|[_ eq]]; [reflexivity|].
+      destruct decl as [na ty bo ra], decl' as [na' ty' bo' ra']; cbn in *; noconf eq.
+      reflexivity.
 
   - eapply OnOne2_prod_inv in X2 as [X2 _].
     destruct X. depelim X0. depelim X1.

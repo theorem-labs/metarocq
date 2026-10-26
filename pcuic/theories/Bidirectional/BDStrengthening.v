@@ -534,6 +534,77 @@ Proof.
   - by apply infering_typing.
 Qed.
 
+(** The bidirectional (co)fixpoint conditions are stable under a renaming: the
+    reduction witness is renamed with [red_rename]. *)
+
+Lemma rename_fix_red_ind `{cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  P Γ Δ f (mfix : mfixpoint term) mind d :
+  urenaming P Γ Δ f ->
+  on_ctx_free_vars P Γ ->
+  on_free_vars P (dtype d) ->
+  fix_red_ind Σ Γ mind d ->
+  fix_red_ind Σ Δ mind (map_def (rename f) (rename (shiftn #|mfix| f)) d).
+Proof.
+  intros hf hΓ hT [hr [ty [hc hred]]].
+  split.
+  { now eapply rename_has_rec_arg. }
+  exists (rename f ty); split.
+  - rewrite rename_def_with_type.
+    now eapply (rename_check_one_fix f mfix).
+  - cbn. eapply red_rename ; tea.
+Qed.
+
+Lemma rename_cofix_red_ind `{cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  P Γ Δ f (mfix : mfixpoint term) mind d :
+  urenaming P Γ Δ f ->
+  on_ctx_free_vars P Γ ->
+  on_free_vars P (dtype d) ->
+  cofix_red_ind Σ Γ mind d ->
+  cofix_red_ind Σ Δ mind (map_def (rename f) (rename (shiftn #|mfix| f)) d).
+Proof.
+  intros hf hΓ hT [ty [hc hred]].
+  exists (rename f ty); split.
+  - rewrite rename_def_with_type.
+    now eapply (rename_check_one_cofix f mfix).
+  - cbn. eapply red_rename ; tea.
+Qed.
+
+Lemma rename_wf_fixpoint_red `{cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  P Γ Δ f mfix :
+  urenaming P Γ Δ f ->
+  on_ctx_free_vars P Γ ->
+  All (fun d => on_free_vars P (dtype d)) mfix ->
+  wf_fixpoint_red Σ Γ mfix ->
+  wf_fixpoint_red Σ Δ (map (map_def (rename f) (rename (shiftn #|mfix| f))) mfix).
+Proof.
+  intros hf hΓ hop [isl [mind [hne [hall hk]]]].
+  split; [|exists mind; split; [|split]].
+  - rewrite forallb_map. eapply forallb_impl; tea. intros x _ h.
+    now eapply isLambda_rename.
+  - destruct mfix => //.
+  - eapply All_map, All_impl with (1 := All_mix hop hall).
+    intros d [hopd hd].
+    now eapply rename_fix_red_ind.
+  - exact hk.
+Qed.
+
+Lemma rename_wf_cofixpoint_red `{cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  P Γ Δ f mfix :
+  urenaming P Γ Δ f ->
+  on_ctx_free_vars P Γ ->
+  All (fun d => on_free_vars P (dtype d)) mfix ->
+  wf_cofixpoint_red Σ Γ mfix ->
+  wf_cofixpoint_red Σ Δ (map (map_def (rename f) (rename (shiftn #|mfix| f))) mfix).
+Proof.
+  intros hf hΓ hop [mind [hne [hall hk]]].
+  exists mind; split; [|split].
+  - destruct mfix => //.
+  - eapply All_map, All_impl with (1 := All_mix hop hall).
+    intros d [hopd hd].
+    now eapply rename_cofix_red_ind.
+  - exact hk.
+Qed.
+
 Section BDRenaming.
 
 Context `{cf : checker_flags}.
@@ -836,7 +907,9 @@ Proof using wfΣ.
       rewrite <-(shiftnP0 P) in hT. eapply on_free_vars_lift_impl in hT. rewrite Nat.add_0_r in hT.
       apply lift_sorting_f_it_impl with p => //= IHp.
       all: eapply IHp ; tea.
-    + by apply rename_wf_fixpoint.
+    + eapply rename_wf_fixpoint_red ; tea.
+      apply (All_impl ht) => d hd.
+      now move: hd => /andP [].
 
   - intros. red. move => P Δ f hf hΓ /= /forallb_All ht.
     erewrite map_dtype.
@@ -859,7 +932,9 @@ Proof using wfΣ.
       rewrite <-(shiftnP0 P) in hT. eapply on_free_vars_lift_impl in hT. rewrite Nat.add_0_r in hT.
       apply lift_sorting_f_it_impl with p => //= IHp.
       all: eapply IHp ; tea.
-    + by apply rename_wf_cofixpoint.
+    + eapply rename_wf_cofixpoint_red ; tea.
+      apply (All_impl ht) => d hd.
+      now move: hd => /andP [].
 
   - intros. red. intros P Δ f hf ht.
     cbn. rewrite rename_prim_type. econstructor; tea; rewrite ?prim_val_tag_map //.

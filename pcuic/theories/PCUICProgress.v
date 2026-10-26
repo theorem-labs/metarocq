@@ -245,7 +245,7 @@ forall (P : global_env_ext -> context -> term -> term -> Type)
       All (on_def_type (Pj Σ) Γ) mfix ->
       All (on_def_body (lift_typing typing Σ) types Γ) mfix ->
       All (on_def_body (Pj Σ) types Γ) mfix ->
-      wf_fixpoint Σ.1 mfix ->
+      wf_fixpoint Σ Γ mfix ->
       P Σ Γ (tFix mfix n) decl.(dtype)) ->
 
   (forall Σ (wfΣ : wf Σ.1) (Γ : context) (wfΓ : wf_local Σ Γ) (mfix : list (def term)) (n : nat) decl,
@@ -257,7 +257,7 @@ forall (P : global_env_ext -> context -> term -> term -> Type)
       All (on_def_type (Pj Σ) Γ) mfix ->
       All (on_def_body (lift_typing typing Σ) types Γ) mfix ->
       All (on_def_body (Pj Σ) types Γ) mfix ->
-      wf_cofixpoint Σ.1 mfix ->
+      wf_cofixpoint Σ Γ mfix ->
       P Σ Γ (tCoFix mfix n) decl.(dtype)) ->
 
   (forall (Σ : global_env_ext) (wfΣ : wf Σ.1) (Γ : context) (wfΓ : wf_local Σ Γ) (p : prim_val) prim_ty cdecl,
@@ -432,7 +432,7 @@ Lemma typing_ind_env `{cf : checker_flags} :
         All (on_def_type (Pj Σ) Γ) mfix ->
         All (on_def_body (lift_typing typing Σ) types Γ) mfix ->
         All (on_def_body (Pj Σ) types Γ) mfix ->
-        wf_fixpoint Σ.1 mfix ->
+        wf_fixpoint Σ Γ mfix ->
         P Σ Γ (tFix mfix n) decl.(dtype)) ->
 
     (forall Σ (wfΣ : wf Σ.1) (Γ : context) (wfΓ : wf_local Σ Γ) (mfix : list (def term)) (n : nat) decl,
@@ -444,7 +444,7 @@ Lemma typing_ind_env `{cf : checker_flags} :
         All (on_def_type (Pj Σ) Γ) mfix ->
         All (on_def_body (lift_typing typing Σ) types Γ) mfix ->
         All (on_def_body (Pj Σ) types Γ) mfix ->
-        wf_cofixpoint Σ.1 mfix ->
+        wf_cofixpoint Σ Γ mfix ->
         P Σ Γ (tCoFix mfix n) decl.(dtype)) ->
 
 

@@ -56,25 +56,28 @@ Proof.
   now rewrite Heq.
 Qed.
 
-Lemma extends_wf_fixpoint `{cf : checker_flags} (Σ Σ' : global_env_ext) mfix : extends Σ Σ' -> wf Σ' ->
-  wf_fixpoint Σ mfix -> wf_fixpoint Σ' mfix.
+Lemma extends_wf_fixpoint `{cf : checker_flags} (Σ : global_env_ext) Σ' Γ mfix : extends Σ.1 Σ' -> wf Σ' ->
+  wf_fixpoint Σ Γ mfix -> wf_fixpoint (Σ', Σ.2) Γ mfix.
 Proof.
-  intros ext wfΣ'.
-  unfold wf_fixpoint, wf_fixpoint_gen.
-  move/andb_and => [] -> /=.
-  destruct map_option_out as [[|ind inds]|]; auto.
-  move/andb_and => [->] /=.
-  now apply extends_check_recursivity_kind.
+  destruct Σ as [Σ φ]; cbn.
+  intros ext wfΣ' [isl [mind [ne [hall hk]]]].
+  refine (isl, (mind; (ne, (_, _)))).
+  - eapply All_impl; tea. intros d [hr [ty [hc [hop hconv]]]].
+    refine (hr, (ty; (hc, (hop, _)))).
+    eapply weakening_env_convSpec; eauto.
+  - now eapply extends_check_recursivity_kind.
 Qed.
 
-Lemma extends_wf_cofixpoint `{cf : checker_flags} (Σ Σ' : global_env_ext) mfix : extends Σ Σ' -> wf Σ' ->
-  wf_cofixpoint Σ mfix -> wf_cofixpoint Σ' mfix.
+Lemma extends_wf_cofixpoint `{cf : checker_flags} (Σ : global_env_ext) Σ' Γ mfix : extends Σ.1 Σ' -> wf Σ' ->
+  wf_cofixpoint Σ Γ mfix -> wf_cofixpoint (Σ', Σ.2) Γ mfix.
 Proof.
-  intros ext wfΣ'.
-  unfold wf_cofixpoint, wf_cofixpoint_gen.
-  destruct map_option_out as [[|ind inds]|]; auto.
-  move/andb_and => [->] /=.
-  now apply extends_check_recursivity_kind.
+  destruct Σ as [Σ φ]; cbn.
+  intros ext wfΣ' [mind [ne [hall hk]]].
+  refine (mind; (ne, (_, _))).
+  - eapply All_impl; tea. intros d [ty [hc [hop hconv]]].
+    refine (ty; (hc, (hop, _))).
+    eapply weakening_env_convSpec; eauto.
+  - now eapply extends_check_recursivity_kind.
 Qed.
 #[global]
 Hint Resolve extends_wf_fixpoint extends_wf_cofixpoint : extends.
