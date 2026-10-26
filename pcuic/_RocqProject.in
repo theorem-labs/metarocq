@@ -44,11 +44,14 @@ theories/Typing/PCUICWeakeningConfigTyp.v
 theories/Typing/PCUICWeakeningTyp.v
 theories/Typing/PCUICUnivSubstitutionTyp.v
 theories/Typing/PCUICClosedTyp.v
+theories/Typing/PCUICCasesWfTyp.v
 theories/Typing/PCUICContextConversionTyp.v
 
 theories/PCUICContextSubst.v
 theories/PCUICCasesContexts.v
 theories/PCUICReduction.v
+theories/PCUICGuardChecker.v
+theories/PCUICGuardClosure.v
 theories/PCUICTyping.v
 theories/PCUICGuardCondition.v
 theories/PCUICGlobalEnv.v

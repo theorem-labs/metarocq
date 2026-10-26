@@ -4,7 +4,7 @@ From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICUtils PCUICOnOne
      PCUICLiftSubst PCUICUnivSubst PCUICTyping PCUICGlobalEnv PCUICWeakeningEnvConv
      PCUICWeakeningEnvTyp PCUICWeakeningConv PCUICWeakeningTyp
-     PCUICSubstitution PCUICContextSubst PCUICCasesContexts PCUICClosed PCUICClosedTyp PCUICClosedConv
+     PCUICSubstitution PCUICContextSubst PCUICCasesContexts PCUICClosed PCUICClosedTyp PCUICClosedConv PCUICCasesWfTyp
      PCUICCumulativity PCUICGeneration PCUICReduction
      PCUICAlpha PCUICEquality PCUICValidity PCUICParallelReductionConfluence
      PCUICConfluence PCUICContextConversion PCUICContextConversionTyp
@@ -2876,7 +2876,10 @@ Proof.
     destruct (OnOne2_nth_error _ _ _ decl _ X4 heq_nth_error) as [decl' [eqnth disj]].
     eapply type_Cumul_alt.
     econstructor; eauto.
-    * eapply (fix_guard_red1 _ _ _ _ 0); eauto.
+    * eapply (fix_guard_red1 _ _ _ _ 0);
+        [ apply wf_wf_cases_env
+        | eapply wf_local_wf_cases_ctx; tea
+        | | eauto ].
       constructor; eauto.
       eapply OnOne2_impl; tea; cbn; intuition auto.
       apply a2. apply a2.
@@ -2934,7 +2937,10 @@ Proof.
     destruct (OnOne2_nth_error _ _ _ decl _ X4 heq_nth_error) as [decl' [eqnth disj]].
     eapply type_Cumul_alt.
     econstructor; eauto.
-    * eapply (fix_guard_red1 _ _ _ _ 0); eauto.
+    * eapply (fix_guard_red1 _ _ _ _ 0);
+        [ apply wf_wf_cases_env
+        | eapply wf_local_wf_cases_ctx; tea
+        | | eauto ].
       apply fix_red_body; eauto.
       eapply OnOne2_impl; tea; cbn; intuition auto.
       apply a2. apply a2.
@@ -2986,7 +2992,10 @@ Proof.
     destruct (OnOne2_nth_error _ _ _ decl _ X4 heq_nth_error) as [decl' [eqnth disj]].
     eapply type_Cumul_alt.
     econstructor; eauto.
-    * eapply (cofix_guard_red1 _ _ _ _ 0); eauto.
+    * eapply (cofix_guard_red1 _ _ _ _ 0);
+        [ apply wf_wf_cases_env
+        | eapply wf_local_wf_cases_ctx; tea
+        | | eauto ].
       constructor; eauto.
       eapply OnOne2_impl; tea; cbn; intuition auto.
       apply a2. apply a2.
@@ -3044,7 +3053,10 @@ Proof.
     destruct (OnOne2_nth_error _ _ _ decl _ X4 heq_nth_error) as [decl' [eqnth disj]].
     eapply type_Cumul_alt.
     econstructor; eauto.
-    * eapply (cofix_guard_red1 _ _ _ _ 0); eauto.
+    * eapply (cofix_guard_red1 _ _ _ _ 0);
+        [ apply wf_wf_cases_env
+        | eapply wf_local_wf_cases_ctx; tea
+        | | eauto ].
       apply cofix_red_body; eauto.
       eapply OnOne2_impl; tea; cbn; intuition auto.
       apply a2. apply a2.

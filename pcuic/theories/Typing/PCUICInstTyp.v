@@ -7,7 +7,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICCase
   PCUICTyping PCUICReduction PCUICCumulativity
   PCUICEquality PCUICGlobalEnv PCUICClosed PCUICClosedConv PCUICClosedTyp PCUICEquality PCUICWeakeningEnvConv PCUICWeakeningEnvTyp
   PCUICSigmaCalculus PCUICRenameDef PCUICRenameConv PCUICWeakeningConv PCUICWeakeningTyp PCUICInstDef PCUICInstConv
-  PCUICGuardCondition PCUICUnivSubstitutionConv PCUICOnFreeVars PCUICOnFreeVarsConv PCUICClosedTyp PCUICClosedTyp.
+  PCUICGuardCondition PCUICUnivSubstitutionConv PCUICOnFreeVars PCUICOnFreeVarsConv PCUICClosedTyp PCUICCasesWfTyp.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -533,7 +533,11 @@ Proof.
       now rewrite map_rev.
   - intros Σ wfΣ Γ wfΓ mfix n decl types hguard hnth htypes hmfixt ihmfixt hmfixb ihmfixb wffix Δ σ hΔ hσ.
     simpl. eapply meta_conv; [econstructor;eauto|].
-    * now eapply fix_guard_inst.
+    * eapply fix_guard_inst.
+      + exact hσ.
+      + eapply typing_closedn_mfix; tea.
+      + now eapply well_subst_wf_cases.
+      + exact hguard.
     * now rewrite nth_error_map hnth.
     * apply All_map, (All_impl ihmfixt).
       intros x t. eapply t; eauto.
@@ -555,7 +559,11 @@ Proof.
 
   - intros Σ wfΣ Γ wfΓ mfix n decl types hguard hnth htypes hmfixt ihmfixt hmfixb ihmfixb wffix Δ σ hΔ hσ.
     simpl. eapply meta_conv; [econstructor;eauto|].
-    * now eapply cofix_guard_inst.
+    * eapply cofix_guard_inst.
+      + exact hσ.
+      + eapply typing_closedn_mfix; tea.
+      + now eapply well_subst_wf_cases.
+      + exact hguard.
     * now rewrite nth_error_map hnth.
     * apply All_map, (All_impl ihmfixt).
       intros x t. eapply t; eauto.

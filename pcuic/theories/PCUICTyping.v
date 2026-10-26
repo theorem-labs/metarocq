@@ -4,7 +4,7 @@ From MetaRocq.Common Require Import config Primitive.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
   PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition.
 From MetaRocq.PCUIC Require Export PCUICCumulativitySpec.
-From MetaRocq.PCUIC Require Export PCUICCases.
+From MetaRocq.PCUIC Require Export PCUICCases PCUICGuardClosure.
 
 Import MonadNotation.
 
@@ -42,18 +42,18 @@ Definition type_of_constructor mdecl (cdecl : constructor_body) (c : inductive *
 
 Include PCUICEnvTyping.
 
-(* AXIOM Postulate existence of a guard condition checker *)
-
-Inductive FixCoFix : Type := Fix | CoFix.
+(* The guard condition is the closure of the executable guard checker
+   [check_guard_gen] under the seven operations of [GuardCheckerCorrect]
+   (decision D1; [PCUICGuardClosure]).  No axiom is involved. *)
 
 Class GuardChecker :=
 { (* guard check for both fixpoints (Fix) and cofixpoints (CoFix)  *)
   guard : FixCoFix -> global_env_ext -> context -> mfixpoint term -> Prop ;
 }.
 
-Axiom guard_checking : GuardChecker.
 #[global]
-Existing Instance guard_checking.
+Instance guard_checking : GuardChecker :=
+  {| guard := guard_cl |}.
 
 Definition fix_guard := guard Fix.
 Definition cofix_guard := guard CoFix.

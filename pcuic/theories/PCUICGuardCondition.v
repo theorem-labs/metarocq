@@ -5,21 +5,24 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICEquality PCUICTyping PCUICReduction PCUICSigmaCalculus
      PCUICNamelessDef PCUICRenameDef PCUICInstDef.
 
-(* AXIOM postulate correctness of the guard condition checker *)
+(** The closure properties of the guard condition.  Under decision D1 the
+    guard is [guard_cl] ([PCUICGuardClosure]), the least predicate closed
+    under exactly these seven operations, so every field below is a theorem
+    and [guard_checking_correct] is no longer an axiom.
 
-Definition tFixCoFix (b:FixCoFix) := if b then tFix else tCoFix.
+    [guard_red1] and [guard_inst] carry the syntactic premises the closure
+    needs: a reduction may bring syntax in from the environment or from the
+    context, and a substitution brings in the images of [σ].  Both are
+    discharged from typing at their call sites, through
+    [Typing/PCUICCasesWfTyp]. *)
 
 Definition nl_mfix mfix := map (map_def_anon nl nl) mfix.
-
-Definition subst_instance_mfix (mfix : list (def term)) u := map (map_def (subst_instance u) (subst_instance u)) mfix.
-
-Definition inst_mfix mfix σ := map (map_def (inst σ) (inst (up (List.length mfix) σ))) mfix.
-
-Definition rename_mfix mfix f := map (map_def (rename f) (rename (shiftn (List.length mfix) f))) mfix.
 
 Class GuardCheckerCorrect :=
 {
   guard_red1 b Σ Γ mfix mfix' idx :
+    wf_cases_env Σ.1 ->
+    wf_cases_ctx Σ.1 Γ ->
     Σ.1 ;;; Γ |- tFixCoFix b mfix idx ⇝ tFixCoFix b mfix' idx ->
     guard b Σ Γ mfix ->
     guard b Σ Γ mfix' ;
@@ -46,6 +49,8 @@ Class GuardCheckerCorrect :=
 
   guard_inst `{checker_flags} b Σ Γ Δ mfix σ :
     Σ ;;; Γ ⊢ σ : Δ ->
+    closedn_mfix #|Δ| mfix ->
+    (forall x, x < #|Δ| -> wf_cases Σ.1 (σ x)) ->
     guard b Σ Δ mfix ->
     guard b Σ Γ (inst_mfix mfix σ) ;
 
@@ -56,8 +61,21 @@ Class GuardCheckerCorrect :=
 
 }.
 
-Axiom guard_checking_correct : GuardCheckerCorrect.
-#[global] Existing Instance guard_checking_correct.
+#[global]
+Instance guard_checking_correct : GuardCheckerCorrect.
+Proof.
+  constructor.
+  - intros b Σ Γ mfix mfix' idx henv hctx hred hg.
+    eapply gc_red1; tea. now constructor.
+  - intros b Σ Γ mfix mfix' idx heq hg.
+    eapply gc_eq; tea. now constructor.
+  - intros b Σ Σ' Γ mfix hext hg. now eapply gc_ext.
+  - intros cf b Σ Γ Γ' mfix hcum hg.
+    eapply gc_ctx; tea. now constructor.
+  - intros cf b Σ Γ mfix u univs hcons hg. now eapply gc_univ.
+  - intros cf b Σ Γ Δ mfix σ hσ hcl hwf hg. now eapply gc_inst.
+  - intros cf b P Σ Γ Δ mfix f hren hg. now eapply gc_ren.
+Qed.
 
 Definition fix_guard_red1 := guard_red1 Fix.
 Definition fix_guard_eq_term := guard_eq_term Fix.
