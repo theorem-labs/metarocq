@@ -255,73 +255,6 @@ Lemma substitution_wf_local_rel `{checker_flags} {Σ} {wfΣ : wf Σ} {Γ Γ' s �
           now eapply substitution.
    Qed.
 
-(** ** Support for deciding the (co)fixpoint conditions
-
-  The checker finds the (co)inductive block of a fixpoint body by reducing the type
-  of its recursive argument, and of a cofixpoint body by reducing the conclusion of
-  its type, exactly where Rocq's kernel reduces. The lemmas below give the
-  uniqueness of the block so found; [PCUICFixWitness] gives the welltypedness of
-  what is reduced. *)
-
-(** Two reducts of one declared type give the same inductive block. *)
-Lemma fix_red_ind_unique {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
-  isType Σ Γ (dtype d) ->
-  fix_red_ind Σ Γ m1 d ->
-  fix_red_ind Σ Γ m2 d ->
-  m1 = m2.
-Proof.
-  intros isty [_ [ty1 [hc1 r1]]] [_ [ty2 [hc2 r2]]].
-  have clΓ : is_closed_context Γ.
-  { eapply wf_local_closed_context. now eapply isType_wf_local. }
-  have op : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
-  have c1 : Σ ;;; Γ ⊢ dtype d ⇝ ty1 by now eapply into_closed_red.
-  have c2 : Σ ;;; Γ ⊢ dtype d ⇝ ty2 by now eapply into_closed_red.
-  destruct (closed_red_confluence c1 c2) as [v [rv1 rv2]].
-  have e1 : check_one_fix (def_with_type d v) = Some m1.
-  { now eapply (check_one_fix_closed_red rv1 hc1). }
-  have e2 : check_one_fix (def_with_type d v) = Some m2.
-  { now eapply (check_one_fix_closed_red rv2 hc2). }
-  congruence.
-Qed.
-
-Lemma cofix_red_ind_unique {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
-  isType Σ Γ (dtype d) ->
-  cofix_red_ind Σ Γ m1 d ->
-  cofix_red_ind Σ Γ m2 d ->
-  m1 = m2.
-Proof.
-  intros isty [ty1 [hc1 r1]] [ty2 [hc2 r2]].
-  have clΓ : is_closed_context Γ.
-  { eapply wf_local_closed_context. now eapply isType_wf_local. }
-  have op : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
-  have c1 : Σ ;;; Γ ⊢ dtype d ⇝ ty1 by now eapply into_closed_red.
-  have c2 : Σ ;;; Γ ⊢ dtype d ⇝ ty2 by now eapply into_closed_red.
-  destruct (closed_red_confluence c1 c2) as [v [rv1 rv2]].
-  have e1 : check_one_cofix (def_with_type d v) = Some m1.
-  { now eapply (check_one_cofix_closed_red rv1 hc1). }
-  have e2 : check_one_cofix (def_with_type d v) = Some m2.
-  { now eapply (check_one_cofix_closed_red rv2 hc2). }
-  congruence.
-Qed.
-
-Lemma fix_red_ind_unique_wf {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
-  on_def_type (lift_typing1 (typing Σ)) Γ d ->
-  fix_red_ind Σ Γ m1 d -> fix_red_ind Σ Γ m2 d -> m1 = m2.
-Proof.
-  intros ond h1 h2.
-  eapply fix_red_ind_unique; [|exact h1|exact h2].
-  now eapply isTypeRel_isType.
-Qed.
-
-Lemma cofix_red_ind_unique_wf {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
-  on_def_type (lift_typing1 (typing Σ)) Γ d ->
-  cofix_red_ind Σ Γ m1 d -> cofix_red_ind Σ Γ m2 d -> m1 = m2.
-Proof.
-  intros ond h1 h2.
-  eapply cofix_red_ind_unique; [|exact h1|exact h2].
-  now eapply isTypeRel_isType.
-Qed.
-
 Section Typecheck.
   Context {cf : checker_flags} {nor : normalizing_flags}.
 
@@ -1593,7 +1526,7 @@ Section Typecheck.
     | TypeError_comp _ na => TypeError_comp err na
     end.
 
-  Ltac ck_fix_red_ind_obl :=
+  Ltac ck_fix_body_on_obl :=
     (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
     let wfΣ := ident:(wfΣ) in let hr := ident:(hr) in let wfΣ' := ident:(wfΣ') in
     let Σ0 := ident:(Σ0) in let wfΣ0 := ident:(wfΣ0) in let r := ident:(r) in
@@ -1601,7 +1534,7 @@ Section Typecheck.
     let X2 := ident:(X2) in let Σ := ident:(Σ) in let ty := ident:(ty) in let d := ident:(d) in
     let wf_type := ident:(wf_type) in let isty := ident:(isty) in
     let hop := ident:(hop) in let rty := ident:(rty) in let hc := ident:(hc) in
-    let hrarg := ident:(hrarg) in let ctx := ident:(ctx) in let concl := ident:(concl) in
+    let hrec := ident:(hrec) in let ctx := ident:(ctx) in let concl := ident:(concl) in
     let c := ident:(c) in let clΓ := ident:(clΓ) in let hcr := ident:(hcr) in
     let eqty := ident:(eqty) in let ctx' := ident:(ctx') in let t' := ident:(t') in
     let d' := ident:(d') in let decomp' := ident:(decomp') in let hnth' := ident:(hnth') in
@@ -1621,13 +1554,12 @@ Section Typecheck.
               assert (hop : is_open_term Γ (dtype d)) by (now eapply isType_is_open_term);
               sq;
               destruct (red_rec_arg_check_one_fix Γ d ctx concl c r X0 X1 hop
-                          ltac:(now symmetry) ltac:(now symmetry) hr) as [hrarg [ty [rty hc]]];
-              split; [exact hrarg|];
+                          ltac:(now symmetry) ltac:(now symmetry) hr) as [_ [ty [rty hc]]];
               exists ty; split; [exact hc|exact (clrel_rel rty)] ]
     | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
               pose proof (hΣ _ wfΣ) as [wfΣ'];
               destruct (wf_type _ wfΣ) as [isty];
-              destruct (X0 _ wfΣ) as [[_ [ty [hc hred]]]];
+              destruct (X0 _ wfΣ) as [[ty [hc hred]]];
               assert (hop : is_open_term Γ (dtype d)) by (now eapply isType_is_open_term);
               assert (clΓ : is_closed_context Γ)
                 by (eapply wf_local_closed_context; now eapply isType_wf_local);
@@ -1647,19 +1579,22 @@ Section Typecheck.
               end;
               intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
               sq; now rewrite -dapp ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              destruct (X0 _ wfΣ) as [[hrarg _]];
-              rewrite /has_rec_arg -eqctx /= in hrarg;
-              move: hrarg => /Nat.ltb_lt hlt;
+    | (* [has_rec_arg d] puts the recursive argument inside the telescope. *)
+      solve [ exfalso;
+              rewrite /has_rec_arg -eqctx /= in hrec;
+              move: hrec => /Nat.ltb_lt hlt;
               symmetry in eqnth; apply nth_error_None in eqnth;
               rewrite List.length_rev smash_context_length /= in eqnth; lia ]
     ].
 
-  Equations check_fix_red_ind (d : def term)
+  (** The block of a fixpoint body: [reduce_to_ind] on the type of its recursive
+      argument. *)
+  Equations check_fix_body_on (d : def term)
     (wf_type : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥)
+    (hrec : has_rec_arg d)
     : typing_result_comp (∑ mind, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ fix_red_ind Σ Γ mind d ∥) :=
-    check_fix_red_ind d wf_type with inspect (decompose_prod_assum [] (dtype d)) := {
+        ∥ mfix_body_on check_one_fix (PCUICReduction.red Σ Γ) mind d ∥) :=
+    check_fix_body_on d wf_type hrec with inspect (decompose_prod_assum [] (dtype d)) := {
       | exist (ctx, concl) eqctx
         with inspect (nth_error (List.rev (smash_context [] ctx)) (rarg d)) := {
         | exist None eqnth :=
@@ -1669,12 +1604,12 @@ Section Typecheck.
                  (Γ ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx))
                  (decl_type c) _ ;;
           ret (inductive_mind r.π1 ; _) } }.
-  Next Obligation. ck_fix_red_ind_obl. Qed.
-  Next Obligation. ck_fix_red_ind_obl. Qed.
-  Next Obligation. ck_fix_red_ind_obl. Qed.
-  Next Obligation. ck_fix_red_ind_obl. Qed.
+  Next Obligation. ck_fix_body_on_obl. Qed.
+  Next Obligation. ck_fix_body_on_obl. Qed.
+  Next Obligation. ck_fix_body_on_obl. Qed.
+  Next Obligation. ck_fix_body_on_obl. Qed.
 
-  Ltac ck_cofix_red_ind_obl :=
+  Ltac ck_cofix_body_on_obl :=
     (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
     let wfΣ := ident:(wfΣ) in let wfΣ' := ident:(wfΣ') in let Σ0 := ident:(Σ0) in
     let wfΣ0 := ident:(wfΣ0) in let r := ident:(r) in let i := ident:(i) in
@@ -1711,16 +1646,17 @@ Section Typecheck.
               sq; exists inst, args, ctx2; exact hcr ]
     ].
 
-  Equations check_cofix_red_ind (d : def term)
+  (** The block of a cofixpoint body: the codomain walk on its type. *)
+  Equations check_cofix_body_on (d : def term)
     (wf_type : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥)
     : typing_result_comp (∑ mind, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ cofix_red_ind Σ Γ mind d ∥) :=
-    check_cofix_red_ind d wf_type :=
+        ∥ mfix_body_on check_one_cofix (PCUICReduction.red Σ Γ) mind d ∥) :=
+    check_cofix_body_on d wf_type :=
       r <- check_codomain_ind Γ (dtype d) _ ;;
       ret (inductive_mind r.π1 ; _).
-  Next Obligation. ck_cofix_red_ind_obl. Qed.
-  Next Obligation. ck_cofix_red_ind_obl. Qed.
-  Next Obligation. ck_cofix_red_ind_obl. Qed.
+  Next Obligation. ck_cofix_body_on_obl. Qed.
+  Next Obligation. ck_cofix_body_on_obl. Qed.
+  Next Obligation. ck_cofix_body_on_obl. Qed.
 
   (* The block found for the first body, [m], arrives either packed with its
      proof or already split by the obligation tactic. *)
@@ -1729,21 +1665,30 @@ Section Typecheck.
     first [
       rename m into m1;
       match goal with
-      | [ h : forall _, _ -> ∥ fix_red_ind _ _ m1 _ ∥ |- _ ] => rename h into hm
-      | [ h : forall _, _ -> ∥ cofix_red_ind _ _ m1 _ ∥ |- _ ] => rename h into hm
+      | [ h : forall _, _ -> ∥ mfix_body_on _ _ m1 _ ∥ |- _ ] => rename h into hm
       end
     | destruct m as [m1 hm]; cbn in * ].
 
-  (* [uniq] is [fix_red_ind_unique_wf] or [cofix_red_ind_unique_wf]. *)
-  Ltac ck_red_inds_obl uniq :=
+  (* [m1] and [mind] are the blocks of the body [d] found from two reducts of its
+     type, [hd] gives the first: they are equal. *)
+  Ltac ck_same_block :=
+    let wfΣ' := ident:(wfΣ') in let d := ident:(d) in let hd := ident:(hd) in
+    let m1 := ident:(m1) in let mind := ident:(mind) in let heq := ident:(heq) in
+    assert (heq : m1 = mind)
+      by (lazymatch type of hd with
+          | mfix_body_on ?chk _ _ _ =>
+            eapply (mfix_body_on_red_unique (check := chk) (wfΣ := wfΣ') (d := d)); eassumption
+          end);
+    subst m1.
+
+  Ltac ck_mfix_inds_obl :=
     (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
     let wfΣ := ident:(wfΣ) in let wfΣ' := ident:(wfΣ') in let Σ0 := ident:(Σ0) in
     let wfΣ0 := ident:(wfΣ0) in let Σ := ident:(Σ) in let H := ident:(H) in
     let mind := ident:(mind) in let d := ident:(d) in let m1 := ident:(m1) in
     let hm := ident:(hm) in let hd := ident:(hd) in let rest := ident:(rest) in
     let hall := ident:(hall) in let htys := ident:(htys) in let eqind := ident:(eqind) in
-    let heq := ident:(heq) in let wf_types := ident:(wf_types) in
-    let absurd := ident:(absurd) in
+    let wf_types := ident:(wf_types) in let absurd := ident:(absurd) in
     first [
       solve [ sq; constructor ]
     | solve [ destruct (wf_types _ wfΣ) as [hall]; sq;
@@ -1763,137 +1708,26 @@ Section Typecheck.
               destruct (hm _ wfΣ) as [hd]; destruct (H _ wfΣ) as [hall];
               destruct (wf_types _ wfΣ) as [htys];
               depelim hall; depelim htys;
-              assert (heq : m1 = mind) by (eapply (uniq _ _ wfΣ' _ d); eassumption);
-              subst m1; now rewrite eqb_refl ]
+              ck_same_block; now rewrite eqb_refl ]
     | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
               apply absurd; exists mind; intros Σ0 wfΣ0;
               rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
               destruct (H _ wfΣ) as [hall]; sq; now depelim hall ]
     ].
 
-  (** Every body of the block is on [mind]. *)
-  Equations check_fix_red_inds (mind : kername) (mfix : mfixpoint term)
-    (wf_types : forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ∥)
-    : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ All (fix_red_ind Σ Γ mind) mfix ∥) :=
-    check_fix_red_inds mind [] wf_types := ret _ ;
-    check_fix_red_inds mind (d :: mfix) wf_types :=
-      m <- check_fix_red_ind d _ ;;
-      eqind <- check_eq_true (eqb m.π1 mind)
-                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;;
-      rest <- check_fix_red_inds mind mfix _ ;;
-      ret _.
-  Next Obligation. ck_red_inds_obl (@fix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@fix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@fix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@fix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@fix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@fix_red_ind_unique_wf). Qed.
-
-  Equations check_cofix_red_inds (mind : kername) (mfix : mfixpoint term)
-    (wf_types : forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ∥)
-    : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ All (cofix_red_ind Σ Γ mind) mfix ∥) :=
-    check_cofix_red_inds mind [] wf_types := ret _ ;
-    check_cofix_red_inds mind (d :: mfix) wf_types :=
-      m <- check_cofix_red_ind d _ ;;
-      eqind <- check_eq_true (eqb m.π1 mind)
-                 (Msg "Ill-formed cofixpoint: not producing values in a mutually coinductive family") ;;
-      rest <- check_cofix_red_inds mind mfix _ ;;
-      ret _.
-  Next Obligation. ck_red_inds_obl (@cofix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@cofix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@cofix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@cofix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@cofix_red_ind_unique_wf). Qed.
-  Next Obligation. ck_red_inds_obl (@cofix_red_ind_unique_wf). Qed.
-
-  Ltac ck_wf_fixpoint_obl :=
+  Ltac ck_wf_mfix_obl :=
     (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
     let wfΣ := ident:(wfΣ) in let wfΣ' := ident:(wfΣ') in let Σ0 := ident:(Σ0) in
     let wfΣ0 := ident:(wfΣ0) in let Σ := ident:(Σ) in let H := ident:(H) in
     let mind := ident:(mind) in let d := ident:(d) in let m1 := ident:(m1) in
     let hm := ident:(hm) in let hd := ident:(hd) in let rest := ident:(rest) in
-    let hall := ident:(hall) in let htys := ident:(htys) in let heq := ident:(heq) in
-    let hne := ident:(hne) in let hk := ident:(hk) in let wflam := ident:(wflam) in
-    let wfkind := ident:(wfkind) in let isl := ident:(isl) in
-    let wf_types := ident:(wf_types) in let absurd := ident:(absurd) in
-    first [
-      solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              destruct (H _ wfΣ) as [[_ [mind [hne _]]]]; now apply hne ]
-    | solve [ destruct (wf_types _ wfΣ) as [hall]; sq;
-              eapply isTypeRel_isType; now depelim hall ]
-    | solve [ destruct (wf_types _ wfΣ) as [hall]; sq; now depelim hall ]
-    | solve [ ck_name_m;
-              destruct (hm _ wfΣ) as [hd]; destruct (rest _ wfΣ) as [hall];
-              sq; split; [exact wflam|];
-              exists m1; split; [discriminate|split; [now constructor|]];
-              now rewrite (abstract_check_recursivity_kind Finite m1 Σ wfΣ) in wfkind ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              ck_name_m;
-              apply absurd;
-              destruct (H _ wfΣ) as [[_ [mind [_ [hall hk]]]]];
-              destruct (hm _ wfΣ) as [hd]; destruct (wf_types _ wfΣ) as [htys];
-              depelim hall; depelim htys;
-              assert (heq : m1 = mind)
-                by (eapply (fix_red_ind_unique_wf (wfΣ := wfΣ') (d := d)); eassumption);
-              subst m1; now rewrite (abstract_check_recursivity_kind Finite mind Σ wfΣ) ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              ck_name_m;
-              apply absurd; intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
-              destruct (H _ wfΣ) as [[_ [mind [_ [hall _]]]]];
-              destruct (hm _ wfΣ) as [hd]; destruct (wf_types _ wfΣ) as [htys];
-              depelim hall; depelim htys;
-              assert (heq : m1 = mind)
-                by (eapply (fix_red_ind_unique_wf (wfΣ := wfΣ') (d := d)); eassumption);
-              subst m1; sq; assumption ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              destruct (H _ wfΣ) as [[_ [mind [_ [hall _]]]]]; depelim hall;
-              apply absurd; exists mind; intros Σ0 wfΣ0;
-              rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ); sq; assumption ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              apply absurd;
-              destruct (H _ wfΣ) as [[isl _]]; exact isl ]
-    ].
-
-  Equations check_wf_fixpoint (mfix : mfixpoint term)
-    (wf_types : forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ∥)
-    : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ wf_fixpoint_red Σ Γ mfix ∥) :=
-    check_wf_fixpoint [] wf_types :=
-      raise (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;
-    check_wf_fixpoint (d :: mfix) wf_types :=
-      wflam <- check_eq_true (forallb (isLambda ∘ dbody) (d :: mfix))
-                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;;
-      m <- check_fix_red_ind d _ ;;
-      rest <- check_fix_red_inds m.π1 mfix _ ;;
-      wfkind <- check_eq_true (check_recursivity_kind (abstract_env_lookup X) m.π1 Finite)
-                  (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;;
-      ret _.
-  Next Obligation. ck_wf_fixpoint_obl. Qed.
-  Next Obligation. ck_wf_fixpoint_obl. Qed.
-  Next Obligation. ck_wf_fixpoint_obl. Qed.
-  Next Obligation. ck_wf_fixpoint_obl. Qed.
-  Next Obligation. ck_wf_fixpoint_obl. Qed.
-  Next Obligation. ck_wf_fixpoint_obl. Qed.
-  Next Obligation. ck_wf_fixpoint_obl. Qed.
-  Next Obligation. ck_wf_fixpoint_obl. Qed.
-
-  Ltac ck_wf_cofixpoint_obl :=
-    (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
-    let wfΣ := ident:(wfΣ) in let wfΣ' := ident:(wfΣ') in let Σ0 := ident:(Σ0) in
-    let wfΣ0 := ident:(wfΣ0) in let Σ := ident:(Σ) in let H := ident:(H) in
-    let mind := ident:(mind) in let d := ident:(d) in let m1 := ident:(m1) in
-    let hm := ident:(hm) in let hd := ident:(hd) in let rest := ident:(rest) in
-    let hall := ident:(hall) in let htys := ident:(htys) in let heq := ident:(heq) in
+    let hall := ident:(hall) in let htys := ident:(htys) in
     let hne := ident:(hne) in let hk := ident:(hk) in let wfkind := ident:(wfkind) in
+    let wflam := ident:(wflam) in let wfrec := ident:(wfrec) in let wfind := ident:(wfind) in
+    let isl := ident:(isl) in let hind := ident:(hind) in
     let wf_types := ident:(wf_types) in let absurd := ident:(absurd) in
     first [
+      (* [check_wf_mfix] *)
       solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
               destruct (H _ wfΣ) as [[mind [hne _]]]; now apply hne ]
     | solve [ destruct (wf_types _ wfΣ) as [hall]; sq;
@@ -1901,8 +1735,8 @@ Section Typecheck.
     | solve [ destruct (wf_types _ wfΣ) as [hall]; sq; now depelim hall ]
     | solve [ ck_name_m;
               destruct (hm _ wfΣ) as [hd]; destruct (rest _ wfΣ) as [hall];
-              sq; exists m1; split; [discriminate|split; [now constructor|]];
-              now rewrite (abstract_check_recursivity_kind CoFinite m1 Σ wfΣ) in wfkind ]
+              rewrite (abstract_check_recursivity_kind _ m1 Σ wfΣ) in wfkind;
+              sq; exists m1; split; [discriminate|split; [now constructor|exact wfkind]] ]
     | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
               pose proof (hΣ _ wfΣ) as [wfΣ'];
               ck_name_m;
@@ -1910,9 +1744,7 @@ Section Typecheck.
               destruct (H _ wfΣ) as [[mind [_ [hall hk]]]];
               destruct (hm _ wfΣ) as [hd]; destruct (wf_types _ wfΣ) as [htys];
               depelim hall; depelim htys;
-              assert (heq : m1 = mind)
-                by (eapply (cofix_red_ind_unique_wf (wfΣ := wfΣ') (d := d)); eassumption);
-              subst m1; now rewrite (abstract_check_recursivity_kind CoFinite mind Σ wfΣ) ]
+              ck_same_block; now rewrite (abstract_check_recursivity_kind _ mind Σ wfΣ) ]
     | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
               pose proof (hΣ _ wfΣ) as [wfΣ'];
               ck_name_m;
@@ -1920,35 +1752,106 @@ Section Typecheck.
               destruct (H _ wfΣ) as [[mind [_ [hall _]]]];
               destruct (hm _ wfΣ) as [hd]; destruct (wf_types _ wfΣ) as [htys];
               depelim hall; depelim htys;
-              assert (heq : m1 = mind)
-                by (eapply (cofix_red_ind_unique_wf (wfΣ := wfΣ') (d := d)); eassumption);
-              subst m1; sq; assumption ]
+              ck_same_block; sq; assumption ]
     | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
               destruct (H _ wfΣ) as [[mind [_ [hall _]]]]; depelim hall;
               apply absurd; exists mind; intros Σ0 wfΣ0;
               rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ); sq; assumption ]
+      (* [check_wf_fixpoint] *)
+    | solve [ destruct (wfind _ wfΣ) as [hind]; sq;
+              split; [exact wflam|split; [exact wfrec|exact hind]] ]
+    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
+              apply absurd; destruct (H _ wfΣ) as [[isl _]]; exact isl ]
+    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
+              apply absurd; destruct (H _ wfΣ) as [[_ [isl _]]]; exact isl ]
+    | solve [ apply absurd; intros Σ0 wfΣ0;
+              destruct (H _ wfΣ0) as [[_ [_ hind]]]; sq; exact hind ]
     ].
 
-  Equations check_wf_cofixpoint (mfix : mfixpoint term)
+  (** One block check for fixpoints and cofixpoints, over a per-body checker
+      [check_body] that finds the block of one body under the precondition [pre]. *)
+  Section mfix_inds.
+  Context (check : def term -> option kername) {shape : ShapeCheck check}
+    (pre : def term -> Type) (err : type_error) (kind : recursivity_kind)
+    (check_body : forall d,
+      (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥) -> pre d ->
+      typing_result_comp (∑ mind, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+        ∥ mfix_body_on check (PCUICReduction.red Σ Γ) mind d ∥)).
+
+  (** Every body of [mfix] is on [mind]. *)
+  Equations check_mfix_inds (mind : kername) (mfix : mfixpoint term)
+    (wf_types : forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+        ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ∥)
+    (pres : All pre mfix)
+    : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+        ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) mind) mfix ∥) :=
+    check_mfix_inds mind [] wf_types _ := ret _ ;
+    check_mfix_inds mind (d :: mfix) wf_types (All_cons pd pres) :=
+      m <- check_body d _ pd ;;
+      eqind <- check_eq_true (eqb m.π1 mind) err ;;
+      rest <- check_mfix_inds mind mfix _ pres ;;
+      ret _.
+  Next Obligation. ck_mfix_inds_obl. Qed.
+  Next Obligation. ck_mfix_inds_obl. Qed.
+  Next Obligation. ck_mfix_inds_obl. Qed.
+  Next Obligation. ck_mfix_inds_obl. Qed.
+  Next Obligation. ck_mfix_inds_obl. Qed.
+  Next Obligation. ck_mfix_inds_obl. Qed.
+
+  (** All bodies are on one block, the block of the first body, of kind [kind]. *)
+  Equations check_wf_mfix (mfix : mfixpoint term)
+    (wf_types : forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+        ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ∥)
+    (pres : All pre mfix)
+    : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+        ∥ mfix_on_ind check (PCUICReduction.red Σ Γ)
+            (fun mind => check_recursivity_kind (lookup_env Σ) mind kind) mfix ∥) :=
+    check_wf_mfix [] wf_types _ := raise err ;
+    check_wf_mfix (d :: mfix) wf_types (All_cons pd pres) :=
+      m <- check_body d _ pd ;;
+      rest <- check_mfix_inds m.π1 mfix _ pres ;;
+      wfkind <- check_eq_true (check_recursivity_kind (abstract_env_lookup X) m.π1 kind) err ;;
+      ret _.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+
+  End mfix_inds.
+
+  (** Fixpoints: every body is a lambda and has its recursive argument in the
+      telescope of its declared type, before the block search. *)
+  Equations check_wf_fixpoint (mfix : mfixpoint term)
+    (wf_types : forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+        ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ∥)
+    : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+        ∥ wf_fixpoint_red Σ Γ mfix ∥) :=
+    check_wf_fixpoint mfix wf_types :=
+      wflam <- check_eq_true (forallb (isLambda ∘ dbody) mfix)
+                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;;
+      wfrec <- check_eq_true (forallb has_rec_arg mfix)
+                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;;
+      wfind <- check_wf_mfix check_one_fix (fun d => is_true (has_rec_arg d))
+                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family")
+                 Finite check_fix_body_on mfix wf_types (forallb_All _ _ wfrec) ;;
+      ret _.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+  Next Obligation. ck_wf_mfix_obl. Qed.
+
+  (** Cofixpoints: no precondition on the bodies. *)
+  Definition check_wf_cofixpoint (mfix : mfixpoint term)
     (wf_types : forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ∥)
     : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ wf_cofixpoint_red Σ Γ mfix ∥) :=
-    check_wf_cofixpoint [] wf_types :=
-      raise (Msg "Ill-formed cofixpoint: not producing values in a mutually coinductive family") ;
-    check_wf_cofixpoint (d :: mfix) wf_types :=
-      m <- check_cofix_red_ind d _ ;;
-      rest <- check_cofix_red_inds m.π1 mfix _ ;;
-      wfkind <- check_eq_true (check_recursivity_kind (abstract_env_lookup X) m.π1 CoFinite)
-                  (Msg "Ill-formed cofixpoint: not producing values in a mutually coinductive family") ;;
-      ret _.
-  Next Obligation. ck_wf_cofixpoint_obl. Qed.
-  Next Obligation. ck_wf_cofixpoint_obl. Qed.
-  Next Obligation. ck_wf_cofixpoint_obl. Qed.
-  Next Obligation. ck_wf_cofixpoint_obl. Qed.
-  Next Obligation. ck_wf_cofixpoint_obl. Qed.
-  Next Obligation. ck_wf_cofixpoint_obl. Qed.
-  Next Obligation. ck_wf_cofixpoint_obl. Qed.
+    check_wf_mfix check_one_cofix (fun _ => True)
+      (Msg "Ill-formed cofixpoint: not producing values in a mutually coinductive family")
+      CoFinite (fun d wt _ => check_cofix_body_on d wt) mfix wf_types (All_True mfix).
 
   End check_wf_mfix.
 

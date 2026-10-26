@@ -35,26 +35,14 @@ Proof.
   all: try (cbn; lia).
 Qed.
 
-Lemma weakening_config_wf_fixpoint {cf1 cf2} Σ Γ mfix :
+Lemma weakening_config_mfix_on_ind {cf1 cf2} Σ Γ check ok mfix :
   config.impl cf1 cf2 ->
-  @wf_fixpoint cf1 Σ Γ mfix ->
-  @wf_fixpoint cf2 Σ Γ mfix.
+  mfix_on_ind check (@conv_witness cf1 Σ Γ) ok mfix ->
+  mfix_on_ind check (@conv_witness cf2 Σ Γ) ok mfix.
 Proof.
-  intros Hcf [isl [mind [ne [hall hk]]]].
-  refine (isl, (mind; (ne, (_, hk)))).
-  eapply All_impl; tea. intros d [hr [ty [hc [hop hconv]]]].
-  refine (hr, (ty; (hc, (hop, _)))).
-  now eapply (@weakening_config_convSpec cf1 cf2).
-Qed.
-
-Lemma weakening_config_wf_cofixpoint {cf1 cf2} Σ Γ mfix :
-  config.impl cf1 cf2 ->
-  @wf_cofixpoint cf1 Σ Γ mfix ->
-  @wf_cofixpoint cf2 Σ Γ mfix.
-Proof.
-  intros Hcf [mind [ne [hall hk]]].
-  refine (mind; (ne, (_, hk))).
-  eapply All_impl; tea. intros d [ty [hc [hop hconv]]].
+  intros Hcf h.
+  refine (mfix_on_ind_All2 _ (fun _ hk => hk) h).
+  apply All2_refl. intros d m [ty [hc [hop hconv]]].
   refine (ty; (hc, (hop, _))).
   now eapply (@weakening_config_convSpec cf1 cf2).
 Qed.
@@ -89,8 +77,10 @@ Proof.
   all: try (unshelve eapply IH; [ eassumption .. | ];
             try solve [ constructor; simpl; lia ]).
   all: try (eapply (@weakening_config_cumulSpec cf1 cf2); eassumption).
-  all: try (eapply (@weakening_config_wf_fixpoint cf1 cf2); eassumption).
-  all: try (eapply (@weakening_config_wf_cofixpoint cf1 cf2); eassumption).
+  all: try (eapply (@weakening_config_mfix_on_ind cf1 cf2); eassumption).
+  all: try (match goal with h : wf_fixpoint _ _ _ |- wf_fixpoint _ _ _ =>
+              destruct h as (? & ? & ?); split; [|split]; tas;
+              eapply (@weakening_config_mfix_on_ind cf1 cf2); eassumption end).
   all: try now constructor; simpl; repeat destruct ?; simpl; lia.
   all: specialize (fun Γ t T H H' => IH _ Γ t T H ltac:(right; exact H')).
   all: simpl in IH.

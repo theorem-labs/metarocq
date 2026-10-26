@@ -11,7 +11,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICUtil
      PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp
      PCUICConversion PCUICInversion PCUICContexts PCUICArities
      PCUICWellScopedCumulativity PCUICGuardCondition
-     PCUICParallelReduction PCUICSpine PCUICInductives PCUICInductiveInversion PCUICSigmaCalculus.
+     PCUICParallelReduction PCUICSpine PCUICInductives PCUICFixWitness PCUICInductiveInversion
+     PCUICSigmaCalculus.
 
 From Stdlib Require Import ssreflect ssrbool Utf8.
 From Equations Require Import Equations.
@@ -51,23 +52,10 @@ Proof.
 Qed.
 
 (** A reduction of a declared type composes with the witness conversion. *)
-Lemma fix_on_ind_red_type {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ mind} {d : def term} {ty} :
+Lemma mfix_body_on_red_type {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {check Γ mind} {d : def term} {ty} :
   Σ ;;; Γ ⊢ dtype d ⇝ ty ->
-  fix_on_ind Σ Γ mind d ->
-  fix_on_ind Σ Γ mind (def_with_type d ty).
-Proof.
-  intros r [hr [tw [hcheck [hop hconv]]]].
-  split; [now eapply red_has_rec_arg|].
-  exists tw. split; [exact hcheck|]. split; [exact hop|]. cbn.
-  have hred : Σ ;;; Γ ⊢ ty ≤[Conv] dtype d by eapply red_ws_cumul_pb_inv; tea.
-  eapply (cumul_Trans _ _ _ _ (dtype d)); [exact (clrel_ctx r)|exact (clrel_src r)| |exact hconv].
-  exact (@cumulAlgo_cumulSpec _ _ Conv _ _ _ hred).
-Qed.
-
-Lemma cofix_on_ind_red_type {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ mind} {d : def term} {ty} :
-  Σ ;;; Γ ⊢ dtype d ⇝ ty ->
-  cofix_on_ind Σ Γ mind d ->
-  cofix_on_ind Σ Γ mind (def_with_type d ty).
+  mfix_body_on check (conv_witness Σ Γ) mind d ->
+  mfix_body_on check (conv_witness Σ Γ) mind (def_with_type d ty).
 Proof.
   intros r [tw [hcheck [hop hconv]]].
   exists tw. split; [exact hcheck|]. split; [exact hop|]. cbn.
@@ -76,98 +64,46 @@ Proof.
   exact (@cumulAlgo_cumulSpec _ _ Conv _ _ _ hred).
 Qed.
 
-Lemma wf_fixpoint_red1_type {cf Σ} {wfΣ : wf Σ} Γ mfix mfix1 :
-  wf_fixpoint Σ Γ mfix ->
-  OnOne2
-  (fun x y : def term =>
-   closed_red1 Σ Γ (dtype x) (dtype y)
-   × (dname x, dbody x, rarg x) = (dname y, dbody y, rarg y)) mfix mfix1 ->
-  wf_fixpoint Σ Γ mfix1.
-Proof.
-  intros [isl [mind [ne [hall hck]]]] o.
-  split.
-  { move: isl. clear -o. induction o; cbn.
-    - destruct p as [_ eqs].
-      destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs. auto.
-    - move/andP => [] h hs. apply/andP; split => //. now apply IHo. }
-  exists mind. split.
-  { intros eq; subst mfix1. now depelim o. }
-  split; [|exact hck].
-  clear -o hall wfΣ.
-  induction o; depelim hall; constructor; auto.
-  destruct p as [r eqs].
-  destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
-  exact (fix_on_ind_red_type
-    (d := {| dname := na; dtype := ty; dbody := bo; rarg := ra |}) (ty := ty')
-    (closed_red1_red r) f).
-Qed.
-
-Lemma wf_fixpoint_red1_body {cf Σ} {wfΣ : wf Σ} Γ Δ mfix mfix1 :
-  wf_fixpoint Σ Γ mfix ->
-  OnOne2
-  (fun x y : def term =>
-   closed_red1 Σ Δ (dbody x) (dbody y)
-   × (dname x, dtype x, rarg x) = (dname y, dtype y, rarg y)) mfix mfix1 ->
-  wf_fixpoint Σ Γ mfix1.
-Proof.
-  intros [isl [mind [ne [hall hck]]]] o.
-  split.
-  { move: isl. clear -o. induction o; cbn.
-    - destruct p as [r eqs].
-      destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
-      move/andP => [] h hs. apply/andP; split => //.
-      move: h. cbn. intros h.
-      eapply (isLambda_red1 Σ Δ bo bo') => //. exact (clrel_rel r).
-    - move/andP => [] h hs. apply/andP; split => //. now apply IHo. }
-  exists mind. split.
-  { intros eq; subst mfix1. now depelim o. }
-  split; [|exact hck].
-  clear -o hall.
-  induction o; depelim hall; constructor; auto.
-  destruct p as [_ eqs].
-  destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
-  exact f.
-Qed.
-
-Lemma wf_cofixpoint_red1_type {cf:checker_flags} (Σ : global_env_ext) Γ mfix mfix1 :
-  wf Σ.1 ->
-  wf_cofixpoint Σ Γ mfix ->
+Lemma mfix_on_ind_red1_type {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {check ok} Γ mfix mfix1 :
   OnOne2
   (fun x y : def term =>
    Σ ;;; Γ ⊢ dtype x ⇝ dtype y
    × (dname x, dbody x, rarg x) = (dname y, dbody y, rarg y)) mfix mfix1 ->
-  wf_cofixpoint Σ Γ mfix1.
+  mfix_on_ind check (conv_witness Σ Γ) ok mfix ->
+  mfix_on_ind check (conv_witness Σ Γ) ok mfix1.
 Proof.
-  intros wfΣ [mind [ne [hall hck]]] o.
-  exists mind. split.
-  { intros eq; subst mfix1. now depelim o. }
-  split; [|exact hck].
-  clear -o hall wfΣ.
-  induction o; depelim hall; constructor; auto.
-  destruct p as [r eqs].
-  destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
-  exact (cofix_on_ind_red_type
-    (d := {| dname := na; dtype := ty; dbody := bo; rarg := ra |}) (ty := ty') r c).
+  intros o. eapply mfix_on_ind_OnOne2; tea.
+  intros [na ty bo ra] [na' ty' bo' ra'] m [r eqs] h; cbn in r, eqs.
+  case: eqs => <- <- <-.
+  exact (mfix_body_on_red_type (d := {| dname := na; dtype := ty; dbody := bo; rarg := ra |}) r h).
 Qed.
 
-Lemma wf_cofixpoint_red1_body {cf:checker_flags} (Σ : global_env_ext) Γ Δ mfix mfix1 :
-  wf Σ.1 ->
-  wf_cofixpoint Σ Γ mfix ->
+(** A check that reads only the declared type does not see a reduction of a body. *)
+Lemma mfix_on_ind_red1_body {check} `{ShapeCheck check} {R ok} (Q : term -> term -> Type) mfix mfix1 :
   OnOne2
   (fun x y : def term =>
-   red1 Σ Δ (dbody x) (dbody y)
+   Q (dbody x) (dbody y)
    × (dname x, dtype x, rarg x) = (dname y, dtype y, rarg y)) mfix mfix1 ->
-  wf_cofixpoint Σ Γ mfix1.
+  mfix_on_ind check R ok mfix ->
+  mfix_on_ind check R ok mfix1.
 Proof.
-  intros wfΣ [mind [ne [hall hck]]] o.
-  exists mind. split.
-  { intros eq; subst mfix1. now depelim o. }
-  split; [|exact hck].
-  clear -o hall.
-  induction o; depelim hall; constructor; auto.
-  destruct p as [_ eqs].
-  destruct hd as [na ty bo ra], hd' as [na' ty' bo' ra']; cbn in *; noconf eqs.
-  exact c.
+  intros o. eapply mfix_on_ind_OnOne2; tea.
+  intros [na ty bo ra] [na' ty' bo' ra'] m [_ eqs] [tw [hc hr]]; cbn in eqs.
+  case: eqs => <- <- <-.
+  exists tw; split; [|exact hr].
+  rewrite -hc.
+  exact (shape_check_dbody (check := check)
+    (def_with_type {| dname := na; dtype := ty; dbody := bo; rarg := ra |} tw) bo').
+Qed.
+
+Lemma forallb_OnOne2 {A} {Q : A -> A -> Type} {p : A -> bool} {l l'} :
+  OnOne2 Q l l' ->
+  (forall x y, Q x y -> p x -> p y) ->
+  forallb p l -> forallb p l'.
+Proof.
+  intros o hq hl. apply All_forallb.
+  eapply (OnOne2_All_All o (forallb_All _ _ hl)); [easy|].
+  intros x y q px. exact (hq x y q px).
 Qed.
 
 #[global] Hint Extern 0 (conv_decls _ _ _ _ _) => constructor : pcuic.
@@ -2850,9 +2786,9 @@ Proof.
     simpl. destruct narg; discriminate.
 
   - (* Fix congruence: type reduction *)
-    (* [wf_fixpoint] is now a sigma type, so it takes an X name: restore the
-       names the rest of this branch uses. *)
-    rename X4 into wffix, X5 into X4, H1 into H2.
+    match goal with H : wf_fixpoint _ _ _ |- _ => rename H into wffix end.
+    match goal with H : OnOne2 _ mfix mfix1 |- _ => rename H into X4 end.
+    match goal with H : is_true (forallb (test_def _ _) mfix) |- _ => rename H into H2 end.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : conv_context cumulAlgo_gen Σ (Γ ,,, fix_context mfix) (Γ ,,, fix_context mfix1)).
     { clear -wf wfΓ X X4 H2 fixl.
@@ -2916,14 +2852,26 @@ Proof.
         eapply (closedn_on_free_vars (P:=xpredT)) in Hs.
         now eapply on_free_vars_any_xpredT.
 
-    * eapply wf_fixpoint_red1_type; [exact wffix|].
-      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e]; split; [exact r|exact e].
+    * destruct wffix as [isl [hr hm]].
+      have o : OnOne2 (fun x y : def term => Σ ;;; Γ ⊢ dtype x ⇝ dtype y
+          × (dname x, dbody x, rarg x) = (dname y, dbody y, rarg y)) mfix mfix1.
+      { eapply OnOne2_impl; tea; cbn; intros x y [[r _] e];
+          split; [now eapply closed_red1_red|exact e]. }
+      split; [|split].
+      + eapply (forallb_OnOne2 o); [|exact isl].
+        intros x y [_ e]; cbn. now case: e => _ -> _.
+      + eapply (forallb_OnOne2 o); [|exact hr].
+        intros [na ty bo ra] [na' ty' bo' ra'] [r e]; cbn in r, e.
+        case: e => <- <- <-.
+        exact (red_has_rec_arg (d := {| dname := na; dtype := ty; dbody := bo; rarg := ra |}) r).
+      + exact (mfix_on_ind_red1_type Γ mfix mfix1 o hm).
     * eapply isTypeRel_isType. eapply All_nth_error in X0; eauto.
     * apply conv_cumul, conv_sym. destruct disj as [<-|[[red Hred] eq]] => //.
       reflexivity. eapply PCUICCumulativity.red_conv.
       apply red1_red, red.
   - (* Fix congruence in body *)
-    rename X4 into wffix, X5 into X4, H1 into H2.
+    match goal with H : wf_fixpoint _ _ _ |- _ => rename H into wffix end.
+    match goal with H : OnOne2 _ mfix mfix1 |- _ => rename H into X4 end.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : fix_context mfix = fix_context mfix1).
     { clear -wf X4.
@@ -2958,15 +2906,28 @@ Proof.
         noconf eq.
         rewrite -convctx.
         apply lift_sorting_it_impl_gen with HB => //= [] [Ht IHt] //. eauto.
-    * eapply wf_fixpoint_red1_body; [exact wffix|].
-      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e]; split; [exact r|exact e].
+    * destruct wffix as [isl [hr hm]].
+      have o : OnOne2 (fun x y : def term =>
+          closed_red1 Σ (Γ ,,, fix_context mfix) (dbody x) (dbody y)
+          × (dname x, dtype x, rarg x) = (dname y, dtype y, rarg y)) mfix mfix1.
+      { eapply OnOne2_impl; tea; cbn; intros x y [[r _] e]; split; [exact r|exact e]. }
+      split; [|split].
+      + eapply (forallb_OnOne2 o); [|exact isl].
+        intros x y [r _] h; cbn in h |- *.
+        exact (isLambda_red1 _ _ _ _ h (clrel_rel r)).
+      + eapply (forallb_OnOne2 o); [|exact hr].
+        intros [na ty bo ra] [na' ty' bo' ra'] [_ e] h; cbn in e.
+        case: e => <- <- <-. exact h.
+      + exact (mfix_on_ind_red1_body _ mfix mfix1 o hm).
     * eapply isTypeRel_isType. eapply All_nth_error in X0; eauto.
     * apply conv_cumul, conv_sym. destruct disj as [<-|[_ eq]]; [reflexivity|].
       destruct decl as [na ty bo ra], decl' as [na' ty' bo' ra']; cbn in *; noconf eq.
       reflexivity.
 
   - (* CoFix congruence: type reduction *)
-    rename X4 into wffix, X5 into X4, H1 into H2.
+    match goal with H : wf_cofixpoint _ _ _ |- _ => rename H into wffix end.
+    match goal with H : OnOne2 _ mfix mfix1 |- _ => rename H into X4 end.
+    match goal with H : is_true (forallb (test_def _ _) mfix) |- _ => rename H into H2 end.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : conv_context cumulAlgo_gen Σ (Γ ,,, fix_context mfix) (Γ ,,, fix_context mfix1)).
     { clear -wf wfΓ X X4 H2 fixl.
@@ -3029,7 +2990,7 @@ Proof.
         eapply (closedn_on_free_vars (P:=xpredT)) in Hs.
         now eapply on_free_vars_any_xpredT.
 
-    * eapply (wf_cofixpoint_red1_type _ Γ); [exact wf|exact wffix|].
+    * eapply mfix_on_ind_red1_type; [|exact wffix].
       eapply OnOne2_impl; tea; cbn; intros x y [[r _] e];
         split; [now eapply closed_red1_red|exact e].
     * eapply isTypeRel_isType. eapply All_nth_error in X0; eauto.
@@ -3038,7 +2999,8 @@ Proof.
       apply red1_red, red.
 
   - (* CoFix congruence in body *)
-    rename X4 into wffix, X5 into X4, H1 into H2.
+    match goal with H : wf_cofixpoint _ _ _ |- _ => rename H into wffix end.
+    match goal with H : OnOne2 _ mfix mfix1 |- _ => rename H into X4 end.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : fix_context mfix = fix_context mfix1).
     { clear -wf X4.
@@ -3073,9 +3035,8 @@ Proof.
         noconf eq.
         rewrite -convctx.
         apply lift_sorting_it_impl_gen with HB => //= [] [Ht IHt] //. eauto.
-    * eapply wf_cofixpoint_red1_body; [exact wf|exact wffix|].
-      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e];
-        split; [exact (clrel_rel r)|exact e].
+    * eapply (mfix_on_ind_red1_body (closed_red1 Σ (Γ ,,, fix_context mfix))); [|exact wffix].
+      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e]; split; [exact r|exact e].
     * eapply isTypeRel_isType. eapply All_nth_error in X0; eauto.
     * apply conv_cumul, conv_sym. destruct disj as [<-|[_ eq]]; [reflexivity|].
       destruct decl as [na ty bo ra], decl' as [na' ty' bo' ra']; cbn in *; noconf eq.

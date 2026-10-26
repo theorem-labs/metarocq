@@ -15,14 +15,22 @@ From MetaRocq.Quotation.ToPCUIC.QuotationOf.PCUIC Require Import PCUICAst.Instan
 
 #[export] Instance quote_FixCoFix : ground_quotable FixCoFix := ltac:(destruct 1; exact _).
 
-#[export] Instance quote_has_rec_arg {d} : ground_quotable (is_true (has_rec_arg d))
-  := ltac:(cbv [has_rec_arg]; exact _).
+#[export] Instance quote_mfix_body_on {T check R mind d}
+  {qT : quotation_of T} {quoteT : ground_quotable T}
+  {qcheck : quotation_of check} {qR : quotation_of R}
+  {quoteR : forall t u, ground_quotable (R t u)} :
+  ground_quotable (@mfix_body_on T check R mind d)
+  := ltac:(cbv [mfix_body_on]; exact _).
 
-#[export] Instance quote_fix_on_ind {cf Σ Γ mind d} : ground_quotable (@fix_on_ind cf Σ Γ mind d)
-  := ltac:(cbv [fix_on_ind]; exact _).
+#[export] Instance quote_mfix_on_ind {T check R ok mfix}
+  {qT : quotation_of T} {quoteT : ground_quotable T}
+  {qcheck : quotation_of check} {qR : quotation_of R} {qok : quotation_of ok}
+  {quoteR : forall t u, ground_quotable (R t u)} :
+  ground_quotable (@mfix_on_ind T check R ok mfix)
+  := ltac:(cbv [mfix_on_ind]; exact _).
 
-#[export] Instance quote_cofix_on_ind {cf Σ Γ mind d} : ground_quotable (@cofix_on_ind cf Σ Γ mind d)
-  := ltac:(cbv [cofix_on_ind]; exact _).
+#[export] Instance quote_conv_witness {cf Σ Γ t u} : ground_quotable (@conv_witness cf Σ Γ t u)
+  := ltac:(cbv [conv_witness]; exact _).
 
 #[export] Instance quote_wf_fixpoint {cf Σ Γ mfix} : ground_quotable (@wf_fixpoint cf Σ Γ mfix)
   := ltac:(cbv [wf_fixpoint]; exact _).

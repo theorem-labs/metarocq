@@ -104,30 +104,20 @@ Definition check_one_fix d :=
 Definition has_rec_arg (d : def term) : bool :=
   d.(rarg) <? context_assumptions (decompose_prod_assum [] d.(dtype)).1.
 
-(** [d] with its declared type replaced by [ty]. *)
-Definition def_with_type (d : def term) (ty : term) : def term :=
-  {| dname := d.(dname); dtype := ty; dbody := d.(dbody); rarg := d.(rarg) |}.
+(** The witness relation of the typing rules: [ty] is scoped in [Γ] and
+    convertible with the declared type. Rocq's kernel reduces the type of the
+    recursive argument to find its inductive ([Inductive.inductive_of_mutfix]);
+    for a well-typed declared type, a convertible type on which [check_one_fix]
+    succeeds exists exactly when that reduction reaches an applied inductive. *)
+Definition conv_witness `{checker_flags} (Σ : global_env_ext) (Γ : context) (t ty : term) :=
+  is_open_term Γ ty × (Σ ;;; Γ |- t =s ty).
 
-Lemma map_def_with_type f g d ty :
-  def_with_type (map_def f g d) (f ty) = map_def f g (def_with_type d ty).
-Proof. reflexivity. Qed.
-
-(** A fixpoint body is on the inductive block [mind] when its declared type
-    converts to a type whose recursive argument is, syntactically, an applied
-    inductive of [mind]. Rocq's kernel reduces the type of the recursive
-    argument to find its inductive ([Inductive.inductive_of_mutfix]); for a
-    well-typed declared type, the conversion holds exactly when that reduction
-    reaches an applied inductive of [mind]. *)
-Definition fix_on_ind `{checker_flags} (Σ : global_env_ext) (Γ : context) (mind : kername) (d : def term) :=
-  has_rec_arg d ×
-  ∑ ty, (check_one_fix (def_with_type d ty) = Some mind) ×
-        is_open_term Γ ty × (Σ ;;; Γ |- d.(dtype) =s ty).
-
-(** All bodies are lambdas and recurse on one finite mutual inductive block. *)
+(** All bodies are lambdas, recurse on a syntactic product of their declared
+    type, and recurse on one finite mutual inductive block. *)
 Definition wf_fixpoint `{checker_flags} (Σ : global_env_ext) (Γ : context) (mfix : mfixpoint term) :=
-  forallb (isLambda ∘ dbody) mfix ×
-  ∑ mind, (mfix <> []) × All (fix_on_ind Σ Γ mind) mfix ×
-          check_recursivity_kind (lookup_env Σ) mind Finite.
+  forallb (isLambda ∘ dbody) mfix × forallb has_rec_arg mfix ×
+  mfix_on_ind check_one_fix (conv_witness Σ Γ)
+    (fun mind => check_recursivity_kind (lookup_env Σ) mind Finite) mfix.
 
 Definition check_one_cofix d :=
   let '{| dname := na;
@@ -141,18 +131,11 @@ Definition check_one_cofix d :=
   | None => None (* Not recursive on an inductive type *)
   end.
 
-(** A cofixpoint body produces values of the block [mind] when its declared
-    type converts to a type whose conclusion is, syntactically, an applied
-    inductive of [mind] (the kernel's [codomain_is_coind] reduces under every
-    product). *)
-Definition cofix_on_ind `{checker_flags} (Σ : global_env_ext) (Γ : context) (mind : kername) (d : def term) :=
-  ∑ ty, (check_one_cofix (def_with_type d ty) = Some mind) ×
-        is_open_term Γ ty × (Σ ;;; Γ |- d.(dtype) =s ty).
-
-(** All bodies produce values in one coinductive mutual block. *)
+(** All bodies produce values in one coinductive mutual block (the kernel's
+    [codomain_is_coind] reduces the codomain under every product). *)
 Definition wf_cofixpoint `{checker_flags} (Σ : global_env_ext) (Γ : context) (mfix : mfixpoint term) :=
-  ∑ mind, (mfix <> []) × All (cofix_on_ind Σ Γ mind) mfix ×
-          check_recursivity_kind (lookup_env Σ) mind CoFinite.
+  mfix_on_ind check_one_cofix (conv_witness Σ Γ)
+    (fun mind => check_recursivity_kind (lookup_env Σ) mind CoFinite) mfix.
 
 Reserved Notation "'wf_local' Σ Γ " (at level 9, Σ, Γ at next level).
 

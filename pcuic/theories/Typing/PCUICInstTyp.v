@@ -354,50 +354,25 @@ Proof.
   apply inst_cumulSpec.
 Qed.
 
-Lemma inst_wf_fixpoint {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ σ mfix} :
+(** Instantiation carries the witness of every body; [check] is one of
+    [check_one_fix] and [check_one_cofix] ([inst_check_one_fix],
+    [inst_check_one_cofix]). *)
+Lemma inst_mfix_on_ind {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ σ check ok mfix} :
+  (forall d m, check d = Some m ->
+    check (map_def (inst σ) (inst (up #|mfix| σ)) d) = Some m) ->
   closed_subst Γ σ Δ ->
   is_closed_context Γ ->
   All (fun d => is_open_term Γ (dtype d)) mfix ->
-  wf_fixpoint Σ Γ mfix ->
-  wf_fixpoint Σ Δ (map (map_def (inst σ) (inst (up #|mfix| σ))) mfix).
+  mfix_on_ind check (conv_witness Σ Γ) ok mfix ->
+  mfix_on_ind check (conv_witness Σ Δ) ok (map (map_def (inst σ) (inst (up #|mfix| σ))) mfix).
 Proof.
-  intros hσ hΓ hop [isl [mind [ne [hall hk]]]].
-  split; [|exists mind; split; [|split]].
-  - rewrite forallb_map. eapply forallb_impl; tea. intros x _ h.
-    now eapply isLambda_inst.
-  - destruct mfix => //.
-  - eapply All_map. eapply All_impl.
-    { eapply All_prod; [exact hop|exact hall]. }
-    intros d [hopd [hr [ty [hc [hty hconv]]]]].
-    split.
-    { now eapply inst_has_rec_arg. }
-    exists ty.[σ]; split; [|split].
-    * rewrite map_def_with_type.
-      now eapply (inst_check_one_fix σ mfix).
-    * now eapply inst_is_open_term.
-    * now eapply inst_convSpec.
-  - exact hk.
-Qed.
-
-Lemma inst_wf_cofixpoint {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ σ mfix} :
-  closed_subst Γ σ Δ ->
-  is_closed_context Γ ->
-  All (fun d => is_open_term Γ (dtype d)) mfix ->
-  wf_cofixpoint Σ Γ mfix ->
-  wf_cofixpoint Σ Δ (map (map_def (inst σ) (inst (up #|mfix| σ))) mfix).
-Proof.
-  intros hσ hΓ hop [mind [ne [hall hk]]].
-  exists mind; split; [|split].
-  - destruct mfix => //.
-  - eapply All_map. eapply All_impl.
-    { eapply All_prod; [exact hop|exact hall]. }
-    intros d [hopd [ty [hc [hty hconv]]]].
-    exists ty.[σ]; split; [|split].
-    * rewrite map_def_with_type.
-      now eapply (inst_check_one_cofix σ mfix).
-    * now eapply inst_is_open_term.
-    * now eapply inst_convSpec.
-  - exact hk.
+  intros hc hσ hΓ hop.
+  eapply mfix_on_ind_map; [exact hop| |easy].
+  intros d m hopd [ty [hcd [hty hconv]]].
+  exists ty.[σ]; split; [|split].
+  - rewrite map_def_with_type. now apply hc.
+  - now eapply inst_is_open_term.
+  - now eapply inst_convSpec.
 Qed.
 
 Lemma inst_prim_type σ p pty : (prim_type p pty).[σ] = prim_type (map_prim (inst σ) p) pty.
@@ -596,7 +571,13 @@ Proof.
         now eapply All_local_env_app_inv in htypes as [].
       + rewrite lift0_inst /types inst_context_length fix_context_length.
         now sigma.
-    * eapply inst_wf_fixpoint; tea.
+    * destruct wffix as (isl & hra & hon). split; [|split].
+      1: rewrite forallb_map; refine (forallb_impl _ _ _ _ isl); intros x _ h.
+      1: now eapply isLambda_inst.
+      1: rewrite forallb_map; refine (forallb_impl _ _ _ _ hra); intros x _ h.
+      1: now eapply inst_has_rec_arg.
+      eapply inst_mfix_on_ind; tea.
+      1: exact (inst_check_one_fix σ mfix).
       1: eapply well_subst_closed_subst; tea; eapply wf_local_closed_context; tea.
       1: eapply wf_local_closed_context; tea.
       eapply (All_impl hmfixt) => d hd.
@@ -622,7 +603,8 @@ Proof.
         now eapply All_local_env_app_inv in htypes as [].
       + rewrite lift0_inst /types inst_context_length fix_context_length.
         now sigma.
-    * eapply inst_wf_cofixpoint; tea.
+    * eapply inst_mfix_on_ind; tea.
+      1: exact (inst_check_one_cofix σ mfix).
       1: eapply well_subst_closed_subst; tea; eapply wf_local_closed_context; tea.
       1: eapply wf_local_closed_context; tea.
       eapply (All_impl hmfixt) => d hd.

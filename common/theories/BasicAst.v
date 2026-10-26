@@ -150,6 +150,67 @@ Definition test_def {A} (tyf bodyf : A -> bool) (d : def A) :=
 Definition tFixProp {A} (P P' : A -> Type) (m : mfixpoint A) :=
   All (fun x : def A => P x.(dtype) * P' x.(dbody))%type m.
 
+(** [d] with its declared type replaced by [ty]. *)
+Definition def_with_type {T} (d : def T) (ty : T) : def T :=
+  {| dname := d.(dname); dtype := ty; dbody := d.(dbody); rarg := d.(rarg) |}.
+
+Lemma map_def_with_type {A B} (f g : A -> B) d ty :
+  def_with_type (map_def f g d) (f ty) = map_def f g (def_with_type d ty).
+Proof. reflexivity. Qed.
+
+(** A (co)fixpoint body [d] is on the block [mind] when its declared type is
+    related by [R] (conversion or reduction) to a type [ty] on which [check]
+    finds [mind]. *)
+Definition mfix_body_on {T} (check : def T -> option kername) (R : T -> T -> Type)
+  (mind : kername) (d : def T) :=
+  ∑ ty, (check (def_with_type d ty) = Some mind) × R d.(dtype) ty.
+
+(** All bodies are on one block [mind], which passes [ok] (its recursivity kind). *)
+Definition mfix_on_ind {T} (check : def T -> option kername) (R : T -> T -> Type)
+  (ok : kername -> bool) (mfix : mfixpoint T) :=
+  ∑ mind, (mfix <> []) × All (mfix_body_on check R mind) mfix × ok mind.
+
+Lemma mfix_on_ind_All2 {T T'} {check : def T -> option kername} {R : T -> T -> Type} {ok : kername -> bool}
+  {check' : def T' -> option kername} {R' : T' -> T' -> Type} {ok' : kername -> bool} {mfix mfix'} :
+  All2 (fun d d' => forall m, mfix_body_on check R m d -> mfix_body_on check' R' m d') mfix mfix' ->
+  (forall m, ok m -> ok' m) ->
+  mfix_on_ind check R ok mfix -> mfix_on_ind check' R' ok' mfix'.
+Proof.
+  intros hall hok [mind [ne [hb hk]]].
+  exists mind; split; [|split].
+  - intros ->. depelim hall. now apply ne.
+  - clear ne hok hk. revert hb.
+    induction hall as [|d d' l l' hd _ IH]; intros hb; depelim hb; constructor.
+    + now apply hd.
+    + now apply IH.
+  - now apply hok.
+Qed.
+
+Lemma mfix_on_ind_map {T T'} {check : def T -> option kername} {R : T -> T -> Type} {ok : kername -> bool}
+  {check' : def T' -> option kername} {R' : T' -> T' -> Type} {ok' : kername -> bool} (f : def T -> def T')
+  (P : def T -> Type) mfix :
+  All P mfix ->
+  (forall d m, P d -> mfix_body_on check R m d -> mfix_body_on check' R' m (f d)) ->
+  (forall m, ok m -> ok' m) ->
+  mfix_on_ind check R ok mfix -> mfix_on_ind check' R' ok' (map f mfix).
+Proof.
+  intros hP hb hok. apply mfix_on_ind_All2; tas.
+  induction hP; constructor; eauto.
+Qed.
+
+Lemma mfix_on_ind_OnOne2 {T} {check : def T -> option kername} {R : T -> T -> Type} {ok : kername -> bool}
+  (Q : def T -> def T -> Type) mfix mfix' :
+  OnOne2 Q mfix mfix' ->
+  (forall d d' m, Q d d' -> mfix_body_on check R m d -> mfix_body_on check R m d') ->
+  mfix_on_ind check R ok mfix -> mfix_on_ind check R ok mfix'.
+Proof.
+  intros ho hq. apply mfix_on_ind_All2; [|easy].
+  induction ho as [d d' tl hd|d tl tl' _ IH].
+  - constructor; [intros m; now apply hq|].
+    induction tl; constructor; auto.
+  - constructor; [intros m h; exact h|exact IH].
+Qed.
+
 Lemma map_def_map_def {A B C} (f f' : B -> C) (g g' : A -> B) (d : def A) :
   map_def f f' (map_def g g' d) = map_def (f ∘ g) (f' ∘ g') d.
 Proof.

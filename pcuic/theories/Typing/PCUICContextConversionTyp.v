@@ -179,38 +179,18 @@ Proof.
     all: eapply cumulAlgo_cumulSpec; eauto.
 Defined.
 
-Lemma wf_fixpoint_context_cumulativity {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Γ' mfix} :
+Lemma mfix_on_ind_context_cumulativity {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Γ' check ok mfix} :
   wf_local Σ Γ -> wf_local Σ Γ' ->
   cumul_context cumulAlgo_gen Σ Γ' Γ ->
   All (fun d => is_open_term Γ (dtype d)) mfix ->
-  wf_fixpoint Σ Γ mfix -> wf_fixpoint Σ Γ' mfix.
+  mfix_on_ind check (conv_witness Σ Γ) ok mfix -> mfix_on_ind check (conv_witness Σ Γ') ok mfix.
 Proof.
-  intros wfΓ wfΓ' hctx hop [isl [mind [ne [hall hk]]]].
-  split; [exact isl|]. exists mind. split; [exact ne|]. split; [|exact hk].
+  intros wfΓ wfΓ' hctx hop h.
   have hlen : #|Γ'| = #|Γ| by apply (All2_fold_length hctx).
   have hcc : Σ ⊢ Γ' ≤ Γ by eapply (wt_cum_ws_cumul_ctx_pb Cumul).
-  eapply All_impl. { eapply All_prod; [exact hop|exact hall]. }
-  intros d [hopd [hr [ty [hc [hty hconv]]]]].
-  split; [exact hr|]. exists ty. split; [exact hc|]. split.
-  - move: hty. now rewrite hlen.
-  - eapply convSpec_convAlgo_curry in hconv; tea.
-    2: now eapply wf_local_closed_context.
-    eapply (ws_cumul_pb_ws_cumul_ctx hcc) in hconv.
-    exact (@cumulAlgo_cumulSpec _ _ Conv _ _ _ hconv).
-Qed.
-
-Lemma wf_cofixpoint_context_cumulativity {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Γ' mfix} :
-  wf_local Σ Γ -> wf_local Σ Γ' ->
-  cumul_context cumulAlgo_gen Σ Γ' Γ ->
-  All (fun d => is_open_term Γ (dtype d)) mfix ->
-  wf_cofixpoint Σ Γ mfix -> wf_cofixpoint Σ Γ' mfix.
-Proof.
-  intros wfΓ wfΓ' hctx hop [mind [ne [hall hk]]].
-  exists mind. split; [exact ne|]. split; [|exact hk].
-  have hlen : #|Γ'| = #|Γ| by apply (All2_fold_length hctx).
-  have hcc : Σ ⊢ Γ' ≤ Γ by eapply (wt_cum_ws_cumul_ctx_pb Cumul).
-  eapply All_impl. { eapply All_prod; [exact hop|exact hall]. }
-  intros d [hopd [ty [hc [hty hconv]]]].
+  refine (mfix_on_ind_All2 _ (fun _ hk => hk) h).
+  eapply All_All2_refl, (All_impl hop).
+  intros d hopd m [ty [hc [hty hconv]]].
   exists ty. split; [exact hc|]. split.
   - move: hty. now rewrite hlen.
   - eapply convSpec_convAlgo_curry in hconv; tea.
@@ -305,7 +285,9 @@ Proof.
       eapply (All_mfix_wf); auto.
       apply (All_impl X1); simpl.
       intros d' Ht. now apply Ht.
-    * eapply (wf_fixpoint_context_cumulativity wfΓ X6 X5); tea.
+    * match goal with h : wf_fixpoint _ _ _ |- _ => destruct h as (isl & hra & hon) end.
+      split; [exact isl|split; [exact hra|]].
+      eapply (mfix_on_ind_context_cumulativity wfΓ X6 X5); tea.
       eapply (All_impl X0) => d hd.
       now eapply isType_is_open_term, isTypeRel_isType, hd.
   - econstructor.
@@ -322,7 +304,7 @@ Proof.
       eapply (All_mfix_wf); auto.
       apply (All_impl X1); simpl.
       intros d' Ht. now apply Ht.
-    * eapply (wf_cofixpoint_context_cumulativity wfΓ X6 X5); tea.
+    * eapply (mfix_on_ind_context_cumulativity wfΓ X6 X5); tea.
       eapply (All_impl X0) => d hd.
       now eapply isType_is_open_term, isTypeRel_isType, hd.
   - econstructor; tea.

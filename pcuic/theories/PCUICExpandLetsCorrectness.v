@@ -2687,19 +2687,28 @@ Proof.
   rewrite /trans_local context_assumptions_map //.
 Qed.
 
-Lemma trans_fix_on_ind {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {wfΣ' : wf_trans Σ}
-  {Γ n mind d} :
+(** The translation keeps [mfix_on_ind] (all of [wf_cofixpoint], the last part of
+    [wf_fixpoint]), for a check that it preserves on the bodies that satisfy [P]
+    with a well-scoped witness type. *)
+Lemma trans_mfix_on_ind {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {wfΣ' : wf_trans Σ}
+  {check} `{ShapeCheck check} {Γ k mfix} (P : def term -> Type) :
   wf_local Σ Γ ->
-  isType Σ Γ (dtype d) ->
-  on_free_vars (shiftnP n (shiftnP #|Γ| xpred0)) (dbody d) ->
-  ST.fix_on_ind Σ Γ mind d ->
-  @ST.fix_on_ind (cf' cf) (trans_global Σ) (trans_local Γ) mind (map_def trans trans d).
+  All (fun d => isType Σ Γ (dtype d)) mfix ->
+  All P mfix ->
+  (forall d ty, P d -> is_open_term Γ ty ->
+    check (map_def trans trans (def_with_type d ty)) = check (def_with_type d ty)) ->
+  mfix_on_ind check (ST.conv_witness Σ Γ)
+    (fun mind => ST.check_recursivity_kind (lookup_env Σ) mind k) mfix ->
+  mfix_on_ind check (@ST.conv_witness (cf' cf) (trans_global Σ) (trans_local Γ))
+    (fun mind => ST.check_recursivity_kind (lookup_env (trans_global Σ)) mind k)
+    (map (map_def trans trans) mfix).
 Proof.
-  intros wfΓ hty onbod hfix.
-  have h : ∑ ty, (ST.check_one_fix (ST.def_with_type d ty) = Some mind)
-                 × red Σ Γ (dtype d) ty.
-  { eapply fix_on_ind_red_wf; tea. }
-  destruct h as [ty [hc hred]].
+  intros wfΓ hty hP htr.
+  apply (mfix_on_ind_map _ _ _ (All_prod _ _ _ _ hty hP)).
+  2:{ intros mind hk. cbv beta in hk |- *.
+      rewrite (trans_check_rec_kind Σ mind k) in hk. exact hk. }
+  intros d mind [isty hd] hb.
+  destruct (mfix_body_on_conv_red (wfΣ := wfΣ) wfΓ isty hb) as [ty [hc hred]].
   have clΓ : is_closed_context Γ by now eapply wf_local_closed_context.
   have opd : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
   have convs : Σ ;;; Γ ⊢ dtype d ≤[Conv] ty.
@@ -2711,81 +2720,11 @@ Proof.
     + now eapply trans_is_closed_context.
     + apply trans_on_free_vars; len; tea.
     + eapply trans_red; tea. now eapply isType_wt. }
-  split.
-  - apply trans_has_rec_arg. exact (fst hfix).
-  - exists (trans ty). split; [|split].
-    * rewrite map_def_with_type.
-      erewrite (trans_check_one_fix n (shiftnP #|Γ| xpred0)).
-      { exact hc. }
-      rewrite /test_def /=. apply/andP; split; [exact opty|exact onbod].
-    * exact (@ws_cumul_pb_is_open_term_right (cf' cf) Conv (trans_global Σ) wfΣ'
-               (trans_local Γ) _ _ convt).
-    * exact (@cumulAlgo_cumulSpec (cf' cf) (trans_global Σ) Conv _ _ _ convt).
-Qed.
-
-Lemma trans_cofix_on_ind {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {wfΣ' : wf_trans Σ}
-  {Γ mind d} :
-  wf_local Σ Γ ->
-  isType Σ Γ (dtype d) ->
-  ST.cofix_on_ind Σ Γ mind d ->
-  @ST.cofix_on_ind (cf' cf) (trans_global Σ) (trans_local Γ) mind (map_def trans trans d).
-Proof.
-  intros wfΓ hty hcofix.
-  have h : ∑ ty, (ST.check_one_cofix (ST.def_with_type d ty) = Some mind)
-                 × red Σ Γ (dtype d) ty.
-  { eapply cofix_on_ind_red_wf; tea. }
-  destruct h as [ty [hc hred]].
-  have clΓ : is_closed_context Γ by now eapply wf_local_closed_context.
-  have opd : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
-  have convt : @ws_cumul_pb (cf' cf) Conv (trans_global Σ) (trans_local Γ)
-                 (trans (dtype d)) (trans ty).
-  { eapply red_ws_cumul_pb; tea. split.
-    + now eapply trans_is_closed_context.
-    + apply trans_on_free_vars; len; tea.
-    + eapply trans_red; tea. now eapply isType_wt. }
   exists (trans ty). split; [|split].
-  - rewrite map_def_with_type trans_check_one_cofix. exact hc.
+  - rewrite map_def_with_type htr //.
   - exact (@ws_cumul_pb_is_open_term_right (cf' cf) Conv (trans_global Σ) wfΣ'
              (trans_local Γ) _ _ convt).
   - exact (@cumulAlgo_cumulSpec (cf' cf) (trans_global Σ) Conv _ _ _ convt).
-Qed.
-
-Lemma trans_wf_fixpoint {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {wfΣ' : wf_trans Σ}
-  {Γ n mfix} :
-  wf_local Σ Γ ->
-  All (fun d => isType Σ Γ (dtype d)) mfix ->
-  on_free_vars_mfix (shiftnP #|Γ| xpred0) n mfix ->
-  ST.wf_fixpoint Σ Γ mfix ->
-  @ST.wf_fixpoint (cf' cf) (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix).
-Proof.
-  intros wfΓ hty onm [isl [mind [ne [hall hk]]]].
-  split.
-  { apply All_forallb. eapply All_map.
-    eapply (All_impl (forallb_All _ _ isl)).
-    intros d h. cbn in h |- *. now rewrite trans_isLambda. }
-  exists mind. split; [|split].
-  - destruct mfix => //.
-  - eapply All_map.
-    eapply (All_impl (All_prod _ _ _ _ (All_prod _ _ _ _ hty (forallb_All _ _ onm)) hall)).
-    intros d [[hd onbod] hfix].
-    eapply (trans_fix_on_ind (n := n)); tea.
-    move: onbod; rewrite /test_def => /andP[] _ //.
-  - rewrite (trans_check_rec_kind Σ mind Finite) in hk. exact hk.
-Qed.
-
-Lemma trans_wf_cofixpoint {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {wfΣ' : wf_trans Σ}
-  {Γ mfix} :
-  wf_local Σ Γ ->
-  All (fun d => isType Σ Γ (dtype d)) mfix ->
-  ST.wf_cofixpoint Σ Γ mfix ->
-  @ST.wf_cofixpoint (cf' cf) (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix).
-Proof.
-  intros wfΓ hty [mind [ne [hall hk]]].
-  exists mind. split; [|split].
-  - destruct mfix => //.
-  - eapply All_map, (All_impl (All_prod _ _ _ _ hty hall)).
-    intros d [hd hcofix]. eapply trans_cofix_on_ind; tea.
-  - rewrite (trans_check_rec_kind Σ mind CoFinite) in hk. exact hk.
 Qed.
 
 Lemma type_mkApps_napp `{checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} Γ f u T T' :
@@ -3924,8 +3863,20 @@ Proof.
       all: rewrite -(trans_lift _ (shiftnP #|Γ| xpred0)) /=.
       all: try eapply (isTypeRel_is_open_term (Σ := Σ)); tea.
       all: rewrite -(fix_context_length mfix); eapply HT.
-    + eapply (trans_wf_fixpoint (n := #|mfix|)); tea.
-      eapply (All_impl X0). intros d hd. now eapply isTypeRel_isType.
+    + have alltys : All (fun d => isType Σ Γ (dtype d)) mfix.
+      { eapply (All_impl X0). intros d hd. now eapply isTypeRel_isType. }
+      have onm : on_free_vars_mfix (shiftnP #|Γ| xpred0) #|mfix| mfix by exact hopfix.
+      match goal with H : ST.wf_fixpoint _ _ _ |- _ => destruct H as [isl [hr hm]] end.
+      split; [|split].
+      * apply All_forallb. eapply All_map.
+        eapply (All_impl (forallb_All _ _ isl)).
+        intros d h. cbn in h |- *. now rewrite trans_isLambda.
+      * apply All_forallb. eapply All_map.
+        eapply (All_impl (forallb_All _ _ hr)).
+        intros d h. now apply trans_has_rec_arg.
+      * unshelve eapply (trans_mfix_on_ind _ _ alltys (forallb_All _ _ onm)); tea.
+        intros d ty hd opty. apply (trans_check_one_fix #|mfix| (shiftnP #|Γ| xpred0)).
+        move: hd; rewrite /test_def /= => /andP[] _ onbod. now apply/andP.
 
   - rewrite trans_dtype. simpl.
     assert (hopfix : is_open_term Γ (tCoFix mfix n)).
@@ -3953,8 +3904,10 @@ Proof.
       all: rewrite -(trans_lift _ (shiftnP #|Γ| xpred0)) /=.
       all: try eapply (isTypeRel_is_open_term (Σ := Σ)); tea.
       all: rewrite -(fix_context_length mfix); eapply HT.
-    + eapply trans_wf_cofixpoint; tea.
-      eapply (All_impl X0). intros d hd. now eapply isTypeRel_isType.
+    + have alltys : All (fun d => isType Σ Γ (dtype d)) mfix.
+      { eapply (All_impl X0). intros d hd. now eapply isTypeRel_isType. }
+      unshelve eapply (trans_mfix_on_ind _ _ alltys alltys); tea.
+      intros d ty _ _. apply trans_check_one_cofix.
   - cbn. rewrite trans_prim_ty. econstructor; eauto. rewrite prim_val_tag_map //.
     * now eapply trans_declared_constant in H0.
     * destruct p as [? []]; cbn in X0 |- *.

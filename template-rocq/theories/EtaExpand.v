@@ -889,10 +889,8 @@ Lemma wf_fixpoint_rarg Σ Γ mfix decl :
   wf_fixpoint Σ Γ mfix -> In decl mfix ->
   decl.(rarg) < context_assumptions (decompose_prod_assum [] decl.(dtype)).1.
 Proof.
-  intros (_ & mind & _ & hall & _) hin.
-  induction hall as [|d mfix' [hrec _] _ IH] in hin |- *; [destruct hin|].
-  destruct hin as [<-|hin]; auto.
-  apply Nat.ltb_lt, hrec.
+  intros (_ & hrec & _) hin.
+  apply Nat.ltb_lt. exact (proj1 (forallb_forall _ _) hrec decl hin).
 Qed.
 
 From Equations Require Import Equations.

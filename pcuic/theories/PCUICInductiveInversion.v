@@ -235,8 +235,7 @@ Proof.
   rewrite simpl_subst_k //. len.
 Qed.
 
-(** Under the new specification a [dtype] need not *be* a telescope over an applied
-    inductive: it *reduces* to one. *)
+(** The declared types reduce to telescopes over an applied coinductive of the block. *)
 Lemma wf_cofixpoint_all {cf:checker_flags} (Σ : global_env_ext) {wfΣ : wf Σ} Γ mfix :
   is_closed_context Γ ->
   All (fun d => is_open_term Γ (dtype d)) mfix ->
@@ -251,7 +250,7 @@ Proof.
   exists mind; split; [exact hck|].
   eapply All_impl. { eapply All_prod; [exact op|exact hall]. }
   intros d [opd hd].
-  eapply cofix_on_ind_red in hd as [ty [r hc]] => //.
+  eapply mfix_body_on_conv_closed_red in hd as [ty [hc r]] => //.
   eapply check_one_cofix_inv in hc as [ctx [i [u [args eq]]]].
   exists ctx, i, u, args. now rewrite -eq.
 Qed.
@@ -606,11 +605,9 @@ Lemma wf_cofixpoint_typing_spine {cf:checker_flags} (Σ : global_env_ext) Γ ind
   check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
 Proof.
   intros wfΣ wfΓ wfcofix Hnth wat sp.
-  destruct wfcofix as [mind [_ [hall hck]]].
-  eapply nth_error_all in hall; tea.
-  eapply (cofix_on_ind_red (wfΣ := wfΣ)) in hall as [ty [r hc]].
-  2:now eapply wf_local_closed_context.
-  2:now eapply isType_is_open_term.
+  destruct (mfix_on_ind_inv (wfΣ := wfΣ) (wf_local_closed_context wfΓ)
+    (isType_is_open_term wat) wfcofix Hnth) as [mind [ty [r hc hck]]].
+  cbv beta in hck.
   eapply check_one_cofix_inv in hc as [ctx [i [u0 [l eqty]]]]. subst ty.
   have hcum : Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx
       (mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u0) l) ≤ dtype d.

@@ -12,16 +12,19 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTy
 
 (** * Reduction witnesses for the (co)fixpoint well-formedness conditions
 
-  [wf_fixpoint] asks the declared type of a body to _convert_ to a type whose
-  recursive argument is syntactically an applied inductive; [wf_cofixpoint] asks the
-  same of the conclusion. A checker, and the bidirectional system, work instead with
-  a _reduct_ of the declared type. For a well-scoped declared type the two agree, and
-  this file proves both directions:
+  [wf_fixpoint] and [wf_cofixpoint] ask, through [mfix_on_ind], the declared type of
+  each body to _convert_ to a type on which [check_one_fix] (resp. [check_one_cofix])
+  finds the block. A checker, and the bidirectional system, work instead with a
+  _reduct_ of the declared type. Both checks read only the shape of a type, which
+  reduction and equality up to universes preserve ([ShapeCheck]); so for a
+  well-scoped declared type the two witnesses agree, and this file proves both
+  directions, once for any such check:
 
-  - [fix_on_ind_red] / [cofix_on_ind_red]: the conversion witness yields a reduction
-    witness, because [check_one_fix] and [check_one_cofix] only look at the shape of
-    a type, and that shape is preserved by reduction and by equality up to universes;
-  - [red_fix_on_ind] / [red_cofix_on_ind]: the converse, a reduct is convertible. *)
+  - [mfix_body_on_conv_closed_red], [mfix_body_on_conv_red], [mfix_on_ind_conv_red],
+    [mfix_on_ind_inv]: the conversion witness yields a reduction witness;
+  - [mfix_body_on_red_conv], [mfix_on_ind_red_conv]: the converse, a reduct is
+    convertible;
+  - [mfix_body_on_red_unique]: two reduction witnesses give the same block. *)
 
 Implicit Types (cf : checker_flags).
 
@@ -123,6 +126,19 @@ Proof.
   now destruct i.
 Qed.
 
+(** A check that reads only the shape of the declared type: it ignores the body,
+    and what it finds is preserved by equality up to universes and by reduction. *)
+Class ShapeCheck (check : def term -> option kername) : Prop := {
+  shape_check_dbody d bo :
+    check {| dname := d.(dname); dtype := d.(dtype); dbody := bo; rarg := d.(rarg) |} = check d;
+  shape_check_eq_term_upto {Σ cmp_universe cmp_sort} d t u :
+    eq_term_upto_univ Σ cmp_universe cmp_sort Conv t u ->
+    check (def_with_type d t) = check (def_with_type d u);
+  shape_check_closed_red {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d ty v mind} :
+    Σ ;;; Γ ⊢ ty ⇝ v ->
+    check (def_with_type d ty) = Some mind ->
+    check (def_with_type d v) = Some mind }.
+
 Section FixWitness.
   Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}.
 
@@ -157,89 +173,122 @@ Section FixWitness.
     exact (check_one_cofix_it_mkProd (i := {| inductive_mind := mind; inductive_ind := k |})).
   Qed.
 
+End FixWitness.
+
+#[export] Instance check_one_fix_shape : ShapeCheck check_one_fix :=
+  @Build_ShapeCheck check_one_fix (fun d bo => ltac:(destruct d; reflexivity))
+    (@check_one_fix_eq_term_upto) (@check_one_fix_closed_red).
+
+#[export] Instance check_one_cofix_shape : ShapeCheck check_one_cofix :=
+  @Build_ShapeCheck check_one_cofix (fun d bo => ltac:(destruct d; reflexivity))
+    (@check_one_cofix_eq_term_upto) (@check_one_cofix_closed_red).
+
+Section MfixWitness.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}.
+  Context {check : def term -> option kername} {shape : ShapeCheck check}.
+
   (** ** From the conversion witness to a reduction witness *)
 
-  Lemma fix_on_ind_red Γ mind d :
+  Lemma mfix_body_on_conv_closed_red {Γ mind d} :
     is_closed_context Γ -> is_open_term Γ (dtype d) ->
-    fix_on_ind Σ Γ mind d ->
-    ∑ ty, (Σ ;;; Γ ⊢ dtype d ⇝ ty) × check_one_fix (def_with_type d ty) = Some mind.
-  Proof using wfΣ.
-    intros clΓ opd [_ [ty [hc [opty cv]]]].
-    eapply convSpec_convAlgo_curry in cv; tea.
-    eapply ws_cumul_pb_alt_closed in cv as [v [v' [rv rv' eq]]].
-    exists v; split => //.
-    rewrite (check_one_fix_eq_term_upto d _ _ eq).
-    now eapply check_one_fix_closed_red.
-  Qed.
-
-  Lemma cofix_on_ind_red Γ mind d :
-    is_closed_context Γ -> is_open_term Γ (dtype d) ->
-    cofix_on_ind Σ Γ mind d ->
-    ∑ ty, (Σ ;;; Γ ⊢ dtype d ⇝ ty) × check_one_cofix (def_with_type d ty) = Some mind.
-  Proof using wfΣ.
+    mfix_body_on check (conv_witness Σ Γ) mind d ->
+    mfix_body_on check (closed_red Σ Γ) mind d.
+  Proof using wfΣ shape.
     intros clΓ opd [ty [hc [opty cv]]].
     eapply convSpec_convAlgo_curry in cv; tea.
     eapply ws_cumul_pb_alt_closed in cv as [v [v' [rv rv' eq]]].
     exists v; split => //.
-    rewrite (check_one_cofix_eq_term_upto d _ _ eq).
-    now eapply check_one_cofix_closed_red.
+    rewrite (shape_check_eq_term_upto (check := check) d _ _ eq).
+    exact (shape_check_closed_red (check := check) (wfΣ := wfΣ) rv' hc).
   Qed.
 
   (** The same, from the hypotheses a typing derivation provides. *)
-
-  Lemma fix_on_ind_red_wf Γ mind d :
+  Lemma mfix_body_on_conv_red {Γ mind d} :
     wf_local Σ Γ -> isType Σ Γ (dtype d) ->
-    fix_on_ind Σ Γ mind d ->
-    ∑ ty, (check_one_fix (def_with_type d ty) = Some mind) × red Σ Γ (dtype d) ty.
-  Proof using wfΣ.
+    mfix_body_on check (conv_witness Σ Γ) mind d ->
+    mfix_body_on check (red Σ Γ) mind d.
+  Proof using wfΣ shape.
     intros wfΓ isty h.
-    destruct (fix_on_ind_red Γ mind d (wf_local_closed_context wfΓ)
-      (isType_is_open_term isty) h) as [ty [r hc]].
+    destruct (mfix_body_on_conv_closed_red (wf_local_closed_context wfΓ)
+      (isType_is_open_term isty) h) as [ty [hc r]].
     exists ty; split => //. exact (clrel_rel r).
   Qed.
 
-  Lemma cofix_on_ind_red_wf Γ mind d :
-    wf_local Σ Γ -> isType Σ Γ (dtype d) ->
-    cofix_on_ind Σ Γ mind d ->
-    ∑ ty, (check_one_cofix (def_with_type d ty) = Some mind) × red Σ Γ (dtype d) ty.
-  Proof using wfΣ.
-    intros wfΓ isty h.
-    destruct (cofix_on_ind_red Γ mind d (wf_local_closed_context wfΓ)
-      (isType_is_open_term isty) h) as [ty [r hc]].
-    exists ty; split => //. exact (clrel_rel r).
+  Lemma mfix_on_ind_conv_red {ok Γ mfix} :
+    wf_local Σ Γ -> All (fun d => isType Σ Γ (dtype d)) mfix ->
+    mfix_on_ind check (conv_witness Σ Γ) ok mfix ->
+    mfix_on_ind check (red Σ Γ) ok mfix.
+  Proof using wfΣ shape.
+    intros wfΓ alltys. apply mfix_on_ind_All2; [|easy].
+    apply All_All2_refl. eapply All_impl; tea. intros d isty m.
+    now apply mfix_body_on_conv_red.
+  Qed.
+
+  (** A reduct of the declared type of each body passes the check and finds the
+      block; the declared type itself need not pass it. *)
+  Lemma mfix_on_ind_inv {ok Γ mfix idx decl} :
+    is_closed_context Γ -> is_open_term Γ (dtype decl) ->
+    mfix_on_ind check (conv_witness Σ Γ) ok mfix ->
+    nth_error mfix idx = Some decl ->
+    ∑ mind ty,
+      [× Σ ;;; Γ ⊢ dtype decl ⇝ ty, check (def_with_type decl ty) = Some mind & ok mind].
+  Proof using wfΣ shape.
+    intros clΓ opd [mind [ne [hall hck]]] nthe.
+    eapply nth_error_all in hall; tea.
+    eapply mfix_body_on_conv_closed_red in hall as [ty [hc r]]; tea.
+    exists mind, ty. split; tea.
   Qed.
 
   (** ** From a reduction witness back to the conversion witness *)
 
-  Lemma red_fix_on_ind Γ mind d ty :
+  Lemma mfix_body_on_red_conv {Γ mind d} :
     is_closed_context Γ -> is_open_term Γ (dtype d) ->
-    has_rec_arg d ->
-    check_one_fix (def_with_type d ty) = Some mind ->
-    red Σ Γ (dtype d) ty ->
-    fix_on_ind Σ Γ mind d.
+    mfix_body_on check (red Σ Γ) mind d ->
+    mfix_body_on check (conv_witness Σ Γ) mind d.
   Proof using wfΣ.
-    intros clΓ opd hr hc r.
-    have cr : Σ ;;; Γ ⊢ dtype d ⇝ ty by eapply into_closed_red.
-    split => //.
-    exists ty; split => //; split.
-    - exact (closed_red_open_right cr).
-    - exact (@cumulAlgo_cumulSpec _ _ Conv _ _ _ (red_ws_cumul_pb cr)).
-  Qed.
-
-  Lemma red_cofix_on_ind Γ mind d ty :
-    is_closed_context Γ -> is_open_term Γ (dtype d) ->
-    check_one_cofix (def_with_type d ty) = Some mind ->
-    red Σ Γ (dtype d) ty ->
-    cofix_on_ind Σ Γ mind d.
-  Proof using wfΣ.
-    intros clΓ opd hc r.
+    intros clΓ opd [ty [hc r]].
     have cr : Σ ;;; Γ ⊢ dtype d ⇝ ty by eapply into_closed_red.
     exists ty; split => //; split.
     - exact (closed_red_open_right cr).
     - exact (@cumulAlgo_cumulSpec _ _ Conv _ _ _ (red_ws_cumul_pb cr)).
   Qed.
 
-End FixWitness.
+  Lemma mfix_on_ind_red_conv {ok Γ mfix} :
+    wf_local Σ Γ -> All (fun d => isType Σ Γ (dtype d)) mfix ->
+    mfix_on_ind check (red Σ Γ) ok mfix ->
+    mfix_on_ind check (conv_witness Σ Γ) ok mfix.
+  Proof using wfΣ.
+    intros wfΓ alltys. apply mfix_on_ind_All2; [|easy].
+    apply All_All2_refl. eapply All_impl; tea. intros d isty m.
+    apply mfix_body_on_red_conv.
+    - now eapply wf_local_closed_context.
+    - now eapply isType_is_open_term.
+  Qed.
+
+  (** ** Two reducts of one declared type give the same block *)
+
+  Lemma mfix_body_on_red_unique {Γ d m1 m2} :
+    on_def_type (lift_typing1 (typing Σ)) Γ d ->
+    mfix_body_on check (red Σ Γ) m1 d ->
+    mfix_body_on check (red Σ Γ) m2 d ->
+    m1 = m2.
+  Proof using wfΣ shape.
+    intros ond [ty1 [hc1 r1]] [ty2 [hc2 r2]].
+    have isty : isType Σ Γ (dtype d) by now eapply isTypeRel_isType.
+    have clΓ : is_closed_context Γ.
+    { eapply wf_local_closed_context. now eapply isType_wf_local. }
+    have op : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
+    have c1 : Σ ;;; Γ ⊢ dtype d ⇝ ty1 by now eapply into_closed_red.
+    have c2 : Σ ;;; Γ ⊢ dtype d ⇝ ty2 by now eapply into_closed_red.
+    destruct (closed_red_confluence c1 c2) as [v [rv1 rv2]].
+    have e1 : check (def_with_type d v) = Some m1.
+    { exact (shape_check_closed_red (check := check) (wfΣ := wfΣ) rv1 hc1). }
+    have e2 : check (def_with_type d v) = Some m2.
+    { exact (shape_check_closed_red (check := check) (wfΣ := wfΣ) rv2 hc2). }
+    rewrite e1 in e2. now injection e2.
+  Qed.
+
+End MfixWitness.
 
 (** ** Welltypedness of what a checker reduces to find the block *)
 
