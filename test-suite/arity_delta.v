@@ -110,10 +110,10 @@ Next Obligation. todo "the negative controls only need infer to compute". Qed.
 Next Obligation. todo "the negative controls only need infer to compute". Qed.
 #[local] Existing Instance PCUICSN.normalization.
 
-Definition ad_set_ind_type (ty : Ast.term) (ib : Ast.Env.one_inductive_body)
-  : Ast.Env.one_inductive_body :=
+Definition ad_set (ty : Ast.term) (idx : option Ast.Env.context)
+    (ib : Ast.Env.one_inductive_body) : Ast.Env.one_inductive_body :=
   {| Ast.Env.ind_name := ib.(Ast.Env.ind_name);
-     Ast.Env.ind_indices := ib.(Ast.Env.ind_indices);
+     Ast.Env.ind_indices := match idx with Some c => c | None => ib.(Ast.Env.ind_indices) end;
      Ast.Env.ind_sort := ib.(Ast.Env.ind_sort);
      Ast.Env.ind_type := ty;
      Ast.Env.ind_kelim := ib.(Ast.Env.ind_kelim);
@@ -121,7 +121,7 @@ Definition ad_set_ind_type (ty : Ast.term) (ib : Ast.Env.one_inductive_body)
      Ast.Env.ind_projs := ib.(Ast.Env.ind_projs);
      Ast.Env.ind_relevance := ib.(Ast.Env.ind_relevance) |}.
 
-Definition ad_patch_decl (kn : kername) (ty : Ast.term)
+Definition ad_patch_decl (kn : kername) (ty : Ast.term) (idx : option Ast.Env.context)
     (d : kername × Ast.Env.global_decl) : kername × Ast.Env.global_decl :=
   match d.2 with
   | Ast.Env.InductiveDecl m =>
@@ -130,17 +130,21 @@ Definition ad_patch_decl (kn : kername) (ty : Ast.term)
         {| Ast.Env.ind_finite := m.(Ast.Env.ind_finite);
            Ast.Env.ind_npars := m.(Ast.Env.ind_npars);
            Ast.Env.ind_params := m.(Ast.Env.ind_params);
-           Ast.Env.ind_bodies := map (ad_set_ind_type ty) m.(Ast.Env.ind_bodies);
+           Ast.Env.ind_bodies := map (ad_set ty idx) m.(Ast.Env.ind_bodies);
            Ast.Env.ind_universes := m.(Ast.Env.ind_universes);
            Ast.Env.ind_variance := m.(Ast.Env.ind_variance) |})
     else d
   | _ => d
   end.
 
-Definition ad_patch (kn : kername) (ty : Ast.term) (p : Ast.Env.program) : Ast.Env.program :=
+Definition ad_patch_gen (kn : kername) (ty : Ast.term) (idx : option Ast.Env.context)
+    (p : Ast.Env.program) : Ast.Env.program :=
   ({| Ast.Env.universes := p.1.(Ast.Env.universes);
-      Ast.Env.declarations := map (ad_patch_decl kn ty) p.1.(Ast.Env.declarations);
+      Ast.Env.declarations := map (ad_patch_decl kn ty idx) p.1.(Ast.Env.declarations);
       Ast.Env.retroknowledge := p.1.(Ast.Env.retroknowledge) |}, p.2).
+
+Definition ad_patch (kn : kername) (ty : Ast.term) (p : Ast.Env.program) : Ast.Env.program :=
+  ad_patch_gen kn ty None p.
 
 Definition ad_kn (t : Ast.term) : kername :=
   match t with
@@ -159,13 +163,27 @@ Definition ad_wrongidx : Type := bool -> Prop.     (* an arity, wrong index type
 Definition ad_wrongsort : Type := nat -> Set.      (* an arity, wrong sort *)
 Axiom ad_opaque : Type.                            (* an arity-typed axiom: no body *)
 
+(** A block with no constructors: nothing else pins its indices, so it is the
+    one place where a doctored index context is not caught by [cstr_eq]. *)
+Inductive ad_empty : nat -> Prop := .
+
 Definition ad_witness :=
-  (fun (a : ad_notar) (b : ad_right) (c : ad_wrongidx) (d : ad_wrongsort) (e : ad_opaque) =>
+  (fun (a : ad_notar) (b : ad_right) (c : ad_wrongidx) (d : ad_wrongsort) (e : ad_opaque)
+       (f : ad_letar) (g : ad_empty 0) =>
      ad_src 0).
 
 MetaRocq Quote Recursively Definition ad_prog := ad_witness.
 
 Definition ad_src_kn : kername := Eval vm_compute in ad_kn <% ad_src %>.
+Definition ad_empty_kn : kername := Eval vm_compute in ad_kn <% ad_empty %>.
+
+(** An index context made of one let, which [it_mkProd_or_LetIn] turns into a
+    [tLetIn] that zeta-reduces away.  Rocq's kernel never produces it for
+    [ind_type = Prop]: [whd_decompose_prod_decls] cannot introduce a let. *)
+Definition ad_let_idx : Ast.Env.context :=
+  [{| decl_name := {| binder_name := nNamed "x"; binder_relevance := Relevant |};
+      decl_body := Some <% 0 %>;
+      decl_type := <% nat %> |}].
 
 (* [nor] is an explicit parameter so that instance resolution finds it, as in
    test-suite/reduction_test.v:67-71. *)
@@ -173,9 +191,13 @@ Definition ad_normal : @normalizing_flags default_checker_flags.
 now econstructor.
 Defined.
 
-Definition ad_run (nor : normalizing_flags) (ty : Ast.term) : string + string :=
+Definition ad_run_on (nor : normalizing_flags) (kn : kername) (ty : Ast.term)
+    (idx : option Ast.Env.context) : string + string :=
   infer_and_print_template_program (cf := default_checker_flags)
-    (ad_patch ad_src_kn ty ad_prog) Monomorphic_ctx.
+    (ad_patch_gen kn ty idx ad_prog) Monomorphic_ctx.
+
+Definition ad_run (nor : normalizing_flags) (ty : Ast.term) : string + string :=
+  ad_run_on nor ad_src_kn ty None.
 
 Definition ad_rejected (r : string + string) : bool :=
   match r with inl _ => false | inr _ => true end.
@@ -226,3 +248,23 @@ Definition ad_B6_rejected : ad_rejected ad_B6 = true := eq_refl.
 Definition ad_B7 := Eval vm_compute in ad_run ad_normal <% ad_src %>.
 Print ad_B7.
 Definition ad_B7_rejected : ad_rejected ad_B7 = true := eq_refl.
+
+(** B8: the zeta counterexample.  [ad_empty] has no constructors; give it
+    [ind_type = Prop] and an index context made of one let.  The arity built
+    from the declaration is [tLetIn x 0 nat (tSort Prop)], which is *convertible*
+    to [Prop] but not a reduct of it, and Rocq's kernel computes an empty index
+    context for [ind_type = Prop].  Rejected, always. *)
+Definition ad_B8 := Eval vm_compute in
+  ad_run_on ad_normal ad_empty_kn <% Prop %> (Some ad_let_idx).
+Print ad_B8.
+Definition ad_B8_rejected : ad_rejected ad_B8 = true := eq_refl.
+
+(** B9: the mirror.  [ind_type] is a constant whose reduct keeps a let
+    ([let X := nat in X -> Prop]) while the declaration's index context has the
+    zeta-reduced shape [_ : nat].  Rocq's kernel reduces with [whd_allnolet]
+    (kernel/reduction.ml:122-126) and keeps the let, so it never produces this
+    declaration.  Rejected, always: the checker's telescope walk reduces with
+    [RedFlags.zeta := false]. *)
+Definition ad_B9 := Eval vm_compute in ad_run_on ad_normal ad_empty_kn <% ad_letar %> None.
+Print ad_B9.
+Definition ad_B9_rejected : ad_rejected ad_B9 = true := eq_refl.
