@@ -28,7 +28,12 @@ let safecheck_env env evm poly =
 let quote_safecheck_program ~opaque_access env evm term =
   Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm term
 
+(* The translation memo ([trans_memo.ml]) is emptied when the translation
+   ends; this also empties it when SafeCheck or a test ends by an exception. *)
+let with_trans_memo_reset f = Fun.protect ~finally:Trans_memo.reset f
+
 let safecheck_program ~opaque_access env evm poly term =
+  with_trans_memo_reset @@ fun () ->
   let env = safecheck_env env evm poly in
   let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
   let uctx =
@@ -72,30 +77,119 @@ let test_quote_sharing ~opaque_access env evm poly c =
       (str "Quote sharing test failed: structurally equal = " ++ bool equal
        ++ str ", repeated values shared = " ++ bool physically_shared ++ str ".")
 
-(* Sameness of the shared translation: quote [c] as [MetaRocq SafeCheck] does,
-   translate the program once with the memoized [trans_program] (the checker's)
-   and once with the plain [trans_program_unshared], and compare the two PCUIC
-   programs with OCaml's structural equality.  The memo must also have hit at
-   least once, so the test exercises reuse and not only misses. *)
+(* The first [tCase] node of a quoted program: in its term, else in the body of
+   one of its constant declarations. *)
+let rec find_case (t : Ast0.term) : Ast0.term option =
+  let first l =
+    List.fold_left (fun found x -> match found with Some _ -> found | None -> find_case x) None l
+  in
+  match t with
+  | Ast0.Coq_tCase _ -> Some t
+  | Ast0.Coq_tEvar (_, l) -> first l
+  | Ast0.Coq_tCast (c, _, ty) -> first [c; ty]
+  | Ast0.Coq_tProd (_, a, b) | Ast0.Coq_tLambda (_, a, b) -> first [a; b]
+  | Ast0.Coq_tLetIn (_, b, ty, b') -> first [b; ty; b']
+  | Ast0.Coq_tApp (f, l) -> first (f :: l)
+  | Ast0.Coq_tProj (_, c) -> find_case c
+  | Ast0.Coq_tFix (m, _) | Ast0.Coq_tCoFix (m, _) ->
+    first (List.concat_map (fun d -> [d.BasicAst.dtype; d.BasicAst.dbody]) m)
+  | Ast0.Coq_tArray (_, l, d, ty) -> first (l @ [d; ty])
+  | _ -> None
+
+let find_case_in_program ((genv, body) : Ast0.Env.program) =
+  match find_case body with
+  | Some t -> Some t
+  | None ->
+    List.fold_left (fun found (_, decl) ->
+        match found, decl with
+        | Some _, _ -> found
+        | None, Ast0.Env.ConstantDecl { Ast0.Env.cst_body = Some b; _ } -> find_case b
+        | None, _ -> None)
+      None genv.Ast0.Env.declarations
+
+(* Sameness of the shared translation, and the environment control.
+
+   Sameness: quote [c] as [MetaRocq SafeCheck] does, translate the program with
+   the memoized [trans_program] (the checker's) and with the plain
+   [trans_program_unshared], and require [compare a b = 0] and at least one memo
+   hit.  ([compare] is total; [=] is false on a NaN primitive float.)
+
+   Environment control: the memo may reuse only values that read no
+   environment.  [Σ1] is the empty environment, [Σ2] the translated
+   environment of the quoted program; [t] is a [tCase] node of the program, so
+   its inductive [I] is in [Σ2] and not in [Σ1]; [w] is a case-free term;
+   [u = tApp (f, [t; t; w])] and [v = tApp (g, [w; u])] share [t] and [w]
+   physically.  After translating with [trans_shared Σ1], [trans_shared Σ2 x]
+   must equal [trans Σ2 x] for (a) [x = t], (b) [x = u] with [t] computed in the
+   same call, (c) [x = v] after [w] alone went into the table (so the parent
+   meets a table hit and a flagged child together), and [w] must hit across
+   [Σ1] and [Σ2].
+
+   The command expects a term whose quoted program contains a match on an
+   inductive (a [tCase] node), in the term itself or in the body of a constant
+   it depends on; otherwise it fails. *)
 let test_trans_sharing ~opaque_access env evm poly c =
+  with_trans_memo_reset @@ fun () ->
   let env = safecheck_env env evm poly in
   let term = EConstr.to_constr evm c in
   let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
+  let same a b = Stdlib.compare a b = 0 in
   let hits_before = Trans_memo.hits () in
   let shared = time (str"Shared translation") SafeTemplateChecker.trans_program prog in
   let hits = Trans_memo.hits () - hits_before in
   let unshared =
     time (str"Unshared translation") SafeTemplateChecker.trans_program_unshared prog
   in
-  let equal = time (str"Comparing") (fun () -> shared = unshared) () in
-  if equal && hits > 0 then
-    Feedback.msg_info
-      (str "Trans sharing test passed: the shared and unshared translations are structurally equal ("
-       ++ Pp.int hits ++ str " memo hits).")
+  let equal = time (str"Comparing") (fun () -> same shared unshared) () in
+  let t =
+    match find_case_in_program prog with
+    | Some t -> t
+    | None ->
+      CErrors.user_err
+        (str "MetaRocq Test Trans Sharing expects a term whose quoted program contains a match on an inductive.")
+  in
+  let genv, _ = prog in
+  let sigma1 =
+    TemplateToPCUIC.empty_trans_env genv.Ast0.Env.universes genv.Ast0.Env.retroknowledge
+  in
+  let sigma2 = TemplateToPCUIC.trans_global_env genv in
+  let rel n = Ast0.Coq_tRel n in
+  let w = Ast0.Coq_tApp (rel Datatypes.O, [rel (Datatypes.S Datatypes.O)]) in
+  let u = Ast0.Coq_tApp (rel (Datatypes.S (Datatypes.S Datatypes.O)), [t; t; w]) in
+  let v = Ast0.Coq_tApp (rel (Datatypes.S (Datatypes.S (Datatypes.S Datatypes.O))), [w; u]) in
+  let shared_tr sigma x = TemplateToPCUICShared.trans_shared sigma x in
+  let plain_tr sigma x = TemplateToPCUIC.trans sigma x in
+  let checks_under_sigma2 x = same (shared_tr sigma2 x) (plain_tr sigma2 x) in
+  (* The control means something only if [t] translates differently under the two environments. *)
+  let env_matters = not (same (plain_tr sigma1 t) (plain_tr sigma2 t)) in
+  Trans_memo.reset ();
+  ignore (shared_tr sigma1 u);
+  let case_a = checks_under_sigma2 t in
+  Trans_memo.reset ();
+  ignore (shared_tr sigma1 u);
+  let case_b = checks_under_sigma2 u in
+  Trans_memo.reset ();
+  ignore (shared_tr sigma1 w);
+  ignore (shared_tr sigma1 v);
+  let case_c = checks_under_sigma2 v in
+  Trans_memo.reset ();
+  ignore (shared_tr sigma1 w);
+  let hits_w = Trans_memo.hits () in
+  let w2 = shared_tr sigma2 w in
+  let case_w = Trans_memo.hits () = hits_w + 1 && same w2 (plain_tr sigma2 w) in
+  Trans_memo.reset ();
+  let verdict ok = str (if ok then "ok" else "FAILED") in
+  let report =
+    str "structurally equal = " ++ bool equal ++ str ", memo hits = " ++ Pp.int hits
+    ++ str "; environment control: environment matters " ++ verdict env_matters
+    ++ str ", (a) " ++ verdict case_a ++ str ", (b) " ++ verdict case_b
+    ++ str ", (c) " ++ verdict case_c ++ str ", w hit across environments " ++ verdict case_w
+    ++ str "."
+  in
+  if equal && hits > 0 && env_matters && case_a && case_b && case_c && case_w then
+    Feedback.msg_info (str "Trans sharing test passed: " ++ report)
   else
-    CErrors.user_err
-      (str "Trans sharing test failed: structurally equal = " ++ bool equal
-       ++ str ", memo hits = " ++ Pp.int hits ++ str ".")
+    CErrors.user_err (str "Trans sharing test failed: " ++ report)
 
 let check ~opaque_access env evm poly (c, _ustate) =
   debug (fun () -> str"Quoting");

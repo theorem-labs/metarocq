@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config Primitive EnvMap.
-From MetaRocq.Template Require AstUtils TemplateProgram.
+From MetaRocq.Template Require AstUtils TemplateProgram Induction.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICPrimitive PCUICCases PCUICProgram.
 From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC.
 
@@ -12,15 +12,83 @@ From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC.
   [trans] ([trans_shared_eq]) and every statement about [trans] holds of it.
 
   At extraction, [memo_trans] is the trusted OCaml memo [Trans_memo.memo]: it
-  returns, for a physically shared Template subterm, the PCUIC value already
-  computed for it, so a shared subterm is translated once and its translation
-  is shared too.  [trans_memo_release] is the identity in Rocq; at extraction it
-  drops the memo's table once a whole program is translated, so the table does
-  not keep the Template program alive. *)
+  returns, for a physically shared Template subterm whose translation read no
+  environment, the PCUIC value already computed for it, so such a subterm is
+  translated once and its translation is shared too.  [trans] reads the
+  environment only at [tCase] ([trans_case_free]), so the memo stores only
+  values whose computation met no [tCase].  [trans_memo_release] is the
+  identity in Rocq; at extraction it empties the memo's table once a whole
+  program is translated, so the table does not keep the Template program
+  alive.
 
-Definition memo_trans {A} (Σ : global_env_map) (t : Ast.term) (k : unit -> A) : A := k tt.
+  Both are monomorphic: the table holds PCUIC terms keyed by Template terms,
+  and [memo_trans] is used only in [trans_shared]. *)
 
-Definition trans_memo_release {A} (x : A) : A := x.
+Definition memo_trans (Σ : global_env_map) (t : Ast.term) (k : unit -> term) : term := k tt.
+
+Definition trans_memo_release (p : PCUICEnvironment.program) : PCUICEnvironment.program := p.
+
+(** ** Where [trans] reads the environment
+
+    [case_free t] holds when [t] has no [tCase] in any subterm that [trans]
+    translates.  [trans] reads [Σ] only in its [tCase] branch, so on a
+    case-free term it gives the same value under every environment.  The memo
+    relies on this: a later edit that makes [trans] read [Σ] elsewhere breaks
+    [trans_case_free] instead of silently breaking the memo. *)
+
+Fixpoint case_free (t : Ast.term) : bool :=
+  match t with
+  | Ast.tEvar _ args => forallb case_free args
+  | Ast.tLambda _ T M => case_free T && case_free M
+  | Ast.tApp u v => case_free u && forallb case_free v
+  | Ast.tProd _ A B => case_free A && case_free B
+  | Ast.tCast c _ t => case_free c && case_free t
+  | Ast.tLetIn _ b t b' => case_free b && case_free t && case_free b'
+  | Ast.tCase _ _ _ _ => false
+  | Ast.tProj _ c => case_free c
+  | Ast.tFix mfix _ => forallb (fun d => case_free d.(dtype) && case_free d.(dbody)) mfix
+  | Ast.tCoFix mfix _ => forallb (fun d => case_free d.(dtype) && case_free d.(dbody)) mfix
+  | Ast.tArray _ v d ty => forallb case_free v && case_free d && case_free ty
+  | Ast.tRel _ | Ast.tVar _ | Ast.tSort _ | Ast.tConst _ _ | Ast.tInd _ _
+  | Ast.tConstruct _ _ _ | Ast.tInt _ | Ast.tFloat _ | Ast.tString _ => true
+  end.
+
+Lemma map_trans_case_free Σ Σ' l :
+  Forall (fun t => case_free t -> trans Σ t = trans Σ' t) l ->
+  forallb case_free l ->
+  map (trans Σ) l = map (trans Σ') l.
+Proof.
+  induction 1 as [|x l Hx Hl IH]; cbn; [reflexivity|].
+  intros Hcf; apply andb_prop in Hcf as [Hcx Hcl].
+  now rewrite (Hx Hcx), (IH Hcl).
+Qed.
+
+Lemma map_def_trans_case_free Σ Σ' m :
+  tFixProp (fun t => case_free t -> trans Σ t = trans Σ' t)
+           (fun t => case_free t -> trans Σ t = trans Σ' t) m ->
+  forallb (fun d => case_free d.(dtype) && case_free d.(dbody)) m ->
+  map (map_def (trans Σ) (trans Σ)) m = map (map_def (trans Σ') (trans Σ')) m.
+Proof.
+  induction 1 as [|d m [Hty Hbody] Hm IH]; cbn; [reflexivity|].
+  intros Hcf; apply andb_prop in Hcf as [Hcd Hcm]; apply andb_prop in Hcd as [Hct Hcb].
+  rewrite (IH Hcm). f_equal. unfold map_def. now rewrite (Hty Hct), (Hbody Hcb).
+Qed.
+
+Lemma trans_case_free Σ Σ' t : case_free t -> trans Σ t = trans Σ' t.
+Proof.
+  induction t using MetaRocq.Template.Induction.term_forall_list_ind;
+    cbn [case_free trans is_true]; intros Hcf; try discriminate Hcf;
+    repeat match goal with
+    | H : is_true (_ && _) |- _ => apply andb_prop in H as [? ?]
+    | H : (_ && _) = true |- _ => apply andb_prop in H as [? ?]
+    end;
+    repeat match goal with
+    | H : Forall _ ?l, H' : _ |- _ => rewrite (map_trans_case_free Σ Σ' l H H'); clear H
+    | H : tFixProp _ _ ?m, H' : _ |- _ => rewrite (map_def_trans_case_free Σ Σ' m H H'); clear H
+    | H : _ -> trans Σ ?x = trans Σ' ?x, H' : _ |- _ => rewrite (H H'); clear H
+    end;
+    reflexivity.
+Qed.
 
 Section TransShared.
   Context (Σ : global_env_map).
