@@ -17,6 +17,15 @@ Unset MetaRocq Debug.
 (* We're doing erasure assuming no Prop <= Type rule and lets can appear in constructor types. *)
 #[local] Existing Instance config.extraction_checker_flags.
 
+(* The erasure pipeline's correctness assumes that the guard condition is preserved
+   by its translations (the hypotheses [ExpandLetsGuardTrans] and
+   [TemplateToPCUICGuardTrans]). They are taken as section hypotheses and erased
+   from the computation. A section cannot hold a [Require] or a [Module], so it is
+   closed and reopened around each of them. *)
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
+
 Definition test (p : Ast.Env.program) : string :=
   erase_and_print_template_program default_erasure_config [] p.
 
@@ -59,7 +68,11 @@ MetaRocq Run (tmEval hnf singlelim >>= erase).
 MetaRocq Run (erase (plus 0 1)).
 
 (** vector addition **)
+End GuardTrans.
 Require Stdlib.Vectors.Vector.
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
 
 Definition vplus {n:nat} :
   Vector.t nat n -> Vector.t nat n -> Vector.t nat n := (Vector.map2 plus).
@@ -74,14 +87,22 @@ Set MetaRocq Timing.
 Time MetaRocq Run (tmEval hnf vplus0123 >>= erase).
 
 (** Cofix *)
+End GuardTrans.
 From Stdlib Require Import StreamMemo.
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
 
 MetaRocq Quote Recursively Definition memo := memo_make.
 
 Definition testmemo := Eval lazy in test memo.
 
 (** Cofix *)
+End GuardTrans.
 From Stdlib Require Import StreamMemo.
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
 
 (** Ackermann **)
 Fixpoint ack (n m:nat) {struct n} : nat :=
@@ -144,7 +165,11 @@ MetaRocq Quote Recursively Definition p_arden_size := arden_size.
 Definition P_arden_size := Eval lazy in test p_arden_size.
 
 (** SASL tautology function: variable arity **)
+End GuardTrans.
 From Stdlib Require Import Bool.
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
 Fixpoint tautArg (n:nat) : Type :=
   match n with
     | 0 => bool
@@ -244,8 +269,12 @@ Goal
 Qed.
  *)
 
+End GuardTrans.
 Module HetList.
 (** Heterogenous datatypes, a la Matthes **)
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
 Inductive PList : Set->Type:=  (* powerlists *)
 | zero : forall A:Set, A -> PList A
 | succ : forall A:Set, PList (A * A)%type -> PList A.
@@ -325,6 +354,7 @@ Definition P_size_myTree := Eval lazy in (test p_size_myTree).
   vm_compute. reflexivity.
 Qed.
  *)
+End GuardTrans.
 End HetList.
 
 From Stdlib Require Import Arith.Compare_dec.
@@ -332,6 +362,9 @@ From Stdlib Require Import Arith.PeanoNat.
 From Stdlib Require Import Arith.Peano_dec.
 From Stdlib Require Import Arith Init.Wf.
 From Stdlib Require Import Program.
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
 Program Fixpoint provedCopy (n:nat) {wf lt n} : nat :=
   match n with 0 => 0 | S k => S (provedCopy k) end.
 
@@ -350,7 +383,11 @@ Time Definition P_provedCopyx := Eval lazy in (test cbv_provedCopyx).
 (* We don't run this one every time as it is really expensive *)
 (*Time Definition P_provedCopyxvm := Eval vm_compute in (test p_provedCopyx).*)
 
+End GuardTrans.
 From MetaRocq.ErasurePlugin Require Import Loader.
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
 
 MetaRocq Erase provedCopyx.
 MetaRocq Erase -time -typed -unsafe provedCopyx.
@@ -363,7 +400,11 @@ provedCopy). *)
 
 Print P_provedCopyx.
 
+End GuardTrans.
 From Stdlib Require Import Streams.
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
 
 CoFixpoint ones : Stream nat := Cons 1 ones.
 
@@ -511,3 +552,4 @@ Import ETransform Optimize.
 MetaRocq Typed Erase provedCopyx.
 Eval lazy in testty cbv_provedCopyx.
 *)
+End GuardTrans.

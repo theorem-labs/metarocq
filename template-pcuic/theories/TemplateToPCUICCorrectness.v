@@ -1834,17 +1834,21 @@ Qed.
 #[global]
 Hint Resolve trans_wf_local : trans.
 
-Axiom fix_guard_trans :
-  forall Σ Γ mfix,
-    ST.fix_guard Σ Γ mfix ->
-    let Σ' := trans_global Σ in
-    fix_guard Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix).
-
-Axiom cofix_guard_trans :
-  forall Σ Γ mfix,
-    ST.cofix_guard Σ Γ mfix ->
-    let Σ' := trans_global Σ in
-    cofix_guard Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix).
+(** The guard-translation properties of the Template to PCUIC translation. They are hypotheses,
+    not axioms: under [guard := guard_cl] they are concrete propositions relating the Template
+    guard to the PCUIC guard that are not proved here (BET-64 GuardLane, REPORT §2e). The lemmas
+    that need them take a [TemplateToPCUICGuardTrans] premise. *)
+Class TemplateToPCUICGuardTrans : Prop := {
+  fix_guard_trans :
+    forall Σ Γ mfix,
+      ST.fix_guard Σ Γ mfix ->
+      let Σ' := trans_global Σ in
+      fix_guard Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix);
+  cofix_guard_trans :
+    forall Σ Γ mfix,
+      ST.cofix_guard Σ Γ mfix ->
+      let Σ' := trans_global Σ in
+      cofix_guard Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix) }.
 
 Notation Swf_fix Σ def := (WfAst.wf Σ (dtype def) * WfAst.wf Σ (dbody def)).
 
@@ -2248,7 +2252,7 @@ Ltac simpl_let :=
   end.
 Local Hint Extern 4 => simpl_let : trans.
 
-Theorem template_to_pcuic {cf} :
+Theorem template_to_pcuic {cf} {t2pgt : TemplateToPCUICGuardTrans} :
   ST.env_prop (fun Σ Γ t T =>
     let Σ' := trans_global Σ in
     wf Σ' ->
@@ -3057,7 +3061,7 @@ Proof.
   trivial.
 Qed.
 
-Lemma trans_on_global_env `{checker_flags} Σ :
+Lemma trans_on_global_env `{checker_flags} {t2pgt : TemplateToPCUICGuardTrans} Σ :
   (forall (Σ : Ast.Env.global_env_ext) Γ j, Typing.wf Σ ->
     Typing.lift_typing Typing.typing Σ Γ j ->
     let Σ' := trans_global_env Σ in
@@ -3305,7 +3309,7 @@ Proof.
             now eapply trans_consistent_instance_ext_gen.
 Qed.
 
-Lemma template_to_pcuic_env {cf} Σ :Template.Typing.wf Σ -> wf (trans_global_env Σ).
+Lemma template_to_pcuic_env {cf} {t2pgt : TemplateToPCUICGuardTrans} Σ :Template.Typing.wf Σ -> wf (trans_global_env Σ).
 Proof.
   intros Hu.
   eapply trans_on_global_env; eauto. simpl; intros.
@@ -3317,7 +3321,7 @@ Proof.
   - eapply (X2 _ (Ast.tSort s)); eauto.
 Qed.
 
-Lemma template_to_pcuic_env_ext {cf} Σ :Template.Typing.wf_ext Σ -> wf_ext (trans_global Σ).
+Lemma template_to_pcuic_env_ext {cf} {t2pgt : TemplateToPCUICGuardTrans} Σ :Template.Typing.wf_ext Σ -> wf_ext (trans_global Σ).
 Proof.
   intros [u Hu].
   split. now apply template_to_pcuic_env.
@@ -3325,7 +3329,7 @@ Proof.
   now destruct Σ as [Σ udecl]; cbn in *.
 Qed.
 
-Theorem template_to_pcuic_typing {cf} {Σ : Ast.Env.global_env_ext} Γ t T :
+Theorem template_to_pcuic_typing {cf} {t2pgt : TemplateToPCUICGuardTrans} {Σ : Ast.Env.global_env_ext} Γ t T :
   ST.wf Σ ->
   ST.typing Σ Γ t T ->
   let Σ' := trans_global Σ in

@@ -1840,16 +1840,6 @@ Proof.
   econstructor; eauto.
 Qed.
 
-Axiom fix_guard_trans :
-  forall Σ Γ mfix,
-    ST.fix_guard Σ Γ mfix ->
-    TT.fix_guard (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix).
-
-Axiom cofix_guard_trans :
-  forall Σ Γ mfix,
-  ST.cofix_guard Σ Γ mfix ->
-  TT.cofix_guard (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix).
-
 (* This version of typing spine allows to not require [isType] assumptions at the end of the
   application chain, which is crucial to be able to build a spine that both encompasses PCUIC's
   applications and mimicks the typing rule of.Common. Otherwise we would only model:
@@ -2212,7 +2202,16 @@ Proof.
   f_equal; lia.
 Qed.
 
-Theorem pcuic_to_template {cf} (Σ : SE.global_env_ext) Γ t T :
+(** The guard-translation properties [fix_guard_trans] and [cofix_guard_trans] are premises,
+    not axioms: under [guard := guard_cl] they state concrete propositions about the PCUIC and
+    Template guards that are not proved here (BET-64 GuardLane, REPORT §2e). *)
+Theorem pcuic_to_template {cf} (Σ : SE.global_env_ext) Γ t T
+  (fix_guard_trans : forall Σ Γ mfix,
+    ST.fix_guard Σ Γ mfix ->
+    TT.fix_guard (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix))
+  (cofix_guard_trans : forall Σ Γ mfix,
+    ST.cofix_guard Σ Γ mfix ->
+    TT.cofix_guard (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix)) :
   ST.wf Σ ->
   ST.typing Σ Γ t T ->
   TT.typing (trans_global Σ) (trans_local Γ) (trans t) (trans T).
@@ -2352,7 +2351,6 @@ Proof.
     + rewrite length_map H. now destruct mdecl.
   - rewrite trans_dtype. simpl.
     eapply TT.type_Fix; auto.
-    + now rewrite fix_guard_trans.
     + erewrite map_nth_error.
       2: apply H0.
       destruct decl.
@@ -2367,7 +2365,6 @@ Proof.
     + now rewrite trans_wf_fixpoint.
   - rewrite trans_dtype. simpl.
     eapply TT.type_CoFix; auto.
-    + now eapply cofix_guard_trans.
     + erewrite map_nth_error.
       2: eassumption.
       destruct decl.
