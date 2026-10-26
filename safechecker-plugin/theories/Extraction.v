@@ -2,6 +2,7 @@
 From Stdlib Require Import OrdersTac Ascii ExtrOcamlBasic ExtrOCamlInt63 ExtrOCamlFloats.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.SafeChecker Require Import PCUICWfEnvImpl PCUICSafeChecker PCUICSafeConversion.
+From MetaRocq.TemplatePCUIC Require Import TemplateToPCUICShared.
 From MetaRocq.SafeCheckerPlugin Require Import SafeTemplateChecker.
 
 (** * Extraction setup for the safechecker phase of MetaRocq.
@@ -32,6 +33,12 @@ Extraction Inline Equations.Prop.Logic.True_rect_dep Equations.Prop.Logic.False_
 (** This Inline is because of a problem of weak type variables (partial application?) *)
 Extraction Inline PCUICPrimitive.prim_val_reflect_eq.
 
+(** The Template-to-PCUIC translation keeps the quoter's sharing: [memo_trans]
+    is the identity in Rocq ([TemplateToPCUICShared.trans_shared_eq]) and the
+    trusted memo on physical equality of [trans_memo.ml] at extraction. *)
+Extract Constant TemplateToPCUICShared.memo_trans => "Trans_memo.memo".
+Extract Constant TemplateToPCUICShared.trans_memo_release => "Trans_memo.release".
+
 Set Extraction Output Directory "src".
 Axiom fake_abstract_guard_impl_properties:
   forall (fix_cofix : PCUICTyping.FixCoFix)
@@ -52,5 +59,7 @@ Definition infer_and_print_template_program_with_guard {cf} {nor} :=
 
 Separate Extraction Wf.Fix_sub MakeOrderTac PCUICSafeChecker.typecheck_program
          infer_and_print_template_program_with_guard
+         (* The plain translation, for the sharing test [MetaRocq Test Trans Sharing] *)
+         SafeTemplateChecker.trans_program_unshared
          (* The following directives ensure separate extraction does not produce name clashes *)
          Stdlib.Strings.String UnivSubst PCUICPretty.

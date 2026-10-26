@@ -9,11 +9,23 @@ From MetaRocq.SafeChecker Require Import PCUICErrors PCUICSafeChecker PCUICWfEnv
 
 Import MonadNotation.
 
-From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC.
+From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC TemplateToPCUICShared.
 
-Definition trans_program (p : Ast.Env.program) : program :=
+Definition trans_program_unshared (p : Ast.Env.program) : program :=
   let Σ' := trans_global_env p.1 in
   (Σ', trans Σ' p.2).
+
+(** The checker translates with [trans_shared], which keeps the sharing of the
+    quoted program at extraction (see [TemplateToPCUICShared]), then releases
+    the memo's table.  In Rocq it is the plain translation:
+    [trans_program_unshared_eq]. *)
+Definition trans_program (p : Ast.Env.program) : program :=
+  @trans_memo_release program
+    (let Σ' := trans_global_env_shared p.1 in
+     (Σ', trans_shared Σ' p.2)).
+
+Lemma trans_program_unshared_eq p : trans_program p = trans_program_unshared p.
+Proof. reflexivity. Qed.
 
 Definition EnvCheck_wf_env_ext {cf:checker_flags} {guard : abstract_guard_impl} := EnvCheck wf_env_ext.
 
@@ -69,8 +81,14 @@ Program Definition infer_and_print_template_program {cf : checker_flags} {nor : 
       forall Σ : global_env_ext, wf_ext Σ -> Σ ∼_ext x -> NormalizationIn Σ}  : string + string :=
   match infer_template_program (cf:=cf) p φ return string + string with
   | CorrectDecl t =>
-    let Σ' := trans_global_env p.1 in
-    inl ("Environment is well-formed and " ^ string_of_term (trans Σ' p.2) ^
+    (* Print from the environment the checker already holds, which is
+       [(trans_program p).1], instead of translating [p.1] a second time. *)
+    let X := proj1_sig t.π2 in
+    let Σ' := {| trans_env_env := (reference_impl_env_ext X).1;
+                 trans_env_map := wf_env_ext_map X;
+                 trans_env_repr := wf_env_ext_map_repr X |} in
+    inl ("Environment is well-formed and " ^
+         string_of_term (trans_memo_release (trans_shared Σ' p.2)) ^
          " has type: " ^ string_of_term t.π1)
   | EnvError Σ (AlreadyDeclared id) =>
     inr ("Already declared: " ^ id)
