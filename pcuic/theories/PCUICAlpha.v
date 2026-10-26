@@ -53,19 +53,6 @@ Section Alpha.
       eauto using nth_error_Some_length.
   Qed.
 
-  Lemma decompose_prod_assum_upto_names' ctx ctx' x y :
-    ctx ≡Γ ctx' -> upto_names' x y ->
-    let (ctx0, x0) := decompose_prod_assum ctx x in
-    let (ctx1, x1) := decompose_prod_assum ctx' y in
-    ctx0 ≡Γ ctx1 * upto_names' x0 x1.
-  Proof using Type.
-    induction x in ctx, ctx', y |- *; intros eqctx eqt; inv eqt; simpl;
-      try split; auto; try constructor; auto.
-    - specialize (IHx2 (ctx,, vass na x1) (ctx',,vass na' a') b').
-      apply IHx2; auto. constructor; auto; constructor; auto.
-    - apply IHx3; auto. constructor; auto; constructor; auto.
-  Qed.
-
   Lemma destInd_spec t :
     match destInd t with
     | Some (ind, u) => t = tInd ind u
@@ -87,7 +74,7 @@ Section Alpha.
     has_rec_arg d -> has_rec_arg d'.
   Proof using Type.
     intros eqty eqr. rewrite /has_rec_arg -eqr.
-    pose proof (decompose_prod_assum_upto_names' [] [] (dtype d) (dtype d')
+    pose proof (decompose_prod_assum_upto [] [] (dtype d) (dtype d')
       ltac:(constructor) eqty).
     do 2 destruct decompose_prod_assum.
     destruct X as [eqctx _]. cbn.

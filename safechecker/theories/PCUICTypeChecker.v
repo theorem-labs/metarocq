@@ -260,53 +260,8 @@ Lemma substitution_wf_local_rel `{checker_flags} {Σ} {wfΣ : wf Σ} {Γ Γ' s �
   The checker finds the (co)inductive block of a fixpoint body by reducing the type
   of its recursive argument, and of a cofixpoint body by reducing the conclusion of
   its type, exactly where Rocq's kernel reduces. The lemmas below give the
-  welltypedness of what is reduced, and the uniqueness of the block so found. *)
-
-Lemma wf_local_nth_error_welltyped {cf : checker_flags} {Σ : global_env_ext} {Γ n c} :
-  wf_local Σ Γ ->
-  nth_error Γ n = Some c ->
-  welltyped Σ (skipn (S n) Γ) (decl_type c).
-Proof.
-  induction Γ as [|a Γ ih] in n |- *; intros wf hnth.
-  - now rewrite nth_error_nil in hnth.
-  - depelim wf.
-    + destruct n; cbn in hnth.
-      * noconf hnth. rewrite skipn_S skipn_0.
-        now eapply isTypeRel_welltyped.
-      * rewrite skipn_S. now eapply ih.
-    + destruct n; cbn in hnth.
-      * noconf hnth. rewrite skipn_S skipn_0.
-        apply lift_sorting_forget_body in l.
-        now eapply isTypeRel_welltyped.
-      * rewrite skipn_S. now eapply ih.
-Qed.
-
-(** The type of the [n]-th argument of a declared type is welltyped in the context
-    of the arguments that precede it. *)
-Lemma isType_rec_arg_welltyped {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
-  {Γ T ctx concl n c} :
-  isType Σ Γ T ->
-  decompose_prod_assum [] T = (ctx, concl) ->
-  nth_error (List.rev (smash_context [] ctx)) n = Some c ->
-  welltyped Σ (Γ ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx)) (decl_type c).
-Proof.
-  intros isty decomp hnth.
-  have eqty := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
-  cbn in eqty. rewrite eqty in isty.
-  apply isType_it_mkProd_or_LetIn_wf_local in isty.
-  apply wf_local_smash_end in isty.
-  have hlt : n < #|smash_context [] ctx|.
-  { have h := nth_error_Some_length hnth. now rewrite List.length_rev in h. }
-  rewrite (nth_error_rev_inv _ _ hlt) in hnth.
-  have hnth' : nth_error (Γ ,,, smash_context [] ctx) (#|smash_context [] ctx| - S n) = Some c.
-  { rewrite /app_context nth_error_app_lt //. lia. }
-  have w := wf_local_nth_error_welltyped isty hnth'.
-  rewrite /app_context in w |- *.
-  have e : S (#|smash_context [] ctx| - S n) = #|smash_context [] ctx| - n by lia.
-  rewrite e skipn_app in w.
-  replace (#|smash_context [] ctx| - n - #|smash_context [] ctx|) with 0 in w by lia.
-  now rewrite skipn_0 in w.
-Qed.
+  uniqueness of the block so found; [PCUICFixWitness] gives the welltypedness of
+  what is reduced. *)
 
 (** Two reducts of one declared type give the same inductive block. *)
 Lemma fix_red_ind_unique {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
@@ -349,13 +304,6 @@ Proof.
   congruence.
 Qed.
 
-Lemma welltyped_prod_codomain {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ na A B} :
-  welltyped Σ Γ (tProd na A B) -> welltyped Σ (Γ ,, vass na A) B.
-Proof.
-  intros [T hT]. eapply inversion_Prod in hT as (? & ? & ? & ? & ?); tea.
-  now eexists.
-Qed.
-
 Lemma fix_red_ind_unique_wf {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
   on_def_type (lift_typing1 (typing Σ)) Γ d ->
   fix_red_ind Σ Γ m1 d -> fix_red_ind Σ Γ m2 d -> m1 = m2.
@@ -372,37 +320,6 @@ Proof.
   intros ond h1 h2.
   eapply cofix_red_ind_unique; [|exact h1|exact h2].
   now eapply isTypeRel_isType.
-Qed.
-
-(** [check_one_cofix] on a telescope over an applied inductive type. *)
-Lemma check_one_cofix_it_mkProd {d ctx i u l} :
-  check_one_cofix (def_with_type d (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l)))
-  = Some (inductive_mind i).
-Proof.
-  rewrite /check_one_cofix /def_with_type /=.
-  rewrite decompose_prod_assum_it_mkProd; first apply is_ind_app_head_mkApps.
-  cbn -[decompose_app].
-  rewrite decompose_app_mkApps //.
-  now destruct i.
-Qed.
-
-(** A reduct whose telescope has let-ins reduces further to one without them. *)
-Lemma red_mkApps_smash_witness {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
-  {Γ C ctx i u l} :
-  Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ->
-  ∑ l', Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn (smash_context [] ctx) (mkApps (tInd i u) l').
-Proof.
-  intros r.
-  have clΓ := clrel_ctx r.
-  have opr : is_open_term Γ (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l))
-    := closed_red_open_right r.
-  have h : Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ⇝
-           it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx (mkApps (tInd i u) l)).
-  { now eapply red_it_mkProd_or_LetIn_to_smash. }
-  rewrite expand_lets_mkApps in h.
-  rewrite /expand_lets /expand_lets_k /= in h.
-  eexists.
-  transitivity (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l)); [exact r|exact h].
 Qed.
 
 Section Typecheck.
@@ -1682,15 +1599,17 @@ Section Typecheck.
     let Σ0 := ident:(Σ0) in let wfΣ0 := ident:(wfΣ0) in let r := ident:(r) in
     let hred := ident:(hred) in let X0 := ident:(X0) in let X1 := ident:(X1) in
     let X2 := ident:(X2) in let Σ := ident:(Σ) in let ty := ident:(ty) in let d := ident:(d) in
-    let hd := ident:(hd) in let wf_type := ident:(wf_type) in let isty := ident:(isty) in
+    let wf_type := ident:(wf_type) in let isty := ident:(isty) in
     let hop := ident:(hop) in let rty := ident:(rty) in let hc := ident:(hc) in
     let hrarg := ident:(hrarg) in let ctx := ident:(ctx) in let concl := ident:(concl) in
     let c := ident:(c) in let clΓ := ident:(clΓ) in let hcr := ident:(hcr) in
     let eqty := ident:(eqty) in let ctx' := ident:(ctx') in let t' := ident:(t') in
     let d' := ident:(d') in let decomp' := ident:(decomp') in let hnth' := ident:(hnth') in
     let r' := ident:(r') in let args := ident:(args) in let dapp := ident:(dapp) in
-    let mind' := ident:(mind') in let k := ident:(k) in let inst := ident:(inst) in
-    let di := ident:(di) in let eqctx := ident:(eqctx) in let eqnth := ident:(eqnth) in
+    let k := ident:(k) in let inst := ident:(inst) in
+    let ctx2 := ident:(ctx2) in let t2 := ident:(t2) in let d2 := ident:(d2) in
+    let decomp2 := ident:(decomp2) in let hnth2 := ident:(hnth2) in
+    let eqctx := ident:(eqctx) in let eqnth := ident:(eqnth) in
     let hlt := ident:(hlt) in let h := ident:(h) in let absurd := ident:(absurd) in
     first [
       solve [ pose proof (hΣ _ wfΣ) as [wfΣ'];
@@ -1719,13 +1638,13 @@ Section Typecheck.
               rewrite eqty in hcr;
               destruct (red_it_mkProd_or_LetIn_smash Γ ctx concl ty (rarg d) c hcr
                           ltac:(now symmetry)) as [ctx' [t' [d' [decomp' hnth' r']]]];
-              rewrite /check_one_fix /def_with_type /= decomp' hnth' in hc;
-              destruct (decompose_app (decl_type d')) as [hd args] eqn:dapp;
-              destruct (destInd hd) as [[[mind' k] inst]|] eqn:di; [|discriminate hc];
-              clear hc;
-              apply destInd_Some_eq in di; subst hd;
-              apply decompose_app_inv in dapp;
-              apply absurd; exists (mkInd mind' k), inst, args;
+              destruct (check_one_fix_inv _ _ _ hc)
+                as (ctx2 & t2 & d2 & k & inst & args & decomp2 & hnth2 & dapp);
+              rewrite decomp' in decomp2; injection decomp2 as <- <-;
+              rewrite hnth' in hnth2; injection hnth2 as <-;
+              lazymatch type of hc with
+              | _ = Some ?m => apply absurd; exists (mkInd m k), inst, args
+              end;
               intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
               sq; now rewrite -dapp ]
     | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
@@ -1761,13 +1680,11 @@ Section Typecheck.
     let wfΣ0 := ident:(wfΣ0) in let r := ident:(r) in let i := ident:(i) in
     let hi := ident:(hi) in let u := ident:(u) in let l := ident:(l) in
     let ctxr := ident:(ctxr) in let hred := ident:(hred) in let X0 := ident:(X0) in
-    let Σ := ident:(Σ) in let ty := ident:(ty) in let d := ident:(d) in let hd := ident:(hd) in
+    let Σ := ident:(Σ) in let ty := ident:(ty) in let d := ident:(d) in
     let wf_type := ident:(wf_type) in let isty := ident:(isty) in let hop := ident:(hop) in
     let hc := ident:(hc) in let clΓ := ident:(clΓ) in let hcr := ident:(hcr) in
-    let eqty := ident:(eqty) in let args := ident:(args) in let dapp := ident:(dapp) in
-    let mind' := ident:(mind') in let k := ident:(k) in let inst := ident:(inst) in
-    let di := ident:(di) in let ctx2 := ident:(ctx2) in let t2 := ident:(t2) in
-    let decomp2 := ident:(decomp2) in let h := ident:(h) in let absurd := ident:(absurd) in
+    let args := ident:(args) in let k := ident:(k) in let inst := ident:(inst) in
+    let ctx2 := ident:(ctx2) in let absurd := ident:(absurd) in
     first [
       solve [ pose proof (hΣ _ wfΣ) as [wfΣ'];
               destruct (wf_type _ wfΣ) as [isty];
@@ -1785,20 +1702,13 @@ Section Typecheck.
               assert (clΓ : is_closed_context Γ)
                 by (eapply wf_local_closed_context; now eapply isType_wf_local);
               assert (hcr : Σ ;;; Γ ⊢ dtype d ⇝ ty) by (now eapply into_closed_red);
-              rewrite /check_one_cofix /def_with_type /= in hc;
-              destruct (decompose_prod_assum [] ty) as [ctx2 t2] eqn:decomp2;
-              destruct (decompose_app t2) as [hd args] eqn:dapp;
-              destruct (destInd hd) as [[[mind' k] inst]|] eqn:di; [|discriminate hc];
-              clear hc;
-              apply destInd_Some_eq in di; subst hd;
-              apply decompose_app_inv in dapp;
-              assert (eqty : ty = it_mkProd_or_LetIn ctx2 t2)
-                by (pose proof (decompose_prod_assum_it_mkProd_or_LetIn [] ty ctx2 t2 decomp2) as h;
-                    now cbn in h);
-              apply absurd; exists (mkInd mind' k); intros Σ0 wfΣ0;
+              destruct (check_one_cofix_inv _ _ _ hc) as [ctx2 [k [inst [args ->]]]];
+              lazymatch type of hc with
+              | _ = Some ?m => apply absurd; exists (mkInd m k)
+              end;
+              intros Σ0 wfΣ0;
               rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
-              sq; exists inst, args, ctx2;
-              rewrite -dapp -eqty; exact hcr ]
+              sq; exists inst, args, ctx2; exact hcr ]
     ].
 
   Equations check_cofix_red_ind (d : def term)

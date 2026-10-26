@@ -59,31 +59,10 @@ Qed.
 (** * Reading off the shape of a [check_one_fix] / [check_one_cofix] witness
 
   [PCUICFixWitness] turns the conversion witness of [wf_fixpoint] / [wf_cofixpoint]
-  into a reduct of the declared type that the checks still accept. What is left to do
-  here is to read the shape of such an accepted type: a telescope whose recursive
-  argument (resp. whose conclusion) is an applied inductive of the block. *)
-
-Section CheckShape.
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}.
-
-  Lemma check_one_cofix_inv d ty mind :
-    check_one_cofix (def_with_type d ty) = Some mind ->
-    ∑ ctx i u args,
-      ty = it_mkProd_or_LetIn ctx
-        (mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u) args).
-  Proof using Type.
-    rewrite /check_one_cofix /def_with_type /=.
-    destruct (decompose_prod_assum [] ty) as [ctx concl] eqn:decomp.
-    destruct (decompose_app concl) as [hd l] eqn:da.
-    destruct (destInd hd) as [[[mind' i'] u']|] eqn:di => //.
-    move=> [=] <-.
-    exists ctx, i', u', l.
-    destruct hd => //; noconf di.
-    eapply decompose_app_inv in da. subst concl.
-    eapply (decompose_prod_assum_it_mkProd_or_LetIn [] ty) in decomp. now cbn in decomp.
-  Qed.
-
-End CheckShape.
+  into a reduct of the declared type that the checks still accept, and reads the
+  shape of such an accepted type ([check_one_fix_inv], [check_one_cofix_inv]). The
+  lemmas below use that shape: a telescope whose recursive argument (resp. whose
+  conclusion) is an applied inductive of the block. *)
 
 (** A spine of a type that reduces to a telescope over an applied inductive of [ind]
     can only end in an applied inductive of [ind]. *)

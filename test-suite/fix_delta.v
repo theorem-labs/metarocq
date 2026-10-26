@@ -105,9 +105,11 @@ MetaRocq SafeCheck @fd_from.
    R11, R12 and R15 build the term with Ltac2's unsafe constructors and give it
    to SafeCheck with [exact_no_check], under a type ascription.  The kernel
    never sees a term given to SafeCheck; MetaRocq checks the term itself.
-   Each of these cases first elaborates the same term under [Check], so that
-   the [Fail] that follows can only come from SafeCheck, not from a change in
-   how Ltac2 builds the term. *)
+   Each of these cases first quotes the same term with [MetaRocq Test Quote],
+   which elaborates it as SafeCheck does and does not give it to the kernel
+   ([Check] would: it types its term with [Typeops.infer]), so that the [Fail]
+   that follows can only come from SafeCheck, not from a change in how Ltac2
+   builds the term. *)
 Module FdUnsafe.
 Import Ltac2.Ltac2.
 Ltac2 bnd (n : ident) (t : constr) := Constr.Binder.unsafe_make (Some n) Constr.Binder.Relevant t.
@@ -158,15 +160,15 @@ Axiom fd_ax : Type.
 Unset Guard Checking.
 
 (* R1: the recursive argument is a sort. *)
-Check (ltac2:(unchecked (fix1 'Type)) : Type -> nat).
+MetaRocq Test Quote (ltac2:(unchecked (fix1 'Type)) : Type -> nat).
 Fail MetaRocq SafeCheck (ltac2:(unchecked (fix1 'Type)) : Type -> nat).
 
 (* R2: an alias of a function type. *)
-Check (ltac2:(unchecked (fix1 'fd_fun)) : fd_fun -> nat).
+MetaRocq Test Quote (ltac2:(unchecked (fix1 'fd_fun)) : fd_fun -> nat).
 Fail MetaRocq SafeCheck (ltac2:(unchecked (fix1 'fd_fun)) : fd_fun -> nat).
 
 (* R3: an axiom. *)
-Check (ltac2:(unchecked (fix1 'fd_ax)) : fd_ax -> nat).
+MetaRocq Test Quote (ltac2:(unchecked (fix1 'fd_ax)) : fd_ax -> nat).
 Fail MetaRocq SafeCheck (ltac2:(unchecked (fix1 'fd_ax)) : fd_ax -> nat).
 
 (* R4: mutual fixpoints over two different inductive blocks. *)
@@ -180,14 +182,14 @@ Fail MetaRocq SafeCheck
   (fix f (n : fd_nat') {struct n} : nat := 0 with g (b : fd_bool') {struct b} : nat := 0 for f).
 
 (* R6: a fixpoint on a coinductive type, directly and through an alias. *)
-Check (ltac2:(unchecked (fix1 'fd_str)) : fd_str -> nat).
+MetaRocq Test Quote (ltac2:(unchecked (fix1 'fd_str)) : fd_str -> nat).
 Fail MetaRocq SafeCheck (ltac2:(unchecked (fix1 'fd_str)) : fd_str -> nat).
-Check (ltac2:(unchecked (fix1 'fd_str')) : fd_str' -> nat).
+MetaRocq Test Quote (ltac2:(unchecked (fix1 'fd_str')) : fd_str' -> nat).
 Fail MetaRocq SafeCheck (ltac2:(unchecked (fix1 'fd_str')) : fd_str' -> nat).
 
 (* R7: the recursive argument's type is a let-bound variable whose value is
    not an inductive type. *)
-Check (ltac2:(unchecked (letfix ())) : (nat -> nat) -> nat).
+MetaRocq Test Quote (ltac2:(unchecked (letfix ())) : (nat -> nat) -> nat).
 Fail MetaRocq SafeCheck (ltac2:(unchecked (letfix ())) : (nat -> nat) -> nat).
 
 (* R8-R10: cofixpoints that do not produce a coinductive type.  These enter
@@ -206,13 +208,13 @@ Fail MetaRocq SafeCheck @fd_cbad_sort.
    [fix] spell the products out, and the [fix] tactic on a goal [fd_natfun]
    fails with "Not enough products". *)
 Definition fd_natfun := nat -> nat.
-Check (ltac2:(unchecked (fixhidden 'fd_natfun)) : fd_natfun).
+MetaRocq Test Quote (ltac2:(unchecked (fixhidden 'fd_natfun)) : fd_natfun).
 Fail MetaRocq SafeCheck (ltac2:(unchecked (fixhidden 'fd_natfun)) : fd_natfun).
 
 (* R12: the recursive argument's type is a stuck iota redex: [fd_sel b] with
    [b] a variable reduces to no head at all, so neither the kernel nor the
    checker can find an inductive. *)
-Check (ltac2:(unchecked (fixstuck ())) : forall b : bool, fd_sel b -> nat).
+MetaRocq Test Quote (ltac2:(unchecked (fixstuck ())) : forall b : bool, fd_sel b -> nat).
 Fail MetaRocq SafeCheck
   (ltac2:(unchecked (fixstuck ())) : forall b : bool, fd_sel b -> nat).
 
@@ -230,7 +232,7 @@ Fail MetaRocq SafeCheck @fd_cbad_hidden.
 
 (* R15: the recursive argument's type is a let-bound variable whose value is a
    coinductive type. *)
-Check (ltac2:(unchecked (letstrfix ())) : fd_str -> nat).
+MetaRocq Test Quote (ltac2:(unchecked (letstrfix ())) : fd_str -> nat).
 Fail MetaRocq SafeCheck (ltac2:(unchecked (letstrfix ())) : fd_str -> nat).
 
 Set Guard Checking.
