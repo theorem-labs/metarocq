@@ -12,8 +12,7 @@ Environment is well-formed and Ind(Stdlib.Init.Datatypes.nat,0,[]) has type: Sor
 MetaRocq SafeCheck (3 + 1).
 
 Definition bool_list := List.map negb (cons true (cons false nil)).
-(* was working a bit by accident *)
-(* MetaRocq SafeCheck bool_list. *)
+MetaRocq SafeCheck bool_list.
 MetaRocq RocqCheck bool_list.
 
 Record template_list_record := { template_list_field : list nat }.
@@ -46,6 +45,10 @@ MetaRocq SafeCheck template_iffT_nat.
    the kernel binds [u] from the arity's conclusion (make_param_univs). *)
 Definition template_sigT_nat := {n : nat & nat}.
 MetaRocq SafeCheck template_sigT_nat.
+
+(* Issue #16: nested [sigT] instances at independent universes. *)
+Definition template_issue16 := {A : Type & {B : Type & A}}.
+MetaRocq SafeCheck template_issue16.
 
 (* One kernel match on template [prod] reached in two contexts.  The kernel
    stores no instance on it, so the translated case instance must not depend
@@ -183,9 +186,8 @@ Unset Universe Polymorphism.
 
 
 (* Time MetaRocq SafeCheck @infer_and_print_template_program. *)
-(* Uses template polymorphism:
-Error:
-Type error: Terms are not <= for cumulativity: Sort([Stdlib.Init.Datatypes.23,Stdlib.Init.Datatypes.24]) Sort([Set]) after reduction: Sort([Stdlib.Init.Datatypes.23,Stdlib.Init.Datatypes.24]) Sort([Set]), while checking MetaRocq.Template.Universes.Universe.Expr.t
+(* Fails after about 30 seconds on Rocq 9.2.0, before the checker runs:
+Error: Quoting sort polymorphic abstract universe context not yet supported.
 *)
 
 (* Unset Universe Minimization ToSet. *)
