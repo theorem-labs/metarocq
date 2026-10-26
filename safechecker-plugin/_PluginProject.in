@@ -9,6 +9,10 @@ src/META.rocq-metarocq-safechecker
 # From template
 src/ssrbool.ml
 src/ssrbool.mli
+src/string2pos.ml
+src/string2pos.mli
+src/canonicalTries.ml
+src/canonicalTries.mli
 src/uGraph0.ml
 src/uGraph0.mli
 src/wGraph.ml
