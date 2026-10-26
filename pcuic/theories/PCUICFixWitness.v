@@ -34,87 +34,25 @@ Proof.
   induction 1; cbn; reflexivity.
 Qed.
 
-(** The [n]-th declarations of two related contexts have related types. *)
-Lemma eq_context_upto_nth_error_type {Σ cmp_universe cmp_sort pb} ctx ctx' n :
-  eq_context_upto Σ cmp_universe cmp_sort pb ctx ctx' ->
-  match nth_error ctx n, nth_error ctx' n with
-  | Some d, Some d' => eq_term_upto_univ Σ cmp_universe cmp_sort pb (decl_type d) (decl_type d')
-  | None, None => True
-  | _, _ => False
-  end.
-Proof.
-  intros h; induction h in n |- *.
-  - destruct n; exact I.
-  - destruct n; cbn.
-    + depelim p; cbn; assumption.
-    + apply IHh.
-Qed.
-
-(** [decompose_app] commutes with equality up to universes (as in [PCUICAlpha],
-    which this file must not depend on: it comes later in the build). *)
-Lemma decompose_app_eq_term_upto {Σ cmp_universe cmp_sort pb x y hd tl} :
-  eq_term_upto_univ Σ cmp_universe cmp_sort pb x y ->
-  decompose_app x = (hd, tl) ->
-  ∑ hd' tl', y = mkApps hd' tl' ×
-    eq_term_upto_univ_napp Σ cmp_universe cmp_sort pb #|tl| hd hd' ×
-    negb (isApp hd') ×
-    All2 (eq_term_upto_univ Σ cmp_universe cmp_sort Conv) tl tl'.
-Proof.
-  intros eq dapp.
-  pose proof (decompose_app_notApp _ _ _ dapp).
-  apply decompose_app_inv in dapp. subst x.
-  eapply eq_term_upto_univ_mkApps_l_inv in eq as [u' [l' [[eqh eqtl] ->]]].
-  eexists _, _; intuition eauto.
-  revert H.
-  now depelim eqh.
-Qed.
-
-Lemma decompose_prod_assum_eq_term_upto {Σ cmp_universe cmp_sort} ctx ctx' x y :
-  eq_context_upto Σ cmp_universe cmp_sort Conv ctx ctx' ->
-  eq_term_upto_univ Σ cmp_universe cmp_sort Conv x y ->
-  let '(ctx0, x0) := decompose_prod_assum ctx x in
-  let '(ctx1, x1) := decompose_prod_assum ctx' y in
-  eq_context_upto Σ cmp_universe cmp_sort Conv ctx0 ctx1 ×
-  eq_term_upto_univ Σ cmp_universe cmp_sort Conv x0 x1.
-Proof.
-  induction x in ctx, ctx', y |- *; intros eqctx eqt; depelim eqt; cbn;
-    try solve [split; auto; constructor; auto].
-  - apply IHx2; auto. constructor; auto. constructor; auto.
-  - apply IHx3; auto. constructor; auto. constructor; auto.
-Qed.
-
-Lemma eq_context_upto_smash_context_upto {Σ cmp_universe cmp_sort} ctx ctx' x y :
-  eq_context_upto Σ cmp_universe cmp_sort Conv ctx ctx' ->
-  eq_context_upto Σ cmp_universe cmp_sort Conv x y ->
-  eq_context_upto Σ cmp_universe cmp_sort Conv (smash_context ctx x) (smash_context ctx' y).
-Proof.
-  induction x in ctx, ctx', y |- *; intros eqctx eqx; depelim eqx; cbn; auto.
-  depelim c; cbn.
-  - apply IHx; auto.
-    apply eq_context_upto_cat; auto.
-    constructor; [constructor|constructor; auto].
-  - apply IHx; auto.
-    eapply eq_context_upto_subst_context; try reflexivity; tea.
-    constructor; [auto|constructor].
-Qed.
-
 Lemma check_one_fix_eq_term_upto {Σ cmp_universe cmp_sort} d t u :
   eq_term_upto_univ Σ cmp_universe cmp_sort Conv t u ->
   check_one_fix (def_with_type d t) = check_one_fix (def_with_type d u).
 Proof.
   intros eqt.
   rewrite /check_one_fix /def_with_type /=.
-  have h := decompose_prod_assum_eq_term_upto [] [] t u ltac:(constructor) eqt.
+  have h := decompose_prod_assum_upto [] [] t u ltac:(constructor) eqt.
   do 2 destruct decompose_prod_assum.
   destruct h as [eqctx _].
-  eapply (eq_context_upto_smash_context_upto [] []) in eqctx; [|constructor].
+  eapply (eq_context_upto_smash_context _ _ _ Conv [] []) in eqctx;
+    [| intros ??; auto | intros ??; auto | constructor].
   eapply eq_context_upto_rev' in eqctx.
-  have hn := eq_context_upto_nth_error_type _ _ (rarg d) eqctx.
+  have hn := eq_context_upto_nth_error _ _ _ _ _ _ (rarg d) eqctx.
   destruct (nth_error (List.rev (smash_context [] c)) (rarg d)) as [argd|],
            (nth_error (List.rev (smash_context [] c0)) (rarg d)) as [argd'|];
-    cbn in hn => //.
+    depelim hn => //.
+  destruct e as [[_ _] eqty].
   destruct (decompose_app (decl_type argd)) as [hd args] eqn:eqdec.
-  destruct (decompose_app_eq_term_upto hn eqdec) as (hd' & tl' & -> & eqhd & napp & _).
+  destruct (decompose_app_upto eqty eqdec) as (hd' & tl' & -> & eqhd & napp & _).
   rewrite decompose_app_mkApps //.
   exact (destInd_mind_eq_term_upto eqhd).
 Qed.
@@ -125,11 +63,11 @@ Lemma check_one_cofix_eq_term_upto {Σ cmp_universe cmp_sort} d t u :
 Proof.
   intros eqt.
   rewrite /check_one_cofix /def_with_type /=.
-  have h := decompose_prod_assum_eq_term_upto [] [] t u ltac:(constructor) eqt.
+  have h := decompose_prod_assum_upto [] [] t u ltac:(constructor) eqt.
   do 2 destruct decompose_prod_assum.
   destruct h as [_ eqconcl].
   destruct (decompose_app t0) as [hd args] eqn:eqdec.
-  destruct (decompose_app_eq_term_upto eqconcl eqdec) as (hd' & tl' & -> & eqhd & napp & _).
+  destruct (decompose_app_upto eqconcl eqdec) as (hd' & tl' & -> & eqhd & napp & _).
   rewrite decompose_app_mkApps //.
   exact (destInd_mind_eq_term_upto eqhd).
 Qed.

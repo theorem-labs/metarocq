@@ -108,6 +108,10 @@ Definition has_rec_arg (d : def term) : bool :=
 Definition def_with_type (d : def term) (ty : term) : def term :=
   {| dname := d.(dname); dtype := ty; dbody := d.(dbody); rarg := d.(rarg) |}.
 
+Lemma map_def_with_type f g d ty :
+  def_with_type (map_def f g d) (f ty) = map_def f g (def_with_type d ty).
+Proof. reflexivity. Qed.
+
 (** A fixpoint body is on the inductive block [mind] when its declared type
     converts to a type whose recursive argument is, syntactically, an applied
     inductive of [mind]. Rocq's kernel reduces the type of the recursive

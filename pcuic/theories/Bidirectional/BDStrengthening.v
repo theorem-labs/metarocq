@@ -549,7 +549,7 @@ Proof.
   split.
   { now eapply rename_has_rec_arg. }
   exists (rename f ty); split.
-  - rewrite rename_def_with_type.
+  - rewrite map_def_with_type.
     now eapply (rename_check_one_fix f mfix).
   - cbn. eapply red_rename ; tea.
 Qed.
@@ -564,7 +564,7 @@ Lemma rename_cofix_red_ind `{cf : checker_flags} {Σ : global_env_ext} {wfΣ : w
 Proof.
   intros hf hΓ hT [ty [hc hred]].
   exists (rename f ty); split.
-  - rewrite rename_def_with_type.
+  - rewrite map_def_with_type.
     now eapply (rename_check_one_cofix f mfix).
   - cbn. eapply red_rename ; tea.
 Qed.

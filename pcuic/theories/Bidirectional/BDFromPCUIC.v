@@ -113,8 +113,7 @@ Proof.
 Qed.
 
 (** The undirected (co)fixpoint conditions, whose witness is convertible to the
-    declared type, imply the bidirectional ones, whose witness is a reduct of it.
-    Exported: the translations to Template and the safe checker need it too. *)
+    declared type, imply the bidirectional ones, whose witness is a reduct of it. *)
 
 Lemma wf_fixpoint_wf_fixpoint_red `{cf : checker_flags} {Σ : global_env_ext}
   {wfΣ : wf Σ} {Γ mfix} :

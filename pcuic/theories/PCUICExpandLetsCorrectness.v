@@ -2687,11 +2687,6 @@ Proof.
   rewrite /trans_local context_assumptions_map //.
 Qed.
 
-Lemma trans_def_with_type d ty :
-  map_def trans trans (ST.def_with_type d ty) =
-  ST.def_with_type (map_def trans trans d) (trans ty).
-Proof. reflexivity. Qed.
-
 Lemma trans_fix_on_ind {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {wfΣ' : wf_trans Σ}
   {Γ n mind d} :
   wf_local Σ Γ ->
@@ -2719,7 +2714,7 @@ Proof.
   split.
   - apply trans_has_rec_arg. exact (fst hfix).
   - exists (trans ty). split; [|split].
-    * rewrite -trans_def_with_type.
+    * rewrite map_def_with_type.
       erewrite (trans_check_one_fix n (shiftnP #|Γ| xpred0)).
       { exact hc. }
       rewrite /test_def /=. apply/andP; split; [exact opty|exact onbod].
@@ -2749,7 +2744,7 @@ Proof.
     + apply trans_on_free_vars; len; tea.
     + eapply trans_red; tea. now eapply isType_wt. }
   exists (trans ty). split; [|split].
-  - rewrite -trans_def_with_type trans_check_one_cofix. exact hc.
+  - rewrite map_def_with_type trans_check_one_cofix. exact hc.
   - exact (@ws_cumul_pb_is_open_term_right (cf' cf) Conv (trans_global Σ) wfΣ'
              (trans_local Γ) _ _ convt).
   - exact (@cumulAlgo_cumulSpec (cf' cf) (trans_global Σ) Conv _ _ _ convt).

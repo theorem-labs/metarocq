@@ -372,7 +372,7 @@ Proof.
     split.
     { now eapply inst_has_rec_arg. }
     exists ty.[σ]; split; [|split].
-    * rewrite inst_def_with_type.
+    * rewrite map_def_with_type.
       now eapply (inst_check_one_fix σ mfix).
     * now eapply inst_is_open_term.
     * now eapply inst_convSpec.
@@ -393,7 +393,7 @@ Proof.
     { eapply All_prod; [exact hop|exact hall]. }
     intros d [hopd [ty [hc [hty hconv]]]].
     exists ty.[σ]; split; [|split].
-    * rewrite inst_def_with_type.
+    * rewrite map_def_with_type.
       now eapply (inst_check_one_cofix σ mfix).
     * now eapply inst_is_open_term.
     * now eapply inst_convSpec.

@@ -731,10 +731,6 @@ Proof.
   now len.
 Qed.
 
-Lemma rename_def_with_type f g d ty :
-  def_with_type (map_def f g d) (f ty) = map_def f g (def_with_type d ty).
-Proof. reflexivity. Qed.
-
 Lemma rename_wf_fixpoint {Σ : global_env_ext} {wfΣ : wf Σ.1} P Γ Δ f mfix :
   urenaming (shiftnP #|Γ| P) Γ Δ f ->
   is_closed_context Γ -> is_closed_context Δ ->
@@ -753,7 +749,7 @@ Proof.
     split.
     { now eapply rename_has_rec_arg. }
     exists (rename f ty); split; [|split].
-    * rewrite rename_def_with_type.
+    * rewrite map_def_with_type.
       now eapply (rename_check_one_fix f mfix).
     * eapply urename_is_open_term; tea.
     * eapply convSpec_renameP; tea.
@@ -774,7 +770,7 @@ Proof.
     { eapply All_prod; [exact hop|exact hall]. }
     intros d [hopd [ty [hc [hty hconv]]]].
     exists (rename f ty); split; [|split].
-    * rewrite rename_def_with_type.
+    * rewrite map_def_with_type.
       now eapply (rename_check_one_cofix f mfix).
     * eapply urename_is_open_term; tea.
     * eapply convSpec_renameP; tea.

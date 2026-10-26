@@ -2021,16 +2021,6 @@ Proof.
   destruct Ast.Env.lookup_env as [[]|] => //.
 Qed.
 
-Lemma trans_check_rec_kind_impl {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {k f} :
-  let Σ' := trans_global Σ in
-  wf Σ' ->
-  ST.check_recursivity_kind Σ k f ->
-  check_recursivity_kind (lookup_env Σ') k f.
-Proof.
-  intros Σ' wfΣ' h.
-  now rewrite (@trans_check_rec_kind cf Σ wfΣ wfΣ' k f) in h.
-Qed.
-
 Lemma trans_fix_on_ind {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ mind d} :
   let Σ' := trans_global Σ in
   wf Σ' ->
@@ -2100,7 +2090,7 @@ Proof.
   - eapply All_map, (All_impl (All_prod _ _ _ _ (All_prod _ _ _ _ wfm opm) hall)).
     intros d [[[wfty wfbod] opd] hfix].
     eapply trans_fix_on_ind; tea.
-  - now eapply trans_check_rec_kind_impl.
+  - now rewrite (@trans_check_rec_kind cf Σ wfΣ wfΣ' mind Finite) in hk.
 Qed.
 
 Lemma trans_wf_cofixpoint {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ mfix} :
@@ -2119,7 +2109,7 @@ Proof.
   - eapply All_map, (All_impl (All_prod _ _ _ _ (All_prod _ _ _ _ wfm opm) hall)).
     intros d [[[wfty wfbod] opd] hcofix].
     eapply trans_cofix_on_ind; tea.
-  - now eapply trans_check_rec_kind_impl.
+  - now rewrite (@trans_check_rec_kind cf Σ wfΣ wfΣ' mind CoFinite) in hk.
 Qed.
 
 Lemma trans_global_decl_universes Σ d :

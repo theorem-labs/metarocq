@@ -172,19 +172,13 @@ Section Spines.
       /on_free_vars_decl /test_decl /=. ring.
   Qed.
 
-  Lemma red_it_mkProd_or_LetIn_smash Γ Δ T :
-    is_closed_context Γ ->
-    is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
-    Σ ;;; Γ ⊢ it_mkProd_or_LetIn Δ T ⇝ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T).
-  Proof. exact (red_it_mkProd_or_LetIn_to_smash (wfΣ := wfΣ) Γ Δ T). Qed.
-
   Lemma cumul_it_mkProd_or_LetIn_smash Γ Δ T :
     is_closed_context Γ ->
     is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
     Σ ;;; Γ ⊢ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T) = it_mkProd_or_LetIn Δ T.
   Proof.
     intros clΓ clp. symmetry. eapply red_ws_cumul_pb.
-    now apply red_it_mkProd_or_LetIn_smash.
+    now apply red_it_mkProd_or_LetIn_to_smash.
   Qed.
 
   Lemma typing_spine_smash Γ Δ T args T' :
@@ -193,7 +187,7 @@ Section Spines.
   Proof.
     intros sp.
     have ty := (typing_spine_isType_dom sp).
-    have r := (red_it_mkProd_or_LetIn_smash Γ Δ T).
+    have r := (red_it_mkProd_or_LetIn_to_smash (wfΣ := wfΣ) Γ Δ T).
     specialize (r (wf_local_closed_context (isType_wf_local ty)) (isType_is_open_term ty)).
     eapply typing_spine_strengthen; tea.
     eapply isType_red; tea. eapply r.

@@ -372,8 +372,8 @@ Proof using Type.
         split.
         { now rewrite subst_instance_has_rec_arg. }
         exists (subst_instance u ty); split; [|split].
-        { rewrite subst_instance_def_with_type.
-          now rewrite subst_instance_check_one_fix_def. }
+        { rewrite map_def_with_type.
+          now rewrite subst_instance_check_one_fix. }
         { move: hop. rewrite !on_free_vars_subst_instance.
           now rewrite length_map. }
         { eapply convSpec_subst_instance; aa. } }
@@ -399,8 +399,8 @@ Proof using Type.
       { eapply All_map. eapply All_impl; tea.
         intros d [ty [hc [hop hconv]]].
         exists (subst_instance u ty); split; [|split].
-        { rewrite subst_instance_def_with_type.
-          now rewrite subst_instance_check_one_cofix_def. }
+        { rewrite map_def_with_type.
+          now rewrite subst_instance_check_one_cofix. }
         { move: hop. rewrite !on_free_vars_subst_instance.
           now rewrite length_map. }
         { eapply convSpec_subst_instance; aa. } }
