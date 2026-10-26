@@ -12,8 +12,16 @@ Set Default Goal Selector "!".
   A port of the cofixpoint guard checker of the Rocq kernel
   ([codomain_is_coind], [check_one_cofix] and [check_cofix],
   kernel/inductive.ml) to PCUIC, as a total executable function
-  [check_cofix_block].  It differs from the kernel's code in these ways, and
-  each of them refuses more than the kernel or follows PCUIC's reduction:
+  [check_cofix_block].  The kernel code it is compared with below is that
+  of Rocq 9.2 with two fixes: the type of each function is reduced in the
+  block's outer context, where it lives, and not under the block's own
+  binders (rocq-prover/rocq#22386, fixed by #22388); and a function of the
+  block in the body of a nested cofixpoint that is not the nested block's
+  main function is refused ([RecCallInNonMainMutual], #22392).  The port
+  does both.
+
+  The port differs from that kernel code in these ways.  All but the last
+  refuse more than the kernel; the last accepts more.
 
   - Every head reduction is one [head_step] at a time ([PCUICGuardReduce]),
     and every part that a step discards is analysed as if the step had kept
@@ -24,15 +32,25 @@ Set Default Goal Selector "!".
     of a projection, the unread constructor argument of a match on a known
     constructor).  A body is accepted only if a reduction that kept every
     part it drops would be accepted too.
-  - The type of each function is reduced in the block's outer context, where
-    it lives, and not under the block's own binders (the codomain read
-    through the wrong variables is rocq-prover/rocq#22386).  The variables
-    of the outer context are opaque, including its local definitions: a
-    codomain that is a variable of the outer context is refused.
-  - A function of the block in the body of a nested cofixpoint that is not
-    the nested block's main function is refused ([RecCallInNonMainMutual]).
-  - A function of the block in a parameter of a constructor, or in a
-    parameter of a [match], is refused (the kernel does not look there).
+  - In particular, when a fixpoint or cofixpoint is unfolded and the body it
+    unfolds to names no function of its block, the other functions of the
+    block are discarded as the terms [tFix mfix k] or [tCoFix mfix k], and
+    each is analysed as if it were kept: a [tFix] is stuck, so it is
+    refused where a function of the block occurs in it, and a [tCoFix] is a
+    nested cofixpoint whose main function is [k], so the rule for non-main
+    functions applies to the others.  This refuses productive bodies that
+    the kernel accepts, for example, with [CoInductive R := mkR { hd : nat;
+    tl : R }] (primitive projections),
+    [cofix g : R := mkR 0 (tl (cofix h : R := mkR 1 g with h' : R := mkR 2 h' for h))]:
+    unfolding [h] discards [tCoFix mfix 1], whose main function is [h'] and
+    whose non-main function [h] names [g].
+  - The variables of the outer context are opaque, including its local
+    definitions: a codomain that is a local definition of the outer context
+    is refused, where the kernel unfolds it ([let T := S in cofix f : T := …]).
+  - A function of the block in a parameter of a constructor is refused (the
+    kernel skips the parameters).  A function of the block in a parameter of
+    a [match] is refused, as in the kernel, where the parameters occur in
+    the expanded return clause.
   - A constructor is read in the recursive-argument tree of its position
     only if it is a constructor of that tree's inductive; otherwise it is
     refused.  A kept constructor always is (typing); a discarded part,
@@ -44,6 +62,11 @@ Set Default Goal Selector "!".
   - Recursion is bounded by doubling fuel ([nfuel]): a fuel of [k] allows
     [2 ^ k] nested steps.  Exhaustion is [OutOfFuel], which is never caught
     and never turned into [Reject].
+  - Accepts more: every constant with a body unfolds, including one whose
+    body the kernel keeps opaque ([Qed]), because PCUIC has no opacity and
+    its reduction unfolds it.  So with [Lemma idS : Stream -> Stream] closed
+    by [Qed], the port accepts [cofix f : Stream := Cons 0 (idS f)], which
+    the kernel refuses ([idS f] has an opaque constant at its head).
 
   Positions in a body are counted as in PCUIC: at a point under [d] binders
   of the body, the functions of the block are [tRel d] ... [tRel (d + nb - 1)]
@@ -291,9 +314,16 @@ Section CoFix.
         match head_step lookup retro [] t with
         | Stuck => cf_whnf g d tree vlra t
         | Stepped t' parts =>
-          (* every discarded part is analysed where the step happened *)
-          gr_and (gr_list (fun part => rec (CfCheck g d tree vlra part)) parts)
-            (rec (CfWhd g d tree vlra t'))
+          (* Every discarded part is analysed where the step happened.  The
+             result is [gr_and] of the parts and of the reduct, written so
+             that, when the parts are accepted, the analysis of the reduct is
+             a tail call: the extracted checker then follows a long chain of
+             head steps in constant stack. *)
+          match gr_list (fun part => rec (CfCheck g d tree vlra part)) parts with
+          | Accept => rec (CfWhd g d tree vlra t')
+          | OutOfFuel => OutOfFuel
+          | Reject msg => gr_and (Reject msg) (rec (CfWhd g d tree vlra t'))
+          end
         | StepBad msg => Reject msg
         end
       end.
