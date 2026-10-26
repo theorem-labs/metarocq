@@ -2578,6 +2578,63 @@ Section AddLevelsCstrs.
        let edges := add_cstrs uctx.2 edges in
        (levels, edges, G.2).
 
+  (** The index of [add_uctx uctx G], built from the index of [G] by adding only the
+      new levels and edges. On an empty [uctx] every fold is over an empty set, so the
+      index comes back unchanged without any computation. *)
+  Definition add_level_edges_ix (levels : VSet.t) (ix : index) : index :=
+    VSet.fold
+      (fun l ix =>
+         match variable_of_level l with
+         | None => ix
+         | Some ll => ix_add_edge (edge_of_level ll) ix
+         end) levels ix.
+
+  Definition add_cstrs_ix (ctrs : GoodConstraintSet.t) (ix : index) : index :=
+    GoodConstraintSet.fold (fun ctr => ix_add_edge (edge_of_constraint ctr)) ctrs ix.
+
+  Definition add_uctx_ix (uctx : VSet.t × GoodConstraintSet.t) (ix : index) : index :=
+    let ix := VSet.fold ix_add_vertex uctx.1 ix in
+    let ix := add_level_edges_ix uctx.1 ix in
+    add_cstrs_ix uctx.2 ix.
+
+  Lemma add_uctx_ix_empty ix :
+    add_uctx_ix (VSet.empty, GoodConstraintSet.empty) ix = ix.
+  Proof. reflexivity. Qed.
+
+  Lemma add_uctx_ix_correct uctx G ix :
+    invariants G -> is_index_of G ix ->
+    is_index_of (add_uctx uctx G) (add_uctx_ix uctx ix).
+  Proof.
+    intros HG Hix.
+    unfold add_uctx, add_uctx_ix, add_level_edges_ix, add_cstrs_ix,
+      add_level_edges, add_cstrs.
+    rewrite !VSet.fold_spec !GoodConstraintSet.fold_spec.
+    set (Vf := VSet.union uctx.1 G.1.1).
+    assert (HVf : forall w, VSet.In w Vf <-> List.In w (VSet.elements uctx.1) \/ VSet.In w G.1.1).
+    { intro w. unfold Vf. rewrite VSet.union_spec.
+      split; (intros [H|H]; [left|right; exact H]).
+      - apply InA_In_eq, VSet.elements_spec1, H.
+      - apply VSet.elements_spec1, InA_In_eq, H. }
+    have H1 := ix_fold_vertices (VSet.elements uctx.1) G ix Vf Hix (@edges_vertices G HG) HVf.
+    assert (Hlevel : forall a (G1 : universes_graph) ix1, is_index_of G1 ix1 ->
+      is_index_of (G1.1.1,
+        (fun l E => match variable_of_level l with
+                    | None => E | Some ll => EdgeSet.add (edge_of_level ll) E end) a G1.1.2,
+        G1.2)
+        ((fun l ix => match variable_of_level l with
+                     | None => ix | Some ll => ix_add_edge (edge_of_level ll) ix end) a ix1)).
+    { intros a [[V1 E1] s1] ix1 Hix1.
+      destruct (variable_of_level a); [|exact Hix1].
+      exact (ix_add_edge_correct (V1, E1, s1) _ ix1 Hix1). }
+    have H2 := ix_fold_edges _ _ (VSet.elements uctx.1) (Vf, G.1.2, G.2) _ Hlevel H1.
+    assert (Hcstr : forall a (G1 : universes_graph) ix1, is_index_of G1 ix1 ->
+      is_index_of (G1.1.1,
+        (fun c E => EdgeSet.add (edge_of_constraint c) E) a G1.1.2, G1.2)
+        ((fun c ix => ix_add_edge (edge_of_constraint c) ix) a ix1)).
+    { intros a [[V1 E1] s1] ix1 Hix1. exact (ix_add_edge_correct (V1, E1, s1) _ ix1 Hix1). }
+    exact (ix_fold_edges _ _ (GoodConstraintSet.elements uctx.2) _ _ Hcstr H2).
+  Qed.
+
   Definition uctx_of_udecl u : ContextSet.t :=
     (levels_of_udecl u, constraints_of_udecl u).
 
