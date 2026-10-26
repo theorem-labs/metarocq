@@ -65,7 +65,6 @@ Proof using P Pcmp cf.
   - destruct (lookup_env Σ ind) eqn:look => //.
     eapply extends_lookup in look; eauto. rewrite look //.
     destruct g => //=; destruct nth_error => //=.
-    destruct destArity as [[ctx s]|] => //=.
     destruct Nat.leb => //=.
     destruct ind_variance => //=.
   - destruct (lookup_env Σ (inductive_mind i)) eqn:look => //.
