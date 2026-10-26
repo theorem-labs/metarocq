@@ -110,6 +110,11 @@ Ltac2 letfix () : constr :=
     (Constr.Unsafe.make (Constr.Unsafe.Fix [| 0 |] 0
       [| bnd @f (Constr.Unsafe.make (Constr.Unsafe.Prod (bnd @x (rel 1)) 'nat)) |]
       [| Constr.Unsafe.make (Constr.Unsafe.Lambda (bnd @x (rel 2)) '0) |]))).
+(* [fix f : ty := fun x : nat => 0], whose declared type [ty] is a constant
+   that unfolds to a product: the products are hidden. *)
+Ltac2 fixhidden (ty : constr) : constr :=
+  Constr.Unsafe.make (Constr.Unsafe.Fix [| 0 |] 0 [| bnd @f ty |]
+    [| Constr.Unsafe.make (Constr.Unsafe.Lambda (bnd @x 'nat) '0) |]).
 Ltac2 unchecked (c : constr) := ltac1:(t |- exact_no_check t) (Ltac1.of_constr c).
 End FdUnsafe.
 Import FdUnsafe.
@@ -156,11 +161,14 @@ CoFixpoint fd_cbad_alias : fd_nat' := fd_cbad_alias.
 Fail MetaRocq SafeCheck @fd_cbad_alias.
 CoFixpoint fd_cbad_sort : Type := fd_cbad_sort.
 Fail MetaRocq SafeCheck @fd_cbad_sort.
-Set Guard Checking.
+(* R11: a fixpoint whose declared type hides its products behind a definition.
+   The kernel finds the lambdas by reducing the body and accepts this; PCUIC
+   reads the recursive argument from the syntactic products of the declared
+   type, which [EtaExpand.wf_fixpoint_rarg] relies on, so it must stay
+   rejected.  Rocq's own syntax never builds such a fixpoint: [Fixpoint] and
+   [fix] spell the products out, and the [fix] tactic on a goal [fd_natfun]
+   fails with "Not enough products". *)
+Definition fd_natfun := nat -> nat.
+Fail MetaRocq SafeCheck (ltac2:(unchecked (fixhidden 'fd_natfun)) : fd_natfun).
 
-(* Not tested: a fixpoint whose declared type hides its products behind a
-   definition (the kernel finds the lambdas by reducing the body; PCUIC reads
-   the syntactic products of the type, which [EtaExpand] relies on).  Rocq's
-   elaborator does not produce one: the [Fixpoint] and [fix] syntax spell the
-   products out, and the [fix] tactic on a goal [nat_fun := nat -> nat] fails
-   with "Not enough products". *)
+Set Guard Checking.
