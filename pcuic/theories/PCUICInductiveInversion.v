@@ -14,7 +14,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICOnFreeVars PCUICContextConversion PCUICContextConversionTyp PCUICContextSubst
      PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp
      PCUICConversion PCUICInversion PCUICContexts PCUICArities
-     PCUICSpine PCUICInductives PCUICWellScopedCumulativity PCUICValidity.
+     PCUICSpine PCUICInductives PCUICFixWitness
+     PCUICWellScopedCumulativity PCUICValidity.
 
 From Equations.Type Require Import Relation_Properties.
 From Equations.Prop Require Import DepElim.
@@ -55,10 +56,107 @@ Proof.
   eapply validity. eapply type_Construct; eauto.
 Qed.
 
+(** * Reading off the shape of a [check_one_fix] / [check_one_cofix] witness
+
+  [PCUICFixWitness] turns the conversion witness of [wf_fixpoint] / [wf_cofixpoint]
+  into a reduct of the declared type that the checks still accept. What is left to do
+  here is to read the shape of such an accepted type: a telescope whose recursive
+  argument (resp. whose conclusion) is an applied inductive of the block. *)
+
+Section CheckShape.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}.
+
+  Lemma check_one_fix_inv d ty mind :
+    check_one_fix (def_with_type d ty) = Some mind ->
+    ∑ ctx concl c i u args,
+      [× ty = it_mkProd_or_LetIn ctx concl,
+         nth_error (List.rev (smash_context [] ctx)) (rarg d) = Some c &
+         decl_type c = mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u) args].
+  Proof using Type.
+    rewrite /check_one_fix /def_with_type /=.
+    destruct (decompose_prod_assum [] ty) as [ctx concl] eqn:decomp.
+    destruct (nth_error (List.rev (smash_context [] ctx)) (rarg d)) as [c|] eqn:hnth => //.
+    destruct (decompose_app (decl_type c)) as [hd l] eqn:da.
+    destruct (destInd hd) as [[[mind' i'] u']|] eqn:di => //.
+    move=> [=] <-.
+    exists ctx, concl, c, i', u', l. split => //.
+    - eapply (decompose_prod_assum_it_mkProd_or_LetIn [] ty) in decomp. now cbn in decomp.
+    - destruct hd => //; noconf di. now eapply decompose_app_inv in da.
+  Qed.
+
+  Lemma check_one_cofix_inv d ty mind :
+    check_one_cofix (def_with_type d ty) = Some mind ->
+    ∑ ctx i u args,
+      ty = it_mkProd_or_LetIn ctx
+        (mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u) args).
+  Proof using Type.
+    rewrite /check_one_cofix /def_with_type /=.
+    destruct (decompose_prod_assum [] ty) as [ctx concl] eqn:decomp.
+    destruct (decompose_app concl) as [hd l] eqn:da.
+    destruct (destInd hd) as [[[mind' i'] u']|] eqn:di => //.
+    move=> [=] <-.
+    exists ctx, i', u', l.
+    destruct hd => //; noconf di.
+    eapply decompose_app_inv in da. subst concl.
+    eapply (decompose_prod_assum_it_mkProd_or_LetIn [] ty) in decomp. now cbn in decomp.
+  Qed.
+
+End CheckShape.
+
+(** A spine of a type that reduces to a telescope over an applied inductive of [ind]
+    can only end in an applied inductive of [ind]. *)
+Lemma tProd_eq_it_mkProd_Ind {na A B ctx ind u args} :
+  tProd na A B = it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args) ->
+  ∑ ctx', (ctx = ctx' ++ [vass na A]) ×
+    (B = it_mkProd_or_LetIn ctx' (mkApps (tInd ind u) args)).
+Proof.
+  destruct ctx as [|ctx x] using rev_case.
+  - cbn. destruct args using rev_case; [cbn|rewrite mkApps_app]; discriminate.
+  - rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /=.
+    destruct x as [na' [b|] ty]; [discriminate|].
+    intros [= <- <- ->]. now exists ctx.
+Qed.
+
+Lemma mkApps_tInd_eq_it_mkProd_Ind {ind u l ctx ind' u' args} :
+  mkApps (tInd ind u) l = it_mkProd_or_LetIn ctx (mkApps (tInd ind' u') args) ->
+  ind = ind'.
+Proof.
+  destruct ctx as [|ctx x] using rev_case.
+  - cbn. intros eq. eapply mkApps_notApp_inj in eq as [eqh _] => //. now noconf eqh.
+  - rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /=.
+    destruct x as [na [b|] ty]; destruct l using rev_case;
+      rewrite ?mkApps_app /=; discriminate.
+Qed.
+
+Lemma typing_spine_it_mkProd_Ind_inv {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  {Γ T l U} :
+  typing_spine Σ Γ T l U ->
+  forall ctx ind u args ind' u' args',
+  Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args) ≤ T ->
+  U = mkApps (tInd ind' u') args' ->
+  ind = ind'.
+Proof.
+  induction 1 as [ty ty' ity ity' cum|ty hd tl na A B B' ity ityp cum tyhd sp IH];
+    intros ctx I ui iargs ind' u' args' hcum heq; subst.
+  - have hc : Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd I ui) iargs) ≤
+      mkApps (tInd ind' u') args' by etransitivity; tea.
+    eapply ws_cumul_pb_Ind_r_inv in hc as [ui' [l' [r _ _]]].
+    eapply red_it_mkProd_or_LetIn_mkApps_Ind in r as [ctx' [args'' eq]].
+    symmetry. now eapply mkApps_tInd_eq_it_mkProd_Ind.
+  - have hc : Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd I ui) iargs) ≤ tProd na A B
+      by etransitivity; tea.
+    eapply ws_cumul_pb_Prod_r_inv in hc as [na1 [A1 [B1 [r eqna cdom ccod]]]].
+    eapply red_it_mkProd_or_LetIn_mkApps_Ind in r as [ctx1 [args1 eq]].
+    eapply tProd_eq_it_mkProd_Ind in eq as [ctx0 [_ ->]].
+    eapply (substitution0_ws_cumul_pb (t:=hd)) in ccod; tea.
+    rewrite /subst1 subst_it_mkProd_or_LetIn subst_mkApps /= Nat.add_0_r in ccod.
+    eapply (IH _ I ui _ ind' u' args'); [exact ccod|reflexivity].
+Qed.
+
 Lemma type_tFix_inv {cf:checker_flags} (Σ : global_env_ext) Γ mfix idx T : wf Σ ->
   Σ ;;; Γ |- tFix mfix idx : T ->
   { T' & { rarg & {f & (unfold_fix mfix idx = Some (rarg, f))  *
-    wf_fixpoint Σ  mfix
+    wf_fixpoint Σ Γ mfix
   * (Σ ;;; Γ |- f : T') * (Σ ;;; Γ ⊢ T' ≤ T) }}}%type.
 Proof.
   intros wfΣ H. depind H.
@@ -72,7 +170,9 @@ Proof.
     + split.
       * eauto.
       * eapply (substitution (Δ :=  [])); simpl; eauto with wf.
-        rename i into hguard. clear -f a a0 a1 hguard.
+        match goal with H : fix_guard _ _ _ |- _ => rename H into hguard end.
+        match goal with H : wf_fixpoint _ _ _ |- _ => rename H into hwffix end.
+        clear -a a0 a1 hguard hwffix.
         pose proof a1 as a1'. apply All_rev in a1'.
         unfold fix_subst, fix_context. simpl.
         revert a1'. rewrite <- (@List.length_rev _ mfix).
@@ -118,7 +218,7 @@ Lemma subslet_cofix {cf:checker_flags} (Σ : global_env_ext) Γ mfix :
   cofix_guard Σ Γ mfix ->
   All (on_def_type (lift_typing typing Σ) Γ) mfix ->
   All (on_def_body (lift_typing typing Σ) (fix_context mfix) Γ) mfix ->
-  wf_cofixpoint Σ mfix -> subslet Σ Γ (cofix_subst mfix) (fix_context mfix).
+  wf_cofixpoint Σ Γ mfix -> subslet Σ Γ (cofix_subst mfix) (fix_context mfix).
 Proof.
   intros wfΓ hguard types bodies wfcofix.
   pose proof bodies as X1. apply All_rev in X1.
@@ -156,7 +256,7 @@ Qed.
 Lemma type_tCoFix_inv {cf:checker_flags} (Σ : global_env_ext) Γ mfix idx T : wf Σ ->
   Σ ;;; Γ |- tCoFix mfix idx : T ->
   ∑ d, (nth_error mfix idx = Some d) *
-    wf_cofixpoint Σ mfix *
+    wf_cofixpoint Σ Γ mfix *
     (Σ ;;; Γ |- subst0 (cofix_subst mfix) (dbody d) : (dtype d)) *
     (Σ ;;; Γ ⊢ dtype d ≤ T).
 Proof.
@@ -174,66 +274,25 @@ Proof.
   rewrite simpl_subst_k //. len.
 Qed.
 
-Lemma wf_cofixpoint_all {cf:checker_flags} (Σ : global_env_ext) mfix :
-  wf_cofixpoint Σ mfix ->
+(** Under the new specification a [dtype] need not *be* a telescope over an applied
+    inductive: it *reduces* to one. *)
+Lemma wf_cofixpoint_all {cf:checker_flags} (Σ : global_env_ext) {wfΣ : wf Σ} Γ mfix :
+  is_closed_context Γ ->
+  All (fun d => is_open_term Γ (dtype d)) mfix ->
+  wf_cofixpoint Σ Γ mfix ->
   ∑ mind, check_recursivity_kind (lookup_env Σ) mind CoFinite *
-  All (fun d => ∑ ctx i u args, (dtype d) = it_mkProd_or_LetIn ctx (mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u) args)) mfix.
+  All (fun d => ∑ ctx i u args,
+    Σ ;;; Γ ⊢ dtype d ⇝
+      it_mkProd_or_LetIn ctx
+        (mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u) args)) mfix.
 Proof.
-  unfold wf_cofixpoint, wf_cofixpoint_gen.
-  destruct mfix. discriminate.
-  simpl.
-  destruct (check_one_cofix d) as [ind|] eqn:hcof.
-  intros eqr.
-  exists ind.
-  destruct (map_option_out (map check_one_cofix mfix)) eqn:eqfixes.
-  move/andb_and: eqr => [eqinds rk].
-  split; auto.
-  constructor.
-  - move: hcof. unfold check_one_cofix.
-    destruct d as [dname dbody dtype rarg] => /=.
-    destruct (decompose_prod_assum [] dbody) as [ctx concl] eqn:Hdecomp.
-    apply decompose_prod_assum_it_mkProd_or_LetIn in Hdecomp.
-    destruct (decompose_app concl) eqn:dapp.
-    destruct (destInd t) as [[ind' u]|] eqn:dind.
-    destruct ind' as [mind ind'].
-    move=> [=] Hmind. subst mind.
-    exists ctx, ind', u, l0.
-    simpl in Hdecomp. rewrite Hdecomp.
-    f_equal.
-    destruct t; try discriminate.
-    simpl in dind. noconf dind.
-    apply decompose_app_inv in dapp => //.
-    discriminate.
-  - clear rk hcof.
-    induction mfix in l, eqfixes, eqinds |- *. constructor.
-    simpl in *.
-    destruct (check_one_cofix a) eqn:hcof; try discriminate.
-    destruct (map_option_out (map check_one_cofix mfix)) eqn:hcofs; try discriminate.
-    noconf eqfixes.
-    specialize (IHmfix _ eq_refl).
-    simpl in eqinds.
-    move/andb_and: eqinds => [eqk eql0].
-    constructor; auto. clear IHmfix hcofs d.
-    destruct a as [dname dbody dtype rarg] => /=.
-    unfold check_one_cofix in hcof.
-    destruct (decompose_prod_assum [] dbody) as [ctx concl] eqn:Hdecomp.
-    apply decompose_prod_assum_it_mkProd_or_LetIn in Hdecomp.
-    destruct (decompose_app concl) eqn:dapp.
-    destruct (destInd t) as [[ind' u]|] eqn:dind.
-    destruct ind' as [mind ind']. noconf hcof.
-    exists ctx, ind', u, l.
-    simpl in Hdecomp. rewrite Hdecomp.
-    f_equal.
-    destruct t; try discriminate.
-    simpl in dind. noconf dind.
-    apply decompose_app_inv in dapp => //.
-    rewrite dapp. do 3 f_equal.
-    symmetry.
-    change (eq_kername ind k) with (ReflectEq.eqb ind k) in eqk.
-    destruct (ReflectEq.eqb_spec ind k); auto.
-    discriminate.
-  - discriminate.
-  - discriminate.
+  intros clΓ op [mind [_ [hall hck]]].
+  exists mind; split; [exact hck|].
+  eapply All_impl. { eapply All_prod; [exact op|exact hall]. }
+  intros d [opd hd].
+  eapply cofix_on_ind_red in hd as [ty [r hc]] => //.
+  eapply check_one_cofix_inv in hc as [ctx [i [u [args eq]]]].
+  exists ctx, i, u, args. now rewrite -eq.
 Qed.
 
 
@@ -579,21 +638,24 @@ Qed.
 
 Lemma wf_cofixpoint_typing_spine {cf:checker_flags} (Σ : global_env_ext) Γ ind u mfix idx d args args' :
   wf Σ.1 -> wf_local Σ Γ ->
-  wf_cofixpoint Σ mfix ->
+  wf_cofixpoint Σ Γ mfix ->
   nth_error mfix idx = Some d ->
   isType Σ Γ (dtype d) ->
   typing_spine Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
   check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
 Proof.
   intros wfΣ wfΓ wfcofix Hnth wat sp.
-  apply wf_cofixpoint_all in wfcofix.
-  destruct wfcofix as [mind [cr allfix]].
-  eapply nth_error_all in allfix; eauto.
-  simpl in allfix.
-  destruct allfix as [ctx [i [u' [args'' eqty]]]].
-  rewrite {}eqty in sp wat.
-  eapply mkApps_ind_typing_spine in sp; auto.
-  destruct sp as [instsub [makes Hargs Hind Hu subs subsl]].
+  destruct wfcofix as [mind [_ [hall hck]]].
+  eapply nth_error_all in hall; tea.
+  eapply (cofix_on_ind_red (wfΣ := wfΣ)) in hall as [ty [r hc]].
+  2:now eapply wf_local_closed_context.
+  2:now eapply isType_is_open_term.
+  eapply check_one_cofix_inv in hc as [ctx [i [u0 [l eqty]]]]. subst ty.
+  have hcum : Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx
+      (mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u0) l) ≤ dtype d.
+  { now eapply red_ws_cumul_pb_inv. }
+  have heq : {| inductive_mind := mind; inductive_ind := i |} = ind.
+  { eapply (typing_spine_it_mkProd_Ind_inv sp); [exact hcum|reflexivity]. }
   now subst ind.
 Qed.
 

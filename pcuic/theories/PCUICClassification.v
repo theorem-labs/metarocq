@@ -9,7 +9,7 @@ From MetaRocq.PCUIC Require Import PCUICTyping PCUICAst PCUICAstUtils PCUICTacti
   PCUICUnivSubst PCUICWeakeningEnvConv PCUICWeakeningEnvTyp
   PCUICCumulativity PCUICConfluence
   PCUICInduction PCUICLiftSubst PCUICContexts PCUICSpine
-  PCUICConversion PCUICValidity PCUICInductives PCUICConversion
+  PCUICConversion PCUICValidity PCUICInductives PCUICFixWitness PCUICConversion
   PCUICInductiveInversion PCUICNormal PCUICSafeLemmata
   PCUICParallelReductionConfluence
   PCUICClosed PCUICClosedTyp
@@ -127,55 +127,36 @@ Section Spines.
   Context {Σ : global_env_ext}.
   Context (wfΣ : wf Σ.1).
 
-  Lemma wf_fixpoint_inv mfix idx decl :
-    wf_fixpoint Σ mfix ->
+  (** Under the new specification the declared type itself need not pass the check:
+      a reduct of it does. *)
+  Lemma wf_fixpoint_inv Γ mfix idx decl :
+    is_closed_context Γ -> is_open_term Γ (dtype decl) ->
+    wf_fixpoint Σ Γ mfix ->
     nth_error mfix idx = Some decl ->
-    ∑ mind, (check_one_fix decl = Some mind)  *
-      check_recursivity_kind (lookup_env Σ) mind Finite.
+    ∑ mind ty,
+      [× Σ ;;; Γ ⊢ dtype decl ⇝ ty,
+         check_one_fix (def_with_type decl ty) = Some mind &
+         check_recursivity_kind (lookup_env Σ) mind Finite].
   Proof.
-    rewrite /wf_fixpoint => wffix nthe.
-    unfold wf_fixpoint_gen in *.
-    move: wffix; case E: (map_option_out (map check_one_fix mfix)) => [l|] //.
-    apply map_option_Some in E.
-    eapply All2_map_left' in E.
-    eapply All2_nth_error_Some in E; eauto.
-    destruct E as [kn [Hl Hcheck]].
-    destruct l as [|hd tl].
-    now rewrite nth_error_nil in Hl => //.
-    move/and3P=> [hmfix eqhd checkrec].
-    exists kn. split; auto.
-    enough (hd = kn) as -> => //.
-    clear -Hl eqhd.
-    eapply forallb_All in eqhd.
-    destruct idx; simpl in Hl; [congruence|].
-    eapply All_nth_error in eqhd; eauto.
-    now eapply ReflectEq.eqb_eq in eqhd.
-    rewrite andb_false_r => //.
+    intros clΓ opd [isl [mind [ne [hall hck]]]] nthe.
+    eapply nth_error_all in hall; tea.
+    eapply (fix_on_ind_red (wfΣ := wfΣ)) in hall as [ty [r hc]]; tea.
+    exists mind, ty. split; tea.
   Qed.
 
-  Lemma wf_cofixpoint_inv mfix idx decl :
-    wf_cofixpoint Σ mfix ->
+  Lemma wf_cofixpoint_inv Γ mfix idx decl :
+    is_closed_context Γ -> is_open_term Γ (dtype decl) ->
+    wf_cofixpoint Σ Γ mfix ->
     nth_error mfix idx = Some decl ->
-    ∑ mind, (check_one_cofix decl = Some mind)  *
-      check_recursivity_kind (lookup_env Σ) mind CoFinite.
+    ∑ mind ty,
+      [× Σ ;;; Γ ⊢ dtype decl ⇝ ty,
+         check_one_cofix (def_with_type decl ty) = Some mind &
+         check_recursivity_kind (lookup_env Σ) mind CoFinite].
   Proof.
-    rewrite /wf_cofixpoint => wffix nthe.
-    unfold wf_cofixpoint_gen in *.
-    move: wffix; case E: (map_option_out (map check_one_cofix mfix)) => [l|] //.
-    apply map_option_Some in E.
-    eapply All2_map_left' in E.
-    eapply All2_nth_error_Some in E; eauto.
-    destruct E as [kn [Hl Hcheck]].
-    destruct l as [|hd tl].
-    now rewrite nth_error_nil in Hl => //.
-    move/andP=> [eqhd checkrec].
-    exists kn. split; auto.
-    enough (hd = kn) as -> => //.
-    clear -Hl eqhd.
-    eapply forallb_All in eqhd.
-    destruct idx; simpl in Hl; [congruence|].
-    eapply All_nth_error in eqhd; eauto.
-    now eapply ReflectEq.eqb_eq in eqhd.
+    intros clΓ opd [mind [ne [hall hck]]] nthe.
+    eapply nth_error_all in hall; tea.
+    eapply (cofix_on_ind_red (wfΣ := wfΣ)) in hall as [ty [r hc]]; tea.
+    exists mind, ty. split; tea.
   Qed.
 
     Lemma on_free_vars_it_mkLambda_or_LetIn {P Δ t} :
@@ -445,7 +426,7 @@ Qed.
   Qed.
 
   Lemma wf_fixpoint_spine Γ mfix idx decl args ty :
-    wf_fixpoint Σ.1 mfix ->
+    wf_fixpoint Σ Γ mfix ->
     nth_error mfix idx = Some decl ->
     isType Σ Γ (dtype decl) ->
     typing_spine Σ Γ (dtype decl) args ty ->
@@ -457,16 +438,22 @@ Qed.
     | None => ∑ na dom codom, Σ ;;; Γ ⊢ tProd na dom codom ≤ ty
     end.
   Proof.
-    move=> wffix nthe isty.
-    eapply wf_fixpoint_inv in nthe; eauto.
-    destruct nthe as [mind' [cfix ck]].
-    move=> sp.
-    destruct decl as [dna dty dbod rarg].
-    rewrite /check_one_fix in cfix. simpl in *.
-    case E: (decompose_prod_assum [] dty) => [Γ' concl].
+    move=> wffix nthe isty sp.
+    have clΓ : is_closed_context Γ.
+    { eapply wf_local_closed_context. now eapply isType_wf_local. }
+    have opd : is_open_term Γ (dtype decl) by eapply isType_is_open_term.
+    eapply wf_fixpoint_inv in nthe as [mind' [tw [r cfix ck]]]; tea.
+    have istw : isType Σ Γ tw by eapply isType_red; [exact isty|exact (clrel_rel r)].
+    have sp' : typing_spine Σ Γ tw args ty.
+    { eapply typing_spine_strengthen;
+        [exact sp|exact istw|now eapply red_ws_cumul_pb_inv]. }
+    clear sp isty. rename sp' into sp.
+    destruct decl as [dna dty dbod rarg]; cbn in *.
+    rewrite /check_one_fix /def_with_type /= in cfix.
+    case E: (decompose_prod_assum [] tw) => [Γ' concl].
     rewrite E in cfix.
     eapply decompose_prod_assum_it_mkProd_or_LetIn in E.
-    simpl in E. subst dty.
+    simpl in E. subst tw.
     destruct (nth_error _ rarg) eqn:Hnth => //.
     pose proof (nth_error_Some_length Hnth).
     len in H. simpl in H.
@@ -475,7 +462,7 @@ Qed.
     - eapply typing_spine_nth_error in sp; eauto; cycle 1.
       * eapply smash_context_assumption_context; constructor.
       * eapply wf_local_smash_end; eauto.
-        destruct isty as (_ & s & Hs & _).
+        destruct istw as (_ & s & Hs & _).
         eapply inversion_it_mkProd_or_LetIn in Hs; eauto.
         now eapply typing_wf_local.
       * destruct (decompose_app (decl_type c)) as [hd tl] eqn:da.
@@ -488,17 +475,19 @@ Qed.
     - eapply typing_spine_nth_error_None_prod in sp; eauto.
       * eapply smash_context_assumption_context; constructor.
       * eapply wf_local_smash_end; eauto.
-        destruct isty as (_ & s & Hs & _).
+        destruct istw as (_ & s & Hs & _).
         eapply inversion_it_mkProd_or_LetIn in Hs; eauto.
         now eapply typing_wf_local.
   Qed.
 
+  (** The declared type no longer *is* a telescope over an applied inductive: it
+      reduces to one. *)
   Lemma wf_cofixpoint_spine Γ mfix idx decl args ty :
-    wf_cofixpoint Σ.1 mfix ->
+    wf_cofixpoint Σ Γ mfix ->
     nth_error mfix idx = Some decl ->
     isType Σ Γ (dtype decl) ->
     typing_spine Σ Γ (dtype decl) args ty ->
-    ∑ Γ' T, (decompose_prod_assum [] (dtype decl) = (Γ', T)) *
+    ∑ Γ' T, (Σ ;;; Γ ⊢ dtype decl ⇝ it_mkProd_or_LetIn Γ' T) *
     ∑ ind u indargs, (T = mkApps (tInd ind u) indargs) *
     check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite *
     if #|args| <? context_assumptions Γ' then
@@ -509,16 +498,21 @@ Qed.
       (#|args| = context_assumptions Γ') *
       (Σ ;;; Γ ⊢ subst (List.rev args) 0 (expand_lets Γ' T) ≤ ty).
   Proof.
-    move=> wffix nthe isty.
-    eapply wf_cofixpoint_inv in nthe; eauto.
-    destruct nthe as [mind' [cfix ck]].
-    move=> sp.
-    destruct decl as [dna dty dbod rarg].
-    rewrite /check_one_cofix in cfix. simpl in *.
-    case E: (decompose_prod_assum [] dty) => [Γ' concl].
+    move=> wfcofix nthe isty sp.
+    have clΓ : is_closed_context Γ.
+    { eapply wf_local_closed_context. now eapply isType_wf_local. }
+    have opd : is_open_term Γ (dtype decl) by eapply isType_is_open_term.
+    eapply wf_cofixpoint_inv in nthe as [mind' [tw [r cfix ck]]]; tea.
+    have istw : isType Σ Γ tw by eapply isType_red; [exact isty|exact (clrel_rel r)].
+    have sp' : typing_spine Σ Γ tw args ty.
+    { eapply typing_spine_strengthen;
+        [exact sp|exact istw|now eapply red_ws_cumul_pb_inv]. }
+    clear sp isty. rename sp' into sp.
+    rewrite /check_one_cofix /def_with_type /= in cfix.
+    case E: (decompose_prod_assum [] tw) => [Γ' concl].
     rewrite E in cfix.
     eapply decompose_prod_assum_it_mkProd_or_LetIn in E.
-    simpl in E. subst dty. exists Γ', concl. split; auto.
+    simpl in E. subst tw. exists Γ', concl. split; auto.
     destruct (decompose_app concl) as [hd tl] eqn:da.
     destruct (destInd hd) as [[mind i]|] eqn:di => //.
     destruct mind => //. destruct hd => //.
@@ -531,12 +525,12 @@ Qed.
     - eapply typing_spine_smash in sp.
       destruct (nth_error args #|args|) eqn:hargs.
       { rewrite (proj2 (nth_error_None _ _)) // in hargs. }
-      destruct (nth_error (List.rev (smash_context [] Γ')) #|args|) as [decl|] eqn:hnth.
+      destruct (nth_error (List.rev (smash_context [] Γ')) #|args|) as [decl'|] eqn:hnth.
       eapply typing_spine_nth_error_None in sp; eauto.
       * len in sp.
       * eapply smash_context_assumption_context; constructor.
       * eapply wf_local_smash_end; eauto.
-        destruct isty as (_ & s & Hs & _).
+        destruct istw as (_ & s & Hs & _).
         eapply inversion_it_mkProd_or_LetIn in Hs; eauto.
         now eapply typing_wf_local.
       * len; simpl. eapply nth_error_None in hargs => //.
@@ -653,9 +647,7 @@ Section classification.
     simpl in a.
     apply isTypeRel_isType in a.
     eapply typing_spine_strengthen in sp; eauto.
-    eapply wf_cofixpoint_spine in sp as (Γ' & concl & da & ?); eauto.
-    eapply decompose_prod_assum_it_mkProd_or_LetIn in da.
-    simpl in da.
+    eapply wf_cofixpoint_spine in sp as (Γ' & concl & _ & ?); eauto.
     move: s => [ind' [u' [indargs' [[ceq ccum] ck]]]].
     subst concl.  move: ck.
     elim: Nat.ltb_spec => Hargs.
@@ -672,8 +664,8 @@ Section classification.
       now eapply invert_cumul_prod_ind in cum.
     - move=> [hargs ccum'].
       rewrite expand_lets_mkApps subst_mkApps /= in ccum'.
-      eapply invert_cumul_ind_ind in ccum' as ((? & r) & ?).
-      len in r. eapply ReflectEq.eqb_eq in i0. now subst ind'.
+      eapply invert_cumul_ind_ind in ccum' as ((hind & r) & _).
+      len in r. eapply ReflectEq.eqb_eq in hind. now subst ind'.
   Qed.
 
   Lemma check_recursivity_kind_inj {mind rk rk'} :
