@@ -362,13 +362,22 @@ Proof using Type.
       rewrite -fix_context_subst_instance /app_context -(subst_instance_app u (fix_context mfix) Γ) -/(app_context Γ _).
       rewrite -subst_instance_lift length_map.
       eapply lift_typing_mapu with (tm := Some _) (u := None); cbn; eauto using relevance_subst_opt.
-    + red; rewrite <- wffix.
-      unfold wf_fixpoint, wf_fixpoint_gen.
-      f_equal.
-      { rewrite forallb_map. solve_all. cbn.
-        destruct (dbody x) => //. }
-      rewrite map_map_compose.
-      now rewrite subst_instance_check_one_fix.
+    + destruct wffix as [isl [mind [ne [hall hk]]]].
+      split; [|exists mind; split; [|split]].
+      { rewrite forallb_map. eapply forallb_impl; tea. intros x _ hx.
+        now eapply isLambda_subst_instance. }
+      { destruct mfix => //. }
+      { eapply All_map. eapply All_impl; tea.
+        intros d [hr [ty [hc [hop hconv]]]].
+        split.
+        { now rewrite subst_instance_has_rec_arg. }
+        exists (subst_instance u ty); split; [|split].
+        { rewrite subst_instance_def_with_type.
+          now rewrite subst_instance_check_one_fix_def. }
+        { move: hop. rewrite !on_free_vars_subst_instance.
+          now rewrite length_map. }
+        { eapply convSpec_subst_instance; aa. } }
+      exact hk.
 
   - intros mfix n decl H H0 H1 X IHX X0 IHX0 wffix u univs wfΣ'.
     rewrite (map_dtype _ (subst_instance u)). econstructor.
@@ -384,10 +393,18 @@ Proof using Type.
       rewrite -fix_context_subst_instance /app_context -(subst_instance_app u (fix_context mfix) Γ) -/(app_context Γ _).
       rewrite -subst_instance_lift length_map.
       eapply lift_typing_mapu with (tm := Some _) (u := None); cbn; eauto using relevance_subst_opt.
-    + red; rewrite <- wffix.
-      unfold wf_cofixpoint, wf_cofixpoint_gen.
-      rewrite map_map_compose.
-      now rewrite subst_instance_check_one_cofix.
+    + destruct wffix as [mind [ne [hall hk]]].
+      exists mind; split; [|split].
+      { destruct mfix => //. }
+      { eapply All_map. eapply All_impl; tea.
+        intros d [ty [hc [hop hconv]]].
+        exists (subst_instance u ty); split; [|split].
+        { rewrite subst_instance_def_with_type.
+          now rewrite subst_instance_check_one_cofix_def. }
+        { move: hop. rewrite !on_free_vars_subst_instance.
+          now rewrite length_map. }
+        { eapply convSpec_subst_instance; aa. } }
+      exact hk.
 
   - intros.
     rewrite subst_instance_prim_type.

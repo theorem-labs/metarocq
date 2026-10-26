@@ -354,6 +354,52 @@ Proof.
   apply inst_cumulSpec.
 Qed.
 
+Lemma inst_wf_fixpoint {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ σ mfix} :
+  closed_subst Γ σ Δ ->
+  is_closed_context Γ ->
+  All (fun d => is_open_term Γ (dtype d)) mfix ->
+  wf_fixpoint Σ Γ mfix ->
+  wf_fixpoint Σ Δ (map (map_def (inst σ) (inst (up #|mfix| σ))) mfix).
+Proof.
+  intros hσ hΓ hop [isl [mind [ne [hall hk]]]].
+  split; [|exists mind; split; [|split]].
+  - rewrite forallb_map. eapply forallb_impl; tea. intros x _ h.
+    now eapply isLambda_inst.
+  - destruct mfix => //.
+  - eapply All_map. eapply All_impl.
+    { eapply All_prod; [exact hop|exact hall]. }
+    intros d [hopd [hr [ty [hc [hty hconv]]]]].
+    split.
+    { now eapply inst_has_rec_arg. }
+    exists ty.[σ]; split; [|split].
+    * rewrite inst_def_with_type.
+      now eapply (inst_check_one_fix σ mfix).
+    * now eapply inst_is_open_term.
+    * now eapply inst_convSpec.
+  - exact hk.
+Qed.
+
+Lemma inst_wf_cofixpoint {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ σ mfix} :
+  closed_subst Γ σ Δ ->
+  is_closed_context Γ ->
+  All (fun d => is_open_term Γ (dtype d)) mfix ->
+  wf_cofixpoint Σ Γ mfix ->
+  wf_cofixpoint Σ Δ (map (map_def (inst σ) (inst (up #|mfix| σ))) mfix).
+Proof.
+  intros hσ hΓ hop [mind [ne [hall hk]]].
+  exists mind; split; [|split].
+  - destruct mfix => //.
+  - eapply All_map. eapply All_impl.
+    { eapply All_prod; [exact hop|exact hall]. }
+    intros d [hopd [ty [hc [hty hconv]]]].
+    exists ty.[σ]; split; [|split].
+    * rewrite inst_def_with_type.
+      now eapply (inst_check_one_cofix σ mfix).
+    * now eapply inst_is_open_term.
+    * now eapply inst_convSpec.
+  - exact hk.
+Qed.
+
 Lemma inst_prim_type σ p pty : (prim_type p pty).[σ] = prim_type (map_prim (inst σ) p) pty.
 Proof.
   destruct p as [? []] => //.
@@ -550,7 +596,11 @@ Proof.
         now eapply All_local_env_app_inv in htypes as [].
       + rewrite lift0_inst /types inst_context_length fix_context_length.
         now sigma.
-    * now apply inst_wf_fixpoint.
+    * eapply inst_wf_fixpoint; tea.
+      1: eapply well_subst_closed_subst; tea; eapply wf_local_closed_context; tea.
+      1: eapply wf_local_closed_context; tea.
+      eapply (All_impl hmfixt) => d hd.
+      now eapply isType_is_open_term, isTypeRel_isType, hd.
     * reflexivity.
 
   - intros Σ wfΣ Γ wfΓ mfix n decl types hguard hnth htypes hmfixt ihmfixt hmfixb ihmfixb wffix Δ σ hΔ hσ.
@@ -572,7 +622,11 @@ Proof.
         now eapply All_local_env_app_inv in htypes as [].
       + rewrite lift0_inst /types inst_context_length fix_context_length.
         now sigma.
-    * now apply inst_wf_cofixpoint.
+    * eapply inst_wf_cofixpoint; tea.
+      1: eapply well_subst_closed_subst; tea; eapply wf_local_closed_context; tea.
+      1: eapply wf_local_closed_context; tea.
+      eapply (All_impl hmfixt) => d hd.
+      now eapply isType_is_open_term, isTypeRel_isType, hd.
     * reflexivity.
 
   - intros Σ wfΣ Γ wfΓ p pty cdecl _ hp hdecl pinv hty hind Δ σ hΔ hσ.

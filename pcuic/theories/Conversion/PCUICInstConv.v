@@ -1011,33 +1011,26 @@ Proof.
   noconf dp. rewrite decompose_app_mkApps // in da'. noconf da' => //.
 Qed.
 
-Lemma inst_wf_fixpoint Σ f mfix :
-  wf_fixpoint Σ mfix ->
-  wf_fixpoint Σ (map (map_def (inst f) (inst (up #|mfix| f))) mfix).
+Lemma isLambda_inst f t : isLambda t -> isLambda (inst f t).
+Proof. destruct t => //. Qed.
+
+Lemma inst_has_rec_arg f (mfix : mfixpoint term) d :
+  has_rec_arg d ->
+  has_rec_arg (map_def (inst f) (inst (up #|mfix| f)) d).
 Proof.
-  unfold wf_fixpoint, wf_fixpoint_gen.
-  move/andb_and => [] hmfix ho.
-  apply/andP; split.
-  { rewrite forallb_map; eapply forallb_impl; tea; cbn => x hx hl.
-    destruct (dbody x) => /= //. }
-  rewrite map_map_compose.
-  destruct (map_option_out (map check_one_fix mfix)) as [[]|] eqn:hmap => //.
-  eapply map_option_out_impl in hmap.
-  2:{ intros x y. apply (inst_check_one_fix f mfix). }
-  now rewrite hmap.
+  destruct d; unfold has_rec_arg; simpl.
+  move: (inst_decompose_prod_assum f [] dtype).
+  rewrite up_0. intros ->.
+  destruct decompose_prod_assum.
+  destruct decompose_prod_assum as [Γ' t'].
+  cbn. move/Nat.ltb_lt => hlt. apply/Nat.ltb_lt.
+  rewrite context_assumptions_app. len.
+  all: try lia.
 Qed.
 
-Lemma inst_wf_cofixpoint Σ f mfix :
-  wf_cofixpoint Σ mfix ->
-  wf_cofixpoint Σ (map (map_def (inst f) (inst (up #|mfix| f))) mfix).
-Proof.
-  unfold wf_cofixpoint, wf_cofixpoint_gen.
-  rewrite map_map_compose.
-  destruct (map_option_out (map check_one_cofix mfix)) as [[]|] eqn:hmap => //.
-  eapply map_option_out_impl in hmap.
-  2:{ intros x y. apply (inst_check_one_cofix f mfix). }
-  now rewrite hmap.
-Qed.
+Lemma inst_def_with_type f g d ty :
+  def_with_type (map_def f g d) (f ty) = map_def f g (def_with_type d ty).
+Proof. reflexivity. Qed.
 
 Lemma inst_extended_subst f Γ :
   map (inst (up (context_assumptions Γ) f)) (extended_subst Γ 0) =
