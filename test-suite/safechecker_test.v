@@ -121,6 +121,13 @@ Fail Polymorphic Definition template_successor_too_low@{i} : Type@{i} :=
 
 Unset Universe Polymorphism.
 
+(* A known limit.  Rocq types [prod True True] in [Prop]: the template
+   quality of [prod] follows its arguments.  The translation drops template
+   qualities and gives the instance [Type@{Set}], so SafeCheck rejects a
+   declaration that needs [Prop]. *)
+Definition template_prod_prop : Prop := prod True True.
+Fail MetaRocq SafeCheck template_prod_prop.
+
 (* Time MetaRocq SafeCheck @infer_and_print_template_program. *)
 (* Fails after about 30 seconds on Rocq 9.2.0, before the checker runs:
 Error: Quoting sort polymorphic abstract universe context not yet supported.

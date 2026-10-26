@@ -78,14 +78,14 @@ do not have the same head when comparing for cumulativity"
    inductive, so it reaches the path where a substitution keyed on the body's
    instance could replace the declared [d] by the body's larger
    representative and repair the declaration.  The default is read from the
-   inductive's metadata, not named here; the checker's message names it
-   ([Corelib.Init.Datatypes.190] in Rocq 9.2), next to the body's sort,
-   which the quoter names [Template.MetaRocq.algebraic.1]. *)
+   inductive's metadata, not named here: the command puts its name where the
+   expected message says [<default>].  The body's sort is the level the quoter
+   mints for [d+1], [Template.MetaRocq.algebraic.1]. *)
 MetaRocq Test Quoter Declared Default
   "Terms
 Type([Template.MetaRocq.algebraic.1])
 and
-Type([Corelib.Init.Datatypes.190])
+Type([<default>])
 do not have the same head when comparing for cumulativity"
   "while checking Regression.MetaRocq.declared_type_successor" list.
 

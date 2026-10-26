@@ -1077,7 +1077,8 @@ struct
        A term's dependencies include those of its subterms. A hit skips the
        [add_constant]/[add_inductive] and [remember_universe_levels] calls of
        the subterm, which its miss made on this same closure; all of them only
-       add to sets.
+       add to sets, but a caller whose callbacks count occurrences sees fewer
+       calls than without the cache.
 
        The cache is direct-mapped: a slot holds one subterm and a collision
        evicts it, so a lookup is one probe whatever the hash quality. (In one

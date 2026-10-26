@@ -481,7 +481,22 @@ let declared_default_declaration env ind =
   in
   let constant = Names.Constant.make1 (regression_kername "declared_type_successor") in
   (Environ.add_constant constant constant_body env,
-   Constr.mkConstU (constant, UVars.Instance.empty))
+   Constr.mkConstU (constant, UVars.Instance.empty),
+   default)
+
+(* [s] with every occurrence of [what] replaced by [by_]. *)
+let replace_all ~what ~by_ s =
+  let n = String.length what and len = String.length s in
+  let b = Buffer.create len in
+  let rec go i =
+    if i + n > len then Buffer.add_string b (String.sub s i (len - i))
+    else if String.equal (String.sub s i n) what then begin
+      Buffer.add_string b by_; go (i + n)
+    end else begin
+      Buffer.add_char b s.[i]; go (i + 1)
+    end
+  in
+  go 0; Buffer.contents b
 
 let test_declared_default ~opaque_access env evm reason subject c =
   let ind =
@@ -489,7 +504,12 @@ let test_declared_default ~opaque_access env evm reason subject c =
     | Constr.Ind (ind, _) -> ind
     | _ -> fail "This test needs an inductive type."
   in
-  let env, term = declared_default_declaration env ind in
+  let env, term, default = declared_default_declaration env ind in
+  (* The checker names the default level as Rocq prints it; the fixture
+     writes [<default>] for it, so the test names no generated level. *)
+  let reason =
+    replace_all ~what:"<default>" ~by_:(Univ.Level.to_string default) reason
+  in
   expect_safecheck_rejection
     "The declaration typed at its inductive's default universe" reason subject
     (safecheck_program ~opaque_access env evm false term)
