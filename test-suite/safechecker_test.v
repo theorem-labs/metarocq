@@ -11,6 +11,15 @@ Environment is well-formed and Ind(Stdlib.Init.Datatypes.nat,0,[]) has type: Sor
 
 MetaRocq SafeCheck (3 + 1).
 
+Universe bf_lo bf_hi.
+Constraint bf_lo < bf_hi.
+Unset Universe Checking.
+Definition bf_level_too_low : Type@{bf_lo} := Type@{bf_hi}.
+Set Universe Checking.
+(* SafeCheck must reject bf_level_too_low because its declaration adds the
+   opposite [bf_hi < bf_lo] constraint, making the universes unsatisfiable. *)
+Fail MetaRocq SafeCheck bf_level_too_low.
+
 Definition bool_list := List.map negb (cons true (cons false nil)).
 (* was working a bit by accident *)
 (* MetaRocq SafeCheck bool_list. *)
