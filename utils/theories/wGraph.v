@@ -1589,12 +1589,12 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
 
     Definition pf_relax_edge (e : indexed_edge) (m : pf_state) : pf_state :=
       let '(source, weight, target) := e in
-      let value :=
-        Nbar.max (pf_lookup m target)
-          (Nbar.add (Some weight) (pf_lookup m source)) in
+      let candidate := Nbar.add (Some weight) (pf_lookup m source) in
       match PTree.get target m with
-      | Some old => if nbar_eqb old value then m else PTree.set target value m
-      | None => PTree.set target value m
+      | Some old =>
+          let value := Nbar.max old candidate in
+          if nbar_eqb old value then m else PTree.set target value m
+      | None => PTree.set target (Nbar.max None candidate) m
       end.
 
     Definition pf_relax_edges (ix : index) (m : pf_state) : pf_state :=
