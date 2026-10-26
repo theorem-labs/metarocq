@@ -1133,8 +1133,7 @@ Qed.
       rewrite wfu /= wfpars wf_universes_mkApps /=
         forallb_app wfinds /= H0 /= !andb_true_r.
       pose proof (declared_inductive_inv wf_universes_weaken wf X isdecl).
-      move:(onArity X3) => /andP[] /andP[] /= _ hty _.
-      rewrite (ind_arity_eq X3) in hty.
+      move:(onArityRed X3) => /andP[] /andP[] /= _ hty _.
       rewrite !wf_universes_it_mkProd_or_LetIn in hty.
       move/and3P: hty => [] wfp wfindis wfisort.
       have ond : on_udecl_prop Σ (ind_universes mdecl).
@@ -1211,7 +1210,7 @@ Qed.
       noconf heq. simpl.
       rewrite wf_universes_subst.
       apply wf_extended_subst.
-      rewrite ind_arity_eq in onArity. move:onArity => /andP[] /andP[] /= _ Hs _.
+      move:onArityRed => /andP[] /andP[] /= _ Hs _.
       rewrite !wf_universes_it_mkProd_or_LetIn in Hs.
       now move/andP: Hs => /andP /andP [].
       rewrite wf_universes_lift.

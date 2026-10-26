@@ -299,10 +299,13 @@ Section BDToPCUICTyping.
       {
         eapply has_sort_isType.
         eapply type_mkApps_arity.
+        (* The declared type of the inductive is convertible to its arity. *)
+        1: eapply PCUICArities.type_ws_cumul_pb.
         1: econstructor ; eauto.
-        erewrite PCUICGlobalMaps.ind_arity_eq.
-        2: by eapply PCUICInductives.oib ; eauto.
-        rewrite !subst_instance_it_mkProd_or_LetIn -it_mkProd_or_LetIn_app -subst_instance_app - (app_nil_r (pparams p ++ skipn (ci_npar ci) args)).
+        2: eapply PCUICContextConversion.ws_cumul_pb_eq_le, (PCUICInductives.declared_inductive_type_ws_cumul H) ; eauto.
+        1: rewrite subst_instance_it_mkProd_or_LetIn ;
+           eapply isTypeRel_isType, (on_inductive_inst H) ; eauto.
+        rewrite subst_instance_it_mkProd_or_LetIn - (app_nil_r (pparams p ++ skipn (ci_npar ci) args)).
         eapply arity_spine_it_mkProd_or_LetIn ; auto.
         - unshelve apply ctx_inst_spine_subst ; auto.
           apply weaken_wf_local ; auto.
