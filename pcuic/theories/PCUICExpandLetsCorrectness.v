@@ -3791,6 +3791,8 @@ Proof.
           eapply wf_local_closed_context in wfctx.
           now move: wfctx; rewrite on_free_vars_ctx_app /= => /andP[].
           exact X. }
+    + match goal with h : (isCoFinite _ ==> on_free_vars _ _) = true |- _ => move: h end.
+      cbn. case: (isCoFinite _) => //=. apply trans_on_free_vars.
     + red. eapply Forall2_map_right, Forall2_map.
       eapply Forall2_All2 in H5.
       eapply All2i_All2_mix_left in X8; tea.
