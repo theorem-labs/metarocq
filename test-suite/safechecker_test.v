@@ -97,6 +97,19 @@ Record template_alg_outer := {
   template_alg_oc : Type@{template_alg_c} }.
 MetaRocq SafeCheck @template_alg_outer.
 
+(* A template class with two [Type] parameters whose field [T -> Prop] lives
+   in [max(u1, Set+1)], since [Prop : Type@{Set+1}].  Its sort is
+   [max(Set+1, u0, u1)], and the template levels may be [Set].  The quoter must
+   keep the [Set+1] component of that sort: without it the declared sort's
+   representative is only above [u0] and [u1], and the inductive-sort check
+   fails (seen on Stdlib's [ZifyClasses.InjTyp]). *)
+#[universes(template)]
+Class template_injtyp (S : Type) (T : Type) := {
+  template_injtyp_inj : S -> T;
+  template_injtyp_pred : T -> Prop;
+  template_injtyp_cstr : forall x, template_injtyp_pred (template_injtyp_inj x) }.
+MetaRocq SafeCheck @template_injtyp.
+
 (* SafeCheck uses default checker flags even when quotation runs while Rocq
    universe checking is disabled.  The upper-bound pass must still ask a
    checking graph what follows from the source graph. *)

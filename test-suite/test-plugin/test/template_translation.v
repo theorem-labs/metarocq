@@ -90,3 +90,23 @@ do not have the same head when comparing for cumulativity"
   "while checking Regression.MetaRocq.declared_type_successor" list.
 
 Unset Universe Polymorphism.
+
+(* Controls for the inductive-sort check that [template_injtyp] in
+   safechecker_test.v relies on: a constructor argument in a larger universe
+   than the declared sort.  Universe checking is off only while Rocq accepts
+   the declarations.  [neg_sort_poly] has the shape the template translation
+   produces: a declared sort that is a bound level [u], which an instance may
+   set to [Set], below a field in [max(u, Set+1)].  The empty constraint list
+   [@{u|}] keeps Rocq from adding [Set < u].  (A named global universe would
+   not do: Rocq's graph holds [Set < u] for it.) *)
+Unset Universe Checking.
+Record neg_sort_mono : Set := { neg_sort_mono_f : Prop }.
+Polymorphic Record neg_sort_poly@{u|} (T : Type@{u}) : Type@{u} :=
+  { neg_sort_poly_f : T -> Prop }.
+Set Universe Checking.
+MetaRocq Test SafeCheck Rejects Source
+  "Incorrect inductive sort: The constructor arguments universes are not smaller than the declared inductive sort"
+  "neg_sort_mono" @neg_sort_mono.
+MetaRocq Test SafeCheck Rejects Source
+  "Incorrect inductive sort: The constructor arguments universes are not smaller than the declared inductive sort"
+  "neg_sort_poly" @neg_sort_poly.
