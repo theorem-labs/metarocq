@@ -429,3 +429,117 @@ Proof.
   - depelim ar'; arity_det_whd; solve [arity_det_IH IH | arity_det_absurd].
   - depelim ar'; arity_det_whd; solve [arity_det_IH IH | arity_det_absurd].
 Qed.
+
+(** ** The progress test of [arity_red_fallback]
+
+  [arity_red_fallback] recurses only when [whd_all] changed the term that
+  [whd_allnolet] stopped at.  The lemmas below show that a change means a
+  [tLetIn] on the part of the term the machine inspects ([let_spine]): with no
+  such let, [whd_all] stops at once on the [whd_allnolet] result.  A
+  translation that maps [tLetIn] to [tLetIn] on that part, and whose image of a
+  [whd_all] result has no let there, therefore keeps the test, although it
+  need not be injective (TemplateToPCUICCorrectness, [trans_arity_red]). *)
+
+(** The head the machine stops at is never an application. *)
+Lemma whd_rel_out_napp {z Σ Γ t args h l} :
+  whd_rel z Σ Γ t args h l -> isApp h = false.
+Proof.
+  induction 1; try reflexivity; try assumption.
+  destruct t; cbn in hs; try discriminate; reflexivity.
+Qed.
+
+(** Running the machine on [mkApps f l] is running it on [f] with stack [l]. *)
+Lemma whd_rel_mkApps_nil {z Σ Γ f l h l'} :
+  isApp f = false -> whd_rel z Σ Γ f l h l' -> whd_rel z Σ Γ (mkApps f l) [] h l'.
+Proof.
+  intros hf w. destruct l as [|a l]; [exact w|].
+  rewrite (LiftSubst.mkApps_tApp f (a :: l) hf ltac:(discriminate)).
+  apply whd_app; [exact hf|discriminate|]. now rewrite app_nil_r.
+Qed.
+
+(** A [tLetIn] where the machine looks: the head, a case discriminant, a
+    projected term, or the recursive argument of a fixpoint. *)
+Inductive let_spine : term -> list term -> Prop :=
+| let_spine_let na b B t args : let_spine (tLetIn na b B t) args
+| let_spine_app f l args : let_spine f (l ++ args) -> let_spine (tApp f l) args
+| let_spine_case ci p c brs args : let_spine c [] -> let_spine (tCase ci p c brs) args
+| let_spine_proj p c args : let_spine c [] -> let_spine (tProj p c) args
+| let_spine_fix mfix idx narg fn args a :
+    unfold_fix mfix idx = Some (narg, fn) -> nth_error args narg = Some a ->
+    let_spine a [] -> let_spine (tFix mfix idx) args.
+
+Lemma let_spine_mkApps {t l} : isApp t = false -> let_spine t l -> let_spine (mkApps t l) [].
+Proof.
+  intros ht ls. destruct l as [|a l]; [exact ls|].
+  rewrite (LiftSubst.mkApps_tApp t (a :: l) ht ltac:(discriminate)).
+  apply let_spine_app. now rewrite app_nil_r.
+Qed.
+
+(** Without a let where the machine looks, a [whd_allnolet] result is a
+    [whd_all] result of itself. *)
+Lemma whd_nolet_idem {Σ Γ t args h l} :
+  whd_rel false Σ Γ t args h l -> ~ let_spine h l -> whd_rel true Σ Γ h l h l.
+Proof.
+  induction 1 as [c args d b h l hnth hbod w IH|c args d hnth hbod
+    |na b B t args h l hz w IH|na b B t args hz
+    |c u decl body args h l hcst hbod w IH|c u decl args hcst hbod
+    |c k T args h l w IH
+    |f l args h l' hf hl w IH
+    |na A t a args h l w IH
+    |mfix idx narg fn args c ind n ui cargs h l hunf hnth wa IHa wb IHb
+    |mfix idx narg fn args c t cargs hunf hnth wa IHa hnc
+    |mfix idx narg fn args hunf hnth|mfix idx args hunf
+    |ci p c brs args n ui cargs mdecl idecl cdecl br h l wa IHa hbr hdecl hlen wb IHb
+    |ci p c brs args mfix idx cargs narg fn h l wa IHa hunf wb IHb
+    |ci p c brs args t cargs wa IHa hnc hncf
+    |p c args u cargs a h l wa IHa hnth wb IHb
+    |p c args mfix idx cargs narg fn h l wa IHa hunf wb IHb
+    |p c args t cargs wa IHa hnc hncf
+    |t args hs]; intros nls.
+  (* the result of a contraction is the result of its continuation *)
+  all: try solve [exact (IH nls) | exact (IHb nls)].
+  (* tRel, assumption *)
+  - eapply whd_rel_assum; eassumption.
+  (* let, zeta off: the let is on the spine *)
+  - exfalso. apply nls. apply let_spine_let.
+  (* axiom *)
+  - eapply whd_axiom; eassumption.
+  (* stuck fix: its recursive argument is a result with no let on the spine *)
+  - destruct (whd_nth_split _ _ _ hnth) as [_ len].
+    have hX : nth_error (firstn narg args ++ mkApps t cargs :: skipn (S narg) args) narg =
+      Some (mkApps t cargs) by now apply whd_nth_middle.
+    have ht := whd_rel_out_napp wa.
+    have nlt : ~ let_spine t cargs.
+    { intros lt. apply nls. eapply let_spine_fix; [exact hunf|exact hX|].
+      exact (let_spine_mkApps ht lt). }
+    have H := whd_fix_stuck true Σ Γ mfix idx narg fn _ _ t cargs hunf hX
+      (whd_rel_mkApps_nil ht (IHa nlt)) hnc.
+    rewrite -(whd_nth_split _ _ _ hX).1 in H. exact H.
+  - eapply whd_fix_noarg; eassumption.
+  - eapply whd_fix_nounfold; eassumption.
+  (* stuck case *)
+  - have ht := whd_rel_out_napp wa.
+    have nlt : ~ let_spine t cargs.
+    { intros lt. apply nls. apply let_spine_case. exact (let_spine_mkApps ht lt). }
+    exact (whd_case_stuck true Σ Γ ci p _ brs args t cargs
+      (whd_rel_mkApps_nil ht (IHa nlt)) hnc hncf).
+  (* stuck projection *)
+  - have ht := whd_rel_out_napp wa.
+    have nlt : ~ let_spine t cargs.
+    { intros lt. apply nls. apply let_spine_proj. exact (let_spine_mkApps ht lt). }
+    exact (whd_proj_stuck true Σ Γ p _ args t cargs
+      (whd_rel_mkApps_nil ht (IHa nlt)) hnc hncf).
+  (* the machine stops *)
+  - exact (whd_stop true Σ Γ t args hs).
+Qed.
+
+(** The fallback of [arity_red] recurses only past a let on the spine. *)
+Lemma whd_fallback_let_spine {Σ Γ t h l h' l'} :
+  whd_rel false Σ Γ t [] h l ->
+  whd_rel true Σ Γ (mkApps h l) [] h' l' ->
+  mkApps h' l' <> mkApps h l -> ~ ~ let_spine h l.
+Proof.
+  intros w w' hne nls. apply hne.
+  have w'' := whd_rel_mkApps_nil (whd_rel_out_napp w) (whd_nolet_idem w nls).
+  now destruct (whd_rel_det w' w'') as [-> ->].
+Qed.
