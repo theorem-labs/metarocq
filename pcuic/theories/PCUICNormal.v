@@ -14,17 +14,24 @@ Set Asymmetric Patterns.
 
 Module RedFlags.
 
+  (** [unfold_local] unfolds a let-bound variable of the context.  Rocq's
+      kernel unfolds it under delta ([RelKey] in kernel/cClosure.ml), so
+      [allnolet] (no zeta) still unfolds it; conversion uses [nodelta] and
+      relies on unfolding it too, so it is a flag of its own. *)
   Record t := mk {
     beta   : bool ;
     iota   : bool ;
     zeta   : bool ;
     delta  : bool ;
     fix_   : bool ;
-    cofix_ : bool
+    cofix_ : bool ;
+    unfold_local : bool
   }.
 
-  Definition default := mk true true true true true true.
-  Definition nodelta := mk true true true false true true.
+  Definition default := mk true true true true true true true.
+  Definition nodelta := mk true true true false true true true.
+  (** kernel/redFlags.ml [allnolet]: every reduction but zeta. *)
+  Definition allnolet := mk true true false true true true true.
 
 End RedFlags.
 
@@ -45,8 +52,8 @@ Section Normal.
       option_map decl_body (nth_error Γ i) = Some None ->
       whne Γ (tRel i)
 
-  | whne_rel_nozeta i :
-      RedFlags.zeta flags = false ->
+  | whne_rel_nounfold i :
+      RedFlags.unfold_local flags = false ->
       whne Γ (tRel i)
 
   | whne_lam_nobeta na A b :
@@ -322,12 +329,12 @@ Definition whnf_whne_dec flags Σ Γ t :
 Proof with eauto using sq with pcuic; try congruence.
   induction t using term_forall_mkApps_ind in Γ |- *; split...
   all: try now (right; intros [H]; depelim H;help).
-  - destruct (RedFlags.zeta flags) eqn:Er.
+  - destruct (RedFlags.unfold_local flags) eqn:Er.
     + destruct (option_map decl_body (nth_error Γ n)) as [ [ | ] | ] eqn:E...
       * right. intros [H]. depelim H. depelim w. congruence. congruence. all:help.
       * right. intros [H]. depelim H. depelim w. congruence. congruence. all:help.
     + eauto using sq.
-  - destruct (RedFlags.zeta flags) eqn:Er...
+  - destruct (RedFlags.unfold_local flags) eqn:Er...
     destruct (option_map decl_body (nth_error Γ n)) as [ [ | ] | ] eqn:E...
     + right. intros [H]. depelim H. congruence. congruence. help.
     + right. intros [H]. depelim H. congruence. congruence. help.
@@ -639,7 +646,7 @@ Context (P : term -> term -> Type).
 
 Lemma whne_red1_ind {cf:checker_flags} {wfΣ : wf Σ}
       (Hrel : forall i body,
-          RedFlags.zeta flags = false ->
+          RedFlags.unfold_local flags = false ->
           option_map decl_body (nth_error Γ i) = Some (Some body) ->
           P (tRel i) (lift0 (S i) body))
       (Hlam_nobeta_1 : forall na A b M',

@@ -11,6 +11,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
   PCUICContextConversion PCUICConversion PCUICClassification
   PCUICSpine PCUICInductives PCUICInductiveInversion PCUICConfluence
   PCUICArities PCUICPrincipality PCUICFirstorder.
+From MetaRocq.PCUIC Require PCUICOnFreeVars PCUICClosedTyp PCUICValidity.
 
 From MetaRocq.Erasure Require Import Extract.
 
@@ -60,15 +61,41 @@ Qed.
 Lemma isArity_ind_type (Σ : global_env_ext) mind ind idecl :
   wf Σ ->
   declared_inductive (fst Σ) ind mind idecl ->
-  isArity (ind_type idecl).
+  Is_conv_to_Arity Σ [] (ind_type idecl).
 Proof.
-  intros.
-  eapply (declared_inductive_inv weaken_env_prop_typing) in H; eauto.
-  - inv H. rewrite ind_arity_eq.
-    change PCUICEnvironment.it_mkProd_or_LetIn with it_mkProd_or_LetIn.
-    rewrite <- it_mkProd_or_LetIn_app.
-    clear.
-    eapply it_mkProd_isArity. econstructor.
+  intros wfΣ decli.
+  eexists; split; [sq|].
+  - eapply into_closed_red; [|constructor|].
+    + exact (declared_inductive_type decli).
+    + apply PCUICOnFreeVars.closedn_on_free_vars.
+      now eapply PCUICClosedTyp.declared_inductive_closed_type.
+  - eapply it_mkProd_isArity. constructor.
+Qed.
+
+(** [tInd ind u] has the arity built from the parameters, indices and sort of
+    its declaration, to which its declared type reduces ([ind_arity_red]). *)
+Lemma type_Ind_arity_form {Σ : global_env_ext} {wfΣ : wf Σ} {Γ ind mdecl idecl u} :
+  wf_local Σ Γ -> declared_inductive Σ ind mdecl idecl ->
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  Σ ;;; Γ |- tInd ind u :
+    subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))).
+Proof.
+  intros wfΓ decli cu.
+  eapply type_reduction_closed; [eapply type_Ind; tea|].
+  exact (declared_inductive_type_closed_red decli Γ u wfΓ).
+Qed.
+
+Lemma typing_spine_ind_type_arity_form {Σ : global_env_ext} {wfΣ : wf Σ} {Γ ind mdecl idecl u args T} :
+  wf_local Σ Γ -> declared_inductive Σ ind mdecl idecl ->
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  typing_spine Σ Γ (subst_instance u (ind_type idecl)) args T ->
+  typing_spine Σ Γ (subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl)))) args T.
+Proof.
+  intros wfΓ decli cu sp.
+  eapply typing_spine_strengthen; tea.
+  - eapply PCUICValidity.validity, type_Ind_arity_form; tea.
+  - eapply red_ws_cumul_pb_inv.
+    exact (declared_inductive_type_closed_red decli Γ u wfΓ).
 Qed.
 
 Lemma isWfArity_prod_inv (Σ : global_env_ext) (Γ : context) (x : aname) (x0 x1 : term) :
@@ -742,7 +769,9 @@ Proof.
   eapply invert_type_mkApps_ind in tyargs' as f; tea. destruct f as [sp' cum']; eauto.
   do 2 eexists. split => //. tea. instantiate (1 := u'').
   split => //.
-  rewrite (declared_inductive_type decli) in sp, sp'.
+  pose proof (typing_wf_local Hty) as wfΓ.
+  eapply (typing_spine_ind_type_arity_form (wfΣ := wfΣ.1) wfΓ decli) in sp; tea.
+  eapply (typing_spine_ind_type_arity_form (wfΣ := wfΣ.1) wfΓ decli) in sp'; tea.
   rewrite subst_instance_it_mkProd_or_LetIn /= in sp, sp'.
   eapply typing_spine_inj in sp. 4:exact sp'. all:eauto.
   destruct u, u'' => //.
@@ -801,8 +830,7 @@ Proof.
   unfold lookup_inductive. rewrite (declared_inductive_lookup_gen d_.p1).
   destruct (on_declared_constructor d).
   destruct p as [onind oib].
-  rewrite oib.(ind_arity_eq).
-  rewrite /isPropositionalArity !destArity_it_mkProd_or_LetIn /=.
+  cbv beta iota.
   eapply PCUICSpine.typing_spine_strengthen in t0; eauto.
   unfold type_of_constructor in t0.
   destruct s0 as [indctors [nthcs onc]].
@@ -837,8 +865,7 @@ Proof.
   pose proof (wfΣ' := wfΣ.1).
   unshelve epose proof (decli_ := declared_inductive_to_gen decli); eauto.
   rewrite (declared_inductive_lookup_gen decli_).
-  rewrite oib.(ind_arity_eq).
-  rewrite /isPropositionalArity !destArity_it_mkProd_or_LetIn /=.
+  cbv beta iota.
   destruct (Sort.is_propositional (ind_sort x0)) eqn:isp; auto.
   exfalso; eapply ise.
   red. eexists; intuition eauto. right.
@@ -884,11 +911,9 @@ Proof.
   unfold lookup_inductive.
   unshelve epose proof (decli_ := declared_inductive_to_gen decli); eauto.
   rewrite (declared_inductive_lookup_gen decli_).
-  rewrite (EGlobalEnv.declared_inductive_lookup decli') /=
-    /isPropositionalArity.
-  destruct H0 as [_ [_ [_ isP]]]. unfold isPropositionalArity in isP.
-  destruct destArity as [[ctx s]|] eqn:da => //.
-  rewrite isP; congruence. congruence.
+  rewrite (EGlobalEnv.declared_inductive_lookup decli') /=.
+  destruct H0 as [_ [_ [_ isP]]].
+  rewrite isP; congruence.
 Qed.
 
 Lemma isPropositional_propositional_cstr Σ (Σ' : E.global_context) ind c mdecl idecl cdecl mdecl' idecl' :

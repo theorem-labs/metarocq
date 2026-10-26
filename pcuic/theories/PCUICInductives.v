@@ -235,23 +235,32 @@ Section OnInductives.
   Context {cf : checker_flags} {Σ : global_env} {wfΣ : wf Σ} {mdecl ind idecl}
     (decli : declared_inductive Σ ind mdecl idecl).
 
-  Lemma on_minductive_wf_params_indices : wf_local (Σ, ind_universes mdecl) (ind_params mdecl ,,, ind_indices idecl).
+  Lemma declared_inductive_arity_isTypeRel :
+    isTypeRel (Σ, ind_universes mdecl) []
+      (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))) rel_of_Type.
   Proof using decli wfΣ.
     eapply on_declared_inductive in decli as [onmind oib].
-    pose proof (oib.(onArity)).
-    rewrite oib.(ind_arity_eq) in X.
+    rewrite it_mkProd_or_LetIn_app.
+    exact (oib.(onArityRed)).
+  Qed.
+
+  Lemma on_minductive_wf_params_indices : wf_local (Σ, ind_universes mdecl) (ind_params mdecl ,,, ind_indices idecl).
+  Proof using decli wfΣ.
+    pose proof declared_inductive_arity_isTypeRel as X.
     destruct X as (_ & s & Hs & _).
-    rewrite -it_mkProd_or_LetIn_app in Hs.
     eapply it_mkProd_or_LetIn_wf_local in Hs.
     now rewrite app_context_nil_l in Hs.
   Qed.
 
+  (** The declared type reduces to the arity built from the parameters,
+      indices and sort ([ind_arity_red]); it is no longer syntactically equal
+      to it. *)
   Lemma declared_inductive_type :
-    ind_type idecl = it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl)).
+    red Σ [] (ind_type idecl) (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))).
   Proof using decli wfΣ.
     eapply on_declared_inductive in decli as [onmind oib].
-    rewrite oib.(ind_arity_eq).
-    now rewrite -it_mkProd_or_LetIn_app.
+    rewrite it_mkProd_or_LetIn_app.
+    exact (ind_arity_red_red oib).
   Qed.
 
 End OnInductives.
@@ -285,12 +294,9 @@ Section OnInductives.
           (tSort (subst_instance_sort u idecl.(ind_sort)))) rel_of_Type.
   Proof using decli wfΣ.
     move=> wfΓ cext.
-    destruct (on_declared_inductive decli) as [onmind oib].
-    pose proof (oib.(onArity)) as ar.
-    rewrite oib.(ind_arity_eq) in ar.
+    pose proof (declared_inductive_arity_isTypeRel (wfΣ := wfΣ) decli) as ar.
     eapply lift_typing_weaken_ctx with (Γ := []) => //.
     rewrite -(subst_instance_it_mkProd_or_LetIn u _ (tSort _)).
-    rewrite -it_mkProd_or_LetIn_app in ar.
     eapply (lift_typing_subst_instance_decl Σ [] _ _ (InductiveDecl mdecl) u wfΣ) in ar; cbn in ar; tas.
     unshelve eapply declared_inductive_to_gen in decli; eauto.
   Qed.
@@ -302,9 +308,84 @@ Section OnInductives.
   Proof using decli wfΣ.
     move=> wfΓ cext.
     destruct (on_declared_inductive decli) as [onmind oib].
-    rewrite oib.(ind_arity_eq).
-    rewrite -it_mkProd_or_LetIn_app subst_instance_it_mkProd_or_LetIn /=.
-    now apply on_inductive_inst.
+    pose proof (oib.(onArity)) as ar.
+    eapply lift_typing_weaken_ctx with (Γ := []) => //.
+    eapply (lift_typing_subst_instance_decl Σ [] _ _ (InductiveDecl mdecl) u wfΣ) in ar; cbn in ar; tas.
+    unshelve eapply declared_inductive_to_gen in decli; eauto.
+  Qed.
+
+  Lemma declared_inductive_type_closed_red Γ u :
+    wf_local Σ Γ ->
+    Σ ;;; Γ ⊢ subst_instance u (ind_type idecl) ⇝
+      subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))).
+  Proof using decli wfΣ.
+    move=> wfΓ.
+    destruct (on_declared_inductive decli) as [onmind oib].
+    have clT : closedn 0 (ind_type idecl).
+    { have h := oib.(onArity).
+      eapply isTypeRel_isType in h.
+      exact (isType_closed (Σ := (Σ.1, ind_universes mdecl)) (Γ := []) h). }
+    have clA : closedn 0 (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))).
+    { have h := declared_inductive_arity_isTypeRel (wfΣ := wfΣ) decli.
+      eapply isTypeRel_isType in h.
+      exact (isType_closed (Σ := (Σ.1, ind_universes mdecl)) (Γ := []) h). }
+    have r0 : Σ ;;; [] ⊢ subst_instance u (ind_type idecl) ⇝
+      subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))).
+    { split => //.
+      - apply closedn_on_free_vars. by rewrite closedn_subst_instance.
+      - have r := declared_inductive_type (wfΣ := wfΣ) decli.
+        clear -r. induction r;
+          first [ reflexivity
+                | (eapply red_trans; eassumption)
+                | (eapply red1_red; exact (red1_subst_instance _ [] u _ _ ltac:(eassumption))) ]. }
+    eapply (weakening_closed_red (Γ := []) (Γ' := []) (Γ'' := Γ)) in r0.
+    2:{ rewrite app_context_nil_l. now eapply wf_local_closed_context. }
+    rewrite !lift_closed in r0; try (by rewrite closedn_subst_instance).
+    change (lift_context #|Γ| 0 []) with (@nil context_decl) in r0.
+    rewrite app_context_nil_l in r0.
+    exact r0.
+  Qed.
+
+  Lemma declared_inductive_type_ws_cumul Γ u :
+    wf_local Σ Γ ->
+    Σ ;;; Γ ⊢ subst_instance u (ind_type idecl) =
+      subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))).
+  Proof using decli wfΣ.
+    move=> wfΓ. eapply red_ws_cumul_pb.
+    now eapply declared_inductive_type_closed_red.
+  Qed.
+
+  Lemma isType_ind_arity_inst Γ u :
+    wf_local Σ Γ ->
+    consistent_instance_ext Σ (ind_universes mdecl) u ->
+    isType Σ Γ (subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl)))).
+  Proof using decli wfΣ.
+    move=> wfΓ cu. rewrite subst_instance_it_mkProd_or_LetIn /=.
+    eapply isTypeRel_isType. now eapply on_inductive_inst.
+  Qed.
+
+  Lemma typing_spine_ind_type Γ u args T :
+    wf_local Σ Γ ->
+    consistent_instance_ext Σ (ind_universes mdecl) u ->
+    typing_spine Σ Γ (subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl)))) args T ->
+    typing_spine Σ Γ (subst_instance u (ind_type idecl)) args T.
+  Proof using decli wfΣ.
+    move=> wfΓ cu sp.
+    eapply typing_spine_strengthen; [exact sp| |].
+    - eapply isTypeRel_isType, declared_inductive_valid_type; tea.
+    - eapply ws_cumul_pb_eq_le. now eapply declared_inductive_type_ws_cumul.
+  Qed.
+
+  Lemma typing_spine_ind_type_inv Γ u args T :
+    wf_local Σ Γ ->
+    consistent_instance_ext Σ (ind_universes mdecl) u ->
+    typing_spine Σ Γ (subst_instance u (ind_type idecl)) args T ->
+    typing_spine Σ Γ (subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl)))) args T.
+  Proof using decli wfΣ.
+    move=> wfΓ cu sp.
+    eapply typing_spine_strengthen; [exact sp| |].
+    - now eapply isType_ind_arity_inst.
+    - eapply ws_cumul_pb_eq_le. symmetry. now eapply declared_inductive_type_ws_cumul.
   Qed.
 
   Local Definition oi := (on_declared_inductive decli).1.
@@ -312,8 +393,7 @@ Section OnInductives.
 
   Lemma on_inductive_sort : wf_sort (Σ.1, ind_universes mdecl) (ind_sort idecl).
   Proof using decli wfΣ.
-    pose proof (oib.(onArity)) as ar.
-    rewrite oib.(ind_arity_eq) in ar.
+    pose proof (oib.(onArityRed)) as ar.
     destruct ar as (_ & s & ar & _).
     eapply typing_wf_universes in ar; auto.
     move/andP: ar => [].
@@ -352,13 +432,12 @@ Section OnInductives.
     intros cu sp.
     eapply type_mkApps; tea.
     econstructor; eauto. apply sp.
-    rewrite (declared_inductive_type decli).
+    eapply typing_spine_ind_type; [apply sp|exact cu|].
     rewrite subst_instance_it_mkProd_or_LetIn.
     eapply wf_arity_spine_typing_spine; tea.
     split.
     rewrite -subst_instance_it_mkProd_or_LetIn.
-    rewrite -(declared_inductive_type decli).
-    eapply isTypeRel_isType, declared_inductive_valid_type; tea.
+    eapply isType_ind_arity_inst; tea.
     apply sp.
     eapply arity_spine_it_mkProd_or_LetIn_Sort.
     2:reflexivity. 2:exact sp.
@@ -707,10 +786,16 @@ Proof.
   eapply declared_inductive_wf_global_ext; eauto with pcuic.
   set (u := abstract_instance (ind_universes mdecl)).
   destruct hdecl; eauto.
-  assert (isType (Σ.1, ind_universes mdecl) [] (ind_type idecl)).
-  { eapply isTypeRel_isType. pose proof (onArity oib). exact X. }
-  rewrite (subst_instance_ind_type_id _ _ _ _ _ hdecl).
-  rewrite (ind_arity_eq oib).
+  have wfext : wf_ext_wk (Σ.1, ind_universes mdecl).
+  { eapply declared_inductive_wf_ext_wk; eauto. eapply hdecl. }
+  have X : isType (Σ.1, ind_universes mdecl) []
+    (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))).
+  { eapply isTypeRel_isType, (declared_inductive_arity_isTypeRel (wfΣ := wfΣ) hdecl). }
+  eapply (typing_spine_ind_type (Σ := (Σ.1, ind_universes mdecl)) hdecl); [exact wfsmpars| |].
+  { eapply consistent_instance_ext_abstract_instance; eauto with pcuic.
+    all: try (eapply declared_inductive_wf_global_ext; eauto with pcuic; eapply hdecl). }
+  rewrite (isType_subst_instance_id _ _ _ wfext X).
+  rewrite it_mkProd_or_LetIn_app in X |- *.
   rewrite -(app_nil_r (to_extended_list _)).
   eapply typing_spine_it_mkProd_or_LetIn'; auto.
   eapply spine_subst_smash_inv; tea.
@@ -718,8 +803,7 @@ Proof.
   eapply typing_spine_refl. eapply isType_Sort; tea.
   now eapply on_inductive_sort.
   now cbn in *.
-  eapply isType_weaken; auto.
-  now rewrite (oib.(ind_arity_eq)) in X.
+  eapply isType_weaken; auto; exact X.
 Qed.
 
 Lemma subst_context_extended_subst_expand Γ Δ :
@@ -1225,16 +1309,22 @@ Proof.
     eapply consistent_instance_ext_abstract_instance; eauto with pcuic.
     eapply declared_inductive_wf_global_ext; eauto with pcuic.
     destruct decli; eauto.
-    assert (isType (Σ.1, ind_universes mdecl) [] (ind_type idecl)@[u]).
-    { eapply isTypeRel_isType. rewrite typeu. pose proof (onArity oib). exact X1. }
-    rewrite (ind_arity_eq oib).
+    have wfext : wf_ext_wk (Σ.1, ind_universes mdecl).
+    { eapply declared_inductive_wf_ext_wk; eauto. eapply decli. }
+    have X1 : isType (Σ.1, ind_universes mdecl) []
+      (it_mkProd_or_LetIn (ind_params mdecl) (it_mkProd_or_LetIn (ind_indices idecl) (tSort (ind_sort idecl))))@[u].
+    { have h := oib.(onArityRed). eapply isTypeRel_isType in h.
+      rewrite /u (isType_subst_instance_id _ _ _ wfext h). exact h. }
+    eapply (typing_spine_ind_type (Σ := (Σ.1, ind_universes mdecl)) decli); [assumption| |].
+    { subst u. eapply consistent_instance_ext_abstract_instance; eauto with pcuic.
+      all: try (eapply declared_inductive_wf_global_ext; eauto with pcuic; eapply decli). }
+    rewrite it_mkProd_or_LetIn_app.
     rewrite subst_instance_it_mkProd_or_LetIn.
     rewrite -(app_nil_r (to_extended_list _)).
     eapply typing_spine_it_mkProd_or_LetIn' ; auto.
     rewrite parsu. eapply X.
     constructor.
     cbn.
-    rewrite (oib.(ind_arity_eq)) in X1.
     eapply isType_it_mkProd_or_LetIn_subst.
     2:eapply X. eapply isType_weaken => //.
     rewrite -parsu - !subst_instance_it_mkProd_or_LetIn /= //.
@@ -1248,9 +1338,7 @@ Proof.
     now eapply wf_local_closed_context in X0.
     constructor. reflexivity.
     rewrite -subst_instance_it_mkProd_or_LetIn.
-    pose proof (onArity oib). rewrite -(oib.(ind_arity_eq)).
-    apply lift_typing_impl with (1 := X1) => t T HT.
-    eapply (weaken_ctx (Γ:=[])); auto. }
+    eapply isType_weaken => //; exact X1. }
   intros wf.
   generalize (weakening_wf_local (Γ'':=[_]) wf X1).
   simpl; clear X1 wf.
@@ -1636,7 +1724,8 @@ Proof.
   eapply has_sort_isTypeRel with (s := subst_instance_sort u (ind_sort idecl)).
   1: rewrite relevance_subst_eq; apply oib0.(ind_relevance_compat).
   eapply type_mkApps. econstructor; eauto. eapply decli.p1.
-  rewrite (ind_arity_eq oib0).
+  eapply (typing_spine_ind_type decli); [exact wfsmash|exact cu|].
+  rewrite it_mkProd_or_LetIn_app.
   pose proof (on_projs_noidx _ _ _ _ _ _ onps).
   destruct (ind_indices idecl) eqn:eqind; try discriminate.
   simpl.
@@ -1694,8 +1783,9 @@ Proof.
   set (decli' := on_declared_inductive declm).
   rename declm into decli.
   destruct decli' as [declm decli'].
-  pose proof (decli'.(onArity)) as ar.
-  rewrite decli'.(ind_arity_eq) in tyargs, ar.
+  eapply (typing_spine_ind_type_inv decli) in tyargs; tea.
+  rewrite it_mkProd_or_LetIn_app in tyargs.
+  pose proof (decli'.(onArityRed)) as ar.
   destruct ar as (_ & s' & ar & _). cbn in ar.
   rewrite !subst_instance_it_mkProd_or_LetIn in tyargs.
   simpl in tyargs. rewrite -it_mkProd_or_LetIn_app in tyargs.
@@ -1738,8 +1828,9 @@ Proof.
   set (decli' := on_declared_inductive declm).
   rename declm into decli.
   destruct decli' as [declm decli'].
-  pose proof (decli'.(onArity)) as ar.
-  rewrite decli'.(ind_arity_eq) in tyargs, ar.
+  eapply (typing_spine_ind_type_inv decli) in tyargs; tea.
+  rewrite it_mkProd_or_LetIn_app in tyargs.
+  pose proof (decli'.(onArityRed)) as ar.
   destruct ar as (_ & s' & ar & _). cbn in ar.
   rewrite !subst_instance_it_mkProd_or_LetIn in tyargs.
   simpl in tyargs. rewrite -it_mkProd_or_LetIn_app in tyargs.
@@ -2530,10 +2621,14 @@ Proof.
     generalize wfidxctx. rewrite {1}/idxctx {1}app_context_assoc => wfidxctx'.
     rewrite subst_instance_mkApps /=; cbn.
     erewrite subst_instance_id_mdecl; tea.
-    eapply pre_type_mkApps_arity. econstructor; tea.
-    eapply isTypeRel_isType, declared_inductive_valid_type; tea.
-    pose proof (on_declared_inductive isdecl) as [onmind oib].
-    rewrite oib.(ind_arity_eq) !subst_instance_it_mkProd_or_LetIn
+    have isTyar : isType Σ (Γ ,,, idxctx)
+      (subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))))
+      by eapply isType_ind_arity_inst; tea.
+    eapply pre_type_mkApps_arity.
+    { eapply (type_ws_cumul_pb (pb := Conv)); [econstructor; tea|exact isTyar|].
+      now eapply declared_inductive_type_ws_cumul. }
+    { exact isTyar. }
+    rewrite it_mkProd_or_LetIn_app !subst_instance_it_mkProd_or_LetIn
       subst_instance_to_extended_list subst_instance_app_ctx
       subst_instance_smash.
     rewrite /to_extended_list to_extended_list_k_app.
@@ -2637,9 +2732,14 @@ Proof.
     rewrite subst_instance_mkApps /=; cbn.
     erewrite subst_instance_id_mdecl; tea.
     rewrite subst_mkApps. cbn.
-    eapply pre_type_mkApps_arity. econstructor; tea.
-    eapply isTypeRel_isType, declared_inductive_valid_type; tea.
-    rewrite oib.(ind_arity_eq) !subst_instance_it_mkProd_or_LetIn
+    have isTyar : isType Σ (Γ ,,, idxctx)
+      (subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))))
+      by eapply isType_ind_arity_inst; tea.
+    eapply pre_type_mkApps_arity.
+    { eapply (type_ws_cumul_pb (pb := Conv)); [econstructor; tea|exact isTyar|].
+      now eapply declared_inductive_type_ws_cumul. }
+    { exact isTyar. }
+    rewrite it_mkProd_or_LetIn_app !subst_instance_it_mkProd_or_LetIn
       subst_instance_to_extended_list subst_instance_app_ctx
       subst_instance_smash.
     (* rewrite -it_mkProd_or_LetIn_app. *)

@@ -25,6 +25,7 @@ theories/ToPCUIC/Equations/Type.v
 theories/ToPCUIC/Init.v
 theories/ToPCUIC/PCUIC/Induction.v
 theories/ToPCUIC/PCUIC/PCUICAst.v
+theories/ToPCUIC/PCUIC/PCUICArityRed.v
 theories/ToPCUIC/PCUIC/PCUICCumulativitySpec.v
 theories/ToPCUIC/PCUIC/PCUICEquality.v
 theories/ToPCUIC/PCUIC/PCUICReduction.v
@@ -79,15 +80,17 @@ theories/ToPCUIC/QuotationOf/PCUIC/PCUICAst/PCUICConversion/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICAst/PCUICEnvTyping/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICAst/PCUICEnvironment/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICAst/PCUICEnvironmentHelper/Instances.v
-theories/ToPCUIC/QuotationOf/PCUIC/PCUICAst/PCUICGlobalMaps/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICAst/PCUICLookup/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICAst/PCUICTerm/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICAst/PCUICTermUtils/Instances.v
+theories/ToPCUIC/QuotationOf/PCUIC/PCUICArityRed/Instances.v
+theories/ToPCUIC/QuotationOf/PCUIC/PCUICArityRed/PCUICArityRelation/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICCumulativity/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICCumulativity/PCUICConversionParAlgo/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICCumulativitySpec/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICCumulativitySpec/PCUICConversionParSpec/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICTyping/Instances.v
+theories/ToPCUIC/QuotationOf/PCUIC/PCUICTyping/PCUICGlobalMaps/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICTyping/PCUICDeclarationTyping/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/PCUICTyping/PCUICTypingDef/Instances.v
 theories/ToPCUIC/QuotationOf/PCUIC/Syntax/PCUICReflect/Instances.v
@@ -191,6 +194,7 @@ theories/ToTemplate/QuotationOf/Template/ReflectAst/EnvDecide/Instances.v
 theories/ToTemplate/QuotationOf/Template/ReflectAst/Instances.v
 theories/ToTemplate/QuotationOf/Template/ReflectAst/TemplateTermDecide/Instances.v
 theories/ToTemplate/QuotationOf/Template/Typing/Instances.v
+theories/ToTemplate/QuotationOf/Template/Typing/TemplateArityRelation/Instances.v
 theories/ToTemplate/QuotationOf/Template/Typing/TemplateConversion/Instances.v
 theories/ToTemplate/QuotationOf/Template/Typing/TemplateConversionPar/Instances.v
 theories/ToTemplate/QuotationOf/Template/Typing/TemplateDeclarationTyping/Instances.v

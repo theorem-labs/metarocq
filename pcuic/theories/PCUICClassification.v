@@ -670,11 +670,10 @@ Section classification.
   Proof.
     intros typ.
     eapply inversion_mkApps in typ as (?&?&?); auto.
-    eapply inversion_Ind in t as (?&?&?&decl&?&?); auto.
+    eapply inversion_Ind in t as (?&?&wfΓ&decl&cu&?); auto.
     eapply PCUICSpine.typing_spine_strengthen in t0; eauto.
-    pose proof (on_declared_inductive decl) as [onind oib].
-    rewrite oib.(ind_arity_eq) in t0.
-    rewrite !subst_instance_it_mkProd_or_LetIn in t0.
+    eapply (typing_spine_ind_type_inv decl) in t0; tea.
+    rewrite it_mkProd_or_LetIn_app !subst_instance_it_mkProd_or_LetIn in t0.
     eapply typing_spine_arity_mkApps_Ind in t0; eauto.
     eapply typing_spine_isType_dom in t0 as (_ & s & Hs & _).
     eexists; split; [sq|]. now eapply wt_closed_red_refl.

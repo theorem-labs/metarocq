@@ -20,15 +20,18 @@ Local Notation " () " := tt.
 
 Module RedFlags.
 
+  (** [unfold_local]: unfold a let-bound variable of the context (the kernel
+      does it under delta, so it is independent of [zeta]). *)
   Record t := mk
     { beta : bool;
       iota : bool;
       zeta : bool;
       delta : bool;
       fix_ : bool;
-      cofix_ : bool }.
+      cofix_ : bool;
+      unfold_local : bool }.
 
-  Definition default := mk true true true true true true.
+  Definition default := mk true true true true true true true.
 End RedFlags.
 
 
@@ -171,7 +174,7 @@ Section Reduce.
   match t with
 
   | tRel c =>
-    if RedFlags.zeta flags then
+    if RedFlags.unfold_local flags then
       d <- nth_error Γ c ;;
       match d.(decl_body) with
       | None => ret (t, stack)
@@ -363,7 +366,7 @@ Section Conversion.
   Context `{checker_flags} (flags : RedFlags.t).
   Context (Σ : global_env) (G : universes_graph).
 
-  Definition nodelta_flags := RedFlags.mk true true true false true true.
+  Definition nodelta_flags := RedFlags.mk true true true false true true true.
 
   Definition unfold_one_fix n Γ mfix idx l :=
     unf <- unfold_fix mfix idx ;;

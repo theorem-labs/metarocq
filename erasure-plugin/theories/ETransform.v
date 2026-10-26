@@ -116,7 +116,7 @@ Proof.
     cbv [PCUICSN.NormalizationIn]; cbn.
     let H := match goal with H : PCUICTyping.wf_ext _ |- _ => H end in
     rewrite /PCUICAst.PCUICEnvironment.lookup_env -PCUICAst.PCUICEnvironment.lookup_global_Some_iff_In_NoDup -?hd_error_skipn_iff_In;
-    [ eapply PCUICAst.NoDup_on_global_decls, H
+    [ eapply PCUICTyping.NoDup_on_global_decls, H
     | eexists; eassumption ]. }
   { destruct p as [Σ ?]; cbn in *.
     match goal with H : PCUICSN.NormalizationIn _ |- _ => revert H end.
@@ -128,7 +128,7 @@ Proof.
         split; eassumption. }
     { let H := multimatch goal with H : PCUICTyping.wf_ext _ |- _ => H end in
       rewrite /PCUICAst.PCUICEnvironment.lookup_env -PCUICAst.PCUICEnvironment.lookup_global_Some_iff_In_NoDup -?hd_error_skipn_iff_In;
-      [ eapply PCUICAst.NoDup_on_global_decls, H
+      [ eapply PCUICTyping.NoDup_on_global_decls, H
       | eexists; eassumption ]. }
     revert normalization_in.
     apply PCUICWeakeningEnvSN.weakening_env_normalization_in; eauto;
@@ -398,7 +398,7 @@ Definition map_of_typed_global_env (p : global_env) (fr : fresh_globals p) :=
 Definition pre_remove_match_on_box_typed efl (p : global_env * term) : Prop :=
   wf_eprogram efl (trans_ex_prog p) /\ EEtaExpandedFix.expanded_eprogram (trans_ex_prog p).
 
-Lemma fresh_global_trans kn g : EnvMap.EnvMap.fresh_global kn (trans_env g) -> fresh_global kn g.
+Lemma fresh_global_trans kn g : EnvMap.EnvMap.fresh_global kn (trans_env g) -> ExAst.fresh_global kn g.
 Proof.
   induction g as [ | [[kn' b] d] tl]; cbn; auto; constructor; eauto.
   - now depelim H.

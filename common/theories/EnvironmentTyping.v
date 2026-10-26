@@ -1236,10 +1236,20 @@ Module Type ConversionSig (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
   Include Conversion T E TU ET.
 End ConversionSig.
 
+(** The relation between the user arity of an inductive and the arity the
+    kernel computes from it ([Reduction.dest_arity], kernel/reduction.ml):
+    [arity_red Σ Γ U Δ s] holds when the kernel's head-reduction strategy turns
+    [U], in context [Γ] (the parameters), into [it_mkProd_or_LetIn Δ (tSort s)].
+    Each language gives its own instance (PCUICArityRed, Template Typing). *)
+Module Type ArityRedSig (T : Term) (E : EnvironmentSig T).
+  Import T E.
+  Parameter Inline arity_red : global_env -> context -> term -> context -> sort -> Type.
+End ArityRedSig.
 
-Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E).
+
+Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : ArityRedSig T E).
   (** *** Typing of inductive declarations *)
-  Import T E TU ET C L.
+  Import T E TU ET C L AR.
 
   Section GlobalMaps.
 
@@ -1353,11 +1363,12 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       Let-in assumptions in Δ are systematically unfolded, i.e. we really consider:
       the zeta-reduction of [t]. *)
 
-    Definition ind_realargs (o : one_inductive_body) :=
-      match destArity [] o.(ind_type) with
-      | Some (ctx, _) => #|smash_context [] ctx|
-      | _ => 0
-      end.
+    (** The number of arguments of a full application of the inductive: its
+        parameters and indices, without the let-ins.  It reads the declaration's
+        contexts, which hold the kernel's reduced arity, not [ind_type], which
+        is the user's arity and need not be syntactic. *)
+    Definition ind_realargs (mdecl : mutual_inductive_body) (o : one_inductive_body) :=
+      context_assumptions (mdecl.(ind_params) ,,, o.(ind_indices)).
 
     Definition mdecl_at_i mdecl i (Γ:context) k : Prop :=
       #|Γ| <= k /\ k < #|Γ| + #|mdecl.(ind_bodies)| /\
@@ -1431,7 +1442,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
 
     | pos_arg_concl l k i :
       (** Mutual inductive references in the conclusion are ok *)
-      #|l| = ind_realargs i -> All (closedn #|Γ|) l ->
+      #|l| = ind_realargs mdecl i -> All (closedn #|Γ|) l ->
       mdecl_at_i mdecl i Γ k ->
       Σ ;;; mdecl ;;; NI ;;; Γ |arg+> mkApps (tRel k) l
 
@@ -1788,15 +1799,28 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
           else True
       end.
 
-    Record on_ind_body Σ mind mdecl i idecl :=
-      { (** The type of the inductive must be an arity, sharing the same params
-            as the rest of the block, and maybe having a context of indices. *)
-        ind_arity_eq : idecl.(ind_type)
-                      = it_mkProd_or_LetIn mdecl.(ind_params)
-                                (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort)));
+    Record on_ind_body (Σ : global_env_ext) mind mdecl i idecl :=
+      { (** The type of the inductive is the parameters of the block followed
+            by the user arity [U], and [U] reduces, by the kernel's strategy in
+            the parameter context, to the arity built from the declaration's
+            indices and sort. *)
+        ind_arity_red :
+          ∑ U, (idecl.(ind_type) = it_mkProd_or_LetIn mdecl.(ind_params) U) ×
+               arity_red Σ.1 mdecl.(ind_params) U idecl.(ind_indices) idecl.(ind_sort);
 
         (** It must be well-typed in the empty context. *)
         onArity : on_type_rel Σ [] idecl.(ind_type) rel_of_Type;
+
+        (** The arity built from the declaration is well-typed too.  It follows
+            from [onArity] and [ind_arity_red] by subject reduction, but subject
+            reduction itself uses it (through the typing of the parameters and
+            indices), so it is stated: the checker proves it by subject
+            reduction, which is available there. *)
+        onArityRed :
+          on_type_rel Σ []
+            (it_mkProd_or_LetIn mdecl.(ind_params)
+               (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort))))
+            rel_of_Type;
 
         (** The sorts of the arguments contexts of each constructor *)
         ind_cunivs : list constructor_univs;
@@ -1963,9 +1987,10 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
   Arguments on_ctype_positive {_ Pcmp P Σ mdecl i idecl ind_indices cdecl cunivs}.
   Arguments on_ctype_variance {_ Pcmp P Σ mdecl i idecl ind_indices cdecl cunivs}.
 
-  Arguments ind_arity_eq {_ Pcmp P Σ mind mdecl i idecl}.
+  Arguments ind_arity_red {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments ind_cunivs {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments onArity {_ Pcmp P Σ mind mdecl i idecl}.
+  Arguments onArityRed {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments onConstructors {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments onProjections {_ Pcmp P Σ mind mdecl i idecl}.
   Arguments ind_sorts {_ Pcmp P Σ mind mdecl i idecl}.
@@ -2227,6 +2252,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
 
   Lemma on_global_decl_impl_full {cf1 cf2 : checker_flags} Pcmp1 Pcmp2 P1 P2 Σ Σ' kn d :
     config.impl cf1 cf2 ->
+    (forall Γ U Δ s, arity_red Σ.1 Γ U Δ s -> arity_red Σ'.1 Γ U Δ s) ->
     (forall Γ j, P1 Σ Γ j -> P2 Σ' Γ j) ->
     (forall u Γ pb t t', Pcmp1 (Σ.1, u) Γ pb t t' -> Pcmp2 (Σ'.1, u) Γ pb t t') ->
     (forall u, wf_sort Σ u -> wf_sort Σ' u) ->
@@ -2236,7 +2262,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
     (forall mdecl i Γ t, positive_cstr Σ.1 mdecl i Γ t -> positive_cstr Σ'.1 mdecl i Γ t) ->
     @on_global_decl cf1 Pcmp1 P1 Σ kn d -> @on_global_decl cf2 Pcmp2 P2 Σ' kn d.
   Proof.
-    intros Xcf XP Xcmp Xu Xc Xv Xpos.
+    intros Xcf Xar XP Xcmp Xu Xc Xv Xpos.
     destruct d; simpl.
     - apply XP => //.
     - intros [onI onP onNP onV].
@@ -2244,9 +2270,10 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       2: { eapply All_local_env_impl with (1 := onP). intros; apply XP => //. }
 
       eapply Alli_impl; tea. intros.
-      refine {| ind_arity_eq := X.(ind_arity_eq);
+      refine {| ind_arity_red := let '(U; (eq, ar)) := X.(ind_arity_red) in (U; (eq, Xar _ _ _ _ ar));
                 ind_cunivs := X.(ind_cunivs) |}.
       + eapply XP => //. now apply onArity in X.
+      + eapply XP => //. now apply onArityRed in X.
       + pose proof X.(onConstructors) as X1.
         apply All2_impl with (1 := X1).
         (* [eauto] discharges [on_ctype_positive] with [Xpos] and the hypothesis. *)
@@ -2371,8 +2398,8 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
 
 End GlobalMaps.
 
-Module Type GlobalMapsSig (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E).
-  Include GlobalMaps T E TU ET C L.
+Module Type GlobalMapsSig (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : ArityRedSig T E).
+  Include GlobalMaps T E TU ET C L AR.
 End GlobalMapsSig.
 
 Module Type ConversionParSig (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E) (ET : EnvTypingSig T E TU).
@@ -2400,7 +2427,7 @@ End Typing.
 Module DeclarationTyping (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
   (ET : EnvTypingSig T E TU) (CT : ConversionSig T E TU ET)
   (CS : ConversionParSig T E TU ET) (Ty : Typing T E TU ET CT CS)
-  (L : LookupSig T E) (GM : GlobalMapsSig T E TU ET CT L).
+  (L : LookupSig T E) (AR : ArityRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR).
 
   Import T E L TU ET CT GM CS Ty.
 
@@ -2581,6 +2608,6 @@ End DeclarationTyping.
 Module Type DeclarationTypingSig (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
        (ET : EnvTypingSig T E TU) (CT : ConversionSig T E TU ET)
        (CS : ConversionParSig T E TU ET) (Ty : Typing T E TU ET CT CS)
-       (L : LookupSig T E) (GM : GlobalMapsSig T E TU ET CT L).
-  Include DeclarationTyping T E TU ET CT CS Ty L GM.
+       (L : LookupSig T E) (AR : ArityRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR).
+  Include DeclarationTyping T E TU ET CT CS Ty L AR GM.
 End DeclarationTypingSig.

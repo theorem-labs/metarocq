@@ -1107,9 +1107,10 @@ Section Erase.
       pose proof (abstract_env_ext_wf _ H) as [wf].
       specialize_Σ H. destruct Ht as [ty Ht]. sq.
       eapply inversion_Ind in Ht as (? & ? & ? & ? & ? & ?) ; auto.
-      red. eexists. split. econstructor; eauto. left.
-      eapply isArity_subst_instance.
-      eapply isArity_ind_type; eauto.
+      red. eexists. split.
+      + eapply (type_Ind_arity_form (wfΣ := wf.1)); eauto.
+      + left. eapply isArity_subst_instance.
+        eapply it_mkProd_isArity. constructor.
     - eapply inversion_Case in Ht as (? & ? & ? & ? & [] & ?); auto.
       eexists; eauto.
     - now eapply welltyped_brs in Ht as []; tea.
@@ -1328,10 +1329,7 @@ Definition erase_one_inductive_body (oib : one_inductive_body) : E.one_inductive
   let ctors := map (fun cdecl => EAst.mkConstructor cdecl.(cstr_name) cdecl.(cstr_arity)) oib.(ind_ctors) in
   let projs := map (fun pdecl => EAst.mkProjection pdecl.(proj_name)) oib.(ind_projs) in
   let is_propositional :=
-    match destArity [] oib.(ind_type) with
-    | Some (_, u) => Sort.is_propositional u
-    | None => false (* dummy, impossible case *)
-    end
+    Sort.is_propositional oib.(ind_sort)
   in
   {| E.ind_name := oib.(ind_name);
      E.ind_kelim := oib.(ind_kelim);
@@ -1917,16 +1915,10 @@ Lemma erases_mutual {Σ mdecl m} :
   on_inductive cumulSpec0 (lift_typing typing) (Σ, ind_universes m) mdecl m ->
   erases_mutual_inductive_body m (erase_mutual_inductive_body m).
 Proof.
-  intros oni.
+  intros _.
   destruct m; constructor; simpl; auto.
-  eapply onInductives in oni; simpl in *.
-  assert (Alli (fun i oib =>
-    match destArity [] oib.(ind_type) with Some _ => True | None => False end) 0 ind_bodies0).
-  { eapply Alli_impl; eauto.
-    simpl. intros n x []. simpl in *. rewrite ind_arity_eq.
-    rewrite !destArity_it_mkProd_or_LetIn /= //. } clear oni.
-  induction X; constructor; auto.
-  destruct hd; constructor; simpl; auto.
+  induction ind_bodies0; constructor; auto.
+  destruct a; constructor; simpl; auto.
   clear.
   induction ind_ctors0; constructor; auto.
   cbn in *.

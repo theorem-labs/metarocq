@@ -611,8 +611,7 @@ Qed.
   Proof using Type.
     intros wfΣ decli u.
     pose proof (on_declared_inductive decli) as [onmind oib].
-    pose proof (onArity oib) as ona.
-    rewrite (oib.(ind_arity_eq)) in ona.
+    pose proof (onArityRed oib) as ona.
     apply isTypeRel_subst_instance_id in ona.
     2:split; simpl; auto.
     - rewrite !subst_instance_it_mkProd_or_LetIn in ona.
@@ -633,7 +632,6 @@ Qed.
     intros wfΣ decli u.
     pose proof (on_declared_inductive decli) as [_ oib].
     pose proof (onArity oib) as ona.
-    rewrite (oib.(ind_arity_eq)) in ona |- *.
     apply isTypeRel_subst_instance_id in ona; eauto.
     destruct decli as [declm _].
     eapply declared_inductive_wf_global_ext in declm; auto.
