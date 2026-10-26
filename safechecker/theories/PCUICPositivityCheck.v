@@ -2,7 +2,7 @@
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReflect.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReflect PCUICTyping.
 From MetaRocq.SafeChecker Require Import PCUICErrors.
 
 Import MonadNotation.
