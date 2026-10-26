@@ -10,17 +10,40 @@ Universe template_cache_flags_u.
 MetaRocq Test Cache Typing Flags
   (list (forall X : Type@{template_cache_flags_u}, nat)).
 
+(* The application [list A] is one physical kernel term in both lambdas, but
+   retyping [A] sees a different Rel declaration in each body.  The command
+   compares the second body with both the first and a fresh quotation. *)
+Universes template_cache_rel_i template_cache_rel_j.
+MetaRocq Test Quoter Rel Context Cache
+  (fun A : Type@{template_cache_rel_i} => list A)
+  Type@{template_cache_rel_j}.
+
+(* Initially neither global level is below the other, so quoting their maximum
+   mints a representative.  The command then uses [push_context_set] to add
+   [template_cache_graph_i < template_cache_graph_j]; the maximum quotes as
+   [template_cache_graph_j] under that graph and must not reuse the first
+   cache entry. *)
+Universes template_cache_graph_i template_cache_graph_j.
+MetaRocq Test Quoter Graph Cache
+  Type@{template_cache_graph_i} Type@{template_cache_graph_j}.
+
+(* The first quotation retypes an argument constant in an environment extended
+   with that constant.  The same physical application is then quoted under the
+   original environment, where a fresh quotation rejects the missing global;
+   a cache hit must not hide that rejection. *)
+MetaRocq Test Quoter Global Environment Cache list.
+
 (* The compound product has a scope-dependent child.  The test confirms a hit
    in the same scope, a miss in another scope, and rejection outside a scope. *)
 MetaRocq Test Quoter Scope Cache.
 
 Set Universe Polymorphism.
-(* Retyping the template argument [A] reaches a universe component at offset
-   two while this declaration's state is installed.  The quoter refuses that
-   input; the command checks the exact refusal and then checks that the
-   declaration state was restored. *)
+(* Rocq's surface cannot express a universe component at offset two, so the
+   command builds that polymorphic declaration in the kernel environment.  It
+   checks the exact refusal while the declaration state is installed, then
+   checks that the state was restored. *)
 Polymorphic Definition template_state_restore_source@{u}
-  (A : Type@{u+2}) := list A.
+  (A : Type@{u}) := list A.
 MetaRocq Test Quoter Restores State @template_state_restore_source.
 
 (* The upper-bound pass must let [Control.Timeout] leave its graph query. *)

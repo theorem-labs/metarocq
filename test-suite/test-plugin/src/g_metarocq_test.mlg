@@ -18,6 +18,11 @@ let quoted_prod_children q =
   | Constr.App (_, [| _; t; b |]) -> t, b
   | _ -> fail "Expected a quoted product."
 
+let quoted_lambda_children q =
+  match Constr.kind q with
+  | Constr.App (_, [| _; t; b |]) -> t, b
+  | _ -> fail "Expected a quoted lambda."
+
 let empty_evar_map () =
   let env = Global.env () in
   env, Evd.from_env env
@@ -200,20 +205,196 @@ let test_scope_dependency_cache env sigma =
     fail "No-scope quotation reused a scoped cached result.";
   Feedback.msg_info (Pp.str "Scope-dependent cache regression passed.")
 
-let test_declaration_state_restore ~opaque_access env sigma trm =
+let test_rel_context_dependency_cache env sigma first_term second_type =
+  let name, first_type, body =
+    match Constr.kind first_term with
+    | Constr.Lambda (name, typ, body) -> name, typ, body
+    | _ ->
+      fail "MetaRocq Test Quoter Rel Context Cache: expected a lambda."
+  in
+  let second_term = Constr.mkLambda (name, second_type, body) in
+  let new_cache () =
+    fst
+      (Q.quote_term_remember
+         ~universe_context:(Q.make_template_universe_context ())
+         (fun _ () -> ()) (fun _ _ () -> ()))
+  in
+  let run quote term = fst (quote () env sigma term) in
+  let shared = new_cache () in
+  let first = run shared first_term in
+  let second = run shared second_term in
+  let fresh = run (new_cache ()) second_term in
+  let _, first_body = quoted_lambda_children first in
+  let _, second_body = quoted_lambda_children second in
+  let _, fresh_body = quoted_lambda_children fresh in
+  if second_body == first_body then
+    fail "MetaRocq Test Quoter Rel Context Cache: retyped quotation was reused under a different Rel context.";
+  if Constr.equal second_body first_body then
+    fail "MetaRocq Test Quoter Rel Context Cache: the two Rel contexts produced the same quoted body.";
+  if not (Constr.equal second fresh && Constr.equal second_body fresh_body) then
+    fail "MetaRocq Test Quoter Rel Context Cache: quotation under the second Rel context differs from a fresh quotation.";
+  if Constr.equal first_type second_type then
+    fail "MetaRocq Test Quoter Rel Context Cache: the two Rel contexts have equal binder types.";
+  Feedback.msg_info
+    (Pp.str "Rel-context-dependent cache regression passed.")
+
+let level_of_type what term =
+  let universe =
+    match Constr.kind term with
+    | Constr.Sort (Sorts.Type universe | Sorts.QSort (_, universe)) -> universe
+    | _ -> fail (what ^ " is not a Type sort.")
+  in
+  match Univ.Universe.level universe with
+  | Some level -> level
+  | None -> fail (what ^ " is not at one global universe level.")
+
+let test_graph_dependency_cache env left_type right_type =
+  let left = level_of_type "The first graph-cache argument" left_type in
+  let right = level_of_type "The second graph-cache argument" right_type in
+  let universe = Univ.Universe.unrepr [left, 0; right, 0] in
+  let term =
+    Constr.mkSort (Sorts.make Sorts.Quality.qtype universe)
+  in
+  let constraints =
+    Univ.UnivConstraints.singleton (left, Univ.UnivConstraint.Lt, right)
+  in
+  let extended_env =
+    Environ.push_context_set ~strict:true
+      (Univ.Level.Set.empty, constraints) env
+  in
+  let new_cache () =
+    fst
+      (Q.quote_term_remember
+         ~universe_context:(Q.make_template_universe_context ())
+         (fun _ () -> ()) (fun _ _ () -> ()))
+  in
+  let run quote env =
+    fst (quote () env (Evd.from_env env) term)
+  in
+  let shared = new_cache () in
+  let first = run shared env in
+  let second = run shared extended_env in
+  let fresh = run (new_cache ()) extended_env in
+  if second == first then
+    fail "MetaRocq Test Quoter Graph Cache: quotation was reused after push_context_set changed the universe graph.";
+  if Constr.equal second first then
+    fail "MetaRocq Test Quoter Graph Cache: the changed universe graph produced the same quotation.";
+  if not (Constr.equal second fresh) then
+    fail "MetaRocq Test Quoter Graph Cache: quotation under the changed universe graph differs from a fresh quotation.";
+  Feedback.msg_info
+    (Pp.str "Universe-graph-dependent cache regression passed.")
+
+let test_global_environment_dependency_cache env sigma template =
+  let ind =
+    match Constr.kind template with
+    | Constr.Ind (ind, _) -> ind
+    | _ ->
+      fail "MetaRocq Test Quoter Global Environment Cache: expected an inductive."
+  in
+  let constant =
+    let kn =
+      Names.KerName.make
+        (Names.ModPath.MPfile
+           (Names.DirPath.make
+              [Names.Id.of_string "MetaRocq";
+               Names.Id.of_string "Regression"]))
+        (Names.Label.of_id (Names.Id.of_string "cache_environment_argument"))
+    in
+    Names.Constant.make1 kn
+  in
+  let constant_body =
+    { Declarations.const_hyps = [];
+      const_univ_hyps = UVars.Instance.empty;
+      const_body = Declarations.Undef None;
+      const_type =
+        Constr.mkSort (Sorts.make Sorts.Quality.qtype Univ.Universe.type0);
+      const_relevance = Sorts.Relevant;
+      const_body_code = None;
+      const_universes = Declarations.Monomorphic;
+      const_inline_code = false;
+      const_typing_flags = Environ.typing_flags env }
+  in
+  let extended_env = Environ.add_constant constant constant_body env in
+  let term =
+    Constr.mkApp
+      (Constr.mkIndU (ind, UVars.Instance.empty),
+       [| Constr.mkConstU (constant, UVars.Instance.empty) |])
+  in
+  let new_cache () =
+    fst
+      (Q.quote_term_remember
+         ~universe_context:(Q.make_template_universe_context ())
+         (fun _ () -> ()) (fun _ _ () -> ()))
+  in
+  let run quote env = fst (quote () env sigma term) in
+  let rejects quote env =
+    try
+      ignore (run quote env);
+      false
+    with _ -> true
+  in
+  let shared = new_cache () in
+  ignore (run shared extended_env);
+  if not (rejects (new_cache ()) env) then
+    fail "MetaRocq Test Quoter Global Environment Cache: the fresh quotation unexpectedly accepted the missing constant.";
+  if not (rejects shared env) then
+    fail "MetaRocq Test Quoter Global Environment Cache: a retyped quotation was reused under a different global environment.";
+  Feedback.msg_info
+    (Pp.str "Global-environment-dependent cache regression passed.")
+
+let test_declaration_state_restore ~opaque_access env sigma _trm =
   let open Q in
-  let expected =
+  let bound = Univ.Level.var 0 in
+  let bad_universe = Univ.Universe.unrepr [bound, 2] in
+  let bad_type =
+    Constr.mkSort (Sorts.make Sorts.Quality.qtype bad_universe)
+  in
+  let auctx =
+    UVars.AbstractContext.make
+      { UVars.quals = [||];
+        UVars.univs = [| Names.Name (Names.Id.of_string "u") |] }
+      PConstraints.empty
+  in
+  let constant_body =
+    { Declarations.const_hyps = [];
+      const_univ_hyps = UVars.Instance.empty;
+      const_body = Declarations.Def Constr.mkProp;
+      const_type = bad_type;
+      const_relevance = Sorts.Relevant;
+      const_body_code = None;
+      const_universes = Declarations.Polymorphic auctx;
+      const_inline_code = false;
+      const_typing_flags = Environ.typing_flags env }
+  in
+  let constant =
+    let kn =
+      Names.KerName.make
+        (Names.ModPath.MPfile
+           (Names.DirPath.make
+              [Names.Id.of_string "MetaRocq";
+               Names.Id.of_string "Regression"]))
+        (Names.Label.of_id (Names.Id.of_string "state_restore"))
+    in
+    Names.Constant.make1 kn
+  in
+  let env = Environ.add_constant constant constant_body env in
+  let term =
+    Constr.mkConstU
+      (constant, UVars.Instance.of_array ([||], [| Univ.Level.set |]))
+  in
+  let expected_failure =
     "Quoting template universe offsets above one is not supported."
   in
   let failed_for_expected_reason =
     try
       ignore
         (quote_term_rec ~translate_template:true
-           ~bypass:true ~opaque_access ~with_universes:true env sigma trm);
+           ~bypass:true ~opaque_access ~with_universes:true env sigma term);
       false
     with
     | CErrors.UserError message ->
-      CString.string_contains ~where:(Pp.string_of_ppcmds message) ~what:expected
+      CString.string_contains
+        ~where:(Pp.string_of_ppcmds message) ~what:expected_failure
   in
   let state = !current_declaration_state in
   let all_state_restored =
@@ -522,6 +703,36 @@ VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Scope_Cache CLASSIFIED AS QUERY
 | [ "MetaRocq" "Test" "Quoter" "Scope" "Cache" ] -> {
     let env, evm = empty_evar_map () in
     test_scope_dependency_cache env evm
+  }
+END
+
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Rel_Context_Cache CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Quoter" "Rel" "Context" "Cache" constr(c) constr(ty) ] -> {
+    let env, evm = empty_evar_map () in
+    let c, _ = Constrintern.interp_constr env evm c in
+    let ty, _ = Constrintern.interp_constr env evm ty in
+    test_rel_context_dependency_cache env evm
+      (EConstr.to_constr evm c) (EConstr.to_constr evm ty)
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Graph_Cache CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Quoter" "Graph" "Cache" constr(left) constr(right) ] -> {
+    let env, evm = empty_evar_map () in
+    let left, _ = Constrintern.interp_constr env evm left in
+    let right, _ = Constrintern.interp_constr env evm right in
+    test_graph_dependency_cache env
+      (EConstr.to_constr evm left) (EConstr.to_constr evm right)
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Global_Environment_Cache CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Quoter" "Global" "Environment" "Cache" constr(template) ] -> {
+    let env, evm = empty_evar_map () in
+    let template, _ = Constrintern.interp_constr env evm template in
+    test_global_environment_dependency_cache env evm
+      (EConstr.to_constr evm template)
   }
 END
 
