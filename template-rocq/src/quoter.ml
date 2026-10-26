@@ -482,7 +482,29 @@ struct
          (fun (level, shift) -> expand_component shift level)
          (Univ.Universe.repr universe))
 
-  let local_fresh_var scope universe =
+  (* The components of [universe] that are not bound universe variables, as one
+     universe, when there are at least two of them. *)
+  let global_part universe =
+    match
+      List.filter
+        (fun (level, _) -> Option.is_empty (Univ.Level.var_index level))
+        (Univ.Universe.repr universe)
+    with
+    | _ :: _ :: _ as components -> Some (Univ.Universe.unrepr components)
+    | _ -> None
+
+  (* A fresh bound level for [universe], lower-bounded by its components and,
+     when [universe] has two or more global components [G], by the global level
+     [global_level max(G)] that represents [max(G)] everywhere in the program.
+     A constructor argument whose sort is a maximum of some of those global
+     levels is quoted as a fresh global level [h], and the inductive-sort check
+     needs [h <= level]; [h] may be minted only after this declaration's context
+     is finished.  The upper-bound pass adds [h <= global_level max(G)] when the
+     source graph proves [D_h <= max(G)], and PCUIC chains the two.  The bound
+     holds under the valuation that gives each representative the value of its
+     definition, so the extension stays conservative.  [global_level] answers
+     [None] where no global level can be minted; the bound is then omitted. *)
+  let local_fresh_var ~global_level scope universe =
     let universe = normalize_local_universe scope universe in
     match
       try Some (Univ.Universe.Map.find universe scope.ls_memo)
@@ -505,6 +527,13 @@ struct
              in
              Univ.UnivConstraints.add (component, kind, level) constraints)
           scope.ls_constraints (Univ.Universe.repr universe)
+      in
+      let constraints =
+        match Option.bind (global_part universe) global_level with
+        | None -> constraints
+        | Some global ->
+          Univ.UnivConstraints.add (global, Univ.UnivConstraint.Le, level)
+            constraints
       in
       scope.ls_memo <- Univ.Universe.Map.add universe level scope.ls_memo;
       scope.ls_definitions <-
@@ -629,7 +658,7 @@ struct
 
 
 
-  let template_universe_level ?context env universe =
+  let rec template_universe_level ?context env universe =
     let universe = simplify_template_universe universe in
     let universe =
       match context with
@@ -658,7 +687,13 @@ struct
       if universe_has_var_component universe then begin
         (* Polymorphic scope: components include bound universe variables. *)
         match read_local_scope () with
-        | Some scope -> local_fresh_var scope universe
+        | Some scope ->
+          let global_level globals =
+            match context with
+            | Some _ -> Some (template_universe_level ?context env globals)
+            | None -> None
+          in
+          local_fresh_var ~global_level scope universe
         | None ->
           CErrors.user_err
             Pp.(str "Quoting algebraic template universe "
