@@ -54,13 +54,20 @@ MetaRocq SafeCheck ones.
 (** An inductive nested through a coinductive.  The argument of a
     coinductive constructor is not a subterm, and a cofixpoint cannot put a
     call to its block in a non-recursive argument: together these two would
-    let [t_f (C t_s)] reduce to itself. *)
-Inductive T : Type := C : Stream T -> T.
+    let [t_f (C t_s)] reduce to itself.  The types live in [Set], so that no
+    template universe is instantiated.  While PCUIC has no nested inductive
+    types, SafeCheck refuses the declaration of [T] itself, before any guard
+    check; these lines then hold trivially, and they test the guard once
+    nested inductives are allowed.  The guard rules themselves are tested on
+    this pair without SafeCheck, in [guard_cases_test.v] and in
+    [PCUICGuardCheckerRegress]. *)
+CoInductive SStream (A : Set) : Set := SCons : A -> SStream A -> SStream A.
+Inductive T : Set := C : SStream T -> T.
 
 Unset Guard Checking.
-CoFixpoint t_s : Stream T := Cons T (C t_s) t_s.
+CoFixpoint t_s : SStream T := SCons T (C t_s) t_s.
 Fixpoint t_f (x : T) : nat :=
-  match x with C y => match y with Cons _ t _ => t_f t end end.
+  match x with C y => match y with SCons _ t _ => t_f t end end.
 Set Guard Checking.
 
 Fail MetaRocq SafeCheck t_s.
