@@ -55,6 +55,21 @@ Proof.
   - solve_all.
 Qed.
 
+(** Renaming under the [n >= 1] binders of a predicate context keeps variable 0 out of a case's
+    return type ([nondep_cofinite] in [case_side_conditions]). *)
+Lemma on_free_vars_nondep_rename n f t :
+  0 < n ->
+  on_free_vars (strengthenP 0 1 xpredT) t ->
+  on_free_vars (strengthenP 0 1 xpredT) (rename (shiftn n f) t).
+Proof.
+  intros hn h.
+  rewrite on_free_vars_rename.
+  eapply on_free_vars_impl; [|exact h].
+  intros i. rewrite /= !strengthenP01 /shiftn.
+  destruct (Nat.ltb_spec i n) => //= _.
+  apply/negP => /Nat.eqb_eq. lia.
+Qed.
+
 Lemma shiftn_ext_cond (P : nat -> bool) f f' n :
   (forall i, P i -> f i = f' i) ->
   forall k,
