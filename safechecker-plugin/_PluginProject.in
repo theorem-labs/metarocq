@@ -57,6 +57,8 @@ src/pCUICSafeReduce.mli
 src/pCUICSafeReduce.ml
 src/pCUICSafeConversion.mli
 src/pCUICSafeConversion.ml
+src/pCUICCallByNeed.mli
+src/pCUICCallByNeed.ml
 src/pCUICTypeChecker.mli
 src/pCUICTypeChecker.ml
 src/pCUICPositivityCheck.mli
