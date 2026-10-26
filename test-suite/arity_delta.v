@@ -106,20 +106,27 @@ Inductive ad_fbind : ad_fbar := ad_fbind_0 : ad_fbind 0.
 MetaRocq SafeCheck (@ad_fbind).
 
 (** A12: A4 with Corelib's template-polymorphic [list], as in stdpp's
-    [base.list_elem_of].  A4 uses a non-template copy; this one checks that
-    the quoted [ind_type] and the quoted [ind_indices] agree on how [list]
-    is quoted.  This tree's [MetaRocq SafeCheck] quotes without
-    [~translate_template] (safechecker-plugin/src/g_metarocq_safechecker.mlg:25)
-    and no command or TemplateMonad entry here exposes the translation, so the
-    template-translated path is exercised by the separate probe
-    lanes/arity-delta/arity_a12_translate.v on image injtyp-base (base
-    73b74755), whose SafeCheck quotes with [~translate_template].  There the
-    base refuses it ("∀ A, AD_ElemOf A (list@{u} A) is not an arity") while a
-    syntactic template-[list] control is accepted. *)
+    [base.list_elem_of].  A4 uses a non-template copy.
+
+    On this tree the arity rule accepts it, but [MetaRocq SafeCheck] then
+    fails on a *different* wall: it quotes without [~translate_template]
+    (safechecker-plugin/src/g_metarocq_safechecker.mlg:25), so a
+    template-polymorphic [list] keeps the universes of its declaration and the
+    checker reports "Types are not convertible: Type([Top.i]) and
+    Type([Corelib.Init.Datatypes.190])".  That wall is not this lane's: the
+    control [ad_tlist_syn] of lanes/arity-delta/a12_control.v, whose arity is
+    *syntactic*, is refused with exactly the same message, both on the base and
+    after this change (results/base-37a157cb/a12_control.v-ctl-{base,new}.out).
+
+    The arity rule's half of A12 is exercised on image injtyp-base (base
+    73b74755), whose SafeCheck quotes with [~translate_template], by the probe
+    lanes/arity-delta/arity_a12_translate.v: the base refuses the aliased arity
+    ("∀ A, AD_ElemOf A (list@{u} A) is not an arity") while a syntactic
+    template-[list] control is accepted. *)
 Inductive ad_tlist_elem_of {A} : AD_ElemOf A (list A) :=
 | ad_telem_of_here x l : ad_tlist_elem_of x (cons x l)
 | ad_telem_of_further x y l : ad_tlist_elem_of x l -> ad_tlist_elem_of x (cons y l).
-MetaRocq SafeCheck (@ad_tlist_elem_of).
+Fail MetaRocq SafeCheck (@ad_tlist_elem_of).
 
 (** A13: a let-bound variable as a [match] discriminant.  The kernel keeps
     [b := true] and unfolds the discriminant [Rel b] under delta; it stores
