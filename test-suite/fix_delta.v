@@ -87,6 +87,14 @@ Definition fd_pstr' (A : Type) := fd_pstr A.
 CoFixpoint fd_rep {A} (a : A) : fd_pstr' A := fd_pscons a (fd_rep a).
 MetaRocq SafeCheck @fd_rep.
 
+(* A10: a cofixpoint whose codomain hides its products behind a definition.
+   Rocq's [codomain_is_coind] reduces the codomain and walks under every
+   product, so the kernel accepts this, and the checker must walk it the same
+   way. *)
+Definition fd_fstr := nat -> fd_str.
+CoFixpoint fd_from : fd_fstr := fun n => fd_scons n (fd_from (S n)).
+MetaRocq SafeCheck @fd_from.
+
 (** * Rejected *)
 
 (* Rocq's elaborator and [Typing] reject a [fix] whose recursive argument is
@@ -115,6 +123,16 @@ Ltac2 letfix () : constr :=
 Ltac2 fixhidden (ty : constr) : constr :=
   Constr.Unsafe.make (Constr.Unsafe.Fix [| 0 |] 0 [| bnd @f ty |]
     [| Constr.Unsafe.make (Constr.Unsafe.Lambda (bnd @x 'nat) '0) |]).
+(* [fix f (b : bool) (x : fd_sel b) {struct x} : nat := 0]: the recursive
+   argument's type is a stuck [match], so it reduces to no head at all. *)
+Ltac2 fixstuck () : constr :=
+  let rel n := Constr.Unsafe.make (Constr.Unsafe.Rel n) in
+  let sel n := Constr.Unsafe.make (Constr.Unsafe.App 'fd_sel [| rel n |]) in
+  Constr.Unsafe.make (Constr.Unsafe.Fix [| 1 |] 0
+    [| bnd @f (Constr.Unsafe.make (Constr.Unsafe.Prod (bnd @b 'bool)
+         (Constr.Unsafe.make (Constr.Unsafe.Prod (bnd @x (sel 1)) 'nat)))) |]
+    [| Constr.Unsafe.make (Constr.Unsafe.Lambda (bnd @b 'bool)
+         (Constr.Unsafe.make (Constr.Unsafe.Lambda (bnd @x (sel 1)) '0))) |]).
 Ltac2 unchecked (c : constr) := ltac1:(t |- exact_no_check t) (Ltac1.of_constr c).
 End FdUnsafe.
 Import FdUnsafe.
@@ -170,5 +188,11 @@ Fail MetaRocq SafeCheck @fd_cbad_sort.
    fails with "Not enough products". *)
 Definition fd_natfun := nat -> nat.
 Fail MetaRocq SafeCheck (ltac2:(unchecked (fixhidden 'fd_natfun)) : fd_natfun).
+
+(* R12: the recursive argument's type is a stuck iota redex: [fd_sel b] with
+   [b] a variable reduces to no head at all, so neither the kernel nor the
+   checker can find an inductive. *)
+Fail MetaRocq SafeCheck
+  (ltac2:(unchecked (fixstuck ())) : forall b : bool, fd_sel b -> nat).
 
 Set Guard Checking.
