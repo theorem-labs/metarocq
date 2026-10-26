@@ -1116,7 +1116,8 @@ Section Erase.
     - eapply inversion_Proj in Ht as (? & ? & ? & ? & ? & ? & ? & ? & ?); auto.
       eexists; eauto.
     - eapply inversion_Fix in Ht as (? & ? & ? & ? & ? & ?); auto.
-      sq. destruct p. move/andP: i => [wffix _].
+      sq. destruct p.
+      try match goal with [ h : wf_fixpoint _ _ _ |- _ ] => destruct h as [wffix _] end.
       solve_all. destruct a0 as (Hb & _). cbn in Hb. now eexists.
     - eapply inversion_CoFix in Ht as (? & ? & ? & ? & ? & ?); auto.
       sq. eapply All_impl; tea. cbn. intros d (Hb & _); cbn in Hb; now eexists.

@@ -234,8 +234,8 @@ Proof.
   - econstructor.
 
     eapply All2_impl. eapply All2_All_mix_left. exact X3. eassumption.
-    intros. cbn in *.
-    destruct X7 as [IH []].
+    intros ? ? hP. cbn in *.
+    destruct hP as [IH []].
     split; intuition auto.
     eapply IH.
     + subst types.
@@ -245,8 +245,8 @@ Proof.
   - econstructor.
 
     eapply All2_impl. eapply All2_All_mix_left. exact X3. eassumption.
-    intros. cbn in *.
-    destruct X7 as [IH []].
+    intros ? ? hP. cbn in *.
+    destruct hP as [IH []].
     split; intuition auto.
     eapply IH.
     + subst types. eapply conv_context_app_same; auto.
@@ -533,7 +533,7 @@ Section wellscoped.
     - unshelve eapply declared_projection_to_gen in isdecl; eauto.
       unfold lookup_projection. now rewrite (declared_projection_lookup_gen isdecl).
     - now eapply nth_error_Some_length, Nat.ltb_lt in H0.
-    - move/andb_and: H2 => [] hb _.
+    - try match goal with [ h : wf_fixpoint _ _ _ |- _ ] => destruct h as [hb _] end.
       unfold on_def_body, on_def_type, test_def in *. cbn in *.
       solve_all.
     - now eapply nth_error_Some_length, Nat.ltb_lt in H0.
