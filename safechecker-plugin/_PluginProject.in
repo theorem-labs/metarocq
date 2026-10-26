@@ -35,6 +35,8 @@ src/pCUICArityRed.ml
 src/pCUICArityRed.mli
 src/pCUICTyping.ml
 src/pCUICTyping.mli
+src/pCUICWfUniverses.mli
+src/pCUICWfUniverses.ml
 src/pCUICPosition.mli
 src/pCUICPosition.ml
 src/pCUICNormal.mli
