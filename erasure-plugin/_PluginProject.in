@@ -26,8 +26,6 @@ src/pCUICCases.mli
 src/pCUICCases.ml
 src/pCUICAstUtils.ml
 src/pCUICAstUtils.mli
-src/pCUICArityRed.ml
-src/pCUICArityRed.mli
 src/pCUICTyping.ml
 src/pCUICTyping.mli
 src/pCUICPosition.mli

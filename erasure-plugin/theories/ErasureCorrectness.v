@@ -809,14 +809,16 @@ Section ErasureFunction.
       { eapply PCUICValidity.inversion_mkApps in hty' as [? [hty _]]. clear -hty.
         depind hty; eauto. }
       eapply PCUICInductives.invert_type_mkApps_ind in hty' as [sp cu]; eauto.
+      eapply (EArities.typing_spine_ind_type_arity_form ltac:(constructor) decli cu) in sp.
       pose proof (typing_spine_isArity ltac:(constructor) sp).
       forward H.
       { apply (PCUICUnivSubstitutionTyp.isArity_subst_instance ui).
-        now eapply isArity_ind_type. }
+        eapply EArities.it_mkProd_isArity. constructor. }
       destruct H as [ar [[spar] isa']].
       sq.
       eexists; cbn. split.
-      eapply PCUICSpine.type_mkApps. econstructor; eauto with pcuic. exact spar.
+      eapply PCUICSpine.type_mkApps. 2:exact spar.
+      eapply (EArities.type_Ind_arity_form ltac:(constructor) decli cu).
       now left.
     - clear -wfΣ hty' ne ervv''.
       assert (exists mfix' l', v' = EAst.mkApps (EAst.tFix mfix' idx) l') as [mfix' [l' ->]].

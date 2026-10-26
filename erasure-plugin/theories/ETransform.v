@@ -398,7 +398,7 @@ Definition map_of_typed_global_env (p : global_env) (fr : fresh_globals p) :=
 Definition pre_remove_match_on_box_typed efl (p : global_env * term) : Prop :=
   wf_eprogram efl (trans_ex_prog p) /\ EEtaExpandedFix.expanded_eprogram (trans_ex_prog p).
 
-Lemma fresh_global_trans kn g : EnvMap.EnvMap.fresh_global kn (trans_env g) -> fresh_global kn g.
+Lemma fresh_global_trans kn g : EnvMap.EnvMap.fresh_global kn (trans_env g) -> ExAst.fresh_global kn g.
 Proof.
   induction g as [ | [[kn' b] d] tl]; cbn; auto; constructor; eauto.
   - now depelim H.

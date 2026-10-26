@@ -24,7 +24,6 @@ PCUICCases
 PCUICAstUtils
 EqDecInstances
 PCUICEquality
-PCUICArityRed
 PCUICTyping
 PCUICInduction
 PCUICWfUniverses
