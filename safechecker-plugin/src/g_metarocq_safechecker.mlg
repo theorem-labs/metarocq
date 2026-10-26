@@ -32,6 +32,24 @@ let quote_safecheck_program ~opaque_access env evm term =
    ends; this also empties it when SafeCheck or a test ends by an exception. *)
 let with_trans_memo_reset f = Fun.protect ~finally:Trans_memo.reset f
 
+(* The GC's [space_overhead] while SafeCheck translates and checks.  Rocq sets
+   [space_overhead = 200] for the whole process; during the check the live heap
+   is flat while about 1.9 GB/s is allocated, so the heap grows with the
+   garbage of a major cycle that lasts minutes.  Measured on LemmaPin_0 with
+   cut 1 (runs t200/t80/t40/t20, 2,400 s each, simultaneous on bet64-mem):
+   peak 33.17 / 21.96 / 16.75 / 14.70 GiB, 2,450 declarations checked by about
+   1,827 / 1,736 / 1,732 / 1,949 s, so 40 costs no time.  GC parameters change
+   when memory is reclaimed, never a value, so the checker's result is the
+   same. *)
+let safecheck_space_overhead = 40
+
+(* Run [f ()] with [safecheck_space_overhead]; the saved GC settings are
+   restored when [f] returns or raises, and an exception passes through. *)
+let with_safecheck_gc f =
+  let saved = Gc.get () in
+  Gc.set { saved with Gc.space_overhead = safecheck_space_overhead };
+  Fun.protect ~finally:(fun () -> Gc.set saved) f
+
 let safecheck_program ~opaque_access env evm poly term =
   with_trans_memo_reset @@ fun () ->
   let env = safecheck_env env evm poly in
@@ -43,6 +61,7 @@ let safecheck_program ~opaque_access env evm poly term =
       Ast_quoter.mkPolymorphic_ctx (Ast_quoter.quote_abstract_univ_context auctx)
     else Ast_quoter.mkMonomorphic_ctx ()
   in
+  with_safecheck_gc @@ fun () ->
   time (str"Checking")
     (Extraction.infer_and_print_template_program_with_guard
       Config0.default_checker_flags
