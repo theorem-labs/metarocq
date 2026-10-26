@@ -1188,6 +1188,26 @@ Section CheckEnv.
     (match c with true => vT | false => vF end)
     (at level 200, c, vT, vF at level 200, only parsing).
 
+  Lemma welltyped_prod_inv {Σ : global_env_ext} {Γ na ty ty'} {wfΣ : wf Σ} :
+    welltyped Σ Γ (tProd na ty ty') ->
+    welltyped Σ Γ ty * welltyped Σ (Γ ,, vass na ty) ty'.
+  Proof using Type.
+    intros [s [s1 [s2 [hty [hty' hcum]]]]%inversion_Prod]; auto.
+    apply unlift_TypUniv in hty; cbn in hty.
+    split; eexists; eauto.
+  Qed.
+
+  Lemma welltyped_letin_inv {Σ : global_env_ext} {Γ na b ty t} {wfΣ : wf Σ} :
+    welltyped Σ Γ (tLetIn na b ty t) ->
+    welltyped Σ Γ ty *
+    welltyped Σ Γ b *
+    welltyped Σ (Γ ,, vdef na b ty) t.
+  Proof using Type.
+    intros [s [s1 [hty [hty' hcum]]]%inversion_LetIn]; auto.
+    destruct hty as (hdef & s2 & hty & _); cbn in *.
+    split; [split|]; eexists; eauto.
+  Qed.
+
   Section PositivityCheck.
 
     Context {X_ext : X_env_ext_type}.
