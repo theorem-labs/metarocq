@@ -550,6 +550,17 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
     | String2pos.xI q => String2pos.xO (pkey_succ q)
     end.
 
+  (** The numeric value of a key, used only to state freshness. *)
+  Fixpoint pkey_to_pos (p : pkey) : BinNums.positive :=
+    match p with
+    | String2pos.xH => BinNums.xH
+    | String2pos.xO q => BinNums.xO (pkey_to_pos q)
+    | String2pos.xI q => BinNums.xI (pkey_to_pos q)
+    end.
+
+  Definition pkey_eq_dec (p q : pkey) : {p = q} + {p <> q}.
+  Proof. decide equality. Defined.
+
   Definition indexed_edge := (pkey * Z * pkey)%type.
 
   Record index := {
@@ -596,6 +607,183 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
   Definition index_of (G : t) : index :=
     EdgeSet.fold ix_add_edge (E G) (VSet.fold ix_add_vertex (V G) (ix_singleton (s G))).
 
+  (** [ix] numbers exactly the vertices of [G], injectively, below [ix_next], and binds
+      exactly the edges of [G], each to its numbered image. *)
+  Record is_index_of (G : t) (ix : index) : Prop := {
+    ixo_dom : forall v, VMap.In v ix.(ix_lookup) <-> VSet.In v (V G);
+    ixo_inj : forall v w k,
+      VMap.find v ix.(ix_lookup) = Some k -> VMap.find w ix.(ix_lookup) = Some k -> v = w;
+    ixo_next : forall v k,
+      VMap.find v ix.(ix_lookup) = Some k -> (pkey_to_pos k < pkey_to_pos ix.(ix_next))%positive;
+    ixo_src : VMap.find (s G) ix.(ix_lookup) = Some ix.(ix_src);
+    ixo_size : ix.(ix_size) = VSet.cardinal (V G);
+    ixo_edges : forall e, EdgeMap.In e ix.(ix_edges) <-> EdgeSet.In e (E G);
+    ixo_edge_val : forall e ie,
+      EdgeMap.MapsTo e ie ix.(ix_edges) -> ie = index_edge ix.(ix_lookup) e
+  }.
+
+  Lemma pkey_to_pos_succ p : pkey_to_pos (pkey_succ p) = Pos.succ (pkey_to_pos p).
+  Proof. induction p; cbn; congruence. Qed.
+
+  Lemma ix_InA_eqke_In (p : Edge.t * indexed_edge) l :
+    InA (@EdgeMap.eq_key_elt indexed_edge) p l <-> List.In p l.
+  Proof.
+    induction l as [|q l IH]; cbn.
+    - split; intro H; [inversion H|destruct H].
+    - rewrite InA_cons IH.
+      split; intros [H|H]; [left|right; exact H|left|right; exact H].
+      + destruct p as [a b], q as [c d], H as [H1 H2]. cbn in H1, H2.
+        change (a = c) in H1. subst. reflexivity.
+      + subst q. split; exact eq_refl.
+  Qed.
+
+  Lemma ix_sorted_pairs (f : Edge.t -> indexed_edge) l :
+    Sorted Edge.lt l ->
+    Sorted (fun p q : Edge.t * indexed_edge => Edge.lt (fst p) (fst q))
+      (map (fun e => (e, f e)) l).
+  Proof.
+    induction 1 as [|a l Hl IH Hhd]; cbn.
+    - constructor.
+    - constructor; [exact IH|].
+      destruct l as [|b l']; cbn; constructor.
+      inversion Hhd; subst. cbn. assumption.
+  Qed.
+
+  Lemma ix_eqlistA_eq {A} (l l' : list A) : eqlistA eq l l' -> l = l'.
+  Proof.
+    induction 1; [reflexivity|congruence].
+  Qed.
+
+  Lemma is_index_of_ext G1 G2 ix :
+    VSet.Equal (V G1) (V G2) -> EdgeSet.Equal (E G1) (E G2) -> s G1 = s G2 ->
+    is_index_of G1 ix -> is_index_of G2 ix.
+  Proof.
+    intros HV HE Hs [Hdom Hinj Hnext Hsrc Hsize Hedges Hval].
+    split; auto.
+    - intro v. rewrite -HV. apply Hdom.
+    - now rewrite -Hs.
+    - rewrite Hsize. now apply VSetProp.Equal_cardinal.
+    - intro e. rewrite -HE. apply Hedges.
+  Qed.
+
+  Lemma ix_add_vertex_correct G v ix :
+    is_index_of G ix ->
+    (forall e, EdgeSet.In e (E G) -> VSet.In e..s (V G) /\ VSet.In e..t (V G)) ->
+    is_index_of (VSet.add v (V G), E G, s G) (ix_add_vertex v ix).
+  Proof.
+    intros Hix Hends. unfold ix_add_vertex.
+    destruct (VMap.find v ix.(ix_lookup)) as [k|] eqn:Hv.
+    { apply (is_index_of_ext G); [|reflexivity|reflexivity|exact Hix].
+      cbn [V E s fst snd]. intro w. rewrite VSet.add_spec. split; [now right|].
+      intros [->|Hw]; [|exact Hw].
+      apply (proj1 (@ixo_dom G ix Hix v)). exists k. now apply VMap.find_2. }
+    assert (Vv : ~ VSet.In v (V G)).
+    { intro Vv. apply (proj2 (@ixo_dom G ix Hix v)) in Vv as [k Hk].
+      apply VMap.find_1 in Hk. congruence. }
+    assert (Hfind : forall w, VSet.In w (V G) ->
+      VMap.find w (VMap.add v ix.(ix_next) ix.(ix_lookup)) = VMap.find w ix.(ix_lookup)).
+    { intros w Vw. apply VMapFact.add_neq_o. intros ->. exact (Vv Vw). }
+    split; cbn [ix_lookup ix_src ix_next ix_size ix_edges V E s fst snd].
+    - intro w. rewrite VMapFact.add_in_iff VSet.add_spec (@ixo_dom G ix Hix w).
+      split; intros [H|H]; (try (right; exact H)); left; symmetry; exact H.
+    - intros w1 w2 k Hw1 Hw2.
+      rewrite VMapFact.add_o in Hw1. rewrite VMapFact.add_o in Hw2.
+      destruct (VMap.E.eq_dec v w1) as [<-|Hne1];
+        destruct (VMap.E.eq_dec v w2) as [<-|Hne2]; auto.
+      + injection Hw1 as <-. pose proof (@ixo_next G ix Hix w2 _ Hw2). lia.
+      + injection Hw2 as <-. pose proof (@ixo_next G ix Hix w1 _ Hw1). lia.
+      + exact (@ixo_inj G ix Hix w1 w2 k Hw1 Hw2).
+    - intros w k Hw. rewrite pkey_to_pos_succ.
+      rewrite VMapFact.add_o in Hw.
+      destruct (VMap.E.eq_dec v w) as [<-|Hne].
+      + injection Hw as <-. lia.
+      + pose proof (@ixo_next G ix Hix w k Hw). lia.
+    - rewrite VMapFact.add_neq_o; [|exact (@ixo_src G ix Hix)].
+      intro Heq. apply Vv. rewrite Heq.
+      apply (proj1 (@ixo_dom G ix Hix _)). exists ix.(ix_src).
+      apply VMap.find_2, (@ixo_src G ix Hix).
+    - rewrite VSetProp.add_cardinal_2; [exact Vv|]. now rewrite (@ixo_size G ix Hix).
+    - exact (@ixo_edges G ix Hix).
+    - intros e ie He.
+      rewrite (@ixo_edge_val G ix Hix e ie He).
+      assert (Ee : EdgeSet.In e (E G)).
+      { apply (@ixo_edges G ix Hix). now exists ie. }
+      destruct (Hends e Ee) as [Vs Vt].
+      unfold index_edge. now rewrite (Hfind _ Vs) (Hfind _ Vt).
+  Qed.
+
+  Lemma ix_add_edge_correct G e ix :
+    is_index_of G ix ->
+    is_index_of (V G, EdgeSet.add e (E G), s G) (ix_add_edge e ix).
+  Proof.
+    intros [Hdom Hinj Hnext Hsrc Hsize Hedges Hval].
+    constructor; cbn [ix_lookup ix_src ix_next ix_size ix_edges V E s fst snd].
+    - exact Hdom.
+    - exact Hinj.
+    - exact Hnext.
+    - exact Hsrc.
+    - exact Hsize.
+    - intro e'. rewrite EdgeMapFact.add_in_iff EdgeSet.add_spec Hedges.
+      split; intros [H|H]; (try (right; exact H)); left; symmetry; exact H.
+    - intros e' ie He'. apply EdgeMapFact.add_mapsto_iff in He' as [[Hee Hie]|[_ He']].
+      + change (e = e') in Hee. subst. reflexivity.
+      + exact (Hval e' ie He').
+  Qed.
+
+  Lemma ix_singleton_correct v :
+    is_index_of (VSet.singleton v, EdgeSet.empty, v) (ix_singleton v).
+  Proof.
+    constructor; cbn [ix_lookup ix_src ix_next ix_size ix_edges ix_singleton V E s fst snd].
+    - intro w. rewrite VMapFact.add_in_iff VMapFact.empty_in_iff VSet.singleton_spec.
+      split; [intros [H|[]]|intro H; left]; symmetry; exact H.
+    - intros w1 w2 k Hw1 Hw2.
+      rewrite VMapFact.add_o VMapFact.empty_o in Hw1.
+      rewrite VMapFact.add_o VMapFact.empty_o in Hw2.
+      destruct (VMap.E.eq_dec v w1) as [<-|]; [|discriminate].
+      destruct (VMap.E.eq_dec v w2) as [<-|]; [reflexivity|discriminate].
+    - intros w k Hw. rewrite VMapFact.add_o VMapFact.empty_o in Hw.
+      destruct (VMap.E.eq_dec v w); [|discriminate].
+      injection Hw as <-. rewrite pkey_to_pos_succ. lia.
+    - now rewrite VMapFact.add_eq_o.
+    - now rewrite VSetProp.singleton_cardinal.
+    - intro e. now rewrite EdgeMapFact.empty_in_iff EdgeSetFact.empty_iff.
+    - intros e ie H. apply EdgeMapFact.empty_mapsto_iff in H. destruct H.
+  Qed.
+
+  Lemma ix_fold_vertices (l : list V.t) (G : t) ix Vf :
+    is_index_of G ix ->
+    (forall e, EdgeSet.In e (E G) -> VSet.In e..s (V G) /\ VSet.In e..t (V G)) ->
+    (forall w, VSet.In w Vf <-> List.In w l \/ VSet.In w (V G)) ->
+    is_index_of (Vf, E G, s G) (fold_left (fun ix v => ix_add_vertex v ix) l ix).
+  Proof.
+    induction l as [|v l IH] in G, ix |- *; intros Hix Hends HVf.
+    - apply (is_index_of_ext G); [|reflexivity|reflexivity|exact Hix].
+      intro w. change (VSet.In w (V G) <-> VSet.In w Vf). rewrite HVf.
+      split; [now right|now intros [[]|H]].
+    - apply (IH (VSet.add v (V G), E G, s G)).
+      + exact (ix_add_vertex_correct G v ix Hix Hends).
+      + intros e He. cbn [V E s fst snd] in He |- *. rewrite !VSet.add_spec.
+        destruct (Hends e He) as [Hs Ht]. split; right; assumption.
+      + intro w. cbn [V fst snd]. rewrite HVf VSet.add_spec. cbn [List.In].
+        change (VSet.E.eq w v) with (w = v).
+        split.
+        * intros [[->|H]|H]; [right; left; reflexivity|left; exact H|right; right; exact H].
+        * intros [H|[->|H]]; [left; right; exact H|left; left; reflexivity|right; exact H].
+  Qed.
+
+  Lemma ix_fold_edges {A} (fs : A -> EdgeSet.t -> EdgeSet.t) (fi : A -> index -> index)
+    (l : list A) (G : t) ix :
+    (forall a G1 ix1, is_index_of G1 ix1 ->
+       is_index_of (V G1, fs a (E G1), s G1) (fi a ix1)) ->
+    is_index_of G ix ->
+    is_index_of (V G, fold_left (fun es a => fs a es) l (E G), s G)
+      (fold_left (fun ix a => fi a ix) l ix).
+  Proof.
+    intros Hstep.
+    induction l as [|a l IH] in G, ix |- *; intros Hix.
+    - destruct G as [[vs es] src]. exact Hix.
+    - exact (IH (V G, fs a (E G), s G) (fi a ix) (Hstep a G ix Hix)).
+  Qed.
 
   #[local]
   Instance reflectEq_Z : ReflectEq Z :=
@@ -605,6 +793,11 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
   Instance reflectEq_nbar: ReflectEq Nbar.t :=
     @reflect_option Z reflectEq_Z.
 
+  Lemma reflectEq_nbar_iff (a b : Nbar.t) :
+    @ReflectEq.eqb _ reflectEq_nbar a b = true <-> a = b.
+  Proof.
+    split; [apply ReflectEq.eqb_eq|intros ->; apply ReflectEq.eqb_refl].
+  Qed.
 
   Section graph.
     Context (G : t).
@@ -2031,6 +2224,328 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
         + exact I.
     Qed.
 
+    (** * The interned Bellman-Ford computes the same distances *)
+
+    (** [m] and [m'] agree through [ix]: raw values and support correspond, and neither
+        holds a key outside the graph. *)
+    Definition bf_pf_rel (ix : index) (m : bf_state) (m' : pf_state) : Prop :=
+      (forall v k, VMap.find v ix.(ix_lookup) = Some k -> VMap.find v m = PTree.get k m') /\
+      (forall v, VMap.In v m -> VSet.In v (V G)) /\
+      (forall k n, PTree.get k m' = Some n -> exists v, VMap.find v ix.(ix_lookup) = Some k).
+
+    Lemma bf_state_eqb_find m1 m2 :
+      bf_state_eqb m1 m2 = true <-> (forall v, VMap.find v m1 = VMap.find v m2).
+    Proof using Type.
+      unfold bf_state_eqb. split.
+      - intros Heq v.
+        destruct (VMap.equal_2 Heq) as [Hin Hcmp].
+        destruct (VMapFact.In_dec m1 v) as [[v1 Hmt1]|Hin1].
+        + assert (Hin2 : VMap.In v m2) by (apply Hin; exists v1; exact Hmt1).
+          destruct Hin2 as [v2 Hmt2].
+          rewrite (VMap.find_1 Hmt1) (VMap.find_1 Hmt2).
+          f_equal. apply reflectEq_nbar_iff. exact (Hcmp v v1 v2 Hmt1 Hmt2).
+        + assert (Hni2 : ~ VMap.In v m2).
+          { intro H2. apply Hin1. apply Hin. exact H2. }
+          apply VMapFact.not_find_in_iff in Hin1.
+          apply VMapFact.not_find_in_iff in Hni2.
+          rewrite Hin1 Hni2. reflexivity.
+      - intros Hf. apply VMap.equal_1. split.
+        + intros k. rewrite !VMapFact.in_find_iff (Hf k). reflexivity.
+        + intros k e e' H1 H2.
+          apply VMap.find_1 in H1. apply VMap.find_1 in H2.
+          rewrite (Hf k) H2 in H1. injection H1 as ->.
+          apply reflectEq_nbar_iff. reflexivity.
+    Qed.
+
+    Lemma pf_state_eqb_get m1 m2 :
+      pf_state_eqb m1 m2 = true <-> (forall k, PTree.get k m1 = PTree.get k m2).
+    Proof using Type.
+      unfold pf_state_eqb. rewrite (PTree.beq_eq _ reflectEq_nbar_iff).
+      split; [intros ->; reflexivity|apply PTree.extensionality].
+    Qed.
+
+    Lemma index_edges_elements ix :
+      is_index_of G ix ->
+      Forall2 (fun e p => fst p = e /\ snd p = index_edge ix.(ix_lookup) e)
+        (EdgeSet.elements (E G)) (EdgeMap.elements ix.(ix_edges)).
+    Proof using Type.
+      intro Hix.
+      assert (HL : map (fun e => (e, index_edge ix.(ix_lookup) e)) (EdgeSet.elements (E G))
+                   = EdgeMap.elements ix.(ix_edges)).
+      { assert (Hso : StrictOrder (fun p q : Edge.t * indexed_edge => Edge.lt (fst p) (fst q))).
+        { constructor.
+          - intros [e v] H. exact (@StrictOrder_Irreflexive _ _ Edge.lt_strorder e H).
+          - intros [e1 v1] [e2 v2] [e3 v3] H1 H2.
+            exact (@StrictOrder_Transitive _ _ Edge.lt_strorder e1 e2 e3 H1 H2). }
+        assert (Hprop : Proper (eq ==> eq ==> iff)
+                  (fun p q : Edge.t * indexed_edge => Edge.lt (fst p) (fst q))).
+        { intros p p' Hp q q' Hq. subst. reflexivity. }
+        apply ix_eqlistA_eq.
+        eapply SortA_equivlistA_eqlistA.
+        - exact eq_equivalence.
+        - exact Hso.
+        - exact Hprop.
+        - apply ix_sorted_pairs, EdgeSet.elements_spec2.
+        - exact (EdgeMap.elements_3 _).
+        - intros [e v]. rewrite !InA_In_eq. split.
+          + intros Hin. apply in_map_iff in Hin.
+            destruct Hin as [e' [Hp He']].
+            injection Hp as H1 H2. subst e' v.
+            assert (HinE : EdgeSet.In e (E G)).
+            { apply EdgeSet.elements_spec1, InA_In_eq. exact He'. }
+            destruct (proj2 (@ixo_edges G ix Hix e) HinE) as [v' Hmt].
+            pose proof (@ixo_edge_val G ix Hix _ _ Hmt) as Hv. subst v'.
+            apply ix_InA_eqke_In. apply EdgeMap.elements_1. exact Hmt.
+          + intros Hin. apply ix_InA_eqke_In in Hin.
+            apply EdgeMap.elements_2 in Hin.
+            pose proof (@ixo_edge_val G ix Hix _ _ Hin) as Hv. subst v.
+            apply in_map_iff. exists e. split; [reflexivity|].
+            apply InA_In_eq, EdgeSet.elements_spec1, (@ixo_edges G ix Hix).
+            exists (index_edge (ix_lookup ix) e). exact Hin.
+      }
+      rewrite -HL.
+      generalize (EdgeSet.elements (E G)) as l.
+      induction l as [|e es IH]; cbn.
+      - constructor.
+      - constructor; [split; reflexivity|exact IH].
+    Qed.
+
+    Lemma bf_off_graph_initial x v :
+      v <> x -> bf_lookup (bf_initial x) v = None.
+    Proof using Type.
+      intro Hv. unfold bf_initial.
+      rewrite (bf_lookup_add_neq _ x v _ (not_eq_sym Hv)).
+      unfold bf_lookup. rewrite VMapFact.empty_o. reflexivity.
+    Qed.
+
+    Lemma bf_off_graph_relax_edges x m :
+      ~ VSet.In x (V G) ->
+      (forall v, v <> x -> bf_lookup m v = None) ->
+      forall v, v <> x -> bf_lookup (bf_relax_edges m) v = None.
+    Proof using HI.
+      intros Hx.
+      unfold bf_relax_edges.
+      rewrite EdgeSet.fold_spec.
+      assert (Hall : forall e, List.In e (EdgeSet.elements (E G)) -> EdgeSet.In e (E G)).
+      { intros e He. apply (EdgeSet.elements_spec1 _ _).p1, InA_In_eq; exact He. }
+      induction (EdgeSet.elements (E G)) as [|e es IH] in m, Hall |- *; cbn.
+      - intros H. exact H.
+      - intros Hm. apply IH.
+        + intros e' He'. apply Hall. right; exact He'.
+        + intros v Hv. rewrite bf_lookup_relax_edge.
+          destruct (V.eq_dec v e..t) as [Heq|Hne].
+          * destruct (edges_vertices e (Hall e (or_introl eq_refl))) as [Hs Ht].
+            assert (Hts : e..t <> x) by (intro H; subst x; exact (Hx Ht)).
+            assert (Hss : e..s <> x) by (intro H; subst x; exact (Hx Hs)).
+            rewrite (Hm _ Hts) (Hm _ Hss). reflexivity.
+          * exact (Hm v Hv).
+    Qed.
+
+    Lemma bf_distance_off_graph x y :
+      ~ VSet.In x (V G) -> x <> y -> bf_distance x y = None.
+    Proof using HI.
+      intros Hx Hxy.
+      unfold bf_distance, bf_distances.
+      assert (Hinit : forall v, v <> x -> bf_lookup (bf_initial x) v = None).
+      { intros v Hv. apply bf_off_graph_initial. exact Hv. }
+      revert Hinit. generalize (bf_initial x) as m.
+      induction (VSet.cardinal (V G)) as [|n IH]; intros m Hm.
+      - apply Hm. apply not_eq_sym. exact Hxy.
+      - simpl bf_relax_early. cbv zeta.
+        destruct (bf_state_eqb m (bf_relax_edges m)).
+        + apply Hm. apply not_eq_sym. exact Hxy.
+        + apply IH. apply bf_off_graph_relax_edges; assumption.
+    Qed.
+
+    Lemma index_of_correct : is_index_of G (index_of G).
+    Proof using HI.
+      unfold index_of. rewrite EdgeSet.fold_spec VSet.fold_spec.
+      assert (HV : forall w, VSet.In w (V G) <->
+        List.In w (VSet.elements (V G)) \/
+        VSet.In w (V (VSet.singleton (s G), EdgeSet.empty, s G))).
+      { intro w. cbn [V fst]. rewrite VSet.singleton_spec. split.
+        - intro Hw. left. apply InA_In_eq, VSet.elements_spec1, Hw.
+        - intros [Hw|Hw]; [apply VSet.elements_spec1, InA_In_eq, Hw|].
+          hnf in Hw. subst w. exact source_vertex. }
+      assert (Hends : forall e, EdgeSet.In e (E (VSet.singleton (s G), EdgeSet.empty, s G)) ->
+        VSet.In e..s (V (VSet.singleton (s G), EdgeSet.empty, s G)) /\
+        VSet.In e..t (V (VSet.singleton (s G), EdgeSet.empty, s G))).
+      { intros e He. cbn [E fst snd] in He. apply EdgeSetFact.empty_iff in He. destruct He. }
+      have H1 := ix_fold_vertices (VSet.elements (V G)) _ _ (V G)
+                   (ix_singleton_correct (s G)) Hends HV.
+      have H2 := ix_fold_edges EdgeSet.add ix_add_edge (EdgeSet.elements (E G)) _ _
+                   (fun e G1 ix1 H => ix_add_edge_correct G1 e ix1 H) H1.
+      eapply is_index_of_ext; [..|exact H2].
+      - intro w. reflexivity.
+      - intro e. rewrite -(EdgeSetProp.fold_identity (E G) e) EdgeSet.fold_spec.
+        reflexivity.
+      - reflexivity.
+    Qed.
+
+    Lemma ix_lookup_of_vertex ix v :
+      is_index_of G ix -> VSet.In v (V G) -> exists k, VMap.find v ix.(ix_lookup) = Some k.
+    Proof using Type.
+      intros Hix Hv. apply (proj2 (@ixo_dom G ix Hix v)) in Hv as [k Hk].
+      exists k. now apply VMap.find_1.
+    Qed.
+
+    Lemma ix_vertex_of_lookup ix v k :
+      is_index_of G ix -> VMap.find v ix.(ix_lookup) = Some k -> VSet.In v (V G).
+    Proof using Type.
+      intros Hix Hv. apply (proj1 (@ixo_dom G ix Hix v)). exists k. now apply VMap.find_2.
+    Qed.
+
+    Lemma bf_pf_rel_initial ix x kx :
+      is_index_of G ix -> VMap.find x ix.(ix_lookup) = Some kx ->
+      bf_pf_rel ix (bf_initial x) (pf_initial kx).
+    Proof using Type.
+      intros Hix Hx. unfold bf_initial, pf_initial. repeat split.
+      - intros v k Hv.
+        destruct (V.eq_dec x v) as [<-|Hne].
+        + rewrite Hv in Hx. injection Hx as ->.
+          rewrite VMapFact.add_eq_o; [reflexivity|]. now rewrite PTree.gss.
+        + rewrite VMapFact.add_neq_o; [exact Hne|].
+          rewrite VMapFact.empty_o PTree.gso; [|now rewrite PTree.gempty].
+          intros ->. apply Hne. exact (@ixo_inj G ix Hix x v kx Hx Hv).
+      - intros v Hv. apply VMapFact.add_in_iff in Hv as [<-|Hv].
+        + exact (ix_vertex_of_lookup ix x kx Hix Hx).
+        + apply VMapFact.empty_in_iff in Hv. destruct Hv.
+      - intros k n Hk. destruct (pkey_eq_dec k kx) as [->|Hne].
+        + now exists x.
+        + rewrite PTree.gso in Hk; [exact Hne|]. now rewrite PTree.gempty in Hk.
+    Qed.
+
+    (** Setting one target, on both sides, keeps the relation. *)
+    Lemma bf_pf_rel_set ix m m' m'' t kt val :
+      is_index_of G ix -> bf_pf_rel ix m m' ->
+      VMap.find t ix.(ix_lookup) = Some kt ->
+      (forall k, PTree.get k m'' = if pkey_eq_dec k kt then Some val else PTree.get k m') ->
+      bf_pf_rel ix (VMap.add t val m) m''.
+    Proof using Type.
+      intros Hix [Hval [Hdom Hcod]] Ht Hm''. repeat split.
+      - intros v k Hv. rewrite Hm''.
+        destruct (V.eq_dec t v) as [<-|Hne].
+        + rewrite Hv in Ht. injection Ht as ->.
+          rewrite VMapFact.add_eq_o; [reflexivity|].
+          destruct (pkey_eq_dec _ _) as [Heq|Hn]; [reflexivity|now destruct Hn].
+        + rewrite VMapFact.add_neq_o; [exact Hne|].
+          destruct (pkey_eq_dec k kt) as [->|Hk].
+          * destruct Hne. exact (@ixo_inj G ix Hix t v kt Ht Hv).
+          * exact (Hval v k Hv).
+      - intros v Hv. apply VMapFact.add_in_iff in Hv as [<-|Hv].
+        + exact (ix_vertex_of_lookup ix t kt Hix Ht).
+        + exact (Hdom v Hv).
+      - intros k n Hk. rewrite Hm'' in Hk.
+        destruct (pkey_eq_dec k kt) as [->|Hne].
+        + now exists t.
+        + exact (Hcod k n Hk).
+    Qed.
+
+    Lemma bf_pf_rel_relax_edge ix e m m' :
+      is_index_of G ix -> EdgeSet.In e (E G) -> bf_pf_rel ix m m' ->
+      bf_pf_rel ix (bf_relax_edge e m) (pf_relax_edge (index_edge ix.(ix_lookup) e) m').
+    Proof using HI.
+      intros Hix He Hrel.
+      destruct (edges_vertices e He) as [Vs Vt].
+      destruct (ix_lookup_of_vertex ix _ Hix Vs) as [ks Hks].
+      destruct (ix_lookup_of_vertex ix _ Hix Vt) as [kt Hkt].
+      pose proof (proj1 Hrel _ _ Hks) as Hs.
+      pose proof (proj1 Hrel _ _ Hkt) as Ht.
+      unfold index_edge. rewrite Hks Hkt.
+      unfold bf_relax_edge, pf_relax_edge.
+      replace (pf_lookup m' ks) with (bf_lookup m e..s)
+        by (unfold pf_lookup, bf_lookup; now rewrite Hs).
+      unfold bf_lookup at 1. rewrite Ht.
+      apply (bf_pf_rel_set ix m m' _ e..t kt _ Hix Hrel Hkt).
+      intro k. destruct (PTree.get kt m') as [old|] eqn:Hold.
+      - destruct (ReflectEq.eqb _ _) eqn:Heq; cbv beta iota delta [is_left].
+        + apply reflectEq_nbar_iff in Heq.
+          destruct (pkey_eq_dec k kt) as [->|Hne]; cbv beta iota delta [is_left];
+            [|reflexivity].
+          rewrite Hold. now f_equal.
+        + destruct (pkey_eq_dec k kt) as [->|Hne]; cbv beta iota delta [is_left].
+          * now rewrite PTree.gss.
+          * now rewrite PTree.gso.
+      - cbv beta iota delta [is_left].
+        destruct (pkey_eq_dec k kt) as [->|Hne]; cbv beta iota delta [is_left].
+        + now rewrite PTree.gss.
+        + now rewrite PTree.gso.
+    Qed.
+
+    Lemma bf_pf_rel_relax_edges ix m m' :
+      is_index_of G ix -> bf_pf_rel ix m m' ->
+      bf_pf_rel ix (bf_relax_edges m) (pf_relax_edges ix m').
+    Proof using HI.
+      intros Hix Hrel.
+      unfold bf_relax_edges, pf_relax_edges.
+      rewrite EdgeSet.fold_spec EdgeMap.fold_1.
+      assert (Hin : forall e, In e (EdgeSet.elements (E G)) -> EdgeSet.In e (E G)).
+      { intros e He. apply EdgeSet.elements_spec1, InA_In_eq, He. }
+      pose proof (index_edges_elements ix Hix) as Hl.
+      revert Hin Hrel. clear -Hl Hix HI.
+      induction Hl as [|e p es ps [Hfst Hsnd] Hl IH] in m, m' |- *;
+        intros Hin Hrel; cbn; [exact Hrel|].
+      apply IH.
+      - intros e' He'. apply Hin. now right.
+      - rewrite Hsnd. apply bf_pf_rel_relax_edge; [exact Hix| |exact Hrel].
+        apply Hin. now left.
+    Qed.
+
+    Lemma bf_pf_rel_state_eqb ix m n m' n' :
+      is_index_of G ix -> bf_pf_rel ix m m' -> bf_pf_rel ix n n' ->
+      bf_state_eqb m n = pf_state_eqb m' n'.
+    Proof using Type.
+      intros Hix [Hvm [Hdm Hcm]] [Hvn [Hdn Hcn]].
+      apply Bool.eq_iff_eq_true. rewrite bf_state_eqb_find pf_state_eqb_get.
+      split.
+      - intros Hmn k.
+        destruct (PTree.get k m') as [a|] eqn:Ha.
+        + destruct (Hcm k a Ha) as [v Hv].
+          rewrite -Ha -(Hvm v k Hv) -(Hvn v k Hv). exact (Hmn v).
+        + destruct (PTree.get k n') as [b|] eqn:Hb; [|reflexivity].
+          destruct (Hcn k b Hb) as [v Hv].
+          rewrite -Ha -Hb -(Hvm v k Hv) -(Hvn v k Hv). now rewrite Hmn.
+      - intros Hmn v.
+        destruct (VMap.find v ix.(ix_lookup)) as [k|] eqn:Hv.
+        + now rewrite (Hvm v k Hv) (Hvn v k Hv).
+        + assert (Vv : ~ VSet.In v (V G)).
+          { intro Vv. destruct (ix_lookup_of_vertex ix v Hix Vv) as [k Hk]. congruence. }
+          destruct (VMap.find v m) as [a|] eqn:Ha.
+          { destruct Vv. apply Hdm. exists a. now apply VMap.find_2. }
+          destruct (VMap.find v n) as [b|] eqn:Hb; [|reflexivity].
+          destruct Vv. apply Hdn. exists b. now apply VMap.find_2.
+    Qed.
+
+    Lemma bf_pf_rel_relax_early ix fuel m m' :
+      is_index_of G ix -> bf_pf_rel ix m m' ->
+      bf_pf_rel ix (bf_relax_early fuel m) (pf_relax_early ix fuel m').
+    Proof using HI.
+      intros Hix.
+      induction fuel as [|fuel IH] in m, m' |- *; intros Hrel; [exact Hrel|].
+      pose proof (bf_pf_rel_relax_edges ix m m' Hix Hrel) as Hrel'.
+      change (bf_relax_early (Datatypes.S fuel) m) with
+        (if bf_state_eqb m (bf_relax_edges m) then m
+         else bf_relax_early fuel (bf_relax_edges m)).
+      change (pf_relax_early ix (Datatypes.S fuel) m') with
+        (if pf_state_eqb m' (pf_relax_edges ix m') then m'
+         else pf_relax_early ix fuel (pf_relax_edges ix m')).
+      rewrite (bf_pf_rel_state_eqb ix _ _ _ _ Hix Hrel Hrel').
+      destruct (pf_state_eqb m' (pf_relax_edges ix m')); [exact Hrel|].
+      exact (IH _ _ Hrel').
+    Qed.
+
+    Lemma pf_distance_eq ix x y kx ky :
+      is_index_of G ix ->
+      VMap.find x ix.(ix_lookup) = Some kx -> VMap.find y ix.(ix_lookup) = Some ky ->
+      pf_distance ix kx ky = bf_distance x y.
+    Proof using HI.
+      intros Hix Hx Hy.
+      unfold pf_distance, pf_distances, bf_distance, bf_distances.
+      rewrite (@ixo_size G ix Hix).
+      destruct (bf_pf_rel_relax_early ix (VSet.cardinal (V G)) _ _ Hix
+                  (bf_pf_rel_initial ix x kx Hix Hx)) as [Hval _].
+      unfold pf_lookup, bf_lookup. now rewrite (Hval y ky Hy).
+    Qed.
     Definition bf_labelling : labelling :=
       let distances := bf_distances (s G) in
       fun x => to_label (bf_lookup distances x).
@@ -3097,6 +3612,33 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
         destruct (V.eq_dec x y); cbn; intuition; try discriminate.
         destruct (le_dec (Some n) (lsp G x (s G))); cbn; intuition.
         discriminate.
+    Qed.
+
+    Lemma leqb_vertices_ix_correct ix z x y :
+      is_index_of G ix -> leqb_vertices_ix ix z x y = leqb_vertices z x y.
+    Proof using HI.
+      intro Hix.
+      assert (Hnot : forall v, VMap.find v ix.(ix_lookup) = None -> ~ VSet.In v (V G)).
+      { intros v Hv Vv. apply (proj2 (@ixo_dom G ix Hix v)) in Vv as [k Hk].
+        apply VMap.find_1 in Hk. congruence. }
+      unfold leqb_vertices_ix, leqb_vertices.
+      destruct (VMap.find y ix.(ix_lookup)) as [ky|] eqn:Hy.
+      - assert (Vy : VSet.In y (V G)).
+        { apply (proj1 (@ixo_dom G ix Hix y)). exists ky. now apply VMap.find_2. }
+        rewrite (proj2 (VSet.mem_spec _ _) Vy).
+        destruct (VMap.find x ix.(ix_lookup)) as [kx|] eqn:Hx.
+        + now rewrite (pf_distance_eq G ix x y kx ky Hix Hx Hy).
+        + rewrite (bf_distance_off_graph G x y (Hnot x Hx)).
+          { intros ->. exact (Hnot y Hx Vy). }
+          destruct (Nbar.le_dec (Some z) None) as [H|H]; [destruct H|reflexivity].
+      - destruct (VSet.mem y (V G)) eqn:Hmem.
+        { apply VSet.mem_spec in Hmem. destruct (Hnot y Hy Hmem). }
+        destruct (VMap.find x ix.(ix_lookup)) as [kx|] eqn:Hx.
+        + now rewrite (pf_distance_eq G ix x (s G) kx ix.(ix_src) Hix Hx
+                         (@ixo_src G ix Hix)).
+        + rewrite (bf_distance_off_graph G x (s G) (Hnot x Hx)).
+          { intros ->. exact (Hnot (s G) Hx (@source_vertex G HI)). }
+          destruct (Nbar.le_dec (Some z) None) as [H|H]; [destruct H|reflexivity].
     Qed.
 
   End subgraph.
