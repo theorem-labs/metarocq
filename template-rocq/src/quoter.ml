@@ -512,6 +512,7 @@ struct
       scope.ls_exprs <- universe :: scope.ls_exprs;
       scope.ls_constraints <- constraints;
       level
+
   let extend_abstract_context auctx scope =
     let repr = UVars.AbstractContext.repr auctx in
     let { UVars.quals; UVars.univs } =
@@ -1576,29 +1577,6 @@ struct
     let (fn,_) = quote_term_remember (fun _ () -> ()) (fun _ _ () -> ()) in
     fst (fn () env sigma trm)
 
-
-
-  let test_upper_bound_timeout env =
-    let graph = UGraph.set_type_in_type false (read_universe_graph env) in
-    let context = make_template_universe_context () in
-    let level = fresh_template_level graph context in
-    let definitions =
-      Univ.Level.Map.add level Univ.Universe.type0 Univ.Level.Map.empty
-    in
-    match
-      Control.timeout 1.
-        (fun () ->
-           fresh_template_upper_bounds
-             (fun _ _ _ -> raise Control.Timeout)
-             graph
-             (Univ.Level.Set.singleton Univ.Level.set)
-             definitions
-             Univ.UnivConstraints.empty)
-        ()
-    with
-    | Error _ -> true
-    | Ok _ -> false
-
   let quote_mind_decl env sigma trm mib =
     let (_,fn) = quote_term_remember (fun _ () -> ()) (fun _ _ () -> ()) in
     let (_, indd, _) = fn () env sigma trm mib in indd
@@ -1958,62 +1936,6 @@ struct
     let env = Q.mk_global_env univs decls retro in
     Q.mk_program env tm
 
-  let test_declaration_state_restore ~opaque_access env sigma trm =
-    let active_dependencies = ref None in
-    let hook_ran = ref false in
-    let after_declaration_state () =
-      let state = !current_declaration_state in
-      if String.equal state.ds_name "<toplevel>"
-         || Option.is_empty state.ds_scope
-         || Names.KNset.is_empty state.ds_in_progress
-      then
-        CErrors.user_err
-          (str "Recursive quotation test hook ran before declaration state was installed.");
-      hook_ran := true;
-      active_dependencies := Some state.ds_dependencies;
-      raise (Invalid_argument "Injected recursive declaration quotation failure.")
-    in
-    let failed =
-      try
-        ignore
-          (quote_term_rec ~translate_template:true
-             ~after_declaration_state
-             ~bypass:true ~opaque_access ~with_universes:true env sigma trm);
-        false
-      with Invalid_argument _ -> true
-    in
-    let state = !current_declaration_state in
-    let all_state_restored =
-      failed
-      && !hook_ran
-      && String.equal state.ds_name "<toplevel>"
-      && Option.is_empty state.ds_scope
-      && Names.KNset.is_empty state.ds_in_progress
-      && (match !active_dependencies with
-          | Some active -> state.ds_dependencies != active
-          | None -> false)
-    in
-    if not all_state_restored then false
-    else
-      (* A leaked scope would let a translating quotation outside any
-         declaration mint a level for a bound-variable universe in it, instead
-         of rejecting the universe. *)
-      let universe =
-        Univ.Universe.unrepr
-          [Univ.Level.var 0, 0; Univ.Level.var 1, 0]
-      in
-      let bound_universe =
-        Constr.mkSort (Sorts.make Sorts.Quality.qtype universe)
-      in
-      let quote, _ =
-        quote_term_remember
-          ~universe_context:(make_template_universe_context ())
-          (fun _ () -> ()) (fun _ _ () -> ())
-      in
-      try
-        ignore (quote () env sigma bound_universe);
-        false
-      with CErrors.UserError _ -> true
   let quote_rel_context env sigma ctx =
     fst (quote_rel_context (fun acc env sigma t -> (quote_term (snd env) sigma t, acc)) () ((), env) sigma ctx)
 

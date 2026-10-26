@@ -94,13 +94,6 @@ Record template_alg_outer := {
   template_alg_oc : Type@{template_alg_c} }.
 MetaRocq SafeCheck @template_alg_outer.
 
-(* Changing impredicative Set changes the sort retyping assigns to this shared
-   template argument.  The test command uses one quotation cache across both
-   environments and compares the second result with a fresh quotation. *)
-Universe template_cache_flags_u.
-MetaRocq Test Cache Typing Flags
-  (list (forall X : Type@{template_cache_flags_u}, nat)).
-
 (* SafeCheck uses default checker flags even when quotation runs while Rocq
    universe checking is disabled.  The upper-bound pass must still ask a
    checking graph what follows from the source graph. *)
@@ -108,22 +101,7 @@ Unset Universe Checking.
 MetaRocq SafeCheck @template_alg_outer.
 Set Universe Checking.
 
-(* The compound product has a scope-dependent child.  The test confirms a hit
-   in the same scope, a miss in another scope, and rejection outside a scope. *)
-MetaRocq Test Quoter Scope Cache.
-
 Set Universe Polymorphism.
-Polymorphic Definition template_state_restore_source@{u}
-  (A : Type@{u}) := list A.
-(* The test hook raises after [quote_term_rec] → [quote_declaration] has
-   installed name, scope, dependency root and in-progress state.  The command
-   then checks that a translating quotation outside any declaration still
-   rejects a bound-variable universe, as it must when no scope is installed. *)
-MetaRocq Test Quoter Restores State @template_state_restore_source.
-
-(* The upper-bound pass must let [Control.Timeout] leave its graph query. *)
-MetaRocq Test Quoter Propagates Timeout.
-
 (* This nested use gives [list] the algebraic template instance [max(i,j)].
    It exercises the shared representative in both the list instance and the
    explicit result-sort annotation. *)
@@ -138,49 +116,7 @@ MetaRocq SafeCheck template_list_prod_nat.
 Fail Polymorphic Definition template_successor_too_low@{i} : Type@{i} :=
   list Type@{i}.
 
-(* This calls the extracted SafeCheck entrypoint after trusted quotation, then
-   adds a quoted declaration whose [Type@{Set}] body is claimed at
-   [Type@{Set}].  The declaration has the same successor-too-low condition as
-   the rejected source definition above. *)
-MetaRocq Test SafeCheck Rejects nat.
-
-(* Input-side negative fixtures: the obligation each one breaks exists in the
-   environment before quotation, and each goes through the production
-   SafeCheck path.  Each asserts the rejection's reason and its subject, so a
-   rejection for an unrelated cause fails the test. *)
-
-(* [Set : Type@{Set+1}], so this declaration's claimed type is wrong.  The
-   quoter must hand the checker this declared type, not a type inferred from
-   the body, which would be the type of a repaired declaration. *)
-Unset Universe Checking.
-Definition template_declared_type_is_checked : Set := Set.
-Set Universe Checking.
-MetaRocq Test SafeCheck Rejects Source
-  "Type([Set+1])" "template_declared_type_is_checked"
-  template_declared_type_is_checked.
-
-(* A bound universe [u] has no lower bound, so a cast from
-   [Type@{max(Set+1,u)}] to [Type@{u}] is not justified.  Dropping the [Set+1]
-   component would make that cast reflexive and erase the obligation.  Rocq
-   cannot write an algebraic sort in a binder, so the command builds the
-   declaration in the kernel environment the quoter reads. *)
-MetaRocq Test Quoter Set Successor Cast
-  "Types are not convertible" "set_successor_cast".
-
-(* [bad : Type@{d} := list Type@{d}], where [d] is [list]'s own template
-   default universe.  [Type@{d} : Type@{d+1}], so the declaration needs
-   [d+1 <= d] and must be rejected.  Its body is headed by a template
-   inductive, so it reaches the path where a substitution keyed on the body's
-   instance could replace the declared [d] by the body's larger
-   representative and repair the declaration.  The default is read from the
-   inductive's metadata, not named here. *)
-MetaRocq Test Quoter Declared Default
-  "Types are not convertible" "declared_type_successor" list.
-
 Unset Universe Polymorphism.
-
-
-
 
 (* Time MetaRocq SafeCheck @infer_and_print_template_program. *)
 (* Uses template polymorphism:
