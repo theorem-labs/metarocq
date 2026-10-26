@@ -1836,7 +1836,7 @@ Hint Resolve trans_wf_local : trans.
 
 (** The guard-translation properties of the Template to PCUIC translation. They are hypotheses,
     not axioms: under [guard := guard_cl] they are concrete propositions relating the Template
-    guard to the PCUIC guard that are not proved here (BET-64 GuardLane, REPORT §2e). The lemmas
+    guard to the PCUIC guard that are not proved here. The lemmas
     that need them take a [TemplateToPCUICGuardTrans] premise. *)
 Class TemplateToPCUICGuardTrans : Prop := {
   fix_guard_trans :

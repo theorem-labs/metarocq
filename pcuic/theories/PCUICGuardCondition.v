@@ -5,7 +5,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICEquality PCUICTyping PCUICReduction PCUICSigmaCalculus
      PCUICNamelessDef PCUICRenameDef PCUICInstDef.
 
-(** The closure properties of the guard condition.  Under decision D1 the
+(** The closure properties of the guard condition.  The
     guard is [guard_cl] ([PCUICGuardClosure]), the least predicate closed
     under exactly these seven operations, so every field below is a theorem
     and [guard_checking_correct] is no longer an axiom.

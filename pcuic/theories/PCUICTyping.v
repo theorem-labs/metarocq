@@ -44,7 +44,7 @@ Include PCUICEnvTyping.
 
 (* The guard condition is the closure of the executable guard checker
    [check_guard_gen] under the seven operations of [GuardCheckerCorrect]
-   (decision D1; [PCUICGuardClosure]).  No axiom is involved. *)
+   ([PCUICGuardClosure]).  No axiom is involved. *)
 
 Class GuardChecker :=
 { (* guard check for both fixpoints (Fix) and cofixpoints (CoFix)  *)

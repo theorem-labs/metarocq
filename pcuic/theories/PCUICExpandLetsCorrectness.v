@@ -2722,8 +2722,8 @@ Proof.
 Qed.
 
 (** The guard-translation properties of let expansion. They are hypotheses, not axioms: under
-    [guard := guard_cl] they are concrete propositions that are not proved here (BET-64
-    GuardLane, REPORT §2e). The lemmas that need them take an [ExpandLetsGuardTrans] premise. *)
+    [guard := guard_cl] they are concrete propositions that are not proved here. The lemmas
+    that need them take an [ExpandLetsGuardTrans] premise. *)
 Class ExpandLetsGuardTrans : Prop := {
   fix_guard_trans :
     forall Σ Γ mfix,

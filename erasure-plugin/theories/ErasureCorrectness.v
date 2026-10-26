@@ -1506,7 +1506,7 @@ Qed.
 
 Section PCUICErase.
   Import PCUICAst PCUICAstUtils PCUICEtaExpand PCUICWfEnv.
-  (** The let-expansion guard-translation hypothesis (BET-64 GuardLane, REPORT §2e). *)
+  (** The let-expansion guard-translation hypothesis. *)
   Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}.
 
   Definition lift_wfext (Σ : global_env_ext_map) (wfΣ : ∥ wf_ext Σ ∥) :

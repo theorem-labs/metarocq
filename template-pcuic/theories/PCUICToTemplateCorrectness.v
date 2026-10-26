@@ -2204,7 +2204,7 @@ Qed.
 
 (** The guard-translation properties [fix_guard_trans] and [cofix_guard_trans] are premises,
     not axioms: under [guard := guard_cl] they state concrete propositions about the PCUIC and
-    Template guards that are not proved here (BET-64 GuardLane, REPORT §2e). *)
+    Template guards that are not proved here. *)
 Theorem pcuic_to_template {cf} (Σ : SE.global_env_ext) Γ t T
   (fix_guard_trans : forall Σ Γ mfix,
     ST.fix_guard Σ Γ mfix ->

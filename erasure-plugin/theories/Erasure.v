@@ -1124,7 +1124,7 @@ Proof.
 Qed.
 
 (** The entry points take the guard-translation hypotheses [ExpandLetsGuardTrans] and
-    [TemplateToPCUICGuardTrans] as premises (BET-64 GuardLane, REPORT §2e). They are
+    [TemplateToPCUICGuardTrans] as premises. They are
     propositions, so extraction erases them. *)
 Program Definition erase_and_print_template_program
   {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}

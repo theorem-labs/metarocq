@@ -11,7 +11,7 @@ From Stdlib Require Import ssreflect ssrbool.
 Local Open Scope bs_scope.
 Set Default Goal Selector "!".
 
-(** * The guard predicate as the closure of the executable check (decision D1)
+(** * The guard predicate as the closure of the executable check
 
   [guard_cl] is the least predicate on fixpoint and cofixpoint blocks that
   contains every *case-well-formed* block that [check_guard_gen] accepts and
@@ -254,7 +254,7 @@ Qed.
     every [tProj] node.  The predicate and branch *contexts* are not
     traversed: they are pinned to the inductive's own contexts by [fc], so
     any case inside them comes from the global environment, where
-    [wf_cases_env] covers it (gate 8, N1). *)
+    [wf_cases_env] covers it. *)
 Section TestCases.
   Context (fc : case_info -> predicate term -> list (branch term) -> bool).
   Context (fp : projection -> bool).
