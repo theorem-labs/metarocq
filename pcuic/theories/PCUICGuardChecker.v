@@ -23,12 +23,14 @@ Set Default Goal Selector "!".
   - Fix: the body of each definition [d] must be a prefix of [rarg d + 1]
     lambda abstractions (interleaved [let]s are allowed and do not count,
     as [rarg] counts assumptions only).  The innermost of those binders is
-    the *recursive parameter*; it, and every binder introduced by a branch
-    of a [tCase] whose scrutinee is a recursive-parameter variable (or a
-    variable already known to be such a branch variable) is a *subterm
-    variable*.  Every occurrence of a function of the block must then be of
-    the form [mkApps (tRel j) args] with [#|args| > rarg] and
-    [nth rarg args] a subterm variable.  Nothing is reduced.
+    the *recursive parameter*.  It may be matched on, but it is NOT itself a
+    valid recursive-call argument.  Every assumption binder introduced by a
+    branch of a [tCase] whose scrutinee is the recursive parameter, or a
+    variable already known to be such a branch variable, is a *subterm
+    variable*; [let] binders of a branch context are not.  Every occurrence
+    of a function of the block must then be of the form
+    [mkApps (tRel j) args] with [#|args| > rarg] and [nth rarg args] a
+    subterm variable.  Nothing is reduced.
   - CoFix: the body of each definition must be a (possibly empty) prefix of
     lambdas and [let]s followed by a constructor application; a function of
     the block may occur only as the head of an argument of such a
@@ -102,11 +104,30 @@ Section Checker.
 
   Definition rel_in_scope (nv j : nat) : bool := Nat.ltb j (nv + nblock + nctx).
 
-  Definition is_subterm_var (subs : list bool) (t : term) : bool :=
+  (** What the traversal knows about a bound variable:
+      [GRoot] is the recursive parameter (matchable, not a call argument),
+      [GStrict] a branch variable of a match on a [GRoot]/[GStrict] variable
+      (a strict subterm), and [GNot] anything else. *)
+  Inductive gspec := GNot | GRoot | GStrict.
+
+  Definition spec_of (subs : list gspec) (t : term) : gspec :=
     match t with
-    | tRel m => nth m subs false
-    | _ => false
+    | tRel m => nth m subs GNot
+    | _ => GNot
     end.
+
+  (** A valid recursive-call argument: a strict subterm only. *)
+  Definition is_subterm_var (subs : list gspec) (t : term) : bool :=
+    match spec_of subs t with GStrict => true | _ => false end.
+
+  (** A scrutinee whose branch variables are strict subterms. *)
+  Definition is_matchable_var (subs : list gspec) (t : term) : bool :=
+    match spec_of subs t with GNot => false | _ => true end.
+
+  (** The specs of a branch context's binders, innermost first, as the
+      context list is: assumptions get [sub], [let]s get [GNot]. *)
+  Definition branch_specs (sub : gspec) (ctx : context) : list gspec :=
+    map (fun d => match d.(decl_body) with Some _ => GNot | None => sub end) ctx.
 
   Definition err_evar := "the guard checker does not handle existential variables".
   Definition err_var := "the guard checker does not handle section variables".
@@ -117,8 +138,8 @@ Section Checker.
   Definition err_prefix := "the body of a fixpoint is not a lambda abstraction".
 
   (** One step of the traversal; [rec] checks the immediate subterms. *)
-  Definition gstep (rec : gmode -> list bool -> term -> guard_result)
-    (md : gmode) (subs : list bool) (t : term) : guard_result :=
+  Definition gstep (rec : gmode -> list gspec -> term -> guard_result)
+    (md : gmode) (subs : list gspec) (t : term) : guard_result :=
     let nv := #|subs| in
     match md with
     | MFixPrefix k =>
@@ -126,22 +147,22 @@ Section Checker.
       | tLambda _ A b =>
         gr_and (rec MNoOcc subs A)
           (match k with
-           | 0 => rec MFixBody (true :: subs) b
-           | S k => rec (MFixPrefix k) (false :: subs) b
+           | 0 => rec MFixBody (GRoot :: subs) b
+           | S k => rec (MFixPrefix k) (GNot :: subs) b
            end)
       | tLetIn _ b B u =>
         gr_and (rec MNoOcc subs b)
           (gr_and (rec MNoOcc subs B)
-             (rec (MFixPrefix k) (false :: subs) u))
+             (rec (MFixPrefix k) (GNot :: subs) u))
       | _ => Reject err_prefix
       end
     | MCoBody =>
       match t with
       | tLambda _ A b =>
-        gr_and (rec MNoOcc subs A) (rec MCoBody (false :: subs) b)
+        gr_and (rec MNoOcc subs A) (rec MCoBody (GNot :: subs) b)
       | tLetIn _ b B u =>
         gr_and (rec MNoOcc subs b)
-          (gr_and (rec MNoOcc subs B) (rec MCoBody (false :: subs) u))
+          (gr_and (rec MNoOcc subs B) (rec MCoBody (GNot :: subs) u))
       | _ =>
         let '(hd, args) := decompose_app t in
         match hd with
@@ -183,30 +204,30 @@ Section Checker.
       | tSort _ | tConst _ _ | tInd _ _ | tConstruct _ _ _ => rest
       | tProd _ A B =>
         gr_and (rec md subs A)
-          (gr_and (rec md (false :: subs) B) rest)
+          (gr_and (rec md (GNot :: subs) B) rest)
       | tLambda _ A b =>
         gr_and (rec md subs A)
-          (gr_and (rec md (false :: subs) b) rest)
+          (gr_and (rec md (GNot :: subs) b) rest)
       | tLetIn _ b B u =>
         gr_and (rec md subs b)
           (gr_and (rec md subs B)
-             (gr_and (rec md (false :: subs) u) rest))
+             (gr_and (rec md (GNot :: subs) u) rest))
       | tApp _ _ => rest (* unreachable: [decompose_app] peels applications *)
       | tCase _ p c brs =>
-        let sub := is_subterm_var subs c in
+        let sub := if is_matchable_var subs c then GStrict else GNot in
         gr_and (gr_list (rec md subs) p.(pparams))
-          (gr_and (rec md (List.app (repeat false #|p.(pcontext)|) subs) p.(preturn))
+          (gr_and (rec md (List.app (repeat GNot #|p.(pcontext)|) subs) p.(preturn))
              (gr_and (rec md subs c)
                 (gr_and
                    (gr_list (fun br =>
-                      rec md (List.app (repeat sub #|br.(bcontext)|) subs) br.(bbody)) brs)
+                      rec md (List.app (branch_specs sub br.(bcontext)) subs) br.(bbody)) brs)
                    rest)))
       | tProj _ c => gr_and (rec md subs c) rest
       | tFix mfix _ | tCoFix mfix _ =>
         gr_and (gr_list (fun dd => rec md subs dd.(dtype)) mfix)
           (gr_and
              (gr_list (fun dd =>
-                rec md (List.app (repeat false #|mfix|) subs) dd.(dbody)) mfix)
+                rec md (List.app (repeat GNot #|mfix|) subs) dd.(dbody)) mfix)
              rest)
       | tPrim p => gr_and (gr_prim (rec md subs) p) rest
       end
@@ -216,8 +237,8 @@ Section Checker.
       [gfuel n k] is [gstep] iterated [2 ^ n] times around [k].  The inner
       continuation is kept eta-expanded so that strict (extracted) evaluation
       unfolds only the levels a check actually reaches. *)
-  Fixpoint gfuel (n : nat) (k : gmode -> list bool -> term -> guard_result)
-    : gmode -> list bool -> term -> guard_result :=
+  Fixpoint gfuel (n : nat) (k : gmode -> list gspec -> term -> guard_result)
+    : gmode -> list gspec -> term -> guard_result :=
     match n with
     | 0 => fun md subs t => gstep k md subs t
     | S n => fun md subs t => gfuel n (fun md' subs' t' => gfuel n k md' subs' t') md subs t
