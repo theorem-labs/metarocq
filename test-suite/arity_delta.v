@@ -127,6 +127,20 @@ Definition ad_lpar (k : nat) : Type := let Y := nat in Y -> Prop.
 Inductive ad_lpind (n := 0) : ad_lpar n := ad_lpind_0 : ad_lpind 0.
 MetaRocq SafeCheck (@ad_lpind).
 
+(** A15 (gate note 2): the alias needs fix and iota reduction. *)
+Definition ad_fixar : Type :=
+  (fix f (n : nat) : Type := match n with 0 => nat -> Prop | S k => f k end) 1.
+Inductive ad_fixind : ad_fixar := ad_fixind_0 : ad_fixind 0.
+MetaRocq SafeCheck (@ad_fixind).
+
+(** A16 (gate note 2): a universe-polymorphic alias, instantiated by the
+    inductive's own universe (row M's [subst_instance] transport). *)
+#[universes(polymorphic)]
+Definition ad_upar@{u} : Type@{u+1} := Type@{u} -> Prop.
+#[universes(polymorphic)]
+Inductive ad_upind@{u} : ad_upar@{u} := ad_upind_0 : ad_upind nat.
+MetaRocq SafeCheck (@ad_upind).
+
 (** C1: the documented call-by-need completeness gap of the head-only design.
     The kernel accepts this block and stores [_ : true = true], because forcing
     [b] in the match updates the shared closure.  A sharing-free relation
