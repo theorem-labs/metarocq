@@ -2298,8 +2298,10 @@ End monad_Alli_nth_forall.
     - intros hr. rewrite hr -e in eqh'. congruence.
   Qed.
 
+  (** Both components are logical: a [prod] of two propositions has no
+      extraction, so they form a [/\]. *)
   Definition arity_whnf_result X_ext Γ t :=
-    ∑ r, (forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ r) ×
+    ∑ r, (forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ r) /\
          (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_head_red Σ.1 Γ t r ∥).
 
   (** One level of the decomposition; [T] is the declared type, for the error. *)
@@ -2312,14 +2314,14 @@ End monad_Alli_nth_forall.
     match whd_arity_head r [] as b
       return whd_arity_head r [] = b -> typing_result (arity_whnf_result X_ext Γ t) with
     | true => fun eqh =>
-      ret ((r; (wtr, arity_whnf_direct X_ext Γ t wt eqh)) : arity_whnf_result X_ext Γ t)
+      ret ((r; conj wtr (arity_whnf_direct X_ext Γ t wt eqh)) : arity_whnf_result X_ext Γ t)
     | false => fun eqh =>
       let r' := reduce_term RedFlags.default X_impl X_ext Γ r wtr in
       match whd_arity_head r' [] as b'
         return whd_arity_head r' [] = b' -> typing_result (arity_whnf_result X_ext Γ t) with
       | true => fun eqh' =>
-        ret ((r'; (reduce_term_welltyped RedFlags.default X_ext Γ r wtr,
-                   arity_whnf_fallback X_ext Γ t wt wtr eqh eqh')) : arity_whnf_result X_ext Γ t)
+        ret ((r'; conj (reduce_term_welltyped RedFlags.default X_ext Γ r wtr)
+                   (arity_whnf_fallback X_ext Γ t wt wtr eqh eqh')) : arity_whnf_result X_ext Γ t)
       | false => fun _ => raise (NotAnArity T)
       end eq_refl
     end eq_refl.
@@ -2389,7 +2391,7 @@ End monad_Alli_nth_forall.
     (wt : forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ t)
     (rem : list context_decl) (s : sort) {struct rem}
     : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_red Σ.1 Γ t (List.rev rem) s ∥) :=
-    '(r; (wtr, hr)) <- arity_whnf X_ext T Γ t wt ;;
+    '(r; conj wtr hr) <- arity_whnf X_ext T Γ t wt ;;
     match r as r0 return
       (forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ r0) ->
       (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_head_red Σ.1 Γ t r0 ∥) ->
