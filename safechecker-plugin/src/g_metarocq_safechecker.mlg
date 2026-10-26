@@ -125,29 +125,12 @@ let find_case_in_program ((genv, body) : Ast0.Env.program) =
    meets a table hit and a flagged child together), and [w] must hit across
    [Σ1] and [Σ2].
 
-   The command expects a term whose quoted program contains a match on an
-   inductive (a [tCase] node), in the term itself or in the body of a constant
-   it depends on; otherwise it fails. *)
-let test_trans_sharing ~opaque_access env evm poly c =
-  with_trans_memo_reset @@ fun () ->
-  let env = safecheck_env env evm poly in
-  let term = EConstr.to_constr evm c in
-  let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
+   The comparison runs on every term.  The environment control runs when the
+   quoted program contains a match on an inductive (a [tCase] node), in the
+   term itself or in the body of a constant it depends on; the message says
+   whether it ran. *)
+let trans_environment_control prog t =
   let same a b = Stdlib.compare a b = 0 in
-  let hits_before = Trans_memo.hits () in
-  let shared = time (str"Shared translation") SafeTemplateChecker.trans_program prog in
-  let hits = Trans_memo.hits () - hits_before in
-  let unshared =
-    time (str"Unshared translation") SafeTemplateChecker.trans_program_unshared prog
-  in
-  let equal = time (str"Comparing") (fun () -> same shared unshared) () in
-  let t =
-    match find_case_in_program prog with
-    | Some t -> t
-    | None ->
-      CErrors.user_err
-        (str "MetaRocq Test Trans Sharing expects a term whose quoted program contains a match on an inductive.")
-  in
   let genv, _ = prog in
   let sigma1 =
     TemplateToPCUIC.empty_trans_env genv.Ast0.Env.universes genv.Ast0.Env.retroknowledge
@@ -179,14 +162,33 @@ let test_trans_sharing ~opaque_access env evm poly c =
   let case_w = Trans_memo.hits () = hits_w + 1 && same w2 (plain_tr sigma2 w) in
   Trans_memo.reset ();
   let verdict ok = str (if ok then "ok" else "FAILED") in
+  (env_matters && case_a && case_b && case_c && case_w,
+   str "environment control: environment matters " ++ verdict env_matters
+   ++ str ", (a) " ++ verdict case_a ++ str ", (b) " ++ verdict case_b
+   ++ str ", (c) " ++ verdict case_c ++ str ", w hit across environments " ++ verdict case_w)
+
+let test_trans_sharing ~opaque_access env evm poly c =
+  with_trans_memo_reset @@ fun () ->
+  let env = safecheck_env env evm poly in
+  let term = EConstr.to_constr evm c in
+  let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
+  let hits_before = Trans_memo.hits () in
+  let shared = time (str"Shared translation") SafeTemplateChecker.trans_program prog in
+  let hits = Trans_memo.hits () - hits_before in
+  let unshared =
+    time (str"Unshared translation") SafeTemplateChecker.trans_program_unshared prog
+  in
+  let equal = time (str"Comparing") (fun () -> Stdlib.compare shared unshared = 0) () in
+  let control_ok, control =
+    match find_case_in_program prog with
+    | Some t -> trans_environment_control prog t
+    | None -> (true, str "environment control: not run, the quoted program has no match")
+  in
   let report =
     str "structurally equal = " ++ bool equal ++ str ", memo hits = " ++ Pp.int hits
-    ++ str "; environment control: environment matters " ++ verdict env_matters
-    ++ str ", (a) " ++ verdict case_a ++ str ", (b) " ++ verdict case_b
-    ++ str ", (c) " ++ verdict case_c ++ str ", w hit across environments " ++ verdict case_w
-    ++ str "."
+    ++ str "; " ++ control ++ str "."
   in
-  if equal && hits > 0 && env_matters && case_a && case_b && case_c && case_w then
+  if equal && hits > 0 && control_ok then
     Feedback.msg_info (str "Trans sharing test passed: " ++ report)
   else
     CErrors.user_err (str "Trans sharing test failed: " ++ report)
