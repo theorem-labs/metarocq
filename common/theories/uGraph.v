@@ -1418,6 +1418,26 @@ Section CheckLeq.
     now unfold leqb_level_n.
   Qed.
 
+  (** The same comparison through an index of [G]: no level name is compared inside
+      Bellman-Ford. *)
+  Definition leqb_level_n_ix (ix : index) n (l l' : Level.t)
+    := leqb_vertices_ix ix n l l'.
+
+  Lemma leqb_level_n_ix_eq ix : is_index_of G ix ->
+    forall n l l', leqb_level_n_ix ix n l l' = leqb_level_n n l l'.
+  Proof using HG Huctx.
+    intros Hix n l l'.
+    assert (HI : invariants G) by (rewrite HG; exact _).
+    exact (leqb_vertices_ix_correct G ix n l l' Hix).
+  Qed.
+
+  Lemma leqb_level_n_ix_spec ix : is_index_of G ix ->
+    leqb_level_n_spec_gen (leqb_level_n_ix ix).
+  Proof using HC HG Huctx.
+    intros Hix n l l' Hl Hl'. rewrite (leqb_level_n_ix_eq ix Hix).
+    now apply leqb_level_n_spec.
+  Qed.
+
   Definition leqb_expr_n := (leqb_expr_n_gen leqb_level_n).
 
   Lemma leqb_expr_n_spec0_gen leqb_level_n_gen
