@@ -1557,7 +1557,8 @@ struct
           in
           Some (template_variances @ extra_variances)
         | None ->
-          Option.map (CArray.map_to_list Q.quote_variance)
+          Option.map
+            (fun (_qvar, uvar) -> CArray.map_to_list Q.quote_variance uvar)
             mib.Declarations.mind_variance
       in
       let bodies = List.map Q.mk_one_inductive_body (List.rev ls) in
