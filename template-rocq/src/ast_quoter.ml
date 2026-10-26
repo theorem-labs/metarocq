@@ -178,18 +178,64 @@ struct
     let l = DirPath.repr dp in
     List.map quote_ident l
 
-  let rec quote_modpath (mp : ModPath.t) : Kernames.modpath =
+  (* Equal module paths, kernel names and inductives get one quoted value, for
+     the same reason as strings: a kernel name is quoted at every reference to
+     its declaration, and each copy costs its dirpath spine and records.  The
+     keys are compared with the kernel's equality on names, or physically on
+     values these tables already returned; a key they did not return only
+     misses, so the result is always the value quoting builds afresh. *)
+  let quoted_modpaths : Kernames.modpath ModPath.Map.t ref = ref ModPath.Map.empty
+
+  let rec quote_modpath_unshared (mp : ModPath.t) : Kernames.modpath =
     match mp with
     | MPfile dp -> MPfile (quote_dirpath dp)
     | MPbound mbid -> let (i, id, dp) = MBId.repr mbid in
       MPbound (quote_dirpath dp, quote_ident id, quote_int i)
     | MPdot (mp, id) -> MPdot (quote_modpath mp, quote_ident (Label.to_id id))
 
-  let quote_kn (kn : KerName.t) : Kernames.kername =
-    (quote_modpath (KerName.modpath kn),
-     quote_ident (Label.to_id (KerName.label kn)))
+  and quote_modpath (mp : ModPath.t) : Kernames.modpath =
+    if not !share_quoted_values then quote_modpath_unshared mp
+    else match ModPath.Map.find_opt mp !quoted_modpaths with
+    | Some quoted -> quoted
+    | None ->
+      let quoted = quote_modpath_unshared mp in
+      quoted_modpaths := ModPath.Map.add mp quoted !quoted_modpaths;
+      quoted
 
-  let quote_inductive (kn, i) = { inductive_mind = kn ; inductive_ind = i }
+  module KerNameTable = Hashtbl.Make (KerName)
+
+  let quoted_kns : Kernames.kername KerNameTable.t = KerNameTable.create 4096
+
+  let quote_kn (kn : KerName.t) : Kernames.kername =
+    let quote () =
+      (quote_modpath (KerName.modpath kn),
+       quote_ident (Label.to_id (KerName.label kn)))
+    in
+    if not !share_quoted_values then quote ()
+    else match KerNameTable.find_opt quoted_kns kn with
+    | Some quoted -> quoted
+    | None ->
+      let quoted = quote () in
+      KerNameTable.add quoted_kns kn quoted;
+      quoted
+
+  module QuotedInductiveTable = Hashtbl.Make (struct
+    type t = Kernames.kername * Datatypes.nat
+    let equal (kn1, i1) (kn2, i2) = kn1 == kn2 && i1 == i2
+    let hash (kn, i) = Hashtbl.hash (snd kn, i)
+  end)
+
+  let quoted_inductives : inductive QuotedInductiveTable.t = QuotedInductiveTable.create 4096
+
+  let quote_inductive (kn, i) =
+    if not !share_quoted_values then { inductive_mind = kn ; inductive_ind = i }
+    else match QuotedInductiveTable.find_opt quoted_inductives (kn, i) with
+    | Some quoted -> quoted
+    | None ->
+      let quoted = { inductive_mind = kn ; inductive_ind = i } in
+      QuotedInductiveTable.add quoted_inductives (kn, i) quoted;
+      quoted
+
   let quote_proj ind p a = { proj_ind = ind; proj_npars = p; proj_arg = a }
 
   let quote_constraint_type = function
