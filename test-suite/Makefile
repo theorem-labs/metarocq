@@ -5,6 +5,7 @@ all: bugs plugin-demo
 bugs: Makefile.rocq
 	$(MAKE) -f Makefile.rocq TIMED=$(TIMED)
 	bash check_fail_messages.sh nested_positivity.v
+	bash check_fail_messages.sh coind_case.v
 
 Makefile.rocq: Makefile _RocqProject
 	rocq makefile -f _RocqProject -o Makefile.rocq
