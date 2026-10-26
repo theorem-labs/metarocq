@@ -1822,27 +1822,7 @@ struct
                 (* Extend this declaration's abstract universe context with the
                    fresh bound levels introduced for its algebraic template
                    instances, and their lower-bound constraints. *)
-                let repr = UVars.AbstractContext.repr auctx in
-                let { UVars.quals; UVars.univs } =
-                  UVars.AbstractContext.names auctx
-                in
-                let extra =
-                  Array.init scope.ls_next
-                    (fun k ->
-                       Names.Name
-                         (Names.Id.of_string ("template_alg" ^ string_of_int k)))
-                in
-                let new_univs = Array.append univs extra in
-                let new_pcon =
-                  Univ.UnivConstraints.fold
-                    (fun cstr pcon -> PConstraints.add_univ cstr pcon)
-                    scope.ls_constraints
-                    (UVars.UContext.constraints repr)
-                in
-                let new_auctx =
-                  UVars.AbstractContext.make
-                    { UVars.quals; UVars.univs = new_univs } new_pcon
-                in
+                let new_auctx = extend_abstract_context auctx scope in
                 Q.mkPolymorphic_ctx
                   (Q.quote_abstract_univ_context (constrain new_auctx))
               | Declarations.Polymorphic auctx, _ ->
