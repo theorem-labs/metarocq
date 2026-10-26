@@ -34,6 +34,7 @@ PCUICWfEnv
 PCUICWfEnvImpl
 PCUICSafeReduce
 PCUICSafeConversion
+PCUICCallByNeed
 PCUICTypeChecker
 PCUICPositivityCheck
 PCUICSafeChecker
