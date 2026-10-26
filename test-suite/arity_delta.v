@@ -108,25 +108,14 @@ MetaRocq SafeCheck (@ad_fbind).
 (** A12: A4 with Corelib's template-polymorphic [list], as in stdpp's
     [base.list_elem_of].  A4 uses a non-template copy.
 
-    On this tree the arity rule accepts it, but [MetaRocq SafeCheck] then
-    fails on a *different* wall: it quotes without [~translate_template]
-    (safechecker-plugin/src/g_metarocq_safechecker.mlg:25), so a
-    template-polymorphic [list] keeps the universes of its declaration and the
-    checker reports "Types are not convertible: Type([Top.i]) and
-    Type([Corelib.Init.Datatypes.190])".  That wall is not this lane's: the
-    control [ad_tlist_syn] of lanes/arity-delta/a12_control.v, whose arity is
-    *syntactic*, is refused with exactly the same message, both on the base and
-    after this change (results/base-37a157cb/a12_control.v-ctl-{base,new}.out).
-
-    The arity rule's half of A12 is exercised on image injtyp-base (base
-    73b74755), whose SafeCheck quotes with [~translate_template], by the probe
-    lanes/arity-delta/arity_a12_translate.v: the base refuses the aliased arity
-    ("∀ A, AD_ElemOf A (list@{u} A) is not an arity") while a syntactic
-    template-[list] control is accepted. *)
+    [MetaRocq SafeCheck] on this tree quotes with the template-translating
+    quoter, so template-polymorphic [list] gets its own universe and the
+    check must succeed: the aliased arity [AD_ElemOf A (list A)] is accepted
+    by the arity rule. *)
 Inductive ad_tlist_elem_of {A} : AD_ElemOf A (list A) :=
 | ad_telem_of_here x l : ad_tlist_elem_of x (cons x l)
 | ad_telem_of_further x y l : ad_tlist_elem_of x l -> ad_tlist_elem_of x (cons y l).
-Fail MetaRocq SafeCheck (@ad_tlist_elem_of).
+MetaRocq SafeCheck (@ad_tlist_elem_of).
 
 (** A13: a let-bound variable as a [match] discriminant.  The kernel keeps
     [b := true] and unfolds the discriminant [Rel b] under delta; it stores
