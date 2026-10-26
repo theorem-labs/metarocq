@@ -423,8 +423,7 @@ Section RandomLemmas.
     * rewrite -app_context_assoc-subst_instance_app_ctx; apply: weaken_wf_local=> //.
       set (Δ := _ ,,, _). destruct Σ as [Σ1 Σ2].
       refine (PCUICUnivSubstitutionTyp.typing_subst_instance_wf_local Σ1 Σ2 Δ puinst (ind_universes mib) _ _ _)=> //.
-      destruct (onArity on_body) as (_ & s & lind & _). move: lind => /=.
-      rewrite (PCUICGlobalMaps.ind_arity_eq on_body).
+      destruct (onArityRed on_body) as (_ & s & lind & _). move: lind => /=.
       move=> /PCUICSpine.type_it_mkProd_or_LetIn_inv [uparams [? [slparams + _ _]]].
       move=> /PCUICSpine.type_it_mkProd_or_LetIn_inv [uindxs [? [slindxs + _ _]]].
       move=> indsortTyp.

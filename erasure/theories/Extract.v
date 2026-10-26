@@ -273,7 +273,7 @@ Definition erases_one_inductive_body (oib : one_inductive_body) (oib' : E.one_in
   Forall2 (fun 'i i' => i.(PCUICEnvironment.proj_name) = i'.(E.proj_name)) oib.(ind_projs) oib'.(E.ind_projs) /\
   oib'.(E.ind_name) = oib.(ind_name) /\
   oib'.(E.ind_kelim) = oib.(ind_kelim) /\
-  isPropositionalArity oib.(ind_type) = oib'.(E.ind_propositional).
+  Sort.is_propositional oib.(ind_sort) = oib'.(E.ind_propositional).
 
 Definition erases_mutual_inductive_body (mib : mutual_inductive_body) (mib' : E.mutual_inductive_body) :=
   let bds := mib.(ind_bodies) in
@@ -389,10 +389,7 @@ Definition computational_ind Σ ind :=
   | Some (InductiveDecl decl) =>
     match List.nth_error decl.(ind_bodies) n with
     | Some body =>
-      match destArity [] body.(ind_type) with
-      | Some arity => negb (Sort.is_prop (snd arity))
-      | None => false
-      end
+      negb (Sort.is_prop body.(ind_sort))
     | None => false
     end
   | _ => false

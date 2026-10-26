@@ -237,9 +237,7 @@ Proof.
     destruct g; simpl => //.
     rewrite nth_error_map.
     destruct nth_error => /= //.
-    rewrite (nl_destArity []).
-    destruct (destArity [] (ind_type o)) as [[ctx s]|] eqn:da => /= //.
-    now rewrite nl_context_assumptions.
+    now rewrite !context_assumptions_app !nl_context_assumptions.
   - rewrite nl_lookup_env.
     destruct lookup_env => /= //.
     destruct g; simpl => //.

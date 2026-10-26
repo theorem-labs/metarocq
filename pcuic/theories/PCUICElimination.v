@@ -329,9 +329,8 @@ Proof.
       destruct (declared_inductive_inj decli_ decli'_); subst mdecl' idecl'.
       clear decli'.
       eapply typing_spine_strengthen in sp. 3:tea.
-      rewrite (oib.(ind_arity_eq)) in sp.
-      rewrite !subst_instance_it_mkProd_or_LetIn in sp.
-      rewrite -it_mkProd_or_LetIn_app in sp.
+      eapply (typing_spine_ind_type_inv decli) in sp; tea.
+      rewrite subst_instance_it_mkProd_or_LetIn subst_instance_app_ctx in sp.
       eapply typing_spine_it_mkProd_or_LetIn_full_inv in sp; auto.
       split.
       revert sp.

@@ -32,6 +32,26 @@ Proof.
   destruct 1; replace_quotation_of_goal ().
 Defined.
 #[export] Instance quote_red {Σ Γ x y} : ground_quotable (@red Σ Γ x y) := ltac:(induction 1; exact _).
+#[export] Instance quote_whd_rel {zeta Σ Γ t args h l} : ground_quotable (@whd_rel zeta Σ Γ t args h l).
+Proof.
+  revert t args h l; cbv [ground_quotable].
+  fix quote_whd_rel 5; change (forall t args h l, ground_quotable (@whd_rel zeta Σ Γ t args h l)) in quote_whd_rel.
+  intros t args h l.
+  destruct 1; replace_quotation_of_goal ().
+Defined.
+#[export] Instance quote_arity_red {Σ Γ t Δ s} : ground_quotable (@arity_red Σ Γ t Δ s).
+Proof.
+  revert Γ t Δ s; cbv [ground_quotable].
+  fix quote_arity_red 5; change (forall Γ t Δ s, ground_quotable (@arity_red Σ Γ t Δ s)) in quote_arity_red.
+  intros Γ t Δ s.
+  destruct 1; replace_quotation_of_goal ().
+Defined.
+
+Module QuoteTemplateArityRelation <: QuoteArityRedSig TemplateTerm Env TemplateArityRelation.
+  #[export] Instance quote_arity_red {Σ Γ t Δ s} : ground_quotable (@TemplateArityRelation.arity_red Σ Γ t Δ s)
+    := ltac:(cbv [TemplateArityRelation.arity_red]; exact _).
+End QuoteTemplateArityRelation.
+Export (hints) QuoteTemplateArityRelation.
 #[export] Instance quote_eq_term_nocast {cf Σ ϕ t u} : ground_quotable (@eq_term_nocast cf Σ ϕ t u) := ltac:(cbv [eq_term_nocast]; exact _).
 #[export] Instance quote_leq_term_nocast {cf Σ ϕ t u} : ground_quotable (@leq_term_nocast cf Σ ϕ t u) := ltac:(cbv [leq_term_nocast]; exact _).
 #[export] Instance quote_cumul_gen {cf Σ Γ pb t u} : ground_quotable (@cumul_gen cf Σ Γ pb t u) := ltac:(induction 1; exact _).
@@ -45,7 +65,7 @@ Export (hints) QuoteTemplateEnvTyping.
 Module QuoteTemplateConversion := QuoteConversion TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion qTemplateTerm qEnv qTemplateConversion QuoteTemplateTerm QuoteEnv.
 Export (hints) QuoteTemplateConversion.
 
-Module QuoteTemplateGlobalMaps := QuoteGlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateGlobalMaps qTemplateTerm qEnv qTemplateEnvTyping qTemplateConversion qTemplateLookup qTemplateGlobalMaps QuoteTemplateTerm QuoteEnv QuoteTemplateEnvTyping QuoteTemplateConversion QuoteTemplateLookup.
+Module QuoteTemplateGlobalMaps := QuoteGlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateArityRelation TemplateGlobalMaps qTemplateTerm qEnv qTemplateEnvTyping qTemplateConversion qTemplateLookup qTemplateArityRelation qTemplateGlobalMaps QuoteTemplateTerm QuoteEnv QuoteTemplateEnvTyping QuoteTemplateConversion QuoteTemplateLookup QuoteTemplateArityRelation.
 Export (hints) QuoteTemplateGlobalMaps.
 
 Module QuoteTemplateConversionPar <: QuoteConversionParSig TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversionPar.
@@ -89,6 +109,7 @@ Module QuoteTemplateDeclarationTyping
        TemplateConversionPar
        TemplateTyping
        TemplateLookup
+       TemplateArityRelation
        TemplateGlobalMaps
        TemplateDeclarationTyping
        qTemplateTerm

@@ -27,6 +27,7 @@ PCUICAstUtils
 PCUICGlobalEnv
 PCUICReflect
 PCUICEquality
+PCUICArityRed
 PCUICTyping
 PCUICWfUniverses
 PCUICNormal

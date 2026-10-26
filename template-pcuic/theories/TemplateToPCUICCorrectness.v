@@ -810,12 +810,8 @@ Section Trans_Global.
       destruct g => /= //.
       rewrite nth_error_map.
       destruct nth_error eqn:hnth => /= //.
-      assert (wfty : WfAst.wf Σ (Ast.Env.ind_type o)).
-      { eapply declared_inductive_wf; eauto. eapply typing_wf_sigma; eauto. split; eauto.
-        unshelve eapply Typing.TemplateDeclarationTyping.declared_minductive_from_gen; eauto. }
-      generalize (trans_destArity Σ [] (Ast.Env.ind_type o) wfty wfΣ').
-      destruct Ast.destArity as [[ctx ps]|] eqn:eq' => /= // -> //.
-      now rewrite context_assumptions_map.
+      rewrite /app_context /trans_local.
+      rewrite -map_app context_assumptions_map. now intros.
     - unfold cmp_global_instance_gen, cmp_opt_variance; cbn.
       unfold lookup_constructor, lookup_inductive, lookup_minductive.
       unfold Ast.lookup_constructor, Ast.lookup_inductive, Ast.lookup_minductive.
@@ -1011,6 +1007,9 @@ Section Trans_Global.
     intuition auto using trans_eq_term.
   Qed.
 End Trans_Global.
+
+From MetaRocq.PCUIC Require Import PCUICArityRed.
+From MetaRocq.Template Require TemplateArityRed.
 
 Section Trans_Global.
   Context {cf : checker_flags}.
@@ -1721,6 +1720,282 @@ Section Trans_Global.
     - simpl. eapply array_red_val. eapply (OnOne2_All_mix_left a) in X.
       apply OnOne2_map; solve_all.
   Qed.
+
+  (** ** Transport of the kernel arity relations
+
+    The translation maps a Template derivation of [whd_rel]/[arity_red] to the
+    PCUIC one on the translated terms: a head cast becomes a beta-redex (two
+    machine steps), an n-ary application a spine of binary ones, and the
+    Template iota premises (declared constructor, branch context built from it)
+    the PCUIC ones (the translated branch carries that context).  The terms
+    need to be well formed ([WfAst]), as for [trans_red1]. *)
+
+  Lemma All_cons_split {A} {P : A -> Type} {x l} : All P (x :: l) -> P x × All P l.
+  Proof. intros h. depelim h. split; assumption. Qed.
+
+  Lemma wf_red {Γ M N} :
+    All (WfAst.wf_decl Σ) Γ -> WfAst.wf Σ M -> ST.red Σ Γ M N -> WfAst.wf Σ N.
+  Proof.
+    intros wfΓ wfM r. induction r as [|P N r IH s]; [exact wfM|].
+    eapply wf_red1; [exact wf_wf_decl_pred|exact wfΓ|exact IH|exact s].
+  Qed.
+
+  (** The result of the machine on well-formed terms is well formed. *)
+  Lemma whd_rel_wf {z Γ t args h l} :
+    All (WfAst.wf_decl Σ) Γ -> WfAst.wf Σ t -> All (WfAst.wf Σ) args ->
+    ST.whd_rel z Σ Γ t args h l -> WfAst.wf Σ h × All (WfAst.wf Σ) l.
+  Proof.
+    intros wfΓ wft wfargs w.
+    have wfhl := wf_red wfΓ (WfAst.wf_mkApps _ _ _ wft wfargs)
+      (TemplateArityRed.whd_rel_red _ _ w).
+    exact (WfAst.wf_mkApps_napp Σ h l
+      ltac:(now rewrite (TemplateArityRed.whd_rel_out_napp w)) wfhl).
+  Qed.
+
+  Lemma trans_whd_is_construct t : S.isApp t = false ->
+    whd_is_construct (trans Σ' t) = ST.whd_is_construct t.
+  Proof.
+    destruct t => //= _. destruct TransLookup.lookup_inductive as [[]|] => //.
+  Qed.
+
+  Lemma trans_whd_is_construct0 t : S.isApp t = false ->
+    whd_is_construct0 (trans Σ' t) = ST.whd_is_construct0 t.
+  Proof.
+    destruct t => //= _. destruct TransLookup.lookup_inductive as [[]|] => //.
+  Qed.
+
+  Lemma trans_whd_is_cofix t : S.isApp t = false ->
+    whd_is_cofix (trans Σ' t) = ST.whd_is_cofix t.
+  Proof.
+    destruct t => //= _. destruct TransLookup.lookup_inductive as [[]|] => //.
+  Qed.
+
+  Lemma trans_whd_arity_head t l : S.isApp t = false ->
+    whd_arity_head (trans Σ' t) (map (trans Σ') l) = ST.whd_arity_head t l.
+  Proof.
+    destruct t, l => //= _; try (destruct TransLookup.lookup_inductive as [[]|] => //).
+  Qed.
+
+  Lemma trans_whd_stop_head t args : ST.whd_stop_head t args ->
+    whd_stop_head (trans Σ' t) (map (trans Σ') args).
+  Proof. destruct t, args => //=. Qed.
+
+  Lemma trans_whd_rel {z Γ t args h l} :
+    All (WfAst.wf_decl Σ) Γ -> WfAst.wf Σ t -> All (WfAst.wf Σ) args ->
+    ST.whd_rel z Σ Γ t args h l ->
+    whd_rel z Σ' (trans_local Σ' Γ) (trans Σ' t) (map (trans Σ') args)
+      (trans Σ' h) (map (trans Σ') l).
+  Proof.
+    intros wfΓ wft wfargs w. revert wft wfargs.
+    induction w as [c args d b h l hnth hbod w IH|c args d hnth hbod
+      |na b B t args h l hz w IH|na b B t args hz
+      |c u decl body args h l hcst hbod w IH|c u decl args hcst hbod
+      |c k T args h l w IH
+      |f l args h l' hf hl w IH
+      |na A t a args h l w IH
+      |mfix idx narg fn args c ind n ui cargs h l hunf hnth wa IHa wb IHb
+      |mfix idx narg fn args c t cargs hunf hnth wa IHa hnc
+      |mfix idx narg fn args hunf hnth|mfix idx args hunf
+      |ci p c brs args n ui cargs mdecl idecl cdecl br h l wa IHa hbr hdecl hlen wb IHb
+      |ci p c brs args mfix idx cargs narg fn h l wa IHa hunf wb IHb
+      |ci p c brs args t cargs wa IHa hnc hncf
+      |p c args u cargs a h l wa IHa hnth wb IHb
+      |p c args mfix idx cargs narg fn h l wa IHa hunf wb IHb
+      |p c args t cargs wa IHa hnc hncf
+      |t args hs]; intros wft wfargs.
+    (* tRel, let-bound *)
+    - have wfb : WfAst.wf Σ b.
+      { destruct (nth_error_all hnth wfΓ) as [wdb _]. rewrite hbod in wdb. exact wdb. }
+      eapply whd_rel_unfold.
+      + rewrite /trans_local nth_error_map hnth. reflexivity.
+      + cbn. rewrite hbod. reflexivity.
+      + rewrite -trans_lift. exact (IH (WfAst.wf_lift _ _ _ _ wfb) wfargs).
+    (* tRel, assumption *)
+    - eapply whd_rel_assum.
+      + rewrite /trans_local nth_error_map hnth. reflexivity.
+      + cbn. now rewrite hbod.
+    (* zeta *)
+    - destruct (WfAst.wf_inv wft) as [[wfb wfB] wft'].
+      eapply whd_zeta; [exact hz|].
+      have tw := IH (WfAst.wf_subst1 _ _ _ _ wfb wft') wfargs.
+      rewrite trans_subst in tw. exact tw.
+    (* let, zeta off *)
+    - apply whd_letin_stop. exact hz.
+    (* delta *)
+    - have wfbody : WfAst.wf Σ body.
+      { destruct (declared_constant_wf _ _ wf_wf_decl_pred
+          (Typing.TemplateDeclarationTyping.declared_constant_from_gen hcst)) as [wfbd _].
+        rewrite hbod in wfbd. exact wfbd. }
+      eapply whd_delta.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. rewrite hbod. reflexivity.
+      + rewrite -trans_subst_instance.
+        exact (IH (WfAst.wf_subst_instance _ _ _ wfbody) wfargs).
+    (* axiom *)
+    - eapply whd_axiom.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+    (* a head cast is a beta-redex in PCUIC *)
+    - destruct (WfAst.wf_inv wft) as [wfc wfT].
+      cbn [trans]. apply whd_app, whd_beta. cbn. rewrite lift0_p.
+      exact (IH wfc wfargs).
+    (* an n-ary application is a spine of binary ones *)
+    - destruct (WfAst.wf_inv wft) as [[[_ _] wff] wfl].
+      cbn [trans]. apply whd_rel_mkApps. rewrite -map_app.
+      exact (IH wff (All_app_inv _ _ _ wfl wfargs)).
+    (* beta *)
+    - destruct (WfAst.wf_inv wft) as [wfA wft'].
+      destruct (All_cons_split wfargs) as [wfa wfargs'].
+      cbn [trans map]. apply whd_beta.
+      have tw := IH (WfAst.wf_subst1 _ _ _ _ wfa wft') wfargs'.
+      rewrite trans_subst in tw. exact tw.
+    (* fix unfolding *)
+    - have wfmfix := WfAst.wf_inv wft.
+      have wfc : WfAst.wf Σ c := nth_error_all hnth wfargs.
+      destruct (whd_rel_wf wfΓ wfc All_nil wa) as [_ wfcargs].
+      have wffn := unfold_fix_wf _ _ _ _ _ hunf wft.
+      have tw := IHb wffn ltac:(apply All_app_inv; [now apply All_firstn|
+        constructor; [apply WfAst.wf_mkApps; [constructor|exact wfcargs]|now apply All_skipn]]).
+      rewrite map_app /= -firstn_map map_skipn trans_mkApps /= in tw.
+      eapply whd_fix_iota.
+      + exact (trans_unfold_fix _ _ _ _ wfmfix hunf).
+      + rewrite nth_error_map hnth. reflexivity.
+      + exact (IHa wfc All_nil).
+      + exact tw.
+    (* stuck fix *)
+    - have wfmfix := WfAst.wf_inv wft.
+      have wfc : WfAst.wf Σ c := nth_error_all hnth wfargs.
+      have ht := TemplateArityRed.whd_rel_out_napp wa.
+      rewrite map_app /= -firstn_map map_skipn trans_mkApps.
+      eapply whd_fix_stuck.
+      + exact (trans_unfold_fix _ _ _ _ wfmfix hunf).
+      + rewrite nth_error_map hnth. reflexivity.
+      + exact (IHa wfc All_nil).
+      + rewrite (trans_whd_is_construct t ht). exact hnc.
+    - eapply whd_fix_noarg.
+      + exact (trans_unfold_fix _ _ _ _ (WfAst.wf_inv wft) hunf).
+      + now rewrite nth_error_map hnth.
+    - apply whd_fix_nounfold.
+      move: hunf. rewrite /ST.unfold_fix /unfold_fix nth_error_map.
+      by destruct nth_error.
+    (* iota: the Template premises give the translated branch and its context *)
+    - destruct (WfAst.wf_inv wft) as [mdecl' [idecl' [isdecl hci hpctx lenpar wfpar wfret wfc wfbrs]]].
+      have hdecl' : Ast.declared_constructor Σ (ci.(ci_ind), n) mdecl idecl cdecl.
+      { apply Typing.TemplateDeclarationTyping.declared_constructor_from_gen.
+        apply (Ast.lookup_constructor_declared_gen (lookup := Ast.Env.lookup_env Σ)
+          (id := (ci.(ci_ind), n))).
+        exact hdecl. }
+      destruct (declared_inductive_inj isdecl (proj1 hdecl')). subst mdecl' idecl'.
+      destruct (All2_nth_error _ _ _ wfbrs (proj2 hdecl') hbr) as [wfnac wfbr].
+      have lenbr := All2_length wfnac. len in lenbr.
+      destruct (whd_rel_wf wfΓ wfc All_nil wa) as [_ wfcargs].
+      have wfiota : WfAst.wf Σ (ST.iota_red ci.(ci_npar) cargs
+          (Ast.case_branch_context ci.(ci_ind) mdecl cdecl p br) br).
+      { eapply (wf_red1 _ (S.tCase ci p (S.mkApps (S.tConstruct ci.(ci_ind) n ui) cargs) brs));
+          [exact wf_wf_decl_pred|exact wfΓ| |].
+        2:{ eapply ST.red_iota; [exact hbr|exact hdecl'|exact hlen]. }
+        econstructor; tea. apply WfAst.wf_mkApps; [constructor|exact wfcargs]. }
+      have tw := IHb wfiota wfargs.
+      rewrite (trans_iota_red _ mdecl idecl cdecl _ _ _ _ lenbr) in tw.
+      eapply forall_decls_declared_inductive in isdecl; tea.
+      cbn [trans]. rewrite (trans_lookup_inductive _ wfΣ') (declared_inductive_lookup isdecl).
+      eapply whd_iota.
+      + exact (IHa wfc All_nil).
+      + cbn. rewrite map2_map_map.
+        erewrite nth_error_map2; [reflexivity|exact (proj2 hdecl')|exact hbr].
+      + unfold Ast.map_branch; cbn.
+        rewrite map2_map2_bias_left; len.
+        rewrite PCUICCases.map2_set_binder_name_context_assumptions; len.
+        rewrite hlen.
+        rewrite case_branch_context_assumptions //; len.
+        cbn. rewrite context_assumptions_map //.
+      + exact tw.
+    (* case on a cofix *)
+    - destruct (WfAst.wf_inv wft) as [mdecl' [idecl' [isdecl hci hpctx lenpar wfpar wfret wfc wfbrs]]].
+      destruct (whd_rel_wf wfΓ wfc All_nil wa) as [wfcofix wfcargs].
+      have wffn := unfold_cofix_wf _ _ _ _ _ hunf wfcofix.
+      have wfcase' : WfAst.wf Σ (S.tCase ci p (S.mkApps fn cargs) brs).
+      { econstructor; tea. now apply WfAst.wf_mkApps. }
+      have tw := IHb wfcase' wfargs. have ta := IHa wfc All_nil.
+      have tu := trans_unfold_cofix _ _ _ _ (WfAst.wf_inv wfcofix) hunf.
+      move: tw ta. cbn [trans]. rewrite trans_mkApps.
+      destruct TransLookup.lookup_inductive as [[]|] => tw ta;
+        (eapply whd_case_cofix; [exact ta|exact tu|exact tw]).
+    (* stuck case *)
+    - destruct (WfAst.wf_inv wft) as [mdecl' [idecl' [isdecl hci hpctx lenpar wfpar wfret wfc wfbrs]]].
+      have ht := TemplateArityRed.whd_rel_out_napp wa.
+      have ta := IHa wfc All_nil.
+      move: ta. cbn [trans]. rewrite trans_mkApps.
+      destruct TransLookup.lookup_inductive as [[]|] => ta;
+        (eapply whd_case_stuck; [exact ta|
+          rewrite (trans_whd_is_construct t ht); exact hnc|
+          rewrite (trans_whd_is_cofix t ht); exact hncf]).
+    (* projection *)
+    - have wfc : WfAst.wf Σ c := WfAst.wf_inv wft.
+      destruct (whd_rel_wf wfΓ wfc All_nil wa) as [_ wfcargs].
+      eapply whd_proj.
+      + exact (IHa wfc All_nil).
+      + now rewrite nth_error_map hnth.
+      + exact (IHb (nth_error_all hnth wfcargs) wfargs).
+    (* projection of a cofix *)
+    - have wfc : WfAst.wf Σ c := WfAst.wf_inv wft.
+      destruct (whd_rel_wf wfΓ wfc All_nil wa) as [wfcofix wfcargs].
+      have wffn := unfold_cofix_wf _ _ _ _ _ hunf wfcofix.
+      have wfproj : WfAst.wf Σ (S.tProj p (S.mkApps fn cargs)).
+      { constructor. now apply WfAst.wf_mkApps. }
+      have tw := IHb wfproj wfargs.
+      cbn [trans] in tw. rewrite trans_mkApps in tw.
+      eapply whd_proj_cofix.
+      + exact (IHa wfc All_nil).
+      + exact (trans_unfold_cofix _ _ _ _ (WfAst.wf_inv wfcofix) hunf).
+      + exact tw.
+    (* stuck projection *)
+    - have wfc : WfAst.wf Σ c := WfAst.wf_inv wft.
+      have ht := TemplateArityRed.whd_rel_out_napp wa.
+      cbn [trans]. rewrite trans_mkApps.
+      eapply whd_proj_stuck.
+      + exact (IHa wfc All_nil).
+      + rewrite (trans_whd_is_construct0 t ht). exact hnc.
+      + rewrite (trans_whd_is_cofix t ht). exact hncf.
+    (* the machine stops *)
+    - apply whd_stop. now apply trans_whd_stop_head.
+  Qed.
+
+  Lemma trans_arity_red {Γ t Δ s} :
+    All (WfAst.wf_decl Σ) Γ -> WfAst.wf Σ t ->
+    ST.arity_red Σ Γ t Δ s ->
+    arity_red Σ' (trans_local Σ' Γ) (trans Σ' t) (trans_local Σ' Δ) s.
+  Proof.
+    intros wfΓ wft ar. revert wfΓ wft.
+    induction ar as [Γ t s w|Γ t na A B Δ s w ar IH|Γ t na b A B Δ s w ar IH
+      |Γ t h l h' l' Δ s w ha w' hne ar IH]; intros wfΓ wft.
+    - apply arity_red_sort. exact (trans_whd_rel wfΓ wft All_nil w).
+    - destruct (whd_rel_wf wfΓ wft All_nil w) as [wfprod _].
+      destruct (WfAst.wf_inv wfprod) as [wfA wfB].
+      rewrite /trans_local map_app /=.
+      eapply arity_red_prod; [exact (trans_whd_rel wfΓ wft All_nil w)|].
+      exact (IH ltac:(constructor; [exact (tt, wfA)|exact wfΓ]) wfB).
+    - destruct (whd_rel_wf wfΓ wft All_nil w) as [wflet _].
+      destruct (WfAst.wf_inv wflet) as [[wfb wfA] wfB].
+      rewrite /trans_local map_app /=.
+      eapply arity_red_let; [exact (trans_whd_rel wfΓ wft All_nil w)|].
+      exact (IH ltac:(constructor; [exact (wfb, wfA)|exact wfΓ]) wfB).
+    - destruct (whd_rel_wf wfΓ wft All_nil w) as [wfh wfl].
+      have wfhl := WfAst.wf_mkApps _ _ _ wfh wfl.
+      destruct (whd_rel_wf wfΓ wfhl All_nil w') as [wfh' wfl'].
+      have wfhl' := WfAst.wf_mkApps _ _ _ wfh' wfl'.
+      have ht := TemplateArityRed.whd_rel_out_napp w.
+      have tw := trans_whd_rel wfΓ wft All_nil w.
+      have tw' := trans_whd_rel wfΓ wfhl All_nil w'.
+      rewrite trans_mkApps in tw'.
+      have haT : whd_arity_head (trans Σ' h) (map (trans Σ') l) = false.
+      { rewrite (trans_whd_arity_head h l ht). exact ha. }
+      have ta := IH wfΓ wfhl'. rewrite trans_mkApps in ta.
+      (* the translation is not injective, but the target derivation [ta]
+         itself gives the progress premise *)
+      eapply arity_red_fallback;
+        [exact tw|exact haT|exact tw'|exact (arity_red_fallback_progress tw haT tw' ta)|exact ta].
+  Qed.
 End Trans_Global.
 
 Lemma global_levels_trans Σ
@@ -2090,13 +2365,10 @@ Proof.
   pose proof (isType_wf_local isty).
   destruct isty as (_ & s & Hs & _).
   eapply invert_type_mkApps_ind in Hs as [sp cu]; tea.
-  erewrite ind_arity_eq in sp.
-  2: eapply PCUICInductives.oib ; eauto.
-  rewrite !subst_instance_it_mkProd_or_LetIn in sp.
-  rewrite -it_mkProd_or_LetIn_app /= in sp.
+  eapply (typing_spine_ind_type_inv isdecl) in sp; tea.
+  rewrite subst_instance_it_mkProd_or_LetIn /= in sp.
   eapply PCUICSpine.arity_typing_spine in sp as [hle hs [insts sp]]; tea.
   exists insts. split => //.
-  now rewrite PCUICUnivSubstitutionConv.subst_instance_app_ctx.
 Qed.
 
 Lemma simpl_type_Case {H : checker_flags} {Σ : global_env_ext} {Γ} {ci : case_info} {p c brs ps mdecl idecl indices} {wfΣ : wf Σ} :
@@ -3112,9 +3384,25 @@ Proof.
           (ind_type (trans_one_ind_body (trans_global_env Σg) idecl)) rel_of_Type.
         { apply ST.onArity in oni. unfold on_type_rel in *; simpl in *.
           now apply (X (Σg, Ast.Env.ind_universes m) [] (TypRel (Ast.Env.ind_type idecl) _)). }
+        have onarityred : on_type_rel (PCUICEnvTyping.lift_typing typing)
+          (trans_global (Σg, Ast.Env.ind_universes m)) []
+          (it_mkProd_or_LetIn (ind_params (trans_minductive_body (trans_global_env Σg) m))
+            (it_mkProd_or_LetIn (ind_indices (trans_one_ind_body (trans_global_env Σg) idecl))
+              (tSort (ind_sort (trans_one_ind_body (trans_global_env Σg) idecl))))) rel_of_Type.
+        { apply ST.onArityRed in oni. unfold on_type_rel in *; simpl in *.
+          change (tSort (Ast.Env.ind_sort idecl)) with
+            (trans (trans_global_env Σg) (Ast.tSort (Ast.Env.ind_sort idecl))).
+          rewrite -!trans_it_mkProd_or_LetIn.
+          now apply (X (Σg, Ast.Env.ind_universes m) [] (TypRel _ rel_of_Type)). }
         unshelve refine {| ind_cunivs := oni.(ST.ind_cunivs) |}; tea.
-        --- cbn -[trans_global_env]. rewrite oni.(ST.ind_arity_eq).
-            now rewrite ![trans _ _]trans_it_mkProd_or_LetIn.
+        --- cbn -[trans_global_env].
+            destruct oni.(ST.ind_arity_red) as [U [eqU arU]].
+            exists (trans (trans_global_env Σg) U). split.
+            { rewrite eqU. now rewrite trans_it_mkProd_or_LetIn. }
+            have wfU : WfAst.wf Σg U.
+            { have h := wf_ind_type _ _ wf. rewrite eqU in h.
+              exact (TypingWf.wf_it_mkProd_or_LetIn _ _ _ h).2. }
+            exact (trans_arity_red Σg X0 wfΣg wfpars wfU arU).
         --- pose proof oni.(ST.onConstructors) as X11. red in X11.
             red. eapply All2_map_left.
             destruct wf. solve_all.
@@ -3207,16 +3495,8 @@ Proof.
                 econstructor 2; tea; repeat econstructor; rewrite ?length_map //.
                 2: solve_all; eapply trans_closedn => //.
                 2: rewrite -map_rev nth_error_map H2//.
-                rewrite e.
-                have wfty : WfAst.wf Σg (Ast.Env.ind_type i).
-                { rewrite nth_error_rev in H2. len. rewrite List.rev_involutive in H2.
-                  eapply nth_error_alli in onI; tea. cbn in onI.
-                  destruct onI as [onI _]. eapply Typing.onArity in onI as (_ & s & Hs & _).
-                  now eapply typing_wf in Hs. }
-                rewrite /trans_one_ind_body /= /ind_realargs /= /ST.ind_realargs.
-                generalize (trans_destArity Σg [] _ wfty wfΣg).
-                destruct Ast.destArity as [[args s]|] => /= -> //.
-                len. now rewrite context_assumptions_map. }
+                rewrite e /ind_realargs /ST.ind_realargs. cbn.
+                rewrite -map_app. symmetry. exact (context_assumptions_map Σg _). }
               { cbn. constructor 3.
                 rewrite trans_subst in IHp. apply IHp.
                 move/WfAst.wf_inv: wfty => /= [[wfb wfty] wft].
@@ -3286,8 +3566,7 @@ Proof.
             simpl.
             destruct Ast.Env.ind_variance => //.
             eapply trans_ind_respects_variance; tea.
-            move: onarity; cbn -[Σg]. rewrite oni.(ST.ind_arity_eq).
-            rewrite !trans_it_mkProd_or_LetIn.
+            move: onarityred; cbn -[Σg].
             move=> [] _ [] s [] /subject_closed. rewrite -it_mkProd_or_LetIn_app closedn_it_mkProd_or_LetIn /=.
             rewrite andb_true_r trans_local_app //.
       -- red in onP. red.

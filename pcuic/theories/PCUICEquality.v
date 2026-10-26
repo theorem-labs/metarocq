@@ -48,15 +48,12 @@ Definition global_variance_gen lookup gr napp :=
   | IndRef ind =>
     match lookup_inductive_gen lookup ind with
     | Some (mdecl, idecl) =>
-      match destArity [] idecl.(ind_type) with
-      | Some (ctx, _) => if (context_assumptions ctx) <=? napp then
-          match mdecl.(ind_variance) with
-          | Some var => Variance var
-          | None => AllEqual
-          end
-        else AllEqual
-      | None => AllEqual
-      end
+      if context_assumptions (mdecl.(ind_params) ,,, idecl.(ind_indices)) <=? napp then
+        match mdecl.(ind_variance) with
+        | Some var => Variance var
+        | None => AllEqual
+        end
+      else AllEqual
     | None => AllEqual
     end
   | ConstructRef ind k =>
@@ -1013,7 +1010,6 @@ Proof.
   rewrite /global_variance_gen.
   destruct gr => //=.
   - destruct lookup_inductive_gen as [[mdecl idec]|] => //=.
-    destruct destArity as [[ctx s]|] => //=.
     elim: Nat.leb_spec => // cass.
     destruct ind_variance => //=.
     elim: Nat.leb_spec => //. lia.

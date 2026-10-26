@@ -3,7 +3,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
   PCUICWeakeningEnv PCUICEquality PCUICReduction PCUICCumulativity PCUICCumulativitySpec
-  (* PCUICContextSubst *) (* PCUICUnivSubst *) (* PCUICCases *) (* PCUICTyping *)
+  (* PCUICContextSubst *) (* PCUICUnivSubst *) (* PCUICCases *) PCUICTyping
   (* PCUICGuardCondition *) (* PCUICGlobalEnv *).
 From Equations Require Import Equations.
 
@@ -65,7 +65,6 @@ Proof using P Pcmp cf.
   - destruct (lookup_env Σ ind) eqn:look => //.
     eapply extends_lookup in look; eauto. rewrite look //.
     destruct g => //=; destruct nth_error => //=.
-    destruct destArity as [[ctx s]|] => //=.
     destruct Nat.leb => //=.
     destruct ind_variance => //=.
   - destruct (lookup_env Σ (inductive_mind i)) eqn:look => //.

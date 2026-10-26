@@ -44,13 +44,13 @@ Proof using Type.
       intros d' [H'|H']; subst; auto.
       intros eq.
       destruct o0 as [fresh _ _ _].
-      subst kn. eapply P.fresh_global_iff_not_In in fresh.
+      subst kn. eapply PCUICTyping.fresh_global_iff_not_In in fresh.
       eapply (in_map fst) in H'.
       now apply fresh in H'.
     + intros d' [H'|H'] eq; subst; cbn in *; auto.
       subst.
       destruct o0 as [fresh _ _ _].
-      eapply P.fresh_global_iff_not_In in fresh.
+      eapply PCUICTyping.fresh_global_iff_not_In in fresh.
       eapply (in_map fst) in H.
       now apply fresh in H.
 Qed.
@@ -433,8 +433,8 @@ Transparent Erasure.flag_of_type.
 Ltac invert_wf :=
   match goal with
   | [H : wf _ |- _] => sq; inversion H;subst;clear H;cbn in *
-  | [H : P.on_global_decls _ _ _ _ (_ :: _) |- _] => inversion H;subst;clear H;cbn in *
-  | [H : P.on_global_decls_data _ _ _ _ _ _ _ |- _] => inversion H; subst; clear H; cbn in *
+  | [H : PCUICTyping.on_global_decls _ _ _ _ (_ :: _) |- _] => inversion H;subst;clear H;cbn in *
+  | [H : PCUICTyping.on_global_decls_data _ _ _ _ _ _ _ |- _] => inversion H; subst; clear H; cbn in *
   end.
 
 Lemma wf_erase_global_decls_recursive (H := EWellformed.all_env_flags) :

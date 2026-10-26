@@ -2,7 +2,7 @@
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config Primitive.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
-  PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition.
+  PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition PCUICArityRed.
 From MetaRocq.PCUIC Require Export PCUICCumulativitySpec.
 From MetaRocq.PCUIC Require Export PCUICCases.
 
@@ -339,6 +339,17 @@ Module PCUICTypingDef <: EnvironmentTyping.Typing PCUICTerm PCUICEnvironment PCU
 
 End PCUICTypingDef.
 
+Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
+  PCUICTerm
+  PCUICEnvironment
+  PCUICTermUtils
+  PCUICEnvTyping
+  PCUICConversion
+  PCUICLookup
+  PCUICArityRelation
+.
+Include PCUICGlobalMaps.
+
 Module PCUICDeclarationTyping :=
   EnvironmentTyping.DeclarationTyping
     PCUICTerm
@@ -349,8 +360,26 @@ Module PCUICDeclarationTyping :=
     PCUICConversionParSpec
     PCUICTypingDef
     PCUICLookup
+    PCUICArityRelation
     PCUICGlobalMaps.
 Include PCUICDeclarationTyping.
+
+(** The sigma of [ind_arity_red] makes the declared type reduce to the arity
+    built from the parameters, indices and sort. *)
+Lemma ind_arity_sig_red {Σ T params indices s} :
+  (∑ U, (T = it_mkProd_or_LetIn params U) × arity_red Σ params U indices s) ->
+  PCUICReduction.red Σ [] T (it_mkProd_or_LetIn params (it_mkProd_or_LetIn indices (tSort s))).
+Proof. intros [U [-> ar]]. rewrite -it_mkProd_or_LetIn_app. exact (arity_red_red_params ar). Qed.
+
+(** [ind_arity_red] makes the declared type reduce to the arity built from the
+    declaration's parameters, indices and sort; this replaces the former
+    syntactic equation [ind_arity_eq] for its users. *)
+Lemma ind_arity_red_red {cf Pcmp P Σ mind mdecl i idecl}
+  (X : on_ind_body Pcmp P Σ mind mdecl i idecl) :
+  PCUICReduction.red Σ.1 [] idecl.(ind_type)
+    (it_mkProd_or_LetIn mdecl.(ind_params)
+       (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort)))).
+Proof. exact (ind_arity_sig_red (ind_arity_red X)). Qed.
 
 Inductive welltyped {cf} Σ Γ t : Prop :=
 | iswelltyped A : Σ ;;; Γ |- t : A -> welltyped Σ Γ t.
@@ -855,8 +884,7 @@ Proof.
     rename o0 into Xg.
     set (wfΣ := (ongu, o) : on_global_env cumulSpec0 (lift_typing typing) {| universes := univs; declarations := Σ |}).
     set (Σ':= {| universes := univs; declarations := Σ |}) in *.
-    destruct Xg.
-    rename on_global_decl_d into Xg.
+    destruct Xg as [hfresh udecl honu Xg].
     constructor; auto; try constructor; auto.
     * unshelve eset (IH' := IH ((Σ', udecl); (wfΣ; []; (tSort sProp); _; _))).
       shelve. simpl. apply type_Prop.
@@ -876,9 +904,12 @@ Proof.
           constructor. cbn; subst Σ' Σg; lia. clearbody IH'. cbn in IH'.
           clear IH; rename IH' into IH.
           eapply Alli_impl; eauto. cbn in IH. clear onI onP onNP onV. intros n x Xg.
-          refine {| ind_arity_eq := Xg.(ind_arity_eq);
+          refine {| ind_arity_red := Xg.(ind_arity_red);
                     ind_cunivs := Xg.(ind_cunivs) |}.
           - apply onArity in Xg. apply Xj; tas.
+            apply lift_typing_impl with (1 := Xg); intros ?? HT. split; tas.
+            apply (IH (_; _; _; HT)).
+          - apply onArityRed in Xg. apply Xj; tas.
             apply lift_typing_impl with (1 := Xg); intros ?? HT. split; tas.
             apply (IH (_; _; _; HT)).
           - pose proof Xg.(onConstructors) as Xg'.

@@ -120,8 +120,7 @@ Section infer_irrel.
           end
       end.
     destruct red_viewc.
-    - cbn. simp _reduce_stack.
-      destruct (PCUICNormal.RedFlags.zeta fl); simp _reduce_stack. 2:reflexivity.
+    - simp _reduce_stack.
       destruct PCUICSafeReduce.inspect => //.
       destruct x as [[? [?|] ?]|] => //.
       simp _reduce_stack. simpl.

@@ -256,8 +256,7 @@ Proof.
   destruct (lookup_on_global_env X Hmdecl) as [Σ' [wfΣ' [ext prf]]]; eauto.
   apply onInductives in prf.
   eapply nth_error_alli in Hidecl; eauto.
-  pose proof (onArity Hidecl).
-  rewrite Hidecl.(ind_arity_eq) in X0.
+  pose proof (onArityRed Hidecl) as X0.
   destruct X0 as [_ Hs]; cbn in Hs; wf.
   eapply wf_it_mkProd_or_LetIn in Hs as [? H].
   eapply wf_it_mkProd_or_LetIn in H as [].
@@ -666,8 +665,7 @@ Section WfLookup.
       eapply sorts_local_ctx_All_wf_decl; tea. }
     split => //.
     - now destruct onArity.
-    - rewrite ind_arity_eq in onArity .
-      destruct onArity as [_ ona].
+    - destruct onArityRed as [_ ona].
       eapply wf_it_mkProd_or_LetIn in ona as [_ ona].
       now eapply wf_it_mkProd_or_LetIn in ona as [].
     - unfold on_constructors in onConstructors.
