@@ -17,51 +17,101 @@ Definition fake_guard_impl : FixCoFix -> global_env_ext -> context -> mfixpoint 
 
 (** The universe graphs are stored fields, computed once when an environment is built.
     As let-fields they were recomputed at every access in the extracted checker, so every
-    universe comparison rebuilt the whole graph. *)
+    universe comparison rebuilt the whole graph. Each graph is stored with an index of its
+    vertices, so that universe comparisons compare no level names inside Bellman-Ford. *)
 Record reference_impl_ext {cf:checker_flags} {guard : abstract_guard_impl} := {
       reference_impl_env_ext :> global_env_ext;
       reference_impl_ext_wf :> ∥ wf_ext reference_impl_env_ext ∥;
       reference_impl_ext_graph : universes_graph;
-      reference_impl_ext_graph_wf : is_graph_of_uctx reference_impl_ext_graph (global_ext_uctx reference_impl_env_ext)
+      reference_impl_ext_graph_wf : is_graph_of_uctx reference_impl_ext_graph (global_ext_uctx reference_impl_env_ext);
+      reference_impl_ext_index : wGraph.index;
+      reference_impl_ext_index_wf : wGraph.is_index_of reference_impl_ext_graph reference_impl_ext_index
   }.
 
 Record reference_impl {cf:checker_flags} := {
       reference_impl_env :> global_env;
       reference_impl_wf :> ∥ wf reference_impl_env ∥;
       reference_impl_graph : universes_graph;
-      reference_impl_graph_wf : is_graph_of_uctx reference_impl_graph (global_uctx reference_impl_env)
+      reference_impl_graph_wf : is_graph_of_uctx reference_impl_graph (global_uctx reference_impl_env);
+      reference_impl_index : wGraph.index;
+      reference_impl_index_wf : wGraph.is_index_of reference_impl_graph reference_impl_index
   }.
 
+Lemma graph_index_of_wf {cf:checker_flags} (Σ : global_env) (wfΣ : ∥ wf Σ ∥) G :
+  is_graph_of_uctx G (global_uctx Σ) -> wGraph.is_index_of G (wGraph.index_of G).
+Proof.
+  intro HG. destruct wfΣ as [wfΣ].
+  assert (HI : wGraph.invariants G).
+  { eapply global_uctx_graph_invariants; [exact HG|]. now eapply wf_global_uctx_invariants. }
+  exact (wGraph.index_of_correct G).
+Qed.
+
+Lemma graph_index_of_wf_ext {cf:checker_flags} (Σ : global_env_ext) (wfΣ : ∥ wf_ext Σ ∥) G :
+  is_graph_of_uctx G (global_ext_uctx Σ) -> wGraph.is_index_of G (wGraph.index_of G).
+Proof.
+  intro HG. destruct wfΣ as [wfΣ].
+  assert (HI : wGraph.invariants G).
+  { eapply global_uctx_graph_invariants; [exact HG|]. now eapply wf_ext_global_uctx_invariants. }
+  exact (wGraph.index_of_correct G).
+Qed.
+
+Lemma reference_impl_graph_invariants {cf:checker_flags} (X : reference_impl) :
+  wGraph.invariants (reference_impl_graph X).
+Proof.
+  destruct (reference_impl_wf X) as [wfX].
+  eapply global_uctx_graph_invariants; [exact (reference_impl_graph_wf X)|].
+  now eapply wf_global_uctx_invariants.
+Qed.
+
 Definition build_reference_impl {cf:checker_flags} (Σ : global_env) (wfΣ : ∥ wf Σ ∥) : reference_impl :=
+  let G := graph_of_wf wfΣ in
   {| reference_impl_env := Σ; reference_impl_wf := wfΣ;
-     reference_impl_graph := (graph_of_wf wfΣ).π1;
-     reference_impl_graph_wf := (graph_of_wf wfΣ).π2 |}.
+     reference_impl_graph := G.π1;
+     reference_impl_graph_wf := G.π2;
+     reference_impl_index := wGraph.index_of G.π1;
+     reference_impl_index_wf := graph_index_of_wf Σ wfΣ G.π1 G.π2 |}.
 
 Definition build_reference_impl_ext {cf:checker_flags} {guard : abstract_guard_impl}
   (Σ : global_env_ext) (wfΣ : ∥ wf_ext Σ ∥) : reference_impl_ext :=
+  let G := graph_of_wf_ext wfΣ in
   {| reference_impl_env_ext := Σ; reference_impl_ext_wf := wfΣ;
-     reference_impl_ext_graph := (graph_of_wf_ext wfΣ).π1;
-     reference_impl_ext_graph_wf := (graph_of_wf_ext wfΣ).π2 |}.
+     reference_impl_ext_graph := G.π1;
+     reference_impl_ext_graph_wf := G.π2;
+     reference_impl_ext_index := wGraph.index_of G.π1;
+     reference_impl_ext_index_wf := graph_index_of_wf_ext Σ wfΣ G.π1 G.π2 |}.
 
-(** The graph of [(X, udecl)], from the stored graph of [X] and the universes of [udecl]:
-    adding a declaration's few universes does not rebuild the global graph. *)
+(** The graph of [(X, udecl)] and its index, from the stored graph and index of [X] and the
+    universes of [udecl]: adding a declaration's few universes neither rebuilds the global
+    graph nor renumbers it. *)
 Definition ext_graph_of_udecl {cf:checker_flags} (X : reference_impl) (udecl : universes_decl)
   (wfΣ : ∥ wf_ext (reference_impl_env X, udecl) ∥) :
-  ∑ G, is_graph_of_uctx G (global_ext_uctx (reference_impl_env X, udecl)) :=
+  ∑ G, ∑ ix, is_graph_of_uctx G (global_ext_uctx (reference_impl_env X, udecl)) /\
+             wGraph.is_index_of G ix :=
   match gc_of_uctx (uctx_of_udecl udecl) as o
     return gc_of_uctx (uctx_of_udecl udecl) = o ->
-      ∑ G, is_graph_of_uctx G (global_ext_uctx (reference_impl_env X, udecl)) with
+      ∑ G, ∑ ix, is_graph_of_uctx G (global_ext_uctx (reference_impl_env X, udecl)) /\
+                 wGraph.is_index_of G ix with
   | Some gctx => fun H =>
-    (add_uctx gctx (reference_impl_graph X); is_graph_of_uctx_add H (reference_impl_graph_wf X))
-  | None => fun _ => graph_of_wf_ext wfΣ
+    (add_uctx gctx (reference_impl_graph X);
+      (add_uctx_ix gctx (reference_impl_index X);
+        conj (is_graph_of_uctx_add H (reference_impl_graph_wf X))
+             (add_uctx_ix_correct gctx _ _ (reference_impl_graph_invariants X)
+                (reference_impl_index_wf X))))
+  | None => fun _ =>
+    let G := graph_of_wf_ext wfΣ in
+    (G.π1; (wGraph.index_of G.π1; conj G.π2 (graph_index_of_wf_ext _ wfΣ G.π1 G.π2)))
   end eq_refl.
 
 Definition make_reference_impl_ext {cf:checker_flags} {guard : abstract_guard_impl}
   (X : reference_impl) (udecl : universes_decl) (wfΣ : ∥ wf_ext (reference_impl_env X, udecl) ∥)
   : reference_impl_ext :=
+  let r := ext_graph_of_udecl X udecl wfΣ in
+  let r2 := r.π2 in
   {| reference_impl_env_ext := (reference_impl_env X, udecl); reference_impl_ext_wf := wfΣ;
-     reference_impl_ext_graph := (ext_graph_of_udecl X udecl wfΣ).π1;
-     reference_impl_ext_graph_wf := (ext_graph_of_udecl X udecl wfΣ).π2 |}.
+     reference_impl_ext_graph := r.π1;
+     reference_impl_ext_graph_wf := proj1 r2.π2;
+     reference_impl_ext_index := r2.π1;
+     reference_impl_ext_index_wf := proj2 r2.π2 |}.
 
 Program Definition reference_pop {cf:checker_flags} (Σ : reference_impl) : reference_impl :=
 match Σ.(declarations) with
@@ -69,7 +119,9 @@ match Σ.(declarations) with
  | (d::decls) =>
    {| reference_impl_env := {| universes := Σ.(universes); declarations := decls; retroknowledge := Σ.(retroknowledge) |};
       reference_impl_graph := Σ.(reference_impl_graph);
-      reference_impl_graph_wf := Σ.(reference_impl_graph_wf) |}
+      reference_impl_graph_wf := Σ.(reference_impl_graph_wf);
+      reference_impl_index := Σ.(reference_impl_index);
+      reference_impl_index_wf := Σ.(reference_impl_index_wf) |}
 end.
 Next Obligation.
 destruct Σ.(reference_impl_wf). sq.
@@ -86,7 +138,7 @@ Program Global Instance canonical_abstract_env_struct {cf:checker_flags} {guard 
   abstract_env_struct reference_impl reference_impl_ext :=
   {|
   abstract_env_lookup := fun Σ => lookup_env (reference_impl_env_ext Σ) ;
-  abstract_env_leqb_level_n := fun Σ => leqb_level_n (reference_impl_ext_graph Σ) ;
+  abstract_env_leqb_level_n := fun Σ => leqb_level_n_ix (reference_impl_ext_index Σ) ;
   abstract_env_level_mem := fun Σ l => LevelSet.mem l (global_ext_levels (reference_impl_env_ext Σ));
   abstract_env_guard := fun Σ fix_cofix => guard_impl fix_cofix (reference_impl_env_ext Σ);
   abstract_env_ext_rel := fun X Σ => Σ = reference_impl_env_ext X;
@@ -97,11 +149,15 @@ Program Global Instance canonical_abstract_env_struct {cf:checker_flags} {guard 
   abstract_env_add_decl := fun X kn d H =>
     {| reference_impl_env := add_global_decl X.(reference_impl_env) (kn,d);
        reference_impl_graph := X.(reference_impl_graph);
-       reference_impl_graph_wf := X.(reference_impl_graph_wf) |};
+       reference_impl_graph_wf := X.(reference_impl_graph_wf);
+       reference_impl_index := X.(reference_impl_index);
+       reference_impl_index_wf := X.(reference_impl_index_wf) |};
   abstract_env_is_consistent X uctx :=
    let G := reference_impl_graph X in
+   let ix := reference_impl_index X in
    let G' := add_uctx uctx G in
-   wGraph.is_acyclic' G' && wGraph.IsFullSubgraph.is_full_extension' G G' ;
+   let ix' := add_uctx_ix uctx ix in
+   wGraph.is_acyclic_ix ix' && wGraph.IsFullSubgraph.is_full_extension_ix G ix G' ix' ;
   abstract_env_add_udecl X udecl Hglobal := make_reference_impl_ext X udecl _ ;
   abstract_primitive_constant := fun X tag => primitive_constant X tag;
   abstract_env_rel := fun X Σ => Σ = reference_impl_env X ;
@@ -336,6 +392,11 @@ Next Obligation.
   assert (consistent (global_ext_uctx X).2) as HC.
       { sq; apply (global_ext_uctx_consistent _ H). }
   simpl in HC. apply gc_consistent_iff in HC.
+  assert (HIx : wGraph.invariants (reference_impl_ext_graph X)).
+  { eapply global_uctx_graph_invariants; [exact (reference_impl_ext_graph_wf X)|].
+    now eapply wf_ext_global_uctx_invariants. }
+  unfold leqb_level_n_ix.
+  rewrite (wGraph.leqb_vertices_ix_correct _ _ _ _ _ (reference_impl_ext_index_wf X)).
   eapply leqb_level_n_spec; eauto.
     + eapply gc_of_uctx_invariants; try eapply wf_ext_global_uctx_invariants; eauto.
     + clear Hl Hl'. Opaque gc_of_constraints. cbn in *. Transparent gc_of_constraints.
@@ -360,7 +421,9 @@ Next Obligation.
         now cbn in H0.
      }
   pose proof (reference_impl_graph_wf X) as HG.
-  set (gph := reference_impl_graph X) in *. clearbody gph. simpl in HG.
+  pose proof (reference_impl_index_wf X) as Hix.
+  set (gph := reference_impl_graph X) in *.
+  set (ix := reference_impl_index X) in *. clearbody gph ix. simpl in HG.
   pose proof (HG' := is_graph_of_uctx_add Hudecl' HG).
   assert (Hinv : wGraph.invariants gph).
   { apply (global_uctx_graph_invariants HG H0). }
@@ -368,6 +431,9 @@ Next Obligation.
   { apply (global_uctx_graph_invariants HG' H1). }
   assert (Hsub : wGraph.subgraph gph (add_uctx (t1, t2) gph)).
   { apply add_uctx_subgraph. }
+  pose proof (add_uctx_ix_correct (t1, t2) gph ix Hinv Hix) as Hix'.
+  rewrite (wGraph.is_acyclic_ix_eq _ _ Hix')
+          (wGraph.IsFullSubgraph.is_full_extension_ix_eq gph ix _ _ Hix Hix').
   rewrite (wGraph.IsFullSubgraph.is_acyclic_full_extension'_iff
              gph (add_uctx (t1, t2) gph) Hsub).
   rewrite andb_and.
