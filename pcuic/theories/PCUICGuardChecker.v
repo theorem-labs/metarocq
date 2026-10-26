@@ -28,8 +28,10 @@ Set Default Goal Selector "!".
   [head_step] in [PCUICGuardReduce].  The cofixpoint case is
   [check_cofix_block] ([PCUICGuardCoFix]).
 
-  The port differs from the kernel's fixpoint checker in these ways; each of
-  them refuses more than the kernel, or follows PCUIC's reduction:
+  The port differs from the kernel's fixpoint checker in these ways.  All
+  but one refuse more than the kernel, or follow PCUIC's reduction; the
+  exception is the unfolding of constants (below), which can accept a block
+  that the kernel refuses:
 
   - Every reduction the check performs is a sequence of single [head_step]
     steps: the reductions of [subterm_specif], [restrict_spec],
@@ -61,8 +63,14 @@ Set Default Goal Selector "!".
   - A variable of the outer context is an opaque assumption with no
     subterm information; an index beyond the outer context is refused.
   - Each kernel anomaly or assertion, and each name [lookup] does not know,
-    is a refusal.  Existential and named variables are refused.  Constants
-    with a body unfold.
+    is a refusal.  Existential and named variables are refused.
+  - **Accepts more:** constants with a body unfold, including proofs closed
+    by [Qed], which the quoting keeps as bodies (PCUIC has no opacity).
+    The kernel never unfolds an opaque constant, so a fixpoint whose call
+    is guarded only through such a body, for example
+    [fix f n := c (fun z => f z) n] with [c] a [Qed] constant that applies
+    its function argument to a subterm, is accepted here and refused by
+    the kernel.
   - A match on an inductive type that is not [Finite] gives no subterm in
     its branches, whatever the scrutinee is.
   - A relevant fixpoint is refused on an inductive whose sort is [SProp]
