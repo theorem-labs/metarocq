@@ -176,28 +176,7 @@ Section Spines.
     is_closed_context Γ ->
     is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
     Σ ;;; Γ ⊢ it_mkProd_or_LetIn Δ T ⇝ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T).
-  Proof.
-    intros clΓ clt.
-    eapply into_closed_red => //.
-    induction Δ in Γ, T |- * using ctx_length_rev_ind; simpl; auto.
-    - rewrite expand_lets_nil. reflexivity.
-    - rewrite smash_context_app_expand /=.
-      destruct d as [na [b|] ty].
-      * rewrite expand_lets_vdef {1}it_mkProd_or_LetIn_app /= subst_context_nil app_context_nil_l.
-        rewrite expand_lets_smash_context /= expand_lets_k_ctx_nil.
-        rewrite /expand_lets_ctx /expand_lets_k_ctx /= subst_empty lift0_id lift0_context.
-        rewrite /mkProd_or_LetIn /=.
-        etransitivity.
-        + eapply red1_red, red_zeta.
-        + rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r.
-          now eapply X; len.
-      * rewrite expand_lets_vass it_mkProd_or_LetIn_app /=.
-        rewrite it_mkProd_or_LetIn_app /=.
-        eapply red_prod. reflexivity.
-        rewrite expand_lets_smash_context /= expand_lets_k_ctx_nil.
-        rewrite expand_lets_ctx_assumption_context. repeat constructor.
-        now eapply X.
-  Qed.
+  Proof. exact (red_it_mkProd_or_LetIn_to_smash (wfΣ := wfΣ) Γ Δ T). Qed.
 
   Lemma cumul_it_mkProd_or_LetIn_smash Γ Δ T :
     is_closed_context Γ ->

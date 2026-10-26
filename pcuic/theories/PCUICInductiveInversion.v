@@ -66,24 +66,6 @@ Qed.
 Section CheckShape.
   Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}.
 
-  Lemma check_one_fix_inv d ty mind :
-    check_one_fix (def_with_type d ty) = Some mind ->
-    ∑ ctx concl c i u args,
-      [× ty = it_mkProd_or_LetIn ctx concl,
-         nth_error (List.rev (smash_context [] ctx)) (rarg d) = Some c &
-         decl_type c = mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u) args].
-  Proof using Type.
-    rewrite /check_one_fix /def_with_type /=.
-    destruct (decompose_prod_assum [] ty) as [ctx concl] eqn:decomp.
-    destruct (nth_error (List.rev (smash_context [] ctx)) (rarg d)) as [c|] eqn:hnth => //.
-    destruct (decompose_app (decl_type c)) as [hd l] eqn:da.
-    destruct (destInd hd) as [[[mind' i'] u']|] eqn:di => //.
-    move=> [=] <-.
-    exists ctx, concl, c, i', u', l. split => //.
-    - eapply (decompose_prod_assum_it_mkProd_or_LetIn [] ty) in decomp. now cbn in decomp.
-    - destruct hd => //; noconf di. now eapply decompose_app_inv in da.
-  Qed.
-
   Lemma check_one_cofix_inv d ty mind :
     check_one_cofix (def_with_type d ty) = Some mind ->
     ∑ ctx i u args,

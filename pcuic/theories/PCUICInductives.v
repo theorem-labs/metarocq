@@ -2173,7 +2173,7 @@ Proof.
 Qed.
 
 (** A type reduces to the product over its smashed context
-    (also proved, later in the build order, in [PCUICClassification]). *)
+    ([PCUICClassification.red_it_mkProd_or_LetIn_smash] restates it there). *)
 Lemma red_it_mkProd_or_LetIn_to_smash {cf} {Σ} {wfΣ : wf Σ} Γ Δ T :
   is_closed_context Γ ->
   is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
@@ -2264,30 +2264,6 @@ Proof.
   - exists (it_mkProd_or_LetIn sctx' (expand_lets ctx concl)). split.
     + now transitivity (it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx concl)).
     + eapply check_one_fix_it_mkProd_or_LetIn_assum; [exact ass'|exact hnth'|reflexivity].
-Qed.
-
-(** The cofixpoint lift: a reduction of the conclusion, in the context of the products,
-    to an applied inductive gives a reduct of the declared type on which
-    [check_one_cofix] finds that inductive's block. *)
-Lemma red_concl_check_one_cofix {cf} {Σ} {wfΣ : wf Σ} Γ d ctx concl ind u args :
-  is_open_term Γ (dtype d) ->
-  decompose_prod_assum [] (dtype d) = (ctx, concl) ->
-  Σ ;;; Γ ,,, ctx ⊢ concl ⇝ mkApps (tInd ind u) args ->
-  ∑ ty, (Σ ;;; Γ ⊢ dtype d ⇝ ty) × (check_one_cofix (def_with_type d ty) = Some (inductive_mind ind)).
-Proof.
-  intros op decomp hred.
-  have clΓ : is_closed_context Γ.
-  { move: (clrel_ctx hred). rewrite on_free_vars_ctx_app => /andP[] //. }
-  have eqty := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
-  cbn in eqty.
-  exists (it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args)). split.
-  - eapply into_closed_red => //.
-    rewrite eqty. eapply red_it_mkProd_or_LetIn. exact (clrel_rel hred).
-  - rewrite /check_one_cofix /def_with_type /=.
-    rewrite decompose_prod_assum_it_mkProd; first apply is_ind_app_head_mkApps.
-    cbn -[decompose_app].
-    rewrite decompose_app_mkApps //.
-    now destruct ind.
 Qed.
 
 Lemma wf_local_expand_lets {cf} {Σ} {wfΣ : wf Σ} {Γ Δ Γ'} :

@@ -308,19 +308,6 @@ Proof.
   now rewrite skipn_0 in w.
 Qed.
 
-(** The conclusion of a declared type is welltyped under its products. *)
-Lemma isType_concl_welltyped {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
-  {Γ T ctx concl} :
-  isType Σ Γ T ->
-  decompose_prod_assum [] T = (ctx, concl) ->
-  welltyped Σ (Γ ,,, ctx) concl.
-Proof.
-  intros isty decomp.
-  have eqty := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
-  cbn in eqty. rewrite eqty in isty.
-  now eapply isType_welltyped, isType_it_mkProd_or_LetIn_inv.
-Qed.
-
 (** Two reducts of one declared type give the same inductive block. *)
 Lemma fix_red_ind_unique {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ d m1 m2} :
   isType Σ Γ (dtype d) ->
@@ -385,26 +372,6 @@ Proof.
   intros ond h1 h2.
   eapply cofix_red_ind_unique; [|exact h1|exact h2].
   now eapply isTypeRel_isType.
-Qed.
-
-(** An applied inductive type is not a product. *)
-Lemma mkApps_tInd_not_prod {i u l na A B} : mkApps (tInd i u) l = tProd na A B -> False.
-Proof.
-  destruct l using rev_ind; cbn; [discriminate|].
-  rewrite mkApps_app; cbn; discriminate.
-Qed.
-
-(** A telescope over an applied inductive type is a product only through its
-    outermost binder. *)
-Lemma it_mkProd_or_LetIn_eq_tProd {ctx i u l na A B} :
-  it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) = tProd na A B ->
-  ∑ ctx', (ctx = ctx' ++ [vass na A]) × (B = it_mkProd_or_LetIn ctx' (mkApps (tInd i u) l)).
-Proof.
-  destruct ctx using rev_ind.
-  - cbn. intros h. exfalso. now eapply mkApps_tInd_not_prod.
-  - clear IHctx. rewrite it_mkProd_or_LetIn_app /=.
-    destruct x as [na' [b|] ty]; cbn; [intros [=]|intros [= <- <- <-]].
-    eexists; split; reflexivity.
 Qed.
 
 (** [check_one_cofix] on a telescope over an applied inductive type. *)
@@ -1643,7 +1610,7 @@ Section Typecheck.
                 by (now eapply red_it_mkProd_or_LetIn_mkApps_Ind);
               destruct hv as [ctx3 [l3 ->]];
               destruct (invert_red_prod rv2) as [A' [B' [eqv rA rB]]];
-              destruct (it_mkProd_or_LetIn_eq_tProd eqv) as [ctx4 [_ eqB]];
+              destruct (tProd_eq_it_mkProd_Ind (eq_sym eqv)) as [ctx4 [_ eqB]];
               apply absurd; exists H; intros Σ0 wfΣ0;
               rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
               sq; exists u, l3, ctx4; rewrite -eqB; exact rB ]

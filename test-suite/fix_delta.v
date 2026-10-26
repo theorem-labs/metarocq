@@ -7,10 +7,12 @@
    must still reject a recursive argument whose type does not reduce to an
    inductive type, and mutual fixpoints over different inductive blocks.
 
-   The first part must be accepted.  The second part must stay rejected; each
-   [Fail] there must fail with the "Ill-formed (co)fixpoint" message, not with
-   some other error.  The inductive types are declared here, without template
-   polymorphism, so that nothing but the (co)fixpoint rule is exercised. *)
+   The first part must be accepted.  The second part must stay rejected.  This
+   file checks acceptance and refusal only: [Fail] accepts any error.  The lane
+   driver [lanes/fix-delta/run-fix-delta-tests.sh] checks that each [Fail]
+   fails with the "Ill-formed (co)fixpoint" message, not with some other error.
+   The inductive types are declared here, without template polymorphism, so
+   that nothing but the (co)fixpoint rule is exercised. *)
 
 From MetaRocq.Template Require Import Loader.
 From MetaRocq.SafeCheckerPlugin Require Import Loader.
@@ -99,8 +101,8 @@ MetaRocq SafeCheck @fd_from.
 
 (* Rocq's elaborator and [Typing] reject a [fix] whose recursive argument is
    not of an inductive type, even with guard checking off
-   ([Inductive.inductive_of_mutfix] runs unconditionally), so R1-R3, R6 and R7
-   build the term with Ltac2's unsafe constructors and give it to SafeCheck
+   ([Inductive.inductive_of_mutfix] runs unconditionally), so R1-R3, R6, R7
+   and R15 build the term with Ltac2's unsafe constructors and give it to SafeCheck
    with [exact_no_check], under a type ascription.  The kernel never sees a
    term given to SafeCheck; MetaRocq checks the term itself. *)
 Module FdUnsafe.
@@ -133,6 +135,13 @@ Ltac2 fixstuck () : constr :=
          (Constr.Unsafe.make (Constr.Unsafe.Prod (bnd @x (sel 1)) 'nat)))) |]
     [| Constr.Unsafe.make (Constr.Unsafe.Lambda (bnd @b 'bool)
          (Constr.Unsafe.make (Constr.Unsafe.Lambda (bnd @x (sel 1)) '0))) |]).
+(* [let T := fd_str in fix f (x : T) {struct x} : nat := 0]. *)
+Ltac2 letstrfix () : constr :=
+  let rel n := Constr.Unsafe.make (Constr.Unsafe.Rel n) in
+  Constr.Unsafe.make (Constr.Unsafe.LetIn (bnd @T 'Set) 'fd_str
+    (Constr.Unsafe.make (Constr.Unsafe.Fix [| 0 |] 0
+      [| bnd @f (Constr.Unsafe.make (Constr.Unsafe.Prod (bnd @x (rel 1)) 'nat)) |]
+      [| Constr.Unsafe.make (Constr.Unsafe.Lambda (bnd @x (rel 2)) '0) |]))).
 Ltac2 unchecked (c : constr) := ltac1:(t |- exact_no_check t) (Ltac1.of_constr c).
 End FdUnsafe.
 Import FdUnsafe.
@@ -194,5 +203,21 @@ Fail MetaRocq SafeCheck (ltac2:(unchecked (fixhidden 'fd_natfun)) : fd_natfun).
    checker can find an inductive. *)
 Fail MetaRocq SafeCheck
   (ltac2:(unchecked (fixstuck ())) : forall b : bool, fd_sel b -> nat).
+
+(* R13: mutual cofixpoints over two different coinductive blocks. *)
+CoInductive fd_str2 : Set := fd_scons2 : nat -> fd_str2 -> fd_str2.
+CoFixpoint fd_cmut1 : fd_str := fd_scons 1 fd_cmut1
+with fd_cmut2 : fd_str2 := fd_scons2 2 fd_cmut2.
+Fail MetaRocq SafeCheck @fd_cmut1.
+
+(* R14: a cofixpoint whose codomain hides a product behind a definition and
+   ends in an inductive, not a coinductive, type. *)
+Definition fd_fnat := nat -> nat.
+CoFixpoint fd_cbad_hidden : fd_fnat := fun n => fd_cbad_hidden n.
+Fail MetaRocq SafeCheck @fd_cbad_hidden.
+
+(* R15: the recursive argument's type is a let-bound variable whose value is a
+   coinductive type. *)
+Fail MetaRocq SafeCheck (ltac2:(unchecked (letstrfix ())) : fd_str -> nat).
 
 Set Guard Checking.
