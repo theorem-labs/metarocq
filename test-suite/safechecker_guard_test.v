@@ -35,6 +35,43 @@ Fixpoint r_f (x : R nat) : nat :=
 
 MetaRocq SafeCheck r_f.
 
+(** A parameter of a nested fixpoint is uniform only if no call of the
+    nested block is an argument of an application headed by a variable,
+    as in Rocq's kernel.  In [u_f], the nested call [g u m'] is an argument
+    of [g] itself, so [u] is not uniform and [u_f u] is a call on a variable
+    that is not a subterm. *)
+Inductive lst : Set := nl : lst | cs : nat -> lst -> lst.
+
+Unset Guard Checking.
+Fixpoint u_f (l : lst) {struct l} : nat :=
+  match l with
+  | nl => 0
+  | cs x t =>
+    (fix g (u : lst) (m : nat) (acc : nat) {struct m} : nat :=
+       match m with
+       | O => u_f u
+       | S m' => g u m' (g u m' acc)
+       end) t x 0
+  end.
+Set Guard Checking.
+
+Fail MetaRocq SafeCheck u_f.
+
+(** Twin: the nested call is under a constructor, so [u] is uniform and is
+    the subterm [t]. *)
+Fixpoint u_g (l : lst) {struct l} : nat :=
+  match l with
+  | nl => 0
+  | cs x t =>
+    (fix g (u : lst) (m : nat) (acc : nat) {struct m} : nat :=
+       match m with
+       | O => u_g u
+       | S m' => S (g u m' acc)
+       end) t x 0
+  end.
+
+MetaRocq SafeCheck u_g.
+
 (** A cofixpoint may produce a call to its block only in a recursive argument
     of the constructor, never in a non-recursive one. *)
 CoInductive Stream (A : Type) : Type := Cons : A -> Stream A -> Stream A.

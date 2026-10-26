@@ -71,8 +71,9 @@ Set Default Goal Selector "!".
     [fix f n := c (fun z => f z) n] with [c] a [Qed] constant that applies
     its function argument to a subterm, is accepted here and refused by
     the kernel.
-  - A match on an inductive type that is not [Finite] gives no subterm in
-    its branches, whatever the scrutinee is.
+  - A match on a coinductive ([CoFinite]) type gives no subterm in its
+    branches, and a projection out of a coinductive ([CoFinite]) record
+    gives no subterm, whatever the scrutinee or the projected term is.
   - A relevant fixpoint is refused on an inductive whose sort is [SProp]
     ([is_allowed_fixpoint]); PCUIC always checks eliminations, so the
     kernel's [ind_ignores_elim_constraints] is false here.  It is also
@@ -358,7 +359,10 @@ Definition is_block_rel (k nb i : nat) : bool := Nat.leb k i && Nat.ltb i (k + n
   indices from 0: in a stripped body under [k] binders, the functions of
   the nested block are [k .. k + nb - 1] and its [j]-th parameter is
   [k - 1 - j].  The kernel's count is a minimum over all occurrences, so
-  the order of the traversal does not matter. *)
+  the order of the traversal does not matter.  As in the kernel, an
+  argument of an application headed by a variable is visited as the kernel's
+  [fold_constr_with_binders] visits it: an argument that is a function of
+  the nested block, bare or applied, is a bare occurrence and gives [0]. *)
 
 Fixpoint uniform_prefix (k nunif j : nat) (l : list term) : nat :=
   match l with
@@ -377,19 +381,17 @@ Fixpoint fup (nb k acc : nat) (c : term) {struct c} : nat :=
   | tApp u v =>
     match fst (decompose_app c) with
     | tRel i =>
-      let fix spine (u : term) (acc : nat) {struct u} : nat :=
-        match u with
-        | tApp u' a =>
-          spine u' (match a with
-                    | tRel m => if is_block_rel k nb m then 0 else acc
-                    | _ => fup nb k acc a
-                    end)
+      let arg (acc : nat) (a : term) :=
+        match fst (decompose_app a) with
+        | tRel m => if is_block_rel k nb m then 0 else acc
         | _ => acc
         end in
-      let acc' := spine u (match v with
-                           | tRel m => if is_block_rel k nb m then 0 else acc
-                           | _ => fup nb k acc v
-                           end) in
+      let fix spine (u : term) (acc : nat) {struct u} : nat :=
+        match u with
+        | tApp u' a => spine u' (arg (fup nb k acc a) a)
+        | _ => acc
+        end in
+      let acc' := spine u (arg (fup nb k acc v) v) in
       if is_block_rel k nb i then uniform_prefix k acc' 0 (snd (decompose_app c)) else acc'
     | _ => fup nb k (fup nb k acc u) v
     end
@@ -658,7 +660,7 @@ Section Checker.
     end.
 
   (** [branches_specif]: the deferred specifications of the arguments of
-      each constructor.  A match on a type that is not [Finite] gives
+      each constructor.  A match on a coinductive ([CoFinite]) type gives
       [Not_subterm] everywhere. *)
   Definition branches_specif (ind : inductive) (cs : lspec) : M (list (list lspec)) :=
     tree <- tree_of ind ;;
@@ -666,9 +668,9 @@ Section Checker.
     let car := map (fun l => #|l|) x.2 in
     mib <- lookup_mib ind.(inductive_mind) ;;
     match mib.(ind_finite) with
-    | Finite =>
+    | CoFinite => ret (map (fun nca => repeat (LVal Not_subterm) nca) car)
+    | _ =>
       mapi_m_rec (fun i nca => map_m (fun j => alloc (TBranch cs ind i nca j)) (seq 0 nca)) 0 car
-    | _ => ret (map (fun nca => repeat (LVal Not_subterm) nca) car)
     end.
 
   Definition has_constant_params (nvars k : nat) (ind : inductive) (args : list term) : M bool :=
@@ -974,13 +976,18 @@ Section Checker.
         | tVar _ => reject err_var
         | tProj pr c =>
           subt <- c_spec r stack c ;;
-          match subt with
-          | Subterm internal _ wf =>
-            subs <- of_rt (dest_subterms fuel wf) ;;
-            a0 <- of_option err_anomaly (nth_error subs 0) ;;
-            a <- of_option err_anomaly (nth_error a0 pr.(proj_arg)) ;;
-            spec_of_tree internal a
-          | s => ret s
+          mib <- lookup_mib pr.(proj_ind).(inductive_mind) ;;
+          match mib.(ind_finite) with
+          | CoFinite => ret Not_subterm
+          | _ =>
+            match subt with
+            | Subterm internal _ wf =>
+              subs <- of_rt (dest_subterms fuel wf) ;;
+              a0 <- of_option err_anomaly (nth_error subs 0) ;;
+              a <- of_option err_anomaly (nth_error a0 pr.(proj_arg)) ;;
+              spec_of_tree internal a
+            | s => ret s
+            end
           end
         | tConst c _ =>
           match lookup c with Some (ConstantDecl _) => ret Not_subterm | _ => reject err_const_missing end

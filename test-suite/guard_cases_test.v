@@ -369,3 +369,77 @@ Example tf_syntactic_rejects :
 Proof. vm_compute. reflexivity. Qed.
 Example tf_refused : check_guard_impl Fix (empty_ext Σ_tf) [] tf_block = false.
 Proof. vm_compute. reflexivity. Qed.
+
+(** ** A recursive call on a field projected out of a coinductive
+
+    The same nesting with a negative coinductive record [PStr] and primitive
+    projections: [TP := CP : PStr TP -> TP] and
+    [fix tp_f (x : TP) : nat := match x with CP y => tp_f (pshd TP y) end].
+    The call's argument is a field of [y : PStr TP], a value of a
+    coinductive type, taken by a projection rather than a [match], so it is
+    not a structural subterm of [x] either.  Case well-formedness does not
+    refuse this block, so the check itself must.
+
+    The controls have the same shapes on records declared with [Record] (so
+    [BiFinite], not coinductive): [TR := CR : BoxR TR -> TR], where [BoxR]
+    has primitive projections and [tr_g] calls itself on [bget TR y], and
+    [TM := CM : BoxM TM -> TM], where [BoxM] has none and [tr_m] calls itself
+    on the field taken by a [match] on [y].  Rocq accepts both.  A
+    [BiFinite] record is not recursive, so it has no infinite values, and a
+    subterm through it is a structural subterm. *)
+
+Set Primitive Projections.
+CoInductive PStr (A : Set) : Set := PSCons { pshd : A; pstl : PStr A }.
+Record BoxR (A : Set) : Set := mkBR { bget : A }.
+Unset Primitive Projections.
+Record BoxM (A : Set) : Set := mkBM { bgm : A }.
+Set Warnings "-register-all".
+Inductive TP : Set := CP : PStr TP -> TP.
+Inductive TR : Set := CR : BoxR TR -> TR.
+Inductive TM : Set := CM : BoxM TM -> TM.
+Set Warnings "register-all".
+
+Unset Guard Checking.
+MetaRocq Quote Recursively Definition q_tp :=
+  (fix tp_f (x : TP) : nat := match x with CP y => tp_f (pshd TP y) end).
+Set Guard Checking.
+MetaRocq Quote Recursively Definition q_tr :=
+  (fix tr_g (x : TR) : nat := match x with CR y => tr_g (bget TR y) end).
+MetaRocq Quote Recursively Definition q_trm :=
+  (fix tr_m (x : TM) : nat := match x with CM y => match y with mkBM t => tr_m t end end).
+
+(** The fixpoint block of a quoted term. *)
+Definition fix_block (p : Ast.Env.global_env * Ast.term) : mfixpoint term :=
+  match trans (trans_global_env p.1) p.2 with
+  | tFix mfix _ => mfix
+  | _ => []
+  end.
+
+Definition Σ_tp : global_env := trans_env_env (trans_global_env q_tp.1).
+Definition tp_block : mfixpoint term := fix_block q_tp.
+Definition Σ_tr : global_env := trans_env_env (trans_global_env q_tr.1).
+Definition tr_block : mfixpoint term := fix_block q_tr.
+Definition Σ_trm : global_env := trans_env_env (trans_global_env q_trm.1).
+Definition trm_block : mfixpoint term := fix_block q_trm.
+
+Example tp_block_one : #|tp_block| = 1.
+Proof. vm_compute. reflexivity. Qed.
+Example tp_syntactic_rejects :
+  is_reject (check_guard_gen (lookup_env Σ_tp) Σ_tp.(retroknowledge) guard_fuel Fix 0
+               (strip_mfix tp_block)) = true.
+Proof. vm_compute. reflexivity. Qed.
+Example tp_refused : check_guard_impl Fix (empty_ext Σ_tp) [] tp_block = false.
+Proof. vm_compute. reflexivity. Qed.
+
+Example tr_block_one : #|tr_block| = 1.
+Proof. vm_compute. reflexivity. Qed.
+Example tr_syntactic_accepts :
+  check_guard_gen (lookup_env Σ_tr) Σ_tr.(retroknowledge) guard_fuel Fix 0
+    (strip_mfix tr_block) = Accept.
+Proof. vm_compute. reflexivity. Qed.
+Example trm_block_one : #|trm_block| = 1.
+Proof. vm_compute. reflexivity. Qed.
+Example trm_syntactic_accepts :
+  check_guard_gen (lookup_env Σ_trm) Σ_trm.(retroknowledge) guard_fuel Fix 0
+    (strip_mfix trm_block) = Accept.
+Proof. vm_compute. reflexivity. Qed.
