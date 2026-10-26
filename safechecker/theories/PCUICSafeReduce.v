@@ -449,7 +449,7 @@ Corollary R_Acc_aux :
 
     _reduce_stack Γ t π h reduce with red_viewc t π := {
 
-    | red_view_Rel c π with RedFlags.zeta flags := {
+    | red_view_Rel c π with RedFlags.unfold_local flags := {
       | true with inspect (nth_error (Γ ,,, stack_context π) c) := {
         | @exist None eq := False_rect _ _ ;
         | @exist (Some d) eq with inspect d.(decl_body) := {
@@ -1537,7 +1537,7 @@ Corollary R_Acc_aux :
             eapply PCUICConversion.invert_cumul_prim_type_prod; eauto.
     - unfold zipp. case_eq (decompose_stack π). intros l ρ e.
       constructor. constructor. eapply whne_mkApps.
-      eapply whne_rel_nozeta. assumption.
+      eapply whne_rel_nounfold. assumption.
     - match goal with
       | |- context [ reduce ?x ?y ?z ] =>
         case_eq (reduce x y z) ;

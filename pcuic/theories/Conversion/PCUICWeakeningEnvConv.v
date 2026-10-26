@@ -3,7 +3,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
   PCUICWeakeningEnv PCUICEquality PCUICReduction PCUICCumulativity PCUICCumulativitySpec
-  (* PCUICContextSubst *) (* PCUICUnivSubst *) (* PCUICCases *) (* PCUICTyping *)
+  (* PCUICContextSubst *) (* PCUICUnivSubst *) (* PCUICCases *) PCUICTyping
   (* PCUICGuardCondition *) (* PCUICGlobalEnv *).
 From Equations Require Import Equations.
 

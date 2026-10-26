@@ -1401,15 +1401,8 @@ Include PCUICLookup.
 
 Derive NoConfusion for global_decl.
 
-Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
-  PCUICTerm
-  PCUICEnvironment
-  PCUICTermUtils
-  PCUICEnvTyping
-  PCUICConversion
-  PCUICLookup
-.
-Include PCUICGlobalMaps.
+(* [PCUICGlobalMaps] is instantiated in PCUICTyping: it takes the arity
+   relation of PCUICArityRed, which needs reduction. *)
 
 (** ** Entries
 

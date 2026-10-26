@@ -2343,7 +2343,7 @@ End monad_Alli_nth_forall.
                (x : {X : X_env_type | forall Σ : global_env, Σ ∼ X -> Σ = {| universes := univs; declarations := decls'; retroknowledge := retro |}})
                (X : X_env_type)
                (wf_ : forall Σ : global_env, Σ ∼ X -> Σ = {| universes := univs; declarations := decls'; retroknowledge := retro |})
-               (isfresh : ∥ PCUICAst.fresh_global d.1 decls' ∥)
+               (isfresh : ∥ PCUICTyping.fresh_global d.1 decls' ∥)
                (udecl := universes_decl_of_decl d.2 : universes_decl)
                (X' : {X_ext : X_env_ext_type | check_wf_env_ext_prop X X_ext udecl}),
         forall Σ : global_env_ext, wf_ext Σ -> Σ ∼_ext ` X' -> NormalizationIn Σ},

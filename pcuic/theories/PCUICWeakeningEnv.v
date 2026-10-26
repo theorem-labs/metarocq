@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICArityRed.
 From Equations Require Import Equations.
 From MetaRocq.Utils Require Import LibHypsNaming.
 
@@ -308,6 +308,31 @@ Proof using P Pcmp cf.
 Qed.
 
 Hint Resolve weakening_env_declared_constant : extends.
+
+Lemma weakening_env_whd_rel {Σ Σ' zeta Γ t args h l} :
+  wf Σ' -> extends Σ Σ' ->
+  whd_rel zeta Σ Γ t args h l -> whd_rel zeta Σ' Γ t args h l.
+Proof using P Pcmp cf.
+  intros wfΣ' ext.
+  induction 1;
+    [ eapply whd_rel_unfold | eapply whd_rel_assum | eapply whd_zeta | eapply whd_letin_stop
+    | eapply whd_delta | eapply whd_axiom | eapply whd_app | eapply whd_beta
+    | eapply whd_fix_iota | eapply whd_fix_stuck | eapply whd_fix_noarg | eapply whd_fix_nounfold
+    | eapply whd_iota | eapply whd_case_cofix | eapply whd_case_stuck
+    | eapply whd_proj | eapply whd_proj_cofix | eapply whd_proj_stuck | eapply whd_stop ];
+    eauto using extends_lookup.
+Qed.
+
+Lemma weakening_env_arity_red {Σ Σ' Γ t Δ s} :
+  wf Σ' -> extends Σ Σ' ->
+  arity_red Σ Γ t Δ s -> arity_red Σ' Γ t Δ s.
+Proof using P Pcmp cf.
+  intros wfΣ' ext.
+  induction 1;
+    [ eapply arity_red_sort | eapply arity_red_prod | eapply arity_red_let
+    | eapply arity_red_fallback ];
+    eauto using weakening_env_whd_rel.
+Qed.
 
 Lemma weakening_env_declared_minductive `{CF:checker_flags}:
   forall (Σ : global_env) ind decl,

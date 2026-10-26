@@ -15,6 +15,7 @@ PCUICCases
 PCUICAstUtils
 PCUICReflect
 PCUICEquality
+PCUICArityRed
 PCUICTyping
 PCUICWfUniverses
 PCUICNormal

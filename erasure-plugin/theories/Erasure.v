@@ -870,7 +870,7 @@ Proof.
         rewrite /PCUICAst.lookup_inductive /PCUICAst.lookup_inductive_gen.
         rewrite /PCUICAst.lookup_minductive /PCUICAst.lookup_minductive_gen. cbn.
         destruct lookup_global eqn:hl => //=.
-        eapply PCUICAst.fresh_global_iff_lookup_global_None in H. rewrite H in hl. congruence.
+        eapply PCUICTyping.fresh_global_iff_lookup_global_None in H. rewrite H in hl. congruence.
       + intros diff. eapply IHdecls.
   - cbn [Erasure.erase_global_decls_deps_recursive] => //.
     destruct KernameSet.mem; cbn [ExAst.lookup_env Erasure.erase_global_decl];
@@ -903,7 +903,7 @@ Proof.
         rewrite /PCUICAst.lookup_inductive /PCUICAst.lookup_inductive_gen.
         rewrite /PCUICAst.lookup_minductive /PCUICAst.lookup_minductive_gen. cbn.
         destruct lookup_global eqn:hl => //=.
-        eapply PCUICAst.fresh_global_iff_lookup_global_None in H. rewrite H in hl. congruence.
+        eapply PCUICTyping.fresh_global_iff_lookup_global_None in H. rewrite H in hl. congruence.
       + intros diff. eapply IHdecls.
 Qed.
 
