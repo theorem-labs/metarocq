@@ -299,11 +299,14 @@ Proof.
       eapply type_mkApps. 2:eauto. eauto.
     }
     eapply inversion_CoFix in t as (? & ? & ? & ? & ? & ? & ?) ; auto.
+    match goal with
+    | Hwf : wf_cofixpoint _ _ _ |- _ => rename Hwf into wfcofix
+    end.
     eapply invert_cumul_arity_r in c0; eauto.
     eapply typing_spine_strengthen in t0. 3:eauto.
-    eapply wf_cofixpoint_spine in i0; eauto.
+    eapply wf_cofixpoint_spine in wfcofix; eauto.
     2-3:eapply nth_error_all, isTypeRel_isType in a; eauto; simpl in a; eauto.
-    destruct i0 as (Γ' & T & DA & ind & u & indargs & (eqT & ck) & cum).
+    destruct wfcofix as (Γ' & T & DA & ind & u & indargs & (eqT & ck) & cum).
     destruct (Nat.ltb #|x1| (context_assumptions Γ')).
     eapply invert_cumul_arity_r_gen in c0; eauto.
     destruct c0. destruct H as [[r] isA].

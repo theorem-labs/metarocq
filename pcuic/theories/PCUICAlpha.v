@@ -156,6 +156,65 @@ Section Alpha.
     destruct X as [-> _]; auto.
   Qed.
 
+  (** ** Transport of the [wf_fixpoint] / [wf_cofixpoint] premises along alpha equality
+
+    The specification carries, for every body, a witness type [ty] on which
+    [check_one_fix] finds the inductive block, and a conversion of the declared type
+    with it. Alpha-equal bodies share the witness: only the conversion has to be
+    transported, by transitivity through the original declared type. *)
+
+  Lemma eq_context_upto_context_assumptions {Σ cmp_universe cmp_sort pb Γ Δ} :
+    eq_context_upto Σ cmp_universe cmp_sort pb Γ Δ ->
+    context_assumptions Γ = context_assumptions Δ.
+  Proof using Type.
+    induction 1; cbn; auto. destruct p; cbn; lia.
+  Qed.
+
+  Lemma upto_names_has_rec_arg d d' :
+    dtype d ≡α dtype d' -> rarg d = rarg d' ->
+    has_rec_arg d -> has_rec_arg d'.
+  Proof using Type.
+    intros eqty eqr. rewrite /has_rec_arg -eqr.
+    pose proof (decompose_prod_assum_upto_names' [] [] (dtype d) (dtype d')
+      ltac:(constructor) eqty).
+    do 2 destruct decompose_prod_assum.
+    destruct X as [eqctx _]. cbn.
+    now rewrite (eq_context_upto_context_assumptions eqctx).
+  Qed.
+
+  Lemma rarg_check_one_fix d d' ty :
+    rarg d = rarg d' ->
+    check_one_fix (def_with_type d ty) = check_one_fix (def_with_type d' ty).
+  Proof using Type.
+    intros eqr. rewrite /check_one_fix /def_with_type /= eqr //.
+  Qed.
+
+  Lemma upto_names_fix_on_ind {Σ : global_env_ext} {wfΣ : wf Σ} Γ mind d d' :
+    is_closed_context Γ -> is_open_term Γ (dtype d) ->
+    dtype d ≡α dtype d' -> rarg d = rarg d' ->
+    fix_on_ind Σ Γ mind d -> fix_on_ind Σ Γ mind d'.
+  Proof using Type.
+    intros clΓ opd eqty eqr [hr [ty [hcheck [hop hconv]]]].
+    split; [eapply (upto_names_has_rec_arg d d'); tea|].
+    exists ty. split; [now rewrite -(rarg_check_one_fix d d' ty eqr)|].
+    split; [exact hop|].
+    eapply (cumul_Trans _ _ _ _ (dtype d)); tea.
+    eapply eq_term_upto_univ_cumulSpec, upto_names_impl_eq_term.
+    now symmetry.
+  Qed.
+
+  Lemma upto_names_cofix_on_ind {Σ : global_env_ext} {wfΣ : wf Σ} Γ mind d d' :
+    is_closed_context Γ -> is_open_term Γ (dtype d) ->
+    dtype d ≡α dtype d' ->
+    cofix_on_ind Σ Γ mind d -> cofix_on_ind Σ Γ mind d'.
+  Proof using Type.
+    intros clΓ opd eqty [ty [hcheck [hop hconv]]].
+    exists ty. split; [exact hcheck|]. split; [exact hop|].
+    eapply (cumul_Trans _ _ _ _ (dtype d)); tea.
+    eapply eq_term_upto_univ_cumulSpec, upto_names_impl_eq_term.
+    now symmetry.
+  Qed.
+
   Import PCUICClosed PCUICOnFreeVars PCUICParallelReduction PCUICConfluence.
 
   Lemma is_closed_context_app_left Γ Δ :
@@ -792,16 +851,24 @@ Section Alpha.
           1: apply lift_typing_impl with (1 := IHb) => t T HT.
           2: { rewrite -H. apply eq_term_upto_univ_lift; assumption. }
           eapply context_conversion; eauto.
-        * revert wffix.
-          unfold wf_fixpoint, wf_fixpoint_gen.
-          move/andP => [] hm ho.
-          apply/andP; split.
-          { unfold eq_mfixpoint in *. solve_all. move: b0 a4.
-            generalize (dbody x) (dbody y).
-            clear=> t t' isL eq.
+        * revert wffix. unfold eq_mfixpoint in *.
+          intros [isl [mind [ne [hall hck]]]].
+          split.
+          { move: isl. clear -X. induction X; cbn; auto.
+            move/andP => [] h hs. apply/andP; split; [|now apply IHX].
+            destruct r as (eqty & eqbod & eqrarg & eqann).
+            move: h eqbod. rewrite /Basics.compose /=.
+            generalize (dbody x) (dbody y). clear => t t' isL eq.
             destruct t => //. now depelim eq. }
-          move: ho; enough (map check_one_fix mfix = map check_one_fix mfix') as ->; auto.
-          apply upto_names_check_fix. unfold eq_mfixpoint in *. solve_all.
+          exists mind. split.
+          { intros eq; subst mfix'. depelim X. now apply ne. }
+          split; [|exact hck].
+          eapply (All2_All_mix_left (All_prod _ _ _ _ hall hmfix)) in X.
+          eapply All2_All_right; tea.
+          cbn; intros x y [[hfix hty] (eqtyxy & eqbodxy & eqrargxy & eqannxy)].
+          eapply (upto_names_fix_on_ind Γ mind x y); tea.
+          { now eapply wf_local_closed_context. }
+          { eapply isType_is_open_term. eapply isTypeRel_isType. exact hty. }
         + eapply isTypeRel_isType. eapply All_nth_error in hmfix; tea.
         + apply eq_term_upto_univ_cumulSpec, eq_term_leq_term, upto_names_impl_eq_term.
           now symmetry.
@@ -861,10 +928,17 @@ Section Alpha.
         1: apply lift_typing_impl with (1 := IHb) => t T HT.
         2: { rewrite -H. apply eq_term_upto_univ_lift; assumption. }
         eapply context_conversion; eauto.
-      * revert wffix.
-        unfold wf_cofixpoint, wf_cofixpoint_gen.
-        enough (map check_one_cofix mfix = map check_one_cofix mfix') as ->; auto.
-        apply upto_names_check_cofix. unfold eq_mfixpoint in *. solve_all.
+      * revert wffix. unfold eq_mfixpoint in *.
+        intros [mind [ne [hall hck]]].
+        exists mind. split.
+        { intros eq; subst mfix'. depelim X. now apply ne. }
+        split; [|exact hck].
+        eapply (All2_All_mix_left (All_prod _ _ _ _ hall hmfix)) in X.
+        eapply All2_All_right; tea.
+        cbn; intros x y [[hcofix hty] (eqtyxy & eqbodxy & eqrargxy & eqannxy)].
+        eapply (upto_names_cofix_on_ind Γ mind x y); tea.
+        { now eapply wf_local_closed_context. }
+        { eapply isType_is_open_term. eapply isTypeRel_isType. exact hty. }
       + eapply isTypeRel_isType. eapply All_nth_error in hmfix; tea.
       + apply eq_term_upto_univ_cumulSpec, eq_term_leq_term, upto_names_impl_eq_term.
         now symmetry.

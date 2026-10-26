@@ -702,7 +702,9 @@ Proof.
         eapply closedn_on_free_vars in H0.
         now rewrite -plus_Sn_m -shiftnP_add.
 
-  - eapply inversion_Fix in X4 as (decl' & fixguard' & Hnth & types' & bodies & wffix & cum); auto.
+  - match goal with Hty : _ ;;; _ |- tFix _ _ : _ |- _ =>
+      eapply inversion_Fix in Hty as (decl' & fixguard' & Hnth & types' & bodies & wffix & cum)
+    end; auto.
     eapply type_Cumul_alt.
     econstructor; eauto.
     eapply isTypeRel_isType; now eapply All_nth_error in X0.
@@ -711,7 +713,9 @@ Proof.
     constructor. eapply eq_term_empty_leq_term in eqty.
     now eapply leq_term_empty_leq_term.
 
-  - eapply inversion_CoFix in X4 as (decl' & fixguard' & Hnth & types' & bodies & wfcofix & cum); auto.
+  - match goal with Hty : _ ;;; _ |- tCoFix _ _ : _ |- _ =>
+      eapply inversion_CoFix in Hty as (decl' & fixguard' & Hnth & types' & bodies & wfcofix & cum)
+    end; auto.
     eapply type_Cumul_alt.
     econstructor; eauto.
     eapply isTypeRel_isType; now eapply All_nth_error in X0.

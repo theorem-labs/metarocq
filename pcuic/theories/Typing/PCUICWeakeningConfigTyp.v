@@ -35,6 +35,30 @@ Proof.
   all: try (cbn; lia).
 Qed.
 
+Lemma weakening_config_wf_fixpoint {cf1 cf2} Σ Γ mfix :
+  config.impl cf1 cf2 ->
+  @wf_fixpoint cf1 Σ Γ mfix ->
+  @wf_fixpoint cf2 Σ Γ mfix.
+Proof.
+  intros Hcf [isl [mind [ne [hall hk]]]].
+  refine (isl, (mind; (ne, (_, hk)))).
+  eapply All_impl; tea. intros d [hr [ty [hc [hop hconv]]]].
+  refine (hr, (ty; (hc, (hop, _)))).
+  now eapply (@weakening_config_convSpec cf1 cf2).
+Qed.
+
+Lemma weakening_config_wf_cofixpoint {cf1 cf2} Σ Γ mfix :
+  config.impl cf1 cf2 ->
+  @wf_cofixpoint cf1 Σ Γ mfix ->
+  @wf_cofixpoint cf2 Σ Γ mfix.
+Proof.
+  intros Hcf [mind [ne [hall hk]]].
+  refine (mind; (ne, (_, hk))).
+  eapply All_impl; tea. intros d [ty [hc [hop hconv]]].
+  refine (ty; (hc, (hop, _))).
+  now eapply (@weakening_config_convSpec cf1 cf2).
+Qed.
+
 Lemma weakening_config {cf1 cf2} Σ Γ t T :
   config.impl cf1 cf2 ->
   @typing cf1 Σ Γ t T ->
@@ -65,6 +89,8 @@ Proof.
   all: try (unshelve eapply IH; [ eassumption .. | ];
             try solve [ constructor; simpl; lia ]).
   all: try (eapply (@weakening_config_cumulSpec cf1 cf2); eassumption).
+  all: try (eapply (@weakening_config_wf_fixpoint cf1 cf2); eassumption).
+  all: try (eapply (@weakening_config_wf_cofixpoint cf1 cf2); eassumption).
   all: try now constructor; simpl; repeat destruct ?; simpl; lia.
   all: specialize (fun Γ t T H H' => IH _ Γ t T H ltac:(right; exact H')).
   all: simpl in IH.

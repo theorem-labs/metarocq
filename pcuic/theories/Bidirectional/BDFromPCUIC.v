@@ -2,7 +2,7 @@ From Stdlib Require Import Bool List Arith Lia.
 From MetaRocq.Utils Require Import utils monad_utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICGlobalEnv PCUICAst PCUICAstUtils PCUICInduction PCUICLiftSubst PCUICTyping PCUICEquality PCUICArities PCUICInversion PCUICInductives PCUICInductiveInversion PCUICReduction PCUICSubstitution PCUICConversion PCUICCumulativity PCUICWfUniverses PCUICValidity PCUICContextConversion PCUICSpine PCUICOnFreeVars PCUICWfUniverses PCUICClosed PCUICWellScopedCumulativity PCUICSR PCUICClosedTyp PCUICUnivSubstitutionConv PCUICWeakeningEnvTyp PCUICWeakeningEnv.
-From MetaRocq.PCUIC Require Import BDTyping BDToPCUIC.
+From MetaRocq.PCUIC Require Import PCUICFixWitness BDTyping BDToPCUIC.
 
 From Stdlib Require Import ssreflect.
 From Equations Require Import Equations.
@@ -110,6 +110,39 @@ Proof.
   exists u'; split; tas.
   repeat (eexists; tea).
   eapply geq_relevance; tea.
+Qed.
+
+(** The undirected (co)fixpoint conditions, whose witness is convertible to the
+    declared type, imply the bidirectional ones, whose witness is a reduct of it.
+    Exported: the translations to Template and the safe checker need it too. *)
+
+Lemma wf_fixpoint_wf_fixpoint_red `{cf : checker_flags} {Σ : global_env_ext}
+  {wfΣ : wf Σ} {Γ mfix} :
+  wf_local Σ Γ ->
+  All (fun d => isType Σ Γ (dtype d)) mfix ->
+  wf_fixpoint Σ Γ mfix ->
+  wf_fixpoint_red Σ Γ mfix.
+Proof.
+  intros wfΓ alltys [isl [mind [hne [hall hk]]]].
+  split; [exact isl|exists mind; split; [exact hne|split; [|exact hk]]].
+  eapply All_impl with (1 := All_mix alltys hall).
+  intros d [isty hd].
+  split; [exact hd.1|].
+  now eapply fix_on_ind_red_wf.
+Qed.
+
+Lemma wf_cofixpoint_wf_cofixpoint_red `{cf : checker_flags} {Σ : global_env_ext}
+  {wfΣ : wf Σ} {Γ mfix} :
+  wf_local Σ Γ ->
+  All (fun d => isType Σ Γ (dtype d)) mfix ->
+  wf_cofixpoint Σ Γ mfix ->
+  wf_cofixpoint_red Σ Γ mfix.
+Proof.
+  intros wfΓ alltys [mind [hne [hall hk]]].
+  exists mind; split; [exact hne|split; [|exact hk]].
+  eapply All_impl with (1 := All_mix alltys hall).
+  intros d [isty hd].
+  now eapply cofix_on_ind_red_wf.
 Qed.
 
 Section BDFromPCUIC.
@@ -341,7 +374,7 @@ Proof.
         unshelve eapply declared_projection_to_gen in isdecl; eauto.
         eapply (weaken_lookup_on_global_env' _ _ (InductiveDecl _)); eauto.
         apply isdecl.
-  - intros mfix n decl types ? ? ? Htypes Alltypes Hbodies Allbodies.
+  - intros mfix n decl types ? ? ? Htypes Alltypes Hbodies Allbodies wffix.
     eexists.
     split.
     2:{
@@ -352,8 +385,11 @@ Proof.
     constructor ; eauto.
     + apply (All_impl Alltypes) => d. apply conv_lift_judgment with (na := d.(dname)).
     + apply (All_impl Allbodies) => d. apply conv_lift_judgment with (na := d.(dname)).
+    + eapply wf_fixpoint_wf_fixpoint_red ; tea.
+      apply (All_impl Htypes) => d Hj.
+      now eapply isTypeRel_isType.
 
-  - intros mfix n decl types ? ? ? Htypes Alltypes Hbodies Allbodies.
+  - intros mfix n decl types ? ? ? Htypes Alltypes Hbodies Allbodies wfcofix.
     eexists.
     split.
     2:{
@@ -364,6 +400,9 @@ Proof.
     constructor ; eauto.
     + apply (All_impl Alltypes) => d. apply conv_lift_judgment with (na := d.(dname)).
     + apply (All_impl Allbodies) => d. apply conv_lift_judgment with (na := d.(dname)).
+    + eapply wf_cofixpoint_wf_cofixpoint_red ; tea.
+      apply (All_impl Htypes) => d Hj.
+      now eapply isTypeRel_isType.
 
   - intros p prim_ty cdecl wfΓ' hp hdecl pinv.
     eexists. split; [econstructor; tea|].

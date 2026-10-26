@@ -196,14 +196,14 @@ Proof using wfΣ.
         rewrite closedn_on_free_vars //.
         eapply closed_upwards; tea. cbn. lia.
 
-  - rewrite H3 in H0 ; injection H0 as ->.
+  - rewrite H2 in H0 ; injection H0 as ->.
     eapply nth_error_all in X as (?&[]); tea.
     eexists ; split.
     all: eapply closed_red_refl.
     1,3:fvs.
     all: now eapply subject_is_open_term, infering_sort_typing.
 
-  - rewrite H3 in H0 ; injection H0 as ->.
+  - rewrite H2 in H0 ; injection H0 as ->.
     eapply nth_error_all in X as (?&[]); tea.
     eexists ; split.
     all: eapply closed_red_refl.

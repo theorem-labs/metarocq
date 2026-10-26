@@ -74,6 +74,7 @@ theories/PCUICArities.v
 theories/PCUICWfUniverses.v
 theories/PCUICSpine.v
 theories/PCUICInductives.v
+theories/PCUICFixWitness.v
 
 theories/PCUICValidity.v
 theories/PCUICInductiveInversion.v
