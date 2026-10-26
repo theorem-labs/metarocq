@@ -1,5 +1,8 @@
-CAMLFLAGS+=-bin-annot # For merlin
+CAMLFLAGS :=-thread -bin-annot -strict-sequence -w -a+1..3-4+5..8-9+10..26-27+28..39-40-41-42+43-44-45+46..47-48+49..57-58+59..66-67-68+69-70
+CAMLFLAGS+=-open Metarocq_template_plugin -open Metarocq_safechecker_plugin
+CAMLPKGS+=-package rocq-metarocq-template-ocaml.plugin
 CAMLPKGS+=-package rocq-metarocq-template-rocq.plugin
+CAMLPKGS+=-package rocq-metarocq-safechecker.plugin
 
 -include ../../Makefile.conf
 

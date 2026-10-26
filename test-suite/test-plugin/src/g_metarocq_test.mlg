@@ -5,6 +5,8 @@ DECLARE PLUGIN "rocq-metarocq-test-plugin.plugin"
 (* Test-only commands. Each command checks one property and fails with an
    error if it does not hold. *)
 
+open Stdarg
+
 module Q = Template_rocq.Constr_quoter
 
 let fail msg = CErrors.user_err (Pp.str msg)
@@ -122,6 +124,426 @@ let test_quote_cache () =
     "MetaRocq Test Quotation Cache: quoted %d distinct subterms; a second quotation hit at the root; under a new root, %d subterms hit and %d evicted ones were quoted again; every quotation equals a fresh one."
     (2 * !leaves - 1) !hits !requoted))
 
+(* Template translation: the quoter's caches and declaration state. *)
+
+let test_scope_dependency_cache env sigma =
+  let open Q in
+  let make_scope () =
+    { ls_n_orig = 2;
+      ls_memo = Univ.Universe.Map.empty;
+      ls_definitions = [||];
+      ls_exprs = [];
+      ls_constraints = Univ.UnivConstraints.empty;
+      ls_next = 0 }
+  in
+  let universe =
+    Univ.Universe.unrepr
+      [Univ.Level.var 0, 0; Univ.Level.var 1, 0]
+  in
+  let term =
+    Constr.mkProd
+      (Context.anonR,
+       Constr.mkSort (Sorts.make Sorts.Quality.qtype universe),
+       Constr.mkSort Sorts.prop)
+  in
+  let root_state = !current_declaration_state in
+  if not (quote_cache_usable sigma) then
+    fail "Scope cache regression received an unusable evar map.";
+  let run scope quote =
+    with_declaration_state
+      { root_state with
+        ds_scope = scope;
+        ds_dependencies = new_quote_dependencies env }
+      (fun () -> fst (quote () env sigma term))
+  in
+  let root_hits = ref 0 in
+  let root_candidates = ref 0 in
+  let stored_root = ref None in
+  let quote, _ =
+    quote_term_remember
+      ~universe_context:(make_template_universe_context ())
+      ~on_cache_hit:(fun cached_term ->
+        if cached_term == term then incr root_hits)
+      ~on_cache_candidate:(fun candidate deps ->
+        if candidate == term then begin
+          incr root_candidates;
+          stored_root := Some deps
+        end)
+      ~on_cache_store:(fun stored deps ->
+        if stored == term then stored_root := Some deps)
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let scope1 = make_scope () in
+  let first = run (Some scope1) quote in
+  let root_scope_recorded =
+    match !stored_root with
+    | Some deps ->
+      deps.qd_reads_scope
+      && (match deps.qd_scope with Some scope -> scope == scope1 | None -> false)
+    | None -> false
+  in
+  let hits_after_first = !root_hits in
+  let candidates_after_first = !root_candidates in
+  let cached = run (Some scope1) quote in
+  let same_scope_candidate = !root_candidates > candidates_after_first in
+  let same_scope_hit = !root_hits > hits_after_first in
+  let fresh_quote, _ =
+    quote_term_remember
+      ~universe_context:(make_template_universe_context ())
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let fresh = run (Some scope1) fresh_quote in
+  let scope2 = make_scope () in
+  let hits_before_changed_scope = !root_hits in
+  let changed_scope = run (Some scope2) quote in
+  let changed_scope_missed = Int.equal !root_hits hits_before_changed_scope in
+  let fresh_changed_quote, _ =
+    quote_term_remember
+      ~universe_context:(make_template_universe_context ())
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let fresh_changed = run (Some scope2) fresh_changed_quote in
+  let no_scope_rejected =
+    try
+      ignore (run None quote);
+      false
+    with CErrors.UserError _ -> true
+  in
+  if not root_scope_recorded then
+    fail "Scope-dependent parent cache stored no scope identity.";
+  if not same_scope_candidate then
+    fail "Scope-dependent parent cache entry was not retained.";
+  if not same_scope_hit then
+    fail "Scope-dependent parent cache missed in the same scope.";
+  if not (Constr.equal first cached) then
+    fail "Same-scope cache result changed.";
+  if not (Constr.equal cached fresh) then
+    fail "Same-scope cached and fresh quotations differ.";
+  if not changed_scope_missed then
+    fail "Scope-dependent parent cache hit after scope changed.";
+  if not (Constr.equal changed_scope fresh_changed) then
+    fail "Changed-scope cached and fresh quotations differ.";
+  if not no_scope_rejected then
+    fail "No-scope quotation reused a scoped cached result.";
+  Feedback.msg_info (Pp.str "Scope-dependent cache regression passed.")
+
+let test_declaration_state_restore ~opaque_access env sigma trm =
+  let open Q in
+  let active_dependencies = ref None in
+  let hook_ran = ref false in
+  let after_declaration_state () =
+    let state = !current_declaration_state in
+    if String.equal state.ds_name "<toplevel>"
+       || Option.is_empty state.ds_scope
+       || Names.KNset.is_empty state.ds_in_progress
+    then
+      fail "Recursive quotation test hook ran before declaration state was installed.";
+    hook_ran := true;
+    active_dependencies := Some state.ds_dependencies;
+    raise (Invalid_argument "Injected recursive declaration quotation failure.")
+  in
+  let failed =
+    try
+      ignore
+        (quote_term_rec ~translate_template:true
+           ~after_declaration_state
+           ~bypass:true ~opaque_access ~with_universes:true env sigma trm);
+      false
+    with Invalid_argument _ -> true
+  in
+  let state = !current_declaration_state in
+  let all_state_restored =
+    failed
+    && !hook_ran
+    && String.equal state.ds_name "<toplevel>"
+    && Option.is_empty state.ds_scope
+    && Names.KNset.is_empty state.ds_in_progress
+    && (match !active_dependencies with
+        | Some active -> state.ds_dependencies != active
+        | None -> false)
+  in
+  (* A leaked scope would let a translating quotation outside any
+     declaration mint a level for a bound-variable universe in it, instead
+     of rejecting the universe. *)
+  let bound_universe_rejected () =
+    let universe =
+      Univ.Universe.unrepr
+        [Univ.Level.var 0, 0; Univ.Level.var 1, 0]
+    in
+    let bound_universe =
+      Constr.mkSort (Sorts.make Sorts.Quality.qtype universe)
+    in
+    let quote, _ =
+      quote_term_remember
+        ~universe_context:(make_template_universe_context ())
+        (fun _ () -> ()) (fun _ _ () -> ())
+    in
+    try
+      ignore (quote () env sigma bound_universe);
+      false
+    with CErrors.UserError _ -> true
+  in
+  if all_state_restored && bound_universe_rejected () then
+    Feedback.msg_info (Pp.str "Declaration-state restoration regression passed.")
+  else
+    fail "Recursive declaration quotation left state installed."
+
+let test_upper_bound_timeout env =
+  let open Q in
+  let graph = UGraph.set_type_in_type false (read_universe_graph env) in
+  let context = make_template_universe_context () in
+  let level = fresh_template_level graph context in
+  let definitions =
+    Univ.Level.Map.add level Univ.Universe.type0 Univ.Level.Map.empty
+  in
+  let propagated =
+    match
+      Control.timeout 1.
+        (fun () ->
+           fresh_template_upper_bounds
+             (fun _ _ _ -> raise Control.Timeout)
+             graph
+             (Univ.Level.Set.singleton Univ.Level.set)
+             definitions
+             Univ.UnivConstraints.empty)
+        ()
+    with
+    | Error _ -> true
+    | Ok _ -> false
+  in
+  if propagated then
+    Feedback.msg_info (Pp.str "Fresh upper-bound timeout regression passed.")
+  else
+    fail "Fresh upper-bound pass swallowed Control.Timeout."
+
+let quote_with_cache quote env term =
+  fst (quote () env (Evd.from_env env) term)
+
+let test_cache_typing_flags env evm c =
+  let term = EConstr.to_constr evm c in
+  let impredicative_env = Environ.set_impredicative_set true env in
+  let predicative_env = Environ.set_impredicative_set false env in
+  let cached_context = Ast_quoter.make_template_universe_context () in
+  let quote, _ =
+    Ast_quoter.quote_term_remember ~universe_context:cached_context
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let first = quote_with_cache quote impredicative_env term in
+  let cached = quote_with_cache quote predicative_env term in
+  let fresh_context = Ast_quoter.make_template_universe_context () in
+  let fresh_quote, _ =
+    Ast_quoter.quote_term_remember ~universe_context:fresh_context
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let fresh = quote_with_cache fresh_quote predicative_env term in
+  if cached = fresh && first <> cached then
+    Feedback.msg_info (Pp.str "Cache typing-flag regression passed.")
+  else
+    fail "Cache reused a quotation across changed typing flags."
+
+(* Template translation: negative fixtures for SafeCheck.
+
+   A negative fixture must be rejected, and rejected for its own reason: the
+   checker's message has to contain [reason], a part of the message that names
+   the failing check, and [subject], which says of what.  Accepting the
+   program, or refusing it with another message, fails the test.  On success
+   the full message is printed, so the log records why. *)
+let expect_safecheck_rejection what reason subject = function
+  | Datatypes.Coq_inr s ->
+    let open Pp in
+    let message = Caml_bytestring.caml_string_of_bytestring s in
+    let missing part = not (CString.string_contains ~where:message ~what:part) in
+    if missing reason || missing subject then
+      CErrors.user_err
+        (str what ++ str " was rejected, but not for the expected reason."
+         ++ fnl () ++ str "expected a message containing: " ++ str reason
+         ++ fnl () ++ str "and: " ++ str subject
+         ++ fnl () ++ str "got: " ++ str message)
+    else
+      Feedback.msg_info
+        (str what ++ str " was rejected as expected: " ++ str message)
+  | Datatypes.Coq_inl s ->
+    CErrors.user_err
+      Pp.(str what ++ str " was accepted, but it is ill-typed: "
+          ++ str (Caml_bytestring.caml_string_of_bytestring s))
+
+let safecheck_program = G_metarocq_safechecker.safecheck_program
+
+(* The declaration is already in the environment and already invalid, so the
+   obligation it breaks exists before quotation. *)
+let test_safecheck_rejects_source ~opaque_access env evm poly reason subject c =
+  expect_safecheck_rejection "The quoted source declaration" reason subject
+    (safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c))
+
+let regression_kername name =
+  Names.KerName.make
+    (Names.ModPath.MPfile
+       (Names.DirPath.make
+          [Names.Id.of_string "MetaRocq";
+           Names.Id.of_string "Regression"]))
+    (Names.Label.of_id (Names.Id.of_string name))
+
+(* A polymorphic declaration whose body is
+   [fun (X : Type@{max(Set+1, u)}) => (X : Type@{u})], with a real kernel
+   [Cast] and with [u] its own bound universe.  Nothing constrains a bound
+   universe, so the cast obligation [max(Set+1, u) <= u] does not hold: an
+   instance may set [u] to [Set].  (A declared global universe cannot show
+   this: Rocq's graph already holds [Set < u] for each of those, which makes
+   [max(Set+1, u) = u] true there.)
+
+   Rocq's surface syntax cannot write an algebraic sort in a binder, so the
+   declaration is built here and added to the environment that the quoter
+   reads.  The invalid obligation therefore exists before quotation, exactly
+   as for a declaration that [Unset Universe Checking] let through. *)
+let set_successor_cast_declaration env =
+  let bound = Univ.Level.var 0 in
+  let algebraic = Univ.Universe.unrepr [Univ.Level.set, 1; bound, 0] in
+  let domain = Constr.mkSort (Sorts.make Sorts.Quality.qtype algebraic) in
+  let target =
+    Constr.mkSort (Sorts.make Sorts.Quality.qtype (Univ.Universe.make bound))
+  in
+  let body =
+    Constr.mkLambda
+      (Context.anonR, domain,
+       Constr.mkCast (Constr.mkRel 1, Constr.DEFAULTcast, target))
+  in
+  let typ = Constr.mkProd (Context.anonR, domain, target) in
+  let auctx =
+    UVars.AbstractContext.make
+      { UVars.quals = [||];
+        UVars.univs = [| Names.Name (Names.Id.of_string "u") |] }
+      PConstraints.empty
+  in
+  let constant_body =
+    { Declarations.const_hyps = [];
+      const_univ_hyps = UVars.Instance.empty;
+      const_body = Declarations.Def body;
+      const_type = typ;
+      const_relevance = Sorts.Relevant;
+      const_body_code = None;
+      const_universes = Declarations.Polymorphic auctx;
+      const_inline_code = false;
+      const_typing_flags = Environ.typing_flags env }
+  in
+  let constant = Names.Constant.make1 (regression_kername "set_successor_cast") in
+  (Environ.add_constant constant constant_body env,
+   Constr.mkConstU
+     (constant, UVars.Instance.of_array ([||], [| Univ.Level.set |])))
+
+let test_set_successor_cast ~opaque_access env evm reason subject =
+  let env, term = set_successor_cast_declaration env in
+  expect_safecheck_rejection "The max(Set+1, u) cast" reason subject
+    (safecheck_program ~opaque_access env evm false term)
+
+(* [bad : Type@{d} := I Type@{d}], where [d] is the template default universe
+   of the template inductive [I], read from [I]'s own metadata rather than
+   named here.  [Type@{d} : Type@{d+1}], so [I Type@{d}] lives in
+   [Type@{d+1}] and the declaration is invalid: checking it needs
+   [d+1 <= d].
+
+   The body's head is a template inductive, which is the path where a
+   substitution keyed on the body's inferred instance could rewrite the
+   declared [d] into the body's larger representative and hand the checker a
+   repaired declaration.  The declaration is stored in the environment the
+   quoter reads, so the obligation exists before quotation. *)
+let declared_default_declaration env ind =
+  let mib = Environ.lookup_mind (fst ind) env in
+  let template =
+    match mib.Declarations.mind_template with
+    | Some template -> template
+    | None -> fail "This test needs a template-polymorphic inductive."
+  in
+  let _, defaults =
+    UVars.Instance.to_array template.Declarations.template_defaults
+  in
+  let default =
+    if Int.equal (Array.length defaults) 0 then
+      fail "This test needs a template inductive with a universe parameter."
+    else defaults.(0)
+  in
+  let declared =
+    Constr.mkSort
+      (Sorts.make Sorts.Quality.qtype (Univ.Universe.make default))
+  in
+  let body =
+    Constr.mkApp (Constr.mkIndU (ind, UVars.Instance.empty), [| declared |])
+  in
+  let constant_body =
+    { Declarations.const_hyps = [];
+      const_univ_hyps = UVars.Instance.empty;
+      const_body = Declarations.Def body;
+      const_type = declared;
+      const_relevance = Sorts.Relevant;
+      const_body_code = None;
+      const_universes = Declarations.Monomorphic;
+      const_inline_code = false;
+      const_typing_flags = Environ.typing_flags env }
+  in
+  let constant = Names.Constant.make1 (regression_kername "declared_type_successor") in
+  (Environ.add_constant constant constant_body env,
+   Constr.mkConstU (constant, UVars.Instance.empty),
+   default)
+
+(* [s] with every occurrence of [what] replaced by [by_]. *)
+let replace_all ~what ~by_ s =
+  let n = String.length what and len = String.length s in
+  let b = Buffer.create len in
+  let rec go i =
+    if i + n > len then Buffer.add_string b (String.sub s i (len - i))
+    else if String.equal (String.sub s i n) what then begin
+      Buffer.add_string b by_; go (i + n)
+    end else begin
+      Buffer.add_char b s.[i]; go (i + 1)
+    end
+  in
+  go 0; Buffer.contents b
+
+let test_declared_default ~opaque_access env evm reason subject c =
+  let ind =
+    match EConstr.kind evm c with
+    | Constr.Ind (ind, _) -> ind
+    | _ -> fail "This test needs an inductive type."
+  in
+  let env, term, default = declared_default_declaration env ind in
+  (* The checker names the default level as Rocq prints it; the fixture
+     writes [<default>] for it, so the test names no generated level. *)
+  let reason =
+    replace_all ~what:"<default>" ~by_:(Univ.Level.to_string default) reason
+  in
+  expect_safecheck_rejection
+    "The declaration typed at its inductive's default universe" reason subject
+    (safecheck_program ~opaque_access env evm false term)
+
+(* Quotes the term with the template translation, adds a quoted declaration
+   [successor_too_low : Type@{Set} := Type@{Set}] to the quoted program, and
+   runs the extracted checker on it with the default checker flags. *)
+let test_safecheck_rejection ~opaque_access env evm reason subject c =
+  let term = EConstr.to_constr evm c in
+  let prog =
+    Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true
+      ~opaque_access ~with_universes:true env evm term
+  in
+  let bad_term =
+    Ast_quoter.mkSort
+      (Ast_quoter.quote_sort
+         (Sorts.make Sorts.Quality.qtype Univ.Universe.type0))
+  in
+  let bad_name = Ast_quoter.quote_kn (regression_kername "successor_too_low") in
+  let bad_decl =
+    Ast_quoter.mk_constant_decl
+      (Ast_quoter.mk_constant_body bad_term (Some bad_term)
+         (Ast_quoter.mkMonomorphic_ctx ())
+         (Ast_quoter.quote_relevance Sorts.Relevant))
+  in
+  let global_env, quoted_term = prog in
+  let bad_program =
+    ({ global_env with declarations = (bad_name, bad_decl) :: global_env.declarations },
+     quoted_term)
+  in
+  expect_safecheck_rejection "The successor-too-low quoted declaration" reason subject
+    (Extraction.infer_and_print_template_program_with_guard
+       Config0.default_checker_flags bad_program (Ast_quoter.mkMonomorphic_ctx ()))
+
 }
 
 VERNAC COMMAND EXTEND MetaRocq_Test_Quotation_Sharing CLASSIFIED AS QUERY
@@ -130,4 +552,66 @@ END
 
 VERNAC COMMAND EXTEND MetaRocq_Test_Quotation_Cache CLASSIFIED AS QUERY
 | [ "MetaRocq" "Test" "Quotation" "Cache" ] -> { test_quote_cache () }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Scope_Cache CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Quoter" "Scope" "Cache" ] -> {
+    let env, evm = empty_evar_map () in
+    test_scope_dependency_cache env evm
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_State_Restore CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "Quoter" "Restores" "State" constr(def) ] -> {
+    let env, evm = empty_evar_map () in
+    let evm, def = Constrintern.interp_open_constr env evm def in
+    test_declaration_state_restore env evm
+      (EConstr.to_constr ~abort_on_undefined_evars:false evm def)
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Upper_Bound_Timeout CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Quoter" "Propagates" "Timeout" ] -> {
+    let env, _ = empty_evar_map () in
+    test_upper_bound_timeout env
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Cache_Typing_Flags CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Cache" "Typing" "Flags" constr(c) ] -> {
+    let env, evm = empty_evar_map () in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_cache_typing_flags env evm c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_SafeCheck_Rejects CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "SafeCheck" "Rejects" string(reason) string(subject) constr(c) ] -> {
+    let env, evm = empty_evar_map () in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_safecheck_rejection env evm reason subject c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_SafeCheck_Rejects_Source CLASSIFIED AS QUERY STATE opaque_access
+| #[ poly = Attributes.polymorphic ] [ "MetaRocq" "Test" "SafeCheck" "Rejects" "Source" string(reason) string(subject) constr(c) ] -> {
+    let env, evm = empty_evar_map () in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_safecheck_rejects_source env evm poly reason subject c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Set_Successor_Cast CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "Quoter" "Set" "Successor" "Cast" string(reason) string(subject) ] -> {
+    let env, evm = empty_evar_map () in
+    test_set_successor_cast env evm reason subject
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocq_Test_Quoter_Declared_Default CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "Quoter" "Declared" "Default" string(reason) string(subject) constr(c) ] -> {
+    let env, evm = empty_evar_map () in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_declared_default env evm reason subject c
+  }
 END
