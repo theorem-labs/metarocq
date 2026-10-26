@@ -1,6 +1,6 @@
 From Stdlib Require Import ZArith Zcompare Lia ssrbool.
 From Stdlib Require Import MSetAVL MSetFacts MSetProperties FMapAVL FMapFacts OrdersAlt.
-From MetaRocq.Utils Require Import MRUtils.
+From MetaRocq.Utils Require Import MRUtils CanonicalTries.
 From Stdlib Require Import ssreflect.
 From Equations Require Import Equations.
 
@@ -535,6 +535,69 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
   Module VOT := OrdersAlt.Backport_OT V.
   Module VMap := FMapAVL.Make VOT.
   Module VMapFact := FMapFacts.WFacts_fun VOT VMap.
+  Module EdgeOT := OrdersAlt.Backport_OT Edge.
+  Module EdgeMap := FMapAVL.Make EdgeOT.
+
+  Definition pkey := String2pos.positive.
+
+  Fixpoint pkey_succ (p : pkey) : pkey :=
+    match p with
+    | String2pos.xH => String2pos.xO String2pos.xH
+    | String2pos.xO q => String2pos.xI q
+    | String2pos.xI q => String2pos.xO (pkey_succ q)
+    end.
+
+  Definition indexed_edge := (pkey * Z * pkey)%type.
+
+  Record index := {
+    ix_lookup : VMap.t pkey;
+    ix_src : pkey;
+    ix_next : pkey;
+    ix_size : nat;
+    ix_edges : EdgeMap.t indexed_edge
+  }.
+
+  Record vertex_index_build := {
+    vib_lookup : VMap.t pkey;
+    vib_next : pkey;
+    vib_size : nat
+  }.
+
+  Definition vertex_index_empty : vertex_index_build :=
+    {| vib_lookup := VMap.empty pkey;
+       vib_next := String2pos.xH;
+       vib_size := 0%nat |}.
+
+  Definition vertex_index_add (v : V.t) (b : vertex_index_build) :
+    vertex_index_build :=
+    {| vib_lookup := VMap.add v b.(vib_next) b.(vib_lookup);
+       vib_next := pkey_succ b.(vib_next);
+       vib_size := Datatypes.S b.(vib_size) |}.
+
+  Definition index_edge (lookup : VMap.t pkey) (e : Edge.t) : indexed_edge :=
+    match VMap.find e..s lookup, VMap.find e..t lookup with
+    | Some source, Some target => (source, e..w, target)
+    | _, _ => (String2pos.xH, e..w, String2pos.xH)
+    end.
+
+  Definition index_edges (lookup : VMap.t pkey) (edges : EdgeSet.t) :
+    EdgeMap.t indexed_edge :=
+    EdgeSet.fold
+      (fun e indexed => EdgeMap.add e (index_edge lookup e) indexed)
+      edges (EdgeMap.empty indexed_edge).
+
+  Definition index_of (G : t) : index :=
+    let vertices := VSet.fold vertex_index_add (V G) vertex_index_empty in
+    let lookup := vertices.(vib_lookup) in
+    {| ix_lookup := lookup;
+       ix_src :=
+         match VMap.find (s G) lookup with
+         | Some source => source
+         | None => String2pos.xH
+         end;
+       ix_next := vertices.(vib_next);
+       ix_size := vertices.(vib_size);
+       ix_edges := index_edges lookup (E G) |}.
 
 
   Section graph.
@@ -1516,6 +1579,67 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
       | None, None => true
       | _, _ => false
       end.
+    Definition pf_state := PTree.t Nbar.t.
+
+    Definition pf_lookup (m : pf_state) (x : pkey) : Nbar.t :=
+      match PTree.get x m with
+      | Some n => n
+      | None => None
+      end.
+
+    Definition pf_relax_edge (e : indexed_edge) (m : pf_state) : pf_state :=
+      let '(source, weight, target) := e in
+      let value :=
+        Nbar.max (pf_lookup m target)
+          (Nbar.add (Some weight) (pf_lookup m source)) in
+      match PTree.get target m with
+      | Some old => if nbar_eqb old value then m else PTree.set target value m
+      | None => PTree.set target value m
+      end.
+
+    Definition pf_relax_edges (ix : index) (m : pf_state) : pf_state :=
+      EdgeMap.fold (fun _ e state => pf_relax_edge e state) ix.(ix_edges) m.
+
+    Fixpoint pf_state'_eqb (m1 m2 : PTree.tree' Nbar.t) : bool :=
+      match m1, m2 with
+      | PTree.Node001 r1, PTree.Node001 r2 => pf_state'_eqb r1 r2
+      | PTree.Node010 x1, PTree.Node010 x2 => nbar_eqb x1 x2
+      | PTree.Node011 x1 r1, PTree.Node011 x2 r2 =>
+          nbar_eqb x1 x2 && pf_state'_eqb r1 r2
+      | PTree.Node100 l1, PTree.Node100 l2 => pf_state'_eqb l1 l2
+      | PTree.Node101 l1 r1, PTree.Node101 l2 r2 =>
+          pf_state'_eqb l1 l2 && pf_state'_eqb r1 r2
+      | PTree.Node110 l1 x1, PTree.Node110 l2 x2 =>
+          pf_state'_eqb l1 l2 && nbar_eqb x1 x2
+      | PTree.Node111 l1 x1 r1, PTree.Node111 l2 x2 r2 =>
+          pf_state'_eqb l1 l2 && nbar_eqb x1 x2 && pf_state'_eqb r1 r2
+      | _, _ => false
+      end.
+
+    Definition pf_state_eqb (m1 m2 : pf_state) : bool :=
+      match m1, m2 with
+      | PTree.Empty, PTree.Empty => true
+      | PTree.Nodes m1, PTree.Nodes m2 => pf_state'_eqb m1 m2
+      | _, _ => false
+      end.
+
+    Fixpoint pf_relax_early (ix : index) (fuel : nat) (m : pf_state) : pf_state :=
+      match fuel with
+      | 0%nat => m
+      | Datatypes.S fuel =>
+          let m' := pf_relax_edges ix m in
+          if pf_state_eqb m m' then m
+          else pf_relax_early ix fuel m'
+      end.
+
+    Definition pf_initial (x : pkey) : pf_state :=
+      PTree.set x (Some 0) (PTree.empty Nbar.t).
+
+    Definition pf_distances (ix : index) (x : pkey) : pf_state :=
+      pf_relax_early ix ix.(ix_size) (pf_initial x).
+
+    Definition pf_distance (ix : index) (x y : pkey) : Nbar.t :=
+      pf_lookup (pf_distances ix x) y.
 
     Definition bf_state_eqb (m1 m2 : bf_state) : bool :=
       VMap.equal nbar_eqb m1 m2.
@@ -3046,6 +3170,24 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
     Definition leqb_vertices z x y : bool :=
       if VSet.mem y (V G) then if is_left (Nbar.le_dec (Some z) (bf_distance G x y)) then true else false
       else (Z.leb z 0 && (V.eq_dec x y || Nbar.le_dec (Some z) (bf_distance G x (s G))))%bool.
+    Definition leqb_vertices_ix (ix : index) z x y : bool :=
+      match VMap.find y ix.(ix_lookup) with
+      | Some yi =>
+          match VMap.find x ix.(ix_lookup) with
+          | Some xi =>
+              if is_left (Nbar.le_dec (Some z) (pf_distance ix xi yi))
+              then true else false
+          | None => false
+          end
+      | None =>
+          (Z.leb z 0 &&
+            (V.eq_dec x y ||
+              match VMap.find x ix.(ix_lookup) with
+              | Some xi =>
+                  Nbar.le_dec (Some z) (pf_distance ix xi ix.(ix_src))
+              | None => false
+              end))%bool
+      end.
 
     Lemma leqb_vertices_correct n x y
       : leq_vertices G n x y <-> leqb_vertices n x y.
