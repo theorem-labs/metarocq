@@ -94,6 +94,36 @@ Record template_alg_outer := {
   template_alg_oc : Type@{template_alg_c} }.
 MetaRocq SafeCheck @template_alg_outer.
 
+(* A template class with two [Type] parameters whose field [T -> Prop] lives
+   in [max(u1, Set+1)], since [Prop : Type@{Set+1}].  Its sort is
+   [max(Set+1, u0, u1)], and the template levels may be [Set].  The quoter must
+   keep the [Set+1] component of that sort: without it the declared sort's
+   representative is only above [u0] and [u1], and the inductive-sort check
+   fails (seen in the wild on Stdlib's [ZifyClasses.InjTyp]). *)
+#[universes(template)]
+Class template_injtyp (S : Type) (T : Type) := {
+  template_injtyp_inj : S -> T;
+  template_injtyp_pred : T -> Prop;
+  template_injtyp_cstr : forall x, template_injtyp_pred (template_injtyp_inj x) }.
+MetaRocq SafeCheck @template_injtyp.
+
+(* Negative controls for the inductive-sort check: a constructor argument in a
+   larger universe than the declared sort.  Universe checking is off only
+   while Rocq accepts the declarations.  [neg_sort_poly] has the shape the
+   template translation produces: a declared sort that is a bound level [u],
+   which an instance may set to [Set], below a field in [max(u, Set+1)].  The
+   empty constraint list [@{u|}] keeps Rocq from adding [Set < u].  (A named
+   global universe would not do: Rocq's graph holds [Set < u] for it.) *)
+Unset Universe Checking.
+Record neg_sort_mono : Set := { neg_sort_mono_f : Prop }.
+Polymorphic Record neg_sort_poly@{u|} (T : Type@{u}) : Type@{u} :=
+  { neg_sort_poly_f : T -> Prop }.
+Set Universe Checking.
+MetaRocq Test SafeCheck Rejects Source
+  "Incorrect inductive sort" "neg_sort_mono" @neg_sort_mono.
+MetaRocq Test SafeCheck Rejects Source
+  "Incorrect inductive sort" "neg_sort_poly" @neg_sort_poly.
+
 (* Changing impredicative Set changes the sort retyping assigns to this shared
    template argument.  The test command uses one quotation cache across both
    environments and compares the second result with a fresh quotation. *)
