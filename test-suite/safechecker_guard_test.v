@@ -72,6 +72,22 @@ Fixpoint u_g (l : lst) {struct l} : nat :=
 
 MetaRocq SafeCheck u_g.
 
+(** The nested call [g u m'] sits under two applications of a variable,
+    [h (h (g u m'))]: as in Rocq's kernel, the count reaches [g u m'] and
+    [u] stays uniform. *)
+Fixpoint u_h (h : nat -> nat) (l : lst) {struct l} : nat :=
+  match l with
+  | nl => 0
+  | cs x t =>
+    (fix g (u : lst) (m : nat) {struct m} : nat :=
+       match m with
+       | O => u_h h u
+       | S m' => h (h (g u m'))
+       end) t x
+  end.
+
+MetaRocq SafeCheck u_h.
+
 (** A cofixpoint may produce a call to its block only in a recursive argument
     of the constructor, never in a non-recursive one. *)
 CoInductive Stream (A : Type) : Type := Cons : A -> Stream A -> Stream A.

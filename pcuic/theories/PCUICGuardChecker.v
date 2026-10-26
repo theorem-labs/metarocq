@@ -359,10 +359,14 @@ Definition is_block_rel (k nb i : nat) : bool := Nat.leb k i && Nat.ltb i (k + n
   indices from 0: in a stripped body under [k] binders, the functions of
   the nested block are [k .. k + nb - 1] and its [j]-th parameter is
   [k - 1 - j].  The kernel's count is a minimum over all occurrences, so
-  the order of the traversal does not matter.  As in the kernel, an
-  argument of an application headed by a variable is visited as the kernel's
-  [fold_constr_with_binders] visits it: an argument that is a function of
-  the nested block, bare or applied, is a bare occurrence and gives [0]. *)
+  the order of the traversal does not matter.  [fup] follows the kernel's
+  traversal node by node.  At an application headed by a variable, each
+  argument that is a bare function of the nested block gives [0]; every
+  other argument is visited as the kernel's [fold_constr_with_binders]
+  visits it: its immediate subterms (for an application: its head and its
+  arguments) are counted by [fup].  So an argument [g u m'], with [g] in the
+  nested block, gives [0] through its bare head [g], while [h' (g u m')]
+  counts the uniform prefix of [g u m']. *)
 
 Fixpoint uniform_prefix (k nunif j : nat) (l : list term) : nat :=
   match l with
@@ -381,17 +385,24 @@ Fixpoint fup (nb k acc : nat) (c : term) {struct c} : nat :=
   | tApp u v =>
     match fst (decompose_app c) with
     | tRel i =>
-      let arg (acc : nat) (a : term) :=
-        match fst (decompose_app a) with
+      (* The kernel's [fold_constr_with_binders] on one argument. *)
+      let arg (acc : nat) (a : term) : nat :=
+        match a with
         | tRel m => if is_block_rel k nb m then 0 else acc
-        | _ => acc
+        | tApp _ _ =>
+          (fix app (t : term) (acc : nat) {struct t} : nat :=
+             match t with
+             | tApp t' b => fup nb k (app t' acc) b
+             | _ => fup nb k acc t
+             end) a acc
+        | _ => fup nb k acc a
         end in
       let fix spine (u : term) (acc : nat) {struct u} : nat :=
         match u with
-        | tApp u' a => spine u' (arg (fup nb k acc a) a)
+        | tApp u' a => spine u' (arg acc a)
         | _ => acc
         end in
-      let acc' := spine u (arg (fup nb k acc v) v) in
+      let acc' := spine u (arg acc v) in
       if is_block_rel k nb i then uniform_prefix k acc' 0 (snd (decompose_app c)) else acc'
     | _ => fup nb k (fup nb k acc u) v
     end
