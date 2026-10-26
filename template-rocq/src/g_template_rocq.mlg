@@ -66,7 +66,28 @@ let vtopaqueaccessprog f =
   typed_vernac { ignore_state with opaque_access = Access; prog = Modify }
     (fun {opaque_access; prog} -> let prog = f ~opaque_access ~pm:prog in {no_state with prog})
 
+let test_scope_cache env evm =
+  if Constr_quoter.test_scope_dependency_cache env evm then
+    Feedback.msg_info (Pp.str "Scope-dependent cache regression passed.")
+  else
+    CErrors.user_err
+      (Pp.str "Scope-dependent parent cache dependency is invalid.")
+
+let test_state_restore ~opaque_access env evm trm =
+  if Constr_quoter.test_declaration_state_restore ~opaque_access env evm trm then
+    Feedback.msg_info (Pp.str "Declaration-state restoration regression passed.")
+  else
+    CErrors.user_err
+      (Pp.str "Recursive declaration quotation left state installed.")
+
+let test_upper_bound_timeout env =
+  if Constr_quoter.test_upper_bound_timeout env then
+    Feedback.msg_info (Pp.str "Fresh upper-bound timeout regression passed.")
+  else
+    CErrors.user_err
+      (Pp.str "Fresh upper-bound pass swallowed Control.Timeout.")
 }
+
 
 (** ********* Commands ********* *)
 
@@ -79,6 +100,31 @@ VERNAC COMMAND EXTEND TemplateRocq_Test_Quote CLASSIFIED AS QUERY STATE CUSTOM
              let pgm = Constr.mkApp (EConstr.to_constr evm pgm,
                                      [|Constr.mkRel 0; to_constr_evars evm def|]) in
              run_template_program ~opaque_access ~pm env evm ~poly pgm) }
+END
+
+VERNAC COMMAND EXTEND TemplateRocq_Test_Quoter_Scope_Cache CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Quoter" "Scope" "Cache" ] -> {
+    let env, evm = fresh_env () in
+    test_scope_cache env evm
+  }
+END
+
+VERNAC COMMAND EXTEND TemplateRocq_Test_Quoter_State_Restore CLASSIFIED AS QUERY STATE CUSTOM
+| [ "MetaRocq" "Test" "Quoter" "Restores" "State" constr(def) ] ->
+  { vtopaqueaccessprog (fun ~opaque_access ~pm ->
+      let env, evm = fresh_env () in
+      let evm, def = Constrintern.interp_open_constr env evm def in
+      let () =
+        test_state_restore ~opaque_access env evm (to_constr_evars evm def)
+      in
+      pm) }
+END
+
+VERNAC COMMAND EXTEND TemplateRocq_Test_Quoter_Upper_Bound_Timeout CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Quoter" "Propagates" "Timeout" ] -> {
+    let env, _ = fresh_env () in
+    test_upper_bound_timeout env
+  }
 END
 
 VERNAC COMMAND EXTEND TemplateRocq_Quote_Definition CLASSIFIED AS SIDEFF STATE CUSTOM
