@@ -41,7 +41,7 @@ Implicit Types (cf : checker_flags).
 Existing Instance extraction_checker_flags.
 Existing Instance PCUICSN.extraction_normalizing.
 
-Existing Instance fake_guard_impl_instance.
+Existing Instance real_guard_impl.
 
 Program Definition flag_of_type_impl := @flag_of_type canonical_abstract_env_impl (ltac:(now unshelve econstructor;eauto))
   PCUICSN.extraction_normalizing _.

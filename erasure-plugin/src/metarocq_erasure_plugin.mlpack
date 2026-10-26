@@ -24,6 +24,9 @@ PCUICCases
 PCUICAstUtils
 EqDecInstances
 PCUICEquality
+PCUICReflect
+PCUICGuardChecker
+PCUICGuardClosure
 PCUICTyping
 PCUICInduction
 PCUICWfUniverses

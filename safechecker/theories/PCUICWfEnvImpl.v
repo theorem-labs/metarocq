@@ -3,17 +3,49 @@ From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config uGraph EnvMap.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICEquality PCUICReduction
-     PCUICReflect PCUICSafeLemmata PCUICTyping PCUICGlobalEnv PCUICWfUniverses.
+     PCUICReflect PCUICSafeLemmata PCUICTyping PCUICGlobalEnv PCUICWfUniverses
+     PCUICGuardChecker PCUICGuardClosure.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv.
 From Equations Require Import Equations.
 
+(** An executable guard check. Only soundness is required: a [true] answer
+    implies the guard condition, a [false] answer is a refusal, not a proof
+    that the definition is unguarded. *)
 Class abstract_guard_impl :=
   { guard_impl : FixCoFix -> global_env_ext -> context -> mfixpoint term -> bool ;
-    guard_correct : forall fix_cofix Σ Γ mfix, guard fix_cofix Σ Γ mfix <-> guard_impl fix_cofix Σ Γ mfix
+    guard_correct : forall fix_cofix Σ Γ mfix, guard_impl fix_cofix Σ Γ mfix -> guard fix_cofix Σ Γ mfix
   }.
 
-Definition fake_guard_impl : FixCoFix -> global_env_ext -> context -> mfixpoint term -> bool
-  := fun fix_cofix Σ Γ mfix => true.
+(** The fuel of the real guard check. The checker doubles its traversal depth
+    at each unit of fuel ([gfuel]), so this fixed bound is cheap to state. *)
+Definition guard_fuel : nat := 30.
+
+Definition check_guard_impl (fix_cofix : FixCoFix) (Σ : global_env_ext) (Γ : context)
+  (mfix : mfixpoint term) : bool :=
+  wf_cases_mfix Σ.1 mfix &&
+  match check_guard_gen (lookup_env Σ.1) Σ.1.(retroknowledge) guard_fuel fix_cofix #|Γ|
+          (strip_mfix mfix) with
+  | Accept => true
+  | _ => false
+  end.
+
+Lemma check_guard_impl_correct fix_cofix Σ Γ mfix :
+  check_guard_impl fix_cofix Σ Γ mfix -> guard fix_cofix Σ Γ mfix.
+Proof.
+  rewrite /check_guard_impl => /andP [hwf hchk].
+  change (guard_cl fix_cofix Σ Γ mfix).
+  apply gc_check; split => //.
+  exists guard_fuel.
+  move: hchk; case: check_guard_gen => //.
+Qed.
+
+(** The real guard check: the executable checker [check_guard_gen] of
+    [PCUICGuardChecker], sound for the closure [guard_cl]. It is not a global
+    instance, so that typeclass resolution of the generic environment
+    instances is unchanged; users declare it with [Existing Instance]. *)
+Definition real_guard_impl : abstract_guard_impl :=
+  {| guard_impl := check_guard_impl;
+     guard_correct := check_guard_impl_correct |}.
 
 Record reference_impl_ext {cf:checker_flags} {guard : abstract_guard_impl} := {
       reference_impl_env_ext :> global_env_ext;
@@ -341,7 +373,7 @@ Next Obligation.
   apply: consistent_ext_on_full_ext=> //.
   apply: add_uctx_subgraph.
 Qed.
-Next Obligation. apply guard_correct. Qed.
+Next Obligation. intros; cbn in *; subst; now apply guard_correct. Qed.
 
 
 Program Global Instance optimized_abstract_env_prop {cf:checker_flags} {guard : abstract_guard_impl} :
@@ -376,7 +408,7 @@ Qed.
 Next Obligation.
   now erewrite (abstract_env_is_consistent_correct X.(wf_env_reference)) with (udecl := (t,t0)); eauto.
 Qed.
-Next Obligation. eapply guard_correct. Qed.
+Next Obligation. intros; cbn in *; subst; now apply guard_correct. Qed.
 
 Definition canonical_abstract_env_impl {cf:checker_flags} {guard : abstract_guard_impl} : abstract_env_impl :=
   (reference_impl ; reference_impl_ext ; canonical_abstract_env_struct ; canonical_abstract_env_prop).

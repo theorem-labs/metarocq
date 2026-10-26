@@ -485,7 +485,7 @@ Next Obligation. exact extraction_normalizing. Defined.
 Next Obligation. now split. Qed.
 
 Program Definition pipeline_upto (cf : checker_flags := extraction_checker_flags)
-  (guard := fake_guard_impl)
+  (guard := PCUICWfEnvImpl.real_guard_impl)
   (efl := EWellformed.all_env_flags) :=
   Transform.compose pre_erasure_pipeline
   verified_typed_erasure_pipeline _.

@@ -1079,17 +1079,8 @@ Import EGlobalEnv EWellformed.
 
 Local Open Scope string_scope.
 
-Axiom fake_guard_impl_properties :
-forall (fix_cofix: PCUICTyping.FixCoFix)
-       (Σ: PCUICAst.PCUICEnvironment.global_env_ext)
-       (Γ: PCUICAst.PCUICEnvironment.context)
-       (mfix: BasicAst.mfixpoint PCUICAst.term),
-PCUICTyping.guard fix_cofix Σ Γ mfix <-> fake_guard_impl fix_cofix Σ Γ mfix.
-
-
-Global Program Instance fake_guard_impl : abstract_guard_impl :=
-{| guard_impl := fake_guard_impl |}.
-Next Obligation. apply fake_guard_impl_properties. Qed.
+(** The erasure pipeline runs the real, executable guard check. *)
+Global Existing Instance real_guard_impl.
 
 (** Ideally we'd have a MetaRocq template program that generates a proof of Strong Normalization for the particular program we're erasing.  For now we just axiomatize SN. *)
 Axiom fake_normalization : PCUICSN.Normalization.

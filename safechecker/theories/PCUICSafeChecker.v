@@ -424,7 +424,7 @@ Section CheckEnv.
   Equations infer_typing X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ} Γ
       (wfΓ : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_local Σ Γ ∥) t :
       typing_result (∑ T, forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ Σ ;;; Γ |- t : T ∥) :=
-    infer_typing X_ext Γ wfΓ t := typing_error_forget (infer X_impl X_ext Γ wfΓ t) ;;  ret _.
+    infer_typing X_ext Γ wfΓ t := check_result_forget (infer X_impl X_ext Γ wfΓ t) ;;  ret _.
   Next Obligation.
     exists y. intros.
     pose proof (hΣ _ _ H). specialize_Σ H. sq. cbn in *. now apply infering_typing.
@@ -440,7 +440,7 @@ Section CheckEnv.
 
   Definition check_judgment_wf_env X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ} Γ (wfΓ : forall Σ (wfΣ : abstract_env_ext_rel X_ext Σ), ∥ wf_local Σ Γ ∥) j (Hu : j_univ j = None)
     : typing_result (forall Σ (wfΣ : abstract_env_ext_rel X_ext Σ), ∥ lift_typing typing Σ Γ j ∥).
-    eapply typing_error_forget.
+    eapply check_result_forget.
     pose proof (infer_judgment X_impl X_ext (infer X_impl X_ext) Γ wfΓ (j_term j) (j_typ j) (j_rel j)) as X.
     rewrite -Hu in X.
     apply X.
@@ -453,7 +453,7 @@ Section CheckEnv.
   Equations infer_type_wf_env X_ext {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ} Γ (wfΓ : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_local Σ Γ ∥) t :
     typing_result (∑ s, forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ Σ ;;; Γ |- t : tSort s∥) :=
     infer_type_wf_env X_ext Γ wfΓ t :=
-      '(y ; H) <- typing_error_forget (infer_type X_impl X_ext (infer X_impl X_ext) Γ wfΓ t) ;;
+      '(y ; H) <- check_result_forget (infer_type X_impl X_ext (infer X_impl X_ext) Γ wfΓ t) ;;
       ret (y ; _).
   Next Obligation.
     intros. pose proof (abstract_env_ext_wf _ H0). specialize_Σ H0.

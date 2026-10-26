@@ -20,7 +20,7 @@ Notation "<$ x ; y ; .. ; z $>" :=
 
 
 Local Existing Instance extraction_checker_flags.
-Local Existing Instance fake_guard_impl_instance.
+Local Existing Instance real_guard_impl.
 Local Existing Instance extraction_checker_flags.
 
 Module flag_of_type_tests.

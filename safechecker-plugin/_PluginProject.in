@@ -27,6 +27,10 @@ src/pCUICReflect.mli
 src/pCUICReflect.ml
 src/pCUICEquality.mli
 src/pCUICEquality.ml
+src/pCUICGuardChecker.ml
+src/pCUICGuardChecker.mli
+src/pCUICGuardClosure.ml
+src/pCUICGuardClosure.mli
 src/pCUICTyping.ml
 src/pCUICTyping.mli
 src/pCUICPosition.mli

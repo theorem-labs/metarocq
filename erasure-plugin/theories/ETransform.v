@@ -297,7 +297,7 @@ Definition trans_ex_prog (p : ExAst.global_env * EAst.term) : EAst.global_contex
 Definition eval_typed_eprogram fl :=
   (fun p v => ∥ @EWcbvEval.eval fl (ExAst.trans_env p.1) p.2 v ∥).
 
-Program Definition typed_erase_transform (guard := fake_guard_impl_instance) :
+Program Definition typed_erase_transform (guard := real_guard_impl) :
   Transform.t _ _ PCUICAst.term EAst.term PCUICAst.term EAst.term
   eval_pcuic_program (eval_typed_eprogram EWcbvEval.default_wcbv_flags) :=
  {| name := "typed erasure";

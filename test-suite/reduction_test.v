@@ -22,11 +22,7 @@ From MetaRocq.TestSuite Require hott_example.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfReduction PCUICErrors PCUICSafeReduce PCUICTypeChecker PCUICSafeChecker PCUICWfEnv PCUICWfEnvImpl PCUICSafeConversion.
 From MetaRocq.SafeCheckerPlugin Require Import SafeTemplateChecker.
 
-#[local,program] Instance fake_abstract_guard_impl : PCUICWfEnvImpl.abstract_guard_impl :=
-  {
-    guard_impl := PCUICWfEnvImpl.fake_guard_impl
-  }.
-Next Obligation. todo "this axiom is inconsitent, only used to make infer compute". Qed.
+#[local] Existing Instance real_guard_impl.
 #[local,program] Instance assume_normalization {nor} : @PCUICSN.Normalization default_checker_flags nor.
 Next Obligation. todo "we should write a Template Monad program to prove normalization for the particular program being inferred, rather than axiomatizing it". Qed.
 #[local] Existing Instance PCUICSN.normalization.
