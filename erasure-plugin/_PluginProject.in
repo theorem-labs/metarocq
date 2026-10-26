@@ -38,6 +38,8 @@ src/pCUICGuardCoFix.ml
 src/pCUICGuardCoFix.mli
 src/pCUICGuardChecker.ml
 src/pCUICGuardChecker.mli
+src/pCUICOnFreeVars.ml
+src/pCUICOnFreeVars.mli
 src/pCUICGuardClosure.ml
 src/pCUICGuardClosure.mli
 src/pCUICTyping.ml

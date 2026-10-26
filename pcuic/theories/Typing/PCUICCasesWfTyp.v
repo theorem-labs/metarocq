@@ -80,7 +80,7 @@ Lemma type_Case_wf_cases {cf} {Σ : global_env_ext} {wfΣ : wf Σ.1}
   wf_case_node Σ.1 ci p brs.
 Proof.
   intros isdecl
-    [eq_npars wf_pred cons wf_pctx conv_pctx allowed_elim elim_relevance ind_inst not_cofinite]
+    [eq_npars wf_pred cons wf_pctx conv_pctx allowed_elim elim_relevance ind_inst nondep_cofinite]
     [wf_brs brs_ty].
   eapply (wf_case_node_intro (mdecl := mdecl) (idecl := idecl)).
   - unshelve eapply declared_inductive_to_gen; tea.
@@ -89,8 +89,7 @@ Proof.
   - exact conv_pctx.
   - exact wf_brs.
   - eapply All2i_All2; [exact brs_ty|]. cbn. intros i x y hh. exact hh.1.
-  - clear -not_cofinite. rewrite /is_cofinite.
-    destruct mdecl.(ind_finite); cbn in * => //.
+  - exact nondep_cofinite.
 Qed.
 
 Lemma type_Proj_wf_cases {cf} {Σ : global_env_ext} {wfΣ : wf Σ.1}

@@ -331,9 +331,9 @@ Proof. vm_compute. reflexivity. Qed.
     [fix t_f (x : T) : nat := match x with C y => match y with SCons t _ => t_f t end end]
     the call's argument [t] comes out of a [match] on [y : Str T], a value
     of a coinductive type, so it is not a structural subterm of [x].
-    PCUIC's [type_Case] does not allow a [match] on a coinductive at all, so
-    case well-formedness refuses the block too; the test asserts that the
-    syntactic check also refuses it on its own.
+    The inner [match] returns [nat], which does not mention [y], so PCUIC's
+    [type_Case] allows it and case well-formedness accepts the block: the
+    syntactic check must refuse it on its own.
 
     Rocq refuses this fixpoint, so its term is elaborated with guard checking
     off only to quote it: no constant holding it is defined. *)
@@ -361,7 +361,7 @@ Definition tf_block : mfixpoint term :=
 
 Example tf_block_one : #|tf_block| = 1.
 Proof. vm_compute. reflexivity. Qed.
-Example tf_block_not_wf : wf_cases_mfix Σ_tf tf_block = false.
+Example tf_block_wf : wf_cases_mfix Σ_tf tf_block = true.
 Proof. vm_compute. reflexivity. Qed.
 Example tf_syntactic_rejects :
   is_reject (check_guard_gen (lookup_env Σ_tf) Σ_tf.(retroknowledge) guard_fuel Fix 0

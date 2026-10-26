@@ -20,6 +20,7 @@ PCUICRecArgs
 PCUICGuardReduce
 PCUICGuardCoFix
 PCUICGuardChecker
+PCUICOnFreeVars
 PCUICGuardClosure
 PCUICTyping
 PCUICWfUniverses

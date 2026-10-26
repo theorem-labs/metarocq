@@ -16,6 +16,7 @@ bug8.v
 case.v
 castprop.v
 cofix.v
+coind_case.v
 erasure_live_test.v
 erasure_test.v
 evars.v

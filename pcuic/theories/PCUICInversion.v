@@ -260,7 +260,8 @@ Section Inversion.
                             (List.rev (subst_instance p.(puinst)
                                                       (ind_params mdecl ,,, ind_indices idecl : context))))
        (scrut_ty : Σ ;;; Γ |- c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices))
-       (not_cofinite : isCoFinite mdecl.(ind_finite) = false)
+       (nondep_cofinite : (isCoFinite mdecl.(ind_finite) ==>
+                           on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true)
        (ptm := it_mkLambda_or_LetIn predctx p.(preturn))
        (wf_brs : wf_branches idecl brs)
        (brs_ty :
