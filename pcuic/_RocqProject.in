@@ -50,6 +50,7 @@ theories/Typing/PCUICContextConversionTyp.v
 theories/PCUICContextSubst.v
 theories/PCUICCasesContexts.v
 theories/PCUICReduction.v
+theories/PCUICRecArgs.v
 theories/PCUICGuardReduce.v
 theories/PCUICGuardChecker.v
 theories/PCUICGuardClosure.v

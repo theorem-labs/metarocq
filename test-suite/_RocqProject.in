@@ -21,6 +21,7 @@ erasure_test.v
 evars.v
 extractable.v
 guard_cases_test.v
+guard_recargs_test.v
 guard_reduce_test.v
 hnf_ctor.v
 hott_example.v
