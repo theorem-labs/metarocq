@@ -1,7 +1,7 @@
 From MetaRocq.Common Require Import BasicAst Environment EnvironmentTyping Universes.
 From MetaRocq.Quotation.ToTemplate Require Import Init.
 From MetaRocq.Quotation.ToTemplate Require Import (hints) Stdlib.Init Stdlib.Lists Stdlib.ssr.
-From MetaRocq.Quotation.ToTemplate.Utils Require Import (hints) All_Forall MROption.
+From MetaRocq.Quotation.ToTemplate.Utils Require Import (hints) All_Forall MROption MRProd.
 From MetaRocq.Quotation.ToTemplate.Common Require Import (hints) config BasicAst Kernames Universes Environment.
 From MetaRocq.Quotation.ToTemplate.QuotationOf.Common Require Import Environment.Sig EnvironmentTyping.Sig.
 From Equations.Prop Require Import EqDecInstances.
@@ -100,12 +100,14 @@ Module QuoteGlobalMaps (Import T : Term) (Import E : EnvironmentSig T) (Import T
     constructor_univs
     on_constructors
     fresh_global
+    nested_insts
   : quotation.
   #[export] Typeclasses Transparent
     mdecl_at_i
     constructor_univs
     on_constructors
     fresh_global
+    nested_insts
   .
 
   Section GlobalMaps.
@@ -137,12 +139,92 @@ Module QuoteGlobalMaps (Import T : Term) (Import E : EnvironmentSig T) (Import T
     #[export] Instance quote_on_udecl {univs udecl} : ground_quotable (@on_udecl univs udecl)
       := ltac:(cbv [on_udecl]; exact _).
 
-    #[export] Instance quote_positive_cstr_arg {mdecl ctx t} : ground_quotable (@positive_cstr_arg mdecl ctx t)
-      := ltac:(induction 1; exact _).
-    #[export] Instance quote_positive_cstr {mdecl i ctx t} : ground_quotable (@positive_cstr mdecl i ctx t)
+    Import StrongerInstances.
+    #[local] Hint Extern 0 (quotation_of ?x) =>
+      match goal with H : quotation_of x |- _ => exact H end : typeclass_instances.
+    #[export] Instance quote_nested_inst : ground_quotable nested_inst
+      := ltac:(destruct 1; exact _).
+    #[export] Instance quote_nested_insts : ground_quotable nested_insts
+      := ltac:(cbv [nested_insts]; exact _).
+    #[export] Instance quote_nested_inst_ok {NI ctx x l} : ground_quotable (@nested_inst_ok NI ctx x l)
+      := ltac:(cbv [nested_inst_ok];
+        refine (@MetaRocq.Quotation.ToTemplate.Stdlib.Init.quote_sigT _ _ _ _ _ (fun j qj => _));
+        refine (@MetaRocq.Quotation.ToTemplate.Stdlib.Init.quote_sigT _ _ _ _ _ (fun e qe => _));
+        exact _).
+    #[export] Instance quote_nested_uniform_cstr {mdecl k cdecl} : ground_quotable (@nested_uniform_cstr mdecl k cdecl)
+      := ltac:(cbv [nested_uniform_cstr];
+        refine (@MetaRocq.Quotation.ToTemplate.Stdlib.Init.quote_sigT _ _ _ _ _ (fun rest qrest => _));
+        refine (@MetaRocq.Quotation.ToTemplate.Stdlib.Init.quote_sigT _ _ _ _ _ (fun rest1 qrest1 => _));
+        exact _).
+    #[export] Instance quote_nested_uniform {mdecl idecl k} : ground_quotable (@nested_uniform mdecl idecl k)
+      := ltac:(cbv [nested_uniform]; exact _).
+    #[export] Instance quote_nested_variance_ok {mdecl} : ground_quotable (@nested_variance_ok mdecl)
+      := ltac:(cbv [nested_variance_ok]; exact _).
+
+    (** The quotation of [positive_cstr_arg] names the whole mutual block; the other
+        three relations are its later bodies. *)
+    #[local] Instance quote_positive_args_inductive :
+      inductive_quotation_of positive_args :=
+      {| qinductive :=
+           mkInd (inductive_mind qpositive_cstr_arg.(qinductive)) 1;
+         qinst := qpositive_cstr_arg.(qinst) |}.
+    #[local] Instance quote_positive_nested_ctors_inductive :
+      inductive_quotation_of positive_nested_ctors :=
+      {| qinductive :=
+           mkInd (inductive_mind qpositive_cstr_arg.(qinductive)) 2;
+         qinst := qpositive_cstr_arg.(qinst) |}.
+    #[local] Instance quote_positive_nested_cstr_inductive :
+      inductive_quotation_of positive_nested_cstr :=
+      {| qinductive :=
+           mkInd (inductive_mind qpositive_cstr_arg.(qinductive)) 3;
+         qinst := qpositive_cstr_arg.(qinst) |}.
+
+    (** One instance per relation of the mutual block, each by its own [*_mrect].
+        [NI] grows under [pos_arg_nested], so every motive takes its quotation. *)
+    Local Ltac quote_positive_mrect rect Σ mdecl :=
+      apply (rect Σ mdecl
+        (fun NI ctx t p => quotation_of NI -> quotation_of p)
+        (fun NI ctx l p => quotation_of NI -> quotation_of p)
+        (fun NI ctx ps nskip cs p => quotation_of NI -> quotation_of p)
+        (fun NI ctx ps nskip c p => quotation_of NI -> quotation_of p));
+      intros;
+      repeat match goal with
+      | H : quotation_of ?NI -> quotation_of _ |- _ =>
+          specialize (H ltac:(exact _))
+      end;
+      exact _.
+    #[export] Instance quote_positive_cstr_arg {Σ mdecl NI ctx t} :
+      ground_quotable (@positive_cstr_arg Σ mdecl NI ctx t)
+      := ltac:(
+        intro p;
+        pose proof (@quote_ground nested_insts quote_nested_insts NI) as qNI;
+        revert NI ctx t p qNI;
+        quote_positive_mrect positive_cstr_arg_mrect Σ mdecl).
+    #[export] Instance quote_positive_args {Σ mdecl NI ctx l} :
+      ground_quotable (@positive_args Σ mdecl NI ctx l)
+      := ltac:(
+        intro p;
+        pose proof (@quote_ground nested_insts quote_nested_insts NI) as qNI;
+        revert NI ctx l p qNI;
+        quote_positive_mrect positive_args_mrect Σ mdecl).
+    #[export] Instance quote_positive_nested_ctors {Σ mdecl NI ctx ps nskip cs} :
+      ground_quotable (@positive_nested_ctors Σ mdecl NI ctx ps nskip cs)
+      := ltac:(
+        intro p;
+        pose proof (@quote_ground nested_insts quote_nested_insts NI) as qNI;
+        revert NI ctx ps nskip cs p qNI;
+        quote_positive_mrect positive_nested_ctors_mrect Σ mdecl).
+    #[export] Instance quote_positive_nested_cstr {Σ mdecl NI ctx ps nskip c} :
+      ground_quotable (@positive_nested_cstr Σ mdecl NI ctx ps nskip c)
+      := ltac:(
+        intro p;
+        pose proof (@quote_ground nested_insts quote_nested_insts NI) as qNI;
+        revert NI ctx ps nskip c p qNI;
+        quote_positive_mrect positive_nested_cstr_mrect Σ mdecl).
+
+    #[export] Instance quote_positive_cstr {Σ mdecl i ctx t} : ground_quotable (@positive_cstr Σ mdecl i ctx t)
       := ltac:(induction 1; exact _).
 
-    Import StrongerInstances.
     #[export] Instance quote_ind_respects_variance {Σ mdecl v indices} : ground_quotable (@ind_respects_variance Pcmp Σ mdecl v indices) := ltac:(cbv [ind_respects_variance]; exact _).
     #[export] Instance quote_cstr_respects_variance {Σ mdecl v cs} : ground_quotable (@cstr_respects_variance Pcmp Σ mdecl v cs) := ltac:(cbv [cstr_respects_variance]; exact _).
     #[export] Instance quote_on_constructor {Σ mdecl i idecl ind_indices cdecl cunivs} : ground_quotable (@on_constructor cf Pcmp P Σ mdecl i idecl ind_indices cdecl cunivs)
@@ -172,7 +254,16 @@ Module QuoteGlobalMaps (Import T : Term) (Import E : EnvironmentSig T) (Import T
     quote_on_udecl
     quote_satisfiable_udecl
     quote_valid_on_mono_udecl
+    quote_nested_inst
+    quote_nested_insts
+    quote_nested_inst_ok
+    quote_nested_uniform_cstr
+    quote_nested_uniform
+    quote_nested_variance_ok
     quote_positive_cstr_arg
+    quote_positive_args
+    quote_positive_nested_ctors
+    quote_positive_nested_cstr
     quote_positive_cstr
     quote_ind_respects_variance
     quote_cstr_respects_variance

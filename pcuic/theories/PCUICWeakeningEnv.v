@@ -336,6 +336,38 @@ Qed.
 
 Hint Extern 0 => eapply weakening_env_declared_inductive : extends.
 
+(** Positivity mentions the global environment in its nested case only, through the
+    [declared_inductive] of the nesting inductive, so it is preserved by any extension
+    of a well-formed environment. [wf Σ'] is needed because [lookup_env] returns the
+    first declaration of a name and [extends] permits a shadowing one. *)
+Lemma weakening_env_positive_cstr_arg Σ Σ' (wfΣ' : wf Σ') (ext : extends Σ Σ')
+  mdecl NI Γ t (p : positive_cstr_arg Σ mdecl NI Γ t) :
+  positive_cstr_arg Σ' mdecl NI Γ t.
+Proof using P Pcmp.
+  revert NI Γ t p.
+  apply (positive_cstr_arg_mrect Σ mdecl
+    (fun NI Γ t _ => positive_cstr_arg Σ' mdecl NI Γ t)
+    (fun NI Γ l _ => positive_args Σ' mdecl NI Γ l)
+    (fun NI Γ ps nskip cs _ => positive_nested_ctors Σ' mdecl NI Γ ps nskip cs)
+    (fun NI Γ ps nskip c _ => positive_nested_cstr Σ' mdecl NI Γ ps nskip c));
+    intros; try solve [econstructor; eauto].
+  (* The nested case is the only one that reads the environment. *)
+  econstructor 4; tea. now eapply weakening_env_declared_inductive.
+Qed.
+
+Lemma weakening_env_positive_cstr Σ Σ' (wfΣ' : wf Σ') (ext : extends Σ Σ')
+  mdecl i Γ t (p : positive_cstr Σ mdecl i Γ t) :
+  positive_cstr Σ' mdecl i Γ t.
+Proof using P Pcmp.
+  induction p.
+  - now constructor.
+  - now constructor.
+  - constructor; [|assumption].
+    now eapply weakening_env_positive_cstr_arg; tea.
+Qed.
+
+Hint Extern 0 => eapply weakening_env_positive_cstr : extends.
+
 Lemma weakening_env_declared_constructor :
   forall (H : checker_flags) (Σ : global_env) ind mdecl idecl decl,
     declared_constructor Σ idecl ind mdecl decl ->

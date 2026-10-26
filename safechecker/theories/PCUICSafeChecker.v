@@ -18,7 +18,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics
      BDTyping BDFromPCUIC BDToPCUIC.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICSafeReduce PCUICErrors
-  PCUICSafeConversion PCUICWfReduction PCUICWfEnv PCUICTypeChecker.
+  PCUICSafeConversion PCUICWfReduction PCUICWfEnv PCUICTypeChecker PCUICPositivityCheck.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -1152,212 +1152,63 @@ Section CheckEnv.
     (match c with true => vT | false => vF end)
     (at level 200, c, vT, vF at level 200, only parsing).
 
-  Equations discr_prod_letin (t : term) : Prop :=
-    discr_prod_letin (tProd _ _ _) := False ;
-    discr_prod_letin (tLetIn _ _ _ _) := False ;
-    discr_prod_letin _ := True.
-
-  Variant prod_letin_view : term -> Type :=
-  | prod_letin_tProd : forall na dom codom, prod_letin_view (tProd na dom codom)
-  | prod_letin_tLetIn : forall na b ty t, prod_letin_view (tLetIn na b ty t)
-  | prod_letin_other : forall t, discr_prod_letin t -> prod_letin_view t.
-
-  Equations prod_letin_viewc t : prod_letin_view t :=
-    prod_letin_viewc (tProd na ty t) := prod_letin_tProd na ty t ;
-    prod_letin_viewc (tLetIn na b ty t) := prod_letin_tLetIn na b ty t ;
-    prod_letin_viewc t := prod_letin_other t I.
-
-  Lemma welltyped_prod_inv {Σ : global_env_ext} {Γ na ty ty'} {wfΣ : wf Σ} :
-    welltyped Σ Γ (tProd na ty ty') ->
-    welltyped Σ Γ ty * welltyped Σ (Γ ,, vass na ty) ty'.
-  Proof using Type.
-    intros [s [s1 [s2 [hty [hty' hcum]]]]%inversion_Prod]; auto.
-    apply unlift_TypUniv in hty; cbn in hty.
-    split; eexists; eauto.
-  Qed.
-
-  Lemma welltyped_letin_inv {Σ : global_env_ext} {Γ na b ty t} {wfΣ : wf Σ} :
-    welltyped Σ Γ (tLetIn na b ty t) ->
-    welltyped Σ Γ ty *
-    welltyped Σ Γ b *
-    welltyped Σ (Γ ,, vdef na b ty) t.
-  Proof using Type.
-    intros [s [s1 [hty [hty' hcum]]]%inversion_LetIn]; auto.
-    destruct hty as (hdef & s2 & hty & _); cbn in *.
-    split; [split|]; eexists; eauto.
-  Qed.
-
-  Lemma welltyped_letin_red {Σ : global_env_ext} {Γ na b ty t} {wfX : wf Σ} :
-    welltyped Σ Γ (tLetIn na b ty t) ->
-    welltyped Σ Γ (subst0 [b] t).
-  Proof using Type.
-    intros [s [s1 [hdef [hty' hcum]]]%inversion_LetIn]; auto.
-    exists (subst0 [b] s1).
-    now eapply substitution_let in hty'.
-  Qed.
-
   Section PositivityCheck.
 
     Context {X_ext : X_env_ext_type}.
 
-    Context {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ}.
-
-    Obligation Tactic := Program.Tactics.program_simpl.
-
-    Program Definition isRel (t : term) : typing_result (∑ n, t = tRel n) :=
-      match t with
-      | tRel k => ret (k; _)
-      | _ => raise (Msg "isRel: not a variable")
-      end.
-
-    (** Positivity checking involves reducing let-ins, so it can only be applied to
-        already well-typed terms to ensure termination.
-
-        We could also intersperse weak-head normalizations to reduce the types.
-        This would need to be done in sync with a change in the spec in EnvironmentTyping though. *)
-
-    Program Fixpoint check_positive_cstr_arg
-      mdecl Γ t (wt : forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ t) Δ
-      {measure (Γ; t; wt) (@redp_subterm_rel cf _ X_ext)} : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ positive_cstr_arg mdecl Δ t ∥) :=
-      if closedn #|Δ| t then ret _
-      else
-      match prod_letin_viewc t in prod_letin_view t' with
-      | prod_letin_tProd na ty t =>
-        posarg <- check_eq_true (closedn #|Δ| ty) (Msg "Non-positive occurrence.");;
-        post <- check_positive_cstr_arg mdecl (vass na ty :: Γ) t _ (vass na ty :: Δ) ;;
-        ret _
-      | prod_letin_tLetIn na b ty t =>
-        post <- check_positive_cstr_arg mdecl Γ (subst0 [b] t) _ Δ ;;
-        ret _
-      | prod_letin_other t nprodlet =>
-        let '(hd, args) := decompose_app t in
-        '(hdrel; eqr) <- isRel hd ;;
-        isind <- check_eq_true ((#|Δ| <=? hdrel) && (hdrel <? #|Δ| + #|ind_bodies mdecl|)) (Msg "Conclusion is not an inductive type") ;;
-        (** Actually this is the only necessary check *)
-        check_closed <- check_eq_true (forallb (closedn #|Δ|) args) (Msg "Conclusion arguments refer to the inductive type being defined") ;;
-        match nth_error (List.rev mdecl.(ind_bodies)) (hdrel - #|Δ|) with
-        | Some i =>
-          check_eq_true (eqb (ind_realargs i) #|args|) (Msg "Partial application of inductive") ;;
-          ret _
-        | None => False_rect _ _
+    (** The positivity check itself and its soundness are in [PCUICPositivityCheck]; it
+        needs only the declaration of a nesting inductive, read here from the abstract
+        environment. *)
+    Definition lookup_nested (ind : inductive) :
+      typing_result (mutual_inductive_body × one_inductive_body) :=
+      match abstract_env_lookup X_ext ind.(inductive_mind) with
+      | Some (InductiveDecl mdecl') =>
+        match nth_error (ind_bodies mdecl') ind.(inductive_ind) with
+        | Some idecl' => ret (mdecl', idecl')
+        | None => raise (UndeclaredInductive ind)
         end
+      | _ => raise (UndeclaredInductive ind)
       end.
 
-      Next Obligation. sq.
-        now constructor; rewrite -Heq_anonymous.
-      Qed.
+    Lemma lookup_nested_spec {Σ} (wfΣ : abstract_env_ext_rel X_ext Σ) ind mi :
+      lookup_nested ind = Checked mi ->
+      declared_inductive Σ.1 ind (fst mi) (snd mi).
+    Proof using Type.
+      rewrite /lookup_nested.
+      destruct abstract_env_lookup as [[|decl]|] eqn:look => //.
+      destruct nth_error eqn:hnth => //.
+      intros [= <-]. split => //.
+      eapply declared_minductive_from_gen. red.
+      erewrite (abstract_env_lookup_correct' X_ext); eauto.
+    Qed.
 
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H); specialize_Σ H. sq.
-        clear check_positive_cstr_arg.
-        apply (welltyped_prod_inv wt).
-      Qed.
+    Definition check_positive_cstr mdecl n Γ (t : term)
+      : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ positive_cstr Σ.1 mdecl n Γ t ∥) :=
+      match PCUICPositivityCheck.check_positive_cstr lookup_nested positivity_fuel mdecl n Γ t
+        as r return PCUICPositivityCheck.check_positive_cstr lookup_nested positivity_fuel mdecl n Γ t = r ->
+          typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ positive_cstr Σ.1 mdecl n Γ t ∥)
+      with
+      | Checked tt => fun eq => ret (fun Σ wfΣ =>
+          sq (check_positive_cstr_sound lookup_nested Σ.1 (lookup_nested_spec wfΣ)
+                positivity_fuel mdecl n Γ t eq))
+      | TypeError e => fun _ => raise e
+      end eq_refl.
 
-      Next Obligation.
-        sq. right. unshelve eexists. repeat constructor. now reflexivity.
-      Qed.
-
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H); specialize_Σ H. sq. constructor 4.
-        now rewrite posarg.
-        apply post.
-      Qed.
-
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H);  specialize_Σ H. sq.
-        eapply (welltyped_letin_red wt).
-      Qed.
-
-      Next Obligation.
-        sq; left. split; auto. repeat constructor.
-      Qed.
-
-      Next Obligation. pose proof (abstract_env_ext_wf _ H); specialize_Σ H. sq.
-        now constructor 3.
-      Qed.
-
-      Next Obligation.
-        clear eqr.
-        move/andP: isind => [/Nat.leb_le le /Nat.ltb_lt lt].
-        eapply forallb_All in check_closed. sq.
-        symmetry in Heq_anonymous2; eapply decompose_app_inv in Heq_anonymous2.
-        subst t0. econstructor 2; repeat constructor; eauto.
-        match goal with [ H : is_true (eqb _ _) |- _ ] => now apply eqb_eq in H end.
-      Qed.
-
-      Next Obligation.
-        clear eqr.
-        move/andP: isind => [/Nat.leb_le le /Nat.ltb_lt lt].
-        eapply forallb_All in check_closed. sq.
-        symmetry in Heq_anonymous2; eapply decompose_app_inv in Heq_anonymous2.
-        subst t0. symmetry in Heq_anonymous.
-        eapply nth_error_None in Heq_anonymous.
-        len in Heq_anonymous.
-      Qed.
-
-      Next Obligation.
-        eapply Wf.measure_wf.
-        unshelve eapply wf_redp_subterm; eauto.
-      Defined.
-
-    (** We already assume that constructor types are of the form `it_mkProd_or_LetIn (params,,, args) concl` so
-        we don't need to reduce further. *)
-    Program Fixpoint check_positive_cstr mdecl n Γ t
-      (wt : forall Σ, abstract_env_ext_rel X_ext Σ -> welltyped Σ Γ t) Δ
-      { measure (Γ; t; wt) (@redp_subterm_rel cf _ X_ext) }
-      : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ positive_cstr mdecl n Δ t ∥) :=
-      match prod_letin_viewc t in prod_letin_view t' with
-      | prod_letin_tProd na ty t =>
-        posarg <- check_positive_cstr_arg mdecl Γ ty _ Δ ;;
-        post <- check_positive_cstr mdecl n (vass na ty :: Γ) t _ (vass na ty :: Δ) ;;
-        ret _
-      | prod_letin_tLetIn na b ty t =>
-        (* Do reduction *)
-        post <- check_positive_cstr mdecl n Γ (subst0 [b] t) _ Δ ;;
-        ret _
-      | prod_letin_other t Ht =>
-        let '(hd, indices) := decompose_app t in
-        eqhd <- check_eq_true (eqb hd (tRel (#|ind_bodies mdecl| - S n + #|Δ|)))
-          (Msg "Conclusion of constructor is not the right inductive type") ;;
-          (* actually impossible with prior typing checks. *)
-        closedargs <- check_eq_true (forallb (closedn #|Δ|) indices)
-          (Msg "Arguments of the inductive in the conclusion of a constructor mention the inductive itself");;
-        ret _
+    (** Every constructor of a body, in the shape [check_constructors] combines with
+        the other per-constructor checks. *)
+    Fixpoint check_positive_ctors mdecl n (l : list constructor_body)
+      : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ ->
+          ∥ All (fun x => positive_cstr Σ.1 mdecl n [] (cstr_type x)) l ∥) :=
+      match l with
+      | [] => ret (fun Σ wfΣ => sq All_nil)
+      | c :: l =>
+        p <- check_positive_cstr mdecl n [] (cstr_type c) ;;
+        ps <- check_positive_ctors mdecl n l ;;
+        ret (fun Σ wfΣ =>
+          match p Σ wfΣ, ps Σ wfΣ with
+          | sq hp, sq hps => sq (All_cons hp hps)
+          end)
       end.
-
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H);  specialize_Σ H. sq. eapply (welltyped_prod_inv wt).
-      Qed.
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H);  specialize_Σ H. sq. eapply (welltyped_prod_inv wt).
-      Qed.
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ wfΣ); specialize_Σ wfΣ. sq. right. unshelve eexists. repeat constructor. reflexivity.
-      Qed.
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H); specialize_Σ H. sq. constructor 3; eauto.
-      Qed.
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H); specialize_Σ H. sq. eapply (welltyped_letin_red wt).
-      Qed.
-      Next Obligation.
-        sq. left. repeat constructor.
-      Qed.
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H); specialize_Σ H. sq. now constructor 2.
-      Qed.
-      Next Obligation.
-        pose proof (abstract_env_ext_wf _ H); specialize_Σ H. rename Heq_anonymous into eqa.
-        symmetry in eqa; eapply decompose_app_inv in eqa.
-        subst t0.
-        move: eqhd; case: eqb_spec => // -> _.
-        sq. constructor.
-        now eapply forallb_All in closedargs.
-      Qed.
-      Next Obligation.
-        eapply Wf.measure_wf.
-        unshelve eapply wf_redp_subterm; eauto.
-      Defined.
   End PositivityCheck.
 
   Definition wt_indices Σ mdecl indices cs :=
@@ -1411,18 +1262,6 @@ Section CheckEnv.
     intros H.
     eapply All2_fold_app_inv in H as [cumΓ cumΔs]; auto.
     eapply All2_fold_length in H. len in H.
-  Qed.
-
-  Lemma wt_cstrs {n mdecl idecl cstrs cs} X_ext :
-    (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ All2
-      (fun (cstr : constructor_body) (cs0 : constructor_univs) =>
-      check_constructor_spec Σ n mdecl idecl cstr cs0) cstrs cs ∥) ->
-      forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ All (fun cstr => welltyped Σ (arities_context mdecl.(ind_bodies)) (cstr_type cstr)) cstrs ∥.
-  Proof using Type.
-    intros. specialize_Σ H0;  sq.
-    solve_all. simpl.
-    destruct X as [[[isTy _] _] _]. simpl in isTy.
-    now eapply isType_welltyped in isTy.
   Qed.
 
   Lemma get_wt_indices {mdecl cstrs cs} X_ext
@@ -1755,11 +1594,7 @@ Section CheckEnv.
     '(cs; Hcs) <- (check_constructors_univs X_ext (string_of_kername id) mdecl wfar
         wfpars (S n) idecl idecl.(ind_ctors));;
     posc <- wrap_error _ X_ext (string_of_kername id)
-      (monad_All_All
-       (fun x px =>
-        @check_positive_cstr X_ext _ mdecl n
-          (arities_context mdecl.(ind_bodies)) (cstr_type x) _ [])
-        idecl.(ind_ctors) (wt_cstrs (cs:=cs) X_ext Hcs)) ;;
+      (@check_positive_ctors X_ext mdecl n idecl.(ind_ctors)) ;;
     var <- (monad_All_All
               (fun cs px => @monad_lift_ext X X_ext (EnvCheck X_env_ext_type) _ _ _
                                             (check_cstr_variance X mdecl id idecl.(ind_indices) mdeclvar cs _ _))
@@ -1774,7 +1609,6 @@ Section CheckEnv.
         (Msg "No lets in constructor types allowed, you need to set the checker flag lets_in_constructor_types to [true].")  ))
     ) idecl.(ind_ctors) ;;
     ret (cs; _).
-    Next Obligation. specialize_Σ H. now sq. Qed.
     Next Obligation. destruct HX as [? HX]; eauto. Qed.
     Next Obligation. specialize_Σ H. destruct HX as [? ?].
           specialize_Σ H. now pose proof (abstract_env_ext_wf _ H0). Qed.

@@ -1344,6 +1344,11 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
           but the conclusion [concl] is of the form [mkApps (tRel k) args] for k
           refering to an inductive in the block, and none of the arguments [args]
           refer to the inductive. #|args| must be the length of the full inductive application.
+        - or [concl] is of the form [mkApps (tInd ind u) args], a nested inductive type:
+          the block occurs only in the first [k] arguments of [ind], which must be [k]
+          uniform parameters of [ind] ([nested_uniform], the condition Rocq's kernel
+          computes as [mind_nparams_rec]; see [compute_rec_par] and
+          [check_positivity_nested] in kernel/indtypes.ml).
 
       Let-in assumptions in Δ are systematically unfolded, i.e. we really consider:
       the zeta-reduction of [t]. *)
@@ -1358,31 +1363,167 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       #|Γ| <= k /\ k < #|Γ| + #|mdecl.(ind_bodies)| /\
        nth_error (List.rev mdecl.(ind_bodies)) (k - #|Γ|) = Some i.
 
-    Reserved Notation " mdecl ;;; Γ |arg+> t " (at level 50, Γ, t at next level).
+    (** While the constructors of a nesting inductive type are checked, the nesting type
+        itself is a variable of the local context, as in the kernel's
+        [ienv_push_inductive] (kernel/indtypes.ml). [nested_insts] holds one
+        entry per such variable: the variable sits at de Bruijn *level* [ni_level], and
+        stands for the nesting inductive applied to the [ni_npars] instantiating
+        arguments [ni_args], which live in a context of length [ni_level]. *)
+    Record nested_inst := {
+      ni_level : nat;
+      ni_npars : nat;
+      ni_args : list term }.
+    Definition nested_insts := list nested_inst.
+
+    (** An occurrence [mkApps (tRel x) l] of such a variable is allowed when it repeats
+        the recorded instance and its remaining arguments do not mention the block.
+        The entry is named by its position [j] in [NI], so that the statement needs no
+        decidable equality on entries.  The conditions are a [Prop] conjunction under
+        the [∑], as in [on_variance]: a sort-polymorphic tuple of [Prop]s is a [Prop]
+        instance of an informative type, which extraction refuses. *)
+    Definition nested_inst_ok (NI : nested_insts) (Γ : context) (x : nat) (l : list term) :=
+      ∑ j e,
+        [/\ nth_error NI j = Some e, e.(ni_level) < #|Γ|, x = #|Γ| - S e.(ni_level),
+            firstn e.(ni_npars) l = map (lift0 (#|Γ| - e.(ni_level))) e.(ni_args) &
+            forallb (closedn #|Γ|) (skipn e.(ni_npars) l)].
+
+    (** [nested_uniform mdecl' idecl' k]: [mdecl'] is a single inductive whose first [k]
+        parameters are *uniform*, i.e. every occurrence of its own inductive variable in
+        its constructor types is that variable applied to its first [k] parameter
+        variables. This is Rocq's [k <= mind_nparams_rec], stated without that field,
+        which PCUIC does not store.
+
+        [rest1] is the constructor's body with every such occurrence replaced by a fresh
+        variable [tRel 0], under the parameters [1 .. #|params|].  [closedn (S #|params|)]
+        says it mentions nothing else, in particular not the inductive's own variable,
+        which sits at [S #|params|]: so substituting the occurrence back gives every
+        occurrence of the inductive in [rest]. *)
+    Definition nested_uniform_cstr (mdecl' : mutual_inductive_body) (k : nat) (cdecl' : constructor_body) :=
+      let params := ind_params mdecl' in
+      ∑ rest rest1,
+        [/\ cstr_type cdecl' = it_mkProd_or_LetIn params rest,
+            rest = subst [mkApps (tRel #|params|) (firstn k (to_extended_list params))] 0 rest1
+          & closedn (S #|params|) rest1].
+
+    Definition nested_uniform (mdecl' : mutual_inductive_body) (idecl' : one_inductive_body) (k : nat) :=
+      [× ind_bodies mdecl' = [idecl'],
+         k <= context_assumptions (ind_params mdecl') &
+         All (nested_uniform_cstr mdecl' k) (ind_ctors idecl')].
+
+    (** A nested occurrence of a cumulative block is refused: [positive_cstr_arg_subst]
+        compares the arguments of an inductive application by conversion, which a
+        covariant level does not give. *)
+    Definition nested_variance_ok (mdecl : mutual_inductive_body) :=
+      match ind_variance mdecl with
+      | None => True
+      | Some v => Forall (fun x => x <> Variance.Covariant) v
+      end.
+
+    Reserved Notation " Σ ;;; mdecl ;;; NI ;;; Γ |arg+> t " (at level 50, mdecl, NI, Γ, t at next level).
+    Reserved Notation " Σ ;;; mdecl ;;; NI ;;; Γ |args+> l " (at level 50, mdecl, NI, Γ, l at next level).
     Notation subst0 t := (subst t 0).
     Notation "M { j := N }" := (subst [N] j M) (at level 10, right associativity).
 
-    Inductive positive_cstr_arg mdecl Γ : term -> Type :=
+    Inductive positive_cstr_arg Σ mdecl (NI : nested_insts) Γ : term -> Type :=
     | pos_arg_closed ty :
       closedn #|Γ| ty ->
-      mdecl ;;; Γ |arg+> ty
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> ty
 
     | pos_arg_concl l k i :
       (** Mutual inductive references in the conclusion are ok *)
       #|l| = ind_realargs i -> All (closedn #|Γ|) l ->
       mdecl_at_i mdecl i Γ k ->
-      mdecl ;;; Γ |arg+> mkApps (tRel k) l
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> mkApps (tRel k) l
+
+    | pos_arg_nested_self x l :
+      (** A reference to the nesting inductive of an enclosing [pos_arg_nested], at its
+          own instance *)
+      nested_inst_ok NI Γ x l ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> mkApps (tRel x) l
+
+    | pos_arg_nested ind u args mdecl' idecl' k na :
+      (** A nested inductive type *)
+      declared_inductive Σ ind mdecl' idecl' ->
+      nested_uniform mdecl' idecl' k ->
+      nested_variance_ok mdecl ->
+      k <= #|args| ->
+      All (closedn #|Γ|) (skipn k args) ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |args+> firstn k args ->
+      positive_nested_ctors Σ mdecl
+        ({| ni_level := #|Γ|; ni_npars := k; ni_args := firstn k args |} :: NI)
+        (vass na (mkApps (tInd ind u) (firstn k args)) :: Γ)
+        (map (lift0 1) (firstn k args))
+        (context_assumptions (ind_params mdecl') - k)
+        (map (fun c => subst_instance u (cstr_type c)) (ind_ctors idecl')) ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> mkApps (tInd ind u) args
 
     | pos_arg_let na b ty ty' :
-      mdecl ;;; Γ |arg+> ty' {0 := b} ->
-      mdecl ;;; Γ |arg+> tLetIn na b ty ty'
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> ty' {0 := b} ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> tLetIn na b ty ty'
 
     | pos_arg_ass na ty ty' :
       closedn #|Γ| ty ->
-      mdecl ;;; vass na ty :: Γ |arg+> ty' ->
-      mdecl ;;; Γ |arg+> tProd na ty ty'
+      Σ ;;; mdecl ;;; NI ;;; vass na ty :: Γ |arg+> ty' ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> tProd na ty ty'
 
-  where " mdecl ;;; Γ |arg+> t " := (positive_cstr_arg mdecl Γ t) : type_scope.
+    (** Every member of a list of terms is a positive constructor argument. A relation of
+        the block rather than an [All] premise, so that its induction principles give an
+        induction hypothesis for each member. *)
+    with positive_args Σ mdecl (NI : nested_insts) Γ : list term -> Type :=
+    | pos_args_nil : Σ ;;; mdecl ;;; NI ;;; Γ |args+> []
+    | pos_args_cons t l :
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> t ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |args+> l ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |args+> (t :: l)
+
+    (** Every constructor type of the nesting inductive, instantiated at the enclosing
+        occurrence's arguments. *)
+    with positive_nested_ctors Σ mdecl (NI : nested_insts) Γ : list term -> nat -> list term -> Type :=
+    | pos_nctors_nil ps nskip : positive_nested_ctors Σ mdecl NI Γ ps nskip []
+    | pos_nctors_cons ps nskip t l :
+      positive_nested_cstr Σ mdecl NI Γ ps nskip t ->
+      positive_nested_ctors Σ mdecl NI Γ ps nskip l ->
+      positive_nested_ctors Σ mdecl NI Γ ps nskip (t :: l)
+
+    (** One constructor type of the nesting inductive. [ps] instantiates its uniform
+        parameters, [nskip] counts its remaining parameters, which are pushed without a
+        check, as the kernel does ([ienv_decompose_prod] in [check_positivity_nested],
+        kernel/indtypes.ml). Then every argument must be positive and the conclusion must
+        be the nesting inductive at its own instance ([check_constructors] with
+        [check_head] false). *)
+    with positive_nested_cstr Σ mdecl (NI : nested_insts) Γ : list term -> nat -> term -> Type :=
+    | pos_ncstr_inst p ps nskip na ty t :
+      positive_nested_cstr Σ mdecl NI Γ ps nskip (t {0 := p}) ->
+      positive_nested_cstr Σ mdecl NI Γ (p :: ps) nskip (tProd na ty t)
+
+    | pos_ncstr_let ps nskip na b ty t :
+      positive_nested_cstr Σ mdecl NI Γ ps nskip (t {0 := b}) ->
+      positive_nested_cstr Σ mdecl NI Γ ps nskip (tLetIn na b ty t)
+
+    | pos_ncstr_skip nskip na ty t :
+      positive_nested_cstr Σ mdecl NI (vass na ty :: Γ) [] nskip t ->
+      positive_nested_cstr Σ mdecl NI Γ [] (S nskip) (tProd na ty t)
+
+    | pos_ncstr_arg na ty t :
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> ty ->
+      positive_nested_cstr Σ mdecl NI (vass na ty :: Γ) [] 0 t ->
+      positive_nested_cstr Σ mdecl NI Γ [] 0 (tProd na ty t)
+
+    | pos_ncstr_concl x l :
+      nested_inst_ok NI Γ x l ->
+      positive_nested_cstr Σ mdecl NI Γ [] 0 (mkApps (tRel x) l)
+
+  where " Σ ;;; mdecl ;;; NI ;;; Γ |arg+> t " := (positive_cstr_arg Σ mdecl NI Γ t) : type_scope
+  and " Σ ;;; mdecl ;;; NI ;;; Γ |args+> l " := (positive_args Σ mdecl NI Γ l) : type_scope.
+
+    (** The four relations are mutually recursive, so every proof by cases on one of
+        them needs the induction hypotheses of all four.  [Combined Scheme] builds a
+        conjunction of [Prop]s and does not apply to [Type]-valued relations, so the
+        four principles are used together, as [typing_ind_env] does. *)
+    Scheme positive_cstr_arg_mrect := Induction for positive_cstr_arg Sort Type
+      with positive_args_mrect := Induction for positive_args Sort Type
+      with positive_nested_ctors_mrect := Induction for positive_nested_ctors Sort Type
+      with positive_nested_cstr_mrect := Induction for positive_nested_cstr Sort Type.
 
     (** A constructor type [t] is positive w.r.t. an inductive block [mdecl]
       and inductive [i] when it's zeta normal-form is of the shape Π Δ. concl and:
@@ -1392,24 +1533,24 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
           any of the inductive types in the block. I.e. [indices] are closed terms
           in [params ,,, args]. *)
 
-    Reserved Notation " mdecl @ i ;;; Γ |+> t " (at level 50, i, Γ, t at next level).
+    Reserved Notation " Σ ;;; mdecl @ i ;;; Γ |+> t " (at level 50, mdecl, i, Γ, t at next level).
 
 
-    Inductive positive_cstr mdecl i Γ : term -> Type :=
+    Inductive positive_cstr Σ mdecl i Γ : term -> Type :=
     | pos_concl l (headrel := (#|mdecl.(ind_bodies)| - S i + #|Γ|)%nat) :
       All (closedn #|Γ|) l ->
-      mdecl @ i ;;; Γ |+> mkApps (tRel headrel) l
+      Σ ;;; mdecl @ i ;;; Γ |+> mkApps (tRel headrel) l
 
     | pos_let na b ty ty' :
-      mdecl @ i ;;; Γ |+> ty' {0 := b} ->
-      mdecl @ i ;;; Γ |+> tLetIn na b ty ty'
+      Σ ;;; mdecl @ i ;;; Γ |+> ty' {0 := b} ->
+      Σ ;;; mdecl @ i ;;; Γ |+> tLetIn na b ty ty'
 
     | pos_ass na ty ty' :
-      mdecl ;;; Γ |arg+> ty ->
-      mdecl @ i ;;; vass na ty :: Γ |+> ty' ->
-      mdecl @ i ;;; Γ |+> tProd na ty ty'
+      Σ ;;; mdecl ;;; [] ;;; Γ |arg+> ty ->
+      Σ ;;; mdecl @ i ;;; vass na ty :: Γ |+> ty' ->
+      Σ ;;; mdecl @ i ;;; Γ |+> tProd na ty ty'
 
-    where " mdecl @ i ;;; Γ |+> t " := (positive_cstr mdecl i Γ t) : type_scope.
+    where " Σ ;;; mdecl @ i ;;; Γ |+> t " := (positive_cstr Σ mdecl i Γ t) : type_scope.
 
     Definition lift_level n l :=
       match l with
@@ -1525,8 +1666,10 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
                       cdecl.(cstr_indices)
                       (List.rev (lift_context #|cdecl.(cstr_args)| 0 ind_indices));
 
-      on_ctype_positive : (* The constructor type is positive *)
-        positive_cstr mdecl i [] (cstr_type cdecl);
+      on_ctype_positive : (* The constructor type is positive.  [Σ.1] is the environment
+        the block is declared in: a nested occurrence looks up its nesting inductive
+        there, as the kernel does. *)
+        positive_cstr Σ.1 mdecl i [] (cstr_type cdecl);
 
       on_ctype_variance : (* The constructor type respect the variance annotation
         on polymorphic universes, if any. *)
@@ -2090,9 +2233,10 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
     (forall l s, @check_constructors_smaller cf1 (global_ext_constraints Σ) l s ->
       @check_constructors_smaller cf2 (global_ext_constraints Σ') l s) ->
     (forall u l, @on_variance cf1 Σ.1 u l -> @on_variance cf2 Σ'.1 u l) ->
+    (forall mdecl i Γ t, positive_cstr Σ.1 mdecl i Γ t -> positive_cstr Σ'.1 mdecl i Γ t) ->
     @on_global_decl cf1 Pcmp1 P1 Σ kn d -> @on_global_decl cf2 Pcmp2 P2 Σ' kn d.
   Proof.
-    intros Xcf XP Xcmp Xu Xc Xv.
+    intros Xcf XP Xcmp Xu Xc Xv Xpos.
     destruct d; simpl.
     - apply XP => //.
     - intros [onI onP onNP onV].
@@ -2105,6 +2249,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       + eapply XP => //. now apply onArity in X.
       + pose proof X.(onConstructors) as X1.
         apply All2_impl with (1 := X1).
+        (* [eauto] discharges [on_ctype_positive] with [Xpos] and the hypothesis. *)
         intros ? ? [? ? ? ?]; unshelve econstructor; eauto.
         * apply XP; eauto.
         * eapply sorts_local_ctx_impl with (1 := on_cargs0).

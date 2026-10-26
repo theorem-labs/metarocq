@@ -7,6 +7,7 @@ theories/PCUICSafeReduce.v
 theories/PCUICSafeConversion.v
 theories/PCUICWfReduction.v
 theories/PCUICTypeChecker.v
+theories/PCUICPositivityCheck.v
 theories/PCUICSafeChecker.v
 theories/PCUICWfEnvImpl.v
 theories/PCUICSafeRetyping.v
