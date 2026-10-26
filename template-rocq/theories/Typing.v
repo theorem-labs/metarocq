@@ -494,6 +494,202 @@ Inductive red Σ Γ M : term -> Type :=
 | refl_red : red Σ Γ M M
 | trans_red : forall (P : term) N, red Σ Γ M P -> red1 Σ Γ P N -> red Σ Γ M N.
 
+(** *** The kernel's decomposition of an inductive's user arity
+
+  The Template twin of [PCUICArityRed] (see there for the kernel functions it
+  describes).  [whd_rel zeta Σ Γ t args h l] is the graph of the kernel's
+  weak-head machine, with every flag on except possibly [zeta], on [t] applied
+  to the arguments [args]: it stops at [h] applied to [l].  It is big-step and
+  sharing-free, and it keeps the subterms the machine keeps: fix unfolding puts
+  the *reduced* recursive argument back, and a stuck case, fix or projection
+  keeps its reduced discriminant.  Each contraction carries the side condition
+  [red1] needs, so a derivation is a reduction without any typing
+  ([TemplateArityRed.whd_rel_red]).
+
+  Template differs from PCUIC in two places.  Applications are n-ary: the
+  machine pushes all the arguments of a [tApp f l] at once, for an [f] that is
+  not an application and a non-empty [l] (the [WfAst] invariant, under which
+  [mkApps (tApp f l) args = mkApps f (l ++ args)]).  And a head [tCast] is
+  stripped, as the kernel does ([kernel/cClosure.ml], [knh] on [FCast]).
+
+  [arity_red Σ Γ t Δ s] is the graph of [Reduction.dest_arity]: in context
+  [Γ], [t] decomposes into the telescope [Δ] (innermost declaration first, as
+  [it_mkProd_or_LetIn] reads it) ending in [tSort s].  Both relations are in
+  [Type], like [red1] and [typing], so that they can be quoted. *)
+
+Definition whd_is_construct (t : term) : bool :=
+  match t with tConstruct _ _ _ => true | _ => false end.
+
+Definition whd_is_construct0 (t : term) : bool :=
+  match t with tConstruct _ 0 _ => true | _ => false end.
+
+Definition whd_is_cofix (t : term) : bool :=
+  match t with tCoFix _ _ => true | _ => false end.
+
+(** The heads on which the machine stops at once. *)
+Definition whd_stop_head (t : term) (args : list term) : bool :=
+  match t with
+  | tRel _ | tLetIn _ _ _ _ | tConst _ _ | tApp _ _ | tCast _ _ _
+  | tFix _ _ | tCase _ _ _ _ | tProj _ _ => false
+  | tLambda _ _ _ => match args with [] => true | _ :: _ => false end
+  | _ => true
+  end.
+
+(** A head that ends one level of [whd_decompose_prod_decls]. *)
+Definition whd_arity_head (t : term) (args : list term) : bool :=
+  match t, args with
+  | tProd _ _ _, [] | tLetIn _ _ _ _, [] | tSort _, [] => true
+  | _, _ => false
+  end.
+
+Inductive whd_rel (zeta : bool) (Σ : global_env) (Γ : context) :
+  term -> list term -> term -> list term -> Type :=
+(** A let-bound variable is unfolded whatever [zeta] is: the kernel unfolds a
+    [RelKey] under delta (kernel/cClosure.ml, [knr]). *)
+| whd_rel_unfold c args d b h l
+    (hnth : nth_error Γ c = Some d) (hbod : d.(decl_body) = Some b)
+    (w : whd_rel zeta Σ Γ (lift0 (S c) b) args h l) :
+    whd_rel zeta Σ Γ (tRel c) args h l
+| whd_rel_assum c args d
+    (hnth : nth_error Γ c = Some d) (hbod : d.(decl_body) = None) :
+    whd_rel zeta Σ Γ (tRel c) args (tRel c) args
+| whd_zeta na b B t args h l
+    (hz : zeta = true)
+    (w : whd_rel zeta Σ Γ (subst10 b t) args h l) :
+    whd_rel zeta Σ Γ (tLetIn na b B t) args h l
+| whd_letin_stop na b B t args
+    (hz : zeta = false) :
+    whd_rel zeta Σ Γ (tLetIn na b B t) args (tLetIn na b B t) args
+(** The machine looks the constant up; [lookup_env] takes the first
+    declaration, so the rule is deterministic even on an environment with
+    duplicate names (as in PCUICArityRed). *)
+| whd_delta c u decl body args h l
+    (hcst : lookup_env Σ c = Some (ConstantDecl decl))
+    (hbod : decl.(cst_body) = Some body)
+    (w : whd_rel zeta Σ Γ (subst_instance u body) args h l) :
+    whd_rel zeta Σ Γ (tConst c u) args h l
+| whd_axiom c u decl args
+    (hcst : lookup_env Σ c = Some (ConstantDecl decl))
+    (hbod : decl.(cst_body) = None) :
+    whd_rel zeta Σ Γ (tConst c u) args (tConst c u) args
+(** The kernel strips a head cast (kernel/cClosure.ml, [knh] on [FCast]). *)
+| whd_cast c k T args h l
+    (w : whd_rel zeta Σ Γ c args h l) :
+    whd_rel zeta Σ Γ (tCast c k T) args h l
+(** Applications are n-ary: the machine pushes all of [l] at once.  The side
+    conditions are [WfAst.wf]'s invariant on an application node; a nested
+    [tApp] has no rule at all, and no [whd_stop] rule either. *)
+| whd_app f l args h l'
+    (hf : isApp f = false) (hl : l <> [])
+    (w : whd_rel zeta Σ Γ f (l ++ args) h l') :
+    whd_rel zeta Σ Γ (tApp f l) args h l'
+| whd_beta na A t a args h l
+    (w : whd_rel zeta Σ Γ (subst10 a t) args h l) :
+    whd_rel zeta Σ Γ (tLambda na A t) (a :: args) h l
+(** [PCUICSafeReduce.v], [_reduce_stack], [red_view_Fix]: the recursive
+    argument is reduced, and put back reduced. *)
+| whd_fix_iota mfix idx narg fn args c ind n ui cargs h l
+    (hunf : unfold_fix mfix idx = Some (narg, fn))
+    (hnth : nth_error args narg = Some c)
+    (wa : whd_rel zeta Σ Γ c [] (tConstruct ind n ui) cargs)
+    (wb : whd_rel zeta Σ Γ fn
+      (firstn narg args ++ mkApps (tConstruct ind n ui) cargs :: skipn (S narg) args) h l) :
+    whd_rel zeta Σ Γ (tFix mfix idx) args h l
+| whd_fix_stuck mfix idx narg fn args c t cargs
+    (hunf : unfold_fix mfix idx = Some (narg, fn))
+    (hnth : nth_error args narg = Some c)
+    (wa : whd_rel zeta Σ Γ c [] t cargs)
+    (hnc : whd_is_construct t = false) :
+    whd_rel zeta Σ Γ (tFix mfix idx) args
+      (tFix mfix idx) (firstn narg args ++ mkApps t cargs :: skipn (S narg) args)
+| whd_fix_noarg mfix idx narg fn args
+    (hunf : unfold_fix mfix idx = Some (narg, fn))
+    (hnth : nth_error args narg = None) :
+    whd_rel zeta Σ Γ (tFix mfix idx) args (tFix mfix idx) args
+| whd_fix_nounfold mfix idx args
+    (hunf : unfold_fix mfix idx = None) :
+    whd_rel zeta Σ Γ (tFix mfix idx) args (tFix mfix idx) args
+(** [red_view_Case].  Template's compact branches need the constructor's
+    declaration to build the branch context, exactly as [red1]'s [red_iota]
+    does. *)
+| whd_iota ci p c brs args n ui cargs mdecl idecl cdecl br h l
+    (wa : whd_rel zeta Σ Γ c [] (tConstruct ci.(ci_ind) n ui) cargs)
+    (hbr : nth_error brs n = Some br)
+    (hdecl : lookup_constructor Σ ci.(ci_ind) n = Some (mdecl, idecl, cdecl))
+    (hlen : #|cargs| =
+      (ci.(ci_npar) + context_assumptions (case_branch_context ci.(ci_ind) mdecl cdecl p br))%nat)
+    (wb : whd_rel zeta Σ Γ
+      (iota_red ci.(ci_npar) cargs (case_branch_context ci.(ci_ind) mdecl cdecl p br) br)
+      args h l) :
+    whd_rel zeta Σ Γ (tCase ci p c brs) args h l
+| whd_case_cofix ci p c brs args mfix idx cargs narg fn h l
+    (wa : whd_rel zeta Σ Γ c [] (tCoFix mfix idx) cargs)
+    (hunf : unfold_cofix mfix idx = Some (narg, fn))
+    (wb : whd_rel zeta Σ Γ (tCase ci p (mkApps fn cargs) brs) args h l) :
+    whd_rel zeta Σ Γ (tCase ci p c brs) args h l
+| whd_case_stuck ci p c brs args t cargs
+    (wa : whd_rel zeta Σ Γ c [] t cargs)
+    (hnc : whd_is_construct t = false) (hncf : whd_is_cofix t = false) :
+    whd_rel zeta Σ Γ (tCase ci p c brs) args (tCase ci p (mkApps t cargs) brs) args
+(** [red_view_Proj]. *)
+| whd_proj p c args u cargs a h l
+    (wa : whd_rel zeta Σ Γ c [] (tConstruct p.(proj_ind) 0 u) cargs)
+    (hnth : nth_error cargs (p.(proj_npars) + p.(proj_arg)) = Some a)
+    (wb : whd_rel zeta Σ Γ a args h l) :
+    whd_rel zeta Σ Γ (tProj p c) args h l
+| whd_proj_cofix p c args mfix idx cargs narg fn h l
+    (wa : whd_rel zeta Σ Γ c [] (tCoFix mfix idx) cargs)
+    (hunf : unfold_cofix mfix idx = Some (narg, fn))
+    (wb : whd_rel zeta Σ Γ (tProj p (mkApps fn cargs)) args h l) :
+    whd_rel zeta Σ Γ (tProj p c) args h l
+| whd_proj_stuck p c args t cargs
+    (wa : whd_rel zeta Σ Γ c [] t cargs)
+    (hnc : whd_is_construct0 t = false) (hncf : whd_is_cofix t = false) :
+    whd_rel zeta Σ Γ (tProj p c) args (tProj p (mkApps t cargs)) args
+(** [red_view_other]. *)
+| whd_stop t args
+    (hs : whd_stop_head t args) :
+    whd_rel zeta Σ Γ t args t args.
+
+Derive Signature for whd_rel.
+
+(** [allnolet] and [all] of kernel/redFlags.ml. *)
+Abbreviation whd_allnolet_rel := (whd_rel false).
+Abbreviation whd_all_rel := (whd_rel true).
+
+Inductive arity_red (Σ : global_env) : context -> term -> context -> sort -> Type :=
+| arity_red_sort Γ t s
+    (w : whd_allnolet_rel Σ Γ t [] (tSort s) []) :
+    arity_red Σ Γ t [] s
+| arity_red_prod Γ t na A B Δ s
+    (w : whd_allnolet_rel Σ Γ t [] (tProd na A B) [])
+    (ar : arity_red Σ (Γ ,, vass na A) B Δ s) :
+    arity_red Σ Γ t (Δ ++ [vass na A]) s
+| arity_red_let Γ t na b A B Δ s
+    (w : whd_allnolet_rel Σ Γ t [] (tLetIn na b A B) [])
+    (ar : arity_red Σ (Γ ,, vdef na b A) B Δ s) :
+    arity_red Σ Γ t (Δ ++ [vdef na b A]) s
+(** kernel/reduction.ml, [whd_decompose_prod_decls]: [whd_all] once, and
+    recurse only if it made progress.  The kernel tests progress with
+    [Constr.equal], which ignores binder names; [<>] here sees them.  The
+    Template-to-PCUIC transport rebuilds the PCUIC premise from the PCUIC
+    derivation, so the difference has no effect there. *)
+| arity_red_fallback Γ t h l h' l' Δ s
+    (w : whd_allnolet_rel Σ Γ t [] h l)
+    (ha : whd_arity_head h l = false)
+    (w' : whd_all_rel Σ Γ (mkApps h l) [] h' l')
+    (hne : mkApps h' l' <> mkApps h l)
+    (ar : arity_red Σ Γ (mkApps h' l') Δ s) :
+    arity_red Σ Γ t Δ s.
+
+Derive Signature for arity_red.
+
+(** The instance of [EnvironmentTyping.ArityRedSig] that [TemplateGlobalMaps]
+    uses for [on_ind_body]'s [ind_arity_red]. *)
+Module TemplateArityRelation <: ArityRedSig TemplateTerm Env.
+  Definition arity_red := arity_red.
+End TemplateArityRelation.
+
 (** ** Term equality and cumulativity *)
 
 (* ** Syntactic equality up-to universes
@@ -563,7 +759,7 @@ Include TemplateEnvTyping.
 Module TemplateConversion := Conversion TemplateTerm Env TemplateTermUtils TemplateEnvTyping.
 Include TemplateConversion.
 
-Module TemplateGlobalMaps := GlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup.
+Module TemplateGlobalMaps := GlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateArityRelation.
 Include TemplateGlobalMaps.
 
 Module TemplateConversionPar <: ConversionParSig TemplateTerm Env TemplateTermUtils TemplateEnvTyping.
@@ -946,6 +1142,7 @@ Module TemplateDeclarationTyping :=
     TemplateConversionPar
     TemplateTyping
     TemplateLookup
+    TemplateArityRelation
     TemplateGlobalMaps.
 Include TemplateDeclarationTyping.
 
@@ -1381,9 +1578,13 @@ Proof.
         constructor. cbn; subst Σ' Σg; lia. clearbody IH'. cbn in IH'.
         clear IH; rename IH' into IH.
         eapply Alli_impl; eauto. cbn in IH. clear onI onP onNP onV. intros n x Xg.
-        refine {| ind_arity_eq := Xg.(ind_arity_eq);
+        refine {| ind_arity_red := Xg.(ind_arity_red);
                   ind_cunivs := Xg.(ind_cunivs) |}.
         -- apply onArity in Xg.
+           apply Xj; tas.
+           apply lift_typing_impl with (1 := Xg); intros ?? Hs. split; tas.
+           apply (IH (_; _; _; Hs)).
+        -- apply onArityRed in Xg.
            apply Xj; tas.
            apply lift_typing_impl with (1 := Xg); intros ?? Hs. split; tas.
            apply (IH (_; _; _; Hs)).

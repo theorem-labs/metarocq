@@ -7,7 +7,6 @@ From MetaRocq.Quotation.ToPCUIC.QuotationOf.PCUIC.PCUICAst Require Export
   PCUICEnvTyping.Instances
   PCUICConversion.Instances
   PCUICLookup.Instances
-  PCUICGlobalMaps.Instances
 .
 
 (* TODO: maybe do something about [Include PCUICLookup.] *)

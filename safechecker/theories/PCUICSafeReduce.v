@@ -9,7 +9,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICUtils PCUICReduction PCUICValidity PCUICSafeLemmata
      PCUICConfluence PCUICConversion
      PCUICOnFreeVars PCUICWellScopedCumulativity
-     PCUICClassification.
+     PCUICClassification PCUICArityRed.
 
 From MetaRocq.SafeChecker Require Import PCUICErrors PCUICWfReduction PCUICWfEnv.
 
@@ -449,15 +449,12 @@ Corollary R_Acc_aux :
 
     _reduce_stack Γ t π h reduce with red_viewc t π := {
 
-    | red_view_Rel c π with RedFlags.zeta flags := {
-      | true with inspect (nth_error (Γ ,,, stack_context π) c) := {
-        | @exist None eq := False_rect _ _ ;
-        | @exist (Some d) eq with inspect d.(decl_body) := {
-          | @exist None _ := give (tRel c) π ;
-          | @exist (Some b) H := rec reduce (lift0 (S c) b) π
-          }
-        } ;
-      | false := give (tRel c) π
+    | red_view_Rel c π with inspect (nth_error (Γ ,,, stack_context π) c) := {
+      | @exist None eq := False_rect _ _ ;
+      | @exist (Some d) eq with inspect d.(decl_body) := {
+        | @exist None _ := give (tRel c) π ;
+        | @exist (Some b) H := rec reduce (lift0 (S c) b) π
+        }
       } ;
 
     | red_view_LetIn A b B c π with RedFlags.zeta flags := {
@@ -1228,6 +1225,14 @@ Corollary R_Acc_aux :
     refine (reduce_stack_sound _ _ _ _ [] _); eauto.
   Qed.
 
+  Lemma reduce_term_welltyped Γ t h Σ (wfΣ : abstract_env_ext_rel X Σ) :
+    welltyped Σ Γ (reduce_term Γ t h).
+  Proof using Type.
+    destruct (reduce_term_sound Γ t h Σ wfΣ) as [r].
+    destruct (hΣ Σ wfΣ) as [wΣ].
+    exact (red_welltyped Σ wΣ (h Σ wfΣ) r).
+  Qed.
+
   Scheme Acc_ind' := Induction for Acc Sort Prop.
 
   Lemma Fix_F_prop :
@@ -1535,9 +1540,6 @@ Corollary R_Acc_aux :
             apply inversion_App in h as (?&?&?&?&?); auto.
             apply inversion_Prim in t0 as (prim_ty & cdecl & [? ? ? ?]); auto.
             eapply PCUICConversion.invert_cumul_prim_type_prod; eauto.
-    - unfold zipp. case_eq (decompose_stack π). intros l ρ e.
-      constructor. constructor. eapply whne_mkApps.
-      eapply whne_rel_nozeta. assumption.
     - match goal with
       | |- context [ reduce ?x ?y ?z ] =>
         case_eq (reduce x y z) ;
@@ -1824,6 +1826,305 @@ Corollary R_Acc_aux :
     rewrite stack_context_appstack, decompose_stack_appstack in H.
     cbn in *.
     now rewrite app_nil_r in H.
+  Qed.
+
+  (** ** The machine computes [PCUICArityRed.whd_rel]
+
+    With every flag on except possibly [zeta], the machine started on [t] and
+    the stack [π] stops at the [whd_rel] form of [t] applied to the arguments
+    of [π], in the context of [π]. *)
+
+  Lemma whd_rel_fix_iota_app zeta (Σ : global_env) Γ mfix idx fn pre c post ind n ui cargs h l :
+    unfold_fix mfix idx = Some (#|pre|, fn) ->
+    whd_rel zeta Σ Γ c [] (tConstruct ind n ui) cargs ->
+    whd_rel zeta Σ Γ fn (pre ++ mkApps (tConstruct ind n ui) cargs :: post) h l ->
+    whd_rel zeta Σ Γ (tFix mfix idx) (pre ++ c :: post) h l.
+  Proof using Type.
+    intros hu hc hfn.
+    eapply whd_fix_iota; [exact hu|apply nth_error_snoc; reflexivity|exact hc|].
+    rewrite firstn_app_left by reflexivity.
+    change (pre ++ c :: post) with (pre ++ [c] ++ post).
+    rewrite (app_assoc pre [c] post).
+    rewrite skipn_all_app_eq by (rewrite length_app; cbn; lia).
+    exact hfn.
+  Qed.
+
+  Lemma whd_rel_fix_stuck_app zeta (Σ : global_env) Γ mfix idx fn pre c post t cargs :
+    unfold_fix mfix idx = Some (#|pre|, fn) ->
+    whd_rel zeta Σ Γ c [] t cargs -> whd_is_construct t = false ->
+    whd_rel zeta Σ Γ (tFix mfix idx) (pre ++ c :: post)
+      (tFix mfix idx) (pre ++ mkApps t cargs :: post).
+  Proof using Type.
+    intros hu hc ht.
+    assert (e : pre ++ mkApps t cargs :: post =
+      firstn #|pre| (pre ++ c :: post) ++ mkApps t cargs :: skipn (S #|pre|) (pre ++ c :: post)).
+    { rewrite firstn_app_left by reflexivity.
+      change (pre ++ c :: post) with (pre ++ [c] ++ post).
+      rewrite (app_assoc pre [c] post).
+      rewrite skipn_all_app_eq by (rewrite length_app; cbn; lia).
+      reflexivity. }
+    rewrite e.
+    eapply whd_fix_stuck; [exact hu|apply nth_error_snoc; reflexivity|exact hc|exact ht].
+  Qed.
+
+  Lemma decompose_stack_App_l_fst a π :
+    (decompose_stack (App_l a :: π)).1 = a :: (decompose_stack π).1.
+  Proof using Type.
+    cbn. now destruct (decompose_stack π).
+  Qed.
+
+  Lemma decompose_stack_appstack_App_l_fst args x ρ :
+    (decompose_stack (appstack args (App_l x :: ρ))).1 = args ++ x :: (decompose_stack ρ).1.
+  Proof using Type.
+    rewrite decompose_stack_appstack. cbn. now destruct (decompose_stack ρ).
+  Qed.
+
+  Lemma decompose_stack_at_None_fst π n :
+    decompose_stack_at π n = None -> nth_error (decompose_stack π).1 n = None.
+  Proof using Type.
+    intros h.
+    destruct (decompose_stack π) as [l ρ] eqn:e. cbn.
+    assert (hs : isStackApp ρ = false) by (eapply decompose_stack_noStackApp; exact e).
+    apply decompose_stack_eq in e. subst π.
+    exact (proj2 (decompose_stack_at_appstack_None l ρ n hs) h).
+  Qed.
+
+  Lemma red_discr_whd_stop_head t π :
+    red_discr t π -> whd_stop_head t (decompose_stack π).1.
+  Proof using Type.
+    destruct t; cbn; try (intros; reflexivity); try (intros h; exact (False_rect _ h)).
+    destruct π as [|[] π]; cbn; intros h; first [reflexivity|exact (False_rect _ h)].
+  Qed.
+
+  Lemma discr_construct_whd_is_construct t :
+    discr_construct t -> whd_is_construct t = false.
+  Proof using Type.
+    destruct t; cbn; intros h; try reflexivity; exact (False_rect _ h).
+  Qed.
+
+  Lemma discr_construct_cofix_whd t :
+    discr_construct_cofix t -> whd_is_construct t = false /\ whd_is_cofix t = false.
+  Proof using Type.
+    destruct t; cbn; intros h; try (split; reflexivity); exact (False_rect _ h).
+  Qed.
+
+  Lemma discr_construct0_cofix_whd t :
+    discr_construct0_cofix t -> whd_is_construct0 t = false /\ whd_is_cofix t = false.
+  Proof using Type.
+    destruct t; cbn; intros h; try (split; reflexivity).
+    - destruct n; [exact (False_rect _ (h eq_refl))|split; reflexivity].
+    - exact (False_rect _ h).
+  Qed.
+
+  (** The term a discriminant reduces to is well typed in the position of the
+      discriminant. *)
+  Lemma reduce_discr_welltyped Σ (wfΣ : abstract_env_ext_rel X Σ) Γ c fr π t π' args ρ :
+    isStackApp (fr :: π) = false ->
+    welltyped Σ Γ (zip (c, fr :: π)) ->
+    Req Σ Γ (t, π') (c, fr :: π) ->
+    Pr (t, π') (fr :: π) ->
+    (args, ρ) = decompose_stack π' ->
+    welltyped Σ (Γ ,,, stack_context π) (fill_hole (mkApps t args) fr).
+  Proof using Type.
+    intros hs wt r hpr hdec.
+    assert (hd0 : decompose_stack (fr :: π) = ([], fr :: π)).
+    { destruct fr; cbn in hs; try discriminate; reflexivity. }
+    unfold Pr in hpr. cbn [snd] in hpr.
+    rewrite hd0, <- hdec in hpr. cbn [snd] in hpr. subst ρ.
+    symmetry in hdec. apply decompose_stack_eq in hdec. subst π'.
+    destruct (hΣ _ wfΣ) as [wΣ].
+    apply Req_red in r as [r].
+    pose proof (red_welltyped Σ wΣ wt r) as wt'.
+    change (welltyped Σ Γ (zipc t (appstack args (fr :: π)))) in wt'.
+    rewrite zipc_appstack in wt'.
+    exact (welltyped_context Σ wΣ Γ (fill_hole (mkApps t args) fr, π) wt').
+  Qed.
+
+  Lemma reduce_stack_whd_rel
+    (hbeta : RedFlags.beta flags) (hiota : RedFlags.iota flags)
+    (hdelta : RedFlags.delta flags) (hfix : RedFlags.fix_ flags) :
+    forall Γ t π h Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ whd_rel (RedFlags.zeta flags) Σ.1 (Γ ,,, stack_context π) t
+          (decompose_stack π).1 (fst (reduce_stack Γ t π h))
+          (decompose_stack (snd (reduce_stack Γ t π h))).1 ∥.
+  Proof using Type.
+    intros Γ t π h Σ wfΣ.
+    apply (reduce_stack_prop Γ t π h (fun x y =>
+      ∥ whd_rel (RedFlags.zeta flags) Σ.1 (Γ ,,, stack_context (snd x)) (fst x)
+          (decompose_stack (snd x)).1 (fst y) (decompose_stack (snd y)).1 ∥)).
+    clear -wfΣ hbeta hiota hdelta hfix.
+    intros t π h aux.
+    apply_funelim (_reduce_stack Γ t π h aux); clear -wfΣ hbeta hiota hdelta hfix.
+    all: intros *.
+    all: repeat match goal with
+      | [ |- (forall (t' : term) (π' : stack)
+              (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), { _ : _ | _ }) -> _ ] =>
+          intros reduce
+      | [ |- (forall (t' : term) (π' : stack)
+              (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), _) -> _ ] =>
+          intros haux
+      | [ |- _ ] => intros ?
+      end.
+    all: try match goal with |- context [False_rect _ ?f] => destruct f end.
+    all: cbn [fst snd proj1_sig] in *; try cbv zeta.
+    (* The equations [inspect _ = _] of the elimination principle depend on the
+       hypotheses that the branches rewrite; they are not needed. *)
+    all: repeat match goal with H : inspect _ = _ |- _ => clear H end.
+    (* The recursive call [rf] and its hypothesis [ha] are found by their types:
+       a pattern under [all:] cannot name a local hypothesis. *)
+    (* The discriminant of a fixpoint, a case or a projection: the machine's
+       result on it, and for a case or a projection the typing of the term the
+       discriminant reduced to. *)
+    all: try match goal with
+      | rf : forall (t' : term) (π' : stack)
+               (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), { _ : _ | _ },
+        ha : forall (t' : term) (π' : stack)
+               (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), ∥ _ ∥ |- _ =>
+        match goal with
+        | e : exist (?t0, ?π0) ?prf = rf ?c ?s ?z |- _ =>
+          let hc := fresh "hc" in
+          pose proof (ha c s z) as hc; rewrite <- e in hc;
+          cbn [fst snd proj1_sig decompose_stack] in hc;
+          repeat match goal with
+            | e' : (_, _) = decompose_stack π0 |- _ =>
+                match type of hc with context [decompose_stack π0] =>
+                  rewrite <- e' in hc; cbn [fst snd] in hc end
+            end;
+          try match goal with
+            | e' : (?args, ?ρ) = decompose_stack π0,
+              hw : forall Σ, abstract_env_ext_rel X Σ -> welltyped Σ _ _ |- _ =>
+                match s with
+                | ?fr :: ?ρs =>
+                  pose proof (reduce_discr_welltyped Σ wfΣ _ c fr ρs t0 π0 args ρ eq_refl
+                    (hw Σ wfΣ) (proj1 (prf Σ wfΣ)) (proj1 (proj2 (prf Σ wfΣ))) e') as wtc
+                end
+            end
+        end
+      end.
+    (* The recursive call that ends the branch. *)
+    all: try match goal with
+      | rf : forall (t' : term) (π' : stack)
+               (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), { _ : _ | _ },
+        ha : forall (t' : term) (π' : stack)
+               (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), ∥ _ ∥ |- _ =>
+        match goal with
+        | |- context [ rf ?x ?y ?z ] =>
+          let hr := fresh "hr" in let er := fresh "er" in
+          let tr := fresh "tr" in let πr := fresh "πr" in
+          case_eq (rf x y z); pose proof (ha x y z) as hr;
+          intros [tr πr] ? er; rewrite er in hr; cbn [fst snd proj1_sig] in hr |- *
+        end
+      end.
+    (* The equations on machine results mention the branch's hypotheses through
+       the obligations they carry; the closers below rewrite those hypotheses. *)
+    all: repeat match goal with
+      | H : exist _ _ = _ |- _ => clear H
+      | H : _ = exist _ _ |- _ => clear H
+      end.
+    all: repeat match goal with H : ∥ _ ∥ |- _ => destruct H as [H] end.
+    all: first
+      [ exfalso; congruence
+      (* tRel *)
+      | constructor; eapply whd_rel_unfold;
+        [symmetry; eassumption|symmetry; eassumption|eassumption]
+      | constructor; eapply whd_rel_assum; [symmetry; eassumption|symmetry; eassumption]
+      (* tLetIn *)
+      | constructor; eapply whd_zeta; [assumption|eassumption]
+      | constructor; apply whd_letin_stop; assumption
+      (* tConst *)
+      | constructor; eapply whd_delta;
+        [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; eassumption]
+        | reflexivity | eassumption ]
+      | constructor; eapply whd_axiom;
+        [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; eassumption]
+        | reflexivity ]
+      (* tApp *)
+      | constructor; rewrite decompose_stack_App_l_fst in *; eapply whd_app; eassumption
+      (* tLambda *)
+      | constructor; rewrite decompose_stack_App_l_fst; eapply whd_beta; eassumption
+      (* tFix *)
+      | match goal with
+        | e1 : Some (_, _) = unfold_fix _ _, e2 : Some (_, _, _) = decompose_stack_at ?π0 _ |- _ =>
+            let hlen := fresh "hlen" in
+            symmetry in e2;
+            pose proof (decompose_stack_at_length _ _ _ _ _ e2) as hlen;
+            apply decompose_stack_at_eq in e2; subst π0; subst;
+            rewrite ?decompose_stack_appstack_App_l_fst, ?stack_context_appstack in *;
+            constructor;
+            first
+              [ eapply whd_rel_fix_iota_app; [symmetry; exact e1|eassumption|eassumption]
+              | eapply whd_rel_fix_stuck_app;
+                [symmetry; exact e1|eassumption
+                |apply discr_construct_whd_is_construct; assumption] ]
+        end
+      | match goal with
+        | e1 : Some (_, _) = unfold_fix _ _, e2 : None = decompose_stack_at _ _ |- _ =>
+            constructor; eapply whd_fix_noarg;
+            [symmetry; exact e1|apply decompose_stack_at_None_fst; symmetry; exact e2]
+        end
+      | match goal with
+        | e1 : None = unfold_fix _ _ |- _ =>
+            constructor; apply whd_fix_nounfold; symmetry; exact e1
+        end
+      (* tCase on a constructor: the typing gives [ci_ind] and the argument count *)
+      | match goal with
+        | wtc : welltyped _ _ (fill_hole (mkApps (tConstruct ?ind' _ _) _) (Case_discr _ _ _)),
+          eqbr : Some _ = nth_error _ _ |- _ =>
+            let T := fresh "T" in let typ := fresh "typ" in
+            let ei := fresh "ei" in let br' := fresh "br'" in
+            let hbr := fresh "hbr" in let hlen := fresh "hlen" in
+            destruct wtc as [T typ]; cbn [fill_hole] in typ;
+            destruct (PCUICInductiveInversion.invert_Case_Construct _ (hΣ _ wfΣ) typ)
+              as [ei [br' [hbr hlen]]];
+            subst ind'; rewrite hbr in eqbr; noconf eqbr;
+            constructor; eapply whd_iota; [eassumption|eassumption|eassumption|eassumption]
+        end
+      (* tProj on a constructor: the typing gives [proj_ind] *)
+      | match goal with
+        | wtc : welltyped _ _ (fill_hole (mkApps (tConstruct ?ind' _ _) _) (Proj _)) |- _ =>
+            let T := fresh "T" in let typ := fresh "typ" in let ei := fresh "ei" in
+            destruct wtc as [T typ]; cbn [fill_hole] in typ;
+            pose proof (PCUICInductiveInversion.Proj_Construct_ind_eq _ (hΣ _ wfΣ) typ) as ei;
+            subst ind';
+            constructor; eapply whd_proj; [eassumption|symmetry; eassumption|eassumption]
+        end
+      (* cofixpoints and stuck discriminants *)
+      | constructor; eapply whd_case_cofix; [eassumption|symmetry; eassumption|eassumption]
+      | constructor; eapply whd_proj_cofix; [eassumption|symmetry; eassumption|eassumption]
+      | match goal with
+        | ht : discr_construct_cofix _ |- _ =>
+            let h1 := fresh "h1" in let h2 := fresh "h2" in
+            destruct (discr_construct_cofix_whd _ ht) as [h1 h2];
+            constructor; eapply whd_case_stuck; eassumption
+        end
+      | match goal with
+        | ht : discr_construct0_cofix _ |- _ =>
+            let h1 := fresh "h1" in let h2 := fresh "h2" in
+            destruct (discr_construct0_cofix_whd _ ht) as [h1 h2];
+            constructor; eapply whd_proj_stuck; eassumption
+        end
+      (* every other head stops the machine *)
+      | constructor; apply whd_stop; apply red_discr_whd_stop_head; assumption ].
+  Qed.
+
+  (** [reduce_term] is the [whd_rel] normal form, in applicative form. *)
+  Theorem reduce_term_whd_rel
+    (hbeta : RedFlags.beta flags) (hiota : RedFlags.iota flags)
+    (hdelta : RedFlags.delta flags) (hfix : RedFlags.fix_ flags)
+    Γ t h Σ (wfΣ : abstract_env_ext_rel X Σ) :
+    exists hd l, reduce_term Γ t h = mkApps hd l /\
+      ∥ whd_rel (RedFlags.zeta flags) Σ.1 Γ t [] hd l ∥.
+  Proof using Type.
+    unfold reduce_term.
+    generalize (reduce_stack_whd_rel hbeta hiota hdelta hfix Γ t [] h Σ wfΣ)
+      (reduce_stack_decompose Γ t [] h).
+    destruct (reduce_stack Γ t [] h) as [u ρ]. cbn. intros w e.
+    assert (eρ : ρ = appstack (decompose_stack ρ).1 []).
+    { apply decompose_stack_eq. rewrite <- e. now destruct (decompose_stack ρ). }
+    exists u, (decompose_stack ρ).1. split; [|exact w].
+    transitivity (zipc u (appstack (decompose_stack ρ).1 [])).
+    - f_equal. exact eρ.
+    - exact (@zipc_appstack u (decompose_stack ρ).1 []).
   Qed.
 
 End Reduce.

@@ -25,6 +25,8 @@ Module RedFlags.
 
   Definition default := mk true true true true true true.
   Definition nodelta := mk true true true false true true.
+  (** kernel/redFlags.ml [allnolet]: every reduction but zeta. *)
+  Definition allnolet := mk true true false true true true.
 
 End RedFlags.
 
@@ -43,10 +45,6 @@ Section Normal.
   Inductive whne (Γ : context) : term -> Type :=
   | whne_rel i :
       option_map decl_body (nth_error Γ i) = Some None ->
-      whne Γ (tRel i)
-
-  | whne_rel_nozeta i :
-      RedFlags.zeta flags = false ->
       whne Γ (tRel i)
 
   | whne_lam_nobeta na A b :
@@ -322,15 +320,12 @@ Definition whnf_whne_dec flags Σ Γ t :
 Proof with eauto using sq with pcuic; try congruence.
   induction t using term_forall_mkApps_ind in Γ |- *; split...
   all: try now (right; intros [H]; depelim H;help).
-  - destruct (RedFlags.zeta flags) eqn:Er.
-    + destruct (option_map decl_body (nth_error Γ n)) as [ [ | ] | ] eqn:E...
-      * right. intros [H]. depelim H. depelim w. congruence. congruence. all:help.
-      * right. intros [H]. depelim H. depelim w. congruence. congruence. all:help.
-    + eauto using sq.
-  - destruct (RedFlags.zeta flags) eqn:Er...
-    destruct (option_map decl_body (nth_error Γ n)) as [ [ | ] | ] eqn:E...
-    + right. intros [H]. depelim H. congruence. congruence. help.
-    + right. intros [H]. depelim H. congruence. congruence. help.
+  - destruct (option_map decl_body (nth_error Γ n)) as [ [ | ] | ] eqn:E...
+    + right. intros [H]. depelim H. depelim w. congruence. all:help.
+    + right. intros [H]. depelim H. depelim w. congruence. all:help.
+  - destruct (option_map decl_body (nth_error Γ n)) as [ [ | ] | ] eqn:E...
+    + right. intros [H]. depelim H. congruence. help.
+    + right. intros [H]. depelim H. congruence. help.
   - destruct (RedFlags.beta flags) eqn:Er...
     right. intros [H]. depelim H. congruence. help.
   - destruct (RedFlags.zeta flags) eqn:Er...
@@ -638,10 +633,6 @@ Context (Γ : context).
 Context (P : term -> term -> Type).
 
 Lemma whne_red1_ind {cf:checker_flags} {wfΣ : wf Σ}
-      (Hrel : forall i body,
-          RedFlags.zeta flags = false ->
-          option_map decl_body (nth_error Γ i) = Some (Some body) ->
-          P (tRel i) (lift0 (S i) body))
       (Hlam_nobeta_1 : forall na A b M',
           RedFlags.beta flags = false ->
           red1 Σ Γ A M' ->
@@ -770,7 +761,6 @@ Proof using Type.
   intros t t' wh r.
   induction wh in t, t', wh, r |- *; cbn in *.
   - depelim r; [congruence|now solve_discr].
-  - depelim r; [|solve_discr]; eauto.
   - depelim r; solve_discr; eauto.
   - depelim r; solve_discr.
   - depelim r; solve_discr; eauto.

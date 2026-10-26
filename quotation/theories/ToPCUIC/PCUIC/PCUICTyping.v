@@ -1,17 +1,20 @@
-From MetaRocq.PCUIC Require Import PCUICAst PCUICTyping.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICArityRed PCUICTyping.
 From MetaRocq.Quotation.ToPCUIC Require Import Init.
 From MetaRocq.Quotation.ToPCUIC Require Import (hints) Stdlib.Init Stdlib.Lists Stdlib.Numbers Stdlib.Floats.
 From MetaRocq.Quotation.ToPCUIC.Utils Require Import (hints) utils All_Forall (* MRProd*).
 From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) config BasicAst Universes Kernames Environment EnvironmentTyping Primitive Reflect.
 From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) Environment EnvironmentTyping.
 From MetaRocq.Quotation.ToPCUIC.PCUIC Require Import (hints) (*PCUICAstUtils
-  LiftSubst UnivSubst*) PCUICEquality (*WfAst*) PCUICAst Syntax.PCUICCases utils.PCUICPrimitive PCUICCumulativitySpec.
+  LiftSubst UnivSubst*) PCUICEquality (*WfAst*) PCUICAst PCUICArityRed Syntax.PCUICCases utils.PCUICPrimitive PCUICCumulativitySpec.
 (*From MetaRocq.Quotation.ToPCUIC.PCUIC Require Import (hints) PCUICAstUtils
   LiftSubst UnivSubst TermEquality WfAst.*)
 From MetaRocq.Quotation.ToPCUIC.Common Require Import EnvironmentTyping.
-From MetaRocq.Quotation.ToPCUIC.PCUIC Require Import PCUICAst.
+From MetaRocq.Quotation.ToPCUIC.PCUIC Require Import PCUICAst PCUICArityRed.
 From MetaRocq.Quotation.ToPCUIC.QuotationOf.Common Require Import EnvironmentTyping.Sig.
-From MetaRocq.Quotation.ToPCUIC.QuotationOf.PCUIC Require Import PCUICAst.Instances PCUICTyping.Instances.
+From MetaRocq.Quotation.ToPCUIC.QuotationOf.PCUIC Require Import PCUICAst.Instances PCUICArityRed.Instances PCUICTyping.Instances.
+
+Module QuotePCUICGlobalMaps := QuoteGlobalMaps PCUICTerm PCUICEnvironment PCUICTermUtils PCUICEnvTyping PCUICConversion PCUICLookup PCUICArityRelation PCUICGlobalMaps qPCUICTerm qPCUICEnvironment qPCUICEnvTyping qPCUICConversion qPCUICLookup qPCUICArityRelation qPCUICGlobalMaps QuotePCUICTerm QuotePCUICEnvironment QuotePCUICEnvTyping QuotePCUICConversion QuotePCUICLookup QuotePCUICArityRelation.
+Export (hints) QuotePCUICGlobalMaps.
 
 #[export] Instance quote_FixCoFix : ground_quotable FixCoFix := ltac:(destruct 1; exact _).
 
@@ -88,6 +91,7 @@ Module QuotePCUICDeclarationTyping
        PCUICConversionParSpec
        PCUICTypingDef
        PCUICLookup
+       PCUICArityRelation
        PCUICGlobalMaps
        PCUICDeclarationTyping
        qPCUICTerm

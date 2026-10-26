@@ -198,13 +198,7 @@ Proof.
   move=> wfΓ isType.
   destruct isType as (_ & s & Hs & _).
   eapply invert_type_mkApps_ind in Hs as [tyargs cu]; eauto.
-  set (decli' := on_declared_inductive declm).
-  rename declm into decli.
-  destruct decli' as [declm decli'].
-  pose proof (decli'.(onArity)) as ar.
-  rewrite decli'.(ind_arity_eq) in tyargs, ar.
-  hnf in ar. destruct ar as [s' ar].
-  rewrite -it_mkProd_or_LetIn_app in ar tyargs.
+  eapply typing_spine_ind_type_inv in tyargs; tea.
   rewrite !subst_instance_it_mkProd_or_LetIn in tyargs.
   simpl in tyargs.
   eapply arity_typing_spine in tyargs as [argslen leqs [instsubst sp]] => //.

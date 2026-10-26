@@ -36,9 +36,6 @@ Export (hints) QuotePCUICEnvTyping.
 Module QuotePCUICConversion := QuoteConversion PCUICTerm PCUICEnvironment PCUICTermUtils PCUICEnvTyping PCUICConversion qPCUICTerm qPCUICEnvironment qPCUICConversion QuotePCUICTerm QuotePCUICEnvironment.
 Export (hints) QuotePCUICConversion.
 
-Module QuotePCUICGlobalMaps := QuoteGlobalMaps PCUICTerm PCUICEnvironment PCUICTermUtils PCUICEnvTyping PCUICConversion PCUICLookup PCUICGlobalMaps qPCUICTerm qPCUICEnvironment qPCUICEnvTyping qPCUICConversion qPCUICLookup qPCUICGlobalMaps QuotePCUICTerm QuotePCUICEnvironment QuotePCUICEnvTyping QuotePCUICConversion QuotePCUICLookup.
-Export (hints) QuotePCUICGlobalMaps.
-
 #[export] Instance quote_parameter_entry : ground_quotable parameter_entry := ltac:(destruct 1; exact _).
 #[export] Instance quote_definition_entry : ground_quotable definition_entry := ltac:(destruct 1; exact _).
 #[export] Instance quote_constant_entry : ground_quotable constant_entry := ltac:(destruct 1; exact _).
