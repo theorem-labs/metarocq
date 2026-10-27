@@ -23,7 +23,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICPrimitive
-     PCUICCases PCUICReduction PCUICTyping PCUICEtaDefs PCUICEtaC3C
+     PCUICCases PCUICOnFreeVars PCUICReduction PCUICTyping PCUICEtaDefs PCUICEtaC3C
      PCUICEtaConfluence.
 
 Import ListNotations.
@@ -190,6 +190,7 @@ Section Cong.
       from [PCUICEtaConfluence] (EtaL2, frac/eta-l2 @ e05415aa, unconditional).
       [red1_strengthening] (EtaL2, pinned, proving) is still staged. *)
   Context (red1_strengthening : wf Σ -> forall Γ d t u,
+             on_free_vars xpredT t ->
              red1 Σ (Γ ,, d) (lift0 1 t) u ->
              ∑ u', (u = lift0 1 u') × red1 Σ Γ t u').
 
