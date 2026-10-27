@@ -12,3 +12,5 @@ theories/PCUICSafeChecker.v
 theories/PCUICWfEnvImpl.v
 theories/PCUICSafeRetyping.v
 theories/PCUICRetypingEnvIrrelevance.v
+# BET-315 eta lane (L5): K4 termination measure + acceptance obligations
+theories/PCUICSafeConversionEtaK4.v

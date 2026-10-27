@@ -1596,6 +1596,37 @@ Qed.
 Definition stack_pos (t : term) (π : stack) (h : no_Eta_arg π) : pos (zipc t π) :=
   exist (stack_position π) (stack_position_valid t π h).
 
+(* BET-315 eta: the well-formedness invariant of every checker state. A normal state's
+   stack has no [Eta_arg]; the virtual-argument state's stack is [Eta_arg u args :: ρ]
+   with the [Eta_arg] as HEAD and a no-[Eta_arg] tail (nothing above it). [wf_stack]
+   covers both, so [stack_pos_wf] gives a valid position for every pack, including the
+   virtual side, which the K4 order needs. *)
+Definition wf_stack (π : stack) : bool :=
+  match π with
+  | Eta_arg _ _ :: ρ => no_Eta_arg ρ
+  | _ => no_Eta_arg π
+  end.
+
+Lemma wf_stack_no_Eta_arg π : no_Eta_arg π -> wf_stack π.
+Proof.
+  intro h. destruct π as [|a ρ]; [exact h|].
+  destruct a; try exact h.
+  (* Eta_arg head: no_Eta_arg (Eta_arg..::ρ) is false *)
+  cbn in h. discriminate h.
+Qed.
+
+Lemma stack_position_valid_wf t π :
+  wf_stack π -> validpos (zipc t π) (stack_position π).
+Proof.
+  intro h. destruct π as [|a ρ].
+  - now apply stack_position_valid.
+  - destruct a; try (apply stack_position_valid; exact h).
+    apply stack_position_valid_Eta_arg; exact h.
+Qed.
+
+Definition stack_pos_wf (t : term) (π : stack) (h : wf_stack π) : pos (zipc t π) :=
+  exist (stack_position π) (stack_position_valid_wf t π h).
+
 (* TODO: Move *)
 Lemma map_const {X Y} (y : Y) (l : list X) :
   map (fun _ => y) l = repeat y #|l|.
@@ -2292,3 +2323,94 @@ Section EtaWelltyped.
   Qed.
 
 End EtaWelltyped.
+
+(* ===================================================================== *)
+(* BET-315 eta, K4 TERMINATION: the position decreases each obligation needs.  *)
+(*                                                                             *)
+(* The measure is the base lexicographic [R_aux] (PCUICSafeConversion.v:191) on *)
+(*   (side-1 term, side-1 position, side-2 term, side-2 position, state).       *)
+(* Both eta frames are transparent to [zipc] ([Eta_app] by [fill_hole = id],    *)
+(* [Eta_arg] because its [fill_hole] restores the real term) and are SKIPPED by *)
+(* [stack_position], so every descent reduces exactly one component. The facts  *)
+(* below are the [eqt] / [positionR] hypotheses that [R_positionR] (:395),      *)
+(* [R_positionR2] (:467) and [R_stateR] (:512) consume.                         *)
+(* ===================================================================== *)
+
+(* --- eta frames are transparent to the measure ------------------------------ *)
+
+(* [Eta_app] adds no structural term and no position: side i's term and position
+   are literally unchanged when the eta frame is pushed after its spine. *)
+Lemma zipc_Eta_app t na A π : zipc t (Eta_app na A :: π) = zipc t π.
+Proof. reflexivity. Qed.
+
+Lemma zipc_appstack_Eta_app t args na A ρ :
+  zipc t (appstack args (Eta_app na A :: ρ)) = zipc t (appstack args ρ).
+Proof. rewrite !zipc_appstack. reflexivity. Qed.
+
+Lemma stack_position_appstack_Eta_app args na A ρ :
+  stack_position (appstack args (Eta_app na A :: ρ)) = stack_position (appstack args ρ).
+Proof. rewrite !stack_position_appstack. reflexivity. Qed.
+
+(* [Eta_arg] drops the hole and restores the real term, so side i's [zipc] is the
+   unchanged real term and its position is unchanged (the fold skips the frame). *)
+Lemma zipc_Eta_arg t u args π :
+  zipc t (Eta_arg u args :: π) = zipc (mkApps u args) π.
+Proof. reflexivity. Qed.
+
+Lemma zipc_Eta_arg_appstack t u args ρ :
+  zipc t (Eta_arg u args :: ρ) = zipc u (appstack args ρ).
+Proof. cbn [zipc fill_hole]. now rewrite zipc_appstack. Qed.
+
+Lemma wf_stack_Eta_arg u args ρ : no_Eta_arg ρ -> wf_stack (Eta_arg u args :: ρ).
+Proof. intro h. exact h. Qed.
+
+(* --- (1)/(1') the eta branch: the lambda side descends by [Lambda_bd] -------- *)
+
+(* The lambda side's [zipc] is UNCHANGED (the frame reassembles the lambda), so the
+   [eqt] hypothesis of R_positionR / R_positionR2 is a reflexivity ... *)
+Lemma zipc_Lambda_bd na A b π :
+  zipc b (Lambda_bd na A :: π) = zipc (tLambda na A b) π.
+Proof. reflexivity. Qed.
+
+(* ... and its position strictly deepens, which is the [positionR] hypothesis. *)
+Lemma positionR_Lambda_bd na A π :
+  positionR (stack_position (Lambda_bd na A :: π)) (stack_position π).
+Proof.
+  cbn [stack_position stack_entry_choice].
+  apply positionR_poscat_nonil. discriminate.
+Qed.
+
+(* --- (2) the virtual-argument descent of the E [_isconv_args'] --------------- *)
+
+Lemma positionR_repeat_app_l_app_r n :
+  positionR (repeat app_l n ++ [app_r]) (repeat app_l n ++ [app_l]).
+Proof.
+  induction n as [|n IH]; cbn.
+  - constructor.
+  - constructor. exact IH.
+Qed.
+
+(* The REAL side descends by [App_r] into its real argument: its position strictly
+   deepens, exactly as in base (the obligation at PCUICSafeConversion.v:5060-5076). *)
+Lemma positionR_App_r_appstack t2 u l π :
+  positionR (stack_position (App_r t2 :: appstack l π))
+            (stack_position (appstack (u :: l) π)).
+Proof.
+  cbn [stack_position stack_entry_choice].
+  rewrite !stack_position_appstack.
+  cbn [length]. rewrite repeat_snoc.
+  rewrite -!app_assoc.
+  apply positionR_poscat.
+  apply positionR_repeat_app_l_app_r.
+Qed.
+
+(* The VIRTUAL side keeps its term and its position: pushing [Eta_arg u args] over the
+   focus [tRel 0] leaves [zipc] equal to the real term it came from, and the position
+   fold skips the frame. These are the "side i unchanged" hypotheses of R_positionR2. *)
+Lemma virtual_side_zipc_unchanged u args ρ :
+  zipc (tRel 0) (Eta_arg u args :: ρ) = zipc u (appstack args ρ).
+Proof. apply zipc_Eta_arg_appstack. Qed.
+
+Lemma virtual_side_position_unchanged u args ρ :
+  stack_position (Eta_arg u args :: ρ) = stack_position ρ.
+Proof. reflexivity. Qed.
