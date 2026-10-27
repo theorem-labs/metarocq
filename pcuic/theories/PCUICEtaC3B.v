@@ -449,3 +449,63 @@ Proof.
     + destruct Hty as [_ Ht]. apply Ht.
     + apply All2_map. eapply All2_impl; [exact Hval|]. intros x y [_ Hk]. apply Hk.
 Qed.
+
+Lemma peta_subst1 M M' (H : peta M M') :
+  forall N N' k, peta N N' -> peta (subst [N] k M) (subst [N'] k M').
+Proof.
+  induction H using peta_ind_all; intros N N' k HN; cbn;
+    try solve [econstructor; eauto].
+  - (* eta *)
+    rewrite !commut_lift_subst.
+    apply peta_eta. apply IHpeta; assumption.
+  - (* tRel *)
+    destruct (le_lt_dec k n) as [Hle|Hlt].
+    + assert (Hb : Nat.leb k n = true) by (apply Nat.leb_le; exact Hle).
+      rewrite Hb.
+      destruct (Nat.eq_dec n k) as [->|Hne].
+      * rewrite Nat.sub_diag. cbn. now apply peta_lift.
+      * destruct (n - k) as [|m] eqn:Hnk; [lia|]. destruct m; cbn; apply peta_Rel.
+    + assert (Hb : Nat.leb k n = false) by (apply Nat.leb_gt; exact Hlt).
+      rewrite Hb. apply peta_Rel.
+  - (* tEvar *)
+    constructor. apply All2_map.
+    eapply All2_impl; [eassumption|]. intros x y [_ Hk]. apply Hk; assumption.
+  - (* tCase *)
+    apply peta_Case; cbn.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [_ Hk]. apply Hk; assumption.
+    + assumption.
+    + assumption.
+    + match goal with He : pcontext _ = pcontext _ |- _ => rewrite He end.
+      eauto.
+    + eauto.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [Hc [_ Hk]]. cbn. split; [exact Hc|].
+      rewrite Hc. apply Hk; assumption.
+  - (* tFix *)
+    constructor.
+    match goal with He : All2 _ ?m ?m' |- _ => pose proof (All2_length He) as Hlen end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht; assumption|].
+    split; [rewrite Hlen; apply Hb; assumption|]. split; [exact Hn|exact Hr].
+  - (* tCoFix *)
+    constructor.
+    match goal with He : All2 _ ?m ?m' |- _ => pose proof (All2_length He) as Hlen end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht; assumption|].
+    split; [rewrite Hlen; apply Hb; assumption|]. split; [exact Hn|exact Hr].
+  - (* tPrim *)
+    constructor.
+    match goal with
+    | He : onPrims _ _ _ _ |- _ =>
+        destruct He as [i|fl|st|arr arr' Hlvl Hdef Hty Hval]
+    end; cbn; try solve [constructor].
+    constructor; cbn.
+    + exact Hlvl.
+    + destruct Hdef as [_ Hd]. apply Hd; assumption.
+    + destruct Hty as [_ Ht]. apply Ht; assumption.
+    + apply All2_map. eapply All2_impl; [exact Hval|].
+      intros x y [_ Hk]. apply Hk; assumption.
+Qed.
