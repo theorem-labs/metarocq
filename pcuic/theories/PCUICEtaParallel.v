@@ -15,7 +15,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICTactic
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICReduction PCUICCases
      PCUICTyping PCUICOnFreeVars PCUICSigmaCalculus PCUICClosed
      PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv
-     PCUICOnFreeVarsConv PCUICClosedTyp BDStrengthening PCUICEtaDefs.
+     PCUICOnFreeVarsConv PCUICClosedTyp BDStrengthening PCUICEtaDefs
+     PCUICEquality PCUICPrimitive.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -332,15 +333,40 @@ Qed.
   on the β side) or inside a constructor argument (which keeps the constructor head).
   No counterexample arises.
 
-  Carried hypotheses (named; U-rows of the plan, to be discharged separately):
-  - [upto_domain_refl] : U1 reflexivity of [upto_domain];
+  Carried hypotheses (named; U2 rows of the plan, to be discharged separately):
   - [eta1_subst0], [eta_subst_terms] : U2 closure of η under substitution. *)
+
+(** [upto_domain] reflexivity (plan U1), ported from the 2020 proof
+    [origin/eta_postpo:PCUICEquality.v:1503-1508] to the 9.2 AST (adds the [tPrim]/array
+    and record-[tCase] clauses). *)
+Lemma upto_domain_refl t : upto_domain t t.
+Proof.
+  induction t using term_forall_list_ind; try solve [constructor; auto].
+  - constructor. now apply All_All2 with (1 := X).
+  - destruct X as [hpar [_ hpret]]. constructor.
+    + now apply All_All2 with (1 := hpar).
+    + reflexivity.
+    + reflexivity.
+    + exact hpret.
+    + exact IHt.
+    + eapply All_All2; [exact X0|]. intros x [_ hbody]. split; [reflexivity|exact hbody].
+  - constructor. eapply All_All2; [exact X|]. intros x [? ?]. repeat split; assumption.
+  - constructor. eapply All_All2; [exact X|]. intros x [? ?]. repeat split; assumption.
+  - constructor. destruct p as [tag m]; destruct m; cbn in X.
+    + apply onPrimsInt.
+    + apply onPrimsFloat.
+    + apply onPrimsString.
+    + destruct X as [ht [hd hv]]. apply onPrimsArray.
+      * reflexivity.
+      * exact hd.
+      * exact ht.
+      * now apply All_All2 with (1 := hv).
+Qed.
 
 Section FourCases.
   Context {cf : checker_flags}.
   Context {Σ : global_env} {wfΣ : wf Σ}.
 
-  Hypothesis upto_domain_refl : forall t, upto_domain t t.
   Hypothesis eta1_subst0 :
     forall s M M', eta1 M M' -> eta1 (subst0 s M) (subst0 s M').
   Hypothesis eta_subst_terms :
@@ -454,7 +480,7 @@ Section FourCases.
     nth_error args (p.(proj_npars) + p.(proj_arg)) = Some arg ->
     eta1 (tProj p (mkApps (tConstruct p.(proj_ind) 0 ui) args)) u ->
     C3_concl Γ u arg.
-  Proof using upto_domain_refl.
+  Proof using Type.
     intros hn e. depelim e.
     assert (nih : ~~ isApp (tConstruct (proj_ind p) 0 ui)) by reflexivity.
     destruct (eta1_mkApps_inv _ _ _ nih e) as [[h' [eh ->]]|[l' [ol ->]]].
@@ -472,7 +498,7 @@ Section FourCases.
     is_constructor narg args = true ->
     eta1 (mkApps (tFix mfix idx) args) u ->
     C3_concl Γ u (mkApps fn args).
-  Proof using eta1_subst0 eta_subst_terms upto_domain_refl.
+  Proof using eta1_subst0 eta_subst_terms.
     intros hf hc e.
     assert (nih : ~~ isApp (tFix mfix idx)) by reflexivity.
     destruct (eta1_mkApps_inv _ _ _ nih e) as [[h' [eh ->]]|[l' [ol ->]]].
@@ -501,7 +527,7 @@ Section FourCases.
     unfold_cofix mfix idx = Some (narg, fn) ->
     eta1 (tProj p (mkApps (tCoFix mfix idx) args)) u ->
     C3_concl Γ u (tProj p (mkApps fn args)).
-  Proof using eta1_subst0 eta_subst_terms upto_domain_refl.
+  Proof using eta1_subst0 eta_subst_terms.
     intros hf e. depelim e.
     assert (nih : ~~ isApp (tCoFix mfix idx)) by reflexivity.
     destruct (eta1_mkApps_inv _ _ _ nih e) as [[h' [eh ->]]|[l' [ol ->]]].
@@ -527,7 +553,7 @@ Section FourCases.
     unfold_cofix mfix idx = Some (narg, fn) ->
     eta1 (tCase ci p (mkApps (tCoFix mfix idx) args) brs) u ->
     C3_concl Γ u (tCase ci p (mkApps fn args) brs).
-  Proof using eta1_subst0 eta_subst_terms upto_domain_refl.
+  Proof using eta1_subst0 eta_subst_terms.
     intros hf e. depelim e.
     - (* case_eta_param *)
       eexists _, _. split; [|split].
