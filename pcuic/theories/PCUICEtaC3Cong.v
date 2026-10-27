@@ -63,12 +63,33 @@ Lemma crt_OnOne2_hd {A} (R : A -> A -> Type) a w tl :
   clos_refl_trans R a w -> clos_refl_trans (OnOne2 R) (a :: tl) (w :: tl).
 Proof. induction 1; [apply rt_step; now constructor|apply rt_refl|eapply rt_trans; eauto]. Qed.
 
+Lemma subst_app_lift_rel0 a c : subst0 [a] (tApp (lift0 1 c) (tRel 0)) = tApp c a.
+Proof.
+  assert (H00 : 0 <= 0) by lia. simpl.
+  rewrite (simpl_subst [a] c 0 0 H00). simpl. rewrite !lift0_id. reflexivity.
+Qed.
+
 Section Cong.
   Context {cf : checker_flags} (Σ : global_env).
   Context (IH : C3 Σ).
 
+  (** Discharged elsewhere, kept as named hypotheses (same discipline as
+      C3Falsifier). [eta_subst] : EtaL2 frac/eta-l2 @ 7b4491f0 and C3Prover2
+      frac/eta-c3-C3Prover2 @ 9463536a, both GREEN/unconditional. [red1_eta_ctx_strong]
+      : EtaL2 pinned in PCUICEtaConfluence.v, proving. Require, do not retype. *)
+  Context (eta_subst : forall s s' b b', All2 eta s s' -> eta b b' ->
+             eta (subst0 s b) (subst0 s' b')).
+  Context (red1_eta_ctx_strong : forall Γ Δ t w,
+             red1 Σ Γ t w -> All2 (All_decls eta) Γ Δ ->
+             ∑ w', red1 Σ Δ t w' × eta w w').
+
   Local Lemma all2_upto_refl l : All2 upto_domain l l.
   Proof. apply All2_same, upto_domain_refl. Qed.
+
+  Local Lemma all_decls_eta_refl d : All_decls eta d d.
+  Proof. destruct d as [? [|] ?]; constructor; apply rt_refl. Qed.
+  Local Lemma eta_ctx_refl Γ : All2 (All_decls eta) Γ Γ.
+  Proof. apply All2_same, all_decls_eta_refl. Qed.
 
   (** *** The two-[OnOne2] list diamond: a [red1] step and an [eta1] step on the
       same list [l].  Same position → the element [IH]; different positions →
@@ -248,6 +269,93 @@ Section Cong.
       + apply r_step. now constructor.
       + apply rt_step. now apply letin_eta_body.
       + apply upto_domain_refl.
+  Qed.
+
+  (** *** Base rewrite rows. *)
+
+  (** red_rel / red_delta : [eta1] has no step on [tRel] / [tConst], so the η
+      inversion is vacuous. *)
+  Lemma c3_red_rel Γ i body u :
+    option_map decl_body (nth_error Γ i) = Some (Some body) ->
+    eta1 (tRel i) u -> joinable Σ Γ u (lift0 (S i) body).
+  Proof. intros _ he. depelim he. Qed.
+
+  Lemma c3_red_delta Γ c decl body (isdecl : declared_constant Σ c decl) u0 u :
+    decl.(cst_body) = Some body ->
+    eta1 (tConst c u0) u -> joinable Σ Γ u (subst_instance u0 body).
+  Proof. intros _ he. depelim he. Qed.
+
+  (** red_beta : discharged by [eta_subst] (β-on-the-η-side / β-created overlaps
+      all close; the [eta_red] overlap collapses to equality by [simpl_subst]). *)
+  Lemma c3_red_beta Γ na A b a u :
+    eta1 (tApp (tLambda na A b) a) u -> joinable Σ Γ u (subst0 [a] b).
+  Proof.
+    intros he. depelim he.
+    - (* app_eta_l : η on the λ *) depelim he.
+      + (* eta_red : λ = eta_redex, b = tApp (lift0 1 c) (tRel 0) *)
+        rewrite subst_app_lift_rel0.
+        eexists; eexists. split; [apply r_refl|split; [apply rt_refl|apply upto_domain_refl]].
+      + (* abs_eta_l : η in the domain (ignored by β) *)
+        exists (subst0 [a] b), (subst0 [a] b). split; [|split].
+        * apply r_step. apply red_beta.
+        * apply rt_refl.
+        * apply upto_domain_refl.
+      + (* abs_eta_r : η in the body *)
+        exists (subst0 [a] M'), (subst0 [a] M'). split; [|split].
+        * apply r_step. apply red_beta.
+        * apply eta_subst; [apply All2_same; reflexivity|apply rt_step; eassumption].
+        * apply upto_domain_refl.
+    - (* app_eta_r : η in the argument *)
+      exists (subst0 [N2] b), (subst0 [N2] b). split; [|split].
+      + apply r_step. apply red_beta.
+      + apply eta_subst; [|apply rt_refl].
+        constructor; [apply rt_step; eassumption|constructor].
+      + apply upto_domain_refl.
+  Qed.
+
+  (** red_zeta : discharged by [eta_subst]. *)
+  Lemma c3_red_zeta Γ na b t0 b' u :
+    eta1 (tLetIn na b t0 b') u -> joinable Σ Γ u (subst0 [b] b').
+  Proof.
+    intros he. depelim he.
+    - (* letin_eta_def : η in the bound term *)
+      exists (subst0 [r] b'), (subst0 [r] b'). split; [|split].
+      + apply r_step. apply red_zeta.
+      + apply eta_subst; [|apply rt_refl].
+        constructor; [apply rt_step; eassumption|constructor].
+      + apply upto_domain_refl.
+    - (* letin_eta_ty : η in the type (ignored by ζ) *)
+      exists (subst0 [b] b'), (subst0 [b] b'). split; [|split].
+      + apply r_step. apply red_zeta.
+      + apply rt_refl.
+      + apply upto_domain_refl.
+    - (* letin_eta_body : η in the body *)
+      exists (subst0 [b] r), (subst0 [b] r). split; [|split].
+      + apply r_step. apply red_zeta.
+      + apply eta_subst; [apply All2_same; reflexivity|apply rt_step; eassumption].
+      + apply upto_domain_refl.
+  Qed.
+
+  (** *** prod_red_r : red1 in the Π codomain (under the binder); the parallel
+      η-in-domain case goes through [red1_eta_ctx_strong]. *)
+  Lemma c3_prod_red_r Γ na M M2 N2 u :
+    red1 Σ (Γ ,, vass na M) M2 N2 -> eta1 (tProd na M M2) u -> joinable Σ Γ u (tProd na M N2).
+  Proof.
+    intros hr he. depelim he.
+    - (* prod_eta_l : η in the domain M -> N1, reduction under the changed context *)
+      destruct (red1_eta_ctx_strong (Γ ,, vass na M) (Γ ,, vass na N1) M2 N2 hr)
+        as (w & hw & hw').
+      { constructor; [constructor; apply rt_step; eassumption | apply eta_ctx_refl]. }
+      exists (tProd na N1 w), (tProd na N1 w). split; [|split].
+      + apply r_step. apply prod_red_r. exact hw.
+      + apply eta_Prod; [apply rt_step; eassumption | exact hw'].
+      + apply upto_domain_refl.
+    - (* prod_eta_r : η in the codomain *)
+      destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      exists (tProd na M w), (tProd na M w'). split; [|split].
+      + destruct hw; [apply r_step; now constructor|apply r_refl].
+      + now apply eta_Prod_r.
+      + constructor; [apply upto_domain_refl|exact hd].
   Qed.
 
 End Cong.
