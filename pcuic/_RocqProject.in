@@ -51,6 +51,7 @@ theories/PCUICContextSubst.v
 theories/PCUICCasesContexts.v
 theories/PCUICReduction.v
 theories/PCUICEtaDefs.v
+theories/PCUICEtaParallel.v
 theories/PCUICArityRed.v
 theories/PCUICRecArgs.v
 theories/PCUICGuardReduce.v
