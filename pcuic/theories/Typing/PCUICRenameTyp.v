@@ -207,7 +207,7 @@ Proof.
      + eapply rename_unfold_fix. eassumption.
      + rewrite -is_constructor_rename. assumption.
    - rewrite 2!rename_mkApps. simpl.
-     eapply cumul_cofix_case.
+     eapply cumul_cofix_case; [assumption|].
      eapply rename_unfold_cofix. eassumption.
    - rewrite 2!rename_mkApps. simpl.
      eapply cumul_cofix_proj.
@@ -915,8 +915,10 @@ Proof.
     intros IHctxi Hc IHc iscof ptm wfbrs Hbrs P Δ f Hf.
     simpl.
     assert (iscof' : (isCoFinite (ind_finite mdecl) ==>
-      on_free_vars (strengthenP 0 1 xpredT) (preturn (rename_predicate f p))) = true).
-    { apply/implyP => hcof. move/implyP: iscof => /(_ hcof) h.
+      (ci.(ci_cofix_nondep) ==>
+       on_free_vars (strengthenP 0 1 xpredT) (preturn (rename_predicate f p)))) = true).
+    { apply/implyP => hcof. apply/implyP => hnd.
+      move/implyP: iscof => /(_ hcof) /implyP /(_ hnd) h.
       rewrite -rename_predicate_preturn. apply on_free_vars_nondep_rename => //.
       rewrite (wf_predicate_length_pcontext wfp). lia. }
     rewrite rename_mkApps.

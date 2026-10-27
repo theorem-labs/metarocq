@@ -1561,9 +1561,9 @@ Section Trans_Global.
       rewrite trans_lookup_inductive.
       rewrite (declared_inductive_lookup isdecl).
       apply WfAst.wf_mkApps_napp in wfc as []; auto.
-      pose proof (unfold_cofix_wf _ _ _ _ _ H w). wf_inv w.
+      pose proof (unfold_cofix_wf _ _ _ _ _ H0 w). wf_inv w.
       rewrite !trans_mkApps; eauto with wf.
-      apply trans_unfold_cofix in H; eauto with wf.
+      apply trans_unfold_cofix in H0; eauto with wf.
       eapply red_cofix_case; eauto.
 
     - eapply WfAst.wf_mkApps_napp in Hwf; auto.
@@ -1798,7 +1798,7 @@ Section Trans_Global.
       |mfix idx narg fn args c t cargs hunf hnth wa IHa hnc
       |mfix idx narg fn args hunf hnth|mfix idx args hunf
       |ci p c brs args n ui cargs mdecl idecl cdecl br h l wa IHa hbr hdecl hlen wb IHb
-      |ci p c brs args mfix idx cargs narg fn h l wa IHa hunf wb IHb
+      |ci p c brs args mfix idx cargs narg fn h l hnd wa IHa hunf wb IHb
       |ci p c brs args t cargs wa IHa hnc hncf
       |p c args u cargs a h l wa IHa hnth wb IHb
       |p c args mfix idx cargs narg fn h l wa IHa hunf wb IHb
@@ -1921,7 +1921,7 @@ Section Trans_Global.
       have tu := trans_unfold_cofix _ _ _ _ (WfAst.wf_inv wfcofix) hunf.
       move: tw ta. cbn [trans]. rewrite trans_mkApps.
       destruct TransLookup.lookup_inductive as [[]|] => tw ta;
-        (eapply whd_case_cofix; [exact ta|exact tu|exact tw]).
+        (eapply whd_case_cofix; [exact hnd|exact ta|exact tu|exact tw]).
     (* stuck case *)
     - destruct (WfAst.wf_inv wft) as [mdecl' [idecl' [isdecl hci hpctx lenpar wfpar wfret wfc wfbrs]]].
       have ht := TemplateArityRed.whd_rel_out_napp wa.
@@ -2475,7 +2475,8 @@ Lemma simpl_type_Case {H : checker_flags} {Σ : global_env_ext} {Γ} {ci : case_
   isSortRel ps ci.(ci_relevance) ->
   Σ;;; Γ |- c : mkApps (tInd ci (puinst p)) (pparams p ++ indices) ->
   implb (isCoFinite (ind_finite mdecl))
-    (on_free_vars (strengthenP 0 1 ssrbool.xpredT) (preturn p)) = true ->
+    (implb ci.(ci_cofix_nondep)
+       (on_free_vars (strengthenP 0 1 ssrbool.xpredT) (preturn p))) = true ->
   let ptm := it_mkLambda_or_LetIn predctx (preturn p) in
   wf_branches idecl brs ->
   All2i
@@ -2891,7 +2892,8 @@ Proof.
     + clear X7.
       have hopen := PCUICClosedTyp.subject_is_open_term (X3 X8).
       match goal with h : implb (ST.isCoFinite _) _ = true |- _ => move: h end.
-      rewrite /p'. cbn. case: (Ast.Env.ind_finite mdecl) => //= hocc.
+      rewrite /p'. cbn. case: (Ast.Env.ind_finite mdecl) => //=.
+      case: (ci_cofix_nondep ci) => //= hocc.
       exact (TransNoccur.trans_on_free_vars_noccur _ 1 _ _ _ 0 TransNoccur.nocc_betweenp01
         (hopen X8) hocc).
     + red. eapply All2_Forall2.

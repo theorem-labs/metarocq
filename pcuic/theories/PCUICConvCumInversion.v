@@ -310,10 +310,6 @@ Section fixed.
       ws_cumul_pb_brs Σ Γ p brs brs']∥.
   Proof using wfΣ.
     intros conv decli decli' wfp wfp' whl whr.
-    depelim whl; solve_discr.
-    depelim w; solve_discr; try discriminate.
-    depelim whr; solve_discr.
-    depelim w0; solve_discr; try discriminate.
     apply conv_cum_alt in conv as [(?&?&[r1 r2 eq])]; auto.
     have clΓ : is_closed_context Γ by fvs.
     set(l := tCase ci _ _ _) in *.

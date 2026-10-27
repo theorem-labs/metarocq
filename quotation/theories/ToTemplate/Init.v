@@ -169,7 +169,7 @@ Proof.
                   then (ind <- infer_replacement_inductive qt;;
                         match ind with
                         | Some ind
-                          => ret (inr {| ci_ind := ind ; ci_npar := ci.(ci_npar) ; ci_relevance := ci.(ci_relevance) |})
+                          => ret (inr {| ci_ind := ind ; ci_npar := ci.(ci_npar) ; ci_relevance := ci.(ci_relevance) ; ci_cofix_nondep := ci.(ci_cofix_nondep) |})
                         | None
                           => res <- tmMaybeInferQuotation tt;;
                              ret (inl res)

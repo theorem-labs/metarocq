@@ -821,7 +821,7 @@ Proof.
     assert (hredcasecof :
       PCUICReduction.red Σ [] (tCase ip p (mkApps (tCoFix mfix idx) args) brs)
         (tCase ip p (mkApps fn args) brs)).
-    { constructor; eapply PCUICReduction.red_cofix_case.
+    { constructor; eapply PCUICReduction.red_cofix_case; [assumption|].
         move: e. rewrite closed_unfold_cofix_cunfold_eq; eauto. }
     assert (htcasefn : Σ ;;; [] |- tCase ip p (mkApps fn args) brs : T).
     { eapply subject_reduction; eauto. }
