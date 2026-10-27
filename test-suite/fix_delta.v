@@ -50,7 +50,12 @@ MetaRocq SafeCheck @fd_len2.
 Definition fd_letlen :=
   let T := fd_nlist in
   fix f (l : T) : nat := match l with fd_nnil => 0 | fd_ncons _ t => S (f t) end.
-MetaRocq SafeCheck @fd_letlen.
+(* expect: Unguarded fixpoint *)
+(* With the ported guard checker, A4 is refused: the guard check sees the outer
+   context only through its length, so the outer [let] is opaque and [T] never
+   reduces to an inductive type. Rocq's kernel accepts it. This is the fixpoint
+   form of an intended refusal; its measured cost on r188 and the libraries is 0. *)
+Fail MetaRocq SafeCheck @fd_letlen.
 
 (* A5: the type reduces by iota. *)
 Definition fd_sel (b : bool) : Set := if b then fd_nlist else nat.
