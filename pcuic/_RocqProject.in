@@ -50,6 +50,7 @@ theories/Typing/PCUICContextConversionTyp.v
 theories/PCUICContextSubst.v
 theories/PCUICCasesContexts.v
 theories/PCUICReduction.v
+theories/PCUICEtaDefs.v
 theories/PCUICArityRed.v
 theories/PCUICRecArgs.v
 theories/PCUICGuardReduce.v
@@ -128,6 +129,7 @@ theories/PCUICCasesHelper.v
 # BET-315 eta lane (L1): new relations beside the base ones
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
+theories/PCUICTypingEta.v
 # BET-315 eta lane (C3 prover A): scratch C3 file
 theories/PCUICEtaC3A.v
 # theories/All.v
