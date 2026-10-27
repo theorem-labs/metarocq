@@ -24,7 +24,7 @@ From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICPrimitive
      PCUICCases PCUICOnFreeVars PCUICReduction PCUICTyping PCUICEtaDefs PCUICEtaC3C
-     PCUICEtaConfluence PCUICEtaStrengthening.
+     PCUICEtaConfluence PCUICEtaStrengthening PCUICSigmaCalculus.
 
 Import ListNotations.
 Set Default Goal Selector "!".
@@ -849,5 +849,59 @@ Section Cong.
     - rewrite da. reflexivity.
     - reflexivity.
     - reflexivity.
+  Qed.
+
+  (** A trailing [tRel 0] is never the recursive argument: isConstruct_app (tRel 0)
+      is false, so is_constructor on (L ++ [tRel 0]) forces narg < |L|. *)
+  Lemma is_constructor_app_tRel0 narg L :
+    is_constructor narg (L ++ [tRel 0]) = true -> is_constructor narg L = true.
+  Proof.
+    unfold is_constructor. intro H.
+    destruct (Nat.lt_ge_cases narg #|L|) as [hl|hg].
+    - rewrite nth_error_app_lt in H; [exact hl|]. exact H.
+    - rewrite nth_error_app_ge in H; [exact hg|].
+      destruct (narg - #|L|) as [|k] eqn:Hk; cbn in H; [discriminate H|].
+      rewrite nth_error_nil in H. discriminate H.
+  Qed.
+
+  (** The crux inversion for abs_red_r's eta_red case: one red1 step on the body
+      [tApp (lift0 1 s) (tRel 0)] of an η-redex.  Returns the live reducts as DATA.
+      app_red_l and red_fix collapse into "s reduces, M' is the η-body of the reduct"
+      (app_red_l via red1_strengthening, red_fix via lift_mkApps_tFix_inv +
+      lift_unfold_fix + lift_is_constructor + is_constructor_app_tRel0); red_beta
+      gives s = tLambda..; app_red_r is absurd (tRel 0 under a vass has no reduct). *)
+  Lemma red1_eta_body_inv Γ na A s M' (wfΣ : wf Σ)
+    (hctx : on_ctx_free_vars xpredT Γ) (hs : on_free_vars xpredT s) :
+    red1 Σ (Γ ,, vass na A) (tApp (lift0 1 s) (tRel 0)) M' ->
+    (∑ s', red1 Σ Γ s s' × M' = tApp (lift0 1 s') (tRel 0))
+    + (∑ nb B b, s = tLambda nb B b × M' = b).
+  Proof.
+    intro H. remember (lift0 1 s) as ls eqn:Els. depelim H.
+    - (* red_beta: lift0 1 s = tLambda na0 t b *)
+      right. symmetry in Els. destruct s; cbn in Els; try discriminate Els. noconf Els.
+      eexists _, _, _. split; [reflexivity|].
+      unfold subst1. rewrite subst_reli_lift_id //. apply lift0_id.
+    - (* red_fix: the fix fires on s's own spine (trailing tRel 0 is never the
+         recursive arg), so s red_fix-reduces and M' is the η-body of the reduct *)
+      left. destruct args using rev_ind; [cbn in H; discriminate H|].
+      rewrite mkApps_app in H. cbn in H. noconf H. clear IHargs.
+      symmetry in Els.
+      destruct (lift_mkApps_tFix_inv 1 0 s mfix idx args Els)
+        as (mfix' & args' & Es & Emfix & Eargs).
+      subst s mfix args.
+      rewrite lift_unfold_fix in e.
+      destruct (unfold_fix mfix' idx) as [[narg' fn0]|] eqn:Euf; cbn in e; [|discriminate e].
+      noconf e.
+      apply is_constructor_app_tRel0 in e0.
+      rewrite <- lift_is_constructor in e0.
+      exists (mkApps fn0 args'). split.
+      + eapply red_fix; eassumption.
+      + rewrite mkApps_app lift_mkApps. reflexivity.
+    - (* app_red_l: red1 (lift0 1 s) N1 → strengthen *)
+      left. subst ls.
+      destruct (red1_strengthening (wfΣ := wfΣ) Γ (vass na A) s N1 hctx hs H) as (s' & -> & rs).
+      exists s'. split; [exact rs|reflexivity].
+    - (* app_red_r: red1 (tRel 0) N2 under a vass — impossible *)
+      depelim H; [cbn in e; noconf e | solve_discr].
   Qed.
 End Cong.
