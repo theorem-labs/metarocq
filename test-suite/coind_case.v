@@ -104,3 +104,23 @@ CoFixpoint cc_zeros : cc_nstream := cc_ncons 0 cc_zeros.
 Definition cc_head (s : cc_nstream) : nat := match s with cc_ncons a _ => a end.
 Definition cc_head_zeros : cc_head cc_zeros = 0 := eq_refl.
 MetaRocq SafeCheck cc_head_zeros.
+
+(** * Refused
+
+   The refusal is pinned so that a reduction site that stops testing the flag, and
+   so unfolds a cofixpoint under a dependent match again, is caught here: such a
+   reduction would accept R3, which must fail. The expect comment is matched against
+   the message by [check_fail_messages.sh], which the test-suite Makefile runs on
+   this file. *)
+
+(* R3: a conversion that needs a cofixpoint unfolded under a DEPENDENT match. The
+   return type [dep_ty s] is a match on the matched value, so the quotation marks the
+   match dependent and no cofixpoint unfolds under it. Rocq accepts [dep_head_zeros]:
+   its conversion unfolds [cc_zeros] under the match. SafeCheck must refuse it, since
+   unfolding there breaks subject reduction. *)
+Definition dep_ty (s : cc_nstream) : Type := match s with cc_ncons _ _ => nat end.
+Definition dep_head (s : cc_nstream) : dep_ty s :=
+  match s return dep_ty s with cc_ncons a _ => a end.
+Definition dep_head_zeros : @eq (dep_ty cc_zeros) (dep_head cc_zeros) 0 := eq_refl.
+(* expect: Types are not convertible *)
+Fail MetaRocq SafeCheck dep_head_zeros.
