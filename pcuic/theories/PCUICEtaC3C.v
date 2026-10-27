@@ -125,6 +125,141 @@ Proof.
     + right. exists (a :: l'). split; now constructor.
 Qed.
 
+(** ** One [eta1] step commutes with [subst] and [lift] (plan rows U2-ish). *)
+
+Lemma eta1_subst s t t' : eta1 t t' -> forall k, eta1 (subst s k t) (subst s k t').
+Proof.
+  intros H. revert t t' H.
+  apply (eta1_ind_all (fun t t' => forall k, eta1 (subst s k t) (subst s k t')));
+    intros; cbn.
+  - rewrite commut_lift_subst. apply eta_red.
+  - apply abs_eta_l; auto.
+  - apply abs_eta_r; auto.
+  - apply letin_eta_def; auto.
+  - apply letin_eta_ty; auto.
+  - apply letin_eta_body; auto.
+  - replace (map_predicate_k id (subst s) k (set_pparams p params'))
+      with (set_pparams (map_predicate_k id (subst s) k p) (map (subst s k) params'))
+      by reflexivity.
+    eapply case_eta_param. eapply OnOne2_map.
+    eapply OnOne2_impl; [exact X|]. intros x y Hxy. exact (snd Hxy k).
+  - replace (map_predicate_k id (subst s) k (set_preturn p preturn'))
+      with (set_preturn (map_predicate_k id (subst s) k p)
+                        (subst s (#|pcontext p| + k) preturn'))
+      by reflexivity.
+    eapply case_eta_return. cbn. auto.
+  - apply case_eta_discr; auto.
+  - eapply case_eta_brs. induction X; cbn.
+    + constructor. destruct p0 as [[He HP] Heq]. split; cbn.
+      * rewrite Heq. apply (HP (#|bcontext hd'| + k)).
+      * now rewrite Heq.
+    + now constructor.
+  - apply proj_eta; auto.
+  - apply app_eta_l; auto.
+  - apply app_eta_r; auto.
+  - apply prod_eta_l; auto.
+  - apply prod_eta_r; auto.
+  - eapply evar_eta. eapply OnOne2_map.
+    eapply OnOne2_impl; [exact X|]. intros x y Hxy. exact (snd Hxy k).
+  - cbn. rewrite (OnOne2_length X). eapply fix_eta_ty.
+    set (D := #|mfix1| + k). clearbody D. induction X; cbn.
+    + constructor. destruct p as [[He HP] Heq]. split.
+      * apply (HP k).
+      * revert Heq; unfold map_def; cbn; congruence.
+    + now constructor.
+  - cbn. rewrite (OnOne2_length X). eapply fix_eta_body.
+    set (D := #|mfix1| + k). clearbody D. induction X; cbn.
+    + constructor. destruct p as [[He HP] Heq]. split.
+      * apply (HP D).
+      * revert Heq; unfold map_def; cbn; congruence.
+    + now constructor.
+  - cbn. rewrite (OnOne2_length X). eapply cofix_eta_ty.
+    set (D := #|mfix1| + k). clearbody D. induction X; cbn.
+    + constructor. destruct p as [[He HP] Heq]. split.
+      * apply (HP k).
+      * revert Heq; unfold map_def; cbn; congruence.
+    + now constructor.
+  - cbn. rewrite (OnOne2_length X). eapply cofix_eta_body.
+    set (D := #|mfix1| + k). clearbody D. induction X; cbn.
+    + constructor. destruct p as [[He HP] Heq]. split.
+      * apply (HP D).
+      * revert Heq; unfold map_def; cbn; congruence.
+    + now constructor.
+  - eapply array_eta_val. eapply OnOne2_map.
+    eapply OnOne2_impl; [exact X|]. intros x y Hxy. exact (snd Hxy k).
+  - eapply array_eta_def; cbn; auto.
+  - eapply array_eta_type; cbn; auto.
+Qed.
+
+Lemma eta1_lift n t t' : eta1 t t' -> forall k, eta1 (lift n k t) (lift n k t').
+Proof.
+  intros H. revert t t' H.
+  apply (eta1_ind_all (fun t t' => forall k, eta1 (lift n k t) (lift n k t')));
+    intros; cbn.
+  - assert (E : lift n (S k) (lift0 1 t) = lift0 1 (lift n k t)).
+    { rewrite (permute_lift t n k 1 0); [lia|]. f_equal. lia. }
+    rewrite E. apply eta_red.
+  - apply abs_eta_l; auto.
+  - apply abs_eta_r; auto.
+  - apply letin_eta_def; auto.
+  - apply letin_eta_ty; auto.
+  - apply letin_eta_body; auto.
+  - replace (map_predicate_k id (lift n) k (set_pparams p params'))
+      with (set_pparams (map_predicate_k id (lift n) k p) (map (lift n k) params'))
+      by reflexivity.
+    eapply case_eta_param. eapply OnOne2_map.
+    eapply OnOne2_impl; [exact X|]. intros x y Hxy. exact (snd Hxy k).
+  - replace (map_predicate_k id (lift n) k (set_preturn p preturn'))
+      with (set_preturn (map_predicate_k id (lift n) k p)
+                        (lift n (#|pcontext p| + k) preturn'))
+      by reflexivity.
+    eapply case_eta_return. cbn. auto.
+  - apply case_eta_discr; auto.
+  - eapply case_eta_brs. induction X; cbn.
+    + constructor. destruct p0 as [[He HP] Heq]. split; cbn.
+      * rewrite Heq. apply (HP (#|bcontext hd'| + k)).
+      * now rewrite Heq.
+    + now constructor.
+  - apply proj_eta; auto.
+  - apply app_eta_l; auto.
+  - apply app_eta_r; auto.
+  - apply prod_eta_l; auto.
+  - apply prod_eta_r; auto.
+  - eapply evar_eta. eapply OnOne2_map.
+    eapply OnOne2_impl; [exact X|]. intros x y Hxy. exact (snd Hxy k).
+  - cbn. rewrite (OnOne2_length X). eapply fix_eta_ty.
+    set (D := #|mfix1| + k). clearbody D. induction X; cbn.
+    + constructor. destruct p as [[He HP] Heq]. split.
+      * apply (HP k).
+      * revert Heq; unfold map_def; cbn; congruence.
+    + now constructor.
+  - cbn. rewrite (OnOne2_length X). eapply fix_eta_body.
+    set (D := #|mfix1| + k). clearbody D. induction X; cbn.
+    + constructor. destruct p as [[He HP] Heq]. split.
+      * apply (HP D).
+      * revert Heq; unfold map_def; cbn; congruence.
+    + now constructor.
+  - cbn. rewrite (OnOne2_length X). eapply cofix_eta_ty.
+    set (D := #|mfix1| + k). clearbody D. induction X; cbn.
+    + constructor. destruct p as [[He HP] Heq]. split.
+      * apply (HP k).
+      * revert Heq; unfold map_def; cbn; congruence.
+    + now constructor.
+  - cbn. rewrite (OnOne2_length X). eapply cofix_eta_body.
+    set (D := #|mfix1| + k). clearbody D. induction X; cbn.
+    + constructor. destruct p as [[He HP] Heq]. split.
+      * apply (HP D).
+      * revert Heq; unfold map_def; cbn; congruence.
+    + now constructor.
+  - eapply array_eta_val. eapply OnOne2_map.
+    eapply OnOne2_impl; [exact X|]. intros x y Hxy. exact (snd Hxy k).
+  - eapply array_eta_def; cbn; auto.
+  - eapply array_eta_type; cbn; auto.
+Qed.
+
+Lemma eta1_lift0 n t t' : eta1 t t' -> eta1 (lift0 n t) (lift0 n t').
+Proof. intros H. now apply eta1_lift. Qed.
+
 (** ** The C3 statement (plan §3 row C3). *)
 
 Definition C3_statement {cf : checker_flags} :=
