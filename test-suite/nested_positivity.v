@@ -3,7 +3,8 @@
    Accepted cases: Rocq's kernel accepts each of them, and so must the checker.
    Rejected cases: each is defined with Rocq's positivity check bypassed, and the
    checker must still reject it; a [Fail Inductive] beside each one shows that Rocq's
-   kernel rejects the same definition.
+   kernel rejects the same definition. Nestings that need reduction to be seen, such
+   as a nesting reached through a constant, are tested in [positivity_red.v].
 
    Every type nested here is defined in this file, monomorphic, so the file does not
    depend on how SafeCheck handles template-polymorphic types such as [list] and

@@ -37,6 +37,7 @@ nested_positivity_check.v
 # nested_positivity_stdlib.v
 opaque.v
 order_rec.v
+positivity_red.v
 # plugin-demo/test/test.v
 # plugin-demo/theories/Extraction.v
 # plugin-demo/theories/Lens.v
