@@ -35,13 +35,18 @@ Extraction Inline PCUICPrimitive.prim_val_reflect_eq.
 
 (** The Template-to-PCUIC translation keeps the quoter's sharing: [memo_trans]
     is the identity in Rocq ([TemplateToPCUICShared.trans_shared_eq]) and the
-    trusted memo on physical equality of [trans_memo.ml] at extraction.  These
-    are the first safechecker extraction directives that replace a computation
-    inside the checker; [Print Assumptions] cannot show them.  The shipped
-    checker is correct only if [Trans_memo.memo Σ t k] returns [k ()] and
-    [Trans_memo.release p] returns [p]. *)
+    trusted memo on physical equality of [trans_memo.ml] at extraction;
+    [trans_memo_release] empties that memo; [trans_memo_hold] is the identity
+    in Rocq and [Sys.opaque_identity] at extraction, so [trans_program] reads
+    the program's term before translating the environment.  These three are
+    the safechecker extraction directives that replace a computation inside the
+    checker; [Print Assumptions] cannot show them.  The shipped checker is
+    correct only if [Trans_memo.memo Σ t k] returns [k ()],
+    [Trans_memo.release p] returns [p] and [Sys.opaque_identity t] returns
+    [t]. *)
 Extract Constant TemplateToPCUICShared.memo_trans => "Trans_memo.memo".
 Extract Constant TemplateToPCUICShared.trans_memo_release => "Trans_memo.release".
+Extract Constant TemplateToPCUICShared.trans_memo_hold => "Sys.opaque_identity".
 
 Set Extraction Output Directory "src".
 Axiom fake_abstract_guard_impl_properties:

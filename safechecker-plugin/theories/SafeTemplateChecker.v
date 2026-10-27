@@ -16,16 +16,24 @@ Definition trans_program_unshared (p : Ast.Env.program) : program :=
   (Σ', trans Σ' p.2).
 
 (** The checker translates with [trans_shared], which keeps the sharing of the
-    quoted program at extraction (see [TemplateToPCUICShared]), then releases
-    the memo's table.  In Rocq it is the plain translation:
+    quoted program at extraction, then releases the memo's table.  It reads the
+    program's term first, through [trans_memo_hold], so that the program pair
+    is dead while the environment is translated.  [memo_trans],
+    [trans_memo_release] and [trans_memo_hold] are the identity in Rocq and
+    trusted extraction directives at extraction (see [TemplateToPCUICShared]
+    and [Extraction.v]).  In Rocq [trans_program] is the plain translation:
     [trans_program_unshared_eq]. *)
 Definition trans_program (p : Ast.Env.program) : program :=
+  let t := trans_memo_hold p.2 in
   trans_memo_release
     (let Σ' := trans_global_env_shared p.1 in
-     (Σ', trans_shared Σ' p.2)).
+     (Σ', trans_shared Σ' t)).
 
 Lemma trans_program_unshared_eq p : trans_program p = trans_program_unshared p.
-Proof. reflexivity. Qed.
+Proof.
+  unfold trans_program, trans_program_unshared, trans_memo_release, trans_memo_hold.
+  cbv zeta. now rewrite trans_global_env_shared_eq.
+Qed.
 
 Definition EnvCheck_wf_env_ext {cf:checker_flags} {guard : abstract_guard_impl} := EnvCheck wf_env_ext.
 

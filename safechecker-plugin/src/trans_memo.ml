@@ -2,9 +2,11 @@
    quoter shares, and whose translation reads no environment, is translated to PCUIC once,
    and its PCUIC value is shared too.
 
-   This is the first safechecker extraction directive that replaces a computation inside the
-   checker; [Print Assumptions] cannot show it; the shipped checker is correct only if
-   [memo Σ t k] returns [k ()] and [release p] returns [p].
+   [memo_trans => Trans_memo.memo], [trans_memo_release => Trans_memo.release] and
+   [trans_memo_hold => Sys.opaque_identity] are the safechecker extraction directives that
+   replace a computation inside the checker; [Print Assumptions] cannot show them; the
+   shipped checker is correct only if [memo Σ t k] returns [k ()], [release p] returns [p]
+   and [Sys.opaque_identity t] returns [t].
 
    Why it is sound.  In Rocq, [memo_trans Σ t k] is [k tt], so [trans_shared] is [trans]
    ([TemplateToPCUICShared.trans_shared_eq]).  [trans] is a pure function of [Σ] and the

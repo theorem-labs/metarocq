@@ -19,14 +19,24 @@ From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC.
   values whose computation met no [tCase].  [trans_memo_release] is the
   identity in Rocq; at extraction it empties the memo's table once a whole
   program is translated, so the table does not keep the Template program
-  alive.
+  alive.  [trans_memo_hold] is the identity in Rocq; at extraction it is
+  [Sys.opaque_identity], which makes [SafeTemplateChecker.trans_program] read
+  the program's term before it translates the environment, so the program
+  pair is not kept alive through that translation.
 
-  Both are monomorphic: the table holds PCUIC terms keyed by Template terms,
-  and [memo_trans] is used only in [trans_shared]. *)
+  These three are trusted extraction directives ([Extraction.v]): the shipped
+  checker is correct only if [Trans_memo.memo Σ t k] returns [k ()],
+  [Trans_memo.release p] returns [p] and [Sys.opaque_identity t] returns [t];
+  [Print Assumptions] cannot show them.
+
+  All three are monomorphic: the table holds PCUIC terms keyed by Template
+  terms, and [memo_trans] is used only in [trans_shared]. *)
 
 Definition memo_trans (Σ : global_env_map) (t : Ast.term) (k : unit -> term) : term := k tt.
 
 Definition trans_memo_release (p : PCUICEnvironment.program) : PCUICEnvironment.program := p.
+
+Definition trans_memo_hold (t : Ast.term) : Ast.term := t.
 
 (** ** Where [trans] reads the environment
 
@@ -192,10 +202,15 @@ Section TransShared.
     end.
 End TransShared.
 
+(** The same fold as [TemplateToPCUIC.trans_global_decls], oldest declaration
+    first and each under the same accumulated environment, written as a
+    [fold_left] over the reversed list: the extracted [fold_left] is a loop
+    that drops each list cell once its declaration is translated, where the
+    extracted [fold_right] keeps the whole spine on the stack until the end. *)
 Definition trans_global_decls_shared env (d : Ast.Env.global_declarations) : global_env_map :=
-  fold_right (fun decl Σ' =>
+  fold_left (fun Σ' decl =>
     let decl' := on_snd (trans_global_decl_shared Σ') decl in
-    TemplateToPCUIC.add_global_decl Σ' decl') env d.
+    TemplateToPCUIC.add_global_decl Σ' decl') (List.rev' d) env.
 
 Definition trans_global_env_shared (d : Ast.Env.global_env) : global_env_map :=
   let init := empty_trans_env d.(Ast.Env.universes) d.(Ast.Env.retroknowledge) in
@@ -205,10 +220,12 @@ Definition trans_global_env_shared (d : Ast.Env.global_env) : global_env_map :=
 
     [memo_trans Σ t k] unfolds to [k tt].  After that delta and a beta step, the
     body of the fixpoint [trans_shared Σ] is the body of [trans Σ], so the two
-    fixpoints are convertible; each shared definition below is the original
-    one with [trans_shared] for [trans], so it is convertible to the original
-    too.  Every equation therefore holds by [reflexivity], which the kernel
-    checks again at [Qed]. *)
+    fixpoints are convertible; each shared declaration translation below is the
+    original one with [trans_shared] for [trans], so it is convertible to the
+    original too, and its equation holds by [reflexivity], which the kernel
+    checks again at [Qed].  The environment fold is a [fold_left] over the
+    reversed list, which is not convertible to the original [fold_right] on an
+    abstract list; its equation is proved by rewriting. *)
 
 Lemma trans_shared_eq Σ t : trans_shared Σ t = trans Σ t.
 Proof. reflexivity. Qed.
@@ -243,11 +260,21 @@ Lemma trans_global_decl_shared_eq Σ d :
   trans_global_decl_shared Σ d = trans_global_decl Σ d.
 Proof. reflexivity. Qed.
 
-(** The environment is built by the same fold with the same [add_global_decl]
-    and convertible declaration translations. *)
+(** The environment is built in the same order, with the same [add_global_decl]
+    and convertible declaration translations: [fold_left] over [rev' d] is
+    [fold_right] over [d]. *)
 Lemma trans_global_decls_shared_eq env d :
   trans_global_decls_shared env d = trans_global_decls env d.
-Proof. reflexivity. Qed.
+Proof.
+  unfold trans_global_decls_shared, trans_global_decls, List.rev'.
+  rewrite <- List.rev_alt.
+  rewrite <- (List.rev_involutive d) at 2.
+  rewrite List.fold_left_rev_right.
+  reflexivity.
+Qed.
 
 Lemma trans_global_env_shared_eq d : trans_global_env_shared d = trans_global_env d.
-Proof. reflexivity. Qed.
+Proof.
+  unfold trans_global_env_shared, trans_global_env.
+  apply trans_global_decls_shared_eq.
+Qed.
