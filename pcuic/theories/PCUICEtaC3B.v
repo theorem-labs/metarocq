@@ -1004,3 +1004,81 @@ Proof.
     + destruct Hty as [_ ?]; assumption.
     + eapply All2_impl; [exact Hval|]. now intros x y [_ ?].
 Qed.
+
+(** ** More commutation cases, standalone and green (no eta_subst)
+
+  The remaining "unlocking" rows ([red_cofix_case], [red_cofix_proj], [red_proj])
+  copy [peta_commut_red_fix]. The δ/ρ rows ([red_delta], [red_rel]) are forced
+  reflexive on the η side (peta on [tConst]/[tRel] is reflexive), so the same red1
+  step re-fires. None needs [wf Σ] or scoping: those bite only when a red1 fires
+  INSIDE an η-redex peta contracts (the [abs_red_r] kernel, see EtaC3B.md). *)
+
+Lemma peta_commut_red_rel Σ Γ i body u :
+  option_map decl_body (nth_error Γ i) = Some (Some body) ->
+  peta (tRel i) u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × peta (lift0 (S i) body) w' × upto_domain w w'.
+Proof.
+  intros H Hp. depelim Hp.
+  exists (lift0 (S i) body), (lift0 (S i) body). repeat split.
+  - apply r_step. now apply red_rel.
+  - apply peta_refl.
+  - reflexivity.
+Qed.
+
+Lemma peta_commut_red_delta Σ Γ c decl body uu u :
+  declared_constant Σ c decl -> cst_body decl = Some body ->
+  peta (tConst c uu) u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × peta (subst_instance uu body) w' × upto_domain w w'.
+Proof.
+  intros Hdecl Hbody Hp. depelim Hp.
+  exists (subst_instance uu body), (subst_instance uu body). repeat split.
+  - apply r_step. eapply red_delta; eassumption.
+  - apply peta_refl.
+  - reflexivity.
+Qed.
+
+Lemma peta_commut_red_proj Σ Γ pr args uu arg u :
+  nth_error args (pr.(proj_npars) + pr.(proj_arg)) = Some arg ->
+  peta (tProj pr (mkApps (tConstruct pr.(proj_ind) 0 uu) args)) u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × peta arg w' × upto_domain w w'.
+Proof.
+  intros Hnth Hp. depelim Hp.
+  apply peta_mkApps_inv in Hp as (f' & args' & -> & Hf & Ha). depelim Hf.
+  destruct (All2_nth_error_Some _ _ Ha Hnth) as (arg' & Hnth' & Harg).
+  exists arg', arg'. repeat split.
+  - apply r_step. eapply red_proj; exact Hnth'.
+  - exact Harg.
+  - reflexivity.
+Qed.
+
+Lemma peta_commut_red_cofix_proj Σ Γ pr mfix idx args narg fn u :
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  peta (tProj pr (mkApps (tCoFix mfix idx) args)) u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × peta (tProj pr (mkApps fn args)) w' × upto_domain w w'.
+Proof.
+  intros Hunf Hp. depelim Hp.
+  apply peta_mkApps_inv in Hp as (f' & args' & -> & Hf & Ha). depelim Hf.
+  match goal with Hm : All2 _ mfix ?m |- _ =>
+    destruct (peta_unfold_cofix _ m _ _ _ Hm Hunf) as (fn' & Hunf' & Hfn) end.
+  exists (tProj pr (mkApps fn' args')), (tProj pr (mkApps fn' args')). repeat split.
+  - apply r_step. eapply red_cofix_proj; exact Hunf'.
+  - apply peta_Proj, peta_mkApps; assumption.
+  - reflexivity.
+Qed.
+
+Lemma peta_commut_red_cofix_case Σ Γ ip p mfix idx args narg fn brs u :
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  peta (tCase ip p (mkApps (tCoFix mfix idx) args) brs) u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w
+        × peta (tCase ip p (mkApps fn args) brs) w' × upto_domain w w'.
+Proof.
+  intros Hunf Hp. depelim Hp.
+  match goal with Hd : peta (mkApps (tCoFix _ _) _) _ |- _ =>
+    apply peta_mkApps_inv in Hd as (f' & args' & Hc & Hf & Ha) end. depelim Hf.
+  match goal with Hm : All2 _ mfix ?m |- _ =>
+    destruct (peta_unfold_cofix _ m _ _ _ Hm Hunf) as (fn' & Hunf' & Hfn) end.
+  eexists _, _. repeat split.
+  - apply r_step. rewrite Hc. eapply red_cofix_case; exact Hunf'.
+  - eapply peta_Case; try eassumption. apply peta_mkApps; eassumption.
+  - reflexivity.
+Qed.
