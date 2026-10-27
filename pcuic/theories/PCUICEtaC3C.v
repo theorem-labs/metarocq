@@ -585,6 +585,88 @@ Proof.
   rewrite {1}E. now apply eta_Array_val_gen.
 Qed.
 
+(** ** Substituting [eta]-related substitutions. *)
+
+Lemma eta_subst_l s s' t : All2 eta s s' -> forall k, eta (subst s k t) (subst s' k t).
+Proof.
+  intros hs. induction t using term_forall_list_ind; intros k; cbn;
+    try solve [apply rt_refl].
+  - destruct (Nat.leb k n).
+    + destruct (nth_error s (n - k)) eqn:E.
+      * apply All2_nth_error_Some with (1 := hs) in E as (t' & -> & He).
+        now apply eta_lift0.
+      * apply (All2_nth_error_None _ hs) in E as E'. rewrite E'.
+        rewrite (All2_length hs). apply rt_refl.
+    + apply rt_refl.
+  - apply eta_Evar. induction X; cbn; constructor; auto.
+  - now apply eta_Prod.
+  - now apply eta_Lambda.
+  - now apply eta_LetIn.
+  - now apply eta_App.
+  - destruct X as [IHpars [_ IHret]].
+    eapply rt_trans; [apply eta_Case_discr, IHt|].
+    eapply rt_trans.
+    { apply (eta_Case_brs _ _ _ _ (map_branches_k (subst s') id k l)).
+      cbn. clear -X0 hs.
+      induction X0 as [|br brs' [_ IHbr] _ IHl]; cbn.
+      - constructor.
+      - constructor; [|apply IHl]. split; [apply IHbr|reflexivity]. }
+    eapply rt_trans.
+    { apply (eta_Case_pars _ _ _ _ (map (subst s' k) (pparams p))).
+      cbn. clear -IHpars hs. induction IHpars; cbn; constructor; auto. }
+    assert (E : set_preturn
+                  (set_pparams (map_predicate_k id (subst s) k p)
+                               (map (subst s' k) (pparams p)))
+                  (subst s' (#|pcontext p| + k) (preturn p))
+                = map_predicate_k id (subst s') k p) by (now destruct p).
+    rewrite <- E. apply eta_Case_preturn. cbn. apply IHret.
+  - now apply eta_Proj.
+  - eapply rt_trans.
+    { apply (eta_Fix_ty _ _ (map (map_def (subst s' k) (subst s (#|m| + k))) m)).
+      clear -X hs. induction X; cbn.
+      - constructor.
+      - constructor; [|apply IHX]. split; [apply p|cbn; reflexivity]. }
+    assert (EL : #|map (map_def (subst s' k) (subst s (#|m| + k))) m| = #|m|)
+      by now rewrite length_map.
+    apply eta_Fix_body. rewrite EL. clear -X hs.
+    induction X; cbn.
+    + constructor.
+    + constructor; [|apply IHX]. split; [apply p|cbn; reflexivity].
+  - eapply rt_trans.
+    { apply (eta_CoFix_ty _ _ (map (map_def (subst s' k) (subst s (#|m| + k))) m)).
+      clear -X hs. induction X; cbn.
+      - constructor.
+      - constructor; [|apply IHX]. split; [apply p|cbn; reflexivity]. }
+    assert (EL : #|map (map_def (subst s' k) (subst s (#|m| + k))) m| = #|m|)
+      by now rewrite length_map.
+    apply eta_CoFix_body. rewrite EL. clear -X hs.
+    induction X; cbn.
+    + constructor.
+    + constructor; [|apply IHX]. split; [apply p|cbn; reflexivity].
+  - destruct p as [? p]; destruct p; cbn in X |- *; try solve [apply rt_refl].
+    destruct X as [IHty [IHdef IHval]].
+    eapply rt_trans.
+    { apply (eta_Array_val _ (map (subst s' k) a.(array_value))).
+      cbn. clear -IHval hs. induction IHval; cbn; constructor; auto. }
+    cbn. eapply rt_trans.
+    { apply (eta_Array_default (set_array_value (mapu_array_model id (subst s k) a)
+                                                (map (subst s' k) a.(array_value)))
+                               (subst s k a.(array_default)) (subst s' k a.(array_default))).
+      apply IHdef. }
+    cbn. apply (eta_Array_type (set_array_default
+                                  (set_array_value (mapu_array_model id (subst s k) a)
+                                                   (map (subst s' k) a.(array_value)))
+                                  (subst s' k a.(array_default)))
+                               (subst s k a.(array_type)) (subst s' k a.(array_type))).
+    apply IHty.
+Qed.
+
+Lemma eta_subst s s' t t' k :
+  All2 eta s s' -> eta t t' -> eta (subst s k t) (subst s' k t').
+Proof.
+  intros hs ht. eapply rt_trans; [now apply eta_subst_l|now apply eta_subst_r].
+Qed.
+
 (** ** The C3 statement (plan §3 row C3)
 
   AUTHORITATIVE form, as re-hardened by the lane (`agent://ArityLane.EtaL2`,
