@@ -49,9 +49,77 @@ Proof. destruct 1; [apply r_step; now constructor|apply r_refl]. Qed.
 Lemma red_le_Proj Σ Γ p a b : red_le Σ Γ a b -> red_le Σ Γ (tProj p a) (tProj p b).
 Proof. destruct 1; [apply r_step; now constructor|apply r_refl]. Qed.
 
+(** Lifting [clos_refl]/[clos_refl_trans] of [OnOne2] through a cons. *)
+Lemma clos_refl_OnOne2_cons {A} (R : A -> A -> Type) a l l' :
+  clos_refl (OnOne2 R) l l' -> clos_refl (OnOne2 R) (a :: l) (a :: l').
+Proof. destruct 1; [apply r_step; now constructor|apply r_refl]. Qed.
+Lemma crt_OnOne2_cons {A} (R : A -> A -> Type) a l l' :
+  clos_refl_trans (OnOne2 R) l l' -> clos_refl_trans (OnOne2 R) (a :: l) (a :: l').
+Proof. induction 1; [apply rt_step; now constructor|apply rt_refl|eapply rt_trans; eauto]. Qed.
+Lemma clos_refl_OnOne2_hd {A} (R : A -> A -> Type) a w tl :
+  clos_refl R a w -> clos_refl (OnOne2 R) (a :: tl) (w :: tl).
+Proof. destruct 1; [apply r_step; now constructor|apply r_refl]. Qed.
+Lemma crt_OnOne2_hd {A} (R : A -> A -> Type) a w tl :
+  clos_refl_trans R a w -> clos_refl_trans (OnOne2 R) (a :: tl) (w :: tl).
+Proof. induction 1; [apply rt_step; now constructor|apply rt_refl|eapply rt_trans; eauto]. Qed.
+
 Section Cong.
   Context {cf : checker_flags} (Σ : global_env).
   Context (IH : C3 Σ).
+
+  Local Lemma all2_upto_refl l : All2 upto_domain l l.
+  Proof. apply All2_same, upto_domain_refl. Qed.
+
+  (** *** The two-[OnOne2] list diamond: a [red1] step and an [eta1] step on the
+      same list [l].  Same position → the element [IH]; different positions →
+      parallel.  Output: a [clos_refl] of [OnOne2 red1] on the η-side list and a
+      [clos_refl_trans] of [OnOne2 eta1] on the red-side list, joined by
+      [All2 upto_domain]. *)
+  Lemma c3_OnOne2 Γ l l' l'' :
+    OnOne2 (red1 Σ Γ) l l' -> OnOne2 eta1 l l'' ->
+    ∑ lw lw', clos_refl (OnOne2 (red1 Σ Γ)) l'' lw
+              × clos_refl_trans (OnOne2 eta1) l' lw'
+              × All2 upto_domain lw lw'.
+  Proof.
+    intros hr. revert l''. induction hr as [hd hd' tl pr | hd tl tl' hr IHr]; intros l'' he.
+    - (* red1 at head *) depelim he.
+      + (* eta at head : same position *)
+        destruct (IH _ _ _ _ pr e) as (w & w' & hw & hw' & hu).
+        exists (w :: tl), (w' :: tl). split; [|split].
+        * now apply clos_refl_OnOne2_hd.
+        * now apply crt_OnOne2_hd.
+        * constructor; [exact hu|apply all2_upto_refl].
+      + (* eta in tail : different positions *)
+        eexists (hd' :: _), (hd' :: _). split; [|split].
+        * apply r_step. constructor. exact pr.
+        * apply crt_OnOne2_cons. apply rt_step. eassumption.
+        * apply all2_upto_refl.
+    - (* red1 in tail *) depelim he.
+      + (* eta at head : different positions *)
+        eexists (_ :: tl'), (_ :: tl'). split; [|split].
+        * apply clos_refl_OnOne2_cons. apply r_step. exact hr.
+        * apply crt_OnOne2_hd. apply rt_step. eassumption.
+        * apply all2_upto_refl.
+      + (* eta in tail : recurse *)
+        destruct (IHr _ ltac:(eassumption)) as (lw & lw' & hw & hw' & hu).
+        exists (hd :: lw), (hd :: lw'). split; [|split].
+        * now apply clos_refl_OnOne2_cons.
+        * now apply crt_OnOne2_cons.
+        * constructor; [apply upto_domain_refl|exact hu].
+  Qed.
+
+  (** *** evar_red : red1 in one position of the [tEvar] argument list. *)
+  Lemma c3_evar_red Γ ev l l' u :
+    OnOne2 (red1 Σ Γ) l l' -> eta1 (tEvar ev l) u -> joinable Σ Γ u (tEvar ev l').
+  Proof.
+    intros hr he. depelim he.
+    destruct (c3_OnOne2 _ _ _ _ hr ltac:(eassumption)) as (lw & lw' & hw & hw' & hu).
+    exists (tEvar ev lw), (tEvar ev lw'). split; [|split].
+    - destruct hw; [apply r_step; now constructor|apply r_refl].
+    - clear -hw'. induction hw';
+        [apply rt_step; now constructor|apply rt_refl|eapply rt_trans; eauto].
+    - now constructor.
+  Qed.
 
   (** A joined pair stays joined under any [red_le]/[eta_rt]-preserving frame given
       explicitly. *)
