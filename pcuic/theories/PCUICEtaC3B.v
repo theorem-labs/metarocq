@@ -2341,3 +2341,62 @@ Proof.
     + apply utd_Prim. constructor; cbn; try reflexivity; [exact Hu|now apply All2_same].
 Qed.
 
+(** * Assembly *)
+
+Section Assembly.
+Context {cf : checker_flags}.
+(** The same staged hypothesis as [Section Kernel]: EtaL2's
+    [PCUICEtaStrengthening.v:209], verbatim, NOT Required. *)
+Context (red1_strengthening : forall {Σ : global_env} {wfΣ : wf Σ} Γ d t u,
+  on_ctx_free_vars xpredT Γ ->
+  on_free_vars xpredT t ->
+  red1 Σ (Γ ,, d) (lift0 1 t) u -> ∑ u', (u = lift0 1 u') × red1 Σ Γ t u').
+
+(** Parallel η commutes with one β step, modulo [upto_domain]. The induction only
+    dispatches: every [peta] constructor is its own [commut_*] lemma above. *)
+Lemma red1_peta_diamond (Σ : global_env) (wfΣ : wf Σ) t u : peta t u -> commutes Σ t u.
+Proof.
+  induction 1 using peta_ind_all.
+  - eapply (commut_eta red1_strengthening Σ wfΣ); eassumption.
+  - apply commut_Rel.
+  - apply commut_Var.
+  - apply commut_Sort.
+  - apply commut_Const.
+  - apply commut_Ind.
+  - apply commut_Construct.
+  - now apply commut_Evar.
+  - now apply commut_Lambda.
+  - now apply commut_App.
+  - now apply commut_Prod.
+  - now apply commut_LetIn.
+  - now apply commut_Case.
+  - now apply commut_Proj.
+  - now apply commut_Fix.
+  - now apply commut_CoFix.
+  - now apply commut_Prim.
+Qed.
+
+(** ** C3 (plan.md §3 row C3, in the authoritative form: rows C3-scope and the
+    [wf Σ] row). Hindley strong commutation of one β step against one η step,
+    modulo [upto_domain]: ≤1 β step on the η side, η* on the β side.
+
+    The route: [eta1_peta] embeds the η step in one parallel step; the parallel
+    step commutes with the β step ([red1_peta_diamond]); [peta_to_eta] unfolds the
+    resulting parallel step into η*. [peta] never appears in the statement. The two
+    scoping premises and [wf Σ] are consumed only by the staged [red1_strengthening]
+    in the η constructor's [app_red_l] sub-case. *)
+Theorem red1_eta1_strong_commutation (Σ : global_env) (Γ : context) (t u v : term) :
+  wf Σ -> is_closed_context Γ -> is_open_term Γ t ->
+  red1 Σ Γ t v -> eta1 t u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × clos_refl_trans eta1 v w' × upto_domain w w'.
+Proof.
+  intros wfΣ HΓ Ht Hr He.
+  destruct (red1_peta_diamond Σ wfΣ t u (eta1_peta t u He) Γ Γ v (peta_ctx_refl Γ)
+              (on_free_vars_ctx_on_ctx_free_vars_xpredT HΓ)
+              (on_free_vars_impl _ _ _ (fun _ _ => eq_refl) Ht) Hr)
+    as (w & w' & Hw & Hw' & Hu).
+  exists w, w'. repeat split; [exact Hw|exact (peta_to_eta _ _ Hw')|exact Hu].
+Qed.
+
+End Assembly.
+
