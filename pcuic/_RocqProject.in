@@ -130,8 +130,11 @@ theories/PCUICCasesHelper.v
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
 theories/PCUICTypingEta.v
-# BET-315 eta lane (L2): confluence (eta_subst, red1_eta_ctx_strong, red1_strengthening)
+# BET-315 eta lane (L2): confluence foundation (eta_subst, red1_eta_ctx_strong, lift helpers)
 theories/PCUICEtaConfluence.v
+theories/PCUICEtaReduction.v
+# BET-315 eta lane (C3Prover3): C3 strong commutation, four unlocking cases
+theories/PCUICEtaReductionC3.v
 # BET-315 eta lane (C3 prover C, branch frac/eta-c3-c): row C3 assembly
 theories/PCUICEtaC3C.v
 theories/PCUICEtaC3Cong.v

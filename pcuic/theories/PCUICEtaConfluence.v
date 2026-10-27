@@ -975,3 +975,94 @@ Proof.
     + now apply array_red_type.
     + now apply eta_Array_type.
 Qed.
+
+(** ** Lift-inversion helpers for red1_strengthening (ported from
+    origin/eta_postpo:PCUICBasicStrengthening.v; mkApps_nested -> mkApps_app on 9.2). *)
+
+Lemma lift_Apps_Ind_inv n k M ind u args
+      (H : lift n k M = mkApps (tInd ind u) args)
+  : ∑ args', M = mkApps (tInd ind u) args' /\ args = map (lift n k) args'.
+Proof.
+  revert M H. induction args using rev_ind; cbn; intros M H.
+  - destruct M; cbn in H; try discriminate.
+    invs H. now exists [].
+  - rewrite mkApps_app in H; cbn in H.
+    destruct M; cbn in H; try discriminate.
+    invs H. apply IHargs in H1. destruct H1 as [args' [H1 H2]]; subst.
+    exists (args' ++ [M2]). rewrite mkApps_app; cbn.
+    rewrite map_app. now repeat split.
+Qed.
+
+Lemma lift_Apps_Construct_inv n k M ind c u args
+      (H : lift n k M = mkApps (tConstruct ind c u) args)
+  : ∑ args', M = mkApps (tConstruct ind c u) args' /\ args = map (lift n k) args'.
+Proof.
+  revert M H. induction args using rev_ind; cbn; intros M H.
+  - destruct M; cbn in H; try discriminate.
+    invs H. now exists [].
+  - rewrite mkApps_app in H; cbn in H.
+    destruct M; cbn in H; try discriminate.
+    invs H. apply IHargs in H1. destruct H1 as [args' [H1 H2]]; subst.
+    exists (args' ++ [M2]). rewrite mkApps_app; cbn.
+    rewrite map_app. now repeat split.
+Qed.
+
+Lemma lift_Apps_Fix_inv n k M mfix idx args
+      (H : lift n k M = mkApps (tFix mfix idx) args)
+  : ∑ mfix' args', M = mkApps (tFix mfix' idx) args'
+             /\ mfix = map (map_def (lift n k) (lift n (#|mfix'| + k))) mfix'
+             /\ args = map (lift n k) args'.
+Proof.
+  revert M H. induction args using rev_ind; cbn; intros M H.
+  - destruct M; cbn in H; try discriminate.
+    invs H. now eexists _, [].
+  - rewrite mkApps_app in H; cbn in H.
+    destruct M; cbn in H; try discriminate.
+    invs H. apply IHargs in H1.
+    destruct H1 as [mfix' [args' [H1 [H2 H3]]]]; subst.
+    exists mfix', (args' ++ [M2]). rewrite mkApps_app; cbn.
+    rewrite map_app. now repeat split.
+Qed.
+
+Lemma lift_Apps_CoFix_inv n k M mfix idx args
+      (H : lift n k M = mkApps (tCoFix mfix idx) args)
+  : ∑ mfix' args', M = mkApps (tCoFix mfix' idx) args'
+             /\ mfix = map (map_def (lift n k) (lift n (#|mfix'| + k))) mfix'
+             /\ args = map (lift n k) args'.
+Proof.
+  revert M H. induction args using rev_ind; cbn; intros M H.
+  - destruct M; cbn in H; try discriminate.
+    invs H. now eexists _, [].
+  - rewrite mkApps_app in H; cbn in H.
+    destruct M; cbn in H; try discriminate.
+    invs H. apply IHargs in H1.
+    destruct H1 as [mfix' [args' [H1 [H2 H3]]]]; subst.
+    exists mfix', (args' ++ [M2]). rewrite mkApps_app; cbn.
+    rewrite map_app. now repeat split.
+Qed.
+
+Lemma lift_unfold_fix n k mfix idx :
+  unfold_fix (map (map_def (lift n k) (lift n (#|mfix| + k))) mfix) idx
+  = option_map (on_snd (lift n k)) (unfold_fix mfix idx).
+Proof.
+  unfold unfold_fix.
+  rewrite nth_error_map. destruct (nth_error mfix idx); cbnr.
+  f_equal. unfold on_snd; cbn. f_equal.
+  rewrite distr_lift_subst. rewrite fix_subst_length. f_equal.
+  unfold fix_subst. rewrite !length_map.
+  generalize #|mfix| at 2 3. induction n0; auto. simpl.
+  f_equal. apply IHn0.
+Qed.
+
+Lemma lift_unfold_cofix n k mfix idx :
+  unfold_cofix (map (map_def (lift n k) (lift n (#|mfix| + k))) mfix) idx
+  = option_map (on_snd (lift n k)) (unfold_cofix mfix idx).
+Proof.
+  unfold unfold_cofix.
+  rewrite nth_error_map. destruct (nth_error mfix idx); cbnr.
+  f_equal. unfold on_snd; cbn. f_equal.
+  rewrite distr_lift_subst. rewrite cofix_subst_length. f_equal.
+  unfold cofix_subst. rewrite !length_map.
+  generalize #|mfix| at 2 3. induction n0; auto. simpl.
+  f_equal. apply IHn0.
+Qed.

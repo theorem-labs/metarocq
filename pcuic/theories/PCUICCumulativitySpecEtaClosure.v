@@ -416,4 +416,236 @@ Proof.
   now eapply weakening_cumulSpecE0.
 Qed.
 
+(** * S4: the under-applied inductive / constructor lemmas.
+
+    For heads applied below their cumulativity arity [n], the kernel eta-expands
+    both sides to full arity before comparing instances; in [E] the same is done
+    with [cumul_eta_l]/[cumulSpecE_eta_contract], the eta-expansion domains being
+    irrelevant. [cumulSpecE_ind_underapplied_gen] is the Conv-only induction on the
+    number [k] of missing arguments; [cumulSpecE_ind_underapplied] wraps it with one
+    [pb]-level eta step. The lifted argument hypotheses are transported under the new
+    binders by [weakening_cumulSpecE0_All2] (S3's lift/weakening fragment, gate F-5).
+    [wf Σ.1] and the scoping premises are those of S3 / [cumul_Trans]. *)
+
+(** Scoping helpers for the fresh eta binder. *)
+Lemma is_open_term_snoc_lift (Γ : context) (d : context_decl) a :
+  is_open_term Γ a -> is_open_term (Γ ,, d) (lift0 1 a).
+Proof.
+  intro Ha.
+  replace #|Γ ,, d| with (S #|Γ|) by (cbn; lia).
+  apply on_free_vars_lift0.
+  eapply on_free_vars_impl; [|exact Ha].
+  intros x. rewrite /addnP /shiftnP /=. now repeat nat_compare_specs.
+Qed.
+
+Lemma is_open_term_tRel0 (Γ : context) (d : context_decl) : is_open_term (Γ ,, d) (tRel 0).
+Proof. reflexivity. Qed.
+
+Lemma is_open_term_tLambda_eta (Γ : context) na w :
+  is_open_term Γ w ->
+  is_open_term Γ (tLambda na (tSort sProp) (tApp (lift0 1 w) (tRel 0))).
+Proof.
+  intro Hw. cbn [on_free_vars].
+  apply/andP; split; [done|].
+  apply/andP; split; [|done].
+  apply on_free_vars_lift0.
+  eapply on_free_vars_impl; [|exact Hw].
+  intros x. rewrite /addnP /shiftnP /=. now repeat nat_compare_specs.
+Qed.
+
+Lemma forallb_is_open_snoc_lift (Γ : context) (d : context_decl) args :
+  forallb (is_open_term Γ) args ->
+  forallb (is_open_term (Γ ,, d)) (map (lift0 1) args).
+Proof.
+  induction args as [|a args IH]; cbn [map forallb]; [done|].
+  move=> /andP [Ha Hrest]. apply/andP; split.
+  - now apply is_open_term_snoc_lift.
+  - now apply IH.
+Qed.
+
+Lemma forallb_is_open_snoc_lift_app (Γ : context) (d : context_decl) args :
+  forallb (is_open_term Γ) args ->
+  forallb (is_open_term (Γ ,, d)) (map (lift0 1) args ++ [tRel 0]).
+Proof.
+  intro H. rewrite forallb_app. apply/andP; split.
+  - now apply forallb_is_open_snoc_lift.
+  - cbn [forallb]. rewrite is_open_term_tRel0. reflexivity.
+Qed.
+
+(** One eta-expansion turns an under-applied head into the same head with its
+    arguments lifted and one extra [tRel 0]. *)
+Lemma tApp_lift_mkApps_Ind i u args :
+  tApp (lift0 1 (mkApps (tInd i u) args)) (tRel 0)
+  = mkApps (tInd i u) (map (lift0 1) args ++ [tRel 0]).
+Proof. rewrite lift_mkApps mkApps_app. reflexivity. Qed.
+
+Lemma tApp_lift_mkApps_Construct i k u args :
+  tApp (lift0 1 (mkApps (tConstruct i k u) args)) (tRel 0)
+  = mkApps (tConstruct i k u) (map (lift0 1) args ++ [tRel 0]).
+Proof. rewrite lift_mkApps mkApps_app. reflexivity. Qed.
+
+(** Inductive heads. *)
+Lemma cumulSpecE_ind_underapplied_gen (Σ : global_env_ext) i u u' n :
+  wf Σ.1 ->
+  cumul_Ind_univ Σ Conv i n u u' ->
+  forall k Γ args args',
+  #|args| = #|args'| ->
+  #|args| + k = n ->
+  is_closed_context Γ ->
+  forallb (is_open_term Γ) args ->
+  forallb (is_open_term Γ) args' ->
+  All2 (fun a a' => Σ ;;; Γ ⊢ a ≤sE[Conv] a') args args' ->
+  Σ ;;; Γ ⊢ mkApps (tInd i u) args ≤sE[Conv] mkApps (tInd i u') args'.
+Proof.
+  intros wfΣ Huniv k.
+  induction k as [|k IHk]; intros Γ args args' Hlen Hsum HclΓ Hoa Hoa' Hall.
+  - assert (Hn : #|args| = n) by lia.
+    apply cumulE_Ind; [rewrite Hn; exact Huniv | exact Hall].
+  - eapply cumulE_Trans with
+      (u := tLambda (mkBindAnn nAnon Relevant) (tSort sProp)
+              (tApp (lift0 1 (mkApps (tInd i u') args')) (tRel 0))).
+    + exact HclΓ.
+    + apply is_open_term_tLambda_eta.
+      rewrite on_free_vars_mkApps. apply/andP; split; [reflexivity|exact Hoa'].
+    + apply cumul_eta_r. rewrite !tApp_lift_mkApps_Ind.
+      assert (clΓA : is_closed_context (Γ ,, vass (mkBindAnn nAnon Relevant) (tSort sProp))).
+      { rewrite on_free_vars_ctx_snoc HclΓ /=. reflexivity. }
+      apply IHk.
+      * len; lia.
+      * len; lia.
+      * exact clΓA.
+      * now apply forallb_is_open_snoc_lift_app.
+      * now apply forallb_is_open_snoc_lift_app.
+      * apply All2_app.
+        -- eapply (weakening_cumulSpecE0_All2 Σ Γ
+                     [vass (mkBindAnn nAnon Relevant) (tSort sProp)] args args' 1);
+             [exact wfΣ|reflexivity|exact HclΓ|exact Hoa|exact Hoa'|exact clΓA|exact Hall].
+        -- constructor; [apply cumulE_Refl|constructor].
+    + apply cumulSpecE_eta_contract.
+Qed.
+
+Lemma cumulSpecE_ind_underapplied (Σ : global_env_ext) Γ pb i mdecl idecl u u' args args' :
+  wf Σ.1 ->
+  declared_inductive Σ i mdecl idecl ->
+  is_closed_context Γ ->
+  is_open_term Γ (mkApps (tInd i u) args) ->
+  is_open_term Γ (mkApps (tInd i u') args') ->
+  #|args| = #|args'| ->
+  #|args| < context_assumptions (ind_params mdecl ,,, ind_indices idecl) ->
+  cumul_Ind_univ Σ Conv i (context_assumptions (ind_params mdecl ,,, ind_indices idecl)) u u' ->
+  All2 (fun a a' => Σ ;;; Γ ⊢ a ≤sE[Conv] a') args args' ->
+  Σ ;;; Γ ⊢ mkApps (tInd i u) args ≤sE[pb] mkApps (tInd i u') args'.
+Proof.
+  intros wfΣ _ HclΓ HoW HoW' Hlen Hlt Huniv Hall.
+  set (n := context_assumptions (ind_params mdecl ,,, ind_indices idecl)) in *.
+  assert (Hoa : forallb (is_open_term Γ) args).
+  { move: HoW. rewrite on_free_vars_mkApps => /andP [] _ h. exact h. }
+  assert (Hoa' : forallb (is_open_term Γ) args').
+  { move: HoW'. rewrite on_free_vars_mkApps => /andP [] _ h. exact h. }
+  assert (clΓA : is_closed_context (Γ ,, vass (mkBindAnn nAnon Relevant) (tSort sProp))).
+  { rewrite on_free_vars_ctx_snoc HclΓ /=. reflexivity. }
+  eapply cumulE_Trans with
+    (u := tLambda (mkBindAnn nAnon Relevant) (tSort sProp)
+            (tApp (lift0 1 (mkApps (tInd i u') args')) (tRel 0))).
+  - exact HclΓ.
+  - apply is_open_term_tLambda_eta. exact HoW'.
+  - apply cumul_eta_r. rewrite !tApp_lift_mkApps_Ind.
+    eapply (cumulSpecE_ind_underapplied_gen Σ i u u' n wfΣ Huniv
+              (n - #|args| - 1) (Γ ,, vass (mkBindAnn nAnon Relevant) (tSort sProp))
+              (map (lift0 1) args ++ [tRel 0]) (map (lift0 1) args' ++ [tRel 0])).
+    + len; lia.
+    + len; lia.
+    + exact clΓA.
+    + now apply forallb_is_open_snoc_lift_app.
+    + now apply forallb_is_open_snoc_lift_app.
+    + apply All2_app.
+      * eapply (weakening_cumulSpecE0_All2 Σ Γ
+                  [vass (mkBindAnn nAnon Relevant) (tSort sProp)] args args' 1);
+          [exact wfΣ|reflexivity|exact HclΓ|exact Hoa|exact Hoa'|exact clΓA|exact Hall].
+      * constructor; [apply cumulE_Refl|constructor].
+  - apply cumulSpecE_eta_contract.
+Qed.
+
+(** Constructor heads. *)
+Lemma cumulSpecE_construct_underapplied_gen (Σ : global_env_ext) i c u u' n :
+  wf Σ.1 ->
+  cumul_Construct_univ Σ Conv i c n u u' ->
+  forall k Γ args args',
+  #|args| = #|args'| ->
+  #|args| + k = n ->
+  is_closed_context Γ ->
+  forallb (is_open_term Γ) args ->
+  forallb (is_open_term Γ) args' ->
+  All2 (fun a a' => Σ ;;; Γ ⊢ a ≤sE[Conv] a') args args' ->
+  Σ ;;; Γ ⊢ mkApps (tConstruct i c u) args ≤sE[Conv] mkApps (tConstruct i c u') args'.
+Proof.
+  intros wfΣ Huniv k.
+  induction k as [|k IHk]; intros Γ args args' Hlen Hsum HclΓ Hoa Hoa' Hall.
+  - assert (Hn : #|args| = n) by lia.
+    apply cumulE_Construct; [rewrite Hn; exact Huniv | exact Hall].
+  - eapply cumulE_Trans with
+      (u := tLambda (mkBindAnn nAnon Relevant) (tSort sProp)
+              (tApp (lift0 1 (mkApps (tConstruct i c u') args')) (tRel 0))).
+    + exact HclΓ.
+    + apply is_open_term_tLambda_eta.
+      rewrite on_free_vars_mkApps. apply/andP; split; [reflexivity|exact Hoa'].
+    + apply cumul_eta_r. rewrite !tApp_lift_mkApps_Construct.
+      assert (clΓA : is_closed_context (Γ ,, vass (mkBindAnn nAnon Relevant) (tSort sProp))).
+      { rewrite on_free_vars_ctx_snoc HclΓ /=. reflexivity. }
+      apply IHk.
+      * len; lia.
+      * len; lia.
+      * exact clΓA.
+      * now apply forallb_is_open_snoc_lift_app.
+      * now apply forallb_is_open_snoc_lift_app.
+      * apply All2_app.
+        -- eapply (weakening_cumulSpecE0_All2 Σ Γ
+                     [vass (mkBindAnn nAnon Relevant) (tSort sProp)] args args' 1);
+             [exact wfΣ|reflexivity|exact HclΓ|exact Hoa|exact Hoa'|exact clΓA|exact Hall].
+        -- constructor; [apply cumulE_Refl|constructor].
+    + apply cumulSpecE_eta_contract.
+Qed.
+
+Lemma cumulSpecE_construct_underapplied (Σ : global_env_ext) Γ pb i c mdecl idecl cdecl u u' args args' :
+  wf Σ.1 ->
+  declared_constructor Σ (i, c) mdecl idecl cdecl ->
+  is_closed_context Γ ->
+  is_open_term Γ (mkApps (tConstruct i c u) args) ->
+  is_open_term Γ (mkApps (tConstruct i c u') args') ->
+  #|args| = #|args'| ->
+  #|args| < ind_npars mdecl + context_assumptions (cstr_args cdecl) ->
+  cumul_Construct_univ Σ Conv i c (ind_npars mdecl + context_assumptions (cstr_args cdecl)) u u' ->
+  All2 (fun a a' => Σ ;;; Γ ⊢ a ≤sE[Conv] a') args args' ->
+  Σ ;;; Γ ⊢ mkApps (tConstruct i c u) args ≤sE[pb] mkApps (tConstruct i c u') args'.
+Proof.
+  intros wfΣ _ HclΓ HoW HoW' Hlen Hlt Huniv Hall.
+  set (n := ind_npars mdecl + context_assumptions (cstr_args cdecl)) in *.
+  assert (Hoa : forallb (is_open_term Γ) args).
+  { move: HoW. rewrite on_free_vars_mkApps => /andP [] _ h. exact h. }
+  assert (Hoa' : forallb (is_open_term Γ) args').
+  { move: HoW'. rewrite on_free_vars_mkApps => /andP [] _ h. exact h. }
+  assert (clΓA : is_closed_context (Γ ,, vass (mkBindAnn nAnon Relevant) (tSort sProp))).
+  { rewrite on_free_vars_ctx_snoc HclΓ /=. reflexivity. }
+  eapply cumulE_Trans with
+    (u := tLambda (mkBindAnn nAnon Relevant) (tSort sProp)
+            (tApp (lift0 1 (mkApps (tConstruct i c u') args')) (tRel 0))).
+  - exact HclΓ.
+  - apply is_open_term_tLambda_eta. exact HoW'.
+  - apply cumul_eta_r. rewrite !tApp_lift_mkApps_Construct.
+    eapply (cumulSpecE_construct_underapplied_gen Σ i c u u' n wfΣ Huniv
+              (n - #|args| - 1) (Γ ,, vass (mkBindAnn nAnon Relevant) (tSort sProp))
+              (map (lift0 1) args ++ [tRel 0]) (map (lift0 1) args' ++ [tRel 0])).
+    + len; lia.
+    + len; lia.
+    + exact clΓA.
+    + now apply forallb_is_open_snoc_lift_app.
+    + now apply forallb_is_open_snoc_lift_app.
+    + apply All2_app.
+      * eapply (weakening_cumulSpecE0_All2 Σ Γ
+                  [vass (mkBindAnn nAnon Relevant) (tSort sProp)] args args' 1);
+          [exact wfΣ|reflexivity|exact HclΓ|exact Hoa|exact Hoa'|exact clΓA|exact Hall].
+      * constructor; [apply cumulE_Refl|constructor].
+  - apply cumulSpecE_eta_contract.
+Qed.
+
 End RenamingEta.
