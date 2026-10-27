@@ -160,3 +160,126 @@ Proof.
     + exact Ht.
     + now apply All_All2 with (1 := Hv).
 Qed.
+
+(** ** Strong (nested [All2]-aware) induction principle for [peta] *)
+
+Lemma peta_ind_all (P : term -> term -> Type) :
+  (forall na A M M', peta M M' -> P M M' ->
+     P (tLambda na A (tApp (lift0 1 M) (tRel 0))) M') ->
+  (forall n, P (tRel n) (tRel n)) ->
+  (forall i, P (tVar i) (tVar i)) ->
+  (forall s, P (tSort s) (tSort s)) ->
+  (forall c u, P (tConst c u) (tConst c u)) ->
+  (forall ind u, P (tInd ind u) (tInd ind u)) ->
+  (forall ind n u, P (tConstruct ind n u) (tConstruct ind n u)) ->
+  (forall ev l l', All2 (Trel_conj peta P) l l' -> P (tEvar ev l) (tEvar ev l')) ->
+  (forall na A A' M M', peta A A' -> P A A' -> peta M M' -> P M M' ->
+     P (tLambda na A M) (tLambda na A' M')) ->
+  (forall t t' u u', peta t t' -> P t t' -> peta u u' -> P u u' ->
+     P (tApp t u) (tApp t' u')) ->
+  (forall na a a' b b', peta a a' -> P a a' -> peta b b' -> P b b' ->
+     P (tProd na a b) (tProd na a' b')) ->
+  (forall na b b' ty ty' u u', peta b b' -> P b b' -> peta ty ty' -> P ty ty' ->
+     peta u u' -> P u u' -> P (tLetIn na b ty u) (tLetIn na b' ty' u')) ->
+  (forall ci p p' c c' brs brs',
+     All2 (Trel_conj peta P) p.(pparams) p'.(pparams) ->
+     p.(puinst) = p'.(puinst) ->
+     p.(pcontext) = p'.(pcontext) ->
+     peta p.(preturn) p'.(preturn) -> P p.(preturn) p'.(preturn) ->
+     peta c c' -> P c c' ->
+     All2 (fun x y => (x.(bcontext) = y.(bcontext))
+                      × Trel_conj peta P x.(bbody) y.(bbody)) brs brs' ->
+     P (tCase ci p c brs) (tCase ci p' c' brs')) ->
+  (forall pr c c', peta c c' -> P c c' -> P (tProj pr c) (tProj pr c')) ->
+  (forall mfix mfix' idx,
+     All2 (fun d d' => Trel_conj peta P d.(dtype) d'.(dtype)
+                       × Trel_conj peta P d.(dbody) d'.(dbody)
+                       × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)) mfix mfix' ->
+     P (tFix mfix idx) (tFix mfix' idx)) ->
+  (forall mfix mfix' idx,
+     All2 (fun d d' => Trel_conj peta P d.(dtype) d'.(dtype)
+                       × Trel_conj peta P d.(dbody) d'.(dbody)
+                       × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)) mfix mfix' ->
+     P (tCoFix mfix idx) (tCoFix mfix' idx)) ->
+  (forall p p', onPrims (Trel_conj peta P) eq p p' -> P (tPrim p) (tPrim p')) ->
+  forall t t', peta t t' -> P t t'.
+Proof.
+  intros Heta HRel HVar HSort HConst HInd HCtor HEvar HLam HApp HProd HLet
+         HCase HProj HFix HCoFix HPrim.
+  fix aux 3. intros t t' H. move aux at top.
+  destruct H as
+    [ na A M M' pM
+    | n | i | s | cst u | ind u | ind k u
+    | ev l l' al
+    | na A A' M M' pA pM
+    | f f' u u' pf pu
+    | na a a' b b' pa pb
+    | na b b' ty ty' u u' pb pty pu
+    | ci p p' c c' brs brs' apar eu ectx pret pc abrs
+    | pr c c' pc
+    | mfix mfix' idx am
+    | mfix mfix' idx am
+    | pp pp' op ].
+  - (* peta_eta *) eapply Heta; [exact pM|apply aux; exact pM].
+  - apply HRel.
+  - apply HVar.
+  - apply HSort.
+  - apply HConst.
+  - apply HInd.
+  - apply HCtor.
+  - (* tEvar *)
+    eapply HEvar. revert l l' al.
+    fix auxl 3. intros l l' Hl; destruct Hl.
+    + constructor.
+    + constructor; [split; [assumption|apply aux; assumption]|apply auxl; assumption].
+  - (* tLambda *) eapply HLam; [exact pA|apply aux; exact pA|exact pM|apply aux; exact pM].
+  - (* tApp *) eapply HApp; [exact pf|apply aux; exact pf|exact pu|apply aux; exact pu].
+  - (* tProd *) eapply HProd; [exact pa|apply aux; exact pa|exact pb|apply aux; exact pb].
+  - (* tLetIn *)
+    eapply HLet; [exact pb|apply aux; exact pb|exact pty|apply aux; exact pty
+                 |exact pu|apply aux; exact pu].
+  - (* tCase *)
+    eapply HCase; [| exact eu | exact ectx | exact pret | apply aux; exact pret
+                  | exact pc | apply aux; exact pc |].
+    + revert apar. generalize (pparams p) (pparams p').
+      fix auxl 3. intros l l' Hl; destruct Hl.
+      * constructor.
+      * constructor; [split; [assumption|apply aux; assumption]|apply auxl; assumption].
+    + revert abrs. generalize brs brs'.
+      fix auxl 3. intros l l' Hl; destruct Hl as [|x y ll ll' rh rt].
+      * constructor.
+      * constructor; [|apply auxl; exact rt].
+        destruct rh as [Hc Hb]. split; [exact Hc|].
+        split; [exact Hb|apply aux; exact Hb].
+  - (* tProj *) eapply HProj; [exact pc|apply aux; exact pc].
+  - (* tFix *)
+    eapply HFix. revert am. generalize mfix mfix'.
+    fix auxl 3. intros l l' Hl; destruct Hl as [|x y ll ll' rh rt].
+    + constructor.
+    + constructor; [|apply auxl; exact rt].
+      destruct rh as [Hty [Hbo [Hn Hr]]].
+      split; [split; [exact Hty|apply aux; exact Hty]|].
+      split; [split; [exact Hbo|apply aux; exact Hbo]|].
+      split; assumption.
+  - (* tCoFix *)
+    eapply HCoFix. revert am. generalize mfix mfix'.
+    fix auxl 3. intros l l' Hl; destruct Hl as [|x y ll ll' rh rt].
+    + constructor.
+    + constructor; [|apply auxl; exact rt].
+      destruct rh as [Hty [Hbo [Hn Hr]]].
+      split; [split; [exact Hty|apply aux; exact Hty]|].
+      split; [split; [exact Hbo|apply aux; exact Hbo]|].
+      split; assumption.
+  - (* tPrim *)
+    eapply HPrim. destruct op; try solve [constructor].
+    constructor;
+      [ assumption
+      | split; [assumption|apply aux; assumption]
+      | split; [assumption|apply aux; assumption]
+      | ].
+    match goal with H : All2 peta _ _ |- _ => revert H end.
+    generalize (array_value a) (array_value a').
+    fix auxl 3. intros l l' Hl; destruct Hl.
+    + constructor.
+    + constructor; [split; [assumption|apply aux; assumption]|apply auxl; assumption].
+Qed.
