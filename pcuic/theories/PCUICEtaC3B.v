@@ -2269,3 +2269,75 @@ Proof.
       * apply utd_Case; try reflexivity; [now apply All2_same|exact Hu'].
 Qed.
 
+(** ** [tPrim]: only arrays reduce (value list, default, type). *)
+Lemma red1_tPrim_inv {Σ Γ pv v} :
+  red1 Σ Γ (tPrim pv) v ->
+  ∑ arr, (pv = (primArray; primArrayModel arr)) ×
+    ((∑ value, (v = tPrim (primArray; primArrayModel (set_array_value arr value)))
+                 × OnOne2 (red1 Σ Γ) arr.(array_value) value)
+     + (∑ def, (v = tPrim (primArray; primArrayModel (set_array_default arr def)))
+                 × red1 Σ Γ arr.(array_default) def)
+     + (∑ ty, (v = tPrim (primArray; primArrayModel (set_array_type arr ty)))
+                 × red1 Σ Γ arr.(array_type) ty)).
+Proof.
+  intro H. remember (tPrim pv) as t eqn:Heq.
+  destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
+  all: injection Heq as e; subst; eexists; split; [reflexivity|].
+  - left; left. eexists; split; [reflexivity|assumption].
+  - left; right. eexists; split; [reflexivity|assumption].
+  - right. eexists; split; [reflexivity|assumption].
+Qed.
+
+Lemma set_array_value_id a : set_array_value a (array_value a) = a.
+Proof. now destruct a. Qed.
+Lemma set_array_default_id a : set_array_default a (array_default a) = a.
+Proof. now destruct a. Qed.
+Lemma set_array_type_id a : set_array_type a (array_type a) = a.
+Proof. now destruct a. Qed.
+
+Lemma commut_Prim Σ p p' :
+  onPrims (fun x y => peta x y × commutes Σ x y) eq p p' ->
+  commutes Σ (tPrim p) (tPrim p').
+Proof.
+  intros Hp Γ Δ v HΔ HΓ Ht Hr.
+  destruct (red1_tPrim_inv Hr) as (arr & -> & Hcase).
+  depelim Hp. rename a' into arr'.
+  match goal with
+  | Hl : Universe.make' _ = Universe.make' _,
+    Hd : peta (array_default _) _ × _, Hty : peta (array_type _) _ × _,
+    Hv : All2 _ (array_value _) _ |- _ =>
+      rename Hl into hre; destruct Hd as [pd cd]; destruct Hty as [pty cty]; rename Hv into hval
+  end.
+  have hvalp : All2 peta (array_value arr) (array_value arr').
+  { eapply All2_impl; [exact hval|]. now intros ? ? [? _]. }
+  cbn in Ht. move/andP: Ht => [/andP [Hval Hdef] Hty].
+  destruct Hcase as [[(value & -> & Ho)|(def & -> & Hrd)]|(ty & -> & Hrt)].
+  - destruct (OnOne2_commut (red1 Σ Γ) (red1 Σ Δ) peta upto_domain (fun x => is_true (ofvT x))
+                (array_value arr) (array_value arr') value (fun x => upto_domain_refl x))
+      as (lw & lw' & Hw & Hw' & Hu).
+    + eapply All2_impl; [exact hval|]. intros x y [pxy cxy]. split; [exact pxy|].
+      intros Hq z Hz. exact (cxy Γ Δ z HΔ HΓ Hq Hz).
+    + now apply forallb_All.
+    + exact Ho.
+    + exists (tPrim (primArray; primArrayModel (set_array_value arr' lw))),
+             (tPrim (primArray; primArrayModel (set_array_value arr' lw'))). repeat split.
+      * destruct Hw; [apply r_step; now apply array_red_val|].
+        rewrite set_array_value_id. apply r_refl.
+      * apply peta_Prim. constructor; cbn; assumption.
+      * apply utd_Prim. constructor; cbn; try reflexivity. exact Hu.
+  - destruct (cd Γ Δ def HΔ HΓ Hdef Hrd) as (w & w' & Hw & Hw' & Hu).
+    exists (tPrim (primArray; primArrayModel (set_array_default arr' w))),
+           (tPrim (primArray; primArrayModel (set_array_default arr' w'))). repeat split.
+    + destruct Hw; [apply r_step; now apply array_red_def|].
+      rewrite set_array_default_id. apply r_refl.
+    + apply peta_Prim. constructor; cbn; assumption.
+    + apply utd_Prim. constructor; cbn; try reflexivity; [exact Hu|now apply All2_same].
+  - destruct (cty Γ Δ ty HΔ HΓ Hty Hrt) as (w & w' & Hw & Hw' & Hu).
+    exists (tPrim (primArray; primArrayModel (set_array_type arr' w))),
+           (tPrim (primArray; primArrayModel (set_array_type arr' w'))). repeat split.
+    + destruct Hw; [apply r_step; now apply array_red_type|].
+      rewrite set_array_type_id. apply r_refl.
+    + apply peta_Prim. constructor; cbn; assumption.
+    + apply utd_Prim. constructor; cbn; try reflexivity; [exact Hu|now apply All2_same].
+Qed.
+
