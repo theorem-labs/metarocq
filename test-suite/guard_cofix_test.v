@@ -14,11 +14,11 @@
     is not the scrutinee's, an index of no variable, a constant whose body has
     a free index) are made by editing a quoted block or its environment
     ([run_gen]).  The check runs directly, without the case well-formedness
-    test of [check_guard_impl], because PCUIC's typing refuses every [match]
-    on a coinductive type: several shapes below would be refused for that
-    reason alone, and the guard check must give its own answer on them as
-    well.  Every assertion is an [Example] proved by
-    [vm_compute; reflexivity]. *)
+    test of [check_guard_impl]: some shapes below match on a coinductive
+    type with a return type that mentions the scrutinee, which PCUIC's typing
+    refuses (only a non-dependent case on a coinductive is typable), and the
+    guard check must give its own answer on them as well.  Every assertion is
+    an [Example] proved by [vm_compute; reflexivity]. *)
 From MetaRocq.Utils Require Import utils bytestring.
 From MetaRocq.Template Require Import Loader.
 From MetaRocq.Template Require Ast.

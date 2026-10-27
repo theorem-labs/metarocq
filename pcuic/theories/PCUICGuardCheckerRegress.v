@@ -9,7 +9,7 @@ Local Open Scope bs_scope.
 
   Each [Example] below runs [check_guard_gen] on a fixpoint or cofixpoint
   block, so the [pcuic] build fails if a version of the checker accepts one of
-  these unsafe blocks, or refuses one of the two safe controls.
+  these unsafe blocks, or refuses one of the three safe controls.
 
   The environment and the blocks are PCUIC terms obtained by quoting the
   Gallina sources given in the comments and translating them to PCUIC; the
