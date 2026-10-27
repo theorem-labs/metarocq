@@ -389,6 +389,66 @@ struct
     EConstr.to_constr sigma
       (Retyping.get_type_of env sigma (EConstr.of_constr arg))
 
+  (* A template [Ind] or [Construct] [head] applied to fewer arguments than a
+     full application, eta-expanded: [fun Δ => head args (Rel k) .. (Rel 1)],
+     where [Δ] are the first [k] products of the kernel's type of
+     [head args] after whd_all (template levels bound by a missing argument
+     take their defaults, kernel/inductive.ml).  [Δ] can also hold levels of
+     the given arguments, for example of a sort argument substituted into a
+     dependent binder type.  The kernel stores no universe instance on a
+     template occurrence and compares partial applications of inductives by
+     eta-expanding them (kernel/conversion.ml, [eta_expand_ind]); PCUIC
+     compares the instance of a partial application exactly and has no eta,
+     so the translation gives PCUIC the expanded, fully applied form.
+
+     The translation trusts this step: for every under-applied template
+     [h a1 .. am], Rocq's kernel accepts the original wherever it accepts
+     [fun (x : Δ) => h a1 .. am x ..].  The kernel reads the lambda shape of a
+     term only for a fixpoint body, which [quote_fixpoint] checks on the
+     original term.  [None] when [head] is not a template inductive or
+     constructor, or is fully applied. *)
+  let eta_expand_template_partial env sigma head args =
+    let full_arity mind ctor =
+      let mib = Environ.lookup_mind (fst mind) env in
+      match mib.Declarations.mind_template with
+      | None -> None
+      | Some _ ->
+        let mip = mib.Declarations.mind_packets.(snd mind) in
+        Some
+          (mib.Declarations.mind_nparams
+           + (match ctor with
+              | None -> mip.Declarations.mind_nrealargs
+              | Some c -> mip.Declarations.mind_consnrealargs.(c - 1)))
+    in
+    let arity =
+      match Constr.kind head with
+      | Constr.Ind (mind, _) -> full_arity mind None
+      | Constr.Construct ((mind, c), _) -> full_arity mind (Some c)
+      | _ -> None
+    in
+    match arity with
+    | Some n when Array.length args < n ->
+      let k = n - Array.length args in
+      let partial = Constr.mkApp (head, args) in
+      let rec split k ctx ty =
+        if Int.equal k 0 then ctx
+        else
+          match Constr.kind (Reduction.whd_all (Environ.push_rel_context ctx env) ty) with
+          | Constr.Prod (na, dom, codom) ->
+            split (k - 1)
+              (Context.Rel.add (Context.Rel.Declaration.LocalAssum (na, dom)) ctx)
+              codom
+          | _ ->
+            CErrors.anomaly
+              Pp.(str "The type of a partial application of a template inductive has too few products.")
+      in
+      let binders = split k Context.Rel.empty (retype_template_argument env sigma partial) in
+      let body =
+        Constr.mkApp (Vars.lift k partial, Array.init k (fun i -> Constr.mkRel (k - i)))
+      in
+      Some (Term.it_mkLambda_or_LetIn body binders)
+    | _ -> None
+
   let note_declaration_reference kn =
     let state = !current_declaration_state in
     if Names.KNset.mem kn state.ds_in_progress then
@@ -834,22 +894,18 @@ struct
     | Some _, sort -> Q.quote_sort sort
 
 
-  (* [~canonical] is for an occurrence where PCUIC compares the instance
-     exactly: a [Case] ([`Case]), or an [Ind]/[Construct] applied to fewer
-     arguments than its full arity ([`Partial]; [global_variance_gen],
-     PCUICEquality.v:46-74).  The kernel stores no instance there, and the
-     instance inferred from the arguments' types is fixed at quotation: after
-     PCUIC substitutes into the arguments, one kernel term can carry two
-     instances (a [match .. in prod _ _] reached two ways; [eq@{Set} Z] against
-     [eq@{RelationClasses.21} Z] in [Z.eq_equiv]).  So a level bound by a given
-     argument becomes the program's top level, which is above every argument
-     type and does not depend on it.
-     - [`Case]: every bound level.  The instance only types the predicate's
-       binder and the parameters, which are below [top].
-     - [`Partial]: the levels that are not in the inductive's conclusion sort.
-       A level in the conclusion reaches the occurrence's type, where [top]
-       could exceed what the context allows, so it keeps the inferred level. *)
-  let template_instance ?universe_context ?canonical env sigma mind
+  (* [~canonical:true] is for a [Case], where PCUIC compares the instance
+     exactly ([global_variance_gen], PCUICEquality.v:46-74).  The kernel
+     stores no instance there, and the instance inferred from the parameters'
+     types is fixed at quotation: after PCUIC substitutes into the parameters,
+     one kernel term can carry two instances (a [match .. in prod _ _] reached
+     two ways).  So a level bound by a given parameter becomes the program's
+     top level, which is above every parameter type and does not depend on
+     it; the instance only types the predicate's binder and the parameters,
+     which are below [top].  A partial application, the other place PCUIC
+     compares an instance exactly, does not reach this function: the
+     translation eta-expands it ([eta_expand_template_partial]). *)
+  let template_instance ?universe_context ?(canonical = false) env sigma mind
       args default_instance =
     let mib = Environ.lookup_mind (fst mind) (snd env) in
     match universe_context, mib.Declarations.mind_template with
@@ -862,7 +918,6 @@ struct
       let _, bound_levels =
         UVars.Instance.to_array bound_instance
       in
-      let concl_levels = Sorts.levels template.template_concl in
       (* A template constraint bounds its level from above by a global level
          (kernel/inductive.ml, [instantiate_template_constraints]), which [top]
          would violate.  Such levels keep the inferred instance. *)
@@ -874,16 +929,13 @@ struct
              (UVars.AbstractContext.repr template.template_context))
           Univ.Level.Set.empty
       in
-      let keeps_inference kind bound =
-        Univ.Level.Set.mem bound constrained_levels
-        || (kind = `Partial && Univ.Level.Set.mem bound concl_levels)
-      in
+      let keeps_inference bound = Univ.Level.Set.mem bound constrained_levels in
       (* The canonical substitution maps each level bound by a given argument
          to [top] and each level bound by a missing argument to its default,
          as the kernel does.  It reads no argument. *)
       let canonical_level =
         match canonical, universe_context with
-        | Some kind, Some { top_level = Some top; _ } ->
+        | true, Some { top_level = Some top; _ } ->
           let _, _, (_, substitution) =
             Inductive.instantiate_template_universes mib
               (List.map
@@ -893,7 +945,7 @@ struct
           in
           (fun bound ->
              match Univ.Level.var_index bound with
-             | _ when keeps_inference kind bound -> None
+             | _ when keeps_inference bound -> None
              | None -> assert false
              | Some index ->
                Some
@@ -1240,15 +1292,7 @@ struct
           let () = remember_instance pu in
           let mib = Environ.lookup_mind (fst mind) (snd env) in
           let acc = add_inductive mind mib acc in
-          let pu =
-            let mip = mib.Declarations.mind_packets.(snd mind) in
-            let canonical =
-              Array.length xs
-              < mib.Declarations.mind_nparams + mip.Declarations.mind_nrealargs
-            in
-            let canonical = if canonical then Some `Partial else None in
-            template_instance ?universe_context ?canonical env sigma mind xs pu
-          in
+          let pu = template_instance ?universe_context env sigma mind xs pu in
           let pu =
             extend_instance_for_inductive ?context:universe_context env mind pu
           in
@@ -1262,16 +1306,7 @@ struct
           let () = remember_instance pu in
           let mib = Environ.lookup_mind (fst mind) (snd env) in
           let acc = add_inductive mind mib acc in
-          let pu =
-            let mip = mib.Declarations.mind_packets.(snd mind) in
-            let canonical =
-              Array.length xs
-              < mib.Declarations.mind_nparams
-                + mip.Declarations.mind_consnrealargs.(c - 1)
-            in
-            let canonical = if canonical then Some `Partial else None in
-            template_instance ?universe_context ?canonical env sigma mind xs pu
-          in
+          let pu = template_instance ?universe_context env sigma mind xs pu in
           let pu =
             extend_instance_for_inductive ?context:universe_context env mind pu
           in
@@ -1340,7 +1375,7 @@ struct
         let q_relevance = Q.quote_relevance relevance in
         let acc, q_pars = CArray.fold_left_map (fun acc par -> let (qt, acc) = quote_term acc env sigma par in acc, qt) acc pars in
         let pu =
-          template_instance ?universe_context ~canonical:`Case env sigma mind
+          template_instance ?universe_context ~canonical:true env sigma mind
             pars u
         in
         let pu =
@@ -1383,7 +1418,19 @@ struct
         let acc, arr' = CArray.fold_left_map (fun acc t -> let t', acc = quote_term acc env sigma t in acc, t') acc ar in
         Q.mkArray (Q.quote_univ_level u) arr' ~default:def' ~ty:ty', acc
       in
-      aux acc env trm
+      let expanded =
+        match universe_context with
+        | None -> None
+        | Some _ ->
+          match Constr.kind trm with
+          | Constr.App (f, xs) -> eta_expand_template_partial (snd env) sigma f xs
+          | Constr.Ind _ | Constr.Construct _ ->
+            eta_expand_template_partial (snd env) sigma trm [||]
+          | _ -> None
+      in
+      match expanded with
+      | Some expanded -> quote_term acc env sigma expanded
+      | None -> aux acc env trm
     and quote_recdecl (acc : 'a) env sigma b (ns,ts,ds) =
       let ctxt =
         CArray.map2_i (fun i na t -> (Context.Rel.Declaration.LocalAssum (na, Vars.lift i t))) ns ts in
@@ -1393,7 +1440,27 @@ struct
       let ts', acc = quote_terms quote_term acc env sigma ts in
       let ds', acc = quote_terms quote_term acc envfix sigma ds in
       ((b',(ns',ts',ds')), acc)
-    and quote_fixpoint acc env sigma ((a,b),decl) =
+    and quote_fixpoint acc env sigma ((a,b),decl as fix) =
+      (* The translation eta-expands a partial template application, which can make a
+         fixpoint body a lambda where the kernel finds none.  The kernel reads the
+         number of leading lambdas of each body, after whd_all, only in
+         [Inductive.inductive_of_mutfix], which needs [rarg + 1] of them; PCUIC checks only
+         that a body is a lambda.  So the translation runs that check on the original
+         kernel term, with guard checking off (the guard is checked elsewhere) and any
+         elimination allowed.  The kernel ran it on every declaration it accepted, so it
+         only refuses terms the kernel refuses. *)
+      let () =
+        match universe_context with
+        | None -> ()
+        | Some _ ->
+          (current_dependencies ()).qd_retypes <- true;
+          let kenv = snd env in
+          let kenv =
+            Environ.set_typing_flags
+              { (Environ.typing_flags kenv) with Declarations.check_guarded = false } kenv
+          in
+          Inductive.check_fix ~elim_to:(fun _ _ -> true) kenv fix
+      in
       let a' = Array.map Q.quote_int a in
       let (b',decl'),acc = quote_recdecl acc env sigma b decl in
       (Q.mkFix ((a',b'),decl'), acc)
@@ -1548,9 +1615,12 @@ struct
         quote_rel_context quote_term acc env sigma
           (substitute_context mib.Declarations.mind_params_ctxt)
       in
+      (* Every bound level of a polymorphic declaration, template-translated or
+         not, is below the program's top level, which a canonical instance
+         ([template_instance ~canonical:true]) needs. *)
       let constrain auctx =
-        match mind_template, universe_context with
-        | None, Some { top_level = Some top; _ } -> constrain_below_top top auctx
+        match universe_context with
+        | Some { top_level = Some top; _ } -> constrain_below_top top auctx
         | _ -> auctx
       in
       let uctx =
@@ -1561,9 +1631,9 @@ struct
             Names.KerName.Map.add (MutInd.canonical t)
               (List.rev scope.ls_exprs) !extended_inductives;
           Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context new_auctx)
-        | Some auctx, _ when Option.is_empty mind_template ->
+        | Some auctx, _ ->
           Q.mkPolymorphic_ctx (Q.quote_abstract_univ_context (constrain auctx))
-        | _ -> quoted_universes
+        | None, _ -> quoted_universes
       in
       let var =
         match mind_template with
