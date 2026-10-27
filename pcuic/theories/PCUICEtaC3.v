@@ -69,6 +69,18 @@ Proof.
   - eexists; split; [reflexivity | right; eassumption].
 Qed.
 
+(** One η step on a [tCoFix]: it rewrites a dtype or a dbody of one definition. *)
+Lemma eta1_tCoFix_inv mfix idx N :
+  eta1 (tCoFix mfix idx) N ->
+  ∑ mfix1, (N = tCoFix mfix1 idx) ×
+    (OnOne2 (on_Trel_eq eta1 dtype (fun x => (dname x, dbody x, rarg x))) mfix mfix1
+     + OnOne2 (on_Trel_eq eta1 dbody (fun x => (dname x, dtype x, rarg x))) mfix mfix1).
+Proof.
+  intro H; invs H.
+  - eexists; split; [reflexivity | left; eassumption].
+  - eexists; split; [reflexivity | right; eassumption].
+Qed.
+
 (** ** η congruences on an application spine. *)
 Lemma eta1_mkApps_f M M' l : eta1 M M' -> eta1 (mkApps M l) (mkApps M' l).
 Proof.
@@ -88,6 +100,23 @@ Proof.
   induction 1 in M |- *; cbn.
   - apply eta1_mkApps_f. now apply app_eta_r.
   - apply IHX.
+Qed.
+
+Lemma eta_case_discr ip p c c' brs :
+  eta c c' -> eta (tCase ip p c brs) (tCase ip p c' brs).
+Proof.
+  induction 1.
+  - apply rt_step. now apply case_eta_discr.
+  - apply rt_refl.
+  - eapply rt_trans; eauto.
+Qed.
+
+Lemma eta_proj_c pr c c' : eta c c' -> eta (tProj pr c) (tProj pr c').
+Proof.
+  induction 1.
+  - apply rt_step. now apply proj_eta.
+  - apply rt_refl.
+  - eapply rt_trans; eauto.
 Qed.
 
 (** ** A one-η step preserves a constructor head. *)
@@ -250,6 +279,159 @@ Section C3Cases.
       + apply r_step. eapply red_fix; [exact Hunf | ].
         eapply is_constructor_OnOne2; eassumption.
       + apply rt_step. now apply eta1_mkApps_args.
+      + apply upto_domain_refl.
+  Qed.
+
+  (** ** Unlocking case 3: [red_cofix_case] (independent position / benign head)
+
+    [t = tCase ip p (mkApps (tCoFix mfix idx) args) brs], [red_cofix_case] fires
+    to [tCase ip p (mkApps fn args) brs]. An η step in the predicate, branches or
+    spine is an independent-position case ([red_cofix_case] re-fires, v does the
+    same η step); an η step in the cofix body/type joins both legs at
+    [tCase ip p (mkApps fn' args) brs] via CH2 (no [is_constructor] guard). *)
+  Lemma C3_red_cofix_case ip p mfix idx args narg fn brs :
+    unfold_cofix mfix idx = Some (narg, fn) ->
+    forall w,
+      eta1 (tCase ip p (mkApps (tCoFix mfix idx) args) brs) w ->
+      ∑ a b, clos_refl (red1 Σ Γ) w a
+           × clos_refl_trans eta1 (tCase ip p (mkApps fn args) brs) b
+           × upto_domain a b.
+  Proof.
+    intros Hunf w He. invs He.
+    - (* case_eta_param: independent *)
+      match goal with o : OnOne2 eta1 _ ?params' |- _ =>
+        exists (tCase ip (set_pparams p params') (mkApps fn args) brs),
+               (tCase ip (set_pparams p params') (mkApps fn args) brs);
+        split; [|split];
+        [ apply r_step; eapply red_cofix_case; exact Hunf
+        | apply rt_step; eapply case_eta_param; exact o
+        | apply upto_domain_refl ] end.
+    - (* case_eta_return: independent *)
+      match goal with e : eta1 _ ?pret' |- _ =>
+        exists (tCase ip (set_preturn p pret') (mkApps fn args) brs),
+               (tCase ip (set_preturn p pret') (mkApps fn args) brs);
+        split; [|split];
+        [ apply r_step; eapply red_cofix_case; exact Hunf
+        | apply rt_step; eapply case_eta_return; exact e
+        | apply upto_domain_refl ] end.
+    - (* case_eta_discr: η in the discriminee *)
+      match goal with e : eta1 (mkApps _ _) _ |- _ =>
+        apply eta1_mkApps_inv in e as [[M' [e2 ?]]|[args' [o ?]]] end; subst.
+      + (* η in the cofix head *)
+        unfold unfold_cofix in Hunf.
+        destruct (nth_error mfix idx) as [d|] eqn:Hd; [|discriminate Hunf].
+        invs Hunf.
+        apply eta1_tCoFix_inv in e2 as [mfix1 [-> Hor]].
+        assert (Hjoin :
+          #|mfix| = #|mfix1| ->
+          (forall i, eta (tCoFix mfix i) (tCoFix mfix1 i)) ->
+          (∑ d1, nth_error mfix1 idx = Some d1 × eta (dbody d) (dbody d1)) ->
+          ∑ a b,
+            clos_refl (red1 Σ Γ)
+              (tCase ip p (mkApps (tCoFix mfix1 idx) args) brs) a
+            × clos_refl_trans eta1
+                (tCase ip p (mkApps (subst0 (cofix_subst mfix) (dbody d)) args) brs) b
+            × upto_domain a b).
+        { intros Hlen Hcofix (d1 & Hd1 & Hbody).
+          exists (tCase ip p (mkApps (subst0 (cofix_subst mfix1) (dbody d1)) args) brs),
+                 (tCase ip p (mkApps (subst0 (cofix_subst mfix1) (dbody d1)) args) brs).
+          split; [|split].
+          - apply r_step. eapply red_cofix_case.
+            unfold unfold_cofix. rewrite Hd1. reflexivity.
+          - apply eta_case_discr. apply eta_mkApps_f. apply eta_subst; [|exact Hbody].
+            apply eta_cofix_subst; [exact Hlen | exact Hcofix].
+          - apply upto_domain_refl. }
+        destruct Hor as [Hty | Hbody].
+        * apply Hjoin.
+          -- now apply OnOne2_length in Hty.
+          -- intro i. apply rt_step. now apply cofix_eta_ty.
+          -- pose proof Hty as Hn. eapply OnOne2_nth_error in Hn as [d1 [Hd1 Hr]]; [|exact Hd].
+             exists d1. split; [exact Hd1|]. destruct Hr as [<-|[_ Heq]].
+             ++ apply rt_refl.
+             ++ assert (Hdb : dbody d = dbody d1) by congruence.
+                rewrite Hdb; apply rt_refl.
+        * apply Hjoin.
+          -- now apply OnOne2_length in Hbody.
+          -- intro i. apply rt_step. now apply cofix_eta_body.
+          -- pose proof Hbody as Hn. eapply OnOne2_nth_error in Hn as [d1 [Hd1 Hr]]; [|exact Hd].
+             exists d1. split; [exact Hd1|]. destruct Hr as [<-|[Hb Heq]].
+             ++ apply rt_refl.
+             ++ apply rt_step; exact Hb.
+      + (* η in the discriminee spine *)
+        exists (tCase ip p (mkApps fn args') brs), (tCase ip p (mkApps fn args') brs).
+        split; [|split].
+        * apply r_step. eapply red_cofix_case; exact Hunf.
+        * apply rt_step. apply case_eta_discr. now apply eta1_mkApps_args.
+        * apply upto_domain_refl.
+    - (* case_eta_brs: independent *)
+      match goal with o : OnOne2 (on_Trel_eq eta1 bbody bcontext) _ ?brs' |- _ =>
+        exists (tCase ip p (mkApps fn args) brs'),
+               (tCase ip p (mkApps fn args) brs');
+        split; [|split];
+        [ apply r_step; eapply red_cofix_case; exact Hunf
+        | apply rt_step; eapply case_eta_brs; exact o
+        | apply upto_domain_refl ] end.
+  Qed.
+
+  (** ** Unlocking case 4: [red_cofix_proj] (independent position / benign head)
+
+    [t = tProj pr (mkApps (tCoFix mfix idx) args)]; symmetric to case 3 with a
+    [tProj] wrapper (η can only sit in the discriminee). *)
+  Lemma C3_red_cofix_proj pr mfix idx args narg fn :
+    unfold_cofix mfix idx = Some (narg, fn) ->
+    forall w,
+      eta1 (tProj pr (mkApps (tCoFix mfix idx) args)) w ->
+      ∑ a b, clos_refl (red1 Σ Γ) w a
+           × clos_refl_trans eta1 (tProj pr (mkApps fn args)) b
+           × upto_domain a b.
+  Proof.
+    intros Hunf w He. invs He.
+    match goal with e : eta1 (mkApps _ _) _ |- _ =>
+      apply eta1_mkApps_inv in e as [[M' [e2 ?]]|[args' [o ?]]] end; subst.
+    - (* η in the cofix head *)
+      unfold unfold_cofix in Hunf.
+      destruct (nth_error mfix idx) as [d|] eqn:Hd; [|discriminate Hunf].
+      invs Hunf.
+      apply eta1_tCoFix_inv in e2 as [mfix1 [-> Hor]].
+      assert (Hjoin :
+        #|mfix| = #|mfix1| ->
+        (forall i, eta (tCoFix mfix i) (tCoFix mfix1 i)) ->
+        (∑ d1, nth_error mfix1 idx = Some d1 × eta (dbody d) (dbody d1)) ->
+        ∑ a b,
+          clos_refl (red1 Σ Γ) (tProj pr (mkApps (tCoFix mfix1 idx) args)) a
+          × clos_refl_trans eta1
+              (tProj pr (mkApps (subst0 (cofix_subst mfix) (dbody d)) args)) b
+          × upto_domain a b).
+      { intros Hlen Hcofix (d1 & Hd1 & Hbody).
+        exists (tProj pr (mkApps (subst0 (cofix_subst mfix1) (dbody d1)) args)),
+               (tProj pr (mkApps (subst0 (cofix_subst mfix1) (dbody d1)) args)).
+        split; [|split].
+        - apply r_step. eapply red_cofix_proj.
+          unfold unfold_cofix. rewrite Hd1. reflexivity.
+        - apply eta_proj_c. apply eta_mkApps_f. apply eta_subst; [|exact Hbody].
+          apply eta_cofix_subst; [exact Hlen | exact Hcofix].
+        - apply upto_domain_refl. }
+      destruct Hor as [Hty | Hbody].
+      + apply Hjoin.
+        * now apply OnOne2_length in Hty.
+        * intro i. apply rt_step. now apply cofix_eta_ty.
+        * pose proof Hty as Hn. eapply OnOne2_nth_error in Hn as [d1 [Hd1 Hr]]; [|exact Hd].
+          exists d1. split; [exact Hd1|]. destruct Hr as [<-|[_ Heq]].
+          -- apply rt_refl.
+          -- assert (Hdb : dbody d = dbody d1) by congruence.
+             rewrite Hdb; apply rt_refl.
+      + apply Hjoin.
+        * now apply OnOne2_length in Hbody.
+        * intro i. apply rt_step. now apply cofix_eta_body.
+        * pose proof Hbody as Hn. eapply OnOne2_nth_error in Hn as [d1 [Hd1 Hr]]; [|exact Hd].
+          exists d1. split; [exact Hd1|]. destruct Hr as [<-|[Hb Heq]].
+          -- apply rt_refl.
+          -- apply rt_step; exact Hb.
+    - (* η in the discriminee spine *)
+      exists (tProj pr (mkApps fn args')), (tProj pr (mkApps fn args')).
+      split; [|split].
+      + apply r_step. eapply red_cofix_proj; exact Hunf.
+      + apply rt_step. apply proj_eta. now apply eta1_mkApps_args.
       + apply upto_domain_refl.
   Qed.
 
