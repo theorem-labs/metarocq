@@ -770,4 +770,65 @@ Section Cong.
       + now apply utd_cofix_of.
   Qed.
 
+
+  (** Body-field lifts + fix_context congruences, for fix/cofix_red_body. *)
+  Lemma clos_refl_set_dbody Γ d X Y : clos_refl (red1 Σ Γ) X Y ->
+    clos_refl (on_Trel_eq (red1 Σ Γ) dbody gfixb) (set_dbody d X) (set_dbody d Y).
+  Proof. destruct 1; [apply r_step; split; [exact r|reflexivity]|apply r_refl]. Qed.
+  Local Lemma set_dbody_id d : set_dbody d (dbody d) = d.
+  Proof. now destruct d. Qed.
+  Lemma red_le_fix_body Γ idx m0 m1 :
+    clos_refl (OnOne2 (on_Trel_eq (red1 Σ (Γ ,,, fix_context m0)) dbody gfixb)) m0 m1 ->
+    red_le Σ Γ (tFix m0 idx) (tFix m1 idx).
+  Proof. destruct 1; [apply r_step; now apply fix_red_body|apply r_refl]. Qed.
+  Lemma eta_fix_body_rt idx m0 m1 :
+    clos_refl_trans (OnOne2 (on_Trel_eq eta1 dbody gfixb)) m0 m1 ->
+    clos_refl_trans eta1 (tFix m0 idx) (tFix m1 idx).
+  Proof.
+    induction 1; [apply rt_step; now apply fix_eta_body|apply rt_refl|eapply rt_trans; eauto].
+  Qed.
+  Lemma red_le_cofix_body Γ idx m0 m1 :
+    clos_refl (OnOne2 (on_Trel_eq (red1 Σ (Γ ,,, fix_context m0)) dbody gfixb)) m0 m1 ->
+    red_le Σ Γ (tCoFix m0 idx) (tCoFix m1 idx).
+  Proof. destruct 1; [apply r_step; now apply cofix_red_body|apply r_refl]. Qed.
+  Lemma eta_cofix_body_rt idx m0 m1 :
+    clos_refl_trans (OnOne2 (on_Trel_eq eta1 dbody gfixb)) m0 m1 ->
+    clos_refl_trans eta1 (tCoFix m0 idx) (tCoFix m1 idx).
+  Proof.
+    induction 1; [apply rt_step; now apply cofix_eta_body|apply rt_refl|eapply rt_trans; eauto].
+  Qed.
+
+  (** fix_context depends only on dname+dtype: a dbody η-step leaves it equal;
+      a dtype η-step makes the two fix_contexts eta_ctx-related. *)
+  Lemma mapi_fix_dbody m m' : OnOne2 (on_Trel_eq eta1 dbody gfixb) m m' ->
+    forall k, mapi_rec (fun i d => vass (dname d) (lift0 i (dtype d))) m k
+            = mapi_rec (fun i d => vass (dname d) (lift0 i (dtype d))) m' k.
+  Proof.
+    induction 1 as [hd hd' tl p|hd tl tl' o IH]; intro k; cbn.
+    - f_equal. destruct p as [_ geq]. destruct hd as [n t b r], hd' as [n0 t0 b0 r0].
+      cbn in geq. inversion geq; subst. reflexivity.
+    - f_equal. apply IH.
+  Qed.
+  Lemma fix_context_dbody_eq m m' :
+    OnOne2 (on_Trel_eq eta1 dbody gfixb) m m' -> fix_context m = fix_context m'.
+  Proof. intro h. unfold fix_context, fix_context_gen. f_equal. now apply mapi_fix_dbody. Qed.
+
+  Lemma mapi_fix_eta_dtype m m' : OnOne2 (on_Trel_eq eta1 dtype gfix) m m' ->
+    forall k, All2 (All_decls eta)
+        (mapi_rec (fun i d => vass (dname d) (lift0 i (dtype d))) m k)
+        (mapi_rec (fun i d => vass (dname d) (lift0 i (dtype d))) m' k).
+  Proof.
+    induction 1 as [hd hd' tl p|hd tl tl' o IH]; intro k; cbn.
+    - constructor.
+      + destruct p as [e geq]. destruct hd as [n t b r], hd' as [n0 t0 b0 r0].
+        cbn in *. inversion geq; subst. constructor. apply eta_lift. now apply rt_step.
+      + apply All2_same. apply all_decls_eta_refl.
+    - constructor; [apply all_decls_eta_refl|apply IH].
+  Qed.
+  Lemma fix_context_eta_dtype m m' :
+    OnOne2 (on_Trel_eq eta1 dtype gfix) m m' -> eta_ctx (fix_context m) (fix_context m').
+  Proof.
+    intro h. unfold eta_ctx, fix_context, fix_context_gen. apply All2_rev.
+    now apply mapi_fix_eta_dtype.
+  Qed.
 End Cong.
