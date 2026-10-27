@@ -1,33 +1,18 @@
 From Stdlib Require Import CRelationClasses.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICTactics
-     PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICReduction PCUICCases
-     PCUICTyping PCUICOnFreeVars PCUICSigmaCalculus PCUICClosed.
-From Stdlib Require Import ssreflect ssrbool.
-From Equations Require Import Equations.
-From Equations.Prop Require Import DepElim.
-
+From MetaRocq.PCUIC Require Import PCUICAst PCUICReduction PCUICEtaDefs.
+From Equations.Type Require Import Relation Relation_Properties.
 Set Default Goal Selector "!".
 
-Ltac dump s := idtac "=== goal" s;
-  repeat match goal with H : ?T |- _ => idtac "  HYP>>>" H ":" T; revert H end.
+Lemma probe_cr (R : term -> term -> Type) x y : R x y -> clos_refl R x y.
+Proof. intros r. constructor. exact r. Abort.
 
-Section P.
-  Context {cf : checker_flags}.
-  Context {Σ : global_env_ext}.
+Lemma probe_cr_refl (R : term -> term -> Type) x : clos_refl R x x.
+Proof. constructor 2. Abort.
 
-  Lemma probe_tRel0 Γ na A N : red1 Σ (Γ ,, vass na A) (tRel 0) N -> False.
-  Proof.
-    intros r. depelim r.
-    all: dump "tRel0".
-  Abort.
+Lemma probe_eta x : eta x x.
+Proof. apply rt_refl. Abort.
 
-  Lemma probe_eta_body Γ na A s M' :
-    red1 Σ (Γ ,, vass na A) (tApp (lift0 1 s) (tRel 0)) M' -> False.
-  Proof.
-    intros r. depelim r.
-    all: dump "etabody".
-  Abort.
-
-End P.
+Lemma probe_eta_step x y : eta1 x y -> eta x y.
+Proof. intros. apply rt_step. assumption. Abort.
