@@ -78,6 +78,34 @@ Lemma upto_domain_array (a a' : array_model term) :
   upto_domain (tPrim (primArray; primArrayModel a)) (tPrim (primArray; primArrayModel a')).
 Proof. intros hl hd ht hv. constructor. constructor; auto. now rewrite hl. Qed.
 
+Lemma red1_set_array_default Σ Γ arr x y : red1 Σ Γ x y ->
+  red1 Σ Γ (tPrim (primArray; primArrayModel (set_array_default arr x)))
+           (tPrim (primArray; primArrayModel (set_array_default arr y))).
+Proof.
+  intro r.
+  assert (E : set_array_default (set_array_default arr x) y = set_array_default arr y)
+    by (now destruct arr).
+  rewrite <- E. exact (@array_red_def Σ Γ (set_array_default arr x) y r).
+Qed.
+Lemma red_le_set_array_default Σ Γ arr x y : red_le Σ Γ x y ->
+  red_le Σ Γ (tPrim (primArray; primArrayModel (set_array_default arr x)))
+             (tPrim (primArray; primArrayModel (set_array_default arr y))).
+Proof. destruct 1; [apply r_step; now apply red1_set_array_default|apply r_refl]. Qed.
+
+Lemma red1_set_array_type Σ Γ arr x y : red1 Σ Γ x y ->
+  red1 Σ Γ (tPrim (primArray; primArrayModel (set_array_type arr x)))
+           (tPrim (primArray; primArrayModel (set_array_type arr y))).
+Proof.
+  intro r.
+  assert (E : set_array_type (set_array_type arr x) y = set_array_type arr y)
+    by (now destruct arr).
+  rewrite <- E. exact (@array_red_type Σ Γ (set_array_type arr x) y r).
+Qed.
+Lemma red_le_set_array_type Σ Γ arr x y : red_le Σ Γ x y ->
+  red_le Σ Γ (tPrim (primArray; primArrayModel (set_array_type arr x)))
+             (tPrim (primArray; primArrayModel (set_array_type arr y))).
+Proof. destruct 1; [apply r_step; now apply red1_set_array_type|apply r_refl]. Qed.
+
 Section Cong.
   Context {cf : checker_flags} (Σ : global_env).
   (** NO global [IH : C3 Σ] here, deliberately.  The AUTHORITATIVE C3 is the
@@ -416,6 +444,63 @@ Section Cong.
       + destruct hw; [apply r_step; now constructor|apply r_refl].
       + now apply eta_LetIn_c.
       + constructor; [apply upto_domain_refl|apply upto_domain_refl|exact hd].
+  Qed.
+
+  (** *** Primitive-array reductions.  Set-field commutations are all
+      [now destruct arr]; same-field via the local IH, cross-field parallel. *)
+
+  Lemma c3_array_red_def Γ arr def u :
+    red1 Σ Γ arr.(array_default) def ->
+    (forall u', eta1 arr.(array_default) u' -> joinable Σ Γ u' def) ->
+    eta1 (tPrim (primArray; primArrayModel arr)) u ->
+    joinable Σ Γ u (tPrim (primArray; primArrayModel (set_array_default arr def))).
+  Proof.
+    intros hr IHd he. depelim he.
+    - (* array_eta_val : parallel (red default, η value) *)
+      eexists; eexists. split; [|split].
+      + apply r_step. apply array_red_def. exact hr.
+      + apply rt_step. apply array_eta_val. eassumption.
+      + apply upto_domain_refl.
+    - (* array_eta_def : same field, via IH *)
+      destruct (IHd _ ltac:(eassumption)) as (w & w' & hw & hw' & hu).
+      exists (tPrim (primArray; primArrayModel (set_array_default arr w))),
+             (tPrim (primArray; primArrayModel (set_array_default arr w'))). split; [|split].
+      + now apply red_le_set_array_default.
+      + now apply eta_Array_default.
+      + apply upto_domain_array; cbn;
+          [reflexivity|exact hu|apply upto_domain_refl|apply all2_upto_refl].
+    - (* array_eta_type : parallel (red default, η type) *)
+      eexists; eexists. split; [|split].
+      + apply r_step. apply array_red_def. exact hr.
+      + apply rt_step. apply array_eta_type. eassumption.
+      + apply upto_domain_refl.
+  Qed.
+
+  Lemma c3_array_red_type Γ arr ty0 u :
+    red1 Σ Γ arr.(array_type) ty0 ->
+    (forall u', eta1 arr.(array_type) u' -> joinable Σ Γ u' ty0) ->
+    eta1 (tPrim (primArray; primArrayModel arr)) u ->
+    joinable Σ Γ u (tPrim (primArray; primArrayModel (set_array_type arr ty0))).
+  Proof.
+    intros hr IHt he. depelim he.
+    - (* array_eta_val : parallel *)
+      eexists; eexists. split; [|split].
+      + apply r_step. apply array_red_type. exact hr.
+      + apply rt_step. apply array_eta_val. eassumption.
+      + apply upto_domain_refl.
+    - (* array_eta_def : parallel *)
+      eexists; eexists. split; [|split].
+      + apply r_step. apply array_red_type. exact hr.
+      + apply rt_step. apply array_eta_def. eassumption.
+      + apply upto_domain_refl.
+    - (* array_eta_type : same field, via IH *)
+      destruct (IHt _ ltac:(eassumption)) as (w & w' & hw & hw' & hu).
+      exists (tPrim (primArray; primArrayModel (set_array_type arr w))),
+             (tPrim (primArray; primArrayModel (set_array_type arr w'))). split; [|split].
+      + now apply red_le_set_array_type.
+      + now apply eta_Array_type.
+      + apply upto_domain_array; cbn;
+          [reflexivity|apply upto_domain_refl|exact hu|apply all2_upto_refl].
   Qed.
 
 End Cong.
