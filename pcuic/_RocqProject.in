@@ -51,7 +51,6 @@ theories/PCUICContextSubst.v
 theories/PCUICCasesContexts.v
 theories/PCUICReduction.v
 theories/PCUICEtaDefs.v
-theories/PCUICEtaReductionC3.v
 theories/PCUICArityRed.v
 theories/PCUICRecArgs.v
 theories/PCUICGuardReduce.v
@@ -126,4 +125,13 @@ theories/PCUICWeakeningConfig.v
 
 theories/PCUICCasesHelper.v
 
+
+# BET-315 eta lane (L1): new relations beside the base ones
+theories/PCUICCumulativitySpecEta.v
+theories/PCUICCumulativitySpecEtaClosure.v
+theories/PCUICTypingEta.v
+# BET-315 eta lane (L2): confluence
+theories/PCUICEtaConfluence.v
+# BET-315 eta lane (C3Prover3): C3 strong commutation
+theories/PCUICEtaReductionC3.v
 # theories/All.v

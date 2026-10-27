@@ -262,42 +262,50 @@ Definition eta := clos_refl_trans eta1.
   Universe instances are compared by [eq] (as 2020's [utd_Const]/[utd_Ind]). *)
 
 Inductive upto_domain : term -> term -> Type :=
-| utd_Rel n : upto_domain (tRel n) (tRel n)
+(* Rel/Evar/Var/Sort/App/Const/Ind/Construct/Lambda/Prod/LetIn/Proj/Fix/CoFix below
+   are the byte-for-byte 9.2 ports of the 2020 utd_* constructors
+   (origin/eta_postpo:PCUICEquality.v:1439-1498); only utd_Case is reshaped for the
+   9.2 predicate/branch records and utd_Prim is new (arrays), each noted inline. *)
+| utd_Rel n : upto_domain (tRel n) (tRel n)                           (* = 2020 utd_Rel *)
 
-| utd_Evar e args args' :
+| utd_Evar e args args' :                                            (* = 2020 utd_Evar *)
     All2 upto_domain args args' ->
     upto_domain (tEvar e args) (tEvar e args')
 
-| utd_Var id : upto_domain (tVar id) (tVar id)
+| utd_Var id : upto_domain (tVar id) (tVar id)                        (* = 2020 utd_Var *)
 
-| utd_Sort s : upto_domain (tSort s) (tSort s)
+| utd_Sort s : upto_domain (tSort s) (tSort s)                        (* = 2020 utd_Sort *)
 
-| utd_App t t' u u' :
+| utd_App t t' u u' :                                                 (* = 2020 utd_App *)
     upto_domain t t' ->
     upto_domain u u' ->
     upto_domain (tApp t u) (tApp t' u')
 
-| utd_Const c u : upto_domain (tConst c u) (tConst c u)
+| utd_Const c u : upto_domain (tConst c u) (tConst c u)               (* = 2020 utd_Const *)
 
-| utd_Ind i u : upto_domain (tInd i u) (tInd i u)
+| utd_Ind i u : upto_domain (tInd i u) (tInd i u)                     (* = 2020 utd_Ind *)
 
-| utd_Construct i k u : upto_domain (tConstruct i k u) (tConstruct i k u)
+| utd_Construct i k u : upto_domain (tConstruct i k u) (tConstruct i k u) (* = 2020 utd_Construct *)
 
-| utd_Lambda na na' ty ty' t t' :
+| utd_Lambda na na' ty ty' t t' :                                     (* = 2020 utd_Lambda: ty,ty' ignored *)
     upto_domain t t' ->
     upto_domain (tLambda na ty t) (tLambda na' ty' t')
 
-| utd_Prod na na' a a' b b' :
+| utd_Prod na na' a a' b b' :                                         (* = 2020 utd_Prod: na,na' ignored *)
     upto_domain a a' ->
     upto_domain b b' ->
     upto_domain (tProd na a b) (tProd na' a' b')
 
-| utd_LetIn na na' t t' ty ty' u u' :
+| utd_LetIn na na' t t' ty ty' u u' :                                 (* = 2020 utd_LetIn: na,na' ignored *)
     upto_domain t t' ->
     upto_domain ty ty' ->
     upto_domain u u' ->
     upto_domain (tLetIn na t ty u) (tLetIn na' t' ty' u')
 
+(* RESHAPED for 9.2: 2020 utd_Case related a single return-term p and
+   `All2 (x.1=y.1 x upto_domain x.2 y.2)` branches. 9.2 predicate is a record, so we
+   mirror base eq_predicate/eq_branch (PCUICEquality.v:368-378): params/return by
+   upto_domain, puinst by eq, pcontext/bcontext by eq_context_upto_names. [risk-5] *)
 | utd_Case ci p p' c c' brs brs' :
     All2 upto_domain p.(pparams) p'.(pparams) ->
     p.(puinst) = p'.(puinst) ->
@@ -308,22 +316,24 @@ Inductive upto_domain : term -> term -> Type :=
                      × upto_domain x.(bbody) y.(bbody)) brs brs' ->
     upto_domain (tCase ci p c brs) (tCase ci p' c' brs')
 
-| utd_Proj pr c c' :
+| utd_Proj pr c c' :                                                  (* = 2020 utd_Proj *)
     upto_domain c c' ->
     upto_domain (tProj pr c) (tProj pr c')
 
-| utd_Fix mfix mfix' idx :
+| utd_Fix mfix mfix' idx :                                            (* = 2020 utd_Fix: dname ignored *)
     All2 (fun x y => upto_domain x.(dtype) y.(dtype) ×
                      upto_domain x.(dbody) y.(dbody) ×
                      x.(rarg) = y.(rarg)) mfix mfix' ->
     upto_domain (tFix mfix idx) (tFix mfix' idx)
 
-| utd_CoFix mfix mfix' idx :
+| utd_CoFix mfix mfix' idx :                                          (* = 2020 utd_CoFix: dname ignored *)
     All2 (fun x y => upto_domain x.(dtype) y.(dtype) ×
                      upto_domain x.(dbody) y.(dbody) ×
                      x.(rarg) = y.(rarg)) mfix mfix' ->
     upto_domain (tCoFix mfix idx) (tCoFix mfix' idx)
 
+(* NEW for 9.2 (no 2020 analogue): primitive arrays, mirrors base eq_Prim
+   (PCUICEquality.v:471-473); levels by eq, components by upto_domain. *)
 | utd_Prim p p' :
     onPrims upto_domain eq p p' ->
     upto_domain (tPrim p) (tPrim p').
