@@ -135,4 +135,6 @@ theories/PCUICEtaConfluence.v
 theories/PCUICEtaReduction.v
 # BET-315 eta lane (C3Prover3): C3 strong commutation, four unlocking cases
 theories/PCUICEtaReductionC3.v
+# BET-315 eta lane (L2): red1 lift-strengthening (sibling; heavy imports kept out of the foundation)
+theories/PCUICEtaStrengthening.v
 # theories/All.v
