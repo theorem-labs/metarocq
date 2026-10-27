@@ -76,6 +76,8 @@ Section CumulSpecIsCumulAlgo.
     Σ ;;; Γ |- M ⇝ N -> Σ ;;; Γ |- M =s N.
   Proof.
   intro r. induction r using red1_ind_all; try (econstructor; eauto; reflexivity).
+  (* red_prim_op: the same rule in cumulSpec, on the same denotation. *)
+  all: try (eapply cumul_prim_op; eassumption).
   - eapply cumul_Case; try reflexivity.
     * destruct p as [p x]. cbn in *. try repeat split; cbn; try reflexivity.
       change (fun t u => Σ ;;; Γ ⊢ t ≤s[Conv] u) with (convSpec Σ Γ).

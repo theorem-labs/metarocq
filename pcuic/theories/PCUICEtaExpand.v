@@ -621,6 +621,17 @@ Module Red1Apps.
       decl.(cst_body) = Some body ->
       Σ ;;; Γ |- tConst c u ⇝ subst_instance u body
 
+  (** Primitive operation, mirroring [PCUICReduction.red_prim_op]: a saturated
+      application of a registered bodiless constant to literals reduces to the
+      readback of its denotation.  [red1_red1apps] maps the PCUIC rule here. *)
+  | red_prim_op c decl u op ls r v :
+      prim_op_of Σ c = Some op ->
+      declared_constant Σ c decl ->
+      cst_body decl = None ->
+      PrimitiveOps.prim_op_denote op ls = Some r ->
+      PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
+      Σ ;;; Γ |- mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls) ⇝ v
+
   (** Proj *)
   | red_proj p args u arg:
       nth_error args (p.(proj_npars) + p.(proj_arg)) = Some arg ->
@@ -849,10 +860,18 @@ Module Red1Apps.
         P Γ (tPrim (primArray; primArrayModel arr))
           (tPrim (primArray; primArrayModel (set_array_type arr ty)))) ->
 
+       (forall (Γ : context) c decl u op ls r v,
+          prim_op_of Σ c = Some op ->
+          declared_constant Σ c decl ->
+          cst_body decl = None ->
+          PrimitiveOps.prim_op_denote op ls = Some r ->
+          PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
+          P Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls)) v) ->
+
 
        forall (Γ : context) (t t0 : term), red1 Σ Γ t t0 -> P Γ t t0.
   Proof.
-    intros. rename X32 into Xlast. revert Γ t t0 Xlast.
+    intros. rename X33 into Xlast. revert Γ t t0 Xlast.
     fix aux 4. intros Γ t T.
     move aux at top.
     destruct 1; match goal with
@@ -965,6 +984,8 @@ Lemma red1_red1apps Σ Γ t v :
   red1 Σ Γ t v -> Red1Apps.red1 Σ Γ t v.
 Proof.
   intros red; induction red using red1_ind_all in |- *.
+  (* red_prim_op maps to Red1Apps.red_prim_op (same premises). *)
+  all: try (eapply Red1Apps.red_prim_op; eassumption).
   all:try solve [econstructor; eauto; solve_all; eauto].
   - eapply (Red1Apps.red_beta _ _ _ _ _ _ []).
   - now eapply Red1Apps.red_tApp.

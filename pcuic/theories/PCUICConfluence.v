@@ -256,6 +256,9 @@ Lemma red1_eq_context_upto_l {Σ Σ' cmp_universe cmp_sort pb Γ Δ u v} :
 Proof.
   intros refl_univ_conv refl_univ_pb refl_sort_conv refl_sort_pb h e.
   induction h in Δ, e |- * using red1_ind_all.
+  (* red_prim_op: context-independent; the reduct [v] is its own eq-reduct. *)
+  all: try (eexists; split;
+    [ eapply red_prim_op; eassumption | eapply eq_term_upto_univ_refl; eauto ]).
   all: try solve [
     eexists ; split ; [
       solve [ econstructor ; eauto ]
@@ -806,6 +809,24 @@ Proof.
   eapply eq_context_upto_univ_subst_instance; tc. tea.
 Qed.*)
 
+(** A literal argument of the primitive rule is rigid under [eq_term_upto_univ]:
+    an integer or string payload carries no universe, so an eq-reduct of
+    [term_of_lit l] is [term_of_lit l] itself. *)
+Lemma eq_term_upto_univ_napp_term_of_lit {Σ cmp_universe cmp_sort pb napp l t} :
+  eq_term_upto_univ_napp Σ cmp_universe cmp_sort pb napp (PCUICPrimitiveRed.term_of_lit l) t ->
+  t = PCUICPrimitiveRed.term_of_lit l.
+Proof.
+  intros h; destruct l; depelim h; depelim o; reflexivity.
+Qed.
+
+Lemma all2_eq_term_map_term_of_lit {Σ cmp_universe cmp_sort ls args'} :
+  All2 (eq_term_upto_univ Σ cmp_universe cmp_sort Conv) (map PCUICPrimitiveRed.term_of_lit ls) args' ->
+  args' = map PCUICPrimitiveRed.term_of_lit ls.
+Proof.
+  induction ls in args' |- *; cbn; intros h; depelim h; [reflexivity|].
+  f_equal; [eapply eq_term_upto_univ_napp_term_of_lit; eassumption|now apply IHls].
+Qed.
+
 Lemma red1_eq_term_upto_univ_l {Σ Σ' : global_env} cmp_universe cmp_sort pb napp Γ u v u' :
   RelationClasses.PreOrder (cmp_universe Conv) ->
   RelationClasses.PreOrder (cmp_universe pb) ->
@@ -824,6 +845,13 @@ Proof.
   intros preorder_univ_conv preorder_univ_pb preorder_sort_conv preorder_sort_pb
     sub_univ sub_sort substu_univ substu_sort_conv substu_sort_pb e h.
   induction h in pb, napp, u', e, preorder_univ_pb, preorder_sort_pb, sub_univ, sub_sort, substu_sort_pb |- * using red1_ind_all.
+  (* red_prim_op: the eq-reduct [u'] has the same constant head and the same
+     (rigid) literal arguments, so the same rule fires and the reduct [v] is
+     its own eq-reduct. *)
+  all: try (apply eq_term_upto_univ_napp_mkApps_l_inv in e as [hd' [args' [[h1 h2] ->]]];
+    depelim h1; apply all2_eq_term_map_term_of_lit in h2 as ->;
+    eexists; split; [eapply red_prim_op; eassumption
+                    |eapply eq_term_upto_univ_refl; eauto; tc]).
   all: try solve [
     dependent destruction e ;
     edestruct IHh as [? [? ?]] ; [ .. | eassumption | ] ; eauto ; tc ;
@@ -1917,6 +1945,8 @@ Section RedPred.
     intros onΓ onM r.
     induction r using red1_ind_all; intros; pcuic.
     all:repeat inv_on_free_vars_xpredT.
+    (* red_prim_op: the same rule in pred1; the context reduces reflexively. *)
+    all: try (eapply pred_prim_op; eauto 7 using pred1_refl, pred1_ctx_over_refl with fvs).
     all:try solve [econstructor; pcuic;
       (eapply All_All2_refl, All_refl || eapply OnOne2_All2 || idtac); eauto 7 using pred1_refl, pred1_ctx_over_refl with fvs ].
     - eapply OnOne2_prod_inv in X as [].
@@ -3893,24 +3923,24 @@ Section ConfluenceFacts.
   Qed.
 
   Lemma red_mkApps_tConst_axiom {Γ : closed_context} {cst u} {args : list term} {cb c} :
-    declared_constant Σ cst cb -> cst_body cb = None ->
+    declared_constant Σ cst cb -> cst_body cb = None -> prim_op_of Σ cst = None ->
     forallb (on_free_vars (shiftnP #|Γ| xpred0)) args ->
     red Σ Γ (mkApps (tConst cst u) args) c ->
     ∑ args' : list term,
     (c = mkApps (tConst cst u) args') * (All2 (red Σ Γ) args args').
   Proof using wfΣ.
-    move => Hdecl Hbody hargs /lift_to_pred.
+    move => Hdecl Hbody Hnonreg hargs /lift_to_pred.
     rewrite on_free_vars_mkApps /= hargs.
     move/(_ eq_refl) => [] [x' onx'] [] [y' ony'] [] eqx' [] /= -> wsr.
     cbn in *. subst x'.
-    clear -Hdecl Hbody wfΣ hargs wsr.
+    clear -Hdecl Hbody Hnonreg wfΣ hargs wsr.
     depind wsr.
     - eapply pred1_mkApps_tConst_axiom in r as [r' [eq redargs]]; eauto.
       subst y. exists r'. intuition auto. solve_all. now apply pred1_red in b; eauto with fvs.
     - exists args; split; eauto. apply All2_same; auto.
-    - specialize (IHwsr1 _ _ _ _ Hdecl Hbody hargs _ eq_refl) as [args' [? ?]]. subst y.
+    - specialize (IHwsr1 _ _ _ _ Hdecl Hbody Hnonreg hargs _ eq_refl) as [args' [? ?]]. subst y.
       assert (hargs' : forallb (on_free_vars (shiftnP #|Γ| xpred0)) args'). solve_all; eauto with fvs.
-      specialize (IHwsr2 _ _ _ _ Hdecl Hbody hargs' _ eq_refl) as [? [? ?]]. subst z.
+      specialize (IHwsr2 _ _ _ _ Hdecl Hbody Hnonreg hargs' _ eq_refl) as [? [? ?]]. subst z.
       exists x. intuition auto. eapply All2_trans; eauto.
       intros ? ? ?; eapply red_trans.
   Qed.
