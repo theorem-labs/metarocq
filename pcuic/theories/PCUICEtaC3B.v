@@ -2123,3 +2123,149 @@ Proof.
     + now apply utd_CoFix.
 Qed.
 
+(** ** [tCase]: six [red1] rules. [red_iota] and [red_cofix_case] are the standalone
+    root lemmas; the four congruences reduce the parameters, the return type (under
+    [inst_case_predicate_context]), the discriminee, or one branch (under
+    [inst_case_branch_context]). Both case contexts are computed from [pparams], which
+    [peta] may change, so the η side reads its own — [peta_inst_case_context] relates
+    them, and [on_ctx_free_vars_inst_case_context] (base) supplies the scoping premise. *)
+Lemma red1_tCase_inv {Σ Γ ci p c brs v} :
+  red1 Σ Γ (tCase ci p c brs) v ->
+  (∑ k uu args br, (c = mkApps (tConstruct ci.(ci_ind) k uu) args)
+     × (nth_error brs k = Some br)
+     × (#|args| = (ci.(ci_npar) + context_assumptions br.(bcontext))%nat)
+     × (v = iota_red ci.(ci_npar) p args br))
+  + (∑ mfix idx args narg fn, (c = mkApps (tCoFix mfix idx) args)
+     × (unfold_cofix mfix idx = Some (narg, fn)) × (v = tCase ci p (mkApps fn args) brs))
+  + (∑ par1, (v = tCase ci (set_pparams p par1) c brs) × OnOne2 (red1 Σ Γ) p.(pparams) par1)
+  + (∑ r, (v = tCase ci (set_preturn p r) c brs)
+     × red1 Σ (Γ ,,, inst_case_predicate_context p) p.(preturn) r)
+  + (∑ c1, (v = tCase ci p c1 brs) × red1 Σ Γ c c1)
+  + (∑ brs1, (v = tCase ci p c brs1)
+     × OnOne2 (fun br br' => on_Trel_eq (red1 Σ (Γ ,,, inst_case_branch_context p br))
+                               bbody bcontext br br') brs brs1).
+Proof.
+  intro H. remember (tCase ci p c brs) as t eqn:Heq.
+  destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
+  all: injection Heq as e1 e2 e3 e4; subst.
+  - left; left; left; left; left. eexists _, _, _, _. repeat split; eassumption.
+  - left; left; left; left; right. eexists _, _, _, _, _. repeat split; eassumption.
+  - left; left; left; right. eexists; split; [reflexivity|assumption].
+  - left; left; right. eexists; split; [reflexivity|assumption].
+  - left; right. eexists; split; [reflexivity|assumption].
+  - right. eexists; split; [reflexivity|assumption].
+Qed.
+
+Lemma set_pparams_id p : set_pparams p (pparams p) = p.
+Proof. now destruct p. Qed.
+
+Lemma set_preturn_id p : set_preturn p (preturn p) = p.
+Proof. now destruct p. Qed.
+
+Lemma All2_upto_branch_refl brs :
+  All2 (fun x y => eq_context_upto_names x.(bcontext) y.(bcontext)
+                   × upto_domain x.(bbody) y.(bbody)) brs brs.
+Proof. apply All2_same. intros; split; reflexivity. Qed.
+
+Lemma commut_Case Σ ci p p' c c' brs brs' :
+  All2 (fun x y => peta x y × commutes Σ x y) p.(pparams) p'.(pparams) ->
+  p.(puinst) = p'.(puinst) -> p.(pcontext) = p'.(pcontext) ->
+  peta p.(preturn) p'.(preturn) -> commutes Σ p.(preturn) p'.(preturn) ->
+  peta c c' -> commutes Σ c c' ->
+  All2 (fun x y => (x.(bcontext) = y.(bcontext))
+                   × (peta x.(bbody) y.(bbody) × commutes Σ x.(bbody) y.(bbody))) brs brs' ->
+  commutes Σ (tCase ci p c brs) (tCase ci p' c' brs').
+Proof.
+  intros Hpar Hu Hpc pr Ir pc Ic Hbrs Γ Δ v HΔ HΓ Ht Hr.
+  cbn in Ht. move/and5P: Ht => [Hpars Hret Hpctx Hc Hbrsf].
+  have hpar : All2 peta (pparams p) (pparams p').
+  { eapply All2_impl; [exact Hpar|]. now intros ? ? [? _]. }
+  have hbr : All2 (fun x y => (x.(bcontext) = y.(bcontext)) × peta x.(bbody) y.(bbody)) brs brs'.
+  { eapply All2_impl; [exact Hbrs|]. now intros ? ? [? [? _]]. }
+  have HP : peta (tCase ci p c brs) (tCase ci p' c' brs').
+  { now apply peta_Case. }
+  destruct (red1_tCase_inv Hr)
+    as [[[[[(k & uu & args & br & -> & Hnth & Hlen & ->)
+           |(mfix & idx & args & narg & fn & -> & Hunf & ->)]
+          |(par1 & -> & Ho)]|(r & -> & Hrr)]|(c1 & -> & Hrc)]|(brs1 & -> & Ho)].
+  - exact (peta_commut_red_iota Σ Δ ci k uu args p brs br _ Hnth Hlen HP).
+  - exact (peta_commut_red_cofix_case Σ Δ ci p mfix idx args narg fn brs _ Hunf HP).
+  - (* parameters *)
+    destruct (OnOne2_commut (red1 Σ Γ) (red1 Σ Δ) peta upto_domain (fun x => is_true (ofvT x))
+                (pparams p) (pparams p') par1 (fun x => upto_domain_refl x))
+      as (lw & lw' & Hw & Hw' & Hu').
+    + eapply All2_impl; [exact Hpar|]. intros x y [pxy cxy]. split; [exact pxy|].
+      intros Hq z Hz. exact (cxy Γ Δ z HΔ HΓ Hq Hz).
+    + now apply forallb_All.
+    + exact Ho.
+    + exists (tCase ci (set_pparams p' lw) c' brs'), (tCase ci (set_pparams p' lw') c' brs').
+      repeat split.
+      * destruct Hw; [apply r_step; now apply case_red_param|].
+        rewrite set_pparams_id. apply r_refl.
+      * apply peta_Case; cbn; assumption.
+      * apply utd_Case; cbn; try reflexivity; [exact Hu'|apply All2_upto_branch_refl].
+  - (* return type, under the predicate context *)
+    have HΔ' : peta_ctx (Γ ,,, inst_case_predicate_context p) (Δ ,,, inst_case_predicate_context p').
+    { apply peta_ctx_app; [exact HΔ|]. unfold inst_case_predicate_context.
+      rewrite -Hu -Hpc. exact (peta_inst_case_context _ _ _ _ hpar). }
+    have HΓ' : on_ctx_free_vars xpredT (Γ ,,, inst_case_predicate_context p).
+    { unfold inst_case_predicate_context. rewrite -(octx_shiftnP #|pcontext p|).
+      now apply on_ctx_free_vars_inst_case_context. }
+    rewrite ofvT_shiftnP in Hret.
+    destruct (Ir _ _ r HΔ' HΓ' Hret Hrr) as (w & w' & Hw & Hw' & Hu').
+    exists (tCase ci (set_preturn p' w) c' brs'), (tCase ci (set_preturn p' w') c' brs').
+    repeat split.
+    + destruct Hw; [apply r_step; now apply case_red_return|].
+      rewrite set_preturn_id. apply r_refl.
+    + apply peta_Case; cbn; assumption.
+    + apply utd_Case; cbn; try reflexivity;
+        [now apply All2_same|exact Hu'|apply All2_upto_branch_refl].
+  - (* discriminee *)
+    destruct (Ic Γ Δ c1 HΔ HΓ Hc Hrc) as (w & w' & Hw & Hw' & Hu').
+    exists (tCase ci p' w brs'), (tCase ci p' w' brs'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tCase ci p' x brs')); [|exact Hw].
+      intros x y H. now apply case_red_discr.
+    + now apply peta_Case.
+    + apply utd_Case; try reflexivity;
+        [now apply All2_same|exact Hu'|apply All2_upto_branch_refl].
+  - (* one branch, under its branch context *)
+    destruct (OnOne2_commut
+                (fun br br' => on_Trel_eq (red1 Σ (Γ ,,, inst_case_branch_context p br))
+                                 bbody bcontext br br')
+                (fun br br' => on_Trel_eq (red1 Σ (Δ ,,, inst_case_branch_context p' br))
+                                 bbody bcontext br br')
+                (fun x y => (x.(bcontext) = y.(bcontext)) × peta x.(bbody) y.(bbody))
+                (fun x y => eq_context_upto_names x.(bcontext) y.(bcontext)
+                            × upto_domain x.(bbody) y.(bbody))
+                (fun br => is_true (test_context_k (fun k => on_free_vars (closedP k xpredT))
+                                      #|pparams p| br.(bcontext)
+                                    && on_free_vars (shiftnP #|br.(bcontext)| xpredT) br.(bbody)))
+                brs brs' brs1)
+      as (lw & lw' & Hw & Hw' & Hu').
+    + intros x. split; reflexivity.
+    + eapply All2_impl; [exact Hbrs|].
+      intros x [yc yb] [hc [pb cb]]. cbn in *.
+      split; [split; assumption|].
+      intros Hq z [Hz Hk]. move/andP: Hq => [Hq1 Hq2]. rewrite ofvT_shiftnP in Hq2.
+      have HΔ' : peta_ctx (Γ ,,, inst_case_branch_context p x)
+                          (Δ ,,, inst_case_branch_context p' {| bcontext := yc; bbody := yb |}).
+      { apply peta_ctx_app; [exact HΔ|]. unfold inst_case_branch_context. cbn.
+        rewrite -Hu -hc. exact (peta_inst_case_context _ _ _ _ hpar). }
+      have HΓ' : on_ctx_free_vars xpredT (Γ ,,, inst_case_branch_context p x).
+      { unfold inst_case_branch_context. rewrite -(octx_shiftnP #|bcontext x|).
+        now apply on_ctx_free_vars_inst_case_context. }
+      destruct (cb _ _ (bbody z) HΔ' HΓ' Hq2 Hz) as (w & w' & Hw & Hw' & Hu').
+      exists {| bcontext := yc; bbody := w |}, {| bcontext := bcontext z; bbody := w' |}.
+      cbn. repeat split.
+      * destruct Hw; [apply r_step; split; [assumption|reflexivity]|apply r_refl].
+      * exact Hw'.
+      * rewrite -Hk hc. reflexivity.
+      * exact Hu'.
+    + now apply forallb_All.
+    + exact Ho.
+    + exists (tCase ci p' c' lw), (tCase ci p' c' lw'). repeat split.
+      * destruct Hw; [apply r_step; now apply case_red_brs|apply r_refl].
+      * now apply peta_Case.
+      * apply utd_Case; try reflexivity; [now apply All2_same|exact Hu'].
+Qed.
+
