@@ -52,6 +52,7 @@ run_in_tactic.v
 safechecker_test.v
 # self_erasure.v
 sprop_tests.v
+template_partial.v
 tmExistingInstance.v
 tmFix.v
 tmFreshName.v
