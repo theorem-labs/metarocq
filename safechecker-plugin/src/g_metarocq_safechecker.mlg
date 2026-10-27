@@ -15,33 +15,272 @@ let pr_string l =
   (* We allow utf8 encoding *)
   str (caml_string_of_bytestring l)
 
-let check ~opaque_access env evm poly (c, ustate) =
-  debug (fun () -> str"Quoting");
+(* The production SafeCheck path: quote the term with the template
+   translation, then run the extracted checker on the quoted program.  The
+   negative fixtures below go through this same function, so what they test is
+   what [MetaRocq SafeCheck] does. *)
+let safecheck_program ~opaque_access env evm poly term =
   let env = if poly then env else
     let (qs, us), (qcst, ucst) = Evd.sort_context_set evm in
     Environ.push_context_set ~strict:true (us, ucst) @@
     Environ.push_qualities ~rigid:true (qs, qcst) env
   in
-  let prog = time (str"Quoting") (Ast_quoter.quote_term_rec ~bypass:true ~opaque_access ~with_universes:true env evm) (EConstr.to_constr evm c) in
+  let prog = time (str"Quoting") (Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm) term in
   let uctx =
     if poly then
       let uctx = Evd.to_universe_context evm in
-      let inst, auctx = UVars.abstract_universes uctx in
+      let _inst, auctx = UVars.abstract_universes uctx in
       Ast_quoter.mkPolymorphic_ctx (Ast_quoter.quote_abstract_univ_context auctx)
     else Ast_quoter.mkMonomorphic_ctx ()
   in
-  let check =
-    time (str"Checking")
-      (Extraction.infer_and_print_template_program_with_guard
-        Config0.default_checker_flags
-        (* Config0.type_in_type *)
-         prog)
-      uctx
-  in
-  match check with
+  time (str"Checking")
+    (Extraction.infer_and_print_template_program_with_guard
+      Config0.default_checker_flags
+      (* Config0.type_in_type *)
+       prog)
+    uctx
+
+let check ~opaque_access env evm poly (c, _ustate) =
+  debug (fun () -> str"Quoting");
+  match safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c) with
   | Coq_inl s -> Feedback.msg_info (pr_string s)
   | Coq_inr s -> CErrors.user_err (pr_string s)
+
+let string_contains ~where ~what =
+  let n = String.length where and m = String.length what in
+  let rec search i =
+    i + m <= n && (String.equal (String.sub where i m) what || search (i + 1))
+  in
+  Int.equal m 0 || search 0
+
+(* A negative fixture must be rejected, and rejected for its own reason: the
+   checker's message has to contain [reason], which says why the program is
+   ill-typed, and [subject], which says of what.  Accepting the program, or
+   refusing it for an unrelated reason, fails the test. *)
+let expect_safecheck_rejection what reason subject = function
+  | Coq_inr s ->
+    let message = caml_string_of_bytestring s in
+    let missing part =
+      not (string_contains ~where:message ~what:part)
+    in
+    if missing reason || missing subject then
+      CErrors.user_err
+        (str what ++ str " was rejected, but not for the expected reason."
+         ++ fnl () ++ str "expected a message containing: " ++ str reason
+         ++ fnl () ++ str "and: " ++ str subject
+         ++ fnl () ++ str "got: " ++ str message)
+    else
+      Feedback.msg_info (str what ++ str " was rejected as expected.")
+  | Coq_inl s ->
+    CErrors.user_err
+      (str what ++ str " was accepted, but it is ill-typed: "
+       ++ str (caml_string_of_bytestring s))
+
+(* The declaration is already in the environment and already invalid, so the
+   obligation it breaks exists before quotation. *)
+let test_safecheck_rejects_source ~opaque_access env evm poly reason subject c =
+  expect_safecheck_rejection "The quoted source declaration" reason subject
+    (safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c))
+
+(* A polymorphic declaration whose body is
+   [fun (X : Type@{max(Set+1, u)}) => (X : Type@{u})], with a real kernel
+   [Cast] and with [u] its own bound universe.  Nothing constrains a bound
+   universe, so the cast obligation [max(Set+1, u) <= u] does not hold: an
+   instance may set [u] to [Set].  (A declared global universe cannot show
+   this: Rocq's graph already holds [Set < u] for each of those, which makes
+   [max(Set+1, u) = u] true there.)
+
+   Rocq's surface syntax cannot write an algebraic sort in a binder, so the
+   declaration is built here and added to the environment that the quoter
+   reads.  The invalid obligation therefore exists before quotation, exactly
+   as for a declaration that [Unset Universe Checking] let through. *)
+let set_successor_cast_declaration env =
+  let bound = Univ.Level.var 0 in
+  let algebraic = Univ.Universe.unrepr [Univ.Level.set, 1; bound, 0] in
+  let domain = Constr.mkSort (Sorts.make Sorts.Quality.qtype algebraic) in
+  let target =
+    Constr.mkSort (Sorts.make Sorts.Quality.qtype (Univ.Universe.make bound))
+  in
+  let body =
+    Constr.mkLambda
+      (Context.anonR, domain,
+       Constr.mkCast (Constr.mkRel 1, Constr.DEFAULTcast, target))
+  in
+  let typ = Constr.mkProd (Context.anonR, domain, target) in
+  let auctx =
+    UVars.AbstractContext.make
+      { UVars.quals = [||];
+        UVars.univs = [| Names.Name (Names.Id.of_string "u") |] }
+      PConstraints.empty
+  in
+  let kn =
+    Names.KerName.make
+      (Names.ModPath.MPfile
+         (Names.DirPath.make
+            [Names.Id.of_string "MetaRocq";
+             Names.Id.of_string "Regression"]))
+      (Names.Label.of_id (Names.Id.of_string "set_successor_cast"))
+  in
+  let constant_body =
+    { Declarations.const_hyps = [];
+      const_univ_hyps = UVars.Instance.empty;
+      const_body = Declarations.Def body;
+      const_type = typ;
+      const_relevance = Sorts.Relevant;
+      const_body_code = None;
+      const_universes = Declarations.Polymorphic auctx;
+      const_inline_code = false;
+      const_typing_flags = Environ.typing_flags env }
+  in
+  let constant = Names.Constant.make1 kn in
+  (Environ.add_constant constant constant_body env,
+   Constr.mkConstU
+     (constant, UVars.Instance.of_array ([||], [| Univ.Level.set |])))
+
+let test_set_successor_cast ~opaque_access env evm reason subject =
+  let env, term = set_successor_cast_declaration env in
+  expect_safecheck_rejection "The max(Set+1, u) cast" reason subject
+    (safecheck_program ~opaque_access env evm false term)
+
+(* [bad : Type@{d} := I Type@{d}], where [d] is the template default universe
+   of the template inductive [I], read from [I]'s own metadata rather than
+   named here.  [Type@{d} : Type@{d+1}], so [I Type@{d}] lives in
+   [Type@{d+1}] and the declaration is invalid: checking it needs
+   [d+1 <= d].
+
+   The body's head is a template inductive, which is the path where a
+   substitution keyed on the body's inferred instance could rewrite the
+   declared [d] into the body's larger representative and hand the checker a
+   repaired declaration.  The declaration is stored in the environment the
+   quoter reads, so the obligation exists before quotation. *)
+let declared_default_declaration env ind =
+  let mib = Environ.lookup_mind (fst ind) env in
+  let template =
+    match mib.Declarations.mind_template with
+    | Some template -> template
+    | None ->
+      CErrors.user_err
+        (str "This test needs a template-polymorphic inductive.")
+  in
+  let _, defaults =
+    UVars.Instance.to_array template.Declarations.template_defaults
+  in
+  let default =
+    if Int.equal (Array.length defaults) 0 then
+      CErrors.user_err
+        (str "This test needs a template inductive with a universe parameter.")
+    else defaults.(0)
+  in
+  let declared =
+    Constr.mkSort
+      (Sorts.make Sorts.Quality.qtype (Univ.Universe.make default))
+  in
+  let body =
+    Constr.mkApp (Constr.mkIndU (ind, UVars.Instance.empty), [| declared |])
+  in
+  let kn =
+    Names.KerName.make
+      (Names.ModPath.MPfile
+         (Names.DirPath.make
+            [Names.Id.of_string "MetaRocq";
+             Names.Id.of_string "Regression"]))
+      (Names.Label.of_id (Names.Id.of_string "declared_type_successor"))
+  in
+  let constant_body =
+    { Declarations.const_hyps = [];
+      const_univ_hyps = UVars.Instance.empty;
+      const_body = Declarations.Def body;
+      const_type = declared;
+      const_relevance = Sorts.Relevant;
+      const_body_code = None;
+      const_universes = Declarations.Monomorphic;
+      const_inline_code = false;
+      const_typing_flags = Environ.typing_flags env }
+  in
+  let constant = Names.Constant.make1 kn in
+  (Environ.add_constant constant constant_body env,
+   Constr.mkConstU (constant, UVars.Instance.empty))
+
+let test_declared_default ~opaque_access env evm reason subject c =
+  let ind =
+    match EConstr.kind evm c with
+    | Constr.Ind (ind, _) -> ind
+    | _ -> CErrors.user_err (str "This test needs an inductive type.")
+  in
+  let env, term = declared_default_declaration env ind in
+  expect_safecheck_rejection
+    "The declaration typed at its inductive's default universe" reason subject
+    (safecheck_program ~opaque_access env evm false term)
+
+let quote_with_cache quote env term =
+  fst (quote () env (Evd.from_env env) term)
+
+let test_cache_typing_flags env evm c =
+  let term = EConstr.to_constr evm c in
+  let impredicative_env = Environ.set_impredicative_set true env in
+  let predicative_env = Environ.set_impredicative_set false env in
+  let cached_context = Ast_quoter.make_template_universe_context () in
+  let quote, _ =
+    Ast_quoter.quote_term_remember ~universe_context:cached_context
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let first = quote_with_cache quote impredicative_env term in
+  let cached = quote_with_cache quote predicative_env term in
+  let fresh_context = Ast_quoter.make_template_universe_context () in
+  let fresh_quote, _ =
+    Ast_quoter.quote_term_remember ~universe_context:fresh_context
+      (fun _ () -> ()) (fun _ _ () -> ())
+  in
+  let fresh = quote_with_cache fresh_quote predicative_env term in
+  if cached = fresh && first <> cached then
+    Feedback.msg_info (str "Cache typing-flag regression passed.")
+  else
+    CErrors.user_err
+      (str "Cache reused a quotation across changed typing flags.")
+
+let test_safecheck_rejection ~opaque_access env evm c =
+  let term = EConstr.to_constr evm c in
+  let prog =
+    Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true
+      ~opaque_access ~with_universes:true env evm term
+  in
+  let bad_term =
+    Ast_quoter.mkSort
+      (Ast_quoter.quote_sort
+         (Sorts.make Sorts.Quality.qtype Univ.Universe.type0))
+  in
+  let bad_name =
+    Ast_quoter.quote_kn
+      (Names.KerName.make
+         (Names.ModPath.MPfile
+            (Names.DirPath.make
+               [Names.Id.of_string "MetaRocq";
+                Names.Id.of_string "Regression"]))
+         (Names.Label.of_id (Names.Id.of_string "successor_too_low")))
+  in
+  let bad_decl =
+    Ast_quoter.mk_constant_decl
+      (Ast_quoter.mk_constant_body bad_term (Some bad_term)
+         (Ast_quoter.mkMonomorphic_ctx ())
+         (Ast_quoter.quote_relevance Sorts.Relevant))
+  in
+  let global_env, quoted_term = prog in
+  let bad_program =
+    ({ global_env with declarations = (bad_name, bad_decl) :: global_env.declarations },
+     quoted_term)
+  in
+  match
+    Extraction.infer_and_print_template_program_with_guard
+      Config0.default_checker_flags bad_program (Ast_quoter.mkMonomorphic_ctx ())
+  with
+  | Coq_inr _ ->
+    Feedback.msg_info (str "SafeCheck negative regression passed.")
+  | Coq_inl _ ->
+    CErrors.user_err
+      (str "SafeCheck accepted a successor-too-low quoted declaration.")
+
 }
+
 
 VERNAC COMMAND EXTEND MetaRocqSafeCheck CLASSIFIED AS QUERY STATE opaque_access
 | #[ poly = polymorphic ] [ "MetaRocq" "SafeCheck" constr(c) ] -> {
@@ -51,6 +290,51 @@ VERNAC COMMAND EXTEND MetaRocqSafeCheck CLASSIFIED AS QUERY STATE opaque_access
     check env evm poly c
   }
 END
+
+VERNAC COMMAND EXTEND MetaRocqTestCacheTypingFlags CLASSIFIED AS QUERY
+| [ "MetaRocq" "Test" "Cache" "Typing" "Flags" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_cache_typing_flags env evm c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestSafeCheckRejection CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "SafeCheck" "Rejects" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_safecheck_rejection env evm c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestSafeCheckRejectsSource CLASSIFIED AS QUERY STATE opaque_access
+| #[ poly = polymorphic ] [ "MetaRocq" "Test" "SafeCheck" "Rejects" "Source" string(reason) string(subject) constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_safecheck_rejects_source env evm poly reason subject c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestQuoterSetSuccessorCast CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "Quoter" "Set" "Successor" "Cast" string(reason) string(subject) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    test_set_successor_cast env evm reason subject
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestQuoterDeclaredDefault CLASSIFIED AS QUERY STATE opaque_access
+| [ "MetaRocq" "Test" "Quoter" "Declared" "Default" string(reason) string(subject) constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_declared_default env evm reason subject c
+  }
+END
+
 
 {
 
