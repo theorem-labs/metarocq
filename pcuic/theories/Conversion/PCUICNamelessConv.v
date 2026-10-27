@@ -1217,6 +1217,17 @@ Lemma nl_red1 :
 Proof.
   intros ? Σ ? Γ M N h.
   induction h using red1_ind_all.
+  (* red_prim_op: [nl] keeps the retroknowledge (so [prim_op_of] and [readback]
+     are unchanged) and fixes the ground head arguments and reduct; only the
+     constant's declaration is name-erased. *)
+  all: try (eapply red1_prim_op_map;
+    [ intros ? [[[] ->]|[? [? ->]]]; reflexivity
+    | intros; apply nl_mkApps | reflexivity
+    | eassumption
+    | eapply declared_constant_from_gen; eapply declared_constant_to_gen in H0;
+      unfold declared_constant_gen in *; rewrite nl_lookup_env H0; reflexivity
+    | cbn; rewrite H1; reflexivity
+    | eassumption | eassumption ]).
   all: simpl.
   all: rewrite ?nl_lift ?nl_subst ?nl_subst_instance.
   all: try solve [ econstructor ; eauto ].

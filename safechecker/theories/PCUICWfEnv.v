@@ -20,7 +20,7 @@ Class abstract_env_struct {cf:checker_flags} (abstract_env_impl abstract_env_ext
 
   (* Operations on the environment *)
 
-  abstract_env_init (cs:ContextSet.t) (retro : Retroknowledge.t) : on_global_univs cs -> abstract_env_impl;
+  abstract_env_init (cs:ContextSet.t) (retro : Retroknowledge.t) : on_global_univs cs × Retroknowledge.wf_retro retro -> abstract_env_impl;
   abstract_env_add_decl X (kn:kername) (d:global_decl) :
    (forall Σ, abstract_env_rel X Σ -> ∥ on_global_decls Σ kn d ∥)
    -> abstract_env_impl;
@@ -33,6 +33,7 @@ Class abstract_env_struct {cf:checker_flags} (abstract_env_impl abstract_env_ext
 
   abstract_env_lookup : abstract_env_ext_impl -> kername -> option global_decl;
   abstract_primitive_constant : abstract_env_ext_impl -> Primitive.prim_tag -> option kername;
+  abstract_prim_op_of : abstract_env_ext_impl -> kername -> option prim_op;
 
   (* Primitive decision procedures *)
   abstract_env_level_mem : abstract_env_ext_impl -> Level.t -> bool;
@@ -117,7 +118,9 @@ Class abstract_env_prop {cf:checker_flags} (abstract_env_impl abstract_env_ext_i
   abstract_env_guard_correct X {Σ} (wfΣ : abstract_env_ext_rel X Σ) fix_cofix Γ mfix :
       abstract_env_guard X fix_cofix Γ mfix -> guard fix_cofix Σ Γ mfix;
   abstract_primitive_constant_correct X tag Σ :
-    abstract_env_ext_rel X Σ -> abstract_primitive_constant X tag = PCUICEnvironment.primitive_constant Σ tag
+    abstract_env_ext_rel X Σ -> abstract_primitive_constant X tag = PCUICEnvironment.primitive_constant Σ tag ;
+  abstract_prim_op_of_correct X c Σ :
+    abstract_env_ext_rel X Σ -> abstract_prim_op_of X c = PCUICEnvironment.prim_op_of Σ c
   }.
 
 Definition abstract_env_impl {cf:checker_flags} := ∑ X Y Z, @abstract_env_prop _ X Y Z.
@@ -202,12 +205,19 @@ Defined.
 Program Definition abstract_env_empty {cf:checker_flags} {X_type : abstract_env_impl} : X_type.π1
   := abstract_env_init (LS.singleton Level.lzero , CS.empty) Retroknowledge.empty _.
 Next Obligation.
-  repeat split.
-  - intros x Hx; cbn in *. inversion Hx.
-  - intros x Hx; cbn in *. destruct x; eauto. now inversion Hx.
-  - red. unshelve eexists.
-    + econstructor; eauto. intros; exact 1%positive.
-    + red. intros ? ?. cbn in *. inversion H.
+  split.
+  - repeat split.
+    + intros x Hx; cbn in *. inversion Hx.
+    + intros x Hx; cbn in *. destruct x; eauto. now inversion Hx.
+    + red. unshelve eexists.
+      * econstructor; eauto. intros; exact 1%positive.
+      * red. intros ? ?. cbn in *. inversion H.
+  - constructor; cbn.
+    + constructor.
+    + intros c [].
+    + unfold Retroknowledge.types_distinct, Retroknowledge.disjoint_opt;
+        repeat split; intros c H1 H2; discriminate H1.
+    + intros i [=].
 Defined.
 
 Definition abstract_env_is_consistent_empty {cf:checker_flags} {X_type : abstract_env_impl}
