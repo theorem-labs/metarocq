@@ -948,4 +948,117 @@ Section Cong.
       + now apply eta_Lambda_r.
       + now constructor.
   Qed.
+
+  (** Transfer a dbody red1 list step across an η-related context, with the η residual
+      returned on the reduct side. *)
+  Lemma onOne2_dbody_transfer Γ0 Δ0 m m1 :
+    eta_ctx Γ0 Δ0 ->
+    OnOne2 (on_Trel_eq (red1 Σ Γ0) dbody gfixb) m m1 ->
+    ∑ m2, OnOne2 (on_Trel_eq (red1 Σ Δ0) dbody gfixb) m m2
+        × clos_refl_trans (OnOne2 (on_Trel_eq eta1 dbody gfixb)) m1 m2.
+  Proof.
+    intros hc. induction 1 as [a a' tl [rd geq]|a tl tl' o IH].
+    - destruct (red1_eta_ctx_strong Σ _ _ _ _ rd hc) as (r & hr & he).
+      exists (set_dbody a' r :: tl). split.
+      + constructor. split; [exact hr|exact geq].
+      + apply crt_OnOne2_hd. rewrite <- (set_dbody_id a') at 1. now apply crt_set_dbody.
+    - destruct IH as (m2 & o2 & c2). exists (a :: m2).
+      split; [now constructor|now apply crt_OnOne2_cons].
+  Qed.
+
+  (** The list-level join for fix/cofix_red_body, uniform over the two η branches:
+      w-leg is ≤1 dbody red at fix_context me; v-leg is a dbody-η* then a dtype-η*. *)
+  Lemma fix_body_join Γ mfix0 mfix1 me :
+    OnOne2 (on_Trel_eq (fun x y => red1 Σ (Γ ,,, fix_context mfix0) x y
+              × (forall u', eta1 x u' -> joinable Σ (Γ ,,, fix_context mfix0) u' y))
+              dbody gfixb) mfix0 mfix1 ->
+    OnOne2 (on_Trel_eq eta1 dtype gfix) mfix0 me + OnOne2 (on_Trel_eq eta1 dbody gfixb) mfix0 me ->
+    ∑ mw mmid mw',
+      clos_refl (OnOne2 (on_Trel_eq (red1 Σ (Γ ,,, fix_context me)) dbody gfixb)) me mw
+      × clos_refl_trans (OnOne2 (on_Trel_eq eta1 dbody gfixb)) mfix1 mmid
+      × clos_refl_trans (OnOne2 (on_Trel_eq eta1 dtype gfix)) mmid mw'
+      × All2 updef mw mw'.
+  Proof.
+    intros hr [he|he].
+    - (* η on a dtype: transfer the reds to fix_context me, then a cross-field diamond *)
+      assert (hc : eta_ctx (Γ ,,, fix_context mfix0) (Γ ,,, fix_context me)).
+      { apply All2_app; [now apply fix_context_eta_dtype|apply eta_ctx_refl]. }
+      assert (hr0 : OnOne2 (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix0)) dbody gfixb) mfix0 mfix1).
+      { eapply OnOne2_impl; [exact hr|]. intros a a' [[rd _] g]. split; [exact rd|exact g]. }
+      destruct (onOne2_dbody_transfer _ _ _ _ hc hr0) as (m2 & hr2 & hres).
+      assert (hin : OnOne2 (fun a a' => on_Trel_eq (red1 Σ (Γ ,,, fix_context me)) dbody gfixb a a'
+                     × (forall b, on_Trel_eq eta1 dtype gfix a b ->
+                        ∑ w w', clos_refl (on_Trel_eq (red1 Σ (Γ ,,, fix_context me)) dbody gfixb) b w
+                                × clos_refl_trans (on_Trel_eq eta1 dtype gfix) a' w'
+                                × updef w w')) mfix0 m2).
+      { eapply OnOne2_impl; [exact hr2|]. intros a a' [rd geq]. split; [split; [exact rd|exact geq]|].
+        intros b [e g2].
+        destruct a as [n t bo ra], a' as [n' t' bo' ra'], b as [nb tb bb rb]; cbn in *.
+        inversion geq; inversion g2; subst.
+        exists (set_dbody {| dname := nb; dtype := tb; dbody := bb; rarg := rb |} bo'),
+               (set_dtype {| dname := nb; dtype := t'; dbody := bo'; rarg := rb |} tb).
+        split; [|split].
+        + apply r_step. split; [exact rd|reflexivity].
+        + apply rt_step. split; [exact e|reflexivity].
+        + split; [apply upto_domain_refl|split; [apply upto_domain_refl|reflexivity]]. }
+      destruct (onOne2_diamond _ _ updef updef_refl mfix0 m2 me hin he)
+        as (mw & mw' & hw & hw' & hu).
+      exists mw, m2, mw'. repeat split; assumption.
+    - (* η on a dbody: same field, fix_context unchanged *)
+      pose proof (fix_context_dbody_eq _ _ he) as Efc.
+      assert (hin : OnOne2 (fun a a' => on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix0)) dbody gfixb a a'
+                     × (forall b, on_Trel_eq eta1 dbody gfixb a b ->
+                        ∑ w w', clos_refl (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix0)) dbody gfixb) b w
+                                × clos_refl_trans (on_Trel_eq eta1 dbody gfixb) a' w'
+                                × updef w w')) mfix0 mfix1).
+      { eapply OnOne2_impl; [exact hr|]. intros a a' [[rd IHd] geq]. split; [split; [exact rd|exact geq]|].
+        intros b [eb gbeq]. destruct (IHd _ eb) as (dw & dw' & hdw & hdw' & hud).
+        exists (set_dbody b dw), (set_dbody a' dw'). split; [|split].
+        + rewrite <- (set_dbody_id b) at 1. now apply clos_refl_set_dbody.
+        + rewrite <- (set_dbody_id a') at 1. now apply crt_set_dbody.
+        + destruct a as [n t bo ra], a' as [n' t' bo' ra'], b as [nb tb bb rb]; cbn in *.
+          inversion geq; inversion gbeq; subst.
+          split; [apply upto_domain_refl|split; [exact hud|reflexivity]]. }
+      destruct (onOne2_diamond _ _ updef updef_refl mfix0 mfix1 me hin he)
+        as (mw & mw' & hw & hw' & hu).
+      rewrite Efc in hw.
+      exists mw, mw', mw'. repeat split; [exact hw|exact hw'|apply rt_refl|exact hu].
+  Qed.
+
+  (** *** fix_red_body / cofix_red_body *)
+  Lemma c3_fix_red_body Γ mfix0 mfix1 idx u :
+    OnOne2 (on_Trel_eq (fun x y => red1 Σ (Γ ,,, fix_context mfix0) x y
+              × (forall u', eta1 x u' -> joinable Σ (Γ ,,, fix_context mfix0) u' y))
+              dbody gfixb) mfix0 mfix1 ->
+    eta1 (tFix mfix0 idx) u -> joinable Σ Γ u (tFix mfix1 idx).
+  Proof.
+    intros hr he. depelim he;
+      [destruct (fix_body_join Γ mfix0 mfix1 _ hr (inl o)) as (mw & mm & mw' & hw & h1 & h2 & hu)
+      |destruct (fix_body_join Γ mfix0 mfix1 _ hr (inr o)) as (mw & mm & mw' & hw & h1 & h2 & hu)];
+      exists (tFix mw idx), (tFix mw' idx); (split; [|split]);
+      [apply red_le_fix_body; exact hw
+      |eapply rt_trans; [apply eta_fix_body_rt; exact h1|apply eta_fix_ty_rt; exact h2]
+      |now apply utd_fix_of
+      |apply red_le_fix_body; exact hw
+      |eapply rt_trans; [apply eta_fix_body_rt; exact h1|apply eta_fix_ty_rt; exact h2]
+      |now apply utd_fix_of].
+  Qed.
+
+  Lemma c3_cofix_red_body Γ mfix0 mfix1 idx u :
+    OnOne2 (on_Trel_eq (fun x y => red1 Σ (Γ ,,, fix_context mfix0) x y
+              × (forall u', eta1 x u' -> joinable Σ (Γ ,,, fix_context mfix0) u' y))
+              dbody gfixb) mfix0 mfix1 ->
+    eta1 (tCoFix mfix0 idx) u -> joinable Σ Γ u (tCoFix mfix1 idx).
+  Proof.
+    intros hr he. depelim he;
+      [destruct (fix_body_join Γ mfix0 mfix1 _ hr (inl o)) as (mw & mm & mw' & hw & h1 & h2 & hu)
+      |destruct (fix_body_join Γ mfix0 mfix1 _ hr (inr o)) as (mw & mm & mw' & hw & h1 & h2 & hu)];
+      exists (tCoFix mw idx), (tCoFix mw' idx); (split; [|split]);
+      [apply red_le_cofix_body; exact hw
+      |eapply rt_trans; [apply eta_cofix_body_rt; exact h1|apply eta_cofix_ty_rt; exact h2]
+      |now apply utd_cofix_of
+      |apply red_le_cofix_body; exact hw
+      |eapply rt_trans; [apply eta_cofix_body_rt; exact h1|apply eta_cofix_ty_rt; exact h2]
+      |now apply utd_cofix_of].
+  Qed.
 End Cong.
