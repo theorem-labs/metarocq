@@ -61,13 +61,20 @@ Inductive cast_kind : Set :=
 | Cast.
 Derive NoConfusion EqDec for cast_kind.
 
+(** [ci_cofix_nondep] matters only for a match on a coinductive type. When it is [true],
+    the return clause does not depend on the scrutinee (the typing rule checks this), and a
+    cofixpoint scrutinee unfolds under the match. When it is [false], the return clause may
+    depend on the scrutinee and a cofixpoint scrutinee does not unfold: unfolding would
+    break subject reduction. The quotation of a Rocq term sets it from the syntax of the
+    return clause; no operation on terms changes it. *)
 Record case_info := mk_case_info {
   ci_ind : inductive;
   ci_npar : nat;
   (* Not implemented yet, as the representation in PCUIC doesn't need this cached information.
      ci_cstr_nargs : list nat; (* The number of REAL arguments of each constructor (no params, no lets) *)
      ci_cstr_ndecls : list nat; (* The number of arguments of each constructor (no params but lets included) *)   *)
-  ci_relevance : relevance }.
+  ci_relevance : relevance;
+  ci_cofix_nondep : bool }.
 Derive NoConfusion EqDec for case_info.
 
 Definition string_of_case_info ci :=
@@ -75,7 +82,8 @@ Definition string_of_case_info ci :=
   string_of_nat ci.(ci_npar) ^ "," ^
   (* string_of_list string_of_nat ci.(ci_cstr_nargs) ^ "," ^
   string_of_list string_of_nat ci.(ci_cstr_ndecls) ^ "," ^ *)
-  string_of_relevance ci.(ci_relevance) ^ ")".
+  string_of_relevance ci.(ci_relevance) ^ "," ^
+  (if ci.(ci_cofix_nondep) then "nondep" else "dep") ^ ")".
 
 Inductive recursivity_kind :=
   | Finite (* = inductive *)

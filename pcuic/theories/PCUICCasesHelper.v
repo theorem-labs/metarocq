@@ -27,7 +27,7 @@ Definition make_br ind mib (* pparams puinst *) cdecl t :=
    bbody := t |}.
 
 Definition make_case (ind : inductive) (mib : mutual_inductive_body) (oib : one_inductive_body) (pparams : list term) (puinst : Instance.t) (discr : term) (rettyp : term) (brs : list term) :=
-  let ci := {| ci_ind := ind; ci_npar := mib.(ind_npars); ci_relevance := oib.(ind_relevance) |} in
+  let ci := {| ci_ind := ind; ci_npar := mib.(ind_npars); ci_relevance := oib.(ind_relevance); ci_cofix_nondep := true |} in
   let p := make_case_pred ind mib oib pparams puinst rettyp in
   let brs := map2 (make_br ind mib (*pparams puinst *)) oib.(ind_ctors) brs in
   tCase ci p discr brs.
@@ -490,7 +490,7 @@ Lemma type_Case_helper
   Σ ;;; Γ |- make_case ind mib oib pparams puinst discr rettyp brs : subst_rettyp.
 Proof.
   move=> wfΣ inddecl pparamslen discrtyp p predctx ptyp (* puinstok *) pselimok Her isfinite brslen ptm brstyp srettyp.
-  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib |}.
+  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib ; ci_cofix_nondep := true |}.
 
   have wfΣ1 := (wfΣ : wf Σ.1).
   have Γwf : wf_local Σ Γ by apply: (typing_wf_local discrtyp).
@@ -607,7 +607,7 @@ Lemma type_Case_subst_helper
 Proof.
   move=> wfΣ inddecl pparamslen discrtyp p predctx predWty elimok Her finok brslen brsok substrettyp.
 
-  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib |}.
+  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib ; ci_cofix_nondep := true |}.
 
   have wfΣ1 := (wfΣ : wf Σ.1).
   have Γwf : wf_local Σ Γ by apply: (typing_wf_local discrtyp).
@@ -740,7 +740,7 @@ Lemma type_Case_simple_subst_helper
 Proof.
   move=> wfΣ inddecl pparamslen discrtyp rettyp' p predctx predWty elimok Her brslen brsok.
 
-  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib |}.
+  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib ; ci_cofix_nondep := true |}.
 
   have wfΣ1 := (wfΣ : wf Σ.1).
   have Γwf : wf_local Σ Γ by apply: (typing_wf_local discrtyp).

@@ -1307,7 +1307,7 @@ Proof.
 
   - rewrite trans_mkApps.
     rewrite !trans_mkApps; eauto with wf.
-    apply trans_unfold_cofix in H; eauto with wf.
+    apply trans_unfold_cofix in H0; eauto with wf.
     eapply TT.red_cofix_case; eauto.
 
   - rewrite !trans_mkApps.
@@ -2464,7 +2464,8 @@ Proof.
     + assumption.
     + now rewrite trans_mkApps map_app in X7.
     + match goal with h : implb (ST.isCoFinite _) _ = true |- _ => move: h end.
-      cbn. case: (SE.ind_finite mdecl) => //= hocc.
+      cbn. case: (SE.ind_finite mdecl) => //=.
+      case: (ci_cofix_nondep ci) => //= hocc.
       exact (trans_noccur_between 1 _ _ hocc 0 strengthenP01_nocc_betweenp).
     + rewrite (trans_case_predicate_context Γ); tea.
       eapply All2i_map. eapply All2i_map_right.

@@ -195,8 +195,10 @@ Inductive red1 (Σ : global_env) (Γ : context) : term -> term -> Type :=
     is_constructor narg args = true ->
     red1 Σ Γ (tApp (tFix mfix idx) args) (mkApps fn args)
 
-(** CoFix-case unfolding *)
+(** CoFix-case unfolding, only under a case whose return type does not depend on the
+    scrutinee ([ci_cofix_nondep]) *)
 | red_cofix_case ip p mfix idx args narg fn brs :
+    ip.(ci_cofix_nondep) ->
     unfold_cofix mfix idx = Some (narg, fn) ->
     red1 Σ Γ (tCase ip p (mkApps (tCoFix mfix idx) args) brs)
          (tCase ip p (mkApps fn args) brs)
@@ -314,6 +316,7 @@ Lemma red1_ind_all :
 
        (forall (Γ : context) (ip : case_info) (p : predicate term) (mfix : mfixpoint term) (idx : nat)
           (args : list term) (narg : nat) (fn : term) (brs : list (branch term)),
+        ip.(ci_cofix_nondep) ->
         unfold_cofix mfix idx = Some (narg, fn) ->
         P Γ (tCase ip p (mkApps (tCoFix mfix idx) args) brs) (tCase ip p (mkApps fn args) brs)) ->
 
@@ -623,13 +626,15 @@ Inductive whd_rel (zeta : bool) (Σ : global_env) (Γ : context) :
       args h l) :
     whd_rel zeta Σ Γ (tCase ci p c brs) args h l
 | whd_case_cofix ci p c brs args mfix idx cargs narg fn h l
+    (hnd : ci.(ci_cofix_nondep))
     (wa : whd_rel zeta Σ Γ c [] (tCoFix mfix idx) cargs)
     (hunf : unfold_cofix mfix idx = Some (narg, fn))
     (wb : whd_rel zeta Σ Γ (tCase ci p (mkApps fn cargs) brs) args h l) :
     whd_rel zeta Σ Γ (tCase ci p c brs) args h l
 | whd_case_stuck ci p c brs args t cargs
     (wa : whd_rel zeta Σ Γ c [] t cargs)
-    (hnc : whd_is_construct t = false) (hncf : whd_is_cofix t = false) :
+    (hnc : whd_is_construct t = false)
+    (hncf : (whd_is_cofix t && ci.(ci_cofix_nondep)) = false) :
     whd_rel zeta Σ Γ (tCase ci p c brs) args (tCase ci p (mkApps t cargs) brs) args
 (** [red_view_Proj]. *)
 | whd_proj p c args u cargs a h l
@@ -1043,9 +1048,10 @@ Inductive typing `{checker_flags} (Σ : global_env_ext) (Γ : context) : term ->
     is_allowed_elimination Σ idecl.(ind_kelim) ps ->
     isSortRel ps ci.(ci_relevance) ->
     Σ ;;; Γ |- c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
-    (* A case on a coinductive may not mention the scrutinee, variable 0 of the predicate
-       context, in its return type. *)
-    implb (isCoFinite mdecl.(ind_finite)) (noccur_between 0 1 p.(preturn)) = true ->
+    (* A case on a coinductive whose [ci_cofix_nondep] flag is set may not mention the
+       scrutinee, variable 0 of the predicate context, in its return type. *)
+    implb (isCoFinite mdecl.(ind_finite))
+      (implb ci.(ci_cofix_nondep) (noccur_between 0 1 p.(preturn))) = true ->
     let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
     All2i (fun i cdecl br =>
       let brctxty := case_branch_type ci.(ci_ind) mdecl p ptm i cdecl br in
@@ -1453,7 +1459,8 @@ Lemma typing_ind_env `{cf : checker_flags} :
         isSortRel ps ci.(ci_relevance) ->
         Σ ;;; Γ |- c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
         P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
-        implb (isCoFinite mdecl.(ind_finite)) (noccur_between 0 1 p.(preturn)) = true ->
+        implb (isCoFinite mdecl.(ind_finite))
+          (implb ci.(ci_cofix_nondep) (noccur_between 0 1 p.(preturn))) = true ->
         let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
         All2i (fun i cdecl br =>
           let brctxty := case_branch_type ci.(ci_ind) mdecl p ptm i cdecl br in

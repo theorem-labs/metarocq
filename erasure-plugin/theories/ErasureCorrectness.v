@@ -685,10 +685,10 @@ Section PCUICInv.
       destruct H0. destruct H0. now eapply nth_error_Some_length in H3.
       rewrite -it_mkProd_or_LetIn_app.
       rewrite -onNpars in l, H1.
-      move/PCUICClassification.typing_spine_smash.
+      move/PCUICSafeLemmata.typing_spine_smash.
       rewrite expand_lets_mkApps.
       have lenargs : #|args| = context_assumptions (ind_params mind') + context_assumptions (cstr_args cdecl') by lia.
-      move/(PCUICClassification.typing_spine_all_inv _).
+      move/(PCUICSafeLemmata.typing_spine_all_inv _).
       intros h; forward h. rewrite context_assumptions_smash_context /= context_assumptions_app.
       rewrite /args' /pars. now len.
       rewrite expand_lets_mkApps PCUICLiftSubst.subst_mkApps /= in h.
@@ -745,7 +745,7 @@ Section ErasureFunction.
     exists ar, ∥ typing_spine Σ Γ T args ar ∥ /\ isArity ar.
   Proof.
     intros wfΓ sp isa.
-    unshelve epose proof (PCUICClassification.isArity_typing_spine _ sp); eauto.
+    unshelve epose proof (PCUICSafeLemmata.isArity_typing_spine _ sp); eauto.
     forward H.
     { exists T. split; eauto. sq.
       pose proof (typing_spine_isType_dom sp).

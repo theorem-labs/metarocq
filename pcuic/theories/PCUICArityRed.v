@@ -123,13 +123,16 @@ Inductive whd_rel (zeta : bool) (Σ : global_env) (Γ : context) :
     whd_rel zeta Σ Γ (iota_red ci.(ci_npar) p cargs br) args h l ->
     whd_rel zeta Σ Γ (tCase ci p c brs) args h l
 | whd_case_cofix ci p c brs args mfix idx cargs narg fn h l :
+    ci.(ci_cofix_nondep) ->
     whd_rel zeta Σ Γ c [] (tCoFix mfix idx) cargs ->
     unfold_cofix mfix idx = Some (narg, fn) ->
     whd_rel zeta Σ Γ (tCase ci p (mkApps fn cargs) brs) args h l ->
     whd_rel zeta Σ Γ (tCase ci p c brs) args h l
+(** A case whose scrutinee is neither a constructor nor, under a case that may unfold one
+    ([ci_cofix_nondep]), a cofixpoint. *)
 | whd_case_stuck ci p c brs args t cargs :
     whd_rel zeta Σ Γ c [] t cargs ->
-    whd_is_construct t = false -> whd_is_cofix t = false ->
+    whd_is_construct t = false -> (whd_is_cofix t && ci.(ci_cofix_nondep)) = false ->
     whd_rel zeta Σ Γ (tCase ci p c brs) args (tCase ci p (mkApps t cargs) brs) args
 (** [red_view_Proj]. *)
 | whd_proj p c args u cargs a h l :
@@ -221,7 +224,7 @@ Section WhdRed.
       |mfix idx narg fn args c t cargs hu hn w IH hc
       |mfix idx narg fn args hu hn|mfix idx args hu
       |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
-      |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |ci p c brs args mfix idx cargs narg fn h l hnd w1 IH1 hu w2 IH2
       |ci p c brs args t cargs w IH hc hcf
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
@@ -310,7 +313,7 @@ Proof.
     |mfix idx narg fn args c t cargs hu hn w IH hc
     |mfix idx narg fn args hu hn|mfix idx args hu
     |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
-    |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+    |ci p c brs args mfix idx cargs narg fn h l hnd w1 IH1 hu w2 IH2
     |ci p c brs args t cargs w IH hc hcf
     |p c args u cargs a h l w1 IH1 ha w2 IH2
     |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
@@ -395,6 +398,8 @@ Ltac whd_det_lookup :=
       unfold is_true in H; cbn in H; discriminate
   | H : whd_is_construct (tConstruct _ _ _) = false |- _ => discriminate
   | H : whd_is_construct0 (tConstruct _ 0 _) = false |- _ => discriminate
+  | H : is_true (ci_cofix_nondep ?ci), H' : (whd_is_cofix ?t && ci_cofix_nondep ?ci) = false |- _ =>
+      unfold is_true in H; rewrite H andb_true_r in H'
   | H : whd_is_cofix (tCoFix _ _) = false |- _ => discriminate
   end.
 
@@ -469,7 +474,7 @@ Proof.
       |mfix idx narg fn args c t cargs hu hn w IH hc
       |mfix idx narg fn args hu hn|mfix idx args hu
       |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
-      |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |ci p c brs args mfix idx cargs narg fn h l hnd w1 IH1 hu w2 IH2
       |ci p c brs args t cargs w IH hc hcf
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2

@@ -80,8 +80,9 @@ struct
     let bctx = to_coq_listl taname (List.rev (Array.to_list bctx)) in
     constr_mkApp (tmk_branch, [| Lazy.force tTerm; bctx; bbody |])
 
-  let mk_case_info (ind, npar, relevance) =
-    constr_mkApp (mk_case_info, [| ind; npar; relevance |])
+  let mk_case_info (ind, npar, relevance, nondep) =
+    let nondep = if nondep then Lazy.force ttrue else Lazy.force tfalse in
+    constr_mkApp (mk_case_info, [| ind; npar; relevance; nondep |])
 
   let mkCase ci p c brs =
     let ci = mk_case_info ci in

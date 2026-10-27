@@ -440,8 +440,6 @@ Proof.
   intros. now eapply eq_term_empty_eq_term.
 Qed.
 
-From MetaRocq.PCUIC Require Import PCUICClassification.
-
 Lemma typing_leq_term {cf:checker_flags} (Σ : global_env_ext) Γ t t' T T' :
   wf Σ.1 ->
   on_udecl Σ.1 Σ.2 ->
