@@ -46,10 +46,42 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
       move: H. rewrite H' length_app Nat.add_sub skipn_all_app //. }
   Qed.
 
+  (** Decides [extends_prim_fresh]: it quantifies over all kernames, but only
+      those in [Σ']'s operation table can satisfy its premise, so the finite
+      table is enough. *)
+  Definition extendsb_prim_fresh (Σ Σ' : global_env) : bool
+    := forallb (fun '(c, _) =>
+         (Retroknowledge.prim_op_of Σ.(retroknowledge) c
+            == Retroknowledge.prim_op_of Σ'.(retroknowledge) c)
+         || match lookup_env Σ c with None => true | Some _ => false end)
+         Σ'.(retroknowledge).(Retroknowledge.retro_ops).
+
+  Lemma extends_prim_freshT Σ Σ'
+    : reflectT (extends_prim_fresh Σ Σ') (extendsb_prim_fresh Σ Σ').
+  Proof.
+    destruct (extendsb_prim_fresh Σ Σ') eqn:hb; constructor.
+    - intros c op h.
+      have hin := Retroknowledge.lookup_op_spec _ _ _ h.
+      have H := proj1 (forallb_forall _ _) hb _ hin. cbn beta in H.
+      destruct (orb_true_elim _ _ H) as [He|Hl].
+      + apply eqb_eq in He. left. now rewrite He.
+      + right. destruct (lookup_env Σ c) eqn:hl; [discriminate|reflexivity].
+    - intros hp.
+      have ht : extendsb_prim_fresh Σ Σ' = true.
+      { rewrite /extendsb_prim_fresh. apply (proj2 (forallb_forall _ _)).
+        intros [c op0] hin.
+        destruct (Retroknowledge.lookup_op_in _ _ _ hin) as [op1 h1].
+        change (Retroknowledge.prim_op_of (retroknowledge Σ') c = Some op1) in h1.
+        apply orb_true_intro. destruct (hp c op1 h1) as [h2|h2].
+        + left. rewrite h1 h2. apply eqb_refl.
+        + right. now rewrite h2. }
+      rewrite ht in hb. discriminate.
+  Qed.
   Definition extendsb (Σ Σ' : global_env) : bool
     := Σ.(universes) ⊂?_cs Σ'.(universes)
        && extendsb_decls_part Σ Σ'
-       && Retroknowledge.extendsb Σ.(retroknowledge) Σ'.(retroknowledge).
+       && Retroknowledge.extendsb Σ.(retroknowledge) Σ'.(retroknowledge)
+       && extendsb_prim_fresh Σ Σ'.
 
   Definition extends_declsb (Σ Σ' : global_env) : bool
     := (Σ.(universes) == Σ'.(universes))
@@ -59,7 +91,8 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
   Definition extends_strictly_on_declsb (Σ Σ' : global_env) : bool
     := (Σ.(universes) ⊂?_cs Σ'.(universes))
        && strictly_extendsb_decls_part Σ Σ'
-       && Retroknowledge.extendsb Σ.(retroknowledge) Σ'.(retroknowledge).
+       && Retroknowledge.extendsb Σ.(retroknowledge) Σ'.(retroknowledge)
+       && extendsb_prim_fresh Σ Σ'.
 
   Definition strictly_extends_declsb (Σ Σ' : global_env) : bool
     := (Σ.(universes) == Σ'.(universes))
@@ -69,8 +102,9 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
   Lemma extendsT Σ Σ' : reflectT (extends Σ Σ') (extendsb Σ Σ').
   Proof.
     rewrite /extends/extendsb.
-    case: extends_decls_partT; case: Retroknowledge.extendsT; case: ContextSet.subsetP; cbn;
-      constructor; intuition.
+    case: extends_decls_partT => hd; case: Retroknowledge.extendsT => hr;
+      case: ContextSet.subsetP => hu; case: extends_prim_freshT => hp; cbn;
+      constructor; first [ split; assumption | intros [? ? ? ?]; contradiction ].
   Qed.
 
   Lemma extends_declsT Σ Σ' : reflectT (extends_decls Σ Σ') (extends_declsb Σ Σ').
@@ -83,8 +117,9 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
   Lemma extends_strictly_on_declsT Σ Σ' : reflectT (extends_strictly_on_decls Σ Σ') (extends_strictly_on_declsb Σ Σ').
   Proof.
     rewrite /extends_strictly_on_decls/extends_strictly_on_declsb.
-    case: strictly_extends_decls_partT; case: Retroknowledge.extendsT; case: ContextSet.subsetP; cbn;
-      constructor; intuition.
+    case: strictly_extends_decls_partT => hd; case: Retroknowledge.extendsT => hr;
+      case: ContextSet.subsetP => hu; case: extends_prim_freshT => hp; cbn;
+      constructor; first [ split; assumption | intros [? ? ? ?]; contradiction ].
   Qed.
 
   Lemma strictly_extends_declsT Σ Σ' : reflectT (strictly_extends_decls Σ Σ') (strictly_extends_declsb Σ Σ').
