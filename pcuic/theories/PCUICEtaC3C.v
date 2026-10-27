@@ -60,6 +60,71 @@ Qed.
 
 #[global] Instance upto_domain_Reflexive : Reflexive upto_domain := upto_domain_refl.
 
+(** ** Congruence lemmas for [eta] (the reflexive-transitive closure). *)
+
+Lemma eta_App_l M N a : eta M N -> eta (tApp M a) (tApp N a).
+Proof.
+  induction 1.
+  - apply rt_step. now apply app_eta_l.
+  - apply rt_refl.
+  - eapply rt_trans; eauto.
+Qed.
+
+Lemma eta_App_r M a b : eta a b -> eta (tApp M a) (tApp M b).
+Proof.
+  induction 1.
+  - apply rt_step. now apply app_eta_r.
+  - apply rt_refl.
+  - eapply rt_trans; eauto.
+Qed.
+
+Lemma eta_mkApps_f M N l : eta M N -> eta (mkApps M l) (mkApps N l).
+Proof.
+  intros H. induction l using rev_ind.
+  - exact H.
+  - rewrite !mkApps_app /=. now apply eta_App_l.
+Qed.
+
+Lemma eta1_mkApps_f M N l : eta1 M N -> eta1 (mkApps M l) (mkApps N l).
+Proof.
+  intros H. induction l using rev_ind.
+  - exact H.
+  - rewrite !mkApps_app /=. now apply app_eta_l.
+Qed.
+
+Lemma eta_mkApps_args M l l' : All2 eta l l' -> eta (mkApps M l) (mkApps M l').
+Proof.
+  induction 1 in M |- *; cbn.
+  - apply rt_refl.
+  - eapply rt_trans; [|apply IHX]. now apply eta_mkApps_f, eta_App_r.
+Qed.
+
+Lemma eta_mkApps M N l l' : eta M N -> All2 eta l l' ->
+  eta (mkApps M l) (mkApps N l').
+Proof.
+  intros HMN Hll'. eapply rt_trans.
+  - apply eta_mkApps_f, HMN.
+  - now apply eta_mkApps_args.
+Qed.
+
+Lemma eta1_eta M N : eta1 M N -> eta M N.
+Proof. apply rt_step. Qed.
+
+(** ** Inversion of one [eta1] step on a [mkApps].  (2020 [eta1_mkApps_inv].) *)
+
+Lemma eta1_mkApps_inv M l N :
+  eta1 (mkApps M l) N ->
+  (∑ M', eta1 M M' × N = mkApps M' l) + (∑ l', OnOne2 eta1 l l' × N = mkApps M l').
+Proof.
+  induction l in M, N |- *; cbn.
+  - intros H. left. now exists N.
+  - intros H. apply IHl in H as [[M' [He ->]]|[l' [Hl ->]]].
+    + depelim He.
+      * left. now exists N1.
+      * right. exists (N2 :: l). split; now constructor.
+    + right. exists (a :: l'). split; now constructor.
+Qed.
+
 (** ** The C3 statement (plan §3 row C3). *)
 
 Definition C3_statement {cf : checker_flags} :=
