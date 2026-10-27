@@ -207,6 +207,7 @@ Proof.
     (PCUICAst.PCUICEnvironment.declarations Σ) norm' prf prf6 X eq_refl axf ht fo).
   pose proof wf as [].
   forward H by unshelve (eapply PCUICClassification.wcbveval_red; tea).
+  forward H by (exists v; exact ev).
   forward H. {
     intros [? hr].
     eapply PCUICNormalization.firstorder_value_irred; tea. cbn.
@@ -374,6 +375,7 @@ Section PCUICProof.
     epose proof (@erase_correct_strong optimized_abstract_env_impl g Σ.2 prf0 t v i u args _ _ hprefix prf1 prf2 Σ eq_refl ax ht fo).
     pose proof (proj1 pr) as [[]].
     forward H. eapply PCUICClassification.wcbveval_red; tea.
+    forward H by (eexists; tea).
     assert (PCUICFirstorder.firstorder_value Σ [] v).
     { eapply PCUICFirstorder.firstorder_value_spec; tea. apply w. constructor.
       eapply PCUICClassification.subject_reduction_eval; tea.
@@ -838,10 +840,15 @@ Section ErasureFunction.
       now rewrite /isFunction /isFixApp !head_mkApps //= orb_true_r.
   Qed.
 
+  (* A closed well-typed function either evaluates to a value or weak-head reduces to a
+     match on a cofixpoint whose return type depends on the scrutinee (a stuck form the
+     kernel leaves unreduced). The second disjunct is the case ruled out at the empty type
+     by [no_closed_stuck_cofix_case_at] in PCUICConsistency. *)
   Lemma pcuic_function_value (wfl := default_wcbv_flags)
     {guard_impl : abstract_guard_impl}
     (cf:=config.extraction_checker_flags) {Σ : global_env_ext} {f na A B}
-    (wfΣ : wf_ext Σ) (axfree : axiom_free Σ) (wf : Σ ;;; [] |- f : PCUICAst.tProd na A B) : { v & PCUICWcbvEval.eval Σ f v }.
+    (wfΣ : wf_ext Σ) (axfree : axiom_free Σ) (wf : Σ ;;; [] |- f : PCUICAst.tProd na A B) :
+    { v & PCUICWcbvEval.eval Σ f v } + PCUICClassification.reduces_to_wcbv_stuck Σ f.
   Proof.
     eapply (PCUICNormalization.wcbv_normalization wfΣ axfree wf). Unshelve.
     exact PCUICSN.extraction_normalizing.
@@ -855,12 +862,13 @@ Section ErasureFunction.
     axiom_free Σ ->
     ∥ nisErasable Σ [] f ∥ ->
     let (Σ', f') := transform erase_transform (Σ, f) pr in
-    eval Σ' f' v' -> isFunction v' = true.
+    (eval Σ' f' v' -> isFunction v' = true) + PCUICClassification.reduces_to_wcbv_stuck Σ f.
   Proof.
     intros axfree nise.
     destruct pr as [[]]. destruct wf.
-    epose proof (pcuic_function_value w.1 axfree X) as [v hv].
-    eapply erase_function; tea. now sq.
+    destruct (pcuic_function_value w.1 axfree X) as [[v hv] | hstuck].
+    - left. eapply erase_function; tea. now sq.
+    - right. exact hstuck.
   Qed.
 
 End ErasureFunction.
