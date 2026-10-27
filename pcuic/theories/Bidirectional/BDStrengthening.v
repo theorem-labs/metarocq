@@ -534,6 +534,28 @@ Proof.
   - by apply infering_typing.
 Qed.
 
+(** [mfix_on_ind] with a reduction witness (all of [wf_cofixpoint_red], the last
+    part of [wf_fixpoint_red]) is stable under a renaming, for a check that the
+    renaming preserves: the witness is renamed with [red_rename]. *)
+Lemma rename_mfix_on_ind_red `{cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  {check ok} P Γ Δ f (mfix : mfixpoint term) :
+  urenaming P Γ Δ f ->
+  on_ctx_free_vars P Γ ->
+  All (fun d => on_free_vars P (dtype d)) mfix ->
+  (forall d m, check d = Some m ->
+    check (map_def (rename f) (rename (shiftn #|mfix| f)) d) = Some m) ->
+  mfix_on_ind check (PCUICReduction.red Σ Γ) ok mfix ->
+  mfix_on_ind check (PCUICReduction.red Σ Δ) ok
+    (map (map_def (rename f) (rename (shiftn #|mfix| f))) mfix).
+Proof.
+  intros hf hΓ hop hcheck.
+  apply (mfix_on_ind_map _ _ _ hop); [|easy].
+  intros d m hT [ty [hc hred]].
+  exists (rename f ty); split.
+  - rewrite map_def_with_type. now apply hcheck.
+  - cbn. eapply red_rename ; tea.
+Qed.
+
 Section BDRenaming.
 
 Context `{cf : checker_flags}.
@@ -836,7 +858,16 @@ Proof using wfΣ.
       rewrite <-(shiftnP0 P) in hT. eapply on_free_vars_lift_impl in hT. rewrite Nat.add_0_r in hT.
       apply lift_sorting_f_it_impl with p => //= IHp.
       all: eapply IHp ; tea.
-    + by apply rename_wf_fixpoint.
+    + match goal with H : wf_fixpoint_red _ _ _ |- _ => destruct H as [isl [hr hm]] end.
+      have hop : All (fun d => on_free_vars P (dtype d)) mfix.
+      { apply (All_impl ht) => d hd. now move: hd => /andP []. }
+      split; [|split].
+      * rewrite forallb_map. eapply forallb_impl; [|exact isl].
+        intros x _ h. now eapply isLambda_rename.
+      * rewrite forallb_map. eapply forallb_impl; [|exact hr].
+        intros x _ h. now eapply rename_has_rec_arg.
+      * eapply rename_mfix_on_ind_red; tea.
+        exact (rename_check_one_fix f mfix).
 
   - intros. red. move => P Δ f hf hΓ /= /forallb_All ht.
     erewrite map_dtype.
@@ -859,7 +890,9 @@ Proof using wfΣ.
       rewrite <-(shiftnP0 P) in hT. eapply on_free_vars_lift_impl in hT. rewrite Nat.add_0_r in hT.
       apply lift_sorting_f_it_impl with p => //= IHp.
       all: eapply IHp ; tea.
-    + by apply rename_wf_cofixpoint.
+    + eapply rename_mfix_on_ind_red; tea; [|exact (rename_check_one_cofix f mfix)].
+      apply (All_impl ht) => d hd.
+      now move: hd => /andP [].
 
   - intros. red. intros P Δ f hf ht.
     cbn. rewrite rename_prim_type. econstructor; tea; rewrite ?prim_val_tag_map //.

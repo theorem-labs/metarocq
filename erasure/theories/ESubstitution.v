@@ -266,7 +266,8 @@ Proof.
     econstructor; eauto.
 
     eapply weakening_typing in HT; auto.
-    2:{ apply All_local_env_app_inv in X4 as [X4 _]. eapply X4. }
+    2:{ match goal with [ h : wf_local _ (_ ,,, _ ,,, lift_context _ _ _) |- _ ] =>
+          apply All_local_env_app_inv in h as [h _]; eapply h end. }
 
     cbn in HT.
     eapply inversion_Fix in HT as (? & ? & ? & ? & ? & ? & ?) ; auto.
@@ -290,14 +291,15 @@ Proof.
     rewrite lift_fix_context.
     rewrite lift_context_app - plus_n_O in IH.
     unfold app_context in IH. rewrite <- !app_assoc in IH.
-    rewrite (All2_length X5) in IH |- *.
+    match goal with [ h : All2 _ mfix _ |- _ ] => rewrite (All2_length h) in IH |- * end.
     apply IH. apply e.
 
   - assert (HT : Σ;;; Γ ,,, Γ' |- PCUICAst.tCoFix mfix n : (decl.(dtype))).
     econstructor; eauto.
 
     eapply weakening_typing in HT; auto.
-    2:{ apply All_local_env_app_inv in X4 as [X4 _]. eapply X4. }
+    2:{ match goal with [ h : wf_local _ (_ ,,, _ ,,, lift_context _ _ _) |- _ ] =>
+          apply All_local_env_app_inv in h as [h _]; eapply h end. }
 
     cbn in HT.
     eapply inversion_CoFix in HT as (? & ? & ? & ? & ? & ? & ?) ; auto. clear a0 e.
@@ -319,7 +321,7 @@ Proof.
     rewrite lift_fix_context.
     rewrite lift_context_app -plus_n_O in IH.
     unfold app_context in IH. rewrite <- !app_assoc in IH.
-    rewrite (All2_length X5) in IH |- *.
+    match goal with [ h : All2 _ mfix _ |- _ ] => rewrite (All2_length h) in IH |- * end.
     apply IH. apply IH'.
 
   - econstructor. depelim H4.
@@ -544,16 +546,16 @@ Proof.
       * eauto.
     + econstructor.
       eapply is_type_subst; eauto.
-  - inv H2.
+  - match goal with [ h : erases _ _ (PCUICAst.tFix _ _) _ |- _ ] => inv h end.
     + cbn. econstructor.
       eapply All2_map.
       eapply All2_impl_In.
       eassumption.
-      intros. destruct H4 as [? ? ? ?].
+      intros ? ? hin _ hP. destruct hP as [? ? ? ?].
       repeat split; eauto.
       cbn. now eapply isLambda_subst.
       now eapply ELiftSubst.isLambda_subst.
-      eapply In_nth_error in H2 as [].
+      eapply In_nth_error in hin as [].
       eapply nth_error_all in X3 as IH; eauto.
       eapply nth_error_all in X2 as Ht; eauto. apply unlift_TermTyp in Ht.
       specialize (IH Γ Γ' (Δ ,,, fix_context mfix)).
@@ -567,20 +569,20 @@ Proof.
         now rewrite subst_fix_context.
       * cbn. now rewrite app_context_length fix_context_length.
       * cbn. now erewrite app_context_length, fix_context_length, All2_length.
-      * pose proof (@substitution _ Σ _ Γ Γ' s (Δ ,,, fix_context mfix)).
-        rewrite app_context_assoc in X9.
-        eapply X9 in X5; eauto.
+      * pose proof (@substitution _ Σ _ Γ Γ' s (Δ ,,, fix_context mfix)) as hsub.
+        rewrite app_context_assoc in hsub.
+        match goal with [ h : subslet _ _ s _ |- _ ] => eapply hsub in h; eauto end.
         eapply typing_wf_local.  eassumption.
     + econstructor.
       eapply is_type_subst; eauto.
-  - inv H2.
+  - match goal with [ h : erases _ _ (PCUICAst.tCoFix _ _) _ |- _ ] => inv h end.
     + cbn. econstructor.
       eapply All2_map.
       eapply All2_impl_In.
       eassumption.
-      intros. destruct H4 as (? & ? & ?).
+      intros ? ? hin _ hP. destruct hP as (? & ? & ?).
       repeat split; eauto.
-      eapply In_nth_error in H2 as [].
+      eapply In_nth_error in hin as [].
       eapply nth_error_all in X3 as IH; eauto.
       eapply nth_error_all in X2 as Ht; eauto. apply unlift_TermTyp in Ht.
       specialize (IH Γ Γ' (Δ ,,, fix_context mfix)).
@@ -594,9 +596,9 @@ Proof.
         now rewrite subst_fix_context.
       * cbn. now rewrite app_context_length fix_context_length.
       * cbn. now erewrite app_context_length, fix_context_length, All2_length.
-      * pose proof (@substitution _ Σ _ Γ Γ' s (Δ ,,, fix_context mfix)).
-        rewrite app_context_assoc in X9.
-        eapply X9 in X5; eauto.
+      * pose proof (@substitution _ Σ _ Γ Γ' s (Δ ,,, fix_context mfix)) as hsub.
+        rewrite app_context_assoc in hsub.
+        match goal with [ h : subslet _ _ s _ |- _ ] => eapply hsub in h; eauto end.
         eapply typing_wf_local.  eassumption.
     + econstructor.
       eapply is_type_subst; eauto.

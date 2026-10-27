@@ -15,6 +15,29 @@ From MetaRocq.Quotation.ToPCUIC.QuotationOf.PCUIC Require Import PCUICAst.Instan
 
 #[export] Instance quote_FixCoFix : ground_quotable FixCoFix := ltac:(destruct 1; exact _).
 
+#[export] Instance quote_mfix_body_on {T check R mind d}
+  {qT : quotation_of T} {quoteT : ground_quotable T}
+  {qcheck : quotation_of check} {qR : quotation_of R}
+  {quoteR : forall t u, ground_quotable (R t u)} :
+  ground_quotable (@mfix_body_on T check R mind d)
+  := ltac:(cbv [mfix_body_on]; exact _).
+
+#[export] Instance quote_mfix_on_ind {T check R ok mfix}
+  {qT : quotation_of T} {quoteT : ground_quotable T}
+  {qcheck : quotation_of check} {qR : quotation_of R} {qok : quotation_of ok}
+  {quoteR : forall t u, ground_quotable (R t u)} :
+  ground_quotable (@mfix_on_ind T check R ok mfix)
+  := ltac:(cbv [mfix_on_ind]; exact _).
+
+#[export] Instance quote_conv_witness {cf Σ Γ t u} : ground_quotable (@conv_witness cf Σ Γ t u)
+  := ltac:(cbv [conv_witness]; exact _).
+
+#[export] Instance quote_wf_fixpoint {cf Σ Γ mfix} : ground_quotable (@wf_fixpoint cf Σ Γ mfix)
+  := ltac:(cbv [wf_fixpoint]; exact _).
+
+#[export] Instance quote_wf_cofixpoint {cf Σ Γ mfix} : ground_quotable (@wf_cofixpoint cf Σ Γ mfix)
+  := ltac:(cbv [wf_cofixpoint]; exact _).
+
 #[export] Instance quote_case_side_conditions {cf wf_local_funΣ typingΣ Σ Γ ci p ps mdecl idecl indices predctx}
   {qwf_local_fun : quotation_of wf_local_funΣ} {qtyping : quotation_of typingΣ}
   {quote_wf_local_fun : forall Γ, ground_quotable (@wf_local_funΣ Γ)}

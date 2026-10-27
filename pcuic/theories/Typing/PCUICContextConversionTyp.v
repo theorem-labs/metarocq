@@ -179,6 +179,26 @@ Proof.
     all: eapply cumulAlgo_cumulSpec; eauto.
 Defined.
 
+Lemma mfix_on_ind_context_cumulativity {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Γ' check ok mfix} :
+  wf_local Σ Γ -> wf_local Σ Γ' ->
+  cumul_context cumulAlgo_gen Σ Γ' Γ ->
+  All (fun d => is_open_term Γ (dtype d)) mfix ->
+  mfix_on_ind check (conv_witness Σ Γ) ok mfix -> mfix_on_ind check (conv_witness Σ Γ') ok mfix.
+Proof.
+  intros wfΓ wfΓ' hctx hop h.
+  have hlen : #|Γ'| = #|Γ| by apply (All2_fold_length hctx).
+  have hcc : Σ ⊢ Γ' ≤ Γ by eapply (wt_cum_ws_cumul_ctx_pb Cumul).
+  refine (mfix_on_ind_All2 _ (fun _ hk => hk) h).
+  eapply All_All2_refl, (All_impl hop).
+  intros d hopd m [ty [hc [hty hconv]]].
+  exists ty. split; [exact hc|]. split.
+  - move: hty. now rewrite hlen.
+  - eapply convSpec_convAlgo_curry in hconv; tea.
+    2: now eapply wf_local_closed_context.
+    eapply (ws_cumul_pb_ws_cumul_ctx hcc) in hconv.
+    exact (@cumulAlgo_cumulSpec _ _ Conv _ _ _ hconv).
+Qed.
+
 Lemma context_cumulativity_prop {cf:checker_flags} :
   env_prop
     (fun Σ Γ t T =>
@@ -265,6 +285,11 @@ Proof.
       eapply (All_mfix_wf); auto.
       apply (All_impl X1); simpl.
       intros d' Ht. now apply Ht.
+    * match goal with h : wf_fixpoint _ _ _ |- _ => destruct h as (isl & hra & hon) end.
+      split; [exact isl|split; [exact hra|]].
+      eapply (mfix_on_ind_context_cumulativity wfΓ X6 X5); tea.
+      eapply (All_impl X0) => d hd.
+      now eapply isType_is_open_term, isTypeRel_isType, hd.
   - econstructor.
     all:pcuic.
     * eapply cofix_guard_context_cumulativity; eauto.
@@ -279,6 +304,9 @@ Proof.
       eapply (All_mfix_wf); auto.
       apply (All_impl X1); simpl.
       intros d' Ht. now apply Ht.
+    * eapply (mfix_on_ind_context_cumulativity wfΓ X6 X5); tea.
+      eapply (All_impl X0) => d hd.
+      now eapply isType_is_open_term, isTypeRel_isType, hd.
   - econstructor; tea.
     depelim X1; constructor; eauto. solve_all.
   - econstructor; eauto. pose proof (wf_local_closed_context wfΓ).

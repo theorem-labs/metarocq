@@ -2,7 +2,7 @@
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config Primitive.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
-  PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition.
+  PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition PCUICOnFreeVars.
 From MetaRocq.PCUIC Require Export PCUICCumulativitySpec.
 From MetaRocq.PCUIC Require Export PCUICCases.
 
@@ -99,20 +99,25 @@ Definition check_one_fix d :=
   | None => None (* Recursive argument not found *)
   end.
 
-Definition wf_fixpoint_gen
-  (lookup: kername -> option global_decl) mfix :=
-  forallb (isLambda ∘ dbody) mfix &&
-  let checks := map check_one_fix mfix in
-  match map_option_out checks with
-  | Some (ind :: inds) =>
-    (* Check that mutually recursive fixpoints are all on the same mututal
-       inductive block *)
-    forallb (eqb ind) inds &&
-    check_recursivity_kind lookup ind Finite
-  | _ => false
-  end.
+(** The recursive argument is among the syntactic products of the declared
+    type. *)
+Definition has_rec_arg (d : def term) : bool :=
+  d.(rarg) <? context_assumptions (decompose_prod_assum [] d.(dtype)).1.
 
-Definition wf_fixpoint (Σ : global_env) := wf_fixpoint_gen (lookup_env Σ).
+(** The witness relation of the typing rules: [ty] is scoped in [Γ] and
+    convertible with the declared type. Rocq's kernel reduces the type of the
+    recursive argument to find its inductive ([Inductive.inductive_of_mutfix]);
+    for a well-typed declared type, a convertible type on which [check_one_fix]
+    succeeds exists exactly when that reduction reaches an applied inductive. *)
+Definition conv_witness `{checker_flags} (Σ : global_env_ext) (Γ : context) (t ty : term) :=
+  is_open_term Γ ty × (Σ ;;; Γ |- t =s ty).
+
+(** All bodies are lambdas, recurse on a syntactic product of their declared
+    type, and recurse on one finite mutual inductive block. *)
+Definition wf_fixpoint `{checker_flags} (Σ : global_env_ext) (Γ : context) (mfix : mfixpoint term) :=
+  forallb (isLambda ∘ dbody) mfix × forallb has_rec_arg mfix ×
+  mfix_on_ind check_one_fix (conv_witness Σ Γ)
+    (fun mind => check_recursivity_kind (lookup_env Σ) mind Finite) mfix.
 
 Definition check_one_cofix d :=
   let '{| dname := na;
@@ -126,19 +131,11 @@ Definition check_one_cofix d :=
   | None => None (* Not recursive on an inductive type *)
   end.
 
-Definition wf_cofixpoint_gen
-  (lookup: kername -> option global_decl) mfix :=
-  let checks := map check_one_cofix mfix in
-  match map_option_out checks with
-  | Some (ind :: inds) =>
-    (* Check that mutually recursive cofixpoints are all producing
-       coinductives in the same mututal coinductive block *)
-    forallb (eqb ind) inds &&
-    check_recursivity_kind lookup ind CoFinite
-  | _ => false
-  end.
-
-Definition wf_cofixpoint (Σ : global_env) := wf_cofixpoint_gen (lookup_env Σ).
+(** All bodies produce values in one coinductive mutual block (the kernel's
+    [codomain_is_coind] reduces the codomain under every product). *)
+Definition wf_cofixpoint `{checker_flags} (Σ : global_env_ext) (Γ : context) (mfix : mfixpoint term) :=
+  mfix_on_ind check_one_cofix (conv_witness Σ Γ)
+    (fun mind => check_recursivity_kind (lookup_env Σ) mind CoFinite) mfix.
 
 Reserved Notation "'wf_local' Σ Γ " (at level 9, Σ, Γ at next level).
 
@@ -271,7 +268,7 @@ Inductive typing `{checker_flags} (Σ : global_env_ext) (Γ : context) : term ->
     nth_error mfix n = Some decl ->
     All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ->
     All (on_def_body (lift_typing1 (typing Σ)) (fix_context mfix) Γ) mfix ->
-    wf_fixpoint Σ mfix ->
+    wf_fixpoint Σ Γ mfix ->
     Σ ;;; Γ |- tFix mfix n : decl.(dtype)
 
 | type_CoFix : forall mfix n decl,
@@ -280,7 +277,7 @@ Inductive typing `{checker_flags} (Σ : global_env_ext) (Γ : context) : term ->
     nth_error mfix n = Some decl ->
     All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ->
     All (on_def_body (lift_typing1 (typing Σ)) (fix_context mfix) Γ) mfix ->
-    wf_cofixpoint Σ mfix ->
+    wf_cofixpoint Σ Γ mfix ->
     Σ ;;; Γ |- tCoFix mfix n : decl.(dtype)
 
 | type_Prim p prim_ty cdecl :
@@ -785,7 +782,7 @@ Lemma typing_ind_env_app_size `{cf : checker_flags} :
        All (on_def_type (Pj Σ) Γ) mfix ->
        All (on_def_body (lift_typing typing Σ) types Γ) mfix ->
        All (on_def_body (Pj Σ) types Γ) mfix ->
-       wf_fixpoint Σ mfix ->
+       wf_fixpoint Σ Γ mfix ->
        P Σ Γ (tFix mfix n) decl.(dtype)) ->
 
    (forall Σ (wfΣ : wf Σ.1) (Γ : context) (wfΓ : wf_local Σ Γ) (mfix : list (def term)) (n : nat) decl,
@@ -797,7 +794,7 @@ Lemma typing_ind_env_app_size `{cf : checker_flags} :
        All (on_def_type (Pj Σ) Γ) mfix ->
        All (on_def_body (lift_typing typing Σ) types Γ) mfix ->
        All (on_def_body (Pj Σ) types Γ) mfix ->
-       wf_cofixpoint Σ mfix ->
+       wf_cofixpoint Σ Γ mfix ->
        P Σ Γ (tCoFix mfix n) decl.(dtype)) ->
 
   (forall Σ (wfΣ : wf Σ.1) (Γ : context) (wfΓ : wf_local Σ Γ) (p : prim_val term) prim_ty cdecl,
@@ -1248,7 +1245,7 @@ Lemma typing_ind_env `{cf : checker_flags} :
         All (on_def_type (Pj Σ) Γ) mfix ->
         All (on_def_body (lift_typing typing Σ) types Γ) mfix ->
         All (on_def_body (Pj Σ) types Γ) mfix ->
-        wf_fixpoint Σ mfix ->
+        wf_fixpoint Σ Γ mfix ->
         P Σ Γ (tFix mfix n) decl.(dtype)) ->
 
     (forall Σ (wfΣ : wf Σ.1) (Γ : context) (wfΓ : wf_local Σ Γ) (mfix : list (def term)) (n : nat) decl,
@@ -1260,7 +1257,7 @@ Lemma typing_ind_env `{cf : checker_flags} :
         All (on_def_type (Pj Σ) Γ) mfix ->
         All (on_def_body (lift_typing typing Σ) types Γ) mfix ->
         All (on_def_body (Pj Σ) types Γ) mfix ->
-        wf_cofixpoint Σ mfix ->
+        wf_cofixpoint Σ Γ mfix ->
         P Σ Γ (tCoFix mfix n) decl.(dtype)) ->
 
     (forall Σ (wfΣ : wf Σ.1) (Γ : context) (wfΓ : wf_local Σ Γ) (p : prim_val term) prim_ty cdecl,
