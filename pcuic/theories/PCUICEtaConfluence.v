@@ -15,7 +15,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config Primitive Environment.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICPrimitive PCUICInduction PCUICReduction
-     PCUICEquality PCUICEtaDefs.
+     PCUICEquality PCUICCases PCUICEtaDefs.
 From Equations.Type Require Import Relation Relation_Properties.
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -804,4 +804,174 @@ Proof.
   intros Hs Hb. eapply rt_trans.
   - eapply eta_subst_term; eassumption.
   - eapply subst_eta; eassumption.
+Qed.
+
+(** ** red1_eta_ctx_strong (plan: transport one [red1] step across an
+    η-related context; the second C3 dependency after [eta_subst]).
+
+    Statement published and locked with Main, C3Prover3, C3Falsifier, EtaC3C:
+    one [red1] step on the η-related context Δ, joined by [eta]. No [wf], no
+    scoping premise — the only context-reading case (red_rel) is discharged by
+    [weakening_eta]; red_delta reads Σ, not Γ. *)
+
+#[global] Instance eta_Reflexive : CRelationClasses.Reflexive eta.
+Proof. intro t. apply rt_refl. Qed.
+
+Definition eta_ctx : context -> context -> Type := All2 (All_decls eta).
+
+Lemma eta_ctx_refl Γ : eta_ctx Γ Γ.
+Proof.
+  apply All2_refl. intro d. destruct d as [na [b|] ty]; constructor; apply rt_refl.
+Qed.
+
+Lemma eta_ctx_app Ξ Γ Δ : eta_ctx Γ Δ -> eta_ctx (Γ ,,, Ξ) (Δ ,,, Ξ).
+Proof.
+  intro H. apply All2_app; [|exact H].
+  apply All2_refl. intro d. destruct d as [na [b|] ty]; constructor; apply rt_refl.
+Qed.
+
+Lemma OnOne2_pos {A} {R : A -> A -> Type} pre post a b :
+  R a b -> OnOne2 R (pre ++ a :: post) (pre ++ b :: post).
+Proof. intro. induction pre; cbn; now constructor. Qed.
+
+Lemma All2_eta_pos pre post a b :
+  eta a b -> All2 eta (pre ++ a :: post) (pre ++ b :: post).
+Proof.
+  intro. apply All2_app; [apply All2_refl; reflexivity|].
+  constructor; [assumption|apply All2_refl; reflexivity].
+Qed.
+
+Lemma red1_eta_ctx_strong Σ Γ Δ t u :
+  red1 Σ Γ t u -> eta_ctx Γ Δ -> ∑ u', red1 Σ Δ t u' × eta u u'.
+Proof.
+  intros H. revert Δ.
+  induction H using red1_ind_all; intros Δ HΔ.
+  all: try (eexists; split; [solve [econstructor; eauto]|apply rt_refl]; fail).
+  - (* red_rel *)
+    destruct (nth_error Γ i) as [decl|] eqn:Hi; [|discriminate].
+    assert (Hd' : ∑ decl', nth_error Δ i = Some decl' × All_decls eta decl decl').
+    { eapply All2_nth_error_Some; [exact HΔ|exact Hi]. }
+    destruct Hd' as (decl' & Hi' & Hd).
+    depelim Hd.
+    + cbn in H; discriminate.
+    + cbn in H. invs H.
+      exists (lift0 (S i) b'). split.
+      * constructor. rewrite Hi'. reflexivity.
+      * now apply weakening_eta.
+  - (* abs_red_l *)
+    edestruct (IHred1 Δ HΔ) as (xx & Hr & He).
+    exists (tLambda na xx N). split; [now apply abs_red_l|now apply eta_Lambda_l].
+  - (* abs_red_r *)
+    edestruct (IHred1 (Δ ,, vass na N)) as (xx & Hr & He); [now apply (eta_ctx_app [_])|].
+    exists (tLambda na N xx). split; [now apply abs_red_r|now apply eta_Lambda_r].
+  - (* letin_red_def *)
+    edestruct (IHred1 Δ HΔ) as (xx & Hr & He).
+    exists (tLetIn na xx t b'). split; [now apply letin_red_def|now apply eta_LetIn_b].
+  - (* letin_red_ty *)
+    edestruct (IHred1 Δ HΔ) as (xx & Hr & He).
+    exists (tLetIn na b xx b'). split; [now apply letin_red_ty|now apply eta_LetIn_t].
+  - (* letin_red_body *)
+    edestruct (IHred1 (Δ ,, vdef na b t)) as (xx & Hr & He); [now apply (eta_ctx_app [_])|].
+    exists (tLetIn na b t xx). split; [now apply letin_red_body|now apply eta_LetIn_c].
+  - (* case_red_param *)
+    apply OnOne2_split in X as (a & b & pre & post & (ra & IHa) & Hp1 & Hp2).
+    edestruct (IHa Δ HΔ) as (a' & Hr & He).
+    exists (tCase ci (set_pparams p (pre ++ a' :: post)) c brs). split.
+    + apply case_red_param. rewrite Hp1. now apply OnOne2_pos.
+    + rewrite Hp2. now apply eta_Case_pars_pos.
+  - (* case_red_return *)
+    edestruct (IHred1 (Δ ,,, inst_case_predicate_context p)) as (xx & Hr & He);
+      [now apply eta_ctx_app|].
+    exists (tCase ci (set_preturn p xx) c brs). split.
+    + now apply case_red_return.
+    + assert (Hrw : set_preturn p xx = set_preturn (set_preturn p preturn') xx) by (now destruct p).
+      rewrite Hrw. apply eta_Case_preturn. cbn. exact He.
+  - (* case_red_discr *)
+    edestruct (IHred1 Δ HΔ) as (xx & Hr & He).
+    exists (tCase ind p xx brs). split; [now apply case_red_discr|now apply eta_Case_discr].
+  - (* case_red_brs *)
+    apply OnOne2_split in X
+      as (br0 & br1 & pre & post & ((rb & IHb) & Hbc) & Hb1 & Hb2).
+    edestruct (IHb (Δ ,,, inst_case_branch_context p br0)) as (xx & Hr & He);
+      [now apply eta_ctx_app|].
+    exists (tCase ci p c (pre ++ {| bcontext := bcontext br0; bbody := xx |} :: post)). split.
+    + rewrite Hb1. apply case_red_brs. apply OnOne2_pos. split; cbn; [exact Hr|reflexivity].
+    + rewrite Hb2.
+      destruct br0 as [bc0 bb0], br1 as [bc1 bb1]; cbn in *; subst bc1.
+      now apply eta_Case_brs_pos.
+  - (* proj_red *)
+    edestruct (IHred1 Δ HΔ) as (xx & Hr & He).
+    exists (tProj p xx). split; [now apply proj_red|now apply eta_Proj].
+  - (* app_red_l *)
+    edestruct (IHred1 Δ HΔ) as (xx & Hr & He).
+    exists (tApp xx M2). split; [now apply app_red_l|now apply eta_App_l].
+  - (* app_red_r *)
+    edestruct (IHred1 Δ HΔ) as (xx & Hr & He).
+    exists (tApp M1 xx). split; [now apply app_red_r|now apply eta_App_r].
+  - (* prod_red_l *)
+    edestruct (IHred1 Δ HΔ) as (xx & Hr & He).
+    exists (tProd na xx M2). split; [now apply prod_red_l|now apply eta_Prod_l].
+  - (* prod_red_r *)
+    edestruct (IHred1 (Δ ,, vass na M1)) as (xx & Hr & He); [now apply (eta_ctx_app [_])|].
+    exists (tProd na M1 xx). split; [now apply prod_red_r|now apply eta_Prod_r].
+  - (* evar *)
+    apply OnOne2_split in X as (a & b & pre & post & (ra & IHa) & Hl1 & Hl2).
+    edestruct (IHa Δ HΔ) as (a' & Hr & He).
+    exists (tEvar ev (pre ++ a' :: post)). split.
+    + rewrite Hl1. constructor. now apply OnOne2_pos.
+    + rewrite Hl2. now apply eta_Evar_pos.
+  - (* fix_red_ty *)
+    apply OnOne2_split in X as (d0 & d1 & pre & post & ((rd & IHd) & Hg) & Hm1 & Hm2).
+    edestruct (IHd Δ HΔ) as (tt' & Hr & He).
+    exists (tFix (pre ++ mkdef term (dname d0) tt' (dbody d0) (rarg d0) :: post) idx). split.
+    + rewrite Hm1. apply fix_red_ty. apply OnOne2_pos. split; cbn; [exact Hr|reflexivity].
+    + rewrite Hm2. apply eta_Fix_ty.
+      apply All2_app; [apply All2_refl; intro x; split; cbn; [apply rt_refl|reflexivity]|].
+      constructor; [|apply All2_refl; intro x; split; cbn; [apply rt_refl|reflexivity]].
+      split; cbn; [exact He|cbn in Hg; now symmetry].
+  - (* fix_red_body *)
+    apply OnOne2_split in X as (d0 & d1 & pre & post & ((rd & IHd) & Hg) & Hm1 & Hm2).
+    edestruct (IHd (Δ ,,, fix_context mfix0)) as (tt' & Hr & He); [now apply eta_ctx_app|].
+    exists (tFix (pre ++ mkdef term (dname d0) (dtype d0) tt' (rarg d0) :: post) idx). split.
+    + rewrite Hm1. apply fix_red_body.
+      rewrite Hm1 in Hr. apply OnOne2_pos. split; cbn; [exact Hr|reflexivity].
+    + rewrite Hm2. apply eta_Fix_body.
+      apply All2_app; [apply All2_refl; intro x; split; cbn; [apply rt_refl|reflexivity]|].
+      constructor; [|apply All2_refl; intro x; split; cbn; [apply rt_refl|reflexivity]].
+      split; cbn; [exact He|cbn in Hg; now symmetry].
+  - (* cofix_red_ty *)
+    apply OnOne2_split in X as (d0 & d1 & pre & post & ((rd & IHd) & Hg) & Hm1 & Hm2).
+    edestruct (IHd Δ HΔ) as (tt' & Hr & He).
+    exists (tCoFix (pre ++ mkdef term (dname d0) tt' (dbody d0) (rarg d0) :: post) idx). split.
+    + rewrite Hm1. apply cofix_red_ty. apply OnOne2_pos. split; cbn; [exact Hr|reflexivity].
+    + rewrite Hm2. apply eta_CoFix_ty.
+      apply All2_app; [apply All2_refl; intro x; split; cbn; [apply rt_refl|reflexivity]|].
+      constructor; [|apply All2_refl; intro x; split; cbn; [apply rt_refl|reflexivity]].
+      split; cbn; [exact He|cbn in Hg; now symmetry].
+  - (* cofix_red_body *)
+    apply OnOne2_split in X as (d0 & d1 & pre & post & ((rd & IHd) & Hg) & Hm1 & Hm2).
+    edestruct (IHd (Δ ,,, fix_context mfix0)) as (tt' & Hr & He); [now apply eta_ctx_app|].
+    exists (tCoFix (pre ++ mkdef term (dname d0) (dtype d0) tt' (rarg d0) :: post) idx). split.
+    + rewrite Hm1. apply cofix_red_body.
+      rewrite Hm1 in Hr. apply OnOne2_pos. split; cbn; [exact Hr|reflexivity].
+    + rewrite Hm2. apply eta_CoFix_body.
+      apply All2_app; [apply All2_refl; intro x; split; cbn; [apply rt_refl|reflexivity]|].
+      constructor; [|apply All2_refl; intro x; split; cbn; [apply rt_refl|reflexivity]].
+      split; cbn; [exact He|cbn in Hg; now symmetry].
+  - (* array_red_val *)
+    apply OnOne2_split in X as (a & b & pre & post & (ra & IHa) & Hl1 & Hl2).
+    edestruct (IHa Δ HΔ) as (a' & Hr & He).
+    exists (tPrim (primArray; primArrayModel (set_array_value arr (pre ++ a' :: post)))). split.
+    + apply array_red_val. rewrite Hl1. now apply OnOne2_pos.
+    + rewrite Hl2. now apply eta_Array_val_pos.
+  - (* array_red_def *)
+    edestruct (IHred1 Δ HΔ) as (dd & Hr & He).
+    exists (tPrim (primArray; primArrayModel (set_array_default arr dd))). split.
+    + now apply array_red_def.
+    + now apply eta_Array_default.
+  - (* array_red_type *)
+    edestruct (IHred1 Δ HΔ) as (tt' & Hr & He).
+    exists (tPrim (primArray; primArrayModel (set_array_type arr tt'))). split.
+    + now apply array_red_type.
+    + now apply eta_Array_type.
 Qed.
