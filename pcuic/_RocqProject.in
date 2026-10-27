@@ -135,4 +135,8 @@ theories/PCUICEtaConfluence.v
 theories/PCUICEtaReduction.v
 # BET-315 eta lane (C3Prover3): C3 strong commutation, four unlocking cases
 theories/PCUICEtaReductionC3.v
+# EtaL2's red1_strengthening (file from 9d7170cb; Requires only base files)
+theories/PCUICEtaStrengthening.v
+# C3 prover B (frac/eta-c3-b): parallel-eta route
+theories/PCUICEtaC3B.v
 # theories/All.v
