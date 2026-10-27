@@ -19,7 +19,8 @@
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICCases
-     PCUICInduction PCUICLiftSubst PCUICEquality PCUICReduction PCUICEtaDefs.
+     PCUICInduction PCUICLiftSubst PCUICEquality PCUICReduction PCUICEtaDefs
+     PCUICEtaConfluence.
 From Equations.Type Require Import Relation Relation_Properties.
 From Equations Require Import Equations.
 
@@ -42,16 +43,8 @@ Proof. apply rt_refl. Qed.
 Lemma eta_trans {x y z} : eta x y -> eta y z -> eta x z.
 Proof. intros. eapply rt_trans; eauto. Qed.
 
-(** Lift any one-step η congruence [f] to the reflexive-transitive closure. *)
-Lemma eta_congr (f : term -> term) :
-  (forall x y, eta1 x y -> eta1 (f x) (f y)) ->
-  forall x y, eta x y -> eta (f x) (f y).
-Proof.
-  intros Hf x y H. induction H.
-  - apply eta_step. now apply Hf.
-  - apply eta_refl.
-  - eapply eta_trans; eauto.
-Qed.
+(* One-hole η congruence: Required from EtaL2's PCUICEtaConfluence as [eta_cong1]
+   — not re-derived here. *)
 
 (** CH1 (U4): η under a spine moves the head or exactly one argument.
     PROVED here; = origin/eta_postpo:PCUICEtaReduction.v:1223-1234 (old AST). *)
@@ -97,10 +90,10 @@ Qed.
 Lemma eta_mkApps_args f l l' : OnOne2 eta1 l l' -> eta (mkApps f l) (mkApps f l').
 Proof. intro. apply eta_step. now apply eta1_mkApps_args. Qed.
 
-(** CH6 (U4): [OnOne2 eta1] tracks [nth_error] up to a reflexive η-step. *)
-Lemma onone2_eta_nth_error (l l' : list term) (H : OnOne2 eta1 l l') :
+(** CH6 (U4): [OnOne2 R] tracks [nth_error] up to a reflexive [R]-step (any [R]). *)
+Lemma OnOne2_nth_error_rc {A} (R : A -> A -> Type) (l l' : list A) (H : OnOne2 R l l') :
   forall k a, nth_error l k = Some a ->
-    ∑ a', nth_error l' k = Some a' × clos_refl eta1 a a'.
+    ∑ a', nth_error l' k = Some a' × clos_refl R a a'.
 Proof.
   induction H as [hd hd' tl p|hd tl tl' X IH]; intros [|k] a; cbn.
   - intro e; noconf e. exists hd'. split; [reflexivity| now constructor].
@@ -108,29 +101,10 @@ Proof.
   - intro e; noconf e. exists hd. split; [reflexivity| apply r_refl].
   - intro e. destruct (IH k a e) as [a' [? ?]]. exists a'. now split.
 Qed.
+Notation onone2_eta_nth_error := (OnOne2_nth_error_rc eta1).
 
-(** CH2 (U1): [upto_domain] is reflexive. PROVED here by term induction
-    (= EtaL2's Reflexive upto_domain, frac/eta-l2 @ e49648c4). *)
-Lemma upto_domain_refl t : upto_domain t t.
-Proof.
-  induction t using term_forall_list_ind; cbn; try solve [constructor; auto].
-  - constructor. now eapply All_All2.
-  - destruct X as [Hpars [Hctx Hret]]. constructor.
-    + eapply All_All2; eauto.
-    + reflexivity.
-    + reflexivity.
-    + exact Hret.
-    + exact IHt.
-    + eapply All_All2; eauto. intros br [_ ?]; split; [reflexivity|assumption].
-  - constructor. eapply All_All2; eauto. intros d [Ht Hb]; repeat split; (assumption || reflexivity).
-  - constructor. eapply All_All2; eauto. intros d [Ht Hb]; repeat split; (assumption || reflexivity).
-  - constructor. destruct p as [? []]; cbn in X; try solve [constructor].
-    destruct X as [Htype [Hdef Hval]]. constructor; cbn.
-    + reflexivity.
-    + exact Hdef.
-    + exact Htype.
-    + eapply All_All2; eauto.
-Qed.
+(* CH2 upto_domain_refl: Required from EtaL2's PCUICEtaConfluence
+   (#[global] Instance Reflexive upto_domain) — not re-derived here. *)
 
 (** CH3 (U4): η keeps a constructor-headed term constructor-headed. PROVED here
     from [eta1_mkApps_inv]: a constructor head is a [tConstruct], which has no
@@ -231,14 +205,12 @@ Section C3Unlocking.
         exists (tCase ci p (mkApps fn' args) brs), (tCase ci p (mkApps fn' args) brs).
         split; [|split].
         * constructor. now eapply red_cofix_case.
-        * eapply (eta_congr (fun z => tCase ci p z brs)); [| now eapply eta_mkApps_head].
-          intros ?? h. now eapply case_eta_discr.
+        * apply eta_Case_discr. now eapply eta_mkApps_head.
         * apply upto_domain_refl.
       + exists (tCase ci p (mkApps fn l') brs), (tCase ci p (mkApps fn l') brs).
         split; [|split].
         * constructor. now eapply red_cofix_case.
-        * eapply (eta_congr (fun z => tCase ci p z brs)); [| now eapply eta_mkApps_args].
-          intros ?? h. now eapply case_eta_discr.
+        * apply eta_Case_discr. now eapply eta_mkApps_args.
         * apply upto_domain_refl.
     - exists (tCase ci p (mkApps fn args) brs'), (tCase ci p (mkApps fn args) brs').
       split; [|split].
@@ -261,14 +233,12 @@ Section C3Unlocking.
       exists (tProj pr (mkApps fn' args)), (tProj pr (mkApps fn' args)).
       split; [|split].
       + constructor. now eapply red_cofix_proj.
-      + eapply (eta_congr (fun z => tProj pr z)); [| now eapply eta_mkApps_head].
-        intros ?? h. now eapply proj_eta.
+      + apply eta_Proj. now eapply eta_mkApps_head.
       + apply upto_domain_refl.
     - exists (tProj pr (mkApps fn l')), (tProj pr (mkApps fn l')).
       split; [|split].
       + constructor. now eapply red_cofix_proj.
-      + eapply (eta_congr (fun z => tProj pr z)); [| now eapply eta_mkApps_args].
-        intros ?? h. now eapply proj_eta.
+      + apply eta_Proj. now eapply eta_mkApps_args.
       + apply upto_domain_refl.
   Qed.
 
