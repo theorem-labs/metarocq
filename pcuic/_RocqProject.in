@@ -128,4 +128,5 @@ theories/PCUICCasesHelper.v
 # BET-315 eta lane (L1): new relations beside the base ones
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
+theories/PCUICTypingEta.v
 # theories/All.v
