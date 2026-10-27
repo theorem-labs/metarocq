@@ -68,4 +68,6 @@ vs.v
 ind_fresh_univ.v
 arity_delta.v
 arity_delta_spec.v
+prim_ops.v
+prim_ops_spec.v
 
