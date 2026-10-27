@@ -1,6 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import bytestring.
-From MetaRocq.Common Require Import BasicAst uGraph.
+From MetaRocq.Common Require Import BasicAst PrimitiveOps uGraph.
 From MetaRocq.Template Require Import TemplateMonad TemplateMonad.Extractable.
 
 (* Base types *)
@@ -218,6 +218,17 @@ Register MetaRocq.Template.Ast.Env.global_decl as metarocq.ast.global_decl.
 Register MetaRocq.Template.Ast.Env.ConstantDecl as metarocq.ast.ConstantDecl.
 Register MetaRocq.Template.Ast.Env.InductiveDecl as metarocq.ast.InductiveDecl.
 Register MetaRocq.Common.Environment.Retroknowledge.mk_retroknowledge as metarocq.ast.mk_retroknowledge.
+Register MetaRocq.Common.PrimitiveOps.prim_op as metarocq.ast.prim_op.
+Register MetaRocq.Common.PrimitiveOps.Int63eq as metarocq.ast.prim_op.Int63eq.
+Register MetaRocq.Common.PrimitiveOps.Int63lt as metarocq.ast.prim_op.Int63lt.
+Register MetaRocq.Common.PrimitiveOps.Int63le as metarocq.ast.prim_op.Int63le.
+Register MetaRocq.Common.PrimitiveOps.Int63land as metarocq.ast.prim_op.Int63land.
+Register MetaRocq.Common.PrimitiveOps.Int63lor as metarocq.ast.prim_op.Int63lor.
+Register MetaRocq.Common.PrimitiveOps.Int63lsl as metarocq.ast.prim_op.Int63lsl.
+Register MetaRocq.Common.PrimitiveOps.Int63lsr as metarocq.ast.prim_op.Int63lsr.
+Register MetaRocq.Common.PrimitiveOps.Int63sub as metarocq.ast.prim_op.Int63sub.
+Register MetaRocq.Common.PrimitiveOps.Stringlength as metarocq.ast.prim_op.Stringlength.
+Register MetaRocq.Common.PrimitiveOps.Stringget as metarocq.ast.prim_op.Stringget.
 Register MetaRocq.Template.Ast.Env.mk_global_env as metarocq.ast.Build_global_env.
 Register MetaRocq.Template.Ast.Env.global_env as metarocq.ast.global_env.
 Register MetaRocq.Template.Ast.Env.global_env_ext as metarocq.ast.global_env_ext.

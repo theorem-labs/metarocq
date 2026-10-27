@@ -56,6 +56,51 @@ let hnf_type env ty =
 
 
 
+(** The table in the quoted retroknowledge is keyed on the kername of the
+    bodiless constant that declares the operation, so the checker computes
+    with exactly the declarations the kernel has registered as primitives.
+    The operations themselves are [Reification.prim_op]. *)
+
+(** Which kernel primitive is a registered operation.  This match is
+    exhaustive over [CPrimitives.t] and has no wildcard on purpose: a kernel
+    operation added or removed upstream is an OCaml compile error here, not a
+    silently unquoted operation. *)
+let prim_op_of_kernel (p : CPrimitives.t) : prim_op option =
+  match p with
+  | CPrimitives.Int63eq -> Some POInt63eq
+  | CPrimitives.Int63lt -> Some POInt63lt
+  | CPrimitives.Int63le -> Some POInt63le
+  | CPrimitives.Int63land -> Some POInt63land
+  | CPrimitives.Int63lor -> Some POInt63lor
+  | CPrimitives.Int63lsl -> Some POInt63lsl
+  | CPrimitives.Int63lsr -> Some POInt63lsr
+  | CPrimitives.Int63sub -> Some POInt63sub
+  | CPrimitives.Stringlength -> Some POStringlength
+  | CPrimitives.Stringget -> Some POStringget
+  (* Not in the table (§2 of the lane's design): no reduction rule fires. *)
+  | CPrimitives.Int63head0 | CPrimitives.Int63tail0
+  | CPrimitives.Int63add | CPrimitives.Int63mul | CPrimitives.Int63div
+  | CPrimitives.Int63mod | CPrimitives.Int63divs | CPrimitives.Int63mods
+  | CPrimitives.Int63asr | CPrimitives.Int63lxor
+  | CPrimitives.Int63addc | CPrimitives.Int63subc
+  | CPrimitives.Int63addCarryC | CPrimitives.Int63subCarryC
+  | CPrimitives.Int63mulc | CPrimitives.Int63diveucl | CPrimitives.Int63div21
+  | CPrimitives.Int63addMulDiv
+  | CPrimitives.Int63lts | CPrimitives.Int63les
+  | CPrimitives.Int63compare | CPrimitives.Int63compares
+  | CPrimitives.Float64opp | CPrimitives.Float64abs | CPrimitives.Float64eq
+  | CPrimitives.Float64lt | CPrimitives.Float64le | CPrimitives.Float64compare
+  | CPrimitives.Float64equal | CPrimitives.Float64classify
+  | CPrimitives.Float64add | CPrimitives.Float64sub | CPrimitives.Float64mul
+  | CPrimitives.Float64div | CPrimitives.Float64sqrt
+  | CPrimitives.Float64ofUint63 | CPrimitives.Float64normfr_mantissa
+  | CPrimitives.Float64frshiftexp | CPrimitives.Float64ldshiftexp
+  | CPrimitives.Float64next_up | CPrimitives.Float64next_down
+  | CPrimitives.Arraymake | CPrimitives.Arrayget | CPrimitives.Arraydefault
+  | CPrimitives.Arrayset | CPrimitives.Arraycopy | CPrimitives.Arraylength
+  | CPrimitives.Stringmake | CPrimitives.Stringsub | CPrimitives.Stringcat
+  | CPrimitives.Stringcompare -> None
+
 module type BaseQuoter =
 sig
   include Reification
@@ -172,7 +217,9 @@ sig
     { retro_int63 : quoted_kernel_name option;
       retro_float64 : quoted_kernel_name option;
       retro_string : quoted_kernel_name option;
-      retro_array : quoted_kernel_name option }
+      retro_array : quoted_kernel_name option;
+      retro_ops : (quoted_kernel_name * prim_op) list;
+      retro_bool : quoted_inductive option }
 
   val quote_retroknowledge : pre_quoted_retroknowledge -> quoted_retroknowledge
 
@@ -1678,6 +1725,10 @@ struct
     let visited_types = ref Mindset.empty in
     let universes = ref Univ.Level.Set.empty in
     let constants = ref [] in
+    (* The operations of the declarations this quotation reaches, newest
+       first: one entry per bodiless [Primitive] declaration whose kernel
+       operation is in the table. *)
+    let prim_ops = ref [] in
     let template_defaults = ref Univ.Level.Set.empty in
     let template_universe_context = make_template_universe_context () in
     let universe_context =
@@ -1801,6 +1852,9 @@ struct
               | Undef _ -> None
               | Primitive t ->
                   warn_primitive_turned_into_axiom (CPrimitives.to_string t);
+                  (match prim_op_of_kernel t with
+                   | Some op -> prim_ops := (Q.quote_kn kn, op) :: !prim_ops
+                   | None -> ());
                   None
               | Symbol _ ->
                   warn_symbol_turned_into_axiom (Constant.debug_to_string c);
@@ -1984,7 +2038,14 @@ struct
         { Q.retro_int63 = quote_retro retro.Retroknowledge.retro_int63 ;
           Q.retro_float64 = quote_retro retro.Retroknowledge.retro_float64 ;
           Q.retro_string = quote_retro retro.Retroknowledge.retro_string ;
-          Q.retro_array = quote_retro retro.Retroknowledge.retro_array }
+          Q.retro_array = quote_retro retro.Retroknowledge.retro_array ;
+          Q.retro_ops = List.rev !prim_ops ;
+          (* The kernel registers the pair of constructors [(true, false)];
+             the quoted retroknowledge keeps their inductive, whose packet 0
+             is read back positionally. *)
+          Q.retro_bool =
+            Option.map (fun ((ind, _), _) -> quote_inductive' ind)
+              retro.Retroknowledge.retro_bool }
       in Q.quote_retroknowledge pre
     in
     let env = Q.mk_global_env univs decls retro in
