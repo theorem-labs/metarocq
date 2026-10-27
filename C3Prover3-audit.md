@@ -167,8 +167,8 @@ clos_refl_trans red1` (`:364`).
   `evar`/`array` congruences. Invariant across all: **β never lands on the β-reduct (v) side; it carries
   η* only; the single β is one `red1` re-fire on the η-reduct (u) side.** Reported to `agent://ArityLane`.
   Snapshots pushed to fork.
-- 2026-10-27: **the four unlocking cases are now MECHANISED and PROVED — conditional on {CH2, CH3,
-  CH4f, CH4c}** (see the ⚠ conditional-proof box below), not just read-and-believed.
+- 2026-10-27: **the four unlocking cases are MECHANISED and PROVED — conditional on {CH3, CH4f, CH4c}**
+  (CH2 dropped; see the ⚠ conditional-proof box below), not just read-and-believed.
   `pcuic/theories/PCUICEtaReductionC3.v` on branch `frac/eta-c3-C3Prover3` (fork, commit `669950e0`)
   proves `C3_red_fix`, `C3_red_cofix_case`, `C3_red_cofix_proj`, `C3_red_proj` — each a standalone
   lemma over the matching `red1` redex with C3's exact conclusion
@@ -187,22 +187,36 @@ clos_refl_trans red1` (`:364`).
   CH5b `eta_mkApps_args`, CH6 `onone2_eta_nth_error` as REAL local proofs** (pure `eta1`-congruence
   from `PCUICEtaDefs`); build still EXIT 0 (commit `0ff98361`, fork). These four are now UNCONDITIONAL.
 
+### HARDENED C3 statement (lead directive via EtaL2, 2026-10-27 — prove verbatim in the assembly)
+```
+Lemma C3 : forall Σ Γ t u v,
+  is_closed_context Γ -> is_open_term Γ t ->
+  red1 Σ Γ t v -> eta1 t u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × clos_refl_trans eta1 v w' × upto_domain w w'.
+```
+The UNSCOPED form is FALSE on ill-scoped branch contexts (EtaC3D fuzz: 31,273 cases, the premise
+bites only in the tCase congruence cases); scoping premises match C1a/C1c/U-rows and what C4/A2 consume.
+**My four unlocking cases are UNAFFECTED** (no tCase congruence), so my standalone helper lemmas need
+no scoping premise; the assembly carries them at top level.
+
 ### ⚠ Conditional-proof status (stream-lead rule 16:50Z — `Print Assumptions` cannot show parameters)
 The four C3 unlocking-case lemmas are **PROVED, CONDITIONAL ON** exactly these remaining Section
 `Context` hypotheses (they do NOT appear in `Print Assumptions`; the qualifier comes off only when
 each is discharged from the definitions):
-- **CH2 `upto_domain_refl`** : `forall t, upto_domain t t`  — U1. REAL now as EtaL2's
-  `Instance Reflexive upto_domain` (`frac/eta-l2` @ `e49648c4`, `PCUICEtaConfluence.v`); point CH2 there.
 - **CH3 `eta1_isConstruct_app`** : `forall a a', eta1 a a' -> isConstruct_app a = true -> isConstruct_app a' = true` — U4; EtaL1b's row.
-- **CH4f `eta1_fix_unfold`** : `eta1 (tFix mfix idx) N -> unfold_fix mfix idx = Some(narg,fn) -> ∑ mfix' fn', [× N = tFix mfix' idx, unfold_fix mfix' idx = Some(narg,fn') & eta fn fn']` — U2/U4 (the substitution-closure one; needs EtaL1b's `eta_subst`/`subst_eta`).
-- **CH4c `eta1_cofix_unfold`** : the `tCoFix`/`unfold_cofix` twin — U2/U4.
+- **CH4f `eta1_fix_unfold`** : `eta1 (tFix mfix idx) N -> unfold_fix mfix idx = Some(narg,fn) -> ∑ mfix' fn', [× N = tFix mfix' idx, unfold_fix mfix' idx = Some(narg,fn') & eta fn fn']` — U2/U4; reduces to EtaL2's `eta_subst` (confirmed general enough) + a LOCAL fix_subst pointwise-η congruence.
+- **CH4c `eta1_cofix_unfold`** : the `tCoFix`/`unfold_cofix` twin — U2/U4; reduces to `eta_subst`.
 `onone2_eta_is_constructor` is proved locally but depends on CH3, so it is conditional on CH3.
 No `Admitted`, no `Axiom`; `Print Assumptions` shows only the AST primitive types.
-Names coordinated with EtaL2/EtaL1b (agent://ArityLane.EtaL2, 2026-10-27); de-dupe to their lemmas
-when U1/U4 land on frac/eta.
-- Next: point CH2 at EtaL2's Instance and CH3/CH4 at EtaL1b's lemmas once they land (removes the
-  conditional qualifier); then assemble the full `red1_ind_all` induction (four branches = these four
-  lemmas; ~60 congruence branches per the audit above). No counterexample expected.
+
+**UNCONDITIONAL now (real local proofs in the file):** CH1 `eta1_mkApps_inv`, **CH2 `upto_domain_refl`
+(discharged by local term induction, commit `89e789a0`, was a Context hyp, now a Lemma)**, CH5a
+`eta_mkApps_head`, CH5b `eta_mkApps_args`, CH6 `onone2_eta_nth_error`.
+`eta_subst` (EtaL2's canonical, `All2 eta s s' -> eta b b' -> eta (subst0 s b) (subst0 s' b')`) is the
+primitive that CH4f/CH4c reduce to; de-dupe to EtaL2's/EtaL1b's lemmas on the frac/eta merge.
+- Next: discharge CH4f/CH4c locally from EtaL2's `eta_subst` once it lands (leaves only CH3), point CH3
+  at EtaL1b's U4; then assemble the full `red1_ind_all` induction in the HARDENED form (four branches =
+  these four lemmas; ~60 congruence branches per the audit above). No counterexample expected.
 
 ## Fallback (pred1/rho)
 Commute `eta1` with `pred1` (`PCUICParallelReduction.v`: one `pred1` contracts a set of non-overlapping
