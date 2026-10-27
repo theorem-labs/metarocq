@@ -35,6 +35,18 @@ Proof.
   all: try (cbn; lia).
 Qed.
 
+Lemma weakening_config_mfix_on_ind {cf1 cf2} Σ Γ check ok mfix :
+  config.impl cf1 cf2 ->
+  mfix_on_ind check (@conv_witness cf1 Σ Γ) ok mfix ->
+  mfix_on_ind check (@conv_witness cf2 Σ Γ) ok mfix.
+Proof.
+  intros Hcf h.
+  refine (mfix_on_ind_All2 _ (fun _ hk => hk) h).
+  apply All2_refl. intros d m [ty [hc [hop hconv]]].
+  refine (ty; (hc, (hop, _))).
+  now eapply (@weakening_config_convSpec cf1 cf2).
+Qed.
+
 Lemma weakening_config {cf1 cf2} Σ Γ t T :
   config.impl cf1 cf2 ->
   @typing cf1 Σ Γ t T ->
@@ -65,6 +77,10 @@ Proof.
   all: try (unshelve eapply IH; [ eassumption .. | ];
             try solve [ constructor; simpl; lia ]).
   all: try (eapply (@weakening_config_cumulSpec cf1 cf2); eassumption).
+  all: try (eapply (@weakening_config_mfix_on_ind cf1 cf2); eassumption).
+  all: try (match goal with h : wf_fixpoint _ _ _ |- wf_fixpoint _ _ _ =>
+              destruct h as (? & ? & ?); split; [|split]; tas;
+              eapply (@weakening_config_mfix_on_ind cf1 cf2); eassumption end).
   all: try now constructor; simpl; repeat destruct ?; simpl; lia.
   all: specialize (fun Γ t T H H' => IH _ Γ t T H ltac:(right; exact H')).
   all: simpl in IH.

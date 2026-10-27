@@ -1596,13 +1596,10 @@ Proof.
   f_equal.
 Qed.
 
-Lemma subst_instance_check_one_fix u mfix :
-  List.map
-        (fun x : def term =>
-        check_one_fix (map_def (subst_instance u) (subst_instance u) x)) mfix =
-  List.map check_one_fix mfix.
+Lemma subst_instance_check_one_fix u d :
+  check_one_fix (map_def (subst_instance u) (subst_instance u) d) = check_one_fix d.
 Proof.
-  apply map_ext. intros [na ty def rarg]; simpl.
+  destruct d as [na ty def rarg]; simpl.
   rewrite decompose_prod_assum_ctx.
   destruct (decompose_prod_assum _ ty) eqn:decomp.
   rewrite decompose_prod_assum_ctx in decomp.
@@ -1621,13 +1618,10 @@ Proof.
   destruct destInd as [[i u']|]; simpl; auto.
 Qed.
 
-Lemma subst_instance_check_one_cofix u mfix :
-  List.map
-        (fun x : def term =>
-        check_one_cofix (map_def (subst_instance u) (subst_instance u) x)) mfix =
-  List.map check_one_cofix mfix.
+Lemma subst_instance_check_one_cofix u d :
+  check_one_cofix (map_def (subst_instance u) (subst_instance u) d) = check_one_cofix d.
 Proof.
-  apply map_ext. intros [na ty def rarg]; simpl.
+  destruct d as [na ty def rarg]; simpl.
   rewrite decompose_prod_assum_ctx.
   destruct (decompose_prod_assum _ ty) eqn:decomp.
   rewrite decompose_prod_assum_ctx in decomp.
@@ -1640,6 +1634,17 @@ Proof.
   rewrite <- subst_instance_decompose_app, Happ. simpl.
   rewrite destInd_subst_instance.
   destruct destInd as [[i u']|]; simpl; auto.
+Qed.
+
+Lemma isLambda_subst_instance u t : isLambda t -> isLambda (subst_instance u t).
+Proof. destruct t => //. Qed.
+
+Lemma subst_instance_has_rec_arg u d :
+  has_rec_arg (map_def (subst_instance u) (subst_instance u) d) = has_rec_arg d.
+Proof.
+  destruct d; unfold has_rec_arg; cbn.
+  rewrite -(subst_instance_decompose_prod_assum u []).
+  destruct decompose_prod_assum; cbn. now len.
 Qed.
 
 Lemma All_local_env_over_subst_instance {cf : checker_flags} Σ Γ (wfΓ : wf_local Σ Γ) :

@@ -885,37 +885,18 @@ Proof.
     eapply nth_error_Some_length; eauto.
 Qed.
 
-Lemma wf_fixpoint_rarg :
-  forall cf: config.checker_flags
-, forall Σ0: global_env_ext
-, forall wfΣ: wf Σ0.1
-, forall mfix: list (def term)
-, forall decl: def term
-, forall H2: wf_fixpoint Σ0.1 mfix, In decl mfix ->
-decl.(rarg) < context_assumptions (decompose_prod_assum []  decl.(dtype)).1.
+Lemma wf_fixpoint_rarg Σ Γ mfix decl :
+  wf_fixpoint Σ Γ mfix -> In decl mfix ->
+  decl.(rarg) < context_assumptions (decompose_prod_assum [] decl.(dtype)).1.
 Proof.
-  intros.
-  unfold wf_fixpoint in H2.
-  eapply andb_and in H2. destruct H2 as [_ H2].
-  destruct map_option_out eqn:E; try congruence.
-  destruct l eqn:E2; try congruence.
-  rewrite <- E2 in *. clear E2 H2 k l0.
-  induction mfix in l, E, H |- *.
-  - inversion H.
-  - cbn in E. destruct (check_one_fix a) eqn:Ea; try congruence.
-    destruct H as [-> | H].
-    + unfold check_one_fix in Ea. destruct decl; cbn.
-      destruct (decompose_prod_assum) eqn:Eprod; try congruence. unfold destInd in Ea.
-      destruct nth_error eqn:Enth; try congruence.
-      eapply nth_error_Some_length in Enth.
-      revert Enth. now len.
-    + destruct map_option_out eqn:?; try congruence. eapply IHmfix; eauto.
+  intros (_ & hrec & _) hin.
+  apply Nat.ltb_lt. exact (proj1 (forallb_forall _ _) hrec decl hin).
 Qed.
 
 From Equations Require Import Equations.
 
 Lemma typing_wf_fixpoint {cf : config.checker_flags} Σ0 Γ0 mfix idx t_ty  :
-   Σ0;;; Γ0 |- tFix mfix idx : t_ty -> wf_fixpoint Σ0 mfix.
+   Σ0;;; Γ0 |- tFix mfix idx : t_ty -> wf_fixpoint Σ0 Γ0 mfix.
 Proof.
   intros H.
   depind H; eauto.
@@ -1097,8 +1078,8 @@ Proof.
       eapply expanded_mkApps_tFix; fold lift.
       2:{ rewrite !nth_error_map Eid. cbn. len. reflexivity. }
       ++ cbn. rewrite <- context_assumptions_lift.
-        eapply wf_fixpoint_rarg; eauto. 2: eapply nth_error_In; eauto.
-        clear - X. depind X; eauto.
+        eapply wf_fixpoint_rarg. 1: eapply typing_wf_fixpoint, X.
+        eapply nth_error_In; eauto.
       ++ len. rewrite length_seq. lia.
       ++ unfold eta_single in H.
          rewrite expanded_fold_lambda in H. cbn. simpl_list.
@@ -1115,7 +1096,7 @@ Proof.
          revert H. len. intros [Hl H]. split.
          { eapply isLambda_unlift in Hl. now eapply isLambda_lift. }
 
-         eapply typing_wf_fixpoint in X. eapply wf_fixpoint_rarg in X. 2: eauto. 2: eapply nth_error_In; eauto.
+         eapply typing_wf_fixpoint in X. eapply wf_fixpoint_rarg in X. 2: eapply nth_error_In; eauto.
 
          assert (#|l| > S (rarg d) \/ #|l| <= S (rarg d) )  as [He | He] by lia.
          { replace ((S (rarg d) - #|l|)) with 0 by lia. cbn. rewrite lift0_id.
@@ -1143,7 +1124,7 @@ Proof.
          ** solve_all. eapply @expanded_lift' with (Γ' := []). all: try now reflexivity. 2: eauto.
             len. rewrite !length_firstn !List.length_skipn.
             eapply typing_wf_fixpoint in X.
-            eapply wf_fixpoint_rarg in X. 2: eauto. 2: eapply nth_error_In; eauto.
+            eapply wf_fixpoint_rarg in X. 2: eapply nth_error_In; eauto.
             len. lia.
          ** rewrite rev_map_spec. eapply Forall_rev.
             eapply Forall_forall. intros ? (? & <- & ?) % in_map_iff. econstructor.
@@ -1153,12 +1134,12 @@ Proof.
             -- len.
                eapply Nat.lt_le_trans. eauto. cbn.
                eapply typing_wf_fixpoint in X.
-               eapply wf_fixpoint_rarg in X. 2: eauto. 2: eapply nth_error_In; eauto.
+               eapply wf_fixpoint_rarg in X. 2: eapply nth_error_In; eauto.
                lia.
             -- len.
                eapply Nat.lt_le_trans. eauto. cbn.
                eapply typing_wf_fixpoint in X.
-               eapply wf_fixpoint_rarg in X. 2: eauto. 2: eapply nth_error_In; eauto.
+               eapply wf_fixpoint_rarg in X. 2: eapply nth_error_In; eauto.
                lia.
       ++ destruct l; cbn in *; try congruence.
       ++ cbn. eauto.
@@ -1216,7 +1197,7 @@ Proof.
     + len. rewrite length_seq. lia.
     + fold lift. len.
       assert (Forall (fun x => isLambda (dbody x)) mfix).
-      { apply andb_and in H2. destruct H2 as [isl _]. solve_all. }
+      { match goal with h : wf_fixpoint _ _ _ |- _ => destruct h as [isl _] end. solve_all. }
       solve_all.
       { now eapply isLambda_lift, isLambda_eta_expand. }
       cbn in *.
@@ -1228,13 +1209,13 @@ Proof.
       eapply Forall2_app; solve_all.
       subst types. unfold Typing.fix_context.
       eapply All2_rev. eapply All2_mapi. eapply All_All2_refl, Forall_All, Forall_forall.
-      intros. split. reflexivity. cbn.
+      intros ? hin. split. reflexivity. cbn.
       rewrite <- context_assumptions_lift.
-      eapply wf_fixpoint_rarg in H4; eauto. len; lia.
+      eapply wf_fixpoint_rarg in hin; eauto. len; lia.
       Unshelve. all: eauto. cbn.  rewrite <- context_assumptions_lift. lia.
     + cbn - [rev_map seq]. rewrite rev_map_spec. eapply Forall_rev.
-      eapply Forall_forall. intros ? (? & <- & ?) % in_map_iff. econstructor.
-      eapply in_seq in H4 as [_ ?]. cbn in *. len.
+      eapply Forall_forall. intros ? (? & <- & hin) % in_map_iff. econstructor.
+      eapply in_seq in hin as [_ ?]. cbn in *. len.
       rewrite !length_firstn.
       rewrite -> nth_error_app1. eapply nth_error_repeat.
       len; lia.
@@ -1244,8 +1225,8 @@ Proof.
      specialize (e0 (repeat None #|mfix| ++ Γ'))%list.
      rewrite map_app map_repeat in e0. len. eapply e0; auto.
      eapply Forall2_app; eauto. unfold types.
-     assert (#|Typing.fix_context mfix| = #|mfix|). { unfold Typing.fix_context. now len. }
-     revert H4. generalize (Typing.fix_context mfix). clear.
+     assert (#|Typing.fix_context mfix| = #|mfix|) as hlen. { unfold Typing.fix_context. now len. }
+     revert hlen. generalize (Typing.fix_context mfix). clear.
      induction #|mfix|; intros []; cbn; intros; try congruence; econstructor; eauto.
   - cbn. econstructor; eauto. solve_all. eapply b; tea. solve_all.
   - eapply typing_wf_local; eauto.
