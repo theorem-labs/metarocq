@@ -39,6 +39,10 @@ src/pCUICNormal.mli
 src/pCUICNormal.ml
 src/templateToPCUIC.mli
 src/templateToPCUIC.ml
+src/trans_memo.mli
+src/trans_memo.ml
+src/templateToPCUICShared.mli
+src/templateToPCUICShared.ml
 src/pCUICPretty.mli
 src/pCUICPretty.ml
 src/pCUICProgram.mli

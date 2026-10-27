@@ -24,6 +24,8 @@ PCUICPosition
 PCUICPretty
 PCUICProgram
 TemplateToPCUIC
+Trans_memo
+TemplateToPCUICShared
 PCUICUnivSubst
 
 PCUICErrors
