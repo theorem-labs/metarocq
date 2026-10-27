@@ -234,3 +234,26 @@ MetaRocq Test Quote Sharing @issect'.
 MetaRocq Test Quote Sharing @ap_pp.
 MetaRocq Test Quote Sharing @isequiv_adjointify.
 MetaRocq Test Quote Sharing @IsEquiv.
+
+(* Shared translation: each term above, quoted as SafeCheck does, gives the
+   same PCUIC program with the memoized and the plain translation, and the
+   memo is reused.  When the quoted program contains a match, the command also
+   checks that a value which read the environment is never reused under
+   another environment. *)
+MetaRocq Test Trans Sharing nat.
+MetaRocq Test Trans Sharing (3 + 1).
+MetaRocq Test Trans Sharing bool_list.
+MetaRocq Test Trans Sharing template_list_record.
+MetaRocq Test Trans Sharing template_list_match.
+MetaRocq Test Trans Sharing @Stdlib.setoid_ring.Ring_theory.div_theory.
+MetaRocq Test Trans Sharing template_iffT_nat.
+MetaRocq Test Trans Sharing template_sigT_nat.
+MetaRocq Test Trans Sharing @template_case_instance.
+MetaRocq Test Trans Sharing @template_partial_instance.
+MetaRocq Test Trans Sharing @template_alg_outer.
+MetaRocq Test Trans Sharing template_list_prod_nat.
+MetaRocq Test Trans Sharing bignat.
+MetaRocq Test Trans Sharing @issect'.
+MetaRocq Test Trans Sharing @ap_pp.
+MetaRocq Test Trans Sharing @isequiv_adjointify.
+MetaRocq Test Trans Sharing @IsEquiv.
