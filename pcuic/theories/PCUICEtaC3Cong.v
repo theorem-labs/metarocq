@@ -135,6 +135,37 @@ Proof.
   induction 1; [apply rt_step; now apply eta1_set_array_value|apply rt_refl|eapply rt_trans; eauto].
 Qed.
 
+(** Def-field setters and the per-field [eta]/[upto] lifts for fix/cofix.  A fixed
+    carrier [d] supplies the untouched fields, so [clos_refl_trans] threads cleanly
+    (the intermediate terms all go through [set_dtype d] / [set_dbody d]). *)
+Definition set_dtype (d : def term) (ty : term) : def term :=
+  {| dname := dname d; dtype := ty; dbody := dbody d; rarg := rarg d |}.
+Definition set_dbody (d : def term) (bo : term) : def term :=
+  {| dname := dname d; dtype := dtype d; dbody := bo; rarg := rarg d |}.
+Definition updef (x y : def term) : Type :=
+  upto_domain x.(dtype) y.(dtype) × upto_domain x.(dbody) y.(dbody) × x.(rarg) = y.(rarg).
+Lemma updef_refl x : updef x x.
+Proof. split; [apply upto_domain_refl|split; [apply upto_domain_refl|reflexivity]]. Qed.
+
+Notation gfix := (fun x : def term => (dname x, dbody x, rarg x)).
+Notation gfixb := (fun x : def term => (dname x, dtype x, rarg x)).
+
+Lemma crt_set_dtype d X Y : clos_refl_trans eta1 X Y ->
+  clos_refl_trans (on_Trel_eq eta1 dtype gfix) (set_dtype d X) (set_dtype d Y).
+Proof.
+  induction 1; [apply rt_step; split; [exact r|reflexivity]|apply rt_refl|eapply rt_trans; eauto].
+Qed.
+Lemma crt_set_dbody d X Y : clos_refl_trans eta1 X Y ->
+  clos_refl_trans (on_Trel_eq eta1 dbody gfixb) (set_dbody d X) (set_dbody d Y).
+Proof.
+  induction 1; [apply rt_step; split; [exact r|reflexivity]|apply rt_refl|eapply rt_trans; eauto].
+Qed.
+
+Lemma utd_fix_of idx m m' : All2 updef m m' -> upto_domain (tFix m idx) (tFix m' idx).
+Proof. intro h. now constructor. Qed.
+Lemma utd_cofix_of idx m m' : All2 updef m m' -> upto_domain (tCoFix m idx) (tCoFix m' idx).
+Proof. intro h. now constructor. Qed.
+
 (** Type-generic two-[OnOne2] diamond (the proof of [c3_OnOne2], abstracted over
     the element type [A] and the three element relations [R] (red leg), [S] (eta
     leg), [U] (join).  The red leg carries, per element, a local join [J] for the
@@ -599,6 +630,82 @@ Section Cong.
         eapply OnOne2_impl; [exact hr|]. intros ? ? h. exact (fst h).
       + apply rt_step. apply array_eta_type. eassumption.
       + apply upto_domain_refl.
+  Qed.
+
+  (** Σ-dependent per-field red lift and the tFix congruence lifts. *)
+  Lemma clos_refl_set_dtype Γ d X Y : clos_refl (red1 Σ Γ) X Y ->
+    clos_refl (on_Trel_eq (red1 Σ Γ) dtype gfix) (set_dtype d X) (set_dtype d Y).
+  Proof. destruct 1; [apply r_step; split; [exact r|reflexivity]|apply r_refl]. Qed.
+  Lemma red_le_fix_ty Γ idx m0 m1 :
+    clos_refl (OnOne2 (on_Trel_eq (red1 Σ Γ) dtype gfix)) m0 m1 ->
+    red_le Σ Γ (tFix m0 idx) (tFix m1 idx).
+  Proof. destruct 1; [apply r_step; now apply fix_red_ty|apply r_refl]. Qed.
+  Lemma eta_fix_ty_rt idx m0 m1 :
+    clos_refl_trans (OnOne2 (on_Trel_eq eta1 dtype gfix)) m0 m1 ->
+    clos_refl_trans eta1 (tFix m0 idx) (tFix m1 idx).
+  Proof.
+    induction 1; [apply rt_step; now apply fix_eta_ty|apply rt_refl|eapply rt_trans; eauto].
+  Qed.
+
+  Local Lemma set_dtype_id d : set_dtype d (dtype d) = d.
+  Proof. now destruct d. Qed.
+
+  (** *** fix_red_ty : red1 in one dtype.  η on dtype → same-field diamond
+      (onOne2_diamond + local IH); η on dbody → cross-field parallel. *)
+  Lemma c3_fix_red_ty Γ mfix0 mfix1 idx u :
+    OnOne2 (on_Trel_eq (fun x y => red1 Σ Γ x y
+              × (forall u', eta1 x u' -> joinable Σ Γ u' y)) dtype gfix) mfix0 mfix1 ->
+    eta1 (tFix mfix0 idx) u -> joinable Σ Γ u (tFix mfix1 idx).
+  Proof.
+    intros hr he. depelim he.
+    - (* fix_eta_ty : η on dtype, same field *)
+      assert (hin : OnOne2 (fun a a' => on_Trel_eq (red1 Σ Γ) dtype gfix a a'
+                      × (forall b, on_Trel_eq eta1 dtype gfix a b ->
+                         ∑ w w', clos_refl (on_Trel_eq (red1 Σ Γ) dtype gfix) b w
+                                 × clos_refl_trans (on_Trel_eq eta1 dtype gfix) a' w'
+                                 × updef w w')) mfix0 mfix1).
+      { eapply OnOne2_impl; [exact hr|]. intros a a' [[rd IHd] geq]. split.
+        - split; [exact rd|exact geq].
+        - intros b [eb gbeq]. destruct (IHd _ eb) as (dw & dw' & hdw & hdw' & hu).
+          exists (set_dtype b dw), (set_dtype a' dw'). split; [|split].
+          + rewrite <- (set_dtype_id b) at 1. now apply clos_refl_set_dtype.
+          + rewrite <- (set_dtype_id a') at 1. now apply crt_set_dtype.
+          + split; [exact hu|split]; cbn.
+            * assert (dbody b = dbody a') by congruence. rewrite H. apply upto_domain_refl.
+            * congruence. }
+      destruct (onOne2_diamond (on_Trel_eq (red1 Σ Γ) dtype gfix)
+                 (on_Trel_eq eta1 dtype gfix) updef updef_refl mfix0 mfix1 _ hin
+                 ltac:(eassumption)) as (mw & mw' & hw & hw' & hu).
+      exists (tFix mw idx), (tFix mw' idx). split; [|split].
+      + now apply red_le_fix_ty.
+      + now apply eta_fix_ty_rt.
+      + now apply utd_fix_of.
+    - (* fix_eta_body : η on dbody, cross field — parallel *)
+      assert (hin : OnOne2 (fun a a' => on_Trel_eq (red1 Σ Γ) dtype gfix a a'
+                      × (forall b, on_Trel_eq eta1 dbody gfixb a b ->
+                         ∑ w w', clos_refl (on_Trel_eq (red1 Σ Γ) dtype gfix) b w
+                                 × clos_refl_trans (on_Trel_eq eta1 dbody gfixb) a' w'
+                                 × updef w w')) mfix0 mfix1).
+      { eapply OnOne2_impl; [exact hr|]. intros a a' [[rd IHd] geq]. split.
+        - split; [exact rd|exact geq].
+        - intros b [eb gbeq].
+          exists (set_dbody a' (dbody b)), (set_dbody a' (dbody b)). split; [|split].
+          + apply r_step. split; cbn.
+            * assert (dtype b = dtype a) by congruence. rewrite H. exact rd.
+            * congruence.
+          + apply rt_step. split; cbn.
+            * assert (dbody a' = dbody a) by congruence. rewrite H. exact eb.
+            * congruence.
+          + apply updef_refl. }
+      destruct (onOne2_diamond (on_Trel_eq (red1 Σ Γ) dtype gfix)
+                 (on_Trel_eq eta1 dbody gfixb) updef updef_refl mfix0 mfix1 _ hin
+                 ltac:(eassumption)) as (mw & mw' & hw & hw' & hu).
+      exists (tFix mw idx), (tFix mw' idx). split; [|split].
+      + now apply red_le_fix_ty.
+      + (* eta via fix_eta_body *)
+        clear -hw'. induction hw';
+          [apply rt_step; now apply fix_eta_body|apply rt_refl|eapply rt_trans; eauto].
+      + now apply utd_fix_of.
   Qed.
 
 End Cong.
