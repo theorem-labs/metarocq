@@ -1403,7 +1403,10 @@ struct
         (* Trusted (part of the quoter, outside the verified kernel). Setting this flag
            wrong cannot make the checker unsound: a dependent match on a coinductive with
            the flag set is ill-typed, so the checker refuses it; the flag only lets the
-           checker ACCEPT a dependent match, never changes what it rejects. *)
+           checker ACCEPT a dependent match. A flag set to false where true was sound
+           does change what the checker rejects, in the safe direction: a cofixpoint no
+           longer unfolds under that match, so a conversion that needed the unfolding is
+           refused. That is a completeness cost, not an unsoundness. *)
         let cofix_nondep =
           not (mib.Declarations.mind_finite == Declarations.CoFinite)
           || Vars.noccurn 1 pred
