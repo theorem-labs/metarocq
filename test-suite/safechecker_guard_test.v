@@ -6,6 +6,32 @@ From MetaRocq.SafeCheckerPlugin Require Import Loader.
     Each refused shape has a twin that the kernel accepts, and SafeCheck must
     accept the twin. *)
 
+(** A known divergence, pinned here so that a change to it is deliberate.
+    A recursive function passed unapplied into an argument that the
+    reduction then discards: Rocq's kernel accepts this, because a bare
+    occurrence only asks the kernel to reduce, and the reduction erases it.
+    This checker refuses it, because a part a step discards must carry no
+    pending recursive call.  Two library functions have this shape
+    (Program's obligation wrapper); no object of the corpus the checker was
+    measured on reaches either of them. *)
+Fixpoint unused_beta (n : nat) : nat :=
+  match n with
+  | O => O
+  | S m => (fun (_ : nat -> nat) (k : nat) => k) unused_beta m
+  end.
+
+Fail MetaRocq SafeCheck unused_beta.
+
+(** Its twin, with the function applied to a structural subterm in the
+    discarded argument, is accepted by both. *)
+Fixpoint unused_beta_ctl (n : nat) : nat :=
+  match n with
+  | O => O
+  | S m => (fun (_ : nat) (k : nat) => k) (unused_beta_ctl m) m
+  end.
+
+MetaRocq SafeCheck unused_beta_ctl.
+
 (** The recursive parameter itself is not a structural subterm. *)
 Unset Guard Checking.
 Fixpoint loop (n : nat) : False := loop n.
