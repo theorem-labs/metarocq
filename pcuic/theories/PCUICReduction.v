@@ -1,9 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config Primitive.
+From MetaRocq.Common Require Import config Primitive PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICPrimitive
-     PCUICCases PCUICClosed PCUICTactics.
+     PCUICCases PCUICClosed PCUICTactics PCUICPrimitiveRed.
 
 From Stdlib Require Import ssreflect.
 From Equations.Prop Require Import DepElim.
@@ -77,6 +77,21 @@ Inductive red1 (Σ : global_env) (Γ : context) : term -> term -> Type :=
 | red_delta c decl body (isdecl : declared_constant Σ c decl) u :
     decl.(cst_body) = Some body ->
     Σ ;;; Γ |- tConst c u ⇝ subst_instance u body
+
+(** Primitive operation: a registered bodiless constant applied to exactly the
+    literals its operation expects computes, as it does in the kernel
+    (kernel/cClosure.ml: fire only when saturated and every argument is a
+    value).  [cst_body decl = None] keeps this rule disjoint from [red_delta]
+    in every environment; the instance [u] is unconstrained because the
+    operations are monomorphic.  Over-application reaches the redex through
+    [app_red_l] and a not-yet-literal argument through [app_red_r]. *)
+| red_prim_op c decl u op ls r v :
+    prim_op_of Σ c = Some op ->
+    declared_constant Σ c decl ->
+    cst_body decl = None ->
+    prim_op_denote op ls = Some r ->
+    readback Σ (po_shape (info op)) r = Some v ->
+    Σ ;;; Γ |- mkApps (tConst c u) (map term_of_lit ls) ⇝ v
 
 (** Proj *)
 | red_proj p args u arg:
@@ -193,6 +208,15 @@ Lemma red1_ind_all :
         declared_constant Σ c decl ->
         forall u : Instance.t, cst_body decl = Some body -> P Γ (tConst c u) (subst_instance u body)) ->
 
+       (forall (Γ : context) c (decl : constant_body) (u : Instance.t)
+          (op : prim_op) (ls : list prim_lit) (r : prim_result) (v : term),
+        prim_op_of Σ c = Some op ->
+        declared_constant Σ c decl ->
+        cst_body decl = None ->
+        prim_op_denote op ls = Some r ->
+        readback Σ (po_shape (info op)) r = Some v ->
+        P Γ (mkApps (tConst c u) (map term_of_lit ls)) v) ->
+
        (forall (Γ : context) p (args : list term) (u : Instance.t)
          (arg : term),
            nth_error args (p.(proj_npars) + p.(proj_arg)) = Some arg ->
@@ -298,7 +322,7 @@ Lemma red1_ind_all :
 
        forall (Γ : context) (t t0 : term), red1 Σ Γ t t0 -> P Γ t t0.
 Proof.
-  intros. rename X30 into Xlast. revert Γ t t0 Xlast.
+  intros. rename X31 into Xlast. revert Γ t t0 Xlast.
   fix aux 4. intros Γ t T.
   move aux at top.
   destruct 1; match goal with
@@ -333,22 +357,22 @@ Proof.
     + constructor. split; auto.
     + constructor. auto.
 
-  - eapply X23.
+  - eapply X24.
     revert mfix0 mfix1 o; fix auxl 3.
     intros l l' Hl; destruct Hl;
     constructor; try split; auto; intuition.
 
-  - eapply X24.
+  - eapply X25.
     revert o. generalize (fix_context mfix0). intros c Xnew.
     revert mfix0 mfix1 Xnew; fix auxl 3; intros l l' Hl;
     destruct Hl; constructor; try split; auto; intuition.
 
-  - eapply X25.
+  - eapply X26.
     revert mfix0 mfix1 o.
     fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.
 
-  - eapply X26.
+  - eapply X27.
     revert o. generalize (fix_context mfix0). intros c new.
     revert mfix0 mfix1 new; fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.

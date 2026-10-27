@@ -3949,7 +3949,7 @@ Proof.
   intros e.
   revert e HΓ HM HN.
   elim; clear pb Γ M N.
-  1-9: intros; subst; econstructor 2; eauto; try solve [econstructor; eauto];
+  1-10: intros; subst; econstructor 2; eauto; try solve [econstructor; eauto];
     match goal with |- _ ;;; _  ⊢ ?t ≤[_] _ =>
       eapply (ws_cumul_pb_refl' (exist Γ _) (exist t _)) end.
   all: intros Γ pb; revert Γ.
