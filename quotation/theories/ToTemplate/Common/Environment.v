@@ -50,9 +50,9 @@ Module QuoteEnvironmentHelper (T : Term) (Import E : EnvironmentSig T).
       satisfies the first three fields and not [extends]). *)
   Definition extends_alt (Σ Σ' : global_env) :=
     [× Σ.(universes) ⊂_cs Σ'.(universes),
-      All (fun '(c, _) => { decls & lookup_envs Σ' c = decls ++ lookup_envs Σ c }) (declarations Σ),
-      Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge) &
-      extends_prim_fresh Σ Σ'].
+      All (fun '(c, _) => { decls & lookup_envs Σ' c = decls ++ lookup_envs Σ c }) (declarations Σ) &
+        (Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge)
+         /\ extends_prim_fresh Σ Σ')].
 
   Definition extends_decls_alt (Σ Σ' : global_env) :=
     [× Σ.(universes) = Σ'.(universes),

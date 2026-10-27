@@ -716,11 +716,21 @@ Module Environment (T : Term).
       Retroknowledge.prim_op_of Σ'.(retroknowledge) c = Some op ->
       Retroknowledge.prim_op_of Σ.(retroknowledge) c = Some op \/ lookup_env Σ c = None.
 
+  (** The retroknowledge conjunct and [extends_prim_fresh] are packed as ONE
+      field, a plain conjunction, so that [extends] keeps the three-field shape.
+      This is deliberate and must not be "simplified" back to a flat
+      [[× _, _, _ & _]]: [extends] is [Type]-valued (its second field is the
+      [∑ decls] of [extends_decls_part]), and with a fourth field whose tail is
+      a [Prop] the extraction of [template-rocq] raises a Rocq ANOMALY
+      (plugins/extraction/mlutil.ml line 660, assertion failed), which takes
+      template-pcuic and the whole quotation library down with it.  The four
+      conjuncts, their order and their meaning are unchanged; only the packaging
+      is.  See lanes/prim-ops/impl/extends-gate.md §7 for the A/B. *)
   Definition extends (Σ Σ' : global_env) :=
     [× Σ.(universes) ⊂_cs Σ'.(universes),
-      extends_decls_part Σ Σ',
-      Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge) &
-      extends_prim_fresh Σ Σ'].
+      extends_decls_part Σ Σ' &
+      (Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge)
+       /\ extends_prim_fresh Σ Σ')].
 
   Definition extends_decls (Σ Σ' : global_env) :=
     [× Σ.(universes) = Σ'.(universes),
@@ -729,9 +739,9 @@ Module Environment (T : Term).
 
   Definition extends_strictly_on_decls (Σ Σ' : global_env) :=
     [× Σ.(universes) ⊂_cs Σ'.(universes),
-      strictly_extends_decls_part Σ Σ',
-      Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge) &
-      extends_prim_fresh Σ Σ'].
+      strictly_extends_decls_part Σ Σ' &
+      (Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge)
+       /\ extends_prim_fresh Σ Σ')].
 
   Definition strictly_extends_decls (Σ Σ' : global_env) :=
     [× Σ.(universes) = Σ'.(universes),
@@ -901,23 +911,22 @@ Module Environment (T : Term).
   #[global] Instance strictly_extends_decls_extends_strictly_on_decls Σ Σ' : strictly_extends_decls Σ Σ' -> extends_strictly_on_decls Σ Σ'.
   Proof.
     destruct Σ, Σ'; intros []. cbn in *; subst. split => //=.
-    split; [lsets|csets]. apply Retroknowledge.extends_refl.
-    all: try (apply retro_eq_prim_fresh; reflexivity).
+    - split; [lsets|csets].
+    - split; [apply Retroknowledge.extends_refl|now apply retro_eq_prim_fresh].
   Qed.
 
   #[global] Instance extends_decls_extends Σ Σ' : extends_decls Σ Σ' -> extends Σ Σ'.
   Proof.
     destruct Σ, Σ'; intros []. cbn in *; subst. split => //=.
-    split; [lsets|csets]. apply Retroknowledge.extends_refl.
-    all: try (apply retro_eq_prim_fresh; reflexivity).
+    - split; [lsets|csets].
+    - split; [apply Retroknowledge.extends_refl|now apply retro_eq_prim_fresh].
   Qed.
 
   #[global] Instance extends_strictly_on_decls_extends Σ Σ' : extends_strictly_on_decls Σ Σ' -> extends Σ Σ'.
   Proof.
-    destruct Σ, Σ'; case => //= ? ? ? ?.
+    destruct Σ, Σ'; case => //= ? ? ?.
     rewrite /extends; split => //=.
     now apply strictly_extends_decls_extends_part.
-    all: try assumption.
   Qed.
 
   #[global] Instance strictly_extends_decls_extends_decls_subrel : CRelationClasses.subrelation strictly_extends_decls extends_decls := strictly_extends_decls_extends_decls.
@@ -933,10 +942,10 @@ Module Environment (T : Term).
   Proof. red. intros x. split => //; try exists [] => //. Qed.
 
   Lemma extends_strictly_on_decls_refl : CRelationClasses.Reflexive extends_strictly_on_decls.
-  Proof. red. intros x. split; [apply incl_cs_refl | try exists [] => // | apply Retroknowledge.extends_refl | intros c op h; now left]. Qed.
+  Proof. red. intros x. split; [apply incl_cs_refl | try exists [] => // | split; [apply Retroknowledge.extends_refl | intros c op h; now left]]. Qed.
 
   Lemma extends_refl : CRelationClasses.Reflexive extends.
-  Proof. red. intros x. split; [apply incl_cs_refl | try exists [] => // | apply Retroknowledge.extends_refl | intros c op h; now left]. Qed.
+  Proof. red. intros x. split; [apply incl_cs_refl | try exists [] => // | split; [apply Retroknowledge.extends_refl | intros c op h; now left]]. Qed.
 
   (* easy prefers this to the local hypotheses, which is annoying
   #[global] Instance extends_refl : CRelationClasses.Reflexive extends.
@@ -1048,19 +1057,19 @@ Module Environment (T : Term).
   Proof. extends_trans_t. Qed.
   #[global] Instance extends_strictly_on_decls_trans : CRelationClasses.Transitive extends_strictly_on_decls.
   Proof.
-    intros x y z [u1 d1 r1 p1] [u2 d2 r2 p2]; red; split.
+    intros x y z [u1 d1 [r1 p1]] [u2 d2 [r2 p2]]; red; split.
     - first [ eapply incl_cs_trans; eassumption | etransitivity; eassumption ].
     - eapply strictly_extends_decls_part_trans; eassumption.
-    - etransitivity; eassumption.
-    - eapply extends_prim_fresh_trans; [eapply strictly_extends_decls_extends_part; exact d1|exact p1|exact p2].
+    - split; [etransitivity; eassumption|].
+      eapply extends_prim_fresh_trans; [eapply strictly_extends_decls_extends_part; exact d1|exact p1|exact p2].
   Qed.
   #[global] Instance extends_trans : CRelationClasses.Transitive extends.
   Proof.
-    intros x y z [u1 d1 r1 p1] [u2 d2 r2 p2]; red; split.
+    intros x y z [u1 d1 [r1 p1]] [u2 d2 [r2 p2]]; red; split.
     - first [ eapply incl_cs_trans; eassumption | etransitivity; eassumption ].
     - eapply extends_decls_part_trans; eassumption.
-    - etransitivity; eassumption.
-    - eapply extends_prim_fresh_trans; [exact d1|exact p1|exact p2].
+    - split; [etransitivity; eassumption|].
+      eapply extends_prim_fresh_trans; [exact d1|exact p1|exact p2].
   Qed.
 
   (** Merge two lists of global_declarations, assuming that any globals sharing a name are identical *)
@@ -1138,9 +1147,8 @@ Module Environment (T : Term).
     rewrite /extends_strictly_on_decls/merge_global_envs/merge_globals; cbn.
     split;
       try first [ apply ContextSet.union_spec
-                | apply Retroknowledge.extends_l_merge
-                | apply strictly_extends_decls_l_merge_globals
-                | exact hp ].
+                | apply strictly_extends_decls_l_merge_globals ].
+    split; [apply Retroknowledge.extends_l_merge|exact hp].
   Qed.
 
   Lemma extends_l_merge Σ Σ'
@@ -1194,9 +1202,8 @@ Module Environment (T : Term).
     intros [H1 H2].
     split;
       try first [ apply ContextSet.union_spec
-                | now apply Retroknowledge.extends_r_merge
-                | now apply extends_r_merge_globals
-                | exact hp ].
+                | now apply extends_r_merge_globals ].
+    split; [now apply Retroknowledge.extends_r_merge|exact hp].
   Qed.
 
   Definition primitive_constant (Σ : global_env) (p : prim_tag) : option kername :=

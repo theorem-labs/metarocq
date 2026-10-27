@@ -83,7 +83,8 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
     rewrite /extends/extendsb.
     case: extends_decls_partT => hd; case: Retroknowledge.extendsT => hr;
       case: ContextSet.subsetP => hu; case: extends_prim_freshT => hp; cbn;
-      constructor; first [ split; assumption | intros [? ? ? ?]; contradiction ].
+      constructor; first [ split; [assumption|assumption|split; assumption]
+                         | intros [? ? [? ?]]; contradiction ].
   Qed.
 
   Lemma extends_declsT Σ Σ' : reflectT (extends_decls Σ Σ') (extends_declsb Σ Σ').
@@ -98,7 +99,8 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
     rewrite /extends_strictly_on_decls/extends_strictly_on_declsb.
     case: strictly_extends_decls_partT => hd; case: Retroknowledge.extendsT => hr;
       case: ContextSet.subsetP => hu; case: extends_prim_freshT => hp; cbn;
-      constructor; first [ split; assumption | intros [? ? ? ?]; contradiction ].
+      constructor; first [ split; [assumption|assumption|split; assumption]
+                         | intros [? ? [? ?]]; contradiction ].
   Qed.
 
   Lemma strictly_extends_declsT Σ Σ' : reflectT (strictly_extends_decls Σ Σ') (strictly_extends_declsb Σ Σ').
