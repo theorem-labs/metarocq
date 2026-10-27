@@ -621,16 +621,20 @@ Module Red1Apps.
       decl.(cst_body) = Some body ->
       Σ ;;; Γ |- tConst c u ⇝ subst_instance u body
 
-  (** Primitive operation, mirroring [PCUICReduction.red_prim_op]: a saturated
-      application of a registered bodiless constant to literals reduces to the
-      readback of its denotation.  [red1_red1apps] maps the PCUIC rule here. *)
-  | red_prim_op c decl u op ls r v :
+  (** Primitive operation, in PREFIX form like the Template rule (design §3):
+      the registered bodiless constant applied to its literal arguments [ls]
+      and any further arguments [rest] reduces to the readback of the
+      denotation still applied to [rest].  This relation is spine-form, and
+      its [app_red_l] needs a non-application head, so an over-applied
+      operation can only be reached through [rest]; [red1_red1apps] maps
+      PCUIC's exact rule in at [rest = []]. *)
+  | red_prim_op c decl u op ls r v rest :
       prim_op_of Σ c = Some op ->
       declared_constant Σ c decl ->
       cst_body decl = None ->
       PrimitiveOps.prim_op_denote op ls = Some r ->
       PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
-      Σ ;;; Γ |- mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls) ⇝ v
+      Σ ;;; Γ |- mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ rest) ⇝ mkApps v rest
 
   (** Proj *)
   | red_proj p args u arg:
@@ -860,13 +864,13 @@ Module Red1Apps.
         P Γ (tPrim (primArray; primArrayModel arr))
           (tPrim (primArray; primArrayModel (set_array_type arr ty)))) ->
 
-       (forall (Γ : context) c decl u op ls r v,
+       (forall (Γ : context) c decl u op ls r v rest,
           prim_op_of Σ c = Some op ->
           declared_constant Σ c decl ->
           cst_body decl = None ->
           PrimitiveOps.prim_op_denote op ls = Some r ->
           PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
-          P Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls)) v) ->
+          P Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ rest)) (mkApps v rest)) ->
 
 
        forall (Γ : context) (t t0 : term), red1 Σ Γ t t0 -> P Γ t t0.
@@ -958,6 +962,10 @@ Module Red1Apps.
   Proof.
     induction 1.
     all:try solve [eapply (app_red_l _ _ _ _ [u]) => //; econstructor; eauto].
+    (* red_prim_op: the extra argument [u] joins [rest], which the prefix-form
+       rule keeps applied to the reduct. *)
+    all: try (rewrite -![tApp _ u](mkApps_app _ _ [u]) -app_assoc;
+              eapply red_prim_op; eassumption).
     - rewrite -![tApp _ u](mkApps_app _ _ [u]).
       eapply red_beta.
     - rewrite -![tApp _ u](mkApps_app _ _ [u]). econstructor; eauto.
@@ -969,6 +977,20 @@ Module Red1Apps.
     - rewrite -![tApp _ u](mkApps_app _ _ [u]). now eapply app_fix_red_body.
     - now eapply (app_fix_red_ty _ _ _ _ _ [_]).
     - now eapply (app_fix_red_body _ _ _ _ _ [_]).
+  Qed.
+
+  (** PCUIC's exact-saturation rule is the prefix form at [rest = []]; this is
+      how [red1_red1apps] maps a PCUIC firing into this relation. *)
+  Lemma red_prim_op_exact Σ Γ c decl u op ls r v :
+    prim_op_of Σ c = Some op -> declared_constant Σ c decl -> cst_body decl = None ->
+    PrimitiveOps.prim_op_denote op ls = Some r ->
+    PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
+    red1 Σ Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls)) v.
+  Proof.
+    intros hop hdecl hbody hden hrb.
+    assert (X : red1 Σ Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ []))
+                         (mkApps v [])) by (eapply red_prim_op; eassumption).
+    rewrite app_nil_r in X. exact X.
   Qed.
 
   Lemma isLambda_red1 Σ Γ b b' : isLambda b -> red1 Σ Γ b b' -> isLambda b'.
@@ -984,8 +1006,8 @@ Lemma red1_red1apps Σ Γ t v :
   red1 Σ Γ t v -> Red1Apps.red1 Σ Γ t v.
 Proof.
   intros red; induction red using red1_ind_all in |- *.
-  (* red_prim_op maps to Red1Apps.red_prim_op (same premises). *)
-  all: try (eapply Red1Apps.red_prim_op; eassumption).
+  (* red_prim_op (exact saturation) maps to the prefix-form rule at [rest = []]. *)
+  all: try (eapply Red1Apps.red_prim_op_exact; eassumption).
   all:try solve [econstructor; eauto; solve_all; eauto].
   - eapply (Red1Apps.red_beta _ _ _ _ _ _ []).
   - now eapply Red1Apps.red_tApp.
@@ -1492,13 +1514,17 @@ Proof.
     depelim exp; eauto. constructor; cbn; eauto.
   - constructor. eapply expanded_tPrim_inv in exp.
     depelim exp; eauto. constructor; cbn; eauto.
-  - (* red_prim_op: the reduct is the ground readback of the denotation --
-       a [tPrim] for SInt, a [true]/[false] constructor for SBool. *)
+  - (* red_prim_op (prefix form): the reduct is the ground readback [v] still
+       applied to the extra arguments [rest]; those are expanded because the
+       redex [mkApps (tConst c u) (lits ++ rest)] was. *)
+    eapply expanded_mkApps_inv in exp as [_ hall] => //.
+    apply Forall_app in hall as [_ hrest].
     destruct (PrimitiveOps.po_shape (PrimitiveOps.info op)) eqn:hshape;
       rewrite /PCUICPrimitiveRed.readback hshape /= in H3;
       destruct r as [i|b]; cbn in H3; try discriminate.
-    + (* SInt: v = tPrim (prim_int i) *)
-      noconf H3. do 2 constructor.
+    + (* SInt: v = tPrim (prim_int i), whose head is no constructor/fix/rel *)
+      noconf H3.
+      eapply expanded_mkApps; [cbn; intros h; discriminate h | do 2 constructor | exact hrest].
     + (* SBool: v = tConstruct ind (if b then 0 else 1) [] *)
       destruct (Σ.(retroknowledge).(Retroknowledge.retro_bool)) as [ind|] eqn:hrb;
         [|discriminate].
@@ -1519,9 +1545,7 @@ Proof.
                   (ltac:(now split) : wf Σ) hbI declI
                   (ltac:(destruct b; cbn; lia)))
         as (cdecl & declC & harity).
-      change (tConstruct ind (if b then 0 else 1) [])
-        with (mkApps (tConstruct ind (if b then 0 else 1) u) []).
-      eapply expanded_tConstruct_app; [exact declC| cbn; rewrite harity; lia| constructor].
+      eapply expanded_tConstruct_app; [exact declC | rewrite harity; lia | exact hrest].
 Qed.
 
 Lemma expanded_red {cf : checker_flags} {Σ : global_env_ext} Γ Γ' t v : wf Σ ->
