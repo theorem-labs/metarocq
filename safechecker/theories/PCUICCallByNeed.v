@@ -15,15 +15,16 @@ Import CanonicalTries.
   at [le]; [false] means "don't know", never "not convertible". [cbn_conv_answer] gives the
   same answer with the reason for a "don't know".
 
-  - Heap: a binary random-access list whose digits are the bits of [st_next] (the number of
-    addresses ever allocated), least significant first; a digit 1 at position [j] holds a
-    complete tree of [2^j] cells. Heap addresses ([haddr]) are allocation numbers and have
-    their own type. A lookup scans the bits of the address against the digits (no
-    arithmetic): the cell is in the tree of the highest position where the address has 0
-    and the digit is 1, unless a higher position has address 1 and digit 0 (then the
-    address is not below [st_next]), and the bits below that position are its path in the
-    tree. A cell holds a suspension (environment, code), a value, or a black hole while it
-    is forced. Forcing writes the value back.
+  - Heap: a binary random-access list whose digits are the bits of [st_next] (the next
+    address), least significant first; a digit 1 at position [j] holds a complete tree of
+    [2^j] cells. Heap addresses ([haddr]) are allocation numbers from 1 (index 0 of the
+    list is never allocated) and have their own type. A lookup scans the bits of the
+    address against the digits (no arithmetic): the cell is in the tree of the highest
+    position where the address has 0 and the digit is 1, unless a higher position has
+    address 1 and digit 0 (then the address is not below [st_next]), and the bits below
+    that position are its path in the tree. A cell holds a suspension (the fields of an
+    environment, and a code), a value, or a black hole while it is forced. Forcing writes
+    the value back.
   - Environment: a list of slots for the bound variables, their number, and the offset in
     [Γ] of the free variables beyond them ([goff]). A slot is a heap address or an inline
     suspension (environment, code) that is not in the heap: an argument bound to a binder
@@ -94,9 +95,9 @@ Definition set2 {A} (k1 k2 : key) (x : A) (m : PTree.t (PTree.t A)) : PTree.t (P
 
 (** ** Heap addresses *)
 
-Record haddr := HAddr { ha_n : N }.
+Record haddr := HAddr { ha_p : positive }.
 
-Definition haddr_eqb (a b : haddr) : bool := N.eqb a.(ha_n) b.(ha_n).
+Definition haddr_eqb (a b : haddr) : bool := Pos.eqb a.(ha_p) b.(ha_p).
 
 (** ** Fuel *)
 
@@ -325,7 +326,7 @@ Inductive cbn_value :=
 (** [CFwd a]: the new address [a] of a cell that the collector copied; it exists only in the
   old heap during a collection. *)
 Inductive cbn_cell :=
-| CSusp (e : cbn_env) (c : code)
+| CSusp (vals : list cbn_slot) (nvals goff : nat) (c : code)
 | CDone (v : cbn_value)
 | CBusy
 | CFwd (a : haddr).
@@ -412,7 +413,7 @@ Section Rename.
 
   Definition rn_cell (cl : cbn_cell) (g : G) : cbn_res (cbn_cell * G) :=
     match cl with
-    | CSusp e c => cbn2 (e, g) := rn_env e g in COk (CSusp e c, g)
+    | CSusp vs n o c => cbn2 (vs, g) := rn_slots vs g in COk (CSusp vs n o c, g)
     | CDone v => cbn2 (v, g) := rn_value v g in COk (CDone v, g)
     | CBusy => COk (CBusy, g)
     | CFwd a => cbn2 (a, g) := f a g in COk (CFwd a, g)
@@ -495,18 +496,12 @@ Fixpoint bh_carry {A} (t : btree A) (h : bheap A) : bheap A :=
 
 Definition bh_cons {A} (x : A) (h : bheap A) : bheap A := bh_carry (BLeaf x) h.
 
-(** The heap of [n] dropped addresses: the digits of [n], each tree [BEmpty]. *)
-Fixpoint bh_holes_pos {A} (p : positive) : bheap A :=
+(** The heap of the dropped addresses below [p]: the digits of [p], each tree [BEmpty]. *)
+Fixpoint bh_holes {A} (p : positive) : bheap A :=
   match p with
   | xH => [DOne BEmpty]
-  | xO p => DZero :: bh_holes_pos p
-  | xI p => DOne BEmpty :: bh_holes_pos p
-  end.
-
-Definition bh_holes {A} (n : N) : bheap A :=
-  match n with
-  | N0 => []
-  | Npos p => bh_holes_pos p
+  | xO p => DZero :: bh_holes p
+  | xI p => DOne BEmpty :: bh_holes p
   end.
 
 (** A path in a tree, top split first. *)
@@ -536,12 +531,9 @@ Fixpoint bh_scan {A} (p : positive) (h : bheap A) (acc : bpath)
   end.
 
 (** The tree that holds the cell of address [a] and the cell's path in it; [None] unless
-  [a] is below the number of addresses that [h] encodes. *)
-Definition bh_find {A} (a : N) (h : bheap A) : option (btree A * bpath) :=
-  match a with
-  | N0 => bh_top h PEnd None
-  | Npos p => bh_scan p h PEnd None
-  end.
+  [a] is below the number that the digits [h] encode. *)
+Definition bh_find {A} (a : haddr) (h : bheap A) : option (btree A * bpath) :=
+  bh_scan a.(ha_p) h PEnd None.
 
 Fixpoint bt_get {A} (q : bpath) (t : btree A) : option A :=
   match q, t with
@@ -568,13 +560,13 @@ Fixpoint bh_put {A} (q : bpath) (t : btree A) (h : bheap A) : option (bheap A) :
   end.
 
 Definition bh_get {A} (a : haddr) (h : bheap A) : option A :=
-  match bh_find a.(ha_n) h with
+  match bh_find a h with
   | Some (t, q) => bt_get q t
   | None => None
   end.
 
 Definition bh_upd {A} (a : haddr) (x : A) (h : bheap A) : option (bheap A) :=
-  match bh_find a.(ha_n) h with
+  match bh_find a h with
   | Some (t, q) =>
     match bt_set q x t with
     | Some t => bh_put q t h
@@ -695,7 +687,7 @@ Record cbn_memo := mkMemo {
 
 Record cbn_state := mkState {
   st_heap : bheap cbn_cell;
-  st_next : N;               (* the next heap address *)
+  st_next : positive;        (* the next heap address *)
   st_room : N;               (* allocations left before the next collection *)
   st_steps : N;
   st_gam : PTree.t haddr;    (* the cell of a context entry, by [key_of_succ_nat j] *)
@@ -705,7 +697,7 @@ Definition memo_empty : cbn_memo :=
   mkMemo (PTree.empty _) String2pos.xH DTNil (PTree.empty _) (PTree.empty _) (PTree.empty _).
 
 Definition cbn_init : cbn_state :=
-  mkState [] N0 (gc_room 0) cbn_steps (PTree.empty _) memo_empty.
+  mkState (bh_holes xH) xH (gc_room 0) cbn_steps (PTree.empty _) memo_empty.
 
 Definition tick (s : cbn_state) : option cbn_state :=
   match s.(st_steps) with
@@ -722,7 +714,7 @@ Definition heap_upd (a : haddr) (c : cbn_cell) (s : cbn_state) : option cbn_stat
 
 Definition alloc_now (c : cbn_cell) (s : cbn_state) : haddr * cbn_state :=
   (HAddr s.(st_next),
-   mkState (bh_cons c s.(st_heap)) (N.succ s.(st_next)) (N.pred s.(st_room)) s.(st_steps)
+   mkState (bh_cons c s.(st_heap)) (Pos.succ s.(st_next)) (N.pred s.(st_room)) s.(st_steps)
      s.(st_gam) s.(st_memo)).
 
 Definition set_memo (m : cbn_memo) (s : cbn_state) : cbn_state :=
@@ -754,11 +746,11 @@ Definition memo_set_ceq (q : PTree.t (PTree.t (PTree.t (PTree.t bool)))) (m : cb
 Record gc_state := mkGc {
   g_old : bheap cbn_cell;   (* the old heap, a copied cell replaced by [CFwd] *)
   g_heap : bheap cbn_cell;  (* the new heap *)
-  g_next : N }.             (* its next address *)
+  g_next : positive }.      (* its next address *)
 
 (** Copy the cell at [a] of the old heap and the cells it reaches, children first; give it
   the next new address and leave that address in the old heap. [f] bounds the depth of the
-  walk: [st_next + 1] units, more than the number of cells, so a heap without cycles is
+  walk: [st_next] units, more than the number of cells, so a heap without cycles is
   never cut off. *)
 Fixpoint gc_copy (f : cbn_fuel) (a : haddr) (g : gc_state) {struct f}
   : cbn_res (haddr * gc_state) :=
@@ -772,7 +764,7 @@ Fixpoint gc_copy (f : cbn_fuel) (a : haddr) (g : gc_state) {struct f}
       cbn2 (cl, g) := rn_cell (gc_copy (k tt)) cl g in
       let a' := HAddr g.(g_next) in
       match bh_upd a (CFwd a') g.(g_old) with
-      | Some old => COk (a', mkGc old (bh_cons cl g.(g_heap)) (N.succ g.(g_next)))
+      | Some old => COk (a', mkGc old (bh_cons cl g.(g_heap)) (Pos.succ g.(g_next)))
       | None => CFail WGcDangling
       end
     end
@@ -783,12 +775,12 @@ Fixpoint gc_copy (f : cbn_fuel) (a : haddr) (g : gc_state) {struct f}
   taken from the budget. *)
 Definition collect (rs : list root) (s : cbn_state) : cbn_res (list root * cbn_state) :=
   let onext := s.(st_next) in
-  let copy := gc_copy (fuel_of_pos (N.succ_pos onext) (fun _ => FO)) in
+  let copy := gc_copy (fuel_of_pos onext (fun _ => FO)) in
   let g := mkGc s.(st_heap) (bh_holes onext) onext in
   cbn2 (gm, g) := rn_ptree copy s.(st_gam) g in
   cbn2 (rs, g) := rn_roots copy rs g in
-  COk (rs, mkState g.(g_heap) g.(g_next) (gc_room (N.sub g.(g_next) onext)) s.(st_steps) gm
-             s.(st_memo)).
+  COk (rs, mkState g.(g_heap) g.(g_next) (gc_room (N.sub (Npos g.(g_next)) (Npos onext)))
+             s.(st_steps) gm s.(st_memo)).
 
 Definition gc_due (stress : bool) (s : cbn_state) : bool :=
   stress || match s.(st_room) with N0 => true | Npos _ => false end.
@@ -963,7 +955,7 @@ Section CallByNeed.
           match decl.(decl_body) with
           | Some b =>
             let (c, s) := new_entry b [] (NSCtx j) s in
-            (CSusp (mkEnv [] 0 (S j)) c, s)
+            (CSusp [] 0 (S j) c, s)
           | None => (CDone (VNeu (NVar (nctx - S j)) []), s)
           end in
         cbnlet (a, rs, s) := alloc cl rs s in
@@ -995,22 +987,21 @@ Section CallByNeed.
     match x with
     | SAddr a => COk (a, rs, s)
     | SInl vs n o c =>
-      let e := mkEnv vs n o in
       match c.(c_term) with
-      | tLambda _ _ _ => alloc (CDone (VLam e c)) rs s
+      | tLambda _ _ _ => alloc (CDone (VLam (mkEnv vs n o) c)) rs s
       | tFix mfix idx =>
         match nth_error mfix idx with
-        | Some _ => alloc (CDone (VFix e c idx [])) rs s
-        | None => alloc (CSusp e c) rs s
+        | Some _ => alloc (CDone (VFix (mkEnv vs n o) c idx [])) rs s
+        | None => alloc (CSusp vs n o c) rs s
         end
-      | tSort _ | tProd _ _ _ | tPrim _ => alloc (CDone (VOpen e c)) rs s
+      | tSort _ | tProd _ _ _ | tPrim _ => alloc (CDone (VOpen (mkEnv vs n o) c)) rs s
       | tConst kn u =>
         match delta kn u s with
         | COk (None, s) => alloc (CDone (VNeu (NConst c.(c_term)) [])) rs s
-        | COk (Some _, s) => alloc (CSusp e c) rs s
-        | CFail _ => alloc (CSusp e c) rs s
+        | COk (Some _, s) => alloc (CSusp vs n o c) rs s
+        | CFail _ => alloc (CSusp vs n o c) rs s
         end
-      | _ => alloc (CSusp e c) rs s
+      | _ => alloc (CSusp vs n o c) rs s
       end
     end.
 
@@ -1086,11 +1077,11 @@ Section CallByNeed.
       let d := k tt in
       match heap_get a s with
       | Some (CDone v) => COk (v, rs, s)
-      | Some (CSusp e c) =>
+      | Some (CSusp vs n o c) =>
         match heap_upd a CBusy s with
         | None => CFail WDangling
         | Some s =>
-          cbnlet (v, rs, s) := whnf d e c [] (RA a :: rs) s in
+          cbnlet (v, rs, s) := whnf d (mkEnv vs n o) c [] (RA a :: rs) s in
           match rs with
           | RA a :: rs =>
             match heap_upd a (CDone v) s with
@@ -1348,7 +1339,7 @@ Section CallByNeed.
       let d := k tt in
       match heap_get a s with
       | Some (CDone v) => rb_value d lvl v s
-      | Some (CSusp e c) => rb_susp d lvl e c.(c_term) s
+      | Some (CSusp vs n o c) => rb_susp d lvl (mkEnv vs n o) c.(c_term) s
       | Some CBusy => CFail WBusy
       | Some (CFwd _) | None => CFail WDangling
       end
