@@ -4,7 +4,8 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require String2pos CanonicalTries.
 From MetaRocq.Common Require Import config Kernames.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst.
-From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound.
+From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
+  PCUICCallByNeedSoundGC.
 
 Import CanonicalTries.
 
@@ -31,8 +32,11 @@ Import CanonicalTries.
   - [cbn_conv] answers [true] only through [CbnYes], and [stress] enters the machine only
     through [gc_due] in [alloc].
 
-  The collector is another task's: where a lemma needs a collection to keep [state_ok] and
-  [gam_ok], it takes [collect_pres] as a hypothesis. *)
+  A collection is the collector's ([PCUICCallByNeedSoundGC]): [collect_pres], the statement
+  that a collection keeps [gam_ok] and [heap_nofwd] and re-establishes [state_ok], is proved
+  here from its [collect_sound], so no lemma of this file carries a collector hypothesis.
+  [heap_nofwd] (no forwarding pointer in the machine's heap between collections) is what
+  [collect_sound] asks of its input, so every invariant of a call carries it. *)
 
 (** ** Field equations used as rewrites *)
 
@@ -64,6 +68,10 @@ Proof. reflexivity. Qed.
 
 Lemma alloc_now_memo (cl : cbn_cell) (s : cbn_state) :
   (snd (alloc_now cl s)).(st_memo) = s.(st_memo).
+Proof. reflexivity. Qed.
+
+Lemma alloc_now_heap (cl : cbn_cell) (s : cbn_state) :
+  (snd (alloc_now cl s)).(st_heap) = bh_cons cl (s.(st_heap)).
 Proof. reflexivity. Qed.
 
 Lemma key_neq_of_eqb (p q : String2pos.positive) : key_eqb p q = false -> p <> q.
@@ -136,6 +144,127 @@ Proof.
     destruct X as [[l g3]|w] eqn:E2
   end; [|discriminate].
   injection hr as hr1 hr2. exists l. now symmetry.
+Qed.
+
+(** ** No forwarding pointer between collections
+
+  [collect_sound] asks [heap_nofwd] of the heap it is given, so the machine must keep it
+  between collections: a [CFwd] is written only by the collector, and only in the old heap
+  it then throws away. *)
+
+Lemma heap_nofwd_holes (p : positive) : heap_nofwd (bh_holes p).
+Proof. intros a a' e. rewrite bh_get_holes in e. discriminate. Qed.
+
+(** A cell that holds no address is not a forwarding pointer. *)
+Lemma ad_cell_nil_not_fwd (cl : cbn_cell) (b : haddr) : ad_cell cl = [] -> cl <> CFwd b.
+Proof. destruct cl; intros h e; discriminate. Qed.
+
+Lemma heap_nofwd_alloc_now (lo : positive) (cl : cbn_cell) (s : cbn_state) :
+  bh_ok lo (s.(st_next)) (s.(st_heap)) -> heap_nofwd (s.(st_heap)) ->
+  (forall b : haddr, cl <> CFwd b) ->
+  heap_nofwd ((snd (alloc_now cl s)).(st_heap)).
+Proof.
+  intros hb hnf hcl a a' e. rewrite alloc_now_heap in e.
+  destruct (haddr_dec a (HAddr (s.(st_next)))) as [->|hne].
+  - erewrite bh_digits_get_cons_new in e by eauto using bh_ok_digits.
+    injection e as e. exact (hcl a' e).
+  - erewrite bh_digits_get_cons_old in e by eauto using bh_ok_digits.
+    exact (hnf _ _ e).
+Qed.
+
+Lemma heap_nofwd_heap_upd (a : haddr) (cl : cbn_cell) (s s' : cbn_state) :
+  heap_nofwd (s.(st_heap)) -> (forall b : haddr, cl <> CFwd b) ->
+  heap_upd a cl s = Some s' -> heap_nofwd (s'.(st_heap)).
+Proof.
+  intros hnf hcl e. unfold heap_upd in e.
+  destruct (bh_upd a cl (s.(st_heap))) as [h'|] eqn:hu; [|discriminate].
+  cbn in e. injection e as e. subst s'. cbn [st_heap].
+  intros b b' hb. destruct (haddr_dec b a) as [->|hne].
+  - rewrite (bh_get_upd_same _ _ _ _ hu) in hb. injection hb as hb. exact (hcl b' hb).
+  - rewrite (bh_get_upd_other _ _ _ _ _ hu hne) in hb. exact (hnf _ _ hb).
+Qed.
+
+(** ** The collector keeps the keys of [st_gam]
+
+  [collect_sound] says what the image of a key that [st_gam] held reads back to;
+  [gam_ok] of the new state needs the other direction, that the renaming invented no key.
+  [rn_tree'] maps each node to the same node, so the key sets are the same. *)
+
+Lemma rn_tree'_get_some {G : Type} (f : haddr -> G -> cbn_res (haddr * G)) :
+  forall (m : PTree.tree' haddr) (g : G) (m' : PTree.tree' haddr) (g' : G),
+    rn_tree' f m g = COk (m', g') ->
+    forall (p : String2pos.positive) (a' : haddr),
+      PTree.get' p m' = Some a' -> exists a : haddr, PTree.get' p m = Some a.
+Proof.
+  induction m as [r ihr|x|x r ihr|l ihl|l ihl r ihr|l ihl x|l ihl x r ihr];
+    intros g m' g' he p a' hp; simpl in he.
+  - destruct (rn_tree' f r g) as [[r' g1]|w] eqn:e1; [|discriminate].
+    injection he as he1 he2; subst m' g'.
+    destruct p as [q|q|]; simpl in hp |- *; try discriminate.
+    exact (ihr _ _ _ e1 q a' hp).
+  - destruct (f x g) as [[x' g1]|w] eqn:e1; [|discriminate].
+    injection he as he1 he2; subst m' g'.
+    destruct p as [q|q|]; simpl in hp |- *; try discriminate.
+    eexists; reflexivity.
+  - destruct (f x g) as [[x' g1]|w] eqn:e1; [|discriminate].
+    destruct (rn_tree' f r g1) as [[r' g2]|w] eqn:e2; [|discriminate].
+    injection he as he1 he2; subst m' g'.
+    destruct p as [q|q|]; simpl in hp |- *; try discriminate.
+    + exact (ihr _ _ _ e2 q a' hp).
+    + eexists; reflexivity.
+  - destruct (rn_tree' f l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+    injection he as he1 he2; subst m' g'.
+    destruct p as [q|q|]; simpl in hp |- *; try discriminate.
+    exact (ihl _ _ _ e1 q a' hp).
+  - destruct (rn_tree' f l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+    destruct (rn_tree' f r g1) as [[r' g2]|w] eqn:e2; [|discriminate].
+    injection he as he1 he2; subst m' g'.
+    destruct p as [q|q|]; simpl in hp |- *; try discriminate.
+    + exact (ihr _ _ _ e2 q a' hp).
+    + exact (ihl _ _ _ e1 q a' hp).
+  - destruct (rn_tree' f l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+    destruct (f x g1) as [[x' g2]|w] eqn:e2; [|discriminate].
+    injection he as he1 he2; subst m' g'.
+    destruct p as [q|q|]; simpl in hp |- *; try discriminate.
+    + exact (ihl _ _ _ e1 q a' hp).
+    + eexists; reflexivity.
+  - destruct (rn_tree' f l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+    destruct (f x g1) as [[x' g2]|w] eqn:e2; [|discriminate].
+    destruct (rn_tree' f r g2) as [[r' g3]|w] eqn:e3; [|discriminate].
+    injection he as he1 he2; subst m' g'.
+    destruct p as [q|q|]; simpl in hp |- *; try discriminate.
+    + exact (ihr _ _ _ e3 q a' hp).
+    + exact (ihl _ _ _ e1 q a' hp).
+    + eexists; reflexivity.
+Qed.
+
+Lemma rn_ptree_get_some {G : Type} (f : haddr -> G -> cbn_res (haddr * G))
+    (m : PTree.t haddr) (g : G) (m' : PTree.t haddr) (g' : G) :
+  rn_ptree f m g = COk (m', g') ->
+  forall (p : String2pos.positive) (a' : haddr),
+    PTree.get p m' = Some a' -> exists a : haddr, PTree.get p m = Some a.
+Proof.
+  destruct m as [|m]; unfold rn_ptree; intros he p a' hp.
+  - injection he as he1 he2; subst m'. discriminate hp.
+  - destruct (rn_tree' f m g) as [[m2 g1]|w] eqn:e1; [|discriminate].
+    injection he as he1 he2; subst m' g'.
+    exact (rn_tree'_get_some f m g m2 g1 e1 p a' hp).
+Qed.
+
+Lemma collect_gam_some (rs rs' : list root) (s s' : cbn_state) :
+  collect rs s = COk (rs', s') ->
+  forall (k : String2pos.positive) (a' : haddr),
+    PTree.get k (s'.(st_gam)) = Some a' ->
+    exists a : haddr, PTree.get k (s.(st_gam)) = Some a.
+Proof.
+  intros he. rewrite collect_eq in he.
+  destruct (rn_ptree (gc_copy (fuel_of_pos (s.(st_next)) (fun _ => FO))) (s.(st_gam))
+              (mkGc (s.(st_heap)) (bh_holes (s.(st_next))) (s.(st_next))))
+    as [[gm g1]|w1] eqn:e1; [|discriminate].
+  destruct (rn_roots (gc_copy (fuel_of_pos (s.(st_next)) (fun _ => FO))) rs g1)
+    as [[rs2 g2]|w2] eqn:e2; [|discriminate].
+  injection he as he1 he2. subst rs' s'. cbn [st_gam].
+  intros k a' hk. exact (rn_ptree_get_some _ _ _ _ _ e1 k a' hk).
 Qed.
 
 (** ** [stress] enters the machine only through [gc_due] in [alloc] *)
@@ -493,77 +622,99 @@ Section CtxMemo.
     rn_cell f (CDone (VNeu (NVar l) [])) g = COk (CDone (VNeu (NVar l) []), g).
   Proof. reflexivity. Qed.
 
-  (** An allocation of a cell that holds no address: the state and the context map stay
-    good, and the new address stands for what the cell stands for. *)
+  (** An allocation of a cell that holds no address: the state, the context map and the
+    absence of forwarding pointers stay good, and the new address stands for what the cell
+    stands for. *)
   Lemma alloc_now_addr_free (lo : positive) (lvl : nat) (cl : cbn_cell) (t : term)
       (s : cbn_state) :
-    state_ok lo s -> gam_ok lvl s -> ad_cell cl = [] ->
+    state_ok lo s -> gam_ok lvl s -> heap_nofwd (s.(st_heap)) -> ad_cell cl = [] ->
     (forall H : bheap cbn_cell, repr_cell nctx H lvl cl t) ->
     state_ok lo (snd (alloc_now cl s)) /\ gam_ok lvl (snd (alloc_now cl s))
+    /\ heap_nofwd ((snd (alloc_now cl s)).(st_heap))
     /\ repr_addr nctx ((snd (alloc_now cl s)).(st_heap)) lvl (fst (alloc_now cl s)) t
     /\ (lo <= ha_p (fst (alloc_now cl s)))%positive
     /\ (ha_p (fst (alloc_now cl s)) < (snd (alloc_now cl s)).(st_next))%positive.
   Proof.
-    intros hs hg had hre.
+    intros hs hg hnf had hre.
     assert (hb : bh_ok lo (s.(st_next)) (s.(st_heap))) by (destruct hs as [h _ _]; exact h).
-    split; [|split; [|split; [|split]]].
+    split; [|split; [|split; [|split; [|split]]]].
     - apply alloc_now_state_ok; [exact hs|]. unfold addrs_in. rewrite had. constructor.
     - apply (gam_ok_heap_le lvl s);
         [apply alloc_now_gam | exact (alloc_now_heap_le lo cl s hb) | exact hg].
+    - exact (heap_nofwd_alloc_now lo cl s hb hnf (fun b => ad_cell_nil_not_fwd cl b had)).
     - exact (repr_addr_alloc nctx lo cl s lvl t hb (hre _)).
     - rewrite alloc_now_addr. cbn [ha_p]. exact (bh_ok_le _ _ _ hb).
     - rewrite alloc_now_addr, alloc_now_next. cbn [ha_p]. apply Pos.lt_succ_diag_r.
   Qed.
 
-  (** What a collection must keep for the lemmas below. This is the collector's own
-    preservation statement, and it is a hypothesis here: the collector is another task. *)
+  (** What a collection keeps, as the lemmas below need it. [collect_sound] of
+    [PCUICCallByNeedSoundGC] gives it: it asks [heap_nofwd] of the heap it collects and
+    re-establishes [state_ok] at the old [st_next]. *)
   Definition collect_pres (lvl : nat) : Prop :=
-    forall (lo : positive) (rs rs' : list root) (s s' : cbn_state),
-      state_ok lo s -> gam_ok lvl s -> collect rs s = COk (rs', s') ->
-      exists lo' : positive, state_ok lo' s' /\ gam_ok lvl s'.
+    forall (rs rs' : list root) (s s' : cbn_state),
+      gam_ok lvl s -> heap_nofwd (s.(st_heap)) -> collect rs s = COk (rs', s') ->
+      state_ok (s.(st_next)) s' /\ gam_ok lvl s' /\ heap_nofwd (s'.(st_heap)).
+
+  (** The collector keeps the context map: a key of the new map was a key of the old one
+    ([collect_gam_some]), and its address stands for what the old one stood for (the last
+    conjunct of [collect_sound]). *)
+  Lemma collect_pres_holds (lvl : nat) : collect_pres lvl.
+  Proof.
+    intros rs rs' s s' hg hnf he.
+    destruct (collect_sound nctx rs s rs' s' hnf he) as [hok [hnf' [_ [_ [_ hgam]]]]].
+    split; [exact hok|]. split; [|exact hnf'].
+    intros j a' hk.
+    destruct (collect_gam_some rs rs' s s' he _ _ hk) as [a ha].
+    destruct (hg j a ha) as [t [hd hr]].
+    destruct (hgam _ _ ha) as [a2 [ha2 hpres]].
+    rewrite ha2 in hk. injection hk as hk. subst a2.
+    exists t. split; [exact hd | exact (hpres lvl t hr)].
+  Qed.
 
   Lemma alloc_addr_free (lo : positive) (lvl : nat) (cl : cbn_cell) (t : term)
       (rs : list root) (s : cbn_state) (a : haddr) (rs' : list root) (s' : cbn_state) :
-    collect_pres lvl ->
-    state_ok lo s -> gam_ok lvl s -> memo_ok s ->
+    state_ok lo s -> gam_ok lvl s -> memo_ok s -> heap_nofwd (s.(st_heap)) ->
     ad_cell cl = [] ->
     (forall H : bheap cbn_cell, repr_cell nctx H lvl cl t) ->
     (forall (G : Type) (f : haddr -> G -> cbn_res (haddr * G)) (g : G),
         rn_cell f cl g = COk (cl, g)) ->
     alloc stress cl rs s = COk (a, rs', s') ->
     exists lo' : positive,
-      state_ok lo' s' /\ gam_ok lvl s' /\ memo_ok s'
+      state_ok lo' s' /\ gam_ok lvl s' /\ memo_ok s' /\ heap_nofwd (s'.(st_heap))
       /\ repr_addr nctx (s'.(st_heap)) lvl a t
       /\ (lo' <= ha_p a)%positive /\ (ha_p a < s'.(st_next))%positive.
   Proof.
-    intros hcp hs hg hm had hre hrn e. unfold alloc in e.
+    intros hs hg hm hnf had hre hrn e. unfold alloc in e.
     destruct (gc_due stress s) eqn:Egc.
     - destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:Ec; [|discriminate].
       destruct (collect_cons_cell cl rs rs2 s s2 hrn Ec) as [rs3 ->].
-      destruct (hcp lo (RC cl :: rs) (RC cl :: rs3) s s2 hs hg Ec) as [lo2 [hs2 hg2]].
+      destruct (collect_pres_holds lvl (RC cl :: rs) (RC cl :: rs3) s s2 hg hnf Ec)
+        as [hs2 [hg2 hnf2]].
       assert (hm2 : memo_ok s2) by exact (memo_ok_collect _ _ _ _ Ec hm).
       destruct (alloc_now cl s2) as [a2 s3] eqn:Ea.
       injection e as e1 e2 e3. subst a rs' s'.
-      destruct (alloc_now_addr_free lo2 lvl cl t s2 hs2 hg2 had hre)
-        as [h1 [h2 [h3 [h4 h5]]]].
-      rewrite Ea in h1, h2, h3, h4, h5. cbn [fst snd] in h1, h2, h3, h4, h5.
-      exists lo2. split; [exact h1|]. split; [exact h2|]. split; [|now split].
-      apply (memo_ok_codes s2); [|exact hm2].
-      rewrite <- (alloc_now_memo cl s2), Ea. reflexivity.
+      destruct (alloc_now_addr_free (s.(st_next)) lvl cl t s2 hs2 hg2 hnf2 had hre)
+        as [h1 [h2 [h3 [h4 [h5 h6]]]]].
+      rewrite Ea in h1, h2, h3, h4, h5, h6. cbn [fst snd] in h1, h2, h3, h4, h5, h6.
+      exists (s.(st_next)). split; [exact h1|]. split; [exact h2|].
+      split; [apply (memo_ok_codes s2);
+                [rewrite <- (alloc_now_memo cl s2), Ea; reflexivity | exact hm2]|].
+      split; [exact h3|]. split; [exact h4|]. split; [exact h5 | exact h6].
     - destruct (alloc_now cl s) as [a2 s3] eqn:Ea.
       injection e as e1 e2 e3. subst a rs' s'.
-      destruct (alloc_now_addr_free lo lvl cl t s hs hg had hre) as [h1 [h2 [h3 [h4 h5]]]].
-      rewrite Ea in h1, h2, h3, h4, h5. cbn [fst snd] in h1, h2, h3, h4, h5.
-      exists lo. split; [exact h1|]. split; [exact h2|]. split; [|now split].
-      apply (memo_ok_codes s); [|exact hm].
-      rewrite <- (alloc_now_memo cl s), Ea. reflexivity.
+      destruct (alloc_now_addr_free lo lvl cl t s hs hg hnf had hre)
+        as [h1 [h2 [h3 [h4 [h5 h6]]]]].
+      rewrite Ea in h1, h2, h3, h4, h5, h6. cbn [fst snd] in h1, h2, h3, h4, h5, h6.
+      exists lo. split; [exact h1|]. split; [exact h2|].
+      split; [apply (memo_ok_codes s);
+                [rewrite <- (alloc_now_memo cl s), Ea; reflexivity | exact hm]|].
+      split; [exact h3|]. split; [exact h4|]. split; [exact h5 | exact h6].
   Qed.
 
   (** The allocation of a context cell, then its record in [st_gam]. *)
   Lemma gam_alloc_set (lo : positive) (lvl j : nat) (cl : cbn_cell) (t : term)
       (rs : list root) (s : cbn_state) (a : haddr) (rs' : list root) (s2 : cbn_state) :
-    collect_pres lvl ->
-    state_ok lo s -> gam_ok lvl s -> memo_ok s ->
+    state_ok lo s -> gam_ok lvl s -> memo_ok s -> heap_nofwd (s.(st_heap)) ->
     ad_cell cl = [] ->
     (forall H : bheap cbn_cell, repr_cell nctx H lvl cl t) ->
     (forall (G : Type) (f : haddr -> G -> cbn_res (haddr * G)) (g : G),
@@ -574,17 +725,20 @@ Section CtxMemo.
       state_ok lo' (set_gam (PTree.set (key_of_succ_nat j) a (s2.(st_gam))) s2)
       /\ gam_ok lvl (set_gam (PTree.set (key_of_succ_nat j) a (s2.(st_gam))) s2)
       /\ memo_ok (set_gam (PTree.set (key_of_succ_nat j) a (s2.(st_gam))) s2)
+      /\ heap_nofwd
+           ((set_gam (PTree.set (key_of_succ_nat j) a (s2.(st_gam))) s2).(st_heap))
       /\ repr_addr nctx
            ((set_gam (PTree.set (key_of_succ_nat j) a (s2.(st_gam))) s2).(st_heap)) lvl a t.
   Proof.
-    intros hcp hs hg hm had hre hrn hd e.
-    destruct (alloc_addr_free lo lvl cl t rs s a rs' s2 hcp hs hg hm had hre hrn e)
-      as [lo2 [h1 [h2 [h3 [h4 [h5 h6]]]]]].
-    exists lo2. split; [|split; [|split]].
-    - exact (state_ok_set_gam lo2 j a s2 h1 h5 h6).
-    - exact (gam_ok_set lvl j a t s2 h2 hd h4).
+    intros hs hg hm hnf had hre hrn hd e.
+    destruct (alloc_addr_free lo lvl cl t rs s a rs' s2 hs hg hm hnf had hre hrn e)
+      as [lo2 [h1 [h2 [h3 [h4 [h5 [h6 h7]]]]]]].
+    exists lo2. split; [|split; [|split; [|split]]].
+    - exact (state_ok_set_gam lo2 j a s2 h1 h6 h7).
+    - exact (gam_ok_set lvl j a t s2 h2 hd h5).
     - apply memo_ok_set_gam, h3.
     - rewrite set_gam_heap. exact h4.
+    - rewrite set_gam_heap. exact h5.
   Qed.
 
   (** ** The context lookup *)
@@ -605,15 +759,14 @@ Section CtxMemo.
     records it. *)
   Lemma gam_miss (lo : positive) (lvl j : nat) (rs : list root) (s : cbn_state)
       (a : haddr) (rs' : list root) (s' : cbn_state) :
-    collect_pres lvl ->
-    state_ok lo s -> gam_ok lvl s -> memo_ok s ->
+    state_ok lo s -> gam_ok lvl s -> memo_ok s -> heap_nofwd (s.(st_heap)) ->
     PTree.get (key_of_succ_nat j) (s.(st_gam)) = None ->
     gam X_type X Γ nctx stress j rs s = COk (a, rs', s') ->
     exists (lo' : positive) (t : term),
-      state_ok lo' s' /\ gam_ok lvl s' /\ memo_ok s'
+      state_ok lo' s' /\ gam_ok lvl s' /\ memo_ok s' /\ heap_nofwd (s'.(st_heap))
       /\ ctx_den lvl j = Some t /\ repr_addr nctx (s'.(st_heap)) lvl a t.
   Proof.
-    intros hcp hs hg hm hnone e. unfold gam in e. cbv zeta in e. rewrite hnone in e.
+    intros hs hg hm hnf hnone e. unfold gam in e. cbv zeta in e. rewrite hnone in e.
     destruct (nth_error Γ j) as [decl|] eqn:En; [|discriminate].
     destruct (decl.(decl_body)) as [b|] eqn:Eb.
     - rewrite (surjective_pairing (new_entry X_type X b [] (NSCtx j) s)) in e.
@@ -626,18 +779,21 @@ Section CtxMemo.
       assert (hs1 : state_ok lo s1) by (apply new_entry_state_ok, hs).
       assert (hg1 : gam_ok lvl s1) by (apply new_entry_gam_ok, hg).
       assert (hm1 : memo_ok s1) by (apply new_entry_memo_ok, hm).
+      assert (hnf1 : heap_nofwd (s1.(st_heap)))
+        by (unfold s1; rewrite new_entry_heap; exact hnf).
       assert (hd : ctx_den lvl j = Some (lift (lvl - nctx + S j) 0 b))
         by (unfold ctx_den; rewrite En, Eb; reflexivity).
       assert (hct : c.(c_term) = b) by (unfold c; rewrite new_entry_term; reflexivity).
       destruct (gam_alloc_set lo lvl j (CSusp [] 0 (S j) c) (lift (lvl - nctx + S j) 0 b)
-                  rs s1 a2 rs2 s2 hcp hs1 hg1 hm1 eq_refl
+                  rs s1 a2 rs2 s2 hs1 hg1 hm1 hnf1 eq_refl
                   (fun H => eq_ind _ (fun x => repr_cell nctx H lvl (CSusp [] 0 (S j) c)
                                                  (lift (lvl - nctx + S j) 0 x))
                               (repr_cell_ctx_body H lvl j c) b hct)
                   (fun G f g => rn_cell_ctx_body f j c g) hd Ea)
-        as [lo2 [h1 [h2 [h3 h4]]]].
+        as [lo2 [h1 [h2 [h3 [h4 h5]]]]].
       exists lo2, (lift (lvl - nctx + S j) 0 b).
-      split; [exact h1|]. split; [exact h2|]. split; [exact h3|]. split; [exact hd|exact h4].
+      split; [exact h1|]. split; [exact h2|]. split; [exact h3|]. split; [exact h4|].
+      split; [exact hd | exact h5].
     - cbv beta iota zeta in e.
       destruct (alloc stress (CDone (VNeu (NVar (nctx - S j)) [])) rs s)
         as [[[a2 rs2] s2]|w] eqn:Ea; [|discriminate].
@@ -645,32 +801,33 @@ Section CtxMemo.
       assert (hd : ctx_den lvl j = Some (tRel (lvl - S (nctx - S j))))
         by (unfold ctx_den; rewrite En, Eb; reflexivity).
       destruct (gam_alloc_set lo lvl j (CDone (VNeu (NVar (nctx - S j)) []))
-                  (tRel (lvl - S (nctx - S j))) rs s a2 rs2 s2 hcp hs hg hm eq_refl
+                  (tRel (lvl - S (nctx - S j))) rs s a2 rs2 s2 hs hg hm hnf eq_refl
                   (fun H => repr_cell_ctx_var H lvl (nctx - S j))
                   (fun G f g => rn_cell_ctx_var f (nctx - S j) g) hd Ea)
-        as [lo2 [h1 [h2 [h3 h4]]]].
+        as [lo2 [h1 [h2 [h3 [h4 h5]]]]].
       exists lo2, (tRel (lvl - S (nctx - S j))).
-      split; [exact h1|]. split; [exact h2|]. split; [exact h3|]. split; [exact hd|exact h4].
+      split; [exact h1|]. split; [exact h2|]. split; [exact h3|]. split; [exact h4|].
+      split; [exact hd | exact h5].
   Qed.
 
   (** The lookup, hit or miss: the address it returns stands for what the entry denotes, and
-    the three invariants survive. *)
+    the four invariants survive. No collector hypothesis: [collect_pres_holds] discharges
+    the one a collection needs. *)
   Lemma gam_pres (lo : positive) (lvl j : nat) (rs : list root) (s : cbn_state)
       (a : haddr) (rs' : list root) (s' : cbn_state) :
-    collect_pres lvl ->
-    state_ok lo s -> gam_ok lvl s -> memo_ok s ->
+    state_ok lo s -> gam_ok lvl s -> memo_ok s -> heap_nofwd (s.(st_heap)) ->
     gam X_type X Γ nctx stress j rs s = COk (a, rs', s') ->
     exists (lo' : positive) (t : term),
-      state_ok lo' s' /\ gam_ok lvl s' /\ memo_ok s'
+      state_ok lo' s' /\ gam_ok lvl s' /\ memo_ok s' /\ heap_nofwd (s'.(st_heap))
       /\ ctx_den lvl j = Some t /\ repr_addr nctx (s'.(st_heap)) lvl a t.
   Proof.
-    intros hcp hs hg hm e.
+    intros hs hg hm hnf e.
     destruct (PTree.get (key_of_succ_nat j) (s.(st_gam))) as [a0|] eqn:Eg.
     - rewrite (gam_hit j a0 rs s Eg) in e. injection e as e1 e2 e3. subst a0 rs' s'.
       destruct (gam_hit_repr lvl j a s hg Eg) as [t [h1 h2]].
       exists lo, t. split; [exact hs|]. split; [exact hg|]. split; [exact hm|].
-      split; [exact h1 | exact h2].
-    - exact (gam_miss lo lvl j rs s a rs' s' hcp hs hg hm Eg e).
+      split; [exact hnf|]. split; [exact h1 | exact h2].
+    - exact (gam_miss lo lvl j rs s a rs' s' hs hg hm hnf Eg e).
   Qed.
 
   (** ** The frame of a call *)
@@ -703,6 +860,9 @@ Section CtxMemo.
 
   Lemma run_s2_heap (t u : term) : (run_s2 t u).(st_heap) = bh_holes 1.
   Proof. unfold run_s2, run_s1. rewrite !new_entry_heap. reflexivity. Qed.
+
+  Lemma run_s2_nofwd (t u : term) : heap_nofwd ((run_s2 t u).(st_heap)).
+  Proof. rewrite run_s2_heap. apply heap_nofwd_holes. Qed.
 
   Lemma run_c1_term (t : term) : (run_c1 t).(c_term) = t.
   Proof. unfold run_c1. apply new_entry_term. Qed.
@@ -777,6 +937,7 @@ Section CtxMemo.
     state_ok 1 (run_s2 t u)
     /\ (forall lvl : nat, gam_ok lvl (run_s2 t u))
     /\ memo_ok (run_s2 t u)
+    /\ heap_nofwd ((run_s2 t u).(st_heap))
     /\ repr_susp nctx ((run_s2 t u).(st_heap)) nctx env_empty ((run_c1 t).(c_term)) t
     /\ repr_susp nctx ((run_s2 t u).(st_heap)) nctx env_empty ((run_c2 t u).(c_term)) u
     /\ PTree.get ((run_c1 t).(c_entry)) (((run_s2 t u).(st_memo)).(m_codes))
@@ -790,6 +951,7 @@ Section CtxMemo.
     split; [apply run_s2_state_ok|].
     split; [intros lvl; apply run_s2_gam_ok|].
     split; [apply run_s2_memo_ok|].
+    split; [apply run_s2_nofwd|].
     split; [exact hr1|]. split; [exact hr2|].
     split; [apply run_c1_in_table|]. split; [apply run_c2_in_table|].
     split; [apply run_c1_code_inv | apply run_c2_code_inv].
