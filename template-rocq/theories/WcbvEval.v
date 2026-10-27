@@ -241,8 +241,10 @@ Section Wcbv.
       eval (mkApps f args) (mkApps (tFix mfix idx) (fixargsv ++ argsv))
 
 
-  (** CoFix-case unfolding *)
+  (** CoFix-case unfolding, only under a case whose return type does not depend on the
+      scrutinee ([ci_cofix_nondep]) *)
   | eval_cofix_case ip mfix idx p discr args narg fn brs res :
+      ip.(ci_cofix_nondep) ->
       cunfold_cofix mfix idx = Some (narg, fn) ->
       eval discr (mkApps (tCoFix mfix idx) args) ->
       eval (tCase ip p (mkApps fn args) brs) res ->
@@ -352,6 +354,7 @@ Section Wcbv.
       (forall (ip : case_info) (mfix : mfixpoint term) (idx : nat)
         (p : predicate term) discr (args : list term)
         (narg : nat) (fn : term) (brs : list (branch term)) (res : term),
+          ip.(ci_cofix_nondep) ->
           cunfold_cofix mfix idx = Some (narg, fn) ->
           eval discr (mkApps (tCoFix mfix idx) args) ->
           P discr (mkApps (tCoFix mfix idx) args) ->

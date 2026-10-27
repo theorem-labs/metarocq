@@ -24,7 +24,7 @@ Definition T :=
 tFix
   [mkdef term (nNamed "f") (tProd (nNamed "x") (tApp (tInd (mkInd q_test 0) []) [tInd (mkInd q_unit 0) []]) (tInd (mkInd q_unit 0) []))
      (tLambda (nNamed "x") (tApp (tInd (mkInd q_test 0) []) [tRel 0])
-        (tCase {|ci_ind := mkInd q_test 0; ci_npar := 1; ci_relevance := Relevant |}
+        (tCase {|ci_ind := mkInd q_test 0; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}
           {| pparams := [tInd (mkInd q_unit 0) []]; puinst := [];
              pcontext := [nNamed "X"];
              preturn := (tInd (mkInd q_unit 0) []) |}

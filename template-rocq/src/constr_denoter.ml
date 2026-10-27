@@ -31,7 +31,7 @@ struct
     let (h,args) = app_full trm [] in
     if constr_equall h mk_case_info then
       match args with
-      | ind :: nparam :: relevance :: [] ->
+      | ind :: nparam :: relevance :: _nondep :: [] ->
         { aci_ind = ind;
           aci_npar = nparam;
           aci_relevance = relevance }
