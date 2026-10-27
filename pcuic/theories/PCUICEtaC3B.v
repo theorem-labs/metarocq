@@ -1341,3 +1341,42 @@ Proof.
   - injection Heq as -> -> ->. right. eexists; split; [reflexivity|assumption].
 Qed.
 
+(** [tRel 0] has no [red1] reduct under an assumption: [vass] has no body. *)
+Lemma red1_tRel0_vass_absurd {Σ Γ na A v} :
+  red1 Σ (Γ ,, vass na A) (tRel 0) v -> False.
+Proof.
+  intro H. remember (tRel 0) as t eqn:Heq.
+  destruct H; try discriminate Heq;
+    try solve [destruct args using rev_ind;
+               [cbn in Heq; discriminate Heq|
+                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]].
+  injection Heq as ->.
+  match goal with He : option_map _ _ = _ |- _ => cbn in He; discriminate He end.
+Qed.
+
+(** The red1 reducts of an η-redex BODY [tApp (lift0 1 M) (tRel 0)] under its binder.
+    Three live cases; [app_red_r] is absurd ([red1_tRel0_vass_absurd]). *)
+Lemma red1_eta_body_inv {Σ Γ na A M v} :
+  red1 Σ (Γ ,, vass na A) (tApp (lift0 1 M) (tRel 0)) v ->
+  (∑ N1, (v = tApp N1 (tRel 0)) × red1 Σ (Γ ,, vass na A) (lift0 1 M) N1)
+  + (∑ nb B b, (lift0 1 M = tLambda nb B b) × (v = b {0 := tRel 0}))
+  + (∑ mfix idx args narg fn,
+       (mkApps (tFix mfix idx) args = tApp (lift0 1 M) (tRel 0))
+       × (unfold_fix mfix idx = Some (narg, fn))
+       × (is_constructor narg args = true) × (v = mkApps fn args)).
+Proof.
+  intro H. remember (tApp (lift0 1 M) (tRel 0)) as t eqn:Heq.
+  destruct H; try discriminate Heq.
+  - (* red_beta *)
+    injection Heq as Hf Ha. subst a.
+    left; right. eexists _, _, _. split; [symmetry; exact Hf|reflexivity].
+  - (* red_fix *)
+    right. eexists _, _, _, _, _. repeat split; eassumption.
+  - (* app_red_l *)
+    injection Heq as -> ->.
+    left; left. eexists. split; [reflexivity|assumption].
+  - (* app_red_r *)
+    injection Heq as -> ->.
+    exfalso. eapply red1_tRel0_vass_absurd. eassumption.
+Qed.
+
