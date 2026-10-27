@@ -3,13 +3,21 @@
 Prover: C3Prover3 (independent, duplicated effort accepted).
 Branch: `frac/eta-c3-C3Prover3` from `frac/integ-all2` `56b92b56`.
 Worktree: `/mnt/nvme/sami/tmp/eta-c3-C3Prover3`.
+Audit snapshot pushed: fork `wip/c3-C3Prover3-2026-10-27` (commit `30c45f41`, first line marks
+"DOES NOT BUILD, audit only").
+
+**Verdict status convention (lane lead 2026-10-27 ask 2):** every case verdict below is marked
+**[INFERENCE]** — it is build-free reading of upstream C2's script, "read and believed", NOT yet
+mechanised against the shared `eta1`/`upto_domain`. The 11-01 go/no-go distinguishes read-and-believed
+from proved; these flip to [PROVED] only when the Rocq file builds.
+
 Route chosen: **induction on the β-step with `red1_ind_all`, reusing the *structure* of upstream C2's
 `red1_eta1_diamond` script with the stronger one-sided conclusion.** (Suggested emphasis was pred1/rho;
-after the audit below the direct red1-induction route closes all four unlocking cases cleanly, so I run
-that; pred1/rho is kept as a fallback method, §"Fallback".)
+after the audit the direct red1-induction route closes all four unlocking cases AND the binder critical
+pairs cleanly, so I run that; pred1/rho kept as fallback method — see §Fallback.) I do NOT retype the
+definitions (lane lead 16:14Z); I `Require` C3Prover1's `PCUICEtaDefs.v` once it lands.
 
-Statement (exactly, against the shared `PCUICEtaDefs.v` `eta1`/`upto_domain`, C3Prover1's file —
-I do NOT retype the definitions, per the lane lead 16:14Z):
+Statement (exactly):
 ```
 C3 : red1 Σ Γ t v -> eta1 t u ->
      ∑ w w', clos_refl (red1 Σ Γ) u w × clos_refl_trans eta1 v w' × upto_domain w w'.
@@ -29,107 +37,128 @@ and bounding the η-reduct side to `clos_refl (red1)` (≤1 β).
 
 ---
 
-## Build-free audit of the four unlocking cases (`red_fix`, `red_cofix_case`, `red_cofix_proj`, `red_proj`)
+## THE orthogonality argument (why postponement's counterexample does not transfer — keep this)
 
-Method: read upstream C2's script `origin/eta_postpo:pcuic/theories/PCUICEtaReduction.v:1475-2198`
-(local copy `/tmp/c3_etaredux_postpo.v`), and for every join C2 produces in these four cases, record
-**which side gets β and which gets η**, then check it fits C3's one-sided shape. The gate's worry is
-"any case where C2's script uses β on the η side is a C3 counterexample candidate." Result: **none of
-the four unlocking cases uses β on the β-reduct side; the only β is one re-fire on the η-reduct side.**
-
-Why the postponement counterexample does NOT bite C3: the counterexample
-`t := tApp (tFix [λx:B. tRel 0] 0) (λ_:A. (tConstruct ind 0 ui (lift0 1 a)) (tRel 0))`
-(`plan-gate.md` B3(a)) is about η *creating* a redex (η-reduct fires a fixpoint the original could
-not). In C3 we induct on the β-step of `t`, so the β-redex **pre-exists on `t`**; the η-step can only
-be orthogonal to it or inside its head defs, never create it. "A redex created by η appears only on
-the η side, which it need not match" — exactly C3's asymmetry.
-
-### Case `red_fix`  (C2 `/tmp/c3_etaredux_postpo.v:1508-1565`)
-`t = mkApps (tFix mfix idx) args`, `unfold_fix mfix idx = Some(narg,fn)`, `is_constructor narg args`,
-`v = mkApps fn args`. Outer term is a `tApp` (args non-empty — `is_constructor narg []` is false), so
-`t` is not a top-level `eta_redex`. `eta1 t u` splits by `eta1_mkApps_inv` (`:1223-1234`):
-
-- **(b) η in an argument** `args → args'` (OnOne2, one arg `a_j → a_j'`):
-  `u = mkApps (tFix mfix idx) args'`. `is_constructor narg args'` still holds — if `j = narg` then
-  `a_narg` is constructor-headed (`is_constructor` true on `t`), hence NOT a top `eta_redex`
-  (`eta_redex` is a `tLambda`), so the η is a congruence deeper inside `a_narg` and preserves the
-  constructor head (C2 proves this at `:1558-1565`, `isConstruct_app_App`). So `u` re-fires `red_fix`
-  in **one** step → `w = mkApps fn args'`.  On the β-reduct side `v = mkApps fn args → η w' = mkApps
-  fn args'` by one app-congruence η step. `w = w'`.  ⇒ η-side `clos_refl red1` = 1 step; β-side
-  `clos_refl_trans eta1` = 1 step.  ✔ (C2: `pretac (mkApps fn l')`, `:1556`.)
-
-- **(a) η in the head `tFix`** `eta1 (tFix mfix idx)(tFix mfix' idx)` (fix_eta_ty or fix_eta_body;
-  no `eta_red`, `tFix ≠ tLambda`): `u = mkApps (tFix mfix' idx) args`. `rarg` is preserved by `eta1`
-  on `mfix` (the OnOne2 keeps `(dname,dbody/dtype,rarg)`), so `unfold_fix mfix' idx = Some(narg,fn')`
-  with `fn' = subst0 (fix_subst mfix')(dbody d')`; `is_constructor narg args` unchanged ⇒ `u` re-fires
-  `red_fix` in **one** step → `w = mkApps fn' args`.  On the β-reduct side we need
-  `v = mkApps fn args →η* w' = mkApps fn' args`, i.e.
-  `subst0 (fix_subst mfix)(dbody d) →η* subst0 (fix_subst mfix')(dbody d')`.  The single η step in
-  `mfix` gives (i) `eta1 (tFix mfix j)(tFix mfix' j)` for **every** `j` (same OnOne2 witness, different
-  idx) ⇒ `All2 (clos_refl_trans eta1)(fix_subst mfix)(fix_subst mfix')`; and (ii) `dbody d →η? dbody
-  d'` (one η if the change is in def idx's body, else equal). Closing `subst0` under η in both the
-  list and the body gives η*.  `w = w'`.  ✔
-  **In C2 this is `subst_beta_eta`/`beta_eta_subst0` applied to `eta1` steps only — NO β on this side**
-  (`:1519-1555`; the `beta_eta` there is `union red1 eta1` instantiated at the η injection).
-
-### Case `red_cofix_case`  (C2 `:1567-1618`)
-`t = tCase ip p (mkApps (tCoFix mfix idx) args) brs`, `unfold_cofix mfix idx = Some(narg,fn)`,
-`v = tCase ip p (mkApps fn args) brs`. `eta1 t u` inverts to a case congruence:
-- η in the predicate (pparams/preturn) or a branch body: discriminee unchanged ⇒ `u` re-fires
-  `red_cofix_case` in one step → `w =` (unfolded cofix, η'd predicate/branch); `v → η w' = w`
-  (replay the same predicate/branch η step). ✔ orthogonal.
-- η in the discriminee `mkApps (tCoFix mfix idx) args`: `eta1_mkApps_inv` → head (cofix_eta_ty/body,
-  giving `mfix'`, `unfold_cofix mfix' idx = Some(narg,fn')`) or an arg. Same two shapes as `red_fix`,
-  with `cofix_subst` in place of `fix_subst` (C2 `:1572-1617`). η-side = one `red_cofix_case` re-fire;
-  β-side = η* via `subst0`-congruence of the single η step. ✔ no β on the β-reduct side.
-
-### Case `red_cofix_proj`  (C2 `:1621-1670`)
-`t = tProj p (mkApps (tCoFix mfix idx) args)`. `eta1 t u` is a `proj` congruence into the discriminee
-only ⇒ `eta1_mkApps_inv` → head or arg, identical to `red_cofix_case`'s discriminee sub-case. ✔
-
-### Case `red_proj`  (C2 `:1672-1678`)
-`t = tProj p (mkApps (tConstruct ind 0 u) args)`, `v = arg_sel` (the `proj_npars+proj_arg`-th arg).
-`eta1 t u` is `proj` congruence → `eta1_mkApps_inv`; head case is `eta1 (tConstruct …) M'` which is
-impossible (`tConstruct` has no `eta1` step), so **only** the arg case: `args → args'`,
-`u = tProj p (mkApps (tConstruct ind 0 u) args')`, re-fires `red_proj` in one step →
-`w = args'_sel`.  If `j = sel`: `v = arg_sel = arg_j → η arg_j' = w' = w`. If `j ≠ sel`:
-`w = arg_sel = v`, β-side 0 η steps. ✔  (C2: `OnOne2_nth_error`, `tac v'`, `:1676-1678`.)
-
-### Audit verdict
-All four unlocking cases satisfy C3. **No β step ever appears on the β-reduct (`v`) side; it carries
-η* only.** The η-reduct (`u`) side needs exactly one `red1` re-fire (`clos_refl`). No counterexample.
-This matches `plan.md` §3 C3's INFERENCE "a redex created by η appears only on the η side, which it
-need not match", and the fallback note "any case where C2's script uses β on the η side is a
-counterexample candidate" finds **no** such case in the four.
+Postponement's counterexample (`plan-gate.md` B3(a),
+`t := tApp (tFix [λx:B. tRel 0] 0) (λ_:A. (tConstruct ind 0 ui (lift0 1 a)) (tRel 0))`) is about η
+**creating** a redex: the η-reduct fires a fixpoint the original could not. **C3 inducts on the
+β-step of `t`, so the β-redex pre-exists on `t`.** The η-step is therefore either orthogonal to that
+redex or lies inside its head definitions; it can never be what creates the redex. Hence on the
+β-reduct (`v`) side we only ever **replay** the η step (η*), and on the η-reduct (`u`) side we
+**re-fire** the same, pre-existing β-redex (≤1 `red1`). "A redex created by η appears only on the η
+side, which [C3] need not match." This single fact is why postponement is false but C3 holds, and the
+go/no-go rests on it.
 
 ---
 
-## Context hypotheses this route will assume (U-rows; discharged by L7 / shared closure file)
-Listed with statements; each is a standard η-closure fact (U2/U4, "PROVED 2020 AST"). None is C3 or a
-weakening of C3. I will prove them from the shared file's closure lemmas when available; until then
-they are `Context` in a `Section`:
-- **CH1 (U4 / `eta1_mkApps_inv`)** — may come from shared file:
-  `eta1 (mkApps M l) N -> (∑ M', eta1 M M' × N = mkApps M' l) + (∑ l', OnOne2 eta1 l l' × N = mkApps M l')`.
-- **CH2 (U2 subst-in-body)** `clos_refl_trans eta1 t t' -> clos_refl_trans eta1 (subst0 s t)(subst0 s t')`.
-- **CH3 (U2 subst-in-list)** `All2 (clos_refl_trans eta1) s s' -> clos_refl_trans eta1 (subst0 s t)(subst0 s' t)`.
-- **CH4 (U4 fix_subst congruence)** `eta1 (tFix mfix i)(tFix mfix' i) ->
-  All2 (clos_refl_trans eta1)(fix_subst mfix)(fix_subst mfix')` (and the `cofix_subst` twin).
-- **CH5 (U4 app/proj/case congruence closure of `clos_refl_trans eta1`)** — lift one-step congruences
-  of `eta1` to `clos_refl_trans eta1` (needed to replay the orthogonal η on the β-reduct side under
-  `mkApps`, `tCase`, `tProj`).
-`red1`-side re-fire uses only base `red1` constructors (`red_fix`/`red_cofix_case`/`red_cofix_proj`/
-`red_proj`) — no hypothesis.
+## Build-free audit — the four unlocking cases  [all INFERENCE]
 
-## Status
-- 2026-10-27: worktree + branch created; build-free audit of the four unlocking cases DONE (above),
-  verdict: all four hold, no β on the β-reduct side, no counterexample. Waiting on C3Prover1's shared
-  `PCUICEtaDefs.v` (`wip/eta-c3-defs-2026-10-27`) hash to start the mechanised proof; not pushed yet.
-- Next: on hash arrival — merge defs, `Require` it, write `PCUICEtaReductionC3.v` with the
-  `red1_ind_all` induction; prove the four unlocking cases first, then the ~60 congruences.
+Evidence = upstream C2 `origin/eta_postpo:pcuic/theories/PCUICEtaReduction.v` (local `/tmp/c3_etaredux_postpo.v`).
+For each join I record **which side gets β, which gets η**. Result: **no unlocking case puts β on the
+β-reduct (`v`) side; the only β is one re-fire on the η-reduct (`u`) side.**
 
-## Fallback (pred1/rho), if the red1-induction route stalls on a congruence case
-Commute `eta1` with `pred1` (parallel β-reduction, `PCUICParallelReduction.v`), where one `pred1`
-step contracts a set of non-overlapping β-redexes and η is a diamond against it; then transfer to
-`red1` via `red1 ⊆ pred1 ⊆ red` (`red_pred1`, `pred1_red`) and β-confluence `red_confluence`
-(`PCUICConfluence.v:3938`). Kept as method, not a restatement — the landed lemma is still C3 on
-`eta1`/`upto_domain`.
+### `red_fix`  (C2 `:1508-1565`)  [INFERENCE: holds]
+`t = mkApps (tFix mfix idx) args`, `is_constructor narg args`, `v = mkApps fn args`. `t` is a `tApp`
+(args non-empty), not a top `eta_redex`. `eta1 t u` splits by `eta1_mkApps_inv`:
+- η in an arg `args → args'`: `is_constructor narg args'` preserved (if `j=narg`, `a_narg` is
+  constructor-headed so η is a congruence deeper in, not a top `eta_redex`; C2 `:1558-1565`,
+  `isConstruct_app_App`). `u` re-fires `red_fix` → `w = mkApps fn args'` (1 β). `v = mkApps fn args →η
+  w' = mkApps fn args'` (1 η). `w=w'`. ✔
+- η in head `tFix` (fix_eta_ty/body; no `eta_red`): `rarg` preserved, `unfold_fix mfix' idx =
+  Some(narg,fn')`, `u` re-fires `red_fix` → `w = mkApps fn' args` (1 β). β-side: `subst0 (fix_subst
+  mfix)(dbody d) →η* subst0 (fix_subst mfix')(dbody d')` — single η in `mfix` gives
+  `All2 η (fix_subst mfix)(fix_subst mfix')` and `dbody d →η? dbody d'`, closed under `subst0`. `w=w'`.
+  ✔  In C2 this is `subst_beta_eta`/`beta_eta_subst0` applied to **eta1 steps only** — no β on the v
+  side (`:1519-1555`).
+
+### `red_cofix_case` (`:1567-1618`) / `red_cofix_proj` (`:1621-1670`)  [INFERENCE: holds]
+`cofix_subst` twin of `red_fix`. Predicate (pparams/preturn) or branch-body η is **orthogonal**
+(discriminee unchanged) → re-fire + replay. Discriminee η → `eta1_mkApps_inv` → head (cofix_eta_ty/
+body, `unfold_cofix mfix' = Some(narg,fn')`) or arg, identical to `red_fix`. ✔
+
+### `red_proj`  (C2 `:1672-1678`)  [INFERENCE: holds]
+`t = tProj p (mkApps (tConstruct ind 0 u) args)`, `v = arg_sel`. η is `proj` congruence →
+`eta1_mkApps_inv`; head case `eta1 (tConstruct …) _` is impossible (no `eta1` step on `tConstruct`),
+so **only** the arg case → re-fire `red_proj` → `w = args'_sel` (1 β); `v = arg_sel →η≤1 w'`. ✔
+
+---
+
+## Build-free audit — the binder β/η critical pairs (the real danger zone)  [all INFERENCE]
+
+The "redex created/destroyed by η at a binder" cases are where a C3 counterexample, if any, would
+hide. Audited; **all close for C3 with no β on the `v` side.**
+
+### `red_beta`  (C2 `:1476-1483`)  [INFERENCE: holds — the critical pair is benign]
+`t = tApp (tLambda na A b) a`, `v = b{0:=a}`. `eta1 t u`:
+- **`eta_red` at the λ** (`b = tApp (lift0 1 s)(tRel 0)`, `u = tApp s a`): `v = b{0:=a} = tApp
+  ((lift0 1 s){0:=a})(a) = tApp s a = u` (by `simpl_subst`, `lift0_id`). **β-reduct = η-reduct**;
+  join with 0 steps. ✔  (C2 `:1477`.)  — this is the famous β/η critical pair; trivial for C3.
+- η in domain `A→A'`: `u →β v` (β ignores domain) — 1 β on u, 0 η on v. ✔
+- η in body `b→b'`: `u →β b'{0:=a}`; `v = b{0:=a} →η b'{0:=a}` (`eta_subst`, η-only). ✔
+- η in arg `a→a'`: `u →β b{0:=a'}`; `v = b{0:=a} →η b{0:=a'}` (`subst_eta`, η-only). ✔
+
+### `abs_red_l` (β in λ-domain)  (C2 `:1679-1683`)  [INFERENCE: holds]
+Congruence; η in domain/body uses IH; η=eta_red degenerate. One step each side, modulo domain. ✔
+
+### `abs_red_r` (β in λ-body — β exposing a fix/β-redex UNDER an η-binder)  (C2 `:1685-1725`)  [INFERENCE: holds — deepest case]
+`t = tLambda na N M`, `red1 (Γ,,vass na N) M M'`, `v = tLambda na N M'`. `eta1 t u`:
+- **`eta_red`** (`M = tApp (lift0 1 s)(tRel 0)`, `u = s`): β fires inside the η-redex body. Sub-cases
+  of the body β-step:
+  - β in `lift0 1 s` (s itself β-steps): C2 `red1_strengthening` (`:1718`) gives `s →β s0` under `Γ`
+    (1 red1 on `u=s`); `v = eta_redex na N s0 →η s0` (1 `eta_red`). `w=w'=s0`. ✔
+  - whole `tApp (lift0 1 s)(tRel 0)` is a β-redex (`lift0 1 s` a λ): `s = tLambda na1 v1 v2`,
+    `v = tLambda na N v2` (`lift_subst0_Rel`), `u = s = tLambda na1 v1 v2`. Join with **0 steps both
+    sides** via `upto_domain (tLambda na N v2)(tLambda na1 v1 v2)` (bodies `v2`, domains ignored). ✔
+  - `lift0 1 s = mkApps (tFix mfix idx) args` and **red_fix fires** (`:1690-1717`): `u = s` re-fires
+    `red_fix` (is_constructor transfers through the lift, `:1699-1711`) → `w = mkApps fn0 args0`
+    (1 β on u); `v = eta_redex na N (mkApps fn0 args0) →η mkApps fn0 args0` (1 `eta_red`) → `w'=w`. ✔
+    **This is "β exposes a fix under an η-binder" — the sharpest interaction — and it still carries no
+    β on the v side.**
+- η in domain `N→N'`: `u = tLambda na N' M →β tLambda na N' M'` (body β insensitive to the vass TYPE
+  [INFERENCE: red1 body steps use the context's vdef bodies, not vass types]); `v = tLambda na N M'`;
+  `upto_domain` joins (0 η on v). ✔
+- η in body `M→M''`: both β and η in the body → IH join, lift under `tLambda`. ✔
+
+### `letin` / `tCase` / `tProj` / `tFix`-body / `tCoFix`-body congruences  (C2 `:1727-2198`)
+Not yet line-audited here (owned by L2's `c3-audit.md`). Shape is the same congruence/IH pattern; the
+`tFix`-body and `tCoFix`-body cases are the next to check for a C3 counterexample candidate (β inside a
+fix body meeting η at the body). **No counterexample found so far.** [INFERENCE]
+
+---
+
+## Context hypotheses this route assumes (with upstream status; for L2 to land WITH the definitions)
+
+Each is a standard η-closure fact (U2/U4), none is C3 or a weakening of C3. Stated against the shared
+`eta1`/`upto_domain`; `eta := clos_refl_trans eta1`.
+
+| id | statement | upstream status |
+|---|---|---|
+| CH1 `eta1_mkApps_inv` | `eta1 (mkApps M l) N -> (∑ M', eta1 M M' × N = mkApps M' l) + (∑ l', OnOne2 eta1 l l' × N = mkApps M l')` | **PROVED** `origin/eta_postpo:PCUICEtaReduction.v:1223-1234` (old AST); 9.2 port is a trivial `induction l` |
+| CH2 `eta_subst` (body) | `eta t t' -> eta (subst s k t)(subst s k t')` | **PROVED** upstream (`eta_postpo`, used `PCUICEtaReduction.v:1009,1481,1489`); def in conv/subst file |
+| CH3 `subst_eta` (list) | `All2 eta s s' -> eta (subst s k t)(subst s' k t)` | **PROVED** upstream (used `:1046,1483,1486`) |
+| CH4 `eta_fix_subst`/`eta_cofix_subst` | `eta1 (tFix mfix i)(tFix mfix' i) -> All2 eta (fix_subst mfix)(fix_subst mfix')` (+ cofix) | **DERIVED inline** in C2 (`induction #|mfix|; constructor; …`, `:1521-1529`); package as a lemma |
+| CH5 η congruence closures | `eta`-monotone versions of `eta_Lambda`,`eta_App`,`eta_mkApps`,`eta_Case`,`eta_Proj` (lift one-step `eta1` congruences to `eta`) | **β-eta versions PROVED** upstream (`beta_eta_Lambda :658`, `beta_eta_mkApps :965`, …); η-only analogs are a 1-line `clos_refl_trans` map |
+| CH6 `red1_strengthening` (for `abs_red_r`/`eta_red`) | `red1 Σ (Γ,,,[vass na N]) (lift0 1 t) u -> ∑ u', u = lift0 1 u' × red1 Σ Γ t u'` | **PROVED** upstream (`PCUICBasicStrengthening`, used C2 `:1718`); base has `PCUICBasicStrengthening`? CONFIRM on 9.2 |
+
+Re-fires on the `u` side use only base `red1` constructors — no hypothesis. `clos_refl` combinator:
+CONFIRM it is in scope (base imports `Equations.Type.Relation`, which has `clos_refl_trans`; `clos_refl`
+is what upstream `red01` used, `origin/eta_postpo:PCUICConversion.v:36-42`). If absent, define the plain
+relation combinator locally (not a definition of eta1/upto_domain).
+
+Base lemma names confirmed on `56b92b56`: `OnOne2_nth_error` (`PCUICNormal.v:1810`), `fix_subst`/
+`unfold_fix`/`is_constructor`/`isConstruct_app` (`Syntax/PCUICCases.v:370,378,418`), `simpl_subst`/
+`simpl_subst'` (`PCUICLiftSubst.v:192,493`), `red1_ind_all` (`PCUICReduction.v:161`), `red :=
+clos_refl_trans red1` (`:364`).
+
+## Status / next
+- 2026-10-27: worktree+branch; four-unlocking-cases audit DONE [INFERENCE: all hold, no counterexample];
+  binder critical pairs (`red_beta`, `abs_red_l`, `abs_red_r` incl. β-exposes-fix-under-η-binder) DONE
+  [INFERENCE: all hold]. Reported to `agent://ArityLane`. Snapshot pushed to fork.
+- Blocked on C3Prover1's shared `PCUICEtaDefs.v` (`wip/eta-c3-defs-2026-10-27`, not yet on fork) — do
+  not retype. On hash arrival: merge, `Require`, write `PCUICEtaReductionC3.v`, prove the four cases
+  first (flip them [INFERENCE]→[PROVED]), then the ~60 congruences.
+
+## Fallback (pred1/rho)
+Commute `eta1` with `pred1` (`PCUICParallelReduction.v`: one `pred1` contracts a set of non-overlapping
+β-redexes, η a diamond against it), transfer via `red1 ⊆ pred1 ⊆ red` and β-CR `red_confluence`
+(`PCUICConfluence.v:3938`). Method only; the landed lemma stays C3 on `eta1`/`upto_domain`.
