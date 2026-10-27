@@ -93,6 +93,65 @@ Definition set2 {A} (k1 k2 : key) (x : A) (m : PTree.t (PTree.t A)) : PTree.t (P
   let m2 := match PTree.get k1 m with Some m2 => m2 | None => PTree.empty _ end in
   PTree.set k1 (PTree.set k2 x m2) m.
 
+(** *** Facts about keys and the two-level maps *)
+
+Lemma key_eqb_spec (p q : key) : key_eqb p q = true <-> p = q.
+Proof.
+  revert q; induction p as [p IH|p IH|]; intros [q|q|]; cbn;
+    first [ rewrite IH; split; [now intros -> | now intros [= ->]]
+          | split; discriminate
+          | split; reflexivity ].
+Qed.
+
+Lemma key_succ_not_xH (p : key) : key_succ p <> String2pos.xH.
+Proof. destruct p; discriminate. Qed.
+
+Lemma key_succ_inj (p q : key) : key_succ p = key_succ q -> p = q.
+Proof.
+  revert q; induction p as [p IH|p IH|]; intros [q|q|] H; cbn in H;
+    try discriminate; try reflexivity; injection H as H;
+    first [ now subst
+          | f_equal; now apply IH
+          | now destruct (key_succ_not_xH _ H)
+          | now destruct (key_succ_not_xH _ (eq_sym H)) ].
+Qed.
+
+Lemma key_of_succ_nat_inj (n m : nat) : key_of_succ_nat n = key_of_succ_nat m -> n = m.
+Proof.
+  assert (Htp : exists tp : key -> positive,
+            tp String2pos.xH = xH /\ forall p, tp (key_succ p) = Pos.succ (tp p)).
+  { exists (fix tp (p : key) : positive :=
+              match p with
+              | String2pos.xI q => xI (tp q)
+              | String2pos.xO q => xO (tp q)
+              | String2pos.xH => xH
+              end).
+    split; [reflexivity|].
+    induction p as [p IH|p|]; cbn; [rewrite IH|..]; reflexivity. }
+  destruct Htp as [tp [Hone Hsucc]].
+  assert (Hnat : forall k, tp (key_of_succ_nat k) = Pos.of_succ_nat k).
+  { intros k; induction k as [|k IH]; cbn; [exact Hone | now rewrite Hsucc, IH]. }
+  intros E. apply SuccNat2Pos.inj. now rewrite <- !Hnat, E.
+Qed.
+
+Lemma get2_set2_same {A} (k1 k2 : key) (x : A) m : get2 k1 k2 (set2 k1 k2 x m) = Some x.
+Proof.
+  unfold get2, set2; cbv zeta. rewrite PTree.gss. cbv beta iota. now rewrite PTree.gss.
+Qed.
+
+Lemma get2_set2_other {A} (k1 k2 k1' k2' : key) (x : A) m :
+  k1' <> k1 \/ k2' <> k2 -> get2 k1' k2' (set2 k1 k2 x m) = get2 k1' k2' m.
+Proof.
+  intros Hne. unfold get2, set2; cbv zeta.
+  destruct (key_eqb k1' k1) eqn:E.
+  - apply key_eqb_spec in E; subst k1'. destruct Hne as [Hne|Hne]; [congruence|].
+    rewrite PTree.gss. cbv beta iota. rewrite PTree.gso by exact Hne.
+    destruct (PTree.get k1 m); [reflexivity | apply PTree.gempty].
+  - assert (k1' <> k1).
+    { intros ->. rewrite (proj2 (key_eqb_spec k1 k1) eq_refl) in E. discriminate. }
+    now rewrite PTree.gso.
+Qed.
+
 (** ** Heap addresses *)
 
 Record haddr := HAddr { ha_p : positive }.
@@ -225,6 +284,258 @@ Definition case_branch_step (i : N) : N := N.add 3 (N.double i).
 Definition same_id (c1 c2 : code) : bool :=
   key_eqb c1.(c_entry) c2.(c_entry) && key_eqb c1.(c_path) c2.(c_path).
 
+(** *** Paths are injective; a code's (entry, path) determines its term *)
+
+Lemma wrap_bits_snd m p z : snd (wrap_bits m p z) + 1 = z + Pos.size_nat m.
+Proof.
+  revert p z; induction m as [m IH|m IH|]; intros p z; cbn; [rewrite IH|rewrite IH|]; lia.
+Qed.
+
+Lemma wrap_bits_fst_xI m p z : exists a, fst (wrap_bits m p z) = String2pos.xI a.
+Proof.
+  revert p z; induction m as [m IH|m IH|]; intros p z; cbn; [apply IH|apply IH|eexists; reflexivity].
+Qed.
+
+Lemma wrap_bits_inj m m' p p' z z' :
+  Pos.size_nat m = Pos.size_nat m' -> fst (wrap_bits m p z) = fst (wrap_bits m' p' z') ->
+  m = m' /\ p = p'.
+Proof.
+  revert m' p p' z z'; induction m as [m IH|m IH|]; intros [m'|m'|] p p' z z' Hs H;
+    cbn in Hs, H.
+  - injection Hs as Hs. destruct (IH _ _ _ _ _ Hs H) as [-> E]. now injection E as ->.
+  - injection Hs as Hs. destruct (IH _ _ _ _ _ Hs H) as [_ E]. discriminate E.
+  - injection Hs as Hs. destruct m; cbn in Hs; discriminate Hs.
+  - injection Hs as Hs. destruct (IH _ _ _ _ _ Hs H) as [_ E]. discriminate E.
+  - injection Hs as Hs. destruct (IH _ _ _ _ _ Hs H) as [-> E]. now injection E as ->.
+  - injection Hs as Hs. destruct m; cbn in Hs; discriminate Hs.
+  - injection Hs as Hs. destruct m'; cbn in Hs; discriminate Hs.
+  - injection Hs as Hs. destruct m'; cbn in Hs; discriminate Hs.
+  - now injection H as ->.
+Qed.
+
+Lemma wrap_zeros_inj z z' a a' :
+  wrap_zeros z (String2pos.xI a) = wrap_zeros z' (String2pos.xI a') -> z = z' /\ a = a'.
+Proof.
+  revert z'; induction z as [|z IH]; intros [|z'] H; cbn in H; try discriminate.
+  - now injection H as ->.
+  - injection H as H. destruct (IH _ H) as [-> ->]. now split.
+Qed.
+
+Lemma path_push_inj k k' p p' : path_push k p = path_push k' p' -> k = k' /\ p = p'.
+Proof.
+  unfold path_push.
+  pose proof (wrap_bits_snd (N.succ_pos k) p 0) as Hs.
+  pose proof (wrap_bits_snd (N.succ_pos k') p' 0) as Hs'.
+  destruct (wrap_bits_fst_xI (N.succ_pos k) p 0) as [a Ha].
+  destruct (wrap_bits_fst_xI (N.succ_pos k') p' 0) as [a' Ha'].
+  pose proof (wrap_bits_inj (N.succ_pos k) (N.succ_pos k') p p' 0 0) as Hinj.
+  destruct (wrap_bits (N.succ_pos k) p 0) as [q z].
+  destruct (wrap_bits (N.succ_pos k') p' 0) as [q' z'].
+  cbn in Hs, Hs', Ha, Ha', Hinj. subst q q'.
+  intros H. apply wrap_zeros_inj in H as [<- <-].
+  assert (Hsz : Pos.size_nat (N.succ_pos k) = Pos.size_nat (N.succ_pos k')) by lia.
+  destruct (Hinj Hsz eq_refl) as [Hm ->].
+  split; [|reflexivity].
+  apply N.succ_inj. rewrite <- !N.succ_pos_spec. now rewrite Hm.
+Qed.
+
+Lemma path_push_not_nil k p : path_push k p <> path_nil.
+Proof.
+  unfold path_push, path_nil.
+  destruct (wrap_bits_fst_xI (N.succ_pos k) p 0) as [a Ha].
+  destruct (wrap_bits (N.succ_pos k) p 0) as [q [|z]]; cbn in Ha |- *; subst q; discriminate.
+Qed.
+
+Lemma path_fold_inj ks ks' :
+  fold_right path_push path_nil ks = fold_right path_push path_nil ks' -> ks = ks'.
+Proof.
+  revert ks'; induction ks as [|k ks IH]; intros [|k' ks'] H; cbn [fold_right] in H.
+  - reflexivity.
+  - symmetry in H. destruct (path_push_not_nil _ _ H).
+  - destruct (path_push_not_nil _ _ H).
+  - apply path_push_inj in H as [-> H]. f_equal. now apply IH.
+Qed.
+
+(** The code invariant for the entry [ce]: the term of [c] is the subterm of the entry's
+  instantiated term at the path of [c]. [ks] lists the path steps newest first, as
+  [c_path] stores them; [step t k] is the subterm of [t] at step [k], with the steps of the
+  comment above [child] (and [tLetIn]: type 1; [tCoFix]: as [tFix]). *)
+Definition code_inv (ce : code_entry) (c : code) : Prop :=
+  let step (t : term) (k : N) : option term :=
+    match t with
+    | tApp f a => match k with N0 => Some f | Npos xH => Some a | _ => None end
+    | tLambda _ d b | tProd _ d b =>
+      match k with N0 => Some d | Npos xH => Some b | _ => None end
+    | tLetIn _ b ty body =>
+      match k with N0 => Some b | Npos xH => Some ty | Npos (xO xH) => Some body | _ => None end
+    | tCase _ p scrut brs =>
+      match k with
+      | N0 => Some scrut
+      | Npos xH => Some p.(preturn)
+      | Npos (xO q) => nth_error p.(pparams) (Nat.pred (Pos.to_nat q))
+      | Npos (xI q) => option_map bbody (nth_error brs (Nat.pred (Pos.to_nat q)))
+      end
+    | tProj _ a => match k with N0 => Some a | _ => None end
+    | tFix m _ | tCoFix m _ => option_map dbody (nth_error m (N.to_nat k))
+    | _ => None
+    end
+  in
+  exists ks : list N,
+    c.(c_path) = fold_right path_push path_nil ks /\
+    fold_right (fun k ot => match ot with Some t => step t k | None => None end)
+      (Some (inst_code ce.(ce_inst) ce.(ce_term))) ks = Some c.(c_term).
+
+Lemma code_inv_root ce i :
+  code_inv ce (mkCode i path_nil (inst_code ce.(ce_inst) ce.(ce_term))).
+Proof. unfold code_inv; cbv zeta. exists []. now split. Qed.
+
+Lemma code_inv_path_term ce c1 c2 :
+  code_inv ce c1 -> code_inv ce c2 -> c1.(c_path) = c2.(c_path) -> c1.(c_term) = c2.(c_term).
+Proof.
+  unfold code_inv; cbv zeta.
+  intros [ks [Hp1 Ht1]] [ks' [Hp2 Ht2]] E.
+  rewrite Hp1, Hp2 in E. apply path_fold_inj in E. subst ks'. congruence.
+Qed.
+
+Lemma same_id_spec c1 c2 :
+  same_id c1 c2 = true <-> c1.(c_entry) = c2.(c_entry) /\ c1.(c_path) = c2.(c_path).
+Proof.
+  unfold same_id. split.
+  - intros H. apply Bool.andb_true_iff in H as [H1 H2].
+    apply key_eqb_spec in H1, H2. now split.
+  - intros [H1 H2]. apply Bool.andb_true_iff. now split; apply key_eqb_spec.
+Qed.
+
+Lemma same_id_sound ce c1 c2 :
+  same_id c1 c2 = true -> code_inv ce c1 -> code_inv ce c2 -> c1.(c_term) = c2.(c_term).
+Proof.
+  intros H H1 H2. apply same_id_spec in H as [_ Hp]. exact (code_inv_path_term ce c1 c2 H1 H2 Hp).
+Qed.
+
+(** The same with the entries looked up in a code table: [same_id] gives equal indices, so
+  both codes are read against one entry. *)
+Lemma same_id_sound_table (codes : PTree.t code_entry) ce1 ce2 c1 c2 :
+  same_id c1 c2 = true ->
+  PTree.get c1.(c_entry) codes = Some ce1 -> code_inv ce1 c1 ->
+  PTree.get c2.(c_entry) codes = Some ce2 -> code_inv ce2 c2 ->
+  c1.(c_term) = c2.(c_term).
+Proof.
+  intros H G1 H1 G2 H2. pose proof H as [He _]%same_id_spec.
+  rewrite He, G2 in G1. injection G1 as ->.
+  exact (same_id_sound ce1 c1 c2 H H1 H2).
+Qed.
+
+(** [child] preserves [code_inv], at every step the machine takes. *)
+
+Lemma case_param_step_pos i : case_param_step i = Npos (xO (N.succ_pos i)).
+Proof. destruct i as [|p]; [reflexivity | destruct p; reflexivity]. Qed.
+
+Lemma case_branch_step_pos i : case_branch_step i = Npos (xI (N.succ_pos i)).
+Proof. destruct i as [|p]; [reflexivity | destruct p; reflexivity]. Qed.
+
+Lemma succ_pos_to_nat i : Pos.to_nat (N.succ_pos i) = S (N.to_nat i).
+Proof. destruct i as [|p]; [reflexivity | exact (Pos2Nat.inj_succ p)]. Qed.
+
+Local Ltac code_inv_child_tac k :=
+  unfold code_inv; cbv zeta;
+  let ks := fresh "ks" in let Hp := fresh "Hp" in let Ht := fresh "Ht" in
+  let Hc := fresh "Hc" in
+  intros [ks [Hp Ht]] Hc; exists (k :: ks); split;
+  [ cbn [fold_right child c_path]; now rewrite Hp
+  | cbn [fold_right child c_term]; rewrite Ht, Hc; reflexivity ].
+
+Lemma code_inv_child_app_fun ce c f a :
+  code_inv ce c -> c.(c_term) = tApp f a -> code_inv ce (child c 0 f).
+Proof. code_inv_child_tac 0%N. Qed.
+
+Lemma code_inv_child_app_arg ce c f a :
+  code_inv ce c -> c.(c_term) = tApp f a -> code_inv ce (child c 1 a).
+Proof. code_inv_child_tac 1%N. Qed.
+
+Lemma code_inv_child_lambda_dom ce c na d b :
+  code_inv ce c -> c.(c_term) = tLambda na d b -> code_inv ce (child c 0 d).
+Proof. code_inv_child_tac 0%N. Qed.
+
+Lemma code_inv_child_lambda_body ce c na d b :
+  code_inv ce c -> c.(c_term) = tLambda na d b -> code_inv ce (child c 1 b).
+Proof. code_inv_child_tac 1%N. Qed.
+
+Lemma code_inv_child_prod_dom ce c na d b :
+  code_inv ce c -> c.(c_term) = tProd na d b -> code_inv ce (child c 0 d).
+Proof. code_inv_child_tac 0%N. Qed.
+
+Lemma code_inv_child_prod_body ce c na d b :
+  code_inv ce c -> c.(c_term) = tProd na d b -> code_inv ce (child c 1 b).
+Proof. code_inv_child_tac 1%N. Qed.
+
+Lemma code_inv_child_letin_def ce c na b ty body :
+  code_inv ce c -> c.(c_term) = tLetIn na b ty body -> code_inv ce (child c 0 b).
+Proof. code_inv_child_tac 0%N. Qed.
+
+Lemma code_inv_child_letin_type ce c na b ty body :
+  code_inv ce c -> c.(c_term) = tLetIn na b ty body -> code_inv ce (child c 1 ty).
+Proof. code_inv_child_tac 1%N. Qed.
+
+Lemma code_inv_child_letin_body ce c na b ty body :
+  code_inv ce c -> c.(c_term) = tLetIn na b ty body -> code_inv ce (child c 2 body).
+Proof. code_inv_child_tac 2%N. Qed.
+
+Lemma code_inv_child_case_scrut ce c ci p scrut brs :
+  code_inv ce c -> c.(c_term) = tCase ci p scrut brs -> code_inv ce (child c 0 scrut).
+Proof. code_inv_child_tac 0%N. Qed.
+
+Lemma code_inv_child_case_return ce c ci p scrut brs :
+  code_inv ce c -> c.(c_term) = tCase ci p scrut brs -> code_inv ce (child c 1 p.(preturn)).
+Proof. code_inv_child_tac 1%N. Qed.
+
+Lemma code_inv_child_case_param ce c ci p scrut brs i t :
+  code_inv ce c -> c.(c_term) = tCase ci p scrut brs ->
+  nth_error p.(pparams) (N.to_nat i) = Some t ->
+  code_inv ce (child c (case_param_step i) t).
+Proof.
+  unfold code_inv; cbv zeta. intros [ks [Hp Ht]] Hc Hn.
+  exists (case_param_step i :: ks); split.
+  - cbn [fold_right child c_path]. now rewrite Hp.
+  - cbn [fold_right child c_term]. rewrite Ht, Hc, case_param_step_pos.
+    cbv beta iota. rewrite succ_pos_to_nat. exact Hn.
+Qed.
+
+Lemma code_inv_child_case_branch ce c ci p scrut brs i br :
+  code_inv ce c -> c.(c_term) = tCase ci p scrut brs ->
+  nth_error brs (N.to_nat i) = Some br ->
+  code_inv ce (child c (case_branch_step i) br.(bbody)).
+Proof.
+  unfold code_inv; cbv zeta. intros [ks [Hp Ht]] Hc Hn.
+  exists (case_branch_step i :: ks); split.
+  - cbn [fold_right child c_path]. now rewrite Hp.
+  - cbn [fold_right child c_term]. rewrite Ht, Hc, case_branch_step_pos.
+    cbv beta iota. rewrite succ_pos_to_nat. cbn [Nat.pred]. now rewrite Hn.
+Qed.
+
+Lemma code_inv_child_proj ce c pr a :
+  code_inv ce c -> c.(c_term) = tProj pr a -> code_inv ce (child c 0 a).
+Proof. code_inv_child_tac 0%N. Qed.
+
+Lemma code_inv_child_fix ce c mfix idx k d :
+  code_inv ce c -> c.(c_term) = tFix mfix idx -> nth_error mfix (N.to_nat k) = Some d ->
+  code_inv ce (child c k d.(dbody)).
+Proof.
+  unfold code_inv; cbv zeta. intros [ks [Hp Ht]] Hc Hn.
+  exists (k :: ks); split.
+  - cbn [fold_right child c_path]. now rewrite Hp.
+  - cbn [fold_right child c_term]. rewrite Ht, Hc. cbv beta iota. now rewrite Hn.
+Qed.
+
+Lemma code_inv_child_cofix ce c mfix idx k d :
+  code_inv ce c -> c.(c_term) = tCoFix mfix idx -> nth_error mfix (N.to_nat k) = Some d ->
+  code_inv ce (child c k d.(dbody)).
+Proof.
+  unfold code_inv; cbv zeta. intros [ks [Hp Ht]] Hc Hn.
+  exists (k :: ks); split.
+  - cbn [fold_right child c_path]. now rewrite Hp.
+  - cbn [fold_right child c_term]. rewrite Ht, Hc. cbv beta iota. now rewrite Hn.
+Qed.
+
 (** ** Occurrence count and structural hash of a code *)
 
 (** Occurrences of [tRel k], capped at 2: an occurrence under a lambda, product, fixpoint or
@@ -286,6 +597,10 @@ Fixpoint thash (t : term) : N :=
     fold_left (fun h d => hmix (hmix h (thash d.(dtype))) (thash d.(dbody))) m (hmix 15 (N.of_nat i))
   | _ => 16%N
   end.
+
+(** The hash is a function of the term: equal terms have equal hashes. *)
+Lemma thash_eq t u : t = u -> thash t = thash u.
+Proof. now intros ->. Qed.
 
 (** ** Machine data *)
 
