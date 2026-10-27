@@ -49,6 +49,7 @@ theories/Typing/PCUICContextConversionTyp.v
 
 theories/PCUICContextSubst.v
 theories/PCUICCasesContexts.v
+theories/PCUICPrimitiveRed.v
 theories/PCUICReduction.v
 theories/PCUICArityRed.v
 theories/PCUICRecArgs.v

@@ -4,7 +4,7 @@ From Equations.Type Require Import Relation.
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect Wellfounded Relation_Operators CRelationClasses.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config Environment Primitive EnvironmentTyping Reflect.
+From MetaRocq.Common Require Import config Environment Primitive PrimitiveOps EnvironmentTyping Reflect.
 From MetaRocq.Template Require Import Ast AstUtils LiftSubst UnivSubst ReflectAst TermEquality WfAst.
 
 Import MonadNotation.
@@ -152,6 +152,34 @@ Proof.
       now apply IHparams.
       now apply IHparams.
 Qed.
+
+(** *** Template's side of the primitive-operation interface
+
+  [template_of_lit] builds the term of a literal argument and [lit_of_template]
+  reads one back.  They are Template's half of the pair whose PCUIC twin is in
+  [pcuic/theories/PCUICPrimitiveRed.v]; both languages compute with the one
+  denotation [prim_op_denote] of [common/theories/PrimitiveOps.v], and
+  [trans (template_of_lit l) = tPrim (prim_of_lit l)], so the transport of the
+  rule is the identity on literals. *)
+
+Definition template_of_lit (l : prim_lit) : term :=
+  match l with
+  | LInt i => tInt i
+  | LString s => tString s
+  end.
+
+Definition lit_of_template (t : term) : option prim_lit :=
+  match t with
+  | tInt i => Some (LInt i)
+  | tString s => Some (LString s)
+  | _ => None
+  end.
+
+Lemma lit_of_template_of_lit l : lit_of_template (template_of_lit l) = Some l.
+Proof. by destruct l. Qed.
+
+Lemma lit_of_template_inv t l : lit_of_template t = Some l -> t = template_of_lit l.
+Proof. destruct t => //=; intros [= <-]; reflexivity. Qed.
 
 (** *** One step strong beta-zeta-iota-fix-delta reduction
 

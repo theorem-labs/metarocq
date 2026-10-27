@@ -216,6 +216,8 @@ gen-src/primStringAxioms.ml
 gen-src/primStringAxioms.mli
 gen-src/primitive.ml
 gen-src/primitive.mli
+gen-src/primitiveOps.ml
+gen-src/primitiveOps.mli
 gen-src/quoter.ml
 gen-src/reflect.ml
 gen-src/reflect.mli
