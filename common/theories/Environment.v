@@ -705,10 +705,22 @@ Module Environment (T : Term).
   Notation strictly_extends_decls_part Σ Σ'
     := (strictly_extends_decls_part_globals Σ.(declarations) Σ'.(declarations))
          (only parsing).
+  (** Option A (BET-319): a lax extension may only register an operation on a
+      constant it also DECLARES.  Without this the operation table could grow on
+      a bodiless axiom already declared in the smaller environment, so a stuck
+      [whd_rel] axiom step in [Σ] would fire in [Σ'] and weak-head reduction
+      would not be monotone (weakening_env_whd_rel).  It holds of real Rocq,
+      where [Primitive] always declares a fresh constant. *)
+  Definition extends_prim_fresh (Σ Σ' : global_env) : Prop :=
+    forall c op,
+      Retroknowledge.prim_op_of Σ'.(retroknowledge) c = Some op ->
+      Retroknowledge.prim_op_of Σ.(retroknowledge) c = Some op \/ lookup_env Σ c = None.
+
   Definition extends (Σ Σ' : global_env) :=
     [× Σ.(universes) ⊂_cs Σ'.(universes),
-      extends_decls_part Σ Σ' &
-      Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge)].
+      extends_decls_part Σ Σ',
+      Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge) &
+      extends_prim_fresh Σ Σ'].
 
   Definition extends_decls (Σ Σ' : global_env) :=
     [× Σ.(universes) = Σ'.(universes),
@@ -717,13 +729,22 @@ Module Environment (T : Term).
 
   Definition extends_strictly_on_decls (Σ Σ' : global_env) :=
     [× Σ.(universes) ⊂_cs Σ'.(universes),
-      strictly_extends_decls_part Σ Σ' &
-      Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge)].
+      strictly_extends_decls_part Σ Σ',
+      Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge) &
+      extends_prim_fresh Σ Σ'].
 
   Definition strictly_extends_decls (Σ Σ' : global_env) :=
     [× Σ.(universes) = Σ'.(universes),
       strictly_extends_decls_part Σ Σ' &
       Σ.(retroknowledge) = Σ'.(retroknowledge)].
+
+  (** For the two equal-retroknowledge relations the conjunct is free: the
+      operation table does not change, so every op of [Σ'] is already an op of
+      [Σ].  The subrelation coercions to [extends] discharge the 4th field with
+      this. *)
+  Lemma retro_eq_prim_fresh Σ Σ' :
+    Σ.(retroknowledge) = Σ'.(retroknowledge) -> extends_prim_fresh Σ Σ'.
+  Proof. intros e c op h. left. now rewrite e. Qed.
 
   Existing Class extends.
   Existing Class extends_decls.
