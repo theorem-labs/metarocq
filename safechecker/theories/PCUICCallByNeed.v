@@ -575,6 +575,562 @@ Definition bh_upd {A} (a : haddr) (x : A) (h : bheap A) : option (bheap A) :=
   | None => None
   end.
 
+(** ** Laws of the heap
+
+  [bh_ok lo n h]: [h] is the heap reached from [bh_holes lo] by [bh_cons] and [bh_upd], with
+  [n] the next address ([lo] plus the number of [bh_cons]). The laws: [bh_get_cons_new],
+  [bh_get_cons_old], [bh_get_upd_same], [bh_get_upd_other], [bh_upd_none], [bh_get_above],
+  [bh_get_below], [bh_get_dropped], [bh_upd_get_none], [bh_upd_ok]. The rest of this part are
+  the steps of their proofs. The same laws over the state are after the state's operations. *)
+
+(** The digits of [h] are the binary digits of [n], least significant first. *)
+Inductive bh_digits {A} : bheap A -> positive -> Prop :=
+| bh_digits_one t : bh_digits [DOne t] xH
+| bh_digits_zero h n : bh_digits h n -> bh_digits (DZero :: h) (xO n)
+| bh_digits_more t h n : bh_digits h n -> bh_digits (DOne t :: h) (xI n).
+
+(** The heaps that the machine builds: from the holes below [lo], [bh_cons] (the next
+  address goes from [n] to [Pos.succ n]) and [bh_upd]. *)
+Inductive bh_ok {A} (lo : positive) : positive -> bheap A -> Prop :=
+| bh_ok_holes : bh_ok lo lo (bh_holes lo)
+| bh_ok_cons n h x : bh_ok lo n h -> bh_ok lo (Pos.succ n) (bh_cons x h)
+| bh_ok_upd n h a x h' : bh_ok lo n h -> bh_upd a x h = Some h' -> bh_ok lo n h'.
+
+(** *** Trees *)
+
+Lemma bt_get_set_same {A} q (x : A) t t' : bt_set q x t = Some t' -> bt_get q t' = Some x.
+Proof.
+  revert t t'; induction q as [|q IH|q IH]; intros t t' H; destruct t as [y|l r|];
+    cbn in H; try discriminate.
+  - injection H as <-; reflexivity.
+  - destruct (bt_set q x l) as [l'|] eqn:E; cbn in H; [|discriminate].
+    injection H as <-; exact (IH _ _ E).
+  - destruct (bt_set q x r) as [r'|] eqn:E; cbn in H; [|discriminate].
+    injection H as <-; exact (IH _ _ E).
+Qed.
+
+Lemma bt_get_set_other {A} q q' (x : A) t t' :
+  bt_set q x t = Some t' -> q' <> q -> bt_get q' t' = bt_get q' t.
+Proof.
+  revert q' t t'; induction q as [|q IH|q IH]; intros q' t t' H Hne; destruct t as [y|l r|];
+    cbn in H; try discriminate.
+  - injection H as <-; destruct q'; [congruence|reflexivity|reflexivity].
+  - destruct (bt_set q x l) as [l'|] eqn:E; cbn in H; [|discriminate].
+    injection H as <-; destruct q' as [|q'|q']; cbn; [reflexivity| |reflexivity].
+    apply (IH _ _ _ E); congruence.
+  - destruct (bt_set q x r) as [r'|] eqn:E; cbn in H; [|discriminate].
+    injection H as <-; destruct q' as [|q'|q']; cbn; [reflexivity|reflexivity|].
+    apply (IH _ _ _ E); congruence.
+Qed.
+
+Lemma bt_set_none {A} q (x : A) t : bt_set q x t = None <-> bt_get q t = None.
+Proof.
+  revert t; induction q as [|q IH|q IH]; intros t; destruct t as [y|l r|]; cbn;
+    try (split; intro; congruence).
+  - rewrite <- (IH l); destruct (bt_set q x l); cbn; split; congruence.
+  - rewrite <- (IH r); destruct (bt_set q x r); cbn; split; congruence.
+Qed.
+
+(** *** Where the scan finds a cell *)
+
+Local Fixpoint bp_len (q : bpath) : nat :=
+  match q with PEnd => O | PL q | PR q => S (bp_len q) end.
+
+Local Fixpoint bp_drop (k : nat) (q : bpath) : bpath :=
+  match k, q with
+  | S k, (PL q | PR q) => bp_drop k q
+  | _, _ => q
+  end.
+
+Local Lemma bp_drop_S k q r : bp_drop k q = PL r \/ bp_drop k q = PR r -> bp_drop (S k) q = r.
+Proof.
+  revert q; induction k as [|k IH]; intros q H.
+  - cbn in H; destruct H; subst; reflexivity.
+  - destruct q as [|q|q]; cbn in *; [destruct H; discriminate| apply IH, H | apply IH, H].
+Qed.
+
+(** [bh_at h acc t q]: the scan from [acc] at the start of [h] found the tree [t] in [h], at
+  the position given by the length of [q] beyond [acc], and [q] extends [acc]. *)
+Local Definition bh_at {A} (h : bheap A) (acc : bpath) (t : btree A) (q : bpath) : Prop :=
+  bp_len acc <= bp_len q /\ bp_drop (bp_len q - bp_len acc) q = acc
+  /\ nth_error h (bp_len q - bp_len acc) = Some (DOne t).
+
+Local Lemma bh_at_here {A} (h : bheap A) acc t : bh_at (DOne t :: h) acc t acc.
+Proof. unfold bh_at; rewrite Nat.sub_diag; auto. Qed.
+
+Local Lemma bh_at_shift {A} (d : digit A) h acc acc' t q :
+  acc' = PL acc \/ acc' = PR acc -> bh_at h acc' t q -> bh_at (d :: h) acc t q.
+Proof.
+  unfold bh_at; intros Hacc (Hl & Hd & Hn).
+  assert (E : bp_len acc' = S (bp_len acc)) by (destruct Hacc; subst; reflexivity).
+  rewrite E in Hl, Hd, Hn.
+  replace (bp_len q - bp_len acc) with (S (bp_len q - S (bp_len acc))) by lia.
+  split; [lia|]; split; [|exact Hn].
+  apply bp_drop_S; destruct Hacc; subst; [left|right]; exact Hd.
+Qed.
+
+Local Ltac pl_pr := first [ left; reflexivity | right; reflexivity ].
+
+Local Ltac res_step R :=
+  destruct R as [E|E];
+  [ first [ left; exact E | discriminate E | injection E as <- <-; right; apply bh_at_here ]
+  | right; refine (bh_at_shift _ _ _ _ _ _ _ E); pl_pr ].
+
+Local Lemma bh_top_res {A} (h : bheap A) acc c t q :
+  bh_top h acc c = Some (t, q) -> c = Some (t, q) \/ bh_at h acc t q.
+Proof.
+  revert acc c; induction h as [|d h IH]; intros acc c H; cbn in H; [left; exact H|].
+  destruct d; res_step (IH _ _ H).
+Qed.
+
+Local Lemma bh_scan_nil {A} p acc (c : option (btree A * bpath)) : bh_scan p [] acc c = None.
+Proof. destruct p; reflexivity. Qed.
+
+Local Lemma bh_scan_res {A} p (h : bheap A) acc c t q :
+  bh_scan p h acc c = Some (t, q) -> c = Some (t, q) \/ bh_at h acc t q.
+Proof.
+  revert p acc c; induction h as [|d h IH]; intros p acc c H.
+  - rewrite bh_scan_nil in H; discriminate.
+  - destruct p, d; cbn in H;
+      first [ res_step (IH _ _ _ H) | res_step (bh_top_res h _ _ _ _ H) ].
+Qed.
+
+(** *** Two addresses found at the same path are equal *)
+
+Local Definition bh_short {A} (c : option (btree A * bpath)) (acc : bpath) : Prop :=
+  forall t q, c = Some (t, q) -> bp_len q < bp_len acc.
+
+Local Lemma bh_short_none {A} acc : @bh_short A None acc.
+Proof. intros t q E; discriminate. Qed.
+
+Local Lemma bh_short_here {A} (t : btree A) acc acc' :
+  acc' = PL acc \/ acc' = PR acc -> bh_short (Some (t, acc)) acc'.
+Proof. intros Ha t' q E; injection E as _ <-; destruct Ha; subst; cbn; lia. Qed.
+
+Local Lemma bh_short_step {A} (c : option (btree A * bpath)) acc acc' :
+  acc' = PL acc \/ acc' = PR acc -> bh_short c acc -> bh_short c acc'.
+Proof. intros Ha Hs t q E; specialize (Hs t q E); destruct Ha; subst; cbn; lia. Qed.
+
+(** Both results at the same path beyond [acc], or both from the candidates. *)
+Local Definition bh_same_res (acc q1 q2 : bpath) : Prop :=
+  (q1 = q2 /\ bp_len acc <= bp_len q1) \/ (bp_len q1 < bp_len acc /\ bp_len q2 < bp_len acc).
+
+Local Lemma bh_same_res_step acc acc' q1 q2 :
+  acc' = PL acc \/ acc' = PR acc -> bh_same_res acc q1 q2 -> bh_same_res acc' q1 q2.
+Proof.
+  intros Ha C; assert (E : bp_len acc' = S (bp_len acc)) by (destruct Ha; subst; reflexivity).
+  unfold bh_same_res in *; rewrite E.
+  destruct C as [[<- Hl]|[Hl1 Hl2]].
+  - destruct (Nat.eq_dec (bp_len q1) (bp_len acc)); [right; lia|left; split; [reflexivity|lia]].
+  - right; lia.
+Qed.
+
+Local Lemma bh_same_res_sym acc q1 q2 : bh_same_res acc q1 q2 -> bh_same_res acc q2 q1.
+Proof. unfold bh_same_res; intros [[<- Hl]|[Hl1 Hl2]]; [left; auto|right; auto]. Qed.
+
+Local Ltac short_tac :=
+  first [ apply bh_short_none
+        | eapply bh_short_here; pl_pr
+        | eapply bh_short_step; [|eassumption]; pl_pr ].
+
+(** Every result of a scan comes from its candidate or lies beyond [acc]: when the two
+  results are at the same path or both short, one of these clashes. *)
+Local Ltac crunch :=
+  repeat match goal with
+  | H : bh_scan _ _ _ _ = Some _ |- _ =>
+    apply bh_scan_res in H; destruct H as [H | (? & ? & ?)]
+  | H : bh_top _ _ _ = Some _ |- _ =>
+    apply bh_top_res in H; destruct H as [H | (? & ? & ?)]
+  | H : None = Some _ |- _ => discriminate H
+  | H : Some (_, _) = Some (_, _) |- _ => injection H as _ H; apply (f_equal bp_len) in H
+  | Hs : bh_short ?c ?a, H : ?c = Some (_, _) |- _ => pose proof (Hs _ _ H); clear H
+  end;
+  cbn [bp_len] in *;
+  first [ lia
+        | match goal with
+          | H1 : bp_drop ?k ?q = PL _, H2 : bp_drop ?k ?q = PR _ |- _ =>
+            rewrite H1 in H2; discriminate H2
+          end ].
+
+Local Lemma bh_top_scan {A} (h : bheap A) : forall p acc c1 c2 t1 t2 q1 q2,
+  bh_short c1 acc -> bh_short c2 acc ->
+  bh_top h acc c1 = Some (t1, q1) -> bh_scan p h acc c2 = Some (t2, q2) ->
+  bh_same_res acc q1 q2 -> False.
+Proof.
+  induction h as [|d h IH]; intros p acc c1 c2 t1 t2 q1 q2 S1 S2 H1 H2 C.
+  - rewrite bh_scan_nil in H2; discriminate.
+  - destruct p as [p|p|], d as [|t]; cbn in H1, H2;
+      try (eapply IH; [ | | exact H1 | exact H2 | refine (bh_same_res_step _ _ _ _ _ C); pl_pr ];
+           short_tac);
+      destruct C as [[<- ?]|[? ?]]; crunch.
+Qed.
+
+Local Lemma bh_scan_inj {A} (h : bheap A) : forall p1 p2 acc c1 c2 t1 t2 q1 q2,
+  bh_short c1 acc -> bh_short c2 acc ->
+  bh_scan p1 h acc c1 = Some (t1, q1) -> bh_scan p2 h acc c2 = Some (t2, q2) ->
+  bh_same_res acc q1 q2 -> p1 = p2.
+Proof.
+  induction h as [|d h IH]; intros p1 p2 acc c1 c2 t1 t2 q1 q2 S1 S2 H1 H2 C.
+  - rewrite bh_scan_nil in H1; discriminate.
+  - destruct p1 as [p1|p1|], p2 as [p2|p2|], d as [|t]; cbn in H1, H2;
+      try reflexivity;
+      try (f_equal; eapply IH;
+           [ | | exact H1 | exact H2 | refine (bh_same_res_step _ _ _ _ _ C); pl_pr ];
+           short_tac);
+      exfalso;
+      try (first
+             [ eapply bh_top_scan;
+               [ | | exact H1 | exact H2 | refine (bh_same_res_step _ _ _ _ _ C); pl_pr ]
+             | eapply bh_top_scan;
+               [ | | exact H2 | exact H1
+               | apply bh_same_res_sym; refine (bh_same_res_step _ _ _ _ _ C); pl_pr ] ];
+           short_tac);
+      destruct C as [[<- ?]|[? ?]]; crunch.
+Qed.
+
+Local Lemma bh_find_inj {A} a b (h : bheap A) t1 t2 q :
+  bh_find a h = Some (t1, q) -> bh_find b h = Some (t2, q) -> a = b.
+Proof.
+  intros H1 H2; destruct a as [pa], b as [pb]; f_equal.
+  eapply (bh_scan_inj h pa pb PEnd None None); [apply bh_short_none|apply bh_short_none|
+    exact H1|exact H2|left; split; [reflexivity|cbn; lia]].
+Qed.
+
+Local Lemma bh_find_nth {A} a (h : bheap A) t q :
+  bh_find a h = Some (t, q) -> nth_error h (bp_len q) = Some (DOne t).
+Proof.
+  unfold bh_find; intros H; apply bh_scan_res in H.
+  destruct H as [H|(_ & _ & Hn)]; [discriminate|].
+  cbn [bp_len] in Hn; rewrite Nat.sub_0_r in Hn; exact Hn.
+Qed.
+
+(** *** The scan depends on the digits only *)
+
+Local Definition bh_dshape {A} (d d' : digit A) : Prop :=
+  match d, d' with
+  | DZero, DZero => True
+  | DOne _, DOne _ => True
+  | _, _ => False
+  end.
+
+Local Definition bh_crel {A} (c c' : option (btree A * bpath)) : Prop :=
+  match c, c' with
+  | None, None => True
+  | Some (_, q), Some (_, q') => q = q'
+  | _, _ => False
+  end.
+
+Local Lemma bh_top_shape {A} (h h' : bheap A) : Forall2 bh_dshape h h' ->
+  forall acc c c', bh_crel c c' -> bh_crel (bh_top h acc c) (bh_top h' acc c').
+Proof.
+  induction 1 as [|d d' h h' Hd Hf IH]; intros acc c c' Hc; cbn; [exact Hc|].
+  destruct d, d'; cbn in Hd; try contradiction; apply IH; cbn; auto.
+Qed.
+
+Local Lemma bh_scan_shape {A} (h h' : bheap A) : Forall2 bh_dshape h h' ->
+  forall p acc c c', bh_crel c c' -> bh_crel (bh_scan p h acc c) (bh_scan p h' acc c').
+Proof.
+  induction 1 as [|d d' h h' Hd Hf IH]; intros p acc c c' Hc.
+  - rewrite !bh_scan_nil; exact I.
+  - destruct p, d, d'; cbn in Hd |- *; try contradiction;
+      first [ apply IH | apply bh_top_shape; [exact Hf|] ]; cbn; auto.
+Qed.
+
+Local Lemma bh_put_shape {A} k (t : btree A) h h' :
+  bh_put k t h = Some h' -> Forall2 bh_dshape h h'.
+Proof.
+  revert k h'; induction h as [|d h IH]; intros k h' H; destruct k as [|k|k]; cbn in H;
+    try discriminate.
+  - destruct d; [discriminate|]; injection H as <-; constructor; [exact I|].
+    clear; induction h as [|d h IH]; constructor; [destruct d; exact I|exact IH].
+  - destruct (bh_put k t h) eqn:E; cbn in H; [|discriminate]; injection H as <-.
+    constructor; [destruct d; exact I|exact (IH _ _ E)].
+  - destruct (bh_put k t h) eqn:E; cbn in H; [|discriminate]; injection H as <-.
+    constructor; [destruct d; exact I|exact (IH _ _ E)].
+Qed.
+
+Local Lemma bh_put_nth {A} k (t : btree A) h h' : bh_put k t h = Some h' ->
+  forall i, nth_error h' i = if Nat.eqb i (bp_len k) then Some (DOne t) else nth_error h i.
+Proof.
+  revert k h'; induction h as [|d h IH]; intros k h' H i; destruct k as [|k|k]; cbn in H;
+    try discriminate.
+  - destruct d; [discriminate|]; injection H as <-; destruct i; reflexivity.
+  - destruct (bh_put k t h) eqn:E; cbn in H; [|discriminate]; injection H as <-.
+    destruct i; cbn; [reflexivity|exact (IH _ _ E i)].
+  - destruct (bh_put k t h) eqn:E; cbn in H; [|discriminate]; injection H as <-.
+    destruct i; cbn; [reflexivity|exact (IH _ _ E i)].
+Qed.
+
+Local Lemma bh_put_some {A} k (t t' : btree A) h :
+  nth_error h (bp_len k) = Some (DOne t) -> exists h', bh_put k t' h = Some h'.
+Proof.
+  revert k; induction h as [|d h IH]; intros k H; destruct k as [|k|k]; cbn in H |- *;
+    try discriminate.
+  - injection H as ->; eexists; reflexivity.
+  - destruct (IH _ H) as [h' E]; rewrite E; eexists; reflexivity.
+  - destruct (IH _ H) as [h' E]; rewrite E; eexists; reflexivity.
+Qed.
+
+Local Lemma bh_find_put {A} a (h : bheap A) k t' h' t q :
+  bh_put k t' h = Some h' -> bh_find a h = Some (t, q) ->
+  bh_find a h' = Some (if Nat.eqb (bp_len q) (bp_len k) then t' else t, q).
+Proof.
+  intros Hp Hf.
+  pose proof (bh_scan_shape _ _ (bh_put_shape _ _ _ _ Hp) a.(ha_p) PEnd None None I) as R.
+  fold (bh_find a h) (bh_find a h') in R; rewrite Hf in R.
+  destruct (bh_find a h') as [[t'' q']|] eqn:E; cbn in R; [|contradiction]; subst q'.
+  pose proof (bh_find_nth _ _ _ _ E) as N'; rewrite (bh_put_nth _ _ _ _ Hp) in N'.
+  pose proof (bh_find_nth _ _ _ _ Hf) as N.
+  destruct (Nat.eqb (bp_len q) (bp_len k)); [|rewrite N in N']; congruence.
+Qed.
+
+Local Lemma bh_find_put_none {A} a (h : bheap A) k t' h' :
+  bh_put k t' h = Some h' -> bh_find a h = None -> bh_find a h' = None.
+Proof.
+  intros Hp Hf.
+  pose proof (bh_scan_shape _ _ (bh_put_shape _ _ _ _ Hp) a.(ha_p) PEnd None None I) as R.
+  fold (bh_find a h) (bh_find a h') in R; rewrite Hf in R.
+  destruct (bh_find a h'); [contradiction|reflexivity].
+Qed.
+
+Local Lemma bh_digits_shape {A} (h h' : bheap A) n :
+  bh_digits h n -> Forall2 bh_dshape h h' -> bh_digits h' n.
+Proof.
+  intros Hd; revert h'; induction Hd as [t|h n Hd IH|t h n Hd IH]; intros h' Hf;
+    inversion Hf as [|d d' h0 h0' Hdd Hrest]; subst;
+    destruct d' as [|t']; cbn in Hdd; try contradiction.
+  - inversion Hrest; subst; constructor.
+  - constructor; exact (IH _ Hrest).
+  - constructor; exact (IH _ Hrest).
+Qed.
+
+(** *** [bh_upd] *)
+
+Lemma bh_get_upd_same {A} a (x : A) h h' : bh_upd a x h = Some h' -> bh_get a h' = Some x.
+Proof.
+  unfold bh_upd, bh_get; intros H.
+  destruct (bh_find a h) as [[t q]|] eqn:Ef; [|discriminate].
+  destruct (bt_set q x t) as [t1|] eqn:Es; [|discriminate].
+  rewrite (bh_find_put _ _ _ _ _ _ _ H Ef), Nat.eqb_refl.
+  exact (bt_get_set_same _ _ _ _ Es).
+Qed.
+
+Lemma bh_get_upd_other {A} a b (x : A) h h' :
+  bh_upd a x h = Some h' -> b <> a -> bh_get b h' = bh_get b h.
+Proof.
+  unfold bh_upd, bh_get; intros H Hne.
+  destruct (bh_find a h) as [[t q]|] eqn:Ef; [|discriminate].
+  destruct (bt_set q x t) as [t1|] eqn:Es; [|discriminate].
+  destruct (bh_find b h) as [[s q']|] eqn:Eb.
+  - rewrite (bh_find_put _ _ _ _ _ _ _ H Eb).
+    destruct (Nat.eqb (bp_len q') (bp_len q)) eqn:El; [|reflexivity].
+    apply Nat.eqb_eq in El.
+    pose proof (bh_find_nth _ _ _ _ Ef) as N1; pose proof (bh_find_nth _ _ _ _ Eb) as N2.
+    rewrite El, N1 in N2; injection N2 as <-.
+    apply (bt_get_set_other _ _ _ _ _ Es).
+    intros ->; apply Hne; exact (bh_find_inj _ _ _ _ _ _ Eb Ef).
+  - rewrite (bh_find_put_none _ _ _ _ _ H Eb); reflexivity.
+Qed.
+
+Lemma bh_upd_none {A} a (x : A) h : bh_upd a x h = None <-> bh_get a h = None.
+Proof.
+  unfold bh_upd, bh_get.
+  destruct (bh_find a h) as [[t q]|] eqn:Ef; [|split; auto].
+  destruct (bt_set q x t) as [t1|] eqn:Es.
+  - destruct (bh_put_some q t t1 h (bh_find_nth _ _ _ _ Ef)) as [h' Ep]; rewrite Ep.
+    split; [discriminate|]; intros Hg.
+    apply (proj2 (bt_set_none q x t)) in Hg; congruence.
+  - split; [intros _; exact (proj1 (bt_set_none q x t) Es)|reflexivity].
+Qed.
+
+Lemma bh_upd_get_none {A} a (x : A) h h' :
+  bh_upd a x h = Some h' -> forall b, bh_get b h' = None <-> bh_get b h = None.
+Proof.
+  intros H b; destruct (Pos.eq_dec (ha_p b) (ha_p a)) as [E|E].
+  - assert (b = a) as -> by (destruct a, b; cbn in E; congruence).
+    rewrite (bh_get_upd_same _ _ _ _ H); split; [discriminate|].
+    intros Hg; apply (proj2 (bh_upd_none a x h)) in Hg; congruence.
+  - rewrite (bh_get_upd_other _ _ _ _ _ H); [reflexivity|congruence].
+Qed.
+
+Lemma bh_digits_upd {A} a (x : A) h h' n :
+  bh_upd a x h = Some h' -> bh_digits h n -> bh_digits h' n.
+Proof.
+  unfold bh_upd; intros H Hd.
+  destruct (bh_find a h) as [[t q]|]; [|discriminate].
+  destruct (bt_set q x t) as [t1|]; [|discriminate].
+  exact (bh_digits_shape _ _ _ Hd (bh_put_shape _ _ _ _ H)).
+Qed.
+
+(** *** [bh_cons] *)
+
+Lemma bh_digits_holes {A} p : bh_digits (@bh_holes A p) p.
+Proof. induction p; cbn; constructor; auto. Qed.
+
+Lemma bh_digits_cons {A} (x : A) h n : bh_digits h n -> bh_digits (bh_cons x h) (Pos.succ n).
+Proof.
+  unfold bh_cons; generalize (BLeaf x); intros T Hd; revert T.
+  induction Hd as [t|h n Hd IH|t h n Hd IH]; intros T; cbn; repeat constructor; auto.
+Qed.
+
+Local Definition bh_val {A} (r : option (btree A * bpath)) : option A :=
+  match r with Some (t, q) => bt_get q t | None => None end.
+
+Local Lemma bh_top_indep {A} (h : bheap A) n : bh_digits h n ->
+  forall acc c c', bh_top h acc c = bh_top h acc c'.
+Proof. induction 1; intros; cbn; auto. Qed.
+
+Local Lemma bh_scan_exact {A} (h : bheap A) n : bh_digits h n ->
+  forall acc c, bh_scan n h acc c = c.
+Proof. induction 1; intros; cbn; auto. Qed.
+
+Local Lemma bh_scan_indep {A} (h : bheap A) n : bh_digits h n ->
+  forall p acc c c', p <> n -> bh_scan p h acc c = bh_scan p h acc c'.
+Proof.
+  induction 1 as [t|h n Hd IH|t h n Hd IH]; intros p acc c c' Hp; destruct p as [p|p|]; cbn;
+    rewrite ?bh_scan_nil; try reflexivity; try congruence;
+    first [ apply IH; congruence | eapply bh_top_indep; eassumption ].
+Qed.
+
+Local Lemma bh_scan_carry_new {A} (h : bheap A) n : bh_digits h n ->
+  forall T acc c, bh_val (bh_scan n (bh_carry T h) acc c) = bt_get acc T.
+Proof.
+  induction 1 as [t|h n Hd IH|t h n Hd IH]; intros T acc c.
+  - reflexivity.
+  - cbn [bh_carry bh_scan]; rewrite (bh_scan_exact _ _ Hd); reflexivity.
+  - cbn [bh_carry bh_scan]; rewrite IH; reflexivity.
+Qed.
+
+Local Lemma bh_top_carry {A} (h : bheap A) n : bh_digits h n ->
+  forall T acc, bh_val (bh_top (bh_carry T h) acc None) = bh_val (bh_top h acc None).
+Proof.
+  induction 1 as [t|h n Hd IH|t h n Hd IH]; intros T acc.
+  - reflexivity.
+  - cbn [bh_carry bh_top]; f_equal; eapply bh_top_indep; eassumption.
+  - cbn [bh_carry bh_top]; rewrite IH; f_equal; eapply bh_top_indep; eassumption.
+Qed.
+
+Local Lemma bh_scan_carry_old {A} (h : bheap A) n : bh_digits h n ->
+  forall T p acc c, p <> n ->
+  bh_val (bh_scan p (bh_carry T h) acc None) = bh_val (bh_scan p h acc c).
+Proof.
+  induction 1 as [t|h n Hd IH|t h n Hd IH]; intros T p acc c Hp; destruct p as [p|p|].
+  - destruct p; cbn; rewrite ?bh_scan_nil; reflexivity.
+  - destruct p; cbn; rewrite ?bh_scan_nil; reflexivity.
+  - congruence.
+  - reflexivity.
+  - cbn [bh_carry bh_scan]; f_equal; eapply bh_scan_indep; [eassumption|congruence].
+  - reflexivity.
+  - cbn [bh_carry bh_scan]; apply IH; congruence.
+  - cbn [bh_carry bh_scan]; destruct (Pos.eq_dec p n) as [->|Hne].
+    + rewrite (bh_scan_carry_new _ _ Hd), (bh_scan_exact _ _ Hd); reflexivity.
+    + apply IH; exact Hne.
+  - cbn [bh_carry bh_scan]; rewrite (bh_top_carry _ _ Hd); f_equal;
+      eapply bh_top_indep; eassumption.
+Qed.
+
+Lemma bh_digits_get_cons_new {A} (x : A) h n :
+  bh_digits h n -> bh_get (HAddr n) (bh_cons x h) = Some x.
+Proof. intros Hd; exact (bh_scan_carry_new _ _ Hd (BLeaf x) PEnd None). Qed.
+
+Lemma bh_digits_get_cons_old {A} (x : A) h n a :
+  bh_digits h n -> a <> HAddr n -> bh_get a (bh_cons x h) = bh_get a h.
+Proof.
+  intros Hd Ha; destruct a as [pa].
+  exact (bh_scan_carry_old _ _ Hd (BLeaf x) pa PEnd None ltac:(congruence)).
+Qed.
+
+(** *** The bound *)
+
+Local Lemma bh_scan_above {A} (h : bheap A) n : bh_digits h n ->
+  forall p acc c, (n < p)%positive -> bh_scan p h acc c = None.
+Proof.
+  induction 1 as [t|h n Hd IH|t h n Hd IH]; intros p acc c Hlt; destruct p as [p|p|]; cbn;
+    rewrite ?bh_scan_nil; try reflexivity; try lia.
+  - destruct (Pos.eq_dec p n) as [->|Hne]; [apply (bh_scan_exact _ _ Hd)|apply IH; lia].
+  - apply IH; lia.
+  - apply IH; lia.
+  - apply IH; lia.
+Qed.
+
+Lemma bh_digits_get_above {A} (h : bheap A) n a :
+  bh_digits h n -> (n <= ha_p a)%positive -> bh_get a h = None.
+Proof.
+  intros Hd Hle; unfold bh_get, bh_find.
+  destruct (Pos.eq_dec (ha_p a) n) as [->|Hne].
+  - rewrite (bh_scan_exact _ _ Hd); reflexivity.
+  - rewrite (bh_scan_above _ _ Hd); [reflexivity|lia].
+Qed.
+
+Local Lemma bh_holes_nth {A} p i (t : btree A) :
+  nth_error (bh_holes p) i = Some (DOne t) -> t = BEmpty.
+Proof.
+  revert i; induction p as [p IH|p IH|]; intros i H; destruct i as [|i]; cbn in H;
+    first [ discriminate | injection H as <-; reflexivity | exact (IH _ H)
+          | destruct i; discriminate ].
+Qed.
+
+Lemma bh_get_holes {A} a p : bh_get a (@bh_holes A p) = None.
+Proof.
+  unfold bh_get; destruct (bh_find a (bh_holes p)) as [[t q]|] eqn:E; [|reflexivity].
+  rewrite (bh_holes_nth _ _ _ (bh_find_nth _ _ _ _ E)); destruct q; reflexivity.
+Qed.
+
+(** *** The laws over [bh_ok] *)
+
+Lemma bh_ok_digits {A} lo n (h : bheap A) : bh_ok lo n h -> bh_digits h n.
+Proof.
+  induction 1; [apply bh_digits_holes|apply bh_digits_cons; assumption|].
+  eapply bh_digits_upd; eassumption.
+Qed.
+
+Lemma bh_ok_le {A} lo n (h : bheap A) : bh_ok lo n h -> (lo <= n)%positive.
+Proof. induction 1; lia. Qed.
+
+(** [bh_upd] keeps the next address. *)
+Lemma bh_upd_ok {A} lo n (h : bheap A) a x h' :
+  bh_ok lo n h -> bh_upd a x h = Some h' -> bh_ok lo n h'.
+Proof. intros Hok Hu; exact (bh_ok_upd _ _ _ _ _ _ Hok Hu). Qed.
+
+Lemma bh_get_cons_new {A} lo n h (x : A) :
+  bh_ok lo n h -> bh_get (HAddr n) (bh_cons x h) = Some x.
+Proof. intros Hok; exact (bh_digits_get_cons_new _ _ _ (bh_ok_digits _ _ _ Hok)). Qed.
+
+Lemma bh_get_cons_old {A} lo n h (x : A) a :
+  bh_ok lo n h -> a <> HAddr n -> bh_get a (bh_cons x h) = bh_get a h.
+Proof. intros Hok; exact (bh_digits_get_cons_old _ _ _ _ (bh_ok_digits _ _ _ Hok)). Qed.
+
+Lemma bh_get_above {A} lo n (h : bheap A) a :
+  bh_ok lo n h -> (n <= ha_p a)%positive -> bh_get a h = None.
+Proof. intros Hok; exact (bh_digits_get_above _ _ _ (bh_ok_digits _ _ _ Hok)). Qed.
+
+Lemma bh_get_below {A} lo n (h : bheap A) a :
+  bh_ok lo n h -> (lo <= ha_p a)%positive -> (ha_p a < n)%positive ->
+  exists x, bh_get a h = Some x.
+Proof.
+  intros Hok Hlo; induction Hok as [|n h x Hok IH|n h b x h' Hok IH Hu]; intros Hlt.
+  - lia.
+  - destruct (Pos.eq_dec (ha_p a) n) as [E|E].
+    + exists x; destruct a as [pa]; cbn in E; subst pa; exact (bh_get_cons_new _ _ _ _ Hok).
+    + rewrite (bh_get_cons_old _ _ _ _ _ Hok); [apply IH; lia|].
+      destruct a; cbn in E; congruence.
+  - destruct (Pos.eq_dec (ha_p a) (ha_p b)) as [E|E].
+    + exists x; assert (a = b) as -> by (destruct a, b; cbn in E; congruence).
+      exact (bh_get_upd_same _ _ _ _ Hu).
+    + rewrite (bh_get_upd_other _ _ _ _ _ Hu); [exact (IH Hlt)|congruence].
+Qed.
+
+Lemma bh_get_dropped {A} lo n (h : bheap A) a :
+  bh_ok lo n h -> (ha_p a < lo)%positive -> bh_get a h = None.
+Proof.
+  intros Hok Hlt; induction Hok as [|n h x Hok IH|n h b x h' Hok IH Hu].
+  - apply bh_get_holes.
+  - pose proof (bh_ok_le _ _ _ Hok).
+    rewrite (bh_get_cons_old _ _ _ _ _ Hok); [exact IH|].
+    destruct a; cbn in *; intros E; injection E; lia.
+  - exact (proj2 (bh_upd_get_none _ _ _ _ Hu a) IH).
+Qed.
+
 (** ** State *)
 
 Inductive delta_memo :=
@@ -722,6 +1278,83 @@ Definition set_memo (m : cbn_memo) (s : cbn_state) : cbn_state :=
 
 Definition set_gam (g : PTree.t haddr) (s : cbn_state) : cbn_state :=
   mkState s.(st_heap) s.(st_next) s.(st_room) s.(st_steps) g s.(st_memo).
+
+(** *** The heap laws over the state: [heap_get], [heap_upd], [alloc_now] *)
+
+Lemma cbn_init_ok : bh_ok xH cbn_init.(st_next) cbn_init.(st_heap).
+Proof. exact (bh_ok_holes xH). Qed.
+
+Lemma alloc_now_addr c s : fst (alloc_now c s) = HAddr s.(st_next).
+Proof. reflexivity. Qed.
+
+Lemma alloc_now_next c s : (snd (alloc_now c s)).(st_next) = Pos.succ s.(st_next).
+Proof. reflexivity. Qed.
+
+Lemma alloc_now_ok lo c s :
+  bh_ok lo s.(st_next) s.(st_heap) ->
+  bh_ok lo (snd (alloc_now c s)).(st_next) (snd (alloc_now c s)).(st_heap).
+Proof. intros Hok; exact (bh_ok_cons _ _ _ c Hok). Qed.
+
+Lemma heap_get_alloc_now_new lo c s :
+  bh_ok lo s.(st_next) s.(st_heap) ->
+  heap_get (fst (alloc_now c s)) (snd (alloc_now c s)) = Some c.
+Proof. intros Hok; exact (bh_get_cons_new _ _ _ c Hok). Qed.
+
+Lemma heap_get_alloc_now_old lo c s a :
+  bh_ok lo s.(st_next) s.(st_heap) -> a <> fst (alloc_now c s) ->
+  heap_get a (snd (alloc_now c s)) = heap_get a s.
+Proof. intros Hok Ha; exact (bh_get_cons_old _ _ _ c a Hok Ha). Qed.
+
+Lemma heap_get_upd_same a c s s' : heap_upd a c s = Some s' -> heap_get a s' = Some c.
+Proof.
+  unfold heap_upd, heap_get; destruct (bh_upd a c s.(st_heap)) as [h|] eqn:E; cbn;
+    [|discriminate].
+  intros H; injection H as <-; exact (bh_get_upd_same _ _ _ _ E).
+Qed.
+
+Lemma heap_get_upd_other a b c s s' :
+  heap_upd a c s = Some s' -> b <> a -> heap_get b s' = heap_get b s.
+Proof.
+  unfold heap_upd, heap_get; destruct (bh_upd a c s.(st_heap)) as [h|] eqn:E; cbn;
+    [|discriminate].
+  intros H Hne; injection H as <-; exact (bh_get_upd_other _ _ _ _ _ E Hne).
+Qed.
+
+Lemma heap_upd_none a c s : heap_upd a c s = None <-> heap_get a s = None.
+Proof.
+  unfold heap_upd, heap_get; rewrite <- (bh_upd_none a c s.(st_heap)).
+  destruct (bh_upd a c s.(st_heap)); cbn; split; congruence.
+Qed.
+
+(** [heap_upd] changes the heap only. *)
+Lemma heap_upd_fields a c s s' : heap_upd a c s = Some s' ->
+  s'.(st_next) = s.(st_next) /\ s'.(st_room) = s.(st_room) /\ s'.(st_steps) = s.(st_steps)
+  /\ s'.(st_gam) = s.(st_gam) /\ s'.(st_memo) = s.(st_memo).
+Proof.
+  unfold heap_upd; destruct (bh_upd a c s.(st_heap)); cbn; [|discriminate].
+  intros H; injection H as <-; cbn; auto.
+Qed.
+
+Lemma heap_upd_ok lo a c s s' :
+  bh_ok lo s.(st_next) s.(st_heap) -> heap_upd a c s = Some s' ->
+  bh_ok lo s'.(st_next) s'.(st_heap).
+Proof.
+  unfold heap_upd; destruct (bh_upd a c s.(st_heap)) as [h|] eqn:E; cbn; [|discriminate].
+  intros Hok H; injection H as <-; exact (bh_ok_upd _ _ _ _ _ _ Hok E).
+Qed.
+
+Lemma heap_get_above lo s a :
+  bh_ok lo s.(st_next) s.(st_heap) -> (s.(st_next) <= ha_p a)%positive -> heap_get a s = None.
+Proof. exact (bh_get_above lo s.(st_next) s.(st_heap) a). Qed.
+
+Lemma heap_get_below lo s a :
+  bh_ok lo s.(st_next) s.(st_heap) -> (lo <= ha_p a)%positive ->
+  (ha_p a < s.(st_next))%positive -> exists c, heap_get a s = Some c.
+Proof. exact (bh_get_below lo s.(st_next) s.(st_heap) a). Qed.
+
+Lemma heap_get_dropped lo s a :
+  bh_ok lo s.(st_next) s.(st_heap) -> (ha_p a < lo)%positive -> heap_get a s = None.
+Proof. exact (bh_get_dropped lo s.(st_next) s.(st_heap) a). Qed.
 
 Definition memo_add_entry (e : code_entry) (m : cbn_memo) : cidx * cbn_memo :=
   let i := m.(m_ncode) in
