@@ -1644,3 +1644,280 @@ Proof.
     [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
 Qed.
 
+Ltac red1_dismiss_mkApps Heq :=
+  exfalso; match type of Heq with
+  | mkApps _ ?l = _ =>
+      destruct l using rev_ind;
+      [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]
+  end.
+
+Lemma red1_tProd_inv {Σ Γ na A B v} :
+  red1 Σ Γ (tProd na A B) v ->
+  (∑ A', v = tProd na A' B × red1 Σ Γ A A') +
+  (∑ B', v = tProd na A B' × red1 Σ (Γ ,, vass na A) B B').
+Proof.
+  intro H. remember (tProd na A B) as t eqn:Heq.
+  destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
+  - injection Heq as -> -> ->. left. eexists; split; [reflexivity|assumption].
+  - injection Heq as -> -> ->. right. eexists; split; [reflexivity|assumption].
+Qed.
+
+Lemma red1_tLetIn_inv {Σ Γ na b ty B v} :
+  red1 Σ Γ (tLetIn na b ty B) v ->
+  (v = B {0 := b})
+  + (∑ b', v = tLetIn na b' ty B × red1 Σ Γ b b')
+  + (∑ ty', v = tLetIn na b ty' B × red1 Σ Γ ty ty')
+  + (∑ B', v = tLetIn na b ty B' × red1 Σ (Γ ,, vdef na b ty) B B').
+Proof.
+  intro H. remember (tLetIn na b ty B) as t eqn:Heq.
+  destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
+  - injection Heq as -> -> -> ->. left; left; left. reflexivity.
+  - injection Heq as -> -> -> ->. left; left; right. eexists; split; [reflexivity|assumption].
+  - injection Heq as -> -> -> ->. left; right. eexists; split; [reflexivity|assumption].
+  - injection Heq as -> -> -> ->. right. eexists; split; [reflexivity|assumption].
+Qed.
+
+Lemma red1_tRel_inv {Σ Γ n v} :
+  red1 Σ Γ (tRel n) v ->
+  ∑ body, (option_map decl_body (nth_error Γ n) = Some (Some body)) × (v = lift0 (S n) body).
+Proof.
+  intro H. remember (tRel n) as t eqn:Heq.
+  destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
+  injection Heq as ->. eexists; split; [eassumption|reflexivity].
+Qed.
+
+Lemma red1_tConst_inv {Σ Γ c uu v} :
+  red1 Σ Γ (tConst c uu) v ->
+  ∑ decl body, declared_constant Σ c decl × (cst_body decl = Some body)
+             × (v = subst_instance uu body).
+Proof.
+  intro H. remember (tConst c uu) as t eqn:Heq.
+  destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
+  injection Heq as -> ->. eexists _, _. repeat split; eassumption.
+Qed.
+
+(** * The commutation kernel, one lemma per [peta] constructor.
+
+  [commutes Σ t u] is the induction motive. The η side lives in a context [Δ] related
+  to the β side's [Γ] by [peta_ctx] (bodies only), because case and fixpoint contexts
+  are computed from terms that [peta] may change. Each constructor's case is its own
+  lemma taking the subterms' motives as premises, so every case is committed green on
+  its own; the final induction only dispatches to them. *)
+
+Definition commutes Σ t u : Type :=
+  forall Γ Δ v, peta_ctx Γ Δ -> on_ctx_free_vars xpredT Γ -> ofvT t -> red1 Σ Γ t v ->
+  ∑ w w', clos_refl (red1 Σ Δ) u w × peta v w' × upto_domain w w'.
+
+Lemma clos_refl_map {A B} (R : A -> A -> Type) (S : B -> B -> Type) (f : A -> B) :
+  (forall x y, R x y -> S (f x) (f y)) ->
+  forall x y, clos_refl R x y -> clos_refl S (f x) (f y).
+Proof. intros Hf x y []; [apply r_step; now apply Hf|apply r_refl]. Qed.
+
+Lemma octx_shiftnP n Γ :
+  on_ctx_free_vars (shiftnP n xpredT) Γ = on_ctx_free_vars xpredT Γ.
+Proof. exact (on_ctx_free_vars_proper _ _ (shiftnP_xpredT n) Γ Γ eq_refl). Qed.
+
+Lemma octx_vass Γ na A :
+  on_ctx_free_vars xpredT Γ -> ofvT A -> on_ctx_free_vars xpredT (Γ ,, vass na A).
+Proof.
+  intros HΓ HA. rewrite -(octx_shiftnP 1). now apply on_ctx_free_vars_snoc_ass.
+Qed.
+
+Lemma octx_vdef Γ na b ty :
+  on_ctx_free_vars xpredT Γ -> ofvT ty -> ofvT b ->
+  on_ctx_free_vars xpredT (Γ ,, vdef na b ty).
+Proof.
+  intros HΓ Hty Hb. rewrite -(octx_shiftnP 1). now apply on_ctx_free_vars_snoc_def.
+Qed.
+
+(** Leaves: no [red1] reduct, so nothing to commute. *)
+Lemma commut_Var Σ i : commutes Σ (tVar i) (tVar i).
+Proof. intros Γ Δ v _ _ _ Hr. destruct (red1_tVar_absurd Hr). Qed.
+Lemma commut_Sort Σ s : commutes Σ (tSort s) (tSort s).
+Proof. intros Γ Δ v _ _ _ Hr. destruct (red1_tSort_absurd Hr). Qed.
+Lemma commut_Ind Σ ind uu : commutes Σ (tInd ind uu) (tInd ind uu).
+Proof. intros Γ Δ v _ _ _ Hr. destruct (red1_tInd_absurd Hr). Qed.
+Lemma commut_Construct Σ ind k uu : commutes Σ (tConstruct ind k uu) (tConstruct ind k uu).
+Proof. intros Γ Δ v _ _ _ Hr. destruct (red1_tConstruct_absurd Hr). Qed.
+
+(** [tRel]: the only place [red1] reads its context. The η side reads the
+    [peta]-related body from [Δ]; [peta_lift] relates the two reducts. *)
+Lemma commut_Rel Σ n : commutes Σ (tRel n) (tRel n).
+Proof.
+  intros Γ Δ v HΔ _ _ Hr.
+  destruct (red1_tRel_inv Hr) as (body & Hb & ->).
+  destruct (nth_error Γ n) as [d|] eqn:Hd; cbn in Hb; [|discriminate].
+  destruct (All2_nth_error_Some _ _ HΔ Hd) as (d' & Hd' & Hdd).
+  injection Hb as Hb. unfold peta_decl in Hdd. rewrite Hb in Hdd.
+  destruct (decl_body d') as [body'|] eqn:Hb'; [|destruct Hdd].
+  exists (lift0 (S n) body'), (lift0 (S n) body'). repeat split.
+  - apply r_step. apply red_rel. now rewrite Hd' /= Hb'.
+  - now apply peta_lift.
+  - reflexivity.
+Qed.
+
+Lemma commut_Const Σ c uu : commutes Σ (tConst c uu) (tConst c uu).
+Proof.
+  intros Γ Δ v _ _ _ Hr.
+  destruct (red1_tConst_inv Hr) as (decl & body & Hdecl & Hbody & ->).
+  exact (peta_commut_red_delta Σ Δ c decl body uu _ Hdecl Hbody (peta_refl _)).
+Qed.
+
+Lemma commut_Lambda Σ na A A' M M' :
+  peta A A' -> commutes Σ A A' -> peta M M' -> commutes Σ M M' ->
+  commutes Σ (tLambda na A M) (tLambda na A' M').
+Proof.
+  intros pA IA pM IM Γ Δ v HΔ HΓ Ht Hr.
+  cbn in Ht. move/andP: Ht => [HA HM]. rewrite ofvT_shiftnP in HM.
+  destruct (red1_tLambda_inv Hr) as [(A1 & -> & HrA)|(M1 & -> & HrM)].
+  - destruct (IA Γ Δ A1 HΔ HΓ HA HrA) as (w & w' & Hw & Hw' & Hu).
+    exists (tLambda na w M'), (tLambda na w' M'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tLambda na x M')); [|exact Hw].
+      intros x y H. now apply abs_red_l.
+    + now apply peta_Lambda.
+    + apply utd_Lambda. reflexivity.
+  - destruct (IM (Γ ,, vass na A) (Δ ,, vass na A') M1 (peta_ctx_vass _ _ _ _ _ _ HΔ)
+                 (octx_vass _ _ _ HΓ HA) HM HrM) as (w & w' & Hw & Hw' & Hu).
+    exists (tLambda na A' w), (tLambda na A' w'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tLambda na A' x)); [|exact Hw].
+      intros x y H. now apply abs_red_r.
+    + now apply peta_Lambda.
+    + now apply utd_Lambda.
+Qed.
+
+Lemma commut_Prod Σ na A A' B B' :
+  peta A A' -> commutes Σ A A' -> peta B B' -> commutes Σ B B' ->
+  commutes Σ (tProd na A B) (tProd na A' B').
+Proof.
+  intros pA IA pB IB Γ Δ v HΔ HΓ Ht Hr.
+  cbn in Ht. move/andP: Ht => [HA HB]. rewrite ofvT_shiftnP in HB.
+  destruct (red1_tProd_inv Hr) as [(A1 & -> & HrA)|(B1 & -> & HrB)].
+  - destruct (IA Γ Δ A1 HΔ HΓ HA HrA) as (w & w' & Hw & Hw' & Hu).
+    exists (tProd na w B'), (tProd na w' B'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tProd na x B')); [|exact Hw].
+      intros x y H. now apply prod_red_l.
+    + now apply peta_Prod.
+    + apply utd_Prod; [exact Hu|reflexivity].
+  - destruct (IB (Γ ,, vass na A) (Δ ,, vass na A') B1 (peta_ctx_vass _ _ _ _ _ _ HΔ)
+                 (octx_vass _ _ _ HΓ HA) HB HrB) as (w & w' & Hw & Hw' & Hu).
+    exists (tProd na A' w), (tProd na A' w'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tProd na A' x)); [|exact Hw].
+      intros x y H. now apply prod_red_r.
+    + now apply peta_Prod.
+    + apply utd_Prod; [reflexivity|exact Hu].
+Qed.
+
+Lemma commut_LetIn Σ na b b' ty ty' B B' :
+  peta b b' -> commutes Σ b b' -> peta ty ty' -> commutes Σ ty ty' ->
+  peta B B' -> commutes Σ B B' ->
+  commutes Σ (tLetIn na b ty B) (tLetIn na b' ty' B').
+Proof.
+  intros pb Ib pty Ity pB IB Γ Δ v HΔ HΓ Ht Hr.
+  cbn in Ht. move/and3P: Ht => [Hb Hty HB]. rewrite ofvT_shiftnP in HB.
+  destruct (red1_tLetIn_inv Hr) as [[[->|(b1 & -> & Hrb)]|(ty1 & -> & Hrty)]|(B1 & -> & HrB)].
+  - exact (peta_commut_red_zeta Σ Δ na b ty B _ (peta_LetIn _ _ _ _ _ _ _ pb pty pB)).
+  - destruct (Ib Γ Δ b1 HΔ HΓ Hb Hrb) as (w & w' & Hw & Hw' & Hu).
+    exists (tLetIn na w ty' B'), (tLetIn na w' ty' B'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tLetIn na x ty' B')); [|exact Hw].
+      intros x y H. now apply letin_red_def.
+    + now apply peta_LetIn.
+    + apply utd_LetIn; [exact Hu|reflexivity|reflexivity].
+  - destruct (Ity Γ Δ ty1 HΔ HΓ Hty Hrty) as (w & w' & Hw & Hw' & Hu).
+    exists (tLetIn na b' w B'), (tLetIn na b' w' B'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tLetIn na b' x B')); [|exact Hw].
+      intros x y H. now apply letin_red_ty.
+    + now apply peta_LetIn.
+    + apply utd_LetIn; [reflexivity|exact Hu|reflexivity].
+  - destruct (IB (Γ ,, vdef na b ty) (Δ ,, vdef na b' ty') B1
+                 (peta_ctx_vdef _ _ _ _ _ _ _ _ HΔ pb)
+                 (octx_vdef _ _ _ _ HΓ Hty Hb) HB HrB) as (w & w' & Hw & Hw' & Hu).
+    exists (tLetIn na b' ty' w), (tLetIn na b' ty' w'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tLetIn na b' ty' x)); [|exact Hw].
+      intros x y H. now apply letin_red_body.
+    + now apply peta_LetIn.
+    + apply utd_LetIn; [reflexivity|reflexivity|exact Hu].
+Qed.
+
+Lemma commut_App Σ f f' a a' :
+  peta f f' -> commutes Σ f f' -> peta a a' -> commutes Σ a a' ->
+  commutes Σ (tApp f a) (tApp f' a').
+Proof.
+  intros pf If pa Ia Γ Δ v HΔ HΓ Ht Hr.
+  cbn in Ht. move/andP: Ht => [Hf Ha].
+  destruct (red1_tApp_inv Hr)
+    as [[[(na & A & b & -> & ->)|(mfix & idx & args & narg & fn & Heq & Hunf & Hic & ->)]
+        |(f1 & -> & Hrf)]|(a1 & -> & Hra)].
+  - exact (peta_commut_red_beta Σ Δ na A b a _ (peta_App _ _ _ _ pf pa)).
+  - apply (peta_commut_red_fix Σ Δ mfix idx args narg fn _ Hunf Hic).
+    rewrite Heq. now apply peta_App.
+  - destruct (If Γ Δ f1 HΔ HΓ Hf Hrf) as (w & w' & Hw & Hw' & Hu).
+    exists (tApp w a'), (tApp w' a'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tApp x a')); [|exact Hw].
+      intros x y H. now apply app_red_l.
+    + now apply peta_App.
+    + apply utd_App; [exact Hu|reflexivity].
+  - destruct (Ia Γ Δ a1 HΔ HΓ Ha Hra) as (w & w' & Hw & Hw' & Hu).
+    exists (tApp f' w), (tApp f' w'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tApp f' x)); [|exact Hw].
+      intros x y H. now apply app_red_r.
+    + now apply peta_App.
+    + apply utd_App; [reflexivity|exact Hu].
+Qed.
+
+Lemma commut_Proj Σ pr c c' :
+  peta c c' -> commutes Σ c c' -> commutes Σ (tProj pr c) (tProj pr c').
+Proof.
+  intros pc Ic Γ Δ v HΔ HΓ Ht Hr. cbn in Ht.
+  destruct (red1_tProj_inv Hr)
+    as [[(mfix & idx & args & narg & fn & -> & Hunf & ->)|(args & uu & arg & -> & Hnth & ->)]
+       |(c1 & -> & Hrc)].
+  - exact (peta_commut_red_cofix_proj Σ Δ pr mfix idx args narg fn _ Hunf (peta_Proj _ _ _ pc)).
+  - exact (peta_commut_red_proj Σ Δ pr args uu arg _ Hnth (peta_Proj _ _ _ pc)).
+  - destruct (Ic Γ Δ c1 HΔ HΓ Ht Hrc) as (w & w' & Hw & Hw' & Hu).
+    exists (tProj pr w), (tProj pr w'). repeat split.
+    + eapply (clos_refl_map _ _ (fun x => tProj pr x)); [|exact Hw].
+      intros x y H. now apply proj_red.
+    + now apply peta_Proj.
+    + now apply utd_Proj.
+Qed.
+
+(** The η constructor: the only case that consumes the staged [red1_strengthening],
+    and hence the only consumer of the two scoping premises and of [wf Σ]. *)
+Lemma ofvT_eta_redex na A M :
+  ofvT (tLambda na A (tApp (lift0 1 M) (tRel 0))) -> ofvT A × ofvT M.
+Proof.
+  cbn. rewrite !ofvT_shiftnP ofvT_lift. move/andP => [HA /andP [HM _]]. now split.
+Qed.
+
+Section Kernel.
+Context {cf : checker_flags}.
+(** Staged VERBATIM from EtaL2's [PCUICEtaStrengthening.v:209] (frac/eta-c3-c @
+    6d04f604). NOT Required: Main's ruling keeps this file's closure empty; the
+    discharge is an assembly-time decision of the lane lead. *)
+Context (red1_strengthening : forall {Σ : global_env} {wfΣ : wf Σ} Γ d t u,
+  on_ctx_free_vars xpredT Γ ->
+  on_free_vars xpredT t ->
+  red1 Σ (Γ ,, d) (lift0 1 t) u -> ∑ u', (u = lift0 1 u') × red1 Σ Γ t u').
+
+Lemma commut_eta (Σ : global_env) (wfΣ : wf Σ) na A M M' :
+  peta M M' -> commutes Σ M M' ->
+  commutes Σ (tLambda na A (tApp (lift0 1 M) (tRel 0))) M'.
+Proof.
+  intros pM IM Γ Δ v HΔ HΓ Ht Hr.
+  destruct (ofvT_eta_redex _ _ _ Ht) as [HA HM].
+  destruct (red1_tLambda_inv Hr) as [(A1 & -> & _)|(b1 & -> & Hb)].
+  - (* abs_red_l: still an η-redex; close with zero steps *)
+    exists M', M'. repeat split; [apply r_refl|now apply peta_eta|reflexivity].
+  - destruct (red1_eta_body_inv Hb)
+      as [[(N1 & -> & HN)|(nb & B & b & Hl & ->)]
+         |(mfix & idx & args & narg & fn & Heq & Hunf & Hic & ->)].
+    + (* app_red_l: the clean case, through strengthening and the IH on M *)
+      destruct (@red1_strengthening Σ wfΣ Γ (vass na A) M N1 HΓ HM HN) as (M'' & -> & HrM).
+      destruct (IM Γ Δ M'' HΔ HΓ HM HrM) as (w & w' & Hw & Hw' & Hu).
+      exists w, w'. repeat split; [exact Hw|now apply peta_eta|exact Hu].
+    + exact (peta_commut_eta_red_beta Σ Δ na A M M' nb B b pM Hl).
+    + exact (peta_commut_eta_red_fix Σ Δ na A M M' mfix idx args narg fn pM Heq Hunf Hic).
+Qed.
+
+End Kernel.
+
