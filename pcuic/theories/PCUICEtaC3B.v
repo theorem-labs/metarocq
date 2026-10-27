@@ -16,8 +16,8 @@ From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimitive
-     PCUICInduction PCUICLiftSubst PCUICEquality PCUICCases PCUICOnFreeVars
-     PCUICReduction PCUICEtaDefs.
+     PCUICInduction PCUICLiftSubst PCUICSigmaCalculus PCUICEquality PCUICCases
+     PCUICOnFreeVars PCUICTyping PCUICReduction PCUICEtaDefs.
 
 Import ListNotations.
 
@@ -1378,5 +1378,48 @@ Proof.
   - (* app_red_r *)
     injection Heq as -> ->.
     exfalso. eapply red1_tRel0_vass_absurd. eassumption.
+Qed.
+
+Lemma lift_tLambda_inv n k M nb B b :
+  lift n k M = tLambda nb B b ->
+  ∑ B0 b0, (M = tLambda nb B0 b0) × (B = lift n k B0) × (b = lift n (S k) b0).
+Proof.
+  destruct M; cbn; intros H; try discriminate H.
+  injection H as Hna HB Hb. subst.
+  exists M1, M2. repeat split; reflexivity.
+Qed.
+
+(** [PCUICConversion]'s [subst_rel0_lift_id] is behind conversion; derive the instance
+    we need from [PCUICSigmaCalculus] (which imports nothing we do not already). *)
+Lemma subst_rel0_lift_id0 t : (lift 1 1 t) {0 := tRel 0} = t.
+Proof. exact (eq_trans (subst_reli_lift_id 0 0 t (le_n 0)) (lift0_id t 0)). Qed.
+(** ** Created-redex sub-case 1: [red_beta] created inside the η body.
+
+  [t = eta_redex na A M] with [lift0 1 M = tLambda], i.e. [M] is itself a λ. The inner
+  application β-reduces and [v = tLambda na A b0] where [b0] is [M]'s body — so [v] and
+  [M] differ ONLY in the λ domain ([A] vs [M]'s domain). [peta] cannot absorb that
+  (its λ congruence relates domains), which is exactly why C3's conclusion is modulo
+  [upto_domain]: the mismatch is discharged by [utd_Lambda], which ignores domains and
+  binder names. Both [peta] sub-cases close with ZERO β-steps on the η side. *)
+Lemma peta_commut_eta_red_beta Σ Γ na A M M' nb B b :
+  peta M M' ->
+  lift0 1 M = tLambda nb B b ->
+  ∑ w w', clos_refl (red1 Σ Γ) M' w
+        × peta (tLambda na A (b {0 := tRel 0})) w' × upto_domain w w'.
+Proof.
+  intros Hp Hl.
+  destruct (lift_tLambda_inv _ _ _ _ _ _ Hl) as (B0 & b0 & -> & _ & ->).
+  rewrite (subst_rel0_lift_id0 b0).
+  depelim Hp.
+  - (* peta_eta : b0 is itself an η-redex, M' is its contraction *)
+    eexists _, _. repeat split.
+    + apply r_refl.
+    + apply peta_eta. eassumption.
+    + reflexivity.
+  - (* peta_Lambda : M' = tLambda nb B0' b0' *)
+    eexists _, (tLambda na A _). repeat split.
+    + apply r_refl.
+    + apply peta_Lambda; [apply peta_refl|eassumption].
+    + apply utd_Lambda. reflexivity.
 Qed.
 
