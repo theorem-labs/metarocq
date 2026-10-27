@@ -53,37 +53,6 @@ Section Alpha.
       eauto using nth_error_Some_length.
   Qed.
 
-  Lemma decompose_app_upto {Σ cmp_universe cmp_sort pb x y hd tl} :
-    eq_term_upto_univ Σ cmp_universe cmp_sort pb x y ->
-    decompose_app x = (hd, tl) ->
-    ∑ hd' tl', y = mkApps hd' tl' ×
-    eq_term_upto_univ_napp Σ cmp_universe cmp_sort pb #|tl| hd hd' ×
-    negb (isApp hd') ×
-    All2 (eq_term_upto_univ Σ cmp_universe cmp_sort Conv) tl tl'.
-  Proof using Type.
-    intros eq dapp.
-    pose proof (decompose_app_notApp _ _ _ dapp).
-    apply decompose_app_inv in dapp.
-    subst x.
-    eapply eq_term_upto_univ_mkApps_l_inv in eq as [u' [l' [[eqh eqtl] ->]]].
-    eexists _, _; intuition eauto.
-    revert H.
-    inv eqh; simpl in *; try discriminate; auto.
-  Qed.
-
-  Lemma decompose_prod_assum_upto_names' ctx ctx' x y :
-    ctx ≡Γ ctx' -> upto_names' x y ->
-    let (ctx0, x0) := decompose_prod_assum ctx x in
-    let (ctx1, x1) := decompose_prod_assum ctx' y in
-    ctx0 ≡Γ ctx1 * upto_names' x0 x1.
-  Proof using Type.
-    induction x in ctx, ctx', y |- *; intros eqctx eqt; inv eqt; simpl;
-      try split; auto; try constructor; auto.
-    - specialize (IHx2 (ctx,, vass na x1) (ctx',,vass na' a') b').
-      apply IHx2; auto. constructor; auto; constructor; auto.
-    - apply IHx3; auto. constructor; auto; constructor; auto.
-  Qed.
-
   Lemma destInd_spec t :
     match destInd t with
     | Some (ind, u) => t = tInd ind u
@@ -93,67 +62,51 @@ Section Alpha.
     destruct t; congruence.
   Qed.
 
-  Lemma upto_names_destInd cmp_universe cmp_sort pb napp t u :
-    eq_term_upto_univ_napp empty_global_env cmp_universe cmp_sort pb napp t u ->
-    rel_option (fun '(ind, u) '(ind', u') => (ind = ind') * cmp_universe_instance (cmp_universe Conv) u u')%type (destInd t) (destInd u).
+  (** ** Transport of the [wf_fixpoint] / [wf_cofixpoint] premises along alpha equality
+
+    The specification carries, for every body, a witness type [ty] on which the
+    check ([check_one_fix] or [check_one_cofix]) finds the inductive block, and a
+    conversion of the declared type with it. Alpha-equal bodies share the witness:
+    only the conversion has to be transported, by transitivity through the original
+    declared type. *)
+
+  Lemma upto_names_has_rec_arg d d' :
+    dtype d ≡α dtype d' -> rarg d = rarg d' ->
+    has_rec_arg d -> has_rec_arg d'.
   Proof using Type.
-    induction 1; simpl; constructor; try congruence.
-    split; auto.
+    intros eqty eqr. rewrite /has_rec_arg -eqr.
+    pose proof (decompose_prod_assum_upto [] [] (dtype d) (dtype d')
+      ltac:(constructor) eqty).
+    do 2 destruct decompose_prod_assum.
+    destruct X as [eqctx _]. cbn.
+    now rewrite (PCUICConfluence.eq_context_gen_context_assumptions eqctx).
   Qed.
 
-  Lemma upto_names_check_fix mfix mfix' :
-     All2
-      (fun x y : def term =>
-        (upto_names' (dtype x) (dtype y) × upto_names' (dbody x) (dbody y))
-        × rarg x = rarg y) mfix mfix' ->
-      map check_one_fix mfix = map check_one_fix mfix'.
+  Lemma rarg_check_one_fix d d' ty :
+    rarg d = rarg d' ->
+    check_one_fix (def_with_type d ty) = check_one_fix (def_with_type d' ty).
   Proof using Type.
-    induction 1; simpl; auto.
-    rewrite IHX. f_equal.
-    unfold check_one_fix.
-    destruct x as [name ty body rarg].
-    destruct y as [name' ty' body' rarg'].
-    simpl in r. destruct r as [[eqty eqb] eqrarg].
-    pose proof (decompose_prod_assum_upto_names' [] [] ty ty' ltac:(constructor) eqty).
-    do 2 destruct decompose_prod_assum.
-    destruct X0 as [eqctx eqt].
-    apply (eq_context_upto_smash_context empty_global_env [] []) in eqctx; try constructor.
-    apply eq_context_upto_rev' in eqctx.
-    eapply (eq_context_upto_nth_error empty_global_env _ _ _ _ _ rarg) in eqctx.
-    subst rarg'.
-    destruct (nth_error (List.rev (smash_context [] c)) rarg).
-    all: inv eqctx => //. destruct X0.
-    destruct (decompose_app) eqn:eqdec.
-    destruct (decompose_app_upto e eqdec) as (hd' & tl' & eq & eqhd & napp & eqtl).
-    rewrite eq. rewrite decompose_app_mkApps; auto.
-    apply upto_names_destInd in eqhd.
-    inv eqhd; auto.
-    destruct a as [ind u], b0 as [ind' u']; simpl in *; auto.
-    destruct X0 as [-> _]; auto.
+    intros eqr. rewrite /check_one_fix /def_with_type /= eqr //.
   Qed.
 
-  Lemma upto_names_check_cofix mfix mfix' :
-    All2 (fun x y : def term =>
-     (dtype x ≡α dtype y × dbody x ≡α dbody y)
-     × rarg x = rarg y) mfix mfix' ->
-   map check_one_cofix mfix = map check_one_cofix mfix'.
+  (** [check] is one of [check_one_fix] ([rarg_check_one_fix]) and
+      [check_one_cofix], which reads only the declared type. *)
+  Lemma upto_names_mfix_on_ind {Σ : global_env_ext} {wfΣ : wf Σ} Γ check ok mfix mfix' :
+    (forall d d' ty, rarg d = rarg d' -> check (def_with_type d ty) = check (def_with_type d' ty)) ->
+    is_closed_context Γ -> All (fun d => is_open_term Γ (dtype d)) mfix ->
+    eq_mfixpoint upto_names' mfix mfix' ->
+    mfix_on_ind check (conv_witness Σ Γ) ok mfix -> mfix_on_ind check (conv_witness Σ Γ) ok mfix'.
   Proof using Type.
-    induction 1; simpl; auto.
-    rewrite IHX. f_equal.
-    unfold check_one_cofix. clear X IHX.
-    destruct x as [name ty body rarg].
-    destruct y as [name' ty' body' rarg'].
-    simpl in r. destruct r as [[eqty eqb] <-].
-    pose proof (decompose_prod_assum_upto_names' [] [] ty ty' ltac:(constructor) eqty).
-    do 2 destruct decompose_prod_assum.
-    destruct X as [_ eqt].
-    destruct (decompose_app) eqn:eqdec.
-    destruct (decompose_app_upto eqt eqdec) as (hd' & tl' & eq & eqhd & napp & eqtl).
-    rewrite eq. rewrite decompose_app_mkApps; auto.
-    apply upto_names_destInd in eqhd.
-    inv eqhd; auto.
-    destruct a as [ind u], b as [ind' u']; simpl in *; auto.
-    destruct X as [-> _]; auto.
+    intros hc clΓ hop eqm h.
+    refine (mfix_on_ind_All2 _ (fun _ hk => hk) h).
+    eapply (All2_All_mix_left hop) in eqm.
+    eapply (All2_impl eqm).
+    intros d d' [opd (eqty & _ & eqr & _)] m [ty [hcheck [hopty hconv]]].
+    exists ty. split; [now rewrite -(hc d d' ty eqr)|].
+    split; [exact hopty|].
+    eapply (cumul_Trans _ _ _ _ (dtype d)); tea.
+    eapply eq_term_upto_univ_cumulSpec, upto_names_impl_eq_term.
+    now symmetry.
   Qed.
 
   Import PCUICClosed PCUICOnFreeVars PCUICParallelReduction PCUICConfluence.
@@ -792,16 +745,23 @@ Section Alpha.
           1: apply lift_typing_impl with (1 := IHb) => t T HT.
           2: { rewrite -H. apply eq_term_upto_univ_lift; assumption. }
           eapply context_conversion; eauto.
-        * revert wffix.
-          unfold wf_fixpoint, wf_fixpoint_gen.
-          move/andP => [] hm ho.
-          apply/andP; split.
-          { unfold eq_mfixpoint in *. solve_all. move: b0 a4.
-            generalize (dbody x) (dbody y).
-            clear=> t t' isL eq.
+        * unfold eq_mfixpoint in X.
+          destruct wffix as (isl & hra & hon).
+          split; [|split].
+          { move: isl. clear -X. induction X; cbn; auto.
+            move/andP => [] h hs. apply/andP; split; [|now apply IHX].
+            destruct r as (eqty & eqbod & eqrarg & eqann).
+            move: h eqbod. rewrite /Basics.compose /=.
+            generalize (dbody x) (dbody y). clear => t t' isL eq.
             destruct t => //. now depelim eq. }
-          move: ho; enough (map check_one_fix mfix = map check_one_fix mfix') as ->; auto.
-          apply upto_names_check_fix. unfold eq_mfixpoint in *. solve_all.
+          { move: hra. clear -X. induction X; cbn; auto.
+            move/andP => [] h hs. apply/andP; split; [|now apply IHX].
+            destruct r as (eqty & eqbod & eqrarg & eqann).
+            now eapply (upto_names_has_rec_arg x y). }
+          refine (upto_names_mfix_on_ind (wfΣ := wfΣ) Γ check_one_fix _ mfix mfix'
+            rarg_check_one_fix (wf_local_closed_context (wfΣ := wfΣ) wfΓ) _ X hon).
+          eapply (All_impl hmfix) => d hd.
+          now eapply isType_is_open_term, isTypeRel_isType, hd.
         + eapply isTypeRel_isType. eapply All_nth_error in hmfix; tea.
         + apply eq_term_upto_univ_cumulSpec, eq_term_leq_term, upto_names_impl_eq_term.
           now symmetry.
@@ -861,10 +821,10 @@ Section Alpha.
         1: apply lift_typing_impl with (1 := IHb) => t T HT.
         2: { rewrite -H. apply eq_term_upto_univ_lift; assumption. }
         eapply context_conversion; eauto.
-      * revert wffix.
-        unfold wf_cofixpoint, wf_cofixpoint_gen.
-        enough (map check_one_cofix mfix = map check_one_cofix mfix') as ->; auto.
-        apply upto_names_check_cofix. unfold eq_mfixpoint in *. solve_all.
+      * refine (upto_names_mfix_on_ind (wfΣ := wfΣ) Γ check_one_cofix _ mfix mfix'
+          (fun _ _ _ _ => eq_refl) (wf_local_closed_context (wfΣ := wfΣ) wfΓ) _ X wffix).
+        eapply (All_impl hmfix) => d hd.
+        now eapply isType_is_open_term, isTypeRel_isType, hd.
       + eapply isTypeRel_isType. eapply All_nth_error in hmfix; tea.
       + apply eq_term_upto_univ_cumulSpec, eq_term_leq_term, upto_names_impl_eq_term.
         now symmetry.

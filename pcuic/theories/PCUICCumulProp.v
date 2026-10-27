@@ -1201,7 +1201,9 @@ Proof using Type Hcf cf.
       rewrite (declared_minductive_ind_npars a) in H1.
       rewrite closedn_on_free_vars //. eapply closed_upwards; tea. lia.
 
-  - eapply inversion_Fix in X4 as (decl' & fixguard' & Hnth & types' & bodies & wffix & cum); auto.
+  - match goal with Hty : _ ;;; _ |- tFix _ _ : _ |- _ =>
+      eapply inversion_Fix in Hty as (decl' & fixguard' & Hnth & types' & bodies & wffix & cum)
+    end; auto.
     eapply cumul_pb_cumul_prop in cum; eauto.
     eapply cumul_prop_trans; eauto.
     eapply All2_nth_error in e; eauto.
@@ -1213,7 +1215,9 @@ Proof using Type Hcf cf.
     eapply eq_term_eq_term_prop_impl; eauto.
     now symmetry in a.
 
-  - eapply inversion_CoFix in X4 as (decl' & fixguard' & Hnth & types' & bodies & wfcofix & cum); auto.
+  - match goal with Hty : _ ;;; _ |- tCoFix _ _ : _ |- _ =>
+      eapply inversion_CoFix in Hty as (decl' & fixguard' & Hnth & types' & bodies & wfcofix & cum)
+    end; auto.
     eapply cumul_pb_cumul_prop in cum; eauto.
     eapply cumul_prop_trans; eauto.
     eapply All2_nth_error in e; eauto.

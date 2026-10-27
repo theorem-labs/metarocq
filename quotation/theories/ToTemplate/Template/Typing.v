@@ -39,6 +39,11 @@ Defined.
 #[export] Instance quote_eq_decl {cf Σ ϕ d d'} : ground_quotable (@eq_decl cf Σ ϕ d d') := ltac:(cbv [eq_decl]; exact _).
 #[export] Instance quote_eq_context {cf Σ ϕ d d'} : ground_quotable (@eq_context cf Σ ϕ d d') := ltac:(cbv [eq_context]; exact _).
 
+#[export] Instance quote_wf_fixpoint {Σ Γ mfix} : ground_quotable (@wf_fixpoint Σ Γ mfix)
+  := ltac:(cbv [wf_fixpoint]; exact _).
+#[export] Instance quote_wf_cofixpoint {Σ Γ mfix} : ground_quotable (@wf_cofixpoint Σ Γ mfix)
+  := ltac:(cbv [wf_cofixpoint]; exact _).
+
 Module QuoteTemplateEnvTyping := QuoteEnvTyping TemplateTerm Env TemplateTermUtils TemplateEnvTyping qTemplateTerm qEnv qTemplateEnvTyping QuoteTemplateTerm QuoteEnv.
 Export (hints) QuoteTemplateEnvTyping.
 

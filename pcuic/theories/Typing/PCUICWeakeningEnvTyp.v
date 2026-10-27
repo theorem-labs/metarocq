@@ -56,28 +56,22 @@ Proof.
   now rewrite Heq.
 Qed.
 
-Lemma extends_wf_fixpoint `{cf : checker_flags} (Σ Σ' : global_env_ext) mfix : extends Σ Σ' -> wf Σ' ->
-  wf_fixpoint Σ mfix -> wf_fixpoint Σ' mfix.
+Lemma extends_mfix_on_ind `{cf : checker_flags} (Σ : global_env_ext) Σ' Γ check kind mfix :
+  extends Σ.1 Σ' -> wf Σ' ->
+  mfix_on_ind check (conv_witness Σ Γ) (fun mind => check_recursivity_kind (lookup_env Σ) mind kind) mfix ->
+  mfix_on_ind check (conv_witness (Σ', Σ.2) Γ)
+    (fun mind => check_recursivity_kind (lookup_env Σ') mind kind) mfix.
 Proof.
-  intros ext wfΣ'.
-  unfold wf_fixpoint, wf_fixpoint_gen.
-  move/andb_and => [] -> /=.
-  destruct map_option_out as [[|ind inds]|]; auto.
-  move/andb_and => [->] /=.
-  now apply extends_check_recursivity_kind.
-Qed.
-
-Lemma extends_wf_cofixpoint `{cf : checker_flags} (Σ Σ' : global_env_ext) mfix : extends Σ Σ' -> wf Σ' ->
-  wf_cofixpoint Σ mfix -> wf_cofixpoint Σ' mfix.
-Proof.
-  intros ext wfΣ'.
-  unfold wf_cofixpoint, wf_cofixpoint_gen.
-  destruct map_option_out as [[|ind inds]|]; auto.
-  move/andb_and => [->] /=.
-  now apply extends_check_recursivity_kind.
+  destruct Σ as [Σ φ].
+  intros ext wfΣ' h.
+  refine (mfix_on_ind_All2 _ _ h).
+  - apply All2_refl. intros d m [ty [hc [hop hconv]]].
+    refine (ty; (hc, (hop, _))).
+    eapply weakening_env_convSpec; eauto.
+  - intros m hm. eapply extends_check_recursivity_kind; tea.
 Qed.
 #[global]
-Hint Resolve extends_wf_fixpoint extends_wf_cofixpoint : extends.
+Hint Resolve extends_mfix_on_ind : extends.
 
 Lemma extends_primitive_constant Σ Σ' p t :
   extends Σ Σ' ->
@@ -117,13 +111,17 @@ Proof.
     * revert X5. clear -Σ' wf0 wfΣ' extΣ.
       induction 1; constructor; try destruct t0; eauto with extends.
     * close_Forall. intros; intuition eauto with extends.
-  - econstructor; eauto with extends.
+  - assert (wffix' : wf_fixpoint (Σ', Σ.2) Γ mfix).
+    { match goal with h : wf_fixpoint _ _ _ |- _ => destruct h as (? & ? & ?) end.
+      split; [|split]; tas. now eapply extends_mfix_on_ind. }
+    econstructor; eauto with extends.
     + specialize (forall_Σ' _ wf0 wfΣ' extΣ).
       now apply All_local_env_app_inv in forall_Σ'.
     + eapply fix_guard_extends; eauto.
     + eapply (All_impl X1); intros d X. now apply X.
     + eapply (All_impl X3); intros d X. now apply X.
-  - econstructor; eauto with extends.
+  - assert (wfcofix' : wf_cofixpoint (Σ', Σ.2) Γ mfix) by (eapply extends_mfix_on_ind; tea).
+    econstructor; eauto with extends.
     + specialize (forall_Σ' _ wf0 wfΣ' extΣ).
       now apply All_local_env_app_inv in forall_Σ'.
     + eapply cofix_guard_extends; eauto.

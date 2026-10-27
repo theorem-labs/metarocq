@@ -354,6 +354,27 @@ Proof.
   apply inst_cumulSpec.
 Qed.
 
+(** Instantiation carries the witness of every body; [check] is one of
+    [check_one_fix] and [check_one_cofix] ([inst_check_one_fix],
+    [inst_check_one_cofix]). *)
+Lemma inst_mfix_on_ind {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ σ check ok mfix} :
+  (forall d m, check d = Some m ->
+    check (map_def (inst σ) (inst (up #|mfix| σ)) d) = Some m) ->
+  closed_subst Γ σ Δ ->
+  is_closed_context Γ ->
+  All (fun d => is_open_term Γ (dtype d)) mfix ->
+  mfix_on_ind check (conv_witness Σ Γ) ok mfix ->
+  mfix_on_ind check (conv_witness Σ Δ) ok (map (map_def (inst σ) (inst (up #|mfix| σ))) mfix).
+Proof.
+  intros hc hσ hΓ hop.
+  eapply mfix_on_ind_map; [exact hop| |easy].
+  intros d m hopd [ty [hcd [hty hconv]]].
+  exists ty.[σ]; split; [|split].
+  - rewrite map_def_with_type. now apply hc.
+  - now eapply inst_is_open_term.
+  - now eapply inst_convSpec.
+Qed.
+
 Lemma inst_prim_type σ p pty : (prim_type p pty).[σ] = prim_type (map_prim (inst σ) p) pty.
 Proof.
   destruct p as [? []] => //.
@@ -550,7 +571,17 @@ Proof.
         now eapply All_local_env_app_inv in htypes as [].
       + rewrite lift0_inst /types inst_context_length fix_context_length.
         now sigma.
-    * now apply inst_wf_fixpoint.
+    * destruct wffix as (isl & hra & hon). split; [|split].
+      1: rewrite forallb_map; refine (forallb_impl _ _ _ _ isl); intros x _ h.
+      1: now eapply isLambda_inst.
+      1: rewrite forallb_map; refine (forallb_impl _ _ _ _ hra); intros x _ h.
+      1: now eapply inst_has_rec_arg.
+      eapply inst_mfix_on_ind; tea.
+      1: exact (inst_check_one_fix σ mfix).
+      1: eapply well_subst_closed_subst; tea; eapply wf_local_closed_context; tea.
+      1: eapply wf_local_closed_context; tea.
+      eapply (All_impl hmfixt) => d hd.
+      now eapply isType_is_open_term, isTypeRel_isType, hd.
     * reflexivity.
 
   - intros Σ wfΣ Γ wfΓ mfix n decl types hguard hnth htypes hmfixt ihmfixt hmfixb ihmfixb wffix Δ σ hΔ hσ.
@@ -572,7 +603,12 @@ Proof.
         now eapply All_local_env_app_inv in htypes as [].
       + rewrite lift0_inst /types inst_context_length fix_context_length.
         now sigma.
-    * now apply inst_wf_cofixpoint.
+    * eapply inst_mfix_on_ind; tea.
+      1: exact (inst_check_one_cofix σ mfix).
+      1: eapply well_subst_closed_subst; tea; eapply wf_local_closed_context; tea.
+      1: eapply wf_local_closed_context; tea.
+      eapply (All_impl hmfixt) => d hd.
+      now eapply isType_is_open_term, isTypeRel_isType, hd.
     * reflexivity.
 
   - intros Σ wfΣ Γ wfΓ p pty cdecl _ hp hdecl pinv hty hind Δ σ hΔ hσ.
