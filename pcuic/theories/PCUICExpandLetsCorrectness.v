@@ -1974,6 +1974,33 @@ Proof.
   - destruct Retroknowledge.retro_bool => //. intros [= <-]; reflexivity.
 Qed.
 
+(** [trans] fixes the literal of a term: a prim payload is mapped under
+    [map_prim], which is the identity on the int/string models, and every other
+    node is non-[tPrim] after [trans] (binary [tApp] maps to [tApp]). *)
+Lemma trans_lit_of_term t : lit_of_term (trans t) = lit_of_term t.
+Proof.
+  destruct t => //=. destruct p as [? []] => //=.
+Qed.
+
+Lemma trans_split_lits_inl {argl ls} :
+  split_lits argl = inl ls -> split_lits (map trans argl) = inl ls.
+Proof.
+  intros h; rewrite (split_lits_inl h) trans_map_term_of_lit split_lits_map //.
+Qed.
+
+Lemma trans_split_lits_inr {argl ls a rest} :
+  split_lits argl = inr (ls, a, rest) ->
+  split_lits (map trans argl) = inr (ls, trans a, map trans rest).
+Proof.
+  intros h; destruct (split_lits_inr h) as [-> hnl].
+  rewrite map_app map_cons trans_map_term_of_lit.
+  apply split_lits_app. rewrite trans_lit_of_term //.
+Qed.
+
+Lemma trans_prim_op_of {Σ c op} :
+  prim_op_of Σ c = Some op -> prim_op_of (trans_global_env Σ) c = Some op.
+Proof. rewrite /prim_op_of //. Qed.
+
 Lemma trans_red1 {cf} (Σ : global_env_ext) {wfΣ : wf Σ} {wfΣ' : wf_trans Σ} Γ T U :
   red1 Σ Γ T U ->
   wt Σ Γ T ->
@@ -2300,7 +2327,7 @@ Lemma trans_whd_rel {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {zeta Γ t args h 
 Proof.
   induction 1 as [c args d b h l hn hb w IH|c args d hn hb
       |na b B t args h l hz w IH|na b B t args hz
-      |c u decl body args h l hd hb w IH|c u decl args hd hb
+      |c u decl body args h l hd hb w IH|c u decl args hd hb hpo
       |f a args h l w IH|na A t a args h l w IH
       |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
       |mfix idx narg fn args c t cargs hu hn w IH hc
@@ -2311,7 +2338,12 @@ Proof.
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
       |p c args t cargs w IH hc hcf
-      |t args hs];
+      |t args hs
+      |c u decl op args ls a rest t cargs h l hd hb hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs hd hb hpo hsat hs wa IHa hnl
+      |c u decl op args ls r v h l hd hb hpo hsat hs hden hrb w IH
+      |c u decl op args ls hd hb hpo hsat hs hden
+      |c u decl op args hd hb hpo hpart];
     intros wta; pose proof (wt_mkApps_inv wta) as [wth wtargs]; cbn [trans].
   - (* let-bound variable *)
     have onb : on_free_vars (shiftnP #|skipn (S c) Γ| xpred0) b.
@@ -2342,7 +2374,7 @@ Proof.
     eapply whd_delta with (decl := trans_constant_body decl) (body := trans body);
       [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb|exact IH].
   - eapply whd_axiom with (decl := trans_constant_body decl);
-      [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb].
+      [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb|exact hpo].
   - apply whd_app. exact (IH wta).
   - (* beta *)
     have wtapp : wt Σ Γ (tApp (tLambda na A t) a).
@@ -2458,6 +2490,73 @@ Proof.
     + now rewrite whd_trans_is_construct0.
     + now rewrite whd_trans_is_cofix.
   - apply whd_stop. now rewrite whd_trans_stop_head.
+  (* whd_prim_arg *)
+  - have wta3 : wt Σ Γ a.
+    { have h' := wtargs. rewrite (prim_args_eq hs) in h'.
+      apply All_app in h' as [_ har]. now depelim har. }
+    have wtared : wt Σ Γ (mkApps (tConst c u)
+      (map term_of_lit ls ++ mkApps t cargs :: rest ++ skipn (arity op) args)).
+    { eapply wt_red_red; [exact wta|].
+      rewrite {1}(prim_args_eq hs).
+      apply (red_prim_arg_cong _ _ c u ls a (mkApps t cargs) rest (skipn (arity op) args)).
+      exact (whd_rel_red _ _ wa). }
+    specialize (IH wtared).
+    rewrite map_app trans_map_term_of_lit in IH. cbn [map] in IH.
+    rewrite trans_mkApps map_app map_skipn in IH.
+    eapply whd_prim_arg.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hsat.
+    + rewrite firstn_map. now apply trans_split_lits_inr.
+    + exact (IHa wta3).
+    + rewrite -(trans_mkApps t cargs) trans_lit_of_term. exact hnl.
+    + exact IH.
+  (* whd_prim_stuck *)
+  - have wta3 : wt Σ Γ a.
+    { have h' := wtargs. rewrite (prim_args_eq hs) in h'.
+      apply All_app in h' as [_ har]. now depelim har. }
+    rewrite map_app trans_map_term_of_lit. cbn [map].
+    rewrite trans_mkApps map_app map_skipn.
+    eapply whd_prim_stuck.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hsat.
+    + rewrite firstn_map. now apply trans_split_lits_inr.
+    + exact (IHa wta3).
+    + rewrite -(trans_mkApps t cargs) trans_lit_of_term. exact hnl.
+  (* whd_prim_fire *)
+  - have wtv : wt Σ Γ (mkApps v (skipn (arity op) args)).
+    { eapply wt_red_red; [exact wta|].
+      rewrite {1}(prim_args_eq_inl hs) mkApps_app.
+      apply red_mkApps_f, red1_red.
+      eapply red_prim_op;
+        [exact hpo|exact (lookup_global_Some_if_In _ _ _ hd)|exact hb|exact hden|exact hrb]. }
+    specialize (IH wtv). rewrite map_skipn in IH.
+    eapply whd_prim_fire.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hsat.
+    + rewrite firstn_map. now apply trans_split_lits_inl.
+    + exact hden.
+    + exact (trans_readback hrb).
+    + exact IH.
+  (* whd_prim_inert *)
+  - eapply whd_prim_inert.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hsat.
+    + rewrite firstn_map. now apply trans_split_lits_inl.
+    + exact hden.
+  (* whd_prim_partial *)
+  - eapply whd_prim_partial.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hpart.
 Qed.
 
 (** The typed simulation of [arity_red] by the translation. *)
@@ -2532,7 +2631,7 @@ Proof.
   intros hΓ w.
   induction w as [c args d b h l hn hb w IH|c args d hn hb
       |na b B t args h l hz w IH|na b B t args hz
-      |c u decl body args h l hd hb w IH|c u decl args hd hb
+      |c u decl body args h l hd hb w IH|c u decl args hd hb hpo
       |f a args h l w IH|na A t a args h l w IH
       |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
       |mfix idx narg fn args c t cargs hu hn w IH hc
@@ -2543,7 +2642,12 @@ Proof.
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
       |p c args t cargs w IH hc hcf
-      |t args hs]; intros hta; try exact hta.
+      |t args hs
+      |c u decl op args ls a rest t cargs h l hd hb hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs hd hb hpo hsat hs wa IHa hnl
+      |c u decl op args ls r v h l hd hb hpo hsat hs hden hrb w IH
+      |c u decl op args ls hd hb hpo hsat hs hden
+      |c u decl op args hd hb hpo hpart]; intros hta; try exact hta.
   - exfalso. rewrite (assumption_context_decl_body hΓ hn) in hb. congruence.
   - (* zeta *)
     apply IH. move: hta; rewrite !on_free_vars_mkApps /= => /andP [/and3P [onb _ ont] ->].
@@ -2587,6 +2691,29 @@ Proof.
   - (* stuck projection *)
     move: hta; rewrite !on_free_vars_mkApps => /andP [onc ->]. rewrite andb_true_r.
     exact (IH onc).
+  (* whd_prim_arg *)
+  - apply IH.
+    move: (hta); rewrite !on_free_vars_mkApps => /andP [onc onargs].
+    rewrite on_free_vars_mkApps onc /=.
+    rewrite (prim_args_eq hs) in onargs.
+    rewrite forallb_app /= in onargs. move/andP: onargs => [onls /andP [ona onrest]].
+    have onmk : on_free_vars P (mkApps t cargs) := IHa ona.
+    rewrite forallb_app /= onls onmk onrest //.
+  (* whd_prim_stuck *)
+  - move: (hta); rewrite !on_free_vars_mkApps => /andP [onc onargs].
+    rewrite on_free_vars_mkApps onc /=.
+    rewrite (prim_args_eq hs) in onargs.
+    rewrite forallb_app /= in onargs. move/andP: onargs => [onls /andP [ona onrest]].
+    have onmk : on_free_vars P (mkApps t cargs) := IHa ona.
+    rewrite forallb_app /= onls onmk onrest //.
+  (* whd_prim_fire *)
+  - apply IH.
+    move: (hta); rewrite !on_free_vars_mkApps => /andP [_ onargs].
+    rewrite on_free_vars_mkApps.
+    have onv : on_free_vars P v.
+    { move: hrb; rewrite /readback; destruct (po_shape (info op)), r => //=;
+        [intros [= <-] //|destruct Retroknowledge.retro_bool as [ind|] => //; intros [= <-] //]. }
+    rewrite onv /=. now apply forallb_skipn.
 Qed.
 
 (** The untyped counterpart of [trans_iota_red]: the scope facts that [on_free_vars]
@@ -2642,7 +2769,7 @@ Proof.
   intros hΓ w.
   induction w as [c args d b h l hn hb w IH|c args d hn hb
       |na b B t args h l hz w IH|na b B t args hz
-      |c u decl body args h l hd hb w IH|c u decl args hd hb
+      |c u decl body args h l hd hb w IH|c u decl args hd hb hpo
       |f a args h l w IH|na A t a args h l w IH
       |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
       |mfix idx narg fn args c t cargs hu hn w IH hc
@@ -2653,7 +2780,12 @@ Proof.
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
       |p c args t cargs w IH hc hcf
-      |t args hs]; intros hta; cbn [trans].
+      |t args hs
+      |c u decl op args ls a rest t cargs h l hd hb hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs hd hb hpo hsat hs wa IHa hnl
+      |c u decl op args ls r v h l hd hb hpo hsat hs hden hrb w IH
+      |c u decl op args ls hd hb hpo hsat hs hden
+      |c u decl op args hd hb hpo hpart]; intros hta; cbn [trans].
   - exfalso. rewrite (assumption_context_decl_body hΓ hn) in hb. congruence.
   - eapply whd_rel_assum with (d := trans_decl d); [now rewrite nth_error_map hn|cbn; now rewrite hb].
   - (* zeta *)
@@ -2674,7 +2806,7 @@ Proof.
     eapply whd_delta with (decl := trans_constant_body decl) (body := trans body);
       [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb|exact IH].
   - eapply whd_axiom with (decl := trans_constant_body decl);
-      [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb].
+      [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb|exact hpo].
   - apply whd_app. exact (IH hta).
   - (* beta *)
     move: (hta); rewrite /= on_free_vars_mkApps /= => /andP [/andP [/andP [_ ont] ona] onargs].
@@ -2783,6 +2915,71 @@ Proof.
     + now rewrite whd_trans_is_construct0.
     + now rewrite whd_trans_is_cofix.
   - apply whd_stop. now rewrite whd_trans_stop_head.
+  (* whd_prim_arg *)
+  - move: (hta); rewrite on_free_vars_mkApps => /andP [onc onargs].
+    rewrite (prim_args_eq hs) in onargs.
+    rewrite forallb_app /= in onargs. move/andP: onargs => [onls /andP [ona onrest]].
+    have onmk : on_free_vars P (mkApps t cargs) := whd_rel_on_free_vars_nobody hΓ wa ona.
+    have hta' : on_free_vars P (mkApps (tConst c u)
+      (map term_of_lit ls ++ mkApps t cargs :: rest ++ skipn (arity op) args)).
+    { rewrite on_free_vars_mkApps onc /= forallb_app /= onls onmk onrest //. }
+    specialize (IH hta').
+    rewrite map_app trans_map_term_of_lit in IH. cbn [map] in IH.
+    rewrite trans_mkApps map_app map_skipn in IH.
+    eapply whd_prim_arg.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hsat.
+    + rewrite firstn_map. now apply trans_split_lits_inr.
+    + exact (IHa ona).
+    + rewrite -(trans_mkApps t cargs) trans_lit_of_term. exact hnl.
+    + exact IH.
+  (* whd_prim_stuck *)
+  - move: (hta); rewrite on_free_vars_mkApps => /andP [_ onargs].
+    rewrite (prim_args_eq hs) in onargs.
+    rewrite forallb_app /= in onargs. move/andP: onargs => [_ /andP [ona _]].
+    rewrite map_app trans_map_term_of_lit. cbn [map].
+    rewrite trans_mkApps map_app map_skipn.
+    eapply whd_prim_stuck.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hsat.
+    + rewrite firstn_map. now apply trans_split_lits_inr.
+    + exact (IHa ona).
+    + rewrite -(trans_mkApps t cargs) trans_lit_of_term. exact hnl.
+  (* whd_prim_fire *)
+  - have onv : on_free_vars P v.
+    { move: hrb; rewrite /readback; destruct (po_shape (info op)), r => //=;
+        [intros [= <-] //|destruct Retroknowledge.retro_bool as [ind|] => //; intros [= <-] //]. }
+    have hta' : on_free_vars P (mkApps v (skipn (arity op) args)).
+    { move: (hta); rewrite !on_free_vars_mkApps => /andP [_ onargs].
+      rewrite on_free_vars_mkApps onv /=. now apply forallb_skipn. }
+    specialize (IH hta'). rewrite map_skipn in IH.
+    eapply whd_prim_fire.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hsat.
+    + rewrite firstn_map. now apply trans_split_lits_inl.
+    + exact hden.
+    + exact (trans_readback hrb).
+    + exact IH.
+  (* whd_prim_inert *)
+  - eapply whd_prim_inert.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hsat.
+    + rewrite firstn_map. now apply trans_split_lits_inl.
+    + exact hden.
+  (* whd_prim_partial *)
+  - eapply whd_prim_partial.
+    + rewrite trans_lookup hd; reflexivity.
+    + cbn; now rewrite hb.
+    + exact hpo.
+    + rewrite length_map; exact hpart.
 Qed.
 
 Lemma trans_cmp_global_instance {Σ : global_env} Re Rle gref napp u u' :
