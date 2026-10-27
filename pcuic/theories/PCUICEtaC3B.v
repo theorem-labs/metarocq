@@ -18,6 +18,8 @@ From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimitive
      PCUICInduction PCUICLiftSubst PCUICSigmaCalculus PCUICEquality PCUICCases
      PCUICOnFreeVars PCUICTyping PCUICReduction PCUICEtaDefs.
+(** EtaL2's strengthening lemma; Requires only base files (no eta-lane file). *)
+From MetaRocq.PCUIC Require Import PCUICEtaStrengthening.
 
 Import ListNotations.
 
@@ -1260,7 +1262,7 @@ Proof. unfold is_constructor. now destruct n. Qed.
 
 (** ** The kernel's scoping premise, and why it SURVIVES the induction
 
-  [red1_strengthening] (staged below) needs [on_free_vars xpredT t]. That is NOT
+  [red1_strengthening] (EtaL2's, Required below) needs [on_free_vars xpredT t]. That is NOT
   vacuous on the 9.2 AST: [on_free_vars]'s [tCase] branch
   (Syntax/PCUICOnFreeVars.v:82,:85) tests
   [test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams|] on
@@ -1881,8 +1883,9 @@ Proof.
     + now apply utd_Proj.
 Qed.
 
-(** The η constructor: the only case that consumes the staged [red1_strengthening],
-    and hence the only consumer of the two scoping premises and of [wf Σ]. *)
+(** The η constructor: the only case that uses [red1_strengthening] (EtaL2's
+    [PCUICEtaStrengthening.v], which Requires only base files), and hence the only
+    consumer of the two scoping premises and of [wf Σ]. *)
 Lemma ofvT_eta_redex na A M :
   ofvT (tLambda na A (tApp (lift0 1 M) (tRel 0))) -> ofvT A × ofvT M.
 Proof.
@@ -1891,14 +1894,6 @@ Qed.
 
 Section Kernel.
 Context {cf : checker_flags}.
-(** Staged VERBATIM from EtaL2's [PCUICEtaStrengthening.v:209] (frac/eta-c3-c @
-    6d04f604). NOT Required: Main's ruling keeps this file's closure empty; the
-    discharge is an assembly-time decision of the lane lead. *)
-Context (red1_strengthening : forall {Σ : global_env} {wfΣ : wf Σ} Γ d t u,
-  on_ctx_free_vars xpredT Γ ->
-  on_free_vars xpredT t ->
-  red1 Σ (Γ ,, d) (lift0 1 t) u -> ∑ u', (u = lift0 1 u') × red1 Σ Γ t u').
-
 Lemma commut_eta (Σ : global_env) (wfΣ : wf Σ) na A M M' :
   peta M M' -> commutes Σ M M' ->
   commutes Σ (tLambda na A (tApp (lift0 1 M) (tRel 0))) M'.
@@ -1912,7 +1907,7 @@ Proof.
       as [[(N1 & -> & HN)|(nb & B & b & Hl & ->)]
          |(mfix & idx & args & narg & fn & Heq & Hunf & Hic & ->)].
     + (* app_red_l: the clean case, through strengthening and the IH on M *)
-      destruct (@red1_strengthening Σ wfΣ Γ (vass na A) M N1 HΓ HM HN) as (M'' & -> & HrM).
+      destruct (@red1_strengthening _ Σ wfΣ Γ (vass na A) M N1 HΓ HM HN) as (M'' & -> & HrM).
       destruct (IM Γ Δ M'' HΔ HΓ HM HrM) as (w & w' & Hw & Hw' & Hu).
       exists w, w'. repeat split; [exact Hw|now apply peta_eta|exact Hu].
     + exact (peta_commut_eta_red_beta Σ Δ na A M M' nb B b pM Hl).
@@ -2345,19 +2340,12 @@ Qed.
 
 Section Assembly.
 Context {cf : checker_flags}.
-(** The same staged hypothesis as [Section Kernel]: EtaL2's
-    [PCUICEtaStrengthening.v:209], verbatim, NOT Required. *)
-Context (red1_strengthening : forall {Σ : global_env} {wfΣ : wf Σ} Γ d t u,
-  on_ctx_free_vars xpredT Γ ->
-  on_free_vars xpredT t ->
-  red1 Σ (Γ ,, d) (lift0 1 t) u -> ∑ u', (u = lift0 1 u') × red1 Σ Γ t u').
-
 (** Parallel η commutes with one β step, modulo [upto_domain]. The induction only
     dispatches: every [peta] constructor is its own [commut_*] lemma above. *)
 Lemma red1_peta_diamond (Σ : global_env) (wfΣ : wf Σ) t u : peta t u -> commutes Σ t u.
 Proof.
   induction 1 using peta_ind_all.
-  - eapply (commut_eta red1_strengthening Σ wfΣ); eassumption.
+  - eapply (commut_eta Σ wfΣ); eassumption.
   - apply commut_Rel.
   - apply commut_Var.
   - apply commut_Sort.
@@ -2383,8 +2371,8 @@ Qed.
     The route: [eta1_peta] embeds the η step in one parallel step; the parallel
     step commutes with the β step ([red1_peta_diamond]); [peta_to_eta] unfolds the
     resulting parallel step into η*. [peta] never appears in the statement. The two
-    scoping premises and [wf Σ] are consumed only by the staged [red1_strengthening]
-    in the η constructor's [app_red_l] sub-case. *)
+    scoping premises and [wf Σ] are consumed only by [red1_strengthening] in the η
+    constructor's [app_red_l] sub-case. *)
 Theorem red1_eta1_strong_commutation (Σ : global_env) (Γ : context) (t u v : term) :
   wf Σ -> is_closed_context Γ -> is_open_term Γ t ->
   red1 Σ Γ t v -> eta1 t u ->

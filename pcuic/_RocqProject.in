@@ -130,6 +130,8 @@ theories/PCUICCasesHelper.v
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
 theories/PCUICTypingEta.v
+# EtaL2's red1_strengthening (file from 9d7170cb; Requires only base files)
+theories/PCUICEtaStrengthening.v
 # C3 prover B (frac/eta-c3-b): parallel-eta route
 theories/PCUICEtaC3B.v
 # theories/All.v
