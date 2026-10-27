@@ -201,9 +201,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICTyping PCUICSN PCUICProgram.
 From MetaRocq.SafeChecker Require Import PCUICErrors PCUICSafeChecker PCUICWfEnv PCUICWfEnvImpl.
 From MetaRocq.SafeCheckerPlugin Require Import SafeTemplateChecker.
 
-#[local,program] Instance fake_abstract_guard_impl : PCUICWfEnvImpl.abstract_guard_impl :=
-  { guard_impl := PCUICWfEnvImpl.fake_guard_impl }.
-Next Obligation. todo "the driver controls (B0-B12, C1) run infer under this test-only assumption". Qed.
+#[local] Existing Instance real_guard_impl.
 #[local,program] Instance assume_normalization {nor} : @PCUICSN.Normalization default_checker_flags nor.
 Next Obligation. todo "the driver controls (B0-B12, C1) run infer under this test-only assumption". Qed.
 #[local] Existing Instance PCUICSN.normalization.
