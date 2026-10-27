@@ -1,6 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require CMorphisms CRelationClasses.
+From Stdlib Require Import ListDec.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Environment Primitive PrimitiveOps.
 From Equations Require Import Equations.
@@ -1265,6 +1266,60 @@ Definition retro_type_constant (r : Retroknowledge.t) (p : prim_tag) : option ke
   | primArray => r.(Retroknowledge.retro_array)
   end.
 
+(** §4.2(a) is decidable.  [check_univs] uses this to build the
+    [Retroknowledge.wf_retro] conjunct of [on_global_env] (or to refuse the
+    environment), exactly as it already decides [on_global_univs]. *)
+Definition dec_disjoint_opt (x y : option kername)
+  : {Retroknowledge.disjoint_opt x y} + {~ Retroknowledge.disjoint_opt x y}.
+Proof.
+  unfold Retroknowledge.disjoint_opt.
+  destruct x as [a|]; [|left; congruence].
+  destruct y as [b|]; [|left; congruence].
+  destruct (Kername.eq_dec a b) as [->|ne].
+  - right. intros H. now apply (H b).
+  - left. intros c [= ->] [= ->]. now apply ne.
+Defined.
+
+Definition option_kername_eq_dec (x y : option kername) : {x = y} + {x <> y}.
+Proof. decide equality. apply Kername.eq_dec. Defined.
+
+Definition dec_wf_retro (r : Retroknowledge.t)
+  : {Retroknowledge.wf_retro r} + {~ Retroknowledge.wf_retro r}.
+Proof.
+  set (ops := map fst r.(Retroknowledge.retro_ops)).
+  destruct (ListDec.NoDup_dec Kername.eq_dec ops) as [HN|HN];
+    [|right; intros [h _ _ _]; exact (HN h)].
+  destruct (Forall_dec (fun c => ~ In (Some c) (Retroknowledge.type_constants r))
+              (fun c => match In_dec option_kername_eq_dec (Some c)
+                              (Retroknowledge.type_constants r) with
+                        | left h => right (fun n => n h) | right h => left h end) ops)
+    as [HF|HF];
+    [|right; intros [_ h2 _ _]; apply HF, Forall_forall; exact h2].
+  assert (dts : {Retroknowledge.types_distinct r} + {~ Retroknowledge.types_distinct r}).
+  { unfold Retroknowledge.types_distinct.
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_int63) r.(Retroknowledge.retro_float64)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_int63) r.(Retroknowledge.retro_string)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_int63) r.(Retroknowledge.retro_array)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_float64) r.(Retroknowledge.retro_string)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_float64) r.(Retroknowledge.retro_array)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_string) r.(Retroknowledge.retro_array)); [|right; tauto].
+    left; tauto. }
+  destruct dts as [dts|dts]; [|right; intros [_ _ h3 _]; exact (dts h3)].
+  assert (dbi : {forall i, r.(Retroknowledge.retro_bool) = Some i -> inductive_ind i = 0}
+              + {~ forall i, r.(Retroknowledge.retro_bool) = Some i -> inductive_ind i = 0}).
+  { destruct r.(Retroknowledge.retro_bool) as [i|] eqn:hb.
+    - destruct (Nat.eq_dec (inductive_ind i) 0) as [hi|hi].
+      + left; intros i' Hi'; injection Hi' as <-; exact hi.
+      + right; intros H; exact (hi (H i eq_refl)).
+    - left; intros i' Hi'; discriminate. }
+  destruct dbi as [dbi|dbi]; [|right; intros [_ _ _ h4]; exact (dbi h4)].
+  left; constructor.
+  - exact HN.
+  - intros c hc; rewrite Forall_forall in HF; apply HF; exact hc.
+  - exact dts.
+  - exact dbi.
+Defined.
+
 (** The expected declared type of a registered primitive operation, per language.
     It cannot be written once for both: [Term] has no [tConst], and the type is
     built from the registered type constants and, for a [SBool] result, from the
@@ -1286,6 +1341,24 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
   Lemma primitive_constant_retro (Σ : global_env) p :
     primitive_constant Σ p = retro_type_constant Σ.(retroknowledge) p.
   Proof. now destruct p. Qed.
+
+  (** §4.2(a)1: a registered primitive type constant is never an operation.
+      The single statement every consumer of the axiom inversion lemmas'
+      [prim_op_of Σ c = None] guard [Require]s. *)
+  Lemma prim_op_of_primitive_constant (Σ : global_env) tag c :
+    Retroknowledge.wf_retro Σ.(retroknowledge) ->
+    primitive_constant Σ tag = Some c ->
+    prim_op_of Σ c = None.
+  Proof.
+    intros [_ hnot _ _] hc.
+    destruct (prim_op_of Σ c) as [op|] eqn:hop; [|reflexivity].
+    exfalso. apply (hnot c).
+    - apply in_map_iff. exists (c, op). split; [reflexivity|].
+      exact (Retroknowledge.lookup_op_spec _ _ _ hop).
+    - rewrite primitive_constant_retro in hc.
+      unfold Retroknowledge.type_constants.
+      destruct tag; cbn in hc |- *; rewrite hc; intuition.
+  Qed.
 
   Section GlobalMaps.
 
@@ -1988,7 +2061,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
         [primitive_invariants] — what lets subject reduction type a literal of
         tag [t] with [type_Prim]. *)
     Definition prim_op_tag_declared (Σ : global_env_ext) (t : prim_tag) : Type :=
-      ∑ kn d, [× primitive_constant Σ t = Some kn, declared_constant Σ kn d &
+      ∑ kn d, [/\ primitive_constant Σ t = Some kn, declared_constant Σ kn d &
                  primitive_invariants t d].
 
     (** (gate 4) The same for the result: a literal result needs its type

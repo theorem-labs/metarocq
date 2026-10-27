@@ -1609,8 +1609,9 @@ Proof.
   red. cbn. do 2 red in wfΣ. cbn in wfΣ.
   destruct Σ as [univs Σ]; cbn in *.
   set (Σg:= {| universes := univs; declarations := Σ |}) in *.
-  destruct wfΣ as [ongu [wfr o]]; split => //.
-  destruct o as [|Σ0 kn d o Xg]. { constructor. }
+  destruct wfΣ as [ongu [wfr o]]; split => //; split => //.
+  destruct o. { constructor. }
+  rename o0 into Xg.
   set (wfΣ := (ongu, (wfr, o)) : on_global_env cumul_gen (lift_typing typing) {| universes := univs; declarations := Σ |}).
   set (Σ':= {| universes := univs; declarations := Σ |}) in *.
   destruct Xg. rename udecl0 into udecl.

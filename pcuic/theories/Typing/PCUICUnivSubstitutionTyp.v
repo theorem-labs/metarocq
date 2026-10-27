@@ -93,6 +93,12 @@ Proof.
      1: rewrite subst_instance_subst cofix_subst_instance_subst.
     all: now inversion E.
   - rewrite subst_instance_two. solve [econstructor; eauto].
+  - (* cumul_prim_op: the head keeps its constant, and the literal arguments
+       and the reduct are ground, so the instance substitution fixes them *)
+    rewrite subst_instance_mkApps /=.
+    rewrite (map_prim_ground (subst_instance u) ls (prim_ground_subst_instance u)).
+    rewrite (prim_ground_subst_instance u v (prim_ground_readback Hreadback)).
+    eapply cumul_prim_op; eassumption.
   - rewrite !subst_instance_mkApps.
     eapply cumul_proj. now rewrite nth_error_map Hargs.
   - eapply cumul_Trans; intuition eauto.
