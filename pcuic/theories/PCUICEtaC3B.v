@@ -16,7 +16,8 @@ From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimitive
-     PCUICInduction PCUICLiftSubst PCUICEquality PCUICReduction PCUICEtaDefs.
+     PCUICInduction PCUICLiftSubst PCUICEquality PCUICCases PCUICReduction
+     PCUICEtaDefs.
 
 Import ListNotations.
 
@@ -599,4 +600,81 @@ Proof.
     + destruct Hty as [_ Ht]. apply Ht; assumption.
     + apply All2_map. eapply All2_impl; [exact Hval|].
       intros x y [_ Hk]. apply Hk; assumption.
+Qed.
+
+(** ** [peta] preserves constructor heads, guards and (co)fix unfolding
+
+  This is why the four "unlocking" [red1] rules — [red_fix], [red_cofix_case],
+  [red_cofix_proj], [red_proj] — are harmless for the COMMUTATION: a [peta] step
+  can only η-contract a [tLambda], so it never turns a constructor/(co)fix head
+  into something else, and the guard [is_constructor] survives. (The η-postponement
+  form died on the converse direction: η CREATES a constructor head. C3 never has
+  to match a redex that appears only on the η side.) *)
+
+Lemma peta_isConstruct_app a b :
+  peta a b -> isConstruct_app a = true -> isConstruct_app b = true.
+Proof.
+  unfold isConstruct_app. intros Hp.
+  destruct (decompose_app a) as [hd args] eqn:Ha. cbn.
+  destruct hd; try discriminate. intros _.
+  apply decompose_app_inv in Ha. subst a.
+  apply peta_mkApps_inv in Hp as (f' & args' & -> & Hf & Ha').
+  depelim Hf. now rewrite decompose_app_mkApps.
+Qed.
+
+Lemma peta_is_constructor n args args' :
+  All2 peta args args' -> is_constructor n args = true -> is_constructor n args' = true.
+Proof.
+  unfold is_constructor. intros Ha.
+  destruct (nth_error args n) as [a|] eqn:Hn; [|discriminate].
+  destruct (All2_nth_error_Some _ _ Ha Hn) as (a' & Hn' & Haa).
+  rewrite Hn'. now apply peta_isConstruct_app.
+Qed.
+
+Notation peta_def :=
+  (fun d d' => peta d.(dtype) d'.(dtype) × peta d.(dbody) d'.(dbody)
+               × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)).
+
+Lemma peta_fix_subst mfix mfix' :
+  All2 peta_def mfix mfix' -> All2 peta (fix_subst mfix) (fix_subst mfix').
+Proof.
+  intros H. pose proof (All2_length H) as Hl.
+  unfold fix_subst. rewrite Hl.
+  generalize #|mfix'|. intros n. induction n; cbn; constructor; auto.
+  now apply peta_Fix.
+Qed.
+
+Lemma peta_cofix_subst mfix mfix' :
+  All2 peta_def mfix mfix' -> All2 peta (cofix_subst mfix) (cofix_subst mfix').
+Proof.
+  intros H. pose proof (All2_length H) as Hl.
+  unfold cofix_subst. rewrite Hl.
+  generalize #|mfix'|. intros n. induction n; cbn; constructor; auto.
+  now apply peta_CoFix.
+Qed.
+
+Lemma peta_unfold_fix mfix mfix' idx narg fn :
+  All2 peta_def mfix mfix' ->
+  unfold_fix mfix idx = Some (narg, fn) ->
+  ∑ fn', unfold_fix mfix' idx = Some (narg, fn') × peta fn fn'.
+Proof.
+  unfold unfold_fix. intros H Hu.
+  destruct (nth_error mfix idx) as [d|] eqn:Hd; [|discriminate].
+  destruct (All2_nth_error_Some _ _ H Hd) as (d' & Hd' & (_ & Hbo & _ & Hr)).
+  rewrite Hd'. noconf Hu.
+  eexists. split; [now rewrite Hr|].
+  eapply peta_subst; [exact Hbo|now apply peta_fix_subst].
+Qed.
+
+Lemma peta_unfold_cofix mfix mfix' idx narg fn :
+  All2 peta_def mfix mfix' ->
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ fn', unfold_cofix mfix' idx = Some (narg, fn') × peta fn fn'.
+Proof.
+  unfold unfold_cofix. intros H Hu.
+  destruct (nth_error mfix idx) as [d|] eqn:Hd; [|discriminate].
+  destruct (All2_nth_error_Some _ _ H Hd) as (d' & Hd' & (_ & Hbo & _ & Hr)).
+  rewrite Hd'. noconf Hu.
+  eexists. split; [now rewrite Hr|].
+  eapply peta_subst; [exact Hbo|now apply peta_cofix_subst].
 Qed.
