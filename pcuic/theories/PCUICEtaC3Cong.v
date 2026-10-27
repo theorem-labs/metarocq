@@ -23,7 +23,8 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICPrimitive
-     PCUICCases PCUICReduction PCUICEtaDefs PCUICEtaC3C.
+     PCUICCases PCUICReduction PCUICTyping PCUICEtaDefs PCUICEtaC3C
+     PCUICEtaConfluence.
 
 Import ListNotations.
 Set Default Goal Selector "!".
@@ -73,23 +74,18 @@ Section Cong.
   Context {cf : checker_flags} (Σ : global_env).
   Context (IH : C3 Σ).
 
-  (** Discharged elsewhere, kept as named hypotheses (same discipline as
-      C3Falsifier). [eta_subst] : EtaL2 frac/eta-l2 @ 7b4491f0 and C3Prover2
-      frac/eta-c3-C3Prover2 @ 9463536a, both GREEN/unconditional. [red1_eta_ctx_strong]
-      : EtaL2 pinned in PCUICEtaConfluence.v, proving. Require, do not retype. *)
-  Context (eta_subst : forall s s' b b', All2 eta s s' -> eta b b' ->
-             eta (subst0 s b) (subst0 s' b')).
-  Context (red1_eta_ctx_strong : forall Γ Δ t w,
-             red1 Σ Γ t w -> All2 (All_decls eta) Γ Δ ->
-             ∑ w', red1 Σ Δ t w' × eta w w').
+  (** [eta_subst], [red1_eta_ctx_strong], [eta_ctx_refl] are now the real lemmas
+      from [PCUICEtaConfluence] (EtaL2, frac/eta-l2 @ e05415aa, unconditional).
+      [red1_strengthening] (EtaL2, pinned, proving) is still staged. *)
+  Context (red1_strengthening : wf Σ -> forall Γ d t u,
+             red1 Σ (Γ ,, d) (lift0 1 t) u ->
+             ∑ u', (u = lift0 1 u') × red1 Σ Γ t u').
 
   Local Lemma all2_upto_refl l : All2 upto_domain l l.
   Proof. apply All2_same, upto_domain_refl. Qed.
 
   Local Lemma all_decls_eta_refl d : All_decls eta d d.
   Proof. destruct d as [? [|] ?]; constructor; apply rt_refl. Qed.
-  Local Lemma eta_ctx_refl Γ : All2 (All_decls eta) Γ Γ.
-  Proof. apply All2_same, all_decls_eta_refl. Qed.
 
   (** *** The two-[OnOne2] list diamond: a [red1] step and an [eta1] step on the
       same list [l].  Same position → the element [IH]; different positions →
@@ -343,9 +339,9 @@ Section Cong.
   Proof.
     intros hr he. depelim he.
     - (* prod_eta_l : η in the domain M -> N1, reduction under the changed context *)
-      destruct (red1_eta_ctx_strong (Γ ,, vass na M) (Γ ,, vass na N1) M2 N2 hr)
+      destruct (red1_eta_ctx_strong Σ (Γ ,, vass na M) (Γ ,, vass na N1) M2 N2 hr)
         as (w & hw & hw').
-      { constructor; [constructor; apply rt_step; eassumption | apply eta_ctx_refl]. }
+      { apply All2_cons; [constructor; apply rt_step; eassumption | apply eta_ctx_refl]. }
       exists (tProd na N1 w), (tProd na N1 w). split; [|split].
       + apply r_step. apply prod_red_r. exact hw.
       + apply eta_Prod; [apply rt_step; eassumption | exact hw'].
