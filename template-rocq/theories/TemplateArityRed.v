@@ -9,7 +9,7 @@ Local Open Scope type_scope.
 (** * Properties of the Template weak-head relation
 
   [whd_rel] and [arity_red] are defined in [MetaRocq.Template.Typing], beside
-  [red1], because [TemplateGlobalMaps] takes [arity_red] as its [ArityRedSig]
+  [red1], because [TemplateGlobalMaps] takes them in its [KernelRedSig]
   argument.  This file proves that a [whd_rel] derivation is a reduction
   ([whd_rel_red]) and that its head is never an application
   ([whd_rel_out_napp]); the translation to PCUIC uses both. *)

@@ -2,7 +2,8 @@
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReflect PCUICTyping.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICReflect PCUICTyping
+  PCUICArityRed.
 From MetaRocq.SafeChecker Require Import PCUICErrors.
 
 Import MonadNotation.
@@ -14,10 +15,17 @@ Import MonadNotation.
   [positive_nested_ctors], [positive_nested_cstr] and [positive_cstr]) soundly: a
   [Checked tt] answer yields a derivation, a [TypeError] answer says nothing.
 
-  The only thing they need from the global environment is the declaration of a nesting
-  inductive, so they take a lookup function as a parameter; [PCUICSafeChecker] instantiates
-  it with the abstract environment.  This keeps the checker and its soundness proof
-  independent of the rest of the safe checker.
+  The only things they need from the global environment are the declarations of a
+  nesting inductive and of the constants that weak-head reduction unfolds, so they take
+  a lookup function as a parameter; [PCUICSafeChecker] instantiates it with the abstract
+  environment.  This keeps the checker and its soundness proof independent of the rest
+  of the safe checker.
+
+  A constructor argument type is put in weak-head normal form when its syntax alone does
+  not show it positive, as Rocq's kernel does ([check_strict_positivity],
+  kernel/indtypes.ml).  The terms of the nested walk are not well typed, so the typed
+  reduction of the safe checker cannot be used: [whd_fuel] is an untyped weak-head
+  machine on a fuel, which follows the relation [whd_rel true] rule by rule.
 
   Positivity checking reduces let-ins and, in the nested case, walks the constructors of
   another inductive type, which are not subterms of the term being checked.  The check is
@@ -29,8 +37,13 @@ Import MonadNotation.
 
 Implicit Types (mdecl : mutual_inductive_body) (NI : nested_insts) (Γ : context).
 
-(** Far beyond the call depth that any declaration Rocq produces needs. *)
-Definition positivity_fuel := 10000.
+(** Far beyond the call depth that any declaration Rocq produces needs.  It bounds the
+    calls of one path of the positivity check, and also the steps of one reduction path
+    of [whd_fuel]: a reduction that needs more steps is refused, as when no rule applies.
+    It is written with small numerals: with the numeral [10000], the extracted module
+    referred to the [app] of the module [Decimal] where list append was meant, and OCaml
+    refused to compile it. *)
+Definition positivity_fuel := Nat.pow 10 4.
 
 (** ** Decision procedures for the side conditions *)
 
@@ -167,8 +180,177 @@ Definition nested_binder : aname := mkBindAnn nAnon Relevant.
 
 
 Section Check.
-  (** The declaration of a nesting inductive, from the global environment. *)
-  Context (lookup : inductive -> typing_result (mutual_inductive_body × one_inductive_body)).
+  (** The global environment's declarations, by name. *)
+  Context (lookup : kername -> option global_decl).
+
+  (** The declaration of a nesting inductive. *)
+  Definition lookup_ind (ind : inductive) :
+    typing_result (mutual_inductive_body × one_inductive_body) :=
+    match lookup ind.(inductive_mind) with
+    | Some (InductiveDecl mdecl') =>
+      match nth_error (ind_bodies mdecl') ind.(inductive_ind) with
+      | Some idecl' => ret (mdecl', idecl')
+      | None => raise (UndeclaredInductive ind)
+      end
+    | _ => raise (UndeclaredInductive ind)
+    end.
+
+  (** ** Weak-head reduction
+
+    [whd_fuel fuel Γ t args] reduces [t] applied to [args] in [Γ] with the rules of
+    [whd_rel true], one rule per step, and returns the head and arguments the relation
+    stops at.  It returns [None] when no rule applies (a variable outside [Γ], a constant
+    that the lookup does not declare as a constant, a match or projection on a
+    constructor that has no matching branch or field, a cofixpoint that does not unfold)
+    or when the fuel runs out.  The machine shares nothing, so a reduction that the
+    kernel's lazy machine does in linear time can take exponential time here: the fuel
+    bounds the depth of the reduction, not the total work. *)
+  Fixpoint whd_fuel (fuel : nat) Γ (t : term) (args : list term) {struct fuel}
+    : option (term × list term) :=
+    match fuel with
+    | 0 => None
+    | S fuel =>
+      match t with
+      | tRel c =>
+        match nth_error Γ c with
+        | Some d =>
+          match d.(decl_body) with
+          | Some b => whd_fuel fuel Γ (lift0 (S c) b) args
+          | None => Some (tRel c, args)
+          end
+        | None => None
+        end
+      | tLetIn na b B t => whd_fuel fuel Γ (subst0 [b] t) args
+      | tConst c u =>
+        match lookup c with
+        | Some (ConstantDecl decl) =>
+          match decl.(cst_body) with
+          | Some body => whd_fuel fuel Γ (subst_instance u body) args
+          | None => Some (tConst c u, args)
+          end
+        | _ => None
+        end
+      | tApp f a => whd_fuel fuel Γ f (a :: args)
+      | tLambda na A t =>
+        match args with
+        | a :: args => whd_fuel fuel Γ (subst0 [a] t) args
+        | [] => Some (tLambda na A t, [])
+        end
+      | tFix mfix idx =>
+        match unfold_fix mfix idx with
+        | Some (narg, fn) =>
+          match nth_error args narg with
+          | Some c =>
+            match whd_fuel fuel Γ c [] with
+            | Some (tConstruct ind n ui, cargs) =>
+              whd_fuel fuel Γ fn
+                (firstn narg args ++ mkApps (tConstruct ind n ui) cargs :: skipn (S narg) args)
+            | Some (t', cargs) =>
+              Some (tFix mfix idx, firstn narg args ++ mkApps t' cargs :: skipn (S narg) args)
+            | None => None
+            end
+          | None => Some (tFix mfix idx, args)
+          end
+        | None => Some (tFix mfix idx, args)
+        end
+      | tCase ci p c brs =>
+        match whd_fuel fuel Γ c [] with
+        | Some (tConstruct ind n ui, cargs) =>
+          if eqb ind ci.(ci_ind) then
+            match nth_error brs n with
+            | Some br =>
+              if Nat.eqb #|cargs| (ci.(ci_npar) + context_assumptions br.(bcontext)) then
+                whd_fuel fuel Γ (iota_red ci.(ci_npar) p cargs br) args
+              else None
+            | None => None
+            end
+          else None
+        | Some (tCoFix mfix idx, cargs) =>
+          match unfold_cofix mfix idx with
+          | Some (narg, fn) => whd_fuel fuel Γ (tCase ci p (mkApps fn cargs) brs) args
+          | None => None
+          end
+        | Some (t', cargs) => Some (tCase ci p (mkApps t' cargs) brs, args)
+        | None => None
+        end
+      | tProj p c =>
+        match whd_fuel fuel Γ c [] with
+        | Some (tConstruct ind 0 u, cargs) =>
+          if eqb ind p.(proj_ind) then
+            match nth_error cargs (p.(proj_npars) + p.(proj_arg)) with
+            | Some a => whd_fuel fuel Γ a args
+            | None => None
+            end
+          else None
+        | Some (tCoFix mfix idx, cargs) =>
+          match unfold_cofix mfix idx with
+          | Some (narg, fn) => whd_fuel fuel Γ (tProj p (mkApps fn cargs)) args
+          | None => None
+          end
+        | Some (t', cargs) => Some (tProj p (mkApps t' cargs), args)
+        | None => None
+        end
+      | t => Some (t, args)
+      end
+    end.
+
+  (** The context in which the rules of [positive_cstr_arg] reduce. *)
+  Definition positivity_context mdecl Γ : context := arities_context (ind_bodies mdecl) ,,, Γ.
+
+  (** An argument of a variable head, in weak-head normal form unless it is closed or
+      does not reduce. *)
+  Definition whd_arg mdecl Γ (a : term) : term :=
+    if closedn #|Γ| a then a
+    else match whd_fuel positivity_fuel (positivity_context mdecl Γ) a [] with
+         | Some (h, l) => mkApps h l
+         | None => a
+         end.
+
+  (** The number of leading arguments of the variable [x] that are kept as written: for an
+      enclosing nesting variable, its instantiating arguments, which [nested_inst_okb]
+      compares with the recorded instance as written (Rocq's kernel drops them,
+      [drop_params] in kernel/inductive.ml); for any other variable, none. *)
+  Definition kept_args NI Γ (x : nat) : nat :=
+    match List.find (fun e => Nat.ltb e.(ni_level) #|Γ| && Nat.eqb x (#|Γ| - S e.(ni_level))) NI with
+    | Some e => e.(ni_npars)
+    | None => 0
+    end.
+
+  (** The arguments of the variable [x], the ones after the kept ones in weak-head normal
+      form. *)
+  Definition whd_var_args mdecl NI Γ (x : nat) (args : list term) : list term :=
+    let n := kept_args NI Γ x in
+    firstn n args ++ map (whd_arg mdecl Γ) (skipn n args).
+
+  (** The heads after which a reduct is checked again. *)
+  Definition positivity_head (t : term) : bool :=
+    match t with
+    | tProd _ _ _ | tRel _ | tInd _ _ => true
+    | _ => false
+    end.
+
+  (** The reduction cases of [positive_cstr_arg] for a term that is neither a product nor
+      a let, with the recursive check [rec] and the syntactic application check [app]
+      passed as arguments.  A variable head has its arguments reduced; if that changes
+      some of them, the result is checked again (a closed result is then accepted),
+      else the syntactic check decides.  An inductive head is checked as written.  Any
+      other head is reduced, and the reduct is checked again when it is closed or has a
+      head that the rules read. *)
+  Definition check_positive_whd (rec app : term -> typing_result unit) mdecl NI Γ (t : term)
+    : typing_result unit :=
+    match decompose_app t with
+    | (tRel k, args) =>
+      let args' := whd_var_args mdecl NI Γ k args in
+      if eqb args' args then app t else rec (mkApps (tRel k) args')
+    | (tInd _ _, _) => app t
+    | _ =>
+      match whd_fuel positivity_fuel (positivity_context mdecl Γ) t [] with
+      | Some (h, l) =>
+        if closedn #|Γ| (mkApps h l) || positivity_head h then rec (mkApps h l)
+        else raise (Msg "Positivity: the block occurs under a head that is neither a member of the block nor an inductive")
+      | None => raise (Msg "Positivity: the block occurs under a head that is neither a member of the block nor an inductive")
+      end
+    end.
 
   (** The application case of [positive_cstr_arg], with the recursive checks it needs
       passed as arguments, so that it can be reasoned about once for every head. *)
@@ -191,7 +373,7 @@ Section Check.
       else raise (Msg "Positivity: the block occurs in an argument of a variable that is not an inductive of the block")
     | (tInd ind u, args) =>
       let k := nested_split #|Γ| args in
-      mi <- lookup ind ;;
+      mi <- lookup_ind ind ;;
       if negb (Nat.eqb #|ind_bodies (fst mi)| 1) then
         raise (Msg "Nested positivity: the nested inductive is mutual")
       else if negb (check_nested_variance mdecl) then
@@ -230,10 +412,20 @@ Section Check.
       match t with
       | tProd na ty t =>
         if closedn #|Γ| ty then check_positive_cstr_arg fuel mdecl NI (vass na ty :: Γ) t
-        else raise (Msg "Non-positive occurrence.")
+        else
+          (* A domain that mentions the block is accepted when its weak-head normal form
+             does not. *)
+          match whd_fuel positivity_fuel (positivity_context mdecl Γ) ty [] with
+          | Some (h, l) =>
+            if closedn #|Γ| (mkApps h l) then
+              check_positive_cstr_arg fuel mdecl NI (vass na ty :: Γ) t
+            else raise (Msg "Non-positive occurrence.")
+          | None => raise (Msg "Non-positive occurrence.")
+          end
       | tLetIn na b ty t => check_positive_cstr_arg fuel mdecl NI Γ (subst0 [b] t)
-      | t => check_positive_app (check_positive_args fuel mdecl)
-               (check_positive_nested_ctors fuel mdecl) mdecl NI Γ t
+      | t => check_positive_whd (check_positive_cstr_arg fuel mdecl NI Γ)
+               (check_positive_app (check_positive_args fuel mdecl)
+                  (check_positive_nested_ctors fuel mdecl) mdecl NI Γ) mdecl NI Γ t
       end
     end
 
@@ -302,13 +494,136 @@ Section Check.
 
   (** ** Soundness *)
 
-  Context (Σ : global_env)
-    (lookup_spec : forall ind mi, lookup ind = Checked mi ->
-                   declared_inductive Σ ind (fst mi) (snd mi)).
+  Context (Σ : global_env) (lookup_spec : forall kn, lookup kn = lookup_env Σ kn).
 
   Lemma bind_checked_tt {A} (m : typing_result A) (f : A -> typing_result unit) :
     @bind typing_result _ A unit m f = Checked tt -> ∑ a, (m = Checked a) × (f a = Checked tt).
   Proof. destruct m as [a|e] => //= h. now exists a. Qed.
+
+  Lemma lookup_ind_spec ind mi :
+    lookup_ind ind = Checked mi -> declared_inductive Σ ind (fst mi) (snd mi).
+  Proof.
+    rewrite /lookup_ind.
+    destruct lookup as [[|mdecl']|] eqn:look => //.
+    destruct nth_error eqn:hnth => //.
+    intros [= <-]. split => //.
+    eapply declared_minductive_from_gen. red. rewrite -lookup_spec. exact look.
+  Qed.
+
+  Lemma whd_fuel_sound fuel Γ t args h l :
+    whd_fuel fuel Γ t args = Some (h, l) -> whd_rel true Σ Γ t args h l.
+  Proof.
+    induction fuel as [|fuel IH] in Γ, t, args, h, l |- *; [discriminate|].
+    cbn [whd_fuel].
+    destruct t as [n|i|n l'|u|na A B|na A t|na b B t|f a|k ui|ind ui|ind n ui|ci p c brs|p c
+      |mfix idx|mfix idx|prim]; intros e;
+      try solve [injection e as <- <-; now apply whd_stop].
+    - (* tRel *)
+      destruct (nth_error Γ n) as [d|] eqn:hn; [|discriminate].
+      destruct (decl_body d) as [b|] eqn:hb.
+      + eapply whd_rel_unfold; [exact hn|exact hb|now apply IH].
+      + injection e as <- <-. eapply whd_rel_assum; [exact hn|exact hb].
+    - (* tLambda *)
+      destruct args as [|a args].
+      + injection e as <- <-. now apply whd_stop.
+      + apply whd_beta. now apply IH.
+    - (* tLetIn *)
+      apply whd_zeta; [reflexivity|now apply IH].
+    - (* tApp *)
+      apply whd_app. now apply IH.
+    - (* tConst *)
+      destruct (lookup k) as [[decl|]|] eqn:hl; try discriminate.
+      rewrite lookup_spec in hl.
+      destruct (cst_body decl) as [body|] eqn:hb.
+      + eapply whd_delta; [exact hl|exact hb|now apply IH].
+      + injection e as <- <-. eapply whd_axiom; [exact hl|exact hb].
+    - (* tCase *)
+      destruct (whd_fuel fuel Γ c []) as [[t' cargs]|] eqn:hc; [|discriminate].
+      apply IH in hc.
+      destruct t' as [| | | | | | | | | |ind n ui| | | |mfix idx|];
+        try solve [injection e as <- <-;
+        eapply whd_case_stuck; [exact hc|reflexivity|reflexivity]].
+      + (* a constructor *)
+        destruct (eqb ind (ci_ind ci)) eqn:hind; [|discriminate].
+        apply eqb_eq in hind. subst ind.
+        destruct (nth_error brs n) as [br|] eqn:hbr; [|discriminate].
+        destruct (Nat.eqb #|cargs| (ci_npar ci + context_assumptions (bcontext br))) eqn:hlen;
+          [|discriminate].
+        apply Nat.eqb_eq in hlen.
+        eapply whd_iota; [exact hc|exact hbr|exact hlen|now apply IH].
+      + (* a cofixpoint *)
+        destruct (unfold_cofix mfix idx) as [[narg fn]|] eqn:hu; [|discriminate].
+        eapply whd_case_cofix; [exact hc|exact hu|now apply IH].
+    - (* tProj *)
+      destruct (whd_fuel fuel Γ c []) as [[t' cargs]|] eqn:hc; [|discriminate].
+      apply IH in hc.
+      destruct t' as [| | | | | | | | | |ind n ui| | | |mfix idx|];
+        try solve [injection e as <- <-;
+        eapply whd_proj_stuck; [exact hc|reflexivity|reflexivity]].
+      + (* constructor 0 *)
+        destruct n as [|n]; [|injection e as <- <-;
+          eapply whd_proj_stuck; [exact hc|reflexivity|reflexivity]].
+        destruct (eqb ind (proj_ind p)) eqn:hind; [|discriminate].
+        apply eqb_eq in hind. subst ind.
+        destruct (nth_error cargs (proj_npars p + proj_arg p)) as [a|] eqn:ha; [|discriminate].
+        eapply whd_proj; [exact hc|exact ha|now apply IH].
+      + (* a cofixpoint *)
+        destruct (unfold_cofix mfix idx) as [[narg fn]|] eqn:hu; [|discriminate].
+        eapply whd_proj_cofix; [exact hc|exact hu|now apply IH].
+    - (* tFix *)
+      destruct (unfold_fix mfix idx) as [[narg fn]|] eqn:hu.
+      + destruct (nth_error args narg) as [c|] eqn:hn.
+        * destruct (whd_fuel fuel Γ c []) as [[t' cargs]|] eqn:hc; [|discriminate].
+          apply IH in hc.
+          destruct t' as [| | | | | | | | | |ind n ui| | | | |]; try solve [injection e as <- <-;
+            eapply whd_fix_stuck; [exact hu|exact hn|exact hc|reflexivity]].
+          eapply whd_fix_iota; [exact hu|exact hn|exact hc|now apply IH].
+        * injection e as <- <-. eapply whd_fix_noarg; [exact hu|exact hn].
+      + injection e as <- <-. now apply whd_fix_nounfold.
+  Qed.
+
+  Lemma whd_arg_sound mdecl Γ a :
+    arg_whd Σ (arities_context (ind_bodies mdecl) ,,, Γ) a (whd_arg mdecl Γ a).
+  Proof.
+    rewrite /whd_arg /arg_whd.
+    destruct (closedn #|Γ| a); [now left|].
+    destruct whd_fuel as [[h l]|] eqn:hw; [|now left].
+    right. exists h, l. split; [exact (whd_fuel_sound _ _ _ _ _ _ hw)|reflexivity].
+  Qed.
+
+  Lemma whd_var_args_sound mdecl NI Γ x l :
+    All2 (arg_whd Σ (arities_context (ind_bodies mdecl) ,,, Γ)) l (whd_var_args mdecl NI Γ x l).
+  Proof.
+    rewrite /whd_var_args. generalize (kept_args NI Γ x) as n.
+    induction l as [|a l IH]; intros [|n]; cbn; try constructor.
+    - apply whd_arg_sound.
+    - exact (IH 0).
+    - by left.
+    - apply IH.
+  Qed.
+
+  Lemma check_positive_whd_sound rec app mdecl NI Γ t :
+    (forall t, rec t = Checked tt -> positive_cstr_arg Σ mdecl NI Γ t) ->
+    (forall t, app t = Checked tt -> positive_cstr_arg Σ mdecl NI Γ t) ->
+    check_positive_whd rec app mdecl NI Γ t = Checked tt ->
+    positive_cstr_arg Σ mdecl NI Γ t.
+  Proof.
+    intros hrec happ. rewrite /check_positive_whd.
+    destruct (decompose_app t) as [hd args] eqn:da.
+    pose proof (decompose_app_inv da) as eqt.
+    destruct hd as [n| | | | | | | | | | | | | | |]; cbv beta iota zeta;
+      (* any head but a variable or an inductive: the reduct is checked *)
+      try solve [
+        destruct whd_fuel as [[rh rl]|] eqn:hw; [|discriminate];
+        destruct (closedn #|Γ| (mkApps rh rl) || positivity_head rh); [|discriminate];
+        intros hr; eapply pos_arg_red; [exact (whd_fuel_sound _ _ _ _ _ _ hw)|now apply hrec]].
+    - (* a variable head: its arguments, reduced *)
+      destruct (eqb (whd_var_args mdecl NI Γ n args) args); [apply happ|].
+      intros hr. rewrite eqt.
+      eapply pos_arg_rel_red; [exact (whd_var_args_sound mdecl NI Γ n args)|now apply hrec].
+    - (* an inductive head *)
+      apply happ.
+  Qed.
 
   Lemma check_positive_app_sound args_check ctors_check mdecl NI Γ t :
     (forall NI Γ l, args_check NI Γ l = Checked tt -> positive_args Σ mdecl NI Γ l) ->
@@ -345,7 +660,7 @@ Section Check.
         [|discriminate]; cbn in h.
       apply bind_checked_tt in h as [[] [ha hc]].
       move/andP: hk => [] /Nat.leb_le hkle hcl.
-      pose proof (lookup_spec _ _ hl) as decl.
+      pose proof (lookup_ind_spec _ _ hl) as decl.
       have hb : ind_bodies (fst mi) = [snd mi].
       { apply Nat.eqb_eq in hone. exact (single_body_eq hone (proj2 decl)). }
       eapply (pos_arg_nested Σ mdecl NI Γ ind ui args (fst mi) (snd mi)
@@ -388,10 +703,19 @@ Section Check.
     repeat split.
     - intros mdecl NI Γ t h. cbn [check_positive_cstr_arg] in h.
       destruct (closedn #|Γ| t) eqn:cl; [now constructor 1|].
-      destruct t; try solve [eapply check_positive_app_sound; [exact (IHargs mdecl)|exact (IHctors mdecl)|exact h]].
+      destruct t; cbv beta iota in h; try solve [refine (check_positive_whd_sound _ _ mdecl NI Γ _ _ _ h);
+        [intros ? hr; now apply IHarg
+        |intros ? ha; eapply check_positive_app_sound;
+           [exact (IHargs mdecl)|exact (IHctors mdecl)|exact ha]]].
       + (* tProd *)
-        destruct (closedn #|Γ| t1) eqn:clty; [|discriminate].
-        constructor 6; [exact clty|]. now apply IHarg.
+        destruct (closedn #|Γ| t1) eqn:clty.
+        * constructor 6; [exact clty|]. now apply IHarg.
+        * (* a domain whose weak-head normal form is closed *)
+          destruct (whd_fuel positivity_fuel (positivity_context mdecl Γ) t1 []) as [[h' l]|] eqn:hw;
+            [|discriminate].
+          destruct (closedn #|Γ| (mkApps h' l)) eqn:clr; [|discriminate].
+          eapply pos_arg_ass_red; [exact (whd_fuel_sound _ _ _ _ _ _ hw)|exact clr|].
+          now apply IHarg.
       + (* tLetIn *)
         constructor 5. now apply IHarg.
     - intros mdecl NI Γ l h. cbn [check_positive_args] in h.
@@ -450,12 +774,19 @@ Lemma check_positive_out_of_fuel lookup mdecl :
   = TypeError (Msg "Nested positivity: out of fuel").
 Proof. reflexivity. Qed.
 
+(** Weak-head reduction out of fuel answers [None]: a beta-redex needs three units, one
+    for the application, one for the contraction and one for the result, so two units
+    are not enough. *)
+Lemma whd_fuel_out_of_fuel lookup na A t a :
+  whd_fuel lookup 2 [] (tApp (tLambda na A t) a) [] = None.
+Proof. reflexivity. Qed.
+
 (** A nested occurrence in a block with a covariant universe level is refused for that
     reason: the arguments of an inductive application are compared by conversion, which a
     covariant level does not give (see [positive_cstr_arg_subst]). *)
 Lemma check_positive_covariant_refused lookup args_check ctors_check mdecl NI Γ t ind u args mi :
   decompose_app t = (tInd ind u, args) ->
-  lookup ind = Checked mi ->
+  lookup_ind lookup ind = Checked mi ->
   #|ind_bodies (fst mi)| = 1 ->
   ind_variance mdecl = Some [Variance.Covariant] ->
   check_positive_app lookup args_check ctors_check mdecl NI Γ t

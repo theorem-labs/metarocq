@@ -184,10 +184,12 @@ Inductive arity_red (Σ : global_env) : context -> term -> context -> sort -> Ty
 
 Derive Signature for arity_red.
 
-(** The instance of [EnvironmentTyping.ArityRedSig] that [PCUICGlobalMaps]
-    (in PCUICTyping) uses for [on_ind_body]'s [ind_arity_red]. *)
-Module PCUICArityRelation <: EnvironmentTyping.ArityRedSig PCUICTerm PCUICEnvironment.
+(** The instance of [EnvironmentTyping.KernelRedSig] that [PCUICGlobalMaps]
+    (in PCUICTyping) uses: [arity_red] for [on_ind_body]'s [ind_arity_red], and
+    [whd_rel] for the reductions of strict positivity ([positive_cstr_arg]). *)
+Module PCUICArityRelation <: EnvironmentTyping.KernelRedSig PCUICTerm PCUICEnvironment.
   Definition arity_red := arity_red.
+  Definition whd_rel := whd_rel.
 End PCUICArityRelation.
 
 (** ** A derivation is a reduction *)
@@ -262,6 +264,93 @@ Section WhdRed.
     - reflexivity.
   Qed.
 End WhdRed.
+
+(** A derivation reads the context only through [nth_error] and [decl_body], so two
+    contexts with pointwise equal bodies have the same derivations. *)
+Lemma whd_rel_ctx_bodies {zeta Σ Γ Γ' t args h l} :
+  All2 (fun d d' => decl_body d = decl_body d') Γ Γ' ->
+  whd_rel zeta Σ Γ t args h l -> whd_rel zeta Σ Γ' t args h l.
+Proof.
+  intros a.
+  induction 1;
+    [ | | eapply whd_zeta | eapply whd_letin_stop
+    | eapply whd_delta | eapply whd_axiom | eapply whd_app | eapply whd_beta
+    | eapply whd_fix_iota | eapply whd_fix_stuck | eapply whd_fix_noarg | eapply whd_fix_nounfold
+    | eapply whd_iota | eapply whd_case_cofix | eapply whd_case_stuck
+    | eapply whd_proj | eapply whd_proj_cofix | eapply whd_proj_stuck | eapply whd_stop ];
+    eauto.
+  - match goal with hn : nth_error Γ _ = Some _ |- _ =>
+      destruct (All2_nth_error_Some _ _ a hn) as [d' [hn' hb']] end.
+    eapply whd_rel_unfold; [exact hn'|rewrite -hb'; eassumption|eassumption].
+  - match goal with hn : nth_error Γ _ = Some _ |- _ =>
+      destruct (All2_nth_error_Some _ _ a hn) as [d' [hn' hb']] end.
+    eapply whd_rel_assum; [exact hn'|rewrite -hb'; eassumption].
+Qed.
+
+Lemma assumption_context_decl_body {Γ c d} :
+  assumption_context Γ -> nth_error Γ c = Some d -> decl_body d = None.
+Proof.
+  intros a; induction a in c |- *; destruct c; cbn; intros e; try discriminate.
+  - injection e as <-. reflexivity.
+  - exact (IHa _ e).
+Qed.
+
+(** In a context without bodies no variable is unfolded, and every other step of the
+    machine reads no context: a derivation is a reduction in every context. *)
+Lemma whd_rel_red_nobody {zeta Σ Γ t args h l} :
+  assumption_context Γ ->
+  whd_rel zeta Σ Γ t args h l -> forall Δ, red Σ Δ (mkApps t args) (mkApps h l).
+Proof.
+  intros ass w Δ.
+  induction w as [c args d b h l hn hb w IH|c args d hn hb
+    |na b B t args h l hz w IH|na b B t args hz
+    |c u decl body args h l hd hb w IH|c u decl args hd hb
+    |f a args h l w IH|na A t a args h l w IH
+    |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
+    |mfix idx narg fn args c t cargs hu hn w IH hc
+    |mfix idx narg fn args hu hn|mfix idx args hu
+    |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
+    |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+    |ci p c brs args t cargs w IH hc hcf
+    |p c args u cargs a h l w1 IH1 ha w2 IH2
+    |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+    |p c args t cargs w IH hc hcf
+    |t args hs].
+  - rewrite (assumption_context_decl_body ass hn) in hb. discriminate.
+  - reflexivity.
+  - eapply red_trans; [|exact IH]. apply red_mkApps_f, red1_red, red_zeta.
+  - reflexivity.
+  - eapply red_trans; [|exact IH]. apply red_mkApps_f, red1_red.
+    eapply red_delta; [exact (lookup_global_Some_if_In _ _ _ hd)|exact hb].
+  - reflexivity.
+  - exact IH.
+  - eapply red_trans; [|exact IH]. cbn. apply red_mkApps_f, red1_red, red_beta.
+  - eapply red_trans; [|exact IH2].
+    eapply red_trans.
+    { apply red_mkApps; [reflexivity|]. eapply whd_red_args; [exact hn|exact IH1]. }
+    apply red1_red. eapply red_fix; [exact hu|].
+    destruct (nth_error_split_firstn_skipn _ _ _ hn) as [_ len].
+    rewrite /is_constructor (nth_error_snoc _ _ _ _ (eq_sym len)) /isConstruct_app.
+    now rewrite decompose_app_mkApps.
+  - apply red_mkApps; [reflexivity|]. eapply whd_red_args; [exact hn|exact IH].
+  - reflexivity.
+  - reflexivity.
+  - eapply red_trans; [|exact IH2]. apply red_mkApps_f.
+    eapply red_trans; [eapply red_case_c; exact IH1|].
+    apply red1_red. now apply red_iota.
+  - eapply red_trans; [|exact IH2]. apply red_mkApps_f.
+    eapply red_trans; [eapply red_case_c; exact IH1|].
+    apply red1_red. eapply red_cofix_case; eauto.
+  - apply red_mkApps_f. eapply red_case_c; exact IH.
+  - eapply red_trans; [|exact IH2]. apply red_mkApps_f.
+    eapply red_trans; [eapply red_proj_c; exact IH1|].
+    apply red1_red. now apply red_proj.
+  - eapply red_trans; [|exact IH2]. apply red_mkApps_f.
+    eapply red_trans; [eapply red_proj_c; exact IH1|].
+    apply red1_red. eapply red_cofix_proj; eauto.
+  - apply red_mkApps_f. eapply red_proj_c; exact IH.
+  - reflexivity.
+Qed.
 
 Lemma arity_red_red {Σ Γ t Δ s} :
   arity_red Σ Γ t Δ s -> red Σ Γ t (it_mkProd_or_LetIn Δ (tSort s)).

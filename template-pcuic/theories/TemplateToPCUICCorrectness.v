@@ -3246,11 +3246,50 @@ Proof.
     + now rewrite hlen.
 Qed.
 
+Lemma wf_ind_arities Σ mdecl :
+  All (wf_inductive_body Σ) (Ast.Env.ind_bodies mdecl) ->
+  All (WfAst.wf_decl Σ) (Typing.ind_arities mdecl).
+Proof.
+  rewrite /Typing.ind_arities.
+  rewrite /Ast.Env.arities_context.
+  intros.
+  rewrite rev_map_spec. eapply All_rev. eapply All_map.
+  induction X; constructor; auto.
+  unfold WfAst.wf_decl; cbn. split => //.
+  eapply p.
+Qed.
+
+(** Weak-head reduction in the context of the arities and the positivity context
+    commutes with the translation. *)
+Lemma trans_whd_rel_arities {cf} {Σ mdecl Γ ty h l} :
+  Typing.wf Σ ->
+  wf (trans_global_env Σ) ->
+  All (wf_inductive_body Σ) (Ast.Env.ind_bodies mdecl) ->
+  All (WfAst.wf_decl Σ) Γ ->
+  WfAst.wf Σ ty ->
+  ST.whd_rel true Σ (Ast.Env.arities_context (Ast.Env.ind_bodies mdecl) ,,, Γ) ty [] h l ->
+  (WfAst.wf Σ h × All (WfAst.wf Σ) l) ×
+  whd_rel true (trans_global_env Σ)
+    (arities_context (ind_bodies (trans_minductive_body (trans_global_env Σ) mdecl)) ,,,
+      trans_local (trans_global_env Σ) Γ)
+    (trans (trans_global_env Σ) ty) [] (trans (trans_global_env Σ) h)
+    (map (trans (trans_global_env Σ)) l).
+Proof.
+  intros wfΣ wfΣ' wfbodies wfΓ wfty w.
+  have wfΓr : All (WfAst.wf_decl Σ) (Ast.Env.arities_context (Ast.Env.ind_bodies mdecl) ,,, Γ).
+  { apply All_app_inv; [exact wfΓ|]. exact (wf_ind_arities Σ mdecl wfbodies). }
+  split.
+  - eapply whd_rel_wf; tea. constructor.
+  - eapply trans_whd_rel in w; tea; [|constructor].
+    move: w. rewrite trans_local_app trans_arities_context. cbn. exact id.
+Qed.
+
 Lemma trans_positive_cstr_arg {cf} {Σ mdecl NI Γ t} :
   Typing.wf Σ ->
   wf (trans_global_env Σ) ->
   All (wf_inductive_body Σ) (Ast.Env.ind_bodies mdecl) ->
   ST.positive_cstr_arg Σ mdecl NI Γ t ->
+  All (WfAst.wf_decl Σ) Γ ->
   WfAst.wf Σ t ->
   positive_cstr_arg (trans_global_env Σ)
     (trans_minductive_body (trans_global_env Σ) mdecl)
@@ -3261,20 +3300,20 @@ Proof.
   intros wfΣ wfΣ' wfbodies p.
   revert NI Γ t p.
   apply (ST.positive_cstr_arg_mrect Σ mdecl
-    (fun NI Γ t _ => WfAst.wf Σ t ->
+    (fun NI Γ t _ => All (WfAst.wf_decl Σ) Γ -> WfAst.wf Σ t ->
       positive_cstr_arg (trans_global_env Σ)
         (trans_minductive_body (trans_global_env Σ) mdecl)
         (map (trans_nested_inst (trans_global_env Σ)) NI)
         (trans_local (trans_global_env Σ) Γ)
         (trans (trans_global_env Σ) t))
-    (fun NI Γ l _ => All (WfAst.wf Σ) l ->
+    (fun NI Γ l _ => All (WfAst.wf_decl Σ) Γ -> All (WfAst.wf Σ) l ->
       positive_args (trans_global_env Σ)
         (trans_minductive_body (trans_global_env Σ) mdecl)
         (map (trans_nested_inst (trans_global_env Σ)) NI)
         (trans_local (trans_global_env Σ) Γ)
         (map (trans (trans_global_env Σ)) l))
     (fun NI Γ ps nskip cs _ =>
-      All (WfAst.wf Σ) ps -> All (WfAst.wf Σ) cs ->
+      All (WfAst.wf_decl Σ) Γ -> All (WfAst.wf Σ) ps -> All (WfAst.wf Σ) cs ->
       positive_nested_ctors (trans_global_env Σ)
         (trans_minductive_body (trans_global_env Σ) mdecl)
         (map (trans_nested_inst (trans_global_env Σ)) NI)
@@ -3282,17 +3321,17 @@ Proof.
         (map (trans (trans_global_env Σ)) ps) nskip
         (map (trans (trans_global_env Σ)) cs))
     (fun NI Γ ps nskip c _ =>
-      All (WfAst.wf Σ) ps -> WfAst.wf Σ c ->
+      All (WfAst.wf_decl Σ) Γ -> All (WfAst.wf Σ) ps -> WfAst.wf Σ c ->
       positive_nested_cstr (trans_global_env Σ)
         (trans_minductive_body (trans_global_env Σ) mdecl)
         (map (trans_nested_inst (trans_global_env Σ)) NI)
         (trans_local (trans_global_env Σ) Γ)
         (map (trans (trans_global_env Σ)) ps) nskip
         (trans (trans_global_env Σ) c))).
-  - intros NI0 Γ0 ty closed wfty.
+  - intros NI0 Γ0 ty closed _ wfty.
     constructor. rewrite trans_local_length.
     now eapply trans_closedn.
-  - intros NI0 Γ0 l k i real closed ati wfty.
+  - intros NI0 Γ0 l k i real closed ati _ wfty.
     rewrite trans_mkApps.
     move/WfAst.wf_mkApps_inv: wfty => wfl.
     destruct ati as [le [lt nth]].
@@ -3306,12 +3345,12 @@ Proof.
       cbv beta. intros a [cla wfa]. now eapply trans_closedn.
     + repeat split; rewrite ?trans_local_length ?length_map //.
       rewrite -map_rev nth_error_map nth //.
-  - intros NI0 Γ0 x l inst wfty.
+  - intros NI0 Γ0 x l inst _ wfty.
     rewrite trans_mkApps.
     move/WfAst.wf_mkApps_inv: wfty => wfl.
     econstructor 3. now eapply trans_nested_inst_ok.
   - intros NI0 Γ0 ind u args mdecl' idecl' k na decl uniform variance lenargs
-      closed pargs IHargs nctors IHctors wfty.
+      closed pargs IHargs nctors IHctors wfΓ wfty.
     rewrite trans_mkApps.
     move/WfAst.wf_mkApps_inv: wfty => wfargs.
     have wfind : wf_inductive_body Σ idecl'.
@@ -3327,7 +3366,7 @@ Proof.
       eapply All_map.
       eapply All_impl; [exact (All_mix closed (All_skipn (n := k) wfargs))|].
       cbv beta. intros a [cla wfa]. now eapply trans_closedn.
-    + rewrite firstn_map. apply IHargs. now apply All_firstn.
+    + rewrite firstn_map. apply IHargs; [exact wfΓ|]. now apply All_firstn.
     + have e6 :
         mkApps (tInd ind u) (map (trans (trans_global_env Σ)) (firstn k args)) =
         trans (trans_global_env Σ) (Ast.mkApps (Ast.tInd ind u) (firstn k args)).
@@ -3347,43 +3386,82 @@ Proof.
         Ast.Env.context_assumptions (Ast.Env.ind_params mdecl').
       { cbn. now rewrite context_assumptions_map. }
       rewrite firstn_map trans_local_length e6 e3 e4 e5.
-      apply IHctors.
+      apply IHctors; [constructor; [refine (tt, _); apply WfAst.wf_mkApps;
+        [constructor|now apply All_firstn]|exact wfΓ]| |].
       * eapply All_map. eapply All_impl; [exact (All_firstn (n := k) wfargs)|].
         cbv beta. intros a wfa. now eapply WfAst.wf_lift.
       * eapply All_map. eapply All_impl; [exact (wf_ind_ctors _ _ wfind)|].
         cbv beta. intros c wfc. now eapply WfAst.wf_subst_instance.
-  - intros NI0 Γ0 na b ty ty' pos IHpos wfty.
+  - intros NI0 Γ0 na b ty ty' pos IHpos wfΓ wfty.
     move/WfAst.wf_inv: wfty => /= [[wfb wfty] wft].
     constructor 5. rewrite trans_subst in IHpos.
-    apply IHpos. eapply WfAst.wf_subst; auto.
-  - intros NI0 Γ0 na ty ty' closed pos IHpos wfty.
+    apply IHpos; [exact wfΓ|]. eapply WfAst.wf_subst; auto.
+  - intros NI0 Γ0 na ty ty' closed pos IHpos wfΓ wfty.
     move/WfAst.wf_inv: wfty => /= [wfty wft].
     constructor 6.
     + rewrite trans_local_length. now eapply trans_closedn.
-    + cbn. now apply IHpos.
-  - intros NI0 Γ0 _. constructor.
-  - intros NI0 Γ0 t0 l pos IHpos poss IHposs wfl.
+    + cbn. apply IHpos; [constructor; [exact (tt, wfty)|exact wfΓ]|exact wft].
+  - intros NI0 Γ0 ty h l w pos IHpos wfΓ wfty.
+    destruct (trans_whd_rel_arities wfΣ wfΣ' wfbodies wfΓ wfty w) as [[wfh wfl] tw].
+    econstructor 7; [exact tw|].
+    rewrite -trans_mkApps. apply IHpos; [exact wfΓ|].
+    apply WfAst.wf_mkApps; [exact wfh|exact wfl].
+  - intros NI0 Γ0 na ty ty' h l w closed pos IHpos wfΓ wfprod.
+    move/WfAst.wf_inv: wfprod => /= [wfty wft].
+    destruct (trans_whd_rel_arities wfΣ wfΣ' wfbodies wfΓ wfty w) as [[wfh wfl] tw].
+    econstructor 8; [exact tw| |].
+    + rewrite trans_local_length -trans_mkApps. eapply trans_closedn; tea.
+      apply WfAst.wf_mkApps; [exact wfh|exact wfl].
+    + cbn. apply IHpos; [constructor; [exact (tt, wfty)|exact wfΓ]|exact wft].
+  - intros NI0 Γ0 k l l' a pos IHpos wfΓ wfty.
+    rewrite trans_mkApps.
+    move/WfAst.wf_mkApps_inv: wfty => wfl.
+    have hl' : All (WfAst.wf Σ) l' ×
+      All2 (arg_whd (trans_global_env Σ)
+        (arities_context (ind_bodies (trans_minductive_body (trans_global_env Σ) mdecl)) ,,,
+          trans_local (trans_global_env Σ) Γ0))
+        (map (trans (trans_global_env Σ)) l) (map (trans (trans_global_env Σ)) l').
+    { clear pos IHpos.
+      induction a as [|x y xs ys r a IHa]; [split; constructor|].
+      inversion wfl as [|? ? wx wxs]; subst.
+      destruct (IHa wxs) as [w1 w2]. cbn [map].
+      destruct r as [->|[h0 [l0 [w e]]]].
+      - split; constructor; auto. left; reflexivity.
+      - subst y.
+        destruct (trans_whd_rel_arities wfΣ wfΣ' wfbodies wfΓ wx w) as [[wfh wfl0] tw].
+        split; constructor; auto.
+        + apply WfAst.wf_mkApps; [exact wfh|exact wfl0].
+        + right. exists (trans (trans_global_env Σ) h0), (map (trans (trans_global_env Σ)) l0).
+          split; [exact tw|]. now rewrite trans_mkApps. }
+    destruct hl' as [wfl' a'].
+    econstructor 9; [exact a'|].
+    have e : mkApps (tRel k) (map (trans (trans_global_env Σ)) l') =
+      trans (trans_global_env Σ) (Ast.mkApps (Ast.tRel k) l') by now rewrite trans_mkApps.
+    rewrite e. apply IHpos; [exact wfΓ|].
+    apply WfAst.wf_mkApps; [constructor|exact wfl'].
+  - intros NI0 Γ0 _ _. constructor.
+  - intros NI0 Γ0 t0 l pos IHpos poss IHposs wfΓ wfl.
     depelim wfl. constructor; auto.
-  - intros NI0 Γ0 ps nskip _ _. constructor.
-  - intros NI0 Γ0 ps nskip t0 l pos IHpos poss IHposs wfps wfcs.
+  - intros NI0 Γ0 ps nskip _ _ _. constructor.
+  - intros NI0 Γ0 ps nskip t0 l pos IHpos poss IHposs wfΓ wfps wfcs.
     depelim wfcs. constructor; eauto.
-  - intros NI0 Γ0 p0 ps nskip na ty t0 pos IHpos wfps wfty.
+  - intros NI0 Γ0 p0 ps nskip na ty t0 pos IHpos wfΓ wfps wfty.
     move/WfAst.wf_inv: wfty => /= [wfty wft].
     depelim wfps. constructor 1. rewrite trans_subst in IHpos.
     apply IHpos; auto. eapply WfAst.wf_subst; auto.
-  - intros NI0 Γ0 ps nskip na b ty t0 pos IHpos wfps wfty.
+  - intros NI0 Γ0 ps nskip na b ty t0 pos IHpos wfΓ wfps wfty.
     move/WfAst.wf_inv: wfty => /= [[wfb wfty] wft].
     constructor 2. rewrite trans_subst in IHpos.
     apply IHpos; auto. eapply WfAst.wf_subst; auto.
-  - intros NI0 Γ0 nskip na ty t0 pos IHpos _ wfty.
+  - intros NI0 Γ0 nskip na ty t0 pos IHpos wfΓ _ wfty.
     move/WfAst.wf_inv: wfty => /= [wfty wft].
-    constructor 3. now apply IHpos.
-  - intros NI0 Γ0 na ty t0 pos IHarg ncstr IHcstr _ wfty.
+    constructor 3. apply IHpos; [constructor; [exact (tt, wfty)|exact wfΓ]|constructor|exact wft].
+  - intros NI0 Γ0 na ty t0 pos IHarg ncstr IHcstr wfΓ _ wfty.
     move/WfAst.wf_inv: wfty => /= [wfty wft].
     constructor 4.
     + now apply IHarg.
-    + now apply IHcstr.
-  - intros NI0 Γ0 x l inst _ wfty.
+    + apply IHcstr; [constructor; [exact (tt, wfty)|exact wfΓ]|constructor|exact wft].
+  - intros NI0 Γ0 x l inst _ _ wfty.
     rewrite trans_mkApps.
     move/WfAst.wf_mkApps_inv: wfty => wfl.
     constructor 5. now eapply trans_nested_inst_ok.
@@ -3458,19 +3536,6 @@ Proof.
   eapply wf_subst_context => //.
   eapply wf_lift_context => //.
   eapply wf_extended_subst => //.
-Qed.
-
-Lemma wf_ind_arities Σ mdecl :
-  All (wf_inductive_body Σ) (Ast.Env.ind_bodies mdecl) ->
-  All (WfAst.wf_decl Σ) (Typing.ind_arities mdecl).
-Proof.
-  rewrite /Typing.ind_arities.
-  rewrite /Ast.Env.arities_context.
-  intros.
-  rewrite rev_map_spec. eapply All_rev. eapply All_map.
-  induction X; constructor; auto.
-  unfold WfAst.wf_decl; cbn. split => //.
-  eapply p.
 Qed.
 
 Lemma All2_refl_inv {A} {P : A -> A -> Type} l :
@@ -3922,27 +3987,27 @@ Proof.
               clear -onI wfΣg wfctype X0 onu IHond on_ctype_positive.
               set (Σ' := trans_global_env Σg) in *.
               change [] with (map (trans_decl Σ') []).
-              revert on_ctype_positive wfctype.
+              have wfnil : All (WfAst.wf_decl Σg) (@nil Ast.Env.context_decl) := All_nil.
+              revert on_ctype_positive wfctype wfnil.
               generalize (@nil Ast.Env.context_decl). induction 1; simpl.
               rewrite trans_mkApps. simpl.
               subst headrel.
               assert (#|PCUICEnvironment.ind_bodies (trans_minductive_body Σ' m)| = #|Ast.Env.ind_bodies m|) as <-.
               now rewrite /trans_minductive_body /= length_map.
               assert (#|Γ| = #|map (trans_decl Σ') Γ|) as ->. now rewrite length_map.
-              move/WfAst.wf_mkApps_inv => wfindices.
+              move/WfAst.wf_mkApps_inv => wfindices _.
               eapply pos_concl.
               rewrite length_map.
               eapply All_map. solve_all. now eapply trans_closedn.
-              move/WfAst.wf_inv => /= [[wfb wfty] wft].
-              simpl; intros.
+              move/WfAst.wf_inv => /= [[wfb wfty] wft] wfΓ.
               constructor. rewrite -(trans_subst _ [b]).
-              apply IHon_ctype_positive. eapply WfAst.wf_subst; auto.
-              move/WfAst.wf_inv => /= [wfty wft].
+              apply IHon_ctype_positive; [eapply WfAst.wf_subst; auto|exact wfΓ].
+              move/WfAst.wf_inv => /= [wfty wft] wfΓ.
               constructor.
               have wfbodies : All (wf_inductive_body Σg) (Ast.Env.ind_bodies m).
               { eapply Alli_All; [exact onI|]. intros n0 idecl0 [_ w]. exact w. }
-              exact (trans_positive_cstr_arg X0 wfΣg wfbodies p wfty).
-              cbn. now apply IHon_ctype_positive.
+              exact (trans_positive_cstr_arg X0 wfΣg wfbodies p wfΓ wfty).
+              cbn. apply IHon_ctype_positive; [exact wft|constructor; [exact (tt, wfty)|exact wfΓ]].
             + intros v indv.
               specialize (on_ctype_variance _ indv).
               cbn -[Σg].

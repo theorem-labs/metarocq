@@ -15,7 +15,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp
      PCUICConversion PCUICInversion PCUICContexts PCUICArities
      PCUICSpine PCUICInductives PCUICFixWitness
-     PCUICWellScopedCumulativity PCUICValidity.
+     PCUICWellScopedCumulativity PCUICValidity PCUICArityRed.
 
 From Equations.Type Require Import Relation_Properties.
 From Equations.Prop Require Import DepElim.
@@ -1359,6 +1359,61 @@ Proof.
     intros t _ h. now rewrite closedn_subst_instance.
 Qed.
 
+Lemma assumption_context_map f Γ :
+  assumption_context Γ -> assumption_context (map_context f Γ).
+Proof.
+  induction 1; constructor; auto.
+Qed.
+
+Lemma assumption_context_subst_instance u Γ :
+  assumption_context Γ -> assumption_context (subst_instance u Γ).
+Proof. apply assumption_context_map. Qed.
+
+Lemma assumption_context_arities_context l :
+  assumption_context (arities_context l).
+Proof.
+  rewrite /arities_context rev_map_spec -map_rev.
+  induction (List.rev l); cbn; constructor; auto.
+Qed.
+
+(** The arities have no bodies, so universe instantiation changes the bodies of
+    [arities_context _ ,,, Γ] only in [Γ]. *)
+Lemma whd_rel_subst_instance_arities {Σ : global_env} {mdecl Γ t h l} u :
+  whd_rel true Σ (arities_context (ind_bodies mdecl) ,,, Γ) t [] h l ->
+  whd_rel true Σ (arities_context (ind_bodies mdecl) ,,, subst_instance u Γ)
+    (subst_instance u t) [] (subst_instance u h) (map (subst_instance u) l).
+Proof.
+  intros w. eapply whd_rel_ctx_bodies; [|exact (whd_rel_subst_instance u w)].
+  rewrite subst_instance_app_ctx /app_context.
+  apply All2_app; [apply All2_refl; intros; reflexivity|].
+  move: (assumption_context_arities_context (ind_bodies mdecl)).
+  generalize (arities_context (ind_bodies mdecl)) as c.
+  induction c as [|d c IH]; cbn; intros ass; constructor.
+  - destruct d as [na [b|] ty]; [inversion ass|reflexivity].
+  - apply IH. now inversion ass.
+Qed.
+
+Lemma arg_whd_subst_instance {Σ : global_env} {mdecl Γ a a'} u :
+  arg_whd Σ (arities_context (ind_bodies mdecl) ,,, Γ) a a' ->
+  arg_whd Σ (arities_context (ind_bodies mdecl) ,,, subst_instance u Γ)
+    (subst_instance u a) (subst_instance u a').
+Proof.
+  intros [->|[h [l [w ->]]]]; [now left|right].
+  exists (subst_instance u h), (map (subst_instance u) l). split.
+  - now apply whd_rel_subst_instance_arities.
+  - apply subst_instance_mkApps.
+Qed.
+
+Lemma positive_rel_red_subst_instance {Σ : global_env} {mdecl NI Γ k l l'} u :
+  All2 (arg_whd Σ (arities_context (ind_bodies mdecl) ,,, Γ)) l l' ->
+  positive_cstr_arg Σ mdecl NI (subst_instance u Γ) (subst_instance u (mkApps (tRel k) l')) ->
+  positive_cstr_arg Σ mdecl NI (subst_instance u Γ) (subst_instance u (mkApps (tRel k) l)).
+Proof.
+  intros a p. rewrite !subst_instance_mkApps /= in p |- *.
+  eapply pos_arg_rel_red; [|exact p].
+  eapply All2_map, All2_impl; [exact a|]. intros x y. apply arg_whd_subst_instance.
+Qed.
+
 Lemma positive_cstr_arg_subst_instance {Σ mdecl NI Γ t} u :
   positive_cstr_arg Σ mdecl NI Γ t ->
   positive_cstr_arg Σ mdecl (subst_instance_nested_insts u NI)
@@ -1417,6 +1472,13 @@ Proof.
       exact X0.
   - cbn. constructor 5. now rewrite subst_instance_subst in X.
   - cbn. constructor 6; len => //. now rewrite closedn_subst_instance.
+  - econstructor 7; [eapply whd_rel_subst_instance_arities; eassumption|].
+    rewrite -subst_instance_mkApps. eassumption.
+  - cbn. econstructor 8.
+    + eapply whd_rel_subst_instance_arities; eassumption.
+    + rewrite -subst_instance_mkApps closedn_subst_instance; len; eassumption.
+    + eassumption.
+  - eapply positive_rel_red_subst_instance; eassumption.
   - constructor.
   - constructor; auto.
   - constructor.
@@ -1601,6 +1663,163 @@ Proof.
   eapply closed_inds.
 Qed.
 
+Lemma whd_rel_red_inst {Σ : global_env} {mdecl Γ t h l} w Ξ :
+  assumption_context Γ ->
+  whd_rel true Σ (arities_context (ind_bodies mdecl) ,,, Γ) t [] h l ->
+  red Σ Ξ t@[w] (mkApps h l)@[w].
+Proof.
+  intros ass wh.
+  have ass' : assumption_context (subst_instance w (arities_context (ind_bodies mdecl) ,,, Γ)).
+  { apply assumption_context_subst_instance, assumption_context_app_inv;
+      [exact ass|apply assumption_context_arities_context]. }
+  rewrite subst_instance_mkApps.
+  exact (whd_rel_red_nobody ass' (whd_rel_subst_instance w wh) Ξ).
+Qed.
+
+Lemma arg_whd_red_inst {Σ : global_env} {mdecl Γ l l'} w Ξ :
+  assumption_context Γ ->
+  All2 (arg_whd Σ (arities_context (ind_bodies mdecl) ,,, Γ)) l l' ->
+  All2 (red Σ Ξ) (map (subst_instance w) l) (map (subst_instance w) l').
+Proof.
+  intros ass a. eapply All2_map, All2_impl; [exact a|]. cbn.
+  intros x y [->|[h [l0 [wh ->]]]]; [reflexivity|].
+  exact (whd_rel_red_inst w Ξ ass wh).
+Qed.
+
+Lemma untyped_subslet_assumption_context Γ s Δ :
+  assumption_context Δ -> #|s| = #|Δ| -> untyped_subslet Γ s Δ.
+Proof.
+  induction Δ as [|[na [b|] ty] Δ IH] in s |- *; destruct s as [|t s]; cbn;
+    intros ass e; try discriminate.
+  - constructor.
+  - exfalso. inversion ass.
+  - apply (untyped_cons_let_ass Γ Δ s na t ty). apply IH; [now inversion ass|lia].
+Qed.
+
+Lemma assumption_context_pres_let_bodies Γ Δ :
+  assumption_context Γ -> #|Γ| = #|Δ| ->
+  All2_fold (fun _ _ => PCUICRedTypeIrrelevance.pres_let_bodies) Γ Δ.
+Proof.
+  induction Γ as [|[na [b|] ty] Γ IH] in Δ |- *; destruct Δ as [|d Δ]; cbn;
+    intros ass e; try discriminate.
+  - constructor.
+  - exfalso. inversion ass.
+  - constructor; [apply IH; [now inversion ass|lia]|]. exact tt.
+Qed.
+
+(** A reduction that holds in every context survives the substitution of the
+    inductives for the arities, in any context of the right length: the arities and
+    [Γ] have no bodies. *)
+Lemma red_subst_inds {cf} {Σ} {wfΣ : wf Σ} {ind mdecl Γ Δ a b u v} :
+  assumption_context Γ ->
+  closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+  #|Δ| = #|Γ| ->
+  is_open_term Δ (subst (ind_subst mdecl ind v) #|Γ| a) ->
+  (forall Ξ, red Σ Ξ a b) ->
+  red Σ Δ (subst (ind_subst mdecl ind v) #|Γ| a) (subst (ind_subst mdecl ind v) #|Γ| b).
+Proof.
+  intros ass cl lenΔ op R.
+  move: cl; rewrite closedn_subst_instance_context => cl.
+  have r := R ([] ,,, ind_arities mdecl ,,, Γ).
+  eapply (substitution_untyped_red (s := ind_subst mdecl ind v)) in r.
+  - rewrite app_context_nil_l in r.
+    eapply PCUICRedTypeIrrelevance.context_pres_let_bodies_red; [|exact r].
+    apply assumption_context_pres_let_bodies; [|len; lia].
+    apply assumption_context_fold, ass.
+  - apply untyped_subslet_assumption_context; [apply assumption_context_arities_context|].
+    rewrite /ind_subst inds_length /ind_arities. len.
+  - move: op. rewrite -!is_open_term_closed lenΔ => op.
+    eapply closed_upwards; [exact (closedn_subst_eq' _ 0 #|Γ| _ op)|].
+    rewrite /ind_subst inds_length. len; lia.
+  - rewrite on_free_vars_ctx_on_ctx_free_vars -is_closed_ctx_closed app_context_nil_l.
+    exact cl.
+Qed.
+
+Lemma ws_cumul_pb_red_step {cf} {Σ} {wfΣ : wf Σ} {pb Δ a a' b b'} :
+  is_closed_context Δ -> is_open_term Δ a -> is_open_term Δ b ->
+  red Σ Δ a a' -> red Σ Δ b b' ->
+  (is_open_term Δ a' -> is_open_term Δ b' -> Σ ;;; Δ ⊢ a' ≤[pb] b') ->
+  Σ ;;; Δ ⊢ a ≤[pb] b.
+Proof.
+  intros clΔ opa opb ra rb IH.
+  have ra' : Σ ;;; Δ ⊢ a ⇝ a' by eapply into_closed_red.
+  have rb' : Σ ;;; Δ ⊢ b ⇝ b' by eapply into_closed_red.
+  transitivity a'; [now eapply red_ws_cumul_pb|].
+  transitivity b'; [|now eapply red_ws_cumul_pb_inv].
+  apply IH; eapply closed_red_open_right; eassumption.
+Qed.
+
+(** A step of [positive_inds_conv] through a reduction [t ⇝ t'] that holds in every
+    context. *)
+Lemma positive_inds_conv_red_step {cf} {Σ} {wfΣ : wf Σ} {ind mdecl Γ Δ t t' u u'} :
+  assumption_context Γ ->
+  closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+  #|Δ| = #|Γ| -> closed_ctx Δ ->
+  (forall Ξ, red Σ Ξ t@[u'] t'@[u']) ->
+  is_open_term Δ (subst (ind_subst mdecl ind u) #|Γ| t@[u']) ->
+  is_open_term Δ (subst (ind_subst mdecl ind u') #|Γ| t@[u']) ->
+  (is_open_term Δ (subst (ind_subst mdecl ind u) #|Γ| t'@[u']) ->
+   is_open_term Δ (subst (ind_subst mdecl ind u') #|Γ| t'@[u']) ->
+   Σ ;;; Δ ⊢ subst (ind_subst mdecl ind u) #|Γ| t'@[u'] =
+     subst (ind_subst mdecl ind u') #|Γ| t'@[u']) ->
+  Σ ;;; Δ ⊢ subst (ind_subst mdecl ind u) #|Γ| t@[u'] =
+    subst (ind_subst mdecl ind u') #|Γ| t@[u'].
+Proof.
+  intros ass cl lenΔ clΔ R onl onr IH.
+  eapply ws_cumul_pb_red_step; [now rewrite -is_closed_ctx_closed|exact onl|exact onr| | |exact IH].
+  - exact (red_subst_inds ass cl lenΔ onl R).
+  - exact (red_subst_inds ass cl lenΔ onr R).
+Qed.
+
+(** The [pos_arg_ass_red] case of [positive_inds_conv]: both substituted domains
+    reduce to the same closed term. *)
+Lemma positive_inds_conv_ass_red {cf} {Σ} {wfΣ : wf Σ} {ind mdecl Γ Δ na ty ty' h l u u'} :
+  assumption_context Γ ->
+  closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+  #|Δ| = #|Γ| -> closed_ctx Δ ->
+  whd_rel true Σ.1 (arities_context (ind_bodies mdecl) ,,, Γ) ty [] h l ->
+  closedn #|Γ| (mkApps h l) ->
+  is_open_term Δ (subst (ind_subst mdecl ind u) #|Γ| (tProd na ty ty')@[u']) ->
+  is_open_term Δ (subst (ind_subst mdecl ind u') #|Γ| (tProd na ty ty')@[u']) ->
+  (closed_ctx (ind_arities mdecl ,,, (vass na ty :: Γ))@[u] ->
+   forall Δ', #|Δ'| = S #|Γ| -> closed_ctx Δ' ->
+   is_open_term Δ' (subst (ind_subst mdecl ind u) (S #|Γ|) ty'@[u']) ->
+   is_open_term Δ' (subst (ind_subst mdecl ind u') (S #|Γ|) ty'@[u']) ->
+   assumption_context (vass na ty :: Γ) ->
+   Σ ;;; Δ' ⊢ subst (ind_subst mdecl ind u) (S #|Γ|) ty'@[u'] =
+     subst (ind_subst mdecl ind u') (S #|Γ|) ty'@[u']) ->
+  Σ ;;; Δ ⊢ subst (ind_subst mdecl ind u) #|Γ| (tProd na ty ty')@[u'] =
+    subst (ind_subst mdecl ind u') #|Γ| (tProd na ty ty')@[u'].
+Proof.
+  intros ass cl lenΔ clΔ wh clhl onl onr IH.
+  have clΔ' : is_closed_context Δ by rewrite -is_closed_ctx_closed.
+  cbn in onl, onr |- *.
+  move/andP: onl => [onl onl']. move/andP: onr => [onr onr'].
+  have clty : closedn (#|Γ| + #|ind_bodies mdecl|) ty.
+  { move: onl. rewrite -is_open_term_closed lenΔ => onl0.
+    move: (closedn_subst_eq' _ 0 #|Γ| _ onl0).
+    rewrite closedn_subst_instance /ind_subst inds_length. intros h0; exact h0. }
+  have R : forall Ξ, red Σ Ξ ty@[u'] (mkApps h l)@[u'].
+  { intros Ξ. exact (whd_rel_red_inst u' Ξ ass wh). }
+  eapply ws_cumul_pb_Prod; [reflexivity| |].
+  - eapply ws_cumul_pb_red_step; [exact clΔ'|exact onl|exact onr| | |].
+    + exact (red_subst_inds ass cl lenΔ onl R).
+    + exact (red_subst_inds ass cl lenΔ onr R).
+    + intros _ _. rewrite !subst_closedn ?closedn_subst_instance //.
+      apply ws_cumul_pb_refl; [exact clΔ'|].
+      rewrite -is_open_term_closed lenΔ closedn_subst_instance //.
+  - apply IH.
+    + cbn. apply andb_and; split; [exact cl|].
+      rewrite closedn_subst_instance. eapply closed_upwards; [exact clty|]. len; lia.
+    + cbn. now rewrite lenΔ.
+    + rewrite /snoc closedn_ctx_cons clΔ /=.
+      move: onl. rewrite -is_open_term_closed => onl0.
+      try unfold closed_decl; cbn. by rewrite onl0.
+    + rewrite /= shiftnP_S. exact onl'.
+    + rewrite /= shiftnP_S. exact onr'.
+    + now constructor.
+Qed.
+
 Lemma positive_inds_conv {cf} {Σ} {wfΣ : wf Σ}
   {ind mdecl idecl NI Γ p u u' Δ} :
   declared_inductive Σ ind mdecl idecl ->
@@ -1617,12 +1836,13 @@ Lemma positive_inds_conv {cf} {Σ} {wfΣ : wf Σ}
     (subst (ind_subst mdecl ind u) #|Γ| p@[u']) ->
   is_open_term Δ
     (subst (ind_subst mdecl ind u') #|Γ| p@[u']) ->
+  assumption_context Γ ->
   Σ ;;; Δ ⊢
     subst (ind_subst mdecl ind u) #|Γ| p@[u'] =
     subst (ind_subst mdecl ind u') #|Γ| p@[u'].
 Proof.
-  intros decli cu ru nv cl pos eqNI lenΔ clΔ onl onr; pose proof (proj1 decli) as declm.
-  revert NI Γ p pos eqNI cl Δ lenΔ clΔ onl onr.
+  intros decli cu ru nv cl pos eqNI lenΔ clΔ onl onr ass; pose proof (proj1 decli) as declm.
+  revert NI Γ p pos eqNI cl Δ lenΔ clΔ onl onr ass.
   apply (positive_cstr_arg_mrect Σ.1 mdecl
     (fun NI Γ t _ => NI = [] ->
       closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
@@ -1631,6 +1851,7 @@ Proof.
         (subst (ind_subst mdecl ind u) #|Γ| t@[u']) ->
       is_open_term Δ
         (subst (ind_subst mdecl ind u') #|Γ| t@[u']) ->
+      assumption_context Γ ->
       Σ ;;; Δ ⊢
         subst (ind_subst mdecl ind u) #|Γ| t@[u'] =
         subst (ind_subst mdecl ind u') #|Γ| t@[u'])
@@ -1641,6 +1862,7 @@ Proof.
         (map (fun p => subst (ind_subst mdecl ind u) #|Γ| p@[u']) l) ->
       forallb (is_open_term Δ)
         (map (fun p => subst (ind_subst mdecl ind u') #|Γ| p@[u']) l) ->
+      assumption_context Γ ->
       ws_cumul_pb_terms Σ Δ
         (map (fun p => subst (ind_subst mdecl ind u) #|Γ| p@[u']) l)
         (map (fun p => subst (ind_subst mdecl ind u') #|Γ| p@[u']) l))
@@ -1724,6 +1946,7 @@ Proof.
       now rewrite closedn_subst_instance.
     + cbn -[closedn_ctx] in X.
       eapply X; eauto.
+      all: try (apply assumption_context_vass; assumption).
       * cbn. apply andb_and; split.
         { exact H0. }
         { rewrite closedn_subst_instance. eapply closed_upwards; eauto. len; lia. }
@@ -1733,6 +1956,15 @@ Proof.
         move: h. rewrite -is_open_term_closed. len.
       * move: H3. cbn. move/andP=> [_ h]. by rewrite /= shiftnP_S.
       * move: H4. cbn. move/andP=> [_ h]. by rewrite /= shiftnP_S.
+  - eapply positive_inds_conv_red_step; try eassumption.
+    + intros Ξ. eapply whd_rel_red_inst; eassumption.
+    + intros. eapply X; eassumption.
+  - eapply positive_inds_conv_ass_red; try eassumption.
+    intros. eapply X; eassumption.
+  - eapply (positive_inds_conv_red_step (t' := mkApps (tRel k) l')); try eassumption.
+    + intros Ξ. rewrite !subst_instance_mkApps. apply red_mkApps; [reflexivity|].
+      eapply arg_whd_red_inst; eassumption.
+    + intros. eapply X; eassumption.
   - constructor.
   - cbn in H3, H4 |- *.
     move/andP: H3 => [h3 h3']. move/andP: H4 => [h4 h4'].
@@ -1761,6 +1993,57 @@ Proof.
   rewrite /ind_subst inds_length. move: op. rewrite /ind_arities. len.
 Qed.
 
+Lemma positive_cstr_arg_subst_closed {cf} {Σ} {wfΣ : wf Σ} {ind mdecl idecl Γ t pb u u'} :
+  declared_inductive Σ ind mdecl idecl ->
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  closedn #|Γ| t ->
+  Σ ;;; (ind_arities mdecl)@[u] ,,, Γ@[u] ⊢ t@[u] ≤[pb] t@[u'] ->
+  Σ ;;; subst_context (ind_subst mdecl ind u) 0 Γ@[u] ⊢
+    subst (ind_subst mdecl ind u) #|Γ| t@[u] ≤[pb] subst (ind_subst mdecl ind u') #|Γ| t@[u'].
+Proof.
+  intros decli cu clt cum.
+  pose proof (proj1 decli) as declm.
+  rewrite -(app_context_nil_l (_ ,,, _)) app_context_assoc in cum.
+  eapply substitution_ws_cumul_pb in cum; eauto.
+  2:{ eapply subslet_inds; eauto. }
+  rewrite !subst_closedn ?closedn_subst_instance //.
+  rewrite !subst_closedn ?closedn_subst_instance // in cum; len; auto.
+  now rewrite app_context_nil_l in cum.
+Qed.
+
+(** A step of [positive_cstr_arg_subst] through a reduction [t ⇝ t'] that holds in
+    every context and under every universe instance. *)
+Lemma positive_cstr_arg_subst_red_step {cf} {Σ} {wfΣ : wf Σ} {ind mdecl Γ t t' pb u u'} :
+  assumption_context Γ ->
+  closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
+  (forall w Ξ, red Σ Ξ t@[w] t'@[w]) ->
+  Σ ;;; (ind_arities mdecl)@[u] ,,, Γ@[u] ⊢ t@[u] ≤[pb] t@[u'] ->
+  (Σ ;;; (ind_arities mdecl)@[u] ,,, Γ@[u] ⊢ t'@[u] ≤[pb] t'@[u'] ->
+   Σ ;;; subst_context (ind_subst mdecl ind u) 0 Γ@[u] ⊢
+     subst (ind_subst mdecl ind u) #|Γ| t'@[u] ≤[pb] subst (ind_subst mdecl ind u') #|Γ| t'@[u']) ->
+  Σ ;;; subst_context (ind_subst mdecl ind u) 0 Γ@[u] ⊢
+    subst (ind_subst mdecl ind u) #|Γ| t@[u] ≤[pb] subst (ind_subst mdecl ind u') #|Γ| t@[u'].
+Proof.
+  intros ass cl R cum IH.
+  have clΓ := ws_cumul_pb_is_closed_context (wfΣ := wfΣ) cum.
+  have opl := ws_cumul_pb_is_open_term_left (wfΣ := wfΣ) cum.
+  have opr := ws_cumul_pb_is_open_term_right (wfΣ := wfΣ) cum.
+  have lenΔ : #|subst_context (ind_subst mdecl ind u) 0 Γ@[u]| = #|Γ| by len.
+  have opl' := is_open_term_subst_inds (ind := ind) (w := u) lenΔ opl.
+  have opr' := is_open_term_subst_inds (ind := ind) (w := u') lenΔ opr.
+  eapply ws_cumul_pb_red_step.
+  - rewrite -is_closed_ctx_closed. now apply closed_ctx_subst_ind_arities.
+  - exact opl'.
+  - exact opr'.
+  - exact (red_subst_inds ass cl lenΔ opl' (R u)).
+  - exact (red_subst_inds ass cl lenΔ opr' (R u')).
+  - intros _ _. apply IH.
+    transitivity t@[u].
+    { eapply red_ws_cumul_pb_inv, into_closed_red; [apply R|exact clΓ|exact opl]. }
+    transitivity t@[u']; [exact cum|].
+    eapply red_ws_cumul_pb, into_closed_red; [apply R|exact clΓ|exact opr].
+Qed.
+
 (** The nested case of [positive_cstr_arg_subst]: the arguments of the nested inductive
     are related by conversion, the block-free tail is untouched by both substitutions,
     and the positive prefix is moved from [inds u] to [inds u'] by [positive_inds_conv]. *)
@@ -1776,11 +2059,12 @@ Lemma positive_cstr_arg_subst_nested {cf} {Σ} {wfΣ : wf Σ}
   positive_args Σ.1 mdecl NI Γ (firstn k args) ->
   Σ ;;; subst_instance u (ind_arities mdecl) ,,, subst_instance u Γ ⊢
     subst_instance u (mkApps (tInd ind' ui) args) ≤ subst_instance u' (mkApps (tInd ind' ui) args) ->
+  assumption_context Γ ->
   Σ ;;; subst_context (ind_subst mdecl ind u) 0 (subst_instance u Γ) ⊢
     subst (ind_subst mdecl ind u) #|Γ| (subst_instance u (mkApps (tInd ind' ui) args)) ≤
     subst (ind_subst mdecl ind u') #|Γ| (subst_instance u' (mkApps (tInd ind' ui) args)).
 Proof.
-  intros decli cu ru nv cl eqNI hcl hpa cum.
+  intros decli cu ru nv cl eqNI hcl hpa cum ass.
   pose proof (proj1 decli) as declm.
   subst NI. eapply positive_args_All in hpa.
   have clΔ : closed_ctx (subst_context (ind_subst mdecl ind u) 0 (subst_instance u Γ)).
@@ -1831,20 +2115,16 @@ Lemma positive_cstr_arg_subst {cf} {Σ} {wfΣ : wf Σ} {ind mdecl idecl Γ t u u
   closed_ctx (ind_arities mdecl ,,, Γ)@[u] ->
   Σ ;;; subst_instance u (ind_arities mdecl) ,,, subst_instance u Γ ⊢ (subst_instance u t) ≤ (subst_instance u' t) ->
   positive_cstr_arg Σ.1 mdecl [] Γ t ->
+  assumption_context Γ ->
   (Σ ;;; subst_context (ind_subst mdecl ind u) 0 (subst_instance u Γ) ⊢
     (subst (ind_subst mdecl ind u) #|Γ| (subst_instance u t)) ≤
      subst (ind_subst mdecl ind u') #|Γ| (subst_instance u' t)).
 Proof.
-  intros decli cu ru cl cum pos.
+  intros decli cu ru cl cum pos ass.
   pose proof (proj1 decli) as declm.
   remember ([] : nested_insts) as NI eqn:eqNI in pos.
   induction pos.
-  - rewrite -(app_context_nil_l (_ ,,, _)) app_context_assoc in cum.
-    eapply substitution_ws_cumul_pb in cum; eauto.
-    2:{ eapply subslet_inds; eauto. }
-    rewrite !subst_closedn ?closedn_subst_instance //.
-    rewrite !subst_closedn ?closedn_subst_instance // in cum; len; auto.
-    now rewrite app_context_nil_l in cum.
+  - eapply positive_cstr_arg_subst_closed; tea.
 
   - epose proof (ws_cumul_pb_is_closed_context cum).
     rewrite !subst_instance_mkApps !subst_mkApps in cum |- *.
@@ -1943,9 +2223,34 @@ Proof.
       now rewrite !subst_closedn ?closedn_subst_instance.
     * cbn -[closedn_ctx] in IHpos. rewrite subst_context_snoc in IHpos.
       rewrite length_map Nat.add_0_r in IHpos. eapply IHpos; eauto.
+      all: try (apply assumption_context_vass; assumption).
       cbn. rewrite cl /=. len.
       rewrite closedn_subst_instance.
       eapply closed_upwards; eauto; lia.
+
+  - eapply (positive_cstr_arg_subst_red_step (t' := mkApps h l)); tea.
+    + intros w0 Ξ. eapply whd_rel_red_inst; tea.
+    + intros cum'. eapply IHpos; eauto.
+
+  - simpl in cum |- *.
+    eapply ws_cumul_pb_Prod_Prod_inv_l in cum as [eqna dom codom]; eauto.
+    eapply ws_cumul_pb_Prod; eauto.
+    * eapply (positive_cstr_arg_subst_red_step (t' := mkApps h l)); tea.
+      + intros w0 Ξ. eapply whd_rel_red_inst; tea.
+      + intros dom'. eapply positive_cstr_arg_subst_closed; tea.
+    * have clty := ws_cumul_pb_is_open_term_left (wfΣ := wfΣ) dom.
+      rewrite -is_open_term_closed closedn_subst_instance in clty. len in clty.
+      cbn -[closedn_ctx] in IHpos. rewrite subst_context_snoc in IHpos.
+      rewrite length_map Nat.add_0_r in IHpos. eapply IHpos; eauto.
+      all: try (apply assumption_context_vass; assumption).
+      cbn. rewrite cl /=. len.
+      rewrite closedn_subst_instance.
+      eapply closed_upwards; [exact clty|lia].
+
+  - eapply (positive_cstr_arg_subst_red_step (t' := mkApps (tRel k) l')); tea.
+    + intros w0 Ξ. rewrite !subst_instance_mkApps. apply red_mkApps; [reflexivity|].
+      eapply arg_whd_red_inst; tea.
+    + intros cum'. eapply IHpos; eauto.
 Qed.
 
 Lemma positive_cstr_closed_args_subst_arities {cf} {Σ} {wfΣ : wf Σ} {u u' Γ}
@@ -1995,6 +2300,8 @@ Proof.
     eapply ws_cumul_pb_is_closed_context in eqt.
     now rewrite is_closed_ctx_closed.
     rewrite app_context_nil_l !subst_instance_app_ctx // app_context_assoc //.
+    all: try (rewrite app_context_nil_l; apply assumption_context_app_inv;
+      [now depelim ass|apply smash_context_assumption_context; constructor]).
   - exfalso; now depelim ass.
   - exfalso; now depelim ass.
 Qed.
@@ -2052,16 +2359,6 @@ Proof.
   - eapply smash_context_assumption_context. constructor.
   - now rewrite !(subst_instance_smash _ (expand_lets_ctx _ _)).
 Qed.
-
-Lemma assumption_context_map f Γ :
-  assumption_context Γ -> assumption_context (map_context f Γ).
-Proof.
-  induction 1; constructor; auto.
-Qed.
-
-Lemma assumption_context_subst_instance u Γ :
-  assumption_context Γ -> assumption_context (subst_instance u Γ).
-Proof. apply assumption_context_map. Qed.
 
 Section Betweenu.
   Context (start : nat) (k : nat).

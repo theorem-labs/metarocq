@@ -82,19 +82,20 @@ Module Type QuoteConversionSig (Import T : Term) (Import E : EnvironmentSig T) (
     : ground_quotable (@cumul_ctx_rel cumul_gen Σ Γ Δ Δ').
 End QuoteConversionSig.
 
-Module Type QuotationOfArityRed (T : Term) (E : EnvironmentSig T) (AR : ArityRedSig T E).
+Module Type QuotationOfKernelRed (T : Term) (E : EnvironmentSig T) (AR : KernelRedSig T E).
   MetaRocq Run (tmDeclareQuotationOfModule everything (Some export) "AR").
-End QuotationOfArityRed.
+End QuotationOfKernelRed.
 
-Module Type QuoteArityRedSig (Import T : Term) (Import E : EnvironmentSig T) (Import AR : ArityRedSig T E).
+Module Type QuoteKernelRedSig (Import T : Term) (Import E : EnvironmentSig T) (Import AR : KernelRedSig T E).
   #[export] Declare Instance quote_arity_red {Σ Γ t Δ s} : ground_quotable (@arity_red Σ Γ t Δ s).
-End QuoteArityRedSig.
+  #[export] Declare Instance quote_whd_rel {zeta Σ Γ t args h l} : ground_quotable (@whd_rel zeta Σ Γ t args h l).
+End QuoteKernelRedSig.
 
-Module Type QuotationOfGlobalMaps (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E) (ET : EnvTypingSig T E TU) (C : ConversionSig T E TU ET) (L : LookupSig T E) (AR : ArityRedSig T E) (GM : GlobalMapsSig T E TU ET C L AR).
+Module Type QuotationOfGlobalMaps (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E) (ET : EnvTypingSig T E TU) (C : ConversionSig T E TU ET) (L : LookupSig T E) (AR : KernelRedSig T E) (GM : GlobalMapsSig T E TU ET C L AR).
   MetaRocq Run (tmDeclareQuotationOfModule everything (Some export) "GM").
 End QuotationOfGlobalMaps.
 
-Module Type QuoteGlobalMapsSig (Import T: Term) (Import E: EnvironmentSig T) (Import TU : TermUtils T E) (Import ET: EnvTypingSig T E TU) (Import C: ConversionSig T E TU ET) (Import L: LookupSig T E) (Import AR : ArityRedSig T E) (Import GM : GlobalMapsSig T E TU ET C L AR).
+Module Type QuoteGlobalMapsSig (Import T: Term) (Import E: EnvironmentSig T) (Import TU : TermUtils T E) (Import ET: EnvTypingSig T E TU) (Import C: ConversionSig T E TU ET) (Import L: LookupSig T E) (Import AR : KernelRedSig T E) (Import GM : GlobalMapsSig T E TU ET C L AR).
 
   #[export] Hint Unfold
     mdecl_at_i
@@ -130,6 +131,7 @@ Module Type QuoteGlobalMapsSig (Import T: Term) (Import E: EnvironmentSig T) (Im
   #[export] Declare Instance quote_nested_uniform_cstr {mdecl k cdecl} : ground_quotable (@nested_uniform_cstr mdecl k cdecl).
   #[export] Declare Instance quote_nested_uniform {mdecl idecl k} : ground_quotable (@nested_uniform mdecl idecl k).
   #[export] Declare Instance quote_nested_variance_ok {mdecl} : ground_quotable (@nested_variance_ok mdecl).
+  #[export] Declare Instance quote_arg_whd {Σ Γr a a'} : ground_quotable (@arg_whd Σ Γr a a').
 
   #[export] Declare Instance quote_positive_cstr_arg {Σ mdecl NI ctx t} : ground_quotable (@positive_cstr_arg Σ mdecl NI ctx t).
   #[export] Declare Instance quote_positive_args {Σ mdecl NI ctx l} : ground_quotable (@positive_args Σ mdecl NI ctx l).
@@ -178,14 +180,14 @@ End QuoteTyping.
 Module Type QuotationOfDeclarationTyping (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
   (ET : EnvTypingSig T E TU) (CT : ConversionSig T E TU ET)
   (CS : ConversionParSig T E TU ET) (Ty : Typing T E TU ET CT CS)
-  (L : LookupSig T E) (AR : ArityRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR) (DT : DeclarationTypingSig T E TU ET CT CS Ty L AR GM).
+  (L : LookupSig T E) (AR : KernelRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR) (DT : DeclarationTypingSig T E TU ET CT CS Ty L AR GM).
   MetaRocq Run (tmDeclareQuotationOfModule everything (Some export) "DT").
 End QuotationOfDeclarationTyping.
 
 Module Type QuoteDeclarationTypingSig (Import T : Term) (Import E : EnvironmentSig T) (Import TU : TermUtils T E)
        (Import ET : EnvTypingSig T E TU) (Import CT : ConversionSig T E TU ET)
        (Import CS : ConversionParSig T E TU ET) (Import Ty : Typing T E TU ET CT CS)
-       (Import L : LookupSig T E) (Import AR : ArityRedSig T E) (Import GM : GlobalMapsSig T E TU ET CT L AR)
+       (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import GM : GlobalMapsSig T E TU ET CT L AR)
        (Import DT : DeclarationTypingSig T E TU ET CT CS Ty L AR GM).
   #[export] Declare Instance quote_type_local_decl {cf Σ Γ d} : ground_quotable (@type_local_decl cf Σ Γ d).
   #[export] Declare Instance quote_wf_local_rel {cf Σ Γ Γ'} : ground_quotable (@wf_local_rel cf Σ Γ Γ').

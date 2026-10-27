@@ -1236,18 +1236,24 @@ Module Type ConversionSig (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
   Include Conversion T E TU ET.
 End ConversionSig.
 
-(** The relation between the user arity of an inductive and the arity the
-    kernel computes from it ([Reduction.dest_arity], kernel/reduction.ml):
-    [arity_red Σ Γ U Δ s] holds when the kernel's head-reduction strategy turns
-    [U], in context [Γ] (the parameters), into [it_mkProd_or_LetIn Δ (tSort s)].
+(** The kernel's reductions that the typing of inductive declarations reads.
+    - [arity_red Σ Γ U Δ s] relates the user arity of an inductive to the arity the
+      kernel computes from it ([Reduction.dest_arity], kernel/reduction.ml): the
+      kernel's head-reduction strategy turns [U], in context [Γ] (the parameters),
+      into [it_mkProd_or_LetIn Δ (tSort s)].
+    - [whd_rel zeta Σ Γ t args h l] is the graph of the kernel's weak-head reduction
+      of [t] applied to [args], stopping at [h] applied to [l]; [whd_rel true] is
+      [whd_all], which strict positivity applies to constructor argument types
+      ([check_strict_positivity], kernel/indtypes.ml).
     Each language gives its own instance (PCUICArityRed, Template Typing). *)
-Module Type ArityRedSig (T : Term) (E : EnvironmentSig T).
+Module Type KernelRedSig (T : Term) (E : EnvironmentSig T).
   Import T E.
   Parameter Inline arity_red : global_env -> context -> term -> context -> sort -> Type.
-End ArityRedSig.
+  Parameter Inline whd_rel : bool -> global_env -> context -> term -> list term -> term -> list term -> Type.
+End KernelRedSig.
 
 
-Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : ArityRedSig T E).
+Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : KernelRedSig T E).
   (** *** Typing of inductive declarations *)
   Import T E TU ET C L AR.
 
@@ -1430,6 +1436,12 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       | Some v => Forall (fun x => x <> Variance.Covariant) v
       end.
 
+    (** An argument of a variable head, kept or replaced by its weak-head normal form in
+        [Γr], as [check_strict_positivity] replaces the arguments of a variable head
+        before it tests them (kernel/indtypes.ml). *)
+    Definition arg_whd Σ (Γr : context) (a a' : term) : Type :=
+      (a' = a) + ∑ h l, whd_rel true Σ Γr a [] h l × (a' = mkApps h l).
+
     Reserved Notation " Σ ;;; mdecl ;;; NI ;;; Γ |arg+> t " (at level 50, mdecl, NI, Γ, t at next level).
     Reserved Notation " Σ ;;; mdecl ;;; NI ;;; Γ |args+> l " (at level 50, mdecl, NI, Γ, l at next level).
     Notation subst0 t := (subst t 0).
@@ -1476,6 +1488,29 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       closedn #|Γ| ty ->
       Σ ;;; mdecl ;;; NI ;;; vass na ty :: Γ |arg+> ty' ->
       Σ ;;; mdecl ;;; NI ;;; Γ |arg+> tProd na ty ty'
+
+    (** The three rules below are the kernel's reductions in [check_strict_positivity]
+        (kernel/indtypes.ml), in the context of the block's arities and [Γ]. The first
+        puts the argument type in weak-head normal form before its head is read. *)
+    | pos_arg_red ty h l :
+      whd_rel true Σ (arities_context (ind_bodies mdecl) ,,, Γ) ty [] h l ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> mkApps h l ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> ty
+
+    (** A product domain that mentions the block may still be block-free once in
+        weak-head normal form ([weaker_noccur_between]). The context keeps the domain
+        as written: the rules read only its length and its bodies. *)
+    | pos_arg_ass_red na ty ty' h l :
+      whd_rel true Σ (arities_context (ind_bodies mdecl) ,,, Γ) ty [] h l ->
+      closedn #|Γ| (mkApps h l) ->
+      Σ ;;; mdecl ;;; NI ;;; vass na ty :: Γ |arg+> ty' ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> tProd na ty ty'
+
+    (** The arguments of a variable head are tested in weak-head normal form. *)
+    | pos_arg_rel_red k l l' :
+      All2 (arg_whd Σ (arities_context (ind_bodies mdecl) ,,, Γ)) l l' ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> mkApps (tRel k) l' ->
+      Σ ;;; mdecl ;;; NI ;;; Γ |arg+> mkApps (tRel k) l
 
     (** Every member of a list of terms is a positive constructor argument. A relation of
         the block rather than an [All] premise, so that its induction principles give an
@@ -1679,7 +1714,8 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
 
       on_ctype_positive : (* The constructor type is positive.  [Σ.1] is the environment
         the block is declared in: a nested occurrence looks up its nesting inductive
-        there, as the kernel does. *)
+        there, and the reductions of the positivity rules unfold its constants, as the
+        kernel does. *)
         positive_cstr Σ.1 mdecl i [] (cstr_type cdecl);
 
       on_ctype_variance : (* The constructor type respect the variance annotation
@@ -2398,7 +2434,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
 
 End GlobalMaps.
 
-Module Type GlobalMapsSig (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : ArityRedSig T E).
+Module Type GlobalMapsSig (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : KernelRedSig T E).
   Include GlobalMaps T E TU ET C L AR.
 End GlobalMapsSig.
 
@@ -2427,7 +2463,7 @@ End Typing.
 Module DeclarationTyping (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
   (ET : EnvTypingSig T E TU) (CT : ConversionSig T E TU ET)
   (CS : ConversionParSig T E TU ET) (Ty : Typing T E TU ET CT CS)
-  (L : LookupSig T E) (AR : ArityRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR).
+  (L : LookupSig T E) (AR : KernelRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR).
 
   Import T E L TU ET CT GM CS Ty.
 
@@ -2608,6 +2644,6 @@ End DeclarationTyping.
 Module Type DeclarationTypingSig (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
        (ET : EnvTypingSig T E TU) (CT : ConversionSig T E TU ET)
        (CS : ConversionParSig T E TU ET) (Ty : Typing T E TU ET CT CS)
-       (L : LookupSig T E) (AR : ArityRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR).
+       (L : LookupSig T E) (AR : KernelRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR).
   Include DeclarationTyping T E TU ET CT CS Ty L AR GM.
 End DeclarationTypingSig.

@@ -28,8 +28,10 @@ Proof.
   all: [ > replace_quotation_of_goal () .. ].
 Defined.
 
-Module QuotePCUICArityRelation <: QuoteArityRedSig PCUICTerm PCUICEnvironment PCUICArityRelation.
+Module QuotePCUICArityRelation <: QuoteKernelRedSig PCUICTerm PCUICEnvironment PCUICArityRelation.
   #[export] Instance quote_arity_red {Σ Γ t Δ s} : ground_quotable (@PCUICArityRelation.arity_red Σ Γ t Δ s)
     := ltac:(cbv [PCUICArityRelation.arity_red]; exact _).
+  #[export] Instance quote_whd_rel {zeta Σ Γ t args h l} : ground_quotable (@PCUICArityRelation.whd_rel zeta Σ Γ t args h l)
+    := ltac:(cbv [PCUICArityRelation.whd_rel]; exact _).
 End QuotePCUICArityRelation.
 Export (hints) QuotePCUICArityRelation.

@@ -1203,40 +1203,25 @@ Section CheckEnv.
     Context {X_ext : X_env_ext_type}.
 
     (** The positivity check itself and its soundness are in [PCUICPositivityCheck]; it
-        needs only the declaration of a nesting inductive, read here from the abstract
-        environment. *)
-    Definition lookup_nested (ind : inductive) :
-      typing_result (mutual_inductive_body × one_inductive_body) :=
-      match abstract_env_lookup X_ext ind.(inductive_mind) with
-      | Some (InductiveDecl mdecl') =>
-        match nth_error (ind_bodies mdecl') ind.(inductive_ind) with
-        | Some idecl' => ret (mdecl', idecl')
-        | None => raise (UndeclaredInductive ind)
-        end
-      | _ => raise (UndeclaredInductive ind)
-      end.
-
-    Lemma lookup_nested_spec {Σ} (wfΣ : abstract_env_ext_rel X_ext Σ) ind mi :
-      lookup_nested ind = Checked mi ->
-      declared_inductive Σ.1 ind (fst mi) (snd mi).
+        reads the global environment through a lookup function, here the abstract
+        environment's. *)
+    Lemma abstract_env_lookup_spec {Σ} (wfΣ : abstract_env_ext_rel X_ext Σ) kn :
+      abstract_env_lookup X_ext kn = lookup_env Σ.1 kn.
     Proof using Type.
-      rewrite /lookup_nested.
-      destruct abstract_env_lookup as [[|decl]|] eqn:look => //.
-      destruct nth_error eqn:hnth => //.
-      intros [= <-]. split => //.
-      eapply declared_minductive_from_gen. red.
-      erewrite (abstract_env_lookup_correct' X_ext); eauto.
+      symmetry. exact (abstract_env_lookup_correct' X_ext kn wfΣ).
     Qed.
 
     Definition check_positive_cstr mdecl n Γ (t : term)
       : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ positive_cstr Σ.1 mdecl n Γ t ∥) :=
-      match PCUICPositivityCheck.check_positive_cstr lookup_nested positivity_fuel mdecl n Γ t
-        as r return PCUICPositivityCheck.check_positive_cstr lookup_nested positivity_fuel mdecl n Γ t = r ->
+      match PCUICPositivityCheck.check_positive_cstr (abstract_env_lookup X_ext)
+              positivity_fuel mdecl n Γ t
+        as r return PCUICPositivityCheck.check_positive_cstr (abstract_env_lookup X_ext)
+                      positivity_fuel mdecl n Γ t = r ->
           typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ positive_cstr Σ.1 mdecl n Γ t ∥)
       with
       | Checked tt => fun eq => ret (fun Σ wfΣ =>
-          sq (check_positive_cstr_sound lookup_nested Σ.1 (lookup_nested_spec wfΣ)
-                positivity_fuel mdecl n Γ t eq))
+          sq (check_positive_cstr_sound (abstract_env_lookup X_ext) Σ.1
+                (abstract_env_lookup_spec wfΣ) positivity_fuel mdecl n Γ t eq))
       | TypeError e => fun _ => raise e
       end eq_refl.
 

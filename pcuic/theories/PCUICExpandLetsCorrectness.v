@@ -2462,6 +2462,297 @@ Proof.
       [exact wT|exact haT|exact wT'|exact (arity_red_fallback_progress wT haT wT' IH)|exact IH].
 Qed.
 
+(** ** The untyped simulation of [whd_rel] in a context without bodies
+
+  In a context without let-bound variables, a [whd_rel] derivation never unfolds a
+  variable, and every other contraction keeps [on_free_vars P] for an arbitrary [P]
+  (constant bodies are closed in a well-formed environment). These scope facts are
+  enough to translate each contraction: [trans_subst], [trans_unfold_fix] and
+  [trans_unfold_cofix] need only [on_free_vars] for some predicate, and the iota
+  contraction needs the closedness of the branch context, which [on_free_vars] of a
+  [tCase] contains, and the argument count, which [whd_iota] carries. *)
+
+Lemma on_free_vars_replace_nth P args narg c c' :
+  forallb (on_free_vars P) args -> nth_error args narg = Some c -> on_free_vars P c' ->
+  forallb (on_free_vars P) (firstn narg args ++ c' :: skipn (S narg) args).
+Proof.
+  intros ha hn hc.
+  destruct (nth_error_split_firstn_skipn _ _ _ hn) as [e _].
+  rewrite {1}e forallb_app /= in ha. move/andP: ha => [h1 /andP [_ h2]].
+  now rewrite forallb_app /= h1 hc h2.
+Qed.
+
+(** A contraction keeps the scope of a term in every context: the empty context
+    has no variables to unfold. *)
+Lemma on_free_vars_red1_nil {cf} {Σ : global_env} {wfΣ : wf Σ} {P t u} :
+  red1 Σ [] t u -> on_free_vars P t -> on_free_vars P u.
+Proof.
+  intros r ht.
+  eapply (red1_on_free_vars (Σ := (Σ, Monomorphic_ctx))); [exact r|exact ht|reflexivity].
+Qed.
+
+Lemma whd_rel_on_free_vars_nobody {cf} {Σ : global_env} {wfΣ : wf Σ} {P zeta Γ t args h l} :
+  assumption_context Γ ->
+  whd_rel zeta Σ Γ t args h l ->
+  on_free_vars P (mkApps t args) ->
+  on_free_vars P (mkApps h l).
+Proof.
+  intros hΓ w.
+  induction w as [c args d b h l hn hb w IH|c args d hn hb
+      |na b B t args h l hz w IH|na b B t args hz
+      |c u decl body args h l hd hb w IH|c u decl args hd hb
+      |f a args h l w IH|na A t a args h l w IH
+      |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
+      |mfix idx narg fn args c t cargs hu hn w IH hc
+      |mfix idx narg fn args hu hn|mfix idx args hu
+      |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
+      |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |ci p c brs args t cargs w IH hc hcf
+      |p c args u cargs a h l w1 IH1 ha w2 IH2
+      |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |p c args t cargs w IH hc hcf
+      |t args hs]; intros hta; try exact hta.
+  - exfalso. rewrite (assumption_context_decl_body hΓ hn) in hb. congruence.
+  - (* zeta *)
+    apply IH. move: hta; rewrite !on_free_vars_mkApps /= => /andP [/and3P [onb _ ont] ->].
+    now rewrite (on_free_vars_subst1 _ _ _ onb ont).
+  - (* delta *)
+    apply IH. move: hta; rewrite !on_free_vars_mkApps => /andP [_ ->]. rewrite andb_true_r.
+    apply closed_on_free_vars. rewrite closedn_subst_instance.
+    eapply declared_constant_closed_body;
+      [exact wfΣ|exact (lookup_global_Some_if_In _ _ _ hd)|exact hb].
+  - exact (IH hta).
+  - (* beta *)
+    apply IH. move: hta; rewrite /= !on_free_vars_mkApps /= => /andP [/andP [/andP [_ ont] ona] ->].
+    now rewrite (on_free_vars_subst1 _ _ _ ona ont).
+  - (* fix, recursive argument a constructor *)
+    apply IH2. move: hta; rewrite !on_free_vars_mkApps => /andP [onfix onargs].
+    rewrite (on_free_vars_unfold_fix _ _ _ _ _ hu onfix) /=.
+    exact (on_free_vars_replace_nth _ _ _ _ _ onargs hn (IH1 (nth_error_forallb hn onargs))).
+  - (* fix, recursive argument stuck *)
+    move: hta; rewrite !on_free_vars_mkApps => /andP [-> onargs] /=.
+    exact (on_free_vars_replace_nth _ _ _ _ _ onargs hn (IH (nth_error_forallb hn onargs))).
+  - (* iota *)
+    apply IH2. move: hta; rewrite !on_free_vars_mkApps => /andP [hcase ->]. rewrite andb_true_r.
+    eapply on_free_vars_red1_nil; [eapply red_iota; [exact hbr|exact hlen]|].
+    move: hcase => /= /and5P [h1 h2 h3 h4 h5]. apply/and5P; split => //. exact (IH1 h4).
+  - (* case on a cofixpoint *)
+    apply IH2. move: hta; rewrite !on_free_vars_mkApps => /andP [hcase ->]. rewrite andb_true_r.
+    move: hcase => /= /and5P [h1 h2 h3 h4 h5]. apply/and5P; split => //.
+    move: (IH1 h4); rewrite !on_free_vars_mkApps => /andP [hcf ->].
+    now rewrite (on_free_vars_unfold_cofix _ _ _ _ _ hu hcf).
+  - (* stuck case *)
+    move: hta; rewrite !on_free_vars_mkApps => /andP [hcase ->]. rewrite andb_true_r.
+    move: hcase => /= /and5P [h1 h2 h3 h4 h5]. apply/and5P; split => //. exact (IH h4).
+  - (* projection *)
+    apply IH2. move: hta; rewrite !on_free_vars_mkApps => /andP [hc ->]. rewrite andb_true_r.
+    move: (IH1 hc); rewrite on_free_vars_mkApps => /andP [_ hcargs].
+    exact (nth_error_forallb ha hcargs).
+  - (* projection of a cofixpoint *)
+    apply IH2. move: hta; rewrite !on_free_vars_mkApps => /andP [hc ->]. rewrite andb_true_r.
+    move: (IH1 hc); rewrite on_free_vars_mkApps => /andP [hcf hcargs]. cbn.
+    now rewrite on_free_vars_mkApps (on_free_vars_unfold_cofix _ _ _ _ _ hu hcf) hcargs.
+  - (* stuck projection *)
+    move: hta; rewrite !on_free_vars_mkApps => /andP [onc ->]. rewrite andb_true_r.
+    exact (IH onc).
+Qed.
+
+(** The untyped counterpart of [trans_iota_red]: the scope facts that [on_free_vars]
+    of the [tCase] gives, with the argument count of the contraction. *)
+Lemma trans_iota_red_scoped P npar p args br :
+  forallb (on_free_vars P) args ->
+  forallb (on_free_vars P) (pparams p) ->
+  test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams p| (bcontext br) ->
+  on_free_vars (shiftnP #|bcontext br| P) (bbody br) ->
+  #|args| = npar + context_assumptions (bcontext br) ->
+  trans (iota_red npar p args br) =
+  iota_red npar (map_predicate id trans trans (map_context trans) p) (map trans args)
+    (trans_branch (map_predicate id trans trans (map_context trans) p)
+      (map_branch trans (map_context trans) br)).
+Proof.
+  intros onargs onpars onbctx onb hlen.
+  have oninst : on_free_vars_ctx P (inst_case_branch_context p br).
+  { exact (on_free_vars_ctx_inst_case_context P _ _ _ _ eq_refl onpars onbctx). }
+  have onb' : on_free_vars (shiftnP #|inst_case_branch_context p br| P) (bbody br).
+  { rewrite /inst_case_branch_context /inst_case_context. len. exact onb. }
+  have lenskip : #|skipn npar args| = context_assumptions (inst_case_branch_context p br).
+  { rewrite length_skipn /inst_case_branch_context /inst_case_context
+      context_assumptions_subst_context context_assumptions_subst_instance. lia. }
+  symmetry. rewrite /iota_red.
+  rewrite (trans_subst (shiftnP #|skipn npar args| P) P).
+  { rewrite lenskip. exact (on_free_vars_expand_lets_k _ _ _ _ eq_refl oninst onb'). }
+  { rewrite forallb_rev. now apply forallb_skipn. }
+  rewrite map_rev map_skipn. f_equal.
+  rewrite (trans_expand_lets P) //.
+  cbn -[expand_lets].
+  rewrite expand_lets_assumption_context.
+  { apply assumption_context_subst_context.
+    apply assumption_context_subst_instance.
+    rewrite trans_bcontext.
+    apply smash_context_assumption_context => //.
+    constructor. }
+  rewrite trans_bbody. f_equal.
+  rewrite /inst_case_branch_context /inst_case_context.
+  rewrite (trans_subst_context (closedP #|pparams p| xpredT) P).
+  { rewrite on_free_vars_ctx_subst_instance -test_context_k_closed_on_free_vars_ctx.
+    exact onbctx. }
+  { rewrite [on_free_vars_terms _ _]forallb_rev. exact onpars. }
+  now rewrite map_rev trans_subst_instance_ctx.
+Qed.
+
+Lemma trans_whd_rel_scoped {cf} {Σ : global_env} {wfΣ : wf Σ} {P zeta Γ t args h l} :
+  assumption_context Γ ->
+  whd_rel zeta Σ Γ t args h l ->
+  on_free_vars P (mkApps t args) ->
+  whd_rel zeta (trans_global_env Σ) (trans_local Γ) (trans t) (map trans args)
+    (trans h) (map trans l).
+Proof.
+  intros hΓ w.
+  induction w as [c args d b h l hn hb w IH|c args d hn hb
+      |na b B t args h l hz w IH|na b B t args hz
+      |c u decl body args h l hd hb w IH|c u decl args hd hb
+      |f a args h l w IH|na A t a args h l w IH
+      |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
+      |mfix idx narg fn args c t cargs hu hn w IH hc
+      |mfix idx narg fn args hu hn|mfix idx args hu
+      |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
+      |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |ci p c brs args t cargs w IH hc hcf
+      |p c args u cargs a h l w1 IH1 ha w2 IH2
+      |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |p c args t cargs w IH hc hcf
+      |t args hs]; intros hta; cbn [trans].
+  - exfalso. rewrite (assumption_context_decl_body hΓ hn) in hb. congruence.
+  - eapply whd_rel_assum with (d := trans_decl d); [now rewrite nth_error_map hn|cbn; now rewrite hb].
+  - (* zeta *)
+    move: (hta); rewrite on_free_vars_mkApps /= => /andP [/and3P [onb _ ont] onargs].
+    have hta' : on_free_vars P (mkApps (t {0 := b}) args).
+    { now rewrite on_free_vars_mkApps (on_free_vars_subst1 _ _ _ onb ont) onargs. }
+    have onb' : forallb (on_free_vars P) [b] by rewrite /= onb.
+    specialize (IH hta'). rewrite (trans_subst _ _ [b] 0 t ont onb') in IH.
+    apply whd_zeta; [exact hz|exact IH].
+  - now apply whd_letin_stop.
+  - (* delta *)
+    have hta' : on_free_vars P (mkApps (subst_instance u body) args).
+    { move: hta; rewrite !on_free_vars_mkApps => /andP [_ ->]. rewrite andb_true_r.
+      apply closed_on_free_vars. rewrite closedn_subst_instance.
+      eapply declared_constant_closed_body;
+        [exact wfΣ|exact (lookup_global_Some_if_In _ _ _ hd)|exact hb]. }
+    specialize (IH hta'). rewrite trans_subst_instance in IH.
+    eapply whd_delta with (decl := trans_constant_body decl) (body := trans body);
+      [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb|exact IH].
+  - eapply whd_axiom with (decl := trans_constant_body decl);
+      [rewrite trans_lookup hd; reflexivity|cbn; now rewrite hb].
+  - apply whd_app. exact (IH hta).
+  - (* beta *)
+    move: (hta); rewrite /= on_free_vars_mkApps /= => /andP [/andP [/andP [_ ont] ona] onargs].
+    have hta' : on_free_vars P (mkApps (t {0 := a}) args).
+    { now rewrite on_free_vars_mkApps (on_free_vars_subst1 _ _ _ ona ont) onargs. }
+    have ona' : forallb (on_free_vars P) [a] by rewrite /= ona.
+    specialize (IH hta'). rewrite (trans_subst _ _ [a] 0 t ont ona') in IH.
+    cbn [map]. apply whd_beta. exact IH.
+  - (* fix, recursive argument a constructor *)
+    move: (hta); rewrite on_free_vars_mkApps => /andP [onfix onargs].
+    have onc : on_free_vars P c := nth_error_forallb hn onargs.
+    have hta' : on_free_vars P
+      (mkApps fn (firstn narg args ++ mkApps (tConstruct ind n ui) cargs :: skipn (S narg) args)).
+    { rewrite on_free_vars_mkApps (on_free_vars_unfold_fix _ _ _ _ _ hu onfix) /=.
+      exact (on_free_vars_replace_nth _ _ _ _ _ onargs hn (whd_rel_on_free_vars_nobody hΓ w1 onc)). }
+    specialize (IH2 hta').
+    rewrite map_app /= (trans_mkApps (tConstruct ind n ui) cargs) -firstn_map map_skipn in IH2.
+    eapply whd_fix_iota with (fn := trans fn) (c := trans c) (cargs := map trans cargs).
+    + exact (trans_unfold_fix _ _ _ _ _ onfix hu).
+    + now rewrite nth_error_map hn.
+    + exact (IH1 onc).
+    + exact IH2.
+  - (* fix, recursive argument stuck *)
+    move: (hta); rewrite on_free_vars_mkApps => /andP [onfix onargs].
+    have onc : on_free_vars P c := nth_error_forallb hn onargs.
+    rewrite map_app /= (trans_mkApps t cargs) -firstn_map map_skipn.
+    eapply whd_fix_stuck with (fn := trans fn) (c := trans c).
+    + exact (trans_unfold_fix _ _ _ _ _ onfix hu).
+    + now rewrite nth_error_map hn.
+    + exact (IH onc).
+    + now rewrite whd_trans_is_construct.
+  - move: (hta); rewrite on_free_vars_mkApps => /andP [onfix _].
+    eapply whd_fix_noarg.
+    + exact (trans_unfold_fix _ _ _ _ _ onfix hu).
+    + now rewrite nth_error_map hn.
+  - apply whd_fix_nounfold. exact (trans_unfold_fix_none _ _ hu).
+  - (* iota *)
+    move: (hta); rewrite on_free_vars_mkApps => /andP [hcase onargs].
+    move: (hcase) => /= /and5P [onpars _ _ onc onbrs].
+    move: (whd_rel_on_free_vars_nobody (wfΣ := wfΣ) hΓ w1 onc).
+    rewrite on_free_vars_mkApps => /andP [_ oncargs].
+    move: (nth_error_forallb hbr onbrs) => /= /andP [onbctx onbbody].
+    have hta' : on_free_vars P (mkApps (iota_red ci.(ci_npar) p cargs br) args).
+    { rewrite on_free_vars_mkApps onargs andb_true_r.
+      eapply on_free_vars_red1_nil; [eapply red_iota; [exact hbr|exact hlen]|].
+      move: hcase => /= /and5P [h1 h2 h3 h4 h5]. apply/and5P; split => //.
+      exact (whd_rel_on_free_vars_nobody (wfΣ := wfΣ) hΓ w1 h4). }
+    specialize (IH2 hta').
+    rewrite (trans_iota_red_scoped P _ p cargs br oncargs onpars onbctx onbbody hlen) in IH2.
+    eapply whd_iota with (n := n) (ui := ui) (cargs := map trans cargs).
+    + exact (IH1 onc).
+    + now rewrite !nth_error_map hbr.
+    + rewrite trans_bcontext (context_assumptions_smash_context []) /= context_assumptions_map length_map.
+      exact hlen.
+    + exact IH2.
+  - (* case on a cofixpoint *)
+    move: (hta); rewrite on_free_vars_mkApps => /andP [hcase onargs].
+    move: (hcase) => /= /and5P [h1 h2 h3 onc h5].
+    move: (whd_rel_on_free_vars_nobody (wfΣ := wfΣ) hΓ w1 onc).
+    rewrite on_free_vars_mkApps => /andP [oncf oncargs].
+    have hta' : on_free_vars P (mkApps (tCase ci p (mkApps fn cargs) brs) args).
+    { rewrite on_free_vars_mkApps onargs andb_true_r /=. apply/and5P; split => //.
+      now rewrite on_free_vars_mkApps (on_free_vars_unfold_cofix _ _ _ _ _ hu oncf) oncargs. }
+    specialize (IH2 hta'). cbn [trans] in IH2. rewrite (trans_mkApps fn cargs) in IH2.
+    eapply whd_case_cofix with (mfix := map (map_def trans trans) mfix) (cargs := map trans cargs)
+      (narg := narg) (fn := trans fn).
+    + exact (IH1 onc).
+    + exact (trans_unfold_cofix _ _ _ _ _ oncf hu).
+    + exact IH2.
+  - (* stuck case *)
+    move: (hta); rewrite on_free_vars_mkApps => /andP [hcase _].
+    move: hcase => /= /and5P [_ _ _ onc _].
+    rewrite (trans_mkApps t cargs).
+    eapply whd_case_stuck.
+    + exact (IH onc).
+    + now rewrite whd_trans_is_construct.
+    + now rewrite whd_trans_is_cofix.
+  - (* projection *)
+    move: (hta); rewrite on_free_vars_mkApps => /andP [onc onargs].
+    move: (whd_rel_on_free_vars_nobody (wfΣ := wfΣ) hΓ w1 onc).
+    rewrite on_free_vars_mkApps => /andP [_ oncargs].
+    have hta' : on_free_vars P (mkApps a args).
+    { now rewrite on_free_vars_mkApps (nth_error_forallb ha oncargs) onargs. }
+    eapply whd_proj with (u := u) (cargs := map trans cargs) (a := trans a).
+    + exact (IH1 onc).
+    + now rewrite nth_error_map ha.
+    + exact (IH2 hta').
+  - (* projection of a cofixpoint *)
+    move: (hta); rewrite on_free_vars_mkApps => /andP [onc onargs].
+    move: (whd_rel_on_free_vars_nobody (wfΣ := wfΣ) hΓ w1 onc).
+    rewrite on_free_vars_mkApps => /andP [oncf oncargs].
+    have hta' : on_free_vars P (mkApps (tProj p (mkApps fn cargs)) args).
+    { rewrite on_free_vars_mkApps onargs andb_true_r /=.
+      now rewrite on_free_vars_mkApps (on_free_vars_unfold_cofix _ _ _ _ _ hu oncf) oncargs. }
+    specialize (IH2 hta'). cbn [trans] in IH2. rewrite (trans_mkApps fn cargs) in IH2.
+    eapply whd_proj_cofix with (mfix := map (map_def trans trans) mfix) (cargs := map trans cargs)
+      (narg := narg) (fn := trans fn).
+    + exact (IH1 onc).
+    + exact (trans_unfold_cofix _ _ _ _ _ oncf hu).
+    + exact IH2.
+  - (* stuck projection *)
+    move: (hta); rewrite on_free_vars_mkApps => /andP [onc _].
+    rewrite (trans_mkApps t cargs).
+    eapply whd_proj_stuck.
+    + exact (IH onc).
+    + now rewrite whd_trans_is_construct0.
+    + now rewrite whd_trans_is_cofix.
+  - apply whd_stop. now rewrite whd_trans_stop_head.
+Qed.
+
 Lemma trans_cmp_global_instance {Σ : global_env} Re Rle gref napp u u' :
   cmp_global_instance Σ Re Rle gref napp u u' ->
   cmp_global_instance (trans_global_env Σ) Re Rle gref napp u u'.
@@ -4863,8 +5154,26 @@ Proof.
   reflexivity.
 Qed.
 
+(** The reductions of the positivity rules happen in the arities of the block and the
+    positivity context. Neither has let-bound variables, so the untyped simulation
+    [trans_whd_rel_scoped] translates them. *)
+Lemma trans_whd_rel_arities {cf} {Σ : global_env} {wfΣ : wf Σ} {m Γ p ty h l} :
+  assumption_context Γ ->
+  whd_rel true Σ (arities_context (ind_bodies m) ,,, Γ) ty [] h l ->
+  on_free_vars p ty ->
+  whd_rel true (trans_global_env Σ) (arities_context (ind_bodies (trans_minductive_body m)) ,,,
+    trans_local Γ) (trans ty) [] (trans h) (map trans l).
+Proof.
+  intros hΓ w hty.
+  rewrite trans_arities_context -trans_local_app.
+  have hass : assumption_context (arities_context (ind_bodies m) ,,, Γ).
+  { apply assumption_context_app_inv; [exact hΓ|apply assumption_context_arities_context]. }
+  exact (trans_whd_rel_scoped hass w hty).
+Qed.
+
 Lemma positive_cstr_arg_trans_gen {cf} (Σ : global_env) (wfΣ : wf Σ) m NI Γ T
   (h : positive_cstr_arg Σ m NI Γ T) :
+  assumption_context Γ ->
   trans_ni_wf NI ->
   forall p, on_free_vars p T ->
   positive_cstr_arg (trans_global_env Σ) (trans_minductive_body m)
@@ -4872,25 +5181,25 @@ Lemma positive_cstr_arg_trans_gen {cf} (Σ : global_env) (wfΣ : wf Σ) m NI Γ 
 Proof.
   revert NI Γ T h.
   apply (positive_cstr_arg_mrect Σ m
-    (fun NI Γ T _ => trans_ni_wf NI -> forall p, on_free_vars p T ->
+    (fun NI Γ T _ => assumption_context Γ -> trans_ni_wf NI -> forall p, on_free_vars p T ->
       positive_cstr_arg (trans_global_env Σ) (trans_minductive_body m)
         (map trans_ni NI) (trans_local Γ) (trans T))
-    (fun NI Γ l _ => trans_ni_wf NI -> forall p, on_free_vars_terms p l ->
+    (fun NI Γ l _ => assumption_context Γ -> trans_ni_wf NI -> forall p, on_free_vars_terms p l ->
       positive_args (trans_global_env Σ) (trans_minductive_body m)
         (map trans_ni NI) (trans_local Γ) (map trans l))
-    (fun NI Γ ps nskip cs _ => trans_ni_wf NI ->
+    (fun NI Γ ps nskip cs _ => assumption_context Γ -> trans_ni_wf NI ->
       forall p, on_free_vars_terms p ps -> on_free_vars_terms p cs ->
       positive_nested_ctors (trans_global_env Σ) (trans_minductive_body m)
         (map trans_ni NI) (trans_local Γ) (map trans ps) nskip (map trans cs))
-    (fun NI Γ ps nskip c _ => trans_ni_wf NI ->
+    (fun NI Γ ps nskip c _ => assumption_context Γ -> trans_ni_wf NI ->
       forall p, on_free_vars_terms p ps -> on_free_vars p c ->
       positive_nested_cstr (trans_global_env Σ) (trans_minductive_body m)
         (map trans_ni NI) (trans_local Γ) (map trans ps) nskip (trans c))).
   - (* pos_arg_closed *)
-    intros NI Γ ty cl hwf p hty.
+    intros NI Γ ty cl hΓ hwf p hty.
     constructor 1. len. now eapply closedn_trans.
   - (* pos_arg_concl *)
-    intros NI Γ l k i hlen cl [hk [hk' hnth]] hwf p hty.
+    intros NI Γ l k i hlen cl [hk [hk' hnth]] hΓ hwf p hty.
     rewrite trans_mkApps. econstructor 2.
     2:{ eapply All_map, All_impl; [exact cl|]. intros t ht. len.
         now eapply closedn_trans. }
@@ -4898,12 +5207,12 @@ Proof.
         len. cbn. rewrite rev_mapi. rewrite nth_error_mapi hnth /= //. }
     len. now rewrite -trans_ind_realargs.
   - (* pos_arg_nested_self *)
-    intros NI Γ x l inst hwf p hty.
+    intros NI Γ x l inst hΓ hwf p hty.
     rewrite trans_mkApps. constructor 3.
     now eapply nested_inst_ok_trans.
   - (* pos_arg_nested *)
     intros NI Γ ind u args mdecl' idecl' k na decl uniform variance lenargs cl
-      pargs IHargs nctors IHctors hwf p hty.
+      pargs IHargs nctors IHctors hΓ hwf p hty.
     rewrite on_free_vars_mkApps /= in hty.
     have hargsk : on_free_vars_terms p (firstn k args).
     { eapply All_forallb, All_firstn, forallb_All, hty. }
@@ -4946,7 +5255,7 @@ Proof.
     + rewrite length_map. exact lenargs.
     + rewrite -map_skipn hlen. eapply All_map, All_impl; [exact cl|].
       intros t ht. now eapply closedn_trans.
-    + rewrite firstn_map. exact (IHargs hwf p hargsk).
+    + rewrite firstn_map. exact (IHargs hΓ hwf p hargsk).
     + rewrite -hent -hdecl -hlift.
       change (ind_params (trans_minductive_body mdecl')) with
         (trans_local (ind_params mdecl')).
@@ -4954,80 +5263,123 @@ Proof.
       change (ind_ctors (trans_one_ind_body mdecl' (inductive_ind ind) idecl')) with
         (map (trans_constructor_body (inductive_ind ind) mdecl') (ind_ctors idecl')).
       eapply positive_nested_ctors_trans_ctors; [exact hhyps|].
-      exact (IHctors hwf' (shiftnP 1 p) hps hcs).
+      exact (IHctors (assumption_context_vass _ _ _ hΓ) hwf' (shiftnP 1 p) hps hcs).
   - (* pos_arg_let *)
-    intros NI Γ na b ty ty' pos IHpos hwf p hty.
+    intros NI Γ na b ty ty' pos IHpos hΓ hwf p hty.
     cbn in hty. move/and3P: hty => [hb _ hbody].
     have hsub : on_free_vars p (ty' {0 := b}) by eapply on_free_vars_subst1.
     have hb' : forallb (on_free_vars p) [b] by rewrite /= hb.
-    have IH := IHpos hwf p hsub.
+    have IH := IHpos hΓ hwf p hsub.
     rewrite (trans_subst _ _ [b] 0 ty' hbody hb') in IH.
     constructor 5. exact IH.
   - (* pos_arg_ass *)
-    intros NI Γ na ty ty' cl pos IHpos hwf p hty.
+    intros NI Γ na ty ty' cl pos IHpos hΓ hwf p hty.
     cbn in hty. move/andP: hty => [_ hbody].
     constructor 6.
     + len. now eapply closedn_trans.
-    + exact (IHpos hwf (shiftnP 1 p) hbody).
+    + exact (IHpos (assumption_context_vass _ _ _ hΓ) hwf (shiftnP 1 p) hbody).
+  - (* pos_arg_red *)
+    intros NI Γ ty h l w pos IHpos hΓ hwf p hty.
+    have hΓr : assumption_context (arities_context (ind_bodies m) ,,, Γ).
+    { apply assumption_context_app_inv; [exact hΓ|apply assumption_context_arities_context]. }
+    have IH := IHpos hΓ hwf p (whd_rel_on_free_vars_nobody (wfΣ := wfΣ) hΓr w hty).
+    rewrite trans_mkApps in IH.
+    eapply pos_arg_red; [exact (trans_whd_rel_arities (wfΣ := wfΣ) hΓ w hty)|exact IH].
+  - (* pos_arg_ass_red *)
+    intros NI Γ na ty ty' h l w cl pos IHpos hΓ hwf p hty.
+    cbn in hty. move/andP: hty => [hdom hbody].
+    eapply pos_arg_ass_red.
+    + exact (trans_whd_rel_arities (wfΣ := wfΣ) hΓ w hdom).
+    + rewrite -trans_mkApps. len. now eapply closedn_trans.
+    + exact (IHpos (assumption_context_vass _ _ _ hΓ) hwf (shiftnP 1 p) hbody).
+  - (* pos_arg_rel_red *)
+    intros NI Γ k l l' hred pos IHpos hΓ hwf p hty.
+    have hΓr : assumption_context (arities_context (ind_bodies m) ,,, Γ).
+    { apply assumption_context_app_inv; [exact hΓ|apply assumption_context_arities_context]. }
+    move: (hty); rewrite on_free_vars_mkApps => /andP [hk hl].
+    have hl' : on_free_vars_terms p l'.
+    { move: hl. clear -wfΣ hΓr hred.
+      induction hred as [|a a' l l' ha hred IH]; cbn; [reflexivity|].
+      move/andP=> [ha' hl]. apply/andP; split; [|exact (IH hl)].
+      destruct ha as [->|[h0 [l0 [w ->]]]]; [exact ha'|].
+      exact (whd_rel_on_free_vars_nobody (wfΣ := wfΣ) hΓr w ha'). }
+    have hred' : All2 (arg_whd (trans_global_env Σ)
+        (arities_context (ind_bodies (trans_minductive_body m)) ,,, trans_local Γ))
+        (map trans l) (map trans l').
+    { move: hl. clear -wfΣ hΓ hred.
+      induction hred as [|a a' l l' ha hred IH]; cbn; [constructor|].
+      move/andP=> [ha' hl]. constructor; [|exact (IH hl)].
+      rewrite /arg_whd. destruct ha as [->|[h0 [l0 [w ->]]]]; [now left|right].
+      exists (trans h0), (map trans l0). split.
+      - exact (trans_whd_rel_arities (wfΣ := wfΣ) hΓ w ha').
+      - exact (trans_mkApps h0 l0). }
+    have hl'' : on_free_vars p (mkApps (tRel k) l').
+    { rewrite on_free_vars_mkApps hk. exact hl'. }
+    have IH := IHpos hΓ hwf p hl''.
+    rewrite trans_mkApps in IH. rewrite trans_mkApps.
+    exact (pos_arg_rel_red _ _ _ _ k _ _ hred' IH).
   - (* pos_args_nil *)
-    intros NI Γ hwf p hl. constructor 1.
+    intros NI Γ hΓ hwf p hl. constructor 1.
   - (* pos_args_cons *)
-    intros NI Γ t l pos IHpos poss IHposs hwf p hl.
+    intros NI Γ t l pos IHpos poss IHposs hΓ hwf p hl.
     move/andP: hl => [ht hl].
-    constructor 2; [exact (IHpos hwf p ht)|exact (IHposs hwf p hl)].
+    constructor 2; [exact (IHpos hΓ hwf p ht)|exact (IHposs hΓ hwf p hl)].
   - (* pos_nctors_nil *)
-    intros NI Γ ps nskip hwf p hps hcs. constructor 1.
+    intros NI Γ ps nskip hΓ hwf p hps hcs. constructor 1.
   - (* pos_nctors_cons *)
-    intros NI Γ ps nskip t l pos IHpos poss IHposs hwf p hps hcs.
+    intros NI Γ ps nskip t l pos IHpos poss IHposs hΓ hwf p hps hcs.
     move/andP: hcs => [ht hl].
-    constructor 2; [exact (IHpos hwf p hps ht)|exact (IHposs hwf p hps hl)].
+    constructor 2; [exact (IHpos hΓ hwf p hps ht)|exact (IHposs hΓ hwf p hps hl)].
   - (* pos_ncstr_inst *)
-    intros NI Γ p0 ps nskip na ty t pos IHpos hwf p hps hty.
+    intros NI Γ p0 ps nskip na ty t pos IHpos hΓ hwf p hps hty.
     move/andP: hps => [hp0 hps].
     cbn in hty. move/andP: hty => [_ hbody].
     have hsub : on_free_vars p (t {0 := p0}) by eapply on_free_vars_subst1.
     have hp0' : forallb (on_free_vars p) [p0] by rewrite /= hp0.
-    have IH := IHpos hwf p hps hsub.
+    have IH := IHpos hΓ hwf p hps hsub.
     rewrite (trans_subst _ _ [p0] 0 t hbody hp0') in IH.
     constructor 1. exact IH.
   - (* pos_ncstr_let *)
-    intros NI Γ ps nskip na b ty t pos IHpos hwf p hps hty.
+    intros NI Γ ps nskip na b ty t pos IHpos hΓ hwf p hps hty.
     cbn in hty. move/and3P: hty => [hb _ hbody].
     have hsub : on_free_vars p (t {0 := b}) by eapply on_free_vars_subst1.
     have hb' : forallb (on_free_vars p) [b] by rewrite /= hb.
-    have IH := IHpos hwf p hps hsub.
+    have IH := IHpos hΓ hwf p hps hsub.
     rewrite (trans_subst _ _ [b] 0 t hbody hb') in IH.
     constructor 2. exact IH.
   - (* pos_ncstr_skip *)
-    intros NI Γ nskip na ty t pos IHpos hwf p hps hty.
+    intros NI Γ nskip na ty t pos IHpos hΓ hwf p hps hty.
     cbn in hty. move/andP: hty => [_ hbody].
-    constructor 3. exact (IHpos hwf (shiftnP 1 p) eq_refl hbody).
+    constructor 3. exact (IHpos (assumption_context_vass _ _ _ hΓ) hwf (shiftnP 1 p) eq_refl hbody).
   - (* pos_ncstr_arg *)
-    intros NI Γ na ty t pos IHarg ncstr IHcstr hwf p hps hty.
+    intros NI Γ na ty t pos IHarg ncstr IHcstr hΓ hwf p hps hty.
     cbn in hty. move/andP: hty => [hty hbody].
-    constructor 4; [exact (IHarg hwf p hty)|exact (IHcstr hwf (shiftnP 1 p) eq_refl hbody)].
+    constructor 4; [exact (IHarg hΓ hwf p hty)|].
+    exact (IHcstr (assumption_context_vass _ _ _ hΓ) hwf (shiftnP 1 p) eq_refl hbody).
   - (* pos_ncstr_concl *)
-    intros NI Γ x l inst hwf p hps hty.
+    intros NI Γ x l inst hΓ hwf p hps hty.
     rewrite trans_mkApps. constructor 5.
     now eapply nested_inst_ok_trans.
 Qed.
 
 Lemma positive_cstr_arg_trans {cf} (Σ : global_env) (wfΣ : wf Σ) m acc p T :
+  assumption_context acc ->
   positive_cstr_arg Σ m [] acc T ->
   on_free_vars p T ->
   positive_cstr_arg (trans_global_env Σ) (trans_minductive_body m) []
     (trans_local acc) (trans T).
 Proof.
-  intros h ht. exact (positive_cstr_arg_trans_gen Σ wfΣ m [] acc T h All_nil p ht).
+  intros hacc h ht. exact (positive_cstr_arg_trans_gen Σ wfΣ m [] acc T h hacc All_nil p ht).
 Qed.
 
 Lemma positive_cstr_trans {cf} (Σ : global_env) (wfΣ : wf Σ) m n acc p T :
+  assumption_context acc ->
   positive_cstr Σ m n acc T ->
   on_free_vars p T ->
   positive_cstr (trans_global_env Σ) (trans_minductive_body m) n
     (trans_local acc) (trans T).
 Proof.
-  induction 1 in p |- *.
+  intros hacc h. induction h in p, hacc |- *.
   - cbn. intros. rewrite trans_mkApps.
     cbn. rewrite /headrel. relativize #|Γ|.
     relativize #|ind_bodies m|.
@@ -5035,12 +5387,12 @@ Proof.
     rewrite on_free_vars_closedn. eapply trans_on_free_vars. len.
     now rewrite -on_free_vars_closedn. all:now len.
   - cbn. move/and3P => [] onb onty ont. constructor.
-    rewrite (trans_subst (shiftnP 1 p) p) in IHX => /= //.
-    now rewrite onb. eapply IHX.
+    rewrite (trans_subst (shiftnP 1 p) p) in IHh => /= //.
+    now rewrite onb. eapply IHh; [exact hacc|].
     eapply on_free_vars_subst => /= //. now erewrite onb. exact ont.
   - cbn. move/andP=> [] onty ont.
     constructor. now eapply positive_cstr_arg_trans.
-    now eapply IHX.
+    eapply IHh; [exact (assumption_context_vass _ _ _ hacc)|exact ont].
 Qed.
 
 Lemma cumul_context_Spec_Algo {cf:checker_flags} {Σ} {wfΣ : wf Σ.1} {Γ Γ'} :
@@ -5374,13 +5726,6 @@ Proof.
   - exfalso; depelim ass.
 Qed.
 
-Lemma assumption_context_arities_context mdecl :
-  assumption_context (arities_context mdecl).
-Proof.
-  rewrite /arities_context rev_map_spec -map_rev.
-  induction (List.rev mdecl); cbn; auto with pcuic.
-Qed.
-
 Lemma expand_lets_smash_context_id Γ x :
   expand_lets (smash_context [] Γ) x = x.
 Proof.
@@ -5692,7 +6037,8 @@ Proof.
           rewrite -!trans_it_mkProd_or_LetIn.
           rewrite cstr_eq in on_ctype_positive.
           eapply positive_cstr_smash_middle in on_ctype_positive.
-          eapply (positive_cstr_trans Σ0 X _ _ _ (shiftnP #|ind_bodies m| xpred0))
+          eapply (positive_cstr_trans Σ0 X _ _ _ (shiftnP #|ind_bodies m| xpred0)
+            _ assumption_context_nil)
             in on_ctype_positive.
           exact on_ctype_positive.
           rewrite cstr_eq in on_ctype.

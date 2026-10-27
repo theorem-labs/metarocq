@@ -47,9 +47,11 @@ Proof.
   destruct 1; replace_quotation_of_goal ().
 Defined.
 
-Module QuoteTemplateArityRelation <: QuoteArityRedSig TemplateTerm Env TemplateArityRelation.
+Module QuoteTemplateArityRelation <: QuoteKernelRedSig TemplateTerm Env TemplateArityRelation.
   #[export] Instance quote_arity_red {Σ Γ t Δ s} : ground_quotable (@TemplateArityRelation.arity_red Σ Γ t Δ s)
     := ltac:(cbv [TemplateArityRelation.arity_red]; exact _).
+  #[export] Instance quote_whd_rel {zeta Σ Γ t args h l} : ground_quotable (@TemplateArityRelation.whd_rel zeta Σ Γ t args h l)
+    := ltac:(cbv [TemplateArityRelation.whd_rel]; exact _).
 End QuoteTemplateArityRelation.
 Export (hints) QuoteTemplateArityRelation.
 #[export] Instance quote_eq_term_nocast {cf Σ ϕ t u} : ground_quotable (@eq_term_nocast cf Σ ϕ t u) := ltac:(cbv [eq_term_nocast]; exact _).

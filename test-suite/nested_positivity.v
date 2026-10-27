@@ -1,11 +1,9 @@
 (* Nested inductive types: positivity in the safe checker.
 
    Accepted cases: Rocq's kernel accepts each of them, and so must the checker.
-   Rejected cases that the kernel also refuses: each is defined with Rocq's
-   positivity check bypassed, and the checker must still reject it; a
-   [Fail Inductive] beside each one shows that Rocq's kernel rejects the same
-   definition. One rejected case, [via_const], is accepted by the kernel: it marks
-   a nesting the checker does not support.
+   Rejected cases: each is defined with Rocq's positivity check bypassed, and the
+   checker must still reject it; a [Fail Inductive] beside each one shows that Rocq's
+   kernel rejects the same definition.
 
    Every type nested here is defined in this file, monomorphic, so the file does not
    depend on how SafeCheck handles template-polymorphic types such as [list] and
@@ -153,14 +151,6 @@ Fail Inductive bad_fixed : Set := BadFixed : T1 bad_fixed -> bad_fixed.
 Inductive bad_fixed : Set := BadFixed : T1 bad_fixed -> bad_fixed.
 (* expect: Nested positivity: the block occurs in an argument that is not a uniform parameter *)
 Fail MetaRocq SafeCheck bad_fixed.
-
-(* Incompleteness, by design: the kernel reduces the argument type ([whd_all]) and
-   accepts a nesting reached through a constant. The checker does not reduce and
-   refuses it. *)
-Definition L (A : Set) : Set := mlist A.
-Inductive via_const : Set := VC : L via_const -> via_const.
-(* expect: Positivity: the block occurs under a head that is neither a member of the block nor an inductive *)
-Fail MetaRocq SafeCheck via_const.
 
 (* The block occurs under a parameter of the block, a variable that is neither a
    member of the block nor a nesting inductive. *)

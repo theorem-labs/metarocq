@@ -684,10 +684,12 @@ Inductive arity_red (Σ : global_env) : context -> term -> context -> sort -> Ty
 
 Derive Signature for arity_red.
 
-(** The instance of [EnvironmentTyping.ArityRedSig] that [TemplateGlobalMaps]
-    uses for [on_ind_body]'s [ind_arity_red]. *)
-Module TemplateArityRelation <: ArityRedSig TemplateTerm Env.
+(** The instance of [EnvironmentTyping.KernelRedSig] that [TemplateGlobalMaps]
+    uses: [arity_red] for [on_ind_body]'s [ind_arity_red], and [whd_rel] for the
+    reductions of strict positivity ([positive_cstr_arg]). *)
+Module TemplateArityRelation <: KernelRedSig TemplateTerm Env.
   Definition arity_red := arity_red.
+  Definition whd_rel := whd_rel.
 End TemplateArityRelation.
 
 (** ** Term equality and cumulativity *)

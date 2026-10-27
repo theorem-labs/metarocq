@@ -6,7 +6,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICInduct
      PCUICLiftSubst PCUICEquality PCUICUnivSubst
      PCUICCases PCUICCumulativity PCUICTyping
      PCUICReduction PCUICWeakeningEnv
-     PCUICClosed PCUICPosition.
+     PCUICClosed PCUICPosition PCUICArityRed.
 
 From Equations.Prop Require Import DepElim.
 From Equations Require Import Equations.
@@ -1494,6 +1494,142 @@ Proof.
   - now apply red1_red, red1_subst_instance.
   - reflexivity.
   - etransitivity; eassumption.
+Qed.
+
+(** ** The weak-head machine commutes with universe instantiation *)
+
+Lemma unfold_fix_subst_instance u mfix idx narg fn :
+  unfold_fix mfix idx = Some (narg, fn) ->
+  unfold_fix (List.map (map_def (subst_instance u) (subst_instance u)) mfix) idx =
+  Some (narg, subst_instance u fn).
+Proof.
+  rewrite /unfold_fix nth_error_map.
+  destruct (nth_error mfix idx) as [d|]; cbn; intros e; [|discriminate].
+  injection e as <- <-. now rewrite subst_instance_subst fix_subst_instance_subst.
+Qed.
+
+Lemma unfold_fix_subst_instance_None u mfix idx :
+  unfold_fix mfix idx = None ->
+  unfold_fix (List.map (map_def (subst_instance u) (subst_instance u)) mfix) idx = None.
+Proof. rewrite /unfold_fix nth_error_map. now destruct (nth_error mfix idx). Qed.
+
+Lemma unfold_cofix_subst_instance u mfix idx narg fn :
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  unfold_cofix (List.map (map_def (subst_instance u) (subst_instance u)) mfix) idx =
+  Some (narg, subst_instance u fn).
+Proof.
+  rewrite /unfold_cofix nth_error_map.
+  destruct (nth_error mfix idx) as [d|]; cbn; intros e; [|discriminate].
+  injection e as <- <-. now rewrite subst_instance_subst cofix_subst_instance_subst.
+Qed.
+
+Lemma whd_is_construct_subst_instance u t :
+  whd_is_construct (subst_instance u t) = whd_is_construct t.
+Proof. now destruct t. Qed.
+
+Lemma whd_is_construct0_subst_instance u t :
+  whd_is_construct0 (subst_instance u t) = whd_is_construct0 t.
+Proof. now destruct t. Qed.
+
+Lemma whd_is_cofix_subst_instance u t :
+  whd_is_cofix (subst_instance u t) = whd_is_cofix t.
+Proof. now destruct t. Qed.
+
+Lemma whd_stop_head_subst_instance u t args :
+  whd_stop_head (subst_instance u t) (List.map (subst_instance u) args) = whd_stop_head t args.
+Proof. destruct t; try reflexivity; destruct args; reflexivity. Qed.
+
+Lemma whd_rel_subst_instance {zeta Σ Γ t args h l} u :
+  whd_rel zeta Σ Γ t args h l ->
+  whd_rel zeta Σ (subst_instance u Γ) (subst_instance u t) (List.map (subst_instance u) args)
+    (subst_instance u h) (List.map (subst_instance u) l).
+Proof.
+  induction 1 as [c args d b h l hn hb w IH|c args d hn hb
+    |na b B t args h l hz w IH|na b B t args hz
+    |c u' decl body args h l hd hb w IH|c u' decl args hd hb
+    |f a args h l w IH|na A t a args h l w IH
+    |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
+    |mfix idx narg fn args c t cargs hu hn w IH hc
+    |mfix idx narg fn args hu hn|mfix idx args hu
+    |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
+    |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+    |ci p c brs args t cargs w IH hc hcf
+    |p c args u' cargs a h l w1 IH1 ha w2 IH2
+    |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+    |p c args t cargs w IH hc hcf
+    |t args hs].
+  - rewrite subst_instance_lift in IH.
+    eapply (whd_rel_unfold _ _ _ c _ (map_decl (subst_instance u) d) (subst_instance u b)).
+    + rewrite nth_error_map hn. reflexivity.
+    + cbn. rewrite hb. reflexivity.
+    + exact IH.
+  - eapply (whd_rel_assum _ _ _ c _ (map_decl (subst_instance u) d)).
+    + rewrite nth_error_map hn. reflexivity.
+    + cbn. rewrite hb. reflexivity.
+  - rewrite subst_instance_subst in IH. eapply whd_zeta; [exact hz|exact IH].
+  - now eapply whd_letin_stop.
+  - rewrite subst_instance_two in IH. eapply whd_delta; [exact hd|exact hb|exact IH].
+  - eapply whd_axiom; [exact hd|exact hb].
+  - eapply whd_app. exact IH.
+  - rewrite subst_instance_subst in IH. eapply whd_beta. exact IH.
+  - rewrite map_app in IH2; cbn [List.map] in IH2.
+    rewrite subst_instance_mkApps -firstn_map -skipn_map in IH2.
+    eapply whd_fix_iota.
+    + exact (unfold_fix_subst_instance u _ _ _ _ hu).
+    + rewrite nth_error_map hn. reflexivity.
+    + exact IH1.
+    + exact IH2.
+  - rewrite map_app; cbn [List.map]. rewrite subst_instance_mkApps -firstn_map -skipn_map.
+    eapply whd_fix_stuck.
+    + exact (unfold_fix_subst_instance u _ _ _ _ hu).
+    + rewrite nth_error_map hn. reflexivity.
+    + exact IH.
+    + now rewrite whd_is_construct_subst_instance.
+  - eapply whd_fix_noarg.
+    + exact (unfold_fix_subst_instance u _ _ _ _ hu).
+    + now rewrite nth_error_map hn.
+  - eapply whd_fix_nounfold. exact (unfold_fix_subst_instance_None u _ _ hu).
+  - rewrite iota_red_subst_instance in IH2.
+    eapply whd_iota.
+    + exact IH1.
+    + rewrite nth_error_map hbr. reflexivity.
+    + rewrite length_map. exact hlen.
+    + exact IH2.
+  - change (subst_instance u (tCase ci p (mkApps fn cargs) brs)) with
+      (tCase ci (subst_instance u p) (subst_instance u (mkApps fn cargs))
+        (List.map (map_branch (subst_instance u) id) brs)) in IH2.
+    rewrite subst_instance_mkApps in IH2.
+    eapply whd_case_cofix.
+    + exact IH1.
+    + exact (unfold_cofix_subst_instance u _ _ _ _ hu).
+    + exact IH2.
+  - change (subst_instance u (tCase ci p (mkApps t cargs) brs)) with
+      (tCase ci (subst_instance u p) (subst_instance u (mkApps t cargs))
+        (List.map (map_branch (subst_instance u) id) brs)).
+    rewrite subst_instance_mkApps.
+    eapply whd_case_stuck.
+    + exact IH.
+    + now rewrite whd_is_construct_subst_instance.
+    + now rewrite whd_is_cofix_subst_instance.
+  - eapply whd_proj.
+    + exact IH1.
+    + rewrite nth_error_map ha. reflexivity.
+    + exact IH2.
+  - change (subst_instance u (tProj p (mkApps fn cargs))) with
+      (tProj p (subst_instance u (mkApps fn cargs))) in IH2.
+    rewrite subst_instance_mkApps in IH2.
+    eapply whd_proj_cofix.
+    + exact IH1.
+    + exact (unfold_cofix_subst_instance u _ _ _ _ hu).
+    + exact IH2.
+  - change (subst_instance u (tProj p (mkApps t cargs))) with
+      (tProj p (subst_instance u (mkApps t cargs))).
+    rewrite subst_instance_mkApps.
+    eapply whd_proj_stuck.
+    + exact IH.
+    + now rewrite whd_is_construct0_subst_instance.
+    + now rewrite whd_is_cofix_subst_instance.
+  - eapply whd_stop. now rewrite whd_stop_head_subst_instance.
 Qed.
 
 Lemma subst_instance_ws_cumul_pb {cf : checker_flags} (Σ : global_env_ext) Γ u A B univs :

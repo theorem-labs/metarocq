@@ -16,18 +16,6 @@ From MetaRocq.SafeChecker Require Import PCUICErrors PCUICPositivityCheck.
 
 Import MonadNotation.
 
-(** The declaration of an inductive, from a PCUIC environment. *)
-Definition env_lookup (Σ : global_env) (ind : inductive) :
-  typing_result (mutual_inductive_body × one_inductive_body) :=
-  match lookup_env Σ (inductive_mind ind) with
-  | Some (InductiveDecl mdecl') =>
-    match nth_error (ind_bodies mdecl') (inductive_ind ind) with
-    | Some idecl' => ret (mdecl', idecl')
-    | None => raise (UndeclaredInductive ind)
-    end
-  | _ => raise (UndeclaredInductive ind)
-  end.
-
 (** The answer for one constructor type: [None] for accepted, [Some msg] for refused. *)
 Definition answer lookup mdecl i t : option string :=
   match check_positive_cstr lookup positivity_fuel mdecl i [] t with
@@ -38,16 +26,16 @@ Definition answer lookup mdecl i t : option string :=
 
 (** The answers for the constructors of the block that a quoted program's main term names,
     in order. The environment used for lookups is the whole translated program; the block
-    cannot nest in itself through a lookup, because the rule looks up only [tInd] heads, and
-    the block's own members are [tRel]s in its constructor types. *)
+    cannot nest in itself through a lookup, because the rule looks up only [tInd] heads and
+    constants, and the block's own members are [tRel]s in its constructor types. *)
 Definition positivity_answers (p : Ast.Env.program) : list (option string) :=
   let Σ := PCUICProgram.trans_env_env (trans_global_env p.1) in
   match p.2 with
   | Ast.tInd ind _ =>
-    match env_lookup Σ ind with
+    match lookup_ind (lookup_env Σ) ind with
     | Checked (mdecl, _) =>
       concat (mapi (fun i idecl =>
-        map (fun cdecl => answer (env_lookup Σ) mdecl i (cstr_type cdecl)) (ind_ctors idecl))
+        map (fun cdecl => answer (lookup_env Σ) mdecl i (cstr_type cdecl)) (ind_ctors idecl))
         (ind_bodies mdecl))
     | _ => [Some "not an inductive"]
     end
@@ -66,7 +54,7 @@ Definition program_ind (p : Ast.Env.program) : inductive :=
   end.
 
 Definition program_decl (p : Ast.Env.program) : mutual_inductive_body × one_inductive_body :=
-  match env_lookup (program_env p) (program_ind p) with
+  match lookup_ind (lookup_env (program_env p)) (program_ind p) with
   | Checked d => d
   | TypeError _ =>
     ({| ind_finite := Finite; ind_npars := 0; ind_params := []; ind_bodies := [];
@@ -149,6 +137,13 @@ MetaRocq Quote Recursively Definition q_use_mpair2 := use_mpair2.
 Example Check_use_mpair2 : positivity_answers q_use_mpair2 = [None].
 Proof. vm_compute. reflexivity. Qed.
 
+(* The block under a constant that unfolds to a nesting inductive. *)
+Definition L (A : Set) : Set := mlist A.
+Inductive via_const : Set := VC : L via_const -> via_const.
+MetaRocq Quote Recursively Definition q_via_const := via_const.
+Example Check_via_const : positivity_answers q_via_const = [None].
+Proof. vm_compute. reflexivity. Qed.
+
 (** * Refused, each with its message *)
 
 #[bypass_check(positivity)]
@@ -201,13 +196,6 @@ Example Check_bad_fixed : positivity_answers q_bad_fixed =
   [Some "Nested positivity: the block occurs in an argument that is not a uniform parameter"].
 Proof. vm_compute. reflexivity. Qed.
 
-Definition L (A : Set) : Set := mlist A.
-Inductive via_const : Set := VC : L via_const -> via_const.
-MetaRocq Quote Recursively Definition q_via_const := via_const.
-Example Check_via_const : positivity_answers q_via_const =
-  [Some "Positivity: the block occurs under a head that is neither a member of the block nor an inductive"].
-Proof. vm_compute. reflexivity. Qed.
-
 (* The block occurs under a parameter of the block, a variable that is neither a member
    of the block nor an enclosing nesting inductive. *)
 #[bypass_check(positivity)]
@@ -239,6 +227,91 @@ Example Check_arr_tree : positivity_answers q_arr_tree =
   [Some "Positivity: the block occurs under a head that is neither a member of the block nor an inductive"].
 Proof. vm_compute. reflexivity. Qed.
 
+(** * Reduction, hand-built
+
+  Each case below exercises one reduction rule of the checker on a constructor type of
+  [rose]'s block (one body, no parameter), in which [Rel 0] is the block under no
+  binder. Unless a case says otherwise, the lookup declares nothing, so no constant
+  unfolds. *)
+
+Definition no_lookup : kername -> option global_decl := fun _ => None.
+
+(** [Set], and the function [fun _ : Set => Set], which drops its argument. *)
+Definition set0 : term := tSort Sort.type0.
+Definition drop_set : term := tLambda nested_binder set0 set0.
+
+(* The argument type [(fun X : Set => X) rose] reduces to the block itself. *)
+Example Check_red_argument :
+  answer no_lookup (fst (program_decl q_rose)) 0
+    (tProd nested_binder (tApp (tLambda nested_binder set0 (tRel 0)) (tRel 0)) (tRel 1)) =
+  None.
+Proof. vm_compute. reflexivity. Qed.
+
+(* The product domain [(fun _ : Set => Set) rose] mentions the block, and its weak-head
+   normal form [Set] does not: [((fun _ : Set => Set) rose -> Set) -> rose]. *)
+Example Check_red_domain :
+  answer no_lookup (fst (program_decl q_rose)) 0
+    (tProd nested_binder (tProd nested_binder (tApp drop_set (tRel 0)) set0) (tRel 1)) =
+  None.
+Proof. vm_compute. reflexivity. Qed.
+
+(* The argument of a variable head is reduced:
+   [forall F : Set -> Set, F ((fun _ : Set => Set) rose) -> rose]. The argument
+   reduces to [Set], so [F] is applied to a block-free argument. *)
+Example Check_red_variable_argument :
+  answer no_lookup (fst (program_decl q_rose)) 0
+    (tProd nested_binder (tProd nested_binder set0 set0)
+      (tProd nested_binder (tApp (tRel 0) (tApp drop_set (tRel 1))) (tRel 2))) =
+  None.
+Proof. vm_compute. reflexivity. Qed.
+
+(* Reduction finds no rule: the constant [c] is not declared, so [c rose] does not
+   reduce, and the block stays under a head that the rules do not read. *)
+Example Check_red_none :
+  answer no_lookup (fst (program_decl q_rose)) 0
+    (tProd nested_binder (tApp (tConst (MPfile ["nested_positivity_check"], "c") []) (tRel 0))
+      (tRel 1)) =
+  Some "Positivity: the block occurs under a head that is neither a member of the block nor an inductive".
+Proof. vm_compute. reflexivity. Qed.
+
+(* A product domain that does not reduce: [(c rose -> Set) -> rose], with [c] not
+   declared. The domain [c rose] mentions the block, and reduction gives no answer, so
+   the product is refused. *)
+Example Check_red_domain_none :
+  answer no_lookup (fst (program_decl q_rose)) 0
+    (tProd nested_binder
+      (tProd nested_binder (tApp (tConst (MPfile ["nested_positivity_check"], "c") []) (tRel 0))
+        set0)
+      (tRel 1)) =
+  Some "Non-positive occurrence.".
+Proof. vm_compute. reflexivity. Qed.
+
+(* An argument of a variable head that does not reduce:
+   [forall F : Set -> Set, F (c rose) -> rose], with [c] not declared. The argument is
+   kept as written, so [F] is applied to an argument that mentions the block. *)
+Example Check_red_variable_argument_none :
+  answer no_lookup (fst (program_decl q_rose)) 0
+    (tProd nested_binder (tProd nested_binder set0 set0)
+      (tProd nested_binder
+        (tApp (tRel 0) (tApp (tConst (MPfile ["nested_positivity_check"], "c") []) (tRel 1)))
+        (tRel 2))) =
+  Some "Positivity: the block occurs in an argument of a variable that is not an inductive of the block".
+Proof. vm_compute. reflexivity. Qed.
+
+(* The instance of a nesting inductive is kept as written: [mlist ((fun X : Set => X) rose)
+   -> rose], with [mlist] declared. The instance [(fun X : Set => X) rose] is recorded as
+   written. In the walk of [mcons], the recursive occurrence of [mlist] becomes the
+   nesting variable applied to that instance, which reduces to the block. The checker
+   keeps it as written, so it is the recorded instance; reduced, it would not be. *)
+MetaRocq Quote Recursively Definition q_mlist := mlist.
+Example Check_red_kept_instance :
+  answer (lookup_env (program_env q_mlist)) (fst (program_decl q_rose)) 0
+    (tProd nested_binder
+      (mkApps (tInd (program_ind q_mlist) []) [tApp (tLambda nested_binder set0 (tRel 0)) (tRel 0)])
+      (tRel 1)) =
+  None.
+Proof. vm_compute. reflexivity. Qed.
+
 (** * Refused, hand-built
 
   Rocq's kernel refuses the two shapes below even with its positivity check bypassed, so
@@ -255,7 +328,7 @@ Inductive tl (A : Type) := tn : tl A | tc : A -> tl2 A -> tl A
 with tl2 (A : Type) := t2 : tl A -> tl2 A.
 MetaRocq Quote Recursively Definition q_tl := tl.
 Example Check_mutual_outer :
-  answer (env_lookup (program_env q_tl)) (fst (program_decl q_rose)) 0
+  answer (lookup_env (program_env q_tl)) (fst (program_decl q_rose)) 0
     (nested_cstr_type (program_ind q_tl)) =
   Some "Nested positivity: the nested inductive is mutual".
 Proof. vm_compute. reflexivity. Qed.
@@ -278,11 +351,10 @@ Definition with_ctor_type (d : mutual_inductive_body × one_inductive_body) (t :
 
 (* The conclusion is not a variable: [mlist] with one constructor of type
    [forall (A : Set), Set]. *)
-MetaRocq Quote Recursively Definition q_mlist := mlist.
 Definition bad_concl_decl := with_ctor_type (program_decl q_mlist)
   (it_mkProd_or_LetIn (ind_params (fst (program_decl q_mlist))) (tSort Sort.type0)).
 Example Check_wrong_conclusion :
-  answer (fun _ => ret bad_concl_decl) (fst (program_decl q_rose)) 0
+  answer (fun _ => Some (InductiveDecl (fst bad_concl_decl))) (fst (program_decl q_rose)) 0
     (nested_cstr_type (program_ind q_mlist)) =
   Some "Nested positivity: a constructor of the nesting inductive does not conclude at its own instance".
 Proof. vm_compute. reflexivity. Qed.
@@ -294,7 +366,7 @@ MetaRocq Quote Recursively Definition q_mpair := mpair.
 Definition bad_concl_var_decl := with_ctor_type (program_decl q_mpair)
   (it_mkProd_or_LetIn (ind_params (fst (program_decl q_mpair))) (tRel 0)).
 Example Check_wrong_conclusion_variable :
-  answer (fun _ => ret bad_concl_var_decl) (fst (program_decl q_rose)) 0
+  answer (fun _ => Some (InductiveDecl (fst bad_concl_var_decl))) (fst (program_decl q_rose)) 0
     (nested_cstr_type (program_ind q_mpair)) =
   Some "Nested positivity: a constructor of the nesting inductive does not conclude at its own instance".
 Proof. vm_compute. reflexivity. Qed.
