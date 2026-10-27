@@ -391,5 +391,5 @@ Definition r_decl : mutual_inductive_body :=
   {| ind_finite := BiFinite; ind_npars := 0; ind_params := []; ind_bodies := [r_body];
      ind_universes := Monomorphic_ctx; ind_variance := None |}.
 Example Check_bifinite :
-  answer (fun _ => raise (Msg "no nesting inductive")) r_decl 0 r_cstr_type = None.
+  answer no_lookup r_decl 0 r_cstr_type = None.
 Proof. vm_compute. reflexivity. Qed.
