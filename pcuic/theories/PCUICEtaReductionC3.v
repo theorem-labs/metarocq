@@ -19,7 +19,8 @@
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICCases
-     PCUICInduction PCUICLiftSubst PCUICEquality PCUICReduction PCUICEtaDefs.
+     PCUICInduction PCUICLiftSubst PCUICEquality PCUICReduction PCUICEtaDefs
+     PCUICEtaConfluence.
 From Equations.Type Require Import Relation Relation_Properties.
 From Equations Require Import Equations.
 
@@ -42,16 +43,8 @@ Proof. apply rt_refl. Qed.
 Lemma eta_trans {x y z} : eta x y -> eta y z -> eta x z.
 Proof. intros. eapply rt_trans; eauto. Qed.
 
-(** Lift any one-step η congruence [f] to the reflexive-transitive closure. *)
-Lemma eta_congr (f : term -> term) :
-  (forall x y, eta1 x y -> eta1 (f x) (f y)) ->
-  forall x y, eta x y -> eta (f x) (f y).
-Proof.
-  intros Hf x y H. induction H.
-  - apply eta_step. now apply Hf.
-  - apply eta_refl.
-  - eapply eta_trans; eauto.
-Qed.
+(* One-hole η congruence: Required from EtaL2's PCUICEtaConfluence as [eta_cong1]
+   — not re-derived here. *)
 
 (** CH1 (U4): η under a spine moves the head or exactly one argument.
     PROVED here; = origin/eta_postpo:PCUICEtaReduction.v:1223-1234 (old AST). *)
@@ -97,10 +90,10 @@ Qed.
 Lemma eta_mkApps_args f l l' : OnOne2 eta1 l l' -> eta (mkApps f l) (mkApps f l').
 Proof. intro. apply eta_step. now apply eta1_mkApps_args. Qed.
 
-(** CH6 (U4): [OnOne2 eta1] tracks [nth_error] up to a reflexive η-step. *)
-Lemma onone2_eta_nth_error (l l' : list term) (H : OnOne2 eta1 l l') :
+(** CH6 (U4): [OnOne2 R] tracks [nth_error] up to a reflexive [R]-step (any [R]). *)
+Lemma OnOne2_nth_error_rc {A} (R : A -> A -> Type) (l l' : list A) (H : OnOne2 R l l') :
   forall k a, nth_error l k = Some a ->
-    ∑ a', nth_error l' k = Some a' × clos_refl eta1 a a'.
+    ∑ a', nth_error l' k = Some a' × clos_refl R a a'.
 Proof.
   induction H as [hd hd' tl p|hd tl tl' X IH]; intros [|k] a; cbn.
   - intro e; noconf e. exists hd'. split; [reflexivity| now constructor].
@@ -108,29 +101,10 @@ Proof.
   - intro e; noconf e. exists hd. split; [reflexivity| apply r_refl].
   - intro e. destruct (IH k a e) as [a' [? ?]]. exists a'. now split.
 Qed.
+Notation onone2_eta_nth_error := (OnOne2_nth_error_rc eta1).
 
-(** CH2 (U1): [upto_domain] is reflexive. PROVED here by term induction
-    (= EtaL2's Reflexive upto_domain, frac/eta-l2 @ e49648c4). *)
-Lemma upto_domain_refl t : upto_domain t t.
-Proof.
-  induction t using term_forall_list_ind; cbn; try solve [constructor; auto].
-  - constructor. now eapply All_All2.
-  - destruct X as [Hpars [Hctx Hret]]. constructor.
-    + eapply All_All2; eauto.
-    + reflexivity.
-    + reflexivity.
-    + exact Hret.
-    + exact IHt.
-    + eapply All_All2; eauto. intros br [_ ?]; split; [reflexivity|assumption].
-  - constructor. eapply All_All2; eauto. intros d [Ht Hb]; repeat split; (assumption || reflexivity).
-  - constructor. eapply All_All2; eauto. intros d [Ht Hb]; repeat split; (assumption || reflexivity).
-  - constructor. destruct p as [? []]; cbn in X; try solve [constructor].
-    destruct X as [Htype [Hdef Hval]]. constructor; cbn.
-    + reflexivity.
-    + exact Hdef.
-    + exact Htype.
-    + eapply All_All2; eauto.
-Qed.
+(* CH2 upto_domain_refl: Required from EtaL2's PCUICEtaConfluence
+   (#[global] Instance Reflexive upto_domain) — not re-derived here. *)
 
 (** CH3 (U4): η keeps a constructor-headed term constructor-headed. PROVED here
     from [eta1_mkApps_inv]: a constructor head is a [tConstruct], which has no
@@ -147,31 +121,120 @@ Proof.
   - rewrite decompose_app_mkApps; reflexivity.
 Qed.
 
+(** fix_subst / cofix_subst congruence: one η in the mfix gives η* on every
+    substitution entry (each entry [tFix mfix j -> tFix mfix' j] is one [eta1]). *)
+Lemma All2_eta_fix_subst (m m' : mfixpoint term) :
+  #|m| = #|m'| -> (forall j, eta1 (tFix m j) (tFix m' j)) ->
+  All2 eta (fix_subst m) (fix_subst m').
+Proof.
+  intros Hlen Hj. unfold fix_subst. rewrite Hlen.
+  generalize #|m'|. intro n. induction n; simpl.
+  - constructor.
+  - constructor; [apply eta_step, Hj| exact IHn].
+Qed.
+
+Lemma All2_eta_cofix_subst (m m' : mfixpoint term) :
+  #|m| = #|m'| -> (forall j, eta1 (tCoFix m j) (tCoFix m' j)) ->
+  All2 eta (cofix_subst m) (cofix_subst m').
+Proof.
+  intros Hlen Hj. unfold cofix_subst. rewrite Hlen.
+  generalize #|m'|. intro n. induction n; simpl.
+  - constructor.
+  - constructor; [apply eta_step, Hj| exact IHn].
+Qed.
+
+(** Inversion of [eta1] out of a [tFix]: the result is a [tFix] of the same index
+    and length, each def's [rarg] preserved and [dbody] moved by η*. *)
+Lemma eta1_tFix_inv mfix idx N :
+  eta1 (tFix mfix idx) N ->
+  ∑ mfix', (N = tFix mfix' idx) × (#|mfix| = #|mfix'|) ×
+           (forall j, eta1 (tFix mfix j) (tFix mfix' j)) ×
+           All2 (fun d d' => (rarg d = rarg d') × eta (dbody d) (dbody d')) mfix mfix'.
+Proof.
+  intro he. depelim he.
+  - assert (HA : All2 (fun d d' => (rarg d = rarg d') × eta (dbody d) (dbody d')) mfix mfix1).
+    { eapply OnOne2_All2; [eassumption| |].
+      * intros x y [? Heq]. split; [congruence|].
+        assert (Hd : dbody x = dbody y) by congruence. rewrite Hd. apply eta_refl.
+      * intros x. split; [reflexivity| apply eta_refl]. }
+    exists mfix1.
+    split; [reflexivity|].
+    split; [pose proof (All2_length HA) as Hl; congruence|].
+    split; [intro j; now apply fix_eta_ty| exact HA].
+  - assert (HA : All2 (fun d d' => (rarg d = rarg d') × eta (dbody d) (dbody d')) mfix mfix1).
+    { eapply OnOne2_All2; [eassumption| |].
+      * intros x y [Hb Heq]. split; [congruence| apply eta_step, Hb].
+      * intros x. split; [reflexivity| apply eta_refl]. }
+    exists mfix1.
+    split; [reflexivity|].
+    split; [pose proof (All2_length HA) as Hl; congruence|].
+    split; [intro j; now apply fix_eta_body| exact HA].
+Qed.
+
+Lemma eta1_tCoFix_inv mfix idx N :
+  eta1 (tCoFix mfix idx) N ->
+  ∑ mfix', (N = tCoFix mfix' idx) × (#|mfix| = #|mfix'|) ×
+           (forall j, eta1 (tCoFix mfix j) (tCoFix mfix' j)) ×
+           All2 (fun d d' => (rarg d = rarg d') × eta (dbody d) (dbody d')) mfix mfix'.
+Proof.
+  intro he. depelim he.
+  - assert (HA : All2 (fun d d' => (rarg d = rarg d') × eta (dbody d) (dbody d')) mfix mfix1).
+    { eapply OnOne2_All2; [eassumption| |].
+      * intros x y [? Heq]. split; [congruence|].
+        assert (Hd : dbody x = dbody y) by congruence. rewrite Hd. apply eta_refl.
+      * intros x. split; [reflexivity| apply eta_refl]. }
+    exists mfix1.
+    split; [reflexivity|].
+    split; [pose proof (All2_length HA) as Hl; congruence|].
+    split; [intro j; now apply cofix_eta_ty| exact HA].
+  - assert (HA : All2 (fun d d' => (rarg d = rarg d') × eta (dbody d) (dbody d')) mfix mfix1).
+    { eapply OnOne2_All2; [eassumption| |].
+      * intros x y [Hb Heq]. split; [congruence| apply eta_step, Hb].
+      * intros x. split; [reflexivity| apply eta_refl]. }
+    exists mfix1.
+    split; [reflexivity|].
+    split; [pose proof (All2_length HA) as Hl; congruence|].
+    split; [intro j; now apply cofix_eta_body| exact HA].
+Qed.
+
+(** CH4f (U2/U4): one η-step out of a fixpoint keeps unfolding enabled; the
+    unfolded body moves by η*. PROVED from [eta_subst] + fix_subst congruence. *)
+Lemma eta1_fix_unfold mfix idx N narg fn :
+  eta1 (tFix mfix idx) N -> unfold_fix mfix idx = Some (narg, fn) ->
+  ∑ mfix' fn', [× N = tFix mfix' idx, unfold_fix mfix' idx = Some (narg, fn') & eta fn fn'].
+Proof.
+  intro he. apply eta1_tFix_inv in he as (mfix' & -> & Hlen & Hj & HA).
+  unfold unfold_fix. destruct (nth_error mfix idx) as [d|] eqn:hd; [|discriminate].
+  intro E; noconf E.
+  eapply All2_nth_error_Some in HA as (d' & hd' & Hrarg & Hbody); [|exact hd].
+  exists mfix', (subst0 (fix_subst mfix') (dbody d')). split.
+  - reflexivity.
+  - rewrite hd'. now rewrite <- Hrarg.
+  - apply eta_subst; [now apply All2_eta_fix_subst| exact Hbody].
+Qed.
+
+Lemma eta1_cofix_unfold mfix idx N narg fn :
+  eta1 (tCoFix mfix idx) N -> unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ mfix' fn', [× N = tCoFix mfix' idx, unfold_cofix mfix' idx = Some (narg, fn') & eta fn fn'].
+Proof.
+  intro he. apply eta1_tCoFix_inv in he as (mfix' & -> & Hlen & Hj & HA).
+  unfold unfold_cofix. destruct (nth_error mfix idx) as [d|] eqn:hd; [|discriminate].
+  intro E; noconf E.
+  eapply All2_nth_error_Some in HA as (d' & hd' & Hrarg & Hbody); [|exact hd].
+  exists mfix', (subst0 (cofix_subst mfix') (dbody d')). split.
+  - reflexivity.
+  - rewrite hd'. now rewrite <- Hrarg.
+  - apply eta_subst; [now apply All2_eta_cofix_subst| exact Hbody].
+Qed.
+
 (* ======================================================================= *)
 Section C3Unlocking.
   Context {cf : checker_flags}.
   Context (Σ : global_env).
 
-  (* ---- substitution-level U-row Context hypotheses (U1/U4; L2/L7 own) ---- *)
-
-  (* CH2 upto_domain_refl: proved globally above (unconditional). *)
-
-  (* CH3 eta1_isConstruct_app: proved globally above (unconditional). *)
-
-  (** CH4f (U2/U4): one η-step out of a fixpoint keeps it a fixpoint of the same
-      index, unfolding stays enabled, and the unfolded body moves by η*. *)
-  Context (eta1_fix_unfold :
-    forall mfix idx N narg fn,
-      eta1 (tFix mfix idx) N ->
-      unfold_fix mfix idx = Some (narg, fn) ->
-      ∑ mfix' fn', [× N = tFix mfix' idx, unfold_fix mfix' idx = Some (narg, fn') & eta fn fn']).
-
-  (** CH4c (U2/U4): the cofix twin. *)
-  Context (eta1_cofix_unfold :
-    forall mfix idx N narg fn,
-      eta1 (tCoFix mfix idx) N ->
-      unfold_cofix mfix idx = Some (narg, fn) ->
-      ∑ mfix' fn', [× N = tCoFix mfix' idx, unfold_cofix mfix' idx = Some (narg, fn') & eta fn fn']).
+  (* All closure facts (CH1-CH6, CH4f/CH4c) are proved globally above and in
+     EtaL2's PCUICEtaConfluence (Required). This section is now hypothesis-free
+     apart from the ambient Σ. *)
 
   (** is_constructor preserved by an η-OnOne2 on the spine (CH3 + CH6). *)
   Lemma onone2_eta_is_constructor n l l' :
@@ -231,14 +294,12 @@ Section C3Unlocking.
         exists (tCase ci p (mkApps fn' args) brs), (tCase ci p (mkApps fn' args) brs).
         split; [|split].
         * constructor. now eapply red_cofix_case.
-        * eapply (eta_congr (fun z => tCase ci p z brs)); [| now eapply eta_mkApps_head].
-          intros ?? h. now eapply case_eta_discr.
+        * apply eta_Case_discr. now eapply eta_mkApps_head.
         * apply upto_domain_refl.
       + exists (tCase ci p (mkApps fn l') brs), (tCase ci p (mkApps fn l') brs).
         split; [|split].
         * constructor. now eapply red_cofix_case.
-        * eapply (eta_congr (fun z => tCase ci p z brs)); [| now eapply eta_mkApps_args].
-          intros ?? h. now eapply case_eta_discr.
+        * apply eta_Case_discr. now eapply eta_mkApps_args.
         * apply upto_domain_refl.
     - exists (tCase ci p (mkApps fn args) brs'), (tCase ci p (mkApps fn args) brs').
       split; [|split].
@@ -261,14 +322,12 @@ Section C3Unlocking.
       exists (tProj pr (mkApps fn' args)), (tProj pr (mkApps fn' args)).
       split; [|split].
       + constructor. now eapply red_cofix_proj.
-      + eapply (eta_congr (fun z => tProj pr z)); [| now eapply eta_mkApps_head].
-        intros ?? h. now eapply proj_eta.
+      + apply eta_Proj. now eapply eta_mkApps_head.
       + apply upto_domain_refl.
     - exists (tProj pr (mkApps fn l')), (tProj pr (mkApps fn l')).
       split; [|split].
       + constructor. now eapply red_cofix_proj.
-      + eapply (eta_congr (fun z => tProj pr z)); [| now eapply eta_mkApps_args].
-        intros ?? h. now eapply proj_eta.
+      + apply eta_Proj. now eapply eta_mkApps_args.
       + apply upto_domain_refl.
   Qed.
 
