@@ -1,10 +1,10 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config EnvMap PrimitiveOps.
+From MetaRocq.Common Require Import config EnvMap.
 From MetaRocq.Template Require Ast TypingWf WfAst TermEquality.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCumulativity
-     PCUICLiftSubst PCUICEquality PCUICReduction PCUICPrimitiveRed
+     PCUICLiftSubst PCUICEquality PCUICReduction
      PCUICUnivSubst PCUICTyping PCUICGlobalEnv
      PCUICWeakeningConv PCUICWeakeningTyp PCUICWeakeningEnv
      PCUICSubstitution PCUICGeneration PCUICCasesContexts
@@ -1012,14 +1012,6 @@ End Trans_Global.
 From MetaRocq.PCUIC Require Import PCUICArityRed.
 From MetaRocq.Template Require TemplateArityRed.
 
-Lemma trans_env_env_retroknowledge {Σ : Ast.Env.global_env} :
-  retroknowledge (trans_env_env (trans_global_env Σ)) = Ast.Env.retroknowledge Σ.
-Proof.
-  destruct Σ as [univs Σ] .
-  unfold trans_global_env; cbn -[trans_global_decls].
-  induction Σ => /= //.
-Qed.
-
 Section Trans_Global.
   Context {cf : checker_flags}.
   Context (Σ : Ast.Env.global_env).
@@ -1517,43 +1509,6 @@ Section Trans_Global.
   Proof. now eapply typing_wf_sigma. Qed.
   Hint Resolve wf_wf_decl_pred : wf.
 
-  (** ** The primitive-operation rule transports
-
-    [trans_global_env] keeps the retroknowledge, so the table and the boolean
-    inductive are the same on both sides; a literal argument translates to the
-    literal argument PCUIC's rule expects ([trans (tInt i) = tPrim (prim_int i)]),
-    so the transport of the rule is the identity on literals. *)
-
-  Lemma trans_template_of_lit l : trans Σ' (ST.template_of_lit l) = term_of_lit l.
-  Proof using Type. by destruct l. Qed.
-
-  Lemma trans_map_template_of_lit ls :
-    List.map (trans Σ') (List.map ST.template_of_lit ls) = List.map term_of_lit ls.
-  Proof using Type.
-    rewrite map_map. apply map_ext, trans_template_of_lit.
-  Qed.
-
-  Lemma trans_prim_op_of c op :
-    Ast.Env.prim_op_of Σ c = Some op -> prim_op_of Σ' c = Some op.
-  Proof using Type.
-    rewrite /prim_op_of /Ast.Env.prim_op_of trans_env_env_retroknowledge //.
-  Qed.
-
-  Lemma trans_primitive_bool i :
-    Ast.Env.primitive_bool Σ = Some i -> primitive_bool Σ' = Some i.
-  Proof using Type.
-    rewrite /primitive_bool /Ast.Env.primitive_bool trans_env_env_retroknowledge //.
-  Qed.
-
-  Lemma trans_treadback s r v :
-    ST.treadback Σ s r = Some v -> readback Σ' s r = Some (trans Σ' v).
-  Proof using Type.
-    rewrite /ST.treadback /readback /Ast.Env.primitive_bool trans_env_env_retroknowledge.
-    destruct s, r => //=.
-    - intros [= <-]; reflexivity.
-    - destruct Retroknowledge.retro_bool => //. intros [= <-]; reflexivity.
-  Qed.
-
   Lemma trans_red1 Γ T U :
     All (WfAst.wf_decl Σ) Γ ->
     WfAst.wf Σ T ->
@@ -1621,18 +1576,6 @@ Section Trans_Global.
     - rewrite trans_subst_instance. econstructor.
       apply (forall_decls_declared_constant _ wfΣ wfΣ' c decl H).
       now destruct decl as [na [b|] ty]; cbn; noconf H0.
-
-    (* primitive operation: the literals and the readback are the same on both
-       sides, the arguments beyond the arity are reached by [red1_mkApps_f] *)
-    - rewrite trans_mkApps. cbn [trans].
-      rewrite map_app trans_map_template_of_lit mkApps_app.
-      apply red1_mkApps_f.
-      eapply red_prim_op.
-      + now apply trans_prim_op_of.
-      + now apply (forall_decls_declared_constant _ wfΣ wfΣ').
-      + destruct decl as [? [?|] ?]; cbn in *; congruence.
-      + eassumption.
-      + now apply trans_treadback.
 
     - rewrite trans_mkApps; eauto with wf.
       simpl. constructor. now rewrite nth_error_map H.
@@ -3967,6 +3910,14 @@ Proof.
 Qed.
 
 Lemma trans_env_env_universes {Σ : Ast.Env.global_env} : universes (trans_env_env (trans_global_env Σ)) = Ast.Env.universes Σ.
+Proof.
+  destruct Σ as [univs Σ] .
+  unfold trans_global_env; cbn -[trans_global_decls].
+  induction Σ => /= //.
+Qed.
+
+Lemma trans_env_env_retroknowledge {Σ : Ast.Env.global_env} :
+  retroknowledge (trans_env_env (trans_global_env Σ)) = Ast.Env.retroknowledge Σ.
 Proof.
   destruct Σ as [univs Σ] .
   unfold trans_global_env; cbn -[trans_global_decls].

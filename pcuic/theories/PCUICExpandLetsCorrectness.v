@@ -6,9 +6,9 @@ From Equations Require Import Equations.
 
 Set Warnings "-notation-overridden".
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config PrimitiveOps.
+From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICOnOne PCUICCases PCUICInduction
-     PCUICLiftSubst PCUICEquality PCUICReduction PCUICPrimitiveRed PCUICCasesContexts PCUICTactics
+     PCUICLiftSubst PCUICEquality PCUICReduction PCUICCasesContexts PCUICTactics
      PCUICSigmaCalculus PCUICClosed PCUICClosedTyp PCUICContexts PCUICSubstitution
      PCUICWeakeningEnv PCUICWeakeningEnvTyp PCUICEquality
      PCUICWeakeningConv PCUICWeakeningTyp PCUICCumulativity
@@ -1951,29 +1951,6 @@ Proof.
   now rewrite trans_bbody.
 Qed.
 
-(** ** The primitive-operation rule transports
-
-  [PCUICExpandLets.trans_global_env] copies the retroknowledge and [trans] is
-  the identity on a literal payload and on the reduct of the rule, so the
-  transport of the rule is the identity on literals. *)
-
-Lemma trans_term_of_lit l : trans (term_of_lit l) = term_of_lit l.
-Proof. by destruct l. Qed.
-
-Lemma trans_map_term_of_lit ls :
-  map trans (map term_of_lit ls) = map term_of_lit ls.
-Proof.
-  rewrite map_map. apply map_ext, trans_term_of_lit.
-Qed.
-
-Lemma trans_readback {Σ s r v} :
-  readback Σ s r = Some v -> readback (trans_global_env Σ) s r = Some (trans v).
-Proof.
-  rewrite /readback /=. destruct s, r => //=.
-  - intros [= <-]; reflexivity.
-  - destruct Retroknowledge.retro_bool => //. intros [= <-]; reflexivity.
-Qed.
-
 Lemma trans_red1 {cf} (Σ : global_env_ext) {wfΣ : wf Σ} {wfΣ' : wf_trans Σ} Γ T U :
   red1 Σ Γ T U ->
   wt Σ Γ T ->
@@ -2038,15 +2015,6 @@ Proof.
   - rewrite trans_subst_instance. eapply red1_red; econstructor.
     apply (trans_declared_constant _ c decl H).
     destruct decl. now simpl in *; subst cst_body0.
-
-  (* primitive operation *)
-  - rewrite trans_mkApps trans_map_term_of_lit.
-    eapply red1_red. eapply red_prim_op.
-    + eassumption.
-    + apply (trans_declared_constant _ c decl H0).
-    + destruct decl. now simpl in *; subst cst_body0.
-    + eassumption.
-    + now apply trans_readback.
 
   - rewrite trans_mkApps; eauto with wf.
     simpl. eapply red1_red; constructor; now rewrite nth_error_map H.
