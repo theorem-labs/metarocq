@@ -1423,3 +1423,47 @@ Proof.
     + apply utd_Lambda. reflexivity.
 Qed.
 
+(** ** Created-redex sub-case 2: [red_fix] created inside the η body — helpers.
+
+  NB base HAS [decompose_app_lift] and [lift_is_constructor], but both are inside the
+  commented-out block at Conversion/PCUICWeakeningConv.v:175-208 (same nested-comment
+  trap as [on_free_vars_true] at Syntax/PCUICOnFreeVars.v:139-163). So they are proved
+  locally here — which also keeps the closure clean, since PCUICWeakeningConv is
+  Conversion-level. *)
+
+Lemma decompose_app_rec_lift n k t l :
+  decompose_app_rec (lift n k t) (map (lift n k) l) =
+  (lift n k (decompose_app_rec t l).1, map (lift n k) (decompose_app_rec t l).2).
+Proof.
+  induction t in l |- *; cbn; try reflexivity.
+  now rewrite -(IHt1 (t2 :: l)).
+Qed.
+
+Lemma isConstruct_app_lift n k t : isConstruct_app (lift n k t) = isConstruct_app t.
+Proof.
+  unfold isConstruct_app, decompose_app.
+  replace (@nil term) with (map (lift n k) (@nil term)) at 1 by reflexivity.
+  rewrite decompose_app_rec_lift. cbn.
+  now destruct (decompose_app_rec t []).1.
+Qed.
+
+Lemma is_constructor_lift n k narg args :
+  is_constructor narg (map (lift n k) args) = is_constructor narg args.
+Proof.
+  unfold is_constructor. rewrite nth_error_map.
+  destruct (nth_error args narg); cbn; [apply isConstruct_app_lift|reflexivity].
+Qed.
+
+(** The guard's recursive argument can NEVER be the trailing [tRel 0] of an η-body:
+    [isConstruct_app (tRel 0) = false]. So an η-created fix always has its recursive
+    argument inside the REAL spine — which is why this case is benign. *)
+Lemma is_constructor_app_tRel0 narg args :
+  is_constructor narg (args ++ [tRel 0]) = true -> narg < #|args|.
+Proof.
+  unfold is_constructor. intro H.
+  destruct (Nat.ltb_spec narg #|args|) as [Hlt|Hge]; [exact Hlt|].
+  exfalso. rewrite nth_error_app_ge in H; [exact Hge|].
+  destruct (narg - #|args|) as [|m] eqn:Hd; cbn in H; [discriminate H|].
+  destruct m; cbn in H; discriminate H.
+Qed.
+
