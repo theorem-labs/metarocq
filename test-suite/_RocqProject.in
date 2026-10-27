@@ -35,7 +35,6 @@ modules_sections.v
 mutind.v
 nested_positivity.v
 nested_positivity_check.v
-# nested_positivity_stdlib.v
 opaque.v
 order_rec.v
 positivity_red.v

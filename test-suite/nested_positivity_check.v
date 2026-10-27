@@ -370,3 +370,26 @@ Example Check_wrong_conclusion_variable :
     (nested_cstr_type (program_ind q_mpair)) =
   Some "Nested positivity: a constructor of the nesting inductive does not conclude at its own instance".
 Proof. vm_compute. reflexivity. Qed.
+
+(** * Accepted, although Rocq's kernel refuses it: a BiFinite block
+
+  Rocq's kernel refuses any occurrence of a non-recursive (BiFinite) block in a constructor
+  argument, even with its positivity check bypassed, so no Rocq environment has the block
+  below. The positivity rule does not read [ind_finite], so it accepts
+  [Variant r := R : r -> r]. This is safe for three reasons: the block is positive; no
+  fixpoint or cofixpoint over it is typable (a fixpoint needs a Finite type, a cofixpoint a
+  CoFinite one); and no quoted kernel environment can hold it. The test documents the
+  divergence, so that a later tightening of the rule shows up here. *)
+Definition r_cstr_type : term := tProd nested_binder (tRel 0) (tRel 1).
+Definition r_body : one_inductive_body :=
+  {| ind_name := "r"; ind_indices := []; ind_sort := Sort.type0; ind_type := tSort Sort.type0;
+     ind_kelim := IntoAny;
+     ind_ctors := [{| cstr_name := "R"; cstr_args := [vass nested_binder (tRel 0)];
+                      cstr_indices := []; cstr_type := r_cstr_type; cstr_arity := 1 |}];
+     ind_projs := []; ind_relevance := Relevant |}.
+Definition r_decl : mutual_inductive_body :=
+  {| ind_finite := BiFinite; ind_npars := 0; ind_params := []; ind_bodies := [r_body];
+     ind_universes := Monomorphic_ctx; ind_variance := None |}.
+Example Check_bifinite :
+  answer (fun _ => raise (Msg "no nesting inductive")) r_decl 0 r_cstr_type = None.
+Proof. vm_compute. reflexivity. Qed.

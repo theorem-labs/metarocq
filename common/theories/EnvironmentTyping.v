@@ -1447,6 +1447,10 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
     Notation subst0 t := (subst t 0).
     Notation "M { j := N }" := (subst [N] j M) (at level 10, right associativity).
 
+    (** The quotation names the later relations of this block by their position
+        (bodies 1-3: [positive_args], [positive_nested_ctors], [positive_nested_cstr];
+        quotation/theories/ToPCUIC/Common/EnvironmentTyping.v and its ToTemplate twin), so
+        reordering them must reorder those instances. *)
     Inductive positive_cstr_arg Σ mdecl (NI : nested_insts) Γ : term -> Type :=
     | pos_arg_closed ty :
       closedn #|Γ| ty ->

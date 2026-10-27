@@ -5,6 +5,7 @@
 # unnoticed without this check.
 # Usage: check_fail_messages.sh <file.v>   (run in test-suite/, after `make`)
 # Exit 0 when every expectation holds; 1 otherwise, naming each one that does not.
+# Written for bash 3.2 as well (no mapfile, no expansion of an empty array).
 set -u
 f=$1
 flags=$(grep -E '^-(R|Q|I) ' _RocqProject | tr '\n' ' ')
@@ -13,22 +14,31 @@ out=$(mktemp)
 # for each [Fail]; the n-th Fail SafeCheck message is paired with the n-th expect.
 eval rocq repl -q $flags < "$f" > "$out" 2>&1
 status=0
-mapfile -t expects < <(sed -n 's/^(\* expect: \(.*\) \*)$/\1/p' "$f")
+expects=()
+while IFS= read -r line; do expects+=("$line"); done \
+  < <(sed -n 's/^(\* expect: \(.*\) \*)$/\1/p' "$f")
 # Every [Fail ...] command (Inductive or SafeCheck) prints one block; keep only the
 # blocks of [Fail MetaRocq SafeCheck], in order.
-mapfile -t kinds < <(grep -E '^Fail ' "$f" | sed -E 's/^Fail (MetaRocq SafeCheck|[A-Za-z]+).*/\1/')
-mapfile -t messages < <(awk '/The command has indeed failed with message:/ { getline; m = $0;
+kinds=()
+while IFS= read -r line; do kinds+=("$line"); done \
+  < <(grep -E '^Fail ' "$f" | sed -E 's/^Fail (MetaRocq SafeCheck|[A-Za-z]+).*/\1/')
+messages=()
+while IFS= read -r line; do messages+=("$line"); done \
+  < <(awk '/The command has indeed failed with message:/ { getline; m = $0;
     while ((getline line) > 0 && line !~ /^Rocq </ && line != "") m = m " " line; print m }' "$out")
 n=0
-for i in "${!kinds[@]}"; do
-  [ "${kinds[$i]}" = "MetaRocq SafeCheck" ] || continue
-  want=${expects[$n]:-}
-  got=${messages[$i]:-<no failure message>}
-  case $got in
-    *"$want"*) echo "ok: $want" ;;
-    *) echo "MISMATCH: expected \"$want\", got \"$got\""; status=1 ;;
-  esac
-  n=$((n + 1))
+i=0
+while [ "$i" -lt "${#kinds[@]}" ]; do
+  if [ "${kinds[$i]}" = "MetaRocq SafeCheck" ]; then
+    want=${expects[$n]:-}
+    got=${messages[$i]:-<no failure message>}
+    case $got in
+      *"$want"*) echo "ok: $want" ;;
+      *) echo "MISMATCH: expected \"$want\", got \"$got\""; status=1 ;;
+    esac
+    n=$((n + 1))
+  fi
+  i=$((i + 1))
 done
 [ "$n" -eq "${#expects[@]}" ] || { echo "MISMATCH: ${#expects[@]} expectations, $n Fail SafeCheck commands"; status=1; }
 rm -f "$out"

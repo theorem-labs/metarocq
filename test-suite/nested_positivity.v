@@ -8,8 +8,7 @@
 
    Every type nested here is defined in this file, monomorphic, so the file does not
    depend on how SafeCheck handles template-polymorphic types such as [list] and
-   [prod]. [nested_positivity_stdlib.v] tests those, and [nested_positivity_check.v]
-   runs the positivity check alone on both kinds. *)
+   [prod]; [nested_positivity_check.v] runs the positivity check alone on both kinds. *)
 
 From MetaRocq.Template Require Import Loader.
 From MetaRocq.SafeCheckerPlugin Require Import Loader.
@@ -21,7 +20,7 @@ Inductive moption (A : Set) : Set := mNone : moption A | mSome : A -> moption A.
 (** * Accepted *)
 
 (* The rose tree: the shape of [Stdlib.micromega.ZMicromega.ZArithProof]'s
-   [EnumProof] constructor. The [list] version is in nested_positivity_stdlib.v. *)
+   [EnumProof] constructor. *)
 Inductive mrose : Set := MNode : mlist mrose -> mrose.
 MetaRocq SafeCheck mrose.
 

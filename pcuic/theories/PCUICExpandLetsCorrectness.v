@@ -4747,16 +4747,6 @@ Definition is_telescope_head (t : term) :=
   | _ => true
   end.
 
-Lemma decompose_prod_assum_it_mkProd_telescope ctx ctx' ty :
-  is_telescope_head ty ->
-  decompose_prod_assum ctx (it_mkProd_or_LetIn ctx' ty) = (ctx' ++ ctx, ty).
-Proof.
-  revert ctx ty. induction ctx' using rev_ind; move=> // ctx ty /=.
-  destruct ty; cbn; try (congruence || reflexivity).
-  move=> hty. rewrite it_mkProd_or_LetIn_app /=.
-  case: x => [na [body|] ty'] /=; by rewrite IHctx' // /snoc -app_assoc.
-Qed.
-
 Lemma decompose_prod_assum_telescope_head ctx t Γ T :
   decompose_prod_assum ctx t = (Γ, T) ->
   is_telescope_head T.
@@ -4792,7 +4782,9 @@ Lemma smash_telescope_it_mkProd_or_LetIn Γ T :
   it_mkProd_or_LetIn (smash_context [] Γ) (expand_lets Γ T).
 Proof.
   intros hhead.
-  now rewrite /smash_telescope decompose_prod_assum_it_mkProd_telescope // app_nil_r.
+  rewrite /smash_telescope decompose_prod_assum_it_mkProd_or_LetIn'.
+  have -> : decompose_prod_assum [] T = ([], T) by destruct T; cbn in hhead |- *; congruence.
+  now rewrite /app_context /= app_nil_r.
 Qed.
 
 Lemma smash_telescope_subst s k t Γ T :
