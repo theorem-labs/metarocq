@@ -255,6 +255,37 @@ Lemma substitution_wf_local_rel `{checker_flags} {Σ} {wfΣ : wf Σ} {Γ Γ' s �
           now eapply substitution.
    Qed.
 
+(** A type in weak-head normal form that reduces to a telescope over an applied
+    inductive type is a product or an applied inductive type. It lives here, not in
+    [PCUICFixWitness], because [PCUICNormal] imports [PCUICFixWitness] through [PCUICSR]. *)
+Lemma whnf_red_codomain_ind {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  {Γ T ctx i u l} :
+  whnf RedFlags.default Σ Γ T ->
+  Σ ;;; Γ ⊢ T ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ->
+  isProd T || isInd (decompose_app T).1.
+Proof.
+  intros wh r.
+  destruct (red_mkApps_smash_witness r) as [l' r'].
+  assert (hass : assumption_context (smash_context [] ctx))
+    by (apply smash_context_assumption_context; constructor).
+  set (sctx := smash_context [] ctx) in hass, r'.
+  clearbody sctx.
+  induction sctx using rev_ind.
+  - cbn in r'.
+    eapply whnf_red_inv in r'; tea.
+    apply whnf_red_mkApps_r_inv in r' as (hd & args & -> & whd & _).
+    depelim whd.
+    apply/orP; right.
+    now rewrite decompose_app_mkApps.
+  - clear IHsctx.
+    apply assumption_context_app in hass as [ha hb].
+    destruct x as [na [b|] ty].
+    + exfalso; first [now inversion ha|now inversion hb].
+    + rewrite it_mkProd_or_LetIn_app /= in r'.
+      eapply whnf_red_inv in r'; tea.
+      now depelim r'.
+Qed.
+
 Section Typecheck.
   Context {cf : checker_flags} {nor : normalizing_flags}.
 
@@ -1397,121 +1428,182 @@ Section Typecheck.
     apply wf_clos_trans. eapply wf_redp_subterm; eauto.
   Defined.
 
-  (* Equations does not hand out obligations in a fixed order, so every
-     obligation of a function is discharged by one dispatcher that tries each
-     proof. *)
-  Ltac ck_codomain_obl :=
-    (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
-    let wfΣ := ident:(wfΣ) in let hr := ident:(hr) in let hr' := ident:(hr') in
-    let hC := ident:(hC) in let hp := ident:(hp) in let hpr := ident:(hpr) in
-    let wfΣ' := ident:(wfΣ') in let T := ident:(T) in let hT := ident:(hT) in
-    let Δ := ident:(Δ) in let C := ident:(C) in let na := ident:(na) in let A := ident:(A) in
-    let B := ident:(B) in let Σ0 := ident:(Σ0) in let wfΣ0 := ident:(wfΣ0) in
-    let eqC := ident:(eqC) in let neqC := ident:(neqC) in let hprod := ident:(hprod) in
-    let hco := ident:(hco) in let u := ident:(u) in let l := ident:(l) in
-    let ctxr := ident:(ctxr) in let hred := ident:(hred) in let X0 := ident:(X0) in
-    let Σ := ident:(Σ) in let v := ident:(v) in let rv1 := ident:(rv1) in
-    let rv2 := ident:(rv2) in let hv := ident:(hv) in let H := ident:(H) in
-    let ctx3 := ident:(ctx3) in let l3 := ident:(l3) in let A' := ident:(A') in
-    let B' := ident:(B') in let eqv := ident:(eqv) in let rA := ident:(rA) in
-    let rB := ident:(rB) in let ctx4 := ident:(ctx4) in let eqB := ident:(eqB) in
-    let nind := ident:(nind) in let nprod := ident:(nprod) in let l' := ident:(l') in
-    let hred' := ident:(hred') in let hass := ident:(hass) in let sctx := ident:(sctx) in
-    let IHsctx := ident:(IHsctx) in let ha := ident:(ha) in let hb := ident:(hb) in
-    let x := ident:(x) in let b := ident:(b) in let ctx' := ident:(ctx') in
-    let na' := ident:(na') in let ty' := ident:(ty') in let absurd := ident:(absurd) in
-    first [
-      solve [ destruct (hr _ wfΣ) as [hr']; sq; now exists u, l, [] ]
-    | solve [ pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (hC _ wfΣ) as [T hT];
-              destruct (hp _ wfΣ) as [hpr];
-              eapply (welltyped_prod_codomain (wfΣ := wfΣ'));
-              eexists; eapply subject_reduction; [exact wfΣ'|exact hT|exact (clrel_rel hpr)] ]
-    | solve [
-        assert (hprod : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Δ (tProd na A B))
-          by (intros Σ0 wfΣ0; pose proof (hΣ _ wfΣ0) as [wfΣ'];
-              destruct (hC _ wfΣ0) as [T hT]; destruct (hp _ wfΣ0) as [hpr];
-              eexists; eapply subject_reduction; [exact wfΣ'|exact hT|exact (clrel_rel hpr)]);
-        destruct (eqb_spec C (tProd na A B)) as [eqC|neqC];
-        [ subst C; apply t_step; intros Σ0 wfΣ0; cbn; sq; right;
-          unshelve eexists; [repeat constructor|reflexivity]
-        | eapply t_trans with (y := (Δ ; tProd na A B ; hprod));
-          [ apply t_step; intros Σ0 wfΣ0; cbn; sq; right;
-            unshelve eexists; [repeat constructor|reflexivity]
-          | apply t_step; intros Σ0 wfΣ0; cbn; destruct (hp _ wfΣ0) as [hpr];
-            assert (hco : cored Σ0 Δ (tProd na A B) C)
-              by (eapply red_neq_cored; [exact (clrel_rel hpr)|exact neqC]);
-            apply cored_redp in hco as [hco];
-            sq; left; split; [exact hco|reflexivity] ] ] ]
-    | solve [ pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (X0 _ wfΣ) as [[u [l [ctxr hred]]]];
-              destruct (hp _ wfΣ) as [hpr];
-              sq; exists u, l, (ctxr ++ [vass na A]);
-              eapply into_closed_red; [|exact (clrel_ctx hpr)|exact (clrel_src hpr)];
-              transitivity (tProd na A B); [exact (clrel_rel hpr)|];
-              rewrite it_mkProd_or_LetIn_app /=;
-              now eapply PCUICReduction.red_prod_r, (clrel_rel hred) ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (hp _ wfΣ) as [hpr];
-              destruct (X0 _ wfΣ) as [[u [l [ctxr hred]]]];
-              destruct (closed_red_confluence hred hpr) as [v [rv1 rv2]];
-              assert (hv : ∑ ctx' args', v = it_mkProd_or_LetIn ctx' (mkApps (tInd H u) args'))
-                by (now eapply red_it_mkProd_or_LetIn_mkApps_Ind);
-              destruct hv as [ctx3 [l3 ->]];
-              destruct (invert_red_prod rv2) as [A' [B' [eqv rA rB]]];
-              destruct (tProd_eq_it_mkProd_Ind (eq_sym eqv)) as [ctx4 [_ eqB]];
-              apply absurd; exists H; intros Σ0 wfΣ0;
-              rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
-              sq; exists u, l3, ctx4; rewrite -eqB; exact rB ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (X0 _ wfΣ) as [[u [l [ctxr hred]]]];
-              destruct (red_mkApps_smash_witness (wfΣ := wfΣ') hred) as [l' hred'];
-              assert (hass : assumption_context (smash_context [] ctxr))
-                by (apply smash_context_assumption_context; constructor);
-              set (sctx := smash_context [] ctxr) in hass, hred';
-              clearbody sctx;
-              induction sctx using rev_ind;
-              [ cbn in hred';
-                apply nind; exists H, u, l'; intros Σ0 wfΣ0;
-                rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ); sq; exact hred'
-              | clear IHsctx;
-                apply assumption_context_app in hass as [ha hb];
-                destruct x as [na' [b|] ty'];
-                [ exfalso; first [now inversion ha|now inversion hb]
-                | rewrite it_mkProd_or_LetIn_app /= in hred';
-                  apply nprod; exists na', ty'; eexists;
-                  intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ); sq; exact hred' ] ] ]
-    ].
+  (** *** The codomain walk *)
+
+  (** One step of the walk: [C] itself when it is syntactically a product or an
+      applied inductive type, its weak-head normal form otherwise. *)
+  Definition codomain_whnf (Δ : context) (C : term)
+    (hC : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Δ C) : term :=
+    if isProd C || isInd (decompose_app C).1 then C else hnf Δ C hC.
+
+  Lemma codomain_whnf_red {Δ C hC} Σ (wfΣ : abstract_env_ext_rel X Σ) :
+    ∥ Σ ;;; Δ ⊢ C ⇝ codomain_whnf Δ C hC ∥.
+  Proof.
+    rewrite /codomain_whnf.
+    destruct (isProd C || isInd (decompose_app C).1).
+    - destruct (hC _ wfΣ) as [T hT].
+      pose proof (hΣ _ wfΣ) as [wfΣ'].
+      sq. now eapply PCUICClassification.wt_closed_red_refl.
+    - exact (hnf_sound Σ wfΣ).
+  Qed.
+
+  (** If [C] reduces to a telescope over an applied inductive type, the step of the
+      walk is a product or an applied inductive type. *)
+  Lemma codomain_whnf_shape {Δ C hC i} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
+    isProd (codomain_whnf Δ C hC) || isInd (decompose_app (codomain_whnf Δ C hC)).1.
+  Proof.
+    intros hi. rewrite /codomain_whnf.
+    destruct (isProd C || isInd (decompose_app C).1) eqn:hsyn; [exact hsyn|].
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (hi _ wfΣ) as [[u [l [ctx hred]]]].
+    destruct (hnf_sound (h := hC) Σ wfΣ) as [hr].
+    destruct (hnf_complete (h := hC) Σ wfΣ) as [wh].
+    destruct (closed_red_confluence hr hred) as [v [rv1 rv2]].
+    destruct (red_it_mkProd_or_LetIn_mkApps_Ind rv2) as [ctx' [l' ->]].
+    exact (whnf_red_codomain_ind wh rv1).
+  Qed.
+
+  (** The step is an applied inductive type: the walk stops. *)
+  Lemma codomain_ind_ret {Δ C hC T i u l} :
+    T = codomain_whnf Δ C hC -> (tInd i u, l) = decompose_app T ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u' l' ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u') l') ∥.
+  Proof.
+    intros eqT eqd Σ wfΣ.
+    destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [r]. rewrite -eqT in r.
+    assert (e : mkApps (tInd i u) l = T).
+    { etransitivity. 2: symmetry; eapply mkApps_decompose_app. now rewrite -eqd. }
+    sq; exists u, l, []. rewrite e. exact r.
+  Qed.
+
+  (** The step is a product: the walk goes under it. *)
+  Lemma codomain_welltyped_step {Δ C hC na A B} :
+    tProd na A B = codomain_whnf Δ C hC ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ (Δ ,, vass na A) B.
+  Proof.
+    intros eqT Σ wfΣ.
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (hC _ wfΣ) as [T hT].
+    destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [r]. rewrite -eqT in r.
+    eapply (welltyped_prod_codomain (wfΣ := wfΣ')).
+    eexists; eapply subject_reduction; [exact wfΣ'|exact hT|exact (clrel_rel r)].
+  Qed.
+
+  (** The measure of the walk decreases from [C] to the codomain of its product step. *)
+  Lemma codomain_step_lt {Δ C hC na A B} hB :
+    tProd na A B = codomain_whnf Δ C hC ->
+    clos_trans _ (@redp_subterm_rel cf X_type X)
+      ((Δ ,, vass na A ; B ; hB) : ∑ (Γ' : context) (t : term),
+          forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ' t)
+      (Δ ; C ; hC).
+  Proof.
+    intros eqT.
+    assert (hprod : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Δ (tProd na A B)).
+    { intros Σ wfΣ. pose proof (hΣ _ wfΣ) as [wfΣ'].
+      destruct (hC _ wfΣ) as [T hT].
+      destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [hpr]. rewrite -eqT in hpr.
+      eexists; eapply subject_reduction; [exact wfΣ'|exact hT|exact (clrel_rel hpr)]. }
+    destruct (eqb_spec C (tProd na A B)) as [eqC|neqC].
+    - subst C. apply t_step; intros Σ wfΣ; cbn; sq; right.
+      unshelve eexists; [repeat constructor|reflexivity].
+    - eapply t_trans with (y := (Δ ; tProd na A B ; hprod)).
+      + apply t_step; intros Σ wfΣ; cbn; sq; right.
+        unshelve eexists; [repeat constructor|reflexivity].
+      + apply t_step; intros Σ wfΣ; cbn.
+        destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [hpr]. rewrite -eqT in hpr.
+        assert (hco : cored Σ Δ (tProd na A B) C)
+          by (eapply red_neq_cored; [exact (clrel_rel hpr)|exact neqC]).
+        apply cored_redp in hco as [hco].
+        sq; left; split; [exact hco|reflexivity].
+  Qed.
+
+  Lemma codomain_ind_prod {Δ C hC na A B i} :
+    tProd na A B = codomain_whnf Δ C hC ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u l ctx, Σ ;;; (Δ ,, vass na A) ⊢ B ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥.
+  Proof.
+    intros eqT hB Σ wfΣ.
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (hB _ wfΣ) as [[u [l [ctx hred]]]].
+    destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [hpr]. rewrite -eqT in hpr.
+    sq; exists u, l, (ctx ++ [vass na A]).
+    eapply into_closed_red; [|exact (clrel_ctx hpr)|exact (clrel_src hpr)].
+    transitivity (tProd na A B); [exact (clrel_rel hpr)|].
+    rewrite it_mkProd_or_LetIn_app /=.
+    now eapply PCUICReduction.red_prod_r, (clrel_rel hred).
+  Qed.
+
+  Lemma codomain_ind_prod_absurd {Δ C hC na A B} :
+    tProd na A B = codomain_whnf Δ C hC ->
+    ((∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u l ctx, Σ ;;; (Δ ,, vass na A) ⊢ B ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
+      False) ->
+    (∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) -> False.
+  Proof.
+    intros eqT absurd [i hi].
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [hpr]. rewrite -eqT in hpr.
+    destruct (hi _ wfΣ) as [[u [l [ctx hred]]]].
+    destruct (closed_red_confluence hred hpr) as [v [rv1 rv2]].
+    destruct (red_it_mkProd_or_LetIn_mkApps_Ind rv1) as [ctx3 [l3 ->]].
+    destruct (invert_red_prod rv2) as [A' [B' [eqv rA rB]]].
+    destruct (tProd_eq_it_mkProd_Ind (eq_sym eqv)) as [ctx4 [_ eqB]].
+    apply absurd; exists i; intros Σ0 wfΣ0.
+    rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ).
+    sq; exists u, l3, ctx4; rewrite -eqB; exact rB.
+  Qed.
+
+  (** The step is neither a product nor an applied inductive type: no reduct of [C]
+      is a telescope over an applied inductive type. *)
+  Lemma codomain_ind_refute {Δ C hC T hd l} :
+    T = codomain_whnf Δ C hC -> ~ isProd T -> (hd, l) = decompose_app T ->
+    negb (isInd hd) ->
+    (∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) -> False.
+  Proof.
+    intros eqT nprod eqd nind [i hi].
+    have shape := codomain_whnf_shape (hC := hC) hi.
+    rewrite -eqT -eqd /= in shape.
+    move/orP: shape => [hp|hind].
+    - exact (nprod hp).
+    - rewrite hind in nind. exact (diff_false_true nind).
+  Qed.
 
   (** Rocq's kernel finds the (co)inductive type a cofixpoint produces by weak-head
       reducing its type and going under every product ([codomain_is_coind]). *)
   (* Deriving the unfolding equation of this well-founded definition exhausts memory. *)
   #[derive(equations=no, eliminator=no)]
-  Equations check_codomain_ind (Δ : context) (C : term)
+  Equations? check_codomain_ind (Δ : context) (C : term)
     (hC : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Δ C)
     : typing_result_comp (∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥)
     by wf ((Δ ; C ; hC) : ∑ (Γ' : context) (t : term),
              forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ' t)
           (clos_trans _ (@redp_subterm_rel cf X_type X)) :=
-    check_codomain_ind Δ C hC with inspect (reduce_to_ind (X_type := X_type) Δ C hC) := {
-      | exist (Checked_comp (i; (u; (l; hr)))) _ := ret (i ; _) ;
-      | exist (TypeError_comp _ nind) _
-          with inspect (reduce_to_prod (X_type := X_type) Δ C hC) := {
-        | exist (Checked_comp (na; (A; (B; hp)))) _ :=
-            r <- check_codomain_ind (Δ ,, vass na A) B _ ;;
-            ret (r.π1 ; _) ;
-        | exist (TypeError_comp _ nprod) _ :=
-            raise (Msg "Ill-formed cofixpoint: not producing values in a mutually coinductive family")
-        } }.
-  Next Obligation. ck_codomain_obl. Qed.
-  Next Obligation. ck_codomain_obl. Qed.
-  Next Obligation. ck_codomain_obl. Qed.
-  Next Obligation. ck_codomain_obl. Qed.
-  Next Obligation. ck_codomain_obl. Qed.
-  Next Obligation. ck_codomain_obl. Qed.
+    check_codomain_ind Δ C hC with inspect (codomain_whnf Δ C hC) := {
+      | exist T eqT with view_prodc T := {
+        | view_prod_prod na A B :=
+          match check_codomain_ind (Δ ,, vass na A) B (codomain_welltyped_step eqT) with
+          | TypeError_comp e absurd => TypeError_comp e (codomain_ind_prod_absurd eqT absurd)
+          | Checked_comp r => ret (r.π1 ; codomain_ind_prod eqT r.π2)
+          end ;
+        | view_prod_other T nprod with inspect (decompose_app T) := {
+          | exist (hd, l) eqd with view_indc hd := {
+            | view_ind_tInd i u := ret (i ; codomain_ind_ret eqT eqd) ;
+            | view_ind_other hd nind :=
+              TypeError_comp
+                (Msg "Ill-formed cofixpoint: not producing values in a mutually coinductive family")
+                (codomain_ind_refute eqT nprod eqd nind) } } } }.
+  Proof.
+    eapply codomain_step_lt; eassumption.
+  Qed.
 
   Section check_wf_mfix.
   Context (Γ : context).
@@ -1526,66 +1618,93 @@ Section Typecheck.
     | TypeError_comp _ na => TypeError_comp err na
     end.
 
-  Ltac ck_fix_body_on_obl :=
-    (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
-    let wfΣ := ident:(wfΣ) in let hr := ident:(hr) in let wfΣ' := ident:(wfΣ') in
-    let Σ0 := ident:(Σ0) in let wfΣ0 := ident:(wfΣ0) in let r := ident:(r) in
-    let hred := ident:(hred) in let X0 := ident:(X0) in let X1 := ident:(X1) in
-    let X2 := ident:(X2) in let Σ := ident:(Σ) in let ty := ident:(ty) in let d := ident:(d) in
-    let wf_type := ident:(wf_type) in let isty := ident:(isty) in
-    let hop := ident:(hop) in let rty := ident:(rty) in let hc := ident:(hc) in
-    let hrec := ident:(hrec) in let ctx := ident:(ctx) in let concl := ident:(concl) in
-    let c := ident:(c) in let clΓ := ident:(clΓ) in let hcr := ident:(hcr) in
-    let eqty := ident:(eqty) in let ctx' := ident:(ctx') in let t' := ident:(t') in
-    let d' := ident:(d') in let decomp' := ident:(decomp') in let hnth' := ident:(hnth') in
-    let r' := ident:(r') in let args := ident:(args) in let dapp := ident:(dapp) in
-    let k := ident:(k) in let inst := ident:(inst) in
-    let ctx2 := ident:(ctx2) in let t2 := ident:(t2) in let d2 := ident:(d2) in
-    let decomp2 := ident:(decomp2) in let hnth2 := ident:(hnth2) in
-    let eqctx := ident:(eqctx) in let eqnth := ident:(eqnth) in
-    let hlt := ident:(hlt) in let h := ident:(h) in let absurd := ident:(absurd) in
-    first [
-      solve [ pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (wf_type _ wfΣ) as [isty];
-              eapply (isType_rec_arg_welltyped (wfΣ := wfΣ')); [exact isty|now symmetry|now symmetry] ]
-    | solve [ pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (wf_type _ wfΣ) as [isty];
-              destruct (X2 _ wfΣ) as [hr];
-              assert (hop : is_open_term Γ (dtype d)) by (now eapply isType_is_open_term);
-              sq;
-              destruct (red_rec_arg_check_one_fix Γ d ctx concl c r X0 X1 hop
-                          ltac:(now symmetry) ltac:(now symmetry) hr) as [_ [ty [rty hc]]];
-              exists ty; split; [exact hc|exact (clrel_rel rty)] ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (wf_type _ wfΣ) as [isty];
-              destruct (X0 _ wfΣ) as [[ty [hc hred]]];
-              assert (hop : is_open_term Γ (dtype d)) by (now eapply isType_is_open_term);
-              assert (clΓ : is_closed_context Γ)
-                by (eapply wf_local_closed_context; now eapply isType_wf_local);
-              assert (hcr : Σ ;;; Γ ⊢ dtype d ⇝ ty) by (now eapply into_closed_red);
-              assert (eqty : dtype d = it_mkProd_or_LetIn ctx concl)
-                by (pose proof (decompose_prod_assum_it_mkProd_or_LetIn [] (dtype d) ctx concl
-                                  ltac:(now symmetry)) as h; now cbn in h);
-              rewrite eqty in hcr;
-              destruct (red_it_mkProd_or_LetIn_smash Γ ctx concl ty (rarg d) c hcr
-                          ltac:(now symmetry)) as [ctx' [t' [d' [decomp' hnth' r']]]];
-              destruct (check_one_fix_inv _ _ _ hc)
-                as (ctx2 & t2 & d2 & k & inst & args & decomp2 & hnth2 & dapp);
-              rewrite decomp' in decomp2; injection decomp2 as <- <-;
-              rewrite hnth' in hnth2; injection hnth2 as <-;
-              lazymatch type of hc with
-              | _ = Some ?m => apply absurd; exists (mkInd m k), inst, args
-              end;
-              intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
-              sq; now rewrite -dapp ]
-    | (* [has_rec_arg d] puts the recursive argument inside the telescope. *)
-      solve [ exfalso;
-              rewrite /has_rec_arg -eqctx /= in hrec;
-              move: hrec => /Nat.ltb_lt hlt;
-              symmetry in eqnth; apply nth_error_None in eqnth;
-              rewrite List.length_rev smash_context_length /= in eqnth; lia ]
-    ].
+  Lemma wf_types_head {d mfix} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) (d :: mfix) ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥.
+  Proof.
+    intros h Σ wfΣ. destruct (h _ wfΣ) as [hall]. sq.
+    eapply isTypeRel_isType. now depelim hall.
+  Qed.
+
+  Lemma wf_types_tail {d mfix} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) (d :: mfix) ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) mfix ∥.
+  Proof.
+    intros h Σ wfΣ. destruct (h _ wfΣ) as [hall]. sq. now depelim hall.
+  Qed.
+
+  (** *** The block of a fixpoint body *)
+
+  Lemma fix_rec_arg_welltyped {d ctx concl c}
+    (wf_type : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥) :
+    (ctx, concl) = decompose_prod_assum [] (dtype d) ->
+    Some c = nth_error (List.rev (smash_context [] ctx)) (rarg d) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      welltyped Σ (Γ ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx))
+        (decl_type c).
+  Proof.
+    intros eqctx eqnth Σ wfΣ.
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (wf_type _ wfΣ) as [isty].
+    exact (isType_rec_arg_welltyped (wfΣ := wfΣ') isty (eq_sym eqctx) (eq_sym eqnth)).
+  Qed.
+
+  Lemma fix_body_on_ret {d ctx concl c i u l}
+    (wf_type : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥) :
+    (ctx, concl) = decompose_prod_assum [] (dtype d) ->
+    Some c = nth_error (List.rev (smash_context [] ctx)) (rarg d) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ Σ ;;; Γ ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx) ⊢
+          decl_type c ⇝ mkApps (tInd i u) l ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check_one_fix (PCUICReduction.red Σ Γ) (inductive_mind i) d ∥.
+  Proof.
+    intros eqctx eqnth hr Σ wfΣ.
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (wf_type _ wfΣ) as [isty].
+    destruct (hr _ wfΣ) as [hr'].
+    assert (hop : is_open_term Γ (dtype d)) by (now eapply isType_is_open_term).
+    destruct (red_rec_arg_check_one_fix Γ d ctx concl c i u l hop (eq_sym eqctx) (eq_sym eqnth) hr')
+      as [_ [ty [rty hc]]].
+    sq; exists ty; split; [exact hc|exact (clrel_rel rty)].
+  Qed.
+
+  Lemma fix_body_on_absurd {d ctx concl c}
+    (wf_type : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥) :
+    (ctx, concl) = decompose_prod_assum [] (dtype d) ->
+    Some c = nth_error (List.rev (smash_context [] ctx)) (rarg d) ->
+    ((∑ i u l, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ Σ ;;; Γ ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx) ⊢
+          decl_type c ⇝ mkApps (tInd i u) l ∥) -> False) ->
+    (∑ mind, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check_one_fix (PCUICReduction.red Σ Γ) mind d ∥) -> False.
+  Proof.
+    intros eqctx eqnth absurd [mind hm].
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (wf_type _ wfΣ) as [isty].
+    destruct (hm _ wfΣ) as [[ty [hc hred]]].
+    assert (hop : is_open_term Γ (dtype d)) by (now eapply isType_is_open_term).
+    assert (clΓ : is_closed_context Γ)
+      by (eapply wf_local_closed_context; now eapply isType_wf_local).
+    assert (hcr : Σ ;;; Γ ⊢ dtype d ⇝ ty) by (now eapply into_closed_red).
+    assert (eqty : dtype d = it_mkProd_or_LetIn ctx concl).
+    { pose proof (decompose_prod_assum_it_mkProd_or_LetIn [] (dtype d) ctx concl (eq_sym eqctx)) as h.
+      now cbn in h. }
+    rewrite eqty in hcr.
+    destruct (red_it_mkProd_or_LetIn_smash Γ ctx concl ty (rarg d) c hcr (eq_sym eqnth))
+      as [ctx' [t' [d' [decomp' hnth' r']]]].
+    destruct (check_one_fix_inv _ _ _ hc)
+      as (ctx2 & t2 & d2 & k & inst & args & decomp2 & hnth2 & dapp).
+    rewrite decomp' in decomp2; injection decomp2 as <- <-.
+    rewrite hnth' in hnth2; injection hnth2 as <-.
+    apply absurd; exists (mkInd mind k), inst, args.
+    intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ).
+    sq; now rewrite -dapp.
+  Qed.
 
   (** The block of a fixpoint body: [reduce_to_ind] on the type of its recursive
       argument. *)
@@ -1598,178 +1717,77 @@ Section Typecheck.
       | exist (ctx, concl) eqctx
         with inspect (nth_error (List.rev (smash_context [] ctx)) (rarg d)) := {
         | exist None eqnth :=
-          raise (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;
+          TypeError_comp (Msg "Ill-formed fixpoint: not defined on a mutually inductive family")
+            (fun _ => has_rec_arg_nth_error hrec eqctx eqnth) ;
         | exist (Some c) eqnth :=
-          r <- reduce_to_ind_or (Msg "Ill-formed fixpoint: not defined on a mutually inductive family")
-                 (Γ ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx))
-                 (decl_type c) _ ;;
-          ret (inductive_mind r.π1 ; _) } }.
-  Next Obligation. ck_fix_body_on_obl. Qed.
-  Next Obligation. ck_fix_body_on_obl. Qed.
-  Next Obligation. ck_fix_body_on_obl. Qed.
-  Next Obligation. ck_fix_body_on_obl. Qed.
+          match reduce_to_ind_or
+                  (Msg "Ill-formed fixpoint: not defined on a mutually inductive family")
+                  (Γ ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx))
+                  (decl_type c) (fix_rec_arg_welltyped wf_type eqctx eqnth) with
+          | TypeError_comp e absurd =>
+            TypeError_comp e (fix_body_on_absurd wf_type eqctx eqnth absurd)
+          | Checked_comp r =>
+            ret (inductive_mind r.π1 ; fix_body_on_ret wf_type eqctx eqnth r.π2.π2.π2)
+          end } }.
 
-  Ltac ck_cofix_body_on_obl :=
-    (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
-    let wfΣ := ident:(wfΣ) in let wfΣ' := ident:(wfΣ') in let Σ0 := ident:(Σ0) in
-    let wfΣ0 := ident:(wfΣ0) in let r := ident:(r) in let i := ident:(i) in
-    let hi := ident:(hi) in let u := ident:(u) in let l := ident:(l) in
-    let ctxr := ident:(ctxr) in let hred := ident:(hred) in let X0 := ident:(X0) in
-    let Σ := ident:(Σ) in let ty := ident:(ty) in let d := ident:(d) in
-    let wf_type := ident:(wf_type) in let isty := ident:(isty) in let hop := ident:(hop) in
-    let hc := ident:(hc) in let clΓ := ident:(clΓ) in let hcr := ident:(hcr) in
-    let args := ident:(args) in let k := ident:(k) in let inst := ident:(inst) in
-    let ctx2 := ident:(ctx2) in let absurd := ident:(absurd) in
-    first [
-      solve [ pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (wf_type _ wfΣ) as [isty];
-              now eapply isType_welltyped ]
-    | solve [ first [ destruct r as [i hi]; cbn in *;
-                      destruct (hi _ wfΣ) as [[u [l [ctxr hred]]]]
-                    | destruct (X0 _ wfΣ) as [[u [l [ctxr hred]]]]; rename r into i ];
-              sq; exists (it_mkProd_or_LetIn ctxr (mkApps (tInd i u) l));
-              split; [apply check_one_cofix_it_mkProd|exact (clrel_rel hred)] ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              destruct (wf_type _ wfΣ) as [isty];
-              destruct (X0 _ wfΣ) as [[ty [hc hred]]];
-              assert (hop : is_open_term Γ (dtype d)) by (now eapply isType_is_open_term);
-              assert (clΓ : is_closed_context Γ)
-                by (eapply wf_local_closed_context; now eapply isType_wf_local);
-              assert (hcr : Σ ;;; Γ ⊢ dtype d ⇝ ty) by (now eapply into_closed_red);
-              destruct (check_one_cofix_inv _ _ _ hc) as [ctx2 [k [inst [args ->]]]];
-              lazymatch type of hc with
-              | _ = Some ?m => apply absurd; exists (mkInd m k)
-              end;
-              intros Σ0 wfΣ0;
-              rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
-              sq; exists inst, args, ctx2; exact hcr ]
-    ].
+  (** *** The block of a cofixpoint body *)
+
+  Lemma abstract_isType_welltyped {T} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ T ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ T.
+  Proof.
+    intros h Σ wfΣ. destruct (h _ wfΣ) as [isty]. now eapply isType_welltyped.
+  Qed.
+
+  Lemma cofix_body_on_ret {d i} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u l ctx, Σ ;;; Γ ⊢ dtype d ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check_one_cofix (PCUICReduction.red Σ Γ) (inductive_mind i) d ∥.
+  Proof.
+    intros hi Σ wfΣ.
+    destruct (hi _ wfΣ) as [[u [l [ctx hred]]]].
+    sq; exists (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l)).
+    split; [apply check_one_cofix_it_mkProd|exact (clrel_rel hred)].
+  Qed.
+
+  Lemma cofix_body_on_absurd {d}
+    (wf_type : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥) :
+    ((∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ ∑ u l ctx, Σ ;;; Γ ⊢ dtype d ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
+      False) ->
+    (∑ mind, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check_one_cofix (PCUICReduction.red Σ Γ) mind d ∥) -> False.
+  Proof.
+    intros absurd [mind hm].
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (wf_type _ wfΣ) as [isty].
+    destruct (hm _ wfΣ) as [[ty [hc hred]]].
+    assert (hop : is_open_term Γ (dtype d)) by (now eapply isType_is_open_term).
+    assert (clΓ : is_closed_context Γ)
+      by (eapply wf_local_closed_context; now eapply isType_wf_local).
+    assert (hcr : Σ ;;; Γ ⊢ dtype d ⇝ ty) by (now eapply into_closed_red).
+    destruct (check_one_cofix_inv _ _ _ hc) as [ctx2 [k [inst [args ->]]]].
+    apply absurd; exists (mkInd mind k).
+    intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ).
+    sq; exists inst, args, ctx2; exact hcr.
+  Qed.
 
   (** The block of a cofixpoint body: the codomain walk on its type. *)
-  Equations check_cofix_body_on (d : def term)
+  Definition check_cofix_body_on (d : def term)
     (wf_type : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥)
     : typing_result_comp (∑ mind, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ mfix_body_on check_one_cofix (PCUICReduction.red Σ Γ) mind d ∥) :=
-    check_cofix_body_on d wf_type :=
-      r <- check_codomain_ind Γ (dtype d) _ ;;
-      ret (inductive_mind r.π1 ; _).
-  Next Obligation. ck_cofix_body_on_obl. Qed.
-  Next Obligation. ck_cofix_body_on_obl. Qed.
-  Next Obligation. ck_cofix_body_on_obl. Qed.
+    match check_codomain_ind Γ (dtype d) (abstract_isType_welltyped wf_type) with
+    | TypeError_comp e absurd => TypeError_comp e (cofix_body_on_absurd wf_type absurd)
+    | Checked_comp r => ret (inductive_mind r.π1 ; cofix_body_on_ret r.π2)
+    end.
 
-  (* The block found for the first body, [m], arrives either packed with its
-     proof or already split by the obligation tactic. *)
-  Ltac ck_name_m :=
-    let m := ident:(m) in let m1 := ident:(m1) in let hm := ident:(hm) in
-    first [
-      rename m into m1;
-      match goal with
-      | [ h : forall _, _ -> ∥ mfix_body_on _ _ m1 _ ∥ |- _ ] => rename h into hm
-      end
-    | destruct m as [m1 hm]; cbn in * ].
+  (** *** One block check for fixpoints and cofixpoints *)
 
-  (* [m1] and [mind] are the blocks of the body [d] found from two reducts of its
-     type, [hd] gives the first: they are equal. *)
-  Ltac ck_same_block :=
-    let wfΣ' := ident:(wfΣ') in let d := ident:(d) in let hd := ident:(hd) in
-    let m1 := ident:(m1) in let mind := ident:(mind) in let heq := ident:(heq) in
-    assert (heq : m1 = mind)
-      by (lazymatch type of hd with
-          | mfix_body_on ?chk _ _ _ =>
-            eapply (mfix_body_on_red_unique (check := chk) (wfΣ := wfΣ') (d := d)); eassumption
-          end);
-    subst m1.
-
-  Ltac ck_mfix_inds_obl :=
-    (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
-    let wfΣ := ident:(wfΣ) in let wfΣ' := ident:(wfΣ') in let Σ0 := ident:(Σ0) in
-    let wfΣ0 := ident:(wfΣ0) in let Σ := ident:(Σ) in let H := ident:(H) in
-    let mind := ident:(mind) in let d := ident:(d) in let m1 := ident:(m1) in
-    let hm := ident:(hm) in let hd := ident:(hd) in let rest := ident:(rest) in
-    let hall := ident:(hall) in let htys := ident:(htys) in let eqind := ident:(eqind) in
-    let wf_types := ident:(wf_types) in let absurd := ident:(absurd) in
-    first [
-      solve [ sq; constructor ]
-    | solve [ destruct (wf_types _ wfΣ) as [hall]; sq;
-              eapply isTypeRel_isType; now depelim hall ]
-    | solve [ destruct (wf_types _ wfΣ) as [hall]; sq; now depelim hall ]
-    | solve [ ck_name_m;
-              apply eqb_eq in eqind; subst m1;
-              destruct (hm _ wfΣ) as [hd]; destruct (rest _ wfΣ) as [hall];
-              sq; now constructor ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              apply absurd; intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
-              destruct (H _ wfΣ) as [hall]; sq; now depelim hall ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              ck_name_m;
-              apply absurd;
-              destruct (hm _ wfΣ) as [hd]; destruct (H _ wfΣ) as [hall];
-              destruct (wf_types _ wfΣ) as [htys];
-              depelim hall; depelim htys;
-              ck_same_block; now rewrite eqb_refl ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              apply absurd; exists mind; intros Σ0 wfΣ0;
-              rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
-              destruct (H _ wfΣ) as [hall]; sq; now depelim hall ]
-    ].
-
-  Ltac ck_wf_mfix_obl :=
-    (* Hypotheses are named at run time: Ltac definitions only see bound names. *)
-    let wfΣ := ident:(wfΣ) in let wfΣ' := ident:(wfΣ') in let Σ0 := ident:(Σ0) in
-    let wfΣ0 := ident:(wfΣ0) in let Σ := ident:(Σ) in let H := ident:(H) in
-    let mind := ident:(mind) in let d := ident:(d) in let m1 := ident:(m1) in
-    let hm := ident:(hm) in let hd := ident:(hd) in let rest := ident:(rest) in
-    let hall := ident:(hall) in let htys := ident:(htys) in
-    let hne := ident:(hne) in let hk := ident:(hk) in let wfkind := ident:(wfkind) in
-    let wflam := ident:(wflam) in let wfrec := ident:(wfrec) in let wfind := ident:(wfind) in
-    let isl := ident:(isl) in let hind := ident:(hind) in
-    let wf_types := ident:(wf_types) in let absurd := ident:(absurd) in
-    first [
-      (* [check_wf_mfix] *)
-      solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              destruct (H _ wfΣ) as [[mind [hne _]]]; now apply hne ]
-    | solve [ destruct (wf_types _ wfΣ) as [hall]; sq;
-              eapply isTypeRel_isType; now depelim hall ]
-    | solve [ destruct (wf_types _ wfΣ) as [hall]; sq; now depelim hall ]
-    | solve [ ck_name_m;
-              destruct (hm _ wfΣ) as [hd]; destruct (rest _ wfΣ) as [hall];
-              rewrite (abstract_check_recursivity_kind _ m1 Σ wfΣ) in wfkind;
-              sq; exists m1; split; [discriminate|split; [now constructor|exact wfkind]] ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              ck_name_m;
-              apply absurd;
-              destruct (H _ wfΣ) as [[mind [_ [hall hk]]]];
-              destruct (hm _ wfΣ) as [hd]; destruct (wf_types _ wfΣ) as [htys];
-              depelim hall; depelim htys;
-              ck_same_block; now rewrite (abstract_check_recursivity_kind _ mind Σ wfΣ) ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              pose proof (hΣ _ wfΣ) as [wfΣ'];
-              ck_name_m;
-              apply absurd; intros Σ0 wfΣ0; rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ);
-              destruct (H _ wfΣ) as [[mind [_ [hall _]]]];
-              destruct (hm _ wfΣ) as [hd]; destruct (wf_types _ wfΣ) as [htys];
-              depelim hall; depelim htys;
-              ck_same_block; sq; assumption ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              destruct (H _ wfΣ) as [[mind [_ [hall _]]]]; depelim hall;
-              apply absurd; exists mind; intros Σ0 wfΣ0;
-              rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ); sq; assumption ]
-      (* [check_wf_fixpoint] *)
-    | solve [ destruct (wfind _ wfΣ) as [hind]; sq;
-              split; [exact wflam|split; [exact wfrec|exact hind]] ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              apply absurd; destruct (H _ wfΣ) as [[isl _]]; exact isl ]
-    | solve [ destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-              apply absurd; destruct (H _ wfΣ) as [[_ [isl _]]]; exact isl ]
-    | solve [ apply absurd; intros Σ0 wfΣ0;
-              destruct (H _ wfΣ0) as [[_ [_ hind]]]; sq; exact hind ]
-    ].
-
-  (** One block check for fixpoints and cofixpoints, over a per-body checker
-      [check_body] that finds the block of one body under the precondition [pre]. *)
+  (** Over a per-body checker [check_body] that finds the block of one body under the
+      precondition [pre]. *)
   Section mfix_inds.
   Context (check : def term -> option kername) {shape : ShapeCheck check}
     (pre : def term -> Type) (err : type_error) (kind : recursivity_kind)
@@ -1778,6 +1796,73 @@ Section Typecheck.
       typing_result_comp (∑ mind, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ mfix_body_on check (PCUICReduction.red Σ Γ) mind d ∥)).
 
+  (** Two blocks found for the first body [d] are the same. *)
+  Lemma mfix_body_on_same {d mfix m m'} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) (d :: mfix) ∥) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check (PCUICReduction.red Σ Γ) m d ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      mfix_body_on check (PCUICReduction.red Σ Γ) m' d -> m = m'.
+  Proof.
+    intros wf_types hm Σ wfΣ hm'.
+    pose proof (hΣ _ wfΣ) as [wfΣ'].
+    destruct (hm _ wfΣ) as [hd]. destruct (wf_types _ wfΣ) as [htys].
+    depelim htys.
+    eapply (mfix_body_on_red_unique (check := check) (wfΣ := wfΣ')); eassumption.
+  Qed.
+
+  Lemma mfix_inds_ret {mind d mfix m} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check (PCUICReduction.red Σ Γ) m d ∥) ->
+    eqb m mind ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) mind) mfix ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) mind) (d :: mfix) ∥.
+  Proof.
+    intros hm eqm hrest Σ wfΣ.
+    apply eqb_eq in eqm; subst m.
+    destruct (hm _ wfΣ) as [hd]. destruct (hrest _ wfΣ) as [hall].
+    sq; now constructor.
+  Qed.
+
+  Lemma mfix_inds_head_absurd {mind d mfix} :
+    ((∑ m, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check (PCUICReduction.red Σ Γ) m d ∥) -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) mind) (d :: mfix) ∥) -> False.
+  Proof.
+    intros absurd h. apply absurd; exists mind; intros Σ wfΣ.
+    destruct (h _ wfΣ) as [hall]. sq. now depelim hall.
+  Qed.
+
+  Lemma mfix_inds_mismatch_absurd {mind d mfix m} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) (d :: mfix) ∥) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check (PCUICReduction.red Σ Γ) m d ∥) ->
+    (eqb m mind -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) mind) (d :: mfix) ∥) -> False.
+  Proof.
+    intros wf_types hm absurd h.
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    destruct (h _ wfΣ) as [hall]. depelim hall.
+    assert (e : m = mind) by (eapply (mfix_body_on_same wf_types hm Σ wfΣ); eassumption).
+    subst m. apply absurd. now rewrite eqb_refl.
+  Qed.
+
+  Lemma mfix_inds_tail_absurd {mind d mfix} :
+    ((forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) mind) mfix ∥) -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) mind) (d :: mfix) ∥) -> False.
+  Proof.
+    intros absurd h. apply absurd; intros Σ wfΣ.
+    destruct (h _ wfΣ) as [hall]. sq. now depelim hall.
+  Qed.
+
   (** Every body of [mfix] is on [mind]. *)
   Equations check_mfix_inds (mind : kername) (mfix : mfixpoint term)
     (wf_types : forall Σ (wfΣ : abstract_env_ext_rel X Σ),
@@ -1785,18 +1870,97 @@ Section Typecheck.
     (pres : All pre mfix)
     : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) mind) mfix ∥) :=
-    check_mfix_inds mind [] wf_types _ := ret _ ;
+    check_mfix_inds mind [] wf_types _ := ret (fun Σ wfΣ => sq All_nil) ;
     check_mfix_inds mind (d :: mfix) wf_types (All_cons pd pres) :=
-      m <- check_body d _ pd ;;
-      eqind <- check_eq_true (eqb m.π1 mind) err ;;
-      rest <- check_mfix_inds mind mfix _ pres ;;
-      ret _.
-  Next Obligation. ck_mfix_inds_obl. Qed.
-  Next Obligation. ck_mfix_inds_obl. Qed.
-  Next Obligation. ck_mfix_inds_obl. Qed.
-  Next Obligation. ck_mfix_inds_obl. Qed.
-  Next Obligation. ck_mfix_inds_obl. Qed.
-  Next Obligation. ck_mfix_inds_obl. Qed.
+      match check_body d (wf_types_head wf_types) pd with
+      | TypeError_comp e absurd => TypeError_comp e (mfix_inds_head_absurd absurd)
+      | Checked_comp m =>
+        match check_eq_true (eqb m.π1 mind) err with
+        | TypeError_comp e absurd =>
+          TypeError_comp e (mfix_inds_mismatch_absurd wf_types m.π2 absurd)
+        | Checked_comp eqind =>
+          match check_mfix_inds mind mfix (wf_types_tail wf_types) pres with
+          | TypeError_comp e absurd => TypeError_comp e (mfix_inds_tail_absurd absurd)
+          | Checked_comp rest => ret (mfix_inds_ret m.π2 eqind rest)
+          end
+        end
+      end.
+
+  Lemma wf_mfix_ret {d mfix m} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check (PCUICReduction.red Σ Γ) m d ∥) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) m) mfix ∥) ->
+    check_recursivity_kind (abstract_env_lookup X) m kind ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_on_ind check (PCUICReduction.red Σ Γ)
+          (fun mind => check_recursivity_kind (lookup_env Σ) mind kind) (d :: mfix) ∥.
+  Proof.
+    intros hm hrest wfkind Σ wfΣ.
+    destruct (hm _ wfΣ) as [hd]. destruct (hrest _ wfΣ) as [hall].
+    rewrite (abstract_check_recursivity_kind _ m Σ wfΣ) in wfkind.
+    sq; exists m; split; [discriminate|split; [now constructor|exact wfkind]].
+  Qed.
+
+  Lemma wf_mfix_nil_absurd :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_on_ind check (PCUICReduction.red Σ Γ)
+          (fun mind => check_recursivity_kind (lookup_env Σ) mind kind) [] ∥) -> False.
+  Proof.
+    intros h. destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    destruct (h _ wfΣ) as [[mind [hne _]]]. now apply hne.
+  Qed.
+
+  Lemma wf_mfix_head_absurd {d mfix} :
+    ((∑ m, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check (PCUICReduction.red Σ Γ) m d ∥) -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_on_ind check (PCUICReduction.red Σ Γ)
+          (fun mind => check_recursivity_kind (lookup_env Σ) mind kind) (d :: mfix) ∥) -> False.
+  Proof.
+    intros absurd h.
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    destruct (h _ wfΣ) as [[mind [_ [hall _]]]]. depelim hall.
+    apply absurd; exists mind; intros Σ0 wfΣ0.
+    rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ). sq; assumption.
+  Qed.
+
+  Lemma wf_mfix_tail_absurd {d mfix m} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) (d :: mfix) ∥) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check (PCUICReduction.red Σ Γ) m d ∥) ->
+    ((forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (mfix_body_on check (PCUICReduction.red Σ Γ) m) mfix ∥) -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_on_ind check (PCUICReduction.red Σ Γ)
+          (fun mind => check_recursivity_kind (lookup_env Σ) mind kind) (d :: mfix) ∥) -> False.
+  Proof.
+    intros wf_types hm absurd h.
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    destruct (h _ wfΣ) as [[mind [_ [hall _]]]]. depelim hall.
+    assert (e : m = mind) by (eapply (mfix_body_on_same wf_types hm Σ wfΣ); eassumption).
+    subst m. apply absurd; intros Σ0 wfΣ0.
+    rewrite (abstract_env_ext_irr _ wfΣ0 wfΣ). sq; assumption.
+  Qed.
+
+  Lemma wf_mfix_kind_absurd {d mfix m} :
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ All (on_def_type (lift_typing1 (typing Σ)) Γ) (d :: mfix) ∥) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_body_on check (PCUICReduction.red Σ Γ) m d ∥) ->
+    (check_recursivity_kind (abstract_env_lookup X) m kind -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_on_ind check (PCUICReduction.red Σ Γ)
+          (fun mind => check_recursivity_kind (lookup_env Σ) mind kind) (d :: mfix) ∥) -> False.
+  Proof.
+    intros wf_types hm absurd h.
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    destruct (h _ wfΣ) as [[mind [_ [hall hk]]]]. depelim hall.
+    assert (e : m = mind) by (eapply (mfix_body_on_same wf_types hm Σ wfΣ); eassumption).
+    subst m. apply absurd.
+    now rewrite (abstract_check_recursivity_kind _ mind Σ wfΣ).
+  Qed.
 
   (** All bodies are on one block, the block of the first body, of kind [kind]. *)
   Equations check_wf_mfix (mfix : mfixpoint term)
@@ -1806,21 +1970,62 @@ Section Typecheck.
     : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ mfix_on_ind check (PCUICReduction.red Σ Γ)
             (fun mind => check_recursivity_kind (lookup_env Σ) mind kind) mfix ∥) :=
-    check_wf_mfix [] wf_types _ := raise err ;
+    check_wf_mfix [] wf_types _ := TypeError_comp err wf_mfix_nil_absurd ;
     check_wf_mfix (d :: mfix) wf_types (All_cons pd pres) :=
-      m <- check_body d _ pd ;;
-      rest <- check_mfix_inds m.π1 mfix _ pres ;;
-      wfkind <- check_eq_true (check_recursivity_kind (abstract_env_lookup X) m.π1 kind) err ;;
-      ret _.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
+      match check_body d (wf_types_head wf_types) pd with
+      | TypeError_comp e absurd => TypeError_comp e (wf_mfix_head_absurd absurd)
+      | Checked_comp m =>
+        match check_mfix_inds m.π1 mfix (wf_types_tail wf_types) pres with
+        | TypeError_comp e absurd => TypeError_comp e (wf_mfix_tail_absurd wf_types m.π2 absurd)
+        | Checked_comp rest =>
+          match check_eq_true (check_recursivity_kind (abstract_env_lookup X) m.π1 kind) err with
+          | TypeError_comp e absurd =>
+            TypeError_comp e (wf_mfix_kind_absurd wf_types m.π2 absurd)
+          | Checked_comp wfkind => ret (wf_mfix_ret m.π2 rest wfkind)
+          end
+        end
+      end.
 
   End mfix_inds.
+
+  (** *** Fixpoints and cofixpoints *)
+
+  Lemma wf_fixpoint_ret {mfix} :
+    forallb (isLambda ∘ dbody) mfix -> forallb has_rec_arg mfix ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_on_ind check_one_fix (PCUICReduction.red Σ Γ)
+          (fun mind => check_recursivity_kind (lookup_env Σ) mind Finite) mfix ∥) ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ wf_fixpoint_red Σ Γ mfix ∥.
+  Proof.
+    intros wflam wfrec wfind Σ wfΣ. destruct (wfind _ wfΣ) as [hind].
+    sq; split; [exact wflam|split; [exact wfrec|exact hind]].
+  Qed.
+
+  Lemma wf_fixpoint_lambda_absurd {mfix} :
+    (forallb (isLambda ∘ dbody) mfix -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ wf_fixpoint_red Σ Γ mfix ∥) -> False.
+  Proof.
+    intros absurd h. destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    destruct (h _ wfΣ) as [[isl _]]. exact (absurd isl).
+  Qed.
+
+  Lemma wf_fixpoint_rec_arg_absurd {mfix} :
+    (forallb has_rec_arg mfix -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ wf_fixpoint_red Σ Γ mfix ∥) -> False.
+  Proof.
+    intros absurd h. destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    destruct (h _ wfΣ) as [[_ [hrec _]]]. exact (absurd hrec).
+  Qed.
+
+  Lemma wf_fixpoint_ind_absurd {mfix} :
+    ((forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ mfix_on_ind check_one_fix (PCUICReduction.red Σ Γ)
+          (fun mind => check_recursivity_kind (lookup_env Σ) mind Finite) mfix ∥) -> False) ->
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ wf_fixpoint_red Σ Γ mfix ∥) -> False.
+  Proof.
+    intros absurd h. apply absurd; intros Σ wfΣ.
+    destruct (h _ wfΣ) as [[_ [_ hind]]]. sq; exact hind.
+  Qed.
 
   (** Fixpoints: every body is a lambda and has its recursive argument in the
       telescope of its declared type, before the block search. *)
@@ -1830,18 +2035,22 @@ Section Typecheck.
     : typing_result_comp (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ wf_fixpoint_red Σ Γ mfix ∥) :=
     check_wf_fixpoint mfix wf_types :=
-      wflam <- check_eq_true (forallb (isLambda ∘ dbody) mfix)
-                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;;
-      wfrec <- check_eq_true (forallb has_rec_arg mfix)
-                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") ;;
-      wfind <- check_wf_mfix check_one_fix (fun d => is_true (has_rec_arg d))
-                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family")
-                 Finite check_fix_body_on mfix wf_types (forallb_All _ _ wfrec) ;;
-      ret _.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
-  Next Obligation. ck_wf_mfix_obl. Qed.
+      match check_eq_true (forallb (isLambda ∘ dbody) mfix)
+              (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") with
+      | TypeError_comp e absurd => TypeError_comp e (wf_fixpoint_lambda_absurd absurd)
+      | Checked_comp wflam =>
+        match check_eq_true (forallb has_rec_arg mfix)
+                (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") with
+        | TypeError_comp e absurd => TypeError_comp e (wf_fixpoint_rec_arg_absurd absurd)
+        | Checked_comp wfrec =>
+          match check_wf_mfix check_one_fix (fun d => is_true (has_rec_arg d))
+                  (Msg "Ill-formed fixpoint: not defined on a mutually inductive family")
+                  Finite check_fix_body_on mfix wf_types (forallb_All _ _ wfrec) with
+          | TypeError_comp e absurd => TypeError_comp e (wf_fixpoint_ind_absurd absurd)
+          | Checked_comp wfind => ret (wf_fixpoint_ret wflam wfrec wfind)
+          end
+        end
+      end.
 
   (** Cofixpoints: no precondition on the bodies. *)
   Definition check_wf_cofixpoint (mfix : mfixpoint term)

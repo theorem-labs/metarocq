@@ -338,6 +338,21 @@ Proof.
   now rewrite skipn_0 in w.
 Qed.
 
+(** [has_rec_arg d] puts the recursive argument inside the telescope of the declared
+    type. *)
+Lemma has_rec_arg_nth_error {d ctx concl} :
+  has_rec_arg d ->
+  (ctx, concl) = decompose_prod_assum [] (dtype d) ->
+  None = nth_error (List.rev (smash_context [] ctx)) (rarg d) ->
+  False.
+Proof.
+  intros hrec eqctx eqnth.
+  rewrite /has_rec_arg -eqctx /= in hrec.
+  move: hrec => /Nat.ltb_lt hlt.
+  symmetry in eqnth; apply nth_error_None in eqnth.
+  rewrite List.length_rev smash_context_length /= in eqnth; lia.
+Qed.
+
 Lemma welltyped_prod_codomain {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ na A B} :
   welltyped Σ Γ (tProd na A B) -> welltyped Σ (Γ ,, vass na A) B.
 Proof.
