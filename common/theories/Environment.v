@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect ssrbool ssrfun Morphisms Setoid.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import BasicAst Primitive Universes.
+From MetaRocq.Common Require Import BasicAst Primitive PrimitiveOps Universes.
 From Equations.Prop Require Import Classes EqDecInstances.
 
 Ltac Tauto.intuition_solver ::= auto with *.
@@ -44,90 +44,253 @@ Module Retroknowledge.
     retro_float64 : option kername;
     retro_string : option kername;
     retro_array : option kername;
+    (** The primitive operations the environment registers, keyed on the
+        kername of the bodiless constant that declares each one.  A kername
+        occurs at most once ([wf_retro]), so [prim_op_of] is a function of the
+        head constant; one operation may be registered twice, as the kernel
+        allows (kernel/primred.ml). *)
+    retro_ops : list (kername * prim_op);
+    (** The inductive registered as the booleans.  Its packet 0 is read back
+        positionally: [true] is constructor 0, [false] constructor 1, which is
+        the kernel's orientation. *)
+    retro_bool : option inductive;
   }.
 
-  Definition empty := {| retro_int63 := None; retro_float64 := None; retro_string := None; retro_array := None |}.
+  Definition empty :=
+    {| retro_int63 := None; retro_float64 := None; retro_string := None; retro_array := None;
+       retro_ops := []; retro_bool := None |}.
+
+  (** ** The operation table *)
+
+  Definition lookup_op (l : list (kername * prim_op)) (c : kername) : option prim_op :=
+    option_map snd (find (fun '(c', _) => c' == c) l).
+
+  Definition prim_op_of (r : t) (c : kername) : option prim_op :=
+    lookup_op r.(retro_ops) c.
+
+  Lemma lookup_op_spec l c op : lookup_op l c = Some op -> In (c, op) l.
+  Proof.
+    rewrite /lookup_op; destruct (find _ l) as [[c' op']|] eqn:hf => //=.
+    intros [= <-]. apply find_some in hf as [hin he]. cbn in he.
+    apply eqb_eq in he. now subst c'.
+  Qed.
+
+  Lemma lookup_op_in l c op : In (c, op) l -> exists op', lookup_op l c = Some op'.
+  Proof.
+    rewrite /lookup_op; induction l as [|[c' op'] l ih] => //=.
+    intros [[= <- <-]|hin].
+    - rewrite eqb_refl //=. now eexists.
+    - destruct (c' == c); [now eexists|now apply ih].
+  Qed.
+
+  Lemma find_op_app f (l1 l2 : list (kername * prim_op)) :
+    find f (l1 ++ l2) = match find f l1 with Some x => Some x | None => find f l2 end.
+  Proof.
+    induction l1 as [|x l1 ih] => //=. destruct (f x) => //=.
+  Qed.
+
+  Lemma lookup_op_app l1 l2 c :
+    lookup_op (l1 ++ l2) c = match lookup_op l1 c with Some op => Some op | None => lookup_op l2 c end.
+  Proof.
+    rewrite /lookup_op find_op_app. now destruct (find _ l1).
+  Qed.
+
+  Lemma lookup_op_filter p l c :
+    (forall x, In x l -> fst x = c -> p x = true) ->
+    lookup_op (filter p l) c = lookup_op l c.
+  Proof.
+    rewrite /lookup_op; induction l as [|[c' op'] l ih] => //= hp.
+    have hrest : forall x, In x l -> fst x = c -> p x = true.
+    { intros x hin hx; apply hp => //; now right. }
+    destruct (p (c', op')) eqn:hpx; cbn.
+    - destruct (c' == c) eqn:he; [reflexivity|now apply ih].
+    - destruct (c' == c) eqn:he; [|now apply ih].
+      have hc : c' = c by apply eqb_eq; rewrite he.
+      rewrite (hp (c', op') (or_introl eq_refl) hc) in hpx. discriminate.
+  Qed.
+
+  (** ** Extension: pointwise on the table's kernames *)
+
+  Definition extends_ops (x y : t) :=
+    forall c op, prim_op_of x c = Some op -> prim_op_of y c = Some op.
 
   Definition extends (x y : t) :=
     option_extends x.(retro_int63) y.(retro_int63) /\
     option_extends x.(retro_float64) y.(retro_float64) /\
     option_extends x.(retro_string) y.(retro_string) /\
-    option_extends x.(retro_array) y.(retro_array).
+    option_extends x.(retro_array) y.(retro_array) /\
+    option_extends x.(retro_bool) y.(retro_bool) /\
+    extends_ops x y.
   Existing Class extends.
+
+  Definition extendsb_ops (x y : t) : bool :=
+    forallb (fun '(c, _) => prim_op_of y c == prim_op_of x c) x.(retro_ops).
 
   Definition extendsb (x y : t) :=
     option_extendsb x.(retro_int63) y.(retro_int63) &&
     option_extendsb x.(retro_float64) y.(retro_float64) &&
     option_extendsb x.(retro_string) y.(retro_string) &&
-    option_extendsb x.(retro_array) y.(retro_array).
+    option_extendsb x.(retro_array) y.(retro_array) &&
+    option_extendsb x.(retro_bool) y.(retro_bool) &&
+    extendsb_ops x y.
 
-  Lemma extendsT x y : reflect (extends x y) (extendsb x y).
+  Lemma extends_ops_spec x y : extendsb_ops x y <-> extends_ops x y.
   Proof.
-    rewrite /extends/extendsb; do 4 case: option_extendsT; cbn; constructor; intuition auto.
+    rewrite /extendsb_ops/extends_ops; split.
+    - intros hb c op hx.
+      have hin := lookup_op_spec _ _ _ hx.
+      pose proof (proj1 (forallb_forall _ _) hb _ hin : prim_op_of y c == prim_op_of x c) as hc.
+      apply eqb_eq in hc. rewrite hc. exact hx.
+    - intros hext. apply (proj2 (forallb_forall _ _)). intros [c op] hin.
+      destruct (lookup_op_in _ _ _ hin) as [op' hx].
+      change (is_true (prim_op_of y c == prim_op_of x c)).
+      rewrite (hext c op' hx) /prim_op_of hx. apply eqb_refl.
   Qed.
 
   Lemma extends_spec x y : extendsb x y <-> extends x y.
   Proof.
-    rewrite /extends/extendsb -!option_extends_spec /is_true !Bool.andb_true_iff //=.
+    rewrite /extends/extendsb -!option_extends_spec -extends_ops_spec /is_true !Bool.andb_true_iff //=.
     intuition auto.
+  Qed.
+
+  Lemma extendsT x y : reflect (extends x y) (extendsb x y).
+  Proof.
+    apply iff_reflect. symmetry. apply extends_spec.
   Qed.
 
   #[global] Instance extends_refl x : extends x x.
   Proof.
-    repeat split; apply option_extends_refl.
+    repeat split; try apply option_extends_refl. now intros c op.
   Qed.
 
   #[global] Instance extends_trans : RelationClasses.Transitive Retroknowledge.extends.
   Proof.
-    intros x y z [? [? []]] [? [? []]]; repeat split; cbn; now etransitivity; tea.
+    intros x y z [? [? [? [? [? hx]]]]] [? [? [? [? [? hy]]]]]; repeat split; cbn;
+      try solve [now etransitivity; tea].
+    intros c op h. now apply hy, hx.
   Qed.
 
   #[export,program] Instance reflect_t : ReflectEq t := {
       eqb x y := (x.(retro_int63) == y.(retro_int63)) &&
                  (x.(retro_float64) == y.(retro_float64)) &&
                  (x.(retro_string) == y.(retro_string)) &&
-                 (x.(retro_array) == y.(retro_array))
+                 (x.(retro_array) == y.(retro_array)) &&
+                 (x.(retro_ops) == y.(retro_ops)) &&
+                 (x.(retro_bool) == y.(retro_bool))
     }.
   Next Obligation.
-    do 4 case: eqb_spec; destruct x, y; cbn; intros; subst; constructor; congruence.
+    do 6 case: eqb_spec; destruct x, y; cbn; intros; subst; constructor; congruence.
   Qed.
 
   (** This operation is asymmetric; it perfers the first argument when the arguments are incompatible, but otherwise takes the join *)
+  Definition merge_ops (o1 o2 : list (kername * prim_op)) : list (kername * prim_op) :=
+    o1 ++ filter (fun '(c, _) => match lookup_op o1 c with Some _ => false | None => true end) o2.
+
   Definition merge (r1 r2 : t) : t
     := {| retro_int63 := match r1.(retro_int63) with Some v => Some v | None => r2.(retro_int63) end
        ; retro_float64 := match r1.(retro_float64) with Some v => Some v | None => r2.(retro_float64) end
        ; retro_string := match r1.(retro_string) with Some v => Some v | None => r2.(retro_string) end
        ; retro_array := match r1.(retro_array) with Some v => Some v | None => r2.(retro_array) end
+       ; retro_ops := merge_ops r1.(retro_ops) r2.(retro_ops)
+       ; retro_bool := match r1.(retro_bool) with Some v => Some v | None => r2.(retro_bool) end
         |}.
+
+  Lemma lookup_op_merge o1 o2 c :
+    lookup_op (merge_ops o1 o2) c =
+      match lookup_op o1 c with Some op => Some op | None => lookup_op o2 c end.
+  Proof.
+    rewrite /merge_ops lookup_op_app.
+    destruct (lookup_op o1 c) eqn:h1 => //.
+    apply lookup_op_filter. move=> [c' op'] _ /= ->. now rewrite h1.
+  Qed.
+
+  Lemma prim_op_of_merge r1 r2 c :
+    prim_op_of (merge r1 r2) c =
+      match prim_op_of r1 c with Some op => Some op | None => prim_op_of r2 c end.
+  Proof. apply lookup_op_merge. Qed.
 
   Lemma extends_l_merge r1 r2
     : extends r1 (merge r1 r2).
   Proof.
-    rewrite /extends/merge; destruct r1, r2; cbn; repeat destruct ?; subst;
-      repeat constructor; clear; destruct_head' option; constructor.
+    rewrite /extends; repeat split.
+    1-5: destruct r1, r2; cbn; destruct_head' option; cbn; constructor.
+    intros c op h. rewrite prim_op_of_merge h //.
   Qed.
 
+  (** With the table a list, [merge r1 r2] is no longer syntactically [r2] when
+      [r1] extends [r2] — [r1]'s entries come first — but it still has exactly
+      [r2]'s lookups. *)
   Lemma extends_merge_idempotent r1 r2
-    : extends r1 r2 -> merge r1 r2 = r2.
+    : extends r1 r2 -> extends (merge r1 r2) r2.
   Proof.
-    rewrite /extends/merge; destruct r1, r2; cbn.
-    intro; rdest; destruct_head' (@option_extends); reflexivity.
+    intros [h1 [h2 [h3 [h4 [h5 hops]]]]].
+    rewrite /extends; repeat split.
+    1-5: destruct r1, r2; cbn in *; destruct_head' (@option_extends); cbn; constructor.
+    intros c op. rewrite prim_op_of_merge.
+    destruct (prim_op_of r1 c) eqn:h1' => //.
+    intros [= <-]. now apply hops.
   Qed.
+
+  Definition compatible_ops (x y : t) : bool
+    := forallb (fun '(c, _) =>
+         match prim_op_of x c, prim_op_of y c with
+         | Some ox, Some oy => ox == oy
+         | _, _ => true
+         end) (x.(retro_ops) ++ y.(retro_ops)).
 
   Definition compatible (x y : t) : bool
     := match x.(retro_int63), y.(retro_int63) with Some x, Some y => x == y | _, _ => true end
        && match x.(retro_float64), y.(retro_float64) with Some x, Some y => x == y | _, _ => true end
        && match x.(retro_string), y.(retro_string) with Some x, Some y => x == y | _, _ => true end
-       && match x.(retro_array), y.(retro_array) with Some x, Some y => x == y | _, _ => true end.
+       && match x.(retro_array), y.(retro_array) with Some x, Some y => x == y | _, _ => true end
+       && match x.(retro_bool), y.(retro_bool) with Some x, Some y => x == y | _, _ => true end
+       && compatible_ops x y.
 
   Lemma extends_r_merge r1 r2
     : compatible r1 r2 -> extends r2 (merge r1 r2).
   Proof.
-    rewrite /extends/merge/compatible; destruct r1, r2; cbn; repeat destruct ?; subst.
-    all: repeat case: eqb_spec => //=.
-    all: intros; subst.
-    all: repeat constructor; clear; destruct_head' option; constructor.
+    rewrite /compatible => /andP [] /andP [] /andP [] /andP [] /andP [] h1 h2 h3 h4 h5 hops.
+    rewrite /extends; repeat split.
+    1-5: destruct r1, r2; cbn in *; destruct_head' option; cbn in *;
+         repeat match goal with h : is_true (_ == _) |- _ => apply eqb_eq in h; subst end;
+         constructor.
+    intros c op h.
+    rewrite prim_op_of_merge. destruct (prim_op_of r1 c) as [o|] eqn:h1' => //.
+    have hin : In (c, o) (r1.(retro_ops) ++ r2.(retro_ops))
+      by apply in_or_app; left; apply (lookup_op_spec _ _ _ h1').
+    pose proof (proj1 (forallb_forall _ _) hops _ hin) as hc. cbn beta iota in hc.
+    rewrite h1' h in hc. f_equal. now apply eqb_eq in hc.
   Qed.
+
+  (** ** The retroknowledge-only well-formedness conjunct (design §4.2(a))
+
+      Stated here, beside the table it constrains; the checker and
+      [on_global_env] consume it. *)
+
+  Definition type_constants (r : t) : list (option kername) :=
+    [r.(retro_int63); r.(retro_float64); r.(retro_string); r.(retro_array)].
+
+  Definition disjoint_opt (x y : option kername) : Prop :=
+    forall c, x = Some c -> y = Some c -> False.
+
+  (** The four registered type constants are pairwise distinct kernames.  Rocq's
+      always are — each is set by its own [Primitive <name> := #<type>]
+      declaration — but nothing in MetaRocq tied them, and a table that
+      identifies two of them makes a wrongly-tagged saturated application well
+      typed. *)
+  Definition types_distinct (r : t) : Prop :=
+    disjoint_opt r.(retro_int63) r.(retro_float64) /\
+    disjoint_opt r.(retro_int63) r.(retro_string) /\
+    disjoint_opt r.(retro_int63) r.(retro_array) /\
+    disjoint_opt r.(retro_float64) r.(retro_string) /\
+    disjoint_opt r.(retro_float64) r.(retro_array) /\
+    disjoint_opt r.(retro_string) r.(retro_array).
+
+  Definition wf_retro (r : t) : Prop :=
+    [/\ NoDup (map fst r.(retro_ops)),
+        (forall c, In c (map fst r.(retro_ops)) -> ~ In (Some c) (type_constants r)),
+        types_distinct r
+      & forall i, r.(retro_bool) = Some i -> inductive_ind i = 0].
 
 End Retroknowledge.
 Export (hints) Retroknowledge.
@@ -895,6 +1058,16 @@ Module Environment (T : Term).
     | primString => Σ.(retroknowledge).(Retroknowledge.retro_string)
     | primArray => Σ.(retroknowledge).(Retroknowledge.retro_array)
     end.
+
+  (** The operation registered for the constant [c], if any.  A function of [c]
+      because the table's kernames are distinct
+      ([Retroknowledge.wf_retro]). *)
+  Definition prim_op_of (Σ : global_env) (c : kername) : option prim_op :=
+    Retroknowledge.prim_op_of Σ.(retroknowledge) c.
+
+  (** The inductive registered as the booleans. *)
+  Definition primitive_bool (Σ : global_env) : option inductive :=
+    Σ.(retroknowledge).(Retroknowledge.retro_bool).
 
   Definition tImpl (dom codom : term) : term :=
     tProd {| binder_name := nAnon; binder_relevance := rel_of_Type |}
