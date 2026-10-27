@@ -1,6 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config Primitive.
+From MetaRocq.Common Require Import config Primitive PrimitiveOps EnvironmentTyping.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
   PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition PCUICOnFreeVars PCUICArityRed.
 From MetaRocq.PCUIC Require Export PCUICCumulativitySpec.
@@ -340,6 +340,34 @@ Module PCUICTypingDef <: EnvironmentTyping.Typing PCUICTerm PCUICEnvironment PCU
 
 End PCUICTypingDef.
 
+(** The PCUIC instance of [PrimOpTypeSig]: the expected declared type of an
+    operation, a fold of [tImpl] over the registered type constants ending in the
+    registered type constant or inductive.  Its arms use only [tImpl],
+    [tConst kn []] and [tInd i []], so the Template arm is its [trans]-image. *)
+Module PCUICPrimOpType <: EnvironmentTyping.PrimOpTypeSig PCUICTerm PCUICEnvironment.
+  Import PCUICEnvironment.
+  Definition prim_tag_type (r : Retroknowledge.t) (t : prim_tag) : option term :=
+    option_map (fun kn => tConst kn []) (EnvironmentTyping.retro_type_constant r t).
+  Definition prim_shape_type (r : Retroknowledge.t) (s : prim_shape) : option term :=
+    match s with
+    | SInt => prim_tag_type r primInt
+    | SBool => option_map (fun i => tInd i []) r.(Retroknowledge.retro_bool)
+    end.
+  Fixpoint prim_arg_types (r : Retroknowledge.t) (ts : list prim_tag) (res : term) : option term :=
+    match ts with
+    | [] => Some res
+    | t :: ts => match prim_tag_type r t with
+                 | Some a => option_map (tImpl a) (prim_arg_types r ts res)
+                 | None => None
+                 end
+    end.
+  Definition prim_op_type (r : Retroknowledge.t) (op : prim_op) : option term :=
+    match prim_shape_type r (po_shape (info op)) with
+    | Some res => prim_arg_types r (po_args (info op)) res
+    | None => None
+    end.
+End PCUICPrimOpType.
+
 Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
   PCUICTerm
   PCUICEnvironment
@@ -348,6 +376,7 @@ Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
   PCUICConversion
   PCUICLookup
   PCUICArityRelation
+  PCUICPrimOpType
 .
 Include PCUICGlobalMaps.
 
@@ -362,6 +391,7 @@ Module PCUICDeclarationTyping :=
     PCUICTypingDef
     PCUICLookup
     PCUICArityRelation
+    PCUICPrimOpType
     PCUICGlobalMaps.
 Include PCUICDeclarationTyping.
 
@@ -878,12 +908,12 @@ Proof.
     red. cbn. do 2 red in wfΣ. cbn in wfΣ.
     destruct Σ as [univs Σ]; cbn in *.
     set (Σg:= {| universes := univs; declarations := Σ |}) in *.
-    destruct wfΣ; split => //.
+    destruct wfΣ as [ongu [wfr o]]; split => //; split => //.
     unfold Σg in o |- *; cbn in o.
-    rename o into ongu. rename o0 into o. cbn in o |- *.
+    cbn in o |- *.
     destruct o. { constructor. }
     rename o0 into Xg.
-    set (wfΣ := (ongu, o) : on_global_env cumulSpec0 (lift_typing typing) {| universes := univs; declarations := Σ |}).
+    set (wfΣ := (ongu, (wfr, o)) : on_global_env cumulSpec0 (lift_typing typing) {| universes := univs; declarations := Σ |}).
     set (Σ':= {| universes := univs; declarations := Σ |}) in *.
     destruct Xg as [hfresh udecl honu Xg].
     constructor; auto; try constructor; auto.

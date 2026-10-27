@@ -2425,7 +2425,7 @@ End monad_Alli_nth_forall.
   Program Definition check_univs (univs : ContextSet.t) (retro : Retroknowledge.t)
     : EnvCheck X_env_ext_type ({ X : X_env_type |
       (forall Σ, abstract_env_rel X Σ -> Σ = {| universes := univs; declarations := []; retroknowledge := retro |})
-                      /\ ∥ on_global_univs univs ∥ }) :=
+                      /\ ∥ on_global_univs univs ∥ /\ ∥ Retroknowledge.wf_retro retro ∥ }) :=
     let id := "toplevel" in
     let levels := ContextSet.levels univs in
     check_eq_true_lazy (LevelSet.mem Level.lzero levels)
@@ -2435,11 +2435,14 @@ End monad_Alli_nth_forall.
     check_eq_true_lazy (ConstraintSet.for_all (fun c => LevelSet.mem c.1.1 levels && LevelSet.mem c.2 levels) (ContextSet.constraints univs))
        (fun _ => (abstract_env_ext_empty, IllFormedDecl id (Msg ("non declared level in " ^ print_lset levels ^
                                     " |= " ^ print_constraint_set (ContextSet.constraints univs)))));;
+    wfr <- check_dec (abstract_env_ext_empty, IllFormedDecl id
+             (Msg "ill-formed retroknowledge: primitive-operation table or type constants (design §4.2(a))"))
+           (dec_wf_retro retro) ;;
     match gc_of_uctx univs as X' return (X' = _ -> EnvCheck X_env_ext_type _) with
     | None => fun _ => raise (abstract_env_ext_empty, IllFormedDecl id (Msg "constraints trivially not satisfiable"))
     | Some uctx => fun _ => check_eq_true_lazy (@abstract_env_is_consistent_empty _ X_impl uctx)
         (fun _ => (abstract_env_ext_empty, IllFormedDecl id (Msg "constraints not satisfiable"))) ;;
-    ret (let Hunivs := _ in exist (abstract_env_init univs retro Hunivs) _) end eq_refl .
+    ret (let Hunivs := _ in exist (abstract_env_init univs retro (Hunivs, wfr)) _) end eq_refl .
   Next Obligation.
     intros. have decll :
           ConstraintSet.For_all (declared_cstr_levels (ContextSet.levels univs)) (ContextSet.constraints univs).
@@ -2473,9 +2476,10 @@ End monad_Alli_nth_forall.
         apply wGraph.VSetProp.union_subset_1.
   Qed.
   Next Obligation.
-      cbv beta. intros univs retro id levels X H H0 Hconsistent ? ? Hunivs. clearbody Hunivs.
-    split.
+      cbv beta. intros univs retro id levels X H H0 wfr Hconsistent ? ? Hunivs. clearbody Hunivs.
+    split; [|split].
     - intros. eapply (abstract_env_irr _ _ (abstract_env_init_correct _ _ _)); eauto.
+    - now sq.
     - now sq.
     Unshelve. eauto.
   Qed.

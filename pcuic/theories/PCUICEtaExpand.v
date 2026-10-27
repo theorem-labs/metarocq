@@ -1250,6 +1250,44 @@ Proof.
     rewrite skipn_S IHn. lia_f_equal.
 Qed.
 
+(** Row E2: a registered boolean inductive has exactly the two bodiless
+    constructors [true]/[false], so either index gives a declared constructor
+    with no parameters and no arguments.  Derived from row H's [on_prim_bool_decl]
+    via [lookup_on_global_env_prim]; the [declared_inductive] premise is what the
+    firing operation's §4.2(b) gate-4 clause ([on_prim_op_result SBool]) supplies
+    at the call site. *)
+Lemma wf_primitive_bool_constructor {cf : checker_flags} {Σ : global_env} {ind mdecl idecl} k :
+  wf Σ ->
+  primitive_bool Σ = Some ind ->
+  declared_inductive Σ ind mdecl idecl ->
+  k < 2 ->
+  ∑ cdecl, declared_constructor Σ (ind, k) mdecl idecl cdecl
+     × ind_npars mdecl + context_assumptions (cstr_args cdecl) = 0.
+Proof.
+  intros wfΣ hbool declI hk.
+  destruct declI as [declm hnthbod].
+  destruct (lookup_on_global_env_prim wfΣ declm) as (Σ' & [onΣ' ext hretro hprim]).
+  cbn in hprim.
+  assert (hbool' : primitive_bool Σ' = Some ind).
+  { unfold primitive_bool in *. now rewrite hretro. }
+  specialize (hprim ind hbool' eq_refl).
+  unfold on_prim_bool_decl in hprim.
+  destruct wfΣ as [_ [wfr _]].
+  destruct wfr as [_ _ _ hidx]. specialize (hidx ind hbool).
+  destruct (ind_bodies mdecl) as [|idecl0 [|]] eqn:hbodies => //.
+  rewrite hidx in hnthbod. cbn in hnthbod. noconf hnthbod.
+  destruct hprim as [hnpars hpars huniv hindices hctors].
+  destruct (ind_ctors idecl0) as [|cT [|cF [|]]] eqn:hc => //.
+  destruct hctors as [hT hF].
+  destruct k as [|[|k]]; [| |lia].
+  - exists cT. destruct hT as [_ hargsT _ _ _]. split.
+    + split; [split; assumption|now rewrite hc].
+    + rewrite hnpars hargsT //.
+  - exists cF. destruct hF as [_ hargsF _ _ _]. split.
+    + split; [split; assumption|now rewrite hc].
+    + rewrite hnpars hargsF //.
+Qed.
+
 Lemma expanded_red1 {cf : checker_flags} {Σ : global_env_ext} Γ Γ' t v : wf Σ ->
   expanded_global_env Σ ->
   (forall n body, option_map decl_body (nth_error Γ n) = Some (Some body) -> expanded Σ (skipn (S n) Γ') body) ->
@@ -1454,6 +1492,36 @@ Proof.
     depelim exp; eauto. constructor; cbn; eauto.
   - constructor. eapply expanded_tPrim_inv in exp.
     depelim exp; eauto. constructor; cbn; eauto.
+  - (* red_prim_op: the reduct is the ground readback of the denotation --
+       a [tPrim] for SInt, a [true]/[false] constructor for SBool. *)
+    destruct (PrimitiveOps.po_shape (PrimitiveOps.info op)) eqn:hshape;
+      rewrite /PCUICPrimitiveRed.readback hshape /= in H3;
+      destruct r as [i|b]; cbn in H3; try discriminate.
+    + (* SInt: v = tPrim (prim_int i) *)
+      noconf H3. do 2 constructor.
+    + (* SBool: v = tConstruct ind (if b then 0 else 1) [] *)
+      destruct (Σ.(retroknowledge).(Retroknowledge.retro_bool)) as [ind|] eqn:hrb;
+        [|discriminate].
+      noconf H3.
+      destruct wf as [wfg _].
+      destruct (lookup_on_global_env_prim wfg H0) as (Σ' & [onΣ' ext hretro hpd]).
+      cbn in hpd. specialize (hpd _ H). destruct hpd as [_ _ _ _ hres].
+      rewrite hshape in hres. destruct hres as (i0 & mdecl & idecl & hb' & declI').
+      assert (hbI : primitive_bool Σ = Some ind) by (unfold primitive_bool; now rewrite hrb).
+      assert (hi0 : i0 = ind).
+      { unfold primitive_bool in hb'. rewrite hretro in hb'.
+        rewrite -/(primitive_bool Σ) hbI in hb'. now noconf hb'. }
+      subst i0.
+      pose proof (declI := PCUICWeakeningEnv.weakening_env_declared_inductive
+                    (Σ := Σ') (Σ' := Σ) _ _ _ _ declI').
+      forward declI by (eapply extends_strictly_on_decls_extends, ext).
+      destruct (wf_primitive_bool_constructor (ind := ind) (if b then 0 else 1)
+                  (ltac:(now split) : wf Σ) hbI declI
+                  (ltac:(destruct b; cbn; lia)))
+        as (cdecl & declC & harity).
+      change (tConstruct ind (if b then 0 else 1) [])
+        with (mkApps (tConstruct ind (if b then 0 else 1) u) []).
+      eapply expanded_tConstruct_app; [exact declC| cbn; rewrite harity; lia| constructor].
 Qed.
 
 Lemma expanded_red {cf : checker_flags} {Σ : global_env_ext} Γ Γ' t v : wf Σ ->
