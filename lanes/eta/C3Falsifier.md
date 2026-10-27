@@ -110,13 +110,21 @@ Every tCase candidate I could construct is ruled out, and *how*:
    `c3_case_red_discr`'s `case_eta_discr` (IH at the discriminee); the discriminee-level pair is the
    audit's unlocking case, proven. See § above.
 
-## Assumptions used (all plan U-rows or the C3-budget `red1_eta_ctx`; none is an axiom)
+## Assumptions used (all plan U-rows; `red1_eta_ctx_strong` now DISCHARGED; none is an axiom)
 
-`Context` hypotheses of `PCUICEtaC3Falsify.v`, each discharged by the plan's U-rows:
-`upto_domain_refl` (U1); `eq_context_upto_names_refl` (base); `eta1_mkApps_inv` (= upstream
+**Update 2026-10-27 (L2 landed `red1_eta_ctx_strong`):** the load-bearing context-move lemma is no
+longer assumed. `PCUICEtaC3Falsify.v` now imports `PCUICEtaConfluence.v` (L2, `frac/eta-l2 @
+e05415aa`) and **derives** its `red_le` form (`red1_eta_ctx_le`) from L2's real, GREEN
+`red1_eta_ctx_strong : red1 Σ Γ t u -> eta_ctx Γ Δ -> ∑ u', red1 Σ Δ t u' × eta u u'` (with
+`eta_ctx := All2 (All_decls eta)`, `eta := clos_refl_trans eta1`). L2's lemma is strictly stronger
+than the form the squares needed (one `red1` ⊆ `clos_refl red1`); it carries no wf/scoping premise.
+Rebuilt GREEN (EXIT 0) with the real lemma consumed; `Print Assumptions` of all five lemmas still
+shows only `PrimString`/`PrimInt63`/`PrimFloat`, and `PCUICEtaConfluence` itself is axiom-free.
+
+Remaining `Context` hypotheses of `PCUICEtaC3Falsify.v`, each the ordinary η-closure of a plan
+U-row: `upto_domain_refl` (U1); `eq_context_upto_names_refl` (base); `eta1_mkApps_inv` (= upstream
 `eta1_mkApps_inv`, PROVED); `eta_rt_subst_list`, `eta_rt_subst_term`, `eta_ctx_inst_case_context`,
 `eta_rt_expand_lets`, `eta_rt_expand_lets_body`, `eta_ctx_assumptions` (U2 closure);
-`red1_eta_ctx_strong` (the C3-budget form of upstream `red1_eta_ctx`, audit §3.1);
 `eta_rt_iota_args`, `eta_rt_iota_params`, `eta_rt_iota_body` (U2 closure specialised to `iota_red`);
 and `IH : C3 Σ` (the induction hypothesis of C3's own `red1_ind_all`). The U-row closure lemmas are
 the ordinary substitution/`expand_lets` stability of η (plan rows U2/U4); proving them is L1's U

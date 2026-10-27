@@ -26,7 +26,10 @@
   from the Section hypotheses.
 
   [eta1] and [upto_domain] are the lane's shared definitions, [PCUICEtaDefs.v]
-  (C3Prover1, fork branch wip/eta-c3-defs-2026-10-27), not retyped here. *)
+  (C3Prover1, fork branch wip/eta-c3-defs-2026-10-27), not retyped here. The
+  context-move lemma [red1_eta_ctx_strong] and [eta_ctx] are now L2's REAL GREEN
+  lemmas from [PCUICEtaConfluence.v] (frac/eta-l2 @ e05415aa), DISCHARGED here (see
+  [red1_eta_ctx_le]), not assumed; the remaining U-row closures stay as [Context]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -37,7 +40,7 @@ From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICPrimitive
      PCUICCases PCUICClosed PCUICTactics PCUICEquality PCUICReduction
-     PCUICEtaDefs.
+     PCUICEtaDefs PCUICEtaConfluence.
 
 Import ListNotations.
 Set Default Goal Selector "!".
@@ -58,18 +61,12 @@ Definition joinable {cf:checker_flags} (Σ : global_env) (Γ : context) (u v : t
 Definition C3 {cf:checker_flags} (Σ : global_env) : Type :=
   forall Γ t u v, red1 Σ Γ t v -> eta1 t u -> joinable Σ Γ u v.
 
-(** ** η on contexts (declaration-wise, by the η-star closure) *)
-
-Definition eta_decl (d d' : context_decl) : Type :=
-  (d.(decl_name) = d'.(decl_name)) ×
-  eta_rt d.(decl_type) d'.(decl_type) ×
-  (match d.(decl_body), d'.(decl_body) with
-   | None, None => True
-   | Some b, Some b' => eta_rt b b'
-   | _, _ => False
-   end).
-
-Definition eta_ctx := All2 eta_decl.
+(** ** η on contexts.
+    [eta_ctx] and [red1_eta_ctx_strong] are now the REAL lemmas from
+    [PCUICEtaConfluence.v] (L2, frac/eta-l2 @ e05415aa), not a local hypothesis:
+    [eta_ctx := All2 (All_decls eta)], and
+    [red1_eta_ctx_strong : red1 Σ Γ t u -> eta_ctx Γ Δ -> ∑ u', red1 Σ Δ t u' × eta u u'].
+    [eta] there is [clos_refl_trans eta1] = our [eta_rt]. *)
 
 Section Falsify.
   Context {cf : checker_flags} (Σ : global_env).
@@ -110,25 +107,23 @@ Section Falsify.
   Context (eta_ctx_assumptions : forall Δ Δ', eta_ctx Δ Δ' ->
              context_assumptions Δ = context_assumptions Δ').
 
-  (** The C3-budget form of upstream's [red1_eta_ctx]
-      ([origin/eta_postpo:PCUICEtaReduction.v:1068-1070] is stated with [beta_eta] on
-      both legs and is too weak for C3; audit §3.1). *)
-  Context (red1_eta_ctx_strong : forall Γ Δ t u, eta_ctx Γ Δ -> red1 Σ Γ t u ->
-             ∑ u', red_le Σ Δ t u' × eta_rt u u').
-
   (** The induction hypothesis, in its strongest form (see the header). *)
   Context (IH : C3 Σ).
 
   (** *** Plumbing *)
 
-  Lemma eta_ctx_refl Δ : eta_ctx Δ Δ.
+  (** The C3-budget context-move lemma, now DERIVED from L2's real
+      [red1_eta_ctx_strong] (red1 + eta) by weakening its red1 to [red_le]. *)
+  Lemma red1_eta_ctx_le Γ Δ t u :
+    eta_ctx Γ Δ -> red1 Σ Γ t u -> ∑ u', red_le Σ Δ t u' × eta_rt u u'.
   Proof.
-    induction Δ as [|d Δ ih]; constructor; tas.
-    destruct d as [na [b|] ty]; cbn; repeat split;
-      try apply rt_refl; try reflexivity; try exact I.
+    intros hc hr.
+    destruct (red1_eta_ctx_strong Σ Γ Δ t u hr hc) as [u' [hstep heta]].
+    exists u'. split; [now constructor|exact heta].
   Qed.
 
-  Lemma eta_ctx_app Γ Δ Δ' : eta_ctx Δ Δ' -> eta_ctx (Γ ,,, Δ) (Γ ,,, Δ').
+  (** left-fixed prepend (the imported [eta_ctx_app] appends on the other side). *)
+  Lemma eta_ctx_prepend Γ Δ Δ' : eta_ctx Δ Δ' -> eta_ctx (Γ ,,, Δ) (Γ ,,, Δ').
   Proof.
     intro h. unfold app_context. apply All2_app; tas. apply eta_ctx_refl.
   Qed.
@@ -379,9 +374,9 @@ Section Falsify.
     intros hr he. depelim he.
     - (* case_eta_param: the η step MOVES the β step's context *)
       match goal with Ho : OnOne2 eta1 _ _ |- _ => rename Ho into ho end.
-      destruct (red1_eta_ctx_strong (Γ ,,, inst_case_predicate_context p)
+      destruct (red1_eta_ctx_le (Γ ,,, inst_case_predicate_context p)
                   (Γ ,,, inst_case_predicate_context (set_pparams p params'))
-                  _ _ (eta_ctx_app Γ _ _ (eta_ctx_inst_case_context _ _ _ _ ho)) hr)
+                  _ _ (eta_ctx_prepend Γ _ _ (eta_ctx_inst_case_context _ _ _ _ ho)) hr)
         as [pr'' [hle heta]].
       exists (tCase ci (set_preturn (set_pparams p params') pr'') c brs),
              (tCase ci (set_preturn (set_pparams p params') pr'') c brs).
@@ -578,11 +573,11 @@ Section Falsify.
   Proof.
     intros ho hr. induction hr as [hd hd' tl [r ec]|hd tl tl' h ih].
     - unfold on_Trel in *.
-      destruct (red1_eta_ctx_strong
+      destruct (red1_eta_ctx_le
           (Γ ,,, inst_case_branch_context p hd)
           (Γ ,,, inst_case_branch_context (set_pparams p params') hd)
           _ _
-          (eta_ctx_app Γ _ _
+          (eta_ctx_prepend Γ _ _
              (eta_ctx_inst_case_context (pparams p) params' (puinst p) hd.(bcontext) ho))
           r) as [b'' [hle heta]].
       destruct hle as [z hs|].
