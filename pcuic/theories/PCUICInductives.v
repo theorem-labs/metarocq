@@ -2277,7 +2277,7 @@ Proof.
 Qed.
 
 (** A type reduces to the product over its smashed context
-    ([PCUICClassification.red_it_mkProd_or_LetIn_smash] restates it there). *)
+    ([PCUICSafeLemmata.red_it_mkProd_or_LetIn_smash] restates it there). *)
 Lemma red_it_mkProd_or_LetIn_to_smash {cf} {Σ} {wfΣ : wf Σ} Γ Δ T :
   is_closed_context Γ ->
   is_open_term Γ (it_mkProd_or_LetIn Δ T) ->

@@ -9,7 +9,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICUtils PCUICReduction PCUICValidity PCUICSafeLemmata
      PCUICConfluence PCUICConversion
      PCUICOnFreeVars PCUICWellScopedCumulativity
-     PCUICClassification PCUICArityRed.
+     PCUICArityRed.
 
 From MetaRocq.SafeChecker Require Import PCUICErrors PCUICWfReduction PCUICWfEnv.
 

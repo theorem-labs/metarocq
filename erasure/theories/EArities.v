@@ -8,7 +8,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
   PCUICSR PCUICGeneration PCUICSubstitution PCUICElimination
   PCUICWeakeningEnv PCUICWeakeningEnvTyp
   PCUICWellScopedCumulativity
-  PCUICContextConversion PCUICConversion PCUICClassification
+  PCUICContextConversion PCUICConversion PCUICClassification PCUICSafeLemmata
   PCUICSpine PCUICInductives PCUICInductiveInversion PCUICConfluence
   PCUICArities PCUICPrincipality PCUICFirstorder.
 From MetaRocq.PCUIC Require PCUICOnFreeVars PCUICClosedTyp PCUICValidity.
