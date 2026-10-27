@@ -128,4 +128,6 @@ theories/PCUICCasesHelper.v
 # BET-315 eta lane (L1): new relations beside the base ones
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
+# BET-315 eta lane (C3 prover A): scratch C3 file
+theories/PCUICEtaC3A.v
 # theories/All.v
