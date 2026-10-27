@@ -314,3 +314,257 @@ Proof.
   - constructor.
   - constructor; [apply he|exact ih].
 Qed.
+
+Lemma eta_Case_discr ci p c c' brs : eta c c' -> eta (tCase ci p c brs) (tCase ci p c' brs).
+Proof.
+  induction 1.
+  - apply eta_step. now constructor.
+  - apply eta_refl.
+  - eapply eta_trans; eauto.
+Qed.
+
+(** * The four unlocking β-head cases of C3 (plan §3 row C3, §6 rank 1)
+
+  These are the four cases where η-postponement died (red_fix needs only
+  [is_constructor] on the head).  For the *commutation* form, the β-redex already fires
+  on [t], so the firing condition holds before the η step; the η step is either in the
+  fix/cofix body (propagated through unfolding by [eta], hence the [clos_refl_trans eta1]
+  on the β side) or inside a constructor argument (which keeps the constructor head).
+  No counterexample arises.
+
+  Carried hypotheses (named; U-rows of the plan, to be discharged separately):
+  - [upto_domain_refl] : U1 reflexivity of [upto_domain];
+  - [eta1_subst0], [eta_subst_terms] : U2 closure of η under substitution. *)
+
+Section FourCases.
+  Context {cf : checker_flags}.
+  Context {Σ : global_env} {wfΣ : wf Σ}.
+
+  Hypothesis upto_domain_refl : forall t, upto_domain t t.
+  Hypothesis eta1_subst0 :
+    forall s M M', eta1 M M' -> eta1 (subst0 s M) (subst0 s M').
+  Hypothesis eta_subst_terms :
+    forall s s' M, All2 eta s s' -> eta (subst0 s M) (subst0 s' M).
+
+  Definition C3_concl Γ u v :=
+    ∑ w w', clos_refl (red1 Σ Γ) u w × clos_refl_trans eta1 v w' × upto_domain w w'.
+
+  (** eta commutes with fixpoint unfolding (dtype step). *)
+  Lemma unfold_fix_eta_ty mfix mfix1 idx narg fn :
+    OnOne2 (on_Trel_eq eta1 dtype (fun x => (dname x, dbody x, rarg x))) mfix mfix1 ->
+    unfold_fix mfix idx = Some (narg, fn) ->
+    ∑ fn1, unfold_fix mfix1 idx = Some (narg, fn1) × eta fn fn1.
+  Proof using eta_subst_terms.
+    intros o hf.
+    have len := OnOne2_length o.
+    unfold unfold_fix in *.
+    destruct (nth_error mfix idx) as [d|] eqn:hn => //. noconf hf.
+    destruct (OnOne2_nth_error _ _ _ _ _ o hn) as [d1 [hn1 hd]].
+    assert (rarg d1 = rarg d /\ dbody d1 = dbody d) as [hr hb].
+    { destruct hd as [<-|[_ heq]]; [split; reflexivity|].
+      injection heq. intros -> -> _. split; reflexivity. }
+    rewrite hn1. eexists; split.
+    - now rewrite hr.
+    - rewrite hb. apply eta_subst_terms.
+      apply All2_eta_fix_subst; [exact len|].
+      intros j. apply eta_step. now apply fix_eta_ty.
+  Qed.
+
+  (** eta commutes with fixpoint unfolding (dbody step). *)
+  Lemma unfold_fix_eta_body mfix mfix1 idx narg fn :
+    OnOne2 (on_Trel_eq eta1 dbody (fun x => (dname x, dtype x, rarg x))) mfix mfix1 ->
+    unfold_fix mfix idx = Some (narg, fn) ->
+    ∑ fn1, unfold_fix mfix1 idx = Some (narg, fn1) × eta fn fn1.
+  Proof using eta1_subst0 eta_subst_terms.
+    intros o hf.
+    have len := OnOne2_length o.
+    unfold unfold_fix in *.
+    destruct (nth_error mfix idx) as [d|] eqn:hn => //. noconf hf.
+    destruct (OnOne2_nth_error _ _ _ _ _ o hn) as [d1 [hn1 hd]].
+    have hsub : All2 eta (fix_subst mfix) (fix_subst mfix1).
+    { apply All2_eta_fix_subst; [exact len|].
+      intros j. apply eta_step. now apply fix_eta_body. }
+    rewrite hn1.
+    assert ((rarg d1 = rarg d) × eta (dbody d) (dbody d1)) as [hr hb].
+    { destruct hd as [<-|[eb heq]].
+      - split; [reflexivity|apply eta_refl].
+      - injection heq. intros -> _ _. split; [reflexivity|now apply eta_step]. }
+    eexists; split.
+    - now rewrite hr.
+    - eapply eta_trans.
+      + apply (eta_subst_terms _ _ (dbody d) hsub).
+      + clear -hb eta1_subst0. induction hb.
+        * apply eta_step. now apply eta1_subst0.
+        * apply eta_refl.
+        * eapply eta_trans; eauto.
+  Qed.
+
+  (** eta commutes with cofixpoint unfolding (dtype step). *)
+  Lemma unfold_cofix_eta_ty mfix mfix1 idx narg fn :
+    OnOne2 (on_Trel_eq eta1 dtype (fun x => (dname x, dbody x, rarg x))) mfix mfix1 ->
+    unfold_cofix mfix idx = Some (narg, fn) ->
+    ∑ fn1, unfold_cofix mfix1 idx = Some (narg, fn1) × eta fn fn1.
+  Proof using eta_subst_terms.
+    intros o hf.
+    have len := OnOne2_length o.
+    unfold unfold_cofix in *.
+    destruct (nth_error mfix idx) as [d|] eqn:hn => //. noconf hf.
+    destruct (OnOne2_nth_error _ _ _ _ _ o hn) as [d1 [hn1 hd]].
+    assert (rarg d1 = rarg d /\ dbody d1 = dbody d) as [hr hb].
+    { destruct hd as [<-|[_ heq]]; [split; reflexivity|].
+      injection heq. intros -> -> _. split; reflexivity. }
+    rewrite hn1. eexists; split.
+    - now rewrite hr.
+    - rewrite hb. apply eta_subst_terms.
+      apply All2_eta_cofix_subst; [exact len|].
+      intros j. apply eta_step. now apply cofix_eta_ty.
+  Qed.
+
+  (** eta commutes with cofixpoint unfolding (dbody step). *)
+  Lemma unfold_cofix_eta_body mfix mfix1 idx narg fn :
+    OnOne2 (on_Trel_eq eta1 dbody (fun x => (dname x, dtype x, rarg x))) mfix mfix1 ->
+    unfold_cofix mfix idx = Some (narg, fn) ->
+    ∑ fn1, unfold_cofix mfix1 idx = Some (narg, fn1) × eta fn fn1.
+  Proof using eta1_subst0 eta_subst_terms.
+    intros o hf.
+    have len := OnOne2_length o.
+    unfold unfold_cofix in *.
+    destruct (nth_error mfix idx) as [d|] eqn:hn => //. noconf hf.
+    destruct (OnOne2_nth_error _ _ _ _ _ o hn) as [d1 [hn1 hd]].
+    have hsub : All2 eta (cofix_subst mfix) (cofix_subst mfix1).
+    { apply All2_eta_cofix_subst; [exact len|].
+      intros j. apply eta_step. now apply cofix_eta_body. }
+    rewrite hn1.
+    assert ((rarg d1 = rarg d) × eta (dbody d) (dbody d1)) as [hr hb].
+    { destruct hd as [<-|[eb heq]].
+      - split; [reflexivity|apply eta_refl].
+      - injection heq. intros -> _ _. split; [reflexivity|now apply eta_step]. }
+    eexists; split.
+    - now rewrite hr.
+    - eapply eta_trans.
+      + apply (eta_subst_terms _ _ (dbody d) hsub).
+      + clear -hb eta1_subst0. induction hb.
+        * apply eta_step. now apply eta1_subst0.
+        * apply eta_refl.
+        * eapply eta_trans; eauto.
+  Qed.
+
+  (** *** red_proj ∘ eta1 *)
+  Lemma C3_red_proj Γ p ui args arg u :
+    nth_error args (p.(proj_npars) + p.(proj_arg)) = Some arg ->
+    eta1 (tProj p (mkApps (tConstruct p.(proj_ind) 0 ui) args)) u ->
+    C3_concl Γ u arg.
+  Proof using upto_domain_refl.
+    intros hn e. depelim e.
+    assert (nih : ~~ isApp (tConstruct (proj_ind p) 0 ui)) by reflexivity.
+    destruct (eta1_mkApps_inv _ _ _ nih e) as [[h' [eh ->]]|[l' [ol ->]]].
+    - depelim eh.
+    - destruct (OnOne2_nth_error _ _ _ _ _ ol hn) as [arg' [hn' harg]].
+      exists arg', arg'. split; [|split].
+      + constructor. now econstructor.
+      + destruct harg as [<-|ea]; [apply rt_refl|apply rt_step; exact ea].
+      + apply upto_domain_refl.
+  Qed.
+
+  (** *** red_fix ∘ eta1 *)
+  Lemma C3_red_fix Γ mfix idx args narg fn u :
+    unfold_fix mfix idx = Some (narg, fn) ->
+    is_constructor narg args = true ->
+    eta1 (mkApps (tFix mfix idx) args) u ->
+    C3_concl Γ u (mkApps fn args).
+  Proof using eta1_subst0 eta_subst_terms upto_domain_refl.
+    intros hf hc e.
+    assert (nih : ~~ isApp (tFix mfix idx)) by reflexivity.
+    destruct (eta1_mkApps_inv _ _ _ nih e) as [[h' [eh ->]]|[l' [ol ->]]].
+    - (* η in the fix itself *)
+      depelim eh.
+      + destruct (unfold_fix_eta_ty _ _ _ _ _ o hf) as [fn1 [hf1 efn]].
+        exists (mkApps fn1 args), (mkApps fn1 args). split; [|split].
+        * constructor. now econstructor.
+        * now apply eta_mkApps_f.
+        * apply upto_domain_refl.
+      + destruct (unfold_fix_eta_body _ _ _ _ _ o hf) as [fn1 [hf1 efn]].
+        exists (mkApps fn1 args), (mkApps fn1 args). split; [|split].
+        * constructor. now econstructor.
+        * now apply eta_mkApps_f.
+        * apply upto_domain_refl.
+    - (* η in an argument *)
+      exists (mkApps fn l'), (mkApps fn l'). split; [|split].
+      + constructor. econstructor; [exact hf|].
+        eapply is_constructor_OnOne2_eta1; eauto.
+      + now apply eta_OnOne2_mkApps.
+      + apply upto_domain_refl.
+  Qed.
+
+  (** *** red_cofix_proj ∘ eta1 *)
+  Lemma C3_red_cofix_proj Γ p mfix idx args narg fn u :
+    unfold_cofix mfix idx = Some (narg, fn) ->
+    eta1 (tProj p (mkApps (tCoFix mfix idx) args)) u ->
+    C3_concl Γ u (tProj p (mkApps fn args)).
+  Proof using eta1_subst0 eta_subst_terms upto_domain_refl.
+    intros hf e. depelim e.
+    assert (nih : ~~ isApp (tCoFix mfix idx)) by reflexivity.
+    destruct (eta1_mkApps_inv _ _ _ nih e) as [[h' [eh ->]]|[l' [ol ->]]].
+    - depelim eh.
+      + destruct (unfold_cofix_eta_ty _ _ _ _ _ o hf) as [fn1 [hf1 efn]].
+        exists (tProj p (mkApps fn1 args)), (tProj p (mkApps fn1 args)). split; [|split].
+        * constructor. now econstructor.
+        * apply eta_Proj. now apply eta_mkApps_f.
+        * apply upto_domain_refl.
+      + destruct (unfold_cofix_eta_body _ _ _ _ _ o hf) as [fn1 [hf1 efn]].
+        exists (tProj p (mkApps fn1 args)), (tProj p (mkApps fn1 args)). split; [|split].
+        * constructor. now econstructor.
+        * apply eta_Proj. now apply eta_mkApps_f.
+        * apply upto_domain_refl.
+    - exists (tProj p (mkApps fn l')), (tProj p (mkApps fn l')). split; [|split].
+      + constructor. now econstructor.
+      + apply eta_Proj. now apply eta_OnOne2_mkApps.
+      + apply upto_domain_refl.
+  Qed.
+
+  (** *** red_cofix_case ∘ eta1 *)
+  Lemma C3_red_cofix_case Γ ci p mfix idx args narg fn brs u :
+    unfold_cofix mfix idx = Some (narg, fn) ->
+    eta1 (tCase ci p (mkApps (tCoFix mfix idx) args) brs) u ->
+    C3_concl Γ u (tCase ci p (mkApps fn args) brs).
+  Proof using eta1_subst0 eta_subst_terms upto_domain_refl.
+    intros hf e. depelim e.
+    - (* case_eta_param *)
+      eexists _, _. split; [|split].
+      + constructor. now econstructor.
+      + apply eta_step. now apply case_eta_param.
+      + apply upto_domain_refl.
+    - (* case_eta_return *)
+      eexists _, _. split; [|split].
+      + constructor. now econstructor.
+      + apply eta_step. now apply case_eta_return.
+      + apply upto_domain_refl.
+    - (* case_eta_discr *)
+      assert (nih : ~~ isApp (tCoFix mfix idx)) by reflexivity.
+      destruct (eta1_mkApps_inv _ _ _ nih e) as [[h' [eh ->]]|[l' [ol ->]]].
+      + depelim eh.
+        * destruct (unfold_cofix_eta_ty _ _ _ _ _ o hf) as [fn1 [hf1 efn]].
+          exists (tCase ci p (mkApps fn1 args) brs), (tCase ci p (mkApps fn1 args) brs).
+          split; [|split].
+          -- constructor. eapply red_cofix_case; exact hf1.
+          -- apply eta_Case_discr. apply eta_mkApps_f. exact efn.
+          -- apply upto_domain_refl.
+        * destruct (unfold_cofix_eta_body _ _ _ _ _ o hf) as [fn1 [hf1 efn]].
+          exists (tCase ci p (mkApps fn1 args) brs), (tCase ci p (mkApps fn1 args) brs).
+          split; [|split].
+          -- constructor. eapply red_cofix_case; exact hf1.
+          -- apply eta_Case_discr. apply eta_mkApps_f. exact efn.
+          -- apply upto_domain_refl.
+      + exists (tCase ci p (mkApps fn l') brs), (tCase ci p (mkApps fn l') brs).
+        split; [|split].
+        * constructor. now econstructor.
+        * apply eta_Case_discr. now apply eta_OnOne2_mkApps.
+        * apply upto_domain_refl.
+    - (* case_eta_brs *)
+      eexists _, _. split; [|split].
+      + constructor. now econstructor.
+      + apply eta_step. now apply case_eta_brs.
+      + apply upto_domain_refl.
+  Qed.
+
+End FourCases.
