@@ -142,9 +142,6 @@ Definition exec_check (m : mfixpoint term) : bool := check_guard_impl Fix (empty
 Definition syn_check (m : mfixpoint term) : guard_result :=
   check_guard_gen (lookup_env Σ) Σ.(retroknowledge) guard_fuel Fix 0 (strip_mfix m).
 
-Definition is_reject (r : guard_result) : bool :=
-  match r with Reject _ => true | _ => false end.
-
 (** ** CE-A: a [let] in a branch context that [nat] does not declare
 
     [match O return nat with O (b := f n) => b | S k => O end] inside
@@ -173,7 +170,7 @@ Proof. vm_compute. reflexivity. Qed.
 (** The syntactic check refuses this block by scope as well: the added [let]
     body is not closed in the branch context, which is an index outside the
     block's context. *)
-Example ce_a_syntactic_rejects : is_reject (syn_check ce_a) = true.
+Example ce_a_syntactic_rejects : syn_check ce_a = Reject FixGuard.err_scope.
 Proof. vm_compute. reflexivity. Qed.
 Example ce_a_refused : exec_check ce_a = false.
 Proof. vm_compute. reflexivity. Qed.
@@ -242,7 +239,7 @@ Proof. vm_compute. reflexivity. Qed.
 (** The syntactic check refuses this block by scope as well: without
     parameters, the declared [let] bodies are not closed in the branch
     context. *)
-Example ce_a'_syntactic_rejects : is_reject (syn_check ce_a') = true.
+Example ce_a'_syntactic_rejects : syn_check ce_a' = Reject FixGuard.err_scope.
 Proof. vm_compute. reflexivity. Qed.
 Example ce_a'_refused : exec_check ce_a' = false.
 Proof. vm_compute. reflexivity. Qed.
@@ -295,7 +292,7 @@ Definition sp_irrelevant := sp_block Irrelevant tsP (tRel 0).
 
 Example sp_relevant_wf : wf_cases_mfix Σ sp_relevant = true.
 Proof. vm_compute. reflexivity. Qed.
-Example sp_relevant_syntactic_rejects : is_reject (syn_check sp_relevant) = true.
+Example sp_relevant_syntactic_rejects : syn_check sp_relevant = Reject FixGuard.err_elim.
 Proof. vm_compute. reflexivity. Qed.
 Example sp_relevant_refused : exec_check sp_relevant = false.
 Proof. vm_compute. reflexivity. Qed.
@@ -318,7 +315,7 @@ Definition se_irrelevant := se_block Irrelevant tsEmpty (tRel 0).
 Example sEmpty_eliminates_anywhere :
   option_map (fun p => p.2.(ind_kelim)) (lookup_inductive Σ i_sEmpty) = Some IntoAny.
 Proof. vm_compute. reflexivity. Qed.
-Example se_relevant_syntactic_rejects : is_reject (syn_check se_relevant) = true.
+Example se_relevant_syntactic_rejects : syn_check se_relevant = Reject FixGuard.err_elim.
 Proof. vm_compute. reflexivity. Qed.
 Example se_relevant_refused : exec_check se_relevant = false.
 Proof. vm_compute. reflexivity. Qed.
@@ -364,8 +361,8 @@ Proof. vm_compute. reflexivity. Qed.
 Example tf_block_wf : wf_cases_mfix Σ_tf tf_block = true.
 Proof. vm_compute. reflexivity. Qed.
 Example tf_syntactic_rejects :
-  is_reject (check_guard_gen (lookup_env Σ_tf) Σ_tf.(retroknowledge) guard_fuel Fix 0
-               (strip_mfix tf_block)) = true.
+  check_guard_gen (lookup_env Σ_tf) Σ_tf.(retroknowledge) guard_fuel Fix 0 (strip_mfix tf_block)
+  = Reject FixGuard.err_illegal.
 Proof. vm_compute. reflexivity. Qed.
 Example tf_refused : check_guard_impl Fix (empty_ext Σ_tf) [] tf_block = false.
 Proof. vm_compute. reflexivity. Qed.
@@ -425,8 +422,8 @@ Definition trm_block : mfixpoint term := fix_block q_trm.
 Example tp_block_one : #|tp_block| = 1.
 Proof. vm_compute. reflexivity. Qed.
 Example tp_syntactic_rejects :
-  is_reject (check_guard_gen (lookup_env Σ_tp) Σ_tp.(retroknowledge) guard_fuel Fix 0
-               (strip_mfix tp_block)) = true.
+  check_guard_gen (lookup_env Σ_tp) Σ_tp.(retroknowledge) guard_fuel Fix 0 (strip_mfix tp_block)
+  = Reject FixGuard.err_illegal.
 Proof. vm_compute. reflexivity. Qed.
 Example tp_refused : check_guard_impl Fix (empty_ext Σ_tp) [] tp_block = false.
 Proof. vm_compute. reflexivity. Qed.

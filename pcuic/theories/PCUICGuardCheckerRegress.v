@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Environment.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICGuardChecker.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICGuardCoFix PCUICGuardChecker.
 
 Local Open Scope bs_scope.
 
@@ -9,7 +9,10 @@ Local Open Scope bs_scope.
 
   Each [Example] below runs [check_guard_gen] on a fixpoint or cofixpoint
   block, so the [pcuic] build fails if a version of the checker accepts one of
-  these unsafe blocks, or refuses one of the three safe controls.
+  these unsafe blocks, refuses it for another reason than the one asserted, or
+  refuses one of the three safe controls.  The reason is asserted as the
+  checker's own message constant, so a refusal that comes from an unrelated
+  part of the check does not pass.
 
   The environment and the blocks are PCUIC terms obtained by quoting the
   Gallina sources given in the comments and translating them to PCUIC; the
@@ -25,9 +28,6 @@ Definition tind (s : ident) : term := tInd (ind s) [].
 Definition tcstr (s : ident) (c : nat) : term := tConstruct (ind s) c [].
 Definition anon : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
 Definition nm (s : ident) : aname := {| binder_name := nNamed s; binder_relevance := Relevant |}.
-
-Definition is_reject (r : guard_result) : bool :=
-  match r with Reject _ => true | _ => false end.
 
 (** ** The environment *)
 
@@ -351,16 +351,22 @@ Definition ts_block : mfixpoint term :=
      rarg := 0
    |}].
 
-(** Each half is refused on its own.  The loop needs both a subterm taken
-    through a match on a coinductive and a cofixpoint call in a non-recursive
-    constructor argument; either rule alone breaks it, and both are kept and
-    asserted, so that a later change to one rule cannot open the pair. *)
+(** Each half is refused on its own, and for its own reason.  The loop needs
+    both a subterm taken through a match on a coinductive and a cofixpoint
+    call in a non-recursive constructor argument; either rule alone breaks it,
+    and both are kept and asserted, so that a later change to one rule cannot
+    open the pair.  [t_f]'s call is on [t], taken out of [y : Str T] by a
+    match on a coinductive value, so [t] is not a structural subterm of [x]. *)
 Example nested_coinductive_fix_half_refused :
-  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 Fix 0 (strip_mfix tf_block)) = true.
+  check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 Fix 0 (strip_mfix tf_block)
+  = Reject FixGuard.err_illegal.
 Proof. vm_compute. reflexivity. Qed.
 
+(** [t_s]'s call is in [C t_s], an argument of [SCons] whose type is [T], not
+    [Str T]: a non-recursive argument of the constructor. *)
 Example nested_coinductive_cofix_half_refused :
-  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix ts_block)) = true.
+  check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix ts_block)
+  = Reject PCUICGuardCoFix.err_nonrec.
 Proof. vm_compute. reflexivity. Qed.
 
 (** ** Corecursive calls in parts that a reduction step discards
@@ -369,7 +375,9 @@ Proof. vm_compute. reflexivity. Qed.
   projection, not under a constructor, inside a part of the body that one
   reduction step throws away.  A rule that reduced first and checked only the
   reduct would never see the call; the call is not guarded, so the block must
-  be refused. *)
+  be refused.  The check refuses the call where it stands, before any
+  reduction: as the scrutinee of a [match] in the first three blocks, as the
+  argument of a projection in the fourth. *)
 
 (** [cofix g : Stream := (fix h (k s : nat) {struct k} : Stream := Cons 0 zeros) O
        (match g with Cons a _ => a end)]: unfolding [h] discards its argument [s]. *)
@@ -409,8 +417,8 @@ Definition g_fix_block : mfixpoint term :=
    |}].
 
 Example cofix_call_in_discarded_fix_argument_refused :
-  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix g_fix_block))
-  = true.
+  check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix g_fix_block)
+  = Reject PCUICGuardCoFix.err_casearg.
 Proof. vm_compute. reflexivity. Qed.
 
 (** [cofix g : Stream := match Box (match g with Cons a _ => a end) with Box _ => Cons 0 zeros end]:
@@ -447,8 +455,8 @@ Definition g_iota_block : mfixpoint term :=
    |}].
 
 Example cofix_call_in_discarded_constructor_argument_refused :
-  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix g_iota_block))
-  = true.
+  check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix g_iota_block)
+  = Reject PCUICGuardCoFix.err_casearg.
 Proof. vm_compute. reflexivity. Qed.
 
 (** [cofix g : Stream := (mk (match g with Cons a _ => a end) (Cons 0 zeros)).(snd')]:
@@ -477,8 +485,8 @@ Definition g_proj_block : mfixpoint term :=
    |}].
 
 Example cofix_call_in_discarded_field_refused :
-  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix g_proj_block))
-  = true.
+  check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix g_proj_block)
+  = Reject PCUICGuardCoFix.err_casearg.
 Proof. vm_compute. reflexivity. Qed.
 
 (** [cofix g : S := (fun _ : nat => mkS 0 zs) (hd g)], where [S] is
@@ -499,9 +507,8 @@ Definition g_beta_proj_block : mfixpoint term :=
    |}].
 
 Example cofix_call_under_projection_in_discarded_argument_refused :
-  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0
-               (strip_mfix g_beta_proj_block))
-  = true.
+  check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix g_beta_proj_block)
+  = Reject PCUICGuardCoFix.err_notguarded.
 Proof. vm_compute. reflexivity. Qed.
 
 (** ** Controls: three guarded blocks are accepted
