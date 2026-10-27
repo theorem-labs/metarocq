@@ -2,12 +2,16 @@ From Stdlib Require Import Structures.Equalities Lists.List Lists.ListDec.
 From MetaRocq.Utils Require Import MRProd All_Forall ReflectEq MRRelations MRReflect.
 From MetaRocq.Common Require Import Environment Universes.
 From MetaRocq.Quotation.ToPCUIC Require Import Init.
-From MetaRocq.Quotation.ToPCUIC Require Import (hints) Stdlib.Init Stdlib.ssr utils BasicAst Primitive Universes Kernames.
+From MetaRocq.Quotation.ToPCUIC Require Import (hints) Stdlib.Init Stdlib.ssr utils BasicAst Primitive PrimitiveOps Universes Kernames.
 From MetaRocq.Quotation.ToPCUIC.Utils Require Import (hints) MROption MRProd All_Forall.
 From MetaRocq.Quotation.ToPCUIC.QuotationOf.Common Require Import Environment.Sig.
 
 Module Retroknowledge.
   #[export] Instance quote_t : ground_quotable Retroknowledge.t := ltac:(destruct 1; exact _).
+  (** BET-319: the operation-table conjunct of [Retroknowledge.extends] is a
+      quantified statement, so it is quoted through its decision procedure. *)
+  #[export] Instance quote_extends_ops {x y} : ground_quotable (@Retroknowledge.extends_ops x y)
+    := ground_quotable_of_dec (@Retroknowledge.extends_ops_dec x y).
   #[export] Instance quote_extends {x y} : ground_quotable (@Retroknowledge.extends x y) := ltac:(cbv [Retroknowledge.extends]; exact _).
 End Retroknowledge.
 Export (hints) Retroknowledge.
@@ -44,15 +48,10 @@ Module QuoteEnvironmentHelper (T : Term) (Import E : EnvironmentSig T).
   Qed.
 
   (* quotable versions *)
-  (** BET-319: [extends] has a fourth field, [extends_prim_fresh]; the
-      restatement must carry it or [extends_alt_iff] is false (an extension
-      that registers an operation on a constant both environments declare
-      satisfies the first three fields and not [extends]). *)
   Definition extends_alt (Σ Σ' : global_env) :=
     [× Σ.(universes) ⊂_cs Σ'.(universes),
-      All (fun '(c, _) => { decls & lookup_envs Σ' c = decls ++ lookup_envs Σ c }) (declarations Σ),
-      Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge) &
-      extends_prim_fresh Σ Σ'].
+      All (fun '(c, _) => { decls & lookup_envs Σ' c = decls ++ lookup_envs Σ c }) (declarations Σ) &
+        Retroknowledge.extends Σ.(retroknowledge) Σ'.(retroknowledge)].
 
   Definition extends_decls_alt (Σ Σ' : global_env) :=
     [× Σ.(universes) = Σ'.(universes),
@@ -106,11 +105,6 @@ Module QuoteEnvironment (T : Term) (Import E : EnvironmentSig T) (Import QEH : Q
 
   #[export] Instance quote_global_env : ground_quotable global_env := ltac:(destruct 1; exact _).
 
-  (** The fourth field of [extends] is a quantified statement, but a decidable
-      one ([extends_prim_fresh_dec], decided by [Σ']'s finite operation
-      table), so it is quoted through its decision procedure. *)
-  #[export] Instance quote_extends_prim_fresh {Σ Σ'} : ground_quotable (@extends_prim_fresh Σ Σ')
-    := ground_quotable_of_dec (@extends_prim_fresh_dec Σ Σ').
   #[export] Instance quote_extends_alt {Σ Σ'} : ground_quotable (@extends_alt Σ Σ') := ltac:(cbv [extends_alt]; exact _).
   #[export] Instance quote_extends_decls_alt {Σ Σ'} : ground_quotable (@extends_decls_alt Σ Σ') := ltac:(cbv [extends_decls_alt]; exact _).
   #[export] Instance qextends_alt : quotation_of extends_alt := ltac:(cbv [extends_alt]; exact _).

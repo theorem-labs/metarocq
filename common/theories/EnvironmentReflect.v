@@ -46,21 +46,10 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
       move: H. rewrite H' length_app Nat.add_sub skipn_all_app //. }
   Qed.
 
-  (** The decider itself is [E.extends_prim_freshb] in [Environment.v], because
-      the quotation copies of [extends_alt] need it too; here it only has to be
-      turned into the [reflectT] the other [extendsb] reflections use. *)
-  Notation extendsb_prim_fresh := extends_prim_freshb (only parsing).
-
-  Lemma extends_prim_freshT Σ Σ'
-    : reflectT (extends_prim_fresh Σ Σ') (extends_prim_freshb Σ Σ').
-  Proof.
-    destruct (extends_prim_freshP Σ Σ'); constructor; assumption.
-  Qed.
   Definition extendsb (Σ Σ' : global_env) : bool
     := Σ.(universes) ⊂?_cs Σ'.(universes)
        && extendsb_decls_part Σ Σ'
-       && Retroknowledge.extendsb Σ.(retroknowledge) Σ'.(retroknowledge)
-       && extendsb_prim_fresh Σ Σ'.
+       && Retroknowledge.extendsb Σ.(retroknowledge) Σ'.(retroknowledge).
 
   Definition extends_declsb (Σ Σ' : global_env) : bool
     := (Σ.(universes) == Σ'.(universes))
@@ -70,8 +59,7 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
   Definition extends_strictly_on_declsb (Σ Σ' : global_env) : bool
     := (Σ.(universes) ⊂?_cs Σ'.(universes))
        && strictly_extendsb_decls_part Σ Σ'
-       && Retroknowledge.extendsb Σ.(retroknowledge) Σ'.(retroknowledge)
-       && extendsb_prim_fresh Σ Σ'.
+       && Retroknowledge.extendsb Σ.(retroknowledge) Σ'.(retroknowledge).
 
   Definition strictly_extends_declsb (Σ Σ' : global_env) : bool
     := (Σ.(universes) == Σ'.(universes))
@@ -81,9 +69,8 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
   Lemma extendsT Σ Σ' : reflectT (extends Σ Σ') (extendsb Σ Σ').
   Proof.
     rewrite /extends/extendsb.
-    case: extends_decls_partT => hd; case: Retroknowledge.extendsT => hr;
-      case: ContextSet.subsetP => hu; case: extends_prim_freshT => hp; cbn;
-      constructor; first [ split; assumption | intros [? ? ? ?]; contradiction ].
+    case: extends_decls_partT; case: Retroknowledge.extendsT; case: ContextSet.subsetP; cbn;
+      constructor; intuition.
   Qed.
 
   Lemma extends_declsT Σ Σ' : reflectT (extends_decls Σ Σ') (extends_declsb Σ Σ').
@@ -96,9 +83,8 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
   Lemma extends_strictly_on_declsT Σ Σ' : reflectT (extends_strictly_on_decls Σ Σ') (extends_strictly_on_declsb Σ Σ').
   Proof.
     rewrite /extends_strictly_on_decls/extends_strictly_on_declsb.
-    case: strictly_extends_decls_partT => hd; case: Retroknowledge.extendsT => hr;
-      case: ContextSet.subsetP => hu; case: extends_prim_freshT => hp; cbn;
-      constructor; first [ split; assumption | intros [? ? ? ?]; contradiction ].
+    case: strictly_extends_decls_partT; case: Retroknowledge.extendsT; case: ContextSet.subsetP; cbn;
+      constructor; intuition.
   Qed.
 
   Lemma strictly_extends_declsT Σ Σ' : reflectT (strictly_extends_decls Σ Σ') (strictly_extends_declsb Σ Σ').

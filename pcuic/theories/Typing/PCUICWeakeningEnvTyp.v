@@ -80,7 +80,7 @@ Lemma extends_primitive_constant Σ Σ' p t :
 Proof.
   intros [_ _ ext].
   unfold primitive_constant.
-  case: ext => o [] o' [] o'' o'''.
+  case: ext => o [] o' [] o'' [] o''' _.
   destruct p => //.
   - intros hr. now rewrite hr in o; depelim o.
   - intros hr. now rewrite hr in o'; depelim o'.
@@ -136,8 +136,11 @@ Proof.
     + destruct Σ as [Σ φ]. eapply weakening_env_cumulSpec in cumulA; eauto.
 Qed.
 
+(** [R] must imply [extends_prim], not merely [extends] (standing condition
+    D-1 in common/theories/Environment.v): the [arity_red] and positivity
+    obligations below go through [weakening_env_whd_rel]. *)
 Lemma weakening_on_global_decl_gen `{checker_flags} R P Σ Σ' φ kn decl :
-  CRelationClasses.subrelation R extends ->
+  CRelationClasses.subrelation R extends_prim ->
   weaken_env_prop_gen cumulSpec0 (lift_typing typing) R P ->
   wf Σ -> wf Σ' -> R Σ Σ' ->
   on_global_decl cumulSpec0 P (Σ, φ) kn decl ->
@@ -145,6 +148,7 @@ Lemma weakening_on_global_decl_gen `{checker_flags} R P Σ Σ' φ kn decl :
 Proof.
   unfold weaken_env_prop_gen.
   intros HRext HPΣ wfΣ wfΣ' Hext.
+  pose proof (HRext _ _ Hext) as hfr. pose proof (extends_prim_extends _ _ hfr) as hex.
   apply on_global_decl_impl_full; eauto.
   - reflexivity.
   - intros ????. eapply weakening_env_arity_red; eauto.
@@ -160,24 +164,23 @@ Proof.
     intros [univs' [i [i' []]]]. exists univs', i, i'. split => //.
     all:eapply weakening_env_consistent_instance; tea; eauto.
   - intros ????. eapply weakening_env_positive_cstr; tea.
-    now apply HRext.
+    all: try exact hfr.
 Qed.
 
 Definition weakening_on_global_decl `{checker_flags} P Σ Σ' φ kn decl :
   weaken_env_prop cumulSpec0 (lift_typing typing) P ->
-  wf Σ -> wf Σ' -> extends Σ Σ' ->
+  wf Σ -> wf Σ' -> extends_prim Σ Σ' ->
   on_global_decl cumulSpec0 P (Σ, φ) kn decl ->
   on_global_decl cumulSpec0 P (Σ', φ) kn decl.
-Proof. intro; eapply weakening_on_global_decl_gen; [ | eassumption ]; tc. Qed.
+Proof.
+  intros HP wfΣ wfΣ' ext.
+  eapply (weakening_on_global_decl_gen extends_prim); try eassumption.
+  - intros ?? h; exact h.
+  - intros Σ0 Σ0' φ0 w w' [e _]. exact (HP Σ0 Σ0' φ0 w w' e).
+Qed.
 Lemma weakening_on_global_decl_ext `{checker_flags} P Σ Σ' φ kn decl :
   weaken_env_decls_prop cumulSpec0 (lift_typing typing) P ->
   wf Σ -> wf Σ' -> extends_decls Σ Σ' ->
-  on_global_decl cumulSpec0 P (Σ, φ) kn decl ->
-  on_global_decl cumulSpec0 P (Σ', φ) kn decl.
-Proof. intro; eapply weakening_on_global_decl_gen; [ | eassumption ]; tc. Qed.
-Lemma weakening_on_global_decl_strictly `{checker_flags} P Σ Σ' φ kn decl :
-  weaken_env_strictly_on_decls_prop cumulSpec0 (lift_typing typing) P ->
-  wf Σ -> wf Σ' -> extends_strictly_on_decls Σ Σ' ->
   on_global_decl cumulSpec0 P (Σ, φ) kn decl ->
   on_global_decl cumulSpec0 P (Σ', φ) kn decl.
 Proof. intro; eapply weakening_on_global_decl_gen; [ | eassumption ]; tc. Qed.
@@ -190,7 +193,7 @@ Proof. intro; eapply weakening_on_global_decl_gen; [ | eassumption ]; tc. Qed.
 
 Import CRelationClasses CMorphisms.
 Lemma weakening_env_gen_lookup_on_global_env `{checker_flags} R P Σ Σ' c decl :
-  subrelation R extends ->
+  subrelation R extends_prim ->
   subrelation strictly_extends_decls R ->
   Transitive R ->
   weaken_env_prop_gen cumulSpec0 (lift_typing typing) R P ->
@@ -217,10 +220,17 @@ Qed.
 
 Lemma weakening_env_lookup_on_global_env `{checker_flags} P Σ Σ' c decl :
   weaken_env_prop cumulSpec0 (lift_typing typing) P ->
-  wf Σ' -> wf Σ -> extends Σ Σ' -> on_global_env cumulSpec0 P Σ ->
+  wf Σ' -> wf Σ -> extends_prim Σ Σ' -> on_global_env cumulSpec0 P Σ ->
   lookup_env Σ c = Some decl ->
   on_global_decl cumulSpec0 P (Σ', universes_decl_of_decl decl) c decl.
-Proof. eapply weakening_env_gen_lookup_on_global_env; tc. Qed.
+Proof.
+  intros HP wfΣ' wfΣ ext.
+  eapply (weakening_env_gen_lookup_on_global_env extends_prim); try eassumption.
+  - intros ?? h; exact h.
+  - exact _.
+  - exact _.
+  - intros Σ0 Σ0' φ0 w w' [e _]. exact (HP Σ0 Σ0' φ0 w w' e).
+Qed.
 Lemma weakening_env_decls_lookup_on_global_env `{checker_flags} P Σ Σ' c decl :
   weaken_env_decls_prop cumulSpec0 (lift_typing typing) P ->
   wf Σ' -> wf Σ -> extends_decls Σ Σ' -> on_global_env cumulSpec0 P Σ ->
@@ -230,12 +240,6 @@ Proof. eapply weakening_env_gen_lookup_on_global_env; tc. Qed.
 Lemma weakening_env_strictly_decls_lookup_on_global_env `{checker_flags} P Σ Σ' c decl :
   weaken_env_strictly_decls_prop cumulSpec0 (lift_typing typing) P ->
   wf Σ' -> wf Σ -> strictly_extends_decls Σ Σ' -> on_global_env cumulSpec0 P Σ ->
-  lookup_env Σ c = Some decl ->
-  on_global_decl cumulSpec0 P (Σ', universes_decl_of_decl decl) c decl.
-Proof. eapply weakening_env_gen_lookup_on_global_env; tc. Qed.
-Lemma weakening_env_strictly_on_decls_lookup_on_global_env `{checker_flags} P Σ Σ' c decl :
-  weaken_env_strictly_on_decls_prop cumulSpec0 (lift_typing typing) P ->
-  wf Σ' -> wf Σ -> extends_strictly_on_decls Σ Σ' -> on_global_env cumulSpec0 P Σ ->
   lookup_env Σ c = Some decl ->
   on_global_decl cumulSpec0 P (Σ', universes_decl_of_decl decl) c decl.
 Proof. eapply weakening_env_gen_lookup_on_global_env; tc. Qed.

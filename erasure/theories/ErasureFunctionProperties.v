@@ -2382,7 +2382,7 @@ Proof using Type.
   have wfdecls := decls_prefix_wf prefix wfΣ.
   epose proof (weakening_env_lookup_on_global_env (lift_typing typing) _ Σ kn decl
     weaken_env_prop_typing wfΣ wfdecls).
-  forward X. apply extends_strictly_on_decls_extends, strictly_extends_decls_extends_strictly_on_decls. red; split => //.
+  forward X. apply strictly_extends_decls_extends_prim. red; split => //.
   now apply (X wfdecls).
 Qed.
 

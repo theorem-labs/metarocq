@@ -45,8 +45,12 @@ Set Default Goal Selector "!".
   is a local [let] whose body [b] lives in the context of position [i] (the
   reduct is [lift0 (S i) b]); any other [tRel] is an opaque variable.
 
-  The retroknowledge [retro] is part of the signature for the guard checker;
-  PCUIC has no primitive-operation reduction, so it is not consulted. *)
+  The retroknowledge [retro] is part of the signature for the guard checker,
+  but it is not consulted: PCUIC does have primitive-operation reduction
+  ([red_prim_op], BET-319), yet this stepper deliberately does not fire an
+  operation, matching Rocq, whose guard does not fire one to prune a match
+  branch.  If it ever does, [gc_ext] must take [extends_prim] (standing
+  condition D-3 in common/theories/Environment.v). *)
 
 Inductive step_result :=
 | Stuck
