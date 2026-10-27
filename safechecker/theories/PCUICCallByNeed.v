@@ -589,8 +589,7 @@ Inductive delta_memo :=
 | DAxiom
 | DBody (body : term) (insts : list (Instance.t * cidx * term)).
 
-(** *** The delta memo: a binary trie on the bits of the constant's identifier, each node
-  with the module paths of the constants whose identifier ends there *)
+(** *** Equality of names by identifier first *)
 
 Fixpoint dirpath_eqb (d1 d2 : dirpath) : bool :=
   match d1, d2 with
@@ -607,6 +606,20 @@ Fixpoint modpath_eqb (m1 m2 : modpath) : bool :=
   | MPdot m1 i1, MPdot m2 i2 => String.eqb i1 i2 && modpath_eqb m1 m2
   | _, _ => false
   end.
+
+(** Equality of inductives: the index, the identifier, then the module path (the kername
+  comparison of [Kernames] compares the module path first, byte by byte). *)
+Definition inductive_eqb (i1 i2 : inductive) : bool :=
+  Nat.eqb i1.(inductive_ind) i2.(inductive_ind)
+  && String.eqb i1.(inductive_mind).2 i2.(inductive_mind).2
+  && modpath_eqb i1.(inductive_mind).1 i2.(inductive_mind).1.
+
+Definition case_info_eqb (c1 c2 : case_info) : bool :=
+  inductive_eqb c1.(ci_ind) c2.(ci_ind) && Nat.eqb c1.(ci_npar) c2.(ci_npar)
+  && eqb c1.(ci_relevance) c2.(ci_relevance).
+
+(** *** The delta memo: a binary trie on the bits of the constant's identifier, each node
+  with the module paths of the constants whose identifier ends there *)
 
 Inductive dtrie :=
 | DTNil
@@ -1171,7 +1184,7 @@ Section CallByNeed.
         | RE e :: RSk stk :: rs =>
           match v with
           | VCon (tConstruct ind n _) args =>
-            if eqb ind ci.(ci_ind) then
+            if inductive_eqb ind ci.(ci_ind) then
               match nth_error brs n with
               | Some br =>
                 let cargs := skipn ci.(ci_npar) args in
@@ -1198,7 +1211,7 @@ Section CallByNeed.
         | RE e :: RSk stk :: rs =>
           match v with
           | VCon (tConstruct ind 0 _) args =>
-            if eqb ind p.(proj_ind) then
+            if inductive_eqb ind p.(proj_ind) then
               match nth_error args (p.(proj_npars) + p.(proj_arg)) with
               | Some a => eval_slot d (SAddr a) stk rs s
               | None => CFail WShape
@@ -1527,7 +1540,7 @@ Section CallByNeed.
       let d := k tt in
       match c1.(c_term), c2.(c_term) with
       | tCase ci1 p1 sc1 brs1, tCase ci2 p2 sc2 brs2 =>
-        if eqb ci1 ci2 && (#|brs1| == #|brs2|) && (#|p1.(pparams)| == #|p2.(pparams)|)
+        if case_info_eqb ci1 ci2 && (#|brs1| == #|brs2|) && (#|p1.(pparams)| == #|p2.(pparams)|)
            && forallb2 cmp_level_conv p1.(puinst) p2.(puinst)
            && case_ctx_ok p1.(pcontext) p2.(pcontext)
         then
