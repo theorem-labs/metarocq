@@ -1442,6 +1442,8 @@ Proof.
     1: rewrite subst_instance_subst cofix_subst_instance_subst.
     all: now inversion E.
   - cbn. rewrite subst_instance_two. econstructor; eauto.
+  - (* red_prim_op: head, arguments and reduct are ground *)
+    eapply red1_prim_op_subst_instance; eassumption.
   - cbn. rewrite !subst_instance_mkApps.
     econstructor. now rewrite nth_error_map H.
   - cbn.

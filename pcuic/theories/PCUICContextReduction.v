@@ -86,6 +86,8 @@ Section CtxReduction.
     induction r using red1_ind_all; intros P onΓ ont Δ onΔ Hctx;
       try inv_on_free_vars;
       try solve [eapply red_step; repeat (constructor; eauto)].
+    (* red_prim_op: the reduct is context-independent, so the same rule fires in Δ. *)
+    all: try (eapply red1_red; eapply red_prim_op; eassumption).
     - red in Hctx.
       destruct nth_error eqn:hnth => //; simpl in H; noconf H.
       eapply All2_fold_nth_r in Hctx; eauto.

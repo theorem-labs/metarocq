@@ -378,6 +378,7 @@ Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
   PCUICArityRelation
   PCUICPrimOpType
 .
+Include PCUICGlobalMaps.
 
 Module PCUICDeclarationTyping :=
   EnvironmentTyping.DeclarationTyping
@@ -907,12 +908,12 @@ Proof.
     red. cbn. do 2 red in wfΣ. cbn in wfΣ.
     destruct Σ as [univs Σ]; cbn in *.
     set (Σg:= {| universes := univs; declarations := Σ |}) in *.
-    destruct wfΣ; split => //.
+    destruct wfΣ as [ongu [wfr o]]; split => //; split => //.
     unfold Σg in o |- *; cbn in o.
-    rename o into ongu. rename o0 into o. cbn in o |- *.
+    cbn in o |- *.
     destruct o. { constructor. }
     rename o0 into Xg.
-    set (wfΣ := (ongu, o) : on_global_env cumulSpec0 (lift_typing typing) {| universes := univs; declarations := Σ |}).
+    set (wfΣ := (ongu, (wfr, o)) : on_global_env cumulSpec0 (lift_typing typing) {| universes := univs; declarations := Σ |}).
     set (Σ':= {| universes := univs; declarations := Σ |}) in *.
     destruct Xg as [hfresh udecl honu Xg].
     constructor; auto; try constructor; auto.

@@ -80,7 +80,7 @@ Lemma extends_primitive_constant Σ Σ' p t :
 Proof.
   intros [_ _ ext].
   unfold primitive_constant.
-  case: ext => o [] o' [] o'' o'''.
+  case: ext => o [] o' [] o'' [] o''' _.
   destruct p => //.
   - intros hr. now rewrite hr in o; depelim o.
   - intros hr. now rewrite hr in o'; depelim o'.
@@ -199,7 +199,7 @@ Lemma weakening_env_gen_lookup_on_global_env `{checker_flags} R P Σ Σ' c decl 
   on_global_decl cumulSpec0 P (Σ', universes_decl_of_decl decl) c decl.
 Proof.
   intros HRext1 HRext2 HTR HP wfΣ' wfΣ Hext HΣ.
-  destruct HΣ as [onu onΣ].
+  destruct HΣ as [onu [wfr onΣ]].
   destruct Σ as [univs Σ retro]; cbn in *.
   induction onΣ; simpl. 1: congruence.
   assert (HH: R {| universes := univs; declarations := Σ; retroknowledge := retro |} Σ'). {
@@ -210,9 +210,9 @@ Proof.
   case: eqb_specT; intro eq; subst.
   - intros [= ->]. subst. destruct o.
     clear Hext; eapply weakening_on_global_decl_gen; [ .. | eassumption ]; eauto; [].
-    destruct wfΣ as [? wfΣ]; inversion wfΣ; subst; split; tea.
+    destruct wfΣ as [? [? wfΣ]]; inversion wfΣ; subst; (split; [|split]); tea.
   - destruct o. apply IHonΣ; auto.
-    destruct wfΣ. split => //. now depelim o0.
+    destruct wfΣ as [? [? o0]]. split; [|split]; [ assumption | assumption | now depelim o0 ].
 Qed.
 
 Lemma weakening_env_lookup_on_global_env `{checker_flags} P Σ Σ' c decl :
