@@ -155,6 +155,45 @@ Section Repr.
   Definition repr_susp_mono H H' (h : heap_le H H') :=
     proj1 (proj2 (proj2 (proj2 (proj2 (proj2 (repr_mono H H' h)))))).
 
+  (** ** Allocation only grows the heap
+
+    [alloc_now] writes a cell at the address [st_next] names, which had no cell: every older
+    address reads what it read before, so every reading survives. The hypothesis is the
+    heap's own invariant [bh_ok] of [PCUICCallByNeed], which [cbn_init] starts and every
+    machine step keeps. *)
+
+  Lemma alloc_now_heap_le lo cl s :
+    bh_ok lo s.(st_next) s.(st_heap) ->
+    heap_le s.(st_heap) (snd (alloc_now cl s)).(st_heap).
+  Proof.
+    intros hok a cl' e. cbn.
+    assert (a <> HAddr s.(st_next)) as hne.
+    { intros ->. erewrite bh_get_above in e; [discriminate|eassumption|apply Pos.le_refl]. }
+    erewrite bh_digits_get_cons_old; eauto using bh_ok_digits.
+  Qed.
+
+  Lemma repr_value_alloc lo cl s lvl v t :
+    bh_ok lo s.(st_next) s.(st_heap) ->
+    repr_value s.(st_heap) lvl v t ->
+    repr_value (snd (alloc_now cl s)).(st_heap) lvl v t.
+  Proof. intros hok. apply repr_value_mono, (alloc_now_heap_le lo cl s hok). Qed.
+
+  Lemma repr_slot_alloc lo cl s lvl x t :
+    bh_ok lo s.(st_next) s.(st_heap) ->
+    repr_slot s.(st_heap) lvl x t ->
+    repr_slot (snd (alloc_now cl s)).(st_heap) lvl x t.
+  Proof. intros hok. apply repr_slot_mono, (alloc_now_heap_le lo cl s hok). Qed.
+
+  (** The address allocation returns stands for whatever the cell written there stands for. *)
+  Lemma repr_addr_alloc lo cl s lvl t :
+    bh_ok lo s.(st_next) s.(st_heap) ->
+    repr_cell (snd (alloc_now cl s)).(st_heap) lvl cl t ->
+    repr_addr (snd (alloc_now cl s)).(st_heap) lvl (fst (alloc_now cl s)) t.
+  Proof.
+    intros hok hc. econstructor; [|eassumption].
+    cbn. apply bh_digits_get_cons_new, (bh_ok_digits _ _ _ hok).
+  Qed.
+
   (** ** The relation is a partial function
 
     A structure stands for at most one term. This is what lets a proof speak of "the" term a
