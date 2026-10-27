@@ -678,3 +678,33 @@ Proof.
   eexists. split; [now rewrite Hr|].
   eapply peta_subst; [exact Hbo|now apply peta_cofix_subst].
 Qed.
+(** ** The real collision: [red_fix] against a parallel η step
+
+  η-POSTPONEMENT died here because η can CREATE a constructor head and so unlock a
+  fixpoint that no reduct of the original unfolds. The COMMUTATION is a different
+  claim: [red1 Σ Γ t v] is a hypothesis, so the [tFix] head and the
+  [is_constructor] guard already hold in [t]; a [peta] step can only η-contract a
+  [tLambda], hence it preserves both ([peta_is_constructor]) and the fix re-fires
+  on the η side in exactly ONE [red1] step. The redex η creates is only ever on the
+  η side, and C3 never has to match it. *)
+
+Lemma peta_commut_red_fix Σ Γ mfix idx args narg fn u :
+  unfold_fix mfix idx = Some (narg, fn) ->
+  is_constructor narg args = true ->
+  peta (mkApps (tFix mfix idx) args) u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w
+        × peta (mkApps fn args) w'
+        × upto_domain w w'.
+Proof.
+  intros Hunf Hic Hp.
+  apply peta_mkApps_inv in Hp as (f' & args' & -> & Hf & Ha).
+  depelim Hf.
+  match goal with Hm : All2 _ mfix ?m |- _ =>
+    destruct (peta_unfold_fix _ m _ _ _ Hm Hunf) as (fn' & Hunf' & Hfn) end.
+  exists (mkApps fn' args'), (mkApps fn' args').
+  repeat split.
+  - apply r_step. eapply red_fix; [exact Hunf'|].
+    eapply peta_is_constructor; eassumption.
+  - apply peta_mkApps; assumption.
+  - reflexivity.
+Qed.
