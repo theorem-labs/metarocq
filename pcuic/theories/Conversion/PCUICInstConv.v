@@ -1781,7 +1781,7 @@ Proof.
     + eapply inst_unfold_fix. eassumption.
     + eapply is_constructor_inst. assumption.
   - simpl. rewrite !inst_mkApps. simpl.
-    constructor. eapply red_cofix_case.
+    constructor. eapply red_cofix_case; [assumption|].
     eapply inst_unfold_cofix. eassumption.
   - simpl. rewrite 2!inst_mkApps. simpl.
     constructor; eapply red_cofix_proj.

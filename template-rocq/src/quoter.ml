@@ -72,7 +72,7 @@ sig
   val mkConst : quoted_kernel_name -> quoted_univ_instance -> t
   val mkInd : quoted_inductive -> quoted_univ_instance -> t
   val mkConstruct : quoted_inductive * quoted_int -> quoted_univ_instance -> t
-  val mkCase : (quoted_inductive * quoted_int * quoted_relevance) ->
+  val mkCase : (quoted_inductive * quoted_int * quoted_relevance * bool) ->
     (quoted_univ_instance * t array * quoted_aname array * t) -> (* predicate: instance, params, binder names, return type *)
      t -> (quoted_aname array * t) list (* branches *) -> t
   val mkProj : quoted_proj -> t -> t
@@ -1394,7 +1394,14 @@ struct
             let qctx = quote_name_annots brnas in
               ((qctx, qbody) :: bodies, acc))
           ([],acc) cbrs ci.Constr.ci_cstr_nargs in
-        (Q.mkCase (ind, npar, q_relevance) (qu, q_pars, qpctx, qpred) qdiscr (List.rev branches), acc)
+        (* A case on a coinductive whose return type mentions the scrutinee (variable 1 of
+           the return type, under the indices) may not unfold a cofixpoint in PCUIC; every
+           other case may. *)
+        let cofix_nondep =
+          not (mib.Declarations.mind_finite == Declarations.CoFinite)
+          || Vars.noccurn 1 pred
+        in
+        (Q.mkCase (ind, npar, q_relevance, cofix_nondep) (qu, q_pars, qpctx, qpred) qdiscr (List.rev branches), acc)
 
       | Constr.Fix fp -> quote_fixpoint acc env sigma fp
       | Constr.CoFix fp -> quote_cofixpoint acc env sigma fp

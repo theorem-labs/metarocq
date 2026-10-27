@@ -285,8 +285,10 @@ Section Wcbv.
       (#|argsv| < narg) ->
       eval (tApp f a) (tApp (mkApps (tFix mfix idx) argsv) av)
 
-  (** CoFix-case unfolding *)
+  (** CoFix-case unfolding, only under a case whose return type does not depend on the
+      scrutinee ([ci_cofix_nondep]) *)
   | eval_cofix_case ip mfix idx p discr args narg fn brs res :
+      ip.(ci_cofix_nondep) ->
       cunfold_cofix mfix idx = Some (narg, fn) ->
       eval discr (mkApps (tCoFix mfix idx) args) ->
       eval (tCase ip p (mkApps fn args) brs) res ->
@@ -406,13 +408,13 @@ Section Wcbv.
   (forall (ip : case_info) (mfix : mfixpoint term) (idx : nat)
      (p : predicate term) (discr : term) (args : list term)
      (narg : nat) (fn : term) (brs : list (branch term))
-     (res : term) (e : cunfold_cofix mfix idx = Some (narg, fn))
+     (res : term) (hnd : ip.(ci_cofix_nondep)) (e : cunfold_cofix mfix idx = Some (narg, fn))
      (e0 : eval discr (mkApps (tCoFix mfix idx) args)),
    P discr (mkApps (tCoFix mfix idx) args) e0 ->
    forall e1 : eval (tCase ip p (mkApps fn args) brs) res,
    P (tCase ip p (mkApps fn args) brs) res e1 ->
    P (tCase ip p discr brs) res
-     (eval_cofix_case ip mfix idx p discr args narg fn brs res e e0 e1)) ->
+     (eval_cofix_case ip mfix idx p discr args narg fn brs res hnd e e0 e1)) ->
   (forall (p : projection) (mfix : mfixpoint term) (idx : nat)
      (discr : term) (args : list term) (narg : nat)
      (fn res : term) (e : cunfold_cofix mfix idx = Some (narg, fn))
@@ -1171,7 +1173,12 @@ Section Wcbv.
       assert (narg0 = narg) as -> by congruence.
       assert (fn0 = fn) as -> by congruence.
       specialize (IHev2 _ ev'2); noconf IHev2.
-      now assert (e0 = e) as -> by now apply uip.
+      assert (e0 = e) as -> by now apply uip.
+      match goal with
+      | h : context [ci_cofix_nondep], h0 : context [ci_cofix_nondep] |- _ =>
+        tryif constr_eq h h0 then fail else (assert (h0 = h) as -> by now apply uip)
+      end.
+      reflexivity.
     - depelim ev'; try go.
       specialize (IHev1 _ ev'1).
       pose proof (mkApps_eq_inj (f_equal pr1 IHev1) eq_refl eq_refl) as (? & <-).
@@ -1324,6 +1331,7 @@ Inductive wcbv_red1 (Σ: global_env) : term -> term -> Type :=
                      (idx : nat) (p : predicate term)
                      (args : list term) (narg : nat)
                      (fn : term) (brs : list (branch term)),
+                   ip.(ci_cofix_nondep) ->
                    cunfold_cofix mfix idx = Some (narg, fn) ->
                    All (value Σ) args ->
                    Σ ⊢ tCase ip p (mkApps (tCoFix mfix idx) args) brs ⇝ᵥ tCase ip p (mkApps fn args) brs
@@ -1382,7 +1390,7 @@ Proof.
     eapply closed_cofix_substl_subst_eq; eauto. rewrite closedn_mkApps in Hcl. solve_all.
   - unfold cunfold_cofix in e. destruct nth_error as [d | ] eqn:E; try congruence.
     inversion e; subst.
-    econstructor. unfold unfold_cofix. rewrite E. repeat f_equal.
+    econstructor; [assumption|]. unfold unfold_cofix. rewrite E. repeat f_equal.
     eapply closed_cofix_substl_subst_eq; eauto. rewrite closedn_mkApps in H1. solve_all.
   - now constructor.
   - constructor. subst v'.

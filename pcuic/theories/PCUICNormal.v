@@ -93,6 +93,12 @@ Section Normal.
       RedFlags.iota flags = false ->
       whne Γ (tCase i p c brs)
 
+  (* A cofixpoint does not unfold under a case whose return type may depend on the
+     scrutinee ([ci_cofix_nondep] unset), so such a case is stuck. *)
+  | whne_case_cofix_dep i p mfix idx args brs :
+      i.(ci_cofix_nondep) = false ->
+      whne Γ (tCase i p (mkApps (tCoFix mfix idx) args) brs)
+
   | whne_proj p c :
       whne Γ c ->
       whne Γ (tProj p c)

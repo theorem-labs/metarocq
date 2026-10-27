@@ -665,13 +665,16 @@ Proof.
              assert(Σ ;;; [] |- mkApps (tFix mfix idx) (argsv ++ [av]) : subst [av] 0 x1).
              { rewrite mkApps_app. eapply PCUICValidity.type_App'; eauto.
                eapply subject_reduction_eval; eauto. }
-             epose proof (fix_app_is_constructor (args:=argsv ++ [av]) X).
+             epose proof (fix_app_is_constructor (args:=argsv ++ [av]) X) as X0.
              rewrite /unfold_fix e0 in X0.
              specialize (X0 eq_refl). simpl in X0.
-             rewrite nth_error_snoc in X0. auto. apply X0.
-             eapply value_axiom_free, eval_to_value; eauto.
-             eapply value_whnf; eauto.
-             eapply eval_closed; eauto. now eapply subject_closed in t0.
+             rewrite nth_error_snoc in X0. auto.
+             forward X0. { eapply value_axiom_free, eval_to_value; eauto. }
+             forward X0. { eapply value_whnf.
+               { eapply eval_closed; eauto. now eapply subject_closed in t0. }
+               eapply eval_to_value; eauto. }
+             destruct X0 as [hc | hstuck]; [exact hc|].
+             exfalso. eapply value_not_stuck_cofix_case; [|tea].
              eapply eval_to_value; eauto. }
 
            { constructor.
