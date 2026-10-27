@@ -24,7 +24,7 @@ From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICPrimitive
      PCUICCases PCUICOnFreeVars PCUICReduction PCUICTyping PCUICEtaDefs PCUICEtaC3C
-     PCUICEtaConfluence.
+     PCUICEtaConfluence PCUICEtaStrengthening.
 
 Import ListNotations.
 Set Default Goal Selector "!".
