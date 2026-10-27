@@ -5278,7 +5278,8 @@ Qed.
       eapply whnf_case_arg_whne; eauto.
       now destruct cred.
     - match goal with H : _ = False_rect _ ?f |- _ => destruct f end.
-    - simpl_reduce_stack Σ wfΣ.
+    - repeat match goal with H : {| pr1 := _ |} = {| pr1 := _ |} |- _ => clear H end.
+      simpl_reduce_stack Σ wfΣ.
       constructor; exists (mkApps (tCoFix mfix idx) (decompose_stack ρ).1).
       split; [exact r|].
       right. exists mfix, idx, (decompose_stack ρ).1.
