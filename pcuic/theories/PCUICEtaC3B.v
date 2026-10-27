@@ -1122,3 +1122,138 @@ Proof.
   - apply peta_subst1; eassumption.
   - reflexivity.
 Qed.
+
+(** * The commutation kernel: infrastructure *)
+
+(** ** Contexts related on declaration BODIES only.
+    [red1] reads its context only through [red_rel], i.e. only through let-bodies;
+    declaration types are irrelevant to it. *)
+Definition peta_decl (d d' : context_decl) : Type :=
+  match decl_body d, decl_body d' with
+  | Some b, Some b' => peta b b'
+  | None, None => unit
+  | _, _ => Empty_set
+  end.
+
+Definition peta_ctx := All2 peta_decl.
+
+Lemma peta_decl_refl d : peta_decl d d.
+Proof. unfold peta_decl. destruct (decl_body d); [apply peta_refl|exact tt]. Qed.
+
+Lemma peta_ctx_refl Γ : peta_ctx Γ Γ.
+Proof. apply All2_same, peta_decl_refl. Qed.
+
+Lemma peta_ctx_vass Γ Δ na A na' A' :
+  peta_ctx Γ Δ -> peta_ctx (Γ ,, vass na A) (Δ ,, vass na' A').
+Proof. intros H. constructor; [exact tt|exact H]. Qed.
+
+Lemma peta_ctx_vdef Γ Δ na b t na' b' t' :
+  peta_ctx Γ Δ -> peta b b' -> peta_ctx (Γ ,, vdef na b t) (Δ ,, vdef na' b' t').
+Proof. intros H Hb. constructor; [exact Hb|exact H]. Qed.
+
+Lemma peta_ctx_app Γ Δ Γ' Δ' :
+  peta_ctx Γ Δ -> peta_ctx Γ' Δ' -> peta_ctx (Γ ,,, Γ') (Δ ,,, Δ').
+Proof. intros H H'. unfold app_context. now apply All2_app. Qed.
+
+Lemma peta_ctx_assumptions Γ Δ :
+  peta_ctx Γ Δ -> context_assumptions Γ = context_assumptions Δ.
+Proof.
+  induction 1 as [|d d' Γ Δ Hd H IH]; [reflexivity|].
+  destruct d as [na [b|] ty], d' as [na' [b'|] ty']; cbn in *;
+    try destruct Hd; congruence.
+Qed.
+
+Lemma peta_subst_context ss ss' k ctx :
+  All2 peta ss ss' -> peta_ctx (subst_context ss k ctx) (subst_context ss' k ctx).
+Proof.
+  intros Hs. induction ctx as [|d ctx IH]; [constructor|].
+  rewrite !subst_context_snoc. constructor; [|exact IH].
+  destruct d as [na [b|] ty]; cbn; [|exact tt].
+  apply peta_subst; [apply peta_refl|exact Hs].
+Qed.
+
+Lemma peta_inst_case_context params params' puinst ctx :
+  All2 peta params params' ->
+  peta_ctx (inst_case_context params puinst ctx) (inst_case_context params' puinst ctx).
+Proof. intros H. unfold inst_case_context. apply peta_subst_context. now apply All2_rev. Qed.
+
+Lemma peta_ctx_mapi_vass (f g : nat -> def term -> term) m m' k :
+  #|m| = #|m'| ->
+  All2 peta_decl (mapi_rec (fun i d => vass (dname d) (f i d)) m k)
+                 (mapi_rec (fun i d => vass (dname d) (g i d)) m' k).
+Proof.
+  induction m in m', k |- *; destruct m'; cbn; intros Hl; try discriminate.
+  - constructor.
+  - constructor; [exact tt|]. apply IHm. lia.
+Qed.
+
+Lemma peta_ctx_fix_context m m' : #|m| = #|m'| -> peta_ctx (fix_context m) (fix_context m').
+Proof.
+  intros Hl. unfold fix_context, mapi. apply All2_rev. now apply peta_ctx_mapi_vass.
+Qed.
+
+Lemma peta_extended_subst Γ Γ' n :
+  peta_ctx Γ Γ' -> All2 peta (extended_subst Γ n) (extended_subst Γ' n).
+Proof.
+  intros H. induction H as [|d d' Γ Γ' Hd H IH] in n |- *; [constructor|].
+  destruct d as [na [b|] ty], d' as [na' [b'|] ty']; cbn in Hd |- *.
+  - constructor; [|apply IH].
+    rewrite (peta_ctx_assumptions _ _ H) !extended_subst_length (All2_length H).
+    apply peta_subst; [exact (peta_lift _ _ _ Hd _)|apply IH].
+  - destruct Hd.
+  - destruct Hd.
+  - constructor; [apply peta_Rel|apply IH].
+Qed.
+
+Lemma peta_expand_lets Γ Γ' t t' :
+  peta_ctx Γ Γ' -> peta t t' -> peta (expand_lets Γ t) (expand_lets Γ' t').
+Proof.
+  intros H Ht. unfold expand_lets, expand_lets_k.
+  rewrite (peta_ctx_assumptions _ _ H) (All2_length H).
+  apply peta_subst; [now apply peta_lift|now apply peta_extended_subst].
+Qed.
+
+Lemma peta_iota_red npar p p' args args' br br' :
+  All2 peta args args' -> All2 peta (pparams p) (pparams p') ->
+  puinst p = puinst p' -> bcontext br = bcontext br' -> peta (bbody br) (bbody br') ->
+  peta (iota_red npar p args br) (iota_red npar p' args' br').
+Proof.
+  intros Ha Hp Hu Hc Hb. unfold iota_red.
+  apply peta_subst; [|now apply All2_rev, All2_skipn].
+  apply peta_expand_lets; [|exact Hb].
+  unfold inst_case_branch_context. rewrite Hu Hc.
+  now apply peta_inst_case_context.
+Qed.
+
+Lemma peta_commut_red_iota Σ Γ ci c uu args p brs br u :
+  nth_error brs c = Some br ->
+  #|args| = (ci.(ci_npar) + context_assumptions br.(bcontext))%nat ->
+  peta (tCase ci p (mkApps (tConstruct ci.(ci_ind) c uu) args) brs) u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × peta (iota_red ci.(ci_npar) p args br) w'
+        × upto_domain w w'.
+Proof.
+  intros Hnth Hlen Hp. depelim Hp.
+  match goal with Hd : peta (mkApps (tConstruct _ _ _) _) _ |- _ =>
+    apply peta_mkApps_inv in Hd as (f' & args' & -> & Hf & Ha) end.
+  depelim Hf.
+  match goal with Hb : All2 _ brs ?bs |- _ =>
+    destruct (All2_nth_error_Some _ _ Hb Hnth) as (br' & Hnth' & (Hc & Hbb)) end.
+  eexists _, _. repeat split.
+  - apply r_step. eapply red_iota; [exact Hnth'|].
+    rewrite <- (All2_length Ha), <- Hc. exact Hlen.
+  - apply peta_iota_red; [exact Ha|eassumption|eassumption|exact Hc|exact Hbb].
+  - reflexivity.
+Qed.
+
+(** ** Spine helpers *)
+Lemma mkApps_Fix_eq mfix idx args t :
+  mkApps (tFix mfix idx) args = t ->
+  ((args = []) × (t = tFix mfix idx)) + (∑ f a, t = tApp f a).
+Proof.
+  induction args using rev_ind; cbn; intros H.
+  - left. split; [reflexivity|now symmetry].
+  - right. rewrite mkApps_app in H. cbn in H. subst t. eexists _, _. reflexivity.
+Qed.
+
+Lemma is_constructor_nil n : is_constructor n [] = false.
+Proof. unfold is_constructor. now destruct n. Qed.
