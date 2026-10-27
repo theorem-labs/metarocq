@@ -12,8 +12,9 @@
    it or inside its head definitions and never creates it, so postponement's
    counterexample does not transfer (lanes/eta/C3Prover3.md). Hence the beta-reduct
    side carries only eta* and the eta-reduct side one re-fire (clos_refl red1).
-   U-row Context hypotheses: standard eta-closure, plan rows U1/U2/U4, PROVED on the
-   2020 AST, discharged by L2/L7 with the definitions. No Admitted, no Axiom. *)
+   The structural eta-closure lemmas CH1/CH5/CH6 are PROVED here from PCUICEtaDefs;
+   the substitution-level U-rows CH2/CH3/CH4 are Section Context hypotheses (U1/U4,
+   owned by L2/L7). No Admitted, no Axiom. *)
 
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
@@ -27,18 +28,93 @@ Derive Signature for eta1.
 Set Default Goal Selector "!".
 Import ListNotations.
 
+(* ======================================================================= *)
+(** ** Structural η / mkApps / OnOne2 lemmas (context-free; no [Σ]).
+    These discharge the U4 closure facts CH1, CH5a, CH5b, CH6 directly from
+    [PCUICEtaDefs]'s [eta1] congruences. *)
+
+Lemma eta_step {x y} : eta1 x y -> eta x y.
+Proof. intro. now constructor. Qed.
+
+Lemma eta_refl {x} : eta x x.
+Proof. apply rt_refl. Qed.
+
+Lemma eta_trans {x y z} : eta x y -> eta y z -> eta x z.
+Proof. intros. eapply rt_trans; eauto. Qed.
+
+(** Lift any one-step η congruence [f] to the reflexive-transitive closure. *)
+Lemma eta_congr (f : term -> term) :
+  (forall x y, eta1 x y -> eta1 (f x) (f y)) ->
+  forall x y, eta x y -> eta (f x) (f y).
+Proof.
+  intros Hf x y H. induction H.
+  - apply eta_step. now apply Hf.
+  - apply eta_refl.
+  - eapply eta_trans; eauto.
+Qed.
+
+(** CH1 (U4): η under a spine moves the head or exactly one argument.
+    PROVED here; = origin/eta_postpo:PCUICEtaReduction.v:1223-1234 (old AST). *)
+Lemma eta1_mkApps_inv M l N : eta1 (mkApps M l) N ->
+    (∑ M', eta1 M M' × N = mkApps M' l)
+  + (∑ l', OnOne2 eta1 l l' × N = mkApps M l').
+Proof.
+  induction l in M, N |- *; cbn.
+  - intro H. left. exists N. split; [exact H|reflexivity].
+  - intro H. apply IHl in H as [[M' [hM e]]|[l' [hl e]]].
+    + subst N. depelim hM.
+      * left. exists N1. split; [assumption|reflexivity].
+      * right. exists (N2 :: l). split; [constructor; assumption|reflexivity].
+    + subst N. right. exists (a :: l'). split; [constructor; assumption|reflexivity].
+Defined.
+
+(** η at the head lifts under a fixed spine (one step). *)
+Lemma eta1_mkApps_f l : forall f f', eta1 f f' -> eta1 (mkApps f l) (mkApps f' l).
+Proof.
+  induction l; cbn; intros f f' H.
+  - exact H.
+  - apply IHl. now constructor.
+Qed.
+
+(** CH5a (U4): η* at the head lifts under a fixed spine. *)
+Lemma eta_mkApps_head f f' l : eta f f' -> eta (mkApps f l) (mkApps f' l).
+Proof.
+  intro H. induction H.
+  - apply eta_step. now apply eta1_mkApps_f.
+  - apply eta_refl.
+  - eapply eta_trans; eauto.
+Qed.
+
+(** One OnOne2 in the spine is one η step on [mkApps]. *)
+Lemma eta1_mkApps_args l l' : OnOne2 eta1 l l' -> forall f, eta1 (mkApps f l) (mkApps f l').
+Proof.
+  induction 1 as [hd hd' tl p|hd tl tl' X IH]; cbn; intro f.
+  - apply eta1_mkApps_f. now constructor.
+  - now apply IH.
+Qed.
+
+(** CH5b (U4): one η-OnOne2 in the spine lifts under a fixed head. *)
+Lemma eta_mkApps_args f l l' : OnOne2 eta1 l l' -> eta (mkApps f l) (mkApps f l').
+Proof. intro. apply eta_step. now apply eta1_mkApps_args. Qed.
+
+(** CH6 (U4): [OnOne2 eta1] tracks [nth_error] up to a reflexive η-step. *)
+Lemma onone2_eta_nth_error (l l' : list term) (H : OnOne2 eta1 l l') :
+  forall k a, nth_error l k = Some a ->
+    ∑ a', nth_error l' k = Some a' × clos_refl eta1 a a'.
+Proof.
+  induction H as [hd hd' tl p|hd tl tl' X IH]; intros [|k] a; cbn.
+  - intro e; noconf e. exists hd'. split; [reflexivity| now constructor].
+  - intro e. exists a. split; [exact e| apply r_refl].
+  - intro e; noconf e. exists hd. split; [reflexivity| apply r_refl].
+  - intro e. destruct (IH k a e) as [a' [? ?]]. exists a'. now split.
+Qed.
+
+(* ======================================================================= *)
 Section C3Unlocking.
   Context {cf : checker_flags}.
   Context (Σ : global_env).
 
-  (* ---- U-row Context hypotheses (all on C3Prover3.md's declared list) ---- *)
-
-  (** CH1 (U4): η under a spine moves the head or exactly one argument.
-      PROVED origin/eta_postpo:PCUICEtaReduction.v:1223-1234 (old AST). *)
-  Context (eta1_mkApps_inv :
-    forall M l N, eta1 (mkApps M l) N ->
-      (∑ M', eta1 M M' × N = mkApps M' l)
-    + (∑ l', OnOne2 eta1 l l' × N = mkApps M l')).
+  (* ---- substitution-level U-row Context hypotheses (U1/U4; L2/L7 own) ---- *)
 
   (** CH2 (U1): [upto_domain] is reflexive. PROVED 2020. *)
   Context (upto_domain_refl : forall t, upto_domain t t).
@@ -62,41 +138,6 @@ Section C3Unlocking.
       unfold_cofix mfix idx = Some (narg, fn) ->
       ∑ mfix' fn', [× N = tCoFix mfix' idx, unfold_cofix mfix' idx = Some (narg, fn') & eta fn fn']).
 
-  (** CH5a (U4 congruence): η* in the head lifts under a fixed spine. *)
-  Context (eta_mkApps_head :
-    forall f f' l, eta f f' -> eta (mkApps f l) (mkApps f' l)).
-
-  (** CH5b (U4 congruence): one η-OnOne2 in the spine lifts under a fixed head. *)
-  Context (eta_mkApps_args :
-    forall f l l', OnOne2 eta1 l l' -> eta (mkApps f l) (mkApps f l')).
-
-  (** CH6 (U4): [OnOne2 eta1] tracks [nth_error] up to a reflexive η-step. *)
-  Context (onone2_eta_nth_error :
-    forall (l l' : list term) k a, OnOne2 eta1 l l' -> nth_error l k = Some a ->
-      ∑ a', nth_error l' k = Some a' × clos_refl eta1 a a').
-
-  (* ---- local helpers ---- *)
-
-  Lemma eta_step {x y} : eta1 x y -> eta x y.
-  Proof. intro. now constructor. Qed.
-
-  Lemma eta_refl {x} : eta x x.
-  Proof. apply rt_refl. Qed.
-
-  Lemma eta_trans {x y z} : eta x y -> eta y z -> eta x z.
-  Proof. intros. eapply rt_trans; eauto. Qed.
-
-  (** Lift any one-step η congruence [f] to the reflexive-transitive closure. *)
-  Lemma eta_congr (f : term -> term) :
-    (forall x y, eta1 x y -> eta1 (f x) (f y)) ->
-    forall x y, eta x y -> eta (f x) (f y).
-  Proof.
-    intros Hf x y H. induction H.
-    - apply eta_step. now apply Hf.
-    - apply eta_refl.
-    - eapply eta_trans; eauto.
-  Qed.
-
   (** is_constructor preserved by an η-OnOne2 on the spine (CH3 + CH6). *)
   Lemma onone2_eta_is_constructor n l l' :
     OnOne2 eta1 l l' -> is_constructor n l = true -> is_constructor n l' = true.
@@ -118,14 +159,12 @@ Section C3Unlocking.
   Proof.
     intros huf hic he.
     eapply eta1_mkApps_inv in he as [[M' [hM ->]]|[l' [hl ->]]].
-    - (* η in the head tFix: re-fire red_fix on mfix', body joins by η* *)
-      destruct (eta1_fix_unfold _ _ _ _ _ hM huf) as [mfix' [fn' [-> huf' hfn]]].
+    - destruct (eta1_fix_unfold _ _ _ _ _ hM huf) as [mfix' [fn' [-> huf' hfn]]].
       exists (mkApps fn' args), (mkApps fn' args). split; [|split].
       + constructor. now eapply red_fix.
       + now eapply eta_mkApps_head.
       + apply upto_domain_refl.
-    - (* η in one argument: re-fire red_fix on args', spine joins by η* *)
-      exists (mkApps fn l'), (mkApps fn l'). split; [|split].
+    - exists (mkApps fn l'), (mkApps fn l'). split; [|split].
       + constructor. eapply red_fix; tea. now eapply onone2_eta_is_constructor.
       + now eapply eta_mkApps_args.
       + apply upto_domain_refl.
@@ -140,22 +179,19 @@ Section C3Unlocking.
           × eta (tCase ci p (mkApps fn args) brs) w' × upto_domain w w'.
   Proof.
     intros huf he. depelim he.
-    - (* case_eta_param *)
-      exists (tCase ci (set_pparams p params') (mkApps fn args) brs),
+    - exists (tCase ci (set_pparams p params') (mkApps fn args) brs),
              (tCase ci (set_pparams p params') (mkApps fn args) brs).
       split; [|split].
       + constructor. now eapply red_cofix_case.
       + eapply eta_step. now eapply case_eta_param.
       + apply upto_domain_refl.
-    - (* case_eta_return *)
-      exists (tCase ci (set_preturn p preturn') (mkApps fn args) brs),
+    - exists (tCase ci (set_preturn p preturn') (mkApps fn args) brs),
              (tCase ci (set_preturn p preturn') (mkApps fn args) brs).
       split; [|split].
       + constructor. now eapply red_cofix_case.
       + eapply eta_step. now eapply case_eta_return.
       + apply upto_domain_refl.
-    - (* case_eta_discr : η inside the discriminee *)
-      eapply eta1_mkApps_inv in he as [[M' [hM ->]]|[l' [hl ->]]].
+    - eapply eta1_mkApps_inv in he as [[M' [hM ->]]|[l' [hl ->]]].
       + destruct (eta1_cofix_unfold _ _ _ _ _ hM huf) as [mfix' [fn' [-> huf' hfn]]].
         exists (tCase ci p (mkApps fn' args) brs), (tCase ci p (mkApps fn' args) brs).
         split; [|split].
@@ -169,8 +205,7 @@ Section C3Unlocking.
         * eapply (eta_congr (fun z => tCase ci p z brs)); [| now eapply eta_mkApps_args].
           intros ?? h. now eapply case_eta_discr.
         * apply upto_domain_refl.
-    - (* case_eta_brs *)
-      exists (tCase ci p (mkApps fn args) brs'), (tCase ci p (mkApps fn args) brs').
+    - exists (tCase ci p (mkApps fn args) brs'), (tCase ci p (mkApps fn args) brs').
       split; [|split].
       + constructor. now eapply red_cofix_case.
       + eapply eta_step. now eapply case_eta_brs.
@@ -211,10 +246,8 @@ Section C3Unlocking.
   Proof.
     intros hnth he. depelim he.
     eapply eta1_mkApps_inv in he as [[M' [hM ->]]|[l' [hl ->]]].
-    - (* η in the tConstruct head is impossible *)
-      depelim hM.
-    - (* η in one argument: re-fire red_proj, selected arg joins by ≤1 η *)
-      destruct (onone2_eta_nth_error _ _ _ _ hl hnth) as [arg' [hnth' r]].
+    - depelim hM.
+    - destruct (onone2_eta_nth_error _ _ hl _ _ hnth) as [arg' [hnth' r]].
       exists arg', arg'. split; [|split].
       + constructor. now eapply red_proj.
       + destruct r as [? r|]; [apply eta_step; exact r| apply eta_refl].
