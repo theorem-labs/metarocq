@@ -460,4 +460,265 @@ Section Falsify.
       + apply upto_domain_refl.
   Qed.
 
+  (** ** Row 4: [case_red_brs] — the branch-context row.
+
+      The second square the lane lead singled out. Two facts make it close:
+      (i) [eta1] on a branch ([case_eta_brs]) uses [on_Trel_eq eta1 bbody bcontext],
+      so it NEVER changes [bcontext]; and [inst_case_branch_context p br] reads only
+      [br.(bcontext)] (and [p.(pparams)]/[p.(puinst)]). So a branch η step does NOT
+      move the branch's reduction context — the collision is an ordinary IH square in
+      a FIXED context. (ii) The only η step that moves [inst_case_branch_context] is
+      [case_eta_param] (it changes [pparams]); that is the context-moving subcase and
+      it closes exactly as [case_red_return] did, via [red1_eta_ctx_strong]. *)
+
+  Notation brs_red Γ p :=
+    (OnOne2 (fun br br' =>
+       on_Trel_eq (fun t u => red1 Σ (Γ ,,, inst_case_branch_context p br) t u)
+                  bbody bcontext br br')).
+
+  Lemma red_le_case_brs Γ ci p c brs brs' :
+    ((brs' = brs) + brs_red Γ p brs brs') ->
+    red_le Σ Γ (tCase ci p c brs) (tCase ci p c brs').
+  Proof.
+    intros [->|h].
+    - apply red_le_refl.
+    - apply red_le_one. now apply case_red_brs.
+  Qed.
+
+  Lemma utd_case_brs ci p c brs brs' :
+    All2 (fun x y => eq_context_upto_names x.(bcontext) y.(bcontext)
+                     × upto_domain x.(bbody) y.(bbody)) brs brs' ->
+    upto_domain (tCase ci p c brs) (tCase ci p c brs').
+  Proof.
+    intro h. constructor; tas.
+    - apply All2_upto_domain_refl.
+    - reflexivity.
+    - apply eq_context_upto_names_refl.
+    - apply upto_domain_refl.
+    - apply upto_domain_refl.
+  Qed.
+
+  (** The branch collision square: [case_red_brs] against [case_eta_brs]. Mirrors
+      [onone2_param_square]; the per-branch context is fixed because η preserves
+      [bcontext]. *)
+  Lemma onone2_brs_square Γ p brs brs1 brs2 :
+    brs_red Γ p brs brs1 ->
+    OnOne2 (on_Trel_eq eta1 bbody bcontext) brs brs2 ->
+    ∑ m m', ((m = brs2) + brs_red Γ p brs2 m)
+          × clos_refl_trans (OnOne2 (on_Trel_eq eta1 bbody bcontext)) brs1 m'
+          × All2 (fun x y => eq_context_upto_names x.(bcontext) y.(bcontext)
+                             × upto_domain x.(bbody) y.(bbody)) m m'.
+  Proof.
+    intro h. revert brs2. induction h as [hd hd1 tl [r ec]|hd tl tl1 h ih];
+      intros brs2 he; depelim he.
+    - (* both at the head: IH on the colliding branch body, FIXED context *)
+      destruct p0 as [e ec2].
+      unfold on_Trel in *.
+      destruct (IH (Γ ,,, inst_case_branch_context p hd)
+                   hd.(bbody) hd'.(bbody) hd1.(bbody) r e)
+        as [w [w' [hle [heta hu]]]].
+      assert (ebc : inst_case_branch_context p hd' = inst_case_branch_context p hd).
+      { unfold inst_case_branch_context. now rewrite ec2. }
+      destruct hle as [z hs|].
+      + (* one red1 on the branch body *)
+        exists ({| bcontext := hd.(bcontext); bbody := z |} :: tl),
+               ({| bcontext := hd.(bcontext); bbody := w' |} :: tl).
+        repeat split.
+        * right. constructor. split.
+          -- unfold on_Trel; cbn. rewrite ebc. exact hs.
+          -- cbn. now rewrite ec2.
+        * apply eta_rt_brs_hd; cbn; [exact (eq_sym ec)|exact heta].
+        * constructor.
+          -- split; cbn; [apply eq_context_upto_names_refl|exact hu].
+          -- apply All2_branch_refl.
+      + (* no red1: η-reduct branch already joined *)
+        exists (hd' :: tl),
+               ({| bcontext := hd.(bcontext); bbody := w' |} :: tl).
+        repeat split.
+        * left. reflexivity.
+        * apply eta_rt_brs_hd; cbn; [exact (eq_sym ec)|exact heta].
+        * constructor.
+          -- split; cbn; [rewrite ec2; apply eq_context_upto_names_refl|].
+             (* w = bbody hd' here *) exact hu.
+          -- apply All2_branch_refl.
+    - (* red1 at head, η in tail: disjoint *)
+      exists (hd1 :: tl'), (hd1 :: tl'). repeat split.
+      + right. constructor. split; [exact r|exact ec].
+      + apply rt_step. apply OnOne2_tl. exact he.
+      + apply All2_branch_refl.
+    - (* red1 in tail, η at head: disjoint *)
+      destruct p0 as [e ec2].
+      exists (hd' :: tl1), (hd' :: tl1). repeat split.
+      + right. apply OnOne2_tl. exact h.
+      + apply rt_step. constructor. split; [exact e|exact ec2].
+      + apply All2_branch_refl.
+    - (* both in tail *)
+      destruct (ih _ he) as [m [m' [hm [hm' hu]]]].
+      exists (hd :: m), (hd :: m'). repeat split.
+      + destruct hm as [->|hstep].
+        * left. reflexivity.
+        * right. now apply OnOne2_tl.
+      + clear -hm'. induction hm' as [a b hh|a|a b d h1 ih1 h2 ih2].
+        * apply rt_step. now apply OnOne2_tl.
+        * apply rt_refl.
+        * eapply rt_trans; eassumption.
+      + constructor; tas.
+        split; [apply eq_context_upto_names_refl|apply upto_domain_refl].
+  Qed.
+
+  (** The context-move for one β branch step when η changes [pparams]:
+      replay the branch step in the moved context ([red1_eta_ctx_strong], ≤1 red1),
+      and give the η-star from the β-reduct branches to the join branches. *)
+  Lemma brs_red_move Γ p params' brs brs' :
+    OnOne2 eta1 (pparams p) params' ->
+    brs_red Γ p brs brs' ->
+    ∑ brs'',
+      ((brs'' = brs) + brs_red Γ (set_pparams p params') brs brs'')
+      × clos_refl_trans (OnOne2 (on_Trel_eq eta1 bbody bcontext)) brs' brs''.
+  Proof.
+    intros ho hr. induction hr as [hd hd' tl [r ec]|hd tl tl' h ih].
+    - unfold on_Trel in *.
+      destruct (red1_eta_ctx_strong
+          (Γ ,,, inst_case_branch_context p hd)
+          (Γ ,,, inst_case_branch_context (set_pparams p params') hd)
+          _ _
+          (eta_ctx_app Γ _ _
+             (eta_ctx_inst_case_context (pparams p) params' (puinst p) hd.(bcontext) ho))
+          r) as [b'' [hle heta]].
+      destruct hle as [z hs|].
+      + exists ({| bcontext := hd.(bcontext); bbody := z |} :: tl). split.
+        * right. constructor. split.
+          -- unfold on_Trel; cbn. exact hs.
+          -- reflexivity.
+        * apply eta_rt_brs_hd; cbn; [exact (eq_sym ec)|exact heta].
+      + exists (hd :: tl). split.
+        * left. reflexivity.
+        * apply eta_rt_brs_hd; cbn; [exact (eq_sym ec)|exact heta].
+    - destruct ih as [brs'' [hsum heta_br]].
+      exists (hd :: brs''). split.
+      + destruct hsum as [->|hstep].
+        * left. reflexivity.
+        * right. now apply OnOne2_tl.
+      + (* prepend hd to the η-star *)
+        clear -heta_br. induction heta_br as [a b hh|a|a b d h1 ih1 h2 ih2].
+        * apply rt_step. now apply OnOne2_tl.
+        * apply rt_refl.
+        * eapply rt_trans; eassumption.
+  Qed.
+
+  Lemma c3_case_red_brs Γ ci p c brs brs' (u : term) :
+    brs_red Γ p brs brs' ->
+    eta1 (tCase ci p c brs) u ->
+    joinable Σ Γ u (tCase ci p c brs').
+  Proof.
+    intros hr he. depelim he.
+    - (* case_eta_param: MOVES inst_case_branch_context — the context row *)
+      match goal with Ho : OnOne2 eta1 _ _ |- _ => rename Ho into ho end.
+      destruct (brs_red_move Γ p params' brs brs' ho hr) as [brs'' [hsum heta_br]].
+      exists (tCase ci (set_pparams p params') c brs''),
+             (tCase ci (set_pparams p params') c brs'').
+      repeat split; [| |apply upto_domain_refl].
+      + exact (red_le_case_brs Γ ci (set_pparams p params') c brs brs'' hsum).
+      + eapply rt_trans.
+        * apply eta_rt_one.
+          exact (case_eta_param ci p params' c brs' ho).
+        * exact (eta_rt_case_brs ci (set_pparams p params') c brs' brs'' heta_br).
+    - (* case_eta_return: disjoint (brs context ignores preturn) *)
+      match goal with Ho : eta1 _ _ |- _ => rename Ho into ho end.
+      exists (tCase ci (set_preturn p preturn') c brs'),
+             (tCase ci (set_preturn p preturn') c brs').
+      repeat split; [| |apply upto_domain_refl].
+      + apply red_le_one. now apply case_red_brs.
+      + apply eta_rt_one. now apply case_eta_return.
+    - (* case_eta_discr: disjoint *)
+      exists (tCase ci p c' brs'), (tCase ci p c' brs').
+      repeat split; [| |apply upto_domain_refl].
+      + apply red_le_one. now apply case_red_brs.
+      + apply eta_rt_one. now apply case_eta_discr.
+    - (* case_eta_brs: collision via the branch square (fixed context) *)
+      match goal with Ho : OnOne2 _ _ _ |- _ => rename Ho into ho end.
+      destruct (onone2_brs_square Γ p brs brs' brs'0 hr ho)
+        as [m [m' [hm [hm' hu]]]].
+      exists (tCase ci p c m), (tCase ci p c m'). repeat split.
+      + exact (red_le_case_brs Γ ci p c brs'0 m hm).
+      + now apply eta_rt_case_brs.
+      + now apply utd_case_brs.
+  Qed.
+
+  (** ** Row 5: [red_iota] — the let-bound-parameter / [expand_lets] row.
+
+      The β step IS the ι-contraction: it reads [p.(pparams)], [p.(puinst)] and the
+      selected branch's [bcontext] through [inst_case_branch_context], substitutes the
+      spine via [expand_lets] (where let-bound parameters are duplicated), and drops
+      the predicate's [preturn] and the other branches. So an η step in any of those
+      positions must be reflected in [iota_red]. Every subcase closes with ONE
+      [red_iota] on the η-reduct side and η-steps (through [expand_lets]/[subst]) on
+      the β-reduct side. *)
+
+  Context (eta_rt_iota_args : forall npar pr args args' br,
+             OnOne2 eta1 args args' ->
+             eta_rt (iota_red npar pr args br) (iota_red npar pr args' br)).
+  Context (eta_rt_iota_params : forall npar pr params' args br,
+             OnOne2 eta1 pr.(pparams) params' ->
+             eta_rt (iota_red npar pr args br) (iota_red npar (set_pparams pr params') args br)).
+  Context (eta_rt_iota_body : forall npar pr args br br',
+             br.(bcontext) = br'.(bcontext) -> eta1 br.(bbody) br'.(bbody) ->
+             eta_rt (iota_red npar pr args br) (iota_red npar pr args br')).
+
+  Lemma c3_red_iota Γ ci cidx uinst args p brs br (u : term) :
+    nth_error brs cidx = Some br ->
+    #|args| = (ci.(ci_npar) + context_assumptions br.(bcontext))%nat ->
+    eta1 (tCase ci p (mkApps (tConstruct ci.(ci_ind) cidx uinst) args) brs) u ->
+    joinable Σ Γ u (iota_red ci.(ci_npar) p args br).
+  Proof.
+    intros hnth hlen he. depelim he.
+    - (* case_eta_param: η in pparams, reflected through inst_case_branch_context *)
+      match goal with Ho : OnOne2 eta1 _ _ |- _ => rename Ho into ho end.
+      exists (iota_red ci.(ci_npar) (set_pparams p params') args br),
+             (iota_red ci.(ci_npar) (set_pparams p params') args br).
+      repeat split; [| |apply upto_domain_refl].
+      + apply red_le_one. now apply red_iota.
+      + exact (eta_rt_iota_params ci.(ci_npar) p params' args br ho).
+    - (* case_eta_return: iota_red ignores preturn → join is the β-reduct itself *)
+      exists (iota_red ci.(ci_npar) (set_preturn p preturn') args br),
+             (iota_red ci.(ci_npar) p args br).
+      repeat split; [| |apply upto_domain_refl].
+      + apply red_le_one. now apply red_iota.
+      + apply rt_refl.
+    - (* case_eta_discr: η in the discriminee spine args (tConstruct is η-inert) *)
+      match goal with Ho : eta1 _ _ |- _ => rename Ho into ho end.
+      apply eta1_mkApps_inv in ho as [[M' [hM ->]]|[args' [hargs ->]]].
+      + (* η on the head tConstruct: impossible *)
+        exfalso. depelim hM.
+      + exists (iota_red ci.(ci_npar) p args' br),
+               (iota_red ci.(ci_npar) p args' br).
+        repeat split; [| |apply upto_domain_refl].
+        * apply red_le_one. apply red_iota; tas.
+          now rewrite <- (OnOne2_length hargs).
+        * exact (eta_rt_iota_args ci.(ci_npar) p args args' br hargs).
+    - (* case_eta_brs: η in one branch body; bcontext preserved *)
+      match goal with Ho : OnOne2 _ _ _ |- _ => rename Ho into ho end.
+      destruct (OnOne2_nth_error _ _ _ _ _ ho hnth) as [br' [hnth' hbr]].
+      exists (iota_red ci.(ci_npar) p args br'),
+             (iota_red ci.(ci_npar) p args br').
+      repeat split; [| |apply upto_domain_refl].
+      + apply red_le_one. apply red_iota; tas.
+        destruct hbr as [heq|[hbody hctx]].
+        * now rewrite <- heq.
+        * unfold on_Trel in hctx. now rewrite <- hctx.
+      + destruct hbr as [heq|[hbody hctx]].
+        * rewrite <- heq. apply rt_refl.
+        * unfold on_Trel in hbody, hctx.
+          exact (eta_rt_iota_body ci.(ci_npar) p args br br' hctx hbody).
+  Qed.
+
 End Falsify.
+
+(** No [Admitted], no [Axiom]. Each row's [Print Assumptions] shows only the
+    Section [Context] hypotheses (the U-rows and the C3-budget [red1_eta_ctx]),
+    which are discharged by the plan's U-rows, never an axiom. *)
+Print Assumptions c3_case_red_param.
+Print Assumptions c3_case_red_return.
+Print Assumptions c3_case_red_discr.
+Print Assumptions c3_case_red_brs.
+Print Assumptions c3_red_iota.
