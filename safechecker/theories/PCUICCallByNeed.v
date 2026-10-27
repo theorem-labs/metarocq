@@ -1,28 +1,47 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import BinPos BinNat.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Utils Require String2pos CanonicalTries.
+From MetaRocq.Utils Require String2pos CanonicalTries ByteCompare.
 From MetaRocq.Common Require Import config Kernames.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICWfUniverses.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv.
 
 Import CanonicalTries.
 
-(** * Call-by-need conversion fast path (design CN-1 of BET-298)
+(** * Call-by-need conversion fast path (design CN-1.1 of BET-298)
 
   [cbn_conv le Γ t u] evaluates [t] and [u] with a weak-head call-by-need environment
   machine and compares the weak-head values. [true] means that [t] and [u] are convertible
-  at [le]; [false] means "don't know", never "not convertible".
+  at [le]; [false] means "don't know", never "not convertible". [cbn_conv_answer] gives the
+  same answer with the reason for a "don't know".
 
-  - Heap: a persistent [PTree] from addresses ([String2pos.positive]) to cells. A cell holds
-    a suspension (environment, code), a value, or a black hole while it is forced. Forcing
-    writes the value back.
-  - Environment: the heap addresses of the bound variables, their number, and the offset in
-    [Γ] of the free variables beyond them ([goff]).
+  - Heap: a skew-binary random-access list (Okasaki) of cells, indexed by the age
+    [st_next - 1 - addr] of the address, so that the newest cell is at index 0. Heap
+    addresses ([haddr]) have their own type. A cell holds a suspension (environment, code),
+    a value, or a black hole while it is forced. Forcing writes the value back.
+  - Environment: a list of slots for the bound variables, their number, and the offset in
+    [Γ] of the free variables beyond them ([goff]). A slot is a heap address or an inline
+    suspension (environment, code) that is not in the heap: an argument bound to a binder
+    whose variable occurs at most once stays inline.
+  - Allocation economy: an argument that is a variable reuses the variable's slot; an
+    argument that is a lambda, a fixpoint, a sort, a product, a primitive or a bodiless
+    constant is allocated as a value cell; other arguments as suspensions.
+  - Roots in, roots out: every function that can allocate takes the list of roots its
+    callers hold and returns it renamed together with its result. An allocation may run the
+    copying collector first, when the cells allocated since the last collection exceed
+    twice the live count after it and at least [gc_min] (or at every allocation in stress
+    mode). The collector copies the cells reachable from the roots and from [st_gam] into a
+    fresh heap with new addresses from the old [st_next] on. It does not use the step
+    budget. An address that is not in the heap makes the whole call answer "don't know".
   - Code: every term the machine evaluates is the subterm, at a path, of the instantiated
-    term of an entry of the code table. A code carries the entry index, the path (newest step
-    first) and that subterm. The table only grows and an entry never changes, so equal
-    (index, path) pairs mean equal codes.
+    term of an entry of the code table. A code carries the entry index, the path (encoded
+    injectively as a positive, newest step outermost) and that subterm. The table only grows
+    and an entry never changes, so equal (index, path) pairs mean equal codes. Per (index,
+    path), the state keeps the structural hash of the code and whether a binder's variable
+    occurs at most once in it.
+  - Same code: equal identifiers, or (when both entries passed their [wf_universeb] check at
+    creation) equal hashes and [eqb_term_upto_univ] at [Conv]; the result of that equality is
+    cached by the ordered pair of identifiers for the rest of the call.
   - Bounds: every function is a structural [Fixpoint] on a lazily generated [cbn_fuel] (the
     recursion depth, in effect unbounded), and every machine, read-back and comparison step
     takes one unit of an [N] step budget. Out of budget means "don't know".
@@ -32,28 +51,54 @@ Import CanonicalTries.
   No soundness proofs yet: the comparison theorem is the hook obligation in
   [PCUICTypeChecker.convert]. *)
 
-Local Notation addr := String2pos.positive.
+(** ** Keys of the code table, of [st_gam] and of the per-code maps *)
 
-Fixpoint addr_succ (p : addr) : addr :=
+Local Notation key := String2pos.positive.
+Local Notation cidx := String2pos.positive. (* code-table index *)
+
+Fixpoint key_succ (p : key) : key :=
   match p with
-  | String2pos.xI q => String2pos.xO (addr_succ q)
+  | String2pos.xI q => String2pos.xO (key_succ q)
   | String2pos.xO q => String2pos.xI q
   | String2pos.xH => String2pos.xO String2pos.xH
   end.
 
-Fixpoint addr_eqb (p q : addr) : bool :=
+Fixpoint key_eqb (p q : key) : bool :=
   match p, q with
-  | String2pos.xI p, String2pos.xI q => addr_eqb p q
-  | String2pos.xO p, String2pos.xO q => addr_eqb p q
+  | String2pos.xI p, String2pos.xI q => key_eqb p q
+  | String2pos.xO p, String2pos.xO q => key_eqb p q
   | String2pos.xH, String2pos.xH => true
   | _, _ => false
   end.
 
-Fixpoint addr_of_succ_nat (n : nat) : addr :=
+Fixpoint key_of_succ_nat (n : nat) : key :=
   match n with
   | O => String2pos.xH
-  | S n => addr_succ (addr_of_succ_nat n)
+  | S n => key_succ (key_of_succ_nat n)
   end.
+
+Fixpoint key_of_pos (p : positive) : key :=
+  match p with
+  | xH => String2pos.xH
+  | xO p => String2pos.xO (key_of_pos p)
+  | xI p => String2pos.xI (key_of_pos p)
+  end.
+
+Definition get2 {A} (k1 k2 : key) (m : PTree.t (PTree.t A)) : option A :=
+  match PTree.get k1 m with
+  | Some m2 => PTree.get k2 m2
+  | None => None
+  end.
+
+Definition set2 {A} (k1 k2 : key) (x : A) (m : PTree.t (PTree.t A)) : PTree.t (PTree.t A) :=
+  let m2 := match PTree.get k1 m with Some m2 => m2 | None => PTree.empty _ end in
+  PTree.set k1 (PTree.set k2 x m2) m.
+
+(** ** Heap addresses *)
+
+Record haddr := HAddr { ha_pos : positive }.
+
+Definition haddr_eqb (a b : haddr) : bool := Pos.eqb a.(ha_pos) b.(ha_pos).
 
 (** ** Fuel *)
 
@@ -74,6 +119,48 @@ Definition cbn_depth : cbn_fuel := fuel_of_pos 4611686018427387904%positive (fun
 (** Step budget of one [cbn_conv] call. *)
 Definition cbn_steps : N := 4000000000%N.
 
+(** The collector runs when the cells allocated since the last collection exceed
+  [max (2 * live) gc_min]. *)
+Definition gc_min : N := 1000000%N.
+
+(** ** Results *)
+
+(** Why a call answers "don't know". *)
+Inductive cbn_why :=
+| WDepth       (* the recursion bound ran out *)
+| WSteps       (* the step budget ran out *)
+| WDangling    (* a heap read or write at an address that is not in the heap *)
+| WBusy        (* a black hole: a cell forced during its own evaluation *)
+| WShape       (* a term or value shape the machine does not handle *)
+| WCtx         (* a free variable beyond the context *)
+| WDelta       (* a constant that is not in the environment *)
+| WGcDangling  (* the collector met an address that is not in the heap *)
+| WGcFuel      (* the collector's walk ran out of fuel *)
+| WRoots.      (* returned roots of an unexpected shape (an internal error) *)
+
+Inductive cbn_res (A : Type) := COk (x : A) | CFail (w : cbn_why).
+Arguments COk {A} x.
+Arguments CFail {A} w.
+
+Inductive cbn_answer := CbnYes | CbnNoRule | CbnFail (w : cbn_why).
+
+Local Notation "'cbn2' ( x , s ) := c 'in' k" :=
+  (match c with COk (x, s) => k | CFail w => CFail w end)
+  (at level 200, x ident, s ident, c at level 100, k at level 200, only parsing).
+
+Local Notation "'cbnlet' ( x , r , s ) := c 'in' k" :=
+  (match c with COk (x, r, s) => k | CFail w => CFail w end)
+  (at level 200, x ident, r ident, s ident, c at level 100, k at level 200, only parsing).
+
+(** [cbnwhen n (r, s) := c in k]: continue with [k] if [c] answers [true]; on [false], answer
+  [false] with the roots of [c] less the [n] frames the caller pushed for [c]. *)
+Local Notation "'cbnwhen' n ( r , s ) := c 'in' k" :=
+  (match c with
+   | COk (true, r, s) => k
+   | COk (false, r, s) => COk (false, skipn n r, s)
+   | CFail w => CFail w end)
+  (at level 200, n at level 0, r ident, s ident, c at level 100, k at level 200, only parsing).
+
 (** ** Code table *)
 
 Inductive code_ns :=
@@ -81,120 +168,489 @@ Inductive code_ns :=
 | NSCtx (j : nat)         (* the body of the context entry [j] of [Γ] *)
 | NSConst (kn : kername). (* the body of a constant *)
 
+(** [ce_wf]: the result of the [wf_universeb] check of the instantiated term, run once when
+  the entry is created. *)
 Record code_entry := mkEntry {
   ce_term : term;
   ce_inst : Instance.t;
-  ce_ns : code_ns }.
+  ce_ns : code_ns;
+  ce_wf : bool }.
 
 (** The term the machine evaluates for an entry: its term with its instance substituted.
   The empty instance leaves the term unchanged (monomorphic bodies have no universe
   variables). *)
-Definition entry_code (e : code_entry) : term :=
-  match e.(ce_inst) with
-  | [] => e.(ce_term)
-  | u => subst_instance u e.(ce_term)
+Definition inst_code (u : Instance.t) (t : term) : term :=
+  match u with
+  | [] => t
+  | u => subst_instance u t
   end.
 
+(** [c_path] encodes the list of path steps, newest step outermost, each step [k] as the
+  Elias-gamma code of [k + 1] (prefix-free, so the encoding is injective). *)
 Record code := mkCode {
-  c_entry : addr;
-  c_path : list N;
+  c_entry : cidx;
+  c_path : key;
   c_term : term }.
+
+Definition path_nil : key := String2pos.xH.
+
+Fixpoint wrap_bits (m : positive) (p : key) (z : nat) : key * nat :=
+  match m with
+  | xH => (String2pos.xI p, z)
+  | xO m => wrap_bits m (String2pos.xO p) (S z)
+  | xI m => wrap_bits m (String2pos.xI p) (S z)
+  end.
+
+Fixpoint wrap_zeros (z : nat) (p : key) : key :=
+  match z with
+  | O => p
+  | S z => String2pos.xO (wrap_zeros z p)
+  end.
+
+Definition path_push (k : N) (p : key) : key :=
+  let (q, z) := wrap_bits (N.succ_pos k) p O in wrap_zeros z q.
 
 (** Path steps: [tApp f a]: f 0, a 1; [tLambda]/[tProd]: domain 0, body 1; [tLetIn]: definition
   0, body 2; [tCase]: scrutinee 0, return 1, parameter [i] 2+2i, branch [i] 3+2i; [tProj]: 0;
   [tFix]: body of definition [i] is step [i]. *)
 Definition child (c : code) (k : N) (t : term) : code :=
-  mkCode c.(c_entry) (k :: c.(c_path)) t.
+  mkCode c.(c_entry) (path_push k c.(c_path)) t.
 
 Definition case_param_step (i : N) : N := N.add 2 (N.double i).
 Definition case_branch_step (i : N) : N := N.add 3 (N.double i).
 
-Definition same_code (c1 c2 : code) : bool :=
-  addr_eqb c1.(c_entry) c2.(c_entry) && forallb2 N.eqb c1.(c_path) c2.(c_path).
+Definition same_id (c1 c2 : code) : bool :=
+  key_eqb c1.(c_entry) c2.(c_entry) && key_eqb c1.(c_path) c2.(c_path).
+
+(** ** Occurrence count and structural hash of a code *)
+
+(** Occurrences of [tRel k], capped at 2: an occurrence under a lambda, product, fixpoint or
+  cofixpoint counts 2, match branches take the maximum. Only cost depends on it. *)
+Fixpoint occ (k : nat) (t : term) : nat :=
+  match t with
+  | tRel n => if n == k then 1 else 0
+  | tApp f a => Nat.min 2 (occ k f + occ k a)
+  | tLambda _ d b | tProd _ d b => Nat.min 2 (occ k d + 2 * occ (S k) b)
+  | tLetIn _ b ty body => Nat.min 2 (occ k b + occ k ty + occ (S k) body)
+  | tCase _ p c brs =>
+    let pp := fold_left (fun n x => n + occ k x) p.(pparams) 0 in
+    let pr := occ (k + #|p.(pcontext)|) p.(preturn) in
+    let bm := fold_left (fun m b => Nat.max m (occ (k + #|b.(bcontext)|) b.(bbody))) brs 0 in
+    Nat.min 2 (pp + pr + occ k c + bm)
+  | tProj _ c => occ k c
+  | tFix m _ | tCoFix m _ =>
+    let n := #|m| in
+    if existsb (fun d => negb (occ k d.(dtype) == 0) || negb (occ (k + n) d.(dbody) == 0)) m
+    then 2 else 0
+  | tEvar _ _ => 2
+  | _ => 0
+  end.
+
+Definition hmask : N := 2305843009213693951%N. (* 2^61 - 1 *)
+
+Definition hmix (h x : N) : N := N.land (N.add (N.sub (N.shiftl h 5) h) x) hmask.
+
+Fixpoint hash_string (h : N) (s : String.t) : N :=
+  match s with
+  | String.EmptyString => h
+  | String.String b s => hash_string (hmix h (ByteCompare.ByteN.to_N b)) s
+  end.
+
+(** A structural hash: equal terms, and terms equal up to universes and names, have equal
+  hashes. It is only a filter in front of [eqb_term_upto_univ]. *)
+Fixpoint thash (t : term) : N :=
+  match t with
+  | tRel n => hmix 1 (N.of_nat n)
+  | tVar _ => 2%N
+  | tEvar n l => fold_left (fun h x => hmix h (thash x)) l (hmix 3 (N.of_nat n))
+  | tSort _ => 4%N
+  | tProd _ a b => hmix (hmix 5 (thash a)) (thash b)
+  | tLambda _ a b => hmix (hmix 6 (thash a)) (thash b)
+  | tLetIn _ b ty body => hmix (hmix (hmix 7 (thash b)) (thash ty)) (thash body)
+  | tApp f a => hmix (hmix 8 (thash f)) (thash a)
+  | tConst kn _ => hash_string 9 (snd kn)
+  | tInd i _ => hmix (hash_string 10 (snd i.(inductive_mind))) (N.of_nat i.(inductive_ind))
+  | tConstruct i n _ =>
+    hmix (hmix (hash_string 11 (snd i.(inductive_mind))) (N.of_nat i.(inductive_ind))) (N.of_nat n)
+  | tCase _ p c brs =>
+    let h := fold_left (fun h x => hmix h (thash x)) p.(pparams) (hmix 12 (N.of_nat #|brs|)) in
+    let h := hmix (hmix h (thash p.(preturn))) (thash c) in
+    fold_left (fun h b => hmix h (thash b.(bbody))) brs h
+  | tProj p c => hmix (hmix 13 (N.of_nat p.(proj_arg))) (thash c)
+  | tFix m i =>
+    fold_left (fun h d => hmix (hmix h (thash d.(dtype))) (thash d.(dbody))) m (hmix 14 (N.of_nat i))
+  | tCoFix m i =>
+    fold_left (fun h d => hmix (hmix h (thash d.(dtype))) (thash d.(dbody))) m (hmix 15 (N.of_nat i))
+  | _ => 16%N
+  end.
 
 (** ** Machine data *)
 
+(** A slot of an environment: a heap address, or an inline suspension (the fields of an
+  environment, and a code). *)
+Inductive cbn_slot :=
+| SAddr (a : haddr)
+| SInl (vals : list cbn_slot) (nvals goff : nat) (c : code).
+
 Record cbn_env := mkEnv {
-  ev_vals : list addr;
+  ev_vals : list cbn_slot;
   ev_nvals : nat;
   ev_goff : nat }.
 
 Definition env_empty : cbn_env := mkEnv [] 0 0.
 
-Definition env_push (a : addr) (e : cbn_env) : cbn_env :=
-  mkEnv (a :: e.(ev_vals)) (S e.(ev_nvals)) e.(ev_goff).
+Definition env_push (x : cbn_slot) (e : cbn_env) : cbn_env :=
+  mkEnv (x :: e.(ev_vals)) (S e.(ev_nvals)) e.(ev_goff).
 
-Definition env_push_all (l : list addr) (e : cbn_env) : cbn_env :=
-  fold_left (fun e a => env_push a e) l e.
+Definition env_push_addrs (l : list haddr) (e : cbn_env) : cbn_env :=
+  fold_left (fun e a => env_push (SAddr a) e) l e.
 
 Inductive cbn_neutral :=
 | NVar (lvl : nat)   (* a context variable without a body or a fresh variable, as a level *)
 | NConst (h : term). (* an axiom or opaque constant [tConst kn u] *)
 
 Inductive cbn_value :=
-| VCon (h : term) (sp : list addr)                       (* [tConstruct]/[tInd] head *)
+| VCon (h : term) (sp : list haddr)                      (* [tConstruct]/[tInd] head *)
 | VLam (e : cbn_env) (c : code)                          (* [tLambda] closure *)
-| VFix (e : cbn_env) (c : code) (idx : nat) (sp : list addr)
+| VFix (e : cbn_env) (c : code) (idx : nat) (sp : list haddr)
     (* fixpoint [idx] of the [tFix] code [c], applied to too few arguments *)
-| VStuckFix (e : cbn_env) (c : code) (idx : nat) (sp : list addr)
+| VStuckFix (e : cbn_env) (c : code) (idx : nat) (sp : list haddr)
     (* fixpoint whose recursive argument is neutral or stuck *)
-| VNeu (h : cbn_neutral) (sp : list addr)
+| VNeu (h : cbn_neutral) (sp : list haddr)
 | VOpen (e : cbn_env) (c : code)                         (* [tSort], [tProd], [tPrim] *)
-| VStuck (e : cbn_env) (c : code) (sp : list addr).      (* stuck [tCase]/[tProj] *)
+| VStuck (e : cbn_env) (c : code) (sp : list haddr).     (* stuck [tCase]/[tProj] *)
 
 Inductive cbn_cell :=
 | CSusp (e : cbn_env) (c : code)
 | CDone (v : cbn_value)
 | CBusy.
 
+(** What a caller holds across a call that can allocate. *)
+Inductive root :=
+| RA (a : haddr)
+| RSl (x : cbn_slot)
+| RE (e : cbn_env)
+| RV (v : cbn_value)
+| RSk (l : list cbn_slot)
+| RSp (l : list haddr)
+| RC (c : cbn_cell).
+
+Definition spine_of (v : cbn_value) : list haddr :=
+  match v with
+  | VCon _ sp | VFix _ _ _ sp | VStuckFix _ _ _ sp | VNeu _ sp | VStuck _ _ sp => sp
+  | VLam _ _ | VOpen _ _ => []
+  end.
+
+Definition add_spine (v : cbn_value) (l : list haddr) : option cbn_value :=
+  match v with
+  | VCon h sp => Some (VCon h (sp ++ l))
+  | VStuckFix e c i sp => Some (VStuckFix e c i (sp ++ l))
+  | VNeu h sp => Some (VNeu h (sp ++ l))
+  | VStuck e c sp => Some (VStuck e c (sp ++ l))
+  | _ => None
+  end.
+
+(** ** Renaming: one function per type that holds heap addresses *)
+
+Section Rename.
+  Context {G : Type} (f : haddr -> G -> cbn_res (haddr * G)).
+
+  Fixpoint rn_slot (x : cbn_slot) (g : G) {struct x} : cbn_res (cbn_slot * G) :=
+    match x with
+    | SAddr a => cbn2 (a, g) := f a g in COk (SAddr a, g)
+    | SInl vs n o c =>
+      let fix go (l : list cbn_slot) (g : G) : cbn_res (list cbn_slot * G) :=
+        match l with
+        | [] => COk ([], g)
+        | y :: l =>
+          cbn2 (y, g) := rn_slot y g in
+          cbn2 (l, g) := go l g in
+          COk (y :: l, g)
+        end in
+      cbn2 (vs, g) := go vs g in COk (SInl vs n o c, g)
+    end.
+
+  Fixpoint rn_slots (l : list cbn_slot) (g : G) : cbn_res (list cbn_slot * G) :=
+    match l with
+    | [] => COk ([], g)
+    | y :: l =>
+      cbn2 (y, g) := rn_slot y g in
+      cbn2 (l, g) := rn_slots l g in
+      COk (y :: l, g)
+    end.
+
+  Fixpoint rn_addrs (l : list haddr) (g : G) : cbn_res (list haddr * G) :=
+    match l with
+    | [] => COk ([], g)
+    | a :: l =>
+      cbn2 (a, g) := f a g in
+      cbn2 (l, g) := rn_addrs l g in
+      COk (a :: l, g)
+    end.
+
+  Definition rn_env (e : cbn_env) (g : G) : cbn_res (cbn_env * G) :=
+    cbn2 (vs, g) := rn_slots e.(ev_vals) g in COk (mkEnv vs e.(ev_nvals) e.(ev_goff), g).
+
+  Definition rn_value (v : cbn_value) (g : G) : cbn_res (cbn_value * G) :=
+    match v with
+    | VCon h sp => cbn2 (sp, g) := rn_addrs sp g in COk (VCon h sp, g)
+    | VLam e c => cbn2 (e, g) := rn_env e g in COk (VLam e c, g)
+    | VFix e c i sp =>
+      cbn2 (e, g) := rn_env e g in cbn2 (sp, g) := rn_addrs sp g in COk (VFix e c i sp, g)
+    | VStuckFix e c i sp =>
+      cbn2 (e, g) := rn_env e g in cbn2 (sp, g) := rn_addrs sp g in COk (VStuckFix e c i sp, g)
+    | VNeu h sp => cbn2 (sp, g) := rn_addrs sp g in COk (VNeu h sp, g)
+    | VOpen e c => cbn2 (e, g) := rn_env e g in COk (VOpen e c, g)
+    | VStuck e c sp =>
+      cbn2 (e, g) := rn_env e g in cbn2 (sp, g) := rn_addrs sp g in COk (VStuck e c sp, g)
+    end.
+
+  Definition rn_cell (cl : cbn_cell) (g : G) : cbn_res (cbn_cell * G) :=
+    match cl with
+    | CSusp e c => cbn2 (e, g) := rn_env e g in COk (CSusp e c, g)
+    | CDone v => cbn2 (v, g) := rn_value v g in COk (CDone v, g)
+    | CBusy => COk (CBusy, g)
+    end.
+
+  Definition rn_root (r : root) (g : G) : cbn_res (root * G) :=
+    match r with
+    | RA a => cbn2 (a, g) := f a g in COk (RA a, g)
+    | RSl x => cbn2 (x, g) := rn_slot x g in COk (RSl x, g)
+    | RE e => cbn2 (e, g) := rn_env e g in COk (RE e, g)
+    | RV v => cbn2 (v, g) := rn_value v g in COk (RV v, g)
+    | RSk l => cbn2 (l, g) := rn_slots l g in COk (RSk l, g)
+    | RSp l => cbn2 (l, g) := rn_addrs l g in COk (RSp l, g)
+    | RC c => cbn2 (c, g) := rn_cell c g in COk (RC c, g)
+    end.
+
+  Fixpoint rn_roots (l : list root) (g : G) : cbn_res (list root * G) :=
+    match l with
+    | [] => COk ([], g)
+    | r :: l =>
+      cbn2 (r, g) := rn_root r g in
+      cbn2 (l, g) := rn_roots l g in
+      COk (r :: l, g)
+    end.
+
+  (** The values of [st_gam]. *)
+  Fixpoint rn_tree' (m : PTree.tree' haddr) (g : G) : cbn_res (PTree.tree' haddr * G) :=
+    match m with
+    | PTree.Node001 r => cbn2 (r, g) := rn_tree' r g in COk (PTree.Node001 r, g)
+    | PTree.Node010 x => cbn2 (x, g) := f x g in COk (PTree.Node010 x, g)
+    | PTree.Node011 x r =>
+      cbn2 (x, g) := f x g in cbn2 (r, g) := rn_tree' r g in COk (PTree.Node011 x r, g)
+    | PTree.Node100 l => cbn2 (l, g) := rn_tree' l g in COk (PTree.Node100 l, g)
+    | PTree.Node101 l r =>
+      cbn2 (l, g) := rn_tree' l g in cbn2 (r, g) := rn_tree' r g in COk (PTree.Node101 l r, g)
+    | PTree.Node110 l x =>
+      cbn2 (l, g) := rn_tree' l g in cbn2 (x, g) := f x g in COk (PTree.Node110 l x, g)
+    | PTree.Node111 l x r =>
+      cbn2 (l, g) := rn_tree' l g in cbn2 (x, g) := f x g in cbn2 (r, g) := rn_tree' r g in
+      COk (PTree.Node111 l x r, g)
+    end.
+
+  Definition rn_ptree (m : PTree.t haddr) (g : G) : cbn_res (PTree.t haddr * G) :=
+    match m with
+    | PTree.Empty => COk (PTree.Empty, g)
+    | PTree.Nodes m => cbn2 (m, g) := rn_tree' m g in COk (PTree.Nodes m, g)
+    end.
+End Rename.
+
+(** ** The heap: a skew-binary random-access list *)
+
+Inductive stree (A : Type) :=
+| SLeaf (x : A)
+| SNode (x : A) (l r : stree A).
+Arguments SLeaf {A} x.
+Arguments SNode {A} x l r.
+
+(** Complete trees with their sizes ([2^k - 1]), smallest first; only the first two may have
+  the same size. Index 0 is the element consed last. *)
+Definition skew (A : Type) := list (N * stree A).
+
+Definition sk_cons {A} (x : A) (h : skew A) : skew A :=
+  match h with
+  | (w1, t1) :: (w2, t2) :: h' =>
+    if N.eqb w1 w2 then (N.succ (N.add w1 w2), SNode x t1 t2) :: h' else (1%N, SLeaf x) :: h
+  | _ => (1%N, SLeaf x) :: h
+  end.
+
+Fixpoint st_lookup {A} (w i : N) (t : stree A) : option A :=
+  match t with
+  | SLeaf x => match i with N0 => Some x | Npos _ => None end
+  | SNode x l r =>
+    match i with
+    | N0 => Some x
+    | Npos _ =>
+      let w' := N.div2 w in
+      let i' := N.pred i in
+      if N.ltb i' w' then st_lookup w' i' l else st_lookup w' (N.sub i' w') r
+    end
+  end.
+
+Fixpoint sk_lookup {A} (i : N) (h : skew A) : option A :=
+  match h with
+  | [] => None
+  | (w, t) :: h => if N.ltb i w then st_lookup w i t else sk_lookup (N.sub i w) h
+  end.
+
+Fixpoint st_update {A} (w i : N) (x : A) (t : stree A) : option (stree A) :=
+  match t with
+  | SLeaf _ => match i with N0 => Some (SLeaf x) | Npos _ => None end
+  | SNode y l r =>
+    match i with
+    | N0 => Some (SNode x l r)
+    | Npos _ =>
+      let w' := N.div2 w in
+      let i' := N.pred i in
+      if N.ltb i' w' then option_map (fun l => SNode y l r) (st_update w' i' x l)
+      else option_map (fun r => SNode y l r) (st_update w' (N.sub i' w') x r)
+    end
+  end.
+
+Fixpoint sk_update {A} (i : N) (x : A) (h : skew A) : option (skew A) :=
+  match h with
+  | [] => None
+  | (w, t) :: h =>
+    if N.ltb i w then option_map (fun t => (w, t) :: h) (st_update w i x t)
+    else option_map (fun h => (w, t) :: h) (sk_update (N.sub i w) x h)
+  end.
+
+(** The index of [a] in a heap whose next address is [next]: [None] unless [a < next]. *)
+Definition heap_index (next : positive) (a : haddr) : option N :=
+  if Pos.ltb a.(ha_pos) next then Some (Pos.pred_N (Pos.sub next a.(ha_pos))) else None.
+
+Definition sk_get_addr (h : skew cbn_cell) (next : positive) (a : haddr) : option cbn_cell :=
+  match heap_index next a with
+  | Some i => sk_lookup i h
+  | None => None
+  end.
+
+(** ** State *)
+
 Inductive delta_memo :=
 | DAxiom
-| DBody (body : term) (insts : list (Instance.t * addr * term)).
+| DBody (body : term) (insts : list (Instance.t * cidx * term)).
+
+(** Per-call data that holds no heap address. *)
+Record cbn_memo := mkMemo {
+  m_codes : PTree.t code_entry;
+  m_ncode : cidx;
+  m_delta : KernameMap.t delta_memo;
+  m_once : PTree.t (PTree.t bool);  (* (index, path) of a binder's body: occurs at most once *)
+  m_hash : PTree.t (PTree.t N);     (* (index, path): structural hash of the code *)
+  m_ceq : PTree.t (PTree.t (PTree.t (PTree.t bool))) }. (* code equality of two identifiers *)
 
 Record cbn_state := mkState {
-  st_heap : PTree.t cbn_cell;
-  st_next : addr;
+  st_heap : skew cbn_cell;
+  st_next : positive;        (* the next heap address *)
+  st_live : N;               (* cells copied by the last collection *)
+  st_alloc : N;              (* cells allocated since the last collection *)
   st_steps : N;
-  st_codes : PTree.t code_entry;
-  st_ncode : addr;
-  st_delta : KernameMap.t delta_memo;
-  st_gam : PTree.t addr }.
+  st_gam : PTree.t haddr;    (* the cell of a context entry, by [key_of_succ_nat j] *)
+  st_memo : cbn_memo }.
+
+Definition memo_empty : cbn_memo :=
+  mkMemo (PTree.empty _) String2pos.xH (KernameMap.empty _) (PTree.empty _) (PTree.empty _)
+    (PTree.empty _).
 
 Definition cbn_init : cbn_state :=
-  mkState (PTree.empty _) String2pos.xH cbn_steps (PTree.empty _) String2pos.xH
-    (KernameMap.empty _) (PTree.empty _).
+  mkState [] xH 0%N 0%N cbn_steps (PTree.empty _) memo_empty.
 
 Definition tick (s : cbn_state) : option cbn_state :=
   match s.(st_steps) with
   | N0 => None
-  | n => Some (mkState s.(st_heap) s.(st_next) (N.pred n) s.(st_codes) s.(st_ncode)
-                 s.(st_delta) s.(st_gam))
+  | n => Some (mkState s.(st_heap) s.(st_next) s.(st_live) s.(st_alloc) (N.pred n) s.(st_gam)
+                 s.(st_memo))
   end.
 
-Definition heap_get (a : addr) (s : cbn_state) : option cbn_cell :=
-  PTree.get a s.(st_heap).
+Definition heap_get (a : haddr) (s : cbn_state) : option cbn_cell :=
+  sk_get_addr s.(st_heap) s.(st_next) a.
 
-Definition heap_set (a : addr) (c : cbn_cell) (s : cbn_state) : cbn_state :=
-  mkState (PTree.set a c s.(st_heap)) s.(st_next) s.(st_steps) s.(st_codes) s.(st_ncode)
-    s.(st_delta) s.(st_gam).
+Definition heap_upd (a : haddr) (c : cbn_cell) (s : cbn_state) : option cbn_state :=
+  match heap_index s.(st_next) a with
+  | Some i =>
+    option_map (fun h => mkState h s.(st_next) s.(st_live) s.(st_alloc) s.(st_steps) s.(st_gam)
+                           s.(st_memo))
+      (sk_update i c s.(st_heap))
+  | None => None
+  end.
 
-Definition alloc (c : cbn_cell) (s : cbn_state) : addr * cbn_state :=
-  let a := s.(st_next) in
-  (a, mkState (PTree.set a c s.(st_heap)) (addr_succ a) s.(st_steps) s.(st_codes)
-        s.(st_ncode) s.(st_delta) s.(st_gam)).
+Definition alloc_now (c : cbn_cell) (s : cbn_state) : haddr * cbn_state :=
+  (HAddr s.(st_next),
+   mkState (sk_cons c s.(st_heap)) (Pos.succ s.(st_next)) s.(st_live) (N.succ s.(st_alloc))
+     s.(st_steps) s.(st_gam) s.(st_memo)).
 
-Definition new_entry (e : code_entry) (s : cbn_state) : addr * cbn_state :=
-  let i := s.(st_ncode) in
-  (i, mkState s.(st_heap) s.(st_next) s.(st_steps) (PTree.set i e s.(st_codes))
-        (addr_succ i) s.(st_delta) s.(st_gam)).
+Definition set_memo (m : cbn_memo) (s : cbn_state) : cbn_state :=
+  mkState s.(st_heap) s.(st_next) s.(st_live) s.(st_alloc) s.(st_steps) s.(st_gam) m.
 
-Definition set_delta (m : KernameMap.t delta_memo) (s : cbn_state) : cbn_state :=
-  mkState s.(st_heap) s.(st_next) s.(st_steps) s.(st_codes) s.(st_ncode) m s.(st_gam).
+Definition set_gam (g : PTree.t haddr) (s : cbn_state) : cbn_state :=
+  mkState s.(st_heap) s.(st_next) s.(st_live) s.(st_alloc) s.(st_steps) g s.(st_memo).
 
-Definition set_gam (m : PTree.t addr) (s : cbn_state) : cbn_state :=
-  mkState s.(st_heap) s.(st_next) s.(st_steps) s.(st_codes) s.(st_ncode) s.(st_delta) m.
+Definition memo_add_entry (e : code_entry) (m : cbn_memo) : cidx * cbn_memo :=
+  let i := m.(m_ncode) in
+  (i, mkMemo (PTree.set i e m.(m_codes)) (key_succ i) m.(m_delta) m.(m_once) m.(m_hash)
+        m.(m_ceq)).
 
-Fixpoint find_inst (u : Instance.t) (l : list (Instance.t * addr * term)) : option (addr * term) :=
+Definition memo_set_delta (d : KernameMap.t delta_memo) (m : cbn_memo) : cbn_memo :=
+  mkMemo m.(m_codes) m.(m_ncode) d m.(m_once) m.(m_hash) m.(m_ceq).
+
+Definition memo_set_once (o : PTree.t (PTree.t bool)) (m : cbn_memo) : cbn_memo :=
+  mkMemo m.(m_codes) m.(m_ncode) m.(m_delta) o m.(m_hash) m.(m_ceq).
+
+Definition memo_set_hash (h : PTree.t (PTree.t N)) (m : cbn_memo) : cbn_memo :=
+  mkMemo m.(m_codes) m.(m_ncode) m.(m_delta) m.(m_once) h m.(m_ceq).
+
+Definition memo_set_ceq (q : PTree.t (PTree.t (PTree.t (PTree.t bool)))) (m : cbn_memo)
+  : cbn_memo :=
+  mkMemo m.(m_codes) m.(m_ncode) m.(m_delta) m.(m_once) m.(m_hash) q.
+
+(** ** The collector *)
+
+Record gc_state := mkGc {
+  g_fwd : PTree.t haddr;    (* old address (as a key) to new address *)
+  g_heap : skew cbn_cell;   (* the new heap *)
+  g_next : positive }.      (* its next address *)
+
+(** Copy the cell at [a] of the old heap [old] (next address [onext]) and the cells it
+  reaches, children first; give it the next new address. [f] bounds the depth of the walk:
+  [st_next] units, more than the number of cells, so a heap without cycles is never cut
+  off. *)
+Fixpoint gc_copy (old : skew cbn_cell) (onext : positive) (f : cbn_fuel) (a : haddr)
+  (g : gc_state) {struct f} : cbn_res (haddr * gc_state) :=
+  match PTree.get (key_of_pos a.(ha_pos)) g.(g_fwd) with
+  | Some a' => COk (a', g)
+  | None =>
+    match f with
+    | FO => CFail WGcFuel
+    | FS k =>
+      match sk_get_addr old onext a with
+      | None => CFail WGcDangling
+      | Some cl =>
+        cbn2 (cl, g) := rn_cell (gc_copy old onext (k tt)) cl g in
+        let a' := HAddr g.(g_next) in
+        COk (a', mkGc (PTree.set (key_of_pos a.(ha_pos)) a' g.(g_fwd)) (sk_cons cl g.(g_heap))
+                   (Pos.succ g.(g_next)))
+      end
+    end
+  end.
+
+(** Copy what [rs] and [st_gam] reach into a fresh heap whose addresses start at the old
+  [st_next], and rename [rs] and [st_gam]. No step is taken from the budget. *)
+Definition collect (rs : list root) (s : cbn_state) : cbn_res (list root * cbn_state) :=
+  let old := s.(st_heap) in
+  let onext := s.(st_next) in
+  let copy := gc_copy old onext (fuel_of_pos onext (fun _ => FO)) in
+  let g := mkGc (PTree.empty _) [] onext in
+  cbn2 (gm, g) := rn_ptree copy s.(st_gam) g in
+  cbn2 (rs, g) := rn_roots copy rs g in
+  COk (rs, mkState g.(g_heap) g.(g_next) (N.sub (Npos g.(g_next)) (Npos onext)) 0%N
+             s.(st_steps) gm s.(st_memo)).
+
+Definition gc_due (stress : bool) (s : cbn_state) : bool :=
+  stress || N.ltb (N.max (N.double s.(st_live)) gc_min) s.(st_alloc).
+
+Fixpoint find_inst (u : Instance.t) (l : list (Instance.t * cidx * term)) : option (cidx * term) :=
   match l with
   | [] => None
   | (u', i, t) :: l => if Instance.eqb u u' then Some (i, t) else find_inst u l
@@ -203,313 +659,21 @@ Fixpoint find_inst (u : Instance.t) (l : list (Instance.t * addr * term)) : opti
 Definition is_assum (d : context_decl) : bool :=
   match d.(decl_body) with None => true | Some _ => false end.
 
-(** Allocate the cells of the [n] fixpoints of the [tFix] code [c] over [e] and push them on
-  [acc], fixpoint 0 first, so that [tRel 0] is fixpoint [n-1] as in [fix_subst]. *)
-Fixpoint push_fix_cells (e : cbn_env) (c : code) (i n : nat) (acc : cbn_env) (s : cbn_state)
-  : cbn_env * cbn_state :=
-  match n with
-  | O => (acc, s)
-  | S n =>
-    let (a, s) := alloc (CDone (VFix e c i [])) s in
-    push_fix_cells e c (S i) n (env_push a acc) s
-  end.
-
-(** Push [n] fresh variables, levels [lvl] to [lvl + n - 1], on both environments. *)
-Fixpoint push_fresh (n lvl : nat) (e1 e2 : cbn_env) (s : cbn_state)
-  : nat * cbn_env * cbn_env * cbn_state :=
-  match n with
-  | O => (lvl, e1, e2, s)
-  | S n =>
-    let (x, s) := alloc (CDone (VNeu (NVar lvl) [])) s in
-    push_fresh n (S lvl) (env_push x e1) (env_push x e2) s
-  end.
-
 (** Contexts of a match related by [eq_context_upto_names], without let-ins. *)
 Definition case_ctx_ok (ctx1 ctx2 : context) : bool :=
   forallb2 (fun d1 d2 => is_assum d1 && is_assum d2 && eqb_decl_upto_names d1 d2) ctx1 ctx2.
 
-Local Notation "'cbnlet' ( x , s ) := c 'in' k" :=
-  (match c with Some (x, s) => k | None => None end)
-  (at level 200, x ident, s ident, c at level 100, k at level 200, only parsing).
-
-Local Notation "'cbnwhen' s := c 'in' k" :=
-  (match c with Some (true, s) => k | Some (false, s) => Some (false, s) | None => None end)
-  (at level 200, s ident, c at level 100, k at level 200, only parsing).
+Fixpoint list_set {A} (l : list A) (n : nat) (x : A) : list A :=
+  match l, n with
+  | [], _ => []
+  | _ :: l, O => x :: l
+  | y :: l, S n => y :: list_set l n x
+  end.
 
 Section CallByNeed.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Γ : context) (nctx : nat). (* nctx = #|Γ| *)
-
-  (** *** Delta, with the memo of this call *)
-
-  Definition delta_new (kn : kername) (u : Instance.t) (body : term)
-    (insts : list (Instance.t * addr * term)) (s : cbn_state) : code * cbn_state :=
-    let ent := mkEntry body u (NSConst kn) in
-    let t := entry_code ent in
-    let (i, s) := new_entry ent s in
-    (mkCode i [] t, set_delta (KernameMap.add kn (DBody body ((u, i, t) :: insts)) s.(st_delta)) s).
-
-  (** [Some (Some c)]: the instantiated body; [Some None]: an axiom or opaque constant;
-    [None]: give up. *)
-  Definition delta (kn : kername) (u : Instance.t) (s : cbn_state)
-    : option (option code * cbn_state) :=
-    match KernameMap.find kn s.(st_delta) with
-    | Some DAxiom => Some (None, s)
-    | Some (DBody body insts) =>
-      match find_inst u insts with
-      | Some (i, t) => Some (Some (mkCode i [] t), s)
-      | None => let (c, s) := delta_new kn u body insts s in Some (Some c, s)
-      end
-    | None =>
-      match abstract_env_lookup X kn with
-      | Some (ConstantDecl cb) =>
-        match cb.(cst_body) with
-        | Some body => let (c, s) := delta_new kn u body [] s in Some (Some c, s)
-        | None => Some (None, set_delta (KernameMap.add kn DAxiom s.(st_delta)) s)
-        end
-      | _ => None
-      end
-    end.
-
-  (** *** Context entries: one cell per entry of [Γ], made on first use *)
-
-  Definition gam (j : nat) (s : cbn_state) : option (addr * cbn_state) :=
-    let key := addr_of_succ_nat j in
-    match PTree.get key s.(st_gam) with
-    | Some a => Some (a, s)
-    | None =>
-      match nth_error Γ j with
-      | None => None
-      | Some decl =>
-        let (cl, s) :=
-          match decl.(decl_body) with
-          | Some b =>
-            let (i, s) := new_entry (mkEntry b [] (NSCtx j)) s in
-            (CSusp (mkEnv [] 0 (S j)) (mkCode i [] b), s)
-          | None => (CDone (VNeu (NVar (nctx - S j)) []), s)
-          end in
-        let (a, s) := alloc cl s in
-        Some (a, set_gam (PTree.set key a s.(st_gam)) s)
-      end
-    end.
-
-  (** *** The machine *)
-
-  Fixpoint force (d : cbn_fuel) (a : addr) (s : cbn_state) {struct d}
-    : option (cbn_value * cbn_state) :=
-    match d with
-    | FO => None
-    | FS k =>
-      let d := k tt in
-      match heap_get a s with
-      | Some (CDone v) => Some (v, s)
-      | Some (CSusp e c) =>
-        cbnlet (v, s) := whnf d e c [] (heap_set a CBusy s) in
-        Some (v, heap_set a (CDone v) s)
-      | _ => None
-      end
-    end
-
-  with whnf (d : cbn_fuel) (e : cbn_env) (c : code) (stk : list addr) (s : cbn_state)
-    {struct d} : option (cbn_value * cbn_state) :=
-    match d with
-    | FO => None
-    | FS k =>
-      let d := k tt in
-      match tick s with
-      | None => None
-      | Some s =>
-      match c.(c_term) with
-      | tRel n =>
-        match nth_error e.(ev_vals) n with
-        | Some a =>
-          cbnlet (v, s) := force d a s in
-          apply d v stk s
-        | None =>
-          cbnlet (a, s) := gam (n - e.(ev_nvals) + e.(ev_goff)) s in
-          cbnlet (v, s) := force d a s in
-          apply d v stk s
-        end
-      | tApp f arg =>
-        let (a, s) := alloc (CSusp e (child c 1 arg)) s in
-        whnf d e (child c 0 f) (a :: stk) s
-      | tLambda _ _ b =>
-        match stk with
-        | a :: stk => whnf d (env_push a e) (child c 1 b) stk s
-        | [] => Some (VLam e c, s)
-        end
-      | tLetIn _ b _ body =>
-        let (a, s) := alloc (CSusp e (child c 0 b)) s in
-        whnf d (env_push a e) (child c 2 body) stk s
-      | tConst kn u =>
-        cbnlet (r, s) := delta kn u s in
-        match r with
-        | Some c' => whnf d env_empty c' stk s
-        | None => Some (VNeu (NConst c.(c_term)) stk, s)
-        end
-      | tConstruct _ _ _ | tInd _ _ => Some (VCon c.(c_term) stk, s)
-      | tCase ci p scrut brs =>
-        cbnlet (v, s) := whnf d e (child c 0 scrut) [] s in
-        match v with
-        | VCon (tConstruct ind n _) args =>
-          if eqb ind ci.(ci_ind) then
-            match nth_error brs n with
-            | Some br =>
-              let cargs := skipn ci.(ci_npar) args in
-              if forallb is_assum br.(bcontext) && (#|cargs| == #|br.(bcontext)|) then
-                whnf d (env_push_all cargs e) (child c (case_branch_step (N.of_nat n)) br.(bbody))
-                  stk s
-              else None
-            | None => None
-            end
-          else None
-        | VNeu _ _ | VStuck _ _ _ | VStuckFix _ _ _ _ => Some (VStuck e c stk, s)
-        | _ => None
-        end
-      | tProj p arg =>
-        cbnlet (v, s) := whnf d e (child c 0 arg) [] s in
-        match v with
-        | VCon (tConstruct ind 0 _) args =>
-          if eqb ind p.(proj_ind) then
-            match nth_error args (p.(proj_npars) + p.(proj_arg)) with
-            | Some a =>
-              cbnlet (v, s) := force d a s in
-              apply d v stk s
-            | None => None
-            end
-          else None
-        | VNeu _ _ | VStuck _ _ _ | VStuckFix _ _ _ _ => Some (VStuck e c stk, s)
-        | _ => None
-        end
-      | tFix mfix idx => whnf_fix d e c mfix idx stk s
-      | tSort _ | tProd _ _ _ | tPrim _ =>
-        match stk with
-        | [] => Some (VOpen e c, s)
-        | _ => None
-        end
-      | _ => None
-      end
-      end
-    end
-
-  with whnf_fix (d : cbn_fuel) (e : cbn_env) (c : code) (mfix : mfixpoint term) (idx : nat)
-    (stk : list addr) (s : cbn_state) {struct d} : option (cbn_value * cbn_state) :=
-    match d with
-    | FO => None
-    | FS k =>
-      let d := k tt in
-      match nth_error mfix idx with
-      | None => None
-      | Some def =>
-        match nth_error stk def.(rarg) with
-        | None => Some (VFix e c idx stk, s)
-        | Some a =>
-          cbnlet (v, s) := force d a s in
-          match v with
-          | VCon (tConstruct _ _ _) _ =>
-            let (e', s) := push_fix_cells e c 0 #|mfix| e s in
-            whnf d e' (child c (N.of_nat idx) def.(dbody)) stk s
-          | VNeu _ _ | VStuck _ _ _ | VStuckFix _ _ _ _ => Some (VStuckFix e c idx stk, s)
-          | _ => None
-          end
-        end
-      end
-    end
-
-  with apply (d : cbn_fuel) (v : cbn_value) (stk : list addr) (s : cbn_state) {struct d}
-    : option (cbn_value * cbn_state) :=
-    match stk with
-    | [] => Some (v, s)
-    | _ =>
-      match d with
-      | FO => None
-      | FS k =>
-        let d := k tt in
-        match v with
-        | VCon h args => Some (VCon h (args ++ stk), s)
-        | VLam e c =>
-          match c.(c_term), stk with
-          | tLambda _ _ b, a :: stk => whnf d (env_push a e) (child c 1 b) stk s
-          | _, _ => None
-          end
-        | VFix e c idx args =>
-          match c.(c_term) with
-          | tFix mfix _ => whnf_fix d e c mfix idx (args ++ stk) s
-          | _ => None
-          end
-        | VStuckFix e c idx args => Some (VStuckFix e c idx (args ++ stk), s)
-        | VNeu h args => Some (VNeu h (args ++ stk), s)
-        | VStuck e c args => Some (VStuck e c (args ++ stk), s)
-        | VOpen _ _ => None
-        end
-      end
-    end.
-
-  (** *** Read-back to a term in [Γ] extended by [lvl - nctx] fresh variables *)
-
-  Fixpoint map_st {A B S} (f : A -> S -> option (B * S)) (l : list A) (s : S)
-    : option (list B * S) :=
-    match l with
-    | [] => Some ([], s)
-    | x :: l =>
-      cbnlet (y, s) := f x s in
-      cbnlet (ys, s) := map_st f l s in
-      Some (y :: ys, s)
-    end.
-
-  Fixpoint rb_cell (d : cbn_fuel) (lvl : nat) (a : addr) (s : cbn_state) {struct d}
-    : option (term * cbn_state) :=
-    match d with
-    | FO => None
-    | FS k =>
-      let d := k tt in
-      match heap_get a s with
-      | Some (CDone v) => rb_value d lvl v s
-      | Some (CSusp e c) => rb_susp d lvl e c.(c_term) s
-      | _ => None
-      end
-    end
-
-  with rb_susp (d : cbn_fuel) (lvl : nat) (e : cbn_env) (t : term) (s : cbn_state) {struct d}
-    : option (term * cbn_state) :=
-    match d with
-    | FO => None
-    | FS k =>
-      let d := k tt in
-      match tick s with
-      | None => None
-      | Some s =>
-        cbnlet (ts, s) := map_st (rb_cell d lvl) e.(ev_vals) s in
-        Some (subst ts 0 (lift (lvl - nctx + e.(ev_goff)) e.(ev_nvals) t), s)
-      end
-    end
-
-  with rb_value (d : cbn_fuel) (lvl : nat) (v : cbn_value) (s : cbn_state) {struct d}
-    : option (term * cbn_state) :=
-    match d with
-    | FO => None
-    | FS k =>
-      let d := k tt in
-      let spine h sp s :=
-        cbnlet (ts, s) := map_st (rb_cell d lvl) sp s in
-        Some (mkApps h ts, s) in
-      match v with
-      | VCon h sp => spine h sp s
-      | VLam e c | VOpen e c => rb_susp d lvl e c.(c_term) s
-      | VFix e c i sp | VStuckFix e c i sp =>
-        match c.(c_term) with
-        | tFix mfix _ =>
-          cbnlet (h, s) := rb_susp d lvl e (tFix mfix i) s in
-          spine h sp s
-        | _ => None
-        end
-      | VNeu (NVar l) sp => spine (tRel (lvl - S l)) sp s
-      | VNeu (NConst h) sp => spine h sp s
-      | VStuck e c sp =>
-        cbnlet (h, s) := rb_susp d lvl e c.(c_term) s in
-        spine h sp s
-      end
-    end.
+  Context (stress : bool). (* collect at every allocation *)
 
   (** *** Universe-checked syntactic comparison *)
 
@@ -532,79 +696,703 @@ Section CallByNeed.
     abstract_env_ext_wf_universeb X u1 && abstract_env_ext_wf_universeb X u2 &&
     abstract_env_compare_universe X Conv u1 u2.
 
-  (** *** The comparison: [Some (true, s)] convertible; [Some (false, s)] this rule does not
-    apply (try the next one, or "don't know"); [None] give up the whole call. *)
+  (** *** Code entries, the per-code maps and the same-code test *)
 
-  Fixpoint conv_cell (d : cbn_fuel) (lvl : nat) (le : conv_pb) (a1 a2 : addr) (s : cbn_state)
-    {struct d} : option (bool * cbn_state) :=
-    if addr_eqb a1 a2 then Some (true, s) else
+  Definition new_entry (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state)
+    : code * cbn_state :=
+    let ct := inst_code u t in
+    let (i, m) := memo_add_entry (mkEntry t u ns (wf_term_univs ct)) s.(st_memo) in
+    (mkCode i path_nil ct, set_memo m s).
+
+  Definition entry_wf (i : cidx) (s : cbn_state) : bool :=
+    match PTree.get i s.(st_memo).(m_codes) with
+    | Some e => e.(ce_wf)
+    | None => false
+    end.
+
+  (** Whether the variable of the binder over the body [c] occurs at most once in it. *)
+  Definition once_body (c : code) (s : cbn_state) : bool * cbn_state :=
+    match get2 c.(c_entry) c.(c_path) s.(st_memo).(m_once) with
+    | Some b => (b, s)
+    | None =>
+      let b := Nat.leb (occ 0 c.(c_term)) 1 in
+      (b, set_memo (memo_set_once (set2 c.(c_entry) c.(c_path) b s.(st_memo).(m_once))
+                      s.(st_memo)) s)
+    end.
+
+  Definition code_hash (c : code) (s : cbn_state) : N * cbn_state :=
+    match get2 c.(c_entry) c.(c_path) s.(st_memo).(m_hash) with
+    | Some h => (h, s)
+    | None =>
+      let h := thash c.(c_term) in
+      (h, set_memo (memo_set_hash (set2 c.(c_entry) c.(c_path) h s.(st_memo).(m_hash))
+                      s.(st_memo)) s)
+    end.
+
+  Definition ceq_get (c1 c2 : code) (s : cbn_state) : option bool :=
+    match get2 c1.(c_entry) c1.(c_path) s.(st_memo).(m_ceq) with
+    | Some m => get2 c2.(c_entry) c2.(c_path) m
+    | None => None
+    end.
+
+  Definition ceq_set (c1 c2 : code) (b : bool) (s : cbn_state) : cbn_state :=
+    let q := s.(st_memo).(m_ceq) in
+    let m := match get2 c1.(c_entry) c1.(c_path) q with Some m => m | None => PTree.empty _ end in
+    set_memo (memo_set_ceq (set2 c1.(c_entry) c1.(c_path) (set2 c2.(c_entry) c2.(c_path) b m) q)
+                s.(st_memo)) s.
+
+  (** Code equality: equal identifiers; or both entries passed their universe check, the
+    hashes are equal, and [eqb_term_upto_univ] at [Conv] (cached by identifier pair). *)
+  Definition code_eq (c1 c2 : code) (s : cbn_state) : bool * cbn_state :=
+    if same_id c1 c2 then (true, s)
+    else if negb (entry_wf c1.(c_entry) s && entry_wf c2.(c_entry) s) then (false, s)
+    else
+      let (h1, s) := code_hash c1 s in
+      let (h2, s) := code_hash c2 s in
+      if negb (N.eqb h1 h2) then (false, s)
+      else
+        match ceq_get c1 c2 s with
+        | Some b => (b, s)
+        | None =>
+          let b := eqb_term_upto_univ (abstract_env_compare_universe X)
+                     (abstract_env_compare_sort X)
+                     (compare_global_instance (abstract_env_lookup X)
+                        (abstract_env_compare_universe X))
+                     Conv c1.(c_term) c2.(c_term) in
+          (b, ceq_set c1 c2 b s)
+        end.
+
+  (** *** Allocation, which may collect first *)
+
+  Definition alloc (cl : cbn_cell) (rs : list root) (s : cbn_state)
+    : cbn_res (haddr * list root * cbn_state) :=
+    if gc_due stress s then
+      match collect (RC cl :: rs) s with
+      | COk (RC cl :: rs, s) => let (a, s) := alloc_now cl s in COk (a, rs, s)
+      | COk _ => CFail WRoots
+      | CFail w => CFail w
+      end
+    else let (a, s) := alloc_now cl s in COk (a, rs, s).
+
+  (** *** Delta, with the memo of this call *)
+
+  Definition delta_new (kn : kername) (u : Instance.t) (body : term)
+    (insts : list (Instance.t * cidx * term)) (s : cbn_state) : code * cbn_state :=
+    let (c, s) := new_entry body u (NSConst kn) s in
+    (c, set_memo (memo_set_delta (KernameMap.add kn (DBody body ((u, c.(c_entry), c.(c_term)) :: insts))
+                                    s.(st_memo).(m_delta)) s.(st_memo)) s).
+
+  (** [Some c]: the instantiated body; [None]: an axiom or opaque constant. *)
+  Definition delta (kn : kername) (u : Instance.t) (s : cbn_state)
+    : cbn_res (option code * cbn_state) :=
+    match KernameMap.find kn s.(st_memo).(m_delta) with
+    | Some DAxiom => COk (None, s)
+    | Some (DBody body insts) =>
+      match find_inst u insts with
+      | Some (i, t) => COk (Some (mkCode i path_nil t), s)
+      | None => let (c, s) := delta_new kn u body insts s in COk (Some c, s)
+      end
+    | None =>
+      match abstract_env_lookup X kn with
+      | Some (ConstantDecl cb) =>
+        match cb.(cst_body) with
+        | Some body => let (c, s) := delta_new kn u body [] s in COk (Some c, s)
+        | None =>
+          COk (None, set_memo (memo_set_delta (KernameMap.add kn DAxiom s.(st_memo).(m_delta))
+                                 s.(st_memo)) s)
+        end
+      | _ => CFail WDelta
+      end
+    end.
+
+  (** *** Context entries: one cell per entry of [Γ], made on first use *)
+
+  Definition gam (j : nat) (rs : list root) (s : cbn_state)
+    : cbn_res (haddr * list root * cbn_state) :=
+    let k := key_of_succ_nat j in
+    match PTree.get k s.(st_gam) with
+    | Some a => COk (a, rs, s)
+    | None =>
+      match nth_error Γ j with
+      | None => CFail WCtx
+      | Some decl =>
+        let (cl, s) :=
+          match decl.(decl_body) with
+          | Some b =>
+            let (c, s) := new_entry b [] (NSCtx j) s in
+            (CSusp (mkEnv [] 0 (S j)) c, s)
+          | None => (CDone (VNeu (NVar (nctx - S j)) []), s)
+          end in
+        cbnlet (a, rs, s) := alloc cl rs s in
+        COk (a, rs, set_gam (PTree.set k a s.(st_gam)) s)
+      end
+    end.
+
+  Definition env_var (n : nat) (e : cbn_env) (rs : list root) (s : cbn_state)
+    : cbn_res (cbn_slot * list root * cbn_state) :=
+    match nth_error e.(ev_vals) n with
+    | Some x => COk (x, rs, s)
+    | None =>
+      cbnlet (a, rs, s) := gam (n - e.(ev_nvals) + e.(ev_goff)) rs s in COk (SAddr a, rs, s)
+    end.
+
+  (** The slot of an argument (of an application or a let): a variable reuses its slot;
+    anything else is an inline suspension until it is bound or stored. *)
+  Definition arg_slot (e : cbn_env) (c : code) (rs : list root) (s : cbn_state)
+    : cbn_res (cbn_slot * list root * cbn_state) :=
+    match c.(c_term) with
+    | tRel n => env_var n e rs s
+    | _ => COk (SInl e.(ev_vals) e.(ev_nvals) e.(ev_goff) c, rs, s)
+    end.
+
+  (** Put a slot in the heap: lambdas, fixpoints, sorts, products, primitives and bodiless
+    constants as value cells, anything else as a suspension. *)
+  Definition materialize (x : cbn_slot) (rs : list root) (s : cbn_state)
+    : cbn_res (haddr * list root * cbn_state) :=
+    match x with
+    | SAddr a => COk (a, rs, s)
+    | SInl vs n o c =>
+      let e := mkEnv vs n o in
+      match c.(c_term) with
+      | tLambda _ _ _ => alloc (CDone (VLam e c)) rs s
+      | tFix mfix idx =>
+        match nth_error mfix idx with
+        | Some _ => alloc (CDone (VFix e c idx [])) rs s
+        | None => alloc (CSusp e c) rs s
+        end
+      | tSort _ | tProd _ _ _ | tPrim _ => alloc (CDone (VOpen e c)) rs s
+      | tConst kn u =>
+        match delta kn u s with
+        | COk (None, s) => alloc (CDone (VNeu (NConst c.(c_term)) [])) rs s
+        | COk (Some _, s) => alloc (CSusp e c) rs s
+        | CFail _ => alloc (CSusp e c) rs s
+        end
+      | _ => alloc (CSusp e c) rs s
+      end
+    end.
+
+  (** Bind a slot to the binder over the body [body]: an inline suspension stays inline if
+    the variable occurs at most once in [body], and is put in the heap otherwise. *)
+  Definition bind (x : cbn_slot) (body : code) (rs : list root) (s : cbn_state)
+    : cbn_res (cbn_slot * list root * cbn_state) :=
+    match x with
+    | SAddr _ => COk (x, rs, s)
+    | SInl _ _ _ _ =>
+      let (once, s) := once_body body s in
+      if once then COk (x, rs, s)
+      else cbnlet (a, rs, s) := materialize x rs s in COk (SAddr a, rs, s)
+    end.
+
+  (** Put every slot of a stack in the heap (a stack that becomes a value's spine). *)
+  Fixpoint mat_all (d : cbn_fuel) (l : list cbn_slot) (rs : list root) (s : cbn_state)
+    {struct d} : cbn_res (list haddr * list root * cbn_state) :=
+    match l with
+    | [] => COk ([], rs, s)
+    | x :: l =>
+      match d with
+      | FO => CFail WDepth
+      | FS k =>
+        cbnlet (a, rs, s) := materialize x (RSk l :: rs) s in
+        match rs with
+        | RSk l :: rs =>
+          cbnlet (al, rs, s) := mat_all (k tt) l (RA a :: rs) s in
+          match rs with
+          | RA a :: rs => COk (a :: al, rs, s)
+          | _ => CFail WRoots
+          end
+        | _ => CFail WRoots
+        end
+      end
+    end.
+
+  (** Allocate the cells of the [n] fixpoints of the [tFix] code [c] over [e] and push them on
+    [acc], fixpoint 0 first, so that [tRel 0] is fixpoint [n-1] as in [fix_subst]. *)
+  Fixpoint push_fix_cells (e : cbn_env) (c : code) (i n : nat) (acc : cbn_env)
+    (rs : list root) (s : cbn_state) : cbn_res (cbn_env * list root * cbn_state) :=
+    match n with
+    | O => COk (acc, rs, s)
+    | S n =>
+      cbnlet (a, rs, s) := alloc (CDone (VFix e c i [])) (RE e :: RE acc :: rs) s in
+      match rs with
+      | RE e :: RE acc :: rs => push_fix_cells e c (S i) n (env_push (SAddr a) acc) rs s
+      | _ => CFail WRoots
+      end
+    end.
+
+  (** Push [n] fresh variables, levels [lvl] to [lvl + n - 1], on both environments. *)
+  Fixpoint push_fresh (n lvl : nat) (e1 e2 : cbn_env) (rs : list root) (s : cbn_state)
+    : cbn_res ((nat * cbn_env * cbn_env) * list root * cbn_state) :=
+    match n with
+    | O => COk ((lvl, e1, e2), rs, s)
+    | S n =>
+      cbnlet (x, rs, s) := alloc (CDone (VNeu (NVar lvl) [])) (RE e1 :: RE e2 :: rs) s in
+      match rs with
+      | RE e1 :: RE e2 :: rs =>
+        push_fresh n (S lvl) (env_push (SAddr x) e1) (env_push (SAddr x) e2) rs s
+      | _ => CFail WRoots
+      end
+    end.
+
+  (** *** The machine *)
+
+  Fixpoint force (d : cbn_fuel) (a : haddr) (rs : list root) (s : cbn_state) {struct d}
+    : cbn_res (cbn_value * list root * cbn_state) :=
     match d with
-    | FO => None
+    | FO => CFail WDepth
     | FS k =>
       let d := k tt in
-      cbnlet (v1, s) := force d a1 s in
-      cbnlet (v2, s) := force d a2 s in
-      conv_value d lvl le v1 v2 s
+      match heap_get a s with
+      | Some (CDone v) => COk (v, rs, s)
+      | Some (CSusp e c) =>
+        match heap_upd a CBusy s with
+        | None => CFail WDangling
+        | Some s =>
+          cbnlet (v, rs, s) := whnf d e c [] (RA a :: rs) s in
+          match rs with
+          | RA a :: rs =>
+            match heap_upd a (CDone v) s with
+            | Some s => COk (v, rs, s)
+            | None => CFail WDangling
+            end
+          | _ => CFail WRoots
+          end
+        end
+      | Some CBusy => CFail WBusy
+      | None => CFail WDangling
+      end
     end
 
-  with conv_cells (d : cbn_fuel) (lvl : nat) (l1 l2 : list addr) (s : cbn_state) {struct d}
-    : option (bool * cbn_state) :=
+  (** Evaluate a slot applied to [stk]: an address is forced, an inline suspension is
+    evaluated in place (no write-back). *)
+  with eval_slot (d : cbn_fuel) (x : cbn_slot) (stk : list cbn_slot) (rs : list root)
+    (s : cbn_state) {struct d} : cbn_res (cbn_value * list root * cbn_state) :=
     match d with
-    | FO => None
+    | FO => CFail WDepth
     | FS k =>
       let d := k tt in
-      let fix go l1 l2 s :=
-        match l1, l2 with
-        | [], [] => Some (true, s)
-        | a1 :: l1, a2 :: l2 =>
-          cbnwhen s := conv_cell d lvl Conv a1 a2 s in
-          go l1 l2 s
-        | _, _ => Some (false, s)
-        end in
-      go l1 l2 s
+      match x with
+      | SAddr a =>
+        cbnlet (v, rs, s) := force d a (RSk stk :: rs) s in
+        match rs with
+        | RSk stk :: rs => apply d v stk rs s
+        | _ => CFail WRoots
+        end
+      | SInl vs n o c => whnf d (mkEnv vs n o) c stk rs s
+      end
+    end
+
+  with whnf (d : cbn_fuel) (e : cbn_env) (c : code) (stk : list cbn_slot) (rs : list root)
+    (s : cbn_state) {struct d} : cbn_res (cbn_value * list root * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match tick s with
+      | None => CFail WSteps
+      | Some s =>
+      match c.(c_term) with
+      | tRel n =>
+        cbnlet (x, rs, s) := env_var n e (RSk stk :: rs) s in
+        match rs with
+        | RSk stk :: rs => eval_slot d x stk rs s
+        | _ => CFail WRoots
+        end
+      | tApp f arg =>
+        cbnlet (x, rs, s) := arg_slot e (child c 1 arg) (RE e :: RSk stk :: rs) s in
+        match rs with
+        | RE e :: RSk stk :: rs => whnf d e (child c 0 f) (x :: stk) rs s
+        | _ => CFail WRoots
+        end
+      | tLambda _ _ b =>
+        match stk with
+        | x :: stk =>
+          let cb := child c 1 b in
+          cbnlet (x, rs, s) := bind x cb (RE e :: RSk stk :: rs) s in
+          match rs with
+          | RE e :: RSk stk :: rs => whnf d (env_push x e) cb stk rs s
+          | _ => CFail WRoots
+          end
+        | [] => COk (VLam e c, rs, s)
+        end
+      | tLetIn _ b _ body =>
+        let cb := child c 2 body in
+        cbnlet (x, rs, s) := arg_slot e (child c 0 b) (RE e :: RSk stk :: rs) s in
+        match rs with
+        | RE e :: RSk stk :: rs =>
+          cbnlet (x, rs, s) := bind x cb (RE e :: RSk stk :: rs) s in
+          match rs with
+          | RE e :: RSk stk :: rs => whnf d (env_push x e) cb stk rs s
+          | _ => CFail WRoots
+          end
+        | _ => CFail WRoots
+        end
+      | tConst kn u =>
+        cbn2 (r, s) := delta kn u s in
+        match r with
+        | Some c' => whnf d env_empty c' stk rs s
+        | None =>
+          cbnlet (sp, rs, s) := mat_all d stk rs s in COk (VNeu (NConst c.(c_term)) sp, rs, s)
+        end
+      | tConstruct _ _ _ | tInd _ _ =>
+        cbnlet (sp, rs, s) := mat_all d stk rs s in COk (VCon c.(c_term) sp, rs, s)
+      | tCase ci p scrut brs =>
+        cbnlet (v, rs, s) := whnf d e (child c 0 scrut) [] (RE e :: RSk stk :: rs) s in
+        match rs with
+        | RE e :: RSk stk :: rs =>
+          match v with
+          | VCon (tConstruct ind n _) args =>
+            if eqb ind ci.(ci_ind) then
+              match nth_error brs n with
+              | Some br =>
+                let cargs := skipn ci.(ci_npar) args in
+                if forallb is_assum br.(bcontext) && (#|cargs| == #|br.(bcontext)|) then
+                  whnf d (env_push_addrs cargs e)
+                    (child c (case_branch_step (N.of_nat n)) br.(bbody)) stk rs s
+                else CFail WShape
+              | None => CFail WShape
+              end
+            else CFail WShape
+          | VNeu _ _ | VStuck _ _ _ | VStuckFix _ _ _ _ =>
+            cbnlet (sp, rs, s) := mat_all d stk (RE e :: rs) s in
+            match rs with
+            | RE e :: rs => COk (VStuck e c sp, rs, s)
+            | _ => CFail WRoots
+            end
+          | _ => CFail WShape
+          end
+        | _ => CFail WRoots
+        end
+      | tProj p arg =>
+        cbnlet (v, rs, s) := whnf d e (child c 0 arg) [] (RE e :: RSk stk :: rs) s in
+        match rs with
+        | RE e :: RSk stk :: rs =>
+          match v with
+          | VCon (tConstruct ind 0 _) args =>
+            if eqb ind p.(proj_ind) then
+              match nth_error args (p.(proj_npars) + p.(proj_arg)) with
+              | Some a => eval_slot d (SAddr a) stk rs s
+              | None => CFail WShape
+              end
+            else CFail WShape
+          | VNeu _ _ | VStuck _ _ _ | VStuckFix _ _ _ _ =>
+            cbnlet (sp, rs, s) := mat_all d stk (RE e :: rs) s in
+            match rs with
+            | RE e :: rs => COk (VStuck e c sp, rs, s)
+            | _ => CFail WRoots
+            end
+          | _ => CFail WShape
+          end
+        | _ => CFail WRoots
+        end
+      | tFix mfix idx => whnf_fix d e c mfix idx stk rs s
+      | tSort _ | tProd _ _ _ | tPrim _ =>
+        match stk with
+        | [] => COk (VOpen e c, rs, s)
+        | _ => CFail WShape
+        end
+      | _ => CFail WShape
+      end
+      end
+    end
+
+  with whnf_fix (d : cbn_fuel) (e : cbn_env) (c : code) (mfix : mfixpoint term) (idx : nat)
+    (stk : list cbn_slot) (rs : list root) (s : cbn_state) {struct d}
+    : cbn_res (cbn_value * list root * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match nth_error mfix idx with
+      | None => CFail WShape
+      | Some def =>
+        match nth_error stk def.(rarg) with
+        | None =>
+          cbnlet (sp, rs, s) := mat_all d stk (RE e :: rs) s in
+          match rs with
+          | RE e :: rs => COk (VFix e c idx sp, rs, s)
+          | _ => CFail WRoots
+          end
+        | Some x =>
+          cbnlet (a, rs, s) := materialize x (RE e :: RSk stk :: rs) s in
+          match rs with
+          | RE e :: RSk stk :: rs =>
+            let stk := list_set stk def.(rarg) (SAddr a) in
+            cbnlet (v, rs, s) := force d a (RE e :: RSk stk :: rs) s in
+            match rs with
+            | RE e :: RSk stk :: rs =>
+              match v with
+              | VCon (tConstruct _ _ _) _ =>
+                cbnlet (e', rs, s) := push_fix_cells e c 0 #|mfix| e (RSk stk :: rs) s in
+                match rs with
+                | RSk stk :: rs => whnf d e' (child c (N.of_nat idx) def.(dbody)) stk rs s
+                | _ => CFail WRoots
+                end
+              | VNeu _ _ | VStuck _ _ _ | VStuckFix _ _ _ _ =>
+                cbnlet (sp, rs, s) := mat_all d stk (RE e :: rs) s in
+                match rs with
+                | RE e :: rs => COk (VStuckFix e c idx sp, rs, s)
+                | _ => CFail WRoots
+                end
+              | _ => CFail WShape
+              end
+            | _ => CFail WRoots
+            end
+          | _ => CFail WRoots
+          end
+        end
+      end
+    end
+
+  with apply (d : cbn_fuel) (v : cbn_value) (stk : list cbn_slot) (rs : list root)
+    (s : cbn_state) {struct d} : cbn_res (cbn_value * list root * cbn_state) :=
+    match stk with
+    | [] => COk (v, rs, s)
+    | _ =>
+      match d with
+      | FO => CFail WDepth
+      | FS k =>
+        let d := k tt in
+        match v with
+        | VLam e c =>
+          match c.(c_term), stk with
+          | tLambda _ _ b, x :: stk =>
+            let cb := child c 1 b in
+            cbnlet (x, rs, s) := bind x cb (RE e :: RSk stk :: rs) s in
+            match rs with
+            | RE e :: RSk stk :: rs => whnf d (env_push x e) cb stk rs s
+            | _ => CFail WRoots
+            end
+          | _, _ => CFail WShape
+          end
+        | VFix e c idx args =>
+          match c.(c_term) with
+          | tFix mfix _ => whnf_fix d e c mfix idx (map SAddr args ++ stk) rs s
+          | _ => CFail WShape
+          end
+        | VOpen _ _ => CFail WShape
+        | VCon _ _ | VStuckFix _ _ _ _ | VNeu _ _ | VStuck _ _ _ =>
+          cbnlet (sp, rs, s) := mat_all d stk (RV v :: rs) s in
+          match rs with
+          | RV v :: rs =>
+            match add_spine v sp with
+            | Some v => COk (v, rs, s)
+            | None => CFail WShape
+            end
+          | _ => CFail WRoots
+          end
+        end
+      end
+    end.
+
+  (** *** Read-back to a term in [Γ] extended by [lvl - nctx] fresh variables (no
+    allocation) *)
+
+  Fixpoint map_st {A B S} (f : A -> S -> cbn_res (B * S)) (l : list A) (s : S)
+    : cbn_res (list B * S) :=
+    match l with
+    | [] => COk ([], s)
+    | x :: l =>
+      cbn2 (y, s) := f x s in
+      cbn2 (ys, s) := map_st f l s in
+      COk (y :: ys, s)
+    end.
+
+  Fixpoint rb_cell (d : cbn_fuel) (lvl : nat) (a : haddr) (s : cbn_state) {struct d}
+    : cbn_res (term * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match heap_get a s with
+      | Some (CDone v) => rb_value d lvl v s
+      | Some (CSusp e c) => rb_susp d lvl e c.(c_term) s
+      | Some CBusy => CFail WBusy
+      | None => CFail WDangling
+      end
+    end
+
+  with rb_slot (d : cbn_fuel) (lvl : nat) (x : cbn_slot) (s : cbn_state) {struct d}
+    : cbn_res (term * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match x with
+      | SAddr a => rb_cell d lvl a s
+      | SInl vs n o c => rb_susp d lvl (mkEnv vs n o) c.(c_term) s
+      end
+    end
+
+  with rb_susp (d : cbn_fuel) (lvl : nat) (e : cbn_env) (t : term) (s : cbn_state) {struct d}
+    : cbn_res (term * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match tick s with
+      | None => CFail WSteps
+      | Some s =>
+        cbn2 (ts, s) := map_st (rb_slot d lvl) e.(ev_vals) s in
+        COk (subst ts 0 (lift (lvl - nctx + e.(ev_goff)) e.(ev_nvals) t), s)
+      end
+    end
+
+  with rb_value (d : cbn_fuel) (lvl : nat) (v : cbn_value) (s : cbn_state) {struct d}
+    : cbn_res (term * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      let spine h sp s :=
+        cbn2 (ts, s) := map_st (rb_cell d lvl) sp s in
+        COk (mkApps h ts, s) in
+      match v with
+      | VCon h sp => spine h sp s
+      | VLam e c | VOpen e c => rb_susp d lvl e c.(c_term) s
+      | VFix e c i sp | VStuckFix e c i sp =>
+        match c.(c_term) with
+        | tFix mfix _ =>
+          cbn2 (h, s) := rb_susp d lvl e (tFix mfix i) s in
+          spine h sp s
+        | _ => CFail WShape
+        end
+      | VNeu (NVar l) sp => spine (tRel (lvl - S l)) sp s
+      | VNeu (NConst h) sp => spine h sp s
+      | VStuck e c sp =>
+        cbn2 (h, s) := rb_susp d lvl e c.(c_term) s in
+        spine h sp s
+      end
+    end.
+
+  (** *** The comparison: [COk (true, rs, s)] convertible; [COk (false, rs, s)] this rule does
+    not apply (try the next one, or "don't know"); [CFail w] give up the whole call. *)
+
+  Definition slot_same (x1 x2 : cbn_slot) : bool :=
+    match x1, x2 with
+    | SAddr a1, SAddr a2 => haddr_eqb a1 a2
+    | _, _ => false
+    end.
+
+  Fixpoint conv_slot (d : cbn_fuel) (lvl : nat) (le : conv_pb) (x1 x2 : cbn_slot)
+    (rs : list root) (s : cbn_state) {struct d} : cbn_res (bool * list root * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match x1, x2 with
+      | SAddr a1, SAddr a2 =>
+        if haddr_eqb a1 a2 then COk (true, rs, s) else conv_eval d lvl le x1 x2 rs s
+      | SInl vs1 n1 o1 c1, SInl vs2 n2 o2 c2 =>
+        cbnlet (b, rs, s) := conv_same_code d lvl (mkEnv vs1 n1 o1) c1 (mkEnv vs2 n2 o2) c2
+                               (RSl x1 :: RSl x2 :: rs) s in
+        match rs with
+        | RSl x1 :: RSl x2 :: rs =>
+          if b then COk (true, rs, s) else conv_eval d lvl le x1 x2 rs s
+        | _ => CFail WRoots
+        end
+      | _, _ => conv_eval d lvl le x1 x2 rs s
+      end
+    end
+
+  with conv_eval (d : cbn_fuel) (lvl : nat) (le : conv_pb) (x1 x2 : cbn_slot)
+    (rs : list root) (s : cbn_state) {struct d} : cbn_res (bool * list root * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      cbnlet (v1, rs, s) := eval_slot d x1 [] (RSl x2 :: rs) s in
+      match rs with
+      | RSl x2 :: rs =>
+        cbnlet (v2, rs, s) := eval_slot d x2 [] (RV v1 :: rs) s in
+        match rs with
+        | RV v1 :: rs => conv_value d lvl le v1 v2 rs s
+        | _ => CFail WRoots
+        end
+      | _ => CFail WRoots
+      end
+    end
+
+  (** Spines pairwise at [Conv]. *)
+  with conv_cells (d : cbn_fuel) (lvl : nat) (l1 l2 : list haddr) (rs : list root)
+    (s : cbn_state) {struct d} : cbn_res (bool * list root * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match l1, l2 with
+      | [], [] => COk (true, rs, s)
+      | a1 :: l1, a2 :: l2 =>
+        cbnwhen 2 (rs, s) := conv_slot d lvl Conv (SAddr a1) (SAddr a2) (RSp l1 :: RSp l2 :: rs) s in
+        match rs with
+        | RSp l1 :: RSp l2 :: rs => conv_cells d lvl l1 l2 rs s
+        | _ => CFail WRoots
+        end
+      | _, _ => COk (false, rs, s)
+      end
     end
 
   with conv_term (d : cbn_fuel) (lvl : nat) (le : conv_pb) (e1 : cbn_env) (c1 : code)
-    (e2 : cbn_env) (c2 : code) (s : cbn_state) {struct d} : option (bool * cbn_state) :=
+    (e2 : cbn_env) (c2 : code) (rs : list root) (s : cbn_state) {struct d}
+    : cbn_res (bool * list root * cbn_state) :=
     match d with
-    | FO => None
+    | FO => CFail WDepth
     | FS k =>
       let d := k tt in
-      cbnlet (v1, s) := whnf d e1 c1 [] s in
-      cbnlet (v2, s) := whnf d e2 c2 [] s in
-      conv_value d lvl le v1 v2 s
+      cbnlet (v1, rs, s) := whnf d e1 c1 [] (RE e2 :: rs) s in
+      match rs with
+      | RE e2 :: rs =>
+        cbnlet (v2, rs, s) := whnf d e2 c2 [] (RV v1 :: rs) s in
+        match rs with
+        | RV v1 :: rs => conv_value d lvl le v1 v2 rs s
+        | _ => CFail WRoots
+        end
+      | _ => CFail WRoots
+      end
     end
 
-  (** Same code: equal code identifiers, equal [goff] and [nvals], and the environment cells
-    free in the code pairwise convertible at [Conv]. *)
+  (** Same code: equal [goff] and [nvals], equal codes ([code_eq]), and the environment
+    slots free in the code pairwise convertible at [Conv]. *)
   with conv_same_code (d : cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code) (e2 : cbn_env)
-    (c2 : code) (s : cbn_state) {struct d} : option (bool * cbn_state) :=
+    (c2 : code) (rs : list root) (s : cbn_state) {struct d}
+    : cbn_res (bool * list root * cbn_state) :=
     match d with
-    | FO => None
+    | FO => CFail WDepth
     | FS k =>
       let d := k tt in
-      if same_code c1 c2 && (e1.(ev_goff) == e2.(ev_goff)) && (e1.(ev_nvals) == e2.(ev_nvals))
-      then
-        let t := c1.(c_term) in
-        let fix go i l1 l2 s :=
-          match l1, l2 with
-          | [], [] => Some (true, s)
-          | a1 :: l1, a2 :: l2 =>
-            if addr_eqb a1 a2 || noccur_between i 1 t then go (S i) l1 l2 s
-            else
-              cbnwhen s := conv_cell d lvl Conv a1 a2 s in
-              go (S i) l1 l2 s
-          | _, _ => Some (false, s)
-          end in
-        go 0 e1.(ev_vals) e2.(ev_vals) s
-      else Some (false, s)
+      if (e1.(ev_goff) == e2.(ev_goff)) && (e1.(ev_nvals) == e2.(ev_nvals)) then
+        let (b, s) := code_eq c1 c2 s in
+        if b then same_code_cells d lvl c1.(c_term) 0 e1.(ev_vals) e2.(ev_vals) rs s
+        else COk (false, rs, s)
+      else COk (false, rs, s)
+    end
+
+  with same_code_cells (d : cbn_fuel) (lvl : nat) (t : term) (i : nat)
+    (l1 l2 : list cbn_slot) (rs : list root) (s : cbn_state) {struct d}
+    : cbn_res (bool * list root * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match l1, l2 with
+      | [], [] => COk (true, rs, s)
+      | x1 :: l1, x2 :: l2 =>
+        if slot_same x1 x2 || noccur_between i 1 t then same_code_cells d lvl t (S i) l1 l2 rs s
+        else
+          cbnwhen 2 (rs, s) := conv_slot d lvl Conv x1 x2 (RSk l1 :: RSk l2 :: rs) s in
+          match rs with
+          | RSk l1 :: RSk l2 :: rs => same_code_cells d lvl t (S i) l1 l2 rs s
+          | _ => CFail WRoots
+          end
+      | _, _ => COk (false, rs, s)
+      end
     end
 
   (** Stuck match congruence (rule table, row "stuck match / stuck match"). *)
   with case_cong (d : cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code) (e2 : cbn_env)
-    (c2 : code) (s : cbn_state) {struct d} : option (bool * cbn_state) :=
+    (c2 : code) (rs : list root) (s : cbn_state) {struct d}
+    : cbn_res (bool * list root * cbn_state) :=
     match d with
-    | FO => None
+    | FO => CFail WDepth
     | FS k =>
       let d := k tt in
       match c1.(c_term), c2.(c_term) with
@@ -613,152 +1401,226 @@ Section CallByNeed.
            && forallb2 cmp_level_conv p1.(puinst) p2.(puinst)
            && case_ctx_ok p1.(pcontext) p2.(pcontext)
         then
-          let fix params i l1 l2 s :=
-            match l1, l2 with
-            | [], [] => Some (true, s)
-            | t1 :: l1, t2 :: l2 =>
-              cbnwhen s := conv_term d lvl Conv e1 (child c1 (case_param_step i) t1)
-                             e2 (child c2 (case_param_step i) t2) s in
-              params (N.succ i) l1 l2 s
-            | _, _ => Some (false, s)
-            end in
-          cbnwhen s := params 0%N p1.(pparams) p2.(pparams) s in
-          let '(lvlr, er1, er2, s) := push_fresh #|p1.(pcontext)| lvl e1 e2 s in
-          cbnwhen s := conv_term d lvlr Conv er1 (child c1 1 p1.(preturn))
-                         er2 (child c2 1 p2.(preturn)) s in
-          cbnwhen s := conv_term d lvl Conv e1 (child c1 0 sc1) e2 (child c2 0 sc2) s in
-          let fix branches i l1 l2 s :=
-            match l1, l2 with
-            | [], [] => Some (true, s)
-            | b1 :: l1, b2 :: l2 =>
-              if case_ctx_ok b1.(bcontext) b2.(bcontext) then
-                let '(lvlb, eb1, eb2, s) := push_fresh #|b1.(bcontext)| lvl e1 e2 s in
-                cbnwhen s := conv_term d lvlb Conv eb1 (child c1 (case_branch_step i) b1.(bbody))
-                               eb2 (child c2 (case_branch_step i) b2.(bbody)) s in
-                branches (N.succ i) l1 l2 s
-              else Some (false, s)
-            | _, _ => Some (false, s)
-            end in
-          branches 0%N brs1 brs2 s
-        else Some (false, s)
-      | _, _ => Some (false, s)
+          cbnwhen 2 (rs, s) := case_params d lvl e1 c1 e2 c2 0%N p1.(pparams) p2.(pparams)
+                               (RE e1 :: RE e2 :: rs) s in
+          match rs with
+          | RE e1 :: RE e2 :: rs =>
+            cbnlet (r, rs, s) := push_fresh #|p1.(pcontext)| lvl e1 e2 (RE e1 :: RE e2 :: rs) s in
+            let '(lvlr, er1, er2) := r in
+            cbnwhen 2 (rs, s) := conv_term d lvlr Conv er1 (child c1 1 p1.(preturn))
+                                 er2 (child c2 1 p2.(preturn)) rs s in
+            match rs with
+            | RE e1 :: RE e2 :: rs =>
+              cbnwhen 2 (rs, s) := conv_term d lvl Conv e1 (child c1 0 sc1) e2 (child c2 0 sc2)
+                                   (RE e1 :: RE e2 :: rs) s in
+              match rs with
+              | RE e1 :: RE e2 :: rs => case_branches d lvl e1 c1 e2 c2 0%N brs1 brs2 rs s
+              | _ => CFail WRoots
+              end
+            | _ => CFail WRoots
+            end
+          | _ => CFail WRoots
+          end
+        else COk (false, rs, s)
+      | _, _ => COk (false, rs, s)
+      end
+    end
+
+  with case_params (d : cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code) (e2 : cbn_env)
+    (c2 : code) (i : N) (l1 l2 : list term) (rs : list root) (s : cbn_state) {struct d}
+    : cbn_res (bool * list root * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match l1, l2 with
+      | [], [] => COk (true, rs, s)
+      | t1 :: l1, t2 :: l2 =>
+        cbnwhen 2 (rs, s) := conv_term d lvl Conv e1 (child c1 (case_param_step i) t1)
+                             e2 (child c2 (case_param_step i) t2) (RE e1 :: RE e2 :: rs) s in
+        match rs with
+        | RE e1 :: RE e2 :: rs => case_params d lvl e1 c1 e2 c2 (N.succ i) l1 l2 rs s
+        | _ => CFail WRoots
+        end
+      | _, _ => COk (false, rs, s)
+      end
+    end
+
+  with case_branches (d : cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code) (e2 : cbn_env)
+    (c2 : code) (i : N) (l1 l2 : list (branch term)) (rs : list root) (s : cbn_state)
+    {struct d} : cbn_res (bool * list root * cbn_state) :=
+    match d with
+    | FO => CFail WDepth
+    | FS k =>
+      let d := k tt in
+      match l1, l2 with
+      | [], [] => COk (true, rs, s)
+      | b1 :: l1, b2 :: l2 =>
+        if case_ctx_ok b1.(bcontext) b2.(bcontext) then
+          cbnlet (r, rs, s) := push_fresh #|b1.(bcontext)| lvl e1 e2 (RE e1 :: RE e2 :: rs) s in
+          let '(lvlb, eb1, eb2) := r in
+          cbnwhen 2 (rs, s) := conv_term d lvlb Conv eb1 (child c1 (case_branch_step i) b1.(bbody))
+                               eb2 (child c2 (case_branch_step i) b2.(bbody)) rs s in
+          match rs with
+          | RE e1 :: RE e2 :: rs => case_branches d lvl e1 c1 e2 c2 (N.succ i) l1 l2 rs s
+          | _ => CFail WRoots
+          end
+        else COk (false, rs, s)
+      | _, _ => COk (false, rs, s)
       end
     end
 
   (** The rows of the rule table after "same address" and "same code". *)
-  with conv_rows (d : cbn_fuel) (lvl : nat) (le : conv_pb) (v1 v2 : cbn_value) (s : cbn_state)
-    {struct d} : option (bool * cbn_state) :=
+  with conv_rows (d : cbn_fuel) (lvl : nat) (le : conv_pb) (v1 v2 : cbn_value)
+    (rs : list root) (s : cbn_state) {struct d} : cbn_res (bool * list root * cbn_state) :=
     match d with
-    | FO => None
+    | FO => CFail WDepth
     | FS k =>
       let d := k tt in
       match v1, v2 with
       | VCon h1 sp1, VCon h2 sp2 =>
         let n := #|sp1| in
-        if (n == #|sp2|) && cmp_term le n h1 h2 then conv_cells d lvl sp1 sp2 s
-        else Some (false, s)
+        if (n == #|sp2|) && cmp_term le n h1 h2 then conv_cells d lvl sp1 sp2 rs s
+        else COk (false, rs, s)
       | VNeu (NVar l1) sp1, VNeu (NVar l2) sp2 =>
-        if l1 == l2 then conv_cells d lvl sp1 sp2 s else Some (false, s)
+        if l1 == l2 then conv_cells d lvl sp1 sp2 rs s else COk (false, rs, s)
       | VNeu (NConst h1) sp1, VNeu (NConst h2) sp2 =>
-        if cmp_term Conv #|sp1| h1 h2 then conv_cells d lvl sp1 sp2 s else Some (false, s)
+        if cmp_term Conv #|sp1| h1 h2 then conv_cells d lvl sp1 sp2 rs s else COk (false, rs, s)
       | VLam e1 c1, VLam e2 c2 =>
         match c1.(c_term), c2.(c_term) with
         | tLambda na1 A1 b1, tLambda na2 A2 b2 =>
           if eqb_binder_annot na1 na2 then
-            cbnwhen s := conv_term d lvl Conv e1 (child c1 0 A1) e2 (child c2 0 A2) s in
-            let (x, s) := alloc (CDone (VNeu (NVar lvl) [])) s in
-            conv_term d (S lvl) Conv (env_push x e1) (child c1 1 b1) (env_push x e2)
-              (child c2 1 b2) s
-          else Some (false, s)
-        | _, _ => Some (false, s)
+            cbnwhen 2 (rs, s) := conv_term d lvl Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
+                                 (RE e1 :: RE e2 :: rs) s in
+            match rs with
+            | RE e1 :: RE e2 :: rs =>
+              cbnlet (x, rs, s) := alloc (CDone (VNeu (NVar lvl) [])) (RE e1 :: RE e2 :: rs) s in
+              match rs with
+              | RE e1 :: RE e2 :: rs =>
+                conv_term d (S lvl) Conv (env_push (SAddr x) e1) (child c1 1 b1)
+                  (env_push (SAddr x) e2) (child c2 1 b2) rs s
+              | _ => CFail WRoots
+              end
+            | _ => CFail WRoots
+            end
+          else COk (false, rs, s)
+        | _, _ => COk (false, rs, s)
         end
       | VOpen e1 c1, VOpen e2 c2 =>
         match c1.(c_term), c2.(c_term) with
         | tProd na1 A1 B1, tProd na2 A2 B2 =>
           if eqb_binder_annot na1 na2 then
-            cbnwhen s := conv_term d lvl Conv e1 (child c1 0 A1) e2 (child c2 0 A2) s in
-            let (x, s) := alloc (CDone (VNeu (NVar lvl) [])) s in
-            conv_term d (S lvl) le (env_push x e1) (child c1 1 B1) (env_push x e2)
-              (child c2 1 B2) s
-          else Some (false, s)
-        | tSort s1, tSort s2 => Some (cmp_sort le s1 s2, s)
+            cbnwhen 2 (rs, s) := conv_term d lvl Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
+                                 (RE e1 :: RE e2 :: rs) s in
+            match rs with
+            | RE e1 :: RE e2 :: rs =>
+              cbnlet (x, rs, s) := alloc (CDone (VNeu (NVar lvl) [])) (RE e1 :: RE e2 :: rs) s in
+              match rs with
+              | RE e1 :: RE e2 :: rs =>
+                conv_term d (S lvl) le (env_push (SAddr x) e1) (child c1 1 B1)
+                  (env_push (SAddr x) e2) (child c2 1 B2) rs s
+              | _ => CFail WRoots
+              end
+            | _ => CFail WRoots
+            end
+          else COk (false, rs, s)
+        | tSort s1, tSort s2 => COk (cmp_sort le s1 s2, rs, s)
         | tPrim _, tPrim _ =>
-          cbnlet (t1, s) := rb_susp d lvl e1 c1.(c_term) s in
-          cbnlet (t2, s) := rb_susp d lvl e2 c2.(c_term) s in
-          Some (cmp_term Conv 0 t1 t2, s)
-        | _, _ => Some (false, s)
+          cbn2 (t1, s) := rb_susp d lvl e1 c1.(c_term) s in
+          cbn2 (t2, s) := rb_susp d lvl e2 c2.(c_term) s in
+          COk (cmp_term Conv 0 t1 t2, rs, s)
+        | _, _ => COk (false, rs, s)
         end
       | VStuck e1 c1 sp1, VStuck e2 c2 sp2 =>
         if #|sp1| == #|sp2| then
-          cbnlet (b, s) :=
+          cbnlet (b, rs, s) :=
             match c1.(c_term), c2.(c_term) with
-            | tCase _ _ _ _, tCase _ _ _ _ => case_cong d lvl e1 c1 e2 c2 s
-            | _, _ => Some (false, s)
+            | tCase _ _ _ _, tCase _ _ _ _ => case_cong d lvl e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s
+            | _, _ => COk (false, RV v1 :: RV v2 :: rs, s)
             end in
-          if b then conv_cells d lvl sp1 sp2 s
-          else
-            cbnlet (t1, s) := rb_susp d lvl e1 c1.(c_term) s in
-            cbnlet (t2, s) := rb_susp d lvl e2 c2.(c_term) s in
-            if cmp_term Conv #|sp1| t1 t2 then conv_cells d lvl sp1 sp2 s
-            else Some (false, s)
-        else Some (false, s)
+          match rs with
+          | RV (VStuck e1 c1 sp1) :: RV (VStuck e2 c2 sp2) :: rs =>
+            if b then conv_cells d lvl sp1 sp2 rs s
+            else
+              cbn2 (t1, s) := rb_susp d lvl e1 c1.(c_term) s in
+              cbn2 (t2, s) := rb_susp d lvl e2 c2.(c_term) s in
+              if cmp_term Conv #|sp1| t1 t2 then conv_cells d lvl sp1 sp2 rs s
+              else COk (false, rs, s)
+          | _ => CFail WRoots
+          end
+        else COk (false, rs, s)
       | VFix e1 c1 i1 sp1, VFix e2 c2 i2 sp2
       | VStuckFix e1 c1 i1 sp1, VStuckFix e2 c2 i2 sp2 =>
         if (i1 == i2) && (#|sp1| == #|sp2|) then
           match c1.(c_term), c2.(c_term) with
           | tFix m1 _, tFix m2 _ =>
-            cbnlet (t1, s) := rb_susp d lvl e1 (tFix m1 i1) s in
-            cbnlet (t2, s) := rb_susp d lvl e2 (tFix m2 i2) s in
-            if cmp_term Conv #|sp1| t1 t2 then conv_cells d lvl sp1 sp2 s
-            else Some (false, s)
-          | _, _ => Some (false, s)
+            cbn2 (t1, s) := rb_susp d lvl e1 (tFix m1 i1) s in
+            cbn2 (t2, s) := rb_susp d lvl e2 (tFix m2 i2) s in
+            if cmp_term Conv #|sp1| t1 t2 then conv_cells d lvl sp1 sp2 rs s
+            else COk (false, rs, s)
+          | _, _ => COk (false, rs, s)
           end
-        else Some (false, s)
-      | _, _ => Some (false, s)
+        else COk (false, rs, s)
+      | _, _ => COk (false, rs, s)
       end
     end
 
+  (** Same code first for closures, stuck terms and fixpoints, then the rows. The values are
+    roots across the same-code test, for the fallback. *)
   with conv_value (d : cbn_fuel) (lvl : nat) (le : conv_pb) (v1 v2 : cbn_value)
-    (s : cbn_state) {struct d} : option (bool * cbn_state) :=
+    (rs : list root) (s : cbn_state) {struct d} : cbn_res (bool * list root * cbn_state) :=
     match d with
-    | FO => None
+    | FO => CFail WDepth
     | FS k =>
       let d := k tt in
       match tick s with
-      | None => None
+      | None => CFail WSteps
       | Some s =>
+        let same e1 c1 e2 c2 (spines : bool) :=
+          cbnlet (b, rs, s) := conv_same_code d lvl e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s in
+          match rs with
+          | RV v1 :: RV v2 :: rs =>
+            if b then
+              if spines then conv_cells d lvl (spine_of v1) (spine_of v2) rs s
+              else COk (true, rs, s)
+            else conv_rows d lvl le v1 v2 rs s
+          | _ => CFail WRoots
+          end in
         match v1, v2 with
-        | VLam e1 c1, VLam e2 c2 | VOpen e1 c1, VOpen e2 c2 =>
-          cbnlet (b, s) := conv_same_code d lvl e1 c1 e2 c2 s in
-          if b then Some (true, s) else conv_rows d lvl le v1 v2 s
+        | VLam e1 c1, VLam e2 c2 | VOpen e1 c1, VOpen e2 c2 => same e1 c1 e2 c2 false
         | VStuck e1 c1 sp1, VStuck e2 c2 sp2 =>
-          if #|sp1| == #|sp2| then
-            cbnlet (b, s) := conv_same_code d lvl e1 c1 e2 c2 s in
-            if b then conv_cells d lvl sp1 sp2 s else conv_rows d lvl le v1 v2 s
-          else conv_rows d lvl le v1 v2 s
+          if #|sp1| == #|sp2| then same e1 c1 e2 c2 true else conv_rows d lvl le v1 v2 rs s
         | VFix e1 c1 i1 sp1, VFix e2 c2 i2 sp2
         | VStuckFix e1 c1 i1 sp1, VStuckFix e2 c2 i2 sp2 =>
-          if (i1 == i2) && (#|sp1| == #|sp2|) then
-            cbnlet (b, s) := conv_same_code d lvl e1 c1 e2 c2 s in
-            if b then conv_cells d lvl sp1 sp2 s else conv_rows d lvl le v1 v2 s
-          else conv_rows d lvl le v1 v2 s
-        | _, _ => conv_rows d lvl le v1 v2 s
+          if (i1 == i2) && (#|sp1| == #|sp2|) then same e1 c1 e2 c2 true
+          else conv_rows d lvl le v1 v2 rs s
+        | _, _ => conv_rows d lvl le v1 v2 rs s
         end
       end
     end.
 
-  Definition cbn_run (le : conv_pb) (t u : term) : option (bool * cbn_state) :=
+  Definition cbn_run (le : conv_pb) (t u : term) : cbn_answer :=
     let s := cbn_init in
-    let (i1, s) := new_entry (mkEntry t [] (NSInput false)) s in
-    let (i2, s) := new_entry (mkEntry u [] (NSInput true)) s in
-    conv_term cbn_depth nctx le env_empty (mkCode i1 [] t) env_empty (mkCode i2 [] u) s.
+    let (c1, s) := new_entry t [] (NSInput false) s in
+    let (c2, s) := new_entry u [] (NSInput true) s in
+    match conv_term cbn_depth nctx le env_empty c1 env_empty c2 [] s with
+    | COk (true, _, _) => CbnYes
+    | COk (false, _, _) => CbnNoRule
+    | CFail w => CbnFail w
+    end.
 
 End CallByNeed.
+
+(** The answer of the fast path, with the reason for a "don't know". [stress] collects at
+  every allocation (for the measurement harness only); the answer must not depend on it. *)
+Definition cbn_conv_answer {cf : checker_flags} (X_type : abstract_env_impl)
+  (X : X_type.π2.π1) (stress : bool) (le : conv_pb) (Γ : context) (t u : term) : cbn_answer :=
+  cbn_run X_type X Γ #|Γ| stress le t u.
 
 (** [true]: [t] and [u] are convertible at [le] in [Γ]. [false]: don't know. *)
 Definition cbn_conv {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
   (le : conv_pb) (Γ : context) (t u : term) : bool :=
-  match cbn_run X_type X Γ #|Γ| le t u with
-  | Some (true, _) => true
+  match cbn_conv_answer X_type X false le Γ t u with
+  | CbnYes => true
   | _ => false
   end.
