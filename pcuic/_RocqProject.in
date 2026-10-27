@@ -132,4 +132,5 @@ theories/PCUICCumulativitySpecEtaClosure.v
 theories/PCUICTypingEta.v
 # BET-315 eta lane (C3 prover C, branch frac/eta-c3-c): scratch file for row C3
 theories/PCUICEtaC3C.v
+theories/PCUICEtaC3Cong.v
 # theories/All.v
