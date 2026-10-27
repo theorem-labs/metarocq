@@ -46,36 +46,15 @@ Module EnvironmentReflect (T : Term) (Import E : EnvironmentSig T) (Import TDec 
       move: H. rewrite H' length_app Nat.add_sub skipn_all_app //. }
   Qed.
 
-  (** Decides [extends_prim_fresh]: it quantifies over all kernames, but only
-      those in [Σ']'s operation table can satisfy its premise, so the finite
-      table is enough. *)
-  Definition extendsb_prim_fresh (Σ Σ' : global_env) : bool
-    := forallb (fun '(c, _) =>
-         (Retroknowledge.prim_op_of Σ.(retroknowledge) c
-            == Retroknowledge.prim_op_of Σ'.(retroknowledge) c)
-         || match lookup_env Σ c with None => true | Some _ => false end)
-         Σ'.(retroknowledge).(Retroknowledge.retro_ops).
+  (** The decider itself is [E.extends_prim_freshb] in [Environment.v], because
+      the quotation copies of [extends_alt] need it too; here it only has to be
+      turned into the [reflectT] the other [extendsb] reflections use. *)
+  Notation extendsb_prim_fresh := extends_prim_freshb (only parsing).
 
   Lemma extends_prim_freshT Σ Σ'
-    : reflectT (extends_prim_fresh Σ Σ') (extendsb_prim_fresh Σ Σ').
+    : reflectT (extends_prim_fresh Σ Σ') (extends_prim_freshb Σ Σ').
   Proof.
-    destruct (extendsb_prim_fresh Σ Σ') eqn:hb; constructor.
-    - intros c op h.
-      have hin := Retroknowledge.lookup_op_spec _ _ _ h.
-      have H := proj1 (forallb_forall _ _) hb _ hin. cbn beta in H.
-      destruct (orb_true_elim _ _ H) as [He|Hl].
-      + apply eqb_eq in He. left. now rewrite He.
-      + right. destruct (lookup_env Σ c) eqn:hl; [discriminate|reflexivity].
-    - intros hp.
-      have ht : extendsb_prim_fresh Σ Σ' = true.
-      { rewrite /extendsb_prim_fresh. apply (proj2 (forallb_forall _ _)).
-        intros [c op0] hin.
-        destruct (Retroknowledge.lookup_op_in _ _ _ hin) as [op1 h1].
-        change (Retroknowledge.prim_op_of (retroknowledge Σ') c = Some op1) in h1.
-        apply orb_true_intro. destruct (hp c op1 h1) as [h2|h2].
-        + left. rewrite h1 h2. apply eqb_refl.
-        + right. now rewrite h2. }
-      rewrite ht in hb. discriminate.
+    destruct (extends_prim_freshP Σ Σ'); constructor; assumption.
   Qed.
   Definition extendsb (Σ Σ' : global_env) : bool
     := Σ.(universes) ⊂?_cs Σ'.(universes)

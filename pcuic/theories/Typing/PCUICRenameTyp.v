@@ -217,6 +217,8 @@ Proof.
      + eassumption.
      + rewrite rename_closed. 2: assumption.
        eapply declared_constant_closed_body. all: eauto.
+   - rewrite rename_mkApps /= rename_map_term_of_lit (rename_readback _ _ _ _ _ Hreadback).
+     eapply cumul_prim_op; eassumption.
    - rewrite rename_mkApps. simpl.
      eapply cumul_proj. rewrite nth_error_map. rewrite Hargs. reflexivity.
    - eapply cumul_Trans; try apply X0; try apply X2; eauto. eapply urename_is_open_term; eauto.

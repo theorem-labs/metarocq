@@ -923,6 +923,30 @@ Proof using Type.
   now rewrite rename_closedn_ctx.
 Qed.
 
+(** A primitive-operation redex and its reduct are closed ground terms: the
+    arguments are literal [tPrim]s ([term_of_lit]) and [readback] produces
+    either a literal or a [tConstruct] of the registered boolean inductive.
+    A renaming therefore fixes both sides of the rule. *)
+Lemma rename_term_of_lit f l :
+  rename f (PCUICPrimitiveRed.term_of_lit l) = PCUICPrimitiveRed.term_of_lit l.
+Proof using Type. by destruct l. Qed.
+
+Lemma rename_map_term_of_lit f ls :
+  map (rename f) (map PCUICPrimitiveRed.term_of_lit ls)
+  = map PCUICPrimitiveRed.term_of_lit ls.
+Proof using Type.
+  rewrite map_map. apply map_ext_in => l _. apply rename_term_of_lit.
+Qed.
+
+Lemma rename_readback f Σ s r v :
+  PCUICPrimitiveRed.readback Σ s r = Some v -> rename f v = v.
+Proof using Type.
+  rewrite /PCUICPrimitiveRed.readback.
+  destruct s, r => //=.
+  - by move=> [= <-].
+  - by destruct (Retroknowledge.retro_bool _) => //= [= <-].
+Qed.
+
 Lemma red1_rename :
   forall P Σ Γ Δ u v f,
     wf Σ ->
@@ -982,6 +1006,8 @@ Proof using cf.
     + eassumption.
     + rewrite rename_closed. 2: assumption.
       eapply declared_constant_closed_body. all: eauto.
+  - rewrite rename_mkApps /= rename_map_term_of_lit (rename_readback _ _ _ _ _ H3).
+    eapply red_prim_op; eassumption.
   - rewrite rename_mkApps. simpl.
     econstructor. rewrite nth_error_map. rewrite H. reflexivity.
   - move/and4P: hav=> [hpars hret hc hbrs].

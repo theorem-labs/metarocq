@@ -1210,6 +1210,29 @@ Proof.
   - rewrite closed_nl //.
 Qed.
 
+(** A primitive-operation redex and its reduct carry no binder and no name:
+    the arguments are literal [tPrim]s ([term_of_lit]) and [readback] produces
+    either a literal or a [tConstruct] of the registered boolean inductive.
+    So [nl] fixes both, and [nl_global_env] keeps the retroknowledge
+    ([PCUICNamelessDef.v:159-162]), hence the rule's premises transport. *)
+Lemma nl_term_of_lit l : nl (PCUICPrimitiveRed.term_of_lit l) = PCUICPrimitiveRed.term_of_lit l.
+Proof. by destruct l. Qed.
+
+Lemma nl_map_term_of_lit ls :
+  map nl (map PCUICPrimitiveRed.term_of_lit ls) = map PCUICPrimitiveRed.term_of_lit ls.
+Proof.
+  rewrite map_map. apply map_ext_in => l _. apply nl_term_of_lit.
+Qed.
+
+Lemma nl_readback Σ s r v :
+  PCUICPrimitiveRed.readback Σ s r = Some v -> nl v = v.
+Proof.
+  rewrite /PCUICPrimitiveRed.readback.
+  destruct s, r => //=.
+  - by move=> [= <-].
+  - by destruct (Retroknowledge.retro_bool _) => //= [= <-].
+Qed.
+
 Lemma nl_red1 :
   forall {cf} Σ {wfΣ : wf Σ} Γ M N,
     red1 Σ Γ M N ->
@@ -1288,6 +1311,11 @@ Proof.
       all: cbn in *.
       * f_equal. f_equal. congruence.
       * discriminate.
+  - rewrite nl_mkApps /= nl_map_term_of_lit (nl_readback _ _ _ _ H3).
+    eapply red_prim_op with (decl := nl_constant_body decl); [exact H| |destruct decl as [? [?|] ?]; cbn in *; [discriminate|reflexivity]|exact H2|exact H3].
+    eapply declared_constant_from_gen; eapply declared_constant_to_gen in H0;
+    unfold declared_constant_gen in *.
+    rewrite nl_lookup_env H0. reflexivity.
   - rewrite nl_mkApps. cbn. constructor.
     rewrite nth_error_map H. reflexivity.
   - rewrite nl_pred_set_pparams.
