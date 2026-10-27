@@ -2,7 +2,7 @@ From Stdlib Require Import Bool List Arith Lia.
 From MetaRocq.Utils Require Import utils monad_utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLiftSubst PCUICTyping PCUICInversion PCUICInductives PCUICInductiveInversion PCUICEquality PCUICUnivSubst PCUICClosed PCUICSubstitution PCUICValidity PCUICCumulativity PCUICInductives PCUICWfUniverses PCUICContexts PCUICSpine PCUICSR PCUICWellScopedCumulativity PCUICConversion PCUICOnFreeVars PCUICWeakeningTyp PCUICUnivSubstitutionTyp PCUICClosedTyp PCUICUnivSubstitutionConv.
-From MetaRocq.PCUIC Require Import BDTyping.
+From MetaRocq.PCUIC Require Import PCUICFixWitness BDTyping.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -336,46 +336,63 @@ Section BDToPCUICTyping.
 
     - red ; intros ; econstructor ; eauto.
 
-    - red ; intros ; econstructor ; eauto.
+    - red ; intros Γ mfix n decl hguard hnth Htys IHtys Hbods IHbods wffix wfΓ ;
+        econstructor ; eauto.
 
-      + clear H H0 H1 X.
-        apply All_impl with (1 := X0) => d Hd.
-        specialize (Hd X3).
+      + clear hguard hnth wffix Htys.
+        apply All_impl with (1 := IHtys) => d Hd.
+        specialize (Hd wfΓ).
         apply lift_sorting_it_impl with Hd => //.
 
       + have Htypes : All (fun d => isTypeRel Σ Γ (dtype d) (dname d).(binder_relevance)) mfix.
-        { apply All_impl with (1 := X0) => d Hd.
-          specialize (Hd X3).
+        { apply All_impl with (1 := IHtys) => d Hd.
+          specialize (Hd wfΓ).
           apply lift_sorting_it_impl with Hd => //.
         }
         have wfΓ' : wf_local Σ (Γ,,,fix_context mfix) by apply All_mfix_wf.
 
         remember (fix_context mfix) as Γ' eqn:e.
-        clear H H0 H1 e.
-        apply All_mix with (1 := Htypes) in X2.
-        apply All_impl with (1 := X2) => d [] isTy Hd.
+        clear hguard hnth wffix e.
+        apply All_mix with (1 := Htypes) in IHbods.
+        apply All_impl with (1 := IHbods) => d [] isTy Hd.
         specialize (Hd wfΓ').
         apply lift_sorting_it_impl with Hd => //=.
 
-    - red ; intros ; econstructor ; eauto.
-      + clear H H0 H1 X.
-        apply All_impl with (1 := X0) => d Hd.
-        specialize (Hd X3).
+      + destruct wffix as [isl [hr hm]].
+        split; [exact isl|split; [exact hr|]].
+        eapply mfix_on_ind_red_conv; tea.
+        apply All_impl with (1 := IHtys) => d Hd.
+        specialize (Hd wfΓ).
+        eapply isTypeRel_isType.
+        apply lift_sorting_it_impl with Hd => //.
+
+    - red ; intros Γ mfix n decl hguard hnth Htys IHtys Hbods IHbods wfcofix wfΓ ;
+        econstructor ; eauto.
+
+      + clear hguard hnth wfcofix Htys.
+        apply All_impl with (1 := IHtys) => d Hd.
+        specialize (Hd wfΓ).
         apply lift_sorting_it_impl with Hd => //.
 
       + have Htypes : All (fun d => isTypeRel Σ Γ (dtype d) (dname d).(binder_relevance)) mfix.
-        { apply All_impl with (1 := X0) => d Hd.
-          specialize (Hd X3).
+        { apply All_impl with (1 := IHtys) => d Hd.
+          specialize (Hd wfΓ).
           apply lift_sorting_it_impl with Hd => //.
         }
         have wfΓ' : wf_local Σ (Γ,,,fix_context mfix) by apply All_mfix_wf.
 
         remember (fix_context mfix) as Γ' eqn:e.
-        clear H H0 H1 e.
-        apply All_mix with (1 := Htypes) in X2.
-        apply All_impl with (1 := X2) => d [] isTy Hd.
+        clear hguard hnth wfcofix e.
+        apply All_mix with (1 := Htypes) in IHbods.
+        apply All_impl with (1 := IHbods) => d [] isTy Hd.
         specialize (Hd wfΓ').
         apply lift_sorting_it_impl with Hd => //=.
+
+      + eapply mfix_on_ind_red_conv; tea.
+        apply All_impl with (1 := IHtys) => d Hd.
+        specialize (Hd wfΓ).
+        eapply isTypeRel_isType.
+        apply lift_sorting_it_impl with Hd => //.
 
     - red; intros.
       econstructor; eauto.

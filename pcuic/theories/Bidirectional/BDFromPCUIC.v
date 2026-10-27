@@ -2,7 +2,7 @@ From Stdlib Require Import Bool List Arith Lia.
 From MetaRocq.Utils Require Import utils monad_utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICGlobalEnv PCUICAst PCUICAstUtils PCUICInduction PCUICLiftSubst PCUICTyping PCUICEquality PCUICArities PCUICInversion PCUICInductives PCUICInductiveInversion PCUICReduction PCUICSubstitution PCUICConversion PCUICCumulativity PCUICWfUniverses PCUICValidity PCUICContextConversion PCUICSpine PCUICOnFreeVars PCUICWfUniverses PCUICClosed PCUICWellScopedCumulativity PCUICSR PCUICClosedTyp PCUICUnivSubstitutionConv PCUICWeakeningEnvTyp PCUICWeakeningEnv.
-From MetaRocq.PCUIC Require Import BDTyping BDToPCUIC.
+From MetaRocq.PCUIC Require Import PCUICFixWitness BDTyping BDToPCUIC.
 
 From Stdlib Require Import ssreflect.
 From Equations Require Import Equations.
@@ -341,7 +341,7 @@ Proof.
         unshelve eapply declared_projection_to_gen in isdecl; eauto.
         eapply (weaken_lookup_on_global_env' _ _ (InductiveDecl _)); eauto.
         apply isdecl.
-  - intros mfix n decl types ? ? ? Htypes Alltypes Hbodies Allbodies.
+  - intros mfix n decl types ? ? ? Htypes Alltypes Hbodies Allbodies wffix.
     eexists.
     split.
     2:{
@@ -352,8 +352,13 @@ Proof.
     constructor ; eauto.
     + apply (All_impl Alltypes) => d. apply conv_lift_judgment with (na := d.(dname)).
     + apply (All_impl Allbodies) => d. apply conv_lift_judgment with (na := d.(dname)).
+    + destruct wffix as [isl [hr hm]].
+      split; [exact isl|split; [exact hr|]].
+      eapply mfix_on_ind_conv_red; tea.
+      apply (All_impl Htypes) => d Hj.
+      now eapply isTypeRel_isType.
 
-  - intros mfix n decl types ? ? ? Htypes Alltypes Hbodies Allbodies.
+  - intros mfix n decl types ? ? ? Htypes Alltypes Hbodies Allbodies wfcofix.
     eexists.
     split.
     2:{
@@ -364,6 +369,9 @@ Proof.
     constructor ; eauto.
     + apply (All_impl Alltypes) => d. apply conv_lift_judgment with (na := d.(dname)).
     + apply (All_impl Allbodies) => d. apply conv_lift_judgment with (na := d.(dname)).
+    + eapply mfix_on_ind_conv_red; tea.
+      apply (All_impl Htypes) => d Hj.
+      now eapply isTypeRel_isType.
 
   - intros p prim_ty cdecl wfΓ' hp hdecl pinv.
     eexists. split; [econstructor; tea|].

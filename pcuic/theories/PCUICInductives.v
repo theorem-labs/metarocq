@@ -2042,28 +2042,6 @@ Proof.
       simpl. len in red.
 Qed.
 
-Lemma red1_it_mkProd_or_LetIn_smash {cf} {Σ} {wfΣ : wf Σ} {Γ ctx t u n c} :
-  closed_red1 Σ Γ (it_mkProd_or_LetIn ctx t) u ->
-  nth_error (List.rev (smash_context [] ctx)) n = Some c ->
-  ∑ ctx' t',
-    (decompose_prod_assum [] u = (ctx', t')) *
-    ∑ d, (nth_error (List.rev (smash_context [] ctx')) n = Some d) *
-      (match destInd (head (decl_type c)) with
-      | Some ind => destInd (head (decl_type d)) = Some ind
-      | None => True
-      end).
-Proof.
-  intros r nth.
-  eapply red_it_mkProd_or_LetIn_smash in nth; eauto.
-  destruct nth as [ctx' [t' [d [decomp hnth r']]]].
-  exists ctx', t'. split; eauto.
-  exists d; intuition auto.
-  destruct destInd as [[ind u']|] eqn:di; auto.
-  now eapply (red_destInd _ _ _ _ _ _ r').
-  destruct r. eapply into_closed_red.
-  eapply red1_red; tea. all:auto.
-Qed.
-
 Lemma red_it_mkProd_or_LetIn_mkApps_Ind {cf} {Σ} {wfΣ : wf Σ} {Γ ctx ind u args v} :
   Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args) ⇝ v ->
   ∑ ctx' args', v = it_mkProd_or_LetIn ctx' (mkApps (tInd ind u) args').
@@ -2089,6 +2067,180 @@ Proof.
       specialize (X Γ ltac:(lia) _ _ _ redB') as [ctx' [args' ->]].
       exists (ctx' ++ [vass na A']), args'.
       rewrite it_mkProd_or_LetIn_app /= //.
+Qed.
+
+(** * Lifting a reduction of a (co)fixpoint's recursive argument type to its whole type
+
+  A checker finds the inductive of a fixpoint's recursive argument by reducing that
+  argument's type in its own context, and the inductive of a cofixpoint by reducing
+  the conclusion of its type. The lemmas below turn such a reduction into a reduction
+  of the whole declared type whose [check_one_fix] / [check_one_cofix] gives the
+  inductive block. *)
+
+(** Reducing the type of the [n]-th binder (outermost first) of an assumption-only
+    telescope, in its own context, reduces the whole telescope. *)
+Lemma red_it_mkProd_or_LetIn_assum_nth {Σ : global_env} Γ sctx T n c A' :
+  assumption_context sctx ->
+  nth_error (List.rev sctx) n = Some c ->
+  red Σ (Γ ,,, skipn (#|sctx| - n) sctx) (decl_type c) A' ->
+  ∑ sctx',
+    [× assumption_context sctx',
+       #|sctx'| = #|sctx|,
+       nth_error (List.rev sctx') n = Some (vass (decl_name c) A'),
+       (forall i, i <> n -> nth_error (List.rev sctx') i = nth_error (List.rev sctx) i) &
+       red Σ Γ (it_mkProd_or_LetIn sctx T) (it_mkProd_or_LetIn sctx' T)].
+Proof.
+  revert Γ n c; induction sctx as [|d sctx IH] using rev_ind; intros Γ n c ass hnth hred.
+  - now rewrite nth_error_nil in hnth.
+  - eapply assumption_context_app in ass as [ass assd].
+    destruct d as [na [b|] ty]; [exfalso; now inversion assd|].
+    rewrite List.rev_app_distr /= in hnth.
+    rewrite length_app /= in hred.
+    destruct n as [|n].
+    + cbn in hnth. move: hnth => [= hc]. subst c. cbn.
+      have e : skipn (#|sctx| + 1 - 0) (sctx ++ [vass na ty]) = [].
+      { apply skipn_all2. rewrite length_app /=. lia. }
+      rewrite e in hred.
+      exists (sctx ++ [vass na A']). split.
+      * apply assumption_context_app_inv => //. repeat constructor.
+      * now rewrite !length_app.
+      * now rewrite List.rev_app_distr.
+      * intros [|i] hi; [congruence|]. now rewrite !List.rev_app_distr.
+      * rewrite !it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /=.
+        now eapply red_prod_l.
+    + cbn in hnth.
+      have hlt := nth_error_Some_length hnth. rewrite List.length_rev in hlt.
+      have eqskip : skipn (#|sctx| + 1 - S n) (sctx ++ [vass na ty]) =
+        [vass na ty] ,,, skipn (#|sctx| - n) sctx.
+      { rewrite skipn_app.
+        replace (#|sctx| + 1 - S n - #|sctx|) with 0 by lia.
+        now replace (#|sctx| + 1 - S n) with (#|sctx| - n) by lia. }
+      rewrite eqskip app_context_assoc in hred.
+      destruct (IH (Γ ,,, [vass na ty]) n c ass hnth hred)
+        as [sctx' [ass' hlen' hnth' hother hred']].
+      exists (sctx' ++ [vass na ty]). split.
+      * by apply assumption_context_app_inv.
+      * now rewrite !length_app hlen'.
+      * rewrite List.rev_app_distr /=. exact hnth'.
+      * intros [|i] hi; rewrite !List.rev_app_distr //=.
+        apply hother. congruence.
+      * rewrite !it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /=.
+        now eapply red_prod_r.
+Qed.
+
+(** The same, for closed reductions. *)
+Lemma closed_red_it_mkProd_or_LetIn_assum_nth {cf} {Σ} {wfΣ : wf Σ} Γ sctx T n c A' :
+  assumption_context sctx ->
+  is_open_term Γ (it_mkProd_or_LetIn sctx T) ->
+  nth_error (List.rev sctx) n = Some c ->
+  Σ ;;; Γ ,,, skipn (#|sctx| - n) sctx ⊢ decl_type c ⇝ A' ->
+  ∑ sctx',
+    [× assumption_context sctx',
+       #|sctx'| = #|sctx|,
+       nth_error (List.rev sctx') n = Some (vass (decl_name c) A'),
+       (forall i, i <> n -> nth_error (List.rev sctx') i = nth_error (List.rev sctx) i) &
+       Σ ;;; Γ ⊢ it_mkProd_or_LetIn sctx T ⇝ it_mkProd_or_LetIn sctx' T].
+Proof.
+  intros ass op hnth hred.
+  have clΓ : is_closed_context Γ.
+  { move: (clrel_ctx hred). rewrite on_free_vars_ctx_app => /andP[] //. }
+  destruct (red_it_mkProd_or_LetIn_assum_nth (Σ := Σ) Γ sctx T n c A' ass hnth (clrel_rel hred))
+    as [sctx' [ass' hlen hnth' hother r]].
+  exists sctx'; split; try assumption.
+  now apply into_closed_red.
+Qed.
+
+(** A type reduces to the product over its smashed context. *)
+Lemma red_it_mkProd_or_LetIn_to_smash {cf} {Σ} {wfΣ : wf Σ} Γ Δ T :
+  is_closed_context Γ ->
+  is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
+  Σ ;;; Γ ⊢ it_mkProd_or_LetIn Δ T ⇝ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T).
+Proof.
+  intros clΓ clt.
+  eapply into_closed_red => //.
+  clear clΓ clt.
+  induction Δ in Γ, T |- * using ctx_length_rev_ind; simpl; auto.
+  - rewrite expand_lets_nil. reflexivity.
+  - rewrite smash_context_app_expand /=.
+    destruct d as [na [b|] ty].
+    * rewrite expand_lets_vdef {1}it_mkProd_or_LetIn_app /= subst_context_nil app_context_nil_l.
+      rewrite expand_lets_smash_context /= expand_lets_k_ctx_nil.
+      rewrite /expand_lets_ctx /expand_lets_k_ctx /= subst_empty lift0_id lift0_context.
+      rewrite /mkProd_or_LetIn /=.
+      etransitivity.
+      + eapply red1_red, red_zeta.
+      + rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r.
+        now eapply X; len.
+    * rewrite expand_lets_vass it_mkProd_or_LetIn_app /=.
+      rewrite it_mkProd_or_LetIn_app /=.
+      eapply red_prod. reflexivity.
+      rewrite expand_lets_smash_context /= expand_lets_k_ctx_nil.
+      rewrite expand_lets_ctx_assumption_context. repeat constructor.
+      now eapply X.
+Qed.
+
+(** [decompose_prod_assum] of a product over an assumption-only telescope may expose
+    further products from the conclusion [T], but these are inner binders: they do not
+    move the entries of [List.rev sctx], which lists the outermost binder first. *)
+Lemma nth_error_rev_smash_decompose_it_mkProd_or_LetIn sctx T n :
+  assumption_context sctx ->
+  n < #|sctx| ->
+  nth_error (List.rev (smash_context [] (decompose_prod_assum [] (it_mkProd_or_LetIn sctx T)).1)) n =
+  nth_error (List.rev sctx) n.
+Proof.
+  intros ass hlt.
+  rewrite decompose_prod_assum_it_mkProd_or_LetIn'.
+  destruct (decompose_prod_assum [] T) as [ctx2 t2].
+  cbn -[smash_context app_context].
+  rewrite app_context_nil_l /app_context smash_context_app smash_context_acc List.rev_app_distr.
+  rewrite (smash_assumption_context _ ass) nth_error_app_lt // List.length_rev //.
+Qed.
+
+Lemma check_one_fix_it_mkProd_or_LetIn_assum d sctx T c ind u args :
+  assumption_context sctx ->
+  nth_error (List.rev sctx) (rarg d) = Some c ->
+  decl_type c = mkApps (tInd ind u) args ->
+  check_one_fix (def_with_type d (it_mkProd_or_LetIn sctx T)) = Some (inductive_mind ind).
+Proof.
+  intros ass hnth hc.
+  have hlt := nth_error_Some_length hnth. rewrite List.length_rev in hlt.
+  have := nth_error_rev_smash_decompose_it_mkProd_or_LetIn sctx T (rarg d) ass hlt.
+  rewrite /check_one_fix /def_with_type /=.
+  destruct (decompose_prod_assum [] (it_mkProd_or_LetIn sctx T)) as [ctx2 t2]; cbn => ->.
+  rewrite hnth; cbn -[decompose_app].
+  rewrite hc decompose_app_mkApps //.
+  now destruct ind.
+Qed.
+
+(** The fixpoint lift: a reduction of the recursive argument's type, in its own context,
+    to an applied inductive gives a reduct of the declared type on which [check_one_fix]
+    finds that inductive's block. *)
+Lemma red_rec_arg_check_one_fix {cf} {Σ} {wfΣ : wf Σ} Γ d ctx concl c ind u args :
+  is_open_term Γ (dtype d) ->
+  decompose_prod_assum [] (dtype d) = (ctx, concl) ->
+  nth_error (List.rev (smash_context [] ctx)) (rarg d) = Some c ->
+  Σ ;;; Γ ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx) ⊢
+    decl_type c ⇝ mkApps (tInd ind u) args ->
+  has_rec_arg d ×
+  ∑ ty, (Σ ;;; Γ ⊢ dtype d ⇝ ty) × (check_one_fix (def_with_type d ty) = Some (inductive_mind ind)).
+Proof.
+  intros op decomp hnth hred.
+  have clΓ : is_closed_context Γ.
+  { move: (clrel_ctx hred). rewrite on_free_vars_ctx_app => /andP[] //. }
+  have eqty := decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
+  cbn in eqty.
+  have r1 : Σ ;;; Γ ⊢ dtype d ⇝ it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx concl).
+  { rewrite eqty. apply red_it_mkProd_or_LetIn_to_smash => //. now rewrite -eqty. }
+  have ass : assumption_context (smash_context [] ctx).
+  { apply smash_context_assumption_context; constructor. }
+  destruct (closed_red_it_mkProd_or_LetIn_assum_nth Γ _ _ _ _ _ ass (closed_red_open_right r1) hnth hred)
+    as [sctx' [ass' hlen hnth' _ r2]].
+  split.
+  - have hlt := nth_error_Some_length hnth. rewrite List.length_rev smash_context_length /= in hlt.
+    rewrite /has_rec_arg decomp /=. now apply Nat.ltb_lt.
+  - exists (it_mkProd_or_LetIn sctx' (expand_lets ctx concl)). split.
+    + now transitivity (it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx concl)).
+    + eapply check_one_fix_it_mkProd_or_LetIn_assum; [exact ass'|exact hnth'|reflexivity].
 Qed.
 
 Lemma wf_local_expand_lets {cf} {Σ} {wfΣ : wf Σ} {Γ Δ Γ'} :

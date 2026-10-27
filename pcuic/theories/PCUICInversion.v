@@ -312,7 +312,7 @@ Section Inversion.
         nth_error mfix n = Some decl ×
         All (on_def_type (lift_typing typing Σ) Γ) mfix ×
         All (on_def_body (lift_typing typing Σ) (fix_context mfix) Γ) mfix ×
-        wf_fixpoint Σ mfix ×
+        wf_fixpoint Σ Γ mfix ×
         Σ ;;; Γ ⊢ dtype decl ≤ T.
   Proof using wfΣ.
     intros Γ mfix n T h. invtac h.
@@ -327,7 +327,7 @@ Section Inversion.
         nth_error mfix idx = Some decl ×
         All (on_def_type (lift_typing typing Σ) Γ) mfix ×
         All (on_def_body (lift_typing typing Σ) (fix_context mfix) Γ) mfix ×
-        wf_cofixpoint Σ mfix ×
+        wf_cofixpoint Σ Γ mfix ×
         Σ ;;; Γ ⊢ decl.(dtype) ≤ T.
   Proof using wfΣ.
     intros Γ mfix idx T h. invtac h.
