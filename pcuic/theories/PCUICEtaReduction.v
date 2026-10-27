@@ -7,6 +7,7 @@ From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICLiftSubst
      PCUICCases.
 From MetaRocq.PCUIC Require Export PCUICEtaDefs.
+From MetaRocq.PCUIC Require Import PCUICEtaConfluence.
 
 Import ListNotations.
 Set Default Goal Selector "!".
@@ -97,4 +98,116 @@ Proof.
   - exists b. split; [exact hb|]. apply r_refl.
   - exists b. split; [exact hb|]. apply r_refl.
   - now apply IH.
+Qed.
+
+(** ** η unfolding of (co)fixpoints (needs L2's [eta_subst]) *)
+
+Lemma All2_fix_subst mfix mfix' :
+  #|mfix| = #|mfix'| ->
+  (forall j, eta (tFix mfix j) (tFix mfix' j)) ->
+  All2 eta (fix_subst mfix) (fix_subst mfix').
+Proof.
+  intros Hlen Hj. unfold fix_subst. rewrite Hlen.
+  generalize #|mfix'| as n. induction n as [|n IH]; cbn.
+  - constructor.
+  - constructor; [apply Hj|exact IH].
+Qed.
+
+Lemma All2_cofix_subst mfix mfix' :
+  #|mfix| = #|mfix'| ->
+  (forall j, eta (tCoFix mfix j) (tCoFix mfix' j)) ->
+  All2 eta (cofix_subst mfix) (cofix_subst mfix').
+Proof.
+  intros Hlen Hj. unfold cofix_subst. rewrite Hlen.
+  generalize #|mfix'| as n. induction n as [|n IH]; cbn.
+  - constructor.
+  - constructor; [apply Hj|exact IH].
+Qed.
+
+Lemma eta1_fix_unfold mfix idx N narg fn :
+  eta1 (tFix mfix idx) N ->
+  unfold_fix mfix idx = Some (narg, fn) ->
+  ∑ mfix' fn', [× N = tFix mfix' idx,
+                  unfold_fix mfix' idx = Some (narg, fn') & eta fn fn'].
+Proof.
+  intros H Hunf.
+  unfold unfold_fix in Hunf.
+  destruct (nth_error mfix idx) as [d|] eqn:Hd; [|discriminate].
+  noconf Hunf.
+  depelim H.
+  - (* fix_eta_ty *)
+    match goal with o : OnOne2 _ _ _ |- _ => rename o into HO end.
+    pose proof (Hlen := OnOne2_length HO).
+    destruct (OnOne2_nth_error _ _ _ _ _ HO Hd) as [d1 [Hd1 Hdd]].
+    assert (Hr : (rarg d = rarg d1) × eta (dbody d) (dbody d1)).
+    { destruct Hdd as [->|[_ Heq]].
+      - split; [reflexivity|apply rt_refl].
+      - assert (Hbd : dbody d = dbody d1) by exact (f_equal (fun z => snd (fst z)) Heq).
+        split; [exact (f_equal snd Heq)| rewrite Hbd; apply rt_refl]. }
+    destruct Hr as [Hr Hb].
+    exists mfix1, (subst0 (fix_subst mfix1) (dbody d1)). split.
+    + reflexivity.
+    + unfold unfold_fix. rewrite Hd1 -Hr. reflexivity.
+    + eapply eta_subst; [|exact Hb].
+      apply All2_fix_subst; [exact Hlen|].
+      intro j. apply rt_step. solve [econstructor; eassumption].
+  - (* fix_eta_body *)
+    match goal with o : OnOne2 _ _ _ |- _ => rename o into HO end.
+    pose proof (Hlen := OnOne2_length HO).
+    destruct (OnOne2_nth_error _ _ _ _ _ HO Hd) as [d1 [Hd1 Hdd]].
+    assert (Hr : (rarg d = rarg d1) × eta (dbody d) (dbody d1)).
+    { destruct Hdd as [->|[He Heq]].
+      - split; [reflexivity|apply rt_refl].
+      - split; [exact (f_equal snd Heq)|apply rt_step; exact He]. }
+    destruct Hr as [Hr Hb].
+    exists mfix1, (subst0 (fix_subst mfix1) (dbody d1)). split.
+    + reflexivity.
+    + unfold unfold_fix. rewrite Hd1 -Hr. reflexivity.
+    + eapply eta_subst; [|exact Hb].
+      apply All2_fix_subst; [exact Hlen|].
+      intro j. apply rt_step. solve [econstructor; eassumption].
+Qed.
+
+Lemma eta1_cofix_unfold mfix idx N narg fn :
+  eta1 (tCoFix mfix idx) N ->
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ mfix' fn', [× N = tCoFix mfix' idx,
+                  unfold_cofix mfix' idx = Some (narg, fn') & eta fn fn'].
+Proof.
+  intros H Hunf.
+  unfold unfold_cofix in Hunf.
+  destruct (nth_error mfix idx) as [d|] eqn:Hd; [|discriminate].
+  noconf Hunf.
+  depelim H.
+  - (* cofix_eta_ty *)
+    match goal with o : OnOne2 _ _ _ |- _ => rename o into HO end.
+    pose proof (Hlen := OnOne2_length HO).
+    destruct (OnOne2_nth_error _ _ _ _ _ HO Hd) as [d1 [Hd1 Hdd]].
+    assert (Hr : (rarg d = rarg d1) × eta (dbody d) (dbody d1)).
+    { destruct Hdd as [->|[_ Heq]].
+      - split; [reflexivity|apply rt_refl].
+      - assert (Hbd : dbody d = dbody d1) by exact (f_equal (fun z => snd (fst z)) Heq).
+        split; [exact (f_equal snd Heq)| rewrite Hbd; apply rt_refl]. }
+    destruct Hr as [Hr Hb].
+    exists mfix1, (subst0 (cofix_subst mfix1) (dbody d1)). split.
+    + reflexivity.
+    + unfold unfold_cofix. rewrite Hd1 -Hr. reflexivity.
+    + eapply eta_subst; [|exact Hb].
+      apply All2_cofix_subst; [exact Hlen|].
+      intro j. apply rt_step. solve [econstructor; eassumption].
+  - (* cofix_eta_body *)
+    match goal with o : OnOne2 _ _ _ |- _ => rename o into HO end.
+    pose proof (Hlen := OnOne2_length HO).
+    destruct (OnOne2_nth_error _ _ _ _ _ HO Hd) as [d1 [Hd1 Hdd]].
+    assert (Hr : (rarg d = rarg d1) × eta (dbody d) (dbody d1)).
+    { destruct Hdd as [->|[He Heq]].
+      - split; [reflexivity|apply rt_refl].
+      - split; [exact (f_equal snd Heq)|apply rt_step; exact He]. }
+    destruct Hr as [Hr Hb].
+    exists mfix1, (subst0 (cofix_subst mfix1) (dbody d1)). split.
+    + reflexivity.
+    + unfold unfold_cofix. rewrite Hd1 -Hr. reflexivity.
+    + eapply eta_subst; [|exact Hb].
+      apply All2_cofix_subst; [exact Hlen|].
+      intro j. apply rt_step. solve [econstructor; eassumption].
 Qed.
