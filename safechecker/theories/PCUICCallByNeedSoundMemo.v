@@ -3,7 +3,8 @@ From Stdlib Require Import BinPos BinNat.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require String2pos CanonicalTries.
 From MetaRocq.Common Require Import config Kernames.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICReduction.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICReduction
+  PCUICUnivSubst PCUICWfUniverses PCUICWeakeningEnv PCUICWeakeningEnvTyp.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv PCUICCallByNeed
   PCUICCallByNeedSound PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx.
 
@@ -34,9 +35,20 @@ Local Notation cidx := String2pos.positive.
     [delta_body] is the conclusion the evaluator needs: when the machine's [delta] answers
     for [tConst kn u], the code it returns is the root code of a table entry whose term is
     [inst_code u body] for the body [body] the environment gives [kn]; [delta_red1] turns
-    that into PCUIC's delta step. For [u = []] the machine's [inst_code] returns the body
-    unchanged where PCUIC's rule produces [subst_instance [] body]; [inst_code_nil] and
-    [inst_code_cons] say which is which, and [inst_code_red1] asks [u <> []].
+    that into PCUIC's delta step, for *every* instance, under [wf Σ].
+
+    For a non-empty instance [inst_code] *is* [subst_instance], so [delta_red1_poly]
+    needs nothing. For [u = []] the machine's [inst_code] returns the body unchanged
+    where [red_delta] produces [subst_instance [] body]; the two agree exactly when the
+    body carries no universe variable, which [declared_constant_body_closedu] gets from
+    [wf Σ] by MetaRocq's [on_declared_constant], [typing_wf_universes],
+    [wf_universes_closedu] (with [weaken_lookup_on_global_env'] for its [on_udecl_prop]
+    side condition) and [closedu_subst_instance]. That needs [kn]'s universe context to
+    have no variable, which is the one premise of [delta_red1]/[delta_red1_nil] beyond
+    the evaluator's; [inst_code_nil_ne_subst_instance] shows it cannot be dropped, since
+    a polymorphic constant applied to the empty instance makes the two sides differ in
+    any environment. [mono_poly_instance] and [consistent_instance_ext_nil] are the two
+    ways to discharge it.
   - **The caches.** [hash_ok]: the value stored for a code identifier is [thash] of that
     code's term, so [code_hash_filter] (different hashes, different terms) is a sound
     filter. [once_ok]: the bit stored is [Nat.leb (occ 0 t) 1] for that code's term [t].
@@ -963,6 +975,90 @@ Proof.
   rewrite inst_code_cons. eapply red_delta; eassumption.
 Qed.
 
+(** *** The empty instance
+
+  [inst_code [] body] is [body] where PCUIC's [red_delta] produces
+  [subst_instance [] body]. The two agree exactly when [body] carries no universe
+  variable, and a constant whose universe context has no variables — in particular a
+  monomorphic one — has such a body in a well-formed environment. The chain is
+  MetaRocq's: [on_declared_constant] types the body in [(Σ, cst_universes cb)],
+  [typing_wf_universes] turns that into [wf_universes], [wf_universes_closedu] (with
+  [weaken_lookup_on_global_env'] for its [on_udecl_prop] side condition) turns that into
+  [closedu #|polymorphic_instance (cst_universes cb)| body], and
+  [closedu_subst_instance] then says every instance leaves the body alone. *)
+
+Lemma poly_instance_abstract (univs : universes_decl) :
+  polymorphic_instance univs = abstract_instance univs.
+Proof. destruct univs; reflexivity. Qed.
+
+(** The two routes a caller has to the side condition: the constant is monomorphic, or
+  the instance of the [tConst] is consistent with the constant's universe context (which
+  is what [type_Const] carries). *)
+Lemma mono_poly_instance (univs : universes_decl) :
+  univs = Monomorphic_ctx -> #|polymorphic_instance univs| = 0.
+Proof. intros ->. reflexivity. Qed.
+
+Lemma consistent_instance_ext_nil {cf : checker_flags} (Σ : global_env_ext)
+    (univs : universes_decl) :
+  consistent_instance_ext Σ univs [] -> #|polymorphic_instance univs| = 0.
+Proof.
+  intros h. rewrite poly_instance_abstract.
+  rewrite <- (consistent_instance_length (Σ := Σ) (univs := univs) (u := []) h).
+  reflexivity.
+Qed.
+
+Lemma declared_constant_body_closedu {cf : checker_flags} (Σ : global_env)
+    (kn : kername) (cb : constant_body) (body : term) :
+  wf Σ -> lookup_env Σ kn = Some (ConstantDecl cb) -> cb.(cst_body) = Some body ->
+  closedu #|polymorphic_instance cb.(cst_universes)| body.
+Proof.
+  intros wfΣ hl hb.
+  assert (hdecl : declared_constant Σ kn cb)
+    by (apply declared_constant_from_gen; exact hl).
+  pose proof (on_declared_constant wfΣ hdecl) as hon.
+  destruct hon as [hty _]. rewrite hb in hty. cbn in hty.
+  pose proof (typing_wf_universes (Σ := (Σ, cb.(cst_universes))) wfΣ hty) as hwu.
+  apply andb_true_iff in hwu as [hwu _].
+  refine (wf_universes_closedu (Σ := Σ) (wfΣ := wfΣ) _ hwu).
+  exact (weaken_lookup_on_global_env' Σ kn (ConstantDecl cb) wfΣ hl).
+Qed.
+
+(** The delta step for *every* instance: the side condition is vacuous unless the
+  instance is empty. *)
+Lemma inst_code_red1_gen {cf : checker_flags} (Σ : global_env) (Γ : context)
+    (kn : kername) (ui : Instance.t) (cb : constant_body) (body : term) :
+  wf Σ -> lookup_env Σ kn = Some (ConstantDecl cb) -> cb.(cst_body) = Some body ->
+  (ui = [] -> #|polymorphic_instance cb.(cst_universes)| = 0) ->
+  red1 Σ Γ (tConst kn ui) (inst_code ui body).
+Proof.
+  intros wfΣ hl hb hmono.
+  assert (hdecl : declared_constant Σ kn cb)
+    by (apply declared_constant_from_gen; exact hl).
+  destruct ui as [|l ui]; [|rewrite inst_code_cons; eapply red_delta; eassumption].
+  assert (hcl : closedu 0 body).
+  { rewrite <- (hmono eq_refl).
+    exact (declared_constant_body_closedu Σ kn cb body wfΣ hl hb). }
+  rewrite inst_code_nil, <- (closedu_subst_instance [] body hcl).
+  eapply red_delta; eassumption.
+Qed.
+
+(** *** Why the side condition cannot be dropped
+
+  For the empty instance the machine's [inst_code] returns the body unchanged, where
+  PCUIC's [red_delta] produces [subst_instance [] body], and [subst_instance []] sends
+  every [Level.lvar] to [Level.lzero]. The two therefore differ on any body that
+  mentions a universe variable, so a [delta_red1] stated for every [kn] with no
+  condition on [kn]'s universe context would be false of a *polymorphic* constant
+  applied to the empty instance — in any environment, however well formed, because
+  [wf Σ] constrains the declarations of [Σ], not the instances a term writes. *)
+
+Definition cex_univ_body : term :=
+  tConst (MPfile [], String.EmptyString) [Level.lvar 0].
+
+Lemma inst_code_nil_ne_subst_instance :
+  inst_code [] cex_univ_body <> subst_instance ([] : Instance.t) cex_univ_body.
+Proof. unfold cex_univ_body. cbn. congruence. Qed.
+
 (** ** Pairs returned by the machine *)
 
 Lemma cbn_COk_pair_inj {A B : Type} (x1 y1 : A) (x2 y2 : B) :
@@ -1724,9 +1820,78 @@ Section Memo.
       + intros _. exists cb. split; [exact (lookup_declared Σ kn cb hΣ El) | exact Eb].
   Qed.
 
-  (** The delta step of PCUIC, for an instance the machine actually substitutes. *)
+  Lemma lookup_env_of_abstract (Σ : global_env_ext) (kn : kername) (d : global_decl) :
+    abstract_env_ext_rel X Σ -> abstract_env_lookup X kn = Some d ->
+    lookup_env Σ kn = Some d.
+  Proof.
+    intros hΣ h. rewrite (abstract_env_lookup_correct' X (Σ := Σ) kn hΣ). exact h.
+  Qed.
+
+  (** The delta step of PCUIC, for *every* instance the machine can be given.
+
+    The side condition is vacuous unless the instance is empty, and for the empty
+    instance it says the constant's universe context has no variable — true of every
+    monomorphic constant ([mono_poly_instance]) and of every [tConst kn []] whose
+    instance is consistent with the constant's context ([consistent_instance_ext_nil]).
+    It is stated on [abstract_env_lookup X kn], which is the machine's own oracle, so a
+    caller discharges it by the same lookup the machine makes. [wf Σ] is explicit
+    because [abstract_env_ext_wf] only gives it squashed, and [red1] is in [Type]. *)
   Lemma delta_red1 (Σ : global_env_ext) (Γ : context) (kn : kername) (ui : Instance.t)
       (s s' : cbn_state) (c : code) :
+    abstract_env_ext_rel X Σ -> wf Σ ->
+    memo_fresh (s.(st_memo)) -> delta_ok (s.(st_memo)) ->
+    delta X_type X kn ui s = COk (Some c, s') ->
+    (forall cb : constant_body,
+        abstract_env_lookup X kn = Some (ConstantDecl cb) ->
+        ui = [] -> #|polymorphic_instance cb.(cst_universes)| = 0) ->
+    red1 Σ Γ (tConst kn ui) c.(c_term).
+  Proof.
+    intros hΣ wfΣ hf hd he hmono. unfold delta in he.
+    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
+    - destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. discriminate h1.
+    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El.
+      + assert (Hb : cb.(cst_body) = Some body).
+        { destruct (hd kn _ Ed) as [[cb0 [hl hb]] _]. rewrite El in hl.
+          injection hl as <-. exact hb. }
+        destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
+        * destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. injection h1 as <-.
+          cbn [c_term].
+          assert (Ht : t = inst_code ui body).
+          { destruct (hd kn _ Ed) as [_ hF].
+            destruct (find_inst_sound _ ui insts i t hF Ei) as [ht _]. exact ht. }
+          rewrite Ht.
+          exact (inst_code_red1_gen Σ Γ kn ui cb body wfΣ
+                   (lookup_env_of_abstract Σ kn _ hΣ El) Hb (hmono cb eq_refl)).
+        * destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some (Some c) s' he)
+            as [hr _].
+          assert (Hc : c.(c_term) = inst_code ui body).
+          { apply (f_equal (fun o : option code =>
+                     match o with Some x => x.(c_term) | None => c.(c_term) end)) in hr.
+            cbn in hr. rewrite hr. apply (proj1 (delta_new_code kn ui body insts s)). }
+          rewrite Hc.
+          exact (inst_code_red1_gen Σ Γ kn ui cb body wfΣ
+                   (lookup_env_of_abstract Σ kn _ hΣ El) Hb (hmono cb eq_refl)).
+      + exfalso. destruct (hd kn _ Ed) as [[cb0 [hl _]] _]. rewrite El in hl. discriminate hl.
+      + exfalso. destruct (hd kn _ Ed) as [[cb0 [hl _]] _]. rewrite El in hl. discriminate hl.
+    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
+        [|discriminate he|discriminate he].
+      destruct (cb.(cst_body)) as [body|] eqn:Eb.
+      + destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some (Some c) s' he)
+          as [hr _].
+        assert (Hc : c.(c_term) = inst_code ui body).
+        { apply (f_equal (fun o : option code =>
+                   match o with Some x => x.(c_term) | None => c.(c_term) end)) in hr.
+          cbn in hr. rewrite hr. apply (proj1 (delta_new_code kn ui body [] s)). }
+        rewrite Hc.
+        exact (inst_code_red1_gen Σ Γ kn ui cb body wfΣ
+                 (lookup_env_of_abstract Σ kn _ hΣ El) Eb (hmono cb eq_refl)).
+      + destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. discriminate h1.
+  Qed.
+
+  (** The same for a non-empty instance, which needs neither [wf Σ] nor the side
+    condition: there [inst_code] *is* [subst_instance]. *)
+  Lemma delta_red1_poly (Σ : global_env_ext) (Γ : context) (kn : kername)
+      (ui : Instance.t) (s s' : cbn_state) (c : code) :
     abstract_env_ext_rel X Σ ->
     memo_fresh (s.(st_memo)) -> delta_ok (s.(st_memo)) ->
     delta X_type X kn ui s = COk (Some c, s') -> ui <> [] ->
@@ -1769,6 +1934,27 @@ Section Memo.
         rewrite Hc.
         exact (inst_code_red1 Σ Γ kn ui cb body (lookup_declared Σ kn cb hΣ El) Eb hu).
       + destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. discriminate h1.
+  Qed.
+
+  (** The empty-instance case on its own, in the shape the evaluator's section
+    hypothesis is written in. The one premise beyond it is that [kn] is monomorphic;
+    [inst_code_nil_ne_subst_instance] shows no lemma without such a premise can hold,
+    since the machine's [inst_code []] is the identity where [red_delta] substitutes.
+    Discharge it from the constant's declaration ([mono_poly_instance]) or from the
+    instance's consistency ([consistent_instance_ext_nil]). *)
+  Lemma delta_red1_nil (Σ : global_env_ext) (Γ : context) (kn : kername)
+      (s s' : cbn_state) (c : code) :
+    abstract_env_ext_rel X Σ -> wf Σ ->
+    memo_fresh (s.(st_memo)) -> delta_ok (s.(st_memo)) ->
+    delta X_type X kn [] s = COk (Some c, s') ->
+    (forall cb : constant_body,
+        abstract_env_lookup X kn = Some (ConstantDecl cb) ->
+        cb.(cst_universes) = Monomorphic_ctx) ->
+    red1 Σ Γ (tConst kn []) c.(c_term).
+  Proof.
+    intros hΣ wfΣ hf hd he hmono.
+    refine (delta_red1 Σ Γ kn [] s s' c hΣ wfΣ hf hd he _).
+    intros cb hl _. apply mono_poly_instance. exact (hmono cb hl).
   Qed.
 
   (** ** The five invariants of one call, bundled *)
