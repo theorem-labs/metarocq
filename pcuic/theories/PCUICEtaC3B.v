@@ -1322,3 +1322,22 @@ Proof.
     apply All_forallb_eq_forallb with (1 := Hv). auto.
 Qed.
 
+(** * Kernel inversions *)
+
+(** Clean [red1] inversion for [tLambda]: only [abs_red_l] and [abs_red_r] apply.
+    [depelim] on [red1] leaves impossible [mkApps]-headed cases due to opacity;
+    this inversion avoids that by matching the [tLambda] head directly. *)
+Lemma red1_tLambda_inv {Σ Γ na A b v} :
+  red1 Σ Γ (tLambda na A b) v ->
+  (∑ A', v = tLambda na A' b × red1 Σ Γ A A') +
+  (∑ b', v = tLambda na A b' × red1 Σ (Γ ,, vass na A) b b').
+Proof.
+  intro H. remember (tLambda na A b) as t eqn:Heq.
+  destruct H; try discriminate Heq;
+    try solve [exfalso; destruct args using rev_ind;
+               [cbn in Heq; discriminate Heq|
+                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]].
+  - injection Heq as -> -> ->. left. eexists; split; [reflexivity|assumption].
+  - injection Heq as -> -> ->. right. eexists; split; [reflexivity|assumption].
+Qed.
+
