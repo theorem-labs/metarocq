@@ -82,13 +82,6 @@ Fixpoint key_of_succ_nat (n : nat) : key :=
   | S n => key_succ (key_of_succ_nat n)
   end.
 
-Fixpoint key_of_pos (p : positive) : key :=
-  match p with
-  | xH => String2pos.xH
-  | xO p => String2pos.xO (key_of_pos p)
-  | xI p => String2pos.xI (key_of_pos p)
-  end.
-
 Definition get2 {A} (k1 k2 : key) (m : PTree.t (PTree.t A)) : option A :=
   match PTree.get k1 m with
   | Some m2 => PTree.get k2 m2
@@ -329,10 +322,13 @@ Inductive cbn_value :=
 | VOpen (e : cbn_env) (c : code)                         (* [tSort], [tProd], [tPrim] *)
 | VStuck (e : cbn_env) (c : code) (sp : list haddr).     (* stuck [tCase]/[tProj] *)
 
+(** [CFwd a]: the new address [a] of a cell that the collector copied; it exists only in the
+  old heap during a collection. *)
 Inductive cbn_cell :=
 | CSusp (e : cbn_env) (c : code)
 | CDone (v : cbn_value)
-| CBusy.
+| CBusy
+| CFwd (a : haddr).
 
 (** What a caller holds across a call that can allocate. *)
 Inductive root :=
@@ -419,6 +415,7 @@ Section Rename.
     | CSusp e c => cbn2 (e, g) := rn_env e g in COk (CSusp e c, g)
     | CDone v => cbn2 (v, g) := rn_value v g in COk (CDone v, g)
     | CBusy => COk (CBusy, g)
+    | CFwd a => cbn2 (a, g) := f a g in COk (CFwd a, g)
     end.
 
   Definition rn_root (r : root) (g : G) : cbn_res (root * G) :=
@@ -592,11 +589,93 @@ Inductive delta_memo :=
 | DAxiom
 | DBody (body : term) (insts : list (Instance.t * cidx * term)).
 
+(** *** The delta memo: a binary trie on the bits of the constant's identifier, each node
+  with the module paths of the constants whose identifier ends there *)
+
+Fixpoint dirpath_eqb (d1 d2 : dirpath) : bool :=
+  match d1, d2 with
+  | [], [] => true
+  | x :: d1, y :: d2 => String.eqb x y && dirpath_eqb d1 d2
+  | _, _ => false
+  end.
+
+Fixpoint modpath_eqb (m1 m2 : modpath) : bool :=
+  match m1, m2 with
+  | MPfile d1, MPfile d2 => dirpath_eqb d1 d2
+  | MPbound d1 i1 k1, MPbound d2 i2 k2 =>
+    String.eqb i1 i2 && Nat.eqb k1 k2 && dirpath_eqb d1 d2
+  | MPdot m1 i1, MPdot m2 i2 => String.eqb i1 i2 && modpath_eqb m1 m2
+  | _, _ => false
+  end.
+
+Inductive dtrie :=
+| DTNil
+| DTNode (here : list (modpath * delta_memo)) (z o : dtrie).
+
+Definition dt_child (b : bool) (t : dtrie) : dtrie :=
+  match t with
+  | DTNil => DTNil
+  | DTNode _ z o => if b then o else z
+  end.
+
+Definition dt_byte (x : Byte.byte) (t : dtrie) : dtrie :=
+  let '(b0, (b1, (b2, (b3, (b4, (b5, (b6, b7))))))) := Byte.to_bits x in
+  dt_child b7 (dt_child b6 (dt_child b5 (dt_child b4
+    (dt_child b3 (dt_child b2 (dt_child b1 (dt_child b0 t))))))).
+
+Fixpoint dt_walk (s : String.t) (t : dtrie) : dtrie :=
+  match s with
+  | String.EmptyString => t
+  | String.String x s => dt_walk s (dt_byte x t)
+  end.
+
+Fixpoint mp_find (mp : modpath) (l : list (modpath * delta_memo)) : option delta_memo :=
+  match l with
+  | [] => None
+  | (mp', d) :: l => if modpath_eqb mp mp' then Some d else mp_find mp l
+  end.
+
+Definition dt_find (kn : kername) (t : dtrie) : option delta_memo :=
+  match dt_walk kn.2 t with
+  | DTNil => None
+  | DTNode here _ _ => mp_find kn.1 here
+  end.
+
+Definition dt_upd_child (b : bool) (f : dtrie -> dtrie) (t : dtrie) : dtrie :=
+  match t with
+  | DTNil => if b then DTNode [] DTNil (f DTNil) else DTNode [] (f DTNil) DTNil
+  | DTNode h z o => if b then DTNode h z (f o) else DTNode h (f z) o
+  end.
+
+Definition dt_upd_byte (x : Byte.byte) (f : dtrie -> dtrie) (t : dtrie) : dtrie :=
+  let '(b0, (b1, (b2, (b3, (b4, (b5, (b6, b7))))))) := Byte.to_bits x in
+  dt_upd_child b0 (dt_upd_child b1 (dt_upd_child b2 (dt_upd_child b3
+    (dt_upd_child b4 (dt_upd_child b5 (dt_upd_child b6 (dt_upd_child b7 f))))))) t.
+
+Fixpoint dt_upd (s : String.t) (f : dtrie -> dtrie) (t : dtrie) : dtrie :=
+  match s with
+  | String.EmptyString => f t
+  | String.String x s => dt_upd_byte x (dt_upd s f) t
+  end.
+
+Fixpoint mp_set (mp : modpath) (d : delta_memo) (l : list (modpath * delta_memo))
+  : list (modpath * delta_memo) :=
+  match l with
+  | [] => [(mp, d)]
+  | (mp', d') :: l => if modpath_eqb mp mp' then (mp, d) :: l else (mp', d') :: mp_set mp d l
+  end.
+
+Definition dt_add (kn : kername) (d : delta_memo) (t : dtrie) : dtrie :=
+  dt_upd kn.2 (fun t => match t with
+                        | DTNil => DTNode [(kn.1, d)] DTNil DTNil
+                        | DTNode h z o => DTNode (mp_set kn.1 d h) z o
+                        end) t.
+
 (** Per-call data that holds no heap address. *)
 Record cbn_memo := mkMemo {
   m_codes : PTree.t code_entry;
   m_ncode : cidx;
-  m_delta : KernameMap.t delta_memo;
+  m_delta : dtrie;
   m_once : PTree.t (PTree.t bool);  (* (index, path) of a binder's body: occurs at most once *)
   m_hash : PTree.t (PTree.t N);     (* (index, path): structural hash of the code *)
   m_ceq : PTree.t (PTree.t (PTree.t (PTree.t bool))) }. (* code equality of two identifiers *)
@@ -610,8 +689,7 @@ Record cbn_state := mkState {
   st_memo : cbn_memo }.
 
 Definition memo_empty : cbn_memo :=
-  mkMemo (PTree.empty _) String2pos.xH (KernameMap.empty _) (PTree.empty _) (PTree.empty _)
-    (PTree.empty _).
+  mkMemo (PTree.empty _) String2pos.xH DTNil (PTree.empty _) (PTree.empty _) (PTree.empty _).
 
 Definition cbn_init : cbn_state :=
   mkState [] N0 (gc_room 0) cbn_steps (PTree.empty _) memo_empty.
@@ -645,7 +723,7 @@ Definition memo_add_entry (e : code_entry) (m : cbn_memo) : cidx * cbn_memo :=
   (i, mkMemo (PTree.set i e m.(m_codes)) (key_succ i) m.(m_delta) m.(m_once) m.(m_hash)
         m.(m_ceq)).
 
-Definition memo_set_delta (d : KernameMap.t delta_memo) (m : cbn_memo) : cbn_memo :=
+Definition memo_set_delta (d : dtrie) (m : cbn_memo) : cbn_memo :=
   mkMemo m.(m_codes) m.(m_ncode) d m.(m_once) m.(m_hash) m.(m_ceq).
 
 Definition memo_set_once (o : PTree.t (PTree.t bool)) (m : cbn_memo) : cbn_memo :=
@@ -661,34 +739,28 @@ Definition memo_set_ceq (q : PTree.t (PTree.t (PTree.t (PTree.t bool)))) (m : cb
 (** ** The collector *)
 
 Record gc_state := mkGc {
-  g_fwd : PTree.t haddr;    (* old address (as a key) to new address *)
+  g_old : bheap cbn_cell;   (* the old heap, a copied cell replaced by [CFwd] *)
   g_heap : bheap cbn_cell;  (* the new heap *)
   g_next : N }.             (* its next address *)
 
-Definition key_of_N (n : N) : key :=
-  match n with
-  | N0 => String2pos.xH
-  | Npos p => String2pos.xO (key_of_pos p)
-  end.
-
-(** Copy the cell at [a] of the old heap [old] and the cells it reaches, children first;
-  give it the next new address. [f] bounds the depth of the walk: [st_next + 1] units, more
-  than the number of cells, so a heap without cycles is never cut off. *)
-Fixpoint gc_copy (old : bheap cbn_cell) (f : cbn_fuel) (a : haddr) (g : gc_state)
-  {struct f} : cbn_res (haddr * gc_state) :=
-  match PTree.get (key_of_N a.(ha_n)) g.(g_fwd) with
-  | Some a' => COk (a', g)
-  | None =>
+(** Copy the cell at [a] of the old heap and the cells it reaches, children first; give it
+  the next new address and leave that address in the old heap. [f] bounds the depth of the
+  walk: [st_next + 1] units, more than the number of cells, so a heap without cycles is
+  never cut off. *)
+Fixpoint gc_copy (f : cbn_fuel) (a : haddr) (g : gc_state) {struct f}
+  : cbn_res (haddr * gc_state) :=
+  match bh_get a g.(g_old) with
+  | None => CFail WGcDangling
+  | Some (CFwd a') => COk (a', g)
+  | Some cl =>
     match f with
     | FO => CFail WGcFuel
     | FS k =>
-      match bh_get a old with
+      cbn2 (cl, g) := rn_cell (gc_copy (k tt)) cl g in
+      let a' := HAddr g.(g_next) in
+      match bh_upd a (CFwd a') g.(g_old) with
+      | Some old => COk (a', mkGc old (bh_cons cl g.(g_heap)) (N.succ g.(g_next)))
       | None => CFail WGcDangling
-      | Some cl =>
-        cbn2 (cl, g) := rn_cell (gc_copy old (k tt)) cl g in
-        let a' := HAddr g.(g_next) in
-        COk (a', mkGc (PTree.set (key_of_N a.(ha_n)) a' g.(g_fwd)) (bh_cons cl g.(g_heap))
-                   (N.succ g.(g_next)))
       end
     end
   end.
@@ -697,10 +769,9 @@ Fixpoint gc_copy (old : bheap cbn_cell) (f : cbn_fuel) (a : haddr) (g : gc_state
   [st_next] (the addresses below are dropped), and rename [rs] and [st_gam]. No step is
   taken from the budget. *)
 Definition collect (rs : list root) (s : cbn_state) : cbn_res (list root * cbn_state) :=
-  let old := s.(st_heap) in
   let onext := s.(st_next) in
-  let copy := gc_copy old (fuel_of_pos (N.succ_pos onext) (fun _ => FO)) in
-  let g := mkGc (PTree.empty _) (bh_holes onext) onext in
+  let copy := gc_copy (fuel_of_pos (N.succ_pos onext) (fun _ => FO)) in
+  let g := mkGc s.(st_heap) (bh_holes onext) onext in
   cbn2 (gm, g) := rn_ptree copy s.(st_gam) g in
   cbn2 (rs, g) := rn_roots copy rs g in
   COk (rs, mkState g.(g_heap) g.(g_next) (gc_room (N.sub g.(g_next) onext)) s.(st_steps) gm
@@ -838,13 +909,13 @@ Section CallByNeed.
   Definition delta_new (kn : kername) (u : Instance.t) (body : term)
     (insts : list (Instance.t * cidx * term)) (s : cbn_state) : code * cbn_state :=
     let (c, s) := new_entry body u (NSConst kn) s in
-    (c, set_memo (memo_set_delta (KernameMap.add kn (DBody body ((u, c.(c_entry), c.(c_term)) :: insts))
+    (c, set_memo (memo_set_delta (dt_add kn (DBody body ((u, c.(c_entry), c.(c_term)) :: insts))
                                     s.(st_memo).(m_delta)) s.(st_memo)) s).
 
   (** [Some c]: the instantiated body; [None]: an axiom or opaque constant. *)
   Definition delta (kn : kername) (u : Instance.t) (s : cbn_state)
     : cbn_res (option code * cbn_state) :=
-    match KernameMap.find kn s.(st_memo).(m_delta) with
+    match dt_find kn s.(st_memo).(m_delta) with
     | Some DAxiom => COk (None, s)
     | Some (DBody body insts) =>
       match find_inst u insts with
@@ -857,7 +928,7 @@ Section CallByNeed.
         match cb.(cst_body) with
         | Some body => let (c, s) := delta_new kn u body [] s in COk (Some c, s)
         | None =>
-          COk (None, set_memo (memo_set_delta (KernameMap.add kn DAxiom s.(st_memo).(m_delta))
+          COk (None, set_memo (memo_set_delta (dt_add kn DAxiom s.(st_memo).(m_delta))
                                  s.(st_memo)) s)
         end
       | _ => CFail WDelta
@@ -1017,7 +1088,7 @@ Section CallByNeed.
           end
         end
       | Some CBusy => CFail WBusy
-      | None => CFail WDangling
+      | Some (CFwd _) | None => CFail WDangling
       end
     end
 
@@ -1266,7 +1337,7 @@ Section CallByNeed.
       | Some (CDone v) => rb_value d lvl v s
       | Some (CSusp e c) => rb_susp d lvl e c.(c_term) s
       | Some CBusy => CFail WBusy
-      | None => CFail WDangling
+      | Some (CFwd _) | None => CFail WDangling
       end
     end
 
