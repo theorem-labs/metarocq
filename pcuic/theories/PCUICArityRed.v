@@ -1,9 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICUnivSubst
-     PCUICCases PCUICReduction.
+     PCUICCases PCUICReduction PCUICPrimitiveRed.
 From Equations.Prop Require Import DepElim.
 From Equations Require Import Equations.
 Set Default Goal Selector "!".
@@ -87,6 +87,7 @@ Inductive whd_rel (zeta : bool) (Σ : global_env) (Γ : context) :
     whd_rel zeta Σ Γ (tConst c u) args h l
 | whd_axiom c u decl args :
     lookup_env Σ c = Some (ConstantDecl decl) -> decl.(cst_body) = None ->
+    prim_op_of Σ c = None ->
     whd_rel zeta Σ Γ (tConst c u) args (tConst c u) args
 | whd_app f a args h l :
     whd_rel zeta Σ Γ f (a :: args) h l ->
@@ -149,13 +150,114 @@ Inductive whd_rel (zeta : bool) (Σ : global_env) (Γ : context) :
 (** [red_view_other]. *)
 | whd_stop t args :
     whd_stop_head t args ->
-    whd_rel zeta Σ Γ t args t args.
+    whd_rel zeta Σ Γ t args t args
+(** [PCUICSafeReduce.v], [_reduce_stack], [Prim_app] (design §7.2): a
+    registered bodiless operation saturated on the stack evaluates its
+    arguments left to right.  [split_lits (firstn (arity op) args)] reads the
+    first [arity op] arguments: [inl ls] when all are literals (the operation
+    fires), [inr (ls, a, rest)] when [a] is the first that is not (reduce it,
+    then re-enter or stop).  Over-application leaves [skipn (arity op) args] on
+    the stack, as the machine does. *)
+| whd_prim_arg c u decl op args ls a rest t cargs lit h l :
+    lookup_env Σ c = Some (ConstantDecl decl) -> decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op -> arity op <= #|args| ->
+    split_lits (firstn (arity op) args) = inr (ls, a, rest) ->
+    whd_rel zeta Σ Γ a [] t cargs ->
+    lit_of_term (mkApps t cargs) = Some lit ->
+    whd_rel zeta Σ Γ (tConst c u)
+      (map term_of_lit ls ++ mkApps t cargs :: rest ++ skipn (arity op) args) h l ->
+    whd_rel zeta Σ Γ (tConst c u) args h l
+| whd_prim_stuck c u decl op args ls a rest t cargs :
+    lookup_env Σ c = Some (ConstantDecl decl) -> decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op -> arity op <= #|args| ->
+    split_lits (firstn (arity op) args) = inr (ls, a, rest) ->
+    whd_rel zeta Σ Γ a [] t cargs ->
+    lit_of_term (mkApps t cargs) = None ->
+    whd_rel zeta Σ Γ (tConst c u) args
+      (tConst c u) (map term_of_lit ls ++ mkApps t cargs :: rest ++ skipn (arity op) args)
+| whd_prim_fire c u decl op args ls r v h l :
+    lookup_env Σ c = Some (ConstantDecl decl) -> decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op -> arity op <= #|args| ->
+    split_lits (firstn (arity op) args) = inl ls ->
+    prim_op_denote op ls = Some r ->
+    readback Σ (po_shape (info op)) r = Some v ->
+    whd_rel zeta Σ Γ v (skipn (arity op) args) h l ->
+    whd_rel zeta Σ Γ (tConst c u) args h l
+| whd_prim_inert c u decl op args ls :
+    lookup_env Σ c = Some (ConstantDecl decl) -> decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op -> arity op <= #|args| ->
+    split_lits (firstn (arity op) args) = inl ls ->
+    prim_op_denote op ls = None ->
+    whd_rel zeta Σ Γ (tConst c u) args (tConst c u) args
+| whd_prim_partial c u decl op args :
+    lookup_env Σ c = Some (ConstantDecl decl) -> decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op -> #|args| < arity op ->
+    whd_rel zeta Σ Γ (tConst c u) args (tConst c u) args.
 
 Derive Signature for whd_rel.
 
 (** [allnolet] and [all] of kernel/redFlags.ml. *)
 Abbreviation whd_allnolet_rel := (whd_rel false).
 Abbreviation whd_all_rel := (whd_rel true).
+
+(** ** Helpers shared by the primitive cases of the lemmas below *)
+
+(** The arguments before and after the one being evaluated do not move, so a
+    reduction of that one argument is a reduction of the whole application. *)
+Lemma red_prim_arg_cong Σ Γ c u ls a b rest tail :
+  red Σ Γ a b ->
+  red Σ Γ (mkApps (tConst c u) (map term_of_lit ls ++ a :: rest ++ tail))
+          (mkApps (tConst c u) (map term_of_lit ls ++ b :: rest ++ tail)).
+Proof.
+  intros r. apply red_mkApps; [reflexivity|].
+  apply All2_app; [apply All2_refl; reflexivity|].
+  constructor; [exact r|apply All2_refl; reflexivity].
+Qed.
+
+(** [split_lits] on the first [n] arguments names the maximal literal prefix
+    [ls] and the first non-literal [a]; the whole argument list is then that
+    decomposition followed by the over-applied tail. *)
+Lemma prim_args_eq {args n ls a rest} :
+  split_lits (firstn n args) = inr (ls, a, rest) ->
+  args = map term_of_lit ls ++ a :: rest ++ skipn n args.
+Proof.
+  intros hs.
+  rewrite -{1}(firstn_skipn n args) (fst (split_lits_inr hs)) -app_assoc //.
+Qed.
+
+Lemma prim_args_eq_inl {args n ls} :
+  split_lits (firstn n args) = inl ls ->
+  args = map term_of_lit ls ++ skipn n args.
+Proof.
+  intros hs. rewrite -{1}(firstn_skipn n args) (split_lits_inl hs) //.
+Qed.
+
+(** Reducing the stuck argument [a] of a stuck operation application to a
+    weak-head form [w] (still not a literal) leaves a term that is its own
+    weak-head form: [split_lits] finds [w] at the same place, and the reconstructed
+    argument list is the original one.  This is what [whd_rel_idem] needs. *)
+Lemma whd_prim_stuck_result {n ls w R} :
+  lit_of_term w = None -> #|ls| < n ->
+  (split_lits (firstn n (map term_of_lit ls ++ w :: R)) = inr (ls, w, firstn (n - S #|ls|) R)) ×
+  (map term_of_lit ls ++ w :: firstn (n - S #|ls|) R
+     ++ skipn n (map term_of_lit ls ++ w :: R) = map term_of_lit ls ++ w :: R).
+Proof.
+  intros hw hlt.
+  have hfa : firstn n (map term_of_lit ls ++ w :: R)
+           = map term_of_lit ls ++ w :: firstn (n - S #|ls|) R.
+  { rewrite firstn_app firstn_all2; [rewrite length_map; lia|].
+    rewrite length_map.
+    have -> : n - #|ls| = S (n - S #|ls|) by lia.
+    reflexivity. }
+  have hsk : skipn n (map term_of_lit ls ++ w :: R) = skipn (n - S #|ls|) R.
+  { rewrite skipn_app skipn_all2; [rewrite length_map; lia|].
+    rewrite length_map.
+    have -> : n - #|ls| = S (n - S #|ls|) by lia.
+    reflexivity. }
+  split.
+  - rewrite hfa. apply split_lits_app, hw.
+  - rewrite hsk firstn_skipn //.
+Qed.
 
 Inductive arity_red (Σ : global_env) : context -> term -> context -> sort -> Type :=
 | arity_red_sort Γ t s :
@@ -215,7 +317,7 @@ Section WhdRed.
   Proof.
     induction 1 as [c args d b h l hn hb w IH|c args d hn hb
       |na b B t args h l hz w IH|na b B t args hz
-      |c u decl body args h l hd hb w IH|c u decl args hd hb
+      |c u decl body args h l hd hb w IH|c u decl args hd hb hpo
       |f a args h l w IH|na A t a args h l w IH
       |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
       |mfix idx narg fn args c t cargs hu hn w IH hc
@@ -226,7 +328,12 @@ Section WhdRed.
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
       |p c args t cargs w IH hc hcf
-      |t args hs].
+      |t args hs
+      |c u decl op args ls a rest t cargs lit h l hlook hbod hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs hlook hbod hpo hsat hs wa IHa hnl
+      |c u decl op args ls r v h l hlook hbod hpo hsat hs hden hback w IH
+      |c u decl op args ls hlook hbod hpo hsat hs hden
+      |c u decl op args hlook hbod hpo hpart].
     - eapply red_trans; [|exact IH].
       apply red_mkApps_f, red1_red, red_rel. now rewrite hn /= hb.
     - reflexivity.
@@ -262,6 +369,21 @@ Section WhdRed.
       apply red1_red. eapply red_cofix_proj; eauto.
     - apply red_mkApps_f. eapply red_proj_c; exact IH.
     - reflexivity.
+    (* whd_prim_arg *)
+    - eapply red_trans; [|exact IH].
+      rewrite {1}(prim_args_eq hs). apply red_prim_arg_cong; exact IHa.
+    (* whd_prim_stuck *)
+    - rewrite {1}(prim_args_eq hs). apply red_prim_arg_cong; exact IHa.
+    (* whd_prim_fire *)
+    - eapply red_trans; [|exact IH].
+      rewrite {1}(prim_args_eq_inl hs) mkApps_app.
+      apply red_mkApps_f, red1_red.
+      eapply red_prim_op;
+        [exact hpo|exact (lookup_global_Some_if_In _ _ _ hlook)|exact hbod|exact hden|exact hback].
+    (* whd_prim_inert *)
+    - reflexivity.
+    (* whd_prim_partial *)
+    - reflexivity.
   Qed.
 End WhdRed.
 
@@ -277,7 +399,9 @@ Proof.
     | eapply whd_delta | eapply whd_axiom | eapply whd_app | eapply whd_beta
     | eapply whd_fix_iota | eapply whd_fix_stuck | eapply whd_fix_noarg | eapply whd_fix_nounfold
     | eapply whd_iota | eapply whd_case_cofix | eapply whd_case_stuck
-    | eapply whd_proj | eapply whd_proj_cofix | eapply whd_proj_stuck | eapply whd_stop ];
+    | eapply whd_proj | eapply whd_proj_cofix | eapply whd_proj_stuck | eapply whd_stop
+    | eapply whd_prim_arg | eapply whd_prim_stuck | eapply whd_prim_fire
+    | eapply whd_prim_inert | eapply whd_prim_partial ];
     eauto.
   - match goal with hn : nth_error Γ _ = Some _ |- _ =>
       destruct (All2_nth_error_Some _ _ a hn) as [d' [hn' hb']] end.
@@ -304,7 +428,7 @@ Proof.
   intros ass w Δ.
   induction w as [c args d b h l hn hb w IH|c args d hn hb
     |na b B t args h l hz w IH|na b B t args hz
-    |c u decl body args h l hd hb w IH|c u decl args hd hb
+    |c u decl body args h l hd hb w IH|c u decl args hd hb hpo
     |f a args h l w IH|na A t a args h l w IH
     |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
     |mfix idx narg fn args c t cargs hu hn w IH hc
@@ -315,7 +439,12 @@ Proof.
     |p c args u cargs a h l w1 IH1 ha w2 IH2
     |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
     |p c args t cargs w IH hc hcf
-    |t args hs].
+    |t args hs
+    |c u decl op args ls a rest t cargs lit h l hlook hbod hpo hsat hs wa IHa hnl w IH
+    |c u decl op args ls a rest t cargs hlook hbod hpo hsat hs wa IHa hnl
+    |c u decl op args ls r v h l hlook hbod hpo hsat hs hden hback w IH
+    |c u decl op args ls hlook hbod hpo hsat hs hden
+    |c u decl op args hlook hbod hpo hpart].
   - rewrite (assumption_context_decl_body ass hn) in hb. discriminate.
   - reflexivity.
   - eapply red_trans; [|exact IH]. apply red_mkApps_f, red1_red, red_zeta.
@@ -349,6 +478,21 @@ Proof.
     eapply red_trans; [eapply red_proj_c; exact IH1|].
     apply red1_red. eapply red_cofix_proj; eauto.
   - apply red_mkApps_f. eapply red_proj_c; exact IH.
+  - reflexivity.
+  (* whd_prim_arg *)
+  - eapply red_trans; [|exact IH].
+    rewrite {1}(prim_args_eq hs). apply red_prim_arg_cong; exact IHa.
+  (* whd_prim_stuck *)
+  - rewrite {1}(prim_args_eq hs). apply red_prim_arg_cong; exact IHa.
+  (* whd_prim_fire *)
+  - eapply red_trans; [|exact IH].
+    rewrite {1}(prim_args_eq_inl hs) mkApps_app.
+    apply red_mkApps_f, red1_red.
+    eapply red_prim_op;
+      [exact hpo|exact (lookup_global_Some_if_In _ _ _ hlook)|exact hbod|exact hden|exact hback].
+  (* whd_prim_inert *)
+  - reflexivity.
+  (* whd_prim_partial *)
   - reflexivity.
 Qed.
 
@@ -389,6 +533,11 @@ Ltac whd_det_lookup :=
   match goal with
   | H : ?a = Some _, H' : ?a = Some _ |- _ => rewrite H in H'; noconf H'
   | H : ?a = Some _, H' : ?a = None |- _ => rewrite H in H'; discriminate
+  | H : ?a = None, H' : ?a = Some _ |- _ => rewrite H in H'; discriminate
+  | H : ?a = inl _, H' : ?a = inl _ |- _ => rewrite H in H'; noconf H'
+  | H : ?a = inr _, H' : ?a = inr _ |- _ => rewrite H in H'; noconf H'
+  | H : ?a = inl _, H' : ?a = inr _ |- _ => rewrite H in H'; discriminate
+  | H : ?a = inr _, H' : ?a = inl _ |- _ => rewrite H in H'; discriminate
   | H : true = false |- _ => discriminate
   | H : false = true |- _ => discriminate
   | H : is_true (whd_stop_head _ _) |- _ =>
@@ -419,7 +568,7 @@ Proof.
   all: depelim d2.
   all: repeat (whd_det_lookup || whd_det_ih).
   all: try (split; reflexivity).
-  all: cbn in *; try discriminate; try congruence.
+  all: cbn in *; try discriminate; try congruence; try lia.
 Qed.
 
 Lemma arity_red_det {Σ Γ t Δ s Δ' s'} :
@@ -463,7 +612,7 @@ Lemma whd_rel_idem {zeta Σ Γ t args h l} :
 Proof.
   induction 1 as [c args d b h l hn hb w IH|c args d hn hb
       |na b B t args h l hz w IH|na b B t args hz
-      |c u decl body args h l hd hb w IH|c u decl args hd hb
+      |c u decl body args h l hd hb w IH|c u decl args hd hb hpo
       |f a args h l w IH|na A t a args h l w IH
       |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
       |mfix idx narg fn args c t cargs hu hn w IH hc
@@ -474,7 +623,12 @@ Proof.
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
       |p c args t cargs w IH hc hcf
-      |t args hs]; try assumption.
+      |t args hs
+      |c u decl op args ls a rest t cargs lit h l hlook hbod hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs hlook hbod hpo hsat hs wa IHa hnl
+      |c u decl op args ls r v h l hlook hbod hpo hsat hs hden hback w IH
+      |c u decl op args ls hlook hbod hpo hsat hs hden
+      |c u decl op args hlook hbod hpo hpart]; try assumption.
   - eapply whd_rel_assum; eassumption.
   - now apply whd_letin_stop.
   - eapply whd_axiom; eassumption.
@@ -489,6 +643,21 @@ Proof.
   - eapply whd_case_stuck; [exact (whd_rel_mkApps0 IH)|exact hc|exact hcf].
   - eapply whd_proj_stuck; [exact (whd_rel_mkApps0 IH)|exact hc|exact hcf].
   - now apply whd_stop.
+  (* whd_prim_stuck: the reduced stuck argument keeps the application stuck *)
+  - have hfl : #|firstn (arity op) args| = arity op by rewrite length_firstn; lia.
+    pose proof (split_lits_length_inr hs) as hlen; rewrite hfl in hlen.
+    have hlt : #|ls| < arity op by lia.
+    destruct (whd_prim_stuck_result (n := arity op) (w := mkApps t cargs)
+                (R := rest ++ skipn (arity op) args) hnl hlt) as [hsp heq].
+    rewrite -{2}heq.
+    eapply whd_prim_stuck;
+      [exact hlook|exact hbod|exact hpo| |exact hsp
+      |exact (whd_rel_mkApps0 IHa)|exact hnl].
+    rewrite length_app length_map /= length_app; lia.
+  (* whd_prim_inert *)
+  - eapply whd_prim_inert; eassumption.
+  (* whd_prim_partial *)
+  - eapply whd_prim_partial; eassumption.
 Qed.
 
 (** A non-arity weak-head form continues only through the [whd_all] fallback. *)
