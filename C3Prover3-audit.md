@@ -167,8 +167,12 @@ clos_refl_trans red1` (`:364`).
   `evar`/`array` congruences. Invariant across all: **β never lands on the β-reduct (v) side; it carries
   η* only; the single β is one `red1` re-fire on the η-reduct (u) side.** Reported to `agent://ArityLane`.
   Snapshots pushed to fork.
-- 2026-10-27: **the four unlocking cases are MECHANISED and PROVED — conditional on {CH4f, CH4c} only**
-  (CH1/CH2/CH3/CH5/CH6 all discharged; see the ⚠ box below), not just read-and-believed.
+- 2026-10-27 (later): **the four unlocking cases are now FULLY UNCONDITIONAL and axiom-clean** —
+  commit `129847df`, EXIT 0, `Print Assumptions` = only `PrimString`/`PrimInt63`/`PrimFloat`, no
+  `Admitted`/`Axiom`, NO Section Context hypotheses. All CH1-CH6 + CH4f/CH4c discharged: CH2 Required
+  from EtaL2's `PCUICEtaConfluence`; CH4f/CH4c proved locally from EtaL2's `eta_subst` + local
+  `All2_eta_fix_subst`/`cofix` + `eta1_tFix_inv`/`tCoFix_inv`. Still NO base confluence/rho/pred1.
+  (Earlier in the day they were conditional on {CH4f,CH4c}; now unconditional.)
   `pcuic/theories/PCUICEtaReductionC3.v` on branch `frac/eta-c3-C3Prover3` (fork, commit `669950e0`)
   proves `C3_red_fix`, `C3_red_cofix_case`, `C3_red_cofix_proj`, `C3_red_proj` — each a standalone
   lemma over the matching `red1` redex with C3's exact conclusion
