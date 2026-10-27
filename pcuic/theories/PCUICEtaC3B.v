@@ -397,3 +397,55 @@ Proof.
     + assumption.
     + apply All2_same; intros; apply peta_refl.
 Qed.
+
+(** ** [peta] commutes with lifting and (single) substitution *)
+
+Lemma peta_lift np t t' (H : peta t t') :
+  forall k, peta (lift np k t) (lift np k t').
+Proof.
+  induction H using peta_ind_all; intros k; cbn;
+    try solve [econstructor; eauto].
+  - (* eta *)
+    replace (S k) with (k + 1) by lia.
+    rewrite <- (permute_lift M np k 1 0) by lia.
+    change (lift 1 0 ?x) with (lift0 1 x).
+    apply peta_eta. apply IHpeta.
+  - (* tEvar *)
+    constructor. apply All2_map.
+    eapply All2_impl; [eassumption|]. intros x y [_ Hk]. apply Hk.
+  - (* tCase *)
+    apply peta_Case; cbn.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [_ Hk]. apply Hk.
+    + assumption.
+    + assumption.
+    + match goal with H : pcontext _ = pcontext _ |- _ => rewrite H end.
+      eauto.
+    + eauto.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [Hc [_ Hk]]. cbn. split; [exact Hc|].
+      rewrite Hc. apply Hk.
+  - (* tFix *)
+    constructor.
+    match goal with H : All2 _ ?m ?m' |- _ => pose proof (All2_length H) as Hlen end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht|]. split; [rewrite Hlen; apply Hb|]. split; [exact Hn|exact Hr].
+  - (* tCoFix *)
+    constructor.
+    match goal with H : All2 _ ?m ?m' |- _ => pose proof (All2_length H) as Hlen end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht|]. split; [rewrite Hlen; apply Hb|]. split; [exact Hn|exact Hr].
+  - (* tPrim *)
+    constructor.
+    match goal with
+    | H : onPrims _ _ _ _ |- _ =>
+        destruct H as [i|fl|st|arr arr' Hlvl Hdef Hty Hval]
+    end; cbn; try solve [constructor].
+    constructor; cbn.
+    + exact Hlvl.
+    + destruct Hdef as [_ Hd]. apply Hd.
+    + destruct Hty as [_ Ht]. apply Ht.
+    + apply All2_map. eapply All2_impl; [exact Hval|]. intros x y [_ Hk]. apply Hk.
+Qed.
