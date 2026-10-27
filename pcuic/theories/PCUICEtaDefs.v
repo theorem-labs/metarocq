@@ -211,12 +211,14 @@ Proof.
     + constructor. auto.
   - (* case_eta_return *)
     eapply Hreturn; eauto.
+  - (* case_eta_discr *)
+    eapply Hdiscr; eauto.
   - (* case_eta_brs *)
     eapply Hbrs.
-    revert brs' o. generalize brs.
+    revert brs' o. revert brs.
     fix auxl 3. intros l l' Hl; destruct Hl.
-    + constructor. split; [split; auto|]. apply r.
-    + constructor. auto.
+    + simpl in *. constructor; intros; intuition auto.
+    + constructor. eapply auxl. apply Hl.
   - (* evar_eta *)
     eapply Hevar.
     revert l' o. generalize l.
