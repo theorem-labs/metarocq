@@ -130,4 +130,6 @@ theories/PCUICCasesHelper.v
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
 theories/PCUICTypingEta.v
+# C3 prover B (frac/eta-c3-b): parallel-eta route
+theories/PCUICEtaC3B.v
 # theories/All.v
