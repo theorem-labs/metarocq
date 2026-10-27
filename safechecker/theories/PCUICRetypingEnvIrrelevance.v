@@ -245,6 +245,8 @@ Section infer_irrel.
       simpl. subst call call'.
       reccall ih rec rec'. bang.
       destruct PCUICSafeReduce.inspect; simp _reduce_stack.
+      destruct x as []; simp _reduce_stack. 2:reflexivity.
+      destruct PCUICSafeReduce.inspect; simp _reduce_stack.
       destruct x as []; simp _reduce_stack. 2:bang.
       destruct p0; simp _reduce_stack. simpl.
       subst call call'; reccall ih rec rec'.

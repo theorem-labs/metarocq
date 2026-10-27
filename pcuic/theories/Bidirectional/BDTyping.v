@@ -104,7 +104,9 @@ Inductive infering `{checker_flags} (Σ : global_env_ext) (Γ : context) : term 
   isSortRel ps ci.(ci_relevance) ->
   ctx_inst (checking Σ) Γ (pparams p)
       (List.rev mdecl.(ind_params)@[p.(puinst)]) ->
-  implb (isCoFinite mdecl.(ind_finite)) (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn)) = true ->
+  implb (isCoFinite mdecl.(ind_finite))
+    (implb ci.(ci_cofix_nondep)
+      (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn))) = true ->
   cmp_ind_universes Σ ci #|args| u (puinst p) ->
   All2 (convAlgo Σ Γ) (firstn (ci_npar ci) args) (pparams p) ->
   (* case_branch_typing *)
@@ -440,7 +442,9 @@ Section BidirectionalInduction.
           (List.rev mdecl.(ind_params)@[p.(puinst)]) ->
       ctx_inst Pcheck Γ p.(pparams)
           (List.rev (subst_instance p.(puinst) mdecl.(ind_params))) ->
-      implb (isCoFinite mdecl.(ind_finite)) (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn)) = true ->
+      implb (isCoFinite mdecl.(ind_finite))
+        (implb ci.(ci_cofix_nondep)
+          (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn))) = true ->
       cmp_ind_universes Σ ci #|args| u (puinst p) ->
       All2 (convAlgo Σ Γ) (firstn (ci_npar ci) args) (pparams p) ->
       (* case_branch_typing *)

@@ -972,7 +972,7 @@ Proof using cf.
     + eapply rename_unfold_fix. eassumption.
     + rewrite -is_constructor_rename. assumption.
   - rewrite 2!rename_mkApps. simpl.
-    eapply red_cofix_case.
+    eapply red_cofix_case; [assumption|].
     eapply rename_unfold_cofix. eassumption.
   - rewrite 2!rename_mkApps. simpl.
     eapply red_cofix_proj.

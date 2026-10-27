@@ -2165,36 +2165,49 @@ Section Typecheck.
     now exists t.
   Qed.
 
-  (** A case on a coinductive type is allowed only when its return type does not
-      mention the scrutinee, variable 0 of the predicate context. *)
-  Definition check_nondep_cofinite (mdecl : mutual_inductive_body) (p : predicate term)
+  (** A case on a coinductive type whose [ci_cofix_nondep] flag is set, the flag a
+      cofixpoint scrutinee unfolds under, is allowed only when its return type does
+      not mention the scrutinee, variable 0 of the predicate context. *)
+  Definition check_nondep_cofinite (ci : case_info) (mdecl : mutual_inductive_body)
+    (p : predicate term)
     : typing_result_comp
-        (is_true (isCoFinite (ind_finite mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) :=
-    if isCoFinite (ind_finite mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn)
+        (is_true (isCoFinite (ind_finite mdecl) ==>
+                  (ci.(ci_cofix_nondep) ==>
+                   on_free_vars (strengthenP 0 1 xpredT) p.(preturn)))) :=
+    if isCoFinite (ind_finite mdecl) ==>
+       (ci.(ci_cofix_nondep) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn))
       as b return typing_result_comp (is_true b)
     then Checked_comp eq_refl
     else TypeError_comp (Msg "Dependent case on coinductive") diff_false_true.
 
-  (** On a coinductive [stream], [match s return s = s with ... end] is refused and
-      a return type that mentions only an outer variable is accepted. *)
+  (** On a coinductive [stream], [match s return s = s with ... end] is refused when
+      the flag is set and accepted when it is unset; a return type that mentions only
+      an outer variable is accepted either way. *)
   Lemma check_nondep_cofinite_stream :
     let stream := mkInd (MPfile [], "stream") 0 in
     let eq_ind := mkInd (MPfile [], "eq") 0 in
     let mdecl := {| ind_finite := CoFinite; ind_npars := 0; ind_params := [];
                     ind_bodies := []; ind_universes := Monomorphic_ctx; ind_variance := None |} in
+    let ci (nondep : bool) := {| ci_ind := stream; ci_npar := 0; ci_relevance := Relevant;
+                                 ci_cofix_nondep := nondep |} in
     let pred (ret : term) := {| pparams := []; puinst := [];
                        pcontext := [vass (mkBindAnn nAnon Relevant) (tInd stream [])];
                        preturn := ret |} in
-    match check_nondep_cofinite mdecl (pred (mkApps (tInd eq_ind []) [tInd stream []; tRel 0; tRel 0])) with
+    let dep := pred (mkApps (tInd eq_ind []) [tInd stream []; tRel 0; tRel 0]) in
+    match check_nondep_cofinite (ci true) mdecl dep with
     | TypeError_comp e _ => e = Msg "Dependent case on coinductive"
     | Checked_comp _ => False
     end /\
-    match check_nondep_cofinite mdecl (pred (tRel 1)) with
+    match check_nondep_cofinite (ci false) mdecl dep with
+    | TypeError_comp _ _ => False
+    | Checked_comp _ => True
+    end /\
+    match check_nondep_cofinite (ci true) mdecl (pred (tRel 1)) with
     | TypeError_comp _ _ => False
     | Checked_comp _ => True
     end.
   Proof using Type.
-    vm_compute. split; [reflexivity | exact I].
+    vm_compute. split; [reflexivity | split; exact I].
   Qed.
 
   Equations infer (Γ : context) (HΓ : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ wf_local Σ Γ ∥) (t : term)
@@ -2274,7 +2287,7 @@ Section Typecheck.
     d <- lookup_ind_decl ci.(ci_ind) ;;
     (*let (mdecl;(idecl;isdecl)):= d in*)
     let mdecl := d.π1 in let idecl := d.π2.π1 in let isdecl := d.π2.π2 in
-    check_coind <- check_nondep_cofinite mdecl p ;;
+    check_coind <- check_nondep_cofinite ci mdecl p ;;
     check_eq_true (eqb (ind_npars mdecl) ci.(ci_npar))
                   (Msg "not the right number of parameters") ;;
     (* let '(params, indices) := chop ci.(ci_npar) args in *)

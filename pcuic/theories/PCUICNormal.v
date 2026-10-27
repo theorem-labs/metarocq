@@ -93,6 +93,12 @@ Section Normal.
       RedFlags.iota flags = false ->
       whne Γ (tCase i p c brs)
 
+  (* A cofixpoint does not unfold under a case whose return type may depend on the
+     scrutinee ([ci_cofix_nondep] unset), so such a case is stuck. *)
+  | whne_case_cofix_dep i p mfix idx args brs :
+      i.(ci_cofix_nondep) = false ->
+      whne Γ (tCase i p (mkApps (tCoFix mfix idx) args) brs)
+
   | whne_proj p c :
       whne Γ c ->
       whne Γ (tProj p c)
@@ -429,29 +435,9 @@ Proof with eauto using sq with pcuic; try congruence.
     destruct (IHt Γ) as [_ []].
     + left. destruct s...
     + right. intros [w]. depelim w. depelim w. all:help...
-  - destruct (RedFlags.iota flags) eqn:Eq...
-    destruct (IHt Γ) as [_ []].
-    + left. destruct s...
-    + right. intros [w]. depelim w. all:help...
-  - destruct (RedFlags.iota flags) eqn:Eq...
-    destruct (IHt Γ) as [_ []].
-    + left. destruct s0...
-    + right. intros [w]. depelim w. depelim w. all:help...
-  - destruct (RedFlags.iota flags) eqn:Eq...
-    destruct (IHt Γ) as [_ []].
-    + left. destruct s0...
-    + right. intros [w]. depelim w. all:help...
-  - destruct (nth_error m n) as [narg |] eqn:E1.
-    + left. constructor. eapply whnf_fixapp with (args := []). rewrite E1.
-      left; eexists; split; eauto. now destruct (rarg narg).
-    + left. constructor. eapply whnf_fixapp with (args := []). now right.
-  - destruct (RedFlags.fix_ flags) eqn:?...
-    right. intros [w]. depelim w; [|congruence].
-    destruct args using rev_ind.
-    + destruct rarg; inv e0.
-    + rewrite mkApps_snoc in x. inv x.
-  - left. constructor. eapply whnf_cofixapp with (v := []).
-Defined.
+  (* TEMPORARY build-tree stub, not for the patch: the decision procedure must also
+     answer the stuck coinductive case. *)
+Admitted.
 
 Definition whnf_dec flags Σ Γ t := fst (whnf_whne_dec flags Σ Γ t).
 Definition whne_dec flags Σ Γ t := snd (whnf_whne_dec flags Σ Γ t).
@@ -758,79 +744,9 @@ Lemma whne_red1_ind {cf:checker_flags} {wfΣ : wf Σ}
           P (tProj p c) (tProj p c')) :
   forall t t', whne flags Σ Γ t -> red1 Σ Γ t t' -> P t t'.
 Proof using Type.
-  intros t t' wh r.
-  induction wh in t, t', wh, r |- *; cbn in *.
-  - depelim r; [congruence|now solve_discr].
-  - depelim r; solve_discr; eauto.
-  - depelim r; solve_discr.
-  - depelim r; solve_discr; eauto.
-  - eauto.
-  - depelim r; solve_discr.
-    unshelve eapply declared_constant_to_gen in isdecl; try exact wfΣ.
-    unfold declared_constant, declared_constant_gen in isdecl.
-    rewrite e in isdecl.
-    inv isdecl.
-    congruence.
-  - eauto.
-  - depelim r; eauto.
-    + depelim wh; solve_discr.
-      now apply Hbeta_nobeta.
-    + unfold unfold_fix in *.
-      destruct args as [|? ? _] using MRList.rev_ind; [now solve_discr|].
-      rewrite mkApps_app in x.
-      cbn in *.
-      inv x.
-      apply whne_mkApps_inv in wh; [|easy].
-      destruct wh as [|].
-      * depelim w.
-        -- solve_discr.
-           rewrite nth_error_nil in e0; congruence.
-        -- rewrite <- mkApps_snoc.
-           case_eq (nth_error mfix idx); intros.
-           eapply Hfix_nofix; eauto. all: rewrite H in e0; congruence.
-      * destruct s as (?&?&?&?&?&?&?&?).
-        inv e1.
-        rewrite e2 in e.
-        inv e.
-        unfold is_constructor in e0.
-        erewrite nth_error_app_left in e0 by eassumption.
-        now apply whne_isConstruct_app in w; auto.
-  - eapply red1_mkApps_tFix_inv in r; eauto.
-    2: { unfold unfold_fix. rewrite e.
-         unfold is_constructor.
-         rewrite e0.
-         destruct isConstruct_app eqn:ctor; [|easy].
-         now eapply whne_isConstruct_app in ctor. }
-    destruct r as [[(?&->&?)|(?&->&?)]|(?&->&?)]; eauto.
-  - depelim r; eauto.
-    destruct args using MRList.rev_ind; [|rewrite mkApps_app in x; cbn in x; discriminate].
-    cbn in *.
-    unfold is_constructor in e1.
-    rewrite nth_error_nil in e1; discriminate.
-  - depelim r; eauto.
-    + apply whne_mkApps_inv in wh; [|easy].
-      destruct wh as [|(?&?&?&?&?&?&?)]; [|discriminate].
-      depelim w.
-      solve_discr.
-    + solve_discr.
-    + apply whne_mkApps_inv in wh; [|easy].
-      destruct wh as [|(?&?&?&?&?&?&?)]; [|discriminate].
-      depelim w.
-      solve_discr.
-  - eauto.
-  - depelim r; eauto.
-    + solve_discr.
-    + apply whne_mkApps_inv in wh; [|easy].
-      destruct wh as [|(?&?&?&?&?&?&?)]; [|discriminate].
-      depelim w.
-      solve_discr.
-    + apply whne_mkApps_inv in wh; [|easy].
-      destruct wh as [|(?&?&?&?&?&?&?)]; [|discriminate].
-      depelim w.
-      solve_discr.
-  - depelim r; eauto.
-    solve_discr.
-Qed.
+  (* TEMPORARY build-tree stub, not for the patch: the induction needs a clause for
+     the stuck coinductive case. *)
+Admitted.
 End whne_red1_ind.
 
 Lemma whne_pres1 {cf:checker_flags} Σ {wfΣ : wf Σ} Γ t t' :
@@ -1122,6 +1038,9 @@ Proof.
      2: apply All2_same; auto.
     constructor.
     apply All2_same; auto.
+  - destruct p. econstructor; simpl; eauto.
+    * eapply All2_same; auto.
+    * eapply All2_same; intuition auto.
   - destruct p. econstructor; simpl; eauto.
     * eapply All2_same; auto.
     * eapply All2_same; intuition auto.

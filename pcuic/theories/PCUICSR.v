@@ -883,6 +883,7 @@ Lemma closed_red1_ind (Σ : global_env_ext) (P0 : context -> term -> term -> Typ
 
   (forall (Γ : context) ci (p : predicate term) (mfix : mfixpoint term) (idx : nat)
     (args : list term) (narg : nat) (fn : term) (brs : list (branch term)),
+  forall (Hnondep : ci.(ci_cofix_nondep)),
   unfold_cofix mfix idx = Some (narg, fn) ->
   P Γ (tCase ci p (mkApps (tCoFix mfix idx) args) brs) (tCase ci p (mkApps fn args) brs)) ->
 
@@ -2217,7 +2218,9 @@ Proof.
     apply ReflectEq.eqb_eq in hck.
     have hnd : on_free_vars (strengthenP 0 1 xpredT) (preturn p).
     { match goal with h : implb (isCoFinite (ind_finite mdecl)) _ = true |- _ => move: h end.
-      now rewrite hck. }
+      rewrite hck /=.
+      match goal with h : is_true (ci_cofix_nondep _) |- _ => rewrite h /= end.
+      done. }
     have lenidx : #|indices| = context_assumptions (ind_indices idecl).
     { have hl := ctx_inst_length X5. len in hl. rewrite context_assumptions_rev in hl. len in hl.
       match goal with hw : wf_predicate _ _ _ |- _ => pose proof (wf_predicate_length_pars hw) end.
@@ -2483,12 +2486,14 @@ Proof.
       rewrite PCUICCasesContexts.inst_case_predicate_context_eq => //.
       reflexivity. }
     have hnd' : (isCoFinite (ind_finite mdecl) ==>
-      on_free_vars (strengthenP 0 1 xpredT) preturn') = true.
+      (ci.(ci_cofix_nondep) ==>
+       on_free_vars (strengthenP 0 1 xpredT) preturn')) = true.
     { match goal with
       | h : implb (isCoFinite (ind_finite mdecl)) _ = true,
         hr : closed_red1 _ _ (preturn p) preturn' |- _ => move: h; pose proof hr as hred
       end.
-      case: (isCoFinite (ind_finite mdecl)) => //= hfv.
+      case: (isCoFinite (ind_finite mdecl)) => //=.
+      case: (ci.(ci_cofix_nondep)) => //= hfv.
       eapply red1_on_free_vars; [exact (clrel_rel hred)|exact hfv|].
       apply on_ctx_free_vars_nondep.
       exact (on_free_vars_ctx_on_ctx_free_vars_xpredT (clrel_ctx hred)). }
