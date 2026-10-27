@@ -148,9 +148,31 @@ Section C3.
   Context {cf : checker_flags} (Σ : global_env) (Γ : context).
 
   (* Hindley strong commutation modulo upto_domain.  From a common source t, one red1 step to v
-     and one eta1 step to u join at w ≈ w' where u→w is AT MOST ONE red1 and v→*w' is pure η. *)
+     and one eta1 step to u join at w ≈ w' where u→w is AT MOST ONE red1 and v→*w' is pure η.
+
+     SCOPING PROVISO (EtaC3D mechanical finding, 2026-10-27, full-9.2-tCase model): this LITERAL
+     unscoped form is FALSE on ILL-SCOPED case terms — a bcontext let-body that references an outer
+     binder (unrealizable by inst_case_branch_context) lets the param-subst shift (−npar) plus the
+     red_rel lift (+1) land the unfolded branch variable on an outer λ, breaking one side's η-redex.
+     Every WELL-SCOPED term tested joins (31,273 fuzzed). So C3 must be read over on_free_vars/closed
+     terms (as plan C1a/C1c and the U-rows already are), or case contexts excluded (risk-5). The
+     scoped form below carries the premise; the four unlocking rows (fix/cofix/proj) need no such
+     premise and drive the 11-01 GO. *)
   Definition C3_statement : Type :=
     forall t u v,
+      red1 Σ Γ t v -> eta1 t u ->
+      { w & { w' & (clos_refl (red1 Σ Γ) u w) *
+                   (clos_refl_trans eta1 v w') *
+                   upto_domain w w' } }%type.
+
+  (* The intended (hardened) form: over terms closed under Γ.  closedn #|Γ| t (= on_free_vars
+     (closedP #|Γ| xpredT) t, PCUICOnFreeVars closedP_on_free_vars) is PCUIC's "closed under Γ";
+     this is the form the proof targets and the EtaC3D well-scoped fuzz confirmed (31,273 terms,
+     zero joins missing).  The premise is REQUIRED: the EtaC3D model exhibits ill-scoped case terms
+     (a bcontext let-body reaching an outer binder) where the unscoped C3_statement is false. *)
+  Definition C3_statement_scoped : Type :=
+    forall t u v,
+      closedn #|Γ| t = true ->
       red1 Σ Γ t v -> eta1 t u ->
       { w & { w' & (clos_refl (red1 Σ Γ) u w) *
                    (clos_refl_trans eta1 v w') *
