@@ -1066,3 +1066,35 @@ Proof.
   generalize #|mfix| at 2 3. induction n0; auto. simpl.
   f_equal. apply IHn0.
 Qed.
+
+(** [decompose_app] commutes with [lift]. Both this and [lift_is_constructor]
+    are COMMENTED OUT in 9.2 (Conversion/PCUICWeakeningConv.v:175-208), so they
+    are proved here rather than imported — keeps consumers' build graphs free of
+    Conversion/. *)
+
+Lemma decompose_app_rec_lift n k t l :
+  let (f, a) := decompose_app_rec t l in
+  decompose_app_rec (lift n k t) (map (lift n k) l) = (lift n k f, map (lift n k) a).
+Proof.
+  induction t in k, l |- *; simpl; auto.
+  specialize (IHt1 k (t2 :: l)).
+  destruct decompose_app_rec. now rewrite IHt1.
+Qed.
+
+Lemma decompose_app_lift n k t f a :
+  decompose_app t = (f, a) -> decompose_app (lift n k t) = (lift n k f, map (lift n k) a).
+Proof.
+  generalize (decompose_app_rec_lift n k t []).
+  unfold decompose_app. destruct decompose_app_rec.
+  cbn. intros Heq [= <- <-]. exact Heq.
+Qed.
+
+Lemma lift_is_constructor args narg n k :
+  is_constructor narg args = is_constructor narg (map (lift n k) args).
+Proof.
+  unfold is_constructor. rewrite nth_error_map.
+  destruct nth_error; cbnr.
+  unfold isConstruct_app. destruct decompose_app eqn:Heq.
+  eapply decompose_app_lift in Heq as ->; cbn.
+  destruct t0; cbnr.
+Qed.
