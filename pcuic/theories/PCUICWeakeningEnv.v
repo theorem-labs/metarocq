@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICArityRed.
+From MetaRocq.Common Require Import config PrimitiveOps.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICArityRed PCUICPrimitiveRed.
 From Equations Require Import Equations.
 From MetaRocq.Utils Require Import LibHypsNaming.
 
@@ -309,6 +309,30 @@ Qed.
 
 Hint Resolve weakening_env_declared_constant : extends.
 
+(** [prim_op_of] and [readback] of a defined result are monotone under [extends]:
+    the operation table only grows ([extends_ops]), and a [SBool] result needs
+    [retro_bool] to be registered, which [extends] can only keep ([option_ext_keep]),
+    never change.  This is what makes a primitive weak-head form transport: an
+    operation that fired in [Σ] fires to the same value in [Σ']. *)
+Lemma prim_op_of_extends {Σ Σ' c op} :
+  extends Σ Σ' -> prim_op_of Σ c = Some op -> prim_op_of Σ' c = Some op.
+Proof.
+  intros ext h. destruct ext as [_ _ hre].
+  destruct hre as (_ & _ & _ & _ & _ & hops). exact (hops c op h).
+Qed.
+
+Lemma readback_extends {Σ Σ' s r v} :
+  extends Σ Σ' -> readback Σ s r = Some v -> readback Σ' s r = Some v.
+Proof.
+  intros ext h. destruct s, r; cbn in h |- *; try discriminate; try assumption.
+  destruct ext as [_ _ hre].
+  destruct hre as (_ & _ & _ & _ & hbool & _).
+  destruct (Retroknowledge.retro_bool (retroknowledge Σ)) as [ind|] eqn:hb;
+    [|discriminate].
+  remember (Retroknowledge.retro_bool (retroknowledge Σ')) as rb' eqn:hb'.
+  depelim hbool. exact h.
+Qed.
+
 Lemma weakening_env_whd_rel {Σ Σ' zeta Γ t args h l} :
   wf Σ' -> extends Σ Σ' ->
   whd_rel zeta Σ Γ t args h l -> whd_rel zeta Σ' Γ t args h l.
@@ -319,8 +343,14 @@ Proof using P Pcmp cf.
     | eapply whd_delta | eapply whd_axiom | eapply whd_app | eapply whd_beta
     | eapply whd_fix_iota | eapply whd_fix_stuck | eapply whd_fix_noarg | eapply whd_fix_nounfold
     | eapply whd_iota | eapply whd_case_cofix | eapply whd_case_stuck
-    | eapply whd_proj | eapply whd_proj_cofix | eapply whd_proj_stuck | eapply whd_stop ];
-    eauto using extends_lookup.
+    | eapply whd_proj | eapply whd_proj_cofix | eapply whd_proj_stuck | eapply whd_stop
+    | eapply whd_prim_arg | eapply whd_prim_stuck | eapply whd_prim_fire
+    | eapply whd_prim_inert | eapply whd_prim_partial ];
+    eauto using extends_lookup, prim_op_of_extends, readback_extends.
+  (* OPEN: the whd_axiom branch needs `prim_op_of Σ' c = None`, which `extends`
+     does not give: the operation table may GROW on a constant already declared
+     in Σ, so a stuck axiom in Σ can be a firing operation in Σ'.  whd_rel is
+     not monotone under lax `extends`; see the report to the lane lead. *)
 Qed.
 
 Lemma weakening_env_arity_red {Σ Σ' Γ t Δ s} :
