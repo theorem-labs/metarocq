@@ -375,9 +375,10 @@ Proof. vm_compute. reflexivity. Qed.
   projection, not under a constructor, inside a part of the body that one
   reduction step throws away.  A rule that reduced first and checked only the
   reduct would never see the call; the call is not guarded, so the block must
-  be refused.  The check refuses the call where it stands, before any
-  reduction: as the scrutinee of a [match] in the first three blocks, as the
-  argument of a projection in the fourth. *)
+  be refused.  The check reduces the body until a step discards the part,
+  then refuses the call in that part where it stands: as the scrutinee of a
+  [match] in the first three blocks, as the argument of a projection in the
+  fourth. *)
 
 (** [cofix g : Stream := (fix h (k s : nat) {struct k} : Stream := Cons 0 zeros) O
        (match g with Cons a _ => a end)]: unfolding [h] discards its argument [s]. *)

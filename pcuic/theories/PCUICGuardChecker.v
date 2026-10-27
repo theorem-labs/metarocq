@@ -29,11 +29,16 @@ Set Default Goal Selector "!".
   [check_cofix_block] ([PCUICGuardCoFix]).
 
   The kernel followed is Rocq 9.2's kernel/inductive.ml as patched at
-  commit 18da2c8ff497 of a Rocq fork, not the 9.2.0 release.  Beyond 9.2.0
-  it splits each body's binder prefix once and analyses and rewrites the same
-  stripped body (9.2.0 analyses the stripped body and rewrites the written
-  one), and it submits the positions that this splitting erases to the
-  analysis ([check_erased_prefix], [raw_prefix_escapes]).  The port has both.
+  commit 18da2c8ff497 of a Rocq fork, not the 9.2.0 release.  Its changes
+  beyond 9.2.0 include: it splits each body's binder prefix once and
+  analyses and rewrites the same stripped body (9.2.0 analyses the stripped
+  body and rewrites the written one); it submits the positions that this
+  splitting erases to the analysis ([check_erased_prefix],
+  [raw_prefix_escapes]); [find_uniform_parameters] treats a call of the
+  nested block that is an argument of a variable-headed application as a
+  bare occurrence; and [drop_uniform_parameters] drops the uniform arguments
+  at a call of any function of the block, not only of the body being
+  rewritten.  The port follows the fork in each.
 
   The port differs from the kernel's fixpoint checker in these ways.  All
   but one refuse more than the kernel, or follow PCUIC's reduction; the

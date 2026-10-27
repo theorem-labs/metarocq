@@ -40,7 +40,7 @@ MetaRocq SafeCheck r_f.
     a variable, an argument that is a call of the nested block counts as an
     occurrence of that function with no arguments, so no parameter is
     uniform; an argument of any other shape is visited subterm by subterm.
-    In [u_f], [g u m'] is such an argument of [g u m' _], so [u] is not
+    In [u_f], [g u m' acc] is such an argument of [g u m' _], so [u] is not
     uniform and [u_f u] is a call on a variable that is not a subterm.
     (In [u_h] below the call is reached one application deeper, through the
     argument [h (g u m')], and [u] stays uniform.) *)
