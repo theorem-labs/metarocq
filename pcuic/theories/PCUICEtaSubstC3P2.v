@@ -346,3 +346,12 @@ Proof. intros. now apply subst_eta. Qed.
 
 Corollary eta1_subst0 σ M M' : eta1 M M' -> eta1 (subst0 σ M) (subst0 σ M').
 Proof. intros. now apply eta1_subst. Qed.
+
+(** ** The four unlocking cases, made unconditional against my proved [eta_subst_terms]/[eta1_subst0] *)
+Definition C3_red_proj_uncond := @C3_red_proj.
+Definition C3_red_fix_uncond Σ := @C3_red_fix Σ eta_subst_terms.
+Definition C3_red_cofix_proj_uncond Σ := @C3_red_cofix_proj Σ eta_subst_terms.
+Definition C3_red_cofix_case_uncond Σ := @C3_red_cofix_case Σ eta_subst_terms.
+Print Assumptions C3_red_fix_uncond.
+Print Assumptions C3_red_cofix_case_uncond.
+Print Assumptions eta_subst.
