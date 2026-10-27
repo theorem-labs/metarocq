@@ -119,10 +119,19 @@ Congruence; η in domain/body uses IH; η=eta_red degenerate. One step each side
   `upto_domain` joins (0 η on v). ✔
 - η in body `M→M''`: both β and η in the body → IH join, lift under `tLambda`. ✔
 
-### `letin` / `tCase` / `tProj` / `tFix`-body / `tCoFix`-body congruences  (C2 `:1727-2198`)
-Not yet line-audited here (owned by L2's `c3-audit.md`). Shape is the same congruence/IH pattern; the
-`tFix`-body and `tCoFix`-body cases are the next to check for a C3 counterexample candidate (β inside a
-fix body meeting η at the body). **No counterexample found so far.** [INFERENCE]
+### `letin` / `tCase` / `tProj` congruences  (C2 `:1727-1811`)
+Plain congruences: η and β act on sibling subterms (orthogonal → single-sided replay each side) or on
+the same subterm (IH join). No β on the v side. ✔ [INFERENCE]
+
+### `tFix`-ty/body and `tCoFix`-ty/body congruences  (C2 `:1899-2198`)  [INFERENCE: holds]
+Audited (`:1899-2013` read). β and η both act on the `mfix` `OnOne2` structure. When they hit
+**different** defs the joins are single-sided orthogonal replays (`OnOne2_All2 … beta_eta`, each step
+η on the v side / β on the u side); when they hit the **same** def the body is joined by the **IH**
+(`eapply p1 in X1 as [u' [v' …]]`, `:1993`), which in C3's formulation is already one-sided. C2 carries
+`upto_types`/`upto_domain` bookkeeping on the two `fix_context`s (`:1934-1937,:1967-1969`); for C3 this
+is absorbed by the conclusion's `upto_domain` plus "red1 body steps are insensitive to the vass TYPE".
+**No new β on the β-reduct (v) side. No counterexample.** The `evar`/`array` cases are the same
+OnOne2/IH pattern.
 
 ---
 
@@ -151,9 +160,13 @@ Base lemma names confirmed on `56b92b56`: `OnOne2_nth_error` (`PCUICNormal.v:181
 clos_refl_trans red1` (`:364`).
 
 ## Status / next
-- 2026-10-27: worktree+branch; four-unlocking-cases audit DONE [INFERENCE: all hold, no counterexample];
-  binder critical pairs (`red_beta`, `abs_red_l`, `abs_red_r` incl. β-exposes-fix-under-η-binder) DONE
-  [INFERENCE: all hold]. Reported to `agent://ArityLane`. Snapshot pushed to fork.
+- 2026-10-27: worktree+branch; **full build-free audit of every structurally-distinct case family
+  DONE** [INFERENCE: all hold, NO counterexample anywhere]: the four unlocking cases (`red_fix`,
+  `red_cofix_case`, `red_cofix_proj`, `red_proj`), the binder critical pairs (`red_beta`, `abs_red_l`,
+  `abs_red_r` incl. β-exposes-fix-under-η-binder), and the `letin`/`tCase`/`tProj`/`tFix`/`tCoFix`/
+  `evar`/`array` congruences. Invariant across all: **β never lands on the β-reduct (v) side; it carries
+  η* only; the single β is one `red1` re-fire on the η-reduct (u) side.** Reported to `agent://ArityLane`.
+  Snapshots pushed to fork.
 - Blocked on C3Prover1's shared `PCUICEtaDefs.v` (`wip/eta-c3-defs-2026-10-27`, not yet on fork) — do
   not retype. On hash arrival: merge, `Require`, write `PCUICEtaReductionC3.v`, prove the four cases
   first (flip them [INFERENCE]→[PROVED]), then the ~60 congruences.
