@@ -1,6 +1,7 @@
 -R theories MetaRocq.TemplatePCUIC
 
 theories/TemplateToPCUIC.v
+theories/TemplateToPCUICShared.v
 theories/PCUICToTemplate.v
 theories/PCUICToTemplateCorrectness.v
 theories/TemplateToPCUICCorrectness.v
