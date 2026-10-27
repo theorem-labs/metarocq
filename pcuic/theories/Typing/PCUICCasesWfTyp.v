@@ -256,8 +256,7 @@ Proof.
     + apply All_forallb.
       eapply (Alli_All oi.(onInductives)). intros i idecl oib.
       pose proof (on_type_rel_wf_cases (Σ := (Σ, ind_universes mdecl)) oib.(onArity)) as harity.
-      pose proof harity as harity'.
-      rewrite oib.(ind_arity_eq) in harity'.
+      pose proof (on_type_rel_wf_cases (Σ := (Σ, ind_universes mdecl)) oib.(onArityRed)) as harity'.
       apply wf_cases_it_mkProd_or_LetIn_inv in harity' as [_ harity'].
       apply wf_cases_it_mkProd_or_LetIn_inv in harity' as [hindices _].
       apply/andP; split; [apply/andP; split|].
