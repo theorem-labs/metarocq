@@ -351,10 +351,16 @@ Definition ts_block : mfixpoint term :=
      rarg := 0
    |}].
 
-Example nested_coinductive_pair_refused :
-  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 Fix 0 (strip_mfix tf_block)) ||
-  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix ts_block))
-  = true.
+(** Each half is refused on its own.  The loop needs both a subterm taken
+    through a match on a coinductive and a cofixpoint call in a non-recursive
+    constructor argument; either rule alone breaks it, and both are kept and
+    asserted, so that a later change to one rule cannot open the pair. *)
+Example nested_coinductive_fix_half_refused :
+  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 Fix 0 (strip_mfix tf_block)) = true.
+Proof. vm_compute. reflexivity. Qed.
+
+Example nested_coinductive_cofix_half_refused :
+  is_reject (check_guard_gen (lookup_env Σ) Σ.(retroknowledge) 30 CoFix 0 (strip_mfix ts_block)) = true.
 Proof. vm_compute. reflexivity. Qed.
 
 (** ** Corecursive calls in parts that a reduction step discards

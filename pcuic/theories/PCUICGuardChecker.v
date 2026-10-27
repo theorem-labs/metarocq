@@ -28,6 +28,13 @@ Set Default Goal Selector "!".
   [head_step] in [PCUICGuardReduce].  The cofixpoint case is
   [check_cofix_block] ([PCUICGuardCoFix]).
 
+  The kernel followed is Rocq 9.2's kernel/inductive.ml as patched at
+  commit 18da2c8ff497 of a Rocq fork, not the 9.2.0 release.  Beyond 9.2.0
+  it splits each body's binder prefix once and analyses and rewrites the same
+  stripped body (9.2.0 analyses the stripped body and rewrites the written
+  one), and it submits the positions that this splitting erases to the
+  analysis ([check_erased_prefix], [raw_prefix_escapes]).  The port has both.
+
   The port differs from the kernel's fixpoint checker in these ways.  All
   but one refuse more than the kernel, or follow PCUIC's reduction; the
   exception is the unfolding of constants (below), which can accept a block

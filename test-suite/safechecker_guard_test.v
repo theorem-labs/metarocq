@@ -35,11 +35,15 @@ Fixpoint r_f (x : R nat) : nat :=
 
 MetaRocq SafeCheck r_f.
 
-(** A parameter of a nested fixpoint is uniform only if no call of the
-    nested block is an argument of an application headed by a variable,
-    as in Rocq's kernel.  In [u_f], the nested call [g u m'] is an argument
-    of [g] itself, so [u] is not uniform and [u_f u] is a call on a variable
-    that is not a subterm. *)
+(** Uniform parameters of a nested fixpoint are counted as Rocq's kernel
+    counts them ([find_uniform_parameters]): at an application whose head is
+    a variable, an argument that is a call of the nested block counts as an
+    occurrence of that function with no arguments, so no parameter is
+    uniform; an argument of any other shape is visited subterm by subterm.
+    In [u_f], [g u m'] is such an argument of [g u m' _], so [u] is not
+    uniform and [u_f u] is a call on a variable that is not a subterm.
+    (In [u_h] below the call is reached one application deeper, through the
+    argument [h (g u m')], and [u] stays uniform.) *)
 Inductive lst : Set := nl : lst | cs : nat -> lst -> lst.
 
 Unset Guard Checking.
