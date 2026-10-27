@@ -363,12 +363,67 @@ Proof.
       * now apply All_All2 with (1 := hv).
 Qed.
 
+(** [eta1] is closed under substitution (plan U2), ported from
+    [origin/eta_postpo:PCUICSubstitution.v:2159] to the 9.2 AST (adds the split
+    [case_eta_param]/[case_eta_return], [case_eta_brs] with contexts, and the [array_eta_*]
+    primitive-array congruences). *)
+Lemma eta1_subst s k u v :
+  eta1 u v -> eta1 (subst s k u) (subst s k v).
+Proof.
+  induction 1 in k |- * using eta1_ind_all; cbn;
+    try (constructor; eauto; fail).
+  - refine (transport (fun x => eta1 x _) _ (eta_red _ _ _)). do 2 f_equal.
+    symmetry; apply commut_lift_subst.
+  - replace (map_predicate_k id (subst s) k (set_pparams p params'))
+      with (set_pparams (map_predicate_k id (subst s) k p) (map (subst s k) params'))
+      by reflexivity.
+    apply case_eta_param.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn. intros x y [h1 h2]. exact (h2 k).
+  - replace (map_predicate_k id (subst s) k (set_preturn p preturn'))
+      with (set_preturn (map_predicate_k id (subst s) k p)
+              (subst s (#|p.(pcontext)| + k) preturn'))
+      by reflexivity.
+    apply case_eta_return. cbn. eauto.
+  - apply case_eta_brs.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [bc bb] [bc' bb'] [[h1 h2] h3]; cbn in *. unfold on_Trel; cbn.
+    noconf h3. split; [exact (h2 _)|reflexivity].
+  - constructor. eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros x y [h1 h2]. exact (h2 k).
+  - constructor. apply OnOne2_length in X as e. rewrite e.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [] [] [[h1 h2] e0]; cbn in *. noconf e0; split; [exact (h2 _)|reflexivity].
+  - apply fix_eta_body. apply OnOne2_length in X as e. rewrite e.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [] [] [[h1 h2] e0]; cbn in *. noconf e0; split; [exact (h2 _)|reflexivity].
+  - constructor. apply OnOne2_length in X as e. rewrite e.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [] [] [[h1 h2] e0]; cbn in *. noconf e0; split; [exact (h2 _)|reflexivity].
+  - apply cofix_eta_body. apply OnOne2_length in X as e. rewrite e.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [] [] [[h1 h2] e0]; cbn in *. noconf e0; split; [exact (h2 _)|reflexivity].
+  - replace (map_array_model (subst s k) (set_array_value arr value))
+      with (set_array_value (map_array_model (subst s k) arr) (map (subst s k) value))
+      by reflexivity.
+    apply array_eta_val. eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros x y [h1 h2]. exact (h2 k).
+  - replace (map_array_model (subst s k) (set_array_default arr d))
+      with (set_array_default (map_array_model (subst s k) arr) (subst s k d))
+      by reflexivity.
+    apply array_eta_def. cbn. eauto.
+  - replace (map_array_model (subst s k) (set_array_type arr ty))
+      with (set_array_type (map_array_model (subst s k) arr) (subst s k ty))
+      by reflexivity.
+    apply array_eta_type. cbn. eauto.
+Qed.
+
 Section FourCases.
   Context {cf : checker_flags}.
   Context {Σ : global_env} {wfΣ : wf Σ}.
 
-  Hypothesis eta1_subst0 :
-    forall s M M', eta1 M M' -> eta1 (subst0 s M) (subst0 s M').
+  (* eta1_subst0 is now DISCHARGED (eta1_subst at level 0), not a hypothesis. *)
+  Let eta1_subst0 s M M' (h : eta1 M M') : eta1 (subst0 s M) (subst0 s M') :=
+    eta1_subst s 0 M M' h.
   Hypothesis eta_subst_terms :
     forall s s' M, All2 eta s s' -> eta (subst0 s M) (subst0 s' M).
 
