@@ -708,3 +708,68 @@ Proof.
   - apply peta_mkApps; assumption.
   - reflexivity.
 Qed.
+
+(** ** Bridge half 2: [peta ⊆ eta := clos_refl_trans eta1]
+
+  [eta] congruence closures, then [peta_eta]. The η rule contracts FIRST
+  ([rt_step (eta_red …)]) and then applies the IH, so no [eta1_lift] is needed. *)
+
+Lemma clos_rt_map {A B} (R : A -> A -> Type) (S : B -> B -> Type) (f : A -> B) :
+  (forall x y, R x y -> S (f x) (f y)) ->
+  forall x y, clos_refl_trans R x y -> clos_refl_trans S (f x) (f y).
+Proof.
+  intros Hf x y D. induction D.
+  - apply rt_step; now apply Hf.
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma OnOne2_rt_hd {A} (R : A -> A -> Type) l x y :
+  clos_refl_trans R x y -> clos_refl_trans (OnOne2 R) (x :: l) (y :: l).
+Proof.
+  intros D. induction D.
+  - apply rt_step. now apply OnOne2_hd.
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma OnOne2_rt_tl {A} (R : A -> A -> Type) a l l' :
+  clos_refl_trans (OnOne2 R) l l' -> clos_refl_trans (OnOne2 R) (a :: l) (a :: l').
+Proof.
+  intros D. induction D.
+  - apply rt_step. now apply OnOne2_tl.
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma All2_rt_OnOne2 {A} (R : A -> A -> Type) l l' :
+  All2 (clos_refl_trans R) l l' -> clos_refl_trans (OnOne2 R) l l'.
+Proof.
+  induction 1.
+  - apply rt_refl.
+  - eapply rt_trans; [apply OnOne2_rt_hd; eassumption|apply OnOne2_rt_tl; assumption].
+Qed.
+
+(** Single-position η congruences, each a [clos_rt_map] of an [eta1] congruence. *)
+Definition eta_absl na N : forall x y, eta x y -> eta (tLambda na x N) (tLambda na y N) :=
+  clos_rt_map _ _ _ (fun x y h => abs_eta_l na x y N h).
+Definition eta_absr na A : forall x y, eta x y -> eta (tLambda na A x) (tLambda na A y) :=
+  clos_rt_map _ _ _ (fun x y h => abs_eta_r na x y A h).
+Definition eta_appl M2 : forall x y, eta x y -> eta (tApp x M2) (tApp y M2) :=
+  clos_rt_map _ _ _ (fun x y h => app_eta_l x y M2 h).
+Definition eta_appr M1 : forall x y, eta x y -> eta (tApp M1 x) (tApp M1 y) :=
+  clos_rt_map _ _ _ (fun x y h => app_eta_r x y M1 h).
+Definition eta_prodl M2 na : forall x y, eta x y -> eta (tProd na x M2) (tProd na y M2) :=
+  clos_rt_map _ _ _ (fun x y h => prod_eta_l na x M2 y h).
+Definition eta_prodr M1 na : forall x y, eta x y -> eta (tProd na M1 x) (tProd na M1 y) :=
+  clos_rt_map _ _ _ (fun x y h => prod_eta_r na x y M1 h).
+Definition eta_letd na t b' : forall x y, eta x y -> eta (tLetIn na x t b') (tLetIn na y t b') :=
+  clos_rt_map _ _ _ (fun x y h => letin_eta_def na x t b' y h).
+Definition eta_lett na b b' : forall x y, eta x y -> eta (tLetIn na b x b') (tLetIn na b y b') :=
+  clos_rt_map _ _ _ (fun x y h => letin_eta_ty na b x b' y h).
+Definition eta_letb na b t : forall x y, eta x y -> eta (tLetIn na b t x) (tLetIn na b t y) :=
+  clos_rt_map _ _ _ (fun x y h => letin_eta_body na b t x y h).
+Definition eta_proj pr : forall x y, eta x y -> eta (tProj pr x) (tProj pr y) :=
+  clos_rt_map _ _ _ (fun x y h => proj_eta pr x y h).
+Definition eta_casediscr ci p brs : forall x y, eta x y -> eta (tCase ci p x brs) (tCase ci p y brs) :=
+  clos_rt_map _ _ _ (fun x y h => case_eta_discr ci p x y brs h).
