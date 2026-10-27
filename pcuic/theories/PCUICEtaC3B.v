@@ -1507,3 +1507,66 @@ Proof.
     + rewrite map_app. cbn. now rewrite H2.
 Qed.
 
+Lemma mkApps_tApp_inv f args g a :
+  ~~ isApp f -> mkApps f args = tApp g a ->
+  ∑ args', (args = args' ++ [a]) × (mkApps f args' = g).
+Proof.
+  intros Hf H. destruct args using rev_ind.
+  - cbn in H. subst f. cbn in Hf. discriminate.
+  - rewrite mkApps_app in H. cbn in H. injection H as <- <-.
+    exists args. split; reflexivity.
+Qed.
+
+Lemma lift_unfold_fix_inv n k mfix0 idx narg fn :
+  unfold_fix (map (map_def (lift n k) (lift n (#|mfix0| + k))) mfix0) idx = Some (narg, fn) ->
+  ∑ fn0, (unfold_fix mfix0 idx = Some (narg, fn0)) × (fn = lift n k fn0).
+Proof.
+  intro H. destruct (unfold_fix mfix0 idx) as [[narg0 fn0]|] eqn:E.
+  - rewrite (lift_unfold_fix n k _ _ _ _ E) in H. injection H as <- <-.
+    exists fn0. split; reflexivity.
+  - exfalso. unfold unfold_fix in *. rewrite nth_error_map in H.
+    destruct (nth_error mfix0 idx); cbn in *; discriminate.
+Qed.
+
+Lemma is_constructor_app_lt narg args l :
+  narg < #|args| -> is_constructor narg (args ++ l) = is_constructor narg args.
+Proof. intro H. unfold is_constructor. now rewrite nth_error_app_lt. Qed.
+
+(** ** Created-redex sub-case 2: [red_fix] created inside the η body.
+
+  η turns the λ-bound spine into [args' ++ [tRel 0]] and so can UNLOCK a fixpoint.
+  This is where η-POSTPONEMENT died. For the COMMUTATION it is benign, and
+  [is_constructor_app_tRel0] is why: the guard's recursive argument can never be the
+  trailing [tRel 0], so it lies in the REAL spine, transfers down through the lift
+  ([is_constructor_lift]) to [M]'s own spine, and the fix fires on the η side in ONE
+  step. The β side stays an η-redex ([eta_redex na A (mkApps fn0 args0)]), so [peta_eta]
+  closes it and [upto_domain] is REFLEXIVE here — unlike [red_beta]-created. *)
+Lemma peta_commut_eta_red_fix Σ Γ na A M M' mfix idx args narg fn :
+  peta M M' ->
+  mkApps (tFix mfix idx) args = tApp (lift0 1 M) (tRel 0) ->
+  unfold_fix mfix idx = Some (narg, fn) ->
+  is_constructor narg args = true ->
+  ∑ w w', clos_refl (red1 Σ Γ) M' w
+        × peta (tLambda na A (mkApps fn args)) w' × upto_domain w w'.
+Proof.
+  intros Hp Heq Hunf Hic.
+  destruct (mkApps_tApp_inv (tFix mfix idx) args (lift0 1 M) (tRel 0) eq_refl Heq)
+    as (args' & -> & Hsp).
+  pose proof (is_constructor_app_tRel0 _ _ Hic) as Hlt.
+  rewrite (is_constructor_app_lt _ _ _ Hlt) in Hic.
+  destruct (lift_mkApps_tFix_inv _ _ _ _ _ _ (eq_sym Hsp))
+    as (mfix0 & args0 & -> & -> & ->).
+  destruct (lift_unfold_fix_inv _ _ _ _ _ _ Hunf) as (fn0 & Hunf0 & ->).
+  rewrite is_constructor_lift in Hic.
+  apply peta_mkApps_inv in Hp as (f' & args0' & -> & Hf & Ha).
+  depelim Hf.
+  match goal with Hm : All2 _ mfix0 ?m |- _ =>
+    destruct (peta_unfold_fix _ m _ _ _ Hm Hunf0) as (fn0' & Hunf0' & Hfn) end.
+  exists (mkApps fn0' args0'), (mkApps fn0' args0'). repeat split.
+  - apply r_step. eapply red_fix; [exact Hunf0'|].
+    eapply peta_is_constructor; eassumption.
+  - rewrite mkApps_app. cbn. rewrite <- lift_mkApps.
+    apply peta_eta. apply peta_mkApps; assumption.
+  - reflexivity.
+Qed.
+
