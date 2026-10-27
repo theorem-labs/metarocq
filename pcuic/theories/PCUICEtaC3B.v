@@ -773,3 +773,97 @@ Definition eta_proj pr : forall x y, eta x y -> eta (tProj pr x) (tProj pr y) :=
   clos_rt_map _ _ _ (fun x y h => proj_eta pr x y h).
 Definition eta_casediscr ci p brs : forall x y, eta x y -> eta (tCase ci p x brs) (tCase ci p y brs) :=
   clos_rt_map _ _ _ (fun x y h => case_eta_discr ci p x y brs h).
+
+Lemma eta_tEvar ev l l' : All2 eta l l' -> eta (tEvar ev l) (tEvar ev l').
+Proof.
+  intros H. apply (clos_rt_map _ _ (tEvar ev) (fun x y h => evar_eta ev x y h)).
+  now apply All2_rt_OnOne2.
+Qed.
+
+(** branch list: change bbody via eta* keeping bcontext *)
+Lemma eta_brs_hd bc tl x y :
+  clos_refl_trans eta1 x y ->
+  clos_refl_trans (OnOne2 (on_Trel_eq eta1 bbody bcontext))
+    (mk_branch bc x :: tl) (mk_branch bc y :: tl).
+Proof.
+  induction 1.
+  - apply rt_step. constructor. cbn. split; [assumption|reflexivity].
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma eta_brs brs brs' :
+  All2 (fun x y => bcontext x = bcontext y × eta (bbody x) (bbody y)) brs brs' ->
+  clos_refl_trans (OnOne2 (on_Trel_eq eta1 bbody bcontext)) brs brs'.
+Proof.
+  induction 1 as [|x y l l' [Hc Hb] Hl IH].
+  - apply rt_refl.
+  - destruct x as [bcx bbx], y as [bcy bby]; cbn in *. subst bcy.
+    eapply rt_trans.
+    + apply (eta_brs_hd bcx l bbx bby Hb).
+    + now apply OnOne2_rt_tl.
+Qed.
+
+Lemma eta_tCase ci p p' c c' brs brs' :
+  All2 eta (pparams p) (pparams p') ->
+  puinst p = puinst p' -> pcontext p = pcontext p' ->
+  eta (preturn p) (preturn p') -> eta c c' ->
+  All2 (fun x y => bcontext x = bcontext y × eta (bbody x) (bbody y)) brs brs' ->
+  eta (tCase ci p c brs) (tCase ci p' c' brs').
+Proof.
+  destruct p as [pp pu pc pr], p' as [pp' pu' pc' pr']; cbn.
+  intros Hpar Hu Hpc Hret Hdiscr Hbrs. subst pu' pc'.
+  eapply rt_trans.
+  { apply (clos_rt_map (OnOne2 eta1) _
+             (fun q => tCase ci (mk_predicate q pu pc pr) c brs))
+    with (x := pp) (y := pp').
+    - intros a b h.
+      exact (case_eta_param ci (mk_predicate a pu pc pr) b c brs h).
+    - now apply All2_rt_OnOne2. }
+  eapply rt_trans.
+  { apply (clos_rt_map eta1 _
+             (fun q => tCase ci (mk_predicate pp' pu pc q) c brs))
+    with (x := pr) (y := pr').
+    - intros a b h.
+      exact (case_eta_return ci (mk_predicate pp' pu pc a) b c brs h).
+    - exact Hret. }
+  eapply rt_trans.
+  { exact (eta_casediscr ci (mk_predicate pp' pu pc pr') brs _ _ Hdiscr). }
+  apply (clos_rt_map (OnOne2 (on_Trel_eq eta1 bbody bcontext)) _
+           (fun l => tCase ci (mk_predicate pp' pu pc pr') c' l)
+           (fun l l' h => case_eta_brs ci _ c' l l' h)).
+  now apply eta_brs.
+Qed.
+
+Lemma eta_tPrim_arr arr arr' :
+  array_level arr = array_level arr' ->
+  eta (array_default arr) (array_default arr') ->
+  eta (array_type arr) (array_type arr') ->
+  All2 eta (array_value arr) (array_value arr') ->
+  eta (tPrim (primArray; primArrayModel arr)) (tPrim (primArray; primArrayModel arr')).
+Proof.
+  destruct arr as [lvl ty def vals], arr' as [lvl' ty' def' vals']; cbn.
+  intros Hl Hdef Hty Hval. subst lvl'.
+  eapply rt_trans.
+  { apply (clos_rt_map eta1 _
+             (fun t => tPrim (primArray; primArrayModel
+               {| array_level := lvl; array_type := ty; array_default := t; array_value := vals |})))
+    with (x := def) (y := def').
+    - intros a b h.
+      exact (array_eta_def {| array_level := lvl; array_type := ty; array_default := a; array_value := vals |} b h).
+    - exact Hdef. }
+  eapply rt_trans.
+  { apply (clos_rt_map eta1 _
+             (fun t => tPrim (primArray; primArrayModel
+               {| array_level := lvl; array_type := t; array_default := def'; array_value := vals |})))
+    with (x := ty) (y := ty').
+    - intros a b h.
+      exact (array_eta_type {| array_level := lvl; array_type := a; array_default := def'; array_value := vals |} b h).
+    - exact Hty. }
+  apply (clos_rt_map (OnOne2 eta1) _
+           (fun l => tPrim (primArray; primArrayModel
+             {| array_level := lvl; array_type := ty'; array_default := def'; array_value := l |}))
+           (fun l l' h => array_eta_val
+             {| array_level := lvl; array_type := ty'; array_default := def'; array_value := l |} l' h)).
+  now apply All2_rt_OnOne2.
+Qed.
