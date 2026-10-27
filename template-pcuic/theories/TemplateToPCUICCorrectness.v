@@ -1554,6 +1554,81 @@ Section Trans_Global.
     - destruct Retroknowledge.retro_bool => //. intros [= <-]; reflexivity.
   Qed.
 
+  (** ** The primitive-operation machine graph transports
+
+    The five new [whd_rel] constructors (design §7.2) are read off the same two
+    functions on both sides — [tsplit_lits]/[split_lits] (which arguments are
+    literals) and the denotation — so each Template case maps to the PCUIC one
+    on the translated terms.  [trans] takes a Template literal node to the PCUIC
+    literal argument the rule expects, and is the identity on the literal of a
+    reduct, so the bridges below are all it needs. *)
+
+  Lemma trans_prim_op_of_None c :
+    Ast.Env.prim_op_of Σ c = None -> prim_op_of Σ' c = None.
+  Proof using Type.
+    rewrite /prim_op_of /Ast.Env.prim_op_of trans_env_env_retroknowledge //.
+  Qed.
+
+  Lemma wf_template_of_lit l : WfAst.wf Σ (ST.template_of_lit l).
+  Proof using Type. destruct l; constructor. Qed.
+
+  Lemma All_wf_template_of_lit ls : All (WfAst.wf Σ) (List.map ST.template_of_lit ls).
+  Proof using Type.
+    induction ls as [|l ls ih]; constructor; [apply wf_template_of_lit|exact ih].
+  Qed.
+
+  Lemma lit_of_term_mkApps_cons f a args :
+    lit_of_term (mkApps f (a :: args)) = None.
+  Proof using Type.
+    induction args as [|b args ih] in f, a |- *; cbn [mkApps]; [reflexivity|apply ih].
+  Qed.
+
+  Lemma trans_lit_of_template_Some y l :
+    ST.lit_of_template y = Some l -> lit_of_term (trans Σ' y) = Some l.
+  Proof using Type.
+    destruct y => //=; intros [= <-]; reflexivity.
+  Qed.
+
+  Lemma trans_lit_of_template_None y :
+    WfAst.wf Σ y -> ST.lit_of_template y = None -> lit_of_term (trans Σ' y) = None.
+  Proof using Type.
+    intros wfy hnone; destruct y; cbn [ST.lit_of_template] in hnone;
+      try discriminate hnone; try (cbn [trans]; reflexivity).
+    - (* tApp *) cbn [trans].
+      match goal with |- context [map (trans Σ') ?ll] => destruct ll as [|a ll'] end.
+      + exfalso. destruct (WfAst.wf_inv wfy) as [[[_ hne] _] _]. exact (hne eq_refl).
+      + apply lit_of_term_mkApps_cons.
+    - (* tCase *) cbn [trans]. destruct TransLookup.lookup_inductive as [[]|]; reflexivity.
+  Qed.
+
+  Lemma trans_tsplit_lits_inl {argl ls} :
+    ST.tsplit_lits argl = inl ls ->
+    split_lits (List.map (trans Σ') argl) = inl ls.
+  Proof using Type.
+    intros h; rewrite (ST.tsplit_lits_inl h) trans_map_template_of_lit split_lits_map //.
+  Qed.
+
+  Lemma trans_tsplit_lits_inr {argl ls a rest} :
+    WfAst.wf Σ a ->
+    ST.tsplit_lits argl = inr (ls, a, rest) ->
+    split_lits (List.map (trans Σ') argl) = inr (ls, trans Σ' a, List.map (trans Σ') rest).
+  Proof using Type.
+    intros wfa h; destruct (ST.tsplit_lits_inr h) as [-> hnl].
+    rewrite map_app map_cons trans_map_template_of_lit.
+    apply split_lits_app. now apply trans_lit_of_template_None.
+  Qed.
+
+  (** The first non-literal argument the split names is well formed, so the
+      bridges above apply to it. *)
+  Lemma tsplit_lits_wf {argl n ls a rest} :
+    All (WfAst.wf Σ) argl -> ST.tsplit_lits (firstn n argl) = inr (ls, a, rest) ->
+    WfAst.wf Σ a.
+  Proof using Type.
+    intros wfargs h. destruct (ST.tsplit_lits_inr h) as [e _].
+    have wff := All_firstn (n := n) wfargs. rewrite e in wff.
+    apply All_app in wff as [_ wfar]. now depelim wfar.
+  Qed.
+
   Lemma trans_red1 Γ T U :
     All (WfAst.wf_decl Σ) Γ ->
     WfAst.wf Σ T ->
@@ -1847,7 +1922,7 @@ Section Trans_Global.
     intros wfΓ wft wfargs w. revert wft wfargs.
     induction w as [c args d b h l hnth hbod w IH|c args d hnth hbod
       |na b B t args h l hz w IH|na b B t args hz
-      |c u decl body args h l hcst hbod w IH|c u decl args hcst hbod
+      |c u decl body args h l hcst hbod w IH|c u decl args hcst hbod hpo
       |c k T args h l w IH
       |f l args h l' hf hl w IH
       |na A t a args h l w IH
@@ -1860,7 +1935,12 @@ Section Trans_Global.
       |p c args u cargs a h l wa IHa hnth wb IHb
       |p c args mfix idx cargs narg fn h l wa IHa hunf wb IHb
       |p c args t cargs wa IHa hnc hncf
-      |t args hs]; intros wft wfargs.
+      |t args hs
+      |c u decl op args ls a rest t cargs h l hcst hbod hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs hcst hbod hpo hsat hs wa IHa hnl
+      |c u decl op args ls r v h l hcst hbod hpo hsat hs hden hrb w IH
+      |c u decl op args ls hcst hbod hpo hsat hs hden
+      |c u decl op args hcst hbod hpo hpart]; intros wft wfargs.
     (* tRel, let-bound *)
     - have wfb : WfAst.wf Σ b.
       { destruct (nth_error_all hnth wfΓ) as [wdb _]. rewrite hbod in wdb. exact wdb. }
@@ -1893,6 +1973,7 @@ Section Trans_Global.
     - eapply whd_axiom.
       + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
       + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of_None.
     (* a head cast is a beta-redex in PCUIC *)
     - destruct (WfAst.wf_inv wft) as [wfc wfT].
       cbn [trans]. apply whd_app, whd_beta. cbn. rewrite lift0_p.
@@ -2017,6 +2098,73 @@ Section Trans_Global.
       + rewrite (trans_whd_is_cofix t ht). exact hncf.
     (* the machine stops *)
     - apply whd_stop. now apply trans_whd_stop_head.
+    (* whd_prim_arg: reduce the first non-literal argument, then re-enter *)
+    - have wfa : WfAst.wf Σ a := tsplit_lits_wf wfargs hs.
+      destruct (whd_rel_wf wfΓ wfa All_nil wa) as [wft0 wfcargs].
+      have wftc : WfAst.wf Σ (S.mkApps t cargs) := WfAst.wf_mkApps _ _ _ wft0 wfcargs.
+      have wfrest : All (WfAst.wf Σ) rest.
+      { destruct (ST.tsplit_lits_inr hs) as [e _].
+        have wff := All_firstn (n := arity op) wfargs. rewrite e in wff.
+        apply All_app in wff as [_ wfar]. now depelim wfar. }
+      eapply whd_prim_arg.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hsat.
+      + rewrite firstn_map. now apply trans_tsplit_lits_inr.
+      + exact (IHa wfa All_nil).
+      + rewrite -trans_mkApps.
+        destruct (ST.lit_of_template (S.mkApps t cargs)) as [l0|] eqn:hl0;
+          [|contradiction hnl; reflexivity].
+        rewrite (trans_lit_of_template_Some _ _ hl0). discriminate.
+      + have wfbig : All (WfAst.wf Σ)
+          (List.map ST.template_of_lit ls ++ S.mkApps t cargs :: rest ++ skipn (arity op) args).
+        { apply All_app_inv; [apply All_wf_template_of_lit|].
+          constructor; [exact wftc|apply All_app_inv; [exact wfrest|now apply All_skipn]]. }
+        have tw := IH wft wfbig.
+        rewrite map_app trans_map_template_of_lit in tw. cbn [List.map] in tw.
+        rewrite trans_mkApps map_app map_skipn in tw. exact tw.
+    (* whd_prim_stuck: the reduced stuck argument keeps the application stuck *)
+    - have wfa : WfAst.wf Σ a := tsplit_lits_wf wfargs hs.
+      destruct (whd_rel_wf wfΓ wfa All_nil wa) as [wft0 wfcargs].
+      have wftc : WfAst.wf Σ (S.mkApps t cargs) := WfAst.wf_mkApps _ _ _ wft0 wfcargs.
+      cbn [trans].
+      rewrite map_app trans_map_template_of_lit. cbn [List.map].
+      rewrite trans_mkApps map_app map_skipn.
+      eapply whd_prim_stuck.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hsat.
+      + rewrite firstn_map. now apply trans_tsplit_lits_inr.
+      + exact (IHa wfa All_nil).
+      + rewrite -trans_mkApps. now apply trans_lit_of_template_None.
+    (* whd_prim_fire: every argument is a literal, the rule fires *)
+    - eapply whd_prim_fire.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hsat.
+      + rewrite firstn_map. now apply trans_tsplit_lits_inl.
+      + exact hden.
+      + exact (trans_treadback _ _ _ hrb).
+      + have wfv : WfAst.wf Σ v := TypingWf.wf_treadback hrb.
+        have tw := IH wfv (All_skipn _ wfargs).
+        rewrite map_skipn in tw. exact tw.
+    (* whd_prim_inert: saturated but the operation does not compute *)
+    - eapply whd_prim_inert.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hsat.
+      + rewrite firstn_map. now apply trans_tsplit_lits_inl.
+      + exact hden.
+    (* whd_prim_partial: unsaturated *)
+    - eapply whd_prim_partial.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hpart.
   Qed.
 
   Lemma trans_arity_red {Γ t Δ s} :
