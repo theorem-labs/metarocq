@@ -30,7 +30,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICEquality PCUICCases PCUICReduction PCUICEtaDefs.
-From MetaRocq.PCUIC Require Import PCUICInduction.
+From MetaRocq.PCUIC Require Import PCUICInduction PCUICEtaConfluence.
 
 Import ListNotations.
 
@@ -165,19 +165,10 @@ Proof.
 Qed.
 
 Section C3Cases.
-  (* ASSUMED CLOSURE FACTS (lemma parameters — invisible to Print Assumptions).
-     Everything in this Section is "proved, conditional on CH1, CH2".
-     Names and types are EtaL2's authoritative ones (frac/eta-l2), so the final
-     assembly Requires PCUICEtaConfluence's versions with no rename. *)
-
-  (* CH1 (U1): upto_domain reflexive. LANDED green on frac/eta-l2 @ e49648c4. *)
-  Context (upto_domain_refl : forall t, upto_domain t t).
-
-  (* CH2 (U2+U4): eta commutes with parallel substitution. In progress on
-     frac/eta-l2 (PCUICEtaConfluence.v); exact type agreed with EtaL2. *)
-  Context (eta_subst : forall (s s' : list term) (b b' : term),
-      All2 eta s s' -> eta b b' -> eta (subst0 s b) (subst0 s' b')).
-
+  (* The four unlocking cases are now UNCONDITIONAL: the closure facts they use —
+     upto_domain_refl and eta_subst — are L2's landed lemmas from PCUICEtaConfluence
+     (frac/eta-l2 7b4491f0), no longer Context parameters. Print Assumptions is back
+     to only the base AST primitives. *)
   Context {Σ : global_env} {Γ : context}.
 
   (** ** Unlocking case 1: [red_proj] (independent position)
@@ -436,3 +427,10 @@ Section C3Cases.
   Qed.
 
 End C3Cases.
+
+(** The four unlocking cases are unconditional: no axioms, no hypotheses beyond
+    the base AST primitive types. *)
+Print Assumptions C3_red_proj.
+Print Assumptions C3_red_fix.
+Print Assumptions C3_red_cofix_case.
+Print Assumptions C3_red_cofix_proj.

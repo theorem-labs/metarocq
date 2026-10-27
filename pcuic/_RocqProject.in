@@ -125,7 +125,14 @@ theories/PCUICWeakeningConfig.v
 
 theories/PCUICCasesHelper.v
 
+
+# BET-315 eta lane (L1): new relations beside the base ones
+theories/PCUICCumulativitySpecEta.v
+theories/PCUICCumulativitySpecEtaClosure.v
+theories/PCUICTypingEta.v
+# BET-315 eta lane (L2): confluence
+theories/PCUICEtaConfluence.v
+# BET-315 eta lane (C3Prover1): the four unlocking cases + wf counterexample
 theories/PCUICEtaC3.v
 theories/PCUICEtaC3Cex.v
-
 # theories/All.v
