@@ -187,17 +187,28 @@ clos_refl_trans red1` (`:364`).
   CH5b `eta_mkApps_args`, CH6 `onone2_eta_nth_error` as REAL local proofs** (pure `eta1`-congruence
   from `PCUICEtaDefs`); build still EXIT 0 (commit `0ff98361`, fork). These four are now UNCONDITIONAL.
 
-### HARDENED C3 statement (lead directive via EtaL2, 2026-10-27 — prove verbatim in the assembly)
+### AUTHORITATIVE C3 statement (re-hardened 2nd fix via EtaL2, 2026-10-27 — prove verbatim in the assembly)
 ```
-Lemma C3 : forall Σ Γ t u v,
+Lemma C3 : forall {cf : checker_flags} (Σ : global_env) (Γ : context) (t u v : term),
+  wf Σ ->
   is_closed_context Γ -> is_open_term Γ t ->
   red1 Σ Γ t v -> eta1 t u ->
   ∑ w w', clos_refl (red1 Σ Γ) u w × clos_refl_trans eta1 v w' × upto_domain w w'.
 ```
-The UNSCOPED form is FALSE on ill-scoped branch contexts (EtaC3D fuzz: 31,273 cases, the premise
-bites only in the tCase congruence cases); scoping premises match C1a/C1c/U-rows and what C4/A2 consume.
-**My four unlocking cases are UNAFFECTED** (no tCase congruence), so my standalone helper lemmas need
-no scoping premise; the assembly carries them at top level.
+Two independent falsifications forced the premises, both in the CONGRUENCE cases (not the four
+unlocking ones):
+1. UNSCOPED form FALSE on ill-scoped branch contexts (EtaC3D fuzz, 31,273 cases) → `is_closed_context`
+   / `is_open_term` (the tCase congruence cases).
+2. SCOPED-but-wf-free form FALSE: an open constant body in Σ (`cst_body = Some (tRel 0)`) lets
+   `red_delta` destroy the η-redex inside a congruence; term/context scoping cannot exclude it →
+   add **`wf Σ`** (exactly C2's premise, `origin/eta_postpo:PCUICEtaReduction.v:1471`). C4 supplies
+   `wf` with no mismatch (base `red_confluence` is `wf`-only).
+**Correction to my build-free audit:** the `abs_red_r`/congruence cases I marked `[INFERENCE: holds]`
+were believed under implicit well-scoping; #2 shows the honest statement needs `wf Σ`. This is exactly
+why those verdicts carried `[INFERENCE]` and not `[PROVED]` — read-and-believed ≠ proved; the falsifier
+caught it.
+**My four unlocking cases are UNAFFECTED** (EtaL2 confirms: no tCase congruence, no `red_delta`), so my
+standalone helper lemmas stay premise-free; the assembly carries `wf Σ`/scoping at top level.
 
 ### ⚠ Conditional-proof status (stream-lead rule 16:50Z — `Print Assumptions` cannot show parameters)
 The four C3 unlocking-case lemmas are **PROVED, CONDITIONAL ON** exactly these two remaining Section
