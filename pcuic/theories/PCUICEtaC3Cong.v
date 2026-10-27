@@ -135,6 +135,45 @@ Proof.
   induction 1; [apply rt_step; now apply eta1_set_array_value|apply rt_refl|eapply rt_trans; eauto].
 Qed.
 
+(** Type-generic two-[OnOne2] diamond (the proof of [c3_OnOne2], abstracted over
+    the element type [A] and the three element relations [R] (red leg), [S] (eta
+    leg), [U] (join).  The red leg carries, per element, a local join [J] for the
+    [S]-match — exactly the shape [red1_ind_all]'s per-element IH provides.  Reused
+    for the fix/cofix def-lists via [on_Trel_eq] on the dtype field. *)
+Lemma onOne2_diamond {A} (R S U : A -> A -> Type) :
+  (forall x, U x x) ->
+  forall l l' l'',
+  OnOne2 (fun a a' => R a a'
+            × (forall b, S a b -> ∑ w w', clos_refl R b w × clos_refl_trans S a' w' × U w w'))
+         l l' ->
+  OnOne2 S l l'' ->
+  ∑ lw lw', clos_refl (OnOne2 R) l'' lw × clos_refl_trans (OnOne2 S) l' lw' × All2 U lw lw'.
+Proof.
+  intros Urefl l l' l'' hr. revert l''.
+  induction hr as [hd hd' tl pr | hd tl tl' hr IHr]; intros l'' he.
+  - depelim he.
+    + destruct (snd pr _ ltac:(eassumption)) as (w & w' & hw & hw' & hu).
+      exists (w :: tl), (w' :: tl). split; [|split].
+      * now apply clos_refl_OnOne2_hd.
+      * now apply crt_OnOne2_hd.
+      * constructor; [exact hu|apply All2_same; exact Urefl].
+    + eexists (hd' :: _), (hd' :: _). split; [|split].
+      * apply r_step. constructor. exact (fst pr).
+      * apply crt_OnOne2_cons. apply rt_step. eassumption.
+      * apply All2_same; exact Urefl.
+  - depelim he.
+    + eexists (_ :: tl'), (_ :: tl'). split; [|split].
+      * apply clos_refl_OnOne2_cons. apply r_step.
+        eapply OnOne2_impl; [exact hr|]. intros ? ? h. exact (fst h).
+      * apply crt_OnOne2_hd. apply rt_step. eassumption.
+      * apply All2_same; exact Urefl.
+    + destruct (IHr _ ltac:(eassumption)) as (lw & lw' & hw & hw' & hu).
+      exists (hd :: lw), (hd :: lw'). split; [|split].
+      * now apply clos_refl_OnOne2_cons.
+      * now apply crt_OnOne2_cons.
+      * constructor; [exact (Urefl hd)|exact hu].
+  Qed.
+
 Section Cong.
   Context {cf : checker_flags} (Σ : global_env).
   (** NO global [IH : C3 Σ] here, deliberately.  The AUTHORITATIVE C3 is the
