@@ -129,3 +129,5 @@ theories/PCUICCasesHelper.v
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
 # theories/All.v
+# BET-315 eta lane (C3 prover D): C3 defs + statement (adversarial)
+theories/PCUICEtaC3D.v
