@@ -106,6 +106,35 @@ Lemma red_le_set_array_type Σ Γ arr x y : red_le Σ Γ x y ->
              (tPrim (primArray; primArrayModel (set_array_type arr y))).
 Proof. destruct 1; [apply r_step; now apply red1_set_array_type|apply r_refl]. Qed.
 
+Lemma red1_set_array_value Σ Γ arr l l' : OnOne2 (red1 Σ Γ) l l' ->
+  red1 Σ Γ (tPrim (primArray; primArrayModel (set_array_value arr l)))
+           (tPrim (primArray; primArrayModel (set_array_value arr l'))).
+Proof.
+  intro o.
+  assert (E : set_array_value (set_array_value arr l) l' = set_array_value arr l')
+    by (now destruct arr).
+  rewrite <- E. exact (@array_red_val Σ Γ (set_array_value arr l) l' o).
+Qed.
+Lemma red_le_set_array_value Σ Γ arr l l' : clos_refl (OnOne2 (red1 Σ Γ)) l l' ->
+  red_le Σ Γ (tPrim (primArray; primArrayModel (set_array_value arr l)))
+             (tPrim (primArray; primArrayModel (set_array_value arr l'))).
+Proof. destruct 1; [apply r_step; now apply red1_set_array_value|apply r_refl]. Qed.
+Lemma eta1_set_array_value arr l l' : OnOne2 eta1 l l' ->
+  eta1 (tPrim (primArray; primArrayModel (set_array_value arr l)))
+       (tPrim (primArray; primArrayModel (set_array_value arr l'))).
+Proof.
+  intro o.
+  assert (E : set_array_value (set_array_value arr l) l' = set_array_value arr l')
+    by (now destruct arr).
+  rewrite <- E. exact (array_eta_val (set_array_value arr l) l' o).
+Qed.
+Lemma eta_set_array_value arr l l' : clos_refl_trans (OnOne2 eta1) l l' ->
+  clos_refl_trans eta1 (tPrim (primArray; primArrayModel (set_array_value arr l)))
+                       (tPrim (primArray; primArrayModel (set_array_value arr l'))).
+Proof.
+  induction 1; [apply rt_step; now apply eta1_set_array_value|apply rt_refl|eapply rt_trans; eauto].
+Qed.
+
 Section Cong.
   Context {cf : checker_flags} (Σ : global_env).
   (** NO global [IH : C3 Σ] here, deliberately.  The AUTHORITATIVE C3 is the
@@ -501,6 +530,34 @@ Section Cong.
       + now apply eta_Array_type.
       + apply upto_domain_array; cbn;
           [reflexivity|apply upto_domain_refl|exact hu|apply all2_upto_refl].
+  Qed.
+
+  Lemma c3_array_red_val Γ arr value u :
+    OnOne2 (fun a a' => red1 Σ Γ a a' × (forall b, eta1 a b -> joinable Σ Γ b a'))
+           arr.(array_value) value ->
+    eta1 (tPrim (primArray; primArrayModel arr)) u ->
+    joinable Σ Γ u (tPrim (primArray; primArrayModel (set_array_value arr value))).
+  Proof.
+    intros hr he. depelim he.
+    - (* array_eta_val : both in the value list, use the diamond *)
+      destruct (c3_OnOne2 _ _ _ _ hr ltac:(eassumption)) as (lw & lw' & hw & hw' & hu).
+      exists (tPrim (primArray; primArrayModel (set_array_value arr lw))),
+             (tPrim (primArray; primArrayModel (set_array_value arr lw'))). split; [|split].
+      + now apply red_le_set_array_value.
+      + now apply eta_set_array_value.
+      + apply upto_domain_array; cbn; [reflexivity|apply upto_domain_refl|apply upto_domain_refl|exact hu].
+    - (* array_eta_def : parallel *)
+      eexists; eexists. split; [|split].
+      + apply r_step. apply array_red_val.
+        eapply OnOne2_impl; [exact hr|]. intros ? ? h. exact (fst h).
+      + apply rt_step. apply array_eta_def. eassumption.
+      + apply upto_domain_refl.
+    - (* array_eta_type : parallel *)
+      eexists; eexists. split; [|split].
+      + apply r_step. apply array_red_val.
+        eapply OnOne2_impl; [exact hr|]. intros ? ? h. exact (fst h).
+      + apply rt_step. apply array_eta_type. eassumption.
+      + apply upto_domain_refl.
   Qed.
 
 End Cong.
