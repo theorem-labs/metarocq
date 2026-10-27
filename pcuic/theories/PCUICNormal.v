@@ -2,10 +2,10 @@
 From Equations Require Import Equations.
 From Stdlib Require Import Bool String List Program BinPos Compare_dec Arith Lia.
 From MetaRocq.Utils Require Import utils monad_utils.
-From MetaRocq.Common Require Import config Universes BasicAst.
+From MetaRocq.Common Require Import config Universes BasicAst Primitive PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICOnOne PCUICCases
      PCUICContextReduction PCUICEquality PCUICLiftSubst PCUICTyping PCUICWeakeningEnvConv
-     PCUICWeakeningEnvTyp PCUICReduction PCUICClosedTyp
+     PCUICWeakeningEnvTyp PCUICReduction PCUICClosedTyp PCUICPrimitiveRed
      PCUICInduction PCUICRedTypeIrrelevance PCUICOnFreeVars PCUICEtaExpand.
 From Stdlib Require Import ssreflect ssrbool.
 Set Asymmetric Patterns.
@@ -36,6 +36,50 @@ Proof.
   revert a; induction l; cbn; congruence.
 Qed.
 
+(** * Primitive-operation redexes
+
+  [split_lits], [lits_of_args] and [prim_reduct] are
+  [PCUICPrimitiveRed]'s: the machine ([PCUICSafeReduce]), the machine's graph
+  ([PCUICArityRed]) and the weak-head forms here all ask the same two
+  questions, so they are answered once, beside [lit_of_term].  [prim_reduct Σ
+  op args] is the reduct of [mkApps (tConst c u) args] by [red_prim_op] when
+  the rule fires, and [None] when it does not.  It mentions only [Σ], never a
+  context or the reduction flags, so the machine and conversion can build it
+  from a computed [option term]. *)
+
+(** The rule's premises fail: the application is stuck at its head. *)
+Definition cannot_fire (Σ : global_env) (op : prim_op) (args : list term) : Prop :=
+  prim_reduct Σ op args = None.
+
+(** The reduct computed by [prim_reduct] is the one [red_prim_op] produces. *)
+Lemma red1_prim_reduct {cf : checker_flags} Σ Γ c decl u op args v :
+  lookup_env Σ c = Some (ConstantDecl decl) ->
+  cst_body decl = None ->
+  prim_op_of Σ c = Some op ->
+  prim_reduct Σ op args = Some v ->
+  red1 Σ Γ (mkApps (tConst c u) args) v.
+Proof.
+  intros hl hb hop hr.
+  apply prim_reduct_spec in hr as [ls [r [_ hd hbk ->]]].
+  eapply red_prim_op; tea.
+  now apply declared_constant_from_gen.
+Qed.
+
+(** A literal argument is irreducible, so a saturated application of literals
+    has no reduction but the rule's own. *)
+Lemma red1_term_of_lit Σ Γ l t' : red1 Σ Γ (term_of_lit l) t' -> False.
+Proof.
+  rewrite /term_of_lit; destruct l; cbn; intros r; depelim r; solve_discr.
+Qed.
+
+Lemma OnOne2_map_term_of_lit Σ Γ ls args' :
+  OnOne2 (red1 Σ Γ) (map term_of_lit ls) args' -> False.
+Proof.
+  induction ls as [|l ls ih] in args' |- *; cbn; intros o; depelim o.
+  - now eapply red1_term_of_lit.
+  - now eapply ih.
+Qed.
+
 Section Normal.
 
   Context (flags : RedFlags.t).
@@ -64,6 +108,7 @@ Section Normal.
   | whne_const c u decl :
       lookup_env Σ c = Some (ConstantDecl decl) ->
       decl.(cst_body) = None ->
+      prim_op_of Σ c = None ->
       whne Γ (tConst c u)
 
   | whne_const_nodelta c u :
@@ -99,7 +144,35 @@ Section Normal.
 
   | whne_proj_noiota p c :
       RedFlags.iota flags = false ->
-      whne Γ (tProj p c).
+      whne Γ (tProj p c)
+
+  (** A saturated primitive operation blocked on a stuck argument is neutral,
+      exactly as the kernel's [Ntrl] is (kernel/cClosure.ml).  The arguments
+      before the stuck one are already literals, which is the order the kernel
+      and the machine's [Prim_app] frame evaluate them in; it also makes the
+      blocking argument unique, so that a term cannot be stuck here and rigid
+      ([whnf_primapp_rigid]) there.  Saturation is exact: over-application goes
+      through [whne_app]. *)
+  | whne_primapp_stuck c u decl op ls a rest :
+      lookup_env Σ c = Some (ConstantDecl decl) ->
+      decl.(cst_body) = None ->
+      prim_op_of Σ c = Some op ->
+      #|ls| + S #|rest| = arity op ->
+      whne Γ a ->
+      whne Γ (mkApps (tConst c u) (map term_of_lit ls ++ a :: rest))
+
+  (** A saturated primitive operation on literal arguments whose denotation or
+      readback fails: the term has no reduction at all.  This is where a
+      wrong-tag literal list and an unregistered [retro_bool] land, which is
+      what makes the weak-head theory independent of the environment
+      condition. *)
+  | whne_primapp_inert c u decl op ls :
+      lookup_env Σ c = Some (ConstantDecl decl) ->
+      decl.(cst_body) = None ->
+      prim_op_of Σ c = Some op ->
+      #|ls| = arity op ->
+      prim_reduct Σ op (map term_of_lit ls) = None ->
+      whne Γ (mkApps (tConst c u) (map term_of_lit ls)).
 
   (* Relative to reduction flags *)
   Inductive whnf (Γ : context) : term -> Type :=
@@ -114,7 +187,29 @@ Section Normal.
       \/ (nth_error mfix idx = None) ->
     whnf Γ (mkApps (tFix mfix idx) args)
   | whnf_cofixapp mfix idx v : whnf Γ (mkApps (tCoFix mfix idx) v)
-  | whnf_prim p : whnf Γ (tPrim p).
+  | whnf_prim p : whnf Γ (tPrim p)
+  (** An unsaturated primitive operation is a value, not a neutral, as the
+      kernel says ("partially applied primitives are not Ntrl") and as PCUIC
+      treats an unsaturated fixpoint. *)
+  | whnf_primapp_partial c u decl op args :
+      lookup_env Σ c = Some (ConstantDecl decl) ->
+      decl.(cst_body) = None ->
+      prim_op_of Σ c = Some op ->
+      #|args| < arity op ->
+      whnf Γ (mkApps (tConst c u) args)
+  (** A saturated primitive operation whose first non-literal argument is
+      already a weak-head normal form: the rule can never fire, but the
+      application is not neutral.  [lit_of_term a = None] is stable under
+      reduction because [a] is a weak-head normal form
+      ([whnf_lit_pres1]). *)
+  | whnf_primapp_rigid c u decl op ls a rest :
+      lookup_env Σ c = Some (ConstantDecl decl) ->
+      decl.(cst_body) = None ->
+      prim_op_of Σ c = Some op ->
+      #|ls| + S #|rest| = arity op ->
+      whnf Γ a ->
+      lit_of_term a = None ->
+      whnf Γ (mkApps (tConst c u) (map term_of_lit ls ++ a :: rest)).
 
   Lemma whne_mkApps :
     forall Γ t args,
@@ -135,29 +230,235 @@ Section Normal.
     intros. econstructor. now eapply whne_mkApps.
   Qed.
 
+  (** A neutral is never a literal, so a stuck argument always blocks the
+      rule. *)
+  Lemma whne_not_lit Γ t : whne Γ t -> lit_of_term t = None.
+  Proof using Type.
+    intros h; destruct t => //.
+    exfalso; depelim h; solve_discr.
+  Qed.
+
+  (** The literal prefix makes the blocking argument unique: [split_lits] is a
+      function, and [split_lits_app] computes it on the decomposition. *)
+  Lemma lit_split_inj ls a rest ls' a' rest' :
+    lit_of_term a = None -> lit_of_term a' = None ->
+    map term_of_lit ls ++ a :: rest = map term_of_lit ls' ++ a' :: rest' ->
+    [× ls = ls', a = a' & rest = rest'].
+  Proof using Type.
+    intros ha ha' e.
+    pose proof (split_lits_app (ls := ls) (a := a) (rest := rest) ha) as h.
+    rewrite e (split_lits_app (ls := ls') (a := a') (rest := rest') ha') in h.
+    noconf h; split => //.
+  Qed.
+
+  (** The interface the machine and conversion use: [cannot_fire] plus
+      settled arguments.  An argument that is not a literal must be neutral
+      for the application to be neutral. *)
+  Lemma whne_primapp Γ c u decl op args :
+    lookup_env Σ c = Some (ConstantDecl decl) ->
+    decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op ->
+    #|args| = arity op ->
+    cannot_fire Σ op args ->
+    All (fun a => lit_of_term a = None -> whne Γ a) args ->
+    whne Γ (mkApps (tConst c u) args).
+  Proof using Type.
+    intros hl hb hop hlen hcf hall.
+    destruct (split_lits args) as [ls|[[ls a] rest]] eqn:hs.
+    - pose proof (split_lits_inl hs) as e.
+      rewrite e. rewrite e in hlen hcf.
+      eapply whne_primapp_inert; tea.
+      + now rewrite length_map in hlen.
+      + exact hcf.
+    - destruct (split_lits_inr hs) as [e ha].
+      rewrite e. rewrite e in hlen hall.
+      eapply whne_primapp_stuck; tea.
+      + now rewrite length_app length_map /= in hlen.
+      + apply All_app in hall as [_ hall]; depelim hall. now apply p.
+  Qed.
+
+  (** The same for [whnf]: arguments in weak-head normal form suffice. *)
+  Lemma whnf_primapp Γ c u decl op args :
+    lookup_env Σ c = Some (ConstantDecl decl) ->
+    decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op ->
+    #|args| = arity op ->
+    cannot_fire Σ op args ->
+    All (whnf Γ) args ->
+    whnf Γ (mkApps (tConst c u) args).
+  Proof using Type.
+    intros hl hb hop hlen hcf hall.
+    destruct (split_lits args) as [ls|[[ls a] rest]] eqn:hs.
+    - pose proof (split_lits_inl hs) as e.
+      rewrite e. rewrite e in hlen hcf.
+      apply whnf_ne. eapply whne_primapp_inert; tea.
+      + now rewrite length_map in hlen.
+      + exact hcf.
+    - destruct (split_lits_inr hs) as [e ha].
+      rewrite e. rewrite e in hlen hall.
+      eapply whnf_primapp_rigid; tea.
+      + now rewrite length_app length_map /= in hlen.
+      + apply All_app in hall as [_ hall]; now depelim hall.
+  Qed.
+
+  (** Inversion: a saturated application of a declared bodiless registered
+      constant is a weak-head normal form only as a neutral or as a rigid
+      application.  [whnf_primapp_partial] cannot apply, because the
+      application is saturated. *)
+  Lemma whnf_primapp_inv Γ c u decl op args :
+    lookup_env Σ c = Some (ConstantDecl decl) ->
+    decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op ->
+    #|args| = arity op ->
+    whnf Γ (mkApps (tConst c u) args) ->
+    whne Γ (mkApps (tConst c u) args) +
+    (∑ ls a rest, [× args = map term_of_lit ls ++ a :: rest, whnf Γ a & lit_of_term a = None]).
+  Proof using Type.
+    intros hl hb hop hlen h.
+    depelim h; try solve [exfalso; solve_discr].
+    - now left.
+    - exfalso.
+      eapply mkApps_eq_inj in x as [e1 e2]; [|easy|easy].
+      noconf e1. rewrite hop in e; noconf e.
+      apply (f_equal (@List.length term)) in e2; revert e2.
+      rewrite hlen; lia.
+    - right.
+      eapply mkApps_eq_inj in x as [e1 e2]; [|easy|easy].
+      noconf e1. exists ls, a, rest; split => //.
+  Qed.
+
+  (** The blocking argument of a stuck application is determined, so a term
+      cannot be stuck at one argument and rigid at another. *)
+  Lemma whnf_primapp_stuck_inv Γ c u decl op ls a rest :
+    lookup_env Σ c = Some (ConstantDecl decl) ->
+    decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op ->
+    #|ls| + S #|rest| = arity op ->
+    lit_of_term a = None ->
+    whnf Γ (mkApps (tConst c u) (map term_of_lit ls ++ a :: rest)) ->
+    whne Γ (mkApps (tConst c u) (map term_of_lit ls ++ a :: rest)) + whnf Γ a.
+  Proof using Type.
+    intros hl hb hop hlen ha h.
+    eapply whnf_primapp_inv in h as [hw|[ls' [a' [rest' [e hw ha']]]]]; tea.
+    - now left.
+    - right. eapply lit_split_inj in e as [_ <- _]; tea.
+    - rewrite length_app length_map /=; lia.
+  Qed.
+
+  (** Totality (design §6, C1): in **any** environment a saturated application
+      of a declared bodiless registered constant whose arguments are all in
+      weak-head normal form either reduces or is itself a weak-head normal
+      form.  No conjunct of the environment condition is used. *)
+  Lemma whnf_primapp_total Γ c u decl op args :
+    lookup_env Σ c = Some (ConstantDecl decl) ->
+    decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op ->
+    #|args| = arity op ->
+    All (whnf Γ) args ->
+    (∑ v, red1 Σ Γ (mkApps (tConst c u) args) v) + whnf Γ (mkApps (tConst c u) args).
+  Proof using Type.
+    intros hl hb hop hlen hall.
+    destruct (prim_reduct Σ op args) as [v|] eqn:hr.
+    - left; exists v. eapply red1_prim_reduct; tea.
+    - right. eapply whnf_primapp; tea.
+  Qed.
+
+  (** SG-2's wrong-tag case lands in [whne_primapp_inert]: a literal list of
+      the wrong tags makes [prim_op_denote] fail ([prim_op_denote_args]). *)
+  Lemma whne_primapp_wrong_tag Γ c u decl op ls :
+    lookup_env Σ c = Some (ConstantDecl decl) ->
+    decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op ->
+    #|ls| = arity op ->
+    map lit_tag ls <> po_args (info op) ->
+    whne Γ (mkApps (tConst c u) (map term_of_lit ls)).
+  Proof using Type.
+    intros hl hb hop hlen htag.
+    eapply whne_primapp_inert; tea.
+    rewrite prim_reduct_lits.
+    destruct (prim_op_denote op ls) as [r|] eqn:hd => //.
+    now elim htag; eapply prim_op_denote_args.
+  Qed.
+
+  (** C1's unregistered-[retro_bool] case lands there too: the readback of a
+      boolean result fails when no inductive is registered. *)
+  Lemma whne_primapp_unregistered_bool Γ c u decl op ls :
+    lookup_env Σ c = Some (ConstantDecl decl) ->
+    decl.(cst_body) = None ->
+    prim_op_of Σ c = Some op ->
+    #|ls| = arity op ->
+    po_shape (info op) = SBool ->
+    primitive_bool Σ = None ->
+    whne Γ (mkApps (tConst c u) (map term_of_lit ls)).
+  Proof using Type.
+    intros hl hb hop hlen hs hbool.
+    eapply whne_primapp_inert; tea.
+    rewrite prim_reduct_lits.
+    destruct (prim_op_denote op ls) as [r|] eqn:hd => //.
+    pose proof (prim_op_denote_shape _ _ _ hd) as hsh.
+    rewrite hs in hsh |- *.
+    destruct r as [i|b]; [destruct hsh|].
+    cbn. unfold primitive_bool in hbool. now rewrite hbool.
+  Qed.
+
   Lemma whne_mkApps_inv :
     forall Γ t l,
       negb (isApp t) ->
       whne Γ (mkApps t l) ->
       whne Γ t +
-      ∑ mfix idx d a,
+      (∑ mfix idx d a,
         t = tFix mfix idx ×
         nth_error mfix idx = Some d ×
         nth_error l (rarg d) = Some a ×
-        whne Γ a.
+        whne Γ a) +
+      (∑ c u decl op,
+        t = tConst c u ×
+        lookup_env Σ c = Some (ConstantDecl decl) ×
+        decl.(cst_body) = None ×
+        prim_op_of Σ c = Some op ×
+        arity op <= #|l| ×
+        whne Γ (mkApps (tConst c u) (firstn (arity op) l))).
   Proof using Type.
     intros Γ t l Ha h. revert t Ha h.
     induction l using rev_ind; intros.
     - eauto.
     - rewrite mkApps_snoc in h.
       depelim h.
-      + edestruct IHl as [ | (? & ? & ? & ? & ? & ? & ? & ?)]; eauto. subst.
-        right. exists x0, x1, x2, x3. repeat split; eauto. now eapply nth_error_app_left.
+      + edestruct IHl as [[ | (? & ? & ? & ? & ? & ? & ? & ?)] | (?&?&?&?&?&?&?&?&?&?)]; eauto.
+        * subst. left; right. exists x0, x1, x2, x3. repeat split; eauto.
+          now eapply nth_error_app_left.
+        * subst. right. eexists _, _, _, _. repeat split; tea.
+          2:{ rewrite firstn_app.
+              replace (arity x3 - #|l|) with 0 by lia.
+              now rewrite firstn_O app_nil_r. }
+          rewrite length_app /=; lia.
       + rewrite <- mkApps_snoc in x.
         eapply (f_equal decompose_app) in x;
           rewrite !decompose_app_mkApps in x; cbn in *; try intuition congruence.
         inversion x. subst.
-        right. exists mfix, idx, d, arg. repeat split; eauto.
+        left; right. exists mfix, idx, d, arg. repeat split; eauto.
+      + rewrite <- mkApps_snoc in x.
+        eapply mkApps_eq_inj in x as [e1 e2]; [|easy|easy].
+        assert (hl2 : #|l ++ [x0]| = arity op).
+        { apply (f_equal (@List.length term)) in e2; revert e2.
+          rewrite !length_app !length_map /=; lia. }
+        subst. right. eexists _, _, _, _. repeat split; tea.
+        * lia.
+        * rewrite firstn_all2.
+          2: lia.
+          (rewrite e2 || rewrite -e2).
+          eapply whne_primapp_stuck; tea.
+      + rewrite <- mkApps_snoc in x.
+        eapply mkApps_eq_inj in x as [e1 e2]; [|easy|easy].
+        assert (hl2 : #|l ++ [x0]| = arity op).
+        { apply (f_equal (@List.length term)) in e2; revert e2.
+          rewrite !length_app !length_map /=; lia. }
+        subst. right. eexists _, _, _, _. repeat split; tea.
+        * lia.
+        * rewrite firstn_all2.
+          2: lia.
+          (rewrite e2 || rewrite -e2).
+          eapply whne_primapp_inert; tea.
   Qed.
 
 End Normal.
@@ -217,7 +518,7 @@ Proof.
   induction h in h, t, l, t0 |- *; intros eq; subst.
   - destruct (mkApps_elim t l).
     apply whne_mkApps_inv in w; auto.
-    destruct w as [wh|(?&?&?&?&->&?&?&?)].
+    destruct w as [[wh|(?&?&?&?&->&?&?&?)]|(c&u&decl&op&->&hl&hb&hop&har&hw)].
     + now apply whnf_mkApps.
     + destruct (leb_spec_Set n (rarg x1)).
       * eapply whnf_fixapp.
@@ -233,6 +534,14 @@ Proof.
         rewrite nth_error_app1 in e0; auto.
         rewrite length_firstn.
         lia.
+    + destruct (le_lt_dec (arity op) n).
+      * rewrite -(firstn_skipn (arity op) (firstn n l)) mkApps_app.
+        apply whnf_mkApps.
+        assert (firstn (arity op) (firstn n l) = firstn (arity op) l) as ->
+          by (rewrite firstn_firstn; f_equal; lia).
+        exact hw.
+      * eapply whnf_primapp_partial; tea.
+        rewrite length_firstn; lia.
   - destruct l using MRList.rev_ind; [|now rewrite mkApps_app in eq].
     cbn in *; subst; auto.
   - destruct l using MRList.rev_ind; [|now rewrite mkApps_app in eq].
@@ -256,6 +565,22 @@ Proof.
     apply mkApps_eq_inj in eq as (<-&<-); auto.
   - destruct l using MRList.rev_ind; [|now rewrite mkApps_app in eq].
     cbn in *; subst; auto.
+  - destruct (mkApps_elim t l).
+    apply mkApps_eq_inj in eq as (<-&<-); auto.
+    eapply whnf_primapp_partial; tea.
+    rewrite length_firstn; lia.
+  - destruct (mkApps_elim t l).
+    apply mkApps_eq_inj in eq as (<-&<-); auto.
+    match goal with
+    | |- whnf _ _ _ (mkApps _ (firstn ?k _)) => destruct (le_lt_dec (arity op) k)
+    end.
+    + assert (firstn_all_eq : forall k, arity op <= k ->
+        firstn k (map term_of_lit ls ++ a :: rest) = map term_of_lit ls ++ a :: rest).
+      { intros k hk; apply firstn_all2; rewrite length_app length_map /=; lia. }
+      rewrite firstn_all_eq //.
+      eapply whnf_primapp_rigid; tea.
+    + eapply whnf_primapp_partial; tea.
+      rewrite length_firstn length_app length_map /=; lia.
 Qed.
 
 Lemma whnf_fixapp' {flags} Σ Γ mfix idx narg v :
@@ -312,6 +637,14 @@ Proof.
     destruct H0 as [[? H0]|H0] ; inversion H0. congruence.
   - inv whn; solve_discr; easy.
   - inv whn; solve_discr; easy.
+  - (* whne_primapp_stuck: the blocking argument is the same under both flag
+       sets, so [whnf_primapp_stuck_inv] hands it back. *)
+    eapply whnf_primapp_stuck_inv in whn as [hw|hw]; tea.
+    + exact hw.
+    + eapply whne_primapp_stuck; tea. now apply IHwhe.
+    + now eapply whne_not_lit.
+  - (* whne_primapp_inert: every premise is flag-independent. *)
+    eapply whne_primapp_inert; tea.
 Qed.
 
 Definition whnf_whne_dec flags Σ Γ t :
@@ -486,6 +819,84 @@ Proof.
       apply OnOne2_app_r. assumption.
     + exists (v ++ [N2]). rewrite mkApps_snoc. split; eauto.
       eapply OnOne2_app. econstructor. eauto.
+Qed.
+
+(** An application of fewer than [arity op] arguments cannot fire: a shorter
+    literal list is refused by [prim_op_denote] (its tags cannot match
+    [po_args], whose length is [arity op]). *)
+Lemma prim_reduct_short Σ op args :
+  #|args| < arity op -> prim_reduct Σ op args = None.
+Proof.
+  intros hlt; rewrite /prim_reduct.
+  destruct (lits_of_args args) as [ls|] eqn:hls => //.
+  apply lits_of_args_inv in hls as ->.
+  destruct (prim_op_denote op ls) as [r|] eqn:hd => //.
+  apply prim_op_denote_args in hd.
+  rewrite length_map /arity -hd length_map in hlt. lia.
+Qed.
+
+(** A bodiless registered operation applied to at most [arity op] arguments
+    that does not itself fire reduces only inside one argument: the head cannot
+    unfold ([cst_body = None] rules out [red_delta]), and the rule cannot fire
+    at the root ([prim_reduct = None]) nor at any proper prefix (each is shorter
+    than [arity op], [prim_reduct_short]).  This is the inversion the [whnf]
+    preservation and [whnf_red] cases of the primitive constructors use. *)
+Lemma red1_mkApps_tConst_inv {cf:checker_flags} Σ Γ c u decl op args t' :
+  lookup_env Σ c = Some (ConstantDecl decl) ->
+  cst_body decl = None ->
+  prim_op_of Σ c = Some op ->
+  #|args| <= arity op ->
+  prim_reduct Σ op args = None ->
+  red1 Σ Γ (mkApps (tConst c u) args) t' ->
+  ∑ args', (t' = mkApps (tConst c u) args') × OnOne2 (red1 Σ Γ) args args'.
+Proof.
+  intros hl hb hop hlen hcf r.
+  revert t' hlen hcf r. induction args using rev_ind; intros t' hlen hcf r.
+  - cbn in r. depelim r; try solve_discr.
+    + (* red_delta: cst_body = Some, contradicting hb *)
+      apply declared_constant_to_gen in isdecl; [|exact wfΣ].
+      unfold declared_constant_gen in isdecl. rewrite hl in isdecl.
+      noconf isdecl. congruence.
+    + (* red_prim_op with ls = [] : prim_reduct = Some, contradicting hcf *)
+      exfalso. move: hcf. destruct ls; cbn in x; [|solve_discr].
+      rewrite /prim_reduct lits_of_args_map e e0 //.
+  - rewrite mkApps_snoc in r. depelim r; try solve_discr.
+    + (* red_prim_op at the root: args ++ [x] all literals, prim_reduct = Some *)
+      exfalso. move: hcf.
+      assert (hls : args ++ [x] = map term_of_lit ls) by (now rewrite -mkApps_snoc in x0; apply mkApps_eq_inj in x0 as [_ ->]).
+      rewrite hls /prim_reduct lits_of_args_map e e0 //.
+    + (* app_red_l: the head application reduces *)
+      edestruct IHargs as (args' & -> & ho).
+      * rewrite length_app /= in hlen; lia.
+      * apply prim_reduct_short. rewrite length_app /= in hlen; lia.
+      * exact r.
+      * exists (args' ++ [x]). rewrite mkApps_snoc. split; [reflexivity|].
+        now apply OnOne2_app_r.
+    + (* app_red_r: the last argument reduces *)
+      exists (args ++ [N2]). rewrite mkApps_snoc. split; [reflexivity|].
+      apply OnOne2_app. now constructor.
+Qed.
+
+(** A one-step reduction of a saturated-up-to-the-blocker application reduces
+    either the blocking argument [a] or one of the tail arguments [rest]; the
+    literal prefix is never touched, because a literal does not reduce.  This
+    keeps a stuck or rigid primitive application in the same shape after a step
+    (its witness [whne]/[whnf] for [a] is carried by the caller). *)
+Lemma OnOne2_primapp_split {R : term -> term -> Type} ls a rest args' :
+  (forall l t, R (term_of_lit l) t -> False) ->
+  OnOne2 R (map term_of_lit ls ++ a :: rest) args' ->
+  (∑ a', (args' = map term_of_lit ls ++ a' :: rest) × R a a') +
+  (∑ rest', (args' = map term_of_lit ls ++ a :: rest') × OnOne2 R rest rest').
+Proof.
+  intros hlit ho. induction ls as [|l ls ih] in args', ho |- *.
+  - cbn in ho. depelim ho.
+    + left. eexists; split; [reflexivity|eassumption].
+    + right. eexists; split; [reflexivity|eassumption].
+  - cbn in ho. depelim ho.
+    + exfalso; eapply hlit; eassumption.
+    + edestruct ih as [(a'&->&?)|(rest'&->&?)]; [eassumption| |].
+      * left. eexists; split; [cbn; reflexivity|eassumption].
+      * right. eexists; split; [cbn; reflexivity|eassumption].
 Qed.
 
 Lemma is_constructor_app_false i x y :
@@ -755,7 +1166,24 @@ Lemma whne_red1_ind {cf:checker_flags} {wfΣ : wf Σ}
       (Hproj_discr_noiota : forall p c c',
           RedFlags.iota flags = false ->
           red1 Σ Γ c c' ->
-          P (tProj p c) (tProj p c')) :
+          P (tProj p c) (tProj p c'))
+      (Hprimapp_stuck : forall c u decl op ls a rest t',
+          lookup_env Σ c = Some (ConstantDecl decl) ->
+          decl.(cst_body) = None ->
+          prim_op_of Σ c = Some op ->
+          #|ls| + S #|rest| = arity op ->
+          whne flags Σ Γ a ->
+          (forall a', red1 Σ Γ a a' -> P a a') ->
+          red1 Σ Γ (mkApps (tConst c u) (map term_of_lit ls ++ a :: rest)) t' ->
+          P (mkApps (tConst c u) (map term_of_lit ls ++ a :: rest)) t')
+      (Hprimapp_inert : forall c u decl op ls t',
+          lookup_env Σ c = Some (ConstantDecl decl) ->
+          decl.(cst_body) = None ->
+          prim_op_of Σ c = Some op ->
+          #|ls| = arity op ->
+          prim_reduct Σ op (map term_of_lit ls) = None ->
+          red1 Σ Γ (mkApps (tConst c u) (map term_of_lit ls)) t' ->
+          P (mkApps (tConst c u) (map term_of_lit ls)) t') :
   forall t t', whne flags Σ Γ t -> red1 Σ Γ t t' -> P t t'.
 Proof using Type.
   intros t t' wh r.
@@ -830,6 +1258,10 @@ Proof using Type.
       solve_discr.
   - depelim r; eauto.
     solve_discr.
+  - (* whne_primapp_stuck *)
+    eapply Hprimapp_stuck; eauto.
+  - (* whne_primapp_inert *)
+    eapply Hprimapp_inert; eauto.
 Qed.
 End whne_red1_ind.
 
@@ -861,6 +1293,28 @@ Proof.
     + eapply whne_fixapp; eauto.
     + eapply whne_fixapp; eauto.
       now inv e0.
+  - (* Hprimapp_stuck: a stuck primitive application steps inside an argument *)
+    match goal with
+    | [ Hr : red1 _ _ (mkApps (tConst _ _) (map term_of_lit _ ++ _ :: _)) _ |- _ ] =>
+        eapply red1_mkApps_tConst_inv in Hr as (args' & -> & ho)
+    end;
+      [ eassumption .. | lia | rewrite /prim_reduct /lits_of_args split_lits_app // | ].
+    eapply (OnOne2_primapp_split (R := red1 Σ Γ)) in ho as [(a'&->&ra)|(rest'&->&ho')];
+      [ intros ? ? Hl; eapply red1_term_of_lit; exact Hl | | ].
+    + eapply whne_primapp_stuck; [ eassumption .. | ].
+      match goal with
+      | [ Hih : forall _, red1 _ _ _ _ -> whne _ _ _ _ |- _ ] => eapply Hih; exact ra
+      end.
+    + eapply whne_primapp_stuck; [ eassumption | eassumption | eassumption | | eassumption ].
+      now rewrite (OnOne2_length ho').
+  - (* Hprimapp_inert: a literal application cannot step *)
+    exfalso.
+    match goal with
+    | [ Hr : red1 _ _ (mkApps (tConst _ _) (map term_of_lit _)) _ |- _ ] =>
+        eapply red1_mkApps_tConst_inv in Hr as (args' & _ & ho)
+    end;
+      [ eassumption .. | lia | eassumption | ].
+    eapply OnOne2_map_term_of_lit; exact ho.
 Qed.
 
 Lemma whne_pres {cf:checker_flags} Σ {wfΣ : wf Σ} Γ t t' :
@@ -868,6 +1322,45 @@ Lemma whne_pres {cf:checker_flags} Σ {wfΣ : wf Σ} Γ t t' :
   whne RedFlags.default Σ Γ t -> whne RedFlags.default Σ Γ t'.
 Proof.
   induction 1 using red_rect_n1; eauto using whne_pres1.
+Qed.
+
+(** The named rigidity obligation of [whnf_primapp_rigid]: a default weak-head
+    normal form that is not a literal never [red1]-steps to a literal.  Every
+    [red1] rule whose reduct is a [tPrim] integer or string literal has a
+    non-whnf left-hand side (it is a root redex), so a whnf only steps inside a
+    subterm and keeps its head; the sole head that reads back as such a literal
+    is [tPrim], which a non-literal whnf does not have.  Stated and proved as a
+    lemma (not read off a proof), as the soundness review required. *)
+Lemma whnf_lit_pres1 {cf:checker_flags} Σ {wfΣ : wf Σ} Γ a a' :
+  whnf RedFlags.default Σ Γ a ->
+  lit_of_term a = None ->
+  red1 Σ Γ a a' ->
+  lit_of_term a' = None.
+Proof.
+  intros wh hlit r. destruct wh.
+  - (* neutral: a' is neutral, hence not a literal *)
+    eapply whne_not_lit. eapply whne_pres1; eauto.
+  - depelim r; solve_discr.
+  - depelim r; solve_discr; reflexivity.
+  - depelim r; solve_discr; reflexivity.
+  - apply red1_mkApps_tConstruct_inv in r as (v'&->&_).
+    destruct v' using MRList.rev_ind; [reflexivity|now rewrite mkApps_snoc].
+  - apply red1_mkApps_tInd_inv in r as (v'&->&_).
+    destruct v' using MRList.rev_ind; [reflexivity|now rewrite mkApps_snoc].
+  - eapply red1_mkApps_tFix_inv in r as [[(v'&->&_)|(mfix'&->&_)]|(mfix'&->&_)].
+    2:{ unfold unfold_fix. destruct o as [[? [-> ?]]|]; now unfold is_constructor; rewrite H. }
+    all: destruct _ using MRList.rev_ind; rewrite ?mkApps_snoc; reflexivity.
+  - apply red1_mkApps_tCoFix_inv in r as [[(v'&->&_)|(mfix'&->&_)]|(mfix'&->&_)];
+      destruct _ using MRList.rev_ind; rewrite ?mkApps_snoc; reflexivity.
+  - cbn in hlit. depelim r; solve_discr; cbn; reflexivity.
+  - (* partial: cannot fire (too few arguments); reduces inside an argument *)
+    eapply red1_mkApps_tConst_inv in r as (args'&->&_); [| eassumption..| lia |].
+    + destruct args' using MRList.rev_ind; [reflexivity|now rewrite mkApps_snoc].
+    + now apply prim_reduct_short.
+  - (* rigid: cannot fire (a non-literal argument); reduces inside an argument *)
+    eapply red1_mkApps_tConst_inv in r as (args'&->&_); [| eassumption..| lia |].
+    + destruct args' using MRList.rev_ind; [reflexivity|now rewrite mkApps_snoc].
+    + rewrite /prim_reduct /lits_of_args split_lits_app //.
 Qed.
 
 Lemma whnf_pres1 {cf:checker_flags} Σ {wfΣ : wf Σ} Γ t t' :
@@ -921,6 +1414,27 @@ Proof.
       lia.
   - eapply red1_mkApps_tCoFix_inv in r as [[(?&->&?)|(?&->&?)]|(?&->&?)]; eauto.
   - depelim r; solve_discr; eapply whnf_prim.
+  - (* whnf_primapp_partial: still unsaturated after a step inside an argument *)
+    assert (hle : #|args| <= arity op) by lia.
+    assert (hcf : prim_reduct Σ op args = None) by now apply prim_reduct_short.
+    eapply red1_mkApps_tConst_inv in r as (args'&->&ho); try eassumption.
+    eapply whnf_primapp_partial; try eassumption.
+    apply OnOne2_length in ho; lia.
+  - (* whnf_primapp_rigid: still blocked on a whnf non-literal after a step *)
+    assert (hle : #|map term_of_lit ls ++ a :: rest| <= arity op)
+      by (rewrite length_app length_map /=; lia).
+    assert (hcf : prim_reduct Σ op (map term_of_lit ls ++ a :: rest) = None)
+      by (rewrite /prim_reduct /lits_of_args split_lits_app //).
+    eapply red1_mkApps_tConst_inv in r as (args'&->&ho); try eassumption.
+    eapply (OnOne2_primapp_split (R := red1 Σ Γ)) in ho as [(a'&->&ra)|(rest'&->&ho')];
+      [ intros ? ? Hl; eapply red1_term_of_lit; exact Hl | | ].
+    + eapply whnf_primapp_rigid; try eassumption.
+      * match goal with
+        | [ H : forall _, red1 _ _ a _ -> whnf _ _ _ _ |- _ ] => eapply H; exact ra
+        end.
+      * eapply whnf_lit_pres1; [ eassumption | eassumption | exact ra ].
+    + eapply whnf_primapp_rigid; try eassumption.
+      now rewrite (OnOne2_length ho').
 Qed.
 
 Lemma whnf_pres {cf:checker_flags} Σ {wfΣ : wf Σ} Γ t t' :
@@ -1447,6 +1961,21 @@ Proof.
     * eapply OnOne2_All2; eauto.
       cbn. intros ? ? [? <-].
       intuition eauto; try reflexivity.
+  - (* Hprimapp_stuck: the step is inside an argument; the head stays *)
+    match goal with
+    | [ Hr : red1 _ _ (mkApps (tConst _ _) (map term_of_lit _ ++ _ :: _)) _ |- _ ] =>
+        eapply red1_mkApps_tConst_inv in Hr as (args' & -> & ho)
+    end;
+      [ eassumption .. | lia | rewrite /prim_reduct /lits_of_args split_lits_app // | ].
+    apply whnf_red_mkApps; [ econstructor; eassumption | eapply OnOne2_All2; eauto ].
+  - (* Hprimapp_inert: a literal application cannot step *)
+    exfalso.
+    match goal with
+    | [ Hr : red1 _ _ (mkApps (tConst _ _) (map term_of_lit _)) _ |- _ ] =>
+        eapply red1_mkApps_tConst_inv in Hr as (args' & _ & ho)
+    end;
+      [ eassumption .. | lia | eassumption | ].
+    eapply OnOne2_map_term_of_lit; exact ho.
 Qed.
 
 Lemma whnf_red1_inv {cf:checker_flags} Σ {wfΣ : wf Σ} Γ t t' :
@@ -1512,6 +2041,18 @@ Proof.
     * constructor; eauto. eapply OnOne2_All2; eauto.
     * constructor; eauto. cbn. eapply All2_same; eauto.
     * constructor; eauto. cbn. eapply All2_same; eauto.
+  - (* whnf_primapp_partial: the step is inside an argument; the head stays *)
+    assert (hle : #|args| <= arity op) by lia.
+    assert (hcf : prim_reduct Σ op args = None) by now apply prim_reduct_short.
+    eapply red1_mkApps_tConst_inv in r as (args'&->&ho); try eassumption.
+    apply whnf_red_mkApps; [ econstructor; eassumption | eapply OnOne2_All2; eauto ].
+  - (* whnf_primapp_rigid: the step is inside an argument; the head stays *)
+    assert (hle : #|map term_of_lit ls ++ a :: rest| <= arity op)
+      by (rewrite length_app length_map /=; lia).
+    assert (hcf : prim_reduct Σ op (map term_of_lit ls ++ a :: rest) = None)
+      by (rewrite /prim_reduct /lits_of_args split_lits_app //).
+    eapply red1_mkApps_tConst_inv in r as (args'&->&ho); try eassumption.
+    apply whnf_red_mkApps; [ econstructor; eassumption | eapply OnOne2_All2; eauto ].
 Qed.
 
 Lemma whnf_red_inv {cf:checker_flags} {Σ : global_env_ext} Γ t t' :
