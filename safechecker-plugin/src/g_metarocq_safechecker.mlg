@@ -419,6 +419,63 @@ let test_cache_typing_flags env evm c =
     CErrors.user_err
       (str "Cache reused a quotation across changed typing flags.")
 
+(* Regression tests for the three fixes that keep the translation memo
+   consistent between commands (test-suite/trans_memo_publication.v,
+   trans_memo_reset.v, trans_memo_rejects.v).  Each fails when its fix is
+   undone:
+   (a) the table is published once, after both arrays exist;
+   (b) [with_trans_memo_reset] empties the table on entry;
+   (c) [MetaRocq Test SafeCheck Rejects] runs inside [with_trans_memo_reset]. *)
+let memo_state_name = function
+  | `Empty -> "empty" | `Consistent -> "consistent" | `Torn -> "torn"
+
+(* The message of [e], so that only the hook's own error counts as its raise. *)
+let memo_hook_raised e =
+  CErrors.noncritical e
+  && string_contains ~where:(Pp.string_of_ppcmds (CErrors.print e)) ~what:"trans_memo test"
+
+let test_memo_publication () =
+  with_trans_memo_reset @@ fun () ->
+  Trans_memo.test_arm_raise_between_allocations ();
+  let raised =
+    try Trans_memo.test_populate (); None
+    with e when CErrors.noncritical e -> Some e
+  in
+  let state = Trans_memo.test_state () in
+  match raised with
+  | None ->
+    CErrors.user_err (str "Memo publication test failed: the armed first store did not raise.")
+  | Some e when not (memo_hook_raised e) ->
+    CErrors.user_err
+      (str "Memo publication test failed: the first store raised another error: "
+       ++ CErrors.print e)
+  | Some _ ->
+    if state = `Empty then
+      Feedback.msg_info
+        (str "Memo publication test passed: an exception between the two array allocations left no table.")
+    else
+      CErrors.user_err
+        (str "Memo publication test failed: an exception between the two array allocations left a "
+         ++ str (memo_state_name state)
+         ++ str " table (fix (a), one publication after both arrays exist).")
+
+let test_memo_reset_on_entry () =
+  Trans_memo.reset ();
+  Trans_memo.test_populate ();
+  let before = Trans_memo.test_state () in
+  if before = `Empty then
+    CErrors.user_err (str "Memo reset-on-entry test failed: the table could not be populated.");
+  with_trans_memo_reset @@ fun () ->
+  match Trans_memo.test_state () with
+  | `Empty ->
+    Feedback.msg_info
+      (str "Memo reset-on-entry test passed: a command starts with an empty table.")
+  | state ->
+    CErrors.user_err
+      (str "Memo reset-on-entry test failed: the command started with a "
+       ++ str (memo_state_name state)
+       ++ str " table it did not build (fix (b), reset on entry).")
+
 let test_safecheck_rejection ~opaque_access env evm c =
   with_trans_memo_reset @@ fun () ->
   let term = EConstr.to_constr evm c in
@@ -461,6 +518,38 @@ let test_safecheck_rejection ~opaque_access env evm c =
     CErrors.user_err
       (str "SafeCheck accepted a successor-too-low quoted declaration.")
 
+
+(* (c): the memo's table does not outlive [MetaRocq Test SafeCheck Rejects].
+   The arm is installed by that command's own entry reset and fires after its
+   first store, when the table is published; the check below runs outside that
+   command's wrapper, so it sees what the command left.  Arming, running and
+   checking happen in this one command, and the finally disarms, so no arm
+   survives for another command to meet. *)
+let test_memo_rejects_leak ~opaque_access env evm c =
+  Trans_memo.reset ();
+  Trans_memo.test_arm_raise_after_stores 1;
+  let raised =
+    Fun.protect ~finally:Trans_memo.test_disarm (fun () ->
+      try test_safecheck_rejection ~opaque_access env evm c; None
+      with e when CErrors.noncritical e -> Some e)
+  in
+  match raised with
+  | None ->
+    CErrors.user_err
+      (str "Memo rejects-leak test failed: the armed rejection test did not raise.")
+  | Some e when not (memo_hook_raised e) ->
+    CErrors.user_err
+      (str "Memo rejects-leak test failed: the rejection test raised another error, so the memo hook never fired: "
+       ++ CErrors.print e)
+  | Some _ ->
+    match Trans_memo.test_state () with
+    | `Empty ->
+      Feedback.msg_info
+        (str "Memo rejects-leak test passed: no table outlived MetaRocq Test SafeCheck Rejects.")
+    | state ->
+      CErrors.user_err
+        (str "Memo rejects-leak test failed: a " ++ str (memo_state_name state)
+         ++ str " table outlived MetaRocq Test SafeCheck Rejects (fix (c), that command wrapped in with_trans_memo_reset).")
 }
 
 
@@ -523,6 +612,22 @@ VERNAC COMMAND EXTEND MetaRocqTestQuoteSharing CLASSIFIED AS QUERY STATE opaque_
     let evm = Evd.from_env env in
     let c, _ = Constrintern.interp_constr env evm c in
     test_quote_sharing env evm poly c
+  }
+END
+
+(* Each of these arms, runs and checks within the one command, and leaves the
+   memo disarmed and its table empty. *)
+VERNAC COMMAND EXTEND MetaRocqTestMemo CLASSIFIED AS SIDEFF
+| [ "MetaRocq" "Test" "Memo" "Publication" ] -> { test_memo_publication () }
+| [ "MetaRocq" "Test" "Memo" "Reset" "On" "Entry" ] -> { test_memo_reset_on_entry () }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestMemoRejectsLeak CLASSIFIED AS SIDEFF STATE opaque_access
+| [ "MetaRocq" "Test" "Memo" "Rejects" "Leak" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_memo_rejects_leak env evm c
   }
 END
 

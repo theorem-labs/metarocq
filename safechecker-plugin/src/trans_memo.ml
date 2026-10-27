@@ -5,7 +5,9 @@
    [memo_trans => Trans_memo.memo] and [trans_memo_release => Trans_memo.release] are the
    first safechecker extraction directives that replace a computation inside the checker;
    [Print Assumptions] cannot show them; the shipped checker is correct only if
-   [memo Σ t k] returns [k ()] and [release p] returns [p].
+   [memo Σ t k] returns [k ()] and [release p] returns [p].  With a test hook armed (see
+   below), [memo] can instead raise the user error "trans_memo test"; it never returns
+   another value, and no hook writes a key or a value.
 
    Why it is sound.  In Rocq, [memo_trans Σ t k] is [k tt], so [trans_shared] is [trans]
    ([TemplateToPCUICShared.trans_shared_eq]).  [trans] is a pure function of [Σ] and the
@@ -28,7 +30,13 @@
    the program is translated.  Every plugin command that runs the checker or the
    translation calls [reset] on entry and in a [Fun.protect] finally, so no command starts
    with a table it did not build, and an exception does not keep the table alive after the
-   command. *)
+   command.
+
+   The [test_*] functions exist only for the regression tests
+   test-suite/trans_memo_{publication,reset,rejects}.v.  They are inert unless armed, and
+   armed they can only raise.  Their cost on the hot path: a miss that stores pays one
+   boolean test ([test_armed]), the first store of a table one more, and a hit pays
+   nothing.  [memo] is [@inline], so the split into [memo_core] costs no call. *)
 
 let size = 1 lsl 22
 
@@ -42,10 +50,24 @@ let reads_env = ref false
 let hit_count = ref 0
 let hits () = !hit_count
 
+(* Regression-test hooks; see the header.  An arm is live from the moment the test command
+   sets it until that command's [Fun.protect] finally disarms it.  [reset] does not disarm:
+   test (c) arms the memo and then runs [MetaRocq Test SafeCheck Rejects], whose own entry
+   [reset] must not drop the arm.  Only the [MetaRocq Test Memo …] commands arm, and each
+   disarms in its finally, so no arm outlives its command. *)
+let test_armed = ref false
+let test_raise_between = ref false
+let test_stores_left = ref 0
+let test_rearm () = test_armed := !test_raise_between || !test_stores_left > 0
+let test_error () = CErrors.user_err (Pp.str "trans_memo test")
+
 let store slot (t : Ast0.term) (v : PCUICAst.term) =
   match !table with
   | None ->
     let keys = Array.make size t in
+    if !test_armed && !test_raise_between then begin
+      test_raise_between := false; test_rearm (); test_error ()
+    end;
     let vals = Array.make size v in
     table := Some { keys; vals }
   | Some tb ->
@@ -54,8 +76,13 @@ let store slot (t : Ast0.term) (v : PCUICAst.term) =
     Array.unsafe_set tb.keys slot t;
     Array.unsafe_set tb.vals slot v
 
-let memo (_ : PCUICProgram.global_env_map) (t : Ast0.term) (k : unit -> PCUICAst.term)
-    : PCUICAst.term =
+let test_after_store () =
+  if !test_stores_left > 0 then begin
+    decr test_stores_left;
+    if !test_stores_left = 0 then begin test_rearm (); test_error () end
+  end
+
+let memo_core (t : Ast0.term) (k : unit -> PCUICAst.term) : PCUICAst.term =
   let slot = Hashtbl.hash t land (size - 1) in
   match !table with
   | Some tb when Array.unsafe_get tb.keys slot == t ->
@@ -77,10 +104,18 @@ let memo (_ : PCUICProgram.global_env_map) (t : Ast0.term) (k : unit -> PCUICAst
     let v = k () in
     let read = !reads_env in
     reads_env := outer || read;
-    if not read then store slot t v;
+    if not read then begin
+      store slot t v;
+      if !test_armed then test_after_store ()
+    end;
     v
 
-(* Empty the table and clear the flag. *)
+let[@inline] memo (_ : PCUICProgram.global_env_map) (t : Ast0.term) (k : unit -> PCUICAst.term)
+    : PCUICAst.term =
+  memo_core t k
+
+(* Empty the table and the read flag.  Test arms are left alone; the test command that set
+   one disarms it in its finally. *)
 let reset () =
   table := None;
   reads_env := false
@@ -88,3 +123,29 @@ let reset () =
 let release p =
   reset ();
   p
+
+let test_arm_raise_between_allocations () =
+  test_raise_between := true; test_rearm ()
+
+let test_arm_raise_after_stores n =
+  test_stores_left := max n 0; test_rearm ()
+
+let test_disarm () =
+  test_raise_between := false;
+  test_stores_left := 0;
+  test_rearm ()
+
+let test_pending () = !test_armed
+
+(* [`Torn] is a table whose keys were published without their values: unreachable with the
+   single publication, reachable with the old two-reference table. *)
+let test_state () =
+  match !table with
+  | None -> `Empty
+  | Some tb ->
+    if Array.length tb.keys > 0 && Array.length tb.vals <> Array.length tb.keys then `Torn
+    else `Consistent
+
+(* One case-free entry: [tRel 0] translates to [tRel 0] under every environment. *)
+let test_populate () =
+  ignore (memo_core (Ast0.Coq_tRel Datatypes.O) (fun () -> PCUICAst.Coq_tRel Datatypes.O))

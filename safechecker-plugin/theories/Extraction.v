@@ -39,7 +39,10 @@ Extraction Inline PCUICPrimitive.prim_val_reflect_eq.
     are the first safechecker extraction directives that replace a computation
     inside the checker; [Print Assumptions] cannot show them.  The shipped
     checker is correct only if [Trans_memo.memo Σ t k] returns [k ()] and
-    [Trans_memo.release p] returns [p]. *)
+    [Trans_memo.release p] returns [p].  With one of [trans_memo.ml]'s test
+    hooks armed, [Trans_memo.memo] raises the user error "trans_memo test"
+    instead; it never returns another value, and the hooks are inert unless a
+    [MetaRocq Test Memo …] command arms one for its own duration. *)
 Extract Constant TemplateToPCUICShared.memo_trans => "Trans_memo.memo".
 Extract Constant TemplateToPCUICShared.trans_memo_release => "Trans_memo.release".
 
