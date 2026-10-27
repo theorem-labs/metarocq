@@ -132,6 +132,21 @@ Proof.
     + eapply All_All2; eauto.
 Qed.
 
+(** CH3 (U4): η keeps a constructor-headed term constructor-headed. PROVED here
+    from [eta1_mkApps_inv]: a constructor head is a [tConstruct], which has no
+    [eta1] step, so η can only touch the arguments. *)
+Lemma eta1_isConstruct_app a a' :
+  eta1 a a' -> isConstruct_app a = true -> isConstruct_app a' = true.
+Proof.
+  intros he hc. unfold isConstruct_app in hc |- *.
+  destruct (decompose_app a) as [f l] eqn:da. cbn in hc.
+  destruct f; try discriminate hc.
+  apply decompose_app_inv in da. subst a.
+  eapply eta1_mkApps_inv in he as [[M' [hM e]]|[l' [hl ->]]].
+  - depelim hM.
+  - rewrite decompose_app_mkApps; reflexivity.
+Qed.
+
 (* ======================================================================= *)
 Section C3Unlocking.
   Context {cf : checker_flags}.
@@ -141,9 +156,7 @@ Section C3Unlocking.
 
   (* CH2 upto_domain_refl: proved globally above (unconditional). *)
 
-  (** CH3 (U4): η keeps a constructor-headed term constructor-headed. *)
-  Context (eta1_isConstruct_app :
-    forall a a', eta1 a a' -> isConstruct_app a = true -> isConstruct_app a' = true).
+  (* CH3 eta1_isConstruct_app: proved globally above (unconditional). *)
 
   (** CH4f (U2/U4): one η-step out of a fixpoint keeps it a fixpoint of the same
       index, unfolding stays enabled, and the unfolded body moves by η*. *)
