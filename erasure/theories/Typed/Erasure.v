@@ -1390,17 +1390,7 @@ Local Existing Instance extraction_normalizing.
 
 Import ExAst.
 
-Definition fake_guard_impl : FixCoFix -> global_env_ext -> PCUICEnvironment.context
-                             -> BasicAst.mfixpoint PCUICAst.term -> bool :=
-  fun fix_cofix Σ Γ mfix => true.
-
-Axiom fake_guard_correct : forall (fix_cofix : FixCoFix) (Σ : global_env_ext)
-                    (Γ : PCUICEnvironment.context) (mfix : BasicAst.mfixpoint PCUICAst.term),
-      guard fix_cofix Σ Γ mfix <-> fake_guard_impl fix_cofix Σ Γ mfix.
-
-Instance fake_guard_impl_instance : abstract_guard_impl :=
-  {| guard_impl := fake_guard_impl;
-     guard_correct := fake_guard_correct |}.
+#[local] Existing Instance PCUICWfEnvImpl.real_guard_impl.
 
 Axiom fake_normalization : PCUICSN.Normalization.
 Global Existing Instance fake_normalization.

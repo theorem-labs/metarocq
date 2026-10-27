@@ -90,7 +90,7 @@ Program Definition extract_pcuic_env
            (seeds : KernameSet.t)
            (ignore : kername -> bool) : result ExAst.global_env _ :=
   let Σ := timed "Erasure"
-    (fun _ => erase_global_decls_deps_recursive (X_type := PCUICWfEnvImpl.optimized_abstract_env_impl (guard := fake_guard_impl_instance))
+    (fun _ => erase_global_decls_deps_recursive (X_type := PCUICWfEnvImpl.optimized_abstract_env_impl (guard := PCUICWfEnvImpl.real_guard_impl))
       (X := PCUICWfEnvImpl.build_wf_env_from_env Σ wfΣ)
       (declarations Σ) (universes Σ) (retroknowledge Σ) _ seeds ignore) in
   if optimize_prop_discr params then

@@ -131,7 +131,12 @@ Proof.
     + split.
       * eauto.
       * eapply (substitution (Δ :=  [])); simpl; eauto with wf.
-        match goal with H : fix_guard _ _ _ |- _ => rename H into hguard end.
+        (* [simpl in *] above unfolds [fix_guard] to [guard_cl Fix] now that the
+           guard is a concrete instance rather than an axiom. *)
+        match goal with
+        | H : fix_guard _ _ _ |- _ => rename H into hguard
+        | H : guard_cl Fix _ _ _ |- _ => rename H into hguard
+        end.
         match goal with H : wf_fixpoint _ _ _ |- _ => rename H into hwffix end.
         clear -a a0 a1 hguard hwffix.
         pose proof a1 as a1'. apply All_rev in a1'.

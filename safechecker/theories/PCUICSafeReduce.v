@@ -1409,17 +1409,11 @@ Corollary R_Acc_aux :
   Proof using Type.
     intros wf shape wh typ.
     apply inversion_Case in typ as (?&?&isdecl&?&[]&?); auto.
-    eapply whnf_non_ctor_finite_ind_typed; try eassumption.
+    eapply whnf_non_ctor_non_cofix_ind_typed; try eassumption.
     - unfold isConstruct_app.
       now rewrite decompose_app_mkApps; destruct hd.
-    - unfold isCoFinite in not_cofinite.
-      unfold check_recursivity_kind.
-      cbn.
-      unshelve eapply declared_inductive_to_gen in isdecl; eauto.
-      unfold declared_inductive, declared_minductive in isdecl.
-      cbn in isdecl.
-      rewrite (proj1 isdecl).
-      now destruct ind_finite.
+    - unfold isCoFix_app.
+      now rewrite decompose_app_mkApps; destruct hd.
   Qed.
 
   Lemma whnf_proj_arg_whne Σ Γ hd args p T :

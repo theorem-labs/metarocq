@@ -597,10 +597,10 @@ Definition compute_masks overridden_masks do_trim_const_masks do_trim_ctor_masks
 Import PCUICWfEnvImpl PCUICAst.PCUICEnvironment.
 
 Program Definition make_env {Σ} (wfΣ : ∥wf_ext Σ∥) :=
-  @abstract_make_wf_env_ext _ (optimized_abstract_env_impl (guard := Erasure.fake_guard_impl_instance)) (PCUICWfEnvImpl.build_wf_env_from_env Σ (map_squash fst wfΣ)) Σ.2 _.
+  @abstract_make_wf_env_ext _ (optimized_abstract_env_impl (guard := PCUICWfEnvImpl.real_guard_impl)) (PCUICWfEnvImpl.build_wf_env_from_env Σ (map_squash fst wfΣ)) Σ.2 _.
 
 Program Definition erase_env {Σ} wfΣ seeds ignore :=
-  Erasure.erase_global_decls_deps_recursive (X_type := PCUICWfEnvImpl.optimized_abstract_env_impl (guard := Erasure.fake_guard_impl_instance))
+  Erasure.erase_global_decls_deps_recursive (X_type := PCUICWfEnvImpl.optimized_abstract_env_impl (guard := PCUICWfEnvImpl.real_guard_impl))
     (X := PCUICWfEnvImpl.build_wf_env_from_env Σ wfΣ)
     (declarations Σ) (universes Σ) (retroknowledge Σ) _ seeds ignore.
   Next Obligation.

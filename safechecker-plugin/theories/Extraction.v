@@ -33,22 +33,10 @@ Extraction Inline Equations.Prop.Logic.True_rect_dep Equations.Prop.Logic.False_
 Extraction Inline PCUICPrimitive.prim_val_reflect_eq.
 
 Set Extraction Output Directory "src".
-Axiom fake_abstract_guard_impl_properties:
-  forall (fix_cofix : PCUICTyping.FixCoFix)
-    (Σ : PCUICAst.PCUICEnvironment.global_env_ext)
-    (Γ : PCUICAst.PCUICEnvironment.context)
-    (mfix : BasicAst.mfixpoint PCUICAst.term),
-    PCUICTyping.guard fix_cofix Σ Γ mfix <->
-      PCUICWfEnvImpl.fake_guard_impl fix_cofix Σ Γ mfix.
-
-#[local,program] Instance fake_abstract_guard_impl : PCUICWfEnvImpl.abstract_guard_impl :=
-  {
-    guard_impl := PCUICWfEnvImpl.fake_guard_impl
-  }.
-Next Obligation. eapply fake_abstract_guard_impl_properties. Qed.
-
+(** The extracted checker runs the real, executable guard check
+    [PCUICWfEnvImpl.real_guard_impl] ([check_guard_gen]). *)
 Definition infer_and_print_template_program_with_guard {cf} {nor} :=
-  @SafeTemplateChecker.infer_and_print_template_program cf nor fake_abstract_guard_impl.
+  @SafeTemplateChecker.infer_and_print_template_program cf nor PCUICWfEnvImpl.real_guard_impl.
 
 Separate Extraction Wf.Fix_sub MakeOrderTac PCUICSafeChecker.typecheck_program
          infer_and_print_template_program_with_guard

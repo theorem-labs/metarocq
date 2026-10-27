@@ -47,13 +47,12 @@ Export (hints) QuotePCUICGlobalMaps.
   ground_quotable (@primitive_typing_hyps cf (typingΣ) Σ Γ p)
   := ltac:(destruct 1; exact _).
 
-(* So long as pcuic does axiomatic guard checking, we can't do better than axiomatizing it here *)
-#[export] Instance quote_guard_checking {k Σ Γ t} : ground_quotable (@guard guard_checking k Σ Γ t).
-Proof.
-  tryif unfold_quotation_of ()
-  then fail "It seems that guard_checking is no longer an axiom, please remove the Axiom of this theorem and properly define quotability"
-  else idtac.
-Abort.
+(* [guard] is now [guard_cl] (PCUICGuardClosure), an inductive [Prop] with eight
+   constructors. A proof of it cannot be eliminated into [term] (no singleton
+   elimination), and no decision procedure for [guard_cl] exists (it is closed
+   under reduction and substitution), so neither structural quoting nor
+   [ground_quotable_of_dec] applies.
+   The quotation of guard proofs therefore stays an assumption. *)
 Axiom quote_guard_checking : forall {k Σ Γ t}, ground_quotable (@guard guard_checking k Σ Γ t).
 #[export] Existing Instance quote_guard_checking.
 

@@ -2110,17 +2110,21 @@ Qed.
 #[global]
 Hint Resolve trans_wf_local : trans.
 
-Axiom fix_guard_trans :
-  forall Σ Γ mfix,
-    ST.fix_guard Σ Γ mfix ->
-    let Σ' := trans_global Σ in
-    fix_guard Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix).
-
-Axiom cofix_guard_trans :
-  forall Σ Γ mfix,
-    ST.cofix_guard Σ Γ mfix ->
-    let Σ' := trans_global Σ in
-    cofix_guard Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix).
+(** The guard-translation properties of the Template to PCUIC translation. They are hypotheses,
+    not axioms: under [guard := guard_cl] they are concrete propositions relating the Template
+    guard to the PCUIC guard that are not proved here. The lemmas
+    that need them take a [TemplateToPCUICGuardTrans] premise. *)
+Class TemplateToPCUICGuardTrans : Prop := {
+  fix_guard_trans :
+    forall Σ Γ mfix,
+      ST.fix_guard Σ Γ mfix ->
+      let Σ' := trans_global Σ in
+      fix_guard Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix);
+  cofix_guard_trans :
+    forall Σ Γ mfix,
+      ST.cofix_guard Σ Γ mfix ->
+      let Σ' := trans_global Σ in
+      cofix_guard Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix) }.
 
 Notation Swf_fix Σ def := (WfAst.wf Σ (dtype def) * WfAst.wf Σ (dbody def)).
 
@@ -2451,7 +2455,8 @@ Lemma simpl_type_Case {H : checker_flags} {Σ : global_env_ext} {Γ} {ci : case_
   is_allowed_elimination Σ (ind_kelim idecl) ps ->
   isSortRel ps ci.(ci_relevance) ->
   Σ;;; Γ |- c : mkApps (tInd ci (puinst p)) (pparams p ++ indices) ->
-  isCoFinite (ind_finite mdecl) = false ->
+  implb (isCoFinite (ind_finite mdecl))
+    (on_free_vars (strengthenP 0 1 ssrbool.xpredT) (preturn p)) = true ->
   let ptm := it_mkLambda_or_LetIn predctx (preturn p) in
   wf_branches idecl brs ->
   All2i
@@ -2473,6 +2478,138 @@ Proof.
 Qed.
 
 From MetaRocq.PCUIC Require Import PCUICOnFreeVars.
+
+(** A case on a coinductive states that its return type does not mention the scrutinee with
+    [noccur_between] in Template and with [on_free_vars] in PCUIC: [trans] carries the first to
+    the second for a term whose free variables satisfy some [P]. *)
+Module TransNoccur.
+Import ssrbool.
+
+Lemma shiftnP_nocc_betweenp_impl {P Q : nat -> bool} {k n} m :
+  (forall i, P i -> nocc_betweenp k n i -> Q i) ->
+  forall i, shiftnP m P i -> nocc_betweenp (m + k) n i -> shiftnP m Q i.
+Proof.
+  intros h i. rewrite /shiftnP.
+  destruct (Nat.ltb_spec i m) as [lt|ge]; cbn; intros hp hn; [reflexivity|].
+  apply h; [exact hp|]. move: hn; rewrite /nocc_betweenp.
+  move/orP => [/Nat.ltb_lt h'|/Nat.leb_le h']; apply/orP;
+    [left; apply Nat.ltb_lt|right; apply Nat.leb_le]; lia.
+Qed.
+
+Lemma forallb_map_noccur {A} {f : A -> term} {R : A -> Type} {p q : term -> bool} {r : A -> bool} l :
+  All R l ->
+  (forall x, R x -> p (f x) -> r x -> q (f x)) ->
+  forallb p (map f l) -> forallb r l -> forallb q (map f l).
+Proof.
+  intros hR hf. induction hR as [|x l hx hl IH]; cbn; auto.
+  move/andP => [h1 h2] /andP [h3 h4].
+  apply/andP; split; [exact (hf x hx h1 h3)|exact (IH h2 h4)].
+Qed.
+
+Lemma forallb_map2_map_noccur {A B B' C} (f : A -> B' -> C) (g : B -> B') {R : B -> Type}
+  {p q : C -> bool} l l' :
+  All R l' ->
+  (forall x y, R y -> p (f x (g y)) -> q (f x (g y))) ->
+  forallb p (map2 f l (map g l')) -> forallb q (map2 f l (map g l')).
+Proof.
+  intros hR hf. induction hR as [|y l' hy hl IH] in l |- *; destruct l; cbn; auto.
+  move/andP => [h1 h2]. apply/andP; split; [exact (hf _ _ hy h1)|exact (IH _ h2)].
+Qed.
+
+Lemma forallb_test_def_noccur {f : Ast.term -> term} {R : Ast.term -> Prop}
+  {P Q P' Q' : nat -> bool} {nt nb : Ast.term -> bool} mfix :
+  tFixProp R R mfix ->
+  (forall x, R x -> on_free_vars P (f x) -> nt x -> on_free_vars Q (f x)) ->
+  (forall x, R x -> on_free_vars P' (f x) -> nb x -> on_free_vars Q' (f x)) ->
+  forallb (test_def (on_free_vars P) (on_free_vars P')) (map (map_def f f) mfix) ->
+  forallb (test_def nt nb) mfix ->
+  forallb (test_def (on_free_vars Q) (on_free_vars Q')) (map (map_def f f) mfix).
+Proof.
+  intros hR ht hb. induction hR as [|d l [hd hd'] _ IH]; cbn; auto.
+  unfold test_def; cbn. move/andP => [/andP [h1 h2] h3] /andP [/andP [h4 h5] h6].
+  apply/andP; split; [apply/andP; split|];
+    [exact (ht _ hd h1 h4)|exact (hb _ hd' h2 h5)|exact (IH h3 h6)].
+Qed.
+
+Lemma trans_on_free_vars_noccur (Σ : global_env_map) n (t : Ast.term) (P Q : nat -> bool) k :
+  (forall i, P i -> nocc_betweenp k n i -> Q i) ->
+  on_free_vars P (trans Σ t) -> Ast.noccur_between k n t -> on_free_vars Q (trans Σ t).
+Proof.
+  revert t P Q k.
+  apply (Template.Induction.term_forall_list_ind (fun t => forall (P Q : nat -> bool) k,
+    (forall i, P i -> nocc_betweenp k n i -> Q i) ->
+    on_free_vars P (trans Σ t) -> Ast.noccur_between k n t -> on_free_vars Q (trans Σ t))).
+  - intros i P Q k h hp hn. exact (h i hp hn).
+  - intros; reflexivity.
+  - intros ev l IH P Q k h hp hn; cbn in hp, hn |- *.
+    exact (forallb_map_noccur l (Forall_All _ _ IH) (fun x hx => hx P Q k h) hp hn).
+  - intros; reflexivity.
+  - intros c IHc kind t IHt P Q k h hp hn; cbn in hp, hn |- *.
+    move/andP: hn => [hnc hnt]. move/andP: hp => [/andP [hpt _] hpc].
+    apply/andP; split; [apply/andP; split|];
+      [exact (IHt P Q k h hpt hnt)|reflexivity|exact (IHc P Q k h hpc hnc)].
+  - intros na A IHA B IHB P Q k h hp hn; cbn in hp, hn |- *.
+    move/andP: hp => [hpA hpB]. move/andP: hn => [hnA hnB].
+    apply/andP; split;
+      [exact (IHA P Q k h hpA hnA)|exact (IHB _ _ (S k) (shiftnP_nocc_betweenp_impl 1 h) hpB hnB)].
+  - intros na A IHA B IHB P Q k h hp hn; cbn in hp, hn |- *.
+    move/andP: hp => [hpA hpB]. move/andP: hn => [hnA hnB].
+    apply/andP; split;
+      [exact (IHA P Q k h hpA hnA)|exact (IHB _ _ (S k) (shiftnP_nocc_betweenp_impl 1 h) hpB hnB)].
+  - intros na b IHb t IHt b' IHb' P Q k h hp hn; cbn in hp, hn |- *.
+    move/and3P: hp => [hpb hpt hpb']. move/andP: hn => [/andP [hnb hnt] hnb'].
+    apply/and3P; split; [exact (IHb P Q k h hpb hnb)|exact (IHt P Q k h hpt hnt)|
+      exact (IHb' _ _ (S k) (shiftnP_nocc_betweenp_impl 1 h) hpb' hnb')].
+  - intros f IHf l IHl P Q k h hp hn; cbn in hn; cbn [trans] in hp |- *.
+    rewrite on_free_vars_mkApps in hp. rewrite on_free_vars_mkApps.
+    move/andP: hp => [hpf hpl]. move/andP: hn => [hnf hnl].
+    apply/andP; split; [exact (IHf P Q k h hpf hnf)|].
+    exact (forallb_map_noccur l (Forall_All _ _ IHl) (fun x hx => hx P Q k h) hpl hnl).
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros ci p [IHpars IHret] c IHc brs IHbrs P Q k h hp hn.
+    cbn in hn. move/andP: hn => [/andP [/andP [hnpars hnret] hnc] hnbrs].
+    have hR := All_mix IHbrs (forallb_All _ _ hnbrs).
+    move: hp. cbn [trans].
+    destruct (TransLookup.lookup_inductive Σ (ci_ind ci)) as [[mdecl idecl]|]; cbn;
+      move/and5P => [hpars hret hctx hc hbrs]; apply/and5P; split => //.
+    all: try exact (forallb_map_noccur _ IHpars (fun x hx => hx P Q k h) hpars hnpars).
+    all: try exact (IHc P Q k h hc hnc).
+    + rewrite map2_bias_left_length in hret |- *.
+      exact (IHret _ _ _ (shiftnP_nocc_betweenp_impl _ h) hret hnret).
+    + eapply (forallb_map2_map_noccur _ _ _ _ hR); [|exact hbrs].
+      cbv beta. intros cdecl br [IHb hnb]. cbn.
+      move/andP => [hctx' hb]. apply/andP; split => //.
+      rewrite map2_bias_left_length in hb |- *.
+      exact (IHb _ _ _ (shiftnP_nocc_betweenp_impl _ h) hb hnb).
+    + rewrite length_map in hret |- *.
+      exact (IHret _ _ _ (shiftnP_nocc_betweenp_impl _ h) hret hnret).
+  - intros s t IHt P Q k h hp hn. exact (IHt P Q k h hp hn).
+  - intros mfix idx IH P Q k h hp hn; cbn [trans on_free_vars Ast.noccur_between] in hp, hn |- *.
+    rewrite length_map in hp |- *.
+    exact (forallb_test_def_noccur mfix IH (fun x hx => hx P Q k h)
+      (fun x hx => hx _ _ _ (shiftnP_nocc_betweenp_impl #|mfix| h)) hp hn).
+  - intros mfix idx IH P Q k h hp hn; cbn [trans on_free_vars Ast.noccur_between] in hp, hn |- *.
+    rewrite length_map in hp |- *.
+    exact (forallb_test_def_noccur mfix IH (fun x hx => hx P Q k h)
+      (fun x hx => hx _ _ _ (shiftnP_nocc_betweenp_impl #|mfix| h)) hp hn).
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros u arr def ty IHarr IHdef IHty P Q k h hp hn; cbn in hp, hn |- *.
+    move/andP: hp => [/andP [hparr hpdef] hpty]. move/andP: hn => [/andP [hnarr hndef] hnty].
+    apply/andP; split; [apply/andP; split|].
+    + exact (forallb_map_noccur arr (Forall_All _ _ IHarr) (fun x hx => hx P Q k h) hparr hnarr).
+    + exact (IHdef P Q k h hpdef hndef).
+    + exact (IHty P Q k h hpty hnty).
+Qed.
+
+Lemma nocc_betweenp01 {P : nat -> bool} i :
+  P i -> nocc_betweenp 0 1 i -> strengthenP 0 1 xpredT i.
+Proof. destruct i as [|i]; intros _ h; [exact h|reflexivity]. Qed.
+
+End TransNoccur.
 
 Lemma trans_cumulSpec {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {pb Γ T T'} :
   let Σ' := trans_global Σ in
@@ -2588,7 +2725,7 @@ Ltac simpl_let :=
   end.
 Local Hint Extern 4 => simpl_let : trans.
 
-Theorem template_to_pcuic {cf} :
+Theorem template_to_pcuic {cf} {t2pgt : TemplateToPCUICGuardTrans} :
   ST.env_prop (fun Σ Γ t T =>
     let Σ' := trans_global Σ in
     wf Σ' ->
@@ -2732,6 +2869,12 @@ Proof.
     + now rewrite global_ext_constraints_trans.
     + cbn. clear X7.
       now rewrite trans_mkApps map_app in X6.
+    + clear X7.
+      have hopen := PCUICClosedTyp.subject_is_open_term (X3 X8).
+      match goal with h : implb (ST.isCoFinite _) _ = true |- _ => move: h end.
+      rewrite /p'. cbn. case: (Ast.Env.ind_finite mdecl) => //= hocc.
+      exact (TransNoccur.trans_on_free_vars_noccur _ 1 _ _ _ 0 TransNoccur.nocc_betweenp01
+        (hopen X8) hocc).
     + red. eapply All2_Forall2.
       eapply All2_map2_right.
       eapply All2_map.
@@ -3801,7 +3944,7 @@ Proof.
   trivial.
 Qed.
 
-Lemma trans_on_global_env `{checker_flags} Σ :
+Lemma trans_on_global_env `{checker_flags} {t2pgt : TemplateToPCUICGuardTrans} Σ :
   (forall (Σ : Ast.Env.global_env_ext) Γ j, Typing.wf Σ ->
     Typing.lift_typing Typing.typing Σ Γ j ->
     let Σ' := trans_global_env Σ in
@@ -4042,7 +4185,7 @@ Proof.
             now eapply trans_consistent_instance_ext_gen.
 Qed.
 
-Lemma template_to_pcuic_env {cf} Σ :Template.Typing.wf Σ -> wf (trans_global_env Σ).
+Lemma template_to_pcuic_env {cf} {t2pgt : TemplateToPCUICGuardTrans} Σ :Template.Typing.wf Σ -> wf (trans_global_env Σ).
 Proof.
   intros Hu.
   eapply trans_on_global_env; eauto. simpl; intros.
@@ -4054,7 +4197,7 @@ Proof.
   - eapply (X2 _ (Ast.tSort s)); eauto.
 Qed.
 
-Lemma template_to_pcuic_env_ext {cf} Σ :Template.Typing.wf_ext Σ -> wf_ext (trans_global Σ).
+Lemma template_to_pcuic_env_ext {cf} {t2pgt : TemplateToPCUICGuardTrans} Σ :Template.Typing.wf_ext Σ -> wf_ext (trans_global Σ).
 Proof.
   intros [u Hu].
   split. now apply template_to_pcuic_env.
@@ -4062,7 +4205,7 @@ Proof.
   now destruct Σ as [Σ udecl]; cbn in *.
 Qed.
 
-Theorem template_to_pcuic_typing {cf} {Σ : Ast.Env.global_env_ext} Γ t T :
+Theorem template_to_pcuic_typing {cf} {t2pgt : TemplateToPCUICGuardTrans} {Σ : Ast.Env.global_env_ext} Γ t T :
   ST.wf Σ ->
   ST.typing Σ Γ t T ->
   let Σ' := trans_global Σ in

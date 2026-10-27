@@ -1274,6 +1274,37 @@ Proof.
     solve [solve_all; eauto using on_free_vars_up].
 Qed.
 
+(** Instantiation under the [n >= 1] binders of a predicate context keeps variable 0 out of a
+    case's return type ([nondep_cofinite] in [case_side_conditions]), when the substitution maps
+    the free variables of the return type to well-scoped terms. *)
+Lemma on_free_vars_nondep_inst n (Q : nat -> bool) σ t :
+  0 < n ->
+  (forall i, Q i -> on_free_vars xpredT (σ i)) ->
+  on_free_vars (shiftnP n Q) t ->
+  on_free_vars (strengthenP 0 1 xpredT) t ->
+  on_free_vars (strengthenP 0 1 xpredT) t.[⇑^n σ].
+Proof.
+  intros hn hσ hQ h.
+  set σ' := fun i => if Q i then σ i else tRel i.
+  assert (e : t.[⇑^n σ] = t.[up n σ']).
+  { eapply inst_ext_cond; [|exact hQ].
+    intros i. rewrite -(@up_Upn n σ i) /up /shiftnP /σ'. cbv beta.
+    destruct (Nat.leb_spec n i) as [hi|hi]; [|reflexivity].
+    move=> /orP [/Nat.ltb_spec0 ?|hq]; [lia|].
+    now rewrite hq. }
+  rewrite e. eapply on_free_vars_inst; [|exact h].
+  intros i hi0. rewrite /up /σ'. cbv beta.
+  destruct (Nat.leb_spec n i) as [hi|hi].
+  - rewrite on_free_vars_rename.
+    destruct (Q (i - n)) eqn:hq.
+    + eapply on_free_vars_impl; [|exact (hσ _ hq)].
+      intros j _. change (strengthenP 0 1 xpredT (n + j)).
+      rewrite strengthenP01. apply/negP => /Nat.eqb_eq. lia.
+    + rewrite /=. change (strengthenP 0 1 xpredT (n + (i - n))).
+      rewrite strengthenP01. apply/negP => /Nat.eqb_eq. lia.
+  - rewrite /=. exact hi0.
+Qed.
+
 
 Lemma usubst_on_free_vars_shift Γ Δ σ u n :
    closed_subst Γ σ Δ ->

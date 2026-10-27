@@ -40,9 +40,7 @@ Definition extract_gctx : PCUICProgram.pcuic_program -> global_env_ext :=
 
 Definition gctx := Eval cbv in extract_gctx empty_full. (* Change here *)
 
-Global Program Instance fake_guard_impl : abstract_guard_impl :=
-{| guard_impl := fake_guard_impl |}.
-Next Obligation. Admitted.
+Global Existing Instance real_guard_impl.
 
 Local Existing Instance PCUICSN.default_normalizing.
 Import MonadNotation.
@@ -100,9 +98,7 @@ Definition gctx : global_env_ext :=
 Definition kername_of_string (s : string) : kername :=
   (MPfile [], s).
 
-Global Program Instance fake_guard_impl : abstract_guard_impl :=
-{| guard_impl := fake_guard_impl |}.
-Next Obligation. Admitted.
+Global Existing Instance real_guard_impl.
 Global Instance assume_normalization : PCUICSN.Normalization.
 Admitted.
 

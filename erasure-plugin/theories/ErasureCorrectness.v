@@ -1449,7 +1449,7 @@ Qed.
 
 
 Lemma expand_lets_function (wfl := default_wcbv_flags)
-  {guard_impl : abstract_guard_impl}
+  {guard_impl : abstract_guard_impl} {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
   (cf:=config.extraction_checker_flags) (Σ:global_env_ext_map) K f na A B
   (wf : ∥ Σ ;;; [] |- f : PCUICAst.tProd na A B ∥) pr :
   let (Σ', f') := transform (pcuic_expand_lets_transform K) (Σ, f) pr in
@@ -1508,6 +1508,8 @@ Qed.
 
 Section PCUICErase.
   Import PCUICAst PCUICAstUtils PCUICEtaExpand PCUICWfEnv.
+  (** The let-expansion guard-translation hypothesis. *)
+  Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}.
 
   Definition lift_wfext (Σ : global_env_ext_map) (wfΣ : ∥ wf_ext Σ ∥) :
     let wfe := build_wf_env_from_env Σ.1 (map_squash (wf_ext_wf Σ) wfΣ) in
@@ -2080,6 +2082,7 @@ Arguments PCUICFirstorder.firstorder_ind _ _ : clear implicits.
 
 Section pipeline_cond.
 
+  Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}.
   Variable Σ : global_env_ext_map.
   Variable t : PCUICAst.term.
   Variable T : PCUICAst.term.
@@ -2192,6 +2195,7 @@ End pipeline_cond.
 
 Section pipeline_theorem.
 
+  Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}.
   Variable Σ : global_env_ext_map.
   Variable HΣ : PCUICTyping.wf_ext Σ.
   Variable expΣ : PCUICEtaExpand.expanded_global_env Σ.1.
@@ -2310,7 +2314,7 @@ Section pipeline_theorem.
     rewrite compile_evalue_strip //.
     destruct pre as [[wt] ?]. destruct wt.
     apply (compile_evalue_erase (PCUICExpandLets.trans_global Σ) Σer) => //.
-    { cbn. now eapply (@PCUICExpandLetsCorrectness.trans_wf extraction_checker_flags Σ). }
+    { cbn. now eapply (@PCUICExpandLetsCorrectness.trans_wf extraction_checker_flags elgt Σ). }
     destruct H0. cbn -[transform erase_transform] in H0. apply H0.
   Qed.
 

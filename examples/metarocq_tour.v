@@ -97,7 +97,14 @@ Qed. *)
 (** Erasure *)
 From MetaRocq.ErasurePlugin Require Import Erasure Loader.
 
-(** Running erasure live in Rocq *)
+(** Running erasure live in Rocq. The erasure pipeline's correctness assumes that
+    the guard condition is preserved by its translations (the hypotheses
+    [ExpandLetsGuardTrans] and [TemplateToPCUICGuardTrans]); they are taken as
+    section hypotheses here, and erased from the computation. *)
+Section GuardTrans.
+Context {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}.
+
 Definition test (p : Ast.Env.program) : string :=
   erase_and_print_template_program default_erasure_config [] p.
 
@@ -115,6 +122,7 @@ MetaRocq Run (tmEval lazy singleton_elim >>= tmQuoteRec >>=
   fun p => tmEval lazy (test p) >>= tmPrint). (* Optimized to remove match on Props *)
 
 MetaRocq Erase singleton_elim.
+End GuardTrans.
 
 (** Conclusion: Status of MetaRocq
 

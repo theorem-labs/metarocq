@@ -33,6 +33,18 @@ src/pCUICEquality.mli
 src/pCUICEquality.ml
 src/pCUICArityRed.ml
 src/pCUICArityRed.mli
+src/pCUICGuardResult.ml
+src/pCUICGuardResult.mli
+src/pCUICRecArgs.ml
+src/pCUICRecArgs.mli
+src/pCUICGuardReduce.ml
+src/pCUICGuardReduce.mli
+src/pCUICGuardCoFix.ml
+src/pCUICGuardCoFix.mli
+src/pCUICGuardChecker.ml
+src/pCUICGuardChecker.mli
+src/pCUICGuardClosure.ml
+src/pCUICGuardClosure.mli
 src/pCUICTyping.ml
 src/pCUICTyping.mli
 src/pCUICPosition.mli
@@ -45,6 +57,8 @@ src/pCUICPretty.mli
 src/pCUICPretty.ml
 src/pCUICProgram.mli
 src/pCUICProgram.ml
+src/pCUICOnFreeVars.mli
+src/pCUICOnFreeVars.ml
 
 # From SafeChecker
 src/pCUICErrors.mli

@@ -323,6 +323,10 @@ Proof using Type.
   - intros ci p c brs args u mdecl idecl isdecl hΣ hΓ indnp eqpctx wfp cup
       wfpctx pty Hpty Hcpc kelim hrel
       IHctxi Hc IHc notCoFinite wfbrs hbrs i univs wfext cu.
+    assert (notCoFinite' : implb (isCoFinite (ind_finite mdecl))
+      (on_free_vars (strengthenP 0 1 ssrbool.xpredT) (preturn (subst_instance i p))) = true).
+    { change (preturn (subst_instance i p)) with (subst_instance i (preturn p)).
+      now rewrite on_free_vars_subst_instance. }
     rewrite subst_instance_mkApps subst_instance_it_mkLambda_or_LetIn map_app.
     cbn.
     change (subst_instance i (preturn p)) with (preturn (subst_instance i p)).

@@ -180,7 +180,7 @@ Proof.
   destruct ext. eapply expanded_context_weakening; tea; tc.
 Qed.
 
-Lemma trans_expanded {cf : checker_flags} {Σ} {wfΣ :Template.Typing.wf Σ} Γ T  :
+Lemma trans_expanded {cf : checker_flags} {t2pgt : TemplateToPCUICGuardTrans} {Σ} {wfΣ :Template.Typing.wf Σ} Γ T  :
   let Σ' := trans_global_env Σ in
   WfAst.wf Σ T ->
   PCUICEtaExpand.expanded_global_env Σ' ->
@@ -287,7 +287,7 @@ Proof.
   depelim X0. constructor; auto.
 Qed.
 
-Lemma expanded_trans_local {cf} {Σ} {wfΣ : Typing.wf Σ} Γ ctx :
+Lemma expanded_trans_local {cf} {t2pgt : TemplateToPCUICGuardTrans} {Σ} {wfΣ : Typing.wf Σ} Γ ctx :
   expanded_global_env (trans_global_env Σ) ->
   All (WfAst.wf_decl Σ) ctx ->
   EtaExpand.expanded_context Σ Γ ctx ->
@@ -314,7 +314,7 @@ Proof.
   intros [? ?]. constructor; auto. eauto.
 Qed.
 
-Lemma expanded_trans_global_env {cf} Σ {wfΣ : Typing.wf_ext Σ} :
+Lemma expanded_trans_global_env {cf} {t2pgt : TemplateToPCUICGuardTrans} Σ {wfΣ : Typing.wf_ext Σ} :
   EtaExpand.expanded_global_env Σ ->
   expanded_global_env (trans_global_env Σ).
 Proof.
@@ -360,7 +360,7 @@ Qed.
 
 Import TemplateProgram.
 
-Lemma expanded_trans_program {cf : checker_flags} p (t : wt_template_program p) :
+Lemma expanded_trans_program {cf : checker_flags} {t2pgt : TemplateToPCUICGuardTrans} p (t : wt_template_program p) :
   EtaExpand.expanded_program p ->
   expanded_pcuic_program (trans_template_program p).
 Proof.

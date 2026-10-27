@@ -18,6 +18,13 @@ PCUICAstUtils
 PCUICReflect
 PCUICEquality
 PCUICArityRed
+PCUICGuardResult
+PCUICRecArgs
+PCUICGuardReduce
+PCUICGuardCoFix
+PCUICGuardChecker
+PCUICOnFreeVars
+PCUICGuardClosure
 PCUICTyping
 PCUICWfUniverses
 PCUICNormal

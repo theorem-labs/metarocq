@@ -7,6 +7,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICGlobalEnv
   PCUICTactics PCUICCumulativity
   PCUICInduction PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils
   PCUICPosition PCUICTyping PCUICSigmaCalculus PCUICOnFreeVars PCUICClosed PCUICConfluence PCUICSpine PCUICInductiveInversion PCUICParallelReductionConfluence PCUICWellScopedCumulativity PCUICClosed PCUICRenameDef PCUICInstConv PCUICClosedTyp PCUICWeakeningEnvTyp PCUICRenameTyp PCUICRenameConv PCUICGuardCondition PCUICWeakeningConv.
+From MetaRocq.PCUIC Require PCUICOnFreeVarsConv.
 
 From MetaRocq.PCUIC Require Import BDTyping BDToPCUIC BDFromPCUIC.
 
@@ -764,6 +765,11 @@ Proof using wfΣ.
       rewrite on_free_vars_ctx_subst_instance.
       eapply closed_ctx_on_free_vars, declared_inductive_closed_params.
       eassumption.
+
+    + match goal with h : implb _ (on_free_vars _ (preturn p)) = true |- _ => move: h end.
+      destruct isCoFinite => //= hnd.
+      apply PCUICOnFreeVarsConv.on_free_vars_nondep_rename => //.
+      rewrite (wf_predicate_length_pcontext H1); lia.
 
     + now rewrite length_map.
 

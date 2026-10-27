@@ -26,6 +26,14 @@ PCUICCases
 PCUICAstUtils
 EqDecInstances
 PCUICEquality
+PCUICReflect
+PCUICGuardResult
+PCUICRecArgs
+PCUICGuardReduce
+PCUICGuardCoFix
+PCUICGuardChecker
+PCUICOnFreeVars
+PCUICGuardClosure
 PCUICTyping
 PCUICInduction
 PCUICWfUniverses

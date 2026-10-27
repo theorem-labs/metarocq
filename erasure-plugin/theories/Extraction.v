@@ -34,9 +34,6 @@ Extract Constant Equations.Init.pr1 => "fst".
 Extract Constant Equations.Init.pr2 => "snd".
 Extraction Inline Equations.Init.pr1 Equations.Init.pr2.
 
-(* Extract Constant PCUICWfEnvImpl.guard_impl => "(fun _ _ _ _ -> true)".
-Extract Constant PCUICTyping.guard_checking => "(fun _ _ _ _ -> true)". *)
-
 Set Extraction Output Directory "src".
 
 Separate Extraction ErasureFunction.erase Erasure

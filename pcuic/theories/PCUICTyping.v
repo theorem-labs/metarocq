@@ -4,7 +4,7 @@ From MetaRocq.Common Require Import config Primitive.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
   PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition PCUICOnFreeVars PCUICArityRed.
 From MetaRocq.PCUIC Require Export PCUICCumulativitySpec.
-From MetaRocq.PCUIC Require Export PCUICCases.
+From MetaRocq.PCUIC Require Export PCUICCases PCUICGuardClosure.
 
 Import MonadNotation.
 
@@ -42,18 +42,18 @@ Definition type_of_constructor mdecl (cdecl : constructor_body) (c : inductive *
 
 Include PCUICEnvTyping.
 
-(* AXIOM Postulate existence of a guard condition checker *)
-
-Inductive FixCoFix : Type := Fix | CoFix.
+(* The guard condition is the closure of the executable guard checker
+   [check_guard_gen] under the seven operations of [GuardCheckerCorrect]
+   ([PCUICGuardClosure]).  No axiom is involved. *)
 
 Class GuardChecker :=
 { (* guard check for both fixpoints (Fix) and cofixpoints (CoFix)  *)
   guard : FixCoFix -> global_env_ext -> context -> mfixpoint term -> Prop ;
 }.
 
-Axiom guard_checking : GuardChecker.
 #[global]
-Existing Instance guard_checking.
+Instance guard_checking : GuardChecker :=
+  {| guard := guard_cl |}.
 
 Definition fix_guard := guard Fix.
 Definition cofix_guard := guard CoFix.
@@ -155,7 +155,11 @@ Variant case_side_conditions `{checker_flags} wf_local_funΣ typingΣ Σ Γ ci p
     (ind_inst : ctx_inst typingΣ Γ (p.(pparams) ++ indices)
                          (List.rev (subst_instance p.(puinst)
                                                    (ind_params mdecl ,,, ind_indices idecl : context))))
-    (not_cofinite : isCoFinite mdecl.(ind_finite) = false).
+    (* A case on a coinductive may not mention the scrutinee in its return type, which is
+       variable 0 of the predicate context: unfolding a cofixpoint under such a case would
+       change the type of the case, and subject reduction would fail. *)
+    (nondep_cofinite : (isCoFinite mdecl.(ind_finite) ==>
+                        on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true).
 
 Variant case_branch_typing `{checker_flags} wf_local_funΣ typingΣ Γ (ci:case_info) p ps mdecl idecl ptm  brs :=
 | case_branch_info
@@ -783,7 +787,7 @@ Lemma typing_ind_env_app_size `{cf : checker_flags} :
           (List.rev (subst_instance p.(puinst) (mdecl.(ind_params) ,,, idecl.(ind_indices) : context))) ->
         Σ ;;; Γ |- c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
         P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
-        isCoFinite mdecl.(ind_finite) = false ->
+        (isCoFinite mdecl.(ind_finite) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true ->
         let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
         wf_branches idecl brs ->
         All2i (fun i cdecl br =>
@@ -1248,7 +1252,7 @@ Lemma typing_ind_env `{cf : checker_flags} :
         (List.rev (subst_instance p.(puinst) (mdecl.(ind_params) ,,, idecl.(ind_indices) : context))) ->
       Σ ;;; Γ |- c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
       P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
-      isCoFinite mdecl.(ind_finite) = false ->
+      (isCoFinite mdecl.(ind_finite) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true ->
       let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
       wf_branches idecl brs ->
       All2i (fun i cdecl br =>

@@ -170,7 +170,7 @@ Definition restrict_env (Σ : global_declarations) (kns : list kername) : global
 Import PCUICWfEnv PCUICWfEnvImpl.
 
 Lemma eq_eta_global_env (cf := config.extraction_checker_flags) Σ' Σ :
-  abstract_env_rel (abstract_env_impl := (@optimized_abstract_env_impl config.extraction_checker_flags fake_guard_impl_instance).π1) (build_wf_env_from_env (cf := config.extraction_checker_flags) Σ' (assume_env_wellformed Σ')) Σ ->
+  abstract_env_rel (abstract_env_impl := (@optimized_abstract_env_impl config.extraction_checker_flags PCUICWfEnvImpl.real_guard_impl).π1) (build_wf_env_from_env (cf := config.extraction_checker_flags) Σ' (assume_env_wellformed Σ')) Σ ->
   Σ =
   {|
     PEnv.universes := PEnv.universes Σ';
@@ -190,7 +190,7 @@ Definition eta_global_env
   let Σp := PCUICProgram.trans_env_env (TemplateToPCUIC.trans_global_env Σ) in
   let Σe :=
       erase_global_decls_deps_recursive
-        (X_type := optimized_abstract_env_impl (guard := fake_guard_impl_instance))
+        (X_type := optimized_abstract_env_impl (guard := PCUICWfEnvImpl.real_guard_impl))
         (X := build_wf_env_from_env Σp (assume_env_wellformed _))
         (PEnv.declarations Σp) (PEnv.universes Σp) (PEnv.retroknowledge Σp) (eq_eta_global_env _)
         seeds erasure_ignore in

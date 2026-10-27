@@ -468,7 +468,7 @@ Lemma type_Case_helper
   is_allowed_elimination Σ (ind_kelim oib) ps ->
   isSortRel ps oib.(ind_relevance) ->
 
-  isCoFinite (ind_finite mib) = false ->
+  (isCoFinite (ind_finite mib) ==> on_free_vars (strengthenP 0 1 xpredT) rettyp) = true ->
 
   #|brs| = #|ind_ctors oib| ->
 
@@ -585,7 +585,7 @@ Lemma type_Case_subst_helper
   is_allowed_elimination Σ (ind_kelim oib) ps ->
   isSortRel ps oib.(ind_relevance) ->
 
-  isCoFinite (ind_finite mib) = false ->
+  (isCoFinite (ind_finite mib) ==> on_free_vars (strengthenP 0 1 xpredT) rettyp) = true ->
 
   #|brs| = #|ind_ctors oib| ->
 
@@ -721,8 +721,6 @@ Lemma type_Case_simple_subst_helper
   is_allowed_elimination Σ (ind_kelim oib) ps ->
   isSortRel ps oib.(ind_relevance) ->
 
-  isCoFinite (ind_finite mib) = false ->
-
   #|brs| = #|ind_ctors oib| ->
 
 
@@ -740,7 +738,7 @@ Lemma type_Case_simple_subst_helper
 
   Σ ;;; Γ |- make_case ind mib oib pparams puinst discr rettyp' brs : rettyp.
 Proof.
-  move=> wfΣ inddecl pparamslen discrtyp rettyp' p predctx predWty elimok Her finok brslen brsok.
+  move=> wfΣ inddecl pparamslen discrtyp rettyp' p predctx predWty elimok Her brslen brsok.
 
   set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib |}.
 
@@ -775,6 +773,15 @@ Proof.
   set subst_rettyp' := subst0 (mk_ctx_subst predctx (indices ++ [discr])) rettyp'.
   have -> : rettyp = subst_rettyp'.
   by rewrite /subst_rettyp' /rettyp' PCUICLiftSubst.simpl_subst_k // mk_ctx_subst_length //; len.
+
+  (* [rettyp'] is lifted over the whole predicate context, so it does not mention the
+     scrutinee. *)
+  have finok : (isCoFinite (ind_finite mib) ==>
+                on_free_vars (strengthenP 0 1 xpredT) rettyp') = true.
+  { apply/implyP => _. rewrite /rettyp'. apply: on_free_vars_lift0.
+    eapply on_free_vars_impl; last exact: (PCUICClosedTyp.subject_is_open_term predWty).
+    move=> i _. change (strengthenP 0 1 xpredT (S #|ind_indices oib| + i)).
+    rewrite strengthenP01. apply/negP => /Nat.eqb_eq. lia. }
 
   apply: type_Case_subst_helper=> //; try eassumption.
   - rewrite -/predctx=> ? /=.

@@ -447,7 +447,8 @@ Next Obligation.
   now apply (preservation erase_transform).
 Qed.
 
-Program Definition pcuic_expand_lets_transform_mapping {cf : checker_flags} K : Transform.t _ _ _ _ PCUICAst.term PCUICAst.term
+Program Definition pcuic_expand_lets_transform_mapping {cf : checker_flags}
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans} K : Transform.t _ _ _ _ PCUICAst.term PCUICAst.term
   eval_pcuic_program_mapping eval_pcuic_program_mapping :=
  {| name := "let expansion in constructors";
     pre p := wf_pcuic_inductives_mapping p.2.1 p.1 /\ pre (pcuic_expand_lets_transform K) p.2 ;
@@ -456,7 +457,7 @@ Program Definition pcuic_expand_lets_transform_mapping {cf : checker_flags} K : 
    post p := wf_pcuic_inductives_mapping p.2.1 p.1 /\ post (pcuic_expand_lets_transform K) p.2;
    obseq p hp p' := obseq (pcuic_expand_lets_transform K) p.2 (proj2 hp) p'.2 |}.
 Next Obligation.
-  cbn. intros cf K input []. split => //.
+  cbn. intros cf elgt K input []. split => //.
   - move: H; rewrite /wf_pcuic_inductives_mapping.
     solve_all. move: H; rewrite /wf_pcuic_inductive_mapping.
     destruct x as [ind [na tags]].
@@ -466,10 +467,11 @@ Next Obligation.
   - unshelve eapply (correctness (pcuic_expand_lets_transform K)). apply H0.
 Qed.
 Next Obligation.
-  intros cf K p v pr ev. now eapply (preservation (pcuic_expand_lets_transform K)).
+  intros cf elgt K p v pr ev. now eapply (preservation (pcuic_expand_lets_transform K)).
 Qed.
 
-Program Definition verified_erasure_pipeline {guard : abstract_guard_impl} (efl := EWellformed.all_env_flags) :
+Program Definition verified_erasure_pipeline {guard : abstract_guard_impl}
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans} (efl := EWellformed.all_env_flags) :
  Transform.t _ _ _ EAst.term _ _
   PCUICTransform.eval_pcuic_program
   (EProgram.eval_eprogram final_wcbv_flags) :=
@@ -485,14 +487,15 @@ Program Definition verified_erasure_pipeline {guard : abstract_guard_impl} (efl 
   erase_transform ▷
   verified_lambdabox_pipeline.
 Next Obligation.
-  intros guard efl K T1 p.
+  intros guard elgt efl K T1 p.
   cbn. intuition eauto. now eapply H2. now eapply H2.
 Qed.
 Next Obligation.
-  intros guard efl K T1 p. cbn. intuition auto.
+  intros guard elgt efl K T1 p. cbn. intuition auto.
 Qed.
 
-Program Definition verified_erasure_pipeline_mapping {guard : abstract_guard_impl} (efl := EWellformed.all_env_flags) :
+Program Definition verified_erasure_pipeline_mapping {guard : abstract_guard_impl}
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans} (efl := EWellformed.all_env_flags) :
  Transform.t _ _ _ EAst.term _ _
   eval_pcuic_program_mapping
   (EProgram.eval_eprogram final_wcbv_flags) :=
@@ -508,11 +511,11 @@ Program Definition verified_erasure_pipeline_mapping {guard : abstract_guard_imp
   erase_transform_mapping ▷
   verified_lambdabox_pipeline_mapping.
 Next Obligation.
-  intros guard efl K T1 p.
+  intros guard elgt efl K T1 p.
   cbn. intuition eauto. now eapply H3. now eapply H3.
 Qed.
 Next Obligation.
-  intros guard efl K T1 p. cbn. intuition auto.
+  intros guard elgt efl K T1 p. cbn. intuition auto.
   split; eauto.
 Qed.
 
@@ -633,7 +636,7 @@ Next Obligation.
   now unshelve eapply (preservation (eta_expand K)).
 Qed.
 
-Program Definition template_to_pcuic_mapping K :
+Program Definition template_to_pcuic_mapping {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans} K :
   Transform.t _ _ _ _ _ _ eval_template_program_mapping eval_pcuic_program_mapping :=
  {| name := name (template_to_pcuic_transform K);
     pre p := wf_template_inductives_mapping p.2.1 p.1 /\ pre (template_to_pcuic_transform K) p.2 ;
@@ -642,7 +645,7 @@ Program Definition template_to_pcuic_mapping K :
    post p := wf_pcuic_inductives_mapping p.2.1 p.1 /\ post (template_to_pcuic_transform K) p.2;
    obseq p hp p' := obseq (template_to_pcuic_transform K) p.2 (proj2 hp) p'.2 |}.
 Next Obligation.
-  cbn; intros K input [wfm pre].
+  cbn; intros t2pgt K input [wfm pre].
   pose proof (correctness (template_to_pcuic_transform K) _ pre) as post.
   split. 2:now unshelve eapply (correctness (template_to_pcuic_transform K)).
   move: wfm. rewrite /wf_template_inductives_mapping.
@@ -660,11 +663,12 @@ Next Obligation.
   destruct g => //=. rewrite nth_error_map. destruct nth_error => //=. len.
 Qed.
 Next Obligation.
-  cbn; intros K ? ? [? []] ev. cbn.
+  cbn; intros t2pgt K ? ? [? []] ev. cbn.
   now unshelve eapply (preservation (template_to_pcuic_transform K)).
 Qed.
 
-Program Definition pre_erasure_pipeline (efl := EWellformed.all_env_flags) :
+Program Definition pre_erasure_pipeline {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}
+  (efl := EWellformed.all_env_flags) :
  Transform.t _ _
   _ _ _ _
   eval_template_program
@@ -685,13 +689,14 @@ Program Definition pre_erasure_pipeline (efl := EWellformed.all_env_flags) :
   (* Casts are removed, application is binary, case annotations are inferred from the global environment *)
   template_to_pcuic_transform (K _ T2).
 Next Obligation.
-  intros efl K T1 T2 T3 T4 p. cbn. intuition eauto.
+  intros t2pgt efl K T1 T2 T3 T4 p. cbn. intuition eauto.
 Qed.
 Next Obligation.
-  intros efl K T1 T2 T3 T4 p. cbn. intuition eauto.
+  intros t2pgt efl K T1 T2 T3 T4 p. cbn. intuition eauto.
 Qed.
 
-Program Definition pre_erasure_pipeline_mapping (efl := EWellformed.all_env_flags) :
+Program Definition pre_erasure_pipeline_mapping {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}
+  (efl := EWellformed.all_env_flags) :
  Transform.t _ _
   _ _ _ _
   eval_template_program_mapping
@@ -712,30 +717,36 @@ Program Definition pre_erasure_pipeline_mapping (efl := EWellformed.all_env_flag
   (* Casts are removed, application is binary, case annotations are inferred from the global environment *)
   template_to_pcuic_mapping (K _ T2).
 Next Obligation.
-  intros efl K T1 T2 T3 T4 p. cbn. intuition eauto.
+  intros t2pgt efl K T1 T2 T3 T4 p. cbn. intuition eauto.
 Qed.
 Next Obligation.
-  intros efl K T1 T2 T3 T4 p. cbn. intuition eauto.
+  intros t2pgt efl K T1 T2 T3 T4 p. cbn. intuition eauto.
 Qed.
 
-Program Definition erasure_pipeline {guard : abstract_guard_impl} (efl := EWellformed.all_env_flags) : Transform.t _ _ _ _ _ _
+Program Definition erasure_pipeline {guard : abstract_guard_impl}
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}
+  (efl := EWellformed.all_env_flags) : Transform.t _ _ _ _ _ _
   eval_template_program
   (EProgram.eval_eprogram final_wcbv_flags) :=
   pre_erasure_pipeline ▷
   verified_erasure_pipeline.
 
 Next Obligation.
-  intros guard efl p; cbn. intuition auto.
+  intros guard elgt t2pgt efl p; cbn. intuition auto.
 Qed.
 
-Program Definition erasure_pipeline_mapping {guard : abstract_guard_impl} (efl := EWellformed.all_env_flags) : Transform.t _ _ _ _ _ _
+Program Definition erasure_pipeline_mapping {guard : abstract_guard_impl}
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}
+  (efl := EWellformed.all_env_flags) : Transform.t _ _ _ _ _ _
   eval_template_program_mapping
   (EProgram.eval_eprogram final_wcbv_flags) :=
   pre_erasure_pipeline_mapping ▷
   verified_erasure_pipeline_mapping.
 
 Next Obligation.
-  intros guard efl p; cbn. intuition auto.
+  intros guard elgt t2pgt efl p; cbn. intuition auto.
 Qed.
 
 Local Obligation Tactic := program_simpl.
@@ -1031,6 +1042,7 @@ Proof.
 Qed.
 
 Program Definition verified_typed_erasure_pipeline {guard : abstract_guard_impl}
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
   (efl := EWellformed.all_env_flags)
   econf :
   Transform.t _ _ _ _ _ _
@@ -1062,6 +1074,8 @@ Program Definition verified_typed_erasure_pipeline {guard : abstract_guard_impl}
   Qed.
 
 Program Definition typed_erasure_pipeline {guard : abstract_guard_impl}
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}
   (efl := EWellformed.all_env_flags) econf :
   Transform.t _ _ _ _ _ _
    eval_template_program_mapping
@@ -1079,17 +1093,8 @@ Import EGlobalEnv EWellformed.
 
 Local Open Scope string_scope.
 
-Axiom fake_guard_impl_properties :
-forall (fix_cofix: PCUICTyping.FixCoFix)
-       (Σ: PCUICAst.PCUICEnvironment.global_env_ext)
-       (Γ: PCUICAst.PCUICEnvironment.context)
-       (mfix: BasicAst.mfixpoint PCUICAst.term),
-PCUICTyping.guard fix_cofix Σ Γ mfix <-> fake_guard_impl fix_cofix Σ Γ mfix.
-
-
-Global Program Instance fake_guard_impl : abstract_guard_impl :=
-{| guard_impl := fake_guard_impl |}.
-Next Obligation. apply fake_guard_impl_properties. Qed.
+(** The erasure pipeline runs the real, executable guard check. *)
+Global Existing Instance real_guard_impl.
 
 (** Ideally we'd have a MetaRocq template program that generates a proof of Strong Normalization for the particular program we're erasing.  For now we just axiomatize SN. *)
 Axiom fake_normalization : PCUICSN.Normalization.
@@ -1107,7 +1112,9 @@ Axiom assume_that_we_only_erase_on_welltyped_programs : forall {cf : checker_fla
   forall (p : Ast.Env.program), squash (TemplateProgram.wt_template_program p).
 
 (* This also optionally runs the cofix to fix translation *)
-Program Definition run_erase_program {guard : abstract_guard_impl} econf :=
+Program Definition run_erase_program {guard : abstract_guard_impl}
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans} econf :=
   if econf.(enable_typed_erasure) then run (typed_erasure_pipeline econf)
   else run (erasure_pipeline_mapping ▷ (optional_unsafe_transforms econf)).
 Next Obligation.
@@ -1116,7 +1123,13 @@ Proof.
   destruct enable_unsafe as [[] ? ? ?]=> //.
 Qed.
 
-Program Definition erase_and_print_template_program econf (m : inductives_mapping) (p : Ast.Env.program) : string :=
+(** The entry points take the guard-translation hypotheses [ExpandLetsGuardTrans] and
+    [TemplateToPCUICGuardTrans] as premises. They are
+    propositions, so extraction erases them. *)
+Program Definition erase_and_print_template_program
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans}
+  econf (m : inductives_mapping) (p : Ast.Env.program) : string :=
   let p' := run_erase_program econf (m, p) _ in
   time "Pretty printing" EPretty.print_program p'.
 Next Obligation.
@@ -1137,6 +1150,8 @@ Definition typed_erasure_config :=
     extracted_inductives := [] |}.
 
 (* TODO: Parameterize by a configuration for dearging, allowing to, e.g., override masks. *)
-Program Definition typed_erase_and_print_template_program (p : Ast.Env.program)
+Program Definition typed_erase_and_print_template_program
+  {elgt : PCUICExpandLetsCorrectness.ExpandLetsGuardTrans}
+  {t2pgt : TemplateToPCUICCorrectness.TemplateToPCUICGuardTrans} (p : Ast.Env.program)
   : string :=
   erase_and_print_template_program typed_erasure_config [] p.

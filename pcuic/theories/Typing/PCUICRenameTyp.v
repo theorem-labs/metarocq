@@ -886,6 +886,11 @@ Proof.
     intros IHΔ ci_npar eqpctx predctx wfp cup wfpctx Hpret IHpret IHpredctx isallowed Her.
     intros IHctxi Hc IHc iscof ptm wfbrs Hbrs P Δ f Hf.
     simpl.
+    assert (iscof' : (isCoFinite (ind_finite mdecl) ==>
+      on_free_vars (strengthenP 0 1 xpredT) (preturn (rename_predicate f p))) = true).
+    { apply/implyP => hcof. move/implyP: iscof => /(_ hcof) h.
+      rewrite -rename_predicate_preturn. apply on_free_vars_nondep_rename => //.
+      rewrite (wf_predicate_length_pcontext wfp). lia. }
     rewrite rename_mkApps.
     rewrite map_app. simpl.
     rewrite /ptm. rewrite rename_it_mkLambda_or_LetIn.

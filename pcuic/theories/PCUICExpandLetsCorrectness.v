@@ -3274,15 +3274,18 @@ Proof.
   econstructor; tea.
 Qed.
 
-Axiom fix_guard_trans :
-  forall Σ Γ mfix,
-    ST.fix_guard Σ Γ mfix ->
-    TT.fix_guard (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix).
-
-Axiom cofix_guard_trans :
-  forall Σ Γ mfix,
-  ST.cofix_guard Σ Γ mfix ->
-  TT.cofix_guard (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix).
+(** The guard-translation properties of let expansion. They are hypotheses, not axioms: under
+    [guard := guard_cl] they are concrete propositions that are not proved here. The lemmas
+    that need them take an [ExpandLetsGuardTrans] premise. *)
+Class ExpandLetsGuardTrans : Prop := {
+  fix_guard_trans :
+    forall Σ Γ mfix,
+      ST.fix_guard Σ Γ mfix ->
+      TT.fix_guard (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix);
+  cofix_guard_trans :
+    forall Σ Γ mfix,
+      ST.cofix_guard Σ Γ mfix ->
+      TT.cofix_guard (trans_global Σ) (trans_local Γ) (map (map_def trans trans) mfix) }.
 
 Lemma trans_it_mkLambda_or_LetIn Γ T :
   trans (it_mkLambda_or_LetIn Γ T) = it_mkLambda_or_LetIn (trans_local Γ) (trans T).
@@ -4105,7 +4108,7 @@ Proof.
   destruct p as [? []]; simp prim_type; cbn; reflexivity.
 Qed.
 
-Theorem pcuic_expand_lets {cf} (Σ : SE.global_env_ext) Γ t T :
+Theorem pcuic_expand_lets {cf} {elgt : ExpandLetsGuardTrans} (Σ : SE.global_env_ext) Γ t T :
   wf Σ ->
   typing Σ Γ t T ->
   wf_trans Σ ->
@@ -4259,6 +4262,8 @@ Proof.
           eapply wf_local_closed_context in wfctx.
           now move: wfctx; rewrite on_free_vars_ctx_app /= => /andP[].
           exact X. }
+    + match goal with h : (isCoFinite _ ==> on_free_vars _ _) = true |- _ => move: h end.
+      cbn. case: (isCoFinite _) => //=. apply trans_on_free_vars.
     + red. eapply Forall2_map_right, Forall2_map.
       eapply Forall2_All2 in H5.
       eapply All2i_All2_mix_left in X8; tea.
@@ -4566,7 +4571,7 @@ Proof.
   rewrite [map _ _] (trans_subst_context p q) //.
 Qed.
 
-Lemma trans_ctx_inst_expand_lets {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ} {s} :
+Lemma trans_ctx_inst_expand_lets {cf} {elgt : ExpandLetsGuardTrans} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ} {s} :
   wf_trans Σ ->
   wf_local Σ (Γ ,,, List.rev Δ) ->
   PCUICTyping.ctx_inst (fun Γ t T => lift_typing typing Σ Γ (TermTyp t T)) Γ s Δ ->
@@ -5681,7 +5686,7 @@ Proof.
   now rewrite -expand_lets_app.
 Qed.
 
-Lemma trans_type_local_ctx {cf} {Σ Γ Δ s} :
+Lemma trans_type_local_ctx {cf} {elgt : ExpandLetsGuardTrans} {Σ Γ Δ s} :
   wf Σ -> wf_trans Σ ->
   type_local_ctx (PCUICEnvTyping.lift_typing typing) Σ Γ Δ s ->
   type_local_ctx (PCUICEnvTyping.lift_typing (typing (H:=cf' cf))) (trans_global Σ) (trans_local Γ) (trans_local Δ) s.
@@ -5696,7 +5701,7 @@ Proof.
   all: now eapply pcuic_expand_lets.
 Qed.
 
-Lemma trans_on_context {cf} {Σ Γ} :
+Lemma trans_on_context {cf} {elgt : ExpandLetsGuardTrans} {Σ Γ} :
   wf Σ -> wf_trans Σ ->
   on_context (PCUICEnvTyping.lift_typing typing) Σ Γ ->
   on_context (PCUICEnvTyping.lift_typing (typing (H:=cf' cf))) (trans_global Σ) (trans_local Γ).
@@ -5821,7 +5826,7 @@ Lemma trans_on_udecl {cf} {Σ : global_env} {univs} :
   on_udecl (trans_global_env Σ) univs.
 Proof. auto. Qed.
 
-Lemma trans_wf {cf} {Σ : global_env_ext} : wf Σ -> wf_trans Σ.
+Lemma trans_wf {cf} {elgt : ExpandLetsGuardTrans} {Σ : global_env_ext} : wf Σ -> wf_trans Σ.
 Proof.
   rewrite /PCUICEnvironment.fst_ctx.
   destruct Σ as [[gunivs Σ retro] udecl]; cbn. intros [onu wfΣ]; cbn in *.
@@ -5901,7 +5906,7 @@ Proof.
           erewrite map_expand_lets_to_extended_list_k_above; now try len.
           now len. }
         { rewrite trans_arities_context /=.
-          clear -X onud on_cargs IHX.
+          clear -elgt X onud on_cargs IHX.
           rewrite -trans_local_app.
           induction (cstr_args cdecl) in univs, on_cargs |- * => //.
           destruct a as [na [b|] ty].
@@ -5991,7 +5996,7 @@ Proof.
           rewrite on_free_vars_ctx_smash //.
           len. rewrite on_free_vars_expand_lets_k //. }
         { intros v indv.
-          move: (on_ctype_variance v indv). clear -indv parsfvs onVariance onc X onu ond onud IHX onParams oncargs oncindices.
+          move: (on_ctype_variance v indv). clear -elgt indv parsfvs onVariance onc X onu ond onud IHX onParams oncargs oncindices.
           rewrite indv in onVariance.
           eapply variance_universes_insts in onVariance as [univs' [u [u' [eqv hunivs cu cu' equlen eqvlen equ' cli equ]]]].
           rewrite /cstr_respects_variance.
@@ -6119,7 +6124,7 @@ Proof.
         (cstr_args c).
       { eapply wf_local_closed_context in wfargs.
         now move/onfvs_app: wfargs; len. }
-      clear -indps X onu ond IHX onProjections wfargs oncargs.
+      clear -elgt indps X onu ond IHX onProjections wfargs oncargs.
       have lenprojs : #|ind_projs idecl| > 0.
       { destruct (ind_projs idecl) => /= //. lia. }
       destruct onProjections; econstructor; eauto; cbn; try len => //.
@@ -6219,7 +6224,7 @@ Proof.
   + cbn. rewrite context_assumptions_map //.
 Qed.
 
-Lemma trans_wf_ext {cf} {Σ : global_env_ext} : wf_ext Σ -> wf_ext_trans Σ.
+Lemma trans_wf_ext {cf} {elgt : ExpandLetsGuardTrans} {Σ : global_env_ext} : wf_ext Σ -> wf_ext_trans Σ.
 Proof.
   intros; split. now eapply trans_wf. destruct X.
   now eapply trans_on_udecl.
@@ -6227,7 +6232,7 @@ Qed.
 
 (** From a typing derivation in pcuic we build one where there are no lets
   in constructor types, and branches of cases are appropriately substituted. *)
-Theorem expand_lets_sound {cf} {Σ : global_env_ext} {Γ t T} {wfΣ : wf Σ} :
+Theorem expand_lets_sound {cf} {elgt : ExpandLetsGuardTrans} {Σ : global_env_ext} {Γ t T} {wfΣ : wf Σ} :
   typing Σ Γ t T ->
   typing (H := cf' cf) (trans_global Σ) (trans_local Γ) (trans t) (trans T).
 Proof.
@@ -7037,7 +7042,7 @@ Proof.
   destruct c as [? [] ? ?] => //.
 Qed.
 
-Lemma expand_lets_preserves_fo {cf : checker_flags} (Σ : global_env_ext) Γ v :
+Lemma expand_lets_preserves_fo {cf : checker_flags} {elgt : ExpandLetsGuardTrans} (Σ : global_env_ext) Γ v :
   wf Σ ->
   firstorder_value Σ Γ v ->
   firstorder_value (cf := cf' cf) (trans_global Σ) (trans_local Γ) (trans v).
