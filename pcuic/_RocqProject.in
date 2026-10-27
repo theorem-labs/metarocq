@@ -130,7 +130,9 @@ theories/PCUICCasesHelper.v
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
 theories/PCUICTypingEta.v
-# BET-315 eta lane (C3 prover C, branch frac/eta-c3-c): scratch file for row C3
+# BET-315 eta lane (L2): confluence (eta_subst, red1_eta_ctx_strong, red1_strengthening)
+theories/PCUICEtaConfluence.v
+# BET-315 eta lane (C3 prover C, branch frac/eta-c3-c): row C3 assembly
 theories/PCUICEtaC3C.v
 theories/PCUICEtaC3Cong.v
 # theories/All.v
