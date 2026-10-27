@@ -147,6 +147,17 @@ Module Retroknowledge.
       rewrite (hext c op' hx) /prim_op_of hx. apply eqb_refl.
   Qed.
 
+  (** BET-319: [extends_ops] quantifies over all kernames, so the quotation
+      library cannot quote it structurally the way it quotes the
+      [option_extends] conjuncts; it goes through this decision procedure
+      instead ([quotation/theories/To{PCUIC,Template}/Common/Environment.v]). *)
+  Definition extends_ops_dec x y : {extends_ops x y} + {~ extends_ops x y}.
+  Proof.
+    destruct (extendsb_ops x y) eqn:h; [left|right].
+    - now apply extends_ops_spec.
+    - intros H. apply extends_ops_spec in H. now rewrite h in H.
+  Defined.
+
   Lemma extends_spec x y : extendsb x y <-> extends x y.
   Proof.
     rewrite /extends/extendsb -!option_extends_spec -extends_ops_spec /is_true !Bool.andb_true_iff //=.
@@ -948,6 +959,174 @@ Module Environment (T : Term).
   Proof. extends_trans_t. Qed.
   #[global] Instance extends_trans : CRelationClasses.Transitive extends.
   Proof. extends_trans_t. Qed.
+
+  (** ** Primitive-operation freshness (BET-319)
+
+      [extends] above is LEFT STRUCTURALLY UNCHANGED on purpose: structurally
+      editing it — even to add a trivial conjunct — makes [template-rocq]'s
+      [Recursive Extraction Library Extractable] raise a Rocq extraction anomaly
+      (plugins/extraction/mlutil.ml line 660), module-wide, because [extends] is
+      [Type]-valued and consumed by extracted code.  The A/B that pins this to a
+      one-field edit of [extends] (not to the conjunct, its shape, or the
+      presence of a decider) is lanes/prim-ops/impl/extends-gate.md §7, and the
+      upstream bug note is lanes/prim-ops/impl/extraction-anomaly-upstream.md.
+
+      So the primitive-operation freshness condition is carried by a SEPARATE
+      relation, [extends_prim := prod extends extends_prim_fresh].  (Not named
+      [extends_fresh]: erasure already has an unrelated lemma of that name,
+      erasure/theories/EWellformed.v, and the two would shadow each other.)
+
+      >>> STANDING CONDITION D-1 (freshness).  A weakening lemma whose
+      conclusion a newly-registered primitive operation could falsify must take
+      [extends_prim], not [extends].  Today that is exactly ten lemmas:
+      [weakening_env_whd_rel], [weakening_env_arity_red],
+      [weakening_env_positive_cstr_arg], [weakening_env_positive_cstr]
+      (pcuic/theories/PCUICWeakeningEnv.v), and [weakening_on_global_decl_gen],
+      [weakening_env_gen_lookup_on_global_env], [weakening_on_global_decl],
+      [weakening_env_lookup_on_global_env] (pcuic/theories/Typing/
+      PCUICWeakeningEnvTyp.v); their two [extends_strictly_on_decls] siblings had
+      no caller and were deleted rather than given a second freshness variant.
+      This guarantee is still AUTOMATIC: with [Qed] and no axioms a false
+      statement has no proof, so a lemma that needs [extends_prim] but takes
+      [extends] FAILS TO BUILD (it is what [weakening_env_whd_rel]'s [whd_axiom]
+      case does on plain [extends]).  The only silent risks are those that
+      BYPASS a proof: [Admitted], [Axiom], [Parameter], or a section
+      hypothesis that assumes an extension preserves something.
+
+      >>> STANDING CONDITION D-2 (wider than freshness).  The real criterion is:
+      any lemma that carries a predicate with a NEGATIVE premise on a field that
+      [extends] lets grow over to a larger environment.  [extends_prim_fresh]
+      covers only [prim_op_of = None].  [retro_bool] can also go [None -> Some],
+      and [whne_primapp_inert] is stuck precisely when something is
+      UNREGISTERED, so [whne] and [whnf] (and [ne], [nf]) do NOT survive an
+      extension even under [extends_prim].  Nothing is false today only because
+      no lemma carries [whne]/[whnf]/[ne]/[nf] to a larger environment; the
+      first one to do so needs a new condition, not [extends_prim].
+
+      >>> STANDING CONDITION D-3 (guard).  [gc_ext] in [guard_cl], the
+      [guard_extends] field and Template's [Axiom guard_checking] hold under
+      plain [extends] only because the guard checker never reads the operation
+      table.  If it ever fires primitive operations, [gc_ext] must take
+      [extends_prim].  Not firing them is faithful today: Rocq's own guard does
+      not fire an operation to prune a match branch. <<< *)
+
+  Definition extends_prim_fresh (Σ Σ' : global_env) : Prop :=
+    forall c op,
+      Retroknowledge.prim_op_of Σ'.(retroknowledge) c = Some op ->
+      Retroknowledge.prim_op_of Σ.(retroknowledge) c = Some op \/ lookup_env Σ c = None.
+
+  (** Free whenever the operation table does not change. *)
+  Lemma retro_eq_prim_fresh Σ Σ' :
+    Σ.(retroknowledge) = Σ'.(retroknowledge) -> extends_prim_fresh Σ Σ'.
+  Proof. intros e c op h. left. now rewrite e. Qed.
+
+  (** An extension may not CHANGE the operation on a constant it already
+      declares.  The premise [lookup_env Σ c <> None] is required: a well-formed
+      [Σ] may carry a table entry for a constant it does not declare (design
+      §4.2(b) is per declaration), and that undeclared case is excluded instead
+      by [Retroknowledge.extends] with the functionality of [prim_op_of]. *)
+  Lemma extends_prim_no_change Σ Σ' c op1 op2 :
+    extends_prim_fresh Σ Σ' ->
+    lookup_env Σ c <> None ->
+    Retroknowledge.prim_op_of Σ.(retroknowledge) c = Some op1 ->
+    Retroknowledge.prim_op_of Σ'.(retroknowledge) c = Some op2 ->
+    op1 = op2.
+  Proof. intros h hdecl h1 h2. case: (h c op2 h2) => e; congruence. Qed.
+
+  Lemma lookup_env_None_envs Σ c : lookup_env Σ c = None <-> lookup_envs Σ c = [].
+  Proof.
+    rewrite /lookup_env /lookup_envs -hd_error_lookup_globals.
+    case: lookup_globals => [|? ?] //=; split => //.
+  Qed.
+
+  (** Not componentwise transitive: the middle environment's declarations carry
+      [lookup_env _ c = None] back to the smallest one. *)
+  Lemma extends_prim_fresh_trans Σ Σ' Σ'' :
+    extends_decls_part Σ Σ' ->
+    extends_prim_fresh Σ Σ' -> extends_prim_fresh Σ' Σ'' -> extends_prim_fresh Σ Σ''.
+  Proof.
+    intros hd h1 h2 c op h.
+    case: (h2 _ _ h) => [h'|h'].
+    - now apply h1.
+    - right. apply lookup_env_None_envs.
+      apply lookup_env_None_envs in h'.
+      destruct (hd c) as [decls hdecls].
+      rewrite h' in hdecls. symmetry in hdecls.
+      now apply app_eq_nil in hdecls as [_ ?].
+  Qed.
+
+  (** Decidable: only [Σ']'s finite operation table can satisfy the premise. *)
+  Definition extends_prim_freshb (Σ Σ' : global_env) : bool
+    := forallb (fun '(c, _) =>
+         (Retroknowledge.prim_op_of Σ.(retroknowledge) c
+            == Retroknowledge.prim_op_of Σ'.(retroknowledge) c)
+         || match lookup_env Σ c with None => true | Some _ => false end)
+         Σ'.(retroknowledge).(Retroknowledge.retro_ops).
+
+  Lemma extends_prim_freshP Σ Σ' :
+    reflect (extends_prim_fresh Σ Σ') (extends_prim_freshb Σ Σ').
+  Proof.
+    destruct (extends_prim_freshb Σ Σ') eqn:hb; constructor.
+    - intros c op h.
+      have hin := Retroknowledge.lookup_op_spec _ _ _ h.
+      have H := proj1 (forallb_forall _ _) hb _ hin. cbn beta in H.
+      destruct (orb_true_elim _ _ H) as [He|Hl].
+      + apply eqb_eq in He. left. now rewrite He.
+      + right. destruct (lookup_env Σ c) eqn:hl; [discriminate|reflexivity].
+    - intros hp.
+      have ht : extends_prim_freshb Σ Σ' = true.
+      { rewrite /extends_prim_freshb. apply (proj2 (forallb_forall _ _)).
+        intros [c op0] hin.
+        destruct (Retroknowledge.lookup_op_in _ _ _ hin) as [op1 h1].
+        change (Retroknowledge.prim_op_of (retroknowledge Σ') c = Some op1) in h1.
+        apply orb_true_intro. destruct (hp c op1 h1) as [h2|h2].
+        + left. rewrite h1 h2. apply eqb_refl.
+        + right. now rewrite h2. }
+      rewrite ht in hb. discriminate.
+  Qed.
+
+  Definition extends_prim_fresh_dec Σ Σ'
+    : {extends_prim_fresh Σ Σ'} + {~ extends_prim_fresh Σ Σ'}.
+  Proof. destruct (extends_prim_freshP Σ Σ'); [left|right]; assumption. Defined.
+
+  (** [extends] together with primitive-operation freshness.  A [Type] product,
+      because [extends] is [Type]-valued (its decls field is a [∑]). *)
+  Definition extends_prim (Σ Σ' : global_env) :=
+    prod (extends Σ Σ') (extends_prim_fresh Σ Σ').
+
+  Lemma extends_prim_extends Σ Σ' : extends_prim Σ Σ' -> extends Σ Σ'.
+  Proof. now intros []. Qed.
+
+  #[global] Instance extends_prim_refl : CRelationClasses.Reflexive extends_prim.
+  Proof. intros x. split; [apply extends_refl|now apply retro_eq_prim_fresh]. Qed.
+
+  #[global] Instance extends_prim_trans : CRelationClasses.Transitive extends_prim.
+  Proof.
+    intros x y z [exy pxy] [eyz pyz]. split.
+    - now transitivity y.
+    - destruct exy as [_ dxy _].
+      eapply extends_prim_fresh_trans; [exact dxy|exact pxy|exact pyz].
+  Qed.
+
+  (** The two relations that keep the operation table FIXED give freshness for
+      free ([retro_eq_prim_fresh]), so the weakening lemmas instantiated at them
+      keep their signatures; only the lax relations need [extends_prim]. *)
+  Lemma extends_decls_extends_prim Σ Σ' : extends_decls Σ Σ' -> extends_prim Σ Σ'.
+  Proof.
+    intros h. split; [now apply extends_decls_extends|].
+    apply retro_eq_prim_fresh. now destruct h.
+  Qed.
+
+  Lemma strictly_extends_decls_extends_prim Σ Σ' :
+    strictly_extends_decls Σ Σ' -> extends_prim Σ Σ'.
+  Proof. intros h. now apply extends_decls_extends_prim, strictly_extends_decls_extends_decls. Qed.
+
+  #[global] Instance extends_prim_extends_subrel
+    : CRelationClasses.subrelation extends_prim extends := extends_prim_extends.
+  #[global] Instance extends_decls_extends_prim_subrel
+    : CRelationClasses.subrelation extends_decls extends_prim := extends_decls_extends_prim.
+  #[global] Instance strictly_extends_decls_extends_prim_subrel
+    : CRelationClasses.subrelation strictly_extends_decls extends_prim := strictly_extends_decls_extends_prim.
 
   (** Merge two lists of global_declarations, assuming that any globals sharing a name are identical *)
   Definition declared_kername_set (Σ : global_declarations) : KernameSet.t

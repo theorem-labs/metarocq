@@ -309,11 +309,15 @@ Qed.
 
 Hint Resolve weakening_env_declared_constant : extends.
 
+(** Takes [extends_prim], not [extends] (standing condition D-1 beside
+    [extends_prim] in common/theories/Environment.v): a [whd_axiom] step needs
+    [prim_op_of Σ c = None] to survive the extension, and plain [extends] lets
+    the operation table grow on an already-declared axiom. *)
 Lemma weakening_env_whd_rel {Σ Σ' zeta Γ t args h l} :
-  wf Σ' -> extends Σ Σ' ->
+  wf Σ' -> extends_prim Σ Σ' ->
   whd_rel zeta Σ Γ t args h l -> whd_rel zeta Σ' Γ t args h l.
 Proof using P Pcmp cf.
-  intros wfΣ' ext.
+  intros wfΣ' extf. pose proof (extends_prim_extends _ _ extf) as ext.
   induction 1;
     [ eapply whd_rel_unfold | eapply whd_rel_assum | eapply whd_zeta | eapply whd_letin_stop
     | eapply whd_delta | eapply whd_axiom | eapply whd_app | eapply whd_beta
@@ -324,7 +328,7 @@ Proof using P Pcmp cf.
 Qed.
 
 Lemma weakening_env_arity_red {Σ Σ' Γ t Δ s} :
-  wf Σ' -> extends Σ Σ' ->
+  wf Σ' -> extends_prim Σ Σ' ->
   arity_red Σ Γ t Δ s -> arity_red Σ' Γ t Δ s.
 Proof using P Pcmp cf.
   intros wfΣ' ext.
@@ -366,10 +370,11 @@ Hint Extern 0 => eapply weakening_env_declared_inductive : extends.
     is preserved by any extension of a well-formed environment. [wf Σ'] is needed
     because [lookup_env] returns the first declaration of a name and [extends] permits
     a shadowing one. *)
-Lemma weakening_env_positive_cstr_arg Σ Σ' (wfΣ' : wf Σ') (ext : extends Σ Σ')
+Lemma weakening_env_positive_cstr_arg Σ Σ' (wfΣ' : wf Σ') (extf : extends_prim Σ Σ')
   mdecl NI Γ t (p : positive_cstr_arg Σ mdecl NI Γ t) :
   positive_cstr_arg Σ' mdecl NI Γ t.
 Proof using P Pcmp.
+  pose proof (extends_prim_extends _ _ extf) as ext.
   revert NI Γ t p.
   apply (positive_cstr_arg_mrect Σ mdecl
     (fun NI Γ t _ => positive_cstr_arg Σ' mdecl NI Γ t)
@@ -386,7 +391,7 @@ Proof using P Pcmp.
     exists hx, lx. split; [eapply weakening_env_whd_rel; tea|exact ex].
 Qed.
 
-Lemma weakening_env_positive_cstr Σ Σ' (wfΣ' : wf Σ') (ext : extends Σ Σ')
+Lemma weakening_env_positive_cstr Σ Σ' (wfΣ' : wf Σ') (ext : extends_prim Σ Σ')
   mdecl i Γ t (p : positive_cstr Σ mdecl i Γ t) :
   positive_cstr Σ' mdecl i Γ t.
 Proof using P Pcmp.

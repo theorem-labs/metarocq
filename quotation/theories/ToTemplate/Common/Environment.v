@@ -2,12 +2,16 @@ From Stdlib Require Import Structures.Equalities Lists.List Lists.ListDec.
 From MetaRocq.Utils Require Import MRProd All_Forall ReflectEq MRRelations MRReflect.
 From MetaRocq.Common Require Import Environment Universes.
 From MetaRocq.Quotation.ToTemplate Require Import Init.
-From MetaRocq.Quotation.ToTemplate Require Import (hints) Stdlib.Init Stdlib.ssr utils BasicAst Primitive Universes Kernames.
+From MetaRocq.Quotation.ToTemplate Require Import (hints) Stdlib.Init Stdlib.ssr utils BasicAst Primitive PrimitiveOps Universes Kernames.
 From MetaRocq.Quotation.ToTemplate.Utils Require Import (hints) MROption MRProd All_Forall.
 From MetaRocq.Quotation.ToTemplate.QuotationOf.Common Require Import Environment.Sig.
 
 Module Retroknowledge.
   #[export] Instance quote_t : ground_quotable Retroknowledge.t := ltac:(destruct 1; exact _).
+  (** BET-319: the operation-table conjunct of [Retroknowledge.extends] is a
+      quantified statement, so it is quoted through its decision procedure. *)
+  #[export] Instance quote_extends_ops {x y} : ground_quotable (@Retroknowledge.extends_ops x y)
+    := ground_quotable_of_dec (@Retroknowledge.extends_ops_dec x y).
   #[export] Instance quote_extends {x y} : ground_quotable (@Retroknowledge.extends x y) := ltac:(cbv [Retroknowledge.extends]; exact _).
 End Retroknowledge.
 Export (hints) Retroknowledge.
