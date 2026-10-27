@@ -102,7 +102,12 @@ Section Eval.
   Context (Γ : context) (nctx : nat) (stress : bool).
 
   (** The environment the readings live in: [Γ] under [lvl - nctx] fresh variables. *)
-  Context (Σ : global_env) (Δ : context) (lvl : nat).
+  (** The environment the readings live in: [Γ] under [lvl - nctx] fresh variables.
+     [Σ] is the well-formed ambient environment the abstract one [X] stands for; the hook
+     runs under both, and the delta rule needs them for the body it unfolds. *)
+  Context (Σ : global_env_ext) (Δ : context) (lvl : nat).
+  Hypothesis wfΣ : wf Σ.
+  Hypothesis hΣ : abstract_env_ext_rel X Σ.
   Hypothesis hΔ : #|Δ| = lvl - nctx.
   (** Written so that [subst] never eliminates the section variable [stress]. *)
   Hypothesis hstress : negb stress = true.
