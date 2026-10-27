@@ -1988,7 +1988,7 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
         [primitive_invariants] — what lets subject reduction type a literal of
         tag [t] with [type_Prim]. *)
     Definition prim_op_tag_declared (Σ : global_env_ext) (t : prim_tag) : Type :=
-      ∑ kn d, [× primitive_constant Σ t = Some kn, declared_constant Σ kn d &
+      ∑ kn d, [/\ primitive_constant Σ t = Some kn, declared_constant Σ kn d &
                  primitive_invariants t d].
 
     (** (gate 4) The same for the result: a literal result needs its type
