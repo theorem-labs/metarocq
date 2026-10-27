@@ -70,9 +70,25 @@ Proof.
   rewrite (simpl_subst [a] c 0 0 H00). simpl. rewrite !lift0_id. reflexivity.
 Qed.
 
+Lemma upto_domain_array (a a' : array_model term) :
+  a.(array_level) = a'.(array_level) ->
+  upto_domain a.(array_default) a'.(array_default) ->
+  upto_domain a.(array_type) a'.(array_type) ->
+  All2 upto_domain a.(array_value) a'.(array_value) ->
+  upto_domain (tPrim (primArray; primArrayModel a)) (tPrim (primArray; primArrayModel a')).
+Proof. intros hl hd ht hv. constructor. constructor; auto. now rewrite hl. Qed.
+
 Section Cong.
   Context {cf : checker_flags} (Σ : global_env).
-  Context (IH : C3 Σ).
+  (** NO global [IH : C3 Σ] here, deliberately.  The AUTHORITATIVE C3 is the
+      hardened one (wf Σ + is_closed_context + is_open_term), and its [red1_ind_all]
+      induction offers, per congruence row, only an induction hypothesis for THAT
+      row's sub-reduction, already under the row's extended context.  A global
+      unscoped [IH : C3 Σ] cannot be fed by it: the shell would have to produce C3
+      at arbitrary Γ/t with no scoping in hand.  So every row below takes a LOCAL
+      IH for exactly its own sub-reduction, which is what the induction hands over;
+      the shell discharges the row's scoping obligations.  Do NOT "simplify" this
+      back to a global IH. *)
 
   (** [eta_subst], [red1_eta_ctx_strong], [eta_ctx_refl] are now the real lemmas
       from [PCUICEtaConfluence] (EtaL2, frac/eta-l2 @ e05415aa, unconditional).
@@ -88,33 +104,36 @@ Section Cong.
   Proof. destruct d as [? [|] ?]; constructor; apply rt_refl. Qed.
 
   (** *** The two-[OnOne2] list diamond: a [red1] step and an [eta1] step on the
-      same list [l].  Same position → the element [IH]; different positions →
-      parallel.  Output: a [clos_refl] of [OnOne2 red1] on the η-side list and a
-      [clos_refl_trans] of [OnOne2 eta1] on the red-side list, joined by
-      [All2 upto_domain]. *)
+      same list [l].  Same position → the element's LOCAL IH (carried on the
+      [OnOne2] exactly as [red1_ind_all] hands it over, as a [Trel_conj]);
+      different positions → parallel.  Output: a [clos_refl] of [OnOne2 red1] on
+      the η-side list and a [clos_refl_trans] of [OnOne2 eta1] on the red-side
+      list, joined by [All2 upto_domain]. *)
   Lemma c3_OnOne2 Γ l l' l'' :
-    OnOne2 (red1 Σ Γ) l l' -> OnOne2 eta1 l l'' ->
+    OnOne2 (fun a a' => red1 Σ Γ a a' × (forall b, eta1 a b -> joinable Σ Γ b a')) l l' ->
+    OnOne2 eta1 l l'' ->
     ∑ lw lw', clos_refl (OnOne2 (red1 Σ Γ)) l'' lw
               × clos_refl_trans (OnOne2 eta1) l' lw'
               × All2 upto_domain lw lw'.
   Proof.
     intros hr. revert l''. induction hr as [hd hd' tl pr | hd tl tl' hr IHr]; intros l'' he.
     - (* red1 at head *) depelim he.
-      + (* eta at head : same position *)
-        destruct (IH _ _ _ _ pr e) as (w & w' & hw & hw' & hu).
+      + (* eta at head : same position, use the element's local IH *)
+        destruct (snd pr _ e) as (w & w' & hw & hw' & hu).
         exists (w :: tl), (w' :: tl). split; [|split].
         * now apply clos_refl_OnOne2_hd.
         * now apply crt_OnOne2_hd.
         * constructor; [exact hu|apply all2_upto_refl].
       + (* eta in tail : different positions *)
         eexists (hd' :: _), (hd' :: _). split; [|split].
-        * apply r_step. constructor. exact pr.
+        * apply r_step. constructor. exact (fst pr).
         * apply crt_OnOne2_cons. apply rt_step. eassumption.
         * apply all2_upto_refl.
     - (* red1 in tail *) depelim he.
       + (* eta at head : different positions *)
         eexists (_ :: tl'), (_ :: tl'). split; [|split].
-        * apply clos_refl_OnOne2_cons. apply r_step. exact hr.
+        * apply clos_refl_OnOne2_cons. apply r_step.
+          eapply OnOne2_impl; [exact hr|]. intros ? ? h. exact (fst h).
         * apply crt_OnOne2_hd. apply rt_step. eassumption.
         * apply all2_upto_refl.
       + (* eta in tail : recurse *)
@@ -127,7 +146,8 @@ Section Cong.
 
   (** *** evar_red : red1 in one position of the [tEvar] argument list. *)
   Lemma c3_evar_red Γ ev l l' u :
-    OnOne2 (red1 Σ Γ) l l' -> eta1 (tEvar ev l) u -> joinable Σ Γ u (tEvar ev l').
+    OnOne2 (fun a a' => red1 Σ Γ a a' × (forall b, eta1 a b -> joinable Σ Γ b a')) l l' ->
+    eta1 (tEvar ev l) u -> joinable Σ Γ u (tEvar ev l').
   Proof.
     intros hr he. depelim he.
     destruct (c3_OnOne2 _ _ _ _ hr ltac:(eassumption)) as (lw & lw' & hw & hw' & hu).
@@ -143,11 +163,12 @@ Section Cong.
 
   (** *** app_red_l : red1 in the function, η anywhere in [tApp M1 M2]. *)
   Lemma c3_app_red_l Γ M1 N1 M2 u :
-    red1 Σ Γ M1 N1 -> eta1 (tApp M1 M2) u -> joinable Σ Γ u (tApp N1 M2).
+    red1 Σ Γ M1 N1 -> (forall u', eta1 M1 u' -> joinable Σ Γ u' N1) ->
+    eta1 (tApp M1 M2) u -> joinable Σ Γ u (tApp N1 M2).
   Proof.
-    intros hr he. depelim he.
+    intros hr IHM he. depelim he.
     - (* app_eta_l : eta1 M1 N1' *)
-      destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      destruct (IHM _ he) as (w & w' & hw & hw' & hd).
       exists (tApp w M2), (tApp w' M2). split; [|split].
       + now apply red_le_App_l.
       + now apply eta_App_l.
@@ -161,16 +182,17 @@ Section Cong.
 
   (** *** app_red_r : red1 in the argument. *)
   Lemma c3_app_red_r Γ M1 M2 N2 u :
-    red1 Σ Γ M2 N2 -> eta1 (tApp M1 M2) u -> joinable Σ Γ u (tApp M1 N2).
+    red1 Σ Γ M2 N2 -> (forall u', eta1 M2 u' -> joinable Σ Γ u' N2) ->
+    eta1 (tApp M1 M2) u -> joinable Σ Γ u (tApp M1 N2).
   Proof.
-    intros hr he. depelim he.
+    intros hr IHM he. depelim he.
     - (* app_eta_l : eta1 M1 N1 *)
       exists (tApp N1 N2), (tApp N1 N2). split; [|split].
       + apply r_step. now constructor.
       + apply rt_step. now apply app_eta_l.
       + apply upto_domain_refl.
     - (* app_eta_r : eta1 M2 N2' *)
-      destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      destruct (IHM _ he) as (w & w' & hw & hw' & hd).
       exists (tApp M1 w), (tApp M1 w'). split; [|split].
       + now apply red_le_App_r.
       + now apply eta_App_r.
@@ -179,10 +201,11 @@ Section Cong.
 
   (** *** prod_red_l : red1 in the domain. *)
   Lemma c3_prod_red_l Γ na M1 N1 M2 u :
-    red1 Σ Γ M1 N1 -> eta1 (tProd na M1 M2) u -> joinable Σ Γ u (tProd na N1 M2).
+    red1 Σ Γ M1 N1 -> (forall u', eta1 M1 u' -> joinable Σ Γ u' N1) ->
+    eta1 (tProd na M1 M2) u -> joinable Σ Γ u (tProd na N1 M2).
   Proof.
-    intros hr he. depelim he.
-    - destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+    intros hr IHM he. depelim he.
+    - destruct (IHM _ he) as (w & w' & hw & hw' & hd).
       exists (tProd na w M2), (tProd na w' M2). split; [|split].
       + now apply red_le_Prod_l.
       + now apply eta_Prod_l.
@@ -195,10 +218,11 @@ Section Cong.
 
   (** *** proj_red : red1 in the projected term. *)
   Lemma c3_proj_red Γ p c c' u :
-    red1 Σ Γ c c' -> eta1 (tProj p c) u -> joinable Σ Γ u (tProj p c').
+    red1 Σ Γ c c' -> (forall u', eta1 c u' -> joinable Σ Γ u' c') ->
+    eta1 (tProj p c) u -> joinable Σ Γ u (tProj p c').
   Proof.
-    intros hr he. depelim he.
-    destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+    intros hr IHc he. depelim he.
+    destruct (IHc _ he) as (w & w' & hw & hw' & hd).
     exists (tProj p w), (tProj p w'). split; [|split].
     - now apply red_le_Proj.
     - now apply eta_Proj.
@@ -209,15 +233,16 @@ Section Cong.
       (the [eta_red] overlap contracts the whole redex; the domain reduction only
       changes the ignored domain, so one η-step on [v] rejoins). *)
   Lemma c3_abs_red_l Γ na M N1 N u :
-    red1 Σ Γ M N1 -> eta1 (tLambda na M N) u -> joinable Σ Γ u (tLambda na N1 N).
+    red1 Σ Γ M N1 -> (forall u', eta1 M u' -> joinable Σ Γ u' N1) ->
+    eta1 (tLambda na M N) u -> joinable Σ Γ u (tLambda na N1 N).
   Proof.
-    intros hr he. depelim he.
+    intros hr IHM he. depelim he.
     - (* eta_red : N = tApp (lift0 1 u) (tRel 0), M is the ignored domain *)
       eexists; eexists. split; [apply r_refl|split].
       + apply rt_step. apply eta_red.
       + apply upto_domain_refl.
     - (* abs_eta_l : eta1 M M' *)
-      destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      destruct (IHM _ he) as (w & w' & hw & hw' & hd).
       exists (tLambda na w N), (tLambda na w' N). split; [|split].
       + destruct hw; [apply r_step; now constructor|apply r_refl].
       + now apply eta_Lambda_l.
@@ -231,10 +256,11 @@ Section Cong.
 
   (** *** letin congruences (def / ty / body).  Parallel η / IH as for app. *)
   Lemma c3_letin_red_def Γ na b t b' r u :
-    red1 Σ Γ b r -> eta1 (tLetIn na b t b') u -> joinable Σ Γ u (tLetIn na r t b').
+    red1 Σ Γ b r -> (forall u', eta1 b u' -> joinable Σ Γ u' r) ->
+    eta1 (tLetIn na b t b') u -> joinable Σ Γ u (tLetIn na r t b').
   Proof.
-    intros hr he. depelim he.
-    - destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+    intros hr IHb he. depelim he.
+    - destruct (IHb _ he) as (w & w' & hw & hw' & hd).
       exists (tLetIn na w t b'), (tLetIn na w' t b'). split; [|split].
       + destruct hw; [apply r_step; now constructor|apply r_refl].
       + now apply eta_LetIn_b.
@@ -249,14 +275,15 @@ Section Cong.
       + apply upto_domain_refl.
   Qed.
   Lemma c3_letin_red_ty Γ na b t b' r u :
-    red1 Σ Γ t r -> eta1 (tLetIn na b t b') u -> joinable Σ Γ u (tLetIn na b r b').
+    red1 Σ Γ t r -> (forall u', eta1 t u' -> joinable Σ Γ u' r) ->
+    eta1 (tLetIn na b t b') u -> joinable Σ Γ u (tLetIn na b r b').
   Proof.
-    intros hr he. depelim he.
+    intros hr IHt he. depelim he.
     - exists (tLetIn na r0 r b'), (tLetIn na r0 r b'). split; [|split].
       + apply r_step. now constructor.
       + apply rt_step. now apply letin_eta_def.
       + apply upto_domain_refl.
-    - destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+    - destruct (IHt _ he) as (w & w' & hw & hw' & hd).
       exists (tLetIn na b w b'), (tLetIn na b w' b'). split; [|split].
       + destruct hw; [apply r_step; now constructor|apply r_refl].
       + now apply eta_LetIn_t.
@@ -335,9 +362,11 @@ Section Cong.
   (** *** prod_red_r : red1 in the Π codomain (under the binder); the parallel
       η-in-domain case goes through [red1_eta_ctx_strong]. *)
   Lemma c3_prod_red_r Γ na M M2 N2 u :
-    red1 Σ (Γ ,, vass na M) M2 N2 -> eta1 (tProd na M M2) u -> joinable Σ Γ u (tProd na M N2).
+    red1 Σ (Γ ,, vass na M) M2 N2 ->
+    (forall u', eta1 M2 u' -> joinable Σ (Γ ,, vass na M) u' N2) ->
+    eta1 (tProd na M M2) u -> joinable Σ Γ u (tProd na M N2).
   Proof.
-    intros hr he. depelim he.
+    intros hr IHM2 he. depelim he.
     - (* prod_eta_l : η in the domain M -> N1, reduction under the changed context *)
       destruct (red1_eta_ctx_strong Σ (Γ ,, vass na M) (Γ ,, vass na N1) M2 N2 hr)
         as (w & hw & hw').
@@ -347,7 +376,7 @@ Section Cong.
       + apply eta_Prod; [apply rt_step; eassumption | exact hw'].
       + apply upto_domain_refl.
     - (* prod_eta_r : η in the codomain *)
-      destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      destruct (IHM2 _ he) as (w & w' & hw & hw' & hd).
       exists (tProd na M w), (tProd na M w'). split; [|split].
       + destruct hw; [apply r_step; now constructor|apply r_refl].
       + now apply eta_Prod_r.
@@ -358,10 +387,11 @@ Section Cong.
       η-in-def / η-in-type cases change the [vdef] context, discharged by
       [red1_eta_ctx_strong]. *)
   Lemma c3_letin_red_body Γ na b t0 b' r u :
-    red1 Σ (Γ ,, vdef na b t0) b' r -> eta1 (tLetIn na b t0 b') u ->
-    joinable Σ Γ u (tLetIn na b t0 r).
+    red1 Σ (Γ ,, vdef na b t0) b' r ->
+    (forall u', eta1 b' u' -> joinable Σ (Γ ,, vdef na b t0) u' r) ->
+    eta1 (tLetIn na b t0 b') u -> joinable Σ Γ u (tLetIn na b t0 r).
   Proof.
-    intros hr he. depelim he.
+    intros hr IHb' he. depelim he.
     - (* letin_eta_def : η in the bound term b -> r0 *)
       destruct (red1_eta_ctx_strong Σ (Γ ,, vdef na b t0) (Γ ,, vdef na r0 t0) b' r hr)
         as (w & hw & hw').
@@ -381,7 +411,7 @@ Section Cong.
       + apply eta_LetIn; [apply rt_refl|apply rt_step; eassumption|exact hw'].
       + apply upto_domain_refl.
     - (* letin_eta_body : η in the body b' -> r0 (same subterm, via IH) *)
-      destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      destruct (IHb' _ he) as (w & w' & hw & hw' & hd).
       exists (tLetIn na b t0 w), (tLetIn na b t0 w'). split; [|split].
       + destruct hw; [apply r_step; now constructor|apply r_refl].
       + now apply eta_LetIn_c.
