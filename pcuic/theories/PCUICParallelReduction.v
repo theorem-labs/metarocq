@@ -262,6 +262,19 @@ Section ParallelReduction.
     pred1_ctx Γ Γ' ->
     pred1 Γ Γ' (tRel i) (tRel i)
 
+  (** Primitive operation: a saturated application of a registered bodiless
+      constant to literal arguments reduces to the readback of its denotation,
+      as [red_prim_op] does.  The redex and reduct are closed and ground, so
+      there is no argument to reduce in parallel. *)
+  | pred_prim_op c decl u op ls r v :
+    pred1_ctx Γ Γ' ->
+    prim_op_of Σ c = Some op ->
+    declared_constant Σ c decl ->
+    cst_body decl = None ->
+    PrimitiveOps.prim_op_denote op ls = Some r ->
+    PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
+    pred1 Γ Γ' (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls)) v
+
   (** Case *)
   | pred_iota ci c u args0 args1 p0 params' brs0 brs1 br :
     pred1_ctx Γ Γ' ->
@@ -467,6 +480,15 @@ Section ParallelReduction.
           pred1_ctx Γ Γ' ->
           Pctx Γ Γ' ->
           P Γ Γ' (tRel i) (tRel i)) ->
+      (forall Γ Γ' c decl u op ls r v,
+          pred1_ctx Γ Γ' ->
+          Pctx Γ Γ' ->
+          prim_op_of Σ c = Some op ->
+          declared_constant Σ c decl ->
+          cst_body decl = None ->
+          PrimitiveOps.prim_op_denote op ls = Some r ->
+          PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
+          P Γ Γ' (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls)) v) ->
       (forall Γ Γ' ci c u args0 args1 p0 pparams1 brs0 brs1 br,
           pred1_ctx Γ Γ' ->
           Pctx Γ Γ' ->
@@ -626,7 +648,7 @@ Section ParallelReduction.
       (forall (Γ Γ' : context) (t t0 : term), pred1 Γ Γ' t t0 -> P Γ Γ' t t0) ×
       (forall Γ Γ' Δ Δ', pred1_ctx Γ Γ' -> pred1_ctx_over Γ Γ' Δ Δ' -> Pctxover Γ Γ' Δ Δ').
   Proof using Σ.
-    intros P Pctx Pctxover P' Hctx Hctxover. intros.
+    intros P Pctx Pctxover P' Hctx Hctxover X X0 X1 X2 Hprim. intros.
     assert (forall (Γ Γ' : context) (t t0 : term), pred1 Γ Γ' t t0 -> P Γ Γ' t t0).
     intros.
     rename X21 into pr. revert Γ Γ' t t0 pr.
@@ -650,6 +672,7 @@ Section ParallelReduction.
       apply (on_contexts_impl a). intros. eapply (aux _ _ _ _ X1).
     - simpl. apply X2; auto.
       apply Hctx, (on_contexts_impl a). exact a. intros. apply (aux _ _ _ _ X21).
+    - apply Hctx, (on_contexts_impl a). exact a. intros. apply (aux _ _ _ _ X21).
     - apply Hctx, (on_contexts_impl a). exact a. intros. apply (aux _ _ _ _ X21).
     - eapply (All2_All2_prop (P:=pred1) (Q:=P') a0 ((extendP aux) Γ Γ')).
     - eapply (All2_All2_prop a1 (extendP aux Γ Γ')).
@@ -769,7 +792,7 @@ Section ParallelReduction.
     intros H; revert Γ Δ t u H.
     refine (fst (pred1_ind_all_ctx _ (fun Γ Γ' => pred1_ctx Γ Γ')
       (fun Γ Γ' Δ Δ' => True)
-      _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)); intros *.
+      _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)); intros *.
     all:try intros **; rename_all_hyps;
       try solve [specialize (forall_Γ _ X3); eauto]; eauto;
         try solve [eexists; split; constructor; eauto].
@@ -871,6 +894,25 @@ Section ParallelReduction.
   Proof using.
     induction Δ as [|[na [b|] ty] Δ]; constructor; auto.
     all:constructor; apply pred1_refl.
+  Qed.
+
+  (** Transport a primitive step through a map fixing its ground arguments
+      and readback; contexts are related independently of those closed terms. *)
+  Lemma pred1_prim_op_map Γ Γ' (f : term -> term) c decl u op ls r v :
+    (forall t, prim_ground t -> f t = t) ->
+    (forall t l, f (mkApps t l) = mkApps (f t) (map f l)) ->
+    (forall c u, f (tConst c u) = tConst c u) ->
+    pred1_ctx Γ Γ' ->
+    prim_op_of Σ c = Some op ->
+    declared_constant Σ c decl ->
+    cst_body decl = None ->
+    PrimitiveOps.prim_op_denote op ls = Some r ->
+    PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
+    pred1 Γ Γ' (f (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls))) (f v).
+  Proof.
+    intros hgr hmk hcst hctx hop hdecl hbody hden hback.
+    rewrite hmk hcst (map_prim_ground _ _ hgr) (hgr _ (prim_ground_readback hback)).
+    now eapply pred_prim_op; tea.
   Qed.
 
 End ParallelReduction.
@@ -1094,7 +1136,7 @@ Qed.
   Proof using cf.
     set (Pctx := fun (Γ Γ' : context) => pred1_ctx Σ Γ Γ').
 
-    refine (pred1_ind_all_ctx Σ _ Pctx _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _); intros *; intros;
+    refine (pred1_ind_all_ctx Σ _ Pctx _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _); intros *; intros;
       subst Pctx;
     rename_all_hyps; try subst Γ Γ';
     lazymatch goal with
@@ -1115,6 +1157,10 @@ Qed.
     unfold All2_prop_eq, All2_prop, on_Trel, id in *.
     all:try inv_on_free_vars.
     all:try solve [econstructor; eauto].
+    all:try solve [eapply pred1_prim_op_map;
+      [intros ? [[[] ->]|[? [? ->]]]; reflexivity
+      |apply rename_mkApps|reflexivity|eassumption|eassumption
+      |eassumption|eassumption|eassumption|eassumption]].
     12:{
       econstructor; eauto.
       eapply forall_P0; eauto with pcuic.
@@ -2012,7 +2058,7 @@ Section ParallelSubstitution.
   Proof.
     intros Pover.
     refine (pred1_ind_all_ctx Σ _ (fun Γ Γ' => pred1_ctx Σ Γ Γ')
-       _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _); subst Pover;
+       _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _); subst Pover;
       try (intros until Δ; intros Δ' σ τ ons onis Hrel); trivial; repeat inv_on_free_vars.
 
     (* induction redst using ; sigma; intros Δ Δ' σ τ Hσ Hτ Hrel. *)
@@ -2082,6 +2128,15 @@ Section ParallelSubstitution.
         eapply pred1_subst_vdef_Up; eauto. }
 
     - simpl. now apply Hrel.
+
+    - assert (hv : v.[τ] = v).
+      { destruct (prim_ground_readback H3) as [[[] ->]|[? [? ->]]]; reflexivity. }
+      assert (hls : map (inst σ) (map PCUICPrimitiveRed.term_of_lit ls) =
+                    map PCUICPrimitiveRed.term_of_lit ls).
+      { apply map_prim_ground. intros ? [[[] ->]|[? [? ->]]]; reflexivity. }
+      rewrite hv inst_mkApps hls /=.
+      eapply pred_prim_op; tea.
+      now eapply pred1_subst_pred1_ctx.
 
     - simpl. rewrite inst_mkApps inst_iota_red /= //.
       * rewrite length_skipn; lia.
