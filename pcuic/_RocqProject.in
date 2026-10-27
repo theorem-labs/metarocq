@@ -126,5 +126,6 @@ theories/PCUICWeakeningConfig.v
 theories/PCUICCasesHelper.v
 
 theories/PCUICEtaC3.v
+theories/PCUICEtaC3Cex.v
 
 # theories/All.v
