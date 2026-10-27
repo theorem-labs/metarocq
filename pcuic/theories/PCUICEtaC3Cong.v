@@ -24,7 +24,7 @@ From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICPrimitive
      PCUICCases PCUICOnFreeVars PCUICReduction PCUICTyping PCUICEtaDefs PCUICEtaC3C
-     PCUICEtaConfluence.
+     PCUICEtaConfluence PCUICEtaStrengthening.
 
 Import ListNotations.
 Set Default Goal Selector "!".
@@ -217,14 +217,10 @@ Section Cong.
       the shell discharges the row's scoping obligations.  Do NOT "simplify" this
       back to a global IH. *)
 
-  (** [eta_subst], [red1_eta_ctx_strong], [eta_ctx_refl] are now the real lemmas
-      from [PCUICEtaConfluence] (EtaL2, frac/eta-l2 @ e05415aa, unconditional).
-      [red1_strengthening] (EtaL2, pinned, proving) is still staged. *)
-  Context (red1_strengthening : wf Σ -> forall Γ d t u,
-             on_ctx_free_vars xpredT Γ ->
-             on_free_vars xpredT t ->
-             red1 Σ (Γ ,, d) (lift0 1 t) u ->
-             ∑ u', (u = lift0 1 u') × red1 Σ Γ t u').
+  (** [eta_subst], [red1_eta_ctx_strong], [eta_ctx_refl] (PCUICEtaConfluence) and
+      [red1_strengthening] (PCUICEtaStrengthening), [lift_unfold_fix/cofix],
+      [lift_is_constructor] are all REAL now (merged frac/eta-l2-strengthen @ bacbdf55);
+      no staged hypotheses remain. *)
 
   Local Lemma all2_upto_refl l : All2 upto_domain l l.
   Proof. apply All2_same, upto_domain_refl. Qed.
