@@ -1,68 +1,177 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane: red1 lift-strengthening.
+(** * BET-315 eta lane: red1 lift-strengthening (CONFLUENCE-FREE).
 
-   Reflects one [red1] step on a lifted term back to the unlifted one:
-   if [lift0 1 t] reduces, the reduct is itself a lift and [t] reduces.
+   Reflects one [red1] step on a lifted term back to the unlifted one.
+   SIBLING of the foundation ([PCUICEtaConfluence.v]); nothing here mentions eta.
 
-   Deliberately a SIBLING of [PCUICEtaConfluence.v], not part of it: this needs
-   the renaming/free-variable machinery (Conversion/, Typing/, Bidirectional/),
-   and the foundation file is Required by several workers that must not pay for
-   it. Nothing here mentions eta — it is pure base [red1] — so it can be
-   Required independently of the eta foundation.
+   LANE INVARIANT: the C3 assembly's dependency closure must contain no
+   [PCUICConfluence] and no [PCUICParallelReductionConfluence]. This file's
+   import closure is therefore checked before merge: it must NOT transitively
+   reach [PCUICSR] → [PCUICConfluence]. The original route via [BDStrengthening]
+   violated this (BDStrengthening → BDToPCUIC → … → PCUICSR → PCUICConfluence,
+   measured by EtaC3C: closure 91 vs the clean ingredients' 51-55). The fix:
+   port [urenaming_strengthen], [on_ctx_free_vars_strengthenP], and the
+   [unlift] definitions HERE from [BDStrengthening.v] — their proofs are pure
+   renaming/nat arithmetic and need nothing from the BD development. *)
 
-   ROUTE: strengthen the RENAMING rather than invert the lift, which is how base
-   proves [weakening_red1] (Conversion/PCUICWeakeningConv.v:252, via
-   [red1_rename] + [weakening_renaming]). The 2020 port
-   (origin/eta_postpo:PCUICBasicStrengthening.v:130-455) inverted the lift with a
-   ~325-line [red1_ind_all] induction; on the 9.2 AST its [red_iota] case runs
-   through [iota_red] over [inst_case_branch_context]/[expand_lets], exactly
-   where a hand port is most fragile. [urenaming_strengthen] replaces all of it.
-
-   PREMISES, both genuine and both carried by base's corresponding lemma:
-   - [wf Σ]: needed by [red1_rename] and [red1_on_free_vars]; the mechanism is
-     [red_delta] of a constant, whose body must be closed.
-   - [on_free_vars xpredT M]: NOT provable on the 9.2 AST. Witness: the [tCase]
-     branch of [on_free_vars] (Syntax/PCUICOnFreeVars.v:72) contains
-       test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams| pcontext
-     and the same for each [br.(bcontext)]; neither conjunct mentions [p], so it
-     demands CLOSED predicate/branch contexts however permissive [p] is, and a
-     tCase with an open pcontext declaration falsifies [on_free_vars xpredT].
-     Accordingly [on_free_vars_true], [on_free_vars_xpredT] and
-     [test_context_k_true] are ALL commented out (Syntax/PCUICOnFreeVars.v:139-166),
-     and base's own [weakening_red1] carries [on_free_vars xpredT M] as an
-     explicit premise immediately after [wf Σ] (Conversion/PCUICWeakeningConv.v:254).
-     The premise is intrinsic to strengthening [red1] on this AST, not a cost of
-     the renaming route: a version without it would claim more than base claims.
-     Callers that carry [is_open_term Γ t] discharge it via [shiftnP_xpredT]. *)
-
+From Stdlib Require Import Morphisms.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst
-     PCUICReduction PCUICOnFreeVars PCUICSigmaCalculus PCUICTyping.
-From MetaRocq.PCUIC Require Import PCUICRenameConv PCUICOnFreeVarsConv
-     PCUICInstConv PCUICClosedTyp BDStrengthening.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICInduction
+     PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICSigmaCalculus PCUICClosed
+     PCUICOnFreeVars PCUICReduction PCUICRenameDef PCUICRenameConv
+     PCUICOnFreeVarsConv PCUICInstConv PCUICClosedTyp PCUICTyping.
+From MetaRocq.PCUIC Require Import PCUICWeakeningConv PCUICRenameTyp.
 From Equations Require Import Equations.
-
+From Equations.Prop Require Import DepElim.
 From Stdlib Require Import ssreflect ssrbool.
 
 Implicit Types (cf : checker_flags).
+
+
+Local Ltac case_inequalities :=
+  match goal with
+  | |- context [?x <=? ?y] => destruct (Nat.leb_spec x y)
+  | |- context [?x <? ?y] => destruct (Nat.ltb_spec x y)
+  end.
+(** ** Ported from [BDStrengthening.v] — same proofs, confluence-free closure. *)
+
+Definition unlift_renaming n k i := if i <? k then i else i - n.
+Definition unlift n k := rename (unlift_renaming n k).
+
+Lemma lift_unlift n k : (unlift_renaming n k) ∘ (lift_renaming n k) =1 ren_id.
+Proof.
+  intros i. rewrite /unlift_renaming /lift_renaming /ren_id.
+  repeat nat_compare_specs. all: lia.
+Qed.
+
+Lemma lift_unlift_term {n k} t : unlift n k (lift n k t) = t.
+Proof.
+  by rewrite lift_rename /unlift (rename_compose _ _ _) lift_unlift rename_ren_id.
+Qed.
 
 (** On the strengthened predicate, lifting undoes unlifting. *)
 Lemma lift_unlift_renaming n k i :
   strengthenP k n xpredT i -> lift_renaming n k (unlift_renaming n k i) = i.
 Proof.
   rewrite /strengthenP /lift_renaming /unlift_renaming.
-  repeat nat_compare_specs => //=.
-  all: lia.
+  repeat nat_compare_specs => //=. all: lia.
 Qed.
 
-(** [lift_unlift_term] stated in [rename] form, which is how it appears after
-    [red1_rename] (which produces [rename f _], not the folded [unlift]). *)
+
+(** Local helpers ported from BDStrengthening (not importable — dirty closure). *)
+Lemma Alli_impl_le {A P Q} {l : list A} {n} :
+  Alli P n l -> (forall m x, m <= n + #|l| -> P m x -> Q m x) -> Alli Q n l.
+Proof.
+  induction 1; intros H; [constructor|constructor].
+  - apply H => //. lia.
+  - apply IHX. intros. apply H => //. cbn. lia.
+Qed.
+
+Lemma addnP_strengthen_lift i k k' :
+  i <= k' ->
+  (addnP (S i) (strengthenP k' k xpredT)) ∘ (lift_renaming k (Nat.pred k' - i)) =1 xpredT.
+Proof.
+  intros l ?. rewrite /addnP /strengthenP /lift_renaming.
+  destruct (Nat.leb_spec (Nat.pred k' - i) a) => //.
+  all: case_inequalities => //. all: case_inequalities => //. all: lia.
+Qed.
 Lemma rename_unlift_lift n k t :
   rename (unlift_renaming n k) (lift n k t) = t.
 Proof. exact (lift_unlift_term t). Qed.
 
-(** The general form: strengthen [Γ'] out from under [Γ'']. *)
+(** Context free-vars under [strengthenP], ported verbatim from BDStrengthening. *)
+Lemma on_ctx_free_vars_strengthenP Γ Γ' Γ'':
+  on_ctx_free_vars xpredT Γ ->
+  on_ctx_free_vars xpredT Γ'' ->
+  on_ctx_free_vars (strengthenP #|Γ''| #|Γ'| xpredT) (Γ,,,Γ',,,lift_context #|Γ'| 0 Γ'').
+Proof.
+  intros hΓ hΓ''.
+  rewrite !on_ctx_free_vars_app.
+  repeat (apply /andP ; split).
+  - rewrite /on_ctx_free_vars /lift_context /=.
+    erewrite alli_fold_context_k_prop.
+    apply alli_Alli in hΓ''.
+    eapply alli_Alli, Alli_impl_le ; tea.
+    move => i [? [?|] ?] /= ?.
+    + rewrite /on_free_vars_decl /test_decl /= !addnP_xpredT => /andP [? ?].
+      apply /implyP => _.
+      apply /andP ; split.
+      all: rewrite lift_rename on_free_vars_rename Nat.add_0_r addnP_strengthen_lift //.
+    + rewrite /on_free_vars_decl /test_decl /= !addnP_xpredT => ?.
+      apply /implyP => _.
+      rewrite lift_rename on_free_vars_rename Nat.add_0_r addnP_strengthen_lift //.
+  - rewrite lift_context_length.
+    rewrite /on_ctx_free_vars.
+    apply alli_Alli.
+    eapply forall_nth_error_Alli.
+    intros i ? ?.
+    assert (i < #|Γ'|) by (apply nth_error_Some ; congruence).
+    rewrite /addnP /strengthenP /=.
+    repeat case_inequalities => //=. all: lia.
+  - rewrite addnP_add lift_context_length.
+    erewrite on_ctx_free_vars_proper.
+    3: reflexivity. 1: eassumption.
+    intros ?. rewrite /addnP /strengthenP.
+    case_inequalities => //. case_inequalities => //. lia.
+Qed.
+
+(** [urenaming_strengthen], ported verbatim from BDStrengthening. *)
+Lemma urenaming_strengthen P Γ Γ' Γ'' :
+  urenaming (strengthenP #|Γ''| #|Γ'| P) (Γ ,,, Γ' ,,, lift_context #|Γ'| 0 Γ'') (Γ,,,Γ'') (unlift_renaming #|Γ'| #|Γ''|).
+Proof.
+  rewrite <- rename_context_lift_context.
+  intros i decl' pi nthi.
+  rewrite /strengthenP in pi.
+  destruct (Nat.ltb_spec0 i #|Γ''|) as [iΓ''|iΓ''].
+  - rewrite nth_error_app_context_lt in nthi.
+    1: by rewrite fold_context_k_length.
+    rewrite nth_error_rename_context in nthi.
+    apply option_map_Some in nthi as [decl'' []]. subst.
+    eexists ; split ; [idtac|split ; [idtac|split]].
+    + rewrite /unlift_renaming.
+      move: (iΓ'') => /Nat.ltb_spec0 ->.
+      rewrite nth_error_app_context_lt //.
+      eassumption.
+    + reflexivity.
+    + rewrite /= rename_compose.
+      apply rename_proper ; auto. intros x.
+      rewrite !rshiftk_S lift_renaming_spec -(shiftn_rshiftk _ _ _) !shiftn_add -lift_renaming_spec.
+      rewrite Nat.add_0_r Nat.add_comm Nat.sub_add; try lia.
+      rewrite (lift_unlift _ _ _) /ren_id /unlift_renaming.
+      by move: (iΓ'') => /Nat.ltb_spec0 ->.
+    + cbn ; destruct (decl_body decl'') ; rewrite //=.
+      f_equal. rewrite rename_compose.
+      apply rename_proper ; auto. intros x.
+      change (S (i + _)) with
+        (rshiftk (S i) (shiftn (#|Γ''| - S i) (lift_renaming #|Γ'| 0) x)).
+      rewrite shiftn_lift_renaming lift_renaming_spec -(shiftn_rshiftk _ _ _) shiftn_add.
+      rewrite -lift_renaming_spec Nat.add_0_r.
+      rewrite Nat.add_comm Nat.sub_add //.
+      rewrite (lift_unlift _ _ _) /ren_id /unlift_renaming.
+      by move: (iΓ'') => /Nat.ltb_spec0 ->.
+  - rewrite -app_context_assoc /= in nthi.
+    destruct (Nat.ltb_spec0 i (#|Γ''| + #|Γ'|)) as [iΓ'|iΓ'] ; cbn in * ; [congruence|..].
+    apply Nat.nlt_ge in iΓ'.
+    rewrite nth_error_app_context_ge length_app /= rename_context_length // in nthi.
+    eexists ; repeat split.
+    + rewrite /unlift_renaming.
+      case_inequalities. 1: lia.
+      rewrite nth_error_app_context_ge ; [lia|..].
+      rewrite -nthi. f_equal. lia.
+    + apply rename_proper ; auto. intros x.
+      rewrite /unlift_renaming.
+      case_inequalities. 1: lia.
+      case_inequalities. all: lia.
+    + destruct (decl_body decl') ; rewrite //=.
+      f_equal. apply rename_proper ; auto. intros x.
+      rewrite /unlift_renaming.
+      case_inequalities. 1: lia.
+      case_inequalities. all: lia.
+Qed.
+
+(** ** The strengthening lemmas proper. *)
+
 Lemma red1_strengthening_gen {cf} {Σ : global_env} {wfΣ : wf Σ} Γ Γ' Γ'' M N' :
   on_ctx_free_vars xpredT Γ ->
   on_ctx_free_vars xpredT Γ'' ->
@@ -89,19 +198,14 @@ Proof.
     + apply rename_ren_id.
 Qed.
 
-(** The single-binder corollary the C3 provers Require. No condition is placed
-    on [d], the binder stripped.
-
-    DISCHARGING THE PREMISES AT A C3 CALL SITE — note [is_closed_context] is
-    [on_free_vars_ctx xpred0] (Syntax/PCUICOnFreeVars.v:259), xpred0 NOT xpredT,
-    so neither premise is definitionally what C3 carries; each is ONE
-    monotonicity step ([xpred0 ≤ xpredT] pointwise, [on_free_vars] monotone):
-      on_ctx_free_vars xpredT Γ   from  is_closed_context Γ :
+(** The single-binder corollary the C3 provers Require. No condition on [d].
+    DISCHARGE at a C3 call site (one monotonicity step, NOT [exact]):
+      on_ctx_free_vars xpredT Γ  from  is_closed_context Γ :
         rewrite on_ctx_free_vars_xpredT; eapply on_free_vars_ctx_impl; [|eassumption]; done.
-      on_free_vars xpredT t       from  is_open_term Γ t :
+      on_free_vars xpredT t      from  is_open_term Γ t :
         eapply on_free_vars_impl; [|eassumption]; done.
-    ([on_ctx_free_vars_impl] is commented out at :991, hence going through
-     [on_ctx_free_vars_xpredT] and the ctx-level [on_free_vars_ctx_impl].) *)
+    ([is_closed_context] is [on_free_vars_ctx xpred0] (Syntax/PCUICOnFreeVars.v:259),
+     NOT [xpredT]; [on_ctx_free_vars_impl] is commented out at :991.) *)
 Lemma red1_strengthening {cf} {Σ : global_env} {wfΣ : wf Σ} Γ d t u :
   on_ctx_free_vars xpredT Γ ->
   on_free_vars xpredT t ->
