@@ -16,8 +16,8 @@ From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimitive
-     PCUICInduction PCUICLiftSubst PCUICEquality PCUICCases PCUICReduction
-     PCUICEtaDefs.
+     PCUICInduction PCUICLiftSubst PCUICEquality PCUICCases PCUICOnFreeVars
+     PCUICReduction PCUICEtaDefs.
 
 Import ListNotations.
 
@@ -1257,3 +1257,33 @@ Qed.
 
 Lemma is_constructor_nil n : is_constructor n [] = false.
 Proof. unfold is_constructor. now destruct n. Qed.
+
+(** ** The kernel's scoping premise, and why it SURVIVES the induction
+
+  [red1_strengthening] (staged below) needs [on_free_vars xpredT t]. That is NOT
+  vacuous on the 9.2 AST: [on_free_vars]'s [tCase] branch
+  (Syntax/PCUICOnFreeVars.v:82,:85) tests
+  [test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams|] on
+  [pcontext] and on every [bcontext], and that conjunct never mentions [p], so it
+  demands those contexts be CLOSED however permissive [p] is. (The lemmas that would
+  discharge it — [on_free_vars_true], [on_free_vars_xpredT], [test_context_k_true] —
+  are commented out at :139-163.) Base's own [weakening_red1] carries it for the
+  same reason.
+
+  DO NOT TRY TO DROP THIS PREMISE. It is carried, not re-established at each step,
+  and that is exactly why the induction goes through:
+  - under binders it propagates UNCHANGED, because [shiftnP_xpredT] (:129) gives
+    [shiftnP n xpredT =1 xpredT];
+  - across the [lift0 1] of the η-redex it is INVARIANT ([ofvT_lift] below), because
+    [lift] leaves [pcontext]/[bcontext] untouched ([map_branch_k] uses [id] on
+    [bcontext]), so the p-independent conjunct is literally identical for [M] and
+    [lift0 1 M], while every p-dependent conjunct is trivial at [xpredT].
+  It costs the ROUTE nothing: the authoritative C3 already carries [is_open_term Γ t],
+  and [shiftnP n xpred0 ≤ xpredT] pointwise, so [on_free_vars_impl] (:168) discharges
+  it at assembly. Likewise [wf Σ] is already a C3 premise. *)
+
+Notation ofvT := (on_free_vars xpredT).
+
+Lemma ofvT_shiftnP n t : on_free_vars (shiftnP n xpredT) t = ofvT t.
+Proof. apply on_free_vars_ext, shiftnP_xpredT. Qed.
+
