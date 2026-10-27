@@ -95,7 +95,7 @@ Fixpoint tsl_rec1_app (app : option term) (E : tsl_table) (t : term) : term :=
     let case1 := tCase ik t' (tRel 0) brs' in
     match lookup_tsl_table E (IndRef ik.(ci_ind)) with
     | Some (tInd i _univ) =>
-      let ci' := {| ci_ind := ik.(ci_ind); ci_npar := ik.(ci_npar) * 2; ci_relevance := ik.(ci_relevance) |} in
+      let ci' := {| ci_ind := ik.(ci_ind); ci_npar := ik.(ci_npar) * 2; ci_relevance := ik.(ci_relevance); ci_cofix_nondep := ik.(ci_cofix_nondep) |} in
       tCase ci'
             (map_predicate_k id (fun k => tsl_rec1_app (Some (tsl_rec0 0 case1)) E) 0 t)
             (tsl_rec1 E u)

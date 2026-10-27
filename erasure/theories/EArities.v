@@ -914,7 +914,7 @@ Proof.
   - eapply inversion_Case in wt as wt'; eauto. destruct wt' as (? & ? & ? & ? & cinv & ?).
     assert (Hred1 : PCUICReduction.red Σ [] (tCase ip p discr brs) (tCase ip p (mkApps fn args) brs)). {
       etransitivity. { eapply PCUICReduction.red_case_c. eapply wcbveval_red. 2: eauto. eapply cinv. }
-      econstructor. econstructor.
+      econstructor. eapply PCUICReduction.red_cofix_case; [assumption|].
       rewrite closed_unfold_cofix_cunfold_eq. eauto.
       enough (closed (mkApps (tCoFix mfix idx) args)) as Hcl by (rewrite closedn_mkApps in Hcl; solve_all).
       eapply eval_closed. eauto.

@@ -882,7 +882,8 @@ Lemma closed_red1_ind (Σ : global_env_ext) (P0 : context -> term -> term -> Typ
   is_constructor narg args = true -> P Γ (mkApps (tFix mfix idx) args) (mkApps fn args)) ->
 
   (forall (Γ : context) ci (p : predicate term) (mfix : mfixpoint term) (idx : nat)
-    (args : list term) (narg : nat) (fn : term) (brs : list (branch term)),
+    (args : list term) (narg : nat) (fn : term) (brs : list (branch term))
+    (Hnondep : ci.(ci_cofix_nondep)),
   unfold_cofix mfix idx = Some (narg, fn) ->
   P Γ (tCase ci p (mkApps (tCoFix mfix idx) args) brs) (tCase ci p (mkApps fn args) brs)) ->
 
@@ -2215,9 +2216,11 @@ Proof.
     unshelve epose proof (isdecl' := declared_inductive_to_gen isdecl); eauto.
     rewrite isdecl'.p1 in hck.
     apply ReflectEq.eqb_eq in hck.
+    (* The case unfolds a cofixpoint, so its flag is set; with a coinductive inductive the
+       typing premise then says the return type does not mention the scrutinee. *)
     have hnd : on_free_vars (strengthenP 0 1 xpredT) (preturn p).
     { match goal with h : implb (isCoFinite (ind_finite mdecl)) _ = true |- _ => move: h end.
-      now rewrite hck. }
+      now rewrite hck /= Hnondep. }
     have lenidx : #|indices| = context_assumptions (ind_indices idecl).
     { have hl := ctx_inst_length X5. len in hl. rewrite context_assumptions_rev in hl. len in hl.
       match goal with hw : wf_predicate _ _ _ |- _ => pose proof (wf_predicate_length_pars hw) end.
@@ -2483,12 +2486,14 @@ Proof.
       rewrite PCUICCasesContexts.inst_case_predicate_context_eq => //.
       reflexivity. }
     have hnd' : (isCoFinite (ind_finite mdecl) ==>
-      on_free_vars (strengthenP 0 1 xpredT) preturn') = true.
+      (ci.(ci_cofix_nondep) ==>
+       on_free_vars (strengthenP 0 1 xpredT) preturn')) = true.
     { match goal with
       | h : implb (isCoFinite (ind_finite mdecl)) _ = true,
         hr : closed_red1 _ _ (preturn p) preturn' |- _ => move: h; pose proof hr as hred
       end.
-      case: (isCoFinite (ind_finite mdecl)) => //= hfv.
+      case: (isCoFinite (ind_finite mdecl)) => //=.
+      case: (ci.(ci_cofix_nondep)) => //= hfv.
       eapply red1_on_free_vars; [exact (clrel_rel hred)|exact hfv|].
       apply on_ctx_free_vars_nondep.
       exact (on_free_vars_ctx_on_ctx_free_vars_xpredT (clrel_ctx hred)). }

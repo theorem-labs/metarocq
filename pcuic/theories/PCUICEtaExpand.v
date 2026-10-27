@@ -605,8 +605,10 @@ Module Red1Apps.
       is_constructor narg args = true ->
       Σ ;;; Γ |- mkApps (tFix mfix idx) args ⇝ mkApps fn args
 
-  (** CoFix-case unfolding *)
+  (** CoFix-case unfolding, only under a case whose return type does not depend on the
+      scrutinee ([ci_cofix_nondep]) *)
   | red_cofix_case ip p mfix idx args narg fn brs :
+      ip.(ci_cofix_nondep) ->
       unfold_cofix mfix idx = Some (narg, fn) ->
       Σ ;;; Γ |- tCase ip p (mkApps (tCoFix mfix idx) args) brs ⇝
           tCase ip p (mkApps fn args) brs
