@@ -1570,3 +1570,77 @@ Proof.
   - reflexivity.
 Qed.
 
+(** * Congruence infrastructure: one clean [red1] inversion per head shape.
+    Pattern ([red1_tLambda_inv]): [remember] the head, [destruct] the derivation,
+    [discriminate] head clashes. [depelim] would leave [mkApps]-headed impossible cases. *)
+
+Lemma red1_tApp_inv {Σ Γ f a v} :
+  red1 Σ Γ (tApp f a) v ->
+  (∑ na A b, (f = tLambda na A b) × (v = b {0 := a}))
+  + (∑ mfix idx args narg fn,
+       (mkApps (tFix mfix idx) args = tApp f a) × (unfold_fix mfix idx = Some (narg, fn))
+       × (is_constructor narg args = true) × (v = mkApps fn args))
+  + (∑ f', (v = tApp f' a) × red1 Σ Γ f f')
+  + (∑ a', (v = tApp f a') × red1 Σ Γ a a').
+Proof.
+  intro H. remember (tApp f a) as t eqn:Heq.
+  destruct H; try discriminate Heq.
+  - injection Heq as Hf Ha. subst. left; left; left.
+    eexists _, _, _. split; reflexivity.
+  - left; left; right. eexists _, _, _, _, _. repeat split; eassumption.
+  - injection Heq as Hf Ha. subst. left; right.
+    eexists. split; [reflexivity|assumption].
+  - injection Heq as Hf Ha. subst. right.
+    eexists. split; [reflexivity|assumption].
+Qed.
+
+Lemma red1_tProj_inv {Σ Γ pr c v} :
+  red1 Σ Γ (tProj pr c) v ->
+  (∑ mfix idx args narg fn, (c = mkApps (tCoFix mfix idx) args)
+     × (unfold_cofix mfix idx = Some (narg, fn)) × (v = tProj pr (mkApps fn args)))
+  + (∑ args uu arg, (c = mkApps (tConstruct pr.(proj_ind) 0 uu) args)
+     × (nth_error args (pr.(proj_npars) + pr.(proj_arg)) = Some arg) × (v = arg))
+  + (∑ c', (v = tProj pr c') × red1 Σ Γ c c').
+Proof.
+  intro H. remember (tProj pr c) as t eqn:Heq.
+  destruct H; try discriminate Heq;
+    try solve [exfalso; destruct args using rev_ind;
+               [cbn in Heq; discriminate Heq|
+                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]].
+  - injection Heq as Hp Hc. subst. left; left.
+    eexists _, _, _, _, _. repeat split; eassumption.
+  - injection Heq as Hp Hc. subst. left; right.
+    eexists _, _, _. repeat split; eassumption.
+  - injection Heq as Hp Hc. subst. right.
+    eexists. split; [reflexivity|assumption].
+Qed.
+
+(** Leaves with no [red1] reduct. *)
+Lemma red1_tVar_absurd {Σ Γ i v} : red1 Σ Γ (tVar i) v -> False.
+Proof.
+  intro H. remember (tVar i) as t eqn:Heq. destruct H; try discriminate Heq.
+  destruct args using rev_ind;
+    [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
+Qed.
+
+Lemma red1_tSort_absurd {Σ Γ s v} : red1 Σ Γ (tSort s) v -> False.
+Proof.
+  intro H. remember (tSort s) as t eqn:Heq. destruct H; try discriminate Heq.
+  destruct args using rev_ind;
+    [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
+Qed.
+
+Lemma red1_tInd_absurd {Σ Γ ind uu v} : red1 Σ Γ (tInd ind uu) v -> False.
+Proof.
+  intro H. remember (tInd ind uu) as t eqn:Heq. destruct H; try discriminate Heq.
+  destruct args using rev_ind;
+    [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
+Qed.
+
+Lemma red1_tConstruct_absurd {Σ Γ ind k uu v} : red1 Σ Γ (tConstruct ind k uu) v -> False.
+Proof.
+  intro H. remember (tConstruct ind k uu) as t eqn:Heq. destruct H; try discriminate Heq.
+  destruct args using rev_ind;
+    [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
+Qed.
+
