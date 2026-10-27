@@ -417,6 +417,66 @@ Proof.
     apply array_eta_type. cbn. eauto.
 Qed.
 
+(** [eta1] is closed under lifting (plan U2), same route as [eta1_subst] with
+    [permute_lift] for the η-redex. *)
+Lemma weakening_eta1 n k u v :
+  eta1 u v -> eta1 (lift n k u) (lift n k v).
+Proof.
+  induction 1 in k |- * using eta1_ind_all; cbn;
+    try (constructor; eauto; fail).
+  - refine (transport (fun x => eta1 x _) _ (eta_red _ _ _)). do 2 f_equal.
+    rewrite (permute_lift t n k 1 0 (Nat.le_0_l k)). now rewrite Nat.add_1_r.
+  - replace (map_predicate_k id (lift n) k (set_pparams p params'))
+      with (set_pparams (map_predicate_k id (lift n) k p) (map (lift n k) params'))
+      by reflexivity.
+    apply case_eta_param.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn. intros x y [h1 h2]. exact (h2 k).
+  - replace (map_predicate_k id (lift n) k (set_preturn p preturn'))
+      with (set_preturn (map_predicate_k id (lift n) k p)
+              (lift n (#|p.(pcontext)| + k) preturn'))
+      by reflexivity.
+    apply case_eta_return. cbn. eauto.
+  - apply case_eta_brs.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [bc bb] [bc' bb'] [[h1 h2] h3]; cbn in *. unfold on_Trel; cbn.
+    noconf h3. split; [exact (h2 _)|reflexivity].
+  - constructor. eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros x y [h1 h2]. exact (h2 k).
+  - constructor. apply OnOne2_length in X as e. rewrite e.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [] [] [[h1 h2] e0]; cbn in *. noconf e0; split; [exact (h2 _)|reflexivity].
+  - apply fix_eta_body. apply OnOne2_length in X as e. rewrite e.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [] [] [[h1 h2] e0]; cbn in *. noconf e0; split; [exact (h2 _)|reflexivity].
+  - constructor. apply OnOne2_length in X as e. rewrite e.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [] [] [[h1 h2] e0]; cbn in *. noconf e0; split; [exact (h2 _)|reflexivity].
+  - apply cofix_eta_body. apply OnOne2_length in X as e. rewrite e.
+    eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros [] [] [[h1 h2] e0]; cbn in *. noconf e0; split; [exact (h2 _)|reflexivity].
+  - replace (map_array_model (lift n k) (set_array_value arr value))
+      with (set_array_value (map_array_model (lift n k) arr) (map (lift n k) value))
+      by reflexivity.
+    apply array_eta_val. eapply OnOne2_map, OnOne2_impl; tea; cbn.
+    intros x y [h1 h2]. exact (h2 k).
+  - replace (map_array_model (lift n k) (set_array_default arr d))
+      with (set_array_default (map_array_model (lift n k) arr) (lift n k d))
+      by reflexivity.
+    apply array_eta_def. cbn. eauto.
+  - replace (map_array_model (lift n k) (set_array_type arr ty))
+      with (set_array_type (map_array_model (lift n k) arr) (lift n k ty))
+      by reflexivity.
+    apply array_eta_type. cbn. eauto.
+Qed.
+
+Lemma weakening_eta n k u v : eta u v -> eta (lift n k u) (lift n k v).
+Proof.
+  induction 1.
+  - apply eta_step. now apply weakening_eta1.
+  - apply eta_refl.
+  - eapply eta_trans; eauto.
+Qed.
+
 Section FourCases.
   Context {cf : checker_flags}.
   Context {Σ : global_env} {wfΣ : wf Σ}.
