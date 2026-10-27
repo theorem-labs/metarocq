@@ -32,6 +32,32 @@ Fixpoint unused_beta_ctl (n : nat) : nat :=
 
 MetaRocq SafeCheck unused_beta_ctl.
 
+(** A second known divergence, of the type checker and not of the guard, in
+    the same direction.  A fixpoint whose body is a [let] is accepted by
+    Rocq's kernel, and the guard checker accepts it too, but [wf_fixpoint]
+    tests [isLambda] on the body syntactically, so SafeCheck refuses it with
+    "Ill-formed fixpoint".  The block below is the one measured: the inner
+    fixpoint of a construction whose outer loop needs the [let].  Equations
+    generates bodies of this shape as well. *)
+Definition relay_let (outer : nat -> Type) (seed : nat) : nat -> nat -> Type :=
+  fix inner (carry : nat := seed) (p m : nat) {struct m} : Type :=
+    match m with
+    | O => outer p -> False
+    | S rest => inner p rest
+    end.
+
+Fail MetaRocq SafeCheck relay_let.
+
+(** Its twin without the [let] is accepted. *)
+Definition relay_plain (outer : nat -> Type) (seed : nat) : nat -> nat -> Type :=
+  fix inner (p m : nat) {struct m} : Type :=
+    match m with
+    | O => outer p -> False
+    | S rest => inner p rest
+    end.
+
+MetaRocq SafeCheck relay_plain.
+
 (** The recursive parameter itself is not a structural subterm. *)
 Unset Guard Checking.
 Fixpoint loop (n : nat) : False := loop n.
