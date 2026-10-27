@@ -28,7 +28,35 @@ let safecheck_env env evm poly =
 let quote_safecheck_program ~opaque_access env evm term =
   Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm term
 
+(* The translation memo ([trans_memo.ml]) is emptied when the translation
+   ends.  Every command that runs the checker or the translation also empties
+   it on entry, so it never starts with a table it did not build, and in a
+   finally, so an exception does not keep the table alive. *)
+let with_trans_memo_reset f =
+  Trans_memo.reset ();
+  Fun.protect ~finally:Trans_memo.reset f
+
+(* The GC's [space_overhead] while SafeCheck translates and checks.  Rocq sets
+   [space_overhead = 200] for the whole process.  During the check the live
+   heap is flat while about 1.9 GB/s is allocated, so the major heap settles
+   near live x (1 + space_overhead / 100), and a lower value makes the heap
+   follow the live data more closely.  Measured on LemmaPin_0 with the cut-1
+   prototype [mr-prof], 2,400 s, no verdict, four runs at once: peak 33.17 GiB
+   at 200 and 16.75 GiB at 40.  GC parameters change when memory is reclaimed,
+   never a value, so the checker's result is the same. *)
+let safecheck_space_overhead = 40
+
+(* Run [f ()] with [safecheck_space_overhead].  The setting is changed inside
+   the protected region, and the saved GC settings are restored when [f]
+   returns or raises; an exception passes through. *)
+let with_safecheck_gc f =
+  let saved = Gc.get () in
+  Fun.protect ~finally:(fun () -> Gc.set saved) (fun () ->
+    Gc.set { saved with Gc.space_overhead = safecheck_space_overhead };
+    f ())
+
 let safecheck_program ~opaque_access env evm poly term =
+  with_trans_memo_reset @@ fun () ->
   let env = safecheck_env env evm poly in
   let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
   let uctx =
@@ -38,6 +66,7 @@ let safecheck_program ~opaque_access env evm poly term =
       Ast_quoter.mkPolymorphic_ctx (Ast_quoter.quote_abstract_univ_context auctx)
     else Ast_quoter.mkMonomorphic_ctx ()
   in
+  with_safecheck_gc @@ fun () ->
   time (str"Checking")
     (Extraction.infer_and_print_template_program_with_guard
       Config0.default_checker_flags
@@ -71,6 +100,126 @@ let test_quote_sharing ~opaque_access env evm poly c =
     CErrors.user_err
       (str "Quote sharing test failed: structurally equal = " ++ bool equal
        ++ str ", repeated values shared = " ++ bool physically_shared ++ str ".")
+
+(* The first [tCase] node of a quoted program: in its term, else in the body of
+   one of its constant declarations. *)
+let rec find_case (t : Ast0.term) : Ast0.term option =
+  let first l =
+    List.fold_left (fun found x -> match found with Some _ -> found | None -> find_case x) None l
+  in
+  match t with
+  | Ast0.Coq_tCase _ -> Some t
+  | Ast0.Coq_tEvar (_, l) -> first l
+  | Ast0.Coq_tCast (c, _, ty) -> first [c; ty]
+  | Ast0.Coq_tProd (_, a, b) | Ast0.Coq_tLambda (_, a, b) -> first [a; b]
+  | Ast0.Coq_tLetIn (_, b, ty, b') -> first [b; ty; b']
+  | Ast0.Coq_tApp (f, l) -> first (f :: l)
+  | Ast0.Coq_tProj (_, c) -> find_case c
+  | Ast0.Coq_tFix (m, _) | Ast0.Coq_tCoFix (m, _) ->
+    first (List.concat_map (fun d -> [d.BasicAst.dtype; d.BasicAst.dbody]) m)
+  | Ast0.Coq_tArray (_, l, d, ty) -> first (l @ [d; ty])
+  | _ -> None
+
+let find_case_in_program ((genv, body) : Ast0.Env.program) =
+  match find_case body with
+  | Some t -> Some t
+  | None ->
+    List.fold_left (fun found (_, decl) ->
+        match found, decl with
+        | Some _, _ -> found
+        | None, Ast0.Env.ConstantDecl { Ast0.Env.cst_body = Some b; _ } -> find_case b
+        | None, _ -> None)
+      None genv.Ast0.Env.declarations
+
+(* Sameness of the shared translation, and the environment control.
+
+   Sameness: quote [c] as [MetaRocq SafeCheck] does, translate the program with
+   the memoized [trans_program] (the checker's) and with the plain
+   [trans_program_unshared], and require [compare a b = 0] and at least one memo
+   hit.  ([compare] is total; [=] is false on a NaN primitive float.)
+
+   Environment control: the memo may reuse only values that read no
+   environment.  [Σ1] is the empty environment, [Σ2] the translated
+   environment of the quoted program; [t] is a [tCase] node of the program, so
+   its inductive [I] is in [Σ2] and not in [Σ1]; [w] is a case-free term;
+   [u = tApp (f, [t; t; w])] and [v = tApp (g, [w; u])] share [t] and [w]
+   physically.  After translating with [trans_shared Σ1], [trans_shared Σ2 x]
+   must equal [trans Σ2 x] for (a) [x = t], (b) [x = u] with [t] computed in the
+   same call, (c) [x = v] after [w] alone went into the table (so the parent
+   meets a table hit and a flagged child together), and [w] must hit across
+   [Σ1] and [Σ2].
+
+   The comparison runs on every term.  The environment control runs when the
+   quoted program contains a match on an inductive (a [tCase] node), in the
+   term itself or in the body of a constant it depends on; the message says
+   whether it ran.  [MetaRocq Test Trans Sharing Control] requires the control:
+   it fails when the quoted program has no match, so the control cannot become
+   vacuous unnoticed on the terms expected to have one. *)
+let trans_environment_control prog t =
+  let same a b = Stdlib.compare a b = 0 in
+  let genv, _ = prog in
+  let sigma1 =
+    TemplateToPCUIC.empty_trans_env genv.Ast0.Env.universes genv.Ast0.Env.retroknowledge
+  in
+  let sigma2 = TemplateToPCUIC.trans_global_env genv in
+  let rel n = Ast0.Coq_tRel n in
+  let w = Ast0.Coq_tApp (rel Datatypes.O, [rel (Datatypes.S Datatypes.O)]) in
+  let u = Ast0.Coq_tApp (rel (Datatypes.S (Datatypes.S Datatypes.O)), [t; t; w]) in
+  let v = Ast0.Coq_tApp (rel (Datatypes.S (Datatypes.S (Datatypes.S Datatypes.O))), [w; u]) in
+  let shared_tr sigma x = TemplateToPCUICShared.trans_shared sigma x in
+  let plain_tr sigma x = TemplateToPCUIC.trans sigma x in
+  let checks_under_sigma2 x = same (shared_tr sigma2 x) (plain_tr sigma2 x) in
+  (* The control means something only if [t] translates differently under the two environments. *)
+  let env_matters = not (same (plain_tr sigma1 t) (plain_tr sigma2 t)) in
+  Trans_memo.reset ();
+  ignore (shared_tr sigma1 u);
+  let case_a = checks_under_sigma2 t in
+  Trans_memo.reset ();
+  ignore (shared_tr sigma1 u);
+  let case_b = checks_under_sigma2 u in
+  Trans_memo.reset ();
+  ignore (shared_tr sigma1 w);
+  ignore (shared_tr sigma1 v);
+  let case_c = checks_under_sigma2 v in
+  Trans_memo.reset ();
+  ignore (shared_tr sigma1 w);
+  let hits_w = Trans_memo.hits () in
+  let w2 = shared_tr sigma2 w in
+  let case_w = Trans_memo.hits () = hits_w + 1 && same w2 (plain_tr sigma2 w) in
+  Trans_memo.reset ();
+  let verdict ok = str (if ok then "ok" else "FAILED") in
+  (env_matters && case_a && case_b && case_c && case_w,
+   str "environment control: environment matters " ++ verdict env_matters
+   ++ str ", (a) " ++ verdict case_a ++ str ", (b) " ++ verdict case_b
+   ++ str ", (c) " ++ verdict case_c ++ str ", w hit across environments " ++ verdict case_w)
+
+let test_trans_sharing ~require_control ~opaque_access env evm poly c =
+  with_trans_memo_reset @@ fun () ->
+  let env = safecheck_env env evm poly in
+  let term = EConstr.to_constr evm c in
+  let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
+  let hits_before = Trans_memo.hits () in
+  let shared = time (str"Shared translation") SafeTemplateChecker.trans_program prog in
+  let hits = Trans_memo.hits () - hits_before in
+  let unshared =
+    time (str"Unshared translation") SafeTemplateChecker.trans_program_unshared prog
+  in
+  let equal = time (str"Comparing") (fun () -> Stdlib.compare shared unshared = 0) () in
+  let control_ok, control =
+    match find_case_in_program prog with
+    | Some t -> trans_environment_control prog t
+    | None when require_control ->
+      (false, str "environment control: required, but the quoted program has no match")
+    | None -> (true, str "environment control: not run, the quoted program has no match")
+  in
+  let report =
+    str "structurally equal = " ++ bool equal ++ str ", memo hits = " ++ Pp.int hits
+    ++ str "; " ++ control ++ str "."
+  in
+  if equal && hits > 0 && control_ok then
+    Feedback.msg_info (str "Trans sharing test passed: " ++ report)
+  else
+    CErrors.user_err (str "Trans sharing test failed: " ++ report)
 
 let check ~opaque_access env evm poly (c, _ustate) =
   debug (fun () -> str"Quoting");
@@ -270,7 +419,65 @@ let test_cache_typing_flags env evm c =
     CErrors.user_err
       (str "Cache reused a quotation across changed typing flags.")
 
+(* Regression tests for the three fixes that keep the translation memo
+   consistent between commands (test-suite/trans_memo_publication.v,
+   trans_memo_reset.v, trans_memo_rejects.v).  Each fails when its fix is
+   undone:
+   (a) the table is published once, after both arrays exist;
+   (b) [with_trans_memo_reset] empties the table on entry;
+   (c) [MetaRocq Test SafeCheck Rejects] runs inside [with_trans_memo_reset]. *)
+let memo_state_name = function
+  | `Empty -> "empty" | `Consistent -> "consistent" | `Torn -> "torn"
+
+(* The message of [e], so that only the hook's own error counts as its raise. *)
+let memo_hook_raised e =
+  CErrors.noncritical e
+  && string_contains ~where:(Pp.string_of_ppcmds (CErrors.print e)) ~what:"trans_memo test"
+
+let test_memo_publication () =
+  with_trans_memo_reset @@ fun () ->
+  Trans_memo.test_arm_raise_between_allocations ();
+  let raised =
+    try Trans_memo.test_populate (); None
+    with e when CErrors.noncritical e -> Some e
+  in
+  let state = Trans_memo.test_state () in
+  match raised with
+  | None ->
+    CErrors.user_err (str "Memo publication test failed: the armed first store did not raise.")
+  | Some e when not (memo_hook_raised e) ->
+    CErrors.user_err
+      (str "Memo publication test failed: the first store raised another error: "
+       ++ CErrors.print e)
+  | Some _ ->
+    if state = `Empty then
+      Feedback.msg_info
+        (str "Memo publication test passed: an exception between the two array allocations left no table.")
+    else
+      CErrors.user_err
+        (str "Memo publication test failed: an exception between the two array allocations left a "
+         ++ str (memo_state_name state)
+         ++ str " table (fix (a), one publication after both arrays exist).")
+
+let test_memo_reset_on_entry () =
+  Trans_memo.reset ();
+  Trans_memo.test_populate ();
+  let before = Trans_memo.test_state () in
+  if before = `Empty then
+    CErrors.user_err (str "Memo reset-on-entry test failed: the table could not be populated.");
+  with_trans_memo_reset @@ fun () ->
+  match Trans_memo.test_state () with
+  | `Empty ->
+    Feedback.msg_info
+      (str "Memo reset-on-entry test passed: a command starts with an empty table.")
+  | state ->
+    CErrors.user_err
+      (str "Memo reset-on-entry test failed: the command started with a "
+       ++ str (memo_state_name state)
+       ++ str " table it did not build (fix (b), reset on entry).")
+
 let test_safecheck_rejection ~opaque_access env evm c =
+  with_trans_memo_reset @@ fun () ->
   let term = EConstr.to_constr evm c in
   let prog =
     Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true
@@ -311,6 +518,38 @@ let test_safecheck_rejection ~opaque_access env evm c =
     CErrors.user_err
       (str "SafeCheck accepted a successor-too-low quoted declaration.")
 
+
+(* (c): the memo's table does not outlive [MetaRocq Test SafeCheck Rejects].
+   The arm is installed by that command's own entry reset and fires after its
+   first store, when the table is published; the check below runs outside that
+   command's wrapper, so it sees what the command left.  Arming, running and
+   checking happen in this one command, and the finally disarms, so no arm
+   survives for another command to meet. *)
+let test_memo_rejects_leak ~opaque_access env evm c =
+  Trans_memo.reset ();
+  Trans_memo.test_arm_raise_after_stores 1;
+  let raised =
+    Fun.protect ~finally:Trans_memo.test_disarm (fun () ->
+      try test_safecheck_rejection ~opaque_access env evm c; None
+      with e when CErrors.noncritical e -> Some e)
+  in
+  match raised with
+  | None ->
+    CErrors.user_err
+      (str "Memo rejects-leak test failed: the armed rejection test did not raise.")
+  | Some e when not (memo_hook_raised e) ->
+    CErrors.user_err
+      (str "Memo rejects-leak test failed: the rejection test raised another error, so the memo hook never fired: "
+       ++ CErrors.print e)
+  | Some _ ->
+    match Trans_memo.test_state () with
+    | `Empty ->
+      Feedback.msg_info
+        (str "Memo rejects-leak test passed: no table outlived MetaRocq Test SafeCheck Rejects.")
+    | state ->
+      CErrors.user_err
+        (str "Memo rejects-leak test failed: a " ++ str (memo_state_name state)
+         ++ str " table outlived MetaRocq Test SafeCheck Rejects (fix (c), that command wrapped in with_trans_memo_reset).")
 }
 
 
@@ -373,6 +612,37 @@ VERNAC COMMAND EXTEND MetaRocqTestQuoteSharing CLASSIFIED AS QUERY STATE opaque_
     let evm = Evd.from_env env in
     let c, _ = Constrintern.interp_constr env evm c in
     test_quote_sharing env evm poly c
+  }
+END
+
+(* Each of these arms, runs and checks within the one command, and leaves the
+   memo disarmed and its table empty. *)
+VERNAC COMMAND EXTEND MetaRocqTestMemo CLASSIFIED AS SIDEFF
+| [ "MetaRocq" "Test" "Memo" "Publication" ] -> { test_memo_publication () }
+| [ "MetaRocq" "Test" "Memo" "Reset" "On" "Entry" ] -> { test_memo_reset_on_entry () }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestMemoRejectsLeak CLASSIFIED AS SIDEFF STATE opaque_access
+| [ "MetaRocq" "Test" "Memo" "Rejects" "Leak" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_memo_rejects_leak env evm c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestTransSharing CLASSIFIED AS QUERY STATE opaque_access
+| #[ poly = polymorphic ] [ "MetaRocq" "Test" "Trans" "Sharing" "Control" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_trans_sharing ~require_control:true env evm poly c
+  }
+| #[ poly = polymorphic ] [ "MetaRocq" "Test" "Trans" "Sharing" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_trans_sharing ~require_control:false env evm poly c
   }
 END
 
