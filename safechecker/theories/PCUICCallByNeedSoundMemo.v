@@ -1059,6 +1059,20 @@ Lemma inst_code_nil_ne_subst_instance :
   inst_code [] cex_univ_body <> subst_instance ([] : Instance.t) cex_univ_body.
 Proof. unfold cex_univ_body. cbn. congruence. Qed.
 
+(** *** The obvious fix, and why it is wrong
+
+  The premise would disappear if [inst_code] substituted unconditionally, that is if
+  [PCUICCallByNeed.inst_code u t] were [subst_instance u t] for every [u] instead of
+  returning [t] at [u = []]. Do not do that. [inst_code [] t = t] is exactly what makes
+  the *root* entries of a call read back as the hook's own [t] and [u]: [cbn_run] builds
+  them with [new_entry t [] (NSInput _)], so their root code is [inst_code [] t], and
+  [PCUICCallByNeedSoundCtx.cbn_run_frame] states that the two initial suspensions stand
+  for exactly the hook's [t] and [u]. Making [inst_code] unconditional replaces those by
+  [subst_instance [] t], which is a different term unless [t] is universe-closed — so the
+  frame breaks where the delta rule is fixed, and the premise moves rather than
+  disappearing. It belongs where it is: on the delta rule, discharged at the hook from
+  the instance consistency a well-typed [tConst] carries. *)
+
 (** ** Pairs returned by the machine *)
 
 Lemma cbn_COk_pair_inj {A B : Type} (x1 y1 : A) (x2 y2 : B) :
