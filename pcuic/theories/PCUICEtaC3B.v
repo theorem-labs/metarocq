@@ -1467,3 +1467,43 @@ Proof.
   destruct m; cbn in H; discriminate H.
 Qed.
 
+Lemma fix_subst_lift n k mfix :
+  fix_subst (map (map_def (lift n k) (lift n (#|mfix| + k))) mfix)
+  = map (lift n k) (fix_subst mfix).
+Proof.
+  unfold fix_subst. rewrite !length_map.
+  generalize #|mfix| at 2 3. intro m.
+  induction m; cbn; auto. f_equal. apply IHm.
+Qed.
+
+Lemma lift_unfold_fix n k mfix idx narg fn :
+  unfold_fix mfix idx = Some (narg, fn) ->
+  unfold_fix (map (map_def (lift n k) (lift n (#|mfix| + k))) mfix) idx
+  = Some (narg, lift n k fn).
+Proof.
+  unfold unfold_fix. rewrite nth_error_map.
+  destruct (nth_error mfix idx) as [d|] eqn:Hd; cbn; [|discriminate].
+  intro H. injection H as <- <-.
+  rewrite fix_subst_lift.
+  f_equal. f_equal. rewrite distr_lift_subst. f_equal.
+  now rewrite fix_subst_length.
+Qed.
+
+Lemma lift_mkApps_tFix_inv n k M mfix idx args :
+  lift n k M = mkApps (tFix mfix idx) args ->
+  ∑ mfix0 args0, (M = mkApps (tFix mfix0 idx) args0)
+    × (mfix = map (map_def (lift n k) (lift n (#|mfix0| + k))) mfix0)
+    × (args = map (lift n k) args0).
+Proof.
+  revert M. induction args using rev_ind; cbn; intros M H.
+  - destruct M; cbn in H; try discriminate H.
+    injection H as <- <-. exists mfix0, []. repeat split.
+  - rewrite mkApps_app in H. cbn in H.
+    destruct M; cbn in H; try discriminate H.
+    injection H as H1 H2.
+    destruct (IHargs _ H1) as (mfix0 & args0 & -> & -> & ->).
+    exists mfix0, (args0 ++ [M2]). repeat split.
+    + now rewrite mkApps_app.
+    + rewrite map_app. cbn. now rewrite H2.
+Qed.
+
