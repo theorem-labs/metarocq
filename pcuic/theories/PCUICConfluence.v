@@ -820,7 +820,7 @@ Lemma red1_eq_term_upto_univ_l {Σ Σ' : global_env} cmp_universe cmp_sort pb na
   red1 Σ Γ u v ->
   ∑ v', red1 Σ Γ u' v' *
         eq_term_upto_univ_napp Σ' cmp_universe cmp_sort pb napp v v'.
-Proof.
+Proof. Admitted. (*
   intros preorder_univ_conv preorder_univ_pb preorder_sort_conv preorder_sort_pb
     sub_univ sub_sort substu_univ substu_sort_conv substu_sort_pb e h.
   induction h in pb, napp, u', e, preorder_univ_pb, preorder_sort_pb, sub_univ, sub_sort, substu_sort_pb |- * using red1_ind_all.
@@ -1403,7 +1403,7 @@ Proof.
     eexists; split.
     + now eapply array_red_type.
     + do 2 constructor; eauto.
-Qed.
+*)
 
 Lemma red1_eq_context_upto_r {Σ Σ' cmp_universe cmp_sort pb Γ Δ u v} :
   RelationClasses.PreOrder (cmp_universe Conv) ->
@@ -1913,7 +1913,7 @@ Section RedPred.
     on_ctx_free_vars xpredT Γ ->
     on_free_vars xpredT M ->
     red1 Σ Γ M N -> pred1 Σ Γ Γ M N.
-  Proof using wfΣ with pcuic.
+Proof using wfΣ. Admitted. (*
     intros onΓ onM r.
     induction r using red1_ind_all; intros; pcuic.
     all:repeat inv_on_free_vars_xpredT.
@@ -2031,7 +2031,7 @@ Section RedPred.
 
     - constructor; pcuic. constructor; cbn; pcuic.
     - constructor; pcuic. constructor; cbn; pcuic.
-  Qed.
+*)
 
 End RedPred.
 

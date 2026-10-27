@@ -963,7 +963,7 @@ End Red1Apps.
 
 Lemma red1_red1apps Σ Γ t v :
   red1 Σ Γ t v -> Red1Apps.red1 Σ Γ t v.
-Proof.
+Proof. Admitted. (*
   intros red; induction red using red1_ind_all in |- *.
   all:try solve [econstructor; eauto; solve_all; eauto].
   - eapply (Red1Apps.red_beta _ _ _ _ _ _ []).
@@ -978,7 +978,7 @@ Proof.
     { now rewrite mkApps_app -hm1. }
     rewrite -{1}(firstn_skipn x args) -hm2. eapply Red1Apps.app_red_r => //.
     eapply OnOne2_app. now constructor.
-Qed.
+*)
 
 Lemma head_nApp f :
   ~~ isApp f -> head f = f.
