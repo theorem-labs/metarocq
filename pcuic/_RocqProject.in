@@ -130,4 +130,6 @@ theories/PCUICCasesHelper.v
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
 theories/PCUICTypingEta.v
+# BET-315 eta lane (L2): confluence
+theories/PCUICEtaConfluence.v
 # theories/All.v
