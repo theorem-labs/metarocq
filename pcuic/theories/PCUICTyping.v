@@ -1,6 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config Primitive.
+From MetaRocq.Common Require Import config Primitive PrimitiveOps EnvironmentTyping.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
   PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition PCUICOnFreeVars PCUICArityRed.
 From MetaRocq.PCUIC Require Export PCUICCumulativitySpec.
@@ -340,6 +340,34 @@ Module PCUICTypingDef <: EnvironmentTyping.Typing PCUICTerm PCUICEnvironment PCU
 
 End PCUICTypingDef.
 
+(** The PCUIC instance of [PrimOpTypeSig]: the expected declared type of an
+    operation, a fold of [tImpl] over the registered type constants ending in the
+    registered type constant or inductive.  Its arms use only [tImpl],
+    [tConst kn []] and [tInd i []], so the Template arm is its [trans]-image. *)
+Module PCUICPrimOpType <: EnvironmentTyping.PrimOpTypeSig PCUICTerm PCUICEnvironment.
+  Import PCUICEnvironment.
+  Definition prim_tag_type (r : Retroknowledge.t) (t : prim_tag) : option term :=
+    option_map (fun kn => tConst kn []) (EnvironmentTyping.retro_type_constant r t).
+  Definition prim_shape_type (r : Retroknowledge.t) (s : prim_shape) : option term :=
+    match s with
+    | SInt => prim_tag_type r primInt
+    | SBool => option_map (fun i => tInd i []) r.(Retroknowledge.retro_bool)
+    end.
+  Fixpoint prim_arg_types (r : Retroknowledge.t) (ts : list prim_tag) (res : term) : option term :=
+    match ts with
+    | [] => Some res
+    | t :: ts => match prim_tag_type r t with
+                 | Some a => option_map (tImpl a) (prim_arg_types r ts res)
+                 | None => None
+                 end
+    end.
+  Definition prim_op_type (r : Retroknowledge.t) (op : prim_op) : option term :=
+    match prim_shape_type r (po_shape (info op)) with
+    | Some res => prim_arg_types r (po_args (info op)) res
+    | None => None
+    end.
+End PCUICPrimOpType.
+
 Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
   PCUICTerm
   PCUICEnvironment
@@ -348,8 +376,8 @@ Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
   PCUICConversion
   PCUICLookup
   PCUICArityRelation
+  PCUICPrimOpType
 .
-Include PCUICGlobalMaps.
 
 Module PCUICDeclarationTyping :=
   EnvironmentTyping.DeclarationTyping
@@ -362,6 +390,7 @@ Module PCUICDeclarationTyping :=
     PCUICTypingDef
     PCUICLookup
     PCUICArityRelation
+    PCUICPrimOpType
     PCUICGlobalMaps.
 Include PCUICDeclarationTyping.
 
