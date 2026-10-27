@@ -1082,3 +1082,43 @@ Proof.
   - eapply peta_Case; try eassumption. apply peta_mkApps; eassumption.
   - reflexivity.
 Qed.
+
+(** [red_beta]: the η/β OVERLAP (peta_eta on the function) closes with ZERO β on the
+    η side and NO size-induction / wf — it is handled by [simpl_subst], unlike the
+    [abs_red_r] kernel. The ordinary (peta_Lambda) subcase is one β via [peta_subst1]. *)
+Lemma peta_commut_red_beta Σ Γ na A b a u :
+  peta (tApp (tLambda na A b) a) u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × peta (b {0 := a}) w' × upto_domain w w'.
+Proof.
+  intros Hp. depelim Hp.
+  rename Hp1 into Hfun. rename Hp2 into Harg.
+  depelim Hfun.
+  - (* peta_eta: b = tApp (lift0 1 M) (tRel 0), function contracts to M' *)
+    eexists _, _. repeat split.
+    + apply r_refl.
+    + assert (He : (tApp (lift0 1 M) (tRel 0)) {0 := a} = tApp M a).
+      { change ((tApp (lift0 1 M) (tRel 0)) {0 := a})
+          with (tApp (subst [a] 0 (lift0 1 M)) (subst [a] 0 (tRel 0))).
+        rewrite (simpl_subst_k [a] M 0 1 eq_refl).
+        rewrite (subst_rel_eq [a] 0 0 a 0 eq_refl eq_refl).
+        now rewrite lift0_p. }
+      rewrite He.
+      match goal with H : peta M _ |- _ => apply peta_App; [exact H|exact Harg] end.
+    + reflexivity.
+  - (* peta_Lambda: ordinary beta, one step *)
+    eexists _, _. repeat split.
+    + apply r_step. apply red_beta.
+    + match goal with H : peta b _ |- _ => apply peta_subst1; [exact H|exact Harg] end.
+    + reflexivity.
+Qed.
+
+Lemma peta_commut_red_zeta Σ Γ na b ty b' u :
+  peta (tLetIn na b ty b') u ->
+  ∑ w w', clos_refl (red1 Σ Γ) u w × peta (b' {0 := b}) w' × upto_domain w w'.
+Proof.
+  intros Hp. depelim Hp.
+  eexists _, _. repeat split.
+  - apply r_step. apply red_zeta.
+  - apply peta_subst1; eassumption.
+  - reflexivity.
+Qed.
