@@ -831,4 +831,23 @@ Section Cong.
     intro h. unfold eta_ctx, fix_context, fix_context_gen. apply All2_rev.
     now apply mapi_fix_eta_dtype.
   Qed.
+
+  (** Invert a [tFix] application appearing under a [lift0 1]: the head fix and
+      the spine both come from unlifted data.  Pure syntax, via decompose_app. *)
+  Lemma lift_mkApps_tFix_inv n k M mfix idx args :
+    lift n k M = mkApps (tFix mfix idx) args ->
+    ∑ mfix' args', (M = mkApps (tFix mfix' idx) args')
+      × (mfix = map (map_def (lift n k) (lift n (#|mfix'| + k))) mfix')
+      × (args = map (lift n k) args').
+  Proof.
+    intro H. destruct (decompose_app M) as [f a] eqn:da.
+    pose proof (decompose_app_lift n k M f a da) as dl.
+    rewrite H decompose_app_mkApps // in dl.
+    apply decompose_app_inv in da.
+    destruct f; cbn in dl; noconf dl.
+    eexists _, _. split; [|split].
+    - rewrite da. reflexivity.
+    - reflexivity.
+    - reflexivity.
+  Qed.
 End Cong.
