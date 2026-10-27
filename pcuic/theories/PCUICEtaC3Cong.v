@@ -354,4 +354,38 @@ Section Cong.
       + constructor; [apply upto_domain_refl|exact hd].
   Qed.
 
+  (** *** letin_red_body : red1 in the let body (under [vdef]); the parallel
+      η-in-def / η-in-type cases change the [vdef] context, discharged by
+      [red1_eta_ctx_strong]. *)
+  Lemma c3_letin_red_body Γ na b t0 b' r u :
+    red1 Σ (Γ ,, vdef na b t0) b' r -> eta1 (tLetIn na b t0 b') u ->
+    joinable Σ Γ u (tLetIn na b t0 r).
+  Proof.
+    intros hr he. depelim he.
+    - (* letin_eta_def : η in the bound term b -> r0 *)
+      destruct (red1_eta_ctx_strong Σ (Γ ,, vdef na b t0) (Γ ,, vdef na r0 t0) b' r hr)
+        as (w & hw & hw').
+      { apply All2_cons; [constructor; [apply rt_step; eassumption|apply rt_refl]
+                         | apply eta_ctx_refl]. }
+      exists (tLetIn na r0 t0 w), (tLetIn na r0 t0 w). split; [|split].
+      + apply r_step. now constructor.
+      + apply eta_LetIn; [apply rt_step; eassumption|apply rt_refl|exact hw'].
+      + apply upto_domain_refl.
+    - (* letin_eta_ty : η in the type t0 -> r0 *)
+      destruct (red1_eta_ctx_strong Σ (Γ ,, vdef na b t0) (Γ ,, vdef na b r0) b' r hr)
+        as (w & hw & hw').
+      { apply All2_cons; [constructor; [apply rt_refl|apply rt_step; eassumption]
+                         | apply eta_ctx_refl]. }
+      exists (tLetIn na b r0 w), (tLetIn na b r0 w). split; [|split].
+      + apply r_step. now constructor.
+      + apply eta_LetIn; [apply rt_refl|apply rt_step; eassumption|exact hw'].
+      + apply upto_domain_refl.
+    - (* letin_eta_body : η in the body b' -> r0 (same subterm, via IH) *)
+      destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      exists (tLetIn na b t0 w), (tLetIn na b t0 w'). split; [|split].
+      + destruct hw; [apply r_step; now constructor|apply r_refl].
+      + now apply eta_LetIn_c.
+      + constructor; [apply upto_domain_refl|apply upto_domain_refl|exact hd].
+  Qed.
+
 End Cong.
