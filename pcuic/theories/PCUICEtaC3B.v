@@ -1921,3 +1921,205 @@ Qed.
 
 End Kernel.
 
+(** ** List congruences: one generic [OnOne2] commutation, instantiated per list.
+    The reduced position commutes by its own motive; every other position keeps its
+    [peta] step, and [upto_domain] is reflexive there. *)
+Lemma OnOne2_commut {A} (R1 R2 Pe U : A -> A -> Type) (Q : A -> Type) l l' l1 :
+  (forall x, U x x) ->
+  All2 (fun x y => Pe x y × (Q x -> forall z, R1 x z ->
+          ∑ w w', clos_refl R2 y w × Pe z w' × U w w')) l l' ->
+  All Q l -> OnOne2 R1 l l1 ->
+  ∑ lw lw', clos_refl (OnOne2 R2) l' lw × All2 Pe l1 lw' × All2 U lw lw'.
+Proof.
+  intros HU Ha HQ Ho.
+  induction Ho as [hd hd' tl Hr|hd tl tl1 Ho IHo] in l', Ha, HQ |- *.
+  - depelim Ha. depelim HQ.
+    match goal with H : Pe hd ?y × _ |- _ => destruct H as [Pxy IH] end.
+    match goal with Hq : Q hd |- _ => destruct (IH Hq hd' Hr) as (w & w' & Hw & Hw' & Hu) end.
+    match goal with Ht : All2 _ tl ?tl' |- _ =>
+      exists (w :: tl'), (w' :: tl'); repeat split end.
+    + destruct Hw; [apply r_step; now constructor|apply r_refl].
+    + constructor; [exact Hw'|]. eapply All2_impl; [eassumption|]. now intros ? ? [? _].
+    + constructor; [exact Hu|]. now apply All2_same.
+  - depelim Ha. depelim HQ.
+    match goal with H : Pe hd ?y × _ |- _ => destruct H as [Pxy _] end.
+    match goal with Ht : All2 _ tl ?tl' |- _ =>
+      destruct (IHo tl' Ht HQ) as (lw & lw' & Hl & Hl' & Hu) end.
+    exists (y :: lw), (y :: lw'). repeat split.
+    + destruct Hl; [apply r_step; now apply OnOne2_tl|apply r_refl].
+    + now constructor.
+    + constructor; [apply HU|exact Hu].
+Qed.
+
+Lemma red1_tEvar_inv {Σ Γ ev l v} :
+  red1 Σ Γ (tEvar ev l) v -> ∑ l1, (v = tEvar ev l1) × OnOne2 (red1 Σ Γ) l l1.
+Proof.
+  intro H. remember (tEvar ev l) as t eqn:Heq.
+  destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
+  injection Heq as -> ->. eexists; split; [reflexivity|assumption].
+Qed.
+
+Lemma red1_tFix_inv {Σ Γ mfix idx v} :
+  red1 Σ Γ (tFix mfix idx) v ->
+  (∑ m1, (v = tFix m1 idx)
+     × OnOne2 (on_Trel_eq (red1 Σ Γ) dtype (fun x => (dname x, dbody x, rarg x))) mfix m1)
+  + (∑ m1, (v = tFix m1 idx)
+     × OnOne2 (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix)) dbody
+                (fun x => (dname x, dtype x, rarg x))) mfix m1).
+Proof.
+  intro H. remember (tFix mfix idx) as t eqn:Heq.
+  destruct H; try discriminate Heq.
+  - (* red_fix with an empty spine is blocked: [is_constructor _ []] is false *)
+    exfalso. destruct args using rev_ind.
+    + match goal with Hc : is_constructor _ [] = true |- _ =>
+        rewrite is_constructor_nil in Hc; discriminate Hc end.
+    + rewrite mkApps_app in Heq. cbn in Heq. discriminate Heq.
+  - injection Heq as -> ->. left. eexists; split; [reflexivity|assumption].
+  - injection Heq as -> ->. right. eexists; split; [reflexivity|assumption].
+Qed.
+
+Lemma red1_tCoFix_inv {Σ Γ mfix idx v} :
+  red1 Σ Γ (tCoFix mfix idx) v ->
+  (∑ m1, (v = tCoFix m1 idx)
+     × OnOne2 (on_Trel_eq (red1 Σ Γ) dtype (fun x => (dname x, dbody x, rarg x))) mfix m1)
+  + (∑ m1, (v = tCoFix m1 idx)
+     × OnOne2 (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix)) dbody
+                (fun x => (dname x, dtype x, rarg x))) mfix m1).
+Proof.
+  intro H. remember (tCoFix mfix idx) as t eqn:Heq.
+  destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
+  - injection Heq as -> ->. left. eexists; split; [reflexivity|assumption].
+  - injection Heq as -> ->. right. eexists; split; [reflexivity|assumption].
+Qed.
+
+Lemma commut_Evar Σ ev l l' :
+  All2 (fun x y => peta x y × commutes Σ x y) l l' ->
+  commutes Σ (tEvar ev l) (tEvar ev l').
+Proof.
+  intros Hl Γ Δ v HΔ HΓ Ht Hr. cbn in Ht.
+  destruct (red1_tEvar_inv Hr) as (l1 & -> & Ho).
+  destruct (OnOne2_commut (red1 Σ Γ) (red1 Σ Δ) peta upto_domain (fun x => is_true (ofvT x))
+              l l' l1 (fun x => upto_domain_refl x)) as (lw & lw' & Hw & Hw' & Hu).
+  - eapply All2_impl; [exact Hl|]. intros x y [pxy cxy]. split; [exact pxy|].
+    intros Hq z Hz. exact (cxy Γ Δ z HΔ HΓ Hq Hz).
+  - now apply forallb_All.
+  - exact Ho.
+  - exists (tEvar ev lw), (tEvar ev lw'). repeat split.
+    + eapply (clos_refl_map _ _ (tEvar ev)); [|exact Hw]. intros x y H. now apply evar_red.
+    + now apply peta_Evar.
+    + now apply utd_Evar.
+Qed.
+
+Notation upto_def :=
+  (fun x y => upto_domain x.(dtype) y.(dtype) × upto_domain x.(dbody) y.(dbody)
+              × x.(rarg) = y.(rarg)).
+
+Notation commut_mfix Σ mfix mfix' :=
+  (All2 (fun d d' => (peta d.(dtype) d'.(dtype) × commutes Σ d.(dtype) d'.(dtype))
+                     × (peta d.(dbody) d'.(dbody) × commutes Σ d.(dbody) d'.(dbody))
+                     × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)) mfix mfix').
+
+Lemma upto_def_refl d : upto_def d d.
+Proof. repeat split; reflexivity. Qed.
+
+(** The [dtype] step of a (co)fixpoint, in the β context [Γ], commuted. *)
+Lemma commut_mfix_ty Σ Γ Δ mfix mfix' m1 :
+  peta_ctx Γ Δ -> on_ctx_free_vars xpredT Γ ->
+  commut_mfix Σ mfix mfix' ->
+  forallb (test_def ofvT (on_free_vars (shiftnP #|mfix| xpredT))) mfix ->
+  OnOne2 (on_Trel_eq (red1 Σ Γ) dtype (fun x => (dname x, dbody x, rarg x))) mfix m1 ->
+  ∑ lw lw', clos_refl (OnOne2 (on_Trel_eq (red1 Σ Δ) dtype
+                                 (fun x => (dname x, dbody x, rarg x)))) mfix' lw
+          × All2 peta_def m1 lw' × All2 upto_def lw lw'.
+Proof.
+  intros HΔ HΓ Hm Ht Ho.
+  eapply (OnOne2_commut _ _ peta_def upto_def (fun d => is_true (ofvT (dtype d))));
+    [exact upto_def_refl| |  |exact Ho].
+  - eapply All2_impl; [exact Hm|].
+    intros x [yn yt yb yr] [[pt ct] [[pb cb] [hn hr]]]. cbn in *.
+    split; [repeat split; assumption|].
+    intros Hq z [Hz Hk]. injection Hk as kn kb kr.
+    destruct (ct Γ Δ (dtype z) HΔ HΓ Hq Hz) as (w & w' & Hw & Hw' & Hu).
+    exists (mkdef _ yn w yb yr), (mkdef _ (dname z) w' yb (rarg z)). cbn. repeat split.
+    + destruct Hw; [apply r_step; split; [assumption|reflexivity]|apply r_refl].
+    + exact Hw'.
+    + rewrite <- kb. exact pb.
+    + exact Hu.
+    + reflexivity.
+    + congruence.
+  - apply forallb_All in Ht. eapply All_impl; [exact Ht|].
+    intros d Hd. now move/andP: Hd => [? _].
+Qed.
+
+(** The [dbody] step of a (co)fixpoint, under [fix_context]: both sides extend their
+    context by the [fix_context] of their own list, related by [peta_ctx_fix_context]. *)
+Lemma commut_mfix_body Σ Γ Δ mfix mfix' m1 :
+  peta_ctx Γ Δ -> on_ctx_free_vars xpredT Γ ->
+  commut_mfix Σ mfix mfix' ->
+  forallb (test_def ofvT (on_free_vars (shiftnP #|mfix| xpredT))) mfix ->
+  OnOne2 (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix)) dbody
+            (fun x => (dname x, dtype x, rarg x))) mfix m1 ->
+  ∑ lw lw', clos_refl (OnOne2 (on_Trel_eq (red1 Σ (Δ ,,, fix_context mfix')) dbody
+                                 (fun x => (dname x, dtype x, rarg x)))) mfix' lw
+          × All2 peta_def m1 lw' × All2 upto_def lw lw'.
+Proof.
+  intros HΔ HΓ Hm Ht Ho.
+  have HΔ' : peta_ctx (Γ ,,, fix_context mfix) (Δ ,,, fix_context mfix').
+  { apply peta_ctx_app; [exact HΔ|]. apply peta_ctx_fix_context. exact (All2_length Hm). }
+  have HΓ' : on_ctx_free_vars xpredT (Γ ,,, fix_context mfix).
+  { rewrite -(octx_shiftnP #|mfix|). apply on_ctx_free_vars_fix_context; [|exact HΓ].
+    now apply forallb_All. }
+  eapply (OnOne2_commut _ _ peta_def upto_def (fun d => is_true (ofvT (dbody d))));
+    [exact upto_def_refl| |  |exact Ho].
+  - eapply All2_impl; [exact Hm|].
+    intros x [yn yt yb yr] [[pt ct] [[pb cb] [hn hr]]]. cbn in *.
+    split; [repeat split; assumption|].
+    intros Hq z [Hz Hk]. injection Hk as kn kt kr.
+    destruct (cb _ _ (dbody z) HΔ' HΓ' Hq Hz) as (w & w' & Hw & Hw' & Hu).
+    exists (mkdef _ yn yt w yr), (mkdef _ (dname z) yt w' (rarg z)). cbn. repeat split.
+    + destruct Hw; [apply r_step; split; [assumption|reflexivity]|apply r_refl].
+    + rewrite <- kt. exact pt.
+    + exact Hw'.
+    + reflexivity.
+    + exact Hu.
+    + congruence.
+  - apply forallb_All in Ht. eapply All_impl; [exact Ht|].
+    intros d Hd. move/andP: Hd => [_ Hb]. now rewrite ofvT_shiftnP in Hb.
+Qed.
+
+Lemma commut_Fix Σ mfix mfix' idx :
+  commut_mfix Σ mfix mfix' -> commutes Σ (tFix mfix idx) (tFix mfix' idx).
+Proof.
+  intros Hm Γ Δ v HΔ HΓ Ht Hr. cbn in Ht.
+  destruct (red1_tFix_inv Hr) as [(m1 & -> & Ho)|(m1 & -> & Ho)].
+  - destruct (commut_mfix_ty Σ Γ Δ mfix mfix' m1 HΔ HΓ Hm Ht Ho) as (lw & lw' & Hw & Hw' & Hu).
+    exists (tFix lw idx), (tFix lw' idx). repeat split.
+    + eapply (clos_refl_map _ _ (fun m => tFix m idx)); [|exact Hw].
+      intros x y H. now apply fix_red_ty.
+    + now apply peta_Fix.
+    + now apply utd_Fix.
+  - destruct (commut_mfix_body Σ Γ Δ mfix mfix' m1 HΔ HΓ Hm Ht Ho) as (lw & lw' & Hw & Hw' & Hu).
+    exists (tFix lw idx), (tFix lw' idx). repeat split.
+    + destruct Hw; [apply r_step; now apply fix_red_body|apply r_refl].
+    + now apply peta_Fix.
+    + now apply utd_Fix.
+Qed.
+
+Lemma commut_CoFix Σ mfix mfix' idx :
+  commut_mfix Σ mfix mfix' -> commutes Σ (tCoFix mfix idx) (tCoFix mfix' idx).
+Proof.
+  intros Hm Γ Δ v HΔ HΓ Ht Hr. cbn in Ht.
+  destruct (red1_tCoFix_inv Hr) as [(m1 & -> & Ho)|(m1 & -> & Ho)].
+  - destruct (commut_mfix_ty Σ Γ Δ mfix mfix' m1 HΔ HΓ Hm Ht Ho) as (lw & lw' & Hw & Hw' & Hu).
+    exists (tCoFix lw idx), (tCoFix lw' idx). repeat split.
+    + eapply (clos_refl_map _ _ (fun m => tCoFix m idx)); [|exact Hw].
+      intros x y H. now apply cofix_red_ty.
+    + now apply peta_CoFix.
+    + now apply utd_CoFix.
+  - destruct (commut_mfix_body Σ Γ Δ mfix mfix' m1 HΔ HΓ Hm Ht Ho) as (lw & lw' & Hw & Hw' & Hu).
+    exists (tCoFix lw idx), (tCoFix lw' idx). repeat split.
+    + destruct Hw; [apply r_step; now apply cofix_red_body|apply r_refl].
+    + now apply peta_CoFix.
+    + now apply utd_CoFix.
+Qed.
+
