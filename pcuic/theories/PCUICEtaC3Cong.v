@@ -904,4 +904,48 @@ Section Cong.
     - (* app_red_r: red1 (tRel 0) N2 under a vass — impossible *)
       depelim H; [cbn in e; noconf e | solve_discr].
   Qed.
+
+  Lemma red_le_abs_r Γ na A X Y : clos_refl (red1 Σ (Γ ,, vass na A)) X Y ->
+    red_le Σ Γ (tLambda na A X) (tLambda na A Y).
+  Proof. destruct 1; [apply r_step; now constructor|apply r_refl]. Qed.
+
+  (** *** abs_red_r — the crux row.  red1 in the λ body under [vass na A].
+      eta_red branch: red1_eta_body_inv returns the live reducts as data — both close
+      (s reduces: one red1 on u, one eta_red on v, upto refl; red_beta-created: zero
+      steps, utd_Lambda absorbs the forced domain mismatch).  abs_eta_l via
+      red1_eta_ctx_strong (domain η changes the vass); abs_eta_r via the local IH.
+      [hs_of] is the η-contractum's scoping, discharged by the shell from is_open_term
+      (on_free_vars xpredT is a REAL premise in 9.2: on_free_vars_xpredT is dead code). *)
+  Lemma c3_abs_red_r Γ na A M M' u (wfΣ : wf Σ)
+    (hctx : on_ctx_free_vars xpredT Γ)
+    (hs_of : forall s, M = tApp (lift0 1 s) (tRel 0) -> on_free_vars xpredT s) :
+    red1 Σ (Γ ,, vass na A) M M' ->
+    (forall u', eta1 M u' -> joinable Σ (Γ ,, vass na A) u' M') ->
+    eta1 (tLambda na A M) u -> joinable Σ Γ u (tLambda na A M').
+  Proof.
+    intros hr IHM he. depelim he.
+    - (* eta_red: invert the body's red1 into its live reducts *)
+      destruct (red1_eta_body_inv Γ na A t M' wfΣ hctx (hs_of t eq_refl) hr)
+        as [(s' & rs & ->) | (nb & B & b & -> & ->)].
+      + (* s reduces: one red1 on u, one eta_red on v, upto refl *)
+        exists s', s'. split; [apply r_step; exact rs|].
+        split; [apply rt_step; apply eta_red|apply upto_domain_refl].
+      + (* red_beta-created: zero steps, utd_Lambda absorbs the domain mismatch *)
+        exists (tLambda nb B b), (tLambda na A b). split; [apply r_refl|].
+        split; [apply rt_refl|]. constructor. apply upto_domain_refl.
+    - (* abs_eta_l: η on the domain A -> M'0 changes the vass *)
+      assert (hctx' : eta_ctx (Γ ,, vass na A) (Γ ,, vass na M'0)).
+      { apply All2_cons; [constructor; apply rt_step; eassumption | apply eta_ctx_refl]. }
+      destruct (red1_eta_ctx_strong Σ _ _ M M' hr hctx') as (w & hw & hw').
+      exists (tLambda na M'0 w), (tLambda na M'0 w). split; [|split].
+      + apply r_step. now apply abs_red_r.
+      + apply eta_Lambda; [apply rt_step; eassumption | exact hw'].
+      + apply upto_domain_refl.
+    - (* abs_eta_r: η in the body, via the local IH *)
+      destruct (IHM _ ltac:(eassumption)) as (w & w' & hw & hw' & hd).
+      exists (tLambda na A w), (tLambda na A w'). split; [|split].
+      + now apply red_le_abs_r.
+      + now apply eta_Lambda_r.
+      + now constructor.
+  Qed.
 End Cong.
