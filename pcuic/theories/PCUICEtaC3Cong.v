@@ -120,4 +120,66 @@ Section Cong.
     - now constructor.
   Qed.
 
+  (** *** abs_red_l : red1 in the λ domain.  All three η-inversions are clean
+      (the [eta_red] overlap contracts the whole redex; the domain reduction only
+      changes the ignored domain, so one η-step on [v] rejoins). *)
+  Lemma c3_abs_red_l Γ na M N1 N u :
+    red1 Σ Γ M N1 -> eta1 (tLambda na M N) u -> joinable Σ Γ u (tLambda na N1 N).
+  Proof.
+    intros hr he. depelim he.
+    - (* eta_red : N = tApp (lift0 1 u) (tRel 0), M is the ignored domain *)
+      eexists; eexists. split; [apply r_refl|split].
+      + apply rt_step. apply eta_red.
+      + apply upto_domain_refl.
+    - (* abs_eta_l : eta1 M M' *)
+      destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      exists (tLambda na w N), (tLambda na w' N). split; [|split].
+      + destruct hw; [apply r_step; now constructor|apply r_refl].
+      + now apply eta_Lambda_l.
+      + now constructor.
+    - (* abs_eta_r : eta1 N N' (parallel to the domain reduction) *)
+      eexists; eexists. split; [|split].
+      + apply r_step. apply abs_red_l. exact hr.
+      + apply rt_step. apply abs_eta_r. exact he.
+      + apply upto_domain_refl.
+  Qed.
+
+  (** *** letin congruences (def / ty / body).  Parallel η / IH as for app. *)
+  Lemma c3_letin_red_def Γ na b t b' r u :
+    red1 Σ Γ b r -> eta1 (tLetIn na b t b') u -> joinable Σ Γ u (tLetIn na r t b').
+  Proof.
+    intros hr he. depelim he.
+    - destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      exists (tLetIn na w t b'), (tLetIn na w' t b'). split; [|split].
+      + destruct hw; [apply r_step; now constructor|apply r_refl].
+      + now apply eta_LetIn_b.
+      + constructor; [exact hd|apply upto_domain_refl|apply upto_domain_refl].
+    - exists (tLetIn na r r0 b'), (tLetIn na r r0 b'). split; [|split].
+      + apply r_step. now constructor.
+      + apply rt_step. now apply letin_eta_ty.
+      + apply upto_domain_refl.
+    - exists (tLetIn na r t r0), (tLetIn na r t r0). split; [|split].
+      + apply r_step. now constructor.
+      + apply rt_step. now apply letin_eta_body.
+      + apply upto_domain_refl.
+  Qed.
+  Lemma c3_letin_red_ty Γ na b t b' r u :
+    red1 Σ Γ t r -> eta1 (tLetIn na b t b') u -> joinable Σ Γ u (tLetIn na b r b').
+  Proof.
+    intros hr he. depelim he.
+    - exists (tLetIn na r0 r b'), (tLetIn na r0 r b'). split; [|split].
+      + apply r_step. now constructor.
+      + apply rt_step. now apply letin_eta_def.
+      + apply upto_domain_refl.
+    - destruct (IH _ _ _ _ hr he) as (w & w' & hw & hw' & hd).
+      exists (tLetIn na b w b'), (tLetIn na b w' b'). split; [|split].
+      + destruct hw; [apply r_step; now constructor|apply r_refl].
+      + now apply eta_LetIn_t.
+      + constructor; [apply upto_domain_refl|exact hd|apply upto_domain_refl].
+    - exists (tLetIn na b r r0), (tLetIn na b r r0). split; [|split].
+      + apply r_step. now constructor.
+      + apply rt_step. now apply letin_eta_body.
+      + apply upto_domain_refl.
+  Qed.
+
 End Cong.
