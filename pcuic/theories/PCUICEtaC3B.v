@@ -867,3 +867,140 @@ Proof.
              {| array_level := lvl; array_type := ty'; array_default := def'; array_value := l |} l' h)).
   now apply All2_rt_OnOne2.
 Qed.
+
+(** mfix: change dtype, then dbody, each via one [eta1] field rule keeping the rest *)
+Lemma eta_mfix_ty_hd dn db ra tl x y :
+  clos_refl_trans eta1 x y ->
+  clos_refl_trans (OnOne2 (on_Trel_eq eta1 dtype (fun d => (dname d, dbody d, rarg d))))
+    (mkdef _ dn x db ra :: tl) (mkdef _ dn y db ra :: tl).
+Proof.
+  induction 1.
+  - apply rt_step. constructor. cbn. split; [assumption|reflexivity].
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma eta_mfix_body_hd dn dt ra tl x y :
+  clos_refl_trans eta1 x y ->
+  clos_refl_trans (OnOne2 (on_Trel_eq eta1 dbody (fun d => (dname d, dtype d, rarg d))))
+    (mkdef _ dn dt x ra :: tl) (mkdef _ dn dt y ra :: tl).
+Proof.
+  induction 1.
+  - apply rt_step. constructor. cbn. split; [assumption|reflexivity].
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma eta_mfix_ty mfix mfix' :
+  All2 (fun d d' => eta (dtype d) (dtype d') × dname d = dname d'
+                    × dbody d = dbody d' × rarg d = rarg d') mfix mfix' ->
+  clos_refl_trans (OnOne2 (on_Trel_eq eta1 dtype (fun d => (dname d, dbody d, rarg d))))
+    mfix mfix'.
+Proof.
+  induction 1 as [|x y l l' (Ht & Hn & Hb & Hr) Hl IH].
+  - apply rt_refl.
+  - destruct x as [dnx dtx dbx rax], y as [dny dty dby ray]; cbn in *.
+    subst dny dbx rax.
+    eapply rt_trans.
+    + apply (eta_mfix_ty_hd dnx dby ray l dtx dty Ht).
+    + now apply OnOne2_rt_tl.
+Qed.
+
+Lemma eta_mfix_body mfix mfix' :
+  All2 (fun d d' => eta (dbody d) (dbody d') × dname d = dname d'
+                    × dtype d = dtype d' × rarg d = rarg d') mfix mfix' ->
+  clos_refl_trans (OnOne2 (on_Trel_eq eta1 dbody (fun d => (dname d, dtype d, rarg d))))
+    mfix mfix'.
+Proof.
+  induction 1 as [|x y l l' (Hb & Hn & Ht & Hr) Hl IH].
+  - apply rt_refl.
+  - destruct x as [dnx dtx dbx rax], y as [dny dty dby ray]; cbn in *.
+    subst dny dtx rax.
+    eapply rt_trans.
+    + apply (eta_mfix_body_hd dnx dty ray l dbx dby Hb).
+    + now apply OnOne2_rt_tl.
+Qed.
+
+Lemma mfix_split mfix mfix' :
+  All2 (fun d d' => eta (dtype d) (dtype d') × eta (dbody d) (dbody d')
+                    × dname d = dname d' × rarg d = rarg d') mfix mfix' ->
+  ∑ mid,
+    All2 (fun d d' => eta (dtype d) (dtype d') × dname d = dname d'
+                      × dbody d = dbody d' × rarg d = rarg d') mfix mid ×
+    All2 (fun d d' => eta (dbody d) (dbody d') × dname d = dname d'
+                      × dtype d = dtype d' × rarg d = rarg d') mid mfix'.
+Proof.
+  induction 1 as [|x y l l' (Ht & Hb & Hn & Hr) Hl (mid & H1 & H2)].
+  - exists []. split; constructor.
+  - exists (mkdef _ (dname y) (dtype y) (dbody x) (rarg x) :: mid).
+    split; constructor; cbn; auto; repeat split; auto.
+Qed.
+
+Lemma eta_tFix mfix mfix' idx :
+  All2 (fun d d' => eta (dtype d) (dtype d') × eta (dbody d) (dbody d')
+                    × dname d = dname d' × rarg d = rarg d') mfix mfix' ->
+  eta (tFix mfix idx) (tFix mfix' idx).
+Proof.
+  intros H. destruct (mfix_split _ _ H) as (mid & H1 & H2).
+  eapply rt_trans.
+  - apply (clos_rt_map (OnOne2 (on_Trel_eq eta1 dtype (fun d => (dname d, dbody d, rarg d))))
+             eta1 (fun m => tFix m idx) (fun a b h => fix_eta_ty a b idx h)).
+    now apply eta_mfix_ty.
+  - apply (clos_rt_map (OnOne2 (on_Trel_eq eta1 dbody (fun d => (dname d, dtype d, rarg d))))
+             eta1 (fun m => tFix m idx) (fun a b h => fix_eta_body a b idx h)).
+    now apply eta_mfix_body.
+Qed.
+
+Lemma eta_tCoFix mfix mfix' idx :
+  All2 (fun d d' => eta (dtype d) (dtype d') × eta (dbody d) (dbody d')
+                    × dname d = dname d' × rarg d = rarg d') mfix mfix' ->
+  eta (tCoFix mfix idx) (tCoFix mfix' idx).
+Proof.
+  intros H. destruct (mfix_split _ _ H) as (mid & H1 & H2).
+  eapply rt_trans.
+  - apply (clos_rt_map (OnOne2 (on_Trel_eq eta1 dtype (fun d => (dname d, dbody d, rarg d))))
+             eta1 (fun m => tCoFix m idx) (fun a b h => cofix_eta_ty a b idx h)).
+    now apply eta_mfix_ty.
+  - apply (clos_rt_map (OnOne2 (on_Trel_eq eta1 dbody (fun d => (dname d, dtype d, rarg d))))
+             eta1 (fun m => tCoFix m idx) (fun a b h => cofix_eta_body a b idx h)).
+    now apply eta_mfix_body.
+Qed.
+
+(** Bridge half 2. *)
+Lemma peta_to_eta t u : peta t u -> eta t u.
+Proof.
+  induction 1 using peta_ind_all.
+  - (* eta rule: contract FIRST, then IH; no lift needed *)
+    eapply rt_trans; [apply rt_step; apply eta_red|assumption].
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply rt_refl.
+  - (* tEvar *) apply eta_tEvar. eapply All2_impl; [eassumption|]. now intros x y [_ ?].
+  - (* tLambda *) eapply rt_trans; [apply eta_absl; eassumption|apply eta_absr; eassumption].
+  - (* tApp *) eapply rt_trans; [apply eta_appl; eassumption|apply eta_appr; eassumption].
+  - (* tProd *) eapply rt_trans; [apply eta_prodl; eassumption|apply eta_prodr; eassumption].
+  - (* tLetIn *)
+    eapply rt_trans; [apply eta_letd; eassumption|].
+    eapply rt_trans; [apply eta_lett; eassumption|apply eta_letb; eassumption].
+  - (* tCase *)
+    apply eta_tCase; auto.
+    + eapply All2_impl; [eassumption|]. now intros x y [_ ?].
+    + eapply All2_impl; [eassumption|]. now intros x y [? [_ ?]].
+  - (* tProj *) apply eta_proj; assumption.
+  - (* tFix *) apply eta_tFix. eapply All2_impl; [eassumption|].
+    now intros x y [[_ ?] [[_ ?] [? ?]]].
+  - (* tCoFix *) apply eta_tCoFix. eapply All2_impl; [eassumption|].
+    now intros x y [[_ ?] [[_ ?] [? ?]]].
+  - (* tPrim *)
+    match goal with H : onPrims _ _ _ _ |- _ =>
+      destruct H as [i|fl|st|arr arr' Hlvl Hdef Hty Hval] end;
+      try apply rt_refl.
+    apply eta_tPrim_arr; cbn.
+    + now apply Universe.make'_inj.
+    + destruct Hdef as [_ ?]; assumption.
+    + destruct Hty as [_ ?]; assumption.
+    + eapply All2_impl; [exact Hval|]. now intros x y [_ ?].
+Qed.
