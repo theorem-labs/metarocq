@@ -708,4 +708,70 @@ Section Cong.
       + now apply utd_fix_of.
   Qed.
 
+  Lemma red_le_cofix_ty Γ idx m0 m1 :
+    clos_refl (OnOne2 (on_Trel_eq (red1 Σ Γ) dtype gfix)) m0 m1 ->
+    red_le Σ Γ (tCoFix m0 idx) (tCoFix m1 idx).
+  Proof. destruct 1; [apply r_step; now apply cofix_red_ty|apply r_refl]. Qed.
+  Lemma eta_cofix_ty_rt idx m0 m1 :
+    clos_refl_trans (OnOne2 (on_Trel_eq eta1 dtype gfix)) m0 m1 ->
+    clos_refl_trans eta1 (tCoFix m0 idx) (tCoFix m1 idx).
+  Proof.
+    induction 1; [apply rt_step; now apply cofix_eta_ty|apply rt_refl|eapply rt_trans; eauto].
+  Qed.
+
+  Lemma c3_cofix_red_ty Γ mfix0 mfix1 idx u :
+    OnOne2 (on_Trel_eq (fun x y => red1 Σ Γ x y
+              × (forall u', eta1 x u' -> joinable Σ Γ u' y)) dtype gfix) mfix0 mfix1 ->
+    eta1 (tCoFix mfix0 idx) u -> joinable Σ Γ u (tCoFix mfix1 idx).
+  Proof.
+    intros hr he. depelim he.
+    - (* cofix_eta_ty : same field *)
+      assert (hin : OnOne2 (fun a a' => on_Trel_eq (red1 Σ Γ) dtype gfix a a'
+                      × (forall b, on_Trel_eq eta1 dtype gfix a b ->
+                         ∑ w w', clos_refl (on_Trel_eq (red1 Σ Γ) dtype gfix) b w
+                                 × clos_refl_trans (on_Trel_eq eta1 dtype gfix) a' w'
+                                 × updef w w')) mfix0 mfix1).
+      { eapply OnOne2_impl; [exact hr|]. intros a a' [[rd IHd] geq]. split.
+        - split; [exact rd|exact geq].
+        - intros b [eb gbeq]. destruct (IHd _ eb) as (dw & dw' & hdw & hdw' & hu).
+          exists (set_dtype b dw), (set_dtype a' dw'). split; [|split].
+          + rewrite <- (set_dtype_id b) at 1. now apply clos_refl_set_dtype.
+          + rewrite <- (set_dtype_id a') at 1. now apply crt_set_dtype.
+          + split; [exact hu|split]; cbn.
+            * assert (dbody b = dbody a') by congruence. rewrite H. apply upto_domain_refl.
+            * congruence. }
+      destruct (onOne2_diamond (on_Trel_eq (red1 Σ Γ) dtype gfix)
+                 (on_Trel_eq eta1 dtype gfix) updef updef_refl mfix0 mfix1 _ hin
+                 ltac:(eassumption)) as (mw & mw' & hw & hw' & hu).
+      exists (tCoFix mw idx), (tCoFix mw' idx). split; [|split].
+      + now apply red_le_cofix_ty.
+      + now apply eta_cofix_ty_rt.
+      + now apply utd_cofix_of.
+    - (* cofix_eta_body : cross field *)
+      assert (hin : OnOne2 (fun a a' => on_Trel_eq (red1 Σ Γ) dtype gfix a a'
+                      × (forall b, on_Trel_eq eta1 dbody gfixb a b ->
+                         ∑ w w', clos_refl (on_Trel_eq (red1 Σ Γ) dtype gfix) b w
+                                 × clos_refl_trans (on_Trel_eq eta1 dbody gfixb) a' w'
+                                 × updef w w')) mfix0 mfix1).
+      { eapply OnOne2_impl; [exact hr|]. intros a a' [[rd IHd] geq]. split.
+        - split; [exact rd|exact geq].
+        - intros b [eb gbeq].
+          exists (set_dbody a' (dbody b)), (set_dbody a' (dbody b)). split; [|split].
+          + apply r_step. split; cbn.
+            * assert (dtype b = dtype a) by congruence. rewrite H. exact rd.
+            * congruence.
+          + apply rt_step. split; cbn.
+            * assert (dbody a' = dbody a) by congruence. rewrite H. exact eb.
+            * congruence.
+          + apply updef_refl. }
+      destruct (onOne2_diamond (on_Trel_eq (red1 Σ Γ) dtype gfix)
+                 (on_Trel_eq eta1 dbody gfixb) updef updef_refl mfix0 mfix1 _ hin
+                 ltac:(eassumption)) as (mw & mw' & hw & hw' & hu).
+      exists (tCoFix mw idx), (tCoFix mw' idx). split; [|split].
+      + now apply red_le_cofix_ty.
+      + clear -hw'. induction hw';
+          [apply rt_step; now apply cofix_eta_body|apply rt_refl|eapply rt_trans; eauto].
+      + now apply utd_cofix_of.
+  Qed.
+
 End Cong.
