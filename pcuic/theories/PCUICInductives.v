@@ -1988,6 +1988,12 @@ Lemma red1_destInd (Σ : global_env_ext) Γ t t' ind u :
   destInd (head t') = Some (ind, u).
 Proof.
   induction 1; simpl in *; try discriminate.
+  (* red_prim_op: the redex head is mkApps (tConst c u) (map term_of_lit ls),
+     so destInd (head t) = None contradicts the premise; simpl cannot see
+     through mkApps over the variable list, so rewrite head_mkApps first.  The
+     premise is still the goal's antecedent after [induction 1], so intro it. *)
+  all: try (match goal with |- destInd (head (mkApps (tConst _ _) _)) = Some _ -> _ =>
+             let H := fresh in intros H; rewrite head_mkApps in H; cbn in H; discriminate H end).
   unfold head.
   remember (mkApps (tFix mfix idx) args) eqn:decapp.
   symmetry in decapp. pose proof (mkApps_Fix_spec _ _ _ _ decapp).
