@@ -746,6 +746,27 @@ Module Environment (T : Term).
     Σ.(retroknowledge) = Σ'.(retroknowledge) -> extends_prim_fresh Σ Σ'.
   Proof. intros e c op h. left. now rewrite e. Qed.
 
+  (** An extension may not CHANGE the operation registered on a constant the
+      smaller environment already declares: the first disjunct names the same
+      [op] on both sides, so at [c] and the new [op2] it asks for
+      [prim_op_of Σ c = Some op2], which is false when [Σ] maps [c] to [op1],
+      and the second disjunct is false because [c] is declared.
+
+      The [lookup_env Σ c <> None] premise is REQUIRED (soundness review,
+      `lanes/prim-ops/impl/extends-sound.md`): a well-formed [Σ] may carry a
+      table entry for a constant it does not declare, because the
+      well-formedness conjunct of design §4.2(b) is per declaration.  For an
+      UNdeclared constant the same conclusion comes instead from the third
+      field, [Retroknowledge.extends] (pointwise on the table, :113-115) with
+      the functionality of [prim_op_of] (:65-69) — not from this lemma. *)
+  Lemma extends_prim_no_change Σ Σ' c op1 op2 :
+    extends_prim_fresh Σ Σ' ->
+    lookup_env Σ c <> None ->
+    Retroknowledge.prim_op_of Σ.(retroknowledge) c = Some op1 ->
+    Retroknowledge.prim_op_of Σ'.(retroknowledge) c = Some op2 ->
+    op1 = op2.
+  Proof. intros h hdecl h1 h2. case: (h c op2 h2) => e; congruence. Qed.
+
   Existing Class extends.
   Existing Class extends_decls.
   Existing Class extends_strictly_on_decls.
@@ -973,6 +994,46 @@ Module Environment (T : Term).
       rewrite /lookup_envs in e. rewrite e.
       destruct decls as [|d decls]; cbn; [easy|intros [=]].
   Qed.
+
+  (** [extends_prim_fresh] is decidable: it quantifies over all kernames, but
+      only those in [Σ']'s operation table can satisfy its premise, so the
+      finite table decides it.  It lives here, beside the conjunct itself,
+      because three places need it: [EnvironmentReflect]'s [extendsb], and the
+      two quotation copies of [extends_alt]
+      ([quotation/theories/To{PCUIC,Template}/Common/Environment.v]), which
+      quote the field with [ground_quotable_of_dec]. *)
+  Definition extends_prim_freshb (Σ Σ' : global_env) : bool
+    := forallb (fun '(c, _) =>
+         (Retroknowledge.prim_op_of Σ.(retroknowledge) c
+            == Retroknowledge.prim_op_of Σ'.(retroknowledge) c)
+         || match lookup_env Σ c with None => true | Some _ => false end)
+         Σ'.(retroknowledge).(Retroknowledge.retro_ops).
+
+  Lemma extends_prim_freshP Σ Σ' :
+    reflect (extends_prim_fresh Σ Σ') (extends_prim_freshb Σ Σ').
+  Proof.
+    destruct (extends_prim_freshb Σ Σ') eqn:hb; constructor.
+    - intros c op h.
+      have hin := Retroknowledge.lookup_op_spec _ _ _ h.
+      have H := proj1 (forallb_forall _ _) hb _ hin. cbn beta in H.
+      destruct (orb_true_elim _ _ H) as [He|Hl].
+      + apply eqb_eq in He. left. now rewrite He.
+      + right. destruct (lookup_env Σ c) eqn:hl; [discriminate|reflexivity].
+    - intros hp.
+      have ht : extends_prim_freshb Σ Σ' = true.
+      { rewrite /extends_prim_freshb. apply (proj2 (forallb_forall _ _)).
+        intros [c op0] hin.
+        destruct (Retroknowledge.lookup_op_in _ _ _ hin) as [op1 h1].
+        change (Retroknowledge.prim_op_of (retroknowledge Σ') c = Some op1) in h1.
+        apply orb_true_intro. destruct (hp c op1 h1) as [h2|h2].
+        + left. rewrite h1 h2. apply eqb_refl.
+        + right. now rewrite h2. }
+      rewrite ht in hb. discriminate.
+  Qed.
+
+  Definition extends_prim_fresh_dec Σ Σ'
+    : {extends_prim_fresh Σ Σ'} + {~ extends_prim_fresh Σ Σ'}.
+  Proof. destruct (extends_prim_freshP Σ Σ'); [left|right]; assumption. Defined.
 
   Local Ltac extends_trans_t :=
     intros [?] [?] [?] [?] [?]; red; cbn in *; split;
