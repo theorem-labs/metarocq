@@ -19,7 +19,7 @@
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICCases
-     PCUICLiftSubst PCUICEquality PCUICReduction PCUICEtaDefs.
+     PCUICInduction PCUICLiftSubst PCUICEquality PCUICReduction PCUICEtaDefs.
 From Equations.Type Require Import Relation Relation_Properties.
 From Equations Require Import Equations.
 
@@ -109,6 +109,29 @@ Proof.
   - intro e. destruct (IH k a e) as [a' [? ?]]. exists a'. now split.
 Qed.
 
+(** CH2 (U1): [upto_domain] is reflexive. PROVED here by term induction
+    (= EtaL2's Reflexive upto_domain, frac/eta-l2 @ e49648c4). *)
+Lemma upto_domain_refl t : upto_domain t t.
+Proof.
+  induction t using term_forall_list_ind; cbn; try solve [constructor; auto].
+  - constructor. now eapply All_All2.
+  - destruct X as [Hpars [Hctx Hret]]. constructor.
+    + eapply All_All2; eauto.
+    + reflexivity.
+    + reflexivity.
+    + exact Hret.
+    + exact IHt.
+    + eapply All_All2; eauto. intros br [_ ?]; split; [reflexivity|assumption].
+  - constructor. eapply All_All2; eauto. intros d [Ht Hb]; repeat split; (assumption || reflexivity).
+  - constructor. eapply All_All2; eauto. intros d [Ht Hb]; repeat split; (assumption || reflexivity).
+  - constructor. destruct p as [? []]; cbn in X; try solve [constructor].
+    destruct X as [Htype [Hdef Hval]]. constructor; cbn.
+    + reflexivity.
+    + exact Hdef.
+    + exact Htype.
+    + eapply All_All2; eauto.
+Qed.
+
 (* ======================================================================= *)
 Section C3Unlocking.
   Context {cf : checker_flags}.
@@ -116,8 +139,7 @@ Section C3Unlocking.
 
   (* ---- substitution-level U-row Context hypotheses (U1/U4; L2/L7 own) ---- *)
 
-  (** CH2 (U1): [upto_domain] is reflexive. PROVED 2020. *)
-  Context (upto_domain_refl : forall t, upto_domain t t).
+  (* CH2 upto_domain_refl: proved globally above (unconditional). *)
 
   (** CH3 (U4): η keeps a constructor-headed term constructor-headed. *)
   Context (eta1_isConstruct_app :
