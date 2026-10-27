@@ -4141,6 +4141,71 @@ Proof.
   trivial.
 Qed.
 
+(** ** The §4.2 environment condition transports
+
+  [trans_global_env] keeps the retroknowledge, so the operation table, the four
+  registered type constants and the boolean inductive are literally the same on
+  both sides: §4.2(a)'s conjunct, [Retroknowledge.wf_retro], is the *same*
+  proposition after the translation.  §4.2(b) is per declaration, and every
+  clause of it is structural: [prim_op_type]'s two instances are the same fold
+  over the same option, built only from [tConst kn []], [tInd i []] and [tImpl],
+  on which [trans] is the identity; [primitive_invariants] asks for
+  [cst_type = tSort Set], [cst_body = None] and [Monomorphic_ctx], all preserved
+  by [trans_constant_body]; and [on_prim_bool_decl] reads only names, arities and
+  empty contexts off the block, which [trans_minductive_body] preserves. *)
+
+Section TransPrimDecl.
+  Context {cf : checker_flags}.
+  Context (Σ : Ast.Env.global_env).
+  Notation Σ' := (trans_global_env Σ).
+
+  Lemma trans_tImpl a b :
+    trans Σ' (Ast.Env.tImpl a b) = tImpl (trans Σ' a) (trans Σ' b).
+  Proof using Type. cbn. now rewrite trans_lift. Qed.
+
+  Lemma trans_prim_tag_type r t :
+    option_map (trans Σ') (ST.TemplatePrimOpType.prim_tag_type r t)
+      = PCUICPrimOpType.prim_tag_type r t.
+  Proof using Type.
+    rewrite /ST.TemplatePrimOpType.prim_tag_type /PCUICPrimOpType.prim_tag_type.
+    now destruct (EnvironmentTyping.retro_type_constant r t).
+  Qed.
+
+  Lemma trans_prim_shape_type r s :
+    option_map (trans Σ') (ST.TemplatePrimOpType.prim_shape_type r s)
+      = PCUICPrimOpType.prim_shape_type r s.
+  Proof using Type.
+    destruct s; [apply trans_prim_tag_type|].
+    cbn. now destruct (Retroknowledge.retro_bool r).
+  Qed.
+
+  Lemma trans_prim_arg_types r ts res :
+    option_map (trans Σ') (ST.TemplatePrimOpType.prim_arg_types r ts res)
+      = PCUICPrimOpType.prim_arg_types r ts (trans Σ' res).
+  Proof using Type.
+    induction ts as [|t ts ih] in res |- *; [reflexivity|].
+    cbn [ST.TemplatePrimOpType.prim_arg_types PCUICPrimOpType.prim_arg_types].
+    pose proof (trans_prim_tag_type r t) as ht.
+    destruct (ST.TemplatePrimOpType.prim_tag_type r t) as [a|] eqn:ha;
+      cbn in ht; rewrite -ht //.
+    destruct (ST.TemplatePrimOpType.prim_arg_types r ts res) as [b|] eqn:hb;
+      cbn; rewrite -ih hb //=.
+    now rewrite trans_tImpl.
+  Qed.
+
+  Lemma trans_prim_op_type r op T :
+    ST.TemplatePrimOpType.prim_op_type r op = Some T ->
+    PCUICPrimOpType.prim_op_type r op = Some (trans Σ' T).
+  Proof using Type.
+    rewrite /ST.TemplatePrimOpType.prim_op_type /PCUICPrimOpType.prim_op_type.
+    pose proof (trans_prim_shape_type r (po_shape (info op))) as hs.
+    destruct (ST.TemplatePrimOpType.prim_shape_type r (po_shape (info op))) as [res|] eqn:hr;
+      cbn in hs; rewrite -hs //.
+    intros h. pose proof (trans_prim_arg_types r (po_args (info op)) res) as ha.
+    rewrite h in ha. exact ha.
+  Qed.
+End TransPrimDecl.
+
 Lemma trans_on_global_env `{checker_flags} {t2pgt : TemplateToPCUICGuardTrans} Σ :
   (forall (Σ : Ast.Env.global_env_ext) Γ j, Typing.wf Σ ->
     Typing.lift_typing Typing.typing Σ Γ j ->
