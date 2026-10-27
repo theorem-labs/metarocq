@@ -509,3 +509,94 @@ Proof.
     + apply All2_map. eapply All2_impl; [exact Hval|].
       intros x y [_ Hk]. apply Hk; assumption.
 Qed.
+
+(** ** [peta] on application spines *)
+
+Lemma peta_mkApps f f' args args' :
+  peta f f' -> All2 peta args args' -> peta (mkApps f args) (mkApps f' args').
+Proof.
+  intros Hf Ha. induction Ha in f, f', Hf |- *; cbn; [assumption|].
+  apply IHHa. now apply peta_App.
+Qed.
+
+(** Only [peta_App] produces [peta (tApp _ _) _] (the η-rule's left side is a
+    [tLambda]), so a [peta] step on a spine distributes over head and arguments. *)
+Lemma peta_mkApps_inv f args u :
+  peta (mkApps f args) u ->
+  ∑ f' args', (u = mkApps f' args') × peta f f' × All2 peta args args'.
+Proof.
+  induction args in f, u |- *; cbn; intros H.
+  - exists u, []. repeat split; auto.
+  - destruct (IHargs _ _ H) as (g & args'' & -> & Hg & Ha).
+    depelim Hg.
+    exists t', (u' :: args''). repeat split; cbn; auto.
+Qed.
+
+(** General (list) substitution. *)
+Lemma peta_subst M M' (H : peta M M') :
+  forall ss ss' k, All2 peta ss ss' -> peta (subst ss k M) (subst ss' k M').
+Proof.
+  induction H using peta_ind_all; intros ss ss' k HS; cbn;
+    try solve [econstructor; eauto].
+  - (* eta *)
+    rewrite !commut_lift_subst.
+    apply peta_eta. apply IHpeta; assumption.
+  - (* tRel *)
+    destruct (le_lt_dec k n) as [Hle|Hlt].
+    + assert (Hb : Nat.leb k n = true) by (apply Nat.leb_le; exact Hle).
+      rewrite Hb.
+      destruct (nth_error ss (n - k)) as [b|] eqn:Hs.
+      * destruct (All2_nth_error_Some _ _ HS Hs) as (b' & Hs' & Hbb).
+        rewrite Hs'. now apply peta_lift.
+      * rewrite (All2_nth_error_None _ HS Hs).
+        rewrite (All2_length HS). apply peta_Rel.
+    + assert (Hb : Nat.leb k n = false) by (apply Nat.leb_gt; exact Hlt).
+      rewrite Hb. apply peta_Rel.
+  - (* tEvar *)
+    constructor. apply All2_map.
+    eapply All2_impl; [eassumption|]. intros x y [_ Hk]. apply Hk; assumption.
+  - (* tCase *)
+    apply peta_Case; cbn.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [_ Hk]. apply Hk; assumption.
+    + assumption.
+    + assumption.
+    + match goal with He : pcontext _ = pcontext _ |- _ => rewrite He end.
+      eauto.
+    + eauto.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [Hc [_ Hk]]. cbn. split; [exact Hc|].
+      rewrite Hc. apply Hk; assumption.
+  - (* tFix *)
+    constructor.
+    match goal with
+    | |- All2 _ (map _ ?m) (map _ ?m') =>
+        match goal with He : All2 _ m m' |- _ => pose proof (All2_length He) as Hlen end
+    end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht; assumption|].
+    split; [rewrite Hlen; apply Hb; assumption|]. split; [exact Hn|exact Hr].
+  - (* tCoFix *)
+    constructor.
+    match goal with
+    | |- All2 _ (map _ ?m) (map _ ?m') =>
+        match goal with He : All2 _ m m' |- _ => pose proof (All2_length He) as Hlen end
+    end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht; assumption|].
+    split; [rewrite Hlen; apply Hb; assumption|]. split; [exact Hn|exact Hr].
+  - (* tPrim *)
+    constructor.
+    match goal with
+    | He : onPrims _ _ _ _ |- _ =>
+        destruct He as [i|fl|st|arr arr' Hlvl Hdef Hty Hval]
+    end; cbn; try solve [constructor].
+    constructor; cbn.
+    + exact Hlvl.
+    + destruct Hdef as [_ Hd]. apply Hd; assumption.
+    + destruct Hty as [_ Ht]. apply Ht; assumption.
+    + apply All2_map. eapply All2_impl; [exact Hval|].
+      intros x y [_ Hk]. apply Hk; assumption.
+Qed.
