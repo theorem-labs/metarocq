@@ -26,6 +26,7 @@ PCUICPretty
 PCUICProgram
 TemplateToPCUIC
 PCUICUnivSubst
+PCUICOnFreeVars
 
 PCUICErrors
 PCUICEqualityDec

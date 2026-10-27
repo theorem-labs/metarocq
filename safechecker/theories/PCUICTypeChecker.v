@@ -2165,6 +2165,38 @@ Section Typecheck.
     now exists t.
   Qed.
 
+  (** A case on a coinductive type is allowed only when its return type does not
+      mention the scrutinee, variable 0 of the predicate context. *)
+  Definition check_nondep_cofinite (mdecl : mutual_inductive_body) (p : predicate term)
+    : typing_result_comp
+        (is_true (isCoFinite (ind_finite mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) :=
+    if isCoFinite (ind_finite mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn)
+      as b return typing_result_comp (is_true b)
+    then Checked_comp eq_refl
+    else TypeError_comp (Msg "Dependent case on coinductive") diff_false_true.
+
+  (** On a coinductive [stream], [match s return s = s with ... end] is refused and
+      a return type that mentions only an outer variable is accepted. *)
+  Lemma check_nondep_cofinite_stream :
+    let stream := mkInd (MPfile [], "stream") 0 in
+    let eq_ind := mkInd (MPfile [], "eq") 0 in
+    let mdecl := {| ind_finite := CoFinite; ind_npars := 0; ind_params := [];
+                    ind_bodies := []; ind_universes := Monomorphic_ctx; ind_variance := None |} in
+    let pred (ret : term) := {| pparams := []; puinst := [];
+                       pcontext := [vass (mkBindAnn nAnon Relevant) (tInd stream [])];
+                       preturn := ret |} in
+    match check_nondep_cofinite mdecl (pred (mkApps (tInd eq_ind []) [tInd stream []; tRel 0; tRel 0])) with
+    | TypeError_comp e _ => e = Msg "Dependent case on coinductive"
+    | Checked_comp _ => False
+    end /\
+    match check_nondep_cofinite mdecl (pred (tRel 1)) with
+    | TypeError_comp _ _ => False
+    | Checked_comp _ => True
+    end.
+  Proof using Type.
+    vm_compute. split; [reflexivity | exact I].
+  Qed.
+
   Equations infer (Γ : context) (HΓ : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ wf_local Σ Γ ∥) (t : term)
   : typing_result_comp ({ A : term & forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ Σ ;;; Γ |- t ▹ A ∥ }) by struct t :=
 
@@ -2242,8 +2274,7 @@ Section Typecheck.
     d <- lookup_ind_decl ci.(ci_ind) ;;
     (*let (mdecl;(idecl;isdecl)):= d in*)
     let mdecl := d.π1 in let idecl := d.π2.π1 in let isdecl := d.π2.π2 in
-    check_coind <- check_eq_true (negb (isCoFinite (ind_finite mdecl)))
-          (Msg "Case on coinductives disallowed") ;;
+    check_coind <- check_nondep_cofinite mdecl p ;;
     check_eq_true (eqb (ind_npars mdecl) ci.(ci_npar))
                   (Msg "not the right number of parameters") ;;
     (* let '(params, indices) := chop ci.(ci_npar) args in *)
@@ -2819,7 +2850,6 @@ Section Typecheck.
     - eapply ctx_inst_typing_bd ; eauto.
       eapply ctx_inst_smash.
       now rewrite subst_instance_smash /= in wt_params.
-      - now eapply negbTE.
     - erewrite <- compare_global_instance_correct in i1; eauto.
       1: { apply/wf_instanceP.
         rewrite -wf_universeb_instance_forall.
@@ -3102,7 +3132,7 @@ Section Typecheck.
     eapply declared_inductive_inj in isdecl as []. 2: exact H3.
     subst.
     apply absurd.
-    now apply/negPf.
+    assumption.
   Qed.
 
   Next Obligation.

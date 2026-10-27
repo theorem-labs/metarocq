@@ -2266,6 +2266,90 @@ Proof.
   f_equal; lia.
 Qed.
 
+From MetaRocq.PCUIC Require Import PCUICOnFreeVars.
+
+(** A case on a coinductive states that its return type does not mention the scrutinee with
+    [on_free_vars] in PCUIC and with [noccur_between] in Template: [trans] carries the first to
+    the second. *)
+Lemma shiftnP_nocc_betweenp {P : nat -> bool} {k n} m :
+  (forall i, P i -> nocc_betweenp k n i) ->
+  forall i, shiftnP m P i -> nocc_betweenp (m + k) n i.
+Proof.
+  intros hP i. rewrite /shiftnP.
+  destruct (Nat.ltb_spec i m) as [lt|ge]; cbn.
+  - intros _. rewrite /nocc_betweenp. apply/orP; left. apply Nat.ltb_lt. lia.
+  - move/hP. rewrite /nocc_betweenp.
+    move/orP => [/Nat.ltb_lt h|/Nat.leb_le h]; apply/orP.
+    + left. apply Nat.ltb_lt. lia.
+    + right. apply Nat.leb_le. lia.
+Qed.
+
+Lemma noccur_between_mkApp k n t u :
+  T.noccur_between k n t -> T.noccur_between k n u -> T.noccur_between k n (T.mkApp t u).
+Proof.
+  have e : forall f l, T.noccur_between k n (T.tApp f l) =
+    T.noccur_between k n f && forallb (T.noccur_between k n) l by reflexivity.
+  intros ht hu. destruct t; cbn [T.mkApp]; rewrite e.
+  all: try solve [rewrite ht /= hu //].
+  rewrite e in ht. move/andP: ht => [-> hargs]. rewrite forallb_app hargs /= hu //.
+Qed.
+
+Lemma trans_noccur_between n P t :
+  on_free_vars P t ->
+  forall k, (forall i, P i -> nocc_betweenp k n i) ->
+  T.noccur_between k n (trans t).
+Proof.
+  revert P t.
+  apply (term_on_free_vars_ind (fun P t => forall k, (forall i, P i -> nocc_betweenp k n i) ->
+    T.noccur_between k n (trans t))).
+  - intros P i hi k hP. exact (hP i hi).
+  - intros; reflexivity.
+  - intros P id l _ IH k hP; cbn.
+    rewrite forallb_map. eapply All_forallb, All_impl; [exact IH|]. cbv beta.
+    intros t ht; exact (ht k hP).
+  - intros; reflexivity.
+  - intros P na _ dom codom _ IHd _ IHc k hP; cbn.
+    apply/andP; split; [exact (IHd k hP)|exact (IHc (S k) (shiftnP_nocc_betweenp 1 hP))].
+  - intros P na ty body _ IHt _ IHb k hP; cbn.
+    apply/andP; split; [exact (IHt k hP)|exact (IHb (S k) (shiftnP_nocc_betweenp 1 hP))].
+  - intros P na def ty body _ IHd _ IHt _ IHb k hP; cbn.
+    apply/andP; split; [apply/andP; split|];
+      [exact (IHd k hP)|exact (IHt k hP)|exact (IHb (S k) (shiftnP_nocc_betweenp 1 hP))].
+  - intros P t u _ IHt _ IHu k hP; cbn.
+    exact (noccur_between_mkApp _ _ _ _ (IHt k hP) (IHu k hP)).
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros; reflexivity.
+  - intros P ci pred discr brs _ IHpars _ _ _ IHret _ IHc IHbrs k hP; cbn.
+    apply/andP; split; [apply/andP; split|].
+    + apply/andP; split.
+      * rewrite forallb_map. eapply All_forallb, All_impl; [exact IHpars|]. cbv beta.
+        intros t ht; exact (ht k hP).
+      * len.
+        exact (IHret _ (shiftnP_nocc_betweenp _ hP)).
+    + exact (IHc k hP).
+    + rewrite !forallb_map. eapply All_forallb, All_impl; [exact IHbrs|]. cbv beta.
+      intros br [_ _ _ IHb]. cbn. len.
+      exact (IHb _ (shiftnP_nocc_betweenp _ hP)).
+  - intros P s t _ IHt k hP. exact (IHt k hP).
+  - intros P m i _ IH k hP; cbn.
+    rewrite length_map forallb_map. eapply All_forallb, All_impl; [exact IH|]. cbv beta.
+    intros d [ht hb]. unfold test_def; cbn. apply/andP; split; [exact (ht k hP)|].
+    rewrite -(fix_context_length m). exact (hb _ (shiftnP_nocc_betweenp _ hP)).
+  - intros P m i _ IH k hP; cbn.
+    rewrite length_map forallb_map. eapply All_forallb, All_impl; [exact IH|]. cbv beta.
+    intros d [ht hb]. unfold test_def; cbn. apply/andP; split; [exact (ht k hP)|].
+    rewrite -(fix_context_length m). exact (hb _ (shiftnP_nocc_betweenp _ hP)).
+  - intros P pr _ IH k hP. destruct pr as [? []]; cbn in IH |- *; try reflexivity.
+    destruct IH as [ht [hd hv]].
+    apply/andP; split; [apply/andP; split|]; [|exact (hd k hP)|exact (ht k hP)].
+    rewrite forallb_map. eapply All_forallb, All_impl; [exact hv|]. cbv beta.
+    intros t h; exact (h k hP).
+Qed.
+
+Lemma strengthenP01_nocc_betweenp i : strengthenP 0 1 xpredT i -> nocc_betweenp 0 1 i.
+Proof. destruct i as [|i]; intros h; [exact h|reflexivity]. Qed.
+
 Theorem pcuic_to_template {cf} (Σ : SE.global_env_ext) Γ t T :
   ST.wf Σ ->
   ST.typing Σ Γ t T ->
@@ -2379,6 +2463,9 @@ Proof.
       eassumption.
     + assumption.
     + now rewrite trans_mkApps map_app in X7.
+    + match goal with h : implb (ST.isCoFinite _) _ = true |- _ => move: h end.
+      cbn. case: (SE.ind_finite mdecl) => //= hocc.
+      exact (trans_noccur_between 1 _ _ hocc 0 strengthenP01_nocc_betweenp).
     + rewrite (trans_case_predicate_context Γ); tea.
       eapply All2i_map. eapply All2i_map_right.
       eapply Forall2_All2 in H5.
