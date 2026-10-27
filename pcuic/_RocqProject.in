@@ -130,4 +130,5 @@ theories/PCUICCasesHelper.v
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
 theories/PCUICTypingEta.v
+theories/PCUICEtaReduction.v
 # theories/All.v
