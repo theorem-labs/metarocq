@@ -283,3 +283,117 @@ Proof.
     + constructor.
     + constructor; [split; [assumption|apply aux; assumption]|apply auxl; assumption].
 Qed.
+
+(** ** [eta1] refines to a single parallel step *)
+
+Lemma OnOne2_All2_refl {A} (R S : A -> A -> Type) l l' :
+  OnOne2 R l l' -> (forall x, S x x) -> (forall x y, R x y -> S x y) ->
+  All2 S l l'.
+Proof.
+  intros H Hrefl Himpl. induction H.
+  - constructor; [now apply Himpl|].
+    clear -Hrefl. induction tl; constructor; auto.
+  - constructor; [apply Hrefl|assumption].
+Qed.
+
+Lemma eta1_peta t u : eta1 t u -> peta t u.
+Proof.
+  induction 1 using eta1_ind_all.
+  - (* eta_red *) apply peta_eta, peta_refl.
+  - (* abs_eta_l : domain *) apply peta_Lambda; [assumption|apply peta_refl].
+  - (* abs_eta_r : body *) apply peta_Lambda; [apply peta_refl|assumption].
+  - (* letin def *) apply peta_LetIn; [assumption|apply peta_refl|apply peta_refl].
+  - (* letin ty *) apply peta_LetIn; [apply peta_refl|assumption|apply peta_refl].
+  - (* letin body *) apply peta_LetIn; [apply peta_refl|apply peta_refl|assumption].
+  - (* case param *)
+    apply peta_Case; try reflexivity; try apply peta_refl.
+    + eapply OnOne2_All2_refl;
+        [eassumption | intros ?; apply peta_refl | intros x y [? ?]; assumption].
+    + apply All2_same. intros; split; [reflexivity|apply peta_refl].
+  - (* case return *)
+    apply peta_Case; try reflexivity; try apply peta_refl.
+    + apply All2_same. intros; apply peta_refl.
+    + assumption.
+    + apply All2_same. intros; split; [reflexivity|apply peta_refl].
+  - (* case discr *)
+    apply peta_Case; try reflexivity; try apply peta_refl.
+    + apply All2_same. intros; apply peta_refl.
+    + assumption.
+    + apply All2_same. intros; split; [reflexivity|apply peta_refl].
+  - (* case brs *)
+    apply peta_Case; try reflexivity; try apply peta_refl.
+    + apply All2_same. intros; apply peta_refl.
+    + eapply OnOne2_All2_refl;
+        [ eassumption
+        | intros ?; split; [reflexivity|apply peta_refl]
+        | intros x y [[? Hp] Hc]; split; [exact Hc|exact Hp] ].
+  - (* proj *) apply peta_Proj; assumption.
+  - (* app l *) apply peta_App; [assumption|apply peta_refl].
+  - (* app r *) apply peta_App; [apply peta_refl|assumption].
+  - (* prod l *) apply peta_Prod; [assumption|apply peta_refl].
+  - (* prod r *) apply peta_Prod; [apply peta_refl|assumption].
+  - (* evar *)
+    apply peta_Evar.
+    eapply OnOne2_All2_refl;
+      [eassumption | intros ?; apply peta_refl | intros x y [? ?]; assumption].
+  - (* fix ty *)
+    apply peta_Fix.
+    eapply OnOne2_All2_refl;
+      [ eassumption
+      | intros ?; repeat split; try apply peta_refl; reflexivity
+      | ].
+    intros x y [[He Hp] Heq].
+    assert (Hdn : dname x = dname y) by (now inversion Heq).
+    assert (Hdb : dbody x = dbody y) by (now inversion Heq).
+    assert (Hrr : rarg x = rarg y) by (now inversion Heq).
+    split; [exact Hp|split; [rewrite Hdb; apply peta_refl|split; [exact Hdn|exact Hrr]]].
+  - (* fix body *)
+    apply peta_Fix.
+    eapply OnOne2_All2_refl;
+      [ eassumption
+      | intros ?; repeat split; try apply peta_refl; reflexivity
+      | ].
+    intros x y [[He Hp] Heq].
+    assert (Hdn : dname x = dname y) by (now inversion Heq).
+    assert (Hdt : dtype x = dtype y) by (now inversion Heq).
+    assert (Hrr : rarg x = rarg y) by (now inversion Heq).
+    split; [rewrite Hdt; apply peta_refl|split; [exact Hp|split; [exact Hdn|exact Hrr]]].
+  - (* cofix ty *)
+    apply peta_CoFix.
+    eapply OnOne2_All2_refl;
+      [ eassumption
+      | intros ?; repeat split; try apply peta_refl; reflexivity
+      | ].
+    intros x y [[He Hp] Heq].
+    assert (Hdn : dname x = dname y) by (now inversion Heq).
+    assert (Hdb : dbody x = dbody y) by (now inversion Heq).
+    assert (Hrr : rarg x = rarg y) by (now inversion Heq).
+    split; [exact Hp|split; [rewrite Hdb; apply peta_refl|split; [exact Hdn|exact Hrr]]].
+  - (* cofix body *)
+    apply peta_CoFix.
+    eapply OnOne2_All2_refl;
+      [ eassumption
+      | intros ?; repeat split; try apply peta_refl; reflexivity
+      | ].
+    intros x y [[He Hp] Heq].
+    assert (Hdn : dname x = dname y) by (now inversion Heq).
+    assert (Hdt : dtype x = dtype y) by (now inversion Heq).
+    assert (Hrr : rarg x = rarg y) by (now inversion Heq).
+    split; [rewrite Hdt; apply peta_refl|split; [exact Hp|split; [exact Hdn|exact Hrr]]].
+  - (* array val *)
+    apply peta_Prim. constructor; try reflexivity; try apply peta_refl.
+    eapply OnOne2_All2_refl;
+      [eassumption | intros ?; apply peta_refl | intros x y [? ?]; assumption].
+  - (* array def *)
+    apply peta_Prim. constructor.
+    + reflexivity.
+    + assumption.
+    + apply peta_refl.
+    + apply All2_same; intros; apply peta_refl.
+  - (* array type *)
+    apply peta_Prim. constructor.
+    + reflexivity.
+    + apply peta_refl.
+    + assumption.
+    + apply All2_same; intros; apply peta_refl.
+Qed.
