@@ -151,6 +151,61 @@ re-played in `Γ ,,, fix_context mfix3`, licensed by `upto_types_fix_context` (`
 `:1450-1457`) and `red1_upto_types` (`:1407`). Still **one** `red1`: `upto_types` changes only
 assumption *types*, which `red1` does not read. The β-reduct pays **one** `fix_eta_ty`.
 
+### 2.2 Classification (taxonomy folded in from `ArityLane.EtaC3Audit`'s audit)
+
+`ArityLane.EtaC3Audit` ran the same audit independently, over the same 27 bullets, and reached the
+same verdict ("no case refutes C3 as stated; the η-reduct leg uses at most one `red1` and no
+`eta1`, the β-reduct leg uses only `eta1`"). Its table carried a class column that this one did
+not; the classes are folded in here, with every case assigned. **Both files were written to
+`lanes/eta/c3-audit.md`; this one is the single authoritative file from 2026-10-27 onwards** — see
+§5 for what happened to the other copy and what is known to be lost.
+
+- **vacuous** (the η step cannot exist, so the case closes by inversion): #3 `red_rel` (`:1490`),
+  #8 `red_delta` (`:1672`), plus three impossible sub-cases — `eta1 (tConstruct …)` inside #4
+  (`:1494`) and #9 (`:1675`), and `red1 (tRel 0) _` inside #11 (`:1720-1722`). **5 of ~70.**
+- **overlap** (both steps act at the *same* node, so the square is not a congruence): #1 ×
+  `eta_red` (`:1476-1478`), #10 × `eta_red` (`:1680`), and all four sub-cases of #11 × `eta_red`
+  (`:1686-1725`). **6.**
+- **disjoint** (the two steps are at independent positions; the join does both, one step each
+  way): #1/`abs_eta_l`,`abs_eta_r`,`app_eta_r`; #2 all three; #4 all three; #5 all three; #6 all
+  four; #7 both; #9; #10/`abs_eta_r`; #11/`abs_eta_l`; the non-IH halves of #12-#17 and #19-#27.
+  **≈45.**
+- **→IH** (same subterm, both steps below the same congruence; the induction hypothesis is applied
+  and lifted): #10/`abs_eta_l`, #11/`abs_eta_r`, #12/`letin_eta_def`, #13, #14/`letin_eta_body`,
+  #15, #16, #17 same-branch and list-recursion, #18, #19-#23, #24-#27 same-element. **≈18.**
+- **unlocking** (the η step *creates* a β/ι redex): exactly **one** sub-case in the whole script,
+  #11 `abs_red_r` × `eta_red` × `red_fix` (`:1690-1717`). See §2.3.
+
+### 2.3 Only ONE of the plan's four "unlocking cases" can collide with the β step
+
+The plan (§5, §6 rank 1) names `red_fix`, `red_cofix_case`, `red_cofix_proj` and `red_proj` as the
+four cases where postponement died and where C3 must be attacked first. For **C3** that list is too
+long, and the reason is worth recording because it shrinks the research risk:
+
+η creates a redex only by `eta_red`, i.e. by exposing `s` from `tLambda na A (tApp (lift0 1 s)
+(tRel 0))`. For the created redex to *collide* with the β step — the only situation the induction
+cannot discharge by a congruence plus the IH — the β step must act at the same node, i.e. on the
+body `tApp (lift0 1 s) (tRel 0)`. The head of that body is a `tApp`, so the only `red1` head rules
+that can fire there are **`red_beta`** and **`red_fix`**. `red_cofix_case` and `red_cofix_proj`
+need a `tCase`/`tProj` node, and `red_proj` needs a `tProj` node; none of them can be the body of
+an η-redex.
+
+So when η unlocks a cofix-case, a cofix-proj or a projection, the unlocked redex sits strictly
+*below* the node the β step acts on (the β step is `case_red_discr`, `case_red_param`,
+`case_red_return`, `case_red_brs` or `proj_red`), the case goes to the IH as a congruence, and
+**C3 never has to take the unlocked step at all** — its η-reduct leg may spend 0 of its 1 permitted
+`red1`. Worked instances:
+- `tProj p (tLambda na A (tApp (lift0 1 (mkApps (tConstruct …) args)) (tRel 0)))`: β can only be
+  `proj_red` into the λ; η gives `tProj p (mkApps (tConstruct …) args)`, which *can* `red_proj` but
+  need not. Join by the IH on the discriminant.
+- `tCase ci p (tLambda na A (tApp (lift0 1 (mkApps (tCoFix …) args)) (tRel 0))) brs`: same, with
+  `case_red_discr`.
+
+The one genuine collision, `red_fix` (`:1690-1717`), is resolved in §2.1(a) with one step on each
+leg. **This is the sharpest positive result of the audit**: three of the four rows the plan ranks
+as research risk are congruence cases for C3.
+
+
 ## 3. What is *not* β-on-the-η-side but still blocks a literal reuse
 
 The gate asked one question and the answer is "empty". These five items are the honest remainder:
@@ -217,3 +272,24 @@ checking "one join or two" will otherwise have to re-derive it.
 - Therefore **nothing is added to plan §6 rank 1 by this audit**, and the `red1_ind_all` reuse is
   viable *as to the step budget*. The reuse costs are §3.1-3.5; the residual risk for C3 is
   concentrated in the four 9.2 `tCase` rows of §3.4, which the 2020 proof never had to face.
+- **Independent agreement.** `ArityLane.EtaC3Audit` audited the same 27 bullets separately and
+  reached the same verdict; `ArityLane.EtaC3D` reports the same from an executable model over
+  156k terms (reported to the lane lead, not re-measured here). Three methods, one answer.
+
+## 5. Provenance of this file, and one thing that was lost
+
+Two workers were told to write `lanes/eta/c3-audit.md`. `ArityLane.EtaC3Audit` wrote its audit
+there first; **I overwrote that file at 16:32Z on 2026-10-27 without reading it first — my mistake,
+and the file's earlier content is not recoverable from the lane directory** (the directory is not
+a git repository and holds no backup; a scan of all 200 branches of the fork found
+`c3-audit.md` only on `wip/c3-falsify-2026-10-27`, i.e. only this version).
+
+What is preserved: EtaC3Audit's verdict, method and taxonomy, from its own report to the lane
+lead, are folded into §2.2 above and every case is re-classified here from the source, so no
+*finding* of that audit is lost. What is lost is its own wording and its per-row `[INFERENCE]`
+marks, which flagged the rows whose classification rested on the `beta_eta` auto-search rather than
+on an explicit term. In this file those rows are instead re-derived from the terms (§1, last
+paragraph), so they are not inferences here.
+
+If EtaC3Audit re-emits its table, it should go to `lanes/eta/c3-audit-EtaC3Audit.md`, not to this
+path, and this file's §2.2 should then cite it by line.
