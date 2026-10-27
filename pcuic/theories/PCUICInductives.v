@@ -2146,28 +2146,6 @@ Proof.
       simpl. len in red.
 Qed.
 
-Lemma red1_it_mkProd_or_LetIn_smash {cf} {Σ} {wfΣ : wf Σ} {Γ ctx t u n c} :
-  closed_red1 Σ Γ (it_mkProd_or_LetIn ctx t) u ->
-  nth_error (List.rev (smash_context [] ctx)) n = Some c ->
-  ∑ ctx' t',
-    (decompose_prod_assum [] u = (ctx', t')) *
-    ∑ d, (nth_error (List.rev (smash_context [] ctx')) n = Some d) *
-      (match destInd (head (decl_type c)) with
-      | Some ind => destInd (head (decl_type d)) = Some ind
-      | None => True
-      end).
-Proof.
-  intros r nth.
-  eapply red_it_mkProd_or_LetIn_smash in nth; eauto.
-  destruct nth as [ctx' [t' [d [decomp hnth r']]]].
-  exists ctx', t'. split; eauto.
-  exists d; intuition auto.
-  destruct destInd as [[ind u']|] eqn:di; auto.
-  now eapply (red_destInd _ _ _ _ _ _ r').
-  destruct r. eapply into_closed_red.
-  eapply red1_red; tea. all:auto.
-Qed.
-
 Lemma red_it_mkProd_or_LetIn_mkApps_Ind {cf} {Σ} {wfΣ : wf Σ} {Γ ctx ind u args v} :
   Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args) ⇝ v ->
   ∑ ctx' args', v = it_mkProd_or_LetIn ctx' (mkApps (tInd ind u) args').
@@ -2276,8 +2254,7 @@ Proof.
   now apply into_closed_red.
 Qed.
 
-(** A type reduces to the product over its smashed context
-    ([PCUICClassification.red_it_mkProd_or_LetIn_smash] restates it there). *)
+(** A type reduces to the product over its smashed context. *)
 Lemma red_it_mkProd_or_LetIn_to_smash {cf} {Σ} {wfΣ : wf Σ} Γ Δ T :
   is_closed_context Γ ->
   is_open_term Γ (it_mkProd_or_LetIn Δ T) ->

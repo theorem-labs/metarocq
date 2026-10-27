@@ -1028,10 +1028,6 @@ Proof.
   all: try lia.
 Qed.
 
-Lemma inst_def_with_type f g d ty :
-  def_with_type (map_def f g d) (f ty) = map_def f g (def_with_type d ty).
-Proof. reflexivity. Qed.
-
 Lemma inst_extended_subst f Γ :
   map (inst (up (context_assumptions Γ) f)) (extended_subst Γ 0) =
   extended_subst (inst_context f Γ) 0.

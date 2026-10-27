@@ -127,36 +127,25 @@ Section Spines.
   Context {Σ : global_env_ext}.
   Context (wfΣ : wf Σ.1).
 
-  (** Under the new specification the declared type itself need not pass the check:
-      a reduct of it does. *)
-  Lemma wf_fixpoint_inv Γ mfix idx decl :
-    is_closed_context Γ -> is_open_term Γ (dtype decl) ->
-    wf_fixpoint Σ Γ mfix ->
+  (** The start of the spine lemmas: the spine also applies the reduct of the
+      declared type that the check accepts. *)
+  Lemma mfix_on_ind_spine_witness {check} `{ShapeCheck check} {ok} Γ mfix idx decl args ty :
+    mfix_on_ind check (conv_witness Σ Γ) ok mfix ->
     nth_error mfix idx = Some decl ->
-    ∑ mind ty,
-      [× Σ ;;; Γ ⊢ dtype decl ⇝ ty,
-         check_one_fix (def_with_type decl ty) = Some mind &
-         check_recursivity_kind (lookup_env Σ) mind Finite].
+    isType Σ Γ (dtype decl) ->
+    typing_spine Σ Γ (dtype decl) args ty ->
+    ∑ mind tw,
+      [× Σ ;;; Γ ⊢ dtype decl ⇝ tw, check (def_with_type decl tw) = Some mind, ok mind,
+         isType Σ Γ tw & typing_spine Σ Γ tw args ty].
   Proof.
-    intros clΓ opd [isl [mind [ne [hall hck]]]] nthe.
-    eapply nth_error_all in hall; tea.
-    eapply (fix_on_ind_red (wfΣ := wfΣ)) in hall as [ty [r hc]]; tea.
-    exists mind, ty. split; tea.
-  Qed.
-
-  Lemma wf_cofixpoint_inv Γ mfix idx decl :
-    is_closed_context Γ -> is_open_term Γ (dtype decl) ->
-    wf_cofixpoint Σ Γ mfix ->
-    nth_error mfix idx = Some decl ->
-    ∑ mind ty,
-      [× Σ ;;; Γ ⊢ dtype decl ⇝ ty,
-         check_one_cofix (def_with_type decl ty) = Some mind &
-         check_recursivity_kind (lookup_env Σ) mind CoFinite].
-  Proof.
-    intros clΓ opd [mind [ne [hall hck]]] nthe.
-    eapply nth_error_all in hall; tea.
-    eapply (cofix_on_ind_red (wfΣ := wfΣ)) in hall as [ty [r hc]]; tea.
-    exists mind, ty. split; tea.
+    move=> hm nthe isty sp.
+    have clΓ : is_closed_context Γ.
+    { eapply wf_local_closed_context. now eapply isType_wf_local. }
+    have opd : is_open_term Γ (dtype decl) by eapply isType_is_open_term.
+    eapply mfix_on_ind_inv in nthe as [mind [tw [r cfix ck]]]; tea.
+    have istw : isType Σ Γ tw by eapply isType_red; [exact isty|exact (clrel_rel r)].
+    exists mind, tw; split => //.
+    eapply typing_spine_strengthen; [exact sp|exact istw|now eapply red_ws_cumul_pb_inv].
   Qed.
 
     Lemma on_free_vars_it_mkLambda_or_LetIn {P Δ t} :
@@ -172,19 +161,13 @@ Section Spines.
       /on_free_vars_decl /test_decl /=. ring.
   Qed.
 
-  Lemma red_it_mkProd_or_LetIn_smash Γ Δ T :
-    is_closed_context Γ ->
-    is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
-    Σ ;;; Γ ⊢ it_mkProd_or_LetIn Δ T ⇝ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T).
-  Proof. exact (red_it_mkProd_or_LetIn_to_smash (wfΣ := wfΣ) Γ Δ T). Qed.
-
   Lemma cumul_it_mkProd_or_LetIn_smash Γ Δ T :
     is_closed_context Γ ->
     is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
     Σ ;;; Γ ⊢ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T) = it_mkProd_or_LetIn Δ T.
   Proof.
     intros clΓ clp. symmetry. eapply red_ws_cumul_pb.
-    now apply red_it_mkProd_or_LetIn_smash.
+    now apply red_it_mkProd_or_LetIn_to_smash.
   Qed.
 
   Lemma typing_spine_smash Γ Δ T args T' :
@@ -193,7 +176,7 @@ Section Spines.
   Proof.
     intros sp.
     have ty := (typing_spine_isType_dom sp).
-    have r := (red_it_mkProd_or_LetIn_smash Γ Δ T).
+    have r := (red_it_mkProd_or_LetIn_to_smash (wfΣ := wfΣ) Γ Δ T).
     specialize (r (wf_local_closed_context (isType_wf_local ty)) (isType_is_open_term ty)).
     eapply typing_spine_strengthen; tea.
     eapply isType_red; tea. eapply r.
@@ -417,15 +400,9 @@ Qed.
     | None => ∑ na dom codom, Σ ;;; Γ ⊢ tProd na dom codom ≤ ty
     end.
   Proof.
-    move=> wffix nthe isty sp.
-    have clΓ : is_closed_context Γ.
-    { eapply wf_local_closed_context. now eapply isType_wf_local. }
-    have opd : is_open_term Γ (dtype decl) by eapply isType_is_open_term.
-    eapply wf_fixpoint_inv in nthe as [mind' [tw [r cfix ck]]]; tea.
-    have istw : isType Σ Γ tw by eapply isType_red; [exact isty|exact (clrel_rel r)].
-    have sp' : typing_spine Σ Γ tw args ty.
-    { eapply typing_spine_strengthen;
-        [exact sp|exact istw|now eapply red_ws_cumul_pb_inv]. }
+    move=> [_ [_ hm]] nthe isty sp.
+    destruct (mfix_on_ind_spine_witness _ _ _ _ _ _ hm nthe isty sp)
+      as [mind' [tw [r cfix ck istw sp']]].
     clear sp isty. rename sp' into sp.
     destruct decl as [dna dty dbod rarg]; cbn in *.
     rewrite /check_one_fix /def_with_type /= in cfix.
@@ -459,8 +436,8 @@ Qed.
         now eapply typing_wf_local.
   Qed.
 
-  (** The declared type no longer *is* a telescope over an applied inductive: it
-      reduces to one. *)
+  (** The declared type reduces to a telescope over an applied coinductive of the
+      block. *)
   Lemma wf_cofixpoint_spine Γ mfix idx decl args ty :
     wf_cofixpoint Σ Γ mfix ->
     nth_error mfix idx = Some decl ->
@@ -477,16 +454,10 @@ Qed.
       (#|args| = context_assumptions Γ') *
       (Σ ;;; Γ ⊢ subst (List.rev args) 0 (expand_lets Γ' T) ≤ ty).
   Proof.
-    move=> wfcofix nthe isty sp.
-    have clΓ : is_closed_context Γ.
-    { eapply wf_local_closed_context. now eapply isType_wf_local. }
-    have opd : is_open_term Γ (dtype decl) by eapply isType_is_open_term.
-    eapply wf_cofixpoint_inv in nthe as [mind' [tw [r cfix ck]]]; tea.
-    have istw : isType Σ Γ tw by eapply isType_red; [exact isty|exact (clrel_rel r)].
-    have sp' : typing_spine Σ Γ tw args ty.
-    { eapply typing_spine_strengthen;
-        [exact sp|exact istw|now eapply red_ws_cumul_pb_inv]. }
-    clear sp isty. rename sp' into sp.
+    move=> hm nthe isty sp.
+    destruct (mfix_on_ind_spine_witness _ _ _ _ _ _ hm nthe isty sp)
+      as [mind' [tw [r cfix ck istw sp']]].
+    clear sp isty. rename sp' into sp. cbn in ck.
     rewrite /check_one_cofix /def_with_type /= in cfix.
     case E: (decompose_prod_assum [] tw) => [Γ' concl].
     rewrite E in cfix.

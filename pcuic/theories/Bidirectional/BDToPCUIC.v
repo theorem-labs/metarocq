@@ -87,42 +87,6 @@ Proof.
   apply All_local_env_app_inv in wfΓ as [_ wfr] => //.
 Qed.
 
-(** The bidirectional (co)fixpoint conditions, whose witness is a reduct of the
-    declared type, imply the undirected ones, whose witness is only convertible
-    to it. *)
-
-Lemma wf_fixpoint_red_wf_fixpoint `{cf : checker_flags} {Σ : global_env_ext}
-  {wfΣ : wf Σ} {Γ mfix} :
-  wf_local Σ Γ ->
-  All (fun d => isType Σ Γ (dtype d)) mfix ->
-  wf_fixpoint_red Σ Γ mfix ->
-  wf_fixpoint Σ Γ mfix.
-Proof.
-  intros wfΓ alltys [isl [mind [hne [hall hk]]]].
-  split; [exact isl|exists mind; split; [exact hne|split; [|exact hk]]].
-  eapply All_impl with (1 := All_mix alltys hall).
-  intros d [isty [hr [ty [hc hred]]]].
-  eapply red_fix_on_ind; tea.
-  - now eapply wf_local_closed_context.
-  - now eapply isType_is_open_term.
-Qed.
-
-Lemma wf_cofixpoint_red_wf_cofixpoint `{cf : checker_flags} {Σ : global_env_ext}
-  {wfΣ : wf Σ} {Γ mfix} :
-  wf_local Σ Γ ->
-  All (fun d => isType Σ Γ (dtype d)) mfix ->
-  wf_cofixpoint_red Σ Γ mfix ->
-  wf_cofixpoint Σ Γ mfix.
-Proof.
-  intros wfΓ alltys [mind [hne [hall hk]]].
-  exists mind; split; [exact hne|split; [|exact hk]].
-  eapply All_impl with (1 := All_mix alltys hall).
-  intros d [isty [ty [hc hred]]].
-  eapply red_cofix_on_ind; tea.
-  - now eapply wf_local_closed_context.
-  - now eapply isType_is_open_term.
-Qed.
-
 Section BDToPCUICTyping.
 
   (** We work in a fixed, well-formed global environment*)
@@ -397,7 +361,9 @@ Section BDToPCUICTyping.
         specialize (Hd wfΓ').
         apply lift_sorting_it_impl with Hd => //=.
 
-      + eapply wf_fixpoint_red_wf_fixpoint ; tea.
+      + destruct wffix as [isl [hr hm]].
+        split; [exact isl|split; [exact hr|]].
+        eapply mfix_on_ind_red_conv; tea.
         apply All_impl with (1 := IHtys) => d Hd.
         specialize (Hd wfΓ).
         eapply isTypeRel_isType.
@@ -425,7 +391,7 @@ Section BDToPCUICTyping.
         specialize (Hd wfΓ').
         apply lift_sorting_it_impl with Hd => //=.
 
-      + eapply wf_cofixpoint_red_wf_cofixpoint ; tea.
+      + eapply mfix_on_ind_red_conv; tea.
         apply All_impl with (1 := IHtys) => d Hd.
         specialize (Hd wfΓ).
         eapply isTypeRel_isType.

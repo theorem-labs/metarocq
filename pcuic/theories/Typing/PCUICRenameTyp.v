@@ -731,54 +731,26 @@ Proof.
   now len.
 Qed.
 
-Lemma rename_def_with_type f g d ty :
-  def_with_type (map_def f g d) (f ty) = map_def f g (def_with_type d ty).
-Proof. reflexivity. Qed.
-
-Lemma rename_wf_fixpoint {Σ : global_env_ext} {wfΣ : wf Σ.1} P Γ Δ f mfix :
+(** Renaming carries the witness of every body; [check] is one of
+    [check_one_fix] and [check_one_cofix] ([rename_check_one_fix],
+    [rename_check_one_cofix]). *)
+Lemma rename_mfix_on_ind {Σ : global_env_ext} {wfΣ : wf Σ.1} P Γ Δ f check ok mfix :
+  (forall d m, check d = Some m ->
+    check (map_def (rename f) (rename (shiftn #|mfix| f)) d) = Some m) ->
   urenaming (shiftnP #|Γ| P) Γ Δ f ->
   is_closed_context Γ -> is_closed_context Δ ->
   All (fun d => is_open_term Γ (dtype d)) mfix ->
-  wf_fixpoint Σ Γ mfix ->
-  wf_fixpoint Σ Δ (map (map_def (rename f) (rename (shiftn #|mfix| f))) mfix).
+  mfix_on_ind check (conv_witness Σ Γ) ok mfix ->
+  mfix_on_ind check (conv_witness Σ Δ) ok
+    (map (map_def (rename f) (rename (shiftn #|mfix| f))) mfix).
 Proof.
-  intros hf hΓ hΔ hop [isl [mind [ne [hall hk]]]].
-  split; [|exists mind; split; [|split]].
-  - rewrite forallb_map. eapply forallb_impl; tea. intros x _ h.
-    now eapply isLambda_rename.
-  - destruct mfix => //.
-  - eapply All_map. eapply All_impl.
-    { eapply All_prod; [exact hop|exact hall]. }
-    intros d [hopd [hr [ty [hc [hty hconv]]]]].
-    split.
-    { now eapply rename_has_rec_arg. }
-    exists (rename f ty); split; [|split].
-    * rewrite rename_def_with_type.
-      now eapply (rename_check_one_fix f mfix).
-    * eapply urename_is_open_term; tea.
-    * eapply convSpec_renameP; tea.
-  - exact hk.
-Qed.
-
-Lemma rename_wf_cofixpoint {Σ : global_env_ext} {wfΣ : wf Σ.1} P Γ Δ f mfix :
-  urenaming (shiftnP #|Γ| P) Γ Δ f ->
-  is_closed_context Γ -> is_closed_context Δ ->
-  All (fun d => is_open_term Γ (dtype d)) mfix ->
-  wf_cofixpoint Σ Γ mfix ->
-  wf_cofixpoint Σ Δ (map (map_def (rename f) (rename (shiftn #|mfix| f))) mfix).
-Proof.
-  intros hf hΓ hΔ hop [mind [ne [hall hk]]].
-  exists mind; split; [|split].
-  - destruct mfix => //.
-  - eapply All_map. eapply All_impl.
-    { eapply All_prod; [exact hop|exact hall]. }
-    intros d [hopd [ty [hc [hty hconv]]]].
-    exists (rename f ty); split; [|split].
-    * rewrite rename_def_with_type.
-      now eapply (rename_check_one_cofix f mfix).
-    * eapply urename_is_open_term; tea.
-    * eapply convSpec_renameP; tea.
-  - exact hk.
+  intros hc hf hΓ hΔ hop.
+  eapply mfix_on_ind_map; [exact hop| |easy].
+  intros d m hopd [ty [hcd [hty hconv]]].
+  exists (rename f ty); split; [|split].
+  - rewrite map_def_with_type. now apply hc.
+  - eapply urename_is_open_term; tea.
+  - eapply convSpec_renameP; tea.
 Qed.
 
 Lemma rename_subst_telescope f s Γ :
@@ -1048,7 +1020,13 @@ Proof.
         { now rewrite app_context_length -shiftnP_add. }
         { reflexivity. }
         apply urenaming_context; auto. apply hf.
-      * eapply rename_wf_fixpoint; tea.
+      * destruct wffix as (isl & hra & hon). split; [|split].
+        1: rewrite forallb_map; refine (forallb_impl _ _ _ _ isl); intros x _ h.
+        1: now eapply isLambda_rename.
+        1: rewrite forallb_map; refine (forallb_impl _ _ _ _ hra); intros x _ h.
+        1: now eapply rename_has_rec_arg.
+        eapply (rename_mfix_on_ind (wfΣ := wfΣ)); tea.
+        1: exact (rename_check_one_fix f mfix).
         1: apply hf.
         1: now eapply wf_local_closed_context.
         1: destruct hf as [hΔ _]; now eapply wf_local_closed_context.
@@ -1079,7 +1057,8 @@ Proof.
         { now rewrite app_context_length -shiftnP_add. }
         { reflexivity. }
         apply urenaming_context; auto. apply hf.
-      * eapply rename_wf_cofixpoint; tea.
+      * eapply (rename_mfix_on_ind (wfΣ := wfΣ)); tea.
+        1: exact (rename_check_one_cofix f mfix).
         1: apply hf.
         1: now eapply wf_local_closed_context.
         1: destruct hf as [hΔ _]; now eapply wf_local_closed_context.

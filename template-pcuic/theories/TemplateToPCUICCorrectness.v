@@ -2200,8 +2200,8 @@ Proof.
 Qed.
 
 (** A Template reduction of a well-formed type gives, on the PCUIC side, a
-    conversion to a well-scoped reduct: exactly the witness [fix_on_ind] and
-    [cofix_on_ind] ask for. *)
+    conversion to a well-scoped reduct: exactly the witness [conv_witness]
+    asks for. *)
 Lemma trans_red_convSpec {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ T U} :
   let Σ' := trans_global Σ in
   wf Σ' ->
@@ -2236,11 +2236,6 @@ Proof.
   destruct AstUtils.decompose_prod_assum as [ctx p] => /= // ->.
   rewrite /trans_local context_assumptions_map //.
 Qed.
-
-Lemma trans_def_with_type Σ' d ty :
-  map_def (trans Σ') (trans Σ') (ST.def_with_type d ty) =
-  def_with_type (map_def (trans Σ') (trans Σ') d) (trans Σ' ty).
-Proof. reflexivity. Qed.
 
 Lemma trans_check_one_fix Σ mfix ind :
   let Σ' := trans_global_env Σ in
@@ -2296,62 +2291,36 @@ Proof.
   destruct Ast.Env.lookup_env as [[]|] => //.
 Qed.
 
-Lemma trans_check_rec_kind_impl {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {k f} :
-  let Σ' := trans_global Σ in
-  wf Σ' ->
-  ST.check_recursivity_kind Σ k f ->
-  check_recursivity_kind (lookup_env Σ') k f.
-Proof.
-  intros Σ' wfΣ' h.
-  now rewrite (@trans_check_rec_kind cf Σ wfΣ wfΣ' k f) in h.
-Qed.
-
-Lemma trans_fix_on_ind {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ mind d} :
+(** [mfix_on_ind] goes from a Template reduction witness to a PCUIC conversion
+    witness, given that [trans] carries the check ([trans_check_one_fix],
+    [trans_check_one_cofix]). *)
+Lemma trans_mfix_on_ind {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ mfix k}
+  {check : def Ast.term -> option kername} {check' : def term -> option kername} :
   let Σ' := trans_global Σ in
   wf Σ' ->
   All (WfAst.wf_decl Σ) Γ ->
   is_closed_context (trans_local Σ' Γ) ->
-  is_open_term (trans_local Σ' Γ) (trans Σ' (dtype d)) ->
-  WfAst.wf Σ (dtype d) -> WfAst.wf Σ (dbody d) ->
-  ST.fix_on_ind Σ Γ mind d ->
-  fix_on_ind Σ' (trans_local Σ' Γ) mind (map_def (trans Σ') (trans Σ') d).
+  (forall d m, Swf_fix Σ d -> check d = Some m -> check' (map_def (trans Σ') (trans Σ') d) = Some m) ->
+  All (fun def => Swf_fix Σ def) mfix ->
+  All (fun def => is_open_term (trans_local Σ' Γ) (trans Σ' (dtype def))) mfix ->
+  mfix_on_ind check (ST.red Σ Γ) (fun mind => ST.check_recursivity_kind Σ mind k) mfix ->
+  mfix_on_ind check' (conv_witness Σ' (trans_local Σ' Γ))
+    (fun mind => check_recursivity_kind (lookup_env Σ') mind k)
+    (map (map_def (trans Σ') (trans Σ')) mfix).
 Proof.
-  intros Σ' wfΣ' wfΓ clΓ opd wfty wfbod [hr [ty [hc hred]]].
-  have [wfty' [opty conv]] :
-    WfAst.wf Σ ty × is_open_term (trans_local Σ' Γ) (trans Σ' ty)
-      × (Σ' ;;; trans_local Σ' Γ |- trans Σ' (dtype d) =s trans Σ' ty).
-  { eapply trans_red_convSpec; tea. }
-  split.
-  { now eapply trans_has_rec_arg. }
-  exists (trans Σ' ty). split; [|split].
-  - rewrite -trans_def_with_type.
-    eapply (trans_check_one_fix Σ); [|exact hc].
-    split; cbn; [exact wfty'|exact wfbod].
-  - exact opty.
-  - exact conv.
-Qed.
-
-Lemma trans_cofix_on_ind {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ mind d} :
-  let Σ' := trans_global Σ in
-  wf Σ' ->
-  All (WfAst.wf_decl Σ) Γ ->
-  is_closed_context (trans_local Σ' Γ) ->
-  is_open_term (trans_local Σ' Γ) (trans Σ' (dtype d)) ->
-  WfAst.wf Σ (dtype d) -> WfAst.wf Σ (dbody d) ->
-  ST.cofix_on_ind Σ Γ mind d ->
-  cofix_on_ind Σ' (trans_local Σ' Γ) mind (map_def (trans Σ') (trans Σ') d).
-Proof.
-  intros Σ' wfΣ' wfΓ clΓ opd wfty wfbod [ty [hc hred]].
-  have [wfty' [opty conv]] :
-    WfAst.wf Σ ty × is_open_term (trans_local Σ' Γ) (trans Σ' ty)
-      × (Σ' ;;; trans_local Σ' Γ |- trans Σ' (dtype d) =s trans Σ' ty).
-  { eapply trans_red_convSpec; tea. }
-  exists (trans Σ' ty). split; [|split].
-  - rewrite -trans_def_with_type.
-    eapply (trans_check_one_cofix Σ); [|exact hc].
-    split; cbn; [exact wfty'|exact wfbod].
-  - exact opty.
-  - exact conv.
+  intros Σ' wfΣ' wfΓ clΓ hcheck wfm opm hmfix.
+  refine (mfix_on_ind_map _ _ _ (All_prod _ _ _ _ wfm opm) _ _ hmfix).
+  - intros d m [[wfty wfbod] opd] [ty [hc hred]].
+    have [wfty' [opty conv]] :
+      WfAst.wf Σ ty × is_open_term (trans_local Σ' Γ) (trans Σ' ty)
+        × (Σ' ;;; trans_local Σ' Γ |- trans Σ' (dtype d) =s trans Σ' ty).
+    { eapply trans_red_convSpec; tea. }
+    exists (trans Σ' ty). split; [|split].
+    + exact (hcheck (def_with_type d ty) m (wfty', wfbod) hc).
+    + exact opty.
+    + exact conv.
+  - intros m hk; cbv beta in hk |- *.
+    now rewrite (@trans_check_rec_kind cf Σ wfΣ wfΣ' m k) in hk.
 Qed.
 
 Lemma trans_wf_fixpoint {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ mfix} :
@@ -2359,42 +2328,50 @@ Lemma trans_wf_fixpoint {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ}
   wf Σ' ->
   All (WfAst.wf_decl Σ) Γ ->
   is_closed_context (trans_local Σ' Γ) ->
-  All (fun def => (WfAst.wf Σ (dtype def) * WfAst.wf Σ (dbody def))) mfix ->
+  All (fun def => Swf_fix Σ def) mfix ->
   All (fun def => is_open_term (trans_local Σ' Γ) (trans Σ' (dtype def))) mfix ->
   ST.wf_fixpoint Σ Γ mfix ->
   wf_fixpoint Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix).
 Proof.
-  intros Σ' wfΣ' wfΓ clΓ wfm opm [isl [mind [ne [hall hk]]]].
-  split.
-  { apply All_forallb. eapply All_map.
+  intros Σ' wfΣ' wfΓ clΓ wfm opm [isl [hr hmfix]].
+  split; [|split].
+  - apply All_forallb. eapply All_map.
     eapply (All_impl (forallb_All _ _ isl)).
     intros d h. destruct d as [na ty bod arg]; cbn in h |- *.
-    now destruct bod. }
-  exists mind. split; [|split].
-  - destruct mfix => //.
-  - eapply All_map, (All_impl (All_prod _ _ _ _ (All_prod _ _ _ _ wfm opm) hall)).
-    intros d [[[wfty wfbod] opd] hfix].
-    eapply trans_fix_on_ind; tea.
-  - now eapply trans_check_rec_kind_impl.
+    now destruct bod.
+  - apply All_forallb. eapply All_map.
+    eapply (All_impl (All_prod _ _ _ _ wfm (forallb_All _ _ hr))).
+    intros d [[wfty _] h]. exact (trans_has_rec_arg Σ d wfty h).
+  - exact (trans_mfix_on_ind (Σ := Σ) (wfΣ := wfΣ) wfΣ' wfΓ clΓ (fun d m => trans_check_one_fix Σ d m)
+      wfm opm hmfix).
 Qed.
 
-Lemma trans_wf_cofixpoint {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ mfix} :
+(** The premises of [trans_mfix_on_ind], from the hypotheses of the [tFix] and
+    [tCoFix] cases of [template_to_pcuic]. *)
+Lemma trans_mfix_case_premises {cf} {Σ : Ast.Env.global_env_ext} {wfΣ : Typing.wf Σ} {Γ mfix} :
   let Σ' := trans_global Σ in
   wf Σ' ->
-  All (WfAst.wf_decl Σ) Γ ->
-  is_closed_context (trans_local Σ' Γ) ->
-  All (fun def => (WfAst.wf Σ (dtype def) * WfAst.wf Σ (dbody def))) mfix ->
-  All (fun def => is_open_term (trans_local Σ' Γ) (trans Σ' (dtype def))) mfix ->
-  ST.wf_cofixpoint Σ Γ mfix ->
-  wf_cofixpoint Σ' (trans_local Σ' Γ) (map (map_def (trans Σ') (trans Σ')) mfix).
+  TTy_wf_local Σ Γ ->
+  wf_local Σ' (trans_local Σ' Γ) ->
+  All (ST.on_def_type (ST.lift_typing ST.typing Σ) Γ) mfix ->
+  All (ST.on_def_type (fun Γ j =>
+    wf Σ' -> lift_typing typing Σ' (trans_local Σ' Γ) (judgment_map (trans Σ') j)) Γ) mfix ->
+  All (ST.on_def_body (ST.lift_typing ST.typing Σ) (ST.fix_context mfix) Γ) mfix ->
+  [× All (WfAst.wf_decl Σ) Γ, is_closed_context (trans_local Σ' Γ),
+     All (fun def => Swf_fix Σ def) mfix &
+     All (fun def => is_open_term (trans_local Σ' Γ) (trans Σ' (dtype def))) mfix].
 Proof.
-  intros Σ' wfΣ' wfΓ clΓ wfm opm [mind [ne [hall hk]]].
-  exists mind. split; [|split].
-  - destruct mfix => //.
-  - eapply All_map, (All_impl (All_prod _ _ _ _ (All_prod _ _ _ _ wfm opm) hall)).
-    intros d [[[wfty wfbod] opd] hcofix].
-    eapply trans_cofix_on_ind; tea.
-  - now eapply trans_check_rec_kind_impl.
+  intros Σ' wfΣ' wfΓ wfΓ' hty htyIH hbod.
+  split.
+  - eapply typing_all_wf_decl; tea.
+  - eapply wf_local_closed_context; tea.
+  - eapply (All_impl (All_prod _ _ _ _ hty hbod)).
+    intros d [(_ & s & Hs & _) (Hs' & _)]. split.
+    + now eapply TypingWf.typing_wf in Hs.
+    + now eapply TypingWf.typing_wf in Hs'.
+  - eapply (All_impl htyIH). intros d tu. specialize (tu wfΣ').
+    eapply isType_is_open_term; tea.
+    eapply isTypeRel_isType; exact tu.
 Qed.
 
 Lemma trans_global_decl_universes Σ d :
@@ -2963,19 +2940,8 @@ Proof.
        rewrite <- trans_lift.
        apply tu.
     -- have wfΣ'0 : wf Σ' by assumption.
-       have hwfΓ' : wf_local Σ' (trans_local Σ' Γ) by (apply X; assumption).
-       have hwfd : All (WfAst.wf_decl Σ) Γ by (eapply typing_all_wf_decl; tea).
-       have hcl : is_closed_context (trans_local Σ' Γ)
-         by (eapply wf_local_closed_context; tea).
-       have hwfm : All (fun d => (WfAst.wf Σ (dtype d) * WfAst.wf Σ (dbody d))) mfix.
-       { eapply (All_impl (All_prod _ _ _ _ X0 X2)).
-         intros d [(_ & s & Hs & _) (Hs' & _)]. split.
-         - now eapply TypingWf.typing_wf in Hs.
-         - now eapply TypingWf.typing_wf in Hs'. }
-       have hopm : All (fun d => is_open_term (trans_local Σ' Γ) (trans Σ' (dtype d))) mfix.
-       { eapply (All_impl X1). intros d tu. specialize (tu wfΣ'0).
-         eapply isType_is_open_term; tea.
-         eapply isTypeRel_isType; exact tu. }
+       have [hwfd hcl hwfm hopm] :=
+         trans_mfix_case_premises (Σ := Σ) (wfΣ := wfΣ) wfΣ'0 wfΓ (X wfΣ'0) X0 X1 X2.
        eapply trans_wf_fixpoint; tea.
     -- destruct decl; reflexivity.
 
@@ -2999,20 +2965,10 @@ Proof.
        rewrite <- trans_lift.
        apply tu.
     -- have wfΣ'0 : wf Σ' by assumption.
-       have hwfΓ' : wf_local Σ' (trans_local Σ' Γ) by (apply X; assumption).
-       have hwfd : All (WfAst.wf_decl Σ) Γ by (eapply typing_all_wf_decl; tea).
-       have hcl : is_closed_context (trans_local Σ' Γ)
-         by (eapply wf_local_closed_context; tea).
-       have hwfm : All (fun d => (WfAst.wf Σ (dtype d) * WfAst.wf Σ (dbody d))) mfix.
-       { eapply (All_impl (All_prod _ _ _ _ X0 X2)).
-         intros d [(_ & s & Hs & _) (Hs' & _)]. split.
-         - now eapply TypingWf.typing_wf in Hs.
-         - now eapply TypingWf.typing_wf in Hs'. }
-       have hopm : All (fun d => is_open_term (trans_local Σ' Γ) (trans Σ' (dtype d))) mfix.
-       { eapply (All_impl X1). intros d tu. specialize (tu wfΣ'0).
-         eapply isType_is_open_term; tea.
-         eapply isTypeRel_isType; exact tu. }
-       eapply trans_wf_cofixpoint; tea.
+       have [hwfd hcl hwfm hopm] :=
+         trans_mfix_case_premises (Σ := Σ) (wfΣ := wfΣ) wfΣ'0 wfΓ (X wfΣ'0) X0 X1 X2.
+       eapply (trans_mfix_on_ind (Σ := Σ) (wfΣ := wfΣ) wfΣ'0 hwfd hcl
+         (fun d m => trans_check_one_cofix Σ d m) hwfm hopm); tea.
     -- destruct decl; reflexivity.
 
   - cbn. replace (tConst prim_ty []) with (prim_type (primInt; primIntModel p) prim_ty) by now simp prim_type.

@@ -18,14 +18,8 @@ Export (hints) QuotePCUICGlobalMaps.
 
 #[export] Instance quote_FixCoFix : ground_quotable FixCoFix := ltac:(destruct 1; exact _).
 
-#[export] Instance quote_has_rec_arg {d} : ground_quotable (is_true (has_rec_arg d))
-  := ltac:(cbv [has_rec_arg]; exact _).
-
-#[export] Instance quote_fix_on_ind {cf Σ Γ mind d} : ground_quotable (@fix_on_ind cf Σ Γ mind d)
-  := ltac:(cbv [fix_on_ind]; exact _).
-
-#[export] Instance quote_cofix_on_ind {cf Σ Γ mind d} : ground_quotable (@cofix_on_ind cf Σ Γ mind d)
-  := ltac:(cbv [cofix_on_ind]; exact _).
+#[export] Instance quote_conv_witness {cf Σ Γ t u} : ground_quotable (@conv_witness cf Σ Γ t u)
+  := ltac:(cbv [conv_witness]; exact _).
 
 #[export] Instance quote_wf_fixpoint {cf Σ Γ mfix} : ground_quotable (@wf_fixpoint cf Σ Γ mfix)
   := ltac:(cbv [wf_fixpoint]; exact _).

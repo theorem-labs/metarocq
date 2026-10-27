@@ -30,9 +30,6 @@ Local Existing Instance config.extraction_checker_flags.
 
 (* Properties of PCUIC *)
 
-Lemma isLambda_subst_instance t u : isLambda t -> isLambda t@[u].
-Proof. destruct t => //. Qed.
-
 Lemma wf_local_rel_conv:
   forall Σ : global_env × universes_decl,
     wf Σ.1 ->

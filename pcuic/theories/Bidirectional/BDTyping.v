@@ -27,21 +27,14 @@ Reserved Notation "'wf_local_bd' Σ Γ " (at level 9, Σ, Γ at next level).
 Reserved Notation "'wf_local_bd_rel' Σ Γ Γ'" (at level 9, Σ, Γ, Γ' at next level).
 (** The bidirectional counterparts of [wf_fixpoint] and [wf_cofixpoint]: the
     witness is a reduct of the declared type, as in [infer_ind_Ind]. *)
-Definition fix_red_ind (Σ : global_env_ext) Γ mind (d : def term) :=
-  has_rec_arg d ×
-  ∑ ty, (check_one_fix (def_with_type d ty) = Some mind) × red Σ Γ d.(dtype) ty.
-
 Definition wf_fixpoint_red (Σ : global_env_ext) Γ (mfix : mfixpoint term) :=
-  forallb (isLambda ∘ dbody) mfix ×
-  ∑ mind, (mfix <> []) × All (fix_red_ind Σ Γ mind) mfix ×
-          check_recursivity_kind (lookup_env Σ) mind Finite.
-
-Definition cofix_red_ind (Σ : global_env_ext) Γ mind (d : def term) :=
-  ∑ ty, (check_one_cofix (def_with_type d ty) = Some mind) × red Σ Γ d.(dtype) ty.
+  forallb (isLambda ∘ dbody) mfix × forallb has_rec_arg mfix ×
+  mfix_on_ind check_one_fix (red Σ Γ)
+    (fun mind => check_recursivity_kind (lookup_env Σ) mind Finite) mfix.
 
 Definition wf_cofixpoint_red (Σ : global_env_ext) Γ (mfix : mfixpoint term) :=
-  ∑ mind, (mfix <> []) × All (cofix_red_ind Σ Γ mind) mfix ×
-          check_recursivity_kind (lookup_env Σ) mind CoFinite.
+  mfix_on_ind check_one_cofix (red Σ Γ)
+    (fun mind => check_recursivity_kind (lookup_env Σ) mind CoFinite) mfix.
 
 
 Inductive infering `{checker_flags} (Σ : global_env_ext) (Γ : context) : term -> term -> Type :=

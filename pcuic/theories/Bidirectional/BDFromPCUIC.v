@@ -112,39 +112,6 @@ Proof.
   eapply geq_relevance; tea.
 Qed.
 
-(** The undirected (co)fixpoint conditions, whose witness is convertible to the
-    declared type, imply the bidirectional ones, whose witness is a reduct of it.
-    Exported: the translations to Template and the safe checker need it too. *)
-
-Lemma wf_fixpoint_wf_fixpoint_red `{cf : checker_flags} {Σ : global_env_ext}
-  {wfΣ : wf Σ} {Γ mfix} :
-  wf_local Σ Γ ->
-  All (fun d => isType Σ Γ (dtype d)) mfix ->
-  wf_fixpoint Σ Γ mfix ->
-  wf_fixpoint_red Σ Γ mfix.
-Proof.
-  intros wfΓ alltys [isl [mind [hne [hall hk]]]].
-  split; [exact isl|exists mind; split; [exact hne|split; [|exact hk]]].
-  eapply All_impl with (1 := All_mix alltys hall).
-  intros d [isty hd].
-  split; [exact hd.1|].
-  now eapply fix_on_ind_red_wf.
-Qed.
-
-Lemma wf_cofixpoint_wf_cofixpoint_red `{cf : checker_flags} {Σ : global_env_ext}
-  {wfΣ : wf Σ} {Γ mfix} :
-  wf_local Σ Γ ->
-  All (fun d => isType Σ Γ (dtype d)) mfix ->
-  wf_cofixpoint Σ Γ mfix ->
-  wf_cofixpoint_red Σ Γ mfix.
-Proof.
-  intros wfΓ alltys [mind [hne [hall hk]]].
-  exists mind; split; [exact hne|split; [|exact hk]].
-  eapply All_impl with (1 := All_mix alltys hall).
-  intros d [isty hd].
-  now eapply cofix_on_ind_red_wf.
-Qed.
-
 Section BDFromPCUIC.
 
 
@@ -385,7 +352,9 @@ Proof.
     constructor ; eauto.
     + apply (All_impl Alltypes) => d. apply conv_lift_judgment with (na := d.(dname)).
     + apply (All_impl Allbodies) => d. apply conv_lift_judgment with (na := d.(dname)).
-    + eapply wf_fixpoint_wf_fixpoint_red ; tea.
+    + destruct wffix as [isl [hr hm]].
+      split; [exact isl|split; [exact hr|]].
+      eapply mfix_on_ind_conv_red; tea.
       apply (All_impl Htypes) => d Hj.
       now eapply isTypeRel_isType.
 
@@ -400,7 +369,7 @@ Proof.
     constructor ; eauto.
     + apply (All_impl Alltypes) => d. apply conv_lift_judgment with (na := d.(dname)).
     + apply (All_impl Allbodies) => d. apply conv_lift_judgment with (na := d.(dname)).
-    + eapply wf_cofixpoint_wf_cofixpoint_red ; tea.
+    + eapply mfix_on_ind_conv_red; tea.
       apply (All_impl Htypes) => d Hj.
       now eapply isTypeRel_isType.
 

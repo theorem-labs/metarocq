@@ -1422,6 +1422,24 @@ Proof.
   intros H; apply eq_term_upto_univ_napp_mkApps_l_inv in H; rewrite ?Nat.add_0_r in H; auto.
 Qed.
 
+Lemma decompose_app_upto {Σ cmp_universe cmp_sort pb x y hd tl} :
+  eq_term_upto_univ Σ cmp_universe cmp_sort pb x y ->
+  decompose_app x = (hd, tl) ->
+  ∑ hd' tl', y = mkApps hd' tl' ×
+  eq_term_upto_univ_napp Σ cmp_universe cmp_sort pb #|tl| hd hd' ×
+  negb (isApp hd') ×
+  All2 (eq_term_upto_univ Σ cmp_universe cmp_sort Conv) tl tl'.
+Proof.
+  intros eq dapp.
+  pose proof (decompose_app_notApp _ _ _ dapp).
+  apply decompose_app_inv in dapp.
+  subst x.
+  eapply eq_term_upto_univ_mkApps_l_inv in eq as [u' [l' [[eqh eqtl] ->]]].
+  eexists _, _; intuition eauto.
+  revert H.
+  depelim eqh; simpl in *; try discriminate; auto.
+Qed.
+
 Lemma eq_term_upto_univ_mkApps_r_inv Σ cmp_universe cmp_sort pb u l t :
     eq_term_upto_univ Σ cmp_universe cmp_sort pb t (mkApps u l) ->
     ∑ u' l',
@@ -1644,16 +1662,36 @@ Qed.
 #[global]
 Hint Resolve All2_fold_nil : pcuic.
 
-Lemma eq_context_upto_smash_context Σ ctx ctx' x y pb :
-  eq_context_upto Σ (fun _ => eq) (fun _ => eq) pb ctx ctx' -> eq_context_upto Σ (fun _ => eq) (fun _ => eq) pb x y ->
-  eq_context_upto Σ (fun _ => eq) (fun _ => eq) pb (smash_context ctx x) (smash_context ctx' y).
+Lemma eq_context_upto_smash_context Σ cmp_universe cmp_sort pb ctx ctx' x y :
+  RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pb) ->
+  RelationClasses.subrelation (cmp_sort Conv) (cmp_sort pb) ->
+  eq_context_upto Σ cmp_universe cmp_sort pb ctx ctx' ->
+  eq_context_upto Σ cmp_universe cmp_sort pb x y ->
+  eq_context_upto Σ cmp_universe cmp_sort pb (smash_context ctx x) (smash_context ctx' y).
 Proof.
-  induction x in ctx, ctx', y |- *; intros eqctx eqt; inv eqt; simpl;
-    try split; auto; try constructor; auto. depelim X0 => /=.
-  - apply IHx; auto. apply eq_context_upto_cat; auto.
-    constructor; pcuic.
-  - apply IHx; auto. eapply eq_context_upto_subst_context; eauto.
-    all: reflexivity.
+  intros subu subs.
+  induction x in ctx, ctx', y |- *; intros eqctx eqx; depelim eqx; cbn; auto.
+  depelim c; cbn.
+  - apply IHx; auto.
+    apply eq_context_upto_cat; auto.
+    constructor; [constructor|constructor; auto].
+  - apply IHx; auto.
+    eapply eq_context_upto_subst_context; tea.
+    constructor; [auto|constructor].
+Qed.
+
+Lemma decompose_prod_assum_upto {Σ cmp_universe cmp_sort} ctx ctx' x y :
+  eq_context_upto Σ cmp_universe cmp_sort Conv ctx ctx' ->
+  eq_term_upto_univ Σ cmp_universe cmp_sort Conv x y ->
+  let '(ctx0, x0) := decompose_prod_assum ctx x in
+  let '(ctx1, x1) := decompose_prod_assum ctx' y in
+  eq_context_upto Σ cmp_universe cmp_sort Conv ctx0 ctx1 ×
+  eq_term_upto_univ Σ cmp_universe cmp_sort Conv x0 x1.
+Proof.
+  induction x in ctx, ctx', y |- *; intros eqctx eqt; depelim eqt; cbn;
+    try solve [split; auto; constructor; auto].
+  - apply IHx2; auto. constructor; auto. constructor; auto.
+  - apply IHx3; auto. constructor; auto. constructor; auto.
 Qed.
 
 Lemma eq_context_upto_nth_error Σ cmp_universe cmp_sort pb ctx ctx' n :
