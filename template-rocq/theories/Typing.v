@@ -1026,9 +1026,7 @@ Inductive typing `{checker_flags} (Σ : global_env_ext) (Γ : context) : term ->
     is_allowed_elimination Σ idecl.(ind_kelim) ps ->
     isSortRel ps ci.(ci_relevance) ->
     Σ ;;; Γ |- c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
-    (* A case on a coinductive may not mention the scrutinee, variable 0 of the predicate
-       context, in its return type. *)
-    implb (isCoFinite mdecl.(ind_finite)) (noccur_between 0 1 p.(preturn)) = true ->
+    isCoFinite mdecl.(ind_finite) = false ->
     let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
     All2i (fun i cdecl br =>
       let brctxty := case_branch_type ci.(ci_ind) mdecl p ptm i cdecl br in
@@ -1436,7 +1434,7 @@ Lemma typing_ind_env `{cf : checker_flags} :
         isSortRel ps ci.(ci_relevance) ->
         Σ ;;; Γ |- c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
         P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
-        implb (isCoFinite mdecl.(ind_finite)) (noccur_between 0 1 p.(preturn)) = true ->
+        isCoFinite mdecl.(ind_finite) = false ->
         let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
         All2i (fun i cdecl br =>
           let brctxty := case_branch_type ci.(ci_ind) mdecl p ptm i cdecl br in
@@ -1729,9 +1727,6 @@ Proof.
           Opaque case_branch_type.
           simpl in X14.
           Transparent case_branch_type.
-          (* The return-type premise is not used below. Clear it, so that [induction] does not
-             abstract the literal [0] in it together with the index of [a0]. *)
-          match goal with h : implb _ _ = true |- _ => clear h end.
           induction a0; simpl in *.
           ** constructor.
           ** destruct r0 as [[? ?] ?]. constructor.

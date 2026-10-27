@@ -109,9 +109,6 @@ Proof.
   all: try now eapply (@weakening_config_is_allowed_elimination cf1 cf2); eassumption.
   all: try now repeat destruct ?; subst; simpl in *; assumption.
   all: repeat destruct ?; subst.
-  (* The inductions below generalize numerals, including those in the case premise on a
-     coinductive, which these goals do not use. *)
-  all: try clear nondep_cofinite.
   all: lazymatch goal with
        | [ H : ctx_inst _ _ _ _ |- ctx_inst _ _ _ _ ]
          => generalize dependent H;

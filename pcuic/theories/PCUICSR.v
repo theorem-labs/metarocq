@@ -1467,109 +1467,6 @@ Proof.
   now eapply closed_red1_red.
 Qed.
 
-(** The return type of a case that does not mention the discriminee *)
-
-(** If variable 0 does not occur in [t], the term substituted for it does not matter. *)
-Lemma subst0_cons_nondep c c' s t :
-  on_free_vars (strengthenP 0 1 xpredT) t ->
-  subst0 (c :: s) t = subst0 (c' :: s) t.
-Proof.
-  intros h. rewrite !subst_inst.
-  eapply PCUICInstConv.inst_ext_cond; tea.
-  intros i hi. rewrite (Upn_0 _ i) (Upn_0 _ i).
-  destruct i as [|i]; [|reflexivity].
-  move: hi; rewrite PCUICOnFreeVars.strengthenP01 /= => hi; discriminate.
-Qed.
-
-(** The side condition of [red1_on_free_vars] for "variable 0 does not occur" holds in every
-    context whose declarations are well scoped: it never constrains variable 0 itself. *)
-Lemma on_ctx_free_vars_nondep Γ :
-  on_ctx_free_vars xpredT Γ -> on_ctx_free_vars (strengthenP 0 1 xpredT) Γ.
-Proof.
-  rewrite /on_ctx_free_vars.
-  enough (h : forall n,
-    alli (fun k d => xpredT k ==> on_free_vars_decl (addnP (S k) xpredT) d) n Γ ->
-    alli (fun k d => strengthenP 0 1 xpredT k ==>
-      on_free_vars_decl (addnP (S k) (strengthenP 0 1 xpredT)) d) n Γ) by apply h.
-  induction Γ as [|d Γ IH] => n //.
-  cbn [alli]. move/andP => [hd hΓ]. apply/andP; split; [|now apply IH].
-  apply/implyP => _. eapply (on_free_vars_decl_impl (addnP (S n) xpredT)); [|exact hd].
-  intros i _. rewrite /addnP PCUICOnFreeVars.strengthenP01.
-  apply/negP => /Nat.eqb_eq. lia.
-Qed.
-
-Lemma mk_ctx_subst_snoc_ass na T Δ l c :
-  context_assumptions Δ = #|l| ->
-  mk_ctx_subst (vass na T :: Δ) (l ++ [c]) = c :: mk_ctx_subst Δ l.
-Proof.
-  intros hl.
-  eapply context_subst_fun.
-  - eapply mk_ctx_subst_spec. cbn. rewrite length_app hl /=. lia.
-  - constructor. now eapply mk_ctx_subst_spec.
-Qed.
-
-(** The discriminee's binder is the innermost declaration of the predicate context. *)
-Lemma case_predicate_context_vass ind mdecl idecl p :
-  0 < context_assumptions (case_predicate_context ind mdecl idecl p) ->
-  ∑ na T Δ, case_predicate_context ind mdecl idecl p = vass na T :: Δ.
-Proof.
-  rewrite /case_predicate_context /case_predicate_context_gen
-    /pre_case_predicate_context_gen /inst_case_context /ind_predicate_context.
-  destruct (forget_types (pcontext p)) as [|na nas]; [cbn; intros; lia|].
-  intros _. rewrite subst_context_snoc.
-  do 3 eexists. reflexivity.
-Qed.
-
-Lemma case_predicate_context_assumptions {ind mdecl idecl p} :
-  eq_context_upto_names p.(pcontext) (ind_predicate_context ind mdecl idecl) ->
-  context_assumptions (case_predicate_context ind mdecl idecl p) =
-  S (context_assumptions (ind_indices idecl)).
-Proof.
-  intros eqp.
-  rewrite (PCUICCasesContexts.inst_case_predicate_context_eq eqp)
-    /inst_case_predicate_context /inst_case_context.
-  rewrite context_assumptions_subst_context context_assumptions_subst_instance.
-  rewrite (alpha_eq_context_assumptions _ _ eqp) /ind_predicate_context /=.
-  now rewrite context_assumptions_expand_lets_ctx.
-Qed.
-
-(** A case's return type at two discriminees is convertible when the return clause does not
-    mention the discriminee (variable 0 of the predicate context). *)
-Lemma case_nondep_predicate_conv {cf} {Σ} {wfΣ : wf Σ} {Γ ci mdecl idecl p indices c c' ps} :
-  let predctx := case_predicate_context ci.(ci_ind) mdecl idecl p in
-  let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
-  #|indices ++ [c]| = context_assumptions predctx ->
-  Σ ;;; Γ ,,, predctx |- p.(preturn) : tSort ps ->
-  on_free_vars (strengthenP 0 1 xpredT) p.(preturn) ->
-  forallb (is_open_term Γ) indices ->
-  is_open_term Γ c ->
-  is_open_term Γ c' ->
-  Σ ;;; Γ ⊢ mkApps ptm (indices ++ [c]) = mkApps ptm (indices ++ [c']).
-Proof.
-  intros predctx ptm hlen pret hnd hidx hc hc'.
-  have [na [T [Δ eqΔ]]] : ∑ na T Δ, predctx = vass na T :: Δ.
-  { apply case_predicate_context_vass.
-    change (0 < context_assumptions predctx). rewrite -hlen length_app /=. lia. }
-  have hΔ : context_assumptions Δ = #|indices|.
-  { move: hlen. rewrite eqΔ length_app /=. lia. }
-  have clΓ : is_closed_context Γ.
-  { have wfΓ := typing_wf_local pret.
-    apply All_local_env_app_inv in wfΓ as [wfΓ _].
-    now eapply wf_local_closed_context. }
-  have hptm : is_open_term Γ ptm.
-  { eapply subject_is_open_term, type_it_mkLambda_or_LetIn, pret. }
-  set (s := mk_ctx_subst Δ indices).
-  have r : forall x, is_open_term Γ x ->
-    Σ ;;; Γ ⊢ mkApps ptm (indices ++ [x]) ⇝ subst0 (x :: s) (preturn p).
-  { intros x hx. rewrite /s -(mk_ctx_subst_snoc_ass na T) // -eqΔ.
-    eapply into_closed_red => //.
-    - eapply red_betas_typed; tea. rewrite eqΔ length_app /= hΔ. lia.
-    - rewrite on_free_vars_mkApps hptm forallb_app hidx /= hx //. }
-  transitivity (subst0 (c :: s) (preturn p)).
-  - now eapply red_ws_cumul_pb, r.
-  - rewrite (subst0_cons_nondep c c' s _ hnd). symmetry. now eapply red_ws_cumul_pb, r.
-Qed.
-
 Lemma sr_red1 {cf:checker_flags} :
   env_prop SR_red1
     (fun Σ Γ j =>
@@ -2123,53 +2020,19 @@ Proof.
       rewrite eqargs.
       now eapply (cmp_global_instance_cstr_irrelevant declc).
 
-  - (* Case on a cofix: the cofix unfolds in the discriminee, and the return clause does not
-       mention the discriminee *)
-    destruct X0, X4.
-    eassert (ctx_inst _ _ _ _) as Hctxi by (eapply ctx_inst_impl with (1 := X5); now intros ? []).
-    eassert (PCUICEnvTyping.ctx_inst _ _ _ _) as X6.
-    { eapply ctx_inst_impl with (1 := X5). intros t T [? r]; pattern Γ, t, T in r; exact r. }
-    clear X5; rename Hctxi into X5.
-    set (ptm := it_mkLambda_or_LetIn _ _).
-    assert (isty : isType Σ Γ (mkApps ptm (indices ++ [mkApps (tCoFix mfix idx) args]))).
-    { eapply validity. econstructor; eauto. econstructor; eauto.
-      constructor; eauto.
-      apply (All2i_impl X8). intuition auto. }
-    have typecof := typec.
-    eapply inversion_mkApps in typecof as [? [tcof tsp]] => //.
-    eapply type_tCoFix_inv in tcof as [d [[[Hnth wfcofix] Hbody] Hcum]] => //.
+  - (* Case congruence: on a cofix, impossible *)
+    eapply inversion_mkApps in typec as [? [tcof ?]] =>  //.
+    eapply type_tCoFix_inv in tcof as [d [[[Hnth wfcofix] ?] ?]] => //.
     unfold unfold_cofix in H.
     rewrite Hnth in H. noconf H.
-    pose proof (validity Hbody) as vbody.
-    eapply typing_spine_strengthen in tsp; [|exact vbody|exact Hcum].
-    have typec' : Σ ;;; Γ |- mkApps (subst0 (cofix_subst mfix) (dbody d)) args :
-      mkApps (tInd ci (puinst p)) (pparams p ++ indices).
-    { eapply type_mkApps; tea. }
-    have hck := tsp.
-    eapply wf_cofixpoint_typing_spine in hck; tea.
-    unfold check_recursivity_kind in hck.
+    pose proof (validity t0).
+    eapply typing_spine_strengthen in t; eauto.
+    eapply wf_cofixpoint_typing_spine in t; eauto.
+    unfold check_recursivity_kind in t.
     unshelve epose proof (isdecl' := declared_inductive_to_gen isdecl); eauto.
-    rewrite isdecl'.p1 in hck.
-    apply ReflectEq.eqb_eq in hck.
-    have hnd : on_free_vars (strengthenP 0 1 xpredT) (preturn p).
-    { match goal with h : implb (isCoFinite (ind_finite mdecl)) _ = true |- _ => move: h end.
-      now rewrite hck. }
-    have lenidx : #|indices| = context_assumptions (ind_indices idecl).
-    { have hl := ctx_inst_length X5. len in hl. rewrite context_assumptions_rev in hl. len in hl.
-      match goal with hw : wf_predicate _ _ _ |- _ => pose proof (wf_predicate_length_pars hw) end.
-      pose proof (declared_minductive_ind_npars isdecl). lia. }
-    have hidx : forallb (is_open_term Γ) indices.
-    { have isty' := isty. eapply isType_is_open_term in isty'.
-      move: isty'. rewrite on_free_vars_mkApps forallb_app. now move=> /andP[] _ /andP[]. }
-    eapply type_ws_cumul_pb. eapply type_Case; eauto. 1: econstructor; eauto.
-    1:econstructor; eauto.
-    * solve_all.
-    * tas.
-    * eapply ws_cumul_pb_eq_le.
-      eapply case_nondep_predicate_conv; tea.
-      + rewrite length_app /=. erewrite case_predicate_context_assumptions; tea. lia.
-      + now eapply subject_is_open_term in typec'.
-      + now eapply subject_is_open_term in typec.
+    rewrite isdecl'.p1 in t.
+    apply ReflectEq.eqb_eq in t. rewrite t /= in heq_isCoFinite.
+    discriminate.
 
   - (* Case congruence on a parameter *)
     eassert (ctx_inst _ _ _ _) as Hctxi by (eapply ctx_inst_impl with (1 := X5); now intros ? []).
@@ -2418,16 +2281,6 @@ Proof.
     { eapply closed_red1_eq_context_upto_names; tea.
       rewrite PCUICCasesContexts.inst_case_predicate_context_eq => //.
       reflexivity. }
-    have hnd' : (isCoFinite (ind_finite mdecl) ==>
-      on_free_vars (strengthenP 0 1 xpredT) preturn') = true.
-    { match goal with
-      | h : implb (isCoFinite (ind_finite mdecl)) _ = true,
-        hr : closed_red1 _ _ (preturn p) preturn' |- _ => move: h; pose proof hr as hred
-      end.
-      case: (isCoFinite (ind_finite mdecl)) => //= hfv.
-      eapply red1_on_free_vars; [exact (clrel_rel hred)|exact hfv|].
-      apply on_ctx_free_vars_nondep.
-      exact (on_free_vars_ctx_on_ctx_free_vars_xpredT (clrel_ctx hred)). }
     eapply type_ws_cumul_pb; tea.
     * eapply type_Case; eauto. constructor; eauto. constructor; eauto.
       epose proof (wf_case_branches_types' (p:=set_preturn p preturn') ps _ brs isdecl (validity typec) H0

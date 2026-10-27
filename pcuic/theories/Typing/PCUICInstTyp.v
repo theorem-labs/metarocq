@@ -460,19 +460,6 @@ Proof.
     intros IHΔ ci_npar eqpctx predctx wfp cup Hpctx Hpret
       IHpret IHpredctx isallowed Her.
     intros IHctxi Hc IHc iscof ptm wfbrs Hbrs Δ f HΔ Hf.
-    assert (iscof' : (isCoFinite (ind_finite mdecl) ==>
-      on_free_vars (strengthenP 0 1 xpredT) (preturn (inst_predicate f p))) = true).
-    { apply/implyP => hcof. move/implyP: iscof => /(_ hcof) h.
-      rewrite -inst_predicate_preturn.
-      eapply (on_free_vars_nondep_inst _ (shiftnP #|Γ| xpred0)); [| | |exact h].
-      - rewrite (wf_predicate_length_pcontext wfp). lia.
-      - intros i. rewrite /shiftnP => /orP [/Nat.ltb_spec0 hi|hi]; [|now cbv in hi].
-        destruct (nth_error Γ i) as [decl|] eqn:hnth.
-        2:{ apply nth_error_None in hnth. lia. }
-        eapply on_free_vars_impl; [|exact (subject_is_open_term (Hf.1 _ _ hnth))]. done.
-      - pose proof (subject_is_open_term Hpret) as hop.
-        rewrite app_context_length -shiftnP_add in hop.
-        now rewrite /predctx case_predicate_context_length in hop. }
     autorewrite with sigma. simpl.
     rewrite map_app. simpl.
     rewrite /ptm. rewrite inst_it_mkLambda_or_LetIn.

@@ -343,12 +343,6 @@ Definition strengthenP k n (p : nat -> bool) :=
     if i <? k + n then false
     else p (i - n).
 
-(** [strengthenP 0 1 xpredT] holds of every variable but 0. A case on a coinductive uses it to
-    say that its return type does not mention the scrutinee, variable 0 of the predicate
-    context ([nondep_cofinite] in [case_side_conditions]). *)
-Lemma strengthenP01 i : strengthenP 0 1 xpredT i = negb (i =? 0).
-Proof. destruct i; reflexivity. Qed.
-
 #[global]
 Instance strengthenP_proper n k : Proper (`=1` ==> `=1`) (strengthenP n k).
 Proof.

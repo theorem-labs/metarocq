@@ -6,11 +6,10 @@ From MetaRocq.Utils Require Import utils monad_utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
   PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils
-  PCUICPosition PCUICTyping PCUICCumulativity PCUICReduction PCUICOnFreeVars.
+  PCUICPosition PCUICTyping PCUICCumulativity PCUICReduction.
 
 From MetaRocq.Utils Require Export LibHypsNaming.
 From Stdlib Require Import ssreflect.
-From Stdlib Require ssrbool.
 Set Asymmetric Patterns.
 From Equations.Type Require Import Relation.
 From Equations.Prop Require Import DepElim.
@@ -97,7 +96,7 @@ Inductive infering `{checker_flags} (Σ : global_env_ext) (Γ : context) : term 
   isSortRel ps ci.(ci_relevance) ->
   ctx_inst (checking Σ) Γ (pparams p)
       (List.rev mdecl.(ind_params)@[p.(puinst)]) ->
-  implb (isCoFinite mdecl.(ind_finite)) (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn)) = true ->
+  isCoFinite mdecl.(ind_finite) = false ->
   cmp_ind_universes Σ ci #|args| u (puinst p) ->
   All2 (convAlgo Σ Γ) (firstn (ci_npar ci) args) (pparams p) ->
   (* case_branch_typing *)
@@ -433,7 +432,7 @@ Section BidirectionalInduction.
           (List.rev mdecl.(ind_params)@[p.(puinst)]) ->
       ctx_inst Pcheck Γ p.(pparams)
           (List.rev (subst_instance p.(puinst) mdecl.(ind_params))) ->
-      implb (isCoFinite mdecl.(ind_finite)) (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn)) = true ->
+      isCoFinite mdecl.(ind_finite) = false ->
       cmp_ind_universes Σ ci #|args| u (puinst p) ->
       All2 (convAlgo Σ Γ) (firstn (ci_npar ci) args) (pparams p) ->
       (* case_branch_typing *)
