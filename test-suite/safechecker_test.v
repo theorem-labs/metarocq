@@ -68,10 +68,11 @@ Definition template_case_instance (p : nat * nat)
   f h.
 MetaRocq SafeCheck @template_case_instance.
 
-(* A partially applied template inductive is compared with exact instances
-   in PCUIC.  Typing [g _ h] converts [template_partial_rel nat], which
-   unfolds to [@eq A] quoted at [A : Type@{template_case_u}], with [@eq nat]
-   (Z.eq_equiv: [eq@{RelationClasses.21} Z] against [eq@{Set} Z]). *)
+(* A partially applied template inductive, which the translation eta-expands.
+   Typing [g _ h] converts [template_partial_rel nat], which unfolds to the
+   expansion of [@eq A] at [A : Type@{template_case_u}], with the expansion of
+   [@eq nat] (as in Z.eq_equiv: [eq@{RelationClasses.21} Z] against
+   [eq@{Set} Z]); both are full applications of [eq], compared by variance. *)
 Definition template_partial_rel (A : Type@{template_case_u}) : A -> A -> Prop :=
   @eq A.
 Definition template_partial_instance (P : (nat -> nat -> Prop) -> Prop)
