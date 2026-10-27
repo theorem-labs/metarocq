@@ -21,7 +21,10 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics
 From MetaRocq.PCUIC Require Import BDTyping BDToPCUIC BDFromPCUIC BDUnique.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICSafeReduce PCUICErrors
-  PCUICSafeConversion PCUICWfReduction PCUICWfEnv PCUICCallByNeed.
+  PCUICSafeConversion PCUICWfReduction PCUICWfEnv.
+(* Integration (IntegRun3): required without Import. PCUICCallByNeed defines its own [whnf],
+   which would shadow PCUICNormal's [whnf] used by [whnf_red_codomain_ind] below. *)
+From MetaRocq.SafeChecker Require PCUICCallByNeed.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -366,7 +369,7 @@ Section Typecheck.
     CoreTactics.equations_simpl;
     try Tactics.program_solve_wf.
 
-  Opaque isconv_term cbn_conv.
+  Opaque isconv_term PCUICCallByNeed.cbn_conv.
 
   (* replaces convert and convert_leq*)
   Equations convert (le : conv_pb) Γ t u
@@ -376,7 +379,7 @@ Section Typecheck.
     convert le Γ t u ht hu
       with inspect (eqb_term_upto_univ (abstract_env_compare_universe X) (abstract_env_compare_sort X) (abstract_env_compare_global_instance _ X) le t u) := {
         | @exist true He := ret _ ;
-        | @exist false He with inspect (cbn_conv X_type X le Γ t u) := {
+        | @exist false He with inspect (PCUICCallByNeed.cbn_conv X_type X le Γ t u) := {
           | @exist true Hcbn := ret _ ;
           | @exist false Hcbn with
             inspect (isconv_term _ X Γ le t ht u hu) := {
