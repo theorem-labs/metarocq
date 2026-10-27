@@ -1287,3 +1287,38 @@ Notation ofvT := (on_free_vars xpredT).
 Lemma ofvT_shiftnP n t : on_free_vars (shiftnP n xpredT) t = ofvT t.
 Proof. apply on_free_vars_ext, shiftnP_xpredT. Qed.
 
+(** Proved locally (purity): no base lemma gives this direction. [on_free_vars_lift]
+    and friends all yield [t -> lift t], since [strengthenP k n xpredT <= xpredT] makes
+    [on_free_vars_impl] run outward; the converse needs the window-emptiness of lifting,
+    for which base has no [noccur_between]/[lift] bridge. *)
+Lemma ofvT_lift n k t : ofvT (lift n k t) = ofvT t.
+Proof.
+  induction t in n, k |- * using term_forall_list_ind; cbn; auto.
+  - rewrite forallb_map. apply All_forallb_eq_forallb with (1 := X). auto.
+  - now rewrite IHt1 !ofvT_shiftnP IHt2.
+  - now rewrite IHt1 !ofvT_shiftnP IHt2.
+  - now rewrite IHt1 IHt2 !ofvT_shiftnP IHt3.
+  - now rewrite IHt1 IHt2.
+  - destruct X as (Hpar & _ & Hret).
+    rewrite length_map.
+    f_equal.
+    { rewrite forallb_map. apply All_forallb_eq_forallb with (1 := Hpar). auto. }
+    f_equal.
+    { now rewrite !ofvT_shiftnP Hret. }
+    f_equal.
+    f_equal.
+    { eauto. }
+    rewrite forallb_map. apply All_forallb_eq_forallb with (1 := X0).
+    intros br [_ Hb]. cbn. now rewrite !ofvT_shiftnP Hb.
+  - rewrite forallb_map. apply All_forallb_eq_forallb with (1 := X).
+    intros d [Ht Hb]. unfold test_def. cbn.
+    now rewrite Ht !ofvT_shiftnP Hb.
+  - rewrite forallb_map. apply All_forallb_eq_forallb with (1 := X).
+    intros d [Ht Hb]. unfold test_def. cbn.
+    now rewrite Ht !ofvT_shiftnP Hb.
+  - destruct p as [? []]; cbn in X |- *; auto.
+    destruct X as (Ht & Hd & Hv).
+    rewrite Ht Hd forallb_map. f_equal. f_equal.
+    apply All_forallb_eq_forallb with (1 := Hv). auto.
+Qed.
+
