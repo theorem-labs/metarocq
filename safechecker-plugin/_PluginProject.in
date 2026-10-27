@@ -47,6 +47,8 @@ src/pCUICGuardClosure.ml
 src/pCUICGuardClosure.mli
 src/pCUICTyping.ml
 src/pCUICTyping.mli
+src/pCUICWfUniverses.mli
+src/pCUICWfUniverses.ml
 src/pCUICPosition.mli
 src/pCUICPosition.ml
 src/pCUICNormal.mli
@@ -77,6 +79,8 @@ src/pCUICSafeReduce.mli
 src/pCUICSafeReduce.ml
 src/pCUICSafeConversion.mli
 src/pCUICSafeConversion.ml
+src/pCUICCallByNeed.mli
+src/pCUICCallByNeed.ml
 src/pCUICTypeChecker.mli
 src/pCUICTypeChecker.ml
 src/pCUICPositivityCheck.mli
