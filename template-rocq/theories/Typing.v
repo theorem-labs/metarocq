@@ -181,6 +181,23 @@ Proof. by destruct l. Qed.
 Lemma lit_of_template_inv t l : lit_of_template t = Some l -> t = template_of_lit l.
 Proof. destruct t => //=; intros [= <-]; reflexivity. Qed.
 
+(** The readback of a result into a term, the twin of
+    [PCUICPrimitiveRed.readback].  [SBool] reads back to a constructor of the
+    inductive registered as [retro_bool], positionally: [true] is constructor 0
+    and [false] constructor 1, which is the kernel's orientation
+    ([Register_ind PIT_bool] stores [((ind,1),(ind,2))], kernel/primred.ml, and
+    kernel constructor indices are 1-based while [tConstruct] is 0-based). *)
+Definition treadback (Σ : global_env) (s : prim_shape) (r : prim_result) : option term :=
+  match s, r with
+  | SInt, RInt i => Some (tInt i)
+  | SBool, RBool b =>
+      match primitive_bool Σ with
+      | Some ind => Some (tConstruct ind (if b then 0 else 1) [])
+      | None => None
+      end
+  | SInt, RBool _ | SBool, RInt _ => None
+  end.
+
 (** *** One step strong beta-zeta-iota-fix-delta reduction
 
   Inspired by the reduction relation from Coq in Coq [Barras'99].
@@ -239,6 +256,23 @@ Inductive red1 (Σ : global_env) (Γ : context) : term -> term -> Type :=
 | red_delta c decl body (isdecl : declared_constant Σ c decl) u :
     decl.(cst_body) = Some body ->
     red1 Σ Γ (tConst c u) (subst_instance u body)
+
+(** Primitive operation: a registered bodiless constant applied to exactly the
+    literals its operation expects computes, as it does in the kernel
+    (kernel/cClosure.ml: fire only when saturated and every argument is a
+    value).  The form is prefix, as Template's beta is, because applications are
+    n-ary: the arguments beyond the operation's arity stay applied to the
+    reduct.  [cst_body decl = None] keeps this rule disjoint from [red_delta] in
+    every environment; the instance [u] is unconstrained because the operations
+    are monomorphic.  A not-yet-literal argument reaches its redex through
+    [app_red_r].  The PCUIC twin is [PCUICReduction.red_prim_op], and both
+    languages compute with the one denotation [prim_op_denote]. *)
+| red_prim_op c decl u op ls r v rest (isdecl : declared_constant Σ c decl) :
+    prim_op_of Σ c = Some op ->
+    cst_body decl = None ->
+    prim_op_denote op ls = Some r ->
+    treadback Σ (po_shape (info op)) r = Some v ->
+    red1 Σ Γ (tApp (tConst c u) (map template_of_lit ls ++ rest)) (mkApps v rest)
 
 (** Proj *)
 | red_proj p u args arg:
@@ -353,6 +387,16 @@ Lemma red1_ind_all :
         declared_constant Σ c decl ->
         forall u : Instance.t, cst_body decl = Some body -> P Γ (tConst c u) (subst_instance u body)) ->
 
+       (forall (Γ : context) c (decl : constant_body) (u : Instance.t)
+          (op : prim_op) (ls : list prim_lit) (r : prim_result) (v : term)
+          (rest : list term),
+        declared_constant Σ c decl ->
+        prim_op_of Σ c = Some op ->
+        cst_body decl = None ->
+        prim_op_denote op ls = Some r ->
+        treadback Σ (po_shape (info op)) r = Some v ->
+        P Γ (tApp (tConst c u) (map template_of_lit ls ++ rest)) (mkApps v rest)) ->
+
        (forall (Γ : context) p (args : list term) (u : Instance.t) (arg : term),
            nth_error args (p.(proj_npars) + p.(proj_arg)) = Some arg ->
            P Γ (tProj p (mkApps (tConstruct p.(proj_ind) 0 u) args)) arg) ->
@@ -450,7 +494,7 @@ Lemma red1_ind_all :
 
        forall (Γ : context) (t t0 : term), red1 Σ Γ t t0 -> P Γ t t0.
 Proof.
-  intros. rename X33 into Xlast. revert Γ t t0 Xlast.
+  intros. rename X34 into Xlast. revert Γ t t0 Xlast.
   fix aux 4. intros Γ t T.
   move aux at top.
   destruct 1;
@@ -459,14 +503,14 @@ Proof.
           | H : _ |- _ => eapply H; eauto; fail
           end].
 
-  - apply X13.
+  - apply X14.
     revert params params' o.
     fix auxl 3.
     intros params params' [].
     + constructor. split; auto.
     + constructor. auto.
 
-  - eapply X16; eauto.
+  - eapply X17; eauto.
     revert brs brs' o.
     intros brs.
     generalize (case_branches_contexts (ci_ind ind) mdecl idecl p brs).
@@ -477,39 +521,39 @@ Proof.
       intuition auto. auto.
     + constructor. eapply auxl. apply Hl.
 
-  - apply X19.
+  - apply X20.
     revert M2 N2 o.
     fix auxl 3.
     intros l l' Hl. destruct Hl.
     + constructor. split; auto.
     + constructor. auto.
 
-  - apply X22.
+  - apply X23.
     revert l l' o.
     fix auxl 3.
     intros l l' Hl. destruct Hl.
     constructor. split; auto.
     constructor. auto.
 
-  - apply X26.
+  - apply X27.
     revert mfix0 mfix1 o; fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.
 
-  - apply X27.
+  - apply X28.
     revert o. generalize (fix_context mfix0). intros c H28.
     revert mfix0 mfix1 H28; fix auxl 3; intros l l' Hl;
     destruct Hl; constructor; try split; auto; intuition.
 
-  - eapply X28.
+  - eapply X29.
     revert mfix0 mfix1 o; fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.
 
-  - eapply X29.
+  - eapply X30.
     revert o. generalize (fix_context mfix0). intros c H28.
     revert mfix0 mfix1 H28; fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.
 
-  - eapply X30.
+  - eapply X31.
     revert v v' o. fix auxl 3; intros ? ? Hl; destruct Hl;
       constructor; try split; auto; intuition.
 Defined.

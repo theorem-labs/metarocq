@@ -720,6 +720,15 @@ Proof.
   constructor; auto.
 Qed.
 
+(** The reduct of a primitive operation is a literal or a constructor of the
+    registered boolean inductive: well formed with no premise. *)
+Lemma wf_treadback {Σ s r v} : treadback Σ s r = Some v -> WfAst.wf Σ v.
+Proof.
+  destruct s, r => //=.
+  - intros [= <-]; constructor.
+  - destruct primitive_bool => //. intros [= <-]; constructor.
+Qed.
+
 Section WfRed.
   Context {cf:checker_flags}.
   Context {Σ : global_env}.
@@ -768,6 +777,13 @@ Section WfRed.
       destruct decl; simpl in *.
       subst cst_body0; simpl in *; unfold on_constant_decl in prf; cbn in prf; destruct prf as [prfbod prftyp].
       unfold j_term in prfbod. intuition eauto using wf_extends with typeclass_instances.
+    (* primitive operation: the reduct is a literal or a constructor, and the
+       arguments beyond the operation's arity are kept *)
+    - match goal with
+      | h : All (WfAst.wf Σ) (map template_of_lit _ ++ _) |- _ =>
+        apply All_app in h as [_ hrest]
+      end.
+      apply wf_mkApps; [eapply wf_treadback; eassumption|assumption].
     - apply wf_mkApps_inv in X.
       eapply nth_error_all in X; eauto.
     - simpl in *. econstructor; eauto. cbn.
