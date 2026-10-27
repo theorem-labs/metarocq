@@ -321,8 +321,8 @@ Section ConvCongruences.
   Proof using Type.
     intros H; depind H.
     - now inversion c.
-    - depelim r. solve_discr.
-    - depelim r. solve_discr.
+    - depelim r; solve_discr.
+    - depelim r; solve_discr.
   Qed.
 
   Lemma ws_cumul_pb_Sort_Prod_inv {Γ s na dom codom} pb :
@@ -331,7 +331,7 @@ Section ConvCongruences.
   Proof using Type.
     intros H. depind H.
     - now inversion c.
-    - depelim r. solve_discr.
+    - depelim r; solve_discr.
     - depelim r; solve_discr.
       + eapply IHws_cumul_pb. reflexivity.
       + eapply IHws_cumul_pb. reflexivity.
@@ -342,11 +342,8 @@ Section ConvCongruences.
   Proof using Type.
     intros H; depind H; auto.
     - now inversion c.
-    - depelim r.
-      + solve_discr.
-      + eapply IHws_cumul_pb; reflexivity.
-      + eapply IHws_cumul_pb; reflexivity.
-    - depelim r. solve_discr.
+    - depelim r; try solve_discr; eapply IHws_cumul_pb; reflexivity.
+    - depelim r; solve_discr.
   Qed.
 
   Lemma ws_cumul_pb_Sort_l_inv {Γ s T} pb :
@@ -355,7 +352,7 @@ Section ConvCongruences.
   Proof using Type.
     intros H. depind H.
     - inversion c; eauto using into_closed_red.
-    - depelim r. solve_discr.
+    - depelim r; solve_discr.
     - destruct IHws_cumul_pb as [s' [redv leq]].
       exists s'. split; auto. eapply into_closed_red; tea.
       eapply red_step with v; eauto with fvs.
@@ -370,7 +367,7 @@ Section ConvCongruences.
     - destruct IHws_cumul_pb as [s' [redv leq]].
       exists s'. split; auto. eapply into_closed_red; tea.
       eapply red_step with v; eauto with fvs.
-    - depelim r. solve_discr.
+    - depelim r; solve_discr.
   Qed.
 
   (* #[global]
@@ -561,6 +558,7 @@ Section ConvCongruences.
       depelim r; try specialize (X0 _ _ _ _ eq_refl) as
         [(? & ? & ? & [? ? ? ?])|?].
       - right. split; try apply clos_rt_rt1n_iff; eauto.
+      - solve_discr.
       - solve_discr.
       - left. do 3 eexists; split; eauto with pcuic.
         * transitivity r; eauto with pcuic.
@@ -767,20 +765,21 @@ Section ConvCongruences.
   Lemma invert_red_axiom {Γ cst u cdecl T} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ tConst cst u ⇝ T ->
     T = tConst cst u.
   Proof using wfΣ.
-    intros hdecl hb.
+    intros hdecl hb hnop.
     unshelve eapply declared_constant_to_gen in hdecl; eauto.
     generalize_eq x (tConst cst u).
     move=> e [clΓ clt] red.
-    revert cst u hdecl hb e.
+    revert cst u hdecl hb hnop e.
     eapply clos_rt_rt1n_iff in red.
     induction red; simplify_dep_elim.
     - reflexivity.
-    - depelim r; solve_discr.
-      unshelve eapply declared_constant_to_gen in isdecl; eauto.
-      congruence.
+    - depelim r; try solve_discr.
+      + unshelve eapply declared_constant_to_gen in isdecl; eauto.
+        congruence.
   Qed.
 
   Ltac bool := rtoProp; intuition eauto.
@@ -788,10 +787,11 @@ Section ConvCongruences.
   Lemma invert_red1_axiom_app {Γ cst u cdecl args T} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ mkApps (tConst cst u) args ⇝1 T ->
     ∑ args', (T = mkApps (tConst cst u) args') × All2 (fun arg arg' => Σ ;;; Γ ⊢ arg ⇝ arg') args args'.
   Proof using wfΣ.
-    intros hdecl hbod. revert T.
+    intros hdecl hbod hnop. revert T.
     induction args using rev_ind.
     - simpl. intros; eapply invert_red_axiom in hbod; tea.
       2:{ eapply closed_red1_red; tea. }
@@ -801,6 +801,11 @@ Section ConvCongruences.
       depind clrel_rel; solve_discr.
       * destruct args using rev_case; solve_discr; noconf H.
         rewrite mkApps_app in H; noconf H. solve_discr.
+      * exfalso. clear -hnop e H.
+        destruct ls using MRList.rev_ind; cbn in H; [noconf H; congruence|].
+        rewrite map_app mkApps_app /= in H. injection H as H1 H2.
+        apply mkApps_eq_inj in H1 as [H3 _]; [|easy|easy].
+        noconf H3. congruence.
       * specialize (IHargs N1); forward IHargs.
         { constructor; fvs. cbn in clrel_src. rtoProp; intuition auto. }
         destruct IHargs as [args' []]. exists (args' ++ [M2]). subst N1. rewrite mkApps_app /=; split => //.
@@ -833,10 +838,11 @@ Section ConvCongruences.
   Lemma invert_red_axiom_app {Γ cst u cdecl args T} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ mkApps (tConst cst u) args ⇝ T ->
     ∑ args', (T = mkApps (tConst cst u) args') × All2 (fun arg arg' => Σ ;;; Γ ⊢ arg ⇝ arg') args args'.
   Proof using wfΣ.
-    intros hdecl hbod red.
+    intros hdecl hbod hnop red.
     remember (mkApps (tConst cst u) args) as U. revert red args HeqU.
     revert Γ U T.
     apply: closed_red_ind; intros; subst.
@@ -1062,7 +1068,7 @@ Section Inversions.
   Proof using wfΣ.
     intros [clΓ clu H]. generalize_eq x (tSort u).
     induction H; simplify *.
-    - depind r. solve_discr.
+    - depind r; solve_discr.
     - reflexivity.
     - rewrite IHclos_refl_trans2; eauto with fvs.
   Qed.
@@ -1158,24 +1164,12 @@ Section Inversions.
   Proof using Type.
     intros Γ u v h a.
     induction u in Γ, v, h, a |- *. all: try (cbn [isArity] in *; congruence).
-    - dependent destruction h.
-      apply (f_equal nApp) in H as eq. simpl in eq.
-      rewrite nApp_mkApps in eq. simpl in eq.
-      destruct args. 2: discriminate.
-      simpl in H. discriminate.
-    - dependent destruction h.
-      + apply (f_equal nApp) in H as eq. simpl in eq.
-        rewrite nApp_mkApps in eq. simpl in eq.
-        destruct args. 2: discriminate.
-        simpl in H. discriminate.
+    - dependent destruction h; try solve_discr.
+    - dependent destruction h; try solve_discr.
       + assumption.
       + simpl in *. eapply IHu2. all: eassumption.
-    - dependent destruction h.
+    - dependent destruction h; try solve_discr.
       + simpl in *. apply isArity_subst. assumption.
-      + apply (f_equal nApp) in H as eq. simpl in eq.
-        rewrite nApp_mkApps in eq. simpl in eq.
-        destruct args. 2: discriminate.
-        simpl in H. discriminate.
       + assumption.
       + assumption.
       + simpl in *. eapply IHu3. all: eassumption.
@@ -1404,15 +1398,16 @@ Section Inversions.
   Lemma ws_cumul_pb_Axiom_l_inv {pb Γ cst u args cdecl T} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ mkApps (tConst cst u) args ≤[pb] T ->
     ∑ u' args',
       [× Σ ;;; Γ ⊢ T ⇝ mkApps (tConst cst u') args',
          All2 (fun args args' => Σ ;;; Γ ⊢ args ≤[Conv] args') args args' &
          PCUICEquality.cmp_universe_instance (eq_universe Σ) u u'].
   Proof using wfΣ.
-    intros hdecl hb H.
+    intros hdecl hb hnop H.
     eapply ws_cumul_pb_red in H as (v & v' & [tv tv' eqp]).
-    epose proof (invert_red_axiom_app hdecl hb tv) as [args' [-> ?]].
+    epose proof (invert_red_axiom_app hdecl hb hnop tv) as [args' [-> ?]].
     eapply compare_term_mkApps_l_inv in eqp as [t' [l' []]]; subst v'.
     depelim c.
     exists u', l'. split => //.
@@ -1426,15 +1421,16 @@ Section Inversions.
   Lemma ws_cumul_pb_Axiom_r_inv {pb Γ cst u args cdecl T} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ T ≤[pb] mkApps (tConst cst u) args ->
     ∑ u' args',
       [× Σ ;;; Γ ⊢ T ⇝ mkApps (tConst cst u') args',
          All2 (fun args args' => Σ ;;; Γ ⊢ args ≤[Conv] args') args' args &
          PCUICEquality.cmp_universe_instance (eq_universe Σ) u' u].
   Proof using wfΣ.
-    intros hdecl hb H.
+    intros hdecl hb hnop H.
     eapply ws_cumul_pb_red in H as (v & v' & [tv tv' eqp]).
-    epose proof (invert_red_axiom_app hdecl hb tv') as [args' [-> ?]].
+    epose proof (invert_red_axiom_app hdecl hb hnop tv') as [args' [-> ?]].
     eapply compare_term_mkApps_r_inv in eqp as [t' [l' []]]; subst v.
     depelim c.
     exists u0, l'. split => //.
@@ -1449,27 +1445,30 @@ Section Inversions.
   Lemma invert_cumul_axiom_ind {Γ cst cdecl u ind u' args args'} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ mkApps (tConst cst u) args ≤ mkApps (tInd ind u') args' -> False.
   Proof using wfΣ.
-    intros hd hb ht; eapply ws_cumul_pb_Axiom_l_inv in ht as (u'' & args'' & [hred hcmp _]); eauto.
+    intros hd hb hnop ht; eapply ws_cumul_pb_Axiom_l_inv in ht as (u'' & args'' & [hred hcmp _]); eauto.
     eapply invert_red_mkApps_tInd in hred as (? & []); auto. solve_discr.
   Qed.
 
   Lemma invert_cumul_axiom_prod {Γ cst cdecl u args na dom codom} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ mkApps (tConst cst u) args ≤ tProd na dom codom -> False.
   Proof using wfΣ.
-    intros hd hb ht; eapply ws_cumul_pb_Axiom_l_inv in ht as (u'' & args' & [hred hcmp _]); eauto.
+    intros hd hb hnop ht; eapply ws_cumul_pb_Axiom_l_inv in ht as (u'' & args' & [hred hcmp _]); eauto.
     eapply invert_red_prod in hred as (? & ? & []); auto. solve_discr.
   Qed.
 
   Lemma invert_cumul_prim_type_ind {Γ cst cdecl p ind u' args'} :
     declared_constant Σ cst cdecl ->
     primitive_invariants (prim_val_tag p) cdecl ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ prim_type p cst ≤ mkApps (tInd ind u') args' -> False.
   Proof using wfΣ.
-    intros hd hb ht.
+    intros hd hb hnop ht.
     destruct p as [? []]; simp prim_type in ht.
     1-3:eapply (invert_cumul_axiom_ind (args := [])) in ht; tea; now destruct hb as [? []].
     eapply (invert_cumul_axiom_ind (args := [_])) in ht; tea. apply hb.
@@ -1478,9 +1477,10 @@ Section Inversions.
   Lemma invert_cumul_prim_type_prod {Γ cst cdecl p na dom codom} :
     declared_constant Σ cst cdecl ->
     primitive_invariants (prim_val_tag p) cdecl ->
+    prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ prim_type p cst ≤ tProd na dom codom -> False.
   Proof using wfΣ.
-    intros hd hb ht.
+    intros hd hb hnop ht.
     destruct p as [? []]; simp prim_type in ht.
     1-3:eapply (invert_cumul_axiom_prod (args := [])) in ht; tea; now destruct hb as [? []].
     eapply (invert_cumul_axiom_prod (args := [_])) in ht; tea. apply hb.

@@ -219,7 +219,14 @@ Module Retroknowledge.
 
   (** With the table a list, [merge r1 r2] is no longer syntactically [r2] when
       [r1] extends [r2] — [r1]'s entries come first — but it still has exactly
-      [r2]'s lookups. *)
+      [r2]'s lookups.  The equality is not needed anywhere: [Retroknowledge.merge]
+      has one caller, [merge_global_envs] (:953), whose two lemmas
+      [extends_l_merge] and [extends_r_merge] ask for the two inclusions, not for
+      equality.  Nor does the well-formedness of a prefix environment need it: a
+      prefix is built as [mk_global_env univs Σ retro] with the *same*
+      retroknowledge record as the whole environment
+      ([EnvironmentTyping.v:1953], [:2427]), so a condition stated on the
+      retroknowledge holds in every prefix as soon as it holds once. *)
   Lemma extends_merge_idempotent r1 r2
     : extends r1 r2 -> extends (merge r1 r2) r2.
   Proof.
