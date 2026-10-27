@@ -11,6 +11,7 @@ theories/PCUICCallByNeedSound.v
 theories/PCUICCallByNeedSoundGC.v
 theories/PCUICCallByNeedSoundCtx.v
 theories/PCUICCallByNeedSoundCong.v
+theories/PCUICCallByNeedSoundMemo.v
 theories/PCUICTypeChecker.v
 theories/PCUICPositivityCheck.v
 theories/PCUICSafeChecker.v
