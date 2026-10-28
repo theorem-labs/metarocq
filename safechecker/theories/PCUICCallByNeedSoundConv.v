@@ -500,6 +500,274 @@ Section CmpSound.
   Qed.
 End CmpSound.
 
+(** ** A substitution does not look at an index the term does not use
+
+  The same-code rule skips a position whose index does not occur in the code
+  ([noccur_between i 1 t]), so what it establishes of the two environments is weaker than
+  "pairwise convertible". [subst_noccur_irrel] says that this is enough: two substitutions
+  that agree at every index the term uses give the same term. [subst_agree_lift] is the
+  instance the read-back shape [subst ts 0 (lift N #|ts| t)] meets, where the cut of the
+  lift sits above every substituted index, so the occurrence test is made on [t] itself
+  ([noccur_between_lift]). *)
+
+Lemma noccA_forallb_map {A B : Type} (P : A -> Type) (p : A -> bool) (q : B -> bool)
+  (f : A -> B) (l : list A) :
+  All P l -> (forall x, P x -> p x = true -> q (f x) = true) ->
+  forallb p l = true -> forallb q (map f l) = true.
+Proof.
+  intros HA Hf. induction HA as [|x l Px HA IH]; cbn; intros H; [reflexivity|].
+  apply Bool.andb_true_iff in H as [H1 H2]. apply Bool.andb_true_iff. split.
+  - exact (Hf x Px H1).
+  - exact (IH H2).
+Qed.
+
+Lemma noccA_map_ext {A B : Type} (P : A -> Type) (f g : A -> B) (l : list A) :
+  All P l -> (forall x, In x l -> P x -> f x = g x) -> map f l = map g l.
+Proof.
+  intros HA. induction HA as [|x l Px HA IH]; cbn; intros H; [reflexivity|].
+  f_equal.
+  - apply H; [left; reflexivity | exact Px].
+  - apply IH. intros y Hy Py. apply H; [right; exact Hy | exact Py].
+Qed.
+
+Lemma noccA_forallb_false {A : Type} (p : A -> bool) (l : list A) (x : A) :
+  In x l -> p x = false -> forallb p l = false.
+Proof.
+  intros Hin Hx. induction l as [|y l IH]; cbn in Hin |- *; [contradiction|].
+  destruct Hin as [Hy|Hin].
+  - subst y. rewrite Hx. reflexivity.
+  - rewrite (IH Hin). apply Bool.andb_false_r.
+Qed.
+
+(* [noccA_false H] closes a goal [c = false] where [c] is a conjunction ([andb]) one of
+   whose conjuncts is, up to conversion, the left side of [H : _ = false]. *)
+Ltac noccA_false H :=
+  first [ exact H
+        | apply Bool.andb_false_iff;
+          first [ left; noccA_false H | right; noccA_false H ] ].
+
+(* [noccA_sub Hj] moves the agreement hypothesis [Hj] of a term to one of its direct
+   subterms: if the subterm uses an index then so does the term. *)
+Ltac noccA_sub Hj :=
+  let j := fresh "j" in
+  let Hj1 := fresh "Hj1" in
+  let Hj2 := fresh "Hj2" in
+  intros j Hj1 Hj2; apply Hj; [exact Hj1 | cbn [noccur_between]; noccA_false Hj2].
+
+Lemma noccur_between_lift (n k i : nat) (t : term) :
+  i < k -> noccur_between i 1 t = true -> noccur_between i 1 (lift n k t) = true.
+Proof.
+  revert n k i. elim t using term_forall_list_ind.
+  - (* tRel *)
+    intros r N K I HIK H. cbn [lift noccur_between] in H |- *.
+    destruct (K <=? r) eqn:E; [|exact H].
+    apply Nat.leb_le in E.
+    apply Bool.orb_true_iff; right; apply Nat.leb_le; lia.
+  - (* tVar *) intros; reflexivity.
+  - (* tEvar *)
+    intros ev l Hl N K I HIK H. cbn [lift noccur_between] in H |- *.
+    refine (noccA_forallb_map _ _ _ _ _ Hl _ H). intros x Px Hx. apply Px; assumption.
+  - (* tSort *) intros; reflexivity.
+  - (* tProd *)
+    intros na A IHA B IHB N K I HIK H. cbn [lift noccur_between] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply IHA | apply IHB]; first [assumption | lia].
+  - (* tLambda *)
+    intros na A IHA B IHB N K I HIK H. cbn [lift noccur_between] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply IHA | apply IHB]; first [assumption | lia].
+  - (* tLetIn *)
+    intros na b IHb ty IHty B IHB N K I HIK H. cbn [lift noccur_between] in H |- *.
+    apply Bool.andb_true_iff in H as [H H3]. apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply Bool.andb_true_iff; split|].
+    + apply IHb; first [assumption | lia].
+    + apply IHty; first [assumption | lia].
+    + apply IHB; first [assumption | lia].
+  - (* tApp *)
+    intros u v IHu IHv N K I HIK H. cbn [lift noccur_between] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply IHu | apply IHv]; first [assumption | lia].
+  - (* tConst *) intros; reflexivity.
+  - (* tInd *) intros; reflexivity.
+  - (* tConstruct *) intros; reflexivity.
+  - (* tCase *)
+    intros ci p Hp c IHc brs Hbrs N K I HIK H. cbn [lift noccur_between] in H |- *.
+    destruct Hp as [Hpar [Hctx Hret]].
+    unfold test_predicate_k, map_predicate_k in H |- *. simpl in H |- *.
+    apply Bool.andb_true_iff in H as [H Hbr].
+    apply Bool.andb_true_iff in H as [H Hc].
+    apply Bool.andb_true_iff in H as [H Hr].
+    apply Bool.andb_true_iff in H as [Hpa Hcx].
+    apply Bool.andb_true_iff; split.
+    2:{ refine (noccA_forallb_map _ _ _ _ _ Hbrs _ Hbr).
+        intros br [Pctx Pbody] Hb. unfold test_branch_k, map_branch_k in Hb |- *.
+        simpl in Hb |- *. cbv [id].
+        rewrite length_map.
+        apply Bool.andb_true_iff in Hb as [Hb1 Hb2].
+        apply Bool.andb_true_iff; split; [exact Hb1 | apply Pbody; [lia | exact Hb2]]. }
+    apply Bool.andb_true_iff; split.
+    2:{ apply IHc; assumption. }
+    apply Bool.andb_true_iff; split.
+    2:{ apply Hret; [lia | exact Hr]. }
+    apply Bool.andb_true_iff; split.
+    2:{ rewrite length_map. exact Hcx. }
+    refine (noccA_forallb_map _ _ _ _ _ Hpar _ Hpa). intros x Px Hx. apply Px; assumption.
+  - (* tProj *)
+    intros pr c IHc N K I HIK H. cbn [lift noccur_between] in H |- *.
+    apply IHc; assumption.
+  - (* tFix *)
+    intros mfix idx Hm N K I HIK H. cbn [lift noccur_between] in H |- *.
+    rewrite length_map.
+    refine (noccA_forallb_map _ _ _ _ _ Hm _ H).
+    intros d [Pty Pbody] Hd. unfold test_def, map_def in Hd |- *. simpl in Hd |- *.
+    apply Bool.andb_true_iff in Hd as [Hd1 Hd2].
+    apply Bool.andb_true_iff; split; [apply Pty | apply Pbody]; first [assumption | lia].
+  - (* tCoFix *)
+    intros mfix idx Hm N K I HIK H. cbn [lift noccur_between] in H |- *.
+    rewrite length_map.
+    refine (noccA_forallb_map _ _ _ _ _ Hm _ H).
+    intros d [Pty Pbody] Hd. unfold test_def, map_def in Hd |- *. simpl in Hd |- *.
+    apply Bool.andb_true_iff in Hd as [Hd1 Hd2].
+    apply Bool.andb_true_iff; split; [apply Pty | apply Pbody]; first [assumption | lia].
+  - (* tPrim *)
+    intros prim Hprim N K I HIK H. cbn [lift noccur_between] in H |- *.
+    destruct prim as [tg [? | ? | ? | a]]; cbn in Hprim, H |- *; try reflexivity.
+    destruct Hprim as [Hty [Hdef Hval]].
+    apply Bool.andb_true_iff in H as [H H3]. apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply Bool.andb_true_iff; split|].
+    + refine (noccA_forallb_map _ _ _ _ _ Hval _ H1). intros y Py Hy. apply Py; assumption.
+    + apply Hdef; assumption.
+    + apply Hty; assumption.
+Qed.
+
+Lemma subst_noccur_irrel (l1 l2 : list term) :
+  #|l1| = #|l2| ->
+  forall (b : term) (k : nat),
+    (forall j, j < #|l1| -> noccur_between (k + j) 1 b = false ->
+               nth_error l1 j = nth_error l2 j) ->
+    subst l1 k b = subst l2 k b.
+Proof.
+  intros Hlen b. elim b using term_forall_list_ind.
+  - (* tRel *)
+    intros r k Hj. cbn [subst].
+    destruct (k <=? r) eqn:E; [|reflexivity].
+    apply Nat.leb_le in E.
+    destruct (Nat.lt_ge_cases (r - k) #|l1|) as [Hlt|Hge].
+    + assert (Heq : nth_error l1 (r - k) = nth_error l2 (r - k)).
+      { apply Hj; [exact Hlt|]. cbn [noccur_between].
+        apply Bool.orb_false_iff; split; [apply Nat.ltb_ge | apply Nat.leb_gt]; lia. }
+      rewrite Heq. rewrite Hlen. reflexivity.
+    + assert (E1 : nth_error l1 (r - k) = None) by (apply nth_error_None; lia).
+      assert (E2 : nth_error l2 (r - k) = None) by (apply nth_error_None; lia).
+      rewrite E1. rewrite E2. rewrite Hlen. reflexivity.
+  - (* tVar *) intros; reflexivity.
+  - (* tEvar *)
+    intros ev l Hl k Hj. cbn [subst].
+    f_equal. apply (noccA_map_ext _ _ _ _ Hl). intros x Hin Px. apply Px.
+    intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn [noccur_between].
+    exact (noccA_forallb_false _ _ _ Hin Hj2).
+  - (* tSort *) intros; reflexivity.
+  - (* tProd *)
+    intros na A IHA B IHB k Hj. cbn [subst].
+    f_equal; [apply IHA | apply IHB]; noccA_sub Hj.
+  - (* tLambda *)
+    intros na A IHA B IHB k Hj. cbn [subst].
+    f_equal; [apply IHA | apply IHB]; noccA_sub Hj.
+  - (* tLetIn *)
+    intros na t IHt ty IHty B IHB k Hj. cbn [subst].
+    f_equal; [apply IHt | apply IHty | apply IHB]; noccA_sub Hj.
+  - (* tApp *)
+    intros u v IHu IHv k Hj. cbn [subst].
+    f_equal; [apply IHu | apply IHv]; noccA_sub Hj.
+  - (* tConst *) intros; reflexivity.
+  - (* tInd *) intros; reflexivity.
+  - (* tConstruct *) intros; reflexivity.
+  - (* tCase *)
+    intros ci p Hp c IHc brs Hbrs k Hj. cbn [subst].
+    destruct Hp as [Hpar [Hctx Hret]].
+    f_equal; [unfold map_predicate_k; f_equal | apply IHc; noccA_sub Hj | ].
+    + (* pparams *)
+      apply (noccA_map_ext _ _ _ _ Hpar). intros x Hin Px. apply Px.
+      intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn [noccur_between].
+      unfold test_predicate_k.
+      pose proof (noccA_forallb_false _ _ _ Hin Hj2) as Hf. noccA_false Hf.
+    + (* preturn *)
+      apply Hret. intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn [noccur_between].
+      unfold test_predicate_k.
+      rewrite <- Nat.add_assoc in Hj2. noccA_false Hj2.
+    + (* branches *)
+      apply (noccA_map_ext _ _ _ _ Hbrs). intros br Hin [Pctx Pbody].
+      unfold map_branch_k. f_equal. apply Pbody.
+      intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn [noccur_between].
+      rewrite <- Nat.add_assoc in Hj2.
+      assert (Hb : test_branch_k p (fun k0 => noccur_between k0 1) (k + j) br = false)
+        by (unfold test_branch_k; noccA_false Hj2).
+      pose proof (noccA_forallb_false _ _ _ Hin Hb) as Hf. noccA_false Hf.
+  - (* tProj *)
+    intros pr c IHc k Hj. cbn [subst].
+    f_equal; apply IHc; noccA_sub Hj.
+  - (* tFix *)
+    intros mfix idx Hm k Hj. cbn [subst].
+    f_equal. apply (noccA_map_ext _ _ _ _ Hm). intros d Hin [Pty Pbody].
+    unfold map_def. f_equal.
+    + apply Pty. intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn [noccur_between].
+      assert (Hd : test_def (noccur_between (k + j) 1)
+                     (noccur_between (#|mfix| + (k + j)) 1) d = false)
+        by (unfold test_def; noccA_false Hj2).
+      exact (noccA_forallb_false _ _ _ Hin Hd).
+    + apply Pbody. intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn [noccur_between].
+      rewrite <- Nat.add_assoc in Hj2.
+      assert (Hd : test_def (noccur_between (k + j) 1)
+                     (noccur_between (#|mfix| + (k + j)) 1) d = false)
+        by (unfold test_def; noccA_false Hj2).
+      exact (noccA_forallb_false _ _ _ Hin Hd).
+  - (* tCoFix *)
+    intros mfix idx Hm k Hj. cbn [subst].
+    f_equal. apply (noccA_map_ext _ _ _ _ Hm). intros d Hin [Pty Pbody].
+    unfold map_def. f_equal.
+    + apply Pty. intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn [noccur_between].
+      assert (Hd : test_def (noccur_between (k + j) 1)
+                     (noccur_between (#|mfix| + (k + j)) 1) d = false)
+        by (unfold test_def; noccA_false Hj2).
+      exact (noccA_forallb_false _ _ _ Hin Hd).
+    + apply Pbody. intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn [noccur_between].
+      rewrite <- Nat.add_assoc in Hj2.
+      assert (Hd : test_def (noccur_between (k + j) 1)
+                     (noccur_between (#|mfix| + (k + j)) 1) d = false)
+        by (unfold test_def; noccA_false Hj2).
+      exact (noccA_forallb_false _ _ _ Hin Hd).
+  - (* tPrim *)
+    intros prim Hprim k Hj. cbn [subst].
+    destruct prim as [tg [? | ? | ? | a]]; cbn in Hprim |- *; try reflexivity.
+    destruct Hprim as [Hty [Hdef Hval]].
+    assert (E1 : subst l1 k (array_type a) = subst l2 k (array_type a)).
+    { apply Hty. intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn. noccA_false Hj2. }
+    assert (E2 : subst l1 k (array_default a) = subst l2 k (array_default a)).
+    { apply Hdef. intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn. noccA_false Hj2. }
+    assert (E3 : map (subst l1 k) (array_value a) = map (subst l2 k) (array_value a)).
+    { apply (noccA_map_ext _ _ _ _ Hval). intros y Hin Py. apply Py.
+      intros j Hj1 Hj2. apply Hj; [exact Hj1|]. cbn.
+      pose proof (noccA_forallb_false _ _ _ Hin Hj2) as Hf. noccA_false Hf. }
+    unfold mapu_array_model.
+    rewrite E1. rewrite E2. rewrite E3. reflexivity.
+Qed.
+
+Lemma subst_agree_lift (l1 l2 : list term) (N m : nat) (t : term) :
+  #|l1| = #|l2| -> m = #|l1| ->
+  (forall j, j < #|l1| -> noccur_between j 1 t = false ->
+             nth_error l1 j = nth_error l2 j) ->
+  subst l1 0 (lift N m t) = subst l2 0 (lift N m t).
+Proof.
+  intros Hlen Hm Hag.
+  apply subst_noccur_irrel; [exact Hlen|].
+  intros j Hj Hnoc. apply Hag; [exact Hj|].
+  destruct (noccur_between j 1 t) eqn:E; [|reflexivity].
+  exfalso.
+  assert (Hl : noccur_between (0 + j) 1 (lift N m t) = true)
+    by (apply noccur_between_lift; [lia | exact E]).
+  rewrite Hl in Hnoc. discriminate.
+Qed.
+
 (** ** The fuel a sub-call runs at
 
   Every function of the comparison matches its fuel [FS k] and calls its neighbours at
@@ -766,6 +1034,17 @@ Section Conv.
       end.
   Proof. reflexivity. Qed.
 
+  Lemma conv_same_code_eq (k : unit -> cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code)
+      (e2 : cbn_env) (c2 : code) (rs : list root) (s : cbn_state) :
+    conv_same_code X_type X Γ nctx stress (FS k) lvl e1 c1 e2 c2 rs s
+    = (if (e1.(ev_goff) == e2.(ev_goff)) && (e1.(ev_nvals) == e2.(ev_nvals)) then
+         let (b, s) := code_eq X_type X c1 c2 s in
+         if b then same_code_cells X_type X Γ nctx stress (k tt) lvl (c1.(c_term)) 0
+                     (e1.(ev_vals)) (e2.(ev_vals)) rs s
+         else COk (false, rs, s)
+       else COk (false, rs, s)).
+  Proof. reflexivity. Qed.
+
   (** ** The same-code rule, cell by cell
 
     [same_code_cells] walks the two environments side by side: it skips a position whose
@@ -846,5 +1125,188 @@ Section Conv.
         * split; [exact hok'|].
           constructor; [|exact hag].
           right. exact (hconv eq_refl u1 u2 hx1 hx2 hou1 hou2).
+  Qed.
+
+  (** ** From the cells to the two readings
+
+    [cells_agree] is enough for the substitution congruence: replace, at each position the
+    machine skipped for non-occurrence, the second list's entry by the first's ([patch]).
+    The patched list is pairwise convertible with the first ([cells_agree_patch]), which is
+    [PCUICCallByNeedSoundCong.ws_cumul_pb_subst_lift]'s hypothesis, and substituting it is
+    the same as substituting the second ([subst_agree_lift]). *)
+  Lemma cells_agree_subst (Ξ : context) (t : term) (ts1 ts2 : list term)
+      (N m : nat) (pb : conv_pb) :
+    is_closed_context Ξ ->
+    #|ts1| = #|ts2| -> m = #|ts1| -> N <= #|Ξ| ->
+    on_free_vars (shiftnP (m + (#|Ξ| - N)) (fun _ : nat => false)) t ->
+    forallb (is_open_term Ξ) ts1 = true ->
+    cells_agree Ξ t 0 ts1 ts2 ->
+    ∥ Σ ;;; Ξ ⊢ subst ts1 0 (lift N m t) ≤[pb] subst ts2 0 (lift N m t) ∥.
+  Proof.
+    intros clΞ hlen hm hN hof hop hag.
+    assert (hpl : #|patch t 0 ts1 ts2| = #|ts1|) by exact (patch_length t 0 ts1 ts2 hlen).
+    assert (heq : subst (patch t 0 ts1 ts2) 0 (lift N m t) = subst ts2 0 (lift N m t)).
+    { apply subst_agree_lift; [lia|lia|].
+      intros j hj hn. rewrite hpl in hj.
+      exact (patch_nth t 0 ts1 ts2 j hlen hn). }
+    destruct (sq_terms_all2 Ξ ts1 (patch t 0 ts1 ts2)
+                (cells_agree_patch Ξ t 0 ts1 ts2 clΞ hop hag)) as [hall].
+    constructor. rewrite <- heq.
+    exact (@ws_cumul_pb_subst_lift cf Σ wfΣ pb Ξ ts1 (patch t 0 ts1 ts2) N m t
+             clΞ hall (eq_sym hm) hN hof).
+  Qed.
+
+  (** ** The same-code rule
+
+    [conv_same_code] answers [true] only when the two environments agree on the global
+    offset and the number of slots, [code_eq] accepts the two codes, and every slot the
+    code can see is convertible. [code_eq] accepts in two ways
+    ([PCUICCallByNeedSoundMemo.code_eq_sound]): the two codes have the *same term*, which
+    is where the identifier fast path lands, or the cached syntactic comparison
+    [eqb_term_upto_univ] at [Conv] says yes, which needs the universes of both terms to be
+    well formed. The second hypothesis below asks for that exactly when the identifiers
+    differ, so [conv_same_code_sound_same_id] can drop it. *)
+  Lemma conv_same_code_sound :
+    forall (d : cbn_fuel) (lvl : nat) (Ξ : context) (pb : conv_pb)
+      (e1 : cbn_env) (c1 : code) (e2 : cbn_env) (c2 : code)
+      (ce1 ce2 : code_entry) (ts1 ts2 : list term)
+      (rs : list root) (s : cbn_state) (rs' : list root) (s' : cbn_state),
+      slot_seam_below d ->
+      cok lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      PTree.get c1.(c_entry) ((s.(st_memo)).(m_codes)) = Some ce1 -> code_inv ce1 c1 ->
+      PTree.get c2.(c_entry) ((s.(st_memo)).(m_codes)) = Some ce2 -> code_inv ce2 c2 ->
+      (same_id c1 c2 = false ->
+       wf_universes Σ (c1.(c_term)) /\ wf_universes Σ (c2.(c_term))) ->
+      repr_slots nctx (s.(st_heap)) lvl (e1.(ev_vals)) ts1 ->
+      repr_slots nctx (s.(st_heap)) lvl (e2.(ev_vals)) ts2 ->
+      e1.(ev_nvals) = #|e1.(ev_vals)| -> e2.(ev_nvals) = #|e2.(ev_vals)| ->
+      forallb (is_open_term Ξ) ts1 = true ->
+      forallb (is_open_term Ξ) ts2 = true ->
+      (lvl - nctx + e1.(ev_goff)) <= #|Ξ| ->
+      on_free_vars
+        (shiftnP (e1.(ev_nvals) + (#|Ξ| - (lvl - nctx + e1.(ev_goff))))
+           (fun _ : nat => false))
+        (c1.(c_term)) ->
+      is_open_term Ξ
+        (subst ts2 0 (lift (lvl - nctx + e2.(ev_goff)) (e2.(ev_nvals)) (c2.(c_term)))) ->
+      conv_same_code X_type X Γ nctx stress d lvl e1 c1 e2 c2 rs s = COk (true, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ cok lvl s'
+      /\ ∥ Σ ;;; Ξ ⊢
+             subst ts1 0 (lift (lvl - nctx + e1.(ev_goff)) (e1.(ev_nvals)) (c1.(c_term)))
+             ≤[pb]
+             subst ts2 0 (lift (lvl - nctx + e2.(ev_goff)) (e2.(ev_nvals)) (c2.(c_term)))
+           ∥.
+  Proof.
+    intros d lvl Ξ pb e1 c1 e2 c2 ce1 ce2 ts1 ts2 rs s rs' s'
+      hseam hok hlen clΞ hnc hg1 hi1 hg2 hi2 hwf hr1 hr2 hnv hnv2 ho1 ho2 hN hof hopen2 he.
+    destruct d as [|k]; [cbn in he; discriminate he|].
+    rewrite conv_same_code_eq in he.
+    destruct ((e1.(ev_goff) == e2.(ev_goff)) && (e1.(ev_nvals) == e2.(ev_nvals)))
+      eqn:Eeq; [|discriminate he].
+    apply andb_true_iff in Eeq as [Eg En].
+    assert (hgoff : e1.(ev_goff) = e2.(ev_goff)) by (apply eqb_eq; exact Eg).
+    assert (hnval : e1.(ev_nvals) = e2.(ev_nvals)) by (apply eqb_eq; exact En).
+    (* the code test: it changes only the caches *)
+    assert (hmi : memo_inv X_type X s) by exact (cok_memo_inv lvl s hok).
+    destruct (memo_inv_code_eq X_type X c1 c2 ce1 ce2 s hmi hg1 hi1 hg2 hi2)
+      as (hmi' & hcodes & hheap & hnext & _ & _ & hgam).
+    assert (hok2 : cok lvl (snd (code_eq X_type X c1 c2 s)))
+      by exact (cok_same lvl s _ hok hmi' hheap hnext hgam hcodes).
+    destruct (code_eq X_type X c1 c2 s) as [b2 s2] eqn:Ece.
+    cbn [fst snd] in hok2, hcodes, hheap, hnext, hgam.
+    destruct b2; [|discriminate he].
+    (* the slots *)
+    assert (hlent : #|ts1| = #|ts2|).
+    { rewrite (repr_slots_length nctx lvl (s.(st_heap)) _ _ hr1),
+        (repr_slots_length nctx lvl (s.(st_heap)) _ _ hr2).
+      rewrite <- hnv, <- hnv2. exact hnval. }
+    rewrite <- hheap in hr1, hr2.
+    destruct (same_code_cells_sound (k tt) lvl Ξ (c1.(c_term)) 0
+                (e1.(ev_vals)) (e2.(ev_vals)) ts1 ts2 rs s2 rs' s'
+                (slot_seam_below_step k hseam) hok2 hlen clΞ hnc hr1 hr2 ho1 ho2 he)
+      as (hp & hok' & hag).
+    rewrite hheap in hp, hr1, hr2.
+    split; [exact hp|]. split; [exact hok'|].
+    (* the two readings *)
+    rewrite <- hgoff, <- hnval.
+    assert (hsubst : ∥ Σ ;;; Ξ ⊢
+              subst ts1 0 (lift (lvl - nctx + e1.(ev_goff)) (e1.(ev_nvals)) (c1.(c_term)))
+              ≤[pb]
+              subst ts2 0 (lift (lvl - nctx + e1.(ev_goff)) (e1.(ev_nvals)) (c1.(c_term)))
+            ∥).
+    { apply (cells_agree_subst Ξ (c1.(c_term)) ts1 ts2); try assumption.
+      rewrite hnv. symmetry. exact (repr_slots_length nctx lvl (s.(st_heap)) _ _ hr1). }
+    (* either the two codes have one term, or they are equal up to universes *)
+    assert (Ece' : fst (code_eq X_type X c1 c2 s) = true) by (rewrite Ece; reflexivity).
+    destruct (code_eq_sound X_type X c1 c2 ce1 ce2 s (cok_ceq_ok lvl s hok)
+                hg1 hi1 hg2 hi2 Ece') as [hterm|hceq].
+    - rewrite <- hterm. exact hsubst.
+    - destruct (same_id c1 c2) eqn:Esid.
+      + rewrite <- (same_id_sound_table ((s.(st_memo)).(m_codes)) ce1 ce2 c1 c2
+                      Esid hg1 hi1 hg2 hi2).
+        exact hsubst.
+      + destruct (hwf eq_refl) as [hw1 hw2].
+        destruct hsubst as [hsubst]. constructor.
+        refine (@ws_cumul_pb_conv_trans_r cf Σ wfΣ pb Ξ _ _ _ hsubst _).
+        apply (@ws_cumul_pb_compare_term cf Σ Conv Ξ); [exact clΞ| | |].
+        * exact (@ws_cumul_pb_is_open_term_right cf pb Σ wfΣ Ξ _ _ hsubst).
+        * rewrite hnval, hgoff. exact hopen2.
+        * apply subst_eq_term.
+          apply (eq_term_upto_univ_lift Σ (compare_universe Σ) (compare_sort Σ) Conv
+                   (lvl - nctx + e1.(ev_goff)) 0 (e1.(ev_nvals))).
+          exact (cbn_ceq_term_sound X_type X Σ hΣ (c1.(c_term)) (c2.(c_term))
+                   hw1 hw2 hceq).
+  Qed.
+
+  (** The identifier fast path: two codes with the same identifier, each the code of an
+    entry of one table, have one and the same term ([same_id_sound_table]), so the rule is
+    sound with no term comparison at all — and so with no universe check. *)
+  Lemma same_id_terms (codes : PTree.t code_entry) (ce1 ce2 : code_entry)
+      (c1 c2 : code) :
+    same_id c1 c2 = true ->
+    PTree.get c1.(c_entry) codes = Some ce1 -> code_inv ce1 c1 ->
+    PTree.get c2.(c_entry) codes = Some ce2 -> code_inv ce2 c2 ->
+    c1.(c_term) = c2.(c_term).
+  Proof.
+    intros h g1 i1 g2 i2. exact (same_id_sound_table codes ce1 ce2 c1 c2 h g1 i1 g2 i2).
+  Qed.
+
+  Lemma conv_same_code_sound_same_id :
+    forall (d : cbn_fuel) (lvl : nat) (Ξ : context) (pb : conv_pb)
+      (e1 : cbn_env) (c1 : code) (e2 : cbn_env) (c2 : code)
+      (ce1 ce2 : code_entry) (ts1 ts2 : list term)
+      (rs : list root) (s : cbn_state) (rs' : list root) (s' : cbn_state),
+      slot_seam_below d ->
+      cok lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      same_id c1 c2 = true ->
+      PTree.get c1.(c_entry) ((s.(st_memo)).(m_codes)) = Some ce1 -> code_inv ce1 c1 ->
+      PTree.get c2.(c_entry) ((s.(st_memo)).(m_codes)) = Some ce2 -> code_inv ce2 c2 ->
+      repr_slots nctx (s.(st_heap)) lvl (e1.(ev_vals)) ts1 ->
+      repr_slots nctx (s.(st_heap)) lvl (e2.(ev_vals)) ts2 ->
+      e1.(ev_nvals) = #|e1.(ev_vals)| -> e2.(ev_nvals) = #|e2.(ev_vals)| ->
+      forallb (is_open_term Ξ) ts1 = true ->
+      forallb (is_open_term Ξ) ts2 = true ->
+      (lvl - nctx + e1.(ev_goff)) <= #|Ξ| ->
+      on_free_vars
+        (shiftnP (e1.(ev_nvals) + (#|Ξ| - (lvl - nctx + e1.(ev_goff))))
+           (fun _ : nat => false))
+        (c1.(c_term)) ->
+      is_open_term Ξ
+        (subst ts2 0 (lift (lvl - nctx + e2.(ev_goff)) (e2.(ev_nvals)) (c2.(c_term)))) ->
+      conv_same_code X_type X Γ nctx stress d lvl e1 c1 e2 c2 rs s = COk (true, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ cok lvl s'
+      /\ ∥ Σ ;;; Ξ ⊢
+             subst ts1 0 (lift (lvl - nctx + e1.(ev_goff)) (e1.(ev_nvals)) (c1.(c_term)))
+             ≤[pb]
+             subst ts2 0 (lift (lvl - nctx + e2.(ev_goff)) (e2.(ev_nvals)) (c2.(c_term)))
+           ∥.
+  Proof.
+    intros d lvl Ξ pb e1 c1 e2 c2 ce1 ce2 ts1 ts2 rs s rs' s'
+      hseam hok hlen clΞ hnc hsid hg1 hi1 hg2 hi2 hr1 hr2 hnv hnv2 ho1 ho2 hN hof hopen2 he.
+    apply (conv_same_code_sound d lvl Ξ pb e1 c1 e2 c2 ce1 ce2 ts1 ts2 rs s rs' s');
+      try assumption.
+    intros hf. rewrite hsid in hf. discriminate hf.
   Qed.
 End Conv.
