@@ -226,9 +226,6 @@ Fixpoint tsplit_lits (args : list term)
       end
   end.
 
-Definition tlits_of_args (args : list term) : option (list prim_lit) :=
-  match tsplit_lits args with inl ls => Some ls | inr _ => None end.
-
 Lemma tsplit_lits_inl {args ls} :
   tsplit_lits args = inl ls -> args = map template_of_lit ls.
 Proof.
@@ -250,36 +247,6 @@ Proof.
     cbn; f_equal; [now apply lit_of_template_inv|exact e].
   - intros [= <- <- <-]. split => //.
 Qed.
-
-Lemma tsplit_lits_map ls : tsplit_lits (map template_of_lit ls) = inl ls.
-Proof.
-  induction ls as [|l ls ih]; [reflexivity|].
-  cbn [map tsplit_lits]. rewrite lit_of_template_of_lit ih //.
-Qed.
-
-Lemma tsplit_lits_app {ls a rest} :
-  lit_of_template a = None ->
-  tsplit_lits (map template_of_lit ls ++ a :: rest) = inr (ls, a, rest).
-Proof.
-  intros ha; induction ls as [|l ls ih]; [now cbn; rewrite ha|].
-  cbn [map app tsplit_lits]. rewrite lit_of_template_of_lit ih //.
-Qed.
-
-Lemma tsplit_lits_length_inr {args ls a rest} :
-  tsplit_lits args = inr (ls, a, rest) -> #|args| = S (#|ls| + #|rest|).
-Proof.
-  intros h; destruct (tsplit_lits_inr h) as [-> _]; len; lia.
-Qed.
-
-Lemma tlits_of_args_inv {args ls} :
-  tlits_of_args args = Some ls -> args = map template_of_lit ls.
-Proof.
-  rewrite /tlits_of_args; destruct (tsplit_lits args) eqn:h => // [= <-].
-  now apply tsplit_lits_inl.
-Qed.
-
-Lemma tlits_of_args_map ls : tlits_of_args (map template_of_lit ls) = Some ls.
-Proof. by rewrite /tlits_of_args tsplit_lits_map. Qed.
 
 (** Every operation of the table takes at least one argument, so a saturated
     application really is an application node. *)
@@ -901,6 +868,34 @@ Module TemplateArityRelation <: KernelRedSig TemplateTerm Env.
   Definition whd_rel := whd_rel.
 End TemplateArityRelation.
 
+(** The Template instance of [PrimOpTypeSig] (BET-319 row H; row L owns the rest
+    of this file).  Same skeleton as [PCUICPrimOpType] — a fold of [tImpl] over
+    [tConst kn []] ending in [tConst kn []] or [tInd i []] — so the two arms are
+    related by [trans]. *)
+Module TemplatePrimOpType <: PrimOpTypeSig TemplateTerm Env.
+  Import Env.
+  Definition prim_tag_type (r : Retroknowledge.t) (t : prim_tag) : option term :=
+    option_map (fun kn => tConst kn []) (EnvironmentTyping.retro_type_constant r t).
+  Definition prim_shape_type (r : Retroknowledge.t) (s : prim_shape) : option term :=
+    match s with
+    | SInt => prim_tag_type r primInt
+    | SBool => option_map (fun i => tInd i []) r.(Retroknowledge.retro_bool)
+    end.
+  Fixpoint prim_arg_types (r : Retroknowledge.t) (ts : list prim_tag) (res : term) : option term :=
+    match ts with
+    | [] => Some res
+    | t :: ts => match prim_tag_type r t with
+                 | Some a => option_map (tImpl a) (prim_arg_types r ts res)
+                 | None => None
+                 end
+    end.
+  Definition prim_op_type (r : Retroknowledge.t) (op : prim_op) : option term :=
+    match prim_shape_type r (po_shape (info op)) with
+    | Some res => prim_arg_types r (po_args (info op)) res
+    | None => None
+    end.
+End TemplatePrimOpType.
+
 (** ** Term equality and cumulativity *)
 
 (* ** Syntactic equality up-to universes
@@ -970,7 +965,7 @@ Include TemplateEnvTyping.
 Module TemplateConversion := Conversion TemplateTerm Env TemplateTermUtils TemplateEnvTyping.
 Include TemplateConversion.
 
-Module TemplateGlobalMaps := GlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateArityRelation.
+Module TemplateGlobalMaps := GlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateArityRelation TemplatePrimOpType.
 Include TemplateGlobalMaps.
 
 Module TemplateConversionPar <: ConversionParSig TemplateTerm Env TemplateTermUtils TemplateEnvTyping.
@@ -1351,6 +1346,7 @@ Module TemplateDeclarationTyping :=
     TemplateTyping
     TemplateLookup
     TemplateArityRelation
+    TemplatePrimOpType
     TemplateGlobalMaps.
 Include TemplateDeclarationTyping.
 
@@ -1761,10 +1757,10 @@ Proof.
   red. cbn. do 2 red in wfΣ. cbn in wfΣ.
   destruct Σ as [univs Σ]; cbn in *.
   set (Σg:= {| universes := univs; declarations := Σ |}) in *.
-  destruct wfΣ; split => //.
-  rename o into ongu. rename o0 into o.
+  destruct wfΣ as [ongu [wfr o]]; split => //; split => //.
   destruct o. { constructor. }
-  rename o0 into Xg. set (wfΣ := (ongu, o) : on_global_env cumul_gen (lift_typing typing) {| universes := univs; declarations := Σ |}).
+  rename o0 into Xg.
+  set (wfΣ := (ongu, (wfr, o)) : on_global_env cumul_gen (lift_typing typing) {| universes := univs; declarations := Σ |}).
   set (Σ':= {| universes := univs; declarations := Σ |}) in *.
   destruct Xg. rename udecl0 into udecl.
   rename on_global_decl_d0 into Xg.

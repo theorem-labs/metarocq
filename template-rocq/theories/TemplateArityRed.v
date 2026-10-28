@@ -125,34 +125,6 @@ Section TemplateWhdRed.
     destruct ls as [|l0 ls0]; [cbn in hlen; lia|]; cbn; discriminate.
   Qed.
 
-  (** Reducing the stuck argument [a] of a stuck operation application to a
-      weak-head form [w] (still not a literal) leaves a term that is its own
-      weak-head form: [tsplit_lits] finds [w] at the same place, and the
-      reconstructed argument list is the original one.  This is what
-      [whd_rel_idem] needs. *)
-  Lemma tprim_stuck_result {n ls w R} :
-    lit_of_template w = None -> #|ls| < n ->
-    (tsplit_lits (firstn n (map template_of_lit ls ++ w :: R)) = inr (ls, w, firstn (n - S #|ls|) R)) ×
-    (map template_of_lit ls ++ w :: firstn (n - S #|ls|) R
-       ++ skipn n (map template_of_lit ls ++ w :: R) = map template_of_lit ls ++ w :: R).
-  Proof.
-    intros hw hlt.
-    have hfa : firstn n (map template_of_lit ls ++ w :: R)
-             = map template_of_lit ls ++ w :: firstn (n - S #|ls|) R.
-    { rewrite firstn_app firstn_all2; [rewrite length_map; lia|].
-      rewrite length_map.
-      have -> : n - #|ls| = S (n - S #|ls|) by lia.
-      reflexivity. }
-    have hsk : skipn n (map template_of_lit ls ++ w :: R) = skipn (n - S #|ls|) R.
-    { rewrite skipn_app skipn_all2; [rewrite length_map; lia|].
-      rewrite length_map.
-      have -> : n - #|ls| = S (n - S #|ls|) by lia.
-      reflexivity. }
-    split.
-    - rewrite hfa. apply tsplit_lits_app, hw.
-    - rewrite hsk firstn_skipn //.
-  Qed.
-
   Lemma whd_rel_red {zeta t args h l} :
     whd_rel zeta Σ Γ t args h l -> red Σ Γ (mkApps t args) (mkApps h l).
   Proof.
