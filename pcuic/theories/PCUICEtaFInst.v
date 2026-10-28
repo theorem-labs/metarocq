@@ -89,6 +89,61 @@ Variant finst_construct_rule :=
   (** The kernel's rule: instance EQUALITY when the inductive is not cumulative
       ([ind_variance = None]). *)
 
+(** **THE CONSTRUCTOR CLAUSE IS AN OPEN HOLE, pending FRAC's gate (2026-10-28).**
+
+  **AND THE RULING LEAVES ONE THING OPEN THAT BITES HERE.** The stream lead has
+  NOT authorised changing the BASE spec; the spec repair
+  ([global_variance_gen]'s [ConstructRef] case → [AllEqual] when not cumulative)
+  is being SCOPED as a cost, not built. So once U1' follows the kernel and the
+  spec still does not, **I5's spec ⇒ join direction is FALSE** on the witness
+  [Q@{u} (p1@{u} unit)] against [Q@{v} (p1@{v} unit)]: the spec relates them
+  (through [ConstructRef]'s [AllIrrelevant]) and the join, following the kernel,
+  refuses them.
+
+  **So: I5 HOLDS ONLY ONCE THE BASE-SPEC [ConstructRef] REPAIR LANDS.** Do NOT
+  attempt the spec ⇒ join direction for constructors before that repair exists —
+  it is false today, and no proof effort will change that. See
+  [lanes/eta/spec-faithfulness-constructor.md].
+
+
+  The measurement landed and it went the other way from the first report. The
+  non-cumulative constructor pair is NOT unreachable at typing: the direct
+  posing [@eq (P1@{u} unit) (p1@{u} unit) (p1@{v} unit)] is refused, but
+  wrapping it in a cumulative inductive with an Irrelevant universe in a
+  PARAMETER's type, [Q@{*w} (x : P1@{w} unit)], makes
+  [Q@{u} (p1@{u} unit) = Q@{v} (p1@{v} unit)] WELL-TYPED. The kernel then
+  compares the arguments at [Conv] and REFUSES [p1@{u}] vs [p1@{v}], because
+  [P1] is non-cumulative, while MetaRocq's base spec ACCEPTS, since
+  [global_variance_gen]'s [ConstructRef] case ([PCUICEquality.v:59-68]) returns
+  [AllIrrelevant] without ever reading [ind_variance]. (Evidence
+  [lanes/eta/spec-faithfulness-constructor.md], [kernel5.log]:
+  [STATUS base1_noncum coqc=1] against the cumulative control [base2_cum] at
+  [coqc=0].)
+
+  **That is a PRE-EXISTING defect in the BASE spec, not in this route** — the
+  witness has no λ, so η and [canon] are not implicated. Repairing
+  [global_variance_gen] itself is the stream lead's call and [PCUICEquality.v]
+  is NOT touched here. What IS this lane's obligation is the one line below:
+  **U1' must not COPY the defect.** If F-inst followed the spec's present
+  [ConstructRef] behaviour, the restated I5 would inherit an over-acceptance the
+  kernel refuses, and a repaired route that is faithful to an unfaithful spec
+  buys nothing.
+
+  The parameterisation is kept rather than deleted, because it is what makes the
+  difference between the two rules checkable, and because it costs nothing: every
+  lemma below is proved for both. *)
+
+(** **THE HOLE IS STILL OPEN. [finst_rule] is deliberately NOT defined.**
+    Option (b), following the spec's [AllIrrelevant], is RULED OUT: under
+    decision (C) an acceptance beyond the kernel is allowed only for ILL-TYPED
+    terms, and this witness is WELL-TYPED, so keeping it would knowingly certify
+    a defect. Option (a), repairing the base spec's [ConstructRef] case, is the
+    stream lead's recommendation, but it changes I1 — the base spec the checker
+    and everything downstream rest on — so it goes to FRAC and needs its own
+    gate. Whether the SPEC changes decides what this clause must be, so pinning
+    it now would bet on a ruling not yet made. Everything below is therefore
+    proved for BOTH values of [r]. *)
+
 (** ** Full arity of a head
 
   [IndRef]: the assumptions among parameters and indices, exactly the count
@@ -240,3 +295,144 @@ Section FInstInstance.
   Qed.
 
 End FInstInstance.
+
+(** ** U1', carrying the open constructor clause
+
+  The term-level relation, parameterised by the open clause [r] so that it is
+  usable now and pins itself the moment the gate rules.
+  It is a faithful copy of [eq_term_upto_univ_napp] ([PCUICEquality.v:399-474])
+  with EXACTLY TWO constructors changed, [eq_Ind] and [eq_Construct] — the only
+  two that read [napp]. Every other constructor is base's. The copy is
+  unavoidable: [napp] is threaded through the inductive, so the variance lookup
+  cannot be swapped from outside. *)
+
+Definition cmp_global_instance_finst r Σ cmp_universe gr napp :=
+  cmp_global_instance_eta r Σ cmp_universe gr napp.
+
+(** [r] is a SECTION variable, not an inductive parameter: the recursive
+    notation below cannot infer it from a [_]. Discharging the section gives it
+    back as the first argument of every definition here. *)
+Section FInstRelation.
+Context (r : finst_construct_rule).
+
+Reserved Notation " Σ ⊢ t <==η[ pb , napp ] u" (at level 50, t, u at next level,
+  format "Σ  ⊢  t  <==η[ pb , napp ]  u").
+
+Inductive eq_term_upto_univ_eta_napp Σ
+  (cmp_universe : conv_pb -> Universe.t -> Universe.t -> Prop)
+  (cmp_sort : conv_pb -> sort -> sort -> Prop)
+  (pb : conv_pb) (napp : nat) : term -> term -> Type :=
+| eqη_Rel : forall n,
+    Σ ⊢ tRel n <==η[ pb , napp ] tRel n
+
+| eqη_Evar : forall e args args',
+    All2 (fun arg arg' => (Σ ⊢ arg <==η[ Conv , 0 ] arg')) args args' ->
+    Σ ⊢ tEvar e args <==η[ pb , napp ] tEvar e args'
+
+| eqη_Var : forall id,
+    Σ ⊢ tVar id <==η[ pb , napp ] tVar id
+
+| eqη_Sort : forall s s',
+    cmp_sort pb s s' ->
+    Σ ⊢ tSort s <==η[ pb , napp ] tSort s'
+
+| eqη_App : forall t t' u u',
+    Σ ⊢ t <==η[ pb , S napp ] t' ->
+    Σ ⊢ u <==η[ Conv , 0 ] u' ->
+    Σ ⊢ tApp t u <==η[ pb , napp ] tApp t' u'
+
+| eqη_Const : forall c u u',
+    cmp_universe_instance (cmp_universe Conv) u u' ->
+    Σ ⊢ tConst c u <==η[ pb , napp ] tConst c u'
+
+(* F-INST. The variance is read at the head's FULL ARITY and the instances are
+   compared at [Conv]. These two constructors are the only change from base. *)
+| eqη_Ind : forall i u u',
+    cmp_global_instance_finst r Σ cmp_universe (IndRef i) napp u u' ->
+    Σ ⊢ tInd i u <==η[ pb , napp ] tInd i u'
+
+| eqη_Construct : forall i k u u',
+    cmp_global_instance_finst r Σ cmp_universe (ConstructRef i k) napp u u' ->
+    Σ ⊢ tConstruct i k u <==η[ pb , napp ] tConstruct i k u'
+
+| eqη_Lambda : forall na na' ty ty' t t',
+    eq_binder_annot na na' ->
+    Σ ⊢ ty <==η[ Conv , 0 ] ty' ->
+    Σ ⊢ t <==η[ Conv , 0 ] t' ->
+    Σ ⊢ tLambda na ty t <==η[ pb , napp ] tLambda na' ty' t'
+
+| eqη_Prod : forall na na' a a' b b',
+    eq_binder_annot na na' ->
+    Σ ⊢ a <==η[ Conv , 0 ] a' ->
+    Σ ⊢ b <==η[ pb , 0 ] b' ->
+    Σ ⊢ tProd na a b <==η[ pb , napp ] tProd na' a' b'
+
+| eqη_LetIn : forall na na' t t' ty ty' u u',
+    eq_binder_annot na na' ->
+    Σ ⊢ t <==η[ Conv , 0 ] t' ->
+    Σ ⊢ ty <==η[ Conv , 0 ] ty' ->
+    Σ ⊢ u <==η[ Conv , 0 ] u' ->
+    Σ ⊢ tLetIn na t ty u <==η[ pb , napp ] tLetIn na' t' ty' u'
+
+| eqη_Case : forall indn p p' c c' brs brs',
+    eq_predicate (fun t t' => Σ ⊢ t <==η[ Conv , 0 ] t') (cmp_universe Conv) p p' ->
+    Σ ⊢ c <==η[ Conv , 0 ] c' ->
+    eq_branches (fun t t' => Σ ⊢ t <==η[ Conv , 0 ] t') brs brs' ->
+    Σ ⊢ tCase indn p c brs <==η[ pb , napp ] tCase indn p' c' brs'
+
+| eqη_Proj : forall p c c',
+    Σ ⊢ c <==η[ Conv , 0 ] c' ->
+    Σ ⊢ tProj p c <==η[ pb , napp ] tProj p c'
+
+| eqη_Fix : forall mfix mfix' idx,
+    eq_mfixpoint (fun t t' => Σ ⊢ t <==η[ Conv , 0 ] t') mfix mfix' ->
+    Σ ⊢ tFix mfix idx <==η[ pb , napp ] tFix mfix' idx
+
+| eqη_CoFix : forall mfix mfix' idx,
+    eq_mfixpoint (fun t t' => Σ ⊢ t <==η[ Conv , 0 ] t') mfix mfix' ->
+    Σ ⊢ tCoFix mfix idx <==η[ pb , napp ] tCoFix mfix' idx
+
+| eqη_Prim i i' :
+    onPrims (fun t t' => Σ ⊢ t <==η[ Conv , 0 ] t') (cmp_universe Conv) i i' ->
+    Σ ⊢ tPrim i <==η[ pb , napp ] tPrim i'
+where " Σ ⊢ t <==η[ pb , napp ] u " :=
+  (eq_term_upto_univ_eta_napp Σ _ _ pb napp t u) : type_scope.
+
+Definition compare_term_eta_napp `{checker_flags} Σ φ (pb : conv_pb) napp (t u : term) :=
+  eq_term_upto_univ_eta_napp Σ (compare_universe φ) (compare_sort φ) pb napp t u.
+
+(** **U1'. The comparison obligation 8's restated I5 ends in — STILL CARRYING
+    THE OPEN CONSTRUCTOR CLAUSE [r], which FRAC's gate decides.** *)
+Definition compare_term_eta `{checker_flags} Σ φ (pb : conv_pb) (t u : term) :=
+  compare_term_eta_napp Σ φ pb 0 t u.
+
+End FInstRelation.
+
+Derive Signature for eq_term_upto_univ_eta_napp.
+
+(** ** U1' does not copy the base spec's constructor defect
+
+  The whole point of pinning the constructor clause at the kernel's rule. For a
+  constructor of a NON-cumulative inductive, F-inst demands instance EQUALITY,
+  where base's [global_variance_gen] would return [AllIrrelevant] and demand
+  only equal lengths. *)
+
+Lemma finst_noncumulative_constructor_AllEqual lookup gr napp :
+  noncumulative_constructor_gen lookup gr = true ->
+  global_variance_eta_gen FInstFollowKernel lookup gr napp = AllEqual.
+Proof.
+  intros h. unfold global_variance_eta_gen. now rewrite h.
+Qed.
+
+(** The same fact as the lane states it: a non-cumulative constructor head is
+    compared by instance equality, exactly as [conversion.ml:221-222] does, and
+    NOT by [AllIrrelevant]. *)
+Lemma finst_noncumulative_constructor_instance_eq Σ cmp_universe ind k napp u u' :
+  noncumulative_constructor_gen (lookup_env Σ) (ConstructRef ind k) = true ->
+  cmp_global_instance_finst FInstFollowKernel Σ cmp_universe (ConstructRef ind k) napp u u' ->
+  cmp_universe_instance (cmp_universe Conv) u u'.
+Proof.
+  intros hnc h.
+  unfold cmp_global_instance_finst, cmp_global_instance_eta in h.
+  now rewrite (finst_noncumulative_constructor_AllEqual _ _ napp hnc) in h.
+Qed.
