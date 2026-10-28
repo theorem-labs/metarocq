@@ -6,7 +6,7 @@ From MetaRocq.Common Require Import config Kernames.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICInduction
   PCUICLiftSubst PCUICTyping PCUICEquality PCUICCumulativity PCUICOnFreeVars
   PCUICClosed PCUICSubstitution PCUICContexts PCUICWfUniverses
-  PCUICWellScopedCumulativity PCUICConversion.
+  PCUICWellScopedCumulativity PCUICConversion PCUICSigmaCalculus.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv PCUICCallByNeed
   PCUICCallByNeedSound PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx
   PCUICCallByNeedSoundMemo PCUICCallByNeedSoundCong.
@@ -766,6 +766,152 @@ Proof.
   assert (Hl : noccur_between (0 + j) 1 (lift N m t) = true)
     by (apply noccur_between_lift; [lia | exact E]).
   rewrite Hl in Hnoc. discriminate.
+Qed.
+
+(** ** Pushing fresh variables in front of a substitution
+
+  When the comparison pushes [n] fresh variables and reads a child at the higher level,
+  the child's substitution is the fresh variables' readings [idsn n] in front of the old
+  slot readings lifted by [n]. [subst_push_fresh] says that this reading is the parent's
+  one with the substitution started [n] binders further in; [k] counts the binders already
+  crossed inside the term. *)
+
+Lemma pushA_map2_ext {A B C : Type} (P : A -> Type) (f1 f2 : A -> B) (g1 g2 : B -> C)
+  (l : list A) :
+  All P l -> (forall x, P x -> g1 (f1 x) = g2 (f2 x)) ->
+  map g1 (map f1 l) = map g2 (map f2 l).
+Proof.
+  intros HA Hf. induction HA as [|x l Px HA IH]; cbn; [reflexivity|].
+  f_equal; [exact (Hf x Px) | exact IH].
+Qed.
+
+Lemma subst_push_fresh (n m N : nat) (ts : list term) :
+  #|ts| = m ->
+  forall (t : term) (k : nat),
+    subst (idsn n ++ map (lift0 n) ts) k (lift (N + n) (k + (n + m)) t)
+    = subst ts (k + n) (lift N (k + (n + m)) t).
+Proof.
+  intros Hlen t.
+  assert (HL : #|idsn n ++ map (lift0 n) ts| = n + m).
+  { rewrite length_app. rewrite idsn_length. rewrite length_map. lia. }
+  elim t using term_forall_list_ind.
+  - (* tRel *)
+    intros r k. cbn [lift].
+    destruct (k + (n + m) <=? r) eqn:E1.
+    + (* above the lift's cut: both sides fall past the end of their substitution *)
+      apply Nat.leb_le in E1. cbn [subst].
+      assert (E2 : (k <=? N + n + r) = true) by (apply Nat.leb_le; lia).
+      assert (E3 : (k + n <=? N + r) = true) by (apply Nat.leb_le; lia).
+      assert (E4 : nth_error (idsn n ++ map (lift0 n) ts) (N + n + r - k) = None)
+        by (apply nth_error_None; lia).
+      assert (E5 : nth_error ts (N + r - (k + n)) = None)
+        by (apply nth_error_None; lia).
+      rewrite E2. rewrite E3. rewrite E4. rewrite E5. rewrite HL. rewrite Hlen.
+      cbv beta iota. f_equal. lia.
+    + apply Nat.leb_gt in E1. cbn [subst].
+      destruct (k <=? r) eqn:E2.
+      * apply Nat.leb_le in E2.
+        destruct (Nat.lt_ge_cases r (k + n)) as [Hlt|Hge].
+        -- (* a fresh variable *)
+           assert (E3 : (k + n <=? r) = false) by (apply Nat.leb_gt; lia).
+           rewrite E3.
+           assert (H1 : r - k < #|idsn n|) by (rewrite idsn_length; lia).
+           rewrite (nth_error_app_lt _ _ _ H1).
+           assert (H2 : r - k < n) by lia.
+           rewrite (idsn_lt H2).
+           cbn [lift Nat.leb]. f_equal. lia.
+        -- (* an old slot *)
+           assert (E3 : (k + n <=? r) = true) by (apply Nat.leb_le; lia).
+           rewrite E3.
+           assert (H1 : #|idsn n| <= r - k) by (rewrite idsn_length; lia).
+           rewrite (nth_error_app_ge _ _ _ H1).
+           rewrite idsn_length. rewrite nth_error_map.
+           replace (r - k - n) with (r - (k + n)) by lia.
+           destruct (nth_error ts (r - (k + n))) as [x|] eqn:E4.
+           ++ cbn [option_map].
+              exact (simpl_lift x n 0 k 0 (Nat.le_0_l _) (Nat.le_refl 0)).
+           ++ apply nth_error_None in E4. lia.
+      * (* below the substitution's start *)
+        apply Nat.leb_gt in E2.
+        assert (E3 : (k + n <=? r) = false) by (apply Nat.leb_gt; lia).
+        rewrite E3. reflexivity.
+  - (* tVar *) intros; reflexivity.
+  - (* tEvar *)
+    intros ev l Hl k. cbn [lift subst]. f_equal.
+    apply (pushA_map2_ext _ _ _ _ _ _ Hl). intros x Px. exact (Px k).
+  - (* tSort *) intros; reflexivity.
+  - (* tProd *)
+    intros na A IHA B IHB k. cbn [lift subst].
+    f_equal; [exact (IHA k) | exact (IHB (S k))].
+  - (* tLambda *)
+    intros na A IHA B IHB k. cbn [lift subst].
+    f_equal; [exact (IHA k) | exact (IHB (S k))].
+  - (* tLetIn *)
+    intros na b IHb ty IHty B IHB k. cbn [lift subst].
+    f_equal; [exact (IHb k) | exact (IHty k) | exact (IHB (S k))].
+  - (* tApp *)
+    intros u v IHu IHv k. cbn [lift subst].
+    f_equal; [exact (IHu k) | exact (IHv k)].
+  - (* tConst *) intros; reflexivity.
+  - (* tInd *) intros; reflexivity.
+  - (* tConstruct *) intros; reflexivity.
+  - (* tCase *)
+    intros ci p Hp c IHc brs Hbrs k. cbn [lift subst].
+    destruct Hp as [Hpar [Hctx Hret]].
+    f_equal.
+    + unfold map_predicate_k. cbn [pparams puinst pcontext preturn]. f_equal.
+      * apply (pushA_map2_ext _ _ _ _ _ _ Hpar). intros x Px. exact (Px k).
+      * pose proof (Hret (#|pcontext p| + k)) as E.
+        rewrite <- (Nat.add_assoc #|pcontext p| k (n + m)) in E.
+        rewrite <- (Nat.add_assoc #|pcontext p| k n) in E.
+        exact E.
+    + exact (IHc k).
+    + apply (pushA_map2_ext _ _ _ _ _ _ Hbrs). intros br [Pctx Pbody].
+      unfold map_branch_k. cbn [bcontext bbody]. f_equal.
+      pose proof (Pbody (#|bcontext br| + k)) as E.
+      rewrite <- (Nat.add_assoc #|bcontext br| k (n + m)) in E.
+      rewrite <- (Nat.add_assoc #|bcontext br| k n) in E.
+      exact E.
+  - (* tProj *)
+    intros pr c IHc k. cbn [lift subst]. f_equal. exact (IHc k).
+  - (* tFix *)
+    intros mfix idx Hm k. cbn [lift subst]. f_equal.
+    rewrite !length_map.
+    apply (pushA_map2_ext _ _ _ _ _ _ Hm). intros d [Pty Pbody].
+    unfold map_def. cbn [dname dtype dbody rarg]. f_equal.
+    + exact (Pty k).
+    + pose proof (Pbody (#|mfix| + k)) as E.
+      rewrite <- (Nat.add_assoc #|mfix| k (n + m)) in E.
+      rewrite <- (Nat.add_assoc #|mfix| k n) in E.
+      exact E.
+  - (* tCoFix *)
+    intros mfix idx Hm k. cbn [lift subst]. f_equal.
+    rewrite !length_map.
+    apply (pushA_map2_ext _ _ _ _ _ _ Hm). intros d [Pty Pbody].
+    unfold map_def. cbn [dname dtype dbody rarg]. f_equal.
+    + exact (Pty k).
+    + pose proof (Pbody (#|mfix| + k)) as E.
+      rewrite <- (Nat.add_assoc #|mfix| k (n + m)) in E.
+      rewrite <- (Nat.add_assoc #|mfix| k n) in E.
+      exact E.
+  - (* tPrim *)
+    intros prim Hprim k. cbn [lift subst].
+    destruct prim as [tg [? | ? | ? | a]]; cbn in Hprim |- *; try reflexivity.
+    destruct Hprim as [Hty [Hdef Hval]].
+    assert (E3 : map (subst (idsn n ++ map (lift0 n) ts) k)
+                   (map (lift (N + n) (k + (n + m))) (array_value a))
+                 = map (subst ts (k + n)) (map (lift N (k + (n + m))) (array_value a))).
+    { apply (pushA_map2_ext _ _ _ _ _ _ Hval). intros y Py. exact (Py k). }
+    unfold mapu_array_model. cbn [array_level array_type array_default array_value].
+    rewrite (Hty k). rewrite (Hdef k). rewrite E3. reflexivity.
+Qed.
+
+Lemma subst_push_fresh0 (n m N : nat) (ts : list term) (t : term) :
+  #|ts| = m ->
+  subst (idsn n ++ map (lift0 n) ts) 0 (lift (N + n) (n + m) t)
+  = subst ts n (lift N (n + m) t).
+Proof.
+  intros Hlen. exact (subst_push_fresh n m N ts Hlen t 0).
 Qed.
 
 (** ** The fuel a sub-call runs at
