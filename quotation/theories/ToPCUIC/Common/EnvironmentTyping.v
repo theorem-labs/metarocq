@@ -1,10 +1,30 @@
 From MetaRocq.Common Require Import BasicAst Environment EnvironmentTyping Universes.
 From MetaRocq.Quotation.ToPCUIC Require Import Init.
 From MetaRocq.Quotation.ToPCUIC Require Import (hints) Stdlib.Init Stdlib.Lists Stdlib.ssr.
-From MetaRocq.Quotation.ToPCUIC.Utils Require Import (hints) All_Forall MROption MRProd.
-From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) config BasicAst Kernames Universes Environment.
+From MetaRocq.Quotation.ToPCUIC.Utils Require Import (hints) All_Forall MROption MRProd bytestring.
+From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) config BasicAst Kernames Universes Primitive PrimitiveOps Environment.
 From MetaRocq.Quotation.ToPCUIC.QuotationOf.Common Require Import Environment.Sig EnvironmentTyping.Sig.
 From Equations.Prop Require Import EqDecInstances.
+From MetaRocq.Utils Require Import ReflectEq.
+
+(** BET-319 row M: the §4.2(a) global conjunct of [on_global_env] is decidable
+    ([dec_wf_retro]), so its proofs are quoted through the decision procedure. *)
+#[export] Instance quote_wf_retro {r} : ground_quotable (Retroknowledge.wf_retro r)
+  := ground_quotable_of_dec (dec_wf_retro r).
+
+(** An implication from an equation on a type with decidable equality, as in
+    [on_prim_decl]'s inductive branch, is quoted through the boolean test. *)
+Lemma if_eqb_iff_impl {A} {HR : ReflectEq A} (x y : A) (Q : Prop) :
+  (if eqb x y then Q else True) <-> (x = y -> Q).
+Proof.
+  destruct (eqb_spec x y) as [->|ne]; split; auto.
+  intros f e; now apply ne in e.
+Qed.
+Definition quote_impl_eq_dec {A} {HR : ReflectEq A} {x y : A} {Q : Prop}
+  {qA : quotation_of A} {qR : quotation_of HR} {qx : quotation_of x} {qy : quotation_of y}
+  {qQ : quotation_of Q} {quoteQ : ground_quotable Q} : ground_quotable (x = y -> Q)
+  := @ground_quotable_of_iff (if eqb x y then Q else True) (x = y -> Q)
+       ltac:(destruct (eqb x y); exact _) _ _ (if_eqb_iff_impl x y Q) _.
 
 Module QuoteLookup (Import T : Term) (Import E : EnvironmentSig T) (Import L : LookupSig T E) (Import EDec : EnvironmentDecide T E) (Import qE : QuotationOfEnvironment T E) (Import qL : QuotationOfLookup T E L) (Import qEDec : QuotationOfEnvironmentDecide T E EDec) (Import QuoteE : QuoteEnvironmentSig T E) <: QuoteLookupSig T E L.
 
@@ -93,7 +113,7 @@ Module QuoteConversion (Import T : Term) (Import E : EnvironmentSig T) (Import T
     := ltac:(cbv [cumul_ctx_rel]; exact _).
 End QuoteConversion.
 
-Module QuoteGlobalMaps (Import T : Term) (Import E : EnvironmentSig T) (Import TU : TermUtils T E) (Import ET : EnvTypingSig T E TU) (Import C : ConversionSig T E TU ET) (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import GM : GlobalMapsSig T E TU ET C L AR) (Import qT : QuotationOfTerm T) (Import qE : QuotationOfEnvironment T E) (Import qET : QuotationOfEnvTyping T E TU ET) (Import qC : QuotationOfConversion T E TU ET C) (Import qL : QuotationOfLookup T E L) (Import qAR : QuotationOfKernelRed T E AR) (Import qGM :  QuotationOfGlobalMaps T E TU ET C L AR GM) (Import QuoteT : QuoteTerm T) (Import QuoteE : QuoteEnvironmentSig T E) (Import QuoteET : QuoteEnvTypingSig T E TU ET) (Import QuoteC : QuoteConversionSig T E TU ET C) (Import QuoteL : QuoteLookupSig T E L) (Import QuoteAR : QuoteKernelRedSig T E AR) <: QuoteGlobalMapsSig T E TU ET C L AR GM.
+Module QuoteGlobalMaps (Import T : Term) (Import E : EnvironmentSig T) (Import TU : TermUtils T E) (Import ET : EnvTypingSig T E TU) (Import C : ConversionSig T E TU ET) (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import PO : PrimOpTypeSig T E) (Import GM : GlobalMapsSig T E TU ET C L AR PO) (Import qT : QuotationOfTerm T) (Import qE : QuotationOfEnvironment T E) (Import qET : QuotationOfEnvTyping T E TU ET) (Import qC : QuotationOfConversion T E TU ET C) (Import qL : QuotationOfLookup T E L) (Import qAR : QuotationOfKernelRed T E AR) (Import qPO : QuotationOfPrimOpType T E PO) (Import qGM :  QuotationOfGlobalMaps T E TU ET C L AR PO GM) (Import QuoteT : QuoteTerm T) (Import QuoteE : QuoteEnvironmentSig T E) (Import QuoteET : QuoteEnvTypingSig T E TU ET) (Import QuoteC : QuoteConversionSig T E TU ET C) (Import QuoteL : QuoteLookupSig T E L) (Import QuoteAR : QuoteKernelRedSig T E AR) <: QuoteGlobalMapsSig T E TU ET C L AR PO GM.
 
   #[export] Hint Unfold
     mdecl_at_i
@@ -244,6 +264,32 @@ Module QuoteGlobalMaps (Import T : Term) (Import E : EnvironmentSig T) (Import T
     #[export] Instance quote_on_inductive {Σ mind mdecl} : ground_quotable (@on_inductive cf Pcmp P Σ mind mdecl) := ltac:(destruct 1; exact _).
     #[export] Instance quote_on_constant_decl {Σ d} : ground_quotable (@on_constant_decl P Σ d) := ltac:(cbv [on_constant_decl]; exact _).
     #[export] Instance quote_on_global_decl {Σ kn d} : ground_quotable (@on_global_decl cf Pcmp P Σ kn d) := ltac:(cbv [on_global_decl]; exact _).
+    (** BET-319 row M: §4.2(b), the [on_prim_decl_d] field of [on_global_decls_data]. *)
+    #[export] Instance quote_prim_op_tag_declared {Σ t} : ground_quotable (prim_op_tag_declared Σ t).
+    Proof.
+      cbv [prim_op_tag_declared].
+      refine (@MetaRocq.Quotation.ToPCUIC.Stdlib.Init.quote_sigT _ _ _ _ _ (fun kn qkn => _)).
+      all: try (match goal with |- ground_quotable {_ & _} => idtac end;
+                refine (@MetaRocq.Quotation.ToPCUIC.Stdlib.Init.quote_sigT _ _ _ _ _ (fun d qd => _))).
+      all: exact _.
+    Defined.
+    #[export] Instance quote_on_prim_op_result {Σ s} : ground_quotable (on_prim_op_result Σ s) := ltac:(destruct s; cbv [on_prim_op_result]; exact _).
+    #[export] Instance quote_on_prim_op_constant {Σ op cb} : ground_quotable (on_prim_op_constant Pcmp Σ op cb) := ltac:(destruct 1; exact _).
+    (** A constructor name is a [bytestring], whose equality is decidable. *)
+    Definition quote_ident_eq {x y : ident} : ground_quotable (x = y)
+      := @ground_quotable_of_dec (x = y) (MetaRocq.Utils.bytestring.StringOT.eq_dec x y : {x = y} + {x <> y}) _ _.
+    #[local] Hint Extern 0 (ground_quotable (?x = ?y)) => exact (@quote_ident_eq x y) : typeclass_instances.
+    #[export] Instance quote_on_prim_bool_decl {mdecl} : ground_quotable (on_prim_bool_decl mdecl)
+      := ltac:(cbv [on_prim_bool_decl prim_bool_ctor];
+          repeat match goal with |- context[match ?x with _ => _ end] => destruct x end; exact _).
+    #[export] Instance quote_on_prim_decl {Σ kn d} : ground_quotable (on_prim_decl Pcmp Σ kn d).
+    Proof.
+      destruct d as [cb|m]; cbv [on_prim_decl].
+      - exact _.
+      - refine (@MetaRocq.Quotation.ToPCUIC.Utils.MROption.quote_forall_eq_some_impl _ (fun i => inductive_mind i = kn -> on_prim_bool_decl m) _ _ _ _ _).
+        all: try (intros; eapply @quote_impl_eq_dec).
+        all: exact _.
+    Defined.
     #[export] Instance quote_on_global_decls_data {univs retro Σ kn d} : ground_quotable (@on_global_decls_data cf Pcmp P univs retro Σ kn d) := ltac:(destruct 1; exact _).
     #[export] Instance quote_on_global_decls {univs retro Σ} : ground_quotable (@on_global_decls cf Pcmp P univs retro Σ) := ltac:(induction 1; exact _).
     #[export] Instance quote_on_global_univs {univs} : ground_quotable (@on_global_univs univs) := ltac:(cbv [on_global_univs]; exact _).
@@ -295,17 +341,17 @@ End QuoteGlobalMaps.
 Module QuoteDeclarationTyping (Import T : Term) (Import E : EnvironmentSig T) (Import TU : TermUtils T E)
        (Import ET : EnvTypingSig T E TU) (Import CT : ConversionSig T E TU ET)
        (Import CS : ConversionParSig T E TU ET) (Import Ty : Typing T E TU ET CT CS)
-       (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import GM : GlobalMapsSig T E TU ET CT L AR)
-       (Import DT : DeclarationTypingSig T E TU ET CT CS Ty L AR GM)
+       (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import PO : PrimOpTypeSig T E) (Import GM : GlobalMapsSig T E TU ET CT L AR PO)
+       (Import DT : DeclarationTypingSig T E TU ET CT CS Ty L AR PO GM)
        (Import qT : QuotationOfTerm T) (Import qE : QuotationOfEnvironment T E)
        (Import qET : QuotationOfEnvTyping T E TU ET) (Import qCT : QuotationOfConversion T E TU ET CT)
        (Import qTy : QuotationOfTyping T E TU ET CT CS Ty)
-       (Import qGM : QuotationOfGlobalMaps T E TU ET CT L AR GM)
+       (Import qGM : QuotationOfGlobalMaps T E TU ET CT L AR PO GM)
        (Import QuoteT : QuoteTerm T) (Import QuoteE : QuoteEnvironmentSig T E)
        (Import QuoteET : QuoteEnvTypingSig T E TU ET) (Import QuoteCT : QuoteConversionSig T E TU ET CT)
        (Import QuoteTy : QuoteTyping T E TU ET CT CS Ty)
-       (Import QuoteL : QuoteLookupSig T E L) (Import QuoteGM : QuoteGlobalMapsSig T E TU ET CT L AR GM)
-<: QuoteDeclarationTypingSig T E TU ET CT CS Ty L AR GM DT.
+       (Import QuoteL : QuoteLookupSig T E L) (Import QuoteGM : QuoteGlobalMapsSig T E TU ET CT L AR PO GM)
+<: QuoteDeclarationTypingSig T E TU ET CT CS Ty L AR PO GM DT.
 
   #[export] Hint Unfold
     Forall_decls_typing

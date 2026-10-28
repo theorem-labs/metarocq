@@ -1,6 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config Primitive.
+From MetaRocq.Common Require Import config Primitive PrimitiveOps EnvironmentTyping.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
   PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils PCUICPosition PCUICOnFreeVars PCUICArityRed.
 From MetaRocq.PCUIC Require Export PCUICCumulativitySpec.
@@ -340,6 +340,117 @@ Module PCUICTypingDef <: EnvironmentTyping.Typing PCUICTerm PCUICEnvironment PCU
 
 End PCUICTypingDef.
 
+(** The PCUIC instance of [PrimOpTypeSig]: the expected declared type of an
+    operation, a fold of [tImpl] over the registered type constants ending in the
+    registered type constant or inductive.  Its arms use only [tImpl],
+    [tConst kn []] and [tInd i []], so the Template arm is its [trans]-image. *)
+Module PCUICPrimOpType <: EnvironmentTyping.PrimOpTypeSig PCUICTerm PCUICEnvironment.
+  Import PCUICEnvironment.
+  Definition prim_tag_type (r : Retroknowledge.t) (t : prim_tag) : option term :=
+    option_map (fun kn => tConst kn []) (EnvironmentTyping.retro_type_constant r t).
+  Definition prim_shape_type (r : Retroknowledge.t) (s : prim_shape) : option term :=
+    match s with
+    | SInt => prim_tag_type r primInt
+    | SBool => option_map (fun i => tInd i []) r.(Retroknowledge.retro_bool)
+    end.
+  Fixpoint prim_arg_types (r : Retroknowledge.t) (ts : list prim_tag) (res : term) : option term :=
+    match ts with
+    | [] => Some res
+    | t :: ts => match prim_tag_type r t with
+                 | Some a => option_map (tImpl a) (prim_arg_types r ts res)
+                 | None => None
+                 end
+    end.
+  Definition prim_op_type (r : Retroknowledge.t) (op : prim_op) : option term :=
+    match prim_shape_type r (po_shape (info op)) with
+    | Some res => prim_arg_types r (po_args (info op)) res
+    | None => None
+    end.
+
+  (** The shape of an operation's expected type: an iterated arrow over the
+      argument tags' type constants, ending in the result's type. *)
+  Lemma prim_arg_types_spec r ts res T :
+    prim_arg_types r ts res = Some T ->
+    ∑ tys, All2 (fun t ty => prim_tag_type r t = Some ty) ts tys × T = fold_right tImpl res tys.
+  Proof.
+    induction ts as [|t ts ih] in T |- *; cbn.
+    - intros [= <-]. exists []. split; [constructor|reflexivity].
+    - destruct (prim_tag_type r t) as [a|] eqn:ha; [|discriminate].
+      destruct (prim_arg_types r ts res) as [T'|] eqn:hT; cbn; [|discriminate].
+      intros [= <-]. destruct (ih T' eq_refl) as [tys [hall ->]].
+      exists (a :: tys). split; [constructor; assumption|reflexivity].
+  Qed.
+
+  Lemma prim_op_type_shape r op T :
+    prim_op_type r op = Some T ->
+    ∑ res tys, [× prim_shape_type r (po_shape (info op)) = Some res,
+      All2 (fun t ty => prim_tag_type r t = Some ty) (po_args (info op)) tys &
+      T = fold_right tImpl res tys].
+  Proof.
+    unfold prim_op_type.
+    destruct (prim_shape_type r (po_shape (info op))) as [res|] eqn:hs; [|discriminate].
+    intros h. destruct (prim_arg_types_spec _ _ _ _ h) as [tys [hall ->]].
+    exists res, tys. split; auto.
+  Qed.
+
+  Lemma prim_tag_types_kn r ts tys :
+    All2 (fun t ty => prim_tag_type r t = Some ty) ts tys ->
+    ∑ kns, All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) ts kns
+           × tys = map (fun kn => tConst kn []) kns.
+  Proof.
+    induction 1 as [|t ty ts tys hty _ ih].
+    - exists []. split; [constructor|reflexivity].
+    - unfold prim_tag_type in hty.
+      destruct (EnvironmentTyping.retro_type_constant r t) as [kn|] eqn:e; cbn in hty; [|discriminate].
+      injection hty as <-. destruct ih as (kns & hk & ->).
+      exists (kn :: kns). split; [constructor; assumption|reflexivity].
+  Qed.
+
+  (** The same, read off the retroknowledge fields: each argument type is the
+      bodiless type constant registered for its tag, and the result is the
+      registered integer type ([SInt]) or boolean inductive ([SBool]). *)
+  Lemma prim_op_type_shape_kn r op T :
+    prim_op_type r op = Some T ->
+    ∑ kns res,
+      [× All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) (po_args (info op)) kns,
+         T = fold_right (fun kn B => tImpl (tConst kn []) B) res kns &
+         match po_shape (info op) with
+         | SInt => ∑ kn, r.(Retroknowledge.retro_int63) = Some kn /\ res = tConst kn []
+         | SBool => ∑ i, r.(Retroknowledge.retro_bool) = Some i /\ res = tInd i []
+         end].
+  Proof.
+    intros h. destruct (prim_op_type_shape r op T h) as (res & tys & [hs hall ->]).
+    destruct (prim_tag_types_kn _ _ _ hall) as (kns & hk & ->).
+    exists kns, res. split; [exact hk| |].
+    - clear. induction kns as [|kn kns ih]; cbn; congruence.
+    - destruct (po_shape (info op)); cbn in hs; unfold prim_tag_type in hs; cbn in hs.
+      + destruct (r.(Retroknowledge.retro_int63)) as [kn|] eqn:e; cbn in hs; [|discriminate].
+        injection hs as <-. exists kn. split; first [exact e | reflexivity].
+      + destruct (r.(Retroknowledge.retro_bool)) as [i|] eqn:e; cbn in hs; [|discriminate].
+        injection hs as <-. exists i. split; first [exact e | reflexivity].
+  Qed.
+
+  (** The converse: the expected type is defined once every argument tag and the
+      result shape have their registered types. *)
+  Lemma prim_arg_types_of_kn r ts kns res :
+    All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) ts kns ->
+    prim_arg_types r ts res = Some (fold_right (fun kn B => tImpl (tConst kn []) B) res kns).
+  Proof.
+    induction 1 as [|t kn ts kns e _ ih]; [reflexivity|].
+    change (prim_arg_types r (t :: ts) res) with
+      (match prim_tag_type r t with
+       | Some a => option_map (tImpl a) (prim_arg_types r ts res)
+       | None => None end).
+    unfold prim_tag_type. rewrite e ih. reflexivity.
+  Qed.
+
+  Lemma prim_op_type_of_kn r op kns res :
+    All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) (po_args (info op)) kns ->
+    prim_shape_type r (po_shape (info op)) = Some res ->
+    prim_op_type r op = Some (fold_right (fun kn B => tImpl (tConst kn []) B) res kns).
+  Proof. intros hk hs. unfold prim_op_type. rewrite hs. now apply prim_arg_types_of_kn. Qed.
+End PCUICPrimOpType.
+
 Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
   PCUICTerm
   PCUICEnvironment
@@ -348,6 +459,7 @@ Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
   PCUICConversion
   PCUICLookup
   PCUICArityRelation
+  PCUICPrimOpType
 .
 Include PCUICGlobalMaps.
 
@@ -362,6 +474,7 @@ Module PCUICDeclarationTyping :=
     PCUICTypingDef
     PCUICLookup
     PCUICArityRelation
+    PCUICPrimOpType
     PCUICGlobalMaps.
 Include PCUICDeclarationTyping.
 
@@ -878,12 +991,12 @@ Proof.
     red. cbn. do 2 red in wfΣ. cbn in wfΣ.
     destruct Σ as [univs Σ]; cbn in *.
     set (Σg:= {| universes := univs; declarations := Σ |}) in *.
-    destruct wfΣ; split => //.
+    destruct wfΣ as [ongu [wfr o]]; split => //; split => //.
     unfold Σg in o |- *; cbn in o.
-    rename o into ongu. rename o0 into o. cbn in o |- *.
+    cbn in o |- *.
     destruct o. { constructor. }
     rename o0 into Xg.
-    set (wfΣ := (ongu, o) : on_global_env cumulSpec0 (lift_typing typing) {| universes := univs; declarations := Σ |}).
+    set (wfΣ := (ongu, (wfr, o)) : on_global_env cumulSpec0 (lift_typing typing) {| universes := univs; declarations := Σ |}).
     set (Σ':= {| universes := univs; declarations := Σ |}) in *.
     destruct Xg as [hfresh udecl honu Xg].
     constructor; auto; try constructor; auto.
