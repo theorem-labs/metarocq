@@ -1274,13 +1274,24 @@ Proof.
   unfold Retroknowledge.disjoint_opt.
   destruct x as [a|]; [|left; congruence].
   destruct y as [b|]; [|left; congruence].
-  destruct (Kername.eq_dec a b) as [->|ne].
-  - right. intros H. now apply (H b).
+  (* [right] before any rewrite: the decision must compute under [vm_compute]
+     (the in-Rocq checker), and [Kername.eq_dec]'s equality proof is opaque. *)
+  destruct (Kername.eq_dec a b) as [e|ne].
+  - right. intros H. apply (H a); [reflexivity|]. now rewrite e.
   - left. intros c [= ->] [= ->]. now apply ne.
 Defined.
 
+(* Written out, not [decide equality]: that tactic substitutes with
+   [Kername.eq_dec]'s opaque equality proof before choosing [left], so the
+   decision would not compute under [vm_compute]; here the constructor comes first. *)
 Definition option_kername_eq_dec (x y : option kername) : {x = y} + {x <> y}.
-Proof. decide equality. apply Kername.eq_dec. Defined.
+Proof.
+  destruct x as [a|], y as [b|].
+  - destruct (Kername.eq_dec a b) as [e|ne]; [left; now f_equal|right; congruence].
+  - right; discriminate.
+  - right; discriminate.
+  - left; reflexivity.
+Defined.
 
 (** [NoDup] on kernames is decidable.  Inlined over [Kername.eq_dec] rather
     than taken from [Stdlib.Lists.ListDec], because extraction of this file
