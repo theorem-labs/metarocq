@@ -641,7 +641,9 @@ Proof.
     eapply lookup_global_app_wf in hl'; tea.
     eapply lookup_global_app_wf in hl''; tea.
     eauto.
-  - rewrite /primitive_constant. now rewrite e0 e2 hr.
+  - split; [|split];
+      [rewrite /primitive_constant|rewrite /prim_op_of|rewrite /primitive_bool];
+      now rewrite e0 e2 hr.
 Qed.
 
 

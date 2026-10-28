@@ -201,7 +201,8 @@ Proof.
   { cbn. now intros ? ->. }
   set (prf := (fun (Σ0 : PCUICAst.PCUICEnvironment.global_env) => _)). cbn in prf.
   rewrite (ErasureFunction.erase_global_deps_irr optimized_abstract_env_impl (EAstUtils.term_global_deps et) env' env _ prf prf).
-  { cbn. now intros ? ? -> ->. }
+  { cbn. intros ? ? -> ->. unfold ErasureFunction.same_prims.
+    split; [|split]; try intros; reflexivity. }
   clearbody prf0 prf1 prf2 prf3 prf4 prf5 prf6 prf7.
   epose proof (erase_correct_strong optimized_abstract_env_impl (v:=v) env ext prf2
     (PCUICAst.PCUICEnvironment.declarations Σ) norm' prf prf6 X eq_refl axf ht fo).

@@ -2595,8 +2595,13 @@ Lemma strictly_extends_decls_extends_global_env Σ Σ' :
   extends_global_env Σ Σ'.
 Proof.
   intros wfΣ' [uni [Σ'' de] retr]. red.
-  cbn. unfold lookup_env. rewrite de /primitive_constant retr.
-  split => //. intros kn decl.
+  cbn. unfold lookup_env. rewrite de.
+  (* the three retroknowledge readings agree, since strictly_extends_decls
+     keeps the retroknowledge *)
+  split; [|split; [|split]];
+    [|now rewrite /primitive_constant retr|now rewrite /prim_op_of retr
+     |now rewrite /primitive_bool retr].
+  intros kn decl.
   intros hl.
   apply lookup_global_Some_iff_In_NoDup.
   apply EnvMap.EnvMap.fresh_globals_iff_NoDup.
@@ -2612,9 +2617,9 @@ Qed.
 Lemma extends_global_env_equiv_env Σ Σ' :
   extends_global_env Σ Σ' -> equiv_env_inter Σ Σ'.
 Proof.
-  intros ext. split. intros kn decl decl' hl hl'.
-  destruct ext. apply H in hl. congruence.
-  now destruct ext.
+  intros ext. destruct ext as [hext hprims].
+  split; [|exact hprims]. intros kn decl decl' hl hl'.
+  apply hext in hl. congruence.
 Qed.
 
 Lemma erase_global_deps_fast_spec_gen {deps}
