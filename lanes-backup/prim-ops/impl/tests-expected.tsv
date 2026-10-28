@@ -1,0 +1,103 @@
+# BET-319 row P: the expected verdict of every case of test-suite/prim_ops.v and
+# test-suite/prim_ops_spec.v, per set of design-opt1.md §8 rows landed.
+# check-tests.sh reads this file; TESTS.md is its prose form.
+#
+# columns: file  case  rows_needed  verdict_before  verdict_after
+#   rows_needed  "-" = the verdict never changes; otherwise every row listed must
+#                have landed for verdict_after to be required.
+#   verdicts     prim_ops:      accepted | refused | failholds | notfailed
+#                prim_ops_spec: ok | notok     (the value of the case's po_*_ok)
+#
+# Row sets used below, from design-opt1.md §11:
+#   step 3  A B C D E F G H K O                 first end-to-end build
+#   step 4  A B C D E F G H I K O Q Q2          machine fires
+#   step 4J A B C D E F G H I J K O Q Q2        conversion fires before answering no
+#
+# prim_ops.v --------------------------------------------------------------
+# Part A: the reflexive-proof reproductions.  Non-literal arguments, so the
+# machine's argument-first frame (Q, Q2) and its firing step (I) are needed.
+prim_ops	po_chunk_bytes	A B C D E F G H I K O Q Q2	refused	accepted
+prim_ops	po_decode_ok	A B C D E F G H I K O Q Q2	refused	accepted
+prim_ops	po_byte_digit	A B C D E F G H I K O Q Q2	refused	accepted
+prim_ops	po_fetch_word	A B C D E F G H I K O Q Q2	refused	accepted
+# Part B: literal arguments only.  §11 step 3 says these go green at the first
+# end-to-end build.
+prim_ops	po_eq_refl_args	A B C D E F G H K O	refused	accepted
+prim_ops	po_leb_equal	A B C D E F G H K O	refused	accepted
+prim_ops	po_ltb_equal	A B C D E F G H K O	refused	accepted
+prim_ops	po_ltb_unsigned	A B C D E F G H K O	refused	accepted
+prim_ops	po_leb_unsigned	A B C D E F G H K O	refused	accepted
+prim_ops	po_sub_wraps	A B C D E F G H K O	refused	accepted
+prim_ops	po_land_masks	A B C D E F G H K O	refused	accepted
+prim_ops	po_lor_sets	A B C D E F G H K O	refused	accepted
+prim_ops	po_lsl_63	A B C D E F G H K O	refused	accepted
+prim_ops	po_lsr_63	A B C D E F G H K O	refused	accepted
+prim_ops	po_get_out_of_range	A B C D E F G H K O	refused	accepted
+prim_ops	po_lsl_shifts	A B C D E F G H K O	refused	accepted
+prim_ops	po_lsr_shifts	A B C D E F G H K O	refused	accepted
+prim_ops	po_length_empty	A B C D E F G H K O	refused	accepted
+# Part C: outside the table.  An acceptance at any state means a quoter arm maps
+# an operation the table does not contain.
+prim_ops	po_unregistered_lxor	-	failholds	failholds
+prim_ops	po_unregistered_ltsb	-	failholds	failholds
+prim_ops	po_unregistered_asr	-	failholds	failholds
+# Part D.
+prim_ops	po_conv_same_op	A B C D E F G H I J K O Q Q2	refused	accepted
+prim_ops	po_conv_diff_op	A B C D E F G H I J K O Q Q2	refused	accepted
+prim_ops	po_saturated_by_beta	A B C D E F G H K O	refused	accepted
+prim_ops	po_beta_arg	A B C D E F G H I K O Q Q2	refused	accepted
+prim_ops	po_stuck_reflexive	-	accepted	accepted
+prim_ops	po_no_computation	-	accepted	accepted
+#
+# prim_ops_spec.v ---------------------------------------------------------
+# The harness's own controls.
+prim_ops_spec	po_names_found	-	ok	ok
+prim_ops_spec	po_A0	-	ok	ok
+# The positive twins of Parts B and C.
+prim_ops_spec	po_A1	A B C D E F G H K O	notok	ok
+prim_ops_spec	po_A2	A B C D E F G H K O	notok	ok
+prim_ops_spec	po_A3	-	ok	ok
+prim_ops_spec	po_A4	A B C D E F G H I K O Q Q2	notok	ok
+# Doctored statements: refused before and after, and for the same reason.
+prim_ops_spec	po_B1	-	ok	ok
+prim_ops_spec	po_B2	-	ok	ok
+prim_ops_spec	po_B3	-	ok	ok
+# The table decides.  The _moved cases need the quoter to have put the entry
+# there in the first place.
+prim_ops_spec	po_C1_moved	K	notok	ok
+prim_ops_spec	po_C1	-	ok	ok
+prim_ops_spec	po_C2_moved	K	notok	ok
+# The quoter keys the table on the declaration, not on a type: a user axiom of
+# eqb's type is not registered, the real eqb is.
+prim_ops_spec	po_C3	K	notok	ok
+prim_ops_spec	po_C2	-	ok	ok
+# Doctored environments: all turned by row H; those whose clause needs an entry
+# in the table also need row K.
+prim_ops_spec	po_D1	H	notok	ok
+prim_ops_spec	po_D2	H	notok	ok
+prim_ops_spec	po_D3	H K	notok	ok
+prim_ops_spec	po_D4	H	notok	ok
+prim_ops_spec	po_D5	H K	notok	ok
+prim_ops_spec	po_D6	H	notok	ok
+prim_ops_spec	po_D7	H K	notok	ok
+prim_ops_spec	po_D8	H	notok	ok
+prim_ops_spec	po_D9	H	notok	ok
+prim_ops_spec	po_D10	H	notok	ok
+# Row H part 2: the operation's declared type, checked structurally.
+# TA* are completeness controls: convertible-but-not-syntactic types that must
+# stay ACCEPTED. They never turn; a refusal is a completeness bug, reportable.
+# TR* are soundness controls: refused naming eqb only once the clause exists.
+prim_ops_spec	po_TA1	-	ok	ok
+prim_ops_spec	po_TA2	-	ok	ok
+prim_ops_spec	po_TA3	-	ok	ok
+prim_ops_spec	po_TA4	-	ok	ok
+prim_ops_spec	po_TA5	-	ok	ok
+prim_ops_spec	po_TR1	H K	notok	ok
+prim_ops_spec	po_TR2a	H K	notok	ok
+prim_ops_spec	po_TR2b	H K	notok	ok
+prim_ops_spec	po_TR3	H K	notok	ok
+prim_ops_spec	po_TR4	H K	notok	ok
+prim_ops_spec	po_TR5	H K	notok	ok
+prim_ops_spec	po_D11	H K	notok	ok
+# The weak-head constructor for a rigid argument: row F alone.
+prim_ops_spec	po_E1	F	notok	ok
