@@ -1,22 +1,25 @@
 (* Distributed under the terms of the MIT license. *)
-(** * The premise of the confluence spine: closed constant bodies and fresh names
+(** * Closed constant bodies and fresh names, the premise of the reduction metatheory
 
-  Base confluence ([PCUICParallelReduction], [PCUICParallelReductionConfluence],
-  [PCUICConfluence]) used to assume [wf Σ]. The compiler shows it needs only two
-  facts about the environment, which [ClosedBodies Σ] states:
-  - [closed_bodies]: the body of a declared constant is closed (the δ cases:
-    [PCUICParallelReduction.v] [pred1_rename] and [strong_substitutivity],
-    [PCUICParallelReductionConfluence.v] [rho_rename] and [pred1_rho]'s δ case);
+  Parallel reduction, confluence and the reduction/conversion lemmas built on them
+  used to assume [wf Σ]. They need only two facts about the environment, which
+  [ClosedBodies Σ] states:
+  - [closed_bodies]: the body of a declared constant is closed. It serves the δ cases
+    of [pred1_rename] and [strong_substitutivity] ([PCUICParallelReduction]), of
+    [rho_rename] and [pred1_on_free_vars_gen] ([PCUICParallelReductionConfluence]), of
+    [red1_rename] ([PCUICRenameConv]), [red1_inst] ([PCUICInstConv]) and
+    [red1_on_free_vars] ([PCUICClosedTyp]).
   - [fresh_names]: declaration names are pairwise distinct, so a constant in the
-    declaration list is the one [lookup_env] returns ([declared_constant_to_gen],
-    used by the primitive-operation cases of [PCUICParallelReductionConfluence.v]).
+    declaration list is the one [lookup_env] returns ([cb_declared_constant_to_gen]).
+    It serves the primitive-operation cases and the δ case of [triangle_gen]
+    ([PCUICParallelReductionConfluence]) and [invert_red_axiom] ([PCUICConversion]).
 
-  Both are consequences of [on_global_env Pcmp P] for ANY [Pcmp]/[P]: the instance
-  from [wf] is [wf_ClosedBodies]; an environment checked with another
-  conversion relation (BET-315's [wfE]) gives its own instance the same way.
-  The instance from [wf] is in [Typing/PCUICClosedTyp.v], after
-  [declared_constant_closed_body]; this file comes before it, because
-  [PCUICClosedTyp]'s own reduction lemmas are stated under the class. *)
+  [fresh_names] holds for any [on_global_env Pcmp P] ([NoDup_on_global_decls]).
+  [closed_bodies] comes from typing: the instance from [wf] is [wf_ClosedBodies], in
+  [Typing/PCUICClosedTyp.v] after [declared_constant_closed_body]; a typing judgement
+  that implies closed constant bodies gives its own instance the same way. This file
+  comes before [PCUICClosedTyp], because that file's own reduction lemmas are stated
+  under the class. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTyping.
@@ -75,22 +78,4 @@ Section ToGen.
     destruct g => //. now inversion H.
   Qed.
 
-  Lemma cb_declared_minductive_to_gen {ind mdecl} :
-    declared_minductive Σ ind mdecl -> declared_minductive_gen (lookup_env Σ) ind mdecl.
-  Proof using cb.
-    intro H; eapply lookup_global_Some_iff_In_NoDup in H; [|exact fresh_names].
-    apply lookup_minductive_declared_gen => //.
-    unfold lookup_minductive_gen, lookup_env.
-    destruct (lookup_global _ _) => //.
-    destruct g => //. now inversion H.
-  Qed.
-
-  Lemma cb_declared_inductive_to_gen {ind mdecl idecl} :
-    declared_inductive Σ ind mdecl idecl -> declared_inductive_gen (lookup_env Σ) ind mdecl idecl.
-  Proof using cb. intros []; split => //. now eapply cb_declared_minductive_to_gen. Qed.
-
-  Lemma cb_declared_constructor_to_gen {id mdecl idecl cdecl} :
-    declared_constructor Σ id mdecl idecl cdecl ->
-    declared_constructor_gen (lookup_env Σ) id mdecl idecl cdecl.
-  Proof using cb. intros []; split => //. now eapply cb_declared_inductive_to_gen. Qed.
 End ToGen.
