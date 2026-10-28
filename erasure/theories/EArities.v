@@ -1023,6 +1023,10 @@ Proof.
     destruct w as [ar [[H] r]].
     destruct (prim_type_inv p prim_ty) as [u [args eq]].
     rewrite eq in H.
+    (* The guard on the axiom inversions: [prim_ty] is the registered primitive
+       TYPE constant, which §4.2(a)1 keeps out of the operation table. *)
+    assert (hnop : prim_op_of Σ prim_ty = None).
+    { pose proof wfΣ as [[_ [wfr _]] _]. eapply prim_op_of_primitive_constant; tea. }
     eapply invert_red_axiom_app in H as [args' []]; tea.
     2:now eapply primitive_invariants_axiom.
     subst ar. now eapply isArity_mkApps in r as [].

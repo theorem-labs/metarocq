@@ -51,7 +51,7 @@ Lemma on_global_env_impl `{checker_flags} Σ P Q :
   on_global_env cumul_gen P Σ -> on_global_env cumul_gen Q Σ.
 Proof.
   destruct Σ as [univs Σ]; cbn.
-  intros X [cu X0]; split => /= //. cbn in *.
+  intros X [cu [wfr X0]]; split => /= //; split => /= //. cbn in *.
   induction X0; try destruct o; constructor; auto; constructor; eauto.
   clear IHX0.
   eapply on_global_decl_impl; tea. split => //.
@@ -156,7 +156,7 @@ Lemma lookup_env_extends {cf : checker_flags} (Σ : global_env) k d (Σ' : globa
   lookup_env Σ k = Some d ->
   extends Σ Σ' -> lookup_env Σ' k = Some d.
 Proof.
-  intro H; eapply lookup_env_extends_NoDup, NoDup_on_global_decls, H.
+  intro H; eapply lookup_env_extends_NoDup, NoDup_on_global_decls, H.2.2.
 Qed.
 
 Lemma In_lookup_globals k decls : In k (map fst decls) -> #| lookup_globals decls k | >= 1.
@@ -192,9 +192,9 @@ Lemma declared_env_extends {cf : checker_flags} (Σ : global_env) k d (Σ' : glo
   In (k, InductiveDecl d) (declarations Σ) -> extends Σ Σ' -> In (k,InductiveDecl d) (declarations Σ').
 Proof.
   intros; apply lookup_global_Some_iff_In_NoDup.
-  - destruct X; eapply NoDup_on_global_decls; eauto.
+  - destruct X as [? []]; eapply NoDup_on_global_decls; eauto.
   - eapply lookup_env_extends; eauto.
-    destruct X; eapply lookup_global_Some_iff_In_NoDup; eauto.
+    destruct X as [? []]; eapply lookup_global_Some_iff_In_NoDup; eauto.
     eapply NoDup_extends; eauto.
     now eapply NoDup_on_global_decls.
 Qed.
@@ -226,7 +226,7 @@ Proof.
   intros.
   destruct H as [Hmdecl Hidecl]. red in Hmdecl.
   eapply lookup_global_Some_iff_In_NoDup in  Hmdecl; eauto.
-  2: destruct X; now eapply NoDup_on_global_decls.
+  2: destruct X as [? [? ?]]; now eapply NoDup_on_global_decls.
   destruct (lookup_on_global_env X Hmdecl) as [Σ' [wfΣ' [ext prf]]]; eauto.
   apply onInductives in prf.
   eapply nth_error_alli in Hidecl; eauto.
@@ -252,7 +252,7 @@ Proof.
   intros.
   destruct H as [Hmdecl Hidecl]. red in Hmdecl.
   eapply lookup_global_Some_iff_In_NoDup in  Hmdecl; eauto.
-  2: destruct X; now eapply NoDup_on_global_decls.
+  2: destruct X as [? [? ?]]; now eapply NoDup_on_global_decls.
   destruct (lookup_on_global_env X Hmdecl) as [Σ' [wfΣ' [ext prf]]]; eauto.
   apply onInductives in prf.
   eapply nth_error_alli in Hidecl; eauto.
@@ -286,7 +286,7 @@ Proof.
   intros.
   destruct H as [Hmdecl Hidecl]. red in Hmdecl.
   eapply lookup_global_Some_iff_In_NoDup in  Hmdecl; eauto.
-  2: destruct X; now eapply NoDup_on_global_decls.
+  2: destruct X as [? [? ?]]; now eapply NoDup_on_global_decls.
   destruct (lookup_on_global_env X Hmdecl) as [Σ' [wfΣ' [ext prf]]]; eauto.
   apply onInductives in prf.
   eapply nth_error_alli in Hidecl; eauto.
@@ -546,7 +546,7 @@ Section WfAst.
     intros.
     destruct H as [Hmdecl Hidecl]. red in Hmdecl.
     eapply lookup_global_Some_iff_In_NoDup in  Hmdecl; eauto.
-    2: destruct X; now eapply NoDup_on_global_decls.
+    2: destruct X as [? [? ?]]; now eapply NoDup_on_global_decls.
       destruct (lookup_on_global_env X Hmdecl) as [Σ' [wfΣ' [ext prf]]]; eauto.
     eapply on_global_inductive_wf_params in prf.
     solve_all. eapply wf_decl_extends; tea; typeclasses eauto.
@@ -562,7 +562,7 @@ Section WfAst.
     intros X isdecl.
     destruct isdecl as [[Hmdecl Hidecl] Hcdecl]. red in Hmdecl.
     eapply lookup_global_Some_iff_In_NoDup in  Hmdecl; eauto.
-    2: destruct X; now eapply NoDup_on_global_decls.
+    2: destruct X as [? [? ?]]; now eapply NoDup_on_global_decls.
       destruct (lookup_on_global_env X Hmdecl) as [Σ' [wfΣ' [ext prf]]]; eauto. red in prf.
     apply onInductives in prf.
     eapply nth_error_alli in Hidecl; eauto. simpl in *.
@@ -720,6 +720,15 @@ Proof.
   constructor; auto.
 Qed.
 
+(** The reduct of a primitive operation is a literal or a constructor of the
+    registered boolean inductive: well formed with no premise. *)
+Lemma wf_treadback {Σ s r v} : treadback Σ s r = Some v -> WfAst.wf Σ v.
+Proof.
+  destruct s, r => //=.
+  - intros [= <-]; constructor.
+  - destruct primitive_bool => //. intros [= <-]; constructor.
+Qed.
+
 Section WfRed.
   Context {cf:checker_flags}.
   Context {Σ : global_env}.
@@ -763,11 +772,18 @@ Section WfRed.
     - apply wf_subst_instance.
       unfold declared_constant in H.
       eapply lookup_global_Some_iff_In_NoDup in H; eauto.
-      2: destruct wfΣ; now eapply NoDup_on_global_decls.
+      2: destruct wfΣ as [? [? ?]]; now eapply NoDup_on_global_decls.
       eapply lookup_on_global_env in H as [Σ' [onΣ' [ext prf]]]; eauto.
       destruct decl; simpl in *.
       subst cst_body0; simpl in *; unfold on_constant_decl in prf; cbn in prf; destruct prf as [prfbod prftyp].
       unfold j_term in prfbod. intuition eauto using wf_extends with typeclass_instances.
+    (* primitive operation: the reduct is a literal or a constructor, and the
+       arguments beyond the operation's arity are kept *)
+    - match goal with
+      | h : All (WfAst.wf Σ) (map template_of_lit _ ++ _) |- _ =>
+        apply All_app in h as [_ hrest]
+      end.
+      apply wf_mkApps; [eapply wf_treadback; eassumption|assumption].
     - apply wf_mkApps_inv in X.
       eapply nth_error_all in X; eauto.
     - simpl in *. econstructor; eauto. cbn.
@@ -852,7 +868,7 @@ Section WfRed.
     intros isdecl X.
     destruct isdecl as [[[Hmdecl Hidecl] Hcdecl] Hpdecl].
     eapply lookup_global_Some_iff_In_NoDup in Hmdecl; eauto.
-    2: destruct X; now eapply NoDup_on_global_decls.
+    2: destruct X as [? [? ?]]; now eapply NoDup_on_global_decls.
     destruct (lookup_on_global_env X Hmdecl) as [Σ' [wfΣ' [ext prf]]]; eauto.
     assert (wfpars := on_inductive_wf_params prf).
     eapply on_global_inductive_wf_bodies in prf => //.
@@ -870,7 +886,7 @@ Section WfRed.
     intros wΣ h.
     unfold declared_constant in h.
     eapply lookup_global_Some_iff_In_NoDup in h; eauto.
-    2: destruct wΣ; now eapply NoDup_on_global_decls.
+    2: destruct wΣ as [? [? ?]]; now eapply NoDup_on_global_decls.
     destruct (lookup_on_global_env wΣ h) as [Σ' [wΣ' [ext h']]].
     simpl in h'.
     destruct h'.
@@ -1039,7 +1055,7 @@ Section TypingWf.
     intros declm.
     pose proof (typing_wf_gen (Env.empty_ext Σ) wfΣ _ localenv_nil _ _ (type_Prop _)) as [X _].
     eapply lookup_global_Some_iff_In_NoDup in declm; eauto.
-    2: destruct X; now eapply NoDup_on_global_decls.
+    2: destruct X as [? [? ?]]; now eapply NoDup_on_global_decls.
     destruct (lookup_on_global_env X declm) as [? [? [ext ?]]]; eauto.
     split. eapply on_global_inductive_wf_params in o0. solve_all. eauto using wf_decl_extends with typeclass_instances.
     eapply on_global_inductive_wf_bodies in o0. solve_all.

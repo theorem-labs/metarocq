@@ -572,20 +572,27 @@ Qed.
 Lemma typing_spine_axiom {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} Γ cst u cdecl args args' T :
   declared_constant Σ cst cdecl ->
   cdecl.(cst_body) = None ->
+  prim_op_of Σ cst = None ->
   typing_spine Σ Γ (mkApps (tConst cst u) args) args' T -> args' = [].
 Proof.
-  intros hdecl hb.
+  intros hdecl hb hnop.
   induction args' => //.
   intros sp. depelim sp.
   now eapply invert_cumul_axiom_prod in w.
 Qed.
 
+(** [prim_ty] is the registered primitive TYPE constant ([hp]), which §4.2(a)1
+    keeps out of the operation table: that discharges [typing_spine_axiom]'s
+    guard (row H's [prim_op_of_primitive_constant]). *)
 Lemma typing_spine_prim_type {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} Γ prim prim_ty cdecl args T :
+  primitive_constant Σ (prim_val_tag prim) = Some prim_ty ->
   declared_constant Σ prim_ty cdecl ->
   primitive_invariants (prim_val_tag prim) cdecl ->
   typing_spine Σ Γ (prim_type prim prim_ty) args T -> args = [].
 Proof.
-  intros hdecl hb.
+  intros hp hdecl hb.
+  assert (hnop : prim_op_of Σ prim_ty = None).
+  { pose proof wfΣ as [_ [wfr _]]. eapply prim_op_of_primitive_constant; tea. }
   induction args => //.
   destruct prim as [? []]; cbn in *; intros sp; destruct hb; simp prim_type in *.
   1-3:eapply (typing_spine_axiom _ _ _ _ []) in sp; tea.

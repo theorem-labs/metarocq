@@ -245,7 +245,7 @@ Qed.
 Lemma wf_cons_inv {cf} Σ' (Σ : global_declarations) d :
   wf (set_declarations Σ' (d :: Σ)) -> wf (set_declarations Σ' Σ).
 Proof.
-  intros []. split => //. now depelim o0.
+  intros [o [wfr o0]]. split => //. split => //. now depelim o0.
 Qed.
 
 Lemma template_wf_cons_inv {cf} univs retro (Σ : Ast.Env.global_declarations) d :
@@ -257,8 +257,8 @@ Lemma template_wf_cons_inv {cf} univs retro (Σ : Ast.Env.global_declarations) d
   × ST.on_udecl univs (Ast.universes_decl_of_decl d.2).
 Proof.
   intros wf; split.
-  destruct wf. split => //. now depelim o0.
-  eapply typing_wf_wf in wf. depelim wf.
+  destruct wf as [o [wfr o0]]. split => //. split => //. now depelim o0.
+  eapply typing_wf_wf in wf. destruct wf as [o [wfr o0]].
   cbn in o0. depelim o0. cbn. destruct o1. split => //.
 Qed.
 
