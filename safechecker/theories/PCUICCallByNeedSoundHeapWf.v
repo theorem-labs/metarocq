@@ -27,10 +27,12 @@ Import CanonicalTries.
   because [hwf] is stated over [heap_get] alone: a cell [bh_get] finds after [bh_cons] is the
   new cell or a cell it found before ([bh_get_cons_any]).
 
-  [machine_hwf_holds] needs [#|Γ| <= nctx]; without it the interface is false: with
-  [nctx = 0] and one assumption in [Γ], [gam] makes [NVar 0], which is not below the master
-  level [0]. The machine's runs have [nctx = #|Γ|]
-  ([cbn_conv_answer]), and [machine_hwf_run] is that instance. *)
+  [machine_hwf_holds] needs [#|Γ| <= nctx]; without it the interface is false
+  ([machine_hwf_needs_len]): with [nctx = 0] and one assumption in [Γ], [gam] makes
+  [NVar 0], which is not below the master level [0]. The machine's runs have [nctx = #|Γ|]
+  ([cbn_conv_answer]), and [machine_hwf_run] is that instance. [whnf_master_hwf] and
+  [eval_slot_master_hwf] are [whnf_master] and [eval_slot_master] with the interface
+  discharged from the master section's own [nctx = #|Γ|]. *)
 
 (** ** The heap: what [bh_cons] adds, for any digit list *)
 
@@ -781,3 +783,57 @@ Qed.
 Lemma machine_hwf_run {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
     (Γ : context) (stress : bool) : machine_hwf X_type X Γ #|Γ| stress.
 Proof. exact (machine_hwf_holds X_type X Γ #|Γ| stress (le_n _)). Qed.
+
+(** The premise [#|Γ| <= nctx] is needed: with [nctx = 0], one assumption in [Γ] and the
+  master level [0], the variable [tRel 0] evaluates to [NVar 0], which is not below [0]. *)
+Lemma machine_hwf_needs_len {cf : checker_flags} (X_type : abstract_env_impl)
+    (X : X_type.π2.π1) (stress : bool) :
+  ~ machine_hwf X_type X [jdecl] 0 stress.
+Proof.
+  intros h.
+  destruct (h (FS (fun _ => FS (fun _ => FS (fun _ => FO)))) 0 (le_n 0))
+    as (_ & _ & hw & _ & _).
+  assert (hs0 : hwf 0 cbn_init).
+  { intros a cl ha. unfold heap_get in ha. cbn [cbn_init st_heap] in ha.
+    rewrite bh_get_holes in ha. discriminate ha. }
+  assert (E : exists s', whnf X_type X [jdecl] 0 stress
+                           (FS (fun _ => FS (fun _ => FS (fun _ => FO))))
+                           env_empty (mkCode path_nil path_nil (tRel 0)) [] [] cbn_init
+                         = COk (VNeu (NVar 0) [], [], s')).
+  { destruct stress; eexists; reflexivity. }
+  destruct E as [s' E].
+  destruct (hw _ _ _ _ _ _ _ _ hs0 (Forall_nil _) E) as (_ & _ & hv).
+  cbn in hv. lia.
+Qed.
+
+(** ** The machine at the master level, with the interface discharged *)
+
+Section MasterProved.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext).
+  Context (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ) (hnctx : nctx = #|Γ|).
+  Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
+                    PCUICCallByNeedSoundHook.consts_okb Σ b).
+
+  Lemma machine_hwf_master : machine_hwf X_type X Γ nctx stress.
+  Proof. apply machine_hwf_holds. rewrite hnctx. apply le_n. Qed.
+
+  Lemma whnf_master_hwf d L Q lo G e c stk sts tc rs s v rs' s' :
+    minv X_type X Γ nctx Σ L Q lo G s -> Forall (rwf Q) rs ->
+    g_susp nctx Q G e c.(c_term) tc -> PCUICCallByNeedSoundEval.cok G c ->
+    g_slots nctx Q G stk sts ->
+    whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+    exists lo' G' u, minv X_type X Γ nctx Σ L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
+      /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
+      /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tc sts) u.
+  Proof. exact (whnf_master X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio machine_hwf_master d L Q lo G e c stk sts tc rs s v rs' s'). Qed.
+
+  Lemma eval_slot_master_hwf d L Q lo G x stk sts tx rs s v rs' s' :
+    minv X_type X Γ nctx Σ L Q lo G s -> Forall (rwf Q) rs ->
+    g_slot nctx Q G x tx -> g_slots nctx Q G stk sts ->
+    eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+    exists lo' G' u, minv X_type X Γ nctx Σ L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
+      /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
+      /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tx sts) u.
+  Proof. exact (eval_slot_master X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio machine_hwf_master d L Q lo G x stk sts tx rs s v rs' s'). Qed.
+End MasterProved.
