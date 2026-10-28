@@ -3531,6 +3531,492 @@ Proof.
       cbn beta in hd. apply andb_true_iff in hd. exact (proj2 hd).
 Qed.
 
+(** * A machine call returns the caller's roots renamed, never reshaped (BET-298)
+
+  The shape of a root is the root with every heap address replaced by one constant address
+  ([mp_root kc]). A renaming ([rn_*]), a collection, an allocation and every function of the
+  machine give back roots of the shape of the roots they were given: each function pops
+  exactly the frames it pushes, and threads the rest through calls that keep their shape. *)
+
+Definition kc : haddr -> haddr := fun _ => HAddr xH.
+
+(** Two root lists of one shape, less their first root. *)
+Lemma sk_tl r r' rs rs' :
+  mp_roots kc (r' :: rs') = mp_roots kc (r :: rs) -> mp_roots kc rs' = mp_roots kc rs.
+Proof. intros h. exact (f_equal (@tl root) h). Qed.
+
+(** Strip the frames a call pushed and popped, then chain the equations of the calls. *)
+Local Ltac sk_fin :=
+  repeat match goal with
+         | h : mp_roots kc (_ :: _) = mp_roots kc (_ :: _) |- _ => apply sk_tl in h
+         end;
+  repeat match goal with
+         | h : mp_roots kc ?a = mp_roots kc ?b |- mp_roots kc ?a = _ => rewrite h; clear h
+         end;
+  reflexivity.
+
+(** ** A renaming keeps the shape of what it renames *)
+
+Section SkRename.
+  Context {G : Type} (f : haddr -> G -> cbn_res (haddr * G)).
+
+  Lemma sk_rn_addrs : forall l g l' g', rn_addrs f l g = COk (l', g') -> map kc l' = map kc l.
+  Proof.
+    induction l as [|a l ih]; intros g l' g' he; simpl in he.
+    - injection he as <- <-. reflexivity.
+    - destruct (f a g) as [[b g1]|w] eqn:e1; [|discriminate].
+      destruct (rn_addrs f l g1) as [[l2 g2]|w] eqn:e2; [|discriminate].
+      injection he as <- <-. cbn [map]. rewrite (ih _ _ _ e2). reflexivity.
+  Qed.
+
+  Lemma sk_rn_slot : forall x g x' g', rn_slot f x g = COk (x', g') -> mp_slot kc x' = mp_slot kc x.
+  Proof.
+    intros x. induction x as [a|vs n o c ihvs] using slot_ind'; intros g x' g' he.
+    - simpl in he. destruct (f a g) as [[b g1]|w] eqn:e1; [|discriminate].
+      injection he as <- <-. reflexivity.
+    - rewrite rn_slot_SInl in he.
+      destruct (rn_slots f vs g) as [[vs' g1]|w] eqn:e1; [|discriminate].
+      injection he as <- <-. cbn [mp_slot]. f_equal.
+      revert g vs' g1 e1.
+      induction ihvs as [|y vs hy hvs ihl]; intros g vs' g1 e1; simpl in e1.
+      + injection e1 as <- <-. reflexivity.
+      + destruct (rn_slot f y g) as [[y' ga]|wa] eqn:ea; [|discriminate].
+        destruct (rn_slots f vs ga) as [[vs2 gb]|wb] eqn:eb; [|discriminate].
+        injection e1 as <- <-. cbn [map]. rewrite (hy _ _ _ ea), (ihl _ _ _ eb). reflexivity.
+  Qed.
+
+  Lemma sk_rn_slots : forall l g l' g',
+    rn_slots f l g = COk (l', g') -> mp_slots kc l' = mp_slots kc l.
+  Proof.
+    unfold mp_slots. induction l as [|y l ih]; intros g l' g' he; simpl in he.
+    - injection he as <- <-. reflexivity.
+    - destruct (rn_slot f y g) as [[y' g1]|w] eqn:e1; [|discriminate].
+      destruct (rn_slots f l g1) as [[l2 g2]|w] eqn:e2; [|discriminate].
+      injection he as <- <-. cbn [map].
+      rewrite (sk_rn_slot _ _ _ _ e1), (ih _ _ _ e2). reflexivity.
+  Qed.
+
+  Lemma sk_rn_env e g e' g' : rn_env f e g = COk (e', g') -> mp_env kc e' = mp_env kc e.
+  Proof.
+    intros he. unfold rn_env in he.
+    destruct (rn_slots f (ev_vals e) g) as [[vs g1]|w] eqn:e1; [|discriminate].
+    injection he as <- <-. unfold mp_env. cbn [ev_vals ev_nvals ev_goff].
+    rewrite (sk_rn_slots _ _ _ _ e1). reflexivity.
+  Qed.
+
+  Lemma sk_rn_value v g v' g' : rn_value f v g = COk (v', g') -> mp_value kc v' = mp_value kc v.
+  Proof.
+    intros he. unfold rn_value in he.
+    destruct v as [h sp|e c|e c i sp|e c i sp|h sp|e c|e c sp].
+    - destruct (rn_addrs f sp g) as [[sp1 g1]|w] eqn:e1; [|discriminate].
+      injection he as <- <-. cbn [mp_value]. rewrite (sk_rn_addrs _ _ _ _ e1). reflexivity.
+    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
+      injection he as <- <-. cbn [mp_value]. rewrite (sk_rn_env _ _ _ _ E1). reflexivity.
+    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
+      destruct (rn_addrs f sp g1) as [[sp1 g2]|w] eqn:E2; [|discriminate].
+      injection he as <- <-. cbn [mp_value].
+      rewrite (sk_rn_env _ _ _ _ E1), (sk_rn_addrs _ _ _ _ E2). reflexivity.
+    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
+      destruct (rn_addrs f sp g1) as [[sp1 g2]|w] eqn:E2; [|discriminate].
+      injection he as <- <-. cbn [mp_value].
+      rewrite (sk_rn_env _ _ _ _ E1), (sk_rn_addrs _ _ _ _ E2). reflexivity.
+    - destruct (rn_addrs f sp g) as [[sp1 g1]|w] eqn:e1; [|discriminate].
+      injection he as <- <-. cbn [mp_value]. rewrite (sk_rn_addrs _ _ _ _ e1). reflexivity.
+    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
+      injection he as <- <-. cbn [mp_value]. rewrite (sk_rn_env _ _ _ _ E1). reflexivity.
+    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
+      destruct (rn_addrs f sp g1) as [[sp1 g2]|w] eqn:E2; [|discriminate].
+      injection he as <- <-. cbn [mp_value].
+      rewrite (sk_rn_env _ _ _ _ E1), (sk_rn_addrs _ _ _ _ E2). reflexivity.
+  Qed.
+
+  Lemma sk_rn_cell cl g cl' g' : rn_cell f cl g = COk (cl', g') -> mp_cell kc cl' = mp_cell kc cl.
+  Proof.
+    intros he. unfold rn_cell in he. destruct cl as [vs n o c|v| |b].
+    - destruct (rn_slots f vs g) as [[vs1 g1]|w] eqn:e1; [|discriminate].
+      injection he as <- <-. cbn [mp_cell]. rewrite (sk_rn_slots _ _ _ _ e1). reflexivity.
+    - destruct (rn_value f v g) as [[v1 g1]|w] eqn:e1; [|discriminate].
+      injection he as <- <-. cbn [mp_cell]. rewrite (sk_rn_value _ _ _ _ e1). reflexivity.
+    - injection he as <- <-. reflexivity.
+    - destruct (f b g) as [[b1 g1]|w] eqn:e1; [|discriminate].
+      injection he as <- <-. reflexivity.
+  Qed.
+End SkRename.
+
+Lemma rn_root_skel {G : Type} (f : haddr -> G -> cbn_res (haddr * G)) (r : root) (g : G) r' g' :
+  rn_root f r g = COk (r', g') -> mp_root kc r' = mp_root kc r.
+Proof.
+  intros he. unfold rn_root in he. destruct r as [a|x|e|v|l|l|cl].
+  - destruct (f a g) as [[b g1]|w] eqn:e1; [|discriminate].
+    injection he as <- <-. reflexivity.
+  - destruct (rn_slot f x g) as [[x1 g1]|w] eqn:e1; [|discriminate].
+    injection he as <- <-. cbn [mp_root]. rewrite (sk_rn_slot f _ _ _ _ e1). reflexivity.
+  - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
+    injection he as <- <-. cbn [mp_root]. rewrite (sk_rn_env f _ _ _ _ E1). reflexivity.
+  - destruct (rn_value f v g) as [[v1 g1]|w] eqn:e1; [|discriminate].
+    injection he as <- <-. cbn [mp_root]. rewrite (sk_rn_value f _ _ _ _ e1). reflexivity.
+  - destruct (rn_slots f l g) as [[l1 g1]|w] eqn:e1; [|discriminate].
+    injection he as <- <-. cbn [mp_root]. rewrite (sk_rn_slots f _ _ _ _ e1). reflexivity.
+  - destruct (rn_addrs f l g) as [[l1 g1]|w] eqn:e1; [|discriminate].
+    injection he as <- <-. cbn [mp_root]. rewrite (sk_rn_addrs f _ _ _ _ e1). reflexivity.
+  - destruct (rn_cell f cl g) as [[cl1 g1]|w] eqn:e1; [|discriminate].
+    injection he as <- <-. cbn [mp_root]. rewrite (sk_rn_cell f _ _ _ _ e1). reflexivity.
+Qed.
+
+Lemma rn_roots_skel {G : Type} (f : haddr -> G -> cbn_res (haddr * G)) (rs : list root) (g : G)
+    rs' g' :
+  rn_roots f rs g = COk (rs', g') -> mp_roots kc rs' = mp_roots kc rs.
+Proof.
+  revert g rs' g'. induction rs as [|r rs ih]; intros g rs' g' he; simpl in he.
+  - injection he as <- <-. reflexivity.
+  - destruct (rn_root f r g) as [[r1 g1]|w] eqn:e1; [|discriminate].
+    destruct (rn_roots f rs g1) as [[l2 g2]|w] eqn:e2; [|discriminate].
+    injection he as <- <-. unfold mp_roots in *. cbn [map].
+    rewrite (rn_root_skel f _ _ _ _ e1), (ih _ _ _ e2). reflexivity.
+Qed.
+
+(** ** A collection, and an allocation *)
+
+Lemma collect_skel (rs : list root) (s : cbn_state) rs' s' :
+  collect rs s = COk (rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+Proof.
+  intros he. rewrite collect_eq in he.
+  destruct (rn_ptree (gc_copy (fuel_of_pos s.(st_next) (fun _ => FO))) s.(st_gam)
+              (mkGc s.(st_heap) (bh_holes s.(st_next)) s.(st_next))) as [[gm g1]|w] eqn:e1;
+    [|discriminate he].
+  destruct (rn_roots (gc_copy (fuel_of_pos s.(st_next) (fun _ => FO))) rs g1)
+    as [[rs2 g2]|w] eqn:e2; [|discriminate he].
+  injection he as <- <-. exact (rn_roots_skel _ _ _ _ _ e2).
+Qed.
+
+Lemma alloc_skel (stress : bool) cl rs s a rs' s' :
+  alloc stress cl rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+Proof.
+  intros he. destruct (gc_due stress s) eqn:eg.
+  - rewrite (alloc_gc stress cl rs s eg) in he.
+    destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:ec; [|discriminate he].
+    pose proof (collect_skel _ _ _ _ ec) as h1.
+    destruct rs2 as [|[| | | | | |cl2] rs2]; try discriminate he.
+    injection he as <- <- <-. exact (sk_tl _ _ _ _ h1).
+  - rewrite (alloc_no_gc stress cl rs s eg) in he. injection he as <- <- <-. reflexivity.
+Qed.
+
+(** ** The machine *)
+
+(** The first call whose answer [he] matches on: its answer is [COk (x, y, z)], named by [e]. *)
+Local Ltac dcall he e x y z :=
+  lazymatch type of he with
+  | context [match ?t with COk _ => _ | CFail _ => _ end] =>
+      destruct t as [[[x y] z]|?] eqn:e; [|discriminate he]
+  end.
+
+(** The decisions of a match or projection on a constructor: each test that fails fails. *)
+Local Ltac dtests he :=
+  repeat (match type of he with
+          | context [if ?b then _ else _] => destruct b
+          | context [match ?o with Some _ => _ | None => _ end] => destruct o
+          | context [match ?m with O => _ | S _ => _ end] => destruct m
+          end; try discriminate he).
+
+Lemma push_fresh_skel (stress : bool) : forall n lvl e1 e2 rs s r rs' s',
+  push_fresh stress n lvl e1 e2 rs s = COk (r, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+Proof.
+  induction n as [|n ih]; intros lvl e1 e2 rs s r rs' s' he; cbn [push_fresh] in he.
+  - injection he as <- <- <-. reflexivity.
+  - dcall he ea x1 rs1 s1.
+    destruct rs1 as [|[| |f1| | | |] [|[| |f2| | | |] rs1]]; try discriminate he.
+    pose proof (alloc_skel _ _ _ _ _ _ _ ea) as h1.
+    pose proof (ih _ _ _ _ _ _ _ _ he) as h2. sk_fin.
+Qed.
+
+Section SkMachine.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Γ : context) (nctx : nat) (stress : bool).
+
+  Lemma gam_skel j rs s a rs' s' :
+    gam X_type X Γ nctx stress j rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+  Proof.
+    intros he. unfold gam in he. cbv zeta in he.
+    destruct (PTree.get (key_of_succ_nat j) s.(st_gam)) as [a0|].
+    { injection he as <- <- <-. reflexivity. }
+    destruct (nth_error Γ j) as [decl|]; [|discriminate he].
+    destruct (decl_body decl) as [b|].
+    - destruct (new_entry X_type X b [] (NSCtx j) s) as [c s1].
+      cbv beta iota in he. dcall he ea a1 rs1 s2.
+      injection he as <- <- <-. exact (alloc_skel _ _ _ _ _ _ _ ea).
+    - cbv beta iota in he. dcall he ea a1 rs1 s2.
+      injection he as <- <- <-. exact (alloc_skel _ _ _ _ _ _ _ ea).
+  Qed.
+
+  Lemma env_var_skel n e rs s x rs' s' :
+    env_var X_type X Γ nctx stress n e rs s = COk (x, rs', s') ->
+    mp_roots kc rs' = mp_roots kc rs.
+  Proof.
+    intros he. unfold env_var in he.
+    destruct (nth_error e.(ev_vals) n) as [y|].
+    - injection he as <- <- <-. reflexivity.
+    - dcall he eg a1 rs1 s1. injection he as <- <- <-. exact (gam_skel _ _ _ _ _ _ eg).
+  Qed.
+
+  Lemma arg_slot_skel e c rs s x rs' s' :
+    arg_slot X_type X Γ nctx stress e c rs s = COk (x, rs', s') ->
+    mp_roots kc rs' = mp_roots kc rs.
+  Proof.
+    intros he. unfold arg_slot in he.
+    destruct (c_term c); try (injection he as <- <- <-; reflexivity).
+    exact (env_var_skel _ _ _ _ _ _ _ he).
+  Qed.
+
+  Lemma materialize_skel x rs s a rs' s' :
+    materialize X_type X stress x rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+  Proof.
+    intros he. unfold materialize in he.
+    destruct x as [a0|vs n o c]; [injection he as <- <- <-; reflexivity|].
+    destruct (c_term c) eqn:ec; try exact (alloc_skel _ _ _ _ _ _ _ he).
+    - lazymatch type of he with
+      | context [delta X_type X ?kn ?ui s] =>
+        destruct (delta X_type X kn ui s) as [[[c'|] s1]|w] eqn:ed
+      end; exact (alloc_skel _ _ _ _ _ _ _ he).
+    - lazymatch type of he with
+      | context [nth_error ?m ?i] => destruct (nth_error m i)
+      end; exact (alloc_skel _ _ _ _ _ _ _ he).
+  Qed.
+
+  Lemma bind_skel x body rs s y rs' s' :
+    bind X_type X stress x body rs s = COk (y, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+  Proof.
+    intros he. unfold bind in he. destruct x as [a0|vals n o c].
+    - injection he as <- <- <-. reflexivity.
+    - destruct (once_body body s) as [b s1]. destruct b.
+      + injection he as <- <- <-. reflexivity.
+      + dcall he em a1 rs1 s2. injection he as <- <- <-.
+        exact (materialize_skel _ _ _ _ _ _ em).
+  Qed.
+
+  Lemma mat_all_skel : forall d l rs s al rs' s',
+    mat_all X_type X stress d l rs s = COk (al, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+  Proof.
+    intros d. induction d as [|k ih]; intros l rs s al rs' s' he;
+      destruct l as [|x l]; cbn [mat_all] in he.
+    1,3: injection he as <- <- <-; reflexivity.
+    - discriminate he.
+    - dcall he em a1 rs1 s1.
+      destruct rs1 as [|[| | | |l1| |] rs1]; try discriminate he.
+      pose proof (materialize_skel _ _ _ _ _ _ em) as h1.
+      dcall he em2 al1 rs2 s2.
+      destruct rs2 as [|[a0| | | | | |] rs2]; try discriminate he.
+      injection he as <- <- <-.
+      pose proof (ih tt _ _ _ _ _ _ em2) as h2. sk_fin.
+  Qed.
+
+  Lemma push_fix_cells_skel : forall n e c i acc rs s e' rs' s',
+    push_fix_cells stress e c i n acc rs s = COk (e', rs', s') ->
+    mp_roots kc rs' = mp_roots kc rs.
+  Proof.
+    induction n as [|n ih]; intros e c i acc rs s e' rs' s' he;
+      cbn [push_fix_cells] in he.
+    - injection he as <- <- <-. reflexivity.
+    - dcall he ea a1 rs1 s1.
+      destruct rs1 as [|[| |e1| | | |] [|[| |acc1| | | |] rs1]]; try discriminate he.
+      pose proof (alloc_skel _ _ _ _ _ _ _ ea) as h1.
+      pose proof (ih _ _ _ _ _ _ _ _ _ he) as h2. sk_fin.
+  Qed.
+
+  (** The five functions of the machine at one fuel. *)
+  Definition sk_m (d : cbn_fuel) : Prop :=
+    (forall a rs s v rs' s', force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
+       mp_roots kc rs' = mp_roots kc rs)
+    /\ (forall x stk rs s v rs' s', eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+       mp_roots kc rs' = mp_roots kc rs)
+    /\ (forall e c stk rs s v rs' s', whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+       mp_roots kc rs' = mp_roots kc rs)
+    /\ (forall e c mfix idx stk rs s v rs' s',
+         whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
+       mp_roots kc rs' = mp_roots kc rs)
+    /\ (forall v stk rs s w rs' s', apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
+       mp_roots kc rs' = mp_roots kc rs).
+
+  Lemma sk_machine : forall d, sk_m d.
+  Proof.
+    intros d. induction d as [|k ih].
+    - (* FO: every call fails, except [apply] with an empty stack *)
+      split; [|split; [|split; [|split]]].
+      + intros a rs s v rs' s' he. cbn [force] in he. discriminate he.
+      + intros x stk rs s v rs' s' he. cbn [eval_slot] in he. discriminate he.
+      + intros e c stk rs s v rs' s' he. cbn [whnf] in he. discriminate he.
+      + intros e c mfix idx stk rs s v rs' s' he. cbn [whnf_fix] in he. discriminate he.
+      + intros v stk rs s w rs' s' he. cbn [apply] in he.
+        destruct stk; [injection he as <- <- <-; reflexivity|discriminate he].
+    - destruct (ih tt) as (IHf & IHs & IHw & IHx & IHa).
+      split; [|split; [|split; [|split]]].
+      + (* force *)
+        intros a0 rs0 s0 v0 rs' s' he.
+        cbv beta iota zeta delta [force] in he.
+        destruct (heap_get a0 s0) as [cl|] eqn:ehc; [|discriminate he].
+        destruct cl as [vs n o c|vd| |b]; try discriminate he.
+        * (* a suspension: evaluate it, then write the value back *)
+          destruct (heap_upd a0 CBusy s0) as [sb|] eqn:ebusy; [|discriminate he].
+          dcall he ew vw rsw sw.
+          destruct rsw as [|[ar| | | | | |] rsw]; try discriminate he.
+          destruct (heap_upd ar (CDone vw) sw) as [sd|] eqn:edone; [|discriminate he].
+          injection he as <- <- <-.
+          pose proof (IHw _ _ _ _ _ _ _ _ ew) as h1. sk_fin.
+        * (* a value: the heap has it *)
+          injection he as <- <- <-. reflexivity.
+      + (* eval_slot *)
+        intros x stk rs0 s0 v0 rs' s' he.
+        cbv beta iota zeta delta [eval_slot] in he.
+        destruct x as [a|vs n o c].
+        * dcall he ef vf rsf sf.
+          destruct rsf as [|[| | | |lk| |] rsf]; try discriminate he.
+          pose proof (IHf _ _ _ _ _ _ ef) as h1.
+          pose proof (IHa _ _ _ _ _ _ _ he) as h2. sk_fin.
+        * exact (IHw _ _ _ _ _ _ _ _ he).
+      + (* whnf *)
+        intros e c stk rs0 s0 v0 rs' s' he.
+        cbv beta iota zeta delta [whnf] in he.
+        destruct (tick s0) as [st|] eqn:etick; [|discriminate he].
+        destruct (c_term c) as [n|vr|ev earg|srt|na A B|na A b|na b T body|f arg|kn ui
+                               |ind ui|ind n ui|ci p scrut brs|pr arg|mfix idx|cmfix cidx|prm]
+          eqn:ec; try solve [discriminate he].
+        * (* tRel *)
+          dcall he ev xr rsr sr.
+          destruct rsr as [|[| | | |lk| |] rsr]; try discriminate he.
+          pose proof (env_var_skel _ _ _ _ _ _ _ ev) as h1.
+          pose proof (IHs _ _ _ _ _ _ _ he) as h2. sk_fin.
+        * (* tSort *)
+          destruct stk; [|discriminate he]. injection he as <- <- <-. reflexivity.
+        * (* tProd *)
+          destruct stk; [|discriminate he]. injection he as <- <- <-. reflexivity.
+        * (* tLambda *)
+          destruct stk as [|xh stk'].
+          -- injection he as <- <- <-. reflexivity.
+          -- dcall he eb xb rsb sb.
+             destruct rsb as [|[| |e1| | | |] [|[| | | |k1| |] rsb]]; try discriminate he.
+             pose proof (bind_skel _ _ _ _ _ _ _ eb) as h1.
+             pose proof (IHw _ _ _ _ _ _ _ _ he) as h2. sk_fin.
+        * (* tLetIn *)
+          dcall he ea xa rsa sa.
+          destruct rsa as [|[| |e1| | | |] [|[| | | |k1| |] rsa]]; try discriminate he.
+          pose proof (arg_slot_skel _ _ _ _ _ _ _ ea) as h1.
+          dcall he eb xb rsb sb.
+          destruct rsb as [|[| |e2| | | |] [|[| | | |k2| |] rsb]]; try discriminate he.
+          pose proof (bind_skel _ _ _ _ _ _ _ eb) as h2.
+          pose proof (IHw _ _ _ _ _ _ _ _ he) as h3. sk_fin.
+        * (* tApp *)
+          dcall he ea xa rsa sa.
+          destruct rsa as [|[| |e1| | | |] [|[| | | |k1| |] rsa]]; try discriminate he.
+          pose proof (arg_slot_skel _ _ _ _ _ _ _ ea) as h1.
+          pose proof (IHw _ _ _ _ _ _ _ _ he) as h2. sk_fin.
+        * (* tConst *)
+          destruct (delta X_type X kn ui st) as [[r s1]|w] eqn:ed; [|discriminate he].
+          destruct r as [c'|].
+          -- exact (IHw _ _ _ _ _ _ _ _ he).
+          -- dcall he em sp rs1 s2.
+             pose proof (mat_all_skel _ _ _ _ _ _ _ em) as h1.
+             injection he as <- <- <-. exact h1.
+        * (* tInd *)
+          dcall he em sp rs1 s1.
+          pose proof (mat_all_skel _ _ _ _ _ _ _ em) as h1.
+          injection he as <- <- <-. exact h1.
+        * (* tConstruct *)
+          dcall he em sp rs1 s1.
+          pose proof (mat_all_skel _ _ _ _ _ _ _ em) as h1.
+          injection he as <- <- <-. exact h1.
+        * (* tCase *)
+          dcall he ewc vc rsc sc.
+          destruct rsc as [|[| |e1| | | |] [|[| | | |k1| |] rsc]]; try discriminate he.
+          pose proof (IHw _ _ _ _ _ _ _ _ ewc) as h1.
+          destruct vc as [hd sp| | | |nn sp| |]; try discriminate he.
+          1: { destruct hd; try discriminate he. dtests he.
+               pose proof (IHw _ _ _ _ _ _ _ _ he) as h2. sk_fin. }
+          all: dcall he em sp1 rsm sm;
+               destruct rsm as [|[| |e5| | | |] rsm]; try discriminate he;
+               pose proof (mat_all_skel _ _ _ _ _ _ _ em) as h2;
+               injection he as <- <- <-; sk_fin.
+        * (* tProj *)
+          dcall he ewc vc rsc sc.
+          destruct rsc as [|[| |e1| | | |] [|[| | | |k1| |] rsc]]; try discriminate he.
+          pose proof (IHw _ _ _ _ _ _ _ _ ewc) as h1.
+          destruct vc as [hd sp| | | |nn sp| |]; try discriminate he.
+          1: { destruct hd; try discriminate he. dtests he.
+               pose proof (IHs _ _ _ _ _ _ _ he) as h2. sk_fin. }
+          all: dcall he em sp1 rsm sm;
+               destruct rsm as [|[| |e5| | | |] rsm]; try discriminate he;
+               pose proof (mat_all_skel _ _ _ _ _ _ _ em) as h2;
+               injection he as <- <- <-; sk_fin.
+        * (* tFix *)
+          exact (IHx _ _ _ _ _ _ _ _ _ _ he).
+        * (* tPrim *)
+          destruct stk; [|discriminate he]. injection he as <- <- <-. reflexivity.
+      + (* whnf_fix *)
+        intros e c mfix idx stk rs0 s0 v0 rs' s' he.
+        cbv beta iota zeta delta [whnf_fix] in he.
+        destruct (nth_error mfix idx) as [def|]; [|discriminate he].
+        destruct (nth_error stk (rarg def)) as [x|].
+        * dcall he ea a1 rs1 s1.
+          destruct rs1 as [|[| |e1| | | |] [|[| | | |k1| |] rs1]]; try discriminate he.
+          pose proof (materialize_skel _ _ _ _ _ _ ea) as h1.
+          dcall he ef vf rsf sf.
+          destruct rsf as [|[| |e2| | | |] [|[| | | |k2| |] rsf]]; try discriminate he.
+          pose proof (IHf _ _ _ _ _ _ ef) as h2.
+          destruct vf as [hd sp| | | |nn sp| |]; try discriminate he.
+          1: { (* the guard holds: the forced constructor goes to a fresh cell *)
+               destruct hd; try discriminate he.
+               dcall he ea2 a2 rs2 s2.
+               destruct rs2 as [|[| |e3| | | |] [|[| | | |k3| |] rs2]]; try discriminate he.
+               pose proof (alloc_skel _ _ _ _ _ _ _ ea2) as h3.
+               dcall he ep e4 rs3 s3.
+               destruct rs3 as [|[| | | |k4| |] rs3]; try discriminate he.
+               pose proof (push_fix_cells_skel _ _ _ _ _ _ _ _ _ _ ep) as h4.
+               pose proof (IHw _ _ _ _ _ _ _ _ he) as h5. sk_fin. }
+          all: dcall he em sp1 rsm sm;
+               destruct rsm as [|[| |e5| | | |] rsm]; try discriminate he;
+               pose proof (mat_all_skel _ _ _ _ _ _ _ em) as h3;
+               injection he as <- <- <-; sk_fin.
+        * dcall he em sp rs1 s1.
+          destruct rs1 as [|[| |e1| | | |] rs1]; try discriminate he.
+          pose proof (mat_all_skel _ _ _ _ _ _ _ em) as h1.
+          injection he as <- <- <-. sk_fin.
+      + (* apply *)
+        intros v stk rs0 s0 w rs' s' he.
+        cbv beta iota zeta delta [apply] in he.
+        destruct stk as [|y stk']; [injection he as <- <- <-; reflexivity|].
+        destruct v as [hd sp|e c|e c idx sp|e c idx sp|nn sp|e c|e c sp]; try discriminate he.
+        2: { (* a lambda: beta *)
+             destruct (c_term c); try discriminate he.
+             dcall he eb xb rsb sb.
+             destruct rsb as [|[| |e1| | | |] [|[| | | |k1| |] rsb]]; try discriminate he.
+             pose proof (bind_skel _ _ _ _ _ _ _ eb) as h1.
+             pose proof (IHw _ _ _ _ _ _ _ _ he) as h2. sk_fin. }
+        2: { (* a fixpoint: its spine goes back on the stack *)
+             destruct (c_term c); try discriminate he.
+             exact (IHx _ _ _ _ _ _ _ _ _ _ he). }
+        all: (* the spine grows *)
+             dcall he em sp1 rsm sm;
+             destruct rsm as [|[| | |v1| | |] rsm]; try discriminate he;
+             pose proof (mat_all_skel _ _ _ _ _ _ _ em) as h1;
+             destruct (add_spine v1 sp1) as [v2|] eqn:eadd; [|discriminate he];
+             injection he as <- <- <-; sk_fin.
+  Qed.
+End SkMachine.
+
+Lemma machine_skel {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
+    (Γ : context) (nctx : nat) (stress : bool) : forall d,
+  (forall a rs s v rs' s', force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
+     mp_roots kc rs' = mp_roots kc rs)
+  /\ (forall x stk rs s v rs' s', eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+     mp_roots kc rs' = mp_roots kc rs)
+  /\ (forall e c stk rs s v rs' s', whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+     mp_roots kc rs' = mp_roots kc rs)
+  /\ (forall e c mfix idx stk rs s v rs' s',
+       whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
+     mp_roots kc rs' = mp_roots kc rs)
+  /\ (forall v stk rs s w rs' s', apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
+     mp_roots kc rs' = mp_roots kc rs).
+Proof. exact (sk_machine X_type X Γ nctx stress). Qed.
+
+
 (** * The comparison on ghost readings (BET-298, step 3b)
 
   The seams above ([slot_seam], [term_seam]) read the comparison's inputs with the
