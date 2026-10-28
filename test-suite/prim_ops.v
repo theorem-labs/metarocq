@@ -194,3 +194,25 @@ Inductive po_pos_gap : Set :=
   po_pos_gap_c : po_pos_sel (PrimInt63.eqb 1 1) po_pos_gap -> po_pos_gap.
 (* expect: Positivity: *)
 Fail MetaRocq SafeCheck po_pos_gap.
+
+(** ** Part F — a known completeness gap: the guard through a primitive operation
+
+    The same gap in the guard checker.  Rocq's kernel checks guardedness with
+    [whd_all] (kernel/inductive.ml), which fires a saturated primitive operation, so it
+    accepts [po_guard_gap]: the recursive argument [if eqb 0 0 then m else n] reduces
+    to the subterm [m].  MetaRocq's guard reduces with its own stepper
+    (pcuic/theories/PCUICGuardReduce.v), which does not fire operations, so the call
+    is not seen to be on a subterm.  [po_guard_ctl] is the same fixpoint with the
+    constructor [true] in place of [eqb 0 0]; its acceptance shows that the guard
+    reduces this shape, so the gap's refusal is due to the operation alone.
+
+    The [Fail] is expected, under the same rule as Part E. *)
+
+Fixpoint po_guard_ctl (n : nat) : nat :=
+  match n with O => O | S m => po_guard_ctl (if true then m else n) end.
+MetaRocq SafeCheck po_guard_ctl.
+
+Fixpoint po_guard_gap (n : nat) : nat :=
+  match n with O => O | S m => po_guard_gap (if PrimInt63.eqb 0 0 then m else n) end.
+(* expect: Unguarded fixpoint *)
+Fail MetaRocq SafeCheck po_guard_gap.
