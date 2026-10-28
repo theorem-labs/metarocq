@@ -275,28 +275,6 @@ Proof.
   now eapply red_prim_op; tea.
 Qed.
 
-Corollary red1_prim_op_lift Σ Γ n k c decl u op ls r v :
-  prim_op_of Σ c = Some op -> declared_constant Σ c decl -> cst_body decl = None ->
-  prim_op_denote op ls = Some r -> readback Σ (po_shape (info op)) r = Some v ->
-  red1 Σ Γ (lift n k (mkApps (tConst c u) (map term_of_lit ls))) (lift n k v).
-Proof.
-  intros.
-  eapply (red1_prim_op_map _ _ (lift n k) id);
-    [exact (prim_ground_lift n k)|exact (lift_mkApps n k)|reflexivity
-    |eassumption|eassumption|eassumption|eassumption|eassumption].
-Qed.
-
-Corollary red1_prim_op_subst Σ Γ s k c decl u op ls r v :
-  prim_op_of Σ c = Some op -> declared_constant Σ c decl -> cst_body decl = None ->
-  prim_op_denote op ls = Some r -> readback Σ (po_shape (info op)) r = Some v ->
-  red1 Σ Γ (subst s k (mkApps (tConst c u) (map term_of_lit ls))) (subst s k v).
-Proof.
-  intros.
-  eapply (red1_prim_op_map _ _ (subst s k) id);
-    [exact (prim_ground_subst s k)|exact (subst_mkApps s k)|reflexivity
-    |eassumption|eassumption|eassumption|eassumption|eassumption].
-Qed.
-
 Corollary red1_prim_op_subst_instance Σ Γ ui c decl u op ls r v :
   prim_op_of Σ c = Some op -> declared_constant Σ c decl -> cst_body decl = None ->
   prim_op_denote op ls = Some r -> readback Σ (po_shape (info op)) r = Some v ->
