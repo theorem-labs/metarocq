@@ -26,13 +26,20 @@ Definition beta_eta (Σ : global_env) (Γ : context) : term -> term -> Type :=
   clos_refl_trans (beta_eta1 Σ Γ).
 
 (** ######################################################################
-    REFUTED — NOT CURRENT (2026-10-28). [C4_statement] below is FALSE:
-    [C4_false : C4_statement -> False] is mechanised at
-    fork wip/c4-C4C1b-2026-10-28 @ 99136ff0 (PCUICEtaC1b.v); so is
-    [C1b_false : C1b_statement -> False]. It is kept, UNCHANGED, only because
-    proved work states against it. The replacement (exact βη-confluence on
-    canonical-domain terms) is lanes/eta/plan.md §6.2 and is NOT yet
-    authorised; this statement is re-pinned only when it is.
+    RETIRED (2026-10-28). [C4_statement] below is FALSE and is no longer a
+    target of any lane.
+    WHY: [C4_false : C4_statement -> False] (PCUICEtaC1b.v; fork
+    wip/c4-C4C1b-2026-10-28 @ 99136ff0, cherry-picked onto
+    wip/eta-l2-c4-canon-2026-10-28 as ce081fa7). Its witness [c4_s] reaches two
+    βη-normal forms that are not [upto_domain]-related, because a β step leaves a
+    variable in a λ domain and that blocks η. Widening the comparison does not
+    help: [betaeta_confluence_mod_E2_false] (same file, the gate's [t0]).
+    [C1b_statement] (below) is false too ([C1b_false]).
+    REPLACED BY: exact βη-confluence on canonical-domain terms,
+    [canon_beta_eta_confluence] (PCUICEtaCanonC4.v, c13e90d3), used through the
+    restated I5 [I5_statement] (PCUICEtaI5.v), proved as [I5_FollowKernel]
+    (PCUICEtaI5EtaL.v, f1f86e47); lanes/eta/plan.md §6.2. It is kept UNCHANGED
+    only as the statement that the mechanised refutations refute.
     ###################################################################### *)
 
 (** ** C4 / I4 — the public statement.

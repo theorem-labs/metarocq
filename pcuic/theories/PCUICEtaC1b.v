@@ -817,3 +817,294 @@ Proof.
   apply (rt_from_normal _ _ _ (betaeta_normal_y empty_global_env [])) in Hr. subst u'.
   exact (not_E2_sort _ hasC_f_y (rst_sym _ _ _ HE)).
 Qed.
+
+(** ** [t0]: βη-confluence modulo [E2] is FALSE (design gate r2, S4)
+
+   EtaRepairSound's witness ([lanes/eta/plan-gate-r2.md:119-125]): [s] with its
+   head replaced by a constructor, under a projection. With [S := c1b_P]:
+
+     t0 = tProj p (λz:S. (C (λx:z. ((λy:S.y) x))) z)       closed; the inner domain is z
+     η, η, red_proj:  t0 ⇝ λy:S.y                           = N1
+     β:               t0 ⇝ tProj p (λz:S. (C (λx:z.x)) z)  = N2
+
+   [N1] and [N2] are βη-normal in every [Σ]/[Γ], and they are not [E2]-related:
+   [N2] contains a constructor and [N1] does not ([hasC_E2]). So the conclusion
+   that §6.1 priced ("βη-confluence modulo [E2]") is false, not only its premise.
+   Under the canonical-domain route that replaced it ([canon_beta_eta_confluence],
+   [PCUICEtaCanonC4.v]) [canon t0] joins: β, then the now-unblocked η, then
+   [red_proj], reaches [λx:S.x = canon N1]. *)
+
+Definition t0_p : projection := {| proj_ind := f_ci.(ci_ind); proj_npars := 0; proj_arg := 0 |}.
+Definition t0_inner : term := tLambda c1b_na (tRel 0) (tApp f_LS (tRel 0)).   (* λx:z. ((λy:S.y) x) *)
+Definition t0 : term := tProj t0_p (tLambda c1b_na c1b_P (tApp (tApp f_C t0_inner) (tRel 0))).
+Definition t0_N1 : term := f_LS.
+Definition t0_N2 : term := tProj t0_p (tLambda c1b_na c1b_P (tApp (tApp f_C f_L) (tRel 0))).
+
+Lemma t0_eta1 : eta1 t0 (tProj t0_p (tLambda c1b_na c1b_P (tApp (tApp f_C f_LS) (tRel 0)))).
+Proof.
+  unfold t0, t0_inner. apply proj_eta. apply abs_eta_r. apply app_eta_l. apply app_eta_r.
+  exact (eta_red c1b_na f_LS (tRel 0)).
+Qed.
+
+Lemma t0_eta2 :
+  eta1 (tProj t0_p (tLambda c1b_na c1b_P (tApp (tApp f_C f_LS) (tRel 0)))) (tProj t0_p (tApp f_C f_LS)).
+Proof. apply proj_eta. exact (eta_red c1b_na (tApp f_C f_LS) c1b_P). Qed.
+
+Lemma t0_proj Σ Γ : red1 Σ Γ (tProj t0_p (tApp f_C f_LS)) t0_N1.
+Proof. exact (red_proj Σ Γ t0_p [f_LS] [] f_LS eq_refl). Qed.
+
+Lemma t0_beta Σ Γ : red1 Σ Γ t0 t0_N2.
+Proof.
+  unfold t0, t0_inner, t0_N2, f_L, f_LS.
+  apply proj_red. apply abs_red_r. apply app_red_l. apply app_red_r. apply abs_red_r.
+  exact (red_beta Σ _ c1b_na c1b_P (tRel 0) (tRel 0)).
+Qed.
+
+Lemma t0_to_N1 Σ Γ : beta_eta Σ Γ t0 t0_N1.
+Proof.
+  eapply rt_trans; [apply rt_step; right; exact t0_eta1|].
+  eapply rt_trans; [apply rt_step; right; exact t0_eta2|].
+  apply rt_step; left; apply t0_proj.
+Qed.
+
+Lemma t0_to_N2 Σ Γ : beta_eta Σ Γ t0 t0_N2.
+Proof. apply rt_step; left; apply t0_beta. Qed.
+
+Lemma betaeta_normal_N1 Σ Γ v : beta_eta1 Σ Γ t0_N1 v -> False.
+Proof.
+  unfold t0_N1, f_LS, c1b_P. intros [H|H].
+  - exact (red_normal_lam _ _ _ _ _ (fun v => red_normal_Sort _ _ _ v) (fun v => red_normal_Rel0 _ _ _ _ v) v H).
+  - exact (eta_normal_lam _ _ _ (fun v => eta_normal_Sort _ v) (fun v => eta_normal_Rel _ v) I v H).
+Qed.
+
+Lemma red_normal_N2 Σ Γ v : red1 Σ Γ t0_N2 v -> False.
+Proof.
+  unfold t0_N2. intros H. inv_red H.
+  all: first
+    [ solve [eapply mkApps_Construct_not_Lambda; symmetry; eassumption]
+    | solve [eapply mkApps_Construct_not_Lambda; eassumption]
+    | solve [eapply mkApps_CoFix_not_Lambda; symmetry; eassumption]
+    | solve [eapply mkApps_CoFix_not_Lambda; eassumption]
+    | solve [eapply red_normal_y_scrut; eassumption] ].
+Qed.
+
+Lemma eta_normal_N2 v : eta1 t0_N2 v -> False.
+Proof. unfold t0_N2. intros H. inv_eta H. eapply eta_normal_y_scrut; eassumption. Qed.
+
+Lemma betaeta_normal_N2 Σ Γ v : beta_eta1 Σ Γ t0_N2 v -> False.
+Proof. intros [H|H]; [exact (red_normal_N2 _ _ _ H) | exact (eta_normal_N2 _ H)]. Qed.
+
+Lemma t0_open : is_open_term ([] : context) t0.
+Proof. vm_compute; reflexivity. Qed.
+
+(** The refutation, with every premise of [C4_statement] discharged and the
+    comparison widened from [upto_domain] to [E2]. *)
+Theorem betaeta_confluence_mod_E2_false :
+  (forall (cf : checker_flags) (Σ : global_env) (wfΣ : wf Σ) (Γ : context) (t u v : term),
+     is_closed_context Γ -> is_open_term Γ t ->
+     beta_eta Σ Γ t u -> beta_eta Σ Γ t v ->
+     ∑ u' v', beta_eta Σ Γ u u' × beta_eta Σ Γ v v' × E2 u' v') -> False.
+Proof.
+  intros H.
+  destruct (H default_checker_flags empty_global_env (@wf_empty_global_env default_checker_flags)
+              [] t0 t0_N1 t0_N2 closed_context_nil t0_open (t0_to_N1 _ _) (t0_to_N2 _ _))
+    as (u' & v' & Hu & Hv & HE).
+  apply (rt_from_normal _ _ _ (betaeta_normal_N1 _ _)) in Hu.
+  apply (rt_from_normal _ _ _ (betaeta_normal_N2 _ _)) in Hv.
+  subst u' v'. apply hasC_E2 in HE. vm_compute in HE. discriminate HE.
+Qed.
+
+(** ** Typed C1b is false too (plan.md §6.1, the correction to the correction)
+
+   The witnesses above are ill-typed (a sort applied to an argument), so they
+   say nothing about a TYPED C1b. This one is well-typed, with
+   [Γ := [A : Prop]] ([tc_Γ0]; [Prop] keeps the universe side conditions
+   trivial, nothing below depends on it being [Prop]):
+
+     t  = λx:A. (λy:A. y) x                 η-contracts to  u = λy:A. y
+     t' = λx:A. (λy:((λw:A. A) x). y) x     upto_domain t t', and t' has NO η step
+
+   [t'] is η-normal because [x] occurs in the inner domain, and [lift0 1 _] never
+   contains variable 0. The domain is a REDEX that reduces to [A], so [t'] is
+   well-typed: the argument [x : A] is accepted at [(λw:A. A) x] by one β step in
+   the cumulativity. So typing does not rescue C1b. *)
+
+From MetaRocq.PCUIC Require Import PCUICCumulativitySpec.
+
+Section TypedC1b.
+  #[local] Existing Instance default_checker_flags.
+
+  Definition tc_Σ : global_env_ext := (empty_global_env, Monomorphic_ctx).
+  Definition tc_A : term := tSort sProp.
+  Definition tc_Γ0 : context := [vass c1b_na tc_A].
+  Definition tc_Γ1 : context := tc_Γ0 ,, vass c1b_na (tRel 0).
+  Definition tc_u : term := tLambda c1b_na (tRel 0) (tRel 0).
+  Definition tc_t : term := tLambda c1b_na (tRel 0) (tApp (tLambda c1b_na (tRel 1) (tRel 0)) (tRel 0)).
+  Definition tc_D : term := tApp (tLambda c1b_na (tRel 1) (tRel 2)) (tRel 0).
+  Definition tc_t' : term := tLambda c1b_na (tRel 0) (tApp (tLambda c1b_na tc_D (tRel 0)) (tRel 0)).
+  Definition tc_Γ3 : context := tc_Γ1 ,, vass c1b_na tc_D.
+
+  (** *** Typing *)
+
+  Lemma tc_vass (Γ : context) (na : aname) A s :
+    tc_Σ ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) ->
+    lift_typing typing tc_Σ Γ (j_vass na A).
+  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
+
+  Lemma tc_vass_s (Γ : context) (na : aname) A s :
+    tc_Σ ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) ->
+    lift_typing typing tc_Σ Γ (j_vass_s na A s).
+  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [reflexivity|exact r]. Qed.
+
+  Lemma tc_wf0 : wf_local tc_Σ tc_Γ0.
+  Proof.
+    apply localenv_cons_abs; [constructor|].
+    apply (tc_vass [] c1b_na tc_A (Sort.super sProp)); [|reflexivity].
+    apply type_Sort; [constructor|cbn; trivial].
+  Qed.
+
+  Lemma tc_wf1 : wf_local tc_Σ tc_Γ1.
+  Proof.
+    apply localenv_cons_abs; [exact tc_wf0|].
+    apply (tc_vass _ _ _ sProp); [exact (type_Rel _ _ 0 (vass c1b_na tc_A) tc_wf0 eq_refl)|reflexivity].
+  Qed.
+
+  Lemma tc_wf2 : wf_local tc_Σ (tc_Γ1 ,, vass c1b_na (tRel 1)).
+  Proof.
+    apply localenv_cons_abs; [exact tc_wf1|].
+    apply (tc_vass _ _ _ sProp); [exact (type_Rel _ _ 1 (vass c1b_na tc_A) tc_wf1 eq_refl)|reflexivity].
+  Qed.
+
+  Lemma tc_D_typed : tc_Σ ;;; tc_Γ1 |- tc_D : tSort sProp.
+  Proof.
+    refine (type_App _ _ (tLambda c1b_na (tRel 1) (tRel 2)) c1b_na (tRel 1) (tSort sProp)
+              (Sort.sort_of_product sProp (Sort.super sProp)) (tRel 0) _ _ _).
+    - apply type_Prod.
+      + apply (tc_vass_s _ _ _ sProp); [exact (type_Rel _ _ 1 (vass c1b_na tc_A) tc_wf1 eq_refl)|reflexivity].
+      + apply type_Sort; [exact tc_wf2|cbn; trivial].
+    - apply type_Lambda.
+      + apply (tc_vass _ _ _ sProp); [exact (type_Rel _ _ 1 (vass c1b_na tc_A) tc_wf1 eq_refl)|reflexivity].
+      + exact (type_Rel _ _ 2 (vass c1b_na tc_A) tc_wf2 eq_refl).
+    - exact (type_Rel _ _ 0 (vass c1b_na (tRel 0)) tc_wf1 eq_refl).
+  Qed.
+
+  Lemma tc_wf3 : wf_local tc_Σ tc_Γ3.
+  Proof. apply localenv_cons_abs; [exact tc_wf1|]. exact (tc_vass _ c1b_na _ sProp tc_D_typed ltac:(reflexivity)). Qed.
+
+  Lemma tc_wf3w : wf_local tc_Σ (tc_Γ3 ,, vass c1b_na (tRel 2)).
+  Proof.
+    apply localenv_cons_abs; [exact tc_wf3|].
+    apply (tc_vass _ _ _ sProp); [exact (type_Rel _ _ 2 (vass c1b_na tc_A) tc_wf3 eq_refl)|reflexivity].
+  Qed.
+
+  Lemma tc_liftD_typed : tc_Σ ;;; tc_Γ3 |- lift0 1 tc_D : tSort sProp.
+  Proof.
+    refine (type_App _ _ (tLambda c1b_na (tRel 2) (tRel 3)) c1b_na (tRel 2) (tSort sProp)
+              (Sort.sort_of_product sProp (Sort.super sProp)) (tRel 1) _ _ _).
+    - apply type_Prod.
+      + apply (tc_vass_s _ _ _ sProp); [exact (type_Rel _ _ 2 (vass c1b_na tc_A) tc_wf3 eq_refl)|reflexivity].
+      + apply type_Sort; [exact tc_wf3w|cbn; trivial].
+    - apply type_Lambda.
+      + apply (tc_vass _ _ _ sProp); [exact (type_Rel _ _ 2 (vass c1b_na tc_A) tc_wf3 eq_refl)|reflexivity].
+      + exact (type_Rel _ _ 3 (vass c1b_na tc_A) tc_wf3w eq_refl).
+    - exact (type_Rel _ _ 1 (vass c1b_na (tRel 0)) tc_wf3 eq_refl).
+  Qed.
+
+  Lemma tc_t'_typed : tc_Σ ;;; tc_Γ0 |- tc_t' : tProd c1b_na (tRel 0) tc_D.
+  Proof.
+    apply type_Lambda.
+    - apply (tc_vass _ _ _ sProp); [exact (type_Rel _ _ 0 (vass c1b_na tc_A) tc_wf0 eq_refl)|reflexivity].
+    - refine (type_App _ _ (tLambda c1b_na tc_D (tRel 0)) c1b_na tc_D (lift0 1 tc_D)
+                (Sort.sort_of_product sProp sProp) (tRel 0) _ _ _).
+      + apply type_Prod; [exact (tc_vass_s _ c1b_na _ sProp tc_D_typed ltac:(reflexivity))|exact tc_liftD_typed].
+      + apply type_Lambda; [exact (tc_vass _ c1b_na _ sProp tc_D_typed ltac:(reflexivity))|].
+        exact (type_Rel _ _ 0 (vass c1b_na tc_D) tc_wf3 eq_refl).
+      + eapply type_Cumul; [exact (type_Rel _ _ 0 (vass c1b_na (tRel 0)) tc_wf1 eq_refl)|exact tc_D_typed|].
+        apply cumul_Sym. exact (cumul_beta _ _ _ c1b_na (tRel 1) (tRel 2) (tRel 0)).
+  Qed.
+
+  Lemma tc_t_typed : tc_Σ ;;; tc_Γ0 |- tc_t : tProd c1b_na (tRel 0) (tRel 1).
+  Proof.
+    apply type_Lambda.
+    - apply (tc_vass _ _ _ sProp); [exact (type_Rel _ _ 0 (vass c1b_na tc_A) tc_wf0 eq_refl)|reflexivity].
+    - refine (type_App _ _ (tLambda c1b_na (tRel 1) (tRel 0)) c1b_na (tRel 1) (tRel 2)
+                (Sort.sort_of_product sProp sProp) (tRel 0) _ _ _).
+      + apply type_Prod.
+        * apply (tc_vass_s _ _ _ sProp); [exact (type_Rel _ _ 1 (vass c1b_na tc_A) tc_wf1 eq_refl)|reflexivity].
+        * exact (type_Rel _ _ 2 (vass c1b_na tc_A) tc_wf2 eq_refl).
+      + apply type_Lambda.
+        * apply (tc_vass _ _ _ sProp); [exact (type_Rel _ _ 1 (vass c1b_na tc_A) tc_wf1 eq_refl)|reflexivity].
+        * exact (type_Rel _ _ 0 (vass c1b_na (tRel 1)) tc_wf2 eq_refl).
+      + exact (type_Rel _ _ 0 (vass c1b_na (tRel 0)) tc_wf1 eq_refl).
+  Qed.
+
+  (** *** The η facts *)
+
+  Lemma tc_eta : eta1 tc_t tc_u.
+  Proof. exact (eta_red c1b_na tc_u (tRel 0)). Qed.
+
+  Lemma tc_upto : upto_domain tc_t tc_t'.
+  Proof. unfold tc_t, tc_t', tc_D. repeat constructor. Qed.
+
+  Lemma tc_not_upto : upto_domain tc_u tc_t' -> False.
+  Proof.
+    unfold tc_u, tc_t'. intros H. inversion H; subst.
+    match goal with h : upto_domain (tRel _) _ |- _ => inversion h end.
+  Qed.
+
+  Lemma tc_eta_normal_lamRel n m v : eta1 (tLambda c1b_na (tRel n) (tRel m)) v -> False.
+  Proof. intros H. inv_eta H; first [congruence | eapply eta_normal_Rel; eassumption]. Qed.
+
+  Lemma tc_eta_normal_D v : eta1 tc_D v -> False.
+  Proof.
+    unfold tc_D. intros H. inv_eta H.
+    all: first [eapply tc_eta_normal_lamRel; eassumption | eapply eta_normal_Rel; eassumption].
+  Qed.
+
+  Lemma tc_eta_normal_lamD v : eta1 (tLambda c1b_na tc_D (tRel 0)) v -> False.
+  Proof.
+    intros H. inv_eta H.
+    all: first [congruence | eapply tc_eta_normal_D; eassumption | eapply eta_normal_Rel; eassumption].
+  Qed.
+
+  Lemma tc_eta_normal_body' v : eta1 (tApp (tLambda c1b_na tc_D (tRel 0)) (tRel 0)) v -> False.
+  Proof.
+    intros H. inv_eta H.
+    all: first [eapply tc_eta_normal_lamD; eassumption | eapply eta_normal_Rel; eassumption].
+  Qed.
+
+  (** The inner domain mentions variable 0 ([x]), so the function part of [t']'s
+      body is not a lift. *)
+  Lemma lift_1_0_not_lamD T : lift 1 0 T = tLambda c1b_na tc_D (tRel 0) -> False.
+  Proof.
+    unfold tc_D. intros E. destruct T; cbn in E; try discriminate E.
+    injection E as _ e2 _.
+    match type of e2 with lift 1 0 ?X = _ => destruct X end; cbn in e2; try discriminate e2.
+    injection e2 as _ e5. exact (lift_1_0_not_Rel0 _ e5).
+  Qed.
+
+  Lemma tc_eta_normal_t' v : eta1 tc_t' v -> False.
+  Proof.
+    unfold tc_t'. intros H. inv_eta H.
+    all: first
+      [ eapply lift_1_0_not_lamD; eassumption
+      | eapply lift_1_0_not_lamD; symmetry; eassumption
+      | eapply eta_normal_Rel; eassumption
+      | eapply tc_eta_normal_body'; eassumption ].
+  Qed.
+
+  (** *** The refutation *)
+
+  Theorem C1b_false_typed :
+    (forall (Σ : global_env_ext) (Γ : context) (t t' u T T' : term),
+       wf Σ.1 -> Σ ;;; Γ |- t : T -> Σ ;;; Γ |- t' : T' ->
+       upto_domain t t' -> eta1 t u ->
+       ∑ u', clos_refl eta1 t' u' × upto_domain u u') -> False.
+  Proof.
+    intros H.
+    destruct (H tc_Σ tc_Γ0 tc_t tc_t' tc_u _ _ (@wf_empty_global_env default_checker_flags)
+                tc_t_typed tc_t'_typed tc_upto tc_eta) as (u' & hr & he).
+    destruct hr as [? h|]; [exact (tc_eta_normal_t' _ h)|exact (tc_not_upto he)].
+  Qed.
+
+End TypedC1b.

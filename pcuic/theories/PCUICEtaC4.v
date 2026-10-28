@@ -35,14 +35,16 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICReduction PCUICOnFreeVars PCUIC
     confluence for a statement that is itself confluence-free. *)
 
 (** ######################################################################
-    REFUTED TARGET — NOT CURRENT (2026-10-28). This assembly proves
-    [C4_statement], which is FALSE ([C4_false], fork
-    wip/c4-C4C1b-2026-10-28 @ 99136ff0), from staged hypotheses that include
-    the false [C1b_statement] ([C1b_false], same commit). So it can never be
-    discharged. It is kept as the record of the Hindley-Rosen route.
-    HELD: the HA swap (theorem (A), C4A1 @ 0536d1f2) is deliberately NOT made
-    here, pending the stream lead's ruling. The replacement route is
-    lanes/eta/plan.md §6.2, not yet authorised.
+    RETIRED (2026-10-28). P-INST below is no longer a target of any lane.
+    WHY: it proves [C4_statement], which is FALSE ([C4_false], PCUICEtaC1b.v,
+    cherry-picked here as ce081fa7 from 99136ff0), and it does so from staged
+    hypotheses that include the false [C1b_statement] ([C1b_false]). So its
+    [Context] hypotheses can never be discharged. The HA swap was never made.
+    REPLACED BY: the canonical-domain route, lanes/eta/plan.md §6.2 —
+    [canon_beta_eta_confluence] (PCUICEtaCanonC4.v, c13e90d3) applies the same
+    (A) and (B) AS PROVED at [E := eq] on canonical terms, and the restated I5
+    is proved as [I5_FollowKernel] (PCUICEtaI5EtaL.v, f1f86e47). This file is
+    kept only as the record of the Hindley-Rosen route; nothing Requires it.
     ###################################################################### *)
 
 (** ** The assembly. *)
