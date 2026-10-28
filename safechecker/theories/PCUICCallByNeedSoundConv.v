@@ -9,7 +9,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICInduct
   PCUICWellScopedCumulativity PCUICConversion PCUICSigmaCalculus.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv PCUICCallByNeed
   PCUICCallByNeedSound PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx
-  PCUICCallByNeedSoundMemo PCUICCallByNeedSoundCong.
+  PCUICCallByNeedSoundMemo PCUICCallByNeedSoundCong PCUICCallByNeedSoundHook
+  PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel PCUICCallByNeedSoundHeapWf.
+From MetaRocq.PCUIC Require PCUICConfluence PCUICOnFreeVarsConv.
 
 Import CanonicalTries.
 
@@ -3029,3 +3031,421 @@ Section Conv.
                hctx hret hsc hbrsA).
   Qed.
 End Conv.
+
+(** * The comparison on ghost readings (BET-298, step 3b)
+
+  The seams above ([slot_seam], [term_seam]) read the comparison's inputs with the
+  heap-following [repr_*] and are false ([PCUICCallByNeedSoundHookFrame.term_seam_false]).
+  This part states the comparison against the ghost reading of [machine_sound]
+  ([PCUICCallByNeedSoundEval]) at the master level of [PCUICCallByNeedSoundLevel]: the state
+  satisfies [minv L Q], where [L <= Q] is the comparison's logical level and [Q] the level of
+  the ghost.
+
+  Every function [f] of the comparison gets a statement [spec_f d], made of two parts.
+  - The state part ([post]): from [minv L Q lo G s] and readings of the inputs under [G] at
+    [Q], an answer [COk (b, rs', s')] comes with a master level [Q' >= Q] and a ghost [G'] such
+    that [minv L Q' lo' G' s'] holds and every root of the caller keeps its reading, lifted by
+    [Q' - Q] ([grq]). The master level rises when the comparison crosses binders: a fresh
+    variable at level [L] must be below [Q] ([hwf]), and [gok_raise] lifts the ghost.
+  - The conversion part ([cq]): if [b = true], whenever each of the two readings is the lift
+    by [Q - L] of a term scoped at [L], those two terms are convertible at the comparison's
+    [conv_pb] in [Γ ,,, Δ] for every [Δ] of length [L - nctx]. Nothing is said of [false].
+  The lifts are a premise of the conversion part, not of the call: the state part needs
+  nothing of the readings beyond their existence. That matters for [same_code_cells], which
+  compares environment slots whose readings are lifts only where the code uses them. *)
+
+Section ConvGhost.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext).
+  Context (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ).
+  Context (hnctx : nctx = #|Γ|) (hΓ : is_closed_context Γ) (hhyg : ctx_hyg Γ).
+  Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
+                    PCUICCallByNeedSoundHook.consts_okb Σ b).
+
+  Local Notation xpred0 := (fun _ : nat => false) (only parsing).
+  Local Notation xpredT := (fun _ : nat => true) (only parsing).
+  Local Notation gcok := PCUICCallByNeedSoundEval.cok.
+  Local Notation MI := (minv X_type X Γ nctx Σ).
+
+  (** ** Lifts *)
+
+  Lemma lift0_lift0 (a b : nat) (t : term) : lift0 a (lift0 b t) = lift0 (a + b) t.
+  Proof. apply simpl_lift; lia. Qed.
+
+  Lemma map_lift0_lift0 (a b : nat) (ts : list term) :
+    map (lift0 a) (map (lift0 b) ts) = map (lift0 (a + b)) ts.
+  Proof. rewrite map_map. apply map_ext. intros t. apply lift0_lift0. Qed.
+
+  Lemma map_lift0_0 (ts : list term) : map (lift0 0) ts = ts.
+  Proof. induction ts as [|t ts ih]; cbn; [reflexivity|]. rewrite lift0_id, ih. reflexivity. Qed.
+
+  Lemma rn_comp (f g : nat -> nat) (t : term) :
+    rename f (rename g t) = rename (fun i => f (g i)) t.
+  Proof. exact (rename_compose f g t). Qed.
+
+  Lemma rn_id (t : term) : rename ren_id t = t.
+  Proof. exact (rename_ren_id t). Qed.
+
+  (** [unl m] undoes a lift by [m]. *)
+  Definition unl (m : nat) (t : term) : term := rename (fun i => i - m) t.
+
+  Lemma unl_lift0 (m : nat) (u : term) : unl m (lift0 m u) = u.
+  Proof.
+    unfold unl. rewrite lift_rename, rn_comp.
+    transitivity (rename ren_id u); [|apply rn_id].
+    apply rename_ext. intros i. unfold lift_renaming, ren_id. cbn. lia.
+  Qed.
+
+  Lemma lift0_inj (m : nat) (a b : term) : lift0 m a = lift0 m b -> a = b.
+  Proof. intros h. rewrite <- (unl_lift0 m a), <- (unl_lift0 m b), h. reflexivity. Qed.
+
+  (** [scl L u]: [u] is scoped at level [L], so open in [Γ ,,, Δ] when [#|Δ| = L - nctx].
+    [inq m Q]: the free variables of the lift by [m] of a term scoped at [Q - m]. *)
+  Definition scl (L : nat) (u : term) : bool := on_free_vars (shiftnP L xpred0) u.
+
+  Definition inq (m Q : nat) (i : nat) : bool := (m <=? i) && (i <? Q).
+
+  Lemma inq_lift0 (m L : nat) (u : term) : scl L u -> on_free_vars (inq m (L + m)) (lift0 m u).
+  Proof.
+    unfold scl. intros h. rewrite lift_rename, PCUICOnFreeVarsConv.on_free_vars_rename.
+    eapply on_free_vars_impl; [|exact h].
+    intros i hi. unfold shiftnP in hi. cbv beta. unfold inq, lift_renaming. cbn.
+    destruct (Nat.ltb_spec i L) as [hl|hl]; cbn in hi; [|discriminate hi].
+    apply andb_true_iff. split; [apply Nat.leb_le; lia|apply Nat.ltb_lt; lia].
+  Qed.
+
+  Lemma inq_unl (m Q : nat) (t : term) :
+    on_free_vars (inq m Q) t -> t = lift0 m (unl m t) /\ scl (Q - m) (unl m t).
+  Proof.
+    intros h. split.
+    - unfold unl. rewrite lift_rename, rn_comp.
+      transitivity (rename ren_id t); [symmetry; apply rn_id|].
+      apply (PCUICOnFreeVarsConv.rename_ext_cond (inq m Q)); [|exact h].
+      intros i hi. unfold inq in hi. apply andb_true_iff in hi as [h1 _].
+      apply Nat.leb_le in h1. unfold lift_renaming, ren_id. cbn. lia.
+    - unfold unl, scl. rewrite PCUICOnFreeVarsConv.on_free_vars_rename.
+      eapply on_free_vars_impl; [|exact h].
+      intros i hi. unfold inq in hi. apply andb_true_iff in hi as [h1 h2].
+      apply Nat.leb_le in h1. apply Nat.ltb_lt in h2. unfold shiftnP. cbv beta.
+      destruct (Nat.ltb_spec (i - m) (Q - m)); [reflexivity|lia].
+  Qed.
+
+  (** ** What a [true] claims *)
+
+  Definition cv (L : nat) (pb : conv_pb) (u1 u2 : term) : Prop :=
+    forall Δ : context, #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) ->
+      ∥ Σ ;;; Γ ,,, Δ ⊢ u1 ≤[pb] u2 ∥.
+
+  Definition cq (L Q : nat) (pb : conv_pb) (t1 t2 : term) : Prop :=
+    forall u1 u2 : term, t1 = lift0 (Q - L) u1 -> t2 = lift0 (Q - L) u2 ->
+      scl L u1 -> scl L u2 -> cv L pb u1 u2.
+
+  Definition cvs (L : nat) (us1 us2 : list term) : Prop :=
+    forall Δ : context, #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) ->
+      ∥ ws_cumul_pb_terms Σ (Γ ,,, Δ) us1 us2 ∥.
+
+  Definition cqs (L Q : nat) (ts1 ts2 : list term) : Prop :=
+    forall us1 us2 : list term,
+      ts1 = map (lift0 (Q - L)) us1 -> ts2 = map (lift0 (Q - L)) us2 ->
+      forallb (scl L) us1 -> forallb (scl L) us2 -> cvs L us1 us2.
+
+  Lemma scl_open (L : nat) (Δ : context) (u : term) :
+    nctx <= L -> #|Δ| = L - nctx -> scl L u -> is_open_term (Γ ,,, Δ) u.
+  Proof.
+    intros hL hΔ h. rewrite app_context_length, hΔ, <- hnctx.
+    replace (L - nctx + nctx) with L by lia. exact h.
+  Qed.
+
+  Lemma cq_refl (L Q : nat) (pb : conv_pb) (t : term) : nctx <= L -> cq L Q pb t t.
+  Proof.
+    intros hL u1 u2 e1 e2 h1 h2 Δ hΔ hcl. rewrite e1 in e2. apply lift0_inj in e2. subst u2.
+    constructor. apply ws_cumul_pb_refl; [exact hcl|exact (scl_open L Δ u1 hL hΔ h1)].
+  Qed.
+
+  Lemma cq_lift (L Q Q' : nat) (pb : conv_pb) (t1 t2 : term) :
+    L <= Q -> Q <= Q' ->
+    cq L Q' pb (lift0 (Q' - Q) t1) (lift0 (Q' - Q) t2) -> cq L Q pb t1 t2.
+  Proof.
+    intros hLQ hQ h u1 u2 e1 e2 h1 h2. apply h; [| |exact h1|exact h2].
+    - rewrite e1, lift0_lift0. f_equal. lia.
+    - rewrite e2, lift0_lift0. f_equal. lia.
+  Qed.
+
+  Lemma cqs_lift (L Q Q' : nat) (ts1 ts2 : list term) :
+    L <= Q -> Q <= Q' ->
+    cqs L Q' (map (lift0 (Q' - Q)) ts1) (map (lift0 (Q' - Q)) ts2) -> cqs L Q ts1 ts2.
+  Proof.
+    intros hLQ hQ h us1 us2 e1 e2 h1 h2. apply h; [| |exact h1|exact h2].
+    - rewrite e1, map_lift0_lift0. f_equal. f_equal. lia.
+    - rewrite e2, map_lift0_lift0. f_equal. f_equal. lia.
+  Qed.
+
+  (** ** The caller's roots across a call that may raise the master level *)
+
+  Definition gpq (Q Q' : nat) (G G' : ghost) (r r' : root) : Prop :=
+    match r, r' with
+    | RA a, RA a' => forall t, G a = Some t -> G' a' = Some (lift0 (Q' - Q) t)
+    | RSl x, RSl x' =>
+      forall t, g_slot nctx Q G x t -> g_slot nctx Q' G' x' (lift0 (Q' - Q) t)
+    | RE e, RE e' =>
+      e'.(ev_nvals) = e.(ev_nvals) /\ e'.(ev_goff) = e.(ev_goff)
+      /\ forall ts, g_slots nctx Q G e.(ev_vals) ts ->
+           g_slots nctx Q' G' e'.(ev_vals) (map (lift0 (Q' - Q)) ts)
+    | RV v, RV v' =>
+      forall t, g_value nctx Q G v t -> g_value nctx Q' G' v' (lift0 (Q' - Q) t)
+    | RSk l, RSk l' =>
+      forall ts, g_slots nctx Q G l ts -> g_slots nctx Q' G' l' (map (lift0 (Q' - Q)) ts)
+    | RSp l, RSp l' => forall ts, g_addrs G l ts -> g_addrs G' l' (map (lift0 (Q' - Q)) ts)
+    | RC cl, RC cl' =>
+      forall t, g_cell nctx Q G cl t -> g_cell nctx Q' G' cl' (lift0 (Q' - Q) t)
+    | _, _ => False
+    end.
+
+  Definition grq (Q Q' : nat) (G G' : ghost) (rs rs' : list root) : Prop :=
+    gcx G G' /\ Forall2 (gpq Q Q' G G') rs rs'.
+
+  Lemma gpq_of_gpres Q G G' r r' : gpres nctx Q G G' r r' -> gpq Q Q G G' r r'.
+  Proof.
+    intros h. destruct r, r'; cbn in h |- *; try contradiction; rewrite Nat.sub_diag.
+    all: first
+      [ intros t ht; rewrite lift0_id; exact (h _ ht)
+      | intros ts ht; rewrite map_lift0_0; exact (h _ ht)
+      | destruct h as (a1 & b1 & c1); split; [exact a1|]; split; [exact b1|];
+        intros ts ht; rewrite map_lift0_0; exact (c1 _ ht) ].
+  Qed.
+
+  Lemma grq_of_gren Q G G' rs rs' : gren nctx Q G G' rs rs' -> grq Q Q G G' rs rs'.
+  Proof.
+    intros [hc hf]. split; [exact hc|].
+    induction hf; constructor; [apply gpq_of_gpres; assumption|assumption].
+  Qed.
+
+  Lemma grq_refl Q G rs : grq Q Q G G rs rs.
+  Proof. apply grq_of_gren, gren_refl. Qed.
+
+  Lemma gpq_trans Q Q1 Q2 G G1 G2 r r1 r2 :
+    Q <= Q1 -> Q1 <= Q2 ->
+    gpq Q Q1 G G1 r r1 -> gpq Q1 Q2 G1 G2 r1 r2 -> gpq Q Q2 G G2 r r2.
+  Proof.
+    intros hq1 hq2 h1 h2.
+    assert (e : Q2 - Q = (Q2 - Q1) + (Q1 - Q)) by lia.
+    destruct r, r1; cbn in h1; try contradiction; destruct r2; cbn in h2 |- *;
+      try contradiction; rewrite e.
+    all: first
+      [ intros t ht; rewrite <- lift0_lift0; exact (h2 _ (h1 _ ht))
+      | intros ts ht; rewrite <- map_lift0_lift0; exact (h2 _ (h1 _ ht))
+      | destruct h1 as (a1 & b1 & c1), h2 as (a2 & b2 & c2);
+        split; [congruence|]; split; [congruence|];
+        intros ts ht; rewrite <- map_lift0_lift0; exact (c2 _ (c1 _ ht)) ].
+  Qed.
+
+  Lemma grq_trans Q Q1 Q2 G G1 G2 rs rs1 rs2 :
+    Q <= Q1 -> Q1 <= Q2 ->
+    grq Q Q1 G G1 rs rs1 -> grq Q1 Q2 G1 G2 rs1 rs2 -> grq Q Q2 G G2 rs rs2.
+  Proof.
+    intros hq1 hq2 [hc1 hf1] [hc2 hf2].
+    split; [intros i e hi; exact (hc2 _ _ (hc1 _ _ hi))|].
+    revert rs2 hf2. induction hf1 as [|r r1 l l1 hp hf ih]; intros rs2 hf2;
+      inversion hf2; subst; constructor.
+    - eapply gpq_trans; eassumption.
+    - apply ih. assumption.
+  Qed.
+
+  Lemma grq_cons_inv Q Q' G G' r rs rs1 :
+    grq Q Q' G G' (r :: rs) rs1 ->
+    exists r' rs', rs1 = r' :: rs' /\ gpq Q Q' G G' r r' /\ grq Q Q' G G' rs rs'.
+  Proof.
+    intros [hc hf]. destruct rs1 as [|r' rs']; [inversion hf|].
+    exists r', rs'. split; [reflexivity|].
+    inversion hf; subst. split; [assumption|split; assumption].
+  Qed.
+
+  Lemma gpq_RSk_inv Q Q' G G' l r :
+    gpq Q Q' G G' (RSk l) r ->
+    exists l', r = RSk l'
+      /\ forall ts, g_slots nctx Q G l ts -> g_slots nctx Q' G' l' (map (lift0 (Q' - Q)) ts).
+  Proof. destruct r; cbn; intros h; try contradiction. eexists; split; [reflexivity|exact h]. Qed.
+
+  Lemma gpq_RSp_inv Q Q' G G' l r :
+    gpq Q Q' G G' (RSp l) r ->
+    exists l', r = RSp l' /\ forall ts, g_addrs G l ts -> g_addrs G' l' (map (lift0 (Q' - Q)) ts).
+  Proof. destruct r; cbn; intros h; try contradiction. eexists; split; [reflexivity|exact h]. Qed.
+
+  Lemma gpq_RSl_inv Q Q' G G' x r :
+    gpq Q Q' G G' (RSl x) r ->
+    exists x', r = RSl x'
+      /\ forall t, g_slot nctx Q G x t -> g_slot nctx Q' G' x' (lift0 (Q' - Q) t).
+  Proof. destruct r; cbn; intros h; try contradiction. eexists; split; [reflexivity|exact h]. Qed.
+
+  Lemma gpq_RV_inv Q Q' G G' v r :
+    gpq Q Q' G G' (RV v) r ->
+    exists v', r = RV v'
+      /\ forall t, g_value nctx Q G v t -> g_value nctx Q' G' v' (lift0 (Q' - Q) t).
+  Proof. destruct r; cbn; intros h; try contradiction. eexists; split; [reflexivity|exact h]. Qed.
+
+  Lemma gpq_RE_inv Q Q' G G' e r :
+    gpq Q Q' G G' (RE e) r ->
+    exists e', r = RE e' /\ e'.(ev_nvals) = e.(ev_nvals) /\ e'.(ev_goff) = e.(ev_goff)
+      /\ forall ts, g_slots nctx Q G e.(ev_vals) ts ->
+           g_slots nctx Q' G' e'.(ev_vals) (map (lift0 (Q' - Q)) ts).
+  Proof. destruct r; cbn; intros h; try contradiction. eexists; split; [reflexivity|exact h]. Qed.
+
+  (** ** Raising the master level *)
+
+  Lemma rwf_mono Q Q' r : Q <= Q' -> rwf Q r -> rwf Q' r.
+  Proof.
+    intros h. destruct r; cbn; intros hw; try exact I;
+      [exact (vwf_mono _ _ _ h hw)|exact (cwf_mono _ _ _ h hw)].
+  Qed.
+
+  Lemma rwfs_mono Q Q' rs : Q <= Q' -> Forall (rwf Q) rs -> Forall (rwf Q') rs.
+  Proof.
+    intros h hr. induction hr as [|r rs hr0 _ ih]; constructor; [|exact ih].
+    exact (rwf_mono _ _ _ h hr0).
+  Qed.
+
+  Lemma gpq_raise Q n G r : nctx <= Q -> rwf Q r -> gpq Q (Q + n) G (gshift n G) r r.
+  Proof.
+    intros hQ hw. unfold gpq. replace (Q + n - Q) with n by lia.
+    destruct r; cbn in hw.
+    - intros t ht. cbn. rewrite ht. reflexivity.
+    - intros t ht. exact (proj1 (g_slot_shift nctx Q n hQ G) _ _ ht).
+    - split; [reflexivity|]. split; [reflexivity|].
+      intros ts ht. exact (proj1 (proj2 (g_slot_shift nctx Q n hQ G) _ _ ht)).
+    - intros t ht. exact (g_value_shift nctx Q n hQ G _ _ hw ht).
+    - intros ts ht. exact (proj1 (proj2 (g_slot_shift nctx Q n hQ G) _ _ ht)).
+    - intros ts ht. apply g_addrs_shift. exact ht.
+    - intros t ht. eapply g_cell_shift; eassumption.
+  Qed.
+
+  Lemma grq_raise Q n G rs : nctx <= Q -> Forall (rwf Q) rs -> grq Q (Q + n) G (gshift n G) rs rs.
+  Proof.
+    intros hQ hw. split; [intros i e hi; exact hi|].
+    induction hw; constructor; [apply gpq_raise; assumption|assumption].
+  Qed.
+
+  Lemma minv_raise L Q n lo G s : MI L Q lo G s -> MI L (Q + n) lo (gshift n G) s.
+  Proof.
+    intros [hL hQ hok hw].
+    constructor; [exact hL|lia| |exact (hwf_mono Q (Q + n) s ltac:(lia) hw)].
+    exact (gok_raise X_type X Γ nctx Σ wfΣ hnctx hΓ hhyg Q n lo G s ltac:(lia) hw hok).
+  Qed.
+
+  (** ** The state part of every statement *)
+
+  Definition post (L Q : nat) (G : ghost) (rs : list root) (s' : cbn_state) (rs' : list root)
+    : Prop :=
+    exists Q' lo' G', Q <= Q' /\ MI L Q' lo' G' s' /\ Forall (rwf Q') rs'
+      /\ grq Q Q' G G' rs rs'.
+
+  Lemma post_refl L Q lo G rs s : MI L Q lo G s -> Forall (rwf Q) rs -> post L Q G rs s rs.
+  Proof.
+    intros hm hr. exists Q, lo, G. split; [lia|]. split; [exact hm|].
+    split; [exact hr|apply grq_refl].
+  Qed.
+
+  Lemma post_compose L Q Q1 G G1 rs rs1 s' rs' :
+    Q <= Q1 -> grq Q Q1 G G1 rs rs1 -> post L Q1 G1 rs1 s' rs' -> post L Q G rs s' rs'.
+  Proof.
+    intros hq hg (Q2 & lo2 & G2 & hq2 & hm & hr & hg2). exists Q2, lo2, G2.
+    split; [lia|]. split; [exact hm|]. split; [exact hr|]. eapply grq_trans; eassumption.
+  Qed.
+
+  (** A sub-call answered [false]: the caller drops the two roots it pushed. *)
+  Lemma post_drop2 L Q G r1 r2 rs s' rs' :
+    post L Q G (r1 :: r2 :: rs) s' rs' -> post L Q G rs s' (skipn 2 rs').
+  Proof.
+    intros (Q1 & lo1 & G1 & hq & hm & hr & hg).
+    destruct (grq_cons_inv _ _ _ _ _ _ _ hg) as (q1 & rsA & -> & _ & hgA).
+    destruct (grq_cons_inv _ _ _ _ _ _ _ hgA) as (q2 & rsB & -> & _ & hgB).
+    exists Q1, lo1, G1. split; [exact hq|]. split; [exact hm|]. cbn [skipn].
+    split; [exact (Forall_inv_tail (Forall_inv_tail hr))|exact hgB].
+  Qed.
+
+  (** ** The same-code rule, cell by cell
+
+    [cagree L Q a i ts1 ts2]: at each position of the two slot lists, either the code [a]
+    does not use the slot, or the two readings are convertible in the sense of [cq]. *)
+  Inductive cagree (L Q : nat) (a : term) : nat -> list term -> list term -> Prop :=
+  | cagree_nil i : cagree L Q a i [] []
+  | cagree_cons i u1 u2 l1 l2 :
+      (noccur_between i 1 a = true \/ cq L Q Conv u1 u2) ->
+      cagree L Q a (S i) l1 l2 -> cagree L Q a i (u1 :: l1) (u2 :: l2).
+
+  Lemma cagree_lift L Q Q' a i l1 l2 :
+    L <= Q -> Q <= Q' ->
+    cagree L Q' a i (map (lift0 (Q' - Q)) l1) (map (lift0 (Q' - Q)) l2) -> cagree L Q a i l1 l2.
+  Proof.
+    intros hL hQ. revert i l2. induction l1 as [|u1 l1 ih]; intros i [|u2 l2] h; cbn in h;
+      inversion h as [i0|i0 v1 v2 m1 m2 hd hl]; subst.
+    - constructor.
+    - constructor; [|exact (ih _ _ hl)].
+      destruct hd as [hd|hd]; [left; exact hd|right; exact (cq_lift _ _ _ _ _ _ hL hQ hd)].
+  Qed.
+
+  Definition spec_slot (d : cbn_fuel) : Prop :=
+    forall L Q lo G pb x1 x2 t1 t2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      g_slot nctx Q G x1 t1 -> g_slot nctx Q G x2 t2 ->
+      conv_slot X_type X Γ nctx stress d L pb x1 x2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+
+  Definition spec_scc (d : cbn_fuel) : Prop :=
+    forall L Q lo G a i l1 l2 ts1 ts2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      g_slots nctx Q G l1 ts1 -> g_slots nctx Q G l2 ts2 ->
+      same_code_cells X_type X Γ nctx stress d L a i l1 l2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cagree L Q a i ts1 ts2).
+
+  (** [same_code_cells] skips a position whose two slots are one address (one reading) or
+    whose slot the code does not use, and compares every other position with [conv_slot].
+    Restates [same_code_cells_sound] on ghost readings. *)
+  Lemma same_code_cells_sound_g (k : unit -> cbn_fuel) :
+    spec_slot (k tt) -> spec_scc (k tt) -> spec_scc (FS k).
+  Proof.
+    intros hS hC L Q lo G a i l1 l2 ts1 ts2 rs s b rs' s' hm hr hl1 hl2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite same_code_cells_eq in he.
+    destruct l1 as [|x1 l1]; destruct l2 as [|x2 l2].
+    - injection he as <- <- <-. inversion hl1; subst. inversion hl2; subst.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros _. constructor.
+    - injection he as <- <- <-.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros hb; discriminate hb.
+    - injection he as <- <- <-.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros hb; discriminate hb.
+    - inversion hl1 as [|y1 m1 u1 us1 hx1 hm1]; subst.
+      inversion hl2 as [|y2 m2 u2 us2 hx2 hm2]; subst.
+      destruct (slot_same x1 x2 || noccur_between i 1 a) eqn:Esk.
+      + destruct (hC L Q lo G a (S i) l1 l2 us1 us2 rs s b rs' s' hm hr hm1 hm2 he)
+          as [hp hc].
+        split; [exact hp|]. intros hb. constructor; [|exact (hc hb)].
+        apply orb_true_iff in Esk as [Esame|Enocc]; [right|left; exact Enocc].
+        destruct x1 as [a1|]; destruct x2 as [a2|]; cbn in Esame; try discriminate Esame.
+        apply haddr_eqb_eq in Esame. subst a2.
+        apply g_slot_addr_inv in hx1. apply g_slot_addr_inv in hx2.
+        rewrite hx1 in hx2. injection hx2 as <-. exact (cq_refl _ _ _ _ hL).
+      + destruct (conv_slot X_type X Γ nctx stress (k tt) L Conv x1 x2
+                    (RSk l1 :: RSk l2 :: rs) s) as [[[b2 rs2] s2]|w] eqn:Ecs;
+          [|discriminate he].
+        assert (hr' : Forall (rwf Q) (RSk l1 :: RSk l2 :: rs))
+          by (constructor; [exact I|constructor; [exact I|exact hr]]).
+        destruct (hS L Q lo G Conv x1 x2 u1 u2 _ s b2 rs2 s2 hm hr' hx1 hx2 Ecs)
+          as [hp1 hc1].
+        destruct b2.
+        * destruct hp1 as (Q1 & lo1 & G1 & hq1 & hm1' & hr1 & hg1).
+          destruct (grq_cons_inv _ _ _ _ _ _ _ hg1) as (q1 & rsA & -> & hqa & hgA).
+          destruct (gpq_RSk_inv _ _ _ _ _ _ hqa) as (l1' & -> & hk1).
+          destruct (grq_cons_inv _ _ _ _ _ _ _ hgA) as (q2 & rsB & -> & hqb & hgB).
+          destruct (gpq_RSk_inv _ _ _ _ _ _ hqb) as (l2' & -> & hk2).
+          cbv beta iota in he.
+          destruct (hC L Q1 lo1 G1 a (S i) l1' l2' _ _ rsB s2 b rs' s' hm1'
+                      (Forall_inv_tail (Forall_inv_tail hr1)) (hk1 _ hm1) (hk2 _ hm2) he)
+            as [hp hc].
+          split; [exact (post_compose _ _ _ _ _ _ _ _ _ hq1 hgB hp)|].
+          intros hb. constructor; [right; exact (hc1 eq_refl)|].
+          exact (cagree_lift _ _ _ _ _ _ _ hLQ hq1 (hc hb)).
+        * cbv beta iota in he. injection he as <- <- <-.
+          split; [exact (post_drop2 _ _ _ _ _ _ _ _ hp1)|]. intros hb; discriminate hb.
+  Qed.
+
+End ConvGhost.
