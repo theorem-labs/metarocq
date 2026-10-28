@@ -7,7 +7,7 @@ From MetaRocq.PCUIC Require Import PCUICPrimitive PCUICAst PCUICOnOne PCUICAstUt
   PCUICReduction PCUICGlobalEnv PCUICClosed PCUICEquality PCUICRenameDef PCUICWeakeningEnvConv
   PCUICSigmaCalculus PCUICClosed PCUICOnFreeVars PCUICGuardCondition
   PCUICWeakeningEnvTyp PCUICClosedConv PCUICClosedTyp PCUICViews
-  PCUICTyping.
+  PCUICTyping PCUICClosedBodies.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -928,9 +928,9 @@ Proof using Type.
   now rewrite rename_closedn_ctx.
 Qed.
 
-Lemma red1_rename :
+Lemma red1_rename_cb :
   forall P Σ Γ Δ u v f,
-    wf Σ ->
+    ClosedBodies Σ ->
     urenaming P Γ Δ f ->
     on_free_vars P u ->
     red1 Σ Γ u v ->
@@ -992,7 +992,7 @@ Proof using cf.
     econstructor.
     + eassumption.
     + rewrite rename_closed. 2: assumption.
-      eapply declared_constant_closed_body. all: eauto.
+      eapply closed_bodies. all: eauto.
   - rewrite rename_mkApps. simpl.
     econstructor. rewrite nth_error_map. rewrite H. reflexivity.
   - move/and4P: hav=> [hpars hret hc hbrs].
@@ -1060,7 +1060,16 @@ Proof using cf.
     solve_all.
 Qed.
 
-Lemma red_on_free_vars {P : nat -> bool} {Σ:global_env_ext} {Γ u v} {wfΣ : wf Σ} :
+Lemma red1_rename :
+  forall P Σ Γ Δ u v f,
+    wf Σ ->
+    urenaming P Γ Δ f ->
+    on_free_vars P u ->
+    red1 Σ Γ u v ->
+    red1 Σ Δ (rename f u) (rename f v).
+Proof. intros; eapply red1_rename_cb; tea; typeclasses eauto. Qed.
+
+Lemma red_on_free_vars_cb {P : nat -> bool} {Σ:global_env_ext} {Γ u v} {wfΣ : ClosedBodies Σ} :
   on_ctx_free_vars P Γ ->
   on_free_vars P u ->
   red Σ Γ u v ->
@@ -1068,7 +1077,32 @@ Lemma red_on_free_vars {P : nat -> bool} {Σ:global_env_ext} {Γ u v} {wfΣ : wf
 Proof using Type.
   intros onΓ on r.
   induction r; auto.
-  now eapply red1_on_free_vars.
+  now eapply red1_on_free_vars_cb.
+Qed.
+
+Lemma red_on_free_vars {P : nat -> bool} {Σ:global_env_ext} {Γ u v} {wfΣ : wf Σ} :
+  on_ctx_free_vars P Γ ->
+  on_free_vars P u ->
+  red Σ Γ u v ->
+  on_free_vars P v.
+Proof. intros; eapply red_on_free_vars_cb; tea; typeclasses eauto. Qed.
+
+Lemma red_rename_cb :
+  forall P (Σ : global_env_ext) Γ Δ u v f,
+    ClosedBodies Σ ->
+    urenaming P Γ Δ f ->
+    on_ctx_free_vars P Γ ->
+    on_free_vars P u ->
+    red Σ Γ u v ->
+    red Σ Δ (rename f u) (rename f v).
+Proof using Type.
+  intros.
+  induction X1.
+  - constructor. now eapply red1_rename_cb.
+  - reflexivity.
+  - etransitivity.
+    * eapply IHX1_1. eauto.
+    * eapply IHX1_2. eapply red_on_free_vars_cb; eauto.
 Qed.
 
 Lemma red_rename :
@@ -1079,15 +1113,7 @@ Lemma red_rename :
     on_free_vars P u ->
     red Σ Γ u v ->
     red Σ Δ (rename f u) (rename f v).
-Proof using Type.
-  intros.
-  induction X1.
-  - constructor. now eapply red1_rename.
-  - reflexivity.
-  - etransitivity.
-    * eapply IHX1_1. eauto.
-    * eapply IHX1_2. eapply red_on_free_vars; eauto.
-Qed.
+Proof. intros; eapply red_rename_cb; tea; typeclasses eauto. Qed.
 
 Lemma conv_renameP :
   forall P Σ Γ Δ f A B,

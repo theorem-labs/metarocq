@@ -43,6 +43,7 @@ theories/Typing/PCUICWeakeningEnvTyp.v
 theories/Typing/PCUICWeakeningConfigTyp.v
 theories/Typing/PCUICWeakeningTyp.v
 theories/Typing/PCUICUnivSubstitutionTyp.v
+theories/PCUICClosedBodies.v
 theories/Typing/PCUICClosedTyp.v
 theories/Typing/PCUICCasesWfTyp.v
 theories/Typing/PCUICContextConversionTyp.v
@@ -136,7 +137,6 @@ theories/PCUICTypingEta.v
 # BET-315 eta lane T0 P1: typingE induction principle (lanes/eta/t0-plan.md)
 theories/PCUICTypingEtaInd.v
 theories/Typing/PCUICWeakeningEnvTypEta.v
-theories/PCUICClosedBodies.v
 theories/Typing/PCUICClosedTypEta.v
 # BET-315 eta lane (L5): stack type with the eta frames + eta views (K3/K4), re-cut from trunk 0729d50e
 theories/PCUICPositionEta.v

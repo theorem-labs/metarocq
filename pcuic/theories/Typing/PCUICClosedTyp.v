@@ -5,7 +5,7 @@ From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICInduction
      PCUICLiftSubst PCUICUnivSubst PCUICSigmaCalculus PCUICClosed
      PCUICOnFreeVars PCUICTyping PCUICReduction PCUICGlobalEnv PCUICWeakeningEnvConv PCUICClosedConv
-     PCUICWeakeningEnv PCUICWeakeningEnvTyp.
+     PCUICWeakeningEnv PCUICWeakeningEnvTyp PCUICClosedBodies.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -552,6 +552,15 @@ Proof.
 Qed.
 
 
+(** [wf Σ] gives the premise of the confluence spine ([PCUICClosedBodies]). *)
+#[global] Instance wf_ClosedBodies {cf : checker_flags} (Σ : global_env) {wfΣ : wf Σ} :
+  ClosedBodies Σ.
+Proof.
+  apply Build_ClosedBodies.
+  - intros cst decl body h e. exact (declared_constant_closed_body Σ cst decl body wfΣ h e).
+  - destruct wfΣ as (_ & _ & o). exact (NoDup_on_global_decls _ _ _ _ _ o).
+Qed.
+
 Lemma declared_inductive_closed_type {cf:checker_flags} :
   forall Σ mdecl ind idecl,
     wf Σ ->
@@ -718,7 +727,7 @@ Qed.
 
 (** This shows preservation by reduction of closed/noccur_between predicates
   necessary to prove exchange and strengthening lemmas. *)
-Lemma red1_on_free_vars {cf:checker_flags} {P : nat -> bool} {Σ Γ u v} {wfΣ : wf Σ} :
+Lemma red1_on_free_vars_cb {cf:checker_flags} {P : nat -> bool} {Σ Γ u v} {wfΣ : ClosedBodies Σ} :
   red1 Σ Γ u v ->
   on_free_vars P u ->
   on_ctx_free_vars P Γ ->
@@ -780,7 +789,7 @@ Proof.
   - move: hav; rewrite !on_free_vars_mkApps => /andP [] hcofix ->.
     eapply on_free_vars_unfold_cofix in H as ->; eauto.
   - eapply closed_on_free_vars. rewrite closedn_subst_instance.
-    eapply declared_constant_closed_body; eauto.
+    eapply closed_bodies; eauto.
   - (* red_prim_op: the reduct is ground, so it is free of variables *)
     prim_ground_reduct; reflexivity.
   - move: hav; rewrite on_free_vars_mkApps /=.
@@ -837,14 +846,28 @@ Proof.
     eapply OnOne2_impl_All_r; eauto; solve_all.
 Qed.
 
-Lemma red_on_free_vars {cf} {P : nat -> bool} {Σ Γ u v} {wfΣ : wf Σ} :
+Lemma red1_on_free_vars {cf:checker_flags} {P : nat -> bool} {Σ Γ u v} {wfΣ : wf Σ} :
+  red1 Σ Γ u v ->
+  on_free_vars P u ->
+  on_ctx_free_vars P Γ ->
+  on_free_vars P v.
+Proof. intros; eapply red1_on_free_vars_cb; tea; typeclasses eauto. Qed.
+
+Lemma red_on_free_vars_cb {cf} {P : nat -> bool} {Σ Γ u v} {wfΣ : ClosedBodies Σ} :
   red Σ Γ u v ->
   on_free_vars P u ->
   on_ctx_free_vars P Γ ->
   on_free_vars P v.
 Proof.
-  induction 1; eauto using red1_on_free_vars.
+  induction 1; eauto using red1_on_free_vars_cb.
 Qed.
+
+Lemma red_on_free_vars {cf} {P : nat -> bool} {Σ Γ u v} {wfΣ : wf Σ} :
+  red Σ Γ u v ->
+  on_free_vars P u ->
+  on_ctx_free_vars P Γ ->
+  on_free_vars P v.
+Proof. intros; eapply red_on_free_vars_cb; tea; typeclasses eauto. Qed.
 
 
 Lemma term_closedn_list_ind :

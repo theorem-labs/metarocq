@@ -5,7 +5,7 @@ From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICInduction
   PCUICLiftSubst PCUICTyping PCUICCumulativity
   PCUICClosed PCUICReduction
-  PCUICSigmaCalculus PCUICRenameDef PCUICRenameConv PCUICOnFreeVars
+  PCUICSigmaCalculus PCUICRenameDef PCUICRenameConv PCUICOnFreeVars PCUICClosedBodies
   PCUICClosedConv PCUICClosedTyp.
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -249,15 +249,34 @@ Proof.
   - reflexivity.
 Qed.
 
-Lemma weakening_red1 `{cf:checker_flags} {Σ} Γ Γ' Γ'' M N :
-  wf Σ ->
+Lemma weakening_red1_cb `{cf:checker_flags} {Σ} Γ Γ' Γ'' M N :
+  ClosedBodies Σ ->
   on_free_vars xpredT M ->
   red1 Σ (Γ ,,, Γ') M N ->
   red1 Σ (Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ') (lift #|Γ''| #|Γ'| M) (lift #|Γ''| #|Γ'| N).
 Proof.
   intros.
   rewrite !lift_rename.
-  eapply red1_rename; eauto.
+  eapply red1_rename_cb; eauto.
+  eapply weakening_renaming.
+Qed.
+
+Lemma weakening_red1 `{cf:checker_flags} {Σ} Γ Γ' Γ'' M N :
+  wf Σ ->
+  on_free_vars xpredT M ->
+  red1 Σ (Γ ,,, Γ') M N ->
+  red1 Σ (Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ') (lift #|Γ''| #|Γ'| M) (lift #|Γ''| #|Γ'| N).
+Proof. intros; eapply weakening_red1_cb; tea; typeclasses eauto. Qed.
+
+Lemma weakening_red_cb `{cf:checker_flags} {Σ:global_env_ext} {wfΣ : ClosedBodies Σ} {P Γ Γ' Γ'' M N} :
+  on_ctx_free_vars P (Γ ,,, Γ') ->
+  on_free_vars P M ->
+  red Σ (Γ ,,, Γ') M N ->
+  red Σ (Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ') (lift #|Γ''| #|Γ'| M) (lift #|Γ''| #|Γ'| N).
+Proof.
+  intros.
+  rewrite !lift_rename.
+  eapply red_rename_cb; eauto.
   eapply weakening_renaming.
 Qed.
 
@@ -266,11 +285,15 @@ Lemma weakening_red `{cf:checker_flags} {Σ:global_env_ext} {wfΣ : wf Σ} {P Γ
   on_free_vars P M ->
   red Σ (Γ ,,, Γ') M N ->
   red Σ (Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ') (lift #|Γ''| #|Γ'| M) (lift #|Γ''| #|Γ'| N).
+Proof. intros; eapply weakening_red_cb; tea; typeclasses eauto. Qed.
+
+Lemma weakening_red'_cb `{cf:checker_flags} {Σ:global_env_ext} {wfΣ : ClosedBodies Σ} {P Γ Γ' Γ'' M N} :
+  on_ctx_free_vars P (Γ ,,, Γ') ->
+  on_free_vars P M ->
+  red Σ (Γ ,,, Γ') M N ->
+  red Σ (Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ') (lift #|Γ''| #|Γ'| M) (lift #|Γ''| #|Γ'| N).
 Proof.
-  intros.
-  rewrite !lift_rename.
-  eapply red_rename; eauto.
-  eapply weakening_renaming.
+  now eapply weakening_red_cb.
 Qed.
 
 Lemma weakening_red' `{cf:checker_flags} {Σ:global_env_ext} {wfΣ : wf Σ} {P Γ Γ' Γ'' M N} :
@@ -278,9 +301,15 @@ Lemma weakening_red' `{cf:checker_flags} {Σ:global_env_ext} {wfΣ : wf Σ} {P �
   on_free_vars P M ->
   red Σ (Γ ,,, Γ') M N ->
   red Σ (Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ') (lift #|Γ''| #|Γ'| M) (lift #|Γ''| #|Γ'| N).
-Proof.
-  now eapply weakening_red.
-Qed.
+Proof. intros; eapply weakening_red'_cb; tea; typeclasses eauto. Qed.
+
+Lemma weakening_red_0_cb {cf} {Σ:global_env_ext} {wfΣ : ClosedBodies Σ} {P Γ Γ' M N n} :
+  n = #|Γ'| ->
+  on_ctx_free_vars P Γ ->
+  on_free_vars P M ->
+  red Σ Γ M N ->
+  red Σ (Γ ,,, Γ') (lift0 n M) (lift0 n N).
+Proof. move=> -> onctx ont; eapply (weakening_red_cb (Γ':=[])); tea. Qed.
 
 Lemma weakening_red_0 {cf} {Σ:global_env_ext} {wfΣ : wf Σ} {P Γ Γ' M N n} :
   n = #|Γ'| ->
@@ -288,7 +317,7 @@ Lemma weakening_red_0 {cf} {Σ:global_env_ext} {wfΣ : wf Σ} {P Γ Γ' M N n} :
   on_free_vars P M ->
   red Σ Γ M N ->
   red Σ (Γ ,,, Γ') (lift0 n M) (lift0 n N).
-Proof. move=> -> onctx ont; eapply (weakening_red (Γ':=[])); tea. Qed.
+Proof. intros; eapply weakening_red_0_cb; tea; typeclasses eauto. Qed.
 
 (* TODO MOVE *)
 (* Lemma fix_context_alt_length :
