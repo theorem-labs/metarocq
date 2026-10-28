@@ -45,16 +45,6 @@ Proof.
   rewrite /arity -h length_map //.
 Qed.
 
-Lemma map_term_of_lit_inj ls ls' :
-  map term_of_lit ls = map term_of_lit ls' -> ls = ls'.
-Proof.
-  induction ls as [|a ls ih] in ls' |- *; destruct ls' as [|b ls'] => //=.
-  intros e.
-  have e1 : term_of_lit a = term_of_lit b by congruence.
-  have e2 : map term_of_lit ls = map term_of_lit ls' by congruence.
-  f_equal; [now apply term_of_lit_inj|now apply ih].
-Qed.
-
 (** The empty spine is not a redex: every operation takes at least one
     literal, by [prim_op_denote_length]. *)
 Ltac discr_prim_nil :=
@@ -904,11 +894,6 @@ Section Rho.
     (fold_context (fun Δ => map_decl (rho (Γ ,,, Δ)))).
   Notation rho_ctx := (fold_context_term rho).
   Notation rho_iota_red := (rho_iota_red_gen rho).
-
-  Lemma rho_prim_ground Γ t : prim_ground t -> rho Γ t = t.
-  Proof.
-    intros [[[] ->]|[? [? ->]]]; simp rho; reflexivity.
-  Qed.
 
   Lemma rho_ctx_over_length Δ Γ : #|rho_ctx_over Δ Γ| = #|Γ|.
   Proof using Type.
