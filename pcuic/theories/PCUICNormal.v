@@ -47,29 +47,11 @@ Qed.
   context or the reduction flags, so the machine and conversion can build it
   from a computed [option term]. *)
 
-(** The rule's premises fail: the application is stuck at its head. *)
-Definition cannot_fire (Σ : global_env) (op : prim_op) (args : list term) : Prop :=
-  prim_reduct Σ op args = None.
-
 (** Every operation in the table takes at least one argument, so none fires on
     an empty argument list: a bare registered constant is a normal form.  This
     is what keeps [ne_const] (and its [nf_no_red]) true without a guard. *)
 Lemma prim_op_denote_nil op : prim_op_denote op [] = None.
 Proof. destruct op; reflexivity. Qed.
-
-(** The reduct computed by [prim_reduct] is the one [red_prim_op] produces. *)
-Lemma red1_prim_reduct Σ Γ c decl u op args v :
-  lookup_env Σ c = Some (ConstantDecl decl) ->
-  cst_body decl = None ->
-  prim_op_of Σ c = Some op ->
-  prim_reduct Σ op args = Some v ->
-  red1 Σ Γ (mkApps (tConst c u) args) v.
-Proof.
-  intros hl hb hop hr.
-  apply prim_reduct_spec in hr as [ls [r [_ hd hbk ->]]].
-  eapply red_prim_op; tea.
-  now apply declared_constant_from_gen.
-Qed.
 
 (** A literal argument is irreducible, so a saturated application of literals
     has no reduction but the rule's own. *)
@@ -257,54 +239,6 @@ Section Normal.
     noconf h; split => //.
   Qed.
 
-  (** The interface the machine and conversion use: [cannot_fire] plus
-      settled arguments.  An argument that is not a literal must be neutral
-      for the application to be neutral. *)
-  Lemma whne_primapp Γ c u decl op args :
-    lookup_env Σ c = Some (ConstantDecl decl) ->
-    decl.(cst_body) = None ->
-    prim_op_of Σ c = Some op ->
-    #|args| = arity op ->
-    cannot_fire Σ op args ->
-    All (fun a => lit_of_term a = None -> whne Γ a) args ->
-    whne Γ (mkApps (tConst c u) args).
-  Proof using Type.
-    intros hl hb hop hlen hcf hall.
-    destruct (split_lits args) as [ls|[[ls a] rest]] eqn:hs.
-    - pose proof (split_lits_inl hs) as e.
-      rewrite e. rewrite e in hlen hcf.
-      eapply whne_primapp_inert; tea.
-      now rewrite length_map in hlen.
-    - destruct (split_lits_inr hs) as [e ha].
-      rewrite e. rewrite e in hlen hall.
-      eapply whne_primapp_stuck; tea.
-      + now rewrite length_app length_map /= in hlen.
-      + apply All_app in hall as [_ hall]; depelim hall; auto.
-  Qed.
-
-  (** The same for [whnf]: arguments in weak-head normal form suffice. *)
-  Lemma whnf_primapp Γ c u decl op args :
-    lookup_env Σ c = Some (ConstantDecl decl) ->
-    decl.(cst_body) = None ->
-    prim_op_of Σ c = Some op ->
-    #|args| = arity op ->
-    cannot_fire Σ op args ->
-    All (whnf Γ) args ->
-    whnf Γ (mkApps (tConst c u) args).
-  Proof using Type.
-    intros hl hb hop hlen hcf hall.
-    destruct (split_lits args) as [ls|[[ls a] rest]] eqn:hs.
-    - pose proof (split_lits_inl hs) as e.
-      rewrite e. rewrite e in hlen hcf.
-      apply whnf_ne. eapply whne_primapp_inert; tea.
-      now rewrite length_map in hlen.
-    - destruct (split_lits_inr hs) as [e ha].
-      rewrite e. rewrite e in hlen hall.
-      eapply whnf_primapp_rigid; tea.
-      + now rewrite length_app length_map /= in hlen.
-      + apply All_app in hall as [_ hall]; now depelim hall.
-  Qed.
-
   (** Inversion: a saturated application of a declared bodiless registered
       constant is a weak-head normal form only as a neutral or as a rigid
       application.  [whnf_primapp_partial] cannot apply, because the
@@ -349,10 +283,10 @@ Section Normal.
     - rewrite length_app length_map /=; lia.
   Qed.
 
-  (** ** Why four constructors, not one [cannot_fire] premise (design §6, change log 14)
+  (** ** Why four constructors, not one "cannot fire" premise (design §6, change log 14)
 
       The design's version 7 had one saturated constructor with a bare
-      [cannot_fire] premise: some argument stuck, or not a literal of the expected
+      "cannot fire" premise: some argument stuck, or not a literal of the expected
       tag, or [prim_op_denote]/[readback] returning [None].  That makes
       [eqb ((fun x => x) 1) 2] neutral (its first argument is not a literal), yet
       it steps to [eqb 1 2], which fires; so [whne_pres1]/[whnf_pres1] would be
@@ -366,78 +300,7 @@ Section Normal.
       - [whne_primapp_inert] has literal arguments only, so it has no [red1]
         step at all;
       - [whnf_primapp_partial] is stable because a step never changes the
-        number of arguments (only an argument reduces: [red1_mkApps_tConst_inv]).
-
-      ** What rows I and Q must supply
-
-      [whnf_primapp_total] needs [All (whnf Γ) args]; without it the statement
-      "a saturated application with [prim_reduct Σ op args = None] is a [whnf]"
-      is false on the term above.  Rows I and Q (the machine's firing step and
-      its [Prim_app] frame, [PCUICSafeReduce.v]) discharge it from the machine:
-      when the frame has reduced every argument, they must supply, for the
-      argument list [args] as it stands on the stack, the list-level fact
-      [All (whnf flags Σ Γ) args] at the machine's own [flags], built from the
-      per-argument [reduce_stack_whnf] results as the frame advances (an
-      invariant of [Prim_app]'s [done] list), together with
-      [lookup_env Σ c = Some (ConstantDecl decl)], [cst_body decl = None],
-      [prim_op_of Σ c = Some op] and [#|args| = arity op].  No environment
-      conjunct is needed. *)
-
-  (** Totality (design §6, C1): in **any** environment a saturated application
-      of a declared bodiless registered constant whose arguments are all in
-      weak-head normal form either reduces or is itself a weak-head normal
-      form.  No conjunct of the environment condition is used. *)
-  Lemma whnf_primapp_total Γ c u decl op args :
-    lookup_env Σ c = Some (ConstantDecl decl) ->
-    decl.(cst_body) = None ->
-    prim_op_of Σ c = Some op ->
-    #|args| = arity op ->
-    All (whnf Γ) args ->
-    (∑ v, red1 Σ Γ (mkApps (tConst c u) args) v) + whnf Γ (mkApps (tConst c u) args).
-  Proof using Type.
-    intros hl hb hop hlen hall.
-    destruct (prim_reduct Σ op args) as [v|] eqn:hr.
-    - left; exists v. eapply red1_prim_reduct; tea.
-    - right. eapply whnf_primapp; tea.
-  Qed.
-
-  (** SG-2's wrong-tag case lands in [whne_primapp_inert]: a literal list of
-      the wrong tags makes [prim_op_denote] fail ([prim_op_denote_args]). *)
-  Lemma whne_primapp_wrong_tag Γ c u decl op ls :
-    lookup_env Σ c = Some (ConstantDecl decl) ->
-    decl.(cst_body) = None ->
-    prim_op_of Σ c = Some op ->
-    #|ls| = arity op ->
-    map lit_tag ls <> po_args (info op) ->
-    whne Γ (mkApps (tConst c u) (map term_of_lit ls)).
-  Proof using Type.
-    intros hl hb hop hlen htag.
-    eapply whne_primapp_inert; tea.
-    rewrite prim_reduct_lits.
-    destruct (prim_op_denote op ls) as [r|] eqn:hd => //.
-    now elim htag; eapply prim_op_denote_args.
-  Qed.
-
-  (** C1's unregistered-[retro_bool] case lands there too: the readback of a
-      boolean result fails when no inductive is registered. *)
-  Lemma whne_primapp_unregistered_bool Γ c u decl op ls :
-    lookup_env Σ c = Some (ConstantDecl decl) ->
-    decl.(cst_body) = None ->
-    prim_op_of Σ c = Some op ->
-    #|ls| = arity op ->
-    po_shape (info op) = SBool ->
-    primitive_bool Σ = None ->
-    whne Γ (mkApps (tConst c u) (map term_of_lit ls)).
-  Proof using Type.
-    intros hl hb hop hlen hs hbool.
-    eapply whne_primapp_inert; tea.
-    rewrite prim_reduct_lits.
-    destruct (prim_op_denote op ls) as [r|] eqn:hd => //.
-    pose proof (prim_op_denote_shape _ _ _ hd) as hsh.
-    rewrite hs in hsh |- *.
-    destruct r as [i|b]; [destruct hsh|].
-    cbn. unfold primitive_bool in hbool. now rewrite hbool.
-  Qed.
+        number of arguments (only an argument reduces: [red1_mkApps_tConst_inv]). *)
 
   Lemma whne_mkApps_inv :
     forall Γ t l,
@@ -606,45 +469,6 @@ Section Normal.
     - pose proof (split_lits_app (ls := ls) (a := a) (rest := rest) ha) as hs.
       rewrite e split_lits_map in hs. discriminate.
     - rewrite length_app length_map /=. lia.
-  Qed.
-
-  (** Under [beta], a beta redex is not a weak-head normal form. *)
-  Lemma not_whnf_beta Γ na A b t :
-    RedFlags.beta flags = true ->
-    whnf Γ (tApp (tLambda na A b) t) -> False.
-  Proof using Type.
-    intros hbeta h.
-    depelim h; try solve_discr.
-    all: try (apply (f_equal decompose_app) in x; rewrite decompose_app_mkApps in x;
-              try reflexivity; cbn in x; noconf x; fail).
-    depelim w; try solve_discr.
-    all: try (apply (f_equal decompose_app) in x; rewrite decompose_app_mkApps in x;
-              try reflexivity; cbn in x; noconf x; fail).
-    depelim w; try congruence.
-    all: try (apply (f_equal decompose_app) in x; rewrite decompose_app_mkApps in x;
-              try reflexivity; cbn in x; noconf x; fail).
-  Qed.
-
-  (** Design change log 14's counterexample in general form: a saturated
-      application whose first non-literal argument is a beta redex is not a
-      weak-head normal form.  The redex is neither neutral (so not
-      [whne_primapp_stuck]) nor a whnf (so not [whnf_primapp_rigid]); it is not
-      a literal (so not [whne_primapp_inert]); the application is saturated (so
-      not [whnf_primapp_partial]).  Version 7's single [cannot_fire] premise made
-      it neutral.  Both flags matter: without [delta] the head is neutral, and
-      without [beta] the redex is. *)
-  Lemma whnf_primapp_beta_arg Γ c u decl op na A b x ls rest :
-    RedFlags.delta flags = true ->
-    RedFlags.beta flags = true ->
-    lookup_env Σ c = Some (ConstantDecl decl) ->
-    decl.(cst_body) = None ->
-    prim_op_of Σ c = Some op ->
-    #|ls| + S #|rest| = arity op ->
-    whnf Γ (mkApps (tConst c u) (map term_of_lit ls ++ tApp (tLambda na A b) x :: rest)) -> False.
-  Proof using Type.
-    intros hd hbeta hl hb hop hlen.
-    eapply not_whnf_primapp_arg; tea; [reflexivity|].
-    intros hw; now eapply not_whnf_beta.
   Qed.
 
 End Normal.
