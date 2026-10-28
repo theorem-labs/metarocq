@@ -155,4 +155,10 @@ theories/PCUICEtaCanonConfluence.v
 theories/PCUICEtaCanonEta.v
 # L2 obligation 5: exact strong commutation of R_c and eta1 on canonical terms
 theories/PCUICEtaCanonCommute.v
+# BET-315 eta lane (L2): C4/I4 shared definitions (beta_eta, statement, Hindley-Rosen split)
+theories/PCUICEtaBetaEta.v
+# BET-315 eta lane (L2): C4 P-SCOPE (beta_eta preserves scoping)
+theories/PCUICEtaScope.v
+# BET-315 eta lane (L2): C4 shape guard — (A) is instantiable by C3 + P-SCOPE (C4 -> C3 only)
+theories/PCUICEtaC4Shape.v
 # theories/All.v
