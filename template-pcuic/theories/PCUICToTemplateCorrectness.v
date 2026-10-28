@@ -2,7 +2,7 @@
 From Stdlib Require Import ssreflect ssrbool Utf8 CRelationClasses.
 From Equations.Type Require Import Relation Relation_Properties.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction
-     PCUICLiftSubst PCUICEquality PCUICReduction PCUICCasesContexts PCUICTactics
+     PCUICLiftSubst PCUICEquality PCUICReduction PCUICPrimitiveRed PCUICCasesContexts PCUICTactics
      PCUICWeakeningConv PCUICWeakeningTyp PCUICUnivSubst PCUICTyping PCUICGlobalEnv
      PCUICClosedTyp PCUICGeneration PCUICConversion (* Needs transitivity of cumulativity *)
      PCUICValidity PCUICArities PCUICInversion PCUICInductiveInversion
@@ -12,7 +12,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction
 Set Warnings "-notation-overridden".
 
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config PrimitiveOps.
 From MetaRocq.Template Require Import Ast TypingWf UnivSubst
      TermEquality LiftSubst Reduction.
 Set Warnings "notation-overridden".
@@ -1239,6 +1239,43 @@ Proof.
   now rewrite map2_length !length_map.
 Qed.
 
+(** ** The primitive-operation rule transports
+
+  [PCUICToTemplate.trans_global_env] copies the retroknowledge, so the table
+  and the boolean inductive are the same on both sides, and [trans] takes
+  PCUIC's literal payload back to Template's literal node, so the transport of
+  the rule is the identity on literals. *)
+
+Lemma trans_term_of_lit l : trans (term_of_lit l) = TT.template_of_lit l.
+Proof. by destruct l. Qed.
+
+Lemma trans_map_term_of_lit ls :
+  map trans (map term_of_lit ls) = map TT.template_of_lit ls.
+Proof.
+  rewrite map_map. apply map_ext, trans_term_of_lit.
+Qed.
+
+Lemma trans_prim_op_of {Σ c op} :
+  PCUICEnvironment.prim_op_of Σ c = Some op ->
+  Ast.Env.prim_op_of (trans_global_env Σ) c = Some op.
+Proof.
+  rewrite /Ast.Env.prim_op_of /PCUICEnvironment.prim_op_of //.
+Qed.
+
+Lemma trans_readback {Σ s r v} :
+  readback Σ s r = Some v -> TT.treadback (trans_global_env Σ) s r = Some (trans v).
+Proof.
+  rewrite /readback /TT.treadback /Ast.Env.primitive_bool /=.
+  destruct s, r => //=.
+  - intros [= <-]; reflexivity.
+  - destruct Retroknowledge.retro_bool => //. intros [= <-]; reflexivity.
+Qed.
+
+(** An operation never fires on no argument: every operation of the table takes
+    at least one. *)
+Lemma prim_op_denote_nonnil {op ls r} : prim_op_denote op ls = Some r -> ls <> [].
+Proof. destruct op, ls => //. Qed.
+
 Lemma trans_red1 {cf} (Σ : PCUICEnvironment.global_env_ext) {wfΣ : PCUICTyping.wf Σ} Γ T U :
   red1 Σ Γ T U ->
   wt Σ Γ T ->
@@ -1317,6 +1354,19 @@ Proof.
   - rewrite trans_subst_instance. econstructor.
     apply (trans_declared_constant _ c decl H).
     destruct decl. now simpl in *; subst cst_body0.
+
+  (* primitive operation: Template's rule is the prefix form, with no argument
+     beyond the operation's arity here *)
+  - rewrite trans_mkApps trans_map_term_of_lit.
+    destruct ls as [|l0 ls]; [destruct op; cbn in *; congruence|].
+    rewrite (LiftSubst.mkApps_tApp (T.tConst c u) (map TT.template_of_lit (l0 :: ls)) eq_refl ltac:(discriminate)).
+    rewrite -{1}(app_nil_r (map TT.template_of_lit (l0 :: ls))).
+    eapply (TT.red_prim_op _ _ c _ u op (l0 :: ls) r _ []).
+    + apply (trans_declared_constant _ c decl H0).
+    + now apply trans_prim_op_of.
+    + destruct decl. now simpl in *; subst cst_body0.
+    + eassumption.
+    + now apply trans_readback.
 
   - rewrite trans_mkApps; eauto with wf.
     simpl. constructor; now rewrite nth_error_map H.

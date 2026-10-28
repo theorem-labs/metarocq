@@ -437,7 +437,7 @@ Proof.
   eapply on_declared_constant in declc_; auto.
   red in declc_. rewrite bod in declc_. eapply declc_.
   noconf H0.
-  eapply erases_deps_cons; eauto.
+  eapply erases_deps_cons; [| exact (fst (snd wfΣ)) | |]; eauto.
   constructor; auto.
 
   right.
@@ -550,6 +550,7 @@ Proof.
         destruct Σ. cbn in *. rewrite Hpop' Hpop'' prf'. rewrite <- Hpop at 1.
         eapply (erases_deps_cons Σpop).
           rewrite <- Hpop'. apply wf.
+          rewrite <- Hpop''. exact (fst (snd wf)).
           rewrite Hpop. rewrite prf' in wf. destruct wf. now rewrite Hpop'' Hpop' in o0.
 
         pose proof (erase_constant_body_correct' H0). specialize_Σ wfmake.
