@@ -1801,6 +1801,65 @@ Proof.
     rewrite <- hty; refine (type_Const _ _ _ [] _ wfΓ hd _); rewrite huniv //.
 Qed.
 
+(** The registered result type is a type. *)
+Lemma isType_prim_shape_type {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ s res} :
+  wf_local Σ Γ ->
+  PCUICPrimOpType.prim_shape_type Σ.1.(retroknowledge) s = Some res ->
+  on_prim_op_result Σ s ->
+  isType Σ Γ res.
+Proof.
+  intros wfΓ hsh hres. destruct s; cbn in hsh, hres.
+  - destruct hres as (kn & d & [hpc hd hinv]).
+    unfold PCUICPrimOpType.prim_tag_type, EnvironmentTyping.retro_type_constant in hsh.
+    pose proof hpc as hpc'. cbn in hpc'. rewrite hpc' in hsh. cbn in hsh. noconf hsh.
+    eapply isType_prim_tag_constant; tea. discriminate.
+  - (* [readback_typed] (row G) types the readback of [true] at [res]; its
+       type is then a type by validity. *)
+    assert (hrb : ∑ v, readback Σ SBool (RBool true) = Some v).
+    { cbn in hsh |- *. destruct (Retroknowledge.retro_bool _) => //. now eexists. }
+    destruct hrb as [v hrb].
+    exact (validity (readback_typed (s := SBool) (res := res) wfΓ hsh hres hrb)).
+Qed.
+
+(** The arrow chain of the registered argument types is a type. *)
+Lemma isType_prim_arg_types {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ tags res T} :
+  wf_local Σ Γ ->
+  (forall t, In t tags -> t <> primArray) ->
+  All (prim_op_tag_declared Σ) tags ->
+  PCUICPrimOpType.prim_arg_types Σ.1.(retroknowledge) tags res = Some T ->
+  isType Σ Γ res -> isType Σ Γ T.
+Proof.
+  intros wfΓ. induction tags as [|t tags ih] in T |- *; cbn; intros hna hall h hres.
+  - noconf h. exact hres.
+  - depelim hall.
+    destruct (PCUICPrimOpType.prim_tag_type _ t) as [a|] eqn:ht => //.
+    destruct (PCUICPrimOpType.prim_arg_types _ tags res) as [rest|] eqn:hr => //.
+    cbn in h. noconf h.
+    destruct p as (kn & d & [hpc hd hinv]).
+    unfold PCUICPrimOpType.prim_tag_type in ht.
+    destruct (EnvironmentTyping.retro_type_constant _ t) as [kn'|] eqn:hrt => //.
+    cbn in ht. noconf ht.
+    assert (ept : primitive_constant Σ t = EnvironmentTyping.retro_type_constant (retroknowledge Σ) t)
+      by (destruct t; reflexivity).
+    rewrite ept hrt in hpc. noconf hpc.
+    assert (hnat : t <> primArray) by (apply hna; now left).
+    assert (hrest : isType Σ Γ rest).
+    { eapply (ih rest); tea; try reflexivity. intros t' ht'. apply hna. now right. }
+    (* the domain: a type constant, of sort [Set], relevant *)
+    assert (hdom : isTypeRel Σ Γ (tConst kn' []) Relevant).
+    { destruct t; try congruence; cbn in hinv.
+      all: destruct hinv as [hty hbod huniv]; split; [constructor|];
+        exists (Sort.type0@[[]]); repeat split.
+      all: try reflexivity.
+      all: change (tSort ?s@[[]]) with (tSort s)@[[]];
+        rewrite <- hty; refine (type_Const _ _ _ [] _ wfΓ hd _); rewrite huniv //. }
+    unfold tImpl.
+    eapply (isType_tProd (na := mkBindAnn nAnon Relevant)). split; [exact hdom|].
+    eapply (isType_lift (n := 1) (Γ := Γ ,, vass (mkBindAnn nAnon Relevant) (tConst kn' []))); cbn; tea.
+    + lia.
+    + constructor; tea.
+Qed.
+
 (** A spine of arbitrary arguments through the operation's declared arrow chain:
     each argument is typed at a type convertible to its tag's type constant, and
     an unsaturated spine leaves a product.  This generalises
