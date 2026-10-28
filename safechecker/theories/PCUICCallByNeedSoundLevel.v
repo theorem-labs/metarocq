@@ -365,7 +365,7 @@ Section RunStart.
   Lemma run_c1_gcok (t u : term) :
     PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c1 X_type X t).
   Proof.
-    exists (mkEntry t [] (NSInput false) (wf_term_univs X_type X t)). split.
+    exists (mkEntry t [] (wf_term_univs X_type X t)). split.
     - exact (run_c1_in_table X_type X t u).
     - exact (run_c1_code_inv X_type X t).
   Qed.
@@ -373,7 +373,7 @@ Section RunStart.
   Lemma run_c2_gcok (t u : term) :
     PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c2 X_type X t u).
   Proof.
-    exists (mkEntry u [] (NSInput true) (wf_term_univs X_type X u)). split.
+    exists (mkEntry u [] (wf_term_univs X_type X u)). split.
     - exact (run_c2_in_table X_type X t u).
     - exact (run_c2_code_inv X_type X t u).
   Qed.
@@ -407,7 +407,7 @@ End RunStart.
 
 Section Master.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext).
+  Context (Γ : context) (nctx : nat) (Σ : global_env_ext).
   Context (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ).
   Context (hnctx : nctx = #|Γ|) (hΓ : is_closed_context Γ).
   Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
@@ -430,26 +430,26 @@ Section Master.
     [gam] allocates [NVar 0] at [Q = 0]). *)
   Definition machine_hwf_at (d : cbn_fuel) (Q : nat) : Prop :=
     (forall a rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
-       force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
+       force X_type X Γ nctx d a rs s = COk (v, rs', s') ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
     /\ (forall x stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
-       eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+       eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
     /\ (forall e c stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
-       whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+       whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
     /\ (forall e c mfix idx stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
-       whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
+       whnf_fix X_type X Γ nctx d e c mfix idx stk rs s = COk (v, rs', s') ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
     /\ (forall v stk rs s w rs' s', hwf Q s -> Forall (rwf Q) rs -> vwf Q v ->
-       apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
+       apply X_type X Γ nctx d v stk rs s = COk (w, rs', s') ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q w).
 
   Definition machine_hwf : Prop := forall d Q, nctx <= Q -> machine_hwf_at d Q.
 
   Definition alloc_hwf : Prop := forall Q cl rs s a rs' s', nctx <= Q ->
     hwf Q s -> cwf Q cl -> Forall (rwf Q) rs ->
-    alloc stress cl rs s = COk (a, rs', s') -> hwf Q s' /\ Forall (rwf Q) rs'.
+    alloc cl rs s = COk (a, rs', s') -> hwf Q s' /\ Forall (rwf Q) rs'.
 
   (** *** The machine at the master level
 
@@ -462,14 +462,14 @@ Section Master.
     minv L Q lo G s -> Forall (rwf Q) rs ->
     g_susp nctx Q G e c.(c_term) tc -> PCUICCallByNeedSoundEval.cok G c ->
     g_slots nctx Q G stk sts ->
-    whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+    whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
     exists lo' G' u, minv L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
       /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
       /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tc sts) u.
   Proof.
     intros [hL hQ hok hw] hrs hs hc hstk he.
     assert (hlen : #|jctx (Q - nctx)| = Q - nctx) by apply jctx_length.
-    destruct (machine_sound X_type X Γ nctx stress Σ (jctx (Q - nctx)) Q wfΣ hΣ hlen hnctx
+    destruct (machine_sound X_type X Γ nctx Σ (jctx (Q - nctx)) Q wfΣ hΣ hlen hnctx
                 ltac:(lia) hcio d) as (_ & _ & hW & _ & _).
     destruct (hW lo G e c stk sts tc rs s v rs' s' hok hs hc hstk he)
       as (lo' & G' & u & hren & hok' & hv & hr).
@@ -483,14 +483,14 @@ Section Master.
   Lemma eval_slot_master (hB : machine_hwf) d L Q lo G x stk sts tx rs s v rs' s' :
     minv L Q lo G s -> Forall (rwf Q) rs ->
     g_slot nctx Q G x tx -> g_slots nctx Q G stk sts ->
-    eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+    eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
     exists lo' G' u, minv L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
       /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
       /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tx sts) u.
   Proof.
     intros [hL hQ hok hw] hrs hx hstk he.
     assert (hlen : #|jctx (Q - nctx)| = Q - nctx) by apply jctx_length.
-    destruct (machine_sound X_type X Γ nctx stress Σ (jctx (Q - nctx)) Q wfΣ hΣ hlen hnctx
+    destruct (machine_sound X_type X Γ nctx Σ (jctx (Q - nctx)) Q wfΣ hΣ hlen hnctx
                 ltac:(lia) hcio d) as (_ & hE & _ & _ & _).
     destruct (hE lo G x stk sts tx rs s v rs' s' hok hx hstk he)
       as (lo' & G' & u & hren & hok' & hv & hr).

@@ -529,22 +529,22 @@ Qed.
 
 Section ConvEqs.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context (Γ : context) (nctx : nat) (stress : bool).
+  Context (Γ : context) (nctx : nat).
 
   Local Notation xpred0 := (fun _ : nat => false) (only parsing).
   Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
   Lemma pfd_push_fresh_O (lvl : nat) (e1 e2 : cbn_env) (rs : list root) (s : cbn_state) :
-    push_fresh stress 0 lvl e1 e2 rs s = COk ((lvl, e1, e2), rs, s).
+    push_fresh 0 lvl e1 e2 rs s = COk ((lvl, e1, e2), rs, s).
   Proof. reflexivity. Qed.
 
   Lemma pfd_push_fresh_S (m lvl : nat) (e1 e2 : cbn_env) (rs : list root) (s : cbn_state) :
-    push_fresh stress (S m) lvl e1 e2 rs s =
-    match alloc stress (CDone (VNeu (NVar lvl) [])) (RE e1 :: RE e2 :: rs) s with
+    push_fresh (S m) lvl e1 e2 rs s =
+    match alloc (CDone (VNeu (NVar lvl) [])) (RE e1 :: RE e2 :: rs) s with
     | COk (x, rs1, s1) =>
       match rs1 with
       | RE e1' :: RE e2' :: rs2 =>
-        push_fresh stress m (S lvl) (env_push (SAddr x) e1') (env_push (SAddr x) e2') rs2 s1
+        push_fresh m (S lvl) (env_push (SAddr x) e1') (env_push (SAddr x) e2') rs2 s1
       | _ => CFail WRoots
       end
     | CFail w => CFail w
@@ -559,19 +559,19 @@ Section ConvEqs.
 
   Lemma same_code_cells_eq (k : unit -> cbn_fuel) (lvl : nat) (t : term) (i : nat)
       (l1 l2 : list cbn_slot) (rs : list root) (s : cbn_state) :
-    same_code_cells X_type X Γ nctx stress (FS k) lvl t i l1 l2 rs s
+    same_code_cells X_type X Γ nctx (FS k) lvl t i l1 l2 rs s
     = match l1, l2 with
       | [], [] => COk (true, rs, s)
       | x1 :: l1, x2 :: l2 =>
         if slot_same x1 x2 || noccur_between i 1 t
-        then same_code_cells X_type X Γ nctx stress (k tt) lvl t (S i) l1 l2 rs s
+        then same_code_cells X_type X Γ nctx (k tt) lvl t (S i) l1 l2 rs s
         else
-          match conv_slot X_type X Γ nctx stress (k tt) lvl Conv x1 x2
+          match conv_slot X_type X Γ nctx (k tt) lvl Conv x1 x2
                   (RSk l1 :: RSk l2 :: rs) s with
           | COk (true, rs, s) =>
             match rs with
             | RSk l1 :: RSk l2 :: rs =>
-              same_code_cells X_type X Γ nctx stress (k tt) lvl t (S i) l1 l2 rs s
+              same_code_cells X_type X Γ nctx (k tt) lvl t (S i) l1 l2 rs s
             | _ => CFail WRoots
             end
           | COk (false, rs, s) => COk (false, skipn 2 rs, s)
@@ -583,10 +583,10 @@ Section ConvEqs.
 
   Lemma conv_same_code_eq (k : unit -> cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code)
       (e2 : cbn_env) (c2 : code) (rs : list root) (s : cbn_state) :
-    conv_same_code X_type X Γ nctx stress (FS k) lvl e1 c1 e2 c2 rs s
+    conv_same_code X_type X Γ nctx (FS k) lvl e1 c1 e2 c2 rs s
     = (if (e1.(ev_goff) == e2.(ev_goff)) && (e1.(ev_nvals) == e2.(ev_nvals)) then
          let (b, s) := code_eq X_type X c1 c2 s in
-         if b then same_code_cells X_type X Γ nctx stress (k tt) lvl (c1.(c_term)) 0
+         if b then same_code_cells X_type X Γ nctx (k tt) lvl (c1.(c_term)) 0
                      (e1.(ev_vals)) (e2.(ev_vals)) rs s
          else COk (false, rs, s)
        else COk (false, rs, s)).
@@ -595,17 +595,17 @@ Section ConvEqs.
   Lemma case_params_eq (k : unit -> cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code)
       (e2 : cbn_env) (c2 : code) (i : N) (l1 l2 : list term) (rs : list root)
       (s : cbn_state) :
-    case_params X_type X Γ nctx stress (FS k) lvl e1 c1 e2 c2 i l1 l2 rs s
+    case_params X_type X Γ nctx (FS k) lvl e1 c1 e2 c2 i l1 l2 rs s
     = match l1, l2 with
       | [], [] => COk (true, rs, s)
       | t1 :: l1, t2 :: l2 =>
-        match conv_term X_type X Γ nctx stress (k tt) lvl Conv
+        match conv_term X_type X Γ nctx (k tt) lvl Conv
                 e1 (child c1 (case_param_step i) t1)
                 e2 (child c2 (case_param_step i) t2) (RE e1 :: RE e2 :: rs) s with
         | COk (true, rs, s) =>
           match rs with
           | RE e1 :: RE e2 :: rs =>
-            case_params X_type X Γ nctx stress (k tt) lvl e1 c1 e2 c2 (N.succ i)
+            case_params X_type X Γ nctx (k tt) lvl e1 c1 e2 c2 (N.succ i)
               l1 l2 rs s
           | _ => CFail WRoots
           end
@@ -619,21 +619,21 @@ Section ConvEqs.
   Lemma case_branches_eq (k : unit -> cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code)
       (e2 : cbn_env) (c2 : code) (i : N) (l1 l2 : list (branch term)) (rs : list root)
       (s : cbn_state) :
-    case_branches X_type X Γ nctx stress (FS k) lvl e1 c1 e2 c2 i l1 l2 rs s
+    case_branches X_type X Γ nctx (FS k) lvl e1 c1 e2 c2 i l1 l2 rs s
     = match l1, l2 with
       | [], [] => COk (true, rs, s)
       | b1 :: l1, b2 :: l2 =>
         if case_ctx_ok b1.(bcontext) b2.(bcontext) then
-          match push_fresh stress #|b1.(bcontext)| lvl e1 e2 (RE e1 :: RE e2 :: rs) s with
+          match push_fresh #|b1.(bcontext)| lvl e1 e2 (RE e1 :: RE e2 :: rs) s with
           | COk (r, rs, s) =>
             let '(lvlb, eb1, eb2) := r in
-            match conv_term X_type X Γ nctx stress (k tt) lvlb Conv
+            match conv_term X_type X Γ nctx (k tt) lvlb Conv
                     eb1 (child c1 (case_branch_step i) b1.(bbody))
                     eb2 (child c2 (case_branch_step i) b2.(bbody)) rs s with
             | COk (true, rs, s) =>
               match rs with
               | RE e1 :: RE e2 :: rs =>
-                case_branches X_type X Γ nctx stress (k tt) lvl e1 c1 e2 c2 (N.succ i)
+                case_branches X_type X Γ nctx (k tt) lvl e1 c1 e2 c2 (N.succ i)
                   l1 l2 rs s
               | _ => CFail WRoots
               end
@@ -649,7 +649,7 @@ Section ConvEqs.
 
   Lemma case_cong_eq (k : unit -> cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code)
       (e2 : cbn_env) (c2 : code) (rs : list root) (s : cbn_state) :
-    case_cong X_type X Γ nctx stress (FS k) lvl e1 c1 e2 c2 rs s
+    case_cong X_type X Γ nctx (FS k) lvl e1 c1 e2 c2 rs s
     = match c1.(c_term), c2.(c_term) with
       | tCase ci1 p1 sc1 brs1, tCase ci2 p2 sc2 brs2 =>
         if case_info_eqb ci1 ci2 && (#|brs1| == #|brs2|)
@@ -657,25 +657,25 @@ Section ConvEqs.
            && forallb2 (cmp_level_conv X_type X) p1.(puinst) p2.(puinst)
            && case_ctx_ok p1.(pcontext) p2.(pcontext)
         then
-          match case_params X_type X Γ nctx stress (k tt) lvl e1 c1 e2 c2 0%N
+          match case_params X_type X Γ nctx (k tt) lvl e1 c1 e2 c2 0%N
                   p1.(pparams) p2.(pparams) (RE e1 :: RE e2 :: rs) s with
           | COk (true, rs, s) =>
             match rs with
             | RE e1 :: RE e2 :: rs =>
-              match push_fresh stress #|p1.(pcontext)| lvl e1 e2 (RE e1 :: RE e2 :: rs) s with
+              match push_fresh #|p1.(pcontext)| lvl e1 e2 (RE e1 :: RE e2 :: rs) s with
               | COk (r, rs, s) =>
                 let '(lvlr, er1, er2) := r in
-                match conv_term X_type X Γ nctx stress (k tt) lvlr Conv
+                match conv_term X_type X Γ nctx (k tt) lvlr Conv
                         er1 (child c1 1 p1.(preturn)) er2 (child c2 1 p2.(preturn)) rs s with
                 | COk (true, rs, s) =>
                   match rs with
                   | RE e1 :: RE e2 :: rs =>
-                    match conv_term X_type X Γ nctx stress (k tt) lvl Conv
+                    match conv_term X_type X Γ nctx (k tt) lvl Conv
                             e1 (child c1 0 sc1) e2 (child c2 0 sc2) (RE e1 :: RE e2 :: rs) s with
                     | COk (true, rs, s) =>
                       match rs with
                       | RE e1 :: RE e2 :: rs =>
-                        case_branches X_type X Γ nctx stress (k tt) lvl e1 c1 e2 c2 0%N
+                        case_branches X_type X Γ nctx (k tt) lvl e1 c1 e2 c2 0%N
                           brs1 brs2 rs s
                       | _ => CFail WRoots
                       end
@@ -1412,16 +1412,16 @@ Proof.
   injection he as <- <-. exact (rn_roots_skel _ _ _ _ _ e2).
 Qed.
 
-Lemma alloc_skel (stress : bool) cl rs s a rs' s' :
-  alloc stress cl rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+Lemma alloc_skel cl rs s a rs' s' :
+  alloc cl rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
 Proof.
-  intros he. destruct (gc_due stress s) eqn:eg.
-  - rewrite (alloc_gc stress cl rs s eg) in he.
+  intros he. destruct (gc_due s) eqn:eg.
+  - rewrite (alloc_gc cl rs s eg) in he.
     destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:ec; [|discriminate he].
     pose proof (collect_skel _ _ _ _ ec) as h1.
     destruct rs2 as [|[| | | | | |cl2] rs2]; try discriminate he.
     injection he as <- <- <-. exact (sk_tl _ _ _ _ h1).
-  - rewrite (alloc_no_gc stress cl rs s eg) in he. injection he as <- <- <-. reflexivity.
+  - rewrite (alloc_no_gc cl rs s eg) in he. injection he as <- <- <-. reflexivity.
 Qed.
 
 (** ** The machine *)
@@ -1441,38 +1441,38 @@ Local Ltac dtests he :=
           | context [match ?m with O => _ | S _ => _ end] => destruct m
           end; try discriminate he).
 
-Lemma push_fresh_skel (stress : bool) : forall n lvl e1 e2 rs s r rs' s',
-  push_fresh stress n lvl e1 e2 rs s = COk (r, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+Lemma push_fresh_skel : forall n lvl e1 e2 rs s r rs' s',
+  push_fresh n lvl e1 e2 rs s = COk (r, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
 Proof.
   induction n as [|n ih]; intros lvl e1 e2 rs s r rs' s' he; cbn [push_fresh] in he.
   - injection he as <- <- <-. reflexivity.
   - dcall he ea x1 rs1 s1.
     destruct rs1 as [|[| |f1| | | |] [|[| |f2| | | |] rs1]]; try discriminate he.
-    pose proof (alloc_skel _ _ _ _ _ _ _ ea) as h1.
+    pose proof (alloc_skel _ _ _ _ _ _ ea) as h1.
     pose proof (ih _ _ _ _ _ _ _ _ he) as h2. sk_fin.
 Qed.
 
 Section SkMachine.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context (Γ : context) (nctx : nat) (stress : bool).
+  Context (Γ : context) (nctx : nat).
 
   Lemma gam_skel j rs s a rs' s' :
-    gam X_type X Γ nctx stress j rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+    gam X_type X Γ nctx j rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
   Proof.
     intros he. unfold gam in he. cbv zeta in he.
     destruct (PTree.get (key_of_succ_nat j) s.(st_gam)) as [a0|].
     { injection he as <- <- <-. reflexivity. }
     destruct (nth_error Γ j) as [decl|]; [|discriminate he].
     destruct (decl_body decl) as [b|].
-    - destruct (new_entry X_type X b [] (NSCtx j) s) as [c s1].
+    - destruct (new_entry X_type X b [] s) as [c s1].
       cbv beta iota in he. dcall he ea a1 rs1 s2.
-      injection he as <- <- <-. exact (alloc_skel _ _ _ _ _ _ _ ea).
+      injection he as <- <- <-. exact (alloc_skel _ _ _ _ _ _ ea).
     - cbv beta iota in he. dcall he ea a1 rs1 s2.
-      injection he as <- <- <-. exact (alloc_skel _ _ _ _ _ _ _ ea).
+      injection he as <- <- <-. exact (alloc_skel _ _ _ _ _ _ ea).
   Qed.
 
   Lemma env_var_skel n e rs s x rs' s' :
-    env_var X_type X Γ nctx stress n e rs s = COk (x, rs', s') ->
+    env_var X_type X Γ nctx n e rs s = COk (x, rs', s') ->
     mp_roots kc rs' = mp_roots kc rs.
   Proof.
     intros he. unfold env_var in he.
@@ -1482,7 +1482,7 @@ Section SkMachine.
   Qed.
 
   Lemma arg_slot_skel e c rs s x rs' s' :
-    arg_slot X_type X Γ nctx stress e c rs s = COk (x, rs', s') ->
+    arg_slot X_type X Γ nctx e c rs s = COk (x, rs', s') ->
     mp_roots kc rs' = mp_roots kc rs.
   Proof.
     intros he. unfold arg_slot in he.
@@ -1491,22 +1491,22 @@ Section SkMachine.
   Qed.
 
   Lemma materialize_skel x rs s a rs' s' :
-    materialize X_type X stress x rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+    materialize X_type X x rs s = COk (a, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
   Proof.
     intros he. unfold materialize in he.
     destruct x as [a0|vs n o c]; [injection he as <- <- <-; reflexivity|].
-    destruct (c_term c) eqn:ec; try exact (alloc_skel _ _ _ _ _ _ _ he).
+    destruct (c_term c) eqn:ec; try exact (alloc_skel _ _ _ _ _ _ he).
     - lazymatch type of he with
       | context [delta X_type X ?kn ?ui s] =>
         destruct (delta X_type X kn ui s) as [[[c'|] s1]|w] eqn:ed
-      end; exact (alloc_skel _ _ _ _ _ _ _ he).
+      end; exact (alloc_skel _ _ _ _ _ _ he).
     - lazymatch type of he with
       | context [nth_error ?m ?i] => destruct (nth_error m i)
-      end; exact (alloc_skel _ _ _ _ _ _ _ he).
+      end; exact (alloc_skel _ _ _ _ _ _ he).
   Qed.
 
   Lemma bind_skel x body rs s y rs' s' :
-    bind X_type X stress x body rs s = COk (y, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+    bind X_type X x body rs s = COk (y, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
   Proof.
     intros he. unfold bind in he. destruct x as [a0|vals n o c].
     - injection he as <- <- <-. reflexivity.
@@ -1517,7 +1517,7 @@ Section SkMachine.
   Qed.
 
   Lemma mat_all_skel : forall d l rs s al rs' s',
-    mat_all X_type X stress d l rs s = COk (al, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
+    mat_all X_type X d l rs s = COk (al, rs', s') -> mp_roots kc rs' = mp_roots kc rs.
   Proof.
     intros d. induction d as [|k ih]; intros l rs s al rs' s' he;
       destruct l as [|x l]; cbn [mat_all] in he.
@@ -1533,7 +1533,7 @@ Section SkMachine.
   Qed.
 
   Lemma push_fix_cells_skel : forall n e c i acc rs s e' rs' s',
-    push_fix_cells stress e c i n acc rs s = COk (e', rs', s') ->
+    push_fix_cells e c i n acc rs s = COk (e', rs', s') ->
     mp_roots kc rs' = mp_roots kc rs.
   Proof.
     induction n as [|n ih]; intros e c i acc rs s e' rs' s' he;
@@ -1541,22 +1541,22 @@ Section SkMachine.
     - injection he as <- <- <-. reflexivity.
     - dcall he ea a1 rs1 s1.
       destruct rs1 as [|[| |e1| | | |] [|[| |acc1| | | |] rs1]]; try discriminate he.
-      pose proof (alloc_skel _ _ _ _ _ _ _ ea) as h1.
+      pose proof (alloc_skel _ _ _ _ _ _ ea) as h1.
       pose proof (ih _ _ _ _ _ _ _ _ _ he) as h2. sk_fin.
   Qed.
 
   (** The five functions of the machine at one fuel. *)
   Definition sk_m (d : cbn_fuel) : Prop :=
-    (forall a rs s v rs' s', force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
+    (forall a rs s v rs' s', force X_type X Γ nctx d a rs s = COk (v, rs', s') ->
        mp_roots kc rs' = mp_roots kc rs)
-    /\ (forall x stk rs s v rs' s', eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+    /\ (forall x stk rs s v rs' s', eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
        mp_roots kc rs' = mp_roots kc rs)
-    /\ (forall e c stk rs s v rs' s', whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+    /\ (forall e c stk rs s v rs' s', whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
        mp_roots kc rs' = mp_roots kc rs)
     /\ (forall e c mfix idx stk rs s v rs' s',
-         whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
+         whnf_fix X_type X Γ nctx d e c mfix idx stk rs s = COk (v, rs', s') ->
        mp_roots kc rs' = mp_roots kc rs)
-    /\ (forall v stk rs s w rs' s', apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
+    /\ (forall v stk rs s w rs' s', apply X_type X Γ nctx d v stk rs s = COk (w, rs', s') ->
        mp_roots kc rs' = mp_roots kc rs).
 
   Lemma sk_machine : forall d, sk_m d.
@@ -1688,7 +1688,7 @@ Section SkMachine.
                destruct hd; try discriminate he.
                dcall he ea2 a2 rs2 s2.
                destruct rs2 as [|[| |e3| | | |] [|[| | | |k3| |] rs2]]; try discriminate he.
-               pose proof (alloc_skel _ _ _ _ _ _ _ ea2) as h3.
+               pose proof (alloc_skel _ _ _ _ _ _ ea2) as h3.
                dcall he ep e4 rs3 s3.
                destruct rs3 as [|[| | | |k4| |] rs3]; try discriminate he.
                pose proof (push_fix_cells_skel _ _ _ _ _ _ _ _ _ _ ep) as h4.
@@ -1725,19 +1725,19 @@ Section SkMachine.
 End SkMachine.
 
 Lemma machine_skel {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
-    (Γ : context) (nctx : nat) (stress : bool) : forall d,
-  (forall a rs s v rs' s', force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
+    (Γ : context) (nctx : nat) : forall d,
+  (forall a rs s v rs' s', force X_type X Γ nctx d a rs s = COk (v, rs', s') ->
      mp_roots kc rs' = mp_roots kc rs)
-  /\ (forall x stk rs s v rs' s', eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+  /\ (forall x stk rs s v rs' s', eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
      mp_roots kc rs' = mp_roots kc rs)
-  /\ (forall e c stk rs s v rs' s', whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+  /\ (forall e c stk rs s v rs' s', whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
      mp_roots kc rs' = mp_roots kc rs)
   /\ (forall e c mfix idx stk rs s v rs' s',
-       whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
+       whnf_fix X_type X Γ nctx d e c mfix idx stk rs s = COk (v, rs', s') ->
      mp_roots kc rs' = mp_roots kc rs)
-  /\ (forall v stk rs s w rs' s', apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
+  /\ (forall v stk rs s w rs' s', apply X_type X Γ nctx d v stk rs s = COk (w, rs', s') ->
      mp_roots kc rs' = mp_roots kc rs).
-Proof. exact (sk_machine X_type X Γ nctx stress). Qed.
+Proof. exact (sk_machine X_type X Γ nctx). Qed.
 
 
 (** * The comparison on ghost readings
@@ -1764,7 +1764,7 @@ Proof. exact (sk_machine X_type X Γ nctx stress). Qed.
 
 Section ConvGhost.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext).
+  Context (Γ : context) (nctx : nat) (Σ : global_env_ext).
   Context (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ).
   Context (hnctx : nctx = #|Γ|) (hΓ : is_closed_context Γ) (hhyg : ctx_hyg Γ).
   Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
@@ -2110,14 +2110,14 @@ Section ConvGhost.
     forall L Q lo G pb x1 x2 t1 t2 rs s b rs' s',
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_slot nctx Q G x1 t1 -> g_slot nctx Q G x2 t2 ->
-      conv_slot X_type X Γ nctx stress d L pb x1 x2 rs s = COk (b, rs', s') ->
+      conv_slot X_type X Γ nctx d L pb x1 x2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
 
   Definition spec_scc (d : cbn_fuel) : Prop :=
     forall L Q lo G a i l1 l2 ts1 ts2 rs s b rs' s',
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_slots nctx Q G l1 ts1 -> g_slots nctx Q G l2 ts2 ->
-      same_code_cells X_type X Γ nctx stress d L a i l1 l2 rs s = COk (b, rs', s') ->
+      same_code_cells X_type X Γ nctx d L a i l1 l2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cagree L Q a i ts1 ts2).
 
   (** [same_code_cells] skips a position whose two slots are one address (one reading) or
@@ -2146,7 +2146,7 @@ Section ConvGhost.
         apply haddr_eqb_eq in Esame. subst a2.
         apply g_slot_addr_inv in hx1. apply g_slot_addr_inv in hx2.
         rewrite hx1 in hx2. injection hx2 as <-. exact (cq_refl _ _ _ _ hL).
-      + destruct (conv_slot X_type X Γ nctx stress (k tt) L Conv x1 x2
+      + destruct (conv_slot X_type X Γ nctx (k tt) L Conv x1 x2
                     (RSk l1 :: RSk l2 :: rs) s) as [[[b2 rs2] s2]|w] eqn:Ecs;
           [|discriminate he].
         assert (hr' : Forall (rwf Q) (RSk l1 :: RSk l2 :: rs))
@@ -2176,14 +2176,14 @@ Section ConvGhost.
     forall L Q lo G pb x1 x2 t1 t2 rs s b rs' s',
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_slot nctx Q G x1 t1 -> g_slot nctx Q G x2 t2 ->
-      conv_eval X_type X Γ nctx stress d L pb x1 x2 rs s = COk (b, rs', s') ->
+      conv_eval X_type X Γ nctx d L pb x1 x2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
 
   Definition spec_cells (d : cbn_fuel) : Prop :=
     forall L Q lo G l1 l2 ts1 ts2 rs s b rs' s',
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_addrs G l1 ts1 -> g_addrs G l2 ts2 ->
-      conv_cells X_type X Γ nctx stress d L l1 l2 rs s = COk (b, rs', s') ->
+      conv_cells X_type X Γ nctx d L l1 l2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cqs L Q ts1 ts2).
 
   Definition spec_term (d : cbn_fuel) : Prop :=
@@ -2191,7 +2191,7 @@ Section ConvGhost.
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
       g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
-      conv_term X_type X Γ nctx stress d L pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      conv_term X_type X Γ nctx d L pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
 
   (** Two codes [code_eq] accepts: one term, or equal up to universes at [Conv]. *)
@@ -2203,7 +2203,7 @@ Section ConvGhost.
     forall L Q lo G e1 c1 e2 c2 ts1 ts2 rs s b rs' s',
       MI L Q lo G s -> Forall (rwf Q) rs -> gcok G c1 -> gcok G c2 ->
       g_slots nctx Q G e1.(ev_vals) ts1 -> g_slots nctx Q G e2.(ev_vals) ts2 ->
-      conv_same_code X_type X Γ nctx stress d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      conv_same_code X_type X Γ nctx d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\
       (b = true -> e1.(ev_goff) = e2.(ev_goff) /\ e1.(ev_nvals) = e2.(ev_nvals)
                    /\ samec c1.(c_term) c2.(c_term) /\ cagree L Q c1.(c_term) 0 ts1 ts2).
@@ -2213,7 +2213,7 @@ Section ConvGhost.
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
       g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
-      case_cong X_type X Γ nctx stress d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      case_cong X_type X Γ nctx d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
 
   (** The parameter codes [case_params] walks: child [case_param_step i] onwards. *)
@@ -2228,7 +2228,7 @@ Section ConvGhost.
       MI L Q lo G s -> Forall (rwf Q) rs ->
       pcodes G c1 i l1 -> pcodes G c2 i l2 ->
       Forall2 (g_susp nctx Q G e1) l1 us1 -> Forall2 (g_susp nctx Q G e2) l2 us2 ->
-      case_params X_type X Γ nctx stress d L e1 c1 e2 c2 i l1 l2 rs s = COk (b, rs', s') ->
+      case_params X_type X Γ nctx d L e1 c1 e2 c2 i l1 l2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cqs L Q us1 us2).
 
   (** A branch body read at [Q] through slots [ts], under its own [#|bcontext|] binders, and
@@ -2253,7 +2253,7 @@ Section ConvGhost.
       bcodes G c1 i l1 -> bcodes G c2 i l2 ->
       g_slots nctx Q G e1.(ev_vals) ts1 -> e1.(ev_nvals) = #|e1.(ev_vals)| ->
       g_slots nctx Q G e2.(ev_vals) ts2 -> e2.(ev_nvals) = #|e2.(ev_vals)| ->
-      case_branches X_type X Γ nctx stress d L e1 c1 e2 c2 i l1 l2 rs s = COk (b, rs', s') ->
+      case_branches X_type X Γ nctx d L e1 c1 e2 c2 i l1 l2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\
       (b = true -> Forall2 (fun br1 br2 =>
           case_ctx_ok br1.(bcontext) br2.(bcontext) = true
@@ -2264,7 +2264,7 @@ Section ConvGhost.
     forall L Q lo G pb v1 v2 w1 w2 rs s b rs' s',
       R v1 v2 -> MI L Q lo G s -> Forall (rwf Q) rs -> vwf Q v1 -> vwf Q v2 ->
       g_value nctx Q G v1 w1 -> g_value nctx Q G v2 w2 ->
-      conv_rows X_type X Γ nctx stress d L pb v1 v2 rs s = COk (b, rs', s') ->
+      conv_rows X_type X Γ nctx d L pb v1 v2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
 
   Definition spec_rows (d : cbn_fuel) : Prop := spec_rows_on d (fun _ _ => True).
@@ -2273,7 +2273,7 @@ Section ConvGhost.
     forall L Q lo G pb v1 v2 w1 w2 rs s b rs' s',
       MI L Q lo G s -> Forall (rwf Q) rs -> vwf Q v1 -> vwf Q v2 ->
       g_value nctx Q G v1 w1 -> g_value nctx Q G v2 w2 ->
-      conv_value X_type X Γ nctx stress d L pb v1 v2 rs s = COk (b, rs', s') ->
+      conv_value X_type X Γ nctx d L pb v1 v2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
 
   (** All eleven functions at one fuel: the induction hypothesis of the comparison. *)
@@ -2406,15 +2406,15 @@ Section ConvGhost.
   (** ** [conv_cells] *)
 
   Lemma conv_cells_eq k L l1 l2 rs s :
-    conv_cells X_type X Γ nctx stress (FS k) L l1 l2 rs s =
+    conv_cells X_type X Γ nctx (FS k) L l1 l2 rs s =
     match l1, l2 with
     | [], [] => COk (true, rs, s)
     | a1 :: l1, a2 :: l2 =>
-      match conv_slot X_type X Γ nctx stress (k tt) L Conv (SAddr a1) (SAddr a2)
+      match conv_slot X_type X Γ nctx (k tt) L Conv (SAddr a1) (SAddr a2)
               (RSp l1 :: RSp l2 :: rs) s with
       | COk (true, rs, s) =>
         match rs with
-        | RSp l1 :: RSp l2 :: rs => conv_cells X_type X Γ nctx stress (k tt) L l1 l2 rs s
+        | RSp l1 :: RSp l2 :: rs => conv_cells X_type X Γ nctx (k tt) L l1 l2 rs s
         | _ => CFail WRoots
         end
       | COk (false, rs, s) => COk (false, skipn 2 rs, s)
@@ -2439,7 +2439,7 @@ Section ConvGhost.
       split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros hb; discriminate hb.
     - inversion hl1 as [|y1 u1 m1 us1 hx1 hm1]; subst.
       inversion hl2 as [|y2 u2 m2 us2 hx2 hm2]; subst.
-      destruct (conv_slot X_type X Γ nctx stress (k tt) L Conv (SAddr a1) (SAddr a2)
+      destruct (conv_slot X_type X Γ nctx (k tt) L Conv (SAddr a1) (SAddr a2)
                   (RSp l1 :: RSp l2 :: rs) s) as [[[b2 rs2] s2]|w] eqn:Ecs;
         [|discriminate he].
       assert (hr' : Forall (rwf Q) (RSp l1 :: RSp l2 :: rs))
@@ -2466,15 +2466,15 @@ Section ConvGhost.
   (** ** [conv_eval] and [conv_term]: the machine, then the values *)
 
   Lemma conv_eval_eq k L le x1 x2 rs s :
-    conv_eval X_type X Γ nctx stress (FS k) L le x1 x2 rs s =
-    match eval_slot X_type X Γ nctx stress (k tt) x1 [] (RSl x2 :: rs) s with
+    conv_eval X_type X Γ nctx (FS k) L le x1 x2 rs s =
+    match eval_slot X_type X Γ nctx (k tt) x1 [] (RSl x2 :: rs) s with
     | COk (v1, rs, s) =>
       match rs with
       | RSl x2 :: rs =>
-        match eval_slot X_type X Γ nctx stress (k tt) x2 [] (RV v1 :: rs) s with
+        match eval_slot X_type X Γ nctx (k tt) x2 [] (RV v1 :: rs) s with
         | COk (v2, rs, s) =>
           match rs with
-          | RV v1 :: rs => conv_value X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+          | RV v1 :: rs => conv_value X_type X Γ nctx (k tt) L le v1 v2 rs s
           | _ => CFail WRoots
           end
         | CFail w => CFail w
@@ -2486,15 +2486,15 @@ Section ConvGhost.
   Proof. reflexivity. Qed.
 
   Lemma conv_term_eq k L le e1 c1 e2 c2 rs s :
-    conv_term X_type X Γ nctx stress (FS k) L le e1 c1 e2 c2 rs s =
-    match whnf X_type X Γ nctx stress (k tt) e1 c1 [] (RE e2 :: rs) s with
+    conv_term X_type X Γ nctx (FS k) L le e1 c1 e2 c2 rs s =
+    match whnf X_type X Γ nctx (k tt) e1 c1 [] (RE e2 :: rs) s with
     | COk (v1, rs, s) =>
       match rs with
       | RE e2 :: rs =>
-        match whnf X_type X Γ nctx stress (k tt) e2 c2 [] (RV v1 :: rs) s with
+        match whnf X_type X Γ nctx (k tt) e2 c2 [] (RV v1 :: rs) s with
         | COk (v2, rs, s) =>
           match rs with
-          | RV v1 :: rs => conv_value X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+          | RV v1 :: rs => conv_value X_type X Γ nctx (k tt) L le v1 v2 rs s
           | _ => CFail WRoots
           end
         | CFail w => CFail w
@@ -2510,17 +2510,17 @@ Section ConvGhost.
     intros hV L Q lo G pb x1 x2 t1 t2 rs s b rs' s' hm hr hx1 hx2 he.
     pose proof hm as [hL hLQ _ _].
     rewrite conv_eval_eq in he.
-    destruct (eval_slot X_type X Γ nctx stress (k tt) x1 [] (RSl x2 :: rs) s)
+    destruct (eval_slot X_type X Γ nctx (k tt) x1 [] (RSl x2 :: rs) s)
       as [[[v1 rs1] s1]|w] eqn:E1; [|discriminate he].
-    destruct (eval_slot_master_hwf X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
+    destruct (eval_slot_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
                 x1 [] [] t1 _ s v1 rs1 s1 hm (Forall_cons (RSl x2) I hr) hx1 ltac:(constructor) E1)
       as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & hw1 & hd1).
     destruct (gren_cons_inv _ _ _ _ _ _ hg1) as (q1 & rs1' & -> & hq1 & hg1').
     destruct (gpres_RSl_inv _ _ _ _ _ hq1) as (x2' & -> & hk1).
     cbv beta iota in he.
-    destruct (eval_slot X_type X Γ nctx stress (k tt) x2' [] (RV v1 :: rs1') s1)
+    destruct (eval_slot X_type X Γ nctx (k tt) x2' [] (RV v1 :: rs1') s1)
       as [[[v2 rs2] s2]|w] eqn:E2; [|discriminate he].
-    destruct (eval_slot_master_hwf X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
+    destruct (eval_slot_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
                 x2' [] [] t2 _ s1 v2 rs2 s2 hm1 (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1))
                 (hk1 _ hx2) ltac:(constructor) E2)
       as (lo2 & G2 & w2 & hm2 & hr2 & hv2 & hg2 & hw2 & hd2).
@@ -2529,9 +2529,9 @@ Section ConvGhost.
     cbv beta iota in he.
     destruct (hV L Q lo2 G2 pb v1' v2 w1 w2 rs2' s2 b rs' s' hm2 (Forall_inv_tail hr2)
                 (Forall_inv hr2) hv2 (hk2 _ hw1) hw2 he) as [hp hc].
-    pose proof (proj1 (proj2 (machine_skel X_type X Γ nctx stress (k tt))) _ _ _ _ _ _ _ E1)
+    pose proof (proj1 (proj2 (machine_skel X_type X Γ nctx (k tt))) _ _ _ _ _ _ _ E1)
       as hK1.
-    pose proof (proj1 (proj2 (machine_skel X_type X Γ nctx stress (k tt))) _ _ _ _ _ _ _ E2)
+    pose proof (proj1 (proj2 (machine_skel X_type X Γ nctx (k tt))) _ _ _ _ _ _ _ E2)
       as hK2.
     split.
     - apply (post_compose L Q Q G G2 rs rs2' s' rs' (le_n Q)); [|exact hp].
@@ -2545,17 +2545,17 @@ Section ConvGhost.
     intros hV L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s' hm hr hs1 hc1 hs2 hc2 he.
     pose proof hm as [hL hLQ _ _].
     rewrite conv_term_eq in he.
-    destruct (whnf X_type X Γ nctx stress (k tt) e1 c1 [] (RE e2 :: rs) s)
+    destruct (whnf X_type X Γ nctx (k tt) e1 c1 [] (RE e2 :: rs) s)
       as [[[v1 rs1] s1]|w] eqn:E1; [|discriminate he].
-    destruct (whnf_master_hwf X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
+    destruct (whnf_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
                 e1 c1 [] [] t1 _ s v1 rs1 s1 hm (Forall_cons (RE e2) I hr) hs1 hc1 ltac:(constructor) E1)
       as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & hw1 & hd1).
     destruct (gren_cons_inv _ _ _ _ _ _ hg1) as (q1 & rs1' & -> & hq1 & hg1').
     destruct (gpres_RE_inv _ _ _ _ _ hq1) as (e2' & -> & hk1).
     cbv beta iota in he.
-    destruct (whnf X_type X Γ nctx stress (k tt) e2' c2 [] (RV v1 :: rs1') s1)
+    destruct (whnf X_type X Γ nctx (k tt) e2' c2 [] (RV v1 :: rs1') s1)
       as [[[v2 rs2] s2]|w] eqn:E2; [|discriminate he].
-    destruct (whnf_master_hwf X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
+    destruct (whnf_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
                 e2' c2 [] [] t2 _ s1 v2 rs2 s2 hm1 (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1))
                 (genv_susp _ _ _ _ _ _ _ _ hk1 hs2) (cok_gcx _ _ (proj1 hg1) _ hc2)
                 ltac:(constructor) E2)
@@ -2565,9 +2565,9 @@ Section ConvGhost.
     cbv beta iota in he.
     destruct (hV L Q lo2 G2 pb v1' v2 w1 w2 rs2' s2 b rs' s' hm2 (Forall_inv_tail hr2)
                 (Forall_inv hr2) hv2 (hk2 _ hw1) hw2 he) as [hp hc].
-    pose proof (proj1 (proj2 (proj2 (machine_skel X_type X Γ nctx stress (k tt))))
+    pose proof (proj1 (proj2 (proj2 (machine_skel X_type X Γ nctx (k tt))))
                   _ _ _ _ _ _ _ _ E1) as hK1.
-    pose proof (proj1 (proj2 (proj2 (machine_skel X_type X Γ nctx stress (k tt))))
+    pose proof (proj1 (proj2 (proj2 (machine_skel X_type X Γ nctx (k tt))))
                   _ _ _ _ _ _ _ _ E2) as hK2.
     split.
     - apply (post_compose L Q Q G G2 rs rs2' s' rs' (le_n Q)); [|exact hp].
@@ -2579,27 +2579,27 @@ Section ConvGhost.
   (** ** The rows that compare heads and spines *)
 
   Lemma conv_rows_con_eq k L le h1 sp1 h2 sp2 rs s :
-    conv_rows X_type X Γ nctx stress (FS k) L le (VCon h1 sp1) (VCon h2 sp2) rs s =
+    conv_rows X_type X Γ nctx (FS k) L le (VCon h1 sp1) (VCon h2 sp2) rs s =
     if (#|sp1| == #|sp2|) && cmp_term X_type X le #|sp1| h1 h2
-    then conv_cells X_type X Γ nctx stress (k tt) L sp1 sp2 rs s else COk (false, rs, s).
+    then conv_cells X_type X Γ nctx (k tt) L sp1 sp2 rs s else COk (false, rs, s).
   Proof. reflexivity. Qed.
 
   Lemma conv_rows_var_eq k L le l1 sp1 l2 sp2 rs s :
-    conv_rows X_type X Γ nctx stress (FS k) L le (VNeu (NVar l1) sp1) (VNeu (NVar l2) sp2) rs s =
-    if l1 == l2 then conv_cells X_type X Γ nctx stress (k tt) L sp1 sp2 rs s
+    conv_rows X_type X Γ nctx (FS k) L le (VNeu (NVar l1) sp1) (VNeu (NVar l2) sp2) rs s =
+    if l1 == l2 then conv_cells X_type X Γ nctx (k tt) L sp1 sp2 rs s
     else COk (false, rs, s).
   Proof. reflexivity. Qed.
 
   Lemma conv_rows_const_eq k L le h1 sp1 h2 sp2 rs s :
-    conv_rows X_type X Γ nctx stress (FS k) L le (VNeu (NConst h1) sp1) (VNeu (NConst h2) sp2)
+    conv_rows X_type X Γ nctx (FS k) L le (VNeu (NConst h1) sp1) (VNeu (NConst h2) sp2)
       rs s =
     if cmp_term X_type X Conv #|sp1| h1 h2
-    then conv_cells X_type X Γ nctx stress (k tt) L sp1 sp2 rs s else COk (false, rs, s).
+    then conv_cells X_type X Γ nctx (k tt) L sp1 sp2 rs s else COk (false, rs, s).
   Proof. reflexivity. Qed.
 
   Lemma conv_rows_sort_eq k L le e1 c1 e2 c2 s1 s2 rs s :
     c1.(c_term) = tSort s1 -> c2.(c_term) = tSort s2 ->
-    conv_rows X_type X Γ nctx stress (FS k) L le (VOpen e1 c1) (VOpen e2 c2) rs s
+    conv_rows X_type X Γ nctx (FS k) L le (VOpen e1 c1) (VOpen e2 c2) rs s
     = COk (cmp_sort X_type X le s1 s2, rs, s).
   Proof.
     destruct c1 as [i1 p1 t1], c2 as [i2 p2 t2]. cbn. intros -> ->. reflexivity.
@@ -2738,7 +2738,7 @@ Section ConvGhost.
     [minv] ([alloc_sound], [alloc_hwf_holds]). *)
   Lemma alloc_fresh_g L Q lo G lvl rs s x rs' s' :
     MI L Q lo G s -> Forall (rwf Q) rs -> lvl < Q ->
-    alloc stress (CDone (VNeu (NVar lvl) [])) rs s = COk (x, rs', s') ->
+    alloc (CDone (VNeu (NVar lvl) [])) rs s = COk (x, rs', s') ->
     exists lo' G', MI L Q lo' G' s' /\ Forall (rwf Q) rs' /\ gren nctx Q G G' rs rs'
       /\ G' x = Some (tRel (Q - S lvl)).
   Proof.
@@ -2746,10 +2746,10 @@ Section ConvGhost.
     assert (hj : #|jctx (Q - nctx)| = Q - nctx) by apply jctx_length.
     assert (hc : g_cell nctx Q G (CDone (VNeu (NVar lvl) [])) (tRel (Q - S lvl))).
     { apply g_cell_done. apply (g_VNeuVar _ _ _ lvl [] []). constructor. }
-    destruct (alloc_sound X_type X Γ nctx stress Σ (jctx (Q - nctx)) Q hj hnctx ltac:(lia) lo G
+    destruct (alloc_sound X_type X Γ nctx Σ (jctx (Q - nctx)) Q hj hnctx ltac:(lia) lo G
                 _ _ rs s x rs' s' hok hc (fun _ => eq_refl) he)
       as (lo' & G' & hg & hok' & hx).
-    destruct (alloc_hwf_holds nctx stress Q (CDone (VNeu (NVar lvl) [])) rs s x rs' s'
+    destruct (alloc_hwf_holds nctx Q (CDone (VNeu (NVar lvl) [])) rs s x rs' s'
                 ltac:(lia) hw hlt hr he) as [hw' hr'].
     exists lo', G'. split; [constructor; assumption|]. split; [exact hr'|]. split; assumption.
   Qed.
@@ -2771,7 +2771,7 @@ Section ConvGhost.
       MI L Q lo G s -> Forall (rwf Q) rs -> lvl + n <= Q ->
       g_slots nctx Q G e1.(ev_vals) ts1 -> e1.(ev_nvals) = #|e1.(ev_vals)| ->
       g_slots nctx Q G e2.(ev_vals) ts2 -> e2.(ev_nvals) = #|e2.(ev_vals)| ->
-      push_fresh stress n lvl e1 e2 rs s = COk (r, rs', s') ->
+      push_fresh n lvl e1 e2 rs s = COk (r, rs', s') ->
       exists lo' G' f1 f2,
         r = (lvl + n, f1, f2) /\ MI L Q lo' G' s' /\ Forall (rwf Q) rs'
         /\ gren nctx Q G G' rs rs'
@@ -2787,7 +2787,7 @@ Section ConvGhost.
       split; [exact hm|]. split; [exact hr|]. split; [apply gren_refl|].
       cbn [idsn map app]. repeat split; assumption.
     - rewrite pfd_push_fresh_S in he.
-      destruct (alloc stress (CDone (VNeu (NVar lvl) [])) (RE e1 :: RE e2 :: rs) s)
+      destruct (alloc (CDone (VNeu (NVar lvl) [])) (RE e1 :: RE e2 :: rs) s)
         as [[[x rs1] s1]|w] eqn:Ea; [|discriminate he].
       destruct (alloc_fresh_g L Q lo G lvl _ s x rs1 s1 hm
                   (Forall_cons (RE e1) I (Forall_cons (RE e2) I hr)) ltac:(lia) Ea)
@@ -2872,7 +2872,7 @@ Section ConvGhost.
       inversion hu2 as [|y2 v2 m2 vs2 hv2 hvs2]; subst.
       inversion hp1 as [|i1 z1 n1 hc1 hp1']; subst.
       inversion hp2 as [|i2 z2 n2 hc2 hp2']; subst.
-      destruct (conv_term X_type X Γ nctx stress (k tt) L Conv
+      destruct (conv_term X_type X Γ nctx (k tt) L Conv
                   e1 (child c1 (case_param_step i) t1) e2 (child c2 (case_param_step i) t2)
                   (RE e1 :: RE e2 :: rs) s) as [[[b2 rs2] s2]|w] eqn:Ect; [|discriminate he].
       destruct (hT L Q lo G Conv e1 (child c1 (case_param_step i) t1)
@@ -3120,7 +3120,7 @@ Section ConvGhost.
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
       g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
-      conv_same_code X_type X Γ nctx stress d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      conv_same_code X_type X Γ nctx d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
       post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
   Proof.
     intros hS L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s' hm hr hs1 hc1 hs2 hc2 he.
@@ -3152,24 +3152,24 @@ Section ConvGhost.
   (** ** [conv_slot] *)
 
   Lemma conv_slot_eq k L le x1 x2 rs s :
-    conv_slot X_type X Γ nctx stress (FS k) L le x1 x2 rs s =
+    conv_slot X_type X Γ nctx (FS k) L le x1 x2 rs s =
     match x1, x2 with
     | SAddr a1, SAddr a2 =>
       if haddr_eqb a1 a2 then COk (true, rs, s)
-      else conv_eval X_type X Γ nctx stress (k tt) L le x1 x2 rs s
+      else conv_eval X_type X Γ nctx (k tt) L le x1 x2 rs s
     | SInl vs1 n1 o1 c1, SInl vs2 n2 o2 c2 =>
-      match conv_same_code X_type X Γ nctx stress (k tt) L (mkEnv vs1 n1 o1) c1
+      match conv_same_code X_type X Γ nctx (k tt) L (mkEnv vs1 n1 o1) c1
               (mkEnv vs2 n2 o2) c2 (RSl x1 :: RSl x2 :: rs) s with
       | COk (b, rs, s) =>
         match rs with
         | RSl x1 :: RSl x2 :: rs =>
           if b then COk (true, rs, s)
-          else conv_eval X_type X Γ nctx stress (k tt) L le x1 x2 rs s
+          else conv_eval X_type X Γ nctx (k tt) L le x1 x2 rs s
         | _ => CFail WRoots
         end
       | CFail w => CFail w
       end
-    | _, _ => conv_eval X_type X Γ nctx stress (k tt) L le x1 x2 rs s
+    | _, _ => conv_eval X_type X Γ nctx (k tt) L le x1 x2 rs s
     end.
   Proof. reflexivity. Qed.
 
@@ -3194,7 +3194,7 @@ Section ConvGhost.
       assert (hs2 : g_susp nctx Q G (mkEnv vs2 n2 o2) c2.(c_term) t2)
         by (eapply g_slot_inl_inv; exact hx2).
       assert (hc2 : gcok G c2) by (eapply g_slot_inl_cok; exact hx2).
-      destruct (conv_same_code X_type X Γ nctx stress (k tt) L (mkEnv vs1 n1 o1) c1
+      destruct (conv_same_code X_type X Γ nctx (k tt) L (mkEnv vs1 n1 o1) c1
                   (mkEnv vs2 n2 o2) c2 (RSl (SInl vs1 n1 o1 c1) :: RSl (SInl vs2 n2 o2 c2) :: rs) s)
         as [[[b0 rs0] s0]|w] eqn:Ecs; [|discriminate he].
       destruct (conv_same_code_sound_ghost (k tt) hS L Q lo G pb _ c1 _ c2 t1 t2 _ s b0 rs0 s0
@@ -3245,11 +3245,11 @@ Section ConvGhost.
     the bodies at [S L]. *)
   Definition binder_tail (d : cbn_fuel) (L : nat) (pb : conv_pb) (e1 e2 : cbn_env)
       (cb1 cb2 : code) (rs : list root) (s : cbn_state) :=
-    match alloc stress (CDone (VNeu (NVar L) [])) (RE e1 :: RE e2 :: rs) s with
+    match alloc (CDone (VNeu (NVar L) [])) (RE e1 :: RE e2 :: rs) s with
     | COk (x, rs, s) =>
       match rs with
       | RE e1 :: RE e2 :: rs =>
-        conv_term X_type X Γ nctx stress d (S L) pb (env_push (SAddr x) e1) cb1
+        conv_term X_type X Γ nctx d (S L) pb (env_push (SAddr x) e1) cb1
           (env_push (SAddr x) e2) cb2 rs s
       | _ => CFail WRoots
       end
@@ -3276,7 +3276,7 @@ Section ConvGhost.
     pose proof (proj2 (g_slot_shift nctx Q 1 ltac:(lia) G) _ _ hs1) as [hs1R _].
     pose proof (proj2 (g_slot_shift nctx Q 1 ltac:(lia) G) _ _ hs2) as [hs2R _].
     unfold binder_tail in he.
-    destruct (alloc stress (CDone (VNeu (NVar L) [])) (RE e1 :: RE e2 :: rs) s)
+    destruct (alloc (CDone (VNeu (NVar L) [])) (RE e1 :: RE e2 :: rs) s)
       as [[[x rs1] s1]|w] eqn:Ea; [|discriminate he].
     destruct (alloc_fresh_g L (Q + 1) lo (gshift 1 G) L _ s x rs1 s1 hmR
                 (Forall_cons (RE e1) I (Forall_cons (RE e2) I hrR)) ltac:(lia) Ea)
@@ -3312,7 +3312,7 @@ Section ConvGhost.
     - apply (post_compose L Q (Q + 1) G (gshift 1 G) rs rs s' rs' ltac:(lia) hgR).
       apply (post_compose L (Q + 1) (Q + 1) (gshift 1 G) G1 rs rsB s' rs' (le_n _)
                (grq_of_gren _ _ _ _ _ hgB
-                  (sk_tl _ _ _ _ (sk_tl _ _ _ _ (alloc_skel _ _ _ _ _ _ _ Ea))))).
+                  (sk_tl _ _ _ _ (sk_tl _ _ _ _ (alloc_skel _ _ _ _ _ _ Ea))))).
       exact (post_level L (S L) (Q + 1) G1 rsB s' rs' hL ltac:(lia) hp).
     - intros hbt U1 U2 eU1 eU2 sU1 sU2.
       rewrite Nat.add_1_r in sU1, sU2 |- *.
@@ -3350,7 +3350,7 @@ Section ConvGhost.
     g_slots nctx Q G e2.(ev_vals) ts2 -> e2.(ev_nvals) = #|e2.(ev_vals)| ->
     gcok G (child c1 0 A1) -> gcok G (child c2 0 A2) ->
     gcok G (child c1 1 b1) -> gcok G (child c2 1 b2) ->
-    match conv_term X_type X Γ nctx stress (k tt) L Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
+    match conv_term X_type X Γ nctx (k tt) L Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
             (RE e1 :: RE e2 :: rs) s with
     | COk (true, rs, s) =>
       match rs with
@@ -3369,7 +3369,7 @@ Section ConvGhost.
   Proof.
     intros hm hr hs1 hn1 hs2 hn2 hcA1 hcA2 hcB1 hcB2 he.
     pose proof hm as [hL hLQ _ _].
-    destruct (conv_term X_type X Γ nctx stress (k tt) L Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
+    destruct (conv_term X_type X Γ nctx (k tt) L Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
                 (RE e1 :: RE e2 :: rs) s) as [[[bA rsA] sA]|w] eqn:EA; [|discriminate he].
     destruct (hT L Q lo G Conv e1 (child c1 0 A1) e2 (child c2 0 A2) _ _ _ s bA rsA sA hm
                 (Forall_cons (RE e1) I (Forall_cons (RE e2) I hr))
@@ -3407,9 +3407,9 @@ Section ConvGhost.
 
   Lemma conv_rows_lam_eq k L le e1 c1 e2 c2 na1 A1 b1 na2 A2 b2 rs s :
     c1.(c_term) = tLambda na1 A1 b1 -> c2.(c_term) = tLambda na2 A2 b2 ->
-    conv_rows X_type X Γ nctx stress (FS k) L le (VLam e1 c1) (VLam e2 c2) rs s =
+    conv_rows X_type X Γ nctx (FS k) L le (VLam e1 c1) (VLam e2 c2) rs s =
     if eqb_binder_annot na1 na2 then
-      match conv_term X_type X Γ nctx stress (k tt) L Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
+      match conv_term X_type X Γ nctx (k tt) L Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
               (RE e1 :: RE e2 :: rs) s with
       | COk (true, rs, s) =>
         match rs with
@@ -3425,9 +3425,9 @@ Section ConvGhost.
 
   Lemma conv_rows_prod_eq k L le e1 c1 e2 c2 na1 A1 b1 na2 A2 b2 rs s :
     c1.(c_term) = tProd na1 A1 b1 -> c2.(c_term) = tProd na2 A2 b2 ->
-    conv_rows X_type X Γ nctx stress (FS k) L le (VOpen e1 c1) (VOpen e2 c2) rs s =
+    conv_rows X_type X Γ nctx (FS k) L le (VOpen e1 c1) (VOpen e2 c2) rs s =
     if eqb_binder_annot na1 na2 then
-      match conv_term X_type X Γ nctx stress (k tt) L Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
+      match conv_term X_type X Γ nctx (k tt) L Conv e1 (child c1 0 A1) e2 (child c2 0 A2)
               (RE e1 :: RE e2 :: rs) s with
       | COk (true, rs, s) =>
         match rs with
@@ -3605,21 +3605,21 @@ Section ConvGhost.
   Definition cv_same (d : cbn_fuel) (L : nat) (le : conv_pb) (v1 v2 : cbn_value)
       (e1 : cbn_env) (c1 : code) (e2 : cbn_env) (c2 : code) (spines : bool)
       (rs : list root) (s : cbn_state) :=
-    match conv_same_code X_type X Γ nctx stress d L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s with
+    match conv_same_code X_type X Γ nctx d L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s with
     | COk (b, rs, s) =>
       match rs with
       | RV v1 :: RV v2 :: rs =>
         if b then
-          if spines then conv_cells X_type X Γ nctx stress d L (spine_of v1) (spine_of v2) rs s
+          if spines then conv_cells X_type X Γ nctx d L (spine_of v1) (spine_of v2) rs s
           else COk (true, rs, s)
-        else conv_rows X_type X Γ nctx stress d L le v1 v2 rs s
+        else conv_rows X_type X Γ nctx d L le v1 v2 rs s
       | _ => CFail WRoots
       end
     | CFail w => CFail w
     end.
 
   Lemma conv_value_eq k L le v1 v2 rs s :
-    conv_value X_type X Γ nctx stress (FS k) L le v1 v2 rs s =
+    conv_value X_type X Γ nctx (FS k) L le v1 v2 rs s =
     match tick s with
     | None => CFail WSteps
     | Some s =>
@@ -3628,12 +3628,12 @@ Section ConvGhost.
         cv_same (k tt) L le v1 v2 e1 c1 e2 c2 false rs s
       | VStuck e1 c1 sp1, VStuck e2 c2 sp2 =>
         if #|sp1| == #|sp2| then cv_same (k tt) L le v1 v2 e1 c1 e2 c2 true rs s
-        else conv_rows X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+        else conv_rows X_type X Γ nctx (k tt) L le v1 v2 rs s
       | VFix e1 c1 i1 sp1, VFix e2 c2 i2 sp2
       | VStuckFix e1 c1 i1 sp1, VStuckFix e2 c2 i2 sp2 =>
         if (i1 == i2) && (#|sp1| == #|sp2|) then cv_same (k tt) L le v1 v2 e1 c1 e2 c2 true rs s
-        else conv_rows X_type X Γ nctx stress (k tt) L le v1 v2 rs s
-      | _, _ => conv_rows X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+        else conv_rows X_type X Γ nctx (k tt) L le v1 v2 rs s
+      | _, _ => conv_rows X_type X Γ nctx (k tt) L le v1 v2 rs s
       end
     end.
   Proof. cbn. destruct (tick s); [|reflexivity]. destruct v1, v2; reflexivity. Qed.
@@ -3653,7 +3653,7 @@ Section ConvGhost.
       hs1 hc1 hs2 hc2 he.
     pose proof hm as [hL hLQ _ _].
     unfold cv_same in he.
-    destruct (conv_same_code X_type X Γ nctx stress (k tt) L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s)
+    destruct (conv_same_code X_type X Γ nctx (k tt) L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s)
       as [[[b0 rs0] s0]|w] eqn:E; [|discriminate he].
     destruct (conv_same_code_sound_ghost (k tt) hS L Q lo G pb e1 c1 e2 c2 w1 w2 _ s b0 rs0 s0
                 hm (Forall_cons (RV v1) hv1 (Forall_cons (RV v2) hv2 hr)) hs1 hc1 hs2 hc2 E)
@@ -3694,7 +3694,7 @@ Section ConvGhost.
       hm hr hv1 hv2 hw1 hw2 hT1 hT2 hc1 hc2 hts1 hts2 hhead he.
     pose proof hm as [hL hLQ _ _].
     unfold cv_same in he.
-    destruct (conv_same_code X_type X Γ nctx stress (k tt) L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s)
+    destruct (conv_same_code X_type X Γ nctx (k tt) L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s)
       as [[[b0 rs0] s0]|w] eqn:E; [|discriminate he].
     destruct (hS L Q lo G e1 c1 e2 c2 ts1 ts2 _ s b0 rs0 s0 hm
                 (Forall_cons (RV v1) hv1 (Forall_cons (RV v2) hv2 hr)) hc1 hc2 hts1 hts2 E)
@@ -3731,7 +3731,7 @@ Section ConvGhost.
     destruct (tick s) as [s0|] eqn:Et; [|discriminate he].
     pose proof (minv_tick _ _ _ _ _ _ Et hm) as hm0.
     pose proof (gok_codes_hyg X_type X Γ nctx Σ _ Q lo G s hok hhyg) as hch.
-    assert (hrows : conv_rows X_type X Γ nctx stress (k tt) L pb v1 v2 rs s0 = COk (b, rs', s') ->
+    assert (hrows : conv_rows X_type X Γ nctx (k tt) L pb v1 v2 rs s0 = COk (b, rs', s') ->
               post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2))
       by (intros h; exact (hR L Q lo G pb v1 v2 w1 w2 rs s0 b rs' s' I hm0 hr hv1 hv2 hw1 hw2 h)).
     destruct v1 as [h1 sp1|e1 c1|e1 c1 i1 sp1|e1 c1 i1 sp1|n1 sp1|e1 c1|e1 c1 sp1];
@@ -3865,16 +3865,16 @@ Section ConvGhost.
       pose proof (grq_raise Q #|bcontext br1| G _ ltac:(lia) hr0) as hgR.
       pose proof (proj2 (g_slot_shift nctx Q #|bcontext br1| ltac:(lia) G) _ _ hs1) as [hs1R _].
       pose proof (proj2 (g_slot_shift nctx Q #|bcontext br1| ltac:(lia) G) _ _ hs2) as [hs2R _].
-      destruct (push_fresh stress #|bcontext br1| L e1 e2 (RE e1 :: RE e2 :: rs) s)
+      destruct (push_fresh #|bcontext br1| L e1 e2 (RE e1 :: RE e2 :: rs) s)
         as [[[r rsP] sP]|w] eqn:EP; [|discriminate he].
       destruct (push_fresh_g #|bcontext br1| L (Q + #|bcontext br1|) lo (gshift #|bcontext br1| G)
                   L e1 e2 _ _ _ s r rsP sP hmR hrR ltac:(lia) hs1R hn1 hs2R hn2 EP)
         as (loP & GP & f1 & f2 & -> & hmP & hrP & hgP & hnf1 & hgf1 & hnf2 & hgf2 & hf1 & hf2).
-      pose proof (push_fresh_skel stress _ _ _ _ _ _ _ _ _ EP) as hkP.
+      pose proof (push_fresh_skel _ _ _ _ _ _ _ _ _ EP) as hkP.
       cbv beta iota in he.
       pose proof (g_susp_of_slots nctx _ GP f1 (bbody br1) _ hf1 hnf1) as hB1.
       pose proof (g_susp_of_slots nctx _ GP f2 (bbody br2) _ hf2 hnf2) as hB2.
-      destruct (conv_term X_type X Γ nctx stress (k tt) (L + #|bcontext br1|) Conv
+      destruct (conv_term X_type X Γ nctx (k tt) (L + #|bcontext br1|) Conv
                   f1 (child c1 (case_branch_step i) (bbody br1))
                   f2 (child c2 (case_branch_step i) (bbody br2)) rsP sP)
         as [[[bC rsC] sC]|w] eqn:EC; [|discriminate he].
@@ -4095,7 +4095,7 @@ Section ConvGhost.
     | COk (t1, s) =>
       match rb_susp nctx d L e2 a2 s with
       | COk (t2, s) =>
-        if cmp_term X_type X Conv n t1 t2 then conv_cells X_type X Γ nctx stress d L sp1 sp2 rs s
+        if cmp_term X_type X Conv n t1 t2 then conv_cells X_type X Γ nctx d L sp1 sp2 rs s
         else COk (false, rs, s)
       | CFail w => CFail w
       end
@@ -4142,7 +4142,7 @@ Section ConvGhost.
 
   Lemma conv_rows_prim_eq k L le e1 c1 e2 c2 p1 p2 rs s :
     c1.(c_term) = tPrim p1 -> c2.(c_term) = tPrim p2 ->
-    conv_rows X_type X Γ nctx stress (FS k) L le (VOpen e1 c1) (VOpen e2 c2) rs s =
+    conv_rows X_type X Γ nctx (FS k) L le (VOpen e1 c1) (VOpen e2 c2) rs s =
     match rb_susp nctx (k tt) L e1 (tPrim p1) s with
     | COk (t1, s) =>
       match rb_susp nctx (k tt) L e2 (tPrim p2) s with
@@ -4186,7 +4186,7 @@ Section ConvGhost.
   (** *** The fixpoint rows *)
 
   Lemma conv_rows_fix_eq k L le e1 c1 i1 sp1 e2 c2 i2 sp2 rs s :
-    conv_rows X_type X Γ nctx stress (FS k) L le (VFix e1 c1 i1 sp1) (VFix e2 c2 i2 sp2) rs s =
+    conv_rows X_type X Γ nctx (FS k) L le (VFix e1 c1 i1 sp1) (VFix e2 c2 i2 sp2) rs s =
     if (i1 == i2) && (#|sp1| == #|sp2|) then
       match c1.(c_term), c2.(c_term) with
       | tFix m1 _, tFix m2 _ => head_rb (k tt) L e1 (tFix m1 i1) e2 (tFix m2 i2) #|sp1| sp1 sp2 rs s
@@ -4196,7 +4196,7 @@ Section ConvGhost.
   Proof. reflexivity. Qed.
 
   Lemma conv_rows_sfix_eq k L le e1 c1 i1 sp1 e2 c2 i2 sp2 rs s :
-    conv_rows X_type X Γ nctx stress (FS k) L le (VStuckFix e1 c1 i1 sp1)
+    conv_rows X_type X Γ nctx (FS k) L le (VStuckFix e1 c1 i1 sp1)
       (VStuckFix e2 c2 i2 sp2) rs s =
     if (i1 == i2) && (#|sp1| == #|sp2|) then
       match c1.(c_term), c2.(c_term) with
@@ -4239,18 +4239,18 @@ Section ConvGhost.
   (** *** The stuck-term row: the case congruence, then the read-back of the heads *)
 
   Lemma conv_rows_stuck_eq k L le e1 c1 sp1 e2 c2 sp2 rs s :
-    conv_rows X_type X Γ nctx stress (FS k) L le (VStuck e1 c1 sp1) (VStuck e2 c2 sp2) rs s =
+    conv_rows X_type X Γ nctx (FS k) L le (VStuck e1 c1 sp1) (VStuck e2 c2 sp2) rs s =
     if #|sp1| == #|sp2| then
       match match c1.(c_term), c2.(c_term) with
             | tCase _ _ _ _, tCase _ _ _ _ =>
-              case_cong X_type X Γ nctx stress (k tt) L e1 c1 e2 c2
+              case_cong X_type X Γ nctx (k tt) L e1 c1 e2 c2
                 (RV (VStuck e1 c1 sp1) :: RV (VStuck e2 c2 sp2) :: rs) s
             | _, _ => COk (false, RV (VStuck e1 c1 sp1) :: RV (VStuck e2 c2 sp2) :: rs, s)
             end with
       | COk (b, rs, s) =>
         match rs with
         | RV (VStuck e1 c1 sp1) :: RV (VStuck e2 c2 sp2) :: rs =>
-          if b then conv_cells X_type X Γ nctx stress (k tt) L sp1 sp2 rs s
+          if b then conv_cells X_type X Γ nctx (k tt) L sp1 sp2 rs s
           else head_rb (k tt) L e1 c1.(c_term) e2 c2.(c_term) #|sp1| sp1 sp2 rs s
         | _ => CFail WRoots
         end
@@ -4280,7 +4280,7 @@ Section ConvGhost.
       by (constructor; [exact hv1|constructor; [exact hv2|exact hr]]).
     destruct (match c1.(c_term), c2.(c_term) with
               | tCase _ _ _ _, tCase _ _ _ _ =>
-                case_cong X_type X Γ nctx stress (k tt) L e1 c1 e2 c2
+                case_cong X_type X Γ nctx (k tt) L e1 c1 e2 c2
                   (RV (VStuck e1 c1 sp1) :: RV (VStuck e2 c2 sp2) :: rs) s
               | _, _ => COk (false, RV (VStuck e1 c1 sp1) :: RV (VStuck e2 c2 sp2) :: rs, s)
               end) as [[[bK rsK] sK]|w] eqn:EK; [|discriminate he].
@@ -4336,8 +4336,8 @@ Section ConvGhost.
 
   Local Ltac rows_false hm hr he :=
     match type of he with
-    | conv_rows ?a1 ?a2 ?a3 ?a4 ?a5 ?a6 ?a7 ?a8 ?a9 ?a10 ?a11 ?a12 = _ =>
-      change (conv_rows a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12) with (COk (false, a11, a12)) in he
+    | conv_rows ?a1 ?a2 ?a3 ?a4 ?a5 ?a6 ?a7 ?a8 ?a9 ?a10 ?a11 = _ =>
+      change (conv_rows a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11) with (COk (false, a10, a11)) in he
     end;
     injection he as <- <- <-;
     split; [exact (post_refl _ _ _ _ _ _ hm hr)|intros hb; discriminate hb].
@@ -4580,10 +4580,10 @@ Section ConvGhost.
   (** [push_fresh n] fresh variables on both environments, then the two codes at [L + n]. *)
   Definition fresh_tail (d : cbn_fuel) (n L : nat) (e1 e2 : cbn_env) (cb1 cb2 : code)
       (rs : list root) (s : cbn_state) :=
-    match push_fresh stress n L e1 e2 (RE e1 :: RE e2 :: rs) s with
+    match push_fresh n L e1 e2 (RE e1 :: RE e2 :: rs) s with
     | COk (r, rs, s) =>
       let '(lvlr, er1, er2) := r in
-      conv_term X_type X Γ nctx stress d lvlr Conv er1 cb1 er2 cb2 rs s
+      conv_term X_type X Γ nctx d lvlr Conv er1 cb1 er2 cb2 rs s
     | CFail w => CFail w
     end.
 
@@ -4609,12 +4609,12 @@ Section ConvGhost.
     pose proof (proj2 (g_slot_shift nctx Q n ltac:(lia) G) _ _ hs1) as [hs1R _].
     pose proof (proj2 (g_slot_shift nctx Q n ltac:(lia) G) _ _ hs2) as [hs2R _].
     unfold fresh_tail in he.
-    destruct (push_fresh stress n L e1 e2 (RE e1 :: RE e2 :: rs) s)
+    destruct (push_fresh n L e1 e2 (RE e1 :: RE e2 :: rs) s)
       as [[[r rsP] sP]|w] eqn:EP; [|discriminate he].
     destruct (push_fresh_g n L (Q + n) lo (gshift n G) L e1 e2 _ _ _ s r rsP sP hmR hrR
                 ltac:(lia) hs1R hn1 hs2R hn2 EP)
       as (loP & GP & f1 & f2 & -> & hmP & hrP & hgP & hnf1 & hgf1 & hnf2 & hgf2 & hf1 & hf2).
-    pose proof (push_fresh_skel stress _ _ _ _ _ _ _ _ _ EP) as hkP.
+    pose proof (push_fresh_skel _ _ _ _ _ _ _ _ _ EP) as hkP.
     cbv beta iota in he.
     pose proof (g_susp_of_slots nctx _ GP f1 cb1.(c_term) _ hf1 hnf1) as hB1.
     pose proof (g_susp_of_slots nctx _ GP f2 cb2.(c_term) _ hf2 hnf2) as hB2.
@@ -4681,7 +4681,7 @@ Section ConvGhost.
     (* the parameters *)
     assert (hr0 : Forall (rwf Q) (RE e1 :: RE e2 :: rs))
       by (constructor; [exact I|constructor; [exact I|exact hr]]).
-    destruct (case_params X_type X Γ nctx stress (k tt) L e1 c1 e2 c2 0%N
+    destruct (case_params X_type X Γ nctx (k tt) L e1 c1 e2 c2 0%N
                 (pparams p1) (pparams p2) (RE e1 :: RE e2 :: rs) s)
       as [[[bA rsA] sA]|w] eqn:EA; [|discriminate he].
     destruct (hP L Q lo G e1 c1 e2 c2 0%N (pparams p1) (pparams p2) _ _ _ s bA rsA sA hm hr0
@@ -4702,10 +4702,10 @@ Section ConvGhost.
     pose proof (g_slots_length _ _ _ _ _ hfs1) as hlf1. rewrite length_map in hlf1.
     pose proof (g_slots_length _ _ _ _ _ hfs2) as hlf2. rewrite length_map in hlf2.
     (* the return clauses *)
-    destruct (push_fresh stress #|pcontext p1| L f1 f2 (RE f1 :: RE f2 :: rsB) sA)
+    destruct (push_fresh #|pcontext p1| L f1 f2 (RE f1 :: RE f2 :: rsB) sA)
       as [[[[[lvlr er1] er2] rsP] sP]|w] eqn:EP; [|discriminate he].
     cbv beta iota in he.
-    destruct (conv_term X_type X Γ nctx stress (k tt) lvlr Conv er1 (child c1 1 (preturn p1))
+    destruct (conv_term X_type X Γ nctx (k tt) lvlr Conv er1 (child c1 1 (preturn p1))
                 er2 (child c2 1 (preturn p2)) rsP sP) as [[[bC rsC] sC]|w] eqn:EC;
       [|discriminate he].
     assert (EF : fresh_tail (k tt) #|pcontext p1| L f1 f2 (child c1 1 (preturn p1))
@@ -4735,7 +4735,7 @@ Section ConvGhost.
     pose proof (g_slots_length _ _ _ _ _ hgs2) as hlg2. rewrite length_map in hlg2.
     assert (hgcx : gcx G GB) by (intros i x h; exact (proj1 hgBB _ _ (proj1 hgA _ _ h))).
     (* the scrutinees *)
-    destruct (conv_term X_type X Γ nctx stress (k tt) L Conv g1 (child c1 0 sc1)
+    destruct (conv_term X_type X Γ nctx (k tt) L Conv g1 (child c1 0 sc1)
                 g2 (child c2 0 sc2) (RE g1 :: RE g2 :: rsC') sC)
       as [[[bD rsD] sD]|w] eqn:ED; [|discriminate he].
     assert (hng1' : ev_nvals g1 = #|ev_vals g1|) by lia.
@@ -4828,13 +4828,13 @@ End ConvGhost.
   ones), and [hrb], the read-back interface [rb_sound] that
   [PCUICCallByNeedSoundReadBack.rb_sound_holds] proves from [wf Σ], [hΓ] and [hhyg]. *)
 Theorem spec_all_holds {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
-    (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext)
+    (Γ : context) (nctx : nat) (Σ : global_env_ext)
     (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ)
     (hnctx : nctx = #|Γ|) (hΓ : is_closed_context Γ) (hhyg : ctx_hyg Γ)
     (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
               PCUICCallByNeedSoundHook.consts_okb Σ b)
     (hrb : rb_sound X_type X Γ nctx Σ) :
-  forall d, spec_all X_type X Γ nctx stress Σ d.
+  forall d, spec_all X_type X Γ nctx Σ d.
 Proof. intros d. eapply spec_all_ind; eassumption. Qed.
 
 (** * Non-vacuity witnesses for the statements of [ConvGhost]
@@ -4908,20 +4908,20 @@ Section Witness.
     machine calls. *)
   Lemma r_split (Γ : context) (nctx : nat) (t u : term) (v1 v2 : cbn_value)
       (s1 s2 s3 : cbn_state) (b : bool) :
-    at_depth (fun d => whnf X_type X Γ nctx false d env_empty (run_c1 X_type X t) []
+    at_depth (fun d => whnf X_type X Γ nctx d env_empty (run_c1 X_type X t) []
                          [RE env_empty] (run_s2 X_type X t u)) (CFail WDepth)
       = COk (v1, [RE env_empty], s1) ->
-    at_depth (fun d => whnf X_type X Γ nctx false d env_empty (run_c2 X_type X t u) []
+    at_depth (fun d => whnf X_type X Γ nctx d env_empty (run_c2 X_type X t u) []
                          [RV v1] s1) (CFail WDepth)
       = COk (v2, [RV v1], s2) ->
-    at_depth (fun d => conv_value X_type X Γ nctx false d nctx Conv v1 v2 [] s2) (CFail WDepth)
+    at_depth (fun d => conv_value X_type X Γ nctx d nctx Conv v1 v2 [] s2) (CFail WDepth)
       = COk (b, [], s3) ->
-    conv_term X_type X Γ nctx false cbn_depth nctx Conv env_empty (run_c1 X_type X t)
+    conv_term X_type X Γ nctx cbn_depth nctx Conv env_empty (run_c1 X_type X t)
       env_empty (run_c2 X_type X t u) [] (run_s2 X_type X t u) = COk (b, [], s3)
     /\ exists d,
-         whnf X_type X Γ nctx false d env_empty (run_c1 X_type X t) [] [RE env_empty]
+         whnf X_type X Γ nctx d env_empty (run_c1 X_type X t) [] [RE env_empty]
            (run_s2 X_type X t u) = COk (v1, [RE env_empty], s1)
-         /\ whnf X_type X Γ nctx false d env_empty (run_c2 X_type X t u) [] [RV v1] s1
+         /\ whnf X_type X Γ nctx d env_empty (run_c2 X_type X t u) [] [RV v1] s1
               = COk (v2, [RV v1], s2).
   Proof.
     unfold at_depth. destruct cbn_depth as [|k]; intros E1 E2 E3; [discriminate E1|].
@@ -4937,15 +4937,15 @@ Section Witness.
                 PCUICCallByNeedSoundHook.consts_okb Σ b)
       (d : cbn_fuel) (v1 v2 : cbn_value) (s1 s2 s3 : cbn_state) :
     minv X_type X Γ nctx Σ nctx nctx xH (run_ghost X_type X t u) (run_s2 X_type X t u) ->
-    whnf X_type X Γ nctx false d env_empty (run_c1 X_type X t) [] [RE env_empty]
+    whnf X_type X Γ nctx d env_empty (run_c1 X_type X t) [] [RE env_empty]
       (run_s2 X_type X t u) = COk (v1, [RE env_empty], s1) ->
-    whnf X_type X Γ nctx false d env_empty (run_c2 X_type X t u) [] [RV v1] s1
+    whnf X_type X Γ nctx d env_empty (run_c2 X_type X t u) [] [RV v1] s1
       = COk (v2, [RV v1], s2) ->
     tick s2 = Some s3 ->
     post X_type X Γ nctx Σ nctx nctx (run_ghost X_type X t u) [] s3 [].
   Proof.
     intros hm0 E1 E2 E3.
-    destruct (whnf_master_hwf X_type X Γ nctx false Σ wfΣ hΣ hnctx hcio d nctx nctx xH
+    destruct (whnf_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio d nctx nctx xH
                 (run_ghost X_type X t u) env_empty (run_c1 X_type X t) [] [] t [RE env_empty]
                 (run_s2 X_type X t u) v1 [RE env_empty] s1 hm0
                 (Forall_cons (RE env_empty) I (Forall_nil _)) (run_c1_g_susp X_type X nctx t u)
@@ -4953,7 +4953,7 @@ Section Witness.
       as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & _ & _).
     assert (hs2 : g_susp nctx nctx G1 env_empty (run_c2 X_type X t u).(c_term) u).
     { rewrite run_c2_term. apply g_susp_env_empty. }
-    destruct (whnf_master_hwf X_type X Γ nctx false Σ wfΣ hΣ hnctx hcio d nctx nctx lo1 G1
+    destruct (whnf_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio d nctx nctx lo1 G1
                 env_empty (run_c2 X_type X t u) [] [] u [RV v1] s1 v2 [RV v1] s2 hm1
                 (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1)) hs2
                 (cok_gcx _ _ (proj1 hg1) _ (run_c2_gcok X_type X t u))
@@ -4982,30 +4982,30 @@ Section Witness.
   Qed.
 
   Definition w_R1 :=
-    at_depth (fun d => whnf X_type X w_Γ 1 false d env_empty (run_c1 X_type X w_t) []
+    at_depth (fun d => whnf X_type X w_Γ 1 d env_empty (run_c1 X_type X w_t) []
                          [RE env_empty] (run_s2 X_type X w_t w_u)) (CFail WDepth).
   Definition w_s1 : cbn_state := match w_R1 with COk (_, _, s) => s | CFail _ => cbn_init end.
   Definition w_R2 :=
-    at_depth (fun d => whnf X_type X w_Γ 1 false d env_empty (run_c2 X_type X w_t w_u) []
+    at_depth (fun d => whnf X_type X w_Γ 1 d env_empty (run_c2 X_type X w_t w_u) []
                          [RV (VCon w_O [])] w_s1) (CFail WDepth).
   Definition w_v2 : cbn_value := match w_R2 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
   Definition w_s2 : cbn_state := match w_R2 with COk (_, _, s) => s | CFail _ => cbn_init end.
   Definition w_s3 : cbn_state := match tick w_s2 with Some s => s | None => cbn_init end.
 
   Lemma w_E1 :
-    at_depth (fun d => whnf X_type X w_Γ 1 false d env_empty (run_c1 X_type X w_t) []
+    at_depth (fun d => whnf X_type X w_Γ 1 d env_empty (run_c1 X_type X w_t) []
                          [RE env_empty] (run_s2 X_type X w_t w_u)) (CFail WDepth)
     = COk (VCon w_O [], [RE env_empty], w_s1).
   Proof. vm_compute. reflexivity. Qed.
 
   Lemma w_E2 :
-    at_depth (fun d => whnf X_type X w_Γ 1 false d env_empty (run_c2 X_type X w_t w_u) []
+    at_depth (fun d => whnf X_type X w_Γ 1 d env_empty (run_c2 X_type X w_t w_u) []
                          [RV (VCon w_O [])] w_s1) (CFail WDepth)
     = COk (w_v2, [RV (VCon w_O [])], w_s2).
   Proof. vm_compute. reflexivity. Qed.
 
   Lemma w_E3 :
-    at_depth (fun d => conv_value X_type X w_Γ 1 false d 1 Conv (VCon w_O []) w_v2 [] w_s2)
+    at_depth (fun d => conv_value X_type X w_Γ 1 d 1 Conv (VCon w_O []) w_v2 [] w_s2)
       (CFail WDepth) = COk (false, [], w_s3).
   Proof. vm_compute. reflexivity. Qed.
 
@@ -5021,7 +5021,7 @@ Section Witness.
     /\ g_susp 1 1 w_G0 env_empty (run_c2 X_type X w_t w_u).(c_term) w_u
     /\ PCUICCallByNeedSoundEval.cok w_G0 (run_c2 X_type X w_t w_u)
     /\ exists s',
-         conv_term X_type X w_Γ 1 false cbn_depth 1 Conv env_empty (run_c1 X_type X w_t)
+         conv_term X_type X w_Γ 1 cbn_depth 1 Conv env_empty (run_c1 X_type X w_t)
            env_empty (run_c2 X_type X w_t w_u) [] (run_s2 X_type X w_t w_u) = COk (false, [], s')
          /\ post X_type X w_Γ 1 Σ 1 1 w_G0 [] s' [].
   Proof.
@@ -5059,31 +5059,31 @@ Section Witness.
   Qed.
 
   Definition v_R1 :=
-    at_depth (fun d => whnf X_type X v_Γ 2 false d env_empty (run_c1 X_type X v_t) []
+    at_depth (fun d => whnf X_type X v_Γ 2 d env_empty (run_c1 X_type X v_t) []
                          [RE env_empty] (run_s2 X_type X v_t v_u)) (CFail WDepth).
   Definition v_v1 : cbn_value := match v_R1 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
   Definition v_s1 : cbn_state := match v_R1 with COk (_, _, s) => s | CFail _ => cbn_init end.
   Definition v_R2 :=
-    at_depth (fun d => whnf X_type X v_Γ 2 false d env_empty (run_c2 X_type X v_t v_u) []
+    at_depth (fun d => whnf X_type X v_Γ 2 d env_empty (run_c2 X_type X v_t v_u) []
                          [RV v_v1] v_s1) (CFail WDepth).
   Definition v_v2 : cbn_value := match v_R2 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
   Definition v_s2 : cbn_state := match v_R2 with COk (_, _, s) => s | CFail _ => cbn_init end.
   Definition v_s3 : cbn_state := match tick v_s2 with Some s => s | None => cbn_init end.
 
   Lemma v_E1 :
-    at_depth (fun d => whnf X_type X v_Γ 2 false d env_empty (run_c1 X_type X v_t) []
+    at_depth (fun d => whnf X_type X v_Γ 2 d env_empty (run_c1 X_type X v_t) []
                          [RE env_empty] (run_s2 X_type X v_t v_u)) (CFail WDepth)
     = COk (v_v1, [RE env_empty], v_s1).
   Proof. vm_compute. reflexivity. Qed.
 
   Lemma v_E2 :
-    at_depth (fun d => whnf X_type X v_Γ 2 false d env_empty (run_c2 X_type X v_t v_u) []
+    at_depth (fun d => whnf X_type X v_Γ 2 d env_empty (run_c2 X_type X v_t v_u) []
                          [RV v_v1] v_s1) (CFail WDepth)
     = COk (v_v2, [RV v_v1], v_s2).
   Proof. vm_compute. reflexivity. Qed.
 
   Lemma v_E3 :
-    at_depth (fun d => conv_value X_type X v_Γ 2 false d 2 Conv v_v1 v_v2 [] v_s2)
+    at_depth (fun d => conv_value X_type X v_Γ 2 d 2 Conv v_v1 v_v2 [] v_s2)
       (CFail WDepth) = COk (true, [], v_s3).
   Proof. vm_compute. reflexivity. Qed.
 
@@ -5116,7 +5116,7 @@ Section Witness.
     /\ g_susp 2 2 v_G0 env_empty (run_c2 X_type X v_t v_u).(c_term) v_u
     /\ PCUICCallByNeedSoundEval.cok v_G0 (run_c2 X_type X v_t v_u)
     /\ exists s',
-         conv_term X_type X v_Γ 2 false cbn_depth 2 Conv env_empty (run_c1 X_type X v_t)
+         conv_term X_type X v_Γ 2 cbn_depth 2 Conv env_empty (run_c1 X_type X v_t)
            env_empty (run_c2 X_type X v_t v_u) [] (run_s2 X_type X v_t v_u) = COk (true, [], s')
          /\ post X_type X v_Γ 2 Σ 2 2 v_G0 [] s' []
          /\ cq v_Γ 2 Σ 2 2 Conv v_t v_u.
