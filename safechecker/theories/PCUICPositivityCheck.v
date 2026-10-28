@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICReflect PCUICTyping
   PCUICArityRed.
 From MetaRocq.SafeChecker Require Import PCUICErrors.
@@ -182,6 +182,14 @@ Definition nested_binder : aname := mkBindAnn nAnon Relevant.
 Section Check.
   (** The global environment's declarations, by name. *)
   Context (lookup : kername -> option global_decl).
+  (** The operation table: the registered primitive operation of a constant.  Weak-head
+      reduction REFUSES on a registered operation ([None] below) rather than firing it:
+      the relation [whd_rel true] fires a saturated literal application, which this
+      untyped machine does not implement, and answering "stuck" there would be unsound.
+      Refusing is sound and costs only completeness: positivity is refused for a
+      constructor argument type whose weak-head reduction meets a registered operation
+      (the row-Q2 risk named in the design, §12). *)
+  Context (lookup_op : kername -> option prim_op).
 
   (** The declaration of a nesting inductive. *)
   Definition lookup_ind (ind : inductive) :
@@ -226,7 +234,11 @@ Section Check.
         | Some (ConstantDecl decl) =>
           match decl.(cst_body) with
           | Some body => whd_fuel fuel Γ (subst_instance u body) args
-          | None => Some (tConst c u, args)
+          | None =>
+            match lookup_op c with
+            | Some _ => None
+            | None => Some (tConst c u, args)
+            end
           end
         | _ => None
         end
@@ -494,7 +506,8 @@ Section Check.
 
   (** ** Soundness *)
 
-  Context (Σ : global_env) (lookup_spec : forall kn, lookup kn = lookup_env Σ kn).
+  Context (Σ : global_env) (lookup_spec : forall kn, lookup kn = lookup_env Σ kn)
+    (lookup_op_spec : forall kn, lookup_op kn = prim_op_of Σ kn).
 
   Lemma bind_checked_tt {A} (m : typing_result A) (f : A -> typing_result unit) :
     @bind typing_result _ A unit m f = Checked tt -> ∑ a, (m = Checked a) × (f a = Checked tt).
@@ -536,7 +549,9 @@ Section Check.
       rewrite lookup_spec in hl.
       destruct (cst_body decl) as [body|] eqn:hb.
       + eapply whd_delta; [exact hl|exact hb|now apply IH].
-      + injection e as <- <-. eapply whd_axiom; [exact hl|exact hb].
+      + destruct (lookup_op k) as [op|] eqn:ho; [discriminate|].
+        injection e as <- <-. eapply whd_axiom; [exact hl|exact hb|].
+        now rewrite -lookup_op_spec.
     - (* tCase *)
       destruct (whd_fuel fuel Γ c []) as [[t' cargs]|] eqn:hc; [|discriminate].
       apply IH in hc.
@@ -767,8 +782,8 @@ End Check.
 
 (** Running out of fuel is a rejection with its own message: three nested products with two
     units of fuel. *)
-Lemma check_positive_out_of_fuel lookup mdecl :
-  check_positive_cstr_arg lookup 2 mdecl [] []
+Lemma check_positive_out_of_fuel lookup lookup_op mdecl :
+  check_positive_cstr_arg lookup lookup_op 2 mdecl [] []
     (tProd nested_binder (tSort Sort.type0) (tProd nested_binder (tSort Sort.type0)
       (tProd nested_binder (tSort Sort.type0) (tRel 3))))
   = TypeError (Msg "Nested positivity: out of fuel").
@@ -777,8 +792,8 @@ Proof. reflexivity. Qed.
 (** Weak-head reduction out of fuel answers [None]: a beta-redex needs three units, one
     for the application, one for the contraction and one for the result, so two units
     are not enough. *)
-Lemma whd_fuel_out_of_fuel lookup na A t a :
-  whd_fuel lookup 2 [] (tApp (tLambda na A t) a) [] = None.
+Lemma whd_fuel_out_of_fuel lookup lookup_op na A t a :
+  whd_fuel lookup lookup_op 2 [] (tApp (tLambda na A t) a) [] = None.
 Proof. reflexivity. Qed.
 
 (** A nested occurrence in a block with a covariant universe level is refused for that
