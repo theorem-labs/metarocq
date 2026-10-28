@@ -195,4 +195,6 @@ theories/PCUICEtaFInstEtaC1c.v
 theories/PCUICEtaI5Trans.v
 # L2 obligation 8, A2: spec => join (C4-SIDE)
 theories/PCUICEtaI5A2.v
+# L2 obligation 9: the cumul_eta_l case of A2, and I5 in full (C4-SIDE)
+theories/PCUICEtaI5EtaL.v
 # theories/All.v
