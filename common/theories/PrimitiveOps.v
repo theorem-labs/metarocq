@@ -1,9 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 (** * Primitive operations: the one interface used by reduction and the checker
 
-  Every computation on primitive values goes through [prim_op_denote] and the
-  three facts proved about it here ([prim_op_denote_args], [prim_op_denote_shape],
-  [prim_op_denote_total]).  [prim_op] is the set of registered operations,
+  Every computation on primitive values goes through [prim_op_denote].  The
+  proofs use two facts about it, [prim_op_denote_args] and [prim_op_denote_shape];
+  [prim_op_denote_total] is a satisfying instance (see its comment).  [prim_op] is the set of registered operations,
   [prim_lit] the literal arguments they consume and [prim_result] the values they
   produce.  The readback of a result into a term, and the reader turning a term's
   payload into a literal, are per-language and live beside each language's
@@ -105,18 +105,12 @@ Proof.
     injection H as <-; exact I.
 Qed.
 
-(** Totality on well-tagged literals: the only way [prim_op_denote] fails is a
-    wrong argument list. *)
+(** Satisfying instance of the reduction rule's premise
+    [prim_op_denote op ls = Some r] (PCUIC [red_prim_op], Template [red_prim_op]):
+    the premise holds for every argument list whose tags are the ones the
+    operation expects.  No proof uses it. *)
 Lemma prim_op_denote_total op ls :
   map lit_tag ls = po_args (info op) -> exists r, prim_op_denote op ls = Some r.
 Proof.
   prim_op_cases op ls; intros H; try discriminate H; eexists; reflexivity.
-Qed.
-
-(** Functionality is not a lemma: [prim_op_denote] is a function.  This is the
-    form the reduction rule's determinism uses. *)
-Lemma prim_op_denote_funct op ls r r' :
-  prim_op_denote op ls = Some r -> prim_op_denote op ls = Some r' -> r = r'.
-Proof.
-  intros H H'; rewrite H in H'; now injection H' as <-.
 Qed.

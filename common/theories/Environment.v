@@ -231,14 +231,14 @@ Module Retroknowledge.
   (** With the table a list, [merge r1 r2] is no longer syntactically [r2] when
       [r1] extends [r2] — [r1]'s entries come first — but it still has exactly
       [r2]'s lookups.  The equality is not needed anywhere: [Retroknowledge.merge]
-      has one caller, [merge_global_envs] (:953), whose two lemmas
+      has one caller, [merge_global_envs], whose two lemmas
       [extends_l_merge] and [extends_r_merge] ask for the two inclusions, not for
       equality.  Nor does the well-formedness of a prefix environment need it: a
       prefix is built as [mk_global_env univs Σ retro] with the *same*
-      retroknowledge record as the whole environment
-      ([EnvironmentTyping.v:1953], [:2427]), so a condition stated on the
+      retroknowledge record as the whole environment (see [on_global_decls_data]
+      and its field [on_prim_decl_d] in EnvironmentTyping.v), so a condition stated on the
       retroknowledge holds in every prefix as soon as it holds once. *)
-  Lemma extends_merge_idempotent r1 r2
+  Lemma extends_merge_back r1 r2
     : extends r1 r2 -> extends (merge r1 r2) r2.
   Proof.
     intros [h1 [h2 [h3 [h4 [h5 hops]]]]].
@@ -966,10 +966,9 @@ Module Environment (T : Term).
       editing it — even to add a trivial conjunct — makes [template-rocq]'s
       [Recursive Extraction Library Extractable] raise a Rocq extraction anomaly
       (plugins/extraction/mlutil.ml line 660), module-wide, because [extends] is
-      [Type]-valued and consumed by extracted code.  The A/B that pins this to a
-      one-field edit of [extends] (not to the conjunct, its shape, or the
-      presence of a decider) is lanes/prim-ops/impl/extends-gate.md §7, and the
-      upstream bug note is lanes/prim-ops/impl/extraction-anomaly-upstream.md.
+      [Type]-valued and consumed by extracted code.  The trigger is a one-field
+      edit of [extends] itself: the anomaly does not depend on what the new field
+      states, on its shape, or on whether a decider for it exists.
 
       So the primitive-operation freshness condition is carried by a SEPARATE
       relation, [extends_prim := prod extends extends_prim_fresh].  (Not named
@@ -978,7 +977,7 @@ Module Environment (T : Term).
 
       >>> STANDING CONDITION D-1 (freshness).  A weakening lemma whose
       conclusion a newly-registered primitive operation could falsify must take
-      [extends_prim], not [extends].  Today that is exactly ten lemmas:
+      [extends_prim], not [extends].  Today that is exactly eight lemmas:
       [weakening_env_whd_rel], [weakening_env_arity_red],
       [weakening_env_positive_cstr_arg], [weakening_env_positive_cstr]
       (pcuic/theories/PCUICWeakeningEnv.v), and [weakening_on_global_decl_gen],
@@ -1007,8 +1006,14 @@ Module Environment (T : Term).
       [guard_extends] field and Template's [Axiom guard_checking] hold under
       plain [extends] only because the guard checker never reads the operation
       table.  If it ever fires primitive operations, [gc_ext] must take
-      [extends_prim].  Not firing them is faithful today: Rocq's own guard does
-      not fire an operation to prune a match branch. <<< *)
+      [extends_prim].  This is NOT what Rocq does: the kernel's guard reduces
+      with [whd_all] ([subterm_specif], and the match pruning in
+      [check_rec_call_state], kernel/inductive.ml), and [whd_all] fires a
+      saturated primitive ([FFlex] on a [Primitive] in kernel/cClosure.ml).  So
+      a fixpoint whose structural argument goes through a primitive operation,
+      such as [g (if PrimInt63.eqb 0 0 then m else n)], is accepted by Rocq and
+      refused by MetaRocq's guard: a known refusal class, pinned by
+      test-suite/prim_ops.v. <<< *)
 
   Definition extends_prim_fresh (Σ Σ' : global_env) : Prop :=
     forall c op,
@@ -1019,19 +1024,6 @@ Module Environment (T : Term).
   Lemma retro_eq_prim_fresh Σ Σ' :
     Σ.(retroknowledge) = Σ'.(retroknowledge) -> extends_prim_fresh Σ Σ'.
   Proof. intros e c op h. left. now rewrite e. Qed.
-
-  (** An extension may not CHANGE the operation on a constant it already
-      declares.  The premise [lookup_env Σ c <> None] is required: a well-formed
-      [Σ] may carry a table entry for a constant it does not declare (design
-      §4.2(b) is per declaration), and that undeclared case is excluded instead
-      by [Retroknowledge.extends] with the functionality of [prim_op_of]. *)
-  Lemma extends_prim_no_change Σ Σ' c op1 op2 :
-    extends_prim_fresh Σ Σ' ->
-    lookup_env Σ c <> None ->
-    Retroknowledge.prim_op_of Σ.(retroknowledge) c = Some op1 ->
-    Retroknowledge.prim_op_of Σ'.(retroknowledge) c = Some op2 ->
-    op1 = op2.
-  Proof. intros h hdecl h1 h2. case: (h c op2 h2) => e; congruence. Qed.
 
   Lemma lookup_env_None_envs Σ c : lookup_env Σ c = None <-> lookup_envs Σ c = [].
   Proof.
@@ -1054,40 +1046,6 @@ Module Environment (T : Term).
       rewrite h' in hdecls. symmetry in hdecls.
       now apply app_eq_nil in hdecls as [_ ?].
   Qed.
-
-  (** Decidable: only [Σ']'s finite operation table can satisfy the premise. *)
-  Definition extends_prim_freshb (Σ Σ' : global_env) : bool
-    := forallb (fun '(c, _) =>
-         (Retroknowledge.prim_op_of Σ.(retroknowledge) c
-            == Retroknowledge.prim_op_of Σ'.(retroknowledge) c)
-         || match lookup_env Σ c with None => true | Some _ => false end)
-         Σ'.(retroknowledge).(Retroknowledge.retro_ops).
-
-  Lemma extends_prim_freshP Σ Σ' :
-    reflect (extends_prim_fresh Σ Σ') (extends_prim_freshb Σ Σ').
-  Proof.
-    destruct (extends_prim_freshb Σ Σ') eqn:hb; constructor.
-    - intros c op h.
-      have hin := Retroknowledge.lookup_op_spec _ _ _ h.
-      have H := proj1 (forallb_forall _ _) hb _ hin. cbn beta in H.
-      destruct (orb_true_elim _ _ H) as [He|Hl].
-      + apply eqb_eq in He. left. now rewrite He.
-      + right. destruct (lookup_env Σ c) eqn:hl; [discriminate|reflexivity].
-    - intros hp.
-      have ht : extends_prim_freshb Σ Σ' = true.
-      { rewrite /extends_prim_freshb. apply (proj2 (forallb_forall _ _)).
-        intros [c op0] hin.
-        destruct (Retroknowledge.lookup_op_in _ _ _ hin) as [op1 h1].
-        change (Retroknowledge.prim_op_of (retroknowledge Σ') c = Some op1) in h1.
-        apply orb_true_intro. destruct (hp c op1 h1) as [h2|h2].
-        + left. rewrite h1 h2. apply eqb_refl.
-        + right. now rewrite h2. }
-      rewrite ht in hb. discriminate.
-  Qed.
-
-  Definition extends_prim_fresh_dec Σ Σ'
-    : {extends_prim_fresh Σ Σ'} + {~ extends_prim_fresh Σ Σ'}.
-  Proof. destruct (extends_prim_freshP Σ Σ'); [left|right]; assumption. Defined.
 
   (** [extends] together with primitive-operation freshness.  A [Type] product,
       because [extends] is [Type]-valued (its decls field is a [∑]). *)
