@@ -1,8 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICUtils PCUICOnOne
-     PCUICLiftSubst PCUICUnivSubst PCUICTyping PCUICGlobalEnv PCUICWeakeningEnvConv
+     PCUICLiftSubst PCUICUnivSubst PCUICTyping PCUICGlobalEnv PCUICWeakeningEnv PCUICWeakeningEnvConv
      PCUICWeakeningEnvTyp PCUICWeakeningConv PCUICWeakeningTyp
      PCUICSubstitution PCUICContextSubst PCUICCasesContexts PCUICClosed PCUICClosedTyp PCUICClosedConv PCUICCasesWfTyp
      PCUICCumulativity PCUICGeneration PCUICReduction
@@ -12,7 +12,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICUtil
      PCUICConversion PCUICInversion PCUICContexts PCUICArities
      PCUICWellScopedCumulativity PCUICGuardCondition
      PCUICParallelReduction PCUICSpine PCUICInductives PCUICFixWitness PCUICInductiveInversion
-     PCUICSigmaCalculus.
+     PCUICSigmaCalculus PCUICPrimitiveRed.
 
 From Stdlib Require Import ssreflect ssrbool Utf8.
 From Equations Require Import Equations.
@@ -940,10 +940,19 @@ P Γ (array_type arr) ty ->
 P Γ (tPrim (primArray; primArrayModel arr))
   (tPrim (primArray; primArrayModel (set_array_type arr ty)))) ->
 
+(forall (Γ : context) c (decl : constant_body) (u : Instance.t) op ls r v,
+  prim_op_of Σ c = Some op -> declared_constant Σ c decl -> cst_body decl = None ->
+  prim_op_denote op ls = Some r -> readback Σ (po_shape (info op)) r = Some v ->
+  P Γ (mkApps (tConst c u) (map term_of_lit ls)) v) ->
+
   forall (Γ : context) (t t0 : term), closed_red1 Σ Γ t t0 -> P0 Γ t t0.
 Proof.
   intros.
-  destruct X30 as [clΓ clt r].
+  (* The red_prim_op clause is the last case hypothesis, auto-named X30; move it
+     out of the X-namespace so the closed_red1 proof stays X31 and the later
+     cases' local hypotheses are auto-named from X30 as before. *)
+  rename X30 into Hprim.
+  destruct X31 as [clΓ clt r].
   move: clΓ clt.
   Ltac t :=
     eauto; try split; eauto;
@@ -1570,6 +1579,184 @@ Proof.
   - rewrite (subst0_cons_nondep c c' s _ hnd). symmetry. now eapply red_ws_cumul_pb, r.
 Qed.
 
+(** Row G.  A spine of literal arguments through a primitive operation's declared
+    type ends at the result type.  [PCUICPrimOpType.prim_arg_types r tags res] is a
+    non-dependent product chain of [tImpl]s, each [tProd _ a (lift0 1 rest)], so
+    substituting a literal argument cancels the lift; the base case is [res ≤ T].
+    The spine may start at any [ty'] the declared type is cumulative with: each
+    step then reuses the tail spine as given, with no need to re-type its start. *)
+Lemma typing_spine_prim_arg_types {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+  {Γ r tags res T} {ls : list prim_lit} ty ty' :
+  PCUICPrimOpType.prim_arg_types r tags res = Some ty ->
+  Σ ;;; Γ ⊢ ty ≤ ty' ->
+  #|ls| = #|tags| ->
+  typing_spine Σ Γ ty' (map term_of_lit ls) T ->
+  Σ ;;; Γ ⊢ res ≤ T.
+Proof.
+  induction tags as [|t tags ih] in ls, ty, ty' |- *; intros hty hle hlen hsp.
+  - destruct ls => //. cbn in hty. noconf hty.
+    depelim hsp. etransitivity; tea.
+  - destruct ls as [|l ls] => //. cbn in hty, hlen.
+    destruct (PCUICPrimOpType.prim_tag_type r t) as [a|] eqn:ht => //.
+    destruct (PCUICPrimOpType.prim_arg_types r tags res) as [rest|] eqn:hrest => //.
+    cbn in hty. noconf hty.
+    depelim hsp.
+    assert (hP : Σ ;;; Γ ⊢ tImpl a rest ≤ tProd na A B) by (etransitivity; tea).
+    unfold tImpl in hP.
+    eapply ws_cumul_pb_Prod_Prod_inv in hP as [_ _ hcod].
+    eapply substitution0_ws_cumul_pb in hcod; tea.
+    unfold subst1 in hcod. rewrite simpl_subst_k in hcod; [reflexivity|].
+    eapply ih.
+    4: exact hsp.
+    1: reflexivity.
+    1: exact hcod.
+    lia.
+Qed.
+
+(** [prim_op_type]'s arms use only [tImpl], [tConst kn []] and [tInd i []]:
+    the type is closed and has no universe to instantiate. *)
+Lemma prim_arg_types_closed_inst r tags res ty u :
+  PCUICPrimOpType.prim_arg_types r tags res = Some ty ->
+  closed res -> subst_instance u res = res ->
+  closed ty × subst_instance u ty = ty.
+Proof.
+  induction tags as [|t tags ih] in ty |- *; cbn; intros h hcl hu.
+  - noconf h. now split.
+  - destruct (PCUICPrimOpType.prim_tag_type r t) as [a|] eqn:ht => //.
+    destruct (PCUICPrimOpType.prim_arg_types r tags res) as [rest|] eqn:hr => //.
+    cbn in h. noconf h.
+    unfold PCUICPrimOpType.prim_tag_type in ht.
+    destruct (EnvironmentTyping.retro_type_constant r t) => //. cbn in ht. noconf ht.
+    destruct (ih _ eq_refl hcl hu) as [hclr hur].
+    unfold tImpl. cbn. rewrite subst_instance_lift hur. split; [|reflexivity].
+    now eapply (closedn_lift 1 0 0) in hclr.
+Qed.
+
+Lemma prim_shape_type_closed_inst r s res u :
+  PCUICPrimOpType.prim_shape_type r s = Some res ->
+  closed res × subst_instance u res = res.
+Proof.
+  destruct s; cbn.
+  - unfold PCUICPrimOpType.prim_tag_type. destruct (EnvironmentTyping.retro_type_constant r primInt) => //.
+    intros [= <-]. now split.
+  - destruct (Retroknowledge.retro_bool r) => //. intros [= <-]. now split.
+Qed.
+
+(** The readback of a result has the registered result type: a literal is typed
+    by [type_Prim] at the registered type constant, a boolean by
+    [type_Construct] at the registered inductive, whose shape [on_prim_bool_decl]
+    fixes (one packet, constructors of type [tRel 0]). *)
+Lemma readback_typed {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ s r v res} :
+  wf_local Σ Γ ->
+  PCUICPrimOpType.prim_shape_type Σ.1.(retroknowledge) s = Some res ->
+  on_prim_op_result Σ s ->
+  readback Σ s r = Some v ->
+  Σ ;;; Γ |- v : res.
+Proof.
+  intros wfΓ hsh hres hrb.
+  destruct s, r; cbn in hrb, hsh, hres => //.
+  - noconf hrb.
+    destruct hres as (kn & d & [hpc hd hinv]).
+    unfold PCUICPrimOpType.prim_tag_type, EnvironmentTyping.retro_type_constant in hsh.
+    pose proof hpc as hpc'. cbn in hpc'. rewrite hpc' in hsh. cbn in hsh. noconf hsh.
+    eapply (type_Prim Σ Γ (prim_int i) kn d); tea.
+    constructor.
+  - destruct (Retroknowledge.retro_bool _) as [ind|] eqn:hb => //.
+    noconf hrb. cbn in hsh. noconf hsh.
+    destruct hres as (i & mdecl & idecl & hpb & hdi).
+    assert (e : Some i = Some ind) by exact (eq_trans (eq_sym hpb) hb). noconf e.
+    pose proof hdi as [hmind hnth].
+    unshelve epose proof (hl := declared_minductive_to_gen hmind); eauto.
+    destruct (lookup_on_global_env_prim wfΣ hl) as (Σ' & [_ _ hretro hpd]).
+    cbn in hpd. specialize (hpd ind). forward hpd.
+    { exact (eq_trans (f_equal Retroknowledge.retro_bool hretro) hb). }
+    specialize (hpd eq_refl).
+    unfold on_prim_bool_decl in hpd.
+    destruct (ind_bodies mdecl) as [|idecl0 []] eqn:hbodies => //.
+    destruct hpd as [_ _ huniv _ hctors].
+    destruct (inductive_ind ind) as [|n] eqn:hii; cbn in hnth; [noconf hnth|now destruct n].
+    destruct (ind_ctors idecl) as [|cT [|cF []]] eqn:hct => //.
+    destruct hctors as [hT hF].
+    assert (hctor : forall j cdecl, nth_error (ind_ctors idecl) j = Some cdecl ->
+      cstr_type cdecl = tRel 0 -> Σ ;;; Γ |- tConstruct ind j [] : tInd ind []).
+    { intros j cdecl hj hty.
+      assert (h := type_Construct Σ Γ ind j [] mdecl idecl cdecl wfΓ).
+      forward h by (split; tea).
+      forward h by (unfold consistent_instance_ext, consistent_instance; now rewrite huniv).
+      enough (e : type_of_constructor mdecl cdecl (ind, j) [] = tInd ind []) by now rewrite e in h.
+      unfold type_of_constructor. rewrite hty hbodies. cbn.
+      destruct ind as [mind ii]. cbn in hii. now subst ii. }
+    destruct b.
+    + eapply (hctor 0 cT); [now rewrite hct|apply hT].
+    + eapply (hctor 1 cF); [now rewrite hct|apply hF].
+Qed.
+
+(** Row G: subject reduction for [red_prim_op].  The operation's declared type is
+    convertible to [prim_op_type] (row H's [on_prim_op_constant]); a spine of
+    literals through it ends at the result type ([typing_spine_prim_arg_types]);
+    the readback has that type ([readback_typed]). *)
+Lemma sr_prim_op {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ c u decl op ls r v T} :
+  Σ ;;; Γ |- mkApps (tConst c u) (map term_of_lit ls) : T ->
+  prim_op_of Σ c = Some op ->
+  declared_constant Σ c decl ->
+  prim_op_denote op ls = Some r ->
+  readback Σ (po_shape (info op)) r = Some v ->
+  Σ ;;; Γ |- v : T.
+Proof.
+  intros ht hop hdecl hden hrb.
+  pose proof (validity ht) as isT.
+  eapply inversion_mkApps_direct in ht as (A & s & hc & _ & hsp); tea.
+  eapply inversion_Const in hc as (decl' & wfΓ & hdecl' & cu & hle); tea.
+  unshelve epose proof (hg := declared_constant_to_gen hdecl); eauto.
+  unshelve epose proof (hg' := declared_constant_to_gen hdecl'); eauto.
+  unshelve epose proof (declared_constant_inj decl decl' hg hg'); subst decl'.
+  (* Row H: the registering declaration. *)
+  destruct (lookup_on_global_env_prim_decl wfΣ hg) as (Σ' & [onΣ' ext hretro hpd]).
+  cbn in hpd. specialize (hpd op). forward hpd.
+  { unfold prim_op_of in *. cbn. rewrite hretro. exact hop. }
+  destruct hpd as [_ huniv [Tp [hTp hconv]] _ hres].
+  rewrite hretro in hTp. unfold PCUICPrimOpType.prim_op_type in hTp.
+  destruct (PCUICPrimOpType.prim_shape_type _ (po_shape (info op))) as [res|] eqn:hsh => //.
+  destruct (prim_shape_type_closed_inst _ _ _ u hsh) as [hclres hures].
+  destruct (prim_arg_types_closed_inst _ _ _ _ u hTp hclres hures) as [hclTp huTp].
+  (* cst_type decl ≡ Tp at the prefix: move it to Σ, instance u, context Γ. *)
+  change (cumulSpec0 (Σ', cst_universes decl) [] Conv (cst_type decl) Tp) in hconv.
+  eapply (weakening_env_convSpec Σ' Σ.1 (cst_universes decl) []) in hconv; tea.
+  2:{ eapply extends_decls_extends, strictly_extends_decls_extends_decls; tea. }
+  eapply (convSpec_subst_instance (Σ.1, cst_universes decl) [] u _ _ Σ.2) in hconv.
+  2:{ eapply consistent_instance_valid_constraints; tea.
+      split; [exact wfΣ|]. now eapply (weaken_lookup_on_global_env' _ _ (ConstantDecl decl)). }
+  rewrite huTp in hconv. cbn in hconv.
+  assert (hcl : closed (cst_type decl)@[u]).
+  { rewrite closedn_subst_instance. eapply declared_constant_closed_type; tea. }
+  unshelve epose proof (hws := @cumulSpec_cumulAlgo cf Σ wfΣ Conv (exist [] eq_refl)
+    (exist (cst_type decl)@[u] _) (exist Tp _) _); cbn.
+  1-2: now eapply closedn_on_free_vars.
+  1: destruct Σ; exact hconv.
+  eapply (weakening_ws_cumul_pb (Γ := []) (Γ' := []) (Γ'' := Γ)) in hws.
+  2: rewrite app_context_nil_l; now eapply wf_local_closed_context.
+  cbn in hws. rewrite app_context_nil_l !lift_closed in hws; tas.
+  assert (hTA : Σ ;;; Γ ⊢ Tp ≤ A).
+  { etransitivity; [|exact hle]. eapply ws_cumul_pb_eq_le. now symmetry. }
+  (* The spine of literals ends at the result type. *)
+  pose proof (prim_op_denote_args _ _ _ hden) as hargs.
+  eapply (typing_spine_prim_arg_types Tp A) in hsp; tea.
+  2:{ apply (f_equal (@length _)) in hargs. now rewrite length_map in hargs. }
+  (* The readback has the result type. *)
+  assert (hres' : on_prim_op_result Σ (po_shape (info op))).
+  { destruct (po_shape (info op)); cbn in hres |- *.
+    - destruct hres as (kn & d & [hpc hd hinv]). exists kn, d. split; tas.
+      + cbn in hpc |- *. now rewrite -hretro.
+      + eapply weakening_env_declared_constant; tea.
+        eapply extends_decls_extends, strictly_extends_decls_extends_decls; tea.
+    - destruct hres as (i & mdecl & idecl & hpb & hdi). exists i, mdecl, idecl. split.
+      + exact (eq_trans (f_equal Retroknowledge.retro_bool (eq_sym hretro)) hpb).
+      + eapply weakening_env_declared_inductive; tea.
+        eapply extends_decls_extends, strictly_extends_decls_extends_decls; tea. }
+  pose proof (readback_typed (Σ := Σ) (res := res) wfΓ hsh hres' hrb) as hv.
+  now eapply (type_ws_cumul_pb (pb := Cumul) res).
+Qed.
+
 Lemma sr_red1 {cf:checker_flags} :
   env_prop SR_red1
     (fun Σ Γ j =>
@@ -1597,6 +1784,17 @@ Proof.
         end
       ]
     end.
+  (* red_prim_op under a typing rule whose subject is not an application of a
+     constant: the subject cannot be mkApps (tConst c u) (map term_of_lit ls).
+     Only type_Const (empty ls) and type_App (a snoc) remain. *)
+  all: try solve [ match goal with
+    | [ H : _ = mkApps (tConst _ _) (map term_of_lit ?ls) |- _ ] =>
+        destruct ls using MRList.rev_ind;
+        [ cbn in H; discriminate H | rewrite map_app mkApps_app in H; cbn in H; discriminate H ]
+    | [ H : mkApps (tConst _ _) (map term_of_lit ?ls) = _ |- _ ] =>
+        destruct ls using MRList.rev_ind;
+        [ cbn in H; discriminate H | rewrite map_app mkApps_app in H; cbn in H; discriminate H ]
+    end ].
 
   - (* Contexts *)
     split; auto. intros Γ' Δ' Δ ->. clear X0.
@@ -1735,6 +1933,15 @@ Proof.
     all:repeat constructor. cbn.
     rewrite -(shiftnP_add 1) addnP_shiftnP. repeat inv_on_free_vars => //.
 
+  - (* red_prim_op on an application: an operation applied to literals *)
+    match goal with
+    | [ H : ?tm = mkApps (tConst _ _) (map term_of_lit _) |- _ ;;; _ |- _ : ?T ] =>
+        assert (ht : Σ ;;; Γ |- tm : T) by (eapply type_App; eauto); rewrite H in ht
+    | [ H : mkApps (tConst _ _) (map term_of_lit _) = ?tm |- _ ;;; _ |- _ : ?T ] =>
+        assert (ht : Σ ;;; Γ |- tm : T) by (eapply type_App; eauto); rewrite <- H in ht
+    end.
+    eapply sr_prim_op; tea.
+
   - (* Constant unfolding *)
     unshelve epose proof (H' := declared_constant_to_gen H); eauto.
     unshelve epose proof (H0' := declared_constant_to_gen H0); eauto.
@@ -1752,6 +1959,15 @@ Proof.
     eapply weakening; tea.
     now rewrite app_context_nil_l.
     eapply @typing_subst_instance_decl with (Γ:=[]); tea.
+
+  - (* red_prim_op on a constant: an operation of arity zero *)
+    match goal with
+    | [ H : ?tm = mkApps (tConst _ _) (map term_of_lit _) |- _ ;;; _ |- _ : ?T ] =>
+        assert (ht : Σ ;;; Γ |- tm : T) by (eapply type_Const; eauto); rewrite H in ht
+    | [ H : mkApps (tConst _ _) (map term_of_lit _) = ?tm |- _ ;;; _ |- _ : ?T ] =>
+        assert (ht : Σ ;;; Γ |- tm : T) by (eapply type_Const; eauto); rewrite <- H in ht
+    end.
+    eapply sr_prim_op; tea.
 
   - (* iota reduction *)
     clear forall_u forall_u0 X X0.
@@ -3517,6 +3733,14 @@ Section SRContext.
      split. eapply isType_red1; eauto.
      clear isty; revert H.
      induction re using red1_ind_all.
+     (* red_prim_op: a tConst-headed application is not an arity. *)
+     all: try (intros [?ctxp [?sp Hdp]];
+               match type of Hdp with
+               | destArity [] (mkApps (tConst _ _) (map term_of_lit ?ls)) = _ =>
+                   destruct ls using MRList.rev_ind;
+                   [ cbn in Hdp; discriminate
+                   | rewrite map_app mkApps_app in Hdp; cbn in Hdp; discriminate ]
+               end).
      all: intros [ctx [s H1]]; cbn in *; try discriminate.
      - rewrite destArity_app in H1.
        case_eq (destArity [] b'); [intros [ctx' s']|]; intro ee;
