@@ -1808,27 +1808,27 @@ Section Conv.
 
     The state invariants of the earlier files, bundled: the heap was built the way
     [bh_ok] describes and holds no forwarding pointer, the context map names only cells
-    that stand for what the context entry denotes, the code table is good, the five memo
-    tables mean what they say, and no cell names a variable at a level not yet in scope.
-    Raising the level only weakens the last clause. *)
+    that stand for what the context entry denotes, the code table is good and the five memo
+    tables mean what they say.
+
+    It does NOT say that no cell of the heap names a variable at a level not yet in scope:
+    that is false as soon as a binder has been crossed — the cells [push_fresh] and the
+    binder rows allocate for the fresh variables stay in the heap after the comparison has
+    come back out of the binder. Scoping is a property of each environment instead
+    ([env_reads] below). [lvl] is kept as an argument so that every statement says at
+    which level the invariant is used. *)
   Definition cok (lvl : nat) (s : cbn_state) : Prop :=
     (exists lo : positive, state_ok lo s)
     /\ heap_nofwd s.(st_heap)
     /\ (forall l : nat, gam_ok Γ nctx l s)
     /\ memo_ok X_type X s
-    /\ memo_inv X_type X s
-    /\ heap_wf lvl s.(st_heap).
+    /\ memo_inv X_type X s.
 
   Lemma cok_mono (lvl lvl' : nat) (s : cbn_state) : lvl <= lvl' -> cok lvl s -> cok lvl' s.
-  Proof.
-    intros hle (h1 & h2 & h3 & h4 & h5 & h6).
-    split; [exact h1|]. split; [exact h2|]. split; [exact h3|].
-    split; [exact h4|]. split; [exact h5|].
-    exact (heap_wf_mono lvl lvl' _ hle h6).
-  Qed.
+  Proof. intros _ h. exact h. Qed.
 
   Lemma cok_memo_inv (lvl : nat) (s : cbn_state) : cok lvl s -> memo_inv X_type X s.
-  Proof. intros (_ & _ & _ & _ & h & _). exact h. Qed.
+  Proof. intros (_ & _ & _ & _ & h). exact h. Qed.
 
   Lemma cok_ceq_ok (lvl : nat) (s : cbn_state) : cok lvl s -> ceq_ok X_type X (s.(st_memo)).
   Proof. intros h. exact (proj1 (proj2 (proj2 (proj2 (cok_memo_inv lvl s h))))). Qed.
@@ -1842,8 +1842,8 @@ Section Conv.
     ((s'.(st_memo)).(m_codes)) = ((s.(st_memo)).(m_codes)) ->
     cok lvl s'.
   Proof.
-    intros (h1 & h2 & h3 & h4 & _ & h6) hm he hn hg hc.
-    split; [|split; [|split; [|split; [|split]]]].
+    intros (h1 & h2 & h3 & h4 & _) hm he hn hg hc.
+    split; [|split; [|split; [|split]]].
     - destruct h1 as [lo [hb hcl hga]]. exists lo. split.
       + rewrite he, hn. exact hb.
       + rewrite he, hn. exact hcl.
@@ -1853,7 +1853,6 @@ Section Conv.
       exists t. split; [exact hd|]. rewrite he. exact hr.
     - exact (memo_ok_codes X_type X s s' hc h4).
     - exact hm.
-    - rewrite he. exact h6.
   Qed.
 
   (** ** The seam with the evaluator
