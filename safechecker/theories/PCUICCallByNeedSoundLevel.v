@@ -5,9 +5,11 @@ From MetaRocq.Utils Require CanonicalTries.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTyping
   PCUICOnFreeVars PCUICReduction PCUICSigmaCalculus PCUICRenameDef PCUICRenameConv
-  PCUICOnFreeVarsConv PCUICWeakeningConv PCUICRedTypeIrrelevance BDStrengthening.
+  PCUICOnFreeVarsConv PCUICWeakeningConv PCUICRedTypeIrrelevance BDStrengthening
+  PCUICWellScopedCumulativity.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
-  PCUICCallByNeedSoundCtx PCUICCallByNeedSoundEval.
+  PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
+  PCUICCallByNeedSoundHook PCUICCallByNeedSoundCong PCUICCallByNeedSoundEval.
 
 Import CanonicalTries.
 
@@ -282,6 +284,119 @@ Proof.
     unfold pres_let_bodies. rewrite hb. exact tt.
 Qed.
 
+(** ** The state a run starts in, against [gok] (moved from [PCUICCallByNeedSoundHookFrame]
+  so that the instances below can use it) *)
+
+Section RunStart.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+
+  (** The ghost of the start state: no address, the real code table. *)
+  Definition run_ghost (t u : term) : ghost :=
+    mkGhost (fun _ => None) (((run_s2 X_type X t u).(st_memo)).(m_codes)).
+
+  Lemma run_s2_gam_empty (t u : term) :
+    (run_s2 X_type X t u).(st_gam) = PTree.empty haddr.
+  Proof. unfold run_s2, run_s1. rewrite !new_entry_gam. reflexivity. Qed.
+
+  Lemma run_s2_memo_inv (t u : term) : memo_inv X_type X (run_s2 X_type X t u).
+  Proof.
+    unfold run_s2, run_s1. apply memo_inv_new_entry, memo_inv_new_entry, memo_inv_init.
+  Qed.
+
+  (** Every entry of the start table names its constants at the right instance length. *)
+  Lemma run_s2_consts_okb (Σ : global_env_ext) (t u : term) :
+    consts_okb Σ t -> consts_okb Σ u ->
+    forall i e, PTree.get i (((run_s2 X_type X t u).(st_memo)).(m_codes)) = Some e ->
+      consts_okb Σ (inst_code e.(ce_inst) e.(ce_term)).
+  Proof.
+    intros ht hu i e hi. rewrite run_s2_codes in hi.
+    destruct (key_eqb i (key_succ String2pos.xH)) eqn:E1.
+    - apply key_eqb_spec in E1; subst i. rewrite PTree.gss in hi.
+      injection hi as <-. cbn [ce_inst ce_term]. rewrite consts_inst_code. exact hu.
+    - rewrite PTree.gso in hi by (apply key_neq_of_eqb, E1).
+      destruct (key_eqb i String2pos.xH) eqn:E2.
+      + apply key_eqb_spec in E2; subst i. rewrite PTree.gss in hi.
+        injection hi as <-. cbn [ce_inst ce_term]. rewrite consts_inst_code. exact ht.
+      + rewrite PTree.gso in hi by (apply key_neq_of_eqb, E2).
+        rewrite PTree.gempty in hi. discriminate hi.
+  Qed.
+
+  (** Every entry of the start table is hygienic. *)
+  Lemma run_s2_hyg (t u : term) :
+    on_free_vars xpredT t -> on_free_vars xpredT u ->
+    forall i e, PTree.get i (((run_s2 X_type X t u).(st_memo)).(m_codes)) = Some e ->
+      on_free_vars xpredT (inst_code e.(ce_inst) e.(ce_term)).
+  Proof.
+    intros ht hu i e hi. rewrite run_s2_codes in hi.
+    destruct (key_eqb i (key_succ String2pos.xH)) eqn:E1.
+    - apply key_eqb_spec in E1; subst i. rewrite PTree.gss in hi.
+      injection hi as <-. cbn [ce_inst ce_term]. rewrite hyg_inst_code. exact hu.
+    - rewrite PTree.gso in hi by (apply key_neq_of_eqb, E1).
+      destruct (key_eqb i String2pos.xH) eqn:E2.
+      + apply key_eqb_spec in E2; subst i. rewrite PTree.gss in hi.
+        injection hi as <-. cbn [ce_inst ce_term]. rewrite hyg_inst_code. exact ht.
+      + rewrite PTree.gso in hi by (apply key_neq_of_eqb, E2).
+        rewrite PTree.gempty in hi. discriminate hi.
+  Qed.
+
+  (** The state invariant of [machine_sound] holds of the state [cbn_run] starts in, at every
+    level and under every extension [Δ]: the heap and the context map are empty. *)
+  Lemma run_s2_gok (Γ : context) (nctx : nat) (Σ : global_env_ext) (Δ : context)
+      (lvl : nat) (t u : term) :
+    consts_okb Σ t -> consts_okb Σ u -> on_free_vars xpredT t -> on_free_vars xpredT u ->
+    gok X_type X Γ nctx Σ Δ lvl xH (run_ghost t u) (run_s2 X_type X t u).
+  Proof.
+    intros ht hu hht hhu. split.
+    - apply run_s2_state_ok.
+    - apply run_s2_nofwd.
+    - intros a cl h. unfold heap_get in h. rewrite run_s2_heap, bh_get_holes in h.
+      discriminate h.
+    - intros a tm h. discriminate h.
+    - intros j a h. rewrite run_s2_gam_empty, PTree.gempty in h. discriminate h.
+    - split; [apply run_s2_memo_inv|]. split; [apply run_s2_memo_ok|]. split.
+      + intros i e hi. exact hi.
+      + split; [exact (run_s2_consts_okb Σ t u ht hu)|].
+        intros _. exact (run_s2_hyg t u hht hhu).
+    - intros _ a tm h. discriminate h.
+  Qed.
+
+  (** The two root codes are in the ghost's table. *)
+  Lemma run_c1_gcok (t u : term) :
+    PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c1 X_type X t).
+  Proof.
+    exists (mkEntry t [] (NSInput false) (wf_term_univs X_type X t)). split.
+    - exact (run_c1_in_table X_type X t u).
+    - exact (run_c1_code_inv X_type X t).
+  Qed.
+
+  Lemma run_c2_gcok (t u : term) :
+    PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c2 X_type X t u).
+  Proof.
+    exists (mkEntry u [] (NSInput true) (wf_term_univs X_type X u)). split.
+    - exact (run_c2_in_table X_type X t u).
+    - exact (run_c2_code_inv X_type X t u).
+  Qed.
+
+  (** A suspension of a code in the empty environment, at the call's own level, reads as the
+    code itself, under any ghost. *)
+  Lemma g_susp_env_empty (nctx : nat) (G : ghost) (t : term) :
+    g_susp nctx nctx G env_empty t t.
+  Proof.
+    pose proof (g_susp_intro nctx nctx G [] 0 0 t [] (g_slots_nil nctx nctx G) eq_refl) as h.
+    rewrite subst_empty, Nat.sub_diag in h. cbn [Nat.add] in h. rewrite lift0_id in h.
+    exact h.
+  Qed.
+
+  Lemma run_c1_g_susp (nctx : nat) (t u : term) :
+    g_susp nctx nctx (run_ghost t u) env_empty (run_c1 X_type X t).(c_term) t.
+  Proof. rewrite run_c1_term. apply g_susp_env_empty. Qed.
+
+  Lemma run_c2_g_susp (nctx : nat) (t u : term) :
+    g_susp nctx nctx (run_ghost t u) env_empty (run_c2 X_type X t u).(c_term) u.
+  Proof. rewrite run_c2_term. apply g_susp_env_empty. Qed.
+
+End RunStart.
+
 (** ** The comparison's invariant: [gok] at the master level
 
   [minv L Q lo G s]: the comparison is at logical level [L], the master level is [Q], and
@@ -306,9 +421,13 @@ Section Master.
   (** *** The interface of the structural invariant (slice B)
 
     The machine keeps [hwf Q] of the heap, of the roots and of the value it returns, and so
-    does an allocation of a cell that has it. Stated here, proved in its own slice; every
-    lemma of the comparison that needs it takes it as a hypothesis. *)
-  Definition machine_hwf : Prop := forall d Q, nctx <= Q ->
+    does an allocation of a cell that has it. Stated here, proved in its own slice
+    ([PCUICCallByNeedSoundHeapWf]); every lemma of the comparison that needs it takes it as
+    a hypothesis. [machine_hwf] unfolds to the same statement as before [machine_hwf_at] was
+    split out. Instances proved here: the fuel [FO] case of every clause
+    ([machine_hwf_FO]), an allocation without collection ([alloc_now_hwf]), and the premises
+    at a real start state ([minv_init], [minv_run_s2]). The full instance is slice B's proof. *)
+  Definition machine_hwf_at (d : cbn_fuel) (Q : nat) : Prop :=
     (forall a rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
        force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
@@ -325,11 +444,30 @@ Section Master.
        apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q w).
 
+  Definition machine_hwf : Prop := forall d Q, nctx <= Q -> machine_hwf_at d Q.
+
+  Lemma machine_hwf_FO Q : machine_hwf_at FO Q.
+  Proof.
+    unfold machine_hwf_at. split; [|split; [|split; [|split]]].
+    - intros a rs s v rs' s' _ _ he. cbn [force] in he. discriminate he.
+    - intros x stk rs s v rs' s' _ _ he. cbn [eval_slot] in he. discriminate he.
+    - intros e c stk rs s v rs' s' _ _ he. cbn [whnf] in he. discriminate he.
+    - intros e c mfix idx stk rs s v rs' s' _ _ he. cbn [whnf_fix] in he. discriminate he.
+    - intros v stk rs s w rs' s' hw hr hv he. cbn [apply] in he.
+      destruct stk; [inversion he; subst; split; [exact hw|split; assumption]|discriminate he].
+  Qed.
+
   Definition alloc_hwf : Prop := forall Q cl rs s a rs' s', nctx <= Q ->
     hwf Q s -> cwf Q cl -> Forall (rwf Q) rs ->
     alloc stress cl rs s = COk (a, rs', s') -> hwf Q s' /\ Forall (rwf Q) rs'.
 
-  (** *** The machine at the master level *)
+  (** *** The machine at the master level
+
+    CONDITIONAL. [whnf_master] and [eval_slot_master] take [machine_hwf] as a hypothesis.
+    They say something about a run only once slice B has proved [machine_hwf]; if
+    [machine_hwf] turns out to be false, these two lemmas are about nothing. No lemma may use
+    them as if they were unconditional: every user must carry [machine_hwf] as its own
+    hypothesis until it is discharged. *)
 
   Lemma whnf_master (hB : machine_hwf) d L Q lo G e c stk sts tc rs s v rs' s' :
     minv L Q lo G s -> Forall (rwf Q) rs ->
@@ -346,7 +484,8 @@ Section Master.
                 ltac:(lia) hcio d) as (_ & _ & hW & _ & _).
     destruct (hW lo G e c stk sts tc rs s v rs' s' hok hs hc hstk he)
       as (lo' & G' & u & hren & hok' & hv & hr).
-    destruct (hB d Q ltac:(lia)) as (_ & _ & hBw & _ & _).
+    pose proof (hB d Q ltac:(lia)) as hBd. unfold machine_hwf_at in hBd.
+    destruct hBd as (_ & _ & hBw & _ & _).
     destruct (hBw e c stk rs s v rs' s' hw hrs he) as (hw' & hrs' & hvw).
     exists lo', G', u. split; [constructor; assumption|]. split; [exact hrs'|].
     split; [exact hvw|]. split; [exact hren|]. split; [exact hv|exact hr].
@@ -366,7 +505,8 @@ Section Master.
                 ltac:(lia) hcio d) as (_ & hE & _ & _ & _).
     destruct (hE lo G x stk sts tx rs s v rs' s' hok hx hstk he)
       as (lo' & G' & u & hren & hok' & hv & hr).
-    destruct (hB d Q ltac:(lia)) as (_ & hBe & _ & _ & _).
+    pose proof (hB d Q ltac:(lia)) as hBd. unfold machine_hwf_at in hBd.
+    destruct hBd as (_ & hBe & _ & _ & _).
     destruct (hBe x stk rs s v rs' s' hw hrs he) as (hw' & hrs' & hvw).
     exists lo', G', u. split; [constructor; assumption|]. split; [exact hrs'|].
     split; [exact hvw|]. split; [exact hren|]. split; [exact hv|exact hr].
@@ -405,4 +545,192 @@ Section Master.
     - rewrite Nat.sub_diag. exact hok.
     - intros a cl ha. destruct (hempty a cl ha).
   Qed.
+
+  (** A step that leaves heap, next address, context map and memo alone keeps [minv]. *)
+  Lemma minv_same L Q lo G s s' :
+    minv L Q lo G s -> s'.(st_heap) = s.(st_heap) -> s'.(st_next) = s.(st_next) ->
+    s'.(st_gam) = s.(st_gam) -> s'.(st_memo) = s.(st_memo) -> minv L Q lo G s'.
+  Proof.
+    intros [hL hQ hok hw] e1 e2 e3 e4. split; [exact hL|exact hQ| |].
+    - eapply gok_same; [exact hok|exact e1|exact e2|exact e3|].
+      eapply mok_memo; [exact e4|exact (gk_memo _ _ _ _ _ _ _ _ _ _ hok)].
+    - intros a cl ha. unfold heap_get in ha. rewrite e1 in ha. exact (hw a cl ha).
+  Qed.
+
+  (** The machine's initial state is an instance of [minv] with the empty ghost. *)
+  Lemma minv_init : minv nctx nctx xH (mkGhost (fun _ => None) (PTree.empty _)) cbn_init.
+  Proof.
+    split; [lia|lia| |].
+    - exact (gok_init X_type X Γ nctx Σ (jctx (nctx - nctx)) nctx).
+    - intros a cl h. unfold heap_get, cbn_init in h. cbn [st_heap] in h.
+      rewrite bh_get_holes in h. discriminate.
+  Qed.
+
+  (** *** The interface of the read-back (slice F)
+
+    A read-back at the logical level [L] of a suspension whose master reading is the lifted
+    logical term [v] is a reduct of [v], and leaves [minv] alone. Its instance:
+    [rb_instance] below, a real call that returns. *)
+  Definition rb_case (d : cbn_fuel) (L Q : nat) (lo : positive) (G : ghost) (e : cbn_env)
+      (t v : term) (s : cbn_state) : Prop :=
+    minv L Q lo G s -> on_free_vars xpredT t -> on_free_vars xpredT v ->
+    g_susp nctx Q G e t (lift0 (Q - L) v) ->
+    forall u s', rb_susp nctx d L e t s = COk (u, s') ->
+      minv L Q lo G s' /\ forall Δ, #|Δ| = L - nctx -> ∥ red Σ (Γ ,,, Δ) v u ∥.
+
+  Definition rb_sound : Prop := forall d L Q lo G e t v s, rb_case d L Q lo G e t v s.
+
+  (** *** The interface of the comparison (the seam, slice D+E+G)
+
+    A call at logical level [L] on inputs whose master readings at [Q] are the lifted logical
+    terms [v1], [v2] ends at a master level [Q' >= Q] with [minv], its roots renamed and
+    keeping their readings lifted to [Q'], and, when it answers [true], [v1] and [v2]
+    convertible at [pb] in every closed context [Γ ,,, Δ] of the logical length. Instances:
+    [slot_instance] and [term_instance] below, real calls that answer [true]. *)
+  Definition seam_post (L Q : nat) (G : ghost) (rs : list root) (pb : conv_pb) (v1 v2 : term)
+      (b : bool) (rs' : list root) (s' : cbn_state) : Prop :=
+    exists Q' lo' G', Q <= Q' /\ minv L Q' lo' G' s' /\ Forall (rwf Q') rs'
+      /\ gren nctx Q' (gshift (Q' - Q) G) G' rs rs'
+      /\ (b = true -> forall Δ, #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) ->
+            is_open_term (Γ ,,, Δ) v1 -> is_open_term (Γ ,,, Δ) v2 ->
+            ∥ Σ ;;; Γ ,,, Δ ⊢ v1 ≤[pb] v2 ∥).
+
+  Definition term_case (d : cbn_fuel) (L Q : nat) (lo : positive) (G : ghost) (pb : conv_pb)
+      (e1 : cbn_env) (c1 : code) (e2 : cbn_env) (c2 : code) (v1 v2 : term) (rs : list root)
+      (s : cbn_state) : Prop :=
+    minv L Q lo G s -> Forall (rwf Q) rs ->
+    PCUICCallByNeedSoundEval.cok G c1 -> PCUICCallByNeedSoundEval.cok G c2 ->
+    on_free_vars xpredT v1 -> on_free_vars xpredT v2 ->
+    g_susp nctx Q G e1 c1.(c_term) (lift0 (Q - L) v1) ->
+    g_susp nctx Q G e2 c2.(c_term) (lift0 (Q - L) v2) ->
+    forall b rs' s', conv_term X_type X Γ nctx stress d L pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      seam_post L Q G rs pb v1 v2 b rs' s'.
+
+  Definition slot_case (d : cbn_fuel) (L Q : nat) (lo : positive) (G : ghost) (pb : conv_pb)
+      (x1 x2 : cbn_slot) (v1 v2 : term) (rs : list root) (s : cbn_state) : Prop :=
+    minv L Q lo G s -> Forall (rwf Q) rs ->
+    on_free_vars xpredT v1 -> on_free_vars xpredT v2 ->
+    g_slot nctx Q G x1 (lift0 (Q - L) v1) -> g_slot nctx Q G x2 (lift0 (Q - L) v2) ->
+    forall b rs' s', conv_slot X_type X Γ nctx stress d L pb x1 x2 rs s = COk (b, rs', s') ->
+      seam_post L Q G rs pb v1 v2 b rs' s'.
+
+  Definition term_sound (d : cbn_fuel) : Prop :=
+    forall L Q lo G pb e1 c1 e2 c2 v1 v2 rs s, term_case d L Q lo G pb e1 c1 e2 c2 v1 v2 rs s.
+  Definition slot_sound (d : cbn_fuel) : Prop :=
+    forall L Q lo G pb x1 x2 v1 v2 rs s, slot_case d L Q lo G pb x1 x2 v1 v2 rs s.
 End Master.
+
+(** An allocation without collection keeps [hwf]. *)
+Lemma alloc_now_hwf Q lo cl s :
+  bh_ok lo s.(st_next) s.(st_heap) -> hwf Q s -> cwf Q cl -> hwf Q (snd (alloc_now cl s)).
+Proof.
+  intros hbok hw hc b cl2 hb. unfold heap_get in hb. cbn in hb.
+  destruct (haddr_dec b (HAddr s.(st_next))) as [->|hne].
+  - rewrite (bh_get_cons_new _ _ _ _ hbok) in hb. injection hb as <-. exact hc.
+  - rewrite (bh_get_cons_old _ _ _ _ _ hbok hne) in hb. exact (hw b cl2 hb).
+Qed.
+
+(** ** Satisfying instances of the named hypotheses (gate rule)
+
+  The section hypotheses of [Shift], [Raise] and [Master]: [nctx <= lvl], [wfΣ], [hΣ],
+  [hnctx], [hΓ], [hhyg], [hcio]. For the empty context and for a context of one assumption
+  ([level_ctx_instance_nil], [level_ctx_instance_one]); for any well-formed context,
+  [PCUICCallByNeedSoundHookFrame.eval_section_instance]; [wfΣ] and [hΣ] for every abstract
+  environment, [PCUICCallByNeedSoundEval.eval_env_instance]. The interfaces: below. *)
+
+Definition inst_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
+Definition inst_Γ : context := [vass inst_na (tSort sProp)].
+
+Lemma level_ctx_instance_nil (Σ : global_env_ext) :
+  0 <= 0 /\ 0 = #|([] : context)| /\ is_closed_context [] /\ ctx_hyg []
+  /\ (forall j decl b, nth_error ([] : context) j = Some decl -> decl.(decl_body) = Some b ->
+        PCUICCallByNeedSoundHook.consts_okb Σ b).
+Proof.
+  split; [lia|]. split; [reflexivity|]. split; [reflexivity|].
+  split; intros j decl b h; destruct j; discriminate h.
+Qed.
+
+Lemma inst_Γ_nobody j decl b :
+  nth_error inst_Γ j = Some decl -> decl.(decl_body) = Some b -> False.
+Proof.
+  destruct j as [|j]; cbn; intros h hb; [injection h as <-; discriminate hb|].
+  destruct j; discriminate h.
+Qed.
+
+Lemma level_ctx_instance_one (Σ : global_env_ext) :
+  1 <= 1 /\ 1 = #|inst_Γ| /\ is_closed_context inst_Γ /\ ctx_hyg inst_Γ
+  /\ (forall j decl b, nth_error inst_Γ j = Some decl -> decl.(decl_body) = Some b ->
+        PCUICCallByNeedSoundHook.consts_okb Σ b).
+Proof.
+  split; [lia|]. split; [reflexivity|]. split; [reflexivity|].
+  split; intros j decl b h hb; destruct (inst_Γ_nobody j decl b h hb).
+Qed.
+
+Fixpoint fuel_n (n : nat) : cbn_fuel :=
+  match n with O => FO | S n => FS (fun _ => fuel_n n) end.
+
+Section Instances.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Σ : global_env_ext).
+
+  Definition G0 : ghost := mkGhost (fun _ => None) (PTree.empty _).
+
+  (** F: the read-back of a sort in the empty environment, at the start state. *)
+  Lemma rb_instance :
+    (exists s', rb_susp 0 (fuel_n 1) 0 env_empty (tSort sProp) cbn_init = COk (tSort sProp, s'))
+    /\ minv X_type X [] 0 Σ 0 0 xH G0 cbn_init
+    /\ on_free_vars xpredT (tSort sProp)
+    /\ g_susp 0 0 G0 env_empty (tSort sProp) (lift0 (0 - 0) (tSort sProp))
+    /\ rb_case X_type X [] 0 Σ (fuel_n 1) 0 0 xH G0 env_empty (tSort sProp) (tSort sProp) cbn_init.
+  Proof.
+    split.
+    { destruct (rb_susp 0 (fuel_n 1) 0 env_empty (tSort sProp) cbn_init) as [[u s']|w] eqn:E;
+        pose proof E as Ec; vm_compute in Ec; try discriminate Ec.
+      injection Ec as hu _. subst u. exists s'. reflexivity. }
+    split; [exact (minv_init X_type X [] 0 Σ eq_refl)|]. split; [reflexivity|].
+    split; [exact (g_susp_env_empty 0 G0 (tSort sProp))|].
+    intros hm _ _ _ u s' E. pose proof E as Ec. vm_compute in Ec.
+    injection Ec as hu hs. subst u s'. split.
+    - eapply minv_same; [exact hm|reflexivity|reflexivity|reflexivity|reflexivity].
+    - intros Δ _. constructor. apply refl_red.
+  Qed.
+
+  (** The seam at a slot: two equal addresses, a cell left by a binder (a fresh variable),
+    at levels [L = Q = 1]. [conv_cells] makes exactly this call. *)
+  Definition sl_cell : cbn_cell := CDone (VNeu (NVar 0) []).
+  Definition sl_a : haddr := fst (alloc_now sl_cell cbn_init).
+  Definition sl_s : cbn_state := snd (alloc_now sl_cell cbn_init).
+
+  Lemma slot_instance pb :
+    exists G, minv X_type X [] 0 Σ 1 1 xH G sl_s
+      /\ g_slot 0 1 G (SAddr sl_a) (lift0 (1 - 1) (tRel 0))
+      /\ on_free_vars xpredT (tRel 0)
+      /\ conv_slot X_type X [] 0 false (fuel_n 1) 1 pb (SAddr sl_a) (SAddr sl_a) [] sl_s
+         = COk (true, [], sl_s)
+      /\ slot_case X_type X [] 0 false Σ (fuel_n 1) 1 1 xH G pb (SAddr sl_a) (SAddr sl_a)
+           (tRel 0) (tRel 0) [] sl_s.
+  Proof.
+    destruct (alloc_now_sound X_type X [] 0 Σ (jctx (1 - 0)) 1 eq_refl eq_refl
+                (le_S _ _ (le_n 0)) xH _ sl_cell (tRel (1 - 1)) cbn_init
+                (gok_init X_type X [] 0 Σ (jctx (1 - 0)) 1)
+                (g_cell_done 0 1 _ _ _ (g_VNeuVar 0 1 _ 0 [] [] (Forall2_nil _)))
+                (fun _ => eq_refl)) as (G & _ & hok & ha).
+    assert (hm : minv X_type X [] 0 Σ 1 1 xH G sl_s).
+    { split; [lia|lia|exact hok|].
+      apply (alloc_now_hwf 1 xH sl_cell cbn_init).
+      - exact (so_heap _ _ ltac:(apply state_ok_init)).
+      - intros a cl h. unfold heap_get, cbn_init in h. cbn [st_heap] in h.
+        rewrite bh_get_holes in h. discriminate.
+      - cbn. lia. }
+    assert (hc : conv_slot X_type X [] 0 false (fuel_n 1) 1 pb (SAddr sl_a) (SAddr sl_a) []
+                   sl_s = COk (true, [], sl_s)).
+    { cbn [fuel_n conv_slot]. rewrite haddr_eqb_refl. reflexivity. }
+    exists G. split; [exact hm|]. split; [constructor; exact ha|].
+    split; [reflexivity|]. split; [exact hc|].
+    intros _ _ _ _ _ _ b rs' s' E. rewrite hc in E. injection E as <- <- <-.
+    exists 1, xH, G. split; [lia|]. split; [exact hm|]. split; [constructor|].
+    split.
+    - split; [intros i e h; exact h|constructor].
+    - intros _ Δ _ hcl ho _. constructor. exact (@ws_cumul_pb_refl_open _ Σ pb _ _ hcl ho).
+  Qed.
+End Instances.
