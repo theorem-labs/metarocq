@@ -143,4 +143,6 @@ theories/PCUICEtaC3B.v
 theories/PCUICEtaCanon.v
 # L2 U1' / F-inst pinned definition (plan.md 6.2, R3(a) repair step 1)
 theories/PCUICEtaFInst.v
+# L2 C1a re-pinned to upto_domain_r (plan.md 6.2 obligation 1 re-pin; C4C1a's proof)
+theories/PCUICEtaC1aR.v
 # theories/All.v
