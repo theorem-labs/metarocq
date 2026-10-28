@@ -898,7 +898,7 @@ struct
 
 
   (* [~canonical:true] is for a [Case], where PCUIC compares the instance
-     exactly ([global_variance_gen], PCUICEquality.v:46-74).  The kernel
+     exactly ([global_variance_gen], PCUICEquality.v:46-76).  The kernel
      stores no instance there, and the instance inferred from the parameters'
      types is fixed at quotation: after PCUIC substitutes into the parameters,
      one kernel term can carry two instances (a [match .. in prod _ _] reached
