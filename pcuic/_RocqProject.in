@@ -165,4 +165,6 @@ theories/PCUICEtaC4Shape.v
 theories/PCUICEtaHRModulo.v
 # BET-315 eta lane (L2): C4 assembly (P-INST) — first file joining C4 to base confluence
 theories/PCUICEtaC4.v
+# BET-315 eta lane (C4A1): theorem (A), strong commutation => commutation modulo E (carrier-generic)
+theories/PCUICEtaHRCommutationA1.v
 # theories/All.v
