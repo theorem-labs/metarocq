@@ -2,7 +2,7 @@ From MetaRocq.Template Require Import Ast Typing.
 From MetaRocq.Quotation.ToTemplate Require Import Init.
 From MetaRocq.Quotation.ToTemplate Require Import (hints) Stdlib.Init Stdlib.Lists Stdlib.Numbers Stdlib.Floats.
 From MetaRocq.Quotation.ToTemplate.Utils Require Import (hints) utils All_Forall (* MRProd*).
-From MetaRocq.Quotation.ToTemplate.Common Require Import (hints) config BasicAst Universes Kernames Environment EnvironmentTyping Primitive Reflect.
+From MetaRocq.Quotation.ToTemplate.Common Require Import (hints) config BasicAst Universes Kernames Environment EnvironmentTyping Primitive PrimitiveOps Reflect.
 From MetaRocq.Quotation.ToTemplate.Template Require Import (hints) AstUtils
   LiftSubst UnivSubst ReflectAst TermEquality WfAst.
 From MetaRocq.Quotation.ToTemplate.Common Require Import Environment EnvironmentTyping.
@@ -72,7 +72,7 @@ Export (hints) QuoteTemplateEnvTyping.
 Module QuoteTemplateConversion := QuoteConversion TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion qTemplateTerm qEnv qTemplateConversion QuoteTemplateTerm QuoteEnv.
 Export (hints) QuoteTemplateConversion.
 
-Module QuoteTemplateGlobalMaps := QuoteGlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateArityRelation TemplateGlobalMaps qTemplateTerm qEnv qTemplateEnvTyping qTemplateConversion qTemplateLookup qTemplateArityRelation qTemplateGlobalMaps QuoteTemplateTerm QuoteEnv QuoteTemplateEnvTyping QuoteTemplateConversion QuoteTemplateLookup QuoteTemplateArityRelation.
+Module QuoteTemplateGlobalMaps := QuoteGlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateArityRelation TemplatePrimOpType TemplateGlobalMaps qTemplateTerm qEnv qTemplateEnvTyping qTemplateConversion qTemplateLookup qTemplateArityRelation qTemplatePrimOpType qTemplateGlobalMaps QuoteTemplateTerm QuoteEnv QuoteTemplateEnvTyping QuoteTemplateConversion QuoteTemplateLookup QuoteTemplateArityRelation.
 Export (hints) QuoteTemplateGlobalMaps.
 
 Module QuoteTemplateConversionPar <: QuoteConversionParSig TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversionPar.
@@ -117,6 +117,7 @@ Module QuoteTemplateDeclarationTyping
        TemplateTyping
        TemplateLookup
        TemplateArityRelation
+       TemplatePrimOpType
        TemplateGlobalMaps
        TemplateDeclarationTyping
        qTemplateTerm

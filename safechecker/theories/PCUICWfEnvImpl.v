@@ -197,7 +197,9 @@ Program Global Instance canonical_abstract_env_struct {cf:checker_flags} {guard 
   abstract_env_rel := fun X Σ => Σ = reference_impl_env X ;
   abstract_pop_decls := reference_pop ;
  |}.
-Next Obligation. destruct H as [Hu Hr]. sq. split; [exact Hu|]. split; [exact Hr|]. constructor. Qed.
+Next Obligation.
+  sq. split; [assumption|]. split; [assumption|]. constructor.
+Qed.
 Next Obligation.
   pose proof (reference_impl_wf X) as [[Hu [Hr Hd]]].
   destruct (H _ eq_refl) as [Hdata].
