@@ -145,4 +145,6 @@ theories/PCUICEtaCanon.v
 theories/PCUICEtaFInst.v
 # L2 C1a re-pinned to upto_domain_r (plan.md 6.2 obligation 1 re-pin; C4C1a's proof)
 theories/PCUICEtaC1aR.v
+# L2 C3 re-pinned to upto_domain_r (plan.md 6.2 obligation 1 re-pin; Prover B's proof)
+theories/PCUICEtaC3BR.v
 # theories/All.v
