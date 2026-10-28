@@ -22,6 +22,8 @@ From MetaRocq.PCUIC Require Import BDTyping BDToPCUIC BDFromPCUIC BDUnique.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICSafeReduce PCUICErrors
   PCUICSafeConversion PCUICWfReduction PCUICWfEnv PCUICCallByNeed.
+From MetaRocq.SafeChecker Require PCUICCallByNeedSoundReadBack PCUICCallByNeedSoundConv
+  PCUICCallByNeedSoundHookProof.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -488,9 +490,14 @@ Section Typecheck.
       pose proof hu as [? ?]%andb_and; eassumption.
   Qed.
   Next Obligation.
-    (* Measurement only: the comparison theorem of the call-by-need fast path
-       (design CN-1, BET-298) is not proved yet; it replaces this in step 4. *)
-  Admitted.
+    (* The call-by-need fast path is sound (BET-298): [convert_cbn_sound] reduces the claim to
+       the comparison theorem [spec_all_holds], whose read-back premise is [rb_sound_holds]. *)
+    exact (PCUICCallByNeedSoundHookProof.convert_cbn_sound X_type X
+      (fun Γ nctx stress Σ wfΣ hΣ hn hΓ hh hc =>
+         PCUICCallByNeedSoundConv.spec_all_holds X_type X Γ nctx stress Σ wfΣ hΣ hn hΓ hh hc
+           (PCUICCallByNeedSoundReadBack.rb_sound_holds X_type X Γ nctx Σ wfΣ hΓ hh))
+      le Γ t u ht hu Hcbn Σ wfΣ).
+  Qed.
   Next Obligation.
     now symmetry in Hc; eapply isconv_term_sound in Hc.
   Qed.
