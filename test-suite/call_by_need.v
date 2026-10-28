@@ -191,6 +191,13 @@ Section WellTyped.
   Lemma wt_u_welltyped (Σ : global_env_ext) : welltyped Σ wt_Γ wt_u.
   Proof. econstructor. exact (type_Rel Σ _ 1 _ (wt_wf_local Σ) eq_refl). Qed.
 
+  (** [convert] tries [eqb_term_upto_univ] first and calls [cbn_conv] only when it fails. It
+    fails here, whatever the universe comparisons are: on two variables it compares their
+    indices, and [0 <> 1]. So [convert] takes the fast path on this input. *)
+  Lemma wt_eqb_false cmpu cmps gen :
+    PCUICEqualityDec.eqb_term_upto_univ_napp cmpu cmps gen Conv 0 wt_t wt_u = false.
+  Proof. reflexivity. Qed.
+
   (** The fast path answers [true], by computation, for every abstract environment. *)
   Lemma wt_cbn_conv_true (X_type : abstract_env_impl) (X : X_type.π2.π1) :
     cbn_conv X_type X Conv wt_Γ wt_t wt_u = true.
@@ -209,9 +216,9 @@ Section WellTyped.
   (** ** The same at a concrete environment
 
     The canonical abstract environment of [PCUICWfEnvImpl], built from the empty global
-    environment by [abstract_env_empty_ext]. Its only parameter is the guard implementation
-    [guard]: PCUIC states the guard condition as an axiom ([PCUICTyping.guard_checking]), so
-    an environment that decides it cannot be built here without a new axiom. *)
+    environment by [abstract_env_empty_ext]. The statement is parametric in the guard
+    implementation [guard], so it holds for whichever implementation the checker is built
+    with. *)
   Context {guard : abstract_guard_impl}.
 
   Definition wt_X : (@canonical_abstract_env_impl cf guard).π2.π1 :=

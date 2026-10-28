@@ -1049,9 +1049,9 @@ Definition bh_upd {A} (a : haddr) (x : A) (h : bheap A) : option (bheap A) :=
 
   [bh_ok lo n h]: [h] is the heap reached from [bh_holes lo] by [bh_cons] and [bh_upd], with
   [n] the next address ([lo] plus the number of [bh_cons]). The laws: [bh_get_cons_new],
-  [bh_get_cons_old], [bh_get_upd_same], [bh_get_upd_other], [bh_upd_none], [bh_get_above],
-  [bh_get_below], [bh_upd_ok]. The rest of this part are the steps of their proofs. The
-  laws over the state that the proofs use are after the state's operations. *)
+  [bh_get_cons_old], [bh_get_upd_same], [bh_get_upd_other], [bh_upd_none], [bh_upd_ok]. The
+  rest of this part are the steps of their proofs. The laws over the state that the proofs
+  use are after the state's operations. *)
 
 (** The digits of [h] are the binary digits of [n], least significant first. *)
 Inductive bh_digits {A} : bheap A -> positive -> Prop :=
@@ -2596,8 +2596,8 @@ Section CallByNeed.
       end
     end
 
-  (** The comparison of two weak-head values that [conv_value] did not settle by address or
-    by a shared code. *)
+  (** The comparison of two weak-head values that [conv_value] did not settle by a shared
+    code. *)
   with conv_rows (d : cbn_fuel) (lvl : nat) (le : conv_pb) (v1 v2 : cbn_value)
     (rs : list root) (s : cbn_state) {struct d} : cbn_res (bool * list root * cbn_state) :=
     match d with

@@ -15,16 +15,16 @@ From MetaRocq.SafeChecker Require Import PCUICCallByNeedSoundMemo.
   gives the premise ([inst_okb_nil]) and proves it of well-typed terms and of constant
   bodies. [PCUICCallByNeedSoundEval.machine_sound] discharges the premise with it, and the
   hook establishes it for the let-bodies of the context in
-  [PCUICCallByNeedSoundHookFrame.eval_section_instance].
+  [PCUICCallByNeedSoundHookFrame.cbn_run_gok_frame] (through [wf_local_consts_okb]).
 
   [consts_okb Σ t] says that every constant the *machine* can reach from [t] carries an
   instance of the right length: at [tConst kn u], that [lookup_env Σ kn] is a constant
-  whose universe context has exactly [#|u|] variables. It recurses through at least the
-  subterms [code_inv]'s [step] takes (application, the two sides of a binder, the three
-  of a let, a case's parameters, return clause, discriminee and branch bodies, a
-  projection's argument, and a (co)fixpoint's types and bodies); it also enters the
-  arguments of a [tEvar]. The machine never makes a child code at a [tPrim] or inside a
-  case's [pcontext]/[bcontext], so [consts_okb] is [true] there.
+  whose universe context has exactly [#|u|] variables. It recurses through every subterm
+  [code_inv]'s [step] takes (application, the two sides of a binder, the three of a let, a
+  case's parameters, return clause, discriminee and branch bodies, a projection's argument,
+  and a (co)fixpoint's bodies), and also through a (co)fixpoint's types and the arguments of
+  a [tEvar], which [step] does not take. The machine never makes a child code at a [tPrim]
+  or inside a case's [pcontext]/[bcontext], so [consts_okb] is [true] there.
   [PCUICCallByNeedSoundEval.code_inv_consts_okb] carries it along the machine's codes.
 
   [typing_consts_okb] proves it of every well-typed term, by [typing_ind_env] with the
