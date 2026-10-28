@@ -738,6 +738,7 @@ Proof.
     eapply WfAst.wf_mkApps_napp in w1 as []; [|easy].
     wf_inv w1 x.
     eapply eval_cofix_case.
+    assumption.
     eapply trans_cunfold_cofix; tea.
     rewrite trans_mkApps in IHev1.  eapply IHev1. eauto.
     rewrite /= trans_lookup_inductive (declared_inductive_lookup _ decli') trans_mkApps in IHev2.

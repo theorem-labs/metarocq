@@ -1,18 +1,17 @@
 (* Case analysis on coinductive types.
 
-   A [match] on a coinductive type is accepted when its return type does not
-   mention the matched value: unfolding a cofixpoint under it then leaves the
-   type of the [match] unchanged. A [match] whose return type mentions the
-   matched value is refused, with "Dependent case on coinductive": unfolding a
-   cofixpoint under it would change its type, which breaks subject reduction
-   (the Rocq reference manual, "Coinductive types", section "Caveat": dependent
-   pattern matching on a positive coinductive type breaks subject reduction).
+   A [match] on a coinductive type is accepted whether or not its return type
+   mentions the matched value. The quotation of a [match] marks, in the case
+   information, whether the return type mentions the matched value. A cofixpoint
+   unfolds under a [match] that does not mention it, which leaves the type of the
+   [match] unchanged; under a [match] that mentions it the cofixpoint does not
+   unfold, since unfolding would change the type of the [match] and break subject
+   reduction (the Rocq reference manual, "Coinductive types", section "Caveat":
+   dependent pattern matching on a positive coinductive type breaks subject
+   reduction).
 
-   Each refused case is preceded by an [expect:] comment; [check_fail_messages.sh],
-   which the test-suite Makefile runs on this file, checks that the message of the
-   [Fail MetaRocq SafeCheck] that follows contains it, since [Fail] alone passes on
-   any error. The types are declared here, without template polymorphism, so that
-   nothing but the case rule is exercised. *)
+   The types are declared here, without template polymorphism, so that nothing but
+   the case rule is exercised. *)
 
 From MetaRocq.Template Require Import Loader.
 From MetaRocq.SafeCheckerPlugin Require Import Loader.
@@ -76,25 +75,32 @@ CoFixpoint cc_copy {A} (s : cc_stream A) : cc_stream A :=
   end.
 MetaRocq SafeCheck @cc_copy.
 
-(** * Refused *)
+(** * Dependent return types *)
 
 #[universes(template=no)]
 CoInductive cc_nstream : Type := cc_ncons (a : nat) (rest : cc_nstream).
 
 (* R1: a proof by [destruct] on a coinductive: its match returns
-   [exists a r, s = cc_ncons a r], which mentions [s]. *)
+   [exists a r, s = cc_ncons a r], which mentions [s]. The quotation marks the
+   match as dependent, and a cofixpoint does not unfold under it. *)
 Lemma cc_ncases (s : cc_nstream) : exists a r, s = cc_ncons a r.
 Proof. destruct s as [a r]. exists a, r. reflexivity. Qed.
-(* expect: Dependent case on coinductive *)
-Fail MetaRocq SafeCheck cc_ncases.
+MetaRocq SafeCheck cc_ncases.
 
-(* R2: the counterexample to subject reduction. [cc_eq_force s] is a match whose
-   return type, [s = cc_force s], mentions [s]. For [s] a cofixpoint, unfolding
-   [s] under the match would give it a type that is not convertible to the old
-   one. *)
+(* R2: the term behind the counterexample to subject reduction. [cc_eq_force s] is
+   a match whose return type, [s = cc_force s], mentions [s]. The quotation marks
+   the match as dependent, so no cofixpoint unfolds under it, and its type stays
+   the same. *)
 Definition cc_force (s : cc_nstream) : cc_nstream :=
   match s with cc_ncons a r => cc_ncons a r end.
 Definition cc_eq_force (s : cc_nstream) : s = cc_force s :=
   match s return s = cc_force s with cc_ncons a r => eq_refl end.
-(* expect: Dependent case on coinductive *)
-Fail MetaRocq SafeCheck cc_eq_force.
+MetaRocq SafeCheck cc_eq_force.
+
+(* A5: a cofixpoint under a match whose return type does not mention the matched
+   value still unfolds: this equation holds by computation alone, so checking it
+   needs the unfolding. *)
+CoFixpoint cc_zeros : cc_nstream := cc_ncons 0 cc_zeros.
+Definition cc_head (s : cc_nstream) : nat := match s with cc_ncons a _ => a end.
+Definition cc_head_zeros : cc_head cc_zeros = 0 := eq_refl.
+MetaRocq SafeCheck cc_head_zeros.

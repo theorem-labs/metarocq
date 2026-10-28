@@ -815,8 +815,8 @@ Proof using wfΣ.
       eapply closed_ctx_on_free_vars, declared_inductive_closed_params.
       eassumption.
 
-    + match goal with h : implb _ (on_free_vars _ (preturn p)) = true |- _ => move: h end.
-      destruct isCoFinite => //= hnd.
+    + match goal with h : implb _ (implb _ (on_free_vars _ (preturn p))) = true |- _ => move: h end.
+      destruct isCoFinite => //=. destruct ci.(ci_cofix_nondep) => //= hnd.
       apply PCUICOnFreeVarsConv.on_free_vars_nondep_rename => //.
       rewrite (wf_predicate_length_pcontext H1); lia.
 

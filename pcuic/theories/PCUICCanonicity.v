@@ -17,10 +17,13 @@ From MetaRocq.PCUIC Require Import PCUICTyping PCUICEquality PCUICAst PCUICAstUt
   PCUICReduction PCUICCSubst PCUICOnFreeVars PCUICWellScopedCumulativity
   PCUICWcbvEval PCUICClassification PCUICSN PCUICNormalization PCUICViews.
 
+(** A closed well-typed term of an inductive type is convertible to a term whose head is
+    a constructor or a cofixpoint, unless it is blocked by a case on a cofixpoint. *)
 Lemma pcuic_canonicity {cf:checker_flags} {nor : normalizing_flags} Σ {normalization_in: NormalizationIn Σ} t i u args :
      axiom_free Σ -> wf Σ ->
      Σ ;;; [] |- t : mkApps (tInd i u) args ->
-     { t':term & (Σ ;;; [] |- t' : mkApps (tInd i u) args) * (Σ ;;; [] |- t =s t') * construct_cofix_discr (head t')}.
+     { t':term & (Σ ;;; [] |- t' : mkApps (tInd i u) args) * (Σ ;;; [] |- t =s t') *
+       (construct_cofix_discr (head t') + stuck_cofix_case t')}.
 Proof.
   intros axΣ wfΣ typ_ind. pose proof (_ ; typ_ind) as wt.
   eapply wh_normalization in wt ; eauto.
