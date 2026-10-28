@@ -389,6 +389,122 @@ Proof.
       exact hd.
 Qed.
 
+(** ** Why [gok] carries a hygiene clause: red weakening is false without it
+
+  The comparison changes the level of [gok] by lifting every ghost term, which needs red
+  weakening of every ghost term. [rw_w] below is a match whose branch context is one
+  let-binding of an outer variable. [lift] leaves branch contexts alone, so [lift0 1 rw_w] is
+  [rw_w] itself, while [iota_red] expands the let-body: [rw_w] reduces to [tRel 0] in a
+  context of one assumption, and in a context of two its lift still reduces to [tRel 0],
+  never to [lift0 1 (tRel 0)] ([red_weakening_needs_hygiene]). Without [gk_hyg], a cell
+  [CDone (VNeu (NVar 0) [])] at level 1, which reads [tRel 0], could carry the ghost
+  [rw_w]; after lifting to level 2 the cell reads [tRel 1] and the lifted ghost does not
+  reduce to it. [rw_w] fails the hygiene test ([rw_w_unhygienic]), which is what [gk_hyg]
+  excludes. *)
+
+Definition rw_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
+Definition rw_d : context_decl := vass rw_na (tSort sProp).
+Definition rw_ind : inductive :=
+  {| inductive_mind := (MPfile ["RW"], "rw"); inductive_ind := 0 |}.
+Definition rw_ci : case_info := {| ci_ind := rw_ind; ci_npar := 0; ci_relevance := Relevant |}.
+Definition rw_p : predicate term :=
+  {| pparams := []; puinst := []; pcontext := []; preturn := tSort sProp |}.
+(** A branch whose context is one let-binding of [tRel 0]: a variable outside the match. *)
+Definition rw_br (b : term) : branch term :=
+  {| bcontext := [vdef rw_na (tRel 0) (tSort sProp)]; bbody := b |}.
+Definition rw_case (b : term) : term := tCase rw_ci rw_p (tConstruct rw_ind 0 []) [rw_br b].
+Definition rw_w : term := rw_case (tRel 0).
+
+Lemma rw_w_unhygienic : on_free_vars xpredT rw_w = false.
+Proof. reflexivity. Qed.
+
+(** [lift] leaves the branch context alone, and the branch body [tRel 0] is bound by it. *)
+Lemma rw_w_lift : lift0 1 rw_w = rw_w.
+Proof. reflexivity. Qed.
+
+Lemma mkApps_eq_nonapp f args t :
+  match t with tApp _ _ => False | _ => True end -> mkApps f args = t -> args = [] /\ f = t.
+Proof.
+  intros hn h. destruct args as [|a args _] using rev_ind; [split; [reflexivity|exact h]|].
+  rewrite mkApps_app in h. subst t. destruct hn.
+Qed.
+
+Local Ltac rw_clean :=
+  repeat match goal with
+  | H : mkApps _ ?args = _ |- _ =>
+      apply mkApps_eq_nonapp in H;
+        [let ha := fresh "ha" in destruct H as [ha H]; subst; try discriminate H|exact I]
+  end.
+
+Local Ltac rw_nobody :=
+  match goal with
+  | H : option_map decl_body (nth_error _ _) = Some (Some _) |- _ => cbn in H; discriminate H
+  end.
+
+(** The terms [rw_w] reaches in a context of two assumptions. *)
+Definition rw_reach (x : term) : Prop :=
+  x = rw_case (tRel 0) \/ x = rw_case (tRel 1) \/ x = tRel 0.
+
+Lemma rw_step_case (Σ : global_env) (b y : term) :
+  (b = tRel 0 \/ b = tRel 1) -> red1 Σ [rw_d; rw_d] (rw_case b) y -> rw_reach y.
+Proof.
+  intros hb h. unfold rw_case in h.
+  inversion h; subst; rw_clean.
+  - (* iota: the let-body of the branch context, [tRel 0] *)
+    match goal with Hn : nth_error _ ?c = Some _ |- _ =>
+      destruct c as [|c]; [cbn in Hn; injection Hn as <-|destruct c; discriminate Hn] end.
+    right; right. destruct hb as [-> | ->]; reflexivity.
+  - (* parameters: there are none *)
+    match goal with X : OnOne2 _ _ _ |- _ => cbn in X; inversion X end.
+  - (* return clause: [tSort sProp] is normal *)
+    match goal with X : red1 _ _ _ _ |- _ => cbn [preturn rw_p] in X; inversion X; subst end;
+      rw_clean.
+  - (* discriminant: a constructor is normal *)
+    match goal with X : red1 _ _ (tConstruct _ _ _) _ |- _ => inversion X; subst end; rw_clean.
+  - (* branch body: [tRel 0] unfolds the let to [tRel 1], which is normal *)
+    match goal with X : OnOne2 _ _ _ |- _ => inversion X; subst end.
+    + match goal with X0 : prod _ _ |- _ => destruct X0 as [hr hc] end.
+      match goal with |- rw_reach (tCase _ _ _ [?br']) => destruct br' as [bc bb] end.
+      cbn in hr, hc. subst bc.
+      destruct hb as [-> | ->]; inversion hr; subst; rw_clean; [|rw_nobody].
+      match goal with H : option_map decl_body (nth_error _ _) = Some (Some _) |- _ =>
+        cbn in H; injection H as <- end.
+      right; left. reflexivity.
+    + match goal with X0 : OnOne2 _ [] _ |- _ => inversion X0 end.
+Qed.
+
+Lemma rw_step (Σ : global_env) (x y : term) :
+  rw_reach x -> red1 Σ [rw_d; rw_d] x y -> rw_reach y.
+Proof.
+  intros hx h. destruct hx as [ -> | [ -> | -> ] ].
+  - exact (rw_step_case Σ (tRel 0) y (or_introl eq_refl) h).
+  - exact (rw_step_case Σ (tRel 1) y (or_intror eq_refl) h).
+  - inversion h; subst; rw_clean. rw_nobody.
+Qed.
+
+Lemma rw_reach_red (Σ : global_env) (x y : term) :
+  rw_reach x -> red Σ [rw_d; rw_d] x y -> rw_reach y.
+Proof.
+  intros hx hr. induction hr as [x y h|x|x y z h1 ih1 h2 ih2].
+  - exact (rw_step Σ x y hx h).
+  - exact hx.
+  - exact (ih2 (ih1 hx)).
+Qed.
+
+(** Red weakening fails for [rw_w]: it reduces to [tRel 0] in a context of one assumption,
+  but its lift (itself) does not reduce to the lift of [tRel 0] in a context of two. *)
+Lemma red_weakening_needs_hygiene (Σ : global_env) :
+  ∥ red Σ [rw_d] rw_w (tRel 0) ∥
+  /\ ~ ∥ red Σ ([rw_d] ,,, [rw_d]) (lift0 1 rw_w) (lift0 1 (tRel 0)) ∥.
+Proof.
+  split.
+  - constructor. apply red1_red.
+    exact (red_iota Σ [rw_d] rw_ci 0 [] [] rw_p [rw_br (tRel 0)] (rw_br (tRel 0))
+             eq_refl eq_refl).
+  - rewrite rw_w_lift. intros [hr].
+    destruct (rw_reach_red Σ _ _ (or_introl eq_refl) hr) as [h|[h|h]]; discriminate h.
+Qed.
+
 Section Eval.
   Context {cf : checker_flags}.
   Context (X_type : abstract_env_impl) (X : X_type.π2.π1).
