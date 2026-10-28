@@ -153,4 +153,6 @@ theories/PCUICEtaCanonRed.v
 theories/PCUICEtaCanonConfluence.v
 # L2 obligation 5 (eta1 against canon), confluence-free
 theories/PCUICEtaCanonEta.v
+# L2 obligation 5: exact strong commutation of R_c and eta1 on canonical terms
+theories/PCUICEtaCanonCommute.v
 # theories/All.v
