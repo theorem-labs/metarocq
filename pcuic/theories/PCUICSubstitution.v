@@ -6,7 +6,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICUnivSubst PCUICContextSubst PCUICTyping
      PCUICWeakeningEnvConv PCUICWeakeningEnv PCUICWeakeningEnvTyp PCUICClosed PCUICClosedConv PCUICClosedTyp
      PCUICReduction PCUICWeakeningConv PCUICWeakeningTyp PCUICCumulativity PCUICUnivSubstitutionConv
-     PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICInstTyp PCUICOnFreeVars.
+     PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICInstTyp PCUICOnFreeVars PCUICClosedBodies.
 
 From Stdlib Require Import ssreflect.
 From Equations Require Import Equations.
@@ -1367,31 +1367,44 @@ Section SubstitutionLemmas.
     now eapply (subslet_usubst Hs).
   Qed.
 
+  Lemma substitution_untyped_let_red_cb {cbΣ : ClosedBodies Σ} {Γ Δ Γ' s M N} :
+    untyped_subslet Γ s Δ ->
+    is_open_term (Γ,,, Δ,,, Γ') M ->
+    red1 Σ (Γ ,,, Δ ,,, Γ') M N ->
+    red Σ (Γ ,,, subst_context s 0 Γ') (subst s #|Γ'| M) (subst s #|Γ'| N).
+  Proof using Type.
+    intros Hs H.
+    rewrite !subst_inst.
+    eapply red1_inst_cb; eauto.
+    now eapply subslet_usubst.
+  Qed.
   Lemma substitution_untyped_let_red {Γ Δ Γ' s M N} :
     untyped_subslet Γ s Δ ->
     is_open_term (Γ,,, Δ,,, Γ') M ->
     red1 Σ (Γ ,,, Δ ,,, Γ') M N ->
     red Σ (Γ ,,, subst_context s 0 Γ') (subst s #|Γ'| M) (subst s #|Γ'| N).
-  Proof using wfΣ.
-    intros Hs H.
-    rewrite !subst_inst.
-    eapply red1_inst; eauto.
-    now eapply subslet_usubst.
-  Qed.
+  Proof using wfΣ. intros; eapply substitution_untyped_let_red_cb; tea; typeclasses eauto. Qed.
 
+  Lemma substitution_untyped_red_cb {cbΣ : ClosedBodies Σ} {Γ Δ Γ' s M N} :
+    untyped_subslet Γ s Δ ->
+    is_open_term (Γ ,,, Δ ,,, Γ') M ->
+    on_ctx_free_vars (shiftnP #|Γ,,, Δ,,, Γ'| xpred0) (Γ,,, Δ,,, Γ') ->
+    red Σ (Γ ,,, Δ ,,, Γ') M N ->
+    red Σ (Γ ,,, subst_context s 0 Γ') (subst s #|Γ'| M) (subst s #|Γ'| N).
+  Proof using Type.
+    intros subsl onM onΓ.
+    induction 1; trea.
+    - eapply substitution_untyped_let_red_cb; eassumption.
+    - etransitivity; [eapply IHX1|eapply IHX2]; tea.
+      eapply red_on_free_vars_cb in X1; tea.
+  Qed.
   Lemma substitution_untyped_red {Γ Δ Γ' s M N} :
     untyped_subslet Γ s Δ ->
     is_open_term (Γ ,,, Δ ,,, Γ') M ->
     on_ctx_free_vars (shiftnP #|Γ,,, Δ,,, Γ'| xpred0) (Γ,,, Δ,,, Γ') ->
     red Σ (Γ ,,, Δ ,,, Γ') M N ->
     red Σ (Γ ,,, subst_context s 0 Γ') (subst s #|Γ'| M) (subst s #|Γ'| N).
-  Proof using wfΣ.
-    intros subsl onM onΓ.
-    induction 1; trea.
-    - eapply substitution_untyped_let_red; eassumption.
-    - etransitivity; [eapply IHX1|eapply IHX2]; tea.
-      eapply red_on_free_vars in X1; tea.
-  Qed.
+  Proof using wfΣ. intros; eapply substitution_untyped_red_cb; tea; typeclasses eauto. Qed.
 
   Lemma substitution_red {Γ Δ Γ' s M N} :
     subslet Σ Γ s Δ -> wf_local Σ Γ ->
@@ -1466,14 +1479,14 @@ Proof using Type.
   rewrite subst_context_app. lia_f_equal.
 Qed.
 
-  Lemma red_red {P Γ Δ Γ' s s' b} :
+  Lemma red_red_cb {cbΣ : ClosedBodies Σ} {P Γ Δ Γ' s s' b} :
     on_ctx_free_vars P (Γ ,,, Δ ,,, Γ') ->
     on_free_vars P b ->
     All2 (red Σ Γ) s s' ->
     All (on_free_vars (addnP (#|Γ'| + #|Δ|) P)) s ->
     untyped_subslet Γ s Δ ->
     red Σ (Γ ,,, subst_context s 0 Γ') (subst s #|Γ'| b) (subst s' #|Γ'| b).
-  Proof using wfΣ.
+  Proof using Type.
     intros onΓ onb Hall ons Hsubs.
     revert P b onb Γ Δ Γ' onΓ Hall Hsubs ons.
     apply: term_on_free_vars_ind;
@@ -1489,7 +1502,7 @@ Qed.
       destruct (#|Γ'| <=? i) eqn:Heq.
       + destruct nth_error eqn:Heq'.
         * destruct (All2_nth_error_Some _ _ Hall Heq') as [t' [-> Ptt']].
-          intros. relativize #|Γ'|; [eapply (weakening_red (Γ':=[]))|]; tea.
+          intros. relativize #|Γ'|; [eapply (weakening_red_cb (Γ':=[]))|]; tea.
           2:now eapply nth_error_all in ons; tea.
           2:now len.
           simpl.
@@ -1578,6 +1591,14 @@ Qed.
       * cbn in X, X0. intuition eauto.
       * cbn in X, X0; intuition eauto.
   Qed.
+  Lemma red_red {P Γ Δ Γ' s s' b} :
+    on_ctx_free_vars P (Γ ,,, Δ ,,, Γ') ->
+    on_free_vars P b ->
+    All2 (red Σ Γ) s s' ->
+    All (on_free_vars (addnP (#|Γ'| + #|Δ|) P)) s ->
+    untyped_subslet Γ s Δ ->
+    red Σ (Γ ,,, subst_context s 0 Γ') (subst s #|Γ'| b) (subst s' #|Γ'| b).
+  Proof using wfΣ. intros; eapply red_red_cb; tea; typeclasses eauto. Qed.
 
   Lemma untyped_substitution_red {Γ Δ Γ' s M N} :
     untyped_subslet Γ s Δ ->
