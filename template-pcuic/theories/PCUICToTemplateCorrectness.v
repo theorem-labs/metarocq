@@ -1271,11 +1271,6 @@ Proof.
   - destruct Retroknowledge.retro_bool => //. intros [= <-]; reflexivity.
 Qed.
 
-(** An operation never fires on no argument: every operation of the table takes
-    at least one. *)
-Lemma prim_op_denote_nonnil {op ls r} : prim_op_denote op ls = Some r -> ls <> [].
-Proof. destruct op, ls => //. Qed.
-
 Lemma trans_red1 {cf} (Σ : PCUICEnvironment.global_env_ext) {wfΣ : PCUICTyping.wf Σ} Γ T U :
   red1 Σ Γ T U ->
   wt Σ Γ T ->

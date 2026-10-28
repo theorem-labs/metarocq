@@ -1539,12 +1539,6 @@ Section Trans_Global.
     rewrite /prim_op_of /Ast.Env.prim_op_of trans_env_env_retroknowledge //.
   Qed.
 
-  Lemma trans_primitive_bool i :
-    Ast.Env.primitive_bool Σ = Some i -> primitive_bool Σ' = Some i.
-  Proof using Type.
-    rewrite /primitive_bool /Ast.Env.primitive_bool trans_env_env_retroknowledge //.
-  Qed.
-
   Lemma trans_treadback s r v :
     ST.treadback Σ s r = Some v -> readback Σ' s r = Some (trans Σ' v).
   Proof using Type.

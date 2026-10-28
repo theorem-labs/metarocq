@@ -226,9 +226,6 @@ Fixpoint tsplit_lits (args : list term)
       end
   end.
 
-Definition tlits_of_args (args : list term) : option (list prim_lit) :=
-  match tsplit_lits args with inl ls => Some ls | inr _ => None end.
-
 Lemma tsplit_lits_inl {args ls} :
   tsplit_lits args = inl ls -> args = map template_of_lit ls.
 Proof.
@@ -250,36 +247,6 @@ Proof.
     cbn; f_equal; [now apply lit_of_template_inv|exact e].
   - intros [= <- <- <-]. split => //.
 Qed.
-
-Lemma tsplit_lits_map ls : tsplit_lits (map template_of_lit ls) = inl ls.
-Proof.
-  induction ls as [|l ls ih]; [reflexivity|].
-  cbn [map tsplit_lits]. rewrite lit_of_template_of_lit ih //.
-Qed.
-
-Lemma tsplit_lits_app {ls a rest} :
-  lit_of_template a = None ->
-  tsplit_lits (map template_of_lit ls ++ a :: rest) = inr (ls, a, rest).
-Proof.
-  intros ha; induction ls as [|l ls ih]; [now cbn; rewrite ha|].
-  cbn [map app tsplit_lits]. rewrite lit_of_template_of_lit ih //.
-Qed.
-
-Lemma tsplit_lits_length_inr {args ls a rest} :
-  tsplit_lits args = inr (ls, a, rest) -> #|args| = S (#|ls| + #|rest|).
-Proof.
-  intros h; destruct (tsplit_lits_inr h) as [-> _]; len; lia.
-Qed.
-
-Lemma tlits_of_args_inv {args ls} :
-  tlits_of_args args = Some ls -> args = map template_of_lit ls.
-Proof.
-  rewrite /tlits_of_args; destruct (tsplit_lits args) eqn:h => // [= <-].
-  now apply tsplit_lits_inl.
-Qed.
-
-Lemma tlits_of_args_map ls : tlits_of_args (map template_of_lit ls) = Some ls.
-Proof. by rewrite /tlits_of_args tsplit_lits_map. Qed.
 
 (** Every operation of the table takes at least one argument, so a saturated
     application really is an application node. *)

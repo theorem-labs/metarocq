@@ -1998,10 +1998,6 @@ Proof.
   apply split_lits_app. rewrite trans_lit_of_term //.
 Qed.
 
-Lemma trans_prim_op_of {Σ c op} :
-  prim_op_of Σ c = Some op -> prim_op_of (trans_global_env Σ) c = Some op.
-Proof. rewrite /prim_op_of //. Qed.
-
 Lemma trans_red1 {cf} (Σ : global_env_ext) {wfΣ : wf Σ} {wfΣ' : wf_trans Σ} Γ T U :
   red1 Σ Γ T U ->
   wt Σ Γ T ->
