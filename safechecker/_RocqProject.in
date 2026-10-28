@@ -20,6 +20,7 @@ theories/PCUICCallByNeedSoundHeapWf.v
 theories/PCUICCallByNeedSoundReadBack.v
 theories/PCUICCallByNeedSoundConv.v
 theories/PCUICCallByNeedSoundHookFrame.v
+theories/PCUICCallByNeedCounterexamples.v
 theories/PCUICCallByNeedSoundHookProof.v
 theories/PCUICTypeChecker.v
 theories/PCUICPositivityCheck.v

@@ -86,9 +86,8 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
   every clause of [machine_sound] says instead that the roots come back renamed and stand,
   under the new ghost, for what they stood for ([gren]). The ghost of the new heap is built
   along the collector's walk, at each fresh address from the ghost term of the old address
-  copied there ([collect_ghost]); it is a ghost renaming in the sense of
-  [PCUICCallByNeedSoundGC.root_pres], and it needs nothing of the collector beyond its
-  invariant [gc_inv]. *)
+  copied there ([collect_ghost]). It needs nothing of the collector beyond its invariant
+  [gc_inv] and [gc_copy_ok] ([PCUICCallByNeedSoundGC]). *)
 
 Lemma forallb_map_All {A B} (f : A -> B) (p : B -> bool) (q : A -> bool) (l : list A) :
   All (fun x => p (f x) = q x) l -> forallb p (map f l) = forallb q l.
@@ -1388,7 +1387,7 @@ Section Eval.
     that the roots come back unchanged or that the ghost map only grows. It promises
     [gren G G' rs rs']: the code table only grows ([gcx]), and every root comes back as a root
     of the same shape that stands, under the new ghost [G'], for what the old root stood for
-    under [G] ([gpres], one clause per shape, like [PCUICCallByNeedSoundGC.root_pres]).
+    under [G] ([gpres], one clause per shape of root).
     Without a collection the roots come back as they went in and [G'] extends [G]
     ([gren_ext]); a collection renames them ([collect_ghost]). *)
 
@@ -1517,7 +1516,7 @@ Section Eval.
     Context (lo : positive) (G : ghost) (s : cbn_state) (hok : gok lo G s).
 
     Record gcg (Gn : ghost) (g : gc_state) : Prop := mkGcg {
-      gg_inv : gc_inv nctx s.(st_heap) s.(st_next) g;
+      gg_inv : gc_inv s.(st_heap) s.(st_next) g;
       gg_codes : gc Gn = gc G;
       gg_fwd : forall x b t, bh_get x g.(g_old) = Some (CFwd b) -> G x = Some t ->
         Gn b = Some t;
@@ -1871,17 +1870,17 @@ Section Eval.
       cpg (gc_copy k) -> gcg Gn g -> bh_get a g.(g_old) = Some cl -> cell_fwd cl = None ->
       rn_cell (gc_copy k) cl g = COk (cl1, g1) ->
       bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old) = Some old ->
-      gc_inv nctx s.(st_heap) s.(st_next)
+      gc_inv s.(st_heap) s.(st_next)
         (mkGc old (bh_cons cl1 g1.(g_heap)) (Pos.succ g1.(g_next))) ->
       exists Gn', gcg Gn' (mkGc old (bh_cons cl1 g1.(g_heap)) (Pos.succ g1.(g_next)))
         /\ gext Gn Gn' /\ (forall t, G a = Some t -> Gn' (HAddr g1.(g_next)) = Some t).
     Proof.
       intros hk hg ha hf e1 e2 hinv2.
       assert (hcl : bh_get a s.(st_heap) = Some cl)
-        by exact (inv_keep _ _ _ _ (gg_inv _ _ hg) _ _ ha hf).
+        by exact (inv_keep _ _ _ (gg_inv _ _ hg) _ _ ha hf).
       destruct (gk_cells _ _ _ hok a cl hcl) as [t0 [hGa hc0]].
       destruct (rn_cell_g _ hk _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hbusy & hr1).
-      pose proof (inv_heap _ _ _ _ (gg_inv _ _ hg1)) as hok1.
+      pose proof (inv_heap _ _ _ (gg_inv _ _ hg1)) as hok1.
       pose (Gn' := mkGhost (fun b => if haddr_eqb b (HAddr g1.(g_next)) then Some t0 else Gn1 b)
                      (gc Gn1)).
       assert (hfresh : forall b t, Gn1 b = Some t -> b <> HAddr g1.(g_next)).
@@ -1933,7 +1932,7 @@ Section Eval.
         exists Gn. split; [exact hg|]. split; [apply gext_refl|].
         intros t ht. exact (gg_fwd _ _ hg _ _ _ ea ht).
       - pose proof he as he0.
-        destruct (gc_copy_ok nctx s.(st_heap) s.(st_next) (FS k) a g a' g' (gg_inv _ _ hg) he0)
+        destruct (gc_copy_ok s.(st_heap) s.(st_next) (FS k) a g a' g' (gg_inv _ _ hg) he0)
           as [hst _].
         rewrite gc_copy_FS in he.
         destruct (bh_get a g.(g_old)) as [cl|] eqn:ea; [|discriminate].
@@ -1944,20 +1943,20 @@ Section Eval.
             [|discriminate].
           inversion he; subst; clear he.
           exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
-                   (step_inv _ _ _ _ _ hst)).
+                   (step_inv _ _ _ _ hst)).
         + destruct (rn_cell (gc_copy (k tt)) (CDone v) g) as [[cl1 g1]|w] eqn:e1;
             [|discriminate].
           destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
             [|discriminate].
           inversion he; subst; clear he.
           exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
-                   (step_inv _ _ _ _ _ hst)).
+                   (step_inv _ _ _ _ hst)).
         + destruct (rn_cell (gc_copy (k tt)) CBusy g) as [[cl1 g1]|w] eqn:e1; [|discriminate].
           destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
             [|discriminate].
           inversion he; subst; clear he.
           exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
-                   (step_inv _ _ _ _ _ hst)).
+                   (step_inv _ _ _ _ hst)).
         + inversion he; subst; clear he.
           exists Gn. split; [exact hg|]. split; [apply gext_refl|].
           intros t ht. exact (gg_fwd _ _ hg _ _ _ ea ht).
@@ -1971,8 +1970,7 @@ Section Eval.
       exists G', gc G' = gc G /\ Forall2 (gpres G G') rs rs' /\ gok s.(st_next) G' s'.
     Proof.
       intros he.
-      destruct (collect_sound nctx rs s rs' s' (gk_nofwd _ _ _ hok) he)
-        as (hso & hnf & _ & _ & _ & _).
+      destruct (collect_sound rs s rs' s' (gk_nofwd _ _ _ hok) he) as (hso & hnf & _ & _).
       rewrite collect_eq in he.
       destruct (rn_ptree (gc_copy (fuel_of_pos s.(st_next) (fun _ => FO))) s.(st_gam)
                   (mkGc s.(st_heap) (bh_holes s.(st_next)) s.(st_next))) as [[gm1 g1]|w1] eqn:e1;
