@@ -621,20 +621,20 @@ Module Red1Apps.
       decl.(cst_body) = Some body ->
       Σ ;;; Γ |- tConst c u ⇝ subst_instance u body
 
-  (** Primitive operation, in PREFIX form like the Template rule (design §3):
-      the registered bodiless constant applied to its literal arguments [ls]
-      and any further arguments [rest] reduces to the readback of the
-      denotation still applied to [rest].  This relation is spine-form, and
-      its [app_red_l] needs a non-application head, so an over-applied
-      operation can only be reached through [rest]; [red1_red1apps] maps
-      PCUIC's exact rule in at [rest = []]. *)
-  | red_prim_op c decl u op ls r v rest :
+  (** Primitive operation, mirroring [PCUICReduction.red_prim_op]: a saturated
+      application of a registered bodiless constant to literals reduces to the
+      readback of its denotation.  Like [red_beta] and [red_fix], the rule keeps
+      trailing arguments, because this relation holds applications in [mkApps]
+      normal form ([app_red_l] needs a non-application head), so an
+      over-applied redex can only step through its own rule.
+      [red1_red1apps] maps the PCUIC rule here with no trailing arguments. *)
+  | red_prim_op c decl u op ls r v args :
       prim_op_of Σ c = Some op ->
       declared_constant Σ c decl ->
       cst_body decl = None ->
       PrimitiveOps.prim_op_denote op ls = Some r ->
       PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
-      Σ ;;; Γ |- mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ rest) ⇝ mkApps v rest
+      Σ ;;; Γ |- mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ args) ⇝ mkApps v args
 
   (** Proj *)
   | red_proj p args u arg:
@@ -864,13 +864,13 @@ Module Red1Apps.
         P Γ (tPrim (primArray; primArrayModel arr))
           (tPrim (primArray; primArrayModel (set_array_type arr ty)))) ->
 
-       (forall (Γ : context) c decl u op ls r v rest,
+       (forall (Γ : context) c decl u op ls r v args,
           prim_op_of Σ c = Some op ->
           declared_constant Σ c decl ->
           cst_body decl = None ->
           PrimitiveOps.prim_op_denote op ls = Some r ->
           PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
-          P Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ rest)) (mkApps v rest)) ->
+          P Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ args)) (mkApps v args)) ->
 
 
        forall (Γ : context) (t t0 : term), red1 Σ Γ t t0 -> P Γ t t0.
@@ -956,20 +956,46 @@ Module Red1Apps.
        constructor; try split; auto; intuition.
   Defined.
 
+  (** The saturated form, which is what the PCUIC rule produces. *)
+  Lemma red_prim_op_sat Σ Γ c decl u op ls r v :
+    prim_op_of Σ c = Some op ->
+    declared_constant Σ c decl ->
+    cst_body decl = None ->
+    PrimitiveOps.prim_op_denote op ls = Some r ->
+    PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
+    red1 Σ Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls)) v.
+  Proof.
+    intros h1 h2 h3 h4 h5.
+    have h := red_prim_op Σ Γ c decl u op ls r v [] h1 h2 h3 h4 h5.
+    rewrite app_nil_r in h. exact h.
+  Qed.
+
+  (** One more argument joins the trailing arguments. *)
+  Lemma red_prim_op_app Σ Γ c decl u op ls r v args a :
+    prim_op_of Σ c = Some op ->
+    declared_constant Σ c decl ->
+    cst_body decl = None ->
+    PrimitiveOps.prim_op_denote op ls = Some r ->
+    PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
+    red1 Σ Γ (tApp (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ args)) a)
+             (tApp (mkApps v args) a).
+  Proof.
+    intros h1 h2 h3 h4 h5.
+    rewrite -![tApp _ a](mkApps_app _ _ [a]) -app_assoc.
+    exact (red_prim_op Σ Γ c decl u op ls r v (args ++ [a]) h1 h2 h3 h4 h5).
+  Qed.
+
   Lemma red_tApp Σ Γ t v u :
     red1 Σ Γ t v ->
     red1 Σ Γ (tApp t u) (tApp v u).
   Proof.
     induction 1.
     all:try solve [eapply (app_red_l _ _ _ _ [u]) => //; econstructor; eauto].
-    (* red_prim_op: the extra argument [u] joins [rest], which the prefix-form
-       rule keeps applied to the reduct. *)
-    all: try (rewrite -![tApp _ u](mkApps_app _ _ [u]) -app_assoc;
-              eapply red_prim_op; eassumption).
     - rewrite -![tApp _ u](mkApps_app _ _ [u]).
       eapply red_beta.
     - rewrite -![tApp _ u](mkApps_app _ _ [u]). econstructor; eauto.
       now apply is_constructor_app_ge.
+    - eapply red_prim_op_app; eassumption.
     - rewrite -![tApp _ u](mkApps_app _ _ [u]). econstructor; eauto.
     - rewrite -![tApp _ u](mkApps_app _ _ [u]). econstructor; eauto.
       now eapply OnOne2_app_r.
@@ -977,20 +1003,6 @@ Module Red1Apps.
     - rewrite -![tApp _ u](mkApps_app _ _ [u]). now eapply app_fix_red_body.
     - now eapply (app_fix_red_ty _ _ _ _ _ [_]).
     - now eapply (app_fix_red_body _ _ _ _ _ [_]).
-  Qed.
-
-  (** PCUIC's exact-saturation rule is the prefix form at [rest = []]; this is
-      how [red1_red1apps] maps a PCUIC firing into this relation. *)
-  Lemma red_prim_op_exact Σ Γ c decl u op ls r v :
-    prim_op_of Σ c = Some op -> declared_constant Σ c decl -> cst_body decl = None ->
-    PrimitiveOps.prim_op_denote op ls = Some r ->
-    PCUICPrimitiveRed.readback Σ (PrimitiveOps.po_shape (PrimitiveOps.info op)) r = Some v ->
-    red1 Σ Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls)) v.
-  Proof.
-    intros hop hdecl hbody hden hrb.
-    assert (X : red1 Σ Γ (mkApps (tConst c u) (map PCUICPrimitiveRed.term_of_lit ls ++ []))
-                         (mkApps v [])) by (eapply red_prim_op; eassumption).
-    rewrite app_nil_r in X. exact X.
   Qed.
 
   Lemma isLambda_red1 Σ Γ b b' : isLambda b -> red1 Σ Γ b b' -> isLambda b'.
@@ -1006,8 +1018,8 @@ Lemma red1_red1apps Σ Γ t v :
   red1 Σ Γ t v -> Red1Apps.red1 Σ Γ t v.
 Proof.
   intros red; induction red using red1_ind_all in |- *.
-  (* red_prim_op (exact saturation) maps to the prefix-form rule at [rest = []]. *)
-  all: try (eapply Red1Apps.red_prim_op_exact; eassumption).
+  (* red_prim_op maps to Red1Apps.red_prim_op with no trailing arguments. *)
+  all: try (eapply Red1Apps.red_prim_op_sat; eassumption).
   all:try solve [econstructor; eauto; solve_all; eauto].
   - eapply (Red1Apps.red_beta _ _ _ _ _ _ []).
   - now eapply Red1Apps.red_tApp.
@@ -1241,7 +1253,7 @@ Proof.
     set (cb := ConstantDecl _). now exists [(c, cb)].
     constructor.
   - forward IHexpanded_global_declarations.
-    destruct wf. cbn in *. split => //.
+    destruct wf as [? [? o0]]. cbn in *. split; [assumption|]. split; [assumption|].
     cbn. now depelim o0.
     eapply IHexpanded_global_declarations in H'.
     destruct decl as [? [] ?]; cbn in * => //. 2:constructor.
@@ -1272,6 +1284,15 @@ Proof.
     rewrite skipn_S IHn. lia_f_equal.
 Qed.
 
+(** [prim_op_of] and [primitive_bool] read only the retroknowledge. *)
+Lemma prim_op_of_retro_eq (Σ Σ' : global_env) c :
+  Σ'.(retroknowledge) = Σ.(retroknowledge) -> prim_op_of Σ' c = prim_op_of Σ c.
+Proof. intros e. rewrite /prim_op_of e //. Qed.
+
+Lemma primitive_bool_retro_eq (Σ Σ' : global_env) :
+  Σ'.(retroknowledge) = Σ.(retroknowledge) -> primitive_bool Σ' = primitive_bool Σ.
+Proof. intros e. rewrite /primitive_bool e //. Qed.
+
 (** Row E2: a registered boolean inductive has exactly the two bodiless
     constructors [true]/[false], so either index gives a declared constructor
     with no parameters and no arguments.  Derived from row H's [on_prim_bool_decl]
@@ -1284,30 +1305,28 @@ Lemma wf_primitive_bool_constructor {cf : checker_flags} {Σ : global_env} {ind 
   declared_inductive Σ ind mdecl idecl ->
   k < 2 ->
   ∑ cdecl, declared_constructor Σ (ind, k) mdecl idecl cdecl
-     × ind_npars mdecl + context_assumptions (cstr_args cdecl) = 0.
+     × ((ind_npars mdecl + context_assumptions (cstr_args cdecl))%nat = 0).
 Proof.
   intros wfΣ hbool declI hk.
   destruct declI as [declm hnthbod].
-  destruct (lookup_on_global_env_prim wfΣ declm) as (Σ' & [onΣ' ext hretro hprim]).
+  destruct (lookup_on_global_env_prim wfΣ (declared_minductive_to_gen (wfΣ := wfΣ) declm))
+    as (Σ' & [onΣ' ext hretro hprim]).
   cbn in hprim.
-  assert (hbool' : primitive_bool Σ' = Some ind).
-  { unfold primitive_bool in *. now rewrite hretro. }
-  specialize (hprim ind hbool' eq_refl).
+  specialize (hprim ind (eq_trans (primitive_bool_retro_eq _ _ hretro) hbool) eq_refl).
   unfold on_prim_bool_decl in hprim.
-  destruct wfΣ as [_ [wfr _]].
-  destruct wfr as [_ _ _ hidx]. specialize (hidx ind hbool).
-  destruct (ind_bodies mdecl) as [|idecl0 [|]] eqn:hbodies => //.
-  rewrite hidx in hnthbod. cbn in hnthbod. noconf hnthbod.
-  destruct hprim as [hnpars hpars huniv hindices hctors].
-  destruct (ind_ctors idecl0) as [|cT [|cF [|]]] eqn:hc => //.
-  destruct hctors as [hT hF].
+  have hidx : inductive_ind ind = 0.
+  { destruct wfΣ as [_ [[_ _ _ hix] _]]. exact (hix ind hbool). }
+  pose proof hnthbod as hn. rewrite hidx in hn.
+  move: hprim hn. case: (ind_bodies mdecl) => [|idecl0 [|? ?]] //= hprim.
+  move=> [= hid]. subst idecl0.
+  destruct hprim as [hnpars _ _ _ hctors].
+  move: hctors. case hc: (ind_ctors idecl) => [|cT [|cF [|? ?]]] //= [hT hF].
+  destruct hT as [_ hargsT _ _ _]. destruct hF as [_ hargsF _ _ _].
   destruct k as [|[|k]]; [| |lia].
-  - exists cT. destruct hT as [_ hargsT _ _ _]. split.
-    + split; [split; assumption|now rewrite hc].
-    + rewrite hnpars hargsT //.
-  - exists cF. destruct hF as [_ hargsF _ _ _]. split.
-    + split; [split; assumption|now rewrite hc].
-    + rewrite hnpars hargsF //.
+  - exists cT. split; [split; [split; assumption|now rewrite hc]|].
+    rewrite hnpars hargsT; reflexivity.
+  - exists cF. split; [split; [split; assumption|now rewrite hc]|].
+    rewrite hnpars hargsF; reflexivity.
 Qed.
 
 Lemma expanded_red1 {cf : checker_flags} {Σ : global_env_ext} Γ Γ' t v : wf Σ ->
@@ -1514,38 +1533,43 @@ Proof.
     depelim exp; eauto. constructor; cbn; eauto.
   - constructor. eapply expanded_tPrim_inv in exp.
     depelim exp; eauto. constructor; cbn; eauto.
-  - (* red_prim_op (prefix form): the reduct is the ground readback [v] still
-       applied to the extra arguments [rest]; those are expanded because the
-       redex [mkApps (tConst c u) (lits ++ rest)] was. *)
-    eapply expanded_mkApps_inv in exp as [_ hall] => //.
-    apply Forall_app in hall as [_ hrest].
+  - (* red_prim_op: the trailing arguments are expanded because the redex is,
+       and the reduct is the ground readback of the denotation -- a [tPrim]
+       for SInt, a [true]/[false] constructor for SBool. *)
+    match goal with
+    | h1 : prim_op_of _ _ = Some _, h2 : declared_constant _ _ _,
+      h5 : PCUICPrimitiveRed.readback _ _ _ = Some _ |- _ =>
+        rename h1 into Hop; rename h2 into Hdc; rename h5 into Hrb
+    end.
+    move/expanded_mkApps_inv': exp. cbn. rewrite arguments_mkApps_nApp //.
+    move=> [hargs _]. apply Forall_app in hargs as [_ hargs].
+    eapply expanded_mkApps_expanded; [|solve_all].
     destruct (PrimitiveOps.po_shape (PrimitiveOps.info op)) eqn:hshape;
-      rewrite /PCUICPrimitiveRed.readback hshape /= in H3;
-      destruct r as [i|b]; cbn in H3; try discriminate.
-    + (* SInt: v = tPrim (prim_int i), whose head is no constructor/fix/rel *)
-      noconf H3.
-      eapply expanded_mkApps; [cbn; intros h; discriminate h | do 2 constructor | exact hrest].
+      move: Hrb; rewrite /PCUICPrimitiveRed.readback; destruct r as [i|b]; cbn;
+      try (intros ?; discriminate).
+    + (* SInt: v = tPrim (prim_int i) *)
+      move=> [= <-]. do 2 constructor.
     + (* SBool: v = tConstruct ind (if b then 0 else 1) [] *)
-      destruct (Σ.(retroknowledge).(Retroknowledge.retro_bool)) as [ind|] eqn:hrb;
-        [|discriminate].
-      noconf H3.
-      destruct wf as [wfg _].
-      destruct (lookup_on_global_env_prim wfg H0) as (Σ' & [onΣ' ext hretro hpd]).
-      cbn in hpd. specialize (hpd _ H). destruct hpd as [_ _ _ _ hres].
-      rewrite hshape in hres. destruct hres as (i0 & mdecl & idecl & hb' & declI').
-      assert (hbI : primitive_bool Σ = Some ind) by (unfold primitive_bool; now rewrite hrb).
-      assert (hi0 : i0 = ind).
-      { unfold primitive_bool in hb'. rewrite hretro in hb'.
-        rewrite -/(primitive_bool Σ) hbI in hb'. now noconf hb'. }
-      subst i0.
-      pose proof (declI := PCUICWeakeningEnv.weakening_env_declared_inductive
-                    (Σ := Σ') (Σ' := Σ) _ _ _ _ declI').
-      forward declI by (eapply extends_strictly_on_decls_extends, ext).
-      destruct (wf_primitive_bool_constructor (ind := ind) (if b then 0 else 1)
-                  (ltac:(now split) : wf Σ) hbI declI
-                  (ltac:(destruct b; cbn; lia)))
-        as (cdecl & declC & harity).
-      eapply expanded_tConstruct_app; [exact declC | rewrite harity; lia | exact hrest].
+      case hrb: (Retroknowledge.retro_bool _) => [ind|] //= [= <-].
+      destruct (lookup_on_global_env_prim wf (declared_constant_to_gen (wfΣ := wf) Hdc))
+        as (Σ' & [onΣ' ext hretro hpd]).
+      cbn in hpd.
+      specialize (hpd op (eq_trans (prim_op_of_retro_eq _ _ c hretro) Hop)).
+      destruct hpd as [_ _ _ _ hres].
+      rewrite hshape in hres. cbn in hres.
+      destruct hres as (i0 & mdecl & idecl & hb' & declI').
+      have hbI : primitive_bool Σ = Some ind := hrb.
+      have hi : Some ind = Some i0 :=
+        eq_trans (eq_sym hbI) (eq_trans (eq_sym (primitive_bool_retro_eq _ _ hretro)) hb').
+      injection hi as <-.
+      have declI : declared_inductive Σ ind mdecl idecl.
+      { eapply (PCUICWeakeningEnv.weakening_env_declared_inductive _ _ _ _ _ declI' _ wf).
+        eapply extends_decls_extends, strictly_extends_decls_extends_decls, ext. }
+      destruct (wf_primitive_bool_constructor (if b then 0 else 1) wf hbI declI
+                  ltac:(destruct b; cbn; lia)) as (cdecl & declC & harity).
+      change (tConstruct ind (if b then 0 else 1) [])
+        with (mkApps (tConstruct ind (if b then 0 else 1) []) []).
+      eapply expanded_tConstruct_app; [exact declC| cbn; lia| constructor].
 Qed.
 
 Lemma expanded_red {cf : checker_flags} {Σ : global_env_ext} Γ Γ' t v : wf Σ ->
