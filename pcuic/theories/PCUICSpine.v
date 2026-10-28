@@ -14,7 +14,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICClosed PCUICClosedTyp PCUICSubstitution PCUICContextSubst
      PCUICWellScopedCumulativity
      PCUICWeakeningConv PCUICWeakeningTyp PCUICGeneration PCUICUtils PCUICContexts
-     PCUICArities.
+     PCUICArities PCUICClosedBodies.
 
 From Equations.Prop Require Import DepElim.
 From Equations.Type Require Import Relation_Properties.
@@ -51,18 +51,23 @@ Qed.
 
 Import PCUICOnFreeVars.
 
-Lemma weakening_closed_red {cf} {Σ} {wfΣ : wf Σ} {Γ Γ' Γ'' M N} :
+Lemma weakening_closed_red_cb {cf} {Σ} {wfΣ : ClosedBodies Σ} {Γ Γ' Γ'' M N} :
   Σ ;;; Γ ,,, Γ' ⊢ M ⇝ N ->
   is_closed_context (Γ ,,, Γ'') ->
   Σ ;;; Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ' ⊢ lift #|Γ''| #|Γ'| M ⇝ lift #|Γ''| #|Γ'| N.
 Proof.
   intros onf onctx.
   eapply into_closed_red.
-  - destruct onf. eapply weakening_red; tea.
+  - destruct onf. eapply weakening_red_cb; tea.
     now rewrite on_free_vars_ctx_on_ctx_free_vars.
   - eapply is_closed_context_lift; eauto with fvs.
   - eapply is_open_term_lift; eauto with fvs.
 Qed.
+Lemma weakening_closed_red {cf} {Σ} {wfΣ : wf Σ} {Γ Γ' Γ'' M N} :
+  Σ ;;; Γ ,,, Γ' ⊢ M ⇝ N ->
+  is_closed_context (Γ ,,, Γ'') ->
+  Σ ;;; Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ' ⊢ lift #|Γ''| #|Γ'| M ⇝ lift #|Γ''| #|Γ'| N.
+Proof. intros; eapply weakening_closed_red_cb; tea; typeclasses eauto. Qed.
 
 Lemma subslet_eq_context_alpha {cf} {Σ Γ s Δ Δ'} :
   eq_context_upto_names Δ Δ' →

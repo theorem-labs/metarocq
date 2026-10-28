@@ -7,7 +7,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICCase
      PCUICConfluence PCUICClosed PCUICClosedConv PCUICClosedTyp PCUICParallelReductionConfluence PCUICEquality
      PCUICSigmaCalculus PCUICContextReduction PCUICContextConversion
      PCUICWeakeningConv PCUICWeakeningTyp PCUICUnivSubst
-     PCUICWellScopedCumulativity PCUICUnivSubstitutionConv PCUICInduction.
+     PCUICWellScopedCumulativity PCUICUnivSubstitutionConv PCUICInduction PCUICClosedBodies.
 
 From Stdlib Require Import CRelationClasses CMorphisms.
 From Equations.Prop Require Import DepElim.
@@ -447,13 +447,13 @@ Section ConvCongruences.
     intros. now eapply is_open_term_subst_gen; tea.
   Qed.
 
-  Lemma closed_red_red_subst {Γ Δ Γ' s s' b} :
+  Lemma closed_red_red_subst_cb {cbΣ : ClosedBodies Σ} {Γ Δ Γ' s s' b} :
     is_closed_context (Γ ,,, Δ ,,, Γ') ->
     All2 (closed_red Σ Γ) s s' ->
     untyped_subslet Γ s Δ ->
     is_open_term (Γ ,,, Δ ,,, Γ') b ->
     Σ ;;; Γ ,,, subst_context s 0 Γ' ⊢ subst s #|Γ'| b ⇝ subst s' #|Γ'| b.
-  Proof using wfΣ.
+  Proof using Type.
     intros.
     split; eauto with fvs.
     - eapply is_closed_subst_context; tea. 1:solve_all; eauto with fvs.
@@ -461,11 +461,18 @@ Section ConvCongruences.
     - eapply is_open_term_subst; tea.
       1:solve_all; eauto with fvs.
       now rewrite (untyped_subslet_length X0).
-    - eapply red_red; tea; eauto with fvs.
+    - eapply red_red_cb; tea; eauto with fvs.
       * solve_all. exact X.
       * solve_all. len.
         rewrite Nat.add_assoc -shiftnP_add addnP_shiftnP; eauto with fvs.
   Qed.
+  Lemma closed_red_red_subst {Γ Δ Γ' s s' b} :
+    is_closed_context (Γ ,,, Δ ,,, Γ') ->
+    All2 (closed_red Σ Γ) s s' ->
+    untyped_subslet Γ s Δ ->
+    is_open_term (Γ ,,, Δ ,,, Γ') b ->
+    Σ ;;; Γ ,,, subst_context s 0 Γ' ⊢ subst s #|Γ'| b ⇝ subst s' #|Γ'| b.
+  Proof using wfΣ. intros; eapply closed_red_red_subst_cb; tea; typeclasses eauto. Qed.
 
   Lemma closed_red_red_subst0 {Γ Δ s s' b} :
     is_closed_context (Γ ,,, Δ) ->
@@ -511,17 +518,23 @@ Section ConvCongruences.
     - eapply substitution_untyped_red; tea; eauto with fvs.
   Qed. *)
 
+  Lemma closed_red_untyped_substitution_cb {cbΣ : ClosedBodies Σ} {Γ Δ Γ' s M N} :
+    untyped_subslet Γ s Δ ->
+    forallb (on_free_vars (shiftnP #|Γ| xpred0)) s ->
+    Σ ;;; Γ ,,, Δ ,,, Γ' ⊢ M ⇝ N ->
+    Σ ;;; Γ ,,, subst_context s 0 Γ' ⊢ subst s #|Γ'| M ⇝ subst s #|Γ'| N.
+  Proof using Type.
+    intros Hs H. split.
+    - eapply is_closed_subst_context; eauto with fvs pcuic.
+    - eapply is_open_term_subst; tea; eauto with fvs pcuic.
+    - eapply substitution_untyped_red_cb; tea; eauto with fvs.
+  Qed.
   Lemma closed_red_untyped_substitution {Γ Δ Γ' s M N} :
     untyped_subslet Γ s Δ ->
     forallb (on_free_vars (shiftnP #|Γ| xpred0)) s ->
     Σ ;;; Γ ,,, Δ ,,, Γ' ⊢ M ⇝ N ->
     Σ ;;; Γ ,,, subst_context s 0 Γ' ⊢ subst s #|Γ'| M ⇝ subst s #|Γ'| N.
-  Proof using wfΣ.
-    intros Hs H. split.
-    - eapply is_closed_subst_context; eauto with fvs pcuic.
-    - eapply is_open_term_subst; tea; eauto with fvs pcuic.
-    - eapply substitution_untyped_red; tea; eauto with fvs.
-  Qed.
+  Proof using wfΣ. intros; eapply closed_red_untyped_substitution_cb; tea; typeclasses eauto. Qed.
 
   Lemma closed_red_untyped_substitution0 {Γ Δ s M N} :
     untyped_subslet Γ s Δ ->
@@ -538,13 +551,13 @@ Section ConvCongruences.
   Qed.
   Hint Resolve untyped_subslet_def_tip : pcuic.
 
-  Lemma invert_red_letin {Γ C na d ty b} :
+  Lemma invert_red_letin_cb {cbΣ : ClosedBodies Σ} {Γ C na d ty b} :
     Σ ;;; Γ ⊢ (tLetIn na d ty b) ⇝ C ->
     (∑ d' ty' b',
     [× C = tLetIn na d' ty' b', Σ ;;; Γ ⊢ d ⇝ d', Σ ;;; Γ ⊢ ty ⇝ ty' &
       Σ ;;; (Γ ,, vdef na d ty) ⊢ b ⇝ b']) +
     (Σ ;;; Γ ⊢ (subst10 d b) ⇝ C)%type.
-  Proof using wfΣ.
+  Proof using Type.
     generalize_eq x (tLetIn na d ty b).
     move=> e [clΓ clt] red.
     assert (clC : is_open_term Γ C) by eauto with fvs.
@@ -562,18 +575,18 @@ Section ConvCongruences.
       - solve_discr.
       - left. do 3 eexists; split; eauto with pcuic.
         * transitivity r; eauto with pcuic.
-        * eapply red_red_ctx_inv'; eauto.
+        * eapply red_red_ctx_inv'_cb; eauto.
           simpl. constructor.
           1:{ apply closed_red_ctx_refl => //. }
           constructor. all:constructor; eauto with fvs.
       - right; auto. transitivity (b {0 := r}); auto.
-        eapply (closed_red_red_subst (Δ := [vass na ty]) (Γ' := [])); eauto with fvs.
+        eapply (closed_red_red_subst_cb (Δ := [vass na ty]) (Γ' := [])); eauto with fvs.
         * constructor; [|constructor]. eapply into_closed_red; eauto with fvs.
         * constructor. constructor.
       - left. do 3 eexists. repeat split; eauto with pcuic.
         * transitivity r; pcuic.
         * eauto with fvs.
-        * eapply red_red_ctx_inv' in c1; [exact c1|].
+        * eapply red_red_ctx_inv'_cb in c1; [exact c1|].
           simpl. constructor; [now apply closed_red_ctx_refl|].
           constructor; eauto with fvs pcuic.
       - right; auto.
@@ -581,15 +594,22 @@ Section ConvCongruences.
         now transitivity r; eauto with pcuic fvs.
       - right; auto.
         transitivity (r {0 := d}); auto.
-        eapply (closed_red_untyped_substitution (Δ := [vdef na d ty]) (Γ' := [])); cbn; eauto with pcuic fvs.
+        eapply (closed_red_untyped_substitution_cb (Δ := [vdef na d ty]) (Γ' := [])); cbn; eauto with pcuic fvs.
   Qed.
+  Lemma invert_red_letin {Γ C na d ty b} :
+    Σ ;;; Γ ⊢ (tLetIn na d ty b) ⇝ C ->
+    (∑ d' ty' b',
+    [× C = tLetIn na d' ty' b', Σ ;;; Γ ⊢ d ⇝ d', Σ ;;; Γ ⊢ ty ⇝ ty' &
+      Σ ;;; (Γ ,, vdef na d ty) ⊢ b ⇝ b']) +
+    (Σ ;;; Γ ⊢ (subst10 d b) ⇝ C)%type.
+  Proof using wfΣ. intros; eapply invert_red_letin_cb; tea; typeclasses eauto. Qed.
 
-  Lemma invert_red_prod {Γ na dom codom T} :
+  Lemma invert_red_prod_cb {cbΣ : ClosedBodies Σ} {Γ na dom codom T} :
     Σ ;;; Γ ⊢ tProd na dom codom ⇝ T ->
     ∑ dom' codom',
       [× T = tProd na dom' codom', Σ ;;; Γ ⊢ dom ⇝ dom' &
          Σ ;;; Γ ,, vass na dom ⊢ codom ⇝ codom'].
-  Proof using wfΣ.
+  Proof using Type.
     generalize_eq x (tProd na dom codom).
     move=> e [clΓ clt] red.
     revert na dom codom e.
@@ -599,19 +619,25 @@ Section ConvCongruences.
       rewrite on_fvs_prod => /andP[] ondom oncodom.
       exists dom, codom; repeat split; eauto with fvs.
     - move: clt; rewrite on_fvs_prod => /andP [] ondom oncodom.
-      forward IHred. { eapply red1_on_free_vars; tea; eauto with fvs. }
+      forward IHred. { eapply red1_on_free_vars_cb; tea; eauto with fvs. }
       depelim r; solve_discr.
       * specialize (IHred _ _ _ eq_refl).
         destruct IHred as [dom' [codom' [-> [redl redr]]]].
         eexists _, _; split => //.
         { transitivity N1; split; eauto with fvs. }
-        { eapply red_red_ctx_inv'; tea. constructor; eauto with fvs.
+        { eapply red_red_ctx_inv'_cb; tea. constructor; eauto with fvs.
           { now eapply closed_red_ctx_refl. }
           constructor; split; eauto with fvs. }
       * specialize (IHred _ _ _ eq_refl) as [dom' [codom' [-> [redl redr]]]].
         eexists _, _; split => //.
         transitivity N2; split; eauto with fvs.
   Qed.
+  Lemma invert_red_prod {Γ na dom codom T} :
+    Σ ;;; Γ ⊢ tProd na dom codom ⇝ T ->
+    ∑ dom' codom',
+      [× T = tProd na dom' codom', Σ ;;; Γ ⊢ dom ⇝ dom' &
+         Σ ;;; Γ ,, vass na dom ⊢ codom ⇝ codom'].
+  Proof using wfΣ. intros; eapply invert_red_prod_cb; tea; typeclasses eauto. Qed.
 
   (*Lemma ws_cumul_pb_LetIn_l_inv {Γ na d ty b T} :
     Σ ;;; Γ ⊢ tLetIn na d ty b ≤ T ->
@@ -762,15 +788,15 @@ Section ConvCongruences.
   Qed.
 
   (* TODO move *)
-  Lemma invert_red_axiom {Γ cst u cdecl T} :
+  Lemma invert_red_axiom_cb {cbΣ : ClosedBodies Σ} {Γ cst u cdecl T} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
     prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ tConst cst u ⇝ T ->
     T = tConst cst u.
-  Proof using wfΣ.
+  Proof using Type.
     intros hdecl hb hnop.
-    unshelve eapply declared_constant_to_gen in hdecl; eauto.
+    unshelve eapply cb_declared_constant_to_gen in hdecl; eauto.
     generalize_eq x (tConst cst u).
     move=> e [clΓ clt] red.
     revert cst u hdecl hb hnop e.
@@ -778,22 +804,29 @@ Section ConvCongruences.
     induction red; simplify_dep_elim.
     - reflexivity.
     - depelim r; try solve_discr.
-      + unshelve eapply declared_constant_to_gen in isdecl; eauto.
+      + unshelve eapply cb_declared_constant_to_gen in isdecl; eauto.
         congruence.
   Qed.
+  Lemma invert_red_axiom {Γ cst u cdecl T} :
+    declared_constant Σ cst cdecl ->
+    cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
+    Σ ;;; Γ ⊢ tConst cst u ⇝ T ->
+    T = tConst cst u.
+  Proof using wfΣ. intros; eapply invert_red_axiom_cb; tea; typeclasses eauto. Qed.
 
   Ltac bool := rtoProp; intuition eauto.
 
-  Lemma invert_red1_axiom_app {Γ cst u cdecl args T} :
+  Lemma invert_red1_axiom_app_cb {cbΣ : ClosedBodies Σ} {Γ cst u cdecl args T} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
     prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ mkApps (tConst cst u) args ⇝1 T ->
     ∑ args', (T = mkApps (tConst cst u) args') × All2 (fun arg arg' => Σ ;;; Γ ⊢ arg ⇝ arg') args args'.
-  Proof using wfΣ.
+  Proof using Type.
     intros hdecl hbod hnop. revert T.
     induction args using rev_ind.
-    - simpl. intros; eapply invert_red_axiom in hbod; tea.
+    - simpl. intros; eapply invert_red_axiom_cb in hbod; tea.
       2:{ eapply closed_red1_red; tea. }
       subst. exists []. split => //.
     - rewrite mkApps_app /=; intros.
@@ -816,13 +849,20 @@ Section ConvCongruences.
         + eapply All_All2; tea; cbn; bool. eapply closed_red_refl; fvs.
         + constructor; [|constructor]. eapply into_closed_red; tea. now constructor.
   Qed.
+  Lemma invert_red1_axiom_app {Γ cst u cdecl args T} :
+    declared_constant Σ cst cdecl ->
+    cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
+    Σ ;;; Γ ⊢ mkApps (tConst cst u) args ⇝1 T ->
+    ∑ args', (T = mkApps (tConst cst u) args') × All2 (fun arg arg' => Σ ;;; Γ ⊢ arg ⇝ arg') args args'.
+  Proof using wfΣ. intros; eapply invert_red1_axiom_app_cb; tea; typeclasses eauto. Qed.
 
-  Lemma closed_red_ind (P : context -> term -> term -> Type) :
+  Lemma closed_red_ind_cb {cbΣ : ClosedBodies Σ} (P : context -> term -> term -> Type) :
     (forall Γ t, is_closed_context Γ -> is_open_term Γ t -> P Γ t t) ->
     (forall Γ t u, Σ ;;; Γ ⊢ t ⇝1 u -> P Γ t u) ->
     (forall Γ t u v, Σ ;;; Γ ⊢ t ⇝ u -> Σ ;;; Γ ⊢ u ⇝ v -> P Γ t u -> P Γ u v -> P Γ t v) ->
     forall Γ t u, Σ ;;; Γ ⊢ t ⇝ u -> P Γ t u.
-  Proof.
+  Proof using Type.
     intros prefl pred ptrans.
     destruct 1 as [ctx src rel].
     eapply clos_rt_rt1n_iff in rel.
@@ -834,25 +874,38 @@ Section ConvCongruences.
       + eapply pred. split; fvs.
       + eapply IHrel. fvs.
   Qed.
+  Lemma closed_red_ind (P : context -> term -> term -> Type) :
+    (forall Γ t, is_closed_context Γ -> is_open_term Γ t -> P Γ t t) ->
+    (forall Γ t u, Σ ;;; Γ ⊢ t ⇝1 u -> P Γ t u) ->
+    (forall Γ t u v, Σ ;;; Γ ⊢ t ⇝ u -> Σ ;;; Γ ⊢ u ⇝ v -> P Γ t u -> P Γ u v -> P Γ t v) ->
+    forall Γ t u, Σ ;;; Γ ⊢ t ⇝ u -> P Γ t u.
+  Proof using wfΣ. intros; eapply closed_red_ind_cb; tea; typeclasses eauto. Qed.
 
+  Lemma invert_red_axiom_app_cb {cbΣ : ClosedBodies Σ} {Γ cst u cdecl args T} :
+    declared_constant Σ cst cdecl ->
+    cst_body cdecl = None ->
+    prim_op_of Σ cst = None ->
+    Σ ;;; Γ ⊢ mkApps (tConst cst u) args ⇝ T ->
+    ∑ args', (T = mkApps (tConst cst u) args') × All2 (fun arg arg' => Σ ;;; Γ ⊢ arg ⇝ arg') args args'.
+  Proof using Type.
+    intros hdecl hbod hnop red.
+    remember (mkApps (tConst cst u) args) as U. revert red args HeqU.
+    revert Γ U T.
+    apply: closed_red_ind_cb; intros; subst.
+    - exists args. split => //. rewrite on_free_vars_mkApps /= in H0. toAll. eapply All_All2; tea; bool. now eapply closed_red_refl.
+    - eapply invert_red1_axiom_app_cb in X; tea.
+    - specialize (X1 _ eq_refl) as [args' []].
+      subst u0. specialize (X2 _ eq_refl) as [args'' []]. subst v.
+      exists args''. split => //. eapply All2_trans; tea.
+      intros x y z red1 red2. now etransitivity.
+  Qed.
   Lemma invert_red_axiom_app {Γ cst u cdecl args T} :
     declared_constant Σ cst cdecl ->
     cst_body cdecl = None ->
     prim_op_of Σ cst = None ->
     Σ ;;; Γ ⊢ mkApps (tConst cst u) args ⇝ T ->
     ∑ args', (T = mkApps (tConst cst u) args') × All2 (fun arg arg' => Σ ;;; Γ ⊢ arg ⇝ arg') args args'.
-  Proof using wfΣ.
-    intros hdecl hbod hnop red.
-    remember (mkApps (tConst cst u) args) as U. revert red args HeqU.
-    revert Γ U T.
-    apply: closed_red_ind; intros; subst.
-    - exists args. split => //. rewrite on_free_vars_mkApps /= in H0. toAll. eapply All_All2; tea; bool. now eapply closed_red_refl.
-    - eapply invert_red1_axiom_app in X; tea.
-    - specialize (X1 _ eq_refl) as [args' []].
-      subst u0. specialize (X2 _ eq_refl) as [args'' []]. subst v.
-      exists args''. split => //. eapply All2_trans; tea.
-      intros x y z red1 red2. now etransitivity.
-  Qed.
+  Proof using wfΣ. intros; eapply invert_red_axiom_app_cb; tea; typeclasses eauto. Qed.
 
   Lemma invert_red_tPrim {Γ p T} :
     Σ ;;; Γ ⊢ tPrim p ⇝ T ->
@@ -1266,17 +1319,22 @@ Section Inversions.
       exists l. inversion e. subst. auto.
   Qed.
 
+  Lemma invert_red_mkApps_tInd_cb {cbΣ : ClosedBodies Σ} {Γ : context} {ind u} (args : list term) c :
+    Σ ;;; Γ ⊢ mkApps (tInd ind u) args ⇝ c ->
+    ∑ args' : list term,
+    [× c = mkApps (tInd ind u) args', is_closed_context Γ & All2 (closed_red Σ Γ) args args'].
+  Proof using Type.
+    move=> [clΓ].
+    rewrite PCUICOnFreeVars.on_free_vars_mkApps => /= hargs r.
+    destruct (red_mkApps_tInd_cb (Γ := exist Γ clΓ) hargs r) as [args' [eq red]].
+    exists args'; split => //.
+    solve_all; split; eauto with fvs.
+  Qed.
   Lemma invert_red_mkApps_tInd {Γ : context} {ind u} (args : list term) c :
     Σ ;;; Γ ⊢ mkApps (tInd ind u) args ⇝ c ->
     ∑ args' : list term,
     [× c = mkApps (tInd ind u) args', is_closed_context Γ & All2 (closed_red Σ Γ) args args'].
-  Proof using wfΣ.
-    move=> [clΓ].
-    rewrite PCUICOnFreeVars.on_free_vars_mkApps => /= hargs r.
-    destruct (red_mkApps_tInd (Γ := exist Γ clΓ) hargs r) as [args' [eq red]].
-    exists args'; split => //.
-    solve_all; split; eauto with fvs.
-  Qed.
+  Proof using wfΣ. intros; eapply invert_red_mkApps_tInd_cb; tea; typeclasses eauto. Qed.
 
   (* TODO deprecate? #[deprecated(note="use red_mkApps_tInd")] *)
   Notation invert_red_ind := red_mkApps_tInd.
@@ -2986,19 +3044,25 @@ Section ConvSubst.
   Qed.
   Hint Resolve subslet_open : fvs.
 
-  Lemma untyped_closed_red_subst {Γ Δ Γ' s M N} :
+  Lemma untyped_closed_red_subst_cb {cbΣ : ClosedBodies Σ} {Γ Δ Γ' s M N} :
     untyped_subslet Γ s Δ ->
     forallb (is_open_term Γ) s ->
     Σ ;;; Γ ,,, Δ ,,, Γ' ⊢ M ⇝ N ->
     Σ ;;; Γ ,,, subst_context s 0 Γ' ⊢ subst s #|Γ'| M ⇝ subst s #|Γ'| N.
-  Proof using wfΣ.
+  Proof using Type.
     intros Hs Hs' H. split.
     - eapply is_closed_subst_context; eauto with fvs pcuic.
       eapply (untyped_subslet_length Hs).
     - eapply is_open_term_subst; tea; eauto with fvs pcuic.
       eapply (untyped_subslet_length Hs).
-    - eapply substitution_untyped_red; tea; eauto with fvs.
+    - eapply substitution_untyped_red_cb; tea; eauto with fvs.
   Qed.
+  Lemma untyped_closed_red_subst {Γ Δ Γ' s M N} :
+    untyped_subslet Γ s Δ ->
+    forallb (is_open_term Γ) s ->
+    Σ ;;; Γ ,,, Δ ,,, Γ' ⊢ M ⇝ N ->
+    Σ ;;; Γ ,,, subst_context s 0 Γ' ⊢ subst s #|Γ'| M ⇝ subst s #|Γ'| N.
+  Proof using wfΣ. intros; eapply untyped_closed_red_subst_cb; tea; typeclasses eauto. Qed.
 
   Lemma closed_red_subst {Γ Δ Γ' s M N} :
     subslet Σ Γ s Δ ->
