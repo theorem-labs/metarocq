@@ -517,6 +517,8 @@ Lemma red1_upto_conv_ctx_prop Σ Γ Γ' t t' :
 Proof using Type.
   intros Hred; induction Hred using red1_ind_all in Γ' |- *;
     try solve [econstructor; eauto; try solve [solve_all]].
+  (* red_prim_op: context-independent; the same rule fires in Γ'. *)
+  all: try (eapply red_prim_op; eassumption).
   - econstructor. destruct (nth_error Γ i) eqn:eq; simpl in H => //.
     noconf H; simpl in H; noconf H.
     eapply All2_fold_nth in X; eauto.

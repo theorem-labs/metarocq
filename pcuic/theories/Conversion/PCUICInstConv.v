@@ -80,6 +80,10 @@ Qed.
 #[global]
 Hint Rewrite inst_mkApps : sigma.
 
+(** Instantiation fixes a ground term. *)
+Lemma prim_ground_inst σ t : prim_ground t -> t.[σ] = t.
+Proof. intros [[[] ->]|[? [? ->]]]; reflexivity. Qed.
+
 Lemma lift0_inst n t : lift0 n t = t.[↑^n].
 Proof. by rewrite lift_rename rename_inst lift_renaming_0 -ren_shiftk. Qed.
 #[global]
@@ -1743,6 +1747,11 @@ Lemma red1_inst {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ u v σ} :
 Proof.
   intros hσ Hu h.
   induction h using red1_ind_all in Hu, σ, Δ, hσ |- *.
+  (* red_prim_op: instantiation fixes the ground head arguments and reduct. *)
+  all: try (eapply red1_red; eapply red1_prim_op_map;
+    [ intros ? [[[] ->]|[? [? ->]]]; reflexivity
+    | intros; apply inst_mkApps | reflexivity
+    | eassumption | eassumption | eassumption | eassumption | eassumption ]).
   all:try inv_on_free_vars.
   all: try solve [
     try (cbn in hav; rtoProp);

@@ -172,6 +172,12 @@ Proof.
   all: repeat match goal with
          | [ H : All2_dep _ _ |- _ ] => apply All2_undep in H
          end.
+  (* cumul_prim_op: renaming fixes the ground head arguments and reduct. *)
+  all: try (rewrite rename_mkApps; cbn [rename];
+    rewrite (map_prim_ground (rename f) _ (prim_ground_rename f));
+    match goal with H : PCUICPrimitiveRed.readback _ _ _ = Some ?w |- _ =>
+      rewrite (prim_ground_rename f w (prim_ground_readback H)) end;
+    eapply cumul_prim_op; eassumption).
   - rewrite rename_subst10. solve [econstructor].
   - rewrite rename_subst10. solve [econstructor].
   - rename Hren into hf. unfold urenaming in hf.
