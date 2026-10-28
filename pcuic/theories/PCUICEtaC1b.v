@@ -230,3 +230,118 @@ Proof.
   intros H. apply (C1b_false_open []).
   intros t t' u _ _. exact (H t t' u).
 Qed.
+
+(** ** Probe: can a narrower equivalence repair C1b without breaking C4?
+
+   Candidate [E'] := [upto_domain] that also requires corresponding λ domains to
+   have the same free variables. [E'] excludes the witness above by
+   construction (the inner domains [P] and [x] differ in free variables).
+   C1b over [E'] then plausibly holds (proof sketch, NOT mechanised: in the
+   [eta_red] case, [X E' lift0 1 t0] forces every domain of [X] to avoid the
+   lifted window, so [X = lift0 1 X0] with [t0 E' X0]; η-steps preserve free
+   variables exactly, so a step inside a domain closes by reflexivity).
+
+   But C4 itself forces [E] to relate two terms whose corresponding λ domains
+   DIFFER in free variables, so C4 is FALSE modulo [E'] (and C3 with it, since
+   both reducts below are βη-normal). Witness (closed; [w] is the outer binder):
+
+     c4_t    = λw:P. λx:w. (λy:P. y) x      an η-redex under λw
+     c4_eta  = λw:P. λy:P. y                 c4_t →η c4_eta
+     c4_beta = λw:P. λx:w. x                 c4_t →β c4_beta
+
+   Both reducts are βη-normal in every [Σ]/[Γ], so any joining modulo [E] must
+   relate them as they are: [E c4_beta c4_eta]. Their depth-1 domains are [w]
+   (free variable 0) and [P] (none). [C4_forces_relating] proves this for an
+   ARBITRARY relation [E], at any [Σ], [Γ]. *)
+
+Definition c4_t : term :=
+  tLambda c1b_na c1b_P (eta_redex c1b_na (tRel 0) (tLambda c1b_na c1b_P (tRel 0))).
+Definition c4_eta : term := tLambda c1b_na c1b_P (tLambda c1b_na c1b_P (tRel 0)).
+Definition c4_beta : term := tLambda c1b_na c1b_P (tLambda c1b_na (tRel 0) (tRel 0)).
+
+Lemma c4_eta_step : eta1 c4_t c4_eta.
+Proof. unfold c4_t, c4_eta. apply abs_eta_r. apply eta_red. Qed.
+
+Lemma c4_beta_step Σ Γ : red1 Σ Γ c4_t c4_beta.
+Proof.
+  unfold c4_t, c4_beta. apply abs_red_r. apply abs_red_r.
+  exact (red_beta Σ _ c1b_na c1b_P (tRel 0) (tRel 0)).
+Qed.
+
+Lemma c4_open (Γ : context) : is_open_term Γ c4_t.
+Proof. vm_compute; reflexivity. Qed.
+
+(** Generic λ-normality, from normality of the domain and the body. *)
+Lemma red_normal_lam Σ Γ na A b :
+  (forall v, red1 Σ Γ A v -> False) ->
+  (forall v, red1 Σ (Γ ,, vass na A) b v -> False) ->
+  forall v, red1 Σ Γ (tLambda na A b) v -> False.
+Proof.
+  intros HA Hb v H. inv_red H; eauto.
+Qed.
+
+Lemma eta_normal_lam na A b :
+  (forall v, eta1 A v -> False) ->
+  (forall v, eta1 b v -> False) ->
+  match b with tApp _ _ => False | _ => True end ->
+  forall v, eta1 (tLambda na A b) v -> False.
+Proof.
+  intros HA Hb Hshape v H. inv_eta H; first [exact Hshape | eauto].
+Qed.
+
+Lemma red_normal_c4_eta Σ Γ v : red1 Σ Γ c4_eta v -> False.
+Proof.
+  unfold c4_eta. revert v. apply red_normal_lam.
+  - intros v. apply red_normal_Sort.
+  - apply red_normal_lam.
+    + intros v. apply red_normal_Sort.
+    + intros v. apply red_normal_Rel0.
+Qed.
+
+Lemma red_normal_c4_beta Σ Γ v : red1 Σ Γ c4_beta v -> False.
+Proof.
+  unfold c4_beta. revert v. apply red_normal_lam.
+  - intros v. apply red_normal_Sort.
+  - apply red_normal_lam.
+    + intros v. apply red_normal_Rel0.
+    + intros v. apply red_normal_Rel0.
+Qed.
+
+Lemma eta_normal_c4_eta v : eta1 c4_eta v -> False.
+Proof.
+  unfold c4_eta. revert v. apply eta_normal_lam.
+  - intros v. apply eta_normal_Sort.
+  - apply eta_normal_lam; [intros v; apply eta_normal_Sort | intros v; apply eta_normal_Rel | exact I].
+  - exact I.
+Qed.
+
+Lemma eta_normal_c4_beta v : eta1 c4_beta v -> False.
+Proof.
+  unfold c4_beta. revert v. apply eta_normal_lam.
+  - intros v. apply eta_normal_Sort.
+  - apply eta_normal_lam; [intros v; apply eta_normal_Rel | intros v; apply eta_normal_Rel | exact I].
+  - exact I.
+Qed.
+
+Lemma betaeta_normal_c4_eta Σ Γ v : beta_eta1 Σ Γ c4_eta v -> False.
+Proof. intros [H|H]; [exact (red_normal_c4_eta _ _ _ H) | exact (eta_normal_c4_eta _ H)]. Qed.
+
+Lemma betaeta_normal_c4_beta Σ Γ v : beta_eta1 Σ Γ c4_beta v -> False.
+Proof. intros [H|H]; [exact (red_normal_c4_beta _ _ _ H) | exact (eta_normal_c4_beta _ H)]. Qed.
+
+(** Any [E] modulo which βη is confluent on well-scoped terms at [Σ]/[Γ] relates
+    [c4_beta] and [c4_eta]. Instantiate with a C4-shaped hypothesis (C4_statement
+    supplies it at any [wf Σ], [is_closed_context Γ]). *)
+Theorem C4_forces_relating (E : term -> term -> Type) (Σ : global_env) (Γ : context) :
+  (forall t u v, is_open_term Γ t -> beta_eta Σ Γ t u -> beta_eta Σ Γ t v ->
+     ∑ u' v', beta_eta Σ Γ u u' × beta_eta Σ Γ v v' × E u' v') ->
+  E c4_beta c4_eta.
+Proof.
+  intros H.
+  have Hb : beta_eta Σ Γ c4_t c4_beta by apply rt_step; left; apply c4_beta_step.
+  have He : beta_eta Σ Γ c4_t c4_eta by apply rt_step; right; apply c4_eta_step.
+  destruct (H _ _ _ (c4_open Γ) Hb He) as (u' & v' & Hu & Hv & HE).
+  apply (rt_from_normal _ _ _ (betaeta_normal_c4_beta Σ Γ)) in Hu.
+  apply (rt_from_normal _ _ _ (betaeta_normal_c4_eta Σ Γ)) in Hv.
+  subst u' v'. exact HE.
+Qed.
