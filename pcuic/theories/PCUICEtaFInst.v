@@ -214,50 +214,67 @@ Proof.
     now rewrite !(proj2 (Nat.leb_le _ _) (Nat.le_max_r _ _)).
 Qed.
 
-(** The F-inst instance comparison. Pinned at [Conv]; see the header. *)
-Definition cmp_global_instance_eta r Σ cmp_universe gr napp :=
-  cmp_opt_variance cmp_universe Conv (global_variance_eta r Σ gr napp).
+(** ** The F-inst instance comparison — CORRECTION of 5b9cd4ff (2026-10-28)
+
+  5b9cd4ff compared EVERY head at [Conv]. That was WRONG for heads applied to at
+  least their arity: base [eq_Ind]/[eq_Construct] ([PCUICEquality.v:427], [:431])
+  and the spec's [cumulE_Ind]/[cumulE_Construct]
+  ([PCUICCumulativitySpecEta.v:51-59]) compare those at [pb], so a fully applied
+  cumulative inductive at [Cumul] ([Box@{+u} ≤ Box@{v}], [u < v]) was
+  spec-related but join-refused, and A2 was false
+  ([finst_cumulative_box_witness] below now holds). The lane lead's [Conv]
+  correction was about UNDER-applied heads — every spec route relating one is an
+  η detour at [Conv] — and EtaL2 over-applied it to all heads.
+
+  The comparison MODE is now read from [napp]: [pb] when the head carries at
+  least its arity, [Conv] (with the full-arity variance) below it. The variance
+  lookup is unchanged. R3(a) stays deleted: the η drop goes from [(Conv, n)] to
+  [(pb, m)], and [finst_Conv_pb] shows that is monotone. *)
+
+Definition finst_mode (Σ : global_env) (gr : global_reference) (pb : conv_pb) (napp : nat) :=
+  if head_arity Σ gr <=? napp then pb else Conv.
+
+Definition cmp_global_instance_eta r Σ cmp_universe pb gr napp :=
+  cmp_opt_variance cmp_universe (finst_mode Σ gr pb napp) (global_variance_eta r Σ gr napp).
 
 (** ** The instance comparison is an equivalence
 
-  This lane flagged TRANSITIVITY as the riskiest step of the restatement,
-  because [cmp_opt_variance] at [Variance v] is a DISJUNCTION
-  ([PCUICEquality.v:79]) and a composition can take different disjuncts on each
-  side. **It closed immediately, and it does not move the cost.** Base already
-  owns the combinator for exactly this, [cmp_opt_variance_or_impl]
-  ([PCUICEquality.v:140-...]), and uses it to prove [cmp_global_instance_trans]
-  ([:614-628]). Our relation has the same SHAPE — [cmp_opt_variance] applied to
-  a variance VALUE — and base's proofs never inspect where that value came from,
-  only that it is one of the three constructors. So the three proofs below are
-  base's, verbatim in structure, over [global_variance_eta_gen] instead of
-  [global_variance_gen].
+  Transitivity was flagged as the riskiest step because [cmp_opt_variance] at
+  [Variance v] is a disjunction ([PCUICEquality.v:79]). It is base's proof
+  ([cmp_global_instance_trans], [:614-628]) with [cmp_opt_variance_or_impl],
+  verbatim in structure: base never inspects where the variance or the mode came
+  from. With the mode now [pb] or [Conv], every hypothesis base needs is required
+  at BOTH, and is discharged at the actual mode by [finst_mode_cases]. All hold
+  for BOTH values of the constructor hole [r]. *)
 
-  The [Conv] pin pays for itself a second time here. Base's transitivity needs
-  [subrelation (cmp_universe Conv) (cmp_universe pb)]; at [pb := Conv] that
-  hypothesis is free. At [Cumul] it would have to be carried.
-
-  All three hold for BOTH values of the constructor hole. *)
+Lemma finst_mode_cases (P : conv_pb -> Type) Σ gr pb napp :
+  P Conv -> P pb -> P (finst_mode Σ gr pb napp).
+Proof. intros hC hp. unfold finst_mode. now destruct (_ <=? _). Qed.
 
 Section FInstInstance.
   Context (r : finst_construct_rule) (Σ : global_env)
           (cmp_universe : conv_pb -> Universe.t -> Universe.t -> Prop).
 
-  Lemma cmp_global_instance_eta_refl gr napp :
+  Lemma cmp_global_instance_eta_refl pb gr napp :
     RelationClasses.Reflexive (cmp_universe Conv) ->
-    RelationClasses.Reflexive (cmp_global_instance_eta r Σ cmp_universe gr napp).
+    RelationClasses.Reflexive (cmp_universe pb) ->
+    RelationClasses.Reflexive (cmp_global_instance_eta r Σ cmp_universe pb gr napp).
   Proof.
-    intros univ_refl.
+    intros univ_refl _.
     unfold cmp_global_instance_eta.
     destruct global_variance_eta_gen as [| |v] => //= u.
     - now apply cmp_universe_instance_refl.
     - left. now apply cmp_universe_instance_refl.
   Qed.
 
-  Lemma cmp_global_instance_eta_sym gr napp :
+  Lemma cmp_global_instance_eta_sym pb gr napp :
     RelationClasses.Symmetric (cmp_universe Conv) ->
-    RelationClasses.Symmetric (cmp_global_instance_eta r Σ cmp_universe gr napp).
+    RelationClasses.Symmetric (cmp_universe pb) ->
+    RelationClasses.Symmetric (cmp_global_instance_eta r Σ cmp_universe pb gr napp).
   Proof.
-    intros univ_sym.
+    intros univ_sym univ_sym'.
+    have hm : RelationClasses.Symmetric (cmp_universe (finst_mode Σ gr pb napp))
+      := finst_mode_cases (fun m => RelationClasses.Symmetric (cmp_universe m)) _ _ _ _ univ_sym univ_sym'.
     unfold cmp_global_instance_eta.
     destruct global_variance_eta_gen as [| |v] => //= u u'.
     - now symmetry.
@@ -265,15 +282,19 @@ Section FInstInstance.
       all: now symmetry.
   Qed.
 
-  (** The step this lane called riskiest. See the section header: it closed with
-      base's own combinator, in the hour it was attacked. *)
-  Lemma cmp_global_instance_eta_trans gr napp :
+  (** The step this lane called riskiest; base's own combinator closes it. *)
+  Lemma cmp_global_instance_eta_trans pb gr napp :
+    RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pb) ->
     RelationClasses.Transitive (cmp_universe Conv) ->
-    RelationClasses.Transitive (cmp_global_instance_eta r Σ cmp_universe gr napp).
+    RelationClasses.Transitive (cmp_universe pb) ->
+    RelationClasses.Transitive (cmp_global_instance_eta r Σ cmp_universe pb gr napp).
   Proof.
-    intros univ_trans.
-    assert (univ_sub : RelationClasses.subrelation (cmp_universe Conv) (cmp_universe Conv))
-      by (intros x y h; exact h).
+    intros univ_sub univ_trans univ_trans'.
+    have hsub : RelationClasses.subrelation (cmp_universe Conv) (cmp_universe (finst_mode Σ gr pb napp))
+      := finst_mode_cases (fun m => RelationClasses.subrelation (cmp_universe Conv) (cmp_universe m))
+           _ _ _ _ (fun x y h => h) univ_sub.
+    have htr : RelationClasses.Transitive (cmp_universe (finst_mode Σ gr pb napp))
+      := finst_mode_cases (fun m => RelationClasses.Transitive (cmp_universe m)) _ _ _ _ univ_trans univ_trans'.
     unfold cmp_global_instance_eta.
     destruct global_variance_eta_gen as [| |v] => //= u u' u''.
     1,2: now etransitivity.
@@ -281,20 +302,88 @@ Section FInstInstance.
     all: now etransitivity.
   Qed.
 
-  (** Base [compare_term]'s instance comparison implies F-inst's: one
-      [cmp_instance_opt_variance] ([PCUICEquality.v:102-109], i.e.
-      [AllEqual ⊆ v]). **This is the lemma that keeps [isconv_sound] untouched**:
-      the checker keeps base [compare_term] (SC3, K2), and base ⊆ F-inst, so
-      "checker accepts ⊆ algorithmic ⊆ spec" survives the widening. *)
-  Lemma cmp_global_instance_eta_weaken gr napp u u' :
+  (** [AllEqual] input implies F-inst at any mode ([cmp_instance_opt_variance],
+      [PCUICEquality.v:102-109]). *)
+  Lemma cmp_global_instance_eta_weaken pb gr napp u u' :
     cmp_universe_instance (cmp_universe Conv) u u' ->
-    cmp_global_instance_eta r Σ cmp_universe gr napp u u'.
+    cmp_global_instance_eta r Σ cmp_universe pb gr napp u u'.
   Proof.
     intros h. unfold cmp_global_instance_eta.
-    now apply (cmp_instance_opt_variance cmp_universe Conv _ u u').
+    now apply (cmp_instance_opt_variance cmp_universe _ _ u u').
+  Qed.
+
+  (** A [Conv]-mode comparison implies the same comparison at any [pb'] whose
+      universe relation contains [Conv]'s. *)
+  Lemma cmp_opt_variance_Conv_sub pb' v u u' :
+    RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pb') ->
+    cmp_opt_variance cmp_universe Conv v u u' -> cmp_opt_variance cmp_universe pb' v u u'.
+  Proof.
+    intros sub. destruct v as [| |v]; cbn; try (intros h; exact h).
+    intros [h|h]; [now left|right].
+    eapply Forall3_impl; [exact h|]. intros [] x y; cbn; try (intros; exact I).
+    - unfold on_rel. apply sub.
+    - intros e; exact e.
+  Qed.
+
+  (** **Item (3) of the lane lead's approval: the [(Conv, n) → (pb, m)]
+      monotonicity the η drop relies on.** At [Conv] the mode is [Conv] for
+      every [napp]; the variance does not read [napp]
+      ([global_variance_eta_napp_irrelevant]); and a [Conv]-mode comparison
+      implies the [pb]-mode or [Conv]-mode one at [m]. *)
+  Lemma finst_Conv_pb pb gr n m u u' :
+    RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pb) ->
+    cmp_global_instance_eta r Σ cmp_universe Conv gr n u u' ->
+    cmp_global_instance_eta r Σ cmp_universe pb gr m u u'.
+  Proof.
+    intros sub. unfold cmp_global_instance_eta.
+    have -> : finst_mode Σ gr Conv n = Conv by unfold finst_mode; now destruct (_ <=? _).
+    rewrite (global_variance_eta_napp_irrelevant r (lookup_env Σ) gr n m).
+    apply cmp_opt_variance_Conv_sub.
+    exact (finst_mode_cases (fun pm => RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pm))
+             _ _ _ _ (fun x y h => h) sub).
   Qed.
 
 End FInstInstance.
+
+(** **Item (1) of the lane lead's approval: the [Box@{+u}] witness now HOLDS.**
+    A cumulative inductive with no parameters and no indices (arity 0), one
+    [Covariant] universe, compared at [Cumul] with [napp 0] and no arguments:
+    [u ≤ v] suffices. Under 5b9cd4ff this demanded [u = v], which is why A2 was
+    false. Stated for ANY such declared inductive, at BOTH constructor rules. *)
+Lemma finst_cumulative_box_witness r (Σ : global_env) cmp_universe i mdecl idecl u v :
+  declared_inductive_gen (lookup_env Σ) i mdecl idecl ->
+  ind_params mdecl = [] -> ind_indices idecl = [] ->
+  ind_variance mdecl = Some [Variance.Covariant] ->
+  on_rel (cmp_universe Cumul) Universe.make' u v ->
+  cmp_global_instance_eta r Σ cmp_universe Cumul (IndRef i) 0 [u] [v].
+Proof.
+  intros hd hp hi hv huv.
+  have hl := declared_inductive_lookup_gen hd.
+  unfold cmp_global_instance_eta, finst_mode, global_variance_eta_gen, head_arity_gen.
+  rewrite hl hp hi; cbn.
+  have -> : (match r with FInstFollowSpec => false
+             | FInstFollowKernel => noncumulative_constructor_gen (lookup_env Σ) (IndRef i) end) = false
+    by now destruct r.
+  unfold global_variance_gen. rewrite hl hp hi hv; cbn.
+  right. constructor; [exact huv|constructor].
+Qed.
+
+(** **Hypotheses satisfiable (FRAC's standing rule).** The corrected
+    transitivity's three premises are met by the REAL comparison
+    [compare_universe φ], at every [pb], for EVERY [φ] — no well-formedness
+    needed: [compare_universe φ Conv] is [eq_universe φ], transitive by
+    [eq_universe_trans]; [compare_universe φ pb] is transitive by
+    [compare_universe_trans]; and [eq_universe φ ⊆ compare_universe φ pb] is
+    [compare_universe_subrel] ([Universes.v:1329], [:1417], [:1407]). This
+    corollary is that statement, checked. *)
+Lemma cmp_global_instance_eta_trans_compare {cf : checker_flags} r Σ φ pb gr napp :
+  RelationClasses.Transitive (cmp_global_instance_eta r Σ (compare_universe φ) pb gr napp).
+Proof.
+  apply cmp_global_instance_eta_trans.
+  - exact (compare_universe_subrel φ pb).
+  - exact (eq_universe_trans φ).
+  - exact (compare_universe_trans φ pb).
+Qed.
 
 (** ** U1', carrying the open constructor clause
 
@@ -306,8 +395,8 @@ End FInstInstance.
   unavoidable: [napp] is threaded through the inductive, so the variance lookup
   cannot be swapped from outside. *)
 
-Definition cmp_global_instance_finst r Σ cmp_universe gr napp :=
-  cmp_global_instance_eta r Σ cmp_universe gr napp.
+Definition cmp_global_instance_finst r Σ cmp_universe pb gr napp :=
+  cmp_global_instance_eta r Σ cmp_universe pb gr napp.
 
 (** [r] is a SECTION variable, not an inductive parameter: the recursive
     notation below cannot infer it from a [_]. Discharging the section gives it
@@ -345,14 +434,15 @@ Inductive eq_term_upto_univ_eta_napp Σ
     cmp_universe_instance (cmp_universe Conv) u u' ->
     Σ ⊢ tConst c u <==η[ pb , napp ] tConst c u'
 
-(* F-INST. The variance is read at the head's FULL ARITY and the instances are
-   compared at [Conv]. These two constructors are the only change from base. *)
+(* F-INST. The variance is read at the head's FULL ARITY; the comparison mode is
+   [pb] at or above the arity and [Conv] below it ([finst_mode]). These two
+   constructors are the only change from base. *)
 | eqη_Ind : forall i u u',
-    cmp_global_instance_finst r Σ cmp_universe (IndRef i) napp u u' ->
+    cmp_global_instance_finst r Σ cmp_universe pb (IndRef i) napp u u' ->
     Σ ⊢ tInd i u <==η[ pb , napp ] tInd i u'
 
 | eqη_Construct : forall i k u u',
-    cmp_global_instance_finst r Σ cmp_universe (ConstructRef i k) napp u u' ->
+    cmp_global_instance_finst r Σ cmp_universe pb (ConstructRef i k) napp u u' ->
     Σ ⊢ tConstruct i k u <==η[ pb , napp ] tConstruct i k u'
 
 | eqη_Lambda : forall na na' ty ty' t t',
@@ -427,9 +517,9 @@ Qed.
 (** The same fact as the lane states it: a non-cumulative constructor head is
     compared by instance equality, exactly as [conversion.ml:221-222] does, and
     NOT by [AllIrrelevant]. *)
-Lemma finst_noncumulative_constructor_instance_eq Σ cmp_universe ind k napp u u' :
+Lemma finst_noncumulative_constructor_instance_eq Σ cmp_universe pb ind k napp u u' :
   noncumulative_constructor_gen (lookup_env Σ) (ConstructRef ind k) = true ->
-  cmp_global_instance_finst FInstFollowKernel Σ cmp_universe (ConstructRef ind k) napp u u' ->
+  cmp_global_instance_finst FInstFollowKernel Σ cmp_universe pb (ConstructRef ind k) napp u u' ->
   cmp_universe_instance (cmp_universe Conv) u u'.
 Proof.
   intros hnc h.
