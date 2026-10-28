@@ -1651,11 +1651,12 @@ Next Obligation.
   { now eexists. }
   pose proof (abstract_pop_decls_correct X decls prop' _ _ HX H).
   destruct x, Σ as [[] u], H0; cbn in *.
-  subst. sq. inversion H1. subst. destruct wfX. cbn in *.
+  subst. sq. inversion H1. subst. destruct wfX as [onu [wfr o0]]. cbn in *.
   specialize (prop _ HX).
   cbn in prop.
-  rewrite prop in o0. depelim o0. destruct o1.
-  split. 2:exact on_global_decl_d. split => //.
+  rewrite prop in o0. depelim o0. destruct o.
+  split. 2:exact on_global_decl_d.
+  split; [split; [exact onu|split; [exact wfr|exact o0]]|done].
 Qed.
 Next Obligation.
   unshelve eapply (normalization_in (S _)); cbn in *; revgoals; try eassumption; lia.
@@ -1723,11 +1724,12 @@ Next Obligation.
   { now eexists. }
   pose proof (abstract_pop_decls_correct X decls prop' _ _ HX H).
   destruct x, Σ as [[] u], H0; cbn in *.
-  subst. sq. inversion H1. subst. destruct wfX. cbn in *.
+  subst. sq. inversion H1. subst. destruct wfX as [onu [wfr o0]]. cbn in *.
   specialize (prop _ HX).
   cbn in prop.
-  rewrite prop in o0. depelim o0. destruct o1.
-  split. 2:exact on_global_decl_d. split => //.
+  rewrite prop in o0. depelim o0. destruct o.
+  split. 2:exact on_global_decl_d.
+  split; [split; [exact onu|split; [exact wfr|exact o0]]|done].
 Qed.
 Next Obligation.
   unshelve eapply (normalization_in (S _)); cbn in *; revgoals; try eassumption; lia.
@@ -1806,7 +1808,7 @@ Proof.
       { intros tag.
         rewrite (abstract_primitive_constant_correct _ _ _ H0) (abstract_primitive_constant_correct _ _ _ H1).
         rewrite H2 H3. apply hpc. }
-      { intros kn.
+      { intros kn0.
         rewrite (abstract_prim_op_of_correct _ _ _ H0) (abstract_prim_op_of_correct _ _ _ H1).
         rewrite H2 H3. apply hop. }
       { rewrite (abstract_primitive_bool_correct _ _ H0) (abstract_primitive_bool_correct _ _ H1).
@@ -1878,7 +1880,7 @@ induction decls; eauto. intros. destruct a as [kn []].
     { intros tag.
       rewrite (abstract_primitive_constant_correct _ _ _ H0) (abstract_primitive_constant_correct _ _ _ H1).
       rewrite H2 H3. apply hpc. }
-    { intros kn.
+    { intros kn0.
       rewrite (abstract_prim_op_of_correct _ _ _ H0) (abstract_prim_op_of_correct _ _ _ H1).
       rewrite H2 H3. apply hop. }
     { rewrite (abstract_primitive_bool_correct _ _ H0) (abstract_primitive_bool_correct _ _ H1).
