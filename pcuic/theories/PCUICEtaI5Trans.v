@@ -40,7 +40,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICIn
      PCUICEquality PCUICReduction PCUICOnFreeVars PCUICTyping PCUICUnivSubstitutionConv
      PCUICEtaDefs PCUICEtaScope PCUICEtaCanon PCUICEtaCanonRed PCUICEtaCanonC4
      PCUICEtaFInst PCUICEtaFInstEquiv PCUICEtaFInstC1c PCUICEtaFInstFlip
-     PCUICEtaFInstEtaC1c PCUICEtaI5.
+     PCUICEtaFInstEtaC1c PCUICEtaI5 PCUICClosedBodies.
 
 (** ** [canon] preserves U1' *)
 
@@ -120,7 +120,7 @@ End Canon.
 
 Section A3.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
 
   Local Notation cu := (compare_universe Σ).
   Local Notation cs := (compare_sort Σ).

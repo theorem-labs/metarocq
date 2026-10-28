@@ -3,7 +3,7 @@
 (** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A4: the F-inst
       comparison is included in the E-spec
 
-    [finst_cumulSpecE] : wf Σ -> is_closed_context Γ ->
+    [finst_cumulSpecE] : ClosedBodies Σ -> is_closed_context Γ ->
       is_open_term Γ (mkApps M args) -> is_open_term Γ (mkApps N args') ->
       M ≈F[pb, #|args|] N -> All2 (≤sE[Conv]) args args' ->
       Σ ;;; Γ ⊢ mkApps M args ≤sE[pb] mkApps N args'
@@ -46,11 +46,11 @@ From MetaRocq.Common Require Import config BasicAst Universes Primitive.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICInduction
      PCUICEquality PCUICCases PCUICOnFreeVars PCUICTyping PCUICCumulativitySpec
      PCUICCumulativitySpecEta PCUICCumulativitySpecEtaClosure
-     PCUICEtaFInst PCUICEtaFInstGlue PCUICEtaJoinSpec.
+     PCUICEtaFInst PCUICEtaFInstGlue PCUICEtaJoinSpec PCUICClosedBodies.
 
 Section FInstSpec.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ.1) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ.1) (r : finst_construct_rule).
 
   Local Notation RF pb n :=
     (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).

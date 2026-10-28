@@ -17,7 +17,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimitive
      PCUICInduction PCUICLiftSubst PCUICSigmaCalculus PCUICEquality PCUICCases
-     PCUICOnFreeVars PCUICTyping PCUICReduction PCUICPrimitiveRed PCUICEtaDefs.
+     PCUICOnFreeVars PCUICTyping PCUICReduction PCUICPrimitiveRed PCUICEtaDefs PCUICClosedBodies.
 (** EtaL2's strengthening lemma; Requires only base files (no eta-lane file). *)
 From MetaRocq.PCUIC Require Import PCUICEtaStrengthening.
 
@@ -1269,7 +1269,7 @@ Proof. unfold is_constructor. now destruct n. Qed.
   [pcontext] and on every [bcontext], and that conjunct never mentions [p], so it
   demands those contexts be CLOSED however permissive [p] is. (The lemmas that would
   discharge it — [on_free_vars_true], [on_free_vars_xpredT], [test_context_k_true] —
-  are commented out at :139-163.) Base's own [weakening_red1] carries it for the
+  are commented out at :139-163.) Base's own [weakening_red1_cb] carries it for the
   same reason.
 
   DO NOT TRY TO DROP THIS PREMISE. It is carried, not re-established at each step,
@@ -1959,7 +1959,7 @@ Qed.
 
 Section Kernel.
 Context {cf : checker_flags}.
-Lemma commut_eta (Σ : global_env) (wfΣ : wf Σ) na A M M' :
+Lemma commut_eta (Σ : global_env) (wfΣ : ClosedBodies Σ) na A M M' :
   peta M M' -> commutes Σ M M' ->
   commutes Σ (tLambda na A (tApp (lift0 1 M) (tRel 0))) M'.
 Proof.
@@ -2409,7 +2409,7 @@ Section Assembly.
 Context {cf : checker_flags}.
 (** Parallel η commutes with one β step, modulo [upto_domain]. The induction only
     dispatches: every [peta] constructor is its own [commut_*] lemma above. *)
-Lemma red1_peta_diamond (Σ : global_env) (wfΣ : wf Σ) t u : peta t u -> commutes Σ t u.
+Lemma red1_peta_diamond (Σ : global_env) (wfΣ : ClosedBodies Σ) t u : peta t u -> commutes Σ t u.
 Proof.
   induction 1 using peta_ind_all.
   - eapply (commut_eta Σ wfΣ); eassumption.
@@ -2441,7 +2441,7 @@ Qed.
     scoping premises and [wf Σ] are consumed only by [red1_strengthening] in the η
     constructor's [app_red_l] sub-case. *)
 Theorem red1_eta1_strong_commutation (Σ : global_env) (Γ : context) (t u v : term) :
-  wf Σ -> is_closed_context Γ -> is_open_term Γ t ->
+  ClosedBodies Σ -> is_closed_context Γ -> is_open_term Γ t ->
   red1 Σ Γ t v -> eta1 t u ->
   ∑ w w', clos_refl (red1 Σ Γ) u w × clos_refl_trans eta1 v w' × upto_domain w w'.
 Proof.

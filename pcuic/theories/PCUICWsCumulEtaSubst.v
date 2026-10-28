@@ -34,7 +34,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLi
      PCUICSubstitution PCUICConversion PCUICSpine PCUICUnivSubst PCUICUnivSubstitutionConv
      PCUICEtaDefs PCUICEtaScope PCUICEtaCanon PCUICEtaCanonRed PCUICEtaConfluence
      PCUICEtaFInst PCUICEtaFInstEquiv PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2
-     PCUICWellScopedCumulativityEta PCUICConversionEtaCongr.
+     PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICClosedBodies.
 
 (** ** U1' under substitution *)
 
@@ -89,7 +89,7 @@ End Inst.
 Section Map.
 
   (** Source environment [Σ], target [Σ'] (they differ only for universe instances). *)
-  Context {cf : checker_flags} (Σ Σ' : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ Σ' : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
 
   Local Notation RF Σ pb n := (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
@@ -134,7 +134,7 @@ End Map.
 
 Section A7.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
 
   Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
 
@@ -153,7 +153,7 @@ Section A7.
       + intros x y hx h.
         have hcr : Σ ;;; Γ ,,, Δ ,,, Γ'' ⊢ x ⇝ y.
         { split; [exact hΓ|exact hx|apply red1_red; exact h]. }
-        exact (clrel_rel (untyped_closed_red_subst hs hs' hcr)).
+        exact (clrel_rel (untyped_closed_red_subst_cb hs hs' hcr)).
       + intros x y h. exact (eta1_subst_step s x y h _).
       + intros x y e. rewrite !canon_subst. now rewrite e.
       + intros x y e. rewrite !canon_subst. apply finst_subst. exact (RF_canon Σ r _ _ _ _ e).
@@ -197,7 +197,7 @@ Section A7.
       + intros x y hx h.
         have hcr : Σ ;;; Γ ,,, Γ' ⊢ x ⇝ y.
         { split; [exact hΓ|exact hx|apply red1_red; exact h]. }
-        exact (clrel_rel (weakening_closed_red hcr hΓ'')).
+        exact (clrel_rel (weakening_closed_red_cb hcr hΓ'')).
       + intros x y h. exact (eta1_lift _ x y h _).
       + intros x y e. rewrite !canon_lift. now rewrite e.
       + intros x y e. rewrite !canon_lift. apply finst_lift. exact (RF_canon Σ r _ _ _ _ e).
@@ -403,7 +403,7 @@ Section UnivInst.
 
 End UnivInst.
 
-Lemma subst_instance_ws_cumul_pbE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+Lemma subst_instance_ws_cumul_pbE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
   {r : finst_construct_rule} univs u {pb Γ A B} :
   valid_constraints (global_ext_constraints (Σ.1, univs)) (subst_instance_cstrs u Σ) ->
   ws_cumul_pbE r pb Σ Γ A B ->

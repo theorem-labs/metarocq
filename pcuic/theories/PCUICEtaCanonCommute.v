@@ -2,7 +2,7 @@
 
 (** * BET-315 eta lane, §6.2 obligation 5: EXACT strong commutation of [R_c] and [eta1]
 
-    [R_c_eta1_strong_commutation] : wf Σ -> is_closed_context Γ ->
+    [R_c_eta1_strong_commutation] : ClosedBodies Σ -> is_closed_context Γ ->
       is_open_term Γ t -> canon t = t ->
       R_c Σ Γ t v -> eta1 t u ->
       ∑ z, clos_refl (R_c Σ Γ) u z × clos_refl_trans eta1 v z
@@ -33,7 +33,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReduction PCUICTyping
      PCUICOnFreeVars PCUICEtaDefs PCUICEtaCanon PCUICEtaC3BR PCUICEtaCanonRed
-     PCUICEtaCanonEta.
+     PCUICEtaCanonEta PCUICClosedBodies.
 
 Local Open Scope type_scope.
 
@@ -49,7 +49,7 @@ Proof.
 Qed.
 
 Theorem R_c_eta1_strong_commutation {cf : checker_flags} Σ Γ t u v :
-  wf Σ -> is_closed_context Γ -> is_open_term Γ t -> canon t = t ->
+  ClosedBodies Σ -> is_closed_context Γ -> is_open_term Γ t -> canon t = t ->
   R_c Σ Γ t v -> eta1 t u ->
   ∑ z, clos_refl (R_c Σ Γ) u z × clos_refl_trans eta1 v z.
 Proof.

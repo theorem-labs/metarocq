@@ -20,7 +20,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Kernames Environment EnvironmentTyping.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
      PCUICEquality PCUICArityRed PCUICCumulativitySpec PCUICCumulativitySpecEta
-     PCUICCumulativitySpecEtaClosure.
+     PCUICCumulativitySpecEtaClosure PCUICClosedBodies PCUICClosedTyp.
 
 #[local] Existing Instance default_checker_flags.
 
@@ -191,6 +191,11 @@ Proof.
       cbn. intros i h; discriminate h.
 Qed.
 
+(** [si_wf] gives the confluence spine's premise ([PCUICClosedBodies]), which the η
+    chain takes in place of [wf] (W-c). *)
+Definition si_cb : ClosedBodies si_env := @wf_ClosedBodies _ si_env si_wf.
+#[local] Existing Instance si_cb.
+
 (** ** The universe premises *)
 
 Lemma si_cumul_Ind_univ pb n : cumul_Ind_univ si_Σ pb si_ind n [] [].
@@ -210,7 +215,7 @@ Proof. split; [exact si_declared_inductive|reflexivity]. Qed.
 Lemma cumulSpecE_ind_underapplied_gen_inst :
   si_Σ ;;; [] ⊢ mkApps (tInd si_ind []) [] ≤sE[Conv] mkApps (tInd si_ind []) [].
 Proof.
-  exact (cumulSpecE_ind_underapplied_gen si_Σ si_ind [] [] 1 si_wf (si_cumul_Ind_univ Conv 1)
+  exact (cumulSpecE_ind_underapplied_gen si_Σ si_ind [] [] 1 si_cb (si_cumul_Ind_univ Conv 1)
            1 [] [] [] eq_refl eq_refl eq_refl eq_refl eq_refl All2_nil).
 Qed.
 
@@ -218,14 +223,14 @@ Lemma cumulSpecE_ind_underapplied_inst :
   si_Σ ;;; [] ⊢ mkApps (tInd si_ind []) [] ≤sE[Cumul] mkApps (tInd si_ind []) [].
 Proof.
   exact (cumulSpecE_ind_underapplied si_Σ [] Cumul si_ind si_mdecl si_idecl [] [] [] []
-           si_wf si_declared_inductive eq_refl eq_refl eq_refl eq_refl
+           si_cb si_declared_inductive eq_refl eq_refl eq_refl eq_refl
            (le_n 1) (si_cumul_Ind_univ Conv 1) All2_nil).
 Qed.
 
 Lemma cumulSpecE_construct_underapplied_gen_inst :
   si_Σ ;;; [] ⊢ mkApps (tConstruct si_ind 0 []) [] ≤sE[Conv] mkApps (tConstruct si_ind 0 []) [].
 Proof.
-  exact (cumulSpecE_construct_underapplied_gen si_Σ si_ind 0 [] [] 1 si_wf
+  exact (cumulSpecE_construct_underapplied_gen si_Σ si_ind 0 [] [] 1 si_cb
            (si_cumul_Construct_univ Conv 1) 1 [] [] [] eq_refl eq_refl eq_refl eq_refl eq_refl All2_nil).
 Qed.
 
@@ -233,6 +238,6 @@ Lemma cumulSpecE_construct_underapplied_inst :
   si_Σ ;;; [] ⊢ mkApps (tConstruct si_ind 0 []) [] ≤sE[Cumul] mkApps (tConstruct si_ind 0 []) [].
 Proof.
   exact (cumulSpecE_construct_underapplied si_Σ [] Cumul si_ind 0 si_mdecl si_idecl si_cdecl [] [] [] []
-           si_wf si_declared_constructor eq_refl eq_refl eq_refl eq_refl
+           si_cb si_declared_constructor eq_refl eq_refl eq_refl eq_refl
            (le_n 1) (si_cumul_Construct_univ Conv 1) All2_nil).
 Qed.

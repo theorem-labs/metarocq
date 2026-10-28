@@ -44,7 +44,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLi
      PCUICCumulativitySpecEta
      PCUICEtaDefs PCUICEtaScope PCUICEtaCanon PCUICEtaCanonRed PCUICEtaCanonEta
      PCUICEtaStrengthening PCUICEtaFInst PCUICEtaFInstEquiv PCUICEtaFInstC1c
-     PCUICEtaFInstEtaC1c PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2.
+     PCUICEtaFInstEtaC1c PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICClosedBodies.
 From MetaRocq.PCUIC Require PCUICEtaC3BR PCUICEtaU8.
 
 Lemma eta1_tRel_absurd n v : eta1 (tRel n) v -> False.
@@ -60,7 +60,7 @@ Proof. intros h. eapply on_free_vars_impl; [|exact h]. done. Qed.
 
 Section EtaL.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
 
   Local Notation cu := (compare_universe Σ).
   Local Notation cs := (compare_sort Σ).
@@ -192,6 +192,6 @@ End EtaL.
 
   **Hypotheses satisfiable (FRAC's rule):** [wf Σ], by any well-formed
   environment; the statement's own scoping premises by any scoped pair. *)
-Theorem I5_FollowKernel {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ) :
+Theorem I5_FollowKernel {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) :
   I5_statement FInstFollowKernel Σ.
 Proof. exact (I5_obligation8_FollowKernel Σ wfΣ (I5_eta_l_case_holds Σ wfΣ FInstFollowKernel)). Qed.

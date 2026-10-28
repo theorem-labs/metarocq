@@ -3,7 +3,7 @@
 (** * BET-315 eta lane, §6.2 obligation 7: the NEW C4 — EXACT βη-confluence of
       [R_c ∪ eta1] on canonical, scoped terms
 
-    [canon_beta_eta_confluence] : wf Σ -> is_closed_context Γ ->
+    [canon_beta_eta_confluence] : ClosedBodies Σ -> is_closed_context Γ ->
       is_open_term Γ t -> canon t = t ->
       (R_c ∪ eta1)* t u -> (R_c ∪ eta1)* t v ->
       ∑ w, (R_c ∪ eta1)* u w × (R_c ∪ eta1)* v w
@@ -44,7 +44,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReduction PCUICTy
      PCUICOnFreeVars PCUICEtaDefs PCUICEtaBetaEta PCUICEtaScope
      PCUICEtaHRCommutationA1 PCUICEtaHRModulo PCUICEtaU8
      PCUICEtaCanon PCUICEtaCanonRed PCUICEtaCanonConfluence PCUICEtaCanonEta
-     PCUICEtaCanonCommute.
+     PCUICEtaCanonCommute PCUICClosedBodies.
 
 Local Open Scope type_scope.
 
@@ -52,14 +52,14 @@ Local Open Scope type_scope.
 
 Definition Qc (Γ : context) (t : term) : Type := is_open_term Γ t × canon t = t.
 
-Lemma red1_is_open_term {cf : checker_flags} {Σ : global_env} (wfΣ : wf Σ) {Γ t u} :
+Lemma red1_is_open_term {cf : checker_flags} {Σ : global_env} (wfΣ : ClosedBodies Σ) {Γ t u} :
   is_closed_context Γ -> red1 Σ Γ t u -> is_open_term Γ t -> is_open_term Γ u.
 Proof.
   intros HΓ r ht. eapply (beta_eta_is_open_term (wfΣ := wfΣ)); [exact HΓ| |exact ht].
   apply rt_step. left. exact r.
 Qed.
 
-Lemma Qc_R_c {cf : checker_flags} (Σ : global_env) (wfΣ : wf Σ) Γ :
+Lemma Qc_R_c {cf : checker_flags} (Σ : global_env) (wfΣ : ClosedBodies Σ) Γ :
   is_closed_context Γ -> forall t u, Qc Γ t -> R_c Σ Γ t u -> Qc Γ u.
 Proof.
   intros HΓ t u [ht ct] [u0 [r ->]]. split.
@@ -89,7 +89,7 @@ Proof. intros x y z e1 e2; now transitivity y. Qed.
 
 (** ** (A)'s strong-commutation premise, from obligation 5 *)
 
-Lemma Qc_strong_commutation {cf : checker_flags} (Σ : global_env) (wfΣ : wf Σ) Γ :
+Lemma Qc_strong_commutation {cf : checker_flags} (Σ : global_env) (wfΣ : ClosedBodies Σ) Γ :
   is_closed_context Γ ->
   forall t u v, Qc Γ t -> R_c Σ Γ t v -> eta1 t u ->
     ∑ w w', clos_refl (R_c Σ Γ) u w × clos_refl_trans eta1 v w' × w = w'.
@@ -101,7 +101,7 @@ Qed.
 
 (** ** (A) applied: [R_c*] and [eta1*] commute EXACTLY on [Q] *)
 
-Lemma R_c_eta1_commute {cf : checker_flags} (Σ : global_env) (wfΣ : wf Σ) Γ :
+Lemma R_c_eta1_commute {cf : checker_flags} (Σ : global_env) (wfΣ : ClosedBodies Σ) Γ :
   is_closed_context Γ ->
   forall t u v, Qc Γ t -> clos_refl_trans (R_c Σ Γ) t u -> clos_refl_trans eta1 t v ->
     ∑ u' v', clos_refl_trans eta1 u u' × clos_refl_trans (R_c Σ Γ) v v' × u' = v'.
@@ -115,7 +115,7 @@ Qed.
 
 (** ** (B) applied: the NEW C4 *)
 
-Theorem canon_beta_eta_confluence {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ)
+Theorem canon_beta_eta_confluence {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ)
   Γ t u v :
   is_closed_context Γ -> is_open_term Γ t -> canon t = t ->
   clos_refl_trans (union (R_c Σ Γ) eta1) t u ->

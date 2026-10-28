@@ -50,7 +50,7 @@ From MetaRocq.Common Require Import config BasicAst Universes.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICEquality PCUICReduction
      PCUICOnFreeVars PCUICTyping PCUICCumulativitySpec PCUICCumulativitySpecEta
      PCUICEtaDefs PCUICEtaBetaEta PCUICEtaScope PCUICEtaCanon PCUICEtaCanonRed
-     PCUICEtaFInst PCUICEtaJoinSpec PCUICEtaCanonSpec PCUICEtaFInstSpec.
+     PCUICEtaFInst PCUICEtaJoinSpec PCUICEtaCanonSpec PCUICEtaFInstSpec PCUICClosedBodies.
 
 (** ** The pinned restatement *)
 
@@ -81,7 +81,7 @@ Definition I5_eta_l_case {cf : checker_flags} (r : finst_construct_rule) (Σ : g
 
 Section A4.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ.1) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ.1) (r : finst_construct_rule).
 
   Lemma red1_open Γ x y : is_closed_context Γ -> red1 Σ Γ x y -> is_open_term Γ x -> is_open_term Γ y.
   Proof.

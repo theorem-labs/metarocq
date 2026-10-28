@@ -33,7 +33,7 @@ From MetaRocq.Common Require Import config BasicAst Universes.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLiftSubst PCUICEquality
      PCUICReduction PCUICOnFreeVars PCUICTyping PCUICCumulativitySpec PCUICCumulativitySpecEta
      PCUICEtaFInst PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICEtaI5EtaL
-     PCUICWellScopedCumulativityEta.
+     PCUICWellScopedCumulativityEta PCUICClosedBodies.
 
 Definition ws_cumul_pbE_terms {cf : checker_flags} (r : finst_construct_rule) (Σ : global_env_ext)
   (Γ : context) : list term -> list term -> Type :=
@@ -70,7 +70,7 @@ Qed.
 
 Section A5.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
 
   Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
   Local Notation WT Γ := (ws_cumul_pbE_terms r Σ Γ).

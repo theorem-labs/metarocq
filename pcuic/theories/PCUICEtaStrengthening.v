@@ -20,7 +20,7 @@ From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICInduction
      PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICSigmaCalculus PCUICClosed
      PCUICOnFreeVars PCUICReduction PCUICRenameDef PCUICRenameConv
-     PCUICOnFreeVarsConv PCUICInstConv PCUICClosedTyp PCUICTyping.
+     PCUICOnFreeVarsConv PCUICInstConv PCUICClosedTyp PCUICTyping PCUICClosedBodies.
 From MetaRocq.PCUIC Require Import PCUICWeakeningConv PCUICRenameTyp.
 From Equations Require Import Equations.
 From Equations.Prop Require Import DepElim.
@@ -172,7 +172,7 @@ Qed.
 
 (** ** The strengthening lemmas proper. *)
 
-Lemma red1_strengthening_gen {cf} {Σ : global_env} {wfΣ : wf Σ} Γ Γ' Γ'' M N' :
+Lemma red1_strengthening_gen {cf} {Σ : global_env} {wfΣ : ClosedBodies Σ} Γ Γ' Γ'' M N' :
   on_ctx_free_vars xpredT Γ ->
   on_ctx_free_vars xpredT Γ'' ->
   on_free_vars xpredT M ->
@@ -186,9 +186,9 @@ Proof.
                    (Γ ,,, Γ' ,,, lift_context #|Γ'| 0 Γ'')).
   { now apply on_ctx_free_vars_strengthenP. }
   assert (HN' : on_free_vars (strengthenP #|Γ''| #|Γ'| xpredT) N').
-  { eapply (@red1_on_free_vars cf _ (empty_ext Σ) _ _ _ wfΣ); [exact H|exact HM|exact Hctx]. }
+  { eapply (@red1_on_free_vars_cb cf _ (empty_ext Σ) _ _ _ wfΣ); [exact H|exact HM|exact Hctx]. }
   exists (unlift #|Γ'| #|Γ''| N'). split.
-  - eapply (red1_rename _ _ _ _ _ _ (unlift_renaming #|Γ'| #|Γ''|)) in H; tea.
+  - eapply (red1_rename_cb _ _ _ _ _ _ (unlift_renaming #|Γ'| #|Γ''|)) in H; tea.
     2: apply urenaming_strengthen.
     rewrite rename_unlift_lift in H. exact H.
   - rewrite /unlift lift_rename rename_compose.
@@ -206,7 +206,7 @@ Qed.
         eapply on_free_vars_impl; [|eassumption]; done.
     ([is_closed_context] is [on_free_vars_ctx xpred0] (Syntax/PCUICOnFreeVars.v:259),
      NOT [xpredT]; [on_ctx_free_vars_impl] is commented out at :991.) *)
-Lemma red1_strengthening {cf} {Σ : global_env} {wfΣ : wf Σ} Γ d t u :
+Lemma red1_strengthening {cf} {Σ : global_env} {wfΣ : ClosedBodies Σ} Γ d t u :
   on_ctx_free_vars xpredT Γ ->
   on_free_vars xpredT t ->
   red1 Σ (Γ ,, d) (lift0 1 t) u -> ∑ u', (u = lift0 1 u') × red1 Σ Γ t u'.
