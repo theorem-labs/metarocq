@@ -1236,7 +1236,7 @@ Qed.
 Lemma erases_global_closed_env {Σ : global_env} Σ' : wf Σ -> erases_global Σ Σ' -> closed_env Σ'.
 Proof.
   destruct Σ as [univs Σ]; cbn in *.
-  intros [onu wf] er; cbn in *.
+  intros [onu [wfr wf]] er; cbn in *.
   move: wf. red in er; cbn in er.
   induction er; intros wf.
   - constructor.
