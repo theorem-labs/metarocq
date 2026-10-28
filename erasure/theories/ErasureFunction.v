@@ -1758,6 +1758,8 @@ Definition same_prims (Σ Σ' : global_env) :=
   (forall kn, prim_op_of Σ kn = prim_op_of Σ' kn) /\
   primitive_bool Σ = primitive_bool Σ'.
 
+(** Satisfying instance of the [same_prims] premise (callers discharge it by
+    reflexivity). *)
 Lemma same_prims_refl Σ : same_prims Σ Σ.
 Proof. split; [intros; reflexivity|split; [intros; reflexivity|reflexivity]]. Qed.
 

@@ -156,15 +156,6 @@ Proof.
     exact (invert_cumul_ind_prod (args := []) hcum).
 Qed.
 
-(** The rest of a decomposed stack starts with no application. *)
-Lemma decompose_stack_snd_nil {π args ρ} :
-  decompose_stack π = (args, ρ) -> decompose_stack ρ = ([], ρ).
-Proof.
-  intros e. apply decompose_stack_noStackApp in e.
-  destruct ρ as [|s ρ]; [reflexivity|].
-  destruct s; cbn in *; try discriminate; reflexivity.
-Qed.
-
 (** An operation applied beyond its arity is ill-typed: its saturated part has
     the result type, which is not a product. *)
 Lemma prim_app_overapplied_ill_typed {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ c u op args} :
@@ -653,7 +644,8 @@ Corollary R_Acc_aux :
            left to right under the [Prim_app] frame, as [red_view_Fix] does its
            recursive argument under [Fix_app], and fires when they are all
            literals.  [whd_rel], the machine's graph, has one constructor per
-           leaf below. *)
+           leaf below, except the readback-[None] leaf ([False_rect]), which
+           [wf_prim_op_readback] makes unreachable. *)
         | @exist (Some (ConstantDecl {| cst_body := None |})) eq
             with inspect (abstract_prim_op_of X c) := {
           | @exist None eqop := give (tConst c u) π ;
@@ -1927,7 +1919,7 @@ Corollary R_Acc_aux :
           assert (hlen : #|ls| + S #|rest| = arity op)
             by (apply (f_equal (@length _)) in efirst;
                 rewrite length_firstn, length_app, length_map in efirst; cbn in efirst; lia);
-          pose proof (decompose_stack_snd_nil (eq_sym hπ)) as hρ;
+          pose proof (decompose_stack_twice _ _ _ (eq_sym hπ)) as hρ;
           unfold zipp; rewrite decompose_stack_appstack, hρ; cbn;
           rewrite app_nil_r, stack_context_appstack;
           destruct (skipn (arity op) args) as [|x more] eqn:hsk;
@@ -2534,7 +2526,7 @@ Corollary R_Acc_aux :
           hsat : true = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π,
           hr : whd_rel _ _ _ ?v _ _ _ |- _ =>
           let hρ := fresh "hρ" in
-          pose proof (decompose_stack_snd_nil (eq_sym hπ)) as hρ;
+          pose proof (decompose_stack_twice _ _ _ (eq_sym hπ)) as hρ;
           assert (hctx : stack_context π = stack_context ρ)
             by (symmetry in hπ; apply decompose_stack_eq in hπ; subst π;
                 now rewrite stack_context_appstack);
@@ -2558,7 +2550,7 @@ Corollary R_Acc_aux :
           hc : whd_rel _ _ (_ ,,, ?Δc) ?a _ ?t ?l,
           hr : whd_rel _ _ (_ ,,, ?Δr) (tConst _ _) _ _ _ |- _ =>
           let hρ := fresh "hρ" in
-          pose proof (decompose_stack_snd_nil (eq_sym hπ)) as hρ;
+          pose proof (decompose_stack_twice _ _ _ (eq_sym hπ)) as hρ;
           assert (hctx : stack_context π = stack_context ρ)
             by (symmetry in hπ; apply decompose_stack_eq in hπ; subst π;
                 now rewrite stack_context_appstack);
@@ -2584,7 +2576,7 @@ Corollary R_Acc_aux :
           hsat : true = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π,
           hc : whd_rel _ _ (_ ,,, ?Δc) ?a _ ?t ?l |- _ =>
           let hρ := fresh "hρ" in
-          pose proof (decompose_stack_snd_nil (eq_sym hπ)) as hρ;
+          pose proof (decompose_stack_twice _ _ _ (eq_sym hπ)) as hρ;
           assert (hctx : stack_context π = stack_context ρ)
             by (symmetry in hπ; apply decompose_stack_eq in hπ; subst π;
                 now rewrite stack_context_appstack);
