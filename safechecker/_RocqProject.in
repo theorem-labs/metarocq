@@ -7,7 +7,6 @@ theories/PCUICSafeReduce.v
 theories/PCUICSafeConversion.v
 theories/PCUICWfReduction.v
 theories/PCUICCallByNeed.v
-theories/PCUICCallByNeedTests.v
 theories/PCUICCallByNeedSound.v
 theories/PCUICCallByNeedSoundGC.v
 theories/PCUICCallByNeedSoundCtx.v
@@ -20,6 +19,7 @@ theories/PCUICCallByNeedSoundHeapWf.v
 theories/PCUICCallByNeedSoundReadBack.v
 theories/PCUICCallByNeedSoundConv.v
 theories/PCUICCallByNeedSoundHookFrame.v
+theories/PCUICCallByNeedCounterexamples.v
 theories/PCUICCallByNeedSoundHookProof.v
 theories/PCUICTypeChecker.v
 theories/PCUICPositivityCheck.v

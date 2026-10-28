@@ -13,7 +13,7 @@ Import CanonicalTries.
 Local Notation key := String2pos.positive.
 Local Notation cidx := String2pos.positive.
 
-(** * BET-298 step 2c: the memo tables of one [cbn_conv] call
+(** * The memo tables of one [cbn_conv] call
 
   [PCUICCallByNeed]'s [cbn_memo] holds five maps, all of them empty at the start of a call:
   the code table [m_codes] with its next index [m_ncode] (whose invariant [memo_ok] is
@@ -24,9 +24,8 @@ Local Notation cidx := String2pos.positive.
     constant's identifier lead to, and [dt_add] writes there. [dt_find_add_same],
     [dt_find_add_other] and [dt_find_nil] are the three map laws. They rest on the
     injectivity of the bit path of an identifier ([sbits_inj], through [Byte.to_bits]) and
-    on [mp_find]/[mp_set] being an association list under [modpath_eqb]; [modpath_eqb],
-    [dirpath_eqb], [inductive_eqb] and [case_info_eqb] are shown to decide equality, which
-    is also what the comparison's use of [inductive_eqb]/[case_info_eqb] needs.
+    on [mp_find]/[mp_set] being an association list under [modpath_eqb], whose soundness
+    is [modpath_eqb_eq].
   - **The delta entry means what it says.** [delta_ok] says that every [kn] the trie answers
     for either carries [DAxiom], and then the environment's declaration for [kn] is a
     constant without a body, or carries [DBody body insts], and then the environment's
@@ -37,34 +36,29 @@ Local Notation cidx := String2pos.positive.
     [inst_code u body] for the body [body] the environment gives [kn]; [delta_red1] turns
     that into PCUIC's delta step, for *every* instance, under [wf Σ].
 
-    For a non-empty instance [inst_code] *is* [subst_instance], so [delta_red1_poly]
+    For a non-empty instance [inst_code] *is* [subst_instance], so [inst_code_red1_gen]
     needs nothing. For [u = []] the machine's [inst_code] returns the body unchanged
     where [red_delta] produces [subst_instance [] body]; the two agree exactly when the
     body carries no universe variable, which [declared_constant_body_closedu] gets from
     [wf Σ] by MetaRocq's [on_declared_constant], [typing_wf_universes],
     [wf_universes_closedu] (with [weaken_lookup_on_global_env'] for its [on_udecl_prop]
     side condition) and [closedu_subst_instance]. That needs [kn]'s universe context to
-    have no variable, which is the one premise of [delta_red1]/[delta_red1_nil] beyond
-    the evaluator's; [inst_code_nil_ne_subst_instance] shows it cannot be dropped, since
-    a polymorphic constant applied to the empty instance makes the two sides differ in
-    any environment. [mono_poly_instance] and [consistent_instance_ext_nil] are the two
-    ways to discharge it.
+    have no variable, which is the one premise of [delta_red1] beyond the evaluator's.
+    The evaluator discharges it with [PCUICCallByNeedSoundHook.inst_okb_nil].
   - **The caches.** [hash_ok]: the value stored for a code identifier is [thash] of that
-    code's term, so [code_hash_filter] (different hashes, different terms) is a sound
-    filter. [once_ok]: the bit stored is [Nat.leb (occ 0 t) 1] for that code's term [t].
-    [ceq_ok]: the bit stored for a *pair* of identifiers is the value of
+    code's term. [once_ok]: the bit stored is [Nat.leb (occ 0 t) 1] for that code's term
+    [t]. [ceq_ok]: the bit stored for a *pair* of identifiers is the value of
     [eqb_term_upto_univ] at [Conv] on the two terms.
 
     The invariant of [m_ceq] is *not* "true means the two codes have the same term".
-    [code_eq] ([PCUICCallByNeed.v:2869]) answers [true] in two ways: [same_id c1 c2], where
-    the terms are indeed equal ([same_id_sound_table]); or, at line 2880, the cached bit
+    [PCUICCallByNeed.code_eq] answers [true] in two ways: [same_id c1 c2], where the terms
+    are indeed equal ([same_id_sound_table]); or the cached bit
     [eqb_term_upto_univ (abstract_env_compare_universe X) … Conv c1.(c_term) c2.(c_term)],
     which is equality *up to universes* and holds of terms that differ (two sorts at
     convertible universes, two instances of a polymorphic constant). So the strongest sound
     statement is the disjunction [code_eq_sound] proves: equal terms, or [eqb_term_upto_univ]
-    at [Conv] says [true] — the second of which is what
-    [PCUICCallByNeedSoundCong.ws_cumul_pb_eqb_term_upto_univ] consumes. A [false] answer
-    says nothing, and no lemma here states anything about it.
+    at [Conv] says [true]. [PCUICCallByNeedSoundConv.code_eq_sound_wf] consumes it. A
+    [false] answer says nothing, and no lemma here states anything about it.
   - **The code table grows.** [memo_add_entry] writes at [m_ncode] and touches nothing else,
     so an index already in the table keeps its entry ([memo_add_entry_codes_mono]). That new
     index is fresh in *every* map of the memo, which is [memo_fresh] (through [key_val], the
@@ -76,25 +70,19 @@ Local Notation cidx := String2pos.positive.
     setter keeps the other five fields.
 
   Nothing here is about the heap: every operation of this file leaves [st_heap], [st_next],
-  [st_room], [st_steps] and [st_gam] alone, so [state_ok] and [gam_ok] cross them without an
-  argument, and [memo_inv] crosses any step that keeps [st_memo] ([memo_inv_memo]). *)
+  [st_room], [st_steps] and [st_gam] alone, so [state_ok] crosses them without an
+  argument. *)
 
 (** ** Equality of names by identifier first
 
   [modpath_eqb] and its companions compare the identifier before the module path, where
-  MetaRocq's [Kername.compare] compares the path first. Each is a decision procedure. *)
+  MetaRocq's [Kername.compare] compares the path first. A [true] answer means equality. *)
 
 Lemma string_eqb_spec (x y : String.t) : String.eqb x y = true <-> x = y.
 Proof.
   split.
   - intros h. exact (@eqb_eq String.t _ x y h).
   - intros <-. exact (@eqb_refl String.t _ x).
-Qed.
-
-Lemma string_eqb_false (x y : String.t) : x <> y -> String.eqb x y = false.
-Proof.
-  intros hne. destruct (String.eqb x y) eqn:E; [|reflexivity].
-  apply string_eqb_spec in E. contradiction.
 Qed.
 
 Lemma dirpath_eqb_refl (d : dirpath) : dirpath_eqb d d = true.
@@ -110,9 +98,6 @@ Proof.
   apply Bool.andb_true_iff in h as [h1 h2].
   apply string_eqb_spec in h1. apply IH in h2. subst. reflexivity.
 Qed.
-
-Lemma dirpath_eqb_spec (d1 d2 : dirpath) : dirpath_eqb d1 d2 = true <-> d1 = d2.
-Proof. split; [apply dirpath_eqb_eq | intros <-; apply dirpath_eqb_refl]. Qed.
 
 Lemma modpath_eqb_refl (m : modpath) : modpath_eqb m m = true.
 Proof.
@@ -137,22 +122,10 @@ Proof.
     apply IH in h2. subst. reflexivity.
 Qed.
 
-Lemma modpath_eqb_spec (m1 m2 : modpath) : modpath_eqb m1 m2 = true <-> m1 = m2.
-Proof. split; [apply modpath_eqb_eq | intros <-; apply modpath_eqb_refl]. Qed.
-
 Lemma modpath_eqb_false (m1 m2 : modpath) : m1 <> m2 -> modpath_eqb m1 m2 = false.
 Proof.
   intros hne. destruct (modpath_eqb m1 m2) eqn:E; [|reflexivity].
   apply modpath_eqb_eq in E. contradiction.
-Qed.
-
-Lemma inductive_eqb_refl (i : inductive) : inductive_eqb i i = true.
-Proof.
-  unfold inductive_eqb. apply Bool.andb_true_iff.
-  split; [apply Bool.andb_true_iff; split|].
-  - apply PeanoNat.Nat.eqb_eq; reflexivity.
-  - apply string_eqb_spec; reflexivity.
-  - apply modpath_eqb_refl.
 Qed.
 
 Lemma inductive_eqb_eq (i1 i2 : inductive) : inductive_eqb i1 i2 = true -> i1 = i2.
@@ -164,18 +137,6 @@ Proof.
   apply modpath_eqb_eq in h2. subst. reflexivity.
 Qed.
 
-Lemma inductive_eqb_spec (i1 i2 : inductive) : inductive_eqb i1 i2 = true <-> i1 = i2.
-Proof. split; [apply inductive_eqb_eq | intros <-; apply inductive_eqb_refl]. Qed.
-
-Lemma case_info_eqb_refl (c : case_info) : case_info_eqb c c = true.
-Proof.
-  unfold case_info_eqb. apply Bool.andb_true_iff.
-  split; [apply Bool.andb_true_iff; split|].
-  - apply inductive_eqb_refl.
-  - apply PeanoNat.Nat.eqb_eq; reflexivity.
-  - apply eqb_refl.
-Qed.
-
 Lemma case_info_eqb_eq (c1 c2 : case_info) : case_info_eqb c1 c2 = true -> c1 = c2.
 Proof.
   destruct c1 as [i1 n1 r1], c2 as [i2 n2 r2]. unfold case_info_eqb. cbn.
@@ -183,18 +144,6 @@ Proof.
   apply Bool.andb_true_iff in h1 as [h3 h4].
   apply inductive_eqb_eq in h3. apply PeanoNat.Nat.eqb_eq in h4.
   apply eqb_eq in h2. subst. reflexivity.
-Qed.
-
-Lemma case_info_eqb_spec (c1 c2 : case_info) : case_info_eqb c1 c2 = true <-> c1 = c2.
-Proof. split; [apply case_info_eqb_eq | intros <-; apply case_info_eqb_refl]. Qed.
-
-(** [find_inst] selects by [Instance.eqb], which is equality of instances. *)
-
-Lemma instance_eqb_refl (u : Instance.t) : Instance.eqb u u = true.
-Proof.
-  unfold Instance.eqb. induction u as [|l u IH]; cbn [forallb2]; [reflexivity|].
-  apply Bool.andb_true_iff. split; [|exact IH].
-  destruct (Level.eqb_spec l l) as [_|hne]; [reflexivity | now destruct hne].
 Qed.
 
 Lemma instance_eqb_eq (u v : Instance.t) : Instance.eqb u v = true -> u = v.
@@ -205,9 +154,6 @@ Proof.
   destruct (Level.eqb_spec l l') as [he|hne]; [|discriminate h1].
   apply Level.eq_leibniz in he. apply IH in h2. subst. reflexivity.
 Qed.
-
-Lemma instance_eqb_spec (u v : Instance.t) : Instance.eqb u v = true <-> u = v.
-Proof. split; [apply instance_eqb_eq | intros <-; apply instance_eqb_refl]. Qed.
 
 (** ** The delta trie is a finite map
 
@@ -222,9 +168,6 @@ Lemma dt_find_here (kn : kername) (t : dtrie) :
 Proof. unfold dt_find. destruct (dt_walk kn.2 t); reflexivity. Qed.
 
 (** *** The association list at a node *)
-
-Lemma mp_find_nil (mp : modpath) : mp_find mp [] = None.
-Proof. reflexivity. Qed.
 
 Lemma mp_find_set_same (mp : modpath) (d : delta_memo)
     (l : list (modpath * delta_memo)) :
@@ -481,67 +424,13 @@ Qed.
 Lemma set_memo_memo (m : cbn_memo) (s : cbn_state) : (set_memo m s).(st_memo) = m.
 Proof. reflexivity. Qed.
 
-Lemma set_memo_next (m : cbn_memo) (s : cbn_state) :
-  (set_memo m s).(st_next) = s.(st_next).
-Proof. reflexivity. Qed.
-
-Lemma set_memo_room (m : cbn_memo) (s : cbn_state) :
-  (set_memo m s).(st_room) = s.(st_room).
-Proof. reflexivity. Qed.
-
-Lemma set_memo_steps (m : cbn_memo) (s : cbn_state) :
-  (set_memo m s).(st_steps) = s.(st_steps).
-Proof. reflexivity. Qed.
-
 Lemma memo_set_delta_delta (t : dtrie) (m : cbn_memo) :
   (memo_set_delta t m).(m_delta) = t.
 Proof. reflexivity. Qed.
 
-Lemma memo_set_delta_fields (t : dtrie) (m : cbn_memo) :
-  (memo_set_delta t m).(m_codes) = m.(m_codes)
-  /\ (memo_set_delta t m).(m_ncode) = m.(m_ncode)
-  /\ (memo_set_delta t m).(m_once) = m.(m_once)
-  /\ (memo_set_delta t m).(m_hash) = m.(m_hash)
-  /\ (memo_set_delta t m).(m_ceq) = m.(m_ceq).
-Proof. repeat split. Qed.
-
 Lemma memo_set_delta_codes (t : dtrie) (m : cbn_memo) :
   (memo_set_delta t m).(m_codes) = m.(m_codes).
 Proof. reflexivity. Qed.
-
-Lemma memo_set_once_fields (o : PTree.t (PTree.t bool)) (m : cbn_memo) :
-  (memo_set_once o m).(m_codes) = m.(m_codes)
-  /\ (memo_set_once o m).(m_ncode) = m.(m_ncode)
-  /\ (memo_set_once o m).(m_delta) = m.(m_delta)
-  /\ (memo_set_once o m).(m_hash) = m.(m_hash)
-  /\ (memo_set_once o m).(m_ceq) = m.(m_ceq).
-Proof. repeat split. Qed.
-
-Lemma memo_set_hash_fields (h : PTree.t (PTree.t N)) (m : cbn_memo) :
-  (memo_set_hash h m).(m_codes) = m.(m_codes)
-  /\ (memo_set_hash h m).(m_ncode) = m.(m_ncode)
-  /\ (memo_set_hash h m).(m_delta) = m.(m_delta)
-  /\ (memo_set_hash h m).(m_once) = m.(m_once)
-  /\ (memo_set_hash h m).(m_ceq) = m.(m_ceq).
-Proof. repeat split. Qed.
-
-Lemma memo_set_ceq_fields (q : PTree.t (PTree.t (PTree.t (PTree.t bool)))) (m : cbn_memo) :
-  (memo_set_ceq q m).(m_codes) = m.(m_codes)
-  /\ (memo_set_ceq q m).(m_ncode) = m.(m_ncode)
-  /\ (memo_set_ceq q m).(m_delta) = m.(m_delta)
-  /\ (memo_set_ceq q m).(m_once) = m.(m_once)
-  /\ (memo_set_ceq q m).(m_hash) = m.(m_hash).
-Proof. repeat split. Qed.
-
-Lemma memo_add_entry_fields (e : code_entry) (m : cbn_memo) :
-  fst (memo_add_entry e m) = m.(m_ncode)
-  /\ (snd (memo_add_entry e m)).(m_codes) = PTree.set m.(m_ncode) e m.(m_codes)
-  /\ (snd (memo_add_entry e m)).(m_ncode) = key_succ m.(m_ncode)
-  /\ (snd (memo_add_entry e m)).(m_delta) = m.(m_delta)
-  /\ (snd (memo_add_entry e m)).(m_once) = m.(m_once)
-  /\ (snd (memo_add_entry e m)).(m_hash) = m.(m_hash)
-  /\ (snd (memo_add_entry e m)).(m_ceq) = m.(m_ceq).
-Proof. repeat split. Qed.
 
 (** ** Two-level maps *)
 
@@ -578,13 +467,6 @@ Fixpoint key_val (p : key) : positive :=
 Lemma key_val_succ (p : key) : key_val (key_succ p) = Pos.succ (key_val p).
 Proof.
   induction p as [p IH|p IH|]; cbn [key_succ key_val]; [now rewrite IH|reflexivity|reflexivity].
-Qed.
-
-Lemma key_val_inj (p q : key) : key_val p = key_val q -> p = q.
-Proof.
-  revert q. induction p as [p IH|p IH|]; intros [q|q|] h; cbn [key_val] in h;
-    try discriminate h; try reflexivity;
-    injection h as h; now rewrite (IH q h).
 Qed.
 
 Definition idx_lt (i j : key) : Prop := (key_val i < key_val j)%positive.
@@ -817,17 +699,6 @@ Qed.
 
 (** ** [once_body] and [code_hash] over the state *)
 
-Lemma once_body_state (c : code) (s : cbn_state) :
-  (snd (once_body c s)).(st_heap) = s.(st_heap)
-  /\ (snd (once_body c s)).(st_next) = s.(st_next)
-  /\ (snd (once_body c s)).(st_room) = s.(st_room)
-  /\ (snd (once_body c s)).(st_steps) = s.(st_steps)
-  /\ (snd (once_body c s)).(st_gam) = s.(st_gam).
-Proof.
-  unfold once_body. destruct (get2 c.(c_entry) c.(c_path) ((s.(st_memo)).(m_once)));
-    cbn [snd]; repeat split.
-Qed.
-
 Lemma once_body_memo (c : code) (s : cbn_state) :
   ((snd (once_body c s)).(st_memo)).(m_codes) = ((s.(st_memo)).(m_codes))
   /\ ((snd (once_body c s)).(st_memo)).(m_ncode) = ((s.(st_memo)).(m_ncode))
@@ -877,16 +748,6 @@ Lemma ceq_set_memo (c1 c2 : code) (b : bool) (s : cbn_state) :
   /\ (((ceq_set c1 c2 b s).(st_memo)).(m_hash)) = ((s.(st_memo)).(m_hash)).
 Proof. unfold ceq_set; cbv zeta. repeat split. Qed.
 
-Lemma once_body_sound (c : code) (e : code_entry) (s : cbn_state) :
-  once_ok (s.(st_memo)) ->
-  PTree.get c.(c_entry) ((s.(st_memo)).(m_codes)) = Some e -> code_inv e c ->
-  fst (once_body c s) = Nat.leb (occ 0 c.(c_term)) 1.
-Proof.
-  intros h g hi. unfold once_body.
-  destruct (get2 c.(c_entry) c.(c_path) ((s.(st_memo)).(m_once))) as [b|] eqn:E;
-    cbn [fst]; [exact (h c e b E g hi) | reflexivity].
-Qed.
-
 Lemma once_body_ok (c : code) (e : code_entry) (s : cbn_state) :
   once_ok (s.(st_memo)) ->
   PTree.get c.(c_entry) ((s.(st_memo)).(m_codes)) = Some e -> code_inv e c ->
@@ -908,16 +769,6 @@ Proof.
     cbn [snd]; [exact h|].
   rewrite set_memo_memo. apply memo_fresh_set_once; [exact h|].
   apply (memo_fresh_codes (s.(st_memo)) c.(c_entry) h). rewrite g. discriminate.
-Qed.
-
-Lemma code_hash_sound (c : code) (e : code_entry) (s : cbn_state) :
-  hash_ok (s.(st_memo)) ->
-  PTree.get c.(c_entry) ((s.(st_memo)).(m_codes)) = Some e -> code_inv e c ->
-  fst (code_hash c s) = thash c.(c_term).
-Proof.
-  intros h g hi. unfold code_hash.
-  destruct (get2 c.(c_entry) c.(c_path) ((s.(st_memo)).(m_hash))) as [v|] eqn:E;
-    cbn [fst]; [exact (h c e v E g hi) | reflexivity].
 Qed.
 
 Lemma code_hash_ok (c : code) (e : code_entry) (s : cbn_state) :
@@ -943,20 +794,6 @@ Proof.
   apply (memo_fresh_codes (s.(st_memo)) c.(c_entry) h). rewrite g. discriminate.
 Qed.
 
-(** A hash mismatch is a sound filter: the two codes do not have the same term. *)
-Lemma code_hash_filter (c1 c2 : code) (e1 e2 : code_entry) (s1 s2 : cbn_state) :
-  hash_ok (s1.(st_memo)) ->
-  PTree.get c1.(c_entry) ((s1.(st_memo)).(m_codes)) = Some e1 -> code_inv e1 c1 ->
-  hash_ok (s2.(st_memo)) ->
-  PTree.get c2.(c_entry) ((s2.(st_memo)).(m_codes)) = Some e2 -> code_inv e2 c2 ->
-  fst (code_hash c1 s1) <> fst (code_hash c2 s2) ->
-  c1.(c_term) <> c2.(c_term).
-Proof.
-  intros h1 g1 i1 h2 g2 i2 hne heq. apply hne.
-  rewrite (code_hash_sound c1 e1 s1 h1 g1 i1), (code_hash_sound c2 e2 s2 h2 g2 i2).
-  now rewrite heq.
-Qed.
-
 (** ** Instantiated code and PCUIC's delta step *)
 
 Lemma inst_code_nil (t : term) : inst_code [] t = t.
@@ -965,15 +802,6 @@ Proof. reflexivity. Qed.
 Lemma inst_code_cons (l : Level.t) (u : Instance.t) (t : term) :
   inst_code (l :: u) t = subst_instance (l :: u) t.
 Proof. reflexivity. Qed.
-
-Lemma inst_code_red1 (Σ : global_env) (Γ : context) (kn : kername) (ui : Instance.t)
-    (cb : constant_body) (body : term) :
-  declared_constant Σ kn cb -> cb.(cst_body) = Some body -> ui <> [] ->
-  red1 Σ Γ (tConst kn ui) (inst_code ui body).
-Proof.
-  intros hd hb hu. destruct ui as [|l ui]; [now destruct hu|].
-  rewrite inst_code_cons. eapply red_delta; eassumption.
-Qed.
 
 (** *** The empty instance
 
@@ -990,22 +818,6 @@ Qed.
 Lemma poly_instance_abstract (univs : universes_decl) :
   polymorphic_instance univs = abstract_instance univs.
 Proof. destruct univs; reflexivity. Qed.
-
-(** The two routes a caller has to the side condition: the constant is monomorphic, or
-  the instance of the [tConst] is consistent with the constant's universe context (which
-  is what [type_Const] carries). *)
-Lemma mono_poly_instance (univs : universes_decl) :
-  univs = Monomorphic_ctx -> #|polymorphic_instance univs| = 0.
-Proof. intros ->. reflexivity. Qed.
-
-Lemma consistent_instance_ext_nil {cf : checker_flags} (Σ : global_env_ext)
-    (univs : universes_decl) :
-  consistent_instance_ext Σ univs [] -> #|polymorphic_instance univs| = 0.
-Proof.
-  intros h. rewrite poly_instance_abstract.
-  rewrite <- (consistent_instance_length (Σ := Σ) (univs := univs) (u := []) h).
-  reflexivity.
-Qed.
 
 Lemma declared_constant_body_closedu {cf : checker_flags} (Σ : global_env)
     (kn : kername) (cb : constant_body) (body : term) :
@@ -1024,7 +836,11 @@ Proof.
 Qed.
 
 (** The delta step for *every* instance: the side condition is vacuous unless the
-  instance is empty. *)
+  instance is empty. For the empty instance the machine's [inst_code] returns the body
+  unchanged, where PCUIC's [red_delta] produces [subst_instance [] body], and
+  [subst_instance []] sends every [Level.lvar] to [Level.lzero]. The two differ on any body
+  that mentions a universe variable, so the side condition is needed for a polymorphic
+  constant applied to the empty instance, whatever [Σ] is. *)
 Lemma inst_code_red1_gen {cf : checker_flags} (Σ : global_env) (Γ : context)
     (kn : kername) (ui : Instance.t) (cb : constant_body) (body : term) :
   wf Σ -> lookup_env Σ kn = Some (ConstantDecl cb) -> cb.(cst_body) = Some body ->
@@ -1041,23 +857,6 @@ Proof.
   rewrite inst_code_nil, <- (closedu_subst_instance [] body hcl).
   eapply red_delta; eassumption.
 Qed.
-
-(** *** Why the side condition cannot be dropped
-
-  For the empty instance the machine's [inst_code] returns the body unchanged, where
-  PCUIC's [red_delta] produces [subst_instance [] body], and [subst_instance []] sends
-  every [Level.lvar] to [Level.lzero]. The two therefore differ on any body that
-  mentions a universe variable, so a [delta_red1] stated for every [kn] with no
-  condition on [kn]'s universe context would be false of a *polymorphic* constant
-  applied to the empty instance — in any environment, however well formed, because
-  [wf Σ] constrains the declarations of [Σ], not the instances a term writes. *)
-
-Definition cex_univ_body : term :=
-  tConst (MPfile [], String.EmptyString) [Level.lvar 0].
-
-Lemma inst_code_nil_ne_subst_instance :
-  inst_code [] cex_univ_body <> subst_instance ([] : Instance.t) cex_univ_body.
-Proof. unfold cex_univ_body. cbn. congruence. Qed.
 
 (** ** Pairs returned by the machine *)
 
@@ -1337,26 +1136,6 @@ Section Memo.
 
   (** *** [new_entry] *)
 
-  Lemma new_entry_delta (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (((snd (new_entry X_type X t u ns s)).(st_memo)).(m_delta))
-    = ((s.(st_memo)).(m_delta)).
-  Proof. reflexivity. Qed.
-
-  Lemma new_entry_once (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (((snd (new_entry X_type X t u ns s)).(st_memo)).(m_once))
-    = ((s.(st_memo)).(m_once)).
-  Proof. reflexivity. Qed.
-
-  Lemma new_entry_hash (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (((snd (new_entry X_type X t u ns s)).(st_memo)).(m_hash))
-    = ((s.(st_memo)).(m_hash)).
-  Proof. reflexivity. Qed.
-
-  Lemma new_entry_ceq (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (((snd (new_entry X_type X t u ns s)).(st_memo)).(m_ceq))
-    = ((s.(st_memo)).(m_ceq)).
-  Proof. reflexivity. Qed.
-
   Lemma new_entry_memo_eq (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
     ((snd (new_entry X_type X t u ns s)).(st_memo))
     = snd (memo_add_entry
@@ -1427,27 +1206,6 @@ Section Memo.
     (((snd (delta_new X_type X kn ui body insts s)).(st_memo)).(m_codes))
     = (((snd (new_entry X_type X body ui (NSConst kn) s)).(st_memo)).(m_codes)).
   Proof. rewrite delta_new_spec. reflexivity. Qed.
-
-  Lemma delta_new_memo_fields (kn : kername) (ui : Instance.t) (body : term)
-      (insts : list (Instance.t * cidx * term)) (s : cbn_state) :
-    (((snd (delta_new X_type X kn ui body insts s)).(st_memo)).(m_ncode))
-    = (((snd (new_entry X_type X body ui (NSConst kn) s)).(st_memo)).(m_ncode))
-    /\ (((snd (delta_new X_type X kn ui body insts s)).(st_memo)).(m_once))
-       = ((s.(st_memo)).(m_once))
-    /\ (((snd (delta_new X_type X kn ui body insts s)).(st_memo)).(m_hash))
-       = ((s.(st_memo)).(m_hash))
-    /\ (((snd (delta_new X_type X kn ui body insts s)).(st_memo)).(m_ceq))
-       = ((s.(st_memo)).(m_ceq)).
-  Proof. rewrite delta_new_spec. repeat split. Qed.
-
-  Lemma delta_new_state (kn : kername) (ui : Instance.t) (body : term)
-      (insts : list (Instance.t * cidx * term)) (s : cbn_state) :
-    (snd (delta_new X_type X kn ui body insts s)).(st_heap) = s.(st_heap)
-    /\ (snd (delta_new X_type X kn ui body insts s)).(st_next) = s.(st_next)
-    /\ (snd (delta_new X_type X kn ui body insts s)).(st_room) = s.(st_room)
-    /\ (snd (delta_new X_type X kn ui body insts s)).(st_steps) = s.(st_steps)
-    /\ (snd (delta_new X_type X kn ui body insts s)).(st_gam) = s.(st_gam).
-  Proof. rewrite delta_new_spec. repeat split. Qed.
 
   Lemma delta_new_entry (kn : kername) (ui : Instance.t) (body : term)
       (insts : list (Instance.t * cidx * term)) (s : cbn_state) :
@@ -1795,31 +1553,6 @@ Section Memo.
       + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. discriminate h1.
   Qed.
 
-  (** A [None] answer is a constant the environment declares without a body. *)
-  Lemma delta_axiom (Σ : global_env_ext) (kn : kername) (ui : Instance.t)
-      (s s' : cbn_state) :
-    abstract_env_ext_rel X Σ -> delta_ok (s.(st_memo)) ->
-    delta X_type X kn ui s = COk (None, s') ->
-    exists cb : constant_body, declared_constant Σ kn cb /\ cb.(cst_body) = None.
-  Proof.
-    intros hΣ hd. unfold delta.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - intros _. pose proof (hd kn _ Ed) as [cb [hl hb]].
-      exists cb. split; [exact (lookup_declared Σ kn cb hΣ hl) | exact hb].
-    - destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. discriminate h1.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some None s' hc)
-          as [hr _]. discriminate hr.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|intros hc; discriminate hc|intros hc; discriminate hc].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some None s' hc)
-          as [hr _]. discriminate hr.
-      + intros _. exists cb. split; [exact (lookup_declared Σ kn cb hΣ El) | exact Eb].
-  Qed.
-
   Lemma lookup_env_of_abstract (Σ : global_env_ext) (kn : kername) (d : global_decl) :
     abstract_env_ext_rel X Σ -> abstract_env_lookup X kn = Some d ->
     lookup_env Σ kn = Some d.
@@ -1830,12 +1563,10 @@ Section Memo.
   (** The delta step of PCUIC, for *every* instance the machine can be given.
 
     The side condition is vacuous unless the instance is empty, and for the empty
-    instance it says the constant's universe context has no variable — true of every
-    monomorphic constant ([mono_poly_instance]) and of every [tConst kn []] whose
-    instance is consistent with the constant's context ([consistent_instance_ext_nil]).
-    It is stated on [abstract_env_lookup X kn], which is the machine's own oracle, so a
-    caller discharges it by the same lookup the machine makes. [wf Σ] is explicit
-    because [abstract_env_ext_wf] only gives it squashed, and [red1] is in [Type]. *)
+    instance it says the constant's universe context has no variable. It is stated on
+    [abstract_env_lookup X kn], which is the machine's own oracle, so a caller discharges
+    it by the same lookup the machine makes. [wf Σ] is explicit because
+    [abstract_env_ext_wf] only gives it squashed, and [red1] is in [Type]. *)
   Lemma delta_red1 (Σ : global_env_ext) (Γ : context) (kn : kername) (ui : Instance.t)
       (s s' : cbn_state) (c : code) :
     abstract_env_ext_rel X Σ -> wf Σ ->
@@ -1888,75 +1619,6 @@ Section Memo.
       + destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. discriminate h1.
   Qed.
 
-  (** The same for a non-empty instance, which needs neither [wf Σ] nor the side
-    condition: there [inst_code] *is* [subst_instance]. *)
-  Lemma delta_red1_poly (Σ : global_env_ext) (Γ : context) (kn : kername)
-      (ui : Instance.t) (s s' : cbn_state) (c : code) :
-    abstract_env_ext_rel X Σ ->
-    memo_fresh (s.(st_memo)) -> delta_ok (s.(st_memo)) ->
-    delta X_type X kn ui s = COk (Some c, s') -> ui <> [] ->
-    red1 Σ Γ (tConst kn ui) c.(c_term).
-  Proof.
-    intros hΣ hf hd he hu. unfold delta in he.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. discriminate h1.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El.
-      + assert (Hb : cb.(cst_body) = Some body).
-        { destruct (hd kn _ Ed) as [[cb0 [hl hb]] _]. rewrite El in hl.
-          injection hl as <-. exact hb. }
-        destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-        * destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. injection h1 as <-.
-          cbn [c_term].
-          assert (Ht : t = inst_code ui body).
-          { destruct (hd kn _ Ed) as [_ hF].
-            destruct (find_inst_sound _ ui insts i t hF Ei) as [ht _]. exact ht. }
-          rewrite Ht.
-          exact (inst_code_red1 Σ Γ kn ui cb body (lookup_declared Σ kn cb hΣ El) Hb hu).
-        * destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some (Some c) s' he)
-            as [hr _].
-          assert (Hc : c.(c_term) = inst_code ui body).
-          { apply (f_equal (fun o : option code =>
-                     match o with Some x => x.(c_term) | None => c.(c_term) end)) in hr.
-            cbn in hr. rewrite hr. apply (proj1 (delta_new_code kn ui body insts s)). }
-          rewrite Hc.
-          exact (inst_code_red1 Σ Γ kn ui cb body (lookup_declared Σ kn cb hΣ El) Hb hu).
-      + exfalso. destruct (hd kn _ Ed) as [[cb0 [hl _]] _]. rewrite El in hl. discriminate hl.
-      + exfalso. destruct (hd kn _ Ed) as [[cb0 [hl _]] _]. rewrite El in hl. discriminate hl.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|discriminate he|discriminate he].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some (Some c) s' he)
-          as [hr _].
-        assert (Hc : c.(c_term) = inst_code ui body).
-        { apply (f_equal (fun o : option code =>
-                   match o with Some x => x.(c_term) | None => c.(c_term) end)) in hr.
-          cbn in hr. rewrite hr. apply (proj1 (delta_new_code kn ui body [] s)). }
-        rewrite Hc.
-        exact (inst_code_red1 Σ Γ kn ui cb body (lookup_declared Σ kn cb hΣ El) Eb hu).
-      + destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. discriminate h1.
-  Qed.
-
-  (** The empty-instance case on its own, in the shape the evaluator's section
-    hypothesis is written in. The one premise beyond it is that [kn] is monomorphic;
-    [inst_code_nil_ne_subst_instance] shows no lemma without such a premise can hold,
-    since the machine's [inst_code []] is the identity where [red_delta] substitutes.
-    Discharge it from the constant's declaration ([mono_poly_instance]) or from the
-    instance's consistency ([consistent_instance_ext_nil]). *)
-  Lemma delta_red1_nil (Σ : global_env_ext) (Γ : context) (kn : kername)
-      (s s' : cbn_state) (c : code) :
-    abstract_env_ext_rel X Σ -> wf Σ ->
-    memo_fresh (s.(st_memo)) -> delta_ok (s.(st_memo)) ->
-    delta X_type X kn [] s = COk (Some c, s') ->
-    (forall cb : constant_body,
-        abstract_env_lookup X kn = Some (ConstantDecl cb) ->
-        cb.(cst_universes) = Monomorphic_ctx) ->
-    red1 Σ Γ (tConst kn []) c.(c_term).
-  Proof.
-    intros hΣ wfΣ hf hd he hmono.
-    refine (delta_red1 Σ Γ kn [] s s' c hΣ wfΣ hf hd he _).
-    intros cb hl _. apply mono_poly_instance. exact (hmono cb hl).
-  Qed.
-
   (** ** The five invariants of one call, bundled *)
 
   Definition memo_inv (s : cbn_state) : Prop :=
@@ -1969,12 +1631,6 @@ Section Memo.
     split; [apply memo_fresh_empty|]. split; [apply once_ok_empty|].
     split; [apply hash_ok_empty|]. split; [apply ceq_ok_empty | apply delta_ok_empty].
   Qed.
-
-  (** Every step that keeps [st_memo] keeps all five: allocation, a heap write, a tick, a
-    context-map write and a collection. *)
-  Lemma memo_inv_memo (s s' : cbn_state) :
-    (s'.(st_memo)) = (s.(st_memo)) -> memo_inv s -> memo_inv s'.
-  Proof. intros he. unfold memo_inv. now rewrite he. Qed.
 
   Lemma memo_inv_new_entry (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
     memo_inv s -> memo_inv (snd (new_entry X_type X t u ns s)).

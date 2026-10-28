@@ -14,7 +14,7 @@ Import CanonicalTries.
 
 Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
-(** * The evaluator of the call-by-need machine against PCUIC reduction (BET-298, step 2d)
+(** * The evaluator of the call-by-need machine against PCUIC reduction
 
   [whnf], [whnf_fix], [eval_slot], [force] and [apply] turn a suspension into a weak-head
   value. This file proves that the term the input stands for reduces, in PCUIC, to the term
@@ -26,23 +26,23 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
   ** What a structure stands for
 
-  The read-back used here is *not* [repr_value] of [PCUICCallByNeedSound]: it is a ghost
-  read-back [g_value], which reads an address [a] as the term [G a] of a ghost map
-  [G : haddr -> option term] instead of following the heap. The two differ exactly on a cell
-  the machine has already forced: [repr] reads such a cell as the value now in it, the ghost
-  map keeps the term the cell was allocated for.
+  The read-back used here is a ghost read-back [g_value], which reads an address [a] as the
+  term [G a] of a ghost map [G : haddr -> option term] instead of following the heap. A
+  read-back that follows the heap and this one differ exactly on a cell the machine has
+  already forced: the first reads such a cell as the value now in it, the ghost map keeps
+  the term the cell was allocated for.
 
-  The ghost map is what makes the write-back compositional, and it is the "ghost allocation
-  term" of REPORT-BET298 §4.3. With [repr], forcing an address changes what *every* other
-  structure that names it stands for: the reading of a cell is a term built out of the
-  readings of the addresses below it, so a write-back turns a third party's reading [u] into
-  some reduct [u']. To put a value [v] back into a forced cell one then has to know that [v]
-  is a reduct of the cell's reading *as it is when the forcing ends*, not of its reading when
-  the forcing started, and the two are only joinable, not ordered: that is a confluence
-  argument, not an induction. With the ghost map, [G] only ever grows at fresh addresses
-  ([gext]), so a write-back changes no reading at all, and the heap invariant [gk_cells] —
-  "the cell at [a] stands for a reduct of [G a]" — is restored at the forced address by
-  transitivity and is untouched everywhere else.
+  The ghost map is what makes the write-back compositional. With a read-back that follows
+  the heap, forcing an address changes what *every* other structure that names it stands
+  for: the reading of a cell is a term built out of the readings of the addresses below it,
+  so a write-back turns a third party's reading [u] into some reduct [u']. To put a value
+  [v] back into a forced cell one then has to know that [v] is a reduct of the cell's
+  reading *as it is when the forcing ends*, not of its reading when the forcing started,
+  and the two are only joinable, not ordered: that is a confluence argument, not an
+  induction. With the ghost map, [G] only ever grows at fresh addresses ([gext]), so a
+  write-back changes no reading at all, and the heap invariant [gk_cells] — "the cell at
+  [a] stands for a reduct of [G a]" — is restored at the forced address by transitivity and
+  is untouched everywhere else.
 
   The fixpoint rule is why the machine puts the forced recursive argument in a *fresh*
   cell: the old cell still stands for the unforced argument, and the unfolded body must see
@@ -51,22 +51,23 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
   ** What is assumed
 
   The theorem's hypotheses, each a premise of [machine_sound]:
+  - [wfΣ], [hΣ]: [Σ] is well formed and is the environment [X] stands for.
+  - [hΔ]: the readings live in [Γ ,,, Δ], and [Δ] has [lvl - nctx] entries.
   - [hnctx], [hlvl]: what the machine's comment says of its own parameters.
   - [const_instance_ok]: every constant a let-body of [Γ] names carries an instance of the
     right length ([PCUICCallByNeedSoundHook.consts_okb]). [delta_red1] needs this of the
     constant it unfolds, because the machine's [inst_code []] is the identity where PCUIC
-    substitutes the empty instance ([inst_code_nil_ne_subst_instance]). For the entries of
-    the code table it is part of the state invariant [gok]: a constant body has it by
-    [declared_constant_consts_okb], an input term by [typing_consts_okb']. Only the
-    let-bodies of the context come from outside the table.
+    substitutes the empty instance. For the entries of the code table it is part of the
+    state invariant [gok]: a constant body has it by [declared_constant_consts_okb], an
+    input term by [typing_consts_okb']. Only the let-bodies of the context come from outside
+    the table.
 
   The memo facts are proved, not assumed: [gok] carries [memo_inv] of
   [PCUICCallByNeedSoundMemo] and [memo_ok] of [PCUICCallByNeedSoundCtx], and every reading
   of a code says the code is in the code table ([cok]), which is what [once_body] needs to
-  keep its cache sound. [wfΣ] and [hΣ] are the hook's own hypotheses: [Σ] is well formed
-  and is the environment [X] stands for.
+  keep its cache sound.
 
-  ** Hygiene (BET-298 step 3b)
+  ** Hygiene
 
   [gok] also says that every ghost term, and every entry of the code table, is hygienic
   ([on_free_vars xpredT]: its variables are anything, but the contexts of its matches are
@@ -77,7 +78,7 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
   returns its ghost existentially, so only its own invariant can carry the clause. The hook
   establishes [ctx_hyg] and both clauses ([cbn_run_gok_frame]); every new ghost term is a
   reading of hygienic ghost terms and codes ([g_slot_hyg], [g_susp_hyg]), which is the
-  premise [alloc_sound] now asks of the reading it allocates.
+  premise [alloc_sound] asks of the reading it allocates.
 
   ** Collections
 
@@ -86,9 +87,8 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
   every clause of [machine_sound] says instead that the roots come back renamed and stand,
   under the new ghost, for what they stood for ([gren]). The ghost of the new heap is built
   along the collector's walk, at each fresh address from the ghost term of the old address
-  copied there ([collect_ghost]); it is a ghost renaming in the sense of
-  [PCUICCallByNeedSoundGC.root_pres], and it needs nothing of the collector beyond its
-  invariant [gc_inv]. *)
+  copied there ([collect_ghost]). It needs nothing of the collector beyond its invariant
+  [gc_inv] and [gc_copy_ok] ([PCUICCallByNeedSoundGC]). *)
 
 Lemma forallb_map_All {A B} (f : A -> B) (p : B -> bool) (q : A -> bool) (l : list A) :
   All (fun x => p (f x) = q x) l -> forallb p (map f l) = forallb q l.
@@ -176,11 +176,6 @@ Qed.
 
 (** ** Setting one element of a list *)
 
-Lemma list_set_length {A} (l : list A) n x : #|list_set l n x| = #|l|.
-Proof.
-  revert n. induction l as [|y l ih]; intros [|n]; cbn; try reflexivity. now rewrite ih.
-Qed.
-
 Lemma nth_error_list_set_same {A} (l : list A) n x :
   n < #|l| -> nth_error (list_set l n x) n = Some x.
 Proof.
@@ -193,11 +188,6 @@ Proof.
   revert n. induction l as [|y l ih]; intros [|n] h; cbn in *; try discriminate.
   - injection h as ->. reflexivity.
   - now rewrite (ih n h).
-Qed.
-
-Lemma list_set_list_set {A} (l : list A) n x y : list_set (list_set l n x) n y = list_set l n y.
-Proof.
-  revert n. induction l as [|z l ih]; intros [|n]; cbn; try reflexivity. now rewrite ih.
 Qed.
 
 Lemma All2_red_list_set {cf : checker_flags} (Σ : global_env_ext) Γ (l : list term) n t u :
@@ -389,122 +379,6 @@ Proof.
       exact hd.
 Qed.
 
-(** ** Why [gok] carries a hygiene clause: red weakening is false without it
-
-  The comparison changes the level of [gok] by lifting every ghost term, which needs red
-  weakening of every ghost term. [rw_w] below is a match whose branch context is one
-  let-binding of an outer variable. [lift] leaves branch contexts alone, so [lift0 1 rw_w] is
-  [rw_w] itself, while [iota_red] expands the let-body: [rw_w] reduces to [tRel 0] in a
-  context of one assumption, and in a context of two its lift still reduces to [tRel 0],
-  never to [lift0 1 (tRel 0)] ([red_weakening_needs_hygiene]). Without [gk_hyg], a cell
-  [CDone (VNeu (NVar 0) [])] at level 1, which reads [tRel 0], could carry the ghost
-  [rw_w]; after lifting to level 2 the cell reads [tRel 1] and the lifted ghost does not
-  reduce to it. [rw_w] fails the hygiene test ([rw_w_unhygienic]), which is what [gk_hyg]
-  excludes. *)
-
-Definition rw_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
-Definition rw_d : context_decl := vass rw_na (tSort sProp).
-Definition rw_ind : inductive :=
-  {| inductive_mind := (MPfile ["RW"], "rw"); inductive_ind := 0 |}.
-Definition rw_ci : case_info := {| ci_ind := rw_ind; ci_npar := 0; ci_relevance := Relevant |}.
-Definition rw_p : predicate term :=
-  {| pparams := []; puinst := []; pcontext := []; preturn := tSort sProp |}.
-(** A branch whose context is one let-binding of [tRel 0]: a variable outside the match. *)
-Definition rw_br (b : term) : branch term :=
-  {| bcontext := [vdef rw_na (tRel 0) (tSort sProp)]; bbody := b |}.
-Definition rw_case (b : term) : term := tCase rw_ci rw_p (tConstruct rw_ind 0 []) [rw_br b].
-Definition rw_w : term := rw_case (tRel 0).
-
-Lemma rw_w_unhygienic : on_free_vars xpredT rw_w = false.
-Proof. reflexivity. Qed.
-
-(** [lift] leaves the branch context alone, and the branch body [tRel 0] is bound by it. *)
-Lemma rw_w_lift : lift0 1 rw_w = rw_w.
-Proof. reflexivity. Qed.
-
-Lemma mkApps_eq_nonapp f args t :
-  match t with tApp _ _ => False | _ => True end -> mkApps f args = t -> args = [] /\ f = t.
-Proof.
-  intros hn h. destruct args as [|a args _] using rev_ind; [split; [reflexivity|exact h]|].
-  rewrite mkApps_app in h. subst t. destruct hn.
-Qed.
-
-Local Ltac rw_clean :=
-  repeat match goal with
-  | H : mkApps _ ?args = _ |- _ =>
-      apply mkApps_eq_nonapp in H;
-        [let ha := fresh "ha" in destruct H as [ha H]; subst; try discriminate H|exact I]
-  end.
-
-Local Ltac rw_nobody :=
-  match goal with
-  | H : option_map decl_body (nth_error _ _) = Some (Some _) |- _ => cbn in H; discriminate H
-  end.
-
-(** The terms [rw_w] reaches in a context of two assumptions. *)
-Definition rw_reach (x : term) : Prop :=
-  x = rw_case (tRel 0) \/ x = rw_case (tRel 1) \/ x = tRel 0.
-
-Lemma rw_step_case (Σ : global_env) (b y : term) :
-  (b = tRel 0 \/ b = tRel 1) -> red1 Σ [rw_d; rw_d] (rw_case b) y -> rw_reach y.
-Proof.
-  intros hb h. unfold rw_case in h.
-  inversion h; subst; rw_clean.
-  - (* iota: the let-body of the branch context, [tRel 0] *)
-    match goal with Hn : nth_error _ ?c = Some _ |- _ =>
-      destruct c as [|c]; [cbn in Hn; injection Hn as <-|destruct c; discriminate Hn] end.
-    right; right. destruct hb as [-> | ->]; reflexivity.
-  - (* parameters: there are none *)
-    match goal with X : OnOne2 _ _ _ |- _ => cbn in X; inversion X end.
-  - (* return clause: [tSort sProp] is normal *)
-    match goal with X : red1 _ _ _ _ |- _ => cbn [preturn rw_p] in X; inversion X; subst end;
-      rw_clean.
-  - (* discriminant: a constructor is normal *)
-    match goal with X : red1 _ _ (tConstruct _ _ _) _ |- _ => inversion X; subst end; rw_clean.
-  - (* branch body: [tRel 0] unfolds the let to [tRel 1], which is normal *)
-    match goal with X : OnOne2 _ _ _ |- _ => inversion X; subst end.
-    + match goal with X0 : prod _ _ |- _ => destruct X0 as [hr hc] end.
-      match goal with |- rw_reach (tCase _ _ _ [?br']) => destruct br' as [bc bb] end.
-      cbn in hr, hc. subst bc.
-      destruct hb as [-> | ->]; inversion hr; subst; rw_clean; [|rw_nobody].
-      match goal with H : option_map decl_body (nth_error _ _) = Some (Some _) |- _ =>
-        cbn in H; injection H as <- end.
-      right; left. reflexivity.
-    + match goal with X0 : OnOne2 _ [] _ |- _ => inversion X0 end.
-Qed.
-
-Lemma rw_step (Σ : global_env) (x y : term) :
-  rw_reach x -> red1 Σ [rw_d; rw_d] x y -> rw_reach y.
-Proof.
-  intros hx h. destruct hx as [ -> | [ -> | -> ] ].
-  - exact (rw_step_case Σ (tRel 0) y (or_introl eq_refl) h).
-  - exact (rw_step_case Σ (tRel 1) y (or_intror eq_refl) h).
-  - inversion h; subst; rw_clean. rw_nobody.
-Qed.
-
-Lemma rw_reach_red (Σ : global_env) (x y : term) :
-  rw_reach x -> red Σ [rw_d; rw_d] x y -> rw_reach y.
-Proof.
-  intros hx hr. induction hr as [x y h|x|x y z h1 ih1 h2 ih2].
-  - exact (rw_step Σ x y hx h).
-  - exact hx.
-  - exact (ih2 (ih1 hx)).
-Qed.
-
-(** Red weakening fails for [rw_w]: it reduces to [tRel 0] in a context of one assumption,
-  but its lift (itself) does not reduce to the lift of [tRel 0] in a context of two. *)
-Lemma red_weakening_needs_hygiene (Σ : global_env) :
-  ∥ red Σ [rw_d] rw_w (tRel 0) ∥
-  /\ ~ ∥ red Σ ([rw_d] ,,, [rw_d]) (lift0 1 rw_w) (lift0 1 (tRel 0)) ∥.
-Proof.
-  split.
-  - constructor. apply red1_red.
-    exact (red_iota Σ [rw_d] rw_ci 0 [] [] rw_p [rw_br (tRel 0)] (rw_br (tRel 0))
-             eq_refl eq_refl).
-  - rewrite rw_w_lift. intros [hr].
-    destruct (rw_reach_red Σ _ _ (or_introl eq_refl) hr) as [h|[h|h]]; discriminate h.
-Qed.
-
 Section Eval.
   Context {cf : checker_flags}.
   Context (X_type : abstract_env_impl) (X : X_type.π2.π1).
@@ -565,9 +439,9 @@ Section Eval.
 
   (** ** The ghost read-back
 
-    [G a] is the term the cell at [a] was allocated for. An inline suspension is read like
-    [repr_susp]: the slots are read, then substituted into the code lifted over the
-    environment's own variables. *)
+    [G a] is the term the cell at [a] was allocated for. An inline suspension is read by
+    reading its slots, then substituting them into the code lifted over the environment's
+    own variables. *)
 
   Inductive g_slot (G : ghost) : cbn_slot -> term -> Prop :=
   | g_slot_addr a t : G a = Some t -> g_slot G (SAddr a) t
@@ -1182,8 +1056,9 @@ Section Eval.
           -- rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hhyg hcx i e hi).
   Qed.
 
-  (** The state invariant is not empty: the machine's initial state has it, with the empty
-    ghost. A call adds its input codes to the table with [new_entry] before it starts. *)
+  (** Satisfying instance of the state invariant [gok], the premise of [machine_sound]: the
+    machine's initial state has it, with the empty ghost. A call adds its input codes to the
+    table with [new_entry] before it starts. *)
   Lemma gok_init : gok xH (mkGhost (fun _ => None) (PTree.empty _)) cbn_init.
   Proof.
     split.
@@ -1388,7 +1263,7 @@ Section Eval.
     that the roots come back unchanged or that the ghost map only grows. It promises
     [gren G G' rs rs']: the code table only grows ([gcx]), and every root comes back as a root
     of the same shape that stands, under the new ghost [G'], for what the old root stood for
-    under [G] ([gpres], one clause per shape, like [PCUICCallByNeedSoundGC.root_pres]).
+    under [G] ([gpres], one clause per shape of root).
     Without a collection the roots come back as they went in and [G'] extends [G]
     ([gren_ext]); a collection renames them ([collect_ghost]). *)
 
@@ -1517,7 +1392,7 @@ Section Eval.
     Context (lo : positive) (G : ghost) (s : cbn_state) (hok : gok lo G s).
 
     Record gcg (Gn : ghost) (g : gc_state) : Prop := mkGcg {
-      gg_inv : gc_inv nctx s.(st_heap) s.(st_next) g;
+      gg_inv : gc_inv s.(st_heap) s.(st_next) g;
       gg_codes : gc Gn = gc G;
       gg_fwd : forall x b t, bh_get x g.(g_old) = Some (CFwd b) -> G x = Some t ->
         Gn b = Some t;
@@ -1871,17 +1746,17 @@ Section Eval.
       cpg (gc_copy k) -> gcg Gn g -> bh_get a g.(g_old) = Some cl -> cell_fwd cl = None ->
       rn_cell (gc_copy k) cl g = COk (cl1, g1) ->
       bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old) = Some old ->
-      gc_inv nctx s.(st_heap) s.(st_next)
+      gc_inv s.(st_heap) s.(st_next)
         (mkGc old (bh_cons cl1 g1.(g_heap)) (Pos.succ g1.(g_next))) ->
       exists Gn', gcg Gn' (mkGc old (bh_cons cl1 g1.(g_heap)) (Pos.succ g1.(g_next)))
         /\ gext Gn Gn' /\ (forall t, G a = Some t -> Gn' (HAddr g1.(g_next)) = Some t).
     Proof.
       intros hk hg ha hf e1 e2 hinv2.
       assert (hcl : bh_get a s.(st_heap) = Some cl)
-        by exact (inv_keep _ _ _ _ (gg_inv _ _ hg) _ _ ha hf).
+        by exact (inv_keep _ _ _ (gg_inv _ _ hg) _ _ ha hf).
       destruct (gk_cells _ _ _ hok a cl hcl) as [t0 [hGa hc0]].
       destruct (rn_cell_g _ hk _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hbusy & hr1).
-      pose proof (inv_heap _ _ _ _ (gg_inv _ _ hg1)) as hok1.
+      pose proof (inv_heap _ _ _ (gg_inv _ _ hg1)) as hok1.
       pose (Gn' := mkGhost (fun b => if haddr_eqb b (HAddr g1.(g_next)) then Some t0 else Gn1 b)
                      (gc Gn1)).
       assert (hfresh : forall b t, Gn1 b = Some t -> b <> HAddr g1.(g_next)).
@@ -1933,7 +1808,7 @@ Section Eval.
         exists Gn. split; [exact hg|]. split; [apply gext_refl|].
         intros t ht. exact (gg_fwd _ _ hg _ _ _ ea ht).
       - pose proof he as he0.
-        destruct (gc_copy_ok nctx s.(st_heap) s.(st_next) (FS k) a g a' g' (gg_inv _ _ hg) he0)
+        destruct (gc_copy_ok s.(st_heap) s.(st_next) (FS k) a g a' g' (gg_inv _ _ hg) he0)
           as [hst _].
         rewrite gc_copy_FS in he.
         destruct (bh_get a g.(g_old)) as [cl|] eqn:ea; [|discriminate].
@@ -1944,20 +1819,20 @@ Section Eval.
             [|discriminate].
           inversion he; subst; clear he.
           exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
-                   (step_inv _ _ _ _ _ hst)).
+                   (step_inv _ _ _ _ hst)).
         + destruct (rn_cell (gc_copy (k tt)) (CDone v) g) as [[cl1 g1]|w] eqn:e1;
             [|discriminate].
           destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
             [|discriminate].
           inversion he; subst; clear he.
           exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
-                   (step_inv _ _ _ _ _ hst)).
+                   (step_inv _ _ _ _ hst)).
         + destruct (rn_cell (gc_copy (k tt)) CBusy g) as [[cl1 g1]|w] eqn:e1; [|discriminate].
           destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
             [|discriminate].
           inversion he; subst; clear he.
           exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
-                   (step_inv _ _ _ _ _ hst)).
+                   (step_inv _ _ _ _ hst)).
         + inversion he; subst; clear he.
           exists Gn. split; [exact hg|]. split; [apply gext_refl|].
           intros t ht. exact (gg_fwd _ _ hg _ _ _ ea ht).
@@ -1971,8 +1846,7 @@ Section Eval.
       exists G', gc G' = gc G /\ Forall2 (gpres G G') rs rs' /\ gok s.(st_next) G' s'.
     Proof.
       intros he.
-      destruct (collect_sound nctx rs s rs' s' (gk_nofwd _ _ _ hok) he)
-        as (hso & hnf & _ & _ & _ & _).
+      destruct (collect_sound rs s rs' s' (gk_nofwd _ _ _ hok) he) as (hso & hnf & _ & _).
       rewrite collect_eq in he.
       destruct (rn_ptree (gc_copy (fuel_of_pos s.(st_next) (fun _ => FO))) s.(st_gam)
                   (mkGc s.(st_heap) (bh_holes s.(st_next)) s.(st_next))) as [[gm1 g1]|w1] eqn:e1;
@@ -2015,8 +1889,7 @@ Section Eval.
   (** *** Allocation, which may collect first *)
 
   (** The new cell's reading becomes its ghost term, so it must be hygienic (under
-    [ctx_hyg]); every caller allocates a reading of hygienic ghosts and codes whose head, if
-    it has one, is a [tConstruct], [tInd], [tConst] or variable. *)
+    [ctx_hyg]); every caller allocates a reading of hygienic ghosts and codes. *)
   Lemma alloc_now_sound lo G cl u s :
     gok lo G s -> g_cell G cl u -> (ctx_hyg -> on_free_vars xpredT u) ->
     exists G', gext G G' /\ gok lo G' (snd (alloc_now cl s))
@@ -3256,9 +3129,10 @@ End Eval.
     clauses: for the empty context at level 0 with [Δ = []] ([eval_ctx_instance_nil]); for a
     well-formed context at its own length, [eval_section_instance] of
     [PCUICCallByNeedSoundHookFrame] (the hook's case).
-  - [gok]: [gok_init], and [run_s2_gok] of [PCUICCallByNeedSoundHookFrame] for the state the
-    hook starts in. *)
+  - [gok]: [gok_init], and [PCUICCallByNeedSoundLevel.run_s2_gok] for the state the hook
+    starts in. *)
 
+(** Satisfying instance of the hypotheses [wfΣ] and [hΣ] of [Section Eval]. *)
 Lemma eval_env_instance {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1) :
   ∥ ∑ Σ : global_env_ext, abstract_env_ext_rel X Σ × wf Σ ∥.
 Proof.
@@ -3267,6 +3141,8 @@ Proof.
   constructor. exists Σ. split; [exact hΣ|exact hw].
 Qed.
 
+(** Satisfying instance of the hypotheses [hΔ], [hnctx], [hlvl] and [const_instance_ok] of
+  [Section Eval], and of the premise [ctx_hyg], at the empty context. *)
 Lemma eval_ctx_instance_nil (Σ : global_env_ext) :
   #|([] : context)| = 0 - 0 /\ 0 = #|([] : context)| /\ 0 <= 0
   /\ (forall j decl b, nth_error ([] : context) j = Some decl -> decl.(decl_body) = Some b ->

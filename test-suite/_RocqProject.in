@@ -13,6 +13,7 @@ bug5.v
 bug6.v
 bug7.v
 bug8.v
+call_by_need.v
 case.v
 castprop.v
 cofix.v

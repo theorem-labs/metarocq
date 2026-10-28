@@ -16,11 +16,11 @@ Import CanonicalTries.
 Local Notation xpredT := (fun _ : nat => true) (only parsing).
 Local Notation xpred0 := (fun _ : nat => false) (only parsing).
 
-(** * The comparison's levels against the evaluator's invariant (BET-298, step 3b)
+(** * The comparison's levels against the evaluator's invariant
 
   The comparison crosses binders, so it reads its inputs at a level [L] that grows and
   shrinks, while [gok] cannot change its level downwards while a stale fresh-variable cell
-  exists ([PCUICCallByNeedSoundHookFrame.ghost_shift_false], [ghost_map_false]).
+  exists ([PCUICCallByNeedCounterexamples.ghost_shift_false], [ghost_map_false]).
 
   The design: [gok] is kept at a MASTER level [Q], the highest level the comparison has
   reached, with the junk context [jctx (Q - nctx)] for the variables between [nctx] and [Q];
@@ -38,7 +38,7 @@ Local Notation xpred0 := (fun _ : nat => false) (only parsing).
     ([machine_hwf_holds], under [#|Γ| <= nctx]; it is false as a closed Prop without that
     side condition, [machine_hwf_needs_len]). It also needs
     [gk_hyg], the hygiene of every ghost term, for red weakening
-    ([PCUICCallByNeedSoundEval.red_weakening_needs_hygiene]).
+    ([PCUICCallByNeedCounterexamples.red_weakening_needs_hygiene]).
   - [red_unlift] and [red_assum_irrel] do NOT depend on [gk_hyg]: the terms they move are
     root readings, which are reducts of the typed inputs of the hook, hence hygienic by
     themselves ([red_on_free_vars]). *)
@@ -286,8 +286,7 @@ Proof.
     unfold pres_let_bodies. rewrite hb. exact tt.
 Qed.
 
-(** ** The state a run starts in, against [gok] (moved from [PCUICCallByNeedSoundHookFrame]
-  so that the instances below can use it) *)
+(** ** The state a run starts in, against [gok] *)
 
 Section RunStart.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
@@ -410,7 +409,7 @@ Section Master.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext).
   Context (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ).
-  Context (hnctx : nctx = #|Γ|) (hΓ : is_closed_context Γ) (hhyg : ctx_hyg Γ).
+  Context (hnctx : nctx = #|Γ|) (hΓ : is_closed_context Γ).
   Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
                     PCUICCallByNeedSoundHook.consts_okb Σ b).
 
@@ -420,17 +419,15 @@ Section Master.
     mi_gok : gok X_type X Γ nctx Σ (jctx (Q - nctx)) Q lo G s;
     mi_hwf : hwf Q s }.
 
-  (** *** The interface of the structural invariant (slice B)
+  (** *** The interface of the structural invariant
 
     The machine keeps [hwf Q] of the heap, of the roots and of the value it returns, and so
     does an allocation of a cell that has it. This file only STATES the interface.
     [PCUICCallByNeedSoundHeapWf] (which imports this file) PROVES it: [machine_hwf_holds]
-    under [#|Γ| <= nctx], [alloc_hwf_holds], and the satisfying instance [machine_hwf_run]
-    at [nctx = #|Γ|]. As a closed Prop [machine_hwf] is FALSE without [#|Γ| <= nctx]
-    ([machine_hwf_needs_len]: with [nctx = 0] and one assumption in [Γ], [gam] allocates
-    [NVar 0] at [Q = 0]). [machine_hwf] unfolds to the statement it had before
-    [machine_hwf_at] was split out. Partial instances proved here: the fuel [FO] case
-    ([machine_hwf_FO]) and an allocation without collection ([alloc_now_hwf]). *)
+    under [#|Γ| <= nctx], [alloc_hwf_holds], and the satisfying instance
+    [machine_hwf_master] at [nctx = #|Γ|]. As a closed Prop [machine_hwf] is FALSE without
+    [#|Γ| <= nctx] ([machine_hwf_needs_len]: with [nctx = 0] and one assumption in [Γ],
+    [gam] allocates [NVar 0] at [Q = 0]). *)
   Definition machine_hwf_at (d : cbn_fuel) (Q : nat) : Prop :=
     (forall a rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
        force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
@@ -449,17 +446,6 @@ Section Master.
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q w).
 
   Definition machine_hwf : Prop := forall d Q, nctx <= Q -> machine_hwf_at d Q.
-
-  Lemma machine_hwf_FO Q : machine_hwf_at FO Q.
-  Proof.
-    unfold machine_hwf_at. split; [|split; [|split; [|split]]].
-    - intros a rs s v rs' s' _ _ he. cbn [force] in he. discriminate he.
-    - intros x stk rs s v rs' s' _ _ he. cbn [eval_slot] in he. discriminate he.
-    - intros e c stk rs s v rs' s' _ _ he. cbn [whnf] in he. discriminate he.
-    - intros e c mfix idx stk rs s v rs' s' _ _ he. cbn [whnf_fix] in he. discriminate he.
-    - intros v stk rs s w rs' s' hw hr hv he. cbn [apply] in he.
-      destruct stk; [inversion he; subst; split; [exact hw|split; assumption]|discriminate he].
-  Qed.
 
   Definition alloc_hwf : Prop := forall Q cl rs s a rs' s', nctx <= Q ->
     hwf Q s -> cwf Q cl -> Forall (rwf Q) rs ->
@@ -538,7 +524,8 @@ Section Master.
              ltac:(rewrite jctx_length; lia) (jctx_assum _) hr').
   Qed.
 
-  (** The start of a run is an instance of [minv]: [L = Q = nctx], an empty heap. *)
+  (** The start of a run is an instance of [minv]: [L = Q = nctx], an empty heap. It is the
+    satisfying instance of [minv] at a start state that [gok] describes. *)
   Lemma minv_start lo G s :
     gok X_type X Γ nctx Σ [] nctx lo G s ->
     (forall a cl, heap_get a s = Some cl -> False) ->
@@ -560,7 +547,8 @@ Section Master.
     - intros a cl ha. unfold heap_get in ha. rewrite e1 in ha. exact (hw a cl ha).
   Qed.
 
-  (** The machine's initial state is an instance of [minv] with the empty ghost. *)
+  (** The machine's initial state is an instance of [minv] with the empty ghost: the
+    satisfying instance of [minv] at [cbn_init]. *)
   Lemma minv_init : minv nctx nctx xH (mkGhost (fun _ => None) (PTree.empty _)) cbn_init.
   Proof.
     split; [lia|lia| |].
@@ -569,7 +557,7 @@ Section Master.
       rewrite bh_get_holes in h. discriminate.
   Qed.
 
-  (** *** The interface of the read-back (slice F)
+  (** *** The interface of the read-back
 
     A read-back at the logical level [L] of a suspension whose master reading is the lifted
     logical term [v] is a reduct of [v], and leaves [minv] alone. Its instance:
@@ -584,27 +572,19 @@ Section Master.
   Definition rb_sound : Prop := forall d L Q lo G e t v s, rb_case d L Q lo G e t v s.
 End Master.
 
-(** An allocation without collection keeps [hwf]. *)
-Lemma alloc_now_hwf Q lo cl s :
-  bh_ok lo s.(st_next) s.(st_heap) -> hwf Q s -> cwf Q cl -> hwf Q (snd (alloc_now cl s)).
-Proof.
-  intros hbok hw hc b cl2 hb. unfold heap_get in hb. cbn in hb.
-  destruct (haddr_dec b (HAddr s.(st_next))) as [->|hne].
-  - rewrite (bh_get_cons_new _ _ _ _ hbok) in hb. injection hb as <-. exact hc.
-  - rewrite (bh_get_cons_old _ _ _ _ _ hbok hne) in hb. exact (hw b cl2 hb).
-Qed.
-
-(** ** Satisfying instances of the named hypotheses (gate rule)
+(** ** Satisfying instances of the named hypotheses
 
   The section hypotheses of [Shift], [Raise] and [Master]: [nctx <= lvl], [wfΣ], [hΣ],
   [hnctx], [hΓ], [hhyg], [hcio]. For the empty context and for a context of one assumption
   ([level_ctx_instance_nil], [level_ctx_instance_one]); for any well-formed context,
   [PCUICCallByNeedSoundHookFrame.eval_section_instance]; [wfΣ] and [hΣ] for every abstract
-  environment, [PCUICCallByNeedSoundEval.eval_env_instance]. The interfaces: below. *)
+  environment, [PCUICCallByNeedSoundEval.eval_env_instance]. The interface [rb_sound]:
+  [rb_instance] below. *)
 
 Definition inst_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
 Definition inst_Γ : context := [vass inst_na (tSort sProp)].
 
+(** The satisfying instance of the context hypotheses at the empty context. *)
 Lemma level_ctx_instance_nil (Σ : global_env_ext) :
   0 <= 0 /\ 0 = #|([] : context)| /\ is_closed_context [] /\ ctx_hyg []
   /\ (forall j decl b, nth_error ([] : context) j = Some decl -> decl.(decl_body) = Some b ->
@@ -621,6 +601,7 @@ Proof.
   destruct j; discriminate h.
 Qed.
 
+(** The satisfying instance of the context hypotheses at a context of one assumption. *)
 Lemma level_ctx_instance_one (Σ : global_env_ext) :
   1 <= 1 /\ 1 = #|inst_Γ| /\ is_closed_context inst_Γ /\ ctx_hyg inst_Γ
   /\ (forall j decl b, nth_error inst_Γ j = Some decl -> decl.(decl_body) = Some b ->
@@ -639,7 +620,8 @@ Section Instances.
 
   Definition G0 : ghost := mkGhost (fun _ => None) (PTree.empty _).
 
-  (** F: the read-back of a sort in the empty environment, at the start state. *)
+  (** The satisfying instance of [rb_case] (the interface [rb_sound]) at a real call that
+    returns: the read-back of a sort in the empty environment, at the start state. *)
   Lemma rb_instance :
     (exists s', rb_susp 0 (fuel_n 1) 0 env_empty (tSort sProp) cbn_init = COk (tSort sProp, s'))
     /\ minv X_type X [] 0 Σ 0 0 xH G0 cbn_init

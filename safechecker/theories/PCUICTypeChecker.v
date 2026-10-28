@@ -21,9 +21,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics
 From MetaRocq.PCUIC Require Import BDTyping BDToPCUIC BDFromPCUIC BDUnique.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICSafeReduce PCUICErrors
-  PCUICSafeConversion PCUICWfReduction PCUICWfEnv PCUICCallByNeed.
-From MetaRocq.SafeChecker Require PCUICCallByNeedSoundReadBack PCUICCallByNeedSoundConv
-  PCUICCallByNeedSoundHookProof.
+  PCUICSafeConversion PCUICWfReduction PCUICWfEnv.
+From MetaRocq.SafeChecker Require PCUICCallByNeed.
+From MetaRocq.SafeChecker Require PCUICCallByNeedSoundHookProof.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -368,7 +368,7 @@ Section Typecheck.
     CoreTactics.equations_simpl;
     try Tactics.program_solve_wf.
 
-  Opaque isconv_term cbn_conv.
+  Opaque isconv_term PCUICCallByNeed.cbn_conv.
 
   (* replaces convert and convert_leq*)
   Equations convert (le : conv_pb) Γ t u
@@ -378,7 +378,7 @@ Section Typecheck.
     convert le Γ t u ht hu
       with inspect (eqb_term_upto_univ (abstract_env_compare_universe X) (abstract_env_compare_sort X) (abstract_env_compare_global_instance _ X) le t u) := {
         | @exist true He := ret _ ;
-        | @exist false He with inspect (cbn_conv X_type X le Γ t u) := {
+        | @exist false He with inspect (PCUICCallByNeed.cbn_conv X_type X le Γ t u) := {
           | @exist true Hcbn := ret _ ;
           | @exist false Hcbn with
             inspect (isconv_term _ X Γ le t ht u hu) := {
@@ -398,13 +398,8 @@ Section Typecheck.
       pose proof hu as [? ?]%andb_and; eassumption.
   Qed.
   Next Obligation.
-    (* The call-by-need fast path is sound (BET-298): [convert_cbn_sound] reduces the claim to
-       the comparison theorem [spec_all_holds], whose read-back premise is [rb_sound_holds]. *)
-    exact (PCUICCallByNeedSoundHookProof.convert_cbn_sound X_type X
-      (fun Γ nctx stress Σ wfΣ hΣ hn hΓ hh hc =>
-         PCUICCallByNeedSoundConv.spec_all_holds X_type X Γ nctx stress Σ wfΣ hΣ hn hΓ hh hc
-           (PCUICCallByNeedSoundReadBack.rb_sound_holds X_type X Γ nctx Σ wfΣ hΓ hh))
-      le Γ t u ht hu Hcbn Σ wfΣ).
+    (* The call-by-need fast path is sound: [PCUICCallByNeedSoundHookProof.convert_cbn_sound]. *)
+    exact (PCUICCallByNeedSoundHookProof.convert_cbn_sound X_type X le Γ t u ht hu Hcbn Σ wfΣ).
   Qed.
   Next Obligation.
     now symmetry in Hc; eapply isconv_term_sound in Hc.
@@ -415,7 +410,7 @@ Section Typecheck.
     specialize_Σ wfΣ.
     eapply isconv_term_complete in Hc; eauto.
   Qed.
-  Transparent isconv_term.
+  Transparent isconv_term PCUICCallByNeed.cbn_conv.
 
   Definition wt_decl (Σ : global_env_ext) Γ d :=
     match d with

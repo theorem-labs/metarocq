@@ -12,6 +12,8 @@ correctness/completeness proofs.
 | [PCUICSafeReduce]     | Weak-head reduction machine
 | [PCUICSafeConversion] | Conversion checker
 | [PCUICWfEnv]          | Helper properties for global environments and universes
+| [PCUICCallByNeed]     | Call-by-need conversion fast path that [PCUICTypeChecker] tries before the conversion checker
+| [PCUICCallByNeedSound*] | Soundness of the fast path ([PCUICCallByNeedSoundHookProof.convert_cbn_sound])
 | [PCUICTypeChecker]    | Type inference and type checking
 | [PCUICSafeRetyping]   | Fast type inference, assuming well-typedness
 | [PCUICSafeChecker]    | Checking of global environments
@@ -21,6 +23,8 @@ correctness/completeness proofs.
 
 [PCUICSafeReduce]: PCUICSafeReduce.v
 [PCUICSafeConversion]: PCUICSafeConversion.v
+[PCUICCallByNeed]: PCUICCallByNeed.v
+[PCUICCallByNeedSound*]: PCUICCallByNeedSoundHookProof.v
 [PCUICTypeChecker]: PCUICSafeChecker.v
 [PCUICSafeRetyping]: PCUICSafeRetyping.v
 [PCUICSafeChecker]: PCUICSafeChecker.v

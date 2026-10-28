@@ -8,10 +8,10 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTy
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
   PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel
-  PCUICCallByNeedSoundConv PCUICCallByNeedSoundHookFrame.
+  PCUICCallByNeedSoundReadBack PCUICCallByNeedSoundConv PCUICCallByNeedSoundHookFrame.
 From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
 
-(** * The call-by-need fast path is sound at the hook (BET-298, step 4)
+(** * The call-by-need fast path is sound at the hook
 
   [PCUICTypeChecker.convert] answers "convertible" when [cbn_conv X_type X le Γ t u] is
   [true]. This file proves that answer sound: [cbn_conv_sound] gives
@@ -28,23 +28,13 @@ From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
   [cq L L le t u]. With [Q - L = 0] the lift is the identity, [t] and [u] are scoped at
   [#|Γ|] ([subject_closed]), and [Δ = []] gives the conversion in [Γ] itself.
 
-  The comparison theorem [forall d, spec_all d] is [PCUICCallByNeedSoundConv]'s
-  [spec_all_holds]. Until it lands it is the section hypothesis [hspec], stated as the
-  theorem closes over [Section ConvGhost]'s parameters. Every other premise of
-  [spec_term]'s call is discharged here from the obligation's own context. *)
+  The comparison theorem [forall d, spec_all d] is [PCUICCallByNeedSoundConv.spec_all_holds].
+  Its read-back premise [rb_sound] is [PCUICCallByNeedSoundReadBack.rb_sound_holds]. Every
+  other premise of [spec_term]'s call is discharged here from the obligation's own context,
+  so [convert_cbn_sound] has no hypothesis beyond the obligation's. *)
 
 Section HookProof.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-
-  (** Discharged by [PCUICCallByNeedSoundConv.spec_all_holds]: the comparison theorem,
-    closed over [Section ConvGhost]'s parameters in their order. *)
-  Hypothesis hspec :
-    forall (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext),
-      wf Σ -> abstract_env_ext_rel X Σ -> nctx = #|Γ| -> is_closed_context Γ ->
-      ctx_hyg Γ ->
-      (forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
-         consts_okb Σ b) ->
-      forall d, spec_all X_type X Γ nctx stress Σ d.
 
   (** The start state of [cbn_run] is an instance of [minv] at [L = Q = #|Γ|]. *)
   Lemma run_s2_minv (Σ : global_env_ext) (Γ : context) (t u : term) :
@@ -56,12 +46,12 @@ Section HookProof.
     discriminate h.
   Qed.
 
-  (** [cbn_conv] unfolded to [cbn_run]. KERNEL TRAP: do not [unfold cbn_conv,
-    cbn_conv_answer in hc] and then [rewrite cbn_run_eq in hc]. The tactics succeed at
-    once, but at [Qed] the kernel checks [hc : cbn_conv ... = true] against the rewrite's
-    motive applied to [cbn_run ...], evaluates the machine at [cbn_depth] on the way, and
-    runs out of memory (killed at 8 GB on bet64-mem). Rewriting with this [eq_refl] lemma
-    first makes each rewrite's motive syntactically the hypothesis, and [Qed] is instant. *)
+  (** [cbn_conv] unfolded to [cbn_run]. Do not [unfold cbn_conv, cbn_conv_answer in hc] and
+    then [rewrite cbn_run_eq in hc]. The tactics succeed at once, but at [Qed] the kernel
+    checks [hc : cbn_conv ... = true] against the rewrite's motive applied to
+    [cbn_run ...], evaluates the machine at [cbn_depth] on the way, and runs out of memory
+    (more than 8 GB). Rewriting with this [eq_refl] lemma first makes each rewrite's motive
+    syntactically the hypothesis, and [Qed] is instant. *)
   Lemma cbn_conv_unfold (le : conv_pb) (Γ : context) (t u : term) :
     cbn_conv X_type X le Γ t u
     = match cbn_run X_type X Γ #|Γ| false le t u with CbnYes => true | _ => false end.
@@ -95,7 +85,8 @@ Section HookProof.
                 env_empty (run_c2 X_type X t u) [] (run_s2 X_type X t u))
       as [[[b rs'] s']|w] eqn:Ec; [|discriminate hc].
     destruct b; [|discriminate hc].
-    destruct (hspec Γ #|Γ| false Σ wfΣ hΣ eq_refl hΓ hhyg hcio cbn_depth)
+    destruct (spec_all_holds X_type X Γ #|Γ| false Σ wfΣ hΣ eq_refl hΓ hhyg hcio
+                (rb_sound_holds X_type X Γ #|Γ| Σ wfΣ hΓ hhyg) cbn_depth)
       as (_ & _ & _ & hT & _).
     destruct (hT #|Γ| #|Γ| xH (run_ghost X_type X t u) le env_empty (run_c1 X_type X t)
                 env_empty (run_c2 X_type X t u) t u [] (run_s2 X_type X t u) true rs' s'
