@@ -3167,7 +3167,8 @@ Section CallByNeed.
               match nth_error brs n with
               | Some br =>
                 let cargs := skipn ci.(ci_npar) args in
-                if forallb is_assum br.(bcontext) && (#|cargs| == #|br.(bcontext)|) then
+                if forallb is_assum br.(bcontext)
+                   && (#|args| == ci.(ci_npar) + #|br.(bcontext)|) then
                   whnf d (env_push_addrs cargs e)
                     (child c (case_branch_step (N.of_nat n)) br.(bbody)) stk rs s
                 else CFail WShape
@@ -3244,9 +3245,17 @@ Section CallByNeed.
             | RE e :: RSk stk :: rs =>
               match v with
               | VCon (tConstruct _ _ _) _ =>
-                cbnlet (e', rs, s) := push_fix_cells e c 0 #|mfix| e (RSk stk :: rs) s in
+                (* The stack holds the forced argument in a fresh cell, so that the
+                   argument the unfolded body sees is the constructor the guard tested. *)
+                cbnlet (a2, rs, s) := alloc (CDone v) (RE e :: RSk stk :: rs) s in
                 match rs with
-                | RSk stk :: rs => whnf d e' (child c (N.of_nat idx) def.(dbody)) stk rs s
+                | RE e :: RSk stk :: rs =>
+                  let stk := list_set stk def.(rarg) (SAddr a2) in
+                  cbnlet (e', rs, s) := push_fix_cells e c 0 #|mfix| e (RSk stk :: rs) s in
+                  match rs with
+                  | RSk stk :: rs => whnf d e' (child c (N.of_nat idx) def.(dbody)) stk rs s
+                  | _ => CFail WRoots
+                  end
                 | _ => CFail WRoots
                 end
               | VNeu _ _ | VStuck _ _ _ | VStuckFix _ _ _ _ =>
