@@ -367,71 +367,7 @@ Module PCUICPrimOpType <: EnvironmentTyping.PrimOpTypeSig PCUICTerm PCUICEnviron
     | None => None
     end.
 
-  (** The shape of an operation's expected type: an iterated arrow over the
-      argument tags' type constants, ending in the result's type. *)
-  Lemma prim_arg_types_spec r ts res T :
-    prim_arg_types r ts res = Some T ->
-    ∑ tys, All2 (fun t ty => prim_tag_type r t = Some ty) ts tys × T = fold_right tImpl res tys.
-  Proof.
-    induction ts as [|t ts ih] in T |- *; cbn.
-    - intros [= <-]. exists []. split; [constructor|reflexivity].
-    - destruct (prim_tag_type r t) as [a|] eqn:ha; [|discriminate].
-      destruct (prim_arg_types r ts res) as [T'|] eqn:hT; cbn; [|discriminate].
-      intros [= <-]. destruct (ih T' eq_refl) as [tys [hall ->]].
-      exists (a :: tys). split; [constructor; assumption|reflexivity].
-  Qed.
-
-  Lemma prim_op_type_shape r op T :
-    prim_op_type r op = Some T ->
-    ∑ res tys, [× prim_shape_type r (po_shape (info op)) = Some res,
-      All2 (fun t ty => prim_tag_type r t = Some ty) (po_args (info op)) tys &
-      T = fold_right tImpl res tys].
-  Proof.
-    unfold prim_op_type.
-    destruct (prim_shape_type r (po_shape (info op))) as [res|] eqn:hs; [|discriminate].
-    intros h. destruct (prim_arg_types_spec _ _ _ _ h) as [tys [hall ->]].
-    exists res, tys. split; auto.
-  Qed.
-
-  Lemma prim_tag_types_kn r ts tys :
-    All2 (fun t ty => prim_tag_type r t = Some ty) ts tys ->
-    ∑ kns, All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) ts kns
-           × tys = map (fun kn => tConst kn []) kns.
-  Proof.
-    induction 1 as [|t ty ts tys hty _ ih].
-    - exists []. split; [constructor|reflexivity].
-    - unfold prim_tag_type in hty.
-      destruct (EnvironmentTyping.retro_type_constant r t) as [kn|] eqn:e; cbn in hty; [|discriminate].
-      injection hty as <-. destruct ih as (kns & hk & ->).
-      exists (kn :: kns). split; [constructor; assumption|reflexivity].
-  Qed.
-
-  (** The same, read off the retroknowledge fields: each argument type is the
-      bodiless type constant registered for its tag, and the result is the
-      registered integer type ([SInt]) or boolean inductive ([SBool]). *)
-  Lemma prim_op_type_shape_kn r op T :
-    prim_op_type r op = Some T ->
-    ∑ kns res,
-      [× All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) (po_args (info op)) kns,
-         T = fold_right (fun kn B => tImpl (tConst kn []) B) res kns &
-         match po_shape (info op) with
-         | SInt => ∑ kn, r.(Retroknowledge.retro_int63) = Some kn /\ res = tConst kn []
-         | SBool => ∑ i, r.(Retroknowledge.retro_bool) = Some i /\ res = tInd i []
-         end].
-  Proof.
-    intros h. destruct (prim_op_type_shape r op T h) as (res & tys & [hs hall ->]).
-    destruct (prim_tag_types_kn _ _ _ hall) as (kns & hk & ->).
-    exists kns, res. split; [exact hk| |].
-    - clear. induction kns as [|kn kns ih]; cbn; congruence.
-    - destruct (po_shape (info op)); cbn in hs; unfold prim_tag_type in hs; cbn in hs.
-      + destruct (r.(Retroknowledge.retro_int63)) as [kn|] eqn:e; cbn in hs; [|discriminate].
-        injection hs as <-. exists kn. split; first [exact e | reflexivity].
-      + destruct (r.(Retroknowledge.retro_bool)) as [i|] eqn:e; cbn in hs; [|discriminate].
-        injection hs as <-. exists i. split; first [exact e | reflexivity].
-  Qed.
-
-  (** The converse: the expected type is defined once every argument tag and the
-      result shape have their registered types. *)
+  (** Helper of [prim_op_type_of_kn] below. *)
   Lemma prim_arg_types_of_kn r ts kns res :
     All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) ts kns ->
     prim_arg_types r ts res = Some (fold_right (fun kn B => tImpl (tConst kn []) B) res kns).
@@ -444,6 +380,9 @@ Module PCUICPrimOpType <: EnvironmentTyping.PrimOpTypeSig PCUICTerm PCUICEnviron
     unfold prim_tag_type. rewrite e ih. reflexivity.
   Qed.
 
+  (** Satisfying instance of [on_prim_op_constant]'s premise
+      [prim_op_type r op = Some T]: the premise holds whenever every argument tag
+      and the result shape have registered type constants.  No proof uses it. *)
   Lemma prim_op_type_of_kn r op kns res :
     All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) (po_args (info op)) kns ->
     prim_shape_type r (po_shape (info op)) = Some res ->
