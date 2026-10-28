@@ -139,4 +139,10 @@ theories/PCUICEtaReductionC3.v
 theories/PCUICEtaStrengthening.v
 # C3 prover B (frac/eta-c3-b): parallel-eta route
 theories/PCUICEtaC3B.v
+# BET-315 eta lane (L2): C4/I4 shared definitions (beta_eta, statement, Hindley-Rosen split)
+theories/PCUICEtaBetaEta.v
+# BET-315 eta lane (L2): C4 P-SCOPE (beta_eta preserves scoping)
+theories/PCUICEtaScope.v
+# BET-315 eta lane (L2): C4 shape guard — (A) is instantiable by C3 + P-SCOPE (C4 -> C3 only)
+theories/PCUICEtaC4Shape.v
 # theories/All.v
