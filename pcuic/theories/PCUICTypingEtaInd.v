@@ -11,7 +11,7 @@
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICCases
-     PCUICOnFreeVars PCUICTyping PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICTypingEta.
+     PCUICOnFreeVars PCUICEquality PCUICTyping PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICTypingEta.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations.Type Require Import Relation.
@@ -19,6 +19,24 @@ From Equations Require Import Equations.
 Set Equations With UIP.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
+
+Definition tybranchesE {cf} Σ Γ ci mdecl idecl p ps ptm n ctors brs :=
+  All2i
+  (fun (i : nat) (cdecl : constructor_body) (br : branch term) =>
+   (eq_context_upto_names br.(bcontext) (cstr_branch_context ci mdecl cdecl)) *
+   (let brctxty := case_branch_type ci mdecl idecl p br ptm i cdecl in
+    wf_localE Σ (Γ,,, brctxty.1)
+    × Σ;;; Γ,,, brctxty.1 |-E bbody br : brctxty.2
+      × Σ;;; Γ,,, brctxty.1 |-E brctxty.2 : tSort ps)) n ctors brs.
+
+Definition branchesE_size {cf} {Σ Γ ci mdecl idecl p ps ptm brs}
+   (typing_size : forall Σ Γ t T, Σ ;;; Γ |-E t : T -> size)
+  {n ctors}
+  (a : tybranchesE Σ Γ ci mdecl idecl p ps ptm n ctors brs) : size :=
+  (all2i_size _ (fun i x y p =>
+    Nat.max
+      (All_local_env_size (typing_size _) _ p.2.1)
+      (Nat.max (typing_size _ _ _ _ p.2.2.1) (typing_size _ _ _ _ p.2.2.2))) a).
 
 Definition typingE_size `{cf : checker_flags} {Σ Γ t T} (d : Σ ;;; Γ |-E t : T) : size.
 Proof.
@@ -50,7 +68,7 @@ Proof.
   - exact (S (S (All_local_env_size (typingE_size _) _ a))).
   - exact (S (Nat.max (All_local_env_size (typingE_size _) _ wf_pctx)
       (Nat.max (ctx_inst_size _ typingE_size ind_inst)
-        (Nat.max d2 (Nat.max d3 (branches_size typingE_size brs_ty)))))).
+        (Nat.max d2 (Nat.max d3 (branchesE_size typingE_size brs_ty)))))).
   - exact (S (Nat.max
       (Nat.max (All_local_env_size (typingE_size _) _ a) (all_size _ (fun x p => on_def_type_size (typingE_size Σ) _ _ p) a0))
       (all_size (on_def_body (lift_typing typingE _) _ _) (fun x p => on_def_body_size (typingE_size Σ) _ _ _ p) a1))).
@@ -81,11 +99,6 @@ Proof.
   now apply typingE_wf_local in Hs.
 Defined.
 
-Lemma typeE_Prop_wf `{checker_flags} Σ Γ : wf_localE Σ Γ -> Σ ;;; Γ |-E tSort sProp : tSort Sort.type1.
-Proof. repeat constructor; auto. Defined.
-
-Lemma typeE_Prop `{checker_flags} Σ : Σ ;;; [] |-E tSort sProp : tSort Sort.type1.
-Proof. repeat constructor. Defined.
 
 Definition env_propE `{checker_flags} (P : forall Σ Γ t T, Type) (Pj : forall Σ Γ j, Type) (PΓ : forall Σ Γ, Type) :=
   forall Σ (wfΣ : wfE Σ.1) Γ t T (ty : Σ ;;; Γ |-E t : T),
@@ -313,7 +326,7 @@ Lemma typingE_ind_env_app_size `{cf : checker_flags} :
        P Σ Γ t A ->
        Σ ;;; Γ |-E B : tSort s ->
        P Σ Γ B (tSort s) ->
-       Σ ;;; Γ |-E A <=s B ->
+       cumulSpecE Σ Γ A B ->
        P Σ Γ t B) ->
 
       env_propE P Pj PΓ.
@@ -778,7 +791,7 @@ Lemma typingE_ind_env `{cf : checker_flags} :
         P Σ Γ t A ->
         Σ ;;; Γ |-E B : tSort s ->
         P Σ Γ B (tSort s) ->
-        Σ ;;; Γ |-E A <=s B ->
+        cumulSpecE Σ Γ A B ->
         P Σ Γ t B) ->
 
        env_propE P Pj PΓ.
