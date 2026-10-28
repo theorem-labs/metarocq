@@ -57,11 +57,17 @@ Proof.
       * exfalso. eapply LevelSet.empty_spec. exact Hx.
       * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
     + exists si_val. intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
-  - apply globenv_decl; [constructor|].
+  - (* trunk's wf: the retroknowledge conjunct, then the declarations *)
+    split.
+    { constructor; cbn; [constructor|intros c []|repeat split; intros c h; discriminate h
+                        |intros i h; discriminate h]. }
+    apply globenv_decl; [constructor|].
     constructor.
     + constructor.
     + exact si_on_udecl.
     + exact (si_vass [] (mkBindAnn nAnon Relevant) (tSort sProp) _ (si_P_typed [] si_wf_nil) eq_refl).
+    + (* on_prim_decl: no operation is registered *)
+      cbn. intros op h; discriminate h.
 Qed.
 
 Lemma sa_declared : declared_constant sa_Σ sa_kn sa_cb.

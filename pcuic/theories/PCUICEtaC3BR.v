@@ -27,10 +27,10 @@ From Stdlib Require Import CRelationClasses.
 From Equations.Type Require Import Relation Relation_Properties.
 From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config BasicAst.
+From MetaRocq.Common Require Import config BasicAst PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimitive
      PCUICInduction PCUICLiftSubst PCUICSigmaCalculus PCUICEquality PCUICCases
-     PCUICOnFreeVars PCUICTyping PCUICReduction PCUICEtaDefs PCUICEtaCanon.
+     PCUICOnFreeVars PCUICTyping PCUICReduction PCUICPrimitiveRed PCUICEtaDefs PCUICEtaCanon.
 (** EtaL2's strengthening lemma; Requires only base files (no eta-lane file). *)
 From MetaRocq.PCUIC Require Import PCUICEtaStrengthening.
 
@@ -1316,7 +1316,11 @@ Proof.
   destruct H; try discriminate Heq;
     try solve [exfalso; destruct args using rev_ind;
                [cbn in Heq; discriminate Heq|
-                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]].
+                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]];
+    (* red_prim_op: a constant applied to literals *)
+    try solve [exfalso; destruct ls using rev_ind;
+               [cbn in Heq; discriminate Heq|
+                rewrite map_app mkApps_app in Heq; cbn in Heq; discriminate Heq]].
   - injection Heq as -> -> ->. left. eexists; split; [reflexivity|assumption].
   - injection Heq as -> -> ->. right. eexists; split; [reflexivity|assumption].
 Qed.
@@ -1329,7 +1333,11 @@ Proof.
   destruct H; try discriminate Heq;
     try solve [destruct args using rev_ind;
                [cbn in Heq; discriminate Heq|
-                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]].
+                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]];
+    (* red_prim_op: a constant applied to literals *)
+    try solve [destruct ls using rev_ind;
+               [cbn in Heq; discriminate Heq|
+                rewrite map_app mkApps_app in Heq; cbn in Heq; discriminate Heq]].
   injection Heq as ->.
   match goal with He : option_map _ _ = _ |- _ => cbn in He; discriminate He end.
 Qed.
@@ -1352,6 +1360,11 @@ Proof.
     left; right. eexists _, _, _. split; [symmetry; exact Hf|reflexivity].
   - (* red_fix *)
     right. eexists _, _, _, _, _. repeat split; eassumption.
+  - (* red_prim_op: the left side is [tApp (lift0 1 M) (tRel 0)], and a literal
+       argument is never [tRel 0] *)
+    exfalso. destruct ls using rev_ind.
+    + cbn in Heq. discriminate Heq.
+    + rewrite map_app mkApps_app in Heq. cbn in Heq. inversion Heq.
   - (* app_red_l *)
     injection Heq as -> ->.
     left; left. eexists. split; [reflexivity|assumption].
@@ -1554,6 +1567,26 @@ Qed.
     Pattern ([red1_tLambda_inv]): [remember] the head, [destruct] the derivation,
     [discriminate] head clashes. [depelim] would leave [mkApps]-headed impossible cases. *)
 
+(** The arguments of a [red_prim_op] redex are int/string literals, which
+    [peta] relates only to themselves; so a [peta] step leaves a whole
+    primitive redex unchanged (it has no λ, hence no η-redex). *)
+Lemma peta_lits ls args' :
+  All2 peta (map term_of_lit ls) args' -> args' = map term_of_lit ls.
+Proof.
+  induction ls as [|l ls IH] in args' |- *; cbn; intros h; depelim h; [reflexivity|].
+  f_equal; [|now apply IH].
+  match goal with H : peta (term_of_lit l) _ |- _ => destruct l; cbn in H; depelim H end;
+  match goal with H : onPrims _ _ _ _ |- _ => depelim H end; reflexivity.
+Qed.
+
+Lemma peta_prim_redex c u ls t' :
+  peta (mkApps (tConst c u) (map term_of_lit ls)) t' ->
+  t' = mkApps (tConst c u) (map term_of_lit ls).
+Proof.
+  intros h. destruct (peta_mkApps_inv _ _ _ h) as (f' & args' & -> & hf & ha).
+  depelim hf. now rewrite (peta_lits _ _ ha).
+Qed.
+
 Lemma red1_tApp_inv {Σ Γ f a v} :
   red1 Σ Γ (tApp f a) v ->
   (∑ na A b, (f = tLambda na A b) × (v = b {0 := a}))
@@ -1561,16 +1594,22 @@ Lemma red1_tApp_inv {Σ Γ f a v} :
        (mkApps (tFix mfix idx) args = tApp f a) × (unfold_fix mfix idx = Some (narg, fn))
        × (is_constructor narg args = true) × (v = mkApps fn args))
   + (∑ f', (v = tApp f' a) × red1 Σ Γ f f')
-  + (∑ a', (v = tApp f a') × red1 Σ Γ a a').
+  + (∑ a', (v = tApp f a') × red1 Σ Γ a a')
+  (* red_prim_op, with exactly its premises *)
+  + (∑ c decl u op ls r,
+       (mkApps (tConst c u) (map term_of_lit ls) = tApp f a)
+       × (prim_op_of Σ c = Some op) × declared_constant Σ c decl × (cst_body decl = None)
+       × (prim_op_denote op ls = Some r) × (readback Σ (po_shape (info op)) r = Some v)).
 Proof.
   intro H. remember (tApp f a) as t eqn:Heq.
   destruct H; try discriminate Heq.
-  - injection Heq as Hf Ha. subst. left; left; left.
+  - injection Heq as Hf Ha. subst. left; left; left; left.
     eexists _, _, _. split; reflexivity.
-  - left; left; right. eexists _, _, _, _, _. repeat split; eassumption.
-  - injection Heq as Hf Ha. subst. left; right.
+  - left; left; left; right. eexists _, _, _, _, _. repeat split; eassumption.
+  - right. eexists _, _, _, _, _, _. repeat split; eassumption.
+  - injection Heq as Hf Ha. subst. left; left; right.
     eexists. split; [reflexivity|assumption].
-  - injection Heq as Hf Ha. subst. right.
+  - injection Heq as Hf Ha. subst. left; right.
     eexists. split; [reflexivity|assumption].
 Qed.
 
@@ -1586,7 +1625,11 @@ Proof.
   destruct H; try discriminate Heq;
     try solve [exfalso; destruct args using rev_ind;
                [cbn in Heq; discriminate Heq|
-                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]].
+                rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq]];
+    (* red_prim_op: a constant applied to literals *)
+    try solve [exfalso; destruct ls using rev_ind;
+               [cbn in Heq; discriminate Heq|
+                rewrite map_app mkApps_app in Heq; cbn in Heq; discriminate Heq]].
   - injection Heq as Hp Hc. subst. left; left.
     eexists _, _, _, _, _. repeat split; eassumption.
   - injection Heq as Hp Hc. subst. left; right.
@@ -1599,29 +1642,41 @@ Qed.
 Lemma red1_tVar_absurd {Σ Γ i v} : red1 Σ Γ (tVar i) v -> False.
 Proof.
   intro H. remember (tVar i) as t eqn:Heq. destruct H; try discriminate Heq.
-  destruct args using rev_ind;
+  - destruct args using rev_ind;
     [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
+  - (* red_prim_op: a constant applied to literals *)
+    destruct ls using rev_ind;
+    [cbn in Heq; discriminate Heq|rewrite map_app mkApps_app in Heq; cbn in Heq; discriminate Heq].
 Qed.
 
 Lemma red1_tSort_absurd {Σ Γ s v} : red1 Σ Γ (tSort s) v -> False.
 Proof.
   intro H. remember (tSort s) as t eqn:Heq. destruct H; try discriminate Heq.
-  destruct args using rev_ind;
+  - destruct args using rev_ind;
     [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
+  - (* red_prim_op: a constant applied to literals *)
+    destruct ls using rev_ind;
+    [cbn in Heq; discriminate Heq|rewrite map_app mkApps_app in Heq; cbn in Heq; discriminate Heq].
 Qed.
 
 Lemma red1_tInd_absurd {Σ Γ ind uu v} : red1 Σ Γ (tInd ind uu) v -> False.
 Proof.
   intro H. remember (tInd ind uu) as t eqn:Heq. destruct H; try discriminate Heq.
-  destruct args using rev_ind;
+  - destruct args using rev_ind;
     [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
+  - (* red_prim_op: a constant applied to literals *)
+    destruct ls using rev_ind;
+    [cbn in Heq; discriminate Heq|rewrite map_app mkApps_app in Heq; cbn in Heq; discriminate Heq].
 Qed.
 
 Lemma red1_tConstruct_absurd {Σ Γ ind k uu v} : red1 Σ Γ (tConstruct ind k uu) v -> False.
 Proof.
   intro H. remember (tConstruct ind k uu) as t eqn:Heq. destruct H; try discriminate Heq.
-  destruct args using rev_ind;
+  - destruct args using rev_ind;
     [cbn in Heq; discriminate Heq|rewrite mkApps_app in Heq; cbn in Heq; discriminate Heq].
+  - (* red_prim_op: a constant applied to literals *)
+    destruct ls using rev_ind;
+    [cbn in Heq; discriminate Heq|rewrite map_app mkApps_app in Heq; cbn in Heq; discriminate Heq].
 Qed.
 
 Ltac red1_dismiss_mkApps Heq :=
@@ -1673,7 +1728,11 @@ Lemma red1_tConst_inv {Σ Γ c uu v} :
 Proof.
   intro H. remember (tConst c uu) as t eqn:Heq.
   destruct H; try discriminate Heq; try solve [red1_dismiss_mkApps Heq].
-  injection Heq as -> ->. eexists _, _. repeat split; eassumption.
+  - injection Heq as -> ->. eexists _, _. repeat split; eassumption.
+  - (* red_prim_op on a bare constant ([ls = []]): no operation is nullary *)
+    exfalso. destruct ls using rev_ind.
+    + match goal with H : prim_op_denote ?op [] = Some _ |- _ => destruct op; discriminate H end.
+    + rewrite map_app mkApps_app in Heq. cbn in Heq. discriminate Heq.
 Qed.
 
 (** * The commutation kernel, one lemma per [peta] constructor.
@@ -1825,8 +1884,9 @@ Proof.
   intros pf If pa Ia Γ Δ v HΔ HΓ Ht Hr.
   cbn in Ht. move/andP: Ht => [Hf Ha].
   destruct (red1_tApp_inv Hr)
-    as [[[(na & A & b & -> & ->)|(mfix & idx & args & narg & fn & Heq & Hunf & Hic & ->)]
-        |(f1 & -> & Hrf)]|(a1 & -> & Hra)].
+    as [[[[(na & A & b & -> & ->)|(mfix & idx & args & narg & fn & Heq & Hunf & Hic & ->)]
+        |(f1 & -> & Hrf)]|(a1 & -> & Hra)]
+       |(c & decl & uu & op & ls & r & Heq & Hop & Hdecl & Hbody & Hden & Hback)].
   - exact (peta_commut_red_beta Σ Δ na A b a _ (peta_App _ _ _ _ pf pa)).
   - apply (peta_commut_red_fix Σ Δ mfix idx args narg fn _ Hunf Hic).
     rewrite Heq. now apply peta_App.
@@ -1842,6 +1902,11 @@ Proof.
       intros x y H. now apply app_red_r.
     + now apply peta_App.
     + apply utdr_App; [reflexivity|exact Hu].
+  - (* red_prim_op: the redex has no λ, so the [peta] step leaves it unchanged
+       ([peta_prim_redex]); fire the same rule on the other side *)
+    have hp : peta (tApp f a) (tApp f' a') := peta_App _ _ _ _ pf pa.
+    rewrite -Heq in hp. apply peta_prim_redex in hp. rewrite hp.
+    exists v, v. repeat split; [apply r_step; eapply red_prim_op; eassumption|apply peta_refl|reflexivity].
 Qed.
 
 Lemma commut_Proj Σ pr c c' :

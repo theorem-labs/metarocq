@@ -178,11 +178,17 @@ Proof.
       * exfalso. eapply LevelSet.empty_spec. exact Hx.
       * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
     + exists si_val. intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
-  - apply globenv_decl; [constructor|].
+  - (* trunk's wf: the retroknowledge conjunct, then the declarations *)
+    split.
+    { constructor; cbn; [constructor|intros c []|repeat split; intros c h; discriminate h
+                        |intros i h; discriminate h]. }
+    apply globenv_decl; [constructor|].
     constructor.
     + constructor.
     + exact si_on_udecl.
     + exact si_on_inductive.
+    + (* on_prim_decl: no boolean type is registered *)
+      cbn. intros i h; discriminate h.
 Qed.
 
 (** ** The universe premises *)

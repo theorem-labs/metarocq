@@ -35,7 +35,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config Universes Primitive.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICLiftSubst
      PCUICPrimitive PCUICInduction PCUICReduction PCUICEquality PCUICCases
-     PCUICEtaDefs PCUICEtaCanon.
+     PCUICEtaDefs PCUICEtaCanon PCUICPrimitiveRed.
 
 Local Open Scope type_scope.
 Set Default Goal Selector "!".
@@ -260,6 +260,17 @@ Proof.
   - destruct (IH _ _ e) as (f'' & args' & -> & ef & ea).
     destruct (upto_domain_r_tApp_inv _ _ _ ef) as (f' & a' & -> & ef' & ea').
     exists f', (a' :: args'). split; [reflexivity|split; [assumption|now constructor]].
+Qed.
+
+(** The arguments of a [red_prim_op] redex are int/string literals, which
+    [upto_domain_r] relates only to themselves. *)
+Lemma upto_domain_r_lits ls args' :
+  All2 upto_domain_r (map term_of_lit ls) args' -> args' = map term_of_lit ls.
+Proof.
+  induction ls as [|l ls IH] in args' |- *; cbn; intros h; depelim h; [reflexivity|].
+  f_equal; [|now apply IH].
+  match goal with H : upto_domain_r (term_of_lit l) _ |- _ => destruct l; cbn in H; depelim H end;
+  match goal with H : onPrims _ _ _ _ |- _ => depelim H end; reflexivity.
 Qed.
 
 Lemma upto_domain_r_head_construct t t' l l' :
@@ -520,6 +531,12 @@ Proof.
     apply upto_domain_r_tConst_inv in e; subst t'.
     exists (subst_instance u body).
     split; [apply r_step; eapply red_delta; eassumption|reflexivity].
+  - (* red_prim_op: the left side is a constant applied to literals *)
+    intros Γ c decl u op ls r v hop hdecl hbody hden hback Γ' t' hΓ e.
+    destruct (upto_domain_r_mkApps_inv _ _ _ e) as (f' & args' & -> & ef & eargs).
+    apply upto_domain_r_tConst_inv in ef; subst f'.
+    rewrite (upto_domain_r_lits _ _ eargs).
+    exists v. split; [apply r_step; eapply red_prim_op; eassumption|reflexivity].
   - (* red_proj *)
     intros Γ pr args u arg hnth Γ' t' hΓ e.
     destruct (upto_domain_r_tProj_inv _ _ _ e) as (c' & -> & hc).

@@ -2,10 +2,10 @@
 From Stdlib Require Import CRelationClasses.
 From Equations.Type Require Import Relation Relation_Properties.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config BasicAst Reflect.
+From MetaRocq.Common Require Import config BasicAst Reflect PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICEquality
      PCUICLiftSubst PCUICUnivSubst PCUICCases PCUICOnFreeVars PCUICSigmaCalculus
-     PCUICCumulativitySpec.
+     PCUICCumulativitySpec PCUICPrimitiveRed.
 
 From Stdlib Require Import ssreflect ssrbool.
 
@@ -159,6 +159,15 @@ Inductive cumulSpecE0 {cf : checker_flags} (Σ : global_env_ext) Γ (pb : conv_p
     decl.(cst_body) = Some body ->
     Σ ;;; Γ ⊢ tConst c u ≤sE[pb] body@[u]
 
+(** Primitive operation: the same rule as [cumul_prim_op]. *)
+| cumulE_prim_op : forall c decl u op ls r v,
+    prim_op_of Σ c = Some op ->
+    declared_constant Σ c decl ->
+    cst_body decl = None ->
+    prim_op_denote op ls = Some r ->
+    readback Σ (po_shape (info op)) r = Some v ->
+    Σ ;;; Γ ⊢ mkApps (tConst c u) (map term_of_lit ls) ≤sE[pb] v
+
 (** Proj *)
 | cumulE_proj : forall p args u arg,
     nth_error args (p.(proj_npars) + p.(proj_arg)) = Some arg ->
@@ -232,6 +241,17 @@ Lemma cumulSpecE0_rect :
             (Hdecl_body : cst_body decl = Some body),
         P cf Σ Γ pb (tConst c u) (subst_instance u body)
           (cumulE_delta _ _ _ _ _ _ Hdecl_decl _ Hdecl_body)) ->
+
+    (* primitive operation *)
+    (forall (Γ : context) (pb : conv_pb) c (decl : constant_body) (u : Instance.t)
+            (op : prim_op) (ls : list prim_lit) (r : prim_result) (v : term)
+            (Hop : prim_op_of Σ c = Some op)
+            (Hdecl_decl : declared_constant Σ c decl)
+            (Hdecl_body : cst_body decl = None)
+            (Hdenote : prim_op_denote op ls = Some r)
+            (Hreadback : readback Σ (po_shape (info op)) r = Some v),
+        P cf Σ Γ pb (mkApps (tConst c u) (map term_of_lit ls)) v
+          (cumulE_prim_op _ _ _ _ _ _ _ _ _ _ Hop Hdecl_decl Hdecl_body Hdenote Hreadback)) ->
 
     (* Proj *)
     (forall (Γ : context) (pb : conv_pb)p (args : list term) (u : Instance.t)
@@ -389,25 +409,25 @@ Proof.
   fix aux 5. intros Γ pb t u Xlast.
   move aux at top.
   destruct Xlast.
-  - eapply X8; eauto.
   - eapply X9; eauto.
   - eapply X10; eauto.
-  - eapply X21; eauto. clear -a aux.
-    revert args args' a.
-    fix aux' 3; destruct a; constructor; auto.
+  - eapply X11; eauto.
   - eapply X22; eauto. clear -a aux.
     revert args args' a.
     fix aux' 3; destruct a; constructor; auto.
-  - eapply X23; eauto.
-  - eapply X24; eauto.
-  - eapply X11; eauto.
+  - eapply X23; eauto. clear -a aux.
     revert args args' a.
     fix aux' 3; destruct a; constructor; auto.
+  - eapply X24; eauto.
+  - eapply X25; eauto.
   - eapply X12; eauto.
+    revert args args' a.
+    fix aux' 3; destruct a; constructor; auto.
   - eapply X13; eauto.
   - eapply X14; eauto.
   - eapply X15; eauto.
-  - eapply X16 ; eauto.
+  - eapply X16; eauto.
+  - eapply X17 ; eauto.
     + unfold cumul_predicate in *. destruct c0 as [c0 [cuniv [ccontext creturn]]].
       repeat split ; eauto.
       * revert c0. generalize (pparams p), (pparams p').
@@ -415,15 +435,7 @@ Proof.
       * apply Forall2_dep_from_nth_error; intros; exact I.
     + revert brs brs' c1.
       fix aux' 3; destruct c1; constructor; intuition auto.
-  - eapply X17 ; eauto.
   - eapply X18 ; eauto.
-    revert c. unfold cumul_mfixpoint.
-    set (mfixAbs_context := fix_context mfix).
-    clearbody mfixAbs_context.
-    revert mfix mfix'.
-    fix aux' 3; destruct c; constructor.
-    + intuition auto.
-    + auto.
   - eapply X19 ; eauto.
     revert c. unfold cumul_mfixpoint.
     set (mfixAbs_context := fix_context mfix).
@@ -432,7 +444,15 @@ Proof.
     fix aux' 3; destruct c; constructor.
     + intuition auto.
     + auto.
-  - eapply X20; eauto.
+  - eapply X20 ; eauto.
+    revert c. unfold cumul_mfixpoint.
+    set (mfixAbs_context := fix_context mfix).
+    clearbody mfixAbs_context.
+    revert mfix mfix'.
+    fix aux' 3; destruct c; constructor.
+    + intuition auto.
+    + auto.
+  - eapply X21; eauto.
     clear -o aux.
     induction o; constructor; auto.
     clear -a0 aux. revert a0.
@@ -446,7 +466,8 @@ Proof.
   - eapply X5; eauto.
   - eapply X6; eauto.
   - eapply X7; eauto.
-  - eapply X25; eauto.
+  - eapply X8; eauto.
+  - eapply X26; eauto.
 Defined.
 
 Notation cumulSpecE0_ind_all := cumulSpecE0_rect (only parsing).
@@ -514,6 +535,17 @@ Lemma convSpecE0_ind_all :
                (Hdecl_body : cst_body decl = Some body),
            P cf Σ Γ Conv (tConst c u) (subst_instance u body)
              (cumulE_delta _ _ _ _ _ _ Hdecl_decl _ Hdecl_body)) ->
+
+        (* primitive operation *)
+       (forall (Γ : context) c (decl : constant_body) (u : Instance.t)
+               (op : prim_op) (ls : list prim_lit) (r : prim_result) (v : term)
+               (Hop : prim_op_of Σ c = Some op)
+               (Hdecl_decl : declared_constant Σ c decl)
+               (Hdecl_body : cst_body decl = None)
+               (Hdenote : prim_op_denote op ls = Some r)
+               (Hreadback : readback Σ (po_shape (info op)) r = Some v),
+           P cf Σ Γ Conv (mkApps (tConst c u) (map term_of_lit ls)) v
+             (cumulE_prim_op _ _ _ _ _ _ _ _ _ _ Hop Hdecl_decl Hdecl_body Hdenote Hreadback)) ->
 
         (* Proj *)
        (forall (Γ : context)p (args : list term) (u : Instance.t)
@@ -654,14 +686,14 @@ Lemma convSpecE0_ind_all :
 
        forall (Γ : context) (t t0 : term) (Ht : cumulSpecE0 Σ Γ Conv t t0), P cf Σ Γ Conv t t0 Ht.
 Proof.
-  intros cf Σ P Hbeta Hzeta Hrel Hiota Hfix Hcofix_case Hcofix_proj Hdelta Hproj
+  intros cf Σ P Hbeta Hzeta Hrel Hiota Hfix Hcofix_case Hcofix_proj Hdelta Hprim_op Hproj
     HTrans HSym HRefl HEvar HApp HLambda HProd HLetIn HCase HProj HFix HCoFix HPrim
     HInd HConstruct HSort HConst Heta Γ t t0 Ht.
   remember Conv as pb eqn:Hpb in Ht |- *.
   revert Hpb.
   induction Ht using cumulSpecE0_rect; intros Hpb; subst pb.
   all: try solve [ first [ eapply Hbeta | eapply Hzeta | eapply Hrel | eapply Hiota | eapply Hfix
-                         | eapply Hcofix_case | eapply Hcofix_proj | eapply Hdelta | eapply Hproj
+                         | eapply Hcofix_case | eapply Hcofix_proj | eapply Hdelta | eapply Hprim_op | eapply Hproj
                          | eapply HRefl | eapply HSort | eapply HConst ]; eauto ].
   - eapply HTrans; eauto.
   - eapply HSym; eauto.
@@ -703,6 +735,7 @@ Proof.
   - now eapply cumulE_cofix_case.
   - now eapply cumulE_cofix_proj.
   - now eapply cumulE_delta.
+  - now eapply cumulE_prim_op.
   - now apply cumulE_proj.
   - now eapply cumulE_Trans.
   - now apply cumulE_Sym.

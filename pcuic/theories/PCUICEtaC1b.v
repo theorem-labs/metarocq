@@ -137,12 +137,18 @@ Lemma mkApps_fix_head mfix idx args t :
   mkApps (tFix mfix idx) args = t -> fst (decompose_app t) = tFix mfix idx.
 Proof. intros <-. rewrite decompose_app_mkApps //. Qed.
 
+(** [red_prim_op]'s left side is a constant applied to literals. *)
+Lemma mkApps_const_head c u args t :
+  mkApps (tConst c u) args = t -> fst (decompose_app t) = tConst c u.
+Proof. intros <-. rewrite decompose_app_mkApps //. Qed.
+
 Ltac inv_red H :=
   let x := fresh "x" in
   let Ex := fresh "Ex" in
   match type of H with red1 _ _ ?t _ => remember t as x eqn:Ex end;
   destruct H; try discriminate Ex;
   try (apply mkApps_fix_head in Ex; unfold decompose_app in Ex; cbn in Ex; discriminate Ex);
+  try (apply mkApps_const_head in Ex; unfold decompose_app in Ex; cbn in Ex; discriminate Ex);
   injection Ex; intros; subst.
 
 Lemma red_normal_Sort Σ Γ s v : red1 Σ Γ (tSort s) v -> False.
@@ -338,7 +344,10 @@ Proof.
       * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
     + exists {| valuation_mono := fun _ => 1%positive; valuation_poly := fun _ => 0 |}.
       intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
-  - constructor.
+  - (* trunk's wf: the retroknowledge conjunct, then the declarations *)
+    split; [|constructor].
+    constructor; cbn; [constructor|intros c []|repeat split; intros c h; discriminate h
+                       |intros i h; discriminate h].
 Qed.
 
 Lemma closed_context_nil : is_closed_context ([] : context).

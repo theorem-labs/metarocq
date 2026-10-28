@@ -98,6 +98,12 @@ Proof.
      + eassumption.
      + rewrite rename_closed. 2: assumption.
        eapply declared_constant_closed_body. all: eauto.
+   - (* cumulE_prim_op: renaming fixes the ground head arguments and reduct
+        (trunk's cumul_prim_op case of PCUICRenameTyp) *)
+     rewrite rename_mkApps; cbn [rename].
+     rewrite (map_prim_ground (rename f) _ (prim_ground_rename f)).
+     rewrite (prim_ground_rename f v (prim_ground_readback Hreadback)).
+     eapply cumulE_prim_op; eassumption.
    - rewrite rename_mkApps. simpl.
      eapply cumulE_proj. rewrite nth_error_map. rewrite Hargs. reflexivity.
    - eapply cumulE_Trans; try apply X0; try apply X2; eauto. eapply urename_is_open_term; eauto.
