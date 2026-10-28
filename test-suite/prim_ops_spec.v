@@ -212,7 +212,7 @@ Definition po_absent_ind : inductive :=
 (** Every name above was found: a [po_nothing] here would make a control pass by
     patching nothing. *)
 Definition po_names_found_ok : bool := Eval vm_compute in
-  forallb (fun kn => negb (eqb kn po_nokn))
+  forallb (fun kn => negb (ReflectEq.eqb kn po_nokn))
     [po_eqb_kn; po_ltb_kn; po_lsl_kn; po_int_kn; po_defined_kn;
      po_ltb_equal_kn; po_lsl_shifts_kn; po_unsat_kn; po_beta_arg_kn;
      po_cmp_ind.(inductive_mind); po_mut_ind.(inductive_mind);
@@ -262,7 +262,7 @@ Definition po_add_op (c : kername) (op : prim_op) (r : Retroknowledge.t)
 (** Move one entry of the table to another operation, keeping its kername. *)
 Definition po_swap_op (c : kername) (op : prim_op) (r : Retroknowledge.t)
     : Retroknowledge.t :=
-  po_set_ops (map (fun e => if eqb e.1 c then (e.1, op) else e)
+  po_set_ops (map (fun e => if ReflectEq.eqb e.1 c then (e.1, op) else e)
                   r.(Retroknowledge.retro_ops)) r.
 
 Definition po_retro (f : Retroknowledge.t -> Retroknowledge.t) (p : Ast.Env.program)
@@ -284,7 +284,7 @@ Definition po_patch_cst (kn : kername) (f : Ast.Env.constant_body -> Ast.Env.con
     (d : kername × Ast.Env.global_decl) : kername × Ast.Env.global_decl :=
   match d.2 with
   | Ast.Env.ConstantDecl cb =>
-      if eqb d.1 kn then (d.1, Ast.Env.ConstantDecl (f cb)) else d
+      if ReflectEq.eqb d.1 kn then (d.1, Ast.Env.ConstantDecl (f cb)) else d
   | _ => d
   end.
 
@@ -295,6 +295,10 @@ Definition po_decl (kn : kername) (f : Ast.Env.constant_body -> Ast.Env.constant
       Ast.Env.retroknowledge := p.1.(Ast.Env.retroknowledge) |}, p.2).
 
 Definition po_main (t : Ast.term) (p : Ast.Env.program) : Ast.Env.program := (p.1, t).
+
+(** [Corelib.PrimString] (imported for the literals) also defines [string]; the
+    checker's messages and identifiers are [bytestring]s. *)
+Local Notation string := bytestring.string (only parsing).
 
 (** * The driver
 
@@ -440,7 +444,7 @@ Definition po_B3_holds : po_B3_ok = true := eq_refl.
 Definition po_C1_env := Eval vm_compute in
   po_retro (po_swap_op po_ltb_kn Int63le) po_ltb_prog.
 Definition po_C1_moved_ok : bool := Eval vm_compute in
-  eqb (Retroknowledge.prim_op_of po_C1_env.1.(Ast.Env.retroknowledge) po_ltb_kn)
+  ReflectEq.eqb (Retroknowledge.prim_op_of po_C1_env.1.(Ast.Env.retroknowledge) po_ltb_kn)
       (Some Int63le).
 Print po_C1_moved_ok.
 Definition po_C1_moved_holds : po_C1_moved_ok = true := eq_refl.
@@ -453,7 +457,7 @@ Definition po_C1_holds : po_C1_ok = true := eq_refl.
 Definition po_C2_env := Eval vm_compute in
   po_retro (po_swap_op po_lsl_kn Int63lsr) po_lsl_prog.
 Definition po_C2_moved_ok : bool := Eval vm_compute in
-  eqb (Retroknowledge.prim_op_of po_C2_env.1.(Ast.Env.retroknowledge) po_lsl_kn)
+  ReflectEq.eqb (Retroknowledge.prim_op_of po_C2_env.1.(Ast.Env.retroknowledge) po_lsl_kn)
       (Some Int63lsr).
 Print po_C2_moved_ok.
 Definition po_C2_moved_holds : po_C2_moved_ok = true := eq_refl.
@@ -474,7 +478,7 @@ Definition po_fake_witness (x : PrimInt63.int) : bool :=
 MetaRocq Quote Recursively Definition po_fake_prog := po_fake_witness.
 Definition po_fake_kn : kername := Eval vm_compute in po_cst_kn <% po_fake_eqb %>.
 Definition po_C3_ok : bool := Eval vm_compute in
-  negb (eqb po_fake_kn po_nokn) &&
+  negb (ReflectEq.eqb po_fake_kn po_nokn) &&
   match Retroknowledge.prim_op_of po_fake_prog.1.(Ast.Env.retroknowledge) po_fake_kn,
         Retroknowledge.prim_op_of po_fake_prog.1.(Ast.Env.retroknowledge) po_eqb_kn with
   | None, Some Int63eq => true
