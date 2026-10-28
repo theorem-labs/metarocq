@@ -141,4 +141,6 @@ theories/PCUICEtaStrengthening.v
 theories/PCUICEtaC3B.v
 # L2 canonical-domain route (plan.md 6.2), obligation 1
 theories/PCUICEtaCanon.v
+# L2 U1' / F-inst pinned definition (plan.md 6.2, R3(a) repair step 1)
+theories/PCUICEtaFInst.v
 # theories/All.v
