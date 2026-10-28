@@ -6097,4 +6097,169 @@ Section ConvGhost.
         [lia|lia|exact (hch _ hc1)|exact (hch _ hc2)|exact hsame|exact hag].
   Qed.
 
+  (** ** The stuck-match rule: the branches *)
+
+  Lemma rbody_lift d ts N br :
+    rbody (map (lift0 d) ts) (d + N) br = lift d #|br.(bcontext)| (rbody ts N br).
+  Proof. unfold rbody. rewrite length_map. apply lift_bodyk. reflexivity. Qed.
+
+  (** A branch body read through [n] fresh variables pushed on its environment, at the master
+    level, is the lift of the logical body. *)
+  Lemma fresh_branch_read L Q n N ts t U :
+    L <= Q ->
+    subst ts n (lift N (n + #|ts|) t) = lift (Q - L) n U ->
+    subst (map (lift0 (Q - L)) (idsn n) ++ map (lift0 n) ts) 0 (lift (n + N) (n + #|ts|) t)
+    = lift0 (Q - L) U.
+  Proof.
+    intros hLQ e.
+    rewrite subst_app_simpl, length_map, idsn_length. cbn [Nat.add].
+    rewrite (lift_bodyk n ts N #|ts| n t eq_refl), e.
+    rewrite simpl_lift by lia.
+    replace (n + (Q - L)) with ((Q - L) + n) by lia. apply cg_subst_fresh_lift.
+  Qed.
+
+  Lemma branches_lift L Q QC ts1 ts2 N1 N2 l1 l2 :
+    L <= Q -> Q <= QC ->
+    Forall2 (fun br1 br2 => case_ctx_ok br1.(bcontext) br2.(bcontext) = true
+      /\ cqb L QC #|br1.(bcontext)| Conv (rbody (map (lift0 (QC - Q)) ts1) ((QC - Q) + N1) br1)
+                                         (rbody (map (lift0 (QC - Q)) ts2) ((QC - Q) + N2) br2))
+      l1 l2 ->
+    Forall2 (fun br1 br2 => case_ctx_ok br1.(bcontext) br2.(bcontext) = true
+      /\ cqb L Q #|br1.(bcontext)| Conv (rbody ts1 N1 br1) (rbody ts2 N2 br2)) l1 l2.
+  Proof.
+    intros hLQ hQ h. induction h as [|br1 br2 l1 l2 [hc hq] _ ih]; constructor; [|exact ih].
+    split; [exact hc|]. apply (cqb_lift L Q QC _ Conv _ _ hLQ hQ).
+    rewrite !rbody_lift in hq. destruct (case_ctx_ok_spec _ _ hc) as [hx _ _].
+    rewrite <- (All2_length hx) in hq. exact hq.
+  Qed.
+
+  Lemma case_branches_sound_g (k : unit -> cbn_fuel) :
+    spec_term (k tt) -> spec_branches (k tt) -> spec_branches (FS k).
+  Proof.
+    intros hT hB L Q lo G e1 c1 e2 c2 i l1 l2 ts1 ts2 rs s b rs' s'
+      hm hr hb1 hb2 hs1 hn1 hs2 hn2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite case_branches_eq in he.
+    destruct l1 as [|br1 l1]; destruct l2 as [|br2 l2].
+    - injection he as <- <- <-.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros _. constructor.
+    - injection he as <- <- <-.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros hb; discriminate hb.
+    - injection he as <- <- <-.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros hb; discriminate hb.
+    - inversion hb1 as [|i1 z1 m1 hc1 hb1']; subst.
+      inversion hb2 as [|i2 z2 m2 hc2 hb2']; subst.
+      cbv beta iota in he.
+      destruct (case_ctx_ok (bcontext br1) (bcontext br2)) eqn:Ectx;
+        [|injection he as <- <- <-;
+          split; [exact (post_refl _ _ _ _ _ _ hm hr)|intros hb; discriminate hb]].
+      destruct (case_ctx_ok_spec _ _ Ectx) as [hctx _ _].
+      pose proof (All2_length hctx) as hn12.
+      assert (hr0 : Forall (rwf Q) (RE e1 :: RE e2 :: rs))
+        by (constructor; [exact I|constructor; [exact I|exact hr]]).
+      pose proof (minv_raise L Q #|bcontext br1| lo G s hm) as hmR.
+      pose proof (rwfs_mono Q (Q + #|bcontext br1|) _ ltac:(lia) hr0) as hrR.
+      pose proof (grq_raise Q #|bcontext br1| G _ ltac:(lia) hr0) as hgR.
+      pose proof (proj2 (g_slot_shift nctx Q #|bcontext br1| ltac:(lia) G) _ _ hs1) as [hs1R _].
+      pose proof (proj2 (g_slot_shift nctx Q #|bcontext br1| ltac:(lia) G) _ _ hs2) as [hs2R _].
+      destruct (push_fresh stress #|bcontext br1| L e1 e2 (RE e1 :: RE e2 :: rs) s)
+        as [[[r rsP] sP]|w] eqn:EP; [|discriminate he].
+      destruct (push_fresh_g #|bcontext br1| L (Q + #|bcontext br1|) lo (gshift #|bcontext br1| G)
+                  L e1 e2 _ _ _ s r rsP sP hmR hrR ltac:(lia) hs1R hn1 hs2R hn2 EP)
+        as (loP & GP & f1 & f2 & -> & hmP & hrP & hgP & hnf1 & hgf1 & hnf2 & hgf2 & hf1 & hf2).
+      pose proof (push_fresh_skel stress _ _ _ _ _ _ _ _ _ EP) as hkP.
+      cbv beta iota in he.
+      pose proof (g_susp_of_slots nctx _ GP f1 (bbody br1) _ hf1 hnf1) as hB1.
+      pose proof (g_susp_of_slots nctx _ GP f2 (bbody br2) _ hf2 hnf2) as hB2.
+      destruct (conv_term X_type X Γ nctx stress (k tt) (L + #|bcontext br1|) Conv
+                  f1 (child c1 (case_branch_step i) (bbody br1))
+                  f2 (child c2 (case_branch_step i) (bbody br2)) rsP sP)
+        as [[[bC rsC] sC]|w] eqn:EC; [|discriminate he].
+      destruct (hT (L + #|bcontext br1|) (Q + #|bcontext br1|) loP GP Conv
+                  f1 (child c1 (case_branch_step i) (bbody br1))
+                  f2 (child c2 (case_branch_step i) (bbody br2)) _ _ rsP sP bC rsC sC
+                  (minv_level L (L + #|bcontext br1|) (Q + #|bcontext br1|) loP GP sP hmP
+                     ltac:(lia) ltac:(lia)) hrP hB1
+                  (cok_gcx _ _ (proj1 hgP) _ hc1) hB2 (cok_gcx _ _ (proj1 hgP) _ hc2) EC)
+        as [hpC hcC].
+      (* the roots [push_fresh] handed back *)
+      destruct (gren_cons_inv _ _ _ _ _ _ hgP) as (p1 & rsP1 & -> & hp1 & hgP1).
+      destruct (gpres_RE_inv _ _ _ _ _ hp1) as (e1' & -> & (hne1 & hge1 & hke1)).
+      destruct (gren_cons_inv _ _ _ _ _ _ hgP1) as (p2 & rsP' & -> & hp2 & hgP').
+      destruct (gpres_RE_inv _ _ _ _ _ hp2) as (e2' & -> & (hne2 & hge2 & hke2)).
+      assert (hgR' : grq Q (Q + #|bcontext br1|) G (gshift #|bcontext br1| G) rs rs).
+      { destruct (grq_cons_inv _ _ _ _ _ _ _ hgR) as (a1 & ra & ea & _ & hga).
+        injection ea as <- <-.
+        destruct (grq_cons_inv _ _ _ _ _ _ _ hga) as (a2 & rb & eb & _ & hgb).
+        injection eb as <- <-. exact hgb. }
+      assert (hgP'' : grq (Q + #|bcontext br1|) (Q + #|bcontext br1|) (gshift #|bcontext br1| G)
+                        GP rs rsP').
+      { apply grq_of_gren; [exact hgP'|exact (sk_tl _ _ _ _ (sk_tl _ _ _ _ hkP))]. }
+      destruct bC.
+      + destruct hpC as (QC & loC & GC & hqC & hmC & hrC & hgC).
+        destruct (grq_cons_inv _ _ _ _ _ _ _ hgC) as (q1 & rsC1 & -> & hqa & hgC1).
+        destruct (gpq_RE_inv _ _ _ _ _ _ hqa) as (g1 & -> & hng1 & hgg1 & hkg1).
+        destruct (grq_cons_inv _ _ _ _ _ _ _ hgC1) as (q2 & rsC' & -> & hqb & hgC').
+        destruct (gpq_RE_inv _ _ _ _ _ _ hqb) as (g2 & -> & hng2 & hgg2 & hkg2).
+        cbv beta iota in he.
+        pose proof (hkg1 _ (hke1 _ hs1R)) as hg1s. pose proof (hkg2 _ (hke2 _ hs2R)) as hg2s.
+        rewrite map_lift0_lift0 in hg1s, hg2s.
+        replace (QC - (Q + #|bcontext br1|) + #|bcontext br1|) with (QC - Q) in hg1s, hg2s
+          by lia.
+        pose proof (g_slots_length _ _ _ _ _ hs1) as hl1.
+        pose proof (g_slots_length _ _ _ _ _ hs2) as hl2.
+        pose proof (g_slots_length _ _ _ _ _ hg1s) as hl1'. rewrite length_map in hl1'.
+        pose proof (g_slots_length _ _ _ _ _ hg2s) as hl2'. rewrite length_map in hl2'.
+        destruct (hB L QC loC GC g1 c1 g2 c2 (N.succ i) l1 l2 _ _ rsC' sC b rs' s'
+                    (minv_level _ L _ _ _ _ hmC ltac:(lia) ltac:(lia))
+                    (Forall_inv_tail (Forall_inv_tail hrC))
+                    (bcodes_gcx _ _ _ _ _ (proj1 hgC)
+                       (bcodes_gcx _ _ _ _ _ (proj1 hgP)
+                          (bcodes_gcx G (gshift #|bcontext br1| G) _ _ _ (fun _ _ h => h) hb1')))
+                    (bcodes_gcx _ _ _ _ _ (proj1 hgC)
+                       (bcodes_gcx _ _ _ _ _ (proj1 hgP)
+                          (bcodes_gcx G (gshift #|bcontext br1| G) _ _ _ (fun _ _ h => h) hb2')))
+                    hg1s ltac:(lia) hg2s ltac:(lia) he) as [hp hc].
+        split.
+        * apply (post_compose L Q (Q + #|bcontext br1|) G _ rs rs s' rs' ltac:(lia) hgR').
+          apply (post_compose L _ _ _ GP rs rsP' s' rs' (le_n _) hgP'').
+          exact (post_compose L _ QC GP GC rsP' rsC' s' rs' hqC hgC' hp).
+        * intros hb. constructor.
+          -- split; [exact Ectx|]. intros U1 U2 eU1 eU2 sU1 sU2.
+             apply (hcC eq_refl U1 U2); [| |exact sU1|exact sU2].
+             ++ replace (Q + #|bcontext br1| - (L + #|bcontext br1|)) with (Q - L) by lia.
+                rewrite hgf1, hnf1.
+                pose proof (g_slots_length _ _ _ _ _ hf1) as hlf.
+                rewrite length_app, length_map, idsn_length, length_map in hlf.
+                rewrite <- hlf.
+                replace (Q + #|bcontext br1| - nctx + ev_goff e1)
+                  with (#|bcontext br1| + (Q - nctx + ev_goff e1)) by lia.
+                replace (Q + #|bcontext br1| - (L + #|bcontext br1|)) with (Q - L) by lia.
+                apply fresh_branch_read; [lia|]. exact eU1.
+             ++ replace (Q + #|bcontext br1| - (L + #|bcontext br1|)) with (Q - L) by lia.
+                rewrite hgf2, hnf2.
+                pose proof (g_slots_length _ _ _ _ _ hf2) as hlf.
+                rewrite length_app, length_map, idsn_length, length_map in hlf.
+                rewrite <- hlf.
+                replace (Q + #|bcontext br1| - nctx + ev_goff e2)
+                  with (#|bcontext br1| + (Q - nctx + ev_goff e2)) by lia.
+                replace (Q + #|bcontext br1| - (L + #|bcontext br1|)) with (Q - L) by lia.
+                apply fresh_branch_read; [lia|]. unfold rbody in eU2. rewrite <- hn12 in eU2.
+                exact eU2.
+          -- apply (branches_lift L Q QC ts1 ts2 _ _ l1 l2 hLQ ltac:(lia)).
+             rewrite hgg1, hge1, hgg2, hge2 in hc.
+             replace (QC - nctx + ev_goff e1) with ((QC - Q) + (Q - nctx + ev_goff e1)) in hc
+               by lia.
+             replace (QC - nctx + ev_goff e2) with ((QC - Q) + (Q - nctx + ev_goff e2)) in hc
+               by lia.
+             exact (hc hb).
+      + cbv beta iota in he. injection he as <- <- <-.
+        split; [|intros hb; discriminate hb].
+        apply (post_compose L Q (Q + #|bcontext br1|) G _ rs rs _ _ ltac:(lia) hgR').
+        apply (post_compose L _ _ _ GP rs rsP' _ _ (le_n _) hgP'').
+        apply (post_drop2 L _ GP (RE e1') (RE e2') rsP').
+        exact (post_level L (L + #|bcontext br1|) (Q + #|bcontext br1|) GP _ _ _ hL
+                 ltac:(lia) hpC).
+  Qed.
+
 End ConvGhost.
