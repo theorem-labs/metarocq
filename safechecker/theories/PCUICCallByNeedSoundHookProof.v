@@ -36,16 +36,6 @@ From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
 Section HookProof.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
 
-  (** The start state of [cbn_run] is an instance of [minv] at [L = Q = #|Γ|]. *)
-  Lemma run_s2_minv (Σ : global_env_ext) (Γ : context) (t u : term) :
-    gok X_type X Γ #|Γ| Σ [] #|Γ| xH (run_ghost X_type X t u) (run_s2 X_type X t u) ->
-    minv X_type X Γ #|Γ| Σ #|Γ| #|Γ| xH (run_ghost X_type X t u) (run_s2 X_type X t u).
-  Proof.
-    intros hok. apply minv_start; [reflexivity|exact hok|].
-    intros a cl h. unfold heap_get in h. rewrite run_s2_heap, bh_get_holes in h.
-    discriminate h.
-  Qed.
-
   (** [cbn_conv] unfolded to [cbn_run]. Do not [unfold cbn_conv, cbn_conv_answer in hc] and
     then [rewrite cbn_run_eq in hc]. The tactics succeed at once, but at [Qed] the kernel
     checks [hc : cbn_conv ... = true] against the rewrite's motive applied to
@@ -90,7 +80,8 @@ Section HookProof.
       as (_ & _ & _ & hT & _).
     destruct (hT #|Γ| #|Γ| xH (run_ghost X_type X t u) le env_empty (run_c1 X_type X t)
                 env_empty (run_c2 X_type X t u) t u [] (run_s2 X_type X t u) true rs' s'
-                (run_s2_minv Σ Γ t u hok) (Forall_nil _) hs1 hc1 hs2 hc2 Ec) as [_ hq].
+                (r_minv_start X_type X Σ Γ #|Γ| t u eq_refl hok) (Forall_nil _) hs1 hc1 hs2 hc2
+                Ec) as [_ hq].
     exact (cq_hook Σ Γ le t u hΓ (subject_closed htA) (subject_closed huB) (hq eq_refl)).
   Qed.
 

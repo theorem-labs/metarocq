@@ -448,8 +448,8 @@ Section Master.
     cred Γ Σ (jctx (Q - nctx)) (lift0 (Q - L) v) u ->
     exists u', u = lift0 (Q - L) u'
       /\ forall Δ, #|Δ| = L - nctx -> ∥ red Σ (Γ ,,, Δ) v u' ∥.
-  Proof.
-    intros hL hQ hv [hr].
+  Proof using wfΣ hΓ.
+    clear hnctx. intros hL hQ hv [hr].
     replace (Q - nctx) with ((Q - L) + (L - nctx)) in hr by lia.
     rewrite jctx_add, app_context_assoc in hr.
     pose proof (red_unlift Σ wfΣ (Γ ,,, jctx (L - nctx)) (jctx (Q - L)) v u

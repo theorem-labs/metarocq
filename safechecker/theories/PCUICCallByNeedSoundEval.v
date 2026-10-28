@@ -6,6 +6,7 @@ From MetaRocq.Common Require Import config Kernames.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICReduction
   PCUICTyping PCUICUnivSubst PCUICClosed PCUICClosedTyp PCUICInduction PCUICSigmaCalculus
   PCUICContexts PCUICOnFreeVars.
+From MetaRocq.PCUIC Require PCUICInductiveInversion.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
   PCUICCallByNeedSoundHook.
@@ -93,13 +94,6 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
 Lemma forallb_map_All {A B} (f : A -> B) (p : B -> bool) (q : A -> bool) (l : list A) :
   All (fun x => p (f x) = q x) l -> forallb p (map f l) = forallb q l.
 Proof. induction 1 as [|x l hx hl ih]; cbn; [reflexivity|]. rewrite hx, ih. reflexivity. Qed.
-
-Lemma Forall_app_g {A} (P : A -> Prop) (l1 l2 : list A) :
-  Forall P l1 -> Forall P l2 -> Forall P (l1 ++ l2).
-Proof.
-  induction 1 as [|x l hx hl ih]; simpl; intros h2;
-    [exact h2|constructor; [exact hx|exact (ih h2)]].
-Qed.
 
 (** ** Instances, closedness and the instance condition on the codes of the table *)
 
@@ -214,10 +208,6 @@ Proof.
   constructor. apply ih. exact h.
 Qed.
 
-Lemma assumption_context_map_context (f : term -> term) (Γ : context) :
-  assumption_context Γ -> assumption_context (map_context f Γ).
-Proof. induction 1; cbn; constructor; assumption. Qed.
-
 (** A branch whose context has no let-in needs no [expand_lets]. *)
 Lemma iota_red_assum npar p args br :
   assumption_context br.(bcontext) ->
@@ -225,7 +215,8 @@ Lemma iota_red_assum npar p args br :
 Proof.
   intros h. unfold iota_red. rewrite expand_lets_assumption_context; [reflexivity|].
   unfold inst_case_branch_context, inst_case_context.
-  apply assumption_context_fold. apply assumption_context_map_context. exact h.
+  apply assumption_context_fold. apply PCUICInductiveInversion.assumption_context_map.
+  exact h.
 Qed.
 
 (** A branch read through an environment: its body under the branch's own binders. *)
@@ -568,7 +559,7 @@ Section Eval.
     - intros vals nvals goff c ts _ ih _ _. exact ih.
     - constructor.
     - intros x l t ts _ ih1 _ ih2. unfold ad_slots. cbn [flat_map].
-      apply Forall_app_g; [exact ih1|exact ih2].
+      apply app_Forall; [exact ih1|exact ih2].
   Qed.
 
   Lemma g_addrs_ad G l ts : g_addrs G l ts -> Forall (gdef G) l.
@@ -585,7 +576,7 @@ Section Eval.
     intros h. destruct h; cbn [ad_value];
       try (eapply g_addrs_ad; eassumption);
       try (eapply g_susp_ad; eassumption).
-    all: apply Forall_app_g;
+    all: apply app_Forall;
       [eapply g_susp_ad; eassumption|eapply g_addrs_ad; eassumption].
   Qed.
 
@@ -926,17 +917,6 @@ Section Eval.
     intros hc i e' he'. rewrite q1 in he'. exact (h5 hc i e' he').
   Qed.
 
-  (** An entry added at the next index leaves every existing entry in place. *)
-  Lemma memo_codes_set_mono (m : cbn_memo) (e' : code_entry) i e :
-    memo_fresh m -> PTree.get i m.(m_codes) = Some e ->
-    PTree.get i (PTree.set m.(m_ncode) e' m.(m_codes)) = Some e.
-  Proof.
-    intros hf h. rewrite PTree.gso; [exact h|]. intros ->.
-    destruct hf as [hc _].
-    assert (hn : PTree.get (m_ncode m) (m_codes m) <> None) by congruence.
-    exact (idx_lt_neq _ _ (hc _ hn) eq_refl).
-  Qed.
-
   (** [delta] leaves the code table alone, or adds the body of [kn] at the next index. *)
   Lemma delta_codes kn ui s r s1 :
     delta_ok X_type X (s.(st_memo)) -> delta X_type X kn ui s = COk (r, s1) ->
@@ -1013,7 +993,7 @@ Section Eval.
       rewrite hc.
     - split; [exact hcodes|]. split; [exact hokb|exact hhyg].
     - split.
-      + intros i e hi. exact (memo_codes_set_mono _ _ i e hf (hcodes i e hi)).
+      + intros i e hi. exact (memo_add_entry_codes_mono _ _ hf i e (hcodes i e hi)).
       + split.
         * intros i e hi.
           destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
@@ -2008,7 +1988,7 @@ Section Eval.
         assert (hgrow : forall i e, PTree.get i (gc G) = Some e ->
                    PTree.get i ((s1.(st_memo)).(m_codes)) = Some e).
         { intros i e hi. rewrite hs1, new_entry_codes.
-          exact (memo_codes_set_mono _ _ i e hf (hcodes i e hi)). }
+          exact (memo_add_entry_codes_mono _ _ hf i e (hcodes i e hi)). }
         assert (hm1 : mok ((s1.(st_memo)).(m_codes)) s1).
         { rewrite hs1. split; [exact (memo_inv_new_entry X_type X b [] s hmi)|].
           split; [exact (new_entry_memo_ok X_type X b [] s hmo)|].

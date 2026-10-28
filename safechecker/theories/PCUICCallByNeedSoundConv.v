@@ -12,6 +12,7 @@ From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv PCUICCallBy
   PCUICCallByNeedSoundMemo PCUICCallByNeedSoundCong PCUICCallByNeedSoundHook
   PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel PCUICCallByNeedSoundHeapWf.
 From MetaRocq.PCUIC Require PCUICConfluence PCUICOnFreeVarsConv PCUICRenameConv.
+From MetaRocq.SafeChecker Require PCUICSafeConversion PCUICCallByNeedSoundReadBack.
 
 Import CanonicalTries.
 
@@ -54,17 +55,11 @@ Set Default Goal Selector "1".
 
   [cmp_term], [cmp_sort], [cmp_level_conv] and [wf_term_univs] ([PCUICCallByNeed]) and
   [cbn_ceq_term] ([PCUICCallByNeedSoundMemo]) read the abstract environment [X]; here they
-  are shown sound for every [Σ] that [X] stands for ([abstract_env_ext_rel X Σ]). The proofs
-  replay [PCUICSafeConversion.cmpb_term_correct] and its local lemmas without importing that
-  file, whose section assumes [normalization_in] — a hypothesis the fast path must not
-  depend on. [wf_term_univs_correct] uses the pointwise congruence [cs_on_universes_ext],
-  not functional extensionality. *)
-
-Lemma cs_forallb_ext {A} (f g : A -> bool) (l : list A) :
-  (forall x, f x = g x) -> forallb f l = forallb g l.
-Proof.
-  intros h. induction l as [|x l IH]; cbn; [reflexivity|]. now rewrite h, IH.
-Qed.
+  are shown sound for every [Σ] that [X] stands for ([abstract_env_ext_rel X Σ]). The
+  syntactic comparison is [PCUICSafeConversion.cmpb_term_correct]; neither its statement
+  nor its proof uses that file's section hypothesis [normalization_in].
+  [wf_term_univs_correct] uses the pointwise congruence [cs_on_universes_ext], not
+  functional extensionality. *)
 
 (** [on_universes] depends only on the values of its universe test. *)
 Lemma cs_on_universes_ext (f g : Universe.t -> bool) (fc : nat -> term -> bool) :
@@ -80,11 +75,11 @@ Proof.
   - congruence.
   - congruence.
   - congruence.
-  - now apply cs_forallb_ext.
-  - now apply cs_forallb_ext.
-  - now apply cs_forallb_ext.
+  - now apply forallb_ext.
+  - now apply forallb_ext.
+  - now apply forallb_ext.
   - destruct X as [hpar [_ hret]].
-    rewrite (cs_forallb_ext f g _ hfg).
+    rewrite (forallb_ext f g hfg).
     rewrite (All_forallb_eq_forallb _ (on_universes f fc) (on_universes g fc) _ hpar);
       [|now intros].
     rewrite (All_forallb_eq_forallb _ (test_branch (fc #|puinst p|) (on_universes f fc))
@@ -99,11 +94,6 @@ Proof.
     + now intros.
 Qed.
 
-Lemma cs_reflectT_true {P : Type} {b : bool} : reflectT P b -> b = true -> P.
-Proof.
-  intros r e. destruct r as [p|np]; [exact p|discriminate e].
-Qed.
-
 Section CmpSound.
   Context {cf : checker_flags}.
   Context (X_type : abstract_env_impl) (X : X_type.π2.π1).
@@ -114,78 +104,6 @@ Section CmpSound.
     unfold wf_term_univs, wf_universes.
     apply cs_on_universes_ext. intros u.
     symmetry. exact (abstract_env_ext_wf_universeb_correct X hΣ u).
-  Qed.
-
-  Lemma cs_iff_reflect (P : Prop) (b : bool) :
-    P <-> b -> reflect P b.
-  Proof.
-    intro H. apply iff_reflect. exact H.
-  Qed.
-
-  Lemma cs_wf_universe_iff u :
-    wf_universeb Σ u <-> wf_universe Σ u.
-  Proof.
-    symmetry; apply reflect_iff. eapply wf_universe_reflect.
-  Qed.
-
-  Lemma cs_wf_sort_iff s :
-    wf_sortb Σ s <-> wf_sort Σ s.
-  Proof.
-    symmetry; apply reflect_iff. eapply wf_sort_reflect.
-  Qed.
-
-  Lemma cs_wf_instance_iff u :
-    wf_instanceb Σ u <-> wf_instance Σ u.
-  Proof.
-    symmetry; apply reflect_iff. eapply wf_instanceP.
-  Qed.
-
-  Lemma cs_compare_global_instance_correct pb ref n l l' :
-    wf_instance Σ l ->
-    wf_instance Σ l' ->
-    cmp_global_instance Σ (compare_universe Σ) pb ref n l l' <->
-    compare_global_instance (abstract_env_lookup X) (abstract_env_compare_universe X)
-      pb ref n l l'.
-  Proof.
-    intros hl hl'. apply reflect_iff.
-    apply (reflect_cmp_global_instance Σ (abstract_env_lookup X) (wf_universeb Σ)).
-    - intros u u' hu hu'. apply cs_iff_reflect.
-      apply (abstract_env_compare_universe_correct X hΣ); now apply cs_wf_universe_iff.
-    - intros u u' hu hu'. apply cs_iff_reflect.
-      apply (abstract_env_compare_universe_correct X hΣ); now apply cs_wf_universe_iff.
-    - intros kn. exact (abstract_env_lookup_correct' X kn hΣ).
-    - rewrite wf_universeb_instance_forall. now apply cs_wf_instance_iff.
-    - rewrite wf_universeb_instance_forall. now apply cs_wf_instance_iff.
-  Qed.
-
-  Lemma cs_cmpb_term_reflect pb napp t u :
-    wf_universes Σ t ->
-    wf_universes Σ u ->
-    reflectT (compare_term_napp Σ Σ pb napp t u)
-      (eqb_term_upto_univ_napp (abstract_env_compare_universe X) (abstract_env_compare_sort X)
-        (compare_global_instance (abstract_env_lookup X) (abstract_env_compare_universe X))
-        pb napp t u).
-  Proof.
-    intros ht hu. unfold compare_term_napp.
-    apply (reflect_eq_term_upto_univ Σ (wf_universeb Σ) closedu).
-    - intros u1 u2 h1 h2. apply cs_iff_reflect.
-      apply (abstract_env_compare_universe_correct X hΣ); now apply cs_wf_universe_iff.
-    - intros u1 u2 h1 h2. apply cs_iff_reflect.
-      apply (abstract_env_compare_universe_correct X hΣ); now apply cs_wf_universe_iff.
-    - intros s1 s2 h1 h2. apply cs_iff_reflect.
-      apply (abstract_env_compare_sort_correct X hΣ); now apply cs_wf_sort_iff.
-    - intros s1 s2 h1 h2. apply cs_iff_reflect.
-      apply (abstract_env_compare_sort_correct X hΣ); now apply cs_wf_sort_iff.
-    - intros gr n ui ui' h1 h2. apply cs_iff_reflect.
-      rewrite wf_universeb_instance_forall in h1.
-      rewrite wf_universeb_instance_forall in h2.
-      apply cs_compare_global_instance_correct; now apply cs_wf_instance_iff.
-    - intros gr n ui ui' h1 h2. apply cs_iff_reflect.
-      rewrite wf_universeb_instance_forall in h1.
-      rewrite wf_universeb_instance_forall in h2.
-      apply cs_compare_global_instance_correct; now apply cs_wf_instance_iff.
-    - exact ht.
-    - exact hu.
   Qed.
 
   Lemma cmp_term_wf (pb : conv_pb) (napp : nat) (t u : term) :
@@ -202,7 +120,7 @@ Section CmpSound.
   Proof.
     intros h. destruct (cmp_term_wf pb napp t u h) as [ht hu].
     unfold cmp_term in h. apply andb_true_iff in h as [_ h].
-    exact (cs_reflectT_true (cs_cmpb_term_reflect pb napp t u ht hu) h).
+    exact (fst (PCUICSafeConversion.cmpb_term_correct X_type X Σ hΣ pb napp t u ht hu) h).
   Qed.
 
   Lemma cbn_ceq_term_sound (t u : term) :
@@ -210,7 +128,7 @@ Section CmpSound.
     cbn_ceq_term X_type X t u = true -> compare_term Σ Σ Conv t u.
   Proof.
     intros ht hu h.
-    exact (cs_reflectT_true (cs_cmpb_term_reflect Conv 0 t u ht hu) h).
+    exact (fst (PCUICSafeConversion.cmpb_term_correct X_type X Σ hΣ Conv 0 t u ht hu) h).
   Qed.
 
   Lemma cmp_sort_sound (pb : conv_pb) (s1 s2 : sort) :
@@ -221,8 +139,8 @@ Section CmpSound.
     apply andb_true_iff in h12 as [h1 h2].
     rewrite <- (abstract_env_ext_wf_sortb_correct X hΣ) in h1.
     rewrite <- (abstract_env_ext_wf_sortb_correct X hΣ) in h2.
-    assert (w1 : wf_sort Σ s1) by (apply cs_wf_sort_iff; exact h1).
-    assert (w2 : wf_sort Σ s2) by (apply cs_wf_sort_iff; exact h2).
+    assert (w1 : wf_sort Σ s1) by (apply PCUICSafeConversion.wf_sort_iff; exact h1).
+    assert (w2 : wf_sort Σ s2) by (apply PCUICSafeConversion.wf_sort_iff; exact h2).
     exact (proj2 (abstract_env_compare_sort_correct X hΣ pb s1 s2 w1 w2) h).
   Qed.
 
@@ -235,8 +153,10 @@ Section CmpSound.
     apply andb_true_iff in h12 as [h1 h2].
     rewrite <- (abstract_env_ext_wf_universeb_correct X hΣ) in h1.
     rewrite <- (abstract_env_ext_wf_universeb_correct X hΣ) in h2.
-    assert (w1 : wf_universe Σ (Universe.make' l1)) by (apply cs_wf_universe_iff; exact h1).
-    assert (w2 : wf_universe Σ (Universe.make' l2)) by (apply cs_wf_universe_iff; exact h2).
+    assert (w1 : wf_universe Σ (Universe.make' l1))
+      by (apply PCUICSafeConversion.wf_universe_iff; exact h1).
+    assert (w2 : wf_universe Σ (Universe.make' l2))
+      by (apply PCUICSafeConversion.wf_universe_iff; exact h2).
     exact (proj2 (abstract_env_compare_universe_correct X hΣ Conv _ _ w1 w2) h).
   Qed.
 
@@ -551,12 +471,6 @@ Section ConvEqs.
     end.
   Proof. reflexivity. Qed.
 
-  Lemma haddr_eqb_eq (a b : haddr) : haddr_eqb a b = true -> a = b.
-  Proof.
-    destruct a as [p], b as [q]. unfold haddr_eqb. cbn. intros h.
-    apply Pos.eqb_eq in h. rewrite h. reflexivity.
-  Qed.
-
   Lemma same_code_cells_eq (k : unit -> cbn_fuel) (lvl : nat) (t : term) (i : nat)
       (l1 l2 : list cbn_slot) (rs : list root) (s : cbn_state) :
     same_code_cells X_type X Γ nctx (FS k) lvl t i l1 l2 rs s
@@ -706,10 +620,6 @@ Section ConvEqs.
     apply andb_true_iff in h as [h1 h2]. constructor; [exact h1|exact (ih h2)].
   Qed.
 
-  Lemma cc_Forall_impl {A : Type} (P Q : A -> Prop) (l : list A) :
-    Forall P l -> (forall x, P x -> Q x) -> Forall Q l.
-  Proof. intros h himp. induction h; constructor; auto. Qed.
-
   Definition rd_pred (ts : list term) (N : nat) (p : predicate term) : predicate term :=
     {| pparams := map (fun t => subst ts 0 (lift N #|ts| t)) p.(pparams);
        puinst := p.(puinst);
@@ -748,7 +658,7 @@ Section ConvEqs.
     apply andb_true_iff in h as [h3 h]. apply andb_true_iff in h as [h4 h5].
     rewrite test_context_k_closed_on_free_vars_ctx in h3.
     split; [exact h1|]. split; [exact h2|]. split; [exact h3|]. split; [exact h4|].
-    refine (cc_Forall_impl _ _ _ (cc_forallb_Forall _ _ h5) _).
+    refine (Forall_impl (cc_forallb_Forall _ _ h5) _).
     intros br hb. cbv beta in hb. apply andb_true_iff in hb as [hb1 hb2].
     rewrite test_context_k_closed_on_free_vars_ctx in hb1. split; [exact hb1|exact hb2].
   Qed.
@@ -1784,28 +1694,15 @@ Section ConvGhost.
     map (lift0 a) (map (lift0 b) ts) = map (lift0 (a + b)) ts.
   Proof. rewrite map_map. apply map_ext. intros t. apply lift0_lift0. Qed.
 
-  Lemma map_lift0_0 (ts : list term) : map (lift0 0) ts = ts.
-  Proof. induction ts as [|t ts ih]; cbn; [reflexivity|]. rewrite lift0_id, ih. reflexivity. Qed.
-
-  Lemma rn_comp (f g : nat -> nat) (t : term) :
-    rename f (rename g t) = rename (fun i => f (g i)) t.
-  Proof. exact (rename_compose f g t). Qed.
-
-  Lemma rn_id (t : term) : rename ren_id t = t.
-  Proof. exact (rename_ren_id t). Qed.
-
   (** [unl m] undoes a lift by [m]. *)
   Definition unl (m : nat) (t : term) : term := rename (fun i => i - m) t.
 
   Lemma unl_lift0 (m : nat) (u : term) : unl m (lift0 m u) = u.
   Proof.
-    unfold unl. rewrite lift_rename, rn_comp.
-    transitivity (rename ren_id u); [|apply rn_id].
+    unfold unl. rewrite lift_rename, rename_compose.
+    transitivity (rename ren_id u); [|apply rename_ren_id].
     apply rename_ext. intros i. unfold lift_renaming, ren_id. cbn. lia.
   Qed.
-
-  Lemma lift0_inj (m : nat) (a b : term) : lift0 m a = lift0 m b -> a = b.
-  Proof. intros h. rewrite <- (unl_lift0 m a), <- (unl_lift0 m b), h. reflexivity. Qed.
 
   (** [scl L u]: [u] is scoped at level [L], so open in [Γ ,,, Δ] when [#|Δ| = L - nctx].
     [inq m Q]: the free variables of the lift by [m] of a term scoped at [Q - m]. *)
@@ -1826,8 +1723,8 @@ Section ConvGhost.
     on_free_vars (inq m Q) t -> t = lift0 m (unl m t) /\ scl (Q - m) (unl m t).
   Proof.
     intros h. split.
-    - unfold unl. rewrite lift_rename, rn_comp.
-      transitivity (rename ren_id t); [symmetry; apply rn_id|].
+    - unfold unl. rewrite lift_rename, rename_compose.
+      transitivity (rename ren_id t); [symmetry; apply rename_ren_id|].
       apply (PCUICOnFreeVarsConv.rename_ext_cond (inq m Q)); [|exact h].
       intros i hi. unfold inq in hi. apply andb_true_iff in hi as [h1 _].
       apply Nat.leb_le in h1. unfold lift_renaming, ren_id. cbn. lia.
@@ -1866,7 +1763,8 @@ Section ConvGhost.
 
   Lemma cq_refl (L Q : nat) (pb : conv_pb) (t : term) : nctx <= L -> cq L Q pb t t.
   Proof.
-    intros hL u1 u2 e1 e2 h1 h2 Δ hΔ hcl. rewrite e1 in e2. apply lift0_inj in e2. subst u2.
+    intros hL u1 u2 e1 e2 h1 h2 Δ hΔ hcl. rewrite e1 in e2.
+    apply PCUICCallByNeedSoundReadBack.lift0_inj in e2. subst u2.
     constructor. apply ws_cumul_pb_refl; [exact hcl|exact (scl_open L Δ u1 hL hΔ h1)].
   Qed.
 
@@ -1919,9 +1817,9 @@ Section ConvGhost.
     intros h. destruct r, r'; cbn in h |- *; try contradiction; rewrite Nat.sub_diag.
     all: first
       [ intros t ht; rewrite lift0_id; exact (h _ ht)
-      | intros ts ht; rewrite map_lift0_0; exact (h _ ht)
+      | intros ts ht; rewrite map_lift0; exact (h _ ht)
       | destruct h as (a1 & b1 & c1); split; [exact a1|]; split; [exact b1|];
-        intros ts ht; rewrite map_lift0_0; exact (c1 _ ht) ].
+        intros ts ht; rewrite map_lift0; exact (c1 _ ht) ].
   Qed.
 
   Lemma grq_of_gren Q G G' rs rs' :
@@ -2348,9 +2246,9 @@ Section ConvGhost.
     cq L Q pb w1 w2 -> cq L Q pb t1 t2.
   Proof.
     intros hL hQ hr1 hr2 h u1 u2 e1 e2 s1 s2 Δ hΔ hcl. subst t1 t2.
-    destruct (cred_unlift Γ nctx Σ wfΣ hnctx hΓ L Q u1 w1 hL hQ (scl_hyg L u1 s1) hr1)
+    destruct (cred_unlift Γ nctx Σ wfΣ hΓ L Q u1 w1 hL hQ (scl_hyg L u1 s1) hr1)
       as (w1' & -> & hd1).
-    destruct (cred_unlift Γ nctx Σ wfΣ hnctx hΓ L Q u2 w2 hL hQ (scl_hyg L u2 s2) hr2)
+    destruct (cred_unlift Γ nctx Σ wfΣ hΓ L Q u2 w2 hL hQ (scl_hyg L u2 s2) hr2)
       as (w2' & -> & hd2).
     assert (hj : #|jctx (L - nctx)| = L - nctx) by apply jctx_length.
     destruct (hd1 _ hj) as [rj1]. destruct (hd2 _ hj) as [rj2].
@@ -2399,7 +2297,7 @@ Section ConvGhost.
 
   Lemma lift0_closed_inv m h h' : closedn 0 h -> h = lift0 m h' -> h' = h.
   Proof.
-    intros hc e. apply (lift0_inj m).
+    intros hc e. apply (PCUICCallByNeedSoundReadBack.lift0_inj m).
     transitivity h; [symmetry; exact e|symmetry; exact (lift_closed _ _ _ hc)].
   Qed.
 
@@ -2703,7 +2601,7 @@ Section ConvGhost.
     split; [exact hp|]. intros hb u1 u2 e1 e2 s1 s2.
     apply mkApps_lift0_inv in e1 as (h1' & us1 & -> & eh1 & ->).
     apply mkApps_lift0_inv in e2 as (h2' & us2 & -> & eh2 & ->).
-    rewrite eh1 in eh2. apply lift0_inj in eh2. subst h2'.
+    rewrite eh1 in eh2. apply PCUICCallByNeedSoundReadBack.lift0_inj in eh2. subst h2'.
     unfold scl in s1, s2. rewrite on_free_vars_mkApps in s1, s2.
     apply andb_true_iff in s1 as [sh1 sus1]. apply andb_true_iff in s2 as [_ sus2].
     apply cv_spine; [exact hL| |exact (hc hb us1 us2 eq_refl eq_refl sus1 sus2)].
@@ -2900,9 +2798,6 @@ Section ConvGhost.
 
   (** ** The same-code rule on ghost readings *)
 
-  Lemma shiftnP0 (P : nat -> bool) : shiftnP 0 P =1 P.
-  Proof. intros i. unfold shiftnP. cbn. rewrite Nat.sub_0_r. reflexivity. Qed.
-
   (** The slots of an environment unlifted where the code uses them, a closed filler
     elsewhere: the logical slots the same-code rule substitutes. *)
   Fixpoint pickw (m : nat) (a : term) (i : nat) (ts : list term) : list term :=
@@ -3014,7 +2909,8 @@ Section ConvGhost.
               subst ts 0 (lift (Q - nctx + goff) n a) = lift0 (Q - L) U ->
               on_free_vars (inq (Q - L) Q) (subst ts 0 (lift (Q - nctx + goff) n a)) ->
               U = subst (pickw (Q - L) a 0 ts) 0 (lift (L - nctx + goff) n a)).
-    { intros ts a U hy hl eU hT. apply (lift0_inj (Q - L)). rewrite <- eU.
+    { intros ts a U hy hl eU hT. apply (PCUICCallByNeedSoundReadBack.lift0_inj (Q - L)).
+      rewrite <- eU.
       rewrite (lift_susp_read nctx L (Q - L) hL (L - nctx + goff) n a (pickw (Q - L) a 0 ts)
                  ltac:(rewrite pickw_length; exact hl)).
       rewrite <- hN.
@@ -3452,7 +3348,7 @@ Section ConvGhost.
     exact (scl_open L Δ A hL hΔ hA).
   Qed.
 
-  Lemma scl_binder L B : on_free_vars (shiftnP 1 (shiftnP L xpred0)) B -> scl (L + 1) B.
+  Lemma scl_binder_n L n B : on_free_vars (shiftnP n (shiftnP L xpred0)) B -> scl (L + n) B.
   Proof.
     intros h. unfold scl. rewrite (on_free_vars_ext _ _ _ (shiftnP_add _ _ _)) in h.
     rewrite Nat.add_comm. exact h.
@@ -3495,7 +3391,7 @@ Section ConvGhost.
     apply andb_true_iff in s1 as [sA1 sB1]. apply andb_true_iff in s2 as [sA2 sB2].
     destruct (hdom A1u A2u eA1 eA2 sA1 sA2 Δ hΔ hcl) as [hd].
     assert (hΔ' : #|Δ ,, vass na1 A1u| = L + 1 - nctx) by (cbn; lia).
-    destruct (hbody B1u B2u eB1 eB2 (scl_binder L B1u sB1) (scl_binder L B2u sB2)
+    destruct (hbody B1u B2u eB1 eB2 (scl_binder_n L 1 B1u sB1) (scl_binder_n L 1 B2u sB2)
                 (Δ ,, vass na1 A1u) hΔ' (snoc_closed L Δ na1 A1u hL hΔ hcl sA1)) as [hbd].
     constructor.
     exact (ws_cumul_pb_Lambda (wfΣ := wfΣ) (eqb_binder_annot_spec _ _ Ena) hd hbd).
@@ -3538,7 +3434,7 @@ Section ConvGhost.
     apply andb_true_iff in s1 as [sA1 sB1]. apply andb_true_iff in s2 as [sA2 sB2].
     destruct (hdom A1u A2u eA1 eA2 sA1 sA2 Δ hΔ hcl) as [hd].
     assert (hΔ' : #|Δ ,, vass na1 A1u| = L + 1 - nctx) by (cbn; lia).
-    destruct (hbody B1u B2u eB1 eB2 (scl_binder L B1u sB1) (scl_binder L B2u sB2)
+    destruct (hbody B1u B2u eB1 eB2 (scl_binder_n L 1 B1u sB1) (scl_binder_n L 1 B2u sB2)
                 (Δ ,, vass na1 A1u) hΔ' (snoc_closed L Δ na1 A1u hL hΔ hcl sA1)) as [hbd].
     constructor.
     exact (ws_cumul_pb_Prod (wfΣ := wfΣ) pb (eqb_binder_annot_spec _ _ Ena) hd hbd).
@@ -4432,12 +4328,6 @@ Section ConvGhost.
     subst (map (lift0 d) ts) 0 (lift (d + N) #|ts| t) = lift0 d (subst ts 0 (lift N #|ts| t)).
   Proof. exact (lift_bodyk d ts N #|ts| 0 t eq_refl). Qed.
 
-  Lemma scl_binder_n L n B : on_free_vars (shiftnP n (shiftnP L xpred0)) B -> scl (L + n) B.
-  Proof.
-    intros h. unfold scl. rewrite (on_free_vars_ext _ _ _ (shiftnP_add _ _ _)) in h.
-    rewrite Nat.add_comm. exact h.
-  Qed.
-
   Lemma lift0_tCase_inv m ci p c brs u :
     tCase ci p c brs = lift0 m u ->
     exists p' c' brs', u = tCase ci p' c' brs'
@@ -4567,7 +4457,7 @@ Section ConvGhost.
       as [hS].
     (* branches *)
     destruct (case_brs_cv L Q Δ q1 ts1 ts2 N1 N2 brs1 brs2 bs1 bs2 hL hΔ hcl hop1 hbrs eb1 eb2
-                hob1 (cc_Forall_impl _ _ _ hob2 (fun br h => proj2 h))) as [hB].
+                hob1 (Forall_impl hob2 (fun br h => proj2 h))) as [hB].
     constructor.
     apply (ws_cumul_pb_tCase (wfΣ := wfΣ) ho1 ho2 hpars).
     - rewrite <- ei1, <- ei2. exact (cmp_level_conv_instance X_type X Σ hΣ _ _ Einst).
@@ -4880,26 +4770,12 @@ Section Witness.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Σ : global_env_ext) (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ).
 
-  (** [tick] keeps [minv]. *)
-  Lemma r_minv_tick (Γ : context) (nctx L Q : nat) (lo : positive) (G : ghost)
-      (s s' : cbn_state) :
-    minv X_type X Γ nctx Σ L Q lo G s -> tick s = Some s' ->
-    minv X_type X Γ nctx Σ L Q lo G s'.
-  Proof.
-    intros [hL hQ hok hw] e. destruct (tick_shape s s' e) as (th & tn & _ & tg & tm).
-    constructor; [exact hL|exact hQ| |exact (hwf_heap Q s s' th hw)].
-    apply (gok_same X_type X Γ nctx Σ _ Q lo G s s' hok th tn tg).
-    exact (mok_memo X_type X Γ Σ _ s s' tm (@gk_memo _ X_type X Γ nctx Σ _ _ _ _ _ hok)).
-  Qed.
-
   (** The start state of a run satisfies [minv] at [L = Q = nctx]. *)
   Lemma r_minv_start (Γ : context) (nctx : nat) (t u : term) (hnctx : nctx = #|Γ|) :
-    consts_okb Σ t -> consts_okb Σ u -> on_free_vars xpredT t -> on_free_vars xpredT u ->
+    gok X_type X Γ nctx Σ [] nctx xH (run_ghost X_type X t u) (run_s2 X_type X t u) ->
     minv X_type X Γ nctx Σ nctx nctx xH (run_ghost X_type X t u) (run_s2 X_type X t u).
   Proof.
-    intros ht hu hht hhu.
-    apply (minv_start X_type X Γ nctx Σ hnctx xH (run_ghost X_type X t u) _
-             (run_s2_gok X_type X Γ nctx Σ [] nctx t u ht hu hht hhu)).
+    intros hok. apply (minv_start X_type X Γ nctx Σ hnctx xH (run_ghost X_type X t u) _ hok).
     intros a cl h. unfold heap_get in h. rewrite run_s2_heap, bh_get_holes in h.
     discriminate h.
   Qed.
@@ -4959,7 +4835,8 @@ Section Witness.
                 (cok_gcx _ _ (proj1 hg1) _ (run_c2_gcok X_type X t u))
                 (g_slots_nil nctx nctx _) E2)
       as (lo2 & G2 & w2 & hm2 & hr2 & hv2 & hg2 & _ & _).
-    exists nctx, lo2, G2. split; [lia|]. split; [exact (r_minv_tick _ _ _ _ _ _ _ _ hm2 E3)|].
+    exists nctx, lo2, G2. split; [lia|].
+    split; [exact (minv_tick X_type X Γ nctx Σ _ _ _ _ _ _ E3 hm2)|].
     split; [constructor|]. split; [|split; [constructor|reflexivity]].
     intros i e hi. exact (proj1 hg2 _ _ (proj1 hg1 _ _ hi)).
   Qed.
@@ -5026,7 +4903,8 @@ Section Witness.
          /\ post X_type X w_Γ 1 Σ 1 1 w_G0 [] s' [].
   Proof.
     assert (hm0 : minv X_type X w_Γ 1 Σ 1 1 xH w_G0 (run_s2 X_type X w_t w_u))
-      by exact (r_minv_start w_Γ 1 w_t w_u eq_refl eq_refl eq_refl eq_refl eq_refl).
+      by exact (r_minv_start w_Γ 1 w_t w_u eq_refl
+                  (run_s2_gok X_type X w_Γ 1 Σ [] 1 w_t w_u eq_refl eq_refl eq_refl eq_refl)).
     split; [exact hm0|].
     split; [exact (run_c1_g_susp X_type X 1 w_t w_u)|].
     split; [exact (run_c1_gcok X_type X w_t w_u)|].
@@ -5122,7 +5000,8 @@ Section Witness.
          /\ cq v_Γ 2 Σ 2 2 Conv v_t v_u.
   Proof.
     assert (hm0 : minv X_type X v_Γ 2 Σ 2 2 xH v_G0 (run_s2 X_type X v_t v_u))
-      by exact (r_minv_start v_Γ 2 v_t v_u eq_refl eq_refl eq_refl eq_refl eq_refl).
+      by exact (r_minv_start v_Γ 2 v_t v_u eq_refl
+                  (run_s2_gok X_type X v_Γ 2 Σ [] 2 v_t v_u eq_refl eq_refl eq_refl eq_refl)).
     split; [exact hm0|].
     split; [exact (run_c1_g_susp X_type X 2 v_t v_u)|].
     split; [exact (run_c1_gcok X_type X v_t v_u)|].

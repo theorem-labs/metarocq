@@ -229,11 +229,3 @@ Proof.
     + intros _. split; constructor; assumption.
     + intros hf. discriminate hf.
 Qed.
-
-Lemma assumption_context_map_context f ctx :
-  assumption_context ctx -> assumption_context (map_context f ctx).
-Proof.
-  induction 1; simpl.
-  - constructor.
-  - constructor. assumption.
-Qed.

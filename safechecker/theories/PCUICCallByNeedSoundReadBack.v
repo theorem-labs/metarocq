@@ -247,20 +247,6 @@ Section ReadBack.
   Lemma ctxL_xpredT0 : on_ctx_free_vars xpredT (Γ ,,, jctx (L - nctx)).
   Proof. apply master_ctx_xpredT. exact hΓ. Qed.
 
-  (** [PCUICCallByNeedSoundLevel.cred_unlift] at the logical context [jctx (L - nctx)],
-    without its section hypothesis [nctx = #|Γ|], which its proof does not need. *)
-  Lemma cred_unlift_L w y :
-    on_free_vars xpredT w -> cred Γ Σ (jctx (Q - nctx)) (lift0 (Q - L) w) y ->
-    exists y', y = lift0 (Q - L) y' /\ ∥ red Σ (Γ ,,, jctx (L - nctx)) w y' ∥.
-  Proof.
-    intros hv [hr]. pose proof hL. pose proof hQ.
-    replace (Q - nctx) with ((Q - L) + (L - nctx)) in hr by lia.
-    rewrite jctx_add, app_context_assoc in hr.
-    pose proof (red_unlift Σ wfΣ (Γ ,,, jctx (L - nctx)) (jctx (Q - L)) w y ctxL_xpredT0 hv)
-      as hU.
-    rewrite jctx_length in hU. exact (hU hr).
-  Qed.
-
   (** *** Hygiene of the readings *)
 
   Lemma G_hyg : hygG G.
@@ -446,7 +432,8 @@ Section ReadBack.
       split; [exact hs'|]. split; [exact hu|].
       intros t ht. rewrite hGa in ht. injection ht as <-.
       intros w -> hw.
-      destruct (cred_unlift_L w y hw hr) as (y' & -> & [hr1]).
+      destruct (cred_unlift Γ nctx Σ wfΣ hΓ L Q w y hL hQ hw hr) as (y' & -> & hd).
+      destruct (hd _ (jctx_length _)) as [hr1].
       pose proof (PCUICRenameConv.red_on_free_vars ctxL_xpredT0 hw hr1) as hy1.
       destruct (hl y' eq_refl hy1) as [hr2]. constructor. exact (red_trans _ _ _ _ _ hr1 hr2).
     - destruct hc as [hc|(y & hy & hr)]; [discriminate hc|].
@@ -456,7 +443,8 @@ Section ReadBack.
       split; [exact hs'|]. split; [exact hu|].
       intros t ht. rewrite hGa in ht. injection ht as <-.
       intros w -> hw.
-      destruct (cred_unlift_L w y hw hr) as (y' & -> & [hr1]).
+      destruct (cred_unlift Γ nctx Σ wfΣ hΓ L Q w y hL hQ hw hr) as (y' & -> & hd).
+      destruct (hd _ (jctx_length _)) as [hr1].
       pose proof (PCUICRenameConv.red_on_free_vars ctxL_xpredT0 hw hr1) as hy1.
       destruct (hl y' eq_refl hy1) as [hr2]. constructor. exact (red_trans _ _ _ _ _ hr1 hr2).
   Qed.
