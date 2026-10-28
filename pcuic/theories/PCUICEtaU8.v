@@ -147,10 +147,9 @@ Qed.
 
 (** ** U6: η is strongly normalising *)
 
-Ltac u8_lia := first [lia | match goal with |- ?g => idtac "GOAL" g end; match goal with H : ?h |- _ => idtac "HYP" H ":" h; fail end; fail].
 Ltac u8_size_lia :=
   cbn in *; unfold predicate_size, context_size, branch_size, mfixpoint_size, def_size in *;
-  cbn in *; u8_lia.
+  cbn in *; lia.
 
 Lemma eta1_size t u : eta1 t u -> PCUICSize.size u < PCUICSize.size t.
 Proof.
@@ -546,7 +545,7 @@ Lemma u8_eta1_tPrim_inv p u : eta1 (tPrim p) u ->
            × (u = tPrim (primArray; primArrayModel (set_array_default arr d)))) +
      (∑ ty, eta1 (array_type arr) ty
            × (u = tPrim (primArray; primArrayModel (set_array_type arr ty))))).
-Proof. intros h; depelim h; eexists; split; [reflexivity|u8_sum_solve]. Qed.
+Proof. intros h; depelim h; (eexists; split; [reflexivity|u8_sum_solve]). Qed.
 
 (** ** Join relations for branches and (co)fixpoint bodies *)
 
@@ -945,11 +944,12 @@ Qed.
 
 (** ** Newman: SN (U6) + local confluence (U7) ⇒ confluence, EXACTLY *)
 
-Theorem eta1_confluence : forall t u v, eta t u -> eta t v -> ∑ w, eta u w × eta v w.
+Theorem eta1_confluence t u v : eta t u -> eta t v -> ∑ w, eta u w × eta v w.
 Proof.
+  revert u v. pattern t.
   apply (@well_founded_induction_type term (ltof term PCUICSize.size)
            (well_founded_ltof term PCUICSize.size)).
-  intros t IH u v Hu Hv.
+  clear t. intros t IH u v Hu Hv.
   destruct (u8_eta_inv_step _ _ Hu) as [<-|[u1 [s1 r1]]].
   { exists v. split; [exact Hv|apply u8_eta_refl]. }
   destruct (u8_eta_inv_step _ _ Hv) as [<-|[v1 [s2 r2]]].
