@@ -28,10 +28,11 @@ From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
   [cbn_lift_conv L L le t u]. With [Q - L = 0] the lift is the identity, [t] and [u] are scoped at
   [#|Γ|] ([subject_closed]), and [Δ = []] gives the conversion in [Γ] itself.
 
-  The comparison theorem [forall d, cbn_spec_all d] is [PCUICCallByNeedSoundConv.cbn_spec_all_holds].
-  Its read-back premise [cbn_rb_sound] is [PCUICCallByNeedSoundReadBack.cbn_rb_sound_holds]. Every
-  other premise of [cbn_spec_term]'s call is discharged here from the obligation's own context,
-  so [convert_cbn_sound] has no hypothesis beyond the obligation's. *)
+  The comparison theorem [forall d, cbn_spec_all d] is
+  [PCUICCallByNeedSoundConv.cbn_spec_all_holds]. Its read-back premise [cbn_rb_sound] is
+  [PCUICCallByNeedSoundReadBack.cbn_rb_sound_holds]. Every other premise of [cbn_spec_term]'s call
+  is discharged here from the obligation's own context, so [convert_cbn_sound] has no hypothesis
+  beyond the obligation's. *)
 
 Section HookProof.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
@@ -48,7 +49,7 @@ Section HookProof.
   Proof. reflexivity. Qed.
 
   (** [cbn_lift_conv] at [L = Q = #|Γ|], read at [Δ = []], for two terms scoped in [Γ]. *)
-  Lemma cbn_cq_hook (Σ : global_env_ext) (Γ : context) (le : conv_pb) (t u : term) :
+  Lemma cbn_lift_conv_hook (Σ : global_env_ext) (Γ : context) (le : conv_pb) (t u : term) :
     is_closed_context Γ -> closedn #|Γ| t -> closedn #|Γ| u ->
     cbn_lift_conv Γ #|Γ| Σ #|Γ| #|Γ| le t u -> ∥ Σ ;;; Γ ⊢ t ≤[le] u ∥.
   Proof.
@@ -82,7 +83,7 @@ Section HookProof.
                 cbn_env_empty (cbn_run_c2 X_type X t u) t u [] (cbn_run_s2 X_type X t u) true rs' s'
                 (cbn_r_minv_start X_type X Σ Γ #|Γ| t u eq_refl hok) (Forall_nil _) hs1 hc1 hs2 hc2
                 Ec) as [_ hq].
-    exact (cbn_cq_hook Σ Γ le t u hΓ (subject_closed htA) (subject_closed huB) (hq eq_refl)).
+    exact (cbn_lift_conv_hook Σ Γ le t u hΓ (subject_closed htA) (subject_closed huB) (hq eq_refl)).
   Qed.
 
   (** [cbn_conv_sound] in the shape of [PCUICTypeChecker.convert]'s obligation for the

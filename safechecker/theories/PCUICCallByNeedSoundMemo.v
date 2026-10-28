@@ -64,10 +64,10 @@ Local Notation cbn_cidx := String2pos.positive.
     index is fresh in *every* map of the memo, which is [cbn_memo_fresh] (through [cbn_key_val], the
     reading of a code index as a [positive], under which [cbn_key_succ] is [Pos.succ]). Without
     it the three cache invariants would not survive an added entry: a stale pair
-    ([cbn_m_ncode], path) in [cbn_m_hash] would be read against the new entry. With it, [cbn_delta_ok],
-    [cbn_once_ok], [cbn_hash_ok], [cbn_ceq_ok] and [cbn_memo_fresh] — bundled as [cbn_memo_inv] — all survive
-    [cbn_memo_add_entry], [cbn_new_entry], [cbn_once_body], [cbn_code_hash], [cbn_code_eq] and [cbn_delta], and each
-    setter keeps the other five fields.
+    ([cbn_m_ncode], path) in [cbn_m_hash] would be read against the new entry. With it,
+    [cbn_delta_ok], [cbn_once_ok], [cbn_hash_ok], [cbn_ceq_ok] and [cbn_memo_fresh] — bundled as
+    [cbn_memo_inv] — all survive [cbn_memo_add_entry], [cbn_new_entry], [cbn_once_body],
+    [cbn_code_hash], [cbn_code_eq] and [cbn_delta], and each setter keeps the other five fields.
 
   Nothing here is about the heap: every operation of this file leaves [cbn_st_heap], [cbn_st_next],
   [cbn_st_room], [cbn_st_steps] and [cbn_st_gam] alone, so [cbn_state_ok] crosses them without an
@@ -302,7 +302,8 @@ Proof.
   destruct (Byte.to_bits x) as [b0 [b1 [b2 [b3 [b4 [b5 [b6 b7]]]]]]]. reflexivity.
 Qed.
 
-Lemma cbn_dt_walk_bits (s : String.t) (t : cbn_dtrie) : cbn_dt_walk s t = cbn_dt_walkb (cbn_sbits s) t.
+Lemma cbn_dt_walk_bits (s : String.t) (t : cbn_dtrie) : cbn_dt_walk s t
+  = cbn_dt_walkb (cbn_sbits s) t.
 Proof.
   revert t. induction s as [|x s IH]; intros t; cbn [cbn_dt_walk cbn_sbits]; [reflexivity|].
   rewrite cbn_dt_walkb_app, <- cbn_dt_byte_walkb. apply IH.
@@ -397,7 +398,8 @@ Qed.
 Lemma cbn_dt_find_add_same (kn : kername) (d : cbn_delta_memo) (t : cbn_dtrie) :
   cbn_dt_find kn (cbn_dt_add kn d t) = Some d.
 Proof.
-  rewrite cbn_dt_find_here, cbn_dt_add_ins, cbn_dt_walk_bits, cbn_dt_upd_bits, cbn_dt_walkb_updb_same,
+  rewrite cbn_dt_find_here, cbn_dt_add_ins, cbn_dt_walk_bits, cbn_dt_upd_bits,
+    cbn_dt_walkb_updb_same,
     cbn_dt_ins_here.
   apply cbn_mp_find_set_same.
 Qed.
@@ -466,7 +468,8 @@ Fixpoint cbn_key_val (p : cbn_key) : positive :=
 
 Lemma cbn_key_val_succ (p : cbn_key) : cbn_key_val (cbn_key_succ p) = Pos.succ (cbn_key_val p).
 Proof.
-  induction p as [p IH|p IH|]; cbn [cbn_key_succ cbn_key_val]; [now rewrite IH|reflexivity|reflexivity].
+  induction p as [p IH|p IH|]; cbn [cbn_key_succ cbn_key_val];
+    [now rewrite IH|reflexivity|reflexivity].
 Qed.
 
 Definition cbn_idx_lt (i j : cbn_key) : Prop := (cbn_key_val i < cbn_key_val j)%positive.
@@ -496,7 +499,8 @@ Definition cbn_memo_fresh (m : cbn_memo) : Prop :=
 
 Lemma cbn_memo_fresh_empty : cbn_memo_fresh cbn_memo_empty.
 Proof.
-  unfold cbn_memo_empty, cbn_memo_fresh. cbn [cbn_m_codes cbn_m_hash cbn_m_once cbn_m_ceq cbn_m_ncode].
+  unfold cbn_memo_empty, cbn_memo_fresh.
+  cbn [cbn_m_codes cbn_m_hash cbn_m_once cbn_m_ceq cbn_m_ncode].
   split; [|split; [|split]].
   - intros i. rewrite PTree.gempty. intros h; now destruct h.
   - intros i. rewrite PTree.gempty. intros h; now destruct h.
@@ -600,29 +604,34 @@ Definition cbn_hash_ok (m : cbn_memo) : Prop :=
     h = cbn_thash c.(cbn_c_term).
 
 Lemma cbn_once_ok_fields (m m' : cbn_memo) :
-  m'.(cbn_m_once) = m.(cbn_m_once) -> m'.(cbn_m_codes) = m.(cbn_m_codes) -> cbn_once_ok m -> cbn_once_ok m'.
+  m'.(cbn_m_once) = m.(cbn_m_once) -> m'.(cbn_m_codes) = m.(cbn_m_codes) -> cbn_once_ok m ->
+    cbn_once_ok m'.
 Proof.
   intros h1 h2 h c e b g1 g2. rewrite h1 in g1. rewrite h2 in g2. exact (h c e b g1 g2).
 Qed.
 
 Lemma cbn_hash_ok_fields (m m' : cbn_memo) :
-  m'.(cbn_m_hash) = m.(cbn_m_hash) -> m'.(cbn_m_codes) = m.(cbn_m_codes) -> cbn_hash_ok m -> cbn_hash_ok m'.
+  m'.(cbn_m_hash) = m.(cbn_m_hash) -> m'.(cbn_m_codes) = m.(cbn_m_codes) -> cbn_hash_ok m ->
+    cbn_hash_ok m'.
 Proof.
   intros h1 h2 h c e v g1 g2. rewrite h1 in g1. rewrite h2 in g2. exact (h c e v g1 g2).
 Qed.
 
 Lemma cbn_once_ok_empty : cbn_once_ok cbn_memo_empty.
 Proof.
-  intros c e b g _ _. cbn [cbn_memo_empty cbn_m_once] in g. rewrite cbn_get2_empty in g. discriminate g.
+  intros c e b g _ _. cbn [cbn_memo_empty cbn_m_once] in g. rewrite cbn_get2_empty in g.
+  discriminate g.
 Qed.
 
 Lemma cbn_hash_ok_empty : cbn_hash_ok cbn_memo_empty.
 Proof.
-  intros c e v g _ _. cbn [cbn_memo_empty cbn_m_hash] in g. rewrite cbn_get2_empty in g. discriminate g.
+  intros c e v g _ _. cbn [cbn_memo_empty cbn_m_hash] in g. rewrite cbn_get2_empty in g.
+  discriminate g.
 Qed.
 
 (** Two codes with the same identifier, each read against its table entry, have one term. *)
-Lemma cbn_same_ident_term (codes : PTree.t cbn_code_entry) (c1 c2 : cbn_code) (e1 e2 : cbn_code_entry) :
+Lemma cbn_same_ident_term (codes : PTree.t cbn_code_entry) (c1 c2 : cbn_code)
+  (e1 e2 : cbn_code_entry) :
   c1.(cbn_c_entry) = c2.(cbn_c_entry) -> c1.(cbn_c_path) = c2.(cbn_c_path) ->
   PTree.get c1.(cbn_c_entry) codes = Some e1 -> cbn_code_inv e1 c1 ->
   PTree.get c2.(cbn_c_entry) codes = Some e2 -> cbn_code_inv e2 c2 ->
@@ -637,7 +646,8 @@ Lemma cbn_once_ok_set (c : cbn_code) (e : cbn_code_entry) (m : cbn_memo) :
   cbn_once_ok m ->
   PTree.get c.(cbn_c_entry) m.(cbn_m_codes) = Some e -> cbn_code_inv e c ->
   cbn_once_ok (cbn_memo_set_once
-             (cbn_set2 c.(cbn_c_entry) c.(cbn_c_path) (Nat.leb (cbn_occ 0 c.(cbn_c_term)) 1) m.(cbn_m_once)) m).
+             (cbn_set2 c.(cbn_c_entry) c.(cbn_c_path) (Nat.leb (cbn_occ 0 c.(cbn_c_term)) 1)
+               m.(cbn_m_once)) m).
 Proof.
   intros h g hi c' e' b. cbn [cbn_memo_set_once cbn_m_once cbn_m_codes]. intros g' g2 hi'.
   destruct (cbn_key_eqb c'.(cbn_c_entry) c.(cbn_c_entry)) eqn:E1;
@@ -656,7 +666,8 @@ Qed.
 Lemma cbn_hash_ok_set (c : cbn_code) (e : cbn_code_entry) (m : cbn_memo) :
   cbn_hash_ok m ->
   PTree.get c.(cbn_c_entry) m.(cbn_m_codes) = Some e -> cbn_code_inv e c ->
-  cbn_hash_ok (cbn_memo_set_hash (cbn_set2 c.(cbn_c_entry) c.(cbn_c_path) (cbn_thash c.(cbn_c_term)) m.(cbn_m_hash)) m).
+  cbn_hash_ok (cbn_memo_set_hash (cbn_set2 c.(cbn_c_entry) c.(cbn_c_path) (cbn_thash c.(cbn_c_term))
+    m.(cbn_m_hash)) m).
 Proof.
   intros h g hi c' e' v. cbn [cbn_memo_set_hash cbn_m_hash cbn_m_codes]. intros g' g2 hi'.
   destruct (cbn_key_eqb c'.(cbn_c_entry) c.(cbn_c_entry)) eqn:E1;
@@ -706,7 +717,8 @@ Lemma cbn_once_body_memo (c : cbn_code) (s : cbn_state) :
   /\ ((snd (cbn_once_body c s)).(cbn_st_memo)).(cbn_m_hash) = ((s.(cbn_st_memo)).(cbn_m_hash))
   /\ ((snd (cbn_once_body c s)).(cbn_st_memo)).(cbn_m_ceq) = ((s.(cbn_st_memo)).(cbn_m_ceq)).
 Proof.
-  unfold cbn_once_body. destruct (cbn_get2 c.(cbn_c_entry) c.(cbn_c_path) ((s.(cbn_st_memo)).(cbn_m_once)));
+  unfold cbn_once_body. destruct (cbn_get2 c.(cbn_c_entry) c.(cbn_c_path)
+    ((s.(cbn_st_memo)).(cbn_m_once)));
     cbn [snd]; repeat split.
 Qed.
 
@@ -717,7 +729,8 @@ Lemma cbn_code_hash_state (c : cbn_code) (s : cbn_state) :
   /\ (snd (cbn_code_hash c s)).(cbn_st_steps) = s.(cbn_st_steps)
   /\ (snd (cbn_code_hash c s)).(cbn_st_gam) = s.(cbn_st_gam).
 Proof.
-  unfold cbn_code_hash. destruct (cbn_get2 c.(cbn_c_entry) c.(cbn_c_path) ((s.(cbn_st_memo)).(cbn_m_hash)));
+  unfold cbn_code_hash. destruct (cbn_get2 c.(cbn_c_entry) c.(cbn_c_path)
+    ((s.(cbn_st_memo)).(cbn_m_hash)));
     cbn [snd]; repeat split.
 Qed.
 
@@ -728,7 +741,8 @@ Lemma cbn_code_hash_memo (c : cbn_code) (s : cbn_state) :
   /\ ((snd (cbn_code_hash c s)).(cbn_st_memo)).(cbn_m_once) = ((s.(cbn_st_memo)).(cbn_m_once))
   /\ ((snd (cbn_code_hash c s)).(cbn_st_memo)).(cbn_m_ceq) = ((s.(cbn_st_memo)).(cbn_m_ceq)).
 Proof.
-  unfold cbn_code_hash. destruct (cbn_get2 c.(cbn_c_entry) c.(cbn_c_path) ((s.(cbn_st_memo)).(cbn_m_hash)));
+  unfold cbn_code_hash. destruct (cbn_get2 c.(cbn_c_entry) c.(cbn_c_path)
+    ((s.(cbn_st_memo)).(cbn_m_hash)));
     cbn [snd]; repeat split.
 Qed.
 
@@ -898,7 +912,8 @@ Section Memo.
       b = cbn_ceq_term c1.(cbn_c_term) c2.(cbn_c_term).
 
   Lemma cbn_ceq_ok_fields (m m' : cbn_memo) :
-    m'.(cbn_m_ceq) = m.(cbn_m_ceq) -> m'.(cbn_m_codes) = m.(cbn_m_codes) -> cbn_ceq_ok m -> cbn_ceq_ok m'.
+    m'.(cbn_m_ceq) = m.(cbn_m_ceq) -> m'.(cbn_m_codes) = m.(cbn_m_codes) -> cbn_ceq_ok m ->
+      cbn_ceq_ok m'.
   Proof.
     intros h1 h2 h c1 c2 e1 e2 b g g1 hi1 g2 hi2.
     unfold cbn_ceq_lookup in g. rewrite h1 in g. rewrite h2 in g1, g2.
@@ -916,7 +931,8 @@ Section Memo.
   Proof.
     intros [_ [_ [_ hq]]] h c1 c2 e1 e2 b. unfold cbn_ceq_lookup.
     cbn [cbn_memo_add_entry snd cbn_m_ceq cbn_m_codes]. intros g g1 hi1 g2 hi2.
-    destruct (cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq)) as [r|] eqn:Er; [|discriminate g].
+    destruct (cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq)) as [r|] eqn:Er;
+      [|discriminate g].
     destruct (hq c1.(cbn_c_entry) c1.(cbn_c_path) r Er) as [hlt1 hlt2].
     assert (hne1 : c1.(cbn_c_entry) <> m.(cbn_m_ncode)) by exact (cbn_idx_lt_neq _ _ hlt1).
     assert (hne2 : c2.(cbn_c_entry) <> m.(cbn_m_ncode)).
@@ -932,7 +948,8 @@ Section Memo.
     cbn_ceq_ok
       (cbn_memo_set_ceq
          (cbn_set2 c1.(cbn_c_entry) c1.(cbn_c_path)
-            (cbn_set2 c2.(cbn_c_entry) c2.(cbn_c_path) (cbn_ceq_term c1.(cbn_c_term) c2.(cbn_c_term))
+            (cbn_set2 c2.(cbn_c_entry) c2.(cbn_c_path)
+              (cbn_ceq_term c1.(cbn_c_term) c2.(cbn_c_term))
                (match cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq) with
                 | Some q => q
                 | None => PTree.empty _
@@ -955,15 +972,18 @@ Section Memo.
         reflexivity.
       + rewrite cbn_get2_set2_other in g by (right; exact (cbn_key_neq_of_eqb _ _ E4)).
         refine (h d1 d2 f1 f2 b _ k1 ki1 k2 ki2). unfold cbn_ceq_lookup. rewrite E1, E2.
-        destruct (cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq)) as [r|] eqn:Er; [exact g|].
+        destruct (cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq)) as [r|]
+          eqn:Er; [exact g|].
         rewrite cbn_get2_empty in g. discriminate g.
       + rewrite cbn_get2_set2_other in g by (left; exact (cbn_key_neq_of_eqb _ _ E3)).
         refine (h d1 d2 f1 f2 b _ k1 ki1 k2 ki2). unfold cbn_ceq_lookup. rewrite E1, E2.
-        destruct (cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq)) as [r|] eqn:Er; [exact g|].
+        destruct (cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq)) as [r|]
+          eqn:Er; [exact g|].
         rewrite cbn_get2_empty in g. discriminate g.
       + rewrite cbn_get2_set2_other in g by (left; exact (cbn_key_neq_of_eqb _ _ E3)).
         refine (h d1 d2 f1 f2 b _ k1 ki1 k2 ki2). unfold cbn_ceq_lookup. rewrite E1, E2.
-        destruct (cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq)) as [r|] eqn:Er; [exact g|].
+        destruct (cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) m.(cbn_m_ceq)) as [r|]
+          eqn:Er; [exact g|].
         rewrite cbn_get2_empty in g. discriminate g.
     - rewrite cbn_get2_set2_other in g by (right; exact (cbn_key_neq_of_eqb _ _ E2)).
       exact (h d1 d2 f1 f2 b g k1 ki1 k2 ki2).
@@ -977,7 +997,8 @@ Section Memo.
     cbn_ceq_ok (s.(cbn_st_memo)) ->
     PTree.get c1.(cbn_c_entry) ((s.(cbn_st_memo)).(cbn_m_codes)) = Some e1 -> cbn_code_inv e1 c1 ->
     PTree.get c2.(cbn_c_entry) ((s.(cbn_st_memo)).(cbn_m_codes)) = Some e2 -> cbn_code_inv e2 c2 ->
-    cbn_ceq_ok (((cbn_ceq_set c1 c2 (cbn_ceq_term c1.(cbn_c_term) c2.(cbn_c_term)) s)).(cbn_st_memo)).
+    cbn_ceq_ok (((cbn_ceq_set c1 c2 (cbn_ceq_term c1.(cbn_c_term) c2.(cbn_c_term))
+      s)).(cbn_st_memo)).
   Proof.
     intros h g1 hi1 g2 hi2. unfold cbn_ceq_set; cbv zeta. rewrite cbn_set_memo_memo.
     exact (cbn_ceq_ok_set c1 c2 e1 e2 (s.(cbn_st_memo)) h g1 hi1 g2 hi2).
@@ -1026,7 +1047,8 @@ Section Memo.
     intros hq g1 hi1 g2 hi2. unfold cbn_code_eq.
     destruct (cbn_same_id c1 c2) eqn:Esid.
     { intros _. left.
-      exact (cbn_same_id_sound_table ((s.(cbn_st_memo)).(cbn_m_codes)) e1 e2 c1 c2 Esid g1 hi1 g2 hi2). }
+      exact (cbn_same_id_sound_table ((s.(cbn_st_memo)).(cbn_m_codes)) e1 e2 c1 c2 Esid g1
+        hi1 g2 hi2). }
     destruct (negb (cbn_entry_wf c1.(cbn_c_entry) s && cbn_entry_wf c2.(cbn_c_entry) s)) eqn:Ewf;
       [cbn [fst]; intros hc; discriminate hc|].
     destruct (cbn_code_hash c1 s) as [v1 s1] eqn:E1.
@@ -1086,7 +1108,8 @@ Section Memo.
 
   Lemma cbn_delta_ok_empty : cbn_delta_ok cbn_memo_empty.
   Proof.
-    intros kn d h. cbn [cbn_memo_empty cbn_m_delta] in h. rewrite cbn_dt_find_nil in h. discriminate h.
+    intros kn d h. cbn [cbn_memo_empty cbn_m_delta] in h. rewrite cbn_dt_find_nil in h.
+    discriminate h.
   Qed.
 
   Lemma cbn_inst_entry_ok_mono (codes codes' : PTree.t cbn_code_entry) (body : term)
@@ -1143,7 +1166,8 @@ Section Memo.
   Proof. reflexivity. Qed.
 
   Lemma cbn_new_entry_fresh (t : term) (u : Instance.t) (s : cbn_state) :
-    cbn_memo_fresh (s.(cbn_st_memo)) -> cbn_memo_fresh ((snd (cbn_new_entry X_type X t u s)).(cbn_st_memo)).
+    cbn_memo_fresh (s.(cbn_st_memo)) -> cbn_memo_fresh
+      ((snd (cbn_new_entry X_type X t u s)).(cbn_st_memo)).
   Proof. intros h. rewrite cbn_new_entry_memo_eq. now apply cbn_memo_fresh_add_entry. Qed.
 
   Lemma cbn_new_entry_once_ok (t : term) (u : Instance.t) (s : cbn_state) :
@@ -1196,9 +1220,11 @@ Section Memo.
       (insts : list (Instance.t * cbn_cidx * term)) (s : cbn_state) :
     (fst (cbn_delta_new X_type X kn ui body insts s)).(cbn_c_term) = cbn_inst_code ui body
     /\ (fst (cbn_delta_new X_type X kn ui body insts s)).(cbn_c_path) = cbn_path_nil
-    /\ (fst (cbn_delta_new X_type X kn ui body insts s)).(cbn_c_entry) = ((s.(cbn_st_memo)).(cbn_m_ncode)).
+    /\ (fst (cbn_delta_new X_type X kn ui body insts s)).(cbn_c_entry)
+      = ((s.(cbn_st_memo)).(cbn_m_ncode)).
   Proof.
-    rewrite cbn_delta_new_fst, cbn_new_entry_code. cbn [cbn_c_term cbn_c_path cbn_c_entry]. repeat split.
+    rewrite cbn_delta_new_fst, cbn_new_entry_code. cbn [cbn_c_term cbn_c_path cbn_c_entry].
+    repeat split.
   Qed.
 
   Lemma cbn_delta_new_codes (kn : kername) (ui : Instance.t) (body : term)
@@ -1324,9 +1350,9 @@ Section Memo.
 
   (** *** The machine's [cbn_delta]
 
-    [cbn_delta] returns [cbn_delta_new]'s result through a [let]-destructured pair; [cbn_let_COk_pair]
-    reads the components without having to [destruct] the application and lose the name
-    [cbn_delta_new] the per-field lemmas speak of. *)
+    [cbn_delta] returns [cbn_delta_new]'s result through a [let]-destructured pair;
+    [cbn_let_COk_pair] reads the components without having to [destruct] the application and lose
+    the name [cbn_delta_new] the per-field lemmas speak of. *)
 
   Lemma cbn_let_COk_pair {A : Type} (p : cbn_code * cbn_state) (g : cbn_code -> A)
       (r : A) (s' : cbn_state) :
@@ -1354,7 +1380,8 @@ Section Memo.
           /\ s' = snd (cbn_delta_new X_type X kn ui body insts s))
     \/ (exists cb, abstract_env_lookup X kn = Some (ConstantDecl cb) /\ cb.(cst_body) = None
           /\ r = None
-          /\ s' = cbn_set_memo (cbn_memo_set_delta (cbn_dt_add kn CbnDAxiom ((s.(cbn_st_memo)).(cbn_m_delta)))
+          /\ s' = cbn_set_memo (cbn_memo_set_delta
+            (cbn_dt_add kn CbnDAxiom ((s.(cbn_st_memo)).(cbn_m_delta)))
                               (s.(cbn_st_memo))) s).
   Proof.
     unfold cbn_delta.
@@ -1413,7 +1440,8 @@ Section Memo.
 
   Lemma cbn_delta_memo_ok (kn : kername) (ui : Instance.t) (s : cbn_state)
       (r : option cbn_code) (s' : cbn_state) :
-    cbn_memo_ok X_type X s -> cbn_delta X_type X kn ui s = CbnCOk (r, s') -> cbn_memo_ok X_type X s'.
+    cbn_memo_ok X_type X s -> cbn_delta X_type X kn ui s = CbnCOk (r, s') ->
+      cbn_memo_ok X_type X s'.
   Proof.
     intros hm hc.
     destruct (cbn_delta_cases kn ui s r s' hc)
@@ -1594,7 +1622,8 @@ Section Memo.
   (** ** The five invariants of one call, bundled *)
 
   Definition cbn_memo_inv (s : cbn_state) : Prop :=
-    cbn_memo_fresh (s.(cbn_st_memo)) /\ cbn_once_ok (s.(cbn_st_memo)) /\ cbn_hash_ok (s.(cbn_st_memo))
+    cbn_memo_fresh (s.(cbn_st_memo)) /\ cbn_once_ok (s.(cbn_st_memo)) /\
+      cbn_hash_ok (s.(cbn_st_memo))
     /\ cbn_ceq_ok (s.(cbn_st_memo)) /\ cbn_delta_ok (s.(cbn_st_memo)).
 
   Lemma cbn_memo_inv_init : cbn_memo_inv cbn_init.
@@ -1689,7 +1718,8 @@ Section Memo.
     destruct (cbn_code_hash c1 s) as [v1 s1] eqn:E1.
     destruct (cbn_code_hash c2 s1) as [v2 s2] eqn:E2.
     assert (hs1 : s1 = snd (cbn_code_hash c1 s)) by (rewrite E1; reflexivity).
-    assert (hm1 : cbn_memo_inv s1) by (rewrite hs1; exact (cbn_memo_inv_code_hash c1 e1 s hm g1 hi1)).
+    assert (hm1 : cbn_memo_inv s1) by (rewrite hs1;
+      exact (cbn_memo_inv_code_hash c1 e1 s hm g1 hi1)).
     assert (hc1 : ((s1.(cbn_st_memo)).(cbn_m_codes)) = ((s.(cbn_st_memo)).(cbn_m_codes)))
       by (rewrite hs1; apply (proj1 (cbn_code_hash_memo c1 s))).
     assert (hp1 : s1.(cbn_st_heap) = s.(cbn_st_heap) /\ s1.(cbn_st_next) = s.(cbn_st_next)

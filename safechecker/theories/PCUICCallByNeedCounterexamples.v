@@ -41,9 +41,9 @@ Local Notation cbn_xpredT := (fun _ : nat => true) (only parsing).
 
   [cbn_repr_value H lvl v t] reads "in heap [H], with [lvl] levels in scope, the value [v]
   stands for the term [t]". It is the relational form of the machine's read-back functions
-  [cbn_rb_slot], [cbn_rb_susp] and [cbn_rb_value]. [nctx] is the length of the context the call started
-  in. A cell that is being forced ([CbnCBusy]) or that the collector has moved ([CbnCFwd]) stands
-  for no term. *)
+  [cbn_rb_slot], [cbn_rb_susp] and [cbn_rb_value]. [nctx] is the length of the context the call
+  started in. A cell that is being forced ([CbnCBusy]) or that the collector has moved ([CbnCFwd])
+  stands for no term. *)
 
 Section Repr.
   Context (nctx : nat).
@@ -55,7 +55,8 @@ Section Repr.
   with cbn_repr_addrs (H : cbn_bheap cbn_cell) : nat -> list cbn_haddr -> list term -> Prop :=
   | cbn_repr_addrs_nil lvl : cbn_repr_addrs H lvl [] []
   | cbn_repr_addrs_cons lvl a l t ts :
-      cbn_repr_addr H lvl a t -> cbn_repr_addrs H lvl l ts -> cbn_repr_addrs H lvl (a :: l) (t :: ts)
+      cbn_repr_addr H lvl a t -> cbn_repr_addrs H lvl l ts ->
+        cbn_repr_addrs H lvl (a :: l) (t :: ts)
 
   with cbn_repr_cell (H : cbn_bheap cbn_cell) : nat -> cbn_cell -> term -> Prop :=
   | cbn_repr_cell_susp lvl vals nvals goff c t :
@@ -74,7 +75,8 @@ Section Repr.
   with cbn_repr_slots (H : cbn_bheap cbn_cell) : nat -> list cbn_slot -> list term -> Prop :=
   | cbn_repr_slots_nil lvl : cbn_repr_slots H lvl [] []
   | cbn_repr_slots_cons lvl x l t ts :
-      cbn_repr_slot H lvl x t -> cbn_repr_slots H lvl l ts -> cbn_repr_slots H lvl (x :: l) (t :: ts)
+      cbn_repr_slot H lvl x t -> cbn_repr_slots H lvl l ts ->
+        cbn_repr_slots H lvl (x :: l) (t :: ts)
 
   (** [cbn_repr_susp H lvl e t u]: the suspension of the code [t] in the environment [e] stands
     for [u]. This is [cbn_rb_susp]'s equation, with the slots read back one by one. *)
@@ -118,30 +120,36 @@ End Repr.
 Definition cbn_old_gam_ok (Γ : context) (nctx lvl : nat) (s : cbn_state) : Prop :=
   forall (j : nat) (a : cbn_haddr),
     PTree.get (cbn_key_of_succ_nat j) (s.(cbn_st_gam)) = Some a ->
-    exists t : term, cbn_ctx_den Γ nctx lvl j = Some t /\ cbn_repr_addr nctx (s.(cbn_st_heap)) lvl a t.
+    exists t : term, cbn_ctx_den Γ nctx lvl j = Some t /\
+      cbn_repr_addr nctx (s.(cbn_st_heap)) lvl a t.
 
 (** A renamed root stands in the new heap for what the root stood for in the old heap, one
   clause per shape of root. *)
-Definition cbn_old_root_pres (nctx : nat) (Hold Hnew : cbn_bheap cbn_cell) (r r' : cbn_root) : Prop :=
+Definition cbn_old_root_pres (nctx : nat) (Hold Hnew : cbn_bheap cbn_cell)
+  (r r' : cbn_root) : Prop :=
   match r, r' with
-  | CbnRA a, CbnRA a' => forall lvl t, cbn_repr_addr nctx Hold lvl a t -> cbn_repr_addr nctx Hnew lvl a' t
-  | CbnRSl x, CbnRSl x' => forall lvl t, cbn_repr_slot nctx Hold lvl x t -> cbn_repr_slot nctx Hnew lvl x' t
+  | CbnRA a, CbnRA a' => forall lvl t, cbn_repr_addr nctx Hold lvl a t ->
+    cbn_repr_addr nctx Hnew lvl a' t
+  | CbnRSl x, CbnRSl x' => forall lvl t, cbn_repr_slot nctx Hold lvl x t ->
+    cbn_repr_slot nctx Hnew lvl x' t
   | CbnRE e, CbnRE e' =>
     forall lvl tm u, cbn_repr_susp nctx Hold lvl e tm u -> cbn_repr_susp nctx Hnew lvl e' tm u
-  | CbnRV v, CbnRV v' => forall lvl t, cbn_repr_value nctx Hold lvl v t -> cbn_repr_value nctx Hnew lvl v' t
+  | CbnRV v, CbnRV v' => forall lvl t, cbn_repr_value nctx Hold lvl v t ->
+    cbn_repr_value nctx Hnew lvl v' t
   | CbnRSk l, CbnRSk l' =>
     forall lvl ts, cbn_repr_slots nctx Hold lvl l ts -> cbn_repr_slots nctx Hnew lvl l' ts
   | CbnRSp l, CbnRSp l' =>
     forall lvl ts, cbn_repr_addrs nctx Hold lvl l ts -> cbn_repr_addrs nctx Hnew lvl l' ts
-  | CbnRC cl, CbnRC cl' => forall lvl t, cbn_repr_cell nctx Hold lvl cl t -> cbn_repr_cell nctx Hnew lvl cl' t
+  | CbnRC cl, CbnRC cl' => forall lvl t, cbn_repr_cell nctx Hold lvl cl t ->
+    cbn_repr_cell nctx Hnew lvl cl' t
   | _, _ => False
   end.
 
 (** ** A comparison seam on heap readings is false at the fuel [cbn_run] uses
 
-  [cbn_old_slot_seam] and [cbn_old_term_seam] read the comparison's inputs with [repr_*] and promise,
-  of every answer, that the caller's roots keep their [repr] reading ([cbn_old_root_pres]) and
-  that the state keeps [cbn_old_cok].
+  [cbn_old_slot_seam] and [cbn_old_term_seam] read the comparison's inputs with [repr_*] and
+  promise, of every answer, that the caller's roots keep their [repr] reading ([cbn_old_root_pres])
+  and that the state keeps [cbn_old_cok].
 
   The run below is [cbn_run]'s own first [cbn_conv_term], at [cbn_depth], in
   [cbn_w_Γ = [x := (fun n : nat => n) O : nat]] with [cbn_w_t = x] and [cbn_w_u = fun n : nat => n]
@@ -155,7 +163,8 @@ Definition cbn_old_root_pres (nctx : nat) (Hold Hnew : cbn_bheap cbn_cell) (r r'
   Nothing in the counterexample is ill-typed, and the machine is sound here: the defect is
   in the heap-following invariant. The ghost reading does not have it: every ghost of the
   invariant [cbn_minv] still reads the forced cell as the let-body ([cbn_sc_ghost_reads_body]); the
-  same run satisfies the comparison's postcondition ([PCUICCallByNeedSoundConv.cbn_witness_seam_run]). *)
+  same run satisfies the comparison's postcondition
+  ([PCUICCallByNeedSoundConv.cbn_witness_seam_run]). *)
 
 Section SeamCounterexample.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
@@ -211,8 +220,10 @@ Section SeamCounterexample.
   (** The run, by computation: it answers [false], and the context cell of [x] is at
     address 1 and holds [O]. *)
   Lemma cbn_sc_term_run :
-    match cbn_conv_term X_type X cbn_w_Γ 1 cbn_depth 1 Conv cbn_env_empty (cbn_run_c1 X_type X cbn_w_t)
-            cbn_env_empty (cbn_run_c2 X_type X cbn_w_t cbn_w_u) [] (cbn_run_s2 X_type X cbn_w_t cbn_w_u) with
+    match cbn_conv_term X_type X cbn_w_Γ 1 cbn_depth 1 Conv cbn_env_empty
+      (cbn_run_c1 X_type X cbn_w_t)
+            cbn_env_empty (cbn_run_c2 X_type X cbn_w_t cbn_w_u) []
+              (cbn_run_s2 X_type X cbn_w_t cbn_w_u) with
     | CbnCOk (b, rs, s) =>
         b = false /\ rs = []
         /\ PTree.get (cbn_key_of_succ_nat 0) s.(cbn_st_gam) = Some (CbnHAddr 1)
@@ -223,7 +234,8 @@ Section SeamCounterexample.
 
   Lemma cbn_sc_slot_run :
     match cbn_conv_slot X_type X cbn_w_Γ 1 cbn_depth 1 Conv
-            (CbnSInl [] 0 0 (cbn_run_c1 X_type X cbn_w_t)) (CbnSInl [] 0 0 (cbn_run_c2 X_type X cbn_w_t cbn_w_u))
+            (CbnSInl [] 0 0 (cbn_run_c1 X_type X cbn_w_t))
+              (CbnSInl [] 0 0 (cbn_run_c2 X_type X cbn_w_t cbn_w_u))
             [] (cbn_run_s2 X_type X cbn_w_t cbn_w_u) with
     | CbnCOk (_, _, s) =>
         PTree.get (cbn_key_of_succ_nat 0) s.(cbn_st_gam) = Some (CbnHAddr 1)
@@ -239,7 +251,8 @@ Section SeamCounterexample.
     forall Q lo G, cbn_minv X_type X cbn_w_Γ 1 Σ 1 Q lo G s -> G (CbnHAddr 1) = Some cbn_w_body.
   Proof.
     intros hgam Q lo G [_ _ hok _].
-    destruct (@cbn_gk_gam _ X_type X cbn_w_Γ 1 Σ _ _ _ _ _ hok 0 (CbnHAddr 1) hgam) as (tm & hden & hG).
+    destruct (@cbn_gk_gam _ X_type X cbn_w_Γ 1 Σ _ _ _ _ _ hok 0 (CbnHAddr 1) hgam) as
+      (tm & hden & hG).
     change (cbn_ctx_den cbn_w_Γ 1 Q 0) with (Some (lift0 (Q - 1 + 1) cbn_w_body)) in hden.
     assert (hl : forall n k, lift n k cbn_w_body = cbn_w_body) by reflexivity.
     rewrite hl in hden. injection hden as <-. exact hG.
@@ -272,7 +285,8 @@ Section SeamCounterexample.
       [|contradiction hrun].
     destruct hrun as (_ & _ & hg & hh).
     destruct (hseam 1 Conv cbn_w_Γ cbn_env_empty (cbn_run_c1 X_type X cbn_w_t) cbn_env_empty
-                (cbn_run_c2 X_type X cbn_w_t cbn_w_u) [] (cbn_run_s2 X_type X cbn_w_t cbn_w_u) b rs s'
+                (cbn_run_c2 X_type X cbn_w_t cbn_w_u) []
+                  (cbn_run_s2 X_type X cbn_w_t cbn_w_u) b rs s'
                 (cbn_old_cok_run_s2 cbn_w_Γ 1 1 cbn_w_t cbn_w_u) eq_refl eq_refl (le_n 1) E)
       as (_ & hcok & _).
     exact (cbn_sc_not_old_cok s' hg hh hcok).
@@ -283,12 +297,14 @@ Section SeamCounterexample.
     intros hseam.
     pose proof cbn_sc_slot_run as hrun.
     destruct (cbn_conv_slot X_type X cbn_w_Γ 1 cbn_depth 1 Conv
-                (CbnSInl [] 0 0 (cbn_run_c1 X_type X cbn_w_t)) (CbnSInl [] 0 0 (cbn_run_c2 X_type X cbn_w_t cbn_w_u))
+                (CbnSInl [] 0 0 (cbn_run_c1 X_type X cbn_w_t))
+                  (CbnSInl [] 0 0 (cbn_run_c2 X_type X cbn_w_t cbn_w_u))
                 [] (cbn_run_s2 X_type X cbn_w_t cbn_w_u)) as [[[b rs] s']|w] eqn:E;
       [|contradiction hrun].
     destruct hrun as [hg hh].
     destruct (hseam 1 Conv cbn_w_Γ (CbnSInl [] 0 0 (cbn_run_c1 X_type X cbn_w_t))
-                (CbnSInl [] 0 0 (cbn_run_c2 X_type X cbn_w_t cbn_w_u)) [] (cbn_run_s2 X_type X cbn_w_t cbn_w_u)
+                (CbnSInl [] 0 0 (cbn_run_c2 X_type X cbn_w_t cbn_w_u)) []
+                  (cbn_run_s2 X_type X cbn_w_t cbn_w_u)
                 b rs s' (cbn_old_cok_run_s2 cbn_w_Γ 1 1 cbn_w_t cbn_w_u) eq_refl eq_refl (le_n 1) E)
       as (_ & hcok & _).
     exact (cbn_sc_not_old_cok s' hg hh hcok).
@@ -316,9 +332,9 @@ End SeamCounterexample.
   heap; the second pair takes the lambda row at level 0 again and needs [cbn_gok] at level 1.
 
   No map on ghost terms repairs the shift ([cbn_ghost_map_false]). At level 1 a cell
-  [CbnVNeu (CbnNVar 0)] (the genuine variable at level 0) and a stale cell [CbnVNeu (CbnNVar 1)] both read
-  [tRel 0], so both may carry the ghost [tRel 0]. At level 2 the first reads [tRel 1] and the
-  second [tRel 0], so the image of [tRel 0] under the map would have to reduce to both, which
+  [CbnVNeu (CbnNVar 0)] (the genuine variable at level 0) and a stale cell [CbnVNeu (CbnNVar 1)]
+  both read [tRel 0], so both may carry the ghost [tRel 0]. At level 2 the first reads [tRel 1] and
+  the second [tRel 0], so the image of [tRel 0] under the map would have to reduce to both, which
   confluence forbids. The lemma asks the image to be a term of the level-2 context (as every
   level shift gives); for an image outside the context, [red_confluence] does not apply, and
   the same conclusion is left as this argument. [red_confluence] brings
@@ -431,11 +447,14 @@ Section GhostShiftCounterexample.
       /\ forall φ, on_free_vars (shiftnP 2 ssrbool.xpred0) (φ (tRel 0)) ->
            ~ cbn_gok X_type X [] 0 Σ [cbn_gs_d; cbn_gs_d] 2 lo (cbn_gmap φ G) cbn_gs_s2.
   Proof.
-    destruct (cbn_alloc_now_sound X_type X [] 0 Σ [cbn_gs_d] 1 eq_refl eq_refl (le_S _ _ (le_n 0)) xH
+    destruct (cbn_alloc_now_sound X_type X [] 0 Σ [cbn_gs_d] 1 eq_refl eq_refl
+      (le_S _ _ (le_n 0)) xH
                 _ (cbn_gs_var 0) (tRel (1 - S 0)) cbn_init
-                (cbn_gok_init X_type X [] 0 Σ [cbn_gs_d] 1) (cbn_g_cell_var 0 1 _ 0) (fun _ => eq_refl))
+                (cbn_gok_init X_type X [] 0 Σ [cbn_gs_d] 1) (cbn_g_cell_var 0 1 _ 0)
+                  (fun _ => eq_refl))
       as (G1 & _ & hok1 & ha1).
-    destruct (cbn_alloc_now_sound X_type X [] 0 Σ [cbn_gs_d] 1 eq_refl eq_refl (le_S _ _ (le_n 0)) xH
+    destruct (cbn_alloc_now_sound X_type X [] 0 Σ [cbn_gs_d] 1 eq_refl eq_refl
+      (le_S _ _ (le_n 0)) xH
                 G1 (cbn_gs_var 1) (tRel (1 - S 1)) cbn_gs_s1 hok1 (cbn_g_cell_var 0 1 G1 1)
                 (fun _ => eq_refl))
       as (G2 & hx & hok2 & ha2).
@@ -470,20 +489,22 @@ End GhostShiftCounterexample.
   never to [lift0 1 (tRel 0)] ([cbn_red_weakening_needs_hygiene]). Without [cbn_gk_hyg], a cell
   [CbnCDone (CbnVNeu (CbnNVar 0) [])] at level 1, which reads [tRel 0], could carry the ghost
   [cbn_rw_w]; after lifting to level 2 the cell reads [tRel 1] and the lifted ghost does not
-  reduce to it. [cbn_rw_w] fails the hygiene test ([cbn_rw_w_unhygienic]), which is what [cbn_gk_hyg]
-  excludes. *)
+  reduce to it. [cbn_rw_w] fails the hygiene test ([cbn_rw_w_unhygienic]), which is what
+  [cbn_gk_hyg] excludes. *)
 
 Definition cbn_rw_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
 #[local] Definition cbn_rw_d : context_decl := vass cbn_rw_na (tSort sProp).
 Definition cbn_rw_ind : inductive :=
   {| inductive_mind := (MPfile ["RW"], "rw"); inductive_ind := 0 |}.
-Definition cbn_rw_ci : case_info := {| ci_ind := cbn_rw_ind; ci_npar := 0; ci_relevance := Relevant |}.
+Definition cbn_rw_ci : case_info := {| ci_ind := cbn_rw_ind; ci_npar := 0; ci_relevance :=
+  Relevant |}.
 #[local] Definition cbn_rw_p : predicate term :=
   {| pparams := []; puinst := []; pcontext := []; preturn := tSort sProp |}.
 (** A branch whose context is one let-binding of [tRel 0]: a variable outside the match. *)
 Definition cbn_rw_br (b : term) : branch term :=
   {| bcontext := [vdef cbn_rw_na (tRel 0) (tSort sProp)]; bbody := b |}.
-Definition cbn_rw_case (b : term) : term := tCase cbn_rw_ci cbn_rw_p (tConstruct cbn_rw_ind 0 []) [cbn_rw_br b].
+Definition cbn_rw_case (b : term) : term :=
+  tCase cbn_rw_ci cbn_rw_p (tConstruct cbn_rw_ind 0 []) [cbn_rw_br b].
 #[local] Definition cbn_rw_w : term := cbn_rw_case (tRel 0).
 
 Lemma cbn_rw_w_unhygienic : on_free_vars cbn_xpredT cbn_rw_w = false.
@@ -570,7 +591,8 @@ Lemma cbn_red_weakening_needs_hygiene (Σ : global_env) :
 Proof.
   split.
   - constructor. apply red1_red.
-    exact (red_iota Σ [cbn_rw_d] cbn_rw_ci 0 [] [] cbn_rw_p [cbn_rw_br (tRel 0)] (cbn_rw_br (tRel 0))
+    exact (red_iota Σ [cbn_rw_d] cbn_rw_ci 0 [] [] cbn_rw_p [cbn_rw_br (tRel 0)]
+      (cbn_rw_br (tRel 0))
              eq_refl eq_refl).
   - rewrite cbn_rw_w_lift. intros [hr].
     destruct (cbn_rw_reach_red Σ _ _ (or_introl eq_refl) hr) as [h|[h|h]]; discriminate h.

@@ -38,7 +38,8 @@ Local Notation cbn_xpred0 := (fun _ : nat => false) (only parsing).
     keeps it by [cbn_machine_hwf_holds], under [#|Γ| <= nctx]. It also needs
     [cbn_gk_hyg], the hygiene of every ghost term, for red weakening
     ([PCUICCallByNeedCounterexamples.cbn_red_weakening_needs_hygiene]).
-  - [cbn_red_unlift] and [cbn_red_assum_irrel] do NOT depend on [cbn_gk_hyg]: the terms they move are
+  - [cbn_red_unlift] and [cbn_red_assum_irrel] do NOT depend on [cbn_gk_hyg]: the terms they move
+  are
     root readings, which are reducts of the typed inputs of the hook, hence hygienic by
     themselves ([red_on_free_vars]). *)
 
@@ -57,7 +58,8 @@ Proof. unfold cbn_jctx, app_context. rewrite repeat_app. reflexivity. Qed.
 Lemma cbn_jctx_closed p n : on_free_vars_ctx p (cbn_jctx n).
 Proof.
   revert p. induction n as [|n ih]; intros p; [reflexivity|].
-  change (cbn_jctx (S n)) with (cbn_jctx n ,, cbn_jdecl). rewrite on_free_vars_ctx_snoc, ih. reflexivity.
+  change (cbn_jctx (S n)) with (cbn_jctx n ,, cbn_jdecl). rewrite on_free_vars_ctx_snoc, ih.
+  reflexivity.
 Qed.
 
 Lemma cbn_jctx_assum n : assumption_context (cbn_jctx n).
@@ -80,7 +82,8 @@ Section Shift.
   Qed.
 
   Lemma cbn_g_slot_shift G :
-    (forall x t, cbn_g_slot nctx lvl G x t -> cbn_g_slot nctx (lvl + n) (cbn_gshift n G) x (lift0 n t))
+    (forall x t, cbn_g_slot nctx lvl G x t ->
+      cbn_g_slot nctx (lvl + n) (cbn_gshift n G) x (lift0 n t))
     /\ (forall l ts, cbn_g_slots nctx lvl G l ts ->
           cbn_g_slots nctx (lvl + n) (cbn_gshift n G) l (map (lift0 n) ts) /\ #|ts| = #|l|).
   Proof.
@@ -114,7 +117,8 @@ Section Shift.
   Qed.
 
   Lemma cbn_g_value_shift G v t :
-    cbn_vwf lvl v -> cbn_g_value nctx lvl G v t -> cbn_g_value nctx (lvl + n) (cbn_gshift n G) v (lift0 n t).
+    cbn_vwf lvl v -> cbn_g_value nctx lvl G v t ->
+      cbn_g_value nctx (lvl + n) (cbn_gshift n G) v (lift0 n t).
   Proof.
     intros hw hv. destruct hv; cbn in hw; rewrite ?lift_mkApps.
     - rewrite (lift_closed n 0 h hw). constructor. exact (cbn_g_addrs_shift G _ _ H).
@@ -124,13 +128,17 @@ Section Shift.
       replace (n + (lvl - S l)) with (lvl + n - S l) by lia.
       constructor. exact (cbn_g_addrs_shift G _ _ H).
     - rewrite (lift_closed n 0 h hw). constructor. exact (cbn_g_addrs_shift G _ _ H).
-    - econstructor; [exact (cbn_g_susp_shift G _ _ _ H)|exact H0|exact (cbn_g_addrs_shift G _ _ H1)].
-    - econstructor; [exact H|exact (cbn_g_susp_shift G _ _ _ H0)|exact H1|exact (cbn_g_addrs_shift G _ _ H2)].
-    - econstructor; [exact H|exact (cbn_g_susp_shift G _ _ _ H0)|exact H1|exact (cbn_g_addrs_shift G _ _ H2)].
+    - econstructor; [exact (cbn_g_susp_shift G _ _ _ H)|exact H0|exact
+      (cbn_g_addrs_shift G _ _ H1)].
+    - econstructor; [exact H|exact (cbn_g_susp_shift G _ _ _ H0)|exact H1|exact
+      (cbn_g_addrs_shift G _ _ H2)].
+    - econstructor; [exact H|exact (cbn_g_susp_shift G _ _ _ H0)|exact H1|exact
+      (cbn_g_addrs_shift G _ _ H2)].
   Qed.
 
   Lemma cbn_g_cell_shift G cl u :
-    cbn_cwf lvl cl -> cbn_g_cell nctx lvl G cl u -> cbn_g_cell nctx (lvl + n) (cbn_gshift n G) cl (lift0 n u).
+    cbn_cwf lvl cl -> cbn_g_cell nctx lvl G cl u ->
+      cbn_g_cell nctx (lvl + n) (cbn_gshift n G) cl (lift0 n u).
   Proof.
     intros hw hc. destruct hc; cbn in hw.
     - constructor; [exact (cbn_g_susp_shift G _ _ _ H)|exact H0].
@@ -138,7 +146,8 @@ Section Shift.
   Qed.
 
   Lemma cbn_ctx_den_shift Γ j t :
-    nctx = #|Γ| -> cbn_ctx_den Γ nctx lvl j = Some t -> cbn_ctx_den Γ nctx (lvl + n) j = Some (lift0 n t).
+    nctx = #|Γ| -> cbn_ctx_den Γ nctx lvl j = Some t ->
+      cbn_ctx_den Γ nctx (lvl + n) j = Some (lift0 n t).
   Proof.
     intros hn. unfold cbn_ctx_den. destruct (nth_error Γ j) as [decl|] eqn:E; [|discriminate].
     pose proof (nth_error_Some_length E) as hj.
@@ -273,7 +282,8 @@ Section RunStart.
 
   Lemma cbn_run_s2_memo_inv (t u : term) : cbn_memo_inv X_type X (cbn_run_s2 X_type X t u).
   Proof.
-    unfold cbn_run_s2, cbn_run_s1. apply cbn_memo_inv_new_entry, cbn_memo_inv_new_entry, cbn_memo_inv_init.
+    unfold cbn_run_s2, cbn_run_s1. apply cbn_memo_inv_new_entry, cbn_memo_inv_new_entry,
+      cbn_memo_inv_init.
   Qed.
 
   (** Every entry of the start table names its constants at the right instance length. *)
@@ -316,7 +326,8 @@ Section RunStart.
     level and under every extension [Δ]: the heap and the context map are empty. *)
   Lemma cbn_run_s2_gok (Γ : context) (nctx : nat) (Σ : global_env_ext) (Δ : context)
       (lvl : nat) (t u : term) :
-    cbn_consts_okb Σ t -> cbn_consts_okb Σ u -> on_free_vars cbn_xpredT t -> on_free_vars cbn_xpredT u ->
+    cbn_consts_okb Σ t -> cbn_consts_okb Σ u -> on_free_vars cbn_xpredT t ->
+      on_free_vars cbn_xpredT u ->
     cbn_gok X_type X Γ nctx Σ Δ lvl xH (cbn_run_ghost t u) (cbn_run_s2 X_type X t u).
   Proof.
     intros ht hu hht hhu. split.
@@ -355,7 +366,8 @@ Section RunStart.
   Lemma cbn_g_susp_env_empty (nctx : nat) (G : cbn_ghost) (t : term) :
     cbn_g_susp nctx nctx G cbn_env_empty t t.
   Proof.
-    pose proof (cbn_g_susp_intro nctx nctx G [] 0 0 t [] (cbn_g_slots_nil nctx nctx G) eq_refl) as h.
+    pose proof (cbn_g_susp_intro nctx nctx G [] 0 0 t [] (cbn_g_slots_nil nctx nctx G) eq_refl) as
+      h.
     rewrite subst_empty, Nat.sub_diag in h. cbn [Nat.add] in h. rewrite lift0_id in h.
     exact h.
   Qed.
@@ -476,7 +488,8 @@ Section Master.
 
   (** A step that leaves heap, next address, context map and memo alone keeps [cbn_minv]. *)
   Lemma cbn_minv_same L Q lo G s s' :
-    cbn_minv L Q lo G s -> s'.(cbn_st_heap) = s.(cbn_st_heap) -> s'.(cbn_st_next) = s.(cbn_st_next) ->
+    cbn_minv L Q lo G s -> s'.(cbn_st_heap) = s.(cbn_st_heap) ->
+      s'.(cbn_st_next) = s.(cbn_st_next) ->
     s'.(cbn_st_gam) = s.(cbn_st_gam) -> s'.(cbn_st_memo) = s.(cbn_st_memo) -> cbn_minv L Q lo G s'.
   Proof.
     intros [hL hQ hok hw] e1 e2 e3 e4. split; [exact hL|exact hQ| |].
@@ -487,7 +500,8 @@ Section Master.
 
   (** The machine's initial state is an instance of [cbn_minv] with the empty ghost: the
     satisfying instance of [cbn_minv] at [cbn_init]. *)
-  Lemma cbn_minv_init : cbn_minv nctx nctx xH (cbn_mkGhost (fun _ => None) (PTree.empty _)) cbn_init.
+  Lemma cbn_minv_init : cbn_minv nctx nctx xH
+    (cbn_mkGhost (fun _ => None) (PTree.empty _)) cbn_init.
   Proof.
     split; [lia|lia| |].
     - exact (cbn_gok_init X_type X Γ nctx Σ (cbn_jctx (nctx - nctx)) nctx).
@@ -561,14 +575,17 @@ Section Instances.
   (** The satisfying instance of [cbn_rb_case] (the interface [cbn_rb_sound]) at a real call that
     returns: the read-back of a sort in the empty environment, at the start state. *)
   Lemma cbn_rb_instance :
-    (exists s', cbn_rb_susp 0 (cbn_fuel_n 1) 0 cbn_env_empty (tSort sProp) cbn_init = CbnCOk (tSort sProp, s'))
+    (exists s', cbn_rb_susp 0 (cbn_fuel_n 1) 0 cbn_env_empty (tSort sProp) cbn_init
+      = CbnCOk (tSort sProp, s'))
     /\ cbn_minv X_type X [] 0 Σ 0 0 xH cbn_G0 cbn_init
     /\ on_free_vars cbn_xpredT (tSort sProp)
     /\ cbn_g_susp 0 0 cbn_G0 cbn_env_empty (tSort sProp) (lift0 (0 - 0) (tSort sProp))
-    /\ cbn_rb_case X_type X [] 0 Σ (cbn_fuel_n 1) 0 0 xH cbn_G0 cbn_env_empty (tSort sProp) (tSort sProp) cbn_init.
+    /\ cbn_rb_case X_type X [] 0 Σ (cbn_fuel_n 1) 0 0 xH cbn_G0 cbn_env_empty (tSort sProp)
+      (tSort sProp) cbn_init.
   Proof.
     split.
-    { destruct (cbn_rb_susp 0 (cbn_fuel_n 1) 0 cbn_env_empty (tSort sProp) cbn_init) as [[u s']|w] eqn:E;
+    { destruct (cbn_rb_susp 0 (cbn_fuel_n 1) 0 cbn_env_empty (tSort sProp) cbn_init) as
+      [[u s']|w] eqn:E;
         pose proof E as Ec; vm_compute in Ec; try discriminate Ec.
       injection Ec as hu _. subst u. exists s'. reflexivity. }
     split; [exact (cbn_minv_init X_type X [] 0 Σ eq_refl)|]. split; [reflexivity|].

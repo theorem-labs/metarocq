@@ -15,13 +15,14 @@ Import CanonicalTries.
   about the state [cbn_run] starts from that the soundness proof uses.
 
   - [cbn_memo_ok s]: every index of the code table holds an entry whose root code is the one
-    [cbn_new_entry] builds, with the universe check [cbn_new_entry] recorded. [cbn_new_entry] keeps it,
-    and the code [cbn_new_entry] returns satisfies [cbn_code_inv] for the entry it added.
+    [cbn_new_entry] builds, with the universe check [cbn_new_entry] recorded. [cbn_new_entry] keeps
+    it, and the code [cbn_new_entry] returns satisfies [cbn_code_inv] for the entry it added.
     [cbn_code_inv_child_step] carries [cbn_code_inv] along the machine's child codes.
   - [cbn_ctx_den lvl j]: the term the context entry [j] denotes with [lvl] levels in scope. The
     ghost invariant [cbn_gok] of [PCUICCallByNeedSoundEval] asks each cell of [cbn_st_gam] to carry
     this term as its ghost.
-  - the start of a call: [cbn_run_s1], [cbn_run_c1], [cbn_run_s2] and [cbn_run_c2] are the states and codes
+  - the start of a call: [cbn_run_s1], [cbn_run_c1], [cbn_run_s2] and [cbn_run_c2] are the states
+  and codes
     [cbn_run] builds before its first [cbn_conv_term] ([cbn_run_eq]); the start state satisfies
     [cbn_state_ok], [cbn_memo_ok] and [cbn_heap_nofwd], and the table holds the two root entries.
   - [cbn_heap_nofwd] (no forwarding pointer in the machine's heap between collections) is what
@@ -72,7 +73,8 @@ Lemma cbn_alloc_gc (cl : cbn_cell) (rs : list cbn_root) (s : cbn_state) :
   cbn_gc_due s = true ->
   cbn_alloc cl rs s
   = match cbn_collect (CbnRC cl :: rs) s with
-    | CbnCOk (CbnRC cl' :: rs', s') => CbnCOk (fst (cbn_alloc_now cl' s'), rs', snd (cbn_alloc_now cl' s'))
+    | CbnCOk (CbnRC cl' :: rs', s') => CbnCOk
+      (fst (cbn_alloc_now cl' s'), rs', snd (cbn_alloc_now cl' s'))
     | CbnCOk _ => CbnCFail CbnWRoots
     | CbnCFail w => CbnCFail w
     end.
@@ -144,7 +146,8 @@ Section CtxMemo.
   (** [cbn_memo_ok] reads only the code table, so every operation that leaves it alone keeps the
     invariant. *)
   Lemma cbn_memo_ok_codes (s s' : cbn_state) :
-    ((s'.(cbn_st_memo)).(cbn_m_codes)) = ((s.(cbn_st_memo)).(cbn_m_codes)) -> cbn_memo_ok s -> cbn_memo_ok s'.
+    ((s'.(cbn_st_memo)).(cbn_m_codes)) = ((s.(cbn_st_memo)).(cbn_m_codes)) -> cbn_memo_ok s ->
+      cbn_memo_ok s'.
   Proof. intros he h i e hi. rewrite he in hi. exact (h i e hi). Qed.
 
   Lemma cbn_new_entry_memo_ok (t : term) (u : Instance.t) (s : cbn_state) :
@@ -180,8 +183,8 @@ Section CtxMemo.
   (** ** The child codes the machine builds
 
     [cbn_child_step t k t'] lists the steps the machine's traversal takes: one constructor per
-    [code_inv_child_*] lemma of [PCUICCallByNeed]. [cbn_code_inv_child_step] carries [cbn_code_inv] along any
-    of them, so a proof over the traversal needs one lemma, not sixteen. *)
+    [code_inv_child_*] lemma of [PCUICCallByNeed]. [cbn_code_inv_child_step] carries [cbn_code_inv]
+    along any of them, so a proof over the traversal needs one lemma, not sixteen. *)
   Inductive cbn_child_step : term -> N -> term -> Prop :=
   | cbn_cs_app_fun f a : cbn_child_step (tApp f a) 0 f
   | cbn_cs_app_arg f a : cbn_child_step (tApp f a) 1 a
@@ -305,11 +308,13 @@ Section CtxMemo.
   (** The state the call hands to [cbn_conv_term] satisfies [cbn_state_ok] and [cbn_memo_ok]. *)
   Lemma cbn_run_s2_state_ok (t u : term) : cbn_state_ok 1 (cbn_run_s2 t u).
   Proof.
-    unfold cbn_run_s2, cbn_run_s1. apply cbn_new_entry_state_ok, cbn_new_entry_state_ok, cbn_state_ok_init.
+    unfold cbn_run_s2, cbn_run_s1. apply cbn_new_entry_state_ok, cbn_new_entry_state_ok,
+      cbn_state_ok_init.
   Qed.
 
   Lemma cbn_run_s2_memo_ok (t u : term) : cbn_memo_ok (cbn_run_s2 t u).
-  Proof. unfold cbn_run_s2, cbn_run_s1. apply cbn_new_entry_memo_ok, cbn_new_entry_memo_ok, cbn_memo_ok_init. Qed.
+  Proof. unfold cbn_run_s2, cbn_run_s1. apply cbn_new_entry_memo_ok, cbn_new_entry_memo_ok,
+    cbn_memo_ok_init. Qed.
 
   (** The two codes the call starts from: the table holds their entries, and each code is
     the root code of its entry. *)
@@ -321,7 +326,8 @@ Section CtxMemo.
            (cbn_mkEntry t [] (cbn_wf_term_univs X_type X t))
            (PTree.empty cbn_code_entry)).
   Proof.
-    unfold cbn_run_s2, cbn_run_s1. rewrite cbn_new_entry_codes, cbn_new_entry_ncode, cbn_new_entry_codes.
+    unfold cbn_run_s2, cbn_run_s1. rewrite cbn_new_entry_codes, cbn_new_entry_ncode,
+      cbn_new_entry_codes.
     reflexivity.
   Qed.
 

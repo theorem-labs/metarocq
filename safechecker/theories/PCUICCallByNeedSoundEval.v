@@ -17,9 +17,9 @@ Local Notation cbn_xpredT := (fun _ : nat => true) (only parsing).
 
 (** * The evaluator of the call-by-need machine against PCUIC reduction
 
-  [cbn_whnf], [cbn_whnf_fix], [cbn_eval_slot], [cbn_force] and [cbn_apply] turn a suspension into a weak-head
-  value. This file proves that the term the input stands for reduces, in PCUIC, to the term
-  the value stands for, for every rule the machine has: beta, zeta, rel (including the
+  [cbn_whnf], [cbn_whnf_fix], [cbn_eval_slot], [cbn_force] and [cbn_apply] turn a suspension into a
+  weak-head value. This file proves that the term the input stands for reduces, in PCUIC, to the
+  term the value stands for, for every rule the machine has: beta, zeta, rel (including the
   forcing of a cell and its write-back), delta, iota, fixpoint unfolding, projection, and
   the stuck forms of a match, a projection and a fixpoint whose scrutinee or recursive
   argument is neutral or stuck. The machine has no rule for a cofixpoint, a [tVar] or a
@@ -72,8 +72,8 @@ Local Notation cbn_xpredT := (fun _ : nat => true) (only parsing).
 
   [cbn_gok] also says that every ghost term, and every entry of the code table, is hygienic
   ([on_free_vars cbn_xpredT]: its variables are anything, but the contexts of its matches are
-  closed), under the premise [cbn_ctx_hyg] that the let-bodies of [Γ] are. [cbn_machine_sound] itself
-  never uses it. The comparison needs it to change level: red weakening and red under
+  closed), under the premise [cbn_ctx_hyg] that the let-bodies of [Γ] are. [cbn_machine_sound]
+  itself never uses it. The comparison needs it to change level: red weakening and red under
   substitution are false for a term whose match contexts are not closed, because [lift]
   leaves those contexts alone while [iota_red] expands their let-bodies. [cbn_machine_sound]
   returns its ghost existentially, so only its own invariant can carry the clause. The hook
@@ -121,7 +121,8 @@ Proof.
   destruct u as [|l u]; [reflexivity|]. rewrite cbn_inst_code_cons. apply cbn_consts_subst_instance.
 Qed.
 
-Lemma cbn_closed_inst_code (u : Instance.t) (t : term) : closedn 0 t -> closedn 0 (cbn_inst_code u t).
+Lemma cbn_closed_inst_code (u : Instance.t) (t : term) : closedn 0 t ->
+  closedn 0 (cbn_inst_code u t).
 Proof.
   intros h. destruct u as [|l u]; [exact h|]. rewrite cbn_inst_code_cons, closedn_subst_instance.
   exact h.
@@ -140,11 +141,13 @@ Qed.
 
 (** The fixpoints of a [tFix] code read through an environment: [subst ts 0] of
   [lift K n] of each definition, under the [#|mfix|] binders of the block. *)
-#[local] Definition cbn_rfix (ts : list term) (K n : nat) (mfix : mfixpoint term) : mfixpoint term :=
+#[local] Definition cbn_rfix (ts : list term) (K n : nat) (mfix : mfixpoint term)
+  : mfixpoint term :=
   map (map_def (subst ts 0) (subst ts (#|mfix| + 0)))
     (map (map_def (lift K n) (lift K (#|mfix| + n))) mfix).
 
-Lemma cbn_rfix_eq ts K n mfix j : subst ts 0 (lift K n (tFix mfix j)) = tFix (cbn_rfix ts K n mfix) j.
+Lemma cbn_rfix_eq ts K n mfix j : subst ts 0 (lift K n (tFix mfix j))
+  = tFix (cbn_rfix ts K n mfix) j.
 Proof. cbn [lift subst]. unfold cbn_rfix. rewrite length_map. reflexivity. Qed.
 
 Lemma cbn_rfix_length ts K n mfix : #|cbn_rfix ts K n mfix| = #|mfix|.
@@ -299,7 +302,8 @@ Proof.
 Qed.
 
 Lemma cbn_hyg_subst s k t :
-  forallb (on_free_vars cbn_xpredT) s -> on_free_vars cbn_xpredT t -> on_free_vars cbn_xpredT (subst s k t).
+  forallb (on_free_vars cbn_xpredT) s -> on_free_vars cbn_xpredT t ->
+    on_free_vars cbn_xpredT (subst s k t).
 Proof.
   intros hs ht. eapply on_free_vars_impl; [|exact (on_free_vars_subst_gen _ _ s k t hs ht)].
   intros; reflexivity.
@@ -310,11 +314,14 @@ Lemma cbn_hyg_mkApps h ts :
   on_free_vars cbn_xpredT (mkApps h ts).
 Proof. intros hh hts. rewrite on_free_vars_mkApps, hh, hts. reflexivity. Qed.
 
-Lemma cbn_hyg_subst_instance u t : on_free_vars cbn_xpredT (subst_instance u t) = on_free_vars cbn_xpredT t.
+Lemma cbn_hyg_subst_instance u t : on_free_vars cbn_xpredT (subst_instance u t)
+  = on_free_vars cbn_xpredT t.
 Proof. apply on_free_vars_subst_instance. Qed.
 
-Lemma cbn_hyg_inst_code u t : on_free_vars cbn_xpredT (cbn_inst_code u t) = on_free_vars cbn_xpredT t.
-Proof. destruct u as [|l u]; [reflexivity|]. rewrite cbn_inst_code_cons. apply cbn_hyg_subst_instance. Qed.
+Lemma cbn_hyg_inst_code u t : on_free_vars cbn_xpredT (cbn_inst_code u t)
+  = on_free_vars cbn_xpredT t.
+Proof. destruct u as [|l u]; [reflexivity|]. rewrite cbn_inst_code_cons.
+  apply cbn_hyg_subst_instance. Qed.
 
 (** Hygiene recurses through every subterm [cbn_code_inv]'s step takes, as [cbn_consts_okb] does. *)
 Lemma cbn_code_inv_hyg (e : cbn_code_entry) (c : cbn_code) :
@@ -370,6 +377,13 @@ Proof.
       exact hd.
 Qed.
 
+(** The first call whose answer [he] matches on: its answer is [CbnCOk (x, y, z)], named by [e]. *)
+Ltac cbn_dcall he e x y z :=
+  lazymatch type of he with
+  | context [match ?t with CbnCOk _ => _ | CbnCFail _ => _ end] =>
+      destruct t as [[[x y] z]|?] eqn:e; [|discriminate he]
+  end.
+
 Section Eval.
   Context {cf : checker_flags}.
   Context (X_type : abstract_env_impl) (X : X_type.π2.π1).
@@ -403,7 +417,8 @@ Section Eval.
   Lemma cbn_cred_app_r f t u : cbn_cred t u -> cbn_cred (tApp f t) (tApp f u).
   Proof. intros [h]. constructor. exact (red_app_r _ _ _ h). Qed.
 
-  Lemma cbn_cred_letin na d0 d1 T b : cbn_cred d0 d1 -> cbn_cred (tLetIn na d0 T b) (tLetIn na d1 T b).
+  Lemma cbn_cred_letin na d0 d1 T b : cbn_cred d0 d1 ->
+    cbn_cred (tLetIn na d0 T b) (tLetIn na d1 T b).
   Proof.
     intros [h]. constructor.
     exact (red_letin na d0 d1 T T b b h (refl_red _ _ _) (refl_red _ _ _)).
@@ -415,14 +430,16 @@ Section Eval.
     code table [cbn_gc]: the table every code of a reading is checked against. Both only grow
     ([cbn_gext]). *)
 
-  Record cbn_ghost := cbn_mkGhost { cbn_gm : cbn_haddr -> option term; cbn_gc : PTree.t cbn_code_entry }.
+  Record cbn_ghost := cbn_mkGhost { cbn_gm : cbn_haddr -> option term;
+    cbn_gc : PTree.t cbn_code_entry }.
   Coercion cbn_gm : cbn_ghost >-> Funclass.
 
   (** A code is in the table: its index holds an entry it satisfies [cbn_code_inv] for. *)
   Definition cbn_cok (G : cbn_ghost) (c : cbn_code) : Prop :=
     exists e, PTree.get c.(cbn_c_entry) (cbn_gc G) = Some e /\ cbn_code_inv e c.
 
-  Lemma cbn_cok_child G c k t : cbn_cok G c -> cbn_child_step c.(cbn_c_term) k t -> cbn_cok G (cbn_child c k t).
+  Lemma cbn_cok_child G c k t : cbn_cok G c -> cbn_child_step c.(cbn_c_term) k t ->
+    cbn_cok G (cbn_child c k t).
   Proof.
     intros [e [he hi]] hs. exists e.
     split; [exact he|exact (cbn_code_inv_child_step e c k t hi hs)].
@@ -462,8 +479,10 @@ Section Eval.
     its environment, applied to its spine. *)
   Inductive cbn_g_value (G : cbn_ghost) : cbn_value -> term -> Prop :=
   | cbn_g_VCon h sp ts : cbn_g_addrs G sp ts -> cbn_g_value G (CbnVCon h sp) (mkApps h ts)
-  | cbn_g_VLam e c t : cbn_g_susp G e c.(cbn_c_term) t -> cbn_cok G c -> cbn_g_value G (CbnVLam e c) t
-  | cbn_g_VOpen e c t : cbn_g_susp G e c.(cbn_c_term) t -> cbn_cok G c -> cbn_g_value G (CbnVOpen e c) t
+  | cbn_g_VLam e c t : cbn_g_susp G e c.(cbn_c_term) t -> cbn_cok G c ->
+    cbn_g_value G (CbnVLam e c) t
+  | cbn_g_VOpen e c t : cbn_g_susp G e c.(cbn_c_term) t -> cbn_cok G c ->
+    cbn_g_value G (CbnVOpen e c) t
   | cbn_g_VNeuVar l sp ts :
       cbn_g_addrs G sp ts -> cbn_g_value G (CbnVNeu (CbnNVar l) sp) (mkApps (tRel (lvl - S l)) ts)
   | cbn_g_VNeuConst h sp ts :
@@ -472,10 +491,12 @@ Section Eval.
       cbn_g_susp G e c.(cbn_c_term) h -> cbn_cok G c -> cbn_g_addrs G sp ts ->
       cbn_g_value G (CbnVStuck e c sp) (mkApps h ts)
   | cbn_g_VFix e c mfix idx i sp h ts :
-      c.(cbn_c_term) = tFix mfix idx -> cbn_g_susp G e (tFix mfix i) h -> cbn_cok G c -> cbn_g_addrs G sp ts ->
+      c.(cbn_c_term) = tFix mfix idx -> cbn_g_susp G e (tFix mfix i) h -> cbn_cok G c ->
+        cbn_g_addrs G sp ts ->
       cbn_g_value G (CbnVFix e c i sp) (mkApps h ts)
   | cbn_g_VStuckFix e c mfix idx i sp h ts :
-      c.(cbn_c_term) = tFix mfix idx -> cbn_g_susp G e (tFix mfix i) h -> cbn_cok G c -> cbn_g_addrs G sp ts ->
+      c.(cbn_c_term) = tFix mfix idx -> cbn_g_susp G e (tFix mfix i) h -> cbn_cok G c ->
+        cbn_g_addrs G sp ts ->
       cbn_g_value G (CbnVStuckFix e c i sp) (mkApps h ts).
 
   Inductive cbn_g_cell (G : cbn_ghost) : cbn_cell -> term -> Prop :=
@@ -488,7 +509,8 @@ Section Eval.
 
   Record cbn_gext (G G' : cbn_ghost) : Prop := cbn_mkGext {
     cbn_gx_map : forall a t, G a = Some t -> G' a = Some t;
-    cbn_gx_codes : forall i e, PTree.get i (cbn_gc G) = Some e -> PTree.get i (cbn_gc G') = Some e }.
+    cbn_gx_codes : forall i e, PTree.get i (cbn_gc G) = Some e ->
+      PTree.get i (cbn_gc G') = Some e }.
   Arguments cbn_gx_map {G G'} _ _ _ _.
   Arguments cbn_gx_codes {G G'} _ _ _ _.
   Coercion cbn_gx_map : cbn_gext >-> Funclass.
@@ -541,12 +563,14 @@ Section Eval.
 
   Lemma cbn_g_cell_mono G G' (h : cbn_gext G G') cl t : cbn_g_cell G cl t -> cbn_g_cell G' cl t.
   Proof.
-    intros hc. destruct hc; econstructor; eauto using cbn_g_value_mono, cbn_g_susp_mono, cbn_cok_mono.
+    intros hc. destruct hc; econstructor; eauto using cbn_g_value_mono, cbn_g_susp_mono,
+      cbn_cok_mono.
   Qed.
 
   (** ** Every address a reading names has a ghost term *)
 
-  #[local] Definition cbn_gdef (G : cbn_haddr -> option term) (a : cbn_haddr) : Prop := exists t, G a = Some t.
+  #[local] Definition cbn_gdef (G : cbn_haddr -> option term) (a : cbn_haddr) : Prop := exists t,
+    G a = Some t.
 
   Lemma cbn_g_slot_ad G :
     (forall x t, cbn_g_slot G x t -> Forall (cbn_gdef G) (cbn_ad_slot x))
@@ -589,15 +613,18 @@ Section Eval.
 
   (** ** The state operations that leave the heap shape alone
 
-    What [cbn_heap_upd], [cbn_tick], [cbn_new_entry], [cbn_once_body] and [cbn_delta] change of a state. *)
+    What [cbn_heap_upd], [cbn_tick], [cbn_new_entry], [cbn_once_body] and [cbn_delta] change of a
+    state. *)
 
   Lemma cbn_heap_upd_shape a cl s s' :
     cbn_heap_upd a cl s = Some s' ->
     s'.(cbn_st_next) = s.(cbn_st_next) /\ s'.(cbn_st_room) = s.(cbn_st_room)
     /\ s'.(cbn_st_steps) = s.(cbn_st_steps) /\ s'.(cbn_st_gam) = s.(cbn_st_gam)
-    /\ s'.(cbn_st_memo) = s.(cbn_st_memo) /\ cbn_bh_upd a cl s.(cbn_st_heap) = Some s'.(cbn_st_heap).
+    /\ s'.(cbn_st_memo) = s.(cbn_st_memo) /\
+      cbn_bh_upd a cl s.(cbn_st_heap) = Some s'.(cbn_st_heap).
   Proof.
-    unfold cbn_heap_upd. destruct (cbn_bh_upd a cl s.(cbn_st_heap)) as [h'|] eqn:e; cbn; [|discriminate].
+    unfold cbn_heap_upd. destruct (cbn_bh_upd a cl s.(cbn_st_heap)) as [h'|] eqn:e; cbn;
+      [|discriminate].
     intros he. inversion he; subst. cbn. repeat split; try reflexivity.
   Qed.
 
@@ -675,7 +702,8 @@ Section Eval.
     constants at the right instance length; and, under [cbn_ctx_hyg], every entry is hygienic. *)
   #[local] Definition cbn_mok (K : PTree.t cbn_code_entry) (s : cbn_state) : Prop :=
     cbn_memo_inv X_type X s /\ cbn_memo_ok X_type X s
-    /\ (forall i e, PTree.get i K = Some e -> PTree.get i ((s.(cbn_st_memo)).(cbn_m_codes)) = Some e)
+    /\ (forall i e, PTree.get i K = Some e ->
+      PTree.get i ((s.(cbn_st_memo)).(cbn_m_codes)) = Some e)
     /\ (forall i e, PTree.get i ((s.(cbn_st_memo)).(cbn_m_codes)) = Some e ->
           cbn_consts_okb Σ (cbn_inst_code e.(cbn_ce_inst) e.(cbn_ce_term)) = true)
     /\ (cbn_ctx_hyg -> forall i e, PTree.get i ((s.(cbn_st_memo)).(cbn_m_codes)) = Some e ->
@@ -696,8 +724,10 @@ Section Eval.
 
   (** *** Readings of hygienic ghost terms and codes are hygienic *)
 
-  Definition cbn_hygG (G : cbn_ghost) : Prop := forall a t, G a = Some t -> on_free_vars cbn_xpredT t.
-  Definition cbn_codes_hyg (G : cbn_ghost) : Prop := forall c, cbn_cok G c -> on_free_vars cbn_xpredT c.(cbn_c_term).
+  Definition cbn_hygG (G : cbn_ghost) : Prop := forall a t, G a = Some t ->
+    on_free_vars cbn_xpredT t.
+  Definition cbn_codes_hyg (G : cbn_ghost) : Prop := forall c, cbn_cok G c ->
+    on_free_vars cbn_xpredT c.(cbn_c_term).
 
   Lemma cbn_gok_codes_hyg lo G s : cbn_gok lo G s -> cbn_ctx_hyg -> cbn_codes_hyg G.
   Proof.
@@ -723,10 +753,12 @@ Section Eval.
     on_free_vars cbn_xpredT t -> cbn_g_susp G e t u -> on_free_vars cbn_xpredT u.
   Proof.
     intros ht hs. inversion hs; subst.
-    apply cbn_hyg_subst; [exact (proj2 (cbn_g_slot_hyg G hG hC) _ _ H)|apply cbn_hyg_lift; exact ht].
+    apply cbn_hyg_subst; [exact (proj2 (cbn_g_slot_hyg G hG hC) _ _ H)|apply
+      cbn_hyg_lift; exact ht].
   Qed.
 
-  Lemma cbn_g_addrs_hyg G (hG : cbn_hygG G) l ts : cbn_g_addrs G l ts -> forallb (on_free_vars cbn_xpredT) ts.
+  Lemma cbn_g_addrs_hyg G (hG : cbn_hygG G) l ts : cbn_g_addrs G l ts ->
+    forallb (on_free_vars cbn_xpredT) ts.
   Proof.
     induction 1 as [|a t l ts ha hl ih]; [reflexivity|]. cbn. rewrite (hG _ _ ha), ih.
     reflexivity.
@@ -840,7 +872,8 @@ Section Eval.
   Qed.
 
   Lemma cbn_g_slots_list_set G l ts n x t :
-    cbn_g_slots G l ts -> cbn_g_slot G x t -> cbn_g_slots G (cbn_list_set l n x) (cbn_list_set ts n t).
+    cbn_g_slots G l ts -> cbn_g_slot G x t ->
+      cbn_g_slots G (cbn_list_set l n x) (cbn_list_set ts n t).
   Proof.
     intros h hx. revert n. induction h as [|y l u us hy hl ih]; intros [|n]; cbn;
       constructor; try assumption. apply ih.
@@ -854,7 +887,8 @@ Section Eval.
   Proof. induction 1; cbn; [trivial|]. intros h2. constructor; auto. Qed.
 
   Lemma cbn_g_addrs_nth G l ts n a :
-    cbn_g_addrs G l ts -> nth_error l n = Some a -> exists t, nth_error ts n = Some t /\ G a = Some t.
+    cbn_g_addrs G l ts -> nth_error l n = Some a -> exists t, nth_error ts n = Some t /\
+      G a = Some t.
   Proof.
     intros h. revert n. induction h as [|b t l ts hb hl ih]; intros [|n] hn; cbn in hn;
       try discriminate.
@@ -888,7 +922,8 @@ Section Eval.
   Proof. destruct a as [p]. unfold cbn_haddr_eqb. cbn. apply Pos.eqb_refl. Qed.
 
   Lemma cbn_gdom_addrs_in lo G s l :
-    (forall a t, G a = Some t -> (lo <= cbn_ha_p a)%positive /\ (cbn_ha_p a < s.(cbn_st_next))%positive) ->
+    (forall a t, G a = Some t -> (lo <= cbn_ha_p a)%positive /\
+      (cbn_ha_p a < s.(cbn_st_next))%positive) ->
     Forall (cbn_gdef G) l -> cbn_addrs_in lo s.(cbn_st_next) l.
   Proof.
     intros hd. induction 1 as [|b l hb hl ih]; constructor; [|exact ih].
@@ -905,7 +940,8 @@ Section Eval.
   Qed.
 
   Lemma cbn_mok_once_body K c e s :
-    cbn_mok K s -> PTree.get c.(cbn_c_entry) ((s.(cbn_st_memo)).(cbn_m_codes)) = Some e -> cbn_code_inv e c ->
+    cbn_mok K s -> PTree.get c.(cbn_c_entry) ((s.(cbn_st_memo)).(cbn_m_codes)) = Some e ->
+      cbn_code_inv e c ->
     cbn_mok K (snd (cbn_once_body c s)).
   Proof.
     intros (h1 & h2 & h3 & h4 & h5) hg hi.
@@ -963,7 +999,8 @@ Section Eval.
     cbn_mok K s1 -> cbn_gok lo (cbn_mkGhost (cbn_gm G) K) s1.
   Proof.
     intros hok e1 e2 e3 hK hm.
-    assert (hx : cbn_gext G (cbn_mkGhost (cbn_gm G) K)) by (split; [intros a t h; exact h|exact hK]).
+    assert (hx : cbn_gext G (cbn_mkGhost (cbn_gm G) K)) by
+      (split; [intros a t h; exact h|exact hK]).
     destruct hok as [h1 h2 h3 h4 h5 _ h7]. split.
     - destruct h1 as [p1 p2 p3]. split.
       + rewrite e1, e2. exact p1.
@@ -1041,7 +1078,8 @@ Section Eval.
 
   (** *** The context map *)
 
-  Lemma cbn_ctx_den_red j t : cbn_ctx_den Γ nctx lvl j = Some t -> cbn_cred (tRel (lvl - nctx + j)) t.
+  Lemma cbn_ctx_den_red j t : cbn_ctx_den Γ nctx lvl j = Some t ->
+    cbn_cred (tRel (lvl - nctx + j)) t.
   Proof.
     unfold cbn_ctx_den. destruct (nth_error Γ j) as [decl|] eqn:ed; [|discriminate].
     destruct decl.(decl_body) as [b|] eqn:eb; intros h; injection h as <-.
@@ -1070,7 +1108,8 @@ Section Eval.
     intros hok he.
     destruct (cbn_heap_upd_shape _ _ _ _ he) as (he1 & he2 & he3 & he4 & he5 & hu).
     split.
-    - apply (cbn_heap_upd_state_ok lo a CbnCBusy s s' (cbn_gk_state _ _ _ hok)); [cbn; constructor|exact he].
+    - apply (cbn_heap_upd_state_ok lo a CbnCBusy s s' (cbn_gk_state _ _ _ hok));
+      [cbn; constructor|exact he].
     - apply (cbn_heap_nofwd_heap_upd a CbnCBusy s s' (cbn_gk_nofwd _ _ _ hok));
         [intros b; discriminate|exact he].
     - intros b cl hb. unfold cbn_heap_get in hb.
@@ -1203,7 +1242,8 @@ Section Eval.
 
   (** *** The congruences of reduction the new rules need *)
 
-  Lemma cbn_cred_case_c ci p c c' brs : cbn_cred c c' -> cbn_cred (tCase ci p c brs) (tCase ci p c' brs).
+  Lemma cbn_cred_case_c ci p c c' brs : cbn_cred c c' ->
+    cbn_cred (tCase ci p c brs) (tCase ci p c' brs).
   Proof. intros [h]. constructor. exact (red_case_c _ _ _ _ _ h). Qed.
 
   Lemma cbn_cred_proj_c pr c c' : cbn_cred c c' -> cbn_cred (tProj pr c) (tProj pr c').
@@ -1220,8 +1260,8 @@ Section Eval.
 
     A call may collect, and a collection renames every address. So a call does not promise
     that the roots come back unchanged or that the ghost map only grows. It promises
-    [cbn_gren G G' rs rs']: the code table only grows ([cbn_gcx]), and every root comes back as a root
-    of the same shape that stands, under the new ghost [G'], for what the old root stood for
+    [cbn_gren G G' rs rs']: the code table only grows ([cbn_gcx]), and every root comes back as a
+    root of the same shape that stands, under the new ghost [G'], for what the old root stood for
     under [G] ([cbn_gpres], one clause per shape of root).
     Without a collection the roots come back as they went in and [G'] extends [G]
     ([cbn_gren_ext]); a collection renames them ([cbn_collect_ghost]). *)
@@ -1268,7 +1308,8 @@ Section Eval.
     intros ts h. exact (cbn_g_slots_mono _ _ hx _ _ (c _ h)).
   Qed.
 
-  Lemma cbn_genv_susp G G' e e' t u : cbn_genv G G' e e' -> cbn_g_susp G e t u -> cbn_g_susp G' e' t u.
+  Lemma cbn_genv_susp G G' e e' t u : cbn_genv G G' e e' -> cbn_g_susp G e t u ->
+    cbn_g_susp G' e' t u.
   Proof.
     intros (h1 & h2 & h3) hs. destruct (cbn_g_susp_inv _ _ _ _ hs) as (ts & hts & hnv & ->).
     rewrite <- h1, <- h2. apply cbn_g_susp_of_slots; [exact (h3 _ hts)|].
@@ -1362,14 +1403,18 @@ Section Eval.
       cbn_gg_rng : forall b t, Gn b = Some t -> exists x, G x = Some t }.
 
     (** What the walk asks of the address map it threads through the renamings. *)
-    #[local] Definition cbn_cpg (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state)) : Prop :=
+    #[local] Definition cbn_cpg (cp : cbn_haddr -> cbn_gc_state ->
+      cbn_res (cbn_haddr * cbn_gc_state)) : Prop :=
       forall a g a' g' Gn, cbn_gcg Gn g -> cp a g = CbnCOk (a', g') ->
-        exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn' /\ (forall t, G a = Some t -> Gn' a' = Some t).
+        exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn' /\
+          (forall t, G a = Some t -> Gn' a' = Some t).
 
     Section Walk.
-      Context (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state)) (hcp : cbn_cpg cp).
+      Context (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state))
+        (hcp : cbn_cpg cp).
 
-      Lemma cbn_rn_addrs_g : forall l g l' g' Gn, cbn_gcg Gn g -> cbn_rn_addrs cp l g = CbnCOk (l', g') ->
+      Lemma cbn_rn_addrs_g : forall l g l' g' Gn, cbn_gcg Gn g ->
+        cbn_rn_addrs cp l g = CbnCOk (l', g') ->
         exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn'
           /\ (forall ts, cbn_g_addrs G l ts -> cbn_g_addrs Gn' l' ts).
       Proof.
@@ -1387,8 +1432,10 @@ Section Eval.
           constructor; [exact (hx2 _ _ (ha1 _ hat))|exact (hl2 _ hl)].
       Qed.
 
-      Lemma cbn_rn_slot_g : forall x g x' g' Gn, cbn_gcg Gn g -> cbn_rn_slot cp x g = CbnCOk (x', g') ->
-        exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn' /\ (forall t, cbn_g_slot G x t -> cbn_g_slot Gn' x' t).
+      Lemma cbn_rn_slot_g : forall x g x' g' Gn, cbn_gcg Gn g ->
+        cbn_rn_slot cp x g = CbnCOk (x', g') ->
+        exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn' /\
+          (forall t, cbn_g_slot G x t -> cbn_g_slot Gn' x' t).
       Proof.
         intros x. induction x as [a|vs n o c ihvs] using cbn_slot_ind'; intros g x' g' Gn hg he.
         - simpl in he. destruct (cp a g) as [[b g1]|w] eqn:e1; [|discriminate].
@@ -1422,7 +1469,8 @@ Section Eval.
           exact (cbn_cok_eqc _ _ _ (cbn_gg_codes _ _ hg') hcok).
       Qed.
 
-      Lemma cbn_rn_slots_g : forall l g l' g' Gn, cbn_gcg Gn g -> cbn_rn_slots cp l g = CbnCOk (l', g') ->
+      Lemma cbn_rn_slots_g : forall l g l' g' Gn, cbn_gcg Gn g ->
+        cbn_rn_slots cp l g = CbnCOk (l', g') ->
         exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn'
           /\ (forall ts, cbn_g_slots G l ts -> cbn_g_slots Gn' l' ts).
       Proof.
@@ -1453,7 +1501,8 @@ Section Eval.
       Qed.
 
       Lemma cbn_rn_value_g v g v' g' Gn : cbn_gcg Gn g -> cbn_rn_value cp v g = CbnCOk (v', g') ->
-        exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn' /\ (forall t, cbn_g_value G v t -> cbn_g_value Gn' v' t).
+        exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn' /\
+          (forall t, cbn_g_value G v t -> cbn_g_value Gn' v' t).
       Proof.
         destruct v as [hd sp|e c|e c i sp|e c i sp|hd sp|e c|e c sp]; intros hg he;
           unfold cbn_rn_value in he.
@@ -1586,7 +1635,8 @@ Section Eval.
           exists Gn'. split; [exact hg'|]. split; [exact hx'|]. exact hr.
       Qed.
 
-      Lemma cbn_rn_roots_g : forall l g l' g' Gn, cbn_gcg Gn g -> cbn_rn_roots cp l g = CbnCOk (l', g') ->
+      Lemma cbn_rn_roots_g : forall l g l' g' Gn, cbn_gcg Gn g ->
+        cbn_rn_roots cp l g = CbnCOk (l', g') ->
         exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn' /\ Forall2 (cbn_gpres G Gn') l l'.
       Proof.
         induction l as [|r l ih]; intros g l' g' Gn hg he; simpl in he.
@@ -1601,7 +1651,8 @@ Section Eval.
           constructor; [exact (cbn_gpres_r_ext _ _ _ _ _ hp1 hx2)|exact hp2].
       Qed.
 
-      Lemma cbn_rn_tree'_g : forall m g m' g' Gn, cbn_gcg Gn g -> cbn_rn_tree' cp m g = CbnCOk (m', g') ->
+      Lemma cbn_rn_tree'_g : forall m g m' g' Gn, cbn_gcg Gn g ->
+        cbn_rn_tree' cp m g = CbnCOk (m', g') ->
         exists Gn', cbn_gcg Gn' g' /\ cbn_gext Gn Gn'
           /\ (forall p a', PTree.get' p m' = Some a' ->
                 exists a, PTree.get' p m = Some a
@@ -1702,12 +1753,14 @@ Section Eval.
     (** One copied cell: its children are renamed, the copy goes to the fresh address
       [cbn_g_next], and the ghost of the new heap is extended there by the old ghost term. *)
     Lemma cbn_gc_copy_g_write k a g cl cl1 g1 old Gn :
-      cbn_cpg (cbn_gc_copy k) -> cbn_gcg Gn g -> cbn_bh_get a g.(cbn_g_old) = Some cl -> cbn_cell_fwd cl = None ->
+      cbn_cpg (cbn_gc_copy k) -> cbn_gcg Gn g -> cbn_bh_get a g.(cbn_g_old) = Some cl ->
+        cbn_cell_fwd cl = None ->
       cbn_rn_cell (cbn_gc_copy k) cl g = CbnCOk (cl1, g1) ->
       cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old) = Some old ->
       cbn_gc_inv s.(cbn_st_heap) s.(cbn_st_next)
         (cbn_mkGc old (cbn_bh_cons cl1 g1.(cbn_g_heap)) (Pos.succ g1.(cbn_g_next))) ->
-      exists Gn', cbn_gcg Gn' (cbn_mkGc old (cbn_bh_cons cl1 g1.(cbn_g_heap)) (Pos.succ g1.(cbn_g_next)))
+      exists Gn', cbn_gcg Gn' (cbn_mkGc old (cbn_bh_cons cl1 g1.(cbn_g_heap))
+        (Pos.succ g1.(cbn_g_next)))
         /\ cbn_gext Gn Gn' /\ (forall t, G a = Some t -> Gn' (CbnHAddr g1.(cbn_g_next)) = Some t).
     Proof.
       intros hk hg ha hf e1 e2 hinv2.
@@ -1716,7 +1769,8 @@ Section Eval.
       destruct (cbn_gk_cells _ _ _ hok a cl hcl) as [t0 [hGa hc0]].
       destruct (cbn_rn_cell_g _ hk _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hbusy & hr1).
       pose proof (cbn_inv_heap _ _ _ (cbn_gg_inv _ _ hg1)) as hok1.
-      pose (Gn' := cbn_mkGhost (fun b => if cbn_haddr_eqb b (CbnHAddr g1.(cbn_g_next)) then Some t0 else Gn1 b)
+      pose (Gn' := cbn_mkGhost (fun b =>
+        if cbn_haddr_eqb b (CbnHAddr g1.(cbn_g_next)) then Some t0 else Gn1 b)
                      (cbn_gc Gn1)).
       assert (hfresh : forall b t, Gn1 b = Some t -> b <> CbnHAddr g1.(cbn_g_next)).
       { intros b t hb ->. destruct (cbn_gg_dom _ _ hg1 _ _ hb) as [_ hlt]. cbn in hlt. lia. }
@@ -1753,7 +1807,8 @@ Section Eval.
           split; [exact (cbn_bh_ok_le _ _ _ hok1)|lia].
         + destruct (cbn_gg_dom _ _ hg1 _ _ hb) as [h1 h2]. split; [exact h1|]. cbn. lia.
       - intros b t hb. unfold Gn' in hb. cbn [cbn_gm] in hb.
-        destruct (cbn_haddr_eqb b (CbnHAddr g1.(cbn_g_next))); [injection hb as <-; exists a; exact hGa|].
+        destruct (cbn_haddr_eqb b (CbnHAddr g1.(cbn_g_next)));
+          [injection hb as <-; exists a; exact hGa|].
         exact (cbn_gg_rng _ _ hg1 _ _ hb).
     Qed.
 
@@ -1767,27 +1822,33 @@ Section Eval.
         exists Gn. split; [exact hg|]. split; [apply cbn_gext_refl|].
         intros t ht. exact (cbn_gg_fwd _ _ hg _ _ _ ea ht).
       - pose proof he as he0.
-        destruct (cbn_gc_copy_ok s.(cbn_st_heap) s.(cbn_st_next) (CbnFS k) a g a' g' (cbn_gg_inv _ _ hg) he0)
+        destruct (cbn_gc_copy_ok s.(cbn_st_heap) s.(cbn_st_next) (CbnFS k) a g a' g'
+          (cbn_gg_inv _ _ hg) he0)
           as [hst _].
         rewrite cbn_gc_copy_FS in he.
         destruct (cbn_bh_get a g.(cbn_g_old)) as [cl|] eqn:ea; [|discriminate].
         destruct cl as [vals n o c|v| |b].
-        + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) (CbnCSusp vals n o c) g) as [[cl1 g1]|w] eqn:e1;
+        + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) (CbnCSusp vals n o c) g) as
+          [[cl1 g1]|w] eqn:e1;
             [|discriminate].
-          destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as [old|] eqn:e2;
+          destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
+            [old|] eqn:e2;
             [|discriminate].
           inversion he; subst; clear he.
           exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
                    (cbn_step_inv _ _ _ _ hst)).
         + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) (CbnCDone v) g) as [[cl1 g1]|w] eqn:e1;
             [|discriminate].
-          destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as [old|] eqn:e2;
+          destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
+            [old|] eqn:e2;
             [|discriminate].
           inversion he; subst; clear he.
           exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
                    (cbn_step_inv _ _ _ _ hst)).
-        + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) CbnCBusy g) as [[cl1 g1]|w] eqn:e1; [|discriminate].
-          destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as [old|] eqn:e2;
+        + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) CbnCBusy g) as [[cl1 g1]|w] eqn:e1;
+          [|discriminate].
+          destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
+            [old|] eqn:e2;
             [|discriminate].
           inversion he; subst; clear he.
           exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
@@ -1802,13 +1863,16 @@ Section Eval.
       reading it had. *)
     Lemma cbn_collect_ghost rs rs' s' :
       cbn_collect rs s = CbnCOk (rs', s') ->
-      exists G', cbn_gc G' = cbn_gc G /\ Forall2 (cbn_gpres G G') rs rs' /\ cbn_gok s.(cbn_st_next) G' s'.
+      exists G', cbn_gc G' = cbn_gc G /\ Forall2 (cbn_gpres G G') rs rs' /\
+        cbn_gok s.(cbn_st_next) G' s'.
     Proof.
       intros he.
       destruct (cbn_collect_sound rs s rs' s' (cbn_gk_nofwd _ _ _ hok) he) as (hso & hnf & _ & _).
       rewrite cbn_collect_eq in he.
-      destruct (cbn_rn_ptree (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) s.(cbn_st_gam)
-                  (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))) as [[gm1 g1]|w1] eqn:e1;
+      destruct (cbn_rn_ptree (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO)))
+        s.(cbn_st_gam)
+                  (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))) as
+                    [[gm1 g1]|w1] eqn:e1;
         [|discriminate].
       destruct (cbn_rn_roots (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
         as [[rs2 g2]|w2] eqn:e2; [|discriminate].
@@ -1855,13 +1919,15 @@ Section Eval.
       /\ G' (fst (cbn_alloc_now cl s)) = Some u.
   Proof.
     intros hok hcl hhu. cbn [cbn_alloc_now fst snd].
-    pose (G' := cbn_mkGhost (fun b => if cbn_haddr_eqb b (CbnHAddr s.(cbn_st_next)) then Some u else G b)
+    pose (G' := cbn_mkGhost (fun b => if cbn_haddr_eqb b (CbnHAddr s.(cbn_st_next)) then
+      Some u else G b)
                   (cbn_gc G)).
     assert (hnew : G' (CbnHAddr s.(cbn_st_next)) = Some u).
     { unfold G'. cbn [cbn_gm]. rewrite cbn_haddr_eqb_refl. reflexivity. }
     assert (hold : cbn_gext G G').
     { split; [|intros i e hi; exact hi].
-      intros b t hb. unfold G'. cbn [cbn_gm]. destruct (cbn_haddr_eqb b (CbnHAddr s.(cbn_st_next))) eqn:eb;
+      intros b t hb. unfold G'. cbn [cbn_gm].
+      destruct (cbn_haddr_eqb b (CbnHAddr s.(cbn_st_next))) eqn:eb;
         [|exact hb].
       apply cbn_haddr_eqb_eq in eb. subst b.
       destruct (cbn_gk_dom _ _ _ hok _ _ hb) as [_ hlt]. cbn in hlt. lia. }
@@ -1877,7 +1943,8 @@ Section Eval.
     - intros b b' hb. cbn in hb.
       destruct (cbn_haddr_dec b (CbnHAddr s.(cbn_st_next))) as [->|hne].
       + rewrite (cbn_bh_get_cons_new _ _ _ _ hbok) in hb. injection hb as ->. inversion hcl.
-      + rewrite (cbn_bh_get_cons_old _ _ _ _ _ hbok hne) in hb. exact (cbn_gk_nofwd _ _ _ hok _ _ hb).
+      + rewrite (cbn_bh_get_cons_old _ _ _ _ _ hbok hne) in hb.
+        exact (cbn_gk_nofwd _ _ _ hok _ _ hb).
     - intros b cl2 hb. unfold cbn_heap_get in hb. cbn in hb.
       destruct (cbn_haddr_dec b (CbnHAddr s.(cbn_st_next))) as [->|hne].
       + rewrite (cbn_bh_get_cons_new _ _ _ _ hbok) in hb.
@@ -1902,8 +1969,8 @@ Section Eval.
       exact (cbn_gk_hyg _ _ _ hok hc _ _ hb).
   Qed.
 
-  (** [cbn_alloc] collects when [cbn_gc_due] says so: the roots come back renamed ([cbn_collect_ghost]) and
-    the new cell is allocated in the new heap. *)
+  (** [cbn_alloc] collects when [cbn_gc_due] says so: the roots come back renamed
+    ([cbn_collect_ghost]) and the new cell is allocated in the new heap. *)
   Lemma cbn_alloc_sound lo G cl u rs s a rs' s' :
     cbn_gok lo G s -> cbn_g_cell G cl u -> (cbn_ctx_hyg -> on_free_vars cbn_xpredT u) ->
     cbn_alloc cl rs s = CbnCOk (a, rs', s') ->
@@ -1945,7 +2012,8 @@ Section Eval.
     - destruct (nth_error Γ j) as [decl|] eqn:ed; [|discriminate].
       assert (hmain : forall G0 cl t s1,
         cbn_gext G G0 ->
-        cbn_ctx_den Γ nctx lvl j = Some t -> cbn_g_cell G0 cl t -> (cbn_ctx_hyg -> on_free_vars cbn_xpredT t) ->
+        cbn_ctx_den Γ nctx lvl j = Some t -> cbn_g_cell G0 cl t ->
+          (cbn_ctx_hyg -> on_free_vars cbn_xpredT t) ->
         cbn_gok lo G0 s1 ->
         (match cbn_alloc cl rs s1 with
          | CbnCOk (a2, rs2, s2) =>
@@ -1960,7 +2028,8 @@ Section Eval.
         destruct (cbn_alloc_sound lo G0 cl t rs s1 _ _ _ hok1 hcl hht ea)
           as (lo2 & G' & hren & hok2 & hga).
         destruct (cbn_gk_dom _ _ _ hok2 _ _ hga) as [hlo hlt].
-        exists lo2, G', t. split; [exact (cbn_gren_trans _ _ _ _ _ _ (cbn_gren_ext _ _ _ hx0) hren)|].
+        exists lo2, G', t. split; [exact
+          (cbn_gren_trans _ _ _ _ _ _ (cbn_gren_ext _ _ _ hx0) hren)|].
         split; [|split; [exact hga|exact (cbn_ctx_den_red j t hden)]].
         split; cbn.
         - exact (cbn_state_ok_set_gam lo2 j _ _ (cbn_gk_state _ _ _ hok2) hlo hlt).
@@ -2025,7 +2094,8 @@ Section Eval.
         * intros hcx. rewrite hct. apply cbn_hyg_lift. exact (hcx j decl b ed eb).
         * exact hok1.
         * exact he.
-      + apply (hmain G (CbnCDone (CbnVNeu (CbnNVar (nctx - S j)) [])) (tRel (lvl - S (nctx - S j))) s
+      + apply (hmain G (CbnCDone (CbnVNeu (CbnNVar (nctx - S j)) []))
+        (tRel (lvl - S (nctx - S j))) s
                  (cbn_gext_refl G)).
         * unfold cbn_ctx_den. rewrite ed, eb. reflexivity.
         * constructor. exact (cbn_g_VNeuVar G (nctx - S j) [] [] (Forall2_nil _)).
@@ -2039,7 +2109,8 @@ Section Eval.
   Lemma cbn_env_var_sound lo G n e rs s x rs' s' tu :
     cbn_gok lo G s -> cbn_g_susp G e (tRel n) tu ->
     cbn_env_var X_type X Γ nctx n e rs s = CbnCOk (x, rs', s') ->
-    exists lo' G' t, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_slot G' x t /\ cbn_cred tu t.
+    exists lo' G' t, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_slot G' x t /\
+      cbn_cred tu t.
   Proof.
     intros hok hsusp he. unfold cbn_env_var in he.
     destruct (cbn_g_susp_inv _ _ _ _ hsusp) as [ts (h1 & h2 & ->)].
@@ -2074,7 +2145,8 @@ Section Eval.
   Lemma cbn_arg_slot_sound lo G e c rs s x rs' s' tu :
     cbn_gok lo G s -> cbn_g_susp G e c.(cbn_c_term) tu -> cbn_cok G c ->
     cbn_arg_slot X_type X Γ nctx e c rs s = CbnCOk (x, rs', s') ->
-    exists lo' G' t, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_slot G' x t /\ cbn_cred tu t.
+    exists lo' G' t, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_slot G' x t /\
+      cbn_cred tu t.
   Proof.
     intros hok hsusp hcok he. unfold cbn_arg_slot in he.
     destruct (cbn_g_susp_inv _ _ _ _ hsusp) as [ts (h1 & h2 & ->)].
@@ -2097,7 +2169,8 @@ Section Eval.
   Proof.
     intros hok hx he.
     assert (hht : cbn_ctx_hyg -> on_free_vars cbn_xpredT t).
-    { intros hc. exact (proj1 (cbn_g_slot_hyg G (cbn_gk_hyg _ _ _ hok hc) (cbn_gok_codes_hyg _ _ _ hok hc))
+    { intros hc. exact (proj1 (cbn_g_slot_hyg G (cbn_gk_hyg _ _ _ hok hc)
+      (cbn_gok_codes_hyg _ _ _ hok hc))
                           _ _ hx). }
     unfold cbn_materialize in he.
     destruct x as [a0|vals n o c].
@@ -2232,7 +2305,8 @@ Section Eval.
   (** A value grows its spine: what [cbn_apply] does to a constructor, a neutral, a stuck match
     or projection, and a stuck fixpoint once the stack is in the heap. *)
   Lemma cbn_g_value_add_spine G v t l ts v' :
-    cbn_g_value G v t -> cbn_g_addrs G l ts -> cbn_add_spine v l = Some v' -> cbn_g_value G v' (mkApps t ts).
+    cbn_g_value G v t -> cbn_g_addrs G l ts -> cbn_add_spine v l = Some v' ->
+      cbn_g_value G v' (mkApps t ts).
   Proof.
     intros hv hl ha. destruct hv; cbn in ha; try discriminate ha; injection ha as <-.
     all: rewrite <- mkApps_app; econstructor; try eassumption; apply Forall2_app; assumption.
@@ -2251,7 +2325,8 @@ Section Eval.
     cbn_push_fix_cells e c i m acc rs s = CbnCOk (e', rs', s') ->
     exists lo' G', cbn_gren G G' rs rs' /\ cbn_gok lo' G' s'
        /\ cbn_g_slots G' e'.(cbn_ev_vals)
-            (List.rev (map (fun j => subst ts 0 (lift (lvl - nctx + e.(cbn_ev_goff)) e.(cbn_ev_nvals)
+            (List.rev (map (fun j => subst ts 0
+              (lift (lvl - nctx + e.(cbn_ev_goff)) e.(cbn_ev_nvals)
                                                      (tFix mfix j))) (seq i m)) ++ tacc)
        /\ e'.(cbn_ev_nvals) = #|e'.(cbn_ev_vals)| /\ e'.(cbn_ev_goff) = acc.(cbn_ev_goff).
   Proof.
@@ -2264,12 +2339,14 @@ Section Eval.
     - cbn [cbn_push_fix_cells] in he.
       destruct (cbn_alloc (CbnCDone (CbnVFix e c i [])) (CbnRE e :: CbnRE acc :: rs) s)
         as [[[a1 rs1] s1]|w] eqn:ea; [|discriminate he].
-      set (tf := fun j => subst ts 0 (lift (lvl - nctx + e.(cbn_ev_goff)) e.(cbn_ev_nvals) (tFix mfix j))).
+      set (tf := fun j => subst ts 0 (lift (lvl - nctx + e.(cbn_ev_goff)) e.(cbn_ev_nvals)
+        (tFix mfix j))).
       assert (hcl : cbn_g_cell G (CbnCDone (CbnVFix e c i [])) (tf i)).
       { constructor. exact (cbn_g_VFix G e c mfix idx0 i [] (tf i) [] hc
                               (cbn_g_susp_of_slots G e _ ts hts hnv) hcok (Forall2_nil _)). }
       assert (hhf : cbn_ctx_hyg -> on_free_vars cbn_xpredT (tf i)).
-      { intros hx. apply (cbn_g_susp_hyg G (cbn_gk_hyg _ _ _ hok hx) (cbn_gok_codes_hyg _ _ _ hok hx) e
+      { intros hx. apply (cbn_g_susp_hyg G (cbn_gk_hyg _ _ _ hok hx)
+        (cbn_gok_codes_hyg _ _ _ hok hx) e
                           (tFix mfix i)).
         - apply (cbn_hyg_tFix_idx mfix idx0 i). rewrite <- hc.
           exact (cbn_gok_codes_hyg _ _ _ hok hx c hcok).
@@ -2296,7 +2373,8 @@ Section Eval.
         reflexivity. }
       destruct (ih lo1 G1 e1 c mfix idx0 ts (S i) (cbn_env_push (CbnSAddr a1) acc1) (tf i :: tacc)
                   rs1b s1 e' rs' s' hok1 hc (cbn_gren_cok _ _ _ _ c hren1 hcok) hts1 hnv1'
-                  (cbn_g_slots_cons G1 (CbnSAddr a1) _ (tf i) tacc (cbn_g_slot_addr G1 a1 (tf i) hga1)
+                  (cbn_g_slots_cons G1 (CbnSAddr a1) _ (tf i) tacc
+                    (cbn_g_slot_addr G1 a1 (tf i) hga1)
                      hacc1)
                   hnacc1 he)
         as (lo2 & G2 & hren2 & hok2 & hsl & hnv' & hgoff).
@@ -2326,14 +2404,6 @@ Section Eval.
     [destruct] is not contradictory, and it cannot stop firing unnoticed: a branch it leaves
     open fails the next tactic or the bullet. *)
 
-  (** The first call whose answer [he] matches on: its answer is [CbnCOk (x, y, z)], named by
-    [e]. *)
-  Local Ltac cbn_dcall he e x y z :=
-    lazymatch type of he with
-    | context [match ?t with CbnCOk _ => _ | CbnCFail _ => _ end] =>
-        destruct t as [[[x y] z]|?] eqn:e; [|discriminate he]
-    end.
-
   (** [hw] runs [cbn_whnf] at [CbnFS k]: past the step [htick] takes, keep the rule for the code
     [hct] names. *)
   Local Ltac cbn_whnf_rule hw htick hct :=
@@ -2342,7 +2412,8 @@ Section Eval.
   (** The answer of a call stands for a reduct of [t]. *)
   Definition cbn_res_sound (G : cbn_ghost) (rs rs' : list cbn_root) (s' : cbn_state) (v : cbn_value)
       (t : term) : Prop :=
-    exists lo' G' u, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_value G' v u /\ cbn_cred t u.
+    exists lo' G' u, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_value G' v u /\
+      cbn_cred t u.
 
   (** The five clauses of [cbn_machine_sound], at fuel [d]. *)
   Definition cbn_force_sound_at (d : cbn_fuel) : Prop :=
@@ -2449,7 +2520,8 @@ Section Eval.
     cbn_dcall he em sp rsm sm.
     destruct rsm as [|[| |ee| | | |] rsm]; try discriminate he.
     injection he as <- <- <-.
-    destruct (cbn_mat_all_sound d lo G stk sts (CbnRE e :: rs) s sp (CbnRE ee :: rsm) sm hok hsts em)
+    destruct (cbn_mat_all_sound d lo G stk sts (CbnRE e :: rs) s sp (CbnRE ee :: rsm) sm
+      hok hsts em)
       as (lom & G' & hrenm & hokm & haddrm).
     destruct (cbn_gren_cons _ _ _ _ _ _ hrenm) as [hpe hrenm1].
     cbn [cbn_gpres] in hpe.
@@ -2489,7 +2561,8 @@ Section Eval.
       as (A' & B & htc & hlamprop).
     subst tc.
     refine (cbn_res_sound_pre G Gv rs rsb rs' s' v _ (mkApps (subst [txh] 0 B) sts) hrenb2 _
-              (IHw lob Gv (cbn_env_push xb ee) (cbn_child c 1 b) lk sts (subst [txh] 0 B) rsb sb v rs'
+              (IHw lob Gv (cbn_env_push xb ee) (cbn_child c 1 b) lk sts (subst [txh] 0 B)
+                rsb sb v rs'
                  s' hokb (hlamprop xb txh hslotb) (cbn_gren_cok _ _ _ _ _ hrenb hcb)
                  (hpk _ hslots) he)).
     change (mkApps (tLambda na A' B) (txh :: sts))
@@ -2515,7 +2588,8 @@ Section Eval.
   (** A variable: its slot, evaluated against the stack. *)
   Lemma cbn_whnf_rel_sound k (IHs : cbn_eval_slot_sound_at (k tt)) lo G e c n stk sts tc rs s st v
       rs' s' :
-    cbn_gok lo G st -> cbn_tick s = Some st -> c.(cbn_c_term) = tRel n -> cbn_g_susp G e (tRel n) tc ->
+    cbn_gok lo G st -> cbn_tick s = Some st -> c.(cbn_c_term) = tRel n ->
+      cbn_g_susp G e (tRel n) tc ->
     cbn_g_slots G stk sts ->
     cbn_whnf X_type X Γ nctx (CbnFS k) e c stk rs s = CbnCOk (v, rs', s') ->
     cbn_res_sound G rs rs' s' v (mkApps tc sts).
@@ -2671,7 +2745,8 @@ Section Eval.
           [exact hokd0|reflexivity|reflexivity|reflexivity|exact hgd
           |exact (cbn_mok_widen _ _ (cbn_gk_memo _ _ _ hokd0))]. }
       assert (hcokc : cbn_cok Gd c') by (exists ce; split; [exact hce|exact hci]).
-      assert (hsuspc : cbn_g_susp Gd cbn_env_empty c'.(cbn_c_term) (lift0 (lvl - nctx) c'.(cbn_c_term))).
+      assert (hsuspc : cbn_g_susp Gd cbn_env_empty c'.(cbn_c_term)
+        (lift0 (lvl - nctx) c'.(cbn_c_term))).
       { unfold cbn_env_empty.
         replace (lift0 (lvl - nctx) c'.(cbn_c_term))
           with (subst [] 0 (lift (lvl - nctx + 0) 0 c'.(cbn_c_term)))
@@ -2682,7 +2757,8 @@ Section Eval.
                (IHw lo Gd cbn_env_empty c' stk sts _ rs sd v rs' s' hokd hsuspc hcokc
                   (cbn_g_slots_mono G Gd hxd stk sts hsts) hw)).
     - (* no body: a neutral constant *)
-      exact (cbn_head_sound (k tt) lo G stk sts rs sd v rs' s' (CbnVNeu (CbnNConst (tConst kn ui))) _
+      exact (cbn_head_sound (k tt) lo G stk sts rs sd v rs' s'
+        (CbnVNeu (CbnNConst (tConst kn ui))) _
                (cbn_delta_gok lo G kn ui st None sd hokt ed) hsts
                (fun G' sp ha => cbn_g_VNeuConst G' (tConst kn ui) sp sts ha) hw).
   Qed.
@@ -2753,7 +2829,8 @@ Section Eval.
            rewrite hnv2, hnv, <- (cbn_g_slots_length _ _ _ hts), (cbn_g_slots_length _ _ _ hts1).
            reflexivity. }
        refine (cbn_res_sound_pre G G1 rs rss rs' s' v _ _ hren1b _
-                 (IHw lo1 G1 _ (cbn_child c (cbn_case_branch_step (N.of_nat cn)) br.(bbody)) stk2 sts _
+                 (IHw lo1 G1 _ (cbn_child c (cbn_case_branch_step (N.of_nat cn)) br.(bbody)) stk2
+                   sts _
                     rss ss v rs' s' hok1 hsb hcb hsts1 hw)).
        apply cbn_cred_mkApps. rewrite htc.
        eapply cbn_cred_trans; [apply cbn_cred_case_c; exact hcreds|].
@@ -2775,7 +2852,8 @@ Section Eval.
                       (fun e' sp => CbnVStuck e' c sp) _ hok1 hsts1 _ hw));
          intros G' e' sp hcx hpe' cbn_haddr;
          apply (cbn_g_VStuck G' e' c sp tc sts);
-         [ rewrite ect; exact (cbn_genv_susp _ _ _ _ _ _ (cbn_genv_trans _ _ _ _ _ _ hpe hpe') hsusp)
+         [ rewrite ect; exact (cbn_genv_susp _ _ _ _ _ _
+           (cbn_genv_trans _ _ _ _ _ _ hpe hpe') hsusp)
          | exact (cbn_cok_gcx _ _ hcx c (cbn_gren_cok _ _ _ _ _ hren1 hcok))
          | exact cbn_haddr ].
   Qed.
@@ -2832,7 +2910,8 @@ Section Eval.
                       (fun e' sp => CbnVStuck e' c sp) _ hok1 hsts1 _ hw));
          intros G' e' sp hcx hpe' cbn_haddr;
          apply (cbn_g_VStuck G' e' c sp tc sts);
-         [ rewrite ect; exact (cbn_genv_susp _ _ _ _ _ _ (cbn_genv_trans _ _ _ _ _ _ hpe hpe') hsusp)
+         [ rewrite ect; exact (cbn_genv_susp _ _ _ _ _ _
+           (cbn_genv_trans _ _ _ _ _ _ hpe hpe') hsusp)
          | exact (cbn_cok_gcx _ _ hcx c (cbn_gren_cok _ _ _ _ _ hren1 hcok))
          | exact cbn_haddr ].
   Qed.
@@ -2876,7 +2955,8 @@ Section Eval.
       split; [exact (cbn_g_cell_done_inv _ _ _ hgc)|exact hcred].
   Qed.
 
-  Lemma cbn_eval_slot_step_sound k (IHf : cbn_force_sound_at (k tt)) (IHw : cbn_whnf_sound_at (k tt))
+  Lemma cbn_eval_slot_step_sound k (IHf : cbn_force_sound_at (k tt))
+    (IHw : cbn_whnf_sound_at (k tt))
       (IHa : cbn_apply_sound_at (k tt)) :
     cbn_eval_slot_sound_at (CbnFS k).
   Proof.
@@ -2896,7 +2976,8 @@ Section Eval.
                (IHa lof Gf vf lk sts uf rsf sf v rs' s' hokf hvf (hpk _ hsts) he)).
     - (* CbnSInl: whnf in place *)
       exact (IHw lo G (cbn_mkEnv vs n o) c stk sts tx rs s v rs' s' hok
-               (cbn_g_slot_inl_inv _ _ _ _ _ _ hslot) (cbn_g_slot_inl_cok _ _ _ _ _ _ hslot) hsts he).
+               (cbn_g_slot_inl_inv _ _ _ _ _ _ hslot)
+                 (cbn_g_slot_inl_cok _ _ _ _ _ _ hslot) hsts he).
   Qed.
 
   Lemma cbn_whnf_step_sound k (IHs : cbn_eval_slot_sound_at (k tt)) (IHw : cbn_whnf_sound_at (k tt))
@@ -2933,7 +3014,8 @@ Section Eval.
                (fun G' sp ha => cbn_g_VCon G' (tInd ind ui) sp sts ha) hw).
     - (* tConstruct *)
       cbn_whnf_rule hw etick ect. rewrite (cbn_g_susp_construct _ _ _ _ _ _ hsusp).
-      exact (cbn_head_sound (k tt) lo G stk sts rs st v rs' s' (CbnVCon (tConstruct ind n ui)) _ hokt
+      exact (cbn_head_sound (k tt) lo G stk sts rs st v rs' s'
+        (CbnVCon (tConstruct ind n ui)) _ hokt
                hsts (fun G' sp ha => cbn_g_VCon G' (tConstruct ind n ui) sp sts ha) hw).
     - exact (cbn_whnf_case_sound k IHw lo G e c ci p scrut brs stk sts tc rs s st v rs' s' hokt
                etick ect hsusp hcok hsts hw).
@@ -2948,7 +3030,8 @@ Section Eval.
       exact (cbn_open_sound lo G e c stk sts tc rs st v rs' s' hokt hsusp hcok hsts hw).
   Qed.
 
-  Lemma cbn_whnf_fix_step_sound k (IHf : cbn_force_sound_at (k tt)) (IHw : cbn_whnf_sound_at (k tt)) :
+  Lemma cbn_whnf_fix_step_sound k (IHf : cbn_force_sound_at (k tt))
+    (IHw : cbn_whnf_sound_at (k tt)) :
     cbn_whnf_fix_sound_at (CbnFS k).
   Proof.
     intros lo G e c mfix idx0 idx stk sts tc rs s v rs' s' hok hcfix hsusp hcok hsts he.
@@ -2957,10 +3040,12 @@ Section Eval.
     destruct (cbn_g_susp_inv _ _ _ _ hsusp) as (ts & hts & hnv & htc).
     destruct (nth_error stk (rarg def)) as [x|] eqn:ex.
     2: { (* too few arguments: a fixpoint value *)
-      exact (cbn_stuck_sound (k tt) lo G e stk sts rs s v rs' s' (fun e' sp => CbnVFix e' c idx sp) _
+      exact (cbn_stuck_sound (k tt) lo G e stk sts rs s v rs' s'
+        (fun e' sp => CbnVFix e' c idx sp) _
                hok hsts
                (fun G' e' sp hcx hpe cbn_haddr =>
-                  cbn_g_VFix G' e' c mfix idx0 idx sp tc sts hcfix (cbn_genv_susp _ _ _ _ _ _ hpe hsusp)
+                  cbn_g_VFix G' e' c mfix idx0 idx sp tc sts hcfix
+                    (cbn_genv_susp _ _ _ _ _ _ hpe hsusp)
                     (cbn_cok_gcx _ _ hcx c hcok) cbn_haddr)
                he). }
     destruct (cbn_g_slots_nth _ _ _ _ _ hsts ex) as (tx & htx & hgx).
@@ -2980,7 +3065,8 @@ Section Eval.
       apply cbn_g_slots_list_set; [exact (hpka _ hsts)|]. constructor. exact hGa. }
     (* force it *)
     cbn_dcall he ef vf rsf sf.
-    destruct (IHf loa Ga a (CbnRE ea :: CbnRSk (cbn_list_set stka (rarg def) (CbnSAddr a)) :: rsa) sa
+    destruct (IHf loa Ga a (CbnRE ea :: CbnRSk (cbn_list_set stka (rarg def) (CbnSAddr a)) :: rsa)
+      sa
                 vf rsf sf tx hoka hGa ef)
       as (lof & Gf & uf & hrenf & hokf & hvf & hcredf).
     destruct rsf as [|[| |e3| | | |] [|[| | | |stkf| |] rsf]]; try discriminate he.
@@ -3049,11 +3135,13 @@ Section Eval.
        eapply cbn_cred_trans; [exact (cbn_cred_mkApps_list_set _ _ _ _ _ htx hcredf)|].
        apply cbn_cred_one. rewrite huf.
        eapply red_fix.
-       - exact (cbn_unfold_fix_rfix ts (lvl - nctx + cbn_ev_goff e) (cbn_ev_nvals e) mfix idx def edef).
+       - exact (cbn_unfold_fix_rfix ts (lvl - nctx + cbn_ev_goff e) (cbn_ev_nvals e) mfix
+         idx def edef).
        - apply cbn_is_constructor_list_set. exact hrarg.
     }
     (* CbnVStuckFix, CbnVNeu, CbnVStuck: a stuck fixpoint *)
-    all: refine (cbn_res_sound_pre G Gf rs rsf rs' s' v _ _ (cbn_gren_trans _ _ _ _ _ _ hrena2 hrenf2)
+    all: refine (cbn_res_sound_pre G Gf rs rsf rs' s' v _ _
+      (cbn_gren_trans _ _ _ _ _ _ hrena2 hrenf2)
                    (cbn_cred_refl _)
                    (cbn_stuck_sound (k tt) lof Gf e3 stkf sts rsf sf v rs' s'
                       (fun e' sp => CbnVStuckFix e' c idx sp) _ hokf hstkf _ he));
@@ -3063,7 +3151,8 @@ Section Eval.
                   (cbn_cok_gcx _ _ hcx c hcokf) cbn_haddr).
   Qed.
 
-  Lemma cbn_apply_step_sound k (IHw : cbn_whnf_sound_at (k tt)) (IHx : cbn_whnf_fix_sound_at (k tt)) :
+  Lemma cbn_apply_step_sound k (IHw : cbn_whnf_sound_at (k tt))
+    (IHx : cbn_whnf_fix_sound_at (k tt)) :
     cbn_apply_sound_at (CbnFS k).
   Proof.
     intros lo G vv stk sts tv rs s w rs' s' hok hv hsts he.
@@ -3106,7 +3195,8 @@ Section Eval.
 
   (** At fuel [CbnFO] every call fails, except [cbn_apply] with an empty stack. *)
   Lemma cbn_machine_sound_FO :
-    cbn_force_sound_at CbnFO /\ cbn_eval_slot_sound_at CbnFO /\ cbn_whnf_sound_at CbnFO /\ cbn_whnf_fix_sound_at CbnFO
+    cbn_force_sound_at CbnFO /\ cbn_eval_slot_sound_at CbnFO /\ cbn_whnf_sound_at CbnFO /\
+      cbn_whnf_fix_sound_at CbnFO
     /\ cbn_apply_sound_at CbnFO.
   Proof.
     split; [|split; [|split; [|split]]].
@@ -3127,14 +3217,16 @@ Section Eval.
     (forall lo G a rs s v rs' s' t,
         cbn_gok lo G s -> G a = Some t ->
         cbn_force X_type X Γ nctx d a rs s = CbnCOk (v, rs', s') ->
-        exists lo' G' u, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_value G' v u /\ cbn_cred t u)
+        exists lo' G' u, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_value G' v u /\
+          cbn_cred t u)
     /\ (forall lo G x stk sts tx rs s v rs' s',
         cbn_gok lo G s -> cbn_g_slot G x tx -> cbn_g_slots G stk sts ->
         cbn_eval_slot X_type X Γ nctx d x stk rs s = CbnCOk (v, rs', s') ->
         exists lo' G' u, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_value G' v u
                          /\ cbn_cred (mkApps tx sts) u)
     /\ (forall lo G e c stk sts tc rs s v rs' s',
-        cbn_gok lo G s -> cbn_g_susp G e c.(cbn_c_term) tc -> cbn_cok G c -> cbn_g_slots G stk sts ->
+        cbn_gok lo G s -> cbn_g_susp G e c.(cbn_c_term) tc -> cbn_cok G c ->
+          cbn_g_slots G stk sts ->
         cbn_whnf X_type X Γ nctx d e c stk rs s = CbnCOk (v, rs', s') ->
         exists lo' G' u, cbn_gren G G' rs rs' /\ cbn_gok lo' G' s' /\ cbn_g_value G' v u
                          /\ cbn_cred (mkApps tc sts) u)

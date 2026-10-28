@@ -16,25 +16,27 @@ Import CanonicalTries.
   cell, [cbn_rwf] of a root). [PCUICCallByNeedSoundLevel] needs it at the master level [Q] to
   raise that level ([cbn_gok_raise]). The ghost reading cannot see it, so its preservation is a
   separate theorem, proved here for two interfaces: [cbn_machine_hwf], every machine function
-  keeps [cbn_hwf Q] of the heap, [cbn_rwf Q] of the roots and [cbn_vwf Q] of the value it returns, at any
-  master level [Q >= nctx] ([cbn_machine_hwf_holds]); [cbn_alloc_hwf], so does an allocation of a
-  cell that has it ([cbn_alloc_hwf_holds]).
+  keeps [cbn_hwf Q] of the heap, [cbn_rwf Q] of the roots and [cbn_vwf Q] of the value it returns,
+  at any master level [Q >= nctx] ([cbn_machine_hwf_holds]); [cbn_alloc_hwf], so does an allocation
+  of a cell that has it ([cbn_alloc_hwf_holds]).
 
   Why it holds: a fresh variable [CbnNVar l] is made only by [cbn_gam], at the level
   [nctx - S j] of an entry [j] of [Γ], so below [nctx] when [#|Γ| <= nctx]; the head of a
   [CbnVCon] or of a neutral constant comes only from a [tConstruct], [tInd] or [tConst] code,
   which is closed; every other value the machine builds copies existing structure ([cbn_add_spine],
-  a collection's renaming) or has no head ([CbnVLam], [CbnVFix], [CbnVOpen], [CbnVStuck], [CbnVStuckFix]).
+  a collection's renaming) or has no head ([CbnVLam], [CbnVFix], [CbnVOpen], [CbnVStuck],
+  [CbnVStuckFix]).
 
   The heap needs one law that holds for every digit list, not only the ones [cbn_bh_ok] describes,
-  because [cbn_hwf] is stated over [cbn_heap_get] alone: a cell [cbn_bh_get] finds after [cbn_bh_cons] is the
-  new cell or a cell it found before ([cbn_bh_get_cons_any]).
+  because [cbn_hwf] is stated over [cbn_heap_get] alone: a cell [cbn_bh_get] finds after
+  [cbn_bh_cons] is the new cell or a cell it found before ([cbn_bh_get_cons_any]).
 
   [cbn_machine_hwf_holds] needs [#|Γ| <= nctx]; without it the interface is false
   ([cbn_machine_hwf_needs_len]): with [nctx = 0] and one assumption in [Γ], [cbn_gam] makes
   [CbnNVar 0], which is not below the master level [0]. The machine's runs have [nctx = #|Γ|]
   ([cbn_conv_answer]), which is how [PCUICCallByNeedSoundLevel.cbn_whnf_master] and
-  [cbn_eval_slot_master] use [cbn_machine_hwf_holds]. *)
+  [cbn_eval_slot_master] use [cbn_machine_hwf_holds], and [cbn_machine_hwf_master] is that
+  instance. *)
 
 (** ** The invariant *)
 
@@ -109,11 +111,13 @@ Section HeapCons.
 
   Lemma cbn_bh_get_app_zeros a h zs : cbn_bh_zeros zs -> cbn_bh_get a (h ++ zs) = cbn_bh_get a h.
   Proof.
-    intros hz. unfold cbn_bh_get, cbn_bh_find. rewrite (cbn_bh_scan_app_zeros _ _ _ _ _ hz). reflexivity.
+    intros hz. unfold cbn_bh_get, cbn_bh_find. rewrite (cbn_bh_scan_app_zeros _ _ _ _ _ hz).
+    reflexivity.
   Qed.
 
   Lemma cbn_bh_carry_app_zeros t h zs :
-    cbn_bh_zeros zs -> exists zs', cbn_bh_zeros zs' /\ cbn_bh_carry t (h ++ zs) = cbn_bh_carry t h ++ zs'.
+    cbn_bh_zeros zs -> exists zs', cbn_bh_zeros zs' /\
+      cbn_bh_carry t (h ++ zs) = cbn_bh_carry t h ++ zs'.
   Proof.
     intros hz. revert t. induction h as [|d h ih]; intros t.
     - cbn [app]. destruct hz as [|d zs0 hd hz0].
@@ -157,7 +161,8 @@ Section HeapCons.
     rewrite (cbn_bh_get_app_zeros a _ _ hz'), (cbn_bh_get_app_zeros a _ _ hz).
     change (cbn_bh_carry (CbnBLeaf y) h0) with (cbn_bh_cons y h0).
     destruct hh0 as [-> | (n & hn)].
-    - change (cbn_bh_cons y []) with [CbnDOne (CbnBLeaf y)]. rewrite cbn_bh_get_one. intros h. discriminate h.
+    - change (cbn_bh_cons y []) with [CbnDOne (CbnBLeaf y)]. rewrite cbn_bh_get_one. intros h.
+      discriminate h.
     - destruct (cbn_haddr_dec a (CbnHAddr n)) as [-> | hne].
       + rewrite (cbn_bh_digits_get_cons_new y h0 n hn). intros h. injection h as ->. left.
         reflexivity.
@@ -176,7 +181,8 @@ Proof. intros h. inversion h; assumption. Qed.
 Lemma cbn_hwf_heap Q s s' : s'.(cbn_st_heap) = s.(cbn_st_heap) -> cbn_hwf Q s -> cbn_hwf Q s'.
 Proof. intros he h a cl ha. unfold cbn_heap_get in ha. rewrite he in ha. exact (h a cl ha). Qed.
 
-Lemma cbn_hwf_upd Q a cl s s' : cbn_hwf Q s -> cbn_cwf Q cl -> cbn_heap_upd a cl s = Some s' -> cbn_hwf Q s'.
+Lemma cbn_hwf_upd Q a cl s s' : cbn_hwf Q s -> cbn_cwf Q cl -> cbn_heap_upd a cl s = Some s' ->
+  cbn_hwf Q s'.
 Proof.
   intros h hc hu b cl' hb.
   destruct (cbn_haddr_dec b a) as [-> | hne].
@@ -184,7 +190,8 @@ Proof.
   - rewrite (cbn_heap_get_upd_other a b cl s s' hu hne) in hb. exact (h b cl' hb).
 Qed.
 
-Lemma cbn_hwf_alloc_now Q cl s : cbn_hwf Q s -> cbn_cwf Q cl -> cbn_hwf Q (snd (cbn_alloc_now cl s)).
+Lemma cbn_hwf_alloc_now Q cl s : cbn_hwf Q s -> cbn_cwf Q cl ->
+  cbn_hwf Q (snd (cbn_alloc_now cl s)).
 Proof.
   intros h hc b cl' hb. unfold cbn_heap_get in hb. cbn [cbn_alloc_now snd cbn_st_heap] in hb.
   destruct (cbn_bh_get_cons_any cl cl' _ b hb) as [-> | hb']; [exact hc|exact (h b cl' hb')].
@@ -355,7 +362,8 @@ End RenameWf.
   (forall a cl, cbn_bh_get a g.(cbn_g_old) = Some cl -> cbn_cwf Q cl)
   /\ (forall a cl, cbn_bh_get a g.(cbn_g_heap) = Some cl -> cbn_cwf Q cl).
 
-Lemma cbn_gc_copy_step Q (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state)) a x g cl cl1 g1 old n :
+Lemma cbn_gc_copy_step Q (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state)) a x
+  g cl cl1 g1 old n :
   (forall a g a' g', cbn_gcw Q g -> cp a g = CbnCOk (a', g') -> cbn_gcw Q g') ->
   cbn_gcw Q g -> cbn_cwf Q cl -> cbn_rn_cell cp cl g = CbnCOk (cl1, g1) ->
   cbn_bh_upd a (CbnCFwd x) g1.(cbn_g_old) = Some old ->
@@ -368,10 +376,12 @@ Proof.
     + rewrite (cbn_bh_get_upd_same _ _ _ _ hu) in hb. injection hb as <-. exact I.
     + rewrite (cbn_bh_get_upd_other _ _ _ _ _ hu hne) in hb. exact (ho b cl' hb).
   - intros b cl' hb.
-    destruct (cbn_bh_get_cons_any cl1 cl' _ b hb) as [-> | hb']; [exact (hc1 hcl)|exact (hh b cl' hb')].
+    destruct (cbn_bh_get_cons_any cl1 cl' _ b hb) as [-> | hb'];
+      [exact (hc1 hcl)|exact (hh b cl' hb')].
 Qed.
 
-Lemma cbn_gc_copy_wf Q : forall f a g a' g', cbn_gcw Q g -> cbn_gc_copy f a g = CbnCOk (a', g') -> cbn_gcw Q g'.
+Lemma cbn_gc_copy_wf Q : forall f a g a' g', cbn_gcw Q g -> cbn_gc_copy f a g = CbnCOk (a', g') ->
+  cbn_gcw Q g'.
 Proof.
   intros f. induction f as [|k ih]; intros a g a' g' hg he.
   - rewrite cbn_gc_copy_FO in he.
@@ -380,7 +390,8 @@ Proof.
   - rewrite cbn_gc_copy_FS in he.
     destruct (cbn_bh_get a g.(cbn_g_old)) as [cl|] eqn:ea; [|discriminate he].
     pose proof (proj1 hg a cl ea) as hcl.
-    assert (hcp : forall a g a' g', cbn_gcw Q g -> cbn_gc_copy (k tt) a g = CbnCOk (a', g') -> cbn_gcw Q g')
+    assert (hcp : forall a g a' g', cbn_gcw Q g -> cbn_gc_copy (k tt) a g = CbnCOk (a', g') ->
+      cbn_gcw Q g')
       by (intros; eapply ih; eassumption).
     destruct cl as [vs n o c|v| |b].
     4: injection he as <- <-; exact hg.
@@ -404,11 +415,13 @@ Proof.
   set (cp := cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) in he.
   assert (hcp : forall a g a' g', cbn_gcw Q g -> cp a g = CbnCOk (a', g') -> cbn_gcw Q g')
     by (intros; eapply cbn_gc_copy_wf; eassumption).
-  assert (hg0 : cbn_gcw Q (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))).
+  assert (hg0 : cbn_gcw Q (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next))
+    s.(cbn_st_next))).
   { split; cbn [cbn_g_old cbn_g_heap].
     - exact hs.
     - intros a cl ha. rewrite cbn_bh_get_holes in ha. discriminate ha. }
-  destruct (cbn_rn_ptree cp s.(cbn_st_gam) (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next)))
+  destruct (cbn_rn_ptree cp s.(cbn_st_gam)
+    (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next)))
     as [[cbn_gm g1]|w] eqn:e1; [|discriminate he].
   destruct (cbn_rn_roots cp rs g1) as [[rs2 g2]|w] eqn:e2; [|discriminate he].
   injection he as <- <-.
@@ -428,7 +441,8 @@ Proof.
     destruct (cbn_collect_wf Q _ _ _ _ ec hs (Forall_cons (CbnRC cl) hc hrs)) as [hs2 hr2].
     destruct rs2 as [|[| | | | | |cl2] rs2]; try discriminate he.
     injection he as <- <- <-.
-    split; [exact (cbn_hwf_alloc_now Q cl2 s2 hs2 (cbn_rwf_hd _ _ _ hr2))|exact (cbn_rwf_tl _ _ _ hr2)].
+    split; [exact (cbn_hwf_alloc_now Q cl2 s2 hs2 (cbn_rwf_hd _ _ _ hr2))|exact
+      (cbn_rwf_tl _ _ _ hr2)].
   - rewrite (cbn_alloc_no_gc cl rs s eg) in he. injection he as <- <- <-.
     split; [exact (cbn_hwf_alloc_now Q cl s hs hc)|exact hrs].
 Qed.
@@ -445,13 +459,6 @@ Proof.
 Qed.
 
 (** ** The machine *)
-
-(** The first call whose answer [he] matches on: its answer is [CbnCOk (x, y, z)], named by [e]. *)
-Local Ltac cbn_dcall he e x y z :=
-  lazymatch type of he with
-  | context [match ?t with CbnCOk _ => _ | CbnCFail _ => _ end] =>
-      destruct t as [[[x y] z]|?] eqn:e; [|discriminate he]
-  end.
 
 (** The roots a call is given: the roots held, or new ones without a value or cell. *)
 Local Ltac cbn_rok :=
@@ -479,8 +486,10 @@ Section Machine.
   Lemma cbn_tick_wf s s' : cbn_tick s = Some s' -> cbn_hwf Q s -> cbn_hwf Q s'.
   Proof. intros he. apply cbn_hwf_heap. exact (proj1 (cbn_tick_shape s s' he)). Qed.
 
-  Lemma cbn_delta_wf kn u s r s' : cbn_delta X_type X kn u s = CbnCOk (r, s') -> cbn_hwf Q s -> cbn_hwf Q s'.
-  Proof. intros he. apply cbn_hwf_heap. exact (proj1 (cbn_delta_shape X_type X kn u s r s' he)). Qed.
+  Lemma cbn_delta_wf kn u s r s' : cbn_delta X_type X kn u s = CbnCOk (r, s') -> cbn_hwf Q s ->
+    cbn_hwf Q s'.
+  Proof. intros he. apply cbn_hwf_heap. exact
+    (proj1 (cbn_delta_shape X_type X kn u s r s' he)). Qed.
 
   Lemma cbn_gam_wf j rs s a rs' s' :
     cbn_gam X_type X Γ nctx j rs s = CbnCOk (a, rs', s') ->
@@ -600,16 +609,20 @@ Section Machine.
   Definition cbn_machine_hwf_at (d : cbn_fuel) : Prop :=
     (forall a rs s v rs' s',
        cbn_force X_type X Γ nctx d a rs s = CbnCOk (v, rs', s') ->
-       cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs' /\ cbn_vwf Q v)
+       cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs' /\
+         cbn_vwf Q v)
     /\ (forall x stk rs s v rs' s',
        cbn_eval_slot X_type X Γ nctx d x stk rs s = CbnCOk (v, rs', s') ->
-       cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs' /\ cbn_vwf Q v)
+       cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs' /\
+         cbn_vwf Q v)
     /\ (forall e c stk rs s v rs' s',
        cbn_whnf X_type X Γ nctx d e c stk rs s = CbnCOk (v, rs', s') ->
-       cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs' /\ cbn_vwf Q v)
+       cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs' /\
+         cbn_vwf Q v)
     /\ (forall e c mfix idx stk rs s v rs' s',
        cbn_whnf_fix X_type X Γ nctx d e c mfix idx stk rs s = CbnCOk (v, rs', s') ->
-       cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs' /\ cbn_vwf Q v)
+       cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs' /\
+         cbn_vwf Q v)
     /\ (forall v stk rs s w rs' s',
        cbn_apply X_type X Γ nctx d v stk rs s = CbnCOk (w, rs', s') ->
        cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_vwf Q v ->
@@ -760,7 +773,8 @@ Section Machine.
                destruct (cbn_alloc_wf _ _ _ _ _ _ _ ea2 hsf hvf ltac:(cbn_rok)) as [hs2 hr2].
                cbn_dcall he ep e4 rs3 s3.
                destruct rs3 as [|[| | | |k4| |] rs3]; try discriminate he.
-               destruct (cbn_push_fix_cells_wf _ _ _ _ _ _ _ _ _ _ ep hs2 ltac:(cbn_rok)) as [hs3 hr3].
+               destruct (cbn_push_fix_cells_wf _ _ _ _ _ _ _ _ _ _ ep hs2 ltac:(cbn_rok))
+                 as [hs3 hr3].
                exact (IHw _ _ _ _ _ _ _ _ he hs3 ltac:(cbn_rok)). }
           all: cbn_dcall he em sp1 rsm sm;
                destruct rsm as [|[| |e5| | | |] rsm]; try discriminate he;
@@ -807,6 +821,13 @@ Lemma cbn_machine_hwf_holds {cf : checker_flags} (X_type : abstract_env_impl) (X
     (Γ : context) (nctx : nat) (hlen : #|Γ| <= nctx) :
   cbn_machine_hwf X_type X Γ nctx.
 Proof. intros d Q hQ. exact (cbn_machine_wf X_type X Γ nctx hlen Q hQ d). Qed.
+
+(** The satisfying instance of [cbn_machine_hwf] at the level the machine runs at:
+  [cbn_conv_answer] takes [nctx = #|Γ|]. *)
+Lemma cbn_machine_hwf_master {cf : checker_flags} (X_type : abstract_env_impl)
+    (X : X_type.π2.π1) (Γ : context) (nctx : nat) (hnctx : nctx = #|Γ|) :
+  cbn_machine_hwf X_type X Γ nctx.
+Proof. apply cbn_machine_hwf_holds. rewrite hnctx. apply le_n. Qed.
 
 (** The premise [#|Γ| <= nctx] is needed: with [nctx = 0], one assumption in [Γ] and the
   master level [0], the variable [tRel 0] evaluates to [CbnNVar 0], which is not below [0]. *)

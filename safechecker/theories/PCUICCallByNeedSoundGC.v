@@ -19,13 +19,13 @@ Import CanonicalTries.
   lemma [cbn_gc_copy_ok] that the walk keeps it, are also what [PCUICCallByNeedSoundEval] uses to
   prove that a collection keeps the ghost readings ([cbn_collect_ghost]).
 
-  What the proof needs beyond [cbn_state_ok]: the heap handed to [cbn_collect] must hold no [CbnCFwd]
-  cell ([cbn_heap_nofwd]). [cbn_state_ok] does not say so, and it cannot be dropped: a stale [CbnCFwd a]
-  is returned unchanged by [cbn_gc_copy], so its [a] - an address of the old heap, below the new
-  heap's first address - would be written into the new heap and [cbn_state_ok] would fail. The
-  machine satisfies it, because [cbn_collect] is the only writer of [CbnCFwd] and it throws the old
-  heap away; the second conjunct of [cbn_collect_sound] re-establishes it, so repeated
-  collections keep it.
+  What the proof needs beyond [cbn_state_ok]: the heap handed to [cbn_collect] must hold no
+  [CbnCFwd] cell ([cbn_heap_nofwd]). [cbn_state_ok] does not say so, and it cannot be dropped: a
+  stale [CbnCFwd a] is returned unchanged by [cbn_gc_copy], so its [a] - an address of the old heap,
+  below the new heap's first address - would be written into the new heap and [cbn_state_ok] would
+  fail. The machine satisfies it, because [cbn_collect] is the only writer of [CbnCFwd] and it
+  throws the old heap away; the second conjunct of [cbn_collect_sound] re-establishes it, so
+  repeated collections keep it.
 
   The walk of [cbn_gc_copy] is bounded by fuel ([cbn_st_next] units). A heap with a cycle through a
   cell that is not yet copied exhausts it and the collection fails with [CbnWGcFuel]; every
@@ -70,7 +70,8 @@ Lemma cbn_gc_copy_FS (k : unit -> cbn_fuel) (a : cbn_haddr) (g : cbn_gc_state) :
     | CbnCOk (cl1, g1) =>
       match cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old) with
       | Some old =>
-        CbnCOk (CbnHAddr g1.(cbn_g_next), cbn_mkGc old (cbn_bh_cons cl1 g1.(cbn_g_heap)) (Pos.succ g1.(cbn_g_next)))
+        CbnCOk (CbnHAddr g1.(cbn_g_next),
+          cbn_mkGc old (cbn_bh_cons cl1 g1.(cbn_g_heap)) (Pos.succ g1.(cbn_g_next)))
       | None => CbnCFail CbnWGcDangling
       end
     | CbnCFail w => CbnCFail w
@@ -105,7 +106,8 @@ Section Collector.
     cbn_bh_get a g.(cbn_g_old) = Some cl -> cbn_cell_fwd cl = None -> cbn_bh_get a Hold = Some cl.
   Proof. intros [h _ _ _ _]. exact h. Qed.
 
-  Lemma cbn_inv_moved g : cbn_gc_inv g -> forall a a', cbn_bh_get a g.(cbn_g_old) = Some (CbnCFwd a') ->
+  Lemma cbn_inv_moved g : cbn_gc_inv g -> forall a a',
+    cbn_bh_get a g.(cbn_g_old) = Some (CbnCFwd a') ->
     (onext <= cbn_ha_p a')%positive /\ (cbn_ha_p a' < g.(cbn_g_next))%positive.
   Proof. intros [_ h _ _ _]. exact h. Qed.
 
@@ -140,16 +142,19 @@ Section Collector.
   Qed.
 
   (** ** What the collector asks of the address map it threads through the renamings *)
-  Definition cbn_cp_ok (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state)) : Prop :=
+  Definition cbn_cp_ok (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state)) : Prop
+    :=
     forall a g a' g', cbn_gc_inv g -> cp a g = CbnCOk (a', g') ->
       cbn_gstep g g' /\ (onext <= cbn_ha_p a')%positive /\ (cbn_ha_p a' < g'.(cbn_g_next))%positive.
 
   (** ** The renamings under an address map that satisfies [cbn_cp_ok] *)
 
   Section Structural.
-    Context (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state)) (hcp : cbn_cp_ok cp).
+    Context (cp : cbn_haddr -> cbn_gc_state -> cbn_res (cbn_haddr * cbn_gc_state))
+      (hcp : cbn_cp_ok cp).
 
-    Lemma cbn_rn_addrs_ok : forall (l : list cbn_haddr) (g : cbn_gc_state) (l' : list cbn_haddr) (g' : cbn_gc_state),
+    Lemma cbn_rn_addrs_ok : forall (l : list cbn_haddr) (g : cbn_gc_state) (l' : list cbn_haddr)
+      (g' : cbn_gc_state),
       cbn_gc_inv g -> cbn_rn_addrs cp l g = CbnCOk (l', g') ->
       cbn_gstep g g' /\ cbn_addrs_in onext g'.(cbn_g_next) l'.
     Proof.
@@ -166,7 +171,8 @@ Section Collector.
           [split; [exact hb1|exact (Pos.lt_le_trans _ _ _ hb2 (cbn_step_next _ _ hs2))]|exact had2].
     Qed.
 
-    Lemma cbn_rn_slot_ok : forall (x : cbn_slot) (g : cbn_gc_state) (x' : cbn_slot) (g' : cbn_gc_state),
+    Lemma cbn_rn_slot_ok : forall (x : cbn_slot) (g : cbn_gc_state) (x' : cbn_slot)
+      (g' : cbn_gc_state),
       cbn_gc_inv g -> cbn_rn_slot cp x g = CbnCOk (x', g') ->
       cbn_gstep g g' /\ cbn_addrs_in onext g'.(cbn_g_next) (cbn_ad_slot x').
     Proof.
@@ -297,7 +303,8 @@ Section Collector.
     Qed.
 
     (** A renamed cell is a forwarding pointer only if the cell was one. *)
-    Lemma cbn_rn_cell_nofwd (cl : cbn_cell) (g : cbn_gc_state) (cl' : cbn_cell) (g' : cbn_gc_state) :
+    Lemma cbn_rn_cell_nofwd (cl : cbn_cell) (g : cbn_gc_state) (cl' : cbn_cell)
+      (g' : cbn_gc_state) :
       cbn_cell_fwd cl = None -> cbn_rn_cell cp cl g = CbnCOk (cl', g') -> cbn_cell_fwd cl' = None.
     Proof.
       destruct cl as [vals n o c|v| |b]; intros hf he; unfold cbn_rn_cell in he.
@@ -344,7 +351,8 @@ Section Collector.
         split; [exact hs|exact had].
     Qed.
 
-    Lemma cbn_rn_roots_ok : forall (l : list cbn_root) (g : cbn_gc_state) (l' : list cbn_root) (g' : cbn_gc_state),
+    Lemma cbn_rn_roots_ok : forall (l : list cbn_root) (g : cbn_gc_state) (l' : list cbn_root)
+      (g' : cbn_gc_state),
       cbn_gc_inv g -> cbn_rn_roots cp l g = CbnCOk (l', g') ->
       cbn_gstep g g' /\ cbn_addrs_in onext g'.(cbn_g_next) (cbn_ad_roots l').
     Proof.
@@ -445,7 +453,8 @@ Section Collector.
           split; [exact hx1|exact (Pos.lt_le_trans _ _ _ hx2 (cbn_step_next _ _ hs3))].
     Qed.
 
-    Lemma cbn_rn_ptree_ok (m : PTree.t cbn_haddr) (g : cbn_gc_state) (m' : PTree.t cbn_haddr) (g' : cbn_gc_state) :
+    Lemma cbn_rn_ptree_ok (m : PTree.t cbn_haddr) (g : cbn_gc_state) (m' : PTree.t cbn_haddr)
+      (g' : cbn_gc_state) :
       cbn_gc_inv g -> cbn_rn_ptree cp m g = CbnCOk (m', g') ->
       cbn_gstep g g'
       /\ (forall p a', PTree.get p m' = Some a' ->
@@ -465,8 +474,10 @@ Section Collector.
     (** *** One copied cell
 
       The cell is read from the old heap, its children are renamed, the copy is pushed onto
-      the new heap at [cbn_g_next] and the old cell is overwritten with [CbnCFwd] of that address. *)
-    Lemma cbn_gc_copy_write (a : cbn_haddr) (g : cbn_gc_state) (cl cl1 : cbn_cell) (g1 : cbn_gc_state)
+      the new heap at [cbn_g_next] and the old cell is overwritten with [CbnCFwd] of that address.
+      *)
+    Lemma cbn_gc_copy_write (a : cbn_haddr) (g : cbn_gc_state) (cl cl1 : cbn_cell)
+      (g1 : cbn_gc_state)
         (old : cbn_bheap cbn_cell) :
       cbn_gc_inv g ->
       cbn_cell_fwd cl = None ->
@@ -482,7 +493,8 @@ Section Collector.
       pose proof (cbn_inv_heap _ hinv1) as hok1.
       pose proof (cbn_bh_ok_le _ _ _ hok1) as hlo1.
       pose proof (cbn_rn_cell_nofwd _ _ _ _ hf e1) as hf1.
-      assert (hinv2 : cbn_gc_inv (cbn_mkGc old (cbn_bh_cons cl1 g1.(cbn_g_heap)) (Pos.succ g1.(cbn_g_next)))).
+      assert (hinv2 : cbn_gc_inv (cbn_mkGc old (cbn_bh_cons cl1 g1.(cbn_g_heap))
+        (Pos.succ g1.(cbn_g_next)))).
       { constructor; cbn.
         - intros b clb hb hfb. destruct (cbn_haddr_dec b a) as [->|hne].
           + rewrite (cbn_bh_get_upd_same _ _ _ _ e2) in hb.
@@ -534,18 +546,22 @@ Section Collector.
       destruct cl as [vals n o c|v| |b].
       + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) (CbnCSusp vals n o c) g) as [[cl1 g1]|w] eqn:e1;
           [|discriminate].
-        destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as [old|] eqn:e2;
+        destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
+          [old|] eqn:e2;
           [|discriminate].
         inversion he; subst; clear he.
         exact (cbn_gc_copy_write _ (ih tt) a g (CbnCSusp vals n o c) _ _ _ hinv eq_refl e1 e2).
       + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) (CbnCDone v) g) as [[cl1 g1]|w] eqn:e1;
           [|discriminate].
-        destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as [old|] eqn:e2;
+        destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
+          [old|] eqn:e2;
           [|discriminate].
         inversion he; subst; clear he.
         exact (cbn_gc_copy_write _ (ih tt) a g (CbnCDone v) _ _ _ hinv eq_refl e1 e2).
-      + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) CbnCBusy g) as [[cl1 g1]|w] eqn:e1; [|discriminate].
-        destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as [old|] eqn:e2;
+      + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) CbnCBusy g) as [[cl1 g1]|w] eqn:e1;
+        [|discriminate].
+        destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
+          [old|] eqn:e2;
           [|discriminate].
         inversion he; subst; clear he.
         exact (cbn_gc_copy_write _ (ih tt) a g CbnCBusy _ _ _ hinv eq_refl e1 e2).
@@ -576,7 +592,8 @@ Proof. reflexivity. Qed.
 
 (** ** A collection re-establishes the state invariant *)
 
-Theorem cbn_collect_sound (rs : list cbn_root) (s : cbn_state) (rs' : list cbn_root) (s' : cbn_state) :
+Theorem cbn_collect_sound (rs : list cbn_root) (s : cbn_state) (rs' : list cbn_root)
+  (s' : cbn_state) :
   cbn_heap_nofwd s.(cbn_st_heap) -> cbn_collect rs s = CbnCOk (rs', s') ->
   cbn_state_ok s.(cbn_st_next) s'
   /\ cbn_heap_nofwd s'.(cbn_st_heap)
@@ -584,8 +601,10 @@ Theorem cbn_collect_sound (rs : list cbn_root) (s : cbn_state) (rs' : list cbn_r
   /\ s'.(cbn_st_steps) = s.(cbn_st_steps).
 Proof.
   rewrite cbn_collect_eq. intros hnf he.
-  destruct (cbn_rn_ptree (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) s.(cbn_st_gam)
-              (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))) as [[gm g1]|w1] eqn:e1;
+  destruct (cbn_rn_ptree (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO)))
+    s.(cbn_st_gam)
+              (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))) as
+                [[gm g1]|w1] eqn:e1;
     [|discriminate].
   destruct (cbn_rn_roots (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
     as [[rs2 g2]|w2] eqn:e2; [|discriminate].

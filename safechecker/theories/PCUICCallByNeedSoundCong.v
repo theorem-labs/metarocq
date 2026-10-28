@@ -94,7 +94,8 @@ Section Congruence.
     assert (cl2 : is_closed_context (Γ ,,, cbn_fresh_context #|ts2|)).
     { rewrite on_free_vars_ctx_app clΓ /=. apply cbn_fresh_context_on_free_vars. }
     exact (untyped_substitution_ws_cumul_pb_subst_conv (Γ' := []) eqs cl1 cl2
-             (cbn_untyped_subslet_fresh_context Γ ts1) (cbn_untyped_subslet_fresh_context Γ ts2) opb).
+             (cbn_untyped_subslet_fresh_context Γ ts1)
+               (cbn_untyped_subslet_fresh_context Γ ts2) opb).
   Qed.
 
   (** ** 2. Spine congruence

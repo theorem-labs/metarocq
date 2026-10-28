@@ -28,7 +28,8 @@ Local Notation cbn_xpredT := (fun _ : nat => true) (only parsing).
   - The two root codes are in the ghost's table ([cbn_cok] of the evaluator) and their initial
     suspensions read, under the ghost, as the hook's own [t] and [u]
     ([cbn_run_c1_g_susp], [cbn_run_c1_gcok], [cbn_run_c2_g_susp], [cbn_run_c2_gcok]).
-  - [cbn_machine_sound]'s premises on the let-bodies of [Γ], [cbn_consts_okb] and [cbn_ctx_hyg], come
+  - [cbn_machine_sound]'s premises on the let-bodies of [Γ], [cbn_consts_okb] and [cbn_ctx_hyg],
+  come
     from [wf_local] ([cbn_wf_local_consts_okb], [cbn_wf_local_ctx_hyg]). *)
 
 Section Frame.
@@ -101,9 +102,11 @@ Section Frame.
           cbn_consts_okb Σ b)
     /\ cbn_ctx_hyg Γ
     /\ cbn_gok X_type X Γ #|Γ| Σ [] #|Γ| xH (cbn_run_ghost X_type X t u) (cbn_run_s2 X_type X t u)
-    /\ cbn_g_susp #|Γ| #|Γ| (cbn_run_ghost X_type X t u) cbn_env_empty (cbn_run_c1 X_type X t).(cbn_c_term) t
+    /\ cbn_g_susp #|Γ| #|Γ| (cbn_run_ghost X_type X t u) cbn_env_empty
+      (cbn_run_c1 X_type X t).(cbn_c_term) t
     /\ PCUICCallByNeedSoundEval.cbn_cok (cbn_run_ghost X_type X t u) (cbn_run_c1 X_type X t)
-    /\ cbn_g_susp #|Γ| #|Γ| (cbn_run_ghost X_type X t u) cbn_env_empty (cbn_run_c2 X_type X t u).(cbn_c_term) u
+    /\ cbn_g_susp #|Γ| #|Γ| (cbn_run_ghost X_type X t u) cbn_env_empty
+      (cbn_run_c2 X_type X t u).(cbn_c_term) u
     /\ PCUICCallByNeedSoundEval.cbn_cok (cbn_run_ghost X_type X t u) (cbn_run_c2 X_type X t u).
   Proof.
     intros wfΣ [A htA] [B huB].

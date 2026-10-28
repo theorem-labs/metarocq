@@ -19,8 +19,8 @@ Local Notation cbn_xpredT := (fun _ : nat => true) (only parsing).
   level [L] of a suspension whose master reading at [Q] is [lift0 (Q - L) v] returns a
   reduct of [v], and leaves [cbn_minv] alone.
 
-  The read-back is pure apart from [cbn_tick], which lowers only [cbn_st_steps]; [cbn_minv] reads the
-  heap, the next address, the context map and the memo ([cbn_minv_same]), never [cbn_st_steps].
+  The read-back is pure apart from [cbn_tick], which lowers only [cbn_st_steps]; [cbn_minv] reads
+  the heap, the next address, the context map and the memo ([cbn_minv_same]), never [cbn_st_steps].
 
   The one obstacle: a slot of an environment that the code does not use may read, at [Q],
   as a term that names a fresh variable at a level [>= L] (it is not a lift). Its read-back
@@ -241,7 +241,8 @@ Section ReadBack.
   Lemma cbn_rL_refl w : cbn_rL w w.
   Proof. constructor. apply refl_red. Qed.
 
-  Lemma cbn_ctxL_xpredT k : on_ctx_free_vars cbn_xpredT ((Γ ,,, cbn_jctx (L - nctx)) ,,, cbn_jctx k).
+  Lemma cbn_ctxL_xpredT k : on_ctx_free_vars cbn_xpredT
+    ((Γ ,,, cbn_jctx (L - nctx)) ,,, cbn_jctx k).
   Proof. rewrite <- app_context_assoc, <- cbn_jctx_add. apply cbn_master_ctx_xpredT. exact hΓ. Qed.
 
   Lemma cbn_ctxL_xpredT0 : on_ctx_free_vars cbn_xpredT (Γ ,,, cbn_jctx (L - nctx)).
@@ -306,7 +307,8 @@ Section ReadBack.
     cbn_same s' /\ on_free_vars cbn_xpredT u /\ cbn_lrel tx u.
 
   Definition cbn_Psusp (d : cbn_fuel) : Prop := forall e t s u s' tx, cbn_same s ->
-    on_free_vars cbn_xpredT t -> cbn_g_susp nctx Q G e t tx -> cbn_rb_susp nctx d L e t s = CbnCOk (u, s') ->
+    on_free_vars cbn_xpredT t -> cbn_g_susp nctx Q G e t tx ->
+      cbn_rb_susp nctx d L e t s = CbnCOk (u, s') ->
     cbn_same s' /\ on_free_vars cbn_xpredT u /\ cbn_lrel tx u.
 
   Definition cbn_Pvalue (d : cbn_fuel) : Prop := forall v s u s' tv, cbn_same s ->
@@ -329,7 +331,8 @@ Section ReadBack.
       constructor; [exact (hry t hat)|exact hrys].
   Qed.
 
-  Lemma cbn_slots_ok d : cbn_Pslot d -> forall l ts s us s', cbn_same s -> cbn_g_slots nctx Q G l ts ->
+  Lemma cbn_slots_ok d : cbn_Pslot d -> forall l ts s us s', cbn_same s ->
+    cbn_g_slots nctx Q G l ts ->
     cbn_map_st (cbn_rb_slot nctx d L) l s = CbnCOk (us, s') ->
     cbn_same s' /\ forallb (on_free_vars cbn_xpredT) us /\ Forall2 cbn_lrel ts us.
   Proof.
@@ -410,13 +413,15 @@ Section ReadBack.
         symmetry. exact (hnth i ti x' Eti hli hx').
       - rewrite length_map, hlen. exact hocc. }
     rewrite hwr, hext. constructor.
-    assert (hons : All (on_free_vars (addnP (#|@nil context_decl| + #|cbn_jctx n|) cbn_xpredT)) ws').
+    assert (hons : All (on_free_vars (addnP (#|@nil context_decl| + #|cbn_jctx n|) cbn_xpredT))
+      ws').
     { apply forallb_All in hws'. eapply All_impl; [exact hws'|].
       intros x hx. eapply on_free_vars_impl; [|exact hx]. intros; reflexivity. }
     assert (hsub : untyped_subslet (Γ ,,, cbn_jctx (L - nctx)) ws' (cbn_jctx n)).
     { rewrite <- hlen, <- hl'. apply cbn_untyped_subslet_jctx. }
     exact (red_red (Σ := Σ) (wfΣ := wfΣ) (P := cbn_xpredT) (Γ := Γ ,,, cbn_jctx (L - nctx))
-             (Δ := cbn_jctx n) (Γ' := []) (cbn_ctxL_xpredT n) (cbn_hyg_lift _ _ _ ht) hall hons hsub).
+             (Δ := cbn_jctx n) (Γ' := []) (cbn_ctxL_xpredT n) (cbn_hyg_lift _ _ _ ht)
+               hall hons hsub).
   Qed.
 
   Lemma cbn_cell_step k : cbn_Pvalue (k tt) -> cbn_Psusp (k tt) -> cbn_Pcell (CbnFS k).
@@ -427,7 +432,8 @@ Section ReadBack.
     destruct (cbn_gk_cells _ _ _ _ _ _ _ _ _ _ cbn_hok0 a cl Eh) as (t0 & hGa & hc).
     destruct cl as [vs n o c|v| |a']; try discriminate E.
     - destruct hc as [hc|(y & hy & hr)]; [discriminate hc|].
-      apply cbn_g_cell_susp_inv in hy as hy'. pose proof (cbn_g_cell_susp_cok _ _ _ _ _ _ _ _ hy) as hcok.
+      apply cbn_g_cell_susp_inv in hy as hy'.
+      pose proof (cbn_g_cell_susp_cok _ _ _ _ _ _ _ _ hy) as hcok.
       destruct (IHs _ _ _ _ _ _ hs (cbn_code_hyg c hcok) hy' E) as (hs' & hu & hl).
       split; [exact hs'|]. split; [exact hu|].
       intros t ht. rewrite hGa in ht. injection ht as <-.
@@ -466,7 +472,8 @@ Section ReadBack.
     intros IHc IHs v s u s' tv hs hvw hv E. cbn [cbn_rb_value] in E.
     destruct v as [h sp|e c|e c i sp|e c i sp|[l|h] sp|e c|e c sp].
     - (* CbnVCon *)
-      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s) as [[us s1]|w] eqn:Em; [|discriminate E].
+      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s) as [[us s1]|w] eqn:Em;
+        [|discriminate E].
       injection E as <- <-. cbn in hvw.
       apply cbn_g_value_VCon_inv in hv as (ts & -> & hts).
       destruct (cbn_spine_ok _ IHc _ _ _ _ _ hs hts Em) as (hs1 & hus & hF).
@@ -481,7 +488,8 @@ Section ReadBack.
       rewrite hct in E.
       destruct (cbn_rb_susp nctx (k tt) L e (tFix mfix i) s) as [[hu s1]|w] eqn:E1;
         [|discriminate E].
-      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s1) as [[us s2]|w] eqn:Em; [|discriminate E].
+      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s1) as [[us s2]|w] eqn:Em;
+        [|discriminate E].
       injection E as <- <-.
       assert (hf : on_free_vars cbn_xpredT (tFix mfix i)).
       { eapply cbn_hyg_tFix_idx. rewrite <- hct. exact (cbn_code_hyg c hcok). }
@@ -494,7 +502,8 @@ Section ReadBack.
       rewrite hct in E.
       destruct (cbn_rb_susp nctx (k tt) L e (tFix mfix i) s) as [[hu s1]|w] eqn:E1;
         [|discriminate E].
-      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s1) as [[us s2]|w] eqn:Em; [|discriminate E].
+      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s1) as [[us s2]|w] eqn:Em;
+        [|discriminate E].
       injection E as <- <-.
       assert (hf : on_free_vars cbn_xpredT (tFix mfix i)).
       { eapply cbn_hyg_tFix_idx. rewrite <- hct. exact (cbn_code_hyg c hcok). }
@@ -503,7 +512,8 @@ Section ReadBack.
       split; [exact hs2|]. split; [apply cbn_hyg_mkApps; assumption|].
       exact (cbn_lrel_app _ _ _ _ hlh hF).
     - (* CbnVNeu (CbnNVar l) *)
-      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s) as [[us s1]|w] eqn:Em; [|discriminate E].
+      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s) as [[us s1]|w] eqn:Em;
+        [|discriminate E].
       injection E as <- <-. cbn in hvw.
       apply cbn_g_value_VNeu_inv in hv as [(l' & ts & el & -> & hts)|(h & ts & el & _)];
         [|discriminate el].
@@ -517,7 +527,8 @@ Section ReadBack.
       destruct hw as (j & ->). cbn in e0. injection e0 as e0.
       pose proof cbn_hQ. replace (L - S l) with j by lia. apply cbn_rL_refl.
     - (* CbnVNeu (CbnNConst h) *)
-      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s) as [[us s1]|w] eqn:Em; [|discriminate E].
+      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s) as [[us s1]|w] eqn:Em;
+        [|discriminate E].
       injection E as <- <-. cbn in hvw.
       apply cbn_g_value_VNeu_inv in hv as [(l' & ts & el & _)|(h' & ts & el & -> & hts)];
         [discriminate el|].
@@ -534,7 +545,8 @@ Section ReadBack.
       apply cbn_g_value_VStuck_inv in hv as (hh & ts & hsu & hts & ->).
       destruct (cbn_rb_susp nctx (k tt) L e c.(cbn_c_term) s) as [[hu s1]|w] eqn:E1;
         [|discriminate E].
-      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s1) as [[us s2]|w] eqn:Em; [|discriminate E].
+      destruct (cbn_map_st (cbn_rb_cell nctx (k tt) L) sp s1) as [[us s2]|w] eqn:Em;
+        [|discriminate E].
       injection E as <- <-.
       destruct (IHs _ _ _ _ _ _ hs (cbn_code_hyg c hcok) hsu E1) as (hs1 & hhu & hlh).
       destruct (cbn_spine_ok _ IHc _ _ _ _ _ hs1 hts Em) as (hs2 & hus & hF).

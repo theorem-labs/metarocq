@@ -121,7 +121,8 @@ Proof.
   intros E. apply SuccNat2Pos.inj. now rewrite <- !Hnat, E.
 Qed.
 
-Lemma cbn_get2_set2_same {A} (k1 k2 : cbn_key) (x : A) m : cbn_get2 k1 k2 (cbn_set2 k1 k2 x m) = Some x.
+Lemma cbn_get2_set2_same {A} (k1 k2 : cbn_key) (x : A) m
+  : cbn_get2 k1 k2 (cbn_set2 k1 k2 x m) = Some x.
 Proof.
   unfold cbn_get2, cbn_set2; cbv zeta. rewrite PTree.gss. cbv beta iota. now rewrite PTree.gss.
 Qed.
@@ -277,7 +278,8 @@ Qed.
 
 Lemma cbn_wrap_bits_fst_xI m p z : exists a, fst (cbn_wrap_bits m p z) = String2pos.xI a.
 Proof.
-  revert p z; induction m as [m IH|m IH|]; intros p z; cbn; [apply IH|apply IH|eexists; reflexivity].
+  revert p z; induction m as [m IH|m IH|]; intros p z; cbn;
+    [apply IH|apply IH|eexists; reflexivity].
 Qed.
 
 Lemma cbn_wrap_bits_inj m m' p p' z z' :
@@ -374,7 +376,8 @@ Lemma cbn_code_inv_root ce i :
 Proof. unfold cbn_code_inv; cbv zeta. exists []. now split. Qed.
 
 Lemma cbn_code_inv_path_term ce c1 c2 :
-  cbn_code_inv ce c1 -> cbn_code_inv ce c2 -> c1.(cbn_c_path) = c2.(cbn_c_path) -> c1.(cbn_c_term) = c2.(cbn_c_term).
+  cbn_code_inv ce c1 -> cbn_code_inv ce c2 -> c1.(cbn_c_path) = c2.(cbn_c_path) ->
+    c1.(cbn_c_term) = c2.(cbn_c_term).
 Proof.
   unfold cbn_code_inv; cbv zeta.
   intros [ks [Hp1 Ht1]] [ks' [Hp2 Ht2]] E.
@@ -382,7 +385,8 @@ Proof.
 Qed.
 
 Lemma cbn_same_id_spec c1 c2 :
-  cbn_same_id c1 c2 = true <-> c1.(cbn_c_entry) = c2.(cbn_c_entry) /\ c1.(cbn_c_path) = c2.(cbn_c_path).
+  cbn_same_id c1 c2 = true <-> c1.(cbn_c_entry) = c2.(cbn_c_entry) /\
+    c1.(cbn_c_path) = c2.(cbn_c_path).
 Proof.
   unfold cbn_same_id. split.
   - intros H. apply Bool.andb_true_iff in H as [H1 H2].
@@ -391,9 +395,11 @@ Proof.
 Qed.
 
 Lemma cbn_same_id_sound ce c1 c2 :
-  cbn_same_id c1 c2 = true -> cbn_code_inv ce c1 -> cbn_code_inv ce c2 -> c1.(cbn_c_term) = c2.(cbn_c_term).
+  cbn_same_id c1 c2 = true -> cbn_code_inv ce c1 -> cbn_code_inv ce c2 ->
+    c1.(cbn_c_term) = c2.(cbn_c_term).
 Proof.
-  intros H H1 H2. apply cbn_same_id_spec in H as [_ Hp]. exact (cbn_code_inv_path_term ce c1 c2 H1 H2 Hp).
+  intros H H1 H2. apply cbn_same_id_spec in H as [_ Hp].
+  exact (cbn_code_inv_path_term ce c1 c2 H1 H2 Hp).
 Qed.
 
 (** The same with the entries looked up in a code table: [cbn_same_id] gives equal indices, so
@@ -465,11 +471,13 @@ Lemma cbn_code_inv_child_letin_body ce c na b ty body :
 Proof. cbn_code_inv_child_tac 2%N. Qed.
 
 Lemma cbn_code_inv_child_case_scrut ce c ci p scrut brs :
-  cbn_code_inv ce c -> c.(cbn_c_term) = tCase ci p scrut brs -> cbn_code_inv ce (cbn_child c 0 scrut).
+  cbn_code_inv ce c -> c.(cbn_c_term) = tCase ci p scrut brs ->
+    cbn_code_inv ce (cbn_child c 0 scrut).
 Proof. cbn_code_inv_child_tac 0%N. Qed.
 
 Lemma cbn_code_inv_child_case_return ce c ci p scrut brs :
-  cbn_code_inv ce c -> c.(cbn_c_term) = tCase ci p scrut brs -> cbn_code_inv ce (cbn_child c 1 p.(preturn)).
+  cbn_code_inv ce c -> c.(cbn_c_term) = tCase ci p scrut brs ->
+    cbn_code_inv ce (cbn_child c 1 p.(preturn)).
 Proof. cbn_code_inv_child_tac 1%N. Qed.
 
 Lemma cbn_code_inv_child_case_param ce c ci p scrut brs i t :
@@ -564,21 +572,26 @@ Fixpoint cbn_thash (t : term) : N :=
   | tSort _ => 4%N
   | tProd _ a b => cbn_hmix (cbn_hmix 5 (cbn_thash a)) (cbn_thash b)
   | tLambda _ a b => cbn_hmix (cbn_hmix 6 (cbn_thash a)) (cbn_thash b)
-  | tLetIn _ b ty body => cbn_hmix (cbn_hmix (cbn_hmix 7 (cbn_thash b)) (cbn_thash ty)) (cbn_thash body)
+  | tLetIn _ b ty body => cbn_hmix (cbn_hmix (cbn_hmix 7 (cbn_thash b)) (cbn_thash ty))
+    (cbn_thash body)
   | tApp f a => cbn_hmix (cbn_hmix 8 (cbn_thash f)) (cbn_thash a)
   | tConst kn _ => cbn_hash_string 9 (snd kn)
   | tInd i _ => cbn_hmix (cbn_hash_string 10 (snd i.(inductive_mind))) (N.of_nat i.(inductive_ind))
   | tConstruct i n _ =>
-    cbn_hmix (cbn_hmix (cbn_hash_string 11 (snd i.(inductive_mind))) (N.of_nat i.(inductive_ind))) (N.of_nat n)
+    cbn_hmix (cbn_hmix (cbn_hash_string 11 (snd i.(inductive_mind))) (N.of_nat i.(inductive_ind)))
+      (N.of_nat n)
   | tCase _ p c brs =>
-    let h := fold_left (fun h x => cbn_hmix h (cbn_thash x)) p.(pparams) (cbn_hmix 12 (N.of_nat #|brs|)) in
+    let h := fold_left (fun h x => cbn_hmix h (cbn_thash x)) p.(pparams)
+      (cbn_hmix 12 (N.of_nat #|brs|)) in
     let h := cbn_hmix (cbn_hmix h (cbn_thash p.(preturn))) (cbn_thash c) in
     fold_left (fun h b => cbn_hmix h (cbn_thash b.(bbody))) brs h
   | tProj p c => cbn_hmix (cbn_hmix 13 (N.of_nat p.(proj_arg))) (cbn_thash c)
   | tFix m i =>
-    fold_left (fun h d => cbn_hmix (cbn_hmix h (cbn_thash d.(dtype))) (cbn_thash d.(dbody))) m (cbn_hmix 14 (N.of_nat i))
+    fold_left (fun h d => cbn_hmix (cbn_hmix h (cbn_thash d.(dtype))) (cbn_thash d.(dbody))) m
+      (cbn_hmix 14 (N.of_nat i))
   | tCoFix m i =>
-    fold_left (fun h d => cbn_hmix (cbn_hmix h (cbn_thash d.(dtype))) (cbn_thash d.(dbody))) m (cbn_hmix 15 (N.of_nat i))
+    fold_left (fun h d => cbn_hmix (cbn_hmix h (cbn_thash d.(dtype))) (cbn_thash d.(dbody))) m
+      (cbn_hmix 15 (N.of_nat i))
   | _ => 16%N
   end.
 
@@ -688,20 +701,24 @@ Section Rename.
     end.
 
   Definition cbn_rn_env (e : cbn_env) (g : G) : cbn_res (cbn_env * G) :=
-    cbn2 (vs, g) := cbn_rn_slots e.(cbn_ev_vals) g in CbnCOk (cbn_mkEnv vs e.(cbn_ev_nvals) e.(cbn_ev_goff), g).
+    cbn2 (vs, g) := cbn_rn_slots e.(cbn_ev_vals) g in CbnCOk
+      (cbn_mkEnv vs e.(cbn_ev_nvals) e.(cbn_ev_goff), g).
 
   Definition cbn_rn_value (v : cbn_value) (g : G) : cbn_res (cbn_value * G) :=
     match v with
     | CbnVCon h sp => cbn2 (sp, g) := cbn_rn_addrs sp g in CbnCOk (CbnVCon h sp, g)
     | CbnVLam e c => cbn2 (e, g) := cbn_rn_env e g in CbnCOk (CbnVLam e c, g)
     | CbnVFix e c i sp =>
-      cbn2 (e, g) := cbn_rn_env e g in cbn2 (sp, g) := cbn_rn_addrs sp g in CbnCOk (CbnVFix e c i sp, g)
+      cbn2 (e, g) := cbn_rn_env e g in cbn2 (sp, g) :=
+        cbn_rn_addrs sp g in CbnCOk (CbnVFix e c i sp, g)
     | CbnVStuckFix e c i sp =>
-      cbn2 (e, g) := cbn_rn_env e g in cbn2 (sp, g) := cbn_rn_addrs sp g in CbnCOk (CbnVStuckFix e c i sp, g)
+      cbn2 (e, g) := cbn_rn_env e g in cbn2 (sp, g) :=
+        cbn_rn_addrs sp g in CbnCOk (CbnVStuckFix e c i sp, g)
     | CbnVNeu h sp => cbn2 (sp, g) := cbn_rn_addrs sp g in CbnCOk (CbnVNeu h sp, g)
     | CbnVOpen e c => cbn2 (e, g) := cbn_rn_env e g in CbnCOk (CbnVOpen e c, g)
     | CbnVStuck e c sp =>
-      cbn2 (e, g) := cbn_rn_env e g in cbn2 (sp, g) := cbn_rn_addrs sp g in CbnCOk (CbnVStuck e c sp, g)
+      cbn2 (e, g) := cbn_rn_env e g in cbn2 (sp, g) :=
+        cbn_rn_addrs sp g in CbnCOk (CbnVStuck e c sp, g)
     end.
 
   Definition cbn_rn_cell (cl : cbn_cell) (g : G) : cbn_res (cbn_cell * G) :=
@@ -741,7 +758,8 @@ Section Rename.
       cbn2 (x, g) := f x g in cbn2 (r, g) := cbn_rn_tree' r g in CbnCOk (PTree.Node011 x r, g)
     | PTree.Node100 l => cbn2 (l, g) := cbn_rn_tree' l g in CbnCOk (PTree.Node100 l, g)
     | PTree.Node101 l r =>
-      cbn2 (l, g) := cbn_rn_tree' l g in cbn2 (r, g) := cbn_rn_tree' r g in CbnCOk (PTree.Node101 l r, g)
+      cbn2 (l, g) := cbn_rn_tree' l g in cbn2 (r, g) :=
+        cbn_rn_tree' r g in CbnCOk (PTree.Node101 l r, g)
     | PTree.Node110 l x =>
       cbn2 (l, g) := cbn_rn_tree' l g in cbn2 (x, g) := f x g in CbnCOk (PTree.Node110 l x, g)
     | PTree.Node111 l x r =>
@@ -830,7 +848,8 @@ Definition cbn_mp_root (u : cbn_haddr -> cbn_haddr) (r : cbn_root) : cbn_root :=
   | CbnRC c => CbnRC (cbn_mp_cell u c)
   end.
 
-Definition cbn_mp_roots (u : cbn_haddr -> cbn_haddr) (l : list cbn_root) : list cbn_root := map (cbn_mp_root u) l.
+Definition cbn_mp_roots (u : cbn_haddr -> cbn_haddr) (l : list cbn_root) : list cbn_root :=
+  map (cbn_mp_root u) l.
 
 (** *** The addresses a structure holds *)
 
@@ -898,7 +917,8 @@ Qed.
 
 (** *** Shape: lengths, slot lists and spines of renamed and extended structures *)
 
-Lemma cbn_rn_slots_length {G} (f : cbn_haddr -> G -> cbn_res (cbn_haddr * G)) (l : list cbn_slot) (g : G)
+Lemma cbn_rn_slots_length {G} (f : cbn_haddr -> G -> cbn_res (cbn_haddr * G))
+  (l : list cbn_slot) (g : G)
     (l' : list cbn_slot) (g' : G) :
   cbn_rn_slots f l g = CbnCOk (l', g') -> #|l'| = #|l|.
 Proof.
@@ -911,7 +931,8 @@ Qed.
 
 Lemma cbn_rn_env_vals {G} (f : cbn_haddr -> G -> cbn_res (cbn_haddr * G)) (e : cbn_env) (g : G)
     (e' : cbn_env) (g' : G) :
-  cbn_rn_env f e g = CbnCOk (e', g') -> cbn_rn_slots f e.(cbn_ev_vals) g = CbnCOk (e'.(cbn_ev_vals), g').
+  cbn_rn_env f e g = CbnCOk (e', g') -> cbn_rn_slots f e.(cbn_ev_vals) g
+    = CbnCOk (e'.(cbn_ev_vals), g').
 Proof.
   unfold cbn_rn_env. destruct (cbn_rn_slots f (cbn_ev_vals e) g) as [[vs g1]|w]; intros H;
     inversion H; subst. reflexivity.
@@ -919,7 +940,8 @@ Qed.
 
 Lemma cbn_env_push_addrs_vals (l : list cbn_haddr) (e : cbn_env) :
   cbn_env_push_addrs l e
-  = cbn_mkEnv (map CbnSAddr (List.rev l) ++ e.(cbn_ev_vals)) (#|l| + e.(cbn_ev_nvals)) e.(cbn_ev_goff).
+  = cbn_mkEnv (map CbnSAddr (List.rev l) ++ e.(cbn_ev_vals)) (#|l| + e.(cbn_ev_nvals))
+    e.(cbn_ev_goff).
 Proof.
   unfold cbn_env_push_addrs. revert e. induction l as [|a l IH]; intros e.
   - destruct e; reflexivity.
@@ -974,7 +996,8 @@ Inductive cbn_bpath := CbnPEnd | CbnPL (q : cbn_bpath) | CbnPR (q : cbn_bpath).
 (** The scan, from the current position up: [acc] is the path of the bits below it (the
   latest first), [cand] the tree and path of the cell if the bits from here on are equal
   to the digits. Beyond the address's highest bit 1 ([cbn_bh_top]) its bits are 0. *)
-Fixpoint cbn_bh_top {A} (h : cbn_bheap A) (acc : cbn_bpath) (cand : option (cbn_btree A * cbn_bpath))
+Fixpoint cbn_bh_top {A} (h : cbn_bheap A) (acc : cbn_bpath)
+  (cand : option (cbn_btree A * cbn_bpath))
   : option (cbn_btree A * cbn_bpath) :=
   match h with
   | [] => cand
@@ -1016,7 +1039,8 @@ Fixpoint cbn_bt_set {A} (q : cbn_bpath) (x : A) (t : cbn_btree A) : option (cbn_
   end.
 
 (** Replace the tree at the position given by the length of [q]. *)
-Fixpoint cbn_bh_put {A} (q : cbn_bpath) (t : cbn_btree A) (h : cbn_bheap A) : option (cbn_bheap A) :=
+Fixpoint cbn_bh_put {A} (q : cbn_bpath) (t : cbn_btree A) (h : cbn_bheap A)
+  : option (cbn_bheap A) :=
   match q, h with
   | CbnPEnd, CbnDOne _ :: h => Some (CbnDOne t :: h)
   | (CbnPL q | CbnPR q), d :: h => option_map (cons d) (cbn_bh_put q t h)
@@ -1041,11 +1065,11 @@ Definition cbn_bh_upd {A} (a : cbn_haddr) (x : A) (h : cbn_bheap A) : option (cb
 
 (** ** Laws of the heap
 
-  [cbn_bh_ok lo n h]: [h] is the heap reached from [cbn_bh_holes lo] by [cbn_bh_cons] and [cbn_bh_upd], with
-  [n] the next address ([lo] plus the number of [cbn_bh_cons]). The laws: [cbn_bh_get_cons_new],
-  [cbn_bh_get_cons_old], [cbn_bh_get_upd_same], [cbn_bh_get_upd_other], [cbn_bh_upd_none], [cbn_bh_upd_ok]. The
-  rest of this part are the steps of their proofs. The laws over the state that the proofs
-  use are after the state's operations. *)
+  [cbn_bh_ok lo n h]: [h] is the heap reached from [cbn_bh_holes lo] by [cbn_bh_cons] and
+  [cbn_bh_upd], with [n] the next address ([lo] plus the number of [cbn_bh_cons]). The laws:
+  [cbn_bh_get_cons_new], [cbn_bh_get_cons_old], [cbn_bh_get_upd_same], [cbn_bh_get_upd_other],
+  [cbn_bh_upd_none], [cbn_bh_upd_ok]. The rest of this part are the steps of their proofs. The laws
+  over the state that the proofs use are after the state's operations. *)
 
 (** The digits of [h] are the binary digits of [n], least significant first. *)
 Inductive cbn_bh_digits {A} : cbn_bheap A -> positive -> Prop :=
@@ -1062,7 +1086,8 @@ Inductive cbn_bh_ok {A} (lo : positive) : positive -> cbn_bheap A -> Prop :=
 
 (** *** Trees *)
 
-Lemma cbn_bt_get_set_same {A} q (x : A) t t' : cbn_bt_set q x t = Some t' -> cbn_bt_get q t' = Some x.
+Lemma cbn_bt_get_set_same {A} q (x : A) t t' : cbn_bt_set q x t = Some t' ->
+  cbn_bt_get q t' = Some x.
 Proof.
   revert t t'; induction q as [|q IH|q IH]; intros t t' H; destruct t as [y|l r|];
     cbn in H; try discriminate.
@@ -1106,7 +1131,8 @@ Local Fixpoint cbn_bp_drop (k : nat) (q : cbn_bpath) : cbn_bpath :=
   | _, _ => q
   end.
 
-Local Lemma cbn_bp_drop_S k q r : cbn_bp_drop k q = CbnPL r \/ cbn_bp_drop k q = CbnPR r -> cbn_bp_drop (S k) q = r.
+Local Lemma cbn_bp_drop_S k q r : cbn_bp_drop k q = CbnPL r \/ cbn_bp_drop k q = CbnPR r ->
+  cbn_bp_drop (S k) q = r.
 Proof.
   revert q; induction k as [|k IH]; intros q H.
   - cbn in H; destruct H; subst; reflexivity.
@@ -1115,7 +1141,8 @@ Qed.
 
 (** [cbn_bh_at h acc t q]: the scan from [acc] at the start of [h] found the tree [t] in [h], at
   the position given by the length of [q] beyond [acc], and [q] extends [acc]. *)
-Local Definition cbn_bh_at {A} (h : cbn_bheap A) (acc : cbn_bpath) (t : cbn_btree A) (q : cbn_bpath) : Prop :=
+Local Definition cbn_bh_at {A} (h : cbn_bheap A) (acc : cbn_bpath) (t : cbn_btree A)
+  (q : cbn_bpath) : Prop :=
   cbn_bp_len acc <= cbn_bp_len q /\ cbn_bp_drop (cbn_bp_len q - cbn_bp_len acc) q = acc
   /\ nth_error h (cbn_bp_len q - cbn_bp_len acc) = Some (CbnDOne t).
 
@@ -1147,7 +1174,8 @@ Proof.
   destruct d; cbn_res_step (IH _ _ H).
 Qed.
 
-Local Lemma cbn_bh_scan_nil {A} p acc (c : option (cbn_btree A * cbn_bpath)) : cbn_bh_scan p [] acc c = None.
+Local Lemma cbn_bh_scan_nil {A} p acc (c : option (cbn_btree A * cbn_bpath))
+  : cbn_bh_scan p [] acc c = None.
 Proof. destruct p; reflexivity. Qed.
 
 Local Lemma cbn_bh_scan_res {A} p (h : cbn_bheap A) acc c t q :
@@ -1177,15 +1205,18 @@ Proof. intros Ha Hs t q E; specialize (Hs t q E); destruct Ha; subst; cbn; lia. 
 
 (** Both results at the same path beyond [acc], or both from the candidates. *)
 Local Definition cbn_bh_same_res (acc q1 q2 : cbn_bpath) : Prop :=
-  (q1 = q2 /\ cbn_bp_len acc <= cbn_bp_len q1) \/ (cbn_bp_len q1 < cbn_bp_len acc /\ cbn_bp_len q2 < cbn_bp_len acc).
+  (q1 = q2 /\ cbn_bp_len acc <= cbn_bp_len q1) \/
+    (cbn_bp_len q1 < cbn_bp_len acc /\ cbn_bp_len q2 < cbn_bp_len acc).
 
 Local Lemma cbn_bh_same_res_step acc acc' q1 q2 :
   acc' = CbnPL acc \/ acc' = CbnPR acc -> cbn_bh_same_res acc q1 q2 -> cbn_bh_same_res acc' q1 q2.
 Proof.
-  intros Ha C; assert (E : cbn_bp_len acc' = S (cbn_bp_len acc)) by (destruct Ha; subst; reflexivity).
+  intros Ha C; assert (E : cbn_bp_len acc' = S (cbn_bp_len acc)) by
+    (destruct Ha; subst; reflexivity).
   unfold cbn_bh_same_res in *; rewrite E.
   destruct C as [[<- Hl]|[Hl1 Hl2]].
-  - destruct (Nat.eq_dec (cbn_bp_len q1) (cbn_bp_len acc)); [right; lia|left; split; [reflexivity|lia]].
+  - destruct (Nat.eq_dec (cbn_bp_len q1) (cbn_bp_len acc));
+    [right; lia|left; split; [reflexivity|lia]].
   - right; lia.
 Qed.
 
@@ -1224,7 +1255,8 @@ Proof.
   induction h as [|d h IH]; intros p acc c1 c2 t1 t2 q1 q2 S1 S2 H1 H2 C.
   - rewrite cbn_bh_scan_nil in H2; discriminate.
   - destruct p as [p|p|], d as [|t]; cbn in H1, H2;
-      try (eapply IH; [ | | exact H1 | exact H2 | refine (cbn_bh_same_res_step _ _ _ _ _ C); cbn_pl_pr ];
+      try (eapply IH; [ | | exact H1 | exact H2 | refine (cbn_bh_same_res_step _ _ _ _ _ C);
+        cbn_pl_pr ];
            cbn_short_tac);
       destruct C as [[<- ?]|[? ?]]; cbn_crunch.
 Qed.
@@ -1247,7 +1279,8 @@ Proof.
                [ | | exact H1 | exact H2 | refine (cbn_bh_same_res_step _ _ _ _ _ C); cbn_pl_pr ]
              | eapply cbn_bh_top_scan;
                [ | | exact H2 | exact H1
-               | apply cbn_bh_same_res_sym; refine (cbn_bh_same_res_step _ _ _ _ _ C); cbn_pl_pr ] ];
+               | apply cbn_bh_same_res_sym; refine (cbn_bh_same_res_step _ _ _ _ _ C); cbn_pl_pr ]
+                 ];
            cbn_short_tac);
       destruct C as [[<- ?]|[? ?]]; cbn_crunch.
 Qed.
@@ -1256,7 +1289,8 @@ Local Lemma cbn_bh_find_inj {A} a b (h : cbn_bheap A) t1 t2 q :
   cbn_bh_find a h = Some (t1, q) -> cbn_bh_find b h = Some (t2, q) -> a = b.
 Proof.
   intros H1 H2; destruct a as [pa], b as [pb]; f_equal.
-  eapply (cbn_bh_scan_inj h pa pb CbnPEnd None None); [apply cbn_bh_short_none|apply cbn_bh_short_none|
+  eapply (cbn_bh_scan_inj h pa pb CbnPEnd None None);
+    [apply cbn_bh_short_none|apply cbn_bh_short_none|
     exact H1|exact H2|left; split; [reflexivity|cbn; lia]].
 Qed.
 
@@ -1292,7 +1326,8 @@ Proof.
 Qed.
 
 Local Lemma cbn_bh_scan_shape {A} (h h' : cbn_bheap A) : Forall2 cbn_bh_dshape h h' ->
-  forall p acc c c', cbn_bh_crel c c' -> cbn_bh_crel (cbn_bh_scan p h acc c) (cbn_bh_scan p h' acc c').
+  forall p acc c c', cbn_bh_crel c c' ->
+    cbn_bh_crel (cbn_bh_scan p h acc c) (cbn_bh_scan p h' acc c').
 Proof.
   induction 1 as [|d d' h h' Hd Hf IH]; intros p acc c c' Hc.
   - rewrite !cbn_bh_scan_nil; exact I.
@@ -1340,7 +1375,8 @@ Local Lemma cbn_bh_find_put {A} a (h : cbn_bheap A) k t' h' t q :
   cbn_bh_find a h' = Some (if Nat.eqb (cbn_bp_len q) (cbn_bp_len k) then t' else t, q).
 Proof.
   intros Hp Hf.
-  pose proof (cbn_bh_scan_shape _ _ (cbn_bh_put_shape _ _ _ _ Hp) a.(cbn_ha_p) CbnPEnd None None I) as R.
+  pose proof (cbn_bh_scan_shape _ _ (cbn_bh_put_shape _ _ _ _ Hp) a.(cbn_ha_p) CbnPEnd None None I)
+    as R.
   fold (cbn_bh_find a h) (cbn_bh_find a h') in R; rewrite Hf in R.
   destruct (cbn_bh_find a h') as [[t'' q']|] eqn:E; cbn in R; [|contradiction]; subst q'.
   pose proof (cbn_bh_find_nth _ _ _ _ E) as N'; rewrite (cbn_bh_put_nth _ _ _ _ Hp) in N'.
@@ -1352,7 +1388,8 @@ Local Lemma cbn_bh_find_put_none {A} a (h : cbn_bheap A) k t' h' :
   cbn_bh_put k t' h = Some h' -> cbn_bh_find a h = None -> cbn_bh_find a h' = None.
 Proof.
   intros Hp Hf.
-  pose proof (cbn_bh_scan_shape _ _ (cbn_bh_put_shape _ _ _ _ Hp) a.(cbn_ha_p) CbnPEnd None None I) as R.
+  pose proof (cbn_bh_scan_shape _ _ (cbn_bh_put_shape _ _ _ _ Hp) a.(cbn_ha_p) CbnPEnd None None I)
+    as R.
   fold (cbn_bh_find a h) (cbn_bh_find a h') in R; rewrite Hf in R.
   destruct (cbn_bh_find a h'); [contradiction|reflexivity].
 Qed.
@@ -1370,7 +1407,8 @@ Qed.
 
 (** *** [cbn_bh_upd] *)
 
-Lemma cbn_bh_get_upd_same {A} a (x : A) h h' : cbn_bh_upd a x h = Some h' -> cbn_bh_get a h' = Some x.
+Lemma cbn_bh_get_upd_same {A} a (x : A) h h' : cbn_bh_upd a x h = Some h' ->
+  cbn_bh_get a h' = Some x.
 Proof.
   unfold cbn_bh_upd, cbn_bh_get; intros H.
   destruct (cbn_bh_find a h) as [[t q]|] eqn:Ef; [|discriminate].
@@ -1421,7 +1459,8 @@ Qed.
 Lemma cbn_bh_digits_holes {A} p : cbn_bh_digits (@cbn_bh_holes A p) p.
 Proof. induction p; cbn; constructor; auto. Qed.
 
-Lemma cbn_bh_digits_cons {A} (x : A) h n : cbn_bh_digits h n -> cbn_bh_digits (cbn_bh_cons x h) (Pos.succ n).
+Lemma cbn_bh_digits_cons {A} (x : A) h n : cbn_bh_digits h n ->
+  cbn_bh_digits (cbn_bh_cons x h) (Pos.succ n).
 Proof.
   unfold cbn_bh_cons; generalize (CbnBLeaf x); intros T Hd; revert T.
   induction Hd as [t|h n Hd IH|t h n Hd IH]; intros T; cbn; repeat constructor; auto.
@@ -1456,7 +1495,8 @@ Proof.
 Qed.
 
 Local Lemma cbn_bh_top_carry {A} (h : cbn_bheap A) n : cbn_bh_digits h n ->
-  forall T acc, cbn_bh_val (cbn_bh_top (cbn_bh_carry T h) acc None) = cbn_bh_val (cbn_bh_top h acc None).
+  forall T acc, cbn_bh_val (cbn_bh_top (cbn_bh_carry T h) acc None)
+    = cbn_bh_val (cbn_bh_top h acc None).
 Proof.
   induction 1 as [t|h n Hd IH|t h n Hd IH]; intros T acc.
   - reflexivity.
@@ -1609,7 +1649,8 @@ Definition cbn_dt_upd_child (b : bool) (f : cbn_dtrie -> cbn_dtrie) (t : cbn_dtr
   | CbnDTNode h z o => if b then CbnDTNode h z (f o) else CbnDTNode h (f z) o
   end.
 
-Definition cbn_dt_upd_byte (x : Byte.byte) (f : cbn_dtrie -> cbn_dtrie) (t : cbn_dtrie) : cbn_dtrie :=
+Definition cbn_dt_upd_byte (x : Byte.byte) (f : cbn_dtrie -> cbn_dtrie) (t : cbn_dtrie)
+  : cbn_dtrie :=
   let '(b0, (b1, (b2, (b3, (b4, (b5, (b6, b7))))))) := Byte.to_bits x in
   cbn_dt_upd_child b0 (cbn_dt_upd_child b1 (cbn_dt_upd_child b2 (cbn_dt_upd_child b3
     (cbn_dt_upd_child b4 (cbn_dt_upd_child b5 (cbn_dt_upd_child b6 (cbn_dt_upd_child b7 f))))))) t.
@@ -1624,7 +1665,8 @@ Fixpoint cbn_mp_set (mp : modpath) (d : cbn_delta_memo) (l : list (modpath * cbn
   : list (modpath * cbn_delta_memo) :=
   match l with
   | [] => [(mp, d)]
-  | (mp', d') :: l => if cbn_modpath_eqb mp mp' then (mp, d) :: l else (mp', d') :: cbn_mp_set mp d l
+  | (mp', d') :: l => if cbn_modpath_eqb mp mp' then (mp, d) :: l else (mp', d')
+    :: cbn_mp_set mp d l
   end.
 
 Definition cbn_dt_add (kn : kername) (d : cbn_delta_memo) (t : cbn_dtrie) : cbn_dtrie :=
@@ -1659,19 +1701,22 @@ Definition cbn_init : cbn_state :=
 Definition cbn_tick (s : cbn_state) : option cbn_state :=
   match s.(cbn_st_steps) with
   | N0 => None
-  | n => Some (cbn_mkState s.(cbn_st_heap) s.(cbn_st_next) s.(cbn_st_room) (N.pred n) s.(cbn_st_gam) s.(cbn_st_memo))
+  | n => Some (cbn_mkState s.(cbn_st_heap) s.(cbn_st_next) s.(cbn_st_room) (N.pred n) s.(cbn_st_gam)
+    s.(cbn_st_memo))
   end.
 
 Definition cbn_heap_get (a : cbn_haddr) (s : cbn_state) : option cbn_cell :=
   cbn_bh_get a s.(cbn_st_heap).
 
 Definition cbn_heap_upd (a : cbn_haddr) (c : cbn_cell) (s : cbn_state) : option cbn_state :=
-  option_map (fun h => cbn_mkState h s.(cbn_st_next) s.(cbn_st_room) s.(cbn_st_steps) s.(cbn_st_gam) s.(cbn_st_memo))
+  option_map (fun h => cbn_mkState h s.(cbn_st_next) s.(cbn_st_room) s.(cbn_st_steps) s.(cbn_st_gam)
+    s.(cbn_st_memo))
     (cbn_bh_upd a c s.(cbn_st_heap)).
 
 Definition cbn_alloc_now (c : cbn_cell) (s : cbn_state) : cbn_haddr * cbn_state :=
   (CbnHAddr s.(cbn_st_next),
-   cbn_mkState (cbn_bh_cons c s.(cbn_st_heap)) (Pos.succ s.(cbn_st_next)) (N.pred s.(cbn_st_room)) s.(cbn_st_steps)
+   cbn_mkState (cbn_bh_cons c s.(cbn_st_heap)) (Pos.succ s.(cbn_st_next)) (N.pred s.(cbn_st_room))
+     s.(cbn_st_steps)
      s.(cbn_st_gam) s.(cbn_st_memo)).
 
 Definition cbn_set_memo (m : cbn_memo) (s : cbn_state) : cbn_state :=
@@ -1702,7 +1747,8 @@ Qed.
 
 Definition cbn_memo_add_entry (e : cbn_code_entry) (m : cbn_memo) : cbn_cidx * cbn_memo :=
   let i := m.(cbn_m_ncode) in
-  (i, cbn_mkMemo (PTree.set i e m.(cbn_m_codes)) (cbn_key_succ i) m.(cbn_m_delta) m.(cbn_m_once) m.(cbn_m_hash)
+  (i, cbn_mkMemo (PTree.set i e m.(cbn_m_codes)) (cbn_key_succ i) m.(cbn_m_delta) m.(cbn_m_once)
+    m.(cbn_m_hash)
         m.(cbn_m_ceq)).
 
 Definition cbn_memo_set_delta (d : cbn_dtrie) (m : cbn_memo) : cbn_memo :=
@@ -1741,7 +1787,8 @@ Fixpoint cbn_gc_copy (f : cbn_fuel) (a : cbn_haddr) (g : cbn_gc_state) {struct f
       cbn2 (cl, g) := cbn_rn_cell (cbn_gc_copy (k tt)) cl g in
       let a' := CbnHAddr g.(cbn_g_next) in
       match cbn_bh_upd a (CbnCFwd a') g.(cbn_g_old) with
-      | Some old => CbnCOk (a', cbn_mkGc old (cbn_bh_cons cl g.(cbn_g_heap)) (Pos.succ g.(cbn_g_next)))
+      | Some old => CbnCOk (a', cbn_mkGc old (cbn_bh_cons cl g.(cbn_g_heap))
+        (Pos.succ g.(cbn_g_next)))
       | None => CbnCFail CbnWGcDangling
       end
     end
@@ -1756,13 +1803,15 @@ Definition cbn_collect (rs : list cbn_root) (s : cbn_state) : cbn_res (list cbn_
   let g := cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes onext) onext in
   cbn2 (gm, g) := cbn_rn_ptree copy s.(cbn_st_gam) g in
   cbn2 (rs, g) := cbn_rn_roots copy rs g in
-  CbnCOk (rs, cbn_mkState g.(cbn_g_heap) g.(cbn_g_next) (cbn_gc_room (N.sub (Npos g.(cbn_g_next)) (Npos onext)))
+  CbnCOk (rs, cbn_mkState g.(cbn_g_heap) g.(cbn_g_next)
+    (cbn_gc_room (N.sub (Npos g.(cbn_g_next)) (Npos onext)))
              s.(cbn_st_steps) gm s.(cbn_st_memo)).
 
 Definition cbn_gc_due (s : cbn_state) : bool :=
   match s.(cbn_st_room) with N0 => true | Npos _ => false end.
 
-Fixpoint cbn_find_inst (u : Instance.t) (l : list (Instance.t * cbn_cidx * term)) : option (cbn_cidx * term) :=
+Fixpoint cbn_find_inst (u : Instance.t) (l : list (Instance.t * cbn_cidx * term))
+  : option (cbn_cidx * term) :=
   match l with
   | [] => None
   | (u', i, t) :: l => if Instance.eqb u u' then Some (i, t) else cbn_find_inst u l
@@ -1827,7 +1876,8 @@ Section CallByNeed.
     | Some b => (b, s)
     | None =>
       let b := Nat.leb (cbn_occ 0 c.(cbn_c_term)) 1 in
-      (b, cbn_set_memo (cbn_memo_set_once (cbn_set2 c.(cbn_c_entry) c.(cbn_c_path) b s.(cbn_st_memo).(cbn_m_once))
+      (b, cbn_set_memo (cbn_memo_set_once
+        (cbn_set2 c.(cbn_c_entry) c.(cbn_c_path) b s.(cbn_st_memo).(cbn_m_once))
                       s.(cbn_st_memo)) s)
     end.
 
@@ -1836,7 +1886,8 @@ Section CallByNeed.
     | Some h => (h, s)
     | None =>
       let h := cbn_thash c.(cbn_c_term) in
-      (h, cbn_set_memo (cbn_memo_set_hash (cbn_set2 c.(cbn_c_entry) c.(cbn_c_path) h s.(cbn_st_memo).(cbn_m_hash))
+      (h, cbn_set_memo (cbn_memo_set_hash
+        (cbn_set2 c.(cbn_c_entry) c.(cbn_c_path) h s.(cbn_st_memo).(cbn_m_hash))
                       s.(cbn_st_memo)) s)
     end.
 
@@ -1848,15 +1899,18 @@ Section CallByNeed.
 
   Definition cbn_ceq_set (c1 c2 : cbn_code) (b : bool) (s : cbn_state) : cbn_state :=
     let q := s.(cbn_st_memo).(cbn_m_ceq) in
-    let m := match cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) q with Some m => m | None => PTree.empty _ end in
-    cbn_set_memo (cbn_memo_set_ceq (cbn_set2 c1.(cbn_c_entry) c1.(cbn_c_path) (cbn_set2 c2.(cbn_c_entry) c2.(cbn_c_path) b m) q)
+    let m := match cbn_get2 c1.(cbn_c_entry) c1.(cbn_c_path) q with Some m => m | None =>
+      PTree.empty _ end in
+    cbn_set_memo (cbn_memo_set_ceq (cbn_set2 c1.(cbn_c_entry) c1.(cbn_c_path)
+      (cbn_set2 c2.(cbn_c_entry) c2.(cbn_c_path) b m) q)
                 s.(cbn_st_memo)) s.
 
   (** Code equality: equal identifiers; or both entries passed their universe check, the
     hashes are equal, and [eqb_term_upto_univ] at [Conv] (cached by identifier pair). *)
   Definition cbn_code_eq (c1 c2 : cbn_code) (s : cbn_state) : bool * cbn_state :=
     if cbn_same_id c1 c2 then (true, s)
-    else if negb (cbn_entry_wf c1.(cbn_c_entry) s && cbn_entry_wf c2.(cbn_c_entry) s) then (false, s)
+    else if negb (cbn_entry_wf c1.(cbn_c_entry) s && cbn_entry_wf c2.(cbn_c_entry) s)
+      then (false, s)
     else
       let (h1, s) := cbn_code_hash c1 s in
       let (h2, s) := cbn_code_hash c2 s in
@@ -1890,7 +1944,8 @@ Section CallByNeed.
   Definition cbn_delta_new (kn : kername) (u : Instance.t) (body : term)
     (insts : list (Instance.t * cbn_cidx * term)) (s : cbn_state) : cbn_code * cbn_state :=
     let (c, s) := cbn_new_entry body u s in
-    (c, cbn_set_memo (cbn_memo_set_delta (cbn_dt_add kn (CbnDBody body ((u, c.(cbn_c_entry), c.(cbn_c_term)) :: insts))
+    (c, cbn_set_memo (cbn_memo_set_delta
+      (cbn_dt_add kn (CbnDBody body ((u, c.(cbn_c_entry), c.(cbn_c_term)) :: insts))
                                     s.(cbn_st_memo).(cbn_m_delta)) s.(cbn_st_memo)) s).
 
   (** [Some c]: the instantiated body; [None]: an axiom or opaque constant. *)
@@ -1909,7 +1964,8 @@ Section CallByNeed.
         match cb.(cst_body) with
         | Some body => let (c, s) := cbn_delta_new kn u body [] s in CbnCOk (Some c, s)
         | None =>
-          CbnCOk (None, cbn_set_memo (cbn_memo_set_delta (cbn_dt_add kn CbnDAxiom s.(cbn_st_memo).(cbn_m_delta))
+          CbnCOk (None, cbn_set_memo (cbn_memo_set_delta
+            (cbn_dt_add kn CbnDAxiom s.(cbn_st_memo).(cbn_m_delta))
                                  s.(cbn_st_memo)) s)
         end
       | _ => CbnCFail CbnWDelta
@@ -1944,7 +2000,8 @@ Section CallByNeed.
     match nth_error e.(cbn_ev_vals) n with
     | Some x => CbnCOk (x, rs, s)
     | None =>
-      cbnlet (a, rs, s) := cbn_gam (n - e.(cbn_ev_nvals) + e.(cbn_ev_goff)) rs s in CbnCOk (CbnSAddr a, rs, s)
+      cbnlet (a, rs, s) := cbn_gam (n - e.(cbn_ev_nvals) + e.(cbn_ev_goff)) rs s in CbnCOk
+        (CbnSAddr a, rs, s)
     end.
 
   (** The slot of an argument (of an application or a let): a variable reuses its slot;
@@ -2024,7 +2081,8 @@ Section CallByNeed.
     | S n =>
       cbnlet (a, rs, s) := cbn_alloc (CbnCDone (CbnVFix e c i [])) (CbnRE e :: CbnRE acc :: rs) s in
       match rs with
-      | CbnRE e :: CbnRE acc :: rs => cbn_push_fix_cells e c (S i) n (cbn_env_push (CbnSAddr a) acc) rs s
+      | CbnRE e :: CbnRE acc :: rs => cbn_push_fix_cells e c (S i) n
+        (cbn_env_push (CbnSAddr a) acc) rs s
       | _ => CbnCFail CbnWRoots
       end
     end.
@@ -2035,7 +2093,8 @@ Section CallByNeed.
     match n with
     | O => CbnCOk ((lvl, e1, e2), rs, s)
     | S n =>
-      cbnlet (x, rs, s) := cbn_alloc (CbnCDone (CbnVNeu (CbnNVar lvl) [])) (CbnRE e1 :: CbnRE e2 :: rs) s in
+      cbnlet (x, rs, s) := cbn_alloc (CbnCDone (CbnVNeu (CbnNVar lvl) []))
+        (CbnRE e1 :: CbnRE e2 :: rs) s in
       match rs with
       | CbnRE e1 :: CbnRE e2 :: rs =>
         cbn_push_fresh n (S lvl) (cbn_env_push (CbnSAddr x) e1) (cbn_env_push (CbnSAddr x) e2) rs s
@@ -2091,7 +2150,8 @@ Section CallByNeed.
       end
     end
 
-  with cbn_whnf (d : cbn_fuel) (e : cbn_env) (c : cbn_code) (stk : list cbn_slot) (rs : list cbn_root)
+  with cbn_whnf (d : cbn_fuel) (e : cbn_env) (c : cbn_code) (stk : list cbn_slot)
+    (rs : list cbn_root)
     (s : cbn_state) {struct d} : cbn_res (cbn_value * list cbn_root * cbn_state) :=
     match d with
     | CbnFO => CbnCFail CbnWDepth
@@ -2141,12 +2201,14 @@ Section CallByNeed.
         match r with
         | Some c' => cbn_whnf d cbn_env_empty c' stk rs s
         | None =>
-          cbnlet (sp, rs, s) := cbn_mat_all d stk rs s in CbnCOk (CbnVNeu (CbnNConst c.(cbn_c_term)) sp, rs, s)
+          cbnlet (sp, rs, s) := cbn_mat_all d stk rs s in CbnCOk
+            (CbnVNeu (CbnNConst c.(cbn_c_term)) sp, rs, s)
         end
       | tConstruct _ _ _ | tInd _ _ =>
         cbnlet (sp, rs, s) := cbn_mat_all d stk rs s in CbnCOk (CbnVCon c.(cbn_c_term) sp, rs, s)
       | tCase ci p scrut brs =>
-        cbnlet (v, rs, s) := cbn_whnf d e (cbn_child c 0 scrut) [] (CbnRE e :: CbnRSk stk :: rs) s in
+        cbnlet (v, rs, s) := cbn_whnf d e (cbn_child c 0 scrut) []
+          (CbnRE e :: CbnRSk stk :: rs) s in
         match rs with
         | CbnRE e :: CbnRSk stk :: rs =>
           match v with
@@ -2241,7 +2303,8 @@ Section CallByNeed.
                   let stk := cbn_list_set stk def.(rarg) (CbnSAddr a2) in
                   cbnlet (e', rs, s) := cbn_push_fix_cells e c 0 #|mfix| e (CbnRSk stk :: rs) s in
                   match rs with
-                  | CbnRSk stk :: rs => cbn_whnf d e' (cbn_child c (N.of_nat idx) def.(dbody)) stk rs s
+                  | CbnRSk stk :: rs => cbn_whnf d e'
+                    (cbn_child c (N.of_nat idx) def.(dbody)) stk rs s
                   | _ => CbnCFail CbnWRoots
                   end
                 | _ => CbnCFail CbnWRoots
@@ -2402,7 +2465,8 @@ Section CallByNeed.
       | CbnSAddr a1, CbnSAddr a2 =>
         if cbn_haddr_eqb a1 a2 then CbnCOk (true, rs, s) else cbn_conv_eval d lvl le x1 x2 rs s
       | CbnSInl vs1 n1 o1 c1, CbnSInl vs2 n2 o2 c2 =>
-        cbnlet (b, rs, s) := cbn_conv_same_code d lvl (cbn_mkEnv vs1 n1 o1) c1 (cbn_mkEnv vs2 n2 o2) c2
+        cbnlet (b, rs, s) := cbn_conv_same_code d lvl (cbn_mkEnv vs1 n1 o1) c1
+          (cbn_mkEnv vs2 n2 o2) c2
                                (CbnRSl x1 :: CbnRSl x2 :: rs) s in
         match rs with
         | CbnRSl x1 :: CbnRSl x2 :: rs =>
@@ -2441,7 +2505,8 @@ Section CallByNeed.
       match l1, l2 with
       | [], [] => CbnCOk (true, rs, s)
       | a1 :: l1, a2 :: l2 =>
-        cbnwhen 2 (rs, s) := cbn_conv_slot d lvl Conv (CbnSAddr a1) (CbnSAddr a2) (CbnRSp l1 :: CbnRSp l2 :: rs) s in
+        cbnwhen 2 (rs, s) := cbn_conv_slot d lvl Conv (CbnSAddr a1) (CbnSAddr a2)
+          (CbnRSp l1 :: CbnRSp l2 :: rs) s in
         match rs with
         | CbnRSp l1 :: CbnRSp l2 :: rs => cbn_conv_cells d lvl l1 l2 rs s
         | _ => CbnCFail CbnWRoots
@@ -2495,7 +2560,8 @@ Section CallByNeed.
       match l1, l2 with
       | [], [] => CbnCOk (true, rs, s)
       | x1 :: l1, x2 :: l2 =>
-        if cbn_slot_same x1 x2 || noccur_between i 1 t then cbn_same_code_cells d lvl t (S i) l1 l2 rs s
+        if cbn_slot_same x1 x2 || noccur_between i 1 t then cbn_same_code_cells d lvl t
+          (S i) l1 l2 rs s
         else
           cbnwhen 2 (rs, s) := cbn_conv_slot d lvl Conv x1 x2 (CbnRSk l1 :: CbnRSk l2 :: rs) s in
           match rs with
@@ -2524,13 +2590,15 @@ Section CallByNeed.
                                (CbnRE e1 :: CbnRE e2 :: rs) s in
           match rs with
           | CbnRE e1 :: CbnRE e2 :: rs =>
-            cbnlet (r, rs, s) := cbn_push_fresh #|p1.(pcontext)| lvl e1 e2 (CbnRE e1 :: CbnRE e2 :: rs) s in
+            cbnlet (r, rs, s) := cbn_push_fresh #|p1.(pcontext)| lvl e1 e2
+              (CbnRE e1 :: CbnRE e2 :: rs) s in
             let '(lvlr, er1, er2) := r in
             cbnwhen 2 (rs, s) := cbn_conv_term d lvlr Conv er1 (cbn_child c1 1 p1.(preturn))
                                  er2 (cbn_child c2 1 p2.(preturn)) rs s in
             match rs with
             | CbnRE e1 :: CbnRE e2 :: rs =>
-              cbnwhen 2 (rs, s) := cbn_conv_term d lvl Conv e1 (cbn_child c1 0 sc1) e2 (cbn_child c2 0 sc2)
+              cbnwhen 2 (rs, s) := cbn_conv_term d lvl Conv e1 (cbn_child c1 0 sc1) e2
+                (cbn_child c2 0 sc2)
                                    (CbnRE e1 :: CbnRE e2 :: rs) s in
               match rs with
               | CbnRE e1 :: CbnRE e2 :: rs => cbn_case_branches d lvl e1 c1 e2 c2 0%N brs1 brs2 rs s
@@ -2556,7 +2624,8 @@ Section CallByNeed.
       | [], [] => CbnCOk (true, rs, s)
       | t1 :: l1, t2 :: l2 =>
         cbnwhen 2 (rs, s) := cbn_conv_term d lvl Conv e1 (cbn_child c1 (cbn_case_param_step i) t1)
-                             e2 (cbn_child c2 (cbn_case_param_step i) t2) (CbnRE e1 :: CbnRE e2 :: rs) s in
+                             e2 (cbn_child c2 (cbn_case_param_step i) t2)
+                               (CbnRE e1 :: CbnRE e2 :: rs) s in
         match rs with
         | CbnRE e1 :: CbnRE e2 :: rs => cbn_case_params d lvl e1 c1 e2 c2 (N.succ i) l1 l2 rs s
         | _ => CbnCFail CbnWRoots
@@ -2576,9 +2645,11 @@ Section CallByNeed.
       | [], [] => CbnCOk (true, rs, s)
       | b1 :: l1, b2 :: l2 =>
         if cbn_case_ctx_ok b1.(bcontext) b2.(bcontext) then
-          cbnlet (r, rs, s) := cbn_push_fresh #|b1.(bcontext)| lvl e1 e2 (CbnRE e1 :: CbnRE e2 :: rs) s in
+          cbnlet (r, rs, s) := cbn_push_fresh #|b1.(bcontext)| lvl e1 e2
+            (CbnRE e1 :: CbnRE e2 :: rs) s in
           let '(lvlb, eb1, eb2) := r in
-          cbnwhen 2 (rs, s) := cbn_conv_term d lvlb Conv eb1 (cbn_child c1 (cbn_case_branch_step i) b1.(bbody))
+          cbnwhen 2 (rs, s) := cbn_conv_term d lvlb Conv eb1
+            (cbn_child c1 (cbn_case_branch_step i) b1.(bbody))
                                eb2 (cbn_child c2 (cbn_case_branch_step i) b2.(bbody)) rs s in
           match rs with
           | CbnRE e1 :: CbnRE e2 :: rs => cbn_case_branches d lvl e1 c1 e2 c2 (N.succ i) l1 l2 rs s
@@ -2605,16 +2676,19 @@ Section CallByNeed.
       | CbnVNeu (CbnNVar l1) sp1, CbnVNeu (CbnNVar l2) sp2 =>
         if l1 == l2 then cbn_conv_cells d lvl sp1 sp2 rs s else CbnCOk (false, rs, s)
       | CbnVNeu (CbnNConst h1) sp1, CbnVNeu (CbnNConst h2) sp2 =>
-        if cbn_cmp_term Conv #|sp1| h1 h2 then cbn_conv_cells d lvl sp1 sp2 rs s else CbnCOk (false, rs, s)
+        if cbn_cmp_term Conv #|sp1| h1 h2 then cbn_conv_cells d lvl sp1 sp2 rs s else CbnCOk
+          (false, rs, s)
       | CbnVLam e1 c1, CbnVLam e2 c2 =>
         match c1.(cbn_c_term), c2.(cbn_c_term) with
         | tLambda na1 A1 b1, tLambda na2 A2 b2 =>
           if eqb_binder_annot na1 na2 then
-            cbnwhen 2 (rs, s) := cbn_conv_term d lvl Conv e1 (cbn_child c1 0 A1) e2 (cbn_child c2 0 A2)
+            cbnwhen 2 (rs, s) := cbn_conv_term d lvl Conv e1 (cbn_child c1 0 A1) e2
+              (cbn_child c2 0 A2)
                                  (CbnRE e1 :: CbnRE e2 :: rs) s in
             match rs with
             | CbnRE e1 :: CbnRE e2 :: rs =>
-              cbnlet (x, rs, s) := cbn_alloc (CbnCDone (CbnVNeu (CbnNVar lvl) [])) (CbnRE e1 :: CbnRE e2 :: rs) s in
+              cbnlet (x, rs, s) := cbn_alloc (CbnCDone (CbnVNeu (CbnNVar lvl) []))
+                (CbnRE e1 :: CbnRE e2 :: rs) s in
               match rs with
               | CbnRE e1 :: CbnRE e2 :: rs =>
                 cbn_conv_term d (S lvl) Conv (cbn_env_push (CbnSAddr x) e1) (cbn_child c1 1 b1)
@@ -2630,11 +2704,13 @@ Section CallByNeed.
         match c1.(cbn_c_term), c2.(cbn_c_term) with
         | tProd na1 A1 B1, tProd na2 A2 B2 =>
           if eqb_binder_annot na1 na2 then
-            cbnwhen 2 (rs, s) := cbn_conv_term d lvl Conv e1 (cbn_child c1 0 A1) e2 (cbn_child c2 0 A2)
+            cbnwhen 2 (rs, s) := cbn_conv_term d lvl Conv e1 (cbn_child c1 0 A1) e2
+              (cbn_child c2 0 A2)
                                  (CbnRE e1 :: CbnRE e2 :: rs) s in
             match rs with
             | CbnRE e1 :: CbnRE e2 :: rs =>
-              cbnlet (x, rs, s) := cbn_alloc (CbnCDone (CbnVNeu (CbnNVar lvl) [])) (CbnRE e1 :: CbnRE e2 :: rs) s in
+              cbnlet (x, rs, s) := cbn_alloc (CbnCDone (CbnVNeu (CbnNVar lvl) []))
+                (CbnRE e1 :: CbnRE e2 :: rs) s in
               match rs with
               | CbnRE e1 :: CbnRE e2 :: rs =>
                 cbn_conv_term d (S lvl) le (cbn_env_push (CbnSAddr x) e1) (cbn_child c1 1 B1)
@@ -2655,7 +2731,8 @@ Section CallByNeed.
         if #|sp1| == #|sp2| then
           cbnlet (b, rs, s) :=
             match c1.(cbn_c_term), c2.(cbn_c_term) with
-            | tCase _ _ _ _, tCase _ _ _ _ => cbn_case_cong d lvl e1 c1 e2 c2 (CbnRV v1 :: CbnRV v2 :: rs) s
+            | tCase _ _ _ _, tCase _ _ _ _ =>
+              cbn_case_cong d lvl e1 c1 e2 c2 (CbnRV v1 :: CbnRV v2 :: rs) s
             | _, _ => CbnCOk (false, CbnRV v1 :: CbnRV v2 :: rs, s)
             end in
           match rs with
@@ -2697,7 +2774,8 @@ Section CallByNeed.
       | None => CbnCFail CbnWSteps
       | Some s =>
         let same e1 c1 e2 c2 (spines : bool) :=
-          cbnlet (b, rs, s) := cbn_conv_same_code d lvl e1 c1 e2 c2 (CbnRV v1 :: CbnRV v2 :: rs) s in
+          cbnlet (b, rs, s) := cbn_conv_same_code d lvl e1 c1 e2 c2
+            (CbnRV v1 :: CbnRV v2 :: rs) s in
           match rs with
           | CbnRV v1 :: CbnRV v2 :: rs =>
             if b then
