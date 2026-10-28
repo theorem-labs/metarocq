@@ -153,7 +153,7 @@ Section A7.
       + intros x y hx h.
         have hcr : Σ ;;; Γ ,,, Δ ,,, Γ'' ⊢ x ⇝ y.
         { split; [exact hΓ|exact hx|apply red1_red; exact h]. }
-        exact (clrel_rel (untyped_closed_red_subst hs hs' hcr)).
+        exact (clrel_rel (untyped_closed_red_subst_cb hs hs' hcr)).
       + intros x y h. exact (eta1_subst_step s x y h _).
       + intros x y e. rewrite !canon_subst. now rewrite e.
       + intros x y e. rewrite !canon_subst. apply finst_subst. exact (RF_canon Σ r _ _ _ _ e).
@@ -197,7 +197,7 @@ Section A7.
       + intros x y hx h.
         have hcr : Σ ;;; Γ ,,, Γ' ⊢ x ⇝ y.
         { split; [exact hΓ|exact hx|apply red1_red; exact h]. }
-        exact (clrel_rel (weakening_closed_red hcr hΓ'')).
+        exact (clrel_rel (weakening_closed_red_cb hcr hΓ'')).
       + intros x y h. exact (eta1_lift _ x y h _).
       + intros x y e. rewrite !canon_lift. now rewrite e.
       + intros x y e. rewrite !canon_lift. apply finst_lift. exact (RF_canon Σ r _ _ _ _ e).

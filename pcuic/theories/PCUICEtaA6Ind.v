@@ -163,8 +163,8 @@ Section A6Ind.
     - exists l. split; [reflexivity|apply All2_BE_refl].
     - destruct s as [[y0 [hr ->]]|he].
       + have hcr : Σ ;;; Γ ⊢ mkApps (tInd ind u) l ⇝ y0 := closed_red_of hΓ hl (red1_red _ _ _ _ hr).
-        have hy0 := closed_red_open_right (wfΣ := wfΣ) hcr.
-        destruct (invert_red_mkApps_tInd (Σ := Σ) (wfΣ := wfΣ) l y0 hcr) as (l0 & [-> _ hl0]).
+        have hy0 := closed_red_open_right_cb (wfΣ := wfΣ) hcr.
+        destruct (invert_red_mkApps_tInd_cb (Σ := Σ) (cbΣ := wfΣ) l y0 hcr) as (l0 & [-> _ hl0]).
         have e0 : canon (mkApps (tInd ind u) l0) = mkApps (tInd ind u) (map canon l0) by now rewrite canon_mkApps.
         destruct (IH (map canon l0) e0 (canon_is_open_term Γ _ hy0)) as (l' & -> & hl').
         exists l'. split; [reflexivity|]. exact (All2_BE_red_compose Γ l l0 l' hl0 hl').
@@ -175,7 +175,7 @@ Section A6Ind.
 
   Lemma chain_mkApps_Const Γ cst cdecl u l v :
     declared_constant Σ cst cdecl -> cst_body cdecl = None ->
-    (* trunk's premise of [invert_red_axiom_app]: [cst] is not a primitive
+    (* trunk's premise of [invert_red_axiom_app_cb]: [cst] is not a primitive
        operation, whose saturated application would reduce *)
     prim_op_of Σ cst = None ->
     is_closed_context Γ -> is_open_term Γ (mkApps (tConst cst u) l) ->
@@ -188,8 +188,8 @@ Section A6Ind.
     - exists l. split; [reflexivity|apply All2_BE_refl].
     - destruct s as [[y0 [hr ->]]|he].
       + have hcr : Σ ;;; Γ ⊢ mkApps (tConst cst u) l ⇝ y0 := closed_red_of hΓ hl (red1_red _ _ _ _ hr).
-        have hy0 := closed_red_open_right (wfΣ := wfΣ) hcr.
-        destruct (invert_red_axiom_app (Σ := Σ) (wfΣ := wfΣ) hd hb hnop hcr) as (l0 & -> & hl0).
+        have hy0 := closed_red_open_right_cb (wfΣ := wfΣ) hcr.
+        destruct (invert_red_axiom_app_cb (Σ := Σ) (cbΣ := wfΣ) hd hb hnop hcr) as (l0 & -> & hl0).
         have e0 : canon (mkApps (tConst cst u) l0) = mkApps (tConst cst u) (map canon l0) by now rewrite canon_mkApps.
         destruct (IH (map canon l0) e0 (canon_is_open_term Γ _ hy0)) as (l' & -> & hl').
         exists l'. split; [reflexivity|]. exact (All2_BE_red_compose Γ l l0 l' hl0 hl').

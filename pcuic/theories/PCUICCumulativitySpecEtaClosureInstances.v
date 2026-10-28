@@ -20,7 +20,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Kernames Environment EnvironmentTyping.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
      PCUICEquality PCUICArityRed PCUICCumulativitySpec PCUICCumulativitySpecEta
-     PCUICCumulativitySpecEtaClosure.
+     PCUICCumulativitySpecEtaClosure PCUICClosedBodies PCUICClosedTyp.
 
 #[local] Existing Instance default_checker_flags.
 

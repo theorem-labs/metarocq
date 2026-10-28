@@ -133,9 +133,9 @@ Section A1.
   Proof.
     intros h. apply into_ws_cumul_pbE_spec.
     - apply cumulSpec0_incl_E. eapply cumulAlgo_cumulSpec. exact h.
-    - exact (ws_cumul_pb_is_closed_context h).
-    - exact (ws_cumul_pb_is_open_term_left h).
-    - exact (ws_cumul_pb_is_open_term_right h).
+    - exact (ws_cumul_pb_is_closed_context_cb h).
+    - exact (ws_cumul_pb_is_open_term_left_cb h).
+    - exact (ws_cumul_pb_is_open_term_right_cb h).
   Qed.
 
   (** ** Equivalence-relation structure *)
@@ -163,13 +163,13 @@ Section A1.
 
   Lemma red_ws_cumul_pbE {pb Γ t u} : Σ ;;; Γ ⊢ t ⇝ u -> ws_cumul_pbE r pb Σ Γ t u.
   Proof.
-    intros h. constructor; [exact (clrel_ctx h)|exact (clrel_src h)|exact (closed_red_open_right h)|].
+    intros h. constructor; [exact (clrel_ctx h)|exact (clrel_src h)|exact (closed_red_open_right_cb h)|].
     exact (JoinE_red_l Σ r Γ pb t u (clrel_rel h)).
   Qed.
 
   Lemma red_ws_cumul_pbE_inv {pb Γ t u} : Σ ;;; Γ ⊢ t ⇝ u -> ws_cumul_pbE r pb Σ Γ u t.
   Proof.
-    intros h. constructor; [exact (clrel_ctx h)|exact (closed_red_open_right h)|exact (clrel_src h)|].
+    intros h. constructor; [exact (clrel_ctx h)|exact (closed_red_open_right_cb h)|exact (clrel_src h)|].
     exact (JoinE_red_r Σ r Γ pb u t (clrel_rel h)).
   Qed.
 

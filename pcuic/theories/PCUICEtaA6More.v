@@ -190,7 +190,7 @@ Section A6More.
 
   (** I7 rev 15 C9: the untyped lemma that serves [PCUICInductiveInversion]'s
       F-row uses. The scoping premises are what base's
-      [red_it_mkProd_or_LetIn_mkApps_Ind] (closed reduction) needs. *)
+      [red_it_mkProd_or_LetIn_mkApps_Ind_cb] (closed reduction) needs. *)
   Lemma chain_it_mkProd_or_LetIn_mkApps_Ind Γ ctx ind u args T :
     is_closed_context Γ -> is_open_term Γ (it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args)) ->
     chain Γ (canon (it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args))) T ->
@@ -207,10 +207,10 @@ Section A6More.
     - now exists ctx0, args0.
     - destruct s as [[y0 [hr ->]]|he].
       + have hcr := closed_red_of hΓ ho0 (red1_red _ _ _ _ hr).
-        destruct (red_it_mkProd_or_LetIn_mkApps_Ind (wfΣ := wfΣ) hcr) as (ctx1 & args1 & ->).
+        destruct (red_it_mkProd_or_LetIn_mkApps_Ind_cb (wfΣ := wfΣ) hcr) as (ctx1 & args1 & ->).
         destruct (canon_it_mkProd_or_LetIn_Ind ctx1 ind u args1) as (ctx2 & e2).
         apply (IH ctx2 (map canon args1) e2).
-        exact (canon_is_open_term Γ _ (closed_red_open_right (wfΣ := wfΣ) hcr)).
+        exact (canon_is_open_term Γ _ (closed_red_open_right_cb (wfΣ := wfΣ) hcr)).
       + destruct (eta1_it_mkProd_or_LetIn_Ind _ _ _ _ _ he) as (ctx1 & args1 & ->).
         exact (IH ctx1 args1 eq_refl (eta1_on_free_vars _ _ he _ ho0)).
   Qed.

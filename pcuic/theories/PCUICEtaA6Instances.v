@@ -29,7 +29,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICEtaDefs PCUICEtaCanon PCUICEtaCanonRed PCUICEtaFInst PCUICEtaFInstEquiv PCUICEtaI5 PCUICEtaI5Trans
      PCUICEtaI5A2 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
      PCUICCumulativitySpecEtaClosureInstances PCUICEtaFracInstances
-     PCUICEtaA6 PCUICEtaA6Ind PCUICEtaA6More PCUICContextConversionEta.
+     PCUICEtaA6 PCUICEtaA6Ind PCUICEtaA6More PCUICContextConversionEta PCUICClosedBodies PCUICClosedTyp.
 
 #[local] Existing Instance default_checker_flags.
 
@@ -72,8 +72,8 @@ Qed.
 
 (** [sa_wf] gives the confluence spine's premise ([PCUICClosedBodies]), which the η
     chain takes in place of [wf] (W-c). *)
-Definition sa_cb : ClosedBodies sa_env := @wf_ClosedBodies _ sa_env sa_wf.
-#[local] Existing Instance sa_cb.
+Definition sa_clb : ClosedBodies sa_env := @wf_ClosedBodies _ sa_env sa_wf.
+#[local] Existing Instance sa_clb.
 
 Lemma sa_declared : declared_constant sa_Σ sa_kn sa_cb.
 Proof. cbn. first [reflexivity | now left]. Qed.
@@ -119,7 +119,7 @@ Proof. apply JoinE_red_r. apply rt_step. exact (red_zeta _ _ si_na fi_P fi_P fi_
 Ltac a6_solve :=
   repeat match goal with
   | |- wf _ => first [exact si_wf | exact sa_wf]
-  | |- ClosedBodies _ => first [exact si_cb | exact sa_cb]
+  | |- ClosedBodies _ => first [exact si_cb | exact sa_clb]
   | |- declared_constant sa_Σ _ _ => exact sa_declared
   | |- cst_body sa_cb = None => reflexivity
   | |- ws_cumul_pbE _ _ si_Σ _ fi_beta fi_P => exact (fi_WS_beta _)
@@ -271,7 +271,7 @@ Lemma chain_mkApps_Ind_inst :
 Proof. unshelve eapply (chain_mkApps_Ind (Σ := si_Σ) (wfΣ := si_cb) []); a6_solve. Qed.
 Lemma chain_mkApps_Const_inst :
   ∑ l', (sa_A = mkApps sa_ax l') × All2 (fun a a' => clos_refl_trans (be_step sa_Σ []) a a') [fi_P] l'.
-Proof. unshelve eapply (chain_mkApps_Const (Σ := sa_Σ) (wfΣ := sa_cb) [] sa_kn sa_cb); a6_solve. Qed.
+Proof. unshelve eapply (chain_mkApps_Const (Σ := sa_Σ) (wfΣ := sa_clb) [] sa_kn sa_cb); a6_solve. Qed.
 Lemma finst_tApp_l_inst : ∑ f' a', [× tApp fi_P fi_P = tApp f' a',
     eq_term_upto_univ_eta_napp r si_Σ.1 (compare_universe si_Σ) (compare_sort si_Σ) Cumul 1 fi_P f'
     & eq_term_upto_univ_eta_napp r si_Σ.1 (compare_universe si_Σ) (compare_sort si_Σ) Conv 0 fi_P a'].
@@ -315,11 +315,11 @@ Proof. unshelve eapply (invert_cumul_ind_indE (Σ := si_Σ) (wfΣ := si_cb) (r :
 Lemma ws_cumul_pbE_Axiom_l_inv_inst :
   ∑ u' args', [× clos_refl_trans (union (R_c sa_Σ []) eta1) (canon sa_A) (mkApps (tConst sa_kn u') args'),
     All2 (WSa Conv []) [fi_P] args' & cmp_universe_instance (compare_universe sa_Σ Conv) [] u'].
-Proof. unshelve eapply (ws_cumul_pbE_Axiom_l_inv (Σ := sa_Σ) (wfΣ := sa_cb) (r := r) (cdecl := sa_cb)); a6_solve. Qed.
+Proof. unshelve eapply (ws_cumul_pbE_Axiom_l_inv (Σ := sa_Σ) (wfΣ := sa_clb) (r := r) (cdecl := sa_cb)); a6_solve. Qed.
 Lemma ws_cumul_pbE_Axiom_r_inv_inst :
   ∑ u' args', [× clos_refl_trans (union (R_c sa_Σ []) eta1) (canon sa_A) (mkApps (tConst sa_kn u') args'),
     All2 (WSa Conv []) args' [fi_P] & cmp_universe_instance (compare_universe sa_Σ Conv) u' []].
-Proof. unshelve eapply (ws_cumul_pbE_Axiom_r_inv (Σ := sa_Σ) (wfΣ := sa_cb) (r := r) (cdecl := sa_cb)); a6_solve. Qed.
+Proof. unshelve eapply (ws_cumul_pbE_Axiom_r_inv (Σ := sa_Σ) (wfΣ := sa_clb) (r := r) (cdecl := sa_cb)); a6_solve. Qed.
 
 (** ** A6 part 3 *)
 
