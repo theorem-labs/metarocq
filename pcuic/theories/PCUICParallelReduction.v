@@ -5,7 +5,7 @@ From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICUtils PCUICOnOne PCUICAst PCUICAstUtils PCUICTactics PCUICDepth PCUICCases
      PCUICLiftSubst PCUICUnivSubst PCUICReduction PCUICTyping
      PCUICSigmaCalculus PCUICWeakeningEnvConv PCUICInduction
-     PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICOnFreeVars
+     PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICOnFreeVars PCUICClosedBodies
      PCUICWeakeningConv PCUICWeakeningTyp PCUICSubstitution.
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -1114,7 +1114,7 @@ Qed.
       the context.
   *)
 
-  Lemma pred1_rename {Σ} {wfΣ : wf Σ} :
+  Lemma pred1_rename {Σ} {wfΣ : ClosedBodies Σ} :
     (forall Γ Γ' u v, pred1 Σ Γ Γ' u v ->
     forall {P f Δ Δ'},
     pred1_ctx Σ Δ Δ' ->
@@ -1402,7 +1402,7 @@ Qed.
     - rewrite rename_subst_instance.
       econstructor; tea.
       rewrite rename_closed. 2: assumption.
-      eapply (PCUICClosedTyp.declared_constant_closed_body). all: eauto.
+      eapply closed_bodies. all: eauto.
     - rewrite rename_mkApps. simpl. cbn in H0; inv_on_free_vars.
       econstructor; tea. 2:erewrite nth_error_map, heq_nth_error; reflexivity.
       solve_all.
@@ -1478,7 +1478,7 @@ Qed.
     - destruct t => //; constructor; auto.
   Qed.
 
-  Lemma weakening_pred1 {Σ} {wfΣ : wf Σ} {P Γ Γ' Γ'' Δ Δ' Δ'' M N} :
+  Lemma weakening_pred1 {Σ} {wfΣ : ClosedBodies Σ} {P Γ Γ' Γ'' Δ Δ' Δ'' M N} :
     pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') M N ->
     on_ctx_free_vars (PCUICOnFreeVars.shiftnP #|Γ'| P) (Γ ,,, Γ') ->
     on_free_vars (PCUICOnFreeVars.shiftnP #|Γ'| P) M ->
@@ -1517,7 +1517,7 @@ Qed.
     2:tea. tea.
   Qed.
 
-  Lemma weakening_pred1_pred1 {Σ} {wfΣ : wf Σ} {P Γ Δ Γ' Δ' M N} :
+  Lemma weakening_pred1_pred1 {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ Γ' Δ' M N} :
     pred1_ctx_over Σ Γ Δ Γ' Δ' ->
     on_ctx_free_vars P Γ ->
     on_free_vars P M ->
@@ -1531,7 +1531,7 @@ Qed.
     now rewrite (on_contexts_length X1).
   Qed.
 
-  Lemma weakening_pred1_0 {Σ} {wfΣ : wf Σ} {P Γ Δ Γ' M N} :
+  Lemma weakening_pred1_0 {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ Γ' M N} :
     pred1 Σ Γ Δ M N ->
     on_ctx_free_vars P Γ ->
     on_free_vars P M ->
@@ -1796,7 +1796,7 @@ Section ParallelSubstitution.
   Lemma shiftk_shift : ↑ =1 ↑^1.
   Proof. reflexivity. Qed.
 
-  Lemma pred1_subst_Up {wfΣ : wf Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname) (t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
+  Lemma pred1_subst_Up {wfΣ : ClosedBodies Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname) (t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
       pred1 Σ Δ Δ' t0.[σ] t1.[τ] ->
       on_free_vars Q t0.[σ] ->
       pred1_subst P Q Γ Γ' Δ Δ' σ τ ->
@@ -1830,7 +1830,7 @@ Section ParallelSubstitution.
     repeat (constructor; auto).
   Qed.
 
-  Lemma pred1_subst_vdef_Up {wfΣ : wf Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname)
+  Lemma pred1_subst_vdef_Up {wfΣ : ClosedBodies Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname)
     (b0 b1 t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
       on_free_vars P t0 ->
       on_free_vars P b0 ->
@@ -1885,7 +1885,7 @@ Section ParallelSubstitution.
     - rewrite IHΓ. lia_f_equal.
   Qed.
 
-  Lemma pred1_subst_Upn {wfΣ : wf Σ} {P Q} {Γ Γ' Δ Δ' σ τ Δ0 Δ1 n} :
+  Lemma pred1_subst_Upn {wfΣ : ClosedBodies Σ} {P Q} {Γ Γ' Δ Δ' σ τ Δ0 Δ1 n} :
     n = #|Δ0| ->
     on_free_vars_ctx P Δ0 ->
     on_free_vars_ctx Q (inst_context σ Δ0) ->
@@ -1966,7 +1966,7 @@ Section ParallelSubstitution.
         reflexivity.
   Qed.
 
-  Lemma pred1_subst_up {wfΣ : wf Σ} {P Q : nat -> bool} {Γ Γ' Δ Δ'} (σ τ : nat -> term) (Δ0 Δ1 : context) n :
+  Lemma pred1_subst_up {wfΣ : ClosedBodies Σ} {P Q : nat -> bool} {Γ Γ' Δ Δ'} (σ τ : nat -> term) (Δ0 Δ1 : context) n :
     n = #|Δ0| ->
     pred1_subst P Q Γ Γ' Δ Δ' σ τ ->
     on_free_vars_ctx P Δ0 ->
@@ -2037,7 +2037,7 @@ Section ParallelSubstitution.
   Qed.
 
   Lemma strong_substitutivity {wfΣ :
-   wf Σ}:
+   ClosedBodies Σ}:
     let Pover (Γ Γ' : context) (Δ Δ' : context) :=
     pred1_ctx Σ Γ Γ' ->
     pred1_ctx_over Σ Γ Γ' Δ Δ' ->
@@ -2372,7 +2372,7 @@ Section ParallelSubstitution.
 
     - simpl. rewrite inst_closed0.
       rewrite PCUICClosed.closedn_subst_instance; auto.
-      eapply (PCUICClosedTyp.declared_constant_closed_body). all: eauto.
+      eapply closed_bodies. all: eauto.
       econstructor. 1,3: eauto with pcuic. auto with pcuic.
 
     - eapply pred1_refl_gen. now apply pred1_subst_pred1_ctx in Hrel.
@@ -2534,7 +2534,7 @@ Section ParallelSubstitution.
 
   Hint Rewrite subst0_inst : sigma.
 
-  Lemma psubst_pred1_subst {wfΣ : wf Σ} {Γ Γ1 Δ Δ1 s s'} :
+  Lemma psubst_pred1_subst {wfΣ : ClosedBodies Σ} {Γ Γ1 Δ Δ1 s s'} :
     on_ctx_free_vars xpredT Γ ->
     pred1_ctx Σ Γ Γ1 ->
     psubst Σ Γ Γ1 s s' Δ Δ1 ->
@@ -2582,7 +2582,7 @@ Section ParallelSubstitution.
         + now destruct (IHps x eq_refl) as [? []].
   Qed.
 
-  Lemma pred1_subst_context {wfΣ : wf Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s'} :
+  Lemma pred1_subst_context {wfΣ : ClosedBodies Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s'} :
     psubst Σ Γ Γ1 s s' Δ Δ1 ->
     #|Γ| = #|Γ1| -> #|Γ'| = #|Γ'1| ->
     pred1_ctx_over Σ Γ Γ1 Δ Δ1 ->
@@ -2608,7 +2608,7 @@ Section ParallelSubstitution.
   Qed.
 
   (** Parallel reduction is substitutive. *)
-  Lemma substitution_let_pred1 {wfΣ : wf Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N} :
+  Lemma substitution_let_pred1 {wfΣ : ClosedBodies Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N} :
     psubst Σ Γ Γ1 s s' Δ Δ1 ->
     #|Γ| = #|Γ1| -> #|Γ'| = #|Γ'1| ->
     on_contexts_over (pred1 Σ) Γ Γ1 Δ Δ1 ->
@@ -2654,7 +2654,7 @@ Section ParallelSubstitution.
   Hint Constructors psubst : pcuic.
   Hint Transparent vass vdef : pcuic.
 
-  Lemma substitution0_pred1 {wfΣ : wf Σ} {Γ Δ M M' na na' A A' N N'} :
+  Lemma substitution0_pred1 {wfΣ : ClosedBodies Σ} {Γ Δ M M' na na' A A' N N'} :
     on_ctx_free_vars xpredT Γ ->
     on_free_vars xpredT M ->
     on_free_vars xpredT N ->
@@ -2677,7 +2677,7 @@ Section ParallelSubstitution.
     apply (H redN).
   Qed.
 
-  Lemma substitution0_let_pred1 {wfΣ : wf Σ} {Γ Δ na na' M M' A A' N N'} :
+  Lemma substitution0_let_pred1 {wfΣ : ClosedBodies Σ} {Γ Δ na na' M M' A A' N N'} :
     on_ctx_free_vars xpredT Γ ->
     on_free_vars xpredT M ->
     on_free_vars xpredT N ->

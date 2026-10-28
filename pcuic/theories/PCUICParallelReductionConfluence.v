@@ -4,7 +4,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICTactics PCUICSize PCUICLiftSubst
      PCUICSigmaCalculus PCUICUnivSubst PCUICTyping PCUICReduction
-     PCUICReflect PCUICInduction PCUICClosed PCUICClosedConv PCUICClosedTyp PCUICDepth PCUICOnFreeVars
+     PCUICReflect PCUICInduction PCUICClosed PCUICClosedConv PCUICClosedTyp PCUICDepth PCUICOnFreeVars PCUICClosedBodies
      PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICWeakeningConv PCUICWeakeningTyp
      PCUICViews PCUICParallelReduction.
 From MetaRocq.Common Require Import PrimitiveOps.
@@ -235,7 +235,7 @@ Section Pred1_inversion.
   Qed.
 
   Lemma pred1_mkApps_tConst_axiom {cf : checker_flags}
-      (Σ : global_env) {wfΣ : wf Σ} (Γ Δ : context)
+      (Σ : global_env) {wfΣ : ClosedBodies Σ} (Γ Δ : context)
         cst u (args : list term) cb c :
     declared_constant Σ cst cb -> cst_body cb = None ->
     prim_op_of Σ cst = None ->
@@ -273,7 +273,7 @@ Section Pred1_inversion.
       the operation fires only at its own arity ([prim_op_denote_length]), so
       no prefix of a redex is one, and literal arguments do not reduce. *)
   Lemma pred1_mkApps_tConst_lit {cf : checker_flags}
-      (Σ : global_env) {wfΣ : wf Σ} (Γ Δ : context)
+      (Σ : global_env) {wfΣ : ClosedBodies Σ} (Γ Δ : context)
         cst u op cb ls c :
     declared_constant Σ cst cb -> cst_body cb = None ->
     prim_op_of Σ cst = Some op ->
@@ -439,7 +439,7 @@ Notation fold_context_term f := (fold_context (fun Γ' => map_decl (f Γ'))).
 Section Rho.
   Context {cf : checker_flags}.
   Context (Σ : global_env).
-  Context (wfΣ : wf Σ).
+  Context (wfΣ : ClosedBodies Σ).
 
   (** This refines the non-lambda/non-fix application arm using the original
       arguments, not their reducts.  Only an already saturated literal redex
@@ -1983,8 +1983,8 @@ Section Rho.
       case e: lookup_env => [[decl|decl]|] //; simp rho.
       case eb: cst_body => [b|] //; simp rho.
       rewrite rename_inst inst_closed0 //.
-      apply declared_decl_closed in e as [Hb Ht]%andb_and => //.
-      hnf in Hb. rewrite eb /= in Hb. rewrite closedn_subst_instance; auto.
+      have Hb := closed_bodies _ _ _ (declared_constant_from_gen e) eb.
+      rewrite closedn_subst_instance; auto.
 
     - (* construct/cofix iota reduction *)
       simpl; simp rho.
@@ -2657,7 +2657,7 @@ Section Rho.
       eapply (on_free_vars_cofix_subst _ _ idx); cbn; tea. solve_all.
       cbn in hnth. now len; inv_on_free_vars.
 
-    - eapply declared_constant_closed_body in H0; tea.
+    - eapply closed_bodies in H0; tea.
       rewrite on_free_vars_subst_instance.
       now eapply closed_on_free_vars.
     - inv_on_free_vars.
@@ -4409,7 +4409,7 @@ Notation rho_ctx Σ := (fold_context_term (rho Σ)).
 
 (* The diamond lemma for parallel reduction follows directly from the triangle lemma. *)
 
-Corollary pred1_diamond {cf : checker_flags} {Σ : global_env} {wfΣ : wf Σ} {Γ Δ Δ' t u v} :
+Corollary pred1_diamond {cf : checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {Γ Δ Δ' t u v} :
   on_ctx_free_vars xpredT Γ ->
   on_free_vars xpredT t ->
   pred1 Σ Γ Δ t u ->

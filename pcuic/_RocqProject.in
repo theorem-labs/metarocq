@@ -69,6 +69,7 @@ theories/PCUICSubstitution.v
 theories/PCUICContextReduction.v
 theories/PCUICCumulativity.v
 theories/PCUICCumulativitySpec.v
+theories/PCUICClosedBodies.v
 theories/PCUICParallelReduction.v
 theories/PCUICParallelReductionConfluence.v
 theories/PCUICConfluence.v

@@ -5,7 +5,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICTactic
      PCUICReduction PCUICEquality PCUICUnivSubstitutionConv
      PCUICSigmaCalculus PCUICContextReduction
      PCUICParallelReduction PCUICParallelReductionConfluence PCUICClosedConv PCUICClosedTyp
-     PCUICRedTypeIrrelevance PCUICOnFreeVars PCUICInstDef PCUICInstConv PCUICWeakeningConv PCUICWeakeningTyp.
+     PCUICRedTypeIrrelevance PCUICOnFreeVars PCUICClosedBodies PCUICInstDef PCUICInstConv PCUICWeakeningConv PCUICWeakeningTyp.
 
 
 (* We show that conversion/cumulativity starting from well-typed terms is transitive.
@@ -1676,7 +1676,7 @@ Proof.
   eapply All_All2_telescopei; eauto.
 Qed.
 
-Lemma OnOne2_pars_pred1_ctx_over {cf : checker_flags} {Σ} {wfΣ : wf Σ} Γ params params' puinst pctx :
+Lemma OnOne2_pars_pred1_ctx_over {cf : checker_flags} {Σ} {wfΣ : ClosedBodies Σ} Γ params params' puinst pctx :
   on_ctx_free_vars xpredT Γ ->
   forallb (on_free_vars xpredT) params ->
   on_free_vars_ctx (shiftnP #|params| xpredT) pctx ->
@@ -1744,7 +1744,7 @@ Proof.
   rewrite H on_free_vars_fix_context //.
 Qed.
 
-Lemma pred_on_free_vars {cf : checker_flags} {Σ} {wfΣ : wf Σ} {P Γ Δ t u} :
+Lemma pred_on_free_vars {cf : checker_flags} {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ t u} :
   on_ctx_free_vars P Γ ->
   clos_refl_trans (pred1 Σ Γ Δ) t u ->
   on_free_vars P t -> on_free_vars P u.
@@ -1792,7 +1792,7 @@ Ltac inv_on_free_vars_xpredT :=
 Section RedPred.
   Context {cf : checker_flags}.
   Context {Σ : global_env}.
-  Context (wfΣ : wf Σ).
+  Context (wfΣ : ClosedBodies Σ).
 
   Hint Resolve pred1_ctx_over_refl : pcuic.
   Hint Unfold All2_prop2_eq : pcuic.
@@ -2068,7 +2068,7 @@ End RedPred.
 Section PredRed.
   Context {cf : checker_flags}.
   Context {Σ : global_env_ext}.
-  Context (wfΣ : wf Σ).
+  Context (wfΣ : ClosedBodies Σ).
 
   (** Parallel reduction is included in the reflexive transitive closure of 1-step reduction *)
   Lemma pred1_red Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
@@ -2645,21 +2645,21 @@ Definition ws_pred_curry Σ P (Γ Γ' : ws_context P) := clos_refl_trans (ws_pre
 
 Definition ws_pred Σ := clos_refl_trans (ws_pred1 Σ).
 
-Lemma ws_red1_pred1_curry {cf:checker_flags} {Σ : global_env} {wfΣ : wf Σ} {P} {Γ : ws_context P}
+Lemma ws_red1_pred1_curry {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {P} {Γ : ws_context P}
   {t u : ws_term (shiftnP #|Γ| P)} :
   ws_red1 Σ P Γ t u -> ws_pred1_curry Σ P Γ Γ t u.
 Proof.
   eapply red1_pred1; eauto with fvs.
 Qed.
 
-Lemma ws_red1_pred1 {cf:checker_flags} {Σ : global_env} {wfΣ : wf Σ} {Γ : closed_context}
+Lemma ws_red1_pred1 {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {Γ : closed_context}
   {t u : ws_term (shiftnP #|Γ| xpred0)} :
   ws_red1 Σ _ Γ t u -> ws_pred1 Σ (Γ; t) (Γ; u).
 Proof.
   eapply red1_pred1; eauto with fvs.
 Qed.
 
-Lemma red_pred' {cf:checker_flags} {Σ : global_env} {wfΣ : wf Σ} {P} {Γ : ws_context P}
+Lemma red_pred' {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {P} {Γ : ws_context P}
   {t u : ws_term (shiftnP #|Γ| P)} :
   ws_red Σ P Γ t u -> ws_pred_curry Σ P Γ Γ t u.
 Proof.
@@ -2675,14 +2675,14 @@ Proof.
   econstructor 3; tea.
 Qed.
 
-Lemma red_pred {cf:checker_flags} {Σ : global_env} {wfΣ : wf Σ} {Γ : closed_context}
+Lemma red_pred {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {Γ : closed_context}
   {t u : ws_term (shiftnP #|Γ| xpred0)} :
   ws_red Σ _ Γ t u -> ws_pred Σ (Γ; t) (Γ; u).
 Proof.
   intros r. now eapply ws_pred_ws_pred_curry, red_pred'.
 Qed.
 
-Lemma ws_pred1_red {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {P} {Γ Γ' : ws_context P}
+Lemma ws_pred1_red {cf:checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {P} {Γ Γ' : ws_context P}
   {t : ws_term (shiftnP #|Γ| P)} {u : ws_term (shiftnP #|Γ'| P)} :
   pred1 Σ Γ Γ' t u -> red Σ Γ t u.
 Proof.
@@ -2690,7 +2690,7 @@ Proof.
 Qed.
 
 #[program]
-Definition rho_ws_pair {cf:checker_flags} (Σ : global_env) {wfΣ : wf Σ} (p : ws_pair) : ws_pair :=
+Definition rho_ws_pair {cf:checker_flags} (Σ : global_env) {wfΣ : ClosedBodies Σ} (p : ws_pair) : ws_pair :=
   (rho_ctx Σ p; rho Σ (rho_ctx Σ p) p).
 Next Obligation.
   destruct p as [Γ t]. cbn.
@@ -2711,7 +2711,7 @@ Next Obligation.
   all:eauto with fvs.
 Qed.
 
-Lemma ws_pred1_diamond {cf:checker_flags} {Σ : global_env} {wfΣ : wf Σ} {t u v : ws_pair} :
+Lemma ws_pred1_diamond {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {t u v : ws_pair} :
   ws_pred1 Σ t u -> ws_pred1 Σ t v ->
   ws_pred1 Σ u (rho_ws_pair Σ t) × ws_pred1 Σ v (rho_ws_pair Σ t).
 Proof.
@@ -2721,7 +2721,7 @@ Qed.
 
 #[global] Hint Resolve pred1_on_free_vars_ctx : fvs.
 
-Lemma pred1_on_free_vars_on_free_vars_ctx {cf:checker_flags} {Σ : global_env} {wfΣ : wf Σ}
+Lemma pred1_on_free_vars_on_free_vars_ctx {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ}
   {P} {Γ Γ' : context} {t u : term} :
     pred1 Σ Γ Γ' t u ->
     on_free_vars_ctx P Γ ->
@@ -2738,7 +2738,7 @@ Definition red_ctx Σ : relation context :=
 
 Section RedConfluence.
   Context {cf : checker_flags}.
-  Context {Σ : global_env_ext} (wfΣ : wf Σ).
+  Context {Σ : global_env_ext} (wfΣ : ClosedBodies Σ).
 
   Instance pred1_refl Γ : Reflexive (pred1 Σ Γ Γ).
   Proof using Type. red; apply pred1_refl. Qed.
@@ -3811,7 +3811,7 @@ Arguments red1_ctx _ _ _ : clear implicits.
 
 Section ConfluenceFacts.
   Context {cf : checker_flags}.
-  Context {Σ : global_env_ext} {wfΣ : wf Σ}.
+  Context {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
 
   Lemma lift_to_ws_red {Γ : closed_context} {x : term} {p : on_free_vars (shiftnP #|Γ| xpred0) x} {y} :
     red Σ Γ x y ->
