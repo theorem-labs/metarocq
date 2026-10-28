@@ -197,6 +197,8 @@ theories/PCUICEtaI5Trans.v
 theories/PCUICEtaI5A2.v
 # L2 obligation 9: the cumul_eta_l case of A2, and I5 in full (C4-SIDE)
 theories/PCUICEtaI5EtaL.v
+# L2/K6: the I7 eta step into the spec and into the canonical join (C4-SIDE)
+theories/PCUICEtaK6EtaStep.v
 # BET-315 eta lane (C4C1b): row C1b refuted — a machine-checked witness that C1b is false
 theories/PCUICEtaC1b.v
 # theories/All.v
