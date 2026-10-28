@@ -781,6 +781,8 @@ Proof.
     eapply on_free_vars_unfold_cofix in H as ->; eauto.
   - eapply closed_on_free_vars. rewrite closedn_subst_instance.
     eapply declared_constant_closed_body; eauto.
+  - (* red_prim_op: the reduct is ground, so it is free of variables *)
+    prim_ground_reduct; reflexivity.
   - move: hav; rewrite on_free_vars_mkApps /=.
     now move/(nth_error_forallb H).
   - rewrite (on_ctx_free_vars_concat _ _ [_]) // /= hctx

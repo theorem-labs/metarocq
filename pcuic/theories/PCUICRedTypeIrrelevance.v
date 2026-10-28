@@ -98,6 +98,8 @@ Proof using Type.
   intros HT X0. induction X0 using red1_ind_all in Γ', HT |- *; eauto.
   all:pcuic.
   all:try solve [econstructor; eauto; solve_all].
+  (* red_prim_op: context-independent; the same rule fires in Γ'. *)
+  all: try (eapply red_prim_op; eassumption).
   - econstructor.
     move: H; case: nth_error_spec => [x hnth hi|hi] /= // [=] hbod.
     eapply All2_fold_nth in HT as [d' [hnth' [_ pres]]]; eauto.

@@ -58,6 +58,11 @@ Proof.
   autorewrite with sigma. f_equal.
 Qed.
 
+(** Renaming fixes a ground term: a literal payload and a nullary constructor
+    carry no de Bruijn variable. *)
+Lemma prim_ground_rename f t : prim_ground t -> rename f t = t.
+Proof. intros [[[] ->]|[? [? ->]]]; reflexivity. Qed.
+
 Lemma decompose_app_rec_rename r t l :
   forall hd args,
   decompose_app_rec t l = (hd, args) ->
@@ -933,6 +938,12 @@ Lemma red1_rename :
 Proof using cf.
   intros P Σ Γ Δ u v f wfΣ hf hav h.
   induction h using red1_ind_all in P, f, Δ, hav, hf |- *.
+  (* red_prim_op: the head stays [tConst c u], the literal arguments and the
+     reduct are ground, so renaming fixes them. *)
+  all: try (eapply red1_prim_op_map;
+    [ intros ? [[[] ->]|[? [? ->]]]; reflexivity
+    | intros; apply rename_mkApps | reflexivity
+    | eassumption | eassumption | eassumption | eassumption | eassumption ]).
   all: try solve [
     try (cbn in hav; rtoProp);
     simpl ; constructor ; eapply IHh ;
