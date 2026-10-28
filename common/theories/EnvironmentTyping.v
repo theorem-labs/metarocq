@@ -2083,7 +2083,9 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
     Definition on_prim_op_result (Σ : global_env_ext) (s : prim_shape) : Type :=
       match s with
       | SInt => prim_op_tag_declared Σ primInt
-      | SBool => ∑ i mdecl idecl, primitive_bool Σ = Some i × declared_inductive Σ i mdecl idecl
+      (* A [Prop] conjunction under the [∑], not [×]: a sort-polymorphic tuple of
+         [Prop]s is a [Prop] instance of an informative type, which extraction refuses. *)
+      | SBool => ∑ i mdecl idecl, primitive_bool Σ = Some i /\ declared_inductive Σ i mdecl idecl
       end.
 
     (** The constant declaration that registers an operation.  Its declared type

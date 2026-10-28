@@ -415,8 +415,8 @@ Module PCUICPrimOpType <: EnvironmentTyping.PrimOpTypeSig PCUICTerm PCUICEnviron
       [× All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) (po_args (info op)) kns,
          T = fold_right (fun kn B => tImpl (tConst kn []) B) res kns &
          match po_shape (info op) with
-         | SInt => ∑ kn, r.(Retroknowledge.retro_int63) = Some kn × res = tConst kn []
-         | SBool => ∑ i, r.(Retroknowledge.retro_bool) = Some i × res = tInd i []
+         | SInt => ∑ kn, r.(Retroknowledge.retro_int63) = Some kn /\ res = tConst kn []
+         | SBool => ∑ i, r.(Retroknowledge.retro_bool) = Some i /\ res = tInd i []
          end].
   Proof.
     intros h. destruct (prim_op_type_shape r op T h) as (res & tys & [hs hall ->]).

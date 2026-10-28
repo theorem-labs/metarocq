@@ -2762,7 +2762,7 @@ End monad_Alli_nth_forall.
     | None => fun _ => raise (abstract_env_ext_empty, IllFormedDecl id (Msg "constraints trivially not satisfiable"))
     | Some uctx => fun _ => check_eq_true_lazy (@abstract_env_is_consistent_empty _ X_impl uctx)
         (fun _ => (abstract_env_ext_empty, IllFormedDecl id (Msg "constraints not satisfiable"))) ;;
-    ret (let Hunivs := _ in exist (abstract_env_init univs retro (Hunivs, wfr)) _) end eq_refl .
+    ret (let Hunivs := _ in exist (abstract_env_init univs retro (conj Hunivs wfr)) _) end eq_refl .
   Next Obligation.
     intros. have decll :
           ConstraintSet.For_all (declared_cstr_levels (ContextSet.levels univs)) (ContextSet.constraints univs).

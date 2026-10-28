@@ -20,7 +20,7 @@ Class abstract_env_struct {cf:checker_flags} (abstract_env_impl abstract_env_ext
 
   (* Operations on the environment *)
 
-  abstract_env_init (cs:ContextSet.t) (retro : Retroknowledge.t) : on_global_univs cs × Retroknowledge.wf_retro retro -> abstract_env_impl;
+  abstract_env_init (cs:ContextSet.t) (retro : Retroknowledge.t) : on_global_univs cs /\ Retroknowledge.wf_retro retro -> abstract_env_impl;
   abstract_env_add_decl X (kn:kername) (d:global_decl) :
    (forall Σ, abstract_env_rel X Σ -> ∥ on_global_decls Σ kn d ∥)
    -> abstract_env_impl;

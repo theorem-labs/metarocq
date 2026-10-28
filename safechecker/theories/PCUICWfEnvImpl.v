@@ -252,7 +252,7 @@ Proof.
 Qed.
 
 Program Definition wf_env_init {cf:checker_flags} {guard : abstract_guard_impl} cs retro :
-  on_global_univs cs × Retroknowledge.wf_retro retro -> wf_env := fun H =>
+  on_global_univs cs /\ Retroknowledge.wf_retro retro -> wf_env := fun H =>
   {|
   wf_env_reference := abstract_env_init cs retro H;
   wf_env_map := EnvMap.empty;
