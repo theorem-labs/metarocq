@@ -149,4 +149,6 @@ theories/PCUICEtaC1aR.v
 theories/PCUICEtaC3BR.v
 # L2 obligation 3: red1 <-> R_c simulations through canon (plan.md 6.2)
 theories/PCUICEtaCanonRed.v
+# L2 obligation 4: R_c confluent on canonical terms, via base red_confluence (C4-SIDE)
+theories/PCUICEtaCanonConfluence.v
 # theories/All.v
