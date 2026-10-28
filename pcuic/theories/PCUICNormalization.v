@@ -101,6 +101,12 @@ Proof.
   - assert (x = y) as <- by eauto. eauto.
 Qed.
 
+(** The value premise [∑ v0, eval Σ t v0] of the lemmas below is met, for example, by
+    any constructor. *)
+Example eval_premise_instance (Σ : global_env) ind u :
+  ∑ v0, eval Σ (tConstruct ind 0 u) v0.
+Proof. exists (tConstruct ind 0 u). now apply eval_atom. Qed.
+
 (** Under (A') a well-typed term need not have a value, so the caller supplies one: the
     lemma turns head reduction to an irreducible term into the machine's evaluation. *)
 Lemma ws_wcbv_standardization {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationIn Σ} {T} {t v : ws_term (fun _ => false)} : wf Σ -> axiom_free Σ ->

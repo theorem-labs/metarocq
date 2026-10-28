@@ -840,10 +840,10 @@ Section ErasureFunction.
       now rewrite /isFunction /isFixApp !head_mkApps //= orb_true_r.
   Qed.
 
-  (* A closed well-typed function either evaluates to a value or weak-head reduces to a
-     match on a cofixpoint whose return type depends on the scrutinee (a stuck form the
-     kernel leaves unreduced). The second disjunct is the case ruled out at the empty type
-     by [no_closed_stuck_cofix_case_at] in PCUICConsistency. *)
+  (* A closed well-typed function either evaluates to a value or reduces to a term on
+     which the machine is stuck: a match on a cofixpoint whose return type depends on the
+     scrutinee, in evaluation position ([reduces_to_wcbv_stuck]). The second disjunct is
+     not excluded here, and real programs reach it. *)
   Lemma pcuic_function_value (wfl := default_wcbv_flags)
     {guard_impl : abstract_guard_impl}
     (cf:=config.extraction_checker_flags) {Σ : global_env_ext} {f na A B}
