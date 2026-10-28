@@ -11,7 +11,12 @@
       reduct obtained from [sr_prim_op];
     - a stuck operation application, [whne_primapp_stuck];
     - the typing of that stuck application, and instances of [prim_op_head_type]
-      and [prim_app_typing_inv] on it.
+      and [prim_app_typing_inv] on it;
+    - the premises of [typing_spine_prim_type] (a literal's type admits no
+      argument), and the lemma applied to them;
+    - a well-typed [tCase] whose discriminee is a stuck operation application:
+      the typing premise of [reduced_case_discriminee_whne]
+      (safechecker/theories/PCUICSafeConversion.v).
 
     Each instance is proved directly: no checker run, no normalization
     assumption. *)
@@ -22,7 +27,8 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config Primitive PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICReduction
   PCUICNormal PCUICSR PCUICPrimCanonical PCUICPrimitiveRed PCUICWellScopedCumulativity
-  PCUICPrimInstances.
+  PCUICWfUniverses PCUICPosition PCUICArities PCUICProgress PCUICPrimInstances.
+From Equations Require Import Equations.
 
 Import ListNotations.
 
@@ -314,4 +320,170 @@ Lemma Σ_po_stuck_typing_inv :
      ∑ na A B, Σ_po ;;; Γ_po ⊢ tProd na A B ≤ tConst po_int_kn []).
 Proof.
   exact (prim_app_typing_inv (wfΣ := Σ_po_wf_env) Σ_po_registers Σ_po_stuck_typed (le_n 2)).
+Qed.
+
+(** ** The premises of [typing_spine_prim_type] *)
+
+(** The tag of an integer literal names [int]: the [primitive_constant] premise
+    of [typing_spine_prim_type]. *)
+Lemma po_prim_int_constant i :
+  primitive_constant Σ_po (prim_val_tag (@prim_int term i)) = Some po_int_kn.
+Proof. reflexivity. Qed.
+
+(** [int] meets the invariants of its tag: the [primitive_invariants] premise of
+    [typing_spine_prim_type]. *)
+Lemma po_prim_int_invariants i :
+  primitive_invariants (prim_val_tag (@prim_int term i)) po_int_body.
+Proof. now repeat split. Qed.
+
+(** The type of an integer literal is [int]; the empty spine from it to [int]:
+    the [typing_spine] premise of [typing_spine_prim_type]. *)
+Lemma Σ_po_prim_int_spine i :
+  PCUICArities.typing_spine Σ_po [] (prim_type (prim_int i) po_int_kn) [] (tConst po_int_kn []).
+Proof.
+  have w0 : wf_local Σ_po [] by constructor.
+  have hI : isType Σ_po [] (tConst po_int_kn []) :=
+    has_sort_isType _ (po_int_typed _ _ w0 po_int_declared).
+  rewrite /prim_int; simp prim_type.
+  apply PCUICArities.type_spine_nil; [exact hI|exact hI|].
+  apply ws_cumul_pb_refl; reflexivity.
+Qed.
+
+(** [typing_spine_prim_type] applied to the three premises above, with
+    [declared_constant] given by [po_int_declared]. *)
+Lemma Σ_po_typing_spine_prim_type (i : PrimInt63.int) : @nil term = [].
+Proof.
+  exact (typing_spine_prim_type (wfΣ := Σ_po_wf_env) [] (prim_int i) po_int_kn po_int_body [] _
+    (po_prim_int_constant i) po_int_declared (po_prim_int_invariants i) (Σ_po_prim_int_spine i)).
+Qed.
+
+(** ** A well-typed case on a stuck operation application *)
+
+(** One integer variable [x]. *)
+Definition Γ_po_case : context :=
+  [vass (mkBindAnn (nNamed "x") Relevant) (tConst po_int_kn [])].
+
+Definition po_case_info : case_info :=
+  {| ci_ind := po_bool_ind; ci_npar := 0; ci_relevance := Relevant |}.
+
+(** The constant motive [fun _ : bool => int], over the predicate context that
+    the block fixes. *)
+Definition po_case_pred : predicate term :=
+  {| pparams := []; puinst := [];
+     pcontext := ind_predicate_context po_bool_ind po_bool_mdecl po_bool_body;
+     preturn := tConst po_int_kn [] |}.
+
+(** One branch per constructor of [bool], each an integer literal. *)
+Definition po_case_brs : list (branch term) :=
+  [{| bcontext := []; bbody := tPrim (prim_int 0%uint63) |};
+   {| bcontext := []; bbody := tPrim (prim_int 1%uint63) |}].
+
+(** The discriminee [eqb x 1]. *)
+Definition po_case_discr : term :=
+  mkApps (tConst po_eqb_kn []) [tRel 0; tPrim (prim_int 1%uint63)].
+
+Definition po_case_term : term := tCase po_case_info po_case_pred po_case_discr po_case_brs.
+
+Lemma Γ_po_case_wf : wf_local Σ_po_bool Γ_po_case.
+Proof.
+  have w0 : wf_local Σ_po_bool [] by constructor.
+  constructor; [exact w0|]. split; [exact tt|]. exists Sort.type0. repeat split.
+  exact (po_int_typed _ _ w0 po_bool_int_declared).
+Qed.
+
+(** The discriminee is stuck: [eqb] is saturated and blocked on the variable
+    [x] ([whne_primapp_stuck]). *)
+Lemma Σ_po_bool_case_discr_stuck :
+  whne RedFlags.default Σ_po_bool0 Γ_po_case po_case_discr.
+Proof.
+  unfold po_case_discr.
+  eapply (whne_primapp_stuck _ _ _ po_eqb_kn [] po_eqb_body Int63eq [] (tRel 0)
+            [tPrim (prim_int 1%uint63)]).
+  - reflexivity.
+  - reflexivity.
+  - exact Σ_po_bool_registers.
+  - reflexivity.
+  - apply whne_rel. reflexivity.
+Qed.
+
+(** The discriminee has the type [bool]. *)
+Lemma Σ_po_bool_case_discr_typed :
+  Σ_po_bool ;;; Γ_po_case |- po_case_discr : tInd po_bool_ind [].
+Proof.
+  unfold po_case_discr.
+  apply po_eqb_app_typed; [exact Γ_po_case_wf| |].
+  - exact (type_Rel _ _ 0 _ Γ_po_case_wf eq_refl).
+  - exact (po_bool_lit_int_typed _ 1%uint63 Γ_po_case_wf).
+Qed.
+
+(** The case on the stuck discriminee is well typed ([type_Case]): the premise
+    [welltyped Σ Γ (zipc (tCase ci p c brs) π)] of
+    [reduced_case_discriminee_whne], with the empty stack. *)
+Lemma Σ_po_bool_case_welltyped :
+  welltyped Σ_po_bool Γ_po_case (zipc po_case_term []).
+Proof.
+  set (tI := tConst po_int_kn []).
+  set (tB := tInd po_bool_ind []).
+  set (nb := mkBindAnn (nNamed "bool") Relevant).
+  have wfΓ := Γ_po_case_wf.
+  have hB : forall Δ, wf_local Σ_po_bool Δ -> Σ_po_bool ;;; Δ |- tB : tSort Sort.type0.
+  { intros Δ wfΔ. change (tSort Sort.type0) with (po_bool_body.(ind_type)@[[]]).
+    eapply type_Ind; [exact wfΔ|exact po_bool_declared|cbn; reflexivity]. }
+  have hI : forall Δ, wf_local Σ_po_bool Δ -> Σ_po_bool ;;; Δ |- tI : tSort Sort.type0.
+  { intros Δ wfΔ. exact (po_int_typed _ _ wfΔ po_bool_int_declared). }
+  have hvB : forall Δ, wf_local Σ_po_bool Δ ->
+      lift_typing typing Σ_po_bool Δ (j_vass_s nb tB Sort.type0).
+  { intros Δ wfΔ. split; [exact tt|]. exists Sort.type0. repeat split. exact (hB _ wfΔ). }
+  have wfP : wf_local Σ_po_bool (Γ_po_case ,, vass nb tB).
+  { constructor; [exact wfΓ|]. eapply lift_sorting_forget_univ, hvB, wfΓ. }
+  (* The constructors of [bool] have type [bool]. *)
+  have hctor : forall i na, nth_error po_bool_body.(ind_ctors) i = Some (po_bool_ctor na) ->
+      Σ_po_bool ;;; Γ_po_case |- tConstruct po_bool_ind i [] : tB.
+  { intros i na hi.
+    refine (type_Construct _ _ po_bool_ind i [] po_bool_mdecl po_bool_body (po_bool_ctor na)
+              wfΓ _ _).
+    - split; [exact po_bool_declared|exact hi].
+    - cbn. reflexivity. }
+  (* The motive and the branch types [(fun _ : bool => int) c]. *)
+  have hlam : Σ_po_bool ;;; Γ_po_case |- tLambda nb tB tI : tProd nb tB (tSort Sort.type0).
+  { apply type_Lambda; [eapply lift_sorting_forget_univ, hvB, wfΓ|exact (hI _ wfP)]. }
+  have hprod : Σ_po_bool ;;; Γ_po_case |- tProd nb tB (tSort Sort.type0)
+      : tSort (Sort.sort_of_product Sort.type0 (Sort.super Sort.type0)).
+  { apply type_Prod; [exact (hvB _ wfΓ)|].
+    apply type_Sort; [exact wfP|apply wf_sort_type0]. }
+  have hbrty : forall i na, nth_error po_bool_body.(ind_ctors) i = Some (po_bool_ctor na) ->
+      Σ_po_bool ;;; Γ_po_case |- tApp (tLambda nb tB tI) (tConstruct po_bool_ind i [])
+        : tSort Sort.type0.
+  { intros i na hi.
+    exact (type_App _ _ _ nb tB (tSort Sort.type0) _ _ hprod hlam (hctor i na hi)). }
+  (* A literal branch body has the branch type, by beta. *)
+  have hbody : forall i na n, nth_error po_bool_body.(ind_ctors) i = Some (po_bool_ctor na) ->
+      Σ_po_bool ;;; Γ_po_case |- tPrim (prim_int n)
+        : tApp (tLambda nb tB tI) (tConstruct po_bool_ind i []).
+  { intros i na n hi.
+    eapply type_Cumul; [exact (po_bool_lit_int_typed _ n wfΓ)|exact (hbrty i na hi)|].
+    exact (cumul_Sym _ _ _ _ _ (cumul_beta _ _ _ nb tB tI (tConstruct po_bool_ind i []))). }
+  eapply iswelltyped. cbn [zipc]. unfold po_case_term.
+  eapply (type_Case _ _ po_case_info po_case_pred po_case_discr po_case_brs [] Sort.type0
+            po_bool_mdecl po_bool_body).
+  - exact po_bool_declared.
+  - exact (hI _ wfP).
+  - exact Σ_po_bool_case_discr_typed.
+  - constructor.
+    + reflexivity.
+    + cbn. split; [reflexivity|repeat constructor].
+    + cbn. reflexivity.
+    + exact wfP.
+    + cbn. repeat constructor.
+    + reflexivity.
+    + reflexivity.
+    + cbn. constructor.
+    + reflexivity.
+  - constructor.
+    + unfold wf_branches, wf_branch, wf_branch_gen. cbn. repeat constructor.
+    + constructor; [|constructor; [|constructor]].
+      * split; [cbn; constructor|]. split; [exact wfΓ|].
+        split; [exact (hbody 0 "true" 0%uint63 eq_refl)|exact (hbrty 0 "true" eq_refl)].
+      * split; [cbn; constructor|]. split; [exact wfΓ|].
+        split; [exact (hbody 1 "false" 1%uint63 eq_refl)|exact (hbrty 1 "false" eq_refl)].
 Qed.

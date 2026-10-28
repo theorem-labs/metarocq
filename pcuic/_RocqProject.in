@@ -93,6 +93,7 @@ theories/PCUICClassification.v
 theories/PCUICPrimCanonical.v
 theories/PCUICPrimInstances.v
 theories/PCUICPrimInstanceRules.v
+theories/PCUICPrimInstanceTrans.v
 theories/PCUICCanonicity.v
 
 theories/PCUICCSubst.v

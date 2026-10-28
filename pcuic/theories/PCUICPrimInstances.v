@@ -21,6 +21,15 @@
       [get : str -> int -> int] registered as [Stringget].  Argument tag
       [primString], result shape [SInt].
 
+    For each environment, the [on_prim_decl] condition of every declaration,
+    at the prefix environment it is checked against, is a separate lemma
+    ([Σ_po_land_on_prim_decl], ...), and so are the predicates it is made of:
+    [prim_op_tag_declared], [on_prim_op_result], [on_prim_op_constant],
+    [prim_bool_ctor] and [on_prim_bool_decl].
+
+    Every proof holds for any [checker_flags]: erasure uses these instances at
+    [extraction_checker_flags], the expand-lets translation at [cf' cf].
+
     They cover PCUIC only, not Template, and only the premises named here and
     in [PCUICPrimInstanceRules] (which instantiates the reduction, weak-head and
     typing premises on these environments). *)
@@ -33,7 +42,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICCumul
 
 Import ListNotations.
 
-Local Existing Instance default_checker_flags.
+Section PrimInstances.
+Context {cf : checker_flags}.
 
 Definition po_dp : dirpath := ["PCUICPrimInstances"; "PCUIC"; "MetaRocq"].
 Definition po_int_kn : kername := (MPfile po_dp, "int").
@@ -60,6 +70,11 @@ Definition po_retro : Retroknowledge.t :=
 
 Definition po_univs : ContextSet.t := (LevelSet.singleton Level.lzero, ConstraintSet.empty).
 
+(** The prefix [int] is checked against: no declaration. *)
+Definition Σ_po_nil : global_env :=
+  {| universes := po_univs; declarations := []; retroknowledge := po_retro |}.
+
+(** The prefix [land] is checked against: [int]. *)
 Definition Σ_po_int : global_env :=
   {| universes := po_univs; declarations := [(po_int_kn, ConstantDecl po_int_body)];
      retroknowledge := po_retro |}.
@@ -141,6 +156,51 @@ Proof.
   - now left.
 Qed.
 
+(** [prim_op_tag_declared Σ primInt] in any environment that registers [int]
+    as [retro_int63] and declares it. *)
+Lemma po_int_tag_declared (Σ : global_env_ext) :
+  Σ.1.(retroknowledge).(Retroknowledge.retro_int63) = Some po_int_kn ->
+  declared_constant Σ.1 po_int_kn po_int_body ->
+  prim_op_tag_declared Σ primInt.
+Proof.
+  intros hr hd. exists po_int_kn, po_int_body. split; [exact hr|exact hd|split; reflexivity].
+Qed.
+
+(** [prim_op_tag_declared] for [primInt] in the prefix [land] is checked
+    against: the argument condition [prim_op_args_inv] of [land]. *)
+Lemma Σ_po_tag_int : prim_op_tag_declared (Σ_po_int, Monomorphic_ctx) primInt.
+Proof. apply po_int_tag_declared; [reflexivity|now left]. Qed.
+
+(** [on_prim_op_result] for the shape [SInt] in the prefix [land] is checked
+    against: the result condition [prim_op_result_inv] of [land]. *)
+Lemma Σ_po_result_SInt : on_prim_op_result (Σ_po_int, Monomorphic_ctx) SInt.
+Proof. exact Σ_po_tag_int. Qed.
+
+(** [on_prim_op_constant] for [land], registered as [Int63land], in the prefix
+    it is checked against. *)
+Lemma Σ_po_land_on_prim_op_constant :
+  on_prim_op_constant cumulSpec0 (Σ_po_int, Monomorphic_ctx) Int63land po_land_body.
+Proof.
+  constructor; cbn; try reflexivity.
+  - exists po_land_ty. split; [reflexivity|]. apply cumul_Refl.
+  - constructor; [exact Σ_po_tag_int|constructor; [exact Σ_po_tag_int|constructor]].
+  - exact Σ_po_result_SInt.
+Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for [int] in [Σ_po]:
+    no operation is registered at [int]. *)
+Lemma Σ_po_int_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_nil, Monomorphic_ctx) po_int_kn (ConstantDecl po_int_body).
+Proof. intros op hop. cbn in hop. discriminate hop. Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for [land] in [Σ_po],
+    at the prefix it is checked against. *)
+Lemma Σ_po_land_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_int, Monomorphic_ctx) po_land_kn (ConstantDecl po_land_body).
+Proof.
+  intros op hop. cbn in hop. injection hop as <-. exact Σ_po_land_on_prim_op_constant.
+Qed.
+
 Lemma Σ_po_wf_ext : wf_ext Σ_po.
 Proof.
   split; [|exact po_udecl_ok].
@@ -151,19 +211,14 @@ Proof.
     + constructor.
     + exact po_udecl_ok.
     + cbn. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split. apply po_int_type.
-    + cbn. intros op hop. discriminate hop.
+    + exact Σ_po_int_on_prim_decl.
   - econstructor.
     + constructor; [intros [=]|constructor].
     + exact po_udecl_ok.
     + cbn. split; [exact tt|].
       exists (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)).
       repeat split. exact po_land_type_typed.
-    + cbn. intros op hop. injection hop as <-.
-      constructor; cbn; try reflexivity.
-      * exists po_land_ty. split; [reflexivity|]. apply cumul_Refl.
-      * repeat constructor.
-        all: exists po_int_kn, po_int_body; split; [reflexivity|now left|split; reflexivity].
-      * exists po_int_kn, po_int_body; split; [reflexivity|now left|split; reflexivity].
+    + exact Σ_po_land_on_prim_decl.
 Qed.
 
 Lemma Σ_po_wf : ∥ wf_ext Σ_po ∥.
@@ -206,6 +261,16 @@ Definition po_bool_retro : Retroknowledge.t :=
      Retroknowledge.retro_array := None;
      Retroknowledge.retro_ops := [(po_eqb_kn, Int63eq)];
      Retroknowledge.retro_bool := Some po_bool_ind |}.
+
+(** The prefix [bool] is checked against: no declaration. *)
+Definition Σ_po_bool_nil : global_env :=
+  {| universes := po_univs; declarations := []; retroknowledge := po_bool_retro |}.
+
+(** The prefix [int] is checked against: [bool]. *)
+Definition Σ_po_bool_pre_int : global_env :=
+  {| universes := po_univs;
+     declarations := [(po_bool_kn, InductiveDecl po_bool_mdecl)];
+     retroknowledge := po_bool_retro |}.
 
 (** The prefix [eqb] is checked against: [int] and [bool]. *)
 Definition Σ_po_bool_pre : global_env :=
@@ -275,7 +340,7 @@ Proof.
   - constructor.
   - change (tRel 0) with (mkApps (tRel 0) []). constructor. constructor.
   - intros v [=].
-  - exact I.
+  - destruct lets_in_constructor_types; constructor.
 Qed.
 
 Lemma po_bool_inductive_ok (Σ : global_env_ext) :
@@ -291,12 +356,32 @@ Proof.
     + constructor; [apply po_bool_ctor_ok|].
       constructor; [apply po_bool_ctor_ok|constructor].
     + exact I.
-    + split; [repeat constructor|exact I].
+    + split; [repeat constructor|].
+      destruct indices_matter; [apply wf_sort_type0|exact I].
     + reflexivity.
     + exact I.
   - constructor.
   - reflexivity.
   - reflexivity.
+Qed.
+
+(** [prim_bool_ctor na] holds of the constructor [po_bool_ctor na]. *)
+Lemma po_bool_ctor_prim na : prim_bool_ctor na (po_bool_ctor na).
+Proof. split; reflexivity. Qed.
+
+(** [prim_bool_ctor] for the first constructor of [bool]. *)
+Lemma po_bool_true_prim : prim_bool_ctor "true" (po_bool_ctor "true").
+Proof. apply po_bool_ctor_prim. Qed.
+
+(** [prim_bool_ctor] for the second constructor of [bool]. *)
+Lemma po_bool_false_prim : prim_bool_ctor "false" (po_bool_ctor "false").
+Proof. apply po_bool_ctor_prim. Qed.
+
+(** [on_prim_bool_decl] for the block registered as [retro_bool]. *)
+Lemma po_bool_on_prim_bool_decl : on_prim_bool_decl po_bool_mdecl.
+Proof.
+  cbn. split; try reflexivity.
+  split; [exact po_bool_true_prim|exact po_bool_false_prim].
 Qed.
 
 Lemma po_eqb_type_typed :
@@ -322,6 +407,50 @@ Proof.
   - cbn. reflexivity.
 Qed.
 
+(** [prim_op_tag_declared] for [primInt] in the prefix [eqb] is checked
+    against: the argument condition [prim_op_args_inv] of [eqb]. *)
+Lemma Σ_po_bool_tag_int : prim_op_tag_declared (Σ_po_bool_pre, Monomorphic_ctx) primInt.
+Proof. apply po_int_tag_declared; [reflexivity|now left]. Qed.
+
+(** [on_prim_op_result] for the shape [SBool] in the prefix [eqb] is checked
+    against: the registered boolean inductive is declared. *)
+Lemma Σ_po_bool_result_SBool : on_prim_op_result (Σ_po_bool_pre, Monomorphic_ctx) SBool.
+Proof.
+  cbn. exists po_bool_ind, po_bool_mdecl, po_bool_body. split; [reflexivity|].
+  split; [now right; left|reflexivity].
+Qed.
+
+(** [on_prim_op_constant] for [eqb], registered as [Int63eq], in the prefix it
+    is checked against. *)
+Lemma Σ_po_bool_eqb_on_prim_op_constant :
+  on_prim_op_constant cumulSpec0 (Σ_po_bool_pre, Monomorphic_ctx) Int63eq po_eqb_body.
+Proof.
+  constructor; cbn; try reflexivity.
+  - exists po_eqb_ty. split; [reflexivity|]. apply cumul_Refl.
+  - constructor; [exact Σ_po_bool_tag_int|constructor; [exact Σ_po_bool_tag_int|constructor]].
+  - exact Σ_po_bool_result_SBool.
+Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for the inductive
+    [bool] in [Σ_po_bool]: its block satisfies [on_prim_bool_decl]. *)
+Lemma Σ_po_bool_ind_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_bool_nil, Monomorphic_ctx) po_bool_kn (InductiveDecl po_bool_mdecl).
+Proof. intros i _ _. exact po_bool_on_prim_bool_decl. Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for [int] in
+    [Σ_po_bool]: no operation is registered at [int]. *)
+Lemma Σ_po_bool_int_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_bool_pre_int, Monomorphic_ctx) po_int_kn (ConstantDecl po_int_body).
+Proof. intros op hop. cbn in hop. discriminate hop. Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for [eqb] in
+    [Σ_po_bool], at the prefix it is checked against. *)
+Lemma Σ_po_bool_eqb_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_bool_pre, Monomorphic_ctx) po_eqb_kn (ConstantDecl po_eqb_body).
+Proof.
+  intros op hop. cbn in hop. injection hop as <-. exact Σ_po_bool_eqb_on_prim_op_constant.
+Qed.
+
 Lemma Σ_po_bool_wf_ext : wf_ext Σ_po_bool.
 Proof.
   split; [|exact po_udecl_ok].
@@ -332,13 +461,13 @@ Proof.
     + constructor.
     + exact po_udecl_ok.
     + apply po_bool_inductive_ok.
-    + cbn. intros i _ _. repeat split.
+    + exact Σ_po_bool_ind_on_prim_decl.
   - (* int *)
     econstructor.
     + constructor; [intros [=]|constructor].
     + exact po_udecl_ok.
     + cbn. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split. apply po_int_type.
-    + cbn. intros op hop. discriminate hop.
+    + exact Σ_po_bool_int_on_prim_decl.
   - (* eqb *)
     econstructor.
     + constructor; [intros [=]|constructor; [intros [=]|constructor]].
@@ -346,13 +475,7 @@ Proof.
     + cbn. split; [exact tt|].
       exists (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)).
       repeat split. exact po_eqb_type_typed.
-    + cbn. intros op hop. injection hop as <-.
-      constructor; cbn; try reflexivity.
-      * exists po_eqb_ty. split; [reflexivity|]. apply cumul_Refl.
-      * repeat constructor.
-        all: exists po_int_kn, po_int_body; split; [reflexivity|now left|split; reflexivity].
-      * exists po_bool_ind, po_bool_mdecl, po_bool_body. split; [reflexivity|].
-        split; [now right; left|reflexivity].
+    + exact Σ_po_bool_eqb_on_prim_decl.
 Qed.
 
 Lemma Σ_po_bool_wf : ∥ wf_ext Σ_po_bool ∥.
@@ -388,6 +511,16 @@ Definition po_str_retro : Retroknowledge.t :=
      Retroknowledge.retro_array := None;
      Retroknowledge.retro_ops := [(po_str_len_kn, Stringlength); (po_str_get_kn, Stringget)];
      Retroknowledge.retro_bool := None |}.
+
+(** The prefix [str] is checked against: no declaration. *)
+Definition Σ_po_str_nil : global_env :=
+  {| universes := po_univs; declarations := []; retroknowledge := po_str_retro |}.
+
+(** The prefix [int] is checked against: [str]. *)
+Definition Σ_po_str_pre_int : global_env :=
+  {| universes := po_univs;
+     declarations := [(po_str_kn, ConstantDecl po_str_body)];
+     retroknowledge := po_str_retro |}.
 
 (** The prefix [len] is checked against: [int] and [str]. *)
 Definition Σ_po_str_pre_len : global_env :=
@@ -490,13 +623,92 @@ Proof.
   constructor; [exact w1|]. eapply lift_sorting_forget_univ, po_str_dom_int; [exact w1|exact hi].
 Qed.
 
-(** One [prim_op_tag_declared] goal at a prefix that declares [int] and [str]. *)
-Local Ltac po_str_tag :=
-  first
-    [ exists po_str_kn, po_str_body;
-      split; [reflexivity|repeat (first [now left|right])|split; reflexivity]
-    | exists po_int_kn, po_int_body;
-      split; [reflexivity|repeat (first [now left|right])|split; reflexivity] ].
+(** [prim_op_tag_declared Σ primString] in any environment that registers
+    [str] as [retro_string] and declares it. *)
+Lemma po_str_tag_declared (Σ : global_env_ext) :
+  Σ.1.(retroknowledge).(Retroknowledge.retro_string) = Some po_str_kn ->
+  declared_constant Σ.1 po_str_kn po_str_body ->
+  prim_op_tag_declared Σ primString.
+Proof.
+  intros hr hd. exists po_str_kn, po_str_body. split; [exact hr|exact hd|split; reflexivity].
+Qed.
+
+(** [prim_op_tag_declared] for [primString] in the prefix [len] is checked
+    against: the argument condition [prim_op_args_inv] of [len]. *)
+Lemma Σ_po_str_len_tag_string :
+  prim_op_tag_declared (Σ_po_str_pre_len, Monomorphic_ctx) primString.
+Proof. apply po_str_tag_declared; [reflexivity|now right; left]. Qed.
+
+(** [prim_op_tag_declared] for [primInt] in the prefix [len] is checked
+    against: the result condition [prim_op_result_inv] ([SInt]) of [len]. *)
+Lemma Σ_po_str_len_tag_int :
+  prim_op_tag_declared (Σ_po_str_pre_len, Monomorphic_ctx) primInt.
+Proof. apply po_int_tag_declared; [reflexivity|now left]. Qed.
+
+(** [prim_op_tag_declared] for [primString] in the prefix [get] is checked
+    against: the first argument condition [prim_op_args_inv] of [get]. *)
+Lemma Σ_po_str_get_tag_string :
+  prim_op_tag_declared (Σ_po_str_pre_get, Monomorphic_ctx) primString.
+Proof. apply po_str_tag_declared; [reflexivity|now right; right; left]. Qed.
+
+(** [prim_op_tag_declared] for [primInt] in the prefix [get] is checked
+    against: the second argument and the result ([SInt]) conditions of [get]. *)
+Lemma Σ_po_str_get_tag_int :
+  prim_op_tag_declared (Σ_po_str_pre_get, Monomorphic_ctx) primInt.
+Proof. apply po_int_tag_declared; [reflexivity|now right; left]. Qed.
+
+(** [on_prim_op_constant] for [len], registered as [Stringlength], in the
+    prefix it is checked against. *)
+Lemma Σ_po_str_len_on_prim_op_constant :
+  on_prim_op_constant cumulSpec0 (Σ_po_str_pre_len, Monomorphic_ctx) Stringlength po_str_len_body.
+Proof.
+  constructor; cbn; try reflexivity.
+  - exists po_str_len_ty. split; [reflexivity|]. apply cumul_Refl.
+  - constructor; [exact Σ_po_str_len_tag_string|constructor].
+  - exact Σ_po_str_len_tag_int.
+Qed.
+
+(** [on_prim_op_constant] for [get], registered as [Stringget], in the prefix
+    it is checked against. *)
+Lemma Σ_po_str_get_on_prim_op_constant :
+  on_prim_op_constant cumulSpec0 (Σ_po_str_pre_get, Monomorphic_ctx) Stringget po_str_get_body.
+Proof.
+  constructor; cbn; try reflexivity.
+  - exists po_str_get_ty. split; [reflexivity|]. apply cumul_Refl.
+  - constructor; [exact Σ_po_str_get_tag_string|].
+    constructor; [exact Σ_po_str_get_tag_int|constructor].
+  - exact Σ_po_str_get_tag_int.
+Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for [str] in
+    [Σ_po_str]: no operation is registered at [str]. *)
+Lemma Σ_po_str_str_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_str_nil, Monomorphic_ctx) po_str_kn (ConstantDecl po_str_body).
+Proof. intros op hop. cbn in hop. discriminate hop. Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for [int] in
+    [Σ_po_str]: no operation is registered at [int]. *)
+Lemma Σ_po_str_int_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_str_pre_int, Monomorphic_ctx) po_int_kn (ConstantDecl po_int_body).
+Proof. intros op hop. cbn in hop. discriminate hop. Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for [len] in
+    [Σ_po_str], at the prefix it is checked against. *)
+Lemma Σ_po_str_len_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_str_pre_len, Monomorphic_ctx) po_str_len_kn
+    (ConstantDecl po_str_len_body).
+Proof.
+  intros op hop. cbn in hop. injection hop as <-. exact Σ_po_str_len_on_prim_op_constant.
+Qed.
+
+(** [on_prim_decl] (the [on_prim_decl_d] field of [wf]) for [get] in
+    [Σ_po_str], at the prefix it is checked against. *)
+Lemma Σ_po_str_get_on_prim_decl :
+  on_prim_decl cumulSpec0 (Σ_po_str_pre_get, Monomorphic_ctx) po_str_get_kn
+    (ConstantDecl po_str_get_body).
+Proof.
+  intros op hop. cbn in hop. injection hop as <-. exact Σ_po_str_get_on_prim_op_constant.
+Qed.
 
 (** [wf_ext] (universes, [wf_retro], and each declaration's [on_global_decl]
     and [on_prim_decl_d] against its prefix) for the string instance. *)
@@ -510,13 +722,13 @@ Proof.
     + constructor.
     + exact po_udecl_ok.
     + cbn. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split. apply po_int_type.
-    + cbn. intros op hop. discriminate hop.
+    + exact Σ_po_str_str_on_prim_decl.
   - (* int *)
     econstructor.
     + constructor; [intros [=]|constructor].
     + exact po_udecl_ok.
     + cbn. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split. apply po_int_type.
-    + cbn. intros op hop. discriminate hop.
+    + exact Σ_po_str_int_on_prim_decl.
   - (* len *)
     econstructor.
     + constructor; [intros [=]|constructor; [intros [=]|constructor]].
@@ -524,11 +736,7 @@ Proof.
     + cbn. split; [exact tt|].
       exists (Sort.sort_of_product Sort.type0 Sort.type0).
       repeat split. exact po_str_len_type_typed.
-    + cbn. intros op hop. injection hop as <-.
-      constructor; cbn; try reflexivity.
-      * exists po_str_len_ty. split; [reflexivity|]. apply cumul_Refl.
-      * repeat constructor. all: po_str_tag.
-      * po_str_tag.
+    + exact Σ_po_str_len_on_prim_decl.
   - (* get *)
     econstructor.
     + constructor; [intros [=]|constructor; [intros [=]|constructor; [intros [=]|constructor]]].
@@ -536,12 +744,10 @@ Proof.
     + cbn. split; [exact tt|].
       exists (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)).
       repeat split. exact po_str_get_type_typed.
-    + cbn. intros op hop. injection hop as <-.
-      constructor; cbn; try reflexivity.
-      * exists po_str_get_ty. split; [reflexivity|]. apply cumul_Refl.
-      * repeat constructor. all: po_str_tag.
-      * po_str_tag.
+    + exact Σ_po_str_get_on_prim_decl.
 Qed.
 
 Lemma Σ_po_str_wf : ∥ wf_ext Σ_po_str ∥.
 Proof. exact (sq Σ_po_str_wf_ext). Qed.
+
+End PrimInstances.
