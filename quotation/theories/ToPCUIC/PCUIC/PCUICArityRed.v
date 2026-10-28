@@ -3,7 +3,7 @@ From MetaRocq.Quotation.ToPCUIC Require Import Init.
 From MetaRocq.Quotation.ToPCUIC Require Import (hints) Stdlib.Init Stdlib.Lists.
 From MetaRocq.Quotation.ToPCUIC Require Import (hints) Equations.Type.
 From MetaRocq.Quotation.ToPCUIC.Utils Require Import (hints) All_Forall.
-From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) BasicAst Universes Kernames Environment.
+From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) BasicAst Universes Kernames PrimitiveOps Environment.
 From MetaRocq.Quotation.ToPCUIC.PCUIC Require Import (hints) PCUICAst utils.PCUICPrimitive.
 From MetaRocq.Quotation.ToPCUIC.QuotationOf.Common Require Import EnvironmentTyping.Sig.
 From MetaRocq.Quotation.ToPCUIC.QuotationOf.PCUIC Require Import PCUICArityRed.Instances.

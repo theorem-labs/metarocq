@@ -157,8 +157,8 @@ match Σ.(declarations) with
 end.
 Next Obligation.
 destruct Σ.(reference_impl_wf). sq.
-destruct X as [onu ond]; split => //. rewrite <- Heq_anonymous in ond.
-now depelim ond.
+destruct X as [onu [wfr ond]]; split; [exact onu|]; split; [exact wfr|].
+rewrite <- Heq_anonymous in ond. now depelim ond.
 Qed.
 
 Definition make_wf_env_ext {cf:checker_flags} {guard : abstract_guard_impl}
@@ -192,14 +192,20 @@ Program Global Instance canonical_abstract_env_struct {cf:checker_flags} {guard 
    wGraph.is_acyclic_ix ix' && wGraph.IsFullSubgraph.is_full_extension_ix G ix G' ix' ;
   abstract_env_add_udecl X udecl Hglobal := make_reference_impl_ext X udecl _ ;
   abstract_primitive_constant := fun X tag => primitive_constant X tag;
+  abstract_prim_op_of := fun X c => prim_op_of X c;
+  abstract_primitive_bool := fun X => primitive_bool X;
   abstract_env_rel := fun X Σ => Σ = reference_impl_env X ;
   abstract_pop_decls := reference_pop ;
  |}.
-Next Obligation. sq; constructor; cbn; eauto. econstructor. Qed.
 Next Obligation.
- pose proof (reference_impl_wf X). destruct (H _ eq_refl).
- sq. destruct H0.  econstructor; eauto. econstructor; eauto.
-  Qed.
+  sq. split; [assumption|]. split; [assumption|]. constructor.
+Qed.
+Next Obligation.
+  pose proof (reference_impl_wf X) as [[Hu [Hr Hd]]].
+  destruct (H _ eq_refl) as [Hdata].
+  sq. split; [exact Hu|]. split; [exact Hr|].
+  constructor; [exact Hd|exact Hdata].
+Qed.
 Next Obligation.
   pose proof (reference_impl_wf X). destruct (Hglobal _ eq_refl); sq.
   now econstructor.
@@ -228,7 +234,7 @@ Qed.
 
 Lemma wf_fresh_globals {cf : checker_flags} Σ : wf Σ -> EnvMap.fresh_globals Σ.(declarations).
 Proof. destruct Σ as [univs Σ]; cbn.
-  move=> [] onu; cbn. induction 1; constructor; auto. now destruct o.
+  move=> [] onu [] wfr; cbn. induction 1; constructor; auto. now destruct o.
 Qed.
 
 
@@ -246,7 +252,7 @@ Proof.
 Qed.
 
 Program Definition wf_env_init {cf:checker_flags} {guard : abstract_guard_impl} cs retro :
-  on_global_univs cs -> wf_env := fun H =>
+  on_global_univs cs /\ Retroknowledge.wf_retro retro -> wf_env := fun H =>
   {|
   wf_env_reference := abstract_env_init cs retro H;
   wf_env_map := EnvMap.empty;
@@ -314,6 +320,8 @@ Program Global Instance optimized_abstract_env_struct {cf:checker_flags} {guard 
  {| wf_env_ext_reference := @abstract_env_add_udecl _ _ reference_impl_ext _ X.(wf_env_reference) udecl Hdecl ;
     wf_env_ext_map := X.(wf_env_map) |};
  abstract_primitive_constant X := abstract_primitive_constant X.(wf_env_ext_reference);
+ abstract_prim_op_of X := abstract_prim_op_of X.(wf_env_ext_reference);
+ abstract_primitive_bool X := abstract_primitive_bool X.(wf_env_ext_reference);
  abstract_env_rel X := abstract_env_rel X.(wf_env_reference) ;
  abstract_pop_decls := optim_pop ;
  |}.
