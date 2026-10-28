@@ -71,6 +71,7 @@ Proof using P Pcmp cf.
     eapply extends_lookup in look; eauto. rewrite look //.
     destruct g => //=; destruct nth_error => //=; destruct nth_error => //=.
     destruct Nat.leb => //=.
+    destruct ind_variance => //=.
 Qed.
 
 (** The definition of [cmp_global_instance] is defined so that it is weakenable. *)
