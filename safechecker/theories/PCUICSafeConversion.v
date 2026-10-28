@@ -1280,6 +1280,97 @@ Section Conversion.
       Unshelve. eauto.
   Qed.
 
+  (** One step of the machine on a constant-headed state (design §7.3, steps 1
+      and 2): the default-flag machine on the application, in [zipp] form, as
+      [_isconv_red] runs the machine.  [None] when it makes no progress, that
+      is when the application is already a weak-head normal form under default
+      flags: an axiom, or an unsaturated, inert, stuck or rigid operation. *)
+  Opaque reduce_stack.
+  Equations unfold_one_prim (Γ : context) (c : kername) (u : Instance.t) (π : stack)
+            (h : wtp Γ (tConst c u) π) : option (term * stack) :=
+    unfold_one_prim Γ c u π h with inspect (decompose_stack π) := {
+    | @exist (args, ρ) eqd
+      with inspect (reduce_stack RedFlags.default _ X (Γ ,,, stack_context π)
+                     (tConst c u) (appstack args []) _) := {
+      | @exist (t', π') eqr with inspect (eqb (zipp t' π') (mkApps (tConst c u) args)) := {
+        | @exist true _ := None ;
+        | @exist false _ := Some (t', π' ++ ρ)
+        }
+      }
+    }.
+  Next Obligation.
+    symmetry in eqd.
+    pose proof (heΣ _ wfΣ); sq.
+    eapply welltyped_zipc_stack_context ; eauto.
+  Qed.
+  Transparent reduce_stack.
+
+  (** The machine's facts on the [zipp]-form run: its result reduces from the
+      application, has no stack tail, and is a weak-head normal form. *)
+  Ltac prim_step_facts Σ wfΣ eqr :=
+    match type of eqr with
+    | _ = reduce_stack ?f _ ?X ?Γ ?t ?π ?hh =>
+      let r := fresh "r" in let d := fresh "d" in let wh := fresh "wh" in
+      pose proof (reduce_stack_sound f _ X Σ wfΣ Γ t π hh) as [r];
+      pose proof (reduce_stack_decompose f _ X Γ t π hh) as d;
+      pose proof (reduce_stack_whnf f _ X Γ t π hh Σ wfΣ) as wh;
+      rewrite <- eqr in r, d, wh; cbn in r, d, wh
+    end.
+
+  Lemma unfold_one_prim_shape Γ c u π h t' ξ :
+    Some (t', ξ) = unfold_one_prim Γ c u π h ->
+    ∑ args ρ l,
+      [× decompose_stack π = (args, ρ), ξ = appstack l ρ,
+         (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+            ∥ red Σ (Γ ,,, stack_context π) (mkApps (tConst c u) args) (mkApps t' l) ∥) &
+         mkApps t' l <> mkApps (tConst c u) args].
+  Proof using Type.
+    funelim (unfold_one_prim Γ c u π h); intros [=]; subst.
+    match type of eqr with
+    | _ = reduce_stack ?f _ ?X ?Γ ?t ?π ?hh =>
+      pose proof (reduce_stack_decompose f _ X Γ t π hh) as d
+    end.
+    rewrite <- eqr in d. cbn in d.
+    rewrite decompose_stack_appstack in d. cbn in d.
+    destruct (decompose_stack π') as [l s] eqn:ed. cbn in d. subst s.
+    apply decompose_stack_eq in ed. subst π'.
+    exists args, ρ, l. split.
+    - now symmetry.
+    - now rewrite stack_cat_appstack.
+    - intros Σ wfΣ.
+      match type of eqr with
+      | _ = reduce_stack ?f _ ?X ?Γ ?t ?π ?hh =>
+        pose proof (reduce_stack_sound f _ X Σ wfΣ Γ t π hh) as [r']
+      end.
+      rewrite <- eqr in r'. cbn in r'. rewrite !zipc_appstack in r'. cbn in r'.
+      constructor. exact r'.
+    - intros heq.
+      match goal with H : false = eqb _ _ |- _ => pose proof H as hne end.
+      unfold zipp in hne. rewrite decompose_stack_appstack in hne. cbn in hne.
+      rewrite app_nil_r in hne. rewrite heq in hne.
+      rewrite eqb_refl in hne. discriminate hne.
+  Qed.
+
+  Lemma unfold_one_prim_None Γ c u π h :
+    None = unfold_one_prim Γ c u π h ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+      ∥ whnf RedFlags.default Σ (Γ ,,, stack_context π) (zipp (tConst c u) π) ∥.
+  Proof using Type.
+    funelim (unfold_one_prim Γ c u π h); intros [=].
+    intros Σ wfΣ.
+    prim_step_facts Σ wfΣ eqr.
+    rewrite decompose_stack_appstack in d. cbn in d.
+    destruct (decompose_stack π') as [l s] eqn:ed. cbn in d. subst s.
+    apply decompose_stack_eq in ed. subst π'.
+    match goal with H : true = eqb _ _ |- _ => pose proof H as heqb end.
+    symmetry in heqb. apply eqb_eq in heqb.
+    unfold zipp in heqb, wh |- *. rewrite decompose_stack_appstack in heqb, wh. cbn in heqb, wh.
+    rewrite app_nil_r in heqb, wh.
+    rewrite <- eqd. cbn.
+    rewrite stack_context_appstack in wh. cbn in wh.
+    rewrite heqb in wh. exact wh.
+  Qed.
+
   Inductive prog_view : term -> term -> Type :=
   | prog_view_App u1 v1 u2 v2 :
       prog_view (tApp u1 v1) (tApp u2 v2)
@@ -1512,14 +1603,43 @@ Qed.
     | @exist (Some (ConstantDecl {| cst_body := Some b |})) eq1 :=
       isconv_red leq (tConst c u) π1 (subst_instance u' b) π2 aux ;
     (* Inductive or not found *)
-    | @exist _ eq1 with inspect (abstract_env_lookup X c) := {
+    | @exist d1 eq1 with inspect (abstract_env_lookup X c) := {
       | @exist (Some (ConstantDecl {| cst_body := Some b |})) eq2 :=
         isconv_red leq (subst_instance u b) π1
                         (tConst c' u') π2 aux ;
-      (* Both Inductive or not found *)
-      | @exist _ eq2 := no (NotFoundConstants c c')
+      (* Both bodiless or not found.  Before answering no, a registered
+         operation takes one machine step, on the left, else on the right
+         (design §7.3, steps 1-3), as the kernel does inside lazy unfolding. *)
+      | @exist d2 eq2 with inspect (unfold_one_prim Γ c u π1 h1) := {
+        | @exist (Some (t1', π1')) eqp1 := isconv_red leq t1' π1' (tConst c' u') π2 aux ;
+        | @exist None eqp1 with inspect (unfold_one_prim Γ c' u' π2 h2) := {
+          | @exist (Some (t2', π2')) eqp2 := isconv_red leq (tConst c u) π1 t2' π2' aux ;
+          | @exist None eqp2 := no (NotFoundConstants c c')
+          }
+        }
       }
     }.
+  (* PROBE: print the next obligations' goals; remove before commit *)
+  Next Obligation. idtac "UC_OBL_1". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_2". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_3". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_4". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_5". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_6". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_7". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_8". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_9". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_10". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_11". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_12". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_13". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_14". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_15". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_16". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_17". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_18". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_19". Show. Admitted.
+  Next Obligation. idtac "UC_OBL_20". Show. Admitted.
 (*
     Solve Obligations of unfold_constants with
   try destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];

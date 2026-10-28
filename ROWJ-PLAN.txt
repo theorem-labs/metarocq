@@ -3,6 +3,17 @@ PrimChecker row J plan (design §7.3), safechecker/theories/PCUICSafeConversion.
 DONE in this wip:
 - closed_red_mkApps_tConst_axiom gains `prim_op_of Σ cst = None` (row D/F2 guard).
 - isred_full_nobeta: whne_mkApps_inv now has a third disjunct (registered op
+DONE (compiles): unfold_one_prim (Equations, zipp-form machine run), its
+  obligation, unfold_one_prim_shape (Some: decomposition, strict red of the
+  application) and unfold_one_prim_None (None: whnf default of zipp).
+IN PROGRESS: unfold_constants' bodiless clause.  A nested `with` after the
+  catch-all `@exist _ eq2` makes Equations fail: "The pattern unknown2 would
+  shadow a variable" (it splits the catch-all into the record cases of c and
+  c').  Remedies: (a) a helper Equations function for the prim stage, called
+  from the catch-all, taking the bodiless facts as an argument; (b) explicit
+  `{| cst_body := None |}` clauses for c' and c, the rest staying `no`
+  (unreachable by typing, discharged as today).  The working file carries
+  20 PROBE obligations (UC_OBL_*) after unfold_constants; remove them.
   blocked in its saturated prefix); destruct pattern [[w|(8 ?)]|(10 ?)].
 NEXT FAILURE: :1651, unfold_constants' final `no` obligation (needs the guard).
 
