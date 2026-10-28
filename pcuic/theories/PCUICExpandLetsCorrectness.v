@@ -2339,7 +2339,7 @@ Proof.
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
       |p c args t cargs w IH hc hcf
       |t args hs
-      |c u decl op args ls a rest t cargs h l hd hb hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs lit h l hd hb hpo hsat hs wa IHa hnl w IH
       |c u decl op args ls a rest t cargs hd hb hpo hsat hs wa IHa hnl
       |c u decl op args ls r v h l hd hb hpo hsat hs hden hrb w IH
       |c u decl op args ls hd hb hpo hsat hs hden
@@ -2643,7 +2643,7 @@ Proof.
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
       |p c args t cargs w IH hc hcf
       |t args hs
-      |c u decl op args ls a rest t cargs h l hd hb hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs lit h l hd hb hpo hsat hs wa IHa hnl w IH
       |c u decl op args ls a rest t cargs hd hb hpo hsat hs wa IHa hnl
       |c u decl op args ls r v h l hd hb hpo hsat hs hden hrb w IH
       |c u decl op args ls hd hb hpo hsat hs hden
@@ -2781,7 +2781,7 @@ Proof.
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
       |p c args t cargs w IH hc hcf
       |t args hs
-      |c u decl op args ls a rest t cargs h l hd hb hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs lit h l hd hb hpo hsat hs wa IHa hnl w IH
       |c u decl op args ls a rest t cargs hd hb hpo hsat hs wa IHa hnl
       |c u decl op args ls r v h l hd hb hpo hsat hs hden hrb w IH
       |c u decl op args ls hd hb hpo hsat hs hden

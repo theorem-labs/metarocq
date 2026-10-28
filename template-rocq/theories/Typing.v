@@ -819,13 +819,13 @@ Inductive whd_rel (zeta : bool) (Σ : global_env) (Γ : context) :
     (reduce it, then re-enter or stop).  Over-application leaves
     [skipn (arity op) args] on the stack, as the machine does, and as Template's
     prefix-form [red_prim_op] keeps it applied to the reduct. *)
-| whd_prim_arg c u decl op args ls a rest t cargs h l
+| whd_prim_arg c u decl op args ls a rest t cargs lit h l
     (hcst : lookup_env Σ c = Some (ConstantDecl decl))
     (hbod : decl.(cst_body) = None)
     (hpo : prim_op_of Σ c = Some op) (hsat : arity op <= #|args|)
     (hs : tsplit_lits (firstn (arity op) args) = inr (ls, a, rest))
     (wa : whd_rel zeta Σ Γ a [] t cargs)
-    (hnl : lit_of_template (mkApps t cargs) <> None)
+    (hnl : lit_of_template (mkApps t cargs) = Some lit)
     (w : whd_rel zeta Σ Γ (tConst c u)
       (map template_of_lit ls ++ mkApps t cargs :: rest ++ skipn (arity op) args) h l) :
     whd_rel zeta Σ Γ (tConst c u) args h l

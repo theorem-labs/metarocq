@@ -172,7 +172,7 @@ Section TemplateWhdRed.
       |p c args mfix idx cargs narg fn h l wa IHa hunf wb IHb
       |p c args t cargs wa IHa hnc hncf
       |t args hs
-      |c u decl op args ls a rest t cargs h l hcst hbod hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs lit h l hcst hbod hpo hsat hs wa IHa hnl w IH
       |c u decl op args ls a rest t cargs hcst hbod hpo hsat hs wa IHa hnl
       |c u decl op args ls r v h l hcst hbod hpo hsat hs hden hrb w IH
       |c u decl op args ls hcst hbod hpo hsat hs hden
