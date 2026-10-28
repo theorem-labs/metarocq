@@ -389,25 +389,25 @@ Proof.
   intros a cl ha. exact (proj2 hg2 a cl ha).
 Qed.
 
-Lemma alloc_wf stress Q cl rs s a rs' s' :
-  alloc stress cl rs s = COk (a, rs', s') ->
+Lemma alloc_wf Q cl rs s a rs' s' :
+  alloc cl rs s = COk (a, rs', s') ->
   hwf Q s -> cwf Q cl -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs'.
 Proof.
-  intros he hs hc hrs. destruct (gc_due stress s) eqn:eg.
-  - rewrite (alloc_gc stress cl rs s eg) in he.
+  intros he hs hc hrs. destruct (gc_due s) eqn:eg.
+  - rewrite (alloc_gc cl rs s eg) in he.
     destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:ec; [|discriminate he].
     destruct (collect_wf Q _ _ _ _ ec hs (Forall_cons (RC cl) hc hrs)) as [hs2 hr2].
     destruct rs2 as [|[| | | | | |cl2] rs2]; try discriminate he.
     injection he as <- <- <-.
     split; [exact (hwf_alloc_now Q cl2 s2 hs2 (rwf_hd _ _ _ hr2))|exact (rwf_tl _ _ _ hr2)].
-  - rewrite (alloc_no_gc stress cl rs s eg) in he. injection he as <- <- <-.
+  - rewrite (alloc_no_gc cl rs s eg) in he. injection he as <- <- <-.
     split; [exact (hwf_alloc_now Q cl s hs hc)|exact hrs].
 Qed.
 
 (** The interface [alloc_hwf] of [PCUICCallByNeedSoundLevel]. *)
-Lemma alloc_hwf_holds nctx stress : alloc_hwf nctx stress.
+Lemma alloc_hwf_holds nctx : alloc_hwf nctx.
 Proof.
-  intros Q cl rs s a rs' s' _ hs hc hrs he. exact (alloc_wf stress Q cl rs s a rs' s' he hs hc hrs).
+  intros Q cl rs s a rs' s' _ hs hc hrs he. exact (alloc_wf Q cl rs s a rs' s' he hs hc hrs).
 Qed.
 
 (** ** The machine *)
@@ -439,7 +439,7 @@ Local Ltac dtests he :=
 
 Section Machine.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context (Γ : context) (nctx : nat) (stress : bool).
+  Context (Γ : context) (nctx : nat).
   Context (hlen : #|Γ| <= nctx) (Q : nat) (hQ : nctx <= Q).
 
   Lemma tick_wf s s' : tick s = Some s' -> hwf Q s -> hwf Q s'.
@@ -449,7 +449,7 @@ Section Machine.
   Proof. intros he. apply hwf_heap. exact (proj1 (delta_shape X_type X kn u s r s' he)). Qed.
 
   Lemma gam_wf j rs s a rs' s' :
-    gam X_type X Γ nctx stress j rs s = COk (a, rs', s') ->
+    gam X_type X Γ nctx j rs s = COk (a, rs', s') ->
     hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs'.
   Proof.
     intros he hs hrs. unfold gam in he. cbv zeta in he.
@@ -458,25 +458,25 @@ Section Machine.
     destruct (nth_error Γ j) as [decl|] eqn:ed; [|discriminate he].
     assert (hj : j < nctx) by (pose proof (nth_error_Some_length ed); lia).
     destruct (decl_body decl) as [b|].
-    - destruct (new_entry X_type X b [] (NSCtx j) s) as [c s1] eqn:en.
+    - destruct (new_entry X_type X b [] s) as [c s1] eqn:en.
       cbv beta iota in he.
       assert (hs1 : hwf Q s1).
       { apply (hwf_heap Q s s1); [|exact hs].
         change s1 with (snd (c, s1)). rewrite <- en.
-        exact (proj1 (new_entry_shape X_type X b [] (NSCtx j) s)). }
+        exact (proj1 (new_entry_shape X_type X b [] s)). }
       dcall he ea a1 rs1 s2.
       injection he as <- <- <-.
-      destruct (alloc_wf _ _ _ _ _ _ _ _ ea hs1 I hrs) as [hs2 hr2].
+      destruct (alloc_wf _ _ _ _ _ _ _ ea hs1 I hrs) as [hs2 hr2].
       split; [exact (hwf_heap Q s2 _ eq_refl hs2)|exact hr2].
     - cbv beta iota in he. dcall he ea a1 rs1 s2.
       injection he as <- <- <-.
       assert (hc : cwf Q (CDone (VNeu (NVar (nctx - S j)) []))) by (cbn; lia).
-      destruct (alloc_wf _ _ _ _ _ _ _ _ ea hs hc hrs) as [hs2 hr2].
+      destruct (alloc_wf _ _ _ _ _ _ _ ea hs hc hrs) as [hs2 hr2].
       split; [exact (hwf_heap Q s2 _ eq_refl hs2)|exact hr2].
   Qed.
 
   Lemma env_var_wf n e rs s x rs' s' :
-    env_var X_type X Γ nctx stress n e rs s = COk (x, rs', s') ->
+    env_var X_type X Γ nctx n e rs s = COk (x, rs', s') ->
     hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs'.
   Proof.
     intros he hs hrs. unfold env_var in he.
@@ -486,7 +486,7 @@ Section Machine.
   Qed.
 
   Lemma arg_slot_wf e c rs s x rs' s' :
-    arg_slot X_type X Γ nctx stress e c rs s = COk (x, rs', s') ->
+    arg_slot X_type X Γ nctx e c rs s = COk (x, rs', s') ->
     hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs'.
   Proof.
     intros he hs hrs. unfold arg_slot in he.
@@ -495,28 +495,28 @@ Section Machine.
   Qed.
 
   Lemma materialize_wf x rs s a rs' s' :
-    materialize X_type X stress x rs s = COk (a, rs', s') ->
+    materialize X_type X x rs s = COk (a, rs', s') ->
     hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs'.
   Proof.
     intros he hs hrs. unfold materialize in he.
     destruct x as [a0|vs n o c]; [injection he as <- <- <-; split; assumption|].
-    destruct (c_term c) eqn:ec; try exact (alloc_wf _ _ _ _ _ _ _ _ he hs I hrs).
+    destruct (c_term c) eqn:ec; try exact (alloc_wf _ _ _ _ _ _ _ he hs I hrs).
     - (* tConst: an axiom is a neutral whose head is the code, closed *)
       lazymatch type of he with
       | context [delta X_type X ?kn ?ui s] =>
         destruct (delta X_type X kn ui s) as [[[c'|] s1]|w] eqn:ed
       end.
-      + exact (alloc_wf _ _ _ _ _ _ _ _ he (delta_wf _ _ _ _ _ ed hs) I hrs).
-      + exact (alloc_wf _ _ _ _ _ _ _ _ he (delta_wf _ _ _ _ _ ed hs) eq_refl hrs).
-      + exact (alloc_wf _ _ _ _ _ _ _ _ he hs I hrs).
+      + exact (alloc_wf _ _ _ _ _ _ _ he (delta_wf _ _ _ _ _ ed hs) I hrs).
+      + exact (alloc_wf _ _ _ _ _ _ _ he (delta_wf _ _ _ _ _ ed hs) eq_refl hrs).
+      + exact (alloc_wf _ _ _ _ _ _ _ he hs I hrs).
     - (* tFix *)
       lazymatch type of he with
       | context [nth_error ?m ?i] => destruct (nth_error m i)
-      end; exact (alloc_wf _ _ _ _ _ _ _ _ he hs I hrs).
+      end; exact (alloc_wf _ _ _ _ _ _ _ he hs I hrs).
   Qed.
 
   Lemma bind_wf x body rs s y rs' s' :
-    bind X_type X stress x body rs s = COk (y, rs', s') ->
+    bind X_type X x body rs s = COk (y, rs', s') ->
     hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs'.
   Proof.
     intros he hs hrs. unfold bind in he. destruct x as [a0|vals n o c].
@@ -532,7 +532,7 @@ Section Machine.
   Qed.
 
   Lemma mat_all_wf : forall d l rs s al rs' s',
-    mat_all X_type X stress d l rs s = COk (al, rs', s') ->
+    mat_all X_type X d l rs s = COk (al, rs', s') ->
     hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs'.
   Proof.
     intros d. induction d as [|k ih]; intros l rs s al rs' s' he hs hrs;
@@ -550,7 +550,7 @@ Section Machine.
   Qed.
 
   Lemma push_fix_cells_wf : forall n e c i acc rs s e' rs' s',
-    push_fix_cells stress e c i n acc rs s = COk (e', rs', s') ->
+    push_fix_cells e c i n acc rs s = COk (e', rs', s') ->
     hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs'.
   Proof.
     induction n as [|n ih]; intros e c i acc rs s e' rs' s' he hs hrs;
@@ -558,26 +558,26 @@ Section Machine.
     - injection he as <- <- <-. split; assumption.
     - dcall he ea a1 rs1 s1.
       destruct rs1 as [|[| |e1| | | |] [|[| |acc1| | | |] rs1]]; try discriminate he.
-      destruct (alloc_wf _ _ _ _ _ _ _ _ ea hs I ltac:(rok)) as [hs1 hr1].
+      destruct (alloc_wf _ _ _ _ _ _ _ ea hs I ltac:(rok)) as [hs1 hr1].
       exact (ih _ _ _ _ _ _ _ _ _ he hs1 ltac:(rok)).
   Qed.
 
   (** The five functions of the machine at one fuel. *)
   Definition mwf (d : cbn_fuel) : Prop :=
     (forall a rs s v rs' s',
-       force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
+       force X_type X Γ nctx d a rs s = COk (v, rs', s') ->
        hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
     /\ (forall x stk rs s v rs' s',
-       eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+       eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
        hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
     /\ (forall e c stk rs s v rs' s',
-       whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+       whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
        hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
     /\ (forall e c mfix idx stk rs s v rs' s',
-       whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
+       whnf_fix X_type X Γ nctx d e c mfix idx stk rs s = COk (v, rs', s') ->
        hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
     /\ (forall v stk rs s w rs' s',
-       apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
+       apply X_type X Γ nctx d v stk rs s = COk (w, rs', s') ->
        hwf Q s -> Forall (rwf Q) rs -> vwf Q v ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q w).
 
@@ -723,7 +723,7 @@ Section Machine.
                destruct h; try discriminate he.
                dcall he ea2 a2 rs2 s2.
                destruct rs2 as [|[| |e3| | | |] [|[| | | |k3| |] rs2]]; try discriminate he.
-               destruct (alloc_wf _ _ _ _ _ _ _ _ ea2 hsf hvf ltac:(rok)) as [hs2 hr2].
+               destruct (alloc_wf _ _ _ _ _ _ _ ea2 hsf hvf ltac:(rok)) as [hs2 hr2].
                dcall he ep e4 rs3 s3.
                destruct rs3 as [|[| | | |k4| |] rs3]; try discriminate he.
                destruct (push_fix_cells_wf _ _ _ _ _ _ _ _ _ _ ep hs2 ltac:(rok)) as [hs3 hr3].
@@ -766,11 +766,11 @@ End Machine.
 (** The interface [machine_hwf] of [PCUICCallByNeedSoundLevel], for every context no longer
   than [nctx]. *)
 Lemma machine_hwf_holds {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
-    (Γ : context) (nctx : nat) (stress : bool) (hlen : #|Γ| <= nctx) :
-  machine_hwf X_type X Γ nctx stress.
+    (Γ : context) (nctx : nat) (hlen : #|Γ| <= nctx) :
+  machine_hwf X_type X Γ nctx.
 Proof.
   intros d Q hQ.
-  destruct (machine_wf X_type X Γ nctx stress hlen Q hQ d) as (hf & hs & hw & hx & ha).
+  destruct (machine_wf X_type X Γ nctx hlen Q hQ d) as (hf & hs & hw & hx & ha).
   split; [|split; [|split; [|split]]].
   - intros a rs s v rs' s' h1 h2 he. exact (hf _ _ _ _ _ _ he h1 h2).
   - intros x stk rs s v rs' s' h1 h2 he. exact (hs _ _ _ _ _ _ _ he h1 h2).
@@ -782,8 +782,8 @@ Qed.
 (** The premise [#|Γ| <= nctx] is needed: with [nctx = 0], one assumption in [Γ] and the
   master level [0], the variable [tRel 0] evaluates to [NVar 0], which is not below [0]. *)
 Lemma machine_hwf_needs_len {cf : checker_flags} (X_type : abstract_env_impl)
-    (X : X_type.π2.π1) (stress : bool) :
-  ~ machine_hwf X_type X [jdecl] 0 stress.
+    (X : X_type.π2.π1) :
+  ~ machine_hwf X_type X [jdecl] 0.
 Proof.
   intros h.
   destruct (h (FS (fun _ => FS (fun _ => FS (fun _ => FO)))) 0 (le_n 0))
@@ -791,11 +791,11 @@ Proof.
   assert (hs0 : hwf 0 cbn_init).
   { intros a cl ha. unfold heap_get in ha. cbn [cbn_init st_heap] in ha.
     rewrite bh_get_holes in ha. discriminate ha. }
-  assert (E : exists s', whnf X_type X [jdecl] 0 stress
+  assert (E : exists s', whnf X_type X [jdecl] 0
                            (FS (fun _ => FS (fun _ => FS (fun _ => FO))))
                            env_empty (mkCode path_nil path_nil (tRel 0)) [] [] cbn_init
                          = COk (VNeu (NVar 0) [], [], s')).
-  { destruct stress; eexists; reflexivity. }
+  { eexists; reflexivity. }
   destruct E as [s' E].
   destruct (hw _ _ _ _ _ _ _ _ hs0 (Forall_nil _) E) as (_ & _ & hv).
   cbn in hv. lia.
@@ -805,7 +805,7 @@ Qed.
 
 Section MasterProved.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext).
+  Context (Γ : context) (nctx : nat) (Σ : global_env_ext).
   Context (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ) (hnctx : nctx = #|Γ|).
   Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
                     PCUICCallByNeedSoundHook.consts_okb Σ b).
@@ -813,25 +813,25 @@ Section MasterProved.
   (** The satisfying instance of the interface [machine_hwf] (the hypothesis [hB] of
     [whnf_master] and [eval_slot_master]) at the level the machine runs at:
     [cbn_conv_answer] takes [nctx = #|Γ|]. *)
-  Lemma machine_hwf_master : machine_hwf X_type X Γ nctx stress.
+  Lemma machine_hwf_master : machine_hwf X_type X Γ nctx.
   Proof. apply machine_hwf_holds. rewrite hnctx. apply le_n. Qed.
 
   Lemma whnf_master_hwf d L Q lo G e c stk sts tc rs s v rs' s' :
     minv X_type X Γ nctx Σ L Q lo G s -> Forall (rwf Q) rs ->
     g_susp nctx Q G e c.(c_term) tc -> PCUICCallByNeedSoundEval.cok G c ->
     g_slots nctx Q G stk sts ->
-    whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+    whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
     exists lo' G' u, minv X_type X Γ nctx Σ L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
       /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
       /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tc sts) u.
-  Proof. exact (whnf_master X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio machine_hwf_master d L Q lo G e c stk sts tc rs s v rs' s'). Qed.
+  Proof. exact (whnf_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio machine_hwf_master d L Q lo G e c stk sts tc rs s v rs' s'). Qed.
 
   Lemma eval_slot_master_hwf d L Q lo G x stk sts tx rs s v rs' s' :
     minv X_type X Γ nctx Σ L Q lo G s -> Forall (rwf Q) rs ->
     g_slot nctx Q G x tx -> g_slots nctx Q G stk sts ->
-    eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+    eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
     exists lo' G' u, minv X_type X Γ nctx Σ L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
       /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
       /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tx sts) u.
-  Proof. exact (eval_slot_master X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio machine_hwf_master d L Q lo G x stk sts tx rs s v rs' s'). Qed.
+  Proof. exact (eval_slot_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio machine_hwf_master d L Q lo G x stk sts tx rs s v rs' s'). Qed.
 End MasterProved.

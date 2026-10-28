@@ -1136,34 +1136,34 @@ Section Memo.
 
   (** *** [new_entry] *)
 
-  Lemma new_entry_memo_eq (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    ((snd (new_entry X_type X t u ns s)).(st_memo))
+  Lemma new_entry_memo_eq (t : term) (u : Instance.t) (s : cbn_state) :
+    ((snd (new_entry X_type X t u s)).(st_memo))
     = snd (memo_add_entry
-             (mkEntry t u ns (wf_term_univs X_type X (inst_code u t))) (s.(st_memo))).
+             (mkEntry t u (wf_term_univs X_type X (inst_code u t))) (s.(st_memo))).
   Proof. reflexivity. Qed.
 
-  Lemma new_entry_fresh (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    memo_fresh (s.(st_memo)) -> memo_fresh ((snd (new_entry X_type X t u ns s)).(st_memo)).
+  Lemma new_entry_fresh (t : term) (u : Instance.t) (s : cbn_state) :
+    memo_fresh (s.(st_memo)) -> memo_fresh ((snd (new_entry X_type X t u s)).(st_memo)).
   Proof. intros h. rewrite new_entry_memo_eq. now apply memo_fresh_add_entry. Qed.
 
-  Lemma new_entry_once_ok (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
+  Lemma new_entry_once_ok (t : term) (u : Instance.t) (s : cbn_state) :
     memo_fresh (s.(st_memo)) -> once_ok (s.(st_memo)) ->
-    once_ok ((snd (new_entry X_type X t u ns s)).(st_memo)).
+    once_ok ((snd (new_entry X_type X t u s)).(st_memo)).
   Proof. intros hf h. rewrite new_entry_memo_eq. now apply once_ok_add_entry. Qed.
 
-  Lemma new_entry_hash_ok (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
+  Lemma new_entry_hash_ok (t : term) (u : Instance.t) (s : cbn_state) :
     memo_fresh (s.(st_memo)) -> hash_ok (s.(st_memo)) ->
-    hash_ok ((snd (new_entry X_type X t u ns s)).(st_memo)).
+    hash_ok ((snd (new_entry X_type X t u s)).(st_memo)).
   Proof. intros hf h. rewrite new_entry_memo_eq. now apply hash_ok_add_entry. Qed.
 
-  Lemma new_entry_ceq_ok (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
+  Lemma new_entry_ceq_ok (t : term) (u : Instance.t) (s : cbn_state) :
     memo_fresh (s.(st_memo)) -> ceq_ok (s.(st_memo)) ->
-    ceq_ok ((snd (new_entry X_type X t u ns s)).(st_memo)).
+    ceq_ok ((snd (new_entry X_type X t u s)).(st_memo)).
   Proof. intros hf h. rewrite new_entry_memo_eq. now apply ceq_ok_add_entry. Qed.
 
-  Lemma new_entry_delta_ok (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
+  Lemma new_entry_delta_ok (t : term) (u : Instance.t) (s : cbn_state) :
     memo_fresh (s.(st_memo)) -> delta_ok (s.(st_memo)) ->
-    delta_ok ((snd (new_entry X_type X t u ns s)).(st_memo)).
+    delta_ok ((snd (new_entry X_type X t u s)).(st_memo)).
   Proof. intros hf h. rewrite new_entry_memo_eq. now apply delta_ok_add_entry. Qed.
 
   (** *** [delta_new]: one code entry per (constant, syntactic instance) *)
@@ -1171,25 +1171,25 @@ Section Memo.
   Lemma delta_new_spec (kn : kername) (ui : Instance.t) (body : term)
       (insts : list (Instance.t * cidx * term)) (s : cbn_state) :
     delta_new X_type X kn ui body insts s
-    = (fst (new_entry X_type X body ui (NSConst kn) s),
+    = (fst (new_entry X_type X body ui s),
        set_memo
          (memo_set_delta
             (dt_add kn
                (DBody body
-                  ((ui, (fst (new_entry X_type X body ui (NSConst kn) s)).(c_entry),
-                        (fst (new_entry X_type X body ui (NSConst kn) s)).(c_term))
+                  ((ui, (fst (new_entry X_type X body ui s)).(c_entry),
+                        (fst (new_entry X_type X body ui s)).(c_term))
                      :: insts))
-               (((snd (new_entry X_type X body ui (NSConst kn) s)).(st_memo)).(m_delta)))
-            ((snd (new_entry X_type X body ui (NSConst kn) s)).(st_memo)))
-         (snd (new_entry X_type X body ui (NSConst kn) s))).
+               (((snd (new_entry X_type X body ui s)).(st_memo)).(m_delta)))
+            ((snd (new_entry X_type X body ui s)).(st_memo)))
+         (snd (new_entry X_type X body ui s))).
   Proof.
-    unfold delta_new. destruct (new_entry X_type X body ui (NSConst kn) s). reflexivity.
+    unfold delta_new. destruct (new_entry X_type X body ui s). reflexivity.
   Qed.
 
   Lemma delta_new_fst (kn : kername) (ui : Instance.t) (body : term)
       (insts : list (Instance.t * cidx * term)) (s : cbn_state) :
     fst (delta_new X_type X kn ui body insts s)
-    = fst (new_entry X_type X body ui (NSConst kn) s).
+    = fst (new_entry X_type X body ui s).
   Proof. rewrite delta_new_spec. reflexivity. Qed.
 
   Lemma delta_new_code (kn : kername) (ui : Instance.t) (body : term)
@@ -1204,26 +1204,26 @@ Section Memo.
   Lemma delta_new_codes (kn : kername) (ui : Instance.t) (body : term)
       (insts : list (Instance.t * cidx * term)) (s : cbn_state) :
     (((snd (delta_new X_type X kn ui body insts s)).(st_memo)).(m_codes))
-    = (((snd (new_entry X_type X body ui (NSConst kn) s)).(st_memo)).(m_codes)).
+    = (((snd (new_entry X_type X body ui s)).(st_memo)).(m_codes)).
   Proof. rewrite delta_new_spec. reflexivity. Qed.
 
   Lemma delta_new_entry (kn : kername) (ui : Instance.t) (body : term)
       (insts : list (Instance.t * cidx * term)) (s : cbn_state) :
     PTree.get ((fst (delta_new X_type X kn ui body insts s)).(c_entry))
       (((snd (delta_new X_type X kn ui body insts s)).(st_memo)).(m_codes))
-    = Some (mkEntry body ui (NSConst kn)
+    = Some (mkEntry body ui
               (wf_term_univs X_type X (inst_code ui body))).
   Proof.
     rewrite delta_new_fst, delta_new_codes.
-    exact (new_entry_in_table X_type X body ui (NSConst kn) s).
+    exact (new_entry_in_table X_type X body ui s).
   Qed.
 
   Lemma delta_new_code_inv (kn : kername) (ui : Instance.t) (body : term)
       (insts : list (Instance.t * cidx * term)) (s : cbn_state) :
-    code_inv (mkEntry body ui (NSConst kn) (wf_term_univs X_type X (inst_code ui body)))
+    code_inv (mkEntry body ui (wf_term_univs X_type X (inst_code ui body)))
       (fst (delta_new X_type X kn ui body insts s)).
   Proof.
-    rewrite delta_new_fst. exact (new_entry_code_inv X_type X body ui (NSConst kn) s).
+    rewrite delta_new_fst. exact (new_entry_code_inv X_type X body ui s).
   Qed.
 
   Lemma delta_new_trie (kn : kername) (ui : Instance.t) (body : term)
@@ -1249,7 +1249,7 @@ Section Memo.
     once_ok (((snd (delta_new X_type X kn ui body insts s)).(st_memo))).
   Proof.
     intros hf h. rewrite delta_new_spec. cbn [snd]. rewrite set_memo_memo.
-    refine (once_ok_fields _ _ _ _ (new_entry_once_ok body ui (NSConst kn) s hf h));
+    refine (once_ok_fields _ _ _ _ (new_entry_once_ok body ui s hf h));
       reflexivity.
   Qed.
 
@@ -1259,7 +1259,7 @@ Section Memo.
     hash_ok (((snd (delta_new X_type X kn ui body insts s)).(st_memo))).
   Proof.
     intros hf h. rewrite delta_new_spec. cbn [snd]. rewrite set_memo_memo.
-    refine (hash_ok_fields _ _ _ _ (new_entry_hash_ok body ui (NSConst kn) s hf h));
+    refine (hash_ok_fields _ _ _ _ (new_entry_hash_ok body ui s hf h));
       reflexivity.
   Qed.
 
@@ -1269,7 +1269,7 @@ Section Memo.
     ceq_ok (((snd (delta_new X_type X kn ui body insts s)).(st_memo))).
   Proof.
     intros hf h. rewrite delta_new_spec. cbn [snd]. rewrite set_memo_memo.
-    refine (ceq_ok_fields _ _ _ _ (new_entry_ceq_ok body ui (NSConst kn) s hf h));
+    refine (ceq_ok_fields _ _ _ _ (new_entry_ceq_ok body ui s hf h));
       reflexivity.
   Qed.
 
@@ -1296,7 +1296,7 @@ Section Memo.
       split; [exists cb; split; assumption|].
       constructor.
       + split; [reflexivity|].
-        exists (mkEntry body ui (NSConst kn)
+        exists (mkEntry body ui
                   (wf_term_univs X_type X (inst_code ui body))).
         split; [|split; reflexivity].
         pose proof (delta_new_entry kn ui body insts s) as hent.
@@ -1368,8 +1368,8 @@ Section Memo.
       + intros hc.
         destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some r s' hc)
           as [_ ->].
-        refine (memo_ok_codes X_type X (snd (new_entry X_type X body ui (NSConst kn) s))
-                  _ _ (new_entry_memo_ok X_type X body ui (NSConst kn) s hm)).
+        refine (memo_ok_codes X_type X (snd (new_entry X_type X body ui s))
+                  _ _ (new_entry_memo_ok X_type X body ui s hm)).
         apply delta_new_codes.
     - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
         [|intros hc; discriminate hc|intros hc; discriminate hc].
@@ -1377,8 +1377,8 @@ Section Memo.
       + intros hc.
         destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some r s' hc)
           as [_ ->].
-        refine (memo_ok_codes X_type X (snd (new_entry X_type X body ui (NSConst kn) s))
-                  _ _ (new_entry_memo_ok X_type X body ui (NSConst kn) s hm)).
+        refine (memo_ok_codes X_type X (snd (new_entry X_type X body ui s))
+                  _ _ (new_entry_memo_ok X_type X body ui s hm)).
         apply delta_new_codes.
       + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst s'.
         refine (memo_ok_codes X_type X s _ _ hm). reflexivity.
@@ -1527,7 +1527,7 @@ Section Memo.
         destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some (Some c) s' hc)
           as [hr ->]. injection hr as ->.
         exists cb, body,
-          (mkEntry body ui (NSConst kn) (wf_term_univs X_type X (inst_code ui body))).
+          (mkEntry body ui (wf_term_univs X_type X (inst_code ui body))).
         split; [exact (lookup_declared Σ kn cb hΣ hl)|].
         split; [exact hb|].
         destruct (delta_new_code kn ui body insts s) as [hct [hcp hce]].
@@ -1542,7 +1542,7 @@ Section Memo.
         destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some (Some c) s' hc)
           as [hr ->]. injection hr as ->.
         exists cb, body,
-          (mkEntry body ui (NSConst kn) (wf_term_univs X_type X (inst_code ui body))).
+          (mkEntry body ui (wf_term_univs X_type X (inst_code ui body))).
         split; [exact (lookup_declared Σ kn cb hΣ El)|].
         split; [exact Eb|].
         destruct (delta_new_code kn ui body [] s) as [hct [hcp hce]].
@@ -1632,8 +1632,8 @@ Section Memo.
     split; [apply hash_ok_empty|]. split; [apply ceq_ok_empty | apply delta_ok_empty].
   Qed.
 
-  Lemma memo_inv_new_entry (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    memo_inv s -> memo_inv (snd (new_entry X_type X t u ns s)).
+  Lemma memo_inv_new_entry (t : term) (u : Instance.t) (s : cbn_state) :
+    memo_inv s -> memo_inv (snd (new_entry X_type X t u s)).
   Proof.
     intros [hf [ho [hh [hq hd]]]]. unfold memo_inv.
     split; [now apply new_entry_fresh|]. split; [now apply new_entry_once_ok|].

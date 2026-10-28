@@ -35,8 +35,8 @@ Import CanonicalTries.
   - Roots in, roots out: every function that can allocate takes the list of roots its
     callers hold and returns it renamed together with its result. An allocation may run the
     copying collector first, when the cells allocated since the last collection exceed
-    twice the live count after it and at least [gc_min] (or at every allocation in stress
-    mode). The collector copies the cells reachable from the roots and from [st_gam] into a
+    twice the live count after it and at least [gc_min]. The collector copies the cells
+    reachable from the roots and from [st_gam] into a
     fresh heap with new addresses from the old [st_next] on. It does not use the step
     budget. An address that is not in the heap makes the whole call answer "don't know".
   - Code: every term the machine evaluates is the subterm, at a path, of the instantiated
@@ -215,17 +215,11 @@ Local Notation "'cbnwhen' n ( r , s ) := c 'in' k" :=
 
 (** ** Code table *)
 
-Inductive code_ns :=
-| NSInput (right : bool)  (* an input term of the comparison *)
-| NSCtx (j : nat)         (* the body of the context entry [j] of [Γ] *)
-| NSConst (kn : kername). (* the body of a constant *)
-
 (** [ce_wf]: the result of the [wf_universeb] check of the instantiated term, run once when
   the entry is created. *)
 Record code_entry := mkEntry {
   ce_term : term;
   ce_inst : Instance.t;
-  ce_ns : code_ns;
   ce_wf : bool }.
 
 (** The term the machine evaluates for an entry: its term with its instance substituted.
@@ -1765,8 +1759,8 @@ Definition collect (rs : list root) (s : cbn_state) : cbn_res (list root * cbn_s
   COk (rs, mkState g.(g_heap) g.(g_next) (gc_room (N.sub (Npos g.(g_next)) (Npos onext)))
              s.(st_steps) gm s.(st_memo)).
 
-Definition gc_due (stress : bool) (s : cbn_state) : bool :=
-  stress || match s.(st_room) with N0 => true | Npos _ => false end.
+Definition gc_due (s : cbn_state) : bool :=
+  match s.(st_room) with N0 => true | Npos _ => false end.
 
 Fixpoint find_inst (u : Instance.t) (l : list (Instance.t * cidx * term)) : option (cidx * term) :=
   match l with
@@ -1791,7 +1785,6 @@ Fixpoint list_set {A} (l : list A) (n : nat) (x : A) : list A :=
 Section CallByNeed.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Γ : context) (nctx : nat). (* nctx = #|Γ| *)
-  Context (stress : bool). (* collect at every allocation *)
 
   (** *** Universe-checked syntactic comparison *)
 
@@ -1816,10 +1809,10 @@ Section CallByNeed.
 
   (** *** Code entries, the per-code maps and the same-code test *)
 
-  Definition new_entry (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state)
+  Definition new_entry (t : term) (u : Instance.t) (s : cbn_state)
     : code * cbn_state :=
     let ct := inst_code u t in
-    let (i, m) := memo_add_entry (mkEntry t u ns (wf_term_univs ct)) s.(st_memo) in
+    let (i, m) := memo_add_entry (mkEntry t u (wf_term_univs ct)) s.(st_memo) in
     (mkCode i path_nil ct, set_memo m s).
 
   Definition entry_wf (i : cidx) (s : cbn_state) : bool :=
@@ -1884,7 +1877,7 @@ Section CallByNeed.
 
   Definition alloc (cl : cbn_cell) (rs : list root) (s : cbn_state)
     : cbn_res (haddr * list root * cbn_state) :=
-    if gc_due stress s then
+    if gc_due s then
       match collect (RC cl :: rs) s with
       | COk (RC cl :: rs, s) => let (a, s) := alloc_now cl s in COk (a, rs, s)
       | COk _ => CFail WRoots
@@ -1896,7 +1889,7 @@ Section CallByNeed.
 
   Definition delta_new (kn : kername) (u : Instance.t) (body : term)
     (insts : list (Instance.t * cidx * term)) (s : cbn_state) : code * cbn_state :=
-    let (c, s) := new_entry body u (NSConst kn) s in
+    let (c, s) := new_entry body u s in
     (c, set_memo (memo_set_delta (dt_add kn (DBody body ((u, c.(c_entry), c.(c_term)) :: insts))
                                     s.(st_memo).(m_delta)) s.(st_memo)) s).
 
@@ -1937,7 +1930,7 @@ Section CallByNeed.
         let (cl, s) :=
           match decl.(decl_body) with
           | Some b =>
-            let (c, s) := new_entry b [] (NSCtx j) s in
+            let (c, s) := new_entry b [] s in
             (CSusp [] 0 (S j) c, s)
           | None => (CDone (VNeu (NVar (nctx - S j)) []), s)
           end in
@@ -2728,8 +2721,8 @@ Section CallByNeed.
 
   Definition cbn_run (le : conv_pb) (t u : term) : cbn_answer :=
     let s := cbn_init in
-    let (c1, s) := new_entry t [] (NSInput false) s in
-    let (c2, s) := new_entry u [] (NSInput true) s in
+    let (c1, s) := new_entry t [] s in
+    let (c2, s) := new_entry u [] s in
     match conv_term cbn_depth nctx le env_empty c1 env_empty c2 [] s with
     | COk (true, _, _) => CbnYes
     | COk (false, _, _) => CbnNoRule
@@ -2738,16 +2731,15 @@ Section CallByNeed.
 
 End CallByNeed.
 
-(** The answer of the fast path, with the reason for a "don't know". [stress] collects at
-  every allocation; the answer must not depend on it. *)
+(** The answer of the fast path, with the reason for a "don't know". *)
 Definition cbn_conv_answer {cf : checker_flags} (X_type : abstract_env_impl)
-  (X : X_type.π2.π1) (stress : bool) (le : conv_pb) (Γ : context) (t u : term) : cbn_answer :=
-  cbn_run X_type X Γ #|Γ| stress le t u.
+  (X : X_type.π2.π1) (le : conv_pb) (Γ : context) (t u : term) : cbn_answer :=
+  cbn_run X_type X Γ #|Γ| le t u.
 
 (** [true]: [t] and [u] are convertible at [le] in [Γ]. [false]: don't know. *)
 Definition cbn_conv {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
   (le : conv_pb) (Γ : context) (t u : term) : bool :=
-  match cbn_conv_answer X_type X false le Γ t u with
+  match cbn_conv_answer X_type X le Γ t u with
   | CbnYes => true
   | _ => false
   end.

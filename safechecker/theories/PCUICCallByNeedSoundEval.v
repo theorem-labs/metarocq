@@ -82,7 +82,7 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
   ** Collections
 
-  A run may collect, under [stress] or when [st_room] is spent. A collection renames every
+  A run may collect when [st_room] is spent. A collection renames every
   address, so the ghost a call ends with is not an extension of the one it started with:
   every clause of [machine_sound] says instead that the roots come back renamed and stand,
   under the new ghost, for what they stood for ([gren]). The ghost of the new heap is built
@@ -382,7 +382,7 @@ Qed.
 Section Eval.
   Context {cf : checker_flags}.
   Context (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context (Γ : context) (nctx : nat) (stress : bool).
+  Context (Γ : context) (nctx : nat).
 
   (** The environment the readings live in: [Γ] under [lvl - nctx] fresh variables. [Σ] is
      the well-formed environment the abstract one [X] stands for; the hook has both, and the
@@ -622,13 +622,13 @@ Section Eval.
 
   (** [new_entry], [once_body] and [delta] touch only the memo. *)
 
-  Lemma new_entry_shape t u ns s :
-    (snd (new_entry X_type X t u ns s)).(st_heap) = s.(st_heap)
-    /\ (snd (new_entry X_type X t u ns s)).(st_next) = s.(st_next)
-    /\ (snd (new_entry X_type X t u ns s)).(st_room) = s.(st_room)
-    /\ (snd (new_entry X_type X t u ns s)).(st_steps) = s.(st_steps)
-    /\ (snd (new_entry X_type X t u ns s)).(st_gam) = s.(st_gam)
-    /\ ((snd (new_entry X_type X t u ns s)).(st_memo)).(m_delta)
+  Lemma new_entry_shape t u s :
+    (snd (new_entry X_type X t u s)).(st_heap) = s.(st_heap)
+    /\ (snd (new_entry X_type X t u s)).(st_next) = s.(st_next)
+    /\ (snd (new_entry X_type X t u s)).(st_room) = s.(st_room)
+    /\ (snd (new_entry X_type X t u s)).(st_steps) = s.(st_steps)
+    /\ (snd (new_entry X_type X t u s)).(st_gam) = s.(st_gam)
+    /\ ((snd (new_entry X_type X t u s)).(st_memo)).(m_delta)
        = (s.(st_memo)).(m_delta).
   Proof. repeat split; reflexivity. Qed.
 
@@ -656,17 +656,17 @@ Section Eval.
     - intros he. inversion he; subst. repeat split; reflexivity.
     - destruct (find_inst u insts) as [[i t]|].
       + intros he. inversion he; subst. repeat split; reflexivity.
-      + destruct (new_entry X_type X body u (NSConst kn) s) as [c s1] eqn:e1.
+      + destruct (new_entry X_type X body u s) as [c s1] eqn:e1.
         intros he. inversion he; subst. cbn.
         change s1 with (snd (c, s1)). rewrite <- e1.
-        destruct (new_entry_shape body u (NSConst kn) s) as (p1 & p2 & p3 & p4 & p5 & _).
+        destruct (new_entry_shape body u s) as (p1 & p2 & p3 & p4 & p5 & _).
         rewrite p1, p2, p3, p4, p5. repeat split; reflexivity.
     - destruct (abstract_env_lookup X kn) as [[cb|mib]|]; [|discriminate|discriminate].
       destruct cb.(cst_body) as [body|].
-      + destruct (new_entry X_type X body u (NSConst kn) s) as [c s1] eqn:e1.
+      + destruct (new_entry X_type X body u s) as [c s1] eqn:e1.
         intros he. inversion he; subst. cbn.
         change s1 with (snd (c, s1)). rewrite <- e1.
-        destruct (new_entry_shape body u (NSConst kn) s) as (p1 & p2 & p3 & p4 & p5 & _).
+        destruct (new_entry_shape body u s) as (p1 & p2 & p3 & p4 & p5 & _).
         rewrite p1, p2, p3, p4, p5. repeat split; reflexivity.
       + intros he. inversion he; subst. repeat split; reflexivity.
   Qed.
@@ -955,7 +955,7 @@ Section Eval.
          /\ cb.(cst_body) = Some body
          /\ (s1.(st_memo)).(m_codes)
             = PTree.set ((s.(st_memo)).(m_ncode))
-                (mkEntry body ui (NSConst kn) (wf_term_univs X_type X (inst_code ui body)))
+                (mkEntry body ui (wf_term_univs X_type X (inst_code ui body)))
                 ((s.(st_memo)).(m_codes)).
   Proof.
     intros hd he. unfold delta in he.
@@ -1943,16 +1943,16 @@ Section Eval.
       exact (gk_hyg _ _ _ hok hc _ _ hb).
   Qed.
 
-  (** [alloc] collects when [gc_due] says so, whatever [stress] is: the roots come back
+  (** [alloc] collects when [gc_due] says so: the roots come back
     renamed ([collect_ghost]) and the new cell is allocated in the new heap. *)
   Lemma alloc_sound lo G cl u rs s a rs' s' :
     gok lo G s -> g_cell G cl u -> (ctx_hyg -> on_free_vars xpredT u) ->
-    alloc stress cl rs s = COk (a, rs', s') ->
+    alloc cl rs s = COk (a, rs', s') ->
     exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some u.
   Proof.
     intros hok hcl hhu he.
-    destruct (gc_due stress s) eqn:eg.
-    - rewrite (alloc_gc stress cl rs s eg) in he.
+    destruct (gc_due s) eqn:eg.
+    - rewrite (alloc_gc cl rs s eg) in he.
       destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:ec; [|discriminate].
       destruct (collect_ghost lo G s hok _ _ _ ec) as (G1 & hc1 & hf1 & hok1).
       inversion hf1 as [|r1 r1' l1 l1' hp1 hf1']; subst.
@@ -1964,7 +1964,7 @@ Section Eval.
       split.
       + intros i e hi. apply (gx_codes hx2). rewrite hc1. exact hi.
       + exact (Forall2_gpres_r_ext _ _ _ _ _ hf1' hx2).
-    - rewrite (alloc_no_gc stress cl rs s eg) in he. inversion he; subst; clear he.
+    - rewrite (alloc_no_gc cl rs s eg) in he. inversion he; subst; clear he.
       destruct (alloc_now_sound _ _ _ _ _ hok hcl hhu) as (G2 & hx2 & hok2 & ha2).
       exists lo, G2. split; [exact (gren_ext _ _ _ hx2)|]. split; [exact hok2|exact ha2].
   Qed.
@@ -1973,7 +1973,7 @@ Section Eval.
 
   Lemma gam_sound lo G j rs s a rs' s' :
     gok lo G s ->
-    gam X_type X Γ nctx stress j rs s = COk (a, rs', s') ->
+    gam X_type X Γ nctx j rs s = COk (a, rs', s') ->
     exists lo' G' t, gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some t
                      /\ cred (tRel (lvl - nctx + j)) t.
   Proof.
@@ -1988,7 +1988,7 @@ Section Eval.
         gext G G0 ->
         ctx_den Γ nctx lvl j = Some t -> g_cell G0 cl t -> (ctx_hyg -> on_free_vars xpredT t) ->
         gok lo G0 s1 ->
-        (match alloc stress cl rs s1 with
+        (match alloc cl rs s1 with
          | COk (a2, rs2, s2) =>
              COk (a2, rs2, set_gam (PTree.set (key_of_succ_nat j) a2 (st_gam s2)) s2)
          | CFail w => CFail w
@@ -1996,7 +1996,7 @@ Section Eval.
         exists lo' G' t2, gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some t2
                           /\ cred (tRel (lvl - nctx + j)) t2).
       { intros G0 cl t s1 hx0 hden hcl hht hok1 hm.
-        destruct (alloc stress cl rs s1) as [[[a1 rs1] s2]|w] eqn:ea; [|discriminate].
+        destruct (alloc cl rs s1) as [[[a1 rs1] s2]|w] eqn:ea; [|discriminate].
         inversion hm; subst. clear hm.
         destruct (alloc_sound lo G0 cl t rs s1 _ _ _ hok1 hcl hht ea)
           as (lo2 & G' & hren & hok2 & hga).
@@ -2018,12 +2018,12 @@ Section Eval.
         - exact (gk_memo _ _ _ hok2).
         - exact (gk_hyg _ _ _ hok2). }
       destruct decl.(decl_body) as [b|] eqn:eb.
-      + destruct (new_entry X_type X b [] (NSCtx j) s) as [c s1] eqn:e1.
-        assert (hc : c = fst (new_entry X_type X b [] (NSCtx j) s)) by (rewrite e1; reflexivity).
-        assert (hs1 : s1 = snd (new_entry X_type X b [] (NSCtx j) s))
+      + destruct (new_entry X_type X b [] s) as [c s1] eqn:e1.
+        assert (hc : c = fst (new_entry X_type X b [] s)) by (rewrite e1; reflexivity).
+        assert (hs1 : s1 = snd (new_entry X_type X b [] s))
           by (rewrite e1; reflexivity).
         assert (hct : c.(c_term) = b) by (rewrite hc, new_entry_term; reflexivity).
-        destruct (new_entry_shape b [] (NSCtx j) s) as (q1 & q2 & q3 & _ & q5 & _).
+        destruct (new_entry_shape b [] s) as (q1 & q2 & q3 & _ & q5 & _).
         destruct (gk_memo _ _ _ hok) as (hmi & hmo & hcodes & hokb & hhyg).
         pose proof hmi as (hf & _).
         assert (hgrow : forall i e, PTree.get i (gc G) = Some e ->
@@ -2031,8 +2031,8 @@ Section Eval.
         { intros i e hi. rewrite hs1, new_entry_codes.
           exact (memo_codes_set_mono _ _ i e hf (hcodes i e hi)). }
         assert (hm1 : mok ((s1.(st_memo)).(m_codes)) s1).
-        { rewrite hs1. split; [exact (memo_inv_new_entry X_type X b [] (NSCtx j) s hmi)|].
-          split; [exact (new_entry_memo_ok X_type X b [] (NSCtx j) s hmo)|].
+        { rewrite hs1. split; [exact (memo_inv_new_entry X_type X b [] s hmi)|].
+          split; [exact (new_entry_memo_ok X_type X b [] s hmo)|].
           split; [intros i e hi; exact hi|].
           split.
           - intros i e hi. rewrite new_entry_codes in hi.
@@ -2054,7 +2054,7 @@ Section Eval.
             [exact hok|rewrite hs1; exact q1|rewrite hs1; exact q2|rewrite hs1; exact q5
             |exact hgrow|exact hm1]. }
         assert (hcok : cok G1 c).
-        { exists (mkEntry b [] (NSCtx j) (wf_term_univs X_type X (inst_code [] b))).
+        { exists (mkEntry b [] (wf_term_univs X_type X (inst_code [] b))).
           split.
           - unfold G1. cbn [gc]. rewrite hc, hs1. apply new_entry_in_table.
           - rewrite hc. apply new_entry_code_inv. }
@@ -2079,7 +2079,7 @@ Section Eval.
 
   Lemma env_var_sound lo G n e rs s x rs' s' tu :
     gok lo G s -> g_susp G e (tRel n) tu ->
-    env_var X_type X Γ nctx stress n e rs s = COk (x, rs', s') ->
+    env_var X_type X Γ nctx n e rs s = COk (x, rs', s') ->
     exists lo' G' t, gren G G' rs rs' /\ gok lo' G' s' /\ g_slot G' x t /\ cred tu t.
   Proof.
     intros hok hsusp he. unfold env_var in he.
@@ -2092,7 +2092,7 @@ Section Eval.
       split; [exact hgt|].
       rewrite h2, (lift_rel_lt (lvl - nctx + e.(ev_goff)) n #|e.(ev_vals)|); [|lia].
       rewrite (subst_rel_eq ts 0 n t n hnt eq_refl), lift0_id. apply cred_refl.
-    - destruct (gam X_type X Γ nctx stress (n - e.(ev_nvals) + e.(ev_goff)) rs s)
+    - destruct (gam X_type X Γ nctx (n - e.(ev_nvals) + e.(ev_goff)) rs s)
         as [[[a1 rs1] s1]|w] eqn:eg; [|discriminate].
       inversion he; subst. clear he.
       destruct (gam_sound lo G (n - e.(ev_nvals) + e.(ev_goff)) rs s _ _ _ hok eg)
@@ -2114,7 +2114,7 @@ Section Eval.
 
   Lemma arg_slot_sound lo G e c rs s x rs' s' tu :
     gok lo G s -> g_susp G e c.(c_term) tu -> cok G c ->
-    arg_slot X_type X Γ nctx stress e c rs s = COk (x, rs', s') ->
+    arg_slot X_type X Γ nctx e c rs s = COk (x, rs', s') ->
     exists lo' G' t, gren G G' rs rs' /\ gok lo' G' s' /\ g_slot G' x t /\ cred tu t.
   Proof.
     intros hok hsusp hcok he. unfold arg_slot in he.
@@ -2133,7 +2133,7 @@ Section Eval.
 
   Lemma materialize_sound lo G x rs s a rs' s' t :
     gok lo G s -> g_slot G x t ->
-    materialize X_type X stress x rs s = COk (a, rs', s') ->
+    materialize X_type X x rs s = COk (a, rs', s') ->
     exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some t.
   Proof.
     intros hok hx he.
@@ -2208,7 +2208,7 @@ Section Eval.
 
   Lemma bind_sound lo G x body rs s y rs' s' t :
     gok lo G s -> g_slot G x t -> cok G body ->
-    bind X_type X stress x body rs s = COk (y, rs', s') ->
+    bind X_type X x body rs s = COk (y, rs', s') ->
     exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ g_slot G' y t.
   Proof.
     intros hok hx hcb he. unfold bind in he.
@@ -2228,7 +2228,7 @@ Section Eval.
       destruct b.
       + inversion he; subst. clear he.
         exists lo, G. split; [apply gren_refl|]. split; [exact hok1|exact hx].
-      + destruct (materialize X_type X stress (SInl vals n o c) rs s1)
+      + destruct (materialize X_type X (SInl vals n o c) rs s1)
           as [[[a1 rs1] s2]|w] eqn:em; [|discriminate].
         destruct (materialize_sound lo G (SInl vals n o c) rs s1 a1 rs1 s2 t hok1 hx em)
           as (lo2 & G2 & hren & hok2 & hga).
@@ -2240,7 +2240,7 @@ Section Eval.
 
   Lemma mat_all_sound : forall d lo G l ts rs s al rs' s',
     gok lo G s -> g_slots G l ts ->
-    mat_all X_type X stress d l rs s = COk (al, rs', s') ->
+    mat_all X_type X d l rs s = COk (al, rs', s') ->
     exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ g_addrs G' al ts.
   Proof.
     intros d. induction d as [|k ih]; intros lo G l ts rs s al rs' s' hok hl he;
@@ -2249,14 +2249,14 @@ Section Eval.
          exists lo, G; (split; [apply gren_refl|]); (split; [exact hok|constructor]).
     - discriminate.
     - inversion hl as [|x' l' tx ts0 hgx hgl hex hets]; subst; clear hl.
-      destruct (materialize X_type X stress x (RSk l :: rs) s) as [[[a1 rs1] s1]|w] eqn:em;
+      destruct (materialize X_type X x (RSk l :: rs) s) as [[[a1 rs1] s1]|w] eqn:em;
         [|discriminate].
       destruct (materialize_sound lo G x (RSk l :: rs) s a1 rs1 s1 tx hok hgx em)
         as (lo1 & G1 & hren1 & hok1 & hga1).
       destruct rs1 as [|r rs1t]; [discriminate he|].
       destruct r as [| | | |l1| |]; try discriminate he.
       destruct (gren_cons _ _ _ _ _ _ hren1) as [hpk hren1']. cbn [gpres] in hpk.
-      destruct (mat_all X_type X stress (k tt) l1 (RA a1 :: rs1t) s1)
+      destruct (mat_all X_type X (k tt) l1 (RA a1 :: rs1t) s1)
         as [[[al1 rs2] s2]|w] eqn:em2; [|discriminate].
       destruct rs2 as [|r rs2t]; [discriminate he|].
       destruct r as [a0| | | | | |]; try discriminate he.
@@ -2289,7 +2289,7 @@ Section Eval.
     gok lo G s -> c.(c_term) = tFix mfix idx0 -> cok G c ->
     g_slots G e.(ev_vals) ts -> e.(ev_nvals) = #|e.(ev_vals)| ->
     g_slots G acc.(ev_vals) tacc -> acc.(ev_nvals) = #|acc.(ev_vals)| ->
-    push_fix_cells stress e c i m acc rs s = COk (e', rs', s') ->
+    push_fix_cells e c i m acc rs s = COk (e', rs', s') ->
     exists lo' G', gren G G' rs rs' /\ gok lo' G' s'
        /\ g_slots G' e'.(ev_vals)
             (List.rev (map (fun j => subst ts 0 (lift (lvl - nctx + e.(ev_goff)) e.(ev_nvals)
@@ -2303,7 +2303,7 @@ Section Eval.
       exists lo, G. split; [apply gren_refl|]. split; [exact hok|].
       cbn [seq map List.rev app]. split; [exact hacc|]. split; [exact hnacc|reflexivity].
     - cbn [push_fix_cells] in he.
-      destruct (alloc stress (CDone (VFix e c i [])) (RE e :: RE acc :: rs) s)
+      destruct (alloc (CDone (VFix e c i [])) (RE e :: RE acc :: rs) s)
         as [[[a1 rs1] s1]|w] eqn:ea; [|discriminate he].
       set (tf := fun j => subst ts 0 (lift (lvl - nctx + e.(ev_goff)) e.(ev_nvals) (tFix mfix j))).
       assert (hcl : g_cell G (CDone (VFix e c i [])) (tf i)).
@@ -2362,27 +2362,27 @@ Section Eval.
   Lemma machine_sound : forall d,
     (forall lo G a rs s v rs' s' t,
         gok lo G s -> G a = Some t ->
-        force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
+        force X_type X Γ nctx d a rs s = COk (v, rs', s') ->
         exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' v u /\ cred t u)
     /\ (forall lo G x stk sts tx rs s v rs' s',
         gok lo G s -> g_slot G x tx -> g_slots G stk sts ->
-        eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+        eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
         exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' v u
                          /\ cred (mkApps tx sts) u)
     /\ (forall lo G e c stk sts tc rs s v rs' s',
         gok lo G s -> g_susp G e c.(c_term) tc -> cok G c -> g_slots G stk sts ->
-        whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+        whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
         exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' v u
                          /\ cred (mkApps tc sts) u)
     /\ (forall lo G e c mfix idx0 idx stk sts tc rs s v rs' s',
         gok lo G s -> c.(c_term) = tFix mfix idx0 ->
         g_susp G e (tFix mfix idx) tc -> cok G c -> g_slots G stk sts ->
-        whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
+        whnf_fix X_type X Γ nctx d e c mfix idx stk rs s = COk (v, rs', s') ->
         exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' v u
                          /\ cred (mkApps tc sts) u)
     /\ (forall lo G v stk sts tv rs s w rs' s',
         gok lo G s -> g_value G v tv -> g_slots G stk sts ->
-        apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
+        apply X_type X Γ nctx d v stk rs s = COk (w, rs', s') ->
         exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' w u
                          /\ cred (mkApps tv sts) u).
   Proof.
@@ -2487,7 +2487,7 @@ Section Eval.
                        |ind ui|ind n ui|ci p scrut brs|pr arg|mfix idx|cmfix cidx|prm];
           try (solve [discriminate he]).
         * (* tRel n *)
-          destruct (env_var X_type X Γ nctx stress n e (RSk stk :: rs0) st)
+          destruct (env_var X_type X Γ nctx n e (RSk stk :: rs0) st)
             as [[[xr rsr] sr]|w] eqn:ev; [|discriminate he].
           destruct rsr as [|r1 rsr']; [discriminate he|].
           destruct r1 as [| | | |lk| |]; try discriminate he.
@@ -2528,7 +2528,7 @@ Section Eval.
              inversion hsts as [|x0 l0 txh sts' hsloth hslots']; subst.
              assert (hcb : cok G (child c 1 b))
                by (apply cok_child; [exact hcok|rewrite <- ec; constructor]).
-             destruct (bind X_type X stress xh (child c 1 b) (RE e :: RSk stk' :: rs0) st)
+             destruct (bind X_type X xh (child c 1 b) (RE e :: RSk stk' :: rs0) st)
                as [[[xb rsb] sb]|w] eqn:eb; [|discriminate he].
              destruct rsb as [|r1 rsb1]; [discriminate he|].
              destruct r1 as [| |ee| | | |]; try discriminate he.
@@ -2559,7 +2559,7 @@ Section Eval.
             by (apply cok_child; [exact hcok|rewrite <- ec; constructor]).
           assert (hc2 : cok G (child c 2 body))
             by (apply cok_child; [exact hcok|rewrite <- ec; constructor]).
-          destruct (arg_slot X_type X Γ nctx stress e (child c 0 b) (RE e :: RSk stk :: rs0) st)
+          destruct (arg_slot X_type X Γ nctx e (child c 0 b) (RE e :: RSk stk :: rs0) st)
             as [[[xa rsa] sa]|w] eqn:ea; [|discriminate he].
           destruct rsa as [|r1 rsa1]; [discriminate he|].
           destruct r1 as [| |ee| | | |]; try discriminate he.
@@ -2571,7 +2571,7 @@ Section Eval.
           destruct (gren_cons _ _ _ _ _ _ hrena) as [hpe hrena1].
           destruct (gren_cons _ _ _ _ _ _ hrena1) as [hpk hrena2].
           cbn [gpres] in hpe, hpk.
-          destruct (bind X_type X stress xa (child c 2 body) (RE ee :: RSk lk :: rsa2) sa)
+          destruct (bind X_type X xa (child c 2 body) (RE ee :: RSk lk :: rsa2) sa)
             as [[[xbnd rsb] sb]|w] eqn:eb; [|discriminate he].
           destruct rsb as [|r1 rsb1]; [discriminate he|].
           destruct r1 as [| |ee2| | | |]; try discriminate he.
@@ -2612,7 +2612,7 @@ Section Eval.
             by (apply cok_child; [exact hcok|rewrite <- ec; constructor]).
           assert (hc0f : cok G (child c 0 f))
             by (apply cok_child; [exact hcok|rewrite <- ec; constructor]).
-          destruct (arg_slot X_type X Γ nctx stress e (child c 1 arg) (RE e :: RSk stk :: rs0) st)
+          destruct (arg_slot X_type X Γ nctx e (child c 1 arg) (RE e :: RSk stk :: rs0) st)
             as [[[xr rsr] sr]|w] eqn:ea; [|discriminate he].
           destruct rsr as [|r1 rsr1]; [discriminate he|].
           destruct r1 as [| |ee| | | |]; try discriminate he.
@@ -2684,7 +2684,7 @@ Section Eval.
              ++ exact hcred'.
           -- (* None: a neutral constant *)
              pose proof (delta_gok lo G k0 ui st None sd hokt ed) as hokd.
-             destruct (mat_all X_type X stress (k tt) stk rs0 sd) as [[[sp rsm] sm]|w] eqn:em;
+             destruct (mat_all X_type X (k tt) stk rs0 sd) as [[[sp rsm] sm]|w] eqn:em;
                [|discriminate he].
              injection he as hv0 hrs hsm; subst v0 rs' s'.
              destruct (mat_all_sound (k tt) lo G stk sts rs0 sd sp rsm sm hokd hsts em)
@@ -2695,7 +2695,7 @@ Section Eval.
              rewrite htc. apply cred_refl.
         * (* tInd i ui *)
           pose proof (g_susp_tind _ _ _ _ _ hsusp) as htc.
-          destruct (mat_all X_type X stress (k tt) stk rs0 st) as [[[sp rsm] sm]|w] eqn:em;
+          destruct (mat_all X_type X (k tt) stk rs0 st) as [[[sp rsm] sm]|w] eqn:em;
             [|discriminate he].
           injection he as hv0 hrs hsm; subst v0 rs' s'.
           destruct (mat_all_sound (k tt) lo G stk sts rs0 st sp rsm sm hokt hsts em)
@@ -2706,7 +2706,7 @@ Section Eval.
           rewrite htc. apply cred_refl.
         * (* tConstruct ind n ui *)
           pose proof (g_susp_construct _ _ _ _ _ _ hsusp) as htc.
-          destruct (mat_all X_type X stress (k tt) stk rs0 st) as [[[sp rsm] sm]|w] eqn:em;
+          destruct (mat_all X_type X (k tt) stk rs0 st) as [[[sp rsm] sm]|w] eqn:em;
             [|discriminate he].
           injection he as hv0 hrs hsm; subst v0 rs' s'.
           destruct (mat_all_sound (k tt) lo G stk sts rs0 st sp rsm sm hokt hsts em)
@@ -2797,7 +2797,7 @@ Section Eval.
              ++ rewrite iota_red_assum by exact hassum. unfold rbr; cbn [bbody bcontext].
                 rewrite hlen', subst_app_simpl, htl. reflexivity.
           } (* VStuckFix, VNeu, VStuck: a stuck match *)
-          all: destruct (mat_all X_type X stress (k tt) stk2 (RE e2 :: rss2) ss)
+          all: destruct (mat_all X_type X (k tt) stk2 (RE e2 :: rss2) ss)
                  as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he];
                destruct rsm as [|r1 rsm1]; [discriminate he|];
                destruct r1 as [| |ee| | | |]; try discriminate he;
@@ -2860,7 +2860,7 @@ Section Eval.
              eapply cred_trans; [apply cred_proj_c; exact hcreds|].
              rewrite hus. apply cred_one. apply red_proj. exact hta.
           } (* VStuckFix, VNeu, VStuck: a stuck projection *)
-          all: destruct (mat_all X_type X stress (k tt) stk2 (RE e2 :: rss2) ss)
+          all: destruct (mat_all X_type X (k tt) stk2 (RE e2 :: rss2) ss)
                  as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he];
                destruct rsm as [|r1 rsm1]; [discriminate he|];
                destruct r1 as [| |ee| | | |]; try discriminate he;
@@ -2896,7 +2896,7 @@ Section Eval.
         destruct (g_susp_inv _ _ _ _ hsusp) as (ts & hts & hnv & htc).
         destruct (nth_error stk (rarg def)) as [x|] eqn:ex.
         2: { (* too few arguments: a fixpoint value *)
-          destruct (mat_all X_type X stress (k tt) stk (RE e :: rs0) s0)
+          destruct (mat_all X_type X (k tt) stk (RE e :: rs0) s0)
             as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he].
           destruct rsm as [|r1 rsm1]; [discriminate he|].
           destruct r1 as [| |ee| | | |]; try discriminate he.
@@ -2914,7 +2914,7 @@ Section Eval.
         assert (hrarg : rarg def < #|sts|).
         { apply nth_error_Some_length in htx. exact htx. }
         (* put the recursive argument in the heap *)
-        destruct (materialize X_type X stress x (RE e :: RSk stk :: rs0) s0)
+        destruct (materialize X_type X x (RE e :: RSk stk :: rs0) s0)
           as [[[a rsa] sa]|w] eqn:ema; [|discriminate he].
         destruct (materialize_sound lo G x (RE e :: RSk stk :: rs0) s0 a rsa sa tx
                     hok hgx ema)
@@ -2953,7 +2953,7 @@ Section Eval.
         1: { (* VCon: unfold the fixpoint *)
            destruct h0 as [| | | | | | | | | |cind cn cu| | | | |]; try discriminate he.
            destruct (g_value_VCon_inv _ _ _ _ hvf) as (targs & huf & hargs).
-           destruct (alloc stress (CDone (VCon (tConstruct cind cn cu) args))
+           destruct (alloc (CDone (VCon (tConstruct cind cn cu) args))
                        (RE e3 :: RSk stkf :: rsf2) sf)
              as [[[a2 rs2] s2]|w] eqn:ea2; [|discriminate he].
            assert (hhuf : ctx_hyg -> on_free_vars xpredT uf).
@@ -2978,7 +2978,7 @@ Section Eval.
            assert (hcok2 : cok G2 c)
              by exact (gren_cok _ _ _ _ _ hren2 (gren_cok _ _ _ _ _ hrenf
                          (gren_cok _ _ _ _ _ hrena hcok))).
-           destruct (push_fix_cells stress e4 c 0 #|mfix| e4
+           destruct (push_fix_cells e4 c 0 #|mfix| e4
                        (RSk (list_set stk4 (rarg def) (SAddr a2)) :: rs4) s2)
              as [[[e' rs3] s3]|w] eqn:ep; [|discriminate he].
            destruct (push_fix_cells_sound #|mfix| lo2 G2 e4 c mfix idx0 ts 0 e4 ts _ s2 e' rs3 s3
@@ -3023,7 +3023,7 @@ Section Eval.
            ++ exact (unfold_fix_rfix ts (lvl - nctx + ev_goff e) (ev_nvals e) mfix idx def edef).
            ++ apply is_constructor_list_set. exact hrarg.
         } (* VStuckFix, VNeu, VStuck: a stuck fixpoint *)
-        all: destruct (mat_all X_type X stress (k tt) stkf (RE e3 :: rsf2) sf)
+        all: destruct (mat_all X_type X (k tt) stkf (RE e3 :: rsf2) sf)
                as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he];
              destruct rsm as [|r1 rsm1]; [discriminate he|];
              destruct r1 as [| |ee| | | |]; try discriminate he;
@@ -3062,7 +3062,7 @@ Section Eval.
              inversion hsts as [|x0 l0 txh sts' hsloth hslots']; subst.
              assert (hcb : cok G (child c 1 b))
                by (apply cok_child; [exact hcok|rewrite <- ec; constructor]).
-             destruct (bind X_type X stress xh (child c 1 b) (RE e :: RSk stk' :: rs0) s0)
+             destruct (bind X_type X xh (child c 1 b) (RE e :: RSk stk' :: rs0) s0)
                as [[[xb rsb] sb]|w] eqn:eb; [|discriminate he].
              destruct rsb as [|r1 rsb1]; [discriminate he|].
              destruct r1 as [| |ee| | | |]; try discriminate he.

@@ -54,7 +54,7 @@ Section HookProof.
     syntactically the hypothesis, and [Qed] is instant. *)
   Lemma cbn_conv_unfold (le : conv_pb) (Γ : context) (t u : term) :
     cbn_conv X_type X le Γ t u
-    = match cbn_run X_type X Γ #|Γ| false le t u with CbnYes => true | _ => false end.
+    = match cbn_run X_type X Γ #|Γ| le t u with CbnYes => true | _ => false end.
   Proof. reflexivity. Qed.
 
   (** [cq] at [L = Q = #|Γ|], read at [Δ = []], for two terms scoped in [Γ]. *)
@@ -81,11 +81,11 @@ Section HookProof.
     assert (hΓ : is_closed_context Γ)
       by exact (wf_local_closed_context (wfΣ := wfΣ) (typing_wf_local htA)).
     rewrite cbn_conv_unfold, cbn_run_eq in hc.
-    destruct (conv_term X_type X Γ #|Γ| false cbn_depth #|Γ| le env_empty (run_c1 X_type X t)
+    destruct (conv_term X_type X Γ #|Γ| cbn_depth #|Γ| le env_empty (run_c1 X_type X t)
                 env_empty (run_c2 X_type X t u) [] (run_s2 X_type X t u))
       as [[[b rs'] s']|w] eqn:Ec; [|discriminate hc].
     destruct b; [|discriminate hc].
-    destruct (spec_all_holds X_type X Γ #|Γ| false Σ wfΣ hΣ eq_refl hΓ hhyg hcio
+    destruct (spec_all_holds X_type X Γ #|Γ| Σ wfΣ hΣ eq_refl hΓ hhyg hcio
                 (rb_sound_holds X_type X Γ #|Γ| Σ wfΣ hΓ hhyg) cbn_depth)
       as (_ & _ & _ & hT & _).
     destruct (hT #|Γ| #|Γ| xH (run_ghost X_type X t u) le env_empty (run_c1 X_type X t)

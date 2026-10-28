@@ -29,7 +29,7 @@ Section Machine.
   (** Weak-head evaluation of [t] in [Γ], from the initial state, with the fuel of a real
     call. *)
   Definition t_run (Γ : context) (t : term) : cbn_res (cbn_value * list root * cbn_state) :=
-    whnf X_type X Γ #|Γ| false cbn_depth env_empty (mkCode String2pos.xH path_nil t) []
+    whnf X_type X Γ #|Γ| cbn_depth env_empty (mkCode String2pos.xH path_nil t) []
       [] cbn_init.
 
   (** ** Iota: the arity of the constructor
@@ -129,7 +129,7 @@ Section Machine.
     refuses the branch, so the fast path gives up with [WShape] and [convert] falls through
     to the full conversion checker. *)
   Lemma cbn_conv_answer_refuses_missing_parameters :
-    cbn_conv_answer X_type X false Conv [] t_iota_short (tSort sProp) = CbnFail WShape.
+    cbn_conv_answer X_type X Conv [] t_iota_short (tSort sProp) = CbnFail WShape.
   Proof. vm_compute. reflexivity. Qed.
 
   Lemma cbn_conv_refuses_missing_parameters :

@@ -168,11 +168,11 @@ Section SeamCounterexample.
     /\ memo_ok X_type X s
     /\ memo_inv X_type X s.
 
-  Definition old_slot_seam (Γ : context) (nctx : nat) (stress : bool) (d : cbn_fuel) : Prop :=
+  Definition old_slot_seam (Γ : context) (nctx : nat) (d : cbn_fuel) : Prop :=
     forall (lvl : nat) (pb : conv_pb) (Ξ : context) (x1 x2 : cbn_slot)
       (rs : list root) (s : cbn_state) (b : bool) (rs' : list root) (s' : cbn_state),
       old_cok Γ nctx lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
-      conv_slot X_type X Γ nctx stress d lvl pb x1 x2 rs s = COk (b, rs', s') ->
+      conv_slot X_type X Γ nctx d lvl pb x1 x2 rs s = COk (b, rs', s') ->
       Forall2 (old_root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
       /\ old_cok Γ nctx lvl s'
       /\ (b = true ->
@@ -182,12 +182,12 @@ Section SeamCounterexample.
             is_open_term Ξ t1 -> is_open_term Ξ t2 ->
             ∥ Σ ;;; Ξ ⊢ t1 ≤[pb] t2 ∥).
 
-  Definition old_term_seam (Γ : context) (nctx : nat) (stress : bool) (d : cbn_fuel) : Prop :=
+  Definition old_term_seam (Γ : context) (nctx : nat) (d : cbn_fuel) : Prop :=
     forall (lvl : nat) (pb : conv_pb) (Ξ : context) (e1 : cbn_env) (c1 : code)
       (e2 : cbn_env) (c2 : code) (rs : list root) (s : cbn_state) (b : bool)
       (rs' : list root) (s' : cbn_state),
       old_cok Γ nctx lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
-      conv_term X_type X Γ nctx stress d lvl pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      conv_term X_type X Γ nctx d lvl pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
       Forall2 (old_root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
       /\ old_cok Γ nctx lvl s'
       /\ (b = true ->
@@ -211,7 +211,7 @@ Section SeamCounterexample.
   (** The run, by computation: it answers [false], and the context cell of [x] is at
     address 1 and holds [O]. *)
   Lemma sc_term_run :
-    match conv_term X_type X w_Γ 1 false cbn_depth 1 Conv env_empty (run_c1 X_type X w_t)
+    match conv_term X_type X w_Γ 1 cbn_depth 1 Conv env_empty (run_c1 X_type X w_t)
             env_empty (run_c2 X_type X w_t w_u) [] (run_s2 X_type X w_t w_u) with
     | COk (b, rs, s) =>
         b = false /\ rs = []
@@ -222,7 +222,7 @@ Section SeamCounterexample.
   Proof. vm_compute. repeat split. Qed.
 
   Lemma sc_slot_run :
-    match conv_slot X_type X w_Γ 1 false cbn_depth 1 Conv
+    match conv_slot X_type X w_Γ 1 cbn_depth 1 Conv
             (SInl [] 0 0 (run_c1 X_type X w_t)) (SInl [] 0 0 (run_c2 X_type X w_t w_u))
             [] (run_s2 X_type X w_t w_u) with
     | COk (_, _, s) =>
@@ -262,11 +262,11 @@ Section SeamCounterexample.
     match goal with h : mkApps w_O [] = _ |- _ => cbv [mkApps w_O] in h; discriminate h end.
   Qed.
 
-  Lemma term_seam_false : ~ old_term_seam w_Γ 1 false cbn_depth.
+  Lemma term_seam_false : ~ old_term_seam w_Γ 1 cbn_depth.
   Proof.
     intros hseam.
     pose proof sc_term_run as hrun.
-    destruct (conv_term X_type X w_Γ 1 false cbn_depth 1 Conv env_empty
+    destruct (conv_term X_type X w_Γ 1 cbn_depth 1 Conv env_empty
                 (run_c1 X_type X w_t) env_empty (run_c2 X_type X w_t w_u) []
                 (run_s2 X_type X w_t w_u)) as [[[b rs] s']|w] eqn:E;
       [|contradiction hrun].
@@ -278,11 +278,11 @@ Section SeamCounterexample.
     exact (sc_not_old_cok s' hg hh hcok).
   Qed.
 
-  Lemma slot_seam_false : ~ old_slot_seam w_Γ 1 false cbn_depth.
+  Lemma slot_seam_false : ~ old_slot_seam w_Γ 1 cbn_depth.
   Proof.
     intros hseam.
     pose proof sc_slot_run as hrun.
-    destruct (conv_slot X_type X w_Γ 1 false cbn_depth 1 Conv
+    destruct (conv_slot X_type X w_Γ 1 cbn_depth 1 Conv
                 (SInl [] 0 0 (run_c1 X_type X w_t)) (SInl [] 0 0 (run_c2 X_type X w_t w_u))
                 [] (run_s2 X_type X w_t w_u)) as [[[b rs] s']|w] eqn:E;
       [|contradiction hrun].
@@ -306,7 +306,7 @@ End SeamCounterexample.
 
   The cause is a cell left in the heap by an earlier binder. The lambda row allocates
   [CDone (VNeu (NVar lvl) [])] for its fresh variable, and the cell stays after the
-  comparison comes back out of the binder (no collection runs unless [stress] is set or
+  comparison comes back out of the binder (no collection runs unless
   [st_room] is spent). At level [lvl] the cell reads [tRel (lvl - S lvl)], which is [tRel 0]
   by the truncation of [nat] subtraction; at [S lvl] it reads [tRel (S lvl - S lvl)], which is
   [tRel 0] again; but the lifted ghost is [tRel 1], and [tRel 1] does not reduce to [tRel 0].

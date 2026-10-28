@@ -63,14 +63,14 @@ Qed.
 
 (** ** The two cases of [alloc]: without and with a collection *)
 
-Lemma alloc_no_gc (b : bool) (cl : cbn_cell) (rs : list root) (s : cbn_state) :
-  gc_due b s = false ->
-  alloc b cl rs s = COk (fst (alloc_now cl s), rs, snd (alloc_now cl s)).
+Lemma alloc_no_gc (cl : cbn_cell) (rs : list root) (s : cbn_state) :
+  gc_due s = false ->
+  alloc cl rs s = COk (fst (alloc_now cl s), rs, snd (alloc_now cl s)).
 Proof. intros h. unfold alloc. rewrite h. destruct (alloc_now cl s). reflexivity. Qed.
 
-Lemma alloc_gc (b : bool) (cl : cbn_cell) (rs : list root) (s : cbn_state) :
-  gc_due b s = true ->
-  alloc b cl rs s
+Lemma alloc_gc (cl : cbn_cell) (rs : list root) (s : cbn_state) :
+  gc_due s = true ->
+  alloc cl rs s
   = match collect (RC cl :: rs) s with
     | COk (RC cl' :: rs', s') => COk (fst (alloc_now cl' s'), rs', snd (alloc_now cl' s'))
     | COk _ => CFail WRoots
@@ -85,45 +85,44 @@ Qed.
 Section CtxMemo.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Γ : context) (nctx : nat). (* nctx = #|Γ| *)
-  Context (stress : bool).
 
   (** ** What [new_entry] does to the state *)
 
-  Lemma new_entry_code (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    fst (new_entry X_type X t u ns s)
+  Lemma new_entry_code (t : term) (u : Instance.t) (s : cbn_state) :
+    fst (new_entry X_type X t u s)
     = mkCode ((s.(st_memo)).(m_ncode)) path_nil (inst_code u t).
   Proof. reflexivity. Qed.
 
-  Lemma new_entry_codes (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    ((snd (new_entry X_type X t u ns s)).(st_memo)).(m_codes)
+  Lemma new_entry_codes (t : term) (u : Instance.t) (s : cbn_state) :
+    ((snd (new_entry X_type X t u s)).(st_memo)).(m_codes)
     = PTree.set ((s.(st_memo)).(m_ncode))
-        (mkEntry t u ns (wf_term_univs X_type X (inst_code u t)))
+        (mkEntry t u (wf_term_univs X_type X (inst_code u t)))
         ((s.(st_memo)).(m_codes)).
   Proof. reflexivity. Qed.
 
-  Lemma new_entry_ncode (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    ((snd (new_entry X_type X t u ns s)).(st_memo)).(m_ncode)
+  Lemma new_entry_ncode (t : term) (u : Instance.t) (s : cbn_state) :
+    ((snd (new_entry X_type X t u s)).(st_memo)).(m_ncode)
     = key_succ ((s.(st_memo)).(m_ncode)).
   Proof. reflexivity. Qed.
 
-  Lemma new_entry_heap (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (snd (new_entry X_type X t u ns s)).(st_heap) = s.(st_heap).
+  Lemma new_entry_heap (t : term) (u : Instance.t) (s : cbn_state) :
+    (snd (new_entry X_type X t u s)).(st_heap) = s.(st_heap).
   Proof. reflexivity. Qed.
 
-  Lemma new_entry_next (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (snd (new_entry X_type X t u ns s)).(st_next) = s.(st_next).
+  Lemma new_entry_next (t : term) (u : Instance.t) (s : cbn_state) :
+    (snd (new_entry X_type X t u s)).(st_next) = s.(st_next).
   Proof. reflexivity. Qed.
 
-  Lemma new_entry_gam (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (snd (new_entry X_type X t u ns s)).(st_gam) = s.(st_gam).
+  Lemma new_entry_gam (t : term) (u : Instance.t) (s : cbn_state) :
+    (snd (new_entry X_type X t u s)).(st_gam) = s.(st_gam).
   Proof. reflexivity. Qed.
 
-  Lemma new_entry_term (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (fst (new_entry X_type X t u ns s)).(c_term) = inst_code u t.
+  Lemma new_entry_term (t : term) (u : Instance.t) (s : cbn_state) :
+    (fst (new_entry X_type X t u s)).(c_term) = inst_code u t.
   Proof. reflexivity. Qed.
 
-  Lemma new_entry_entry (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    (fst (new_entry X_type X t u ns s)).(c_entry) = (s.(st_memo)).(m_ncode).
+  Lemma new_entry_entry (t : term) (u : Instance.t) (s : cbn_state) :
+    (fst (new_entry X_type X t u s)).(c_entry) = (s.(st_memo)).(m_ncode).
   Proof. reflexivity. Qed.
 
   (** ** The entry invariant *)
@@ -148,8 +147,8 @@ Section CtxMemo.
     ((s'.(st_memo)).(m_codes)) = ((s.(st_memo)).(m_codes)) -> memo_ok s -> memo_ok s'.
   Proof. intros he h i e hi. rewrite he in hi. exact (h i e hi). Qed.
 
-  Lemma new_entry_memo_ok (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    memo_ok s -> memo_ok (snd (new_entry X_type X t u ns s)).
+  Lemma new_entry_memo_ok (t : term) (u : Instance.t) (s : cbn_state) :
+    memo_ok s -> memo_ok (snd (new_entry X_type X t u s)).
   Proof.
     intros h i e hi. rewrite new_entry_codes in hi.
     destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
@@ -160,15 +159,15 @@ Section CtxMemo.
 
   (** The code [new_entry] returns satisfies [code_inv] for the entry it added, and the
     table holds that entry at the code's index. *)
-  Lemma new_entry_code_inv (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    code_inv (mkEntry t u ns (wf_term_univs X_type X (inst_code u t)))
-      (fst (new_entry X_type X t u ns s)).
+  Lemma new_entry_code_inv (t : term) (u : Instance.t) (s : cbn_state) :
+    code_inv (mkEntry t u (wf_term_univs X_type X (inst_code u t)))
+      (fst (new_entry X_type X t u s)).
   Proof. rewrite new_entry_code. apply code_inv_root. Qed.
 
-  Lemma new_entry_in_table (t : term) (u : Instance.t) (ns : code_ns) (s : cbn_state) :
-    PTree.get ((fst (new_entry X_type X t u ns s)).(c_entry))
-      (((snd (new_entry X_type X t u ns s)).(st_memo)).(m_codes))
-    = Some (mkEntry t u ns (wf_term_univs X_type X (inst_code u t))).
+  Lemma new_entry_in_table (t : term) (u : Instance.t) (s : cbn_state) :
+    PTree.get ((fst (new_entry X_type X t u s)).(c_entry))
+      (((snd (new_entry X_type X t u s)).(st_memo)).(m_codes))
+    = Some (mkEntry t u (wf_term_univs X_type X (inst_code u t))).
   Proof. rewrite new_entry_codes, new_entry_entry. apply PTree.gss. Qed.
 
   (** Under [memo_ok], the boolean [entry_wf] reads is the universe check of the entry's
@@ -235,9 +234,9 @@ Section CtxMemo.
       end
     end.
 
-  Lemma new_entry_state_ok (lo : positive) (t : term) (u : Instance.t) (ns : code_ns)
+  Lemma new_entry_state_ok (lo : positive) (t : term) (u : Instance.t)
       (s : cbn_state) :
-    state_ok lo s -> state_ok lo (snd (new_entry X_type X t u ns s)).
+    state_ok lo s -> state_ok lo (snd (new_entry X_type X t u s)).
   Proof.
     intros [h1 h2 h3]. split; [rewrite new_entry_next, new_entry_heap; exact h1 | | ].
     - rewrite new_entry_next, new_entry_heap. exact h2.
@@ -261,17 +260,17 @@ Section CtxMemo.
   (** ** The frame of a call *)
 
   Definition run_s1 (t : term) : cbn_state :=
-    snd (new_entry X_type X t [] (NSInput false) cbn_init).
+    snd (new_entry X_type X t [] cbn_init).
   Definition run_c1 (t : term) : code :=
-    fst (new_entry X_type X t [] (NSInput false) cbn_init).
+    fst (new_entry X_type X t [] cbn_init).
   Definition run_s2 (t u : term) : cbn_state :=
-    snd (new_entry X_type X u [] (NSInput true) (run_s1 t)).
+    snd (new_entry X_type X u [] (run_s1 t)).
   Definition run_c2 (t u : term) : code :=
-    fst (new_entry X_type X u [] (NSInput true) (run_s1 t)).
+    fst (new_entry X_type X u [] (run_s1 t)).
 
   Lemma cbn_run_eq (le : conv_pb) (t u : term) :
-    cbn_run X_type X Γ nctx stress le t u
-    = match conv_term X_type X Γ nctx stress cbn_depth nctx le
+    cbn_run X_type X Γ nctx le t u
+    = match conv_term X_type X Γ nctx cbn_depth nctx le
               env_empty (run_c1 t) env_empty (run_c2 t u) [] (run_s2 t u) with
       | COk (true, _, _) => CbnYes
       | COk (false, _, _) => CbnNoRule
@@ -279,10 +278,10 @@ Section CtxMemo.
       end.
   Proof.
     unfold cbn_run, run_c1, run_c2, run_s1, run_s2.
-    rewrite (surjective_pairing (new_entry X_type X t [] (NSInput false) cbn_init)).
+    rewrite (surjective_pairing (new_entry X_type X t [] cbn_init)).
     cbv beta iota zeta.
-    rewrite (surjective_pairing (new_entry X_type X u [] (NSInput true)
-      (snd (new_entry X_type X t [] (NSInput false) cbn_init)))).
+    rewrite (surjective_pairing (new_entry X_type X u []
+      (snd (new_entry X_type X t [] cbn_init)))).
     cbv beta iota zeta. reflexivity.
   Qed.
 
@@ -318,9 +317,9 @@ Section CtxMemo.
   Lemma run_s2_codes (t u : term) :
     (((run_s2 t u).(st_memo)).(m_codes))
     = PTree.set (key_succ String2pos.xH)
-        (mkEntry u [] (NSInput true) (wf_term_univs X_type X u))
+        (mkEntry u [] (wf_term_univs X_type X u))
         (PTree.set String2pos.xH
-           (mkEntry t [] (NSInput false) (wf_term_univs X_type X t))
+           (mkEntry t [] (wf_term_univs X_type X t))
            (PTree.empty code_entry)).
   Proof.
     unfold run_s2, run_s1. rewrite new_entry_codes, new_entry_ncode, new_entry_codes.
@@ -329,7 +328,7 @@ Section CtxMemo.
 
   Lemma run_c1_in_table (t u : term) :
     PTree.get ((run_c1 t).(c_entry)) (((run_s2 t u).(st_memo)).(m_codes))
-    = Some (mkEntry t [] (NSInput false) (wf_term_univs X_type X t)).
+    = Some (mkEntry t [] (wf_term_univs X_type X t)).
   Proof.
     rewrite run_s2_codes, run_c1_entry.
     rewrite PTree.gso by (cbn [key_succ]; discriminate). apply PTree.gss.
@@ -337,15 +336,15 @@ Section CtxMemo.
 
   Lemma run_c2_in_table (t u : term) :
     PTree.get ((run_c2 t u).(c_entry)) (((run_s2 t u).(st_memo)).(m_codes))
-    = Some (mkEntry u [] (NSInput true) (wf_term_univs X_type X u)).
+    = Some (mkEntry u [] (wf_term_univs X_type X u)).
   Proof. rewrite run_s2_codes, run_c2_entry. apply PTree.gss. Qed.
 
   Lemma run_c1_code_inv (t : term) :
-    code_inv (mkEntry t [] (NSInput false) (wf_term_univs X_type X t)) (run_c1 t).
-  Proof. unfold run_c1. apply (new_entry_code_inv t [] (NSInput false) cbn_init). Qed.
+    code_inv (mkEntry t [] (wf_term_univs X_type X t)) (run_c1 t).
+  Proof. unfold run_c1. apply (new_entry_code_inv t [] cbn_init). Qed.
 
   Lemma run_c2_code_inv (t u : term) :
-    code_inv (mkEntry u [] (NSInput true) (wf_term_univs X_type X u)) (run_c2 t u).
-  Proof. unfold run_c2. apply (new_entry_code_inv u [] (NSInput true) (run_s1 t)). Qed.
+    code_inv (mkEntry u [] (wf_term_univs X_type X u)) (run_c2 t u).
+  Proof. unfold run_c2. apply (new_entry_code_inv u [] (run_s1 t)). Qed.
 
 End CtxMemo.
