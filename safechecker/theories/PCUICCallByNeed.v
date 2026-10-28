@@ -8,7 +8,7 @@ From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv.
 
 Import CanonicalTries.
 
-(** * Call-by-need conversion fast path (design CN-1.1 of BET-298)
+(** * Call-by-need conversion fast path
 
   [cbn_conv le Γ t u] evaluates [t] and [u] with a weak-head call-by-need environment
   machine and compares the weak-head values. [true] means that [t] and [u] are convertible
@@ -54,8 +54,8 @@ Import CanonicalTries.
   - Delta: constant bodies are looked up once per [cbn_conv] call and memoised by kername;
     one code entry per (constant, syntactic instance).
 
-  No soundness proofs yet: the comparison theorem is the hook obligation in
-  [PCUICTypeChecker.convert]. *)
+  The soundness theorem of [cbn_conv] is
+  [PCUICCallByNeedSoundHookProof.convert_cbn_sound]. *)
 
 (** ** Keys of the code table, of [st_gam] and of the per-code maps *)
 
@@ -101,19 +101,6 @@ Proof.
     first [ rewrite IH; split; [now intros -> | now intros [= ->]]
           | split; discriminate
           | split; reflexivity ].
-Qed.
-
-Lemma key_succ_not_xH (p : key) : key_succ p <> String2pos.xH.
-Proof. destruct p; discriminate. Qed.
-
-Lemma key_succ_inj (p q : key) : key_succ p = key_succ q -> p = q.
-Proof.
-  revert q; induction p as [p IH|p IH|]; intros [q|q|] H; cbn in H;
-    try discriminate; try reflexivity; injection H as H;
-    first [ now subst
-          | f_equal; now apply IH
-          | now destruct (key_succ_not_xH _ H)
-          | now destruct (key_succ_not_xH _ (eq_sym H)) ].
 Qed.
 
 Lemma key_of_succ_nat_inj (n m : nat) : key_of_succ_nat n = key_of_succ_nat m -> n = m.
@@ -174,11 +161,14 @@ Fixpoint fuel_of_pos (p : positive) (k : unit -> cbn_fuel) : cbn_fuel :=
 (** 2^62 units of recursion depth. *)
 Definition cbn_depth : cbn_fuel := fuel_of_pos 4611686018427387904%positive (fun _ => FO).
 
-(** Step budget of one [cbn_conv] call. *)
+(** Step budget of one [cbn_conv] call. A call that exhausts it answers "don't know", and
+  [convert] then runs [isconv_term], so the value bounds only the time such a call loses;
+  it was chosen by measurement, not derived. *)
 Definition cbn_steps : N := 4000000000%N.
 
 (** The collector runs when the cells allocated since the last collection exceed
-  [max (2 * live) gc_min]. *)
+  [max (2 * live) gc_min]. [gc_min] keeps a small heap from being collected after every few
+  allocations; its value was chosen by measurement, not derived. *)
 Definition gc_min : N := 1000000%N.
 
 (** The allocations allowed before the next collection, after a collection that copied
@@ -598,14 +588,8 @@ Fixpoint thash (t : term) : N :=
   | _ => 16%N
   end.
 
-(** The hash is a function of the term: equal terms have equal hashes. *)
-Lemma thash_eq t u : t = u -> thash t = thash u.
-Proof. now intros ->. Qed.
-
 (** ** Machine data *)
 
-(** A slot of an environment: a heap address, or an inline suspension (the fields of an
-  environment, and a code). *)
 Inductive cbn_slot :=
 | SAddr (a : haddr)
 | SInl (vals : list cbn_slot) (nvals goff : nat) (c : code).
@@ -778,7 +762,7 @@ Section Rename.
     end.
 End Rename.
 
-(** ** Step 2a: lemmas on the machine's data structures
+(** ** Lemmas on the machine's data structures
 
   Slots, environments, values, cells and roots: their renamings and the heap addresses they
   hold. Nothing here mentions the heap, reduction, cumulativity or typing.
@@ -803,37 +787,10 @@ Proof.
     + constructor; [apply IH|apply IHl].
 Qed.
 
-(** *** List facts used below, proved here so that no library name is relied on *)
-
-Lemma Forall_app_cbn {A} (P : A -> Prop) (l1 l2 : list A) :
-  Forall P l1 -> Forall P l2 -> Forall P (l1 ++ l2).
-Proof. induction 1; simpl; [trivial|]. intros H2; constructor; auto. Qed.
-
-Lemma Forall2_app_cbn {A B} (R : A -> B -> Prop) (l1 l2 : list A) (m1 m2 : list B) :
-  Forall2 R l1 m1 -> Forall2 R l2 m2 -> Forall2 R (l1 ++ l2) (m1 ++ m2).
-Proof. induction 1; simpl; [trivial|]. intros H2; constructor; auto. Qed.
-
-Lemma Forall2_Forall_r_cbn {A B} (R : A -> B -> Prop) (P : B -> Prop) (l : list A) (m : list B) :
-  Forall2 R l m -> (forall a b, R a b -> P b) -> Forall P m.
-Proof.
-  intros H HP. induction H; constructor; [eapply HP; eassumption|assumption].
-Qed.
-
-Lemma Forall2_length_cbn {A B} (R : A -> B -> Prop) (l : list A) (m : list B) :
-  Forall2 R l m -> #|m| = #|l|.
-Proof. induction 1; simpl; [reflexivity|]. rewrite IHForall2. reflexivity. Qed.
+(** *** List facts used below *)
 
 Lemma length_app_cbn {A} (l1 l2 : list A) : #|l1 ++ l2| = #|l1| + #|l2|.
 Proof. induction l1; simpl; [reflexivity|]. rewrite IHl1. reflexivity. Qed.
-
-Lemma length_rev_cbn {A} (l : list A) : #|List.rev l| = #|l|.
-Proof.
-  induction l as [|a l IH]; simpl; [reflexivity|].
-  rewrite length_app_cbn, IH. simpl. rewrite Nat.add_1_r. reflexivity.
-Qed.
-
-Lemma map_id_cbn {A} (l : list A) : map (fun a : A => a) l = l.
-Proof. induction l as [|a l IH]; simpl; [reflexivity|]. rewrite IH. reflexivity. Qed.
 
 (** *** Renaming by a total map *)
 
@@ -945,350 +902,7 @@ Proof.
     intros IH; inversion IH; subst; reflexivity.
 Qed.
 
-(** *** A total map renames every structure: no failure, and the state is untouched *)
-
-Lemma rn_addrs_pure {G} (u : haddr -> haddr) (l : list haddr) (g : G) :
-  rn_addrs (fun a s => COk (u a, s)) l g = COk (map u l, g).
-Proof.
-  revert g. induction l as [|a l IH]; intros g; simpl; [reflexivity|].
-  rewrite IH. reflexivity.
-Qed.
-
-Lemma rn_slot_pure {G} (u : haddr -> haddr) (x : cbn_slot) (g : G) :
-  rn_slot (fun a s => COk (u a, s)) x g = COk (mp_slot u x, g).
-Proof.
-  revert g. induction x as [a|vs n o c IHvs] using slot_ind'; intros g; [reflexivity|].
-  rewrite rn_slot_SInl.
-  assert (Hl : forall g0 : G,
-            rn_slots (fun a s => COk (u a, s)) vs g0 = COk (map (mp_slot u) vs, g0)).
-  { induction IHvs as [|y vs Hy Hvs IH]; intros g0; simpl; [reflexivity|].
-    rewrite Hy, IH. reflexivity. }
-  rewrite Hl. reflexivity.
-Qed.
-
-Lemma rn_slots_pure {G} (u : haddr -> haddr) (l : list cbn_slot) (g : G) :
-  rn_slots (fun a s => COk (u a, s)) l g = COk (mp_slots u l, g).
-Proof.
-  unfold mp_slots. revert g. induction l as [|y l IH]; intros g; simpl; [reflexivity|].
-  rewrite rn_slot_pure, IH. reflexivity.
-Qed.
-
-Lemma rn_env_pure {G} (u : haddr -> haddr) (e : cbn_env) (g : G) :
-  rn_env (fun a s => COk (u a, s)) e g = COk (mp_env u e, g).
-Proof. unfold rn_env, mp_env. rewrite rn_slots_pure. reflexivity. Qed.
-
-Lemma rn_value_pure {G} (u : haddr -> haddr) (v : cbn_value) (g : G) :
-  rn_value (fun a s => COk (u a, s)) v g = COk (mp_value u v, g).
-Proof.
-  unfold rn_value, mp_value; destruct v;
-    rewrite ?rn_env_pure, ?rn_addrs_pure; cbv beta iota;
-    rewrite ?rn_addrs_pure; reflexivity.
-Qed.
-
-Lemma rn_cell_pure {G} (u : haddr -> haddr) (cl : cbn_cell) (g : G) :
-  rn_cell (fun a s => COk (u a, s)) cl g = COk (mp_cell u cl, g).
-Proof.
-  unfold rn_cell, mp_cell; destruct cl;
-    rewrite ?rn_slots_pure, ?rn_value_pure; reflexivity.
-Qed.
-
-Lemma rn_root_pure {G} (u : haddr -> haddr) (r : root) (g : G) :
-  rn_root (fun a s => COk (u a, s)) r g = COk (mp_root u r, g).
-Proof.
-  unfold rn_root, mp_root; destruct r;
-    rewrite ?rn_slot_pure, ?rn_env_pure, ?rn_value_pure, ?rn_slots_pure, ?rn_addrs_pure,
-      ?rn_cell_pure; reflexivity.
-Qed.
-
-Lemma rn_roots_pure {G} (u : haddr -> haddr) (l : list root) (g : G) :
-  rn_roots (fun a s => COk (u a, s)) l g = COk (mp_roots u l, g).
-Proof.
-  unfold mp_roots. revert g. induction l as [|r l IH]; intros g; simpl; [reflexivity|].
-  rewrite rn_root_pure, IH. reflexivity.
-Qed.
-
-(** *** Renaming with the identity is the identity *)
-
-Lemma mp_slot_id (x : cbn_slot) : mp_slot (fun a => a) x = x.
-Proof.
-  induction x as [a|vs n o c IHvs] using slot_ind'; [reflexivity|].
-  simpl. f_equal. induction IHvs as [|y vs Hy Hvs IH]; simpl; [reflexivity|].
-  rewrite Hy, IH. reflexivity.
-Qed.
-
-Lemma mp_slots_id (l : list cbn_slot) : mp_slots (fun a => a) l = l.
-Proof.
-  unfold mp_slots. induction l as [|y l IH]; simpl; [reflexivity|].
-  rewrite mp_slot_id, IH. reflexivity.
-Qed.
-
-Lemma mp_env_id (e : cbn_env) : mp_env (fun a => a) e = e.
-Proof. unfold mp_env. rewrite mp_slots_id. destruct e; reflexivity. Qed.
-
-Lemma mp_value_id (v : cbn_value) : mp_value (fun a => a) v = v.
-Proof. unfold mp_value; destruct v; rewrite ?mp_env_id, ?map_id_cbn; reflexivity. Qed.
-
-Lemma mp_cell_id (cl : cbn_cell) : mp_cell (fun a => a) cl = cl.
-Proof. unfold mp_cell; destruct cl; rewrite ?mp_slots_id, ?mp_value_id; reflexivity. Qed.
-
-Lemma mp_root_id (r : root) : mp_root (fun a => a) r = r.
-Proof.
-  unfold mp_root; destruct r;
-    rewrite ?mp_slot_id, ?mp_env_id, ?mp_value_id, ?mp_slots_id, ?mp_cell_id, ?map_id_cbn;
-    reflexivity.
-Qed.
-
-Lemma mp_roots_id (l : list root) : mp_roots (fun a => a) l = l.
-Proof.
-  unfold mp_roots. induction l as [|r l IH]; simpl; [reflexivity|].
-  rewrite mp_root_id, IH. reflexivity.
-Qed.
-
-Lemma rn_slot_id {G} (x : cbn_slot) (g : G) :
-  rn_slot (fun a s => COk (a, s)) x g = COk (x, g).
-Proof.
-  etransitivity; [apply (rn_slot_pure (fun a => a) x g)|]. rewrite mp_slot_id. reflexivity.
-Qed.
-
-Lemma rn_slots_id {G} (l : list cbn_slot) (g : G) :
-  rn_slots (fun a s => COk (a, s)) l g = COk (l, g).
-Proof.
-  etransitivity; [apply (rn_slots_pure (fun a => a) l g)|]. rewrite mp_slots_id. reflexivity.
-Qed.
-
-Lemma rn_addrs_id {G} (l : list haddr) (g : G) :
-  rn_addrs (fun a s => COk (a, s)) l g = COk (l, g).
-Proof.
-  etransitivity; [apply (rn_addrs_pure (fun a => a) l g)|]. rewrite map_id_cbn. reflexivity.
-Qed.
-
-Lemma rn_env_id {G} (e : cbn_env) (g : G) :
-  rn_env (fun a s => COk (a, s)) e g = COk (e, g).
-Proof.
-  etransitivity; [apply (rn_env_pure (fun a => a) e g)|]. rewrite mp_env_id. reflexivity.
-Qed.
-
-Lemma rn_value_id {G} (v : cbn_value) (g : G) :
-  rn_value (fun a s => COk (a, s)) v g = COk (v, g).
-Proof.
-  etransitivity; [apply (rn_value_pure (fun a => a) v g)|]. rewrite mp_value_id. reflexivity.
-Qed.
-
-Lemma rn_cell_id {G} (cl : cbn_cell) (g : G) :
-  rn_cell (fun a s => COk (a, s)) cl g = COk (cl, g).
-Proof.
-  etransitivity; [apply (rn_cell_pure (fun a => a) cl g)|]. rewrite mp_cell_id. reflexivity.
-Qed.
-
-Lemma rn_root_id {G} (r : root) (g : G) :
-  rn_root (fun a s => COk (a, s)) r g = COk (r, g).
-Proof.
-  etransitivity; [apply (rn_root_pure (fun a => a) r g)|]. rewrite mp_root_id. reflexivity.
-Qed.
-
-Lemma rn_roots_id {G} (l : list root) (g : G) :
-  rn_roots (fun a s => COk (a, s)) l g = COk (l, g).
-Proof.
-  etransitivity; [apply (rn_roots_pure (fun a => a) l g)|]. rewrite mp_roots_id. reflexivity.
-Qed.
-
-(** *** Renaming by [v] after [u] is renaming by [v] after [u] *)
-
-Lemma mp_slot_comp (u v : haddr -> haddr) (x : cbn_slot) :
-  mp_slot v (mp_slot u x) = mp_slot (fun a => v (u a)) x.
-Proof.
-  induction x as [a|vs n o c IHvs] using slot_ind'; [reflexivity|].
-  simpl. f_equal. rewrite map_map.
-  induction IHvs as [|y vs Hy Hvs IH]; simpl; [reflexivity|].
-  rewrite Hy, IH. reflexivity.
-Qed.
-
-Lemma mp_slots_comp (u v : haddr -> haddr) (l : list cbn_slot) :
-  mp_slots v (mp_slots u l) = mp_slots (fun a => v (u a)) l.
-Proof.
-  unfold mp_slots. induction l as [|y l IH]; simpl; [reflexivity|].
-  rewrite mp_slot_comp, IH. reflexivity.
-Qed.
-
-Lemma mp_env_comp (u v : haddr -> haddr) (e : cbn_env) :
-  mp_env v (mp_env u e) = mp_env (fun a => v (u a)) e.
-Proof. unfold mp_env. simpl. rewrite mp_slots_comp. reflexivity. Qed.
-
-Lemma mp_value_comp (u v : haddr -> haddr) (val : cbn_value) :
-  mp_value v (mp_value u val) = mp_value (fun a => v (u a)) val.
-Proof.
-  unfold mp_value; destruct val; rewrite ?mp_env_comp, ?map_map; reflexivity.
-Qed.
-
-Lemma mp_cell_comp (u v : haddr -> haddr) (cl : cbn_cell) :
-  mp_cell v (mp_cell u cl) = mp_cell (fun a => v (u a)) cl.
-Proof.
-  unfold mp_cell; destruct cl; rewrite ?mp_slots_comp, ?mp_value_comp; reflexivity.
-Qed.
-
-Lemma mp_root_comp (u v : haddr -> haddr) (r : root) :
-  mp_root v (mp_root u r) = mp_root (fun a => v (u a)) r.
-Proof.
-  unfold mp_root; destruct r;
-    rewrite ?mp_slot_comp, ?mp_env_comp, ?mp_value_comp, ?mp_slots_comp, ?mp_cell_comp,
-      ?map_map; reflexivity.
-Qed.
-
-Lemma mp_roots_comp (u v : haddr -> haddr) (l : list root) :
-  mp_roots v (mp_roots u l) = mp_roots (fun a => v (u a)) l.
-Proof.
-  unfold mp_roots. induction l as [|r l IH]; simpl; [reflexivity|].
-  rewrite mp_root_comp, IH. reflexivity.
-Qed.
-
-Lemma rn_slot_comp {G} (u v : haddr -> haddr) (x : cbn_slot) (g : G) :
-  match rn_slot (fun a s => COk (u a, s)) x g with
-  | COk (y, g1) => rn_slot (fun a s => COk (v a, s)) y g1
-  | CFail w => CFail w
-  end = rn_slot (fun a s => COk (v (u a), s)) x g.
-Proof.
-  rewrite (rn_slot_pure u x g). cbv beta iota.
-  rewrite (rn_slot_pure v (mp_slot u x) g), (rn_slot_pure (fun a => v (u a)) x g).
-  rewrite mp_slot_comp. reflexivity.
-Qed.
-
-Lemma rn_slots_comp {G} (u v : haddr -> haddr) (l : list cbn_slot) (g : G) :
-  match rn_slots (fun a s => COk (u a, s)) l g with
-  | COk (l', g1) => rn_slots (fun a s => COk (v a, s)) l' g1
-  | CFail w => CFail w
-  end = rn_slots (fun a s => COk (v (u a), s)) l g.
-Proof.
-  rewrite (rn_slots_pure u l g). cbv beta iota.
-  rewrite (rn_slots_pure v (mp_slots u l) g), (rn_slots_pure (fun a => v (u a)) l g).
-  rewrite mp_slots_comp. reflexivity.
-Qed.
-
-Lemma rn_addrs_comp {G} (u v : haddr -> haddr) (l : list haddr) (g : G) :
-  match rn_addrs (fun a s => COk (u a, s)) l g with
-  | COk (l', g1) => rn_addrs (fun a s => COk (v a, s)) l' g1
-  | CFail w => CFail w
-  end = rn_addrs (fun a s => COk (v (u a), s)) l g.
-Proof.
-  rewrite (rn_addrs_pure u l g). cbv beta iota.
-  rewrite (rn_addrs_pure v (map u l) g), (rn_addrs_pure (fun a => v (u a)) l g).
-  rewrite map_map. reflexivity.
-Qed.
-
-Lemma rn_env_comp {G} (u v : haddr -> haddr) (e : cbn_env) (g : G) :
-  match rn_env (fun a s => COk (u a, s)) e g with
-  | COk (e', g1) => rn_env (fun a s => COk (v a, s)) e' g1
-  | CFail w => CFail w
-  end = rn_env (fun a s => COk (v (u a), s)) e g.
-Proof.
-  rewrite (rn_env_pure u e g). cbv beta iota.
-  rewrite (rn_env_pure v (mp_env u e) g), (rn_env_pure (fun a => v (u a)) e g).
-  rewrite mp_env_comp. reflexivity.
-Qed.
-
-Lemma rn_value_comp {G} (u v : haddr -> haddr) (val : cbn_value) (g : G) :
-  match rn_value (fun a s => COk (u a, s)) val g with
-  | COk (val', g1) => rn_value (fun a s => COk (v a, s)) val' g1
-  | CFail w => CFail w
-  end = rn_value (fun a s => COk (v (u a), s)) val g.
-Proof.
-  rewrite (rn_value_pure u val g). cbv beta iota.
-  rewrite (rn_value_pure v (mp_value u val) g), (rn_value_pure (fun a => v (u a)) val g).
-  rewrite mp_value_comp. reflexivity.
-Qed.
-
-Lemma rn_cell_comp {G} (u v : haddr -> haddr) (cl : cbn_cell) (g : G) :
-  match rn_cell (fun a s => COk (u a, s)) cl g with
-  | COk (cl', g1) => rn_cell (fun a s => COk (v a, s)) cl' g1
-  | CFail w => CFail w
-  end = rn_cell (fun a s => COk (v (u a), s)) cl g.
-Proof.
-  rewrite (rn_cell_pure u cl g). cbv beta iota.
-  rewrite (rn_cell_pure v (mp_cell u cl) g), (rn_cell_pure (fun a => v (u a)) cl g).
-  rewrite mp_cell_comp. reflexivity.
-Qed.
-
-Lemma rn_root_comp {G} (u v : haddr -> haddr) (r : root) (g : G) :
-  match rn_root (fun a s => COk (u a, s)) r g with
-  | COk (r', g1) => rn_root (fun a s => COk (v a, s)) r' g1
-  | CFail w => CFail w
-  end = rn_root (fun a s => COk (v (u a), s)) r g.
-Proof.
-  rewrite (rn_root_pure u r g). cbv beta iota.
-  rewrite (rn_root_pure v (mp_root u r) g), (rn_root_pure (fun a => v (u a)) r g).
-  rewrite mp_root_comp. reflexivity.
-Qed.
-
-Lemma rn_roots_comp {G} (u v : haddr -> haddr) (l : list root) (g : G) :
-  match rn_roots (fun a s => COk (u a, s)) l g with
-  | COk (l', g1) => rn_roots (fun a s => COk (v a, s)) l' g1
-  | CFail w => CFail w
-  end = rn_roots (fun a s => COk (v (u a), s)) l g.
-Proof.
-  rewrite (rn_roots_pure u l g). cbv beta iota.
-  rewrite (rn_roots_pure v (mp_roots u l) g), (rn_roots_pure (fun a => v (u a)) l g).
-  rewrite mp_roots_comp. reflexivity.
-Qed.
-
-(** *** Renaming a list of addresses or of slots piecewise *)
-
-Lemma rn_addrs_app {G} (f : haddr -> G -> cbn_res (haddr * G)) (l1 l2 : list haddr) (g : G) :
-  rn_addrs f (l1 ++ l2) g =
-  match rn_addrs f l1 g with
-  | COk (l1', g1) =>
-    match rn_addrs f l2 g1 with
-    | COk (l2', g2) => COk (l1' ++ l2', g2)
-    | CFail w => CFail w
-    end
-  | CFail w => CFail w
-  end.
-Proof.
-  revert g. induction l1 as [|a l1 IH]; intros g; simpl.
-  - destruct (rn_addrs f l2 g) as [[l2' g2]|w]; reflexivity.
-  - destruct (f a g) as [[b g1]|w]; [|reflexivity]. rewrite IH.
-    destruct (rn_addrs f l1 g1) as [[l1' g2]|w]; [|reflexivity].
-    destruct (rn_addrs f l2 g2) as [[l2' g3]|w]; reflexivity.
-Qed.
-
-Lemma rn_slots_app {G} (f : haddr -> G -> cbn_res (haddr * G)) (l1 l2 : list cbn_slot) (g : G) :
-  rn_slots f (l1 ++ l2) g =
-  match rn_slots f l1 g with
-  | COk (l1', g1) =>
-    match rn_slots f l2 g1 with
-    | COk (l2', g2) => COk (l1' ++ l2', g2)
-    | CFail w => CFail w
-    end
-  | CFail w => CFail w
-  end.
-Proof.
-  revert g. induction l1 as [|y l1 IH]; intros g; simpl.
-  - destruct (rn_slots f l2 g) as [[l2' g2]|w]; reflexivity.
-  - destruct (rn_slot f y g) as [[y' g1]|w]; [|reflexivity]. rewrite IH.
-    destruct (rn_slots f l1 g1) as [[l1' g2]|w]; [|reflexivity].
-    destruct (rn_slots f l2 g2) as [[l2' g3]|w]; reflexivity.
-Qed.
-
-Lemma rn_slots_SAddr {G} (f : haddr -> G -> cbn_res (haddr * G)) (l : list haddr) (g : G) :
-  rn_slots f (map SAddr l) g =
-  match rn_addrs f l g with
-  | COk (l', g') => COk (map SAddr l', g')
-  | CFail w => CFail w
-  end.
-Proof.
-  revert g. induction l as [|a l IH]; intros g; simpl; [reflexivity|].
-  destruct (f a g) as [[b g1]|w]; [|reflexivity]. rewrite IH.
-  destruct (rn_addrs f l g1) as [[l' g2]|w]; reflexivity.
-Qed.
-
-Lemma rn_addrs_length {G} (f : haddr -> G -> cbn_res (haddr * G)) (l : list haddr) (g : G)
-    (l' : list haddr) (g' : G) :
-  rn_addrs f l g = COk (l', g') -> #|l'| = #|l|.
-Proof.
-  revert g l' g'. induction l as [|a l IH]; intros g l' g' H; simpl in H.
-  - inversion H; reflexivity.
-  - destruct (f a g) as [[b g1]|w]; [|discriminate].
-    destruct (rn_addrs f l g1) as [[l2 g2]|w] eqn:E; [|discriminate].
-    inversion H; subst. simpl. f_equal. exact (IH _ _ _ E).
-Qed.
+(** *** Shape: lengths, slot lists and spines of renamed and extended structures *)
 
 Lemma rn_slots_length {G} (f : haddr -> G -> cbn_res (haddr * G)) (l : list cbn_slot) (g : G)
     (l' : list cbn_slot) (g' : G) :
@@ -1301,49 +915,12 @@ Proof.
     inversion H; subst. simpl. f_equal. exact (IH _ _ _ E).
 Qed.
 
-(** *** Shape: a renamed environment has the same [ev_nvals] and [ev_goff] *)
-
-Lemma mp_env_nvals (u : haddr -> haddr) (e : cbn_env) : (mp_env u e).(ev_nvals) = e.(ev_nvals).
-Proof. reflexivity. Qed.
-
-Lemma mp_env_goff (u : haddr -> haddr) (e : cbn_env) : (mp_env u e).(ev_goff) = e.(ev_goff).
-Proof. reflexivity. Qed.
-
 Lemma rn_env_vals {G} (f : haddr -> G -> cbn_res (haddr * G)) (e : cbn_env) (g : G)
     (e' : cbn_env) (g' : G) :
   rn_env f e g = COk (e', g') -> rn_slots f e.(ev_vals) g = COk (e'.(ev_vals), g').
 Proof.
   unfold rn_env. destruct (rn_slots f (ev_vals e) g) as [[vs g1]|w]; intros H;
     inversion H; subst. reflexivity.
-Qed.
-
-Lemma rn_env_shape {G} (f : haddr -> G -> cbn_res (haddr * G)) (e : cbn_env) (g : G)
-    (e' : cbn_env) (g' : G) :
-  rn_env f e g = COk (e', g') -> e'.(ev_nvals) = e.(ev_nvals) /\ e'.(ev_goff) = e.(ev_goff).
-Proof.
-  unfold rn_env. destruct (rn_slots f (ev_vals e) g) as [[vs g1]|w]; intros H;
-    inversion H; subst. split; reflexivity.
-Qed.
-
-Lemma rn_env_length {G} (f : haddr -> G -> cbn_res (haddr * G)) (e : cbn_env) (g : G)
-    (e' : cbn_env) (g' : G) :
-  rn_env f e g = COk (e', g') -> #|e'.(ev_vals)| = #|e.(ev_vals)|.
-Proof. intros H. exact (rn_slots_length _ _ _ _ _ (rn_env_vals _ _ _ _ _ H)). Qed.
-
-(** *** Shape: renaming commutes with [env_push] and [env_push_addrs] *)
-
-Lemma mp_env_empty (u : haddr -> haddr) : mp_env u env_empty = env_empty.
-Proof. reflexivity. Qed.
-
-Lemma mp_env_push (u : haddr -> haddr) (x : cbn_slot) (e : cbn_env) :
-  mp_env u (env_push x e) = env_push (mp_slot u x) (mp_env u e).
-Proof. reflexivity. Qed.
-
-Lemma mp_env_push_addrs (u : haddr -> haddr) (l : list haddr) (e : cbn_env) :
-  mp_env u (env_push_addrs l e) = env_push_addrs (map u l) (mp_env u e).
-Proof.
-  unfold env_push_addrs. revert e. induction l as [|a l IH]; intros e; [reflexivity|].
-  simpl. apply IH.
 Qed.
 
 Lemma env_push_addrs_vals (l : list haddr) (e : cbn_env) :
@@ -1355,474 +932,12 @@ Proof.
   - simpl. rewrite IH. simpl. rewrite map_app, <- app_assoc, Nat.add_succ_r. reflexivity.
 Qed.
 
-Lemma rn_env_push {G} (f : haddr -> G -> cbn_res (haddr * G)) (x : cbn_slot) (e : cbn_env)
-    (g : G) (x' : cbn_slot) (g1 : G) (e' : cbn_env) (g2 : G) :
-  rn_slot f x g = COk (x', g1) ->
-  rn_env f e g1 = COk (e', g2) ->
-  rn_env f (env_push x e) g = COk (env_push x' e', g2).
-Proof.
-  intros H1 H2.
-  pose proof (rn_env_vals _ _ _ _ _ H2) as Hv.
-  destruct (rn_env_shape _ _ _ _ _ H2) as [Hn Ho].
-  unfold rn_env, env_push. simpl. rewrite H1. cbv beta iota. rewrite Hv. cbv beta iota.
-  rewrite Hn, Ho. reflexivity.
-Qed.
-
-(** The slots of [env_push_addrs l e] are those of [e] under [List.rev l], so the renaming
-  visits the addresses in the order of [List.rev l]. *)
-Lemma rn_env_push_addrs {G} (f : haddr -> G -> cbn_res (haddr * G)) (l : list haddr)
-    (e : cbn_env) (g : G) (l' : list haddr) (g1 : G) (e' : cbn_env) (g2 : G) :
-  rn_addrs f (List.rev l) g = COk (l', g1) ->
-  rn_env f e g1 = COk (e', g2) ->
-  rn_env f (env_push_addrs l e) g = COk (env_push_addrs (List.rev l') e', g2).
-Proof.
-  intros H1 H2.
-  pose proof (rn_env_vals _ _ _ _ _ H2) as Hv.
-  destruct (rn_env_shape _ _ _ _ _ H2) as [Hn Ho].
-  pose proof (rn_addrs_length _ _ _ _ _ H1) as Hlen.
-  rewrite !env_push_addrs_vals. unfold rn_env. simpl.
-  rewrite rn_slots_app, rn_slots_SAddr, H1. cbv beta iota.
-  rewrite Hv. cbv beta iota.
-  rewrite rev_involutive, length_rev_cbn, Hn, Ho, Hlen, length_rev_cbn. reflexivity.
-Qed.
-
-(** *** Shape: renaming commutes with [spine_of] and [add_spine] *)
-
 Lemma mp_spine_of (u : haddr -> haddr) (v : cbn_value) :
   spine_of (mp_value u v) = map u (spine_of v).
 Proof. destruct v; reflexivity. Qed.
 
-Lemma rn_value_spine_of {G} (f : haddr -> G -> cbn_res (haddr * G)) (v : cbn_value) (g : G)
-    (v' : cbn_value) (g' : G) :
-  rn_value f v g = COk (v', g') ->
-  exists g0 : G, rn_addrs f (spine_of v) g0 = COk (spine_of v', g').
-Proof.
-  unfold rn_value; destruct v as [h sp|e c|e c i sp|e c i sp|h sp|e c|e c sp]; intros H.
-  - destruct (rn_addrs f sp g) as [[sp' g1]|w] eqn:E; [|discriminate].
-    inversion H; subst. exists g. exact E.
-  - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E; [|discriminate].
-    inversion H; subst. exists g'. reflexivity.
-  - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
-    destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:E2; [|discriminate].
-    inversion H; subst. exists g1. exact E2.
-  - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
-    destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:E2; [|discriminate].
-    inversion H; subst. exists g1. exact E2.
-  - destruct (rn_addrs f sp g) as [[sp' g1]|w] eqn:E; [|discriminate].
-    inversion H; subst. exists g. exact E.
-  - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E; [|discriminate].
-    inversion H; subst. exists g'. reflexivity.
-  - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
-    destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:E2; [|discriminate].
-    inversion H; subst. exists g1. exact E2.
-Qed.
-
-Lemma spine_of_add_spine (v : cbn_value) (l : list haddr) (v0 : cbn_value) :
-  add_spine v l = Some v0 -> spine_of v0 = spine_of v ++ l.
-Proof. unfold add_spine; destruct v; intros H; inversion H; subst; reflexivity. Qed.
-
-Lemma mp_add_spine (u : haddr -> haddr) (v : cbn_value) (l : list haddr) (v0 : cbn_value) :
-  add_spine v l = Some v0 ->
-  add_spine (mp_value u v) (map u l) = Some (mp_value u v0).
-Proof.
-  unfold add_spine; destruct v; intros H; inversion H; subst; simpl; rewrite map_app;
-    reflexivity.
-Qed.
-
-Lemma mp_add_spine_none (u : haddr -> haddr) (v : cbn_value) (l : list haddr) :
-  add_spine v l = None -> add_spine (mp_value u v) (map u l) = None.
-Proof. unfold add_spine; destruct v; intros H; inversion H; reflexivity. Qed.
-
-Lemma rn_add_spine {G} (f : haddr -> G -> cbn_res (haddr * G)) (v : cbn_value)
-    (l : list haddr) (v0 : cbn_value) (g : G) (v' : cbn_value) (g1 : G)
-    (l' : list haddr) (g2 : G) :
-  add_spine v l = Some v0 ->
-  rn_value f v g = COk (v', g1) ->
-  rn_addrs f l g1 = COk (l', g2) ->
-  exists v0' : cbn_value, add_spine v' l' = Some v0' /\ rn_value f v0 g = COk (v0', g2).
-Proof.
-  intros Ha Hv Hl. revert Ha Hv.
-  unfold add_spine, rn_value; destruct v as [h sp|e c|e c i sp|e c i sp|h sp|e c|e c sp];
-    intros Ha Hv; inversion Ha; subst; clear Ha.
-  - destruct (rn_addrs f sp g) as [[sp' g3]|w] eqn:E; [|discriminate].
-    inversion Hv; subst. exists (VCon h (sp' ++ l')). split; [reflexivity|].
-    rewrite rn_addrs_app, E. cbv beta iota. rewrite Hl. reflexivity.
-  - destruct (rn_env f e g) as [[e1 g3]|w] eqn:E1; [|discriminate].
-    destruct (rn_addrs f sp g3) as [[sp' g4]|w] eqn:E2; [|discriminate].
-    inversion Hv; subst. exists (VStuckFix e1 c i (sp' ++ l')). split; [reflexivity|].
-    cbv beta iota. rewrite rn_addrs_app, E2. cbv beta iota.
-    rewrite Hl. reflexivity.
-  - destruct (rn_addrs f sp g) as [[sp' g3]|w] eqn:E; [|discriminate].
-    inversion Hv; subst. exists (VNeu h (sp' ++ l')). split; [reflexivity|].
-    rewrite rn_addrs_app, E. cbv beta iota. rewrite Hl. reflexivity.
-  - destruct (rn_env f e g) as [[e1 g3]|w] eqn:E1; [|discriminate].
-    destruct (rn_addrs f sp g3) as [[sp' g4]|w] eqn:E2; [|discriminate].
-    inversion Hv; subst. exists (VStuck e1 c (sp' ++ l')). split; [reflexivity|].
-    cbv beta iota. rewrite rn_addrs_app, E2. cbv beta iota.
-    rewrite Hl. reflexivity.
-Qed.
-
-(** *** The addresses of a renamed structure are the images of its addresses *)
-
-Lemma ad_mp_slot (u : haddr -> haddr) (x : cbn_slot) :
-  ad_slot (mp_slot u x) = map u (ad_slot x).
-Proof.
-  induction x as [a|vs n o c IHvs] using slot_ind'; [reflexivity|].
-  simpl. induction IHvs as [|y vs Hy Hvs IH]; simpl; [reflexivity|].
-  rewrite map_app, Hy, IH. reflexivity.
-Qed.
-
-Lemma ad_mp_slots (u : haddr -> haddr) (l : list cbn_slot) :
-  ad_slots (mp_slots u l) = map u (ad_slots l).
-Proof.
-  unfold ad_slots, mp_slots. induction l as [|y l IH]; simpl; [reflexivity|].
-  rewrite map_app, ad_mp_slot, IH. reflexivity.
-Qed.
-
-Lemma ad_mp_env (u : haddr -> haddr) (e : cbn_env) : ad_env (mp_env u e) = map u (ad_env e).
-Proof. unfold ad_env, mp_env. simpl. apply ad_mp_slots. Qed.
-
-Lemma ad_mp_value (u : haddr -> haddr) (v : cbn_value) :
-  ad_value (mp_value u v) = map u (ad_value v).
-Proof.
-  unfold ad_value, mp_value; destruct v; rewrite ?map_app, ?ad_mp_env; reflexivity.
-Qed.
-
-Lemma ad_mp_cell (u : haddr -> haddr) (cl : cbn_cell) :
-  ad_cell (mp_cell u cl) = map u (ad_cell cl).
-Proof. unfold ad_cell, mp_cell; destruct cl; rewrite ?ad_mp_slots, ?ad_mp_value; reflexivity. Qed.
-
-Lemma ad_mp_root (u : haddr -> haddr) (r : root) : ad_root (mp_root u r) = map u (ad_root r).
-Proof.
-  unfold ad_root, mp_root; destruct r;
-    rewrite ?ad_mp_slot, ?ad_mp_env, ?ad_mp_value, ?ad_mp_slots, ?ad_mp_cell; reflexivity.
-Qed.
-
-Lemma ad_mp_roots (u : haddr -> haddr) (l : list root) :
-  ad_roots (mp_roots u l) = map u (ad_roots l).
-Proof.
-  unfold ad_roots, mp_roots. induction l as [|r l IH]; simpl; [reflexivity|].
-  rewrite map_app, ad_mp_root, IH. reflexivity.
-Qed.
-
-(** With an effectful map, every address of the result is the image of the address at the
-  same place of the argument, taken at some state. This is what the collector's "every
-  address of the result is in the new heap" argument needs. *)
-Section RenameAddrs.
-  Context {G : Type} (f : haddr -> G -> cbn_res (haddr * G)).
-
-  Definition rn_img (a b : haddr) : Prop := exists s s' : G, f a s = COk (b, s').
-
-  Lemma rn_addrs_ad (l : list haddr) (g : G) (l' : list haddr) (g' : G) :
-    rn_addrs f l g = COk (l', g') -> Forall2 rn_img l l'.
-  Proof.
-    revert g l' g'. induction l as [|a l IH]; intros g l' g' H; simpl in H.
-    - inversion H; subst. constructor.
-    - destruct (f a g) as [[b g1]|w] eqn:E1; [|discriminate].
-      destruct (rn_addrs f l g1) as [[l2 g2]|w] eqn:E2; [|discriminate].
-      inversion H; subst. constructor; [exists g, g1; exact E1|exact (IH _ _ _ E2)].
-  Qed.
-
-  Lemma rn_slot_ad : forall (x : cbn_slot) (g : G) (x' : cbn_slot) (g' : G),
-    rn_slot f x g = COk (x', g') -> Forall2 rn_img (ad_slot x) (ad_slot x').
-  Proof.
-    intros x. induction x as [a|vs n o c IHvs] using slot_ind'; intros g x' g' H.
-    - simpl in H. destruct (f a g) as [[b g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. simpl. constructor; [eexists; eexists; exact E|constructor].
-    - rewrite rn_slot_SInl in H.
-      destruct (rn_slots f vs g) as [[vs' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. simpl. clear H.
-      revert g vs' g' E. induction IHvs as [|y vs Hy Hvs IH]; intros g vs' g1 E; simpl in E.
-      + inversion E; subst. constructor.
-      + destruct (rn_slot f y g) as [[y' g2]|w2] eqn:E2; [|discriminate].
-        destruct (rn_slots f vs g2) as [[vs2 g3]|w3] eqn:E3; [|discriminate].
-        inversion E; subst. simpl.
-        apply Forall2_app_cbn; [exact (Hy _ _ _ E2)|exact (IH _ _ _ E3)].
-  Qed.
-
-  Lemma rn_slots_ad (l : list cbn_slot) (g : G) (l' : list cbn_slot) (g' : G) :
-    rn_slots f l g = COk (l', g') -> Forall2 rn_img (ad_slots l) (ad_slots l').
-  Proof.
-    revert g l' g'. induction l as [|y l IH]; intros g l' g' H; simpl in H.
-    - inversion H; subst. constructor.
-    - destruct (rn_slot f y g) as [[y' g1]|w] eqn:E1; [|discriminate].
-      destruct (rn_slots f l g1) as [[l2 g2]|w] eqn:E2; [|discriminate].
-      inversion H; subst. simpl.
-      apply Forall2_app_cbn; [exact (rn_slot_ad _ _ _ _ E1)|exact (IH _ _ _ E2)].
-  Qed.
-
-  Lemma rn_env_ad (e : cbn_env) (g : G) (e' : cbn_env) (g' : G) :
-    rn_env f e g = COk (e', g') -> Forall2 rn_img (ad_env e) (ad_env e').
-  Proof. intros H. exact (rn_slots_ad _ _ _ _ (rn_env_vals _ _ _ _ _ H)). Qed.
-
-  Lemma rn_value_ad (v : cbn_value) (g : G) (v' : cbn_value) (g' : G) :
-    rn_value f v g = COk (v', g') -> Forall2 rn_img (ad_value v) (ad_value v').
-  Proof.
-    unfold rn_value; destruct v as [h sp|e c|e c i sp|e c i sp|h sp|e c|e c sp]; intros H.
-    - destruct (rn_addrs f sp g) as [[sp' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_addrs_ad _ _ _ _ E).
-    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_env_ad _ _ _ _ E).
-    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
-      destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:E2; [|discriminate].
-      inversion H; subst.
-      apply Forall2_app_cbn; [exact (rn_env_ad _ _ _ _ E1)|exact (rn_addrs_ad _ _ _ _ E2)].
-    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
-      destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:E2; [|discriminate].
-      inversion H; subst.
-      apply Forall2_app_cbn; [exact (rn_env_ad _ _ _ _ E1)|exact (rn_addrs_ad _ _ _ _ E2)].
-    - destruct (rn_addrs f sp g) as [[sp' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_addrs_ad _ _ _ _ E).
-    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_env_ad _ _ _ _ E).
-    - destruct (rn_env f e g) as [[e1 g1]|w] eqn:E1; [|discriminate].
-      destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:E2; [|discriminate].
-      inversion H; subst.
-      apply Forall2_app_cbn; [exact (rn_env_ad _ _ _ _ E1)|exact (rn_addrs_ad _ _ _ _ E2)].
-  Qed.
-
-  Lemma rn_cell_ad (cl : cbn_cell) (g : G) (cl' : cbn_cell) (g' : G) :
-    rn_cell f cl g = COk (cl', g') -> Forall2 rn_img (ad_cell cl) (ad_cell cl').
-  Proof.
-    unfold rn_cell; destruct cl as [vs n o c|v| |a]; intros H.
-    - destruct (rn_slots f vs g) as [[vs' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_slots_ad _ _ _ _ E).
-    - destruct (rn_value f v g) as [[v' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_value_ad _ _ _ _ E).
-    - inversion H; subst. constructor.
-    - destruct (f a g) as [[b g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. constructor; [eexists; eexists; exact E|constructor].
-  Qed.
-
-  Lemma rn_root_ad (r : root) (g : G) (r' : root) (g' : G) :
-    rn_root f r g = COk (r', g') -> Forall2 rn_img (ad_root r) (ad_root r').
-  Proof.
-    unfold rn_root; destruct r as [a|x|e|v|l|l|cl]; intros H.
-    - destruct (f a g) as [[b g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. constructor; [eexists; eexists; exact E|constructor].
-    - destruct (rn_slot f x g) as [[x' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_slot_ad _ _ _ _ E).
-    - destruct (rn_env f e g) as [[e' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_env_ad _ _ _ _ E).
-    - destruct (rn_value f v g) as [[v' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_value_ad _ _ _ _ E).
-    - destruct (rn_slots f l g) as [[l' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_slots_ad _ _ _ _ E).
-    - destruct (rn_addrs f l g) as [[l' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_addrs_ad _ _ _ _ E).
-    - destruct (rn_cell f cl g) as [[cl' g1]|w] eqn:E; [|discriminate].
-      inversion H; subst. exact (rn_cell_ad _ _ _ _ E).
-  Qed.
-
-  Lemma rn_roots_ad (l : list root) (g : G) (l' : list root) (g' : G) :
-    rn_roots f l g = COk (l', g') -> Forall2 rn_img (ad_roots l) (ad_roots l').
-  Proof.
-    revert g l' g'. induction l as [|r l IH]; intros g l' g' H; simpl in H.
-    - inversion H; subst. constructor.
-    - destruct (rn_root f r g) as [[r' g1]|w] eqn:E1; [|discriminate].
-      destruct (rn_roots f l g1) as [[l2 g2]|w] eqn:E2; [|discriminate].
-      inversion H; subst. simpl.
-      apply Forall2_app_cbn; [exact (rn_root_ad _ _ _ _ E1)|exact (IH _ _ _ E2)].
-  Qed.
-
-  (** Every address of a renamed cell, and of renamed roots, satisfies what every image of
-    [f] satisfies. *)
-  Lemma rn_cell_ad_all (P : haddr -> Prop)
-      (HP : forall (a : haddr) (s : G) (b : haddr) (s' : G), f a s = COk (b, s') -> P b)
-      (cl : cbn_cell) (g : G) (cl' : cbn_cell) (g' : G) :
-    rn_cell f cl g = COk (cl', g') -> Forall P (ad_cell cl').
-  Proof.
-    intros H. eapply Forall2_Forall_r_cbn; [exact (rn_cell_ad _ _ _ _ H)|].
-    intros a b [s [s' Hs]]. exact (HP _ _ _ _ Hs).
-  Qed.
-
-  Lemma rn_roots_ad_all (P : haddr -> Prop)
-      (HP : forall (a : haddr) (s : G) (b : haddr) (s' : G), f a s = COk (b, s') -> P b)
-      (l : list root) (g : G) (l' : list root) (g' : G) :
-    rn_roots f l g = COk (l', g') -> Forall P (ad_roots l').
-  Proof.
-    intros H. eapply Forall2_Forall_r_cbn; [exact (rn_roots_ad _ _ _ _ H)|].
-    intros a b [s [s' Hs]]. exact (HP _ _ _ _ Hs).
-  Qed.
-
-  (** The renaming keeps the number of addresses. *)
-  Lemma rn_roots_ad_length (l : list root) (g : G) (l' : list root) (g' : G) :
-    rn_roots f l g = COk (l', g') -> #|ad_roots l'| = #|ad_roots l|.
-  Proof. intros H. exact (Forall2_length_cbn _ _ _ (rn_roots_ad _ _ _ _ H)). Qed.
-End RenameAddrs.
-
-(** *** The occurrence count [occ]
-
-  [occ] is used once, in [once_body]: [Nat.leb (occ 0 c.(c_term)) 1] decides whether the
-  argument of a binder stays inline instead of being shared through the heap. That use
-  needs [occ k t = 0 -> noccur_between k 1 t = true] (the variable really does not occur
-  when [occ] says 0), and that implication is false as [occ] is written: [occ] answers 0 at
-  a [tPrim] and ignores the context of a [tCase], where [noccur_between] looks at both.
-  Both counterexamples are below. The converse, [noccur_between k 1 t = true -> occ k t = 0],
-  holds for every term without a [tEvar], and is proved here. Only the cost of the machine
-  depends on [occ], never its answer. *)
-
-Lemma occ_det (k k' : nat) (t t' : term) : k = k' -> t = t' -> occ k t = occ k' t'.
-Proof. intros -> ->. reflexivity. Qed.
-
-(** [occ] answers 2 at a [tEvar] whatever its arguments are; [evar_free t] says that no
-  subterm [occ] visits is a [tEvar]. *)
-Fixpoint evar_free (t : term) : bool :=
-  match t with
-  | tEvar _ _ => false
-  | tApp f a => evar_free f && evar_free a
-  | tLambda _ d b | tProd _ d b => evar_free d && evar_free b
-  | tLetIn _ b ty body => evar_free b && evar_free ty && evar_free body
-  | tCase _ p c brs =>
-    forallb evar_free p.(pparams) && evar_free p.(preturn) && evar_free c
-    && forallb (fun b => evar_free b.(bbody)) brs
-  | tProj _ c => evar_free c
-  | tFix m _ | tCoFix m _ => forallb (fun d => evar_free d.(dtype) && evar_free d.(dbody)) m
-  | _ => true
-  end.
-
-Lemma fold_left_add_zero (k : nat) (l : list term) (a : nat) :
-  Forall (fun x => occ k x = 0) l -> fold_left (fun n x => n + occ k x) l a = a.
-Proof.
-  intros H. revert a. induction H as [|x l Hx Hl IH]; intros a; simpl; [reflexivity|].
-  rewrite Hx, Nat.add_0_r. apply IH.
-Qed.
-
-Lemma fold_left_max_zero (k : nat) (brs : list (branch term)) (a : nat) :
-  Forall (fun b => occ (k + #|b.(bcontext)|) b.(bbody) = 0) brs ->
-  fold_left (fun m b => Nat.max m (occ (k + #|b.(bcontext)|) b.(bbody))) brs a = a.
-Proof.
-  intros H. revert a. induction H as [|b brs Hb Hbrs IH]; intros a; simpl; [reflexivity|].
-  rewrite Hb, Nat.max_0_r. apply IH.
-Qed.
-
-(** A variable that does not occur free is counted 0. *)
-Lemma noccur_between_occ : forall (t : term) (k : nat),
-  evar_free t = true -> noccur_between k 1 t = true -> occ k t = 0.
-Proof.
-  intros t.
-  induction t
-    as [n|i|ev l IHl|s|na A IHA B IHB|na A IHA B IHB|na b IHb ty IHty bo IHbo
-       |F a IHF IHa|kn ui|ind ui|ind idx ui|ci p IHp c IHc brs IHbrs|pr c IHc
-       |mfix idx IHm|mfix idx IHm|prim IHprim]
-    using PCUICInduction.term_forall_list_ind;
-    intros k He Hn; try reflexivity.
-  - (* tRel *)
-    simpl in Hn |- *. destruct (eqb_spec n k) as [->|Hne]; [|reflexivity].
-    exfalso. rewrite Nat.ltb_irrefl in Hn. simpl in Hn.
-    apply Nat.leb_le in Hn. rewrite Nat.add_1_r in Hn. exact (Nat.lt_irrefl k Hn).
-  - (* tEvar *) simpl in He. discriminate.
-  - (* tProd *)
-    simpl in He, Hn |- *.
-    apply andb_prop in He as [He1 He2]. apply andb_prop in Hn as [Hn1 Hn2].
-    rewrite (IHA _ He1 Hn1), (IHB _ He2 Hn2). reflexivity.
-  - (* tLambda *)
-    simpl in He, Hn |- *.
-    apply andb_prop in He as [He1 He2]. apply andb_prop in Hn as [Hn1 Hn2].
-    rewrite (IHA _ He1 Hn1), (IHB _ He2 Hn2). reflexivity.
-  - (* tLetIn *)
-    simpl in He, Hn |- *.
-    apply andb_prop in He as [He1 He3]. apply andb_prop in He1 as [He1 He2].
-    apply andb_prop in Hn as [Hn1 Hn3]. apply andb_prop in Hn1 as [Hn1 Hn2].
-    rewrite (IHb _ He1 Hn1), (IHty _ He2 Hn2), (IHbo _ He3 Hn3). reflexivity.
-  - (* tApp *)
-    simpl in He, Hn |- *.
-    apply andb_prop in He as [He1 He2]. apply andb_prop in Hn as [Hn1 Hn2].
-    rewrite (IHF _ He1 Hn1), (IHa _ He2 Hn2). reflexivity.
-  - (* tCase *)
-    simpl in He, Hn |- *.
-    apply andb_prop in He as [He1 Hebrs]. apply andb_prop in He1 as [He2 Hec].
-    apply andb_prop in He2 as [Hepars Heret].
-    apply andb_prop in Hn as [Hn1 Hnbrs]. apply andb_prop in Hn1 as [Hnp Hnc].
-    unfold test_predicate_k in Hnp.
-    apply andb_prop in Hnp as [Hnp1 Hnret]. apply andb_prop in Hnp1 as [Hnp2 _].
-    apply andb_prop in Hnp2 as [_ Hnpars].
-    destruct IHp as [IHpars [_ IHret]].
-    assert (Hpars : Forall (fun x => occ k x = 0) p.(pparams)).
-    { revert Hepars Hnpars. induction IHpars as [|x l Hx Hl IH]; intros Hepars Hnpars;
-        [constructor|].
-      simpl in Hepars, Hnpars.
-      apply andb_prop in Hepars as [Hex Hes]. apply andb_prop in Hnpars as [Hnx Hns].
-      constructor; [exact (Hx _ Hex Hnx)|exact (IH Hes Hns)]. }
-    assert (Hbrs : Forall (fun b => occ (k + #|b.(bcontext)|) b.(bbody) = 0) brs).
-    { revert Hebrs Hnbrs. induction IHbrs as [|b brs0 Hb Hbs IH]; intros Hebrs Hnbrs;
-        [constructor|].
-      simpl in Hebrs, Hnbrs.
-      apply andb_prop in Hebrs as [Heb Hebs]. apply andb_prop in Hnbrs as [Hnb Hnbs].
-      destruct Hb as [_ Hb]. unfold test_branch_k in Hnb.
-      apply andb_prop in Hnb as [_ Hnb2].
-      constructor; [rewrite Nat.add_comm; exact (Hb _ Heb Hnb2)|exact (IH Hebs Hnbs)]. }
-    assert (Hpr : occ (k + #|p.(pcontext)|) p.(preturn) = 0).
-    { rewrite Nat.add_comm. exact (IHret _ Heret Hnret). }
-    rewrite (fold_left_add_zero _ _ 0 Hpars), (fold_left_max_zero _ _ 0 Hbrs), Hpr,
-      (IHc _ Hec Hnc).
-    reflexivity.
-  - (* tProj *) simpl in He, Hn |- *. exact (IHc _ He Hn).
-  - (* tFix *)
-    simpl in He, Hn |- *. set (N := #|mfix|) in *. clearbody N.
-    assert (Hex : existsb (fun d => negb (occ k d.(dtype) == 0)
-                                    || negb (occ (k + N) d.(dbody) == 0)) mfix = false).
-    { revert He Hn. induction IHm as [|d m0 Hd Hm IH]; intros He Hn; [reflexivity|].
-      simpl in He, Hn |- *.
-      apply andb_prop in He as [Hed Hes]. apply andb_prop in Hn as [Hnd Hns].
-      apply andb_prop in Hed as [Hedt Hedb]. unfold test_def in Hnd.
-      apply andb_prop in Hnd as [Hndt Hndb]. destruct Hd as [Hdt Hdb].
-      rewrite Nat.add_comm in Hndb.
-      rewrite (Hdt _ Hedt Hndt), (Hdb _ Hedb Hndb), (IH Hes Hns).
-      reflexivity. }
-    rewrite Hex. reflexivity.
-  - (* tCoFix *)
-    simpl in He, Hn |- *. set (N := #|mfix|) in *. clearbody N.
-    assert (Hex : existsb (fun d => negb (occ k d.(dtype) == 0)
-                                    || negb (occ (k + N) d.(dbody) == 0)) mfix = false).
-    { revert He Hn. induction IHm as [|d m0 Hd Hm IH]; intros He Hn; [reflexivity|].
-      simpl in He, Hn |- *.
-      apply andb_prop in He as [Hed Hes]. apply andb_prop in Hn as [Hnd Hns].
-      apply andb_prop in Hed as [Hedt Hedb]. unfold test_def in Hnd.
-      apply andb_prop in Hnd as [Hndt Hndb]. destruct Hd as [Hdt Hdb].
-      rewrite Nat.add_comm in Hndb.
-      rewrite (Hdt _ Hedt Hndt), (Hdb _ Hedb Hndb), (IH Hes Hns).
-      reflexivity. }
-    rewrite Hex. reflexivity.
-Qed.
-
-(** The other direction is false. [occ] answers 0 at a primitive array whose type or
-  default value is the variable. *)
-Definition cex_array : array_model term :=
-  {| array_level := Level.lzero; array_type := tRel 0; array_default := tRel 0;
-     array_value := [] |}.
-
-Definition cex_prim : term := tPrim (primArray; primArrayModel cex_array).
-
-Lemma occ_noccur_between_prim_false :
-  occ 0 cex_prim = 0 /\ noccur_between 0 1 cex_prim = false.
-Proof. split; vm_compute; reflexivity. Qed.
-
-(** And [occ] does not look at the context of a [tCase], where [noccur_between] does. *)
-Definition cex_case : term :=
-  tCase {| ci_ind := {| inductive_mind := (MPfile [], String.EmptyString); inductive_ind := 0 |};
-           ci_npar := 0; ci_relevance := Relevant |}
-    {| pparams := []; puinst := [];
-       pcontext := [{| decl_name := {| binder_name := nAnon; binder_relevance := Relevant |};
-                       decl_body := None; decl_type := tRel 0 |}];
-       preturn := tRel 0 |}
-    (tRel 1) [].
-
-Lemma occ_noccur_between_case_false :
-  occ 0 cex_case = 0 /\ noccur_between 0 1 cex_case = false.
-Proof. split; vm_compute; reflexivity. Qed.
-
-(** [evar_free] cannot be dropped from [noccur_between_occ]: [occ] answers 2 at every
-  [tEvar], including one whose arguments hold no variable at all. *)
-Lemma noccur_between_occ_evar_false :
-  noccur_between 0 1 (tEvar 0 []) = true /\ occ 0 (tEvar 0 []) = 2.
-Proof. split; reflexivity. Qed.
-
 (** ** The heap: a binary random-access list indexed by the bits of the address *)
 
-(** A complete binary tree of depth [j]: [BNode l r] splits on the bit [j - 1] of the
-  allocation number (0 left, 1 right). [BEmpty] stands for a subtree of cells that a
-  collection dropped. *)
 Inductive btree (A : Type) :=
 | BLeaf (x : A)
 | BNode (l r : btree A)
@@ -1935,8 +1050,8 @@ Definition bh_upd {A} (a : haddr) (x : A) (h : bheap A) : option (bheap A) :=
   [bh_ok lo n h]: [h] is the heap reached from [bh_holes lo] by [bh_cons] and [bh_upd], with
   [n] the next address ([lo] plus the number of [bh_cons]). The laws: [bh_get_cons_new],
   [bh_get_cons_old], [bh_get_upd_same], [bh_get_upd_other], [bh_upd_none], [bh_get_above],
-  [bh_get_below], [bh_get_dropped], [bh_upd_get_none], [bh_upd_ok]. The rest of this part are
-  the steps of their proofs. The same laws over the state are after the state's operations. *)
+  [bh_get_below], [bh_upd_ok]. The rest of this part are the steps of their proofs. The
+  laws over the state that the proofs use are after the state's operations. *)
 
 (** The digits of [h] are the binary digits of [n], least significant first. *)
 Inductive bh_digits {A} : bheap A -> positive -> Prop :=
@@ -2298,16 +1413,6 @@ Proof.
   - split; [intros _; exact (proj1 (bt_set_none q x t) Es)|reflexivity].
 Qed.
 
-Lemma bh_upd_get_none {A} a (x : A) h h' :
-  bh_upd a x h = Some h' -> forall b, bh_get b h' = None <-> bh_get b h = None.
-Proof.
-  intros H b; destruct (Pos.eq_dec (ha_p b) (ha_p a)) as [E|E].
-  - assert (b = a) as -> by (destruct a, b; cbn in E; congruence).
-    rewrite (bh_get_upd_same _ _ _ _ H); split; [discriminate|].
-    intros Hg; apply (proj2 (bh_upd_none a x h)) in Hg; congruence.
-  - rewrite (bh_get_upd_other _ _ _ _ _ H); [reflexivity|congruence].
-Qed.
-
 Lemma bh_digits_upd {A} a (x : A) h h' n :
   bh_upd a x h = Some h' -> bh_digits h n -> bh_digits h' n.
 Proof.
@@ -2475,17 +1580,6 @@ Proof.
     + rewrite (bh_get_upd_other _ _ _ _ _ Hu); [exact (IH Hlt)|congruence].
 Qed.
 
-Lemma bh_get_dropped {A} lo n (h : bheap A) a :
-  bh_ok lo n h -> (ha_p a < lo)%positive -> bh_get a h = None.
-Proof.
-  intros Hok Hlt; induction Hok as [|n h x Hok IH|n h b x h' Hok IH Hu].
-  - apply bh_get_holes.
-  - pose proof (bh_ok_le _ _ _ Hok).
-    rewrite (bh_get_cons_old _ _ _ _ _ Hok); [exact IH|].
-    destruct a; cbn in *; intros E; injection E; lia.
-  - exact (proj2 (bh_upd_get_none _ _ _ _ Hu a) IH).
-Qed.
-
 (** ** State *)
 
 Inductive delta_memo :=
@@ -2645,21 +1739,6 @@ Proof. reflexivity. Qed.
 Lemma alloc_now_next c s : (snd (alloc_now c s)).(st_next) = Pos.succ s.(st_next).
 Proof. reflexivity. Qed.
 
-Lemma alloc_now_ok lo c s :
-  bh_ok lo s.(st_next) s.(st_heap) ->
-  bh_ok lo (snd (alloc_now c s)).(st_next) (snd (alloc_now c s)).(st_heap).
-Proof. intros Hok; exact (bh_ok_cons _ _ _ c Hok). Qed.
-
-Lemma heap_get_alloc_now_new lo c s :
-  bh_ok lo s.(st_next) s.(st_heap) ->
-  heap_get (fst (alloc_now c s)) (snd (alloc_now c s)) = Some c.
-Proof. intros Hok; exact (bh_get_cons_new _ _ _ c Hok). Qed.
-
-Lemma heap_get_alloc_now_old lo c s a :
-  bh_ok lo s.(st_next) s.(st_heap) -> a <> fst (alloc_now c s) ->
-  heap_get a (snd (alloc_now c s)) = heap_get a s.
-Proof. intros Hok Ha; exact (bh_get_cons_old _ _ _ c a Hok Ha). Qed.
-
 Lemma heap_get_upd_same a c s s' : heap_upd a c s = Some s' -> heap_get a s' = Some c.
 Proof.
   unfold heap_upd, heap_get; destruct (bh_upd a c s.(st_heap)) as [h|] eqn:E; cbn;
@@ -2675,13 +1754,6 @@ Proof.
   intros H Hne; injection H as <-; exact (bh_get_upd_other _ _ _ _ _ E Hne).
 Qed.
 
-Lemma heap_upd_none a c s : heap_upd a c s = None <-> heap_get a s = None.
-Proof.
-  unfold heap_upd, heap_get; rewrite <- (bh_upd_none a c s.(st_heap)).
-  destruct (bh_upd a c s.(st_heap)); cbn; split; congruence.
-Qed.
-
-(** [heap_upd] changes the heap only. *)
 Lemma heap_upd_fields a c s s' : heap_upd a c s = Some s' ->
   s'.(st_next) = s.(st_next) /\ s'.(st_room) = s.(st_room) /\ s'.(st_steps) = s.(st_steps)
   /\ s'.(st_gam) = s.(st_gam) /\ s'.(st_memo) = s.(st_memo).
@@ -2689,27 +1761,6 @@ Proof.
   unfold heap_upd; destruct (bh_upd a c s.(st_heap)); cbn; [|discriminate].
   intros H; injection H as <-; cbn; auto.
 Qed.
-
-Lemma heap_upd_ok lo a c s s' :
-  bh_ok lo s.(st_next) s.(st_heap) -> heap_upd a c s = Some s' ->
-  bh_ok lo s'.(st_next) s'.(st_heap).
-Proof.
-  unfold heap_upd; destruct (bh_upd a c s.(st_heap)) as [h|] eqn:E; cbn; [|discriminate].
-  intros Hok H; injection H as <-; exact (bh_ok_upd _ _ _ _ _ _ Hok E).
-Qed.
-
-Lemma heap_get_above lo s a :
-  bh_ok lo s.(st_next) s.(st_heap) -> (s.(st_next) <= ha_p a)%positive -> heap_get a s = None.
-Proof. exact (bh_get_above lo s.(st_next) s.(st_heap) a). Qed.
-
-Lemma heap_get_below lo s a :
-  bh_ok lo s.(st_next) s.(st_heap) -> (lo <= ha_p a)%positive ->
-  (ha_p a < s.(st_next))%positive -> exists c, heap_get a s = Some c.
-Proof. exact (bh_get_below lo s.(st_next) s.(st_heap) a). Qed.
-
-Lemma heap_get_dropped lo s a :
-  bh_ok lo s.(st_next) s.(st_heap) -> (ha_p a < lo)%positive -> heap_get a s = None.
-Proof. exact (bh_get_dropped lo s.(st_next) s.(st_heap) a). Qed.
 
 Definition memo_add_entry (e : code_entry) (m : cbn_memo) : cidx * cbn_memo :=
   let i := m.(m_ncode) in
@@ -3518,7 +2569,7 @@ Section CallByNeed.
       end
     end
 
-  (** Stuck match congruence (rule table, row "stuck match / stuck match"). *)
+  (** Congruence of two stuck matches. *)
   with case_cong (d : cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code) (e2 : cbn_env)
     (c2 : code) (rs : list root) (s : cbn_state) {struct d}
     : cbn_res (bool * list root * cbn_state) :=
@@ -3601,7 +2652,8 @@ Section CallByNeed.
       end
     end
 
-  (** The rows of the rule table after "same address" and "same code". *)
+  (** The comparison of two weak-head values that [conv_value] did not settle by address or
+    by a shared code. *)
   with conv_rows (d : cbn_fuel) (lvl : nat) (le : conv_pb) (v1 v2 : cbn_value)
     (rs : list root) (s : cbn_state) {struct d} : cbn_res (bool * list root * cbn_state) :=
     match d with
@@ -3743,7 +2795,7 @@ Section CallByNeed.
 End CallByNeed.
 
 (** The answer of the fast path, with the reason for a "don't know". [stress] collects at
-  every allocation (for the measurement harness only); the answer must not depend on it. *)
+  every allocation; the answer must not depend on it. *)
 Definition cbn_conv_answer {cf : checker_flags} (X_type : abstract_env_impl)
   (X : X_type.π2.π1) (stress : bool) (le : conv_pb) (Γ : context) (t u : term) : cbn_answer :=
   cbn_run X_type X Γ #|Γ| stress le t u.

@@ -14,7 +14,7 @@ Import CanonicalTries.
 
 Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
-(** * The evaluator of the call-by-need machine against PCUIC reduction (BET-298, step 2d)
+(** * The evaluator of the call-by-need machine against PCUIC reduction
 
   [whnf], [whnf_fix], [eval_slot], [force] and [apply] turn a suspension into a weak-head
   value. This file proves that the term the input stands for reduces, in PCUIC, to the term
@@ -26,23 +26,23 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
   ** What a structure stands for
 
-  The read-back used here is *not* [repr_value] of [PCUICCallByNeedSound]: it is a ghost
-  read-back [g_value], which reads an address [a] as the term [G a] of a ghost map
-  [G : haddr -> option term] instead of following the heap. The two differ exactly on a cell
-  the machine has already forced: [repr] reads such a cell as the value now in it, the ghost
-  map keeps the term the cell was allocated for.
+  The read-back used here is a ghost read-back [g_value], which reads an address [a] as the
+  term [G a] of a ghost map [G : haddr -> option term] instead of following the heap. A
+  read-back that follows the heap and this one differ exactly on a cell the machine has
+  already forced: the first reads such a cell as the value now in it, the ghost map keeps
+  the term the cell was allocated for.
 
-  The ghost map is what makes the write-back compositional, and it is the "ghost allocation
-  term" of REPORT-BET298 §4.3. With [repr], forcing an address changes what *every* other
-  structure that names it stands for: the reading of a cell is a term built out of the
-  readings of the addresses below it, so a write-back turns a third party's reading [u] into
-  some reduct [u']. To put a value [v] back into a forced cell one then has to know that [v]
-  is a reduct of the cell's reading *as it is when the forcing ends*, not of its reading when
-  the forcing started, and the two are only joinable, not ordered: that is a confluence
-  argument, not an induction. With the ghost map, [G] only ever grows at fresh addresses
-  ([gext]), so a write-back changes no reading at all, and the heap invariant [gk_cells] —
-  "the cell at [a] stands for a reduct of [G a]" — is restored at the forced address by
-  transitivity and is untouched everywhere else.
+  The ghost map is what makes the write-back compositional. With a read-back that follows
+  the heap, forcing an address changes what *every* other structure that names it stands
+  for: the reading of a cell is a term built out of the readings of the addresses below it,
+  so a write-back turns a third party's reading [u] into some reduct [u']. To put a value
+  [v] back into a forced cell one then has to know that [v] is a reduct of the cell's
+  reading *as it is when the forcing ends*, not of its reading when the forcing started,
+  and the two are only joinable, not ordered: that is a confluence argument, not an
+  induction. With the ghost map, [G] only ever grows at fresh addresses ([gext]), so a
+  write-back changes no reading at all, and the heap invariant [gk_cells] — "the cell at
+  [a] stands for a reduct of [G a]" — is restored at the forced address by transitivity and
+  is untouched everywhere else.
 
   The fixpoint rule is why the machine puts the forced recursive argument in a *fresh*
   cell: the old cell still stands for the unforced argument, and the unfolded body must see
@@ -51,22 +51,23 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
   ** What is assumed
 
   The theorem's hypotheses, each a premise of [machine_sound]:
+  - [wfΣ], [hΣ]: [Σ] is well formed and is the environment [X] stands for.
+  - [hΔ]: the readings live in [Γ ,,, Δ], and [Δ] has [lvl - nctx] entries.
   - [hnctx], [hlvl]: what the machine's comment says of its own parameters.
   - [const_instance_ok]: every constant a let-body of [Γ] names carries an instance of the
     right length ([PCUICCallByNeedSoundHook.consts_okb]). [delta_red1] needs this of the
     constant it unfolds, because the machine's [inst_code []] is the identity where PCUIC
-    substitutes the empty instance ([inst_code_nil_ne_subst_instance]). For the entries of
-    the code table it is part of the state invariant [gok]: a constant body has it by
-    [declared_constant_consts_okb], an input term by [typing_consts_okb']. Only the
-    let-bodies of the context come from outside the table.
+    substitutes the empty instance. For the entries of the code table it is part of the
+    state invariant [gok]: a constant body has it by [declared_constant_consts_okb], an
+    input term by [typing_consts_okb']. Only the let-bodies of the context come from outside
+    the table.
 
   The memo facts are proved, not assumed: [gok] carries [memo_inv] of
   [PCUICCallByNeedSoundMemo] and [memo_ok] of [PCUICCallByNeedSoundCtx], and every reading
   of a code says the code is in the code table ([cok]), which is what [once_body] needs to
-  keep its cache sound. [wfΣ] and [hΣ] are the hook's own hypotheses: [Σ] is well formed
-  and is the environment [X] stands for.
+  keep its cache sound.
 
-  ** Hygiene (BET-298 step 3b)
+  ** Hygiene
 
   [gok] also says that every ghost term, and every entry of the code table, is hygienic
   ([on_free_vars xpredT]: its variables are anything, but the contexts of its matches are
@@ -77,7 +78,7 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
   returns its ghost existentially, so only its own invariant can carry the clause. The hook
   establishes [ctx_hyg] and both clauses ([cbn_run_gok_frame]); every new ghost term is a
   reading of hygienic ghost terms and codes ([g_slot_hyg], [g_susp_hyg]), which is the
-  premise [alloc_sound] now asks of the reading it allocates.
+  premise [alloc_sound] asks of the reading it allocates.
 
   ** Collections
 
@@ -176,11 +177,6 @@ Qed.
 
 (** ** Setting one element of a list *)
 
-Lemma list_set_length {A} (l : list A) n x : #|list_set l n x| = #|l|.
-Proof.
-  revert n. induction l as [|y l ih]; intros [|n]; cbn; try reflexivity. now rewrite ih.
-Qed.
-
 Lemma nth_error_list_set_same {A} (l : list A) n x :
   n < #|l| -> nth_error (list_set l n x) n = Some x.
 Proof.
@@ -193,11 +189,6 @@ Proof.
   revert n. induction l as [|y l ih]; intros [|n] h; cbn in *; try discriminate.
   - injection h as ->. reflexivity.
   - now rewrite (ih n h).
-Qed.
-
-Lemma list_set_list_set {A} (l : list A) n x y : list_set (list_set l n x) n y = list_set l n y.
-Proof.
-  revert n. induction l as [|z l ih]; intros [|n]; cbn; try reflexivity. now rewrite ih.
 Qed.
 
 Lemma All2_red_list_set {cf : checker_flags} (Σ : global_env_ext) Γ (l : list term) n t u :
@@ -565,9 +556,9 @@ Section Eval.
 
   (** ** The ghost read-back
 
-    [G a] is the term the cell at [a] was allocated for. An inline suspension is read like
-    [repr_susp]: the slots are read, then substituted into the code lifted over the
-    environment's own variables. *)
+    [G a] is the term the cell at [a] was allocated for. An inline suspension is read by
+    reading its slots, then substituting them into the code lifted over the environment's
+    own variables. *)
 
   Inductive g_slot (G : ghost) : cbn_slot -> term -> Prop :=
   | g_slot_addr a t : G a = Some t -> g_slot G (SAddr a) t
@@ -1182,8 +1173,9 @@ Section Eval.
           -- rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hhyg hcx i e hi).
   Qed.
 
-  (** The state invariant is not empty: the machine's initial state has it, with the empty
-    ghost. A call adds its input codes to the table with [new_entry] before it starts. *)
+  (** Satisfying instance of the state invariant [gok], the premise of [machine_sound]: the
+    machine's initial state has it, with the empty ghost. A call adds its input codes to the
+    table with [new_entry] before it starts. *)
   Lemma gok_init : gok xH (mkGhost (fun _ => None) (PTree.empty _)) cbn_init.
   Proof.
     split.
@@ -2015,8 +2007,7 @@ Section Eval.
   (** *** Allocation, which may collect first *)
 
   (** The new cell's reading becomes its ghost term, so it must be hygienic (under
-    [ctx_hyg]); every caller allocates a reading of hygienic ghosts and codes whose head, if
-    it has one, is a [tConstruct], [tInd], [tConst] or variable. *)
+    [ctx_hyg]); every caller allocates a reading of hygienic ghosts and codes. *)
   Lemma alloc_now_sound lo G cl u s :
     gok lo G s -> g_cell G cl u -> (ctx_hyg -> on_free_vars xpredT u) ->
     exists G', gext G G' /\ gok lo G' (snd (alloc_now cl s))
@@ -3256,9 +3247,10 @@ End Eval.
     clauses: for the empty context at level 0 with [Δ = []] ([eval_ctx_instance_nil]); for a
     well-formed context at its own length, [eval_section_instance] of
     [PCUICCallByNeedSoundHookFrame] (the hook's case).
-  - [gok]: [gok_init], and [run_s2_gok] of [PCUICCallByNeedSoundHookFrame] for the state the
-    hook starts in. *)
+  - [gok]: [gok_init], and [PCUICCallByNeedSoundLevel.run_s2_gok] for the state the hook
+    starts in. *)
 
+(** Satisfying instance of the hypotheses [wfΣ] and [hΣ] of [Section Eval]. *)
 Lemma eval_env_instance {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1) :
   ∥ ∑ Σ : global_env_ext, abstract_env_ext_rel X Σ × wf Σ ∥.
 Proof.
@@ -3267,6 +3259,8 @@ Proof.
   constructor. exists Σ. split; [exact hΣ|exact hw].
 Qed.
 
+(** Satisfying instance of the hypotheses [hΔ], [hnctx], [hlvl] and [const_instance_ok] of
+  [Section Eval], and of the premise [ctx_hyg], at the empty context. *)
 Lemma eval_ctx_instance_nil (Σ : global_env_ext) :
   #|([] : context)| = 0 - 0 /\ 0 = #|([] : context)| /\ 0 <= 0
   /\ (forall j decl b, nth_error ([] : context) j = Some decl -> decl.(decl_body) = Some b ->

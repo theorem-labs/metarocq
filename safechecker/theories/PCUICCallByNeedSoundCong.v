@@ -11,7 +11,7 @@ From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICCallByNeed.
 
 Set Default Goal Selector "1".
 
-(** * BET-298 step 2c: the PCUIC congruences the call-by-need comparison needs
+(** * The PCUIC congruences the call-by-need comparison needs
 
   The call-by-need comparison of [PCUICCallByNeed] ([conv_term], [conv_same_code],
   [case_cong], [conv_value], [conv_rows]) answers "convertible" in three ways: the two
@@ -52,13 +52,6 @@ Fixpoint fresh_context (n : nat) : context :=
 Lemma fresh_context_length n : #|fresh_context n| = n.
 Proof.
   induction n as [|n IH]; simpl; [reflexivity|]. now rewrite IH.
-Qed.
-
-Lemma fresh_context_assumption_context n : assumption_context (fresh_context n).
-Proof.
-  induction n as [|n IH]; simpl.
-  - constructor.
-  - constructor. exact IH.
 Qed.
 
 Lemma fresh_context_on_free_vars P n : on_free_vars_ctx P (fresh_context n).
@@ -104,64 +97,14 @@ Section Congruence.
              (untyped_subslet_fresh_context Γ ts1) (untyped_subslet_fresh_context Γ ts2) opb).
   Qed.
 
-  (** The form the machine can supply. [N] is the shift [lvl - nctx + goff] and [m] the
-    number of slots [nvals]; the context [Γ] is the one that holds at level [lvl], so
-    [#|Γ| = lvl]. The closedness hypothesis is a bound on the free variables of the code's
-    own term: every free variable of [t] is below [m + (#|Γ| - N)], which for the top-level
-    call ([m = 0], [N = 0]) is "closed in [Γ]", and under one pushed binder ([m = 1],
-    [N = 1], [#|Γ| = nctx + 1]) is "closed in [Γ]" again. *)
-  Lemma ws_cumul_pb_subst_lift {pb Γ ts1 ts2 N m t} :
-    is_closed_context Γ ->
-    ws_cumul_pb_terms Σ Γ ts1 ts2 ->
-    #|ts1| = m ->
-    N <= #|Γ| ->
-    on_free_vars (shiftnP (m + (#|Γ| - N)) xpred0) t ->
-    Σ ;;; Γ ⊢ subst ts1 0 (lift N m t) ≤[pb] subst ts2 0 (lift N m t).
-  Proof using wfΣ.
-    intros clΓ eqs hm hN ont.
-    eapply ws_cumul_pb_subst_open; tea.
-    rewrite hm app_context_length fresh_context_length.
-    assert (h : on_free_vars (strengthenP m N (shiftnP (m + (#|Γ| - N)) xpred0)) (lift N m t)).
-    { now rewrite on_free_vars_lift. }
-    eapply on_free_vars_impl; [|exact h].
-    intros i. unfold strengthenP, shiftnP; cbv beta.
-    destruct (Nat.ltb_spec i m) as [hi|hi].
-    - intros _. destruct (Nat.ltb_spec i (m + #|Γ|)) as [|hle]; [reflexivity|].
-      exfalso; lia.
-    - destruct (Nat.ltb_spec i (m + N)) as [h2|h2]; [intros hf; discriminate hf|].
-      destruct (Nat.ltb_spec (i - N) (m + (#|Γ| - N))) as [h3|h3];
-        [|simpl; intros hf; discriminate hf].
-      intros _. destruct (Nat.ltb_spec i (m + #|Γ|)) as [|hle]; [reflexivity|].
-      exfalso; lia.
-  Qed.
-
-  (** A whole slot list is convertible with itself; the "same address" row of the rule
-    table is this plus reflexivity. *)
-  Lemma ws_cumul_pb_terms_refl {Γ l} :
-    is_closed_context Γ -> forallb (is_open_term Γ) l -> ws_cumul_pb_terms Σ Γ l l.
-  Proof using wfΣ.
-    intros clΓ. induction l as [|t l IH]; simpl.
-    - intros _. constructor.
-    - move=> /andP[] ot ol. constructor; [|now apply IH].
-      now apply ws_cumul_pb_refl.
-  Qed.
-
   (** ** 2. Spine congruence
 
-    [ws_cumul_pb_mkApps] is MetaRocq's own (pcuic/theories/PCUICConversion.v:1672); it is
-    the rule for a head that is already convertible. [ws_cumul_pb_Ind] (:3851) and
-    [ws_cumul_pb_Construct] (:3875) are MetaRocq's rules for an inductive or constructor
-    head compared with variance at [napp = #|args|]. The machine, however, compares heads
-    with [cmp_term pb #|sp|], a *syntactic* test at [napp] = the spine length, for every
-    head shape; [ws_cumul_pb_mkApps_napp] below is that rule, proved here. *)
-
-  Lemma ws_cumul_pb_spine {pb Γ hd hd' args args'} :
-    Σ ;;; Γ ⊢ hd ≤[pb] hd' ->
-    ws_cumul_pb_terms Σ Γ args args' ->
-    Σ ;;; Γ ⊢ mkApps hd args ≤[pb] mkApps hd' args'.
-  Proof using wfΣ.
-    intros h hargs. now eapply ws_cumul_pb_mkApps.
-  Qed.
+    [PCUICConversion.ws_cumul_pb_mkApps] is MetaRocq's rule for a head that is already
+    convertible. [ws_cumul_pb_Ind] and [ws_cumul_pb_Construct] are MetaRocq's rules for an
+    inductive or constructor head compared with variance at [napp = #|args|]. The machine,
+    however, compares heads with [cmp_term pb #|sp|], a *syntactic* test at [napp] = the
+    spine length, for every head shape; [ws_cumul_pb_mkApps_napp] below is that rule,
+    proved here. *)
 
   Lemma ws_cumul_pb_mkApps_napp {pb Γ hd hd' args args'} :
     is_closed_context Γ ->
@@ -186,17 +129,12 @@ Section Congruence.
       apply ws_cumul_pb_refl; tea.
   Qed.
 
-  (** ** 3. Case and projection congruence
+  (** ** 3. Case congruence
 
-    [ws_cumul_pb_Case] is MetaRocq's own (PCUICConversion.v:2324) and
-    [ws_cumul_pb_Proj_c] (:1905). [ws_cumul_pb_tCase] below is the same rule with its
-    [ws_cumul_pb_predicate] and [ws_cumul_pb_brs] hypotheses spelled out component by
-    component, and with the openness hypothesis in the form the machine has it (openness of
-    the whole [tCase] term, which is what the state invariant carries). *)
-
-  Lemma is_open_case_tCase {Γ ci p c brs} :
-    is_open_term Γ (tCase ci p c brs) -> is_open_case Γ p c brs.
-  Proof using Type. intros h. exact h. Qed.
+    [PCUICConversion.ws_cumul_pb_Case] is MetaRocq's own. [ws_cumul_pb_tCase] below is the
+    same rule with its [ws_cumul_pb_predicate] and [ws_cumul_pb_brs] hypotheses spelled out
+    component by component, and with the openness hypothesis in the form the machine has it
+    (openness of the whole [tCase] term, which is what the state invariant carries). *)
 
   Lemma ws_cumul_pb_tCase {pb Γ ci p p' c c' brs brs'} :
     is_open_term Γ (tCase ci p c brs) ->
@@ -221,20 +159,11 @@ Section Congruence.
     split; assumption.
   Qed.
 
-  Lemma ws_cumul_pb_tProj {pb Γ pr c c'} :
-    Σ ;;; Γ ⊢ c = c' ->
-    Σ ;;; Γ ⊢ tProj pr c ≤[pb] tProj pr c'.
-  Proof using wfΣ.
-    intros h. now eapply ws_cumul_pb_Proj_c.
-  Qed.
-
   (** ** 4. Syntactic equality
 
     The test the machine runs before anything else ([eqb_term_upto_univ_napp] at [napp = 0],
-    from [PCUICEqualityDec]). The first lemma is MetaRocq's constructor [ws_cumul_pb_compare]
-    read as a rule; the second adds the reflection, with exactly the hypotheses of
-    [reflect_eq_term_upto_univ] (PCUICEqualityDec.v:452) — these are the ones the hook's
-    existing fast path discharges through [cmpb_term_correct]. *)
+    from [PCUICEqualityDec]). [ws_cumul_pb_compare_term] is MetaRocq's constructor
+    [ws_cumul_pb_compare] read as a rule. *)
 
   Lemma ws_cumul_pb_compare_term {pb Γ t u} :
     is_closed_context Γ ->
@@ -244,63 +173,13 @@ Section Congruence.
     Σ ;;; Γ ⊢ t ≤[pb] u.
   Proof using Type. intros; now constructor. Qed.
 
-  Lemma ws_cumul_pb_eqb_term_upto_univ
-    {pb Γ t u} {p : Universe.t -> bool} {q : nat -> term -> bool}
-    {cmpu : conv_pb -> Universe.t -> Universe.t -> bool}
-    {cmps : conv_pb -> sort -> sort -> bool}
-    {gen : conv_pb -> global_reference -> nat -> list Level.t -> list Level.t -> bool} :
-    (forall u u', p u -> p u' -> reflect (compare_universe Σ Conv u u') (cmpu Conv u u')) ->
-    (forall u u', p u -> p u' -> reflect (compare_universe Σ pb u u') (cmpu pb u u')) ->
-    (forall s s', Sort.on_sort p true s -> Sort.on_sort p true s' ->
-                  reflect (compare_sort Σ Conv s s') (cmps Conv s s')) ->
-    (forall s s', Sort.on_sort p true s -> Sort.on_sort p true s' ->
-                  reflect (compare_sort Σ pb s s') (cmps pb s s')) ->
-    (forall gr napp ui ui',
-        forallb p (map Universe.make' ui) -> forallb p (map Universe.make' ui') ->
-        reflect (cmp_global_instance Σ (compare_universe Σ) Conv gr napp ui ui')
-          (gen Conv gr napp ui ui')) ->
-    (forall gr napp ui ui',
-        forallb p (map Universe.make' ui) -> forallb p (map Universe.make' ui') ->
-        reflect (cmp_global_instance Σ (compare_universe Σ) pb gr napp ui ui')
-          (gen pb gr napp ui ui')) ->
-    on_universes p q t ->
-    on_universes p q u ->
-    is_closed_context Γ ->
-    is_open_term Γ t ->
-    is_open_term Γ u ->
-    eqb_term_upto_univ_napp cmpu cmps gen pb 0 t u ->
-    Σ ;;; Γ ⊢ t ≤[pb] u.
-  Proof using Type.
-    intros h1 h2 h3 h4 h5 h6 wt wu clΓ opt opu heq.
-    constructor; tea.
-    unfold compare_term.
-    destruct (reflect_eq_term_upto_univ _ p q cmpu cmps _ _ gen pb 0
-                h1 h2 h3 h4 h5 h6 t u wt wu) as [he|he].
-    - exact he.
-    - discriminate heq.
-  Qed.
+  (** ** 5. Transitivity in the shape the comparison uses
 
-  (** ** 5. Reflexivity and transitivity in the shape the comparison uses
-
-    [ws_cumul_pb_refl] and the [Transitive] instance are MetaRocq's
-    (PCUICWellScopedCumulativity.v:319 and :178), as are [red_ws_cumul_pb_left] (:338) and
-    [red_ws_cumul_pb_right] (:346). [ws_cumul_pb_closed_red] packs the last two into the
-    one step every row of the comparison takes: the evaluator reduces both sides to the
-    terms the two values read back to, and a congruence compares those. *)
-
-  Lemma ws_cumul_pb_refl_open {pb Γ t} :
-    is_closed_context Γ -> is_open_term Γ t -> Σ ;;; Γ ⊢ t ≤[pb] t.
-  Proof using Type. apply ws_cumul_pb_refl. Qed.
-
-  Lemma ws_cumul_pb_trans' {pb Γ t u v} :
-    Σ ;;; Γ ⊢ t ≤[pb] u -> Σ ;;; Γ ⊢ u ≤[pb] v -> Σ ;;; Γ ⊢ t ≤[pb] v.
-  Proof using wfΣ. intros h1 h2. etransitivity; tea. Qed.
-
-  Lemma ws_cumul_pb_conv_trans_l {pb Γ t u v} :
-    Σ ;;; Γ ⊢ t = u -> Σ ;;; Γ ⊢ u ≤[pb] v -> Σ ;;; Γ ⊢ t ≤[pb] v.
-  Proof using wfΣ.
-    intros h1 h2. etransitivity; [|exact h2]. now apply ws_cumul_eq_pb.
-  Qed.
+    The [Transitive] instance of [ws_cumul_pb], [red_ws_cumul_pb_left] and
+    [red_ws_cumul_pb_right] are MetaRocq's ([PCUICWellScopedCumulativity]).
+    [ws_cumul_pb_closed_red] packs the last two into the one step every row of the
+    comparison takes: the evaluator reduces both sides to the terms the two values read
+    back to, and a congruence compares those. *)
 
   Lemma ws_cumul_pb_conv_trans_r {pb Γ t u v} :
     Σ ;;; Γ ⊢ t ≤[pb] u -> Σ ;;; Γ ⊢ u = v -> Σ ;;; Γ ⊢ t ≤[pb] v.
@@ -323,22 +202,11 @@ End Congruence.
 
 (** ** The branch contexts the machine checks with [case_ctx_ok]
 
-  [case_ctx_ok ctx1 ctx2] (PCUICCallByNeed.v:2786) is the machine's run-time check on the
+  [PCUICCallByNeed.case_ctx_ok ctx1 ctx2] is the machine's run-time check on the
   [pcontext]s and [bcontext]s of a stuck match: both are let-free and they are equal up to
   names. These are the two facts [ws_cumul_pb_Case] and the read-back of a branch body ask
   for; the machine gives up on any context with a let-in, so there is nothing weaker to
   prove here. *)
-
-Lemma case_ctx_ok_eqb_context ctx1 ctx2 :
-  case_ctx_ok ctx1 ctx2 -> eqb_context_upto_names ctx1 ctx2.
-Proof.
-  unfold case_ctx_ok.
-  induction ctx1 as [|d1 ctx1 IH] in ctx2 |- *; destruct ctx2 as [|d2 ctx2]; simpl.
-  - intros _. reflexivity.
-  - intros h. discriminate h.
-  - intros h. discriminate h.
-  - move=> /andP[] /andP[] /andP[] _ _ -> /= h. now apply IH.
-Qed.
 
 Lemma case_ctx_ok_spec ctx1 ctx2 :
   case_ctx_ok ctx1 ctx2 ->
@@ -368,29 +236,4 @@ Proof.
   induction 1; simpl.
   - constructor.
   - constructor. assumption.
-Qed.
-
-Lemma assumption_context_inst_case_context pars u ctx :
-  assumption_context ctx -> assumption_context (inst_case_context pars u ctx).
-Proof.
-  intros h. unfold inst_case_context.
-  apply assumption_context_fold.
-  change (subst_instance u ctx) with (map_context (subst_instance u) ctx).
-  now apply assumption_context_map_context.
-Qed.
-
-Lemma assumption_context_inst_case_branch_context p br :
-  assumption_context br.(bcontext) ->
-  assumption_context (inst_case_branch_context p br).
-Proof.
-  intros h. unfold inst_case_branch_context.
-  now apply assumption_context_inst_case_context.
-Qed.
-
-Lemma assumption_context_inst_case_predicate_context p :
-  assumption_context p.(pcontext) ->
-  assumption_context (inst_case_predicate_context p).
-Proof.
-  intros h. unfold inst_case_predicate_context.
-  now apply assumption_context_inst_case_context.
 Qed.

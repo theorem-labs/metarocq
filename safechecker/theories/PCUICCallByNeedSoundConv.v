@@ -17,10 +17,7 @@ Import CanonicalTries.
 
 Set Default Goal Selector "1".
 
-Local Notation key := String2pos.positive.
-
-
-(** * BET-298 step 3b: the comparison is sound on ghost readings
+(** * The comparison is sound on ghost readings
 
   The comparison of [PCUICCallByNeed] is the mutual block [conv_slot], [conv_eval],
   [conv_term], [conv_same_code], [same_code_cells], [case_cong], [case_params],
@@ -28,26 +25,30 @@ Local Notation key := String2pos.positive.
   [COk (true, _, _)] for "convertible", [COk (false, _, _)] for "this rule does not apply,
   try the next one" and [CFail w] for "give up". Only the [true] answer is a claim.
 
-  The file has four parts.
+  The file has six parts.
   - The soundness of the machine's syntactic tests ([cmp_term_sound] and its companions),
     and the substitution fact the same-code rule rests on ([subst_agree_lift]).
   - The bodies of the comparison's functions at a successor fuel, with the functions' own
     names ([same_code_cells_eq], [case_cong_eq], ...), and the syntax of a [tCase] reading
     ([rsusp_case], [open_case_inv]).
+  - Syntactic facts about codes and readings ([cg_occ_inv], [cg_subst_fresh_lift], ...).
+  - The shape of the roots a machine call returns ([sk_*], [machine_skel]): renamed, never
+    reshaped.
   - [Section ConvGhost]: one statement [spec_f d] per function [f], read against the ghost
     reading of [PCUICCallByNeedSoundEval.machine_sound] at the master level of
-    [PCUICCallByNeedSoundLevel]; one step lemma per function; and [spec_all_holds], every
+    [PCUICCallByNeedSoundLevel]; one step lemma per function; and [spec_all_ind], every
     statement at every fuel, by induction on the fuel. Its hypotheses are the section's,
     including [hrb], the read-back interface [PCUICCallByNeedSoundLevel.rb_sound] that
-    [PCUICCallByNeedSoundReadBack] proves.
+    [PCUICCallByNeedSoundReadBack.rb_sound_holds] proves. [spec_all_holds], after the
+    section, states the result with the section's parameters.
   - Two concrete runs at the real fuel [cbn_depth] that meet the premises of [spec_term] and
     satisfy its conclusion ([witness_seam_run], [witness_true_run]).
 
-  An earlier form of this file read the comparison's inputs with the heap-following
-  [repr_*] of [PCUICCallByNeedSound]; that form is false at the fuel [cbn_run] uses
-  ([PCUICCallByNeedSoundHookFrame.term_seam_false]) and is gone. Conversion is squashed
-  ([∥ _ ∥]) because [ws_cumul_pb] lives in [Type] and the readings in [Prop]; that is also
-  the shape of the hook's obligation in [PCUICTypeChecker.convert]. *)
+  The comparison's inputs are read with the ghost read-back, not with one that follows the
+  heap: a statement with a heap-following read-back is false at the fuel [cbn_run] uses
+  ([PCUICCallByNeedCounterexamples.term_seam_false]). Conversion is squashed ([∥ _ ∥])
+  because [ws_cumul_pb] lives in [Type] and the readings in [Prop]; that is also the shape
+  of the hook's obligation in [PCUICTypeChecker.convert]. *)
 
 (** ** Soundness of the machine's syntactic tests
 
@@ -294,14 +295,14 @@ Qed.
 
 (* [noccA_false H] closes a goal [c = false] where [c] is a conjunction ([andb]) one of
    whose conjuncts is, up to conversion, the left side of [H : _ = false]. *)
-Ltac noccA_false H :=
+Local Ltac noccA_false H :=
   first [ exact H
         | apply Bool.andb_false_iff;
           first [ left; noccA_false H | right; noccA_false H ] ].
 
 (* [noccA_sub Hj] moves the agreement hypothesis [Hj] of a term to one of its direct
    subterms: if the subterm uses an index then so does the term. *)
-Ltac noccA_sub Hj :=
+Local Ltac noccA_sub Hj :=
   let j := fresh "j" in
   let Hj1 := fresh "Hj1" in
   let Hj2 := fresh "Hj2" in
@@ -1253,7 +1254,7 @@ Proof.
       cbn beta in hd. apply andb_true_iff in hd. exact (proj2 hd).
 Qed.
 
-(** * A machine call returns the caller's roots renamed, never reshaped (BET-298)
+(** * A machine call returns the caller's roots renamed, never reshaped
 
   The shape of a root is the root with every heap address replaced by one constant address
   ([mp_root kc]). A renaming ([rn_*]), a collection, an allocation and every function of the
@@ -1739,10 +1740,11 @@ Lemma machine_skel {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type
 Proof. exact (sk_machine X_type X Γ nctx stress). Qed.
 
 
-(** * The comparison on ghost readings (BET-298, step 3b)
+(** * The comparison on ghost readings
 
-  A statement that reads the comparison's inputs with the heap-following [repr_*] is false
-  ([PCUICCallByNeedSoundHookFrame.term_seam_false]). This part states the comparison against the ghost reading of [machine_sound]
+  A statement that reads the comparison's inputs with a heap-following read-back is false
+  ([PCUICCallByNeedCounterexamples.term_seam_false]). This part states the comparison
+  against the ghost reading of [machine_sound]
   ([PCUICCallByNeedSoundEval]) at the master level of [PCUICCallByNeedSoundLevel]: the state
   satisfies [minv L Q], where [L <= Q] is the comparison's logical level and [Q] the level of
   the ghost.
@@ -3136,25 +3138,6 @@ Section ConvGhost.
       [lia|lia|exact (hch _ hc1)|exact (hch _ hc2)|exact hsame|exact hag].
   Qed.
 
-  (** The identifier fast path: [same_id] gives one term, so no universe check enters. *)
-  Lemma conv_same_code_sound_same_id_ghost (d : cbn_fuel) : spec_same d ->
-    forall L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s',
-      same_id c1 c2 = true ->
-      MI L Q lo G s -> Forall (rwf Q) rs ->
-      g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
-      g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
-      conv_same_code X_type X Γ nctx stress d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
-      c1.(c_term) = c2.(c_term) /\ post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
-  Proof.
-    intros hS L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s' hsid hm hr hs1 hc1 hs2 hc2 he.
-    split.
-    - destruct hc1 as [ce1 [hg1 hi1]]. destruct hc2 as [ce2 [hg2 hi2]].
-      exact (same_id_sound_table _ ce1 ce2 c1 c2 hsid hg1 hi1 hg2 hi2).
-    - exact (conv_same_code_sound_ghost d hS L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s'
-               hm hr hs1 hc1 hs2 hc2 he).
-  Qed.
-
-  (** The same-code rule read for a fixpoint value: fixpoint [i] of the two [tFix] codes. *)
   Lemma cagree_fix L Q m idx idx' i l1 l2 :
     cagree L Q (tFix m idx) i l1 l2 -> cagree L Q (tFix m idx') i l1 l2.
   Proof. induction 1; constructor; [exact H|exact IHcagree]. Qed.
@@ -4068,8 +4051,8 @@ Section ConvGhost.
 
   (** ** The read-back: the conversion side
 
-    [rb_sound] of [PCUICCallByNeedSoundLevel], the frozen interface between this file and
-    [PCUICCallByNeedSoundReadBack] (worker ReadBack), which proves it. *)
+    [rb_sound] of [PCUICCallByNeedSoundLevel], which
+    [PCUICCallByNeedSoundReadBack.rb_sound_holds] proves. *)
   Context (hrb : rb_sound X_type X Γ nctx Σ).
 
   (** Two heads that reduce to terms equal up to universes at [Conv] (with [napp] arguments),
@@ -4351,7 +4334,7 @@ Section ConvGhost.
 
   (** *** All the rows *)
 
-  Ltac rows_false hm hr he :=
+  Local Ltac rows_false hm hr he :=
     match type of he with
     | conv_rows ?a1 ?a2 ?a3 ?a4 ?a5 ?a6 ?a7 ?a8 ?a9 ?a10 ?a11 ?a12 = _ =>
       change (conv_rows a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12) with (COk (false, a11, a12)) in he
@@ -4694,7 +4677,7 @@ Section ConvGhost.
     pose proof (g_slots_length _ _ _ _ _ hts2) as hl2.
     assert (hk1 : ev_nvals e1 = #|ts1|) by lia.
     assert (hk2 : ev_nvals e2 = #|ts2|) by lia.
-    try rewrite Ec1. try rewrite Ec2. rewrite hk1, hk2.
+    rewrite hk1, hk2.
     (* the parameters *)
     assert (hr0 : Forall (rwf Q) (RE e1 :: RE e2 :: rs))
       by (constructor; [exact I|constructor; [exact I|exact hr]]).
@@ -4843,7 +4826,7 @@ End ConvGhost.
   [hnctx], [hΓ], [hhyg] and [hcio] ([PCUICCallByNeedSoundHookFrame.eval_section_instance]
   gives them for any well-formed context, and [w_section] and [v_section] below at concrete
   ones), and [hrb], the read-back interface [rb_sound] that
-  [PCUICCallByNeedSoundReadBack] proves. *)
+  [PCUICCallByNeedSoundReadBack.rb_sound_holds] proves from [wf Σ], [hΓ] and [hhyg]. *)
 Theorem spec_all_holds {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
     (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext)
     (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ)
@@ -4863,12 +4846,12 @@ Proof. intros d. eapply spec_all_ind; eassumption. Qed.
   machine lemma [whnf_master_hwf] and, for the run that answers [true], the conversion part
   [cq] by hand, not by the fuel induction. The answers and final states are obtained by
   computation. The only hypotheses are [wf Σ] and [abstract_env_ext_rel X Σ]: the start
-  invariant is [run_s2_gok] of [PCUICCallByNeedSoundLevel], and the section hypotheses of
-  [ConvGhost] hold at both contexts ([w_section], [v_section]).
-  - [witness_seam_run]: the run that refuted the old seam
-    ([PCUICCallByNeedSoundHookFrame.term_seam_false]): [x := (fun n : nat => n) O] against
-    [fun n : nat => n]. It answers [false], [post] holds after it, and the context cell of [x]
-    has been forced while every ghost of [minv] still reads it as its let-body.
+  invariant is [run_s2_gok] of [PCUICCallByNeedSoundLevel], the context hypotheses of
+  [ConvGhost] hold at both contexts ([w_section], [v_section]), and [hrb] follows from them
+  by [PCUICCallByNeedSoundReadBack.rb_sound_holds].
+  - [witness_seam_run]: [x := (fun n : nat => n) O] against [fun n : nat => n], the run
+    [PCUICCallByNeedCounterexamples.term_seam_false] uses. It answers [false], and [post]
+    holds after it.
   - [witness_true_run]: [x := (fun n : y => n) y] against [y], at [Conv]. It answers [true]
     and [cq] holds. *)
 
@@ -4981,7 +4964,7 @@ Section Witness.
     intros i e hi. exact (proj1 hg2 _ _ (proj1 hg1 _ _ hi)).
   Qed.
 
-  (** ** W1: the run that refuted the old seam answers [false], and [post] holds after it *)
+  (** ** A run that answers [false], and [post] holds after it *)
 
   Definition w_G0 : ghost := run_ghost X_type X w_t w_u.
 
@@ -5029,9 +5012,8 @@ Section Witness.
   Lemma w_tick : tick w_s2 = Some w_s3.
   Proof. vm_compute. reflexivity. Qed.
 
-  Lemma w_body_lift (n k : nat) : lift n k w_body = w_body.
-  Proof. reflexivity. Qed.
-
+  (** Satisfying instance of the premises of [spec_term] at [cbn_depth], with its
+    conclusion: a run that answers [false]. *)
   Theorem witness_seam_run :
     minv X_type X w_Γ 1 Σ 1 1 xH w_G0 (run_s2 X_type X w_t w_u)
     /\ g_susp 1 1 w_G0 env_empty (run_c1 X_type X w_t).(c_term) w_t
@@ -5041,10 +5023,7 @@ Section Witness.
     /\ exists s',
          conv_term X_type X w_Γ 1 false cbn_depth 1 Conv env_empty (run_c1 X_type X w_t)
            env_empty (run_c2 X_type X w_t w_u) [] (run_s2 X_type X w_t w_u) = COk (false, [], s')
-         /\ post X_type X w_Γ 1 Σ 1 1 w_G0 [] s' []
-         /\ PTree.get (key_of_succ_nat 0) s'.(st_gam) = Some (HAddr 1)
-         /\ heap_get (HAddr 1) s' = Some (CDone (VCon w_O []))
-         /\ (forall Q' lo' G', minv X_type X w_Γ 1 Σ 1 Q' lo' G' s' -> G' (HAddr 1) = Some w_body).
+         /\ post X_type X w_Γ 1 Σ 1 1 w_G0 [] s' [].
   Proof.
     assert (hm0 : minv X_type X w_Γ 1 Σ 1 1 xH w_G0 (run_s2 X_type X w_t w_u))
       by exact (r_minv_start w_Γ 1 w_t w_u eq_refl eq_refl eq_refl eq_refl eq_refl).
@@ -5056,19 +5035,11 @@ Section Witness.
     destruct (r_split w_Γ 1 w_t w_u (VCon w_O []) w_v2 w_s1 w_s2 w_s3 false
                 w_E1 w_E2 w_E3) as [hrun (d & hd1 & hd2)].
     exists w_s3. split; [exact hrun|].
-    assert (hgam : PTree.get (key_of_succ_nat 0) w_s3.(st_gam) = Some (HAddr 1))
-      by (vm_compute; reflexivity).
     destruct w_section as (_ & _ & _ & hcio).
-    split; [exact (r_post w_Γ 1 w_t w_u eq_refl hcio d _ _ _ _ _ hm0 hd1 hd2 w_tick)|].
-    split; [exact hgam|].
-    split; [vm_compute; reflexivity|].
-    intros Q' lo' G' [_ _ hok _].
-    destruct (@gk_gam _ X_type X w_Γ 1 Σ _ _ _ _ _ hok 0 (HAddr 1) hgam) as (tm & hden & hG).
-    change (ctx_den w_Γ 1 Q' 0) with (Some (lift0 (Q' - 1 + 1) w_body)) in hden.
-    rewrite w_body_lift in hden. injection hden as <-. exact hG.
+    exact (r_post w_Γ 1 w_t w_u eq_refl hcio d _ _ _ _ _ hm0 hd1 hd2 w_tick).
   Qed.
 
-  (** ** W2: a run that answers [true], with its conversion claim *)
+  (** ** A run that answers [true], with its conversion claim *)
 
   Definition v_G0 : ghost := run_ghost X_type X v_t v_u.
 
@@ -5136,6 +5107,8 @@ Section Witness.
     apply into_closed_red; [exact v_red|exact hcl|reflexivity].
   Qed.
 
+  (** Satisfying instance of the premises of [spec_term] at [cbn_depth], with its
+    conclusion: a run that answers [true]. *)
   Theorem witness_true_run :
     minv X_type X v_Γ 2 Σ 2 2 xH v_G0 (run_s2 X_type X v_t v_u)
     /\ g_susp 2 2 v_G0 env_empty (run_c1 X_type X v_t).(c_term) v_t
