@@ -93,7 +93,7 @@ Module QuoteConversion (Import T : Term) (Import E : EnvironmentSig T) (Import T
     := ltac:(cbv [cumul_ctx_rel]; exact _).
 End QuoteConversion.
 
-Module QuoteGlobalMaps (Import T : Term) (Import E : EnvironmentSig T) (Import TU : TermUtils T E) (Import ET : EnvTypingSig T E TU) (Import C : ConversionSig T E TU ET) (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import GM : GlobalMapsSig T E TU ET C L AR) (Import qT : QuotationOfTerm T) (Import qE : QuotationOfEnvironment T E) (Import qET : QuotationOfEnvTyping T E TU ET) (Import qC : QuotationOfConversion T E TU ET C) (Import qL : QuotationOfLookup T E L) (Import qAR : QuotationOfKernelRed T E AR) (Import qGM :  QuotationOfGlobalMaps T E TU ET C L AR GM) (Import QuoteT : QuoteTerm T) (Import QuoteE : QuoteEnvironmentSig T E) (Import QuoteET : QuoteEnvTypingSig T E TU ET) (Import QuoteC : QuoteConversionSig T E TU ET C) (Import QuoteL : QuoteLookupSig T E L) (Import QuoteAR : QuoteKernelRedSig T E AR) <: QuoteGlobalMapsSig T E TU ET C L AR GM.
+Module QuoteGlobalMaps (Import T : Term) (Import E : EnvironmentSig T) (Import TU : TermUtils T E) (Import ET : EnvTypingSig T E TU) (Import C : ConversionSig T E TU ET) (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import PO : PrimOpTypeSig T E) (Import GM : GlobalMapsSig T E TU ET C L AR PO) (Import qT : QuotationOfTerm T) (Import qE : QuotationOfEnvironment T E) (Import qET : QuotationOfEnvTyping T E TU ET) (Import qC : QuotationOfConversion T E TU ET C) (Import qL : QuotationOfLookup T E L) (Import qAR : QuotationOfKernelRed T E AR) (Import qPO : QuotationOfPrimOpType T E PO) (Import qGM :  QuotationOfGlobalMaps T E TU ET C L AR PO GM) (Import QuoteT : QuoteTerm T) (Import QuoteE : QuoteEnvironmentSig T E) (Import QuoteET : QuoteEnvTypingSig T E TU ET) (Import QuoteC : QuoteConversionSig T E TU ET C) (Import QuoteL : QuoteLookupSig T E L) (Import QuoteAR : QuoteKernelRedSig T E AR) <: QuoteGlobalMapsSig T E TU ET C L AR PO GM.
 
   #[export] Hint Unfold
     mdecl_at_i
@@ -295,17 +295,17 @@ End QuoteGlobalMaps.
 Module QuoteDeclarationTyping (Import T : Term) (Import E : EnvironmentSig T) (Import TU : TermUtils T E)
        (Import ET : EnvTypingSig T E TU) (Import CT : ConversionSig T E TU ET)
        (Import CS : ConversionParSig T E TU ET) (Import Ty : Typing T E TU ET CT CS)
-       (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import GM : GlobalMapsSig T E TU ET CT L AR)
-       (Import DT : DeclarationTypingSig T E TU ET CT CS Ty L AR GM)
+       (Import L : LookupSig T E) (Import AR : KernelRedSig T E) (Import PO : PrimOpTypeSig T E) (Import GM : GlobalMapsSig T E TU ET CT L AR PO)
+       (Import DT : DeclarationTypingSig T E TU ET CT CS Ty L AR PO GM)
        (Import qT : QuotationOfTerm T) (Import qE : QuotationOfEnvironment T E)
        (Import qET : QuotationOfEnvTyping T E TU ET) (Import qCT : QuotationOfConversion T E TU ET CT)
        (Import qTy : QuotationOfTyping T E TU ET CT CS Ty)
-       (Import qGM : QuotationOfGlobalMaps T E TU ET CT L AR GM)
+       (Import qGM : QuotationOfGlobalMaps T E TU ET CT L AR PO GM)
        (Import QuoteT : QuoteTerm T) (Import QuoteE : QuoteEnvironmentSig T E)
        (Import QuoteET : QuoteEnvTypingSig T E TU ET) (Import QuoteCT : QuoteConversionSig T E TU ET CT)
        (Import QuoteTy : QuoteTyping T E TU ET CT CS Ty)
-       (Import QuoteL : QuoteLookupSig T E L) (Import QuoteGM : QuoteGlobalMapsSig T E TU ET CT L AR GM)
-<: QuoteDeclarationTypingSig T E TU ET CT CS Ty L AR GM DT.
+       (Import QuoteL : QuoteLookupSig T E L) (Import QuoteGM : QuoteGlobalMapsSig T E TU ET CT L AR PO GM)
+<: QuoteDeclarationTypingSig T E TU ET CT CS Ty L AR PO GM DT.
 
   Import StrongerInstances.
   #[export] Instance quote_type_local_decl {cf Σ Γ d} : ground_quotable (@type_local_decl cf Σ Γ d) := ltac:(cbv [type_local_decl isType]; exact _).

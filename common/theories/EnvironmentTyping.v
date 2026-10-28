@@ -1,7 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require CMorphisms CRelationClasses.
-From Stdlib Require Import ListDec.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Environment Primitive PrimitiveOps.
 From Equations Require Import Equations.
@@ -1283,11 +1282,25 @@ Defined.
 Definition option_kername_eq_dec (x y : option kername) : {x = y} + {x <> y}.
 Proof. decide equality. apply Kername.eq_dec. Defined.
 
+(** [NoDup] on kernames is decidable.  Inlined over [Kername.eq_dec] rather
+    than taken from [Stdlib.Lists.ListDec], because extraction of this file
+    would then need a [listDec] module that the plugins do not ship. *)
+Definition dec_NoDup_kername (l : list kername) : {NoDup l} + {~ NoDup l}.
+Proof.
+  induction l as [|a l ih].
+  - left; constructor.
+  - destruct (In_dec Kername.eq_dec a l) as [hin|hnin].
+    + right; intros h; inversion h; subst; contradiction.
+    + destruct ih as [h|h].
+      * left; constructor; assumption.
+      * right; intros h'; inversion h'; subst; contradiction.
+Defined.
+
 Definition dec_wf_retro (r : Retroknowledge.t)
   : {Retroknowledge.wf_retro r} + {~ Retroknowledge.wf_retro r}.
 Proof.
   set (ops := map fst r.(Retroknowledge.retro_ops)).
-  destruct (ListDec.NoDup_dec Kername.eq_dec ops) as [HN|HN];
+  destruct (dec_NoDup_kername ops) as [HN|HN];
     [|right; intros [h _ _ _]; exact (HN h)].
   destruct (Forall_dec (fun c => ~ In (Some c) (Retroknowledge.type_constants r))
               (fun c => match In_dec option_kername_eq_dec (Some c)
