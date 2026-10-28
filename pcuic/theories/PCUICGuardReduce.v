@@ -47,10 +47,14 @@ Set Default Goal Selector "!".
 
   The retroknowledge [retro] is part of the signature for the guard checker,
   but it is not consulted: PCUIC does have primitive-operation reduction
-  ([red_prim_op], BET-319), yet this stepper deliberately does not fire an
-  operation, matching Rocq, whose guard does not fire one to prune a match
-  branch.  If it ever does, [gc_ext] must take [extends_prim] (standing
-  condition D-3 in common/theories/Environment.v). *)
+  ([red_prim_op]), yet this stepper does not fire an operation.  Rocq's guard
+  does: it reduces with [whd_all] (kernel/inductive.ml, [subterm_specif] and the
+  match pruning of [check_rec_call_state]), which fires saturated primitives
+  (kernel/cClosure.ml).  So a fixpoint whose recursive argument is computed by a
+  primitive operation can be accepted by Rocq and refused here: a known refusal
+  class (incompleteness, not unsoundness), pinned by test-suite/prim_ops.v.  If
+  this stepper ever fires operations, [gc_ext] must take [extends_prim]
+  (standing condition D-3 in common/theories/Environment.v). *)
 
 Inductive step_result :=
 | Stuck

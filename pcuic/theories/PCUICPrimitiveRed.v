@@ -74,62 +74,6 @@ Proof.
   destruct t => //=; intros h; rewrite /term_of_lit; f_equal; now apply lit_of_prim_inv.
 Qed.
 
-Lemma prim_of_lit_inj l l' : prim_of_lit l = prim_of_lit l' -> l = l'.
-Proof.
-  intros e; apply (f_equal lit_of_prim) in e.
-  rewrite !lit_of_prim_of_lit in e; now injection e.
-Qed.
-
-Lemma term_of_lit_inj l l' : term_of_lit l = term_of_lit l' -> l = l'.
-Proof.
-  intros e; apply (f_equal lit_of_term) in e.
-  rewrite !lit_of_term_of_lit in e; now injection e.
-Qed.
-
-Lemma map_term_of_lit_inj ls ls' :
-  map term_of_lit ls = map term_of_lit ls' -> ls = ls'.
-Proof.
-  induction ls as [|a ls ih] in ls' |- *; destruct ls' as [|b ls'] => //=.
-  intros e; injection e as e1 e2.
-  apply prim_of_lit_inj in e1. apply ih in e2. now subst.
-Qed.
-
-(** ** The reduct of a redex is unique
-
-  A redex of the rule determines its head constant, its universe instance and
-  its literal arguments; [prim_op_of] is a function of the head (the table's
-  kernames are distinct), [prim_op_denote] is a function, and so is [readback].
-  These are the two halves confluence needs. *)
-
-Lemma prim_redex_inj c u ls c' u' ls' :
-  mkApps (tConst c u) (map term_of_lit ls) = mkApps (tConst c' u') (map term_of_lit ls') ->
-  [× c = c', u = u' & ls = ls'].
-Proof.
-  intros e.
-  eapply mkApps_eq_inj in e as [e1 e2]; [|easy|easy].
-  noconf e1. split => //. now apply map_term_of_lit_inj.
-Qed.
-
-Lemma readback_funct Σ s r v v' :
-  readback Σ s r = Some v -> readback Σ s r = Some v' -> v = v'.
-Proof.
-  intros h h'; rewrite h in h'; now injection h' as <-.
-Qed.
-
-(** One reduct: the data of two firings of the rule on the same term agree.
-    [op = op'] is the caller's: [prim_op_of] is a function of the head, and
-    [prim_redex_inj] gives it the same head. *)
-Lemma red_prim_op_det Σ op ls r r' v v' :
-  prim_op_denote op ls = Some r -> prim_op_denote op ls = Some r' ->
-  readback Σ (po_shape (info op)) r = Some v ->
-  readback Σ (po_shape (info op)) r' = Some v' ->
-  v = v'.
-Proof.
-  intros d d' b b'.
-  pose proof (prim_op_denote_funct _ _ _ _ d d') as <-.
-  now eapply readback_funct.
-Qed.
-
 (** ** The arguments of a redex, and the computed reduct
 
   The machine ([PCUICSafeReduce], design §7.2), the weak-head forms
@@ -202,31 +146,6 @@ Proof.
   cbn [map app split_lits]. rewrite lit_of_term_of_lit ih //.
 Qed.
 
-(** Replacing the first non-literal argument by its weak-head normal form, when
-    that is not a literal either, leaves the split where it was.  This is what
-    makes the machine's stopping state its own weak-head normal form. *)
-Lemma split_lits_replace {n args ls a rest b} :
-  n <= #|args| ->
-  split_lits (firstn n args) = inr (ls, a, rest) ->
-  lit_of_term b = None ->
-  (n <= #|map term_of_lit ls ++ b :: rest ++ skipn n args|) ×
-  (firstn n (map term_of_lit ls ++ b :: rest ++ skipn n args)
-     = map term_of_lit ls ++ b :: rest).
-Proof.
-  intros hn hs hb.
-  destruct (split_lits_inr hs) as [ef _].
-  have hfl : #|firstn n args| = n by rewrite length_firstn; lia.
-  have hlen : #|map term_of_lit ls ++ b :: rest| = n.
-  { rewrite -hfl ef !length_app !length_map //=. }
-  have happ : forall (x y : list term), #|x| = n -> firstn n (x ++ y) = x.
-  { intros x y hx. rewrite firstn_app -hx firstn_all Nat.sub_diag /= app_nil_r //. }
-  have esp : map term_of_lit ls ++ b :: rest ++ skipn n args
-           = (map term_of_lit ls ++ b :: rest) ++ skipn n args
-    by rewrite -app_assoc.
-  rewrite esp.
-  split; [rewrite length_app; lia|exact (happ _ _ hlen)].
-Qed.
-
 Lemma split_lits_length_inl {args ls} : split_lits args = inl ls -> #|args| = #|ls|.
 Proof. intros h; rewrite (split_lits_inl h) length_map //. Qed.
 
@@ -239,8 +158,8 @@ Qed.
 Lemma lits_of_args_map ls : lits_of_args (map term_of_lit ls) = Some ls.
 Proof. by rewrite /lits_of_args split_lits_map. Qed.
 
-(** The reduct the rule produces on these arguments, if it can fire.  [None] is
-    exactly §6's [cannot_fire]: an argument that is not a literal (stuck, or a
+(** The reduct the rule produces on these arguments, if it can fire.  [None] means
+    the rule cannot fire: an argument that is not a literal (stuck, or a
     payload of the wrong kind), an argument list the operation does not accept,
     or a readback that fails because the booleans are not registered. *)
 Definition prim_reduct (Σ : global_env) (op : prim_op) (args : list term) : option term :=
@@ -269,16 +188,4 @@ Proof.
   rewrite /prim_reduct; destruct (lits_of_args args) as [ls|] eqn:hls => //.
   destruct (prim_op_denote op ls) as [r|] eqn:hd => // hb.
   exists ls, r; split => //. now apply lits_of_args_inv.
-Qed.
-
-(** Only the arguments decide whether the rule fires, so a reduct computed in
-    one environment is computed in every environment with the same booleans. *)
-Lemma prim_reduct_retro {Σ Σ' op args} :
-  Σ.(retroknowledge).(Retroknowledge.retro_bool)
-    = Σ'.(retroknowledge).(Retroknowledge.retro_bool) ->
-  prim_reduct Σ op args = prim_reduct Σ' op args.
-Proof.
-  intros e; rewrite /prim_reduct; destruct (lits_of_args args) as [ls|] => //.
-  destruct (prim_op_denote op ls) as [[i|b]|] => //=.
-  destruct (po_shape (info op)) => //=. now rewrite e.
 Qed.
