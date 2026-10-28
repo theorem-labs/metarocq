@@ -429,6 +429,26 @@ Module PCUICPrimOpType <: EnvironmentTyping.PrimOpTypeSig PCUICTerm PCUICEnviron
       + destruct (r.(Retroknowledge.retro_bool)) as [i|] eqn:e; cbn in hs; [|discriminate].
         injection hs as <-. exists i. split; first [exact e | reflexivity].
   Qed.
+
+  (** The converse: the expected type is defined once every argument tag and the
+      result shape have their registered types. *)
+  Lemma prim_arg_types_of_kn r ts kns res :
+    All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) ts kns ->
+    prim_arg_types r ts res = Some (fold_right (fun kn B => tImpl (tConst kn []) B) res kns).
+  Proof.
+    induction 1 as [|t kn ts kns e _ ih]; [reflexivity|].
+    change (prim_arg_types r (t :: ts) res) with
+      (match prim_tag_type r t with
+       | Some a => option_map (tImpl a) (prim_arg_types r ts res)
+       | None => None end).
+    unfold prim_tag_type. rewrite e ih. reflexivity.
+  Qed.
+
+  Lemma prim_op_type_of_kn r op kns res :
+    All2 (fun t kn => EnvironmentTyping.retro_type_constant r t = Some kn) (po_args (info op)) kns ->
+    prim_shape_type r (po_shape (info op)) = Some res ->
+    prim_op_type r op = Some (fold_right (fun kn B => tImpl (tConst kn []) B) res kns).
+  Proof. intros hk hs. unfold prim_op_type. rewrite hs. now apply prim_arg_types_of_kn. Qed.
 End PCUICPrimOpType.
 
 Module PCUICGlobalMaps := EnvironmentTyping.GlobalMaps
