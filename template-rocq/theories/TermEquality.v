@@ -50,7 +50,8 @@ Definition global_variance_gen lookup gr napp :=
           same supertype, so no universe ws_cumul_pb needs to be checked for them; we
           still check that the instances have the same length. A constructor of a
           non-cumulative inductive is compared by instance equality even when fully
-          applied, as the kernel does ([convert_constructors_gen]). *)
+          applied, as Rocq's kernel does (function [convert_constructors_gen] of
+          kernel/conversion.ml). *)
         match mdecl.(ind_variance) with
         | Some _ => AllIrrelevant
         | None => AllEqual
