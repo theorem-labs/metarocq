@@ -72,6 +72,14 @@ Definition po_unsat : PrimInt63.eqb 1 = PrimInt63.eqb 1 := eq_refl.
 Definition po_beta_arg : PrimInt63.eqb ((fun x : PrimInt63.int => x) 1) 2 = false
   := eq_refl.
 
+(** Stuck applications of two different operations: with [x] a variable,
+    neither [eqb x 1] nor [leb x 1] can take a step.  The hypothesis only puts
+    [leb] into the quoted program.  The statement is doctored into
+    [... -> eqb x 1 = leb x 1] below, which conversion must refuse. *)
+Definition po_stuck : forall x : PrimInt63.int,
+    PrimInt63.leb x 1 = PrimInt63.leb x 1 -> PrimInt63.eqb x 1 = PrimInt63.eqb x 1
+  := fun x _ => eq_refl.
+
 (** A constant with a body, of the type an operation would have.  It is
     registered as an operation by one control, and named as [retro_int63] by
     another, where it satisfies neither [cst_body = None] nor
@@ -81,6 +89,8 @@ Definition po_defined : PrimInt63.int -> PrimInt63.int -> bool := PrimInt63.eqb.
 (** Terms put into a doctored declaration or into the main term. *)
 Definition po_ltb_true_ty : Ast.term := <% PrimInt63.ltb 2 2 = true %>.
 Definition po_unsat_bad_ty : Ast.term := <% PrimInt63.eqb 1 = PrimInt63.eqb 2 %>.
+Definition po_stuck_bad_ty : Ast.term := <% forall x : PrimInt63.int,
+    PrimInt63.leb x 1 = PrimInt63.leb x 1 -> PrimInt63.eqb x 1 = PrimInt63.leb x 1 %>.
 Definition po_beta_true_ty : Ast.term :=
   <% PrimInt63.eqb ((fun x : PrimInt63.int => x) 1) 2 = true %>.
 Definition po_int_int_int : Ast.term :=
@@ -136,6 +146,7 @@ MetaRocq Quote Recursively Definition po_ltb_prog := po_ltb_equal.
 MetaRocq Quote Recursively Definition po_lsl_prog := po_lsl_shifts.
 MetaRocq Quote Recursively Definition po_unsat_prog := po_unsat.
 MetaRocq Quote Recursively Definition po_beta_prog := po_beta_arg.
+MetaRocq Quote Recursively Definition po_stuck_prog := po_stuck.
 
 (** ** The declared types the row-H controls put on [eqb]
 
@@ -194,6 +205,7 @@ Definition po_ltb_equal_kn : kername := Eval vm_compute in po_cst_kn <% po_ltb_e
 Definition po_lsl_shifts_kn : kername := Eval vm_compute in po_cst_kn <% po_lsl_shifts %>.
 Definition po_unsat_kn : kername := Eval vm_compute in po_cst_kn <% po_unsat %>.
 Definition po_beta_arg_kn : kername := Eval vm_compute in po_cst_kn <% po_beta_arg %>.
+Definition po_stuck_kn : kername := Eval vm_compute in po_cst_kn <% po_stuck %>.
 
 Definition po_cmp_ind : inductive := Eval vm_compute in po_ind_of <% comparison %>.
 Definition po_mut_ind : inductive := Eval vm_compute in po_ind_of <% po_mutA %>.
@@ -280,6 +292,23 @@ Definition po_with_type (ty : Ast.term) (cb : Ast.Env.constant_body)
      Ast.Env.cst_universes := cb.(Ast.Env.cst_universes);
      Ast.Env.cst_relevance := cb.(Ast.Env.cst_relevance) |}.
 
+Definition po_with_body (b : Ast.term) (cb : Ast.Env.constant_body)
+    : Ast.Env.constant_body :=
+  {| Ast.Env.cst_type := cb.(Ast.Env.cst_type);
+     Ast.Env.cst_body := Some b;
+     Ast.Env.cst_universes := cb.(Ast.Env.cst_universes);
+     Ast.Env.cst_relevance := cb.(Ast.Env.cst_relevance) |}.
+
+Definition po_with_univs (u : universes_decl) (cb : Ast.Env.constant_body)
+    : Ast.Env.constant_body :=
+  {| Ast.Env.cst_type := cb.(Ast.Env.cst_type);
+     Ast.Env.cst_body := cb.(Ast.Env.cst_body);
+     Ast.Env.cst_universes := u;
+     Ast.Env.cst_relevance := cb.(Ast.Env.cst_relevance) |}.
+
+(** A universe-polymorphic context with one level and no constraint. *)
+Definition po_poly_ctx : universes_decl := Polymorphic_ctx ([nAnon], ConstraintSet.empty).
+
 Definition po_patch_cst (kn : kername) (f : Ast.Env.constant_body -> Ast.Env.constant_body)
     (d : kername × Ast.Env.global_decl) : kername × Ast.Env.global_decl :=
   match d.2 with
@@ -348,6 +377,7 @@ Definition po_id_ltb_equal : string := Eval vm_compute in string_of_kername po_l
 Definition po_id_lsl_shifts : string := Eval vm_compute in string_of_kername po_lsl_shifts_kn.
 Definition po_id_unsat : string := Eval vm_compute in string_of_kername po_unsat_kn.
 Definition po_id_beta_arg : string := Eval vm_compute in string_of_kername po_beta_arg_kn.
+Definition po_id_stuck : string := Eval vm_compute in string_of_kername po_stuck_kn.
 Definition po_id_cmp : string :=
   Eval vm_compute in string_of_kername po_cmp_ind.(inductive_mind).
 Definition po_id_twob : string :=
@@ -408,7 +438,9 @@ Definition po_A4_holds : po_A4_ok = true := eq_refl.
     no and prove it.  [po_B3] is [po_B1] for the application whose argument is a
     beta redex, so it asks the machine to reduce the argument and then refute
     the statement.  All three must be refused before and after the rule exists;
-    they are the controls that must never turn. *)
+    they are the controls that must never turn.  [po_B4] accepts [po_stuck] as
+    written, and [po_B5] doctors it to equate two stuck applications of
+    DIFFERENT operations, [eqb x 1] and [leb x 1], which conversion must refuse. *)
 
 Definition po_B1 := Eval vm_compute in
   po_run po_normal (po_decl po_ltb_equal_kn (po_with_type po_ltb_true_ty) po_ltb_prog).
@@ -433,6 +465,20 @@ Definition po_B3_ok : bool := Eval vm_compute in
   po_refused_at po_id_beta_arg po_B3 && po_error_contains po_not_convertible po_B3.
 Print po_B3_ok.
 Definition po_B3_holds : po_B3_ok = true := eq_refl.
+
+Definition po_B4 := Eval vm_compute in po_run po_normal po_stuck_prog.
+Print po_B4.
+Definition po_B4_ok : bool := Eval vm_compute in negb (po_rejected po_B4).
+Print po_B4_ok.
+Definition po_B4_holds : po_B4_ok = true := eq_refl.
+
+Definition po_B5 := Eval vm_compute in
+  po_run po_normal (po_decl po_stuck_kn (po_with_type po_stuck_bad_ty) po_stuck_prog).
+Print po_B5.
+Definition po_B5_ok : bool := Eval vm_compute in
+  po_refused_at po_id_stuck po_B5 && po_error_contains po_not_convertible po_B5.
+Print po_B5_ok.
+Definition po_B5_holds : po_B5_ok = true := eq_refl.
 
 (** ** Part C — the table decides, not the name
 
@@ -595,38 +641,62 @@ Definition po_D10_ok : bool := Eval vm_compute in po_refused_at po_id_rev po_D10
 Print po_D10_ok.
 Definition po_D10_holds : po_D10_ok = true := eq_refl.
 
-(** D11: [retro_int63] names a constant that has a body and is not of type
-    [Set], so the integer tag has no declaration satisfying
-    [primitive_invariants] and the reduct of an integer operation could not be
-    typed. *)
+(** D11: [retro_int63] names the integer type constant, but that constant has a
+    body (here [forall P : Prop, P], which is closed and of type [Prop], below
+    [Set]), so it fails [primitive_invariants] and the reduct of an
+    integer operation could not be typed.  [PrimInt63.int] is in [eqb]'s
+    prefix, so [check_primitive_invariants] runs when [eqb]'s argument tags are
+    checked, and the refusal names [eqb] with that check's own message. *)
+Definition po_false_tm : Ast.term := <% forall P : Prop, P %>.
 Definition po_D11 := Eval vm_compute in
-  po_run po_normal (po_retro (po_set_int63 (Some po_defined_kn)) po_env_prog).
+  po_run po_normal (po_decl po_int_kn (po_with_body po_false_tm) po_env_prog).
 Print po_D11.
-Definition po_D11_ok : bool := Eval vm_compute in po_refused_at po_id_eqb po_D11.
+Definition po_D11_ok : bool := Eval vm_compute in
+  po_refused_at po_id_eqb po_D11
+  && po_error_contains "primitive type is registered to a defined constant" po_D11.
 Print po_D11_ok.
 Definition po_D11_holds : po_D11_ok = true := eq_refl.
 
-(** ** Part T — the operation's declared type (row H part 2)
+(** D12: an operation registered on a primitive TYPE constant ([eqb]'s entry
+    copied onto [PrimInt63.int]).  The retroknowledge condition decides it before
+    any declaration is checked ([dec_wf_retro], from [check_univs]), so the
+    refusal names [toplevel]; the message names the failed conditions. *)
+Definition po_D12 := Eval vm_compute in
+  po_run po_normal (po_retro (po_add_op po_int_kn Int63eq) po_env_prog).
+Print po_D12.
+Definition po_D12_ok : bool := Eval vm_compute in
+  po_refused_at_toplevel po_D12
+  && po_error_contains "an operation registered on a primitive type constant" po_D12.
+Print po_D12_ok.
+Definition po_D12_holds : po_D12_ok = true := eq_refl.
 
-    Row H checks an operation's declared type structurally rather than by
-    [convert]: it walks [cst_type] with [reduce_to_prod], and each domain's head
-    normal form must be the tag's registered type constant under a [Relevant]
-    binder, the final codomain's the result type.  Soundness is proved; what a
-    test can show is **completeness** — that the walk still accepts a type the
-    kernel's conversion accepts.
+(** D13: the registered [eqb] is made universe-polymorphic.  It stays bodiless,
+    so [check_prim_op_constant] passes its first test and refuses at the
+    monomorphic one, naming [eqb].  The unchanged environment is accepted
+    ([po_A0]), which is the positive direction of D12 and D13. *)
+Definition po_D13 := Eval vm_compute in
+  po_run po_normal (po_decl po_eqb_kn (po_with_univs po_poly_ctx) po_env_prog).
+Print po_D13.
+Definition po_D13_ok : bool := Eval vm_compute in
+  po_refused_at po_id_eqb po_D13
+  && po_error_contains "a primitive operation is registered to a non-monomorphic constant" po_D13.
+Print po_D13_ok.
+Definition po_D13_holds : po_D13_ok = true := eq_refl.
 
-    So Part T has two halves, and they fail in opposite directions.  Each [TA]
-    case is a type convertible to [eqb]'s but not syntactically equal to it, and
-    must be **accepted**: a refusal is a completeness bug in the structural
-    check and goes to the lane lead, not a test to be relaxed.  Each [TR] case
-    is a type no registered [eqb] may carry, and must be **refused naming
-    [eqb]** — the clause is per declaration, so a refusal naming [toplevel] or
-    naming the witness would be the wrong branch.
+(** ** Part T — the operation's declared type
 
-    Before row H part 2 lands the [TA] cases are already accepted (nothing
-    inspects the type), so they never turn; the [TR] cases are refused only at
-    the witness, whose application stops typechecking, so they read RED until
-    the clause exists. *)
+    The checker compares an operation's declared type with the type the
+    operation must have by CONVERSION: [check_prim_op_constant] builds the
+    expected type from the registered type constants ([abstract_prim_op_type],
+    equal to [prim_op_type]) and calls [wf_env_conv] on it and [cst_type].  So a
+    declared type that is convertible to the expected one, without being
+    syntactically equal to it, must be accepted, and any other must be refused.
+
+    Part T has two halves, and they fail in opposite directions.  Each [TA] case
+    is a type convertible to [eqb]'s but not syntactically equal to it, and must
+    be **accepted**.  Each [TR] case is a type no registered [eqb] may carry, and
+    must be **refused naming [eqb]**: the condition is per declaration, so a
+    refusal naming [toplevel] or naming the witness would be the wrong branch. *)
 
 Definition po_ty_run (ty : Ast.term) : string + string :=
   po_run po_normal (po_decl po_eqb_kn (po_with_type ty) po_env_prog).

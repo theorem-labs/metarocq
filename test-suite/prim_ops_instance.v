@@ -1,21 +1,30 @@
-(** * BET-319: the central instance of the environment condition
+(** * The central instances of the environment condition
 
-    A concrete PCUIC environment that REGISTERS a primitive operation, with a
+    Concrete PCUIC environments that REGISTER a primitive operation, each with a
     proof that it is well formed under the three-part [wf] (universes ×
-    [Retroknowledge.wf_retro] × declarations, design §4.2).  Every lemma about a
-    registered operation assumes such an environment; this file shows one exists,
-    so none of them holds vacuously.
+    [Retroknowledge.wf_retro] × declarations).  Every lemma about a registered
+    operation assumes such an environment; these instances show that one exists
+    for each result shape, so none of those lemmas holds vacuously.
 
     [Σ_po] declares the integer type constant [int : Set] and the operation
-    [land : int -> int -> int], registers [land] as [Int63land] and [int] as the
-    integer type.  [Int63land]'s result shape is [SInt], so no boolean inductive
-    is needed.  The proof is direct: no checker run, no normalization assumption. *)
+    [land : int -> int -> int], and registers [land] as [Int63land] and [int] as
+    the integer type.  [Int63land]'s result shape is [SInt]: this instance covers
+    the clauses for integer results.
+
+    [Σ_po_bool] declares [int : Set], a one-packet inductive [bool : Set] whose
+    constructors are [true] then [false], and the operation
+    [eqb : int -> int -> bool]; it registers [eqb] as [Int63eq], [int] as the
+    integer type and [bool] as [retro_bool].  [Int63eq]'s result shape is [SBool]:
+    this instance covers the clauses for boolean results ([on_prim_bool_decl],
+    [retro_bool], and the boolean readback, which reads [retro_bool]).
+
+    The proofs are direct: no checker run, no normalization assumption. *)
 
 From MetaRocq.Utils Require Import utils.
 From Stdlib Require Import ssreflect.
 From MetaRocq.Common Require Import config Primitive PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICCumulativitySpec
-  PCUICWfUniverses.
+  PCUICWfUniverses PCUICArityRed.
 
 Import ListNotations.
 
@@ -152,5 +161,193 @@ Proof.
       * exists po_int_kn, po_int_body; split; [reflexivity|now left|split; reflexivity].
 Qed.
 
-(** The instance rests on nothing: no axiom, no admitted lemma. *)
+(** ** The boolean instance *)
+
+Definition po_bool_kn : kername := (MPfile po_dp, "bool").
+Definition po_eqb_kn : kername := (MPfile po_dp, "eqb").
+Definition po_bool_ind : inductive := {| inductive_mind := po_bool_kn; inductive_ind := 0 |}.
+
+(** A constructor of [bool]: no argument, no index, type [tRel 0] (the block's
+    only inductive, in the arities context). *)
+Definition po_bool_ctor (na : ident) : constructor_body :=
+  {| cstr_name := na; cstr_args := []; cstr_indices := []; cstr_type := tRel 0;
+     cstr_arity := 0 |}.
+
+Definition po_bool_body : one_inductive_body :=
+  {| ind_name := "bool"; ind_indices := []; ind_sort := Sort.type0;
+     ind_type := tSort Sort.type0; ind_kelim := IntoAny;
+     ind_ctors := [po_bool_ctor "true"; po_bool_ctor "false"];
+     ind_projs := []; ind_relevance := Relevant |}.
+
+Definition po_bool_mdecl : mutual_inductive_body :=
+  {| ind_finite := Finite; ind_npars := 0; ind_params := [];
+     ind_bodies := [po_bool_body]; ind_universes := Monomorphic_ctx;
+     ind_variance := None |}.
+
+Definition po_eqb_ty : term :=
+  tImpl (tConst po_int_kn []) (tImpl (tConst po_int_kn []) (tInd po_bool_ind [])).
+
+Definition po_eqb_body : constant_body :=
+  {| cst_type := po_eqb_ty; cst_body := None;
+     cst_universes := Monomorphic_ctx; cst_relevance := Relevant |}.
+
+Definition po_bool_retro : Retroknowledge.t :=
+  {| Retroknowledge.retro_int63 := Some po_int_kn;
+     Retroknowledge.retro_float64 := None;
+     Retroknowledge.retro_string := None;
+     Retroknowledge.retro_array := None;
+     Retroknowledge.retro_ops := [(po_eqb_kn, Int63eq)];
+     Retroknowledge.retro_bool := Some po_bool_ind |}.
+
+(** The prefix [eqb] is checked against: [int] and [bool]. *)
+Definition Σ_po_bool_pre : global_env :=
+  {| universes := po_univs;
+     declarations := [(po_int_kn, ConstantDecl po_int_body);
+                      (po_bool_kn, InductiveDecl po_bool_mdecl)];
+     retroknowledge := po_bool_retro |}.
+
+Definition Σ_po_bool0 : global_env :=
+  {| universes := po_univs;
+     declarations := [(po_eqb_kn, ConstantDecl po_eqb_body);
+                      (po_int_kn, ConstantDecl po_int_body);
+                      (po_bool_kn, InductiveDecl po_bool_mdecl)];
+     retroknowledge := po_bool_retro |}.
+
+Definition Σ_po_bool : global_env_ext := (Σ_po_bool0, Monomorphic_ctx).
+
+(** [Σ_po_bool] registers an operation with a boolean result. *)
+Lemma Σ_po_bool_registers : prim_op_of Σ_po_bool0 po_eqb_kn = Some Int63eq.
+Proof. reflexivity. Qed.
+
+Lemma po_bool_retro_wf : Retroknowledge.wf_retro po_bool_retro.
+Proof.
+  constructor; cbn.
+  - constructor; [intros []|constructor].
+  - intros c [<-|[]] h; cbn in h.
+    repeat destruct h as [h|h]; try discriminate; try contradiction.
+  - unfold Retroknowledge.types_distinct, Retroknowledge.disjoint_opt; cbn;
+      repeat split; intros c H1 H2; discriminate.
+  - intros i [= <-]. reflexivity.
+Qed.
+
+(** [Set] is a relevant type in any well-formed context. *)
+Lemma po_set_isType (Σ : global_env_ext) Γ :
+  wf_local Σ Γ -> lift_typing typing Σ Γ (TypRel (tSort Sort.type0) Relevant).
+Proof.
+  intros wfΓ. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split.
+  apply type_Sort; [exact wfΓ|apply wf_sort_type0].
+Qed.
+
+(** The arities context of the block: [bool : Set]. *)
+Lemma po_bool_arities_wf (Σ : global_env_ext) :
+  wf_local Σ (arities_context po_bool_mdecl.(ind_bodies)).
+Proof.
+  cbn. constructor; [constructor|]. apply po_set_isType. constructor.
+Qed.
+
+(** Each constructor's type [tRel 0] is a relevant type in the arities context. *)
+Lemma po_bool_ctor_isType (Σ : global_env_ext) :
+  lift_typing typing Σ (arities_context po_bool_mdecl.(ind_bodies)) (TypRel (tRel 0) Relevant).
+Proof.
+  split; [exact tt|]. exists Sort.type0. split; [|repeat split].
+  have h := type_Rel Σ (arities_context po_bool_mdecl.(ind_bodies)) 0 _
+    (po_bool_arities_wf Σ) eq_refl.
+  exact h.
+Qed.
+
+Lemma po_bool_ctor_ok (Σ : global_env_ext) na :
+  on_constructor cumulSpec0 (lift_typing typing) Σ po_bool_mdecl 0 po_bool_body
+    po_bool_body.(ind_indices) (po_bool_ctor na) [].
+Proof.
+  constructor; cbn.
+  - reflexivity.
+  - reflexivity.
+  - apply po_bool_ctor_isType.
+  - exact tt.
+  - constructor.
+  - change (tRel 0) with (mkApps (tRel 0) []). constructor. constructor.
+  - intros v [=].
+  - exact I.
+Qed.
+
+Lemma po_bool_inductive_ok (Σ : global_env_ext) :
+  on_inductive cumulSpec0 (lift_typing typing) Σ po_bool_kn po_bool_mdecl.
+Proof.
+  constructor; cbn.
+  - constructor; [|constructor].
+    econstructor 1 with (ind_cunivs := [[]; []]); cbn.
+    + exists (tSort Sort.type0). split; [reflexivity|].
+      apply arity_red_sort, whd_stop. reflexivity.
+    + apply po_set_isType. constructor.
+    + apply po_set_isType. constructor.
+    + constructor; [apply po_bool_ctor_ok|].
+      constructor; [apply po_bool_ctor_ok|constructor].
+    + exact I.
+    + split; [repeat constructor|exact I].
+    + reflexivity.
+    + exact I.
+  - constructor.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma po_eqb_type_typed :
+  (Σ_po_bool_pre, Monomorphic_ctx) ;;; [] |- po_eqb_ty
+    : tSort (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)).
+Proof.
+  have hd : declared_constant Σ_po_bool_pre po_int_kn po_int_body by now left.
+  have hdom : forall Γ, wf_local (Σ_po_bool_pre, Monomorphic_ctx) Γ ->
+      lift_typing typing (Σ_po_bool_pre, Monomorphic_ctx) Γ
+        (j_vass_s (mkBindAnn nAnon rel_of_Type) (tConst po_int_kn []) Sort.type0).
+  { intros Γ wfΓ. split; [exact tt|]. exists Sort.type0. repeat split.
+    now apply po_int_typed. }
+  have w1 : wf_local (Σ_po_bool_pre, Monomorphic_ctx)
+              [vass (mkBindAnn nAnon rel_of_Type) (tConst po_int_kn [])].
+  { constructor; [constructor|]. eapply lift_sorting_forget_univ, hdom. constructor. }
+  unfold po_eqb_ty, tImpl.
+  apply type_Prod; [apply hdom; constructor|].
+  apply type_Prod; [now apply hdom|].
+  change (tSort Sort.type0) with (po_bool_body.(ind_type)@[[]]).
+  eapply type_Ind.
+  - constructor; [exact w1|]. eapply lift_sorting_forget_univ, hdom, w1.
+  - split; [now right; left|reflexivity].
+  - cbn. reflexivity.
+Qed.
+
+Lemma Σ_po_bool_wf : ∥ wf_ext Σ_po_bool ∥.
+Proof.
+  constructor. split; [|exact po_udecl_ok].
+  split; [exact po_univs_ok|]. split; [exact po_bool_retro_wf|].
+  cbn. constructor; [constructor; [constructor; [constructor|]|]|].
+  - (* bool *)
+    econstructor.
+    + constructor.
+    + exact po_udecl_ok.
+    + apply po_bool_inductive_ok.
+    + cbn. intros i _ _. repeat split.
+  - (* int *)
+    econstructor.
+    + constructor; [intros [=]|constructor].
+    + exact po_udecl_ok.
+    + cbn. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split. apply po_int_type.
+    + cbn. intros op hop. discriminate hop.
+  - (* eqb *)
+    econstructor.
+    + constructor; [intros [=]|constructor; [intros [=]|constructor]].
+    + exact po_udecl_ok.
+    + cbn. split; [exact tt|].
+      exists (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)).
+      repeat split. exact po_eqb_type_typed.
+    + cbn. intros op hop. injection hop as <-.
+      constructor; cbn; try reflexivity.
+      * exists po_eqb_ty. split; [reflexivity|]. apply cumul_Refl.
+      * repeat constructor.
+        all: exists po_int_kn, po_int_body; split; [reflexivity|now left|split; reflexivity].
+      * exists po_bool_ind, po_bool_mdecl, po_bool_body. split; [reflexivity|].
+        split; [now right; left|reflexivity].
+Qed.
+
+(** The instances rest on nothing beyond the primitive libraries: no axiom of
+    their own, no admitted lemma. *)
 Print Assumptions Σ_po_wf.
+Print Assumptions Σ_po_bool_wf.
