@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitiveRed
   PCUICWeakeningEnv PCUICEquality PCUICReduction PCUICCumulativity PCUICCumulativitySpec
   (* PCUICContextSubst *) (* PCUICUnivSubst *) (* PCUICCases *) PCUICTyping
   (* PCUICGuardCondition *) (* PCUICGlobalEnv *).
@@ -132,14 +132,38 @@ Proof using P Pcmp cf.
     depelim X1; constructor; cbn in X; intuition eauto. solve_all.
 Qed.
 
+(** The primitive-operation table and the registered boolean inductive only grow
+    along [extends]: the table is pointwise on kernames
+    ([Retroknowledge.extends_ops]) and [retro_bool] extends as an option, so a
+    redex of [red_prim_op] in [Σ] is one in [Σ'] with the same reduct. *)
+Lemma extends_prim_op_of {Σ Σ' : global_env} {c op} :
+  extends Σ Σ' -> prim_op_of Σ c = Some op -> prim_op_of Σ' c = Some op.
+Proof using Type.
+  intros [_ _ ext]. apply ext.
+Qed.
+
+Lemma extends_readback {Σ Σ' : global_env} {s r v} :
+  extends Σ Σ' -> readback Σ s r = Some v -> readback Σ' s r = Some v.
+Proof using Type.
+  intros [_ _ (_ & _ & _ & _ & extb & _)].
+  rewrite /readback. destruct s, r => //=. revert extb.
+  generalize (Retroknowledge.retro_bool Σ.(retroknowledge))
+             (Retroknowledge.retro_bool Σ'.(retroknowledge)).
+  by intros ?? [] h.
+Qed.
+
+Hint Resolve extends_prim_op_of extends_readback : extends.
+
 Lemma weakening_env_red1 Σ Σ' Γ M N :
   wf Σ' ->
   extends Σ Σ' ->
   red1 Σ Γ M N ->
   red1 Σ' Γ M N.
 Proof using P Pcmp cf.
-  induction 3 using red1_ind_all;
-    try solve [econstructor; eauto with extends; solve_all].
+  induction 3 using red1_ind_all.
+  all: try solve [econstructor; eauto with extends; solve_all].
+  (* red_prim_op: the table, the declaration and the readback all transport. *)
+  all: solve [eapply red_prim_op; eauto with extends].
 Qed.
 
 Lemma weakening_env_cumul_gen pb Σ Σ' φ Γ M N :

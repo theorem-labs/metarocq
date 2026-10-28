@@ -1442,6 +1442,8 @@ Proof.
     1: rewrite subst_instance_subst cofix_subst_instance_subst.
     all: now inversion E.
   - cbn. rewrite subst_instance_two. econstructor; eauto.
+  - (* red_prim_op: head, arguments and reduct are ground *)
+    eapply red1_prim_op_subst_instance; eassumption.
   - cbn. rewrite !subst_instance_mkApps.
     econstructor. now rewrite nth_error_map H.
   - cbn.
@@ -1539,6 +1541,40 @@ Lemma whd_stop_head_subst_instance u t args :
   whd_stop_head (subst_instance u t) (List.map (subst_instance u) args) = whd_stop_head t args.
 Proof. destruct t; try reflexivity; destruct args; reflexivity. Qed.
 
+(** [subst_instance] fixes a literal, so it changes neither [lit_of_term] nor
+    the literal/non-literal split of an argument list that row Q2's primitive
+    [whd_rel] cases are stated over. *)
+Lemma lit_of_term_subst_instance u t :
+  PCUICPrimitiveRed.lit_of_term (subst_instance u t) = PCUICPrimitiveRed.lit_of_term t.
+Proof. destruct t => //=. now destruct prim as [? []]. Qed.
+
+Lemma split_lits_map_term_of_lit ls :
+  PCUICPrimitiveRed.split_lits (List.map PCUICPrimitiveRed.term_of_lit ls) = inl ls.
+Proof.
+  induction ls as [|l ls ih] => //=.
+  rewrite /PCUICPrimitiveRed.term_of_lit /PCUICPrimitiveRed.lit_of_term
+          PCUICPrimitiveRed.lit_of_prim_of_lit ih //.
+Qed.
+
+Lemma split_lits_subst_instance_inl {args ls} u :
+  PCUICPrimitiveRed.split_lits args = inl ls ->
+  PCUICPrimitiveRed.split_lits (List.map (subst_instance u) args) = inl ls.
+Proof.
+  move/PCUICPrimitiveRed.split_lits_inl => ->.
+  rewrite (map_prim_ground (subst_instance u) ls (prim_ground_subst_instance u)).
+  apply split_lits_map_term_of_lit.
+Qed.
+
+Lemma split_lits_subst_instance_inr {args ls a rest} u :
+  PCUICPrimitiveRed.split_lits args = inr (ls, a, rest) ->
+  PCUICPrimitiveRed.split_lits (List.map (subst_instance u) args)
+    = inr (ls, subst_instance u a, List.map (subst_instance u) rest).
+Proof.
+  move/PCUICPrimitiveRed.split_lits_inr => [-> ha].
+  rewrite map_app /= (map_prim_ground (subst_instance u) ls (prim_ground_subst_instance u)).
+  apply PCUICPrimitiveRed.split_lits_app. now rewrite lit_of_term_subst_instance.
+Qed.
+
 Lemma whd_rel_subst_instance {zeta Σ Γ t args h l} u :
   whd_rel zeta Σ Γ t args h l ->
   whd_rel zeta Σ (subst_instance u Γ) (subst_instance u t) (List.map (subst_instance u) args)
@@ -1546,7 +1582,7 @@ Lemma whd_rel_subst_instance {zeta Σ Γ t args h l} u :
 Proof.
   induction 1 as [c args d b h l hn hb w IH|c args d hn hb
     |na b B t args h l hz w IH|na b B t args hz
-    |c u' decl body args h l hd hb w IH|c u' decl args hd hb
+    |c u' decl body args h l hd hb w IH|c u' decl args hd hb hnp
     |f a args h l w IH|na A t a args h l w IH
     |mfix idx narg fn args c ind n ui cargs h l hu hn w1 IH1 w2 IH2
     |mfix idx narg fn args c t cargs hu hn w IH hc
@@ -1557,7 +1593,13 @@ Proof.
     |p c args u' cargs a h l w1 IH1 ha w2 IH2
     |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
     |p c args t cargs w IH hc hcf
-    |t args hs].
+    |t args hs
+    (* row Q2's five primitive cases, in enumeration order *)
+    |c u' decl op args ls a rest w cargs lit h l hl hb hop har hsp w1 IH1 hlit w2 IH2
+    |c u' decl op args ls a rest w cargs hl hb hop har hsp w1 IH1 hlit
+    |c u' decl op args ls r v h l hl hb hop har hsp hd hr w IH
+    |c u' decl op args ls hl hb hop har hsp hd
+    |c u' decl op args hl hb hop har].
   - rewrite subst_instance_lift in IH.
     eapply (whd_rel_unfold _ _ _ c _ (map_decl (subst_instance u) d) (subst_instance u b)).
     + rewrite nth_error_map hn. reflexivity.
@@ -1569,7 +1611,7 @@ Proof.
   - rewrite subst_instance_subst in IH. eapply whd_zeta; [exact hz|exact IH].
   - now eapply whd_letin_stop.
   - rewrite subst_instance_two in IH. eapply whd_delta; [exact hd|exact hb|exact IH].
-  - eapply whd_axiom; [exact hd|exact hb].
+  - eapply whd_axiom; [exact hd|exact hb|exact hnp].
   - eapply whd_app. exact IH.
   - rewrite subst_instance_subst in IH. eapply whd_beta. exact IH.
   - rewrite map_app in IH2; cbn [List.map] in IH2.
@@ -1630,6 +1672,36 @@ Proof.
     + now rewrite whd_is_construct0_subst_instance.
     + now rewrite whd_is_cofix_subst_instance.
   - eapply whd_stop. now rewrite whd_stop_head_subst_instance.
+  (* row Q2's primitive cases: [Σ] and so [prim_op_of], [lookup_env] and
+     [readback] are untouched by the instance; only the argument list moves,
+     and the literal prefix is fixed because [subst_instance] fixes a literal. *)
+  - rewrite !map_app /= in IH2.
+    rewrite (map_prim_ground (subst_instance u) ls (prim_ground_subst_instance u)) in IH2.
+    rewrite subst_instance_mkApps in IH2.
+    eapply whd_prim_arg.
+    1: exact hl. 1: exact hb. 1: exact hop.
+    1: now rewrite length_map.
+    1: { rewrite firstn_map. exact (split_lits_subst_instance_inr u hsp). }
+    1: exact IH1.
+    1: now rewrite -subst_instance_mkApps lit_of_term_subst_instance.
+    rewrite map_app -skipn_map in IH2. exact IH2.
+  - rewrite !map_app /= (map_prim_ground (subst_instance u) ls (prim_ground_subst_instance u))
+      subst_instance_mkApps map_app -skipn_map.
+    eapply whd_prim_stuck.
+    1: exact hl. 1: exact hb. 1: exact hop.
+    1: now rewrite length_map.
+    1: { rewrite firstn_map. exact (split_lits_subst_instance_inr u hsp). }
+    1: exact IH1.
+    now rewrite -subst_instance_mkApps lit_of_term_subst_instance.
+  - rewrite (prim_ground_subst_instance u v (prim_ground_readback hr)) in IH.
+    eapply whd_prim_fire; tea.
+    + now rewrite length_map.
+    + rewrite firstn_map. now apply split_lits_subst_instance_inl.
+    + now rewrite skipn_map.
+  - eapply whd_prim_inert; tea.
+    + now rewrite length_map.
+    + rewrite firstn_map. now apply split_lits_subst_instance_inl.
+  - eapply whd_prim_partial; tea. now rewrite length_map.
 Qed.
 
 Lemma subst_instance_ws_cumul_pb {cf : checker_flags} (Σ : global_env_ext) Γ u A B univs :
