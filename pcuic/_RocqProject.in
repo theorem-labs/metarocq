@@ -193,4 +193,6 @@ theories/PCUICEtaFInstFlip.v
 theories/PCUICEtaFInstEtaC1c.v
 # L2 obligation 8 (STAGED AT FollowSpec), A3: JoinE is transitive (C4-SIDE)
 theories/PCUICEtaI5Trans.v
+# L2 obligation 8, A2: spec => join (C4-SIDE)
+theories/PCUICEtaI5A2.v
 # theories/All.v
