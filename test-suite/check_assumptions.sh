@@ -28,6 +28,6 @@ bad=$(awk '/^Axioms:/ { inax = 1; next }
 if [ -n "$bad" ]; then
   echo "MISMATCH: axioms outside the primitive-type libraries:"; echo "$bad"; status=1
 fi
-[ "$status" -eq 0 ] && echo "ok: $want Print Assumptions, only primitive-library axioms"
+[ "$status" -eq 0 ] && echo "ok: $want Print Assumptions, only primitive-library axioms${2:+ and $2}"
 rm -f "$out"
 exit $status
