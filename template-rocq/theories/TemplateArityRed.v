@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config PrimitiveOps.
 From MetaRocq.Template Require Import Ast AstUtils ReflectAst LiftSubst UnivSubst Typing.
 
 Local Open Scope type_scope.
@@ -75,12 +75,90 @@ Section TemplateWhdRed.
     rewrite {1}e. now apply red_arg_one.
   Qed.
 
+  (** An application node with at least one argument. *)
+  Lemma mkApps_cons_tApp f pre x post :
+    isApp f = false -> mkApps f (pre ++ x :: post) = tApp f (pre ++ x :: post).
+  Proof.
+    intros hf. apply LiftSubst.mkApps_tApp; [exact hf|destruct pre; discriminate].
+  Qed.
+
+  (** The arguments before and after the one being evaluated do not move, so a
+      reduction of that one argument is a reduction of the whole application. *)
+  Lemma red_prim_arg_cong c u ls a b rest tail :
+    red Σ Γ a b ->
+    red Σ Γ (mkApps (tConst c u) (map template_of_lit ls ++ a :: rest ++ tail))
+            (mkApps (tConst c u) (map template_of_lit ls ++ b :: rest ++ tail)).
+  Proof.
+    intros r.
+    rewrite !(mkApps_cons_tApp (tConst c u) (map template_of_lit ls) _ (rest ++ tail) eq_refl).
+    now apply red_arg_one.
+  Qed.
+
+  (** [tsplit_lits] on the first [n] arguments names the maximal literal prefix
+      [ls] and the first non-literal [a]; the whole argument list is then that
+      decomposition followed by the over-applied tail. *)
+  Lemma tprim_args_eq {args n ls a rest} :
+    tsplit_lits (firstn n args) = inr (ls, a, rest) ->
+    args = map template_of_lit ls ++ a :: rest ++ skipn n args.
+  Proof.
+    intros hs.
+    rewrite -{1}(firstn_skipn n args) (proj1 (tsplit_lits_inr hs)) -app_assoc //.
+  Qed.
+
+  Lemma tprim_args_eq_inl {args n ls} :
+    tsplit_lits (firstn n args) = inl ls ->
+    args = map template_of_lit ls ++ skipn n args.
+  Proof.
+    intros hs. rewrite -{1}(firstn_skipn n args) (tsplit_lits_inl hs) //.
+  Qed.
+
+  (** A saturated literal prefix has exactly the operation's arity, so it is
+      not empty and the redex is an application node. *)
+  Lemma prim_lits_nonnil {args op ls} :
+    arity op <= #|args| -> tsplit_lits (firstn (arity op) args) = inl ls ->
+    map template_of_lit ls ++ skipn (arity op) args <> [].
+  Proof.
+    intros hsat hs.
+    have hfl : #|firstn (arity op) args| = arity op by rewrite length_firstn; lia.
+    have hlen : #|ls| = arity op by rewrite -hfl (tsplit_lits_inl hs) length_map.
+    pose proof (arity_pos op).
+    destruct ls as [|l0 ls0]; [cbn in hlen; lia|]; cbn; discriminate.
+  Qed.
+
+  (** Reducing the stuck argument [a] of a stuck operation application to a
+      weak-head form [w] (still not a literal) leaves a term that is its own
+      weak-head form: [tsplit_lits] finds [w] at the same place, and the
+      reconstructed argument list is the original one.  This is what
+      [whd_rel_idem] needs. *)
+  Lemma tprim_stuck_result {n ls w R} :
+    lit_of_template w = None -> #|ls| < n ->
+    (tsplit_lits (firstn n (map template_of_lit ls ++ w :: R)) = inr (ls, w, firstn (n - S #|ls|) R)) ×
+    (map template_of_lit ls ++ w :: firstn (n - S #|ls|) R
+       ++ skipn n (map template_of_lit ls ++ w :: R) = map template_of_lit ls ++ w :: R).
+  Proof.
+    intros hw hlt.
+    have hfa : firstn n (map template_of_lit ls ++ w :: R)
+             = map template_of_lit ls ++ w :: firstn (n - S #|ls|) R.
+    { rewrite firstn_app firstn_all2; [rewrite length_map; lia|].
+      rewrite length_map.
+      have -> : n - #|ls| = S (n - S #|ls|) by lia.
+      reflexivity. }
+    have hsk : skipn n (map template_of_lit ls ++ w :: R) = skipn (n - S #|ls|) R.
+    { rewrite skipn_app skipn_all2; [rewrite length_map; lia|].
+      rewrite length_map.
+      have -> : n - #|ls| = S (n - S #|ls|) by lia.
+      reflexivity. }
+    split.
+    - rewrite hfa. apply tsplit_lits_app, hw.
+    - rewrite hsk firstn_skipn //.
+  Qed.
+
   Lemma whd_rel_red {zeta t args h l} :
     whd_rel zeta Σ Γ t args h l -> red Σ Γ (mkApps t args) (mkApps h l).
   Proof.
     induction 1 as [c args d b h l hnth hbod w IH|c args d hnth hbod
       |na b B t args h l hz w IH|na b B t args hz
-      |c u decl body args h l hcst hbod w IH|c u decl args hcst hbod
+      |c u decl body args h l hcst hbod w IH|c u decl args hcst hbod hpo
       |c k T args h l w IH
       |f l args h l' hf hl w IH
       |na A t a args h l w IH
@@ -93,7 +171,12 @@ Section TemplateWhdRed.
       |p c args u cargs a h l wa IHa hnth wb IHb
       |p c args mfix idx cargs narg fn h l wa IHa hunf wb IHb
       |p c args t cargs wa IHa hnc hncf
-      |t args hs].
+      |t args hs
+      |c u decl op args ls a rest t cargs lit h l hcst hbod hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs hcst hbod hpo hsat hs wa IHa hnl
+      |c u decl op args ls r v h l hcst hbod hpo hsat hs hden hrb w IH
+      |c u decl op args ls hcst hbod hpo hsat hs hden
+      |c u decl op args hcst hbod hpo hpart].
     (* tRel, let-bound: [red_rel] *)
     - eapply red_trans; [|exact IH]. apply red_hd_step; [reflexivity|].
       apply red_rel. now rewrite hnth /= hbod.
@@ -176,6 +259,21 @@ Section TemplateWhdRed.
         [intros ?; reflexivity| |exact IHa].
       intros x y r. now apply proj_red.
     (* the machine stops *)
+    - constructor.
+    (* whd_prim_arg: reduce the first non-literal argument, then re-enter *)
+    - eapply red_trans; [|exact IH].
+      rewrite {1}(tprim_args_eq hs). apply red_prim_arg_cong. exact IHa.
+    (* whd_prim_stuck: the reduced stuck argument is kept *)
+    - rewrite {1}(tprim_args_eq hs). apply red_prim_arg_cong. exact IHa.
+    (* whd_prim_fire: every argument is a literal, the rule fires *)
+    - eapply red_trans; [|exact IH].
+      rewrite {1}(tprim_args_eq_inl hs).
+      rewrite (LiftSubst.mkApps_tApp (tConst c u) _ eq_refl (prim_lits_nonnil hsat hs)).
+      apply red1_red. eapply red_prim_op;
+        [apply declared_constant_from_gen; exact hcst|exact hpo|exact hbod|exact hden|exact hrb].
+    (* whd_prim_inert: saturated but the operation does not compute *)
+    - constructor.
+    (* whd_prim_partial: unsaturated *)
     - constructor.
   Qed.
 End TemplateWhdRed.

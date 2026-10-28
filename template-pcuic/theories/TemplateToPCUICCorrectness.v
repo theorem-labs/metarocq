@@ -1,10 +1,10 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config EnvMap.
+From MetaRocq.Common Require Import config EnvMap PrimitiveOps.
 From MetaRocq.Template Require Ast TypingWf WfAst TermEquality.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCumulativity
-     PCUICLiftSubst PCUICEquality PCUICReduction
+     PCUICLiftSubst PCUICEquality PCUICReduction PCUICPrimitiveRed
      PCUICUnivSubst PCUICTyping PCUICGlobalEnv
      PCUICWeakeningConv PCUICWeakeningTyp PCUICWeakeningEnv
      PCUICSubstitution PCUICGeneration PCUICCasesContexts
@@ -80,7 +80,7 @@ Module SL :=Template.LiftSubst.
 Lemma wf_fresh_globals {cf : checker_flags} (Σ : global_env) : wf Σ -> EnvMap.fresh_globals Σ.(declarations).
 Proof.
   destruct Σ as [univs Σ]; cbn.
-  move=> [] onu; cbn. induction 1; constructor; auto.
+  move=> [] onu [] _; cbn. induction 1; constructor; auto.
   destruct o; auto.
 Qed.
 
@@ -191,16 +191,16 @@ Proof.
     eexists {| S.Env.universes := univs; S.Env.declarations := Σ; S.Env.retroknowledge := retro |}.
     split.
     * split => //. now exists [a].
-    * destruct wfΣ as [onu ond]. depelim ond.
-      split => //.
+    * destruct wfΣ as [onu [wfr ond]]. depelim ond.
+      exact (onu, (wfr, ond)).
     * eapply TypingWf.typing_wf_sigma in wfΣ.
-      destruct wfΣ as [onu ond]. depelim ond. now destruct o.
+      destruct wfΣ as [onu [_ ond]]. depelim ond. now destruct o.
     * split => //.
       now exists [(a.1, trans_global_decl (trans_global_env {| S.Env.universes := univs; S.Env.declarations := Σ;
         S.Env.retroknowledge := retro |}) a.2)].
     * cbn. now rewrite eq_kername_refl.
-    * destruct wfΣ as [onu ond]. depelim ond.
-      specialize (IHΣ (onu, ond)).
+    * destruct wfΣ as [onu [wfr ond]]. depelim ond.
+      specialize (IHΣ (onu, (wfr, ond))).
       unfold Ast.Env.lookup_env in IHΣ. cbn [Ast.Env.declarations] in IHΣ.
       destruct (Ast.Env.lookup_global Σ cst) eqn:h.
       destruct IHΣ as [Σ' [ext wf ext' hl]].
@@ -1012,6 +1012,14 @@ End Trans_Global.
 From MetaRocq.PCUIC Require Import PCUICArityRed.
 From MetaRocq.Template Require TemplateArityRed.
 
+Lemma trans_env_env_retroknowledge {Σ : Ast.Env.global_env} :
+  retroknowledge (trans_env_env (trans_global_env Σ)) = Ast.Env.retroknowledge Σ.
+Proof.
+  destruct Σ as [univs Σ] .
+  unfold trans_global_env; cbn -[trans_global_decls].
+  induction Σ => /= //.
+Qed.
+
 Section Trans_Global.
   Context {cf : checker_flags}.
   Context (Σ : Ast.Env.global_env).
@@ -1509,6 +1517,118 @@ Section Trans_Global.
   Proof. now eapply typing_wf_sigma. Qed.
   Hint Resolve wf_wf_decl_pred : wf.
 
+  (** ** The primitive-operation rule transports
+
+    [trans_global_env] keeps the retroknowledge, so the table and the boolean
+    inductive are the same on both sides; a literal argument translates to the
+    literal argument PCUIC's rule expects ([trans (tInt i) = tPrim (prim_int i)]),
+    so the transport of the rule is the identity on literals. *)
+
+  Lemma trans_template_of_lit l : trans Σ' (ST.template_of_lit l) = term_of_lit l.
+  Proof using Type. by destruct l. Qed.
+
+  Lemma trans_map_template_of_lit ls :
+    List.map (trans Σ') (List.map ST.template_of_lit ls) = List.map term_of_lit ls.
+  Proof using Type.
+    rewrite map_map. apply map_ext, trans_template_of_lit.
+  Qed.
+
+  Lemma trans_prim_op_of c op :
+    Ast.Env.prim_op_of Σ c = Some op -> prim_op_of Σ' c = Some op.
+  Proof using Type.
+    rewrite /prim_op_of /Ast.Env.prim_op_of trans_env_env_retroknowledge //.
+  Qed.
+
+  Lemma trans_primitive_bool i :
+    Ast.Env.primitive_bool Σ = Some i -> primitive_bool Σ' = Some i.
+  Proof using Type.
+    rewrite /primitive_bool /Ast.Env.primitive_bool trans_env_env_retroknowledge //.
+  Qed.
+
+  Lemma trans_treadback s r v :
+    ST.treadback Σ s r = Some v -> readback Σ' s r = Some (trans Σ' v).
+  Proof using Type.
+    rewrite /ST.treadback /readback /Ast.Env.primitive_bool trans_env_env_retroknowledge.
+    destruct s, r => //=.
+    - intros [= <-]; reflexivity.
+    - destruct Retroknowledge.retro_bool => //. intros [= <-]; reflexivity.
+  Qed.
+
+  (** ** The primitive-operation machine graph transports
+
+    The five new [whd_rel] constructors (design §7.2) are read off the same two
+    functions on both sides — [tsplit_lits]/[split_lits] (which arguments are
+    literals) and the denotation — so each Template case maps to the PCUIC one
+    on the translated terms.  [trans] takes a Template literal node to the PCUIC
+    literal argument the rule expects, and is the identity on the literal of a
+    reduct, so the bridges below are all it needs. *)
+
+  Lemma trans_prim_op_of_None c :
+    Ast.Env.prim_op_of Σ c = None -> prim_op_of Σ' c = None.
+  Proof using Type.
+    rewrite /prim_op_of /Ast.Env.prim_op_of trans_env_env_retroknowledge //.
+  Qed.
+
+  Lemma wf_template_of_lit l : WfAst.wf Σ (ST.template_of_lit l).
+  Proof using Type. destruct l; constructor. Qed.
+
+  Lemma All_wf_template_of_lit ls : All (WfAst.wf Σ) (List.map ST.template_of_lit ls).
+  Proof using Type.
+    induction ls as [|l ls ih]; constructor; [apply wf_template_of_lit|exact ih].
+  Qed.
+
+  Lemma lit_of_term_mkApps_cons f a args :
+    lit_of_term (mkApps f (a :: args)) = None.
+  Proof using Type.
+    induction args as [|b args ih] in f, a |- *; cbn [mkApps]; [reflexivity|apply ih].
+  Qed.
+
+  Lemma trans_lit_of_template_Some y l :
+    ST.lit_of_template y = Some l -> lit_of_term (trans Σ' y) = Some l.
+  Proof using Type.
+    destruct y => //=; intros [= <-]; reflexivity.
+  Qed.
+
+  Lemma trans_lit_of_template_None y :
+    WfAst.wf Σ y -> ST.lit_of_template y = None -> lit_of_term (trans Σ' y) = None.
+  Proof using Type.
+    intros wfy hnone; destruct y; cbn [ST.lit_of_template] in hnone;
+      try discriminate hnone; try (cbn [trans]; reflexivity).
+    - (* tApp *) cbn [trans].
+      match goal with |- context [map (trans Σ') ?ll] => destruct ll as [|a ll'] end.
+      + exfalso. destruct (WfAst.wf_inv wfy) as [[[_ hne] _] _]. exact (hne eq_refl).
+      + apply lit_of_term_mkApps_cons.
+    - (* tCase *) cbn [trans]. destruct TransLookup.lookup_inductive as [[]|]; reflexivity.
+  Qed.
+
+  Lemma trans_tsplit_lits_inl {argl ls} :
+    ST.tsplit_lits argl = inl ls ->
+    split_lits (List.map (trans Σ') argl) = inl ls.
+  Proof using Type.
+    intros h; rewrite (ST.tsplit_lits_inl h) trans_map_template_of_lit split_lits_map //.
+  Qed.
+
+  Lemma trans_tsplit_lits_inr {argl ls a rest} :
+    WfAst.wf Σ a ->
+    ST.tsplit_lits argl = inr (ls, a, rest) ->
+    split_lits (List.map (trans Σ') argl) = inr (ls, trans Σ' a, List.map (trans Σ') rest).
+  Proof using Type.
+    intros wfa h; destruct (ST.tsplit_lits_inr h) as [-> hnl].
+    rewrite map_app map_cons trans_map_template_of_lit.
+    apply split_lits_app. now apply trans_lit_of_template_None.
+  Qed.
+
+  (** The first non-literal argument the split names is well formed, so the
+      bridges above apply to it. *)
+  Lemma tsplit_lits_wf {argl n ls a rest} :
+    All (WfAst.wf Σ) argl -> ST.tsplit_lits (firstn n argl) = inr (ls, a, rest) ->
+    WfAst.wf Σ a.
+  Proof using Type.
+    intros wfargs h. destruct (ST.tsplit_lits_inr h) as [e _].
+    have wff := All_firstn (n := n) wfargs. rewrite e in wff.
+    apply All_app in wff as [_ wfar]. now depelim wfar.
+  Qed.
+
   Lemma trans_red1 Γ T U :
     All (WfAst.wf_decl Σ) Γ ->
     WfAst.wf Σ T ->
@@ -1576,6 +1696,18 @@ Section Trans_Global.
     - rewrite trans_subst_instance. econstructor.
       apply (forall_decls_declared_constant _ wfΣ wfΣ' c decl H).
       now destruct decl as [na [b|] ty]; cbn; noconf H0.
+
+    (* primitive operation: the literals and the readback are the same on both
+       sides, the arguments beyond the arity are reached by [red1_mkApps_f] *)
+    - rewrite trans_mkApps. cbn [trans].
+      rewrite map_app trans_map_template_of_lit mkApps_app.
+      apply red1_mkApps_f.
+      eapply red_prim_op.
+      + now apply trans_prim_op_of.
+      + now apply (forall_decls_declared_constant _ wfΣ wfΣ').
+      + destruct decl as [? [?|] ?]; cbn in *; congruence.
+      + eassumption.
+      + now apply trans_treadback.
 
     - rewrite trans_mkApps; eauto with wf.
       simpl. constructor. now rewrite nth_error_map H.
@@ -1790,7 +1922,7 @@ Section Trans_Global.
     intros wfΓ wft wfargs w. revert wft wfargs.
     induction w as [c args d b h l hnth hbod w IH|c args d hnth hbod
       |na b B t args h l hz w IH|na b B t args hz
-      |c u decl body args h l hcst hbod w IH|c u decl args hcst hbod
+      |c u decl body args h l hcst hbod w IH|c u decl args hcst hbod hpo
       |c k T args h l w IH
       |f l args h l' hf hl w IH
       |na A t a args h l w IH
@@ -1803,7 +1935,12 @@ Section Trans_Global.
       |p c args u cargs a h l wa IHa hnth wb IHb
       |p c args mfix idx cargs narg fn h l wa IHa hunf wb IHb
       |p c args t cargs wa IHa hnc hncf
-      |t args hs]; intros wft wfargs.
+      |t args hs
+      |c u decl op args ls a rest t cargs lit h l hcst hbod hpo hsat hs wa IHa hnl w IH
+      |c u decl op args ls a rest t cargs hcst hbod hpo hsat hs wa IHa hnl
+      |c u decl op args ls r v h l hcst hbod hpo hsat hs hden hrb w IH
+      |c u decl op args ls hcst hbod hpo hsat hs hden
+      |c u decl op args hcst hbod hpo hpart]; intros wft wfargs.
     (* tRel, let-bound *)
     - have wfb : WfAst.wf Σ b.
       { destruct (nth_error_all hnth wfΓ) as [wdb _]. rewrite hbod in wdb. exact wdb. }
@@ -1836,6 +1973,7 @@ Section Trans_Global.
     - eapply whd_axiom.
       + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
       + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of_None.
     (* a head cast is a beta-redex in PCUIC *)
     - destruct (WfAst.wf_inv wft) as [wfc wfT].
       cbn [trans]. apply whd_app, whd_beta. cbn. rewrite lift0_p.
@@ -1960,6 +2098,70 @@ Section Trans_Global.
       + rewrite (trans_whd_is_cofix t ht). exact hncf.
     (* the machine stops *)
     - apply whd_stop. now apply trans_whd_stop_head.
+    (* whd_prim_arg: reduce the first non-literal argument, then re-enter *)
+    - have wfa : WfAst.wf Σ a := tsplit_lits_wf wfargs hs.
+      destruct (whd_rel_wf wfΓ wfa All_nil wa) as [wft0 wfcargs].
+      have wftc : WfAst.wf Σ (S.mkApps t cargs) := WfAst.wf_mkApps _ _ _ wft0 wfcargs.
+      have wfrest : All (WfAst.wf Σ) rest.
+      { destruct (ST.tsplit_lits_inr hs) as [e _].
+        have wff := All_firstn (n := arity op) wfargs. rewrite e in wff.
+        apply All_app in wff as [_ wfar]. now depelim wfar. }
+      eapply whd_prim_arg.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hsat.
+      + rewrite firstn_map. exact (trans_tsplit_lits_inr wfa hs).
+      + exact (IHa wfa All_nil).
+      + rewrite -trans_mkApps. exact (trans_lit_of_template_Some _ _ hnl).
+      + have wfbig : All (WfAst.wf Σ)
+          (List.map ST.template_of_lit ls ++ S.mkApps t cargs :: rest ++ skipn (arity op) args).
+        { apply All_app_inv; [apply All_wf_template_of_lit|].
+          constructor; [exact wftc|apply All_app_inv; [exact wfrest|now apply All_skipn]]. }
+        have tw := IH wft wfbig.
+        rewrite map_app trans_map_template_of_lit in tw. cbn [List.map] in tw.
+        rewrite trans_mkApps map_app map_skipn in tw. exact tw.
+    (* whd_prim_stuck: the reduced stuck argument keeps the application stuck *)
+    - have wfa : WfAst.wf Σ a := tsplit_lits_wf wfargs hs.
+      destruct (whd_rel_wf wfΓ wfa All_nil wa) as [wft0 wfcargs].
+      have wftc : WfAst.wf Σ (S.mkApps t cargs) := WfAst.wf_mkApps _ _ _ wft0 wfcargs.
+      cbn [trans].
+      rewrite map_app trans_map_template_of_lit. cbn [List.map].
+      rewrite trans_mkApps map_app map_skipn.
+      eapply whd_prim_stuck.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hsat.
+      + rewrite firstn_map. exact (trans_tsplit_lits_inr wfa hs).
+      + exact (IHa wfa All_nil).
+      + rewrite -trans_mkApps. now apply trans_lit_of_template_None.
+    (* whd_prim_fire: every argument is a literal, the rule fires *)
+    - eapply whd_prim_fire.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hsat.
+      + rewrite firstn_map. exact (trans_tsplit_lits_inl hs).
+      + exact hden.
+      + exact (trans_treadback _ _ _ hrb).
+      + have wfv : WfAst.wf Σ v := TypingWf.wf_treadback hrb.
+        have tw := IH wfv (All_skipn wfargs).
+        rewrite map_skipn in tw. exact tw.
+    (* whd_prim_inert: saturated but the operation does not compute *)
+    - eapply whd_prim_inert.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hsat.
+      + rewrite firstn_map. exact (trans_tsplit_lits_inl hs).
+      + exact hden.
+    (* whd_prim_partial: unsaturated *)
+    - eapply whd_prim_partial.
+      + rewrite (trans_lookup Σ c wfΣ wfΣ') hcst. reflexivity.
+      + cbn. now rewrite hbod.
+      + now apply trans_prim_op_of.
+      + rewrite length_map. exact hpart.
   Qed.
 
   Lemma trans_arity_red {Γ t Δ s} :
@@ -3916,14 +4118,6 @@ Proof.
   induction Σ => /= //.
 Qed.
 
-Lemma trans_env_env_retroknowledge {Σ : Ast.Env.global_env} :
-  retroknowledge (trans_env_env (trans_global_env Σ)) = Ast.Env.retroknowledge Σ.
-Proof.
-  destruct Σ as [univs Σ] .
-  unfold trans_global_env; cbn -[trans_global_decls].
-  induction Σ => /= //.
-Qed.
-
 Lemma env_eq (g g' : global_env) :
   g.(universes) = g'.(universes) ->
   g.(declarations) = g'.(declarations) ->
@@ -3944,6 +4138,193 @@ Proof.
   trivial.
 Qed.
 
+(** ** The §4.2 environment condition transports
+
+  [trans_global_env] keeps the retroknowledge, so the operation table, the four
+  registered type constants and the boolean inductive are literally the same on
+  both sides: §4.2(a)'s conjunct, [Retroknowledge.wf_retro], is the *same*
+  proposition after the translation.  §4.2(b) is per declaration, and every
+  clause of it is structural: [prim_op_type]'s two instances are the same fold
+  over the same option, built only from [tConst kn []], [tInd i []] and [tImpl],
+  on which [trans] is the identity; [primitive_invariants] asks for
+  [cst_type = tSort Set], [cst_body = None] and [Monomorphic_ctx], all preserved
+  by [trans_constant_body]; and [on_prim_bool_decl] reads only names, arities and
+  empty contexts off the block, which [trans_minductive_body] preserves. *)
+
+Section TransPrimDecl.
+  Context {cf : checker_flags}.
+  Context (Σ : Ast.Env.global_env).
+  Notation Σ' := (trans_global_env Σ).
+
+  Lemma trans_tImpl a b :
+    trans Σ' (Ast.Env.tImpl a b) = tImpl (trans Σ' a) (trans Σ' b).
+  Proof using Type. cbn. now rewrite trans_lift. Qed.
+
+  Lemma trans_prim_tag_type r t :
+    option_map (trans Σ') (ST.TemplatePrimOpType.prim_tag_type r t)
+      = PCUICPrimOpType.prim_tag_type r t.
+  Proof using Type.
+    rewrite /ST.TemplatePrimOpType.prim_tag_type /PCUICPrimOpType.prim_tag_type.
+    now destruct (EnvironmentTyping.retro_type_constant r t).
+  Qed.
+
+  Lemma trans_prim_shape_type r s :
+    option_map (trans Σ') (ST.TemplatePrimOpType.prim_shape_type r s)
+      = PCUICPrimOpType.prim_shape_type r s.
+  Proof using Type.
+    destruct s; [apply trans_prim_tag_type|].
+    cbn. now destruct (Retroknowledge.retro_bool r).
+  Qed.
+
+  Lemma trans_prim_arg_types r ts res :
+    option_map (trans Σ') (ST.TemplatePrimOpType.prim_arg_types r ts res)
+      = PCUICPrimOpType.prim_arg_types r ts (trans Σ' res).
+  Proof using Type.
+    induction ts as [|t ts ih] in res |- *; [reflexivity|].
+    cbn [ST.TemplatePrimOpType.prim_arg_types PCUICPrimOpType.prim_arg_types].
+    pose proof (trans_prim_tag_type r t) as ht.
+    destruct (ST.TemplatePrimOpType.prim_tag_type r t) as [a|] eqn:ha;
+      cbn in ht; rewrite -ht //.
+    destruct (ST.TemplatePrimOpType.prim_arg_types r ts res) as [b|] eqn:hb;
+      cbn; rewrite -ih hb //=.
+    first [now rewrite trans_tImpl | exact (f_equal Some (trans_tImpl _ _)) | cbn; now rewrite trans_lift].
+  Qed.
+
+  Lemma trans_prim_op_type r op T :
+    ST.TemplatePrimOpType.prim_op_type r op = Some T ->
+    PCUICPrimOpType.prim_op_type r op = Some (trans Σ' T).
+  Proof using Type.
+    rewrite /ST.TemplatePrimOpType.prim_op_type /PCUICPrimOpType.prim_op_type.
+    pose proof (trans_prim_shape_type r (po_shape (info op))) as hs.
+    destruct (ST.TemplatePrimOpType.prim_shape_type r (po_shape (info op))) as [res|] eqn:hr;
+      cbn in hs; rewrite -hs //.
+    intros h. pose proof (trans_prim_arg_types r (po_args (info op)) res) as ha.
+    rewrite h in ha. exact (eq_sym ha).
+  Qed.
+End TransPrimDecl.
+
+(** * Row L: the environment condition of design §4.2 under the Template→PCUIC
+    translation.  [trans_global_env] keeps the retroknowledge, so [prim_op_of],
+    [primitive_constant] and [primitive_bool] agree on both sides.  [trans] maps
+    the Template [prim_op_type] to the PCUIC one ([trans_prim_op_type]).  The
+    declared-type conversion is carried by [trans_cumulSpec], which needs both
+    sides closed. *)
+
+Lemma prim_arg_types_closed_pcuic r tags res T :
+  PCUICPrimOpType.prim_arg_types r tags res = Some T -> closed res -> closed T.
+Proof.
+  induction tags as [|t tags ih] in T |- *; cbn; intros h hcl.
+  - noconf h. exact hcl.
+  - destruct (PCUICPrimOpType.prim_tag_type r t) as [a|] eqn:ht => //.
+    destruct (PCUICPrimOpType.prim_arg_types r tags res) as [rest|] eqn:hr => //.
+    cbn in h. noconf h.
+    unfold PCUICPrimOpType.prim_tag_type in ht.
+    destruct (EnvironmentTyping.retro_type_constant r t) => //. cbn in ht. noconf ht.
+    specialize (ih rest eq_refl hcl).
+    unfold tImpl. cbn. now apply (closedn_lift 1 0 0) in ih.
+Qed.
+
+Lemma prim_op_type_closed_pcuic r op T :
+  PCUICPrimOpType.prim_op_type r op = Some T -> closed T.
+Proof.
+  rewrite /PCUICPrimOpType.prim_op_type.
+  destruct (PCUICPrimOpType.prim_shape_type r (po_shape (info op))) as [res|] eqn:hs => //.
+  intros h. eapply prim_arg_types_closed_pcuic; tea.
+  move: hs. destruct (po_shape (info op)); cbn.
+  - unfold PCUICPrimOpType.prim_tag_type.
+    destruct (EnvironmentTyping.retro_type_constant r primInt) => //. now intros [= <-].
+  - destruct (Retroknowledge.retro_bool r) => //. now intros [= <-].
+Qed.
+
+Lemma wf_prim_arg_types (Σ : Ast.Env.global_env) r tags res T :
+  ST.TemplatePrimOpType.prim_arg_types r tags res = Some T -> WfAst.wf Σ res -> WfAst.wf Σ T.
+Proof.
+  induction tags as [|t tags ih] in T |- *; cbn; intros h hw.
+  - noconf h. exact hw.
+  - destruct (ST.TemplatePrimOpType.prim_tag_type r t) as [a|] eqn:ht => //.
+    destruct (ST.TemplatePrimOpType.prim_arg_types r tags res) as [rest|] eqn:hr => //.
+    cbn in h. noconf h.
+    unfold ST.TemplatePrimOpType.prim_tag_type in ht.
+    destruct (EnvironmentTyping.retro_type_constant r t) => //. cbn in ht. noconf ht.
+    specialize (ih rest eq_refl hw).
+    unfold Ast.Env.tImpl. constructor; [constructor|]. now apply WfAst.wf_lift.
+Qed.
+
+Lemma wf_prim_op_type (Σ : Ast.Env.global_env) r op T :
+  ST.TemplatePrimOpType.prim_op_type r op = Some T -> WfAst.wf Σ T.
+Proof.
+  rewrite /ST.TemplatePrimOpType.prim_op_type.
+  destruct (ST.TemplatePrimOpType.prim_shape_type r (po_shape (info op))) as [res|] eqn:hs => //.
+  intros h. eapply wf_prim_arg_types; tea.
+  move: hs. destruct (po_shape (info op)); cbn.
+  - unfold ST.TemplatePrimOpType.prim_tag_type.
+    destruct (EnvironmentTyping.retro_type_constant r primInt) => //. intros [= <-]. constructor.
+  - destruct (Retroknowledge.retro_bool r) => //. intros [= <-]. constructor.
+Qed.
+
+Lemma trans_primitive_invariants_t2p (Σ : Ast.Env.global_env) t d :
+  Ast.Env.primitive_invariants t d ->
+  primitive_invariants t (trans_constant_body (trans_global_env Σ) d).
+Proof.
+  destruct t; cbn; intros [ht hb hu]; split; cbn; rewrite ?ht ?hb ?hu //.
+Qed.
+
+(** Row L: row H's [on_prim_decl] is preserved by the Template→PCUIC translation. *)
+Lemma trans_on_prim_decl_t2p {cf} (Σg : Ast.Env.global_env) (X0 : Typing.wf Σg)
+  (wfΣg : wf (trans_global_env Σg)) ud kn d :
+  Typing.on_global_decl Typing.cumul_gen (fun Σ => WfAst.wf_decl_pred Σ) (Σg, ud) kn d ->
+  (forall cb, d = Ast.Env.ConstantDecl cb ->
+     closed (trans (trans_global_env Σg) cb.(Ast.Env.cst_type))) ->
+  Typing.on_prim_decl Typing.cumul_gen (Σg, ud) kn d ->
+  on_prim_decl cumulSpec0 (trans_env_env (trans_global_env Σg), ud) kn (trans_global_decl (trans_global_env Σg) d).
+Proof.
+  intros wfd hcl onp. destruct d as [cb|mdecl]; cbn in *.
+  - intros op hop.
+    assert (hop' : Ast.Env.prim_op_of Σg kn = Some op).
+    { move: hop. rewrite /prim_op_of /Ast.Env.prim_op_of trans_env_env_retroknowledge //. }
+    destruct (onp op hop') as [hbody huniv [T [hT hconv]] hargs hres].
+    have hT' := trans_prim_op_type Σg _ _ _ hT.
+    constructor; cbn.
+    + now rewrite hbody.
+    + exact huniv.
+    + exists (trans (trans_global_env Σg) T). split.
+      * rewrite trans_env_env_retroknowledge. exact hT'.
+      * eapply (trans_cumulSpec (Σ := (Σg, ud)) (wfΣ := X0) (pb := Conv) (Γ := [])); tea.
+        -- constructor.
+        -- exact wfd.2.
+        -- eapply wf_prim_op_type; tea.
+        -- reflexivity.
+        -- apply closedn_on_free_vars. exact (hcl cb eq_refl).
+        -- apply closedn_on_free_vars. exact (prim_op_type_closed_pcuic _ _ _ hT').
+    + eapply All_impl; [exact hargs|]. intros t (kn' & d' & [hpc hd hinv]).
+      exists kn', (trans_constant_body (trans_global_env Σg) d'). split.
+      * move: hpc. rewrite /primitive_constant /Ast.Env.primitive_constant trans_env_env_retroknowledge //.
+      * eapply forall_decls_declared_constant; tea.
+      * now apply trans_primitive_invariants_t2p.
+    + destruct (po_shape (info op)); cbn in hres |- *.
+      * destruct hres as (kn' & d' & [hpc hd hinv]).
+        exists kn', (trans_constant_body (trans_global_env Σg) d'). split.
+        -- move: hpc. rewrite /primitive_constant /Ast.Env.primitive_constant trans_env_env_retroknowledge //.
+        -- eapply forall_decls_declared_constant; tea.
+        -- now apply trans_primitive_invariants_t2p.
+      * destruct hres as (i & mdecl & idecl & hpb & hdi).
+        exists i, (trans_minductive_body (trans_global_env Σg) mdecl),
+          (trans_one_ind_body (trans_global_env Σg) idecl). split.
+        -- move: hpb. rewrite /primitive_bool /Ast.Env.primitive_bool trans_env_env_retroknowledge //.
+        -- eapply forall_decls_declared_inductive; tea.
+  - intros i hb hm.
+    assert (hb' : Ast.Env.primitive_bool Σg = Some i).
+    { move: hb. rewrite /primitive_bool /Ast.Env.primitive_bool trans_env_env_retroknowledge //. }
+    specialize (onp i hb' hm).
+    red in onp |- *. cbn.
+    destruct (Ast.Env.ind_bodies mdecl) as [|idecl []] eqn:hbodies => //. cbn.
+    destruct onp as [hnp hpar huniv hind hct].
+    split; cbn; rewrite ?hpar ?hind //.
+    destruct (Ast.Env.ind_ctors idecl) as [|cT [|cF []]] => //. cbn.
+    destruct hct as [[hnT haT hiT hyT harT] [hnF haF hiF hyF harF]].
+    split; split; cbn; rewrite ?haT ?hiT ?hyT ?haF ?hiF ?hyF //.
+Qed.
+
 Lemma trans_on_global_env `{checker_flags} {t2pgt : TemplateToPCUICGuardTrans} Σ :
   (forall (Σ : Ast.Env.global_env_ext) Γ j, Typing.wf Σ ->
     Typing.lift_typing Typing.typing Σ Γ j ->
@@ -3955,8 +4336,10 @@ Proof.
   intros X X0.
   simpl in *.
   destruct Σ as [univs Σ retro].
-  destruct X0 as [onu ond]. split => //.
+  destruct X0 as [onu [wfr ond]]. split => //.
   { now rewrite trans_env_env_universes. }
+  split.
+  { rewrite trans_env_env_retroknowledge. exact wfr. }
   cbn -[trans_global_env] in *.
   rewrite trans_env_env_universes /= /trans_global_env /=.
   induction ond; simpl; constructor; auto. destruct o. constructor; auto.
@@ -3967,7 +4350,7 @@ Proof.
     now erewrite trans_global_decl_universes in on_udecl_udecl.
   - simpl.
     set (Σg := {| Ast.Env.universes := univs; Ast.Env.declarations := Σ; Ast.Env.retroknowledge := retro |}).
-    set (X0 := (onu, ond) : Typing.wf Σg).
+    set (X0 := (onu, (wfr, ond)) : Typing.wf Σg).
     assert (trans_env_env (trans_global_env Σg) =
        {| universes := univs;
           declarations := declarations (trans_global_decls (empty_trans_env univs retro) Σ) |}) as <-.
@@ -3975,7 +4358,9 @@ Proof.
       now rewrite trans_env_env_universes. reflexivity.
       now rewrite trans_env_env_retroknowledge. }
     assert (wfΣg : PCUICTyping.wf (trans_global_env Σg)).
-    { split; rewrite trans_env_env_universes //. }
+    { split; [rewrite trans_env_env_universes //|].
+      split; [rewrite trans_env_env_retroknowledge; exact wfr|].
+      rewrite trans_env_env_universes; first [exact IHond | done]. }
     have wfdecl := on_global_decl_wf (Σ := (Σg, udecl)) X0 on_global_decl_d.
     destruct d eqn:eqd.
     * eapply (X (Σg, _) [] (TermoptTypRel _ _ _)); auto.
@@ -4183,6 +4568,28 @@ Proof.
           exists univs', i, i'; split => //.
           all:change (trans_env_env (trans_global_env Σg), univs') with (global_env_ext_map_global_env_ext (trans_global (Σg, univs')));
             now eapply trans_consistent_instance_ext_gen.
+  - (* on_prim_decl_d: row H's environment condition, carried by the translation *)
+    set (Σg := {| Ast.Env.universes := univs; Ast.Env.declarations := Σ; Ast.Env.retroknowledge := retro |}).
+    set (X0 := (onu, (wfr, ond)) : Typing.wf Σg).
+    assert (trans_env_env (trans_global_env Σg) =
+       {| universes := univs;
+          declarations := declarations (trans_global_decls (empty_trans_env univs retro) Σ) |}) as <-.
+    { apply env_eq.
+      now rewrite trans_env_env_universes. reflexivity.
+      now rewrite trans_env_env_retroknowledge. }
+    assert (wfΣg : PCUICTyping.wf (trans_global_env Σg)).
+    { split; [rewrite trans_env_env_universes //|].
+      split; [rewrite trans_env_env_retroknowledge; exact wfr|].
+      rewrite trans_env_env_universes; first [exact IHond | done]. }
+    have wfdecl := on_global_decl_wf (Σ := (Σg, udecl)) X0 on_global_decl_d.
+    assert (hcl : forall cb, d = Ast.Env.ConstantDecl cb ->
+      closed (trans (trans_global_env Σg) cb.(Ast.Env.cst_type))).
+    { intros cb ->. cbn in on_global_decl_d.
+      have ty := X (Σg, udecl) [] (TermoptTypRel _ _ _) X0 on_global_decl_d wfΣg.
+      apply lift_sorting_forget_body, lift_sorting_forget_rel in ty.
+      destruct ty as (_ & s & Hs & _).
+      exact (@PCUICClosedTyp.subject_closed _ (trans_global (Σg, udecl)) wfΣg _ _ _ Hs). }
+    destruct d; exact (trans_on_prim_decl_t2p Σg X0 wfΣg udecl kn _ wfdecl hcl on_prim_decl_d).
 Qed.
 
 Lemma template_to_pcuic_env {cf} {t2pgt : TemplateToPCUICGuardTrans} Σ :Template.Typing.wf Σ -> wf (trans_global_env Σ).

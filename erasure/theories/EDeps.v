@@ -491,11 +491,12 @@ Qed. *)
 
 Lemma erases_deps_cons Σ Σ' kn decl decl' t :
   on_global_univs Σ.(universes) ->
+  Retroknowledge.wf_retro Σ.(retroknowledge) ->
   on_global_decls cumulSpec0 (lift_typing typing) Σ.(universes) Σ.(retroknowledge) ((kn, decl) :: Σ.(declarations)) ->
   erases_deps Σ Σ' t ->
   erases_deps (add_global_decl Σ (kn, decl)) ((kn, decl') :: Σ') t.
 Proof.
-  intros wfu wfΣ er.
+  intros wfu wfr wfΣ er.
   induction er using erases_deps_forall_ind; try solve [now constructor].
   inversion wfΣ.
   unshelve epose proof (H_ := declared_constant_to_gen H); eauto.
@@ -755,11 +756,12 @@ Proof.
       split; [easy|].
       inversion wf; subst.
       cbn in *.
+      pose proof (fst (snd wf)) as wfr0; pose proof (snd (snd wf)) as wfd0; cbn in wfr0, wfd0.
       split.
       * unfold erases_constant_body, on_constant_decl in *.
         destruct ?; [|easy].
         destruct ?; [|easy].
-        depelim wf. depelim o0. destruct o1. cbn in *.
+        destruct wf as [o [wfr o0]]. depelim o0. destruct o1. cbn in *.
         eapply (erases_extends ({| universes := univs; declarations := Σ |}, cst_universes cst')); eauto.
         cbn. 4:{ split; eauto; cbn; try reflexivity. eexists [_]; cbn; reflexivity. }
         constructor; auto. cbn. red in on_global_decl_d. rewrite E in on_global_decl_d. apply unlift_TermTyp in on_global_decl_d. exact on_global_decl_d.
@@ -772,18 +774,18 @@ Proof.
         unfold on_constant_decl in *.
         cbn in *.
         eapply (erases_deps_single (_, _)). 3:eauto.
-        depelim wf. depelim o0. destruct o1.
+        destruct wf as [o [wfr o0]]. depelim o0. destruct o1.
         now split; cbn; eauto.
-        depelim wf. depelim o0. destruct o1. do 2 red in on_global_decl_d. rewrite E in on_global_decl_d.
+        destruct wf as [o [wfr o0]]. depelim o0. destruct o1. do 2 red in on_global_decl_d. rewrite E in on_global_decl_d.
         now apply unlift_TermTyp in on_global_decl_d.
-        apply IH; eauto. depelim wf. now depelim o0.
+        apply IH; eauto. destruct wf as [o [wfr o0]]. depelim o0. split; [|split]; assumption.
     + set (Σu := {| universes := univs; declarations := Σ; retroknowledge := retro |}).
       assert (wfΣu : PCUICTyping.wf Σu).
-      { depelim wf. now depelim o0. }
+      { destruct wf as [o [wfr o0]]. depelim o0. split; [|split]; assumption. }
       assert (exists decl' Σ'', Σ' = (kn, decl') :: Σ'' /\ erases_global Σu Σ'')
         as (erdecl & ? & -> & erg')
           by now depelim erg; eexists _, _.
-      apply IH in erg'. 2:{ depelim wf. now depelim o0. }
+      apply IH in erg'. 2:{ destruct wf as [o [wfr o0]]. depelim o0. split; [|split]; assumption. }
       assert (decl_ext: PCUICAst.declared_constant Σu kn' cst').
       { unshelve eapply declared_constant_to_gen in decl'; eauto.
         eapply declared_constant_from_gen.
@@ -807,15 +809,15 @@ Proof.
         all: cbn; eauto.
       * intros.
         apply H0 in H1.
-        eapply (erases_deps_cons Σu); eauto. apply wfΣu. apply wf.
+        eapply (erases_deps_cons Σu); eauto; [exact (fst wfΣu)|exact (fst (snd wfΣu))|exact (snd (snd wf))].
   + pose proof (wf' := wf). intros k mdecl idecl decli.
     depelim erg.
-    * inv wf. inv X.
-      specialize (IH _ (H0, X0) erg).
+    * inv wf. destruct X as [wfr X]. inv X.
+      specialize (IH _ (H0, (wfr, X0)) erg).
       apply proj2 in IH. specialize (IH k mdecl idecl).
       forward IH.
       assert (wf Σg).
-      { econstructor; eauto. unfold Σg; cbn. econstructor;
+      { split; [assumption|]. split; [assumption|]. unfold Σg; cbn. econstructor;
         eauto. }
       destruct decli as [decli ?]. split; auto. cbn in X0, X1.
       unshelve eapply declared_minductive_to_gen in decli; eauto.
@@ -827,7 +829,7 @@ Proof.
       exists mdecl', idecl'. split; auto.
       red. destruct decli'; split; auto.
       assert (wf Σg).
-      { econstructor; eauto. unfold Σg; cbn. econstructor;
+      { split; [assumption|]. split; [assumption|]. unfold Σg; cbn. econstructor;
         eauto. }
       destruct decli as [decli ?].
       unshelve eapply declared_minductive_to_gen in decli; eauto.
@@ -836,8 +838,8 @@ Proof.
       unfold declared_inductive_gen, declared_minductive_gen in decli.
       unfold PCUICEnvironment.lookup_env in decli.
       simpl in decli. rewrite eq_kername_refl in decli. intuition discriminate.
-    * inv wf. inv X. destruct X1.
-      specialize (IH _ (H0, X0) erg).
+    * inv wf. destruct X as [wfr X]. inv X. destruct X1.
+      specialize (IH _ (H0, (wfr, X0)) erg).
       destruct decli as [decli ?].
       unshelve eapply declared_minductive_to_gen in decli; eauto.
       simpl in decli |- *.
