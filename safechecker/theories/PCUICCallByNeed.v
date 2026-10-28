@@ -3168,7 +3168,7 @@ Section CallByNeed.
               | Some br =>
                 let cargs := skipn ci.(ci_npar) args in
                 if forallb is_assum br.(bcontext)
-                   && (#|args| == ci.(ci_npar) + #|br.(bcontext)|) then
+                   && (#|args| == ci.(ci_npar) + context_assumptions br.(bcontext)) then
                   whnf d (env_push_addrs cargs e)
                     (child c (case_branch_step (N.of_nat n)) br.(bbody)) stk rs s
                 else CFail WShape
