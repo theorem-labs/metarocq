@@ -36,23 +36,6 @@ Proof.
   now etransitivity.
 Qed.
 
-(** A bodiless constant that is not a registered operation does not reduce, so
-    an application of it reduces only in its arguments.  A registered operation
-    is handled by the rigidity lemma instead (design §7.3, row J). *)
-Lemma closed_red_mkApps_tConst_axiom {cf} {Σ} {wfΣ : wf Σ} {Γ} {cst u} {args : list term} {cb c} :
-  declared_constant Σ cst cb -> cst_body cb = None -> prim_op_of Σ cst = None ->
-  Σ ;;; Γ ⊢ mkApps (tConst cst u) args ⇝ c ->
-  ∑ args' : list term,
-  (c = mkApps (tConst cst u) args') * (red_terms Σ Γ args args').
-Proof.
-  intros decl hcb hnop [clΓ clt r].
-  eapply (PCUICConfluence.red_mkApps_tConst_axiom (Γ := exist Γ clΓ)) in decl as [args' [eq r']]; tea.
-  * exists args'; split; auto.
-    eapply into_red_terms; auto.
-    inv_on_free_vars. solve_all.
-  * cbn. inv_on_free_vars; solve_all.
-Qed.
-
 (** * Conversion for PCUIC without fuel
 
   Following PCUICSafeReduce, we derive a fuel-free implementation of
@@ -1280,11 +1263,11 @@ Section Conversion.
       Unshelve. eauto.
   Qed.
 
-  (** One step of the machine on a constant-headed state (design §7.3, steps 1
-      and 2): the default-flag machine on the application, in [zipp] form, as
-      [_isconv_red] runs the machine.  [None] when it makes no progress, that
-      is when the application is already a weak-head normal form under default
-      flags: an axiom, or an unsaturated, inert, stuck or rigid operation. *)
+  (** A full weak-head run of the default-flag machine ([reduce_stack]) on a
+      constant-headed state, in [zipp] form (design §7.3, steps 1 and 2).
+      [None] when it makes no progress, that is when the application is already
+      a weak-head normal form under default flags: an axiom, or an unsaturated,
+      inert, stuck or rigid operation. *)
   Opaque reduce_stack.
   Equations unfold_one_prim (Γ : context) (c : kername) (u : Instance.t) (π : stack)
             (h : wtp Γ (tConst c u) π) : option (term * stack) :=
@@ -1384,7 +1367,7 @@ Section Conversion.
        cored Σ Γ (zipc t' ξ) (zipc (tConst c u) π)).
   Proof using Type.
     intros e. destruct (unfold_one_prim_shape _ _ _ _ _ _ _ e) as (args & ρ & l & [ed -> hr hne]).
-    pose proof (decompose_stack_snd_nil ed) as hρ.
+    pose proof (decompose_stack_twice _ _ _ ed) as hρ.
     apply decompose_stack_eq in ed. subst π.
     assert (ezp : forall t L, zipp t (appstack L ρ) = mkApps t L).
     { intros t L. unfold zipp. rewrite decompose_stack_appstack. rewrite hρ. cbn. now rewrite app_nil_r. }
@@ -1641,11 +1624,12 @@ Qed.
     repeat match goal with | h : _ |- _ => specialize (h _ wfΣ) end.
 
   (** Before answering no on two constant-headed whnfs (design §7.3): a
-      registered operation takes one machine step, on the left, else on the
-      right, as the kernel does inside lazy unfolding
-      ([unfold_ref_with_args], kernel/cClosure.ml).  When neither side moves,
-      both are weak-head normal forms under default flags and the answer no is
-      justified by the rigidity lemma. *)
+      registered operation is run by [unfold_one_prim] (a full default-flag
+      weak-head run), on the left, else on the right, as the kernel does inside
+      lazy unfolding ([unfold_ref_with_args], kernel/cClosure.ml).  When
+      neither side moves, both are weak-head normal forms under default flags,
+      and the answer no rests on [closed_red_whnf_mkApps_tConst]: every reduct
+      of either side keeps its head constant. *)
   Equations(noeqns) unfold_prims (Γ : context) (leq : conv_pb)
             (c : kername) (u : Instance.t) (π1 : stack)
             (h1 : wtp Γ (tConst c u) π1)
@@ -5868,7 +5852,7 @@ Equations (noeqns) isconv_array_values_aux
     all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
       destruct (unfold_one_prim_shape _ _ _ _ _ _ _ ee) as (args & ρ & l & [ed eξ hr _]);
       destruct (hr _ wfΣ) as [r]; constructor;
-      pose proof (decompose_stack_snd_nil ed) as hρ;
+      pose proof (decompose_stack_twice _ _ _ ed) as hρ;
       unfold zippx; rewrite ed; subst; rewrite decompose_stack_appstack; rewrite hρ; cbn;
       rewrite app_nil_r;
       eapply red_it_mkLambda_or_LetIn;
@@ -5934,7 +5918,7 @@ Equations (noeqns) isconv_array_values_aux
     all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
       destruct (unfold_one_prim_shape _ _ _ _ _ _ _ ee) as (args & ρ & l & [ed eξ _ _]);
       rewrite ed; subst; rewrite decompose_stack_appstack;
-      rewrite (decompose_stack_snd_nil ed); reflexivity end ].
+      rewrite (decompose_stack_twice _ _ _ ed); reflexivity end ].
     - eapply unfold_one_fix_decompose. eassumption.
     - reflexivity.
     - reflexivity.

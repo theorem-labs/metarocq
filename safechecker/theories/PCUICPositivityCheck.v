@@ -25,7 +25,8 @@ Import MonadNotation.
   not show it positive, as Rocq's kernel does ([check_strict_positivity],
   kernel/indtypes.ml).  The terms of the nested walk are not well typed, so the typed
   reduction of the safe checker cannot be used: [whd_fuel] is an untyped weak-head
-  machine on a fuel, which follows the relation [whd_rel true] rule by rule.
+  machine on a fuel, which follows the relation [whd_rel true] rule by rule, except that
+  it gives up ([None]) on a registered primitive operation instead of firing it.
 
   Positivity checking reduces let-ins and, in the nested case, walks the constructors of
   another inductive type, which are not subterms of the term being checked.  The check is
@@ -182,13 +183,13 @@ Definition nested_binder : aname := mkBindAnn nAnon Relevant.
 Section Check.
   (** The global environment's declarations, by name. *)
   Context (lookup : kername -> option global_decl).
-  (** The operation table: the registered primitive operation of a constant.  Weak-head
-      reduction REFUSES on a registered operation ([None] below) rather than firing it:
-      the relation [whd_rel true] fires a saturated literal application, which this
-      untyped machine does not implement, and answering "stuck" there would be unsound.
-      Refusing is sound and costs only completeness: positivity is refused for a
-      constructor argument type whose weak-head reduction meets a registered operation
-      (the row-Q2 risk named in the design, §12). *)
+  (** The operation table: the registered primitive operation of a constant.  [whd_fuel]
+      does not implement the rule of [whd_rel true] that fires a saturated literal
+      application of a registered operation, so on any registered operation it gives up
+      ([None]) instead of answering that the term is stuck there, which could be false.
+      Giving up is sound: [whd_arg] then keeps the argument as written, and
+      [check_positive_whd] rejects the term.  It costs only completeness: a constructor
+      argument type whose positivity needs an operation to fire is rejected. *)
   Context (lookup_op : kername -> option prim_op).
 
   (** The declaration of a nesting inductive. *)
@@ -209,8 +210,9 @@ Section Check.
     [whd_rel true], one rule per step, and returns the head and arguments the relation
     stops at.  It returns [None] when no rule applies (a variable outside [Γ], a constant
     that the lookup does not declare as a constant, a match or projection on a
-    constructor that has no matching branch or field, a cofixpoint that does not unfold)
-    or when the fuel runs out.  The machine shares nothing, so a reduction that the
+    constructor that has no matching branch or field, a cofixpoint that does not unfold),
+    on a registered primitive operation, whose firing rule it does not implement, or when
+    the fuel runs out.  The machine shares nothing, so a reduction that the
     kernel's lazy machine does in linear time can take exponential time here: the fuel
     bounds the depth of the reduction, not the total work. *)
   Fixpoint whd_fuel (fuel : nat) Γ (t : term) (args : list term) {struct fuel}
