@@ -4186,8 +4186,10 @@ Section ConvGhost.
     | _, _ => False
     end.
 
+  (** Every root keeps its reading, lifted by [Q' - Q], and its shape ([machine_skel]): only
+    its addresses change. *)
   Definition grq (Q Q' : nat) (G G' : ghost) (rs rs' : list root) : Prop :=
-    gcx G G' /\ Forall2 (gpq Q Q' G G') rs rs'.
+    gcx G G' /\ Forall2 (gpq Q Q' G G') rs rs' /\ mp_roots kc rs' = mp_roots kc rs.
 
   Lemma gpq_of_gpres Q G G' r r' : gpres nctx Q G G' r r' -> gpq Q Q G G' r r'.
   Proof.
@@ -4199,14 +4201,15 @@ Section ConvGhost.
         intros ts ht; rewrite map_lift0_0; exact (c1 _ ht) ].
   Qed.
 
-  Lemma grq_of_gren Q G G' rs rs' : gren nctx Q G G' rs rs' -> grq Q Q G G' rs rs'.
+  Lemma grq_of_gren Q G G' rs rs' :
+    gren nctx Q G G' rs rs' -> mp_roots kc rs' = mp_roots kc rs -> grq Q Q G G' rs rs'.
   Proof.
-    intros [hc hf]. split; [exact hc|].
+    intros [hc hf] hk. split; [exact hc|]. split; [|exact hk]. clear hk.
     induction hf; constructor; [apply gpq_of_gpres; assumption|assumption].
   Qed.
 
   Lemma grq_refl Q G rs : grq Q Q G G rs rs.
-  Proof. apply grq_of_gren, gren_refl. Qed.
+  Proof. apply grq_of_gren; [apply gren_refl|reflexivity]. Qed.
 
   Lemma gpq_trans Q Q1 Q2 G G1 G2 r r1 r2 :
     Q <= Q1 -> Q1 <= Q2 ->
@@ -4228,21 +4231,33 @@ Section ConvGhost.
     Q <= Q1 -> Q1 <= Q2 ->
     grq Q Q1 G G1 rs rs1 -> grq Q1 Q2 G1 G2 rs1 rs2 -> grq Q Q2 G G2 rs rs2.
   Proof.
-    intros hq1 hq2 [hc1 hf1] [hc2 hf2].
+    intros hq1 hq2 [hc1 [hf1 hk1]] [hc2 [hf2 hk2]].
     split; [intros i e hi; exact (hc2 _ _ (hc1 _ _ hi))|].
+    split; [|congruence].
+    clear hk1 hk2.
     revert rs2 hf2. induction hf1 as [|r r1 l l1 hp hf ih]; intros rs2 hf2;
       inversion hf2; subst; constructor.
     - eapply gpq_trans; eassumption.
     - apply ih. assumption.
   Qed.
 
+  Lemma grq_cons_inv_skel Q Q' G G' r rs rs1 :
+    grq Q Q' G G' (r :: rs) rs1 ->
+    exists r' rs', rs1 = r' :: rs' /\ gpq Q Q' G G' r r' /\ grq Q Q' G G' rs rs'
+      /\ mp_root kc r' = mp_root kc r.
+  Proof.
+    intros [hc [hf hk]]. destruct rs1 as [|r' rs']; [inversion hf|].
+    exists r', rs'. split; [reflexivity|]. cbn in hk. injection hk as hk1 hk2.
+    inversion hf; subst. split; [assumption|]. split; [|exact hk1].
+    split; [exact hc|split; assumption].
+  Qed.
+
   Lemma grq_cons_inv Q Q' G G' r rs rs1 :
     grq Q Q' G G' (r :: rs) rs1 ->
     exists r' rs', rs1 = r' :: rs' /\ gpq Q Q' G G' r r' /\ grq Q Q' G G' rs rs'.
   Proof.
-    intros [hc hf]. destruct rs1 as [|r' rs']; [inversion hf|].
-    exists r', rs'. split; [reflexivity|].
-    inversion hf; subst. split; [assumption|split; assumption].
+    intros h. destruct (grq_cons_inv_skel _ _ _ _ _ _ _ h) as (r' & rs' & e & h1 & h2 & _).
+    exists r', rs'. split; [exact e|split; assumption].
   Qed.
 
   Lemma gpq_RSk_inv Q Q' G G' l r :
@@ -4305,7 +4320,7 @@ Section ConvGhost.
 
   Lemma grq_raise Q n G rs : nctx <= Q -> Forall (rwf Q) rs -> grq Q (Q + n) G (gshift n G) rs rs.
   Proof.
-    intros hQ hw. split; [intros i e hi; exact hi|].
+    intros hQ hw. split; [intros i e hi; exact hi|]. split; [|reflexivity].
     induction hw; constructor; [apply gpq_raise; assumption|assumption].
   Qed.
 
@@ -4792,10 +4807,14 @@ Section ConvGhost.
     cbv beta iota in he.
     destruct (hV L Q lo2 G2 pb v1' v2 w1 w2 rs2' s2 b rs' s' hm2 (Forall_inv_tail hr2)
                 (Forall_inv hr2) hv2 (hk2 _ hw1) hw2 he) as [hp hc].
+    pose proof (proj1 (proj2 (machine_skel X_type X Γ nctx stress (k tt))) _ _ _ _ _ _ _ E1)
+      as hK1.
+    pose proof (proj1 (proj2 (machine_skel X_type X Γ nctx stress (k tt))) _ _ _ _ _ _ _ E2)
+      as hK2.
     split.
     - apply (post_compose L Q Q G G2 rs rs2' s' rs' (le_n Q)); [|exact hp].
       apply (grq_trans Q Q Q G G1 G2 rs rs1' rs2' (le_n Q) (le_n Q));
-        apply grq_of_gren; assumption.
+        (apply grq_of_gren; [assumption|eapply sk_tl; eassumption]).
     - intros hb. exact (cq_red L Q pb t1 t2 w1 w2 hL hLQ hd1 hd2 (hc hb)).
   Qed.
 
@@ -4824,10 +4843,14 @@ Section ConvGhost.
     cbv beta iota in he.
     destruct (hV L Q lo2 G2 pb v1' v2 w1 w2 rs2' s2 b rs' s' hm2 (Forall_inv_tail hr2)
                 (Forall_inv hr2) hv2 (hk2 _ hw1) hw2 he) as [hp hc].
+    pose proof (proj1 (proj2 (proj2 (machine_skel X_type X Γ nctx stress (k tt))))
+                  _ _ _ _ _ _ _ _ E1) as hK1.
+    pose proof (proj1 (proj2 (proj2 (machine_skel X_type X Γ nctx stress (k tt))))
+                  _ _ _ _ _ _ _ _ E2) as hK2.
     split.
     - apply (post_compose L Q Q G G2 rs rs2' s' rs' (le_n Q)); [|exact hp].
       apply (grq_trans Q Q Q G G1 G2 rs rs1' rs2' (le_n Q) (le_n Q));
-        apply grq_of_gren; assumption.
+        (apply grq_of_gren; [assumption|eapply sk_tl; eassumption]).
     - intros hb. exact (cq_red L Q pb t1 t2 w1 w2 hL hLQ hd1 hd2 (hc hb)).
   Qed.
 
@@ -5585,7 +5608,8 @@ Section ConvGhost.
     split.
     - apply (post_compose L Q (Q + 1) G (gshift 1 G) rs rs s' rs' ltac:(lia) hgR).
       apply (post_compose L (Q + 1) (Q + 1) (gshift 1 G) G1 rs rsB s' rs' (le_n _)
-               (grq_of_gren _ _ _ _ _ hgB)).
+               (grq_of_gren _ _ _ _ _ hgB
+                  (sk_tl _ _ _ _ (sk_tl _ _ _ _ (alloc_skel _ _ _ _ _ _ _ Ea))))).
       exact (post_level L (S L) (Q + 1) G1 rsB s' rs' hL ltac:(lia) hp).
     - intros hbt U1 U2 eU1 eU2 sU1 sU2.
       rewrite Nat.add_1_r in sU1, sU2 |- *.
