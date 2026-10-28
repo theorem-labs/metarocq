@@ -38,7 +38,7 @@ Local Notation xpred0 := (fun _ : nat => false) (only parsing).
     ([machine_hwf_holds], under [#|Γ| <= nctx]; it is false as a closed Prop without that
     side condition, [machine_hwf_needs_len]). It also needs
     [gk_hyg], the hygiene of every ghost term, for red weakening
-    ([PCUICCallByNeedSoundEval.red_weakening_needs_hygiene]).
+    ([PCUICCallByNeedCounterexamples.red_weakening_needs_hygiene]).
   - [red_unlift] and [red_assum_irrel] do NOT depend on [gk_hyg]: the terms they move are
     root readings, which are reducts of the typed inputs of the hook, hence hygienic by
     themselves ([red_on_free_vars]). *)
