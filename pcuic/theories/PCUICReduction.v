@@ -82,6 +82,41 @@ Proof.
   f_equal; [now apply hf, prim_ground_term_of_lit|exact ih].
 Qed.
 
+(** Replace the reduct of a firing by its ground shape -- a [tPrim] at an
+    integer or a string payload, or a constructor with no argument and no
+    universe.  An induction whose primitive-operation case only needs the
+    reduct to carry no variable, universe or subterm closes it with this
+    tactic and a computation. *)
+Ltac prim_ground_reduct :=
+  match goal with
+  | H : readback _ _ _ = Some _ |- _ =>
+      destruct (prim_ground_readback H) as [[[?|?] ->]|[? [? ->]]]
+  end.
+
+(** [red_prim_op]'s left-hand side is [mkApps (tConst c u) (map term_of_lit ls)]
+    with [ls] a variable, so [solve_discr] cannot tell it apart from a rigid
+    head on its own: it has to case on [ls], since the empty list leaves the
+    bare [tConst] and a snoc leaves a [tApp].  Every [depelim r; solve_discr]
+    over [red1] downstream needs that step, so the tactic is extended once here
+    (a superset of PCUICAstUtils' [solve_discr]: the first two blocks are the
+    original, so the override loses no existing behaviour, and the new block
+    does not fire on a concrete [ls]). *)
+Ltac solve_discr ::=
+  (try (progress (prepare_discr; finish_discr; cbn [mkApps] in * )));
+  (try (match goal with
+        | [ H : is_true (application_atom _) |- _ ] => discriminate
+        | [ H : is_true (application_atom (mkApps _ _)) |- _ ] =>
+          destruct (application_atom_mkApps H); subst; try discriminate
+        end));
+  (try (match goal with
+        | [ H : _ = mkApps (tConst _ _) (map term_of_lit ?ls) |- _ ] =>
+          destruct ls using MRList.rev_ind;
+          rewrite ?map_app ?mkApps_app in H; cbn in H; discriminate
+        | [ H : mkApps (tConst _ _) (map term_of_lit ?ls) = _ |- _ ] =>
+          destruct ls using MRList.rev_ind;
+          rewrite ?map_app ?mkApps_app in H; cbn in H; discriminate
+        end)).
+
 Inductive red1 (Σ : global_env) (Γ : context) : term -> term -> Type :=
 (** Reductions *)
 (** Beta *)

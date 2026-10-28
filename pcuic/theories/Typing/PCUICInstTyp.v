@@ -116,6 +116,12 @@ Proof.
   all: repeat match goal with
          | [ H : All2_dep _ _ |- _ ] => apply All2_undep in H
          end.
+  (* cumul_prim_op: instantiation fixes the ground head arguments and reduct. *)
+  all: try (rewrite inst_mkApps; cbn [inst];
+    rewrite (map_prim_ground (inst σ) _ (prim_ground_inst σ));
+    match goal with H : PCUICPrimitiveRed.readback _ _ _ = Some ?w |- _ =>
+      rewrite (prim_ground_inst σ w (prim_ground_readback H)) end;
+    eapply cumul_prim_op; eassumption).
   - rewrite subst10_inst. sigma. solve [econstructor].
   - rewrite subst10_inst. sigma. solve [econstructor].
   - destruct (nth_error Γ i) eqn:hnth; noconf pf.
