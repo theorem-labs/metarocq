@@ -129,6 +129,7 @@ theories/PCUICCasesHelper.v
 # BET-315 eta lane (L1): new relations beside the base ones
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
+theories/PCUICCumulativitySpecEtaClosureInstances.v
 theories/PCUICTypingEta.v
 # BET-315 eta lane (L2): confluence foundation (eta_subst, red1_eta_ctx_strong)
 theories/PCUICEtaConfluence.v
@@ -202,6 +203,8 @@ theories/PCUICEtaK6EtaStep.v
 # L3 rows A1 (ws_cumul_pbE over JoinE) and A5 (its congruences), new statements (C4-SIDE)
 theories/PCUICWellScopedCumulativityEta.v
 theories/PCUICConversionEtaCongr.v
+theories/PCUICWsCumulEtaSubst.v
+theories/PCUICEtaA6Refutations.v
 # BET-315 eta lane (C4C1b): row C1b refuted — a machine-checked witness that C1b is false
 theories/PCUICEtaC1b.v
 # theories/All.v
