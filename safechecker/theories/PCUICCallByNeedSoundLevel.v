@@ -281,3 +281,128 @@ Proof.
     constructor; [apply ih; [congruence|exact ha']|].
     unfold pres_let_bodies. rewrite hb. exact tt.
 Qed.
+
+(** ** The comparison's invariant: [gok] at the master level
+
+  [minv L Q lo G s]: the comparison is at logical level [L], the master level is [Q], and
+  the state satisfies [gok] at [Q] with the junk context, and [hwf Q]. The roots the
+  comparison holds are described by their readings at [Q] in each lemma, as [lift0 (Q - L)]
+  of a logical reading. *)
+
+Section Master.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Γ : context) (nctx : nat) (stress : bool) (Σ : global_env_ext).
+  Context (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ).
+  Context (hnctx : nctx = #|Γ|) (hΓ : is_closed_context Γ) (hhyg : ctx_hyg Γ).
+  Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
+                    PCUICCallByNeedSoundHook.consts_okb Σ b).
+
+  Record minv (L Q : nat) (lo : positive) (G : ghost) (s : cbn_state) : Prop := mkMinv {
+    mi_L : nctx <= L;
+    mi_Q : L <= Q;
+    mi_gok : gok X_type X Γ nctx Σ (jctx (Q - nctx)) Q lo G s;
+    mi_hwf : hwf Q s }.
+
+  (** *** The interface of the structural invariant (slice B)
+
+    The machine keeps [hwf Q] of the heap, of the roots and of the value it returns, and so
+    does an allocation of a cell that has it. Stated here, proved in its own slice; every
+    lemma of the comparison that needs it takes it as a hypothesis. *)
+  Definition machine_hwf : Prop := forall d Q, nctx <= Q ->
+    (forall a rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
+       force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
+       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
+    /\ (forall x stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
+       eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
+    /\ (forall e c stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
+       whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
+    /\ (forall e c mfix idx stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
+       whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
+       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
+    /\ (forall v stk rs s w rs' s', hwf Q s -> Forall (rwf Q) rs -> vwf Q v ->
+       apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
+       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q w).
+
+  Definition alloc_hwf : Prop := forall Q cl rs s a rs' s', nctx <= Q ->
+    hwf Q s -> cwf Q cl -> Forall (rwf Q) rs ->
+    alloc stress cl rs s = COk (a, rs', s') -> hwf Q s' /\ Forall (rwf Q) rs'.
+
+  (** *** The machine at the master level *)
+
+  Lemma whnf_master (hB : machine_hwf) d L Q lo G e c stk sts tc rs s v rs' s' :
+    minv L Q lo G s -> Forall (rwf Q) rs ->
+    g_susp nctx Q G e c.(c_term) tc -> PCUICCallByNeedSoundEval.cok G c ->
+    g_slots nctx Q G stk sts ->
+    whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
+    exists lo' G' u, minv L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
+      /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
+      /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tc sts) u.
+  Proof.
+    intros [hL hQ hok hw] hrs hs hc hstk he.
+    assert (hlen : #|jctx (Q - nctx)| = Q - nctx) by apply jctx_length.
+    destruct (machine_sound X_type X Γ nctx stress Σ (jctx (Q - nctx)) Q wfΣ hΣ hlen hnctx
+                ltac:(lia) hcio d) as (_ & _ & hW & _ & _).
+    destruct (hW lo G e c stk sts tc rs s v rs' s' hok hs hc hstk he)
+      as (lo' & G' & u & hren & hok' & hv & hr).
+    destruct (hB d Q ltac:(lia)) as (_ & _ & hBw & _ & _).
+    destruct (hBw e c stk rs s v rs' s' hw hrs he) as (hw' & hrs' & hvw).
+    exists lo', G', u. split; [constructor; assumption|]. split; [exact hrs'|].
+    split; [exact hvw|]. split; [exact hren|]. split; [exact hv|exact hr].
+  Qed.
+
+  Lemma eval_slot_master (hB : machine_hwf) d L Q lo G x stk sts tx rs s v rs' s' :
+    minv L Q lo G s -> Forall (rwf Q) rs ->
+    g_slot nctx Q G x tx -> g_slots nctx Q G stk sts ->
+    eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
+    exists lo' G' u, minv L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
+      /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
+      /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tx sts) u.
+  Proof.
+    intros [hL hQ hok hw] hrs hx hstk he.
+    assert (hlen : #|jctx (Q - nctx)| = Q - nctx) by apply jctx_length.
+    destruct (machine_sound X_type X Γ nctx stress Σ (jctx (Q - nctx)) Q wfΣ hΣ hlen hnctx
+                ltac:(lia) hcio d) as (_ & hE & _ & _ & _).
+    destruct (hE lo G x stk sts tx rs s v rs' s' hok hx hstk he)
+      as (lo' & G' & u & hren & hok' & hv & hr).
+    destruct (hB d Q ltac:(lia)) as (_ & hBe & _ & _ & _).
+    destruct (hBe x stk rs s v rs' s' hw hrs he) as (hw' & hrs' & hvw).
+    exists lo', G', u. split; [constructor; assumption|]. split; [exact hrs'|].
+    split; [exact hvw|]. split; [exact hren|]. split; [exact hv|exact hr].
+  Qed.
+
+  (** *** From the master level to the logical level
+
+    A master reduction from a lifted logical reading is a lifted logical reduction, in any
+    assumption context of the logical length. *)
+  Lemma cred_unlift L Q v u :
+    nctx <= L -> L <= Q -> on_free_vars xpredT v ->
+    cred Γ Σ (jctx (Q - nctx)) (lift0 (Q - L) v) u ->
+    exists u', u = lift0 (Q - L) u'
+      /\ forall Δ, #|Δ| = L - nctx -> ∥ red Σ (Γ ,,, Δ) v u' ∥.
+  Proof.
+    intros hL hQ hv [hr].
+    replace (Q - nctx) with ((Q - L) + (L - nctx)) in hr by lia.
+    rewrite jctx_add, app_context_assoc in hr.
+    pose proof (red_unlift Σ wfΣ (Γ ,,, jctx (L - nctx)) (jctx (Q - L)) v u
+                  (master_ctx_xpredT Γ hΓ (L - nctx)) hv) as hU.
+    rewrite jctx_length in hU.
+    destruct (hU hr) as (u' & hu & [hr']).
+    exists u'. split; [exact hu|].
+    intros Δ hΔ. constructor.
+    exact (red_assum_irrel Σ Γ (jctx (L - nctx)) Δ v u'
+             ltac:(rewrite jctx_length; lia) (jctx_assum _) hr').
+  Qed.
+
+  (** The start of a run is an instance of [minv]: [L = Q = nctx], an empty heap. *)
+  Lemma minv_start lo G s :
+    gok X_type X Γ nctx Σ [] nctx lo G s ->
+    (forall a cl, heap_get a s = Some cl -> False) ->
+    minv nctx nctx lo G s.
+  Proof.
+    intros hok hempty. split; [lia|lia| |].
+    - rewrite Nat.sub_diag. exact hok.
+    - intros a cl ha. destruct (hempty a cl ha).
+  Qed.
+End Master.
