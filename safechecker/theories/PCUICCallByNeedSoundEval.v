@@ -5,12 +5,14 @@ From MetaRocq.Utils Require CanonicalTries.
 From MetaRocq.Common Require Import config Kernames.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICReduction
   PCUICTyping PCUICUnivSubst PCUICClosed PCUICClosedTyp PCUICInduction PCUICSigmaCalculus
-  PCUICContexts.
+  PCUICContexts PCUICOnFreeVars.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
   PCUICCallByNeedSoundHook.
 
 Import CanonicalTries.
+
+Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
 (** * The evaluator of the call-by-need machine against PCUIC reduction (BET-298, step 2d)
 
@@ -63,6 +65,19 @@ Import CanonicalTries.
   of a code says the code is in the code table ([cok]), which is what [once_body] needs to
   keep its cache sound. [wfΣ] and [hΣ] are the hook's own hypotheses: [Σ] is well formed
   and is the environment [X] stands for.
+
+  ** Hygiene (BET-298 step 3b)
+
+  [gok] also says that every ghost term, and every entry of the code table, is hygienic
+  ([on_free_vars xpredT]: its variables are anything, but the contexts of its matches are
+  closed), under the premise [ctx_hyg] that the let-bodies of [Γ] are. [machine_sound] itself
+  never uses it. The comparison needs it to change level: red weakening and red under
+  substitution are false for a term whose match contexts are not closed, because [lift]
+  leaves those contexts alone while [iota_red] expands their let-bodies. [machine_sound]
+  returns its ghost existentially, so only its own invariant can carry the clause. The hook
+  establishes [ctx_hyg] and both clauses ([cbn_run_gok_frame]); every new ghost term is a
+  reading of hygienic ghost terms and codes ([g_slot_hyg], [g_susp_hyg]), which is the
+  premise [alloc_sound] now asks of the reading it allocates.
 
   ** Collections
 
@@ -289,6 +304,89 @@ Proof.
                     (fun d => consts_okb Σ d.(dtype) && consts_okb Σ d.(dbody)) _ _ _ h0 Ed)
         as hd.
       cbn in hd. apply andb_true_iff in hd. exact (proj2 hd).
+Qed.
+
+(** ** Hygiene: [on_free_vars xpredT] *)
+
+Lemma hyg_shift n t : on_free_vars (shiftnP n xpredT) t = on_free_vars xpredT t.
+Proof. apply on_free_vars_ext. apply shiftnP_xpredT. Qed.
+
+Lemma hyg_lift n k t : on_free_vars xpredT t -> on_free_vars xpredT (lift n k t).
+Proof.
+  intros h. rewrite <- (on_free_vars_lift xpredT n k t) in h.
+  eapply on_free_vars_impl; [|exact h]. intros; reflexivity.
+Qed.
+
+Lemma hyg_subst s k t :
+  forallb (on_free_vars xpredT) s -> on_free_vars xpredT t -> on_free_vars xpredT (subst s k t).
+Proof.
+  intros hs ht. eapply on_free_vars_impl; [|exact (on_free_vars_subst_gen _ _ s k t hs ht)].
+  intros; reflexivity.
+Qed.
+
+Lemma hyg_mkApps h ts :
+  on_free_vars xpredT h -> forallb (on_free_vars xpredT) ts ->
+  on_free_vars xpredT (mkApps h ts).
+Proof. intros hh hts. rewrite on_free_vars_mkApps, hh, hts. reflexivity. Qed.
+
+Lemma hyg_subst_instance u t : on_free_vars xpredT (subst_instance u t) = on_free_vars xpredT t.
+Proof. apply on_free_vars_subst_instance. Qed.
+
+Lemma hyg_inst_code u t : on_free_vars xpredT (inst_code u t) = on_free_vars xpredT t.
+Proof. destruct u as [|l u]; [reflexivity|]. rewrite inst_code_cons. apply hyg_subst_instance. Qed.
+
+(** Hygiene recurses through every subterm [code_inv]'s step takes, as [consts_okb] does. *)
+Lemma code_inv_hyg (e : code_entry) (c : code) :
+  code_inv e c -> on_free_vars xpredT (inst_code e.(ce_inst) e.(ce_term)) ->
+  on_free_vars xpredT c.(c_term).
+Proof.
+  unfold code_inv; cbv zeta. intros [ks [_ ht]] hr. revert ht.
+  generalize (c_term c) as t.
+  induction ks as [|k ks IH]; cbn [fold_right]; intros t ht.
+  - injection ht as <-. exact hr.
+  - destruct (fold_right _ _ ks) as [t0|] eqn:E; [|discriminate ht].
+    pose proof (IH t0 eq_refl) as h0. clear IH E.
+    destruct t0; cbn [on_free_vars] in h0; cbn in ht; try discriminate ht;
+      repeat match goal with
+             | H : is_true (_ && _) |- _ => apply andb_true_iff in H as [? ?]
+             | H : (_ && _) = true |- _ => apply andb_true_iff in H as [? ?]
+             end;
+      rewrite ?hyg_shift in *.
+    + (* tProd *)
+      destruct k as [|[q|q|]]; cbn in ht; try discriminate ht; injection ht as <-; assumption.
+    + (* tLambda *)
+      destruct k as [|[q|q|]]; cbn in ht; try discriminate ht; injection ht as <-; assumption.
+    + (* tLetIn *)
+      destruct k as [|[q|[q|q|]|]]; cbn in ht; try discriminate ht; injection ht as <-;
+        assumption.
+    + (* tApp *)
+      destruct k as [|[q|q|]]; cbn in ht; try discriminate ht; injection ht as <-; assumption.
+    + (* tCase *)
+      destruct k as [|[q|q|]]; cbn in ht.
+      * injection ht as <-. assumption.
+      * destruct (nth_error brs _) as [br|] eqn:Eb; cbn in ht; [|discriminate ht].
+        injection ht as <-.
+        match goal with H : forallb _ brs = true |- _ =>
+          pose proof (forallb_nth_some _ _ _ _ H Eb) as hb end.
+        cbn beta in hb. apply andb_true_iff in hb as [_ hb]. rewrite hyg_shift in hb.
+        exact hb.
+      * match goal with H : forallb _ (pparams _) = true |- _ =>
+          exact (forallb_nth_some _ _ _ _ H ht) end.
+      * injection ht as <-. assumption.
+    + (* tProj *)
+      destruct k as [|q]; cbn in ht; [injection ht as <-; assumption|discriminate ht].
+    + (* tFix *)
+      destruct (nth_error mfix _) as [d|] eqn:Ed; cbn in ht; [|discriminate ht].
+      injection ht as <-.
+      pose proof (forallb_nth_some _ _ _ _ h0 Ed) as hd.
+      unfold test_def in hd. apply andb_true_iff in hd as [_ hd]. rewrite hyg_shift in hd.
+      exact hd.
+    + (* tCoFix *)
+      destruct (nth_error mfix _) as [d|] eqn:Ed; cbn in ht; [|discriminate ht].
+      injection ht as <-.
+      pose proof (forallb_nth_some _ _ _ _ h0 Ed) as hd.
+      unfold test_def in hd. apply andb_true_iff in hd as [_ hd]. rewrite hyg_shift in hd.
+      exact hd.
 Qed.
 
 Section Eval.
@@ -589,14 +687,28 @@ Section Eval.
     carries a ghost map: every cell has a ghost term, and the cell stands for a reduct of
     it, unless the cell is being forced, in which case its caller carries the reading. *)
 
+  (** Hygiene: a term passes [on_free_vars xpredT], which beside its variables tests that
+    the contexts of its matches are closed. Red weakening ([weakening_red1]) and red under
+    substitution ([red_red]) need it of the terms they move: [lift] does not touch the
+    contexts of a match while [iota_red] expands their let-bodies, so without it a lifted
+    term can reduce to the unlifted reduct. The machine never looks at it; the comparison
+    needs it of every ghost term to change level. Every ghost term is a reading built from
+    codes and older ghost terms, and every code comes from a typed term, except that the
+    let-bodies of [Γ] come from outside the code table: so the clauses below hold under
+    [ctx_hyg], which the hook has from [wf_local]. *)
+  Definition ctx_hyg : Prop := forall j decl b,
+    nth_error Γ j = Some decl -> decl.(decl_body) = Some b -> on_free_vars xpredT b.
+
   (** The memo of the state: the invariants of the memo files ([memo_inv], [memo_ok]); the
-    ghost's code table [K] is part of the real one; and every entry of the real one names
-    its constants at the right instance length. *)
+    ghost's code table [K] is part of the real one; every entry of the real one names its
+    constants at the right instance length; and, under [ctx_hyg], every entry is hygienic. *)
   Definition mok (K : PTree.t code_entry) (s : cbn_state) : Prop :=
     memo_inv X_type X s /\ memo_ok X_type X s
     /\ (forall i e, PTree.get i K = Some e -> PTree.get i ((s.(st_memo)).(m_codes)) = Some e)
     /\ (forall i e, PTree.get i ((s.(st_memo)).(m_codes)) = Some e ->
-          consts_okb Σ (inst_code e.(ce_inst) e.(ce_term)) = true).
+          consts_okb Σ (inst_code e.(ce_inst) e.(ce_term)) = true)
+    /\ (ctx_hyg -> forall i e, PTree.get i ((s.(st_memo)).(m_codes)) = Some e ->
+          on_free_vars xpredT (inst_code e.(ce_inst) e.(ce_term))).
 
   Record gok (lo : positive) (G : ghost) (s : cbn_state) : Prop := mkGok {
     gk_state : state_ok lo s;
@@ -608,7 +720,50 @@ Section Eval.
       (lo <= ha_p a)%positive /\ (ha_p a < s.(st_next))%positive;
     gk_gam : forall j a, PTree.get (key_of_succ_nat j) s.(st_gam) = Some a ->
       exists t, ctx_den Γ nctx lvl j = Some t /\ G a = Some t;
-    gk_memo : mok (gc G) s }.
+    gk_memo : mok (gc G) s;
+    gk_hyg : ctx_hyg -> forall a t, G a = Some t -> on_free_vars xpredT t }.
+
+  (** *** Readings of hygienic ghost terms and codes are hygienic *)
+
+  Definition hygG (G : ghost) : Prop := forall a t, G a = Some t -> on_free_vars xpredT t.
+  Definition codes_hyg (G : ghost) : Prop := forall c, cok G c -> on_free_vars xpredT c.(c_term).
+
+  Lemma gok_codes_hyg lo G s : gok lo G s -> ctx_hyg -> codes_hyg G.
+  Proof.
+    intros hok hc c [e [he hi]].
+    destruct (gk_memo _ _ _ hok) as (_ & _ & hK & _ & hh).
+    exact (code_inv_hyg e c hi (hh hc _ _ (hK _ _ he))).
+  Qed.
+
+  Lemma g_slot_hyg G (hG : hygG G) (hC : codes_hyg G) :
+    (forall x t, g_slot G x t -> on_free_vars xpredT t)
+    /\ (forall l ts, g_slots G l ts -> forallb (on_free_vars xpredT) ts).
+  Proof using.
+    apply (g_slot_mutind G (fun x t => on_free_vars xpredT t)
+             (fun l ts => forallb (on_free_vars xpredT) ts)).
+    - intros a t ha. exact (hG _ _ ha).
+    - intros vals nvals goff c ts _ ih _ hc.
+      apply hyg_subst; [exact ih|apply hyg_lift; exact (hC c hc)].
+    - reflexivity.
+    - intros x l t ts _ ih1 _ ih2. cbn. rewrite ih1, ih2. reflexivity.
+  Qed.
+
+  Lemma g_susp_hyg G (hG : hygG G) (hC : codes_hyg G) e t u :
+    on_free_vars xpredT t -> g_susp G e t u -> on_free_vars xpredT u.
+  Proof.
+    intros ht hs. inversion hs; subst.
+    apply hyg_subst; [exact (proj2 (g_slot_hyg G hG hC) _ _ H)|apply hyg_lift; exact ht].
+  Qed.
+
+  Lemma g_addrs_hyg G (hG : hygG G) l ts : g_addrs G l ts -> forallb (on_free_vars xpredT) ts.
+  Proof.
+    induction 1 as [|a t l ts ha hl ih]; [reflexivity|]. cbn. rewrite (hG _ _ ha), ih.
+    reflexivity.
+  Qed.
+
+  Lemma hyg_tFix_idx mfix i j :
+    on_free_vars xpredT (tFix mfix i) -> on_free_vars xpredT (tFix mfix j).
+  Proof. cbn [on_free_vars]. exact (fun h => h). Qed.
 
   (** ** The algebra of ghost readings *)
 
@@ -782,12 +937,13 @@ Section Eval.
     mok K s -> PTree.get c.(c_entry) ((s.(st_memo)).(m_codes)) = Some e -> code_inv e c ->
     mok K (snd (once_body c s)).
   Proof.
-    intros (h1 & h2 & h3 & h4) hg hi.
+    intros (h1 & h2 & h3 & h4 & h5) hg hi.
     destruct (once_body_memo c s) as (q1 & _).
     split; [exact (memo_inv_once_body X_type X c e s h1 hg hi)|].
     split; [exact (memo_ok_codes X_type X s _ q1 h2)|].
     split; [intros i e' he'; rewrite q1; exact (h3 i e' he')|].
-    intros i e' he'. rewrite q1 in he'. exact (h4 i e' he').
+    split; [intros i e' he'; rewrite q1 in he'; exact (h4 i e' he')|].
+    intros hc i e' he'. rewrite q1 in he'. exact (h5 hc i e' he').
   Qed.
 
   (** An entry added at the next index leaves every existing entry in place. *)
@@ -837,7 +993,7 @@ Section Eval.
     gok lo G s -> s1.(st_heap) = s.(st_heap) -> s1.(st_next) = s.(st_next) ->
     s1.(st_gam) = s.(st_gam) -> mok (gc G) s1 -> gok lo G s1.
   Proof.
-    intros [h1 h2 h3 h4 h5 _] e1 e2 e3 hd. split.
+    intros [h1 h2 h3 h4 h5 _ h7] e1 e2 e3 hd. split.
     - destruct h1 as [p1 p2 p3]. split.
       + rewrite e1, e2. exact p1.
       + intros a cl hc. rewrite e1 in hc. rewrite e2. exact (p2 _ _ hc).
@@ -847,6 +1003,7 @@ Section Eval.
     - intros a t ht. rewrite e2. exact (h4 _ _ ht).
     - intros j a hj. rewrite e3 in hj. exact (h5 _ _ hj).
     - exact hd.
+    - exact h7.
   Qed.
 
   (** The same state shape, with the ghost's table replaced by a larger one. *)
@@ -858,7 +1015,7 @@ Section Eval.
   Proof.
     intros hok e1 e2 e3 hK hm.
     assert (hx : gext G (mkGhost (gm G) K)) by (split; [intros a t h; exact h|exact hK]).
-    destruct hok as [h1 h2 h3 h4 h5 _]. split.
+    destruct hok as [h1 h2 h3 h4 h5 _ h7]. split.
     - destruct h1 as [p1 p2 p3]. split.
       + rewrite e1, e2. exact p1.
       + intros a cl hc. rewrite e1 in hc. rewrite e2. exact (p2 _ _ hc).
@@ -871,30 +1028,42 @@ Section Eval.
     - intros a t ht. rewrite e2. exact (h4 _ _ ht).
     - intros j a hj. rewrite e3 in hj. exact (h5 _ _ hj).
     - exact hm.
+    - exact h7.
   Qed.
 
   Lemma delta_gok lo G kn ui s r s1 :
     gok lo G s -> delta X_type X kn ui s = COk (r, s1) -> gok lo G s1.
   Proof.
     intros hok hd. destruct (delta_shape _ _ _ _ _ hd) as (e1 & e2 & _ & _ & e5).
-    destruct (gk_memo _ _ _ hok) as (hmi & hmo & hcodes & hokb).
+    destruct (gk_memo _ _ _ hok) as (hmi & hmo & hcodes & hokb & hhyg).
     pose proof hmi as (hf & _ & _ & _ & hdo).
     apply (gok_same lo G s); [exact hok|exact e1|exact e2|exact e5|].
     split; [exact (memo_inv_delta X_type X kn ui s r s1 hmi hd)|].
     split; [exact (delta_memo_ok X_type X kn ui s r s1 hmo hd)|].
     destruct (delta_codes kn ui s r s1 hdo hd) as [hc|(cb & body & hl & hb & hc)];
       rewrite hc.
-    - split; [exact hcodes|exact hokb].
+    - split; [exact hcodes|]. split; [exact hokb|exact hhyg].
     - split.
       + intros i e hi. exact (memo_codes_set_mono _ _ i e hf (hcodes i e hi)).
-      + intros i e hi.
-        destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
-        * apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
-          injection hi as <-. cbn [ce_inst ce_term].
-          pose proof (lookup_declared X_type X Σ kn cb hΣ hl) as hdecl.
-          rewrite (consts_inst_code Σ ui body).
-          exact (declared_constant_consts_okb Σ kn cb body wfΣ hdecl hb).
-        * rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi).
+      + split.
+        * intros i e hi.
+          destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
+          -- apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
+             injection hi as <-. cbn [ce_inst ce_term].
+             pose proof (lookup_declared X_type X Σ kn cb hΣ hl) as hdecl.
+             rewrite (consts_inst_code Σ ui body).
+             exact (declared_constant_consts_okb Σ kn cb body wfΣ hdecl hb).
+          -- rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi).
+        * intros hcx i e hi.
+          destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
+          -- apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
+             injection hi as <-. cbn [ce_inst ce_term].
+             pose proof (lookup_declared X_type X Σ kn cb hΣ hl) as hdecl.
+             rewrite hyg_inst_code.
+             pose proof (declared_constant_closed_body Σ kn cb body wfΣ hdecl hb) as hcl.
+             eapply on_free_vars_impl; [|exact (closedn_on_free_vars (P := xpredT) hcl)].
+             intros; reflexivity.
+          -- rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hhyg hcx i e hi).
   Qed.
 
   (** The state invariant is not empty: the machine's initial state has it, with the empty
@@ -912,8 +1081,12 @@ Section Eval.
       rewrite PTree.gempty in h. discriminate.
     - split; [apply memo_inv_init|]. split; [apply memo_ok_init|]. split.
       + intros i e h. cbn [gc] in h. rewrite PTree.gempty in h. discriminate.
-      + intros i e h. unfold cbn_init, memo_empty in h. cbn [st_memo m_codes] in h.
-        rewrite PTree.gempty in h. discriminate.
+      + split.
+        * intros i e h. unfold cbn_init, memo_empty in h. cbn [st_memo m_codes] in h.
+          rewrite PTree.gempty in h. discriminate.
+        * intros _ i e h. unfold cbn_init, memo_empty in h. cbn [st_memo m_codes] in h.
+          rewrite PTree.gempty in h. discriminate.
+    - intros _ a t h. discriminate h.
   Qed.
 
   (** *** The context map *)
@@ -965,6 +1138,7 @@ Section Eval.
     - intros b t ht. rewrite he1. exact (gk_dom _ _ _ hok b t ht).
     - intros j b hj. rewrite he4 in hj. exact (gk_gam _ _ _ hok j b hj).
     - exact (mok_memo _ s s' he5 (gk_memo _ _ _ hok)).
+    - exact (gk_hyg _ _ _ hok).
   Qed.
 
   Lemma gok_heap_upd_done lo G a v u t s s' :
@@ -989,6 +1163,7 @@ Section Eval.
     - intros b t0 ht0. rewrite he1. exact (gk_dom _ _ _ hok b t0 ht0).
     - intros j b hj. rewrite he4 in hj. exact (gk_gam _ _ _ hok j b hj).
     - exact (mok_memo _ s s' he5 (gk_memo _ _ _ hok)).
+    - exact (gk_hyg _ _ _ hok).
   Qed.
 
   (** *** Inversions of the ghost value reading, by case on the value shape *)
@@ -1233,7 +1408,8 @@ Section Eval.
       gg_cells : forall b cl, bh_get b g.(g_heap) = Some cl ->
         exists t, Gn b = Some t /\ (cl = CBusy \/ exists u, g_cell Gn cl u /\ cred t u);
       gg_dom : forall b t, Gn b = Some t ->
-        (s.(st_next) <= ha_p b)%positive /\ (ha_p b < g.(g_next))%positive }.
+        (s.(st_next) <= ha_p b)%positive /\ (ha_p b < g.(g_next))%positive;
+      gg_rng : forall b t, Gn b = Some t -> exists x, G x = Some t }.
 
     (** What the walk asks of the address map it threads through the renamings. *)
     Definition cpg (cp : haddr -> gc_state -> cbn_res (haddr * gc_state)) : Prop :=
@@ -1626,6 +1802,9 @@ Section Eval.
         + apply haddr_eqb_eq in eb. subst b. cbn.
           split; [exact (bh_ok_le _ _ _ hok1)|lia].
         + destruct (gg_dom _ _ hg1 _ _ hb) as [h1 h2]. split; [exact h1|]. cbn. lia.
+      - intros b t hb. unfold Gn' in hb. cbn [gm] in hb.
+        destruct (haddr_eqb b (HAddr g1.(g_next))); [injection hb as <-; exists a; exact hGa|].
+        exact (gg_rng _ _ hg1 _ _ hb).
     Qed.
 
     Lemma gc_copy_g : forall f, cpg (gc_copy f).
@@ -1697,6 +1876,7 @@ Section Eval.
         - reflexivity.
         - intros x b t hx _. destruct (gk_nofwd _ _ _ hok _ _ hx).
         - intros b cl hc. rewrite bh_get_holes in hc. discriminate.
+        - intros b t hb. discriminate hb.
         - intros b t hb. discriminate hb. }
       destruct (rn_ptree_g _ (gc_copy_g _) _ _ _ _ _ hg0 e1) as (Gn1 & hg1 & hx1 & hgam).
       destruct (rn_roots_g _ (gc_copy_g _) _ _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hroots).
@@ -1711,17 +1891,22 @@ Section Eval.
         exists t. split; [exact hden|]. exact (hx2 _ _ (hr _ hGa)).
       - rewrite (gg_codes _ _ hg2).
         apply (mok_memo _ s); [reflexivity|exact (gk_memo _ _ _ hok)].
+      - intros hc a t ht. destruct (gg_rng _ _ hg2 _ _ ht) as [x hx].
+        exact (gk_hyg _ _ _ hok hc _ _ hx).
     Qed.
   End GhostCollect.
 
   (** *** Allocation, which may collect first *)
 
+  (** The new cell's reading becomes its ghost term, so it must be hygienic (under
+    [ctx_hyg]); every caller allocates a reading of hygienic ghosts and codes whose head, if
+    it has one, is a [tConstruct], [tInd], [tConst] or variable. *)
   Lemma alloc_now_sound lo G cl u s :
-    gok lo G s -> g_cell G cl u ->
+    gok lo G s -> g_cell G cl u -> (ctx_hyg -> on_free_vars xpredT u) ->
     exists G', gext G G' /\ gok lo G' (snd (alloc_now cl s))
       /\ G' (fst (alloc_now cl s)) = Some u.
   Proof.
-    intros hok hcl. cbn [alloc_now fst snd].
+    intros hok hcl hhu. cbn [alloc_now fst snd].
     pose (G' := mkGhost (fun b => if haddr_eqb b (HAddr s.(st_next)) then Some u else G b)
                   (gc G)).
     assert (hnew : G' (HAddr s.(st_next)) = Some u).
@@ -1764,16 +1949,19 @@ Section Eval.
       destruct (gk_gam _ _ _ hok _ _ hj) as [t [ht hg]].
       exists t. split; [exact ht|exact (hold _ _ hg)].
     - exact (gk_memo _ _ _ hok).
+    - intros hc b t hb. unfold G' in hb. cbn [gm] in hb.
+      destruct (haddr_eqb b (HAddr s.(st_next))); [injection hb as <-; exact (hhu hc)|].
+      exact (gk_hyg _ _ _ hok hc _ _ hb).
   Qed.
 
   (** [alloc] collects when [gc_due] says so, whatever [stress] is: the roots come back
     renamed ([collect_ghost]) and the new cell is allocated in the new heap. *)
   Lemma alloc_sound lo G cl u rs s a rs' s' :
-    gok lo G s -> g_cell G cl u ->
+    gok lo G s -> g_cell G cl u -> (ctx_hyg -> on_free_vars xpredT u) ->
     alloc stress cl rs s = COk (a, rs', s') ->
     exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some u.
   Proof.
-    intros hok hcl he.
+    intros hok hcl hhu he.
     destruct (gc_due stress s) eqn:eg.
     - rewrite (alloc_gc stress cl rs s eg) in he.
       destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:ec; [|discriminate].
@@ -1781,14 +1969,14 @@ Section Eval.
       inversion hf1 as [|r1 r1' l1 l1' hp1 hf1']; subst.
       destruct r1' as [| | | | | |cl1]; try discriminate he.
       cbn [gpres] in hp1.
-      destruct (alloc_now_sound _ _ _ _ _ hok1 (hp1 _ hcl)) as (G2 & hx2 & hok2 & ha2).
+      destruct (alloc_now_sound _ _ _ _ _ hok1 (hp1 _ hcl) hhu) as (G2 & hx2 & hok2 & ha2).
       cbn [alloc_now] in he. inversion he; subst; clear he.
       exists s.(st_next), G2. split; [|split; [exact hok2|exact ha2]].
       split.
       + intros i e hi. apply (gx_codes hx2). rewrite hc1. exact hi.
       + exact (Forall2_gpres_r_ext _ _ _ _ _ hf1' hx2).
     - rewrite (alloc_no_gc stress cl rs s eg) in he. inversion he; subst; clear he.
-      destruct (alloc_now_sound _ _ _ _ _ hok hcl) as (G2 & hx2 & hok2 & ha2).
+      destruct (alloc_now_sound _ _ _ _ _ hok hcl hhu) as (G2 & hx2 & hok2 & ha2).
       exists lo, G2. split; [exact (gren_ext _ _ _ hx2)|]. split; [exact hok2|exact ha2].
   Qed.
 
@@ -1809,7 +1997,8 @@ Section Eval.
     - destruct (nth_error Γ j) as [decl|] eqn:ed; [|discriminate].
       assert (hmain : forall G0 cl t s1,
         gext G G0 ->
-        ctx_den Γ nctx lvl j = Some t -> g_cell G0 cl t -> gok lo G0 s1 ->
+        ctx_den Γ nctx lvl j = Some t -> g_cell G0 cl t -> (ctx_hyg -> on_free_vars xpredT t) ->
+        gok lo G0 s1 ->
         (match alloc stress cl rs s1 with
          | COk (a2, rs2, s2) =>
              COk (a2, rs2, set_gam (PTree.set (key_of_succ_nat j) a2 (st_gam s2)) s2)
@@ -1817,10 +2006,10 @@ Section Eval.
          end) = COk (a, rs', s') ->
         exists lo' G' t2, gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some t2
                           /\ cred (tRel (lvl - nctx + j)) t2).
-      { intros G0 cl t s1 hx0 hden hcl hok1 hm.
+      { intros G0 cl t s1 hx0 hden hcl hht hok1 hm.
         destruct (alloc stress cl rs s1) as [[[a1 rs1] s2]|w] eqn:ea; [|discriminate].
         inversion hm; subst. clear hm.
-        destruct (alloc_sound lo G0 cl t rs s1 _ _ _ hok1 hcl ea)
+        destruct (alloc_sound lo G0 cl t rs s1 _ _ _ hok1 hcl hht ea)
           as (lo2 & G' & hren & hok2 & hga).
         destruct (gk_dom _ _ _ hok2 _ _ hga) as [hlo hlt].
         exists lo2, G', t. split; [exact (gren_trans _ _ _ _ _ _ (gren_ext _ _ _ hx0) hren)|].
@@ -1837,7 +2026,8 @@ Section Eval.
             exists t. split; [exact hden|exact hga].
           + rewrite PTree.gso in hj2 by (apply key_neq_of_eqb, ek).
             exact (gk_gam _ _ _ hok2 _ _ hj2).
-        - exact (gk_memo _ _ _ hok2). }
+        - exact (gk_memo _ _ _ hok2).
+        - exact (gk_hyg _ _ _ hok2). }
       destruct decl.(decl_body) as [b|] eqn:eb.
       + destruct (new_entry X_type X b [] (NSCtx j) s) as [c s1] eqn:e1.
         assert (hc : c = fst (new_entry X_type X b [] (NSCtx j) s)) by (rewrite e1; reflexivity).
@@ -1845,7 +2035,7 @@ Section Eval.
           by (rewrite e1; reflexivity).
         assert (hct : c.(c_term) = b) by (rewrite hc, new_entry_term; reflexivity).
         destruct (new_entry_shape b [] (NSCtx j) s) as (q1 & q2 & q3 & _ & q5 & _).
-        destruct (gk_memo _ _ _ hok) as (hmi & hmo & hcodes & hokb).
+        destruct (gk_memo _ _ _ hok) as (hmi & hmo & hcodes & hokb & hhyg).
         pose proof hmi as (hf & _).
         assert (hgrow : forall i e, PTree.get i (gc G) = Some e ->
                    PTree.get i ((s1.(st_memo)).(m_codes)) = Some e).
@@ -1855,12 +2045,19 @@ Section Eval.
         { rewrite hs1. split; [exact (memo_inv_new_entry X_type X b [] (NSCtx j) s hmi)|].
           split; [exact (new_entry_memo_ok X_type X b [] (NSCtx j) s hmo)|].
           split; [intros i e hi; exact hi|].
-          intros i e hi. rewrite new_entry_codes in hi.
-          destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
-          - apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
-            injection hi as <-. cbn [ce_inst ce_term inst_code].
-            exact (const_instance_ok j decl b ed eb).
-          - rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi). }
+          split.
+          - intros i e hi. rewrite new_entry_codes in hi.
+            destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
+            + apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
+              injection hi as <-. cbn [ce_inst ce_term inst_code].
+              exact (const_instance_ok j decl b ed eb).
+            + rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi).
+          - intros hcx i e hi. rewrite new_entry_codes in hi.
+            destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
+            + apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
+              injection hi as <-. cbn [ce_inst ce_term inst_code].
+              exact (hcx j decl b ed eb).
+            + rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hhyg hcx i e hi). }
         pose (G1 := mkGhost (gm G) ((s1.(st_memo)).(m_codes))).
         assert (hx1 : gext G G1) by (split; [intros a1 t1 h; exact h|exact hgrow]).
         assert (hok1 : gok lo G1 s1).
@@ -1877,12 +2074,14 @@ Section Eval.
         * constructor; [|exact hcok].
           rewrite <- (subst_empty 0 (lift (lvl - nctx + S j) 0 c.(c_term))).
           exact (g_susp_intro G1 [] 0 (S j) c.(c_term) [] (g_slots_nil G1) eq_refl).
+        * intros hcx. rewrite hct. apply hyg_lift. exact (hcx j decl b ed eb).
         * exact hok1.
         * exact he.
       + apply (hmain G (CDone (VNeu (NVar (nctx - S j)) [])) (tRel (lvl - S (nctx - S j))) s
                  (gext_refl G)).
         * unfold ctx_den. rewrite ed, eb. reflexivity.
         * constructor. exact (g_VNeuVar G (nctx - S j) [] [] (Forall2_nil _)).
+        * intros _. reflexivity.
         * exact hok.
         * exact he.
   Qed.
@@ -1948,7 +2147,11 @@ Section Eval.
     materialize X_type X stress x rs s = COk (a, rs', s') ->
     exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some t.
   Proof.
-    intros hok hx he. unfold materialize in he.
+    intros hok hx he.
+    assert (hht : ctx_hyg -> on_free_vars xpredT t).
+    { intros hc. exact (proj1 (g_slot_hyg G (gk_hyg _ _ _ hok hc) (gok_codes_hyg _ _ _ hok hc))
+                          _ _ hx). }
+    unfold materialize in he.
     destruct x as [a0|vals n o c].
     - inversion hx; subst. inversion he; subst. clear he.
       exists lo, G. split; [apply gren_refl|]. split; [exact hok|assumption].
@@ -1959,22 +2162,23 @@ Section Eval.
           by (constructor; [exact h1|reflexivity])
       end.
       remember (subst _ 0 (lift (lvl - nctx + o) #|vals| c.(c_term))) as t0 eqn:ht0.
+      rename hht into hht0.
       destruct (c_term c) eqn:ec.
       all: try (assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
                   by (constructor; [rewrite ec; exact hsusp|assumption]);
-                exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he)).
+                exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl hht0 he)).
       + (* tSort *)
         assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
           by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
-        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl hht0 he).
       + (* tProd *)
         assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
           by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
-        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl hht0 he).
       + (* tLambda *)
         assert (hcl : g_cell G (CDone (VLam (mkEnv vals #|vals| o) c)) t0)
           by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
-        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl hht0 he).
       + (* tConst: the memo may add an entry first *)
         match type of he with context [delta X_type X ?kn ?ui s] =>
           destruct (delta X_type X kn ui s) as [[[c'|] s1]|w] eqn:ed
@@ -1982,15 +2186,15 @@ Section Eval.
         * pose proof (delta_gok lo G _ _ s _ s1 hok ed) as hok1.
           assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
             by (constructor; [rewrite ec; exact hsusp|assumption]).
-          exact (alloc_sound lo G _ _ rs s1 a rs' s' hok1 hcl he).
+          exact (alloc_sound lo G _ _ rs s1 a rs' s' hok1 hcl hht0 he).
         * pose proof (delta_gok lo G _ _ s _ s1 hok ed) as hok1.
           assert (hcl : g_cell G (CDone (VNeu (NConst (tConst k ui)) [])) t0).
           { constructor. rewrite ht0, subst_lift_const.
             exact (g_VNeuConst G (tConst k ui) [] [] (Forall2_nil _)). }
-          exact (alloc_sound lo G _ _ rs s1 a rs' s' hok1 hcl he).
+          exact (alloc_sound lo G _ _ rs s1 a rs' s' hok1 hcl hht0 he).
         * assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
             by (constructor; [rewrite ec; exact hsusp|assumption]).
-          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl hht0 he).
       + (* tFix: a fixpoint value, or a suspension if the index is out of range *)
         match goal with ec' : c_term c = tFix ?m ?i |- _ =>
           destruct (nth_error m i) as [def|] eqn:enth
@@ -2001,14 +2205,14 @@ Section Eval.
           { constructor. change t0 with (mkApps t0 []).
             eapply g_VFix; [exact ec| |assumption|constructor].
             first [exact hsusp|rewrite <- ec; exact hsusp|rewrite ec in hsusp; exact hsusp]. }
-          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl hht0 he).
         * assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
             by (constructor; [rewrite ec; exact hsusp|assumption]).
-          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl hht0 he).
       + (* tPrim *)
         assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
           by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
-        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl hht0 he).
   Qed.
 
   (** *** Binding a slot to a binder *)
@@ -2116,7 +2320,13 @@ Section Eval.
       assert (hcl : g_cell G (CDone (VFix e c i [])) (tf i)).
       { constructor. exact (g_VFix G e c mfix idx0 i [] (tf i) [] hc
                               (g_susp_of_slots G e _ ts hts hnv) hcok (Forall2_nil _)). }
-      destruct (alloc_sound lo G _ _ _ s a1 rs1 s1 hok hcl ea)
+      assert (hhf : ctx_hyg -> on_free_vars xpredT (tf i)).
+      { intros hx. apply (g_susp_hyg G (gk_hyg _ _ _ hok hx) (gok_codes_hyg _ _ _ hok hx) e
+                          (tFix mfix i)).
+        - apply (hyg_tFix_idx mfix idx0 i). rewrite <- hc.
+          exact (gok_codes_hyg _ _ _ hok hx c hcok).
+        - exact (g_susp_of_slots G e _ ts hts hnv). }
+      destruct (alloc_sound lo G _ _ _ s a1 rs1 s1 hok hcl hhf ea)
         as (lo1 & G1 & hren1 & hok1 & hga1).
       destruct rs1 as [|r1 rs1a]; [discriminate he|].
       destruct r1 as [| |e1| | | |]; try discriminate he.
@@ -2439,7 +2649,7 @@ Section Eval.
           pose proof (g_susp_const _ _ _ _ _ hsusp) as htc.
           destruct (delta X_type X k0 ui st) as [[[c'| ] sd]|w] eqn:ed; [| |discriminate he].
           -- (* Some c': the body of [k0] at [ui], by [delta_body] and [delta_red1] *)
-             destruct (gk_memo _ _ _ hokt) as (hmi & _ & hcodes & hokb).
+             destruct (gk_memo _ _ _ hokt) as (hmi & _ & hcodes & hokb & _).
              destruct hmi as (hf & _ & _ & _ & hdo).
              destruct (delta_body X_type X Σ k0 ui st sd c' hΣ hf hdo ed)
                as (cb & body & ce & hdecl & hb & hct & _ & hce & _ & _ & hci).
@@ -2757,7 +2967,11 @@ Section Eval.
            destruct (alloc stress (CDone (VCon (tConstruct cind cn cu) args))
                        (RE e3 :: RSk stkf :: rsf2) sf)
              as [[[a2 rs2] s2]|w] eqn:ea2; [|discriminate he].
-           destruct (alloc_sound lof Gf _ uf _ sf a2 rs2 s2 hokf (g_cell_done Gf _ _ hvf) ea2)
+           assert (hhuf : ctx_hyg -> on_free_vars xpredT uf).
+           { intros hc. rewrite huf. apply hyg_mkApps; [reflexivity|].
+             exact (g_addrs_hyg Gf (gk_hyg _ _ _ hokf hc) _ _ hargs). }
+           destruct (alloc_sound lof Gf _ uf _ sf a2 rs2 s2 hokf (g_cell_done Gf _ _ hvf) hhuf
+                       ea2)
              as (lo2 & G2 & hren2 & hok2 & hGa2).
            destruct rs2 as [|r1 rs2a]; [discriminate he|].
            destruct r1 as [| |e4| | | |]; try discriminate he.

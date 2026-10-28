@@ -4,12 +4,14 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require CanonicalTries.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTyping
-  PCUICOnFreeVars PCUICReduction PCUICConfluence.
+  PCUICOnFreeVars PCUICReduction PCUICConfluence PCUICClosed PCUICClosedTyp.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
   PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundConv.
 
 Import CanonicalTries.
+
+Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
 (** * The frame of a call against the evaluator's invariant (BET-298, step 4, part 1)
 
@@ -64,14 +66,32 @@ Section Frame.
         rewrite PTree.gempty in hi. discriminate hi.
   Qed.
 
+  (** Every entry of the start table is hygienic. *)
+  Lemma run_s2_hyg (t u : term) :
+    on_free_vars xpredT t -> on_free_vars xpredT u ->
+    forall i e, PTree.get i (((run_s2 X_type X t u).(st_memo)).(m_codes)) = Some e ->
+      on_free_vars xpredT (inst_code e.(ce_inst) e.(ce_term)).
+  Proof.
+    intros ht hu i e hi. rewrite run_s2_codes in hi.
+    destruct (key_eqb i (key_succ String2pos.xH)) eqn:E1.
+    - apply key_eqb_spec in E1; subst i. rewrite PTree.gss in hi.
+      injection hi as <-. cbn [ce_inst ce_term]. rewrite hyg_inst_code. exact hu.
+    - rewrite PTree.gso in hi by (apply key_neq_of_eqb, E1).
+      destruct (key_eqb i String2pos.xH) eqn:E2.
+      + apply key_eqb_spec in E2; subst i. rewrite PTree.gss in hi.
+        injection hi as <-. cbn [ce_inst ce_term]. rewrite hyg_inst_code. exact ht.
+      + rewrite PTree.gso in hi by (apply key_neq_of_eqb, E2).
+        rewrite PTree.gempty in hi. discriminate hi.
+  Qed.
+
   (** The state invariant of [machine_sound] holds of the state [cbn_run] starts in, at every
     level and under every extension [Δ]: the heap and the context map are empty. *)
   Lemma run_s2_gok (Γ : context) (nctx : nat) (Σ : global_env_ext) (Δ : context)
       (lvl : nat) (t u : term) :
-    consts_okb Σ t -> consts_okb Σ u ->
+    consts_okb Σ t -> consts_okb Σ u -> on_free_vars xpredT t -> on_free_vars xpredT u ->
     gok X_type X Γ nctx Σ Δ lvl xH (run_ghost t u) (run_s2 X_type X t u).
   Proof.
-    intros ht hu. split.
+    intros ht hu hht hhu. split.
     - apply run_s2_state_ok.
     - apply run_s2_nofwd.
     - intros a cl h. unfold heap_get in h. rewrite run_s2_heap, bh_get_holes in h.
@@ -80,7 +100,9 @@ Section Frame.
     - intros j a h. rewrite run_s2_gam_empty, PTree.gempty in h. discriminate h.
     - split; [apply run_s2_memo_inv|]. split; [apply run_s2_memo_ok|]. split.
       + intros i e hi. exact hi.
-      + exact (run_s2_consts_okb Σ t u ht hu).
+      + split; [exact (run_s2_consts_okb Σ t u ht hu)|].
+        intros _. exact (run_s2_hyg t u hht hhu).
+    - intros _ a tm h. discriminate h.
   Qed.
 
   (** The two root codes are in the ghost's table. *)
@@ -132,17 +154,41 @@ Section Frame.
     exact (typing_consts_okb' Σ _ b' ty wfΣ hbt).
   Qed.
 
+  (** A typed term is hygienic: it is closed in its context ([subject_closed]). *)
+  Lemma typing_hyg (Σ : global_env_ext) (Γ : context) (t T : term) :
+    wf Σ -> Σ ;;; Γ |- t : T -> on_free_vars xpredT t.
+  Proof.
+    intros wfΣ ht. pose proof (subject_closed ht) as hc.
+    eapply on_free_vars_impl; [|exact (closedn_on_free_vars (P := xpredT) hc)].
+    intros; reflexivity.
+  Qed.
+
+  (** The hygiene premise of [gok] on the context: every let-body of a well-formed context is
+    hygienic. *)
+  Lemma wf_local_ctx_hyg (Σ : global_env_ext) (Γ : context) :
+    wf Σ -> wf_local Σ Γ -> ctx_hyg Γ.
+  Proof.
+    intros wfΣ wfΓ j decl b hj hb.
+    pose proof (All_local_env_nth_error wfΓ hj) as hd.
+    destruct decl as [na [b'|] ty]; cbn in hb; [|discriminate hb].
+    injection hb as <-. cbn in hd. destruct hd as [hbt _]. cbn in hbt.
+    exact (typing_hyg Σ _ b' ty wfΣ hbt).
+  Qed.
+
   (** ** The frame lemma
 
     Everything [machine_sound] asks of the start of a call, from the hook's hypotheses: the
-    side conditions on [nctx], [lvl] and [Δ], the context premise, the state invariant, and
-    the two root suspensions with their codes in the table and their readings. *)
+    side conditions on [nctx], [lvl] and [Δ], the context premise, the state invariant (with
+    its hygiene clauses: the root entries [t] and [u] are hygienic because they are typed),
+    the hygiene of [Γ]'s let-bodies under which [gok]'s hygiene clauses apply, and the two
+    root suspensions with their codes in the table and their readings. *)
   Lemma cbn_run_gok_frame (Σ : global_env_ext) (Γ : context) (t u : term) :
     wf Σ -> welltyped Σ Γ t -> welltyped Σ Γ u ->
     #|([] : context)| = #|Γ| - #|Γ|
     /\ #|Γ| <= #|Γ|
     /\ (forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
           consts_okb Σ b)
+    /\ ctx_hyg Γ
     /\ gok X_type X Γ #|Γ| Σ [] #|Γ| xH (run_ghost t u) (run_s2 X_type X t u)
     /\ g_susp #|Γ| #|Γ| (run_ghost t u) env_empty (run_c1 X_type X t).(c_term) t
     /\ PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c1 X_type X t)
@@ -152,10 +198,13 @@ Section Frame.
     intros wfΣ [A htA] [B huB].
     split; [cbn; lia|]. split; [lia|].
     split; [exact (wf_local_consts_okb Σ Γ wfΣ (typing_wf_local htA))|].
+    split; [exact (wf_local_ctx_hyg Σ Γ wfΣ (typing_wf_local htA))|].
     split.
     { apply run_s2_gok.
       - exact (typing_consts_okb' Σ Γ t A wfΣ htA).
-      - exact (typing_consts_okb' Σ Γ u B wfΣ huB). }
+      - exact (typing_consts_okb' Σ Γ u B wfΣ huB).
+      - exact (typing_hyg Σ Γ t A wfΣ htA).
+      - exact (typing_hyg Σ Γ u B wfΣ huB). }
     split; [apply run_c1_g_susp|]. split; [apply run_c1_gcok|].
     split; [apply run_c2_g_susp|apply run_c2_gcok].
   Qed.
@@ -379,7 +428,7 @@ Section GhostShiftCounterexample.
     destruct (alloc_now_sound X_type X [] 0 Σ [] 0 eq_refl eq_refl (le_n 0) xH _ (gs_var 0)
                 (tRel (0 - S 0))
                 cbn_init
-                (gok_init X_type X [] 0 Σ [] 0) (g_cell_var 0 0 _ 0))
+                (gok_init X_type X [] 0 Σ [] 0) (g_cell_var 0 0 _ 0) (fun _ => eq_refl))
       as (G1 & _ & hok1 & ha1).
     pose proof (hshift _ _ _ hok1) as hok2.
     destruct (gk_cells _ _ _ _ _ _ _ _ _ _ hok2 gs_a1 (gs_var 0) gs_s1_get)
@@ -414,10 +463,11 @@ Section GhostShiftCounterexample.
   Proof.
     destruct (alloc_now_sound X_type X [] 0 Σ [gs_d] 1 eq_refl eq_refl (le_S _ _ (le_n 0)) xH
                 _ (gs_var 0) (tRel (1 - S 0)) cbn_init
-                (gok_init X_type X [] 0 Σ [gs_d] 1) (g_cell_var 0 1 _ 0))
+                (gok_init X_type X [] 0 Σ [gs_d] 1) (g_cell_var 0 1 _ 0) (fun _ => eq_refl))
       as (G1 & _ & hok1 & ha1).
     destruct (alloc_now_sound X_type X [] 0 Σ [gs_d] 1 eq_refl eq_refl (le_S _ _ (le_n 0)) xH
-                G1 (gs_var 1) (tRel (1 - S 1)) gs_s1 hok1 (g_cell_var 0 1 G1 1))
+                G1 (gs_var 1) (tRel (1 - S 1)) gs_s1 hok1 (g_cell_var 0 1 G1 1)
+                (fun _ => eq_refl))
       as (G2 & hx & hok2 & ha2).
     exists xH, G2. split; [exact hok2|].
     intros φ hop hok.
