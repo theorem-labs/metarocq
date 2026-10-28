@@ -344,8 +344,11 @@ Proof.
   eapply weaken_ctx => //.
 Qed.
 
-(** The crucial property on constructors of cumulative inductive types for type preservation:
-    we don't need to compare their instances when fully applied. *)
+(** The crucial property on constructors of inductive types for type preservation: a
+    comparison of the inductive's instances at full arity gives the comparison of a fully
+    applied constructor's instances. For a cumulative inductive the constructor's
+    instances need not be compared; for a non-cumulative one the hypothesis already gives
+    instance equality, which is what the constructor comparison asks for. *)
 Lemma cmp_global_instance_cstr_irrelevant {cf} {Σ} {wfΣ  : wf Σ} {ci c} {mdecl idecl cdecl u u'} :
   declared_constructor Σ (ci, c) mdecl idecl cdecl ->
   cmp_ind_universes Σ ci (context_assumptions (ind_params mdecl) + #|cstr_indices cdecl|) u u' ->
@@ -356,11 +359,16 @@ Proof.
   pose proof (on_declared_constructor declc).
   pose proof (on_declared_constructor declc) as [[onind oib] [ctor_sorts [hnth onc]]].
   intros Hu. pose proof (cmp_global_instance_length _ _ _ _ _ _ _ Hu).
+  have Hnc : ind_variance mdecl = None -> cmp_universe_instance (compare_universe Σ Conv) u u'.
+  { move=> hv.
+    eapply cmp_global_instance_ind_inv in Hu; [|tc|apply declc.p1].
+    destruct Hu as [(_ & l & indv & _) | Hu]; [congruence|exact Hu]. }
   rewrite /cmp_global_instance_gen /cmp_opt_variance /= /lookup_constructor /lookup_constructor_gen.
   unshelve epose proof (declc' := declared_constructor_to_gen declc); eauto.
   rewrite (declared_inductive_lookup_gen declc'.p1) (proj2 declc').
   rewrite -(cstr_args_length onc).
   case: leb_spec_Set; try lia.
+  move=> _. destruct (ind_variance mdecl) eqn:hv => /=; [lia|exact (Hnc eq_refl)].
 Qed.
 
 Lemma wf_pre_case_branch_context {cf} {Σ} {wfΣ : wf Σ} {Γ ci mdecl idecl p} {br : branch term} {cdecl} :
