@@ -443,7 +443,7 @@ Lemma weaken_lookup_on_global_env' Σ c decl :
   lookup_env Σ c = Some decl ->
   on_udecl_prop Σ (universes_decl_of_decl decl).
 Proof using P Pcmp cf.
-  intros [onu wfΣ] HH.
+  intros [onu [wfr wfΣ]] HH.
   destruct Σ as [univs Σ]; cbn in *.
   induction wfΣ; simpl. 1: discriminate.
   destruct o as [? udecl o ?].
@@ -572,9 +572,10 @@ Qed.
 Lemma strictly_extends_decls_wf Σ Σ' :
   wf Σ' -> strictly_extends_decls Σ Σ' -> wf Σ.
 Proof using P Pcmp cf.
-  intros [onu ond] [eq [Σ'' eq']].
-  split => //.
+  intros [onu [wfr ond]] [eq [Σ'' eq']].
+  split; [|split].
   - red. rewrite eq. apply onu.
+  - rewrite e. apply wfr.
   - rewrite eq. rewrite eq' in ond.
     rewrite -e in ond.
     revert ond; clear.
