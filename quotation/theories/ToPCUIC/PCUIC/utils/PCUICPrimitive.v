@@ -1,5 +1,6 @@
 From MetaRocq.Utils.MRTactics Require Import DestructHead UniquePose.
 From MetaRocq.PCUIC Require Import utils.PCUICPrimitive.
+From MetaRocq.Common Require PrimitiveOps.
 From MetaRocq.Quotation.ToPCUIC Require Import Init.
 From MetaRocq.Quotation.ToPCUIC Require Import (hints) Stdlib.Init Stdlib.Numbers Stdlib.Floats.
 From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) Universes Primitive.
@@ -19,6 +20,15 @@ From MetaRocq.Quotation.ToPCUIC.Utils Require Import (hints) All_Forall.
 #[export] Instance quote_prim_model {term tag} {qterm : quotation_of term} {quote_term : ground_quotable term} : ground_quotable (prim_model term tag) := ltac:(destruct 1; eauto).
 
 #[export] Instance quote_pstring : ground_quotable PrimString.string := fun s => PCUICAst.tString s.
+
+(** BET-319 row M: the primitive-operation payload types, for quoting the
+    premises of [whd_rel]'s operation constructors (split_lits, prim_op_denote,
+    readback).  They sit here, beside [quote_pstring], because a [prim_lit]
+    carries a [PrimString.string] whose quotation is the target language's
+    [tString]; the [Common] layer cannot see it. *)
+#[export] Instance quote_prim_shape : ground_quotable PrimitiveOps.prim_shape := ltac:(destruct 1; exact _).
+#[export] Instance quote_prim_lit : ground_quotable PrimitiveOps.prim_lit := ltac:(destruct 1; exact _).
+#[export] Instance quote_prim_result : ground_quotable PrimitiveOps.prim_result := ltac:(destruct 1; exact _).
 
 #[export] Instance quote_prim_model_of {term tag} {qterm : quotation_of term} {quote_term : ground_quotable term} : ground_quotable (prim_model_of term tag) := ltac:(cbv [prim_model_of]; destruct tag; exact _).
 

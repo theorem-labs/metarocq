@@ -1,4 +1,5 @@
 From MetaRocq.Template Require Import Ast ReflectAst Induction.
+From MetaRocq.Common Require PrimitiveOps.
 From MetaRocq.Quotation.ToTemplate Require Import Init.
 From MetaRocq.Quotation.ToTemplate Require Import (hints) Stdlib.Init Stdlib.Lists Stdlib.Numbers Stdlib.Floats.
 From MetaRocq.Quotation.ToTemplate.Common Require Import (hints) Universes BasicAst Kernames.
@@ -8,6 +9,13 @@ From MetaRocq.Quotation.ToTemplate.QuotationOf.Template Require Import Ast.Insta
 From MetaRocq.Utils Require Import MRUtils.
 
 #[export] Instance quote_pstring : ground_quotable PrimString.string := fun s => Ast.tString s.
+
+(** BET-319 row M: the primitive-operation payload types (see the ToPCUIC
+    twin in [PCUICPrimitive.v]); here beside [quote_pstring] because a
+    [prim_lit] carries a [PrimString.string]. *)
+#[export] Instance quote_prim_shape : ground_quotable PrimitiveOps.prim_shape := ltac:(destruct 1; exact _).
+#[export] Instance quote_prim_lit : ground_quotable PrimitiveOps.prim_lit := ltac:(destruct 1; exact _).
+#[export] Instance quote_prim_result : ground_quotable PrimitiveOps.prim_result := ltac:(destruct 1; exact _).
 
 #[export] Instance quote_predicate {term} {qterm : quotation_of term} {quote_term : ground_quotable term} : ground_quotable (predicate term) := ltac:(destruct 1; exact _).
 #[export] Instance quote_branch {term} {qterm : quotation_of term} {quote_term : ground_quotable term} : ground_quotable (branch term) := ltac:(destruct 1; exact _).
