@@ -1538,8 +1538,8 @@ Proof.
         declarations := Σ;
         retroknowledge := retroknowledge0
       |}).
-      { destruct wfΣ; econstructor =>//.
-        inversion o0 =>//. }
+      { destruct wfΣ as [ou [wfr od]]. split; [assumption|]. split; [assumption|].
+        now inversion od. }
       specialize (IHΣ wfΣ' ind idx mdecl idecl cdecl).
       forward IHΣ. repeat split => //.
       unfold declared_minductive.
@@ -1585,7 +1585,7 @@ Lemma eta_expand_global_env_expanded {cf : checker_flags} (Σ : global_env_ext_m
 Proof.
   destruct Σ as [Σ univs]; cbn.
   unfold expanded_global_env. cbn.
-  unfold Typing.wf, Typing.on_global_env. intros [onu ond].
+  unfold Typing.wf, Typing.on_global_env. intros [onu [wfr ond]].
   cbn in *.
   destruct Σ as []. cbn in *.
   assert (strictly_extends_decls env env) by reflexivity.
