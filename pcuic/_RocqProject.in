@@ -191,4 +191,6 @@ theories/PCUICEtaFInstC1c.v
 theories/PCUICEtaFInstFlip.v
 # L2 obligation 8 (STAGED AT FollowSpec), A3 piece: eta1 C1c for U1' (C4-SIDE)
 theories/PCUICEtaFInstEtaC1c.v
+# L2 obligation 8 (STAGED AT FollowSpec), A3: JoinE is transitive (C4-SIDE)
+theories/PCUICEtaI5Trans.v
 # theories/All.v
