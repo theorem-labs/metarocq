@@ -63,10 +63,16 @@ Definition global_variance_gen lookup gr napp :=
     match lookup_constructor_gen lookup ind k with
     | Some (mdecl, idecl, cdecl) =>
       if (cdecl.(cstr_arity) + mdecl.(ind_npars))%nat <=? napp then
-        (** Fully applied constructors are always compared at the same supertype,
-          which implies that no universe ws_cumul_pb needs to be checked here.
-          We will still check that the instances have the same length. *)
-        AllIrrelevant
+        (** Fully applied constructors of a cumulative inductive are compared at the
+          same supertype, so no universe ws_cumul_pb needs to be checked for them; we
+          still check that the instances have the same length. A constructor of a
+          non-cumulative inductive is compared by instance equality even when fully
+          applied, as Rocq's kernel does (function [convert_constructors_gen] of
+          kernel/conversion.ml). *)
+        match mdecl.(ind_variance) with
+        | Some _ => AllIrrelevant
+        | None => AllEqual
+        end
       else AllEqual
     | _ => AllEqual
     end
@@ -1019,6 +1025,7 @@ Proof.
     elim: Nat.leb_spec => //. lia.
   - destruct lookup_constructor_gen as [[[mdecl idecl] cdecl]|] => //=.
     elim: Nat.leb_spec => // cass.
+    destruct ind_variance => //=.
     elim: Nat.leb_spec => //. lia.
 Qed.
 
