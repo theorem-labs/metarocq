@@ -103,9 +103,15 @@ therefore carries `From Stdlib Require Import ListDec.` and `dec_wf_retro` calls
 `ListDec.NoDup_dec Kername.eq_dec`. But `gen-src/listDec.ml{,i}` is absent from
 `template-rocq/_PluginProject.in` and `ListDec` from `gen-src/metarocq_template_plugin.mlpack`
 — the design §5 step already applied to `PrimitiveOps` (`_PluginProject.in:217-220`,
-mlpack `:106`). **Two valid fixes exist and only one may land**: add `listDec` to the
-extraction lists (row K), or drop the dependency by inlining `NoDup_dec` over
-`Kername.eq_dec` (row H, no plugin change). PrimQuoter2 and PrimEnv2 are settling which.
+mlpack `:106`; `List0` is the same shape at `:117-118`/`:11`). **Settled: Main ruled on
+2026-10-28 "remove the dependency, do not add the plumbing", so this is ROW H's fix, not
+row K's** — the plumbing route is explicitly not being taken. PrimEnv2 has replaced the
+call with `dec_NoDup_kername` over `Kername.eq_dec` and reports `common STATUS 0` with
+zero `listDec` references; **not yet landed**. PrimQuoter2 verified the dependency has a
+single source: `EnvironmentTyping.v:4` and `:1290`, with `open ListDec` appearing only in
+`gen-src/environmentTyping.ml{,i}`, whose `.d` files are the only things wanting
+`gen-src/listDec.cmx`. `frac/prim-ops-KO` stays at `464246cb`. **Do not re-run the
+composition until PrimEnv2's row-H commit lands.**
 
 **2. Within `pcuic` the first break is `PCUICNormal.v:465`** (`[Focus] Wrong bullet`), with
 everything green through `PCUICSR` (PrimSpec2, `out/dehm-k8.log`, a `common`+`pcuic`-only
@@ -117,6 +123,18 @@ primitive case is unfinished.
 `ToTemplate/QuotationOf/Common/EnvironmentTyping/Sig.v:98: Cannot import functor … Sig.GM`.
 Landed HM `40b3bf95` touches no `quotation/` file; PrimEnv2's wip `17209e31` has the four
 that fix it (PrimSpec2).
+
+**4. A claim I made and withdrew: the safechecker plugin's lists.** I predicted that
+`safechecker-plugin`'s `_PluginProject.in`/mlpack would need `listDec`/`primitiveOps` too,
+and the lane lead first reported it as verified. **Both of us were wrong to call it
+verified, and the claim is withdrawn.** A grep showing the modules absent from a list is
+not evidence that they are needed: `out/compose2/safechecker-plugin.log` never reached
+extraction at all — it stopped at `No rule to make target '../pcuic/theories/Bidirectional/BDToPCUIC.vo'`,
+behind the pcuic/row-F frontier — so no missing-module error could have surfaced
+(PrimQuoter2). Under design change-log v10, template-provided `Common` modules resolve over
+`OCAMLPATH` and are *correctly* absent from that mlpack, so absence is probably right.
+`listDec` becomes moot there once row H lands; `primitiveOps` is PrimQuoter2's open check,
+to be settled by an end-to-end build once `pcuic` compiles, not by reading a list.
 
 So `safechecker` and `safechecker-plugin` are not reachable, and neither test file can run.
 
