@@ -161,3 +161,122 @@ Section Frame.
   Qed.
 
 End Frame.
+
+(** * The evaluator seam of [PCUICCallByNeedSoundConv] is false at the fuel [cbn_run] uses
+
+  [slot_seam] and [term_seam] read the comparison's inputs with the heap-following
+  [repr_*] and promise, of every answer, that the caller's roots keep their [repr] reading
+  ([root_pres]) and that the state keeps [cok], whose [gam_ok] asks every cell of the
+  context map to stand, under [repr], for exactly the context entry it was made for.
+  Forcing a cell writes its value back, and [repr] reads a forced cell as that value: a
+  reduct of what it stood for, not the same term. So neither promise survives a single
+  evaluation that forces a context cell.
+
+  The run below is [cbn_run]'s own first [conv_term], at [cbn_depth], in
+  [Γ = [x := (fun n : nat => n) O : nat]] with [t = x] and [u = fun n : nat => n]. The
+  start state satisfies [cok] ([cok_run_s2]). [whnf] of [x] allocates the context cell of
+  [x] at address 1, records it in [st_gam], forces it and writes back [VCon O []]; the
+  comparison then answers [false] (constructor against lambda: no rule). [gam_ok] of the
+  final state would need address 1 to stand under [repr] for the body
+  [(fun n : nat => n) O]; it stands for [O]. [term_seam] promises [cok] of the final state,
+  so it is false ([term_seam_false]). The same run through [conv_slot] on two inline slots
+  refutes [slot_seam] ([slot_seam_false]). Nothing in the counterexample is ill-typed; and
+  it is not a defect of the machine, which is sound here: it is a defect of the seam's
+  heap-following invariant, the one [PCUICCallByNeedSoundEval]'s header explains why the
+  evaluator replaced by the ghost reading. *)
+
+Section SeamCounterexample.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Σ : global_env_ext).
+
+  Definition sc_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
+  Definition sc_nat : inductive :=
+    {| inductive_mind := (MPfile ["Datatypes"; "Init"; "Corelib"], "nat"); inductive_ind := 0 |}.
+  Definition sc_O : term := tConstruct sc_nat 0 [].
+  Definition sc_body : term := tApp (tLambda sc_na (tInd sc_nat []) (tRel 0)) sc_O.
+  Definition sc_Γ : context := [vdef sc_na sc_body (tInd sc_nat [])].
+  Definition sc_t : term := tRel 0.
+  Definition sc_u : term := tLambda sc_na (tInd sc_nat []) (tRel 0).
+
+  (** [cok] holds of the state every call starts in. *)
+  Lemma cok_run_s2 (Γ : context) (nctx lvl : nat) (t u : term) :
+    PCUICCallByNeedSoundConv.cok X_type X Γ nctx lvl (run_s2 X_type X t u).
+  Proof.
+    split; [exists xH; apply run_s2_state_ok|].
+    split; [apply run_s2_nofwd|].
+    split; [intros l; apply run_s2_gam_ok|].
+    split; [apply run_s2_memo_ok|apply run_s2_memo_inv].
+  Qed.
+
+  (** The run, by computation: the context cell of [x] is at address 1 and holds [O]. *)
+  Lemma sc_term_run :
+    match conv_term X_type X sc_Γ 1 false cbn_depth 1 Conv env_empty (run_c1 X_type X sc_t)
+            env_empty (run_c2 X_type X sc_t sc_u) [] (run_s2 X_type X sc_t sc_u) with
+    | COk (_, _, s) =>
+        PTree.get (key_of_succ_nat 0) s.(st_gam) = Some (HAddr 1)
+        /\ heap_get (HAddr 1) s = Some (CDone (VCon sc_O []))
+    | CFail _ => False
+    end.
+  Proof. vm_compute. split; reflexivity. Qed.
+
+  Lemma sc_slot_run :
+    match conv_slot X_type X sc_Γ 1 false cbn_depth 1 Conv
+            (SInl [] 0 0 (run_c1 X_type X sc_t)) (SInl [] 0 0 (run_c2 X_type X sc_t sc_u))
+            [] (run_s2 X_type X sc_t sc_u) with
+    | COk (_, _, s) =>
+        PTree.get (key_of_succ_nat 0) s.(st_gam) = Some (HAddr 1)
+        /\ heap_get (HAddr 1) s = Some (CDone (VCon sc_O []))
+    | CFail _ => False
+    end.
+  Proof. vm_compute. split; reflexivity. Qed.
+
+  (** No state whose context cell of [x] holds [O] satisfies [cok]. *)
+  Lemma sc_not_cok (s : cbn_state) :
+    PTree.get (key_of_succ_nat 0) s.(st_gam) = Some (HAddr 1) ->
+    heap_get (HAddr 1) s = Some (CDone (VCon sc_O [])) ->
+    ~ PCUICCallByNeedSoundConv.cok X_type X sc_Γ 1 1 s.
+  Proof.
+    intros hg hh (_ & _ & hgam & _ & _).
+    destruct (hgam 1 0 (HAddr 1) hg) as (tm & hden & hr).
+    cbn in hden. injection hden as <-.
+    inversion hr as [lv a cl tm0 hget hcl]; subst.
+    unfold heap_get in hh. rewrite hh in hget. injection hget as <-.
+    inversion hcl; subst.
+    match goal with h : repr_value _ _ _ (VCon _ _) _ |- _ => inversion h; subst end.
+    match goal with h : repr_addrs _ _ _ [] _ |- _ => inversion h; subst end.
+    match goal with h : mkApps sc_O [] = _ |- _ => cbv [mkApps sc_O] in h; discriminate h end.
+  Qed.
+
+  Lemma term_seam_false : ~ term_seam X_type X Σ sc_Γ 1 false cbn_depth.
+  Proof.
+    intros hseam.
+    pose proof sc_term_run as hrun.
+    destruct (conv_term X_type X sc_Γ 1 false cbn_depth 1 Conv env_empty
+                (run_c1 X_type X sc_t) env_empty (run_c2 X_type X sc_t sc_u) []
+                (run_s2 X_type X sc_t sc_u)) as [[[b rs] s']|w] eqn:E;
+      [|contradiction hrun].
+    destruct hrun as [hg hh].
+    destruct (hseam 1 Conv sc_Γ env_empty (run_c1 X_type X sc_t) env_empty
+                (run_c2 X_type X sc_t sc_u) [] (run_s2 X_type X sc_t sc_u) b rs s'
+                (cok_run_s2 sc_Γ 1 1 sc_t sc_u) eq_refl eq_refl (le_n 1) E)
+      as (_ & hcok & _).
+    exact (sc_not_cok s' hg hh hcok).
+  Qed.
+
+  Lemma slot_seam_false : ~ slot_seam X_type X Σ sc_Γ 1 false cbn_depth.
+  Proof.
+    intros hseam.
+    pose proof sc_slot_run as hrun.
+    destruct (conv_slot X_type X sc_Γ 1 false cbn_depth 1 Conv
+                (SInl [] 0 0 (run_c1 X_type X sc_t)) (SInl [] 0 0 (run_c2 X_type X sc_t sc_u))
+                [] (run_s2 X_type X sc_t sc_u)) as [[[b rs] s']|w] eqn:E;
+      [|contradiction hrun].
+    destruct hrun as [hg hh].
+    destruct (hseam 1 Conv sc_Γ (SInl [] 0 0 (run_c1 X_type X sc_t))
+                (SInl [] 0 0 (run_c2 X_type X sc_t sc_u)) [] (run_s2 X_type X sc_t sc_u)
+                b rs s' (cok_run_s2 sc_Γ 1 1 sc_t sc_u) eq_refl eq_refl (le_n 1) E)
+      as (_ & hcok & _).
+    exact (sc_not_cok s' hg hh hcok).
+  Qed.
+
+End SeamCounterexample.
