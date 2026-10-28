@@ -179,4 +179,6 @@ theories/PCUICEtaJoinSpec.v
 theories/PCUICEtaCanonSpec.v
 # L2 obligation 8 (STAGED AT FollowSpec), A4: compare_term_eta is included in the E-spec
 theories/PCUICEtaFInstSpec.v
+# L2 obligation 8 (STAGED AT FollowSpec): pinned I5 restatement, A4 (join => spec), obligation 9's premise
+theories/PCUICEtaI5.v
 # theories/All.v
