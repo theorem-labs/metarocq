@@ -34,7 +34,9 @@ Local Notation xpred0 := (fun _ : nat => false) (only parsing).
     head of every constructor and neutral constant value is closed. That is a whole-heap
     STRUCTURAL invariant, true at the master level (fresh variables are only allocated
     below it) but not one the ghost reading can see, so its preservation by the machine is a
-    separate theorem ([machine_hwf] states it; it is proved elsewhere). It also needs
+    separate theorem: [machine_hwf] states it, and [PCUICCallByNeedSoundHeapWf] proves it
+    ([machine_hwf_holds], under [#|Γ| <= nctx]; it is false as a closed Prop without that
+    side condition, [machine_hwf_needs_len]). It also needs
     [gk_hyg], the hygiene of every ghost term, for red weakening
     ([PCUICCallByNeedSoundEval.red_weakening_needs_hygiene]).
   - [red_unlift] and [red_assum_irrel] do NOT depend on [gk_hyg]: the terms they move are
@@ -421,12 +423,14 @@ Section Master.
   (** *** The interface of the structural invariant (slice B)
 
     The machine keeps [hwf Q] of the heap, of the roots and of the value it returns, and so
-    does an allocation of a cell that has it. Stated here, proved in its own slice
-    ([PCUICCallByNeedSoundHeapWf]); every lemma of the comparison that needs it takes it as
-    a hypothesis. [machine_hwf] unfolds to the same statement as before [machine_hwf_at] was
-    split out. Instances proved here: the fuel [FO] case of every clause
-    ([machine_hwf_FO]), an allocation without collection ([alloc_now_hwf]), and the premises
-    at a real start state ([minv_init], [minv_run_s2]). The full instance is slice B's proof. *)
+    does an allocation of a cell that has it. This file only STATES the interface.
+    [PCUICCallByNeedSoundHeapWf] (which imports this file) PROVES it: [machine_hwf_holds]
+    under [#|Γ| <= nctx], [alloc_hwf_holds], and the satisfying instance [machine_hwf_run]
+    at [nctx = #|Γ|]. As a closed Prop [machine_hwf] is FALSE without [#|Γ| <= nctx]
+    ([machine_hwf_needs_len]: with [nctx = 0] and one assumption in [Γ], [gam] allocates
+    [NVar 0] at [Q = 0]). [machine_hwf] unfolds to the statement it had before
+    [machine_hwf_at] was split out. Partial instances proved here: the fuel [FO] case
+    ([machine_hwf_FO]) and an allocation without collection ([alloc_now_hwf]). *)
   Definition machine_hwf_at (d : cbn_fuel) (Q : nat) : Prop :=
     (forall a rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
        force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
@@ -463,11 +467,10 @@ Section Master.
 
   (** *** The machine at the master level
 
-    CONDITIONAL. [whnf_master] and [eval_slot_master] take [machine_hwf] as a hypothesis.
-    They say something about a run only once slice B has proved [machine_hwf]; if
-    [machine_hwf] turns out to be false, these two lemmas are about nothing. No lemma may use
-    them as if they were unconditional: every user must carry [machine_hwf] as its own
-    hypothesis until it is discharged. *)
+    [whnf_master] and [eval_slot_master] take [machine_hwf] as a hypothesis [hB]. It cannot
+    be discharged in this file: [PCUICCallByNeedSoundHeapWf], which proves it, imports this
+    file. Consumers should call [whnf_master_hwf] and [eval_slot_master_hwf] of
+    [PCUICCallByNeedSoundHeapWf], the same lemmas with [hB] discharged from [hnctx]. *)
 
   Lemma whnf_master (hB : machine_hwf) d L Q lo G e c stk sts tc rs s v rs' s' :
     minv L Q lo G s -> Forall (rwf Q) rs ->
@@ -733,4 +736,29 @@ Section Instances.
     - split; [intros i e h; exact h|constructor].
     - intros _ Δ _ hcl ho _. constructor. exact (@ws_cumul_pb_refl_open _ Σ pb _ _ hcl ho).
   Qed.
+
+  (** The seam at a term: [cbn_run]'s own first call, comparing the assumption [x] of
+    [inst_Γ] with itself ([t = u = tRel 0], [nctx = L = Q = 1]). *)
+  Definition ti_t : term := tRel 0.
+  Definition ti_s : cbn_state := run_s2 X_type X ti_t ti_t.
+  Definition ti_c1 : code := run_c1 X_type X ti_t.
+  Definition ti_c2 : code := run_c2 X_type X ti_t ti_t.
+
+  Lemma ti_run pb :
+    exists s', conv_term X_type X inst_Γ 1 false (fuel_n 8) 1 pb env_empty ti_c1 env_empty ti_c2
+                 [] ti_s = COk (true, [], s').
+  Proof.
+    destruct (conv_term X_type X inst_Γ 1 false (fuel_n 8) 1 pb env_empty ti_c1 env_empty ti_c2
+                [] ti_s) as [[[b rs'] s']|w] eqn:E;
+      pose proof E as Ec; vm_compute in Ec; try discriminate Ec.
+    injection Ec as hb hrs _. subst b rs'. exists s'. reflexivity.
+  Qed.
+
+  Lemma hwf_heap_eq Q s s' : s'.(st_heap) = s.(st_heap) -> hwf Q s -> hwf Q s'.
+  Proof. intros e h a cl ha. unfold heap_get in ha. rewrite e in ha. exact (h a cl ha). Qed.
+
+  Lemma ti_hcio j decl b : nth_error inst_Γ j = Some decl -> decl.(decl_body) = Some b ->
+    PCUICCallByNeedSoundHook.consts_okb Σ b.
+  Proof. intros h hb. destruct (inst_Γ_nobody j decl b h hb). Qed.
+
 End Instances.

@@ -7,8 +7,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTy
   PCUICOnFreeVars PCUICReduction PCUICConfluence PCUICClosed PCUICClosedTyp.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
-  PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel
-  PCUICCallByNeedSoundConv.
+  PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel.
+From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
 
 Import CanonicalTries.
 
@@ -151,6 +151,45 @@ Section SeamCounterexample.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Σ : global_env_ext).
 
+  (** The REFUTED definitions: [PCUICCallByNeedSoundConv]'s old [cok], [term_seam] and
+    [slot_seam], copied here under [old_] names solely so that the counterexamples below stay
+    checkable. No result of the development depends on them. *)
+  Definition old_cok (Γ : context) (nctx lvl : nat) (s : cbn_state) : Prop :=
+    (exists lo : positive, state_ok lo s)
+    /\ heap_nofwd s.(st_heap)
+    /\ (forall l : nat, gam_ok Γ nctx l s)
+    /\ memo_ok X_type X s
+    /\ memo_inv X_type X s.
+
+  Definition old_slot_seam (Γ : context) (nctx : nat) (stress : bool) (d : cbn_fuel) : Prop :=
+    forall (lvl : nat) (pb : conv_pb) (Ξ : context) (x1 x2 : cbn_slot)
+      (rs : list root) (s : cbn_state) (b : bool) (rs' : list root) (s' : cbn_state),
+      old_cok Γ nctx lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      conv_slot X_type X Γ nctx stress d lvl pb x1 x2 rs s = COk (b, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ old_cok Γ nctx lvl s'
+      /\ (b = true ->
+          forall t1 t2 : term,
+            repr_slot nctx (s.(st_heap)) lvl x1 t1 ->
+            repr_slot nctx (s.(st_heap)) lvl x2 t2 ->
+            is_open_term Ξ t1 -> is_open_term Ξ t2 ->
+            ∥ Σ ;;; Ξ ⊢ t1 ≤[pb] t2 ∥).
+
+  Definition old_term_seam (Γ : context) (nctx : nat) (stress : bool) (d : cbn_fuel) : Prop :=
+    forall (lvl : nat) (pb : conv_pb) (Ξ : context) (e1 : cbn_env) (c1 : code)
+      (e2 : cbn_env) (c2 : code) (rs : list root) (s : cbn_state) (b : bool)
+      (rs' : list root) (s' : cbn_state),
+      old_cok Γ nctx lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      conv_term X_type X Γ nctx stress d lvl pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ old_cok Γ nctx lvl s'
+      /\ (b = true ->
+          forall u1 u2 : term,
+            repr_susp nctx (s.(st_heap)) lvl e1 (c1.(c_term)) u1 ->
+            repr_susp nctx (s.(st_heap)) lvl e2 (c2.(c_term)) u2 ->
+            is_open_term Ξ u1 -> is_open_term Ξ u2 ->
+            ∥ Σ ;;; Ξ ⊢ u1 ≤[pb] u2 ∥).
+
   Definition sc_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
   Definition sc_nat : inductive :=
     {| inductive_mind := (MPfile ["Datatypes"; "Init"; "Corelib"], "nat"); inductive_ind := 0 |}.
@@ -162,7 +201,7 @@ Section SeamCounterexample.
 
   (** [cok] holds of the state every call starts in. *)
   Lemma cok_run_s2 (Γ : context) (nctx lvl : nat) (t u : term) :
-    PCUICCallByNeedSoundConv.cok X_type X Γ nctx lvl (run_s2 X_type X t u).
+    old_cok Γ nctx lvl (run_s2 X_type X t u).
   Proof.
     split; [exists xH; apply run_s2_state_ok|].
     split; [apply run_s2_nofwd|].
@@ -196,7 +235,7 @@ Section SeamCounterexample.
   Lemma sc_not_cok (s : cbn_state) :
     PTree.get (key_of_succ_nat 0) s.(st_gam) = Some (HAddr 1) ->
     heap_get (HAddr 1) s = Some (CDone (VCon sc_O [])) ->
-    ~ PCUICCallByNeedSoundConv.cok X_type X sc_Γ 1 1 s.
+    ~ old_cok sc_Γ 1 1 s.
   Proof.
     intros hg hh (_ & _ & hgam & _ & _).
     destruct (hgam 1 0 (HAddr 1) hg) as (tm & hden & hr).
@@ -209,7 +248,7 @@ Section SeamCounterexample.
     match goal with h : mkApps sc_O [] = _ |- _ => cbv [mkApps sc_O] in h; discriminate h end.
   Qed.
 
-  Lemma term_seam_false : ~ term_seam X_type X Σ sc_Γ 1 false cbn_depth.
+  Lemma term_seam_false : ~ old_term_seam sc_Γ 1 false cbn_depth.
   Proof.
     intros hseam.
     pose proof sc_term_run as hrun.
@@ -225,7 +264,7 @@ Section SeamCounterexample.
     exact (sc_not_cok s' hg hh hcok).
   Qed.
 
-  Lemma slot_seam_false : ~ slot_seam X_type X Σ sc_Γ 1 false cbn_depth.
+  Lemma slot_seam_false : ~ old_slot_seam sc_Γ 1 false cbn_depth.
   Proof.
     intros hseam.
     pose proof sc_slot_run as hrun.
@@ -271,10 +310,13 @@ End SeamCounterexample.
   [functional_extensionality_dep] into the assumptions of [ghost_map_false]; those of
   [ghost_shift_false] are the Rocq primitives and [guard_checking] only.
 
-  So the level of [gok] cannot move down while a stale cell exists, and a whole-heap scoping
-  clause ([heap_wf lvl] of [PCUICCallByNeedSoundConv]) is false at the comparison's level for
-  the same reason. [env_reads] does not help: it is a hypothesis of [case_cong_sound] and
-  [case_branches_sound], and [env_reads_intro], the only way to obtain it, needs that false
+  So the level of [gok] cannot move down while a stale cell exists. The whole-heap scoping
+  clause [heap_wf lvl] of [PCUICCallByNeedSoundConv] holds on the empty start heap
+  ([run_s2_heap]); the claim that it then FAILS is an ARGUMENT, not a Coq result: once a
+  fresh-variable cell [CDone (VNeu (NVar lvl) [])] outlives its binder and the comparison is
+  back at level [lvl], [value_wf] would need [lvl < lvl]. That such a state is reachable is
+  the run described above, not formalized. [env_reads] is a hypothesis of [case_cong_sound]
+  and [case_branches_sound]; [env_reads_intro], the only way to obtain it, needs
   [heap_wf lvl] and is called nowhere. *)
 
 Section GhostShiftCounterexample.
