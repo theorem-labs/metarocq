@@ -351,7 +351,7 @@ End RenameWf.
 (** ** A collection, and an allocation *)
 
 (** Every cell [bh_get] finds in the old and in the new heap of a collection. *)
-Definition gcw (Q : nat) (g : gc_state) : Prop :=
+#[local] Definition gcw (Q : nat) (g : gc_state) : Prop :=
   (forall a cl, bh_get a g.(g_old) = Some cl -> cwf Q cl)
   /\ (forall a cl, bh_get a g.(g_heap) = Some cl -> cwf Q cl).
 

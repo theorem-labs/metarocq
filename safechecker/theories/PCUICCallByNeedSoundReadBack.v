@@ -211,14 +211,14 @@ Section ReadBack.
   Local Notation ren := (rename (unlift_renaming (Q - L) 0)).
   Local Notation clean := (on_free_vars (strengthenP 0 (Q - L) xpredT)).
 
-  Lemma hL : nctx <= L. Proof. destruct hm as [h _ _ _]. exact h. Qed.
-  Lemma hQ : L <= Q. Proof. destruct hm as [_ h _ _]. exact h. Qed.
-  Lemma hok0 : gok X_type X Γ nctx Σ (jctx (Q - nctx)) Q lo G s0.
+  #[local] Lemma hL : nctx <= L. Proof. destruct hm as [h _ _ _]. exact h. Qed.
+  #[local] Lemma hQ : L <= Q. Proof. destruct hm as [_ h _ _]. exact h. Qed.
+  #[local] Lemma hok0 : gok X_type X Γ nctx Σ (jctx (Q - nctx)) Q lo G s0.
   Proof. destruct hm as [_ _ h _]. exact h. Qed.
-  Lemma hw0 : hwf Q s0. Proof. destruct hm as [_ _ _ h]. exact h. Qed.
+  #[local] Lemma hw0 : hwf Q s0. Proof. destruct hm as [_ _ _ h]. exact h. Qed.
 
   (** The state a read-back leaves: [s0] up to [st_steps] (and [st_room]). *)
-  Definition same (s : cbn_state) : Prop :=
+  #[local] Definition same (s : cbn_state) : Prop :=
     s.(st_heap) = s0.(st_heap) /\ s.(st_next) = s0.(st_next)
     /\ s.(st_gam) = s0.(st_gam) /\ s.(st_memo) = s0.(st_memo).
 
@@ -231,11 +231,11 @@ Section ReadBack.
   Lemma same_heap s a : same s -> heap_get a s = heap_get a s0.
   Proof. intros (e1 & _). unfold heap_get. rewrite e1. reflexivity. Qed.
 
-  Definition rL (w u : term) : Prop := ∥ red Σ (Γ ,,, jctx (L - nctx)) w u ∥.
+  #[local] Definition rL (w u : term) : Prop := ∥ red Σ (Γ ,,, jctx (L - nctx)) w u ∥.
 
   (** A reading at [Q] and a read-back at [L]: when the reading is a lift of a hygienic
     logical term, the read-back is a reduct of it. *)
-  Definition lrel (t u : term) : Prop :=
+  #[local] Definition lrel (t u : term) : Prop :=
     forall w, t = lift0 (Q - L) w -> on_free_vars xpredT w -> rL w u.
 
   Lemma rL_refl w : rL w w.

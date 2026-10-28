@@ -1171,7 +1171,7 @@ Qed.
   machine give back roots of the shape of the roots they were given: each function pops
   exactly the frames it pushes, and threads the rest through calls that keep their shape. *)
 
-Definition kc : haddr -> haddr := fun _ => HAddr xH.
+#[local] Definition kc : haddr -> haddr := fun _ => HAddr xH.
 
 (** Two root lists of one shape, less their first root. *)
 Lemma sk_tl r r' rs rs' :
@@ -1456,7 +1456,7 @@ Section SkMachine.
   Qed.
 
   (** The five functions of the machine at one fuel. *)
-  Definition sk_m (d : cbn_fuel) : Prop :=
+  #[local] Definition sk_m (d : cbn_fuel) : Prop :=
     (forall a rs s v rs' s', force X_type X Γ nctx d a rs s = COk (v, rs', s') ->
        mp_roots kc rs' = mp_roots kc rs)
     /\ (forall x stk rs s v rs' s', eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
@@ -1665,7 +1665,7 @@ Proof. exact (sk_machine X_type X Γ nctx). Qed.
     that [minv L Q' lo' G' s'] holds and every root of the caller keeps its reading, lifted by
     [Q' - Q] ([grq]). The master level rises when the comparison crosses binders: a fresh
     variable at level [L] must be below [Q] ([hwf]), and [gok_raise] lifts the ghost.
-  - The conversion part ([cq]): if [b = true], whenever each of the two readings is the lift
+  - The conversion part ([cbn_lift_conv]): if [b = true], whenever each of the two readings is the lift
     by [Q - L] of a term scoped at [L], those two terms are convertible at the comparison's
     [conv_pb] in [Γ ,,, Δ] for every [Δ] of length [L - nctx]. Nothing is said of [false].
   The lifts are a premise of the conversion part, not of the call: the state part needs
@@ -1695,7 +1695,7 @@ Section ConvGhost.
   Proof. rewrite map_map. apply map_ext. intros t. apply lift0_lift0. Qed.
 
   (** [unl m] undoes a lift by [m]. *)
-  Definition unl (m : nat) (t : term) : term := rename (fun i => i - m) t.
+  #[local] Definition unl (m : nat) (t : term) : term := rename (fun i => i - m) t.
 
   Lemma unl_lift0 (m : nat) (u : term) : unl m (lift0 m u) = u.
   Proof.
@@ -1706,9 +1706,9 @@ Section ConvGhost.
 
   (** [scl L u]: [u] is scoped at level [L], so open in [Γ ,,, Δ] when [#|Δ| = L - nctx].
     [inq m Q]: the free variables of the lift by [m] of a term scoped at [Q - m]. *)
-  Definition scl (L : nat) (u : term) : bool := on_free_vars (shiftnP L xpred0) u.
+  #[local] Definition scl (L : nat) (u : term) : bool := on_free_vars (shiftnP L xpred0) u.
 
-  Definition inq (m Q : nat) (i : nat) : bool := (m <=? i) && (i <? Q).
+  #[local] Definition inq (m Q : nat) (i : nat) : bool := (m <=? i) && (i <? Q).
 
   Lemma inq_lift0 (m L : nat) (u : term) : scl L u -> on_free_vars (inq m (L + m)) (lift0 m u).
   Proof.
@@ -1737,19 +1737,19 @@ Section ConvGhost.
 
   (** ** What a [true] claims *)
 
-  Definition cv (L : nat) (pb : conv_pb) (u1 u2 : term) : Prop :=
+  #[local] Definition cv (L : nat) (pb : conv_pb) (u1 u2 : term) : Prop :=
     forall Δ : context, #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) ->
       ∥ Σ ;;; Γ ,,, Δ ⊢ u1 ≤[pb] u2 ∥.
 
-  Definition cq (L Q : nat) (pb : conv_pb) (t1 t2 : term) : Prop :=
+  Definition cbn_lift_conv (L Q : nat) (pb : conv_pb) (t1 t2 : term) : Prop :=
     forall u1 u2 : term, t1 = lift0 (Q - L) u1 -> t2 = lift0 (Q - L) u2 ->
       scl L u1 -> scl L u2 -> cv L pb u1 u2.
 
-  Definition cvs (L : nat) (us1 us2 : list term) : Prop :=
+  #[local] Definition cvs (L : nat) (us1 us2 : list term) : Prop :=
     forall Δ : context, #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) ->
       ∥ ws_cumul_pb_terms Σ (Γ ,,, Δ) us1 us2 ∥.
 
-  Definition cqs (L Q : nat) (ts1 ts2 : list term) : Prop :=
+  #[local] Definition cqs (L Q : nat) (ts1 ts2 : list term) : Prop :=
     forall us1 us2 : list term,
       ts1 = map (lift0 (Q - L)) us1 -> ts2 = map (lift0 (Q - L)) us2 ->
       forallb (scl L) us1 -> forallb (scl L) us2 -> cvs L us1 us2.
@@ -1761,7 +1761,7 @@ Section ConvGhost.
     replace (L - nctx + nctx) with L by lia. exact h.
   Qed.
 
-  Lemma cq_refl (L Q : nat) (pb : conv_pb) (t : term) : nctx <= L -> cq L Q pb t t.
+  Lemma cq_refl (L Q : nat) (pb : conv_pb) (t : term) : nctx <= L -> cbn_lift_conv L Q pb t t.
   Proof.
     intros hL u1 u2 e1 e2 h1 h2 Δ hΔ hcl. rewrite e1 in e2.
     apply PCUICCallByNeedSoundReadBack.lift0_inj in e2. subst u2.
@@ -1770,7 +1770,7 @@ Section ConvGhost.
 
   Lemma cq_lift (L Q Q' : nat) (pb : conv_pb) (t1 t2 : term) :
     L <= Q -> Q <= Q' ->
-    cq L Q' pb (lift0 (Q' - Q) t1) (lift0 (Q' - Q) t2) -> cq L Q pb t1 t2.
+    cbn_lift_conv L Q' pb (lift0 (Q' - Q) t1) (lift0 (Q' - Q) t2) -> cbn_lift_conv L Q pb t1 t2.
   Proof.
     intros hLQ hQ h u1 u2 e1 e2 h1 h2. apply h; [| |exact h1|exact h2].
     - rewrite e1, lift0_lift0. f_equal. lia.
@@ -1788,7 +1788,7 @@ Section ConvGhost.
 
   (** ** The caller's roots across a call that may raise the master level *)
 
-  Definition gpq (Q Q' : nat) (G G' : ghost) (r r' : root) : Prop :=
+  #[local] Definition gpq (Q Q' : nat) (G G' : ghost) (r r' : root) : Prop :=
     match r, r' with
     | RA a, RA a' => forall t, G a = Some t -> G' a' = Some (lift0 (Q' - Q) t)
     | RSl x, RSl x' =>
@@ -1809,7 +1809,7 @@ Section ConvGhost.
 
   (** Every root keeps its reading, lifted by [Q' - Q], and its shape ([machine_skel]): only
     its addresses change. *)
-  Definition grq (Q Q' : nat) (G G' : ghost) (rs rs' : list root) : Prop :=
+  #[local] Definition grq (Q Q' : nat) (G G' : ghost) (rs rs' : list root) : Prop :=
     gcx G G' /\ Forall2 (gpq Q Q' G G') rs rs' /\ mp_roots kc rs' = mp_roots kc rs.
 
   Lemma gpq_of_gpres Q G G' r r' : gpres nctx Q G G' r r' -> gpq Q Q G G' r r'.
@@ -1954,7 +1954,7 @@ Section ConvGhost.
 
   (** ** The state part of every statement *)
 
-  Definition post (L Q : nat) (G : ghost) (rs : list root) (s' : cbn_state) (rs' : list root)
+  #[local] Definition post (L Q : nat) (G : ghost) (rs : list root) (s' : cbn_state) (rs' : list root)
     : Prop :=
     exists Q' lo' G', Q <= Q' /\ MI L Q' lo' G' s' /\ Forall (rwf Q') rs'
       /\ grq Q Q' G G' rs rs'.
@@ -1986,11 +1986,11 @@ Section ConvGhost.
   (** ** The same-code rule, cell by cell
 
     [cagree L Q a i ts1 ts2]: at each position of the two slot lists, either the code [a]
-    does not use the slot, or the two readings are convertible in the sense of [cq]. *)
+    does not use the slot, or the two readings are convertible in the sense of [cbn_lift_conv]. *)
   Inductive cagree (L Q : nat) (a : term) : nat -> list term -> list term -> Prop :=
   | cagree_nil i : cagree L Q a i [] []
   | cagree_cons i u1 u2 l1 l2 :
-      (noccur_between i 1 a = true \/ cq L Q Conv u1 u2) ->
+      (noccur_between i 1 a = true \/ cbn_lift_conv L Q Conv u1 u2) ->
       cagree L Q a (S i) l1 l2 -> cagree L Q a i (u1 :: l1) (u2 :: l2).
 
   Lemma cagree_lift L Q Q' a i l1 l2 :
@@ -2009,7 +2009,7 @@ Section ConvGhost.
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_slot nctx Q G x1 t1 -> g_slot nctx Q G x2 t2 ->
       conv_slot X_type X Γ nctx d L pb x1 x2 rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb t1 t2).
 
   Definition spec_scc (d : cbn_fuel) : Prop :=
     forall L Q lo G a i l1 l2 ts1 ts2 rs s b rs' s',
@@ -2075,7 +2075,7 @@ Section ConvGhost.
       MI L Q lo G s -> Forall (rwf Q) rs ->
       g_slot nctx Q G x1 t1 -> g_slot nctx Q G x2 t2 ->
       conv_eval X_type X Γ nctx d L pb x1 x2 rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb t1 t2).
 
   Definition spec_cells (d : cbn_fuel) : Prop :=
     forall L Q lo G l1 l2 ts1 ts2 rs s b rs' s',
@@ -2090,7 +2090,7 @@ Section ConvGhost.
       g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
       g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
       conv_term X_type X Γ nctx d L pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb t1 t2).
 
   (** Two codes [code_eq] accepts: one term, or equal up to universes at [Conv]. *)
   Definition samec (a1 a2 : term) : Prop := a1 = a2 \/ ∥ compare_term Σ Σ Conv a1 a2 ∥.
@@ -2112,7 +2112,7 @@ Section ConvGhost.
       g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
       g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
       case_cong X_type X Γ nctx d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb t1 t2).
 
   (** The parameter codes [case_params] walks: child [case_param_step i] onwards. *)
   Inductive pcodes (G : ghost) (c : code) : N -> list term -> Prop :=
@@ -2135,7 +2135,7 @@ Section ConvGhost.
   Definition rbody (ts : list term) (N : nat) (br : branch term) : term :=
     subst ts #|br.(bcontext)| (lift N (#|br.(bcontext)| + #|ts|) br.(bbody)).
 
-  Definition cqb (L Q k : nat) (pb : conv_pb) (B1 B2 : term) : Prop :=
+  #[local] Definition cqb (L Q k : nat) (pb : conv_pb) (B1 B2 : term) : Prop :=
     forall U1 U2 : term, B1 = lift (Q - L) k U1 -> B2 = lift (Q - L) k U2 ->
       scl (L + k) U1 -> scl (L + k) U2 -> cv (L + k) pb U1 U2.
 
@@ -2163,7 +2163,7 @@ Section ConvGhost.
       R v1 v2 -> MI L Q lo G s -> Forall (rwf Q) rs -> vwf Q v1 -> vwf Q v2 ->
       g_value nctx Q G v1 w1 -> g_value nctx Q G v2 w2 ->
       conv_rows X_type X Γ nctx d L pb v1 v2 rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb w1 w2).
 
   Definition spec_rows (d : cbn_fuel) : Prop := spec_rows_on d (fun _ _ => True).
 
@@ -2172,7 +2172,7 @@ Section ConvGhost.
       MI L Q lo G s -> Forall (rwf Q) rs -> vwf Q v1 -> vwf Q v2 ->
       g_value nctx Q G v1 w1 -> g_value nctx Q G v2 w2 ->
       conv_value X_type X Γ nctx d L pb v1 v2 rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb w1 w2).
 
   (** All eleven functions at one fuel: the induction hypothesis of the comparison. *)
   Definition spec_all (d : cbn_fuel) : Prop :=
@@ -2243,7 +2243,7 @@ Section ConvGhost.
   Lemma cq_red L Q pb t1 t2 w1 w2 :
     nctx <= L -> L <= Q ->
     cred Γ Σ (jctx (Q - nctx)) t1 w1 -> cred Γ Σ (jctx (Q - nctx)) t2 w2 ->
-    cq L Q pb w1 w2 -> cq L Q pb t1 t2.
+    cbn_lift_conv L Q pb w1 w2 -> cbn_lift_conv L Q pb t1 t2.
   Proof.
     intros hL hQ hr1 hr2 h u1 u2 e1 e2 s1 s2 Δ hΔ hcl. subst t1 t2.
     destruct (cred_unlift Γ nctx Σ wfΣ hΓ L Q u1 w1 hL hQ (scl_hyg L u1 s1) hr1)
@@ -2270,7 +2270,7 @@ Section ConvGhost.
   Qed.
 
   Lemma cqs_cons L Q t1 t2 ts1 ts2 :
-    cq L Q Conv t1 t2 -> cqs L Q ts1 ts2 -> cqs L Q (t1 :: ts1) (t2 :: ts2).
+    cbn_lift_conv L Q Conv t1 t2 -> cqs L Q ts1 ts2 -> cqs L Q (t1 :: ts1) (t2 :: ts2).
   Proof.
     intros h hs us1 us2 e1 e2 s1 s2 Δ hΔ hcl.
     destruct us1 as [|u1 us1]; [discriminate e1|]. destruct us2 as [|u2 us2]; [discriminate e2|].
@@ -2885,14 +2885,14 @@ Section ConvGhost.
   Qed.
 
   (** Two readings of codes [code_eq] accepts, through environments with the same counts whose
-    used slots agree in the sense of [cq], are convertible at any [conv_pb]. The used slots of a
+    used slots agree in the sense of [cbn_lift_conv], are convertible at any [conv_pb]. The used slots of a
     lifted reading are lifts ([cg_occ_inv]); the unused ones do not matter
     ([subst_agree_lift]). *)
   Lemma same_code_cq L Q pb n goff ts1 ts2 a1 a2 :
     nctx <= L -> L <= Q -> #|ts1| = n -> #|ts2| = n ->
     on_free_vars xpredT a1 -> on_free_vars xpredT a2 ->
     samec a1 a2 -> cagree L Q a1 0 ts1 ts2 ->
-    cq L Q pb (subst ts1 0 (lift (Q - nctx + goff) n a1))
+    cbn_lift_conv L Q pb (subst ts1 0 (lift (Q - nctx + goff) n a1))
               (subst ts2 0 (lift (Q - nctx + goff) n a2)).
   Proof.
     intros hL hQ hl1 hl2 hy1 hy2 hsame hag u1 u2 e1 e2 s1 s2 Δ hΔ hcl.
@@ -3017,7 +3017,7 @@ Section ConvGhost.
       g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
       g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
       conv_same_code X_type X Γ nctx d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb t1 t2).
   Proof.
     intros hS L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s' hm hr hs1 hc1 hs2 hc2 he.
     pose proof hm as [hL hLQ hok _].
@@ -3258,7 +3258,7 @@ Section ConvGhost.
     end = COk (b, rs', s') ->
     post L Q G rs s' rs' /\
     (b = true ->
-     cq L Q Conv (subst ts1 0 (lift (Q - nctx + e1.(ev_goff)) e1.(ev_nvals) A1))
+     cbn_lift_conv L Q Conv (subst ts1 0 (lift (Q - nctx + e1.(ev_goff)) e1.(ev_nvals) A1))
                  (subst ts2 0 (lift (Q - nctx + e2.(ev_goff)) e2.(ev_nvals) A2))
      /\ cqb L Q 1 pbb (subst ts1 1 (lift (Q - nctx + e1.(ev_goff)) (S e1.(ev_nvals)) b1))
                       (subst ts2 1 (lift (Q - nctx + e2.(ev_goff)) (S e2.(ev_nvals)) b2))).
@@ -3487,7 +3487,7 @@ Section ConvGhost.
   Qed.
 
   Lemma cq_mkApps L Q pb H1 H2 T1 T2 :
-    nctx <= L -> cq L Q pb H1 H2 -> cqs L Q T1 T2 -> cq L Q pb (mkApps H1 T1) (mkApps H2 T2).
+    nctx <= L -> cbn_lift_conv L Q pb H1 H2 -> cqs L Q T1 T2 -> cbn_lift_conv L Q pb (mkApps H1 T1) (mkApps H2 T2).
   Proof.
     intros hL hh hs u1 u2 e1 e2 s1 s2.
     apply mkApps_lift0_inv in e1 as (h1' & us1 & -> & eh1 & ->).
@@ -3543,7 +3543,7 @@ Section ConvGhost.
       g_susp nctx Q G e1 c1.(c_term) w1 -> gcok G c1 ->
       g_susp nctx Q G e2 c2.(c_term) w2 -> gcok G c2 ->
       cv_same (k tt) L pb v1 v2 e1 c1 e2 c2 false rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb w1 w2).
   Proof.
     intros hS hR L Q lo G pb v1 v2 w1 w2 e1 c1 e2 c2 rs s b rs' s' hm hr hv1 hv2 hw1 hw2
       hs1 hc1 hs2 hc2 he.
@@ -3582,9 +3582,9 @@ Section ConvGhost.
       gcok G c1 -> gcok G c2 ->
       g_slots nctx Q G e1.(ev_vals) ts1 -> g_slots nctx Q G e2.(ev_vals) ts2 ->
       (e1.(ev_goff) = e2.(ev_goff) -> e1.(ev_nvals) = e2.(ev_nvals) ->
-       samec c1.(c_term) c2.(c_term) -> cagree L Q c1.(c_term) 0 ts1 ts2 -> cq L Q pb H1 H2) ->
+       samec c1.(c_term) c2.(c_term) -> cagree L Q c1.(c_term) 0 ts1 ts2 -> cbn_lift_conv L Q pb H1 H2) ->
       cv_same (k tt) L pb v1 v2 e1 c1 e2 c2 true rs s = COk (b, rs', s') ->
-      post L Q G rs s' rs' /\ (b = true -> cq L Q pb (mkApps H1 T1) (mkApps H2 T2)).
+      post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb (mkApps H1 T1) (mkApps H2 T2)).
   Proof.
     intros hS hC hR L Q lo G pb v1 v2 H1 H2 T1 T2 e1 c1 e2 c2 ts1 ts2 rs s b rs' s'
       hm hr hv1 hv2 hw1 hw2 hT1 hT2 hc1 hc2 hts1 hts2 hhead he.
@@ -3628,7 +3628,7 @@ Section ConvGhost.
     pose proof (minv_tick _ _ _ _ _ _ Et hm) as hm0.
     pose proof (gok_codes_hyg X_type X Γ nctx Σ _ Q lo G s hok hhyg) as hch.
     assert (hrows : conv_rows X_type X Γ nctx (k tt) L pb v1 v2 rs s0 = COk (b, rs', s') ->
-              post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2))
+              post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb w1 w2))
       by (intros h; exact (hR L Q lo G pb v1 v2 w1 w2 rs s0 b rs' s' I hm0 hr hv1 hv2 hw1 hw2 h)).
     destruct v1 as [h1 sp1|e1 c1|e1 c1 i1 sp1|e1 c1 i1 sp1|n1 sp1|e1 c1|e1 c1 sp1];
     destruct v2 as [h2 sp2|e2 c2|e2 c2 i2 sp2|e2 c2 i2 sp2|n2 sp2|e2 c2|e2 c2 sp2];
@@ -3867,7 +3867,7 @@ Section ConvGhost.
     and [tick]: they leave the heap, the next address, the context map and the memo alone
     ([rb_state]), so they keep [minv] whatever the readings are ([rb_minv]). *)
 
-  Definition sst (s s' : cbn_state) : Prop :=
+  #[local] Definition sst (s s' : cbn_state) : Prop :=
     s'.(st_heap) = s.(st_heap) /\ s'.(st_next) = s.(st_next) /\ s'.(st_gam) = s.(st_gam)
     /\ s'.(st_memo) = s.(st_memo).
 
@@ -4005,7 +4005,7 @@ Section ConvGhost.
     g_susp nctx Q G e1 a1 H1 -> g_susp nctx Q G e2 a2 H2 ->
     g_addrs G sp1 T1 -> g_addrs G sp2 T2 ->
     head_rb (k tt) L e1 a1 e2 a2 #|sp1| sp1 sp2 rs s = COk (b, rs', s') ->
-    post L Q G rs s' rs' /\ (b = true -> cq L Q pb (mkApps H1 T1) (mkApps H2 T2)).
+    post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb (mkApps H1 T1) (mkApps H2 T2)).
   Proof.
     intros hm hr hy1 hy2 hs1 hs2 hT1 hT2 he.
     pose proof hm as [hL hLQ _ _].
@@ -4116,7 +4116,7 @@ Section ConvGhost.
        | _, _ => COk (false, rs, s)
        end
      else COk (false, rs, s)) = COk (b, rs', s') ->
-    post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
+    post L Q G rs s' rs' /\ (b = true -> cbn_lift_conv L Q pb w1 w2).
   Proof.
     intros hm hr (m1 & idx1 & H1 & T1 & hct1 & hh1 & hc1 & hT1 & ->)
       (m2 & idx2 & H2 & T2 & hct2 & hh2 & hc2 & hT2 & ->) he.
@@ -4181,7 +4181,7 @@ Section ConvGhost.
               | _, _ => COk (false, RV (VStuck e1 c1 sp1) :: RV (VStuck e2 c2 sp2) :: rs, s)
               end) as [[[bK rsK] sK]|w] eqn:EK; [|discriminate he].
     assert (hK' : post L Q G (RV (VStuck e1 c1 sp1) :: RV (VStuck e2 c2 sp2) :: rs) sK rsK
-                  /\ (bK = true -> cq L Q pb H1 H2)).
+                  /\ (bK = true -> cbn_lift_conv L Q pb H1 H2)).
     { destruct (c_term c1) eqn:Ec1;
         try (injection EK as <- <- <-;
              split; [exact (post_refl _ _ _ _ _ _ hm hr0)|intros hb; discriminate hb]).
@@ -4284,7 +4284,7 @@ Section ConvGhost.
     [case_cong] compares the parameters ([case_params]), the return clauses under
     [#|pcontext|] fresh variables ([fresh_tail]), the scrutinees, and the branches
     ([case_branches]). [case_cq] is the conversion: two [tCase] readings whose components
-    agree in the sense of [cqs], [cqb] and [cq] are convertible ([ws_cumul_pb_tCase]). *)
+    agree in the sense of [cqs], [cqb] and [cbn_lift_conv] are convertible ([ws_cumul_pb_tCase]). *)
 
   Lemma pcodes_of_case G c ci p sc brs :
     gcok G c -> c.(c_term) = tCase ci p sc brs -> pcodes G c 0 p.(pparams).
@@ -4413,10 +4413,10 @@ Section ConvGhost.
     cqb L Q #|p1.(pcontext)| Conv
       (subst ts1 #|p1.(pcontext)| (lift N1 (#|p1.(pcontext)| + #|ts1|) p1.(preturn)))
       (subst ts2 #|p1.(pcontext)| (lift N2 (#|p1.(pcontext)| + #|ts2|) p2.(preturn))) ->
-    cq L Q Conv (subst ts1 0 (lift N1 #|ts1| sc1)) (subst ts2 0 (lift N2 #|ts2| sc2)) ->
+    cbn_lift_conv L Q Conv (subst ts1 0 (lift N1 #|ts1| sc1)) (subst ts2 0 (lift N2 #|ts2| sc2)) ->
     Forall2 (fun br1 br2 => case_ctx_ok br1.(bcontext) br2.(bcontext) = true
       /\ cqb L Q #|br1.(bcontext)| Conv (rbody ts1 N1 br1) (rbody ts2 N2 br2)) brs1 brs2 ->
-    cq L Q pb (subst ts1 0 (lift N1 #|ts1| (tCase ci p1 sc1 brs1)))
+    cbn_lift_conv L Q pb (subst ts1 0 (lift N1 #|ts1| (tCase ci p1 sc1 brs1)))
               (subst ts2 0 (lift N2 #|ts2| (tCase ci p2 sc2 brs2))).
   Proof.
     intros hL hLQ Einst Ectx hpar hret hsc hbrs u1 u2 e1 e2 s1 s2 Δ hΔ hcl.
@@ -4734,7 +4734,7 @@ Proof. intros d. eapply spec_all_ind; eassumption. Qed.
   start state satisfies [minv], the inputs have readings, their codes are in the ghost's
   table), that the call returns, and that the conclusion holds: the state part [post] by the
   machine lemma [whnf_master] and, for the run that answers [true], the conversion part
-  [cq] by hand, not by the fuel induction. The answers and final states are obtained by
+  [cbn_lift_conv] by hand, not by the fuel induction. The answers and final states are obtained by
   computation. The only hypotheses are [wf Σ] and [abstract_env_ext_rel X Σ]: the start
   invariant is [run_s2_gok] of [PCUICCallByNeedSoundLevel], the context hypotheses of
   [ConvGhost] hold at both contexts ([w_section], [v_section]), and [hrb] follows from them
@@ -4743,16 +4743,16 @@ Proof. intros d. eapply spec_all_ind; eassumption. Qed.
     [PCUICCallByNeedCounterexamples.term_seam_false] uses. It answers [false], and [post]
     holds after it.
   - [witness_true_run]: [x := (fun n : y => n) y] against [y], at [Conv]. It answers [true]
-    and [cq] holds. *)
+    and [cbn_lift_conv] holds. *)
 
 (** [at_depth F dflt] runs [F] at the fuel one unit below [cbn_depth]. Stating the machine
   calls of a run this way lets [vm_compute] evaluate them at the real fuel with no equation
   between fuels to prove. *)
-Definition at_depth {A : Type} (F : cbn_fuel -> A) (dflt : A) : A :=
+#[local] Definition at_depth {A : Type} (F : cbn_fuel -> A) (dflt : A) : A :=
   match cbn_depth with FS k => F (k tt) | FO => dflt end.
 
 (** The concrete contexts and terms. *)
-Definition w_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
+#[local] Definition w_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
 Definition w_nat : inductive :=
   {| inductive_mind := (MPfile ["Datatypes"; "Init"; "Corelib"], "nat"); inductive_ind := 0 |}.
 Definition w_O : term := tConstruct w_nat 0 [].
@@ -4763,8 +4763,8 @@ Definition w_u : term := tLambda w_na (tInd w_nat []) (tRel 0).
 
 Definition v_Γ : context :=
   [vdef w_na (tApp (tLambda w_na (tRel 0) (tRel 0)) (tRel 0)) (tRel 0); vass w_na (tSort sProp)].
-Definition v_t : term := tRel 0.
-Definition v_u : term := tRel 1.
+#[local] Definition v_t : term := tRel 0.
+#[local] Definition v_u : term := tRel 1.
 
 Section Witness.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
@@ -4843,7 +4843,7 @@ Section Witness.
 
   (** ** A run that answers [false], and [post] holds after it *)
 
-  Definition w_G0 : ghost := run_ghost X_type X w_t w_u.
+  #[local] Definition w_G0 : ghost := run_ghost X_type X w_t w_u.
 
   (** The section hypotheses of [ConvGhost] at [w_Γ]. *)
   Lemma w_section :
@@ -4858,30 +4858,30 @@ Section Witness.
       injection hj as <-. injection hb as <-. reflexivity.
   Qed.
 
-  Definition w_R1 :=
+  #[local] Definition w_R1 :=
     at_depth (fun d => whnf X_type X w_Γ 1 d env_empty (run_c1 X_type X w_t) []
                          [RE env_empty] (run_s2 X_type X w_t w_u)) (CFail WDepth).
-  Definition w_s1 : cbn_state := match w_R1 with COk (_, _, s) => s | CFail _ => cbn_init end.
-  Definition w_R2 :=
+  #[local] Definition w_s1 : cbn_state := match w_R1 with COk (_, _, s) => s | CFail _ => cbn_init end.
+  #[local] Definition w_R2 :=
     at_depth (fun d => whnf X_type X w_Γ 1 d env_empty (run_c2 X_type X w_t w_u) []
                          [RV (VCon w_O [])] w_s1) (CFail WDepth).
-  Definition w_v2 : cbn_value := match w_R2 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
-  Definition w_s2 : cbn_state := match w_R2 with COk (_, _, s) => s | CFail _ => cbn_init end.
-  Definition w_s3 : cbn_state := match tick w_s2 with Some s => s | None => cbn_init end.
+  #[local] Definition w_v2 : cbn_value := match w_R2 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
+  #[local] Definition w_s2 : cbn_state := match w_R2 with COk (_, _, s) => s | CFail _ => cbn_init end.
+  #[local] Definition w_s3 : cbn_state := match tick w_s2 with Some s => s | None => cbn_init end.
 
-  Lemma w_E1 :
+  #[local] Lemma w_E1 :
     at_depth (fun d => whnf X_type X w_Γ 1 d env_empty (run_c1 X_type X w_t) []
                          [RE env_empty] (run_s2 X_type X w_t w_u)) (CFail WDepth)
     = COk (VCon w_O [], [RE env_empty], w_s1).
   Proof. vm_compute. reflexivity. Qed.
 
-  Lemma w_E2 :
+  #[local] Lemma w_E2 :
     at_depth (fun d => whnf X_type X w_Γ 1 d env_empty (run_c2 X_type X w_t w_u) []
                          [RV (VCon w_O [])] w_s1) (CFail WDepth)
     = COk (w_v2, [RV (VCon w_O [])], w_s2).
   Proof. vm_compute. reflexivity. Qed.
 
-  Lemma w_E3 :
+  #[local] Lemma w_E3 :
     at_depth (fun d => conv_value X_type X w_Γ 1 d 1 Conv (VCon w_O []) w_v2 [] w_s2)
       (CFail WDepth) = COk (false, [], w_s3).
   Proof. vm_compute. reflexivity. Qed.
@@ -4919,7 +4919,7 @@ Section Witness.
 
   (** ** A run that answers [true], with its conversion claim *)
 
-  Definition v_G0 : ghost := run_ghost X_type X v_t v_u.
+  #[local] Definition v_G0 : ghost := run_ghost X_type X v_t v_u.
 
   (** The section hypotheses of [ConvGhost] at [v_Γ]. *)
   Lemma v_section :
@@ -4936,31 +4936,31 @@ Section Witness.
       + injection hj as <-. discriminate hb.
   Qed.
 
-  Definition v_R1 :=
+  #[local] Definition v_R1 :=
     at_depth (fun d => whnf X_type X v_Γ 2 d env_empty (run_c1 X_type X v_t) []
                          [RE env_empty] (run_s2 X_type X v_t v_u)) (CFail WDepth).
-  Definition v_v1 : cbn_value := match v_R1 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
-  Definition v_s1 : cbn_state := match v_R1 with COk (_, _, s) => s | CFail _ => cbn_init end.
-  Definition v_R2 :=
+  #[local] Definition v_v1 : cbn_value := match v_R1 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
+  #[local] Definition v_s1 : cbn_state := match v_R1 with COk (_, _, s) => s | CFail _ => cbn_init end.
+  #[local] Definition v_R2 :=
     at_depth (fun d => whnf X_type X v_Γ 2 d env_empty (run_c2 X_type X v_t v_u) []
                          [RV v_v1] v_s1) (CFail WDepth).
-  Definition v_v2 : cbn_value := match v_R2 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
-  Definition v_s2 : cbn_state := match v_R2 with COk (_, _, s) => s | CFail _ => cbn_init end.
-  Definition v_s3 : cbn_state := match tick v_s2 with Some s => s | None => cbn_init end.
+  #[local] Definition v_v2 : cbn_value := match v_R2 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
+  #[local] Definition v_s2 : cbn_state := match v_R2 with COk (_, _, s) => s | CFail _ => cbn_init end.
+  #[local] Definition v_s3 : cbn_state := match tick v_s2 with Some s => s | None => cbn_init end.
 
-  Lemma v_E1 :
+  #[local] Lemma v_E1 :
     at_depth (fun d => whnf X_type X v_Γ 2 d env_empty (run_c1 X_type X v_t) []
                          [RE env_empty] (run_s2 X_type X v_t v_u)) (CFail WDepth)
     = COk (v_v1, [RE env_empty], v_s1).
   Proof. vm_compute. reflexivity. Qed.
 
-  Lemma v_E2 :
+  #[local] Lemma v_E2 :
     at_depth (fun d => whnf X_type X v_Γ 2 d env_empty (run_c2 X_type X v_t v_u) []
                          [RV v_v1] v_s1) (CFail WDepth)
     = COk (v_v2, [RV v_v1], v_s2).
   Proof. vm_compute. reflexivity. Qed.
 
-  Lemma v_E3 :
+  #[local] Lemma v_E3 :
     at_depth (fun d => conv_value X_type X v_Γ 2 d 2 Conv v_v1 v_v2 [] v_s2)
       (CFail WDepth) = COk (true, [], v_s3).
   Proof. vm_compute. reflexivity. Qed.
@@ -4977,7 +4977,7 @@ Section Witness.
     - apply PCUICReduction.red1_red. exact (PCUICReduction.red_beta Σ v_Γ w_na (tRel 1) (tRel 0) (tRel 1)).
   Qed.
 
-  Lemma v_cq : cq v_Γ 2 Σ 2 2 Conv v_t v_u.
+  #[local] Lemma v_cq : cbn_lift_conv v_Γ 2 Σ 2 2 Conv v_t v_u.
   Proof.
     intros u1 u2 e1 e2 _ _. rewrite Nat.sub_diag, lift0_id in e1, e2. subst u1 u2.
     intros Δ hΔ hcl. destruct Δ as [|? Δ]; [|discriminate hΔ].
@@ -4997,7 +4997,7 @@ Section Witness.
          conv_term X_type X v_Γ 2 cbn_depth 2 Conv env_empty (run_c1 X_type X v_t)
            env_empty (run_c2 X_type X v_t v_u) [] (run_s2 X_type X v_t v_u) = COk (true, [], s')
          /\ post X_type X v_Γ 2 Σ 2 2 v_G0 [] s' []
-         /\ cq v_Γ 2 Σ 2 2 Conv v_t v_u.
+         /\ cbn_lift_conv v_Γ 2 Σ 2 2 Conv v_t v_u.
   Proof.
     assert (hm0 : minv X_type X v_Γ 2 Σ 2 2 xH v_G0 (run_s2 X_type X v_t v_u))
       by exact (r_minv_start v_Γ 2 v_t v_u eq_refl

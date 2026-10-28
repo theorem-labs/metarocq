@@ -25,7 +25,7 @@ From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
   [Δ = []], level [#|Γ|]), the two codes in the ghost's table and their readings [t] and
   [u]; with the empty heap ([run_s2_heap]) this is [minv] at [L = Q = #|Γ|]
   ([minv_start]). [spec_term] at [cbn_depth] then turns the answer [true] into
-  [cq L L le t u]. With [Q - L = 0] the lift is the identity, [t] and [u] are scoped at
+  [cbn_lift_conv L L le t u]. With [Q - L = 0] the lift is the identity, [t] and [u] are scoped at
   [#|Γ|] ([subject_closed]), and [Δ = []] gives the conversion in [Γ] itself.
 
   The comparison theorem [forall d, spec_all d] is [PCUICCallByNeedSoundConv.spec_all_holds].
@@ -47,10 +47,10 @@ Section HookProof.
     = match cbn_run X_type X Γ #|Γ| le t u with CbnYes => true | _ => false end.
   Proof. reflexivity. Qed.
 
-  (** [cq] at [L = Q = #|Γ|], read at [Δ = []], for two terms scoped in [Γ]. *)
+  (** [cbn_lift_conv] at [L = Q = #|Γ|], read at [Δ = []], for two terms scoped in [Γ]. *)
   Lemma cq_hook (Σ : global_env_ext) (Γ : context) (le : conv_pb) (t u : term) :
     is_closed_context Γ -> closedn #|Γ| t -> closedn #|Γ| u ->
-    cq Γ #|Γ| Σ #|Γ| #|Γ| le t u -> ∥ Σ ;;; Γ ⊢ t ≤[le] u ∥.
+    cbn_lift_conv Γ #|Γ| Σ #|Γ| #|Γ| le t u -> ∥ Σ ;;; Γ ⊢ t ≤[le] u ∥.
   Proof.
     intros hΓ hct hcu hq.
     assert (e : forall v : term, v = lift0 (#|Γ| - #|Γ|) v)

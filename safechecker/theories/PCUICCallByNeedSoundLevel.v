@@ -556,7 +556,7 @@ Section Instances.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Σ : global_env_ext).
 
-  Definition G0 : ghost := mkGhost (fun _ => None) (PTree.empty _).
+  #[local] Definition G0 : ghost := mkGhost (fun _ => None) (PTree.empty _).
 
   (** The satisfying instance of [rb_case] (the interface [rb_sound]) at a real call that
     returns: the read-back of a sort in the empty environment, at the start state. *)

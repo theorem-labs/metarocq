@@ -336,7 +336,7 @@ Section GhostShiftCounterexample.
 
   (** Every ghost term mapped by [φ]; [gshift] ([PCUICCallByNeedSoundLevel]) lifts them. *)
 
-  Definition gmap (φ : term -> term) (G : ghost) : ghost :=
+  #[local] Definition gmap (φ : term -> term) (G : ghost) : ghost :=
     mkGhost (fun a => option_map φ (G a)) (gc G).
 
   (** A variable without a body reduces only to itself. *)
@@ -362,7 +362,7 @@ Section GhostShiftCounterexample.
   Qed.
 
   Definition gs_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
-  Definition gs_d : context_decl := vass gs_na (tSort sProp).
+  #[local] Definition gs_d : context_decl := vass gs_na (tSort sProp).
   Definition gs_var (l : nat) : cbn_cell := CDone (VNeu (NVar l) []).
 
   (** The cell of the fresh variable at level [l] reads, at level [lvl], as [tRel (lvl - S l)]. *)
@@ -474,17 +474,17 @@ End GhostShiftCounterexample.
   excludes. *)
 
 Definition rw_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
-Definition rw_d : context_decl := vass rw_na (tSort sProp).
+#[local] Definition rw_d : context_decl := vass rw_na (tSort sProp).
 Definition rw_ind : inductive :=
   {| inductive_mind := (MPfile ["RW"], "rw"); inductive_ind := 0 |}.
 Definition rw_ci : case_info := {| ci_ind := rw_ind; ci_npar := 0; ci_relevance := Relevant |}.
-Definition rw_p : predicate term :=
+#[local] Definition rw_p : predicate term :=
   {| pparams := []; puinst := []; pcontext := []; preturn := tSort sProp |}.
 (** A branch whose context is one let-binding of [tRel 0]: a variable outside the match. *)
 Definition rw_br (b : term) : branch term :=
   {| bcontext := [vdef rw_na (tRel 0) (tSort sProp)]; bbody := b |}.
 Definition rw_case (b : term) : term := tCase rw_ci rw_p (tConstruct rw_ind 0 []) [rw_br b].
-Definition rw_w : term := rw_case (tRel 0).
+#[local] Definition rw_w : term := rw_case (tRel 0).
 
 Lemma rw_w_unhygienic : on_free_vars xpredT rw_w = false.
 Proof. reflexivity. Qed.

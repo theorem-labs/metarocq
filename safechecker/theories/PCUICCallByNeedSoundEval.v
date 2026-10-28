@@ -140,7 +140,7 @@ Qed.
 
 (** The fixpoints of a [tFix] code read through an environment: [subst ts 0] of
   [lift K n] of each definition, under the [#|mfix|] binders of the block. *)
-Definition rfix (ts : list term) (K n : nat) (mfix : mfixpoint term) : mfixpoint term :=
+#[local] Definition rfix (ts : list term) (K n : nat) (mfix : mfixpoint term) : mfixpoint term :=
   map (map_def (subst ts 0) (subst ts (#|mfix| + 0)))
     (map (map_def (lift K n) (lift K (#|mfix| + n))) mfix).
 
@@ -220,7 +220,7 @@ Proof.
 Qed.
 
 (** A branch read through an environment: its body under the branch's own binders. *)
-Definition rbr (ts : list term) (K n : nat) (br : branch term) : branch term :=
+#[local] Definition rbr (ts : list term) (K n : nat) (br : branch term) : branch term :=
   {| bcontext := br.(bcontext);
      bbody := subst ts #|br.(bcontext)| (lift K (#|br.(bcontext)| + n) br.(bbody)) |}.
 
@@ -546,7 +546,7 @@ Section Eval.
 
   (** ** Every address a reading names has a ghost term *)
 
-  Definition gdef (G : haddr -> option term) (a : haddr) : Prop := exists t, G a = Some t.
+  #[local] Definition gdef (G : haddr -> option term) (a : haddr) : Prop := exists t, G a = Some t.
 
   Lemma g_slot_ad G :
     (forall x t, g_slot G x t -> Forall (gdef G) (ad_slot x))
@@ -673,7 +673,7 @@ Section Eval.
   (** The memo of the state: the invariants of the memo files ([memo_inv], [memo_ok]); the
     ghost's code table [K] is part of the real one; every entry of the real one names its
     constants at the right instance length; and, under [ctx_hyg], every entry is hygienic. *)
-  Definition mok (K : PTree.t code_entry) (s : cbn_state) : Prop :=
+  #[local] Definition mok (K : PTree.t code_entry) (s : cbn_state) : Prop :=
     memo_inv X_type X s /\ memo_ok X_type X s
     /\ (forall i e, PTree.get i K = Some e -> PTree.get i ((s.(st_memo)).(m_codes)) = Some e)
     /\ (forall i e, PTree.get i ((s.(st_memo)).(m_codes)) = Some e ->
@@ -1362,7 +1362,7 @@ Section Eval.
       gg_rng : forall b t, Gn b = Some t -> exists x, G x = Some t }.
 
     (** What the walk asks of the address map it threads through the renamings. *)
-    Definition cpg (cp : haddr -> gc_state -> cbn_res (haddr * gc_state)) : Prop :=
+    #[local] Definition cpg (cp : haddr -> gc_state -> cbn_res (haddr * gc_state)) : Prop :=
       forall a g a' g' Gn, gcg Gn g -> cp a g = COk (a', g') ->
         exists Gn', gcg Gn' g' /\ gext Gn Gn' /\ (forall t, G a = Some t -> Gn' a' = Some t).
 
