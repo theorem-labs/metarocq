@@ -175,4 +175,6 @@ theories/PCUICEtaCanonC4.v
 theories/PCUICEtaFInstGlue.v
 # L2 obligation 8 (STAGED AT FollowSpec), A4: join => spec bridges independent of U1'
 theories/PCUICEtaJoinSpec.v
+# L2 obligation 8 (STAGED AT FollowSpec), A4: t ≈ canon t in the E-spec
+theories/PCUICEtaCanonSpec.v
 # theories/All.v
