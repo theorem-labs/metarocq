@@ -1477,7 +1477,6 @@ Qed.
       all:cbn in H; rtoProp; intuition eauto. solve_all.
     - destruct t => //; constructor; auto.
   Qed.
-  Local Notation pred1_rename := pred1_rename_cb (only parsing).
 
   Lemma weakening_pred1_cb {Σ} {wfΣ : ClosedBodies Σ} {P Γ Γ' Γ'' Δ Δ' Δ'' M N} :
     pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') M N ->
@@ -1496,13 +1495,13 @@ Qed.
     pose proof (pred1_pred1_ctx _ H).
     eapply on_contexts_length in X. len in X.
     assert (#|Δ'| = #|Γ'|)  by lia. rewrite -H1.
-    eapply (fst pred1_rename _ _ _ _ ). tea.
+    eapply (fst pred1_rename_cb _ _ _ _ ). tea.
     { pose proof (pred1_pred1_ctx _ H).
       eapply on_contexts_app_inv in X0 as [] => //.
       eapply on_contexts_app.
       eapply on_contexts_app => //.
       rewrite - !rename_context_lift_context.
-      eapply (snd pred1_rename).
+      eapply (snd pred1_rename_cb).
       5:{ eapply on_contexts_app => //. } exact a.
       2:tea. assumption.
       eapply (weakening_renaming _ Γ []).
@@ -1517,7 +1516,6 @@ Qed.
     rewrite H0. apply weakening_renaming.
     2:tea. tea.
   Qed.
-  Local Notation weakening_pred1 := weakening_pred1_cb (only parsing).
 
   Lemma weakening_pred1_pred1_cb {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ Γ' Δ' M N} :
     pred1_ctx_over Σ Γ Δ Γ' Δ' ->
@@ -1526,13 +1524,12 @@ Qed.
     pred1 Σ Γ Δ M N ->
     pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') (lift0 #|Γ'| M) (lift0 #|Δ'| N).
   Proof.
-    intros; eapply (weakening_pred1 (Γ' := []) (Δ' := [])); eauto.
+    intros; eapply (weakening_pred1_cb (Γ' := []) (Δ' := [])); eauto.
     now rewrite shiftnP0.
     now rewrite shiftnP0.
     pose proof (pred1_pred1_ctx _ X0).
     now rewrite (on_contexts_length X1).
   Qed.
-  Local Notation weakening_pred1_pred1 := weakening_pred1_pred1_cb (only parsing).
 
   Lemma weakening_pred1_0_cb {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ Γ' M N} :
     pred1 Σ Γ Δ M N ->
@@ -1541,10 +1538,9 @@ Qed.
     pred1 Σ (Γ ,,, Γ') (Δ ,,, Γ') (lift0 #|Γ'| M) (lift0 #|Γ'| N).
   Proof.
     intros p onΓ onM.
-    eapply weakening_pred1_pred1; tea.
+    eapply weakening_pred1_pred1_cb; tea.
     apply on_contexts_over_refl; pcuic.
   Qed.
-  Local Notation weakening_pred1_0 := weakening_pred1_0_cb (only parsing).
 
   Lemma on_contexts_over_pred1_ctx Σ Γ Γ' Δ Δ' :
     #|Δ| = #|Δ'| ->
@@ -1586,7 +1582,6 @@ End ParallelWeakening.
 Hint Resolve pred1_pred1_ctx : pcuic.
 
 Section ParallelSubstitution.
-  Local Notation weakening_pred1_pred1 := weakening_pred1_pred1_cb (only parsing).
   Context {cf : checker_flags}.
 
   Inductive psubst Σ (Γ Γ' : context) : list term -> list term -> context -> context -> Type :=
@@ -1822,7 +1817,7 @@ Section ParallelSubstitution.
     apply on_free_vars_lift0. rewrite addnP_shiftnP //.
     split.
     unfold subst_compose. rewrite - !(lift0_inst 1).
-    eapply (weakening_pred1_pred1 (Γ' := [_]) (Δ' := [_])); auto.
+    eapply (weakening_pred1_pred1_cb (Γ' := [_]) (Δ' := [_])); auto.
     repeat (constructor; auto). tea. tas.
     intros decl hnth. specialize (y decl hnth).
     destruct decl_body => //.
@@ -1831,10 +1826,9 @@ Section ParallelSubstitution.
     rewrite -(Nat.add_1_r (S x)).
     rewrite -shiftk_compose subst_compose_assoc shift_Up_comm -subst_compose_assoc shiftk_shift
       -inst_assoc - !(lift0_inst 1). reflexivity.
-    eapply (weakening_pred1_pred1 (Γ' := [_]) (Δ' := [_])); tea.
+    eapply (weakening_pred1_pred1_cb (Γ' := [_]) (Δ' := [_])); tea.
     repeat (constructor; auto).
   Qed.
-  Local Notation pred1_subst_Up := pred1_subst_Up_cb (only parsing).
 
   Lemma pred1_subst_vdef_Up_cb {wfΣ : ClosedBodies Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname)
     (b0 b1 t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
@@ -1865,7 +1859,7 @@ Section ParallelSubstitution.
       split; [|split]; auto.
       * rewrite /subst_compose -(lift0_inst 1). eapply on_free_vars_lift0; rewrite addnP_shiftnP //.
       * rewrite /subst_compose - !(lift0_inst 1).
-        eapply (weakening_pred1_pred1 (Γ' := [_]) (Δ' := [_])); eauto.
+        eapply (weakening_pred1_pred1_cb (Γ' := [_]) (Δ' := [_])); eauto.
         repeat (constructor; auto).
       * intros decl hnth. specialize (Hrel decl hnth).
         destruct decl_body => //.
@@ -1874,10 +1868,9 @@ Section ParallelSubstitution.
         eapply simpl_pred. rewrite -(lift0_inst 1) //.
         rewrite -(Nat.add_1_r (S x)) -(shiftk_compose _ 1) subst_compose_assoc shift_Up_comm shiftk_shift
           -subst_compose_assoc -inst_assoc -(lift0_inst 1) //.
-        eapply (weakening_pred1_pred1 (Γ' := [_]) (Δ' := [_])); eauto.
+        eapply (weakening_pred1_pred1_cb (Γ' := [_]) (Δ' := [_])); eauto.
         repeat (constructor; auto).
   Qed.
-  Local Notation pred1_subst_vdef_Up := pred1_subst_vdef_Up_cb (only parsing).
 
   Lemma leb_S x y : S x <= y -> x <? y.
   Proof. intros. apply Nat.leb_le. lia. Qed.
@@ -1952,7 +1945,7 @@ Section ParallelSubstitution.
         unfold subst_compose. rewrite - !(lift0_inst _).
         rewrite -{1 2}len0.
         relativize #|Δ1|. relativize #|Δ0|.
-        eapply weakening_pred1_pred1; tea. now len. len. rewrite -len0. exact pred.
+        eapply weakening_pred1_pred1_cb; tea. now len. len. rewrite -len0. exact pred.
         all:now len.
       * intros decl hnth.
         rewrite nth_error_app_ge in hnth. lia.
@@ -1965,14 +1958,13 @@ Section ParallelSubstitution.
         unfold subst_compose at 1. rewrite - !(lift0_inst _).
         eapply simpl_pred; revgoals. 3:reflexivity.
         relativize #|Δ0|.
-        eapply weakening_pred1_pred1; tea. now len. len. exact p'. now len.
+        eapply weakening_pred1_pred1_cb; tea. now len. len. exact p'. now len.
         rewrite lift0_inst inst_assoc. apply inst_ext.
         rewrite subst_compose_assoc; len. rewrite -len0.
         rewrite -{2}(shiftn_Upn #|Δ0|) -subst_compose_assoc shiftk_compose.
         len in l. replace (S (x - #|Δ0|) + #|Δ0|) with (S x) by lia.
         reflexivity.
   Qed.
-  Local Notation pred1_subst_Upn := pred1_subst_Upn_cb (only parsing).
 
   Lemma pred1_subst_up_cb {wfΣ : ClosedBodies Σ} {P Q : nat -> bool} {Γ Γ' Δ Δ'} (σ τ : nat -> term) (Δ0 Δ1 : context) n :
     n = #|Δ0| ->
@@ -1987,10 +1979,9 @@ Section ParallelSubstitution.
     intros -> ps onΔ oniΔ a a'.
     eapply pred1_subst_ext; tea. intros i; reflexivity. reflexivity.
     1-2:rewrite up_Upn //.
-    eapply pred1_subst_Upn => //.
+    eapply pred1_subst_Upn_cb => //.
   Qed.
-  Local Notation pred1_subst_up := pred1_subst_up_cb (only parsing).
-  Hint Resolve pred1_subst_up : pcuic.
+  Hint Resolve pred1_subst_up_cb : pcuic.
 
   Ltac simpl_pred :=
     eapply simpl_pred;
@@ -2095,7 +2086,7 @@ Section ParallelSubstitution.
         + rewrite -(length_of X).
           eapply All2_fold_All_fold_mix_left_inv in X as [fvs X].
           eapply All2_fold_All_fold_mix_left_inv in X as [fvs' X].
-          eapply pred1_subst_Upn; len => //; tea.
+          eapply pred1_subst_Upn_cb; len => //; tea.
           now move/All_fold_on_free_vars_ctx: fvs'.
           eapply (snd (All_fold_fold_context_k (fun Γ d => on_free_vars_decl (shiftnP #|Γ| Q) d) (fun k => inst (⇑^k σ')) _)) in fvs.
           move/All_fold_on_free_vars_ctx: fvs.
@@ -2111,7 +2102,7 @@ Section ParallelSubstitution.
         specialize (X2 P Q _ _ _ _ ont0 onit0 Hrel).
         specialize (X0 (shiftnP 1 P) (shiftnP 1 Q) (Δ ,, vass na t0.[σ]) (Δ' ,, vass na t1.[τ]) (⇑ σ) (⇑ τ) onb0).
         forward X0. now rewrite -up_Up.
-        forward X0. eapply pred1_subst_Up; auto.
+        forward X0. eapply pred1_subst_Up_cb; auto.
         specialize (X4 P Q _ _ _ _ b2 b Hrel).
         eapply (pred_beta _ _ _ _ _ _ _ _ _ _ X2 X0 X4). }
 
@@ -2134,7 +2125,7 @@ Section ParallelSubstitution.
         econstructor; eauto.
         eapply X4; eauto.
         now rewrite -up_Up.
-        eapply pred1_subst_vdef_Up; eauto. }
+        eapply pred1_subst_vdef_Up_cb; eauto. }
 
     - simpl. now apply Hrel.
 
@@ -2185,7 +2176,7 @@ Section ParallelSubstitution.
           rewrite {2}b0.
           eapply b; tea.
           eapply pred1_subst_ext.
-          5:eapply pred1_subst_Upn; len => //.
+          5:eapply pred1_subst_Upn_cb; len => //.
           1-2:now len.
           1-2:now sigma.
           { eapply on_free_vars_ctx_inst_case_context; tea => //. solve_all. }
@@ -2230,7 +2221,7 @@ Section ParallelSubstitution.
         { now move/andP: a0 => []. }
         { move/andP: a => [] /=. len. rewrite up_Upn; eauto. }
         rewrite -(fix_context_length mfix0); auto with pcuic.
-        eapply pred1_subst_Upn; auto with pcuic.
+        eapply pred1_subst_Upn_cb; auto with pcuic.
       + unfold unfold_fix. rewrite nth_error_map Heq. simpl.
         rewrite !subst_inst. do 2 apply f_equal. sigma. apply inst_ext.
         rewrite -{2}(Upn_0 τ).
@@ -2268,7 +2259,7 @@ Section ParallelSubstitution.
         eapply b; tea. now rewrite -up_Upn ?fix_context_length.
         rewrite length_map -(fix_context_length mfix0); auto with pcuic.
         relativize #|fix_context mfix1|.
-        eapply pred1_subst_Upn; rewrite ?inst_context_length;
+        eapply pred1_subst_Upn_cb; rewrite ?inst_context_length;
           auto with pcuic.
         now len.
       + unfold unfold_cofix. rewrite nth_error_map Heq. simpl.
@@ -2296,7 +2287,7 @@ Section ParallelSubstitution.
         now rewrite -(All2_length X5).
         eapply X8; tea.
         rewrite -H1. relativize #|pcontext p0|.
-        eapply pred1_subst_up; len => //.
+        eapply pred1_subst_up_cb; len => //.
         eapply pred1_pred1_ctx in X7.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
         rewrite !inst_inst_case_context_wf //.
@@ -2324,7 +2315,7 @@ Section ParallelSubstitution.
         now rewrite -(All2_length X5).
         eapply b; tea.
         relativize #|bcontext x|. relativize #|bcontext y|.
-        eapply pred1_subst_up.
+        eapply pred1_subst_up_cb.
         all:len => //; try lia.
         { eapply on_free_vars_ctx_inst_case_context; tea; solve_all. }
         { rewrite !inst_inst_case_context_wf //.
@@ -2368,7 +2359,7 @@ Section ParallelSubstitution.
         relativize #|fix_context mfix1|.
         rewrite length_map.
         rewrite -(fix_context_length mfix0).
-        eapply pred1_subst_Upn; rewrite ?inst_context_length ?fix_context_length;
+        eapply pred1_subst_Upn_cb; rewrite ?inst_context_length ?fix_context_length;
           auto with pcuic. now len.
       + unfold unfold_cofix. rewrite nth_error_map Heq. simpl.
         rewrite !subst_inst. do 2 apply f_equal. sigma. apply inst_ext.
@@ -2396,7 +2387,7 @@ Section ParallelSubstitution.
     - (* Lambda congruence *)
       sigma. econstructor. pcuic. eapply X2; tea.
       now rewrite -up_Up.
-      now eapply pred1_subst_Up.
+      now eapply pred1_subst_Up_cb.
 
     - (* App congruence *)
       sigma; auto with pcuic.
@@ -2405,7 +2396,7 @@ Section ParallelSubstitution.
     - (* Let congruence *)
       sigma. econstructor; eauto. eapply X4; tea.
       now rewrite -up_Up.
-      eapply pred1_subst_vdef_Up; eauto.
+      eapply pred1_subst_vdef_Up_cb; eauto.
 
     - (* Case congruence *)
       simpl.
@@ -2428,7 +2419,7 @@ Section ParallelSubstitution.
         now rewrite -(All2_length X1) /= -H0.
         rewrite -H0.
         relativize #|pcontext p0|.
-        eapply pred1_subst_up; len; try lia; tea.
+        eapply pred1_subst_up_cb; len; try lia; tea.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
         rewrite !inst_inst_case_context_wf //.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
@@ -2448,7 +2439,7 @@ Section ParallelSubstitution.
         rewrite - !inst_inst_case_context_wf //.
         now rewrite /= -(All2_length X1) -b0.
         relativize #|bcontext x|. relativize #|bcontext y|.
-        eapply pred1_subst_up; len => //.
+        eapply pred1_subst_up_cb; len => //.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
         rewrite !inst_inst_case_context_wf //.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
@@ -2495,7 +2486,7 @@ Section ParallelSubstitution.
       cbn in onid. now rewrite -up_Upn fix_context_length //.
       rewrite length_map -(fix_context_length mfix0).
       relativize #|fix_context mfix1|.
-      eapply pred1_subst_Upn; rewrite ?inst_context_length ?fix_context_length //. now len.
+      eapply pred1_subst_Upn_cb; rewrite ?inst_context_length ?fix_context_length //. now len.
 
     - (* CoFix congruence *)
       sigma. pose proof (pred1_subst_pred1_ctx Hrel).
@@ -2525,13 +2516,13 @@ Section ParallelSubstitution.
       cbn in onid. now rewrite -up_Upn fix_context_length //.
       rewrite length_map -(fix_context_length mfix0).
       relativize #|fix_context mfix1|.
-      eapply pred1_subst_Upn; rewrite ?inst_context_length ?fix_context_length //. now len.
+      eapply pred1_subst_Upn_cb; rewrite ?inst_context_length ?fix_context_length //. now len.
 
     - (* Prod Congruence *)
       sigma. econstructor; eauto with pcuic.
       eapply X2; auto with pcuic; try eapply Up_ctxmap; auto with pcuic; tea.
       now rewrite -up_Up.
-      apply pred1_subst_Up; eauto.
+      apply pred1_subst_Up_cb; eauto.
 
     - sigma. simpl. constructor; auto with pcuic. solve_all.
 
@@ -2540,7 +2531,6 @@ Section ParallelSubstitution.
       eauto; try eapply Hrel; constructor; rtoProp; cbn; intuition eauto. solve_all.
     - rewrite !pred_atom_inst; auto. eapply pred1_refl_gen; auto with pcuic.
   Qed.
-  Local Notation strong_substitutivity := strong_substitutivity_cb (only parsing).
 
   Hint Rewrite subst0_inst : sigma.
 
@@ -2591,7 +2581,6 @@ Section ParallelSubstitution.
           now rewrite -subst0_inst.
         + now destruct (IHps x eq_refl) as [? []].
   Qed.
-  Local Notation psubst_pred1_subst := psubst_pred1_subst_cb (only parsing).
 
   Lemma pred1_subst_context_cb {wfΣ : ClosedBodies Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s'} :
     psubst Σ Γ Γ1 s s' Δ Δ1 ->
@@ -2609,15 +2598,14 @@ Section ParallelSubstitution.
     eapply on_contexts_app_inv in hM as []; len; try lia.
     eapply on_contexts_app_inv in a as []; len; try lia.
     eapply on_contexts_app => //.
-    eapply (snd strong_substitutivity).
+    eapply (snd strong_substitutivity_cb).
     2:tea.
     eapply on_contexts_app => //.
-    3:{ eapply psubst_pred1_subst => //. }
+    3:{ eapply psubst_pred1_subst_cb => //. }
     assumption.
     rewrite -subst_context0_inst_context.
     eapply on_free_vars_ctx_subst_context_xpredT => //. solve_all.
   Qed.
-  Local Notation pred1_subst_context := pred1_subst_context_cb (only parsing).
 
   (** Parallel reduction is substitutive. *)
   Lemma substitution_let_pred1_cb {wfΣ : ClosedBodies Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N} :
@@ -2636,7 +2624,7 @@ Section ParallelSubstitution.
     assert (pred1_ctx Σ (Γ,,, inst_context (s ⋅n ids) Γ') (Γ1,,, inst_context (s' ⋅n ids) Γ'1)).
     { eapply pred1_pred1_ctx in hM.
       rewrite - !subst_context0_inst_context.
-      eapply pred1_subst_context; tea. }
+      eapply pred1_subst_context_cb; tea. }
     rewrite !subst_context0_inst_context.
     pose proof (pred1_pred1_ctx _ hM).
     pose proof (on_contexts_length hctx).
@@ -2644,14 +2632,14 @@ Section ParallelSubstitution.
     2:len; try lia.
     eapply on_contexts_app_inv in a as [].
     2:lia.
-    eapply psubst_pred1_subst in Hs => //.
+    eapply psubst_pred1_subst_cb in Hs => //.
     have onΓ'i := (on_free_vars_ctx_subst_context_xpredT s _ onΓ' (All_forallb _ _ ons)).
     rewrite subst_context0_inst_context in onΓ'i.
-    pose proof (pred1_subst_Upn eq_refl onΓ' onΓ'i Hs a0).
+    pose proof (pred1_subst_Upn_cb eq_refl onΓ' onΓ'i Hs a0).
     eapply on_contexts_app_inv in X as [] => //.
     specialize (X0 a3).
     rewrite -hl'.
-    eapply strong_substitutivity. tea.
+    eapply strong_substitutivity_cb. tea.
     3:tea.
     now rewrite hl'.
     rewrite -subst_inst.
@@ -2662,7 +2650,6 @@ Section ParallelSubstitution.
     unshelve eapply (on_free_vars_impl _ _ _ _ H0).
     rewrite /substP /shiftnP. intros i. destruct Nat.ltb => //.
   Qed.
-  Local Notation substitution_let_pred1 := substitution_let_pred1_cb (only parsing).
 
   Hint Constructors psubst : pcuic.
   Hint Transparent vass vdef : pcuic.
@@ -2676,7 +2663,7 @@ Section ParallelSubstitution.
     pred1 Σ Γ Δ (subst1 M 0 N) (subst1 M' 0 N').
   Proof.
     intros onΓ onM onN redM redN.
-    pose proof (@substitution_let_pred1 wfΣ Γ [vass na A] [] Δ [vass na' A'] [] [M] [M'] N N') as H.
+    pose proof (@substitution_let_pred1_cb wfΣ Γ [vass na A] [] Δ [vass na' A'] [] [M] [M'] N N') as H.
     forward H. { constructor; auto with pcuic.
       apply pred1_pred1_ctx in redN.
       depelim redN. pcuic. now depelim a. }
@@ -2689,7 +2676,6 @@ Section ParallelSubstitution.
     do 2 forward H => //.
     apply (H redN).
   Qed.
-  Local Notation substitution0_pred1 := substitution0_pred1_cb (only parsing).
 
   Lemma substitution0_let_pred1_cb {wfΣ : ClosedBodies Σ} {Γ Δ na na' M M' A A' N N'} :
     on_ctx_free_vars xpredT Γ ->
@@ -2700,7 +2686,7 @@ Section ParallelSubstitution.
     pred1 Σ Γ Δ (subst1 M 0 N) (subst1 M' 0 N').
   Proof.
     intros onΓ onM onN redM redN.
-    pose proof (@substitution_let_pred1 wfΣ Γ [vdef na M A] [] Δ [vdef na' M' A'] [] [M] [M'] N N') as H.
+    pose proof (@substitution_let_pred1_cb wfΣ Γ [vdef na M A] [] Δ [vdef na' M' A'] [] [M] [M'] N N') as H.
     forward H. {
       pose proof (psubst_vdef Σ Γ Δ [] [] [] [] na na' M M' A A').
       rewrite !subst_empty in X. apply X; pcuic.
@@ -2715,45 +2701,179 @@ Section ParallelSubstitution.
     do 2 forward H => //.
     apply (H redN).
   Qed.
-  Local Notation substitution0_let_pred1 := substitution0_let_pred1_cb (only parsing).
 
 End ParallelSubstitution.
 
+(** * The trunk statements, under [wf Σ]
 
+  Each statement below is trunk's, as written in trunk; it follows from its
+  [ClosedBodies] version [_cb] through the instance [wf_ClosedBodies]. *)
 
+Section ParallelWeakeningWf.
+  Context {cf : checker_flags}.
 
+  Lemma pred1_rename {Σ} {wfΣ : wf Σ} :
+    (forall Γ Γ' u v, pred1 Σ Γ Γ' u v ->
+    forall {P f Δ Δ'},
+    pred1_ctx Σ Δ Δ' ->
+    urenaming P Γ Δ f ->
+    urenaming P Γ' Δ' f ->
+    on_free_vars P u ->
+    on_ctx_free_vars P Γ ->
+    pred1 Σ Δ Δ' (rename f u) (rename f v)) ×
+    (forall (Γ Γ' : context) (Δ Δ' : context),
+      pred1_ctx Σ Γ Γ' ->
+      pred1_ctx_over Σ Γ Γ' Δ Δ' ->
+      forall P f Δ0 Δ'0,
+        urenaming P Γ Δ0 f ->
+        urenaming P Γ' Δ'0 f ->
+        pred1_ctx Σ Δ0 Δ'0 ->
+        on_ctx_free_vars P Γ ->
+        on_free_vars_ctx P Δ ->
+        pred1_ctx_over Σ Δ0 Δ'0 (rename_context f Δ) (rename_context f Δ')).
+  Proof. intros; eapply pred1_rename_cb; tea; typeclasses eauto. Qed.
 
+  Lemma weakening_pred1 {Σ} {wfΣ : wf Σ} {P Γ Γ' Γ'' Δ Δ' Δ'' M N} :
+    pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') M N ->
+    on_ctx_free_vars (PCUICOnFreeVars.shiftnP #|Γ'| P) (Γ ,,, Γ') ->
+    on_free_vars (PCUICOnFreeVars.shiftnP #|Γ'| P) M ->
+    #|Γ| = #|Δ| ->
+    on_contexts_over (pred1 Σ) Γ Δ Γ'' Δ'' ->
+    pred1 Σ (Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ')
+          (Δ ,,, Δ'' ,,, lift_context #|Δ''| 0 Δ')
+          (lift #|Γ''| #|Γ'| M) (lift #|Δ''| #|Δ'| N).
+  Proof. intros; eapply weakening_pred1_cb; tea; typeclasses eauto. Qed.
 
+  Lemma weakening_pred1_pred1 {Σ} {wfΣ : wf Σ} {P Γ Δ Γ' Δ' M N} :
+    pred1_ctx_over Σ Γ Δ Γ' Δ' ->
+    on_ctx_free_vars P Γ ->
+    on_free_vars P M ->
+    pred1 Σ Γ Δ M N ->
+    pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') (lift0 #|Γ'| M) (lift0 #|Δ'| N).
+  Proof. intros; eapply weakening_pred1_pred1_cb; tea; typeclasses eauto. Qed.
 
+  Lemma weakening_pred1_0 {Σ} {wfΣ : wf Σ} {P Γ Δ Γ' M N} :
+    pred1 Σ Γ Δ M N ->
+    on_ctx_free_vars P Γ ->
+    on_free_vars P M ->
+    pred1 Σ (Γ ,,, Γ') (Δ ,,, Γ') (lift0 #|Γ'| M) (lift0 #|Γ'| N).
+  Proof. intros; eapply weakening_pred1_0_cb; tea; typeclasses eauto. Qed.
 
-(** * The trunk statements under their old names (BET-315 W-c, FRAC 2026-10-28).
-    Each old name keeps its trunk type, with the premise [wf Σ]; it is a
-    corollary of its [ClosedBodies] statement [_cb] through [wf_ClosedBodies]. *)
-Lemma weakening_pred1_0 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P : forall _ : nat, bool} {Γ Δ : PCUICAst.PCUICEnvironment.context} {Γ' : list (BasicAst.context_decl PCUICAst.term)} {M N : PCUICAst.term} (_ : PCUICParallelReduction.pred1 Σ Γ Δ M N) (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars P Γ)) (_ : is_true (PCUICOnFreeVars.on_free_vars P M)), PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Γ') (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Γ') (PCUICAst.lift (@length (BasicAst.context_decl PCUICAst.term) Γ') O M) (PCUICAst.lift (@length (BasicAst.context_decl PCUICAst.term) Γ') O N).
-Proof. intros cf Σ wfΣ P Γ Δ Γ' M N cbh9 cbh10 cbh11. exact (@weakening_pred1_0_cb cf Σ _ P Γ Δ Γ' M N cbh9 cbh10 cbh11). Qed.
-Lemma substitution0_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {Γ : list (BasicAst.context_decl PCUICAst.term)} {Δ : PCUICAst.PCUICEnvironment.context} {M M' : PCUICAst.term} {na na' : BasicAst.aname} {A A' N N' : PCUICAst.term} (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars (fun _ : nat => true) Γ)) (_ : is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) M)) (_ : is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) N)) (_ : PCUICParallelReduction.pred1 Σ Γ Δ M M') (_ : PCUICParallelReduction.pred1 Σ (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Γ (PCUICAst.PCUICEnvironment.vass na A)) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Δ (PCUICAst.PCUICEnvironment.vass na' A')) N N'), PCUICParallelReduction.pred1 Σ Γ Δ (PCUICAst.subst1 M O N) (PCUICAst.subst1 M' O N').
-Proof. intros cf Σ wfΣ Γ Δ M M' na na' A A' N N' cbh13 cbh14 cbh15 cbh16 cbh17. exact (@substitution0_pred1_cb cf Σ _ Γ Δ M M' na na' A A' N N' cbh13 cbh14 cbh15 cbh16 cbh17). Qed.
-Lemma substitution0_let_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {Γ : list (BasicAst.context_decl PCUICAst.term)} {Δ : PCUICAst.PCUICEnvironment.context} {na na' : BasicAst.aname} {M M' A A' N N' : PCUICAst.term} (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars (fun _ : nat => true) Γ)) (_ : is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) M)) (_ : is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) N)) (_ : PCUICParallelReduction.pred1 Σ Γ Δ M M') (_ : PCUICParallelReduction.pred1 Σ (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Γ (PCUICAst.PCUICEnvironment.vdef na M A)) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Δ (PCUICAst.PCUICEnvironment.vdef na' M' A')) N N'), PCUICParallelReduction.pred1 Σ Γ Δ (PCUICAst.subst1 M O N) (PCUICAst.subst1 M' O N').
-Proof. intros cf Σ wfΣ Γ Δ na na' M M' A A' N N' cbh13 cbh14 cbh15 cbh16 cbh17. exact (@substitution0_let_pred1_cb cf Σ _ Γ Δ na na' M M' A A' N N' cbh13 cbh14 cbh15 cbh16 cbh17). Qed.
-Lemma psubst_pred1_subst : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {Γ Γ1 : list (BasicAst.context_decl PCUICAst.term)} {Δ Δ1 : PCUICAst.PCUICEnvironment.context} {s s' : list PCUICAst.term} (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars (fun _ : nat => true) Γ)) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 Σ Γ0 Γ'0)) Γ Γ1) (_ : PCUICParallelReduction.psubst Σ Γ Γ1 s s' Δ Δ1) (_ : @All_Forall.All PCUICAst.term (fun t : PCUICAst.term => is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) t)) s), @PCUICParallelReduction.pred1_subst Σ (fun _ : nat => true) (fun _ : nat => true) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ1 Δ1) Γ Γ1 (@PCUICSigmaCalculus.subst_consn PCUICAst.term s PCUICSigmaCalculus.ids) (@PCUICSigmaCalculus.subst_consn PCUICAst.term s' PCUICSigmaCalculus.ids).
-Proof. intros cf Σ wfΣ Γ Γ1 Δ Δ1 s s' cbh9 cbh10 cbh11 cbh12. exact (@psubst_pred1_subst_cb cf Σ _ Γ Γ1 Δ Δ1 s s' cbh9 cbh10 cbh11 cbh12). Qed.
-Lemma pred1_subst_Up : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} (P Q : forall _ : nat, bool) (Γ Γ' : PCUICAst.PCUICEnvironment.context) (na : BasicAst.aname) (t0 t1 : PCUICAst.term) (Δ Δ' : PCUICAst.PCUICEnvironment.context) (σ τ : forall _ : nat, PCUICAst.term) (_ : PCUICParallelReduction.pred1 Σ Δ Δ' (PCUICSigmaCalculus.inst σ t0) (PCUICSigmaCalculus.inst τ t1)) (_ : is_true (PCUICOnFreeVars.on_free_vars Q (PCUICSigmaCalculus.inst σ t0))) (_ : @PCUICParallelReduction.pred1_subst Σ P Q Γ Γ' Δ Δ' σ τ), @PCUICParallelReduction.pred1_subst Σ (PCUICOnFreeVars.shiftnP (S O) P) (PCUICOnFreeVars.shiftnP (S O) Q) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Γ (PCUICAst.PCUICEnvironment.vass na t0)) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Γ' (PCUICAst.PCUICEnvironment.vass na t1)) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Δ (PCUICAst.PCUICEnvironment.vass na (PCUICSigmaCalculus.inst σ t0))) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Δ' (PCUICAst.PCUICEnvironment.vass na (PCUICSigmaCalculus.inst τ t1))) (PCUICSigmaCalculus.Up σ) (PCUICSigmaCalculus.Up τ).
-Proof. intros cf Σ wfΣ P Q Γ Γ' na t0 t1 Δ Δ' σ τ cbh14 cbh15 cbh16. exact (@pred1_subst_Up_cb cf Σ _ P Q Γ Γ' na t0 t1 Δ Δ' σ τ cbh14 cbh15 cbh16). Qed.
-Lemma weakening_pred1_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P : forall _ : nat, bool} {Γ Δ Γ' Δ' : list (BasicAst.context_decl PCUICAst.term)} {M N : PCUICAst.term} (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ0 Δ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ0) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Δ'0)) Γ0 Γ'0)) Γ' Δ') (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars P Γ)) (_ : is_true (PCUICOnFreeVars.on_free_vars P M)) (_ : PCUICParallelReduction.pred1 Σ Γ Δ M N), PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Γ') (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Δ') (PCUICAst.lift (@length (BasicAst.context_decl PCUICAst.term) Γ') O M) (PCUICAst.lift (@length (BasicAst.context_decl PCUICAst.term) Δ') O N).
-Proof. intros cf Σ wfΣ P Γ Δ Γ' Δ' M N cbh10 cbh11 cbh12 cbh13. exact (@weakening_pred1_pred1_cb cf Σ _ P Γ Δ Γ' Δ' M N cbh10 cbh11 cbh12 cbh13). Qed.
-Lemma pred1_subst_vdef_Up : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} (P Q : forall _ : nat, bool) (Γ Γ' : PCUICAst.PCUICEnvironment.context) (na : BasicAst.aname) (b0 b1 t0 t1 : PCUICAst.term) (Δ Δ' : PCUICAst.PCUICEnvironment.context) (σ τ : forall _ : nat, PCUICAst.term) (_ : is_true (PCUICOnFreeVars.on_free_vars P t0)) (_ : is_true (PCUICOnFreeVars.on_free_vars P b0)) (_ : is_true (PCUICOnFreeVars.on_free_vars Q (PCUICSigmaCalculus.inst σ t0))) (_ : is_true (PCUICOnFreeVars.on_free_vars Q (PCUICSigmaCalculus.inst σ b0))) (_ : PCUICParallelReduction.pred1 Σ Δ Δ' (PCUICSigmaCalculus.inst σ t0) (PCUICSigmaCalculus.inst τ t1)) (_ : PCUICParallelReduction.pred1 Σ Δ Δ' (PCUICSigmaCalculus.inst σ b0) (PCUICSigmaCalculus.inst τ b1)) (_ : @PCUICParallelReduction.pred1_subst Σ P Q Γ Γ' Δ Δ' σ τ), @PCUICParallelReduction.pred1_subst Σ (PCUICOnFreeVars.shiftnP (S O) P) (PCUICOnFreeVars.shiftnP (S O) Q) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Γ (PCUICAst.PCUICEnvironment.vdef na b0 t0)) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Γ' (PCUICAst.PCUICEnvironment.vdef na b1 t1)) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Δ (PCUICAst.PCUICEnvironment.vdef na (PCUICSigmaCalculus.inst σ b0) (PCUICSigmaCalculus.inst σ t0))) (@BasicAst.snoc (BasicAst.context_decl PCUICAst.term) Δ' (PCUICAst.PCUICEnvironment.vdef na (PCUICSigmaCalculus.inst τ b1) (PCUICSigmaCalculus.inst τ t1))) (PCUICSigmaCalculus.Up σ) (PCUICSigmaCalculus.Up τ).
-Proof. intros cf Σ wfΣ P Q Γ Γ' na b0 b1 t0 t1 Δ Δ' σ τ cbh16 cbh17 cbh18 cbh19 cbh20 cbh21 cbh22. exact (@pred1_subst_vdef_Up_cb cf Σ _ P Q Γ Γ' na b0 b1 t0 t1 Δ Δ' σ τ cbh16 cbh17 cbh18 cbh19 cbh20 cbh21 cbh22). Qed.
-Lemma pred1_subst_up : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P Q : forall _ : nat, bool} {Γ Γ' Δ Δ' : PCUICAst.PCUICEnvironment.context} (σ τ : forall _ : nat, PCUICAst.term) (Δ0 Δ1 : PCUICAst.PCUICEnvironment.context) (n : nat) (_ : @eq nat n (@length (BasicAst.context_decl PCUICAst.term) Δ0)) (_ : @PCUICParallelReduction.pred1_subst Σ P Q Γ Γ' Δ Δ' σ τ) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx P Δ0)) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx Q (PCUICInstDef.inst_context σ Δ0))) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ2 Δ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ2) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ'0)) Γ0 Γ'0)) Δ0 Δ1) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ2 Δ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Δ2) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ' Δ'0)) Γ0 Γ'0)) (PCUICInstDef.inst_context σ Δ0) (PCUICInstDef.inst_context τ Δ1)), @PCUICParallelReduction.pred1_subst Σ (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Δ0) P) (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Δ0) Q) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ0) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ1) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ (PCUICInstDef.inst_context σ Δ0)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ' (PCUICInstDef.inst_context τ Δ1)) (PCUICSigmaCalculus.up n σ) (PCUICSigmaCalculus.up n τ).
-Proof. intros cf Σ wfΣ P Q Γ Γ' Δ Δ' σ τ Δ0 Δ1 n cbh14 cbh15 cbh16 cbh17 cbh18 cbh19. exact (@pred1_subst_up_cb cf Σ _ P Q Γ Γ' Δ Δ' σ τ Δ0 Δ1 n cbh14 cbh15 cbh16 cbh17 cbh18 cbh19). Qed.
-Lemma weakening_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P : forall _ : nat, bool} {Γ Γ' Γ'' Δ Δ' Δ'' : list (BasicAst.context_decl PCUICAst.term)} {M N : PCUICAst.term} (_ : PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Γ') (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Δ') M N) (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ') P) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Γ'))) (_ : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ') P) M)) (_ : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ) (@length (BasicAst.context_decl PCUICAst.term) Δ)) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ0 Δ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ0) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Δ'0)) Γ0 Γ'0)) Γ'' Δ''), PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Γ'') (PCUICAst.PCUICEnvironment.lift_context (@length (BasicAst.context_decl PCUICAst.term) Γ'') O Γ')) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Δ'') (PCUICAst.PCUICEnvironment.lift_context (@length (BasicAst.context_decl PCUICAst.term) Δ'') O Δ')) (PCUICAst.lift (@length (BasicAst.context_decl PCUICAst.term) Γ'') (@length (BasicAst.context_decl PCUICAst.term) Γ') M) (PCUICAst.lift (@length (BasicAst.context_decl PCUICAst.term) Δ'') (@length (BasicAst.context_decl PCUICAst.term) Δ') N).
-Proof. intros cf Σ wfΣ P Γ Γ' Γ'' Δ Δ' Δ'' M N cbh12 cbh13 cbh14 cbh15 cbh16. exact (@weakening_pred1_cb cf Σ _ P Γ Γ' Γ'' Δ Δ' Δ'' M N cbh12 cbh13 cbh14 cbh15 cbh16). Qed.
-Lemma pred1_subst_Upn : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P Q : forall _ : nat, bool} {Γ Γ' Δ Δ' : PCUICAst.PCUICEnvironment.context} {σ : PCUICSigmaCalculus.substitutionT} {τ : forall _ : nat, PCUICAst.term} {Δ0 Δ1 : list (BasicAst.context_decl PCUICAst.term)} {n : nat} (_ : @eq nat n (@length (BasicAst.context_decl PCUICAst.term) Δ0)) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx P Δ0)) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx Q (PCUICInstDef.inst_context σ Δ0))) (_ : @PCUICParallelReduction.pred1_subst Σ P Q Γ Γ' Δ Δ' σ τ) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ2 Δ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ2) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ'0)) Γ0 Γ'0)) Δ0 Δ1) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ2 Δ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Δ2) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ' Δ'0)) Γ0 Γ'0)) (PCUICInstDef.inst_context σ Δ0) (PCUICInstDef.inst_context τ Δ1)), @PCUICParallelReduction.pred1_subst Σ (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Δ0) P) (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Δ0) Q) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ0) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ1) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ (PCUICInstDef.inst_context σ Δ0)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ' (PCUICInstDef.inst_context τ Δ1)) (PCUICSigmaCalculus.Upn n σ) (PCUICSigmaCalculus.Upn n τ).
-Proof. intros cf Σ wfΣ P Q Γ Γ' Δ Δ' σ τ Δ0 Δ1 n cbh14 cbh15 cbh16 cbh17 cbh18 cbh19. exact (@pred1_subst_Upn_cb cf Σ _ P Q Γ Γ' Δ Δ' σ τ Δ0 Δ1 n cbh14 cbh15 cbh16 cbh17 cbh18 cbh19). Qed.
-Lemma pred1_subst_context : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {Γ Δ : PCUICAst.PCUICEnvironment.context} {Γ' : list (BasicAst.context_decl PCUICAst.term)} {Γ1 Δ1 : PCUICAst.PCUICEnvironment.context} {Γ'1 : list (BasicAst.context_decl PCUICAst.term)} {s s' : list PCUICAst.term} (_ : PCUICParallelReduction.psubst Σ Γ Γ1 s s' Δ Δ1) (_ : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ) (@length (BasicAst.context_decl PCUICAst.term) Γ1)) (_ : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ') (@length (BasicAst.context_decl PCUICAst.term) Γ'1)) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ0 Δ' : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ0) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ1 Δ')) Γ0 Γ'0)) Δ Δ1) (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars (fun _ : nat => true) Γ)) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx (fun _ : nat => true) Γ')) (_ : @All_Forall.All PCUICAst.term (fun t : PCUICAst.term => is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) t)) s) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 Σ Γ0 Γ'0)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) Γ') (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ1 Δ1) Γ'1)), @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 Σ Γ0 Γ'0)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ (PCUICAst.PCUICEnvironment.subst_context s O Γ')) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ1 (PCUICAst.PCUICEnvironment.subst_context s' O Γ'1)).
-Proof. intros cf Σ wfΣ Γ Δ Γ' Γ1 Δ1 Γ'1 s s' cbh11 cbh12 cbh13 cbh14 cbh15 cbh16 cbh17 cbh18. exact (@pred1_subst_context_cb cf Σ _ Γ Δ Γ' Γ1 Δ1 Γ'1 s s' cbh11 cbh12 cbh13 cbh14 cbh15 cbh16 cbh17 cbh18). Qed.
-Lemma substitution_let_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {Γ Δ : PCUICAst.PCUICEnvironment.context} {Γ' : list (BasicAst.context_decl PCUICAst.term)} {Γ1 Δ1 : PCUICAst.PCUICEnvironment.context} {Γ'1 : list (BasicAst.context_decl PCUICAst.term)} {s s' : list PCUICAst.term} {M N : PCUICAst.term} (_ : PCUICParallelReduction.psubst Σ Γ Γ1 s s' Δ Δ1) (_ : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ) (@length (BasicAst.context_decl PCUICAst.term) Γ1)) (_ : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ') (@length (BasicAst.context_decl PCUICAst.term) Γ'1)) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ0 Δ' : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ0) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ1 Δ')) Γ0 Γ'0)) Δ Δ1) (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars (fun _ : nat => true) Γ)) (_ : @All_Forall.All PCUICAst.term (fun t : PCUICAst.term => is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) t)) s) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx (fun _ : nat => true) Γ')) (_ : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ'1) (fun _ : nat => true)) M)) (_ : PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) Γ') (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ1 Δ1) Γ'1) M N), PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ (PCUICAst.PCUICEnvironment.subst_context s O Γ')) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ1 (PCUICAst.PCUICEnvironment.subst_context s' O Γ'1)) (PCUICAst.subst s (@length (BasicAst.context_decl PCUICAst.term) Γ') M) (PCUICAst.subst s' (@length (BasicAst.context_decl PCUICAst.term) Γ'1) N).
-Proof. intros cf Σ wfΣ Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N cbh13 cbh14 cbh15 cbh16 cbh17 cbh18 cbh19 cbh20 cbh21. exact (@substitution_let_pred1_cb cf Σ _ Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N cbh13 cbh14 cbh15 cbh16 cbh17 cbh18 cbh19 cbh20 cbh21). Qed.
-Lemma strong_substitutivity : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ}, let Pover : forall (_ : PCUICAst.PCUICEnvironment.context) (_ : PCUICAst.PCUICEnvironment.context) (_ : PCUICAst.PCUICEnvironment.context) (_ : PCUICAst.PCUICEnvironment.context), Type := fun Γ Γ' Δ Δ' : PCUICAst.PCUICEnvironment.context => forall (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 Σ Γ0 Γ'0)) Γ Γ') (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ0 Δ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ0) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ'0)) Γ0 Γ'0)) Δ Δ') (P Q : forall _ : nat, bool) (Δ0 Δ'0 : PCUICAst.PCUICEnvironment.context) (σ : PCUICSigmaCalculus.substitutionT) (τ : forall _ : nat, PCUICAst.term) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx P Δ)) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx Q (PCUICInstDef.inst_context σ Δ))) (_ : @PCUICParallelReduction.pred1_subst Σ P Q Γ Γ' Δ0 Δ'0 σ τ), @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ1 Δ'1 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ0 Δ1) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ'0 Δ'1)) Γ0 Γ'0)) (PCUICInstDef.inst_context σ Δ) (PCUICInstDef.inst_context τ Δ') in prod (forall (Γ Γ' : PCUICAst.PCUICEnvironment.context) (s t : PCUICAst.term) (_ : PCUICParallelReduction.pred1 Σ Γ Γ' s t) (P Q : forall _ : nat, bool) (Δ Δ' : PCUICAst.PCUICEnvironment.context) (σ τ : forall _ : nat, PCUICAst.term) (_ : is_true (PCUICOnFreeVars.on_free_vars P s)) (_ : is_true (PCUICOnFreeVars.on_free_vars Q (PCUICSigmaCalculus.inst σ s))) (_ : @PCUICParallelReduction.pred1_subst Σ P Q Γ Γ' Δ Δ' σ τ), PCUICParallelReduction.pred1 Σ Δ Δ' (PCUICSigmaCalculus.inst σ s) (PCUICSigmaCalculus.inst τ t)) (forall Γ Γ' Δ Δ' : PCUICAst.PCUICEnvironment.context, Pover Γ Γ' Δ Δ').
-Proof. intros cf Σ wfΣ. exact (@strong_substitutivity_cb cf Σ _). Qed.
-Lemma pred1_rename : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ}, prod (forall (Γ Γ' : PCUICAst.PCUICEnvironment.context) (u v : PCUICAst.term) (_ : PCUICParallelReduction.pred1 Σ Γ Γ' u v) (P : forall _ : nat, bool) (f : forall _ : nat, nat) (Δ Δ' : list (BasicAst.context_decl PCUICAst.term)) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 Σ Γ0 Γ'0)) Δ Δ') (_ : PCUICRenameDef.urenaming P Γ Δ f) (_ : PCUICRenameDef.urenaming P Γ' Δ' f) (_ : is_true (PCUICOnFreeVars.on_free_vars P u)) (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars P Γ)), PCUICParallelReduction.pred1 Σ Δ Δ' (PCUICSigmaCalculus.rename f u) (PCUICSigmaCalculus.rename f v)) (forall (Γ Γ' Δ Δ' : PCUICAst.PCUICEnvironment.context) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 Σ Γ0 Γ'0)) Γ Γ') (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ0 Δ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ0) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ'0)) Γ0 Γ'0)) Δ Δ') (P : forall _ : nat, bool) (f : forall _ : nat, nat) (Δ0 Δ'0 : list (BasicAst.context_decl PCUICAst.term)) (_ : PCUICRenameDef.urenaming P Γ Δ0 f) (_ : PCUICRenameDef.urenaming P Γ' Δ'0 f) (_ : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 Σ Γ0 Γ'0)) Δ0 Δ'0) (_ : is_true (PCUICOnFreeVars.on_ctx_free_vars P Γ)) (_ : is_true (PCUICOnFreeVars.on_free_vars_ctx P Δ)), @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ1 Δ'1 : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ0 Δ1) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ'0 Δ'1)) Γ0 Γ'0)) (PCUICSigmaCalculus.rename_context f Δ) (PCUICSigmaCalculus.rename_context f Δ')).
-Proof. intros cf Σ wfΣ. exact (@pred1_rename_cb cf Σ _). Qed.
+End ParallelWeakeningWf.
+
+Section ParallelSubstitutionWf.
+  Context {cf : checker_flags}.
+  Context {Σ : global_env}.
+
+  Lemma pred1_subst_Up {wfΣ : wf Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname) (t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
+      pred1 Σ Δ Δ' t0.[σ] t1.[τ] ->
+      on_free_vars Q t0.[σ] ->
+      (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+      (@pred1_subst Σ) (shiftnP 1 P) (shiftnP 1 Q) (Γ,, vass na t0) (Γ' ,, vass na t1) (Δ,, vass na t0.[σ]) (Δ',, vass na t1.[τ]) (⇑ σ) (⇑ τ).
+  Proof. intros; eapply pred1_subst_Up_cb; tea; typeclasses eauto. Qed.
+
+  Lemma pred1_subst_vdef_Up {wfΣ : wf Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname)
+    (b0 b1 t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
+      on_free_vars P t0 ->
+      on_free_vars P b0 ->
+      on_free_vars Q t0.[σ] ->
+      on_free_vars Q b0.[σ] ->
+      pred1 Σ Δ Δ' t0.[σ] t1.[τ] ->
+      pred1 Σ Δ Δ' b0.[σ] b1.[τ] ->
+      (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+      (@pred1_subst Σ) (shiftnP 1 P) (shiftnP 1 Q) (Γ,, vdef na b0 t0) (Γ',, vdef na b1 t1) (Δ,, vdef na b0.[σ] t0.[σ]) (Δ',, vdef na b1.[τ] t1.[τ]) (⇑ σ) (⇑ τ).
+  Proof. intros; eapply pred1_subst_vdef_Up_cb; tea; typeclasses eauto. Qed.
+
+  Lemma pred1_subst_Upn {wfΣ : wf Σ} {P Q} {Γ Γ' Δ Δ' σ τ Δ0 Δ1 n} :
+    n = #|Δ0| ->
+    on_free_vars_ctx P Δ0 ->
+    on_free_vars_ctx Q (inst_context σ Δ0) ->
+    (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+    pred1_ctx_over Σ Γ Γ' Δ0 Δ1 ->
+    pred1_ctx_over Σ Δ Δ' (inst_context σ Δ0) (inst_context τ Δ1) ->
+    (@pred1_subst Σ) (shiftnP #|Δ0| P) (shiftnP #|Δ0| Q) (Γ ,,, Δ0) (Γ' ,,, Δ1) (Δ ,,, inst_context σ Δ0) (Δ' ,,, inst_context τ Δ1)
+      (⇑^n σ) (⇑^n τ).
+  Proof. intros; eapply pred1_subst_Upn_cb; tea; typeclasses eauto. Qed.
+
+  Lemma pred1_subst_up {wfΣ : wf Σ} {P Q : nat -> bool} {Γ Γ' Δ Δ'} (σ τ : nat -> term) (Δ0 Δ1 : context) n :
+    n = #|Δ0| ->
+    (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+    on_free_vars_ctx P Δ0 ->
+    on_free_vars_ctx Q (inst_context σ Δ0) ->
+    pred1_ctx_over Σ Γ Γ' Δ0 Δ1 ->
+    pred1_ctx_over Σ Δ Δ' (inst_context σ Δ0) (inst_context τ Δ1) ->
+    (@pred1_subst Σ) (shiftnP #|Δ0| P) (shiftnP #|Δ0| Q) (Γ ,,, Δ0) (Γ' ,,, Δ1) (Δ ,,, inst_context σ Δ0) (Δ' ,,, inst_context τ Δ1)
+      (up n σ) (up n τ).
+  Proof. intros; eapply pred1_subst_up_cb; tea; typeclasses eauto. Qed.
+
+  Lemma strong_substitutivity {wfΣ :
+   wf Σ}:
+    let Pover (Γ Γ' : context) (Δ Δ' : context) :=
+    pred1_ctx Σ Γ Γ' ->
+    pred1_ctx_over Σ Γ Γ' Δ Δ' ->
+    forall P Q Δ0 Δ'0 σ τ,
+      on_free_vars_ctx P Δ ->
+      on_free_vars_ctx Q (inst_context σ Δ) ->
+      (@pred1_subst Σ) P Q Γ Γ' Δ0 Δ'0 σ τ ->
+      pred1_ctx_over Σ Δ0 Δ'0 (inst_context σ Δ) (inst_context τ Δ')
+    in
+    (forall Γ Γ' s t,
+      pred1 Σ Γ Γ' s t ->
+      forall P Q Δ Δ' σ τ,
+      on_free_vars P s ->
+      on_free_vars Q s.[σ] ->
+      (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+      pred1 Σ Δ Δ' s.[σ] t.[τ]) ×
+    (forall Γ Γ' Δ Δ', Pover Γ Γ' Δ Δ').
+  Proof. intros; eapply strong_substitutivity_cb; tea; typeclasses eauto. Qed.
+
+  Lemma psubst_pred1_subst {wfΣ : wf Σ} {Γ Γ1 Δ Δ1 s s'} :
+    on_ctx_free_vars xpredT Γ ->
+    pred1_ctx Σ Γ Γ1 ->
+    psubst Σ Γ Γ1 s s' Δ Δ1 ->
+    All (on_free_vars xpredT) s ->
+    (@pred1_subst Σ) xpredT xpredT (Γ,,, Δ) (Γ1,,, Δ1) Γ Γ1 (s ⋅n ids) (s' ⋅n ids).
+  Proof. intros; eapply psubst_pred1_subst_cb; tea; typeclasses eauto. Qed.
+
+  Lemma pred1_subst_context {wfΣ : wf Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s'} :
+    psubst Σ Γ Γ1 s s' Δ Δ1 ->
+    #|Γ| = #|Γ1| -> #|Γ'| = #|Γ'1| ->
+    pred1_ctx_over Σ Γ Γ1 Δ Δ1 ->
+    on_ctx_free_vars xpredT Γ ->
+    on_free_vars_ctx xpredT Γ' ->
+    All (on_free_vars xpredT) s ->
+    pred1_ctx Σ (Γ ,,, Δ ,,, Γ') (Γ1 ,,, Δ1 ,,, Γ'1) ->
+    pred1_ctx Σ (Γ ,,, subst_context s 0 Γ') (Γ1 ,,, subst_context s' 0 Γ'1).
+  Proof. intros; eapply pred1_subst_context_cb; tea; typeclasses eauto. Qed.
+
+  Lemma substitution_let_pred1 {wfΣ : wf Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N} :
+    psubst Σ Γ Γ1 s s' Δ Δ1 ->
+    #|Γ| = #|Γ1| -> #|Γ'| = #|Γ'1| ->
+    on_contexts_over (pred1 Σ) Γ Γ1 Δ Δ1 ->
+    on_ctx_free_vars xpredT Γ ->
+    All (on_free_vars xpredT) s ->
+    on_free_vars_ctx xpredT Γ' ->
+    on_free_vars (shiftnP #|Γ'1| xpredT) M ->
+    pred1 Σ (Γ ,,, Δ ,,, Γ') (Γ1 ,,, Δ1 ,,, Γ'1) M N ->
+    pred1 Σ (Γ ,,, subst_context s 0 Γ') (Γ1 ,,, subst_context s' 0 Γ'1) (subst s #|Γ'| M) (subst s' #|Γ'1| N).
+  Proof. intros; eapply substitution_let_pred1_cb; tea; typeclasses eauto. Qed.
+
+  Lemma substitution0_pred1 {wfΣ : wf Σ} {Γ Δ M M' na na' A A' N N'} :
+    on_ctx_free_vars xpredT Γ ->
+    on_free_vars xpredT M ->
+    on_free_vars xpredT N ->
+    pred1 Σ Γ Δ M M' ->
+    pred1 Σ (Γ ,, vass na A) (Δ ,, vass na' A') N N' ->
+    pred1 Σ Γ Δ (subst1 M 0 N) (subst1 M' 0 N').
+  Proof. intros; eapply substitution0_pred1_cb; tea; typeclasses eauto. Qed.
+
+  Lemma substitution0_let_pred1 {wfΣ : wf Σ} {Γ Δ na na' M M' A A' N N'} :
+    on_ctx_free_vars xpredT Γ ->
+    on_free_vars xpredT M ->
+    on_free_vars xpredT N ->
+    pred1 Σ Γ Δ M M' ->
+    pred1 Σ (Γ ,, vdef na M A) (Δ ,, vdef na' M' A') N N' ->
+    pred1 Σ Γ Δ (subst1 M 0 N) (subst1 M' 0 N').
+  Proof. intros; eapply substitution0_let_pred1_cb; tea; typeclasses eauto. Qed.
+
+End ParallelSubstitutionWf.
