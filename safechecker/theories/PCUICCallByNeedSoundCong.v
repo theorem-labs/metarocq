@@ -13,8 +13,8 @@ Set Default Goal Selector "1".
 
 (** * The PCUIC congruences the call-by-need comparison needs
 
-  The call-by-need comparison of [PCUICCallByNeed] ([conv_term], [conv_same_code],
-  [case_cong], [conv_value], [conv_rows]) answers "convertible" in three ways: the two
+  The call-by-need comparison of [PCUICCallByNeed] ([cbn_conv_term], [cbn_conv_same_code],
+  [cbn_case_cong], [cbn_conv_value], [cbn_conv_rows]) answers "convertible" in three ways: the two
   sides are the *same code* under two environments whose slots are pairwise convertible;
   the two values have the same head and pairwise convertible arguments; or a stuck
   [tCase]/[tProj] has convertible scrutinees, parameters, return clauses and branches.
@@ -23,7 +23,7 @@ Set Default Goal Selector "1".
   cumulativity of [PCUICWellScopedCumulativity]) that each of those answers needs. It
   speaks only of [PCUICAst] terms and MetaRocq's own cumulativity: no machine structure
   appears in any statement, so it is independent of the machine theorem. The one machine
-  definition it mentions is [case_ctx_ok] (a predicate on two [context]s), for which it
+  definition it mentions is [cbn_case_ctx_ok] (a predicate on two [context]s), for which it
   proves the reflection the stuck-match row needs.
 
   Where MetaRocq already has the fact, this file names it and restates it in the shape the
@@ -35,32 +35,32 @@ Set Default Goal Selector "1".
 
 (** ** A context of fresh assumptions
 
-  The reading of a suspension is [subst ts 0 (lift N m t)] with [#|ts| = m] ([rb_susp]).
+  The reading of a suspension is [subst ts 0 (lift N m t)] with [#|ts| = m] ([cbn_rb_susp]).
   To use MetaRocq's substitution lemma we need a context for the substitution to be an
   [untyped_subslet] of. Nothing about that context matters except that it is made of [m]
   assumptions and is closed, so we take [m] copies of one closed assumption. *)
 
-Definition fresh_decl : context_decl :=
+Definition cbn_fresh_decl : context_decl :=
   vass {| binder_name := nAnon; binder_relevance := Relevant |} (tSort Sort.type0).
 
-Fixpoint fresh_context (n : nat) : context :=
+Fixpoint cbn_fresh_context (n : nat) : context :=
   match n with
   | 0 => []
-  | S n => fresh_context n ,, fresh_decl
+  | S n => cbn_fresh_context n ,, cbn_fresh_decl
   end.
 
-Lemma fresh_context_length n : #|fresh_context n| = n.
+Lemma cbn_fresh_context_length n : #|cbn_fresh_context n| = n.
 Proof.
   induction n as [|n IH]; simpl; [reflexivity|]. now rewrite IH.
 Qed.
 
-Lemma fresh_context_on_free_vars P n : on_free_vars_ctx P (fresh_context n).
+Lemma cbn_fresh_context_on_free_vars P n : on_free_vars_ctx P (cbn_fresh_context n).
 Proof.
   induction n as [|n IH]; simpl; [reflexivity|].
   rewrite on_free_vars_ctx_snoc IH /=. reflexivity.
 Qed.
 
-Lemma untyped_subslet_fresh_context Γ s : untyped_subslet Γ s (fresh_context #|s|).
+Lemma cbn_untyped_subslet_fresh_context Γ s : untyped_subslet Γ s (cbn_fresh_context #|s|).
 Proof.
   induction s as [|t s IH]; simpl.
   - constructor.
@@ -75,26 +75,27 @@ Section Congruence.
 
     The same-code rule compares two suspensions of *one* code under two environments. The
     reading of a suspension is [subst ts 0 (lift N m t)] with [N = lvl - nctx + goff] and
-    [m = #|ts| = nvals] ([rb_susp] of [PCUICCallByNeed]), so the rule is sound as soon as
+    [m = #|ts| = nvals] ([cbn_rb_susp] of [PCUICCallByNeed]), so the rule is sound as soon as
     substituting two pairwise convertible lists in one term gives convertible results. *)
 
   (** The general form: the lifted code must be an open term of [Γ] extended by [#|ts1|]
     assumptions, which is exactly "its free variables are the [#|ts1|] slots and the
     variables of [Γ]". *)
-  Lemma ws_cumul_pb_subst_open {pb Γ ts1 ts2 b} :
+  Lemma cbn_ws_cumul_pb_subst_open {pb Γ ts1 ts2 b} :
     is_closed_context Γ ->
     ws_cumul_pb_terms Σ Γ ts1 ts2 ->
-    is_open_term (Γ ,,, fresh_context #|ts1|) b ->
+    is_open_term (Γ ,,, cbn_fresh_context #|ts1|) b ->
     Σ ;;; Γ ⊢ subst ts1 0 b ≤[pb] subst ts2 0 b.
   Proof using wfΣ.
     intros clΓ eqs opb.
     apply ws_cumul_eq_pb.
-    assert (cl1 : is_closed_context (Γ ,,, fresh_context #|ts1|)).
-    { rewrite on_free_vars_ctx_app clΓ /=. apply fresh_context_on_free_vars. }
-    assert (cl2 : is_closed_context (Γ ,,, fresh_context #|ts2|)).
-    { rewrite on_free_vars_ctx_app clΓ /=. apply fresh_context_on_free_vars. }
+    assert (cl1 : is_closed_context (Γ ,,, cbn_fresh_context #|ts1|)).
+    { rewrite on_free_vars_ctx_app clΓ /=. apply cbn_fresh_context_on_free_vars. }
+    assert (cl2 : is_closed_context (Γ ,,, cbn_fresh_context #|ts2|)).
+    { rewrite on_free_vars_ctx_app clΓ /=. apply cbn_fresh_context_on_free_vars. }
     exact (untyped_substitution_ws_cumul_pb_subst_conv (Γ' := []) eqs cl1 cl2
-             (untyped_subslet_fresh_context Γ ts1) (untyped_subslet_fresh_context Γ ts2) opb).
+             (cbn_untyped_subslet_fresh_context Γ ts1)
+               (cbn_untyped_subslet_fresh_context Γ ts2) opb).
   Qed.
 
   (** ** 2. Spine congruence
@@ -102,11 +103,11 @@ Section Congruence.
     [PCUICConversion.ws_cumul_pb_mkApps] is MetaRocq's rule for a head that is already
     convertible. [ws_cumul_pb_Ind] and [ws_cumul_pb_Construct] are MetaRocq's rules for an
     inductive or constructor head compared with variance at [napp = #|args|]. The machine,
-    however, compares heads with [cmp_term pb #|sp|], a *syntactic* test at [napp] = the
-    spine length, for every head shape; [ws_cumul_pb_mkApps_napp] below is that rule,
+    however, compares heads with [cbn_cmp_term pb #|sp|], a *syntactic* test at [napp] = the
+    spine length, for every head shape; [cbn_ws_cumul_pb_mkApps_napp] below is that rule,
     proved here. *)
 
-  Lemma ws_cumul_pb_mkApps_napp {pb Γ hd hd' args args'} :
+  Lemma cbn_ws_cumul_pb_mkApps_napp {pb Γ hd hd' args args'} :
     is_closed_context Γ ->
     is_open_term Γ hd ->
     is_open_term Γ hd' ->
@@ -131,12 +132,12 @@ Section Congruence.
 
   (** ** 3. Case congruence
 
-    [PCUICConversion.ws_cumul_pb_Case] is MetaRocq's own. [ws_cumul_pb_tCase] below is the
+    [PCUICConversion.ws_cumul_pb_Case] is MetaRocq's own. [cbn_ws_cumul_pb_tCase] below is the
     same rule with its [ws_cumul_pb_predicate] and [ws_cumul_pb_brs] hypotheses spelled out
     component by component, and with the openness hypothesis in the form the machine has it
     (openness of the whole [tCase] term, which is what the state invariant carries). *)
 
-  Lemma ws_cumul_pb_tCase {pb Γ ci p p' c c' brs brs'} :
+  Lemma cbn_ws_cumul_pb_tCase {pb Γ ci p p' c c' brs brs'} :
     is_open_term Γ (tCase ci p c brs) ->
     is_open_term Γ (tCase ci p' c' brs') ->
     ws_cumul_pb_terms Σ Γ p.(pparams) p'.(pparams) ->
@@ -162,10 +163,10 @@ Section Congruence.
   (** ** 4. Syntactic equality
 
     The test the machine runs before anything else ([eqb_term_upto_univ_napp] at [napp = 0],
-    from [PCUICEqualityDec]). [ws_cumul_pb_compare_term] is MetaRocq's constructor
+    from [PCUICEqualityDec]). [cbn_ws_cumul_pb_compare_term] is MetaRocq's constructor
     [ws_cumul_pb_compare] read as a rule. *)
 
-  Lemma ws_cumul_pb_compare_term {pb Γ t u} :
+  Lemma cbn_ws_cumul_pb_compare_term {pb Γ t u} :
     is_closed_context Γ ->
     is_open_term Γ t ->
     is_open_term Γ u ->
@@ -177,17 +178,17 @@ Section Congruence.
 
     The [Transitive] instance of [ws_cumul_pb], [red_ws_cumul_pb_left] and
     [red_ws_cumul_pb_right] are MetaRocq's ([PCUICWellScopedCumulativity]).
-    [ws_cumul_pb_closed_red] packs the last two into the one step every row of the
+    [cbn_ws_cumul_pb_closed_red] packs the last two into the one step every row of the
     comparison takes: the evaluator reduces both sides to the terms the two values read
     back to, and a congruence compares those. *)
 
-  Lemma ws_cumul_pb_conv_trans_r {pb Γ t u v} :
+  Lemma cbn_ws_cumul_pb_conv_trans_r {pb Γ t u v} :
     Σ ;;; Γ ⊢ t ≤[pb] u -> Σ ;;; Γ ⊢ u = v -> Σ ;;; Γ ⊢ t ≤[pb] v.
   Proof using wfΣ.
     intros h1 h2. etransitivity; [exact h1|]. now apply ws_cumul_eq_pb.
   Qed.
 
-  Lemma ws_cumul_pb_closed_red {pb Γ t t' u u'} :
+  Lemma cbn_ws_cumul_pb_closed_red {pb Γ t t' u u'} :
     Σ ;;; Γ ⊢ t ⇝ t' ->
     Σ ;;; Γ ⊢ u ⇝ u' ->
     Σ ;;; Γ ⊢ t' ≤[pb] u' ->
@@ -200,20 +201,20 @@ Section Congruence.
 
 End Congruence.
 
-(** ** The branch contexts the machine checks with [case_ctx_ok]
+(** ** The branch contexts the machine checks with [cbn_case_ctx_ok]
 
-  [PCUICCallByNeed.case_ctx_ok ctx1 ctx2] is the machine's run-time check on the
+  [PCUICCallByNeed.cbn_case_ctx_ok ctx1 ctx2] is the machine's run-time check on the
   [pcontext]s and [bcontext]s of a stuck match: both are let-free and they are equal up to
   names. These are the two facts [ws_cumul_pb_Case] and the read-back of a branch body ask
   for; the machine gives up on any context with a let-in, so there is nothing weaker to
   prove here. *)
 
-Lemma case_ctx_ok_spec ctx1 ctx2 :
-  case_ctx_ok ctx1 ctx2 ->
+Lemma cbn_case_ctx_ok_spec ctx1 ctx2 :
+  cbn_case_ctx_ok ctx1 ctx2 ->
   [× eq_context_upto_names ctx1 ctx2,
      assumption_context ctx1 & assumption_context ctx2].
 Proof.
-  unfold case_ctx_ok.
+  unfold cbn_case_ctx_ok.
   induction ctx1 as [|d1 ctx1 IH] in ctx2 |- *; destruct ctx2 as [|d2 ctx2]; simpl.
   - intros _. split; constructor.
   - intros h. discriminate h.
@@ -228,12 +229,4 @@ Proof.
                 {| decl_name := na2; decl_body := None; decl_type := ty2 |}) as [hd|hd].
     + intros _. split; constructor; assumption.
     + intros hf. discriminate hf.
-Qed.
-
-Lemma assumption_context_map_context f ctx :
-  assumption_context ctx -> assumption_context (map_context f ctx).
-Proof.
-  induction 1; simpl.
-  - constructor.
-  - constructor. assumption.
 Qed.

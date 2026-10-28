@@ -6,6 +6,58 @@ From MetaRocq.SafeCheckerPlugin Require Import Loader.
     Each refused shape has a twin that the kernel accepts, and SafeCheck must
     accept the twin. *)
 
+(** A known divergence, pinned here so that a change to it is deliberate.
+    A recursive function passed unapplied into an argument that the
+    reduction then discards: Rocq's kernel accepts this, because a bare
+    occurrence only asks the kernel to reduce, and the reduction erases it.
+    This checker refuses it, because a part a step discards must carry no
+    pending recursive call.  Two library functions have this shape
+    (Program's obligation wrapper); no object of the corpus the checker was
+    measured on reaches either of them. *)
+Fixpoint unused_beta (n : nat) : nat :=
+  match n with
+  | O => O
+  | S m => (fun (_ : nat -> nat) (k : nat) => k) unused_beta m
+  end.
+
+Fail MetaRocq SafeCheck unused_beta.
+
+(** Its twin, with the function applied to a structural subterm in the
+    discarded argument, is accepted by both. *)
+Fixpoint unused_beta_ctl (n : nat) : nat :=
+  match n with
+  | O => O
+  | S m => (fun (_ : nat) (k : nat) => k) (unused_beta_ctl m) m
+  end.
+
+MetaRocq SafeCheck unused_beta_ctl.
+
+(** A second known divergence, of the type checker and not of the guard, in
+    the same direction.  A fixpoint whose body is a [let] is accepted by
+    Rocq's kernel, and the guard checker accepts it too, but [wf_fixpoint]
+    tests [isLambda] on the body syntactically, so SafeCheck refuses it with
+    "Ill-formed fixpoint".  The block below is the one measured: the inner
+    fixpoint of a construction whose outer loop needs the [let].  Equations
+    generates bodies of this shape as well. *)
+Definition relay_let (outer : nat -> Type) (seed : nat) : nat -> nat -> Type :=
+  fix inner (carry : nat := seed) (p m : nat) {struct m} : Type :=
+    match m with
+    | O => outer p -> False
+    | S rest => inner p rest
+    end.
+
+Fail MetaRocq SafeCheck relay_let.
+
+(** Its twin without the [let] is accepted. *)
+Definition relay_plain (outer : nat -> Type) (seed : nat) : nat -> nat -> Type :=
+  fix inner (p m : nat) {struct m} : Type :=
+    match m with
+    | O => outer p -> False
+    | S rest => inner p rest
+    end.
+
+MetaRocq SafeCheck relay_plain.
+
 (** The recursive parameter itself is not a structural subterm. *)
 Unset Guard Checking.
 Fixpoint loop (n : nat) : False := loop n.

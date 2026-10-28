@@ -7,7 +7,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICParallelReduction PCUICEquality PCUICUnivSubstitutionConv
      PCUICParallelReductionConfluence PCUICConfluence
      PCUICContextReduction PCUICOnFreeVars PCUICWellScopedCumulativity
-     PCUICGuardCondition PCUICClosedTyp.
+     PCUICGuardCondition PCUICClosedTyp PCUICClosedBodies.
 
 From Stdlib Require Import CRelationClasses ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -561,21 +561,26 @@ Section ContextConversion.
     eapply PCUICContextReduction.red_red_ctx; tea; eauto with fvs.
   Qed.
 
-  Lemma red_red_ctx_inv' {Γ Δ : context} {t u} :
+  Lemma red_red_ctx_inv'_cb {cbΣ : ClosedBodies Σ} {Γ Δ : context} {t u} :
     Σ ⊢ Δ ⇝ Γ ->
     Σ ;;; Γ ⊢ t ⇝ u ->
     Σ ;;; Δ ⊢ t ⇝ u.
-  Proof using wfΣ.
+  Proof using Type.
     intros rc [onΓ ont r].
     move: (red_ctx_closed_left rc) => onΔ.
     eapply closed_red_ctx_red_ctx in rc.
     eapply red_ctx_red_context in rc.
-    eapply PCUICContextReduction.red_red_ctx in r.
+    eapply PCUICContextReduction.red_red_ctx_cb in r.
     econstructor; tea. all:eauto with fvs.
     all:try now rewrite (All2_fold_length rc).
     all:eauto with fvs.
     rewrite -(All2_fold_length rc); eauto with fvs.
   Qed.
+  Lemma red_red_ctx_inv' {Γ Δ : context} {t u} :
+    Σ ⊢ Δ ⇝ Γ ->
+    Σ ;;; Γ ⊢ t ⇝ u ->
+    Σ ;;; Δ ⊢ t ⇝ u.
+  Proof using wfΣ. intros; eapply red_red_ctx_inv'_cb; tea; typeclasses eauto. Qed.
 
   Lemma cumul_red_ctx_inv {pb} {Γ Γ' : context} {T U : term} :
     Σ ;;; Γ ⊢ T ≤[pb] U ->

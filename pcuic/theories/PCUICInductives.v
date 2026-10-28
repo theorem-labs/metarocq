@@ -12,7 +12,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICContextConversion PCUICUnivSubstitutionConv
      PCUICUnivSubstitutionTyp
      PCUICConversion PCUICGlobalEnv PCUICInversion PCUICContexts PCUICArities
-     PCUICParallelReduction PCUICWfUniverses PCUICSpine.
+     PCUICParallelReduction PCUICWfUniverses PCUICSpine PCUICClosedBodies.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations.Prop Require Import DepElim.
@@ -2152,19 +2152,19 @@ Proof.
       simpl. len in red.
 Qed.
 
-Lemma red_it_mkProd_or_LetIn_mkApps_Ind {cf} {Σ} {wfΣ : wf Σ} {Γ ctx ind u args v} :
+Lemma red_it_mkProd_or_LetIn_mkApps_Ind_cb {cf} {Σ} {wfΣ : ClosedBodies Σ} {Γ ctx ind u args v} :
   Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args) ⇝ v ->
   ∑ ctx' args', v = it_mkProd_or_LetIn ctx' (mkApps (tInd ind u) args').
 Proof.
   rename Γ into Δ.
   revert Δ v args.
   induction ctx using ctx_length_rev_ind; simpl; intros Δ v args r.
-  - eapply invert_red_mkApps_tInd in r as [args' [-> conv]];  auto.
+  - eapply invert_red_mkApps_tInd_cb in r as [args' [-> conv]];  auto.
     now exists [], args'.
   - rewrite it_mkProd_or_LetIn_app in r.
     destruct d as [na [b|] ty].
     simpl in *.
-    eapply invert_red_letin in r as [[d' [ty' [b' [-> redb redty redbody]]]]|]; auto.
+    eapply invert_red_letin_cb in r as [[d' [ty' [b' [-> redb redty redbody]]]]|]; auto.
     * specialize (X Γ ltac:(lia) _ _ _ redbody).
       destruct X as [ctx' [args' ->]].
       exists (ctx' ++ [vdef na d' ty']).
@@ -2173,11 +2173,15 @@ Proof.
       specialize (X (subst_context [b] 0 Γ) ltac:(autorewrite with len; lia) _ _ _ c).
       apply X.
     * simpl in r.
-      eapply invert_red_prod in r as [A' [B' [-> redty redB']]]; auto.
+      eapply invert_red_prod_cb in r as [A' [B' [-> redty redB']]]; auto.
       specialize (X Γ ltac:(lia) _ _ _ redB') as [ctx' [args' ->]].
       exists (ctx' ++ [vass na A']), args'.
       rewrite it_mkProd_or_LetIn_app /= //.
 Qed.
+Lemma red_it_mkProd_or_LetIn_mkApps_Ind {cf} {Σ} {wfΣ : wf Σ} {Γ ctx ind u args v} :
+  Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args) ⇝ v ->
+  ∑ ctx' args', v = it_mkProd_or_LetIn ctx' (mkApps (tInd ind u) args').
+Proof. intros; eapply red_it_mkProd_or_LetIn_mkApps_Ind_cb; tea; typeclasses eauto. Qed.
 
 (** * Lifting a reduction of a (co)fixpoint's recursive argument type to its whole type
 
