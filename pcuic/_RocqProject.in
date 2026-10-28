@@ -147,4 +147,6 @@ theories/PCUICEtaFInst.v
 theories/PCUICEtaC1aR.v
 # L2 C3 re-pinned to upto_domain_r (plan.md 6.2 obligation 1 re-pin; Prover B's proof)
 theories/PCUICEtaC3BR.v
+# L2 obligation 3: red1 <-> R_c simulations through canon (plan.md 6.2)
+theories/PCUICEtaCanonRed.v
 # theories/All.v
