@@ -212,4 +212,5 @@ theories/PCUICEtaA6.v
 theories/PCUICEtaA6Ind.v
 theories/PCUICEtaA6More.v
 theories/PCUICContextConversionEta.v
+theories/PCUICEtaA6Instances.v
 # theories/All.v
