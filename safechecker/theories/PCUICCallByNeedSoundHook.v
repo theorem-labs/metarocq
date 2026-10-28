@@ -7,85 +7,85 @@ From MetaRocq.SafeChecker Require Import PCUICCallByNeedSoundMemo.
 
 (** * The instance condition of the delta rule
 
-  [PCUICCallByNeedSoundMemo.delta_red1] reduces [tConst kn ui] to the code the machine's
-  [delta] hands back, for every instance, under one premise that only bites when [ui] is
-  empty: [kn]'s universe context must have no variable. [inst_code []] is the identity where
+  [PCUICCallByNeedSoundMemo.cbn_delta_red1] reduces [tConst kn ui] to the code the machine's
+  [cbn_delta] hands back, for every instance, under one premise that only bites when [ui] is
+  empty: [kn]'s universe context must have no variable. [cbn_inst_code []] is the identity where
   [red_delta] substitutes the empty instance, so the two differ on a polymorphic constant
-  applied to [[]], in any environment. This file defines the property [consts_okb] that
-  gives the premise ([inst_okb_nil]) and proves it of well-typed terms and of constant
-  bodies. [PCUICCallByNeedSoundEval.machine_sound] discharges the premise with it, and the
+  applied to [[]], in any environment. This file defines the property [cbn_consts_okb] that
+  gives the premise ([cbn_inst_okb_nil]) and proves it of well-typed terms and of constant
+  bodies. [PCUICCallByNeedSoundEval.cbn_machine_sound] discharges the premise with it, and the
   hook establishes it for the let-bodies of the context in
-  [PCUICCallByNeedSoundHookFrame.cbn_run_gok_frame] (through [wf_local_consts_okb]).
+  [PCUICCallByNeedSoundHookFrame.cbn_run_gok_frame] (through [cbn_wf_local_consts_okb]).
 
-  [consts_okb Σ t] says that every constant the *machine* can reach from [t] carries an
+  [cbn_consts_okb Σ t] says that every constant the *machine* can reach from [t] carries an
   instance of the right length: at [tConst kn u], that [lookup_env Σ kn] is a constant
   whose universe context has exactly [#|u|] variables. It recurses through every subterm
-  [code_inv]'s [step] takes (application, the two sides of a binder, the three of a let, a
+  [cbn_code_inv]'s [step] takes (application, the two sides of a binder, the three of a let, a
   case's parameters, return clause, discriminee and branch bodies, a projection's argument,
   and a (co)fixpoint's bodies), and also through a (co)fixpoint's types and the arguments of
   a [tEvar], which [step] does not take. The machine never makes a child code at a [tPrim]
-  or inside a case's [pcontext]/[bcontext], so [consts_okb] is [true] there.
-  [PCUICCallByNeedSoundEval.code_inv_consts_okb] carries it along the machine's codes.
+  or inside a case's [pcontext]/[bcontext], so [cbn_consts_okb] is [true] there.
+  [PCUICCallByNeedSoundEval.cbn_code_inv_consts_okb] carries it along the machine's codes.
 
-  [typing_consts_okb] proves it of every well-typed term, by [typing_ind_env] with the
+  [cbn_typing_consts_okb] proves it of every well-typed term, by [typing_ind_env] with the
   property that ignores the type, so no substitution lemma is needed: the conclusion term
   of every typing rule is built from the premises' terms, never from their types. The
   [tConst] case is exactly [type_Const]'s own [consistent_instance_ext] premise, through
   [consistent_instance_length].
 
-  [declared_constant_consts_okb] does the same for the body of a declared constant — the
-  case the evaluator really needs, because [delta] unfolds a body and keeps evaluating
+  [cbn_declared_constant_consts_okb] does the same for the body of a declared constant — the
+  case the evaluator really needs, because [cbn_delta] unfolds a body and keeps evaluating
   inside it, so the constants the run reaches are not only subterms of the hook's [t] and
   [u]. A well-formed environment types each constant body in its own universes
-  ([on_declared_constant]), and [consts_okb] does not mention the universe declaration at
+  ([on_declared_constant]), and [cbn_consts_okb] does not mention the universe declaration at
   all — it is about [lookup_env] and lengths — so the same statement transfers. *)
 
 (** ** The instance condition as a boolean on terms *)
 
-Definition inst_okb (Σ : global_env) (kn : kername) (u : Instance.t) : bool :=
+Definition cbn_inst_okb (Σ : global_env) (kn : kername) (u : Instance.t) : bool :=
   match lookup_env Σ kn with
   | Some (ConstantDecl cb) =>
       Nat.eqb #|polymorphic_instance cb.(cst_universes)| #|u|
   | _ => false
   end.
 
-Fixpoint consts_okb (Σ : global_env) (t : term) : bool :=
+Fixpoint cbn_consts_okb (Σ : global_env) (t : term) : bool :=
   match t with
-  | tConst kn u => inst_okb Σ kn u
-  | tEvar _ args => forallb (consts_okb Σ) args
+  | tConst kn u => cbn_inst_okb Σ kn u
+  | tEvar _ args => forallb (cbn_consts_okb Σ) args
   | tProd _ A B
-  | tLambda _ A B => consts_okb Σ A && consts_okb Σ B
-  | tLetIn _ b B u => consts_okb Σ b && consts_okb Σ B && consts_okb Σ u
-  | tApp f a => consts_okb Σ f && consts_okb Σ a
+  | tLambda _ A B => cbn_consts_okb Σ A && cbn_consts_okb Σ B
+  | tLetIn _ b B u => cbn_consts_okb Σ b && cbn_consts_okb Σ B && cbn_consts_okb Σ u
+  | tApp f a => cbn_consts_okb Σ f && cbn_consts_okb Σ a
   | tCase _ p c brs =>
-      forallb (consts_okb Σ) p.(pparams) && consts_okb Σ p.(preturn)
-      && consts_okb Σ c && forallb (fun br => consts_okb Σ br.(bbody)) brs
-  | tProj _ c => consts_okb Σ c
+      forallb (cbn_consts_okb Σ) p.(pparams) && cbn_consts_okb Σ p.(preturn)
+      && cbn_consts_okb Σ c && forallb (fun br => cbn_consts_okb Σ br.(bbody)) brs
+  | tProj _ c => cbn_consts_okb Σ c
   | tFix mfix _
   | tCoFix mfix _ =>
-      forallb (fun d => consts_okb Σ d.(dtype) && consts_okb Σ d.(dbody)) mfix
+      forallb (fun d => cbn_consts_okb Σ d.(dtype) && cbn_consts_okb Σ d.(dbody)) mfix
   | _ => true
   end.
 
-(** What the premise of [delta_red1] asks for, read off [consts_okb]. *)
-Lemma inst_okb_spec (Σ : global_env) (kn : kername) (u : Instance.t) (cb : constant_body) :
-  inst_okb Σ kn u -> lookup_env Σ kn = Some (ConstantDecl cb) ->
+(** What the premise of [cbn_delta_red1] asks for, read off [cbn_consts_okb]. *)
+Lemma cbn_inst_okb_spec (Σ : global_env) (kn : kername) (u : Instance.t) (cb : constant_body) :
+  cbn_inst_okb Σ kn u -> lookup_env Σ kn = Some (ConstantDecl cb) ->
   #|polymorphic_instance cb.(cst_universes)| = #|u|.
 Proof.
-  unfold inst_okb. intros h hl. rewrite hl in h. now apply PeanoNat.Nat.eqb_eq in h.
+  unfold cbn_inst_okb. intros h hl. rewrite hl in h. now apply PeanoNat.Nat.eqb_eq in h.
 Qed.
 
-Lemma inst_okb_nil (Σ : global_env) (kn : kername) (cb : constant_body) :
-  inst_okb Σ kn [] -> lookup_env Σ kn = Some (ConstantDecl cb) ->
+Lemma cbn_inst_okb_nil (Σ : global_env) (kn : kername) (cb : constant_body) :
+  cbn_inst_okb Σ kn [] -> lookup_env Σ kn = Some (ConstantDecl cb) ->
   #|polymorphic_instance cb.(cst_universes)| = 0.
-Proof. intros h hl. exact (inst_okb_spec Σ kn [] cb h hl). Qed.
+Proof. intros h hl. exact (cbn_inst_okb_spec Σ kn [] cb h hl). Qed.
 
 (** ** Every well-typed term satisfies it *)
 
-Lemma ctx_inst_consts_okb {cf : checker_flags} (Σ : global_env_ext) (Γ : context)
+Lemma cbn_ctx_inst_consts_okb {cf : checker_flags} (Σ : global_env_ext) (Γ : context)
     (l : list term) (Δ : context) :
-  ctx_inst (Prop_conj typing (fun Σ _ t _ => consts_okb Σ.1 t) Σ) Γ l Δ ->
-  All (fun t => consts_okb Σ.1 t) l.
+  ctx_inst (Prop_conj typing (fun Σ _ t _ => cbn_consts_okb Σ.1 t) Σ) Γ l Δ ->
+  All (fun t => cbn_consts_okb Σ.1 t) l.
 Proof.
   induction 1 as [|na t i inst Δ ty hc IH|na b t inst Δ hc IH].
   - constructor.
@@ -93,10 +93,10 @@ Proof.
   - exact IH.
 Qed.
 
-Lemma typing_consts_okb {cf : checker_flags} :
-  env_prop (fun Σ _ t _ => consts_okb Σ.1 t)
-    (fun Σ _ j => option_default (consts_okb Σ.1) (j_term j) true
-                  && consts_okb Σ.1 (j_typ j))
+Lemma cbn_typing_consts_okb {cf : checker_flags} :
+  env_prop (fun Σ _ t _ => cbn_consts_okb Σ.1 t)
+    (fun Σ _ j => option_default (cbn_consts_okb Σ.1) (j_term j) true
+                  && cbn_consts_okb Σ.1 (j_typ j))
     (fun _ _ => True).
 Proof.
   apply typing_ind_env.
@@ -119,10 +119,10 @@ Proof.
   - (* tApp *) intros Σ wfΣ Γ wfΓ t na A B u s _ _ _ _ ht _ hu.
     cbn. now rewrite ht, hu.
   - (* tConst *) intros Σ wfΣ Γ wfΓ cst u decl _ _ hdecl hcons.
-    cbn. unfold inst_okb.
+    cbn. unfold cbn_inst_okb.
     unshelve eapply declared_constant_to_gen in hdecl; eauto.
     unfold declared_constant_gen in hdecl. rewrite hdecl.
-    apply PeanoNat.Nat.eqb_eq. rewrite poly_instance_abstract.
+    apply PeanoNat.Nat.eqb_eq. rewrite cbn_poly_instance_abstract.
     now rewrite <- (consistent_instance_length (Σ := Σ) (univs := decl.(cst_universes)) hcons).
   - (* tInd *) intros. reflexivity.
   - (* tConstruct *) intros. reflexivity.
@@ -132,7 +132,7 @@ Proof.
     cbn. apply andb_true_iff; split; [apply andb_true_iff; split;
       [apply andb_true_iff; split|]|].
     + apply All_forallb.
-      pose proof (ctx_inst_consts_okb Σ Γ _ _ hctxi) as hall.
+      pose proof (cbn_ctx_inst_consts_okb Σ Γ _ _ hctxi) as hall.
       now eapply All_app in hall as [hall _].
     + exact hpret.
     + exact hcc.
@@ -155,28 +155,28 @@ Proof.
   - (* cumulativity *) intros Σ wfΣ Γ wfΓ t A B s _ _ ht _ _ _. exact ht.
 Qed.
 
-Lemma typing_consts_okb' {cf : checker_flags} (Σ : global_env_ext) (Γ : context)
+Lemma cbn_typing_consts_okb' {cf : checker_flags} (Σ : global_env_ext) (Γ : context)
     (t T : term) :
-  wf Σ -> Σ ;;; Γ |- t : T -> consts_okb Σ.1 t.
-Proof. intros wfΣ ty. exact (snd (snd (typing_consts_okb Σ wfΣ Γ t T ty))). Qed.
+  wf Σ -> Σ ;;; Γ |- t : T -> cbn_consts_okb Σ.1 t.
+Proof. intros wfΣ ty. exact (snd (snd (cbn_typing_consts_okb Σ wfΣ Γ t T ty))). Qed.
 
 (** ** The constants reached inside an unfolded body
 
     The evaluator does not only reach constants that are subterms of the hook's [t] and
-    [u]: [delta] unfolds a constant's body and keeps evaluating inside it. But in a
+    [u]: [cbn_delta] unfolds a constant's body and keeps evaluating inside it. But in a
     well-formed environment that body is itself well-typed, in the constant's own
-    universes ([on_declared_constant]), and [consts_okb] does not read the universe
+    universes ([on_declared_constant]), and [cbn_consts_okb] does not read the universe
     declaration at all — only [lookup_env] and instance lengths — so the same property
     holds of it. This is the case the bridge really needs. *)
 
-Lemma declared_constant_consts_okb {cf : checker_flags} (Σ : global_env)
+Lemma cbn_declared_constant_consts_okb {cf : checker_flags} (Σ : global_env)
     (kn : kername) (cb : constant_body) (body : term) :
   wf Σ -> declared_constant Σ kn cb -> cb.(cst_body) = Some body ->
-  consts_okb Σ body.
+  cbn_consts_okb Σ body.
 Proof.
   intros wfΣ hdecl hb.
   pose proof (on_declared_constant wfΣ hdecl) as hon.
   unfold on_constant_decl in hon. rewrite hb in hon. cbn in hon.
   destruct hon as [hck _].
-  exact (typing_consts_okb' (Σ, cst_universes cb) [] body (cst_type cb) wfΣ hck).
+  exact (cbn_typing_consts_okb' (Σ, cst_universes cb) [] body (cst_type cb) wfΣ hck).
 Qed.

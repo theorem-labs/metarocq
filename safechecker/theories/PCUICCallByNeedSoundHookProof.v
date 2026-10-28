@@ -19,18 +19,18 @@ From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
   well-typedness of [t] and [u] in [Γ], and [convert_cbn_sound] restates it in exactly the
   shape of [convert]'s obligation.
 
-  The proof follows [cbn_run]'s first call. [cbn_run_eq] exposes it: [conv_term] at fuel
-  [cbn_depth] and level [#|Γ|] on the two root codes [run_c1], [run_c2], in the start state
-  [run_s2], with no roots. [cbn_run_gok_frame] gives the start state's [gok] (at
+  The proof follows [cbn_run]'s first call. [cbn_run_eq] exposes it: [cbn_conv_term] at fuel
+  [cbn_depth] and level [#|Γ|] on the two root codes [cbn_run_c1], [cbn_run_c2], in the start state
+  [cbn_run_s2], with no roots. [cbn_run_gok_frame] gives the start state's [cbn_gok] (at
   [Δ = []], level [#|Γ|]), the two codes in the ghost's table and their readings [t] and
-  [u]; with the empty heap ([run_s2_heap]) this is [minv] at [L = Q = #|Γ|]
-  ([minv_start]). [spec_term] at [cbn_depth] then turns the answer [true] into
+  [u]; with the empty heap ([cbn_run_s2_heap]) this is [cbn_minv] at [L = Q = #|Γ|]
+  ([cbn_minv_start]). [cbn_spec_term] at [cbn_depth] then turns the answer [true] into
   [cbn_lift_conv L L le t u]. With [Q - L = 0] the lift is the identity, [t] and [u] are scoped at
   [#|Γ|] ([subject_closed]), and [Δ = []] gives the conversion in [Γ] itself.
 
-  The comparison theorem [forall d, spec_all d] is [PCUICCallByNeedSoundConv.spec_all_holds].
-  Its read-back premise [rb_sound] is [PCUICCallByNeedSoundReadBack.rb_sound_holds]. Every
-  other premise of [spec_term]'s call is discharged here from the obligation's own context,
+  The comparison theorem [forall d, cbn_spec_all d] is [PCUICCallByNeedSoundConv.cbn_spec_all_holds].
+  Its read-back premise [cbn_rb_sound] is [PCUICCallByNeedSoundReadBack.cbn_rb_sound_holds]. Every
+  other premise of [cbn_spec_term]'s call is discharged here from the obligation's own context,
   so [convert_cbn_sound] has no hypothesis beyond the obligation's. *)
 
 Section HookProof.
@@ -48,7 +48,7 @@ Section HookProof.
   Proof. reflexivity. Qed.
 
   (** [cbn_lift_conv] at [L = Q = #|Γ|], read at [Δ = []], for two terms scoped in [Γ]. *)
-  Lemma cq_hook (Σ : global_env_ext) (Γ : context) (le : conv_pb) (t u : term) :
+  Lemma cbn_cq_hook (Σ : global_env_ext) (Γ : context) (le : conv_pb) (t u : term) :
     is_closed_context Γ -> closedn #|Γ| t -> closedn #|Γ| u ->
     cbn_lift_conv Γ #|Γ| Σ #|Γ| #|Γ| le t u -> ∥ Σ ;;; Γ ⊢ t ≤[le] u ∥.
   Proof.
@@ -71,18 +71,18 @@ Section HookProof.
     assert (hΓ : is_closed_context Γ)
       by exact (wf_local_closed_context (wfΣ := wfΣ) (typing_wf_local htA)).
     rewrite cbn_conv_unfold, cbn_run_eq in hc.
-    destruct (conv_term X_type X Γ #|Γ| cbn_depth #|Γ| le env_empty (run_c1 X_type X t)
-                env_empty (run_c2 X_type X t u) [] (run_s2 X_type X t u))
+    destruct (cbn_conv_term X_type X Γ #|Γ| cbn_depth #|Γ| le cbn_env_empty (cbn_run_c1 X_type X t)
+                cbn_env_empty (cbn_run_c2 X_type X t u) [] (cbn_run_s2 X_type X t u))
       as [[[b rs'] s']|w] eqn:Ec; [|discriminate hc].
     destruct b; [|discriminate hc].
-    destruct (spec_all_holds X_type X Γ #|Γ| Σ wfΣ hΣ eq_refl hΓ hhyg hcio
-                (rb_sound_holds X_type X Γ #|Γ| Σ wfΣ hΓ hhyg) cbn_depth)
+    destruct (cbn_spec_all_holds X_type X Γ #|Γ| Σ wfΣ hΣ eq_refl hΓ hhyg hcio
+                (cbn_rb_sound_holds X_type X Γ #|Γ| Σ wfΣ hΓ hhyg) cbn_depth)
       as (_ & _ & _ & hT & _).
-    destruct (hT #|Γ| #|Γ| xH (run_ghost X_type X t u) le env_empty (run_c1 X_type X t)
-                env_empty (run_c2 X_type X t u) t u [] (run_s2 X_type X t u) true rs' s'
-                (r_minv_start X_type X Σ Γ #|Γ| t u eq_refl hok) (Forall_nil _) hs1 hc1 hs2 hc2
+    destruct (hT #|Γ| #|Γ| xH (cbn_run_ghost X_type X t u) le cbn_env_empty (cbn_run_c1 X_type X t)
+                cbn_env_empty (cbn_run_c2 X_type X t u) t u [] (cbn_run_s2 X_type X t u) true rs' s'
+                (cbn_r_minv_start X_type X Σ Γ #|Γ| t u eq_refl hok) (Forall_nil _) hs1 hc1 hs2 hc2
                 Ec) as [_ hq].
-    exact (cq_hook Σ Γ le t u hΓ (subject_closed htA) (subject_closed huB) (hq eq_refl)).
+    exact (cbn_cq_hook Σ Γ le t u hΓ (subject_closed htA) (subject_closed huB) (hq eq_refl)).
   Qed.
 
   (** [cbn_conv_sound] in the shape of [PCUICTypeChecker.convert]'s obligation for the
@@ -95,8 +95,8 @@ Section HookProof.
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ Σ ;;; Γ ⊢ t ≤[le] u ∥.
   Proof.
     intros Hcbn Σ wfΣ.
-    destruct (abstract_env_ext_sq_wf X_type X Σ wfΣ) as [hwf].
-    exact (cbn_conv_sound Σ Γ le t u hwf wfΣ (ht Σ wfΣ) (hu Σ wfΣ) (eq_sym Hcbn)).
+    destruct (abstract_env_ext_sq_wf X_type X Σ wfΣ) as [cbn_hwf].
+    exact (cbn_conv_sound Σ Γ le t u cbn_hwf wfΣ (ht Σ wfΣ) (hu Σ wfΣ) (eq_sym Hcbn)).
   Qed.
 
 End HookProof.

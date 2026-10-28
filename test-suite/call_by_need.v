@@ -1,6 +1,6 @@
 (* Tests of the call-by-need fast path of conversion, [PCUICCallByNeed].
 
-   The machine tests run [whnf] on a fixed term and check the answer by [vm_compute]. The
+   The machine tests run [cbn_whnf] on a fixed term and check the answer by [vm_compute]. The
    conversion tests run [cbn_conv_answer] and [cbn_conv], the function that
    [PCUICTypeChecker.convert] calls. None of them looks up the environment, so they hold for
    every abstract environment [X]. The last section is a well-typed input on which the fast
@@ -28,8 +28,8 @@ Section Machine.
 
   (** Weak-head evaluation of [t] in [Γ], from the initial state, with the fuel of a real
     call. *)
-  Definition t_run (Γ : context) (t : term) : cbn_res (cbn_value * list root * cbn_state) :=
-    whnf X_type X Γ #|Γ| cbn_depth env_empty (mkCode String2pos.xH path_nil t) []
+  Definition t_run (Γ : context) (t : term) : cbn_res (cbn_value * list cbn_root * cbn_state) :=
+    cbn_whnf X_type X Γ #|Γ| cbn_depth cbn_env_empty (cbn_mkCode String2pos.xH cbn_path_nil t) []
       [] cbn_init.
 
   (** ** Iota: the arity of the constructor
@@ -42,7 +42,7 @@ Section Machine.
   Definition t_iota_short : term :=
     tCase (t_ci 1) t_pred t_O [{| bcontext := []; bbody := tSort sProp |}].
 
-  Lemma iota_refuses_missing_parameters : t_run [] t_iota_short = CFail WShape.
+  Lemma iota_refuses_missing_parameters : t_run [] t_iota_short = CbnCFail CbnWShape.
   Proof. vm_compute. reflexivity. Qed.
 
   (** It must fire: no parameter, [S O] against a branch with one assumption, which selects
@@ -54,8 +54,8 @@ Section Machine.
 
   Lemma iota_fires_on_full_arity :
     match t_run [] t_iota_fire with
-    | COk (v, _, _) => v = VCon t_O []
-    | CFail _ => False
+    | CbnCOk (v, _, _) => v = CbnVCon t_O []
+    | CbnCFail _ => False
     end.
   Proof. vm_compute. reflexivity. Qed.
 
@@ -69,8 +69,8 @@ Section Machine.
 
   Lemma iota_fires_after_parameters :
     match t_run [] t_iota_fire_npar with
-    | COk (v, _, _) => v = VCon t_O []
-    | CFail _ => False
+    | CbnCOk (v, _, _) => v = CbnVCon t_O []
+    | CbnCFail _ => False
     end.
   Proof. vm_compute. reflexivity. Qed.
 
@@ -82,7 +82,7 @@ Section Machine.
     tCase (t_ci 0) t_pred t_O
       [{| bcontext := [vdef t_na t_O (tInd t_nat [])]; bbody := tRel 0 |}].
 
-  Lemma iota_gives_up_on_letin_context : t_run [] t_iota_letin = CFail WShape.
+  Lemma iota_gives_up_on_letin_context : t_run [] t_iota_letin = CbnCFail CbnWShape.
   Proof. vm_compute. reflexivity. Qed.
 
   (** ** Fixpoint: the forced recursive argument
@@ -105,8 +105,8 @@ Section Machine.
 
   Lemma fix_passes_a_fresh_forced_cell :
     match t_run t_fixΓ t_fix with
-    | COk (VNeu (NVar 0) [a], _, s) =>
-        a = HAddr 4 /\ heap_get a s = Some (CDone (VCon t_S [HAddr 3]))
+    | CbnCOk (CbnVNeu (CbnNVar 0) [a], _, s) =>
+        a = CbnHAddr 4 /\ cbn_heap_get a s = Some (CbnCDone (CbnVCon t_S [CbnHAddr 3]))
     | _ => False
     end.
   Proof. vm_compute. split; reflexivity. Qed.
@@ -114,22 +114,22 @@ Section Machine.
   (** And the value reads back as [k (S O)], a reduct of [t]. *)
   Lemma fix_reads_back_a_reduct :
     match t_run t_fixΓ t_fix with
-    | COk (v, _, s) =>
-        match rb_value 1 cbn_depth 1 v s with
-        | COk (u, _) => u = tApp (tRel 0) (tApp t_S t_O)
-        | CFail _ => False
+    | CbnCOk (v, _, s) =>
+        match cbn_rb_value 1 cbn_depth 1 v s with
+        | CbnCOk (u, _) => u = tApp (tRel 0) (tApp t_S t_O)
+        | CbnCFail _ => False
         end
-    | CFail _ => False
+    | CbnCFail _ => False
     end.
   Proof. vm_compute. reflexivity. Qed.
 
   (** ** Conversion: the fast path does not answer "convertible" on a stuck match
 
     [t_iota_short] is stuck in PCUIC, so it is not convertible to [Prop]. The machine
-    refuses the branch, so the fast path gives up with [WShape] and [convert] falls through
+    refuses the branch, so the fast path gives up with [CbnWShape] and [convert] falls through
     to the full conversion checker. *)
   Lemma cbn_conv_answer_refuses_missing_parameters :
-    cbn_conv_answer X_type X Conv [] t_iota_short (tSort sProp) = CbnFail WShape.
+    cbn_conv_answer X_type X Conv [] t_iota_short (tSort sProp) = CbnFail CbnWShape.
   Proof. vm_compute. reflexivity. Qed.
 
   Lemma cbn_conv_refuses_missing_parameters :
