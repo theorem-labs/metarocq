@@ -273,6 +273,15 @@ Proof.
   destruct r1, r2, r3; cbn; intros h1 h2; try contradiction; intros; auto.
 Qed.
 
+Lemma Forall2_cons_inv {A B : Type} (R : A -> B -> Prop) (x : A) (l : list A)
+    (m : list B) :
+  Forall2 R (x :: l) m ->
+  exists (y : B) (m' : list B), m = y :: m' /\ R x y /\ Forall2 R l m'.
+Proof.
+  intros h. inversion h; subst. eexists. eexists.
+  split; [reflexivity|]. split; assumption.
+Qed.
+
 Lemma roots_pres_refl (nctx : nat) (H : bheap cbn_cell) (rs : list root) :
   Forall2 (root_pres nctx H H) rs rs.
 Proof. induction rs; constructor; [apply root_pres_refl|assumption]. Qed.
@@ -286,6 +295,219 @@ Proof.
   - eapply root_pres_trans; eassumption.
   - apply ih. assumption.
 Qed.
+
+(** ** Soundness of the machine's syntactic tests
+
+  [cmp_term], [cmp_sort], [cmp_level_conv] and [wf_term_univs] ([PCUICCallByNeed]) and
+  [cbn_ceq_term] ([PCUICCallByNeedSoundMemo]) read the abstract environment [X]; here they
+  are shown sound for every [Σ] that [X] stands for ([abstract_env_ext_rel X Σ]). The proofs
+  replay [PCUICSafeConversion.cmpb_term_correct] and its local lemmas without importing that
+  file, whose section assumes [normalization_in] — a hypothesis the fast path must not
+  depend on. [wf_term_univs_correct] uses the pointwise congruence [cs_on_universes_ext],
+  not functional extensionality. *)
+
+Lemma cs_forallb_ext {A} (f g : A -> bool) (l : list A) :
+  (forall x, f x = g x) -> forallb f l = forallb g l.
+Proof.
+  intros h. induction l as [|x l IH]; cbn; [reflexivity|]. now rewrite h, IH.
+Qed.
+
+(** [on_universes] depends only on the values of its universe test. *)
+Lemma cs_on_universes_ext (f g : Universe.t -> bool) (fc : nat -> term -> bool) :
+  (forall u, f u = g u) -> forall t, on_universes f fc t = on_universes g fc t.
+Proof.
+  intros hfg t.
+  induction t using term_forall_list_ind; cbn.
+  - reflexivity.
+  - reflexivity.
+  - eapply All_forallb_eq_forallb; tea. now intros.
+  - destruct s; cbn; auto.
+  - congruence.
+  - congruence.
+  - congruence.
+  - congruence.
+  - now apply cs_forallb_ext.
+  - now apply cs_forallb_ext.
+  - now apply cs_forallb_ext.
+  - destruct X as [hpar [_ hret]].
+    rewrite (cs_forallb_ext f g _ hfg).
+    rewrite (All_forallb_eq_forallb _ (on_universes f fc) (on_universes g fc) _ hpar);
+      [|now intros].
+    rewrite (All_forallb_eq_forallb _ (test_branch (fc #|puinst p|) (on_universes f fc))
+      (test_branch (fc #|puinst p|) (on_universes g fc)) _ X0);
+      [|intros b [_ hb]; unfold test_branch; now rewrite hb].
+    congruence.
+  - assumption.
+  - eapply All_forallb_eq_forallb; tea. intros d [h1 h2]. now rewrite h1, h2.
+  - eapply All_forallb_eq_forallb; tea. intros d [h1 h2]. now rewrite h1, h2.
+  - eapply test_primu_primProp; tea.
+    + intros x. apply hfg.
+    + now intros.
+Qed.
+
+Lemma cs_reflectT_true {P : Type} {b : bool} : reflectT P b -> b = true -> P.
+Proof.
+  intros r e. destruct r as [p|np]; [exact p|discriminate e].
+Qed.
+
+Section CmpSound.
+  Context {cf : checker_flags}.
+  Context (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Σ : global_env_ext) (hΣ : abstract_env_ext_rel X Σ).
+
+  Lemma wf_term_univs_correct (t : term) : wf_term_univs X_type X t = wf_universes Σ t.
+  Proof.
+    unfold wf_term_univs, wf_universes.
+    apply cs_on_universes_ext. intros u.
+    symmetry. exact (abstract_env_ext_wf_universeb_correct X hΣ u).
+  Qed.
+
+  Lemma cs_iff_reflect (P : Prop) (b : bool) :
+    P <-> b -> reflect P b.
+  Proof.
+    intro H. apply iff_reflect. exact H.
+  Qed.
+
+  Lemma cs_wf_universe_iff u :
+    wf_universeb Σ u <-> wf_universe Σ u.
+  Proof.
+    symmetry; apply reflect_iff. eapply wf_universe_reflect.
+  Qed.
+
+  Lemma cs_wf_sort_iff s :
+    wf_sortb Σ s <-> wf_sort Σ s.
+  Proof.
+    symmetry; apply reflect_iff. eapply wf_sort_reflect.
+  Qed.
+
+  Lemma cs_wf_instance_iff u :
+    wf_instanceb Σ u <-> wf_instance Σ u.
+  Proof.
+    symmetry; apply reflect_iff. eapply wf_instanceP.
+  Qed.
+
+  Lemma cs_compare_global_instance_correct pb ref n l l' :
+    wf_instance Σ l ->
+    wf_instance Σ l' ->
+    cmp_global_instance Σ (compare_universe Σ) pb ref n l l' <->
+    compare_global_instance (abstract_env_lookup X) (abstract_env_compare_universe X)
+      pb ref n l l'.
+  Proof.
+    intros hl hl'. apply reflect_iff.
+    apply (reflect_cmp_global_instance Σ (abstract_env_lookup X) (wf_universeb Σ)).
+    - intros u u' hu hu'. apply cs_iff_reflect.
+      apply (abstract_env_compare_universe_correct X hΣ); now apply cs_wf_universe_iff.
+    - intros u u' hu hu'. apply cs_iff_reflect.
+      apply (abstract_env_compare_universe_correct X hΣ); now apply cs_wf_universe_iff.
+    - intros kn. exact (abstract_env_lookup_correct' X kn hΣ).
+    - rewrite wf_universeb_instance_forall. now apply cs_wf_instance_iff.
+    - rewrite wf_universeb_instance_forall. now apply cs_wf_instance_iff.
+  Qed.
+
+  Lemma cs_cmpb_term_reflect pb napp t u :
+    wf_universes Σ t ->
+    wf_universes Σ u ->
+    reflectT (compare_term_napp Σ Σ pb napp t u)
+      (eqb_term_upto_univ_napp (abstract_env_compare_universe X) (abstract_env_compare_sort X)
+        (compare_global_instance (abstract_env_lookup X) (abstract_env_compare_universe X))
+        pb napp t u).
+  Proof.
+    intros ht hu. unfold compare_term_napp.
+    apply (reflect_eq_term_upto_univ Σ (wf_universeb Σ) closedu).
+    - intros u1 u2 h1 h2. apply cs_iff_reflect.
+      apply (abstract_env_compare_universe_correct X hΣ); now apply cs_wf_universe_iff.
+    - intros u1 u2 h1 h2. apply cs_iff_reflect.
+      apply (abstract_env_compare_universe_correct X hΣ); now apply cs_wf_universe_iff.
+    - intros s1 s2 h1 h2. apply cs_iff_reflect.
+      apply (abstract_env_compare_sort_correct X hΣ); now apply cs_wf_sort_iff.
+    - intros s1 s2 h1 h2. apply cs_iff_reflect.
+      apply (abstract_env_compare_sort_correct X hΣ); now apply cs_wf_sort_iff.
+    - intros gr n ui ui' h1 h2. apply cs_iff_reflect.
+      rewrite wf_universeb_instance_forall in h1.
+      rewrite wf_universeb_instance_forall in h2.
+      apply cs_compare_global_instance_correct; now apply cs_wf_instance_iff.
+    - intros gr n ui ui' h1 h2. apply cs_iff_reflect.
+      rewrite wf_universeb_instance_forall in h1.
+      rewrite wf_universeb_instance_forall in h2.
+      apply cs_compare_global_instance_correct; now apply cs_wf_instance_iff.
+    - exact ht.
+    - exact hu.
+  Qed.
+
+  Lemma cmp_term_wf (pb : conv_pb) (napp : nat) (t u : term) :
+    cmp_term X_type X pb napp t u = true -> wf_universes Σ t /\ wf_universes Σ u.
+  Proof.
+    unfold cmp_term. intros h.
+    apply andb_true_iff in h as [h _].
+    apply andb_true_iff in h as [ht hu].
+    split; rewrite <- wf_term_univs_correct; assumption.
+  Qed.
+
+  Lemma cmp_term_sound (pb : conv_pb) (napp : nat) (t u : term) :
+    cmp_term X_type X pb napp t u = true -> compare_term_napp Σ Σ pb napp t u.
+  Proof.
+    intros h. destruct (cmp_term_wf pb napp t u h) as [ht hu].
+    unfold cmp_term in h. apply andb_true_iff in h as [_ h].
+    exact (cs_reflectT_true (cs_cmpb_term_reflect pb napp t u ht hu) h).
+  Qed.
+
+  Lemma cbn_ceq_term_sound (t u : term) :
+    wf_universes Σ t -> wf_universes Σ u ->
+    cbn_ceq_term X_type X t u = true -> compare_term Σ Σ Conv t u.
+  Proof.
+    intros ht hu h.
+    exact (cs_reflectT_true (cs_cmpb_term_reflect Conv 0 t u ht hu) h).
+  Qed.
+
+  Lemma cmp_sort_sound (pb : conv_pb) (s1 s2 : sort) :
+    cmp_sort X_type X pb s1 s2 = true -> compare_sort Σ pb s1 s2.
+  Proof.
+    unfold cmp_sort. intros h.
+    apply andb_true_iff in h as [h12 h].
+    apply andb_true_iff in h12 as [h1 h2].
+    rewrite <- (abstract_env_ext_wf_sortb_correct X hΣ) in h1.
+    rewrite <- (abstract_env_ext_wf_sortb_correct X hΣ) in h2.
+    assert (w1 : wf_sort Σ s1) by (apply cs_wf_sort_iff; exact h1).
+    assert (w2 : wf_sort Σ s2) by (apply cs_wf_sort_iff; exact h2).
+    exact (proj2 (abstract_env_compare_sort_correct X hΣ pb s1 s2 w1 w2) h).
+  Qed.
+
+  Lemma cmp_level_conv_sound (l1 l2 : Level.t) :
+    cmp_level_conv X_type X l1 l2 = true ->
+    compare_universe Σ Conv (Universe.make' l1) (Universe.make' l2).
+  Proof.
+    unfold cmp_level_conv; cbv zeta. intros h.
+    apply andb_true_iff in h as [h12 h].
+    apply andb_true_iff in h12 as [h1 h2].
+    rewrite <- (abstract_env_ext_wf_universeb_correct X hΣ) in h1.
+    rewrite <- (abstract_env_ext_wf_universeb_correct X hΣ) in h2.
+    assert (w1 : wf_universe Σ (Universe.make' l1)) by (apply cs_wf_universe_iff; exact h1).
+    assert (w2 : wf_universe Σ (Universe.make' l2)) by (apply cs_wf_universe_iff; exact h2).
+    exact (proj2 (abstract_env_compare_universe_correct X hΣ Conv _ _ w1 w2) h).
+  Qed.
+
+  Lemma cmp_level_conv_instance (u1 u2 : Instance.t) :
+    forallb2 (cmp_level_conv X_type X) u1 u2 = true ->
+    cmp_universe_instance (compare_universe Σ Conv) u1 u2.
+  Proof.
+    unfold cmp_universe_instance.
+    revert u2. induction u1 as [|l1 u1 IH]; intros u2; destruct u2 as [|l2 u2]; cbn;
+      try (intros e; discriminate e).
+    - intros _. constructor.
+    - intros h. apply andb_true_iff in h as [h hs]. constructor.
+      + exact (cmp_level_conv_sound l1 l2 h).
+      + exact (IH u2 hs).
+  Qed.
+End CmpSound.
+
+(** ** The fuel a sub-call runs at
+
+  Every function of the comparison matches its fuel [FS k] and calls its neighbours at
+  [k tt]. [fuel_sub d' d] says that [d'] is reachable from [d] that way, so a rule proved
+  at [d] may use the evaluator's seam at every fuel its own sub-calls can reach. *)
+Inductive fuel_sub : cbn_fuel -> cbn_fuel -> Prop :=
+| fuel_sub_refl d : fuel_sub d d
+| fuel_sub_step d k : fuel_sub d (k tt) -> fuel_sub d (FS k).
 
 (** ** The list of readings the same-code rule compares
 
@@ -361,5 +583,268 @@ Section Conv.
         * constructor. exact (@ws_cumul_pb_refl_open cf Σ Conv Ξ u1 clΞ hu).
         * destruct hd as [hd|hd]; [exfalso; congruence|exact hd].
       + exact (ih hl).
+  Qed.
+
+  (** ** What every function of the comparison assumes of the state
+
+    The state invariants of the earlier files, bundled: the heap was built the way
+    [bh_ok] describes and holds no forwarding pointer, the context map names only cells
+    that stand for what the context entry denotes, the code table is good, the five memo
+    tables mean what they say, and no cell names a variable at a level not yet in scope.
+    Raising the level only weakens the last clause. *)
+  Definition cok (lvl : nat) (s : cbn_state) : Prop :=
+    (exists lo : positive, state_ok lo s)
+    /\ heap_nofwd s.(st_heap)
+    /\ (forall l : nat, gam_ok Γ nctx l s)
+    /\ memo_ok X_type X s
+    /\ memo_inv X_type X s
+    /\ heap_wf lvl s.(st_heap).
+
+  Lemma cok_mono (lvl lvl' : nat) (s : cbn_state) : lvl <= lvl' -> cok lvl s -> cok lvl' s.
+  Proof.
+    intros hle (h1 & h2 & h3 & h4 & h5 & h6).
+    split; [exact h1|]. split; [exact h2|]. split; [exact h3|].
+    split; [exact h4|]. split; [exact h5|].
+    exact (heap_wf_mono lvl lvl' _ hle h6).
+  Qed.
+
+  Lemma cok_memo_inv (lvl : nat) (s : cbn_state) : cok lvl s -> memo_inv X_type X s.
+  Proof. intros (_ & _ & _ & _ & h & _). exact h. Qed.
+
+  Lemma cok_ceq_ok (lvl : nat) (s : cbn_state) : cok lvl s -> ceq_ok X_type X (s.(st_memo)).
+  Proof. intros h. exact (proj1 (proj2 (proj2 (proj2 (cok_memo_inv lvl s h))))). Qed.
+
+  (** A step that leaves the heap, the next address, the context map and the code table
+    alone keeps the whole invariant; [code_eq] is such a step. *)
+  Lemma cok_same (lvl : nat) (s s' : cbn_state) :
+    cok lvl s -> memo_inv X_type X s' ->
+    s'.(st_heap) = s.(st_heap) -> s'.(st_next) = s.(st_next) ->
+    s'.(st_gam) = s.(st_gam) ->
+    ((s'.(st_memo)).(m_codes)) = ((s.(st_memo)).(m_codes)) ->
+    cok lvl s'.
+  Proof.
+    intros (h1 & h2 & h3 & h4 & _ & h6) hm he hn hg hc.
+    split; [|split; [|split; [|split; [|split]]]].
+    - destruct h1 as [lo [hb hcl hga]]. exists lo. split.
+      + rewrite he, hn. exact hb.
+      + rewrite he, hn. exact hcl.
+      + rewrite hg, hn. exact hga.
+    - rewrite he. exact h2.
+    - intros l j a hk. rewrite hg in hk. destruct (h3 l j a hk) as [t [hd hr]].
+      exists t. split; [exact hd|]. rewrite he. exact hr.
+    - exact (memo_ok_codes X_type X s s' hc h4).
+    - exact hm.
+    - rewrite he. exact h6.
+  Qed.
+
+  (** ** The seam with the evaluator
+
+    [conv_slot] and [conv_term] are the two doors of the comparison that can force a value
+    ([conv_eval], [whnf]), so their soundness is the evaluator's theorem, not this file's.
+    Each is assumed here in exactly the form the comparison uses it, and nothing else in
+    this file is assumed. A function that answers at all hands the caller's roots back
+    renamed, keeps the state invariant, and — when it answers [true] — relates the two
+    readings. *)
+  Definition slot_seam (d : cbn_fuel) : Prop :=
+    forall (lvl : nat) (pb : conv_pb) (Ξ : context) (x1 x2 : cbn_slot)
+      (rs : list root) (s : cbn_state) (b : bool) (rs' : list root) (s' : cbn_state),
+      cok lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      conv_slot X_type X Γ nctx stress d lvl pb x1 x2 rs s = COk (b, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ cok lvl s'
+      /\ (b = true ->
+          forall t1 t2 : term,
+            repr_slot nctx (s.(st_heap)) lvl x1 t1 ->
+            repr_slot nctx (s.(st_heap)) lvl x2 t2 ->
+            is_open_term Ξ t1 -> is_open_term Ξ t2 ->
+            ∥ Σ ;;; Ξ ⊢ t1 ≤[pb] t2 ∥).
+
+  Definition term_seam (d : cbn_fuel) : Prop :=
+    forall (lvl : nat) (pb : conv_pb) (Ξ : context) (e1 : cbn_env) (c1 : code)
+      (e2 : cbn_env) (c2 : code) (rs : list root) (s : cbn_state) (b : bool)
+      (rs' : list root) (s' : cbn_state),
+      cok lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      conv_term X_type X Γ nctx stress d lvl pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ cok lvl s'
+      /\ (b = true ->
+          forall u1 u2 : term,
+            repr_susp nctx (s.(st_heap)) lvl e1 (c1.(c_term)) u1 ->
+            repr_susp nctx (s.(st_heap)) lvl e2 (c2.(c_term)) u2 ->
+            is_open_term Ξ u1 -> is_open_term Ξ u2 ->
+            ∥ Σ ;;; Ξ ⊢ u1 ≤[pb] u2 ∥).
+
+  (** The sub-calls run at the fuel [k tt] of the caller's [FS k], so a rule is proved
+    from the seam at every fuel the caller can reach. *)
+  Definition slot_seam_below (d : cbn_fuel) : Prop :=
+    forall d' : cbn_fuel, fuel_sub d' d -> slot_seam d'.
+
+  Definition term_seam_below (d : cbn_fuel) : Prop :=
+    forall d' : cbn_fuel, fuel_sub d' d -> term_seam d'.
+
+  Lemma slot_seam_below_step (k : unit -> cbn_fuel) :
+    slot_seam_below (FS k) -> slot_seam_below (k tt).
+  Proof. intros h d' hs. exact (h d' (fuel_sub_step d' k hs)). Qed.
+
+  Lemma term_seam_below_step (k : unit -> cbn_fuel) :
+    term_seam_below (FS k) -> term_seam_below (k tt).
+  Proof. intros h d' hs. exact (h d' (fuel_sub_step d' k hs)). Qed.
+
+  Lemma slot_seam_below_here (k : unit -> cbn_fuel) :
+    slot_seam_below (FS k) -> slot_seam (k tt).
+  Proof. intros h. exact (h (k tt) (fuel_sub_step _ k (fuel_sub_refl _))). Qed.
+
+  Lemma term_seam_below_here (k : unit -> cbn_fuel) :
+    term_seam_below (FS k) -> term_seam (k tt).
+  Proof. intros h. exact (h (k tt) (fuel_sub_step _ k (fuel_sub_refl _))). Qed.
+
+  (** ** Reading a renamed root *)
+
+  Lemma root_pres_RSk_inv (H H' : bheap cbn_cell) (l : list cbn_slot) (r : root) :
+    root_pres nctx H H' (RSk l) r ->
+    exists l' : list cbn_slot,
+      r = RSk l'
+      /\ (forall lvl ts, repr_slots nctx H lvl l ts -> repr_slots nctx H' lvl l' ts).
+  Proof.
+    destruct r as [a|x|e|v|lk|lp|cl]; cbn; intros h; try contradiction.
+    exists lk. split; [reflexivity|exact h].
+  Qed.
+
+  Lemma root_pres_RE_inv (H H' : bheap cbn_cell) (e : cbn_env) (r : root) :
+    root_pres nctx H H' (RE e) r ->
+    exists e' : cbn_env,
+      r = RE e'
+      /\ (forall lvl tm u, repr_susp nctx H lvl e tm u -> repr_susp nctx H' lvl e' tm u).
+  Proof.
+    destruct r as [a|x|e0|v|lk|lp|cl]; cbn; intros h; try contradiction.
+    exists e0. split; [reflexivity|exact h].
+  Qed.
+
+  Lemma haddr_eqb_eq (a b : haddr) : haddr_eqb a b = true -> a = b.
+  Proof.
+    destruct a as [p], b as [q]. unfold haddr_eqb. cbn. intros h.
+    apply Pos.eqb_eq in h. rewrite h. reflexivity.
+  Qed.
+
+  Lemma repr_slots_nil_inv (H : bheap cbn_cell) (lvl : nat) (ts : list term) :
+    repr_slots nctx H lvl [] ts -> ts = [].
+  Proof. intros h. inversion h; subst. reflexivity. Qed.
+
+  Lemma repr_slots_cons_inv (H : bheap cbn_cell) (lvl : nat) (x : cbn_slot)
+      (l : list cbn_slot) (ts : list term) :
+    repr_slots nctx H lvl (x :: l) ts ->
+    exists (u : term) (ts' : list term),
+      ts = u :: ts' /\ repr_slot nctx H lvl x u /\ repr_slots nctx H lvl l ts'.
+  Proof.
+    intros h. inversion h; subst. eexists. eexists.
+    split; [reflexivity|]. split; eassumption.
+  Qed.
+
+  (** The body of [same_code_cells] at a successor fuel, written with the names of the
+    comparison's functions: [cbn] would replace them by the raw mutual fixpoint. *)
+  Lemma same_code_cells_eq (k : unit -> cbn_fuel) (lvl : nat) (t : term) (i : nat)
+      (l1 l2 : list cbn_slot) (rs : list root) (s : cbn_state) :
+    same_code_cells X_type X Γ nctx stress (FS k) lvl t i l1 l2 rs s
+    = match l1, l2 with
+      | [], [] => COk (true, rs, s)
+      | x1 :: l1, x2 :: l2 =>
+        if slot_same x1 x2 || noccur_between i 1 t
+        then same_code_cells X_type X Γ nctx stress (k tt) lvl t (S i) l1 l2 rs s
+        else
+          match conv_slot X_type X Γ nctx stress (k tt) lvl Conv x1 x2
+                  (RSk l1 :: RSk l2 :: rs) s with
+          | COk (true, rs, s) =>
+            match rs with
+            | RSk l1 :: RSk l2 :: rs =>
+              same_code_cells X_type X Γ nctx stress (k tt) lvl t (S i) l1 l2 rs s
+            | _ => CFail WRoots
+            end
+          | COk (false, rs, s) => COk (false, skipn 2 rs, s)
+          | CFail w => CFail w
+          end
+      | _, _ => COk (false, rs, s)
+      end.
+  Proof. reflexivity. Qed.
+
+  (** ** The same-code rule, cell by cell
+
+    [same_code_cells] walks the two environments side by side: it skips a position whose
+    two slots are the same address (so the two readings are the same term), and a position
+    the code does not use ([noccur_between i 1 t]); everything else goes to [conv_slot].
+    What it establishes is exactly [cells_agree]. *)
+  Lemma same_code_cells_sound :
+    forall (d : cbn_fuel) (lvl : nat) (Ξ : context) (t : term) (i : nat)
+      (l1 l2 : list cbn_slot) (ts1 ts2 : list term) (rs : list root) (s : cbn_state)
+      (rs' : list root) (s' : cbn_state),
+      slot_seam_below d ->
+      cok lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      repr_slots nctx (s.(st_heap)) lvl l1 ts1 ->
+      repr_slots nctx (s.(st_heap)) lvl l2 ts2 ->
+      forallb (is_open_term Ξ) ts1 = true ->
+      forallb (is_open_term Ξ) ts2 = true ->
+      same_code_cells X_type X Γ nctx stress d lvl t i l1 l2 rs s = COk (true, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ cok lvl s'
+      /\ cells_agree Ξ t i ts1 ts2.
+  Proof.
+    intros d. induction d as [|k ih]; intros lvl Ξ t i l1 l2 ts1 ts2 rs s rs' s'
+      hseam hok hlen clΞ hnc hr1 hr2 ho1 ho2 he.
+    { cbn in he. discriminate he. }
+    rewrite same_code_cells_eq in he.
+    destruct l1 as [|x1 l1]; destruct l2 as [|x2 l2].
+    - (* both exhausted *)
+      cbn in he. inversion he; subst.
+      rewrite (repr_slots_nil_inv _ _ _ hr1), (repr_slots_nil_inv _ _ _ hr2).
+      split; [apply roots_pres_refl|]. split; [exact hok|]. constructor.
+    - discriminate he.
+    - discriminate he.
+    - destruct (repr_slots_cons_inv _ _ _ _ _ hr1) as [u1 [ts1' [-> [hx1 hl1]]]].
+      destruct (repr_slots_cons_inv _ _ _ _ _ hr2) as [u2 [ts2' [-> [hx2 hl2]]]].
+      cbn in ho1, ho2.
+      apply andb_true_iff in ho1 as [hou1 ho1].
+      apply andb_true_iff in ho2 as [hou2 ho2].
+      destruct (slot_same x1 x2 || noccur_between i 1 t) eqn:Eskip.
+      + (* the machine skipped this position *)
+        destruct (ih tt lvl Ξ t (S i) l1 l2 ts1' ts2' rs s rs' s'
+                    (slot_seam_below_step k hseam) hok hlen clΞ hnc hl1 hl2 ho1 ho2 he)
+          as (hp & hok' & hag).
+        split; [exact hp|]. split; [exact hok'|].
+        constructor; [|exact hag].
+        apply orb_true_iff in Eskip as [Esame|Enocc]; [|left; exact Enocc].
+        right.
+        (* the same address: the two slots stand for one term *)
+        destruct x1 as [a1|? ? ? ?], x2 as [a2|? ? ? ?]; cbn in Esame;
+          try discriminate Esame.
+        apply haddr_eqb_eq in Esame. subst a2.
+        assert (hu : u1 = u2).
+        { exact (proj1 (proj2 (proj2 (proj2 (repr_det nctx (s.(st_heap))))))
+                   lvl (SAddr a1) u1 hx1 u2 hx2). }
+        subst u2. constructor.
+        exact (@ws_cumul_pb_refl_open cf Σ Conv Ξ u1 clΞ hou1).
+      + (* the machine compared this position *)
+        destruct (conv_slot X_type X Γ nctx stress (k tt) lvl Conv x1 x2
+                    (RSk l1 :: RSk l2 :: rs) s) as [[[b2 rs2] s2]|w] eqn:Ecs;
+          [|discriminate he].
+        destruct (slot_seam_below_here k hseam lvl Conv Ξ x1 x2
+                    (RSk l1 :: RSk l2 :: rs) s b2 rs2 s2 hok hlen clΞ hnc Ecs)
+          as (hp1 & hok2 & hconv).
+        destruct b2; [|discriminate he].
+        destruct (Forall2_cons_inv _ _ _ _ hp1) as [r1' [q1 [-> [hpr1 hp1']]]].
+        destruct (root_pres_RSk_inv (s.(st_heap)) (s2.(st_heap)) l1 r1' hpr1)
+          as [l1b [-> hk1]].
+        destruct (Forall2_cons_inv _ _ _ _ hp1') as [r2' [q2 [-> [hpr2 hp2']]]].
+        destruct (root_pres_RSk_inv (s.(st_heap)) (s2.(st_heap)) l2 r2' hpr2)
+          as [l2b [-> hk2]].
+
+        destruct (ih tt lvl Ξ t (S i) l1b l2b ts1' ts2' q2 s2 rs' s'
+                    (slot_seam_below_step k hseam) hok2 hlen clΞ hnc
+                    (hk1 lvl ts1' hl1) (hk2 lvl ts2' hl2) ho1 ho2 he)
+          as (hp & hok' & hag).
+        split.
+        * exact (roots_pres_trans nctx (s.(st_heap)) (s2.(st_heap)) (s'.(st_heap))
+                   rs q2 rs' hp2' hp).
+        * split; [exact hok'|].
+          constructor; [|exact hag].
+          right. exact (hconv eq_refl u1 u2 hx1 hx2 hou1 hou2).
   Qed.
 End Conv.
