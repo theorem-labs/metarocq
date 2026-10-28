@@ -159,3 +159,36 @@ Definition HR_modulo_statement : Type :=
     (* conclusion: union R S confluent modulo E on Q *)
     forall t u v, Q t -> clos_refl_trans (union R S) t u -> clos_refl_trans (union R S) t v ->
       ∑ u' v', clos_refl_trans (union R S) u u' × clos_refl_trans (union R S) v v' × E u' v'.
+
+(** ** Pinned statements for the C1a, C1b and U8 provers.
+
+   They live HERE, in the confluence-free shared file, not in the assembly
+   ([PCUICEtaC4], which Requires [PCUICConfluence]): a statement must never be
+   heavier than what it states. Each prover states its theorem AS the named
+   statement. *)
+
+(** C1a at a FIXED context: all C4 needs ([HR_A_instantiable] takes it at
+    [Γ' := Γ]). The one-step form is FALSE (B3(b)); [clos_refl] is required. *)
+Definition C1a_fixed_statement : Type :=
+  forall (Σ : global_env) (Γ : context) (t t' u : term),
+    upto_domain t t' -> red1 Σ Γ t u ->
+    ∑ u', clos_refl (red1 Σ Γ) t' u' × upto_domain u u'.
+
+Definition C1b_statement : Type :=
+  forall (t t' u : term),
+    upto_domain t t' -> eta1 t u ->
+    ∑ u', clos_refl eta1 t' u' × upto_domain u u'.
+
+(** U8: η confluence modulo [upto_domain]. Unscoped, as η is context-free and
+    upstream's U7 ([eta1_local_confluence], origin/eta_postpo
+    PCUICEtaReduction.v:152) is unscoped. NOTE: upstream U7 is EXACT local
+    confluence ([∑ v, eta u1 v × eta u2 v], no [upto_domain]), so U8 may be
+    proved exactly by Newman from U6 + U7 and then weakened by [upto_domain_refl]
+    — C1b is not needed for U8. Newman IS valid here: η alone is SN (U6).
+    U7 is NOT in our tree: it exists only upstream, on the 2020 AST, and must
+    be PORTED (the plan's "PROVED" referred to upstream). *)
+Definition U8_statement : Type :=
+  forall (t u v : term),
+    clos_refl_trans eta1 t u -> clos_refl_trans eta1 t v ->
+    ∑ u' v', clos_refl_trans eta1 u u' × clos_refl_trans eta1 v v' × upto_domain u' v'.
+

@@ -1,13 +1,15 @@
 (* Distributed under the terms of the MIT license. *)
 (** * BET-315 eta lane, C4 / I4: βη confluence up to [upto_domain] — ASSEMBLY.
 
-   P-INST (EtaL2). This file proves [C4_statement] from five STAGED hypotheses,
-   each stated EXACTLY as the dispatched prover delivers it:
-     HA   theorem (A)  [HR_strong_commutation_modulo_statement]  (C4A1, C4A2)
-     HB   theorem (B)  [HR_modulo_statement]                     (C4B)
-     C1a  [C1a_fixed_statement]                                   (C4C1a)
-     C1b  [C1b_statement]                                         (C4C1b)
-     U8   [U8_statement]                                          (C4U6U8)
+   P-INST (EtaL2). This file proves [C4_statement] from STAGED hypotheses, each
+   stated EXACTLY as the dispatched prover delivers it; landed ones are swapped
+   for the real lemma.
+     HA   theorem (A)  [HR_strong_commutation_modulo_statement]  (C4A1, C4A2) staged
+     HB   theorem (B)  [HR_modulo_statement]                     (C4B)  LANDED:
+          [HR_modulo], [PCUICEtaHRModulo] (from wip/c4-C4B-2026-10-28 @ 18f37f50)
+     C1a  [C1a_fixed_statement]                                   (C4C1a) staged
+     C1b  [C1b_statement]                                         (C4C1b) staged
+     U8   [U8_statement]                                          (C4U6U8) staged
    Everything else is discharged by lemmas that already exist: [red_confluence]
    (the β leg, base), P-SCOPE ([PCUICEtaScope]), the [upto_domain] equivalence
    ([PCUICEtaConfluence]) and the (A) shape guard ([PCUICEtaC4Shape], which
@@ -24,38 +26,18 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICReduction PCUICOnFreeVars PCUICTyping
      PCUICConfluence PCUICEtaDefs PCUICEtaConfluence PCUICEtaBetaEta PCUICEtaScope
-     PCUICEtaC4Shape PCUICEtaC3B.
+     PCUICEtaC4Shape PCUICEtaC3B PCUICEtaHRModulo.
 
-(** ** Staged statements — exact, as dispatched. *)
-
-(** C1a at a FIXED context: all C4 needs ([HR_A_instantiable] takes it at
-    [Γ' := Γ]). The one-step form is FALSE (B3(b)); [clos_refl] is required. *)
-Definition C1a_fixed_statement : Type :=
-  forall (Σ : global_env) (Γ : context) (t t' u : term),
-    upto_domain t t' -> red1 Σ Γ t u ->
-    ∑ u', clos_refl (red1 Σ Γ) t' u' × upto_domain u u'.
-
-Definition C1b_statement : Type :=
-  forall (t t' u : term),
-    upto_domain t t' -> eta1 t u ->
-    ∑ u', clos_refl eta1 t' u' × upto_domain u u'.
-
-(** U8: η confluence modulo [upto_domain]. Unscoped, as η is context-free and
-    upstream's U7 ([eta1_local_confluence], origin/eta_postpo
-    PCUICEtaReduction.v:152) is unscoped. NOTE: upstream U7 is EXACT local
-    confluence ([∑ v, eta u1 v × eta u2 v], no [upto_domain]), so U8 may be
-    proved exactly by Newman from U6 + U7 and then weakened by [upto_domain_refl]
-    — C1b is not needed for U8. Newman IS valid here: η alone is SN (U6). *)
-Definition U8_statement : Type :=
-  forall (t u v : term),
-    clos_refl_trans eta1 t u -> clos_refl_trans eta1 t v ->
-    ∑ u' v', clos_refl_trans eta1 u u' × clos_refl_trans eta1 v v' × upto_domain u' v'.
+(** ** Staged statements: [C1a_fixed_statement], [C1b_statement] and
+    [U8_statement] live in the confluence-free shared file [PCUICEtaBetaEta]
+    (byte-identical), NOT here: this file Requires [PCUICConfluence], and a
+    prover that Required its pinned statement from here would inherit base
+    confluence for a statement that is itself confluence-free. *)
 
 (** ** The assembly. *)
 
 Section C4Assembly.
   Context (HA  : HR_strong_commutation_modulo_statement)
-          (HB  : HR_modulo_statement)
           (C1a : C1a_fixed_statement)
           (C1b : C1b_statement)
           (U8  : U8_statement).
@@ -66,7 +48,8 @@ Section C4Assembly.
     rewrite /beta_eta /beta_eta1 in Hu Hv |- *.
     have HΓ' : on_ctx_free_vars (shiftnP #|Γ| xpred0) Γ
       by rewrite on_free_vars_ctx_on_ctx_free_vars.
-    eapply (HB term (red1 Σ Γ) eta1 upto_domain (is_open_term Γ)).
+    (* (B): the real lemma, no longer a hypothesis *)
+    eapply (HR_modulo term (red1 Σ Γ) eta1 upto_domain (is_open_term Γ)).
     - (* R preserves Q (P-SCOPE, base half) *)
       intros a b Ha Hr.
       apply (@beta_eta1_on_free_vars cf Σ wfΣ _ Γ a b HΓ'); [left; exact Hr | exact Ha].
