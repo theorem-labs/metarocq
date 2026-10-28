@@ -42,9 +42,8 @@ Definition set_array_value (ar : array_model term) (v : list term) :=
   instance: neither carries a de Bruijn variable, a universe or a proper
   subterm.  Every syntactic operation the stability proofs push through the
   rule -- lifting, substitution, universe substitution, renaming,
-  instantiation -- is therefore the identity on them, and they are closed.  The
-  row of syntactic inductions over [red1_ind_all] uses these lemmas once per
-  operation. *)
+  instantiation -- is therefore the identity on them.  The stability proofs
+  use [prim_ground_readback], [prim_ground_subst_instance] and [map_prim_ground]. *)
 
 Definition prim_ground (t : term) : Prop :=
   (exists l, t = term_of_lit l) \/ (exists ind n, t = tConstruct ind n []).
@@ -60,16 +59,7 @@ Proof.
     intros [= <-]. right. now do 2 eexists.
 Qed.
 
-Lemma prim_ground_lift n k t : prim_ground t -> lift n k t = t.
-Proof. intros [[[] ->]|[? [? ->]]]; reflexivity. Qed.
-
-Lemma prim_ground_subst s k t : prim_ground t -> subst s k t = t.
-Proof. intros [[[] ->]|[? [? ->]]]; reflexivity. Qed.
-
 Lemma prim_ground_subst_instance u t : prim_ground t -> subst_instance u t = t.
-Proof. intros [[[] ->]|[? [? ->]]]; reflexivity. Qed.
-
-Lemma prim_ground_closedn k t : prim_ground t -> closedn k t.
 Proof. intros [[[] ->]|[? [? ->]]]; reflexivity. Qed.
 
 (** The arguments of a redex are fixed by any operation that fixes ground
