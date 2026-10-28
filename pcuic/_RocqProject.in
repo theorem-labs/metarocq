@@ -189,4 +189,6 @@ theories/PCUICEtaFInstTransport.v
 theories/PCUICEtaFInstC1c.v
 # L2 obligation 8 (STAGED AT FollowSpec), A3 piece: U1' flip and right-hand C1c (C4-SIDE)
 theories/PCUICEtaFInstFlip.v
+# L2 obligation 8 (STAGED AT FollowSpec), A3 piece: eta1 C1c for U1' (C4-SIDE)
+theories/PCUICEtaFInstEtaC1c.v
 # theories/All.v
