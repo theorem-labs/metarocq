@@ -151,4 +151,6 @@ theories/PCUICEtaC3BR.v
 theories/PCUICEtaCanonRed.v
 # L2 obligation 4: R_c confluent on canonical terms, via base red_confluence (C4-SIDE)
 theories/PCUICEtaCanonConfluence.v
+# L2 obligation 5 (eta1 against canon), confluence-free
+theories/PCUICEtaCanonEta.v
 # theories/All.v
