@@ -933,37 +933,81 @@ Proof.
   rewrite IH canon_ctx_length. reflexivity.
 Qed.
 
+(** List helpers, so the main induction needs no [solve_all] (whose behaviour
+    after a partial [cbn] is what made the first draft of this proof fail). *)
+
+Lemma forallb_canon_ofv P l :
+  All (fun t => forall P, on_free_vars P t -> on_free_vars P (canon t)) l ->
+  forallb (on_free_vars P) l -> forallb (on_free_vars P) (map canon l).
+Proof.
+  induction 1; cbn; [reflexivity|]. move/andP => [h1 h2]. apply/andP. split; auto.
+Qed.
+
+Lemma forallb_canon_def_ofv P Q mfix :
+  All (fun d => (forall P, on_free_vars P d.(dtype) -> on_free_vars P (canon d.(dtype))) ×
+                (forall P, on_free_vars P d.(dbody) -> on_free_vars P (canon d.(dbody)))) mfix ->
+  forallb (test_def (on_free_vars P) (on_free_vars Q)) mfix ->
+  forallb (test_def (on_free_vars P) (on_free_vars Q)) (map (canon_def canon) mfix).
+Proof.
+  induction 1 as [|d mfix [Hty Hbo] _ IH]; cbn; [reflexivity|].
+  unfold test_def at 1 3; cbn.
+  move/andP => [/andP [h1 h2] h3]. apply/andP. split; [apply/andP; split; auto|auto].
+Qed.
+
+Lemma forallb_canon_branch_ofv P f n brs :
+  All (fun br => onctx (fun t => forall P, on_free_vars P t -> on_free_vars P (canon t))
+                       br.(bcontext) ×
+                 (forall P, on_free_vars P br.(bbody) -> on_free_vars P (canon br.(bbody)))) brs ->
+  forallb (fun br => test_context_k f n br.(bcontext) &&
+                     on_free_vars (shiftnP #|br.(bcontext)| P) br.(bbody)) brs ->
+  forallb (fun br => test_context_k f n br.(bcontext) &&
+                     on_free_vars (shiftnP #|br.(bcontext)| P) br.(bbody))
+          (map (canon_branch canon) brs).
+Proof.
+  induction 1 as [|br brs [_ Hb] _ IH]; cbn; [reflexivity|].
+  move/andP => [/andP [h1 h2] h3]. apply/andP. split; [|auto].
+  unfold canon_branch; cbn. rewrite canon_ctx_length test_context_k_canon.
+  apply/andP. split; [exact h1|auto].
+Qed.
+
+(** The proof dispatches EXPLICITLY, one bullet per term constructor, with no
+    [auto] prelude: an [auto] prelude closes [tProj] as well as the leaf cases,
+    which silently shifts every later bullet. And it unfolds with
+    [cbn [on_free_vars canon]], never a bare [cbn], which would also unfold
+    [andb] into an [if] and leave the ssreflect views nothing to apply to. *)
 Lemma canon_on_free_vars P t : on_free_vars P t -> on_free_vars P (canon t).
 Proof.
-  induction t in P |- * using term_forall_list_ind; cbn; auto.
-  - (* tEvar *) intros h. rewrite forallb_map. solve_all.
+  induction t in P |- * using term_forall_list_ind; cbn [on_free_vars canon].
+  - (* tRel *) auto.
+  - (* tVar *) auto.
+  - (* tEvar *) apply forallb_canon_ofv. exact X.
+  - (* tSort *) auto.
   - (* tProd *) move/andP => [h1 h2]. apply/andP. split; auto.
   - (* tLambda *) move/andP => [_ h2]. apply/andP. split; [reflexivity|auto].
   - (* tLetIn *) move/and3P => [h1 h2 h3]. apply/and3P. split; auto.
   - (* tApp *) move/andP => [h1 h2]. apply/andP. split; auto.
+  - (* tConst *) auto.
+  - (* tInd *) auto.
+  - (* tConstruct *) auto.
   - (* tCase *) destruct X as (Hpar & _ & Hret).
+    unfold canon_predicate; cbn [pparams pcontext preturn].
     move/and5P => [hp hr hc hd hbrs]. apply/and5P. split.
-    + rewrite forallb_map. solve_all.
-    + cbn. rewrite canon_ctx_length. now apply Hret.
-    + cbn. rewrite canon_ctx_length test_context_k_canon. exact hc.
+    + now apply forallb_canon_ofv.
+    + rewrite canon_ctx_length. now apply Hret.
+    + rewrite length_map test_context_k_canon. exact hc.
     + now apply IHt.
-    + rewrite forallb_map. cbn. rewrite canon_ctx_length.
-      solve_all. move/andP: b => [hb1 hb2]. apply/andP. split.
-      * rewrite test_context_k_canon. exact hb1.
-      * rewrite canon_ctx_length. now apply b0.
+    + rewrite length_map. now apply forallb_canon_branch_ofv.
   - (* tProj *) auto.
-  - (* tFix *) intros h. rewrite forallb_map length_map. solve_all.
-    unfold test_def in *. move/andP: b => [h1 h2]. apply/andP. split; auto.
-  - (* tCoFix *) intros h. rewrite forallb_map length_map. solve_all.
-    unfold test_def in *. move/andP: b => [h1 h2]. apply/andP. split; auto.
+  - (* tFix *) rewrite length_map. now apply forallb_canon_def_ofv.
+  - (* tCoFix *) rewrite length_map. now apply forallb_canon_def_ofv.
   - (* tPrim *) destruct p as [? m]; destruct m; cbn in X |- *; auto.
-    destruct X as (Hty & Hdef & Hval). simp test_prim.
-    move/and3P => [hv hd ht]. apply/and3P. split.
-    + rewrite forallb_map. solve_all.
+    destruct X as (Hty & Hdef & Hval). simp test_prim; cbn.
+    move/andP => [/andP [hv hd] ht]. apply/andP. split; [apply/andP; split|].
+    + now apply forallb_canon_ofv.
     + now apply Hdef.
     + now apply Hty.
 Qed.
 
 (** The [Q]-facing corollary: [canon] preserves [is_open_term]. *)
-Lemma canon_is_open_term Γ t : is_open_term Γ t -> is_open_term Γ (canon t).
+Lemma canon_is_open_term (Γ : context) t : is_open_term Γ t -> is_open_term Γ (canon t).
 Proof. apply canon_on_free_vars. Qed.
