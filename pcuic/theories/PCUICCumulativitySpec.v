@@ -2,9 +2,9 @@
 From Stdlib Require Import CRelationClasses.
 From Equations.Type Require Import Relation Relation_Properties.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config BasicAst Reflect.
+From MetaRocq.Common Require Import config BasicAst Reflect PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICEquality
-     PCUICLiftSubst PCUICUnivSubst PCUICCases PCUICOnFreeVars.
+     PCUICLiftSubst PCUICUnivSubst PCUICCases PCUICOnFreeVars PCUICPrimitiveRed.
 
 Set Default Goal Selector "!".
 
@@ -194,6 +194,16 @@ Inductive cumulSpec0 {cf : checker_flags} (Σ : global_env_ext) Γ (pb : conv_pb
     decl.(cst_body) = Some body ->
     Σ ;;; Γ ⊢ tConst c u ≤s[pb] body@[u]
 
+(** Primitive operation: the same rule as [red_prim_op], on the same
+    [prim_op_denote]. *)
+| cumul_prim_op : forall c decl u op ls r v,
+    prim_op_of Σ c = Some op ->
+    declared_constant Σ c decl ->
+    cst_body decl = None ->
+    prim_op_denote op ls = Some r ->
+    readback Σ (po_shape (info op)) r = Some v ->
+    Σ ;;; Γ ⊢ mkApps (tConst c u) (map term_of_lit ls) ≤s[pb] v
+
 (** Proj *)
 | cumul_proj : forall p args u arg,
     nth_error args (p.(proj_npars) + p.(proj_arg)) = Some arg ->
@@ -315,6 +325,17 @@ Lemma cumulSpec0_rect :
             (Hdecl_body : cst_body decl = Some body),
         P cf Σ Γ pb (tConst c u) (subst_instance u body)
           (cumul_delta _ _ _ _ _ _ Hdecl_decl _ Hdecl_body)) ->
+
+    (* primitive operation *)
+    (forall (Γ : context) (pb : conv_pb) c (decl : constant_body) (u : Instance.t)
+            (op : prim_op) (ls : list prim_lit) (r : prim_result) (v : term)
+            (Hop : prim_op_of Σ c = Some op)
+            (Hdecl_decl : declared_constant Σ c decl)
+            (Hdecl_body : cst_body decl = None)
+            (Hdenote : prim_op_denote op ls = Some r)
+            (Hreadback : readback Σ (po_shape (info op)) r = Some v),
+        P cf Σ Γ pb (mkApps (tConst c u) (map term_of_lit ls)) v
+          (cumul_prim_op _ _ _ _ _ _ _ _ _ _ Hop Hdecl_decl Hdecl_body Hdenote Hreadback)) ->
 
     (* Proj *)
     (forall (Γ : context) (pb : conv_pb)p (args : list term) (u : Instance.t)
@@ -465,25 +486,25 @@ Proof.
   fix aux 5. intros Γ pb t u Xlast.
   move aux at top.
   destruct Xlast.
-  - eapply X8; eauto.
   - eapply X9; eauto.
   - eapply X10; eauto.
-  - eapply X21; eauto. clear -a aux.
-    revert args args' a.
-    fix aux' 3; destruct a; constructor; auto.
+  - eapply X11; eauto.
   - eapply X22; eauto. clear -a aux.
     revert args args' a.
     fix aux' 3; destruct a; constructor; auto.
-  - eapply X23; eauto.
-  - eapply X24; eauto.
-  - eapply X11; eauto.
+  - eapply X23; eauto. clear -a aux.
     revert args args' a.
     fix aux' 3; destruct a; constructor; auto.
+  - eapply X24; eauto.
+  - eapply X25; eauto.
   - eapply X12; eauto.
+    revert args args' a.
+    fix aux' 3; destruct a; constructor; auto.
   - eapply X13; eauto.
   - eapply X14; eauto.
   - eapply X15; eauto.
-  - eapply X16 ; eauto.
+  - eapply X16; eauto.
+  - eapply X17 ; eauto.
     + unfold cumul_predicate in *. destruct c0 as [c0 [cuniv [ccontext creturn]]].
       repeat split ; eauto.
       * revert c0. generalize (pparams p), (pparams p').
@@ -491,15 +512,7 @@ Proof.
       * apply Forall2_dep_from_nth_error; intros; exact I.
     + revert brs brs' c1.
       fix aux' 3; destruct c1; constructor; intuition auto.
-  - eapply X17 ; eauto.
   - eapply X18 ; eauto.
-    revert c. unfold cumul_mfixpoint.
-    set (mfixAbs_context := fix_context mfix).
-    clearbody mfixAbs_context.
-    revert mfix mfix'.
-    fix aux' 3; destruct c; constructor.
-    + intuition auto.
-    + auto.
   - eapply X19 ; eauto.
     revert c. unfold cumul_mfixpoint.
     set (mfixAbs_context := fix_context mfix).
@@ -508,7 +521,15 @@ Proof.
     fix aux' 3; destruct c; constructor.
     + intuition auto.
     + auto.
-  - eapply X20; eauto.
+  - eapply X20 ; eauto.
+    revert c. unfold cumul_mfixpoint.
+    set (mfixAbs_context := fix_context mfix).
+    clearbody mfixAbs_context.
+    revert mfix mfix'.
+    fix aux' 3; destruct c; constructor.
+    + intuition auto.
+    + auto.
+  - eapply X21; eauto.
     clear -o aux.
     induction o; constructor; auto.
     clear -a0 aux. revert a0.
@@ -522,6 +543,7 @@ Proof.
   - eapply X5; eauto.
   - eapply X6; eauto.
   - eapply X7; eauto.
+  - eapply X8; eauto.
 Defined.
 
 Notation cumulSpec0_ind_all := cumulSpec0_rect (only parsing).
@@ -589,6 +611,17 @@ Lemma convSpec0_ind_all :
                (Hdecl_body : cst_body decl = Some body),
            P cf Σ Γ Conv (tConst c u) (subst_instance u body)
              (cumul_delta _ _ _ _ _ _ Hdecl_decl _ Hdecl_body)) ->
+
+        (* primitive operation *)
+       (forall (Γ : context) c (decl : constant_body) (u : Instance.t)
+               (op : prim_op) (ls : list prim_lit) (r : prim_result) (v : term)
+               (Hop : prim_op_of Σ c = Some op)
+               (Hdecl_decl : declared_constant Σ c decl)
+               (Hdecl_body : cst_body decl = None)
+               (Hdenote : prim_op_denote op ls = Some r)
+               (Hreadback : readback Σ (po_shape (info op)) r = Some v),
+           P cf Σ Γ Conv (mkApps (tConst c u) (map term_of_lit ls)) v
+             (cumul_prim_op _ _ _ _ _ _ _ _ _ _ Hop Hdecl_decl Hdecl_body Hdenote Hreadback)) ->
 
         (* Proj *)
        (forall (Γ : context)p (args : list term) (u : Instance.t)
@@ -726,7 +759,7 @@ Proof.
   remember Conv as pb eqn:Hpb in Ht |- *.
   induction Ht; eauto; subst.
   all: exactly_once (idtac; multimatch goal with H : _ |- _ => eapply H end; eauto).
-  6:{ destruct X25; constructor; auto. eapply All2_dep_impl; tea; intuition auto. }
+  6:{ destruct X26; constructor; auto. eapply All2_dep_impl; tea; intuition auto. }
   all: cbv [cumul_predicate_dep] in *.
   all: repeat destruct ?; subst.
   all: destruct_head'_prod.

@@ -722,6 +722,14 @@ Section classification.
       eauto.
     - eapply inversion_Case in typed as (? & ? & ? & ? & [] & ?); tas; eauto.
     - eapply inversion_Proj in typed as (? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
+    (* whne_primapp_stuck / whne_primapp_inert: the head is a bodiless
+       registered constant, which [axiom_free_value] sends to [false]. *)
+    - rewrite axiom_free_value_mkApps in axfree; cbn in axfree.
+      match goal with H : lookup_env _ _ = Some (ConstantDecl ?d) |- _ => rewrite H in axfree end.
+      match goal with H : cst_body ?d = None |- _ => destruct d; cbn in *; subst; discriminate axfree end.
+    - rewrite axiom_free_value_mkApps in axfree; cbn in axfree.
+      match goal with H : lookup_env _ _ = Some (ConstantDecl ?d) |- _ => rewrite H in axfree end.
+      match goal with H : cst_body ?d = None |- _ => destruct d; cbn in *; subst; discriminate axfree end.
   Qed.
 
   Lemma wh_neutral_empty t ty :
@@ -753,10 +761,23 @@ Section classification.
       unfold unfold_fix. destruct nth_error; [|easy].
       destruct o as [[? [? ?]]|]; [|easy]. inversion H; eauto.
     - now rewrite head_mkApps /head /=.
-    - eapply inversion_Prim in typed as [prim_ty [cdecl [? ? ? ? hp]]]; eauto.
+    - eapply inversion_Prim in typed as [prim_ty [cdecl [? hpc ? ? hp]]]; eauto.
+      (* The guard on the axiom inversions: prim_ty is a registered primitive
+         TYPE constant, which §4.2(a)1 keeps out of the operation table. *)
+      assert (hnop : prim_op_of Σ prim_ty = None).
+      { pose proof wfΣ as [_ [wfr _]].
+        exact (prim_op_of_primitive_constant _ _ _ wfr hpc). }
       destruct p as [? []]; simp prim_type in w.
       1-3:eapply (invert_cumul_axiom_ind (args := [])) in w; eauto; destruct p0 as [? []]; eauto.
       eapply (invert_cumul_axiom_ind (args := [array_type a0])) in w; eauto. destruct p0 as [s []]; eauto.
+    (* whnf_primapp_partial / whnf_primapp_rigid: the head is a bodiless
+       registered constant, which [axiom_free_value] sends to [false]. *)
+    - exfalso. rewrite axiom_free_value_mkApps in axfree; cbn in axfree.
+      match goal with H : lookup_env _ _ = Some (ConstantDecl ?d) |- _ => rewrite H in axfree end.
+      match goal with H : cst_body ?d = None |- _ => destruct d; cbn in *; subst; discriminate axfree end.
+    - exfalso. rewrite axiom_free_value_mkApps in axfree; cbn in axfree.
+      match goal with H : lookup_env _ _ = Some (ConstantDecl ?d) |- _ => rewrite H in axfree end.
+      match goal with H : cst_body ?d = None |- _ => destruct d; cbn in *; subst; discriminate axfree end.
   Qed.
 
   Lemma whnf_classification t i u args :

@@ -38,6 +38,10 @@ Proof.
   destruct (nth_error args narg) eqn:Heq.
   eapply nth_error_app_left in Heq. now rewrite -> Heq. discriminate.
 
+  (* primitive operation: the appended argument joins the arguments beyond the
+     operation's arity, which the prefix-form rule keeps applied to the reduct *)
+  intros. rewrite !mkApp_mkApps -app_assoc. now (eapply red_prim_op; eauto).
+
   intros. rewrite mkApp_mkApps. now constructor.
 
   intros. simpl.

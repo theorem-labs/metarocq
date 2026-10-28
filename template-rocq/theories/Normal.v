@@ -27,8 +27,12 @@ Section Normal.
            neutral Γ (tRel i)
        | ne_var v : neutral Γ (tVar v)
        | ne_evar n l : neutral Γ (tEvar n l)
+       (* A registered primitive operation is a bodiless constant that is NOT
+          inert: [red_prim_op] fires on it once saturated with literals, so only a
+          constant outside the operation table is neutral. *)
        | ne_const c u decl :
            lookup_env Σ c = Some (ConstantDecl decl) -> decl.(cst_body) = None ->
+           prim_op_of Σ c = None ->
            neutral Γ (tConst c u)
        | ne_app f v : neutral Γ f -> Forall (normal Γ) v -> neutral Γ (tApp f v)
        | ne_case i p c brs : neutral Γ c ->
@@ -53,8 +57,10 @@ Section Normal.
       whne Γ (tRel i)
   | whne_var v : whne Γ (tVar v)
   | whne_evar n l : whne Γ (tEvar n l)
+  (* As for [ne_const]: a registered operation is not neutral. *)
   | whne_const c u decl :
       lookup_env Σ c = Some (ConstantDecl decl) -> decl.(cst_body) = None ->
+      prim_op_of Σ c = None ->
       whne Γ (tConst c u)
   | whne_app f v : whne Γ f -> whne Γ (tApp f v)
   | whne_case i p c brs : whne Γ c -> whne Γ (tCase i p c brs)

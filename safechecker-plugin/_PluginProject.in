@@ -23,6 +23,8 @@ src/pCUICPrimitive.mli
 src/pCUICPrimitive.ml
 src/pCUICAst.ml
 src/pCUICAst.mli
+src/pCUICPrimitiveRed.mli
+src/pCUICPrimitiveRed.ml
 src/pCUICAstUtils.ml
 src/pCUICAstUtils.mli
 src/pCUICCases.mli

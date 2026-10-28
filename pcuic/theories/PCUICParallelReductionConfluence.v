@@ -7,6 +7,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICTactic
      PCUICReflect PCUICInduction PCUICClosed PCUICClosedConv PCUICClosedTyp PCUICDepth PCUICOnFreeVars
      PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICWeakeningConv PCUICWeakeningTyp
      PCUICViews PCUICParallelReduction.
+From MetaRocq.Common Require Import PrimitiveOps.
+From MetaRocq.PCUIC Require Import PCUICPrimitiveRed.
 
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -21,6 +23,60 @@ Local Set Keyed Unification.
 
 Ltac solve_discr := (try (progress (prepare_discr; finish_discr; cbn [mkApps] in * )));
   try discriminate.
+
+(** A primitive redex is headed by a constant, so it never matches a spine
+    headed by another term.  [depelim] cannot see that through [mkApps] of a
+    variable argument list, so the equation it leaves is discriminated on the
+    heads returned by [decompose_app_rec]. *)
+Ltac discr_mkApps_heads :=
+  prepare_discr;
+  match goal with
+  | [ H : mkApps _ _ = mkApps _ _ |- _ ] =>
+    apply mkApps_eq_decompose_app in H;
+    rewrite !decompose_app_rec_mkApps in H; cbn in H; noconf H
+  end.
+
+(** An operation fires only on exactly as many literals as its info announces,
+    so neither the empty spine nor a strict prefix of a redex is one. *)
+Lemma prim_op_denote_length op ls r :
+  prim_op_denote op ls = Some r -> #|ls| = arity op.
+Proof.
+  intros h; apply prim_op_denote_args in h.
+  rewrite /arity -h length_map //.
+Qed.
+
+(** The empty spine is not a redex: every operation takes at least one
+    literal, by [prim_op_denote_length]. *)
+Ltac discr_prim_nil :=
+  exfalso;
+  try match goal with
+  | [ He : [] = map term_of_lit _ |- _ ] => symmetry in He
+  end;
+  match goal with
+  | [ He : map term_of_lit ?ls = [], Hd : prim_op_denote ?op ?ls = Some _ |- _ ] =>
+    destruct ls as [|? ?];
+    [ apply prim_op_denote_length in Hd; destruct op; cbn in Hd; discriminate
+    | cbn in He; discriminate ]
+  end.
+
+(** A spine of literals of the wrong length is not a redex either: the heads
+    agree, so the argument lists do, and [prim_op_denote] fixes their length.
+    [prim_op_of] is a function, which identifies the two operations. *)
+Ltac discr_prim_spine :=
+  exfalso; discr_mkApps_heads;
+  repeat match goal with
+  | [ E1 : prim_op_of ?Σ ?c = Some ?o1, E2 : prim_op_of ?Σ ?c = Some ?o2 |- _ ] =>
+    assert (o1 = o2) by congruence; subst o2
+  end;
+  match goal with
+  | [ He : @eq (list term) _ _ |- _ ] => apply (f_equal (@length term)) in He
+  end;
+  match goal with
+  | [ Hd : prim_op_denote ?op ?ls = Some _ |- _ ] =>
+    apply prim_op_denote_length in Hd
+  end;
+  autorewrite with len in *; cbn in *; lia.
+
 
 Section FoldFix.
   Context (rho : context -> term -> term).
@@ -124,8 +180,7 @@ Section Pred1_inversion.
     depelim X... exists []. intuition auto.
     intros. rewrite mkApps_app in X.
     depelim X...
-    prepare_discr. apply mkApps_eq_decompose_app in H.
-    rewrite !decompose_app_rec_mkApps in H. noconf H.
+    all:try solve [discr_mkApps_heads; congruence].
     destruct (IHargs _ X1) as [args' [-> Hargs']].
     exists (args' ++ [N1]).
     rewrite mkApps_app. intuition auto.
@@ -149,9 +204,9 @@ Section Pred1_inversion.
     revert c. induction args using rev_ind; intros; simpl in *.
     depelim X... exists []. intuition auto.
     intros. rewrite mkApps_app in X.
-    depelim X... simpl in H; noconf H. solve_discr.
-    prepare_discr. apply mkApps_eq_decompose_app in H.
-    rewrite !decompose_app_rec_mkApps in H. noconf H.
+    depelim X...
+    all:try solve [simpl in H; noconf H; solve_discr].
+    all:try solve [discr_mkApps_heads; congruence].
     destruct (IHargs _ X1) as [args' [-> Hargs']].
     exists (args' ++ [N1]).
     rewrite mkApps_app. intuition auto.
@@ -172,23 +227,25 @@ Section Pred1_inversion.
       * exists []; intuition auto.
     - rewrite mkApps_app /= in X.
       depelim X; try (simpl in H1; noconf H1); solve_discr.
-      * prepare_discr. apply mkApps_eq_decompose_app in H1.
-        rewrite !decompose_app_rec_mkApps in H1. noconf H1.
-      * destruct (IHargs _ H H0 X1) as [args' [-> Hargs']].
-        exists (args' ++ [N1]).
-        rewrite mkApps_app. intuition auto.
-        eapply All2_app; auto.
+      all:try solve [discr_mkApps_heads; congruence].
+      destruct (IHargs _ H H0 X1) as [args' [-> Hargs']].
+      exists (args' ++ [N1]).
+      rewrite mkApps_app. intuition auto.
+      eapply All2_app; auto.
   Qed.
 
   Lemma pred1_mkApps_tConst_axiom {cf : checker_flags}
       (Σ : global_env) {wfΣ : wf Σ} (Γ Δ : context)
         cst u (args : list term) cb c :
     declared_constant Σ cst cb -> cst_body cb = None ->
+    prim_op_of Σ cst = None ->
     pred1 Σ Γ Δ (mkApps (tConst cst u) args) c ->
     {args' : list term & (c = mkApps (tConst cst u) args') * (All2 (pred1 Σ Γ Δ) args args') }%type.
   Proof with solve_discr.
     revert c. induction args using rev_ind; intros; simpl in *.
     depelim X...
+    all:try solve [discr_mkApps_heads; congruence].
+    all:try solve [congruence].
     - unshelve eapply declared_constant_to_gen in H, isdecl; eauto.
       red in H, isdecl. unfold declared_constant_gen in *.
       rewrite isdecl in H; noconf H.
@@ -196,12 +253,50 @@ Section Pred1_inversion.
     - exists []. intuition auto.
     - rewrite mkApps_app in X.
       depelim X...
-      * prepare_discr. apply mkApps_eq_decompose_app in H1.
-        rewrite !decompose_app_rec_mkApps in H1. noconf H1.
-      * destruct (IHargs _ H H0 X1) as [args' [-> Hargs']].
+      all:try solve [discr_mkApps_heads; congruence].
+      * destruct (IHargs _ H H0 H1 X1) as [args' [-> Hargs']].
         exists (args' ++ [N1]).
         rewrite mkApps_app. intuition auto.
         eapply All2_app; auto.
+  Qed.
+
+  (** A literal argument is normal: its only parallel reduct is itself. *)
+  Lemma pred1_term_of_lit (Σ : global_env) (Γ Δ : context) l c :
+    pred1 Σ Γ Δ (term_of_lit l) c -> c = term_of_lit l.
+  Proof with solve_discr.
+    destruct l; cbn; intros X; depelim X...
+    all:try solve [depelim o; reflexivity].
+    all:reflexivity.
+  Qed.
+
+  (** A registered bodiless constant applied to too few literals is stuck:
+      the operation fires only at its own arity ([prim_op_denote_length]), so
+      no prefix of a redex is one, and literal arguments do not reduce. *)
+  Lemma pred1_mkApps_tConst_lit {cf : checker_flags}
+      (Σ : global_env) {wfΣ : wf Σ} (Γ Δ : context)
+        cst u op cb ls c :
+    declared_constant Σ cst cb -> cst_body cb = None ->
+    prim_op_of Σ cst = Some op ->
+    #|ls| < arity op ->
+    pred1 Σ Γ Δ (mkApps (tConst cst u) (map term_of_lit ls)) c ->
+    c = mkApps (tConst cst u) (map term_of_lit ls).
+  Proof with solve_discr.
+    intros hdecl hbody hop. revert c.
+    induction ls using rev_ind; intros c hlt X; simpl in *.
+    - depelim X...
+      all:try solve [discr_prim_nil].
+      all:try solve [unshelve eapply declared_constant_to_gen in hdecl, isdecl; eauto;
+                     red in hdecl, isdecl; rewrite isdecl in hdecl; noconf hdecl; congruence].
+      all:reflexivity.
+    - rewrite map_app mkApps_app in X |- *.
+      cbn [map mkApps] in X |- *.
+      depelim X...
+      all:try solve [discr_mkApps_heads; congruence].
+      all:try solve [discr_prim_spine].
+      f_equal.
+      * apply (IHls M1); [|exact X1].
+        rewrite length_app /= in hlt; lia.
+      * now eapply pred1_term_of_lit.
   Qed.
 
   Lemma pred1_mkApps_tFix_inv Σ (Γ Δ : context)
@@ -345,6 +440,109 @@ Section Rho.
   Context {cf : checker_flags}.
   Context (Σ : global_env).
   Context (wfΣ : wf Σ).
+
+  (** This refines the non-lambda/non-fix application arm using the original
+      arguments, not their reducts.  Only an already saturated literal redex
+      fires; otherwise the ordinary application congruence is retained. *)
+  Definition rho_prim_app (t : term) : option term :=
+    match decompose_app t with
+    | (tConst c u, args) =>
+      match lookup_env Σ c, prim_op_of Σ c, map_option_out (map lit_of_term args) with
+      | Some (ConstantDecl decl), Some op, Some ls =>
+        match cst_body decl, prim_op_denote op ls with
+        | None, Some r => readback Σ (po_shape (info op)) r
+        | _, _ => None
+        end
+      | _, _, _ => None
+      end
+    | _ => None
+    end.
+  (** Keep the recognizer folded: every proof about the application arm reads
+      it through the lemmas below, never through its unfolding. *)
+  Arguments rho_prim_app : simpl never.
+
+  Lemma literals_readback ls :
+    map_option_out (map lit_of_term (map term_of_lit ls)) = Some ls.
+  Proof.
+    induction ls as [|l ls ih]; [reflexivity|].
+    cbn [map]. rewrite lit_of_term_of_lit.
+    cbn [map_option_out]. rewrite ih //.
+  Qed.
+
+  Lemma rho_prim_app_redex c decl u op ls r v :
+    lookup_env Σ c = Some (ConstantDecl decl) ->
+    prim_op_of Σ c = Some op ->
+    cst_body decl = None ->
+    prim_op_denote op ls = Some r ->
+    readback Σ (po_shape (info op)) r = Some v ->
+    rho_prim_app (mkApps (tConst c u) (map term_of_lit ls)) = Some v.
+  Proof.
+    intros hdecl hop hbody hden hback.
+    rewrite /rho_prim_app decompose_app_mkApps //= hdecl hop literals_readback hbody hden.
+    exact hback.
+  Qed.
+
+  Lemma literals_readback_inv args ls :
+    map_option_out (map lit_of_term args) = Some ls ->
+    args = map term_of_lit ls.
+  Proof.
+    induction args in ls |- *; cbn.
+    - intros [= <-]; reflexivity.
+    - destruct (lit_of_term a) eqn:ha => //.
+      destruct (map_option_out (map lit_of_term args)) eqn:ht => //.
+      intros [= <-]. rewrite (lit_of_term_inv _ _ ha) (IHargs _ eq_refl).
+      reflexivity.
+  Qed.
+
+  Lemma rho_prim_app_inv t v :
+    rho_prim_app t = Some v ->
+    ∑ c decl u op ls r,
+      (t = mkApps (tConst c u) (map term_of_lit ls)) ×
+      (lookup_env Σ c = Some (ConstantDecl decl)) ×
+      (prim_op_of Σ c = Some op) ×
+      (cst_body decl = None) ×
+      (prim_op_denote op ls = Some r) ×
+      (readback Σ (po_shape (info op)) r = Some v).
+  Proof.
+    rewrite /rho_prim_app.
+    destruct (decompose_app t) as [hd args] eqn:ht.
+    destruct hd => //.
+    destruct (lookup_env Σ k) as [[decl|decl]|] eqn:hd => //.
+    destruct (prim_op_of Σ k) as [op|] eqn:hop => //.
+    destruct (map_option_out (map lit_of_term args)) as [ls|] eqn:hl => //.
+    destruct (cst_body decl) eqn:hb => //.
+    destruct (prim_op_denote op ls) as [r|] eqn:hr => //.
+    intros hback.
+    exists k, decl, ui, op, ls, r. repeat split => //.
+    apply decompose_app_inv in ht.
+    now rewrite ht (literals_readback_inv _ _ hl).
+  Qed.
+
+  Lemma lit_of_term_rename f t : lit_of_term (rename f t) = lit_of_term t.
+  Proof.
+    destruct t => //; destruct prim as [? []]; reflexivity.
+  Qed.
+
+  Lemma rho_prim_app_rename f t :
+    rho_prim_app (rename f t) = rho_prim_app t.
+  Proof.
+    rewrite /rho_prim_app.
+    destruct (decompose_app t) as [hd args] eqn:ht.
+    erewrite decompose_app_rename; tea.
+    destruct hd => //.
+    rewrite map_map_compose.
+    have -> : map (lit_of_term ∘ rename f) args = map lit_of_term args.
+    { apply map_ext. apply lit_of_term_rename. }
+    reflexivity.
+  Qed.
+
+  Lemma rho_prim_app_construct ind n u args :
+    rho_prim_app (mkApps (tConstruct ind n u) args) = None.
+  Proof. rewrite /rho_prim_app decompose_app_mkApps //. Qed.
+
+  Lemma rho_prim_app_cofix mfix idx args :
+    rho_prim_app (mkApps (tCoFix mfix idx) args) = None.
+  Proof. rewrite /rho_prim_app decompose_app_mkApps //. Qed.
 
   #[program] Definition map_fix_rho {t} (rho : context -> forall x, depth x < depth t -> term) Γ mfixctx (mfix : mfixpoint term)
     (H : mfixpoint_depth mfix < depth t) :=
@@ -580,7 +778,11 @@ Section Rho.
           else mkApps (tFix mfix' idx) args
         | None => mkApps (tFix mfix' idx) args
         end ;
-      | fix_lambda_app_other t u nisfixlam := tApp (rho Γ t) (rho Γ u) } ;
+      | fix_lambda_app_other t u nisfixlam :=
+        match rho_prim_app (tApp t u) with
+        | Some v => v
+        | None => tApp (rho Γ t) (rho Γ u)
+        end } ;
   rho Γ (tLetIn na d t b) => (subst10 (rho Γ d) (rho (vdef na (rho Γ d) (rho Γ t) :: Γ) b));
   rho Γ (tRel i) with option_map decl_body (nth_error Γ i) := {
     | Some (Some body) => (lift0 (S i) body);
@@ -782,7 +984,8 @@ Section Rho.
     unshelve erewrite view_lambda_fix_app_other. simpl.
     clear; induction l using rev_ind; simpl; auto.
     rewrite mkApps_app. simpl. apply IHl.
-    simp rho. rewrite IHl. now rewrite map_app mkApps_app.
+    simp rho. rewrite -[tApp _ _](mkApps_app _ _ [x]) rho_prim_app_construct.
+    rewrite IHl. now rewrite map_app mkApps_app.
   Qed.
   Hint Rewrite rho_app_construct : rho.
 
@@ -795,10 +998,52 @@ Section Rho.
     unshelve erewrite view_lambda_fix_app_other. simpl.
     clear; induction l using rev_ind; simpl; auto.
     rewrite mkApps_app. simpl. apply IHl.
-    simp rho. rewrite IHl. now rewrite map_app mkApps_app.
+    simp rho. rewrite -[tApp _ _](mkApps_app _ _ [x]) rho_prim_app_cofix.
+    rewrite IHl. now rewrite map_app mkApps_app.
   Qed.
 
   Hint Rewrite rho_app_cofix : rho.
+
+  Lemma isFixLambda_app_tConst c u l x :
+    isFixLambda_app (tApp (mkApps (tConst c u) l) x) = false.
+  Proof using Type.
+    induction l using rev_ind; simpl; auto.
+    rewrite mkApps_app. simpl. apply IHl.
+  Qed.
+
+  (** [rho] computes a recognised redex: the application arm looks at the
+      original arguments, which a redex has as literals already. *)
+  Lemma rho_app_prim_gen Γ c u args v :
+    args <> [] ->
+    rho_prim_app (mkApps (tConst c u) args) = Some v ->
+    rho Γ (mkApps (tConst c u) args) = v.
+  Proof using Type.
+    destruct args using rev_case; [intros h; destruct (h eq_refl)|].
+    intros _ hr.
+    rewrite mkApps_app. simp rho.
+    unshelve erewrite view_lambda_fix_app_other.
+    { rewrite isFixLambda_app_tConst //. }
+    simpl. rewrite -[tApp _ _](mkApps_app _ _ [x]).
+    now rewrite hr.
+  Qed.
+
+  Lemma rho_app_prim Γ c decl u op ls r v :
+    declared_constant Σ c decl ->
+    prim_op_of Σ c = Some op ->
+    cst_body decl = None ->
+    prim_op_denote op ls = Some r ->
+    readback Σ (po_shape (info op)) r = Some v ->
+    rho Γ (mkApps (tConst c u) (map term_of_lit ls)) = v.
+  Proof using wfΣ.
+    intros hdecl hop hbody hden hback.
+    unshelve eapply declared_constant_to_gen in hdecl; eauto.
+    red in hdecl.
+    apply rho_app_prim_gen.
+    - have hlen := prim_op_denote_length _ _ _ hden.
+      destruct ls as [|l0 ls0]; [|cbn; congruence].
+      destruct op; cbn in hlen; discriminate.
+    - now eapply rho_prim_app_redex.
+  Qed.
 
   Lemma map_cofix_subst (f : context -> term -> term)
         (f' : context -> context -> term -> term) mfix Γ Γ' :
@@ -1722,7 +1967,16 @@ Section Rho.
       + simpl.
         simp rho. pose proof (isFixLambda_app_rename r _ i).
         simpl in H2. rewrite (view_lambda_fix_app_other (rename r t) (rename r a0) H2). simpl.
-        erewrite H0, H1; eauto.
+        change (rename r
+          (match rho_prim_app (tApp t a0) with
+           | Some v => v | None => tApp (rho Γ t) (rho Γ a0) end) =
+          match rho_prim_app (rename r (tApp t a0)) with
+          | Some v => v | None => tApp (rho Δ (rename r t)) (rho Δ (rename r a0)) end).
+        rewrite rho_prim_app_rename.
+        destruct (rho_prim_app (tApp t a0)) eqn:hp.
+        * destruct (rho_prim_app_inv _ _ hp) as [? [? [? [? [? [? [_ [_ [_ [_ [_ hb]]]]]]]]]]].
+          destruct (prim_ground_readback hb) as [[[] ->]|[? [? ->]]]; reflexivity.
+        * cbn. erewrite H0, H1; eauto.
 
     - (* Constant unfolding *)
       simpl; simp rho; simpl.
@@ -2239,6 +2493,7 @@ Section Rho.
 
     apply: (pred1_ind_all_ctx _ _ Pctx Pctxover); subst Pctx Pctxover; cbn -[on_ctx_free_vars]; intros; auto.
     all:try solve [t].
+    all:try solve [prim_ground_reduct; reflexivity].
 
     - move: H; rewrite /on_ctx_free_vars.
       generalize 0. clear X.
@@ -3310,7 +3565,7 @@ Section Rho.
     set Pctx := fun (Γ Δ : context) =>
       on_ctx_free_vars xpredT Γ ->
       pred1_ctx Σ Δ (rho_ctx Γ).
-    refine (pred1_ind_all_ctx Σ _ Pctx _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _);
+    refine (pred1_ind_all_ctx Σ _ Pctx _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _);
       subst Pctx; intros *.
     all:try intros **; rename_all_hyps;
       try solve [specialize (forall_Γ _ X3); eauto]; eauto;
@@ -3380,6 +3635,10 @@ Section Rho.
       destruct o. constructor; auto.
       constructor. auto.
       constructor. auto.
+
+    - (* primitive operation: [rho] computes the same readback *)
+      erewrite rho_app_prim; eauto.
+      all:eapply pred1_refl_gen; eauto.
 
     - (* iota reduction *)
       simpl in X0. cbn.
@@ -3775,7 +4034,31 @@ Section Rho.
         constructor; eauto.
 
       + (* No head redex *)
-        simpl. constructor; auto.
+        simpl.
+        remember (rho_prim_app (tApp t a0)) as ro eqn:hprim.
+        symmetry in hprim.
+        destruct ro as [vprim|].
+        2:{ constructor; auto. }
+        (* The source is a saturated literal spine: its arguments are normal
+           and its strict prefix is stuck, so the same redex fires again. *)
+        destruct (rho_prim_app_inv _ _ hprim)
+          as [cst [declc [u' [op [ls [r [heq [hlook [hop [hbody [hden hback]]]]]]]]]]].
+        have hlen := prim_op_denote_length _ _ _ hden.
+        destruct ls as [|lpre llast] using rev_case.
+        { destruct op; cbn in hlen; discriminate. }
+        rewrite map_app mkApps_app /= in heq. noconf heq.
+        apply pred1_term_of_lit in predN0; subst N1.
+        have hdecl : declared_constant Σ cst declc
+          := declared_constant_from_gen hlook.
+        assert (hlt : #|lpre| < arity op).
+        { rewrite length_app /= in hlen. lia. }
+        have hM1 := @pred1_mkApps_tConst_lit cf Σ wfΣ _ _ _ _ _ _ _ _
+          hdecl hbody hop hlt predM0.
+        subst M1.
+        replace (tApp (mkApps (tConst cst u') (map term_of_lit lpre)) (term_of_lit llast))
+          with (mkApps (tConst cst u') (map term_of_lit (lpre ++ [llast])))
+          by now rewrite map_app mkApps_app.
+        eapply pred_prim_op; tea.
 
     - simpl; simp rho; simpl. eapply pred_zeta; eauto with fvs.
       eapply impl_impl_forall_Γ'1; eauto with fvs.

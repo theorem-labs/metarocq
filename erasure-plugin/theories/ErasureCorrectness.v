@@ -201,7 +201,8 @@ Proof.
   { cbn. now intros ? ->. }
   set (prf := (fun (Σ0 : PCUICAst.PCUICEnvironment.global_env) => _)). cbn in prf.
   rewrite (ErasureFunction.erase_global_deps_irr optimized_abstract_env_impl (EAstUtils.term_global_deps et) env' env _ prf prf).
-  { cbn. now intros ? ? -> ->. }
+  { cbn. intros ? ? -> ->. unfold ErasureFunction.same_prims.
+    split; [|split]; try intros; reflexivity. }
   clearbody prf0 prf1 prf2 prf3 prf4 prf5 prf6 prf7.
   epose proof (erase_correct_strong optimized_abstract_env_impl (v:=v) env ext prf2
     (PCUICAst.PCUICEnvironment.declarations Σ) norm' prf prf6 X eq_refl axf ht fo).
@@ -217,14 +218,14 @@ Proof.
   split => //.
   eapply (erase_global_deps_eval optimized_abstract_env_impl env env' ext).
   unshelve erewrite (ErasureFunction.erase_irrel_global_env (X_type:=optimized_abstract_env_impl) (t:=v)); tea.
-  red. intros. split; reflexivity.
+  red. intros. split; [|split; [|split]]; intros; reflexivity.
   split => //.
   sq. unfold et', et.
   unshelve erewrite (ErasureFunction.erase_irrel_global_env (X_type:=optimized_abstract_env_impl) (t:=v)); tea.
-  red. intros. split; reflexivity.
+  red. intros. split; [|split; [|split]]; intros; reflexivity.
   subst et et' X X'.
   unshelve erewrite (ErasureFunction.erase_irrel_global_env (X_type:=optimized_abstract_env_impl) (t:=v)); tea.
-  red. intros. split; reflexivity.
+  red. intros. split; [|split; [|split]]; intros; reflexivity.
 Qed.
 
 Definition pcuic_lookup_inductive_pars Σ ind :=
@@ -652,8 +653,11 @@ Section PCUICInv.
         rewrite expand_lets_mkApps //=. cbn.
         intros h. specialize (h eq_refl).
         eapply invert_red_mkApps_tInd in h as [args' []]. solve_discr.
-    - eapply inversion_Prim in wf as [prim_ty [cdecl []]]; eauto.
-      now eapply invert_cumul_prim_type_prod in w; tea.
+    - eapply inversion_Prim in wf as (prim_ty & cdecl & [? hpc hdecl hinv ? w]); eauto.
+      (* the type constant is not a registered operation (row D's guard), by
+         §4.2(a) on the retroknowledge *)
+      exfalso. eapply (invert_cumul_prim_type_prod hdecl hinv); [|exact w].
+      exact (prim_op_of_primitive_constant _ _ _ (fst (snd (fst wfΣ))) hpc).
     - clear X1. depelim X.
       move/expanded_mkApps_inv'.
       rewrite arguments_mkApps head_mkApps /=. intros [expargs [mind' [idecl' [cdecl' []]]]].
@@ -2046,7 +2050,7 @@ Section PCUICErase.
     destruct_compose_no_clear. intros ? ?.
     eapply transform_erase_pres_term.
     rewrite fst_pair.
-    { red. cbn. split => //. } reflexivity.
+    { red. cbn. split; [intros; assumption|split; [|split]; intros; reflexivity]. } reflexivity.
     eapply transform_lambdabox_pres_term.
     split. rewrite fst_pair.
     { unfold run, time. destruct_compose_no_clear. intros H eq'. clear -extapp'.
@@ -2054,7 +2058,7 @@ Section PCUICErase.
     cbn [snd run]. unfold run, time.
     destruct_compose_no_clear. intros ? ?.
     eapply transform_erase_pres_term. cbn [fst].
-    { red. cbn. split => //. } reflexivity.
+    { red. cbn. split; [intros; assumption|split; [|split]; intros; reflexivity]. } reflexivity.
   Qed.
 
 Transparent erase_transform.

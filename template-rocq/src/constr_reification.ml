@@ -224,6 +224,13 @@ struct
   let tConstantDecl = ast "ConstantDecl"
   let tInductiveDecl = ast "InductiveDecl"
   let tmk_retroknowledge = ast "mk_retroknowledge"
+  let tprim_op = ast "prim_op"
+  let (cInt63eq, cInt63lt, cInt63le, cInt63land, cInt63lor,
+       cInt63lsl, cInt63lsr, cInt63sub, cStringlength, cStringget) =
+    (ast "prim_op.Int63eq", ast "prim_op.Int63lt", ast "prim_op.Int63le",
+     ast "prim_op.Int63land", ast "prim_op.Int63lor", ast "prim_op.Int63lsl",
+     ast "prim_op.Int63lsr", ast "prim_op.Int63sub",
+     ast "prim_op.Stringlength", ast "prim_op.Stringget")
   let tBuild_global_env = ast "Build_global_env"
   let tglobal_env = ast "global_env"
 

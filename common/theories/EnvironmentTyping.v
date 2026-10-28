@@ -2,7 +2,7 @@
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require CMorphisms CRelationClasses.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config BasicAst Universes Environment Primitive.
+From MetaRocq.Common Require Import config BasicAst Universes Environment Primitive PrimitiveOps.
 From Equations Require Import Equations.
 
 Module Lookup (T : Term) (E : EnvironmentSig T).
@@ -1252,10 +1252,137 @@ Module Type KernelRedSig (T : Term) (E : EnvironmentSig T).
   Parameter Inline whd_rel : bool -> global_env -> context -> term -> list term -> term -> list term -> Type.
 End KernelRedSig.
 
+(** The constant a retroknowledge registers as the type of a primitive tag.
+    [Environment.primitive_constant] is the same function read off a global
+    environment ([primitive_constant_retro] below); the condition of design §4.2(b)
+    needs it on the retroknowledge alone, because the expected declared type of an
+    operation is a function of the retroknowledge only. *)
+Definition retro_type_constant (r : Retroknowledge.t) (p : prim_tag) : option kername :=
+  match p with
+  | primInt => r.(Retroknowledge.retro_int63)
+  | primFloat => r.(Retroknowledge.retro_float64)
+  | primString => r.(Retroknowledge.retro_string)
+  | primArray => r.(Retroknowledge.retro_array)
+  end.
 
-Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : KernelRedSig T E).
+(** §4.2(a) is decidable.  [check_univs] uses this to build the
+    [Retroknowledge.wf_retro] conjunct of [on_global_env] (or to refuse the
+    environment), exactly as it already decides [on_global_univs]. *)
+Definition dec_disjoint_opt (x y : option kername)
+  : {Retroknowledge.disjoint_opt x y} + {~ Retroknowledge.disjoint_opt x y}.
+Proof.
+  unfold Retroknowledge.disjoint_opt.
+  destruct x as [a|]; [|left; congruence].
+  destruct y as [b|]; [|left; congruence].
+  (* [right] before any rewrite: the decision must compute under [vm_compute]
+     (the in-Rocq checker), and [Kername.eq_dec]'s equality proof is opaque. *)
+  destruct (Kername.eq_dec a b) as [e|ne].
+  - right. intros H. apply (H a); [reflexivity|]. now rewrite e.
+  - left. intros c [= ->] [= ->]. now apply ne.
+Defined.
+
+(* Written out, not [decide equality]: that tactic substitutes with
+   [Kername.eq_dec]'s opaque equality proof before choosing [left], so the
+   decision would not compute under [vm_compute]; here the constructor comes first. *)
+Definition option_kername_eq_dec (x y : option kername) : {x = y} + {x <> y}.
+Proof.
+  destruct x as [a|], y as [b|].
+  - destruct (Kername.eq_dec a b) as [e|ne]; [left; now f_equal|right; congruence].
+  - right; discriminate.
+  - right; discriminate.
+  - left; reflexivity.
+Defined.
+
+(** [NoDup] on kernames is decidable.  Inlined over [Kername.eq_dec] rather
+    than taken from [Stdlib.Lists.ListDec], because extraction of this file
+    would then need a [listDec] module that the plugins do not ship. *)
+Definition dec_NoDup_kername (l : list kername) : {NoDup l} + {~ NoDup l}.
+Proof.
+  induction l as [|a l ih].
+  - left; constructor.
+  - destruct (In_dec Kername.eq_dec a l) as [hin|hnin].
+    + right; intros h; inversion h; subst; contradiction.
+    + destruct ih as [h|h].
+      * left; constructor; assumption.
+      * right; intros h'; inversion h'; subst; contradiction.
+Defined.
+
+Definition dec_wf_retro (r : Retroknowledge.t)
+  : {Retroknowledge.wf_retro r} + {~ Retroknowledge.wf_retro r}.
+Proof.
+  set (ops := map fst r.(Retroknowledge.retro_ops)).
+  destruct (dec_NoDup_kername ops) as [HN|HN];
+    [|right; intros [h _ _ _]; exact (HN h)].
+  destruct (Forall_dec (fun c => ~ In (Some c) (Retroknowledge.type_constants r))
+              (fun c => match In_dec option_kername_eq_dec (Some c)
+                              (Retroknowledge.type_constants r) with
+                        | left h => right (fun n => n h) | right h => left h end) ops)
+    as [HF|HF];
+    [|right; intros [_ h2 _ _]; apply HF, Forall_forall; exact h2].
+  assert (dts : {Retroknowledge.types_distinct r} + {~ Retroknowledge.types_distinct r}).
+  { unfold Retroknowledge.types_distinct.
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_int63) r.(Retroknowledge.retro_float64)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_int63) r.(Retroknowledge.retro_string)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_int63) r.(Retroknowledge.retro_array)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_float64) r.(Retroknowledge.retro_string)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_float64) r.(Retroknowledge.retro_array)); [|right; tauto].
+    destruct (dec_disjoint_opt r.(Retroknowledge.retro_string) r.(Retroknowledge.retro_array)); [|right; tauto].
+    left; tauto. }
+  destruct dts as [dts|dts]; [|right; intros [_ _ h3 _]; exact (dts h3)].
+  assert (dbi : {forall i, r.(Retroknowledge.retro_bool) = Some i -> inductive_ind i = 0}
+              + {~ forall i, r.(Retroknowledge.retro_bool) = Some i -> inductive_ind i = 0}).
+  { destruct r.(Retroknowledge.retro_bool) as [i|] eqn:hb.
+    - destruct (Nat.eq_dec (inductive_ind i) 0) as [hi|hi].
+      + left; intros i' Hi'; injection Hi' as <-; exact hi.
+      + right; intros H; exact (hi (H i eq_refl)).
+    - left; intros i' Hi'; discriminate. }
+  destruct dbi as [dbi|dbi]; [|right; intros [_ _ _ h4]; exact (dbi h4)].
+  left; constructor.
+  - exact HN.
+  - intros c hc; rewrite Forall_forall in HF; apply HF; exact hc.
+  - exact dts.
+  - exact dbi.
+Defined.
+
+(** The expected declared type of a registered primitive operation, per language.
+    It cannot be written once for both: [Term] has no [tConst], and the type is
+    built from the registered type constants and, for a [SBool] result, from the
+    registered inductive.  Each language gives its own instance
+    ([PCUICPrimOpType], [TemplatePrimOpType]), on the same skeleton — a fold of
+    [tImpl] over [tConst kn []] ending in [tConst kn []] or [tInd i []] — so that
+    the two are related by [trans]. *)
+Module Type PrimOpTypeSig (T : Term) (E : EnvironmentSig T).
+  Import T E.
+  Parameter Inline prim_op_type : Retroknowledge.t -> prim_op -> option term.
+End PrimOpTypeSig.
+
+
+Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : KernelRedSig T E) (PO : PrimOpTypeSig T E).
   (** *** Typing of inductive declarations *)
-  Import T E TU ET C L AR.
+  Import T E TU ET C L AR PO.
+
+  (** [retro_type_constant] is [primitive_constant] read off the retroknowledge. *)
+  Lemma primitive_constant_retro (Σ : global_env) p :
+    primitive_constant Σ p = retro_type_constant Σ.(retroknowledge) p.
+  Proof. now destruct p. Qed.
+
+  (** §4.2(a)1: a registered primitive type constant is never an operation.
+      The single statement every consumer of the axiom inversion lemmas'
+      [prim_op_of Σ c = None] guard [Require]s. *)
+  Lemma prim_op_of_primitive_constant (Σ : global_env) tag c :
+    Retroknowledge.wf_retro Σ.(retroknowledge) ->
+    primitive_constant Σ tag = Some c ->
+    prim_op_of Σ c = None.
+  Proof.
+    intros [_ hnot _ _] hc.
+    destruct (prim_op_of Σ c) as [op|] eqn:hop; [|reflexivity].
+    exfalso. apply (hnot c).
+    - apply in_map_iff. exists (c, op). split; [reflexivity|].
+      exact (Retroknowledge.lookup_op_spec _ _ _ hop).
+    - rewrite primitive_constant_retro in hc.
+      unfold Retroknowledge.type_constants.
+      destruct tag; cbn in hc |- *; rewrite hc; intuition.
+  Qed.
 
   Section GlobalMaps.
 
@@ -1945,12 +2072,82 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
     Definition fresh_global (s : kername) (g : global_declarations) : Prop :=
       Forall (fun g => g.1 <> s) g.
 
+    (** *** Primitive operations: the per-declaration condition (design §4.2(b))
+
+      The retroknowledge-only part of the condition is a global conjunct of
+      [on_global_env] ([Retroknowledge.wf_retro]); everything that needs a
+      declaration is checked here, on the declaration that registers it, against
+      the prefix environment.  A table entry whose constant is not declared yet
+      never fires ([red_prim_op] has [declared_constant]), so no forward lookup
+      is needed. *)
+
+    (** (B4) The type constant of [t] is registered, declared, and satisfies
+        [primitive_invariants] — what lets subject reduction type a literal of
+        tag [t] with [type_Prim]. *)
+    Definition prim_op_tag_declared (Σ : global_env_ext) (t : prim_tag) : Type :=
+      ∑ kn d, [/\ primitive_constant Σ t = Some kn, declared_constant Σ kn d &
+                 primitive_invariants t d].
+
+    (** (gate 4) The same for the result: a literal result needs its type
+        constant, a constructor result needs the registered inductive to be
+        declared. *)
+    Definition on_prim_op_result (Σ : global_env_ext) (s : prim_shape) : Type :=
+      match s with
+      | SInt => prim_op_tag_declared Σ primInt
+      (* A [Prop] conjunction under the [∑], not [×]: a sort-polymorphic tuple of
+         [Prop]s is a [Prop] instance of an informative type, which extraction refuses. *)
+      | SBool => ∑ i mdecl idecl, primitive_bool Σ = Some i /\ declared_inductive Σ i mdecl idecl
+      end.
+
+    (** The constant declaration that registers an operation.  Its declared type
+        is only required to be *convertible* to [prim_op_type], as the kernel's
+        own check is (kernel/constant_typing.ml). *)
+    Record on_prim_op_constant (Σ : global_env_ext) (op : prim_op) (cb : constant_body) : Type := {
+      prim_op_cst_body : cb.(cst_body) = None;
+      prim_op_cst_univs : cb.(cst_universes) = Monomorphic_ctx;
+      prim_op_cst_type :
+        ∑ T, prim_op_type Σ.1.(retroknowledge) op = Some T × Pcmp Σ [] Conv cb.(cst_type) T;
+      prim_op_args_inv : All (prim_op_tag_declared Σ) (po_args (info op));
+      prim_op_result_inv : on_prim_op_result Σ (po_shape (info op))
+    }.
+
+    (** (SG-1, gate 8) One constructor of the registered boolean inductive: no
+        argument, no index, and the kernel's name
+        ([check_name], kernel/safe_typing.ml). *)
+    Definition prim_bool_ctor (na : ident) (cdecl : constructor_body) : Prop :=
+      [/\ cdecl.(cstr_name) = na, cdecl.(cstr_args) = [], cdecl.(cstr_indices) = [],
+          cdecl.(cstr_type) = tRel 0 & cdecl.(cstr_arity) = 0].
+
+    (** (D1, SG-1) The block [retro_bool] names: one packet, no parameter, no
+        index, monomorphic, exactly the two constructors [true] and [false], in
+        that order — at least as strong as the kernel's [check_register_ind] in
+        every respect the readback depends on. *)
+    Definition on_prim_bool_decl (mdecl : mutual_inductive_body) : Prop :=
+      match mdecl.(ind_bodies) with
+      | [idecl] =>
+        [/\ mdecl.(ind_npars) = 0, mdecl.(ind_params) = [],
+            mdecl.(ind_universes) = Monomorphic_ctx, idecl.(ind_indices) = [] &
+            match idecl.(ind_ctors) with
+            | [cT; cF] => prim_bool_ctor "true" cT /\ prim_bool_ctor "false" cF
+            | _ => False
+            end]
+      | _ => False
+      end.
+
+    Definition on_prim_decl (Σ : global_env_ext) (kn : kername) (d : global_decl) : Type :=
+      match d with
+      | ConstantDecl cb => forall op, prim_op_of Σ kn = Some op -> on_prim_op_constant Σ op cb
+      | InductiveDecl mdecl =>
+          forall i, primitive_bool Σ = Some i -> inductive_mind i = kn -> on_prim_bool_decl mdecl
+      end.
+
     Record on_global_decls_data (univs : ContextSet.t) retro (Σ : global_declarations) (kn : kername) (d : global_decl) :=
         {
           kn_fresh :  fresh_global kn Σ ;
           udecl := universes_decl_of_decl d ;
           on_udecl_udecl : on_udecl univs udecl ;
-          on_global_decl_d : on_global_decl (mk_global_env univs Σ retro, udecl) kn d
+          on_global_decl_d : on_global_decl (mk_global_env univs Σ retro, udecl) kn d ;
+          on_prim_decl_d : on_prim_decl (mk_global_env univs Σ retro, udecl) kn d
         }.
 
     Inductive on_global_decls (univs : ContextSet.t) (retro : Retroknowledge.t): global_declarations -> Type :=
@@ -1994,8 +2191,12 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       LS.For_all (negb ∘ Level.is_var) levels /\
       consistent cstrs.
 
+    (** The retroknowledge conjunct (design §4.2(a)) is global, not per
+        declaration: every prefix environment carries the same retroknowledge, so
+        stating it here keeps every prefix well-formed. *)
     Definition on_global_env (g : global_env) : Type :=
-      on_global_univs g.(universes) × on_global_decls g.(universes) g.(retroknowledge) g.(declarations).
+      on_global_univs g.(universes) × Retroknowledge.wf_retro g.(retroknowledge) ×
+      on_global_decls g.(universes) g.(retroknowledge) g.(declarations).
 
     Definition on_global_env_ext (Σ : global_env_ext) :=
       on_global_env Σ.1 × on_udecl Σ.(universes) Σ.2.
@@ -2383,6 +2584,16 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
   Qed.
 
 
+  Lemma on_prim_decl_impl Pcmp Pcmp' Σ kn d :
+    (forall Γ pb t t', Pcmp Σ Γ pb t t' -> Pcmp' Σ Γ pb t t') ->
+    on_prim_decl Pcmp Σ kn d -> on_prim_decl Pcmp' Σ kn d.
+  Proof.
+    intros X h. destruct d as [cb|mdecl]; [|exact h].
+    intros op hop. specialize (h op hop) as [hb hu [T [hT hc]] ha hr].
+    constructor; try assumption.
+    exists T. split; [assumption|now apply X].
+  Qed.
+
   Lemma on_global_env_impl_config {cf1 cf2 : checker_flags} Pcmp Pcmp' P Q :
     config.impl cf1 cf2 ->
     (forall Σ Γ j,
@@ -2395,15 +2606,19 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
         Pcmp Σ Γ pb t T -> Pcmp' Σ Γ pb t T) ->
     forall Σ, @on_global_env cf1 Pcmp P Σ -> @on_global_env cf2 Pcmp' Q Σ.
   Proof.
-    intros Xcf X Xcmp Σ [cu IH]. split; auto.
-    revert cu IH; generalize (universes Σ) as univs, (retroknowledge Σ) as retro, (declarations Σ). clear Σ.
+    intros Xcf X Xcmp Σ [cu [wfr IH]]. split; [assumption|]. split; [assumption|].
+    revert cu wfr IH; generalize (universes Σ) as univs, (retroknowledge Σ) as retro, (declarations Σ). clear Σ.
     induction g; intros; auto. constructor; auto.
-    depelim IH. specialize (IHg cu IH). constructor; auto.
+    depelim IH. specialize (IHg cu wfr IH). constructor; auto.
     destruct o. constructor; auto.
-    eapply @on_global_decl_impl_only_config with (cf := cf1) (1 := Xcf) (5 := on_global_decl_d0).
-    { intros. eapply X; [tea| split; tea |tea]. }
-    { cbn. intros. eapply Xcmp. 1,3: eassumption. split; cbn. all: eassumption. }
-    split; eauto.
+    - eapply @on_global_decl_impl_only_config with (cf := cf1) (1 := Xcf) (5 := on_global_decl_d0).
+      { intros. eapply X; [tea| split; [tea|split; tea] |tea]. }
+      { cbn. intros. eapply Xcmp. 1,3: eassumption.
+        split; [|split]; cbn; eassumption. }
+      split; [|split]; eauto.
+    - eapply on_prim_decl_impl; [|exact on_prim_decl_d0].
+      cbn. intros Γ pb t t' hc. eapply Xcmp. 3: exact hc.
+      all: split; [|split]; cbn; eassumption.
   Qed.
 
   Lemma on_global_env_impl {cf : checker_flags} Pcmp P Q :
@@ -2420,13 +2635,14 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
     ∑ Σ' : global_env_ext, on_global_env Pcmp P Σ' × strictly_extends_decls Σ' Σ × on_global_decl Pcmp P Σ' c decl.
   Proof.
     unfold on_global_env.
-    destruct Σ as [univs Σ retro]; cbn. intros [cu ond].
+    destruct Σ as [univs Σ retro]; cbn. intros [cu [wfr ond]].
     induction ond; cbn in * => //.
     destruct o. rename udecl0 into udecl.
     case: eqb_specT => [-> [= <-]| ne].
     - exists ({| universes := univs; declarations := Σ; retroknowledge := retro |}, udecl); cbn.
-      split; try constructor; tas.
-      split => //=. now exists [(kn, d)].
+      split; [|split]; cbn; tas.
+      + split; [tas|split; tas].
+      + split => //=. now exists [(kn, d)].
     - intros hl.
       specialize (IHond hl) as [[Σ' udecl'] [ong [[equ ext extretro] ond']]].
       exists (Σ', udecl'). cbn in equ |- *. subst univs. split; cbn; auto; try apply ong.
@@ -2435,11 +2651,73 @@ Module GlobalMaps (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvT
       now exists ((kn, d) :: Σ'').
   Qed.
 
+  (** The twin of [lookup_on_global_env] for the primitive-operation condition of
+      design §4.2(b): the prefix environment in which the declaration was checked,
+      with its retroknowledge — which is the whole environment's, so
+      [prim_op_type] is the same term there and in [Σ]. *)
+  Lemma lookup_on_global_env_prim `{checker_flags} {Pcmp P} {Σ : global_env} {c decl} :
+    on_global_env Pcmp P Σ ->
+    lookup_env Σ c = Some decl ->
+    ∑ Σ' : global_env_ext,
+      [× on_global_env Pcmp P Σ', strictly_extends_decls Σ' Σ,
+         Σ'.1.(retroknowledge) = Σ.(retroknowledge) & on_prim_decl Pcmp Σ' c decl].
+  Proof.
+    unfold on_global_env.
+    destruct Σ as [univs Σ retro]; cbn. intros [cu [wfr ond]].
+    induction ond; cbn in * => //.
+    destruct o. rename udecl0 into udecl.
+    case: eqb_specT => [-> [= <-]| ne].
+    - exists ({| universes := univs; declarations := Σ; retroknowledge := retro |}, udecl); cbn.
+      split; cbn.
+      + split; [tas|split; tas].
+      + split => //=. now exists [(kn, d)].
+      + reflexivity.
+      + tas.
+    - intros hl.
+      specialize (IHond hl) as [[Σ' udecl'] [ong [equ ext extretro] hretro ond']].
+      exists (Σ', udecl'). cbn in equ, hretro |- *. subst univs.
+      split; cbn; auto; try apply ong.
+      split; cbn; auto.
+      cbn in ext. destruct ext as [Σ'' ->]. cbn in *.
+      now exists ((kn, d) :: Σ'').
+  Qed.
+
+  (** The same, exposing the prefix's universe declaration: the condition was
+      checked at [(Σ_prefix, universes_decl_of_decl decl)], which is what moving
+      its conversion to an instance needs. *)
+  Lemma lookup_on_global_env_prim_decl `{checker_flags} {Pcmp P} {Σ : global_env} {c decl} :
+    on_global_env Pcmp P Σ ->
+    lookup_env Σ c = Some decl ->
+    ∑ Σ' : global_env,
+      [× on_global_env Pcmp P Σ', strictly_extends_decls Σ' Σ,
+         Σ'.(retroknowledge) = Σ.(retroknowledge) &
+         on_prim_decl Pcmp (Σ', universes_decl_of_decl decl) c decl].
+  Proof.
+    unfold on_global_env.
+    destruct Σ as [univs Σ retro]; cbn. intros [cu [wfr ond]].
+    induction ond; cbn in * => //.
+    destruct o. rename udecl0 into udecl.
+    case: eqb_specT => [-> [= <-]| ne].
+    - exists {| universes := univs; declarations := Σ; retroknowledge := retro |}; cbn.
+      split; cbn.
+      + split; [tas|split; tas].
+      + split => //=. now exists [(kn, d)].
+      + reflexivity.
+      + tas.
+    - intros hl.
+      specialize (IHond hl) as [Σ' [ong [equ ext extretro] hretro ond']].
+      exists Σ'. cbn in equ, hretro |- *. subst univs.
+      split; cbn; auto; try apply ong.
+      split; cbn; auto.
+      cbn in ext. destruct ext as [Σ'' ->]. cbn in *.
+      now exists ((kn, d) :: Σ'').
+  Qed.
+
 
 End GlobalMaps.
 
-Module Type GlobalMapsSig (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : KernelRedSig T E).
-  Include GlobalMaps T E TU ET C L AR.
+Module Type GlobalMapsSig (T: Term) (E: EnvironmentSig T) (TU : TermUtils T E) (ET: EnvTypingSig T E TU) (C: ConversionSig T E TU ET) (L: LookupSig T E) (AR : KernelRedSig T E) (PO : PrimOpTypeSig T E).
+  Include GlobalMaps T E TU ET C L AR PO.
 End GlobalMapsSig.
 
 Module Type ConversionParSig (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E) (ET : EnvTypingSig T E TU).
@@ -2467,7 +2745,7 @@ End Typing.
 Module DeclarationTyping (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
   (ET : EnvTypingSig T E TU) (CT : ConversionSig T E TU ET)
   (CS : ConversionParSig T E TU ET) (Ty : Typing T E TU ET CT CS)
-  (L : LookupSig T E) (AR : KernelRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR).
+  (L : LookupSig T E) (AR : KernelRedSig T E) (PO : PrimOpTypeSig T E) (GM : GlobalMapsSig T E TU ET CT L AR PO).
 
   Import T E L TU ET CT GM CS Ty.
 
@@ -2515,15 +2793,18 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
         P Σ Γ j -> Q Σ Γ j) ->
     @on_global_env cf2 (@cumul_gen cf2) P Σ -> @on_global_env cf3 (@cumul_gen cf3) Q Σ.
   Proof.
-    intros Xcf Xcmp X [cu IH]. destruct wfΣ as [_ wfΣ]. split; auto.
-    revert cu IH wfΣ; generalize (universes Σ) as univs, (retroknowledge Σ) as retro, (declarations Σ). clear Σ.
+    intros Xcf Xcmp X [cu [wfr IH]]. destruct wfΣ as [_ [_ wfΣ]].
+    split; [assumption|]. split; [assumption|].
+    revert cu wfr IH wfΣ; generalize (universes Σ) as univs, (retroknowledge Σ) as retro, (declarations Σ). clear Σ.
     induction g; intros; auto. constructor; auto.
     depelim IH. depelim wfΣ.
-    specialize (IHg cu IH wfΣ).
+    specialize (IHg cu wfr IH wfΣ).
     constructor; auto.
     destruct o. constructor; auto.
+    2:{ eapply on_prim_decl_impl; [|exact on_prim_decl_d0].
+        intros Γ pb t t' hc. now eapply Xcmp. }
     eapply @on_global_decl_impl_only_config with (cf := cf2) (5 := on_global_decl_d0) => //.
-    { intros. eapply X; cycle -1; tea; split; tea. }
+    { intros. eapply X; cycle -1; tea; (split; [|split]); tea. }
     { intros. now eapply Xcmp. }
   Qed.
 
@@ -2648,6 +2929,6 @@ End DeclarationTyping.
 Module Type DeclarationTypingSig (T : Term) (E : EnvironmentSig T) (TU : TermUtils T E)
        (ET : EnvTypingSig T E TU) (CT : ConversionSig T E TU ET)
        (CS : ConversionParSig T E TU ET) (Ty : Typing T E TU ET CT CS)
-       (L : LookupSig T E) (AR : KernelRedSig T E) (GM : GlobalMapsSig T E TU ET CT L AR).
-  Include DeclarationTyping T E TU ET CT CS Ty L AR GM.
+       (L : LookupSig T E) (AR : KernelRedSig T E) (PO : PrimOpTypeSig T E) (GM : GlobalMapsSig T E TU ET CT L AR PO).
+  Include DeclarationTyping T E TU ET CT CS Ty L AR PO GM.
 End DeclarationTypingSig.

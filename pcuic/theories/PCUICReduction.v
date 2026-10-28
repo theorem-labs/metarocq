@@ -1,9 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config Primitive.
+From MetaRocq.Common Require Import config Primitive PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils
      PCUICLiftSubst PCUICUnivSubst PCUICInduction PCUICPrimitive
-     PCUICCases PCUICClosed PCUICTactics.
+     PCUICCases PCUICClosed PCUICTactics PCUICPrimitiveRed.
 
 From Stdlib Require Import ssreflect.
 From Equations.Prop Require Import DepElim.
@@ -34,6 +34,78 @@ Definition set_array_value (ar : array_model term) (v : list term) :=
      array_type := ar.(array_type);
      array_value := v |}.
 
+
+(** ** The redex and the reduct of the primitive-operation rule are ground
+
+  A literal argument of the rule is [tPrim] at an integer or string payload and
+  a reduct is either such a [tPrim] or a constructor at the empty universe
+  instance: neither carries a de Bruijn variable, a universe or a proper
+  subterm.  Every syntactic operation the stability proofs push through the
+  rule -- lifting, substitution, universe substitution, renaming,
+  instantiation -- is therefore the identity on them.  The stability proofs
+  use [prim_ground_readback], [prim_ground_subst_instance] and [map_prim_ground]. *)
+
+Definition prim_ground (t : term) : Prop :=
+  (exists l, t = term_of_lit l) \/ (exists ind n, t = tConstruct ind n []).
+
+Lemma prim_ground_term_of_lit l : prim_ground (term_of_lit l).
+Proof. left; now exists l. Qed.
+
+Lemma prim_ground_readback {Σ s r v} : readback Σ s r = Some v -> prim_ground v.
+Proof.
+  rewrite /readback; destruct s, r => //=.
+  - intros [= <-]. left. now exists (LInt i).
+  - destruct (Retroknowledge.retro_bool Σ.(retroknowledge)) => //.
+    intros [= <-]. right. now do 2 eexists.
+Qed.
+
+Lemma prim_ground_subst_instance u t : prim_ground t -> subst_instance u t = t.
+Proof. intros [[[] ->]|[? [? ->]]]; reflexivity. Qed.
+
+(** The arguments of a redex are fixed by any operation that fixes ground
+    terms, which is how each induction rewrites [map f (map term_of_lit ls)]. *)
+Lemma map_prim_ground (f : term -> term) ls :
+  (forall t, prim_ground t -> f t = t) ->
+  map f (map term_of_lit ls) = map term_of_lit ls.
+Proof.
+  intros hf; induction ls as [|l ls ih] => //=.
+  f_equal; [now apply hf, prim_ground_term_of_lit|exact ih].
+Qed.
+
+(** Replace the reduct of a firing by its ground shape -- a [tPrim] at an
+    integer or a string payload, or a constructor with no argument and no
+    universe.  An induction whose primitive-operation case only needs the
+    reduct to carry no variable, universe or subterm closes it with this
+    tactic and a computation. *)
+Ltac prim_ground_reduct :=
+  match goal with
+  | H : readback _ _ _ = Some _ |- _ =>
+      destruct (prim_ground_readback H) as [[[?|?] ->]|[? [? ->]]]
+  end.
+
+(** [red_prim_op]'s left-hand side is [mkApps (tConst c u) (map term_of_lit ls)]
+    with [ls] a variable, so [solve_discr] cannot tell it apart from a rigid
+    head on its own: it has to case on [ls], since the empty list leaves the
+    bare [tConst] and a snoc leaves a [tApp].  Every [depelim r; solve_discr]
+    over [red1] downstream needs that step, so the tactic is extended once here
+    (a superset of PCUICAstUtils' [solve_discr]: the first two blocks are the
+    original, so the override loses no existing behaviour, and the new block
+    does not fire on a concrete [ls]). *)
+Ltac solve_discr ::=
+  (try (progress (prepare_discr; finish_discr; cbn [mkApps] in * )));
+  (try (match goal with
+        | [ H : is_true (application_atom _) |- _ ] => discriminate
+        | [ H : is_true (application_atom (mkApps _ _)) |- _ ] =>
+          destruct (application_atom_mkApps H); subst; try discriminate
+        end));
+  (try (match goal with
+        | [ H : _ = mkApps (tConst _ _) (map term_of_lit ?ls) |- _ ] =>
+          destruct ls using MRList.rev_ind;
+          rewrite ?map_app ?mkApps_app in H; cbn in H; discriminate
+        | [ H : mkApps (tConst _ _) (map term_of_lit ?ls) = _ |- _ ] =>
+          destruct ls using MRList.rev_ind;
+          rewrite ?map_app ?mkApps_app in H; cbn in H; discriminate
+        end)).
 
 Inductive red1 (Σ : global_env) (Γ : context) : term -> term -> Type :=
 (** Reductions *)
@@ -77,6 +149,21 @@ Inductive red1 (Σ : global_env) (Γ : context) : term -> term -> Type :=
 | red_delta c decl body (isdecl : declared_constant Σ c decl) u :
     decl.(cst_body) = Some body ->
     Σ ;;; Γ |- tConst c u ⇝ subst_instance u body
+
+(** Primitive operation: a registered bodiless constant applied to exactly the
+    literals its operation expects computes, as it does in the kernel
+    (kernel/cClosure.ml: fire only when saturated and every argument is a
+    value).  [cst_body decl = None] keeps this rule disjoint from [red_delta]
+    in every environment; the instance [u] is unconstrained because the
+    operations are monomorphic.  Over-application reaches the redex through
+    [app_red_l] and a not-yet-literal argument through [app_red_r]. *)
+| red_prim_op c decl u op ls r v :
+    prim_op_of Σ c = Some op ->
+    declared_constant Σ c decl ->
+    cst_body decl = None ->
+    prim_op_denote op ls = Some r ->
+    readback Σ (po_shape (info op)) r = Some v ->
+    Σ ;;; Γ |- mkApps (tConst c u) (map term_of_lit ls) ⇝ v
 
 (** Proj *)
 | red_proj p args u arg:
@@ -155,6 +242,42 @@ where " Σ ;;; Γ |- t ⇝ u " := (red1 Σ Γ t u).
 
 Derive Signature for red1.
 
+(** A redex of [red_prim_op] is stable under any term map [f] that fixes ground
+    terms, commutes with application and keeps a constant a constant: the head
+    stays the same constant (the rule puts no condition on its instance), the
+    arguments and the reduct are ground.  This is the whole content of the
+    primitive-operation case of every syntactic induction over
+    [red1_ind_all]. *)
+Lemma red1_prim_op_map Σ Γ (f : term -> term) (g : Instance.t -> Instance.t)
+  c decl u op ls r v :
+  (forall t, prim_ground t -> f t = t) ->
+  (forall t l, f (mkApps t l) = mkApps (f t) (map f l)) ->
+  (forall c u, f (tConst c u) = tConst c (g u)) ->
+  prim_op_of Σ c = Some op ->
+  declared_constant Σ c decl ->
+  cst_body decl = None ->
+  prim_op_denote op ls = Some r ->
+  readback Σ (po_shape (info op)) r = Some v ->
+  red1 Σ Γ (f (mkApps (tConst c u) (map term_of_lit ls))) (f v).
+Proof.
+  intros hgr hmk hcst hop hdecl hbody hden hback.
+  rewrite hmk hcst (map_prim_ground _ _ hgr) (hgr _ (prim_ground_readback hback)).
+  now eapply red_prim_op; tea.
+Qed.
+
+Corollary red1_prim_op_subst_instance Σ Γ ui c decl u op ls r v :
+  prim_op_of Σ c = Some op -> declared_constant Σ c decl -> cst_body decl = None ->
+  prim_op_denote op ls = Some r -> readback Σ (po_shape (info op)) r = Some v ->
+  red1 Σ Γ (subst_instance ui (mkApps (tConst c u) (map term_of_lit ls)))
+           (subst_instance ui v).
+Proof.
+  intros.
+  eapply (red1_prim_op_map _ _ (subst_instance ui : term -> term)
+                               (subst_instance ui : Instance.t -> Instance.t));
+    [exact (prim_ground_subst_instance ui)|exact (subst_instance_mkApps ui)|reflexivity
+    |eassumption|eassumption|eassumption|eassumption|eassumption].
+Qed.
+
 Definition red1_ctx Σ := (OnOne2_local_env (fun Δ => on_one_decl (fun t t' => red1 Σ Δ t t'))).
 Definition red1_ctx_rel Σ Γ := (OnOne2_local_env (fun Δ => on_one_decl (fun t t' => red1 Σ (Γ ,,, Δ) t t'))).
 
@@ -192,6 +315,15 @@ Lemma red1_ind_all :
        (forall (Γ : context) c (decl : constant_body) (body : term),
         declared_constant Σ c decl ->
         forall u : Instance.t, cst_body decl = Some body -> P Γ (tConst c u) (subst_instance u body)) ->
+
+       (forall (Γ : context) c (decl : constant_body) (u : Instance.t)
+          (op : prim_op) (ls : list prim_lit) (r : prim_result) (v : term),
+        prim_op_of Σ c = Some op ->
+        declared_constant Σ c decl ->
+        cst_body decl = None ->
+        prim_op_denote op ls = Some r ->
+        readback Σ (po_shape (info op)) r = Some v ->
+        P Γ (mkApps (tConst c u) (map term_of_lit ls)) v) ->
 
        (forall (Γ : context) p (args : list term) (u : Instance.t)
          (arg : term),
@@ -298,7 +430,7 @@ Lemma red1_ind_all :
 
        forall (Γ : context) (t t0 : term), red1 Σ Γ t t0 -> P Γ t t0.
 Proof.
-  intros. rename X30 into Xlast. revert Γ t t0 Xlast.
+  intros. rename X31 into Xlast. revert Γ t t0 Xlast.
   fix aux 4. intros Γ t T.
   move aux at top.
   destruct 1; match goal with
@@ -333,22 +465,22 @@ Proof.
     + constructor. split; auto.
     + constructor. auto.
 
-  - eapply X23.
+  - eapply X24.
     revert mfix0 mfix1 o; fix auxl 3.
     intros l l' Hl; destruct Hl;
     constructor; try split; auto; intuition.
 
-  - eapply X24.
+  - eapply X25.
     revert o. generalize (fix_context mfix0). intros c Xnew.
     revert mfix0 mfix1 Xnew; fix auxl 3; intros l l' Hl;
     destruct Hl; constructor; try split; auto; intuition.
 
-  - eapply X25.
+  - eapply X26.
     revert mfix0 mfix1 o.
     fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.
 
-  - eapply X26.
+  - eapply X27.
     revert o. generalize (fix_context mfix0). intros c new.
     revert mfix0 mfix1 new; fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.

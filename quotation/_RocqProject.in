@@ -7,6 +7,7 @@ theories/ToPCUIC/Common/Environment.v
 theories/ToPCUIC/Common/EnvironmentTyping.v
 theories/ToPCUIC/Common/Kernames.v
 theories/ToPCUIC/Common/Primitive.v
+theories/ToPCUIC/Common/PrimitiveOps.v
 theories/ToPCUIC/Common/Reflect.v
 theories/ToPCUIC/Common/Transform.v
 theories/ToPCUIC/Common/Universes.v
@@ -126,6 +127,7 @@ theories/ToTemplate/Common/Environment.v
 theories/ToTemplate/Common/EnvironmentTyping.v
 theories/ToTemplate/Common/Kernames.v
 theories/ToTemplate/Common/Primitive.v
+theories/ToTemplate/Common/PrimitiveOps.v
 theories/ToTemplate/Common/Reflect.v
 theories/ToTemplate/Common/Transform.v
 theories/ToTemplate/Common/Universes.v
