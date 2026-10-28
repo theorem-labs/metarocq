@@ -1,5 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, C4 row C1b: REFUTATION.
+(** * BET-315 eta lane, C4: REFUTATIONS of row C1b and of C4 itself.
+
+   [C1b_false : C1b_statement -> False] and [C4_false : C4_statement -> False],
+   both over the pinned statements of [PCUICEtaBetaEta]. The C4 witness is at
+   the end of the file; it reuses the C1b normality lemmas.
 
    Row C1b, pinned as [C1b_statement] in [PCUICEtaBetaEta], asks for
      [upto_domain t t' -> eta1 t u -> ∑ u', clos_refl eta1 t' u' × upto_domain u u']
@@ -32,17 +36,17 @@
      the related side repairs it; a repair has to change [eta1], [upto_domain]
      or the (A)/(B) decomposition.
 
-   Dependencies: [PCUICEtaDefs], [PCUICEtaBetaEta] (for [C1b_statement], [beta_eta1]) and base
-   syntax only. No [Context], no [Axiom], no [Admitted]. *)
+   Dependencies: [PCUICEtaDefs], [PCUICEtaBetaEta] (for [C1b_statement], [C4_statement],
+   [beta_eta1]), [PCUICTyping] (for [wf]) and base syntax/reduction only. No [Context], no [Axiom], no [Admitted]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations.Type Require Import Relation Relation_Properties.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config Universes.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICReduction
-     PCUICOnFreeVars PCUICEtaDefs PCUICEtaBetaEta.
+     PCUICOnFreeVars PCUICTyping PCUICEtaDefs PCUICEtaBetaEta.
 
-Import PCUICOnFreeVars (is_open_term).
+Import PCUICOnFreeVars (is_open_term, is_closed_context).
 
 (** ** The witness *)
 
@@ -231,45 +235,25 @@ Proof.
   intros t t' u _ _. exact (H t t' u).
 Qed.
 
-(** ** Probe: can a narrower equivalence repair C1b without breaking C4?
 
-   Candidate [E'] := [upto_domain] that also requires corresponding λ domains to
-   have the same free variables. [E'] excludes the witness above by
-   construction (the inner domains [P] and [x] differ in free variables).
-   C1b over [E'] then plausibly holds (proof sketch, NOT mechanised: in the
-   [eta_red] case, [X E' lift0 1 t0] forces every domain of [X] to avoid the
-   lifted window, so [X = lift0 1 X0] with [t0 E' X0]; η-steps preserve free
-   variables exactly, so a step inside a domain closes by reflexivity).
+(** ** C4 itself is FALSE ([C4_statement], [PCUICEtaBetaEta])
 
-   But C4 itself forces [E] to relate two terms whose corresponding λ domains
-   DIFFER in free variables, so C4 is FALSE modulo [E'] (and C3 with it, since
-   both reducts below are βη-normal). Witness (closed; [w] is the outer binder):
+   Same root cause one step further (EtaL2's witness). With [P := tSort sProp]:
 
-     c4_t    = λw:P. λx:w. (λy:P. y) x      an η-redex under λw
-     c4_eta  = λw:P. λy:P. y                 c4_t →η c4_eta
-     c4_beta = λw:P. λx:w. x                 c4_t →β c4_beta
+     c4_s = λz:P. (P (λx:z. ((λy:P. y) x))) z         closed: the inner domain is z
+     η then η:  c4_s →η c1b_t = λz:P. (P (λy:P. y)) z  →η c1b_u = P (λy:P. y)
+     β:         c4_s →β c1b_t' = λz:P. (P (λx:z. x)) z
 
-   Both reducts are βη-normal in every [Σ]/[Γ], so any joining modulo [E] must
-   relate them as they are: [E c4_beta c4_eta]. Their depth-1 domains are [w]
-   (free variable 0) and [P] (none). [C4_forces_relating] proves this for an
-   ARBITRARY relation [E], at any [Σ], [Γ]. *)
+   [c1b_u] and [c1b_t'] are βη-normal in every [Σ]/[Γ] (proved by inversion on
+   the [red1] and [eta1] constructors), and [upto_domain c1b_u c1b_t'] fails
+   (application against λ). So the two reducts of [c4_s] have no common
+   reduct modulo [upto_domain]. All premises of [C4_statement] are discharged at
+   [default_checker_flags], [empty_global_env] (proved [wf]), [Γ := []]. *)
 
-Definition c4_t : term :=
-  tLambda c1b_na c1b_P (eta_redex c1b_na (tRel 0) (tLambda c1b_na c1b_P (tRel 0))).
-Definition c4_eta : term := tLambda c1b_na c1b_P (tLambda c1b_na c1b_P (tRel 0)).
-Definition c4_beta : term := tLambda c1b_na c1b_P (tLambda c1b_na (tRel 0) (tRel 0)).
-
-Lemma c4_eta_step : eta1 c4_t c4_eta.
-Proof. unfold c4_t, c4_eta. apply abs_eta_r. apply eta_red. Qed.
-
-Lemma c4_beta_step Σ Γ : red1 Σ Γ c4_t c4_beta.
-Proof.
-  unfold c4_t, c4_beta. apply abs_red_r. apply abs_red_r.
-  exact (red_beta Σ _ c1b_na c1b_P (tRel 0) (tRel 0)).
-Qed.
-
-Lemma c4_open (Γ : context) : is_open_term Γ c4_t.
-Proof. vm_compute; reflexivity. Qed.
+Definition c4_s : term :=
+  tLambda c1b_na c1b_P
+    (tApp (tApp c1b_P (tLambda c1b_na (tRel 0) (tApp (tLambda c1b_na c1b_P (tRel 0)) (tRel 0))))
+          (tRel 0)).
 
 (** Generic λ-normality, from normality of the domain and the body. *)
 Lemma red_normal_lam Σ Γ na A b :
@@ -289,59 +273,87 @@ Proof.
   intros HA Hb Hshape v H. inv_eta H; first [exact Hshape | eauto].
 Qed.
 
-Lemma red_normal_c4_eta Σ Γ v : red1 Σ Γ c4_eta v -> False.
+(** *** (a) The two reductions *)
+
+Lemma c4_s_eta_step : eta1 c4_s c1b_t.
 Proof.
-  unfold c4_eta. revert v. apply red_normal_lam.
-  - intros v. apply red_normal_Sort.
-  - apply red_normal_lam.
-    + intros v. apply red_normal_Sort.
-    + intros v. apply red_normal_Rel0.
+  unfold c4_s, c1b_t, c1b_u, c1b_P. cbn.
+  apply abs_eta_r. apply app_eta_l. apply app_eta_r.
+  exact (eta_red c1b_na (tLambda c1b_na (tSort sProp) (tRel 0)) (tRel 0)).
 Qed.
 
-Lemma red_normal_c4_beta Σ Γ v : red1 Σ Γ c4_beta v -> False.
+Lemma c4_s_beta_step Σ Γ : red1 Σ Γ c4_s c1b_t'.
 Proof.
-  unfold c4_beta. revert v. apply red_normal_lam.
-  - intros v. apply red_normal_Sort.
-  - apply red_normal_lam.
-    + intros v. apply red_normal_Rel0.
-    + intros v. apply red_normal_Rel0.
+  unfold c4_s, c1b_t', c1b_L.
+  apply abs_red_r. apply app_red_l. apply app_red_r. apply abs_red_r.
+  exact (red_beta Σ _ c1b_na c1b_P (tRel 0) (tRel 0)).
 Qed.
 
-Lemma eta_normal_c4_eta v : eta1 c4_eta v -> False.
+Lemma c4_s_to_u Σ Γ : beta_eta Σ Γ c4_s c1b_u.
 Proof.
-  unfold c4_eta. revert v. apply eta_normal_lam.
-  - intros v. apply eta_normal_Sort.
-  - apply eta_normal_lam; [intros v; apply eta_normal_Sort | intros v; apply eta_normal_Rel | exact I].
-  - exact I.
+  eapply rt_trans with (y := c1b_t).
+  - apply rt_step. right. exact c4_s_eta_step.
+  - apply rt_step. right. exact c1b_step.
 Qed.
 
-Lemma eta_normal_c4_beta v : eta1 c4_beta v -> False.
+Lemma c4_s_to_t' Σ Γ : beta_eta Σ Γ c4_s c1b_t'.
+Proof. apply rt_step. left. apply c4_s_beta_step. Qed.
+
+(** *** (b) Normality of [c1b_u] ([c1b_t'] is [betaeta_normal_t'] above) *)
+
+Lemma red_normal_u Σ Γ v : red1 Σ Γ c1b_u v -> False.
 Proof.
-  unfold c4_beta. revert v. apply eta_normal_lam.
-  - intros v. apply eta_normal_Sort.
-  - apply eta_normal_lam; [intros v; apply eta_normal_Rel | intros v; apply eta_normal_Rel | exact I].
-  - exact I.
+  unfold c1b_u, c1b_P. intros H. inv_red H.
+  - eapply red_normal_Sort; eassumption.
+  - eapply (red_normal_lam _ _ _ _ _ (fun v => red_normal_Sort _ _ _ v)
+                                     (fun v => red_normal_Rel0 _ _ _ _ v)).
+    eassumption.
 Qed.
 
-Lemma betaeta_normal_c4_eta Σ Γ v : beta_eta1 Σ Γ c4_eta v -> False.
-Proof. intros [H|H]; [exact (red_normal_c4_eta _ _ _ H) | exact (eta_normal_c4_eta _ H)]. Qed.
+Lemma eta_normal_u v : eta1 c1b_u v -> False.
+Proof.
+  unfold c1b_u, c1b_P. intros H. inv_eta H.
+  - eapply eta_normal_Sort; eassumption.
+  - eapply (eta_normal_lam _ _ _ (fun v => eta_normal_Sort _ v) (fun v => eta_normal_Rel _ v) I).
+    eassumption.
+Qed.
 
-Lemma betaeta_normal_c4_beta Σ Γ v : beta_eta1 Σ Γ c4_beta v -> False.
-Proof. intros [H|H]; [exact (red_normal_c4_beta _ _ _ H) | exact (eta_normal_c4_beta _ H)]. Qed.
+Lemma betaeta_normal_u Σ Γ v : beta_eta1 Σ Γ c1b_u v -> False.
+Proof. intros [H|H]; [exact (red_normal_u _ _ _ H) | exact (eta_normal_u _ H)]. Qed.
 
-(** Any [E] modulo which βη is confluent on well-scoped terms at [Σ]/[Γ] relates
-    [c4_beta] and [c4_eta]. Instantiate with a C4-shaped hypothesis (C4_statement
-    supplies it at any [wf Σ], [is_closed_context Γ]). *)
-Theorem C4_forces_relating (E : term -> term -> Type) (Σ : global_env) (Γ : context) :
-  (forall t u v, is_open_term Γ t -> beta_eta Σ Γ t u -> beta_eta Σ Γ t v ->
-     ∑ u' v', beta_eta Σ Γ u u' × beta_eta Σ Γ v v' × E u' v') ->
-  E c4_beta c4_eta.
+(** *** (d) Side conditions *)
+
+Lemma wf_empty_global_env {cf : checker_flags} : wf empty_global_env.
+Proof.
+  split.
+  - split; [|split].
+    + intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+    + intros x Hx.
+      change (LevelSet.In x (LevelSet.union (ContextSet.levels ContextSet.empty)
+                                            (LevelSet.singleton Level.lzero))) in Hx.
+      apply LevelSet.union_spec in Hx as [Hx|Hx].
+      * exfalso. eapply LevelSet.empty_spec. exact Hx.
+      * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
+    + exists {| valuation_mono := fun _ => 1%positive; valuation_poly := fun _ => 0 |}.
+      intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+  - constructor.
+Qed.
+
+Lemma closed_context_nil : is_closed_context ([] : context).
+Proof. reflexivity. Qed.
+
+Lemma c4_s_open : is_open_term ([] : context) c4_s.
+Proof. vm_compute; reflexivity. Qed.
+
+(** *** The refutation of C4 *)
+
+Theorem C4_false : C4_statement -> False.
 Proof.
   intros H.
-  have Hb : beta_eta Σ Γ c4_t c4_beta by apply rt_step; left; apply c4_beta_step.
-  have He : beta_eta Σ Γ c4_t c4_eta by apply rt_step; right; apply c4_eta_step.
-  destruct (H _ _ _ (c4_open Γ) Hb He) as (u' & v' & Hu & Hv & HE).
-  apply (rt_from_normal _ _ _ (betaeta_normal_c4_beta Σ Γ)) in Hu.
-  apply (rt_from_normal _ _ _ (betaeta_normal_c4_eta Σ Γ)) in Hv.
-  subst u' v'. exact HE.
+  destruct (H default_checker_flags empty_global_env (@wf_empty_global_env default_checker_flags)
+              [] c4_s c1b_u c1b_t' closed_context_nil c4_s_open
+              (c4_s_to_u _ _) (c4_s_to_t' _ _)) as (u' & v' & Hu & Hv & HE).
+  apply (rt_from_normal _ _ _ (betaeta_normal_u _ _)) in Hu.
+  apply (rt_from_normal _ _ _ (betaeta_normal_t' _ _)) in Hv.
+  subst u' v'. exact (c1b_not_upto HE).
 Qed.
