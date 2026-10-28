@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config uGraph EnvMap.
+From MetaRocq.Common Require Import config uGraph EnvMap PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICEquality PCUICReduction
      PCUICReflect PCUICSafeLemmata PCUICTyping PCUICGlobalEnv PCUICWfUniverses.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec.
