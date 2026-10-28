@@ -73,7 +73,7 @@ Section CtxReduction.
         eapply forallb_All in H); intros
     end.
 
-  Lemma red1_red_ctx P Γ Δ t u :
+  Lemma red1_red_ctx_cb P Γ Δ t u :
     on_ctx_free_vars P Γ ->
     on_ctx_free_vars P Δ ->
     on_free_vars P t ->
@@ -187,8 +187,9 @@ Section CtxReduction.
     - eapply red_primArray_default; eauto.
     - eapply red_primArray_type; eauto.
   Qed.
+  Local Notation red1_red_ctx := red1_red_ctx_cb (only parsing).
 
-  Lemma red_red_ctx P Γ Δ t u :
+  Lemma red_red_ctx_cb P Γ Δ t u :
     on_ctx_free_vars P Γ ->
     on_ctx_free_vars P Δ ->
     on_free_vars P t ->
@@ -202,6 +203,7 @@ Section CtxReduction.
     transitivity y; eauto.
     eapply IHX2; tea. eapply red_on_free_vars_cb in X1; tea.
   Qed.
+  Local Notation red_red_ctx := red_red_ctx_cb (only parsing).
 
   Lemma red_context_app {Γ Γ' Δ Δ'} :
     red_context Σ Γ Δ ->
@@ -231,7 +233,7 @@ Section CtxReduction.
     bool_congr.
   Qed.
 
-  Lemma red_context_on_ctx_free_vars {P Γ Δ} :
+  Lemma red_context_on_ctx_free_vars_cb {P Γ Δ} :
     on_ctx_free_vars P Γ ->
     red_context Σ Γ Δ ->
     on_ctx_free_vars P Δ.
@@ -249,8 +251,9 @@ Section CtxReduction.
     - move/andP: ond => [] /=; eauto using red_on_free_vars_cb.
       intros. apply /andP. eauto using red_on_free_vars_cb.
   Qed.
+  Local Notation red_context_on_ctx_free_vars := red_context_on_ctx_free_vars_cb (only parsing).
 
-  Lemma red_context_rel_on_ctx_free_vars {P Γ Δ Δ'} :
+  Lemma red_context_rel_on_ctx_free_vars_cb {P Γ Δ Δ'} :
     on_ctx_free_vars (addnP #|Δ| P) Γ ->
     on_ctx_free_vars P Δ ->
     red_context_rel Σ Γ Δ Δ' ->
@@ -276,6 +279,7 @@ Section CtxReduction.
       * eapply red_on_free_vars_cb;revgoals;tea.
         now rewrite on_ctx_free_vars_app onΔ onΓ.
   Qed.
+  Local Notation red_context_rel_on_ctx_free_vars := red_context_rel_on_ctx_free_vars_cb (only parsing).
 
   Definition on_ctx_free_vars_fold P ctx :=
     All_fold (fun Γ d =>
@@ -288,7 +292,7 @@ Section CtxReduction.
     repeat (PCUICSigmaCalculus.nat_compare_specs => //).
   Qed.
 
-  Lemma red_context_trans Γ Δ Δ' :
+  Lemma red_context_trans_cb Γ Δ Δ' :
     on_ctx_free_vars (closedP #|Γ| xpredT) Γ ->
     red_context Σ Γ Δ -> red_context Σ Δ Δ' -> red_context Σ Γ Δ'.
   Proof using wfΣ.
@@ -316,8 +320,9 @@ Section CtxReduction.
         { eapply red_on_free_vars_cb; tea; auto with fvs.
           move/andP: ond => [] /= //. }
   Qed.
+  Local Notation red_context_trans := red_context_trans_cb (only parsing).
 
-  Lemma red_context_app_right {Γ Γ' Δ Δ'} :
+  Lemma red_context_app_right_cb {Γ Γ' Δ Δ'} :
     on_ctx_free_vars (closedP #|Γ ,,, Γ'| xpredT) (Γ ,,, Γ') ->
     red_context Σ Γ Δ ->
     red_context_rel Σ Δ Γ' Δ' ->
@@ -328,6 +333,7 @@ Section CtxReduction.
     - eapply red_context_app_same. tea.
     - eapply red_context_app; [apply red_context_refl|tas].
   Qed.
+  Local Notation red_context_app_right := red_context_app_right_cb (only parsing).
 
   Lemma red_context_rel_inv {Γ Γ' Δ'} :
     red_context Σ (Γ ,,, Γ') (Γ ,,, Δ') ->
@@ -373,7 +379,7 @@ Section CtxReduction.
     - apply All2_fold_refl => //.
   Qed.
 
-  Lemma red_ctx_rel_red_context_rel Γ Δ Δ' :
+  Lemma red_ctx_rel_red_context_rel_cb Γ Δ Δ' :
     on_ctx_free_vars (closedP #|Γ,,, Δ| xpredT) (Γ,,, Δ) ->
     red_ctx_rel Σ Γ Δ Δ' <~> red_context_rel Σ Γ Δ Δ'.
   Proof using wfΣ.
@@ -413,8 +419,31 @@ Section CtxReduction.
              induction IHX; try now do 2 constructor.
              econstructor 3; tea.
   Qed.
+  Local Notation red_ctx_rel_red_context_rel := red_ctx_rel_red_context_rel_cb (only parsing).
 
 End CtxReduction.
 
 
 
+
+
+
+
+
+(** * The trunk statements under their old names (BET-315 W-c, FRAC 2026-10-28).
+    Each old name keeps its trunk type, with the premise [wf Σ]; it is a
+    corollary of its [ClosedBodies] statement [_cb] through [wf_ClosedBodies]. *)
+Lemma red_context_on_ctx_free_vars : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {P : forall _ : nat, bool} {Γ Δ : list (BasicAst.context_decl PCUICAst.term)} (cbh6 : is_true (PCUICOnFreeVars.on_ctx_free_vars P Γ)) (cbh7 : PCUICReduction.red_context (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ), is_true (PCUICOnFreeVars.on_ctx_free_vars P Δ).
+Proof. intros cf Σ wfΣ P Γ Δ cbh6 cbh7. exact (@red_context_on_ctx_free_vars_cb cf Σ _ P Γ Δ cbh6 cbh7). Qed.
+Lemma red_context_trans : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (Γ Δ Δ' : list (BasicAst.context_decl PCUICAst.term)) (cbh6 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) Γ) (fun _ : nat => true)) Γ)) (cbh7 : PCUICReduction.red_context (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ) (cbh8 : PCUICReduction.red_context (PCUICAst.PCUICEnvironment.fst_ctx Σ) Δ Δ'), PCUICReduction.red_context (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ'.
+Proof. intros cf Σ wfΣ Γ Δ Δ' cbh6 cbh7 cbh8. exact (@red_context_trans_cb cf Σ _ Γ Δ Δ' cbh6 cbh7 cbh8). Qed.
+Lemma red_context_rel_on_ctx_free_vars : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {P : forall _ : nat, bool} {Γ Δ Δ' : list (BasicAst.context_decl PCUICAst.term)} (cbh7 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.addnP (@length (BasicAst.context_decl PCUICAst.term) Δ) P) Γ)) (cbh8 : is_true (PCUICOnFreeVars.on_ctx_free_vars P Δ)) (cbh9 : PCUICReduction.red_context_rel (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ Δ'), is_true (PCUICOnFreeVars.on_ctx_free_vars P Δ').
+Proof. intros cf Σ wfΣ P Γ Δ Δ' cbh7 cbh8 cbh9. exact (@red_context_rel_on_ctx_free_vars_cb cf Σ _ P Γ Δ Δ' cbh7 cbh8 cbh9). Qed.
+Lemma red_red_ctx : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) (Γ Δ : list (BasicAst.context_decl PCUICAst.term)) (t u : PCUICAst.term) (cbh8 : is_true (PCUICOnFreeVars.on_ctx_free_vars P Γ)) (cbh9 : is_true (PCUICOnFreeVars.on_ctx_free_vars P Δ)) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars P t)) (cbh11 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ t u) (cbh12 : PCUICReduction.red_context (PCUICAst.PCUICEnvironment.fst_ctx Σ) Δ Γ), PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) Δ t u.
+Proof. intros cf Σ wfΣ P Γ Δ t u cbh8 cbh9 cbh10 cbh11 cbh12. exact (@red_red_ctx_cb cf Σ _ P Γ Δ t u cbh8 cbh9 cbh10 cbh11 cbh12). Qed.
+Lemma red1_red_ctx : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) (Γ Δ : list (BasicAst.context_decl PCUICAst.term)) (t u : PCUICAst.term) (cbh8 : is_true (PCUICOnFreeVars.on_ctx_free_vars P Γ)) (cbh9 : is_true (PCUICOnFreeVars.on_ctx_free_vars P Δ)) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars P t)) (cbh11 : PCUICReduction.red1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ t u) (cbh12 : PCUICReduction.red_context (PCUICAst.PCUICEnvironment.fst_ctx Σ) Δ Γ), PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) Δ t u.
+Proof. intros cf Σ wfΣ P Γ Δ t u cbh8 cbh9 cbh10 cbh11 cbh12. exact (@red1_red_ctx_cb cf Σ _ P Γ Δ t u cbh8 cbh9 cbh10 cbh11 cbh12). Qed.
+Lemma red_ctx_rel_red_context_rel : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (Γ Δ : list (BasicAst.context_decl PCUICAst.term)) (Δ' : PCUICAst.PCUICEnvironment.context) (cbh6 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ)) (fun _ : nat => true)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ))), CRelationClasses.iffT (PCUICReduction.red_ctx_rel (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ Δ') (PCUICReduction.red_context_rel (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ Δ').
+Proof. intros cf Σ wfΣ Γ Δ Δ' cbh6. exact (@red_ctx_rel_red_context_rel_cb cf Σ _ Γ Δ Δ' cbh6). Qed.
+Lemma red_context_app_right : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {Γ Γ' Δ Δ' : list (BasicAst.context_decl PCUICAst.term)} (cbh7 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Γ')) (fun _ : nat => true)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Γ'))) (cbh8 : PCUICReduction.red_context (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ) (cbh9 : PCUICReduction.red_context_rel (PCUICAst.PCUICEnvironment.fst_ctx Σ) Δ Γ' Δ'), PCUICReduction.red_context (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Γ') (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Δ Δ').
+Proof. intros cf Σ wfΣ Γ Γ' Δ Δ' cbh7 cbh8 cbh9. exact (@red_context_app_right_cb cf Σ _ Γ Γ' Δ Δ' cbh7 cbh8 cbh9). Qed.

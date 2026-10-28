@@ -23,6 +23,16 @@ From Equations Require Import Equations.
 From Stdlib Require Import CRelationClasses CMorphisms.
 From Equations.Prop Require Import DepElim.
 From Equations.Type Require Import Relation Relation_Properties.
+Local Notation strong_substitutivity := PCUICParallelReduction.strong_substitutivity_cb (only parsing).
+Local Notation pred1_on_free_vars := PCUICParallelReductionConfluence.pred1_on_free_vars_cb (only parsing).
+Local Notation pred1_on_free_vars_ctx := PCUICParallelReductionConfluence.pred1_on_free_vars_ctx_cb (only parsing).
+Local Notation pred1_on_ctx_free_vars := PCUICParallelReductionConfluence.pred1_on_ctx_free_vars_cb (only parsing).
+Local Notation triangle := PCUICParallelReductionConfluence.triangle_cb (only parsing).
+Local Notation pred1_mkApps_tConst_axiom := PCUICParallelReductionConfluence.pred1_mkApps_tConst_axiom_cb (only parsing).
+Local Notation pred1_diamond := PCUICParallelReductionConfluence.pred1_diamond_cb (only parsing).
+Local Notation pred1_ctx_over_inst_case_context := PCUICParallelReductionConfluence.pred1_ctx_over_inst_case_context_cb (only parsing).
+Local Notation pred1_fix_context := PCUICParallelReductionConfluence.pred1_fix_context_cb (only parsing).
+Local Notation red_red_ctx := PCUICContextReduction.red_red_ctx_cb (only parsing).
 
 Local Ltac intuition_solver ::= auto with *.
 
@@ -1676,7 +1686,7 @@ Proof.
   eapply All_All2_telescopei; eauto.
 Qed.
 
-Lemma OnOne2_pars_pred1_ctx_over {cf : checker_flags} {Σ} {wfΣ : ClosedBodies Σ} Γ params params' puinst pctx :
+Lemma OnOne2_pars_pred1_ctx_over_cb {cf : checker_flags} {Σ} {wfΣ : ClosedBodies Σ} Γ params params' puinst pctx :
   on_ctx_free_vars xpredT Γ ->
   forallb (on_free_vars xpredT) params ->
   on_free_vars_ctx (shiftnP #|params| xpredT) pctx ->
@@ -1744,7 +1754,7 @@ Proof.
   rewrite H on_free_vars_fix_context //.
 Qed.
 
-Lemma pred_on_free_vars {cf : checker_flags} {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ t u} :
+Lemma pred_on_free_vars_cb {cf : checker_flags} {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ t u} :
   on_ctx_free_vars P Γ ->
   clos_refl_trans (pred1 Σ Γ Δ) t u ->
   on_free_vars P t -> on_free_vars P u.
@@ -1790,6 +1800,7 @@ Ltac inv_on_free_vars_xpredT :=
 #[global] Hint Extern 3 (is_true (on_free_vars (shiftnP _ xpredT) _)) => rewrite shiftnP_xpredT : fvs.
 
 Section RedPred.
+  Local Notation OnOne2_pars_pred1_ctx_over := OnOne2_pars_pred1_ctx_over_cb (only parsing).
   Context {cf : checker_flags}.
   Context {Σ : global_env}.
   Context (wfΣ : ClosedBodies Σ).
@@ -1808,7 +1819,7 @@ Section RedPred.
       precisely not closed by arbitrary reductions in contexts with let-ins.
    *)
 
-  Lemma pred1_ctx_pred1 P Γ Γ' Δ Δ' t u :
+  Lemma pred1_ctx_pred1_cb P Γ Γ' Δ Δ' t u :
     #|Γ| = #|Γ'| ->
     on_free_vars (closedP #|Γ ,,, Δ| P) t ->
     on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ ,,, Δ) ->
@@ -1843,6 +1854,7 @@ Section RedPred.
     rewrite nth_error_app_ge. lia.
     now replace #|Δ'| with #|Δ| by lia.
   Qed.
+  Local Notation pred1_ctx_pred1 := pred1_ctx_pred1_cb (only parsing).
 
   Lemma pred1_ctx_assumption_context Γ Γ' :
     pred1_ctx Σ Γ Γ' ->
@@ -1860,7 +1872,7 @@ Section RedPred.
     intros h; depelim h. depelim p; constructor; auto.
   Qed.
 
-  Lemma pred1_ctx_pred1_inv P Γ Γ' Δ Δ' t u :
+  Lemma pred1_ctx_pred1_inv_cb P Γ Γ' Δ Δ' t u :
     #|Γ| = #|Γ'| ->
     on_free_vars (closedP #|Γ ,,, Δ| P) t ->
     on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ ,,, Δ) ->
@@ -1900,6 +1912,7 @@ Section RedPred.
     econstructor => //.
     rewrite nth_error_app_ge //. lia.
   Qed.
+  Local Notation pred1_ctx_pred1_inv := pred1_ctx_pred1_inv_cb (only parsing).
 
   Ltac noconf H := repeat (DepElim.noconf H; simpl NoConfusion in * ).
 
@@ -1937,7 +1950,7 @@ Section RedPred.
     intuition.
   Qed.
 
-  Lemma red1_pred1 Γ M N :
+  Lemma red1_pred1_cb Γ M N :
     on_ctx_free_vars xpredT Γ ->
     on_free_vars xpredT M ->
     red1 Σ Γ M N -> pred1 Σ Γ Γ M N.
@@ -2062,6 +2075,7 @@ Section RedPred.
     - constructor; pcuic. constructor; cbn; pcuic.
     - constructor; pcuic. constructor; cbn; pcuic.
   Qed.
+  Local Notation red1_pred1 := red1_pred1_cb (only parsing).
 
 End RedPred.
 
@@ -2071,7 +2085,7 @@ Section PredRed.
   Context (wfΣ : ClosedBodies Σ).
 
   (** Parallel reduction is included in the reflexive transitive closure of 1-step reduction *)
-  Lemma pred1_red Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
+  Lemma pred1_red_cb Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
     on_free_vars_ctx xpredT Γ ->
     on_free_vars xpredT M ->
     red Σ Γ M N.
@@ -2238,8 +2252,9 @@ Section PredRed.
       + now eapply Universe.make'_inj in e.
       + solve_all.
   Qed.
+  Local Notation pred1_red := pred1_red_cb (only parsing).
 
-  Lemma pred1_red_r_gen P Γ Γ' Δ Δ' : forall M N,
+  Lemma pred1_red_r_gen_cb P Γ Γ' Δ Δ' : forall M N,
     on_free_vars (closedP #|Γ ,,, Δ| P) M ->
     on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ' ,,, Δ) ->
     pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') M N ->
@@ -2281,8 +2296,9 @@ Section PredRed.
       rewrite nth_error_app_ge. lia.
       now replace #|Δ'| with #|Δ| by lia.
   Qed.
+  Local Notation pred1_red_r_gen := pred1_red_r_gen_cb (only parsing).
 
-  Lemma pred1_red_r_gen' P Γ Γ' Δ Δ' : forall M N,
+  Lemma pred1_red_r_gen'_cb P Γ Γ' Δ Δ' : forall M N,
     on_free_vars (shiftnP #|Γ ,,, Δ| P) M ->
     on_free_vars_ctx P (Γ' ,,, Δ) ->
     pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') M N ->
@@ -2326,8 +2342,9 @@ Section PredRed.
       rewrite nth_error_app_ge. lia.
       now replace #|Δ'| with #|Δ| by lia.
   Qed.
+  Local Notation pred1_red_r_gen' := pred1_red_r_gen'_cb (only parsing).
 
-  Lemma pred1_pred1_r P Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
+  Lemma pred1_pred1_r_cb P Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
     on_ctx_free_vars (closedP #|Γ| P) Γ' ->
     on_free_vars (closedP #|Γ| P) M ->
     pred1 Σ Γ' Γ' M N.
@@ -2337,8 +2354,9 @@ Section PredRed.
     eapply pred1_pred1_ctx in pred. apply (length_of pred).
     simpl. eapply pred1_ctx_refl.
   Qed.
+  Local Notation pred1_pred1_r := pred1_pred1_r_cb (only parsing).
 
-  Lemma pred1_pred1_r' P Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
+  Lemma pred1_pred1_r'_cb P Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
     on_free_vars_ctx P Γ' ->
     on_free_vars (shiftnP #|Γ| P) M ->
     pred1 Σ Γ' Γ' M N.
@@ -2348,8 +2366,9 @@ Section PredRed.
     eapply pred1_pred1_ctx in pred. apply (length_of pred).
     simpl. eapply pred1_ctx_refl.
   Qed.
+  Local Notation pred1_pred1_r' := pred1_pred1_r'_cb (only parsing).
 
-  Lemma pred1_red_r {P Γ Γ' M N} :
+  Lemma pred1_red_r_cb {P Γ Γ' M N} :
     pred1 Σ Γ Γ' M N ->
     on_free_vars_ctx P Γ' ->
     on_free_vars (shiftnP #|Γ| P) M ->
@@ -2362,6 +2381,7 @@ Section PredRed.
     eapply on_free_vars_ctx_impl; tea => //.
     eapply on_free_vars_impl; tea => //.
   Qed.
+  Local Notation pred1_red_r := pred1_red_r_cb (only parsing).
 
 End PredRed.
 
@@ -2645,26 +2665,26 @@ Definition ws_pred_curry Σ P (Γ Γ' : ws_context P) := clos_refl_trans (ws_pre
 
 Definition ws_pred Σ := clos_refl_trans (ws_pred1 Σ).
 
-Lemma ws_red1_pred1_curry {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {P} {Γ : ws_context P}
+Lemma ws_red1_pred1_curry_cb {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {P} {Γ : ws_context P}
   {t u : ws_term (shiftnP #|Γ| P)} :
   ws_red1 Σ P Γ t u -> ws_pred1_curry Σ P Γ Γ t u.
 Proof.
-  eapply red1_pred1; eauto with fvs.
+  eapply red1_pred1_cb; eauto with fvs.
 Qed.
 
-Lemma ws_red1_pred1 {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {Γ : closed_context}
+Lemma ws_red1_pred1_cb {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {Γ : closed_context}
   {t u : ws_term (shiftnP #|Γ| xpred0)} :
   ws_red1 Σ _ Γ t u -> ws_pred1 Σ (Γ; t) (Γ; u).
 Proof.
-  eapply red1_pred1; eauto with fvs.
+  eapply red1_pred1_cb; eauto with fvs.
 Qed.
 
-Lemma red_pred' {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {P} {Γ : ws_context P}
+Lemma red_pred'_cb {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {P} {Γ : ws_context P}
   {t u : ws_term (shiftnP #|Γ| P)} :
   ws_red Σ P Γ t u -> ws_pred_curry Σ P Γ Γ t u.
 Proof.
   eapply clos_rt_monotone => x y H.
-  eapply red1_pred1; eauto with fvs.
+  eapply red1_pred1_cb; eauto with fvs.
 Qed.
 
 Lemma ws_pred_ws_pred_curry {Σ} {Γ : closed_context} {t : ws_term (shiftnP #|Γ| xpred0)} {u : ws_term (shiftnP #|Γ| xpred0)} :
@@ -2675,22 +2695,22 @@ Proof.
   econstructor 3; tea.
 Qed.
 
-Lemma red_pred {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {Γ : closed_context}
+Lemma red_pred_cb {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {Γ : closed_context}
   {t u : ws_term (shiftnP #|Γ| xpred0)} :
   ws_red Σ _ Γ t u -> ws_pred Σ (Γ; t) (Γ; u).
 Proof.
-  intros r. now eapply ws_pred_ws_pred_curry, red_pred'.
+  intros r. now eapply ws_pred_ws_pred_curry, red_pred'_cb.
 Qed.
 
-Lemma ws_pred1_red {cf:checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {P} {Γ Γ' : ws_context P}
+Lemma ws_pred1_red_cb {cf:checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {P} {Γ Γ' : ws_context P}
   {t : ws_term (shiftnP #|Γ| P)} {u : ws_term (shiftnP #|Γ'| P)} :
   pred1 Σ Γ Γ' t u -> red Σ Γ t u.
 Proof.
-  intros p; eapply pred1_red; tea => //; eauto with fvs.
+  intros p; eapply pred1_red_cb; tea => //; eauto with fvs.
 Qed.
 
 #[program]
-Definition rho_ws_pair {cf:checker_flags} (Σ : global_env) {wfΣ : ClosedBodies Σ} (p : ws_pair) : ws_pair :=
+Definition rho_ws_pair_cb {cf:checker_flags} (Σ : global_env) {wfΣ : ClosedBodies Σ} (p : ws_pair) : ws_pair :=
   (rho_ctx Σ p; rho Σ (rho_ctx Σ p) p).
 Next Obligation.
   destruct p as [Γ t]. cbn.
@@ -2711,9 +2731,9 @@ Next Obligation.
   all:eauto with fvs.
 Qed.
 
-Lemma ws_pred1_diamond {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {t u v : ws_pair} :
+Lemma ws_pred1_diamond_cb {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {t u v : ws_pair} :
   ws_pred1 Σ t u -> ws_pred1 Σ t v ->
-  ws_pred1 Σ u (rho_ws_pair Σ t) × ws_pred1 Σ v (rho_ws_pair Σ t).
+  ws_pred1 Σ u (rho_ws_pair_cb Σ t) × ws_pred1 Σ v (rho_ws_pair_cb Σ t).
 Proof.
   intros p q.
   apply pred1_diamond; eauto with fvs.
@@ -2721,7 +2741,7 @@ Qed.
 
 #[global] Hint Resolve pred1_on_free_vars_ctx : fvs.
 
-Lemma pred1_on_free_vars_on_free_vars_ctx {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ}
+Lemma pred1_on_free_vars_on_free_vars_ctx_cb {cf:checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ}
   {P} {Γ Γ' : context} {t u : term} :
     pred1 Σ Γ Γ' t u ->
     on_free_vars_ctx P Γ ->
@@ -2737,6 +2757,13 @@ Definition red_ctx Σ : relation context :=
   All2_fold (on_decls (fun Γ Δ => red Σ Γ)).
 
 Section RedConfluence.
+  Local Notation ws_red1_pred1 := ws_red1_pred1_cb (only parsing).
+  Local Notation ws_red1_pred1_curry := ws_red1_pred1_curry_cb (only parsing).
+  Local Notation pred_on_free_vars := pred_on_free_vars_cb (only parsing).
+  Local Notation pred1_red := pred1_red_cb (only parsing).
+  Local Notation red1_pred1 := red1_pred1_cb (only parsing).
+  Local Notation ws_pred1_diamond := ws_pred1_diamond_cb (only parsing).
+  Local Notation rho_ws_pair := rho_ws_pair_cb (only parsing).
   Context {cf : checker_flags}.
   Context {Σ : global_env_ext} (wfΣ : ClosedBodies Σ).
 
@@ -2749,7 +2776,7 @@ Section RedConfluence.
   Instance pred1_rel_refl : Reflexive pred1_rel.
   Proof using Type. red. intros [ctx x]. red. simpl. apply pred1_refl. Qed.
 
-  Lemma red1_weak_confluence P {Γ : ws_context P} {t u v : ws_term (shiftnP #|Γ| P)} :
+  Lemma red1_weak_confluence_cb P {Γ : ws_context P} {t u v : ws_term (shiftnP #|Γ| P)} :
     red1 Σ Γ t u -> red1 Σ Γ t v ->
     ∑ t', red Σ Γ u t' * red Σ Γ v t'.
   Proof using wfΣ.
@@ -2760,19 +2787,22 @@ Section RedConfluence.
     eapply pred1_red in redl; eauto with fvs.
     eapply pred1_red in redr; eauto with fvs.
   Qed.
+  Local Notation red1_weak_confluence := red1_weak_confluence_cb (only parsing).
 
-  Lemma diamond_pred1_rel : diamond pred1_rel.
+  Lemma diamond_pred1_rel_cb : diamond pred1_rel.
   Proof using wfΣ.
     move=> t u v tu tv.
     exists (rho_ws_pair Σ t). apply (ws_pred1_diamond tu tv).
   Qed.
+  Local Notation diamond_pred1_rel := diamond_pred1_rel_cb (only parsing).
 
-  Lemma pred1_rel_confluent : confluent pred1_rel.
+  Lemma pred1_rel_confluent_cb : confluent pred1_rel.
   Proof using wfΣ.
     eapply diamond_confluent. apply diamond_pred1_rel.
   Qed.
+  Local Notation pred1_rel_confluent := pred1_rel_confluent_cb (only parsing).
 
-  Lemma red_trans_clos_pred1 (Γ : ws_context xpred0) t u :
+  Lemma red_trans_clos_pred1_cb (Γ : ws_context xpred0) t u :
     ws_red Σ xpred0 Γ t u ->
     trans_clos pred1_rel (Γ; t) (Γ; u).
   Proof using wfΣ.
@@ -2781,6 +2811,7 @@ Section RedConfluence.
     constructor. pcuic.
     econstructor 2; eauto.
   Qed.
+  Local Notation red_trans_clos_pred1 := red_trans_clos_pred1_cb (only parsing).
 
   Inductive clos_refl_trans_ctx_decl (R : relation context_decl) (x : context_decl) : context_decl -> Type :=
     rt_ctx_decl_step : forall y, R x y -> clos_refl_trans_ctx_decl R x y
@@ -2814,7 +2845,7 @@ Section RedConfluence.
   Definition ws_red_ctx := lift_ws (red_ctx Σ).
   Definition ws_pred1_ctx := (lift_ws (on_contexts (pred1 Σ))).
 
-  Lemma red1_ctx_pred1_ctx {Γ Γ' : closed_context} : ws_red1_ctx Γ Γ' -> ws_pred1_ctx Γ Γ'.
+  Lemma red1_ctx_pred1_ctx_cb {Γ Γ' : closed_context} : ws_red1_ctx Γ Γ' -> ws_pred1_ctx Γ Γ'.
   Proof using wfΣ.
     rewrite /ws_red1_ctx /ws_pred1_ctx /lift_ws /=.
     move: Γ Γ' => [Γ onΓ] [Γ' onΓ'] /= a.
@@ -2835,8 +2866,9 @@ Section RedConfluence.
       constructor; auto.
       eapply All_decls_refl; tc. intros x; apply pred1_refl_gen; eauto.
   Qed.
+  Local Notation red1_ctx_pred1_ctx := red1_ctx_pred1_ctx_cb (only parsing).
 
-  Lemma pred1_ctx_red_ctx {Γ Γ' : closed_context} : ws_pred1_ctx Γ Γ' -> ws_red_ctx Γ Γ'.
+  Lemma pred1_ctx_red_ctx_cb {Γ Γ' : closed_context} : ws_pred1_ctx Γ Γ' -> ws_red_ctx Γ Γ'.
   Proof using wfΣ.
     rewrite /ws_pred1_ctx /ws_red_ctx /lift_ws /=.
     move: Γ Γ' => [Γ onΓ] [Γ' onΓ'] /= a.
@@ -2846,18 +2878,20 @@ Section RedConfluence.
     eapply All_decls_on_free_vars_impl; tea.
     intros. eapply pred1_red; tea; eauto with fvs.
   Qed.
+  Local Notation pred1_ctx_red_ctx := pred1_ctx_red_ctx_cb (only parsing).
 
   Definition red_rel_ctx : ws_pair -> ws_pair -> Type :=
     fun t u =>
     (red Σ t.π1 t.π2 u.π2 * red_ctx Σ t.π1 u.π1)%type.
 
-  Lemma pred1_red' M N : ws_pred1 Σ M N -> red_rel_ctx M N.
+  Lemma pred1_red'_cb M N : ws_pred1 Σ M N -> red_rel_ctx M N.
   Proof using wfΣ.
     intros * Hred.
     split. apply (pred1_red wfΣ _ _ _ _ Hred); eauto with fvs.
     eapply pred1_pred1_ctx in Hred.
     now eapply pred1_ctx_red_ctx.
   Qed.
+  Local Notation pred1_red' := pred1_red'_cb (only parsing).
 
   Global Instance red_ctx_refl : Reflexive (red_ctx Σ).
   Proof using Type.
@@ -2868,15 +2902,16 @@ Section RedConfluence.
   Hint Resolve alpha_eq_reflexive : pcuic.
   Set Firstorder Solver eauto with pcuic core typeclass_instances.
 
-  Lemma clos_rt_OnOne2_local_env_ctx_incl R :
+  Lemma clos_rt_OnOne2_local_env_ctx_incl_cb R :
     inclusion (clos_refl_trans (OnOne2_local_env (fun Γ => on_one_decl1 R Γ)))
               (clos_refl_trans_ctx (OnOne2_local_env (fun Γ => on_one_decl1 R Γ))).
   Proof using wfΣ.
     intros x y H.
     induction H; [now constructor 1|constructor 2; reflexivity|econstructor 3; eauto].
   Qed.
+  Local Notation clos_rt_OnOne2_local_env_ctx_incl := clos_rt_OnOne2_local_env_ctx_incl_cb (only parsing).
 
-  Lemma red_ctx_clos_rt_red1_ctx : inclusion (red_ctx Σ) (clos_refl_trans_ctx (red1_ctx Σ)).
+  Lemma red_ctx_clos_rt_red1_ctx_cb : inclusion (red_ctx Σ) (clos_refl_trans_ctx (red1_ctx Σ)).
   Proof using wfΣ.
     intros x y H.
     induction H; [firstorder|].
@@ -2897,6 +2932,7 @@ Section RedConfluence.
           induction IHAll2_fold; try solve[repeat constructor; auto].
           etransitivity; eauto.
   Qed.
+  Local Notation red_ctx_clos_rt_red1_ctx := red_ctx_clos_rt_red1_ctx_cb (only parsing).
 
   Inductive clos_refl_trans_ctx_t (R : relation ws_pair) (x : ws_pair) : ws_pair -> Type :=
   | rt_ctx_t_step : forall y, R x y -> clos_refl_trans_ctx_t R x y
@@ -2974,7 +3010,7 @@ Section RedConfluence.
     now destruct (uip ht ht').
   Qed.
 
-  Lemma red1_ctx_on_free_vars P Γ Δ :
+  Lemma red1_ctx_on_free_vars_cb P Γ Δ :
     on_free_vars_ctx P Γ ->
     red1_ctx Σ Γ Δ ->
     on_free_vars_ctx P Δ.
@@ -2997,6 +3033,7 @@ Section RedConfluence.
       apply/andP; split; auto.
       now rewrite -(OnOne2_local_env_length X).
   Qed.
+  Local Notation red1_ctx_on_free_vars := red1_ctx_on_free_vars_cb (only parsing).
 
   Lemma eq_context_upto_names_on_free_vars P Γ Δ :
     on_free_vars_ctx P Γ ->
@@ -3015,7 +3052,7 @@ Section RedConfluence.
       depelim cd; subst; auto.
   Qed.
 
-  Lemma clos_refl_trans_ctx_on_free_vars P Γ Δ :
+  Lemma clos_refl_trans_ctx_on_free_vars_cb P Γ Δ :
     on_free_vars_ctx P Γ ->
     clos_refl_trans_ctx (red1_ctx Σ) Γ Δ ->
     on_free_vars_ctx P Δ.
@@ -3026,6 +3063,7 @@ Section RedConfluence.
     - now eapply eq_context_upto_names_on_free_vars.
     - eauto.
   Qed.
+  Local Notation clos_refl_trans_ctx_on_free_vars := clos_refl_trans_ctx_on_free_vars_cb (only parsing).
 
   Lemma clos_refl_trans_ctx_length Γ Δ :
     clos_refl_trans_ctx (red1_ctx Σ) Γ Δ -> #|Γ| = #|Δ|.
@@ -3036,7 +3074,7 @@ Section RedConfluence.
     - lia.
   Qed.
 
-  Lemma clos_rt_red1_rel_ctx_rt_ctx_red1_rel : inclusion red_rel_ctx (clos_refl_trans_ctx_t red1_rel).
+  Lemma clos_rt_red1_rel_ctx_rt_ctx_red1_rel_cb : inclusion red_rel_ctx (clos_refl_trans_ctx_t red1_rel).
   Proof using wfΣ.
     move=> [[Γ hΓ] [t ht]] [[Δ hΔ] [u hu]] [redt redctx].
     eapply clos_rt_rt1n_iff in redt. cbn in *.
@@ -3069,6 +3107,7 @@ Section RedConfluence.
         constructor. apply r.
       * apply IHredt.
   Qed.
+  Local Notation clos_rt_red1_rel_ctx_rt_ctx_red1_rel := clos_rt_red1_rel_ctx_rt_ctx_red1_rel_cb (only parsing).
 
   Definition pred1_rel_alpha : ws_pair -> ws_pair -> Type :=
     fun t u => (ws_pred1 Σ t u +
@@ -3089,7 +3128,7 @@ Section RedConfluence.
     - econstructor 3; eauto.
   Qed.
 
-  Lemma red1_rel_alpha_pred1_rel_alpha : inclusion red1_rel_alpha pred1_rel_alpha.
+  Lemma red1_rel_alpha_pred1_rel_alpha_cb : inclusion red1_rel_alpha pred1_rel_alpha.
   Proof using wfΣ.
     intros [ctx [t ht]] [ctx' [t' ht']].
     rewrite /red1_rel_alpha /pred1_rel_alpha /=.
@@ -3098,6 +3137,7 @@ Section RedConfluence.
     - left. subst. simpl in eq. subst. eapply pred1_refl_gen. now apply red1_ctx_pred1_ctx.
     - right; split; auto.
   Qed.
+  Local Notation red1_rel_alpha_pred1_rel_alpha := red1_rel_alpha_pred1_rel_alpha_cb (only parsing).
 
   Lemma clos_refl_trans_prod_l_sigma {A B} {P : A -> B -> Prop} (R : relation A) (S : relation (∑ x : A, { y : B | P x y })) :
     (forall x b hb hb', clos_refl_trans S (x; exist b hb) (x; exist b hb')) ->
@@ -3122,7 +3162,7 @@ Section RedConfluence.
     intros. induction X0; try solve [econstructor; eauto].
   Qed.
 
-  Lemma red_ws_red (Γ : closed_context) (x y : ws_term (shiftnP #|Γ| xpred0)) :
+  Lemma red_ws_red_cb (Γ : closed_context) (x y : ws_term (shiftnP #|Γ| xpred0)) :
     red Σ Γ x y -> ws_red Σ xpred0 Γ x y.
   Proof using wfΣ.
     destruct Γ as [Γ hΓ].
@@ -3139,6 +3179,7 @@ Section RedConfluence.
       eapply (IHX1 hx H).
       eauto.
   Qed.
+  Local Notation red_ws_red := red_ws_red_cb (only parsing).
 
   Lemma clos_refl_trans_red1_ctx_eq_length (Γ Δ : closed_context) :
     clos_refl_trans (fun x y : closed_context =>
@@ -3152,7 +3193,7 @@ Section RedConfluence.
     - lia.
   Qed.
 
-  Lemma pred1_rel_alpha_red1_rel_alpha : inclusion pred1_rel_alpha (clos_refl_trans red1_rel_alpha).
+  Lemma pred1_rel_alpha_red1_rel_alpha_cb : inclusion pred1_rel_alpha (clos_refl_trans red1_rel_alpha).
   Proof using wfΣ.
     intros x y pred. red in pred.
     destruct pred as [pred|[pctx eq]].
@@ -3185,8 +3226,9 @@ Section RedConfluence.
           etransitivity; tea.
     - constructor. right. right. destruct x, y; cbn in *; auto.
   Qed.
+  Local Notation pred1_rel_alpha_red1_rel_alpha := pred1_rel_alpha_red1_rel_alpha_cb (only parsing).
 
-  Lemma pred1_upto_names_gen {P Γ Γ' Δ Δ' t u} :
+  Lemma pred1_upto_names_gen_cb {P Γ Γ' Δ Δ' t u} :
     on_free_vars_ctx P Γ ->
     on_free_vars (shiftnP #|Γ| P) t ->
     pred1 Σ Γ Δ t u ->
@@ -3219,8 +3261,9 @@ Section RedConfluence.
     depelim eqd. subst. noconf eq. subst. noconf eq.
     rewrite hnth'' //.
   Qed.
+  Local Notation pred1_upto_names_gen := pred1_upto_names_gen_cb (only parsing).
 
-  Lemma pred1_ctx_upto_names {P Γ Γ' Δ} :
+  Lemma pred1_ctx_upto_names_cb {P Γ Γ' Δ} :
     on_free_vars_ctx P Γ ->
     pred1_ctx Σ Γ Δ ->
     eq_context_upto_names Γ Γ' ->
@@ -3246,8 +3289,9 @@ Section RedConfluence.
         eapply pred1_upto_names_gen; tea; eauto with fvs.
         constructor => //. constructor => //.
   Qed.
+  Local Notation pred1_ctx_upto_names := pred1_ctx_upto_names_cb (only parsing).
 
-  Lemma pred1_upto_names {P Γ Γ' Δ t u} :
+  Lemma pred1_upto_names_cb {P Γ Γ' Δ t u} :
     on_free_vars_ctx P Γ ->
     on_free_vars (shiftnP #|Γ| P) t ->
     pred1 Σ Γ Δ t u ->
@@ -3260,6 +3304,7 @@ Section RedConfluence.
     exists Δ'; split; auto.
     now eapply pred1_upto_names_gen.
   Qed.
+  Local Notation pred1_upto_names := pred1_upto_names_cb (only parsing).
 
   #[program]
   Definition ws_pair_eq_ctx (t : ws_pair) {Γ'} (H : eq_context_upto_names t Γ') : ws_pair :=
@@ -3273,7 +3318,7 @@ Section RedConfluence.
       now rewrite -(All2_length H).
     Qed.
 
-  Lemma diamond_pred1_rel_alpha : diamond pred1_rel_alpha.
+  Lemma diamond_pred1_rel_alpha_cb : diamond pred1_rel_alpha.
   Proof using wfΣ.
     move=> t u v tu tv.
     destruct tu as [tu|[tu eq]], tv as [tv|[tv eq']].
@@ -3291,21 +3336,24 @@ Section RedConfluence.
       split. right; split; auto. now symmetry.
       right. split; auto. now symmetry.
   Qed.
+  Local Notation diamond_pred1_rel_alpha := diamond_pred1_rel_alpha_cb (only parsing).
 
-  Lemma pred1_rel_alpha_confluent : confluent pred1_rel_alpha.
+  Lemma pred1_rel_alpha_confluent_cb : confluent pred1_rel_alpha.
   Proof using wfΣ.
     eapply diamond_confluent. apply diamond_pred1_rel_alpha.
   Qed.
+  Local Notation pred1_rel_alpha_confluent := pred1_rel_alpha_confluent_cb (only parsing).
 
-  Lemma pred_rel_confluent : confluent red1_rel_alpha.
+  Lemma pred_rel_confluent_cb : confluent red1_rel_alpha.
   Proof using wfΣ.
     notypeclasses refine (fst (sandwich _ _ _ _) _).
     3:eapply pred1_rel_alpha_confluent; eauto.
     - apply red1_rel_alpha_pred1_rel_alpha.
     - apply pred1_rel_alpha_red1_rel_alpha.
   Qed.
+  Local Notation pred_rel_confluent := pred_rel_confluent_cb (only parsing).
 
-  Lemma clos_refl_trans_out (Γ : closed_context) (x y : ws_term (shiftnP #|Γ| xpred0)) :
+  Lemma clos_refl_trans_out_cb (Γ : closed_context) (x y : ws_term (shiftnP #|Γ| xpred0)) :
     clos_refl_trans (red1 Σ Γ) x y -> clos_refl_trans red1_rel (Γ; x) (Γ; y).
   Proof using wfΣ.
     destruct x as [x hx], y as [y hy]; cbn.
@@ -3318,8 +3366,9 @@ Section RedConfluence.
       eapply red_on_free_vars_cb in X1; tea; eauto with fvs.
       cbn. eapply IHX2.
   Qed.
+  Local Notation clos_refl_trans_out := clos_refl_trans_out_cb (only parsing).
 
-  Lemma clos_red_rel_out x y :
+  Lemma clos_red_rel_out_cb x y :
     clos_refl_trans red1_rel x y ->
     clos_refl_trans pred1_rel x y.
   Proof using wfΣ.
@@ -3332,8 +3381,9 @@ Section RedConfluence.
     cbn in eq. subst t.
     eapply pred1_refl_gen. now eapply red1_ctx_pred1_ctx.
   Qed.
+  Local Notation clos_red_rel_out := clos_red_rel_out_cb (only parsing).
 
-  Lemma red1_rel_alpha_red1_rel : inclusion (clos_refl_trans red1_rel_alpha) (clos_refl_trans_ctx_t red1_rel).
+  Lemma red1_rel_alpha_red1_rel_cb : inclusion (clos_refl_trans red1_rel_alpha) (clos_refl_trans_ctx_t red1_rel).
   Proof using wfΣ.
     intros x y H.
     induction H.
@@ -3347,8 +3397,9 @@ Section RedConfluence.
     - constructor 2; reflexivity.
     - econstructor 3; eauto.
   Qed.
+  Local Notation red1_rel_alpha_red1_rel := red1_rel_alpha_red1_rel_cb (only parsing).
 
-  Lemma red1_rel_alpha_red1_rel_inv : inclusion (clos_refl_trans_ctx_t red1_rel) (clos_refl_trans red1_rel_alpha).
+  Lemma red1_rel_alpha_red1_rel_inv_cb : inclusion (clos_refl_trans_ctx_t red1_rel) (clos_refl_trans red1_rel_alpha).
   Proof using wfΣ.
     intros x y H.
     induction H.
@@ -3361,6 +3412,7 @@ Section RedConfluence.
       subst. constructor. firstorder auto.
     - econstructor 3; eauto.
   Qed.
+  Local Notation red1_rel_alpha_red1_rel_inv := red1_rel_alpha_red1_rel_inv_cb (only parsing).
 
   Definition transport_on_free_vars {n m : nat} {t} (p : on_free_vars (shiftnP n xpred0) t) (eq : n = m) :
     on_free_vars (shiftnP m xpred0) t.
@@ -3372,7 +3424,7 @@ Section RedConfluence.
   Definition move_ws_term {Γ Δ : closed_context} (t : ws_term (shiftnP #|Γ| xpred0)) (eq : #|Γ| = #|Δ|) : ws_pair :=
     (Δ; transport_ws_term t eq).
 
-  Lemma clos_red_rel_out_inv x y :
+  Lemma clos_red_rel_out_inv_cb x y :
     clos_refl_trans pred1_rel x y ->
     clos_refl_trans red1_rel_alpha x y.
   Proof using wfΣ.
@@ -3396,6 +3448,7 @@ Section RedConfluence.
     constructor 2.
     etransitivity; eauto.
   Qed.
+  Local Notation clos_red_rel_out_inv := clos_red_rel_out_inv_cb (only parsing).
 
   Hint Transparent context : typeclass_instances.
 
@@ -3409,26 +3462,28 @@ Section RedConfluence.
       intros ???? []; constructor; auto.
   Qed.
 
-  Lemma red_context_trans {Γ Δ Δ' : context} :
+  Lemma red_context_trans_cb {Γ Δ Δ' : context} :
     on_ctx_free_vars (closedP #|Γ| xpredT) Γ ->
     red_ctx Σ Γ Δ -> red_ctx Σ Δ Δ' -> red_ctx Σ Γ Δ'.
   Proof using wfΣ.
     intros onΓ.
     move/red_ctx_red_context => h /red_ctx_red_context h'.
-    apply red_ctx_red_context. eapply red_context_trans; tea.
+    apply red_ctx_red_context. eapply PCUICContextReduction.red_context_trans_cb; tea.
   Qed.
+  Local Notation red_context_trans := red_context_trans_cb (only parsing).
 
   Global Instance ws_red_ctx_refl : Reflexive ws_red_ctx.
   Proof using Type.
     intros Γ. red. red. reflexivity.
   Qed.
 
-  Global Instance ws_red_ctx_trans : Transitive ws_red_ctx.
+  Global Instance ws_red_ctx_trans_cb : Transitive ws_red_ctx.
   Proof using wfΣ.
     intros Γ Δ Δ'. apply red_context_trans. eauto with fvs.
     destruct Γ as [Γ onΓ]. cbn -[on_ctx_free_vars].
     now rewrite on_free_vars_ctx_on_ctx_free_vars_closedP.
   Qed.
+  Local Notation ws_red_ctx_trans := ws_red_ctx_trans_cb (only parsing).
 
   Lemma ws_red_ctx_length {x y : closed_context} (r : ws_red_ctx x y) : #|x| = #|y|.
   Proof using Type.
@@ -3449,7 +3504,7 @@ Section RedConfluence.
     eapply IHclos_refl_trans1. f_equal. eauto.
   Qed.
 
-  Lemma ws_red_red_ctx_aux {Γ Δ : closed_context} {t u : ws_term (shiftnP #|Γ| xpred0)} :
+  Lemma ws_red_red_ctx_aux_cb {Γ Δ : closed_context} {t u : ws_term (shiftnP #|Γ| xpred0)} :
     ws_red Σ xpred0 Γ t u ->
     forall rctx : ws_red_ctx Δ Γ,
     red Σ Δ (transport_ws_term t (symmetry (ws_red_ctx_length rctx))) (transport_ws_term u (symmetry (ws_red_ctx_length rctx))).
@@ -3463,8 +3518,9 @@ Section RedConfluence.
     forward X0. now eapply red_ctx_red_context.
     exact X0.
   Qed.
+  Local Notation ws_red_red_ctx_aux := ws_red_red_ctx_aux_cb (only parsing).
 
-  Lemma ws_red_red_ctx {Γ Δ : closed_context} {t u : ws_term (shiftnP #|Γ| xpred0)} :
+  Lemma ws_red_red_ctx_cb {Γ Δ : closed_context} {t u : ws_term (shiftnP #|Γ| xpred0)} :
     ws_red Σ xpred0 Γ t u ->
     forall rctx : ws_red_ctx Δ Γ,
     ws_red Σ xpred0 Δ (transport_ws_term t (symmetry (ws_red_ctx_length rctx))) (transport_ws_term u (symmetry (ws_red_ctx_length rctx))).
@@ -3473,6 +3529,7 @@ Section RedConfluence.
     pose proof (ws_red_red_ctx_aux X rctx).
     now eapply red_ws_red.
   Qed.
+  Local Notation ws_red_red_ctx := ws_red_red_ctx_cb (only parsing).
 
   Lemma ws_red_irrel P Γ t ht u hu ht' hu' :
     ws_red Σ P Γ (exist t ht) (exist u hu) ->
@@ -3482,7 +3539,7 @@ Section RedConfluence.
     now rewrite (uip ht ht') (uip hu hu').
   Qed.
 
-  Lemma clos_rt_red1_rel_ws_red1 x y :
+  Lemma clos_rt_red1_rel_ws_red1_cb x y :
     clos_refl_trans red1_rel x y ->
     ∑ redctx : ws_red_ctx x.π1 y.π1,
       ws_red Σ xpred0 x.π1 x.π2 (transport_ws_term y.π2 (symmetry (ws_red_ctx_length redctx))).
@@ -3509,8 +3566,9 @@ Section RedConfluence.
         unshelve eapply ws_red_red_ctx in w. shelve. exact r.
         eapply ws_red_irrel. exact w.
   Qed.
+  Local Notation clos_rt_red1_rel_ws_red1 := clos_rt_red1_rel_ws_red1_cb (only parsing).
 
-  Lemma clos_rt_red1_rel_red1 x y :
+  Lemma clos_rt_red1_rel_red1_cb x y :
     clos_refl_trans red1_rel x y ->
     red_ctx Σ x.π1 y.π1 * clos_refl_trans (red1 Σ x.π1) x.π2 y.π2.
   Proof using wfΣ.
@@ -3519,6 +3577,7 @@ Section RedConfluence.
     red in wsred.
     now eapply ws_red_red in wsred; cbn in wsred.
   Qed.
+  Local Notation clos_rt_red1_rel_red1 := clos_rt_red1_rel_red1_cb (only parsing).
 
   Lemma decl_body_eq_context_upto_names Γ Γ' n d :
     option_map decl_body (nth_error Γ n) = Some d ->
@@ -3628,7 +3687,7 @@ Section RedConfluence.
     intros x; apply All2_fold_refl; tc.
   Qed.
 
-  Lemma red_ctx_red_ctx_alpha_trans {Γ Δ Δ'} :
+  Lemma red_ctx_red_ctx_alpha_trans_cb {Γ Δ Δ'} :
     ws_red_ctx Γ Δ -> red_ctx_alpha Δ Δ' -> red_ctx_alpha Γ Δ'.
   Proof using wfΣ.
     destruct Γ as [Γ onΓ], Δ as [Δ onΔ]; cbn. rewrite /ws_red_ctx /lift_ws /=.
@@ -3652,6 +3711,7 @@ Section RedConfluence.
         rewrite -(All2_fold_length r) on_free_vars_ctx_on_ctx_free_vars //.
         rewrite on_free_vars_ctx_on_ctx_free_vars //.
   Qed.
+  Local Notation red_ctx_red_ctx_alpha_trans := red_ctx_red_ctx_alpha_trans_cb (only parsing).
 
   Lemma ws_red_refl_irrel P (Γ : ws_context P) (x y : ws_term (shiftnP #|Γ| P)) :
     x = y :> term ->
@@ -3662,7 +3722,7 @@ Section RedConfluence.
     constructor 2.
   Qed.
 
-  Lemma clos_rt_red1_alpha_out x y :
+  Lemma clos_rt_red1_alpha_out_cb x y :
     clos_refl_trans red1_rel_alpha x y ->
     ∑ redctx : red_ctx_alpha x.π1 y.π1,
       ws_red Σ xpred0 x.π1 x.π2 (transport_ws_term y.π2 (symmetry (All2_fold_length redctx))).
@@ -3688,14 +3748,16 @@ Section RedConfluence.
           eapply red_ws_red. eapply ws_red_red in w. cbn in w |- *.
           eapply clos_rt_red1_eq_context_upto_names; eauto. now symmetry.
   Qed.
+  Local Notation clos_rt_red1_alpha_out := clos_rt_red1_alpha_out_cb (only parsing).
 
-  Lemma clos_rt_red1_alpha_out' x y :
+  Lemma clos_rt_red1_alpha_out'_cb x y :
     clos_refl_trans red1_rel_alpha x y ->
     red_ctx_alpha x.π1 y.π1 × red Σ x.π1 x.π2 y.π2.
   Proof using wfΣ.
     move/clos_rt_red1_alpha_out => [redctx redt].
     split => //. now eapply ws_red_red in redt.
   Qed.
+  Local Notation clos_rt_red1_alpha_out' := clos_rt_red1_alpha_out'_cb (only parsing).
 
   Inductive clos_refl_trans_ctx_1n (R : relation context) (x : context) : context -> Type :=
   | rt1n_ctx_eq : clos_refl_trans_ctx_1n R x x
@@ -3720,7 +3782,7 @@ Section RedConfluence.
     econstructor 3. constructor 1; eauto. eauto.
   Qed.
 
-  Lemma clos_rt_red1_red1_rel_alpha (Γ : closed_context) (x y : ws_term (shiftnP #|Γ| xpred0)) :
+  Lemma clos_rt_red1_red1_rel_alpha_cb (Γ : closed_context) (x y : ws_term (shiftnP #|Γ| xpred0)) :
     clos_refl_trans (red1 Σ Γ) x y -> clos_refl_trans red1_rel_alpha (Γ; x) (Γ; y).
   Proof using wfΣ.
     destruct Γ as [Γ onΓ].
@@ -3736,8 +3798,9 @@ Section RedConfluence.
       specialize (IHX1 hx hy').
       econstructor 3; eauto.
   Qed.
+  Local Notation clos_rt_red1_red1_rel_alpha := clos_rt_red1_red1_rel_alpha_cb (only parsing).
 
-  Lemma red1_confluent Γ : confluent (ws_red1 Σ xpred0 Γ).
+  Lemma red1_confluent_cb Γ : confluent (ws_red1 Σ xpred0 Γ).
   Proof using wfΣ.
     intros x y z xy xz.
     pose proof (pred_rel_confluent (Γ; x) (Γ; y) (Γ; z)).
@@ -3751,8 +3814,9 @@ Section RedConfluence.
     eexists (exist (proj1_sig nf) H : ws_term (shiftnP #|Γ| xpred0)).
     now split; apply red_ws_red; cbn.
   Qed.
+  Local Notation red1_confluent := red1_confluent_cb (only parsing).
 
-  Lemma pred_red {Γ : closed_context} {t : open_term Γ} {u} :
+  Lemma pred_red_cb {Γ : closed_context} {t : open_term Γ} {u} :
     clos_refl_trans (pred1 Σ Γ Γ) t u ->
     clos_refl_trans (red1 Σ Γ) t u.
   Proof using wfΣ.
@@ -3773,6 +3837,7 @@ Section RedConfluence.
       eapply pred_on_free_vars; tea; eauto with fvs.
       transitivity ((Γ; exist y H0) : ws_pair); eauto.
   Qed.
+  Local Notation pred_red := pred_red_cb (only parsing).
 
 End RedConfluence.
 
@@ -3810,10 +3875,14 @@ Qed.
 Arguments red1_ctx _ _ _ : clear implicits.
 
 Section ConfluenceFacts.
+  Local Notation red_ws_red := red_ws_red_cb (only parsing).
+  Local Notation red_pred' := red_pred'_cb (only parsing).
+  Local Notation pred1_red := pred1_red_cb (only parsing).
+  Local Notation red1_confluent := red1_confluent_cb (only parsing).
   Context {cf : checker_flags}.
   Context {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
 
-  Lemma lift_to_ws_red {Γ : closed_context} {x : term} {p : on_free_vars (shiftnP #|Γ| xpred0) x} {y} :
+  Lemma lift_to_ws_red_cb {Γ : closed_context} {x : term} {p : on_free_vars (shiftnP #|Γ| xpred0) x} {y} :
     red Σ Γ x y ->
     ∑ x' y' : open_term Γ,
       x = x' :> term × y = y' :> term × ws_red Σ xpred0 Γ x' y'.
@@ -3822,10 +3891,11 @@ Section ConfluenceFacts.
     refine (exist y (red_on_free_vars_cb r p _)). eauto with fvs. split => //. split => //.
     now eapply red_ws_red.
   Qed.
+  Local Notation lift_to_ws_red := lift_to_ws_red_cb (only parsing).
 
   Set Equations With UIP.
 
-  Lemma ws_pred_curry_red {Γ Δ t u} : ws_pred_curry Σ xpred0 Γ Δ t u -> red Σ Γ t u.
+  Lemma ws_pred_curry_red_cb {Γ Δ t u} : ws_pred_curry Σ xpred0 Γ Δ t u -> red Σ Γ t u.
   Proof using wfΣ.
     intros ws. red in ws.
     induction ws. red in r.
@@ -3833,6 +3903,7 @@ Section ConfluenceFacts.
     - constructor 2.
     - etransitivity; tea.
   Qed.
+  Local Notation ws_pred_curry_red := ws_pred_curry_red_cb (only parsing).
 
   Lemma ws_pred_pred {Γ : closed_context} {t : open_term Γ} {u} :
     ws_pred_curry Σ xpred0 Γ Γ t u ->
@@ -3845,7 +3916,7 @@ Section ConfluenceFacts.
     - econstructor 3; tea.
   Qed.
 
-  Lemma lift_to_pred {Γ : closed_context} {x : term} {p : on_free_vars (shiftnP #|Γ| xpred0) x} {y} :
+  Lemma lift_to_pred_cb {Γ : closed_context} {x : term} {p : on_free_vars (shiftnP #|Γ| xpred0) x} {y} :
     red Σ Γ x y ->
     ∑ x' y' : open_term Γ,
       x = x' :> term × y = y' :> term × clos_refl_trans (pred1 Σ Γ Γ) x' y'.
@@ -3855,8 +3926,9 @@ Section ConfluenceFacts.
     eapply red_pred' in pred. red in pred.
     now eapply ws_pred_pred in pred; cbn in *.
   Qed.
+  Local Notation lift_to_pred := lift_to_pred_cb (only parsing).
 
-  Lemma red_mkApps_tConstruct {Γ : closed_context} {ind pars k} (args : list term) {c} :
+  Lemma red_mkApps_tConstruct_cb {Γ : closed_context} {ind pars k} (args : list term) {c} :
     forallb (on_free_vars (shiftnP #|Γ| xpred0)) args ->
     red Σ Γ (mkApps (tConstruct ind pars k) args) c ->
     ∑ args' : list term,
@@ -3877,8 +3949,9 @@ Section ConfluenceFacts.
       exists x. intuition auto. eapply All2_trans; eauto.
       intros ? ? ?; eapply red_trans.
   Qed.
+  Local Notation red_mkApps_tConstruct := red_mkApps_tConstruct_cb (only parsing).
 
-  Lemma red_mkApps_tInd {Γ : closed_context} {ind u} {args : list term} {c} :
+  Lemma red_mkApps_tInd_cb {Γ : closed_context} {ind u} {args : list term} {c} :
     forallb (on_free_vars (shiftnP #|Γ| xpred0)) args ->
     red Σ Γ (mkApps (tInd ind u) args) c ->
     ∑ args' : list term,
@@ -3899,8 +3972,9 @@ Section ConfluenceFacts.
       exists x. intuition auto. eapply All2_trans; eauto.
       intros ? ? ?; eapply red_trans.
   Qed.
+  Local Notation red_mkApps_tInd := red_mkApps_tInd_cb (only parsing).
 
-  Lemma red_mkApps_tRel {Γ : closed_context} {k b} {args : list term} {c} :
+  Lemma red_mkApps_tRel_cb {Γ : closed_context} {k b} {args : list term} {c} :
     forallb (on_free_vars (shiftnP #|Γ| xpred0)) args ->
     nth_error Γ k = Some b -> decl_body b = None ->
     red Σ Γ (mkApps (tRel k) args) c ->
@@ -3923,8 +3997,9 @@ Section ConfluenceFacts.
       exists x. intuition auto. eapply All2_trans; eauto.
       intros ? ? ?; eapply red_trans.
   Qed.
+  Local Notation red_mkApps_tRel := red_mkApps_tRel_cb (only parsing).
 
-  Lemma red_mkApps_tConst_axiom {Γ : closed_context} {cst u} {args : list term} {cb c} :
+  Lemma red_mkApps_tConst_axiom_cb {Γ : closed_context} {cst u} {args : list term} {cb c} :
     declared_constant Σ cst cb -> cst_body cb = None -> prim_op_of Σ cst = None ->
     forallb (on_free_vars (shiftnP #|Γ| xpred0)) args ->
     red Σ Γ (mkApps (tConst cst u) args) c ->
@@ -3946,8 +4021,9 @@ Section ConfluenceFacts.
       exists x. intuition auto. eapply All2_trans; eauto.
       intros ? ? ?; eapply red_trans.
   Qed.
+  Local Notation red_mkApps_tConst_axiom := red_mkApps_tConst_axiom_cb (only parsing).
 
-  Lemma ws_red_confluence {Γ t u v} :
+  Lemma ws_red_confluence_cb {Γ t u v} :
     ws_red Σ xpred0 Γ t u -> ws_red Σ xpred0 Γ t v ->
     ∑ v', ws_red Σ xpred0 Γ u v' * ws_red Σ xpred0 Γ v v'.
   Proof using wfΣ.
@@ -3955,10 +4031,11 @@ Section ConfluenceFacts.
     destruct (red1_confluent wfΣ _ _ _ _ H H') as [nf [redl redr]].
     exists nf; intuition auto.
   Qed.
+  Local Notation ws_red_confluence := ws_red_confluence_cb (only parsing).
 
   Notation byfvs := (_ ltac:(eauto with fvs)) (only parsing).
 
-  Lemma red_ws_red_left {Γ : closed_context} {x : ws_term (shiftnP #|Γ| xpred0)} {y} :
+  Lemma red_ws_red_left_cb {Γ : closed_context} {x : ws_term (shiftnP #|Γ| xpred0)} {y} :
     red Σ Γ x y -> ∑ prf, ws_red Σ xpred0 Γ x (exist y prf).
   Proof using wfΣ.
     move=> r.
@@ -3966,8 +4043,9 @@ Section ConfluenceFacts.
     exists ony.
     now eapply red_ws_red.
   Qed.
+  Local Notation red_ws_red_left := red_ws_red_left_cb (only parsing).
 
-  Lemma red_confluence {Γ : closed_context} {t : open_term Γ} {u v} :
+  Lemma red_confluence_cb {Γ : closed_context} {t : open_term Γ} {u v} :
     red Σ Γ t u -> red Σ Γ t v ->
     ∑ v', red Σ Γ u v' * red Σ Γ v v'.
   Proof using wfΣ.
@@ -3976,7 +4054,159 @@ Section ConfluenceFacts.
     destruct (ws_red_confluence redu redv) as [nf [redl redr]].
     now exists nf; split; [eapply ws_red_red in redl | eapply ws_red_red in redr].
   Qed.
+  Local Notation red_confluence := red_confluence_cb (only parsing).
 
 End ConfluenceFacts.
 
-Arguments red_confluence {cf} {Σ} {wfΣ} {Γ t u v}.
+Arguments red_confluence_cb {cf} {Σ} {wfΣ} {Γ t u v}.
+
+
+
+
+
+(** * The trunk statements under their old names (BET-315 W-c, FRAC 2026-10-28).
+    Each old name keeps its trunk type, with the premise [wf Σ]; it is a
+    corollary of its [ClosedBodies] statement [_cb] through [wf_ClosedBodies]. *)
+Definition rho_ws_pair {cf:checker_flags} (Σ : global_env) {wfΣ : wf Σ} (p : ws_pair) : ws_pair :=
+  rho_ws_pair_cb Σ p.
+Lemma pred1_rel_alpha_confluent : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @PCUICConfluence.confluent PCUICConfluence.ws_pair (@PCUICConfluence.pred1_rel_alpha Σ).
+Proof. intros cf Σ wfΣ. exact (@pred1_rel_alpha_confluent_cb cf Σ _). Qed.
+Lemma pred_rel_confluent : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @PCUICConfluence.confluent PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ).
+Proof. intros cf Σ wfΣ. exact (@pred_rel_confluent_cb cf Σ _). Qed.
+Lemma diamond_pred1_rel : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @PCUICConfluence.diamond PCUICConfluence.ws_pair (@PCUICConfluence.pred1_rel Σ).
+Proof. intros cf Σ wfΣ. exact (@diamond_pred1_rel_cb cf Σ _). Qed.
+Lemma pred1_rel_confluent : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @PCUICConfluence.confluent PCUICConfluence.ws_pair (@PCUICConfluence.pred1_rel Σ).
+Proof. intros cf Σ wfΣ. exact (@pred1_rel_confluent_cb cf Σ _). Qed.
+Lemma diamond_pred1_rel_alpha : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @PCUICConfluence.diamond PCUICConfluence.ws_pair (@PCUICConfluence.pred1_rel_alpha Σ).
+Proof. intros cf Σ wfΣ. exact (@diamond_pred1_rel_alpha_cb cf Σ _). Qed.
+Lemma red1_rel_alpha_pred1_rel_alpha : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @CRelationClasses.subrelation PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ) (@PCUICConfluence.pred1_rel_alpha Σ).
+Proof. intros cf Σ wfΣ. exact (@red1_rel_alpha_pred1_rel_alpha_cb cf Σ _). Qed.
+#[global] Instance ws_red_ctx_trans : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @CRelationClasses.Transitive (PCUICConfluence.ws_context (fun _ : nat => false)) (@PCUICConfluence.ws_red_ctx Σ).
+Proof. intros cf Σ wfΣ. exact (@ws_red_ctx_trans_cb cf Σ _). Qed.
+Lemma pred1_red' : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (M N : PCUICConfluence.ws_pair) (cbh5 : PCUICConfluence.ws_pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) M N), @PCUICConfluence.red_rel_ctx Σ M N.
+Proof. intros cf Σ wfΣ M N cbh5. exact (@pred1_red'_cb cf Σ _ M N cbh5). Qed.
+Lemma clos_rt_red1_rel_ctx_rt_ctx_red1_rel : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @CRelationClasses.subrelation PCUICConfluence.ws_pair (@PCUICConfluence.red_rel_ctx Σ) (PCUICConfluence.clos_refl_trans_ctx_t (@PCUICConfluence.red1_rel Σ)).
+Proof. intros cf Σ wfΣ. exact (@clos_rt_red1_rel_ctx_rt_ctx_red1_rel_cb cf Σ _). Qed.
+Lemma pred1_rel_alpha_red1_rel_alpha : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @CRelationClasses.subrelation PCUICConfluence.ws_pair (@PCUICConfluence.pred1_rel_alpha Σ) (@Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ)).
+Proof. intros cf Σ wfΣ. exact (@pred1_rel_alpha_red1_rel_alpha_cb cf Σ _). Qed.
+Lemma red_ctx_clos_rt_red1_ctx : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @CRelationClasses.subrelation PCUICAst.PCUICEnvironment.context (PCUICConfluence.red_ctx (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (PCUICConfluence.clos_refl_trans_ctx (PCUICReduction.red1_ctx (PCUICAst.PCUICEnvironment.fst_ctx Σ))).
+Proof. intros cf Σ wfΣ. exact (@red_ctx_clos_rt_red1_ctx_cb cf Σ _). Qed.
+Lemma red1_rel_alpha_red1_rel_inv : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @CRelationClasses.subrelation PCUICConfluence.ws_pair (PCUICConfluence.clos_refl_trans_ctx_t (@PCUICConfluence.red1_rel Σ)) (@Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ)).
+Proof. intros cf Σ wfΣ. exact (@red1_rel_alpha_red1_rel_inv_cb cf Σ _). Qed.
+Lemma red1_rel_alpha_red1_rel : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)), @CRelationClasses.subrelation PCUICConfluence.ws_pair (@Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ)) (PCUICConfluence.clos_refl_trans_ctx_t (@PCUICConfluence.red1_rel Σ)).
+Proof. intros cf Σ wfΣ. exact (@red1_rel_alpha_red1_rel_cb cf Σ _). Qed.
+Lemma clos_red_rel_out : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (x y : PCUICConfluence.ws_pair) (cbh5 : @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel Σ) x y), @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.pred1_rel Σ) x y.
+Proof. intros cf Σ wfΣ x y cbh5. exact (@clos_red_rel_out_cb cf Σ _ x y cbh5). Qed.
+Lemma clos_red_rel_out_inv : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (x y : PCUICConfluence.ws_pair) (cbh5 : @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.pred1_rel Σ) x y), @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ) x y.
+Proof. intros cf Σ wfΣ x y cbh5. exact (@clos_red_rel_out_inv_cb cf Σ _ x y cbh5). Qed.
+Lemma red1_ctx_pred1_ctx : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {Γ Γ' : PCUICConfluence.ws_context (fun _ : nat => false)} (cbh5 : @PCUICConfluence.ws_red1_ctx Σ Γ Γ'), @PCUICConfluence.ws_pred1_ctx Σ Γ Γ'.
+Proof. intros cf Σ wfΣ Γ Γ' cbh5. exact (@red1_ctx_pred1_ctx_cb cf Σ _ Γ Γ' cbh5). Qed.
+Lemma pred1_ctx_red_ctx : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {Γ Γ' : PCUICConfluence.ws_context (fun _ : nat => false)} (cbh5 : @PCUICConfluence.ws_pred1_ctx Σ Γ Γ'), @PCUICConfluence.ws_red_ctx Σ Γ Γ'.
+Proof. intros cf Σ wfΣ Γ Γ' cbh5. exact (@pred1_ctx_red_ctx_cb cf Σ _ Γ Γ' cbh5). Qed.
+Lemma ws_pred1_diamond : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {t u v : PCUICConfluence.ws_pair} (cbh6 : PCUICConfluence.ws_pred1 Σ t u) (cbh7 : PCUICConfluence.ws_pred1 Σ t v), prod (PCUICConfluence.ws_pred1 Σ u (@PCUICConfluence.rho_ws_pair cf Σ wfΣ t)) (PCUICConfluence.ws_pred1 Σ v (@PCUICConfluence.rho_ws_pair cf Σ wfΣ t)).
+Proof. intros cf Σ wfΣ t u v cbh6 cbh7. exact (@ws_pred1_diamond_cb cf Σ _ t u v cbh6 cbh7). Qed.
+Lemma clos_rt_OnOne2_local_env_ctx_incl : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (R : forall (_ : PCUICAst.PCUICEnvironment.context) (_ : PCUICAst.term) (_ : PCUICAst.term), Type), @CRelationClasses.subrelation PCUICAst.PCUICEnvironment.context (@Relation.clos_refl_trans PCUICAst.PCUICEnvironment.context (PCUICOnOne.OnOne2_local_env (fun Γ : PCUICAst.PCUICEnvironment.context => PCUICOnOne.on_one_decl (R Γ)))) (PCUICConfluence.clos_refl_trans_ctx (PCUICOnOne.OnOne2_local_env (fun Γ : PCUICAst.PCUICEnvironment.context => PCUICOnOne.on_one_decl (R Γ)))).
+Proof. intros cf Σ wfΣ R. exact (@clos_rt_OnOne2_local_env_ctx_incl_cb cf Σ _ R). Qed.
+Lemma red1_ctx_on_free_vars : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) (Γ : list (BasicAst.context_decl PCUICAst.term)) (Δ : PCUICAst.PCUICEnvironment.context) (cbh6 : is_true (PCUICOnFreeVars.on_free_vars_ctx P Γ)) (cbh7 : PCUICReduction.red1_ctx (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ), is_true (PCUICOnFreeVars.on_free_vars_ctx P Δ).
+Proof. intros cf Σ wfΣ P Γ Δ cbh6 cbh7. exact (@red1_ctx_on_free_vars_cb cf Σ _ P Γ Δ cbh6 cbh7). Qed.
+Lemma red_ctx_red_ctx_alpha_trans : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {Γ Δ : PCUICConfluence.ws_context (fun _ : nat => false)} {Δ' : PCUICAst.PCUICEnvironment.context} (cbh6 : @PCUICConfluence.ws_red_ctx Σ Γ Δ) (cbh7 : @PCUICConfluence.red_ctx_alpha Σ (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Δ) Δ'), @PCUICConfluence.red_ctx_alpha Σ (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) Δ'.
+Proof. intros cf Σ wfΣ Γ Δ Δ' cbh6 cbh7. exact (@red_ctx_red_ctx_alpha_trans_cb cf Σ _ Γ Δ Δ' cbh6 cbh7). Qed.
+Lemma clos_refl_trans_ctx_on_free_vars : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) (Γ : list (BasicAst.context_decl PCUICAst.term)) (Δ : PCUICAst.PCUICEnvironment.context) (cbh6 : is_true (PCUICOnFreeVars.on_free_vars_ctx P Γ)) (cbh7 : PCUICConfluence.clos_refl_trans_ctx (PCUICReduction.red1_ctx (PCUICAst.PCUICEnvironment.fst_ctx Σ)) Γ Δ), is_true (PCUICOnFreeVars.on_free_vars_ctx P Δ).
+Proof. intros cf Σ wfΣ P Γ Δ cbh6 cbh7. exact (@clos_refl_trans_ctx_on_free_vars_cb cf Σ _ P Γ Δ cbh6 cbh7). Qed.
+Lemma red1_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ) (Γ : list (BasicAst.context_decl PCUICAst.term)) (M N : PCUICAst.term) (cbh6 : is_true (PCUICOnFreeVars.on_ctx_free_vars (fun _ : nat => true) Γ)) (cbh7 : is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) M)) (cbh8 : PCUICReduction.red1 Σ Γ M N), PCUICParallelReduction.pred1 Σ Γ Γ M N.
+Proof. intros cf Σ wfΣ Γ M N cbh6 cbh7 cbh8. exact (@red1_pred1_cb cf Σ _ Γ M N cbh6 cbh7 cbh8). Qed.
+Lemma red1_confluent : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (Γ : PCUICConfluence.ws_context (fun _ : nat => false)), @PCUICConfluence.confluent (PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (PCUICConfluence.ws_red1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ).
+Proof. intros cf Σ wfΣ Γ. exact (@red1_confluent_cb cf Σ _ Γ). Qed.
+Lemma pred1_red : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (Γ Γ' : PCUICAst.PCUICEnvironment.context) (M N : PCUICAst.term) (cbh7 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Γ' M N) (cbh8 : is_true (PCUICOnFreeVars.on_free_vars_ctx (fun _ : nat => true) Γ)) (cbh9 : is_true (PCUICOnFreeVars.on_free_vars (fun _ : nat => true) M)), PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ M N.
+Proof. intros cf Σ wfΣ Γ Γ' M N cbh7 cbh8 cbh9. exact (@pred1_red_cb cf Σ _ Γ Γ' M N cbh7 cbh8 cbh9). Qed.
+Lemma pred_on_free_vars : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P : forall _ : nat, bool} {Γ : list (BasicAst.context_decl PCUICAst.term)} {Δ : PCUICAst.PCUICEnvironment.context} {t u : PCUICAst.term} (cbh8 : is_true (PCUICOnFreeVars.on_ctx_free_vars P Γ)) (cbh9 : @Relation.clos_refl_trans PCUICAst.term (PCUICParallelReduction.pred1 Σ Γ Δ) t u) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars P t)), is_true (PCUICOnFreeVars.on_free_vars P u).
+Proof. intros cf Σ wfΣ P Γ Δ t u cbh8 cbh9 cbh10. exact (@pred_on_free_vars_cb cf Σ _ P Γ Δ t u cbh8 cbh9 cbh10). Qed.
+Lemma red_context_trans : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {Γ Δ Δ' : PCUICAst.PCUICEnvironment.context} (cbh6 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) Γ) (fun _ : nat => true)) Γ)) (cbh7 : PCUICConfluence.red_ctx (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ) (cbh8 : PCUICConfluence.red_ctx (PCUICAst.PCUICEnvironment.fst_ctx Σ) Δ Δ'), PCUICConfluence.red_ctx (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ'.
+Proof. intros cf Σ wfΣ Γ Δ Δ' cbh6 cbh7 cbh8. exact (@red_context_trans_cb cf Σ _ Γ Δ Δ' cbh6 cbh7 cbh8). Qed.
+Lemma ws_red1_pred1_curry : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P : forall _ : nat, bool} {Γ : PCUICConfluence.ws_context P} {t u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P)} (cbh7 : PCUICConfluence.ws_red1 Σ P Γ t u), PCUICConfluence.ws_pred1_curry Σ P Γ Γ t u.
+Proof. intros cf Σ wfΣ P Γ t u cbh7. exact (@ws_red1_pred1_curry_cb cf Σ _ P Γ t u cbh7). Qed.
+Lemma red_pred' : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P : forall _ : nat, bool} {Γ : PCUICConfluence.ws_context P} {t u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P)} (cbh7 : PCUICConfluence.ws_red Σ P Γ t u), PCUICConfluence.ws_pred_curry Σ P Γ Γ t u.
+Proof. intros cf Σ wfΣ P Γ t u cbh7. exact (@red_pred'_cb cf Σ _ P Γ t u cbh7). Qed.
+Lemma pred1_on_free_vars_on_free_vars_ctx : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {P : forall _ : nat, bool} {Γ Γ' : PCUICAst.PCUICEnvironment.context} {t u : PCUICAst.term} (cbh8 : PCUICParallelReduction.pred1 Σ Γ Γ' t u) (cbh9 : is_true (PCUICOnFreeVars.on_free_vars_ctx P Γ)) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ) P) t)), is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ) P) u).
+Proof. intros cf Σ wfΣ P Γ Γ' t u cbh8 cbh9 cbh10. exact (@pred1_on_free_vars_on_free_vars_ctx_cb cf Σ _ P Γ Γ' t u cbh8 cbh9 cbh10). Qed.
+Lemma pred1_pred1_r' : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) (Γ Γ' : PCUICAst.PCUICEnvironment.context) (M N : PCUICAst.term) (cbh8 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Γ' M N) (cbh9 : is_true (PCUICOnFreeVars.on_free_vars_ctx P Γ')) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ) P) M)), PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ' Γ' M N.
+Proof. intros cf Σ wfΣ P Γ Γ' M N cbh8 cbh9 cbh10. exact (@pred1_pred1_r'_cb cf Σ _ P Γ Γ' M N cbh8 cbh9 cbh10). Qed.
+Lemma pred1_red_r : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {P : forall _ : nat, bool} {Γ Γ' : PCUICAst.PCUICEnvironment.context} {M N : PCUICAst.term} (cbh8 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Γ' M N) (cbh9 : is_true (PCUICOnFreeVars.on_free_vars_ctx P Γ')) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ) P) M)), PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ' M N.
+Proof. intros cf Σ wfΣ P Γ Γ' M N cbh8 cbh9 cbh10. exact (@pred1_red_r_cb cf Σ _ P Γ Γ' M N cbh8 cbh9 cbh10). Qed.
+Lemma pred1_pred1_r : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) (Γ Γ' : PCUICAst.PCUICEnvironment.context) (M N : PCUICAst.term) (cbh8 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Γ' M N) (cbh9 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) Γ) P) Γ')) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) Γ) P) M)), PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ' Γ' M N.
+Proof. intros cf Σ wfΣ P Γ Γ' M N cbh8 cbh9 cbh10. exact (@pred1_pred1_r_cb cf Σ _ P Γ Γ' M N cbh8 cbh9 cbh10). Qed.
+Lemma pred1_upto_names : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {P : forall _ : nat, bool} {Γ Γ' : list (BasicAst.context_decl PCUICAst.term)} {Δ : PCUICAst.PCUICEnvironment.context} {t u : PCUICAst.term} (cbh9 : is_true (PCUICOnFreeVars.on_free_vars_ctx P Γ)) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ) P) t)) (cbh11 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ t u) (cbh12 : @All_Forall.All2 (BasicAst.context_decl PCUICAst.term) (BasicAst.context_decl PCUICAst.term) PCUICEquality.eq_decl_upto_names Γ Γ'), @sigT PCUICAst.PCUICEnvironment.context (fun Δ' : PCUICAst.PCUICEnvironment.context => prod (PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ' Δ' t u) (@All_Forall.All2 (BasicAst.context_decl PCUICAst.term) (BasicAst.context_decl PCUICAst.term) PCUICEquality.eq_decl_upto_names Δ Δ')).
+Proof. intros cf Σ wfΣ P Γ Γ' Δ t u cbh9 cbh10 cbh11 cbh12. exact (@pred1_upto_names_cb cf Σ _ P Γ Γ' Δ t u cbh9 cbh10 cbh11 cbh12). Qed.
+Lemma red_ws_red : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (Γ : PCUICConfluence.ws_context (fun _ : nat => false)) (x y : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (cbh6 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) y)), PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ x y.
+Proof. intros cf Σ wfΣ Γ x y cbh6. exact (@red_ws_red_cb cf Σ _ Γ x y cbh6). Qed.
+Lemma pred_red : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {t : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} {u : PCUICAst.term} (cbh6 : @Relation.clos_refl_trans PCUICAst.term (PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) t) u), @Relation.clos_refl_trans PCUICAst.term (PCUICReduction.red1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) t) u.
+Proof. intros cf Σ wfΣ Γ t u cbh6. exact (@pred_red_cb cf Σ _ Γ t u cbh6). Qed.
+Lemma ws_pred_curry_red : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ Δ : PCUICConfluence.ws_context (fun _ : nat => false)} {t u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} (cbh7 : PCUICConfluence.ws_pred_curry (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ Δ t u), PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) t) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) u).
+Proof. intros cf Σ wfΣ Γ Δ t u cbh7. exact (@ws_pred_curry_red_cb cf Σ _ Γ Δ t u cbh7). Qed.
+Lemma red_pred : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {t u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} (cbh6 : PCUICConfluence.ws_red Σ (fun _ : nat => false) Γ t u), PCUICConfluence.ws_pred Σ (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ t) (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ u).
+Proof. intros cf Σ wfΣ Γ t u cbh6. exact (@red_pred_cb cf Σ _ Γ t u cbh6). Qed.
+Lemma ws_red1_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {t u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} (cbh6 : PCUICConfluence.ws_red1 Σ (fun _ : nat => false) Γ t u), PCUICConfluence.ws_pred1 Σ (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ t) (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ u).
+Proof. intros cf Σ wfΣ Γ t u cbh6. exact (@ws_red1_pred1_cb cf Σ _ Γ t u cbh6). Qed.
+Lemma ws_pred1_red : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {P : forall _ : nat, bool} {Γ Γ' : PCUICConfluence.ws_context P} {t : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P)} {u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ')) P)} (cbh8 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj P Γ) (@PCUICConfluence.ws_context_proj P Γ') (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P) t) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ')) P) u)), PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj P Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P) t) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ')) P) u).
+Proof. intros cf Σ wfΣ P Γ Γ' t u cbh8. exact (@ws_pred1_red_cb cf Σ _ P Γ Γ' t u cbh8). Qed.
+Lemma pred1_ctx_upto_names : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {P : forall _ : nat, bool} {Γ Γ' Δ : list (BasicAst.context_decl PCUICAst.term)} (cbh7 : is_true (PCUICOnFreeVars.on_free_vars_ctx P Γ)) (cbh8 : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ0 Γ'0)) Γ Δ) (cbh9 : @All_Forall.All2 (BasicAst.context_decl PCUICAst.term) (BasicAst.context_decl PCUICAst.term) PCUICEquality.eq_decl_upto_names Γ Γ'), @sigT (list (BasicAst.context_decl PCUICAst.term)) (fun Δ' : list (BasicAst.context_decl PCUICAst.term) => prod (@All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ0 Γ'0)) Γ' Δ') (@All_Forall.All2 (BasicAst.context_decl PCUICAst.term) (BasicAst.context_decl PCUICAst.term) PCUICEquality.eq_decl_upto_names Δ Δ')).
+Proof. intros cf Σ wfΣ P Γ Γ' Δ cbh7 cbh8 cbh9. exact (@pred1_ctx_upto_names_cb cf Σ _ P Γ Γ' Δ cbh7 cbh8 cbh9). Qed.
+Lemma red_mkApps_tInd : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {ind : Kernames.inductive} {u : Universes.Instance.t} {args : list PCUICAst.term} {c : PCUICAst.term} (cbh8 : is_true (@List.forallb PCUICAst.term (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) args)) (cbh9 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (PCUICAst.mkApps (PCUICAst.tInd ind u) args) c), @sigT (list PCUICAst.term) (fun args' : list PCUICAst.term => prod (@eq PCUICAst.term c (PCUICAst.mkApps (PCUICAst.tInd ind u) args')) (@All_Forall.All2 PCUICAst.term PCUICAst.term (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) args args')).
+Proof. intros cf Σ wfΣ Γ ind u args c cbh8 cbh9. exact (@red_mkApps_tInd_cb cf Σ _ Γ ind u args c cbh8 cbh9). Qed.
+Lemma red_confluence : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {t : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} {u v : PCUICAst.term} (cbh7 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) t) u) (cbh8 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) t) v), @sigT PCUICAst.term (fun v' : PCUICAst.term => prod (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) u v') (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) v v')).
+Proof. intros cf Σ wfΣ Γ t u v cbh7 cbh8. exact (@red_confluence_cb cf Σ _ Γ t u v cbh7 cbh8). Qed.
+Lemma red_mkApps_tConstruct : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {ind : Kernames.inductive} {pars : nat} {k : Universes.Instance.t} (args : list PCUICAst.term) {c : PCUICAst.term} (cbh9 : is_true (@List.forallb PCUICAst.term (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) args)) (cbh10 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (PCUICAst.mkApps (PCUICAst.tConstruct ind pars k) args) c), @sigT (list PCUICAst.term) (fun args' : list PCUICAst.term => prod (@eq PCUICAst.term c (PCUICAst.mkApps (PCUICAst.tConstruct ind pars k) args')) (@All_Forall.All2 PCUICAst.term PCUICAst.term (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) args args')).
+Proof. intros cf Σ wfΣ Γ ind pars k args c cbh9 cbh10. exact (@red_mkApps_tConstruct_cb cf Σ _ Γ ind pars k args c cbh9 cbh10). Qed.
+Lemma red_trans_clos_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (Γ : PCUICConfluence.ws_context (fun _ : nat => false)) (t u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (cbh6 : PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ t u), @Relation.trans_clos PCUICConfluence.ws_pair (@PCUICConfluence.pred1_rel Σ) (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ t) (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ u).
+Proof. intros cf Σ wfΣ Γ t u cbh6. exact (@red_trans_clos_pred1_cb cf Σ _ Γ t u cbh6). Qed.
+Lemma pred1_upto_names_gen : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {P : forall _ : nat, bool} {Γ Γ' : list (BasicAst.context_decl PCUICAst.term)} {Δ : PCUICAst.PCUICEnvironment.context} {Δ' : list (BasicAst.context_decl PCUICAst.term)} {t u : PCUICAst.term} (cbh10 : is_true (PCUICOnFreeVars.on_free_vars_ctx P Γ)) (cbh11 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) Γ) P) t)) (cbh12 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ Δ t u) (cbh13 : @All_Forall.All2 (BasicAst.context_decl PCUICAst.term) (BasicAst.context_decl PCUICAst.term) PCUICEquality.eq_decl_upto_names Γ Γ') (cbh14 : @All_Forall.All2 (BasicAst.context_decl PCUICAst.term) (BasicAst.context_decl PCUICAst.term) PCUICEquality.eq_decl_upto_names Δ Δ') (cbh15 : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ0 Γ'0)) Γ' Δ'), PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ' Δ' t u.
+Proof. intros cf Σ wfΣ P Γ Γ' Δ Δ' t u cbh10 cbh11 cbh12 cbh13 cbh14 cbh15. exact (@pred1_upto_names_gen_cb cf Σ _ P Γ Γ' Δ Δ' t u cbh10 cbh11 cbh12 cbh13 cbh14 cbh15). Qed.
+Lemma pred1_ctx_pred1_inv : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ) (P : forall _ : nat, bool) (Γ Γ' Δ Δ' : list (BasicAst.context_decl PCUICAst.term)) (t u : PCUICAst.term) (cbh10 : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ) (@length (BasicAst.context_decl PCUICAst.term) Γ')) (cbh11 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ)) P) t)) (cbh12 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ)) P) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ))) (cbh13 : PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ') t u) (cbh14 : PCUICLiftSubst.assumption_context Δ), PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ) t u.
+Proof. intros cf Σ wfΣ P Γ Γ' Δ Δ' t u cbh10 cbh11 cbh12 cbh13 cbh14. exact (@pred1_ctx_pred1_inv_cb cf Σ _ P Γ Γ' Δ Δ' t u cbh10 cbh11 cbh12 cbh13 cbh14). Qed.
+Lemma OnOne2_pars_pred1_ctx_over : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ} (Γ : list (BasicAst.context_decl PCUICAst.term)) (params params' : list PCUICAst.term) (puinst : Universes.Instance.t) (pctx : list (BasicAst.context_decl PCUICAst.term)) (cbh8 : is_true (PCUICOnFreeVars.on_ctx_free_vars (fun _ : nat => true) Γ)) (cbh9 : is_true (@List.forallb PCUICAst.term (PCUICOnFreeVars.on_free_vars (fun _ : nat => true)) params)) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars_ctx (PCUICOnFreeVars.shiftnP (@length PCUICAst.term params) (fun _ : nat => true)) pctx)) (cbh11 : @All_Forall.OnOne2 PCUICAst.term (PCUICParallelReduction.pred1 Σ Γ Γ) params params'), @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls ((fun Δ Δ' : list (BasicAst.context_decl PCUICAst.term) => PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ')) Γ0 Γ'0)) (PCUICCases.inst_case_context params puinst pctx) (PCUICCases.inst_case_context params' puinst pctx).
+Proof. intros cf Σ wfΣ Γ params params' puinst pctx cbh8 cbh9 cbh10 cbh11. exact (@OnOne2_pars_pred1_ctx_over_cb cf Σ _ Γ params params' puinst pctx cbh8 cbh9 cbh10 cbh11). Qed.
+Lemma ws_red_confluence : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {t u v : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} (cbh7 : PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ t u) (cbh8 : PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ t v), @sigT (PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (fun v' : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) => prod (PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ u v') (PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ v v')).
+Proof. intros cf Σ wfΣ Γ t u v cbh7 cbh8. exact (@ws_red_confluence_cb cf Σ _ Γ t u v cbh7 cbh8). Qed.
+Lemma red_ws_red_left : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {x : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} {y : PCUICAst.term} (cbh6 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x) y), @sigT ((fun t : PCUICAst.term => is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) t)) y) (fun prf : (fun t : PCUICAst.term => is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) t)) y => PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ x (@exist PCUICAst.term (fun t : PCUICAst.term => is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) t)) y prf)).
+Proof. intros cf Σ wfΣ Γ x y cbh6. exact (@red_ws_red_left_cb cf Σ _ Γ x y cbh6). Qed.
+Lemma pred1_red_r_gen' : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) (Γ Γ' Δ Δ' : list (BasicAst.context_decl PCUICAst.term)) (M N : PCUICAst.term) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ)) P) M)) (cbh11 : is_true (PCUICOnFreeVars.on_free_vars_ctx P (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ))) (cbh12 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ') M N) (cbh13 : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ) (@length (BasicAst.context_decl PCUICAst.term) Γ')) (cbh14 : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ0 Γ'0)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ')), PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ') M N.
+Proof. intros cf Σ wfΣ P Γ Γ' Δ Δ' M N cbh10 cbh11 cbh12 cbh13 cbh14. exact (@pred1_red_r_gen'_cb cf Σ _ P Γ Γ' Δ Δ' M N cbh10 cbh11 cbh12 cbh13 cbh14). Qed.
+Lemma red_mkApps_tRel : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {k : nat} {b : BasicAst.context_decl PCUICAst.term} {args : list PCUICAst.term} {c : PCUICAst.term} (cbh8 : is_true (@List.forallb PCUICAst.term (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) args)) (cbh9 : @eq (option (BasicAst.context_decl PCUICAst.term)) (@List.nth_error (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ) k) (@Some (BasicAst.context_decl PCUICAst.term) b)) (cbh10 : @eq (option PCUICAst.term) (@BasicAst.decl_body PCUICAst.term b) (@None PCUICAst.term)) (cbh11 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (PCUICAst.mkApps (PCUICAst.tRel k) args) c), @sigT (list PCUICAst.term) (fun args' : list PCUICAst.term => prod (@eq PCUICAst.term c (PCUICAst.mkApps (PCUICAst.tRel k) args')) (@All_Forall.All2 PCUICAst.term PCUICAst.term (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) args args')).
+Proof. intros cf Σ wfΣ Γ k b args c cbh8 cbh9 cbh10 cbh11. exact (@red_mkApps_tRel_cb cf Σ _ Γ k b args c cbh8 cbh9 cbh10 cbh11). Qed.
+Lemma clos_rt_red1_red1_rel_alpha : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (Γ : PCUICConfluence.ws_context (fun _ : nat => false)) (x y : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (cbh6 : @Relation.clos_refl_trans PCUICAst.term (PCUICReduction.red1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) y)), @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ) (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ x) (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ y).
+Proof. intros cf Σ wfΣ Γ x y cbh6. exact (@clos_rt_red1_red1_rel_alpha_cb cf Σ _ Γ x y cbh6). Qed.
+Lemma clos_refl_trans_out : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (Γ : PCUICConfluence.ws_context (fun _ : nat => false)) (x y : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (cbh6 : @Relation.clos_refl_trans PCUICAst.term (PCUICReduction.red1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) y)), @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel Σ) (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ x) (@existT (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ0 : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ0)) (fun _ : nat => false))) Γ y).
+Proof. intros cf Σ wfΣ Γ x y cbh6. exact (@clos_refl_trans_out_cb cf Σ _ Γ x y cbh6). Qed.
+Lemma pred1_ctx_pred1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ) (P : forall _ : nat, bool) (Γ Γ' Δ Δ' : list (BasicAst.context_decl PCUICAst.term)) (t u : PCUICAst.term) (cbh10 : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ) (@length (BasicAst.context_decl PCUICAst.term) Γ')) (cbh11 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ)) P) t)) (cbh12 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ)) P) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ))) (cbh13 : PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ) t u) (cbh14 : PCUICLiftSubst.assumption_context Δ) (cbh15 : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 Σ Γ0 Γ'0)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ')), PCUICParallelReduction.pred1 Σ (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ') t u.
+Proof. intros cf Σ wfΣ P Γ Γ' Δ Δ' t u cbh10 cbh11 cbh12 cbh13 cbh14 cbh15. exact (@pred1_ctx_pred1_cb cf Σ _ P Γ Γ' Δ Δ' t u cbh10 cbh11 cbh12 cbh13 cbh14 cbh15). Qed.
+Lemma red_mkApps_tConst_axiom : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {cst : Kernames.kername} {u : Universes.Instance.t} {args : list PCUICAst.term} {cb : PCUICAst.PCUICEnvironment.constant_body} {c : PCUICAst.term} (cbh9 : PCUICAst.declared_constant (PCUICAst.PCUICEnvironment.fst_ctx Σ) cst cb) (cbh10 : @eq (option PCUICAst.term) (PCUICAst.PCUICEnvironment.cst_body cb) (@None PCUICAst.term)) (cbh11 : @eq (option PrimitiveOps.prim_op) (PCUICAst.PCUICEnvironment.prim_op_of (PCUICAst.PCUICEnvironment.fst_ctx Σ) cst) (@None PrimitiveOps.prim_op)) (cbh12 : is_true (@List.forallb PCUICAst.term (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) args)) (cbh13 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (PCUICAst.mkApps (PCUICAst.tConst cst u) args) c), @sigT (list PCUICAst.term) (fun args' : list PCUICAst.term => prod (@eq PCUICAst.term c (PCUICAst.mkApps (PCUICAst.tConst cst u) args')) (@All_Forall.All2 PCUICAst.term PCUICAst.term (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) args args')).
+Proof. intros cf Σ wfΣ Γ cst u args cb c cbh9 cbh10 cbh11 cbh12 cbh13. exact (@red_mkApps_tConst_axiom_cb cf Σ _ Γ cst u args cb c cbh9 cbh10 cbh11 cbh12 cbh13). Qed.
+Lemma pred1_red_r_gen : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) (Γ Γ' Δ Δ' : list (BasicAst.context_decl PCUICAst.term)) (M N : PCUICAst.term) (cbh10 : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ)) P) M)) (cbh11 : is_true (PCUICOnFreeVars.on_ctx_free_vars (PCUICOnFreeVars.closedP (@length (BasicAst.context_decl PCUICAst.term) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ)) P) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ))) (cbh12 : PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ') M N) (cbh13 : @eq nat (@length (BasicAst.context_decl PCUICAst.term) Γ) (@length (BasicAst.context_decl PCUICAst.term) Γ')) (cbh14 : @All_Forall.All2_fold (BasicAst.context_decl PCUICAst.term) (fun Γ0 Γ'0 : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls (PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ0 Γ'0)) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ')), PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ) (@BasicAst.app_context (BasicAst.context_decl PCUICAst.term) Γ' Δ') M N.
+Proof. intros cf Σ wfΣ P Γ Γ' Δ Δ' M N cbh10 cbh11 cbh12 cbh13 cbh14. exact (@pred1_red_r_gen_cb cf Σ _ P Γ Γ' Δ Δ' M N cbh10 cbh11 cbh12 cbh13 cbh14). Qed.
+Lemma red1_weak_confluence : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (P : forall _ : nat, bool) {Γ : PCUICConfluence.ws_context P} {t u v : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P)} (cbh8 : PCUICReduction.red1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj P Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P) t) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P) u)) (cbh9 : PCUICReduction.red1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj P Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P) t) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P) v)), @sigT PCUICAst.term (fun t' : PCUICAst.term => prod (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj P Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P) u) t') (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj P Γ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' P Γ)) P) v) t')).
+Proof. intros cf Σ wfΣ P Γ t u v cbh8 cbh9. exact (@red1_weak_confluence_cb cf Σ _ P Γ t u v cbh8 cbh9). Qed.
+Lemma lift_to_ws_red : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {x : PCUICAst.term} {p : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x)} {y : PCUICAst.term} (cbh7 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) x y), @sigT (PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (fun x' : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) => @sigT (PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (fun y' : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) => prod (@eq PCUICAst.term x (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x')) (prod (@eq PCUICAst.term y (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) y')) (PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ x' y')))).
+Proof. intros cf Σ wfΣ Γ x p y cbh7. exact (@lift_to_ws_red_cb cf Σ _ Γ x p y cbh7). Qed.
+Lemma ws_red_red_ctx : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {Γ Δ : PCUICConfluence.ws_context (fun _ : nat => false)} {t u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} (cbh7 : PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ t u) (rctx : @PCUICConfluence.ws_red_ctx Σ Δ Γ), PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Δ (@PCUICConfluence.transport_ws_term (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) t (@CRelationClasses.symmetry nat (@eq nat) (@CRelationClasses.eq_Symmetric nat) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_red_ctx_length Σ Δ Γ rctx))) (@PCUICConfluence.transport_ws_term (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) u (@CRelationClasses.symmetry nat (@eq nat) (@CRelationClasses.eq_Symmetric nat) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_red_ctx_length Σ Δ Γ rctx))).
+Proof. intros cf Σ wfΣ Γ Δ t u cbh7 rctx. exact (@ws_red_red_ctx_cb cf Σ _ Γ Δ t u cbh7 rctx). Qed.
+Lemma lift_to_pred : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} {wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)} {Γ : PCUICConfluence.ws_context (fun _ : nat => false)} {x : PCUICAst.term} {p : is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x)} {y : PCUICAst.term} (cbh7 : PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) x y), @sigT (PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (fun x' : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) => @sigT (PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) (fun y' : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) => prod (@eq PCUICAst.term x (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x')) (prod (@eq PCUICAst.term y (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) y')) (@Relation.clos_refl_trans PCUICAst.term (PCUICParallelReduction.pred1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) x') (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false)) y'))))).
+Proof. intros cf Σ wfΣ Γ x p y cbh7. exact (@lift_to_pred_cb cf Σ _ Γ x p y cbh7). Qed.
+Lemma ws_red_red_ctx_aux : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) {Γ Δ : PCUICConfluence.ws_context (fun _ : nat => false)} {t u : PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))} (cbh7 : PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) Γ t u) (rctx : @PCUICConfluence.ws_red_ctx Σ Δ Γ), PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) Δ) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) (fun _ : nat => false)) (@PCUICConfluence.transport_ws_term (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) t (@CRelationClasses.symmetry nat (@eq nat) (@CRelationClasses.eq_Symmetric nat) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_red_ctx_length Σ Δ Γ rctx)))) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) (fun _ : nat => false)) (@PCUICConfluence.transport_ws_term (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) u (@CRelationClasses.symmetry nat (@eq nat) (@CRelationClasses.eq_Symmetric nat) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Δ)) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (@PCUICConfluence.ws_red_ctx_length Σ Δ Γ rctx)))).
+Proof. intros cf Σ wfΣ Γ Δ t u cbh7 rctx. exact (@ws_red_red_ctx_aux_cb cf Σ _ Γ Δ t u cbh7 rctx). Qed.
+Lemma clos_rt_red1_alpha_out' : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (x y : PCUICConfluence.ws_pair) (cbh5 : @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ) x y), prod (@PCUICConfluence.red_ctx_alpha Σ (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x)) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x)) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x))) (fun _ : nat => false)) (@projT2 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x)) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (fun _ : nat => false)) (@projT2 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))).
+Proof. intros cf Σ wfΣ x y cbh5. exact (@clos_rt_red1_alpha_out'_cb cf Σ _ x y cbh5). Qed.
+Lemma clos_rt_red1_rel_red1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (x y : PCUICConfluence.ws_pair) (cbh5 : @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel Σ) x y), prod (PCUICConfluence.red_ctx (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x)) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (@Relation.clos_refl_trans PCUICAst.term (PCUICReduction.red1 (PCUICAst.PCUICEnvironment.fst_ctx Σ) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x))) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x))) (fun _ : nat => false)) (@projT2 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x)) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (fun _ : nat => false)) (@projT2 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))).
+Proof. intros cf Σ wfΣ x y cbh5. exact (@clos_rt_red1_rel_red1_cb cf Σ _ x y cbh5). Qed.
+Lemma clos_rt_red1_rel_ws_red1 : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (x y : PCUICConfluence.ws_pair) (cbh5 : @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel Σ) x y), @sigT (@PCUICConfluence.ws_red_ctx Σ (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y)) (fun redctx : @PCUICConfluence.ws_red_ctx Σ (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y) => PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x) (@projT2 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x) (@PCUICConfluence.transport_ws_term (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x))) (@projT2 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y) (@CRelationClasses.symmetry nat (@eq nat) (@CRelationClasses.eq_Symmetric nat) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x))) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (@PCUICConfluence.ws_red_ctx_length Σ (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y) redctx)))).
+Proof. intros cf Σ wfΣ x y cbh5. exact (@clos_rt_red1_rel_ws_red1_cb cf Σ _ x y cbh5). Qed.
+Lemma clos_rt_red1_alpha_out : forall {cf : config.checker_flags} {Σ : PCUICAst.PCUICEnvironment.global_env_ext} (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf (PCUICAst.PCUICEnvironment.fst_ctx Σ)) (x y : PCUICConfluence.ws_pair) (cbh5 : @Relation.clos_refl_trans PCUICConfluence.ws_pair (@PCUICConfluence.red1_rel_alpha Σ) x y), @sigT (@PCUICConfluence.red_ctx_alpha Σ (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x)) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (fun redctx : @PCUICConfluence.red_ctx_alpha Σ (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x)) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y)) => PCUICConfluence.ws_red (PCUICAst.PCUICEnvironment.fst_ctx Σ) (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x) (@projT2 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x) (@PCUICConfluence.transport_ws_term (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x))) (@projT2 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y) (@CRelationClasses.symmetry nat (@eq nat) (@CRelationClasses.eq_Symmetric nat) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x))) (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y))) (@All_Forall.All2_fold_length (BasicAst.context_decl PCUICAst.term) (fun Γ _ : list (BasicAst.context_decl PCUICAst.term) => PCUICAst.PCUICEnvironment.All_decls_alpha (PCUICReduction.red (PCUICAst.PCUICEnvironment.fst_ctx Σ) Γ)) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) x)) (@PCUICConfluence.ws_context_proj (fun _ : nat => false) (@projT1 (PCUICConfluence.ws_context (fun _ : nat => false)) (fun Γ : PCUICConfluence.ws_context (fun _ : nat => false) => PCUICConfluence.ws_term (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) Γ)) (fun _ : nat => false))) y)) redctx)))).
+Proof. intros cf Σ wfΣ x y cbh5. exact (@clos_rt_red1_alpha_out_cb cf Σ _ x y cbh5). Qed.
+Lemma rho_ws_pair_obligation_1 : forall (cf : config.checker_flags) (Σ : PCUICAst.PCUICEnvironment.global_env) (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ) (p : PCUICConfluence.ws_pair), is_true (PCUICOnFreeVars.on_free_vars_ctx (fun _ : nat => false) (@BasicAst.fold_context PCUICAst.term (fun Γ' : list (BasicAst.context_decl PCUICAst.term) => @BasicAst.map_decl PCUICAst.term PCUICAst.term (PCUICParallelReductionConfluence.rho Σ Γ')) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (PCUICConfluence.ws_pair_context p)))).
+Proof. intros cf Σ wfΣ p. exact (@rho_ws_pair_cb_obligation_1 cf Σ _ p). Defined.
+Lemma rho_ws_pair_obligation_2 : forall (cf : config.checker_flags) (Σ : PCUICAst.PCUICEnvironment.global_env) (wfΣ : @MetaRocq.PCUIC.PCUICTyping.wf cf Σ) (p : PCUICConfluence.ws_pair), is_true (PCUICOnFreeVars.on_free_vars (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (@exist PCUICAst.PCUICEnvironment.context (fun t : PCUICAst.PCUICEnvironment.context => is_true (PCUICOnFreeVars.on_free_vars_ctx (fun _ : nat => false) t)) (@BasicAst.fold_context PCUICAst.term (fun Γ' : list (BasicAst.context_decl PCUICAst.term) => @BasicAst.map_decl PCUICAst.term PCUICAst.term (PCUICParallelReductionConfluence.rho Σ Γ')) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (PCUICConfluence.ws_pair_context p))) (PCUICConfluence.rho_ws_pair_obligation_1 cf Σ wfΣ p)))) (fun _ : nat => false)) (PCUICParallelReductionConfluence.rho Σ (@BasicAst.fold_context PCUICAst.term (fun Γ' : list (BasicAst.context_decl PCUICAst.term) => @BasicAst.map_decl PCUICAst.term PCUICAst.term (PCUICParallelReductionConfluence.rho Σ Γ')) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (PCUICConfluence.ws_pair_context p))) (@PCUICConfluence.ws_term_proj (PCUICOnFreeVars.shiftnP (@length (BasicAst.context_decl PCUICAst.term) (@PCUICConfluence.ws_context_proj' (fun _ : nat => false) (PCUICConfluence.ws_pair_context p))) (fun _ : nat => false)) (PCUICConfluence.ws_pair_term p)))).
+Proof. intros cf Σ wfΣ p. exact (@rho_ws_pair_cb_obligation_2 cf Σ _ p). Defined.
+(** The trunk hints of this file, on the trunk statements (the hints above
+    name the [_cb] statements, which the spine uses). *)
+#[global] Hint Resolve PCUICClosedTyp.red1_on_free_vars PCUICClosedTyp.red_on_free_vars : fvs.
+#[global] Hint Resolve PCUICParallelReductionConfluence.pred1_on_free_vars PCUICParallelReductionConfluence.pred1_on_ctx_free_vars : fvs.
+#[global] Hint Resolve PCUICParallelReductionConfluence.pred1_on_free_vars_ctx : fvs.
