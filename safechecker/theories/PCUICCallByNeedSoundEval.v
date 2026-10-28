@@ -62,9 +62,18 @@ Import CanonicalTries.
   [PCUICCallByNeedSoundMemo] and [memo_ok] of [PCUICCallByNeedSoundCtx], and every reading
   of a code says the code is in the code table ([cok]), which is what [once_body] needs to
   keep its cache sound. [wfΣ] and [hΣ] are the hook's own hypotheses: [Σ] is well formed
-  and is the environment [X] stands for. [hstress] and the budget: the run allocates fewer
-  cells than [st_room] leaves it, so no allocation collects. A run that collects needs the
-  renaming of [PCUICCallByNeedSoundGC], which relates [repr] readings, not ghost ones. *)
+  and is the environment [X] stands for.
+
+  ** Collections
+
+  A run may collect, under [stress] or when [st_room] is spent. A collection renames every
+  address, so the ghost a call ends with is not an extension of the one it started with:
+  every clause of [machine_sound] says instead that the roots come back renamed and stand,
+  under the new ghost, for what they stood for ([gren]). The ghost of the new heap is built
+  along the collector's walk, at each fresh address from the ghost term of the old address
+  copied there ([collect_ghost]); it is a ghost renaming in the sense of
+  [PCUICCallByNeedSoundGC.root_pres], and it needs nothing of the collector beyond its
+  invariant [gc_inv]. *)
 
 Lemma forallb_map_All {A B} (f : A -> B) (p : B -> bool) (q : A -> bool) (l : list A) :
   All (fun x => p (f x) = q x) l -> forallb p (map f l) = forallb q l.
@@ -294,11 +303,6 @@ Section Eval.
   Hypothesis wfΣ : wf Σ.
   Hypothesis hΣ : abstract_env_ext_rel X Σ.
   Hypothesis hΔ : #|Δ| = lvl - nctx.
-  (** Written so that [subst] never eliminates the section variable [stress]. *)
-  Hypothesis hstress : negb stress = true.
-
-  Lemma stress_false : stress = false.
-  Proof. apply negb_true_iff. exact hstress. Qed.
 
   Local Notation ΓΔ := (Γ ,,, Δ).
 
@@ -504,43 +508,9 @@ Section Eval.
     - exact (g_value_ad _ _ _ H).
   Qed.
 
-  (** ** The shape of the heap, which every state operation keeps
+  (** ** The state operations that leave the heap shape alone
 
-    [hok] is what the machine keeps of the heap without any reading: the heap was built the
-    way [bh_ok] says, and it holds no forwarding pointer, so the collector's theorem
-    applies to it. It is all that is needed to see that [st_next] never goes down, which is
-    what lets a caller spend the room budget across two calls in a row. *)
-
-  Definition hok (s : cbn_state) : Prop :=
-    (exists lo, bh_ok lo s.(st_next) s.(st_heap)) /\ heap_nofwd s.(st_heap).
-
-  Definition hstep (s s' : cbn_state) : Prop :=
-    (s.(st_next) <= s'.(st_next))%positive /\ hok s'.
-
-  Lemma hstep_refl s : hok s -> hstep s s.
-  Proof. intros h. split; [apply Pos.le_refl|exact h]. Qed.
-
-  Lemma hstep_trans s1 s2 s3 : hstep s1 s2 -> hstep s2 s3 -> hstep s1 s3.
-  Proof. intros [h1 _] [h2 h3]. split; [exact (Pos.le_trans _ _ _ h1 h2)|exact h3]. Qed.
-
-  Lemma hok_alloc_now cl s : cell_fwd cl = None -> hok s -> hok (snd (alloc_now cl s)).
-  Proof.
-    intros hf [[lo hb] hn]. split; cbn.
-    - exists lo. apply bh_ok_cons. exact hb.
-    - intros a a' ha. cbn in ha.
-      destruct (haddr_dec a (HAddr s.(st_next))) as [->|hne].
-      + rewrite (bh_get_cons_new _ _ _ _ hb) in ha.
-        inversion ha; subst. cbn in hf. discriminate.
-      + rewrite (bh_get_cons_old _ _ _ _ _ hb hne) in ha. exact (hn _ _ ha).
-  Qed.
-
-  Lemma alloc_now_next cl s : (snd (alloc_now cl s)).(st_next) = Pos.succ s.(st_next).
-  Proof. reflexivity. Qed.
-
-  Lemma hstep_alloc_now cl s : cell_fwd cl = None -> hok s -> hstep s (snd (alloc_now cl s)).
-  Proof.
-    intros hf h. split; [cbn; lia|exact (hok_alloc_now cl s hf h)].
-  Qed.
+    What [heap_upd], [tick], [new_entry], [once_body] and [delta] change of a state. *)
 
   Lemma heap_upd_shape a cl s s' :
     heap_upd a cl s = Some s' ->
@@ -552,20 +522,6 @@ Section Eval.
     intros he. inversion he; subst. cbn. repeat split; try reflexivity.
   Qed.
 
-  Lemma hstep_heap_upd a cl s s' :
-    cell_fwd cl = None -> hok s -> heap_upd a cl s = Some s' -> hstep s s'.
-  Proof.
-    intros hf [[lo hb] hn] he.
-    destruct (heap_upd_shape _ _ _ _ he) as (hn1 & _ & _ & _ & _ & hu).
-    split; [rewrite hn1; apply Pos.le_refl|].
-    split.
-    - exists lo. rewrite hn1. exact (bh_upd_ok _ _ _ _ _ _ hb hu).
-    - intros b b' hb'. destruct (haddr_dec b a) as [->|hne].
-      + rewrite (bh_get_upd_same _ _ _ _ hu) in hb'.
-        inversion hb'; subst. cbn in hf. discriminate.
-      + rewrite (bh_get_upd_other _ _ _ _ _ hu hne) in hb'. exact (hn _ _ hb').
-  Qed.
-
   Lemma tick_shape s s' :
     tick s = Some s' ->
     s'.(st_heap) = s.(st_heap) /\ s'.(st_next) = s.(st_next)
@@ -574,13 +530,6 @@ Section Eval.
   Proof.
     unfold tick. destruct s.(st_steps) eqn:e; [discriminate|].
     intros he. inversion he; subst. cbn. repeat split; reflexivity.
-  Qed.
-
-  Lemma hstep_tick s s' : hok s -> tick s = Some s' -> hstep s s'.
-  Proof.
-    intros [hb hn] he. destruct (tick_shape _ _ he) as (h1 & h2 & _).
-    split; [rewrite h2; apply Pos.le_refl|].
-    split; [rewrite h2, h1; exact hb|rewrite h1; exact hn].
   Qed.
 
   (** [new_entry], [once_body] and [delta] touch only the memo. *)
@@ -634,496 +583,6 @@ Section Eval.
       + intros he. inversion he; subst. repeat split; reflexivity.
   Qed.
 
-  Lemma hstep_delta kn u s r s' : hok s -> delta X_type X kn u s = COk (r, s') -> hstep s s'.
-  Proof.
-    intros [hb hn] he. destruct (delta_shape _ _ _ _ _ he) as (h1 & h2 & _).
-    split; [rewrite h2; apply Pos.le_refl|].
-    split; [rewrite h2, h1; exact hb|rewrite h1; exact hn].
-  Qed.
-
-  Lemma hstep_new_entry t u ns s :
-    hok s -> hstep s (snd (new_entry X_type X t u ns s)).
-  Proof.
-    intros [hb hn]. destruct (new_entry_shape t u ns s) as (p1 & p2 & _).
-    split; [rewrite p2; apply Pos.le_refl|].
-    split; [rewrite p2, p1; exact hb|rewrite p1; exact hn].
-  Qed.
-
-  Lemma hstep_once_body c s : hok s -> hstep s (snd (once_body c s)).
-  Proof.
-    intros [hb hn]. destruct (once_body_shape c s) as (p1 & p2 & _).
-    split; [rewrite p2; apply Pos.le_refl|].
-    split; [rewrite p2, p1; exact hb|rewrite p1; exact hn].
-  Qed.
-
-  Lemma hstep_set_gam g s : hok s -> hstep s (set_gam g s).
-  Proof. intros h. split; [apply Pos.le_refl|exact h]. Qed.
-
-  (** The renamed cell of a collection is a forwarding pointer only if the cell was one. *)
-  Lemma rn_cell_fwd_none {G : Type} (f : haddr -> G -> cbn_res (haddr * G)) cl g cl' g' :
-    cell_fwd cl = None -> rn_cell f cl g = COk (cl', g') -> cell_fwd cl' = None.
-  Proof.
-    destruct cl as [vals n o c|v| |b]; intros hf he; unfold rn_cell in he.
-    - destruct (rn_slots f vals g) as [[vs' g1]|w] eqn:e1; [|discriminate].
-      injection he as he1 he2. subst cl'. reflexivity.
-    - destruct (rn_value f v g) as [[v' g1]|w] eqn:e1; [|discriminate].
-      injection he as he1 he2. subst cl'. reflexivity.
-    - injection he as he1 he2. subst cl'. reflexivity.
-    - discriminate hf.
-  Qed.
-
-  Lemma collect_cell_nofwd cl rs rs' s s' :
-    cell_fwd cl = None -> collect (RC cl :: rs) s = COk (rs', s') ->
-    exists cl' rs2, rs' = RC cl' :: rs2 /\ cell_fwd cl' = None.
-  Proof.
-    intros hf e. destruct (collect_inv _ _ _ _ e) as [gm [g1 [g2 [hr _]]]].
-    rewrite rn_roots_cons, rn_root_RC in hr.
-    destruct (rn_cell (gc_copy (fuel_of_pos s.(st_next) (fun _ : unit => FO))) cl g1)
-      as [[cl' ga]|w] eqn:e1; [|discriminate].
-    destruct (rn_roots (gc_copy (fuel_of_pos s.(st_next) (fun _ : unit => FO))) rs ga)
-      as [[l gb]|w] eqn:e2; [|discriminate].
-    injection hr as hr1 hr2. subst rs'.
-    exists cl', l. split; [reflexivity|].
-    exact (rn_cell_fwd_none _ _ _ _ _ hf e1).
-  Qed.
-
-  Lemma hstep_alloc cl rs s a rs' s' :
-    cell_fwd cl = None -> hok s -> alloc stress cl rs s = COk (a, rs', s') -> hstep s s'.
-  Proof.
-    intros hf hk he.
-    destruct (gc_due stress s) eqn:eg.
-    - rewrite (alloc_gc stress cl rs s eg) in he.
-      destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:ec; [|discriminate].
-      destruct (collect_cell_nofwd _ _ _ _ _ hf ec) as [cl2 [rs3 [-> hf2]]].
-      inversion he; subst.
-      destruct (collect_sound 0 _ _ _ _ (proj2 hk) ec) as (hso & hnf & hnext & _).
-      assert (hk2 : hok s2).
-      { split; [exists s.(st_next); exact (so_heap _ _ hso)|exact hnf]. }
-      apply (hstep_trans s s2); [split; [exact hnext|exact hk2]|].
-      exact (hstep_alloc_now cl2 s2 hf2 hk2).
-    - rewrite (alloc_no_gc stress cl rs s eg) in he. inversion he; subst.
-      exact (hstep_alloc_now cl s hf hk).
-  Qed.
-
-  (** Accumulating forms, so that a chain of steps is one [eauto] away. *)
-
-  Lemma hstep_alloc' s s1 s2 cl rs a rs' :
-    hstep s s1 -> cell_fwd cl = None -> alloc stress cl rs s1 = COk (a, rs', s2) ->
-    hstep s s2.
-  Proof.
-    intros h1 hf he.
-    exact (hstep_trans _ _ _ h1 (hstep_alloc _ _ _ _ _ _ hf (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_alloc_susp' s s1 s2 vals n o c rs a rs' :
-    hstep s s1 -> alloc stress (CSusp vals n o c) rs s1 = COk (a, rs', s2) -> hstep s s2.
-  Proof. intros h1 he. eapply hstep_alloc'; [exact h1| |exact he]. reflexivity. Qed.
-
-  Lemma hstep_alloc_done' s s1 s2 v rs a rs' :
-    hstep s s1 -> alloc stress (CDone v) rs s1 = COk (a, rs', s2) -> hstep s s2.
-  Proof. intros h1 he. eapply hstep_alloc'; [exact h1| |exact he]. reflexivity. Qed.
-
-  Lemma hstep_delta' s s1 s2 kn u r :
-    hstep s s1 -> delta X_type X kn u s1 = COk (r, s2) -> hstep s s2.
-  Proof.
-    intros h1 he. exact (hstep_trans _ _ _ h1 (hstep_delta _ _ _ _ _ (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_tick' s s1 s2 : hstep s s1 -> tick s1 = Some s2 -> hstep s s2.
-  Proof.
-    intros h1 he. exact (hstep_trans _ _ _ h1 (hstep_tick _ _ (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_heap_upd' s s1 s2 a cl :
-    hstep s s1 -> cell_fwd cl = None -> heap_upd a cl s1 = Some s2 -> hstep s s2.
-  Proof.
-    intros h1 hf he.
-    exact (hstep_trans _ _ _ h1 (hstep_heap_upd _ _ _ _ hf (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_new_entry' s s1 t u ns :
-    hstep s s1 -> hstep s (snd (new_entry X_type X t u ns s1)).
-  Proof.
-    intros h1. exact (hstep_trans _ _ _ h1 (hstep_new_entry t u ns s1 (proj2 h1))).
-  Qed.
-
-  Lemma hstep_once_body' s s1 c : hstep s s1 -> hstep s (snd (once_body c s1)).
-  Proof. intros h1. exact (hstep_trans _ _ _ h1 (hstep_once_body c s1 (proj2 h1))). Qed.
-
-  Lemma hstep_set_gam' s s1 g : hstep s s1 -> hstep s (set_gam g s1).
-  Proof. intros h1. exact (hstep_trans _ _ _ h1 (hstep_set_gam g s1 (proj2 h1))). Qed.
-
-
-  Lemma hstep_alloc3 s s1 s2 cl rs a rs' :
-    hstep s s1 -> alloc stress cl rs s1 = COk (a, rs', s2) -> cell_fwd cl = None ->
-    hstep s s2.
-  Proof. intros h1 he hf. exact (hstep_alloc' _ _ _ _ _ _ _ h1 hf he). Qed.
-
-  (** Forward chaining: the one [hstep s ?] hypothesis is extended by each equation in
-    turn. There is no search, so a branch of the machine with a dozen state changes costs
-    a dozen steps. *)
-  Local Ltac chain_step :=
-    repeat
-      match goal with
-      | h : CFail _ = COk _ |- _ => discriminate h
-      | h : None = Some _ |- _ => discriminate h
-      | h : COk _ = COk _ |- _ => inversion h; subst; clear h
-      | h0 : hstep ?s ?s1, h : alloc stress _ _ ?s1 = COk (_, _, ?s2) |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by (eapply hstep_alloc3; [exact h0|exact h|reflexivity]);
-        clear h h0
-      | h0 : hstep ?s ?s1, h : delta X_type X _ _ ?s1 = COk (_, ?s2) |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by (exact (hstep_delta' _ _ _ _ _ _ h0 h)); clear h h0
-      | h0 : hstep ?s ?s1, h : tick ?s1 = Some ?s2 |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by (exact (hstep_tick' _ _ _ h0 h)); clear h h0
-      | h0 : hstep ?s ?s1, h : new_entry X_type X ?t ?u ?ns ?s1 = (_, ?s2) |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by
-          (let hy := fresh "hy" in
-           pose proof (hstep_new_entry' s s1 t u ns h0) as hy; rewrite h in hy;
-           cbn in hy; exact hy);
-        clear h h0
-      | h0 : hstep ?s ?s1, h : once_body ?c ?s1 = (_, ?s2) |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by
-          (let hy := fresh "hy" in
-           pose proof (hstep_once_body' s s1 c h0) as hy; rewrite h in hy;
-           cbn in hy; exact hy);
-        clear h h0
-      | h0 : hstep ?s ?s1, h : heap_upd _ _ ?s1 = Some ?s2 |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by
-          (eapply hstep_heap_upd'; [exact h0| |exact h]; reflexivity);
-        clear h h0
-      end.
-
-  Local Ltac chain_done :=
-    chain_step;
-    repeat (apply hstep_set_gam');
-    match goal with h : hstep _ _ |- _ => exact h end.
-
-  Lemma hstep_gam j rs s a rs' s' :
-    hok s -> gam X_type X Γ nctx stress j rs s = COk (a, rs', s') -> hstep s s'.
-  Proof.
-    intros hk he. unfold gam in he. cbv zeta in he.
-    assert (h0 : hstep s s) by exact (hstep_refl _ hk).
-    destruct (PTree.get (key_of_succ_nat j) s.(st_gam)) as [a0|] eqn:eg.
-    - inversion he; subst. exact h0.
-    - destruct (nth_error Γ j) as [decl|] eqn:ed; [|discriminate].
-      destruct decl.(decl_body) as [b|] eqn:eb.
-      + destruct (new_entry X_type X b [] (NSCtx j) s) as [c s1] eqn:e1.
-        destruct (alloc stress (CSusp [] 0 (S j) c) rs s1) as [[[a1 rs1] s2]|w] eqn:ea;
-          [|discriminate].
-        chain_done.
-      + destruct (alloc stress (CDone (VNeu (NVar (nctx - S j)) [])) rs s)
-          as [[[a1 rs1] s2]|w] eqn:ea; [|discriminate].
-        chain_done.
-  Qed.
-
-  Lemma hstep_gam' s s1 s2 j rs a rs' :
-    hstep s s1 -> gam X_type X Γ nctx stress j rs s1 = COk (a, rs', s2) -> hstep s s2.
-  Proof.
-    intros h1 he. exact (hstep_trans _ _ _ h1 (hstep_gam _ _ _ _ _ _ (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_env_var n e rs s x rs' s' :
-    hok s -> env_var X_type X Γ nctx stress n e rs s = COk (x, rs', s') -> hstep s s'.
-  Proof.
-    intros hk he. unfold env_var in he.
-    destruct (nth_error e.(ev_vals) n) as [x0|].
-    - inversion he; subst. exact (hstep_refl _ hk).
-    - destruct (gam X_type X Γ nctx stress (n - e.(ev_nvals) + e.(ev_goff)) rs s)
-        as [[[a1 rs1] s1]|w] eqn:eg; [|discriminate].
-      inversion he; subst. exact (hstep_gam _ _ _ _ _ _ hk eg).
-  Qed.
-
-  Lemma hstep_env_var' s s1 s2 n e rs x rs' :
-    hstep s s1 -> env_var X_type X Γ nctx stress n e rs s1 = COk (x, rs', s2) -> hstep s s2.
-  Proof.
-    intros h1 he. exact (hstep_trans _ _ _ h1 (hstep_env_var _ _ _ _ _ _ _ (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_arg_slot e c rs s x rs' s' :
-    hok s -> arg_slot X_type X Γ nctx stress e c rs s = COk (x, rs', s') -> hstep s s'.
-  Proof.
-    intros hk he. unfold arg_slot in he.
-    destruct (c_term c); try (inversion he; subst; exact (hstep_refl _ hk)).
-    exact (hstep_env_var _ _ _ _ _ _ _ hk he).
-  Qed.
-
-  Lemma hstep_arg_slot' s s1 s2 e c rs x rs' :
-    hstep s s1 -> arg_slot X_type X Γ nctx stress e c rs s1 = COk (x, rs', s2) -> hstep s s2.
-  Proof.
-    intros h1 he. exact (hstep_trans _ _ _ h1 (hstep_arg_slot _ _ _ _ _ _ _ (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_alloc2 cl rs s a rs' s' :
-    hok s -> alloc stress cl rs s = COk (a, rs', s') -> cell_fwd cl = None -> hstep s s'.
-  Proof. intros hk he hf. exact (hstep_alloc _ _ _ _ _ _ hf hk he). Qed.
-
-  Lemma hstep_materialize x rs s a rs' s' :
-    hok s -> materialize X_type X stress x rs s = COk (a, rs', s') -> hstep s s'.
-  Proof.
-    intros hk he. unfold materialize in he.
-    destruct x as [a0|vs n o c]; [inversion he; subst; exact (hstep_refl _ hk)|].
-    destruct (c_term c) eqn:ec;
-      try (exact (hstep_alloc2 _ _ _ _ _ _ hk he eq_refl)).
-    - (* tConst: the delta memo may add an entry first *)
-      destruct (delta X_type X k ui s) as [[[c'|] s1]|w] eqn:ed.
-      + eapply hstep_alloc3;
-          [exact (hstep_delta _ _ _ _ _ hk ed)|exact he|reflexivity].
-      + eapply hstep_alloc3;
-          [exact (hstep_delta _ _ _ _ _ hk ed)|exact he|reflexivity].
-      + exact (hstep_alloc2 _ _ _ _ _ _ hk he eq_refl).
-    - (* tFix *)
-      destruct (nth_error mfix idx) as [def|];
-        exact (hstep_alloc2 _ _ _ _ _ _ hk he eq_refl).
-  Qed.
-
-  Lemma hstep_materialize' s s1 s2 x rs a rs' :
-    hstep s s1 -> materialize X_type X stress x rs s1 = COk (a, rs', s2) -> hstep s s2.
-  Proof.
-    intros h1 he.
-    exact (hstep_trans _ _ _ h1 (hstep_materialize _ _ _ _ _ _ (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_bind x body rs s y rs' s' :
-    hok s -> bind X_type X stress x body rs s = COk (y, rs', s') -> hstep s s'.
-  Proof.
-    intros hk he. unfold bind in he.
-    destruct x as [a0|vs n o c]; [inversion he; subst; exact (hstep_refl _ hk)|].
-    destruct (once_body body s) as [b s1] eqn:eo.
-    assert (hs1 : hstep s s1).
-    { pose proof (hstep_once_body body s hk) as hy. rewrite eo in hy. cbn in hy. exact hy. }
-    destruct b.
-    - inversion he; subst. exact hs1.
-    - destruct (materialize X_type X stress (SInl vs n o c) rs s1) as [[[a1 rs1] s2]|w]
-        eqn:em; [|discriminate].
-      inversion he; subst.
-      exact (hstep_trans _ _ _ hs1 (hstep_materialize _ _ _ _ _ _ (proj2 hs1) em)).
-  Qed.
-
-  Lemma hstep_bind' s s1 s2 x body rs y rs' :
-    hstep s s1 -> bind X_type X stress x body rs s1 = COk (y, rs', s2) -> hstep s s2.
-  Proof.
-    intros h1 he. exact (hstep_trans _ _ _ h1 (hstep_bind _ _ _ _ _ _ _ (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_mat_all : forall d l rs s al rs' s',
-    hok s -> mat_all X_type X stress d l rs s = COk (al, rs', s') -> hstep s s'.
-  Proof.
-    intros d. induction d as [|k ih]; intros l rs s al rs' s' hk he;
-      destruct l as [|x l]; cbn [mat_all] in he;
-      try (inversion he; subst; exact (hstep_refl _ hk)).
-    destruct (materialize X_type X stress x (RSk l :: rs) s) as [[[a1 rs1] s1]|w] eqn:em;
-      [|discriminate].
-    destruct rs1 as [|r rs2]; [discriminate|]. destruct r; try discriminate.
-    destruct (mat_all X_type X stress (k tt) l0 (RA a1 :: rs2) s1) as [[[al1 rs3] s2]|w]
-      eqn:em2; [|discriminate].
-    destruct rs3 as [|r rs4]; [discriminate|]. destruct r; try discriminate.
-    assert (hs1 : hstep s s1) by exact (hstep_materialize _ _ _ _ _ _ hk em).
-    assert (hs2 : hstep s s2)
-      by exact (hstep_trans _ _ _ hs1 (ih tt _ _ _ _ _ _ (proj2 hs1) em2)).
-    inversion he; subst. exact hs2.
-  Qed.
-
-  Lemma hstep_mat_all' s s1 s2 d l rs al rs' :
-    hstep s s1 -> mat_all X_type X stress d l rs s1 = COk (al, rs', s2) -> hstep s s2.
-  Proof.
-    intros h1 he.
-    exact (hstep_trans _ _ _ h1 (hstep_mat_all _ _ _ _ _ _ _ (proj2 h1) he)).
-  Qed.
-
-  Lemma hstep_push_fix_cells : forall n e c i acc rs s e' rs' s',
-    hok s -> push_fix_cells stress e c i n acc rs s = COk (e', rs', s') ->
-    hstep s s'.
-  Proof.
-    intros n. induction n as [|n ih]; intros e c i acc rs s e' rs' s' hk he;
-      cbn [push_fix_cells] in he.
-    - inversion he; subst. exact (hstep_refl _ hk).
-    - destruct (alloc stress (CDone (VFix e c i [])) (RE e :: RE acc :: rs) s)
-        as [[[a1 rs1] s1]|w] eqn:ea; [|discriminate].
-      destruct rs1 as [|r rs2]; [discriminate|]. destruct r; try discriminate.
-      destruct rs2 as [|r rs3]; [discriminate|]. destruct r; try discriminate.
-      assert (hs1 : hstep s s1)
-        by (eapply hstep_alloc3; [exact (hstep_refl _ hk)|exact ea|reflexivity]).
-      exact (hstep_trans _ _ _ hs1 (ih _ _ _ _ _ _ _ _ _ (proj2 hs1) he)).
-  Qed.
-
-  Lemma hstep_push_fix_cells' s s1 s2 n e c i acc rs e' rs' :
-    hstep s s1 -> push_fix_cells stress e c i n acc rs s1 = COk (e', rs', s2) ->
-    hstep s s2.
-  Proof.
-    intros h1 he.
-    exact (hstep_trans _ _ _ h1 (hstep_push_fix_cells _ _ _ _ _ _ _ _ _ _ (proj2 h1) he)).
-  Qed.
-
-  (** ** The machine itself never gives an address back
-
-    This is what lets the budget below be spent across two calls in a row: the state after
-    the first call is still under the bound the whole call has. It holds for every run,
-    including one that collects, which is why it is proved before anything about
-    readings. *)
-
-  Local Ltac chain_m ihF ihS ihW ihX ihA :=
-    repeat
-      match goal with
-      | h : CFail _ = COk _ |- _ => discriminate h
-      | h : None = Some _ |- _ => discriminate h
-      | h : COk _ = COk _ |- _ => inversion h; subst; clear h
-      | h0 : hstep ?s ?s1, h : new_entry X_type X ?t ?u ?ns ?s1 = (_, ?s2) |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by
-          (let hy := fresh "hy" in
-           pose proof (hstep_new_entry' s s1 t u ns h0) as hy; rewrite h in hy;
-           cbn in hy; exact hy);
-        clear h
-      | h0 : hstep ?s ?s1, h : once_body ?c ?s1 = (_, ?s2) |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by
-          (let hy := fresh "hy" in
-           pose proof (hstep_once_body' s s1 c h0) as hy; rewrite h in hy;
-           cbn in hy; exact hy);
-        clear h
-      (** One clause for every call that returns a value, a root list and a state: the
-        machine's own functions are matched up to the unfolding of their mutual
-        fixpoint, so their head cannot be named here. *)
-      | h0 : hstep ?s ?s1, h : _ = COk (_, _, ?s2) |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by
-          (first
-            [ eapply hstep_trans; [exact h0|eapply ihF; [exact (proj2 h0)|exact h]]
-            | eapply hstep_trans; [exact h0|eapply ihS; [exact (proj2 h0)|exact h]]
-            | eapply hstep_trans; [exact h0|eapply ihW; [exact (proj2 h0)|exact h]]
-            | eapply hstep_trans; [exact h0|eapply ihX; [exact (proj2 h0)|exact h]]
-            | eapply hstep_trans; [exact h0|eapply ihA; [exact (proj2 h0)|exact h]]
-            | eapply hstep_gam'; [exact h0|exact h]
-            | eapply hstep_env_var'; [exact h0|exact h]
-            | eapply hstep_arg_slot'; [exact h0|exact h]
-            | eapply hstep_materialize'; [exact h0|exact h]
-            | eapply hstep_bind'; [exact h0|exact h]
-            | eapply hstep_mat_all'; [exact h0|exact h]
-            | eapply hstep_push_fix_cells'; [exact h0|exact h]
-            | eapply hstep_alloc3; [exact h0|exact h|reflexivity] ]);
-        clear h
-      | h0 : hstep ?s ?s1, h : delta X_type X _ _ ?s1 = COk (_, ?s2) |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by (exact (hstep_delta' _ _ _ _ _ _ h0 h)); clear h
-      | h0 : hstep ?s ?s1, h : tick ?s1 = Some ?s2 |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by (exact (hstep_tick' _ _ _ h0 h)); clear h
-      | h0 : hstep ?s ?s1, h : heap_upd _ _ ?s1 = Some ?s2 |- _ =>
-        let hx := fresh "hs" in
-        assert (hx : hstep s s2) by
-          (eapply hstep_heap_upd'; [exact h0| |exact h]; reflexivity);
-        clear h
-      | h : context [match ?x with COk _ => _ | CFail _ => _ end] |- _ =>
-        match type of x with
-        | cbn_res (_ * _ * _) => destruct x as [[[? ?] ?]|?] eqn:?
-        | cbn_res (_ * _) => destruct x as [[? ?]|?] eqn:?
-        end
-      | h : context [match ?x with Some _ => _ | None => _ end] |- _ =>
-        destruct x eqn:?
-      | h : context [match ?x with nil => _ | cons _ _ => _ end] |- _ =>
-        destruct x as [|? ?]
-      | h : context [match ?r with RA _ => _ | RSl _ => _ | RE _ => _ | RV _ => _
-                     | RSk _ => _ | RSp _ => _ | RC _ => _ end] |- _ => destruct r
-      | h : context [match ?x with true => _ | false => _ end] |- _ => destruct x eqn:?
-      | h : context [match ?v with VCon _ _ => _ | VLam _ _ => _ | VFix _ _ _ _ => _
-                     | VStuckFix _ _ _ _ => _ | VNeu _ _ => _ | VOpen _ _ => _
-                     | VStuck _ _ _ => _ end] |- _ => destruct v eqn:?
-      | h : context [match ?x with CSusp _ _ _ _ => _ | CDone _ => _ | CBusy => _
-                     | CFwd _ => _ end] |- _ => destruct x eqn:?
-      | h : context [match ?x with SAddr _ => _ | SInl _ _ _ _ => _ end] |- _ =>
-        destruct x eqn:?
-      | h : context [match ?x with _ => _ end] |- _ =>
-        match type of x with
-        | term => destruct x eqn:?
-        | nat => destruct x eqn:?
-        end
-      end.
-
-  Local Ltac chain_fin ihF ihS ihW ihX ihA :=
-    chain_m ihF ihS ihW ihX ihA;
-    first [ match goal with h : hstep _ _ |- _ => exact h end
-          | match goal with h : hok _ |- _ => exact (hstep_refl _ h) end ].
-
-  Lemma machine_hstep : forall d,
-    (forall a rs s v rs' s', hok s ->
-        force X_type X Γ nctx stress d a rs s = COk (v, rs', s') -> hstep s s')
-    /\ (forall x stk rs s v rs' s', hok s ->
-        eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') -> hstep s s')
-    /\ (forall e c stk rs s v rs' s', hok s ->
-        whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') -> hstep s s')
-    /\ (forall e c mfix idx stk rs s v rs' s', hok s ->
-        whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
-        hstep s s')
-    /\ (forall v stk rs s w rs' s', hok s ->
-        apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') -> hstep s s').
-  Proof.
-    intros d. induction d as [|k ih].
-    - split; [|split; [|split; [|split]]].
-      + intros a0 rs0 s0 v0 rs1 s1 hk he. cbn [force] in he. discriminate.
-      + intros x0 stk0 rs0 s0 v0 rs1 s1 hk he. cbn [eval_slot] in he. discriminate.
-      + intros e0 c0 stk0 rs0 s0 v0 rs1 s1 hk he. cbn [whnf] in he. discriminate.
-      + intros e0 c0 mf0 ix0 stk0 rs0 s0 v0 rs1 s1 hk he. cbn [whnf_fix] in he.
-        discriminate.
-      + intros v0 stk0 rs0 s0 w0 rs1 s1 hk he. cbn [apply] in he.
-        destruct stk0 as [|y0 stk0];
-          [inversion he; subst; exact (hstep_refl _ hk)|discriminate].
-    - destruct (ih tt) as (ihF & ihS & ihW & ihX & ihA).
-      split; [|split; [|split; [|split]]].
-      + intros a0 rs0 s0 v0 rs1 s1 hk he. cbn [force] in he.
-        assert (h0 : hstep s0 s0) by exact (hstep_refl _ hk).
-        chain_fin ihF ihS ihW ihX ihA.
-      + intros x0 stk0 rs0 s0 v0 rs1 s1 hk he. cbn [eval_slot] in he.
-        assert (h0 : hstep s0 s0) by exact (hstep_refl _ hk).
-        chain_fin ihF ihS ihW ihX ihA.
-      + intros e0 c0 stk0 rs0 s0 v0 rs1 s1 hk he. cbn [whnf] in he.
-        assert (h0 : hstep s0 s0) by exact (hstep_refl _ hk).
-        chain_fin ihF ihS ihW ihX ihA.
-      + intros e0 c0 mf0 ix0 stk0 rs0 s0 v0 rs1 s1 hk he. cbn [whnf_fix] in he.
-        assert (h0 : hstep s0 s0) by exact (hstep_refl _ hk).
-        chain_fin ihF ihS ihW ihX ihA.
-      + intros v0 stk0 rs0 s0 w0 rs1 s1 hk he. cbn [apply] in he.
-        assert (h0 : hstep s0 s0) by exact (hstep_refl _ hk).
-        chain_fin ihF ihS ihW ihX ihA.
-  Qed.
-
-  (** ** The room budget
-
-    A run that allocates fewer cells than [st_room] leaves it never collects, because
-    [gc_due] is [false] while the room is not spent. [fits s s'] says exactly that of the
-    run from [s] to its own result state [s']; [consv] is the conservation law an
-    allocation obeys, and it carries the budget from one call to the next. *)
-
-  Definition nextn (s : cbn_state) : nat := Pos.to_nat s.(st_next).
-  Definition roomn (s : cbn_state) : nat := N.to_nat s.(st_room).
-  Definition fits (s s' : cbn_state) : Prop := (nextn s' < nextn s + roomn s)%nat.
-  Definition consv (s s' : cbn_state) : Prop :=
-    (nextn s + roomn s = nextn s' + roomn s')%nat.
-
-  Lemma consv_refl s : consv s s.
-  Proof. reflexivity. Qed.
-
-  Lemma consv_trans s1 s2 s3 : consv s1 s2 -> consv s2 s3 -> consv s1 s3.
-  Proof. unfold consv. intros h1 h2. rewrite h1. exact h2. Qed.
-
-  Lemma hstep_nextn s s' : hstep s s' -> (nextn s <= nextn s')%nat.
-  Proof. intros [h _]. unfold nextn. lia. Qed.
-
-  Lemma fits_room s s' : fits s s' -> hstep s s' -> roomn s <> 0.
-  Proof. unfold fits. intros hf hs. pose proof (hstep_nextn _ _ hs). lia. Qed.
-
-  (** The second of two calls in a row inherits the budget. *)
-  Lemma fits_next s s1 s2 : fits s s2 -> consv s s1 -> fits s1 s2.
-  Proof. unfold fits, consv. intros h1 h2. lia. Qed.
-
-  Lemma fits_first s s1 s2 : fits s s2 -> hstep s1 s2 -> fits s s1.
-  Proof. unfold fits. intros h1 h2. pose proof (hstep_nextn _ _ h2). lia. Qed.
-
   (** ** What the machine assumes of a state
 
     Beside the heap laws of [state_ok] and the absence of forwarding pointers, the state
@@ -1150,11 +609,6 @@ Section Eval.
     gk_gam : forall j a, PTree.get (key_of_succ_nat j) s.(st_gam) = Some a ->
       exists t, ctx_den Γ nctx lvl j = Some t /\ G a = Some t;
     gk_memo : mok (gc G) s }.
-
-  Lemma gok_hok lo G s : gok lo G s -> hok s.
-  Proof.
-    intros [h1 h2 _ _ _ _]. split; [exists lo; exact (so_heap _ _ h1)|exact h2].
-  Qed.
 
   (** ** The algebra of ghost readings *)
 
@@ -1419,97 +873,28 @@ Section Eval.
     - exact hm.
   Qed.
 
-  Lemma consv_same s s1 :
-    s1.(st_next) = s.(st_next) -> s1.(st_room) = s.(st_room) -> consv s s1.
-  Proof. intros e1 e2. unfold consv, nextn, roomn. rewrite e1, e2. reflexivity. Qed.
-
   Lemma delta_gok lo G kn ui s r s1 :
-    gok lo G s -> delta X_type X kn ui s = COk (r, s1) ->
-    gok lo G s1 /\ consv s s1 /\ roomn s1 = roomn s.
+    gok lo G s -> delta X_type X kn ui s = COk (r, s1) -> gok lo G s1.
   Proof.
-    intros hok hd. destruct (delta_shape _ _ _ _ _ hd) as (e1 & e2 & e3 & _ & e5).
+    intros hok hd. destruct (delta_shape _ _ _ _ _ hd) as (e1 & e2 & _ & _ & e5).
     destruct (gk_memo _ _ _ hok) as (hmi & hmo & hcodes & hokb).
     pose proof hmi as (hf & _ & _ & _ & hdo).
-    split; [|split].
-    - apply (gok_same lo G s); [exact hok|exact e1|exact e2|exact e5|].
-      split; [exact (memo_inv_delta X_type X kn ui s r s1 hmi hd)|].
-      split; [exact (delta_memo_ok X_type X kn ui s r s1 hmo hd)|].
-      destruct (delta_codes kn ui s r s1 hdo hd) as [hc|(cb & body & hl & hb & hc)];
-        rewrite hc.
-      + split; [exact hcodes|exact hokb].
-      + split.
-        * intros i e hi. exact (memo_codes_set_mono _ _ i e hf (hcodes i e hi)).
-        * intros i e hi.
-          destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
-          -- apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
-             injection hi as <-. cbn [ce_inst ce_term].
-             pose proof (lookup_declared X_type X Σ kn cb hΣ hl) as hdecl.
-             rewrite (consts_inst_code Σ ui body).
-             exact (declared_constant_consts_okb Σ kn cb body wfΣ hdecl hb).
-          -- rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi).
-    - apply consv_same; [exact e2|exact e3].
-    - unfold roomn. rewrite e3. reflexivity.
-  Qed.
-
-  (** *** Allocation *)
-
-  Lemma alloc_sound lo G cl u rs s a rs' s' :
-    gok lo G s -> roomn s <> 0 -> g_cell G cl u -> cell_fwd cl = None ->
-    alloc stress cl rs s = COk (a, rs', s') ->
-    rs' = rs /\ consv s s'
-    /\ exists G', gext G G' /\ gok lo G' s' /\ G' a = Some u.
-  Proof.
-    intros hok hroom hcl hfwd he.
-    assert (hgc : gc_due stress s = false).
-    { rewrite stress_false. destruct (gc_due false s) eqn:e; [|reflexivity].
-      apply gc_due_room in e. exfalso. apply hroom. unfold roomn. rewrite e. reflexivity. }
-    rewrite (alloc_no_gc stress cl rs s hgc) in he.
-    inversion he; subst. clear he.
-    pose (G' := mkGhost (fun b => if haddr_eqb b (HAddr s.(st_next)) then Some u else G b)
-                  (gc G)).
-    assert (hnew : G' (HAddr s.(st_next)) = Some u).
-    { unfold G'. cbn [gm]. rewrite haddr_eqb_refl. reflexivity. }
-    assert (hold : gext G G').
-    { split; [|intros i e hi; exact hi].
-      intros b t hb. unfold G'. cbn [gm]. destruct (haddr_eqb b (HAddr s.(st_next))) eqn:eb;
-        [|exact hb].
-      apply haddr_eqb_eq in eb. subst b.
-      destruct (gk_dom _ _ _ hok _ _ hb) as [_ hlt]. cbn in hlt. lia. }
-    assert (hbok : bh_ok lo s.(st_next) s.(st_heap))
-      by exact (so_heap _ _ (gk_state _ _ _ hok)).
-    split; [reflexivity|].
-    split.
-    { unfold consv, nextn, roomn. cbn. rewrite Pos2Nat.inj_succ.
-      destruct (s.(st_room)) eqn:er;
-        [exfalso; apply hroom; unfold roomn; rewrite er; reflexivity|].
-      cbn. lia. }
-    exists G'. split; [exact hold|].
-    split; [|exact hnew].
-    split.
-    - apply (alloc_now_state_ok lo cl s (gk_state _ _ _ hok)).
-      apply (addrs_in_grow lo s.(st_next) (Pos.succ s.(st_next))); [lia|].
-      apply (gdom_addrs_in lo G s); [exact (gk_dom _ _ _ hok)|].
-      exact (g_cell_ad G cl u hcl).
-    - exact (proj2 (hok_alloc_now cl s hfwd (gok_hok _ _ _ hok))).
-    - intros b cl2 hb. unfold heap_get in hb. cbn in hb.
-      destruct (haddr_dec b (HAddr s.(st_next))) as [->|hne].
-      + rewrite (bh_get_cons_new _ _ _ _ hbok) in hb.
-        inversion hb; subst cl2. exists u. split; [exact hnew|].
-        right. exists u. split; [exact (g_cell_mono G G' hold cl u hcl)|apply cred_refl].
-      + rewrite (bh_get_cons_old _ _ _ _ _ hbok hne) in hb.
-        destruct (gk_cells _ _ _ hok _ _ hb) as [t [ht hrest]].
-        exists t. split; [exact (hold _ _ ht)|].
-        destruct hrest as [hbusy|[u1 [hu1 hred]]]; [left; exact hbusy|].
-        right. exists u1. split; [exact (g_cell_mono G G' hold _ _ hu1)|exact hred].
-    - intros b t hb. unfold G' in hb. cbn [gm] in hb. cbn.
-      destruct (haddr_eqb b (HAddr s.(st_next))) eqn:eb.
-      + apply haddr_eqb_eq in eb. subst b. cbn.
-        split; [exact (bh_ok_le _ _ _ hbok)|lia].
-      + destruct (gk_dom _ _ _ hok _ _ hb) as [h1 h2]. split; [exact h1|]. cbn. lia.
-    - intros j b hj. cbn in hj.
-      destruct (gk_gam _ _ _ hok _ _ hj) as [t [ht hg]].
-      exists t. split; [exact ht|exact (hold _ _ hg)].
-    - exact (gk_memo _ _ _ hok).
+    apply (gok_same lo G s); [exact hok|exact e1|exact e2|exact e5|].
+    split; [exact (memo_inv_delta X_type X kn ui s r s1 hmi hd)|].
+    split; [exact (delta_memo_ok X_type X kn ui s r s1 hmo hd)|].
+    destruct (delta_codes kn ui s r s1 hdo hd) as [hc|(cb & body & hl & hb & hc)];
+      rewrite hc.
+    - split; [exact hcodes|exact hokb].
+    - split.
+      + intros i e hi. exact (memo_codes_set_mono _ _ i e hf (hcodes i e hi)).
+      + intros i e hi.
+        destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
+        * apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
+          injection hi as <-. cbn [ce_inst ce_term].
+          pose proof (lookup_declared X_type X Σ kn cb hΣ hl) as hdecl.
+          rewrite (consts_inst_code Σ ui body).
+          exact (declared_constant_consts_okb Σ kn cb body wfΣ hdecl hb).
+        * rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi).
   Qed.
 
   (** *** The context map *)
@@ -1528,352 +913,6 @@ Section Eval.
     - apply nth_error_Some_length in ed.
       replace (lvl - S (nctx - S j)) with (lvl - nctx + j) by lia.
       apply cred_refl.
-  Qed.
-
-  Lemma gam_sound lo G j rs s a rs' s' :
-    gok lo G s -> roomn s <> 0 ->
-    gam X_type X Γ nctx stress j rs s = COk (a, rs', s') ->
-    rs' = rs /\ consv s s'
-    /\ exists G' t, gext G G' /\ gok lo G' s' /\ G' a = Some t
-                    /\ cred (tRel (lvl - nctx + j)) t.
-  Proof.
-    intros hok hroom he. unfold gam in he. cbv zeta in he.
-    destruct (PTree.get (key_of_succ_nat j) s.(st_gam)) as [a0|] eqn:eg.
-    - inversion he; subst. clear he.
-      destruct (gk_gam _ _ _ hok _ _ eg) as [t [ht hg]].
-      split; [reflexivity|]. split; [apply consv_refl|].
-      exists G, t. split; [apply gext_refl|].
-      split; [exact hok|]. split; [exact hg|exact (ctx_den_red j t ht)].
-    - destruct (nth_error Γ j) as [decl|] eqn:ed; [|discriminate].
-      assert (hmain : forall G0 cl t s1,
-        gext G G0 ->
-        ctx_den Γ nctx lvl j = Some t -> g_cell G0 cl t -> cell_fwd cl = None ->
-        gok lo G0 s1 -> s1.(st_next) = s.(st_next) -> s1.(st_room) = s.(st_room) ->
-        (match alloc stress cl rs s1 with
-         | COk (a2, rs2, s2) =>
-             COk (a2, rs2, set_gam (PTree.set (key_of_succ_nat j) a2 (st_gam s2)) s2)
-         | CFail w => CFail w
-         end) = COk (a, rs', s') ->
-        rs' = rs /\ consv s s'
-        /\ exists G' t2, gext G G' /\ gok lo G' s' /\ G' a = Some t2
-                         /\ cred (tRel (lvl - nctx + j)) t2).
-      { intros G0 cl t s1 hx0 hden hcl hfwd hok1 e1n e1r hm.
-        destruct (alloc stress cl rs s1) as [[[a1 rs1] s2]|w] eqn:ea; [|discriminate].
-        inversion hm; subst. clear hm.
-        assert (hroom1 : roomn s1 <> 0) by (unfold roomn; rewrite e1r; exact hroom).
-        destruct (alloc_sound lo G0 cl t rs s1 _ _ _ hok1 hroom1 hcl hfwd ea)
-          as (-> & hcons & G' & hext & hok2 & hga).
-        destruct (gk_dom _ _ _ hok2 _ _ hga) as [hlo hlt].
-        split; [reflexivity|].
-        split.
-        { unfold consv, nextn, roomn in *. cbn. rewrite e1n, e1r in hcons. exact hcons. }
-        exists G', t. split; [exact (gext_trans _ _ _ hx0 hext)|].
-        split; [|split; [exact hga|exact (ctx_den_red j t hden)]].
-        split; cbn.
-        - exact (state_ok_set_gam lo j _ _ (gk_state _ _ _ hok2) hlo hlt).
-        - exact (gk_nofwd _ _ _ hok2).
-        - exact (gk_cells _ _ _ hok2).
-        - exact (gk_dom _ _ _ hok2).
-        - intros j2 a2 hj2.
-          destruct (key_eqb (key_of_succ_nat j2) (key_of_succ_nat j)) eqn:ek.
-          + apply key_eqb_spec, key_of_succ_nat_inj in ek. subst j2.
-            rewrite PTree.gss in hj2. injection hj2 as <-.
-            exists t. split; [exact hden|exact hga].
-          + rewrite PTree.gso in hj2 by (apply key_neq_of_eqb, ek).
-            exact (gk_gam _ _ _ hok2 _ _ hj2).
-        - exact (gk_memo _ _ _ hok2). }
-      destruct decl.(decl_body) as [b|] eqn:eb.
-      + destruct (new_entry X_type X b [] (NSCtx j) s) as [c s1] eqn:e1.
-        assert (hc : c = fst (new_entry X_type X b [] (NSCtx j) s)) by (rewrite e1; reflexivity).
-        assert (hs1 : s1 = snd (new_entry X_type X b [] (NSCtx j) s))
-          by (rewrite e1; reflexivity).
-        assert (hct : c.(c_term) = b) by (rewrite hc, new_entry_term; reflexivity).
-        destruct (new_entry_shape b [] (NSCtx j) s) as (q1 & q2 & q3 & _ & q5 & _).
-        destruct (gk_memo _ _ _ hok) as (hmi & hmo & hcodes & hokb).
-        pose proof hmi as (hf & _).
-        assert (hgrow : forall i e, PTree.get i (gc G) = Some e ->
-                   PTree.get i ((s1.(st_memo)).(m_codes)) = Some e).
-        { intros i e hi. rewrite hs1, new_entry_codes.
-          exact (memo_codes_set_mono _ _ i e hf (hcodes i e hi)). }
-        assert (hm1 : mok ((s1.(st_memo)).(m_codes)) s1).
-        { rewrite hs1. split; [exact (memo_inv_new_entry X_type X b [] (NSCtx j) s hmi)|].
-          split; [exact (new_entry_memo_ok X_type X b [] (NSCtx j) s hmo)|].
-          split; [intros i e hi; exact hi|].
-          intros i e hi. rewrite new_entry_codes in hi.
-          destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
-          - apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
-            injection hi as <-. cbn [ce_inst ce_term inst_code].
-            exact (const_instance_ok j decl b ed eb).
-          - rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi). }
-        pose (G1 := mkGhost (gm G) ((s1.(st_memo)).(m_codes))).
-        assert (hx1 : gext G G1) by (split; [intros a1 t1 h; exact h|exact hgrow]).
-        assert (hok1 : gok lo G1 s1).
-        { apply (gok_recode lo G s s1);
-            [exact hok|rewrite hs1; exact q1|rewrite hs1; exact q2|rewrite hs1; exact q5
-            |exact hgrow|exact hm1]. }
-        assert (hcok : cok G1 c).
-        { exists (mkEntry b [] (NSCtx j) (wf_term_univs X_type X (inst_code [] b))).
-          split.
-          - unfold G1. cbn [gc]. rewrite hc, hs1. apply new_entry_in_table.
-          - rewrite hc. apply new_entry_code_inv. }
-        apply (hmain G1 (CSusp [] 0 (S j) c) (lift (lvl - nctx + S j) 0 c.(c_term)) s1 hx1).
-        * unfold ctx_den. rewrite ed, eb, hct. reflexivity.
-        * constructor; [|exact hcok].
-          rewrite <- (subst_empty 0 (lift (lvl - nctx + S j) 0 c.(c_term))).
-          exact (g_susp_intro G1 [] 0 (S j) c.(c_term) [] (g_slots_nil G1) eq_refl).
-        * reflexivity.
-        * exact hok1.
-        * rewrite hs1. exact q2.
-        * rewrite hs1. exact q3.
-        * exact he.
-      + apply (hmain G (CDone (VNeu (NVar (nctx - S j)) [])) (tRel (lvl - S (nctx - S j))) s
-                 (gext_refl G)).
-        * unfold ctx_den. rewrite ed, eb. reflexivity.
-        * constructor. exact (g_VNeuVar G (nctx - S j) [] [] (Forall2_nil _)).
-        * reflexivity.
-        * exact hok.
-        * reflexivity.
-        * reflexivity.
-        * exact he.
-  Qed.
-
-  (** *** Reading a variable of the environment *)
-
-  Lemma env_var_sound lo G n e rs s x rs' s' tu :
-    gok lo G s -> roomn s <> 0 -> g_susp G e (tRel n) tu ->
-    env_var X_type X Γ nctx stress n e rs s = COk (x, rs', s') ->
-    rs' = rs /\ consv s s'
-    /\ exists G' t, gext G G' /\ gok lo G' s' /\ g_slot G' x t /\ cred tu t.
-  Proof.
-    intros hok hroom hsusp he. unfold env_var in he.
-    destruct (g_susp_inv _ _ _ _ hsusp) as [ts (h1 & h2 & ->)].
-    destruct (nth_error e.(ev_vals) n) as [x0|] eqn:en.
-    - inversion he; subst. clear he.
-      assert (hlt : n < #|e.(ev_vals)|) by (apply nth_error_Some_length in en; exact en).
-      destruct (g_slots_nth _ _ _ _ _ h1 en) as [t [hnt hgt]].
-      split; [reflexivity|]. split; [apply consv_refl|].
-      exists G, t. split; [apply gext_refl|]. split; [exact hok|].
-      split; [exact hgt|].
-      rewrite h2, (lift_rel_lt (lvl - nctx + e.(ev_goff)) n #|e.(ev_vals)|); [|lia].
-      rewrite (subst_rel_eq ts 0 n t n hnt eq_refl), lift0_id. apply cred_refl.
-    - destruct (gam X_type X Γ nctx stress (n - e.(ev_nvals) + e.(ev_goff)) rs s)
-        as [[[a1 rs1] s1]|w] eqn:eg; [|discriminate].
-      inversion he; subst. clear he.
-      destruct (gam_sound lo G (n - e.(ev_nvals) + e.(ev_goff)) rs s _ _ _ hok hroom eg)
-        as (-> & hcons & G' & t & hext & hok1 & hga & hred).
-      assert (hge : #|e.(ev_vals)| <= n) by (apply nth_error_None in en; exact en).
-      split; [reflexivity|]. split; [exact hcons|].
-      exists G', t. split; [exact hext|]. split; [exact hok1|].
-      split; [constructor; exact hga|].
-      rewrite h2.
-      rewrite (lift_rel_ge (lvl - nctx + e.(ev_goff)) n #|e.(ev_vals)|); [|lia].
-      rewrite (subst_rel_gt ts (lvl - nctx + e.(ev_goff) + n) 0);
-        [|rewrite (g_slots_length _ _ _ h1); lia].
-      rewrite (g_slots_length _ _ _ h1).
-      replace (lvl - nctx + e.(ev_goff) + n - #|e.(ev_vals)|)
-        with (lvl - nctx + (n - e.(ev_nvals) + e.(ev_goff))) by lia.
-      exact hred.
-  Qed.
-
-  (** *** The slot of an argument *)
-
-  Lemma arg_slot_sound lo G e c rs s x rs' s' tu :
-    gok lo G s -> roomn s <> 0 -> g_susp G e c.(c_term) tu -> cok G c ->
-    arg_slot X_type X Γ nctx stress e c rs s = COk (x, rs', s') ->
-    rs' = rs /\ consv s s'
-    /\ exists G' t, gext G G' /\ gok lo G' s' /\ g_slot G' x t /\ cred tu t.
-  Proof.
-    intros hok hroom hsusp hcok he. unfold arg_slot in he.
-    destruct (g_susp_inv _ _ _ _ hsusp) as [ts (h1 & h2 & ->)].
-    destruct e as [vals nvals goff]. cbn [ev_vals ev_nvals ev_goff] in *.
-    destruct (c_term c) eqn:ec;
-      [ refine (env_var_sound lo G n (mkEnv vals nvals goff) rs s x rs' s' _ hok hroom
-                  _ he);
-        exact hsusp | .. ].
-    all: inversion he; subst; clear he.
-    all: split; [reflexivity|]; split; [apply consv_refl|].
-    all: exists G; eexists; split; [apply gext_refl|]; split; [exact hok|];
-         split; [|apply cred_refl].
-    all: rewrite <- ec; constructor; [exact h1|try reflexivity; try assumption|exact hcok].
-  Qed.
-
-  (** *** Putting a slot in the heap *)
-
-  Lemma materialize_sound lo G x rs s a rs' s' t :
-    gok lo G s -> roomn s <> 0 -> g_slot G x t ->
-    materialize X_type X stress x rs s = COk (a, rs', s') ->
-    rs' = rs /\ consv s s' /\ exists G', gext G G' /\ gok lo G' s' /\ G' a = Some t.
-  Proof.
-    intros hok hroom hx he. unfold materialize in he.
-    destruct x as [a0|vals n o c].
-    - inversion hx; subst. inversion he; subst. clear he.
-      split; [reflexivity|]. split; [apply consv_refl|].
-      exists G. split; [apply gext_refl|]. split; [exact hok|assumption].
-    - inversion hx; subst. clear hx.
-      match goal with h1 : g_slots G vals ?ts0 |- _ =>
-        assert (hsusp : g_susp G (mkEnv vals #|vals| o) c.(c_term)
-                          (subst ts0 0 (lift (lvl - nctx + o) #|vals| c.(c_term))))
-          by (constructor; [exact h1|reflexivity])
-      end.
-      remember (subst _ 0 (lift (lvl - nctx + o) #|vals| c.(c_term))) as t0 eqn:ht0.
-      destruct (c_term c) eqn:ec.
-      all: try (assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
-                  by (constructor; [rewrite ec; exact hsusp|assumption]);
-                destruct (alloc_sound lo G _ _ rs s a rs' s' hok hroom hcl eq_refl he)
-                  as (-> & hc & G2 & hx1 & hx2 & hx3);
-                split; [reflexivity|]; split; [exact hc|];
-                exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3]).
-      + (* tSort *)
-        assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
-          by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
-        destruct (alloc_sound lo G _ _ rs s a rs' s' hok hroom hcl eq_refl he)
-          as (-> & hc & G2 & hx1 & hx2 & hx3).
-        split; [reflexivity|]; split; [exact hc|].
-        exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-      + (* tProd *)
-        assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
-          by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
-        destruct (alloc_sound lo G _ _ rs s a rs' s' hok hroom hcl eq_refl he)
-          as (-> & hc & G2 & hx1 & hx2 & hx3).
-        split; [reflexivity|]; split; [exact hc|].
-        exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-      + (* tLambda *)
-        assert (hcl : g_cell G (CDone (VLam (mkEnv vals #|vals| o) c)) t0)
-          by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
-        destruct (alloc_sound lo G _ _ rs s a rs' s' hok hroom hcl eq_refl he)
-          as (-> & hc & G2 & hx1 & hx2 & hx3).
-        split; [reflexivity|]; split; [exact hc|].
-        exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-      + (* tConst: the memo may add an entry first *)
-        match type of he with context [delta X_type X ?kn ?ui s] =>
-          destruct (delta X_type X kn ui s) as [[[c'|] s1]|w] eqn:ed
-        end.
-        * destruct (delta_gok lo G _ _ s _ s1 hok ed) as (hok1 & hc1 & hr1).
-          assert (hroom1 : roomn s1 <> 0) by (rewrite hr1; exact hroom).
-          assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
-            by (constructor; [rewrite ec; exact hsusp|assumption]).
-          destruct (alloc_sound lo G _ _ rs s1 a rs' s' hok1 hroom1 hcl eq_refl he)
-            as (-> & hc & G2 & hx1 & hx2 & hx3).
-          split; [reflexivity|]; split; [exact (consv_trans _ _ _ hc1 hc)|].
-          exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-        * destruct (delta_gok lo G _ _ s _ s1 hok ed) as (hok1 & hc1 & hr1).
-          assert (hroom1 : roomn s1 <> 0) by (rewrite hr1; exact hroom).
-          assert (hcl : g_cell G (CDone (VNeu (NConst (tConst k ui)) [])) t0).
-          { constructor. rewrite ht0, subst_lift_const.
-            exact (g_VNeuConst G (tConst k ui) [] [] (Forall2_nil _)). }
-          destruct (alloc_sound lo G _ _ rs s1 a rs' s' hok1 hroom1 hcl eq_refl he)
-            as (-> & hc & G2 & hx1 & hx2 & hx3).
-          split; [reflexivity|]; split; [exact (consv_trans _ _ _ hc1 hc)|].
-          exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-        * assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
-            by (constructor; [rewrite ec; exact hsusp|assumption]).
-          destruct (alloc_sound lo G _ _ rs s a rs' s' hok hroom hcl eq_refl he)
-            as (-> & hc & G2 & hx1 & hx2 & hx3).
-          split; [reflexivity|]; split; [exact hc|].
-          exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-      + (* tFix: a fixpoint value, or a suspension if the index is out of range *)
-        match goal with ec' : c_term c = tFix ?m ?i |- _ =>
-          destruct (nth_error m i) as [def|] eqn:enth
-        end.
-        * match goal with ec' : c_term c = tFix ?m ?i |- _ =>
-            assert (hcl : g_cell G (CDone (VFix (mkEnv vals #|vals| o) c i [])) t0)
-          end.
-          { constructor. change t0 with (mkApps t0 []).
-            eapply g_VFix; [exact ec| |assumption|constructor].
-            first [exact hsusp|rewrite <- ec; exact hsusp|rewrite ec in hsusp; exact hsusp]. }
-          destruct (alloc_sound lo G _ _ rs s a rs' s' hok hroom hcl eq_refl he)
-            as (-> & hc & G2 & hx1 & hx2 & hx3).
-          split; [reflexivity|]; split; [exact hc|].
-          exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-        * assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
-            by (constructor; [rewrite ec; exact hsusp|assumption]).
-          destruct (alloc_sound lo G _ _ rs s a rs' s' hok hroom hcl eq_refl he)
-            as (-> & hc & G2 & hx1 & hx2 & hx3).
-          split; [reflexivity|]; split; [exact hc|].
-          exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-      + (* tPrim *)
-        assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
-          by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
-        destruct (alloc_sound lo G _ _ rs s a rs' s' hok hroom hcl eq_refl he)
-          as (-> & hc & G2 & hx1 & hx2 & hx3).
-        split; [reflexivity|]; split; [exact hc|].
-        exists G2; split; [exact hx1|]; split; [exact hx2|exact hx3].
-  Qed.
-
-  (** *** Binding a slot to a binder *)
-
-  Lemma bind_sound lo G x body rs s y rs' s' t :
-    gok lo G s -> roomn s <> 0 -> g_slot G x t -> cok G body ->
-    bind X_type X stress x body rs s = COk (y, rs', s') ->
-    rs' = rs /\ consv s s' /\ exists G', gext G G' /\ gok lo G' s' /\ g_slot G' y t.
-  Proof.
-    intros hok hroom hx hcb he. unfold bind in he.
-    destruct x as [a0|vals n o c].
-    - inversion he; subst. clear he.
-      split; [reflexivity|]. split; [apply consv_refl|].
-      exists G. split; [apply gext_refl|]. split; [exact hok|exact hx].
-    - destruct (once_body body s) as [b s1] eqn:eo.
-      destruct (once_body_shape body s) as (q1 & q2 & q3 & _ & q5 & _).
-      assert (hs1 : s1 = snd (once_body body s)) by (rewrite eo; reflexivity).
-      assert (hok1 : gok lo G s1).
-      { destruct hcb as [e [hge hci]].
-        apply (gok_same lo G s);
-          [exact hok|rewrite hs1; exact q1|rewrite hs1; exact q2|rewrite hs1; exact q5|].
-        rewrite hs1. destruct (gk_memo _ _ _ hok) as (_ & _ & h3 & _).
-        exact (mok_once_body _ body e s (gk_memo _ _ _ hok) (h3 _ _ hge) hci). }
-      assert (hc1 : consv s s1)
-        by (apply consv_same; rewrite hs1; [exact q2|exact q3]).
-      assert (hroom1 : roomn s1 <> 0)
-        by (unfold roomn; rewrite hs1, q3; exact hroom).
-      clear hs1.
-      destruct b.
-      + inversion he; subst. clear he.
-        split; [reflexivity|]. split; [exact hc1|].
-        exists G. split; [apply gext_refl|]. split; [exact hok1|exact hx].
-      + destruct (materialize X_type X stress (SInl vals n o c) rs s1)
-          as [[[a1 rs1] s2]|w] eqn:em; [|discriminate].
-        destruct (materialize_sound lo G (SInl vals n o c) rs s1 a1 rs1 s2 t
-                    hok1 hroom1 hx em) as (-> & hc2 & G2 & hx1 & hx2 & hx3).
-        inversion he; subst. clear he.
-        split; [reflexivity|]. split; [exact (consv_trans _ _ _ hc1 hc2)|].
-        exists G2. split; [exact hx1|]. split; [exact hx2|constructor; exact hx3].
-  Qed.
-
-  (** *** A whole stack put in the heap *)
-
-  Lemma mat_all_sound : forall d lo G l ts rs s al rs' s',
-    gok lo G s -> fits s s' -> g_slots G l ts ->
-    mat_all X_type X stress d l rs s = COk (al, rs', s') ->
-    rs' = rs /\ consv s s' /\ exists G', gext G G' /\ gok lo G' s' /\ g_addrs G' al ts.
-  Proof.
-    intros d. induction d as [|k ih]; intros lo G l ts rs s al rs' s' hok hfits hl he;
-      destruct l as [|x l]; cbn [mat_all] in he.
-    1,3: inversion he; subst; clear he; inversion hl; subst;
-         (split; [reflexivity|]); (split; [apply consv_refl|]);
-         exists G; (split; [apply gext_refl|]); (split; [exact hok|constructor]).
-    - discriminate.
-    - inversion hl as [|x' l' tx ts0 hgx hgl hex hets]; subst; clear hl.
-      assert (hhs : hstep s s') by
-        exact (hstep_mat_all (FS k) (x :: l) rs s al rs' s' (gok_hok _ _ _ hok) he).
-      assert (hroom : roomn s <> 0) by exact (fits_room s s' hfits hhs).
-      destruct (materialize X_type X stress x (RSk l :: rs) s) as [[[a1 rs1] s1]|w] eqn:em;
-        [|discriminate].
-      destruct (materialize_sound lo G x (RSk l :: rs) s a1 rs1 s1 tx hok hroom hgx em)
-        as (-> & hc1 & G1 & hx1 & hx2 & hx3).
-      destruct (mat_all X_type X stress (k tt) l (RA a1 :: rs) s1)
-        as [[[al1 rs2] s2]|w] eqn:em2; [|discriminate].
-      destruct rs2 as [|r rs2t]; [discriminate he|].
-      destruct r as [a0| | | | | |]; try discriminate he.
-      injection he as hal hrs' hs'; subst al rs' s'.
-      destruct (ih tt lo G1 l ts0 (RA a1 :: rs) s1 al1 (RA a0 :: rs2t) s2
-                  hx2 (fits_next s s1 s2 hfits hc1)
-                  (g_slots_mono G G1 hx1 _ _ hgl) em2)
-        as (hr2 & hc2 & G2 & hy1 & hy2 & hy3).
-      inversion hr2; subst. clear hr2.
-      split; [reflexivity|]. split; [exact (consv_trans _ _ _ hc1 hc2)|].
-      exists G2. split; [exact (gext_trans _ _ _ hx1 hy1)|].
-      split; [exact hy2|].
-      constructor; [exact (hy1 _ _ hx3)|exact hy3].
   Qed.
 
   (** *** The write-back
@@ -1931,14 +970,6 @@ Section Eval.
     - intros b t0 ht0. rewrite he1. exact (gk_dom _ _ _ hok b t0 ht0).
     - intros j b hj. rewrite he4 in hj. exact (gk_gam _ _ _ hok j b hj).
     - exact (mok_memo _ s s' he5 (gk_memo _ _ _ hok)).
-  Qed.
-
-  (** Two shape facts: a [heap_upd] moves neither [st_next] nor [st_room], so it conserves
-    the budget and keeps whatever [fits] bound held. *)
-  Lemma consv_heap_upd a cl s s' : heap_upd a cl s = Some s' -> consv s s'.
-  Proof.
-    intros he. destruct (heap_upd_shape _ _ _ _ he) as (he1 & he2 & _).
-    apply consv_same; [exact he1|exact he2].
   Qed.
 
   (** *** Inversions of the ghost value reading, by case on the value shape *)
@@ -2041,6 +1072,1001 @@ Section Eval.
     exact (All2_red_list_set Σ ΓΔ l n t u hn h).
   Qed.
 
+  (** ** What a call does to the structures its caller holds
+
+    A call may collect, and a collection renames every address. So a call does not promise
+    that the roots come back unchanged or that the ghost map only grows. It promises
+    [gren G G' rs rs']: the code table only grows ([gcx]), and every root comes back as a root
+    of the same shape that stands, under the new ghost [G'], for what the old root stood for
+    under [G] ([gpres], one clause per shape, like [PCUICCallByNeedSoundGC.root_pres]).
+    Without a collection the roots come back as they went in and [G'] extends [G]
+    ([gren_ext]); a collection renames them ([collect_ghost]). *)
+
+  Definition gcx (G G' : ghost) : Prop :=
+    forall i e, PTree.get i (gc G) = Some e -> PTree.get i (gc G') = Some e.
+
+  (** An environment keeps its counts and its slots keep their readings. *)
+  Definition genv (G G' : ghost) (e e' : cbn_env) : Prop :=
+    e'.(ev_nvals) = e.(ev_nvals) /\ e'.(ev_goff) = e.(ev_goff)
+    /\ forall ts, g_slots G e.(ev_vals) ts -> g_slots G' e'.(ev_vals) ts.
+
+  Definition gpres (G G' : ghost) (r r' : root) : Prop :=
+    match r, r' with
+    | RA a, RA a' => forall t, G a = Some t -> G' a' = Some t
+    | RSl x, RSl x' => forall t, g_slot G x t -> g_slot G' x' t
+    | RE e, RE e' => genv G G' e e'
+    | RV v, RV v' => forall t, g_value G v t -> g_value G' v' t
+    | RSk l, RSk l' => forall ts, g_slots G l ts -> g_slots G' l' ts
+    | RSp l, RSp l' => forall ts, g_addrs G l ts -> g_addrs G' l' ts
+    | RC cl, RC cl' => forall t, g_cell G cl t -> g_cell G' cl' t
+    | _, _ => False
+    end.
+
+  Definition gren (G G' : ghost) (rs rs' : list root) : Prop :=
+    gcx G G' /\ Forall2 (gpres G G') rs rs'.
+
+  Lemma cok_gcx G G' (h : gcx G G') c : cok G c -> cok G' c.
+  Proof. intros [e [he hi]]. exists e. split; [exact (h _ _ he)|exact hi]. Qed.
+
+  Lemma cok_eqc G G' c : gc G' = gc G -> cok G c -> cok G' c.
+  Proof. intros he [e [h1 h2]]. exists e. rewrite he. split; assumption. Qed.
+
+  Lemma genv_trans G1 G2 G3 e1 e2 e3 :
+    genv G1 G2 e1 e2 -> genv G2 G3 e2 e3 -> genv G1 G3 e1 e3.
+  Proof.
+    intros (a1 & b1 & c1) (a2 & b2 & c2). split; [congruence|]. split; [congruence|].
+    intros ts h. exact (c2 _ (c1 _ h)).
+  Qed.
+
+  Lemma genv_ext_r G G1 G2 e e' : genv G G1 e e' -> gext G1 G2 -> genv G G2 e e'.
+  Proof.
+    intros (a & b & c) hx. split; [exact a|]. split; [exact b|].
+    intros ts h. exact (g_slots_mono _ _ hx _ _ (c _ h)).
+  Qed.
+
+  Lemma genv_susp G G' e e' t u : genv G G' e e' -> g_susp G e t u -> g_susp G' e' t u.
+  Proof.
+    intros (h1 & h2 & h3) hs. destruct (g_susp_inv _ _ _ _ hs) as (ts & hts & hnv & ->).
+    rewrite <- h1, <- h2. apply g_susp_of_slots; [exact (h3 _ hts)|].
+    rewrite h1, hnv, <- (g_slots_length _ _ _ hts), (g_slots_length _ _ _ (h3 _ hts)).
+    reflexivity.
+  Qed.
+
+  Lemma gpres_ext G G' (h : gext G G') r : gpres G G' r r.
+  Proof.
+    destruct r; cbn [gpres].
+    - intros t ht. exact (h _ _ ht).
+    - intros t ht. exact (g_slot_mono _ _ h _ _ ht).
+    - split; [reflexivity|]. split; [reflexivity|].
+      intros ts ht. exact (g_slots_mono _ _ h _ _ ht).
+    - intros t ht. exact (g_value_mono _ _ h _ _ ht).
+    - intros ts ht. exact (g_slots_mono _ _ h _ _ ht).
+    - intros ts ht. exact (g_addrs_mono _ _ h _ _ ht).
+    - intros t ht. exact (g_cell_mono _ _ h _ _ ht).
+  Qed.
+
+  Lemma gpres_trans G1 G2 G3 r1 r2 r3 :
+    gpres G1 G2 r1 r2 -> gpres G2 G3 r2 r3 -> gpres G1 G3 r1 r3.
+  Proof.
+    intros h1 h2.
+    destruct r1, r2; cbn [gpres] in h1; try contradiction;
+      destruct r3; cbn [gpres] in h2 |- *; try contradiction.
+    all: first [ exact (genv_trans _ _ _ _ _ _ h1 h2)
+               | let hx := fresh "hx" in intros ? hx; exact (h2 _ (h1 _ hx)) ].
+  Qed.
+
+  Lemma gpres_r_ext G G1 G2 r r' : gpres G G1 r r' -> gext G1 G2 -> gpres G G2 r r'.
+  Proof. intros h hx. exact (gpres_trans _ _ _ _ _ _ h (gpres_ext _ _ hx r')). Qed.
+
+  Lemma Forall2_gpres_r_ext G G1 G2 l l' :
+    Forall2 (gpres G G1) l l' -> gext G1 G2 -> Forall2 (gpres G G2) l l'.
+  Proof.
+    intros h hx. induction h as [|r r' l l' hp hl ih]; constructor;
+      [exact (gpres_r_ext _ _ _ _ _ hp hx)|exact ih].
+  Qed.
+
+  Lemma gren_ext G G' rs : gext G G' -> gren G G' rs rs.
+  Proof.
+    intros h. split; [exact (gx_codes h)|].
+    induction rs as [|r rs ih]; constructor; [exact (gpres_ext _ _ h r)|exact ih].
+  Qed.
+
+  Lemma gren_refl G rs : gren G G rs rs.
+  Proof. exact (gren_ext G G rs (gext_refl G)). Qed.
+
+  Lemma gren_trans G1 G2 G3 rs1 rs2 rs3 :
+    gren G1 G2 rs1 rs2 -> gren G2 G3 rs2 rs3 -> gren G1 G3 rs1 rs3.
+  Proof.
+    intros [hc1 hf1] [hc2 hf2]. split; [intros i e hi; exact (hc2 _ _ (hc1 _ _ hi))|].
+    revert rs3 hf2. induction hf1 as [|r1 r2 l1 l2 hp hl ih]; intros rs3 hf2.
+    - inversion hf2; subst. constructor.
+    - inversion hf2 as [|r2' r3 l2' l3 hp2 hl2]; subst. constructor.
+      + exact (gpres_trans _ _ _ _ _ _ hp hp2).
+      + exact (ih _ hl2).
+  Qed.
+
+  Lemma gren_cons G G' r rs r' rs' :
+    gren G G' (r :: rs) (r' :: rs') -> gpres G G' r r' /\ gren G G' rs rs'.
+  Proof. intros [hc hf]. inversion hf; subst. split; [assumption|split; assumption]. Qed.
+
+  Lemma gren_cok G G' rs rs' c : gren G G' rs rs' -> cok G c -> cok G' c.
+  Proof. intros [hc _]. exact (cok_gcx _ _ hc c). Qed.
+
+  (** ** A collection, against the ghost map
+
+    The collector's walk ([gc_copy]) is followed with a second ghost [Gn] for the new heap,
+    built as the walk goes: when the cell at old address [a] is copied to the new address
+    [g_next], [Gn] is extended at that fresh address by [G a]. So nothing about the map the
+    collector builds needs to be recovered afterwards, and no injectivity is needed: every
+    forwarding pointer [a ↦ b] of the old heap has [Gn b = G a] ([gg_fwd]), which is all
+    the renaming of a reading looks at, and every cell of the new heap is the renaming of
+    the old cell it was copied from, so it stands for what that cell stood for
+    ([gg_cells]). A [CBusy] cell is copied as [CBusy]. *)
+
+  Section GhostCollect.
+    Context (lo : positive) (G : ghost) (s : cbn_state) (hok : gok lo G s).
+
+    Record gcg (Gn : ghost) (g : gc_state) : Prop := mkGcg {
+      gg_inv : gc_inv nctx s.(st_heap) s.(st_next) g;
+      gg_codes : gc Gn = gc G;
+      gg_fwd : forall x b t, bh_get x g.(g_old) = Some (CFwd b) -> G x = Some t ->
+        Gn b = Some t;
+      gg_cells : forall b cl, bh_get b g.(g_heap) = Some cl ->
+        exists t, Gn b = Some t /\ (cl = CBusy \/ exists u, g_cell Gn cl u /\ cred t u);
+      gg_dom : forall b t, Gn b = Some t ->
+        (s.(st_next) <= ha_p b)%positive /\ (ha_p b < g.(g_next))%positive }.
+
+    (** What the walk asks of the address map it threads through the renamings. *)
+    Definition cpg (cp : haddr -> gc_state -> cbn_res (haddr * gc_state)) : Prop :=
+      forall a g a' g' Gn, gcg Gn g -> cp a g = COk (a', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn' /\ (forall t, G a = Some t -> Gn' a' = Some t).
+
+    Section Walk.
+      Context (cp : haddr -> gc_state -> cbn_res (haddr * gc_state)) (hcp : cpg cp).
+
+      Lemma rn_addrs_g : forall l g l' g' Gn, gcg Gn g -> rn_addrs cp l g = COk (l', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn'
+          /\ (forall ts, g_addrs G l ts -> g_addrs Gn' l' ts).
+      Proof.
+        induction l as [|a l ih]; intros g l' g' Gn hg he; simpl in he.
+        - inversion he; subst; clear he.
+          exists Gn. split; [exact hg|]. split; [apply gext_refl|].
+          intros ts h. inversion h; subst. constructor.
+        - destruct (cp a g) as [[b g1]|w] eqn:e1; [|discriminate].
+          destruct (rn_addrs cp l g1) as [[l2 g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (hcp _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & ha1).
+          destruct (ih _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hl2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          intros ts h. inversion h as [|a0 t l0 ts0 hat hl]; subst.
+          constructor; [exact (hx2 _ _ (ha1 _ hat))|exact (hl2 _ hl)].
+      Qed.
+
+      Lemma rn_slot_g : forall x g x' g' Gn, gcg Gn g -> rn_slot cp x g = COk (x', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn' /\ (forall t, g_slot G x t -> g_slot Gn' x' t).
+      Proof.
+        intros x. induction x as [a|vs n o c ihvs] using slot_ind'; intros g x' g' Gn hg he.
+        - simpl in he. destruct (cp a g) as [[b g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (hcp _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & ha1).
+          exists Gn1. split; [exact hg1|]. split; [exact hx1|].
+          intros t h. constructor. exact (ha1 _ (g_slot_addr_inv _ _ _ h)).
+        - rewrite rn_slot_SInl in he.
+          destruct (rn_slots cp vs g) as [[vs' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          assert (hl : exists Gn', gcg Gn' g' /\ gext Gn Gn'
+                    /\ (forall ts, g_slots G vs ts -> g_slots Gn' vs' ts)).
+          { revert g vs' g' Gn hg e1.
+            induction ihvs as [|y vs hy hvs ihl]; intros g vs' g1 Gn hg e1; simpl in e1.
+            - inversion e1; subst; clear e1.
+              exists Gn. split; [exact hg|]. split; [apply gext_refl|].
+              intros ts h. inversion h; subst. constructor.
+            - destruct (rn_slot cp y g) as [[y' ga]|wa] eqn:ea; [|discriminate].
+              destruct (rn_slots cp vs ga) as [[vs2 gb]|wb] eqn:eb; [|discriminate].
+              inversion e1; subst; clear e1.
+              destruct (hy _ _ _ _ hg ea) as (Gna & hga & hxa & hra).
+              destruct (ihl _ _ _ _ hga eb) as (Gnb & hgb & hxb & hrb).
+              exists Gnb. split; [exact hgb|]. split; [exact (gext_trans _ _ _ hxa hxb)|].
+              intros ts h. inversion h as [|y0 l0 t ts0 hy1 hl1]; subst.
+              constructor; [exact (g_slot_mono _ _ hxb _ _ (hra _ hy1))|exact (hrb _ hl1)]. }
+          destruct hl as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+          intros t h. inversion h as [|vals nvals goff c0 ts hts hnv hcok]; subst.
+          rewrite <- (rn_slots_length _ _ _ _ _ e1).
+          apply g_slot_inl; [exact (hr _ hts)|reflexivity|].
+          exact (cok_eqc _ _ _ (gg_codes _ _ hg') hcok).
+      Qed.
+
+      Lemma rn_slots_g : forall l g l' g' Gn, gcg Gn g -> rn_slots cp l g = COk (l', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn'
+          /\ (forall ts, g_slots G l ts -> g_slots Gn' l' ts).
+      Proof.
+        induction l as [|y l ih]; intros g l' g' Gn hg he; simpl in he.
+        - inversion he; subst; clear he.
+          exists Gn. split; [exact hg|]. split; [apply gext_refl|].
+          intros ts h. inversion h; subst. constructor.
+        - destruct (rn_slot cp y g) as [[y' g1]|w] eqn:e1; [|discriminate].
+          destruct (rn_slots cp l g1) as [[l2 g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_slot_g _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          destruct (ih _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hr2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          intros ts h. inversion h as [|y0 l0 t ts0 hy1 hl1]; subst.
+          constructor; [exact (g_slot_mono _ _ hx2 _ _ (hr1 _ hy1))|exact (hr2 _ hl1)].
+      Qed.
+
+      Lemma rn_env_g e g e' g' Gn : gcg Gn g -> rn_env cp e g = COk (e', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn' /\ genv G Gn' e e'.
+      Proof.
+        destruct e as [vals n o]. intros hg he.
+        unfold rn_env in he. cbn [ev_vals ev_nvals ev_goff] in he.
+        destruct (rn_slots cp vals g) as [[vs' g1]|w] eqn:e1; [|discriminate].
+        inversion he; subst; clear he.
+        destruct (rn_slots_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+        exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+        split; [reflexivity|]. split; [reflexivity|]. exact hr.
+      Qed.
+
+      Lemma rn_value_g v g v' g' Gn : gcg Gn g -> rn_value cp v g = COk (v', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn' /\ (forall t, g_value G v t -> g_value Gn' v' t).
+      Proof.
+        destruct v as [hd sp|e c|e c i sp|e c i sp|hd sp|e c|e c sp]; intros hg he;
+          unfold rn_value in he.
+        - (* VCon *)
+          destruct (rn_addrs cp sp g) as [[sp' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_addrs_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+          intros t h. inversion h; subst. constructor. apply hr. assumption.
+        - (* VLam *)
+          destruct (rn_env cp e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_env_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+          intros t h. inversion h; subst. constructor.
+          + exact (genv_susp _ _ _ _ _ _ hr ltac:(eassumption)).
+          + exact (cok_eqc _ _ _ (gg_codes _ _ hg') ltac:(eassumption)).
+        - (* VFix *)
+          destruct (rn_env cp e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+          destruct (rn_addrs cp sp g1) as [[sp' g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_env_g _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          destruct (rn_addrs_g _ _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hr2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          intros t h. inversion h; subst.
+          eapply g_VFix; [eassumption| | |apply hr2; assumption].
+          + exact (genv_susp _ _ _ _ _ _ (genv_ext_r _ _ _ _ _ hr1 hx2) ltac:(eassumption)).
+          + exact (cok_eqc _ _ _ (gg_codes _ _ hg2) ltac:(eassumption)).
+        - (* VStuckFix *)
+          destruct (rn_env cp e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+          destruct (rn_addrs cp sp g1) as [[sp' g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_env_g _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          destruct (rn_addrs_g _ _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hr2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          intros t h. inversion h; subst.
+          eapply g_VStuckFix; [eassumption| | |apply hr2; assumption].
+          + exact (genv_susp _ _ _ _ _ _ (genv_ext_r _ _ _ _ _ hr1 hx2) ltac:(eassumption)).
+          + exact (cok_eqc _ _ _ (gg_codes _ _ hg2) ltac:(eassumption)).
+        - (* VNeu *)
+          destruct (rn_addrs cp sp g) as [[sp' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_addrs_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+          intros t h. inversion h; subst; constructor; apply hr; assumption.
+        - (* VOpen *)
+          destruct (rn_env cp e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_env_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+          intros t h. inversion h; subst. constructor.
+          + exact (genv_susp _ _ _ _ _ _ hr ltac:(eassumption)).
+          + exact (cok_eqc _ _ _ (gg_codes _ _ hg') ltac:(eassumption)).
+        - (* VStuck *)
+          destruct (rn_env cp e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+          destruct (rn_addrs cp sp g1) as [[sp' g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_env_g _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          destruct (rn_addrs_g _ _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hr2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          intros t h. inversion h; subst.
+          eapply g_VStuck; [| |apply hr2; assumption].
+          + exact (genv_susp _ _ _ _ _ _ (genv_ext_r _ _ _ _ _ hr1 hx2) ltac:(eassumption)).
+          + exact (cok_eqc _ _ _ (gg_codes _ _ hg2) ltac:(eassumption)).
+      Qed.
+
+      Lemma rn_cell_g cl g cl' g' Gn : gcg Gn g -> rn_cell cp cl g = COk (cl', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn' /\ (cl = CBusy -> cl' = CBusy)
+          /\ (forall t, g_cell G cl t -> g_cell Gn' cl' t).
+      Proof.
+        destruct cl as [vals n o c|v| |b]; intros hg he; unfold rn_cell in he.
+        - destruct (rn_slots cp vals g) as [[vs' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_slots_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+          split; [intros hb; discriminate hb|].
+          intros t h. pose proof (g_cell_susp_inv _ _ _ _ _ _ h) as hs.
+          pose proof (g_cell_susp_cok _ _ _ _ _ _ h) as hc.
+          constructor.
+          + refine (genv_susp G Gn' (mkEnv vals n o) (mkEnv vs' n o) _ _ _ hs).
+            split; [reflexivity|]. split; [reflexivity|]. exact hr.
+          + exact (cok_eqc _ _ _ (gg_codes _ _ hg') hc).
+        - destruct (rn_value cp v g) as [[v' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_value_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+          split; [intros hb; discriminate hb|].
+          intros t h. constructor. exact (hr _ (g_cell_done_inv _ _ _ h)).
+        - inversion he; subst; clear he.
+          exists Gn. split; [exact hg|]. split; [apply gext_refl|].
+          split; [reflexivity|]. intros t h. inversion h.
+        - destruct (cp b g) as [[b' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (hcp _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & _).
+          exists Gn1. split; [exact hg1|]. split; [exact hx1|].
+          split; [intros hb; discriminate hb|]. intros t h. inversion h.
+      Qed.
+
+      Lemma rn_root_g r g r' g' Gn : gcg Gn g -> rn_root cp r g = COk (r', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn' /\ gpres G Gn' r r'.
+      Proof.
+        destruct r as [a|x|e|v|l|l|cl]; intros hg he; unfold rn_root in he.
+        - destruct (cp a g) as [[b g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (hcp _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & ha1).
+          exists Gn1. split; [exact hg1|]. split; [exact hx1|]. exact ha1.
+        - destruct (rn_slot cp x g) as [[x' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_slot_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|]. exact hr.
+        - destruct (rn_env cp e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_env_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|]. exact hr.
+        - destruct (rn_value cp v g) as [[v' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_value_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|]. exact hr.
+        - destruct (rn_slots cp l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_slots_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|]. exact hr.
+        - destruct (rn_addrs cp l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_addrs_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|]. exact hr.
+        - destruct (rn_cell cp cl g) as [[cl' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_cell_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & _ & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|]. exact hr.
+      Qed.
+
+      Lemma rn_roots_g : forall l g l' g' Gn, gcg Gn g -> rn_roots cp l g = COk (l', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn' /\ Forall2 (gpres G Gn') l l'.
+      Proof.
+        induction l as [|r l ih]; intros g l' g' Gn hg he; simpl in he.
+        - inversion he; subst; clear he.
+          exists Gn. split; [exact hg|]. split; [apply gext_refl|]. constructor.
+        - destruct (rn_root cp r g) as [[r' g1]|w] eqn:e1; [|discriminate].
+          destruct (rn_roots cp l g1) as [[l2 g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_root_g _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hp1).
+          destruct (ih _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hp2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          constructor; [exact (gpres_r_ext _ _ _ _ _ hp1 hx2)|exact hp2].
+      Qed.
+
+      Lemma rn_tree'_g : forall m g m' g' Gn, gcg Gn g -> rn_tree' cp m g = COk (m', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn'
+          /\ (forall p a', PTree.get' p m' = Some a' ->
+                exists a, PTree.get' p m = Some a
+                  /\ (forall t, G a = Some t -> Gn' a' = Some t)).
+      Proof.
+        induction m as [r ihr|x|x r ihr|l ihl|l ihl r ihr|l ihl x|l ihl x r ihr];
+          intros g m' g' Gn hg he; simpl in he.
+        - (* Node001 *)
+          destruct (rn_tree' cp r g) as [[r' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (ihr _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          exists Gn1. split; [exact hg1|]. split; [exact hx1|].
+          intros p b hb. destruct p as [q|q|]; simpl in hb |- *; try discriminate.
+          exact (hr1 _ _ hb).
+        - (* Node010 *)
+          destruct (cp x g) as [[x' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (hcp _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & ha1).
+          exists Gn1. split; [exact hg1|]. split; [exact hx1|].
+          intros p b hb. destruct p as [q|q|]; simpl in hb |- *; try discriminate.
+          injection hb as <-. exists x. split; [reflexivity|exact ha1].
+        - (* Node011 *)
+          destruct (cp x g) as [[x' g1]|w] eqn:e1; [|discriminate].
+          destruct (rn_tree' cp r g1) as [[r' g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (hcp _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & ha1).
+          destruct (ihr _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hr2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          intros p b hb. destruct p as [q|q|]; simpl in hb |- *; try discriminate.
+          + exact (hr2 _ _ hb).
+          + injection hb as <-. exists x. split; [reflexivity|].
+            intros t ht. exact (hx2 _ _ (ha1 _ ht)).
+        - (* Node100 *)
+          destruct (rn_tree' cp l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (ihl _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          exists Gn1. split; [exact hg1|]. split; [exact hx1|].
+          intros p b hb. destruct p as [q|q|]; simpl in hb |- *; try discriminate.
+          exact (hr1 _ _ hb).
+        - (* Node101 *)
+          destruct (rn_tree' cp l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+          destruct (rn_tree' cp r g1) as [[r' g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (ihl _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          destruct (ihr _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hr2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          intros p b hb. destruct p as [q|q|]; simpl in hb |- *; try discriminate.
+          + exact (hr2 _ _ hb).
+          + destruct (hr1 _ _ hb) as [a [ha hr]]. exists a. split; [exact ha|].
+            intros t ht. exact (hx2 _ _ (hr _ ht)).
+        - (* Node110 *)
+          destruct (rn_tree' cp l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+          destruct (cp x g1) as [[x' g2]|w] eqn:e2; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (ihl _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          destruct (hcp _ _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & ha2).
+          exists Gn2. split; [exact hg2|]. split; [exact (gext_trans _ _ _ hx1 hx2)|].
+          intros p b hb. destruct p as [q|q|]; simpl in hb |- *; try discriminate.
+          + destruct (hr1 _ _ hb) as [a [ha hr]]. exists a. split; [exact ha|].
+            intros t ht. exact (hx2 _ _ (hr _ ht)).
+          + injection hb as <-. exists x. split; [reflexivity|exact ha2].
+        - (* Node111 *)
+          destruct (rn_tree' cp l g) as [[l' g1]|w] eqn:e1; [|discriminate].
+          destruct (cp x g1) as [[x' g2]|w] eqn:e2; [|discriminate].
+          destruct (rn_tree' cp r g2) as [[r' g3]|w] eqn:e3; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (ihl _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hr1).
+          destruct (hcp _ _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & ha2).
+          destruct (ihr _ _ _ _ hg2 e3) as (Gn3 & hg3 & hx3 & hr3).
+          exists Gn3. split; [exact hg3|].
+          split; [exact (gext_trans _ _ _ hx1 (gext_trans _ _ _ hx2 hx3))|].
+          intros p b hb. destruct p as [q|q|]; simpl in hb |- *.
+          + exact (hr3 _ _ hb).
+          + destruct (hr1 _ _ hb) as [a [ha hr]]. exists a. split; [exact ha|].
+            intros t ht. exact (hx3 _ _ (hx2 _ _ (hr _ ht))).
+          + injection hb as <-. exists x. split; [reflexivity|].
+            intros t ht. exact (hx3 _ _ (ha2 _ ht)).
+      Qed.
+
+      Lemma rn_ptree_g m g m' g' Gn : gcg Gn g -> rn_ptree cp m g = COk (m', g') ->
+        exists Gn', gcg Gn' g' /\ gext Gn Gn'
+          /\ (forall p a', PTree.get p m' = Some a' ->
+                exists a, PTree.get p m = Some a
+                  /\ (forall t, G a = Some t -> Gn' a' = Some t)).
+      Proof.
+        destruct m as [|m]; intros hg he; unfold rn_ptree in he.
+        - inversion he; subst; clear he.
+          exists Gn. split; [exact hg|]. split; [apply gext_refl|].
+          intros p b hb. discriminate hb.
+        - destruct (rn_tree' cp m g) as [[m2 g1]|w] eqn:e1; [|discriminate].
+          inversion he; subst; clear he.
+          destruct (rn_tree'_g _ _ _ _ _ hg e1) as (Gn' & hg' & hx' & hr).
+          exists Gn'. split; [exact hg'|]. split; [exact hx'|].
+          intros p b hb. exact (hr p b hb).
+      Qed.
+    End Walk.
+
+    (** One copied cell: its children are renamed, the copy goes to the fresh address
+      [g_next], and the ghost of the new heap is extended there by the old ghost term. *)
+    Lemma gc_copy_g_write k a g cl cl1 g1 old Gn :
+      cpg (gc_copy k) -> gcg Gn g -> bh_get a g.(g_old) = Some cl -> cell_fwd cl = None ->
+      rn_cell (gc_copy k) cl g = COk (cl1, g1) ->
+      bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old) = Some old ->
+      gc_inv nctx s.(st_heap) s.(st_next)
+        (mkGc old (bh_cons cl1 g1.(g_heap)) (Pos.succ g1.(g_next))) ->
+      exists Gn', gcg Gn' (mkGc old (bh_cons cl1 g1.(g_heap)) (Pos.succ g1.(g_next)))
+        /\ gext Gn Gn' /\ (forall t, G a = Some t -> Gn' (HAddr g1.(g_next)) = Some t).
+    Proof.
+      intros hk hg ha hf e1 e2 hinv2.
+      assert (hcl : bh_get a s.(st_heap) = Some cl)
+        by exact (inv_keep _ _ _ _ (gg_inv _ _ hg) _ _ ha hf).
+      destruct (gk_cells _ _ _ hok a cl hcl) as [t0 [hGa hc0]].
+      destruct (rn_cell_g _ hk _ _ _ _ _ hg e1) as (Gn1 & hg1 & hx1 & hbusy & hr1).
+      pose proof (inv_heap _ _ _ _ (gg_inv _ _ hg1)) as hok1.
+      pose (Gn' := mkGhost (fun b => if haddr_eqb b (HAddr g1.(g_next)) then Some t0 else Gn1 b)
+                     (gc Gn1)).
+      assert (hfresh : forall b t, Gn1 b = Some t -> b <> HAddr g1.(g_next)).
+      { intros b t hb ->. destruct (gg_dom _ _ hg1 _ _ hb) as [_ hlt]. cbn in hlt. lia. }
+      assert (hx2 : gext Gn1 Gn').
+      { split; [|intros i e hi; exact hi].
+        intros b t hb. unfold Gn'. cbn [gm].
+        destruct (haddr_eqb b (HAddr g1.(g_next))) eqn:eb; [|exact hb].
+        apply haddr_eqb_eq in eb. exfalso. exact (hfresh _ _ hb eb). }
+      assert (hnew : Gn' (HAddr g1.(g_next)) = Some t0).
+      { unfold Gn'. cbn [gm]. rewrite haddr_eqb_refl. reflexivity. }
+      exists Gn'. split; [|split; [exact (gext_trans _ _ _ hx1 hx2)|]].
+      2: { intros t ht. rewrite hGa in ht. injection ht as <-. exact hnew. }
+      split; cbn [g_old g_heap g_next].
+      - exact hinv2.
+      - unfold Gn'. cbn [gc]. exact (gg_codes _ _ hg1).
+      - intros x b t hx ht. destruct (haddr_dec x a) as [->|hne].
+        + rewrite (bh_get_upd_same _ _ _ _ e2) in hx. injection hx as <-.
+          rewrite hGa in ht. injection ht as <-. exact hnew.
+        + rewrite (bh_get_upd_other _ _ _ _ _ e2 hne) in hx.
+          exact (hx2 _ _ (gg_fwd _ _ hg1 _ _ _ hx ht)).
+      - intros b cl' hb. destruct (haddr_dec b (HAddr g1.(g_next))) as [->|hne].
+        + rewrite (bh_get_cons_new _ _ _ _ hok1) in hb. injection hb as <-.
+          exists t0. split; [exact hnew|].
+          destruct hc0 as [->|[u [hu hred]]]; [left; exact (hbusy eq_refl)|].
+          right. exists u. split; [exact (g_cell_mono _ _ hx2 _ _ (hr1 _ hu))|exact hred].
+        + rewrite (bh_get_cons_old _ _ _ _ _ hok1 hne) in hb.
+          destruct (gg_cells _ _ hg1 _ _ hb) as [t [ht hc]].
+          exists t. split; [exact (hx2 _ _ ht)|].
+          destruct hc as [hb'|[u [hu hred]]]; [left; exact hb'|].
+          right. exists u. split; [exact (g_cell_mono _ _ hx2 _ _ hu)|exact hred].
+      - intros b t hb. unfold Gn' in hb. cbn [gm] in hb.
+        destruct (haddr_eqb b (HAddr g1.(g_next))) eqn:eb.
+        + apply haddr_eqb_eq in eb. subst b. cbn.
+          split; [exact (bh_ok_le _ _ _ hok1)|lia].
+        + destruct (gg_dom _ _ hg1 _ _ hb) as [h1 h2]. split; [exact h1|]. cbn. lia.
+    Qed.
+
+    Lemma gc_copy_g : forall f, cpg (gc_copy f).
+    Proof.
+      intros f. induction f as [|k ih]; intros a g a' g' Gn hg he.
+      - rewrite gc_copy_FO in he.
+        destruct (bh_get a g.(g_old)) as [cl|] eqn:ea; [|discriminate].
+        destruct cl as [vals n o c|v| |b]; try discriminate.
+        inversion he; subst; clear he.
+        exists Gn. split; [exact hg|]. split; [apply gext_refl|].
+        intros t ht. exact (gg_fwd _ _ hg _ _ _ ea ht).
+      - pose proof he as he0.
+        destruct (gc_copy_ok nctx s.(st_heap) s.(st_next) (FS k) a g a' g' (gg_inv _ _ hg) he0)
+          as [hst _].
+        rewrite gc_copy_FS in he.
+        destruct (bh_get a g.(g_old)) as [cl|] eqn:ea; [|discriminate].
+        destruct cl as [vals n o c|v| |b].
+        + destruct (rn_cell (gc_copy (k tt)) (CSusp vals n o c) g) as [[cl1 g1]|w] eqn:e1;
+            [|discriminate].
+          destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
+            [|discriminate].
+          inversion he; subst; clear he.
+          exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
+                   (step_inv _ _ _ _ _ hst)).
+        + destruct (rn_cell (gc_copy (k tt)) (CDone v) g) as [[cl1 g1]|w] eqn:e1;
+            [|discriminate].
+          destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
+            [|discriminate].
+          inversion he; subst; clear he.
+          exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
+                   (step_inv _ _ _ _ _ hst)).
+        + destruct (rn_cell (gc_copy (k tt)) CBusy g) as [[cl1 g1]|w] eqn:e1; [|discriminate].
+          destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
+            [|discriminate].
+          inversion he; subst; clear he.
+          exact (gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
+                   (step_inv _ _ _ _ _ hst)).
+        + inversion he; subst; clear he.
+          exists Gn. split; [exact hg|]. split; [apply gext_refl|].
+          intros t ht. exact (gg_fwd _ _ hg _ _ _ ea ht).
+    Qed.
+
+    (** The ghost invariant survives a collection: the state after it is [gok] at the old
+      [st_next] for the ghost of the new heap, and every root comes back renamed with the
+      reading it had. *)
+    Lemma collect_ghost rs rs' s' :
+      collect rs s = COk (rs', s') ->
+      exists G', gc G' = gc G /\ Forall2 (gpres G G') rs rs' /\ gok s.(st_next) G' s'.
+    Proof.
+      intros he.
+      destruct (collect_sound nctx rs s rs' s' (gk_nofwd _ _ _ hok) he)
+        as (hso & hnf & _ & _ & _ & _).
+      rewrite collect_eq in he.
+      destruct (rn_ptree (gc_copy (fuel_of_pos s.(st_next) (fun _ => FO))) s.(st_gam)
+                  (mkGc s.(st_heap) (bh_holes s.(st_next)) s.(st_next))) as [[gm1 g1]|w1] eqn:e1;
+        [|discriminate].
+      destruct (rn_roots (gc_copy (fuel_of_pos s.(st_next) (fun _ => FO))) rs g1)
+        as [[rs2 g2]|w2] eqn:e2; [|discriminate].
+      inversion he; subst; clear he.
+      assert (hg0 : gcg (mkGhost (fun _ => None) (gc G))
+                      (mkGc s.(st_heap) (bh_holes s.(st_next)) s.(st_next))).
+      { split; cbn [g_old g_heap g_next gc gm].
+        - constructor; cbn.
+          + intros a cl hc _. exact hc.
+          + intros a a' hc. destruct (gk_nofwd _ _ _ hok _ _ hc).
+          + apply bh_ok_holes.
+          + intros b cl hc. rewrite bh_get_holes in hc. discriminate.
+          + intros b b' hc. rewrite bh_get_holes in hc. discriminate.
+        - reflexivity.
+        - intros x b t hx _. destruct (gk_nofwd _ _ _ hok _ _ hx).
+        - intros b cl hc. rewrite bh_get_holes in hc. discriminate.
+        - intros b t hb. discriminate hb. }
+      destruct (rn_ptree_g _ (gc_copy_g _) _ _ _ _ _ hg0 e1) as (Gn1 & hg1 & hx1 & hgam).
+      destruct (rn_roots_g _ (gc_copy_g _) _ _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hroots).
+      exists Gn2. split; [exact (gg_codes _ _ hg2)|]. split; [exact hroots|].
+      split.
+      - exact hso.
+      - exact hnf.
+      - intros a cl hc. exact (gg_cells _ _ hg2 _ _ hc).
+      - intros a t ht. exact (gg_dom _ _ hg2 _ _ ht).
+      - intros j a' hj. cbn [st_gam] in hj. destruct (hgam _ _ hj) as [a [ha hr]].
+        destruct (gk_gam _ _ _ hok _ _ ha) as [t [hden hGa]].
+        exists t. split; [exact hden|]. exact (hx2 _ _ (hr _ hGa)).
+      - rewrite (gg_codes _ _ hg2).
+        apply (mok_memo _ s); [reflexivity|exact (gk_memo _ _ _ hok)].
+    Qed.
+  End GhostCollect.
+
+  (** *** Allocation, which may collect first *)
+
+  Lemma alloc_now_sound lo G cl u s :
+    gok lo G s -> g_cell G cl u ->
+    exists G', gext G G' /\ gok lo G' (snd (alloc_now cl s))
+      /\ G' (fst (alloc_now cl s)) = Some u.
+  Proof.
+    intros hok hcl. cbn [alloc_now fst snd].
+    pose (G' := mkGhost (fun b => if haddr_eqb b (HAddr s.(st_next)) then Some u else G b)
+                  (gc G)).
+    assert (hnew : G' (HAddr s.(st_next)) = Some u).
+    { unfold G'. cbn [gm]. rewrite haddr_eqb_refl. reflexivity. }
+    assert (hold : gext G G').
+    { split; [|intros i e hi; exact hi].
+      intros b t hb. unfold G'. cbn [gm]. destruct (haddr_eqb b (HAddr s.(st_next))) eqn:eb;
+        [|exact hb].
+      apply haddr_eqb_eq in eb. subst b.
+      destruct (gk_dom _ _ _ hok _ _ hb) as [_ hlt]. cbn in hlt. lia. }
+    assert (hbok : bh_ok lo s.(st_next) s.(st_heap))
+      by exact (so_heap _ _ (gk_state _ _ _ hok)).
+    exists G'. split; [exact hold|].
+    split; [|exact hnew].
+    split.
+    - apply (alloc_now_state_ok lo cl s (gk_state _ _ _ hok)).
+      apply (addrs_in_grow lo s.(st_next) (Pos.succ s.(st_next))); [lia|].
+      apply (gdom_addrs_in lo G s); [exact (gk_dom _ _ _ hok)|].
+      exact (g_cell_ad G cl u hcl).
+    - intros b b' hb. cbn in hb.
+      destruct (haddr_dec b (HAddr s.(st_next))) as [->|hne].
+      + rewrite (bh_get_cons_new _ _ _ _ hbok) in hb. injection hb as ->. inversion hcl.
+      + rewrite (bh_get_cons_old _ _ _ _ _ hbok hne) in hb. exact (gk_nofwd _ _ _ hok _ _ hb).
+    - intros b cl2 hb. unfold heap_get in hb. cbn in hb.
+      destruct (haddr_dec b (HAddr s.(st_next))) as [->|hne].
+      + rewrite (bh_get_cons_new _ _ _ _ hbok) in hb.
+        inversion hb; subst cl2. exists u. split; [exact hnew|].
+        right. exists u. split; [exact (g_cell_mono G G' hold cl u hcl)|apply cred_refl].
+      + rewrite (bh_get_cons_old _ _ _ _ _ hbok hne) in hb.
+        destruct (gk_cells _ _ _ hok _ _ hb) as [t [ht hrest]].
+        exists t. split; [exact (hold _ _ ht)|].
+        destruct hrest as [hbusy|[u1 [hu1 hred]]]; [left; exact hbusy|].
+        right. exists u1. split; [exact (g_cell_mono G G' hold _ _ hu1)|exact hred].
+    - intros b t hb. unfold G' in hb. cbn [gm] in hb. cbn.
+      destruct (haddr_eqb b (HAddr s.(st_next))) eqn:eb.
+      + apply haddr_eqb_eq in eb. subst b. cbn.
+        split; [exact (bh_ok_le _ _ _ hbok)|lia].
+      + destruct (gk_dom _ _ _ hok _ _ hb) as [h1 h2]. split; [exact h1|]. cbn. lia.
+    - intros j b hj. cbn in hj.
+      destruct (gk_gam _ _ _ hok _ _ hj) as [t [ht hg]].
+      exists t. split; [exact ht|exact (hold _ _ hg)].
+    - exact (gk_memo _ _ _ hok).
+  Qed.
+
+  (** [alloc] collects when [gc_due] says so, whatever [stress] is: the roots come back
+    renamed ([collect_ghost]) and the new cell is allocated in the new heap. *)
+  Lemma alloc_sound lo G cl u rs s a rs' s' :
+    gok lo G s -> g_cell G cl u ->
+    alloc stress cl rs s = COk (a, rs', s') ->
+    exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some u.
+  Proof.
+    intros hok hcl he.
+    destruct (gc_due stress s) eqn:eg.
+    - rewrite (alloc_gc stress cl rs s eg) in he.
+      destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:ec; [|discriminate].
+      destruct (collect_ghost lo G s hok _ _ _ ec) as (G1 & hc1 & hf1 & hok1).
+      inversion hf1 as [|r1 r1' l1 l1' hp1 hf1']; subst.
+      destruct r1' as [| | | | | |cl1]; try discriminate he.
+      cbn [gpres] in hp1.
+      destruct (alloc_now_sound _ _ _ _ _ hok1 (hp1 _ hcl)) as (G2 & hx2 & hok2 & ha2).
+      cbn [alloc_now] in he. inversion he; subst; clear he.
+      exists s.(st_next), G2. split; [|split; [exact hok2|exact ha2]].
+      split.
+      + intros i e hi. apply (gx_codes hx2). rewrite hc1. exact hi.
+      + exact (Forall2_gpres_r_ext _ _ _ _ _ hf1' hx2).
+    - rewrite (alloc_no_gc stress cl rs s eg) in he. inversion he; subst; clear he.
+      destruct (alloc_now_sound _ _ _ _ _ hok hcl) as (G2 & hx2 & hok2 & ha2).
+      exists lo, G2. split; [exact (gren_ext _ _ _ hx2)|]. split; [exact hok2|exact ha2].
+  Qed.
+
+  (** *** The context map *)
+
+  Lemma gam_sound lo G j rs s a rs' s' :
+    gok lo G s ->
+    gam X_type X Γ nctx stress j rs s = COk (a, rs', s') ->
+    exists lo' G' t, gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some t
+                     /\ cred (tRel (lvl - nctx + j)) t.
+  Proof.
+    intros hok he. unfold gam in he. cbv zeta in he.
+    destruct (PTree.get (key_of_succ_nat j) s.(st_gam)) as [a0|] eqn:eg.
+    - inversion he; subst. clear he.
+      destruct (gk_gam _ _ _ hok _ _ eg) as [t [ht hg]].
+      exists lo, G, t. split; [apply gren_refl|].
+      split; [exact hok|]. split; [exact hg|exact (ctx_den_red j t ht)].
+    - destruct (nth_error Γ j) as [decl|] eqn:ed; [|discriminate].
+      assert (hmain : forall G0 cl t s1,
+        gext G G0 ->
+        ctx_den Γ nctx lvl j = Some t -> g_cell G0 cl t -> gok lo G0 s1 ->
+        (match alloc stress cl rs s1 with
+         | COk (a2, rs2, s2) =>
+             COk (a2, rs2, set_gam (PTree.set (key_of_succ_nat j) a2 (st_gam s2)) s2)
+         | CFail w => CFail w
+         end) = COk (a, rs', s') ->
+        exists lo' G' t2, gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some t2
+                          /\ cred (tRel (lvl - nctx + j)) t2).
+      { intros G0 cl t s1 hx0 hden hcl hok1 hm.
+        destruct (alloc stress cl rs s1) as [[[a1 rs1] s2]|w] eqn:ea; [|discriminate].
+        inversion hm; subst. clear hm.
+        destruct (alloc_sound lo G0 cl t rs s1 _ _ _ hok1 hcl ea)
+          as (lo2 & G' & hren & hok2 & hga).
+        destruct (gk_dom _ _ _ hok2 _ _ hga) as [hlo hlt].
+        exists lo2, G', t. split; [exact (gren_trans _ _ _ _ _ _ (gren_ext _ _ _ hx0) hren)|].
+        split; [|split; [exact hga|exact (ctx_den_red j t hden)]].
+        split; cbn.
+        - exact (state_ok_set_gam lo2 j _ _ (gk_state _ _ _ hok2) hlo hlt).
+        - exact (gk_nofwd _ _ _ hok2).
+        - exact (gk_cells _ _ _ hok2).
+        - exact (gk_dom _ _ _ hok2).
+        - intros j2 a2 hj2.
+          destruct (key_eqb (key_of_succ_nat j2) (key_of_succ_nat j)) eqn:ek.
+          + apply key_eqb_spec, key_of_succ_nat_inj in ek. subst j2.
+            rewrite PTree.gss in hj2. injection hj2 as <-.
+            exists t. split; [exact hden|exact hga].
+          + rewrite PTree.gso in hj2 by (apply key_neq_of_eqb, ek).
+            exact (gk_gam _ _ _ hok2 _ _ hj2).
+        - exact (gk_memo _ _ _ hok2). }
+      destruct decl.(decl_body) as [b|] eqn:eb.
+      + destruct (new_entry X_type X b [] (NSCtx j) s) as [c s1] eqn:e1.
+        assert (hc : c = fst (new_entry X_type X b [] (NSCtx j) s)) by (rewrite e1; reflexivity).
+        assert (hs1 : s1 = snd (new_entry X_type X b [] (NSCtx j) s))
+          by (rewrite e1; reflexivity).
+        assert (hct : c.(c_term) = b) by (rewrite hc, new_entry_term; reflexivity).
+        destruct (new_entry_shape b [] (NSCtx j) s) as (q1 & q2 & q3 & _ & q5 & _).
+        destruct (gk_memo _ _ _ hok) as (hmi & hmo & hcodes & hokb).
+        pose proof hmi as (hf & _).
+        assert (hgrow : forall i e, PTree.get i (gc G) = Some e ->
+                   PTree.get i ((s1.(st_memo)).(m_codes)) = Some e).
+        { intros i e hi. rewrite hs1, new_entry_codes.
+          exact (memo_codes_set_mono _ _ i e hf (hcodes i e hi)). }
+        assert (hm1 : mok ((s1.(st_memo)).(m_codes)) s1).
+        { rewrite hs1. split; [exact (memo_inv_new_entry X_type X b [] (NSCtx j) s hmi)|].
+          split; [exact (new_entry_memo_ok X_type X b [] (NSCtx j) s hmo)|].
+          split; [intros i e hi; exact hi|].
+          intros i e hi. rewrite new_entry_codes in hi.
+          destruct (key_eqb i ((s.(st_memo)).(m_ncode))) eqn:E.
+          - apply key_eqb_spec in E; subst i. rewrite PTree.gss in hi.
+            injection hi as <-. cbn [ce_inst ce_term inst_code].
+            exact (const_instance_ok j decl b ed eb).
+          - rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi). }
+        pose (G1 := mkGhost (gm G) ((s1.(st_memo)).(m_codes))).
+        assert (hx1 : gext G G1) by (split; [intros a1 t1 h; exact h|exact hgrow]).
+        assert (hok1 : gok lo G1 s1).
+        { apply (gok_recode lo G s s1);
+            [exact hok|rewrite hs1; exact q1|rewrite hs1; exact q2|rewrite hs1; exact q5
+            |exact hgrow|exact hm1]. }
+        assert (hcok : cok G1 c).
+        { exists (mkEntry b [] (NSCtx j) (wf_term_univs X_type X (inst_code [] b))).
+          split.
+          - unfold G1. cbn [gc]. rewrite hc, hs1. apply new_entry_in_table.
+          - rewrite hc. apply new_entry_code_inv. }
+        apply (hmain G1 (CSusp [] 0 (S j) c) (lift (lvl - nctx + S j) 0 c.(c_term)) s1 hx1).
+        * unfold ctx_den. rewrite ed, eb, hct. reflexivity.
+        * constructor; [|exact hcok].
+          rewrite <- (subst_empty 0 (lift (lvl - nctx + S j) 0 c.(c_term))).
+          exact (g_susp_intro G1 [] 0 (S j) c.(c_term) [] (g_slots_nil G1) eq_refl).
+        * exact hok1.
+        * exact he.
+      + apply (hmain G (CDone (VNeu (NVar (nctx - S j)) [])) (tRel (lvl - S (nctx - S j))) s
+                 (gext_refl G)).
+        * unfold ctx_den. rewrite ed, eb. reflexivity.
+        * constructor. exact (g_VNeuVar G (nctx - S j) [] [] (Forall2_nil _)).
+        * exact hok.
+        * exact he.
+  Qed.
+
+  (** *** Reading a variable of the environment *)
+
+  Lemma env_var_sound lo G n e rs s x rs' s' tu :
+    gok lo G s -> g_susp G e (tRel n) tu ->
+    env_var X_type X Γ nctx stress n e rs s = COk (x, rs', s') ->
+    exists lo' G' t, gren G G' rs rs' /\ gok lo' G' s' /\ g_slot G' x t /\ cred tu t.
+  Proof.
+    intros hok hsusp he. unfold env_var in he.
+    destruct (g_susp_inv _ _ _ _ hsusp) as [ts (h1 & h2 & ->)].
+    destruct (nth_error e.(ev_vals) n) as [x0|] eqn:en.
+    - inversion he; subst. clear he.
+      assert (hlt : n < #|e.(ev_vals)|) by (apply nth_error_Some_length in en; exact en).
+      destruct (g_slots_nth _ _ _ _ _ h1 en) as [t [hnt hgt]].
+      exists lo, G, t. split; [apply gren_refl|]. split; [exact hok|].
+      split; [exact hgt|].
+      rewrite h2, (lift_rel_lt (lvl - nctx + e.(ev_goff)) n #|e.(ev_vals)|); [|lia].
+      rewrite (subst_rel_eq ts 0 n t n hnt eq_refl), lift0_id. apply cred_refl.
+    - destruct (gam X_type X Γ nctx stress (n - e.(ev_nvals) + e.(ev_goff)) rs s)
+        as [[[a1 rs1] s1]|w] eqn:eg; [|discriminate].
+      inversion he; subst. clear he.
+      destruct (gam_sound lo G (n - e.(ev_nvals) + e.(ev_goff)) rs s _ _ _ hok eg)
+        as (lo1 & G' & t & hren & hok1 & hga & hred).
+      assert (hge : #|e.(ev_vals)| <= n) by (apply nth_error_None in en; exact en).
+      exists lo1, G', t. split; [exact hren|]. split; [exact hok1|].
+      split; [constructor; exact hga|].
+      rewrite h2.
+      rewrite (lift_rel_ge (lvl - nctx + e.(ev_goff)) n #|e.(ev_vals)|); [|lia].
+      rewrite (subst_rel_gt ts (lvl - nctx + e.(ev_goff) + n) 0);
+        [|rewrite (g_slots_length _ _ _ h1); lia].
+      rewrite (g_slots_length _ _ _ h1).
+      replace (lvl - nctx + e.(ev_goff) + n - #|e.(ev_vals)|)
+        with (lvl - nctx + (n - e.(ev_nvals) + e.(ev_goff))) by lia.
+      exact hred.
+  Qed.
+
+  (** *** The slot of an argument *)
+
+  Lemma arg_slot_sound lo G e c rs s x rs' s' tu :
+    gok lo G s -> g_susp G e c.(c_term) tu -> cok G c ->
+    arg_slot X_type X Γ nctx stress e c rs s = COk (x, rs', s') ->
+    exists lo' G' t, gren G G' rs rs' /\ gok lo' G' s' /\ g_slot G' x t /\ cred tu t.
+  Proof.
+    intros hok hsusp hcok he. unfold arg_slot in he.
+    destruct (g_susp_inv _ _ _ _ hsusp) as [ts (h1 & h2 & ->)].
+    destruct e as [vals nvals goff]. cbn [ev_vals ev_nvals ev_goff] in *.
+    destruct (c_term c) eqn:ec;
+      [ refine (env_var_sound lo G n (mkEnv vals nvals goff) rs s x rs' s' _ hok _ he);
+        exact hsusp | .. ].
+    all: inversion he; subst; clear he.
+    all: exists lo, G; eexists; split; [apply gren_refl|]; split; [exact hok|];
+         split; [|apply cred_refl].
+    all: rewrite <- ec; constructor; [exact h1|try reflexivity; try assumption|exact hcok].
+  Qed.
+
+  (** *** Putting a slot in the heap *)
+
+  Lemma materialize_sound lo G x rs s a rs' s' t :
+    gok lo G s -> g_slot G x t ->
+    materialize X_type X stress x rs s = COk (a, rs', s') ->
+    exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ G' a = Some t.
+  Proof.
+    intros hok hx he. unfold materialize in he.
+    destruct x as [a0|vals n o c].
+    - inversion hx; subst. inversion he; subst. clear he.
+      exists lo, G. split; [apply gren_refl|]. split; [exact hok|assumption].
+    - inversion hx; subst. clear hx.
+      match goal with h1 : g_slots G vals ?ts0 |- _ =>
+        assert (hsusp : g_susp G (mkEnv vals #|vals| o) c.(c_term)
+                          (subst ts0 0 (lift (lvl - nctx + o) #|vals| c.(c_term))))
+          by (constructor; [exact h1|reflexivity])
+      end.
+      remember (subst _ 0 (lift (lvl - nctx + o) #|vals| c.(c_term))) as t0 eqn:ht0.
+      destruct (c_term c) eqn:ec.
+      all: try (assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
+                  by (constructor; [rewrite ec; exact hsusp|assumption]);
+                exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he)).
+      + (* tSort *)
+        assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
+          by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
+        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+      + (* tProd *)
+        assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
+          by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
+        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+      + (* tLambda *)
+        assert (hcl : g_cell G (CDone (VLam (mkEnv vals #|vals| o) c)) t0)
+          by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
+        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+      + (* tConst: the memo may add an entry first *)
+        match type of he with context [delta X_type X ?kn ?ui s] =>
+          destruct (delta X_type X kn ui s) as [[[c'|] s1]|w] eqn:ed
+        end.
+        * pose proof (delta_gok lo G _ _ s _ s1 hok ed) as hok1.
+          assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
+            by (constructor; [rewrite ec; exact hsusp|assumption]).
+          exact (alloc_sound lo G _ _ rs s1 a rs' s' hok1 hcl he).
+        * pose proof (delta_gok lo G _ _ s _ s1 hok ed) as hok1.
+          assert (hcl : g_cell G (CDone (VNeu (NConst (tConst k ui)) [])) t0).
+          { constructor. rewrite ht0, subst_lift_const.
+            exact (g_VNeuConst G (tConst k ui) [] [] (Forall2_nil _)). }
+          exact (alloc_sound lo G _ _ rs s1 a rs' s' hok1 hcl he).
+        * assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
+            by (constructor; [rewrite ec; exact hsusp|assumption]).
+          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+      + (* tFix: a fixpoint value, or a suspension if the index is out of range *)
+        match goal with ec' : c_term c = tFix ?m ?i |- _ =>
+          destruct (nth_error m i) as [def|] eqn:enth
+        end.
+        * match goal with ec' : c_term c = tFix ?m ?i |- _ =>
+            assert (hcl : g_cell G (CDone (VFix (mkEnv vals #|vals| o) c i [])) t0)
+          end.
+          { constructor. change t0 with (mkApps t0 []).
+            eapply g_VFix; [exact ec| |assumption|constructor].
+            first [exact hsusp|rewrite <- ec; exact hsusp|rewrite ec in hsusp; exact hsusp]. }
+          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+        * assert (hcl : g_cell G (CSusp vals #|vals| o c) t0)
+            by (constructor; [rewrite ec; exact hsusp|assumption]).
+          exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+      + (* tPrim *)
+        assert (hcl : g_cell G (CDone (VOpen (mkEnv vals #|vals| o) c)) t0)
+          by (constructor; constructor; [rewrite ec; exact hsusp|assumption]).
+        exact (alloc_sound lo G _ _ rs s a rs' s' hok hcl he).
+  Qed.
+
+  (** *** Binding a slot to a binder *)
+
+  Lemma bind_sound lo G x body rs s y rs' s' t :
+    gok lo G s -> g_slot G x t -> cok G body ->
+    bind X_type X stress x body rs s = COk (y, rs', s') ->
+    exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ g_slot G' y t.
+  Proof.
+    intros hok hx hcb he. unfold bind in he.
+    destruct x as [a0|vals n o c].
+    - inversion he; subst. clear he.
+      exists lo, G. split; [apply gren_refl|]. split; [exact hok|exact hx].
+    - destruct (once_body body s) as [b s1] eqn:eo.
+      destruct (once_body_shape body s) as (q1 & q2 & q3 & _ & q5 & _).
+      assert (hs1 : s1 = snd (once_body body s)) by (rewrite eo; reflexivity).
+      assert (hok1 : gok lo G s1).
+      { destruct hcb as [e [hge hci]].
+        apply (gok_same lo G s);
+          [exact hok|rewrite hs1; exact q1|rewrite hs1; exact q2|rewrite hs1; exact q5|].
+        rewrite hs1. destruct (gk_memo _ _ _ hok) as (_ & _ & h3 & _).
+        exact (mok_once_body _ body e s (gk_memo _ _ _ hok) (h3 _ _ hge) hci). }
+      clear hs1.
+      destruct b.
+      + inversion he; subst. clear he.
+        exists lo, G. split; [apply gren_refl|]. split; [exact hok1|exact hx].
+      + destruct (materialize X_type X stress (SInl vals n o c) rs s1)
+          as [[[a1 rs1] s2]|w] eqn:em; [|discriminate].
+        destruct (materialize_sound lo G (SInl vals n o c) rs s1 a1 rs1 s2 t hok1 hx em)
+          as (lo2 & G2 & hren & hok2 & hga).
+        inversion he; subst. clear he.
+        exists lo2, G2. split; [exact hren|]. split; [exact hok2|constructor; exact hga].
+  Qed.
+
+  (** *** A whole stack put in the heap *)
+
+  Lemma mat_all_sound : forall d lo G l ts rs s al rs' s',
+    gok lo G s -> g_slots G l ts ->
+    mat_all X_type X stress d l rs s = COk (al, rs', s') ->
+    exists lo' G', gren G G' rs rs' /\ gok lo' G' s' /\ g_addrs G' al ts.
+  Proof.
+    intros d. induction d as [|k ih]; intros lo G l ts rs s al rs' s' hok hl he;
+      destruct l as [|x l]; cbn [mat_all] in he.
+    1,3: inversion he; subst; clear he; inversion hl; subst;
+         exists lo, G; (split; [apply gren_refl|]); (split; [exact hok|constructor]).
+    - discriminate.
+    - inversion hl as [|x' l' tx ts0 hgx hgl hex hets]; subst; clear hl.
+      destruct (materialize X_type X stress x (RSk l :: rs) s) as [[[a1 rs1] s1]|w] eqn:em;
+        [|discriminate].
+      destruct (materialize_sound lo G x (RSk l :: rs) s a1 rs1 s1 tx hok hgx em)
+        as (lo1 & G1 & hren1 & hok1 & hga1).
+      destruct rs1 as [|r rs1t]; [discriminate he|].
+      destruct r as [| | | |l1| |]; try discriminate he.
+      destruct (gren_cons _ _ _ _ _ _ hren1) as [hpk hren1']. cbn [gpres] in hpk.
+      destruct (mat_all X_type X stress (k tt) l1 (RA a1 :: rs1t) s1)
+        as [[[al1 rs2] s2]|w] eqn:em2; [|discriminate].
+      destruct rs2 as [|r rs2t]; [discriminate he|].
+      destruct r as [a0| | | | | |]; try discriminate he.
+      injection he as hal hrs' hs'; subst al rs' s'.
+      destruct (ih tt lo1 G1 l1 ts0 (RA a1 :: rs1t) s1 al1 (RA a0 :: rs2t) s2 hok1
+                  (hpk _ hgl) em2)
+        as (lo2 & G2 & hren2 & hok2 & haddr2).
+      destruct (gren_cons _ _ _ _ _ _ hren2) as [hpa hren2']. cbn [gpres] in hpa.
+      exists lo2, G2. split; [exact (gren_trans _ _ _ _ _ _ hren1' hren2')|].
+      split; [exact hok2|].
+      constructor; [exact (hpa _ hga1)|exact haddr2].
+  Qed.
+
+  (** A value grows its spine: what [apply] does to a constructor, a neutral, a stuck match
+    or projection, and a stuck fixpoint once the stack is in the heap. *)
+  Lemma g_value_add_spine G v t l ts v' :
+    g_value G v t -> g_addrs G l ts -> add_spine v l = Some v' -> g_value G v' (mkApps t ts).
+  Proof.
+    intros hv hl ha. destruct hv; cbn in ha; try discriminate ha; injection ha as <-.
+    all: rewrite <- mkApps_app; econstructor; try eassumption; apply Forall2_app; assumption.
+  Qed.
+
   (** *** The cells of a fixpoint block
 
     [push_fix_cells] allocates fixpoint [i], ..., [i + m - 1] of the [tFix] code [c] as
@@ -2048,12 +2074,11 @@ Section Eval.
     through [e], the last one first, which is [fix_subst]'s order. *)
 
   Lemma push_fix_cells_sound : forall m lo G e c mfix idx0 ts i acc tacc rs s e' rs' s',
-    gok lo G s -> fits s s' -> c.(c_term) = tFix mfix idx0 -> cok G c ->
+    gok lo G s -> c.(c_term) = tFix mfix idx0 -> cok G c ->
     g_slots G e.(ev_vals) ts -> e.(ev_nvals) = #|e.(ev_vals)| ->
     g_slots G acc.(ev_vals) tacc -> acc.(ev_nvals) = #|acc.(ev_vals)| ->
     push_fix_cells stress e c i m acc rs s = COk (e', rs', s') ->
-    rs' = rs /\ consv s s'
-    /\ exists G', gext G G' /\ gok lo G' s'
+    exists lo' G', gren G G' rs rs' /\ gok lo' G' s'
        /\ g_slots G' e'.(ev_vals)
             (List.rev (map (fun j => subst ts 0 (lift (lvl - nctx + e.(ev_goff)) e.(ev_nvals)
                                                      (tFix mfix j))) (seq i m)) ++ tacc)
@@ -2061,104 +2086,108 @@ Section Eval.
   Proof.
     intros m. induction m as [|m ih];
       intros lo G e c mfix idx0 ts i acc tacc rs s e' rs' s'
-        hok hfits hc hcok hts hnv hacc hnacc he.
+        hok hc hcok hts hnv hacc hnacc he.
     - cbn [push_fix_cells] in he. inversion he; subst. clear he.
-      split; [reflexivity|]. split; [apply consv_refl|].
-      exists G. split; [apply gext_refl|]. split; [exact hok|].
+      exists lo, G. split; [apply gren_refl|]. split; [exact hok|].
       cbn [seq map List.rev app]. split; [exact hacc|]. split; [exact hnacc|reflexivity].
-    - assert (hhs : hstep s s')
-        by exact (hstep_push_fix_cells (S m) e c i acc rs s e' rs' s' (gok_hok _ _ _ hok) he).
-      assert (hroom : roomn s <> 0) by exact (fits_room s s' hfits hhs).
-      cbn [push_fix_cells] in he.
+    - cbn [push_fix_cells] in he.
       destruct (alloc stress (CDone (VFix e c i [])) (RE e :: RE acc :: rs) s)
         as [[[a1 rs1] s1]|w] eqn:ea; [|discriminate he].
       set (tf := fun j => subst ts 0 (lift (lvl - nctx + e.(ev_goff)) e.(ev_nvals) (tFix mfix j))).
       assert (hcl : g_cell G (CDone (VFix e c i [])) (tf i)).
       { constructor. exact (g_VFix G e c mfix idx0 i [] (tf i) [] hc
                               (g_susp_of_slots G e _ ts hts hnv) hcok (Forall2_nil _)). }
-      destruct (alloc_sound lo G _ _ _ s a1 rs1 s1 hok hroom hcl eq_refl ea)
-        as (hrs1 & hc1 & G1 & hx1 & hok1 & hga1).
-      subst rs1.
-      destruct (ih lo G1 e c mfix idx0 ts (S i) (env_push (SAddr a1) acc) (tf i :: tacc)
-                  rs s1 e' rs' s' hok1 (fits_next s s1 s' hfits hc1) hc (cok_mono G G1 hx1 c hcok)
-                  (g_slots_mono G G1 hx1 _ _ hts) hnv
+      destruct (alloc_sound lo G _ _ _ s a1 rs1 s1 hok hcl ea)
+        as (lo1 & G1 & hren1 & hok1 & hga1).
+      destruct rs1 as [|r1 rs1a]; [discriminate he|].
+      destruct r1 as [| |e1| | | |]; try discriminate he.
+      destruct rs1a as [|r2 rs1b]; [discriminate he|].
+      destruct r2 as [| |acc1| | | |]; try discriminate he.
+      destruct (gren_cons _ _ _ _ _ _ hren1) as [hpe hren1a].
+      destruct (gren_cons _ _ _ _ _ _ hren1a) as [hpa hren1b].
+      cbn [gpres] in hpe, hpa.
+      destruct hpe as (hnv1 & hgo1 & hsl1). destruct hpa as (hnva & hgoa & hsla).
+      assert (hts1 : g_slots G1 e1.(ev_vals) ts) by exact (hsl1 _ hts).
+      assert (hnv1' : e1.(ev_nvals) = #|e1.(ev_vals)|).
+      { rewrite hnv1, hnv, <- (g_slots_length _ _ _ hts), (g_slots_length _ _ _ hts1).
+        reflexivity. }
+      assert (hacc1 : g_slots G1 acc1.(ev_vals) tacc) by exact (hsla _ hacc).
+      assert (hnacc1 : (env_push (SAddr a1) acc1).(ev_nvals)
+                       = #|(env_push (SAddr a1) acc1).(ev_vals)|).
+      { cbn [env_push ev_vals ev_nvals].
+        rewrite hnva, hnacc, <- (g_slots_length _ _ _ hacc), (g_slots_length _ _ _ hacc1).
+        reflexivity. }
+      destruct (ih lo1 G1 e1 c mfix idx0 ts (S i) (env_push (SAddr a1) acc1) (tf i :: tacc)
+                  rs1b s1 e' rs' s' hok1 hc (gren_cok _ _ _ _ c hren1 hcok) hts1 hnv1'
                   (g_slots_cons G1 (SAddr a1) _ (tf i) tacc (g_slot_addr G1 a1 (tf i) hga1)
-                     (g_slots_mono G G1 hx1 _ _ hacc))
-                  ltac:(cbn [env_push ev_vals ev_nvals]; rewrite hnacc; reflexivity) he)
-        as (hrs & hc2 & G2 & hx2 & hok2 & hsl & hnv' & hgoff).
-      split; [exact hrs|]. split; [exact (consv_trans _ _ _ hc1 hc2)|].
-      exists G2. split; [exact (gext_trans _ _ _ hx1 hx2)|]. split; [exact hok2|].
-      split; [|split; [exact hnv'|exact hgoff]].
+                     hacc1)
+                  hnacc1 he)
+        as (lo2 & G2 & hren2 & hok2 & hsl & hnv' & hgoff).
+      exists lo2, G2. split; [exact (gren_trans _ _ _ _ _ _ hren1b hren2)|].
+      split; [exact hok2|].
+      rewrite hnv1, hgo1 in hsl.
+      split; [|split; [exact hnv'|rewrite hgoff; cbn [env_push ev_goff]; exact hgoa]].
       cbn [seq map List.rev]. rewrite <- app_assoc. exact hsl.
   Qed.
-
   (** ** The evaluator against PCUIC reduction
 
     The input stands (through the ghost map) for a term that reduces, in PCUIC, to the term
-    the output value stands for; the state invariant and the budget are re-established. The
-    five functions are proved together by induction on the fuel. [whnf_fix] takes the code
-    of a whole [tFix] block and the index [idx] of the fixpoint it applies, which need not
-    be the index the code was written with: [apply] calls it on the fixpoint cells
+    the output value stands for, and the state invariant is re-established. A call may
+    collect: the ghost it ends with is not an extension of the one it started with, and the
+    roots come back renamed, standing for what they stood for ([gren]). A caller takes the
+    structures it holds back out of the returned roots, as the machine does. The five
+    functions are proved together by induction on the fuel. [whnf_fix] takes the code of a
+    whole [tFix] block and the index [idx] of the fixpoint it applies, which need not be the
+    index the code was written with: [apply] calls it on the fixpoint cells
     [push_fix_cells] made. *)
 
   Lemma machine_sound : forall d,
     (forall lo G a rs s v rs' s' t,
-        gok lo G s -> fits s s' -> G a = Some t ->
+        gok lo G s -> G a = Some t ->
         force X_type X Γ nctx stress d a rs s = COk (v, rs', s') ->
-        rs' = rs /\ consv s s'
-        /\ exists G' u, gext G G' /\ gok lo G' s' /\ g_value G' v u /\ cred t u)
+        exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' v u /\ cred t u)
     /\ (forall lo G x stk sts tx rs s v rs' s',
-        gok lo G s -> fits s s' -> g_slot G x tx -> g_slots G stk sts ->
+        gok lo G s -> g_slot G x tx -> g_slots G stk sts ->
         eval_slot X_type X Γ nctx stress d x stk rs s = COk (v, rs', s') ->
-        rs' = rs /\ consv s s'
-        /\ exists G' u, gext G G' /\ gok lo G' s' /\ g_value G' v u
-                        /\ cred (mkApps tx sts) u)
+        exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' v u
+                         /\ cred (mkApps tx sts) u)
     /\ (forall lo G e c stk sts tc rs s v rs' s',
-        gok lo G s -> fits s s' -> g_susp G e c.(c_term) tc -> cok G c -> g_slots G stk sts ->
+        gok lo G s -> g_susp G e c.(c_term) tc -> cok G c -> g_slots G stk sts ->
         whnf X_type X Γ nctx stress d e c stk rs s = COk (v, rs', s') ->
-        rs' = rs /\ consv s s'
-        /\ exists G' u, gext G G' /\ gok lo G' s' /\ g_value G' v u
-                        /\ cred (mkApps tc sts) u)
+        exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' v u
+                         /\ cred (mkApps tc sts) u)
     /\ (forall lo G e c mfix idx0 idx stk sts tc rs s v rs' s',
-        gok lo G s -> fits s s' -> c.(c_term) = tFix mfix idx0 ->
+        gok lo G s -> c.(c_term) = tFix mfix idx0 ->
         g_susp G e (tFix mfix idx) tc -> cok G c -> g_slots G stk sts ->
         whnf_fix X_type X Γ nctx stress d e c mfix idx stk rs s = COk (v, rs', s') ->
-        rs' = rs /\ consv s s'
-        /\ exists G' u, gext G G' /\ gok lo G' s' /\ g_value G' v u
-                        /\ cred (mkApps tc sts) u)
+        exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' v u
+                         /\ cred (mkApps tc sts) u)
     /\ (forall lo G v stk sts tv rs s w rs' s',
-        gok lo G s -> fits s s' -> g_value G v tv -> g_slots G stk sts ->
+        gok lo G s -> g_value G v tv -> g_slots G stk sts ->
         apply X_type X Γ nctx stress d v stk rs s = COk (w, rs', s') ->
-        rs' = rs /\ consv s s'
-        /\ exists G' u, gext G G' /\ gok lo G' s' /\ g_value G' w u
-                        /\ cred (mkApps tv sts) u).
+        exists lo' G' u, gren G G' rs rs' /\ gok lo' G' s' /\ g_value G' w u
+                         /\ cred (mkApps tv sts) u).
   Proof.
     intros d. induction d as [|k ih].
     - (* FO: every call fails, except [apply] with an empty stack *)
       split; [|split; [|split; [|split]]].
-      + intros lo G a rs s v rs' s' t hok hfits hGa he. cbn [force] in he. discriminate he.
-      + intros lo G x stk sts tx rs s v rs' s' hok hfits hx hsts he.
+      + intros lo G a rs s v rs' s' t hok hGa he. cbn [force] in he. discriminate he.
+      + intros lo G x stk sts tx rs s v rs' s' hok hx hsts he.
         cbn [eval_slot] in he. discriminate he.
-      + intros lo G e c stk sts tc rs s v rs' s' hok hfits hsusp hcok hsts he.
+      + intros lo G e c stk sts tc rs s v rs' s' hok hsusp hcok hsts he.
         cbn [whnf] in he. discriminate he.
-      + intros lo G e c mfix idx0 idx stk sts tc rs s v rs' s' hok hfits hcfix hsusp hcok hsts he.
+      + intros lo G e c mfix idx0 idx stk sts tc rs s v rs' s' hok hcfix hsusp hcok hsts he.
         cbn [whnf_fix] in he. discriminate he.
-      + intros lo G v stk sts tv rs s w rs' s' hok hfits hv hsts he.
+      + intros lo G v stk sts tv rs s w rs' s' hok hv hsts he.
         cbn [apply] in he. destruct stk as [|y stk].
         * inversion he; subst. inversion hsts; subst.
-          split; [reflexivity|]. split; [apply consv_refl|].
-          exists G, tv. split; [apply gext_refl|]. split; [exact hok|].
+          exists lo, G, tv. split; [apply gren_refl|]. split; [exact hok|].
           split; [exact hv|]. apply cred_refl.
         * discriminate he.
     - destruct (ih tt) as (IHf & IHs & IHw & IHx & IHa).
-      destruct (machine_hstep (FS k)) as (HFf & HFs & HFw & HFx & HFa).
-      destruct (machine_hstep (k tt)) as (HKf & HKs & HKw & HKx & HKa).
       split; [|split; [|split; [|split]]].
       + (* force *)
-        intros lo G a0 rs0 s0 v0 rs' s' t0 hok hfits hGa he.
-        assert (hhs : hstep s0 s')
-          by exact (HFf a0 rs0 s0 v0 rs' s' (gok_hok _ _ _ hok) he).
-        assert (hroom0 : roomn s0 <> 0) by exact (fits_room s0 s' hfits hhs).
+        intros lo G a0 rs0 s0 v0 rs' s' t0 hok hGa he.
         cbv beta iota zeta delta [force] in he.
         destruct (heap_get a0 s0) as [cl|] eqn:ehc; [|discriminate he].
         destruct (gk_cells _ _ _ hok a0 cl ehc) as [t1 [hGa1 hcell]].
@@ -2179,44 +2208,27 @@ Section Eval.
           destruct (heap_upd ar (CDone vw) sw) as [sd|] eqn:edone; [|discriminate he].
           injection he as hiv hirs his; subst v0 rs' s'.
           assert (hokb : gok lo G sb) by exact (gok_heap_upd_busy lo G a0 s0 sb hok ebusy).
-          assert (hcons_b : consv s0 sb) by exact (consv_heap_upd a0 CBusy s0 sb ebusy).
-          assert (hfits_b : fits sb sd) by exact (fits_next s0 sb sd hfits hcons_b).
-          assert (hstep_sbsw : hstep sb sw)
-            by exact (HKw (mkEnv vs n o) c [] (RA a0 :: rs0) sb vw (RA ar :: rsw') sw
-                        (gok_hok _ _ _ hokb) ew).
-          assert (hstep_swsd : hstep sw sd)
-            by exact (hstep_heap_upd ar (CDone vw) sw sd eq_refl (proj2 hstep_sbsw) edone).
-          assert (hfits_w : fits sb sw) by exact (fits_first sb sw sd hfits_b hstep_swsd).
           destruct (IHw lo G (mkEnv vs n o) c [] [] u (RA a0 :: rs0) sb vw
-                      (RA ar :: rsw') sw hokb hfits_w hsusp hcok (g_slots_nil G) ew)
-            as (hreq & hcons_w & G' & uw & hext & hokw & hvw & hcredw).
-          inversion hreq; subst ar rsw'.
-          assert (hG'a : G' a0 = Some t0) by exact (hext a0 t0 hGa).
-          assert (hcred_t_uw : cred t0 uw)
-            by exact (cred_trans t0 u uw hcred hcredw).
-          assert (hokd : gok lo G' sd)
-            by exact (gok_heap_upd_done lo G' a0 vw uw t0 sw sd hokw hG'a hvw hcred_t_uw edone).
-          split; [reflexivity|].
-          split.
-          { apply (consv_trans s0 sb sd hcons_b).
-            apply (consv_trans sb sw sd hcons_w).
-            exact (consv_heap_upd a0 (CDone vw) sw sd edone). }
-          exists G', uw. split; [exact hext|]. split; [exact hokd|].
+                      (RA ar :: rsw') sw hokb hsusp hcok (g_slots_nil G) ew)
+            as (lo1 & G' & uw & hren & hokw & hvw & hcredw).
+          destruct (gren_cons _ _ _ _ _ _ hren) as [hpa hren'].
+          cbn [gpres] in hpa.
+          assert (hG'a : G' ar = Some t0) by exact (hpa t0 hGa).
+          assert (hcred_t_uw : cred t0 uw) by exact (cred_trans t0 u uw hcred hcredw).
+          exists lo1, G', uw. split; [exact hren'|].
+          split; [exact (gok_heap_upd_done lo1 G' ar vw uw t0 sw sd hokw hG'a hvw
+                           hcred_t_uw edone)|].
           split; [exact hvw|exact hcred_t_uw].
         * (* CDone vd: the value is already there *)
           destruct hcell as [hbusy|[u [hgc hcred]]]; [discriminate hbusy|].
           pose proof (g_cell_done_inv _ _ _ hgc) as hvd.
           inversion he; subst. clear he.
-          split; [reflexivity|]. split; [apply consv_refl|].
-          exists G, u. split; [apply gext_refl|]. split; [exact hok|].
+          exists lo, G, u. split; [apply gren_refl|]. split; [exact hok|].
           split; [exact hvd|exact hcred].
         * discriminate he.
         * discriminate he.
       + (* eval_slot *)
-        intros lo G x stk sts tx rs0 s0 v0 rs' s' hok hfits hslot hsts he.
-        assert (hhs : hstep s0 s')
-          by exact (HFs x stk rs0 s0 v0 rs' s' (gok_hok _ _ _ hok) he).
-        assert (hroom0 : roomn s0 <> 0) by exact (fits_room s0 s' hfits hhs).
+        intros lo G x stk sts tx rs0 s0 v0 rs' s' hok hslot hsts he.
         cbv beta iota zeta delta [eval_slot] in he.
         destruct x as [a|vs n o c].
         * (* SAddr a: force then apply *)
@@ -2227,22 +2239,13 @@ Section Eval.
           end; [|discriminate he].
           destruct rsf as [|r1 rsf']; [discriminate he|].
           destruct r1 as [| | | |lk| |]; try discriminate he.
-          assert (hstep_s0sf : hstep s0 sf)
-            by exact (HKf a (RSk stk :: rs0) s0 vf (RSk lk :: rsf') sf (gok_hok _ _ _ hok) ef).
-          assert (hstep_sfs' : hstep sf s')
-            by exact (HKa vf lk rsf' sf v0 rs' s' (proj2 hstep_s0sf) he).
-          assert (hfits_f : fits s0 sf) by exact (fits_first s0 sf s' hfits hstep_sfs').
-          destruct (IHf lo G a (RSk stk :: rs0) s0 vf (RSk lk :: rsf') sf tx
-                      hok hfits_f hGa ef)
-            as (hreqf & hconsf & Gf & uf & hextf & hokf & hvf & hcredf).
-          inversion hreqf; subst lk rsf'.
-          assert (hfits_a : fits sf s') by exact (fits_next s0 sf s' hfits hconsf).
-          destruct (IHa lo Gf vf stk sts uf rs0 sf v0 rs' s' hokf hfits_a hvf
-                      (g_slots_mono G Gf hextf stk sts hsts) he)
-            as (hreqa & hconsa & G' & u' & hexta & hoka & hv' & hcreda).
-          split; [exact hreqa|].
-          split; [exact (consv_trans s0 sf s' hconsf hconsa)|].
-          exists G', u'. split; [exact (gext_trans G Gf G' hextf hexta)|].
+          destruct (IHf lo G a (RSk stk :: rs0) s0 vf (RSk lk :: rsf') sf tx hok hGa ef)
+            as (lof & Gf & uf & hrenf & hokf & hvf & hcredf).
+          destruct (gren_cons _ _ _ _ _ _ hrenf) as [hpk hrenf'].
+          cbn [gpres] in hpk.
+          destruct (IHa lof Gf vf lk sts uf rsf' sf v0 rs' s' hokf hvf (hpk _ hsts) he)
+            as (loa & G' & u' & hrena & hoka & hv' & hcreda).
+          exists loa, G', u'. split; [exact (gren_trans _ _ _ _ _ _ hrenf' hrena)|].
           split; [exact hoka|]. split; [exact hv'|].
           apply (cred_trans (mkApps tx sts) (mkApps uf sts) u').
           -- exact (cred_mkApps tx uf sts hcredf).
@@ -2250,26 +2253,17 @@ Section Eval.
         * (* SInl: whnf in place *)
           pose proof (g_slot_inl_inv _ _ _ _ _ _ hslot) as hsusp.
           pose proof (g_slot_inl_cok _ _ _ _ _ _ hslot) as hcok.
-          destruct (IHw lo G (mkEnv vs n o) c stk sts tx rs0 s0 v0 rs' s'
-                      hok hfits hsusp hcok hsts he)
-            as (hreq & hcons & G' & u' & hext & hokw & hv' & hcred).
-          split; [exact hreq|]. split; [exact hcons|].
-          exists G', u'. split; [exact hext|]. split; [exact hokw|].
-          split; [exact hv'|exact hcred].
+          exact (IHw lo G (mkEnv vs n o) c stk sts tx rs0 s0 v0 rs' s'
+                   hok hsusp hcok hsts he).
       + (* whnf *)
-        intros lo G e c stk sts tc rs0 s0 v0 rs' s' hok hfits hsusp hcok hsts he.
-        assert (hhs : hstep s0 s')
-          by exact (HFw e c stk rs0 s0 v0 rs' s' (gok_hok _ _ _ hok) he).
-        assert (hroom0 : roomn s0 <> 0) by exact (fits_room s0 s' hfits hhs).
+        intros lo G e c stk sts tc rs0 s0 v0 rs' s' hok hsusp hcok hsts he.
         cbv beta iota zeta delta [whnf] in he.
         destruct (tick s0) as [st|] eqn:etick; [|discriminate he].
         destruct (tick_shape _ _ etick) as (th & tn & tr & tg & tm).
         assert (hokt : gok lo G st)
           by (apply (gok_same lo G s0 st hok th tn tg);
               exact (mok_memo _ s0 st tm (gk_memo _ _ _ hok))).
-        assert (hcons_st : consv s0 st) by (apply consv_same; [exact tn|exact tr]).
-        assert (hfits_st : fits st s') by exact (fits_next s0 st s' hfits hcons_st).
-        assert (hroomt : roomn st <> 0) by (unfold roomn; rewrite tr; exact hroom0).
+        clear hok.
         remember (c_term c) as ct eqn:ec;
         destruct ct as [n|vr|ev earg|srt|na A B|na A b|na b T body|f arg|k0 ui
                        |ind ui|ind n ui|ci p scrut brs|pr arg|mfix idx|cmfix cidx|prm];
@@ -2280,16 +2274,13 @@ Section Eval.
           destruct rsr as [|r1 rsr']; [discriminate he|].
           destruct r1 as [| | | |lk| |]; try discriminate he.
           destruct (env_var_sound lo G n e (RSk stk :: rs0) st xr (RSk lk :: rsr') sr tc
-                      hokt hroomt hsusp ev)
-            as (hreqv & hconsv & Gv & tv1 & hextv & hokv & hslotv & hcredv).
-          inversion hreqv; subst lk rsr'.
-          assert (hfits_sr : fits sr s') by exact (fits_next st sr s' hfits_st hconsv).
-          destruct (IHs lo Gv xr stk sts tv1 rs0 sr v0 rs' s' hokv hfits_sr hslotv
-                      (g_slots_mono G Gv hextv stk sts hsts) he)
-            as (hreqs & hconss & G' & u' & hext' & hok' & hv' & hcred').
-          split; [exact hreqs|].
-          split; [exact (consv_trans s0 st s' hcons_st (consv_trans st sr s' hconsv hconss))|].
-          exists G', u'. split; [exact (gext_trans G Gv G' hextv hext')|].
+                      hokt hsusp ev)
+            as (lov & Gv & tv1 & hrenv & hokv & hslotv & hcredv).
+          destruct (gren_cons _ _ _ _ _ _ hrenv) as [hpk hrenv'].
+          cbn [gpres] in hpk.
+          destruct (IHs lov Gv xr lk sts tv1 rsr' sr v0 rs' s' hokv hslotv (hpk _ hsts) he)
+            as (los & G' & u' & hrens & hok' & hv' & hcred').
+          exists los, G', u'. split; [exact (gren_trans _ _ _ _ _ _ hrenv' hrens)|].
           split; [exact hok'|]. split; [exact hv'|].
           apply (cred_trans (mkApps tc sts) (mkApps tv1 sts) u').
           -- exact (cred_mkApps tc tv1 sts hcredv).
@@ -2297,16 +2288,14 @@ Section Eval.
         * (* tSort *)
           destruct stk as [|xh stk'].
           -- inversion he; subst; clear he. inversion hsts; subst.
-             split; [reflexivity|]. split; [exact hcons_st|].
-             exists G, tc. split; [apply gext_refl|]. split; [exact hokt|].
+             exists lo, G, tc. split; [apply gren_refl|]. split; [exact hokt|].
              split; [apply (g_VOpen G e c tc); [rewrite <- ec; exact hsusp|exact hcok]|].
              apply cred_refl.
           -- discriminate he.
         * (* tProd *)
           destruct stk as [|xh stk'].
           -- inversion he; subst; clear he. inversion hsts; subst.
-             split; [reflexivity|]. split; [exact hcons_st|].
-             exists G, tc. split; [apply gext_refl|]. split; [exact hokt|].
+             exists lo, G, tc. split; [apply gren_refl|]. split; [exact hokt|].
              split; [apply (g_VOpen G e c tc); [rewrite <- ec; exact hsusp|exact hcok]|].
              apply cred_refl.
           -- discriminate he.
@@ -2314,8 +2303,7 @@ Section Eval.
           destruct stk as [|xh stk'].
           -- (* VLam *)
              inversion he; subst; clear he. inversion hsts; subst.
-             split; [reflexivity|]. split; [exact hcons_st|].
-             exists G, tc. split; [apply gext_refl|]. split; [exact hokt|].
+             exists lo, G, tc. split; [apply gren_refl|]. split; [exact hokt|].
              split; [apply (g_VLam G e c tc); [rewrite <- ec; exact hsusp|exact hcok]|].
              apply cred_refl.
           -- (* beta *)
@@ -2329,21 +2317,18 @@ Section Eval.
              destruct rsb1 as [|r2 rsb2]; [discriminate he|].
              destruct r2 as [| | | |lk| |]; try discriminate he.
              destruct (bind_sound lo G xh (child c 1 b) (RE e :: RSk stk' :: rs0) st xb
-                         (RE ee :: RSk lk :: rsb2) sb txh hokt hroomt hsloth hcb eb)
-               as (hreqb & hconsb & Gv & hextb & hokb & hslotb).
-             inversion hreqb; subst ee lk rsb2.
-             destruct (g_susp_lam Gv e na A b tc
-                         (g_susp_mono G Gv hextb e (tLambda na A b) tc hsusp))
+                         (RE ee :: RSk lk :: rsb2) sb txh hokt hsloth hcb eb)
+               as (lob & Gv & hrenb & hokb & hslotb).
+             destruct (gren_cons _ _ _ _ _ _ hrenb) as [hpe hrenb1].
+             destruct (gren_cons _ _ _ _ _ _ hrenb1) as [hpk hrenb2].
+             cbn [gpres] in hpe, hpk.
+             destruct (g_susp_lam Gv ee na A b tc (genv_susp _ _ _ _ _ _ hpe hsusp))
                as (A' & B & htc & hlamprop).
-             assert (hfits_sb : fits sb s') by exact (fits_next st sb s' hfits_st hconsb).
-             destruct (IHw lo Gv (env_push xb e) (child c 1 b) stk' sts' (subst [txh] 0 B)
-                         rs0 sb v0 rs' s' hokb hfits_sb (hlamprop xb txh hslotb)
-                         (cok_mono G Gv hextb _ hcb)
-                         (g_slots_mono G Gv hextb stk' sts' hslots') he)
-               as (hreqw & hconsw & G' & u' & hext' & hok' & hv' & hcred').
-             split; [exact hreqw|].
-             split; [exact (consv_trans s0 st s' hcons_st (consv_trans st sb s' hconsb hconsw))|].
-             exists G', u'. split; [exact (gext_trans G Gv G' hextb hext')|].
+             destruct (IHw lob Gv (env_push xb ee) (child c 1 b) lk sts' (subst [txh] 0 B)
+                         rsb2 sb v0 rs' s' hokb (hlamprop xb txh hslotb)
+                         (gren_cok _ _ _ _ _ hrenb hcb) (hpk _ hslots') he)
+               as (low & G' & u' & hrenw & hok' & hv' & hcred').
+             exists low, G', u'. split; [exact (gren_trans _ _ _ _ _ _ hrenb2 hrenw)|].
              split; [exact hok'|]. split; [exact hv'|].
              subst tc.
              apply (cred_trans (mkApps (tApp (tLambda na A' B) txh) sts')
@@ -2363,49 +2348,38 @@ Section Eval.
           destruct rsa1 as [|r2 rsa2]; [discriminate he|].
           destruct r2 as [| | | |lk| |]; try discriminate he.
           destruct (arg_slot_sound lo G e (child c 0 b) (RE e :: RSk stk :: rs0) st xa
-                      (RE ee :: RSk lk :: rsa2) sa d' hokt hroomt hsb hc0 ea)
-            as (hreqa & hconsa & Ga & tb & hexta & hoka & hslota & hcreda).
-          inversion hreqa; subst ee lk rsa2.
-          destruct (bind X_type X stress xa (child c 2 body) (RE e :: RSk stk :: rs0) sa)
+                      (RE ee :: RSk lk :: rsa2) sa d' hokt hsb hc0 ea)
+            as (loa & Ga & tb & hrena & hoka & hslota & hcreda).
+          destruct (gren_cons _ _ _ _ _ _ hrena) as [hpe hrena1].
+          destruct (gren_cons _ _ _ _ _ _ hrena1) as [hpk hrena2].
+          cbn [gpres] in hpe, hpk.
+          destruct (bind X_type X stress xa (child c 2 body) (RE ee :: RSk lk :: rsa2) sa)
             as [[[xbnd rsb] sb]|w] eqn:eb; [|discriminate he].
           destruct rsb as [|r1 rsb1]; [discriminate he|].
-          destruct r1 as [| |ee| | | |]; try discriminate he.
+          destruct r1 as [| |ee2| | | |]; try discriminate he.
           destruct rsb1 as [|r2 rsb2]; [discriminate he|].
-          destruct r2 as [| | | |lk| |]; try discriminate he.
-          assert (hstep_sasb : hstep sa sb)
-            by exact (hstep_bind xa (child c 2 body) (RE e :: RSk stk :: rs0) sa
-                        xbnd (RE ee :: RSk lk :: rsb2) sb (gok_hok _ _ _ hoka) eb).
-          assert (hstep_sbs' : hstep sb s')
-            by exact (HKw (env_push xbnd ee) (child c 2 body) lk rsb2 sb v0 rs' s'
-                        (proj2 hstep_sasb) he).
-          assert (hstep_sas' : hstep sa s') by exact (hstep_trans sa sb s' hstep_sasb hstep_sbs').
-          assert (hfits_sa : fits sa s') by exact (fits_next st sa s' hfits_st hconsa).
-          assert (hrooma : roomn sa <> 0) by exact (fits_room sa s' hfits_sa hstep_sas').
-          destruct (bind_sound lo Ga xa (child c 2 body) (RE e :: RSk stk :: rs0) sa xbnd
-                      (RE ee :: RSk lk :: rsb2) sb tb hoka hrooma hslota
-                      (cok_mono G Ga hexta _ hc2) eb)
-            as (hreqb & hconsb & Gb & hextb & hokb & hslotb).
-          inversion hreqb; subst ee lk rsb2.
-          destruct (g_susp_letin Gb e na b T body tc
-                      (g_susp_mono G Gb (gext_trans G Ga Gb hexta hextb) e
-                         (tLetIn na b T body) tc hsusp))
+          destruct r2 as [| | | |lk2| |]; try discriminate he.
+          destruct (bind_sound loa Ga xa (child c 2 body) (RE ee :: RSk lk :: rsa2) sa xbnd
+                      (RE ee2 :: RSk lk2 :: rsb2) sb tb hoka hslota
+                      (gren_cok _ _ _ _ _ hrena hc2) eb)
+            as (lob & Gb & hrenb & hokb & hslotb).
+          destruct (gren_cons _ _ _ _ _ _ hrenb) as [hpe2 hrenb1].
+          destruct (gren_cons _ _ _ _ _ _ hrenb1) as [hpk2 hrenb2].
+          cbn [gpres] in hpe2, hpk2.
+          destruct (g_susp_letin Gb ee2 na b T body tc
+                      (genv_susp _ _ _ _ _ _ (genv_trans _ _ _ _ _ _ hpe hpe2) hsusp))
             as (d'2 & T'2 & B2 & htc2 & hsb2 & hletprop2).
           assert (heqlet : tLetIn na d' T' B = tLetIn na d'2 T'2 B2)
             by (rewrite <- htc; exact htc2).
           inversion heqlet; subst d'2 T'2 B2.
-          assert (hfits_sb : fits sb s') by exact (fits_next sa sb s' hfits_sa hconsb).
-          destruct (IHw lo Gb (env_push xbnd e) (child c 2 body) stk sts (subst [tb] 0 B)
-                      rs0 sb v0 rs' s' hokb hfits_sb (hletprop2 xbnd tb hslotb)
-                      (cok_mono G Gb (gext_trans G Ga Gb hexta hextb) _ hc2)
-                      (g_slots_mono G Gb (gext_trans G Ga Gb hexta hextb) stk sts hsts) he)
-            as (hreqw & hconsw & G' & u' & hext' & hok' & hv' & hcred').
-          split; [exact hreqw|].
-          split.
-          { apply (consv_trans s0 st s' hcons_st).
-            apply (consv_trans st sa s' hconsa).
-            exact (consv_trans sa sb s' hconsb hconsw). }
-          exists G', u'.
-          split; [exact (gext_trans G Ga G' hexta (gext_trans Ga Gb G' hextb hext'))|].
+          destruct (IHw lob Gb (env_push xbnd ee2) (child c 2 body) lk2 sts (subst [tb] 0 B)
+                      rsb2 sb v0 rs' s' hokb (hletprop2 xbnd tb hslotb)
+                      (gren_cok _ _ _ _ _ hrenb (gren_cok _ _ _ _ _ hrena hc2))
+                      (hpk2 _ (hpk _ hsts)) he)
+            as (low & G' & u' & hrenw & hok' & hv' & hcred').
+          exists low, G', u'.
+          split; [exact (gren_trans _ _ _ _ _ _ hrena2
+                           (gren_trans _ _ _ _ _ _ hrenb2 hrenw))|].
           split; [exact hok'|]. split; [exact hv'|].
           subst tc.
           apply (cred_trans (mkApps (tLetIn na d' T' B) sts) (mkApps (subst [tb] 0 B) sts) u').
@@ -2427,19 +2401,16 @@ Section Eval.
           destruct rsr1 as [|r2 rsr2]; [discriminate he|].
           destruct r2 as [| | | |lk| |]; try discriminate he.
           destruct (arg_slot_sound lo G e (child c 1 arg) (RE e :: RSk stk :: rs0) st xr
-                      (RE ee :: RSk lk :: rsr2) sr ua hokt hroomt hsa hc1 ea)
-            as (hreqa & hconsa & Gv & ta & hexta & hoka & hslota & hcreda).
-          inversion hreqa; subst ee lk rsr2.
-          assert (hfits_sr : fits sr s') by exact (fits_next st sr s' hfits_st hconsa).
-          destruct (IHw lo Gv e (child c 0 f) (xr :: stk) (ta :: sts) uf rs0 sr v0 rs' s'
-                      hoka hfits_sr (g_susp_mono G Gv hexta e f uf hsf)
-                      (cok_mono G Gv hexta _ hc0f)
-                      (g_slots_cons Gv xr stk ta sts hslota (g_slots_mono G Gv hexta stk sts hsts))
-                      he)
-            as (hreqw & hconsw & G' & u' & hext' & hok' & hv' & hcred').
-          split; [exact hreqw|].
-          split; [exact (consv_trans s0 st s' hcons_st (consv_trans st sr s' hconsa hconsw))|].
-          exists G', u'. split; [exact (gext_trans G Gv G' hexta hext')|].
+                      (RE ee :: RSk lk :: rsr2) sr ua hokt hsa hc1 ea)
+            as (loa & Gv & ta & hrena & hoka & hslota & hcreda).
+          destruct (gren_cons _ _ _ _ _ _ hrena) as [hpe hrena1].
+          destruct (gren_cons _ _ _ _ _ _ hrena1) as [hpk hrena2].
+          cbn [gpres] in hpe, hpk.
+          destruct (IHw loa Gv ee (child c 0 f) (xr :: lk) (ta :: sts) uf rsr2 sr v0 rs' s'
+                      hoka (genv_susp _ _ _ _ _ _ hpe hsf) (gren_cok _ _ _ _ _ hrena hc0f)
+                      (g_slots_cons Gv xr lk ta sts hslota (hpk _ hsts)) he)
+            as (low & G' & u' & hrenw & hok' & hv' & hcred').
+          exists low, G', u'. split; [exact (gren_trans _ _ _ _ _ _ hrena2 hrenw)|].
           split; [exact hok'|]. split; [exact hv'|].
           subst tc.
           apply (cred_trans (mkApps (tApp uf ua) sts) (mkApps (tApp uf ta) sts) u').
@@ -2467,7 +2438,7 @@ Section Eval.
              { rewrite (lift_closed (lvl - nctx) 0 c'.(c_term) hclosed).
                apply cred_one.
                exact (delta_red1 X_type X Σ ΓΔ k0 ui st sd c' hΣ wfΣ hf hdo ed hinst). }
-             destruct (delta_gok lo G k0 ui st (Some c') sd hokt ed) as (hokd0 & hconsd & hroomd).
+             pose proof (delta_gok lo G k0 ui st (Some c') sd hokt ed) as hokd0.
              pose proof (proj1 (proj2 (proj2 (gk_memo _ _ _ hokd0)))) as hgd.
              pose (Gd := mkGhost (gm G) ((sd.(st_memo)).(m_codes))).
              assert (hxd : gext G Gd) by (split; [intros a1 t1 h; exact h|exact hgd]).
@@ -2482,14 +2453,11 @@ Section Eval.
                  with (subst [] 0 (lift (lvl - nctx + 0) 0 c'.(c_term)))
                  by (rewrite subst_empty, Nat.add_0_r; reflexivity).
                exact (g_susp_intro Gd [] 0 0 c'.(c_term) [] (g_slots_nil Gd) eq_refl). }
-             assert (hfits_sd : fits sd s') by exact (fits_next st sd s' hfits_st hconsd).
              destruct (IHw lo Gd env_empty c' stk sts (lift0 (lvl - nctx) c'.(c_term))
-                         rs0 sd v0 rs' s' hokd hfits_sd hsuspc hcokc
+                         rs0 sd v0 rs' s' hokd hsuspc hcokc
                          (g_slots_mono G Gd hxd stk sts hsts) he)
-               as (hreqw & hconsw & G' & u' & hext' & hok' & hv' & hcred').
-             split; [exact hreqw|].
-             split; [exact (consv_trans s0 st s' hcons_st (consv_trans st sd s' hconsd hconsw))|].
-             exists G', u'. split; [exact (gext_trans G Gd G' hxd hext')|].
+               as (low & G' & u' & hrenw & hok' & hv' & hcred').
+             exists low, G', u'. split; [exact (gren_trans _ _ _ _ _ _ (gren_ext _ _ _ hxd) hrenw)|].
              split; [exact hok'|]. split; [exact hv'|].
              rewrite htc.
              apply (cred_trans (mkApps (tConst k0 ui) sts)
@@ -2497,19 +2465,14 @@ Section Eval.
              ++ exact (cred_mkApps (tConst k0 ui) (lift0 (lvl - nctx) c'.(c_term)) sts hcredc).
              ++ exact hcred'.
           -- (* None: a neutral constant *)
-             destruct (delta_gok lo G k0 ui st None sd hokt ed) as (hokd & hconsd & hroomd).
+             pose proof (delta_gok lo G k0 ui st None sd hokt ed) as hokd.
              destruct (mat_all X_type X stress (k tt) stk rs0 sd) as [[[sp rsm] sm]|w] eqn:em;
                [|discriminate he].
              injection he as hv0 hrs hsm; subst v0 rs' s'.
-             assert (hfits_sd : fits sd sm) by
-               exact (fits_next st sd sm (fits_next s0 st sm hfits hcons_st) hconsd).
-             destruct (mat_all_sound (k tt) lo G stk sts rs0 sd sp rsm sm
-                         hokd hfits_sd hsts em)
-               as (hreqm & hconsm & G' & hextm & hokm & haddrm).
-             split; [exact hreqm|].
-             split; [exact (consv_trans s0 st sm hcons_st (consv_trans st sd sm hconsd hconsm))|].
-             exists G', (mkApps (tConst k0 ui) sts).
-             split; [exact hextm|]. split; [exact hokm|].
+             destruct (mat_all_sound (k tt) lo G stk sts rs0 sd sp rsm sm hokd hsts em)
+               as (lom & G' & hrenm & hokm & haddrm).
+             exists lom, G', (mkApps (tConst k0 ui) sts).
+             split; [exact hrenm|]. split; [exact hokm|].
              split; [exact (g_VNeuConst G' (tConst k0 ui) sp sts haddrm)|].
              rewrite htc. apply cred_refl.
         * (* tInd i ui *)
@@ -2517,11 +2480,10 @@ Section Eval.
           destruct (mat_all X_type X stress (k tt) stk rs0 st) as [[[sp rsm] sm]|w] eqn:em;
             [|discriminate he].
           injection he as hv0 hrs hsm; subst v0 rs' s'.
-          assert (hfits_sm : fits st sm) by exact (fits_next s0 st sm hfits hcons_st).
-          destruct (mat_all_sound (k tt) lo G stk sts rs0 st sp rsm sm hokt hfits_sm hsts em)
-            as (hreqm & hconsm & G' & hextm & hokm & haddrm).
-          split; [exact hreqm|]. split; [exact (consv_trans s0 st sm hcons_st hconsm)|].
-          exists G', (mkApps (tInd ind ui) sts). split; [exact hextm|]. split; [exact hokm|].
+          destruct (mat_all_sound (k tt) lo G stk sts rs0 st sp rsm sm hokt hsts em)
+            as (lom & G' & hrenm & hokm & haddrm).
+          exists lom, G', (mkApps (tInd ind ui) sts). split; [exact hrenm|].
+          split; [exact hokm|].
           split; [exact (g_VCon G' (tInd ind ui) sp sts haddrm)|].
           rewrite htc. apply cred_refl.
         * (* tConstruct ind n ui *)
@@ -2529,11 +2491,10 @@ Section Eval.
           destruct (mat_all X_type X stress (k tt) stk rs0 st) as [[[sp rsm] sm]|w] eqn:em;
             [|discriminate he].
           injection he as hv0 hrs hsm; subst v0 rs' s'.
-          assert (hfits_sm : fits st sm) by exact (fits_next s0 st sm hfits hcons_st).
-          destruct (mat_all_sound (k tt) lo G stk sts rs0 st sp rsm sm hokt hfits_sm hsts em)
-            as (hreqm & hconsm & G' & hextm & hokm & haddrm).
-          split; [exact hreqm|]. split; [exact (consv_trans s0 st sm hcons_st hconsm)|].
-          exists G', (mkApps (tConstruct ind n ui) sts). split; [exact hextm|]. split; [exact hokm|].
+          destruct (mat_all_sound (k tt) lo G stk sts rs0 st sp rsm sm hokt hsts em)
+            as (lom & G' & hrenm & hokm & haddrm).
+          exists lom, G', (mkApps (tConstruct ind n ui) sts). split; [exact hrenm|].
+          split; [exact hokm|].
           split; [exact (g_VCon G' (tConstruct ind n ui) sp sts haddrm)|].
           rewrite htc. apply cred_refl.
         * (* tCase ci p scrut brs: iota, or a stuck match *)
@@ -2545,20 +2506,20 @@ Section Eval.
           | context [match ?y with COk _ => _ | CFail _ => _ end] =>
             destruct y as [[[vs rss] ss]|w] eqn:ews
           end; [|discriminate he].
-          assert (hst_ss : hstep st ss)
-            by exact (HKw e (child c 0 scrut) [] (RE e :: RSk stk :: rs0) st vs rss ss
-                        (gok_hok _ _ _ hokt) ews).
-          assert (hss_s' : hstep ss s').
-          { pose proof (hstep_refl _ (proj2 hst_ss)) as h0.
-            revert h0. repeat match goal with h : hstep _ _ |- _ => clear h end. intros h0.
-            chain_fin HKf HKs HKw HKx HKa. }
-          assert (hfits_ss : fits st ss) by exact (fits_first st ss s' hfits_st hss_s').
           destruct (IHw lo G e (child c 0 scrut) [] [] _ (RE e :: RSk stk :: rs0) st vs rss ss
-                      hokt hfits_ss (g_susp_of_slots G e scrut ts hts hnv) hcs (g_slots_nil G) ews)
-            as (hreq1 & hcons1 & G1 & us & hext1 & hok1 & hvs & hcreds).
-          subst rss. cbv beta iota in he.
-          assert (hfits_s' : fits ss s') by exact (fits_next st ss s' hfits_st hcons1).
-          assert (hsts1 : g_slots G1 stk sts) by exact (g_slots_mono G G1 hext1 _ _ hsts).
+                      hokt (g_susp_of_slots G e scrut ts hts hnv) hcs (g_slots_nil G) ews)
+            as (lo1 & G1 & us & hren1 & hok1 & hvs & hcreds).
+          destruct rss as [|r1 rss1]; [discriminate he|].
+          destruct r1 as [| |e2| | | |]; try discriminate he.
+          destruct rss1 as [|r2 rss2]; [discriminate he|].
+          destruct r2 as [| | | |stk2| |]; try discriminate he.
+          destruct (gren_cons _ _ _ _ _ _ hren1) as [hpe hren1a].
+          destruct (gren_cons _ _ _ _ _ _ hren1a) as [hpk hren1b].
+          cbn [gpres] in hpe, hpk.
+          pose proof hpe as (hnv2 & hgo2 & hsl2).
+          assert (hts1 : g_slots G1 e2.(ev_vals) ts) by exact (hsl2 _ hts).
+          assert (hsts1 : g_slots G1 stk2 sts) by exact (hpk _ hsts).
+          cbv beta iota in he.
           destruct vs as [h0 args|e1 c1|e1 c1 i1 sp1|e1 c1 i1 sp1|nn sp1|e1 c1|e1 c1 sp1];
             try discriminate he.
           1: { (* VCon: iota *)
@@ -2581,28 +2542,28 @@ Section Eval.
              assert (htl : #|List.rev (skipn (ci_npar ci) targs)| = #|bcontext br|).
              { rewrite List.length_rev, (g_addrs_length _ _ _ hcargs). exact hlen'. }
              assert (hcb : cok G1 (child c (case_branch_step (N.of_nat cn)) br.(bbody))).
-             { apply (cok_mono G G1 hext1). apply cok_child; [exact hcok|rewrite <- ec].
+             { apply (gren_cok _ _ _ _ _ hren1). apply cok_child; [exact hcok|rewrite <- ec].
                apply cs_case_branch. rewrite Nat2N.id. exact ebr. }
              rewrite env_push_addrs_vals in he.
              assert (hsb : g_susp G1
-                       (mkEnv (map SAddr (List.rev (skipn (ci_npar ci) args)) ++ e.(ev_vals))
-                          (#|skipn (ci_npar ci) args| + e.(ev_nvals)) e.(ev_goff))
+                       (mkEnv (map SAddr (List.rev (skipn (ci_npar ci) args)) ++ e2.(ev_vals))
+                          (#|skipn (ci_npar ci) args| + e2.(ev_nvals)) e2.(ev_goff))
                        br.(bbody)
                        (subst (List.rev (skipn (ci_npar ci) targs) ++ ts) 0
                           (lift (lvl - nctx + e.(ev_goff))
                              (#|skipn (ci_npar ci) args| + e.(ev_nvals)) br.(bbody)))).
-             { refine (g_susp_of_slots G1 (mkEnv _ _ _) br.(bbody) _ _ _).
+             { rewrite <- hnv2, <- hgo2.
+               refine (g_susp_of_slots G1 (mkEnv _ _ _) br.(bbody) _ _ _).
                - cbn [ev_vals]. apply g_slots_app.
                  + apply g_slots_addrs. apply Forall2_rev. exact hcargs.
-                 + exact (g_slots_mono G G1 hext1 _ _ hts).
-               - cbn [ev_vals ev_nvals]. rewrite length_app, length_map, List.length_rev, hnv.
+                 + exact hts1.
+               - cbn [ev_vals ev_nvals]. rewrite length_app, length_map, List.length_rev.
+                 rewrite hnv2, hnv, <- (g_slots_length _ _ _ hts), (g_slots_length _ _ _ hts1).
                  reflexivity. }
-             destruct (IHw lo G1 _ (child c (case_branch_step (N.of_nat cn)) br.(bbody)) stk sts _
-                         rs0 ss v0 rs' s' hok1 hfits_s' hsb hcb hsts1 he)
-               as (hreqw & hconsw & G' & u' & hext' & hok' & hv' & hcred').
-             split; [exact hreqw|].
-             split; [exact (consv_trans _ _ _ hcons_st (consv_trans _ _ _ hcons1 hconsw))|].
-             exists G', u'. split; [exact (gext_trans _ _ _ hext1 hext')|].
+             destruct (IHw lo1 G1 _ (child c (case_branch_step (N.of_nat cn)) br.(bbody)) stk2 sts _
+                         rss2 ss v0 rs' s' hok1 hsb hcb hsts1 he)
+               as (low & G' & u' & hrenw & hok' & hv' & hcred').
+             exists low, G', u'. split; [exact (gren_trans _ _ _ _ _ _ hren1b hrenw)|].
              split; [exact hok'|]. split; [exact hv'|].
              refine (cred_trans _ _ _ _ hcred'). apply cred_mkApps. rewrite htc.
              eapply cred_trans; [apply cred_case_c; exact hcreds|].
@@ -2618,24 +2579,23 @@ Section Eval.
              ++ rewrite iota_red_assum by exact hassum. unfold rbr; cbn [bbody bcontext].
                 rewrite hlen', subst_app_simpl, htl. reflexivity.
           } (* VStuckFix, VNeu, VStuck: a stuck match *)
-          all: destruct (mat_all X_type X stress (k tt) stk (RE e :: rs0) ss)
+          all: destruct (mat_all X_type X stress (k tt) stk2 (RE e2 :: rss2) ss)
                  as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he];
                destruct rsm as [|r1 rsm1]; [discriminate he|];
                destruct r1 as [| |ee| | | |]; try discriminate he;
                injection he as hv0 hrs hsm; subst v0 rs' s';
-               destruct (mat_all_sound (k tt) lo G1 stk sts (RE e :: rs0) ss sp2 (RE ee :: rsm1) sm
-                           hok1 hfits_s' hsts1 em)
-                 as (hreqm & hconsm & G' & hextm & hokm & haddrm);
-               injection hreqm as hee hrr; subst ee rsm1;
-               (split; [reflexivity|]);
-               (split; [exact (consv_trans _ _ _ hcons_st (consv_trans _ _ _ hcons1 hconsm))|]);
-               exists G', (mkApps tc sts);
-               (split; [exact (gext_trans _ _ _ hext1 hextm)|]);
+               destruct (mat_all_sound (k tt) lo1 G1 stk2 sts (RE e2 :: rss2) ss sp2
+                           (RE ee :: rsm1) sm hok1 hsts1 em)
+                 as (lom & G' & hrenm & hokm & haddrm);
+               destruct (gren_cons _ _ _ _ _ _ hrenm) as [hpe3 hrenm1];
+               cbn [gpres] in hpe3;
+               exists lom, G', (mkApps tc sts);
+               (split; [exact (gren_trans _ _ _ _ _ _ hren1b hrenm1)|]);
                (split; [exact hokm|]);
                (split; [|apply cred_refl]);
                apply g_VStuck;
-               [ rewrite <- ec; exact (g_susp_mono G G' (gext_trans _ _ _ hext1 hextm) _ _ _ hsusp)
-               | exact (cok_mono G G' (gext_trans _ _ _ hext1 hextm) c hcok)
+               [ rewrite <- ec; exact (genv_susp _ _ _ _ _ _ (genv_trans _ _ _ _ _ _ hpe hpe3) hsusp)
+               | exact (gren_cok _ _ _ _ _ hrenm (gren_cok _ _ _ _ _ hren1 hcok))
                | exact haddrm ].
         * (* tProj pr arg: projection, or a stuck projection *)
           assert (hca : cok G (child c 0 arg))
@@ -2645,20 +2605,18 @@ Section Eval.
           | context [match ?y with COk _ => _ | CFail _ => _ end] =>
             destruct y as [[[vs rss] ss]|w] eqn:ews
           end; [|discriminate he].
-          assert (hst_ss : hstep st ss)
-            by exact (HKw e (child c 0 arg) [] (RE e :: RSk stk :: rs0) st vs rss ss
-                        (gok_hok _ _ _ hokt) ews).
-          assert (hss_s' : hstep ss s').
-          { pose proof (hstep_refl _ (proj2 hst_ss)) as h0.
-            revert h0. repeat match goal with h : hstep _ _ |- _ => clear h end. intros h0.
-            chain_fin HKf HKs HKw HKx HKa. }
-          assert (hfits_ss : fits st ss) by exact (fits_first st ss s' hfits_st hss_s').
           destruct (IHw lo G e (child c 0 arg) [] [] _ (RE e :: RSk stk :: rs0) st vs rss ss
-                      hokt hfits_ss (g_susp_of_slots G e arg ts hts hnv) hca (g_slots_nil G) ews)
-            as (hreq1 & hcons1 & G1 & us & hext1 & hok1 & hvs & hcreds).
-          subst rss. cbv beta iota in he.
-          assert (hfits_s' : fits ss s') by exact (fits_next st ss s' hfits_st hcons1).
-          assert (hsts1 : g_slots G1 stk sts) by exact (g_slots_mono G G1 hext1 _ _ hsts).
+                      hokt (g_susp_of_slots G e arg ts hts hnv) hca (g_slots_nil G) ews)
+            as (lo1 & G1 & us & hren1 & hok1 & hvs & hcreds).
+          destruct rss as [|r1 rss1]; [discriminate he|].
+          destruct r1 as [| |e2| | | |]; try discriminate he.
+          destruct rss1 as [|r2 rss2]; [discriminate he|].
+          destruct r2 as [| | | |stk2| |]; try discriminate he.
+          destruct (gren_cons _ _ _ _ _ _ hren1) as [hpe hren1a].
+          destruct (gren_cons _ _ _ _ _ _ hren1a) as [hpk hren1b].
+          cbn [gpres] in hpe, hpk.
+          assert (hsts1 : g_slots G1 stk2 sts) by exact (hpk _ hsts).
+          cbv beta iota in he.
           destruct vs as [h0 args|e1 c1|e1 c1 i1 sp1|e1 c1 i1 sp1|nn sp1|e1 c1|e1 c1 sp1];
             try discriminate he.
           1: { (* VCon: the projection rule *)
@@ -2673,12 +2631,10 @@ Section Eval.
                [|discriminate he].
              destruct (g_value_VCon_inv _ _ _ _ hvs) as (targs & hus & hargs).
              destruct (g_addrs_nth _ _ _ _ _ hargs ea) as (ta & hta & hGa).
-             destruct (IHs lo G1 (SAddr a) stk sts ta rs0 ss v0 rs' s' hok1 hfits_s'
+             destruct (IHs lo1 G1 (SAddr a) stk2 sts ta rss2 ss v0 rs' s' hok1
                          (g_slot_addr G1 a ta hGa) hsts1 he)
-               as (hreqw & hconsw & G' & u' & hext' & hok' & hv' & hcred').
-             split; [exact hreqw|].
-             split; [exact (consv_trans _ _ _ hcons_st (consv_trans _ _ _ hcons1 hconsw))|].
-             exists G', u'. split; [exact (gext_trans _ _ _ hext1 hext')|].
+               as (low & G' & u' & hrenw & hok' & hv' & hcred').
+             exists low, G', u'. split; [exact (gren_trans _ _ _ _ _ _ hren1b hrenw)|].
              split; [exact hok'|]. split; [exact hv'|].
              refine (cred_trans _ _ _ _ hcred'). apply cred_mkApps. rewrite htc.
              change (subst ts 0 (lift (lvl - nctx + ev_goff e) (ev_nvals e) (tProj pr arg)))
@@ -2686,46 +2642,37 @@ Section Eval.
              eapply cred_trans; [apply cred_proj_c; exact hcreds|].
              rewrite hus. apply cred_one. apply red_proj. exact hta.
           } (* VStuckFix, VNeu, VStuck: a stuck projection *)
-          all: destruct (mat_all X_type X stress (k tt) stk (RE e :: rs0) ss)
+          all: destruct (mat_all X_type X stress (k tt) stk2 (RE e2 :: rss2) ss)
                  as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he];
                destruct rsm as [|r1 rsm1]; [discriminate he|];
                destruct r1 as [| |ee| | | |]; try discriminate he;
                injection he as hv0 hrs hsm; subst v0 rs' s';
-               destruct (mat_all_sound (k tt) lo G1 stk sts (RE e :: rs0) ss sp2 (RE ee :: rsm1) sm
-                           hok1 hfits_s' hsts1 em)
-                 as (hreqm & hconsm & G' & hextm & hokm & haddrm);
-               injection hreqm as hee hrr; subst ee rsm1;
-               (split; [reflexivity|]);
-               (split; [exact (consv_trans _ _ _ hcons_st (consv_trans _ _ _ hcons1 hconsm))|]);
-               exists G', (mkApps tc sts);
-               (split; [exact (gext_trans _ _ _ hext1 hextm)|]);
+               destruct (mat_all_sound (k tt) lo1 G1 stk2 sts (RE e2 :: rss2) ss sp2
+                           (RE ee :: rsm1) sm hok1 hsts1 em)
+                 as (lom & G' & hrenm & hokm & haddrm);
+               destruct (gren_cons _ _ _ _ _ _ hrenm) as [hpe3 hrenm1];
+               cbn [gpres] in hpe3;
+               exists lom, G', (mkApps tc sts);
+               (split; [exact (gren_trans _ _ _ _ _ _ hren1b hrenm1)|]);
                (split; [exact hokm|]);
                (split; [|apply cred_refl]);
                apply g_VStuck;
-               [ rewrite <- ec; exact (g_susp_mono G G' (gext_trans _ _ _ hext1 hextm) _ _ _ hsusp)
-               | exact (cok_mono G G' (gext_trans _ _ _ hext1 hextm) c hcok)
+               [ rewrite <- ec; exact (genv_susp _ _ _ _ _ _ (genv_trans _ _ _ _ _ _ hpe hpe3) hsusp)
+               | exact (gren_cok _ _ _ _ _ hrenm (gren_cok _ _ _ _ _ hren1 hcok))
                | exact haddrm ].
         * (* tFix mfix idx *)
-          destruct (IHx lo G e c mfix idx idx stk sts tc rs0 st v0 rs' s' hokt hfits_st
-                      (eq_sym ec) hsusp hcok hsts he)
-            as (hreqx & hconsx & G' & u' & hext' & hok' & hv' & hcred').
-          split; [exact hreqx|]. split; [exact (consv_trans _ _ _ hcons_st hconsx)|].
-          exists G', u'. split; [exact hext'|]. split; [exact hok'|].
-          split; [exact hv'|exact hcred'].
+          exact (IHx lo G e c mfix idx idx stk sts tc rs0 st v0 rs' s' hokt
+                   (eq_sym ec) hsusp hcok hsts he).
         * (* tPrim *)
           destruct stk as [|xh stk'].
           -- inversion he; subst; clear he. inversion hsts; subst.
-             split; [reflexivity|]. split; [exact hcons_st|].
-             exists G, tc. split; [apply gext_refl|]. split; [exact hokt|].
+             exists lo, G, tc. split; [apply gren_refl|]. split; [exact hokt|].
              split; [apply (g_VOpen G e c tc); [rewrite <- ec; exact hsusp|exact hcok]|].
              apply cred_refl.
           -- discriminate he.
       + (* whnf_fix *)
-        intros lo G e c mfix idx0 idx stk sts tc rs0 s0 v0 rs' s' hok hfits hcfix hsusp hcok
+        intros lo G e c mfix idx0 idx stk sts tc rs0 s0 v0 rs' s' hok hcfix hsusp hcok
           hsts he.
-        assert (hhs : hstep s0 s')
-          by exact (HFx e c mfix idx stk rs0 s0 v0 rs' s' (gok_hok _ _ _ hok) he).
-        assert (hroom0 : roomn s0 <> 0) by exact (fits_room s0 s' hfits hhs).
         cbv beta iota zeta delta [whnf_fix] in he.
         destruct (nth_error mfix idx) as [def|] eqn:edef; [|discriminate he].
         destruct (g_susp_inv _ _ _ _ hsusp) as (ts & hts & hnv & htc).
@@ -2737,97 +2684,96 @@ Section Eval.
           destruct r1 as [| |ee| | | |]; try discriminate he.
           injection he as hv0 hrs hsm; subst v0 rs' s'.
           destruct (mat_all_sound (k tt) lo G stk sts (RE e :: rs0) s0 sp2 (RE ee :: rsm1) sm
-                      hok hfits hsts em)
-            as (hreqm & hconsm & G' & hextm & hokm & haddrm).
-          injection hreqm as hee hrr; subst ee rsm1.
-          split; [reflexivity|]. split; [exact hconsm|].
-          exists G', (mkApps tc sts). split; [exact hextm|]. split; [exact hokm|].
+                      hok hsts em)
+            as (lom & G' & hrenm & hokm & haddrm).
+          destruct (gren_cons _ _ _ _ _ _ hrenm) as [hpe hrenm1].
+          cbn [gpres] in hpe.
+          exists lom, G', (mkApps tc sts). split; [exact hrenm1|]. split; [exact hokm|].
           split; [|apply cred_refl].
-          exact (g_VFix G' e c mfix idx0 idx sp2 tc sts hcfix (g_susp_mono G G' hextm _ _ _ hsusp)
-                   (cok_mono G G' hextm c hcok) haddrm). }
+          exact (g_VFix G' ee c mfix idx0 idx sp2 tc sts hcfix (genv_susp _ _ _ _ _ _ hpe hsusp)
+                   (gren_cok _ _ _ _ _ hrenm hcok) haddrm). }
         destruct (g_slots_nth _ _ _ _ _ hsts ex) as (tx & htx & hgx).
         assert (hrarg : rarg def < #|sts|).
         { apply nth_error_Some_length in htx. exact htx. }
         (* put the recursive argument in the heap *)
         destruct (materialize X_type X stress x (RE e :: RSk stk :: rs0) s0)
           as [[[a rsa] sa]|w] eqn:ema; [|discriminate he].
-        assert (hs0sa : hstep s0 sa)
-          by exact (hstep_materialize _ _ _ _ _ _ (gok_hok _ _ _ hok) ema).
         destruct (materialize_sound lo G x (RE e :: RSk stk :: rs0) s0 a rsa sa tx
-                    hok hroom0 hgx ema)
-          as (hreqa & hcons_a & Ga & hexta & hoka & hGa).
-        subst rsa. cbv beta iota in he.
-        assert (hsa_s' : hstep sa s').
-        { pose proof (hstep_refl _ (proj2 hs0sa)) as h0.
-          revert h0. repeat match goal with h : hstep _ _ |- _ => clear h end. intros h0.
-          chain_fin HKf HKs HKw HKx HKa. }
-        assert (hfits_sa : fits sa s') by exact (fits_next s0 sa s' hfits hcons_a).
+                    hok hgx ema)
+          as (loa & Ga & hrena & hoka & hGa).
+        destruct rsa as [|r1 rsa1]; [discriminate he|].
+        destruct r1 as [| |ea| | | |]; try discriminate he.
+        destruct rsa1 as [|r2 rsa2]; [discriminate he|].
+        destruct r2 as [| | | |stka| |]; try discriminate he.
+        destruct (gren_cons _ _ _ _ _ _ hrena) as [hpea hrena1].
+        destruct (gren_cons _ _ _ _ _ _ hrena1) as [hpka hrena2].
+        cbn [gpres] in hpea, hpka.
+        cbv beta iota in he.
+        assert (hstka : g_slots Ga (list_set stka (rarg def) (SAddr a)) sts).
+        { rewrite <- (list_set_nth_id sts (rarg def) tx htx).
+          apply g_slots_list_set; [exact (hpka _ hsts)|]. constructor. exact hGa. }
         (* force it *)
         lazymatch type of he with
         | context [match ?y with COk _ => _ | CFail _ => _ end] =>
           destruct y as [[[vf rsf] sf]|w] eqn:ef
         end; [|discriminate he].
-        assert (hsa_sf : hstep sa sf)
-          by exact (HKf a (RE e :: RSk (list_set stk (rarg def) (SAddr a)) :: rs0) sa vf rsf sf
-                      (proj2 hs0sa) ef).
-        assert (hsf_s' : hstep sf s').
-        { pose proof (hstep_refl _ (proj2 hsa_sf)) as h0.
-          revert h0. repeat match goal with h : hstep _ _ |- _ => clear h end. intros h0.
-          chain_fin HKf HKs HKw HKx HKa. }
-        assert (hfits_f : fits sa sf) by exact (fits_first sa sf s' hfits_sa hsf_s').
-        destruct (IHf lo Ga a (RE e :: RSk (list_set stk (rarg def) (SAddr a)) :: rs0) sa vf rsf sf
-                    tx hoka hfits_f hGa ef)
-          as (hreqf & hconsf & Gf & uf & hextf & hokf & hvf & hcredf).
-        subst rsf. cbv beta iota in he.
-        assert (hfits_sf : fits sf s') by exact (fits_next sa sf s' hfits_sa hconsf).
-        assert (hroomf : roomn sf <> 0) by exact (fits_room sf s' hfits_sf hsf_s').
-        assert (hxf : gext G Gf) by exact (gext_trans _ _ _ hexta hextf).
-        assert (hsts1 : g_slots Gf (list_set stk (rarg def) (SAddr a)) sts).
-        { rewrite <- (list_set_nth_id sts (rarg def) tx htx).
-          apply g_slots_list_set; [exact (g_slots_mono G Gf hxf _ _ hsts)|].
-          constructor. exact (hextf a tx hGa). }
+        destruct (IHf loa Ga a (RE ea :: RSk (list_set stka (rarg def) (SAddr a)) :: rsa2) sa
+                    vf rsf sf tx hoka hGa ef)
+          as (lof & Gf & uf & hrenf & hokf & hvf & hcredf).
+        destruct rsf as [|r1 rsf1]; [discriminate he|].
+        destruct r1 as [| |e3| | | |]; try discriminate he.
+        destruct rsf1 as [|r2 rsf2]; [discriminate he|].
+        destruct r2 as [| | | |stkf| |]; try discriminate he.
+        destruct (gren_cons _ _ _ _ _ _ hrenf) as [hpef hrenf1].
+        destruct (gren_cons _ _ _ _ _ _ hrenf1) as [hpkf hrenf2].
+        cbn [gpres] in hpef, hpkf.
+        cbv beta iota in he.
+        assert (hstkf : g_slots Gf stkf sts) by exact (hpkf _ hstka).
+        assert (hpe3 : genv G Gf e e3) by exact (genv_trans _ _ _ _ _ _ hpea hpef).
         destruct vf as [h0 args|e1 c1|e1 c1 i1 sp1|e1 c1 i1 sp1|nn sp1|e1 c1|e1 c1 sp1];
           try discriminate he.
         1: { (* VCon: unfold the fixpoint *)
            destruct h0 as [| | | | | | | | | |cind cn cu| | | | |]; try discriminate he.
            destruct (g_value_VCon_inv _ _ _ _ hvf) as (targs & huf & hargs).
            destruct (alloc stress (CDone (VCon (tConstruct cind cn cu) args))
-                       (RE e :: RSk (list_set stk (rarg def) (SAddr a)) :: rs0) sf)
+                       (RE e3 :: RSk stkf :: rsf2) sf)
              as [[[a2 rs2] s2]|w] eqn:ea2; [|discriminate he].
-           destruct (alloc_sound lo Gf _ uf _ sf a2 rs2 s2 hokf hroomf
-                       (g_cell_done Gf _ _ hvf) eq_refl ea2)
-             as (hrs2 & hcons2 & G2 & hext2 & hok2 & hGa2).
-           subst rs2. cbv beta iota in he.
-           rewrite list_set_list_set in he.
-           assert (hs2_s' : hstep s2 s').
-           { pose proof (hstep_refl _ (gok_hok _ _ _ hok2)) as h0.
-             revert h0. repeat match goal with h : hstep _ _ |- _ => clear h end. intros h0.
-             chain_fin HKf HKs HKw HKx HKa. }
-           assert (hfits_2 : fits s2 s') by exact (fits_next sf s2 s' hfits_sf hcons2).
-           assert (hxf2 : gext G G2) by exact (gext_trans _ _ _ hxf hext2).
-           destruct (push_fix_cells stress e c 0 #|mfix| e
-                       (RSk (list_set stk (rarg def) (SAddr a2)) :: rs0) s2)
+           destruct (alloc_sound lof Gf _ uf _ sf a2 rs2 s2 hokf (g_cell_done Gf _ _ hvf) ea2)
+             as (lo2 & G2 & hren2 & hok2 & hGa2).
+           destruct rs2 as [|r1 rs2a]; [discriminate he|].
+           destruct r1 as [| |e4| | | |]; try discriminate he.
+           destruct rs2a as [|r2 rs4]; [discriminate he|].
+           destruct r2 as [| | | |stk4| |]; try discriminate he.
+           destruct (gren_cons _ _ _ _ _ _ hren2) as [hpe2 hren2a].
+           destruct (gren_cons _ _ _ _ _ _ hren2a) as [hpk2 hren2b].
+           cbn [gpres] in hpe2, hpk2.
+           cbv beta iota in he.
+           pose proof (genv_trans _ _ _ _ _ _ hpe3 hpe2) as (hnv4 & hgo4 & hsl4).
+           assert (hts4 : g_slots G2 e4.(ev_vals) ts) by exact (hsl4 _ hts).
+           assert (hnv4' : e4.(ev_nvals) = #|e4.(ev_vals)|).
+           { rewrite hnv4, hnv, <- (g_slots_length _ _ _ hts), (g_slots_length _ _ _ hts4).
+             reflexivity. }
+           assert (hcok2 : cok G2 c)
+             by exact (gren_cok _ _ _ _ _ hren2 (gren_cok _ _ _ _ _ hrenf
+                         (gren_cok _ _ _ _ _ hrena hcok))).
+           destruct (push_fix_cells stress e4 c 0 #|mfix| e4
+                       (RSk (list_set stk4 (rarg def) (SAddr a2)) :: rs4) s2)
              as [[[e' rs3] s3]|w] eqn:ep; [|discriminate he].
-           assert (hs3_s' : hstep s3 s').
-           { pose proof (hstep_push_fix_cells _ _ _ _ _ _ _ _ _ _ (gok_hok _ _ _ hok2) ep) as h1.
-             pose proof (hstep_refl _ (proj2 h1)) as h0.
-             revert h0. repeat match goal with h : hstep _ _ |- _ => clear h end. intros h0.
-             chain_fin HKf HKs HKw HKx HKa. }
-           assert (hfits_23 : fits s2 s3) by exact (fits_first s2 s3 s' hfits_2 hs3_s').
-           destruct (push_fix_cells_sound #|mfix| lo G2 e c mfix idx0 ts 0 e ts _ s2 e' rs3 s3
-                       hok2 hfits_23 hcfix (cok_mono G G2 hxf2 c hcok)
-                       (g_slots_mono G G2 hxf2 _ _ hts) hnv (g_slots_mono G G2 hxf2 _ _ hts) hnv ep)
-             as (hrs3 & hcons3 & G3 & hext3 & hok3 & hsl3 & hnv3 & hgoff3).
-           subst rs3. cbv beta iota in he.
-           assert (hfits_3 : fits s3 s') by exact (fits_next s2 s3 s' hfits_2 hcons3).
-           assert (hxf3 : gext G G3) by exact (gext_trans _ _ _ hxf2 hext3).
-           assert (hstk3 : g_slots G3 (list_set stk (rarg def) (SAddr a2))
-                             (list_set sts (rarg def) uf)).
-           { apply g_slots_list_set; [exact (g_slots_mono G G3 hxf3 _ _ hsts)|].
-             constructor. exact (hext3 a2 uf hGa2). }
+           destruct (push_fix_cells_sound #|mfix| lo2 G2 e4 c mfix idx0 ts 0 e4 ts _ s2 e' rs3 s3
+                       hok2 hcfix hcok2 hts4 hnv4' hts4 hnv4' ep)
+             as (lo3 & G3 & hren3 & hok3 & hsl3 & hnv3 & hgoff3).
+           destruct rs3 as [|r1 rs6]; [discriminate he|].
+           destruct r1 as [| | | |stk6| |]; try discriminate he.
+           destruct (gren_cons _ _ _ _ _ _ hren3) as [hpk3 hren3b].
+           cbn [gpres] in hpk3.
+           cbv beta iota in he.
+           assert (hstk6 : g_slots G3 stk6 (list_set sts (rarg def) uf)).
+           { apply hpk3. apply g_slots_list_set; [exact (hpk2 _ hstkf)|].
+             constructor. exact hGa2. }
            assert (hcb : cok G3 (child c (N.of_nat idx) def.(dbody))).
-           { apply (cok_mono G G3 hxf3). apply cok_child; [exact hcok|rewrite hcfix].
+           { apply (gren_cok _ _ _ _ _ hren3). apply cok_child; [exact hcok2|rewrite hcfix].
              apply cs_fix. rewrite Nat2N.id. exact edef. }
+           rewrite hgo4, hnv4 in hsl3. rewrite hgo4 in hgoff3.
            pose proof (g_susp_of_slots G3 e' def.(dbody) _ hsl3 hnv3) as hsb.
            (* the body read through the fixpoint cells is the unfolded body of [unfold_fix] *)
            rewrite hgoff3, hnv3, <- (g_slots_length _ _ _ hsl3), length_app, List.length_rev,
@@ -2838,14 +2784,14 @@ Section Eval.
                             (seq 0 #|mfix|))
              by (apply map_ext; intros j; apply rfix_eq).
            rewrite hm in hsb.
-           destruct (IHw lo G3 e' (child c (N.of_nat idx) def.(dbody))
-                       (list_set stk (rarg def) (SAddr a2)) (list_set sts (rarg def) uf) _
-                       rs0 s3 v0 rs' s' hok3 hfits_3 hsb hcb hstk3 he)
-             as (hreqw & hconsw & G' & u' & hext' & hok' & hv' & hcred').
-           split; [exact hreqw|].
-           split; [exact (consv_trans _ _ _ hcons_a (consv_trans _ _ _ hconsf
-                            (consv_trans _ _ _ hcons2 (consv_trans _ _ _ hcons3 hconsw))))|].
-           exists G', u'. split; [exact (gext_trans _ _ _ hxf3 hext')|].
+           destruct (IHw lo3 G3 e' (child c (N.of_nat idx) def.(dbody))
+                       stk6 (list_set sts (rarg def) uf) _
+                       rs6 s3 v0 rs' s' hok3 hsb hcb hstk6 he)
+             as (low & G' & u' & hrenw & hok' & hv' & hcred').
+           exists low, G', u'.
+           split; [exact (gren_trans _ _ _ _ _ _ hrena2 (gren_trans _ _ _ _ _ _ hrenf2
+                            (gren_trans _ _ _ _ _ _ hren2b
+                               (gren_trans _ _ _ _ _ _ hren3b hrenw))))|].
            split; [exact hok'|]. split; [exact hv'|].
            refine (cred_trans _ _ _ _ hcred').
            rewrite htc, rfix_eq.
@@ -2855,59 +2801,36 @@ Section Eval.
            ++ exact (unfold_fix_rfix ts (lvl - nctx + ev_goff e) (ev_nvals e) mfix idx def edef).
            ++ apply is_constructor_list_set. exact hrarg.
         } (* VStuckFix, VNeu, VStuck: a stuck fixpoint *)
-        all: destruct (mat_all X_type X stress (k tt) (list_set stk (rarg def) (SAddr a))
-                         (RE e :: rs0) sf)
+        all: destruct (mat_all X_type X stress (k tt) stkf (RE e3 :: rsf2) sf)
                as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he];
              destruct rsm as [|r1 rsm1]; [discriminate he|];
              destruct r1 as [| |ee| | | |]; try discriminate he;
              injection he as hv0 hrs hsm; subst v0 rs' s';
-             destruct (mat_all_sound (k tt) lo Gf _ sts (RE e :: rs0) sf sp2 (RE ee :: rsm1) sm
-                         hokf hfits_sf hsts1 em)
-               as (hreqm & hconsm & G' & hextm & hokm & haddrm);
-             injection hreqm as hee hrr; subst ee rsm1;
-             (split; [reflexivity|]);
-             (split; [exact (consv_trans _ _ _ hcons_a (consv_trans _ _ _ hconsf hconsm))|]);
-             exists G', (mkApps tc sts);
-             (split; [exact (gext_trans _ _ _ hxf hextm)|]);
+             destruct (mat_all_sound (k tt) lof Gf stkf sts (RE e3 :: rsf2) sf sp2
+                         (RE ee :: rsm1) sm hokf hstkf em)
+               as (lom & G' & hrenm & hokm & haddrm);
+             destruct (gren_cons _ _ _ _ _ _ hrenm) as [hpem hrenm1];
+             cbn [gpres] in hpem;
+             exists lom, G', (mkApps tc sts);
+             (split; [exact (gren_trans _ _ _ _ _ _ hrena2
+                               (gren_trans _ _ _ _ _ _ hrenf2 hrenm1))|]);
              (split; [exact hokm|]);
              (split; [|apply cred_refl]);
-             exact (g_VStuckFix G' e c mfix idx0 idx sp2 tc sts hcfix
-                      (g_susp_mono G G' (gext_trans _ _ _ hxf hextm) _ _ _ hsusp)
-                      (cok_mono G G' (gext_trans _ _ _ hxf hextm) c hcok) haddrm).
+             exact (g_VStuckFix G' ee c mfix idx0 idx sp2 tc sts hcfix
+                      (genv_susp _ _ _ _ _ _ (genv_trans _ _ _ _ _ _ hpe3 hpem) hsusp)
+                      (gren_cok _ _ _ _ _ hrenm (gren_cok _ _ _ _ _ hrenf
+                         (gren_cok _ _ _ _ _ hrena hcok)))
+                      haddrm).
       + (* apply *)
-        intros lo G vv stk sts tv rs0 s0 ww rs' s' hok hfits hv hsts he.
-        assert (hhs : hstep s0 s')
-          by exact (HFa vv stk rs0 s0 ww rs' s' (gok_hok _ _ _ hok) he).
-        assert (hroom0 : roomn s0 <> 0) by exact (fits_room s0 s' hfits hhs).
+        intros lo G vv stk sts tv rs0 s0 ww rs' s' hok hv hsts he.
         cbv beta iota zeta delta [apply] in he.
         destruct stk as [|xh stk'].
         * (* empty stack: the value itself *)
           inversion he; subst; clear he. inversion hsts; subst.
-          split; [reflexivity|]. split; [apply consv_refl|].
-          exists G, tv. split; [apply gext_refl|]. split; [exact hok|].
+          exists lo, G, tv. split; [apply gren_refl|]. split; [exact hok|].
           split; [exact hv|]. apply cred_refl.
         * destruct vv as [h sp|e c|e c i args|e c i sp|nn sp|e c|e c sp].
-          -- (* VCon *)
-             destruct (g_value_VCon_inv _ _ _ _ hv) as (ts & htv & hadd).
-             destruct (mat_all X_type X stress (k tt) (xh :: stk') (RV (VCon h sp) :: rs0) s0)
-               as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he].
-             destruct rsm as [|r1 rsm1]; [discriminate he|].
-             destruct r1 as [| | |vc| | |]; try discriminate he.
-             destruct (add_spine vc sp2) as [vres|] eqn:eadd; [|discriminate he].
-             injection he as hww hrsm hsm; subst ww rs' s'.
-             destruct (mat_all_sound (k tt) lo G (xh :: stk') sts (RV (VCon h sp) :: rs0) s0 sp2
-                         (RV vc :: rsm1) sm hok hfits hsts em)
-               as (hreqm & hconsm & G' & hextm & hokm & haddrm).
-             inversion hreqm; subst vc rsm1.
-             cbn in eadd. inversion eadd; subst vres.
-             split; [reflexivity|]. split; [exact hconsm|].
-             exists G', (mkApps h (ts ++ sts)).
-             split; [exact hextm|]. split; [exact hokm|].
-             split.
-             ++ apply g_VCon. apply Forall2_app;
-                  [exact (g_addrs_mono G G' hextm sp ts hadd)|exact haddrm].
-             ++ subst tv. rewrite mkApps_app. apply cred_refl.
-          -- (* VLam: beta *)
+          2: { (* VLam: beta *)
              pose proof (g_value_VLam_inv _ _ _ _ hv) as hsusp.
              pose proof (g_value_VLam_cok _ _ _ _ hv) as hcok.
              remember (c_term c) as ct eqn:ec;
@@ -2924,115 +2847,53 @@ Section Eval.
              destruct rsb1 as [|r2 rsb2]; [discriminate he|].
              destruct r2 as [| | | |lk| |]; try discriminate he.
              destruct (bind_sound lo G xh (child c 1 b) (RE e :: RSk stk' :: rs0) s0 xb
-                         (RE ee :: RSk lk :: rsb2) sb txh hok hroom0 hsloth hcb eb)
-               as (hreqb & hconsb & Gv & hextb & hokb & hslotb).
-             inversion hreqb; subst ee lk rsb2.
-             destruct (g_susp_lam Gv e na A b tv
-                         (g_susp_mono G Gv hextb e (tLambda na A b) tv hsusp))
+                         (RE ee :: RSk lk :: rsb2) sb txh hok hsloth hcb eb)
+               as (lob & Gv & hrenb & hokb & hslotb).
+             destruct (gren_cons _ _ _ _ _ _ hrenb) as [hpe hrenb1].
+             destruct (gren_cons _ _ _ _ _ _ hrenb1) as [hpk hrenb2].
+             cbn [gpres] in hpe, hpk.
+             destruct (g_susp_lam Gv ee na A b tv (genv_susp _ _ _ _ _ _ hpe hsusp))
                as (A' & B & htv & hlamprop).
-             assert (hfits_sb : fits sb s') by exact (fits_next s0 sb s' hfits hconsb).
-             destruct (IHw lo Gv (env_push xb e) (child c 1 b) stk' sts' (subst [txh] 0 B)
-                         rs0 sb ww rs' s' hokb hfits_sb (hlamprop xb txh hslotb)
-                         (cok_mono G Gv hextb _ hcb)
-                         (g_slots_mono G Gv hextb stk' sts' hslots') he)
-               as (hreqw & hconsw & G' & u' & hext' & hok' & hv' & hcred').
-             split; [exact hreqw|]. split; [exact (consv_trans s0 sb s' hconsb hconsw)|].
-             exists G', u'. split; [exact (gext_trans G Gv G' hextb hext')|].
+             destruct (IHw lob Gv (env_push xb ee) (child c 1 b) lk sts' (subst [txh] 0 B)
+                         rsb2 sb ww rs' s' hokb (hlamprop xb txh hslotb)
+                         (gren_cok _ _ _ _ _ hrenb hcb) (hpk _ hslots') he)
+               as (low & G' & u' & hrenw & hok' & hv' & hcred').
+             exists low, G', u'. split; [exact (gren_trans _ _ _ _ _ _ hrenb2 hrenw)|].
              split; [exact hok'|]. split; [exact hv'|].
              subst tv.
              apply (cred_trans (mkApps (tApp (tLambda na A' B) txh) sts')
                        (mkApps (subst [txh] 0 B) sts') u').
              ++ apply cred_mkApps. apply cred_one. apply red_beta.
-             ++ exact hcred'.
-          -- (* VFix: the fixpoint applied to its spine, then to the stack *)
+             ++ exact hcred'. }
+          2: { (* VFix: the fixpoint applied to its spine, then to the stack *)
              destruct (g_value_VFix_inv _ _ _ _ _ _ hv)
                as (mfix0 & idx0 & h & ts & hc0 & hsf & hcok & hadd & htv).
              rewrite hc0 in he.
              destruct (IHx lo G e c mfix0 idx0 i (map SAddr args ++ xh :: stk') (ts ++ sts) h
-                         rs0 s0 ww rs' s' hok hfits hc0 hsf hcok
+                         rs0 s0 ww rs' s' hok hc0 hsf hcok
                          (g_slots_app G _ _ _ _ (g_slots_addrs G _ _ hadd) hsts) he)
-               as (hreqx & hconsx & G' & u' & hext' & hok' & hv' & hcred').
-             split; [exact hreqx|]. split; [exact hconsx|].
-             exists G', u'. split; [exact hext'|]. split; [exact hok'|]. split; [exact hv'|].
-             subst tv. rewrite <- mkApps_app. exact hcred'.
-          -- (* VStuckFix: the spine grows *)
-             destruct (mat_all X_type X stress (k tt) (xh :: stk') (RV (VStuckFix e c i sp) :: rs0) s0)
-               as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he].
-             destruct rsm as [|r1 rsm1]; [discriminate he|].
-             destruct r1 as [| | |vc| | |]; try discriminate he.
-             destruct (add_spine vc sp2) as [vres|] eqn:eadd; [|discriminate he].
-             injection he as hww hrsm hsm; subst ww rs' s'.
-             destruct (mat_all_sound (k tt) lo G (xh :: stk') sts (RV (VStuckFix e c i sp) :: rs0)
-                         s0 sp2 (RV vc :: rsm1) sm hok hfits hsts em)
-               as (hreqm & hconsm & G' & hextm & hokm & haddrm).
-             injection hreqm as hvc hrr; subst vc rsm1.
-             cbn in eadd. injection eadd as <-.
-             destruct (g_value_VStuckFix_inv _ _ _ _ _ _ hv)
-               as (mfix0 & idx0 & hh & ts & hc0 & hsf & hcok & hadd & htv).
-             subst tv.
-             split; [reflexivity|]. split; [exact hconsm|].
-             exists G', (mkApps hh (ts ++ sts)).
-             split; [exact hextm|]. split; [exact hokm|].
-             split.
-             ++ exact (g_VStuckFix G' e c mfix0 idx0 i (sp ++ sp2) hh (ts ++ sts) hc0
-                         (g_susp_mono G G' hextm _ _ _ hsf) (cok_mono G G' hextm c hcok)
-                         (Forall2_app (g_addrs_mono G G' hextm sp ts hadd) haddrm)).
-             ++ rewrite mkApps_app. apply cred_refl.
-          -- (* VNeu *)
-             destruct (mat_all X_type X stress (k tt) (xh :: stk') (RV (VNeu nn sp) :: rs0) s0)
-               as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he].
-             destruct rsm as [|r1 rsm1]; [discriminate he|].
-             destruct r1 as [| | |vc| | |]; try discriminate he.
-             destruct (add_spine vc sp2) as [vres|] eqn:eadd; [|discriminate he].
-             injection he as hww hrsm hsm; subst ww rs' s'.
-             destruct (mat_all_sound (k tt) lo G (xh :: stk') sts (RV (VNeu nn sp) :: rs0) s0 sp2
-                         (RV vc :: rsm1) sm hok hfits hsts em)
-               as (hreqm & hconsm & G' & hextm & hokm & haddrm).
-             inversion hreqm; subst vc rsm1.
-             cbn in eadd. inversion eadd; subst vres.
-             destruct (g_value_VNeu_inv _ _ _ _ hv) as [(l & ts & hnn & htv & hadd)|(hh & ts & hnn & htv & hadd)].
-             ++ subst nn tv.
-                split; [reflexivity|]. split; [exact hconsm|].
-                exists G', (mkApps (tRel (lvl - S l)) (ts ++ sts)).
-                split; [exact hextm|]. split; [exact hokm|].
-                split.
-                ** exact (g_VNeuVar G' l (sp ++ sp2) (ts ++ sts)
-                            (Forall2_app (g_addrs_mono G G' hextm sp ts hadd) haddrm)).
-                ** rewrite mkApps_app. apply cred_refl.
-             ++ subst nn tv.
-                split; [reflexivity|]. split; [exact hconsm|].
-                exists G', (mkApps hh (ts ++ sts)).
-                split; [exact hextm|]. split; [exact hokm|].
-                split.
-                ** exact (g_VNeuConst G' hh (sp ++ sp2) (ts ++ sts)
-                            (Forall2_app (g_addrs_mono G G' hextm sp ts hadd) haddrm)).
-                ** rewrite mkApps_app. apply cred_refl.
-          -- (* VOpen: cannot be applied *)
-             discriminate he.
-          -- (* VStuck *)
-             destruct (mat_all X_type X stress (k tt) (xh :: stk') (RV (VStuck e c sp) :: rs0) s0)
-               as [[[sp2 rsm] sm]|w] eqn:em; [|discriminate he].
-             destruct rsm as [|r1 rsm1]; [discriminate he|].
-             destruct r1 as [| | |vc| | |]; try discriminate he.
-             destruct (add_spine vc sp2) as [vres|] eqn:eadd; [|discriminate he].
-             injection he as hww hrsm hsm; subst ww rs' s'.
-             destruct (mat_all_sound (k tt) lo G (xh :: stk') sts (RV (VStuck e c sp) :: rs0) s0 sp2
-                         (RV vc :: rsm1) sm hok hfits hsts em)
-               as (hreqm & hconsm & G' & hextm & hokm & haddrm).
-             inversion hreqm; subst vc rsm1.
-             cbn in eadd. inversion eadd; subst vres.
-             destruct (g_value_VStuck_inv _ _ _ _ _ hv) as (hh & ts & hsuspc & hadd & htv).
-             pose proof (g_value_VStuck_cok _ _ _ _ _ hv) as hcs.
-             subst tv.
-             split; [reflexivity|]. split; [exact hconsm|].
-             exists G', (mkApps hh (ts ++ sts)).
-             split; [exact hextm|]. split; [exact hokm|].
-             split.
-             ++ exact (g_VStuck G' e c (sp ++ sp2) hh (ts ++ sts)
-                         (g_susp_mono G G' hextm e c.(c_term) hh hsuspc)
-                         (cok_mono G G' hextm c hcs)
-                         (Forall2_app (g_addrs_mono G G' hextm sp ts hadd) haddrm)).
-             ++ rewrite mkApps_app. apply cred_refl.
+               as (lox & G' & u' & hrenx & hok' & hv' & hcred').
+             exists lox, G', u'. split; [exact hrenx|]. split; [exact hok'|].
+             split; [exact hv'|].
+             subst tv. rewrite <- mkApps_app. exact hcred'. }
+          4: { (* VOpen: cannot be applied *) discriminate he. }
+          (* VCon, VStuckFix, VNeu, VStuck: the stack goes into the spine *)
+          all: lazymatch type of he with
+               | context [match ?y with COk _ => _ | CFail _ => _ end] =>
+                 destruct y as [[[sp2 rsm] sm]|w] eqn:em
+               end; [|discriminate he];
+               destruct rsm as [|r1 rsm1]; [discriminate he|];
+               destruct r1 as [| | |vc| | |]; try discriminate he;
+               destruct (add_spine vc sp2) as [vres|] eqn:eadd; [|discriminate he];
+               injection he as hww hrsm hsm; subst ww rs' s';
+               destruct (mat_all_sound (k tt) lo G (xh :: stk') sts _ s0 sp2 _ sm hok hsts em)
+                 as (lom & G' & hrenm & hokm & haddrm);
+               destruct (gren_cons _ _ _ _ _ _ hrenm) as [hpv hrenm1];
+               cbn [gpres] in hpv;
+               exists lom, G', (mkApps tv sts);
+               (split; [exact hrenm1|]); (split; [exact hokm|]);
+               (split; [exact (g_value_add_spine _ _ _ _ _ _ (hpv _ hv) haddrm eadd)
+                       |apply cred_refl]).
   Qed.
 
 End Eval.
