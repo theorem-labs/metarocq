@@ -56,10 +56,12 @@ Section HookProof.
     discriminate h.
   Qed.
 
-  (** [cbn_conv] unfolded to [cbn_run]. Rewrite with it rather than [unfold] in a
-    hypothesis: after [unfold], the kernel checks the hypothesis against the rewrite's
-    motive applied to [cbn_run ...], and that check runs out of memory on bet64-mem
-    (8 GB). The rewrite's motive here is syntactically the hypothesis. *)
+  (** [cbn_conv] unfolded to [cbn_run]. KERNEL TRAP: do not [unfold cbn_conv,
+    cbn_conv_answer in hc] and then [rewrite cbn_run_eq in hc]. The tactics succeed at
+    once, but at [Qed] the kernel checks [hc : cbn_conv ... = true] against the rewrite's
+    motive applied to [cbn_run ...], evaluates the machine at [cbn_depth] on the way, and
+    runs out of memory (killed at 8 GB on bet64-mem). Rewriting with this [eq_refl] lemma
+    first makes each rewrite's motive syntactically the hypothesis, and [Qed] is instant. *)
   Lemma cbn_conv_unfold (le : conv_pb) (Γ : context) (t u : term) :
     cbn_conv X_type X le Γ t u
     = match cbn_run X_type X Γ #|Γ| false le t u with CbnYes => true | _ => false end.
