@@ -145,6 +145,8 @@ theories/PCUICEtaBetaEta.v
 theories/PCUICEtaScope.v
 # BET-315 eta lane (L2): C4 shape guard — (A) is instantiable by C3 + P-SCOPE (C4 -> C3 only)
 theories/PCUICEtaC4Shape.v
+# BET-315 eta lane (C4C1a): C1a, upto_domain commutes with red1 up to clos_refl
+theories/PCUICEtaC1a.v
 # BET-315 eta lane (C4B): theorem (B), Hindley-Rosen modulo E (carrier-generic, MetaRocq-free)
 theories/PCUICEtaHRModulo.v
 # BET-315 eta lane (L2): C4 assembly (P-INST) — first file joining C4 to base confluence
