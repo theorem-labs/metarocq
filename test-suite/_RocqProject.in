@@ -31,6 +31,7 @@ issue453.v
 letin.v
 modules_sections.v
 mutind.v
+noncumulative_constructors.v
 opaque.v
 order_rec.v
 # plugin-demo/test/test.v
