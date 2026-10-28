@@ -41,10 +41,12 @@
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations.Type Require Import Relation Relation_Properties.
+From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config Universes.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICReduction
-     PCUICOnFreeVars PCUICTyping PCUICEtaDefs PCUICEtaBetaEta.
+     PCUICInduction PCUICCases PCUICEquality PCUICOnFreeVars PCUICTyping
+     PCUICEtaDefs PCUICEtaBetaEta.
 
 Import PCUICOnFreeVars (is_open_term, is_closed_context).
 
@@ -356,4 +358,462 @@ Proof.
   apply (rt_from_normal _ _ _ (betaeta_normal_u _ _)) in Hu.
   apply (rt_from_normal _ _ _ (betaeta_normal_t' _ _)) in Hv.
   subst u' v'. exact (c1b_not_upto HE).
+Qed.
+
+
+(** ** F1/F2: [E2] does NOT commute with [red1]
+
+   [E2 := clos_refl_sym_trans (upto_domain ∪ eta1)] is the comparison of the
+   design gate's repair (2). It is stated HERE, locally; no shared file changes.
+
+   The blockage is in the REDUCTION, not in the comparison: η-expanding a case
+   SCRUTINEE turns a constructor application into a λ, and iota does not fire on
+   a λ. So a term that iota-reduces is [E2]-related to a term that cannot move at
+   all, by β or by η.
+
+   The inductive is a one-constructor, zero-parameter inductive [EtaC1b.I] with
+   constructor 0; it is never looked up, since [red1]'s [red_iota] reads only the
+   branch list and the arity equation, not the environment. F1 uses a branch of
+   arity 0 and no arguments; F2 a branch of arity 1 and one argument. *)
+
+Definition f_ci : case_info :=
+  {| ci_ind := mkInd (MPfile ["EtaC1b"%bs], "I"%bs) 0; ci_npar := 0; ci_relevance := Relevant |}.
+Definition f_p : predicate term :=
+  {| pparams := []; puinst := []; pcontext := []; preturn := c1b_P |}.
+Definition f_br : branch term := {| bcontext := []; bbody := c1b_P |}.
+Definition f_br1 : branch term := {| bcontext := [vass c1b_na c1b_P]; bbody := c1b_P |}.
+Definition f_C : term := tConstruct f_ci.(ci_ind) 0 [].
+
+(** *** The [E2]-invariant: "contains a constructor", λ domains ignored.
+
+   [upto_domain] ignores λ domains and [eta1] deletes one, so the invariant must
+   ignore them too. Primitive values are given [false] on both sides, which is
+   invariant because no [eta1] or [upto_domain] step relates a [tPrim] to a
+   non-[tPrim]. *)
+
+Fixpoint hasC (t : term) : bool :=
+  match t with
+  | tConstruct _ _ _ => true
+  | tLambda _ _ b => hasC b
+  | tProd _ a b => hasC a || hasC b
+  | tLetIn _ b ty u => hasC b || hasC ty || hasC u
+  | tApp u v => hasC u || hasC v
+  | tEvar _ l => existsb hasC l
+  | tCase _ p c brs =>
+      existsb hasC p.(pparams) || hasC p.(preturn) || hasC c
+      || existsb (fun br => hasC br.(bbody)) brs
+  | tProj _ c => hasC c
+  | tFix m _ => existsb (fun d => hasC d.(dtype) || hasC d.(dbody)) m
+  | tCoFix m _ => existsb (fun d => hasC d.(dtype) || hasC d.(dbody)) m
+  | _ => false
+  end.
+
+Lemma existsb_All_ext {A} (f g : A -> bool) l :
+  All (fun x => f x = g x) l -> existsb f l = existsb g l.
+Proof. induction 1; cbn; congruence. Qed.
+
+Ltac hasC_rw :=
+  repeat match goal with
+  | H : forall k, hasC (lift _ k _) = hasC _ |- _ => rewrite H
+  end.
+
+Lemma hasC_lift n t : forall k, hasC (lift n k t) = hasC t.
+Proof.
+  induction t using term_forall_list_ind; intros k; cbn; hasC_rw; try reflexivity.
+  all: try solve [ induction X; cbn; congruence ].
+  all: try solve
+    [ destruct X as (Hpars & _ & Hret); rewrite Hret;
+      assert (HA : existsb hasC (map (lift n k) (pparams p)) = existsb hasC (pparams p))
+        by (clear -Hpars; induction Hpars; cbn; congruence);
+      assert (HD : existsb (fun br : branch term => hasC (bbody br))
+                     (map_branches_k (lift n) id k l)
+                   = existsb (fun br : branch term => hasC (bbody br)) l)
+        by (clear -X0; induction X0; cbn; [reflexivity|];
+            match goal with H : _ × _ |- _ => destruct H as [_ Hb]; rewrite Hb end;
+            congruence);
+      rewrite HA HD; reflexivity ].
+  all: try solve
+    [ repeat match goal with |- context [lift _ (#|?m| + ?K)] => generalize (#|m| + K)%nat; intro end;
+      induction X; cbn; [reflexivity|];
+      match goal with H : _ × _ |- _ => destruct H as [Ht Hb]; rewrite Ht Hb end;
+      congruence ].
+Qed.
+
+Lemma All2_upto_existsb {l l'} :
+  All (fun t => forall v, upto_domain t v -> hasC t = hasC v) l ->
+  All2 upto_domain l l' -> existsb hasC l = existsb hasC l'.
+Proof.
+  intros H a. pose proof (All2_All_mix_left H a) as a'. clear H a.
+  induction a'; cbn; [reflexivity|].
+  destruct r as [Hh Hr]. rewrite (Hh _ Hr) IHa'. reflexivity.
+Qed.
+
+Lemma hasC_upto t : forall v, upto_domain t v -> hasC t = hasC v.
+Proof.
+  induction t using term_forall_list_ind; intros v e; depelim e; cbn [hasC];
+    repeat match goal with
+    | H : forall v, upto_domain ?x v -> hasC ?x = hasC v, E : upto_domain ?x _ |- _ =>
+        rewrite (H _ E); clear H E
+    end;
+    try reflexivity.
+  (* Evar *)
+  all: try solve [ match goal with
+                   | X : All _ ?l, A : All2 upto_domain ?l ?l' |- _ =>
+                       exact (All2_upto_existsb X A)
+                   end ].
+  (* Case *)
+  all: try solve
+    [ destruct X as (Hpars & _ & Hret);
+      match goal with
+      | A : All2 upto_domain (pparams _) (pparams _) |- _ =>
+          rewrite (All2_upto_existsb Hpars A)
+      end;
+      match goal with
+      | R : upto_domain (preturn _) (preturn _) |- _ => rewrite (Hret _ R)
+      end;
+      f_equal;
+      match goal with
+      | B : All2 _ ?brs ?brs' |- _ => pose proof (All2_All_mix_left X0 B) as bb; clear B X0
+      end;
+      induction bb; cbn; [reflexivity|];
+      destruct r as [[_ Hbb] [_ Hr]]; rewrite (Hbb _ Hr) IHbb; reflexivity ].
+  (* Fix / CoFix *)
+  all: try solve
+    [ match goal with
+      | A : All2 _ ?m ?m' |- _ => pose proof (All2_All_mix_left X A) as mm; clear A X
+      end;
+      induction mm; cbn; [reflexivity|];
+      destruct r as [[Hd Hb] (Ht & Hbo & _)];
+      rewrite (Hd _ Ht) (Hb _ Hbo) IHmm; reflexivity ].
+Qed.
+
+Lemma OnOne2_hasC {l l'} :
+  OnOne2 (Trel_conj eta1 (fun t u => hasC t = hasC u)) l l' ->
+  existsb hasC l = existsb hasC l'.
+Proof.
+  induction 1; cbn; [|congruence].
+  match goal with H : _ × _ |- _ => destruct H as [_ He] end. congruence.
+Qed.
+
+Lemma OnOne2_hasC_br {brs brs'} :
+  OnOne2 (on_Trel_eq (Trel_conj eta1 (fun t u => hasC t = hasC u)) bbody bcontext) brs brs' ->
+  existsb (fun br : branch term => hasC (bbody br)) brs
+  = existsb (fun br : branch term => hasC (bbody br)) brs'.
+Proof.
+  induction 1; cbn; [|congruence].
+  match goal with H : _ × _ |- _ => destruct H as [[_ He] _] end. congruence.
+Qed.
+
+Lemma OnOne2_hasC_mfix_ty {m m'} :
+  OnOne2 (on_Trel_eq (Trel_conj eta1 (fun t u => hasC t = hasC u)) dtype
+                     (fun x => (dname x, dbody x, rarg x))) m m' ->
+  existsb (fun d : def term => hasC (dtype d) || hasC (dbody d)) m
+  = existsb (fun d : def term => hasC (dtype d) || hasC (dbody d)) m'.
+Proof.
+  induction 1; cbn; [|congruence].
+  match goal with H : _ × _ |- _ => destruct H as [[_ He] Heq] end.
+  unfold on_Trel in Heq; cbn in Heq. injection Heq; intros; congruence.
+Qed.
+
+Lemma OnOne2_hasC_mfix_body {m m'} :
+  OnOne2 (on_Trel_eq (Trel_conj eta1 (fun t u => hasC t = hasC u)) dbody
+                     (fun x => (dname x, dtype x, rarg x))) m m' ->
+  existsb (fun d : def term => hasC (dtype d) || hasC (dbody d)) m
+  = existsb (fun d : def term => hasC (dtype d) || hasC (dbody d)) m'.
+Proof.
+  induction 1; cbn; [|congruence].
+  match goal with H : _ × _ |- _ => destruct H as [[_ He] Heq] end.
+  unfold on_Trel in Heq; cbn in Heq. injection Heq; intros; congruence.
+Qed.
+
+Lemma hasC_eta1 t u : eta1 t u -> hasC t = hasC u.
+Proof.
+  revert t u. apply (eta1_ind_all (fun t u => hasC t = hasC u)); intros; cbn;
+    rewrite ?hasC_lift ?orb_false_r;
+    repeat match goal with H : hasC _ = hasC _ |- _ => rewrite H end;
+    try reflexivity.
+  all: try solve [ first [ erewrite OnOne2_hasC by eassumption
+                         | erewrite OnOne2_hasC_br by eassumption
+                         | erewrite OnOne2_hasC_mfix_ty by eassumption
+                         | erewrite OnOne2_hasC_mfix_body by eassumption ]; reflexivity ].
+Qed.
+
+Definition E2 : term -> term -> Type :=
+  clos_refl_sym_trans (fun t u => (upto_domain t u + eta1 t u)%type).
+
+Lemma hasC_E2 t u : E2 t u -> hasC t = hasC u.
+Proof.
+  induction 1.
+  - destruct r as [H|H]; [now apply hasC_upto | now apply hasC_eta1].
+  - reflexivity.
+  - now symmetry.
+  - etransitivity; eassumption.
+Qed.
+
+Lemma not_E2_sort t : hasC t = true -> E2 t c1b_P -> False.
+Proof. intros Ht H. apply hasC_E2 in H. rewrite Ht in H. discriminate H. Qed.
+
+(** *** The witnesses *)
+
+Definition f_L : term := tLambda c1b_na (tRel 0) (tRel 0).      (* λw:x. w, x the outer binder *)
+Definition f_LS : term := tLambda c1b_na c1b_P (tRel 0).         (* λw:P. w, closed *)
+
+Definition f_a : term := tCase f_ci f_p f_C [f_br].
+Definition f_a' : term := tCase f_ci f_p (tLambda c1b_na c1b_P (tApp f_C (tRel 0))) [f_br].
+
+Definition f_y : term :=
+  tCase f_ci f_p (tLambda c1b_na c1b_P (tApp (tApp f_C f_L) (tRel 0))) [f_br1].
+Definition f_y2 : term :=
+  tCase f_ci f_p (tLambda c1b_na c1b_P (tApp (tApp f_C f_LS) (tRel 0))) [f_br1].
+Definition f_z : term := tCase f_ci f_p (tApp f_C f_LS) [f_br1].
+
+(** *** Inversion helpers for [mkApps]-headed [red1] rules *)
+
+Lemma mkApps_eq_Lambda f args na A b :
+  ~~ isApp f -> mkApps f args = tLambda na A b -> f = tLambda na A b.
+Proof.
+  intros Hf E. apply (f_equal decompose_app) in E.
+  rewrite (decompose_app_mkApps f args Hf) in E. cbn in E. now injection E.
+Qed.
+
+Lemma mkApps_Construct_not_Lambda ind n u args na A b :
+  mkApps (tConstruct ind n u) args = tLambda na A b -> False.
+Proof. intros E. apply mkApps_eq_Lambda in E; [discriminate E | reflexivity]. Qed.
+
+Lemma mkApps_CoFix_not_Lambda mfix idx args na A b :
+  mkApps (tCoFix mfix idx) args = tLambda na A b -> False.
+Proof. intros E. apply mkApps_eq_Lambda in E; [discriminate E | reflexivity]. Qed.
+
+(** *** (a) The reductions and the [E2] relations *)
+
+Lemma f_a'_eta : eta1 f_a' f_a.
+Proof.
+  unfold f_a', f_a. apply case_eta_discr. exact (eta_red c1b_na f_C c1b_P).
+Qed.
+
+Lemma f_a_iota Σ Γ : red1 Σ Γ f_a c1b_P.
+Proof.
+  unfold f_a.
+  assert (E : iota_red 0 f_p [] f_br = c1b_P) by (vm_compute; reflexivity).
+  rewrite <- E. exact (red_iota Σ Γ f_ci 0 [] [] f_p [f_br] f_br eq_refl eq_refl).
+Qed.
+
+Lemma f_z_iota Σ Γ : red1 Σ Γ f_z c1b_P.
+Proof.
+  unfold f_z.
+  assert (E : iota_red 0 f_p [f_LS] f_br1 = c1b_P) by (vm_compute; reflexivity).
+  rewrite <- E. exact (red_iota Σ Γ f_ci 0 [] [f_LS] f_p [f_br1] f_br1 eq_refl eq_refl).
+Qed.
+
+Lemma f_y_upto : upto_domain f_y f_y2.
+Proof.
+  unfold f_y, f_y2, f_p, f_br1, f_L, f_LS, f_C, c1b_P.
+  apply utd_Case; cbn.
+  - constructor.
+  - reflexivity.
+  - reflexivity.
+  - constructor.
+  - repeat constructor.
+  - constructor; [|constructor]. split; [reflexivity|constructor].
+Qed.
+
+Lemma f_y2_eta : eta1 f_y2 f_z.
+Proof.
+  unfold f_y2, f_z. apply case_eta_discr.
+  exact (eta_red c1b_na (tApp f_C f_LS) c1b_P).
+Qed.
+
+Lemma E2_step_upto t u : upto_domain t u -> E2 t u.
+Proof. intros H. apply rst_step. now left. Qed.
+
+Lemma E2_step_eta t u : eta1 t u -> E2 t u.
+Proof. intros H. apply rst_step. now right. Qed.
+
+Lemma f_a_E2 : E2 f_a f_a'.
+Proof. apply rst_sym. apply E2_step_eta. exact f_a'_eta. Qed.
+
+Lemma f_z_E2 : E2 f_z f_y.
+Proof.
+  apply rst_sym. eapply rst_trans.
+  - apply E2_step_upto. exact f_y_upto.
+  - apply E2_step_eta. exact f_y2_eta.
+Qed.
+
+(** *** (c) [f_a'] and [f_y] are normal *)
+
+Lemma red_normal_Construct Σ Γ ind n u v : red1 Σ Γ (tConstruct ind n u) v -> False.
+Proof. intros H. inv_red H. Qed.
+
+Lemma eta_normal_Construct ind n u v : eta1 (tConstruct ind n u) v -> False.
+Proof. intros H. inv_eta H. Qed.
+
+Lemma red_normal_appC Σ Γ na A v :
+  red1 Σ (Γ ,, vass na A) (tApp f_C (tRel 0)) v -> False.
+Proof.
+  unfold f_C. intros H. inv_red H.
+  - eapply red_normal_Construct; eassumption.
+  - eapply red_normal_Rel0; eassumption.
+Qed.
+
+Lemma red_normal_a'_scrut Σ Γ v :
+  red1 Σ Γ (tLambda c1b_na c1b_P (tApp f_C (tRel 0))) v -> False.
+Proof.
+  apply red_normal_lam.
+  - intros x. unfold c1b_P. apply red_normal_Sort.
+  - intros x. apply red_normal_appC.
+Qed.
+
+Lemma red_normal_case1 Σ Γ ci p c br v :
+  pparams p = [] ->
+  (forall Δ x, red1 Σ (Γ ,,, Δ) (preturn p) x -> False) ->
+  (forall x, red1 Σ Γ c x -> False) ->
+  (forall Δ x, red1 Σ (Γ ,,, Δ) (bbody br) x -> False) ->
+  (forall ind n u args, c = mkApps (tConstruct ind n u) args -> False) ->
+  (forall mfix idx args, c = mkApps (tCoFix mfix idx) args -> False) ->
+  red1 Σ Γ (tCase ci p c [br]) v -> False.
+Proof.
+  intros Hpar Hret Hc Hbr Hcon Hcof H. inv_red H.
+  all: first
+    [ solve [eapply Hcon; reflexivity]
+    | solve [eapply Hcof; reflexivity]
+    | solve [eapply Hcon; symmetry; eassumption]
+    | solve [eapply Hcof; symmetry; eassumption]
+    | solve [eapply Hcon; eassumption]
+    | solve [eapply Hcof; eassumption]
+    | solve [eapply Hret; eassumption]
+    | solve [eapply Hc; eassumption]
+    | solve [match goal with o : OnOne2 _ (pparams _) _ |- _ => rewrite Hpar in o; depelim o end]
+    | solve [match goal with o : OnOne2 _ [_] _ |- _ => depelim o end;
+             [ match goal with Hp : _ × _ |- _ => destruct Hp as [Hb _]; eapply Hbr; exact Hb end
+             | match goal with o : OnOne2 _ _ _ |- _ => depelim o end ]] ].
+Qed.
+
+Lemma red_normal_a' Σ Γ v : red1 Σ Γ f_a' v -> False.
+Proof.
+  unfold f_a'. apply red_normal_case1.
+  - reflexivity.
+  - intros Δ x. cbn. unfold c1b_P. apply red_normal_Sort.
+  - intros x. apply red_normal_a'_scrut.
+  - intros Δ x. cbn. unfold c1b_P. apply red_normal_Sort.
+  - intros ind n u args E. eapply mkApps_Construct_not_Lambda. symmetry; exact E.
+  - intros mfix idx args E. eapply mkApps_CoFix_not_Lambda. symmetry; exact E.
+Qed.
+
+Lemma lift_1_0_not_CL T : lift 1 0 T = tApp f_C f_L -> False.
+Proof.
+  unfold f_C, f_L. intros E.
+  destruct T; cbn in E; try discriminate E.
+  match type of E with tApp _ (lift 1 0 ?T2) = _ => destruct T2; cbn in E; try discriminate E end.
+  injection E; intros; eapply lift_1_0_not_Rel0; eassumption.
+Qed.
+
+Lemma red_normal_fL Σ Γ na A v : red1 Σ (Γ ,, vass na A) f_L v -> False.
+Proof.
+  unfold f_L. apply red_normal_lam.
+  - intros x. apply red_normal_Rel0.
+  - intros x. apply red_normal_Rel0.
+Qed.
+
+Lemma eta_normal_L' v : eta1 f_L v -> False.
+Proof.
+  unfold f_L. apply eta_normal_lam.
+  - intros x. apply eta_normal_Rel.
+  - intros x. apply eta_normal_Rel.
+  - exact I.
+Qed.
+
+Lemma red_normal_y_scrut Σ Γ v :
+  red1 Σ Γ (tLambda c1b_na c1b_P (tApp (tApp f_C f_L) (tRel 0))) v -> False.
+Proof.
+  apply red_normal_lam.
+  - intros x. unfold c1b_P. apply red_normal_Sort.
+  - intros x H. inv_red H.
+    + (* app_red_l on (tApp f_C f_L) *)
+      match goal with H : red1 _ _ (tApp f_C f_L) _ |- _ => rename H into Hl end.
+      unfold f_C in Hl. inv_red Hl.
+      * eapply red_normal_Construct; eassumption.
+      * eapply red_normal_fL; eassumption.
+    + eapply red_normal_Rel0; eassumption.
+Qed.
+
+Lemma eta_normal_y_scrut v :
+  eta1 (tLambda c1b_na c1b_P (tApp (tApp f_C f_L) (tRel 0))) v -> False.
+Proof.
+  intros H. inv_eta H.
+  - (* eta_red: the function part would have to be a lift *)
+    eapply lift_1_0_not_CL; eassumption.
+  - (* abs_eta_l: the domain *)
+    unfold c1b_P in *. eapply eta_normal_Sort; eassumption.
+  - (* abs_eta_r: the body *)
+    match goal with H : eta1 (tApp (tApp f_C f_L) (tRel 0)) _ |- _ => rename H into Hb end.
+    inv_eta Hb.
+    + match goal with H : eta1 (tApp f_C f_L) _ |- _ => rename H into Hl end.
+      unfold f_C in Hl. inv_eta Hl.
+      * eapply eta_normal_Construct; eassumption.
+      * eapply eta_normal_L'; eassumption.
+    + eapply eta_normal_Rel; eassumption.
+Qed.
+
+Lemma red_normal_y Σ Γ v : red1 Σ Γ f_y v -> False.
+Proof.
+  unfold f_y. apply red_normal_case1.
+  - reflexivity.
+  - intros Δ x. cbn. unfold c1b_P. apply red_normal_Sort.
+  - intros x. apply red_normal_y_scrut.
+  - intros Δ x. cbn. unfold c1b_P. apply red_normal_Sort.
+  - intros ind n u args E. eapply mkApps_Construct_not_Lambda. symmetry; exact E.
+  - intros mfix idx args E. eapply mkApps_CoFix_not_Lambda. symmetry; exact E.
+Qed.
+
+Lemma eta_normal_y v : eta1 f_y v -> False.
+Proof.
+  unfold f_y, f_p, f_br1 in *. intros H. inv_eta H.
+  all: first
+    [ solve [eapply eta_normal_y_scrut; eassumption]
+    | solve [cbn in *; unfold c1b_P in *; eapply eta_normal_Sort; eassumption]
+    | solve [match goal with o : OnOne2 _ _ _ |- _ => cbn in o; depelim o end]
+    | solve [match goal with o : OnOne2 _ _ _ |- _ => cbn in o; depelim o end;
+             [ match goal with Hp : _ × _ |- _ =>
+                 destruct Hp as [Hb _]; cbn in Hb; unfold c1b_P in Hb;
+                 eapply eta_normal_Sort; exact Hb end
+             | match goal with o : OnOne2 _ _ _ |- _ => depelim o end ]] ].
+Qed.
+
+Lemma betaeta_normal_y Σ Γ v : beta_eta1 Σ Γ f_y v -> False.
+Proof. intros [H|H]; [exact (red_normal_y _ _ _ H) | exact (eta_normal_y _ H)]. Qed.
+
+(** *** (d) The refutations *)
+
+Lemma hasC_f_a' : hasC f_a' = true.
+Proof. reflexivity. Qed.
+
+Lemma hasC_f_y : hasC f_y = true.
+Proof. reflexivity. Qed.
+
+(** F1: [E2] does not commute with [red1]: [f_a] iota-reduces to [c1b_P], it is
+    [E2]-related to [f_a'], and [f_a'] has no [red1] step at all. *)
+Theorem E2_red_no_commute :
+  (forall (Σ : global_env) (Γ : context) (t t' u : term),
+     E2 t t' -> red1 Σ Γ t u ->
+     ∑ u', clos_refl_trans (red1 Σ Γ) t' u' × E2 u u') -> False.
+Proof.
+  intros H.
+  destruct (H empty_global_env [] f_a f_a' c1b_P f_a_E2 (f_a_iota _ _)) as (u' & Hr & HE).
+  apply (rt_from_normal _ _ _ (red_normal_a' empty_global_env [])) in Hr. subst u'.
+  exact (not_E2_sort _ hasC_f_a' (rst_sym _ _ _ HE)).
+Qed.
+
+(** F2: the stronger form. [f_y] has no step at all — not even an η step — so
+    keeping η steps in the joins does not rescue the route: the blockage is in
+    the REDUCTION (iota does not fire on an η-expanded scrutinee), not in the
+    comparison. *)
+Theorem E2_red_no_commute_strong :
+  (forall (Σ : global_env) (Γ : context) (t t' u : term),
+     E2 t t' -> red1 Σ Γ t u ->
+     ∑ u', clos_refl_trans (beta_eta1 Σ Γ) t' u' × E2 u u') -> False.
+Proof.
+  intros H.
+  destruct (H empty_global_env [] f_z f_y c1b_P f_z_E2 (f_z_iota _ _)) as (u' & Hr & HE).
+  apply (rt_from_normal _ _ _ (betaeta_normal_y empty_global_env [])) in Hr. subst u'.
+  exact (not_E2_sort _ hasC_f_y (rst_sym _ _ _ HE)).
 Qed.
