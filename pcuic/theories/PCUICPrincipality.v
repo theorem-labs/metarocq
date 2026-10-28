@@ -734,6 +734,10 @@ Proof.
     unshelve eapply declared_constant_to_gen in H0, d; tea.
     pose proof (declared_constant_inj _ _ H0 d). subst cdecl'.
     simp prim_type in w |- *.
+    (* The guard on ws_cumul_pb_Axiom_l_inv: prim_ty is a registered primitive
+       TYPE constant, which §4.2(a)1 keeps out of the operation table. *)
+    assert (hnop : prim_op_of Σ prim_ty = None).
+    { pose proof wfΣ as [_ [wfr _]]. eapply prim_op_of_primitive_constant; tea. }
     eapply (ws_cumul_pb_Axiom_l_inv (args := [_])) in w as [u' [args' []]]; tea. 2:eapply declared_constant_from_gen, H0. 2:eapply p.
     eapply cumulAlgo_cumulSpec. etransitivity. now eapply red_ws_cumul_pb.
     eapply All2_tip_l in a3 as [y' [-> Heq]]. red in c0.

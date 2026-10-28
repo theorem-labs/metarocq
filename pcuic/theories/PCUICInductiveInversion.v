@@ -906,6 +906,7 @@ Proof.
   intros _ red.
   depelim red.
   symmetry in H; apply mkApps_Fix_spec in H. simpl in H. intuition.
+  solve_discr.
   constructor. constructor.
 Qed.
 
