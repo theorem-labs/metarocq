@@ -173,4 +173,6 @@ theories/PCUICEtaHRCommutationA1.v
 theories/PCUICEtaCanonC4.v
 # L2 obligation 8 (STAGED AT FollowSpec): S4 glue, F-inst -> base instance comparison
 theories/PCUICEtaFInstGlue.v
+# L2 obligation 8 (STAGED AT FollowSpec), A4: join => spec bridges independent of U1'
+theories/PCUICEtaJoinSpec.v
 # theories/All.v
