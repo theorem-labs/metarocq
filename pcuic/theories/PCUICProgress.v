@@ -820,7 +820,7 @@ Proof with eauto with wcbv; try congruence.
       set (a := {| array_level := _ |}).
       assert (All (fun x : term => (wcbv_stuck Σ x +
         ((∑ t' : term, Σ ⊢ x ⇝ᵥ t') + value Σ x)))%type array_value).
-      { solve_all. destruct b as [[?|?]|?]; eauto. } clear hvalue0 Hargs.
+      { solve_all; try (destruct b as [[?|?]|?]; eauto). } clear hvalue0 Hargs.
       eapply All_or_disj in X as [].
       * destruct s as [n [v' [? []]]].
         right. eapply wcbv_stuck_prim_value; tea.
@@ -860,9 +860,9 @@ Proof.
     now rewrite nth_error_nil in e.
   - right. do 2 constructor.
   - right. do 2 constructor.
-  - right. constructor.
-  - right. constructor.
-  - right. constructor.
+  - right. apply whnf_sort.
+  - right. apply whnf_prod.
+  - right. apply whnf_lam.
   - left. eexists. eapply red_zeta.
   - (* application *)
     pose proof hty as hty'.
@@ -886,47 +886,47 @@ Proof.
             eapply whnf_fixapp. now right. }
         assert (hnone : nth_error args (rarg d) = None).
         { destruct o as [[d' [hd' ha']]|hnone]; [|congruence].
-          rewrite hd in hd'. now noconf hd'. }
+          assert (d' = d) as e by congruence. subst d'. exact ha'. }
         destruct (Nat.eq_dec (rarg d) #|args|) as [heq|hneq].
         2:{ right. rewrite -![tApp _ _](mkApps_app _ _ [_]).
             eapply whnf_fixapp. left. exists d. split; auto.
-            rewrite nth_error_app_full. rewrite hnone.
-            destruct (Nat.ltb_spec (rarg d) #|args|).
-            { now rewrite (proj2 (nth_error_None _ _)) in hnone; [|lia]. }
-            cbn. destruct (rarg d - #|args|) eqn:hsub; [lia|now rewrite nth_error_nil]. }
+            assert (hge : #|args| <= rarg d).
+            { pose proof hnone as h'. apply nth_error_None in h'. exact h'. }
+            rewrite (nth_error_app_ge args _ (rarg d) hge).
+            destruct (rarg d - #|args|) eqn:hsub; [exfalso; lia|].
+            cbn. now rewrite nth_error_nil. }
         (* the argument is the one the fixpoint waits for *)
         destruct (IHt2 _ ha) as [[a' ha']|hwa].
         { left. eexists. now eapply app_red_r. }
-        assert (hfix : Σ ;;; [] |- mkApps (tFix mfix idx) (args ++ [u]) : B {0 := u}).
+        assert (hge2 : #|args| <= rarg d) by lia.
+        assert (hnth : nth_error (args ++ [t2]) (rarg d) = Some t2).
+        { rewrite (nth_error_app_ge args _ (rarg d) hge2).
+          rewrite heq Nat.sub_diag. reflexivity. }
+        assert (hfix : Σ ;;; [] |- mkApps (tFix mfix idx) (args ++ [t2]) : B {0 := t2}).
         { rewrite mkApps_app /=. eapply type_App'; eauto. }
         epose proof (fix_app_is_constructor hfix (narg := rarg d)
           (fn := subst0 (fix_subst mfix) (dbody d))) as hc.
         forward hc. { unfold unfold_fix. now rewrite hd. }
-        rewrite nth_error_app_full heq in hc.
-        rewrite (proj2 (nth_error_None args (rarg d))) in hc; [lia|].
-        rewrite Nat.sub_diag /= in hc.
+        rewrite hnth in hc.
         forward hc. { now eapply axiom_free_axiom_free_value. }
         forward hc. { assumption. }
         destruct hc as [hcstr|hstuck].
         -- left. eexists. rewrite -![tApp _ _](mkApps_app _ _ [_]).
            eapply red_fix. { unfold unfold_fix. now rewrite hd. }
-           unfold is_constructor. rewrite nth_error_app_full heq.
-           rewrite (proj2 (nth_error_None args (rarg d))); [lia|].
-           now rewrite Nat.sub_diag /=.
+           unfold is_constructor. now rewrite hnth.
         -- right. rewrite -![tApp _ _](mkApps_app _ _ [_]).
-           do 2 constructor. 1: exact hd.
-           ++ rewrite nth_error_app_full heq.
-              rewrite (proj2 (nth_error_None args (rarg d))); [lia|].
-              now rewrite Nat.sub_diag /=.
+           apply whnf_ne. eapply whne_fixapp.
+           ++ exact hd.
+           ++ exact hnth.
            ++ now eapply stuck_cofix_case_whne.
       * right. rewrite -![tApp _ _](mkApps_app _ _ [_]). eapply whnf_cofixapp.
-      * exfalso. eapply inversion_Prim in hf as [prim_ty [cdecl [? ? ? ? hp]]]; eauto.
+      * exfalso. eapply inversion_Prim in hf as [prim_ty [cdecl [? ? ? ? ? hp]]]; eauto.
         now eapply invert_cumul_prim_type_prod in hp.
   - (* constant *)
     eapply inversion_Const in hty as [decl [wfd [declc [cu cum]]]]; eauto.
     destruct (cst_body decl) eqn:hb.
     + left. eexists. eapply red_delta; tea.
-    + right. do 2 constructor; tea.
+    + right. apply whnf_ne.
       unshelve eapply declared_constant_to_gen in declc; eauto.
   - right. eapply (whnf_indapp _ _ [] _ _ []).
   - right. eapply (whnf_cstrapp _ _ [] _ _ _ []).
@@ -934,14 +934,14 @@ Proof.
     pose proof hty as hty'.
     eapply inversion_Case in hty' as (mdecl & idecl & isdecl & indices & cinv & cum); eauto.
     destruct cinv.
-    destruct (X0 _ scrut_ty) as [[c' hc']|hwc].
+    destruct (IHt _ scrut_ty) as [[c' hc']|hwc].
     + left. eexists. now eapply case_red_discr.
-    + assert (haf : axiom_free_value Σ [] c) by now eapply axiom_free_axiom_free_value.
+    + assert (haf : axiom_free_value Σ [] t) by now eapply axiom_free_axiom_free_value.
       eapply whnf_classification' in hwc as [hd|st]; tea.
-      2:{ right. constructor. eapply whne_case. now eapply stuck_cofix_case_whne. }
+      2:{ right. apply whnf_ne. eapply whne_case. now eapply stuck_cofix_case_whne. }
       rewrite /construct_cofix_discr /head in hd.
-      destruct (decompose_app c) as [h l] eqn:da.
-      eapply decompose_app_inv in da. cbn in hd. subst c.
+      destruct (decompose_app t) as [h l] eqn:da.
+      eapply decompose_app_inv in da. cbn in hd. subst t.
       destruct h eqn:eqh => //.
       * (* a constructor: iota *)
         eapply invert_Case_Construct in hty as H_; sq; eauto.
@@ -984,7 +984,7 @@ Proof.
     + left. eexists. split; [reflexivity|]. now rewrite nth_error_nil.
     + now right.
   - right. eapply (whnf_cofixapp _ _ [] _ _ []).
-  - right. constructor.
+  - right. apply whnf_prim.
 Qed.
 
 Lemma whnf_progress `{cf : checker_flags}:
