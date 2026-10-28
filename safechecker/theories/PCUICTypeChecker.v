@@ -22,6 +22,8 @@ From MetaRocq.PCUIC Require Import BDTyping BDToPCUIC BDFromPCUIC BDUnique.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICSafeReduce PCUICErrors
   PCUICSafeConversion PCUICWfReduction PCUICWfEnv.
+From MetaRocq.SafeChecker Require PCUICCallByNeed.
+From MetaRocq.SafeChecker Require PCUICCallByNeedSoundHookProof.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -366,7 +368,7 @@ Section Typecheck.
     CoreTactics.equations_simpl;
     try Tactics.program_solve_wf.
 
-  Opaque isconv_term.
+  Opaque isconv_term PCUICCallByNeed.cbn_conv.
 
   (* replaces convert and convert_leq*)
   Equations convert (le : conv_pb) Γ t u
@@ -376,14 +378,16 @@ Section Typecheck.
     convert le Γ t u ht hu
       with inspect (eqb_term_upto_univ (abstract_env_compare_universe X) (abstract_env_compare_sort X) (abstract_env_compare_global_instance _ X) le t u) := {
         | @exist true He := ret _ ;
-        | @exist false He with
-          inspect (isconv_term _ X Γ le t ht u hu) := {
-          | @exist ConvSuccess Hc := ret _ ;
-          | @exist (ConvError e) Hc :=
-            let t' := hnf Γ t ht in
-            let u' := hnf Γ u hu in
-            raise (NotCumulSmaller false X Γ t u t' u' e)
-      }}.
+        | @exist false He with inspect (PCUICCallByNeed.cbn_conv X_type X le Γ t u) := {
+          | @exist true Hcbn := ret _ ;
+          | @exist false Hcbn with
+            inspect (isconv_term _ X Γ le t ht u hu) := {
+            | @exist ConvSuccess Hc := ret _ ;
+            | @exist (ConvError e) Hc :=
+              let t' := hnf Γ t ht in
+              let u' := hnf Γ u hu in
+              raise (NotCumulSmaller false X Γ t u t' u' e)
+      }}}.
   Next Obligation.
     unfold eqb_term_upto_univ_napp in He. pose (heΣ _ wfΣ) as heΣ; sq.
     constructor; fvs. specialize_Σ wfΣ.
@@ -394,6 +398,10 @@ Section Typecheck.
       pose proof hu as [? ?]%andb_and; eassumption.
   Qed.
   Next Obligation.
+    (* The call-by-need fast path is sound: [PCUICCallByNeedSoundHookProof.convert_cbn_sound]. *)
+    exact (PCUICCallByNeedSoundHookProof.convert_cbn_sound X_type X le Γ t u ht hu Hcbn Σ wfΣ).
+  Qed.
+  Next Obligation.
     now symmetry in Hc; eapply isconv_term_sound in Hc.
   Qed.
   Next Obligation.
@@ -402,7 +410,7 @@ Section Typecheck.
     specialize_Σ wfΣ.
     eapply isconv_term_complete in Hc; eauto.
   Qed.
-  Transparent isconv_term.
+  Transparent isconv_term PCUICCallByNeed.cbn_conv.
 
   Definition wt_decl (Σ : global_env_ext) Γ d :=
     match d with
