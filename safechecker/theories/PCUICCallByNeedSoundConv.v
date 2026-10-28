@@ -5841,4 +5841,260 @@ Section ConvGhost.
     exact (ws_cumul_pb_Prod (wfΣ := wfΣ) pb (eqb_binder_annot_spec _ _ Ena) hd hbd).
   Qed.
 
+  (** ** [conv_value]: same code first, then the rows *)
+
+  Lemma minv_tick L Q lo G s s' : tick s = Some s' -> MI L Q lo G s -> MI L Q lo G s'.
+  Proof.
+    intros ht [hL hQ hok hw]. destruct (tick_shape s s' ht) as (h1 & h2 & _ & h4 & h5).
+    constructor; [exact hL|exact hQ| |exact (hwf_heap Q s s' h1 hw)].
+    apply (gok_same X_type X Γ nctx Σ _ Q lo G s); [exact hok|exact h1|exact h2|exact h4|].
+    eapply mok_memo; [exact h5|exact (gk_memo _ _ _ _ _ _ _ _ _ _ hok)].
+  Qed.
+
+  Lemma mkApps_inj_len f f' l l' : #|l| = #|l'| -> mkApps f l = mkApps f' l' -> f = f' /\ l = l'.
+  Proof.
+    revert l'. induction l as [|a l ih] using rev_ind; intros l' hl e.
+    - destruct l'; [|discriminate hl]. split; [exact e|reflexivity].
+    - destruct l' as [|a' l' _] using rev_ind; [rewrite length_app in hl; cbn in hl; lia|].
+      rewrite !mkApps_app in e. cbn in e. injection e as e1 e2.
+      rewrite !length_app in hl. cbn in hl.
+      destruct (ih l' ltac:(lia) e1) as [-> ->]. subst a'. split; reflexivity.
+  Qed.
+
+  (** Every value reads as a head applied to the readings of its spine. *)
+  Lemma g_value_spine Q G v t :
+    g_value nctx Q G v t -> exists H T, t = mkApps H T /\ g_addrs G (spine_of v) T.
+  Proof.
+    intros h. destruct h;
+      first [ eexists _, _; split; [reflexivity|eassumption]
+            | exists t, []; split; [reflexivity|constructor] ].
+  Qed.
+
+  (** A value renamed without reshaping keeps the readings of its spine. *)
+  Lemma spine_reads Q Q' G G' v v' H T :
+    (forall t, g_value nctx Q G v t -> g_value nctx Q' G' v' (lift0 (Q' - Q) t)) ->
+    mp_value kc v' = mp_value kc v ->
+    g_value nctx Q G v (mkApps H T) -> g_addrs G (spine_of v) T ->
+    g_addrs G' (spine_of v') (map (lift0 (Q' - Q)) T).
+  Proof.
+    intros hk hs hw hT.
+    destruct (g_value_spine _ _ _ _ (hk _ hw)) as (H' & T' & e & hT').
+    rewrite lift_mkApps in e.
+    pose proof (f_equal (@length _) (f_equal spine_of hs)) as hl.
+    rewrite !mp_spine_of, !length_map in hl.
+    assert (hl' : #|map (lift0 (Q' - Q)) T| = #|T'|).
+    { rewrite length_map, (g_addrs_length _ _ _ hT), (g_addrs_length _ _ _ hT'). lia. }
+    destruct (mkApps_inj_len _ _ _ _ hl' e) as [_ <-]. exact hT'.
+  Qed.
+
+  Lemma cq_mkApps L Q pb H1 H2 T1 T2 :
+    nctx <= L -> cq L Q pb H1 H2 -> cqs L Q T1 T2 -> cq L Q pb (mkApps H1 T1) (mkApps H2 T2).
+  Proof.
+    intros hL hh hs u1 u2 e1 e2 s1 s2.
+    apply mkApps_lift0_inv in e1 as (h1' & us1 & -> & eh1 & ->).
+    apply mkApps_lift0_inv in e2 as (h2' & us2 & -> & eh2 & ->).
+    unfold scl in s1, s2. rewrite on_free_vars_mkApps in s1, s2.
+    apply andb_true_iff in s1 as [sh1 sus1]. apply andb_true_iff in s2 as [sh2 sus2].
+    apply cv_spine; [exact hL| |exact (hs us1 us2 eq_refl eq_refl sus1 sus2)].
+    exact (hh h1' h2' eh1 eh2 sh1 sh2).
+  Qed.
+
+  Definition cv_same (d : cbn_fuel) (L : nat) (le : conv_pb) (v1 v2 : cbn_value)
+      (e1 : cbn_env) (c1 : code) (e2 : cbn_env) (c2 : code) (spines : bool)
+      (rs : list root) (s : cbn_state) :=
+    match conv_same_code X_type X Γ nctx stress d L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s with
+    | COk (b, rs, s) =>
+      match rs with
+      | RV v1 :: RV v2 :: rs =>
+        if b then
+          if spines then conv_cells X_type X Γ nctx stress d L (spine_of v1) (spine_of v2) rs s
+          else COk (true, rs, s)
+        else conv_rows X_type X Γ nctx stress d L le v1 v2 rs s
+      | _ => CFail WRoots
+      end
+    | CFail w => CFail w
+    end.
+
+  Lemma conv_value_eq k L le v1 v2 rs s :
+    conv_value X_type X Γ nctx stress (FS k) L le v1 v2 rs s =
+    match tick s with
+    | None => CFail WSteps
+    | Some s =>
+      match v1, v2 with
+      | VLam e1 c1, VLam e2 c2 | VOpen e1 c1, VOpen e2 c2 =>
+        cv_same (k tt) L le v1 v2 e1 c1 e2 c2 false rs s
+      | VStuck e1 c1 sp1, VStuck e2 c2 sp2 =>
+        if #|sp1| == #|sp2| then cv_same (k tt) L le v1 v2 e1 c1 e2 c2 true rs s
+        else conv_rows X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+      | VFix e1 c1 i1 sp1, VFix e2 c2 i2 sp2
+      | VStuckFix e1 c1 i1 sp1, VStuckFix e2 c2 i2 sp2 =>
+        if (i1 == i2) && (#|sp1| == #|sp2|) then cv_same (k tt) L le v1 v2 e1 c1 e2 c2 true rs s
+        else conv_rows X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+      | _, _ => conv_rows X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+      end
+    end.
+  Proof. cbn. destruct (tick s); [|reflexivity]. destruct v1, v2; reflexivity. Qed.
+
+  (** Closures and open values: the same code makes the two readings convertible. *)
+  Lemma cv_same_flat (k : unit -> cbn_fuel) :
+    spec_same (k tt) -> spec_rows (k tt) ->
+    forall L Q lo G pb v1 v2 w1 w2 e1 c1 e2 c2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs -> vwf Q v1 -> vwf Q v2 ->
+      g_value nctx Q G v1 w1 -> g_value nctx Q G v2 w2 ->
+      g_susp nctx Q G e1 c1.(c_term) w1 -> gcok G c1 ->
+      g_susp nctx Q G e2 c2.(c_term) w2 -> gcok G c2 ->
+      cv_same (k tt) L pb v1 v2 e1 c1 e2 c2 false rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
+  Proof.
+    intros hS hR L Q lo G pb v1 v2 w1 w2 e1 c1 e2 c2 rs s b rs' s' hm hr hv1 hv2 hw1 hw2
+      hs1 hc1 hs2 hc2 he.
+    pose proof hm as [hL hLQ _ _].
+    unfold cv_same in he.
+    destruct (conv_same_code X_type X Γ nctx stress (k tt) L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s)
+      as [[[b0 rs0] s0]|w] eqn:E; [|discriminate he].
+    destruct (conv_same_code_sound_ghost (k tt) hS L Q lo G pb e1 c1 e2 c2 w1 w2 _ s b0 rs0 s0
+                hm (Forall_cons (RV v1) hv1 (Forall_cons (RV v2) hv2 hr)) hs1 hc1 hs2 hc2 E)
+      as [hp0 hc0].
+    destruct hp0 as (Q1 & lo1 & G1 & hq1 & hm1 & hr1 & hg1).
+    destruct (grq_cons_inv _ _ _ _ _ _ _ hg1) as (q1 & rsA & -> & hqa & hgA).
+    destruct (gpq_RV_inv _ _ _ _ _ _ hqa) as (v1' & -> & hk1).
+    destruct (grq_cons_inv _ _ _ _ _ _ _ hgA) as (q2 & rsB & -> & hqb & hgB).
+    destruct (gpq_RV_inv _ _ _ _ _ _ hqb) as (v2' & -> & hk2).
+    cbv beta iota in he.
+    destruct b0.
+    - injection he as <- <- <-. split; [|intros _; exact (hc0 eq_refl)].
+      exists Q1, lo1, G1. split; [exact hq1|]. split; [exact hm1|].
+      split; [exact (Forall_inv_tail (Forall_inv_tail hr1))|exact hgB].
+    - destruct (hR L Q1 lo1 G1 pb v1' v2' _ _ rsB s0 b rs' s' I hm1
+                  (Forall_inv_tail (Forall_inv_tail hr1)) (Forall_inv hr1)
+                  (Forall_inv (Forall_inv_tail hr1)) (hk1 _ hw1) (hk2 _ hw2) he) as [hp hc].
+      split; [exact (post_compose _ _ _ _ _ _ _ _ _ hq1 hgB hp)|].
+      intros hb. exact (cq_lift _ _ _ _ _ _ hLQ hq1 (hc hb)).
+  Qed.
+
+  (** Stuck terms and fixpoints: the same code makes the heads convertible, then the spines are
+    compared; the renamed values keep their shape, so their spines read as before. *)
+  Lemma cv_same_spine (k : unit -> cbn_fuel) :
+    spec_same (k tt) -> spec_cells (k tt) -> spec_rows (k tt) ->
+    forall L Q lo G pb v1 v2 H1 H2 T1 T2 e1 c1 e2 c2 ts1 ts2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs -> vwf Q v1 -> vwf Q v2 ->
+      g_value nctx Q G v1 (mkApps H1 T1) -> g_value nctx Q G v2 (mkApps H2 T2) ->
+      g_addrs G (spine_of v1) T1 -> g_addrs G (spine_of v2) T2 ->
+      gcok G c1 -> gcok G c2 ->
+      g_slots nctx Q G e1.(ev_vals) ts1 -> g_slots nctx Q G e2.(ev_vals) ts2 ->
+      (e1.(ev_goff) = e2.(ev_goff) -> e1.(ev_nvals) = e2.(ev_nvals) ->
+       samec c1.(c_term) c2.(c_term) -> cagree L Q c1.(c_term) 0 ts1 ts2 -> cq L Q pb H1 H2) ->
+      cv_same (k tt) L pb v1 v2 e1 c1 e2 c2 true rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb (mkApps H1 T1) (mkApps H2 T2)).
+  Proof.
+    intros hS hC hR L Q lo G pb v1 v2 H1 H2 T1 T2 e1 c1 e2 c2 ts1 ts2 rs s b rs' s'
+      hm hr hv1 hv2 hw1 hw2 hT1 hT2 hc1 hc2 hts1 hts2 hhead he.
+    pose proof hm as [hL hLQ _ _].
+    unfold cv_same in he.
+    destruct (conv_same_code X_type X Γ nctx stress (k tt) L e1 c1 e2 c2 (RV v1 :: RV v2 :: rs) s)
+      as [[[b0 rs0] s0]|w] eqn:E; [|discriminate he].
+    destruct (hS L Q lo G e1 c1 e2 c2 ts1 ts2 _ s b0 rs0 s0 hm
+                (Forall_cons (RV v1) hv1 (Forall_cons (RV v2) hv2 hr)) hc1 hc2 hts1 hts2 E)
+      as [hp0 hc0].
+    destruct hp0 as (Q1 & lo1 & G1 & hq1 & hm1 & hr1 & hg1).
+    destruct (grq_cons_inv_skel _ _ _ _ _ _ _ hg1) as (q1 & rsA & -> & hqa & hgA & hsk1).
+    destruct (gpq_RV_inv _ _ _ _ _ _ hqa) as (v1' & -> & hk1).
+    destruct (grq_cons_inv_skel _ _ _ _ _ _ _ hgA) as (q2 & rsB & -> & hqb & hgB & hsk2).
+    destruct (gpq_RV_inv _ _ _ _ _ _ hqb) as (v2' & -> & hk2).
+    cbn in hsk1, hsk2. injection hsk1 as hsk1. injection hsk2 as hsk2.
+    cbv beta iota in he.
+    destruct b0.
+    - destruct (hc0 eq_refl) as (hgo & hnv & hsame & hag).
+      destruct (hC L Q1 lo1 G1 (spine_of v1') (spine_of v2') _ _ rsB s0 b rs' s' hm1
+                  (Forall_inv_tail (Forall_inv_tail hr1))
+                  (spine_reads Q Q1 G G1 v1 v1' H1 T1 hk1 hsk1 hw1 hT1)
+                  (spine_reads Q Q1 G G1 v2 v2' H2 T2 hk2 hsk2 hw2 hT2) he) as [hp hc].
+      split; [exact (post_compose _ _ _ _ _ _ _ _ _ hq1 hgB hp)|].
+      intros hb. apply (cq_mkApps L Q pb H1 H2 T1 T2 hL (hhead hgo hnv hsame hag)).
+      exact (cqs_lift _ _ _ _ _ hLQ hq1 (hc hb)).
+    - destruct (hR L Q1 lo1 G1 pb v1' v2' _ _ rsB s0 b rs' s' I hm1
+                  (Forall_inv_tail (Forall_inv_tail hr1)) (Forall_inv hr1)
+                  (Forall_inv (Forall_inv_tail hr1)) (hk1 _ hw1) (hk2 _ hw2) he) as [hp hc].
+      split; [exact (post_compose _ _ _ _ _ _ _ _ _ hq1 hgB hp)|].
+      intros hb. exact (cq_lift _ _ _ _ _ _ hLQ hq1 (hc hb)).
+  Qed.
+
+  Lemma conv_value_sound_g (k : unit -> cbn_fuel) :
+    spec_same (k tt) -> spec_cells (k tt) -> spec_rows (k tt) -> spec_value (FS k).
+  Proof.
+    intros hS hC hR L Q lo G pb v1 v2 w1 w2 rs s b rs' s' hm hr hv1 hv2 hw1 hw2 he.
+    pose proof hm as [hL hLQ hok _].
+    rewrite conv_value_eq in he.
+    destruct (tick s) as [s0|] eqn:Et; [|discriminate he].
+    pose proof (minv_tick _ _ _ _ _ _ Et hm) as hm0.
+    pose proof (gok_codes_hyg X_type X Γ nctx Σ _ Q lo G s hok hhyg) as hch.
+    assert (hrows : conv_rows X_type X Γ nctx stress (k tt) L pb v1 v2 rs s0 = COk (b, rs', s') ->
+              post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2))
+      by (intros h; exact (hR L Q lo G pb v1 v2 w1 w2 rs s0 b rs' s' I hm0 hr hv1 hv2 hw1 hw2 h)).
+    destruct v1 as [h1 sp1|e1 c1|e1 c1 i1 sp1|e1 c1 i1 sp1|n1 sp1|e1 c1|e1 c1 sp1];
+    destruct v2 as [h2 sp2|e2 c2|e2 c2 i2 sp2|e2 c2 i2 sp2|n2 sp2|e2 c2|e2 c2 sp2];
+      cbv beta iota in he; try exact (hrows he).
+    - (* closures *)
+      exact (cv_same_flat k hS hR L Q lo G pb _ _ w1 w2 e1 c1 e2 c2 rs s0 b rs' s' hm0 hr hv1 hv2
+               hw1 hw2 (g_value_VLam_inv _ _ _ _ _ _ hw1) (g_value_VLam_cok _ _ _ _ _ _ hw1)
+               (g_value_VLam_inv _ _ _ _ _ _ hw2) (g_value_VLam_cok _ _ _ _ _ _ hw2) he).
+    - (* fixpoints *)
+      destruct ((i1 == i2) && (#|sp1| == #|sp2|)) eqn:Ei; [|exact (hrows he)].
+      apply andb_true_iff in Ei as [Ei _]. apply eqb_eq in Ei. subst i2.
+      pose proof hw1 as hw1'. pose proof hw2 as hw2'.
+      apply g_value_VFix_inv in hw1' as (m1 & idx1 & H1 & T1 & hct1 & hh1 & hc1 & hT1 & ->).
+      apply g_value_VFix_inv in hw2' as (m2 & idx2 & H2 & T2 & hct2 & hh2 & hc2 & hT2 & ->).
+      destruct (g_susp_inv _ _ _ _ _ _ hh1) as (ts1 & hts1 & hn1 & ->).
+      destruct (g_susp_inv _ _ _ _ _ _ hh2) as (ts2 & hts2 & hn2 & ->).
+      apply (cv_same_spine k hS hC hR L Q lo G pb _ _ _ _ T1 T2 e1 c1 e2 c2 ts1 ts2 rs s0 b rs' s'
+               hm0 hr hv1 hv2 hw1 hw2 hT1 hT2 hc1 hc2 hts1 hts2); [|exact he].
+      intros hgo hnv hsame hag. rewrite hct1, hct2 in hsame. rewrite hct1 in hag.
+      pose proof (g_slots_length _ _ _ _ _ hts1) as hl1.
+      pose proof (g_slots_length _ _ _ _ _ hts2) as hl2.
+      rewrite <- hgo, <- hnv.
+      apply (same_code_cq L Q pb (ev_nvals e1) (ev_goff e1) ts1 ts2 _ _ hL hLQ);
+        [lia|lia| | |exact (samec_fix _ _ _ _ _ hsame)|exact (cagree_fix _ _ _ _ _ _ _ _ hag)].
+      + apply (hyg_tFix_idx _ idx1). rewrite <- hct1. exact (hch _ hc1).
+      + apply (hyg_tFix_idx _ idx2). rewrite <- hct2. exact (hch _ hc2).
+    - (* stuck fixpoints *)
+      destruct ((i1 == i2) && (#|sp1| == #|sp2|)) eqn:Ei; [|exact (hrows he)].
+      apply andb_true_iff in Ei as [Ei _]. apply eqb_eq in Ei. subst i2.
+      pose proof hw1 as hw1'. pose proof hw2 as hw2'.
+      apply g_value_VStuckFix_inv in hw1' as (m1 & idx1 & H1 & T1 & hct1 & hh1 & hc1 & hT1 & ->).
+      apply g_value_VStuckFix_inv in hw2' as (m2 & idx2 & H2 & T2 & hct2 & hh2 & hc2 & hT2 & ->).
+      destruct (g_susp_inv _ _ _ _ _ _ hh1) as (ts1 & hts1 & hn1 & ->).
+      destruct (g_susp_inv _ _ _ _ _ _ hh2) as (ts2 & hts2 & hn2 & ->).
+      apply (cv_same_spine k hS hC hR L Q lo G pb _ _ _ _ T1 T2 e1 c1 e2 c2 ts1 ts2 rs s0 b rs' s'
+               hm0 hr hv1 hv2 hw1 hw2 hT1 hT2 hc1 hc2 hts1 hts2); [|exact he].
+      intros hgo hnv hsame hag. rewrite hct1, hct2 in hsame. rewrite hct1 in hag.
+      pose proof (g_slots_length _ _ _ _ _ hts1) as hl1.
+      pose proof (g_slots_length _ _ _ _ _ hts2) as hl2.
+      rewrite <- hgo, <- hnv.
+      apply (same_code_cq L Q pb (ev_nvals e1) (ev_goff e1) ts1 ts2 _ _ hL hLQ);
+        [lia|lia| | |exact (samec_fix _ _ _ _ _ hsame)|exact (cagree_fix _ _ _ _ _ _ _ _ hag)].
+      + apply (hyg_tFix_idx _ idx1). rewrite <- hct1. exact (hch _ hc1).
+      + apply (hyg_tFix_idx _ idx2). rewrite <- hct2. exact (hch _ hc2).
+    - (* open values *)
+      exact (cv_same_flat k hS hR L Q lo G pb _ _ w1 w2 e1 c1 e2 c2 rs s0 b rs' s' hm0 hr hv1 hv2
+               hw1 hw2 (g_value_VOpen_inv _ _ _ _ _ _ hw1) ltac:(inversion hw1; assumption)
+               (g_value_VOpen_inv _ _ _ _ _ _ hw2) ltac:(inversion hw2; assumption) he).
+    - (* stuck matches and projections *)
+      destruct (#|sp1| == #|sp2|) eqn:Ei; [|exact (hrows he)].
+      pose proof hw1 as hw1'. pose proof hw2 as hw2'.
+      apply g_value_VStuck_inv in hw1' as (H1 & T1 & hh1 & hT1 & ->).
+      apply g_value_VStuck_inv in hw2' as (H2 & T2 & hh2 & hT2 & ->).
+      destruct (g_susp_inv _ _ _ _ _ _ hh1) as (ts1 & hts1 & hn1 & ->).
+      destruct (g_susp_inv _ _ _ _ _ _ hh2) as (ts2 & hts2 & hn2 & ->).
+      pose proof (g_value_VStuck_cok _ _ _ _ _ _ _ hw1) as hc1.
+      pose proof (g_value_VStuck_cok _ _ _ _ _ _ _ hw2) as hc2.
+      apply (cv_same_spine k hS hC hR L Q lo G pb _ _ _ _ T1 T2 e1 c1 e2 c2 ts1 ts2 rs s0 b rs' s'
+               hm0 hr hv1 hv2 hw1 hw2 hT1 hT2 hc1 hc2 hts1 hts2); [|exact he].
+      intros hgo hnv hsame hag.
+      pose proof (g_slots_length _ _ _ _ _ hts1) as hl1.
+      pose proof (g_slots_length _ _ _ _ _ hts2) as hl2.
+      rewrite <- hgo, <- hnv.
+      apply (same_code_cq L Q pb (ev_nvals e1) (ev_goff e1) ts1 ts2 _ _ hL hLQ);
+        [lia|lia|exact (hch _ hc1)|exact (hch _ hc2)|exact hsame|exact hag].
+  Qed.
+
 End ConvGhost.
