@@ -163,6 +163,8 @@ theories/PCUICEtaScope.v
 theories/PCUICEtaC4Shape.v
 # BET-315 eta lane (C4B): theorem (B), Hindley-Rosen modulo E (carrier-generic, MetaRocq-free)
 theories/PCUICEtaHRModulo.v
+# BET-315 eta lane (C4U6U8): U6 eta SN, U7 local confluence (port), U8 by Newman (confluence-free)
+theories/PCUICEtaU8.v
 # BET-315 eta lane (L2): C4 assembly (P-INST) — first file joining C4 to base confluence
 theories/PCUICEtaC4.v
 # BET-315 eta lane (C4A1): theorem (A), strong commutation => commutation modulo E (carrier-generic)
