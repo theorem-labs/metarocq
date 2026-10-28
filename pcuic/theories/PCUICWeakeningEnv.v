@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICArityRed.
+From MetaRocq.Common Require Import config PrimitiveOps.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICArityRed PCUICPrimitiveRed.
 From Equations Require Import Equations.
 From MetaRocq.Utils Require Import LibHypsNaming.
 
@@ -309,6 +309,49 @@ Qed.
 
 Hint Resolve weakening_env_declared_constant : extends.
 
+(** The FORWARD transport of the operation table: an operation that fires in
+    [Σ] fires on the same constant in [Σ'].  This is [Retroknowledge.extends_ops],
+    the sixth conjunct of the retroknowledge component of [extends], and it holds
+    under plain [extends] — the table only grows. *)
+Lemma prim_op_of_extends {Σ Σ' c op} :
+  extends Σ Σ' -> prim_op_of Σ c = Some op -> prim_op_of Σ' c = Some op.
+Proof using Type.
+  intros ext h. destruct ext as [_ _ hre].
+  destruct hre as (_ & _ & _ & _ & _ & hops). exact (hops c op h).
+Qed.
+
+(** The BACKWARD transport, which plain [extends] does NOT give: a constant
+    that is declared in [Σ] and is not an operation there is not one in [Σ']
+    either.  This is exactly what [extends_prim_fresh] adds, and it is what the
+    [whd_axiom] branch below needs (standing condition D-1). *)
+Lemma prim_op_of_extends_prim_None {Σ Σ' c d} :
+  extends_prim_fresh Σ Σ' -> lookup_env Σ c = Some d ->
+  prim_op_of Σ c = None -> prim_op_of Σ' c = None.
+Proof using Type.
+  intros hfr hl hnone.
+  rewrite /prim_op_of in hnone |- *.
+  destruct (Retroknowledge.prim_op_of (retroknowledge Σ') c) as [op|] eqn:h';
+    [|reflexivity].
+  destruct (hfr c op h') as [h''|h''].
+  - rewrite hnone in h''; discriminate.
+  - rewrite hl in h''; discriminate.
+Qed.
+
+(** [whd_prim_fire]'s readback also transports: a defined [SBool] readback
+    forces [retro_bool] to be registered in [Σ], and [extends] can only KEEP a
+    registered [retro_bool] ([option_ext_keep]), never change it. *)
+Lemma readback_extends {Σ Σ' s r v} :
+  extends Σ Σ' -> readback Σ s r = Some v -> readback Σ' s r = Some v.
+Proof using Type.
+  intros ext h. destruct s, r; cbn in h |- *; try discriminate; try assumption.
+  destruct ext as [_ _ hre].
+  destruct hre as (_ & _ & _ & _ & hbool & _).
+  destruct (Retroknowledge.retro_bool (retroknowledge Σ)) as [ind|] eqn:hb;
+    [|discriminate].
+  remember (Retroknowledge.retro_bool (retroknowledge Σ')) as rb' eqn:hb'.
+  depelim hbool. exact h.
+Qed.
+
 (** Takes [extends_prim], not [extends] (standing condition D-1 beside
     [extends_prim] in common/theories/Environment.v): a [whd_axiom] step needs
     [prim_op_of Σ c = None] to survive the extension, and plain [extends] lets
@@ -318,13 +361,18 @@ Lemma weakening_env_whd_rel {Σ Σ' zeta Γ t args h l} :
   whd_rel zeta Σ Γ t args h l -> whd_rel zeta Σ' Γ t args h l.
 Proof using P Pcmp cf.
   intros wfΣ' extf. pose proof (extends_prim_extends _ _ extf) as ext.
+  destruct extf as [_ hfr].
   induction 1;
     [ eapply whd_rel_unfold | eapply whd_rel_assum | eapply whd_zeta | eapply whd_letin_stop
     | eapply whd_delta | eapply whd_axiom | eapply whd_app | eapply whd_beta
     | eapply whd_fix_iota | eapply whd_fix_stuck | eapply whd_fix_noarg | eapply whd_fix_nounfold
     | eapply whd_iota | eapply whd_case_cofix | eapply whd_case_stuck
-    | eapply whd_proj | eapply whd_proj_cofix | eapply whd_proj_stuck | eapply whd_stop ];
-    eauto using extends_lookup.
+    | eapply whd_proj | eapply whd_proj_cofix | eapply whd_proj_stuck | eapply whd_stop
+    | eapply whd_prim_arg | eapply whd_prim_stuck | eapply whd_prim_fire
+    | eapply whd_prim_inert | eapply whd_prim_partial ];
+    eauto using extends_lookup, prim_op_of_extends, readback_extends.
+  (* [whd_axiom]: the only branch needing the backward transport. *)
+  all: try (eapply prim_op_of_extends_prim_None; [exact hfr|eassumption|eassumption]).
 Qed.
 
 Lemma weakening_env_arity_red {Σ Σ' Γ t Δ s} :
