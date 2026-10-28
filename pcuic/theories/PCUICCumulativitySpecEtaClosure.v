@@ -7,7 +7,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICCase
   PCUICTyping PCUICReduction PCUICGlobalEnv PCUICClosed PCUICEquality PCUICRenameDef
   PCUICSigmaCalculus PCUICClosed PCUICOnFreeVars PCUICOnFreeVarsConv PCUICGuardCondition
   PCUICWeakeningEnvConv PCUICWeakeningEnvTyp PCUICClosedConv PCUICClosedTyp PCUICRenameConv
-  PCUICWeakeningConv PCUICCumulativitySpec PCUICCumulativitySpecEta.
+  PCUICWeakeningConv PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICWeakeningEnv.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -655,3 +655,71 @@ Proof.
 Qed.
 
 End RenamingEta.
+
+(** * Environment weakening of [cumulSpecE0] (T0 prerequisite P2; t0-plan.md §2)
+
+  The copy of [weakening_env_cumulSpec0] (`Conversion/PCUICWeakeningEnvConv.v`),
+  generic in the environment's [Pcmp]/[P] as base's is, plus the [cumul_eta_l]
+  case (its premise is the induction hypothesis) and the [cumulE_prim_op] case
+  (the operation table, the declaration and the readback transport along
+  [extends], as in base's [red_prim_op] case of [weakening_env_red1]). *)
+Section ExtendsWfE.
+  Context {cf : checker_flags}.
+  Context {Pcmp: global_env_ext -> context -> conv_pb -> term -> term -> Type}.
+  Context {P: global_env_ext -> context -> judgment -> Type}.
+
+  Let wf := on_global_env Pcmp P.
+
+  Local Hint Resolve extends_prim_op_of extends_readback : extends.
+
+Lemma weakening_env_cumulSpecE0 Σ Σ' φ Γ pb M N :
+  wf Σ' ->
+  extends Σ Σ' ->
+  cumulSpecE0 (Σ, φ) Γ pb M N ->
+  cumulSpecE0 (Σ', φ) Γ pb M N.
+Proof.
+  intros HΣ' Hextends Ind.
+  revert pb Γ M N Ind Σ' HΣ' Hextends.
+  induction 1 using cumulSpecE0_rect.
+  all:intros; try solve [econstructor; eauto with extends; intuition auto].
+  all: lazymatch goal with
+       | [ H : cumul_predicate_dep _ _ _ |- _ ] => apply cumul_predicate_undep in H
+       | _ => idtac
+       end.
+  - eapply cumulE_Evar. solve_all.
+  - eapply cumulE_Case.
+    * cbv [cumul_predicate] in *; destruct_head'_prod. clear c0. repeat split; tas.
+      + solve_all.
+      + eapply cmp_universe_instance_impl'; tea. tc.
+      + eauto.
+    * eauto.
+    * unfold cumul_branches, cumul_branch in *. solve_all.
+  - eapply cumulE_Fix; unfold cumul_mfixpoint in *; solve_all.
+  - eapply cumulE_CoFix; unfold cumul_mfixpoint in *; solve_all.
+  - eapply cumulE_Prim; solve_all.
+    destruct X; constructor; eauto.
+    * eapply subrel_extends_cmp_universe; tea.
+    * solve_all.
+  - eapply cumulE_Ind; eauto. 2:solve_all.
+    eapply @cmp_global_instance_weaken_env. 1,2,5:eauto. all: tc.
+  - eapply cumulE_Construct; eauto. 2:solve_all.
+    eapply @cmp_global_instance_weaken_env. 1,2,5:eauto. all: tc.
+  - eapply cumulE_Sort. eapply subrelations_compare_extends; tea.
+  - eapply cumulE_Const. eapply cmp_universe_instance_impl'; eauto; tc.
+Defined.
+
+Lemma weakening_env_convSpecE Σ Σ' φ Γ M N :
+  wf Σ' ->
+  extends Σ Σ' ->
+  convSpecE (Σ, φ) Γ M N ->
+  convSpecE (Σ', φ) Γ M N.
+Proof using P Pcmp. apply weakening_env_cumulSpecE0 with (pb := Conv). Qed.
+
+Lemma weakening_env_cumulSpecE Σ Σ' φ Γ M N :
+  wf Σ' ->
+  extends Σ Σ' ->
+  cumulSpecE (Σ, φ) Γ M N ->
+  cumulSpecE (Σ', φ) Γ M N.
+Proof using P Pcmp. apply weakening_env_cumulSpecE0 with (pb := Cumul). Qed.
+
+End ExtendsWfE.
