@@ -1333,55 +1333,96 @@ Section Memo.
     (let (c, s0) := p in COk (g c, s0)) = COk (r, s') -> r = g (fst p) /\ s' = snd p.
   Proof. destruct p as [c s0]. intros h. injection h as <- <-. split; reflexivity. Qed.
 
-  Lemma delta_fresh (kn : kername) (ui : Instance.t) (s : cbn_state)
-      (r : option code) (s' : cbn_state) :
-    memo_fresh (s.(st_memo)) -> delta X_type X kn ui s = COk (r, s') ->
-    memo_fresh (s'.(st_memo)).
+  (** The three outcomes of [delta]. The trie answers and the state is unchanged: [kn] is an
+    axiom it knows, or a body it knows at [ui]. The body of [kn] is new at [ui]: it comes from
+    the trie or from the environment, and [delta_new] adds it. [kn] is an axiom the trie did
+    not know: the trie records it. *)
+  Lemma delta_cases (kn : kername) (ui : Instance.t) (s : cbn_state) (r : option code)
+      (s' : cbn_state) :
+    delta X_type X kn ui s = COk (r, s') ->
+    (s' = s
+     /\ (r = None
+         \/ exists body insts i t,
+              dt_find kn ((s.(st_memo)).(m_delta)) = Some (DBody body insts)
+              /\ find_inst ui insts = Some (i, t) /\ r = Some (mkCode i path_nil t)))
+    \/ (exists body insts,
+          (dt_find kn ((s.(st_memo)).(m_delta)) = Some (DBody body insts)
+           \/ (dt_find kn ((s.(st_memo)).(m_delta)) = None /\ insts = []
+               /\ exists cb, abstract_env_lookup X kn = Some (ConstantDecl cb)
+                             /\ cb.(cst_body) = Some body))
+          /\ r = Some (fst (delta_new X_type X kn ui body insts s))
+          /\ s' = snd (delta_new X_type X kn ui body insts s))
+    \/ (exists cb, abstract_env_lookup X kn = Some (ConstantDecl cb) /\ cb.(cst_body) = None
+          /\ r = None
+          /\ s' = set_memo (memo_set_delta (dt_add kn DAxiom ((s.(st_memo)).(m_delta)))
+                              (s.(st_memo))) s).
   Proof.
-    intros hf. unfold delta.
+    unfold delta.
     destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact hf.
+    - intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [<- <-].
+      left. split; [reflexivity|left; reflexivity].
     - destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact hf.
+      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [<- <-].
+        left. split; [reflexivity|right]. exists body, insts, i, t.
+        split; [reflexivity|]. split; [exact Ei|reflexivity].
       + intros hc.
         destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some r s' hc)
-          as [_ ->]. now apply delta_new_fresh.
+          as [-> ->].
+        right; left. exists body, insts. split; [left; reflexivity|]. split; reflexivity.
     - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
         [|intros hc; discriminate hc|intros hc; discriminate hc].
       destruct (cb.(cst_body)) as [body|] eqn:Eb.
       + intros hc.
         destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some r s' hc)
-          as [_ ->]. now apply delta_new_fresh.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst s'.
-        rewrite set_memo_memo. now apply memo_fresh_set_delta.
+          as [-> ->].
+        right; left. exists body, [].
+        split; [right; split; [reflexivity|split; [reflexivity|]]|split; reflexivity].
+        exists cb. split; [reflexivity|exact Eb].
+      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [<- <-].
+        right; right. exists cb. split; [reflexivity|]. split; [exact Eb|].
+        split; reflexivity.
+  Qed.
+
+  (** Where a new body comes from, in a sound trie: the environment's body of [kn], and
+    instances the trie has right. *)
+  Lemma delta_new_source (kn : kername) (m : cbn_memo) (body : term)
+      (insts : list (Instance.t * cidx * term)) :
+    delta_ok m ->
+    (dt_find kn m.(m_delta) = Some (DBody body insts)
+     \/ (dt_find kn m.(m_delta) = None /\ insts = []
+         /\ exists cb, abstract_env_lookup X kn = Some (ConstantDecl cb)
+                       /\ cb.(cst_body) = Some body)) ->
+    (exists cb, abstract_env_lookup X kn = Some (ConstantDecl cb) /\ cb.(cst_body) = Some body)
+    /\ Forall (inst_entry_ok m.(m_codes) body) insts.
+  Proof.
+    intros hd [h|(_ & -> & hcb)]; [exact (hd kn _ h)|split; [exact hcb|constructor]].
+  Qed.
+
+  Lemma delta_fresh (kn : kername) (ui : Instance.t) (s : cbn_state)
+      (r : option code) (s' : cbn_state) :
+    memo_fresh (s.(st_memo)) -> delta X_type X kn ui s = COk (r, s') ->
+    memo_fresh (s'.(st_memo)).
+  Proof.
+    intros hf hc.
+    destruct (delta_cases kn ui s r s' hc)
+      as [[-> _]|[(body & insts & _ & _ & ->)|(cb & _ & _ & _ & ->)]].
+    - exact hf.
+    - now apply delta_new_fresh.
+    - rewrite set_memo_memo. now apply memo_fresh_set_delta.
   Qed.
 
   Lemma delta_memo_ok (kn : kername) (ui : Instance.t) (s : cbn_state)
       (r : option code) (s' : cbn_state) :
     memo_ok X_type X s -> delta X_type X kn ui s = COk (r, s') -> memo_ok X_type X s'.
   Proof.
-    intros hm. unfold delta.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact hm.
-    - destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact hm.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some r s' hc)
-          as [_ ->].
-        refine (memo_ok_codes X_type X (snd (new_entry X_type X body ui s))
-                  _ _ (new_entry_memo_ok X_type X body ui s hm)).
-        apply delta_new_codes.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|intros hc; discriminate hc|intros hc; discriminate hc].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some r s' hc)
-          as [_ ->].
-        refine (memo_ok_codes X_type X (snd (new_entry X_type X body ui s))
-                  _ _ (new_entry_memo_ok X_type X body ui s hm)).
-        apply delta_new_codes.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst s'.
-        refine (memo_ok_codes X_type X s _ _ hm). reflexivity.
+    intros hm hc.
+    destruct (delta_cases kn ui s r s' hc)
+      as [[-> _]|[(body & insts & _ & _ & ->)|(cb & _ & _ & _ & ->)]].
+    - exact hm.
+    - refine (memo_ok_codes X_type X (snd (new_entry X_type X body ui s))
+                _ _ (new_entry_memo_ok X_type X body ui s hm)).
+      apply delta_new_codes.
+    - refine (memo_ok_codes X_type X s _ _ hm). reflexivity.
   Qed.
 
   Lemma delta_ok_pres (kn : kername) (ui : Instance.t) (s : cbn_state)
@@ -1389,31 +1430,19 @@ Section Memo.
     memo_fresh (s.(st_memo)) -> delta_ok (s.(st_memo)) ->
     delta X_type X kn ui s = COk (r, s') -> delta_ok (s'.(st_memo)).
   Proof.
-    intros hf hd. unfold delta.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact hd.
-    - pose proof (hd kn _ Ed) as hdb. destruct hdb as [[cb [hl hb]] hF].
-      destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact hd.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some r s' hc)
-          as [_ ->].
-        exact (delta_new_ok kn ui body insts s cb hf hd hl hb hF).
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|intros hc; discriminate hc|intros hc; discriminate hc].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some r s' hc)
-          as [_ ->].
-        exact (delta_new_ok kn ui body [] s cb hf hd El Eb (Forall_nil _)).
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst s'.
-        rewrite set_memo_memo. intros kn' d g.
-        rewrite memo_set_delta_delta in g. rewrite memo_set_delta_codes.
-        destruct (eqb_specT kn' kn) as [->|hne].
-        * rewrite dt_find_add_same in g. injection g as <-.
-          exists cb. split; assumption.
-        * rewrite (dt_find_add_other kn kn' _ _ hne) in g.
-          pose proof (hd kn' d g) as hres. destruct d as [|body' insts']; exact hres.
+    intros hf hd hc.
+    destruct (delta_cases kn ui s r s' hc)
+      as [[-> _]|[(body & insts & hsrc & _ & ->)|(cb & hl & hb & _ & ->)]].
+    - exact hd.
+    - destruct (delta_new_source kn _ body insts hd hsrc) as [[cb [hl hb]] hF].
+      exact (delta_new_ok kn ui body insts s cb hf hd hl hb hF).
+    - rewrite set_memo_memo. intros kn' d g.
+      rewrite memo_set_delta_delta in g. rewrite memo_set_delta_codes.
+      destruct (eqb_specT kn' kn) as [->|hne].
+      + rewrite dt_find_add_same in g. injection g as <-.
+        exists cb. split; [exact hl|exact hb].
+      + rewrite (dt_find_add_other kn kn' _ _ hne) in g.
+        pose proof (hd kn' d g) as hres. destruct d as [|body' insts']; exact hres.
   Qed.
 
   Lemma delta_once_ok (kn : kername) (ui : Instance.t) (s : cbn_state)
@@ -1421,22 +1450,12 @@ Section Memo.
     memo_fresh (s.(st_memo)) -> once_ok (s.(st_memo)) ->
     delta X_type X kn ui s = COk (r, s') -> once_ok (s'.(st_memo)).
   Proof.
-    intros hf h. unfold delta.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact h.
-    - destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact h.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some r s' hc)
-          as [_ ->]. now apply delta_new_once_ok.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|intros hc; discriminate hc|intros hc; discriminate hc].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some r s' hc)
-          as [_ ->]. now apply delta_new_once_ok.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst s'.
-        rewrite set_memo_memo. refine (once_ok_fields _ _ _ _ h); reflexivity.
+    intros hf h hc.
+    destruct (delta_cases kn ui s r s' hc)
+      as [[-> _]|[(body & insts & _ & _ & ->)|(cb & _ & _ & _ & ->)]].
+    - exact h.
+    - now apply delta_new_once_ok.
+    - rewrite set_memo_memo. refine (once_ok_fields _ _ _ _ h); reflexivity.
   Qed.
 
   Lemma delta_hash_ok (kn : kername) (ui : Instance.t) (s : cbn_state)
@@ -1444,22 +1463,12 @@ Section Memo.
     memo_fresh (s.(st_memo)) -> hash_ok (s.(st_memo)) ->
     delta X_type X kn ui s = COk (r, s') -> hash_ok (s'.(st_memo)).
   Proof.
-    intros hf h. unfold delta.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact h.
-    - destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact h.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some r s' hc)
-          as [_ ->]. now apply delta_new_hash_ok.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|intros hc; discriminate hc|intros hc; discriminate hc].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some r s' hc)
-          as [_ ->]. now apply delta_new_hash_ok.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst s'.
-        rewrite set_memo_memo. refine (hash_ok_fields _ _ _ _ h); reflexivity.
+    intros hf h hc.
+    destruct (delta_cases kn ui s r s' hc)
+      as [[-> _]|[(body & insts & _ & _ & ->)|(cb & _ & _ & _ & ->)]].
+    - exact h.
+    - now apply delta_new_hash_ok.
+    - rewrite set_memo_memo. refine (hash_ok_fields _ _ _ _ h); reflexivity.
   Qed.
 
   Lemma delta_ceq_ok (kn : kername) (ui : Instance.t) (s : cbn_state)
@@ -1467,22 +1476,12 @@ Section Memo.
     memo_fresh (s.(st_memo)) -> ceq_ok (s.(st_memo)) ->
     delta X_type X kn ui s = COk (r, s') -> ceq_ok (s'.(st_memo)).
   Proof.
-    intros hf h. unfold delta.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact h.
-    - destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst. exact h.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some r s' hc)
-          as [_ ->]. now apply delta_new_ceq_ok.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|intros hc; discriminate hc|intros hc; discriminate hc].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some r s' hc)
-          as [_ ->]. now apply delta_new_ceq_ok.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. subst s'.
-        rewrite set_memo_memo. refine (ceq_ok_fields _ _ _ _ h); reflexivity.
+    intros hf h hc.
+    destruct (delta_cases kn ui s r s' hc)
+      as [[-> _]|[(body & insts & _ & _ & ->)|(cb & _ & _ & _ & ->)]].
+    - exact h.
+    - now apply delta_new_ceq_ok.
+    - rewrite set_memo_memo. refine (ceq_ok_fields _ _ _ _ h); reflexivity.
   Qed.
 
   (** *** What the machine's [delta] answers
@@ -1506,51 +1505,34 @@ Section Memo.
       /\ e.(ce_inst) = ui
       /\ code_inv e c.
   Proof.
-    intros hΣ hf hd. unfold delta.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. discriminate h1.
-    - pose proof (hd kn _ Ed) as hdb. destruct hdb as [[cb [hl hb]] hF].
-      destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2].
-        injection h1 as <-. subst s'.
-        destruct (find_inst_sound _ ui insts i t hF Ei) as [ht [e [he [h3 h4]]]].
-        exists cb, body, e.
-        split; [exact (lookup_declared Σ kn cb hΣ hl)|].
-        split; [exact hb|].
-        split; [cbn [c_term]; exact ht|].
-        split; [reflexivity|].
-        split; [cbn [c_entry]; exact he|].
-        split; [exact h3|]. split; [exact h4|].
-        pose proof (code_inv_root e i) as hroot.
-        rewrite h3, h4 in hroot. rewrite <- ht in hroot. exact hroot.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some (Some c) s' hc)
-          as [hr ->]. injection hr as ->.
-        exists cb, body,
-          (mkEntry body ui (wf_term_univs X_type X (inst_code ui body))).
-        split; [exact (lookup_declared Σ kn cb hΣ hl)|].
-        split; [exact hb|].
-        destruct (delta_new_code kn ui body insts s) as [hct [hcp hce]].
-        split; [exact hct|]. split; [exact hcp|].
-        split; [exact (delta_new_entry kn ui body insts s)|].
-        split; [reflexivity|]. split; [reflexivity|].
-        exact (delta_new_code_inv kn ui body insts s).
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|intros hc; discriminate hc|intros hc; discriminate hc].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + intros hc.
-        destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some (Some c) s' hc)
-          as [hr ->]. injection hr as ->.
-        exists cb, body,
-          (mkEntry body ui (wf_term_univs X_type X (inst_code ui body))).
-        split; [exact (lookup_declared Σ kn cb hΣ El)|].
-        split; [exact Eb|].
-        destruct (delta_new_code kn ui body [] s) as [hct [hcp hce]].
-        split; [exact hct|]. split; [exact hcp|].
-        split; [exact (delta_new_entry kn ui body [] s)|].
-        split; [reflexivity|]. split; [reflexivity|].
-        exact (delta_new_code_inv kn ui body [] s).
-      + intros hc. destruct (cbn_COk_pair_inj _ _ _ _ hc) as [h1 h2]. discriminate h1.
+    intros hΣ hf hd hc.
+    destruct (delta_cases kn ui s (Some c) s' hc)
+      as [[-> [hn|(body & insts & i & t & Ed & Ei & hr)]]
+         |[(body & insts & hsrc & hr & ->)|(cb & _ & _ & hn & _)]].
+    - discriminate hn.
+    - injection hr as ->.
+      destruct (hd kn _ Ed) as [[cb [hl hb]] hF].
+      destruct (find_inst_sound _ ui insts i t hF Ei) as [ht [e [he [h3 h4]]]].
+      exists cb, body, e.
+      split; [exact (lookup_declared Σ kn cb hΣ hl)|].
+      split; [exact hb|].
+      split; [cbn [c_term]; exact ht|].
+      split; [reflexivity|].
+      split; [cbn [c_entry]; exact he|].
+      split; [exact h3|]. split; [exact h4|].
+      pose proof (code_inv_root e i) as hroot.
+      rewrite h3, h4 in hroot. rewrite <- ht in hroot. exact hroot.
+    - injection hr as ->.
+      destruct (delta_new_source kn _ body insts hd hsrc) as [[cb [hl hb]] _].
+      exists cb, body, (mkEntry body ui (wf_term_univs X_type X (inst_code ui body))).
+      split; [exact (lookup_declared Σ kn cb hΣ hl)|].
+      split; [exact hb|].
+      destruct (delta_new_code kn ui body insts s) as [hct [hcp _]].
+      split; [exact hct|]. split; [exact hcp|].
+      split; [exact (delta_new_entry kn ui body insts s)|].
+      split; [reflexivity|]. split; [reflexivity|].
+      exact (delta_new_code_inv kn ui body insts s).
+    - discriminate hn.
   Qed.
 
   Lemma lookup_env_of_abstract (Σ : global_env_ext) (kn : kername) (d : global_decl) :
@@ -1577,46 +1559,36 @@ Section Memo.
         ui = [] -> #|polymorphic_instance cb.(cst_universes)| = 0) ->
     red1 Σ Γ (tConst kn ui) c.(c_term).
   Proof.
-    intros hΣ wfΣ hf hd he hmono. unfold delta in he.
-    destruct (dt_find kn ((s.(st_memo)).(m_delta))) as [[|body insts]|] eqn:Ed.
-    - destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. discriminate h1.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El.
-      + assert (Hb : cb.(cst_body) = Some body).
-        { destruct (hd kn _ Ed) as [[cb0 [hl hb]] _]. rewrite El in hl.
-          injection hl as <-. exact hb. }
-        destruct (find_inst ui insts) as [[i t]|] eqn:Ei.
-        * destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. injection h1 as <-.
-          cbn [c_term].
-          assert (Ht : t = inst_code ui body).
-          { destruct (hd kn _ Ed) as [_ hF].
-            destruct (find_inst_sound _ ui insts i t hF Ei) as [ht _]. exact ht. }
-          rewrite Ht.
-          exact (inst_code_red1_gen Σ Γ kn ui cb body wfΣ
-                   (lookup_env_of_abstract Σ kn _ hΣ El) Hb (hmono cb eq_refl)).
-        * destruct (let_COk_pair (delta_new X_type X kn ui body insts s) Some (Some c) s' he)
-            as [hr _].
-          assert (Hc : c.(c_term) = inst_code ui body).
-          { apply (f_equal (fun o : option code =>
-                     match o with Some x => x.(c_term) | None => c.(c_term) end)) in hr.
-            cbn in hr. rewrite hr. apply (proj1 (delta_new_code kn ui body insts s)). }
-          rewrite Hc.
-          exact (inst_code_red1_gen Σ Γ kn ui cb body wfΣ
-                   (lookup_env_of_abstract Σ kn _ hΣ El) Hb (hmono cb eq_refl)).
-      + exfalso. destruct (hd kn _ Ed) as [[cb0 [hl _]] _]. rewrite El in hl. discriminate hl.
-      + exfalso. destruct (hd kn _ Ed) as [[cb0 [hl _]] _]. rewrite El in hl. discriminate hl.
-    - destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
-        [|discriminate he|discriminate he].
-      destruct (cb.(cst_body)) as [body|] eqn:Eb.
-      + destruct (let_COk_pair (delta_new X_type X kn ui body [] s) Some (Some c) s' he)
-          as [hr _].
-        assert (Hc : c.(c_term) = inst_code ui body).
-        { apply (f_equal (fun o : option code =>
-                   match o with Some x => x.(c_term) | None => c.(c_term) end)) in hr.
-          cbn in hr. rewrite hr. apply (proj1 (delta_new_code kn ui body [] s)). }
-        rewrite Hc.
-        exact (inst_code_red1_gen Σ Γ kn ui cb body wfΣ
-                 (lookup_env_of_abstract Σ kn _ hΣ El) Eb (hmono cb eq_refl)).
-      + destruct (cbn_COk_pair_inj _ _ _ _ he) as [h1 h2]. discriminate h1.
+    intros hΣ wfΣ hf hd he hmono.
+    (* [red1] is in [Type]: take [cb] and [body] from the environment, and from
+       [delta_cases] only that they are the ones [delta] used. *)
+    assert (hsrc : exists cb body, abstract_env_lookup X kn = Some (ConstantDecl cb)
+                     /\ cb.(cst_body) = Some body /\ c.(c_term) = inst_code ui body).
+    { destruct (delta_cases kn ui s (Some c) s' he)
+        as [[_ [hn|(body & insts & i & t & Ed & Ei & hr)]]
+           |[(body & insts & hsrc & hr & _)|(cb & _ & _ & hn & _)]].
+      - discriminate hn.
+      - injection hr as ->.
+        destruct (hd kn _ Ed) as [[cb [hl hb]] hF].
+        destruct (find_inst_sound _ ui insts i t hF Ei) as [ht _].
+        exists cb, body. split; [exact hl|]. split; [exact hb|exact ht].
+      - injection hr as ->.
+        destruct (delta_new_source kn _ body insts hd hsrc) as [[cb [hl hb]] _].
+        exists cb, body. split; [exact hl|]. split; [exact hb|].
+        exact (proj1 (delta_new_code kn ui body insts s)).
+      - discriminate hn. }
+    destruct (abstract_env_lookup X kn) as [[cb|mib]|] eqn:El;
+      [|exfalso; destruct hsrc as (cb & _ & hl & _); discriminate hl
+       |exfalso; destruct hsrc as (cb & _ & hl & _); discriminate hl].
+    destruct (cb.(cst_body)) as [body|] eqn:Eb.
+    - assert (hct : c.(c_term) = inst_code ui body).
+      { destruct hsrc as (cb' & body' & hl & hb & hct). injection hl as <-.
+        rewrite Eb in hb. injection hb as <-. exact hct. }
+      rewrite hct.
+      exact (inst_code_red1_gen Σ Γ kn ui cb body wfΣ
+               (lookup_env_of_abstract Σ kn _ hΣ El) Eb (hmono cb eq_refl)).
+    - exfalso. destruct hsrc as (cb' & body & hl & hb & _). injection hl as <-.
+      rewrite Eb in hb. discriminate hb.
   Qed.
 
   (** ** The five invariants of one call, bundled *)
