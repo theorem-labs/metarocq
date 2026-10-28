@@ -1,0 +1,42 @@
+PrimChecker row J plan (design §7.3), safechecker/theories/PCUICSafeConversion.v.  Scratch note, not for merge.
+
+DONE in this wip:
+- closed_red_mkApps_tConst_axiom gains `prim_op_of Σ cst = None` (row D/F2 guard).
+- isred_full_nobeta: whne_mkApps_inv now has a third disjunct (registered op
+  blocked in its saturated prefix); destruct pattern [[w|(8 ?)]|(10 ?)].
+NEXT FAILURE: :1651, unfold_constants' final `no` obligation (needs the guard).
+
+DESIGN:
+1. unfold_one_prim Γ c u π (h : wtp Γ (tConst c u) π) : option (term * stack) :=
+     let r := reduce_stack RedFlags.default _ X Γ (tConst c u) π h in
+     if eqb (zipp r.1 r.2) (zipp (tConst c u) π) then None else Some r.
+   Mirror unfold_one_fix (:979) and its lemmas: _red_zipp, _red_zippx, _red, _cored, _decompose, _None.
+   - _cored: Req from reduce_stack_sound; the equal case and the posR case
+     (same zipc; reduce_stack_decompose gives the same stack tail, so zipc_inj
+     gives the same zipp) contradict `eqb = false`.
+   - _None: eqb = true, so zipp is unchanged; reduce_stack_whnf gives
+     whnf default (Γ ,,, stack_context π) (zipp (tConst c u) π)
+     (stack_context is equal by reduce_stack_context).
+2. Both `no` branches: unfold_constants (:1515-1520) and prog_view_Const (:3390-3400):
+     with inspect (unfold_one_prim Γ c u π1 h1) := Some (t',ξ) => isconv_red leq t' ξ (tConst c' u') π2 aux
+       | None with inspect (unfold_one_prim Γ c' u' π2 h2) := Some => isconv_red leq (tConst c u) π1 t' ξ aux
+       | None => no (NotFoundConstants c c')
+   Obligations mirror the defined-constant re-entry (:1561-1603): wtp via
+   red_welltyped + _red; R via R_cored / R_cored2 + _cored; conv transport via
+   red_conv_cum_r/l + closed_red_zipp + _red_zipp.
+3. Rigidity lemma (design §7.3, named), from whnf_red_inv (PCUICNormal.v:2470):
+   whnf_red_mkApps_tConst_inv : whnf_red Σ Γ (mkApps (tConst c u) args) t ->
+     ∑ args', t = mkApps (tConst c u) args' × All2 (red Σ Γ) args args'
+     (induction on args using rev_ind; depelim whnf_red).
+   closed_red_whnf_mkApps_tConst : whnf default (mkApps (tConst c u) args) ->
+     ⇝ t -> ∑ args', t = mkApps (tConst c u) args' × All2 red.
+   Final `no` obligation: replace closed_red_mkApps_tConst_axiom with
+   closed_red_whnf_mkApps_tConst, fed by the two _None whnf facts.
+4. reducible_head (:5392-) gains the same case, plus its four lemmas and
+   reducible_head_None (§7.3 last paragraph).
+5. Row J landing report: name PrimTests' po_* red tests and the log as the
+   concrete runs that close the row-I frame-invariant open item.
+
+J2: erasure Hlookup conjuncts (abstract_prim_op_of / abstract_primitive_bool),
+erase_global_deps_irr hypothesis widening; PCUICRetypingEnvIrrelevance.v:166.
+Cut on frac/prim-ops-L at or after PrimWhnfSR2's ErasureFunctionProperties hunk.

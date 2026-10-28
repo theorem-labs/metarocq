@@ -90,6 +90,7 @@ theories/PCUICValidity.v
 theories/PCUICInductiveInversion.v
 theories/PCUICSR.v
 theories/PCUICClassification.v
+theories/PCUICPrimCanonical.v
 theories/PCUICCanonicity.v
 
 theories/PCUICCSubst.v

@@ -36,13 +36,16 @@ Proof.
   now etransitivity.
 Qed.
 
+(** A bodiless constant that is not a registered operation does not reduce, so
+    an application of it reduces only in its arguments.  A registered operation
+    is handled by the rigidity lemma instead (design §7.3, row J). *)
 Lemma closed_red_mkApps_tConst_axiom {cf} {Σ} {wfΣ : wf Σ} {Γ} {cst u} {args : list term} {cb c} :
-  declared_constant Σ cst cb -> cst_body cb = None ->
+  declared_constant Σ cst cb -> cst_body cb = None -> prim_op_of Σ cst = None ->
   Σ ;;; Γ ⊢ mkApps (tConst cst u) args ⇝ c ->
   ∑ args' : list term,
   (c = mkApps (tConst cst u) args') * (red_terms Σ Γ args args').
 Proof.
-  intros decl hcb [clΓ clt r].
+  intros decl hcb hnop [clΓ clt r].
   eapply (PCUICConfluence.red_mkApps_tConst_axiom (Γ := exist Γ clΓ)) in decl as [args' [eq r']]; tea.
   * exists args'; split; auto.
     eapply into_red_terms; auto.
@@ -597,7 +600,7 @@ Section Conversion.
     destruct (isr _ wfΣ) as [isr'].
     depelim isr'; rewrite -> mkApps_tApp in *; try solve [solve_discr].
     apply whne_mkApps_inv in w; [|easy].
-    destruct w as [|(?&?&?&?&?&?&?&?)]; [|discriminate].
+    destruct w as [[w|(?&?&?&?&?&?&?&?)]|(?&?&?&?&?&?&?&?&?&?)]; [|discriminate|discriminate].
     depelim w; solve_discr; discriminate.
    Qed.
 

@@ -9,7 +9,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICUtils PCUICReduction PCUICValidity PCUICSafeLemmata
      PCUICConfluence PCUICConversion
      PCUICOnFreeVars PCUICWellScopedCumulativity
-     PCUICClassification PCUICArityRed PCUICPrimitiveRed.
+     PCUICClassification PCUICArityRed PCUICPrimitiveRed PCUICPrimCanonical.
 
 From MetaRocq.SafeChecker Require Import PCUICErrors PCUICWfReduction PCUICWfEnv.
 
@@ -181,27 +181,6 @@ Proof.
   eapply prim_app_saturated_not_prod; [exact hop| |exact hf].
   rewrite length_firstn. lia.
 Qed.
-
-(** Every operation takes int or string arguments ([PrimitiveOps.info]). *)
-Lemma prim_op_args_int_or_string {op i tag} :
-  nth_error (po_args (info op)) i = Some tag -> tag = primInt \/ tag = primString.
-Proof.
-  intros h. apply nth_error_In in h.
-  destruct op; cbn in h; firstorder (subst; auto).
-Qed.
-
-(** Canonical forms at a primitive type: a well-typed weak-head normal form of
-    the int or string type that is not a literal is neutral.  The premises on
-    [kn] are §4.2(b)'s [prim_op_tag_declared]: without a bodiless [kn] the
-    statement is false, because a constructor could then be typed at [tConst kn u]
-    through the body of [kn]. *)
-Lemma whnf_prim_type_canonical {cf} {Σ : global_env_ext} {wfΣ : wf Σ} flags {Γ a tag kn d u} :
-  primitive_constant Σ tag = Some kn -> declared_constant Σ kn d -> primitive_invariants tag d ->
-  tag = primInt \/ tag = primString ->
-  whnf flags Σ Γ a -> Σ ;;; Γ |- a : tConst kn u -> lit_of_term a = None ->
-  whne flags Σ Γ a.
-Proof.
-Admitted. (* PROBE: not yet proved; must not be committed *)
 
 (** The blocking argument of a well-typed rigid application is neutral. *)
 Lemma prim_rigid_arg_whne {cf} {Σ : global_env_ext} {wfΣ : wf Σ} flags {Γ c u op ls a rest T} :
