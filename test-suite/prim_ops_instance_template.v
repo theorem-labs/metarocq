@@ -33,7 +33,10 @@ Import ListNotations.
 
 Local Existing Instance default_checker_flags.
 
-Definition po_dp : dirpath := ["prim_ops_instance_template"; "TestSuite"; "MetaRocq"].
+(** The kernames are those of [PCUICPrimInstances], so that the Template→PCUIC
+    translation of these environments computes to the PCUIC ones
+    ([prim_ops_instance_trans.v]). *)
+Definition po_dp : dirpath := ["PCUICPrimInstances"; "PCUIC"; "MetaRocq"].
 Definition po_int_kn : kername := (MPfile po_dp, "int").
 Definition po_land_kn : kername := (MPfile po_dp, "land").
 

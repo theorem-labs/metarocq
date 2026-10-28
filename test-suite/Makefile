@@ -9,6 +9,7 @@ bugs: Makefile.rocq
 	bash check_fail_messages.sh prim_ops.v
 	bash check_assumptions.sh prim_ops_instance.v '^FunctionalExtensionality\.functional_extensionality_dep$$'
 	bash check_assumptions.sh prim_ops_instance_template.v '^guard_checking$$'
+	bash check_assumptions.sh prim_ops_instance_trans.v '^guard_checking$$'
 
 Makefile.rocq: Makefile _RocqProject
 	rocq makefile -f _RocqProject -o Makefile.rocq
