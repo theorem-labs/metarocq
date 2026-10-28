@@ -2012,6 +2012,8 @@ Proof.
     + match goal with Hc : is_constructor _ [] = true |- _ =>
         rewrite is_constructor_nil in Hc; discriminate Hc end.
     + rewrite mkApps_app in Heq. cbn in Heq. discriminate Heq.
+  - (* red_prim_op: a constant applied to literals *)
+    red1_dismiss_mkApps Heq.
   - injection Heq as -> ->. left. eexists; split; [reflexivity|assumption].
   - injection Heq as -> ->. right. eexists; split; [reflexivity|assumption].
 Qed.

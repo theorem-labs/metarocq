@@ -1001,6 +1001,9 @@ Section A2.
     - (* cofix proj *) intros Γ pb p mfix idx args narg fn hf _ _ _. apply JoinE_red1.
       exact (red_cofix_proj _ _ p mfix idx args narg fn hf).
     - (* delta *) intros Γ pb c decl body hd u hb _ _ _. apply JoinE_red1. exact (red_delta _ _ c decl body hd u hb).
+    - (* prim_op: one [red_prim_op] step, so the join is that step *)
+      intros Γ pb c decl u op ls r0 v hop hd hb hden hback _ _ _. apply JoinE_red1.
+      exact (red_prim_op _ _ c decl u op ls r0 v hop hd hb hden hback).
     - (* proj *) intros Γ pb p args u arg ha _ _ _. apply JoinE_red1. exact (red_proj _ _ p args u arg ha).
     - (* Trans: A3 *) intros Γ pb t u v hΓ0 hu0 _ IH1 _ IH2 hΓ ht hv.
       exact (I5_join_trans Σ wfΣ r Γ pb t u v hΓ0 hu0 (IH1 hΓ ht hu0) (IH2 hΓ hu0 hv)).

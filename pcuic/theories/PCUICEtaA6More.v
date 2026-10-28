@@ -152,18 +152,20 @@ Section A6More.
   (** i37, i38, at every [pb]. *)
   Lemma invert_cumul_prim_type_indE {pb Γ cst cdecl p ind u' args'} :
     declared_constant Σ cst cdecl -> primitive_invariants (prim_val_tag p) cdecl ->
+    prim_op_of Σ cst = None ->
     WS pb Γ (prim_type p cst) (mkApps (tInd ind u') args') -> False.
   Proof.
-    intros hd hp. destruct (prim_type_spine p cst) as (u & args & ->).
-    exact (invert_cumul_axiom_indE (wfΣ := wfΣ) hd (primitive_invariants_body _ _ hp)).
+    intros hd hp hnop. destruct (prim_type_spine p cst) as (u & args & ->).
+    exact (invert_cumul_axiom_indE (wfΣ := wfΣ) hd (primitive_invariants_body _ _ hp) hnop).
   Qed.
 
   Lemma invert_cumul_prim_type_prodE {pb Γ cst cdecl p na dom codom} :
     declared_constant Σ cst cdecl -> primitive_invariants (prim_val_tag p) cdecl ->
+    prim_op_of Σ cst = None ->
     WS pb Γ (prim_type p cst) (tProd na dom codom) -> False.
   Proof.
-    intros hd hp. destruct (prim_type_spine p cst) as (u & args & ->).
-    exact (invert_cumul_axiom_prodE (wfΣ := wfΣ) hd (primitive_invariants_body _ _ hp)).
+    intros hd hp hnop. destruct (prim_type_spine p cst) as (u & args & ->).
+    exact (invert_cumul_axiom_prodE (wfΣ := wfΣ) hd (primitive_invariants_body _ _ hp) hnop).
   Qed.
 
   (** x14, untyped: base's [wf_local] premise served only to scope the context,

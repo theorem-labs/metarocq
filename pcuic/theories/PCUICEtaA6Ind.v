@@ -175,18 +175,21 @@ Section A6Ind.
 
   Lemma chain_mkApps_Const Γ cst cdecl u l v :
     declared_constant Σ cst cdecl -> cst_body cdecl = None ->
+    (* trunk's premise of [invert_red_axiom_app]: [cst] is not a primitive
+       operation, whose saturated application would reduce *)
+    prim_op_of Σ cst = None ->
     is_closed_context Γ -> is_open_term Γ (mkApps (tConst cst u) l) ->
     chain Γ (mkApps (tConst cst u) l) v ->
     ∑ l', (v = mkApps (tConst cst u) l') × All2 (fun a a' => BE Γ a a') l l'.
   Proof.
-    intros hd hb hΓ hl h. apply clos_rt_rt1n_iff in h.
+    intros hd hb hnop hΓ hl h. apply clos_rt_rt1n_iff in h.
     remember (mkApps (tConst cst u) l) as x eqn:Ex.
     induction h as [x|x y v s _ IH] in l, hl, Ex |- *; subst x.
     - exists l. split; [reflexivity|apply All2_BE_refl].
     - destruct s as [[y0 [hr ->]]|he].
       + have hcr : Σ ;;; Γ ⊢ mkApps (tConst cst u) l ⇝ y0 := closed_red_of hΓ hl (red1_red _ _ _ _ hr).
         have hy0 := closed_red_open_right (wfΣ := wfΣ) hcr.
-        destruct (invert_red_axiom_app (Σ := Σ) (wfΣ := wfΣ) hd hb hcr) as (l0 & -> & hl0).
+        destruct (invert_red_axiom_app (Σ := Σ) (wfΣ := wfΣ) hd hb hnop hcr) as (l0 & -> & hl0).
         have e0 : canon (mkApps (tConst cst u) l0) = mkApps (tConst cst u) (map canon l0) by now rewrite canon_mkApps.
         destruct (IH (map canon l0) e0 (canon_is_open_term Γ _ hy0)) as (l' & -> & hl').
         exists l'. split; [reflexivity|]. exact (All2_BE_red_compose Γ l l0 l' hl0 hl').
@@ -387,14 +390,14 @@ Section A6Ind.
   (** ** Axiom spines (i33-i36) *)
 
   Lemma ws_cumul_pbE_Axiom_l_inv {pb Γ cst u args cdecl T} :
-    declared_constant Σ cst cdecl -> cst_body cdecl = None ->
+    declared_constant Σ cst cdecl -> cst_body cdecl = None -> prim_op_of Σ cst = None ->
     WS pb Γ (mkApps (tConst cst u) args) T ->
     ∑ u' args', [× chain Γ (canon T) (mkApps (tConst cst u') args'),
       All2 (WS Conv Γ) args args' & cmp_universe_instance (compare_universe Σ Conv) u u'].
   Proof.
-    intros hd hb [hΓ hl hr (v & v' & hv & hv' & e)].
+    intros hd hb hnop [hΓ hl hr (v & v' & hv & hv' & e)].
     rewrite canon_mkApps in hv. cbn [canon] in hv.
-    destruct (chain_mkApps_Const Γ cst cdecl u (map canon args) v hd hb hΓ
+    destruct (chain_mkApps_Const Γ cst cdecl u (map canon args) v hd hb hnop hΓ
                 (open_mkApps_canon Γ _ args eq_refl hl) hv) as (l1 & -> & hl1).
     destruct (finst_mkApps_Const_l _ _ _ _ _ _ e) as (u' & l2 & [-> hu hl2]).
     have ho := chain_open (wfΣ := wfΣ) Γ T _ hΓ hr hv'.
@@ -404,14 +407,14 @@ Section A6Ind.
   Qed.
 
   Lemma ws_cumul_pbE_Axiom_r_inv {pb Γ cst u args cdecl T} :
-    declared_constant Σ cst cdecl -> cst_body cdecl = None ->
+    declared_constant Σ cst cdecl -> cst_body cdecl = None -> prim_op_of Σ cst = None ->
     WS pb Γ T (mkApps (tConst cst u) args) ->
     ∑ u' args', [× chain Γ (canon T) (mkApps (tConst cst u') args'),
       All2 (WS Conv Γ) args' args & cmp_universe_instance (compare_universe Σ Conv) u' u].
   Proof.
-    intros hd hb [hΓ hl hr (v & v' & hv & hv' & e)].
+    intros hd hb hnop [hΓ hl hr (v & v' & hv & hv' & e)].
     rewrite canon_mkApps in hv'. cbn [canon] in hv'.
-    destruct (chain_mkApps_Const Γ cst cdecl u (map canon args) v' hd hb hΓ
+    destruct (chain_mkApps_Const Γ cst cdecl u (map canon args) v' hd hb hnop hΓ
                 (open_mkApps_canon Γ _ args eq_refl hr) hv') as (l1 & -> & hl1).
     destruct (finst_mkApps_Const_r _ _ _ _ _ _ e) as (u' & l2 & [-> hu hl2]).
     have ho := chain_open (wfΣ := wfΣ) Γ T _ hΓ hl hv.
@@ -421,12 +424,12 @@ Section A6Ind.
   Qed.
 
   Lemma invert_cumul_axiom_indE {pb Γ cst cdecl u ind u' args args'} :
-    declared_constant Σ cst cdecl -> cst_body cdecl = None ->
+    declared_constant Σ cst cdecl -> cst_body cdecl = None -> prim_op_of Σ cst = None ->
     WS pb Γ (mkApps (tConst cst u) args) (mkApps (tInd ind u') args') -> False.
   Proof.
-    intros hd hb [hΓ hl hr (v & v' & hv & hv' & e)].
+    intros hd hb hnop [hΓ hl hr (v & v' & hv & hv' & e)].
     rewrite canon_mkApps in hv. rewrite canon_mkApps in hv'. cbn [canon] in hv, hv'.
-    destruct (chain_mkApps_Const Γ cst cdecl u (map canon args) v hd hb hΓ
+    destruct (chain_mkApps_Const Γ cst cdecl u (map canon args) v hd hb hnop hΓ
                 (open_mkApps_canon Γ _ args eq_refl hl) hv) as (l1 & -> & _).
     destruct (chain_mkApps_Ind Γ ind u' (map canon args') v' hΓ (open_mkApps_canon Γ _ args' eq_refl hr) hv')
       as (l1' & -> & _).
@@ -436,13 +439,13 @@ Section A6Ind.
   Qed.
 
   Lemma invert_cumul_axiom_prodE {pb Γ cst cdecl u args na dom codom} :
-    declared_constant Σ cst cdecl -> cst_body cdecl = None ->
+    declared_constant Σ cst cdecl -> cst_body cdecl = None -> prim_op_of Σ cst = None ->
     WS pb Γ (mkApps (tConst cst u) args) (tProd na dom codom) -> False.
   Proof.
-    intros hd hb [hΓ hl hr (v & v' & hv & hv' & e)].
+    intros hd hb hnop [hΓ hl hr (v & v' & hv & hv' & e)].
     rewrite canon_mkApps in hv. cbn [canon] in hv, hv'.
     destruct (chain_Prod _ _ _ _ _ hv') as (na1 & A1 & B1 & [-> _ _ _]).
-    destruct (chain_mkApps_Const Γ cst cdecl u (map canon args) v hd hb hΓ
+    destruct (chain_mkApps_Const Γ cst cdecl u (map canon args) v hd hb hnop hΓ
                 (open_mkApps_canon Γ _ args eq_refl hl) hv) as (l1 & -> & _).
     destruct (finst_Prod_r _ _ _ _ _ _ e) as (na2 & A2 & B2 & [E _ _ _]).
     exact (mkApps_rigid_not_Prod (tConst cst u) _ _ _ _ eq_refl (fun _ _ _ => ltac:(discriminate)) E).
