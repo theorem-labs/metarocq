@@ -185,4 +185,6 @@ theories/PCUICEtaI5.v
 theories/PCUICEtaFInstEquiv.v
 # L2 obligation 8 (STAGED AT FollowSpec), A3 enabler: at Conv, U1' = base relation over eta_env
 theories/PCUICEtaFInstTransport.v
+# L2 obligation 8 (STAGED AT FollowSpec), A3 piece: C1c for U1' (C4-SIDE)
+theories/PCUICEtaFInstC1c.v
 # theories/All.v
