@@ -6,7 +6,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICTactic
      PCUICLiftSubst PCUICEquality PCUICUnivSubst PCUICInduction
      PCUICReduction PCUICCases PCUICWeakeningConv PCUICWeakeningTyp
      PCUICTyping PCUICOnFreeVars PCUICSubstitution
-     PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv.
+     PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICClosedBodies.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations.Prop Require Import DepElim.
@@ -18,7 +18,7 @@ Set Default Goal Selector "!".
 Section CtxReduction.
   Context {cf : checker_flags}.
   Context {Σ : global_env_ext}.
-  Context (wfΣ : wf Σ).
+  Context (wfΣ : ClosedBodies Σ).
 
   Lemma red_prod_alt Γ na M M' N N' :
     red Σ Γ M M' -> red Σ (Γ ,, vass na M') N N' ->
@@ -73,7 +73,7 @@ Section CtxReduction.
         eapply forallb_All in H); intros
     end.
 
-  Lemma red1_red_ctx P Γ Δ t u :
+  Lemma red1_red_ctx_cb P Γ Δ t u :
     on_ctx_free_vars P Γ ->
     on_ctx_free_vars P Δ ->
     on_free_vars P t ->
@@ -97,7 +97,7 @@ Section CtxReduction.
       eapply red_step.
       * constructor. rewrite e => //.
       * rewrite -(firstn_skipn (S i) Δ).
-        eapply weakening_red_0; auto.
+        eapply weakening_red_0_cb; auto.
         + rewrite firstn_length_le //.
           eapply nth_error_Some_length in e. lia.
         + move: onΔ.
@@ -188,7 +188,7 @@ Section CtxReduction.
     - eapply red_primArray_type; eauto.
   Qed.
 
-  Lemma red_red_ctx P Γ Δ t u :
+  Lemma red_red_ctx_cb P Γ Δ t u :
     on_ctx_free_vars P Γ ->
     on_ctx_free_vars P Δ ->
     on_free_vars P t ->
@@ -197,10 +197,10 @@ Section CtxReduction.
     red Σ Δ t u.
   Proof using wfΣ.
     intros onΓ onΔ ont.
-    induction 1; eauto using red1_red_ctx.
+    induction 1; eauto using red1_red_ctx_cb.
     intros H.
     transitivity y; eauto.
-    eapply IHX2; tea. eapply red_on_free_vars in X1; tea.
+    eapply IHX2; tea. eapply red_on_free_vars_cb in X1; tea.
   Qed.
 
   Lemma red_context_app {Γ Γ' Δ Δ'} :
@@ -231,7 +231,7 @@ Section CtxReduction.
     bool_congr.
   Qed.
 
-  Lemma red_context_on_ctx_free_vars {P Γ Δ} :
+  Lemma red_context_on_ctx_free_vars_cb {P Γ Δ} :
     on_ctx_free_vars P Γ ->
     red_context Σ Γ Δ ->
     on_ctx_free_vars P Δ.
@@ -244,13 +244,13 @@ Section CtxReduction.
     rewrite (IHX _ onΓ) /=.
     case: (P 0) ond => //=.
     rewrite /on_free_vars_decl /test_decl /=.
-    case: p; intros; eauto using red_on_free_vars.
-    - move/andP: ond => [] /=; eauto using red_on_free_vars.
-    - move/andP: ond => [] /=; eauto using red_on_free_vars.
-      intros. apply /andP. eauto using red_on_free_vars.
+    case: p; intros; eauto using red_on_free_vars_cb.
+    - move/andP: ond => [] /=; eauto using red_on_free_vars_cb.
+    - move/andP: ond => [] /=; eauto using red_on_free_vars_cb.
+      intros. apply /andP. eauto using red_on_free_vars_cb.
   Qed.
 
-  Lemma red_context_rel_on_ctx_free_vars {P Γ Δ Δ'} :
+  Lemma red_context_rel_on_ctx_free_vars_cb {P Γ Δ Δ'} :
     on_ctx_free_vars (addnP #|Δ| P) Γ ->
     on_ctx_free_vars P Δ ->
     red_context_rel Σ Γ Δ Δ' ->
@@ -265,15 +265,15 @@ Section CtxReduction.
     { rewrite addnP_add Nat.add_1_r //. }
     case: (P 0) ond => //=.
     rewrite /on_free_vars_decl /test_decl /=.
-    case: p; intros; eauto using red_on_free_vars.
-    - move/andP: ond => [] /=; eauto using red_on_free_vars.
-      intros _ ond. eapply red_on_free_vars. 3:tea. 2:auto.
+    case: p; intros; eauto using red_on_free_vars_cb.
+    - move/andP: ond => [] /=; eauto using red_on_free_vars_cb.
+      intros _ ond. eapply red_on_free_vars_cb. 3:tea. 2:auto.
       now rewrite on_ctx_free_vars_app onΔ onΓ.
-    - move/andP: ond => [] /=; eauto using red_on_free_vars.
+    - move/andP: ond => [] /=; eauto using red_on_free_vars_cb.
       intros. apply /andP. split.
-      * eapply red_on_free_vars;revgoals;tea.
+      * eapply red_on_free_vars_cb;revgoals;tea.
         now rewrite on_ctx_free_vars_app onΔ onΓ.
-      * eapply red_on_free_vars;revgoals;tea.
+      * eapply red_on_free_vars_cb;revgoals;tea.
         now rewrite on_ctx_free_vars_app onΔ onΓ.
   Qed.
 
@@ -288,7 +288,7 @@ Section CtxReduction.
     repeat (PCUICSigmaCalculus.nat_compare_specs => //).
   Qed.
 
-  Lemma red_context_trans Γ Δ Δ' :
+  Lemma red_context_trans_cb Γ Δ Δ' :
     on_ctx_free_vars (closedP #|Γ| xpredT) Γ ->
     red_context Σ Γ Δ -> red_context Σ Δ Δ' -> red_context Σ Γ Δ'.
   Proof using wfΣ.
@@ -302,29 +302,29 @@ Section CtxReduction.
     - eapply IHAll2_fold; tea.
     - destruct p; depelim r; constructor.
       * eapply red_trans; tea.
-        eapply red_red_ctx. 4,5:tea. all:tea.
-        { eapply red_context_on_ctx_free_vars; tea. }
-        { eapply red_on_free_vars; tea; auto with fvs. }
+        eapply red_red_ctx_cb. 4,5:tea. all:tea.
+        { eapply red_context_on_ctx_free_vars_cb; tea. }
+        { eapply red_on_free_vars_cb; tea; auto with fvs. }
       * eapply red_trans; tea.
-        eapply red_red_ctx. 4,5:tea. all:tea.
-        { eapply red_context_on_ctx_free_vars; tea. }
-        { eapply red_on_free_vars; tea; auto with fvs.
+        eapply red_red_ctx_cb. 4,5:tea. all:tea.
+        { eapply red_context_on_ctx_free_vars_cb; tea. }
+        { eapply red_on_free_vars_cb; tea; auto with fvs.
           move/andP: ond => [] /= //. }
       * eapply red_trans; tea.
-        eapply red_red_ctx. 4,5:tea. all:tea.
-        { eapply red_context_on_ctx_free_vars; tea. }
-        { eapply red_on_free_vars; tea; auto with fvs.
+        eapply red_red_ctx_cb. 4,5:tea. all:tea.
+        { eapply red_context_on_ctx_free_vars_cb; tea. }
+        { eapply red_on_free_vars_cb; tea; auto with fvs.
           move/andP: ond => [] /= //. }
   Qed.
 
-  Lemma red_context_app_right {Γ Γ' Δ Δ'} :
+  Lemma red_context_app_right_cb {Γ Γ' Δ Δ'} :
     on_ctx_free_vars (closedP #|Γ ,,, Γ'| xpredT) (Γ ,,, Γ') ->
     red_context Σ Γ Δ ->
     red_context_rel Σ Δ Γ' Δ' ->
     red_context Σ (Γ ,,, Γ') (Δ ,,, Δ').
   Proof using wfΣ.
     intros onf red red'.
-    eapply red_context_trans; tea.
+    eapply red_context_trans_cb; tea.
     - eapply red_context_app_same. tea.
     - eapply red_context_app; [apply red_context_refl|tas].
   Qed.
@@ -373,7 +373,7 @@ Section CtxReduction.
     - apply All2_fold_refl => //.
   Qed.
 
-  Lemma red_ctx_rel_red_context_rel Γ Δ Δ' :
+  Lemma red_ctx_rel_red_context_rel_cb Γ Δ Δ' :
     on_ctx_free_vars (closedP #|Γ,,, Δ| xpredT) (Γ,,, Δ) ->
     red_ctx_rel Σ Γ Δ Δ' <~> red_context_rel Σ Γ Δ Δ'.
   Proof using wfΣ.
@@ -388,10 +388,10 @@ Section CtxReduction.
       * rewrite - !/(red_ctx_rel _ _ _ _) - !/(red_context_rel _ _ _ _) in X1 X2 IHX1 IHX2 *.
         eapply red_context_app_same_left in IHX1 => //.
         eapply red_context_app_same_left in IHX2 => //.
-        2:{ eapply red_context_on_ctx_free_vars; tea.
+        2:{ eapply red_context_on_ctx_free_vars_cb; tea.
             now rewrite -(All2_fold_length IHX1). }
         eapply red_context_rel_inv.
-        eapply red_context_trans; tea.
+        eapply red_context_trans_cb; tea.
     - induction 1; try solve [constructor].
       depelim p.
       * transitivity (vass na T' :: Γ0).
@@ -416,5 +416,62 @@ Section CtxReduction.
 
 End CtxReduction.
 
+(** * The same statements under [wf Σ]
 
+  Each lemma below states its [_cb] version's statement under [wf Σ] instead of
+  [ClosedBodies Σ], and is proved from it through the instance [wf_ClosedBodies]. *)
 
+Section CtxReductionWf.
+  Context {cf : checker_flags}.
+  Context {Σ : global_env_ext}.
+  Context (wfΣ : wf Σ).
+
+  Lemma red1_red_ctx P Γ Δ t u :
+    on_ctx_free_vars P Γ ->
+    on_ctx_free_vars P Δ ->
+    on_free_vars P t ->
+    red1 Σ Γ t u ->
+    red_context Σ Δ Γ ->
+    red Σ Δ t u.
+  Proof. eapply (@red1_red_ctx_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma red_red_ctx P Γ Δ t u :
+    on_ctx_free_vars P Γ ->
+    on_ctx_free_vars P Δ ->
+    on_free_vars P t ->
+    red Σ Γ t u ->
+    red_context Σ Δ Γ ->
+    red Σ Δ t u.
+  Proof. eapply (@red_red_ctx_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma red_context_on_ctx_free_vars {P Γ Δ} :
+    on_ctx_free_vars P Γ ->
+    red_context Σ Γ Δ ->
+    on_ctx_free_vars P Δ.
+  Proof. eapply (@red_context_on_ctx_free_vars_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma red_context_rel_on_ctx_free_vars {P Γ Δ Δ'} :
+    on_ctx_free_vars (addnP #|Δ| P) Γ ->
+    on_ctx_free_vars P Δ ->
+    red_context_rel Σ Γ Δ Δ' ->
+    on_ctx_free_vars P Δ'.
+  Proof. eapply (@red_context_rel_on_ctx_free_vars_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma red_context_trans Γ Δ Δ' :
+    on_ctx_free_vars (closedP #|Γ| xpredT) Γ ->
+    red_context Σ Γ Δ -> red_context Σ Δ Δ' -> red_context Σ Γ Δ'.
+  Proof. eapply (@red_context_trans_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma red_context_app_right {Γ Γ' Δ Δ'} :
+    on_ctx_free_vars (closedP #|Γ ,,, Γ'| xpredT) (Γ ,,, Γ') ->
+    red_context Σ Γ Δ ->
+    red_context_rel Σ Δ Γ' Δ' ->
+    red_context Σ (Γ ,,, Γ') (Δ ,,, Δ').
+  Proof. eapply (@red_context_app_right_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma red_ctx_rel_red_context_rel Γ Δ Δ' :
+    on_ctx_free_vars (closedP #|Γ,,, Δ| xpredT) (Γ,,, Δ) ->
+    red_ctx_rel Σ Γ Δ Δ' <~> red_context_rel Σ Γ Δ Δ'.
+  Proof. eapply (@red_ctx_rel_red_context_rel_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+End CtxReductionWf.

@@ -7,7 +7,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICTactics PCUICAstUtil
   PCUICTyping PCUICReduction PCUICCumulativity
   PCUICEquality PCUICGlobalEnv PCUICClosed PCUICClosedConv PCUICClosedTyp PCUICEquality PCUICWeakeningEnvConv PCUICWeakeningEnvTyp
   PCUICSigmaCalculus PCUICRenameDef PCUICRenameConv PCUICWeakeningConv PCUICInstDef PCUICWeakeningTyp
-  PCUICGuardCondition PCUICUnivSubstitutionConv PCUICOnFreeVars PCUICOnFreeVarsConv.
+  PCUICGuardCondition PCUICUnivSubstitutionConv PCUICOnFreeVars PCUICOnFreeVarsConv PCUICClosedBodies.
 
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -1739,7 +1739,7 @@ Proof.
   destruct arr; cbn => //.
 Qed.
 
-Lemma red1_inst {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ u v σ} :
+Lemma red1_inst_cb {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {Γ Δ u v σ} :
   usubst Γ σ Δ ->
   is_open_term Γ u ->
   red1 Σ Γ u v ->
@@ -1794,7 +1794,7 @@ Proof.
   - simpl.
     rewrite inst_closed0.
     * rewrite closedn_subst_instance.
-      eapply declared_constant_closed_body. all: eauto.
+      eapply closed_bodies. all: eauto.
     * do 2 econstructor; eauto.
   - simpl. rewrite inst_mkApps. simpl.
     do 2 econstructor. rewrite nth_error_map. rewrite H. reflexivity.
@@ -1897,6 +1897,12 @@ Proof.
   - cbn. rewrite map_array_model_set_type.
     eapply red_primArray_type; cbn; eauto.
 Defined.
+Lemma red1_inst {Σ : global_env_ext} {wfΣ : wf Σ} {Γ Δ u v σ} :
+  usubst Γ σ Δ ->
+  is_open_term Γ u ->
+  red1 Σ Γ u v ->
+  red Σ Δ u.[σ] v.[σ].
+Proof. intros; eapply red1_inst_cb; tea; typeclasses eauto. Defined.
 
 Lemma eq_term_upto_univ_inst Σ cmp_universe cmp_sort pb napp u v σ :
     RelationClasses.Reflexive (cmp_universe Conv) ->

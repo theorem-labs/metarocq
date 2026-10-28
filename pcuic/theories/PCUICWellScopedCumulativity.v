@@ -6,7 +6,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTy
      PCUICReduction PCUICWeakeningConv PCUICWeakeningTyp PCUICEquality PCUICUnivSubstitutionConv
      PCUICSigmaCalculus PCUICContextReduction
      PCUICParallelReduction PCUICParallelReductionConfluence PCUICClosedConv PCUICClosedTyp
-     PCUICRedTypeIrrelevance PCUICOnFreeVars PCUICConfluence PCUICSubstitution.
+     PCUICRedTypeIrrelevance PCUICOnFreeVars PCUICConfluence PCUICSubstitution PCUICClosedBodies.
 
 From Stdlib Require Import CRelationClasses CMorphisms.
 From Equations.Prop Require Import DepElim.
@@ -73,25 +73,39 @@ Proof.
     econstructor 2; tea.
 Qed.
 
-Lemma red1_is_open_term {cf : checker_flags} {Σ} {wfΣ : wf Σ} {Γ : context} x y :
+Lemma red1_is_open_term_cb {cf : checker_flags} {Σ} {wfΣ : ClosedBodies Σ} {Γ : context} x y :
   red1 Σ Γ x y ->
   is_closed_context Γ ->
   is_open_term Γ x ->
   is_open_term Γ y.
 Proof.
-  intros. eapply red1_on_free_vars; eauto with fvs.
+  intros. eapply red1_on_free_vars_cb; eauto with fvs.
 Qed.
+Lemma red1_is_open_term {cf : checker_flags} {Σ} {wfΣ : wf Σ} {Γ : context} x y :
+  red1 Σ Γ x y ->
+  is_closed_context Γ ->
+  is_open_term Γ x ->
+  is_open_term Γ y.
+Proof. intros; eapply red1_is_open_term_cb; tea; typeclasses eauto. Qed.
 #[global] Hint Immediate red1_is_open_term : fvs.
+#[global] Hint Immediate red1_is_open_term_cb : fvs.
 
-Lemma red_is_open_term {cf : checker_flags} {Σ} {wfΣ : wf Σ} {Γ : context} x y :
+Lemma red_is_open_term_cb {cf : checker_flags} {Σ} {wfΣ : ClosedBodies Σ} {Γ : context} x y :
   red Σ Γ x y ->
   is_closed_context Γ ->
   is_open_term Γ x ->
   is_open_term Γ y.
 Proof.
-  intros. eapply red_on_free_vars; eauto with fvs.
+  intros. eapply red_on_free_vars_cb; eauto with fvs.
 Qed.
+Lemma red_is_open_term {cf : checker_flags} {Σ} {wfΣ : wf Σ} {Γ : context} x y :
+  red Σ Γ x y ->
+  is_closed_context Γ ->
+  is_open_term Γ x ->
+  is_open_term Γ y.
+Proof. intros; eapply red_is_open_term_cb; tea; typeclasses eauto. Qed.
 #[global] Hint Immediate red_is_open_term : fvs.
+#[global] Hint Immediate red_is_open_term_cb : fvs.
 
 Lemma ws_cumul_pb_is_open_term {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ : context} {x y} :
   ws_cumul_pb pb Σ Γ x y ->
@@ -100,26 +114,39 @@ Proof.
   now induction 1; rewrite ?i ?i0 ?i1 ?i2.
 Qed.
 
-Lemma ws_cumul_pb_is_closed_context {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ : context} {x y} :
+Lemma ws_cumul_pb_is_closed_context_cb {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {Γ : context} {x y} :
   ws_cumul_pb pb Σ Γ x y -> is_closed_context Γ.
 Proof.
   now induction 1; rewrite ?i ?i0 ?i1 ?i2.
 Qed.
+Lemma ws_cumul_pb_is_closed_context {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ : context} {x y} :
+  ws_cumul_pb pb Σ Γ x y -> is_closed_context Γ.
+Proof. intros; eapply ws_cumul_pb_is_closed_context_cb; tea; typeclasses eauto. Qed.
 
-Lemma ws_cumul_pb_is_open_term_left {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ}
+Lemma ws_cumul_pb_is_open_term_left_cb {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
   {Γ : context} {x y} :
   ws_cumul_pb pb Σ Γ x y -> is_open_term Γ x.
 Proof.
   now induction 1; rewrite ?i ?i0 ?i1 ?i2.
 Qed.
+Lemma ws_cumul_pb_is_open_term_left {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ}
+  {Γ : context} {x y} :
+  ws_cumul_pb pb Σ Γ x y -> is_open_term Γ x.
+Proof. intros; eapply ws_cumul_pb_is_open_term_left_cb; tea; typeclasses eauto. Qed.
 
-Lemma ws_cumul_pb_is_open_term_right {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ : context} {x y} :
+Lemma ws_cumul_pb_is_open_term_right_cb {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {Γ : context} {x y} :
   ws_cumul_pb pb Σ Γ x y -> is_open_term Γ y.
 Proof.
   now induction 1; rewrite ?i ?i0 ?i1.
 Qed.
+Lemma ws_cumul_pb_is_open_term_right {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ : context} {x y} :
+  ws_cumul_pb pb Σ Γ x y -> is_open_term Γ y.
+Proof. intros; eapply ws_cumul_pb_is_open_term_right_cb; tea; typeclasses eauto. Qed.
 
 #[global] Hint Resolve ws_cumul_pb_is_closed_context ws_cumul_pb_is_open_term_left ws_cumul_pb_is_open_term_right : fvs.
+#[global] Hint Resolve ws_cumul_pb_is_open_term_right_cb : fvs.
+#[global] Hint Resolve ws_cumul_pb_is_open_term_left_cb : fvs.
+#[global] Hint Resolve ws_cumul_pb_is_closed_context_cb : fvs.
 
 Lemma ws_cumul_pb_alt `{cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} Γ t u :
   Σ ;;; Γ ⊢ t ≤[pb] u <~>
@@ -284,10 +311,12 @@ Definition closed_red_red {Σ Γ T U} (r : closed_red Σ Γ T U) := clrel_rel r.
 #[global] Hint Immediate closed_red_red : fvs.
 Coercion closed_red_red : closed_red >-> red.
 
-Lemma closed_red_open_right {cf} {Σ Γ T U} {wfΣ : wf Σ} (r : closed_red Σ Γ T U) : is_open_term Γ U.
+Lemma closed_red_open_right_cb {cf} {Σ Γ T U} {wfΣ : ClosedBodies Σ} (r : closed_red Σ Γ T U) : is_open_term Γ U.
 Proof.
   destruct r. eauto with fvs.
 Qed.
+Lemma closed_red_open_right {cf} {Σ Γ T U} {wfΣ : wf Σ} (r : closed_red Σ Γ T U) : is_open_term Γ U.
+Proof. intros; eapply closed_red_open_right_cb; tea; typeclasses eauto. Qed.
 
 From Equations.Type Require Import Relation_Properties.
 

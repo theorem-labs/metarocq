@@ -5,7 +5,7 @@ From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICUtils PCUICOnOne PCUICAst PCUICAstUtils PCUICTactics PCUICDepth PCUICCases
      PCUICLiftSubst PCUICUnivSubst PCUICReduction PCUICTyping
      PCUICSigmaCalculus PCUICWeakeningEnvConv PCUICInduction
-     PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICOnFreeVars
+     PCUICRenameDef PCUICRenameConv PCUICInstDef PCUICInstConv PCUICOnFreeVars PCUICClosedBodies
      PCUICWeakeningConv PCUICWeakeningTyp PCUICSubstitution.
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -1114,7 +1114,7 @@ Qed.
       the context.
   *)
 
-  Lemma pred1_rename {Σ} {wfΣ : wf Σ} :
+  Lemma pred1_rename_cb {Σ} {wfΣ : ClosedBodies Σ} :
     (forall Γ Γ' u v, pred1 Σ Γ Γ' u v ->
     forall {P f Δ Δ'},
     pred1_ctx Σ Δ Δ' ->
@@ -1402,7 +1402,7 @@ Qed.
     - rewrite rename_subst_instance.
       econstructor; tea.
       rewrite rename_closed. 2: assumption.
-      eapply (PCUICClosedTyp.declared_constant_closed_body). all: eauto.
+      eapply closed_bodies. all: eauto.
     - rewrite rename_mkApps. simpl. cbn in H0; inv_on_free_vars.
       econstructor; tea. 2:erewrite nth_error_map, heq_nth_error; reflexivity.
       solve_all.
@@ -1478,7 +1478,7 @@ Qed.
     - destruct t => //; constructor; auto.
   Qed.
 
-  Lemma weakening_pred1 {Σ} {wfΣ : wf Σ} {P Γ Γ' Γ'' Δ Δ' Δ'' M N} :
+  Lemma weakening_pred1_cb {Σ} {wfΣ : ClosedBodies Σ} {P Γ Γ' Γ'' Δ Δ' Δ'' M N} :
     pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') M N ->
     on_ctx_free_vars (PCUICOnFreeVars.shiftnP #|Γ'| P) (Γ ,,, Γ') ->
     on_free_vars (PCUICOnFreeVars.shiftnP #|Γ'| P) M ->
@@ -1495,13 +1495,13 @@ Qed.
     pose proof (pred1_pred1_ctx _ H).
     eapply on_contexts_length in X. len in X.
     assert (#|Δ'| = #|Γ'|)  by lia. rewrite -H1.
-    eapply (fst pred1_rename _ _ _ _ ). tea.
+    eapply (fst pred1_rename_cb _ _ _ _ ). tea.
     { pose proof (pred1_pred1_ctx _ H).
       eapply on_contexts_app_inv in X0 as [] => //.
       eapply on_contexts_app.
       eapply on_contexts_app => //.
       rewrite - !rename_context_lift_context.
-      eapply (snd pred1_rename).
+      eapply (snd pred1_rename_cb).
       5:{ eapply on_contexts_app => //. } exact a.
       2:tea. assumption.
       eapply (weakening_renaming _ Γ []).
@@ -1517,28 +1517,28 @@ Qed.
     2:tea. tea.
   Qed.
 
-  Lemma weakening_pred1_pred1 {Σ} {wfΣ : wf Σ} {P Γ Δ Γ' Δ' M N} :
+  Lemma weakening_pred1_pred1_cb {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ Γ' Δ' M N} :
     pred1_ctx_over Σ Γ Δ Γ' Δ' ->
     on_ctx_free_vars P Γ ->
     on_free_vars P M ->
     pred1 Σ Γ Δ M N ->
     pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') (lift0 #|Γ'| M) (lift0 #|Δ'| N).
   Proof.
-    intros; eapply (weakening_pred1 (Γ' := []) (Δ' := [])); eauto.
+    intros; eapply (weakening_pred1_cb (Γ' := []) (Δ' := [])); eauto.
     now rewrite shiftnP0.
     now rewrite shiftnP0.
     pose proof (pred1_pred1_ctx _ X0).
     now rewrite (on_contexts_length X1).
   Qed.
 
-  Lemma weakening_pred1_0 {Σ} {wfΣ : wf Σ} {P Γ Δ Γ' M N} :
+  Lemma weakening_pred1_0_cb {Σ} {wfΣ : ClosedBodies Σ} {P Γ Δ Γ' M N} :
     pred1 Σ Γ Δ M N ->
     on_ctx_free_vars P Γ ->
     on_free_vars P M ->
     pred1 Σ (Γ ,,, Γ') (Δ ,,, Γ') (lift0 #|Γ'| M) (lift0 #|Γ'| N).
   Proof.
     intros p onΓ onM.
-    eapply weakening_pred1_pred1; tea.
+    eapply weakening_pred1_pred1_cb; tea.
     apply on_contexts_over_refl; pcuic.
   Qed.
 
@@ -1796,7 +1796,7 @@ Section ParallelSubstitution.
   Lemma shiftk_shift : ↑ =1 ↑^1.
   Proof. reflexivity. Qed.
 
-  Lemma pred1_subst_Up {wfΣ : wf Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname) (t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
+  Lemma pred1_subst_Up_cb {wfΣ : ClosedBodies Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname) (t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
       pred1 Σ Δ Δ' t0.[σ] t1.[τ] ->
       on_free_vars Q t0.[σ] ->
       pred1_subst P Q Γ Γ' Δ Δ' σ τ ->
@@ -1817,7 +1817,7 @@ Section ParallelSubstitution.
     apply on_free_vars_lift0. rewrite addnP_shiftnP //.
     split.
     unfold subst_compose. rewrite - !(lift0_inst 1).
-    eapply (weakening_pred1_pred1 (Γ' := [_]) (Δ' := [_])); auto.
+    eapply (weakening_pred1_pred1_cb (Γ' := [_]) (Δ' := [_])); auto.
     repeat (constructor; auto). tea. tas.
     intros decl hnth. specialize (y decl hnth).
     destruct decl_body => //.
@@ -1826,11 +1826,11 @@ Section ParallelSubstitution.
     rewrite -(Nat.add_1_r (S x)).
     rewrite -shiftk_compose subst_compose_assoc shift_Up_comm -subst_compose_assoc shiftk_shift
       -inst_assoc - !(lift0_inst 1). reflexivity.
-    eapply (weakening_pred1_pred1 (Γ' := [_]) (Δ' := [_])); tea.
+    eapply (weakening_pred1_pred1_cb (Γ' := [_]) (Δ' := [_])); tea.
     repeat (constructor; auto).
   Qed.
 
-  Lemma pred1_subst_vdef_Up {wfΣ : wf Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname)
+  Lemma pred1_subst_vdef_Up_cb {wfΣ : ClosedBodies Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname)
     (b0 b1 t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
       on_free_vars P t0 ->
       on_free_vars P b0 ->
@@ -1859,7 +1859,7 @@ Section ParallelSubstitution.
       split; [|split]; auto.
       * rewrite /subst_compose -(lift0_inst 1). eapply on_free_vars_lift0; rewrite addnP_shiftnP //.
       * rewrite /subst_compose - !(lift0_inst 1).
-        eapply (weakening_pred1_pred1 (Γ' := [_]) (Δ' := [_])); eauto.
+        eapply (weakening_pred1_pred1_cb (Γ' := [_]) (Δ' := [_])); eauto.
         repeat (constructor; auto).
       * intros decl hnth. specialize (Hrel decl hnth).
         destruct decl_body => //.
@@ -1868,7 +1868,7 @@ Section ParallelSubstitution.
         eapply simpl_pred. rewrite -(lift0_inst 1) //.
         rewrite -(Nat.add_1_r (S x)) -(shiftk_compose _ 1) subst_compose_assoc shift_Up_comm shiftk_shift
           -subst_compose_assoc -inst_assoc -(lift0_inst 1) //.
-        eapply (weakening_pred1_pred1 (Γ' := [_]) (Δ' := [_])); eauto.
+        eapply (weakening_pred1_pred1_cb (Γ' := [_]) (Δ' := [_])); eauto.
         repeat (constructor; auto).
   Qed.
 
@@ -1885,7 +1885,7 @@ Section ParallelSubstitution.
     - rewrite IHΓ. lia_f_equal.
   Qed.
 
-  Lemma pred1_subst_Upn {wfΣ : wf Σ} {P Q} {Γ Γ' Δ Δ' σ τ Δ0 Δ1 n} :
+  Lemma pred1_subst_Upn_cb {wfΣ : ClosedBodies Σ} {P Q} {Γ Γ' Δ Δ' σ τ Δ0 Δ1 n} :
     n = #|Δ0| ->
     on_free_vars_ctx P Δ0 ->
     on_free_vars_ctx Q (inst_context σ Δ0) ->
@@ -1945,7 +1945,7 @@ Section ParallelSubstitution.
         unfold subst_compose. rewrite - !(lift0_inst _).
         rewrite -{1 2}len0.
         relativize #|Δ1|. relativize #|Δ0|.
-        eapply weakening_pred1_pred1; tea. now len. len. rewrite -len0. exact pred.
+        eapply weakening_pred1_pred1_cb; tea. now len. len. rewrite -len0. exact pred.
         all:now len.
       * intros decl hnth.
         rewrite nth_error_app_ge in hnth. lia.
@@ -1958,7 +1958,7 @@ Section ParallelSubstitution.
         unfold subst_compose at 1. rewrite - !(lift0_inst _).
         eapply simpl_pred; revgoals. 3:reflexivity.
         relativize #|Δ0|.
-        eapply weakening_pred1_pred1; tea. now len. len. exact p'. now len.
+        eapply weakening_pred1_pred1_cb; tea. now len. len. exact p'. now len.
         rewrite lift0_inst inst_assoc. apply inst_ext.
         rewrite subst_compose_assoc; len. rewrite -len0.
         rewrite -{2}(shiftn_Upn #|Δ0|) -subst_compose_assoc shiftk_compose.
@@ -1966,7 +1966,7 @@ Section ParallelSubstitution.
         reflexivity.
   Qed.
 
-  Lemma pred1_subst_up {wfΣ : wf Σ} {P Q : nat -> bool} {Γ Γ' Δ Δ'} (σ τ : nat -> term) (Δ0 Δ1 : context) n :
+  Lemma pred1_subst_up_cb {wfΣ : ClosedBodies Σ} {P Q : nat -> bool} {Γ Γ' Δ Δ'} (σ τ : nat -> term) (Δ0 Δ1 : context) n :
     n = #|Δ0| ->
     pred1_subst P Q Γ Γ' Δ Δ' σ τ ->
     on_free_vars_ctx P Δ0 ->
@@ -1979,9 +1979,9 @@ Section ParallelSubstitution.
     intros -> ps onΔ oniΔ a a'.
     eapply pred1_subst_ext; tea. intros i; reflexivity. reflexivity.
     1-2:rewrite up_Upn //.
-    eapply pred1_subst_Upn => //.
+    eapply pred1_subst_Upn_cb => //.
   Qed.
-  Hint Resolve pred1_subst_up : pcuic.
+  Hint Resolve pred1_subst_up_cb : pcuic.
 
   Ltac simpl_pred :=
     eapply simpl_pred;
@@ -2036,8 +2036,8 @@ Section ParallelSubstitution.
     now move: H H0 => /andP[] /= ? ? /andP [] /= //.
   Qed.
 
-  Lemma strong_substitutivity {wfΣ :
-   wf Σ}:
+  Lemma strong_substitutivity_cb {wfΣ :
+   ClosedBodies Σ}:
     let Pover (Γ Γ' : context) (Δ Δ' : context) :=
     pred1_ctx Σ Γ Γ' ->
     pred1_ctx_over Σ Γ Γ' Δ Δ' ->
@@ -2086,7 +2086,7 @@ Section ParallelSubstitution.
         + rewrite -(length_of X).
           eapply All2_fold_All_fold_mix_left_inv in X as [fvs X].
           eapply All2_fold_All_fold_mix_left_inv in X as [fvs' X].
-          eapply pred1_subst_Upn; len => //; tea.
+          eapply pred1_subst_Upn_cb; len => //; tea.
           now move/All_fold_on_free_vars_ctx: fvs'.
           eapply (snd (All_fold_fold_context_k (fun Γ d => on_free_vars_decl (shiftnP #|Γ| Q) d) (fun k => inst (⇑^k σ')) _)) in fvs.
           move/All_fold_on_free_vars_ctx: fvs.
@@ -2102,7 +2102,7 @@ Section ParallelSubstitution.
         specialize (X2 P Q _ _ _ _ ont0 onit0 Hrel).
         specialize (X0 (shiftnP 1 P) (shiftnP 1 Q) (Δ ,, vass na t0.[σ]) (Δ' ,, vass na t1.[τ]) (⇑ σ) (⇑ τ) onb0).
         forward X0. now rewrite -up_Up.
-        forward X0. eapply pred1_subst_Up; auto.
+        forward X0. eapply pred1_subst_Up_cb; auto.
         specialize (X4 P Q _ _ _ _ b2 b Hrel).
         eapply (pred_beta _ _ _ _ _ _ _ _ _ _ X2 X0 X4). }
 
@@ -2125,7 +2125,7 @@ Section ParallelSubstitution.
         econstructor; eauto.
         eapply X4; eauto.
         now rewrite -up_Up.
-        eapply pred1_subst_vdef_Up; eauto. }
+        eapply pred1_subst_vdef_Up_cb; eauto. }
 
     - simpl. now apply Hrel.
 
@@ -2176,7 +2176,7 @@ Section ParallelSubstitution.
           rewrite {2}b0.
           eapply b; tea.
           eapply pred1_subst_ext.
-          5:eapply pred1_subst_Upn; len => //.
+          5:eapply pred1_subst_Upn_cb; len => //.
           1-2:now len.
           1-2:now sigma.
           { eapply on_free_vars_ctx_inst_case_context; tea => //. solve_all. }
@@ -2221,7 +2221,7 @@ Section ParallelSubstitution.
         { now move/andP: a0 => []. }
         { move/andP: a => [] /=. len. rewrite up_Upn; eauto. }
         rewrite -(fix_context_length mfix0); auto with pcuic.
-        eapply pred1_subst_Upn; auto with pcuic.
+        eapply pred1_subst_Upn_cb; auto with pcuic.
       + unfold unfold_fix. rewrite nth_error_map Heq. simpl.
         rewrite !subst_inst. do 2 apply f_equal. sigma. apply inst_ext.
         rewrite -{2}(Upn_0 τ).
@@ -2259,7 +2259,7 @@ Section ParallelSubstitution.
         eapply b; tea. now rewrite -up_Upn ?fix_context_length.
         rewrite length_map -(fix_context_length mfix0); auto with pcuic.
         relativize #|fix_context mfix1|.
-        eapply pred1_subst_Upn; rewrite ?inst_context_length;
+        eapply pred1_subst_Upn_cb; rewrite ?inst_context_length;
           auto with pcuic.
         now len.
       + unfold unfold_cofix. rewrite nth_error_map Heq. simpl.
@@ -2287,7 +2287,7 @@ Section ParallelSubstitution.
         now rewrite -(All2_length X5).
         eapply X8; tea.
         rewrite -H1. relativize #|pcontext p0|.
-        eapply pred1_subst_up; len => //.
+        eapply pred1_subst_up_cb; len => //.
         eapply pred1_pred1_ctx in X7.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
         rewrite !inst_inst_case_context_wf //.
@@ -2315,7 +2315,7 @@ Section ParallelSubstitution.
         now rewrite -(All2_length X5).
         eapply b; tea.
         relativize #|bcontext x|. relativize #|bcontext y|.
-        eapply pred1_subst_up.
+        eapply pred1_subst_up_cb.
         all:len => //; try lia.
         { eapply on_free_vars_ctx_inst_case_context; tea; solve_all. }
         { rewrite !inst_inst_case_context_wf //.
@@ -2359,7 +2359,7 @@ Section ParallelSubstitution.
         relativize #|fix_context mfix1|.
         rewrite length_map.
         rewrite -(fix_context_length mfix0).
-        eapply pred1_subst_Upn; rewrite ?inst_context_length ?fix_context_length;
+        eapply pred1_subst_Upn_cb; rewrite ?inst_context_length ?fix_context_length;
           auto with pcuic. now len.
       + unfold unfold_cofix. rewrite nth_error_map Heq. simpl.
         rewrite !subst_inst. do 2 apply f_equal. sigma. apply inst_ext.
@@ -2372,7 +2372,7 @@ Section ParallelSubstitution.
 
     - simpl. rewrite inst_closed0.
       rewrite PCUICClosed.closedn_subst_instance; auto.
-      eapply (PCUICClosedTyp.declared_constant_closed_body). all: eauto.
+      eapply closed_bodies. all: eauto.
       econstructor. 1,3: eauto with pcuic. auto with pcuic.
 
     - eapply pred1_refl_gen. now apply pred1_subst_pred1_ctx in Hrel.
@@ -2387,7 +2387,7 @@ Section ParallelSubstitution.
     - (* Lambda congruence *)
       sigma. econstructor. pcuic. eapply X2; tea.
       now rewrite -up_Up.
-      now eapply pred1_subst_Up.
+      now eapply pred1_subst_Up_cb.
 
     - (* App congruence *)
       sigma; auto with pcuic.
@@ -2396,7 +2396,7 @@ Section ParallelSubstitution.
     - (* Let congruence *)
       sigma. econstructor; eauto. eapply X4; tea.
       now rewrite -up_Up.
-      eapply pred1_subst_vdef_Up; eauto.
+      eapply pred1_subst_vdef_Up_cb; eauto.
 
     - (* Case congruence *)
       simpl.
@@ -2419,7 +2419,7 @@ Section ParallelSubstitution.
         now rewrite -(All2_length X1) /= -H0.
         rewrite -H0.
         relativize #|pcontext p0|.
-        eapply pred1_subst_up; len; try lia; tea.
+        eapply pred1_subst_up_cb; len; try lia; tea.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
         rewrite !inst_inst_case_context_wf //.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
@@ -2439,7 +2439,7 @@ Section ParallelSubstitution.
         rewrite - !inst_inst_case_context_wf //.
         now rewrite /= -(All2_length X1) -b0.
         relativize #|bcontext x|. relativize #|bcontext y|.
-        eapply pred1_subst_up; len => //.
+        eapply pred1_subst_up_cb; len => //.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
         rewrite !inst_inst_case_context_wf //.
         eapply on_free_vars_ctx_inst_case_context; tea; solve_all.
@@ -2486,7 +2486,7 @@ Section ParallelSubstitution.
       cbn in onid. now rewrite -up_Upn fix_context_length //.
       rewrite length_map -(fix_context_length mfix0).
       relativize #|fix_context mfix1|.
-      eapply pred1_subst_Upn; rewrite ?inst_context_length ?fix_context_length //. now len.
+      eapply pred1_subst_Upn_cb; rewrite ?inst_context_length ?fix_context_length //. now len.
 
     - (* CoFix congruence *)
       sigma. pose proof (pred1_subst_pred1_ctx Hrel).
@@ -2516,13 +2516,13 @@ Section ParallelSubstitution.
       cbn in onid. now rewrite -up_Upn fix_context_length //.
       rewrite length_map -(fix_context_length mfix0).
       relativize #|fix_context mfix1|.
-      eapply pred1_subst_Upn; rewrite ?inst_context_length ?fix_context_length //. now len.
+      eapply pred1_subst_Upn_cb; rewrite ?inst_context_length ?fix_context_length //. now len.
 
     - (* Prod Congruence *)
       sigma. econstructor; eauto with pcuic.
       eapply X2; auto with pcuic; try eapply Up_ctxmap; auto with pcuic; tea.
       now rewrite -up_Up.
-      apply pred1_subst_Up; eauto.
+      apply pred1_subst_Up_cb; eauto.
 
     - sigma. simpl. constructor; auto with pcuic. solve_all.
 
@@ -2534,7 +2534,7 @@ Section ParallelSubstitution.
 
   Hint Rewrite subst0_inst : sigma.
 
-  Lemma psubst_pred1_subst {wfΣ : wf Σ} {Γ Γ1 Δ Δ1 s s'} :
+  Lemma psubst_pred1_subst_cb {wfΣ : ClosedBodies Σ} {Γ Γ1 Δ Δ1 s s'} :
     on_ctx_free_vars xpredT Γ ->
     pred1_ctx Σ Γ Γ1 ->
     psubst Σ Γ Γ1 s s' Δ Δ1 ->
@@ -2582,7 +2582,7 @@ Section ParallelSubstitution.
         + now destruct (IHps x eq_refl) as [? []].
   Qed.
 
-  Lemma pred1_subst_context {wfΣ : wf Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s'} :
+  Lemma pred1_subst_context_cb {wfΣ : ClosedBodies Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s'} :
     psubst Σ Γ Γ1 s s' Δ Δ1 ->
     #|Γ| = #|Γ1| -> #|Γ'| = #|Γ'1| ->
     pred1_ctx_over Σ Γ Γ1 Δ Δ1 ->
@@ -2598,17 +2598,17 @@ Section ParallelSubstitution.
     eapply on_contexts_app_inv in hM as []; len; try lia.
     eapply on_contexts_app_inv in a as []; len; try lia.
     eapply on_contexts_app => //.
-    eapply (snd strong_substitutivity).
+    eapply (snd strong_substitutivity_cb).
     2:tea.
     eapply on_contexts_app => //.
-    3:{ eapply psubst_pred1_subst => //. }
+    3:{ eapply psubst_pred1_subst_cb => //. }
     assumption.
     rewrite -subst_context0_inst_context.
     eapply on_free_vars_ctx_subst_context_xpredT => //. solve_all.
   Qed.
 
   (** Parallel reduction is substitutive. *)
-  Lemma substitution_let_pred1 {wfΣ : wf Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N} :
+  Lemma substitution_let_pred1_cb {wfΣ : ClosedBodies Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N} :
     psubst Σ Γ Γ1 s s' Δ Δ1 ->
     #|Γ| = #|Γ1| -> #|Γ'| = #|Γ'1| ->
     on_contexts_over (pred1 Σ) Γ Γ1 Δ Δ1 ->
@@ -2624,7 +2624,7 @@ Section ParallelSubstitution.
     assert (pred1_ctx Σ (Γ,,, inst_context (s ⋅n ids) Γ') (Γ1,,, inst_context (s' ⋅n ids) Γ'1)).
     { eapply pred1_pred1_ctx in hM.
       rewrite - !subst_context0_inst_context.
-      eapply pred1_subst_context; tea. }
+      eapply pred1_subst_context_cb; tea. }
     rewrite !subst_context0_inst_context.
     pose proof (pred1_pred1_ctx _ hM).
     pose proof (on_contexts_length hctx).
@@ -2632,14 +2632,14 @@ Section ParallelSubstitution.
     2:len; try lia.
     eapply on_contexts_app_inv in a as [].
     2:lia.
-    eapply psubst_pred1_subst in Hs => //.
+    eapply psubst_pred1_subst_cb in Hs => //.
     have onΓ'i := (on_free_vars_ctx_subst_context_xpredT s _ onΓ' (All_forallb _ _ ons)).
     rewrite subst_context0_inst_context in onΓ'i.
-    pose proof (pred1_subst_Upn eq_refl onΓ' onΓ'i Hs a0).
+    pose proof (pred1_subst_Upn_cb eq_refl onΓ' onΓ'i Hs a0).
     eapply on_contexts_app_inv in X as [] => //.
     specialize (X0 a3).
     rewrite -hl'.
-    eapply strong_substitutivity. tea.
+    eapply strong_substitutivity_cb. tea.
     3:tea.
     now rewrite hl'.
     rewrite -subst_inst.
@@ -2654,7 +2654,7 @@ Section ParallelSubstitution.
   Hint Constructors psubst : pcuic.
   Hint Transparent vass vdef : pcuic.
 
-  Lemma substitution0_pred1 {wfΣ : wf Σ} {Γ Δ M M' na na' A A' N N'} :
+  Lemma substitution0_pred1_cb {wfΣ : ClosedBodies Σ} {Γ Δ M M' na na' A A' N N'} :
     on_ctx_free_vars xpredT Γ ->
     on_free_vars xpredT M ->
     on_free_vars xpredT N ->
@@ -2663,7 +2663,7 @@ Section ParallelSubstitution.
     pred1 Σ Γ Δ (subst1 M 0 N) (subst1 M' 0 N').
   Proof.
     intros onΓ onM onN redM redN.
-    pose proof (@substitution_let_pred1 wfΣ Γ [vass na A] [] Δ [vass na' A'] [] [M] [M'] N N') as H.
+    pose proof (@substitution_let_pred1_cb wfΣ Γ [vass na A] [] Δ [vass na' A'] [] [M] [M'] N N') as H.
     forward H. { constructor; auto with pcuic.
       apply pred1_pred1_ctx in redN.
       depelim redN. pcuic. now depelim a. }
@@ -2677,7 +2677,7 @@ Section ParallelSubstitution.
     apply (H redN).
   Qed.
 
-  Lemma substitution0_let_pred1 {wfΣ : wf Σ} {Γ Δ na na' M M' A A' N N'} :
+  Lemma substitution0_let_pred1_cb {wfΣ : ClosedBodies Σ} {Γ Δ na na' M M' A A' N N'} :
     on_ctx_free_vars xpredT Γ ->
     on_free_vars xpredT M ->
     on_free_vars xpredT N ->
@@ -2686,7 +2686,7 @@ Section ParallelSubstitution.
     pred1 Σ Γ Δ (subst1 M 0 N) (subst1 M' 0 N').
   Proof.
     intros onΓ onM onN redM redN.
-    pose proof (@substitution_let_pred1 wfΣ Γ [vdef na M A] [] Δ [vdef na' M' A'] [] [M] [M'] N N') as H.
+    pose proof (@substitution_let_pred1_cb wfΣ Γ [vdef na M A] [] Δ [vdef na' M' A'] [] [M] [M'] N N') as H.
     forward H. {
       pose proof (psubst_vdef Σ Γ Δ [] [] [] [] na na' M M' A A').
       rewrite !subst_empty in X. apply X; pcuic.
@@ -2703,3 +2703,177 @@ Section ParallelSubstitution.
   Qed.
 
 End ParallelSubstitution.
+
+(** * The same statements under [wf Σ]
+
+  Each lemma below states its [_cb] version's statement under [wf Σ] instead of
+  [ClosedBodies Σ], and is proved from it through the instance [wf_ClosedBodies]. *)
+
+Section ParallelWeakeningWf.
+  Context {cf : checker_flags}.
+
+  Lemma pred1_rename {Σ} {wfΣ : wf Σ} :
+    (forall Γ Γ' u v, pred1 Σ Γ Γ' u v ->
+    forall {P f Δ Δ'},
+    pred1_ctx Σ Δ Δ' ->
+    urenaming P Γ Δ f ->
+    urenaming P Γ' Δ' f ->
+    on_free_vars P u ->
+    on_ctx_free_vars P Γ ->
+    pred1 Σ Δ Δ' (rename f u) (rename f v)) ×
+    (forall (Γ Γ' : context) (Δ Δ' : context),
+      pred1_ctx Σ Γ Γ' ->
+      pred1_ctx_over Σ Γ Γ' Δ Δ' ->
+      forall P f Δ0 Δ'0,
+        urenaming P Γ Δ0 f ->
+        urenaming P Γ' Δ'0 f ->
+        pred1_ctx Σ Δ0 Δ'0 ->
+        on_ctx_free_vars P Γ ->
+        on_free_vars_ctx P Δ ->
+        pred1_ctx_over Σ Δ0 Δ'0 (rename_context f Δ) (rename_context f Δ')).
+  Proof. intros; eapply pred1_rename_cb; tea; typeclasses eauto. Qed.
+
+  Lemma weakening_pred1 {Σ} {wfΣ : wf Σ} {P Γ Γ' Γ'' Δ Δ' Δ'' M N} :
+    pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') M N ->
+    on_ctx_free_vars (PCUICOnFreeVars.shiftnP #|Γ'| P) (Γ ,,, Γ') ->
+    on_free_vars (PCUICOnFreeVars.shiftnP #|Γ'| P) M ->
+    #|Γ| = #|Δ| ->
+    on_contexts_over (pred1 Σ) Γ Δ Γ'' Δ'' ->
+    pred1 Σ (Γ ,,, Γ'' ,,, lift_context #|Γ''| 0 Γ')
+          (Δ ,,, Δ'' ,,, lift_context #|Δ''| 0 Δ')
+          (lift #|Γ''| #|Γ'| M) (lift #|Δ''| #|Δ'| N).
+  Proof. intros; eapply weakening_pred1_cb; tea; typeclasses eauto. Qed.
+
+  Lemma weakening_pred1_pred1 {Σ} {wfΣ : wf Σ} {P Γ Δ Γ' Δ' M N} :
+    pred1_ctx_over Σ Γ Δ Γ' Δ' ->
+    on_ctx_free_vars P Γ ->
+    on_free_vars P M ->
+    pred1 Σ Γ Δ M N ->
+    pred1 Σ (Γ ,,, Γ') (Δ ,,, Δ') (lift0 #|Γ'| M) (lift0 #|Δ'| N).
+  Proof. intros; eapply weakening_pred1_pred1_cb; tea; typeclasses eauto. Qed.
+
+  Lemma weakening_pred1_0 {Σ} {wfΣ : wf Σ} {P Γ Δ Γ' M N} :
+    pred1 Σ Γ Δ M N ->
+    on_ctx_free_vars P Γ ->
+    on_free_vars P M ->
+    pred1 Σ (Γ ,,, Γ') (Δ ,,, Γ') (lift0 #|Γ'| M) (lift0 #|Γ'| N).
+  Proof. intros; eapply weakening_pred1_0_cb; tea; typeclasses eauto. Qed.
+
+End ParallelWeakeningWf.
+
+Section ParallelSubstitutionWf.
+  Context {cf : checker_flags}.
+  Context {Σ : global_env}.
+
+  Lemma pred1_subst_Up {wfΣ : wf Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname) (t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
+      pred1 Σ Δ Δ' t0.[σ] t1.[τ] ->
+      on_free_vars Q t0.[σ] ->
+      (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+      (@pred1_subst Σ) (shiftnP 1 P) (shiftnP 1 Q) (Γ,, vass na t0) (Γ' ,, vass na t1) (Δ,, vass na t0.[σ]) (Δ',, vass na t1.[τ]) (⇑ σ) (⇑ τ).
+  Proof. intros; eapply pred1_subst_Up_cb; tea; typeclasses eauto. Qed.
+
+  Lemma pred1_subst_vdef_Up {wfΣ : wf Σ} (P Q : nat -> bool) (Γ Γ' : context) (na : aname)
+    (b0 b1 t0 t1 : term) (Δ Δ' : context) (σ τ : nat -> term) :
+      on_free_vars P t0 ->
+      on_free_vars P b0 ->
+      on_free_vars Q t0.[σ] ->
+      on_free_vars Q b0.[σ] ->
+      pred1 Σ Δ Δ' t0.[σ] t1.[τ] ->
+      pred1 Σ Δ Δ' b0.[σ] b1.[τ] ->
+      (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+      (@pred1_subst Σ) (shiftnP 1 P) (shiftnP 1 Q) (Γ,, vdef na b0 t0) (Γ',, vdef na b1 t1) (Δ,, vdef na b0.[σ] t0.[σ]) (Δ',, vdef na b1.[τ] t1.[τ]) (⇑ σ) (⇑ τ).
+  Proof. intros; eapply pred1_subst_vdef_Up_cb; tea; typeclasses eauto. Qed.
+
+  Lemma pred1_subst_Upn {wfΣ : wf Σ} {P Q} {Γ Γ' Δ Δ' σ τ Δ0 Δ1 n} :
+    n = #|Δ0| ->
+    on_free_vars_ctx P Δ0 ->
+    on_free_vars_ctx Q (inst_context σ Δ0) ->
+    (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+    pred1_ctx_over Σ Γ Γ' Δ0 Δ1 ->
+    pred1_ctx_over Σ Δ Δ' (inst_context σ Δ0) (inst_context τ Δ1) ->
+    (@pred1_subst Σ) (shiftnP #|Δ0| P) (shiftnP #|Δ0| Q) (Γ ,,, Δ0) (Γ' ,,, Δ1) (Δ ,,, inst_context σ Δ0) (Δ' ,,, inst_context τ Δ1)
+      (⇑^n σ) (⇑^n τ).
+  Proof. intros; eapply pred1_subst_Upn_cb; tea; typeclasses eauto. Qed.
+
+  Lemma pred1_subst_up {wfΣ : wf Σ} {P Q : nat -> bool} {Γ Γ' Δ Δ'} (σ τ : nat -> term) (Δ0 Δ1 : context) n :
+    n = #|Δ0| ->
+    (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+    on_free_vars_ctx P Δ0 ->
+    on_free_vars_ctx Q (inst_context σ Δ0) ->
+    pred1_ctx_over Σ Γ Γ' Δ0 Δ1 ->
+    pred1_ctx_over Σ Δ Δ' (inst_context σ Δ0) (inst_context τ Δ1) ->
+    (@pred1_subst Σ) (shiftnP #|Δ0| P) (shiftnP #|Δ0| Q) (Γ ,,, Δ0) (Γ' ,,, Δ1) (Δ ,,, inst_context σ Δ0) (Δ' ,,, inst_context τ Δ1)
+      (up n σ) (up n τ).
+  Proof. intros; eapply pred1_subst_up_cb; tea; typeclasses eauto. Qed.
+
+  Lemma strong_substitutivity {wfΣ :
+   wf Σ}:
+    let Pover (Γ Γ' : context) (Δ Δ' : context) :=
+    pred1_ctx Σ Γ Γ' ->
+    pred1_ctx_over Σ Γ Γ' Δ Δ' ->
+    forall P Q Δ0 Δ'0 σ τ,
+      on_free_vars_ctx P Δ ->
+      on_free_vars_ctx Q (inst_context σ Δ) ->
+      (@pred1_subst Σ) P Q Γ Γ' Δ0 Δ'0 σ τ ->
+      pred1_ctx_over Σ Δ0 Δ'0 (inst_context σ Δ) (inst_context τ Δ')
+    in
+    (forall Γ Γ' s t,
+      pred1 Σ Γ Γ' s t ->
+      forall P Q Δ Δ' σ τ,
+      on_free_vars P s ->
+      on_free_vars Q s.[σ] ->
+      (@pred1_subst Σ) P Q Γ Γ' Δ Δ' σ τ ->
+      pred1 Σ Δ Δ' s.[σ] t.[τ]) ×
+    (forall Γ Γ' Δ Δ', Pover Γ Γ' Δ Δ').
+  Proof. intros; eapply strong_substitutivity_cb; tea; typeclasses eauto. Qed.
+
+  Lemma psubst_pred1_subst {wfΣ : wf Σ} {Γ Γ1 Δ Δ1 s s'} :
+    on_ctx_free_vars xpredT Γ ->
+    pred1_ctx Σ Γ Γ1 ->
+    psubst Σ Γ Γ1 s s' Δ Δ1 ->
+    All (on_free_vars xpredT) s ->
+    (@pred1_subst Σ) xpredT xpredT (Γ,,, Δ) (Γ1,,, Δ1) Γ Γ1 (s ⋅n ids) (s' ⋅n ids).
+  Proof. intros; eapply psubst_pred1_subst_cb; tea; typeclasses eauto. Qed.
+
+  Lemma pred1_subst_context {wfΣ : wf Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s'} :
+    psubst Σ Γ Γ1 s s' Δ Δ1 ->
+    #|Γ| = #|Γ1| -> #|Γ'| = #|Γ'1| ->
+    pred1_ctx_over Σ Γ Γ1 Δ Δ1 ->
+    on_ctx_free_vars xpredT Γ ->
+    on_free_vars_ctx xpredT Γ' ->
+    All (on_free_vars xpredT) s ->
+    pred1_ctx Σ (Γ ,,, Δ ,,, Γ') (Γ1 ,,, Δ1 ,,, Γ'1) ->
+    pred1_ctx Σ (Γ ,,, subst_context s 0 Γ') (Γ1 ,,, subst_context s' 0 Γ'1).
+  Proof. intros; eapply pred1_subst_context_cb; tea; typeclasses eauto. Qed.
+
+  Lemma substitution_let_pred1 {wfΣ : wf Σ} {Γ Δ Γ' Γ1 Δ1 Γ'1 s s' M N} :
+    psubst Σ Γ Γ1 s s' Δ Δ1 ->
+    #|Γ| = #|Γ1| -> #|Γ'| = #|Γ'1| ->
+    on_contexts_over (pred1 Σ) Γ Γ1 Δ Δ1 ->
+    on_ctx_free_vars xpredT Γ ->
+    All (on_free_vars xpredT) s ->
+    on_free_vars_ctx xpredT Γ' ->
+    on_free_vars (shiftnP #|Γ'1| xpredT) M ->
+    pred1 Σ (Γ ,,, Δ ,,, Γ') (Γ1 ,,, Δ1 ,,, Γ'1) M N ->
+    pred1 Σ (Γ ,,, subst_context s 0 Γ') (Γ1 ,,, subst_context s' 0 Γ'1) (subst s #|Γ'| M) (subst s' #|Γ'1| N).
+  Proof. intros; eapply substitution_let_pred1_cb; tea; typeclasses eauto. Qed.
+
+  Lemma substitution0_pred1 {wfΣ : wf Σ} {Γ Δ M M' na na' A A' N N'} :
+    on_ctx_free_vars xpredT Γ ->
+    on_free_vars xpredT M ->
+    on_free_vars xpredT N ->
+    pred1 Σ Γ Δ M M' ->
+    pred1 Σ (Γ ,, vass na A) (Δ ,, vass na' A') N N' ->
+    pred1 Σ Γ Δ (subst1 M 0 N) (subst1 M' 0 N').
+  Proof. intros; eapply substitution0_pred1_cb; tea; typeclasses eauto. Qed.
+
+  Lemma substitution0_let_pred1 {wfΣ : wf Σ} {Γ Δ na na' M M' A A' N N'} :
+    on_ctx_free_vars xpredT Γ ->
+    on_free_vars xpredT M ->
+    on_free_vars xpredT N ->
+    pred1 Σ Γ Δ M M' ->
+    pred1 Σ (Γ ,, vdef na M A) (Δ ,, vdef na' M' A') N N' ->
+    pred1 Σ Γ Δ (subst1 M 0 N) (subst1 M' 0 N').
+  Proof. intros; eapply substitution0_let_pred1_cb; tea; typeclasses eauto. Qed.
+
+End ParallelSubstitutionWf.
