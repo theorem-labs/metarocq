@@ -13,7 +13,7 @@ From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByN
 
 Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
-(** * The read-back against the ghost reading (BET-298, slice F)
+(** * The read-back against the ghost reading
 
   [rb_sound_holds] proves [PCUICCallByNeedSoundLevel.rb_sound]: a read-back at the logical
   level [L] of a suspension whose master reading at [Q] is [lift0 (Q - L) v] returns a
@@ -571,9 +571,10 @@ End ReadBack.
 
 (** ** The interface of the read-back holds
 
-  Under the section hypotheses [wfΣ], [hΓ], [hhyg] of [PCUICCallByNeedSoundLevel.Master]
-  (a subset of them; their instances are [PCUICCallByNeedSoundLevel.level_ctx_instance_nil],
-  [level_ctx_instance_one] and [PCUICCallByNeedSoundEval.eval_env_instance]). *)
+  Its premises [wf Σ], [is_closed_context Γ] and [ctx_hyg Γ] are section hypotheses of
+  [PCUICCallByNeedSoundLevel]; their instances are
+  [PCUICCallByNeedSoundLevel.level_ctx_instance_nil], [level_ctx_instance_one] and
+  [PCUICCallByNeedSoundEval.eval_env_instance]. *)
 Theorem rb_sound_holds {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
     (Γ : context) (nctx : nat) (Σ : global_env_ext) :
   wf Σ -> is_closed_context Γ -> ctx_hyg Γ -> rb_sound X_type X Γ nctx Σ.
@@ -589,7 +590,8 @@ Proof.
              ltac:(rewrite jctx_length; lia) (jctx_assum _) hr).
 Qed.
 
-(** The theorem at the empty context, every hypothesis discharged. *)
+(** The satisfying instance of [rb_sound_holds]'s premises at the empty context: every
+  hypothesis discharged, for any [Σ] with [wf Σ]. *)
 Corollary rb_sound_nil {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
     (Σ : global_env_ext) : wf Σ -> rb_sound X_type X [] 0 Σ.
 Proof.

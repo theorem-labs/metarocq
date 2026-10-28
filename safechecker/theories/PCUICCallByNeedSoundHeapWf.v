@@ -10,7 +10,7 @@ From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByN
 
 Import CanonicalTries.
 
-(** * The structural invariant survives the machine (BET-298, step 3b, slice B)
+(** * The structural invariant survives the machine
 
   [PCUICCallByNeedSoundLevel] states two interfaces, [machine_hwf] and [alloc_hwf]: every
   machine function and an allocation keep [hwf Q] of the heap, [rwf Q] of the roots and
@@ -30,7 +30,7 @@ Import CanonicalTries.
   [machine_hwf_holds] needs [#|Γ| <= nctx]; without it the interface is false
   ([machine_hwf_needs_len]): with [nctx = 0] and one assumption in [Γ], [gam] makes
   [NVar 0], which is not below the master level [0]. The machine's runs have [nctx = #|Γ|]
-  ([cbn_conv_answer]), and [machine_hwf_run] is that instance. [whnf_master_hwf] and
+  ([cbn_conv_answer]), and [machine_hwf_master] is that instance. [whnf_master_hwf] and
   [eval_slot_master_hwf] are [whnf_master] and [eval_slot_master] with the interface
   discharged from the master section's own [nctx = #|Γ|]. *)
 
@@ -779,11 +779,6 @@ Proof.
   - intros v stk rs s w rs' s' h1 h2 h3 he. exact (ha _ _ _ _ _ _ _ he h1 h2 h3).
 Qed.
 
-(** The instance the machine runs at: [cbn_conv_answer] takes [nctx = #|Γ|]. *)
-Lemma machine_hwf_run {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
-    (Γ : context) (stress : bool) : machine_hwf X_type X Γ #|Γ| stress.
-Proof. exact (machine_hwf_holds X_type X Γ #|Γ| stress (le_n _)). Qed.
-
 (** The premise [#|Γ| <= nctx] is needed: with [nctx = 0], one assumption in [Γ] and the
   master level [0], the variable [tRel 0] evaluates to [NVar 0], which is not below [0]. *)
 Lemma machine_hwf_needs_len {cf : checker_flags} (X_type : abstract_env_impl)
@@ -815,6 +810,9 @@ Section MasterProved.
   Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
                     PCUICCallByNeedSoundHook.consts_okb Σ b).
 
+  (** The satisfying instance of the interface [machine_hwf] (the hypothesis [hB] of
+    [whnf_master] and [eval_slot_master]) at the level the machine runs at:
+    [cbn_conv_answer] takes [nctx = #|Γ|]. *)
   Lemma machine_hwf_master : machine_hwf X_type X Γ nctx stress.
   Proof. apply machine_hwf_holds. rewrite hnctx. apply le_n. Qed.
 
