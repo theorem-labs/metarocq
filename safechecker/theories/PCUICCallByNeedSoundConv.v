@@ -784,6 +784,811 @@ Inductive fuel_sub : cbn_fuel -> cbn_fuel -> Prop :=
   establishes is therefore, position by position, "the index does not occur in the code, or
   the two readings are convertible". *)
 
+(** ** Allocation and renaming facts for the stuck-match rule
+
+  [push_fresh] allocates one cell per fresh variable and pushes its address on both
+  environments; an allocation may collect first. What the rule needs: renaming keeps an
+  environment's shape, an allocation keeps the caller's roots, and [push_fresh] pushes the
+  SAME addresses on both environments, each reading back as the variable it stands for.
+
+  The "same addresses" part rests on the collector being a function on addresses: once
+  [gc_copy] has copied an address, the old heap holds [CFwd a'] there for the rest of the
+  walk ([pfd_gc_copy_fwd_le]), so a second visit of the address returns the same [a']
+  ([pfd_gc_copy_on_fwd]). The induction on [n] carries the addresses already pushed as a
+  common prefix of both environments ([pfd_push_fresh_prefix]). *)
+
+Section ConvPartD.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Γ : context) (nctx : nat) (stress : bool).
+
+  (** *** List helpers *)
+
+  Lemma pfd_forall2_impl {A B : Type} {R Q : A -> B -> Prop} {l : list A} {l' : list B} :
+    Forall2 R l l' -> (forall a b, R a b -> Q a b) -> Forall2 Q l l'.
+  Proof. intros h himp. induction h; constructor; auto. Qed.
+
+  Lemma pfd_forall2_head {A B : Type} {R : A -> B -> Prop} {a : A} {b : B} {l : list A}
+      {l' : list B} :
+    Forall2 R (a :: l) (b :: l') -> R a b.
+  Proof. intros h. inversion h; assumption. Qed.
+
+  Lemma pfd_forall2_tail {A B : Type} {R : A -> B -> Prop} {a : A} {b : B} {l : list A}
+      {l' : list B} :
+    Forall2 R (a :: l) (b :: l') -> Forall2 R l l'.
+  Proof. intros h. inversion h; assumption. Qed.
+
+  (** *** 1. Renaming keeps an environment's shape *)
+
+  Lemma rn_slots_length {G : Type} (f : haddr -> G -> cbn_res (haddr * G))
+      (l : list cbn_slot) (g : G) (l' : list cbn_slot) (g' : G) :
+    rn_slots f l g = COk (l', g') -> #|l'| = #|l|.
+  Proof. exact (PCUICCallByNeed.rn_slots_length f l g l' g'). Qed.
+
+  Lemma rn_env_shape {G : Type} (f : haddr -> G -> cbn_res (haddr * G))
+      (e : cbn_env) (g : G) (e' : cbn_env) (g' : G) :
+    rn_env f e g = COk (e', g') ->
+    e'.(ev_nvals) = e.(ev_nvals) /\ e'.(ev_goff) = e.(ev_goff)
+    /\ #|e'.(ev_vals)| = #|e.(ev_vals)|.
+  Proof.
+    intros h. destruct (PCUICCallByNeed.rn_env_shape f e g e' g' h) as [hn ho].
+    exact (conj hn (conj ho (rn_env_length f e g e' g' h))).
+  Qed.
+
+  Lemma pfd_rn_root_RE {G : Type} (f : haddr -> G -> cbn_res (haddr * G)) (e : cbn_env)
+      (g : G) :
+    rn_root f (RE e) g =
+    match rn_env f e g with
+    | COk (e', g') => COk (RE e', g')
+    | CFail w => CFail w
+    end.
+  Proof. reflexivity. Qed.
+
+  Lemma pfd_rn_env_mk {G : Type} (f : haddr -> G -> cbn_res (haddr * G))
+      (vs : list cbn_slot) (n o : nat) (g : G) :
+    rn_env f (mkEnv vs n o) g =
+    match rn_slots f vs g with
+    | COk (vs', g') => COk (mkEnv vs' n o, g')
+    | CFail w => CFail w
+    end.
+  Proof. reflexivity. Qed.
+
+  Lemma pfd_rn_slots_cons {G : Type} (f : haddr -> G -> cbn_res (haddr * G))
+      (y : cbn_slot) (l : list cbn_slot) (g : G) :
+    rn_slots f (y :: l) g =
+    match rn_slot f y g with
+    | COk (y', g1) =>
+      match rn_slots f l g1 with
+      | COk (l', g2) => COk (y' :: l', g2)
+      | CFail w => CFail w
+      end
+    | CFail w => CFail w
+    end.
+  Proof. reflexivity. Qed.
+
+  Lemma pfd_rn_slot_SAddr {G : Type} (f : haddr -> G -> cbn_res (haddr * G)) (a : haddr)
+      (g : G) :
+    rn_slot f (SAddr a) g =
+    match f a g with
+    | COk (a', g') => COk (SAddr a', g')
+    | CFail w => CFail w
+    end.
+  Proof. reflexivity. Qed.
+
+  Lemma collect_env_shape (e : cbn_env) (rs : list root) (s : cbn_state)
+      (rs' : list root) (s' : cbn_state) :
+    collect (RE e :: rs) s = COk (rs', s') ->
+    exists (e' : cbn_env) (rs2 : list root),
+      rs' = RE e' :: rs2 /\ e'.(ev_nvals) = e.(ev_nvals) /\ e'.(ev_goff) = e.(ev_goff)
+      /\ #|e'.(ev_vals)| = #|e.(ev_vals)|.
+  Proof.
+    intros he. destruct (collect_inv _ _ _ _ he) as (gm & g1 & g2 & hr & _).
+    set (F := fuel_of_pos (st_next s) (fun _ : unit => FO)) in hr.
+    rewrite rn_roots_cons, pfd_rn_root_RE in hr.
+    destruct (rn_env (gc_copy F) e g1) as [[e' ga]|w] eqn:E1; [|discriminate].
+    cbv beta iota in hr.
+    destruct (rn_roots (gc_copy F) rs ga) as [[rs2 gb]|w] eqn:E2; [|discriminate].
+    cbv beta iota in hr. injection hr as hrs hg. subst rs'.
+    exists e', rs2. split; [reflexivity|]. exact (rn_env_shape _ _ _ _ _ E1).
+  Qed.
+
+  (** *** 2. An allocation keeps the caller's roots *)
+
+  Lemma root_pres_heap_le (H H' : bheap cbn_cell) (r : root) :
+    heap_le H H' -> root_pres nctx H H' r r.
+  Proof.
+    intros hle. destruct (repr_mono nctx H H' hle) as (ha & has & hc & hsl & hss & hsu & hv).
+    unfold root_pres. destruct r; cbn; intros; eauto.
+  Qed.
+
+  Lemma pfd_root_pres_trans (H1 H2 H3 : bheap cbn_cell) (r1 r2 r3 : root) :
+    root_pres nctx H1 H2 r1 r2 -> root_pres nctx H2 H3 r2 r3 -> root_pres nctx H1 H3 r1 r3.
+  Proof.
+    unfold root_pres. destruct r1, r2, r3; cbn; intros h1 h2;
+      first [contradiction | intros; apply h2; apply h1; assumption].
+  Qed.
+
+  Lemma pfd_root_pres_mono (H1 H2 H3 : bheap cbn_cell) (r r' : root) :
+    root_pres nctx H1 H2 r r' -> heap_le H2 H3 -> root_pres nctx H1 H3 r r'.
+  Proof.
+    intros h hle. exact (pfd_root_pres_trans _ _ _ _ _ _ h (root_pres_heap_le _ _ r' hle)).
+  Qed.
+
+  Lemma pfd_roots_refl (H H' : bheap cbn_cell) (hle : heap_le H H') (rs : list root) :
+    Forall2 (root_pres nctx H H') rs rs.
+  Proof.
+    induction rs as [|r rs ih]; constructor; [exact (root_pres_heap_le H H' r hle)|exact ih].
+  Qed.
+
+  Lemma pfd_roots_trans (H1 H2 H3 : bheap cbn_cell) :
+    forall (l1 l2 l3 : list root),
+      Forall2 (root_pres nctx H1 H2) l1 l2 -> Forall2 (root_pres nctx H2 H3) l2 l3 ->
+      Forall2 (root_pres nctx H1 H3) l1 l3.
+  Proof.
+    intros l1 l2 l3 h12. revert l3.
+    induction h12 as [|a b l1 l2 hab h12 ih]; intros l3 h23.
+    - destruct l3 as [|c l3]; [constructor|inversion h23].
+    - destruct l3 as [|c l3]; [inversion h23|].
+      constructor.
+      + exact (pfd_root_pres_trans _ _ _ _ _ _ hab (pfd_forall2_head h23)).
+      + exact (ih _ (pfd_forall2_tail h23)).
+  Qed.
+
+  Lemma pfd_roots_mono (H1 H2 H3 : bheap cbn_cell) (l l' : list root) :
+    Forall2 (root_pres nctx H1 H2) l l' -> heap_le H2 H3 ->
+    Forall2 (root_pres nctx H1 H3) l l'.
+  Proof. intros h hle. exact (pfd_roots_trans _ _ _ _ _ _ h (pfd_roots_refl _ _ hle l')). Qed.
+
+  Lemma alloc_roots (lo : positive) (cl : cbn_cell) (rs : list root) (s : cbn_state)
+      (a : haddr) (rs' : list root) (s' : cbn_state) :
+    state_ok lo s -> heap_nofwd (s.(st_heap)) ->
+    (forall (G : Type) (f : haddr -> G -> cbn_res (haddr * G)) (g : G),
+        rn_cell f cl g = COk (cl, g)) ->
+    alloc stress cl rs s = COk (a, rs', s') ->
+    Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'.
+  Proof.
+    intros hs hnf hrn e. unfold alloc in e.
+    destruct (gc_due stress s) eqn:Egc.
+    - destruct (collect (RC cl :: rs) s) as [[rs2 s2]|w] eqn:Ec; [|discriminate].
+      destruct (collect_cons_cell cl rs rs2 s s2 hrn Ec) as [rs3 ->].
+      destruct (collect_sound nctx _ _ _ _ hnf Ec) as (hok2 & _ & _ & _ & hfa & _).
+      pose proof (pfd_forall2_tail hfa) as hfa'.
+      cbv beta iota in e.
+      destruct (alloc_now cl s2) as [a2 s3] eqn:Ea.
+      cbv beta iota in e. injection e as e1 e2 e3. subst a rs' s'.
+      pose proof (alloc_now_heap_le _ cl s2 (so_heap _ _ hok2)) as hle.
+      rewrite Ea in hle. cbn [snd] in hle.
+      exact (pfd_roots_mono _ _ _ _ _ hfa' hle).
+    - cbv beta iota in e.
+      destruct (alloc_now cl s) as [a2 s3] eqn:Ea.
+      cbv beta iota in e. injection e as e1 e2 e3. subst a rs' s'.
+      pose proof (alloc_now_heap_le _ cl s (so_heap _ _ hs)) as hle.
+      rewrite Ea in hle. cbn [snd] in hle.
+      exact (pfd_roots_refl _ _ hle rs).
+  Qed.
+
+  (** *** 3. What [push_fresh] builds *)
+
+  (** **** A renaming threads its state monotonically when its address map does *)
+  Section RnPres.
+    Context {G : Type} (f : haddr -> G -> cbn_res (haddr * G)) (R : G -> G -> Prop)
+      (Rrefl : forall g, R g g)
+      (Rtrans : forall g1 g2 g3, R g1 g2 -> R g2 g3 -> R g1 g3)
+      (hf : forall a g a' g', f a g = COk (a', g') -> R g g').
+
+    Lemma pfd_rn_addrs : forall (l : list haddr) (g : G) (l' : list haddr) (g' : G),
+      rn_addrs f l g = COk (l', g') -> R g g'.
+    Proof.
+      induction l as [|a l ih]; intros g l' g' he; simpl in he.
+      - injection he as hl hg. subst g'. apply Rrefl.
+      - destruct (f a g) as [[b g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he.
+        destruct (rn_addrs f l g1) as [[l2 g2]|w] eqn:e2; [|discriminate].
+        cbv beta iota in he. injection he as hl hg. subst g'.
+        exact (Rtrans _ _ _ (hf _ _ _ _ e1) (ih _ _ _ e2)).
+    Qed.
+
+    Lemma pfd_rn_slot : forall (x : cbn_slot) (g : G) (x' : cbn_slot) (g' : G),
+      rn_slot f x g = COk (x', g') -> R g g'.
+    Proof.
+      intros x. induction x as [a|vs n o c ihvs] using slot_ind'; intros g x' g' he.
+      - rewrite pfd_rn_slot_SAddr in he.
+        destruct (f a g) as [[b g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hx hg. subst g'. exact (hf _ _ _ _ e1).
+      - rewrite rn_slot_SInl in he.
+        destruct (rn_slots f vs g) as [[vs' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hx hg. subst x' g'.
+        revert g vs' g1 e1.
+        induction ihvs as [|y vs hy hvs ihl]; intros g vs' g1 e1; simpl in e1.
+        + injection e1 as hv hg. subst g1. apply Rrefl.
+        + destruct (rn_slot f y g) as [[y' ga]|wa] eqn:ea; [|discriminate].
+          cbv beta iota in e1.
+          destruct (rn_slots f vs ga) as [[vs2 gb]|wb] eqn:eb; [|discriminate].
+          cbv beta iota in e1. injection e1 as hv hg. subst g1.
+          exact (Rtrans _ _ _ (hy _ _ _ ea) (ihl _ _ _ eb)).
+    Qed.
+
+    Lemma pfd_rn_slots : forall (l : list cbn_slot) (g : G) (l' : list cbn_slot) (g' : G),
+      rn_slots f l g = COk (l', g') -> R g g'.
+    Proof.
+      induction l as [|y l ih]; intros g l' g' he.
+      - simpl in he. injection he as hl hg. subst g'. apply Rrefl.
+      - rewrite pfd_rn_slots_cons in he.
+        destruct (rn_slot f y g) as [[y' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he.
+        destruct (rn_slots f l g1) as [[l2 g2]|w] eqn:e2; [|discriminate].
+        cbv beta iota in he. injection he as hl hg. subst g'.
+        exact (Rtrans _ _ _ (pfd_rn_slot _ _ _ _ e1) (ih _ _ _ e2)).
+    Qed.
+
+    Lemma pfd_rn_env (e : cbn_env) (g : G) (e' : cbn_env) (g' : G) :
+      rn_env f e g = COk (e', g') -> R g g'.
+    Proof.
+      intros he. destruct e as [vals n o]. rewrite pfd_rn_env_mk in he.
+      destruct (rn_slots f vals g) as [[vs g1]|w] eqn:e1; [|discriminate].
+      cbv beta iota in he. injection he as hv hg. subst g'.
+      exact (pfd_rn_slots _ _ _ _ e1).
+    Qed.
+
+    Lemma pfd_rn_value (v : cbn_value) (g : G) (v' : cbn_value) (g' : G) :
+      rn_value f v g = COk (v', g') -> R g g'.
+    Proof.
+      intros he.
+      destruct v as [hd sp|e c|e c i sp|e c i sp|hd sp|e c|e c sp]; unfold rn_value in he.
+      - destruct (rn_addrs f sp g) as [[sp' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hv hg. subst g'.
+        exact (pfd_rn_addrs _ _ _ _ e1).
+      - destruct (rn_env f e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hv hg. subst g'.
+        exact (pfd_rn_env _ _ _ _ e1).
+      - destruct (rn_env f e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he.
+        destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:e2; [|discriminate].
+        cbv beta iota in he. injection he as hv hg. subst g'.
+        exact (Rtrans _ _ _ (pfd_rn_env _ _ _ _ e1) (pfd_rn_addrs _ _ _ _ e2)).
+      - destruct (rn_env f e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he.
+        destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:e2; [|discriminate].
+        cbv beta iota in he. injection he as hv hg. subst g'.
+        exact (Rtrans _ _ _ (pfd_rn_env _ _ _ _ e1) (pfd_rn_addrs _ _ _ _ e2)).
+      - destruct (rn_addrs f sp g) as [[sp' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hv hg. subst g'.
+        exact (pfd_rn_addrs _ _ _ _ e1).
+      - destruct (rn_env f e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hv hg. subst g'.
+        exact (pfd_rn_env _ _ _ _ e1).
+      - destruct (rn_env f e g) as [[e' g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he.
+        destruct (rn_addrs f sp g1) as [[sp' g2]|w] eqn:e2; [|discriminate].
+        cbv beta iota in he. injection he as hv hg. subst g'.
+        exact (Rtrans _ _ _ (pfd_rn_env _ _ _ _ e1) (pfd_rn_addrs _ _ _ _ e2)).
+    Qed.
+
+    Lemma pfd_rn_cell (cl : cbn_cell) (g : G) (cl' : cbn_cell) (g' : G) :
+      rn_cell f cl g = COk (cl', g') -> R g g'.
+    Proof.
+      intros he. destruct cl as [vals n o c|v| |b]; unfold rn_cell in he.
+      - destruct (rn_slots f vals g) as [[vs g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hc hg. subst g'.
+        exact (pfd_rn_slots _ _ _ _ e1).
+      - destruct (rn_value f v g) as [[v1 g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hc hg. subst g'.
+        exact (pfd_rn_value _ _ _ _ e1).
+      - injection he as hc hg. subst g'. apply Rrefl.
+      - destruct (f b g) as [[b1 g1]|w] eqn:e1; [|discriminate].
+        cbv beta iota in he. injection he as hc hg. subst g'.
+        exact (hf _ _ _ _ e1).
+    Qed.
+  End RnPres.
+
+  (** **** A forwarding pointer of the old heap stays for the rest of the walk *)
+  Definition pfd_fwd_le (g g' : gc_state) : Prop :=
+    forall b c, bh_get b g.(g_old) = Some (CFwd c) -> bh_get b g'.(g_old) = Some (CFwd c).
+
+  Lemma pfd_fwd_le_refl (g : gc_state) : pfd_fwd_le g g.
+  Proof. intros b c h. exact h. Qed.
+
+  Lemma pfd_fwd_le_trans (g1 g2 g3 : gc_state) :
+    pfd_fwd_le g1 g2 -> pfd_fwd_le g2 g3 -> pfd_fwd_le g1 g3.
+  Proof. intros h1 h2 b c h. exact (h2 _ _ (h1 _ _ h)). Qed.
+
+  Lemma pfd_fwd_le_write (g g1 : gc_state) (a : haddr) (cl : cbn_cell) (c0 : haddr)
+      (old hp : bheap cbn_cell) (nx : positive) :
+    bh_get a g.(g_old) = Some cl -> cell_fwd cl = None -> pfd_fwd_le g g1 ->
+    bh_upd a (CFwd c0) g1.(g_old) = Some old -> pfd_fwd_le g (mkGc old hp nx).
+  Proof.
+    intros ha hcl hle e2 b c hb. cbn [g_old].
+    assert (hne : b <> a).
+    { intros ->. rewrite ha in hb. injection hb as ->. discriminate hcl. }
+    rewrite (bh_get_upd_other _ _ _ _ _ e2 hne). exact (hle _ _ hb).
+  Qed.
+
+  Lemma pfd_gc_copy_fwd_le : forall (F : cbn_fuel) (a : haddr) (g : gc_state) (a' : haddr)
+      (g' : gc_state),
+    gc_copy F a g = COk (a', g') -> pfd_fwd_le g g'.
+  Proof.
+    intros F. induction F as [|k ih]; intros a g a' g' he.
+    - rewrite gc_copy_FO in he.
+      destruct (bh_get a g.(g_old)) as [cl|] eqn:ea; [|discriminate].
+      destruct cl as [vals n o c|v| |b]; try discriminate.
+      inversion he; subst. apply pfd_fwd_le_refl.
+    - rewrite gc_copy_FS in he.
+      destruct (bh_get a g.(g_old)) as [cl|] eqn:ea; [|discriminate].
+      destruct cl as [vals n o c|v| |b].
+      + destruct (rn_cell (gc_copy (k tt)) (CSusp vals n o c) g) as [[cl1 g1]|w] eqn:e1;
+          [|discriminate].
+        destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
+          [|discriminate].
+        inversion he; subst.
+        exact (pfd_fwd_le_write _ _ _ _ _ _ _ _ ea eq_refl
+                 (pfd_rn_cell (gc_copy (k tt)) pfd_fwd_le pfd_fwd_le_refl pfd_fwd_le_trans
+                    (ih tt) _ _ _ _ e1) e2).
+      + destruct (rn_cell (gc_copy (k tt)) (CDone v) g) as [[cl1 g1]|w] eqn:e1;
+          [|discriminate].
+        destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
+          [|discriminate].
+        inversion he; subst.
+        exact (pfd_fwd_le_write _ _ _ _ _ _ _ _ ea eq_refl
+                 (pfd_rn_cell (gc_copy (k tt)) pfd_fwd_le pfd_fwd_le_refl pfd_fwd_le_trans
+                    (ih tt) _ _ _ _ e1) e2).
+      + destruct (rn_cell (gc_copy (k tt)) CBusy g) as [[cl1 g1]|w] eqn:e1;
+          [|discriminate].
+        destruct (bh_upd a (CFwd (HAddr g1.(g_next))) g1.(g_old)) as [old|] eqn:e2;
+          [|discriminate].
+        inversion he; subst.
+        exact (pfd_fwd_le_write _ _ _ _ _ _ _ _ ea eq_refl
+                 (pfd_rn_cell (gc_copy (k tt)) pfd_fwd_le pfd_fwd_le_refl pfd_fwd_le_trans
+                    (ih tt) _ _ _ _ e1) e2).
+      + inversion he; subst. apply pfd_fwd_le_refl.
+  Qed.
+
+  Lemma pfd_gc_copy_on_fwd (F : cbn_fuel) (a : haddr) (g : gc_state) (c : haddr) :
+    bh_get a g.(g_old) = Some (CFwd c) -> gc_copy F a g = COk (c, g).
+  Proof.
+    intros h. destruct F as [|k]; [rewrite gc_copy_FO|rewrite gc_copy_FS]; rewrite h;
+      reflexivity.
+  Qed.
+
+  (** **** Addresses read through a renaming *)
+  Definition pfd_ra (H H' : bheap cbn_cell) (p p' : haddr) : Prop :=
+    root_pres nctx H H' (RA p) (RA p').
+
+  Lemma pfd_ra_refl (H H' : bheap cbn_cell) (hle : heap_le H H') (P : list haddr) :
+    Forall2 (pfd_ra H H') P P.
+  Proof.
+    induction P as [|p P ih]; constructor; [exact (root_pres_heap_le H H' (RA p) hle)|exact ih].
+  Qed.
+
+  Lemma pfd_ra_trans (H1 H2 H3 : bheap cbn_cell) :
+    forall (l1 l2 l3 : list haddr),
+      Forall2 (pfd_ra H1 H2) l1 l2 -> Forall2 (pfd_ra H2 H3) l2 l3 ->
+      Forall2 (pfd_ra H1 H3) l1 l3.
+  Proof.
+    intros l1 l2 l3 h12. revert l3.
+    induction h12 as [|a b l1 l2 hab h12 ih]; intros l3 h23.
+    - destruct l3 as [|c l3]; [constructor|inversion h23].
+    - destruct l3 as [|c l3]; [inversion h23|].
+      constructor.
+      + exact (pfd_root_pres_trans H1 H2 H3 (RA a) (RA b) (RA c) hab (pfd_forall2_head h23)).
+      + exact (ih _ (pfd_forall2_tail h23)).
+  Qed.
+
+  Lemma pfd_ra_mono (H1 H2 H3 : bheap cbn_cell) (P P' : list haddr) :
+    Forall2 (pfd_ra H1 H2) P P' -> heap_le H2 H3 -> Forall2 (pfd_ra H1 H3) P P'.
+  Proof. intros h hle. exact (pfd_ra_trans _ _ _ _ _ _ h (pfd_ra_refl _ _ hle P')). Qed.
+
+  Lemma pfd_slots_mono (H H' : bheap cbn_cell) (hle : heap_le H H') (lvl : nat)
+      (l : list cbn_slot) (ts : list term) :
+    repr_slots nctx H lvl l ts -> repr_slots nctx H' lvl l ts.
+  Proof. exact (proj1 (proj2 (proj2 (proj2 (proj2 (repr_mono nctx H H' hle))))) lvl l ts). Qed.
+
+  (** **** A prefix of addresses, renamed once, then renamed again to the same addresses *)
+  Lemma pfd_prefix_first (Hold : bheap cbn_cell) (onext : positive) (F : cbn_fuel) :
+    forall (P : list haddr) (B : list cbn_slot) (g : gc_state) (l : list cbn_slot)
+      (g' : gc_state),
+      gc_inv nctx Hold onext g ->
+      rn_slots (gc_copy F) (map SAddr P ++ B) g = COk (l, g') ->
+      exists (P' : list haddr) (B' : list cbn_slot),
+        l = map SAddr P' ++ B'
+        /\ Forall2 (fun p p' => bh_get p g'.(g_old) = Some (CFwd p')
+                                /\ pfd_ra Hold g'.(g_heap) p p') P P'
+        /\ exists gm : gc_state, gstep nctx Hold onext g gm
+                                /\ rn_slots (gc_copy F) B gm = COk (B', g').
+  Proof.
+    pose proof (gc_copy_ok nctx Hold onext F) as hcp.
+    induction P as [|p P ih]; intros B g l g' hinv he.
+    - exists [], l. split; [reflexivity|]. split; [constructor|].
+      exists g. split; [exact (gstep_refl _ _ _ _ hinv)|exact he].
+    - change (map SAddr (p :: P) ++ B) with (SAddr p :: (map SAddr P ++ B)) in he.
+      rewrite pfd_rn_slots_cons, pfd_rn_slot_SAddr in he.
+      destruct (gc_copy F p g) as [[p' g1]|w] eqn:e1; [|discriminate].
+      cbv beta iota in he.
+      destruct (rn_slots (gc_copy F) (map SAddr P ++ B) g1) as [[l2 g2]|w] eqn:e2;
+        [|discriminate].
+      cbv beta iota in he. injection he as hl hg. subst l g'.
+      destruct (hcp _ _ _ _ hinv e1) as (hs1 & _ & _ & hr1).
+      pose proof (step_inv _ _ _ _ _ hs1) as hinv1.
+      destruct (ih B g1 l2 g2 hinv1 e2) as (P1 & B' & -> & hP & gm & hsm & em).
+      destruct (rn_slots_ok nctx Hold onext (gc_copy F) hcp _ _ _ _ hinv1 e2) as (hs2 & _).
+      pose proof (pfd_rn_slots (gc_copy F) pfd_fwd_le pfd_fwd_le_refl pfd_fwd_le_trans
+                    (pfd_gc_copy_fwd_le F) _ _ _ _ e2) as hf2.
+      exists (p' :: P1), B'. split; [reflexivity|]. split.
+      + constructor; [|exact hP]. split.
+        * exact (hf2 _ _ (gc_copy_old_fwd _ _ _ _ _ e1)).
+        * intros lvl t ht.
+          exact (repr_addr_mono nctx _ _ (step_heap _ _ _ _ _ hs2) _ _ _ (hr1 lvl t ht)).
+      + exists gm. split; [exact (gstep_trans _ _ _ _ _ _ hs1 hsm)|exact em].
+  Qed.
+
+  Lemma pfd_prefix_again (F : cbn_fuel) :
+    forall (P P' : list haddr) (B : list cbn_slot) (g : gc_state) (l : list cbn_slot)
+      (g' : gc_state),
+      Forall2 (fun p p' => bh_get p g.(g_old) = Some (CFwd p')) P P' ->
+      rn_slots (gc_copy F) (map SAddr P ++ B) g = COk (l, g') ->
+      exists B' : list cbn_slot,
+        l = map SAddr P' ++ B' /\ rn_slots (gc_copy F) B g = COk (B', g').
+  Proof.
+    intros P P' B g l g' hP. revert l.
+    induction hP as [|p p' P P' hp hP ih]; intros l he.
+    - exists l. split; [reflexivity|exact he].
+    - change (map SAddr (p :: P) ++ B) with (SAddr p :: (map SAddr P ++ B)) in he.
+      rewrite pfd_rn_slots_cons, pfd_rn_slot_SAddr, (pfd_gc_copy_on_fwd F p g p' hp) in he.
+      cbv beta iota in he.
+      remember (rn_slots (gc_copy F) (map SAddr P ++ B) g) as res eqn:e2 in he.
+      destruct res as [[l2 g2]|w]; [|discriminate].
+      symmetry in e2.
+      cbv beta iota in he. injection he as hl hg. subst l g2.
+      destruct (ih _ e2) as (B' & -> & hB). exists B'. split; [reflexivity|exact hB].
+  Qed.
+
+  (** **** A collection over the two environments of [push_fresh]: their common prefix is
+    renamed to one common prefix *)
+  Lemma pfd_collect_two_envs (cl : cbn_cell) (P : list haddr) (B1 B2 : list cbn_slot)
+      (n1 n2 o1 o2 : nat) (rs : list root) (s : cbn_state) (rs' : list root)
+      (s' : cbn_state) :
+    heap_nofwd s.(st_heap) ->
+    (forall (G : Type) (f : haddr -> G -> cbn_res (haddr * G)) (g : G),
+        rn_cell f cl g = COk (cl, g)) ->
+    collect (RC cl :: RE (mkEnv (map SAddr P ++ B1) n1 o1)
+               :: RE (mkEnv (map SAddr P ++ B2) n2 o2) :: rs) s = COk (rs', s') ->
+    exists (P' : list haddr) (B1' B2' : list cbn_slot) (rs2 : list root),
+      rs' = RC cl :: RE (mkEnv (map SAddr P' ++ B1') n1 o1)
+              :: RE (mkEnv (map SAddr P' ++ B2') n2 o2) :: rs2
+      /\ #|B1'| = #|B1| /\ #|B2'| = #|B2|
+      /\ Forall2 (pfd_ra s.(st_heap) s'.(st_heap)) P P'
+      /\ root_pres nctx s.(st_heap) s'.(st_heap) (RSk B1) (RSk B1')
+      /\ root_pres nctx s.(st_heap) s'.(st_heap) (RSk B2) (RSk B2').
+  Proof.
+    intros hnf hrn he. rewrite collect_eq in he.
+    set (F := fuel_of_pos (st_next s) (fun _ : unit => FO)) in he.
+    destruct (rn_ptree (gc_copy F) (st_gam s)
+                (mkGc (st_heap s) (bh_holes (st_next s)) (st_next s))) as [[gm g1]|w1] eqn:e1;
+      [|discriminate].
+    cbv beta iota in he.
+    destruct (rn_roots (gc_copy F)
+                (RC cl :: RE (mkEnv (map SAddr P ++ B1) n1 o1)
+                   :: RE (mkEnv (map SAddr P ++ B2) n2 o2) :: rs) g1) as [[rs3 g2]|w2] eqn:e2;
+      [|discriminate].
+    cbv beta iota in he. injection he as hrs hs. subst rs' s'.
+    assert (hinv0 : gc_inv nctx (st_heap s) (st_next s)
+                      (mkGc (st_heap s) (bh_holes (st_next s)) (st_next s))).
+    { constructor; cbn.
+      - intros a cl0 hc _. exact hc.
+      - intros a a' hc. destruct (hnf _ _ hc).
+      - apply bh_ok_holes.
+      - intros b cl0 hc. rewrite bh_get_holes in hc. discriminate.
+      - intros b b' hc. rewrite bh_get_holes in hc. discriminate. }
+    pose proof (gc_copy_ok nctx (st_heap s) (st_next s) F) as hcp.
+    destruct (rn_ptree_ok nctx (st_heap s) (st_next s) (gc_copy F) hcp _ _ _ _ hinv0 e1)
+      as (hs1 & _).
+    pose proof (step_inv _ _ _ _ _ hs1) as hinv1.
+    rewrite rn_roots_cons, rn_root_RC, hrn in e2. cbv beta iota in e2.
+    rewrite rn_roots_cons, pfd_rn_root_RE, pfd_rn_env_mk in e2.
+    destruct (rn_slots (gc_copy F) (map SAddr P ++ B1) g1) as [[vs1 ga]|w] eqn:ea;
+      [|discriminate].
+    cbv beta iota in e2.
+    rewrite rn_roots_cons, pfd_rn_root_RE, pfd_rn_env_mk in e2.
+    destruct (rn_slots (gc_copy F) (map SAddr P ++ B2) ga) as [[vs2 gb]|w] eqn:eb;
+      [|discriminate].
+    cbv beta iota in e2.
+    destruct (rn_roots (gc_copy F) rs gb) as [[rs4 gc]|w] eqn:ec; [|discriminate].
+    cbv beta iota in e2. injection e2 as hrs3 hg2. subst rs3 g2.
+    destruct (pfd_prefix_first (st_heap s) (st_next s) F P B1 g1 vs1 ga hinv1 ea)
+      as (P' & B1' & -> & hP & gm1 & hsm & em).
+    destruct (rn_slots_ok nctx (st_heap s) (st_next s) (gc_copy F) hcp _ _ _ _
+                (step_inv _ _ _ _ _ hsm) em) as (hsa & _ & hrB1).
+    pose proof (step_inv _ _ _ _ _ hsa) as hinva.
+    assert (hPf : Forall2 (fun p p' => bh_get p ga.(g_old) = Some (CFwd p')) P P').
+    { refine (pfd_forall2_impl hP _). intros p p' h. exact (proj1 h). }
+    destruct (pfd_prefix_again F P P' B2 ga vs2 gb hPf eb) as (B2' & -> & eB2).
+    destruct (rn_slots_ok nctx (st_heap s) (st_next s) (gc_copy F) hcp _ _ _ _ hinva eB2)
+      as (hsb & _ & hrB2).
+    destruct (rn_roots_ok nctx (st_heap s) (st_next s) (gc_copy F) hcp _ _ _ _
+                (step_inv _ _ _ _ _ hsb) ec) as (hsc & _ & _).
+    pose proof (step_heap _ _ _ _ _ hsc) as hle_b.
+    pose proof (heap_le_trans _ _ _ (step_heap _ _ _ _ _ hsb) hle_b) as hle_a.
+    exists P', B1', B2', rs4. cbn [st_heap].
+    split; [reflexivity|].
+    split; [exact (rn_slots_length _ _ _ _ _ em)|].
+    split; [exact (rn_slots_length _ _ _ _ _ eB2)|].
+    split.
+    { refine (pfd_forall2_impl hP _). intros p p' h.
+      exact (pfd_root_pres_trans (st_heap s) (g_heap ga) (g_heap gc) (RA p) (RA p') (RA p')
+               (proj2 h) (root_pres_heap_le (g_heap ga) (g_heap gc) (RA p') hle_a)). }
+    split.
+    { intros l ts h. exact (pfd_slots_mono _ _ hle_a _ _ _ (hrB1 l ts h)). }
+    { intros l ts h. exact (pfd_slots_mono _ _ hle_b _ _ _ (hrB2 l ts h)). }
+  Qed.
+
+  (** **** One step of [push_fresh]: the allocation of one fresh variable *)
+  Lemma pfd_alloc_step (lo : positive) (lvl : nat) (P : list haddr) (B1 B2 : list cbn_slot)
+      (n1 n2 o1 o2 : nat) (rs : list root) (s : cbn_state)
+      (x : haddr) (rsA : list root) (s1 : cbn_state) :
+    state_ok lo s -> (forall l, gam_ok Γ nctx l s) -> memo_ok X_type X s ->
+    heap_nofwd s.(st_heap) ->
+    alloc stress (CDone (VNeu (NVar lvl) []))
+      (RE (mkEnv (map SAddr P ++ B1) n1 o1) :: RE (mkEnv (map SAddr P ++ B2) n2 o2) :: rs) s
+      = COk (x, rsA, s1) ->
+    exists (lo1 : positive) (P1 : list haddr) (B1a B2a : list cbn_slot) (rsa : list root),
+      rsA = RE (mkEnv (map SAddr P1 ++ B1a) n1 o1)
+              :: RE (mkEnv (map SAddr P1 ++ B2a) n2 o2) :: rsa
+      /\ #|B1a| = #|B1| /\ #|B2a| = #|B2|
+      /\ Forall2 (pfd_ra s.(st_heap) s1.(st_heap)) P P1
+      /\ root_pres nctx s.(st_heap) s1.(st_heap) (RSk B1) (RSk B1a)
+      /\ root_pres nctx s.(st_heap) s1.(st_heap) (RSk B2) (RSk B2a)
+      /\ Forall2 (root_pres nctx s.(st_heap) s1.(st_heap)) rs rsa
+      /\ state_ok lo1 s1 /\ (forall l, gam_ok Γ nctx l s1) /\ memo_ok X_type X s1
+      /\ heap_nofwd s1.(st_heap)
+      /\ (forall l, repr_addr nctx s1.(st_heap) l x (tRel (l - S lvl))).
+  Proof.
+    intros hs hg hm hnf e.
+    assert (hrn : forall (G : Type) (f : haddr -> G -> cbn_res (haddr * G)) (g : G),
+               rn_cell f (CDone (VNeu (NVar lvl) [])) g = COk (CDone (VNeu (NVar lvl) []), g)).
+    { intros G f g. exact (rn_cell_ctx_var f lvl g). }
+    assert (hfacts : forall l, exists lo' : positive,
+               state_ok lo' s1 /\ gam_ok Γ nctx l s1 /\ memo_ok X_type X s1
+               /\ heap_nofwd s1.(st_heap)
+               /\ repr_addr nctx s1.(st_heap) l x (tRel (l - S lvl))).
+    { intros l.
+      destruct (alloc_addr_free X_type X Γ nctx stress lo l (CDone (VNeu (NVar lvl) []))
+                  (tRel (l - S lvl)) _ s x rsA s1 hs (hg l) hm hnf eq_refl
+                  (fun H => repr_cell_ctx_var nctx H l lvl) hrn e)
+        as (lo' & h1 & h2 & h3 & h4 & h5 & _).
+      exists lo'. exact (conj h1 (conj h2 (conj h3 (conj h4 h5)))). }
+    destruct (hfacts 0) as (lo1 & hs1 & _ & hm1 & hnf1 & _).
+    assert (hg1 : forall l, gam_ok Γ nctx l s1).
+    { intros l. destruct (hfacts l) as (lo' & _ & h & _). exact h. }
+    assert (hx : forall l, repr_addr nctx s1.(st_heap) l x (tRel (l - S lvl))).
+    { intros l. destruct (hfacts l) as (lo' & _ & _ & _ & _ & h). exact h. }
+    unfold alloc in e. destruct (gc_due stress s) eqn:Egc.
+    - destruct (collect (RC (CDone (VNeu (NVar lvl) []))
+                  :: RE (mkEnv (map SAddr P ++ B1) n1 o1)
+                  :: RE (mkEnv (map SAddr P ++ B2) n2 o2) :: rs) s)
+        as [[rs2 s2]|w] eqn:Ec; [|discriminate].
+      destruct (pfd_collect_two_envs _ P B1 B2 n1 n2 o1 o2 rs s rs2 s2 hnf hrn Ec)
+        as (P1 & B1a & B2a & rs3 & -> & hl1 & hl2 & hP & hB1 & hB2).
+      destruct (collect_sound nctx _ _ _ _ hnf Ec) as (hok2 & _ & _ & _ & hfa & _).
+      pose proof (pfd_forall2_tail (pfd_forall2_tail (pfd_forall2_tail hfa))) as hrs.
+      cbv beta iota in e.
+      destruct (alloc_now (CDone (VNeu (NVar lvl) [])) s2) as [a2 s3] eqn:Ea.
+      cbv beta iota in e. injection e as ex erA es1. subst x rsA s1.
+      pose proof (alloc_now_heap_le (st_next s) (CDone (VNeu (NVar lvl) [])) s2
+                    (so_heap _ _ hok2)) as hle.
+      rewrite Ea in hle. cbn [snd] in hle.
+      exists lo1, P1, B1a, B2a, rs3.
+      split; [reflexivity|]. split; [exact hl1|]. split; [exact hl2|].
+      split; [exact (pfd_ra_mono _ _ _ _ _ hP hle)|].
+      split; [exact (pfd_root_pres_mono _ _ _ _ _ hB1 hle)|].
+      split; [exact (pfd_root_pres_mono _ _ _ _ _ hB2 hle)|].
+      split; [exact (pfd_roots_mono _ _ _ _ _ hrs hle)|].
+      split; [exact hs1|]. split; [exact hg1|]. split; [exact hm1|]. split; [exact hnf1|].
+      exact hx.
+    - cbv beta iota in e.
+      destruct (alloc_now (CDone (VNeu (NVar lvl) [])) s) as [a2 s3] eqn:Ea.
+      cbv beta iota in e. injection e as ex erA es1. subst x rsA s1.
+      pose proof (alloc_now_heap_le lo (CDone (VNeu (NVar lvl) [])) s (so_heap _ _ hs)) as hle.
+      rewrite Ea in hle. cbn [snd] in hle.
+      exists lo1, P, B1, B2, rs.
+      split; [reflexivity|]. split; [reflexivity|]. split; [reflexivity|].
+      split; [exact (pfd_ra_refl _ _ hle P)|].
+      split; [exact (root_pres_heap_le _ _ _ hle)|].
+      split; [exact (root_pres_heap_le _ _ _ hle)|].
+      split; [exact (pfd_roots_refl _ _ hle rs)|].
+      split; [exact hs1|]. split; [exact hg1|]. split; [exact hm1|]. split; [exact hnf1|].
+      exact hx.
+  Qed.
+
+  Lemma pfd_env_step (x' : haddr) (as' P' : list haddr) (B : list cbn_slot) (m n o : nat) :
+    mkEnv (List.rev (map SAddr as') ++ map SAddr (x' :: P') ++ B) (m + S n) o
+    = mkEnv (List.rev (map SAddr (x' :: as')) ++ map SAddr P' ++ B) (S m + n) o.
+  Proof.
+    rewrite Nat.add_succ_r. cbn [map List.rev]. rewrite <- List.app_assoc. reflexivity.
+  Qed.
+
+  Lemma pfd_push_fresh_O (lvl : nat) (e1 e2 : cbn_env) (rs : list root) (s : cbn_state) :
+    push_fresh stress 0 lvl e1 e2 rs s = COk ((lvl, e1, e2), rs, s).
+  Proof. reflexivity. Qed.
+
+  Lemma pfd_push_fresh_S (m lvl : nat) (e1 e2 : cbn_env) (rs : list root) (s : cbn_state) :
+    push_fresh stress (S m) lvl e1 e2 rs s =
+    match alloc stress (CDone (VNeu (NVar lvl) [])) (RE e1 :: RE e2 :: rs) s with
+    | COk (x, rs1, s1) =>
+      match rs1 with
+      | RE e1' :: RE e2' :: rs2 =>
+        push_fresh stress m (S lvl) (env_push (SAddr x) e1') (env_push (SAddr x) e2') rs2 s1
+      | _ => CFail WRoots
+      end
+    | CFail w => CFail w
+    end.
+  Proof. reflexivity. Qed.
+
+  (** **** [push_fresh] over two environments that share a prefix of addresses *)
+  Lemma pfd_push_fresh_prefix (n : nat) :
+    forall (lo : positive) (lvl : nat) (P : list haddr) (B1 B2 : list cbn_slot)
+      (n1 n2 o1 o2 : nat) (rs : list root) (s : cbn_state)
+      (r : nat * cbn_env * cbn_env) (rs' : list root) (s' : cbn_state),
+      state_ok lo s -> (forall l, gam_ok Γ nctx l s) -> memo_ok X_type X s ->
+      heap_nofwd s.(st_heap) ->
+      push_fresh stress n lvl (mkEnv (map SAddr P ++ B1) n1 o1)
+        (mkEnv (map SAddr P ++ B2) n2 o2) rs s = COk (r, rs', s') ->
+      exists (lo' : positive) (P' : list haddr) (B1' B2' : list cbn_slot) (as_ : list haddr),
+        #|as_| = n /\ #|B1'| = #|B1| /\ #|B2'| = #|B2|
+        /\ r = (lvl + n, mkEnv (List.rev (map SAddr as_) ++ map SAddr P' ++ B1') (n + n1) o1,
+                         mkEnv (List.rev (map SAddr as_) ++ map SAddr P' ++ B2') (n + n2) o2)
+        /\ Forall2 (root_pres nctx s.(st_heap) s'.(st_heap)) rs rs'
+        /\ Forall2 (pfd_ra s.(st_heap) s'.(st_heap)) P P'
+        /\ root_pres nctx s.(st_heap) s'.(st_heap) (RSk B1) (RSk B1')
+        /\ root_pres nctx s.(st_heap) s'.(st_heap) (RSk B2) (RSk B2')
+        /\ state_ok lo' s' /\ (forall l, gam_ok Γ nctx l s') /\ memo_ok X_type X s'
+        /\ heap_nofwd s'.(st_heap)
+        /\ (forall (j : nat) (a : haddr), nth_error as_ j = Some a ->
+              forall l, repr_addr nctx s'.(st_heap) l a (tRel (l - S (lvl + j)))).
+  Proof.
+    induction n as [|m ih];
+      intros lo lvl P B1 B2 n1 n2 o1 o2 rs s r rs' s' hs hg hm hnf e.
+    - rewrite pfd_push_fresh_O in e. injection e as er ers es. subst r rs' s'.
+      exists lo, P, B1, B2, [].
+      split; [reflexivity|]. split; [reflexivity|]. split; [reflexivity|].
+      split; [rewrite Nat.add_0_r; reflexivity|].
+      split; [exact (pfd_roots_refl _ _ (heap_le_refl _) rs)|].
+      split; [exact (pfd_ra_refl _ _ (heap_le_refl _) P)|].
+      split; [exact (root_pres_heap_le _ _ _ (heap_le_refl _))|].
+      split; [exact (root_pres_heap_le _ _ _ (heap_le_refl _))|].
+      split; [exact hs|]. split; [exact hg|]. split; [exact hm|]. split; [exact hnf|].
+      intros j a hj. destruct j; discriminate.
+    - rewrite pfd_push_fresh_S in e.
+      destruct (alloc stress (CDone (VNeu (NVar lvl) []))
+                  (RE (mkEnv (map SAddr P ++ B1) n1 o1)
+                     :: RE (mkEnv (map SAddr P ++ B2) n2 o2) :: rs) s)
+        as [[[x rsA] s1]|w] eqn:ea; [|discriminate].
+      destruct (pfd_alloc_step lo lvl P B1 B2 n1 n2 o1 o2 rs s x rsA s1 hs hg hm hnf ea)
+        as (lo1 & P1 & B1a & B2a & rsa & -> & hl1 & hl2 & hP1 & hB1 & hB2 & hrs1
+            & hs1 & hg1 & hm1 & hnf1 & hx).
+      cbv beta iota in e.
+      change (push_fresh stress m (S lvl) (mkEnv (map SAddr (x :: P1) ++ B1a) (S n1) o1)
+                (mkEnv (map SAddr (x :: P1) ++ B2a) (S n2) o2) rsa s1 = COk (r, rs', s')) in e.
+      destruct (ih lo1 (S lvl) (x :: P1) B1a B2a (S n1) (S n2) o1 o2 rsa s1 r rs' s'
+                  hs1 hg1 hm1 hnf1 e)
+        as (lo' & P2 & B1' & B2' & as' & hlen & hl1' & hl2' & -> & hrs2 & hP2 & hB1' & hB2'
+            & hs' & hg' & hm' & hnf' & hrd).
+      destruct P2 as [|x' P']; [inversion hP2|].
+      exists lo', P', B1', B2', (x' :: as').
+      split; [cbn; rewrite hlen; reflexivity|].
+      split; [exact (eq_trans hl1' hl1)|].
+      split; [exact (eq_trans hl2' hl2)|].
+      split.
+      { rewrite (pfd_env_step x' as' P' B1' m n1 o1), (pfd_env_step x' as' P' B2' m n2 o2).
+        rewrite Nat.add_succ_r. reflexivity. }
+      split; [exact (pfd_roots_trans _ _ _ _ _ _ hrs1 hrs2)|].
+      split; [exact (pfd_ra_trans _ _ _ _ _ _ hP1 (pfd_forall2_tail hP2))|].
+      split; [exact (pfd_root_pres_trans _ _ _ _ _ _ hB1 hB1')|].
+      split; [exact (pfd_root_pres_trans _ _ _ _ _ _ hB2 hB2')|].
+      split; [exact hs'|]. split; [exact hg'|]. split; [exact hm'|]. split; [exact hnf'|].
+      intros j a hj l. destruct j as [|j].
+      + cbn in hj. injection hj as <-. rewrite Nat.add_0_r.
+        exact (pfd_forall2_head hP2 l _ (hx l)).
+      + cbn in hj. rewrite Nat.add_succ_r. exact (hrd j a hj l).
+  Qed.
+
+  (** **** What [push_fresh] builds, for any roots the caller hands in *)
+  Lemma push_fresh_spec_gen (lo : positive) (n lvl : nat) (e1 e2 : cbn_env) (rs : list root)
+      (s : cbn_state) (r : nat * cbn_env * cbn_env) (rs' : list root) (s' : cbn_state) :
+    state_ok lo s -> (forall l, gam_ok Γ nctx l s) -> memo_ok X_type X s ->
+    heap_nofwd s.(st_heap) ->
+    push_fresh stress n lvl e1 e2 rs s = COk (r, rs', s') ->
+    exists (lo' : positive) (e1' e2' : cbn_env) (as_ : list haddr) (f1 f2 : cbn_env),
+      #|as_| = n
+      /\ r = (lvl + n, f1, f2)
+      /\ Forall2 (root_pres nctx s.(st_heap) s'.(st_heap)) rs rs'
+      /\ root_pres nctx s.(st_heap) s'.(st_heap) (RE e1) (RE e1')
+      /\ root_pres nctx s.(st_heap) s'.(st_heap) (RE e2) (RE e2')
+      /\ e1'.(ev_nvals) = e1.(ev_nvals) /\ e1'.(ev_goff) = e1.(ev_goff)
+      /\ #|e1'.(ev_vals)| = #|e1.(ev_vals)|
+      /\ e2'.(ev_nvals) = e2.(ev_nvals) /\ e2'.(ev_goff) = e2.(ev_goff)
+      /\ #|e2'.(ev_vals)| = #|e2.(ev_vals)|
+      /\ f1 = mkEnv (List.rev (map SAddr as_) ++ e1'.(ev_vals)) (n + e1'.(ev_nvals))
+                e1'.(ev_goff)
+      /\ f2 = mkEnv (List.rev (map SAddr as_) ++ e2'.(ev_vals)) (n + e2'.(ev_nvals))
+                e2'.(ev_goff)
+      /\ state_ok lo' s' /\ (forall l, gam_ok Γ nctx l s') /\ memo_ok X_type X s'
+      /\ heap_nofwd s'.(st_heap)
+      /\ (forall (j : nat) (a : haddr), nth_error as_ j = Some a ->
+            forall l, repr_addr nctx s'.(st_heap) l a (tRel (l - S (lvl + j)))).
+  Proof.
+    intros hs hg hm hnf e.
+    destruct e1 as [V1 n1 o1], e2 as [V2 n2 o2].
+    change (push_fresh stress n lvl (mkEnv (map SAddr [] ++ V1) n1 o1)
+              (mkEnv (map SAddr [] ++ V2) n2 o2) rs s = COk (r, rs', s')) in e.
+    destruct (pfd_push_fresh_prefix n lo lvl [] V1 V2 n1 n2 o1 o2 rs s r rs' s'
+                hs hg hm hnf e)
+      as (lo' & P' & B1' & B2' & as_ & hlen & hl1 & hl2 & -> & hrs & hP & hB1 & hB2
+          & hs' & hg' & hm' & hnf' & hrd).
+    destruct P' as [|p P']; [|inversion hP].
+    exists lo', (mkEnv B1' n1 o1), (mkEnv B2' n2 o2), as_,
+      (mkEnv (List.rev (map SAddr as_) ++ B1') (n + n1) o1),
+      (mkEnv (List.rev (map SAddr as_) ++ B2') (n + n2) o2).
+    cbn [ev_vals ev_nvals ev_goff].
+    split; [exact hlen|].
+    split; [reflexivity|].
+    split; [exact hrs|].
+    split; [intros l tm u h;
+            exact (repr_susp_transport nctx _ _ _ _ _ _ _ h (st_heap s') B1' hB1)|].
+    split; [intros l tm u h;
+            exact (repr_susp_transport nctx _ _ _ _ _ _ _ h (st_heap s') B2' hB2)|].
+    split; [reflexivity|]. split; [reflexivity|]. split; [exact hl1|].
+    split; [reflexivity|]. split; [reflexivity|]. split; [exact hl2|].
+    split; [reflexivity|]. split; [reflexivity|].
+    split; [exact hs'|]. split; [exact hg'|]. split; [exact hm'|]. split; [exact hnf'|].
+    exact hrd.
+  Qed.
+
+  (** **** What [push_fresh] builds, at the call of the stuck-match rule: the roots are the
+    two environments followed by the caller's roots *)
+  Lemma push_fresh_spec (lo : positive) (n lvl : nat) (e1 e2 : cbn_env) (rs : list root)
+      (s : cbn_state) (r : nat * cbn_env * cbn_env) (rs' : list root) (s' : cbn_state) :
+    state_ok lo s -> (forall l, gam_ok Γ nctx l s) -> memo_ok X_type X s ->
+    heap_nofwd s.(st_heap) ->
+    push_fresh stress n lvl e1 e2 (RE e1 :: RE e2 :: rs) s = COk (r, rs', s') ->
+    exists (lo' : positive) (e1' e2' : cbn_env) (as_ : list haddr) (f1 f2 : cbn_env)
+      (e1r e2r : cbn_env) (rs2 : list root),
+      #|as_| = n
+      /\ r = (lvl + n, f1, f2)
+      /\ rs' = RE e1r :: RE e2r :: rs2
+      /\ root_pres nctx s.(st_heap) s'.(st_heap) (RE e1) (RE e1r)
+      /\ root_pres nctx s.(st_heap) s'.(st_heap) (RE e2) (RE e2r)
+      /\ Forall2 (root_pres nctx s.(st_heap) s'.(st_heap)) rs rs2
+      /\ root_pres nctx s.(st_heap) s'.(st_heap) (RE e1) (RE e1')
+      /\ root_pres nctx s.(st_heap) s'.(st_heap) (RE e2) (RE e2')
+      /\ e1'.(ev_nvals) = e1.(ev_nvals) /\ e1'.(ev_goff) = e1.(ev_goff)
+      /\ #|e1'.(ev_vals)| = #|e1.(ev_vals)|
+      /\ e2'.(ev_nvals) = e2.(ev_nvals) /\ e2'.(ev_goff) = e2.(ev_goff)
+      /\ #|e2'.(ev_vals)| = #|e2.(ev_vals)|
+      /\ f1 = mkEnv (List.rev (map SAddr as_) ++ e1'.(ev_vals)) (n + e1'.(ev_nvals))
+                e1'.(ev_goff)
+      /\ f2 = mkEnv (List.rev (map SAddr as_) ++ e2'.(ev_vals)) (n + e2'.(ev_nvals))
+                e2'.(ev_goff)
+      /\ state_ok lo' s' /\ (forall l, gam_ok Γ nctx l s') /\ memo_ok X_type X s'
+      /\ heap_nofwd s'.(st_heap)
+      /\ (forall (j : nat) (a : haddr), nth_error as_ j = Some a ->
+            forall l, repr_addr nctx s'.(st_heap) l a (tRel (l - S (lvl + j)))).
+  Proof.
+    intros hs hg hm hnf e.
+    destruct (push_fresh_spec_gen lo n lvl e1 e2 _ s r rs' s' hs hg hm hnf e)
+      as (lo' & e1' & e2' & as_ & f1 & f2 & hlen & hr & hrs & hp1 & hp2 & rest).
+    destruct rs' as [|q1 rs3]; [inversion hrs|].
+    destruct rs3 as [|q2 rs2]; [pose proof (pfd_forall2_tail hrs) as ht; inversion ht|].
+    pose proof (pfd_forall2_head hrs) as hq1.
+    pose proof (pfd_forall2_head (pfd_forall2_tail hrs)) as hq2.
+    pose proof (pfd_forall2_tail (pfd_forall2_tail hrs)) as hrs2.
+    destruct q1 as [a1|x1|e1r|v1|l1|l1|c1]; try (exfalso; exact hq1).
+    destruct q2 as [a2|x2|e2r|v2|l2|l2|c2]; try (exfalso; exact hq2).
+    exists lo', e1', e2', as_, f1, f2, e1r, e2r, rs2.
+    split; [exact hlen|]. split; [exact hr|]. split; [reflexivity|].
+    split; [exact hq1|]. split; [exact hq2|]. split; [exact hrs2|].
+    split; [exact hp1|]. split; [exact hp2|]. exact rest.
+  Qed.
+
+End ConvPartD.
+
 Section Conv.
   Context {cf : checker_flags}.
   Context (X_type : abstract_env_impl) (X : X_type.π2.π1).
