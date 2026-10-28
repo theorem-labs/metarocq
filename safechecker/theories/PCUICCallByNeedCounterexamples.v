@@ -12,6 +12,8 @@ From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
 
 Import CanonicalTries.
 
+Local Notation xpredT := (fun _ : nat => true) (only parsing).
+
 (** * Counterexamples to natural invariants of the call-by-need machine
 
   The soundness proof of the call-by-need fast path ([PCUICCallByNeedSoundHookProof]) reads
