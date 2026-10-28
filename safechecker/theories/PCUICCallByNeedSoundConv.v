@@ -3032,6 +3032,505 @@ Section Conv.
   Qed.
 End Conv.
 
+(** * Syntactic facts the ghost-reading comparison needs
+
+  [cg_occ_inv]: a slot the code really uses is a subterm of the reading, so the reading's
+  free-variable property passes to it (hygiene rules out an occurrence that is only in a
+  [tCase] context). [cg_subst_scope_inv]: the free variables of a term above a substituted
+  block. [cg_subst_fresh_lift]: fresh variables pushed at the top of an environment read
+  back the lifted body. [cg_code_inv_wf_universes]: a code of a universe-checked entry is
+  universe-checked. *)
+
+Local Notation xpred0 := (fun _ : nat => false) (only parsing).
+Local Notation xpredT := (fun _ : nat => true) (only parsing).
+
+(** ** List helpers *)
+
+Lemma cg_forallb_In {A} (p : A -> bool) (l : list A) (x : A) :
+  forallb p l = true -> In x l -> p x = true.
+Proof. intros H Hin. rewrite forallb_forall in H. exact (H x Hin). Qed.
+
+Lemma cg_forallb_nth_some {A} (p : A -> bool) (l : list A) n x :
+  forallb p l = true -> nth_error l n = Some x -> p x = true.
+Proof. intros h hn. apply nth_error_In in hn. exact (cg_forallb_In p l x h hn). Qed.
+
+Lemma cg_All_forallb_false {A} (Q : A -> Type) (p : A -> bool) (G : Prop) (l : list A) :
+  All Q l -> forallb p l = false -> (forall x, In x l -> Q x -> p x = false -> G) -> G.
+Proof.
+  intros HA. induction HA as [|x l Qx HA IH]; cbn; intros H K; [discriminate H|].
+  apply Bool.andb_false_iff in H as [H|H].
+  - exact (K x (or_introl eq_refl) Qx H).
+  - apply IH; [exact H|]. intros y Hy Qy Hpy. exact (K y (or_intror Hy) Qy Hpy).
+Qed.
+
+Lemma cg_forallb_All_impl {A} (Q : A -> Type) (p q : A -> bool) (l : list A) :
+  All Q l -> (forall x, Q x -> p x = true -> q x = true) ->
+  forallb p l = true -> forallb q l = true.
+Proof.
+  intros HA Hf. induction HA as [|x l Qx HA IH]; cbn; intros H; [reflexivity|].
+  apply Bool.andb_true_iff in H as [H1 H2].
+  apply Bool.andb_true_iff; split; [exact (Hf x Qx H1) | exact (IH H2)].
+Qed.
+
+Lemma cg_forallb_map_inv {A B} (Q : A -> Type) (p : A -> bool) (q : B -> bool) (f : A -> B)
+  (l : list A) :
+  All Q l -> (forall x, Q x -> q (f x) = true -> p x = true) ->
+  forallb q (map f l) = true -> forallb p l = true.
+Proof.
+  intros HA Hf. induction HA as [|x l Qx HA IH]; cbn; intros H; [reflexivity|].
+  apply Bool.andb_true_iff in H as [H1 H2].
+  apply Bool.andb_true_iff; split; [exact (Hf x Qx H1) | exact (IH H2)].
+Qed.
+
+Lemma cg_test_context_k_impl_on (Q : term -> Type) (f g : nat -> term -> bool) (m : nat)
+  (ctx : context) :
+  onctx Q ctx -> (forall i t, Q t -> f i t = true -> g i t = true) ->
+  test_context_k f m ctx = true -> test_context_k g m ctx = true.
+Proof.
+  intros HA Hfg. induction HA as [|d ctx [Hb Ht] HA IH]; cbn [test_context_k]; intros H;
+    [reflexivity|].
+  apply Bool.andb_true_iff in H as [H1 H2]. apply Bool.andb_true_iff; split; [exact (IH H1)|].
+  destruct d as [na [b|] ty]; unfold test_decl in H2 |- *;
+    cbn [option_default decl_body decl_type andb] in Hb, Ht, H2 |- *.
+  - apply Bool.andb_true_iff in H2 as [H2 H3].
+    apply Bool.andb_true_iff; split; [exact (Hfg _ _ Hb H2) | exact (Hfg _ _ Ht H3)].
+  - exact (Hfg _ _ Ht H2).
+Qed.
+
+(** ** 1. A term closed at [k] does not use an index from [k] on *)
+
+Lemma cg_closedn_noccur : forall (t : term) (k n : nat), closedn k t -> noccur_between k n t.
+Proof.
+  intros t. elim t using term_forall_list_ind.
+  - (* tRel *)
+    intros r k n H. cbn [closedn noccur_between] in H |- *.
+    apply Bool.orb_true_iff; left; exact H.
+  - (* tVar *) intros; reflexivity.
+  - (* tEvar *)
+    intros ev l Hl k n H. cbn [closedn noccur_between] in H |- *.
+    refine (cg_forallb_All_impl _ _ _ _ Hl _ H). intros x Px Hx. apply Px; exact Hx.
+  - (* tSort *) intros; reflexivity.
+  - (* tProd *)
+    intros na A IHA B IHB k n H. cbn [closedn noccur_between] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply IHA | apply IHB]; assumption.
+  - (* tLambda *)
+    intros na A IHA B IHB k n H. cbn [closedn noccur_between] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply IHA | apply IHB]; assumption.
+  - (* tLetIn *)
+    intros na b IHb ty IHty B IHB k n H. cbn [closedn noccur_between] in H |- *.
+    apply Bool.andb_true_iff in H as [H H3]. apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply Bool.andb_true_iff; split|].
+    + apply IHb; assumption.
+    + apply IHty; assumption.
+    + apply IHB; assumption.
+  - (* tApp *)
+    intros u v IHu IHv k n H. cbn [closedn noccur_between] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply IHu | apply IHv]; assumption.
+  - (* tConst *) intros; reflexivity.
+  - (* tInd *) intros; reflexivity.
+  - (* tConstruct *) intros; reflexivity.
+  - (* tCase *)
+    intros ci p [Hpar [Hctx Hret]] c IHc brs Hbrs k n H.
+    cbn [closedn noccur_between] in H |- *.
+    unfold test_predicate_k in H |- *.
+    apply Bool.andb_true_iff in H as [H Hbr].
+    apply Bool.andb_true_iff in H as [H Hc].
+    apply Bool.andb_true_iff in H as [H Hr].
+    apply Bool.andb_true_iff in H as [H Hcx].
+    apply Bool.andb_true_iff in H as [Hu Hpa].
+    apply Bool.andb_true_iff; split.
+    2:{ refine (cg_forallb_All_impl _ _ _ _ Hbrs _ Hbr).
+        intros br [Pctx Pbody] Hb. unfold test_branch_k in Hb |- *.
+        apply Bool.andb_true_iff in Hb as [Hb1 Hb2].
+        apply Bool.andb_true_iff; split.
+        - refine (cg_test_context_k_impl_on _ _ _ _ _ Pctx _ Hb1).
+          intros i t' Qt Ht. apply Qt; exact Ht.
+        - apply Pbody; exact Hb2. }
+    apply Bool.andb_true_iff; split.
+    2:{ apply IHc; exact Hc. }
+    apply Bool.andb_true_iff; split.
+    2:{ apply Hret; exact Hr. }
+    apply Bool.andb_true_iff; split.
+    2:{ refine (cg_test_context_k_impl_on _ _ _ _ _ Hctx _ Hcx).
+        intros i t' Qt Ht. apply Qt; exact Ht. }
+    apply Bool.andb_true_iff; split; [reflexivity|].
+    refine (cg_forallb_All_impl _ _ _ _ Hpar _ Hpa). intros x Px Hx. apply Px; exact Hx.
+  - (* tProj *)
+    intros pr c IHc k n H. cbn [closedn noccur_between] in H |- *. apply IHc; exact H.
+  - (* tFix *)
+    intros mfix idx Hm k n H. cbn [closedn noccur_between] in H |- *.
+    refine (cg_forallb_All_impl _ _ _ _ Hm _ H).
+    intros d [Pty Pbody] Hd. unfold test_def in Hd |- *.
+    apply Bool.andb_true_iff in Hd as [Hd1 Hd2].
+    apply Bool.andb_true_iff; split; [apply Pty | apply Pbody]; assumption.
+  - (* tCoFix *)
+    intros mfix idx Hm k n H. cbn [closedn noccur_between] in H |- *.
+    refine (cg_forallb_All_impl _ _ _ _ Hm _ H).
+    intros d [Pty Pbody] Hd. unfold test_def in Hd |- *.
+    apply Bool.andb_true_iff in Hd as [Hd1 Hd2].
+    apply Bool.andb_true_iff; split; [apply Pty | apply Pbody]; assumption.
+  - (* tPrim *)
+    intros prim Hprim k n H. cbn [closedn noccur_between] in H |- *.
+    destruct prim as [tg [? | ? | ? | a]]; cbn in Hprim, H |- *; try reflexivity.
+    destruct Hprim as [Hty [Hdef Hval]].
+    apply Bool.andb_true_iff in H as [H H3]. apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply Bool.andb_true_iff; split|].
+    + refine (cg_forallb_All_impl _ _ _ _ Hval _ H1). intros y Py Hy. apply Py; exact Hy.
+    + apply Hdef; exact H2.
+    + apply Hty; exact H3.
+Qed.
+
+(** ** Free-variable helpers *)
+
+Lemma cg_hyg_shift n t : on_free_vars (shiftnP n xpredT) t = on_free_vars xpredT t.
+Proof. apply on_free_vars_ext. apply shiftnP_xpredT. Qed.
+
+Lemma cg_ofv_shiftn (P : nat -> bool) n k t :
+  on_free_vars (shiftnP n (shiftnP k P)) t = on_free_vars (shiftnP (n + k) P) t.
+Proof. apply on_free_vars_ext. apply shiftnP_add. Qed.
+
+Lemma cg_ofv_lift0 (P : nat -> bool) k u :
+  on_free_vars (shiftnP k P) (lift0 k u) = on_free_vars P u.
+Proof.
+  rewrite lift_rename. rewrite PCUICOnFreeVarsConv.on_free_vars_rename.
+  apply on_free_vars_ext. intros i. cbv [shiftnP lift_renaming].
+  replace (0 <=? i) with true by (symmetry; apply Nat.leb_le; lia).
+  replace (k + i <? k) with false by (symmetry; apply Nat.ltb_ge; lia).
+  replace (k + i - k) with i by lia. reflexivity.
+Qed.
+
+(** Hygiene closes every [tCase] context, so no index occurs in one. *)
+Lemma cg_ctx_hyg_noccur (n m : nat) (ctx : context) :
+  test_context_k (fun k => on_free_vars (closedP k xpredT)) m ctx = true ->
+  test_context_k (fun k' => noccur_between k' n) m ctx = true.
+Proof.
+  induction ctx as [|d ctx IH]; cbn [test_context_k]; intros H; [reflexivity|].
+  apply Bool.andb_true_iff in H as [H1 H2]. apply Bool.andb_true_iff; split; [exact (IH H1)|].
+  destruct d as [na [b|] ty]; unfold test_decl in H2 |- *;
+    cbn [option_default decl_body decl_type andb] in H2 |- *.
+  - apply Bool.andb_true_iff in H2 as [H2 H3].
+    apply Bool.andb_true_iff; split; apply cg_closedn_noccur; rewrite closedP_on_free_vars;
+      assumption.
+  - apply cg_closedn_noccur; rewrite closedP_on_free_vars; assumption.
+Qed.
+
+(** ** 2. An index the term really uses *)
+
+Lemma cg_occ_inv (P : nat -> bool) (ts : list term) (N j : nat) (u : term) :
+  nth_error ts j = Some u ->
+  forall (t : term) (k : nat),
+    on_free_vars xpredT t ->
+    noccur_between (k + j) 1 t = false ->
+    on_free_vars (shiftnP k P) (subst ts k (lift N (k + #|ts|) t)) ->
+    on_free_vars P u.
+Proof.
+  intros Hj t. elim t using term_forall_list_ind.
+  - (* tRel *)
+    intros r k _ Hn Hf. cbn [noccur_between] in Hn.
+    apply Bool.orb_false_iff in Hn as [H1 H2].
+    apply Nat.ltb_ge in H1. apply Nat.leb_gt in H2.
+    assert (Hr : r = k + j) by lia. subst r.
+    assert (Hlt : j < #|ts|) by (apply nth_error_Some; rewrite Hj; discriminate).
+    rewrite (lift_rel_lt N (k + j) (k + #|ts|)) in Hf by lia.
+    rewrite (subst_rel_eq ts k j u (k + j) Hj eq_refl) in Hf.
+    rewrite cg_ofv_lift0 in Hf. exact Hf.
+  - (* tVar *) intros i k _ Hn _. cbn in Hn. discriminate Hn.
+  - (* tEvar *)
+    intros ev l Hl k Hh Hn Hf. cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    apply (cg_All_forallb_false _ _ _ _ Hl Hn). intros x Hin IH Hx.
+    apply (IH k); [exact (cg_forallb_In _ _ _ Hh Hin) | exact Hx |].
+    apply (cg_forallb_In _ _ _ Hf). apply in_map. apply in_map. exact Hin.
+  - (* tSort *) intros s k _ Hn _. cbn in Hn. discriminate Hn.
+  - (* tProd *)
+    intros na A IHA B IHB k Hh Hn Hf. cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    apply Bool.andb_true_iff in Hh as [HhA HhB]. rewrite cg_hyg_shift in HhB.
+    apply Bool.andb_true_iff in Hf as [HfA HfB]. rewrite cg_ofv_shiftn in HfB.
+    apply Bool.andb_false_iff in Hn as [Hn|Hn].
+    + exact (IHA k HhA Hn HfA).
+    + exact (IHB (S k) HhB Hn HfB).
+  - (* tLambda *)
+    intros na A IHA B IHB k Hh Hn Hf. cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    apply Bool.andb_true_iff in Hh as [HhA HhB]. rewrite cg_hyg_shift in HhB.
+    apply Bool.andb_true_iff in Hf as [HfA HfB]. rewrite cg_ofv_shiftn in HfB.
+    apply Bool.andb_false_iff in Hn as [Hn|Hn].
+    + exact (IHA k HhA Hn HfA).
+    + exact (IHB (S k) HhB Hn HfB).
+  - (* tLetIn *)
+    intros na b IHb ty IHty B IHB k Hh Hn Hf.
+    cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    apply Bool.andb_true_iff in Hh as [Hhb Hh]. apply Bool.andb_true_iff in Hh as [Hhty HhB].
+    rewrite cg_hyg_shift in HhB.
+    apply Bool.andb_true_iff in Hf as [Hfb Hf]. apply Bool.andb_true_iff in Hf as [Hfty HfB].
+    rewrite cg_ofv_shiftn in HfB.
+    apply Bool.andb_false_iff in Hn as [Hn|Hn]; [apply Bool.andb_false_iff in Hn as [Hn|Hn]|].
+    + exact (IHb k Hhb Hn Hfb).
+    + exact (IHty k Hhty Hn Hfty).
+    + exact (IHB (S k) HhB Hn HfB).
+  - (* tApp *)
+    intros a b IHa IHb k Hh Hn Hf. cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    apply Bool.andb_true_iff in Hh as [Hha Hhb].
+    apply Bool.andb_true_iff in Hf as [Hfa Hfb].
+    apply Bool.andb_false_iff in Hn as [Hn|Hn].
+    + exact (IHa k Hha Hn Hfa).
+    + exact (IHb k Hhb Hn Hfb).
+  - (* tConst *) intros s ui k _ Hn _. cbn in Hn. discriminate Hn.
+  - (* tInd *) intros i ui k _ Hn _. cbn in Hn. discriminate Hn.
+  - (* tConstruct *) intros i n ui k _ Hn _. cbn in Hn. discriminate Hn.
+  - (* tCase *)
+    intros ci p [Hpar [Hctx Hret]] c IHc brs Hbrs k Hh Hn Hf.
+    cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    unfold map_predicate_k in Hf. cbn [pparams pcontext preturn puinst] in Hf.
+    apply Bool.andb_true_iff in Hh as [Hhpa Hh]. apply Bool.andb_true_iff in Hh as [Hhr Hh].
+    apply Bool.andb_true_iff in Hh as [Hhcx Hh]. apply Bool.andb_true_iff in Hh as [Hhc Hhbr].
+    apply Bool.andb_true_iff in Hf as [Hfpa Hf]. apply Bool.andb_true_iff in Hf as [Hfr Hf].
+    apply Bool.andb_true_iff in Hf as [_ Hf]. apply Bool.andb_true_iff in Hf as [Hfc Hfbr].
+    unfold test_predicate_k in Hn.
+    apply Bool.andb_false_iff in Hn as [Hn|Hn].
+    1: apply Bool.andb_false_iff in Hn as [Hn|Hn].
+    1: apply Bool.andb_false_iff in Hn as [Hn|Hn].
+    1: apply Bool.andb_false_iff in Hn as [Hn|Hn].
+    1: apply Bool.andb_false_iff in Hn as [Hn|Hn].
+    + (* puinst *) discriminate Hn.
+    + (* pparams *)
+      apply (cg_All_forallb_false _ _ _ _ Hpar Hn). intros x Hin IH Hx.
+      apply (IH k); [exact (cg_forallb_In _ _ _ Hhpa Hin) | exact Hx |].
+      apply (cg_forallb_In _ _ _ Hfpa). apply in_map. apply in_map. exact Hin.
+    + (* pcontext *)
+      rewrite (cg_ctx_hyg_noccur 1 _ _ Hhcx) in Hn. discriminate Hn.
+    + (* preturn *)
+      apply (Hret (#|pcontext p| + k)).
+      * rewrite cg_hyg_shift in Hhr. exact Hhr.
+      * rewrite <- Nat.add_assoc. exact Hn.
+      * rewrite cg_ofv_shiftn in Hfr. rewrite <- Nat.add_assoc. exact Hfr.
+    + (* scrutinee *) exact (IHc k Hhc Hn Hfc).
+    + (* branches *)
+      apply (cg_All_forallb_false _ _ _ _ Hbrs Hn). intros br Hin [Pctx Pbody] Hx.
+      unfold test_branch_k in Hx.
+      pose proof (cg_forallb_In _ _ _ Hhbr Hin) as Hhb. cbn beta in Hhb.
+      apply Bool.andb_true_iff in Hhb as [Hhbcx Hhbb].
+      apply Bool.andb_false_iff in Hx as [Hx|Hx].
+      * rewrite (cg_ctx_hyg_noccur 1 _ _ Hhbcx) in Hx. discriminate Hx.
+      * pose proof (cg_forallb_In _ _ _ Hfbr (in_map _ _ _ (in_map _ _ _ Hin))) as Hfb.
+        cbn [map_branch_k bcontext bbody id] in Hfb.
+        apply Bool.andb_true_iff in Hfb as [_ Hfb].
+        apply (Pbody (#|bcontext br| + k)).
+        -- rewrite cg_hyg_shift in Hhbb. exact Hhbb.
+        -- rewrite <- Nat.add_assoc. exact Hx.
+        -- rewrite cg_ofv_shiftn in Hfb. rewrite <- Nat.add_assoc. exact Hfb.
+  - (* tProj *)
+    intros pr c IHc k Hh Hn Hf. cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    exact (IHc k Hh Hn Hf).
+  - (* tFix *)
+    intros mfix idx Hm k Hh Hn Hf. cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    rewrite !length_map in Hf.
+    apply (cg_All_forallb_false _ _ _ _ Hm Hn). intros d Hin [Pty Pbody] Hx.
+    unfold test_def in Hx.
+    pose proof (cg_forallb_In _ _ _ Hh Hin) as Hhd. unfold test_def in Hhd.
+    apply Bool.andb_true_iff in Hhd as [Hhty Hhbody].
+    pose proof (cg_forallb_In _ _ _ Hf (in_map _ _ _ (in_map _ _ _ Hin))) as Hfd.
+    unfold test_def in Hfd. cbn [map_def dtype dbody] in Hfd.
+    apply Bool.andb_true_iff in Hfd as [Hfty Hfbody].
+    apply Bool.andb_false_iff in Hx as [Hx|Hx].
+    + exact (Pty k Hhty Hx Hfty).
+    + apply (Pbody (#|mfix| + k)).
+      * rewrite cg_hyg_shift in Hhbody. exact Hhbody.
+      * rewrite <- Nat.add_assoc. exact Hx.
+      * rewrite cg_ofv_shiftn in Hfbody. rewrite <- Nat.add_assoc. exact Hfbody.
+  - (* tCoFix *)
+    intros mfix idx Hm k Hh Hn Hf. cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    rewrite !length_map in Hf.
+    apply (cg_All_forallb_false _ _ _ _ Hm Hn). intros d Hin [Pty Pbody] Hx.
+    unfold test_def in Hx.
+    pose proof (cg_forallb_In _ _ _ Hh Hin) as Hhd. unfold test_def in Hhd.
+    apply Bool.andb_true_iff in Hhd as [Hhty Hhbody].
+    pose proof (cg_forallb_In _ _ _ Hf (in_map _ _ _ (in_map _ _ _ Hin))) as Hfd.
+    unfold test_def in Hfd. cbn [map_def dtype dbody] in Hfd.
+    apply Bool.andb_true_iff in Hfd as [Hfty Hfbody].
+    apply Bool.andb_false_iff in Hx as [Hx|Hx].
+    + exact (Pty k Hhty Hx Hfty).
+    + apply (Pbody (#|mfix| + k)).
+      * rewrite cg_hyg_shift in Hhbody. exact Hhbody.
+      * rewrite <- Nat.add_assoc. exact Hx.
+      * rewrite cg_ofv_shiftn in Hfbody. rewrite <- Nat.add_assoc. exact Hfbody.
+  - (* tPrim *)
+    intros prim Hprim k Hh Hn Hf. cbn [on_free_vars noccur_between lift subst] in Hh, Hn, Hf.
+    destruct prim as [tg [? | ? | ? | a]]; cbn -[shiftnP] in Hprim, Hh, Hn, Hf;
+      try discriminate Hn.
+    destruct Hprim as [Hty [Hdef Hval]].
+    apply Bool.andb_true_iff in Hh as [Hh Hhty]. apply Bool.andb_true_iff in Hh as [Hhval Hhdef].
+    apply Bool.andb_true_iff in Hf as [Hf Hfty]. apply Bool.andb_true_iff in Hf as [Hfval Hfdef].
+    apply Bool.andb_false_iff in Hn as [Hn|Hn]; [apply Bool.andb_false_iff in Hn as [Hn|Hn]|].
+    + apply (cg_All_forallb_false _ _ _ _ Hval Hn). intros x Hin IH Hx.
+      apply (IH k); [exact (cg_forallb_In _ _ _ Hhval Hin) | exact Hx |].
+      apply (cg_forallb_In _ _ _ Hfval). apply in_map. apply in_map. exact Hin.
+    + exact (Hdef k Hhdef Hn Hfdef).
+    + exact (Hty k Hhty Hn Hfty).
+Qed.
+
+(** ** 3. The free variables above a substituted block *)
+
+Lemma cg_subst_scope_inv (P : nat -> bool) (ws : list term) :
+  forall (b : term) (k : nat),
+    on_free_vars (shiftnP k P) (subst ws k b) -> on_free_vars (shiftnP (k + #|ws|) P) b.
+Proof.
+  intros b. elim b using term_forall_list_ind.
+  - (* tRel *)
+    intros r k H. cbn [subst] in H. cbn [on_free_vars]. unfold shiftnP.
+    revert H. destruct (k <=? r) eqn:E; intros H.
+    + apply Nat.leb_le in E. revert H. destruct (nth_error ws (r - k)) as [x|] eqn:E2; intros H.
+      * apply Bool.orb_true_iff; left. apply Nat.ltb_lt.
+        assert (r - k < #|ws|) by (apply nth_error_Some; rewrite E2; discriminate). lia.
+      * apply nth_error_None in E2. cbn [on_free_vars] in H. unfold shiftnP in H.
+        apply Bool.orb_true_iff in H as [H|H]; [apply Nat.ltb_lt in H; lia|].
+        apply Bool.orb_true_iff; right.
+        replace (r - (k + #|ws|)) with (r - #|ws| - k) by lia. exact H.
+    + apply Nat.leb_gt in E. apply Bool.orb_true_iff; left. apply Nat.ltb_lt. lia.
+  - (* tVar *) intros; reflexivity.
+  - (* tEvar *)
+    intros ev l Hl k H. cbn [subst on_free_vars] in H |- *.
+    refine (cg_forallb_map_inv _ _ _ _ _ Hl _ H). intros x Px Hx. exact (Px k Hx).
+  - (* tSort *) intros; reflexivity.
+  - (* tProd *)
+    intros na A IHA B IHB k H. cbn [subst on_free_vars] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2]. rewrite cg_ofv_shiftn in H2 |- *.
+    apply Bool.andb_true_iff; split; [exact (IHA k H1) | exact (IHB (S k) H2)].
+  - (* tLambda *)
+    intros na A IHA B IHB k H. cbn [subst on_free_vars] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2]. rewrite cg_ofv_shiftn in H2 |- *.
+    apply Bool.andb_true_iff; split; [exact (IHA k H1) | exact (IHB (S k) H2)].
+  - (* tLetIn *)
+    intros na b0 IHb ty IHty B IHB k H. cbn [subst on_free_vars] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H]. apply Bool.andb_true_iff in H as [H2 H3].
+    rewrite cg_ofv_shiftn in H3 |- *.
+    apply Bool.andb_true_iff; split; [exact (IHb k H1)|].
+    apply Bool.andb_true_iff; split; [exact (IHty k H2) | exact (IHB (S k) H3)].
+  - (* tApp *)
+    intros a b0 IHa IHb k H. cbn [subst on_free_vars] in H |- *.
+    apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [exact (IHa k H1) | exact (IHb k H2)].
+  - (* tConst *) intros; reflexivity.
+  - (* tInd *) intros; reflexivity.
+  - (* tConstruct *) intros; reflexivity.
+  - (* tCase *)
+    intros ci p [Hpar [Hctx Hret]] c IHc brs Hbrs k H.
+    cbn [subst on_free_vars] in H |- *.
+    unfold map_predicate_k in H. cbn [pparams pcontext preturn puinst] in H.
+    rewrite length_map in H.
+    apply Bool.andb_true_iff in H as [Hpa H]. apply Bool.andb_true_iff in H as [Hr H].
+    apply Bool.andb_true_iff in H as [Hcx H]. apply Bool.andb_true_iff in H as [Hc Hbr].
+    apply Bool.andb_true_iff; split.
+    { refine (cg_forallb_map_inv _ _ _ _ _ Hpar _ Hpa). intros x Px Hx. exact (Px k Hx). }
+    apply Bool.andb_true_iff; split.
+    { rewrite cg_ofv_shiftn in Hr |- *. rewrite Nat.add_assoc. exact (Hret _ Hr). }
+    apply Bool.andb_true_iff; split; [exact Hcx|].
+    apply Bool.andb_true_iff; split; [exact (IHc k Hc)|].
+    refine (cg_forallb_map_inv _ _ _ _ _ Hbrs _ Hbr). intros br [Pctx Pbody] Hx.
+    cbn [map_branch_k bcontext bbody id] in Hx.
+    apply Bool.andb_true_iff in Hx as [Hx1 Hx2]. apply Bool.andb_true_iff; split; [exact Hx1|].
+    rewrite cg_ofv_shiftn in Hx2 |- *. rewrite Nat.add_assoc. exact (Pbody _ Hx2).
+  - (* tProj *)
+    intros pr c IHc k H. cbn [subst on_free_vars] in H |- *. exact (IHc k H).
+  - (* tFix *)
+    intros mfix idx Hm k H. cbn [subst on_free_vars] in H |- *. rewrite !length_map in H.
+    refine (cg_forallb_map_inv _ _ _ _ _ Hm _ H). intros d [Pty Pbody] Hx.
+    unfold test_def in Hx |- *. cbn [map_def dtype dbody] in Hx.
+    apply Bool.andb_true_iff in Hx as [Hx1 Hx2].
+    apply Bool.andb_true_iff; split; [exact (Pty k Hx1)|].
+    rewrite cg_ofv_shiftn in Hx2 |- *. rewrite Nat.add_assoc. exact (Pbody _ Hx2).
+  - (* tCoFix *)
+    intros mfix idx Hm k H. cbn [subst on_free_vars] in H |- *. rewrite !length_map in H.
+    refine (cg_forallb_map_inv _ _ _ _ _ Hm _ H). intros d [Pty Pbody] Hx.
+    unfold test_def in Hx |- *. cbn [map_def dtype dbody] in Hx.
+    apply Bool.andb_true_iff in Hx as [Hx1 Hx2].
+    apply Bool.andb_true_iff; split; [exact (Pty k Hx1)|].
+    rewrite cg_ofv_shiftn in Hx2 |- *. rewrite Nat.add_assoc. exact (Pbody _ Hx2).
+  - (* tPrim *)
+    intros prim Hprim k H. cbn [subst on_free_vars] in H |- *.
+    destruct prim as [tg [? | ? | ? | a]]; cbn -[shiftnP] in Hprim, H |- *; try reflexivity.
+    destruct Hprim as [Hty [Hdef Hval]].
+    apply Bool.andb_true_iff in H as [H H3]. apply Bool.andb_true_iff in H as [H1 H2].
+    apply Bool.andb_true_iff; split; [apply Bool.andb_true_iff; split|].
+    + refine (cg_forallb_map_inv _ _ _ _ _ Hval _ H1). intros y Py Hy. exact (Py k Hy).
+    + exact (Hdef k H2).
+    + exact (Hty k H3).
+Qed.
+
+(** ** 4. Substituting the identity readings back *)
+
+Lemma cg_subst_idsn_lift (k : nat) (t : term) : subst (idsn k) 0 (lift k k t) = t.
+Proof.
+  revert t. induction k as [|k IH]; intros t.
+  - cbn [idsn]. rewrite subst_empty. apply lift0_id.
+  - cbn [idsn]. rewrite subst_app_simpl. rewrite idsn_length. cbn [Nat.add].
+    rewrite (subst_reli_lift_id k k t (le_n k)). exact (IH t).
+Qed.
+
+(** ** 5. Substituting lifted identity readings *)
+
+Lemma cg_subst_fresh_lift (m k : nat) (t : term) :
+  subst (map (lift0 m) (idsn k)) 0 (lift (m + k) k t) = lift0 m t.
+Proof.
+  pose proof (distr_lift_subst (lift k k t) (idsn k) m 0) as E.
+  rewrite cg_subst_idsn_lift in E. rewrite idsn_length, Nat.add_0_r in E.
+  rewrite (simpl_lift t k k m k) in E by lia.
+  symmetry; exact E.
+Qed.
+
+(** ** 6. Universe well-formedness of a code's term *)
+
+Lemma cg_code_inv_wf_universes {cf : checker_flags} (Σ : global_env_ext) (e : code_entry) (c : code) :
+  code_inv e c -> wf_universes Σ (inst_code e.(ce_inst) e.(ce_term)) ->
+  wf_universes Σ c.(c_term).
+Proof.
+  unfold code_inv; cbv zeta. intros [ks [_ ht]] hr. revert ht.
+  generalize (c_term c) as t.
+  induction ks as [|k ks IH]; cbn [fold_right]; intros t ht.
+  - injection ht as <-. exact hr.
+  - destruct (fold_right _ _ ks) as [t0|] eqn:E; [|discriminate ht].
+    pose proof (IH t0 eq_refl) as h0. clear IH E.
+    unfold wf_universes in h0 |- *.
+    destruct t0; cbn [on_universes] in h0; cbn in ht; try discriminate ht;
+      repeat match goal with
+             | H : is_true (_ && _) |- _ => apply andb_true_iff in H as [? ?]
+             | H : (_ && _) = true |- _ => apply andb_true_iff in H as [? ?]
+             end.
+    + (* tProd *)
+      destruct k as [|[q|q|]]; cbn in ht; try discriminate ht; injection ht as <-; assumption.
+    + (* tLambda *)
+      destruct k as [|[q|q|]]; cbn in ht; try discriminate ht; injection ht as <-; assumption.
+    + (* tLetIn *)
+      destruct k as [|[q|[q|q|]|]]; cbn in ht; try discriminate ht; injection ht as <-;
+        assumption.
+    + (* tApp *)
+      destruct k as [|[q|q|]]; cbn in ht; try discriminate ht; injection ht as <-; assumption.
+    + (* tCase *)
+      destruct k as [|[q|q|]]; cbn in ht.
+      * injection ht as <-. assumption.
+      * destruct (nth_error brs _) as [br|] eqn:Eb; cbn in ht; [|discriminate ht].
+        injection ht as <-.
+        match goal with H : forallb _ brs = true |- _ =>
+          pose proof (cg_forallb_nth_some _ _ _ _ H Eb) as hb end.
+        unfold test_branch in hb. apply andb_true_iff in hb as [_ hb]. exact hb.
+      * match goal with H : forallb _ (pparams _) = true |- _ =>
+          exact (cg_forallb_nth_some _ _ _ _ H ht) end.
+      * injection ht as <-. assumption.
+    + (* tProj *)
+      destruct k as [|q]; cbn in ht; [injection ht as <-; assumption|discriminate ht].
+    + (* tFix *)
+      destruct (nth_error mfix _) as [d|] eqn:Ed; cbn in ht; [|discriminate ht].
+      injection ht as <-.
+      pose proof (cg_forallb_nth_some _ _ _ _ h0 Ed) as hd.
+      cbn beta in hd. apply andb_true_iff in hd. exact (proj2 hd).
+    + (* tCoFix *)
+      destruct (nth_error mfix _) as [d|] eqn:Ed; cbn in ht; [|discriminate ht].
+      injection ht as <-.
+      pose proof (cg_forallb_nth_some _ _ _ _ h0 Ed) as hd.
+      cbn beta in hd. apply andb_true_iff in hd. exact (proj2 hd).
+Qed.
+
 (** * The comparison on ghost readings (BET-298, step 3b)
 
   The seams above ([slot_seam], [term_seam]) read the comparison's inputs with the
