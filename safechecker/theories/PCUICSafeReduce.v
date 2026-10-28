@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import RelationClasses.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICGeneration PCUICLiftSubst
      PCUICUnivSubst PCUICTyping PCUICPosition PCUICNormal
@@ -9,7 +9,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICUtils PCUICReduction PCUICValidity PCUICSafeLemmata
      PCUICConfluence PCUICConversion
      PCUICOnFreeVars PCUICWellScopedCumulativity
-     PCUICClassification PCUICArityRed.
+     PCUICClassification PCUICArityRed PCUICPrimitiveRed.
 
 From MetaRocq.SafeChecker Require Import PCUICErrors PCUICWfReduction PCUICWfEnv.
 
@@ -50,6 +50,92 @@ Proof.
   intros []; fvs.
 Qed.
 #[global] Hint Resolve welltyped_is_open_term : fvs.
+
+(** ** Primitive operations: facts the machine needs (BET-319 rows I and Q) *)
+
+(** §4.2(b)1, gate 4 ([on_prim_op_result]): in a well-formed environment the
+    readback of a registered operation's result never fails.  This is why the
+    machine's readback-[None] branch is unreachable, and why [whd_rel], the
+    machine's graph, has no constructor for it (change log 15(a)). *)
+Lemma wf_prim_op_readback {cf} {Σ : global_env} (wfΣ : wf Σ) {c cb op ls r} :
+  lookup_env Σ c = Some (ConstantDecl cb) ->
+  prim_op_of Σ c = Some op ->
+  prim_op_denote op ls = Some r ->
+  ∑ v, readback Σ (po_shape (info op)) r = Some v.
+Proof.
+  intros hl hop hden.
+  pose proof (prim_op_denote_shape _ _ _ hden) as hsh.
+  destruct (po_shape (info op)) eqn:hshape, r as [i|b]; cbn in hsh |- *; try contradiction.
+  - eexists; reflexivity.
+  - destruct (lookup_on_global_env_prim wfΣ hl) as (Σ' & [_ _ hretro hpd]).
+    cbn in hpd.
+    specialize (hpd op (eq_trans (f_equal (fun r => Retroknowledge.prim_op_of r c) hretro) hop)).
+    destruct hpd as [_ _ _ _ hres].
+    rewrite hshape in hres. cbn in hres.
+    destruct hres as (i0 & mdecl & idecl & hb' & _).
+    unfold primitive_bool in hb'. rewrite hretro in hb'.
+    rewrite hb'. eexists; reflexivity.
+Qed.
+
+(** The saturated twin of [typing_spine_prim_args]: a spine that consumes every
+    argument type of a registered operation ends at its result type. *)
+Lemma typing_spine_prim_args_sat {cf} {Σ : global_env_ext} {wfΣ : wf Σ}
+  {Γ r tags res T} {args : list term} ty ty' :
+  PCUICPrimOpType.prim_arg_types r tags res = Some ty ->
+  Σ ;;; Γ ⊢ ty ≤ ty' ->
+  #|args| = #|tags| ->
+  typing_spine Σ Γ ty' args T ->
+  Σ ;;; Γ ⊢ res ≤ T.
+Proof.
+  induction tags as [|t tags ih] in args, ty, ty' |- *; intros hty hle hlen hsp.
+  - destruct args as [|x args]; [|cbn in hlen; lia].
+    cbn in hty. noconf hty. depelim hsp. etransitivity; tea.
+  - cbn in hty.
+    destruct (PCUICPrimOpType.prim_tag_type r t) as [a|] eqn:ht => //.
+    destruct (PCUICPrimOpType.prim_arg_types r tags res) as [rest|] eqn:hrest => //.
+    cbn in hty. noconf hty.
+    destruct args as [|x args]; [cbn in hlen; lia|].
+    depelim hsp.
+    assert (hP : Σ ;;; Γ ⊢ tImpl a rest ≤ tProd na A B) by (etransitivity; tea).
+    unfold tImpl in hP.
+    eapply ws_cumul_pb_Prod_Prod_inv in hP as [_ hdom hcod].
+    eapply substitution0_ws_cumul_pb in hcod; tea.
+    unfold subst1 in hcod. rewrite simpl_subst_k in hcod; [reflexivity|].
+    exact (ih args rest (B {0 := x}) eq_refl hcod ltac:(cbn in hlen; lia) hsp).
+Qed.
+
+(** A saturated application of a registered operation has the operation's
+    result type, the int type constant or the registered booleans, never a
+    product, so it cannot be applied further.  [reduce_stack_whnf] uses this to
+    refute an over-applied rigid application, which has no weak-head form. *)
+Lemma prim_app_saturated_not_prod {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ c u op args na A B} :
+  prim_op_of Σ c = Some op -> #|args| = arity op ->
+  Σ ;;; Γ |- mkApps (tConst c u) args : tProd na A B -> False.
+Proof.
+  intros hop hlen ht.
+  pose proof (validity ht) as isT.
+  eapply inversion_mkApps_direct in ht as (A0 & s & hc & _ & hsp); tea.
+  eapply inversion_Const in hc as (decl & wfΓ & hdecl & cu & hle); tea.
+  destruct (prim_op_head_type wfΓ hdecl cu hop hle) as (res & Tp & [hsh hTp hTA hres _]).
+  pose proof (typing_spine_prim_args_sat Tp A0 hTp hTA hlen hsp) as hcum.
+  destruct (po_shape (info op)) eqn:hshape; cbn in hsh, hres.
+  - (* SInt: the result is the int type constant, a bodiless non-operation *)
+    destruct hres as (kn & d & [hpc hdecl' hinv]).
+    unfold PCUICPrimOpType.prim_tag_type, EnvironmentTyping.retro_type_constant in hsh.
+    cbn in hpc. rewrite hpc in hsh. cbn in hsh. noconf hsh.
+    destruct hinv as [_ hbody _].
+    pose proof wfΣ as (_ & wfr & _).
+    have hnop : prim_op_of Σ kn = None
+      by exact (prim_op_of_primitive_constant Σ primInt kn wfr hpc).
+    destruct (ws_cumul_pb_Axiom_l_inv (args := []) hdecl' hbody hnop hcum)
+      as (u' & args' & [hred _ _]).
+    eapply invert_red_prod in hred as (dom' & codom' & [e _ _]).
+    destruct args' as [|x args'] using rev_case; cbn in e; [discriminate|].
+    rewrite mkApps_app in e. discriminate.
+  - (* SBool: the result is the registered inductive *)
+    destruct (Retroknowledge.retro_bool _) as [ind|]; cbn in hsh; noconf hsh.
+    exact (invert_cumul_ind_prod (args := []) hcum).
+Qed.
 
 
 (* We assume normalization of the reduction.
@@ -377,6 +463,27 @@ Corollary R_Acc_aux :
     construct_viewc (tConstruct ind n ui) := view_construct ind n ui ;
     construct_viewc t := view_other t I.
 
+  (** [readback] on the abstract environment: the booleans are read through
+      [abstract_primitive_bool].  It computes the same term as [readback] on
+      every environment the abstract one stands for. *)
+  Definition abstract_readback (s : prim_shape) (r : prim_result) : option term :=
+    match s, r with
+    | SInt, RInt i => Some (tPrim (prim_int i))
+    | SBool, RBool b =>
+        match abstract_primitive_bool X with
+        | Some ind => Some (tConstruct ind (if b then 0 else 1) [])
+        | None => None
+        end
+    | SInt, RBool _ | SBool, RInt _ => None
+    end.
+
+  Lemma abstract_readback_correct Σ (wfΣ : abstract_env_ext_rel X Σ) s r :
+    abstract_readback s r = readback Σ s r.
+  Proof using Type.
+    destruct s, r; cbn; try reflexivity.
+    rewrite (abstract_primitive_bool_correct X Σ wfΣ). reflexivity.
+  Qed.
+
   (* Tailored view for _reduce_stack *)
   Equations red_discr (t : term) (π : stack) : Prop :=
     red_discr (tRel _) _ := False ;
@@ -468,8 +575,48 @@ Corollary R_Acc_aux :
           let body' := subst_instance u body in
           rec reduce body' π ;
         | @exist (Some (InductiveDecl _)) eq := False_rect _ _ ;
-        | @exist (Some _) eq := give (tConst c u) π ;
-        | @exist None eq := False_rect _ _
+        | @exist None eq := False_rect _ _ ;
+        (* A bodiless constant (design §7.2).  An axiom stops the machine; a
+           registered operation saturated on the stack evaluates its arguments
+           left to right under the [Prim_app] frame, as [red_view_Fix] does its
+           recursive argument under [Fix_app], and fires when they are all
+           literals.  [whd_rel], the machine's graph, has one constructor per
+           leaf below. *)
+        | @exist (Some (ConstantDecl {| cst_body := None |})) eq
+            with inspect (abstract_prim_op_of X c) := {
+          | @exist None eqop := give (tConst c u) π ;
+          | @exist (Some op) eqop with inspect (decompose_stack π) := {
+            | @exist (args, ρ) eqπ with inspect (arity op <=? #|args|) := {
+              | @exist false hsat := give (tConst c u) π ;
+              | @exist true hsat with inspect (split_lits (firstn (arity op) args)) := {
+                | @exist (inl ls) eqs with inspect (prim_op_denote op ls) := {
+                  | @exist None eqd := give (tConst c u) π ;
+                  | @exist (Some r) eqd
+                      with inspect (abstract_readback (po_shape (info op)) r) := {
+                    | @exist (Some v) eqv := rec reduce v (appstack (skipn (arity op) args) ρ) ;
+                    | @exist None eqv := False_rect _ _
+                    }
+                  } ;
+                | @exist (inr (ls, a, rest)) eqs
+                    with inspect (reduce a (Prim_app c u op (map term_of_lit ls)
+                                     :: appstack (rest ++ skipn (arity op) args) ρ) _) := {
+                  | @exist (@exist (t, ρ') prf) eqr with inspect (decompose_stack ρ') := {
+                    | @exist (l, θ) eql with inspect (lit_of_term (mkApps t l)) := {
+                      | @exist (Some lit) eqlit :=
+                        rec reduce (tConst c u)
+                          (appstack (map term_of_lit ls ++ mkApps t l
+                                       :: rest ++ skipn (arity op) args) ρ) ;
+                      | @exist None eqlit :=
+                        give (tConst c u)
+                          (appstack (map term_of_lit ls ++ mkApps t l
+                                       :: rest ++ skipn (arity op) args) ρ)
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         } ;
       | _ := give (tConst c u) π
       } ;
@@ -546,6 +693,7 @@ Corollary R_Acc_aux :
     | red_view_other t π discr := give t π
 
     }.
+  Obligations. (* PROBE: remove before commit *)
 
   (* tRel *)
   Next Obligation.
