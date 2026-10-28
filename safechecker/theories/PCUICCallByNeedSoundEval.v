@@ -897,6 +897,25 @@ Section Eval.
         * rewrite PTree.gso in hi by (apply key_neq_of_eqb, E). exact (hokb i e hi).
   Qed.
 
+  (** The state invariant is not empty: the machine's initial state has it, with the empty
+    ghost. A call adds its input codes to the table with [new_entry] before it starts. *)
+  Lemma gok_init : gok xH (mkGhost (fun _ => None) (PTree.empty _)) cbn_init.
+  Proof.
+    split.
+    - apply state_ok_init.
+    - intros a a' h. unfold cbn_init in h. cbn [st_heap] in h.
+      rewrite bh_get_holes in h. discriminate.
+    - intros a cl h. unfold heap_get, cbn_init in h. cbn [st_heap] in h.
+      rewrite bh_get_holes in h. discriminate.
+    - intros a t h. discriminate h.
+    - intros j a h. unfold cbn_init in h. cbn [st_gam] in h.
+      rewrite PTree.gempty in h. discriminate.
+    - split; [apply memo_inv_init|]. split; [apply memo_ok_init|]. split.
+      + intros i e h. cbn [gc] in h. rewrite PTree.gempty in h. discriminate.
+      + intros i e h. unfold cbn_init, memo_empty in h. cbn [st_memo m_codes] in h.
+        rewrite PTree.gempty in h. discriminate.
+  Qed.
+
   (** *** The context map *)
 
   Lemma ctx_den_red j t : ctx_den Γ nctx lvl j = Some t -> cred (tRel (lvl - nctx + j)) t.
