@@ -792,6 +792,10 @@ Section Lemmata.
       apply inversion_App in hw' as ihw' ; auto.
       destruct ihw' as [na' [A' [B' [hP [? ?]]]]].
       apply inversion_Prim in hP as [s1 [s2 [? htyp ? ? ? bot]]] ; auto.
+      (* The guard on the axiom inversions: [s1] is the registered primitive
+         TYPE constant, which §4.2(a)1 keeps out of the operation table. *)
+      assert (hnop : prim_op_of Σ s1 = None).
+      { pose proof hΣ as [_ [wfr _]]. eapply prim_op_of_primitive_constant; tea. }
       now eapply invert_cumul_prim_type_prod in bot.
   Qed.
 
@@ -1053,9 +1057,8 @@ Section Lemmata.
     whnf f Σ Γ' t.
   Proof using Type.
     intros behaves wh conv.
-    destruct wh; eauto using whnf.
-    apply whnf_ne.
-    eapply whne_All2_fold; eauto.
+    induction wh; eauto using whnf.
+    - apply whnf_ne. eapply whne_All2_fold; eauto.
   Qed.
 
   Lemma whne_conv_context f Γ Γ' t :
