@@ -1595,7 +1595,7 @@ Proof.
     |p c args t cargs w IH hc hcf
     |t args hs
     (* row Q2's five primitive cases, in enumeration order *)
-    |c u' decl op args ls a rest w cargs h l hl hb hop har hsp w1 IH1 hlit w2 IH2
+    |c u' decl op args ls a rest w cargs lit h l hl hb hop har hsp w1 IH1 hlit w2 IH2
     |c u' decl op args ls a rest w cargs hl hb hop har hsp w1 IH1 hlit
     |c u' decl op args ls r v h l hl hb hop har hsp hd hr w IH
     |c u' decl op args ls hl hb hop har hsp hd
