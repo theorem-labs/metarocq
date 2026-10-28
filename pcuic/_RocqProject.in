@@ -210,4 +210,5 @@ theories/PCUICEtaC1b.v
 theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6.v
 theories/PCUICEtaA6Ind.v
+theories/PCUICEtaA6More.v
 # theories/All.v
