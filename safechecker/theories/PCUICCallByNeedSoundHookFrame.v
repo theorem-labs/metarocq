@@ -124,36 +124,39 @@ Section Frame.
 
 End Frame.
 
-(** * The evaluator seam of [PCUICCallByNeedSoundConv] is false at the fuel [cbn_run] uses
+(** * The old evaluator seam of the comparison was false at the fuel [cbn_run] uses
 
-  [slot_seam] and [term_seam] read the comparison's inputs with the heap-following
-  [repr_*] and promise, of every answer, that the caller's roots keep their [repr] reading
-  ([root_pres]) and that the state keeps [cok], whose [gam_ok] asks every cell of the
-  context map to stand, under [repr], for exactly the context entry it was made for.
+  The comparison was first proved against two seam hypotheses, [slot_seam] and [term_seam],
+  since deleted from [PCUICCallByNeedSoundConv] and kept below as [old_slot_seam] and
+  [old_term_seam]. They read the comparison's inputs with the heap-following [repr_*] and
+  promised, of every answer, that the caller's roots keep their [repr] reading ([root_pres])
+  and that the state keeps [old_cok], whose [gam_ok] asks every cell of the context map to
+  stand, under [repr], for exactly the context entry it was made for.
   Forcing a cell writes its value back, and [repr] reads a forced cell as that value: a
   reduct of what it stood for, not the same term. So neither promise survives a single
   evaluation that forces a context cell.
 
   The run below is [cbn_run]'s own first [conv_term], at [cbn_depth], in
   [Γ = [x := (fun n : nat => n) O : nat]] with [t = x] and [u = fun n : nat => n]. The
-  start state satisfies [cok] ([cok_run_s2]). [whnf] of [x] allocates the context cell of
+  start state satisfies [old_cok] ([cok_run_s2]). [whnf] of [x] allocates the context cell of
   [x] at address 1, records it in [st_gam], forces it and writes back [VCon O []]; the
   comparison then answers [false] (constructor against lambda: no rule). [gam_ok] of the
   final state would need address 1 to stand under [repr] for the body
-  [(fun n : nat => n) O]; it stands for [O]. [term_seam] promises [cok] of the final state,
-  so it is false ([term_seam_false]). The same run through [conv_slot] on two inline slots
-  refutes [slot_seam] ([slot_seam_false]). Nothing in the counterexample is ill-typed; and
-  it is not a defect of the machine, which is sound here: it is a defect of the seam's
-  heap-following invariant, the one [PCUICCallByNeedSoundEval]'s header explains why the
-  evaluator replaced by the ghost reading. *)
+  [(fun n : nat => n) O]; it stands for [O]. [old_term_seam] promises [old_cok] of the final
+  state, so it is false ([term_seam_false]). The same run through [conv_slot] on two inline
+  slots refutes [old_slot_seam] ([slot_seam_false]). Nothing in the counterexample is
+  ill-typed; and it is not a defect of the machine, which is sound here: it is a defect of the
+  seam's heap-following invariant. The comparison is now proved on ghost readings instead
+  ([spec_all_holds] in [PCUICCallByNeedSoundConv]), as the evaluator already was. *)
 
 Section SeamCounterexample.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Σ : global_env_ext).
 
-  (** The REFUTED definitions: [PCUICCallByNeedSoundConv]'s old [cok], [term_seam] and
-    [slot_seam], copied here under [old_] names solely so that the counterexamples below stay
-    checkable. No result of the development depends on them. *)
+  (** The REFUTED definitions: the old [cok], [term_seam] and [slot_seam] of
+    [PCUICCallByNeedSoundConv], deleted there and copied here under [old_] names solely so
+    that the counterexamples below stay checkable. No result of the development depends on
+    them. *)
   Definition old_cok (Γ : context) (nctx lvl : nat) (s : cbn_state) : Prop :=
     (exists lo : positive, state_ok lo s)
     /\ heap_nofwd s.(st_heap)
@@ -310,14 +313,15 @@ End SeamCounterexample.
   [functional_extensionality_dep] into the assumptions of [ghost_map_false]; those of
   [ghost_shift_false] are the Rocq primitives and [guard_checking] only.
 
-  So the level of [gok] cannot move down while a stale cell exists. The whole-heap scoping
-  clause [heap_wf lvl] of [PCUICCallByNeedSoundConv] holds on the empty start heap
-  ([run_s2_heap]); the claim that it then FAILS is an ARGUMENT, not a Coq result: once a
-  fresh-variable cell [CDone (VNeu (NVar lvl) [])] outlives its binder and the comparison is
-  back at level [lvl], [value_wf] would need [lvl < lvl]. That such a state is reachable is
-  the run described above, not formalized. [env_reads] is a hypothesis of [case_cong_sound]
-  and [case_branches_sound]; [env_reads_intro], the only way to obtain it, needs
-  [heap_wf lvl] and is called nowhere. *)
+  So the level of [gok] cannot move down while a stale cell exists. The old comparison's
+  whole-heap scoping clause [heap_wf lvl] (since deleted from [PCUICCallByNeedSoundConv])
+  held on the empty start heap ([run_s2_heap]); the claim that it then FAILS is an ARGUMENT,
+  not a Coq result: once a fresh-variable cell [CDone (VNeu (NVar lvl) [])] outlives its
+  binder and the comparison is back at level [lvl], [value_wf] would need [lvl < lvl]. That
+  such a state is reachable is the run described above, not formalized. The old
+  [case_cong_sound] and [case_branches_sound] rested on [env_reads], whose only introduction
+  needed [heap_wf lvl] and was called nowhere; all of these are deleted, and the comparison's
+  replacement keeps scoping per master level in [minv] ([PCUICCallByNeedSoundLevel]). *)
 
 Section GhostShiftCounterexample.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
