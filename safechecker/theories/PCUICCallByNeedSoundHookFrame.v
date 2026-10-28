@@ -339,11 +339,14 @@ Section GhostShiftCounterexample.
     intros hnb hr. remember (tRel i) as x eqn:hx. revert hx.
     induction hr as [x y h|x|x y z h1 ih1 h2 ih2]; intros hx; subst x.
     - inversion h; subst; exfalso.
-      + eapply hnb. eassumption.
-      + match goal with H : mkApps _ ?args = tRel _ |- _ =>
-          destruct args as [|a args _] using rev_ind;
-            [discriminate H|rewrite mkApps_app in H; discriminate H]
-        end.
+      (* Every case but [red_rel] has an application spine on the left (with primitive
+         operations, more than one such constructor exists), so one tactic covers them all. *)
+      all: first
+        [ eapply hnb; eassumption
+        | match goal with H : mkApps _ ?args = tRel _ |- _ =>
+            destruct args as [|a args _] using rev_ind;
+              [discriminate H|rewrite mkApps_app in H; discriminate H]
+          end ].
     - reflexivity.
     - specialize (ih1 eq_refl). subst y. exact (ih2 eq_refl).
   Qed.
