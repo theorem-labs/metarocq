@@ -3,11 +3,14 @@
 # primitive-type libraries (the axioms every development using primitive integers,
 # strings or floats has).  [Print Assumptions] alone only prints, so an axiom or an
 # admitted lemma added later would pass unnoticed without this check.
-# Usage: check_assumptions.sh <file.v>   (run in test-suite/, after `make`)
+# Usage: check_assumptions.sh <file.v> [extra]   (run in test-suite/, after `make`)
+# [extra] is an optional regex of further allowed axiom names, for an axiom that the
+# checked statements themselves name (e.g. Template's [guard_checking]).
 # Exit 0 when every reported axiom is allowed; 1 otherwise, naming each other one.
 set -u
 f=$1
 allowed='^(PrimInt63|Uint63Axioms|PrimString|PrimStringAxioms|PrimFloat|FloatAxioms)\.'
+[ -n "${2:-}" ] && allowed="$allowed|$2"
 flags=$(grep -E '^-(R|Q|I) ' _RocqProject | tr '\n' ' ')
 out=$(mktemp)
 # rocq repl prefixes the first line of each answer with one "Rocq < " prompt per

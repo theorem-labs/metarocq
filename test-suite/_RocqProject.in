@@ -71,4 +71,5 @@ arity_delta_spec.v
 prim_ops.v
 prim_ops_spec.v
 prim_ops_instance.v
+prim_ops_instance_template.v
 
