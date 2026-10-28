@@ -1372,14 +1372,16 @@ Section Conversion.
   Qed.
 
   (** What a successful step gives a re-entry: the stack keeps its context, the
-      application reduces in [zipp] and in [zipc] form, and the step is strict. *)
+      application reduces in [zipp] and in [zipc] form, and the step is strict.
+      Stated with [/\], not [×]: obligations of computational type use it, and
+      extraction rejects a [prod] whose parameters are all propositions. *)
   Lemma unfold_one_prim_facts Γ c u π h t' ξ :
     Some (t', ξ) = unfold_one_prim Γ c u π h ->
-    (stack_context ξ = stack_context π) ×
+    (stack_context ξ = stack_context π) /\
     (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-       ∥ red Σ (Γ ,,, stack_context π) (zipp (tConst c u) π) (zipp t' ξ) ∥) ×
+       ∥ red Σ (Γ ,,, stack_context π) (zipp (tConst c u) π) (zipp t' ξ) ∥) /\
     (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-       ∥ red Σ Γ (zipc (tConst c u) π) (zipc t' ξ) ∥) ×
+       ∥ red Σ Γ (zipc (tConst c u) π) (zipc t' ξ) ∥) /\
     (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
        cored Σ Γ (zipc t' ξ) (zipc (tConst c u) π)).
   Proof using Type.
@@ -1671,7 +1673,7 @@ Qed.
   Qed.
   Next Obligation.
     eapply R_cored. simpl. intros Σ wfΣ.
-    exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1))) Σ wfΣ).
+    exact (proj2 (proj2 (proj2 (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1))) Σ wfΣ).
   Qed.
   Next Obligation.
     destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1) as (hctx & _).
@@ -1709,7 +1711,7 @@ Qed.
     unshelve eapply R_cored2.
     all: try reflexivity.
     simpl. intros Σ wfΣ.
-    exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2))) Σ wfΣ).
+    exact (proj2 (proj2 (proj2 (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2))) Σ wfΣ).
   Qed.
   Next Obligation.
     destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2) as (hctx & _).
@@ -1800,7 +1802,7 @@ Qed.
   Qed.
   Next Obligation.
     eapply R_cored. simpl. intros Σ wfΣ.
-    exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1))) Σ wfΣ).
+    exact (proj2 (proj2 (proj2 (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1))) Σ wfΣ).
   Qed.
   Next Obligation.
     destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1) as (hctx & _).
@@ -1837,7 +1839,7 @@ Qed.
     unshelve eapply R_cored2.
     all: try reflexivity.
     simpl. intros Σ wfΣ.
-    exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2))) Σ wfΣ).
+    exact (proj2 (proj2 (proj2 (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2))) Σ wfΣ).
   Qed.
   Next Obligation.
     destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2) as (hctx & _).
@@ -5832,7 +5834,7 @@ Equations (noeqns) isconv_array_values_aux
     funelim (reducible_head Γ t π h).
     all: intro ee ; try noconf ee.
     all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
-                       exact (fst (snd (unfold_one_prim_facts _ _ _ _ _ _ _ ee)) _ wfΣ) end ].
+                       exact (proj1 (proj2 (unfold_one_prim_facts _ _ _ _ _ _ _ ee)) _ wfΣ) end ].
     - eapply unfold_one_fix_red_zipp; eauto.
     - constructor. simpl_stacks.
       eapply red_mkApps_f.
@@ -5909,7 +5911,7 @@ Equations (noeqns) isconv_array_values_aux
     funelim (reducible_head Γ t π h).
     all: intro ee ; try noconf ee.
     all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
-                       exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ ee))) _ wfΣ) end ].
+                       exact (proj2 (proj2 (proj2 (unfold_one_prim_facts _ _ _ _ _ _ _ ee))) _ wfΣ) end ].
     - eapply unfold_one_fix_cored; eauto.
     - repeat zip fold. eapply cored_context.
       constructor. eapply red_delta.
