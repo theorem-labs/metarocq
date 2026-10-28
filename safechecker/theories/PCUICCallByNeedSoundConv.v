@@ -1309,4 +1309,104 @@ Section Conv.
       try assumption.
     intros hf. rewrite hsid in hf. discriminate hf.
   Qed.
+
+  (** ** The stuck-match rule: the parameters
+
+    [case_params] compares the two parameter lists one by one, each as a child code of its
+    own [tCase] under its own environment. Readings are given as [repr_susp] facts, one per
+    parameter, because that is the shape the roots of a collection carry: [root_pres] of an
+    [RE] root preserves [repr_susp], not the slot list. *)
+  Lemma Forall2_susp_transport (H H' : bheap cbn_cell) (lvl : nat) (e e' : cbn_env)
+      (l us : list term) :
+    (forall lvl tm u, repr_susp nctx H lvl e tm u -> repr_susp nctx H' lvl e' tm u) ->
+    Forall2 (fun t u => repr_susp nctx H lvl e t u) l us ->
+    Forall2 (fun t u => repr_susp nctx H' lvl e' t u) l us.
+  Proof. intros hk. induction 1; constructor; auto. Qed.
+
+  Lemma case_params_eq (k : unit -> cbn_fuel) (lvl : nat) (e1 : cbn_env) (c1 : code)
+      (e2 : cbn_env) (c2 : code) (i : N) (l1 l2 : list term) (rs : list root)
+      (s : cbn_state) :
+    case_params X_type X Γ nctx stress (FS k) lvl e1 c1 e2 c2 i l1 l2 rs s
+    = match l1, l2 with
+      | [], [] => COk (true, rs, s)
+      | t1 :: l1, t2 :: l2 =>
+        match conv_term X_type X Γ nctx stress (k tt) lvl Conv
+                e1 (child c1 (case_param_step i) t1)
+                e2 (child c2 (case_param_step i) t2) (RE e1 :: RE e2 :: rs) s with
+        | COk (true, rs, s) =>
+          match rs with
+          | RE e1 :: RE e2 :: rs =>
+            case_params X_type X Γ nctx stress (k tt) lvl e1 c1 e2 c2 (N.succ i)
+              l1 l2 rs s
+          | _ => CFail WRoots
+          end
+        | COk (false, rs, s) => COk (false, skipn 2 rs, s)
+        | CFail w => CFail w
+        end
+      | _, _ => COk (false, rs, s)
+      end.
+  Proof. reflexivity. Qed.
+
+  Lemma case_params_sound :
+    forall (d : cbn_fuel) (lvl : nat) (Ξ : context) (e1 : cbn_env) (c1 : code)
+      (e2 : cbn_env) (c2 : code) (i : N) (l1 l2 us1 us2 : list term)
+      (rs : list root) (s : cbn_state) (rs' : list root) (s' : cbn_state),
+      term_seam_below d ->
+      cok lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      Forall2 (fun t u => repr_susp nctx (s.(st_heap)) lvl e1 t u) l1 us1 ->
+      Forall2 (fun t u => repr_susp nctx (s.(st_heap)) lvl e2 t u) l2 us2 ->
+      forallb (is_open_term Ξ) us1 = true ->
+      forallb (is_open_term Ξ) us2 = true ->
+      case_params X_type X Γ nctx stress d lvl e1 c1 e2 c2 i l1 l2 rs s
+        = COk (true, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ cok lvl s'
+      /\ Forall2 (fun a b => ∥ Σ ;;; Ξ ⊢ a = b ∥) us1 us2.
+  Proof.
+    intros d. induction d as [|k ih];
+      intros lvl Ξ e1 c1 e2 c2 i l1 l2 us1 us2 rs s rs' s'
+        hseam hok hlen clΞ hnc hu1 hu2 ho1 ho2 he.
+    { cbn in he. discriminate he. }
+    rewrite case_params_eq in he.
+    destruct l1 as [|t1 l1]; destruct l2 as [|t2 l2].
+    - cbn in he. inversion he; subst.
+      inversion hu1; subst. inversion hu2; subst.
+      split; [apply roots_pres_refl|]. split; [exact hok|]. constructor.
+    - discriminate he.
+    - discriminate he.
+    - destruct (Forall2_cons_inv _ _ _ _ hu1) as [v1 [us1' [-> [hv1 hl1]]]].
+      destruct (Forall2_cons_inv _ _ _ _ hu2) as [v2 [us2' [-> [hv2 hl2]]]].
+      cbn in ho1, ho2.
+      apply andb_true_iff in ho1 as [hov1 ho1].
+      apply andb_true_iff in ho2 as [hov2 ho2].
+      destruct (conv_term X_type X Γ nctx stress (k tt) lvl Conv
+                  e1 (child c1 (case_param_step i) t1)
+                  e2 (child c2 (case_param_step i) t2) (RE e1 :: RE e2 :: rs) s)
+        as [[[b2 rs2] s2]|w] eqn:Ect; [|discriminate he].
+      destruct (term_seam_below_here k hseam lvl Conv Ξ
+                  e1 (child c1 (case_param_step i) t1)
+                  e2 (child c2 (case_param_step i) t2) (RE e1 :: RE e2 :: rs) s
+                  b2 rs2 s2 hok hlen clΞ hnc Ect) as (hp1 & hok2 & hconv).
+      destruct b2; [|discriminate he].
+      destruct (Forall2_cons_inv _ _ _ _ hp1) as [r1' [q1 [-> [hpr1 hp1']]]].
+      destruct (root_pres_RE_inv (s.(st_heap)) (s2.(st_heap)) e1 r1' hpr1)
+        as [f1 [-> hk1]].
+      destruct (Forall2_cons_inv _ _ _ _ hp1') as [r2' [q2 [-> [hpr2 hp2']]]].
+      destruct (root_pres_RE_inv (s.(st_heap)) (s2.(st_heap)) e2 r2' hpr2)
+        as [f2 [-> hk2]].
+      destruct (ih tt lvl Ξ f1 c1 f2 c2 (N.succ i) l1 l2 us1' us2' q2 s2 rs' s'
+                  (term_seam_below_step k hseam) hok2 hlen clΞ hnc
+                  (Forall2_susp_transport (s.(st_heap)) (s2.(st_heap)) lvl e1 f1
+                     l1 us1' hk1 hl1)
+                  (Forall2_susp_transport (s.(st_heap)) (s2.(st_heap)) lvl e2 f2
+                     l2 us2' hk2 hl2)
+                  ho1 ho2 he)
+        as (hp & hok' & hag).
+      split.
+      + exact (roots_pres_trans nctx (s.(st_heap)) (s2.(st_heap)) (s'.(st_heap))
+                 rs q2 rs' hp2' hp).
+      + split; [exact hok'|].
+        constructor; [|exact hag].
+        exact (hconv eq_refl v1 v2 hv1 hv2 hov1 hov2).
+  Qed.
 End Conv.
