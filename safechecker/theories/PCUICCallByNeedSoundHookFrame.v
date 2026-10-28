@@ -4,7 +4,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require CanonicalTries.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTyping
-  PCUICOnFreeVars.
+  PCUICOnFreeVars PCUICReduction PCUICConfluence.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
   PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundConv.
@@ -280,3 +280,115 @@ Section SeamCounterexample.
   Qed.
 
 End SeamCounterexample.
+
+(** * The ghost reading cannot change level: the shift is false (BET-298, step 3b)
+
+  The comparison crosses binders: its lambda, product and match rows compare at [S lvl] or
+  [lvl + n]. Restating it on the ghost reading of [PCUICCallByNeedSoundEval] would need [gok]
+  at [lvl] to give [gok] at [S lvl] for the same state, with every ghost term lifted by one:
+  [gok lvl G s -> gok (S lvl) (gshift 1 G) s]. That is false ([ghost_shift_false]).
+
+  The cause is a cell left in the heap by an earlier binder. The lambda row allocates
+  [CDone (VNeu (NVar lvl) [])] for its fresh variable, and the cell stays after the
+  comparison comes back out of the binder (no collection runs unless [stress] is set or
+  [st_room] is spent). At level [lvl] the cell reads [tRel (lvl - S lvl)], which is [tRel 0]
+  by the truncation of [nat] subtraction; at [S lvl] it reads [tRel (S lvl - S lvl)], which is
+  [tRel 0] again; but the lifted ghost is [tRel 1], and [tRel 1] does not reduce to [tRel 0].
+  The machine reaches this state: in [Γ = []], comparing [c (fun y => y) (fun y => y)] with
+  [c (fun y => (fun w => w) y) (fun y => (fun w => w) y)] for a constructor [c], the first
+  pair of arguments takes the lambda row at level 0 and leaves its fresh variable in the
+  heap; the second pair takes the lambda row at level 0 again and needs [gok] at level 1.
+
+  No map on ghost terms repairs the shift ([ghost_map_false]). At level 1 a cell
+  [VNeu (NVar 0)] (the genuine variable at level 0) and a stale cell [VNeu (NVar 1)] both read
+  [tRel 0], so both may carry the ghost [tRel 0]. At level 2 the first reads [tRel 1] and the
+  second [tRel 0], so the image of [tRel 0] under the map would have to reduce to both, which
+  confluence forbids. The lemma asks the image to be a term of the level-2 context (as every
+  level shift gives); for an image outside the context, [red_confluence] does not apply, and
+  the same conclusion is left as this argument.
+
+  So the level of [gok] cannot move down while a stale cell exists, and a whole-heap scoping
+  clause ([heap_wf lvl] of [PCUICCallByNeedSoundConv]) is false at the comparison's level for
+  the same reason. [env_reads] does not help: it is a hypothesis of [case_cong_sound] and
+  [case_branches_sound], and [env_reads_intro], the only way to obtain it, needs that false
+  [heap_wf lvl] and is called nowhere. *)
+
+Section GhostShiftCounterexample.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+
+  (** Every ghost term lifted by [n]; every ghost term mapped by [φ]. *)
+  Definition gshift (n : nat) (G : ghost) : ghost :=
+    mkGhost (fun a => option_map (lift0 n) (G a)) (gc G).
+
+  Definition gmap (φ : term -> term) (G : ghost) : ghost :=
+    mkGhost (fun a => option_map φ (G a)) (gc G).
+
+  (** A variable without a body reduces only to itself. *)
+  Lemma red_rel_nobody (Σ : global_env_ext) (Ξ : context) (i : nat) (v : term) :
+    (forall b, option_map decl_body (nth_error Ξ i) <> Some (Some b)) ->
+    red Σ Ξ (tRel i) v -> v = tRel i.
+  Proof.
+    intros hnb hr. remember (tRel i) as x eqn:hx. revert hx.
+    induction hr as [x y h|x|x y z h1 ih1 h2 ih2]; intros hx; subst x.
+    - inversion h; subst; exfalso.
+      + eapply hnb. eassumption.
+      + match goal with H : mkApps _ ?args = tRel _ |- _ =>
+          destruct args as [|a args _] using rev_ind;
+            [discriminate H|rewrite mkApps_app in H; discriminate H]
+        end.
+    - reflexivity.
+    - specialize (ih1 eq_refl). subst y. exact (ih2 eq_refl).
+  Qed.
+
+  Definition gs_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
+  Definition gs_d : context_decl := vass gs_na (tSort sProp).
+  Definition gs_var (l : nat) : cbn_cell := CDone (VNeu (NVar l) []).
+
+  (** The cell of the fresh variable at level [l] reads, at level [lvl], as [tRel (lvl - S l)]. *)
+  Lemma g_cell_var (nctx lvl : nat) (G : ghost) (l : nat) :
+    g_cell nctx lvl G (gs_var l) (tRel (lvl - S l)).
+  Proof.
+    unfold gs_var. constructor.
+    exact (g_VNeuVar nctx lvl G l [] [] (Forall2_nil _)).
+  Qed.
+
+  Lemma g_cell_var_inv (nctx lvl : nat) (G : ghost) (l : nat) (u : term) :
+    g_cell nctx lvl G (gs_var l) u -> u = tRel (lvl - S l).
+  Proof.
+    unfold gs_var. intros h. inversion h; subst.
+    match goal with hv : g_value _ _ _ _ _ |- _ => inversion hv; subst end.
+    match goal with ha : g_addrs _ [] _ |- _ => inversion ha; subst end.
+    reflexivity.
+  Qed.
+
+  (** The state of the counterexample: the start state with the fresh variable of level 0. *)
+  Definition gs_s1 : cbn_state := snd (alloc_now (gs_var 0) cbn_init).
+  Definition gs_a1 : haddr := fst (alloc_now (gs_var 0) cbn_init).
+
+  Lemma gs_s1_get : heap_get gs_a1 gs_s1 = Some (gs_var 0).
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma ghost_shift_false (Σ : global_env_ext) (Δ' : context) :
+    #|Δ'| = 1 ->
+    ~ (forall lo G s, gok X_type X [] 0 Σ [] 0 lo G s ->
+                      gok X_type X [] 0 Σ Δ' 1 lo (gshift 1 G) s).
+  Proof.
+    intros hl hshift.
+    destruct (alloc_now_sound X_type X [] 0 Σ [] 0 eq_refl eq_refl (le_n 0) xH _ (gs_var 0)
+                (tRel (0 - S 0))
+                cbn_init
+                (gok_init X_type X [] 0 Σ [] 0) (g_cell_var 0 0 _ 0))
+      as (G1 & _ & hok1 & ha1).
+    pose proof (hshift _ _ _ hok1) as hok2.
+    destruct (gk_cells _ _ _ _ _ _ _ _ _ _ hok2 gs_a1 (gs_var 0) gs_s1_get)
+      as (t & ht & [hb|(u & hu & [hr])]); [discriminate hb|].
+    cbn [gshift gm] in ht. unfold gs_a1 in ht. rewrite ha1 in ht. cbn in ht.
+    injection ht as <-.
+    apply g_cell_var_inv in hu. subst u.
+    apply red_rel_nobody in hr.
+    - discriminate hr.
+    - intros b. rewrite app_context_nil_l.
+      destruct (nth_error Δ' 1) eqn:E; [|discriminate].
+      apply nth_error_Some_length in E. lia.
+  Qed.
+End GhostShiftCounterexample.
