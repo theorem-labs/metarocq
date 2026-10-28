@@ -7,8 +7,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTy
   PCUICOnFreeVars PCUICReduction PCUICConfluence PCUICClosed PCUICClosedTyp.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
-  PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel
-  PCUICCallByNeedSoundConv.
+  PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel.
+From MetaRocq.PCUIC Require Import PCUICWellScopedCumulativity.
 
 Import CanonicalTries.
 
@@ -35,111 +35,6 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
 Section Frame.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-
-  (** The ghost of the start state: no address, the real code table. *)
-  Definition run_ghost (t u : term) : ghost :=
-    mkGhost (fun _ => None) (((run_s2 X_type X t u).(st_memo)).(m_codes)).
-
-  Lemma run_s2_gam_empty (t u : term) :
-    (run_s2 X_type X t u).(st_gam) = PTree.empty haddr.
-  Proof. unfold run_s2, run_s1. rewrite !new_entry_gam. reflexivity. Qed.
-
-  Lemma run_s2_memo_inv (t u : term) : memo_inv X_type X (run_s2 X_type X t u).
-  Proof.
-    unfold run_s2, run_s1. apply memo_inv_new_entry, memo_inv_new_entry, memo_inv_init.
-  Qed.
-
-  (** Every entry of the start table names its constants at the right instance length. *)
-  Lemma run_s2_consts_okb (Σ : global_env_ext) (t u : term) :
-    consts_okb Σ t -> consts_okb Σ u ->
-    forall i e, PTree.get i (((run_s2 X_type X t u).(st_memo)).(m_codes)) = Some e ->
-      consts_okb Σ (inst_code e.(ce_inst) e.(ce_term)).
-  Proof.
-    intros ht hu i e hi. rewrite run_s2_codes in hi.
-    destruct (key_eqb i (key_succ String2pos.xH)) eqn:E1.
-    - apply key_eqb_spec in E1; subst i. rewrite PTree.gss in hi.
-      injection hi as <-. cbn [ce_inst ce_term]. rewrite consts_inst_code. exact hu.
-    - rewrite PTree.gso in hi by (apply key_neq_of_eqb, E1).
-      destruct (key_eqb i String2pos.xH) eqn:E2.
-      + apply key_eqb_spec in E2; subst i. rewrite PTree.gss in hi.
-        injection hi as <-. cbn [ce_inst ce_term]. rewrite consts_inst_code. exact ht.
-      + rewrite PTree.gso in hi by (apply key_neq_of_eqb, E2).
-        rewrite PTree.gempty in hi. discriminate hi.
-  Qed.
-
-  (** Every entry of the start table is hygienic. *)
-  Lemma run_s2_hyg (t u : term) :
-    on_free_vars xpredT t -> on_free_vars xpredT u ->
-    forall i e, PTree.get i (((run_s2 X_type X t u).(st_memo)).(m_codes)) = Some e ->
-      on_free_vars xpredT (inst_code e.(ce_inst) e.(ce_term)).
-  Proof.
-    intros ht hu i e hi. rewrite run_s2_codes in hi.
-    destruct (key_eqb i (key_succ String2pos.xH)) eqn:E1.
-    - apply key_eqb_spec in E1; subst i. rewrite PTree.gss in hi.
-      injection hi as <-. cbn [ce_inst ce_term]. rewrite hyg_inst_code. exact hu.
-    - rewrite PTree.gso in hi by (apply key_neq_of_eqb, E1).
-      destruct (key_eqb i String2pos.xH) eqn:E2.
-      + apply key_eqb_spec in E2; subst i. rewrite PTree.gss in hi.
-        injection hi as <-. cbn [ce_inst ce_term]. rewrite hyg_inst_code. exact ht.
-      + rewrite PTree.gso in hi by (apply key_neq_of_eqb, E2).
-        rewrite PTree.gempty in hi. discriminate hi.
-  Qed.
-
-  (** The state invariant of [machine_sound] holds of the state [cbn_run] starts in, at every
-    level and under every extension [Δ]: the heap and the context map are empty. *)
-  Lemma run_s2_gok (Γ : context) (nctx : nat) (Σ : global_env_ext) (Δ : context)
-      (lvl : nat) (t u : term) :
-    consts_okb Σ t -> consts_okb Σ u -> on_free_vars xpredT t -> on_free_vars xpredT u ->
-    gok X_type X Γ nctx Σ Δ lvl xH (run_ghost t u) (run_s2 X_type X t u).
-  Proof.
-    intros ht hu hht hhu. split.
-    - apply run_s2_state_ok.
-    - apply run_s2_nofwd.
-    - intros a cl h. unfold heap_get in h. rewrite run_s2_heap, bh_get_holes in h.
-      discriminate h.
-    - intros a tm h. discriminate h.
-    - intros j a h. rewrite run_s2_gam_empty, PTree.gempty in h. discriminate h.
-    - split; [apply run_s2_memo_inv|]. split; [apply run_s2_memo_ok|]. split.
-      + intros i e hi. exact hi.
-      + split; [exact (run_s2_consts_okb Σ t u ht hu)|].
-        intros _. exact (run_s2_hyg t u hht hhu).
-    - intros _ a tm h. discriminate h.
-  Qed.
-
-  (** The two root codes are in the ghost's table. *)
-  Lemma run_c1_gcok (t u : term) :
-    PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c1 X_type X t).
-  Proof.
-    exists (mkEntry t [] (NSInput false) (wf_term_univs X_type X t)). split.
-    - exact (run_c1_in_table X_type X t u).
-    - exact (run_c1_code_inv X_type X t).
-  Qed.
-
-  Lemma run_c2_gcok (t u : term) :
-    PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c2 X_type X t u).
-  Proof.
-    exists (mkEntry u [] (NSInput true) (wf_term_univs X_type X u)). split.
-    - exact (run_c2_in_table X_type X t u).
-    - exact (run_c2_code_inv X_type X t u).
-  Qed.
-
-  (** A suspension of a code in the empty environment, at the call's own level, reads as the
-    code itself, under any ghost. *)
-  Lemma g_susp_env_empty (nctx : nat) (G : ghost) (t : term) :
-    g_susp nctx nctx G env_empty t t.
-  Proof.
-    pose proof (g_susp_intro nctx nctx G [] 0 0 t [] (g_slots_nil nctx nctx G) eq_refl) as h.
-    rewrite subst_empty, Nat.sub_diag in h. cbn [Nat.add] in h. rewrite lift0_id in h.
-    exact h.
-  Qed.
-
-  Lemma run_c1_g_susp (nctx : nat) (t u : term) :
-    g_susp nctx nctx (run_ghost t u) env_empty (run_c1 X_type X t).(c_term) t.
-  Proof. rewrite run_c1_term. apply g_susp_env_empty. Qed.
-
-  Lemma run_c2_g_susp (nctx : nat) (t u : term) :
-    g_susp nctx nctx (run_ghost t u) env_empty (run_c2 X_type X t u).(c_term) u.
-  Proof. rewrite run_c2_term. apply g_susp_env_empty. Qed.
 
   (** [machine_sound]'s premise on the context: every let-body of a well-formed context
     names its constants at the right instance length. *)
@@ -176,6 +71,23 @@ Section Frame.
     exact (typing_hyg Σ _ b' ty wfΣ hbt).
   Qed.
 
+  (** The hook's instance of every section hypothesis of [machine_sound] and of
+    [PCUICCallByNeedSoundLevel]'s [Master] section that depends on the context: [Δ = []],
+    [nctx = lvl = #|Γ|], [const_instance_ok], [ctx_hyg] and [is_closed_context], from
+    [wf Σ] and [wf_local Σ Γ]. *)
+  Lemma eval_section_instance (Σ : global_env_ext) (Γ : context) :
+    wf Σ -> wf_local Σ Γ ->
+    #|([] : context)| = #|Γ| - #|Γ| /\ #|Γ| = #|Γ| /\ #|Γ| <= #|Γ|
+    /\ (forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
+          consts_okb Σ b)
+    /\ ctx_hyg Γ /\ is_closed_context Γ.
+  Proof.
+    intros wfΣ wfΓ. split; [cbn; lia|]. split; [reflexivity|]. split; [lia|].
+    split; [exact (wf_local_consts_okb Σ Γ wfΣ wfΓ)|].
+    split; [exact (wf_local_ctx_hyg Σ Γ wfΣ wfΓ)|].
+    exact (wf_local_closed_context (wfΣ := wfΣ) wfΓ).
+  Qed.
+
   (** ** The frame lemma
 
     Everything [machine_sound] asks of the start of a call, from the hook's hypotheses: the
@@ -190,11 +102,11 @@ Section Frame.
     /\ (forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
           consts_okb Σ b)
     /\ ctx_hyg Γ
-    /\ gok X_type X Γ #|Γ| Σ [] #|Γ| xH (run_ghost t u) (run_s2 X_type X t u)
-    /\ g_susp #|Γ| #|Γ| (run_ghost t u) env_empty (run_c1 X_type X t).(c_term) t
-    /\ PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c1 X_type X t)
-    /\ g_susp #|Γ| #|Γ| (run_ghost t u) env_empty (run_c2 X_type X t u).(c_term) u
-    /\ PCUICCallByNeedSoundEval.cok (run_ghost t u) (run_c2 X_type X t u).
+    /\ gok X_type X Γ #|Γ| Σ [] #|Γ| xH (run_ghost X_type X t u) (run_s2 X_type X t u)
+    /\ g_susp #|Γ| #|Γ| (run_ghost X_type X t u) env_empty (run_c1 X_type X t).(c_term) t
+    /\ PCUICCallByNeedSoundEval.cok (run_ghost X_type X t u) (run_c1 X_type X t)
+    /\ g_susp #|Γ| #|Γ| (run_ghost X_type X t u) env_empty (run_c2 X_type X t u).(c_term) u
+    /\ PCUICCallByNeedSoundEval.cok (run_ghost X_type X t u) (run_c2 X_type X t u).
   Proof.
     intros wfΣ [A htA] [B huB].
     split; [cbn; lia|]. split; [lia|].
@@ -239,6 +151,45 @@ Section SeamCounterexample.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Σ : global_env_ext).
 
+  (** The REFUTED definitions: [PCUICCallByNeedSoundConv]'s old [cok], [term_seam] and
+    [slot_seam], copied here under [old_] names solely so that the counterexamples below stay
+    checkable. No result of the development depends on them. *)
+  Definition old_cok (Γ : context) (nctx lvl : nat) (s : cbn_state) : Prop :=
+    (exists lo : positive, state_ok lo s)
+    /\ heap_nofwd s.(st_heap)
+    /\ (forall l : nat, gam_ok Γ nctx l s)
+    /\ memo_ok X_type X s
+    /\ memo_inv X_type X s.
+
+  Definition old_slot_seam (Γ : context) (nctx : nat) (stress : bool) (d : cbn_fuel) : Prop :=
+    forall (lvl : nat) (pb : conv_pb) (Ξ : context) (x1 x2 : cbn_slot)
+      (rs : list root) (s : cbn_state) (b : bool) (rs' : list root) (s' : cbn_state),
+      old_cok Γ nctx lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      conv_slot X_type X Γ nctx stress d lvl pb x1 x2 rs s = COk (b, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ old_cok Γ nctx lvl s'
+      /\ (b = true ->
+          forall t1 t2 : term,
+            repr_slot nctx (s.(st_heap)) lvl x1 t1 ->
+            repr_slot nctx (s.(st_heap)) lvl x2 t2 ->
+            is_open_term Ξ t1 -> is_open_term Ξ t2 ->
+            ∥ Σ ;;; Ξ ⊢ t1 ≤[pb] t2 ∥).
+
+  Definition old_term_seam (Γ : context) (nctx : nat) (stress : bool) (d : cbn_fuel) : Prop :=
+    forall (lvl : nat) (pb : conv_pb) (Ξ : context) (e1 : cbn_env) (c1 : code)
+      (e2 : cbn_env) (c2 : code) (rs : list root) (s : cbn_state) (b : bool)
+      (rs' : list root) (s' : cbn_state),
+      old_cok Γ nctx lvl s -> #|Ξ| = lvl -> is_closed_context Ξ -> nctx <= lvl ->
+      conv_term X_type X Γ nctx stress d lvl pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      Forall2 (root_pres nctx (s.(st_heap)) (s'.(st_heap))) rs rs'
+      /\ old_cok Γ nctx lvl s'
+      /\ (b = true ->
+          forall u1 u2 : term,
+            repr_susp nctx (s.(st_heap)) lvl e1 (c1.(c_term)) u1 ->
+            repr_susp nctx (s.(st_heap)) lvl e2 (c2.(c_term)) u2 ->
+            is_open_term Ξ u1 -> is_open_term Ξ u2 ->
+            ∥ Σ ;;; Ξ ⊢ u1 ≤[pb] u2 ∥).
+
   Definition sc_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
   Definition sc_nat : inductive :=
     {| inductive_mind := (MPfile ["Datatypes"; "Init"; "Corelib"], "nat"); inductive_ind := 0 |}.
@@ -250,7 +201,7 @@ Section SeamCounterexample.
 
   (** [cok] holds of the state every call starts in. *)
   Lemma cok_run_s2 (Γ : context) (nctx lvl : nat) (t u : term) :
-    PCUICCallByNeedSoundConv.cok X_type X Γ nctx lvl (run_s2 X_type X t u).
+    old_cok Γ nctx lvl (run_s2 X_type X t u).
   Proof.
     split; [exists xH; apply run_s2_state_ok|].
     split; [apply run_s2_nofwd|].
@@ -284,7 +235,7 @@ Section SeamCounterexample.
   Lemma sc_not_cok (s : cbn_state) :
     PTree.get (key_of_succ_nat 0) s.(st_gam) = Some (HAddr 1) ->
     heap_get (HAddr 1) s = Some (CDone (VCon sc_O [])) ->
-    ~ PCUICCallByNeedSoundConv.cok X_type X sc_Γ 1 1 s.
+    ~ old_cok sc_Γ 1 1 s.
   Proof.
     intros hg hh (_ & _ & hgam & _ & _).
     destruct (hgam 1 0 (HAddr 1) hg) as (tm & hden & hr).
@@ -297,7 +248,7 @@ Section SeamCounterexample.
     match goal with h : mkApps sc_O [] = _ |- _ => cbv [mkApps sc_O] in h; discriminate h end.
   Qed.
 
-  Lemma term_seam_false : ~ term_seam X_type X Σ sc_Γ 1 false cbn_depth.
+  Lemma term_seam_false : ~ old_term_seam sc_Γ 1 false cbn_depth.
   Proof.
     intros hseam.
     pose proof sc_term_run as hrun.
@@ -313,7 +264,7 @@ Section SeamCounterexample.
     exact (sc_not_cok s' hg hh hcok).
   Qed.
 
-  Lemma slot_seam_false : ~ slot_seam X_type X Σ sc_Γ 1 false cbn_depth.
+  Lemma slot_seam_false : ~ old_slot_seam sc_Γ 1 false cbn_depth.
   Proof.
     intros hseam.
     pose proof sc_slot_run as hrun.
@@ -359,10 +310,13 @@ End SeamCounterexample.
   [functional_extensionality_dep] into the assumptions of [ghost_map_false]; those of
   [ghost_shift_false] are the Rocq primitives and [guard_checking] only.
 
-  So the level of [gok] cannot move down while a stale cell exists, and a whole-heap scoping
-  clause ([heap_wf lvl] of [PCUICCallByNeedSoundConv]) is false at the comparison's level for
-  the same reason. [env_reads] does not help: it is a hypothesis of [case_cong_sound] and
-  [case_branches_sound], and [env_reads_intro], the only way to obtain it, needs that false
+  So the level of [gok] cannot move down while a stale cell exists. The whole-heap scoping
+  clause [heap_wf lvl] of [PCUICCallByNeedSoundConv] holds on the empty start heap
+  ([run_s2_heap]); the claim that it then FAILS is an ARGUMENT, not a Coq result: once a
+  fresh-variable cell [CDone (VNeu (NVar lvl) [])] outlives its binder and the comparison is
+  back at level [lvl], [value_wf] would need [lvl < lvl]. That such a state is reachable is
+  the run described above, not formalized. [env_reads] is a hypothesis of [case_cong_sound]
+  and [case_branches_sound]; [env_reads_intro], the only way to obtain it, needs
   [heap_wf lvl] and is called nowhere. *)
 
 Section GhostShiftCounterexample.

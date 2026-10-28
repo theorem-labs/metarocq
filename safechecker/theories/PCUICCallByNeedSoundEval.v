@@ -3246,3 +3246,33 @@ Section Eval.
   Qed.
 
 End Eval.
+
+(** ** Satisfying instances of the hypotheses of [machine_sound]
+
+  Every section hypothesis of [Section Eval] has a proved instance:
+  - [wfΣ] and [hΣ]: for EVERY abstract environment [X] there is a [Σ] it stands for, and that
+    [Σ] is well formed ([eval_env_instance]); both are fields of [abstract_env_impl].
+  - [hΔ], [hnctx], [hlvl], [const_instance_ok] and the premise [ctx_hyg] of the hygiene
+    clauses: for the empty context at level 0 with [Δ = []] ([eval_ctx_instance_nil]); for a
+    well-formed context at its own length, [eval_section_instance] of
+    [PCUICCallByNeedSoundHookFrame] (the hook's case).
+  - [gok]: [gok_init], and [run_s2_gok] of [PCUICCallByNeedSoundHookFrame] for the state the
+    hook starts in. *)
+
+Lemma eval_env_instance {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1) :
+  ∥ ∑ Σ : global_env_ext, abstract_env_ext_rel X Σ × wf Σ ∥.
+Proof.
+  destruct (abstract_env_ext_exists X) as [[Σ hΣ]].
+  destruct (abstract_env_ext_wf X hΣ) as [[hw _]].
+  constructor. exists Σ. split; [exact hΣ|exact hw].
+Qed.
+
+Lemma eval_ctx_instance_nil (Σ : global_env_ext) :
+  #|([] : context)| = 0 - 0 /\ 0 = #|([] : context)| /\ 0 <= 0
+  /\ (forall j decl b, nth_error ([] : context) j = Some decl -> decl.(decl_body) = Some b ->
+        consts_okb Σ b = true)
+  /\ ctx_hyg [].
+Proof.
+  split; [reflexivity|]. split; [reflexivity|]. split; [constructor|].
+  split; intros j decl b h; destruct j; discriminate h.
+Qed.
