@@ -15,6 +15,7 @@ theories/PCUICCallByNeedSoundCong.v
 theories/PCUICCallByNeedSoundMemo.v
 theories/PCUICCallByNeedSoundHook.v
 theories/PCUICCallByNeedSoundEval.v
+theories/PCUICCallByNeedSoundLevel.v
 theories/PCUICCallByNeedSoundConv.v
 theories/PCUICCallByNeedSoundHookFrame.v
 theories/PCUICTypeChecker.v

@@ -7,7 +7,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTy
   PCUICOnFreeVars PCUICReduction PCUICConfluence PCUICClosed PCUICClosedTyp.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
-  PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundConv.
+  PCUICCallByNeedSoundHook PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel
+  PCUICCallByNeedSoundConv.
 
 Import CanonicalTries.
 
@@ -367,9 +368,7 @@ End SeamCounterexample.
 Section GhostShiftCounterexample.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
 
-  (** Every ghost term lifted by [n]; every ghost term mapped by [φ]. *)
-  Definition gshift (n : nat) (G : ghost) : ghost :=
-    mkGhost (fun a => option_map (lift0 n) (G a)) (gc G).
+  (** Every ghost term mapped by [φ]; [gshift] ([PCUICCallByNeedSoundLevel]) lifts them. *)
 
   Definition gmap (φ : term -> term) (G : ghost) : ghost :=
     mkGhost (fun a => option_map φ (G a)) (gc G).
