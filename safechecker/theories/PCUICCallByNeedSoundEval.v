@@ -3066,8 +3066,7 @@ Section Eval.
     (* force it *)
     cbn_dcall he ef vf rsf sf.
     destruct (IHf loa Ga a (CbnRE ea :: CbnRSk (cbn_list_set stka (rarg def) (CbnSAddr a)) :: rsa)
-      sa
-                vf rsf sf tx hoka hGa ef)
+      sa vf rsf sf tx hoka hGa ef)
       as (lof & Gf & uf & hrenf & hokf & hvf & hcredf).
     destruct rsf as [|[| |e3| | | |] [|[| | | |stkf| |] rsf]]; try discriminate he.
     destruct (cbn_gren_cons _ _ _ _ _ _ hrenf) as [hpef hrenf1].

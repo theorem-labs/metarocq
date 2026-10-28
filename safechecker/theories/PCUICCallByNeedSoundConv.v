@@ -4295,8 +4295,7 @@ Section ConvGhost.
                 :: CbnRV (CbnVStuck e2 c2 sp2) :: rs, s)
               end) as [[[bK rsK] sK]|w] eqn:EK; [|discriminate he].
     assert (hK' : cbn_post L Q G (CbnRV (CbnVStuck e1 c1 sp1) :: CbnRV (CbnVStuck e2 c2 sp2) :: rs)
-      sK rsK
-                  /\ (bK = true -> cbn_lift_conv L Q pb H1 H2)).
+      sK rsK /\ (bK = true -> cbn_lift_conv L Q pb H1 H2)).
     { destruct (cbn_c_term c1) eqn:Ec1;
         try (injection EK as <- <- <-;
              split; [exact (cbn_post_refl _ _ _ _ _ _ hm hr0)|intros hb; discriminate hb]).
