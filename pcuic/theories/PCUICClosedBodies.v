@@ -16,7 +16,10 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICClosedTyp.
 
-Class ClosedBodies (Σ : global_env) : Prop :=
+(** The [checker_flags] parameter is unused by the property; it is there so that
+    a statement over [ClosedBodies Σ] depends on [cf] exactly as the [wf Σ]
+    statement it generalises did (section-variable structure unchanged). *)
+Class ClosedBodies {cf : checker_flags} (Σ : global_env) : Prop :=
   closed_bodies : forall cst decl body,
     declared_constant Σ cst decl -> decl.(cst_body) = Some body -> closed body.
 
