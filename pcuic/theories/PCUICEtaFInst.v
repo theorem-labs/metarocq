@@ -214,6 +214,29 @@ Proof.
     now rewrite !(proj2 (Nat.leb_le _ _) (Nat.le_max_r _ _)).
 Qed.
 
+(** **After repair (a) the two rules coincide** (8780a014, "Use instance equality
+    for fully applied non-cumulative constructors", cherry-picked with [-x]).
+    Base [global_variance_gen] now gives [AllEqual] to a fully applied
+    constructor of a NON-cumulative inductive — exactly what
+    [FInstFollowKernel]'s extra branch returns. So for BOTH values of [r],
+    [global_variance_eta_gen] is base's variance at the full arity, and
+    [FInstFollowKernel]'s extra branch is redundant. *)
+Lemma global_variance_eta_base r lookup gr napp :
+  global_variance_eta_gen r lookup gr napp
+  = global_variance_gen lookup gr (max napp (head_arity_gen lookup gr)).
+Proof.
+  unfold global_variance_eta_gen. destruct r; [reflexivity|].
+  destruct gr as [id|kn|ind|ind k]; try reflexivity.
+  unfold noncumulative_constructor_gen, global_variance_gen, head_arity_gen.
+  destruct (lookup_constructor_gen lookup ind k) as [[[mdecl idecl] cdecl]|]; [|reflexivity].
+  destruct (ind_variance mdecl); [reflexivity|].
+  now destruct (_ <=? _).
+Qed.
+
+Lemma global_variance_eta_rule_irrelevant r r' lookup gr napp :
+  global_variance_eta_gen r lookup gr napp = global_variance_eta_gen r' lookup gr napp.
+Proof. now rewrite !global_variance_eta_base. Qed.
+
 (** ** The F-inst instance comparison — CORRECTION of 5b9cd4ff (2026-10-28)
 
   5b9cd4ff compared EVERY head at [Conv]. That was WRONG for heads applied to at

@@ -96,6 +96,66 @@ Proof.
   - exact (cmp_instance_opt_variance cu Conv _ u u' h).
 Qed.
 
+(** ** The reverse glue: base instance comparison ⇒ F-inst — SITE K3
+
+  What the spec's [cumulE_Ind]/[cumulE_Construct] read ([cumul_*_univ Σ pb _ n],
+  i.e. base [cmp_global_instance] at [pb] and [napp := n]) implies F-inst at the
+  same [(pb, n)]. Fully applied: F-inst IS base (mode [pb], variance at
+  [max n arity = n]). Under-applied: base's variance is [AllEqual], i.e. instance
+  equality, which implies F-inst's [Conv]-mode comparison at any variance.
+
+  The constructor half is the A2 constructor case. Before repair (a) it was
+  FALSE at [FInstFollowKernel] (base gave [AllIrrelevant] to a fully applied
+  non-cumulative constructor, F-inst [AllEqual]). After (a) it holds at BOTH
+  rules, through [global_variance_eta_base]; A2 uses it at [FInstFollowKernel]. *)
+
+Lemma cmp_global_instance_ind_under (Σ : global_env) cu pb i napp u u' :
+  napp < head_arity Σ (IndRef i) ->
+  cmp_global_instance Σ cu pb (IndRef i) napp u u' ->
+  cmp_universe_instance (cu Conv) u u'.
+Proof.
+  unfold cmp_global_instance, global_variance_gen, head_arity_gen.
+  destruct (lookup_inductive_gen (lookup_env Σ) i) as [[mdecl idecl]|]; [|intros; lia].
+  intros hlt. destruct (Nat.leb_spec (context_assumptions (ind_params mdecl ,,, ind_indices idecl)) napp);
+    [lia|]. intros h; exact h.
+Qed.
+
+Lemma cmp_global_instance_construct_under (Σ : global_env) cu pb i k napp u u' :
+  napp < head_arity Σ (ConstructRef i k) ->
+  cmp_global_instance Σ cu pb (ConstructRef i k) napp u u' ->
+  cmp_universe_instance (cu Conv) u u'.
+Proof.
+  unfold cmp_global_instance, global_variance_gen, head_arity_gen.
+  destruct (lookup_constructor_gen (lookup_env Σ) i k) as [[[mdecl idecl] cdecl]|]; [|intros; lia].
+  intros hlt. destruct (Nat.leb_spec (cstr_arity cdecl + ind_npars mdecl) napp); [lia|].
+  intros h; exact h.
+Qed.
+
+Lemma cumul_ind_finst r (Σ : global_env) cu pb i napp u u' :
+  cmp_global_instance Σ cu pb (IndRef i) napp u u' ->
+  cmp_global_instance_eta r Σ cu pb (IndRef i) napp u u'.
+Proof.
+  intros h. unfold cmp_global_instance_eta. rewrite global_variance_eta_base.
+  destruct (Nat.le_gt_cases (head_arity Σ (IndRef i)) napp) as [hle|hlt].
+  - rewrite (finst_mode_full Σ (IndRef i) pb napp hle) (Nat.max_l _ _ hle). exact h.
+  - rewrite (finst_mode_under Σ (IndRef i) pb napp hlt).
+    apply cmp_instance_opt_variance.
+    exact (cmp_global_instance_ind_under Σ cu pb i napp u u' hlt h).
+Qed.
+
+(** **SITE K3.** *)
+Lemma cumul_construct_finst r (Σ : global_env) cu pb i k napp u u' :
+  cmp_global_instance Σ cu pb (ConstructRef i k) napp u u' ->
+  cmp_global_instance_eta r Σ cu pb (ConstructRef i k) napp u u'.
+Proof.
+  intros h. unfold cmp_global_instance_eta. rewrite global_variance_eta_base.
+  destruct (Nat.le_gt_cases (head_arity Σ (ConstructRef i k)) napp) as [hle|hlt].
+  - rewrite (finst_mode_full Σ (ConstructRef i k) pb napp hle) (Nat.max_l _ _ hle). exact h.
+  - rewrite (finst_mode_under Σ (ConstructRef i k) pb napp hlt).
+    apply cmp_instance_opt_variance.
+    exact (cmp_global_instance_construct_under Σ cu pb i k napp u u' hlt h).
+Qed.
+
 (** ** Arity bridges: [head_arity] is the count S4's lemmas state *)
 
 Lemma head_arity_ind (Σ : global_env) i mdecl idecl :
