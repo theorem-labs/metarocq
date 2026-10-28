@@ -305,7 +305,9 @@ End SeamCounterexample.
   second [tRel 0], so the image of [tRel 0] under the map would have to reduce to both, which
   confluence forbids. The lemma asks the image to be a term of the level-2 context (as every
   level shift gives); for an image outside the context, [red_confluence] does not apply, and
-  the same conclusion is left as this argument.
+  the same conclusion is left as this argument. [red_confluence] brings
+  [functional_extensionality_dep] into the assumptions of [ghost_map_false]; those of
+  [ghost_shift_false] are the Rocq primitives and [guard_checking] only.
 
   So the level of [gok] cannot move down while a stale cell exists, and a whole-heap scoping
   clause ([heap_wf lvl] of [PCUICCallByNeedSoundConv]) is false at the comparison's level for
@@ -390,5 +392,50 @@ Section GhostShiftCounterexample.
     - intros b. rewrite app_context_nil_l.
       destruct (nth_error Δ' 1) eqn:E; [|discriminate].
       apply nth_error_Some_length in E. lia.
+  Qed.
+
+  (** The state of the second counterexample, at level 1: the genuine variable of level 0 and
+    a stale variable of level 1, the cell a binder of an earlier excursion to level 2 left. *)
+  Definition gs_s2 : cbn_state := snd (alloc_now (gs_var 1) gs_s1).
+  Definition gs_a2 : haddr := fst (alloc_now (gs_var 1) gs_s1).
+
+  Lemma gs_s2_get1 : heap_get gs_a1 gs_s2 = Some (gs_var 0).
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma gs_s2_get2 : heap_get gs_a2 gs_s2 = Some (gs_var 1).
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** At level 1 both cells may carry the ghost [tRel 0]; no map [φ] of the ghost terms whose
+    image of [tRel 0] is a term of the level-2 context gives [gok] at level 2. *)
+  Lemma ghost_map_false (Σ : global_env_ext) (wfΣ : wf Σ) :
+    exists lo G, gok X_type X [] 0 Σ [gs_d] 1 lo G gs_s2
+      /\ forall φ, on_free_vars (shiftnP 2 ssrbool.xpred0) (φ (tRel 0)) ->
+           ~ gok X_type X [] 0 Σ [gs_d; gs_d] 2 lo (gmap φ G) gs_s2.
+  Proof.
+    destruct (alloc_now_sound X_type X [] 0 Σ [gs_d] 1 eq_refl eq_refl (le_S _ _ (le_n 0)) xH
+                _ (gs_var 0) (tRel (1 - S 0)) cbn_init
+                (gok_init X_type X [] 0 Σ [gs_d] 1) (g_cell_var 0 1 _ 0))
+      as (G1 & _ & hok1 & ha1).
+    destruct (alloc_now_sound X_type X [] 0 Σ [gs_d] 1 eq_refl eq_refl (le_S _ _ (le_n 0)) xH
+                G1 (gs_var 1) (tRel (1 - S 1)) gs_s1 hok1 (g_cell_var 0 1 G1 1))
+      as (G2 & hx & hok2 & ha2).
+    exists xH, G2. split; [exact hok2|].
+    intros φ hop hok.
+    destruct (gk_cells _ _ _ _ _ _ _ _ _ _ hok gs_a1 (gs_var 0) gs_s2_get1)
+      as (t1 & ht1 & [hb|(u1 & hu1 & [hr1])]); [discriminate hb|].
+    destruct (gk_cells _ _ _ _ _ _ _ _ _ _ hok gs_a2 (gs_var 1) gs_s2_get2)
+      as (t2 & ht2 & [hb|(u2 & hu2 & [hr2])]); [discriminate hb|].
+    cbn [gmap gm] in ht1, ht2. unfold gs_a1 in ht1. unfold gs_a2 in ht2.
+    rewrite (gx_map _ _ hx _ _ ha1) in ht1. rewrite ha2 in ht2. cbn in ht1, ht2.
+    injection ht1 as <-. injection ht2 as <-.
+    apply g_cell_var_inv in hu1. apply g_cell_var_inv in hu2. subst u1 u2.
+    rewrite app_context_nil_l in hr1, hr2.
+    assert (hcl : on_free_vars_ctx ssrbool.xpred0 [gs_d; gs_d]) by reflexivity.
+    destruct (@red_confluence _ Σ wfΣ (exist [gs_d; gs_d] hcl) (exist (φ (tRel 0)) hop) _ _
+                hr1 hr2)
+      as (v & hv1 & hv2).
+    apply red_rel_nobody in hv1; [|intros b; cbn; discriminate].
+    apply red_rel_nobody in hv2; [|intros b; cbn; discriminate].
+    rewrite hv1 in hv2. cbn in hv2. discriminate hv2.
   Qed.
 End GhostShiftCounterexample.
