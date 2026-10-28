@@ -7,7 +7,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICCase
   PCUICTyping PCUICReduction PCUICGlobalEnv PCUICClosed PCUICEquality PCUICRenameDef
   PCUICSigmaCalculus PCUICClosed PCUICOnFreeVars PCUICOnFreeVarsConv PCUICGuardCondition
   PCUICWeakeningEnvConv PCUICWeakeningEnvTyp PCUICClosedConv PCUICClosedTyp PCUICRenameConv
-  PCUICWeakeningConv PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICWeakeningEnv.
+  PCUICWeakeningConv PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICWeakeningEnv PCUICClosedBodies.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -34,7 +34,7 @@ Section RenamingEta.
 Context `{cf : checker_flags}.
 
 Lemma cumulSpecE_renameP pb P Σ Γ Δ f A B : let sP := shiftnP #|Γ| P in
-    wf Σ.1 ->
+    ClosedBodies Σ.1 ->
     urenaming sP Γ Δ f ->
     is_closed_context Γ ->
     is_open_term Γ A ->
@@ -97,7 +97,7 @@ Proof.
      eapply cumulE_delta.
      + eassumption.
      + rewrite rename_closed. 2: assumption.
-       eapply declared_constant_closed_body. all: eauto.
+       eapply closed_bodies. all: eauto.
    - (* cumulE_prim_op: renaming fixes the ground head arguments and reduct
         (trunk's cumul_prim_op case of PCUICRenameTyp) *)
      rewrite rename_mkApps; cbn [rename].
@@ -347,7 +347,7 @@ Proof.
 Defined.
 
 Lemma convSpecE_renameP P Σ Γ Δ f A B : let sP := shiftnP #|Γ| P in
-    wf Σ.1 ->
+    ClosedBodies Σ.1 ->
     urenaming sP Γ Δ f ->
     is_closed_context Γ ->
     is_open_term Γ A ->
@@ -371,7 +371,7 @@ Proof.
 Qed.
 
 Lemma weakening_cumulSpecE0 pb Σ Γ Γ'' M N n :
-  wf Σ.1 ->
+  ClosedBodies Σ.1 ->
   n = #|Γ''| ->
   is_closed_context Γ ->
   is_open_term Γ M ->
@@ -387,7 +387,7 @@ Proof.
 Qed.
 
 Lemma weakening_convSpecE0 Σ Γ Γ'' M N n :
-  wf Σ.1 ->
+  ClosedBodies Σ.1 ->
   n = #|Γ''| ->
   is_closed_context Γ ->
   is_open_term Γ M ->
@@ -403,7 +403,7 @@ Qed.
     [cumulE_Construct] transported, argumentwise, under [k] new binders. *)
 
 Lemma weakening_cumulSpecE0_All2 Σ Γ Γ'' args args' n :
-  wf Σ.1 ->
+  ClosedBodies Σ.1 ->
   n = #|Γ''| ->
   is_closed_context Γ ->
   forallb (is_open_term Γ) args ->
@@ -492,7 +492,7 @@ Proof. rewrite lift_mkApps mkApps_app. reflexivity. Qed.
 
 (** Inductive heads. *)
 Lemma cumulSpecE_ind_underapplied_gen (Σ : global_env_ext) i u u' n :
-  wf Σ.1 ->
+  ClosedBodies Σ.1 ->
   cumul_Ind_univ Σ Conv i n u u' ->
   forall k Γ args args',
   #|args| = #|args'| ->
@@ -531,7 +531,7 @@ Proof.
 Qed.
 
 Lemma cumulSpecE_ind_underapplied (Σ : global_env_ext) Γ pb i mdecl idecl u u' args args' :
-  wf Σ.1 ->
+  ClosedBodies Σ.1 ->
   declared_inductive Σ i mdecl idecl ->
   is_closed_context Γ ->
   is_open_term Γ (mkApps (tInd i u) args) ->
@@ -574,7 +574,7 @@ Qed.
 
 (** Constructor heads. *)
 Lemma cumulSpecE_construct_underapplied_gen (Σ : global_env_ext) i c u u' n :
-  wf Σ.1 ->
+  ClosedBodies Σ.1 ->
   cumul_Construct_univ Σ Conv i c n u u' ->
   forall k Γ args args',
   #|args| = #|args'| ->
@@ -613,7 +613,7 @@ Proof.
 Qed.
 
 Lemma cumulSpecE_construct_underapplied (Σ : global_env_ext) Γ pb i c mdecl idecl cdecl u u' args args' :
-  wf Σ.1 ->
+  ClosedBodies Σ.1 ->
   declared_constructor Σ (i, c) mdecl idecl cdecl ->
   is_closed_context Γ ->
   is_open_term Γ (mkApps (tConstruct i c u) args) ->

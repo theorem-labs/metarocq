@@ -7,7 +7,7 @@
 
    [is_closed_context Γ] is preserved trivially: [Γ] is fixed ([red1 Σ Γ]; [eta1]
    is context-free). Only [is_open_term Γ t] varies. [red1]'s half is base
-   ([red1_on_free_vars], Typing/PCUICClosedTyp.v). The only NEW content is that
+   ([red1_on_free_vars_cb], Typing/PCUICClosedTyp.v). The only NEW content is that
    [eta1] preserves [on_free_vars], whose [eta_red] case needs
      on_free_vars (shiftnP 1 p) (lift0 1 t) -> on_free_vars p t,
    the WINDOW-CONVERSE of [on_free_vars_lift]. 9.2 does not have it, and it is not
@@ -27,7 +27,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst
      PCUICInduction PCUICSigmaCalculus PCUICOnFreeVars PCUICOnOne PCUICReduction
-     PCUICTyping PCUICClosedTyp PCUICEtaDefs PCUICEtaBetaEta.
+     PCUICTyping PCUICClosedTyp PCUICEtaDefs PCUICEtaBetaEta PCUICClosedBodies.
 From Equations Require Import Equations.
 
 (** ** The window-converse of [on_free_vars_lift]. *)
@@ -144,15 +144,15 @@ Qed.
 
 (** ** [beta_eta] preserves scoping (P-SCOPE). *)
 
-Lemma beta_eta1_on_free_vars {cf : checker_flags} {Σ : global_env} {wfΣ : wf Σ} {P Γ t u} :
+Lemma beta_eta1_on_free_vars {cf : checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {P Γ t u} :
   on_ctx_free_vars P Γ -> beta_eta1 Σ Γ t u -> on_free_vars P t -> on_free_vars P u.
 Proof.
   intros HΓ [Hr|He] Ht.
-  - eapply (@red1_on_free_vars cf _ (empty_ext Σ) _ _ _ wfΣ); eassumption.
+  - eapply (@red1_on_free_vars_cb cf _ (empty_ext Σ) _ _ _ wfΣ); eassumption.
   - eapply eta1_on_free_vars; eassumption.
 Qed.
 
-Lemma beta_eta_on_free_vars {cf : checker_flags} {Σ : global_env} {wfΣ : wf Σ} {P Γ t u} :
+Lemma beta_eta_on_free_vars {cf : checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {P Γ t u} :
   on_ctx_free_vars P Γ -> beta_eta Σ Γ t u -> on_free_vars P t -> on_free_vars P u.
 Proof.
   intros HΓ H. induction H; intros Ht; eauto.
@@ -160,7 +160,7 @@ Proof.
 Qed.
 
 (** The form C4 / (A)'s induction consumes. *)
-Lemma beta_eta_is_open_term {cf : checker_flags} {Σ : global_env} {wfΣ : wf Σ} {Γ t u} :
+Lemma beta_eta_is_open_term {cf : checker_flags} {Σ : global_env} {wfΣ : ClosedBodies Σ} {Γ t u} :
   is_closed_context Γ -> beta_eta Σ Γ t u -> is_open_term Γ t -> is_open_term Γ u.
 Proof.
   intros HΓ. eapply beta_eta_on_free_vars; tea.

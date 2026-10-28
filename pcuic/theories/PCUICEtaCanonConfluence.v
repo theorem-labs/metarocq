@@ -2,11 +2,11 @@
 
 (** * BET-315 eta lane, §6.2 obligation 4: [R_c] is confluent on canonical terms
 
-    [R_c_confluence] : wf Σ -> is_closed_context Γ -> is_open_term Γ t ->
+    [R_c_confluence] : ClosedBodies Σ -> is_closed_context Γ -> is_open_term Γ t ->
       canon t = t ->
       R_c* t u -> R_c* t v -> ∑ w, R_c* u w × R_c* v w
 
-  **Route.** Base [red_confluence] ([PCUICConfluence.v:3938]) through the
+  **Route.** Base [red_confluence_cb] ([PCUICConfluence.v:3938]) through the
   simulations of obligation 3: map each [R_c*] chain back to a [red*] chain up
   to [canon] ([R_c_red]), join there, and map the join forward ([red_R_c]).
 
@@ -14,7 +14,7 @@
   [R_c*] from [canon u], not from [u]. The two coincide exactly when [u] is
   canonical, and [R_c_star_canonical] says every [R_c*]-reduct of a canonical
   term is canonical, because each [R_c] step ENDS in [canon].
-  The scoping premises are [red_confluence]'s own; the simulations needed none.
+  The scoping premises are [red_confluence_cb]'s own; the simulations needed none.
 
   **This is a C4-side file.** It Requires base [PCUICConfluence], which the
   lane rules allow for C4 (the β leg). The direction rule binds the other way:
@@ -26,7 +26,7 @@ From Equations.Type Require Import Relation Relation_Properties.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReduction PCUICTyping
-     PCUICOnFreeVars PCUICConfluence PCUICEtaDefs PCUICEtaCanon PCUICEtaCanonRed.
+     PCUICOnFreeVars PCUICConfluence PCUICEtaDefs PCUICEtaCanon PCUICEtaCanonRed PCUICClosedBodies.
 
 Local Open Scope type_scope.
 
@@ -41,7 +41,7 @@ Proof.
   - apply IH2, IH1, ct.
 Qed.
 
-Theorem R_c_confluence {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ) Γ t u v :
+Theorem R_c_confluence {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) Γ t u v :
   is_closed_context Γ -> is_open_term Γ t -> canon t = t ->
   clos_refl_trans (R_c Σ Γ) t u -> clos_refl_trans (R_c Σ Γ) t v ->
   ∑ w, clos_refl_trans (R_c Σ Γ) u w × clos_refl_trans (R_c Σ Γ) v w.
@@ -49,7 +49,7 @@ Proof.
   intros hΓ ht ct hu hv.
   destruct (R_c_red _ _ _ _ hu) as (u0 & ru & eu).
   destruct (R_c_red _ _ _ _ hv) as (v0 & rv & ev).
-  destruct (@red_confluence cf Σ wfΣ (exist Γ hΓ) (exist t ht) u0 v0 ru rv)
+  destruct (@red_confluence_cb cf Σ wfΣ (exist Γ hΓ) (exist t ht) u0 v0 ru rv)
     as (w & ruw & rvw).
   exists (canon w). split.
   - rewrite -(R_c_star_canonical _ _ _ _ ct hu) -eu. now apply red_R_c.

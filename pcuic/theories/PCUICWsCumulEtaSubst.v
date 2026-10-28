@@ -34,7 +34,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLi
      PCUICSubstitution PCUICConversion PCUICSpine PCUICUnivSubst PCUICUnivSubstitutionConv
      PCUICEtaDefs PCUICEtaScope PCUICEtaCanon PCUICEtaCanonRed PCUICEtaConfluence
      PCUICEtaFInst PCUICEtaFInstEquiv PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2
-     PCUICWellScopedCumulativityEta PCUICConversionEtaCongr.
+     PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICClosedBodies.
 
 (** ** U1' under substitution *)
 
@@ -89,7 +89,7 @@ End Inst.
 Section Map.
 
   (** Source environment [Σ], target [Σ'] (they differ only for universe instances). *)
-  Context {cf : checker_flags} (Σ Σ' : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ Σ' : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
 
   Local Notation RF Σ pb n := (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
@@ -134,7 +134,7 @@ End Map.
 
 Section A7.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
 
   Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
 
@@ -403,7 +403,7 @@ Section UnivInst.
 
 End UnivInst.
 
-Lemma subst_instance_ws_cumul_pbE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ}
+Lemma subst_instance_ws_cumul_pbE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
   {r : finst_construct_rule} univs u {pb Γ A B} :
   valid_constraints (global_ext_constraints (Σ.1, univs)) (subst_instance_cstrs u Σ) ->
   ws_cumul_pbE r pb Σ Γ A B ->

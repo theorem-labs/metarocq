@@ -30,7 +30,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICOnFreeVars PCUICTyping PCUICCumulativitySpec PCUICCumulativitySpecEta
      PCUICWellScopedCumulativity PCUICConversion
      PCUICEtaDefs PCUICEtaScope PCUICEtaCanon PCUICEtaFInst PCUICEtaFInstEquiv
-     PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICEtaI5EtaL.
+     PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICEtaI5EtaL PCUICClosedBodies.
 
 Record ws_cumul_pbE {cf : checker_flags} (r : finst_construct_rule) (pb : conv_pb)
   (Σ : global_env_ext) (Γ : context) (t u : term) : Type :=
@@ -89,7 +89,7 @@ End Joins.
 
 Section A1.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
 
   (** ** Forgetting the scoping *)
 

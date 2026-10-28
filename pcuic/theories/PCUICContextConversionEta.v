@@ -33,7 +33,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICContextConversion
      PCUICEtaFInst PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
-     PCUICEtaA6 PCUICEtaA6More.
+     PCUICEtaA6 PCUICEtaA6More PCUICClosedBodies.
 
 Definition ws_cumul_declsE {cf : checker_flags} (r : finst_construct_rule) (pb : conv_pb)
   (Σ : global_env_ext) (Γ : context) (d d' : context_decl) :=
@@ -45,7 +45,7 @@ Definition ws_cumul_ctx_pbE {cf : checker_flags} (r : finst_construct_rule) (pb 
 
 Section A8.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
 
   Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
   Local Notation CTX Γ Γ' := (ws_cumul_ctx_pbE r Conv Σ Γ Γ').

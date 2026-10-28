@@ -58,7 +58,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICIn
      PCUICCumulativitySpec PCUICCumulativitySpecEta
      PCUICEtaDefs PCUICEtaScope PCUICEtaCanon PCUICEtaCanonRed PCUICEtaCanonEta
      PCUICEtaFInst PCUICEtaFInstEquiv PCUICEtaFInstC1c PCUICEtaFInstGlue
-     PCUICEtaReduction PCUICEtaC1aR PCUICEtaI5 PCUICEtaI5Trans.
+     PCUICEtaReduction PCUICEtaC1aR PCUICEtaI5 PCUICEtaI5Trans PCUICClosedBodies.
 From MetaRocq.PCUIC Require PCUICOnFreeVarsConv.
 
 (** ** Witness lists from pointwise joins *)
@@ -163,7 +163,7 @@ Qed.
 
 Section A2.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
 
   Local Notation cu := (compare_universe Σ).
   Local Notation cs := (compare_sort Σ).
@@ -1083,7 +1083,7 @@ End A2.
   **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
   environment; [I5_eta_l_case] is obligation 9's statement, discharged there
   (its probe: [lanes/eta/obligation9-probe.md]). *)
-Theorem I5_obligation8_FollowKernel {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ) :
+Theorem I5_obligation8_FollowKernel {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) :
   I5_eta_l_case FInstFollowKernel Σ -> I5_statement FInstFollowKernel Σ.
 Proof.
   intros heta Γ pb t u hΓ ht hu. split.

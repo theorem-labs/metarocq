@@ -16,9 +16,9 @@ From Equations.Type Require Import Relation Relation_Properties.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICReduction PCUICOnFreeVars PCUICTyping
-     PCUICEtaDefs PCUICEtaConfluence PCUICEtaBetaEta PCUICEtaScope PCUICEtaC3B.
+     PCUICEtaDefs PCUICEtaConfluence PCUICEtaBetaEta PCUICEtaScope PCUICEtaC3B PCUICClosedBodies.
 
-Lemma HR_A_instantiable {cf : checker_flags} (Σ : global_env) (wfΣ : wf Σ) (Γ : context) :
+Lemma HR_A_instantiable {cf : checker_flags} (Σ : global_env) (wfΣ : ClosedBodies Σ) (Γ : context) :
   is_closed_context Γ ->
   HR_strong_commutation_modulo_statement ->
   (* C1a, at a fixed context *)

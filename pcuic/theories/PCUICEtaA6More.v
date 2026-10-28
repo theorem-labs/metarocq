@@ -29,7 +29,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLi
      PCUICEtaDefs PCUICEtaScope PCUICEtaCanon PCUICEtaCanonRed PCUICEtaCanonEta PCUICEtaFInst
      PCUICEtaFInstEquiv PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICEtaC1b
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind
-     PCUICInductives.
+     PCUICInductives PCUICClosedBodies.
 
 Lemma prim_type_spine p cst : ∑ u args, prim_type p cst = mkApps (tConst cst u) args.
 Proof.
@@ -83,7 +83,7 @@ Qed.
 
 Section A6More.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
 
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
   Local Notation chain Γ := (clos_refl_trans (RE Γ)).

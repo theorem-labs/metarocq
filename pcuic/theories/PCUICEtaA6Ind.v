@@ -32,7 +32,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICWellScopedCumulativity PCUICConversion
      PCUICEtaDefs PCUICEtaScope PCUICEtaCanon PCUICEtaCanonRed PCUICEtaCanonEta PCUICEtaFInst
      PCUICEtaFInstEquiv PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICEtaC1b
-     PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst PCUICEtaA6.
+     PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst PCUICEtaA6 PCUICClosedBodies.
 
 (** ** Spine shapes *)
 
@@ -87,7 +87,7 @@ Proof. intros h. inv_eta h. Qed.
 
 Section A6Ind.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
 
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
   Local Notation chain Γ := (clos_refl_trans (RE Γ)).

@@ -65,7 +65,7 @@ Section C4Assembly.
     eapply (HR_modulo term (red1 Σ Γ) eta1 upto_domain (is_open_term Γ)).
     - (* R preserves Q (P-SCOPE, base half) *)
       intros a b Ha Hr.
-      apply (@beta_eta1_on_free_vars cf Σ wfΣ _ Γ a b HΓ'); [left; exact Hr | exact Ha].
+      apply (@beta_eta1_on_free_vars cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ) _ Γ a b HΓ'); [left; exact Hr | exact Ha].
     - (* S preserves Q (P-SCOPE, new half) *)
       intros a b Ha He. exact (eta1_on_free_vars _ _ He _ Ha).
     - exact upto_domain_refl.
@@ -84,7 +84,7 @@ Section C4Assembly.
       intros a b c _ Hb Hc. exact (U8 a b c Hb Hc).
     - (* R* and S* commute modulo E on Q: (A), via the shape guard (C3 inside) *)
       intros a b c Ha Hb Hc.
-      exact (HR_A_instantiable Σ wfΣ Γ HΓ HA (C1a Σ Γ) C1b a b c Ha Hb Hc).
+      exact (HR_A_instantiable Σ (PCUICClosedTyp.wf_ClosedBodies Σ) Γ HΓ HA (C1a Σ Γ) C1b a b c Ha Hb Hc).
     - exact Ht.
     - exact Hu.
     - exact Hv.

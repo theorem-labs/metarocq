@@ -28,11 +28,11 @@ From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
-     PCUICCumulativitySpecEta PCUICEtaFInst PCUICEtaI5 PCUICEtaI5A2 PCUICEtaI5EtaL.
+     PCUICCumulativitySpecEta PCUICEtaFInst PCUICEtaI5 PCUICEtaI5A2 PCUICEtaI5EtaL PCUICClosedBodies.
 
 Section K6.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
 
   (** The η step, into the spec. *)
   Theorem K6_eta_step Γ pb na A t u :
