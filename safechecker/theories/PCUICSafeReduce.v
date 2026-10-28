@@ -156,6 +156,32 @@ Proof.
     exact (invert_cumul_ind_prod (args := []) hcum).
 Qed.
 
+(** The rest of a decomposed stack starts with no application. *)
+Lemma decompose_stack_snd_nil {π args ρ} :
+  decompose_stack π = (args, ρ) -> decompose_stack ρ = ([], ρ).
+Proof.
+  intros e. apply decompose_stack_noStackApp in e.
+  destruct ρ as [|s ρ]; [reflexivity|].
+  destruct s; cbn in *; try discriminate; reflexivity.
+Qed.
+
+(** An operation applied beyond its arity is ill-typed: its saturated part has
+    the result type, which is not a product. *)
+Lemma prim_app_overapplied_ill_typed {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ c u op args} :
+  prim_op_of Σ c = Some op -> arity op < #|args| ->
+  welltyped Σ Γ (mkApps (tConst c u) args) -> False.
+Proof.
+  intros hop hlt [T ht].
+  rewrite <- (firstn_skipn (arity op) args), mkApps_app in ht.
+  destruct (skipn (arity op) args) as [|x more] eqn:hsk.
+  { apply (f_equal (@length _)) in hsk. rewrite length_skipn in hsk. cbn in hsk. lia. }
+  cbn in ht.
+  eapply inversion_mkApps in ht as (A & htapp & _); tea.
+  eapply inversion_App in htapp as (na & A' & B' & hf & _); tea.
+  eapply prim_app_saturated_not_prod; [exact hop| |exact hf].
+  rewrite length_firstn. lia.
+Qed.
+
 (** Every operation takes int or string arguments ([PrimitiveOps.info]). *)
 Lemma prim_op_args_int_or_string {op i tag} :
   nth_error (po_args (info op)) i = Some tag -> tag = primInt \/ tag = primString.
@@ -1714,8 +1740,22 @@ Corollary R_Acc_aux :
       unfold unfold_fix. destruct o as [[? [-> ?]] | ->]; eauto.
     - unfold isCoFix_app in cof.
       now rewrite decompose_app_mkApps in cof.
-    - eapply inversion_Prim in typ as [prim_ty [cdecl [? ? ? ?]]]; tea.
-      now eapply invert_cumul_prim_type_ind in w; tea.
+    - eapply inversion_Prim in typ as (prim_ty & cdecl & [? hpc hdecl hinv ? w]); tea.
+      pose proof wf as (_ & wfr & _).
+      exfalso. eapply (invert_cumul_prim_type_ind hdecl hinv); [|exact w].
+      exact (prim_op_of_primitive_constant Σ _ _ wfr hpc).
+    (* An unsaturated operation has a product type, never an inductive one. *)
+    - exfalso.
+      match goal with
+      | hop : prim_op_of _ _ = Some _, hlt : #|?l| < arity _ |- _ =>
+        destruct (prim_app_typing_inv (wfΣ := wf) hop typ (Nat.lt_le_incl _ _ hlt))
+          as [_ hprod];
+        destruct (hprod hlt) as (na & A & B & hle);
+        exact (invert_cumul_prod_ind hle)
+      end.
+    (* A rigid application is stuck on its blocking argument. *)
+    - eapply whne_primapp_stuck; try eassumption.
+      eapply (prim_rigid_arg_whne (wfΣ := wf)); eassumption.
   Qed.
 
   Lemma whnf_fix_arg_whne mfix idx body Σ Γ t before args aftr ty :
@@ -1829,6 +1869,108 @@ Corollary R_Acc_aux :
     all: try match goal with
              | |- context[False_rect _ ?f] => destruct f
              end.
+    (* The bodiless-constant leaves of the Const branch (design §7.2), found by
+       their [abstract_prim_op_of] equation; every other goal is left to the
+       positional bullets below. *)
+    all: try solve [
+      repeat match goal with H : inspect _ = _ |- _ => clear H end;
+      match goal with
+      (* an axiom *)
+      | hop : None = abstract_prim_op_of X ?c,
+        hl : Some (ConstantDecl _) = abstract_env_lookup X ?c
+        |- context [ zipp _ ?π ] =>
+          unfold zipp; case_eq (decompose_stack π); intros;
+          constructor; constructor; eapply whne_mkApps; eapply whne_const;
+          [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; exact hl]
+          | reflexivity
+          | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; exact hop ]
+      (* a recursive call: the operation fired, or an argument became a literal *)
+      | hop : Some _ = abstract_prim_op_of X _,
+        rf : forall (t' : term) (π' : stack)
+               (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), { _ : _ | _ },
+        ha : forall (t' : term) (π' : stack)
+               (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), _
+        |- _ =>
+          match goal with |- context [ rf ?x ?y ?z ] =>
+            case_eq (rf x y z); specialize (ha x y z);
+            intros [t' π'] Ha eq'; cbn; rewrite eq' in ha; cbn in ha; assumption
+          end
+      (* unsaturated *)
+      | hsat : false = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π,
+        hop : Some ?op = abstract_prim_op_of X ?c,
+        hl : Some (ConstantDecl _) = abstract_env_lookup X ?c |- _ =>
+          unfold zipp; rewrite <- hπ; cbn; constructor;
+          eapply whnf_primapp_partial;
+          [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; exact hl]
+          | reflexivity
+          | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; exact hop
+          | apply Nat.leb_gt; symmetry; exact hsat ]
+      (* saturated on literals, the denotation fails *)
+      | hd : None = prim_op_denote ?op ?ls, hs : inl ?ls = split_lits (firstn (arity ?op) ?args),
+        hsat : true = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π,
+        hop : Some ?op = abstract_prim_op_of X ?c,
+        hl : Some (ConstantDecl _) = abstract_env_lookup X ?c |- _ =>
+          symmetry in hs; symmetry in hsat; apply Nat.leb_le in hsat;
+          unfold zipp; rewrite <- hπ; cbn;
+          rewrite (prim_args_eq_inl hs), mkApps_app;
+          constructor; constructor; eapply whne_mkApps; eapply whne_primapp_inert;
+          [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; exact hl]
+          | reflexivity
+          | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; exact hop
+          | rewrite <- (split_lits_length_inl hs), length_firstn; lia
+          | rewrite prim_reduct_lits, <- hd; reflexivity ]
+      (* the reduced argument is not a literal: rigid, or ill-typed if over-applied *)
+      | hlit : None = lit_of_term (mkApps ?t ?l), hl' : (?l, ?θ) = decompose_stack ?ρ',
+        hs : inr (?ls, ?a, ?rest) = split_lits (firstn (arity ?op) ?args),
+        hsat : true = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π,
+        hop : Some ?op = abstract_prim_op_of X ?c,
+        hl : Some (ConstantDecl _) = abstract_env_lookup X ?c,
+        rf : forall (t' : term) (π' : stack)
+               (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), { _ : _ | _ },
+        ha : forall (t' : term) (π' : stack)
+               (hR : forall Σ, abstract_env_ext_rel X Σ -> R Σ _ _ _), _ |- _ =>
+          let hw := fresh "hw" in
+          match goal with
+          | hr : exist (t, ρ') ?prf = rf a ?s ?z |- _ =>
+            pose proof (ha a s z) as hw; rewrite <- hr in hw; cbn in hw;
+            destruct (prf Σ wfΣ) as [_ [hpr _]]; clear hr
+          | hr : rf a ?s ?z = exist (t, ρ') ?prf |- _ =>
+            pose proof (ha a s z) as hw; rewrite hr in hw; cbn in hw;
+            destruct (prf Σ wfΣ) as [_ [hpr _]]; clear hr
+          end;
+          unfold Pr in hpr; cbn in hpr; rewrite <- hl' in hpr; cbn in hpr; subst θ;
+          symmetry in hl'; apply decompose_stack_eq in hl'; subst ρ';
+          unfold zipp in hw; rewrite decompose_stack_appstack in hw; cbn in hw;
+          rewrite app_nil_r, ?stack_context_appstack in hw; cbn in hw;
+          rewrite ?stack_context_appstack in hw;
+          symmetry in hs; symmetry in hsat; apply Nat.leb_le in hsat;
+          destruct (split_lits_inr hs) as [efirst _];
+          assert (hlen : #|ls| + S #|rest| = arity op)
+            by (apply (f_equal (@length _)) in efirst;
+                rewrite length_firstn, length_app, length_map in efirst; cbn in efirst; lia);
+          pose proof (decompose_stack_snd_nil (eq_sym hπ)) as hρ;
+          unfold zipp; rewrite decompose_stack_appstack, hρ; cbn;
+          rewrite app_nil_r, stack_context_appstack;
+          destruct (skipn (arity op) args) as [|x more] eqn:hsk;
+          [ rewrite app_nil_r; destruct hw as [hw]; constructor;
+            eapply whnf_primapp_rigid;
+            [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; exact hl]
+            | reflexivity
+            | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; exact hop
+            | exact hlen | exact hw | symmetry; exact hlit ]
+          | exfalso;
+            match goal with hwt : forall Σ, abstract_env_ext_rel X Σ -> welltyped Σ _ (zip (tConst _ _, _)) |- _ =>
+              destruct (hΣ _ wfΣ) as [wΣ];
+              pose proof (hwt _ wfΣ) as hwt';
+              symmetry in hπ; apply decompose_stack_eq in hπ; subst π;
+              cbn in hwt'; rewrite zipc_appstack in hwt'; zip fold in hwt';
+              apply welltyped_context in hwt'; [|exact wΣ]; cbn in hwt';
+              eapply (prim_app_overapplied_ill_typed (wfΣ := wΣ)
+                        (eq_trans (eq_sym (abstract_prim_op_of_correct X _ _ wfΣ)) (eq_sym hop)));
+              [|exact hwt'];
+              apply (f_equal (@length _)) in hsk; rewrite length_skipn in hsk; cbn in hsk; lia
+            end ]
+      end ].
     - match goal with
       | |- context [ reduce ?x ?y ?z ] =>
         case_eq (reduce x y z) ;
@@ -1888,8 +2030,10 @@ Corollary R_Acc_aux :
             simpl in h. rewrite stack_context_appstack in h.
             destruct h as [T h].
             apply inversion_App in h as (?&?&?&?&?); auto.
-            apply inversion_Prim in t0 as (prim_ty & cdecl & [? ? ? ?]); auto.
-            eapply PCUICConversion.invert_cumul_prim_type_prod; eauto.
+            apply inversion_Prim in t0 as (prim_ty & cdecl & [? hpc hdecl hinv ? w]); auto.
+            pose proof hΣ as (_ & wfr & _).
+            eapply (PCUICConversion.invert_cumul_prim_type_prod hdecl hinv); [|exact w].
+            exact (prim_op_of_primitive_constant Σ _ _ wfr hpc).
     - match goal with
       | |- context [ reduce ?x ?y ?z ] =>
         case_eq (reduce x y z) ;
@@ -1922,10 +2066,6 @@ Corollary R_Acc_aux :
       intros [t' π'] Ha eq'. cbn.
       rewrite eq' in haux. cbn in haux.
       assumption.
-    - unfold zipp. case_eq (decompose_stack π). intros.
-      constructor. constructor. eapply whne_mkApps. econstructor.
-      + symmetry. erewrite abstract_env_lookup_correct'; eauto.
-      + reflexivity.
     - match goal with
       | |- context [ reduce ?x ?y ?z ] =>
         case_eq (reduce x y z) ;
@@ -2387,7 +2527,101 @@ Corollary R_Acc_aux :
         | reflexivity | eassumption ]
       | constructor; eapply whd_axiom;
         [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; eassumption]
-        | reflexivity ]
+        | reflexivity
+        | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; eassumption ]
+      (* a registered operation (design §7.2): one closer per leaf *)
+      | match goal with
+        | hsat : false = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π |- _ =>
+          rewrite <- hπ; cbn [fst]; constructor; eapply whd_prim_partial;
+          [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; eassumption]
+          | reflexivity
+          | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; eassumption
+          | apply Nat.leb_gt; symmetry; exact hsat ]
+        end
+      | match goal with
+        | hd : None = prim_op_denote ?op ?ls, hs : inl ?ls = split_lits (firstn (arity ?op) ?args),
+          hsat : true = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π |- _ =>
+          rewrite <- hπ; cbn [fst]; constructor; eapply whd_prim_inert;
+          [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; eassumption]
+          | reflexivity
+          | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; eassumption
+          | apply Nat.leb_le; symmetry; exact hsat
+          | symmetry; exact hs
+          | symmetry; exact hd ]
+        end
+      | match goal with
+        | hd : Some ?r = prim_op_denote ?op ?ls, hv : Some ?v = abstract_readback _ ?r,
+          hs : inl ?ls = split_lits (firstn (arity ?op) ?args),
+          hsat : true = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π,
+          hr : whd_rel _ _ _ ?v _ _ _ |- _ =>
+          let hρ := fresh "hρ" in
+          pose proof (decompose_stack_snd_nil (eq_sym hπ)) as hρ;
+          assert (hctx : stack_context π = stack_context ρ)
+            by (symmetry in hπ; apply decompose_stack_eq in hπ; subst π;
+                now rewrite stack_context_appstack);
+          rewrite <- hπ; cbn [fst]; rewrite hctx;
+          rewrite decompose_stack_appstack, hρ, stack_context_appstack in hr;
+          cbn [fst] in hr; rewrite app_nil_r in hr;
+          constructor; eapply whd_prim_fire;
+          [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; eassumption]
+          | reflexivity
+          | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; eassumption
+          | apply Nat.leb_le; symmetry; exact hsat
+          | symmetry; exact hs
+          | symmetry; exact hd
+          | rewrite <- (abstract_readback_correct _ wfΣ); symmetry; exact hv
+          | exact hr ]
+        end
+      | match goal with
+        | hlit : Some _ = lit_of_term (mkApps ?t ?l),
+          hs : inr (?ls, ?a, ?rest) = split_lits (firstn (arity ?op) ?args),
+          hsat : true = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π,
+          hc : whd_rel _ _ (_ ,,, ?Δc) ?a _ ?t ?l,
+          hr : whd_rel _ _ (_ ,,, ?Δr) (tConst _ _) _ _ _ |- _ =>
+          let hρ := fresh "hρ" in
+          pose proof (decompose_stack_snd_nil (eq_sym hπ)) as hρ;
+          assert (hctx : stack_context π = stack_context ρ)
+            by (symmetry in hπ; apply decompose_stack_eq in hπ; subst π;
+                now rewrite stack_context_appstack);
+          replace Δc with (stack_context ρ) in hc
+            by (cbn; rewrite ?stack_context_appstack; reflexivity);
+          replace Δr with (stack_context ρ) in hr
+            by (rewrite ?stack_context_appstack; reflexivity);
+          rewrite decompose_stack_appstack, hρ in hr; cbn [fst] in hr; rewrite app_nil_r in hr;
+          rewrite <- hπ; cbn [fst]; rewrite hctx;
+          constructor; eapply whd_prim_arg;
+          [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; eassumption]
+          | reflexivity
+          | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; eassumption
+          | apply Nat.leb_le; symmetry; exact hsat
+          | symmetry; exact hs
+          | exact hc
+          | symmetry; exact hlit
+          | exact hr ]
+        end
+      | match goal with
+        | hlit : None = lit_of_term (mkApps ?t ?l),
+          hs : inr (?ls, ?a, ?rest) = split_lits (firstn (arity ?op) ?args),
+          hsat : true = (arity ?op <=? #|?args|), hπ : (?args, ?ρ) = decompose_stack ?π,
+          hc : whd_rel _ _ (_ ,,, ?Δc) ?a _ ?t ?l |- _ =>
+          let hρ := fresh "hρ" in
+          pose proof (decompose_stack_snd_nil (eq_sym hπ)) as hρ;
+          assert (hctx : stack_context π = stack_context ρ)
+            by (symmetry in hπ; apply decompose_stack_eq in hπ; subst π;
+                now rewrite stack_context_appstack);
+          replace Δc with (stack_context ρ) in hc
+            by (cbn; rewrite ?stack_context_appstack; reflexivity);
+          rewrite <- hπ; cbn [fst]; rewrite hctx;
+          rewrite decompose_stack_appstack, hρ; cbn [fst]; rewrite app_nil_r;
+          constructor; eapply whd_prim_stuck;
+          [ etransitivity; [exact (abstract_env_lookup_correct' X _ wfΣ)|symmetry; eassumption]
+          | reflexivity
+          | rewrite <- (abstract_prim_op_of_correct X _ _ wfΣ); symmetry; eassumption
+          | apply Nat.leb_le; symmetry; exact hsat
+          | symmetry; exact hs
+          | exact hc
+          | symmetry; exact hlit ]
+        end
       (* tApp *)
       | constructor; rewrite decompose_stack_App_l_fst in *; eapply whd_app; eassumption
       (* tLambda *)
