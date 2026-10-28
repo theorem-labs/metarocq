@@ -43,6 +43,7 @@ theories/Typing/PCUICWeakeningEnvTyp.v
 theories/Typing/PCUICWeakeningConfigTyp.v
 theories/Typing/PCUICWeakeningTyp.v
 theories/Typing/PCUICUnivSubstitutionTyp.v
+theories/PCUICClosedBodies.v
 theories/Typing/PCUICClosedTyp.v
 theories/Typing/PCUICCasesWfTyp.v
 theories/Typing/PCUICContextConversionTyp.v
@@ -69,7 +70,6 @@ theories/PCUICSubstitution.v
 theories/PCUICContextReduction.v
 theories/PCUICCumulativity.v
 theories/PCUICCumulativitySpec.v
-theories/PCUICClosedBodies.v
 theories/PCUICParallelReduction.v
 theories/PCUICParallelReductionConfluence.v
 theories/PCUICConfluence.v

@@ -246,7 +246,7 @@ Section Pred1_inversion.
     depelim X...
     all:try solve [discr_mkApps_heads; congruence].
     all:try solve [congruence].
-    - unshelve eapply declared_constant_to_gen in H, isdecl; eauto.
+    - unshelve eapply cb_declared_constant_to_gen in H, isdecl; eauto.
       red in H, isdecl. unfold declared_constant_gen in *.
       rewrite isdecl in H; noconf H.
       congruence.
@@ -285,7 +285,7 @@ Section Pred1_inversion.
     induction ls using rev_ind; intros c hlt X; simpl in *.
     - depelim X...
       all:try solve [discr_prim_nil].
-      all:try solve [unshelve eapply declared_constant_to_gen in hdecl, isdecl; eauto;
+      all:try solve [unshelve eapply cb_declared_constant_to_gen in hdecl, isdecl; eauto;
                      red in hdecl, isdecl; rewrite isdecl in hdecl; noconf hdecl; congruence].
       all:reflexivity.
     - rewrite map_app mkApps_app in X |- *.
@@ -1036,7 +1036,7 @@ Section Rho.
     rho Γ (mkApps (tConst c u) (map term_of_lit ls)) = v.
   Proof using wfΣ.
     intros hdecl hop hbody hden hback.
-    unshelve eapply declared_constant_to_gen in hdecl; eauto.
+    unshelve eapply cb_declared_constant_to_gen in hdecl; eauto.
     red in hdecl.
     apply rho_app_prim_gen.
     - have hlen := prim_op_denote_length _ _ _ hden.
@@ -1984,7 +1984,7 @@ Section Rho.
       case eb: cst_body => [b|] //; simp rho.
       rewrite rename_inst inst_closed0 //.
       have Hb := closed_bodies _ _ _ (declared_constant_from_gen e) eb.
-      rewrite closedn_subst_instance; auto.
+      all: try (rewrite closedn_subst_instance; now auto).
 
     - (* construct/cofix iota reduction *)
       simpl; simp rho.
@@ -3909,7 +3909,7 @@ Section Rho.
       + eapply forallb_All in b;eapply All2_All_mix_left in X4; tea.
         eapply All2_sym, All2_map_left; solve_all.
 
-    - unshelve eapply declared_constant_to_gen in H; eauto.
+    - unshelve eapply cb_declared_constant_to_gen in H; eauto.
       simpl; simp rho; simpl.
       simpl in X0. red in H. rewrite H /= heq_cst_body /=.
       now eapply pred1_refl_gen.

@@ -1775,7 +1775,7 @@ Ltac inv_on_free_vars_xpredT :=
   end.
 #[global] Hint Resolve on_free_vars_ctx_closed_xpredT : fvs.
 
-#[global] Hint Resolve red1_on_free_vars red_on_free_vars : fvs.
+#[global] Hint Resolve red1_on_free_vars_cb red_on_free_vars_cb : fvs.
 #[global] Hint Resolve pred1_on_free_vars pred1_on_ctx_free_vars : fvs.
 #[global] Hint Extern 4 => progress (unfold PCUICCases.inst_case_predicate_context) : fvs.
 #[global] Hint Extern 4 => progress (unfold PCUICCases.inst_case_branch_context) : fvs.
@@ -2133,7 +2133,7 @@ Section PredRed.
       eapply red1_red; constructor; auto.
       eapply nth_error_pred1_ctx_all_defs in H; eauto.
       rewrite -(firstn_skipn (S i) Γ).
-      eapply weakening_red_0 => //.
+      eapply weakening_red_0_cb => //.
       rewrite firstn_length_le //.
       destruct nth_error eqn:Heq.
       eapply nth_error_Some_length in Heq. lia. noconf Hnth.
@@ -2873,7 +2873,7 @@ Section RedConfluence.
               (clos_refl_trans_ctx (OnOne2_local_env (fun Γ => on_one_decl1 R Γ))).
   Proof using wfΣ.
     intros x y H.
-    induction H; firstorder; try solve[econstructor; eauto].
+    induction H; [now constructor 1|constructor 2; reflexivity|econstructor 3; eauto].
   Qed.
 
   Lemma red_ctx_clos_rt_red1_ctx : inclusion (red_ctx Σ) (clos_refl_trans_ctx (red1_ctx Σ)).
@@ -2984,14 +2984,14 @@ Section RedConfluence.
     - depelim p. subst.
       move: onp; rewrite !on_free_vars_ctx_snoc => /andP[] onΓ /=; rewrite /on_free_vars_decl /test_decl /=.
       rewrite onΓ => ont /=.
-      intros; eapply red1_on_free_vars; eauto with fvs.
+      intros; eapply red1_on_free_vars_cb; eauto with fvs.
       now rewrite on_free_vars_ctx_on_ctx_free_vars.
     - depelim p. subst.
       move: onp; rewrite !on_free_vars_ctx_snoc => /andP[] onΓ /=; rewrite /on_free_vars_decl /test_decl /=.
       rewrite onΓ => /andP[] onb ont /=.
       apply/andP.
       destruct s as [[red <-]|[red <-]]; split => //.
-      all:eapply red1_on_free_vars; tea.
+      all:eapply red1_on_free_vars_cb; tea.
       all:rewrite on_free_vars_ctx_on_ctx_free_vars //.
     - move: onp; rewrite !on_free_vars_ctx_snoc => /andP[] onΓ ond.
       apply/andP; split; auto.
@@ -3061,7 +3061,7 @@ Section RedConfluence.
         constructor 2; simpl; reflexivity.
     - unshelve eapply transitivity.
       refine ((exist Γ hΓ; exist y _) : ws_pair). cbn.
-      eapply red1_on_free_vars; tea. rewrite on_free_vars_ctx_on_ctx_free_vars //.
+      eapply red1_on_free_vars_cb; tea. rewrite on_free_vars_ctx_on_ctx_free_vars //.
       all:cbn.
       * eapply clos_rt_ctx_t_disjunction_left.
         eapply clos_refl_trans_ctx_t_prod_r. intros. split; eauto.
@@ -3134,7 +3134,7 @@ Section RedConfluence.
       constructor 2.
     - cbn in *.
       assert (on_free_vars (shiftnP #|Γ| xpred0) y).
-      eapply red_on_free_vars; tea; eauto with fvs.
+      eapply red_on_free_vars_cb; tea; eauto with fvs.
       econstructor 3. (* Bug if using eauto here, leaving a dangling evar *)
       eapply (IHX1 hx H).
       eauto.
@@ -3315,7 +3315,7 @@ Section RedConfluence.
       constructor 2.
     - econstructor 3.
       unshelve eapply IHX1. cbn.
-      eapply red_on_free_vars in X1; tea; eauto with fvs.
+      eapply red_on_free_vars_cb in X1; tea; eauto with fvs.
       cbn. eapply IHX2.
   Qed.
 
@@ -3732,7 +3732,7 @@ Section RedConfluence.
       constructor 2.
     - cbn in *.
       assert (hy' : on_free_vars (shiftnP #|Γ| xpred0) y).
-      { eapply red_on_free_vars; tea; eauto with fvs. }
+      { eapply red_on_free_vars_cb; tea; eauto with fvs. }
       specialize (IHX1 hx hy').
       econstructor 3; eauto.
   Qed.
@@ -3819,7 +3819,7 @@ Section ConfluenceFacts.
       x = x' :> term × y = y' :> term × ws_red Σ xpred0 Γ x' y'.
   Proof using wfΣ.
     intros r. exists (exist x p). unshelve eexists.
-    refine (exist y (red_on_free_vars r p _)). eauto with fvs. split => //. split => //.
+    refine (exist y (red_on_free_vars_cb r p _)). eauto with fvs. split => //. split => //.
     now eapply red_ws_red.
   Qed.
 
@@ -3872,7 +3872,7 @@ Section ConfluenceFacts.
     - exists args; split; eauto. apply All2_same; auto.
     - specialize (IHwsr1 hargs) as [args' [-> hargs']].
       assert (forallb (on_free_vars (shiftnP #|Γ| xpred0)) args'). solve_all.
-      eapply red_on_free_vars; tea; eauto with fvs.
+      eapply red_on_free_vars_cb; tea; eauto with fvs.
       specialize (IHwsr2 _ _ _ _ H _ eq_refl) as [? [? ?]]. subst z.
       exists x. intuition auto. eapply All2_trans; eauto.
       intros ? ? ?; eapply red_trans.
