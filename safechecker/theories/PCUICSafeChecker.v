@@ -1,6 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config uGraph EnvMap.
+From MetaRocq.Common Require Import config uGraph EnvMap PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics
      PCUICLiftSubst PCUICUnivSubst PCUICSigmaCalculus PCUICTyping PCUICNormal PCUICSR
      PCUICWeakeningEnvConv PCUICWeakeningEnvTyp
@@ -1211,17 +1211,21 @@ Section CheckEnv.
       symmetry. exact (abstract_env_lookup_correct' X_ext kn wfΣ).
     Qed.
 
+    Lemma abstract_prim_op_of_spec {Σ} (wfΣ : abstract_env_ext_rel X_ext Σ) kn :
+      abstract_prim_op_of X_ext kn = prim_op_of Σ.1 kn.
+    Proof using Type. exact (abstract_prim_op_of_correct X_ext kn Σ wfΣ). Qed.
+
     Definition check_positive_cstr mdecl n Γ (t : term)
       : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ positive_cstr Σ.1 mdecl n Γ t ∥) :=
-      match PCUICPositivityCheck.check_positive_cstr (abstract_env_lookup X_ext)
+      match PCUICPositivityCheck.check_positive_cstr (abstract_env_lookup X_ext) (abstract_prim_op_of X_ext)
               positivity_fuel mdecl n Γ t
-        as r return PCUICPositivityCheck.check_positive_cstr (abstract_env_lookup X_ext)
+        as r return PCUICPositivityCheck.check_positive_cstr (abstract_env_lookup X_ext) (abstract_prim_op_of X_ext)
                       positivity_fuel mdecl n Γ t = r ->
           typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ positive_cstr Σ.1 mdecl n Γ t ∥)
       with
       | Checked tt => fun eq => ret (fun Σ wfΣ =>
-          sq (check_positive_cstr_sound (abstract_env_lookup X_ext) Σ.1
-                (abstract_env_lookup_spec wfΣ) positivity_fuel mdecl n Γ t eq))
+          sq (check_positive_cstr_sound (abstract_env_lookup X_ext) (abstract_prim_op_of X_ext) Σ.1
+                (abstract_env_lookup_spec wfΣ) (abstract_prim_op_of_spec wfΣ) positivity_fuel mdecl n Γ t eq))
       | TypeError e => fun _ => raise e
       end eq_refl.
 
@@ -2407,6 +2411,322 @@ End monad_Alli_nth_forall.
     Unshelve. eauto.
   Qed.
 
+  (** * BET-319 row H part 2 (design §4.2(b)): the per-declaration condition
+      [on_prim_decl], checked on the abstract environment of the declaration's
+      prefix.  A declaration that registers no operation and is not the
+      registered boolean inductive passes trivially. *)
+
+  (** The expected declared type [PCUICPrimOpType.prim_op_type], read off the
+      abstract environment's registered type constants and boolean inductive. *)
+  Definition abstract_prim_tag_type (X_ext : X_env_ext_type) (t : prim_tag) : option term :=
+    option_map (fun kn => tConst kn []) (abstract_primitive_constant X_ext t).
+
+  Definition abstract_prim_shape_type (X_ext : X_env_ext_type) (s : prim_shape) : option term :=
+    match s with
+    | SInt => abstract_prim_tag_type X_ext primInt
+    | SBool => option_map (fun i => tInd i []) (abstract_primitive_bool X_ext)
+    end.
+
+  Fixpoint abstract_prim_arg_types (X_ext : X_env_ext_type) (ts : list prim_tag) (res : term) : option term :=
+    match ts with
+    | [] => Some res
+    | t :: ts =>
+      match abstract_prim_tag_type X_ext t with
+      | Some a => option_map (tImpl a) (abstract_prim_arg_types X_ext ts res)
+      | None => None
+      end
+    end.
+
+  Definition abstract_prim_op_type (X_ext : X_env_ext_type) (op : prim_op) : option term :=
+    match abstract_prim_shape_type X_ext (po_shape (info op)) with
+    | Some res => abstract_prim_arg_types X_ext (po_args (info op)) res
+    | None => None
+    end.
+
+  Lemma abstract_prim_tag_type_spec X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) t :
+    abstract_prim_tag_type X_ext t = PCUICPrimOpType.prim_tag_type Σ.1.(retroknowledge) t.
+  Proof using Type.
+    unfold abstract_prim_tag_type, PCUICPrimOpType.prim_tag_type.
+    erewrite abstract_primitive_constant_correct; tea. now rewrite primitive_constant_retro.
+  Qed.
+
+  Lemma abstract_prim_op_type_spec X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) op :
+    abstract_prim_op_type X_ext op = PCUICPrimOpType.prim_op_type Σ.1.(retroknowledge) op.
+  Proof using Type.
+    unfold abstract_prim_op_type, PCUICPrimOpType.prim_op_type.
+    assert (hs : abstract_prim_shape_type X_ext (po_shape (info op)) =
+                 PCUICPrimOpType.prim_shape_type Σ.1.(retroknowledge) (po_shape (info op))).
+    { destruct (po_shape (info op)); cbn.
+      - now eapply abstract_prim_tag_type_spec.
+      - erewrite abstract_primitive_bool_correct; tea. reflexivity. }
+    rewrite hs. destruct PCUICPrimOpType.prim_shape_type as [res|]; [|reflexivity].
+    induction (po_args (info op)) as [|t ts ih]; cbn; [reflexivity|].
+    erewrite abstract_prim_tag_type_spec; tea. now rewrite ih.
+  Qed.
+
+  Lemma prim_op_tag_declared_of_lookup X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) t kn d :
+    abstract_primitive_constant X_ext t = Some kn ->
+    abstract_env_lookup X_ext kn = Some (ConstantDecl d) ->
+    primitive_invariants t d -> prim_op_tag_declared Σ t.
+  Proof using Type.
+    intros hp hl hinv. exists kn, d. split; auto.
+    - now erewrite <- abstract_primitive_constant_correct.
+    - rewrite -(abstract_env_lookup_correct' _ (Σ := Σ)) // in hl.
+      apply declared_constant_from_gen. unfold declared_constant_gen. now rewrite hl.
+  Qed.
+
+  Lemma on_prim_op_result_bool_of_lookup X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) i mdecl idecl :
+    abstract_primitive_bool X_ext = Some i ->
+    abstract_env_lookup X_ext (inductive_mind i) = Some (InductiveDecl mdecl) ->
+    nth_error mdecl.(ind_bodies) (inductive_ind i) = Some idecl ->
+    on_prim_op_result Σ SBool.
+  Proof using Type.
+    intros hb hl hn. exists i, mdecl, idecl. split.
+    - now erewrite <- abstract_primitive_bool_correct.
+    - rewrite -(abstract_env_lookup_correct' _ (Σ := Σ)) // in hl.
+      split; [|exact hn].
+      apply declared_minductive_from_gen. unfold declared_minductive_gen. now rewrite hl.
+  Qed.
+
+  Definition check_prim_op_tag_declared (X_ext : X_env_ext_type) (t : prim_tag)
+    : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ prim_op_tag_declared Σ t ∥) :=
+    match abstract_primitive_constant X_ext t as o
+      return (abstract_primitive_constant X_ext t = o ->
+              typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ prim_op_tag_declared Σ t ∥)) with
+    | None => fun _ => TypeError (Msg "a primitive operation's argument or result tag has no registered type")
+    | Some kn => fun hp =>
+      match abstract_env_lookup X_ext kn as l
+        return (abstract_env_lookup X_ext kn = l ->
+                typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ prim_op_tag_declared Σ t ∥)) with
+      | Some (ConstantDecl d) => fun hl =>
+        match check_result_forget (check_primitive_invariants t d) with
+        | Checked hinv => Checked (fun Σ wfΣ => sq (prim_op_tag_declared_of_lookup X_ext Σ wfΣ t kn d hp hl hinv))
+        | TypeError e => TypeError e
+        end
+      | _ => fun _ => TypeError (UndeclaredConstant kn)
+      end eq_refl
+    end eq_refl.
+
+  Fixpoint check_prim_op_tags (X_ext : X_env_ext_type) (ts : list prim_tag)
+    : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ All (prim_op_tag_declared Σ) ts ∥) :=
+    match ts with
+    | [] => Checked (fun Σ _ => sq All_nil)
+    | t :: ts =>
+      match check_prim_op_tag_declared X_ext t, check_prim_op_tags X_ext ts with
+      | Checked h, Checked hs =>
+        Checked (fun Σ wfΣ => match h Σ wfΣ, hs Σ wfΣ with sq a, sq b => sq (All_cons a b) end)
+      | TypeError e, _ | _, TypeError e => TypeError e
+      end
+    end.
+
+  Definition check_on_prim_op_result (X_ext : X_env_ext_type) (s : prim_shape)
+    : typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_prim_op_result Σ s ∥) :=
+    match s as s' return typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_prim_op_result Σ s' ∥) with
+    | SInt => check_prim_op_tag_declared X_ext primInt
+    | SBool =>
+      match abstract_primitive_bool X_ext as o
+        return (abstract_primitive_bool X_ext = o ->
+                typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_prim_op_result Σ SBool ∥)) with
+      | None => fun _ => TypeError (Msg "a boolean-valued primitive operation but no registered boolean inductive")
+      | Some i => fun hb =>
+        match abstract_env_lookup X_ext (inductive_mind i) as l
+          return (abstract_env_lookup X_ext (inductive_mind i) = l ->
+                  typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_prim_op_result Σ SBool ∥)) with
+        | Some (InductiveDecl mdecl) => fun hl =>
+          match nth_error mdecl.(ind_bodies) (inductive_ind i) as o'
+            return (nth_error mdecl.(ind_bodies) (inductive_ind i) = o' ->
+                    typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_prim_op_result Σ SBool ∥)) with
+          | Some idecl => fun hn =>
+            Checked (fun Σ wfΣ => sq (on_prim_op_result_bool_of_lookup X_ext Σ wfΣ i mdecl idecl hb hl hn))
+          | None => fun _ => TypeError (Msg "the registered boolean inductive is not declared")
+          end eq_refl
+        | _ => fun _ => TypeError (Msg "the registered boolean inductive is not declared")
+        end eq_refl
+      end eq_refl
+    end.
+
+  (** The registered declared type is a type, once the tag and result
+      invariants hold. *)
+  Lemma prim_op_type_welltyped X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) op T :
+    abstract_prim_op_type X_ext op = Some T ->
+    ∥ All (prim_op_tag_declared Σ) (po_args (info op)) ∥ ->
+    ∥ on_prim_op_result Σ (po_shape (info op)) ∥ ->
+    welltyped Σ [] T.
+  Proof using Type.
+    intros hT [hargs] [hres].
+    pose proof (abstract_env_ext_wf _ wfΣ) as [wfΣ'].
+    rewrite (abstract_prim_op_type_spec _ _ wfΣ) in hT.
+    unfold PCUICPrimOpType.prim_op_type in hT.
+    destruct PCUICPrimOpType.prim_shape_type as [res|] eqn:hs; [|discriminate].
+    apply isType_welltyped.
+    eapply (isType_prim_arg_types (wfΣ := wfΣ'.1)); tea.
+    - constructor.
+    - intros t ht. now eapply po_args_not_array.
+    - eapply (isType_prim_shape_type (wfΣ := wfΣ'.1)); tea. constructor.
+  Qed.
+
+  Lemma on_prim_op_constant_of_checks X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) op cb T :
+    cb.(cst_body) = None -> cb.(cst_universes) = Monomorphic_ctx ->
+    abstract_prim_op_type X_ext op = Some T ->
+    ∥ All (prim_op_tag_declared Σ) (po_args (info op)) ∥ ->
+    ∥ on_prim_op_result Σ (po_shape (info op)) ∥ ->
+    ∥ Σ ;;; [] ⊢ cb.(cst_type) ≤[Conv] T ∥ ->
+    ∥ on_prim_op_constant cumulSpec0 Σ op cb ∥.
+  Proof using Type.
+    intros hb hu hT [hargs] [hres] [hconv].
+    pose proof (abstract_env_ext_wf _ wfΣ) as [wfΣ'].
+    rewrite (abstract_prim_op_type_spec _ _ wfΣ) in hT.
+    sq. constructor; auto.
+    exists T. split; [exact hT|].
+    pose proof (wfΣ'.1) as wfΣ1.
+    eapply cumulAlgo_cumulSpec in hconv; tea.
+  Qed.
+
+  Definition prim_cst_ok (X_ext : X_env_ext_type) op cb :=
+    forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_prim_op_constant cumulSpec0 Σ op cb ∥.
+
+  Definition check_prim_op_constant (X_ext : X_env_ext_type)
+    {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ}
+    (op : prim_op) (cb : constant_body)
+    (wty : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ isType Σ [] cb.(cst_type) ∥)
+    : typing_result (prim_cst_ok X_ext op cb) :=
+    match eqb cb.(cst_body) None as b return (eqb cb.(cst_body) None = b -> typing_result (prim_cst_ok X_ext op cb)) with
+    | false => fun _ => TypeError (Msg "a primitive operation is registered to a defined constant")
+    | true => fun hb =>
+    match eqb cb.(cst_universes) Monomorphic_ctx as b return (eqb cb.(cst_universes) Monomorphic_ctx = b -> typing_result (prim_cst_ok X_ext op cb)) with
+    | false => fun _ => TypeError (Msg "a primitive operation is registered to a non-monomorphic constant")
+    | true => fun hu =>
+    match check_prim_op_tags X_ext (po_args (info op)), check_on_prim_op_result X_ext (po_shape (info op)) with
+    | Checked hargs, Checked hres =>
+      match abstract_prim_op_type X_ext op as o return (abstract_prim_op_type X_ext op = o -> typing_result (prim_cst_ok X_ext op cb)) with
+      | None => fun _ => TypeError (Msg "a primitive operation's expected type is not defined")
+      | Some T => fun hT =>
+        match wf_env_conv X_ext Conv [] cb.(cst_type) T
+                (fun Σ wfΣ => match wty Σ wfΣ with sq w => isType_welltyped w end)
+                (fun Σ wfΣ => prim_op_type_welltyped X_ext Σ wfΣ op T hT (hargs Σ wfΣ) (hres Σ wfΣ)) with
+        | Checked hconv =>
+          Checked (fun Σ wfΣ => on_prim_op_constant_of_checks X_ext Σ wfΣ op cb T
+            (eqb_eq _ _ hb) (eqb_eq _ _ hu) hT (hargs Σ wfΣ) (hres Σ wfΣ) (hconv Σ wfΣ))
+        | TypeError e => TypeError e
+        end
+      end eq_refl
+    | TypeError e, _ | _, TypeError e => TypeError e
+    end
+    end eq_refl
+    end eq_refl.
+
+  (** §4.2(b)2: the block registered as the booleans. *)
+  Definition check_prim_bool_ctor (na : ident) (c : constructor_body) : bool :=
+    eqb c.(cstr_name) na && eqb c.(cstr_args) [] && eqb c.(cstr_indices) [] &&
+    eqb c.(cstr_type) (tRel 0) && eqb c.(cstr_arity) 0.
+
+  Definition check_prim_bool_decl (mdecl : mutual_inductive_body) : bool :=
+    match mdecl.(ind_bodies) with
+    | [idecl] =>
+      eqb mdecl.(ind_npars) 0 && eqb mdecl.(ind_params) [] &&
+      eqb mdecl.(ind_universes) Monomorphic_ctx && eqb idecl.(ind_indices) [] &&
+      match idecl.(ind_ctors) with
+      | [cT; cF] => check_prim_bool_ctor "true" cT && check_prim_bool_ctor "false" cF
+      | _ => false
+      end
+    | _ => false
+    end.
+
+  Lemma check_prim_bool_ctor_spec na c : check_prim_bool_ctor na c -> prim_bool_ctor na c.
+  Proof using Type.
+    unfold check_prim_bool_ctor. move/andP => [/andP [/andP [/andP [h1 h2] h3] h4] h5].
+    split; now apply eqb_eq.
+  Qed.
+
+  Lemma check_prim_bool_decl_spec mdecl : check_prim_bool_decl mdecl -> on_prim_bool_decl mdecl.
+  Proof using Type.
+    unfold check_prim_bool_decl, on_prim_bool_decl.
+    destruct (ind_bodies mdecl) as [|idecl [|]]; try discriminate.
+    move/andP => [/andP [/andP [/andP [h1 h2] h3] h4] h5].
+    split; try now apply eqb_eq.
+    destruct (ind_ctors idecl) as [|cT [|cF [|]]]; try discriminate.
+    move/andP: h5 => [hT hF]. split; now apply check_prim_bool_ctor_spec.
+  Qed.
+
+  Lemma on_prim_decl_const_none X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) kn cb :
+    abstract_prim_op_of X_ext kn = None -> on_prim_decl cumulSpec0 Σ kn (ConstantDecl cb).
+  Proof using Type.
+    intros hn op hop.
+    rewrite -(abstract_prim_op_of_correct X_ext kn Σ wfΣ) hn in hop. discriminate.
+  Qed.
+
+  Lemma on_prim_decl_const_some X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) kn cb op :
+    abstract_prim_op_of X_ext kn = Some op -> ∥ on_prim_op_constant cumulSpec0 Σ op cb ∥ ->
+    ∥ on_prim_decl cumulSpec0 Σ kn (ConstantDecl cb) ∥.
+  Proof using Type.
+    intros hs [h]. sq. intros op' hop.
+    rewrite -(abstract_prim_op_of_correct X_ext kn Σ wfΣ) hs in hop. now noconf hop.
+  Qed.
+
+  Lemma on_prim_decl_ind X_ext Σ (wfΣ : abstract_env_ext_rel X_ext Σ) kn mdecl :
+    (forall i, abstract_primitive_bool X_ext = Some i -> inductive_mind i = kn -> on_prim_bool_decl mdecl) ->
+    on_prim_decl cumulSpec0 Σ kn (InductiveDecl mdecl).
+  Proof using Type.
+    intros h i hi hk. eapply h; tea.
+    rewrite (abstract_primitive_bool_correct X_ext Σ wfΣ). exact hi.
+  Qed.
+
+  Lemma prim_bool_none {X_ext i} :
+    abstract_primitive_bool X_ext = None -> abstract_primitive_bool X_ext = Some i -> False.
+  Proof using Type. congruence. Qed.
+
+  Lemma prim_bool_other {X_ext i i' kn} :
+    abstract_primitive_bool X_ext = Some i -> eqb (inductive_mind i) kn = false ->
+    abstract_primitive_bool X_ext = Some i' -> inductive_mind i' = kn -> False.
+  Proof using Type.
+    intros h hk h' hk'. rewrite h in h'. noconf h'. subst. now rewrite eqb_refl in hk.
+  Qed.
+
+  Definition prim_decl_ok (X_ext : X_env_ext_type) kn d :=
+    forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_prim_decl cumulSpec0 Σ kn d ∥.
+
+  Definition check_prim_op_decl (X_ext : X_env_ext_type)
+    {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X_ext -> NormalizationIn Σ}
+    kn (d : global_decl)
+    (ond : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_global_decl cumulSpec0 (lift_typing typing) Σ kn d ∥)
+    : EnvCheck X_env_ext_type (prim_decl_ok X_ext kn d) :=
+    match d as d'
+      return ((forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_global_decl cumulSpec0 (lift_typing typing) Σ kn d' ∥) ->
+              EnvCheck X_env_ext_type (prim_decl_ok X_ext kn d')) with
+    | ConstantDecl cb => fun ond =>
+      match abstract_prim_op_of X_ext kn as o
+        return (abstract_prim_op_of X_ext kn = o -> EnvCheck X_env_ext_type (prim_decl_ok X_ext kn (ConstantDecl cb))) with
+      | None => fun hn => ret (fun Σ wfΣ => sq (on_prim_decl_const_none X_ext Σ wfΣ kn cb hn))
+      | Some op => fun hs =>
+        h <- wrap_error _ X_ext (string_of_kername kn)
+               (check_prim_op_constant X_ext op cb
+                  (fun Σ wfΣ => match ond Σ wfΣ with
+                                | sq o => sq (has_sort_isType _ (projT2 (snd o)).1)
+                                end)) ;;
+        ret (fun Σ wfΣ => on_prim_decl_const_some X_ext Σ wfΣ kn cb op hs (h Σ wfΣ))
+      end eq_refl
+    | InductiveDecl mdecl => fun _ =>
+      match abstract_primitive_bool X_ext as o
+        return (abstract_primitive_bool X_ext = o -> EnvCheck X_env_ext_type (prim_decl_ok X_ext kn (InductiveDecl mdecl))) with
+      | Some i => fun hb =>
+        (if eqb (inductive_mind i) kn as b
+           return (eqb (inductive_mind i) kn = b -> EnvCheck X_env_ext_type (prim_decl_ok X_ext kn (InductiveDecl mdecl))) then
+          fun _ =>
+          (if check_prim_bool_decl mdecl as c
+             return (check_prim_bool_decl mdecl = c -> EnvCheck X_env_ext_type (prim_decl_ok X_ext kn (InductiveDecl mdecl))) then
+            fun hc => ret (fun Σ wfΣ => sq (on_prim_decl_ind X_ext Σ wfΣ kn mdecl
+                             (fun _ _ _ => check_prim_bool_decl_spec mdecl hc)))
+          else fun _ => raise (X_ext, IllFormedDecl (string_of_kername kn)
+                 (Msg "the inductive registered as the booleans is not the enumeration true, false (design §4.2(b)2)")))
+          eq_refl
+        else fun hk => ret (fun Σ wfΣ => sq (on_prim_decl_ind X_ext Σ wfΣ kn mdecl
+                         (fun i' hi' hk' => False_rect _ (prim_bool_other hb hk hi' hk')))))
+        eq_refl
+      | None => fun hb => ret (fun Σ wfΣ => sq (on_prim_decl_ind X_ext Σ wfΣ kn mdecl
+                         (fun i' hi' _ => False_rect _ (prim_bool_none hb hi'))))
+      end eq_refl
+    end ond.
+
   Import EnvMap.
 
   Definition global_uctx_univs (univs : ContextSet.t) :=
@@ -2425,7 +2745,7 @@ End monad_Alli_nth_forall.
   Program Definition check_univs (univs : ContextSet.t) (retro : Retroknowledge.t)
     : EnvCheck X_env_ext_type ({ X : X_env_type |
       (forall Σ, abstract_env_rel X Σ -> Σ = {| universes := univs; declarations := []; retroknowledge := retro |})
-                      /\ ∥ on_global_univs univs ∥ }) :=
+                      /\ ∥ on_global_univs univs ∥ /\ ∥ Retroknowledge.wf_retro retro ∥ }) :=
     let id := "toplevel" in
     let levels := ContextSet.levels univs in
     check_eq_true_lazy (LevelSet.mem Level.lzero levels)
@@ -2435,11 +2755,14 @@ End monad_Alli_nth_forall.
     check_eq_true_lazy (ConstraintSet.for_all (fun c => LevelSet.mem c.1.1 levels && LevelSet.mem c.2 levels) (ContextSet.constraints univs))
        (fun _ => (abstract_env_ext_empty, IllFormedDecl id (Msg ("non declared level in " ^ print_lset levels ^
                                     " |= " ^ print_constraint_set (ContextSet.constraints univs)))));;
+    wfr <- check_dec (abstract_env_ext_empty, IllFormedDecl id
+             (Msg "ill-formed retroknowledge: primitive-operation table or type constants (design §4.2(a))"))
+           (EnvironmentTyping.dec_wf_retro retro) ;;
     match gc_of_uctx univs as X' return (X' = _ -> EnvCheck X_env_ext_type _) with
     | None => fun _ => raise (abstract_env_ext_empty, IllFormedDecl id (Msg "constraints trivially not satisfiable"))
     | Some uctx => fun _ => check_eq_true_lazy (@abstract_env_is_consistent_empty _ X_impl uctx)
         (fun _ => (abstract_env_ext_empty, IllFormedDecl id (Msg "constraints not satisfiable"))) ;;
-    ret (let Hunivs := _ in exist (abstract_env_init univs retro Hunivs) _) end eq_refl .
+    ret (let Hunivs := _ in exist (abstract_env_init univs retro (Hunivs, wfr)) _) end eq_refl .
   Next Obligation.
     intros. have decll :
           ConstraintSet.For_all (declared_cstr_levels (ContextSet.levels univs)) (ContextSet.constraints univs).
@@ -2473,9 +2796,10 @@ End monad_Alli_nth_forall.
         apply wGraph.VSetProp.union_subset_1.
   Qed.
   Next Obligation.
-      cbv beta. intros univs retro id levels X H H0 Hconsistent ? ? Hunivs. clearbody Hunivs.
-    split.
+      cbv beta. intros univs retro id levels X H H0 wfr Hconsistent ? ? Hunivs. clearbody Hunivs.
+    split; [|split].
     - intros. eapply (abstract_env_irr _ _ (abstract_env_init_correct _ _ _)); eauto.
+    - now sq.
     - now sq.
     Unshelve. eauto.
   Qed.
@@ -2508,7 +2832,8 @@ End monad_Alli_nth_forall.
       isfresh <- check_fresh d.1 decls ;;
       let udecl := universes_decl_of_decl d.2 in
       X' <- make_abstract_env_ext X d.1 udecl ;;
-      @check_wf_decl X (proj1_sig X') _ d.1 d.2 (proj2_sig X') ;;
+      ond <- @check_wf_decl X (proj1_sig X') _ d.1 d.2 (proj2_sig X') ;;
+      onp <- @check_prim_op_decl (proj1_sig X') _ d.1 d.2 ond ;;
       ret (exist (abstract_env_add_decl X d.1 d.2 _) _)
     end.
 
@@ -2527,13 +2852,19 @@ End monad_Alli_nth_forall.
   Qed.
 
   Next Obligation.
-    cbn in *. destruct H0.
+    unshelve eapply normalization_in; try ((idtac + unshelve econstructor); eassumption).
+    exists 1; reflexivity.
+  Qed.
+
+  Next Obligation.
+    cbn in *. destruct H0. unfold prim_decl_ok in *.
     specialize_Σ a. specialize_Σ H. rewrite wf_.  cbn in *.
     specialize_Σ H0. sq.
     split; eauto.
     - pose proof (abstract_env_ext_wf _ H0). sq. destruct H3.
       cbn in *. now rewrite wf_ in o0.
-    - sq; now rewrite wf_ in y.
+    - sq; now rewrite wf_ in ond.
+    - sq; now rewrite wf_ in onp.
   Qed.
 
   Next Obligation.
