@@ -25,6 +25,16 @@ Definition beta_eta1 (Σ : global_env) (Γ : context) : term -> term -> Type :=
 Definition beta_eta (Σ : global_env) (Γ : context) : term -> term -> Type :=
   clos_refl_trans (beta_eta1 Σ Γ).
 
+(** ######################################################################
+    REFUTED — NOT CURRENT (2026-10-28). [C4_statement] below is FALSE:
+    [C4_false : C4_statement -> False] is mechanised at
+    fork wip/c4-C4C1b-2026-10-28 @ 99136ff0 (PCUICEtaC1b.v); so is
+    [C1b_false : C1b_statement -> False]. It is kept, UNCHANGED, only because
+    proved work states against it. The replacement (exact βη-confluence on
+    canonical-domain terms) is lanes/eta/plan.md §6.2 and is NOT yet
+    authorised; this statement is re-pinned only when it is.
+    ###################################################################### *)
+
 (** ** C4 / I4 — the public statement.
 
    PREMISES: [wf Σ], [is_closed_context Γ], [is_open_term Γ t]. All three are
