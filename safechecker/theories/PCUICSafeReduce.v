@@ -51,6 +51,23 @@ Proof.
 Qed.
 #[global] Hint Resolve welltyped_is_open_term : fvs.
 
+(** Filling the [Prim_app] frame: the evaluated arguments, then the argument,
+    then the rest of the spine. *)
+Lemma mkApps_tApp_app u args v l :
+  mkApps (tApp (mkApps u args) v) l = mkApps u (args ++ v :: l).
+Proof. rewrite mkApps_app. reflexivity. Qed.
+
+(** The position of an argument under the [Prim_app] frame is strictly to the
+    right of the head's: [n] application nodes then the argument, against [m > n]
+    application nodes down to the head. *)
+Lemma positionR_repeat_app_r n m :
+  n < m -> positionR (repeat app_l n ++ [app_r]) (repeat app_l m).
+Proof.
+  induction n in m |- *; intros h; destruct m as [|m]; try lia; cbn.
+  - constructor.
+  - constructor. apply IHn. lia.
+Qed.
+
 (** ** Primitive operations: facts the machine needs (BET-319 rows I and Q) *)
 
 (** §4.2(b)1, gate 4 ([on_prim_op_result]): in a well-formed environment the
@@ -84,15 +101,16 @@ Lemma typing_spine_prim_args_sat {cf} {Σ : global_env_ext} {wfΣ : wf Σ}
   PCUICPrimOpType.prim_arg_types r tags res = Some ty ->
   Σ ;;; Γ ⊢ ty ≤ ty' ->
   #|args| = #|tags| ->
-  typing_spine Σ Γ ty' args T ->
+  PCUICArities.typing_spine Σ Γ ty' args T ->
   Σ ;;; Γ ⊢ res ≤ T.
 Proof.
   induction tags as [|t tags ih] in args, ty, ty' |- *; intros hty hle hlen hsp.
   - destruct args as [|x args]; [|cbn in hlen; lia].
     cbn in hty. noconf hty. depelim hsp. etransitivity; tea.
   - cbn in hty.
-    destruct (PCUICPrimOpType.prim_tag_type r t) as [a|] eqn:ht => //.
-    destruct (PCUICPrimOpType.prim_arg_types r tags res) as [rest|] eqn:hrest => //.
+    destruct (PCUICPrimOpType.prim_tag_type r t) as [a|] eqn:ht; [|discriminate hty].
+    destruct (PCUICPrimOpType.prim_arg_types r tags res) as [rest|] eqn:hrest;
+      [|discriminate hty].
     cbn in hty. noconf hty.
     destruct args as [|x args]; [cbn in hlen; lia|].
     depelim hsp.
@@ -100,7 +118,7 @@ Proof.
     unfold tImpl in hP.
     eapply ws_cumul_pb_Prod_Prod_inv in hP as [_ hdom hcod].
     eapply substitution0_ws_cumul_pb in hcod; tea.
-    unfold subst1 in hcod. rewrite simpl_subst_k in hcod; [reflexivity|].
+    unfold subst1 in hcod. rewrite simpl_subst_k in hcod; [|reflexivity].
     exact (ih args rest (B {0 := x}) eq_refl hcod ltac:(cbn in hlen; lia) hsp).
 Qed.
 
@@ -114,7 +132,7 @@ Lemma prim_app_saturated_not_prod {cf} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ 
 Proof.
   intros hop hlen ht.
   pose proof (validity ht) as isT.
-  eapply inversion_mkApps_direct in ht as (A0 & s & hc & _ & hsp); tea.
+  eapply PCUICSpine.inversion_mkApps_direct in ht as (A0 & s & hc & _ & hsp); tea.
   eapply inversion_Const in hc as (decl & wfΓ & hdecl & cu & hle); tea.
   destruct (prim_op_head_type wfΓ hdecl cu hop hle) as (res & Tp & [hsh hTp hTA hres _]).
   pose proof (typing_spine_prim_args_sat Tp A0 hTp hTA hlen hsp) as hcum.
@@ -125,16 +143,65 @@ Proof.
     cbn in hpc. rewrite hpc in hsh. cbn in hsh. noconf hsh.
     destruct hinv as [_ hbody _].
     pose proof wfΣ as (_ & wfr & _).
-    have hnop : prim_op_of Σ kn = None
+    assert (hnop : prim_op_of Σ kn = None)
       by exact (prim_op_of_primitive_constant Σ primInt kn wfr hpc).
     destruct (ws_cumul_pb_Axiom_l_inv (args := []) hdecl' hbody hnop hcum)
       as (u' & args' & [hred _ _]).
     eapply invert_red_prod in hred as (dom' & codom' & [e _ _]).
-    destruct args' as [|x args'] using rev_case; cbn in e; [discriminate|].
-    rewrite mkApps_app in e. discriminate.
+    apply (f_equal decompose_app) in e.
+    rewrite decompose_app_mkApps in e; [|reflexivity].
+    cbn in e. discriminate e.
   - (* SBool: the result is the registered inductive *)
     destruct (Retroknowledge.retro_bool _) as [ind|]; cbn in hsh; noconf hsh.
     exact (invert_cumul_ind_prod (args := []) hcum).
+Qed.
+
+(** Every operation takes int or string arguments ([PrimitiveOps.info]). *)
+Lemma prim_op_args_int_or_string {op i tag} :
+  nth_error (po_args (info op)) i = Some tag -> tag = primInt \/ tag = primString.
+Proof.
+  intros h. apply nth_error_In in h.
+  destruct op; cbn in h; firstorder (subst; auto).
+Qed.
+
+(** Canonical forms at a primitive type: a well-typed weak-head normal form of
+    the int or string type that is not a literal is neutral.  The premises on
+    [kn] are §4.2(b)'s [prim_op_tag_declared]: without a bodiless [kn] the
+    statement is false, because a constructor could then be typed at [tConst kn u]
+    through the body of [kn]. *)
+Lemma whnf_prim_type_canonical {cf} {Σ : global_env_ext} {wfΣ : wf Σ} flags {Γ a tag kn d u} :
+  primitive_constant Σ tag = Some kn -> declared_constant Σ kn d -> primitive_invariants tag d ->
+  tag = primInt \/ tag = primString ->
+  whnf flags Σ Γ a -> Σ ;;; Γ |- a : tConst kn u -> lit_of_term a = None ->
+  whne flags Σ Γ a.
+Proof.
+Admitted. (* PROBE: not yet proved; must not be committed *)
+
+(** The blocking argument of a well-typed rigid application is neutral. *)
+Lemma prim_rigid_arg_whne {cf} {Σ : global_env_ext} {wfΣ : wf Σ} flags {Γ c u op ls a rest T} :
+  prim_op_of Σ c = Some op -> #|ls| + S #|rest| = arity op ->
+  whnf flags Σ Γ a -> lit_of_term a = None ->
+  Σ ;;; Γ |- mkApps (tConst c u) (map term_of_lit ls ++ a :: rest) : T ->
+  whne flags Σ Γ a.
+Proof.
+  intros hop hlen hwa hnl typ.
+  assert (hle : #|map term_of_lit ls ++ a :: rest| <= arity op)
+    by (rewrite length_app, length_map; cbn; lia).
+  destruct (prim_app_typing_inv hop typ hle) as [hargs _].
+  destruct (nth_error (po_args (info op)) #|ls|) as [tag|] eqn:htag.
+  2:{ apply nth_error_None in htag. unfold arity in hlen. lia. }
+  assert (hnth : nth_error (map term_of_lit ls ++ a :: rest) #|ls| = Some a).
+  { rewrite nth_error_app2; [rewrite length_map, Nat.sub_diag; reflexivity|].
+    rewrite length_map; lia. }
+  destruct (hargs _ _ _ hnth htag) as (kn & hkn & hta).
+  pose proof (validity typ) as isT.
+  eapply PCUICSpine.inversion_mkApps_direct in typ as (A0 & s0 & hc & _ & _); tea.
+  eapply inversion_Const in hc as (decl0 & wfΓ0 & hdecl0 & cu0 & hle0); tea.
+  destruct (prim_op_head_type wfΓ0 hdecl0 cu0 hop hle0) as (res & Tp & [_ _ _ _ hdeclared]).
+  eapply All_nth_error in hdeclared; [|exact htag].
+  destruct hdeclared as (kn' & d' & [hkn' hd' hinv']).
+  rewrite hkn in hkn'. noconf hkn'.
+  exact (whnf_prim_type_canonical flags hkn hd' hinv' (prim_op_args_int_or_string htag) hwa hta hnl).
 Qed.
 
 
@@ -693,7 +760,6 @@ Corollary R_Acc_aux :
     | red_view_other t π discr := give t π
 
     }.
-  Obligations. (* PROBE: remove before commit *)
 
   (* tRel *)
   Next Obligation.
@@ -741,6 +807,132 @@ Corollary R_Acc_aux :
     - unfold declared_constant, declared_constant_gen.
       rewrite (abstract_env_lookup_correct _ _ _ wfΣ). rewrite <- eq. reflexivity.
     - cbn. reflexivity.
+  Qed.
+  (* tConst, a registered operation (design §7.2).  Equations places these
+     right after the defined-constant obligation, because the bodiless clause
+     shares its [cst_body] split. *)
+
+  (* The operation fires: one [red_prim_op] step, under the over-applied tail. *)
+  Next Obligation.
+    left.
+    symmetry in eqπ. apply decompose_stack_eq in eqπ. subst π.
+    symmetry in eqs. symmetry in eqd. symmetry in eqv. symmetry in eqop.
+    rewrite (abstract_readback_correct Σ wfΣ) in eqv.
+    rewrite (abstract_prim_op_of_correct X c Σ wfΣ) in eqop.
+    cbn. rewrite !zipc_appstack.
+    repeat zip fold. eapply cored_context.
+    assert (e : mkApps (tConst c u) args =
+                mkApps (mkApps (tConst c u) (map term_of_lit ls)) (skipn (arity op) args)).
+    { rewrite <- mkApps_app. f_equal. exact (prim_args_eq_inl eqs). }
+    rewrite e. left. eapply red1_mkApps_f.
+    eapply red_prim_op with (decl := {| cst_type := cst_type0; cst_body := None;
+                                       cst_universes := cst_universes0;
+                                       cst_relevance := cst_relevance0 |});
+      [exact eqop| |reflexivity|exact eqd|exact eqv].
+    unfold declared_constant, declared_constant_gen.
+    rewrite (abstract_env_lookup_correct _ _ _ wfΣ). rewrite <- eq. reflexivity.
+  Qed.
+  Next Obligation.
+    symmetry in eqπ. apply decompose_stack_eq in eqπ. subst π.
+    match goal with H : Pr _ (appstack _ _) |- _ =>
+      unfold Pr in H |- *; rewrite decompose_stack_appstack in H;
+      rewrite decompose_stack_appstack; cbn in H |- *; exact H end.
+  Qed.
+  (* The readback of a fired operation cannot fail (§4.2(b)1, gate 4). *)
+  Next Obligation.
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    destruct (hΣ _ wfΣ) as [wΣ].
+    rewrite (abstract_readback_correct Σ wfΣ) in eqv.
+    rewrite (abstract_prim_op_of_correct X c Σ wfΣ) in eqop.
+    pose proof (abstract_env_lookup_correct' X c wfΣ) as hl. rewrite <- eq in hl.
+    destruct (wf_prim_op_readback wΣ hl (eq_sym eqop) (eq_sym eqd)) as [v hv].
+    rewrite hv in eqv. discriminate eqv.
+  Qed.
+  (* The [Prim_app] frame: the argument under evaluation is in the same term, to
+     the right of the head. *)
+  Next Obligation.
+    symmetry in eqπ. apply decompose_stack_eq in eqπ. subst π.
+    symmetry in eqs.
+    eapply R_positionR.
+    - cbn. rewrite !zipc_appstack. f_equal.
+      rewrite mkApps_tApp_app. f_equal. symmetry. exact (prim_args_eq eqs).
+    - simpl. rewrite ?stack_position_cons, ?stack_position_appstack. simpl.
+      rewrite <- app_assoc. eapply positionR_poscat.
+      apply positionR_repeat_app_r.
+      pose proof (f_equal (@length _) (prim_args_eq eqs)) as hl.
+      rewrite !length_app in hl. cbn in hl. rewrite ?length_app in hl.
+      rewrite ?length_app. lia.
+  Qed.
+  (* The argument reduced to a literal: re-enter on the head.  The step is
+     strict because the argument was not a literal. *)
+  Next Obligation.
+    clear eqr. symmetry in eqπ. apply decompose_stack_eq in eqπ. subst π.
+    symmetry in eqs.
+    assert (hne : mkApps t l <> a).
+    { intros e. rewrite e in eqlit. rewrite (snd (split_lits_inr eqs)) in eqlit.
+      discriminate eqlit. }
+    destruct (prf Σ wfΣ) as [hreq [hpr _]].
+    unfold Pr in hpr. cbn in hpr.
+    symmetry in eql. rewrite eql in hpr. cbn in hpr. subst θ.
+    apply decompose_stack_eq in eql. subst ρ'.
+    destruct hreq as [heq | hR].
+    - exfalso. apply hne. injection heq as -> hs.
+      destruct l as [|x l]; [reflexivity|]. cbn in hs. discriminate hs.
+    - dependent destruction hR.
+      + left.
+        match goal with H : cored _ _ _ _ |- _ =>
+          cbn in H; rewrite !zipc_appstack in H; cbn in H; rewrite ?zipc_appstack in H;
+          rewrite ?mkApps_tApp_app in H; rewrite <- (prim_args_eq eqs) in H;
+          cbn; rewrite !zipc_appstack; exact H end.
+      + exfalso. apply hne.
+        match goal with
+        | Hz : {| pr1 := ?y; pr2 := _ |} = {| pr1 := ?x; pr2 := _ |} |- _ =>
+          assert (hzz : x = y) by (apply (f_equal pr1) in Hz; symmetry; exact Hz)
+        end.
+        apply (zipc_inj _ _ (Prim_app c u op (map term_of_lit ls)
+                               :: appstack (rest ++ skipn (arity op) args) ρ)).
+        rewrite <- zipc_appstack. exact hzz.
+  Qed.
+  Next Obligation.
+    try clear eqr. symmetry in eqπ. apply decompose_stack_eq in eqπ. subst π.
+    match goal with H : Pr _ (appstack _ _) |- _ =>
+      unfold Pr in H |- *; rewrite decompose_stack_appstack in H;
+      rewrite decompose_stack_appstack; cbn in H |- *; exact H end.
+  Qed.
+  (* The argument's weak-head form is not a literal: the application stops. *)
+  Next Obligation.
+    clear eqr. symmetry in eqπ. apply decompose_stack_eq in eqπ. subst π.
+    symmetry in eqs.
+    destruct (prf Σ wfΣ) as [hreq [hpr _]].
+    unfold Pr in hpr. cbn in hpr.
+    symmetry in eql. rewrite eql in hpr. cbn in hpr. subst θ.
+    apply decompose_stack_eq in eql. subst ρ'.
+    assert (hsame : mkApps t l = a ->
+      Req Σ Γ (tConst c u, appstack (map term_of_lit ls ++ mkApps t l
+                                       :: rest ++ skipn (arity op) args) ρ)
+              (tConst c u, appstack args ρ)).
+    { intros e. left. rewrite e, <- (prim_args_eq eqs). reflexivity. }
+    destruct hreq as [heq | hR].
+    - apply hsame. injection heq as -> hs.
+      destruct l as [|x l]; [reflexivity|]. cbn in hs. discriminate hs.
+    - dependent destruction hR.
+      + right. left.
+        match goal with H : cored _ _ _ _ |- _ =>
+          cbn in H; rewrite !zipc_appstack in H; cbn in H; rewrite ?zipc_appstack in H;
+          rewrite ?mkApps_tApp_app in H; rewrite <- (prim_args_eq eqs) in H;
+          cbn; rewrite !zipc_appstack; exact H end.
+      + apply hsame.
+        match goal with
+        | Hz : {| pr1 := ?y; pr2 := _ |} = {| pr1 := ?x; pr2 := _ |} |- _ =>
+          assert (hzz : x = y) by (apply (f_equal pr1) in Hz; symmetry; exact Hz)
+        end.
+        apply (zipc_inj _ _ (Prim_app c u op (map term_of_lit ls)
+                               :: appstack (rest ++ skipn (arity op) args) ρ)).
+        rewrite <- zipc_appstack. exact hzz.
+  Qed.
+  Next Obligation.
+    try clear eqr. symmetry in eqπ. apply decompose_stack_eq in eqπ. subst π.
+    unfold Pr. cbn. rewrite !decompose_stack_appstack. reflexivity.
   Qed.
 
   Next Obligation.
@@ -1472,8 +1664,24 @@ Corollary R_Acc_aux :
       unfold is_true in typ.
       unfold PCUICAst.PCUICEnvironment.fst_ctx in *.
       congruence.
-    - eapply inversion_Prim in typ as (prim_ty & cdecl & [? ? ? ?]); tea.
-      now eapply (invert_cumul_prim_type_ind) in w; tea.
+    - eapply inversion_Prim in typ as (prim_ty & cdecl & [? hpc hdecl hinv ? w]); tea.
+      pose proof wf as (_ & wfr & _).
+      exfalso. eapply (invert_cumul_prim_type_ind hdecl hinv); [|exact w].
+      exact (prim_op_of_primitive_constant Σ _ _ wfr hpc).
+    (* An unsaturated operation has a product type, never an inductive one. *)
+    - exfalso.
+      match goal with
+      | hop : prim_op_of _ _ = Some _, hlt : #|?l| < arity _ |- _ =>
+        destruct (prim_app_typing_inv (wfΣ := wf) hop typ (Nat.lt_le_incl _ _ hlt))
+          as [_ hprod];
+        destruct (hprod hlt) as (na & A & B & hle);
+        exact (invert_cumul_prod_ind hle)
+      end.
+    (* A rigid application: its blocking argument is typed at a primitive type
+       and is a weak-head normal form that is not a literal, so it is neutral
+       ([whnf_prim_type_canonical]) and the application is stuck. *)
+    - eapply whne_primapp_stuck; try eassumption.
+      eapply (prim_rigid_arg_whne (wfΣ := wf)); eassumption.
   Qed.
 
   Definition isCoFix_app t :=
