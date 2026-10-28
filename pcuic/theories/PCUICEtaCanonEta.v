@@ -231,3 +231,128 @@ Proof.
                              array_value := map canon (array_value arr);
                              array_default := canon (array_default arr); array_type := a |} b h').
 Qed.
+
+(** ** (5b) [eta1] preserves canonicity
+
+  The [canon] half of "[eta1] preserves [Q]"; P-SCOPE's [eta1_on_free_vars] is
+  the scoping half. The one non-congruence case is the root, where a canonical
+  η-redex has a canonical contractum because [lift0 1] is injective. The one
+  IMPOSSIBLE case is a step inside a λ domain: a canonical λ's domain is
+  [canon_dom = tSort sProp], which has no η-redex. *)
+
+Lemma eta1_from_sort s u : eta1 (tSort s) u -> False.
+Proof. intros h; inversion h. Qed.
+
+(** A list fixed by [f] stays fixed by one [OnOne2] step whose components
+    preserve fixedness. *)
+Lemma OnOne2_map_fixed {A} (R : A -> A -> Type) (f : A -> A) l l' :
+  OnOne2 R l l' -> map f l = l -> (forall x y, R x y -> f x = x -> f y = y) ->
+  map f l' = l'.
+Proof.
+  intros h. induction h as [hd hd' tl r|hd tl tl' r IH]; cbn; intros e H;
+    injection e as e1 e2; f_equal; eauto.
+Qed.
+
+Lemma eta1_canonical t u : canon t = t -> eta1 t u -> canon u = u.
+Proof.
+  intros ct h. revert ct. revert t u h.
+  apply (eta1_ind_all (fun a b => canon a = a -> canon b = b)).
+  - (* eta_red: a canonical η-redex has a canonical contractum *)
+    intros na t A H. cbn [canon] in H. rewrite canon_lift in H.
+    injection H as _ _ H. now apply lift0_1_inj.
+  - (* abs_eta_l: impossible, the canonical domain is a sort *)
+    intros na M M' N h _ H. cbn [canon] in H. injection H as _ eM _.
+    unfold canon_dom in eM. subst M. exfalso. exact (eta1_from_sort _ _ h).
+  - (* abs_eta_r *)
+    intros na M M' N _ IH H. cbn [canon] in H |- *. injection H as e1 e2 e3.
+    now rewrite (IH e3) e1 e2.
+  - (* letin_eta_def *)
+    intros na b t b' r _ IH H. cbn [canon] in H |- *. injection H as e1 e2 e3 e4.
+    now rewrite (IH e2) e1 e3 e4.
+  - (* letin_eta_ty *)
+    intros na b t b' r _ IH H. cbn [canon] in H |- *. injection H as e1 e2 e3 e4.
+    now rewrite (IH e3) e1 e2 e4.
+  - (* letin_eta_body *)
+    intros na b t b' r _ IH H. cbn [canon] in H |- *. injection H as e1 e2 e3 e4.
+    now rewrite (IH e4) e1 e2 e3.
+  - (* case_eta_param *)
+    intros ci p params' c brs h H. cbn [canon] in H |- *.
+    destruct p as [pars inst ctx ret]; cbn in *.
+    unfold canon_predicate in H |- *; cbn in H |- *.
+    injection H as ep ectx er ec ebrs.
+    rewrite (OnOne2_map_fixed _ _ _ _ h ep); [intros x y [_ IH]; exact IH|].
+    now rewrite ectx er ec ebrs.
+  - (* case_eta_return *)
+    intros ci p preturn' c brs _ IH H. cbn [canon] in H |- *.
+    destruct p as [pars inst ctx ret]; cbn in *.
+    unfold canon_predicate in H |- *; cbn in H |- *.
+    injection H as ep ectx er ec ebrs.
+    now rewrite (IH er) ep ectx ec ebrs.
+  - (* case_eta_discr *)
+    intros ci p c c' brs _ IH H. cbn [canon] in H |- *.
+    injection H as ep ec ebrs. now rewrite (IH ec) ep ebrs.
+  - (* case_eta_brs *)
+    intros ci p c brs brs' h H. cbn [canon] in H |- *.
+    injection H as ep ec ebrs. rewrite ep ec.
+    rewrite (OnOne2_map_fixed _ _ _ _ h ebrs); [|reflexivity].
+    intros x y [[_ IH] hc]. destruct x as [cx bx], y as [cy by_]; cbn in *.
+    unfold canon_branch; cbn. intros e. injection e as e1 e2. subst cy.
+    now rewrite e1 (IH e2).
+  - (* proj_eta *)
+    intros pr c c' _ IH H. cbn [canon] in H |- *. injection H as e. now rewrite (IH e).
+  - (* app_eta_l *)
+    intros M1 N1 M2 _ IH H. cbn [canon] in H |- *. injection H as e1 e2.
+    now rewrite (IH e1) e2.
+  - (* app_eta_r *)
+    intros M2 N2 M1 _ IH H. cbn [canon] in H |- *. injection H as e1 e2.
+    now rewrite (IH e2) e1.
+  - (* prod_eta_l *)
+    intros na M1 M2 N1 _ IH H. cbn [canon] in H |- *. injection H as e1 e2 e3.
+    now rewrite (IH e2) e1 e3.
+  - (* prod_eta_r *)
+    intros na M2 N2 M1 _ IH H. cbn [canon] in H |- *. injection H as e1 e2 e3.
+    now rewrite (IH e3) e1 e2.
+  - (* evar_eta *)
+    intros ev l l' h H. cbn [canon] in H |- *. injection H as e.
+    rewrite (OnOne2_map_fixed _ _ _ _ h e); [|reflexivity].
+    intros x y [_ IH]. exact IH.
+  - (* fix_eta_ty *)
+    intros mfix0 mfix1 idx h H. cbn [canon] in H |- *. injection H as e.
+    rewrite (OnOne2_map_fixed _ _ _ _ h e); [|reflexivity].
+    intros [nx tx bx rx] [ny ty by_ ry] [[_ IH] he]; cbn in *.
+    injection he as -> -> ->. unfold canon_def; cbn. intros ex. injection ex as e1 e2 e3.
+    now rewrite e1 (IH e2) e3.
+  - (* fix_eta_body *)
+    intros mfix0 mfix1 idx h H. cbn [canon] in H |- *. injection H as e.
+    rewrite (OnOne2_map_fixed _ _ _ _ h e); [|reflexivity].
+    intros [nx tx bx rx] [ny ty by_ ry] [[_ IH] he]; cbn in *.
+    injection he as -> -> ->. unfold canon_def; cbn. intros ex. injection ex as e1 e2 e3.
+    now rewrite e1 e2 (IH e3).
+  - (* cofix_eta_ty *)
+    intros mfix0 mfix1 idx h H. cbn [canon] in H |- *. injection H as e.
+    rewrite (OnOne2_map_fixed _ _ _ _ h e); [|reflexivity].
+    intros [nx tx bx rx] [ny ty by_ ry] [[_ IH] he]; cbn in *.
+    injection he as -> -> ->. unfold canon_def; cbn. intros ex. injection ex as e1 e2 e3.
+    now rewrite e1 (IH e2) e3.
+  - (* cofix_eta_body *)
+    intros mfix0 mfix1 idx h H. cbn [canon] in H |- *. injection H as e.
+    rewrite (OnOne2_map_fixed _ _ _ _ h e); [|reflexivity].
+    intros [nx tx bx rx] [ny ty by_ ry] [[_ IH] he]; cbn in *.
+    injection he as -> -> ->. unfold canon_def; cbn. intros ex. injection ex as e1 e2 e3.
+    now rewrite e1 e2 (IH e3).
+  (* [array_model]'s fields are, in order: level, type, default, value. *)
+  - (* array_eta_val *)
+    intros [lv aty adef avals] value h H; cbn in *. simp mapu_prim in H |- *.
+    unfold mapu_array_model in H |- *; cbn in H |- *.
+    injection H as et ed ev.
+    rewrite (OnOne2_map_fixed _ _ _ _ h ev); [intros x y [_ IH]; exact IH|].
+    now rewrite et ed.
+  - (* array_eta_def *)
+    intros [lv aty adef avals] d _ IH H; cbn in *. simp mapu_prim in H |- *.
+    unfold mapu_array_model in H |- *; cbn in H |- *.
+    injection H as et ed ev. now rewrite et (IH ed) ev.
+  - (* array_eta_type *)
+    intros [lv aty adef avals] t' _ IH H; cbn in *. simp mapu_prim in H |- *.
+    unfold mapu_array_model in H |- *; cbn in H |- *.
+    injection H as et ed ev. now rewrite (IH et) ed ev.
+Qed.
