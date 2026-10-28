@@ -2365,6 +2365,106 @@ Section PredRed.
 
 End PredRed.
 
+(** The statements above under [wf Σ], proved from their [_cb] versions through
+    [wf_ClosedBodies]. They stay before [Unset Universe Minimization ToSet] below,
+    which their universes depend on. *)
+
+Lemma OnOne2_pars_pred1_ctx_over {cf : checker_flags} {Σ} {wfΣ : wf Σ} Γ params params' puinst pctx :
+  on_ctx_free_vars xpredT Γ ->
+  forallb (on_free_vars xpredT) params ->
+  on_free_vars_ctx (shiftnP #|params| xpredT) pctx ->
+  OnOne2 (pred1 Σ Γ Γ) params params' ->
+  pred1_ctx_over Σ Γ Γ (inst_case_context params puinst pctx) (inst_case_context params' puinst pctx).
+Proof. intros; eapply OnOne2_pars_pred1_ctx_over_cb; tea; typeclasses eauto. Qed.
+
+Lemma pred_on_free_vars {cf : checker_flags} {Σ} {wfΣ : wf Σ} {P Γ Δ t u} :
+  on_ctx_free_vars P Γ ->
+  clos_refl_trans (pred1 Σ Γ Δ) t u ->
+  on_free_vars P t -> on_free_vars P u.
+Proof. intros; eapply pred_on_free_vars_cb; tea; typeclasses eauto. Qed.
+
+Section RedPredWf.
+  Context {cf : checker_flags}.
+  Context {Σ : global_env}.
+  Context (wfΣ : wf Σ).
+
+  Lemma pred1_ctx_pred1 P Γ Γ' Δ Δ' t u :
+    #|Γ| = #|Γ'| ->
+    on_free_vars (closedP #|Γ ,,, Δ| P) t ->
+    on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ ,,, Δ) ->
+    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ) t u ->
+    assumption_context Δ ->
+    pred1_ctx Σ (Γ ,,, Δ) (Γ' ,,, Δ') ->
+    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') t u.
+  Proof. eapply (@pred1_ctx_pred1_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma pred1_ctx_pred1_inv P Γ Γ' Δ Δ' t u :
+    #|Γ| = #|Γ'| ->
+    on_free_vars (closedP #|Γ ,,, Δ| P) t ->
+    on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ ,,, Δ) ->
+    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') t u ->
+    assumption_context Δ ->
+    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ) t u.
+  Proof. eapply (@pred1_ctx_pred1_inv_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma red1_pred1 Γ M N :
+    on_ctx_free_vars xpredT Γ ->
+    on_free_vars xpredT M ->
+    red1 Σ Γ M N -> pred1 Σ Γ Γ M N.
+  Proof. eapply (@red1_pred1_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+End RedPredWf.
+
+Section PredRedWf.
+  Context {cf : checker_flags}.
+  Context {Σ : global_env_ext}.
+  Context (wfΣ : wf Σ).
+
+  Lemma pred1_red Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
+    on_free_vars_ctx xpredT Γ ->
+    on_free_vars xpredT M ->
+    red Σ Γ M N.
+  Proof. eapply (@pred1_red_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma pred1_red_r_gen P Γ Γ' Δ Δ' : forall M N,
+    on_free_vars (closedP #|Γ ,,, Δ| P) M ->
+    on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ' ,,, Δ) ->
+    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') M N ->
+    #|Γ| = #|Γ'| ->
+    pred1_ctx Σ (Γ' ,,, Δ) (Γ' ,,, Δ') ->
+    pred1 Σ (Γ' ,,, Δ) (Γ' ,,, Δ') M N.
+  Proof. eapply (@pred1_red_r_gen_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma pred1_red_r_gen' P Γ Γ' Δ Δ' : forall M N,
+    on_free_vars (shiftnP #|Γ ,,, Δ| P) M ->
+    on_free_vars_ctx P (Γ' ,,, Δ) ->
+    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') M N ->
+    #|Γ| = #|Γ'| ->
+    pred1_ctx Σ (Γ' ,,, Δ) (Γ' ,,, Δ') ->
+    pred1 Σ (Γ' ,,, Δ) (Γ' ,,, Δ') M N.
+  Proof. eapply (@pred1_red_r_gen'_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma pred1_pred1_r P Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
+    on_ctx_free_vars (closedP #|Γ| P) Γ' ->
+    on_free_vars (closedP #|Γ| P) M ->
+    pred1 Σ Γ' Γ' M N.
+  Proof. eapply (@pred1_pred1_r_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma pred1_pred1_r' P Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
+    on_free_vars_ctx P Γ' ->
+    on_free_vars (shiftnP #|Γ| P) M ->
+    pred1 Σ Γ' Γ' M N.
+  Proof. eapply (@pred1_pred1_r'_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+  Lemma pred1_red_r {P Γ Γ' M N} :
+    pred1 Σ Γ Γ' M N ->
+    on_free_vars_ctx P Γ' ->
+    on_free_vars (shiftnP #|Γ| P) M ->
+    red Σ Γ' M N.
+  Proof. eapply (@pred1_red_r_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
+
+End PredRedWf.
+
 #[global] Hint Resolve on_free_vars_ctx_any_xpredT : fvs.
 
 #[global] Hint Extern 4 (is_true (on_ctx_free_vars xpredT _)) =>
@@ -3981,106 +4081,10 @@ End ConfluenceFacts.
 
 Arguments red_confluence_cb {cf} {Σ} {wfΣ} {Γ t u v}.
 
-(** * The trunk statements, under [wf Σ]
+(** * The same statements under [wf Σ]
 
-  Each statement below is trunk's, as written in trunk; it follows from its
-  [ClosedBodies] version [_cb] through the instance [wf_ClosedBodies]. *)
-
-Lemma OnOne2_pars_pred1_ctx_over {cf : checker_flags} {Σ} {wfΣ : wf Σ} Γ params params' puinst pctx :
-  on_ctx_free_vars xpredT Γ ->
-  forallb (on_free_vars xpredT) params ->
-  on_free_vars_ctx (shiftnP #|params| xpredT) pctx ->
-  OnOne2 (pred1 Σ Γ Γ) params params' ->
-  pred1_ctx_over Σ Γ Γ (inst_case_context params puinst pctx) (inst_case_context params' puinst pctx).
-Proof. intros; eapply OnOne2_pars_pred1_ctx_over_cb; tea; typeclasses eauto. Qed.
-
-Lemma pred_on_free_vars {cf : checker_flags} {Σ} {wfΣ : wf Σ} {P Γ Δ t u} :
-  on_ctx_free_vars P Γ ->
-  clos_refl_trans (pred1 Σ Γ Δ) t u ->
-  on_free_vars P t -> on_free_vars P u.
-Proof. intros; eapply pred_on_free_vars_cb; tea; typeclasses eauto. Qed.
-
-Section RedPredWf.
-  Context {cf : checker_flags}.
-  Context {Σ : global_env}.
-  Context (wfΣ : wf Σ).
-
-  Lemma pred1_ctx_pred1 P Γ Γ' Δ Δ' t u :
-    #|Γ| = #|Γ'| ->
-    on_free_vars (closedP #|Γ ,,, Δ| P) t ->
-    on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ ,,, Δ) ->
-    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ) t u ->
-    assumption_context Δ ->
-    pred1_ctx Σ (Γ ,,, Δ) (Γ' ,,, Δ') ->
-    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') t u.
-  Proof. eapply (@pred1_ctx_pred1_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-  Lemma pred1_ctx_pred1_inv P Γ Γ' Δ Δ' t u :
-    #|Γ| = #|Γ'| ->
-    on_free_vars (closedP #|Γ ,,, Δ| P) t ->
-    on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ ,,, Δ) ->
-    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') t u ->
-    assumption_context Δ ->
-    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ) t u.
-  Proof. eapply (@pred1_ctx_pred1_inv_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-  Lemma red1_pred1 Γ M N :
-    on_ctx_free_vars xpredT Γ ->
-    on_free_vars xpredT M ->
-    red1 Σ Γ M N -> pred1 Σ Γ Γ M N.
-  Proof. eapply (@red1_pred1_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-End RedPredWf.
-
-Section PredRedWf.
-  Context {cf : checker_flags}.
-  Context {Σ : global_env_ext}.
-  Context (wfΣ : wf Σ).
-
-  Lemma pred1_red Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
-    on_free_vars_ctx xpredT Γ ->
-    on_free_vars xpredT M ->
-    red Σ Γ M N.
-  Proof. eapply (@pred1_red_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-  Lemma pred1_red_r_gen P Γ Γ' Δ Δ' : forall M N,
-    on_free_vars (closedP #|Γ ,,, Δ| P) M ->
-    on_ctx_free_vars (closedP #|Γ ,,, Δ| P) (Γ' ,,, Δ) ->
-    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') M N ->
-    #|Γ| = #|Γ'| ->
-    pred1_ctx Σ (Γ' ,,, Δ) (Γ' ,,, Δ') ->
-    pred1 Σ (Γ' ,,, Δ) (Γ' ,,, Δ') M N.
-  Proof. eapply (@pred1_red_r_gen_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-  Lemma pred1_red_r_gen' P Γ Γ' Δ Δ' : forall M N,
-    on_free_vars (shiftnP #|Γ ,,, Δ| P) M ->
-    on_free_vars_ctx P (Γ' ,,, Δ) ->
-    pred1 Σ (Γ ,,, Δ) (Γ' ,,, Δ') M N ->
-    #|Γ| = #|Γ'| ->
-    pred1_ctx Σ (Γ' ,,, Δ) (Γ' ,,, Δ') ->
-    pred1 Σ (Γ' ,,, Δ) (Γ' ,,, Δ') M N.
-  Proof. eapply (@pred1_red_r_gen'_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-  Lemma pred1_pred1_r P Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
-    on_ctx_free_vars (closedP #|Γ| P) Γ' ->
-    on_free_vars (closedP #|Γ| P) M ->
-    pred1 Σ Γ' Γ' M N.
-  Proof. eapply (@pred1_pred1_r_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-  Lemma pred1_pred1_r' P Γ Γ' : forall M N, pred1 Σ Γ Γ' M N ->
-    on_free_vars_ctx P Γ' ->
-    on_free_vars (shiftnP #|Γ| P) M ->
-    pred1 Σ Γ' Γ' M N.
-  Proof. eapply (@pred1_pred1_r'_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-  Lemma pred1_red_r {P Γ Γ' M N} :
-    pred1 Σ Γ Γ' M N ->
-    on_free_vars_ctx P Γ' ->
-    on_free_vars (shiftnP #|Γ| P) M ->
-    red Σ Γ' M N.
-  Proof. eapply (@pred1_red_r_cb cf Σ (PCUICClosedTyp.wf_ClosedBodies Σ)); tea. Qed.
-
-End PredRedWf.
+  Each lemma below states its [_cb] version's statement under [wf Σ] instead of
+  [ClosedBodies Σ], and is proved from it through the instance [wf_ClosedBodies]. *)
 
 Lemma ws_red1_pred1_curry {cf:checker_flags} {Σ : global_env} {wfΣ : wf Σ} {P} {Γ : ws_context P}
   {t u : ws_term (shiftnP #|Γ| P)} :
@@ -4374,7 +4378,7 @@ Section ConfluenceFactsWf.
 
 End ConfluenceFactsWf.
 
-(** Trunk's implicit arguments and global hints, on the trunk statements. *)
+(** The implicit arguments and global hints of the statements under [wf Σ]. *)
 #[global] Hint Resolve red1_on_free_vars red_on_free_vars : fvs.
 #[global] Hint Resolve pred1_on_free_vars pred1_on_ctx_free_vars : fvs.
 #[global] Hint Resolve pred1_on_free_vars_ctx : fvs.

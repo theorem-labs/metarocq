@@ -416,10 +416,10 @@ Section CtxReduction.
 
 End CtxReduction.
 
-(** * The trunk statements, under [wf Σ]
+(** * The same statements under [wf Σ]
 
-  Each statement below is trunk's, as written in trunk; it follows from its
-  [ClosedBodies] version [_cb] through the instance [wf_ClosedBodies]. *)
+  Each lemma below states its [_cb] version's statement under [wf Σ] instead of
+  [ClosedBodies Σ], and is proved from it through the instance [wf_ClosedBodies]. *)
 
 Section CtxReductionWf.
   Context {cf : checker_flags}.
