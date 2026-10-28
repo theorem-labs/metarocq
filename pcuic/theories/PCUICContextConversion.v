@@ -138,6 +138,8 @@ Section ContextReduction.
     intros r onT onΓ H. revert onT onΓ Γ' H.
     simpl in *. induction r using red1_ind_all; intros; auto with pcuic;
     repeat inv_on_free_vars_xpredT.
+    (* red_prim_op: context-independent; the reduct [v] is a common reduct of both. *)
+    all: try (eexists; split; [eapply red1_red; eapply red_prim_op; eassumption|reflexivity]).
     all:try solve [eexists; t].
     all:try specialize (IHr ltac:(tea) ltac:(eauto with fvs)).
     all:try destruct (IHr _ ltac:(tea) ltac:(tea)) as [? [? ?]]; auto.
