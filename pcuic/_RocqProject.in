@@ -139,4 +139,6 @@ theories/PCUICEtaReductionC3.v
 theories/PCUICEtaStrengthening.v
 # C3 prover B (frac/eta-c3-b): parallel-eta route
 theories/PCUICEtaC3B.v
+# L2 canonical-domain route (plan.md 6.2), obligation 1
+theories/PCUICEtaCanon.v
 # theories/All.v
