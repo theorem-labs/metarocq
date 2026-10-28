@@ -6263,3 +6263,313 @@ Section ConvGhost.
   Qed.
 
 End ConvGhost.
+
+(** * Non-vacuity witnesses for the statements of [ConvGhost]
+
+  Two concrete runs of [conv_term] at the real fuel [cbn_depth], from the state [cbn_run]
+  starts in. Each theorem shows that the premises of [spec_term] hold at the run's inputs (the
+  start state satisfies [minv], the inputs have readings, their codes are in the ghost's
+  table), that the call returns, and that the conclusion holds: the state part [post] by the
+  machine lemma [whnf_master_hwf] and, for the run that answers [true], the conversion part
+  [cq] by hand, not by the fuel induction. The answers and final states are obtained by
+  computation. The only hypotheses are [wf Σ] and [abstract_env_ext_rel X Σ]: the start
+  invariant is [run_s2_gok] of [PCUICCallByNeedSoundLevel], and the section hypotheses of
+  [ConvGhost] hold at both contexts ([w_section], [v_section]).
+  - [witness_seam_run]: the run that refuted the old seam
+    ([PCUICCallByNeedSoundHookFrame.term_seam_false]): [x := (fun n : nat => n) O] against
+    [fun n : nat => n]. It answers [false], [post] holds after it, and the context cell of [x]
+    has been forced while every ghost of [minv] still reads it as its let-body.
+  - [witness_true_run]: [x := (fun n : y => n) y] against [y], at [Conv]. It answers [true]
+    and [cq] holds. *)
+
+(** [at_depth F dflt] runs [F] at the fuel one unit below [cbn_depth]. Stating the machine
+  calls of a run this way lets [vm_compute] evaluate them at the real fuel with no equation
+  between fuels to prove. *)
+Definition at_depth {A : Type} (F : cbn_fuel -> A) (dflt : A) : A :=
+  match cbn_depth with FS k => F (k tt) | FO => dflt end.
+
+(** The concrete contexts and terms. *)
+Definition w_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
+Definition w_nat : inductive :=
+  {| inductive_mind := (MPfile ["Datatypes"; "Init"; "Corelib"], "nat"); inductive_ind := 0 |}.
+Definition w_O : term := tConstruct w_nat 0 [].
+Definition w_body : term := tApp (tLambda w_na (tInd w_nat []) (tRel 0)) w_O.
+Definition w_Γ : context := [vdef w_na w_body (tInd w_nat [])].
+Definition w_t : term := tRel 0.
+Definition w_u : term := tLambda w_na (tInd w_nat []) (tRel 0).
+
+Definition v_Γ : context :=
+  [vdef w_na (tApp (tLambda w_na (tRel 0) (tRel 0)) (tRel 0)) (tRel 0); vass w_na (tSort sProp)].
+Definition v_t : term := tRel 0.
+Definition v_u : term := tRel 1.
+
+Section Witness.
+  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
+  Context (Σ : global_env_ext) (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ).
+
+  (** [tick] keeps [minv]. *)
+  Lemma r_minv_tick (Γ : context) (nctx L Q : nat) (lo : positive) (G : ghost)
+      (s s' : cbn_state) :
+    minv X_type X Γ nctx Σ L Q lo G s -> tick s = Some s' ->
+    minv X_type X Γ nctx Σ L Q lo G s'.
+  Proof.
+    intros [hL hQ hok hw] e. destruct (tick_shape s s' e) as (th & tn & _ & tg & tm).
+    constructor; [exact hL|exact hQ| |exact (hwf_heap Q s s' th hw)].
+    apply (gok_same X_type X Γ nctx Σ _ Q lo G s s' hok th tn tg).
+    exact (mok_memo X_type X Γ Σ _ s s' tm (@gk_memo _ X_type X Γ nctx Σ _ _ _ _ _ hok)).
+  Qed.
+
+  (** The start state of a run satisfies [minv] at [L = Q = nctx]. *)
+  Lemma r_minv_start (Γ : context) (nctx : nat) (t u : term) (hnctx : nctx = #|Γ|) :
+    consts_okb Σ t -> consts_okb Σ u -> on_free_vars xpredT t -> on_free_vars xpredT u ->
+    minv X_type X Γ nctx Σ nctx nctx xH (run_ghost X_type X t u) (run_s2 X_type X t u).
+  Proof.
+    intros ht hu hht hhu.
+    apply (minv_start X_type X Γ nctx Σ hnctx xH (run_ghost X_type X t u) _
+             (run_s2_gok X_type X Γ nctx Σ [] nctx t u ht hu hht hhu)).
+    intros a cl h. unfold heap_get in h. rewrite run_s2_heap, bh_get_holes in h.
+    discriminate h.
+  Qed.
+
+  (** A run of [conv_term] at [cbn_depth] from [cbn_run]'s start state, split at its three
+    machine calls. *)
+  Lemma r_split (Γ : context) (nctx : nat) (t u : term) (v1 v2 : cbn_value)
+      (s1 s2 s3 : cbn_state) (b : bool) :
+    at_depth (fun d => whnf X_type X Γ nctx false d env_empty (run_c1 X_type X t) []
+                         [RE env_empty] (run_s2 X_type X t u)) (CFail WDepth)
+      = COk (v1, [RE env_empty], s1) ->
+    at_depth (fun d => whnf X_type X Γ nctx false d env_empty (run_c2 X_type X t u) []
+                         [RV v1] s1) (CFail WDepth)
+      = COk (v2, [RV v1], s2) ->
+    at_depth (fun d => conv_value X_type X Γ nctx false d nctx Conv v1 v2 [] s2) (CFail WDepth)
+      = COk (b, [], s3) ->
+    conv_term X_type X Γ nctx false cbn_depth nctx Conv env_empty (run_c1 X_type X t)
+      env_empty (run_c2 X_type X t u) [] (run_s2 X_type X t u) = COk (b, [], s3)
+    /\ exists d,
+         whnf X_type X Γ nctx false d env_empty (run_c1 X_type X t) [] [RE env_empty]
+           (run_s2 X_type X t u) = COk (v1, [RE env_empty], s1)
+         /\ whnf X_type X Γ nctx false d env_empty (run_c2 X_type X t u) [] [RV v1] s1
+              = COk (v2, [RV v1], s2).
+  Proof.
+    unfold at_depth. destruct cbn_depth as [|k]; intros E1 E2 E3; [discriminate E1|].
+    cbv beta in E1, E2, E3.
+    split; [|exists (k tt); split; assumption].
+    rewrite conv_term_eq, E1. cbv beta iota. rewrite E2. cbv beta iota. exact E3.
+  Qed.
+
+  (** The state part: [post] holds after the two [whnf] calls and the [tick] of
+    [conv_value], by [whnf_master_hwf]. *)
+  Lemma r_post (Γ : context) (nctx : nat) (t u : term) (hnctx : nctx = #|Γ|)
+      (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
+                PCUICCallByNeedSoundHook.consts_okb Σ b)
+      (d : cbn_fuel) (v1 v2 : cbn_value) (s1 s2 s3 : cbn_state) :
+    minv X_type X Γ nctx Σ nctx nctx xH (run_ghost X_type X t u) (run_s2 X_type X t u) ->
+    whnf X_type X Γ nctx false d env_empty (run_c1 X_type X t) [] [RE env_empty]
+      (run_s2 X_type X t u) = COk (v1, [RE env_empty], s1) ->
+    whnf X_type X Γ nctx false d env_empty (run_c2 X_type X t u) [] [RV v1] s1
+      = COk (v2, [RV v1], s2) ->
+    tick s2 = Some s3 ->
+    post X_type X Γ nctx Σ nctx nctx (run_ghost X_type X t u) [] s3 [].
+  Proof.
+    intros hm0 E1 E2 E3.
+    destruct (whnf_master_hwf X_type X Γ nctx false Σ wfΣ hΣ hnctx hcio d nctx nctx xH
+                (run_ghost X_type X t u) env_empty (run_c1 X_type X t) [] [] t [RE env_empty]
+                (run_s2 X_type X t u) v1 [RE env_empty] s1 hm0
+                (Forall_cons (RE env_empty) I (Forall_nil _)) (run_c1_g_susp X_type X nctx t u)
+                (run_c1_gcok X_type X t u) (g_slots_nil nctx nctx _) E1)
+      as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & _ & _).
+    assert (hs2 : g_susp nctx nctx G1 env_empty (run_c2 X_type X t u).(c_term) u).
+    { rewrite run_c2_term. apply g_susp_env_empty. }
+    destruct (whnf_master_hwf X_type X Γ nctx false Σ wfΣ hΣ hnctx hcio d nctx nctx lo1 G1
+                env_empty (run_c2 X_type X t u) [] [] u [RV v1] s1 v2 [RV v1] s2 hm1
+                (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1)) hs2
+                (cok_gcx _ _ (proj1 hg1) _ (run_c2_gcok X_type X t u))
+                (g_slots_nil nctx nctx _) E2)
+      as (lo2 & G2 & w2 & hm2 & hr2 & hv2 & hg2 & _ & _).
+    exists nctx, lo2, G2. split; [lia|]. split; [exact (r_minv_tick _ _ _ _ _ _ _ _ hm2 E3)|].
+    split; [constructor|]. split; [|split; [constructor|reflexivity]].
+    intros i e hi. exact (proj1 hg2 _ _ (proj1 hg1 _ _ hi)).
+  Qed.
+
+  (** ** W1: the run that refuted the old seam answers [false], and [post] holds after it *)
+
+  Definition w_G0 : ghost := run_ghost X_type X w_t w_u.
+
+  (** The section hypotheses of [ConvGhost] at [w_Γ]. *)
+  Lemma w_section :
+    1 = #|w_Γ| /\ is_closed_context w_Γ /\ ctx_hyg w_Γ
+    /\ (forall j decl b, nth_error w_Γ j = Some decl -> decl.(decl_body) = Some b ->
+          PCUICCallByNeedSoundHook.consts_okb Σ b).
+  Proof.
+    split; [reflexivity|]. split; [reflexivity|]. split.
+    - intros [|j] decl b hj hb; [|destruct j; discriminate hj].
+      injection hj as <-. injection hb as <-. reflexivity.
+    - intros [|j] decl b hj hb; [|destruct j; discriminate hj].
+      injection hj as <-. injection hb as <-. reflexivity.
+  Qed.
+
+  Definition w_R1 :=
+    at_depth (fun d => whnf X_type X w_Γ 1 false d env_empty (run_c1 X_type X w_t) []
+                         [RE env_empty] (run_s2 X_type X w_t w_u)) (CFail WDepth).
+  Definition w_s1 : cbn_state := match w_R1 with COk (_, _, s) => s | CFail _ => cbn_init end.
+  Definition w_R2 :=
+    at_depth (fun d => whnf X_type X w_Γ 1 false d env_empty (run_c2 X_type X w_t w_u) []
+                         [RV (VCon w_O [])] w_s1) (CFail WDepth).
+  Definition w_v2 : cbn_value := match w_R2 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
+  Definition w_s2 : cbn_state := match w_R2 with COk (_, _, s) => s | CFail _ => cbn_init end.
+  Definition w_s3 : cbn_state := match tick w_s2 with Some s => s | None => cbn_init end.
+
+  Lemma w_E1 :
+    at_depth (fun d => whnf X_type X w_Γ 1 false d env_empty (run_c1 X_type X w_t) []
+                         [RE env_empty] (run_s2 X_type X w_t w_u)) (CFail WDepth)
+    = COk (VCon w_O [], [RE env_empty], w_s1).
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma w_E2 :
+    at_depth (fun d => whnf X_type X w_Γ 1 false d env_empty (run_c2 X_type X w_t w_u) []
+                         [RV (VCon w_O [])] w_s1) (CFail WDepth)
+    = COk (w_v2, [RV (VCon w_O [])], w_s2).
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma w_E3 :
+    at_depth (fun d => conv_value X_type X w_Γ 1 false d 1 Conv (VCon w_O []) w_v2 [] w_s2)
+      (CFail WDepth) = COk (false, [], w_s3).
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma w_tick : tick w_s2 = Some w_s3.
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma w_body_lift (n k : nat) : lift n k w_body = w_body.
+  Proof. reflexivity. Qed.
+
+  Theorem witness_seam_run :
+    minv X_type X w_Γ 1 Σ 1 1 xH w_G0 (run_s2 X_type X w_t w_u)
+    /\ g_susp 1 1 w_G0 env_empty (run_c1 X_type X w_t).(c_term) w_t
+    /\ PCUICCallByNeedSoundEval.cok w_G0 (run_c1 X_type X w_t)
+    /\ g_susp 1 1 w_G0 env_empty (run_c2 X_type X w_t w_u).(c_term) w_u
+    /\ PCUICCallByNeedSoundEval.cok w_G0 (run_c2 X_type X w_t w_u)
+    /\ exists s',
+         conv_term X_type X w_Γ 1 false cbn_depth 1 Conv env_empty (run_c1 X_type X w_t)
+           env_empty (run_c2 X_type X w_t w_u) [] (run_s2 X_type X w_t w_u) = COk (false, [], s')
+         /\ post X_type X w_Γ 1 Σ 1 1 w_G0 [] s' []
+         /\ PTree.get (key_of_succ_nat 0) s'.(st_gam) = Some (HAddr 1)
+         /\ heap_get (HAddr 1) s' = Some (CDone (VCon w_O []))
+         /\ (forall Q' lo' G', minv X_type X w_Γ 1 Σ 1 Q' lo' G' s' -> G' (HAddr 1) = Some w_body).
+  Proof.
+    assert (hm0 : minv X_type X w_Γ 1 Σ 1 1 xH w_G0 (run_s2 X_type X w_t w_u))
+      by exact (r_minv_start w_Γ 1 w_t w_u eq_refl eq_refl eq_refl eq_refl eq_refl).
+    split; [exact hm0|].
+    split; [exact (run_c1_g_susp X_type X 1 w_t w_u)|].
+    split; [exact (run_c1_gcok X_type X w_t w_u)|].
+    split; [exact (run_c2_g_susp X_type X 1 w_t w_u)|].
+    split; [exact (run_c2_gcok X_type X w_t w_u)|].
+    destruct (r_split w_Γ 1 w_t w_u (VCon w_O []) w_v2 w_s1 w_s2 w_s3 false
+                w_E1 w_E2 w_E3) as [hrun (d & hd1 & hd2)].
+    exists w_s3. split; [exact hrun|].
+    assert (hgam : PTree.get (key_of_succ_nat 0) w_s3.(st_gam) = Some (HAddr 1))
+      by (vm_compute; reflexivity).
+    destruct w_section as (_ & _ & _ & hcio).
+    split; [exact (r_post w_Γ 1 w_t w_u eq_refl hcio d _ _ _ _ _ hm0 hd1 hd2 w_tick)|].
+    split; [exact hgam|].
+    split; [vm_compute; reflexivity|].
+    intros Q' lo' G' [_ _ hok _].
+    destruct (@gk_gam _ X_type X w_Γ 1 Σ _ _ _ _ _ hok 0 (HAddr 1) hgam) as (tm & hden & hG).
+    change (ctx_den w_Γ 1 Q' 0) with (Some (lift0 (Q' - 1 + 1) w_body)) in hden.
+    rewrite w_body_lift in hden. injection hden as <-. exact hG.
+  Qed.
+
+  (** ** W2: a run that answers [true], with its conversion claim *)
+
+  Definition v_G0 : ghost := run_ghost X_type X v_t v_u.
+
+  (** The section hypotheses of [ConvGhost] at [v_Γ]. *)
+  Lemma v_section :
+    2 = #|v_Γ| /\ is_closed_context v_Γ /\ ctx_hyg v_Γ
+    /\ (forall j decl b, nth_error v_Γ j = Some decl -> decl.(decl_body) = Some b ->
+          PCUICCallByNeedSoundHook.consts_okb Σ b).
+  Proof.
+    split; [reflexivity|]. split; [reflexivity|]. split.
+    - intros [|[|j]] decl b hj hb; [| |destruct j; discriminate hj].
+      + injection hj as <-. injection hb as <-. reflexivity.
+      + injection hj as <-. discriminate hb.
+    - intros [|[|j]] decl b hj hb; [| |destruct j; discriminate hj].
+      + injection hj as <-. injection hb as <-. reflexivity.
+      + injection hj as <-. discriminate hb.
+  Qed.
+
+  Definition v_R1 :=
+    at_depth (fun d => whnf X_type X v_Γ 2 false d env_empty (run_c1 X_type X v_t) []
+                         [RE env_empty] (run_s2 X_type X v_t v_u)) (CFail WDepth).
+  Definition v_v1 : cbn_value := match v_R1 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
+  Definition v_s1 : cbn_state := match v_R1 with COk (_, _, s) => s | CFail _ => cbn_init end.
+  Definition v_R2 :=
+    at_depth (fun d => whnf X_type X v_Γ 2 false d env_empty (run_c2 X_type X v_t v_u) []
+                         [RV v_v1] v_s1) (CFail WDepth).
+  Definition v_v2 : cbn_value := match v_R2 with COk (v, _, _) => v | CFail _ => VCon w_O [] end.
+  Definition v_s2 : cbn_state := match v_R2 with COk (_, _, s) => s | CFail _ => cbn_init end.
+  Definition v_s3 : cbn_state := match tick v_s2 with Some s => s | None => cbn_init end.
+
+  Lemma v_E1 :
+    at_depth (fun d => whnf X_type X v_Γ 2 false d env_empty (run_c1 X_type X v_t) []
+                         [RE env_empty] (run_s2 X_type X v_t v_u)) (CFail WDepth)
+    = COk (v_v1, [RE env_empty], v_s1).
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma v_E2 :
+    at_depth (fun d => whnf X_type X v_Γ 2 false d env_empty (run_c2 X_type X v_t v_u) []
+                         [RV v_v1] v_s1) (CFail WDepth)
+    = COk (v_v2, [RV v_v1], v_s2).
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma v_E3 :
+    at_depth (fun d => conv_value X_type X v_Γ 2 false d 2 Conv v_v1 v_v2 [] v_s2)
+      (CFail WDepth) = COk (true, [], v_s3).
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma v_tick : tick v_s2 = Some v_s3.
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** The claim, by hand: [x] unfolds to [(fun n : y => n) y], which beta-reduces to [y]. *)
+  Lemma v_red : PCUICReduction.red Σ v_Γ v_t v_u.
+  Proof.
+    eapply PCUICReduction.red_trans.
+    - apply PCUICReduction.red1_red.
+      exact (PCUICReduction.red_rel Σ v_Γ 0 (tApp (tLambda w_na (tRel 0) (tRel 0)) (tRel 0)) eq_refl).
+    - apply PCUICReduction.red1_red. exact (PCUICReduction.red_beta Σ v_Γ w_na (tRel 1) (tRel 0) (tRel 1)).
+  Qed.
+
+  Lemma v_cq : cq v_Γ 2 Σ 2 2 Conv v_t v_u.
+  Proof.
+    intros u1 u2 e1 e2 _ _. rewrite Nat.sub_diag, lift0_id in e1, e2. subst u1 u2.
+    intros Δ hΔ hcl. destruct Δ as [|? Δ]; [|discriminate hΔ].
+    constructor. apply (red_ws_cumul_pb (wfΣ := wfΣ)).
+    apply into_closed_red; [exact v_red|exact hcl|reflexivity].
+  Qed.
+
+  Theorem witness_true_run :
+    minv X_type X v_Γ 2 Σ 2 2 xH v_G0 (run_s2 X_type X v_t v_u)
+    /\ g_susp 2 2 v_G0 env_empty (run_c1 X_type X v_t).(c_term) v_t
+    /\ PCUICCallByNeedSoundEval.cok v_G0 (run_c1 X_type X v_t)
+    /\ g_susp 2 2 v_G0 env_empty (run_c2 X_type X v_t v_u).(c_term) v_u
+    /\ PCUICCallByNeedSoundEval.cok v_G0 (run_c2 X_type X v_t v_u)
+    /\ exists s',
+         conv_term X_type X v_Γ 2 false cbn_depth 2 Conv env_empty (run_c1 X_type X v_t)
+           env_empty (run_c2 X_type X v_t v_u) [] (run_s2 X_type X v_t v_u) = COk (true, [], s')
+         /\ post X_type X v_Γ 2 Σ 2 2 v_G0 [] s' []
+         /\ cq v_Γ 2 Σ 2 2 Conv v_t v_u.
+  Proof.
+    assert (hm0 : minv X_type X v_Γ 2 Σ 2 2 xH v_G0 (run_s2 X_type X v_t v_u))
+      by exact (r_minv_start v_Γ 2 v_t v_u eq_refl eq_refl eq_refl eq_refl eq_refl).
+    split; [exact hm0|].
+    split; [exact (run_c1_g_susp X_type X 2 v_t v_u)|].
+    split; [exact (run_c1_gcok X_type X v_t v_u)|].
+    split; [exact (run_c2_g_susp X_type X 2 v_t v_u)|].
+    split; [exact (run_c2_gcok X_type X v_t v_u)|].
+    destruct (r_split v_Γ 2 v_t v_u v_v1 v_v2 v_s1 v_s2 v_s3 true
+                v_E1 v_E2 v_E3) as [hrun (d & hd1 & hd2)].
+    exists v_s3. split; [exact hrun|].
+    destruct v_section as (_ & _ & _ & hcio).
+    split; [exact (r_post v_Γ 2 v_t v_u eq_refl hcio d _ _ _ _ _ hm0 hd1 hd2 v_tick)|].
+    exact v_cq.
+  Qed.
+End Witness.
