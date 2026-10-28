@@ -181,4 +181,6 @@ theories/PCUICEtaCanonSpec.v
 theories/PCUICEtaFInstSpec.v
 # L2 obligation 8 (STAGED AT FollowSpec): pinned I5 restatement, A4 (join => spec), obligation 9's premise
 theories/PCUICEtaI5.v
+# L2 obligation 8 (STAGED AT FollowSpec), A3 piece: U1' is reflexive/symmetric/transitive at the term level
+theories/PCUICEtaFInstEquiv.v
 # theories/All.v
