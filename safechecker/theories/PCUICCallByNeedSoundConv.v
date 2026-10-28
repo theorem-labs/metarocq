@@ -11,7 +11,7 @@ From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv PCUICCallBy
   PCUICCallByNeedSound PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx
   PCUICCallByNeedSoundMemo PCUICCallByNeedSoundCong PCUICCallByNeedSoundHook
   PCUICCallByNeedSoundEval PCUICCallByNeedSoundLevel PCUICCallByNeedSoundHeapWf.
-From MetaRocq.PCUIC Require PCUICConfluence PCUICOnFreeVarsConv.
+From MetaRocq.PCUIC Require PCUICConfluence PCUICOnFreeVarsConv PCUICRenameConv.
 
 Import CanonicalTries.
 
@@ -3446,6 +3446,560 @@ Section ConvGhost.
           exact (cagree_lift _ _ _ _ _ _ _ hLQ hq1 (hc hb)).
         * cbv beta iota in he. injection he as <- <- <-.
           split; [exact (post_drop2 _ _ _ _ _ _ _ _ hp1)|]. intros hb; discriminate hb.
+  Qed.
+
+  (** ** The statements of the other functions *)
+
+  Definition spec_eval (d : cbn_fuel) : Prop :=
+    forall L Q lo G pb x1 x2 t1 t2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      g_slot nctx Q G x1 t1 -> g_slot nctx Q G x2 t2 ->
+      conv_eval X_type X Γ nctx stress d L pb x1 x2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+
+  Definition spec_cells (d : cbn_fuel) : Prop :=
+    forall L Q lo G l1 l2 ts1 ts2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      g_addrs G l1 ts1 -> g_addrs G l2 ts2 ->
+      conv_cells X_type X Γ nctx stress d L l1 l2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cqs L Q ts1 ts2).
+
+  Definition spec_term (d : cbn_fuel) : Prop :=
+    forall L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
+      g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
+      conv_term X_type X Γ nctx stress d L pb e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+
+  (** Two codes [code_eq] accepts: one term, or equal up to universes at [Conv]. *)
+  Definition samec (a1 a2 : term) : Prop := a1 = a2 \/ ∥ compare_term Σ Σ Conv a1 a2 ∥.
+
+  (** [conv_same_code] answers [true] with the facts the same-code rule rests on; the
+    conversion of the two readings follows from them ([same_code_cq] below). *)
+  Definition spec_same (d : cbn_fuel) : Prop :=
+    forall L Q lo G e1 c1 e2 c2 ts1 ts2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs -> gcok G c1 -> gcok G c2 ->
+      g_slots nctx Q G e1.(ev_vals) ts1 -> g_slots nctx Q G e2.(ev_vals) ts2 ->
+      conv_same_code X_type X Γ nctx stress d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\
+      (b = true -> e1.(ev_goff) = e2.(ev_goff) /\ e1.(ev_nvals) = e2.(ev_nvals)
+                   /\ samec c1.(c_term) c2.(c_term) /\ cagree L Q c1.(c_term) 0 ts1 ts2).
+
+  Definition spec_case (d : cbn_fuel) : Prop :=
+    forall L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
+      g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
+      case_cong X_type X Γ nctx stress d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+
+  (** The parameter codes [case_params] walks: child [case_param_step i] onwards. *)
+  Inductive pcodes (G : ghost) (c : code) : N -> list term -> Prop :=
+  | pcodes_nil i : pcodes G c i []
+  | pcodes_cons i t l :
+      gcok G (child c (case_param_step i) t) -> pcodes G c (N.succ i) l ->
+      pcodes G c i (t :: l).
+
+  Definition spec_params (d : cbn_fuel) : Prop :=
+    forall L Q lo G e1 c1 e2 c2 i l1 l2 us1 us2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      pcodes G c1 i l1 -> pcodes G c2 i l2 ->
+      Forall2 (g_susp nctx Q G e1) l1 us1 -> Forall2 (g_susp nctx Q G e2) l2 us2 ->
+      case_params X_type X Γ nctx stress d L e1 c1 e2 c2 i l1 l2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cqs L Q us1 us2).
+
+  (** A branch body read at [Q] through slots [ts], under its own [#|bcontext|] binders, and
+    what a [true] claims of two of them: the lifts by [Q - L] at the cut [#|bcontext|] of two
+    terms scoped at [L + #|bcontext|] are convertible. *)
+  Definition rbody (ts : list term) (N : nat) (br : branch term) : term :=
+    subst ts #|br.(bcontext)| (lift N (#|br.(bcontext)| + #|ts|) br.(bbody)).
+
+  Definition cqb (L Q k : nat) (B1 B2 : term) : Prop :=
+    forall U1 U2 : term, B1 = lift (Q - L) k U1 -> B2 = lift (Q - L) k U2 ->
+      scl (L + k) U1 -> scl (L + k) U2 -> cv (L + k) Conv U1 U2.
+
+  Inductive bcodes (G : ghost) (c : code) : N -> list (branch term) -> Prop :=
+  | bcodes_nil i : bcodes G c i []
+  | bcodes_cons i br l :
+      gcok G (child c (case_branch_step i) br.(bbody)) -> bcodes G c (N.succ i) l ->
+      bcodes G c i (br :: l).
+
+  Definition spec_branches (d : cbn_fuel) : Prop :=
+    forall L Q lo G e1 c1 e2 c2 i l1 l2 ts1 ts2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      bcodes G c1 i l1 -> bcodes G c2 i l2 ->
+      g_slots nctx Q G e1.(ev_vals) ts1 -> e1.(ev_nvals) = #|e1.(ev_vals)| ->
+      g_slots nctx Q G e2.(ev_vals) ts2 -> e2.(ev_nvals) = #|e2.(ev_vals)| ->
+      case_branches X_type X Γ nctx stress d L e1 c1 e2 c2 i l1 l2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\
+      (b = true -> Forall2 (fun br1 br2 =>
+          case_ctx_ok br1.(bcontext) br2.(bcontext) = true
+          /\ cqb L Q #|br1.(bcontext)| (rbody ts1 (Q - nctx + e1.(ev_goff)) br1)
+                 (rbody ts2 (Q - nctx + e2.(ev_goff)) br2)) l1 l2).
+
+  Definition spec_rows_on (d : cbn_fuel) (R : cbn_value -> cbn_value -> Prop) : Prop :=
+    forall L Q lo G pb v1 v2 w1 w2 rs s b rs' s',
+      R v1 v2 -> MI L Q lo G s -> Forall (rwf Q) rs -> vwf Q v1 -> vwf Q v2 ->
+      g_value nctx Q G v1 w1 -> g_value nctx Q G v2 w2 ->
+      conv_rows X_type X Γ nctx stress d L pb v1 v2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
+
+  Definition spec_rows (d : cbn_fuel) : Prop := spec_rows_on d (fun _ _ => True).
+
+  Definition spec_value (d : cbn_fuel) : Prop :=
+    forall L Q lo G pb v1 v2 w1 w2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs -> vwf Q v1 -> vwf Q v2 ->
+      g_value nctx Q G v1 w1 -> g_value nctx Q G v2 w2 ->
+      conv_value X_type X Γ nctx stress d L pb v1 v2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb w1 w2).
+
+  (** All eleven functions at one fuel: the induction hypothesis of the comparison. *)
+  Definition spec_all (d : cbn_fuel) : Prop :=
+    spec_slot d /\ spec_eval d /\ spec_cells d /\ spec_term d /\ spec_same d /\ spec_scc d
+    /\ spec_case d /\ spec_params d /\ spec_branches d /\ spec_rows d /\ spec_value d.
+
+  (** The base case of the induction: at [FO] every function of the comparison answers
+    [CFail WDepth]. This is not evidence that the statements say anything; see the witness
+    lemmas for that. *)
+  Lemma spec_all_FO : spec_all FO.
+  Proof.
+    repeat split; repeat intro;
+      match goal with h : _ = COk _ |- _ => cbn in h; discriminate h end.
+  Qed.
+
+  (** ** Helpers for the step lemmas *)
+
+  Lemma post_level L L' Q G rs s' rs' :
+    nctx <= L -> L <= L' -> post L' Q G rs s' rs' -> post L Q G rs s' rs'.
+  Proof.
+    intros h1 h2 (Q' & lo' & G' & hq & [hL hLQ hok hw] & hr & hg).
+    exists Q', lo', G'. split; [exact hq|]. split; [constructor; [exact h1|lia|exact hok|exact hw]|].
+    split; assumption.
+  Qed.
+
+  Lemma gren_cons_inv Q G G' r rs rs1 :
+    gren nctx Q G G' (r :: rs) rs1 ->
+    exists r' rs', rs1 = r' :: rs' /\ gpres nctx Q G G' r r' /\ gren nctx Q G G' rs rs'.
+  Proof.
+    intros [hc hf]. destruct rs1 as [|r' rs']; [inversion hf|].
+    exists r', rs'. split; [reflexivity|].
+    inversion hf; subst. split; [assumption|split; assumption].
+  Qed.
+
+  Lemma gpres_RE_inv Q G G' e r :
+    gpres nctx Q G G' (RE e) r -> exists e', r = RE e' /\ genv nctx Q G G' e e'.
+  Proof. destruct r; cbn; intros h; try contradiction. eexists; split; [reflexivity|exact h]. Qed.
+
+  Lemma gpres_RV_inv Q G G' v r :
+    gpres nctx Q G G' (RV v) r ->
+    exists v', r = RV v' /\ forall t, g_value nctx Q G v t -> g_value nctx Q G' v' t.
+  Proof. destruct r; cbn; intros h; try contradiction. eexists; split; [reflexivity|exact h]. Qed.
+
+  Lemma gpres_RSl_inv Q G G' x r :
+    gpres nctx Q G G' (RSl x) r ->
+    exists x', r = RSl x' /\ forall t, g_slot nctx Q G x t -> g_slot nctx Q G' x' t.
+  Proof. destruct r; cbn; intros h; try contradiction. eexists; split; [reflexivity|exact h]. Qed.
+
+  Lemma ctx_closed_jctx n : is_closed_context (Γ ,,, jctx n).
+  Proof. rewrite on_free_vars_ctx_app, hΓ. apply jctx_closed. Qed.
+
+  Lemma red_scl L Δ v u :
+    nctx <= L -> #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) -> scl L v ->
+    PCUICReduction.red Σ (Γ ,,, Δ) v u -> scl L u.
+  Proof.
+    intros hL hΔ hcl hv hr. unfold scl in *.
+    assert (e : #|Γ ,,, Δ| = L) by (rewrite app_context_length, hΔ, <- hnctx; lia).
+    assert (hc : on_ctx_free_vars (shiftnP L xpred0) (Γ ,,, Δ)).
+    { rewrite <- e, on_free_vars_ctx_on_ctx_free_vars. exact hcl. }
+    exact (PCUICRenameConv.red_on_free_vars (wfΣ := wfΣ) hc hv hr).
+  Qed.
+
+  Lemma scl_hyg L u : scl L u -> on_free_vars xpredT u.
+  Proof. intros h. eapply on_free_vars_impl; [|exact h]. intros; reflexivity. Qed.
+
+  (** The readings of the inputs reduce, at the master level, to the readings of their values:
+    a [true] about the values is a [true] about the inputs. *)
+  Lemma cq_red L Q pb t1 t2 w1 w2 :
+    nctx <= L -> L <= Q ->
+    cred Γ Σ (jctx (Q - nctx)) t1 w1 -> cred Γ Σ (jctx (Q - nctx)) t2 w2 ->
+    cq L Q pb w1 w2 -> cq L Q pb t1 t2.
+  Proof.
+    intros hL hQ hr1 hr2 h u1 u2 e1 e2 s1 s2 Δ hΔ hcl. subst t1 t2.
+    destruct (cred_unlift Γ nctx Σ wfΣ hnctx hΓ L Q u1 w1 hL hQ (scl_hyg L u1 s1) hr1)
+      as (w1' & -> & hd1).
+    destruct (cred_unlift Γ nctx Σ wfΣ hnctx hΓ L Q u2 w2 hL hQ (scl_hyg L u2 s2) hr2)
+      as (w2' & -> & hd2).
+    assert (hj : #|jctx (L - nctx)| = L - nctx) by apply jctx_length.
+    destruct (hd1 _ hj) as [rj1]. destruct (hd2 _ hj) as [rj2].
+    pose proof (red_scl L _ u1 w1' hL hj (ctx_closed_jctx _) s1 rj1) as sw1.
+    pose proof (red_scl L _ u2 w2' hL hj (ctx_closed_jctx _) s2 rj2) as sw2.
+    destruct (h w1' w2' eq_refl eq_refl sw1 sw2 Δ hΔ hcl) as [hc].
+    destruct (hd1 Δ hΔ) as [r1]. destruct (hd2 Δ hΔ) as [r2].
+    constructor.
+    eapply (ws_cumul_pb_closed_red (wfΣ := wfΣ)); [| |exact hc].
+    - exact (into_closed_red r1 hcl (scl_open L Δ u1 hL hΔ s1)).
+    - exact (into_closed_red r2 hcl (scl_open L Δ u2 hL hΔ s2)).
+  Qed.
+
+  Lemma cqs_nil L Q : cqs L Q [] [].
+  Proof.
+    intros us1 us2 e1 e2 _ _ Δ _ _.
+    destruct us1; [|discriminate e1]. destruct us2; [|discriminate e2].
+    constructor. constructor.
+  Qed.
+
+  Lemma cqs_cons L Q t1 t2 ts1 ts2 :
+    cq L Q Conv t1 t2 -> cqs L Q ts1 ts2 -> cqs L Q (t1 :: ts1) (t2 :: ts2).
+  Proof.
+    intros h hs us1 us2 e1 e2 s1 s2 Δ hΔ hcl.
+    destruct us1 as [|u1 us1]; [discriminate e1|]. destruct us2 as [|u2 us2]; [discriminate e2|].
+    cbn in e1, e2. injection e1 as e1 e1'. injection e2 as e2 e2'.
+    cbn in s1, s2. apply andb_true_iff in s1 as [s1 s1']. apply andb_true_iff in s2 as [s2 s2'].
+    destruct (h u1 u2 e1 e2 s1 s2 Δ hΔ hcl) as [hc].
+    destruct (hs us1 us2 e1' e2' s1' s2' Δ hΔ hcl) as [hcs].
+    constructor. constructor; assumption.
+  Qed.
+
+  Lemma mkApps_lift0_inv m h ts u :
+    mkApps h ts = lift0 m u ->
+    exists h' us, u = mkApps h' us /\ h = lift0 m h' /\ ts = map (lift0 m) us.
+  Proof.
+    revert u. induction ts as [|t ts ih] using rev_ind; intros u e.
+    - exists u, []. cbn in e |- *. split; [reflexivity|]. split; [exact e|reflexivity].
+    - rewrite mkApps_app in e. cbn in e.
+      destruct u as [| | | | | | |u1 u2| | | | | | | |]; cbn in e; try discriminate e.
+      injection e as e1 e2.
+      destruct (ih _ e1) as (h' & us & -> & -> & ->).
+      exists h', (us ++ [u2]). split; [rewrite mkApps_app; reflexivity|]. split; [reflexivity|].
+      rewrite map_app. cbn. rewrite e2. reflexivity.
+  Qed.
+
+  Lemma lift0_closed_inv m h h' : closedn 0 h -> h = lift0 m h' -> h' = h.
+  Proof.
+    intros hc e. apply (lift0_inj m).
+    transitivity h; [symmetry; exact e|symmetry; exact (lift_closed _ _ _ hc)].
+  Qed.
+
+  (** ** [conv_cells] *)
+
+  Lemma conv_cells_eq k L l1 l2 rs s :
+    conv_cells X_type X Γ nctx stress (FS k) L l1 l2 rs s =
+    match l1, l2 with
+    | [], [] => COk (true, rs, s)
+    | a1 :: l1, a2 :: l2 =>
+      match conv_slot X_type X Γ nctx stress (k tt) L Conv (SAddr a1) (SAddr a2)
+              (RSp l1 :: RSp l2 :: rs) s with
+      | COk (true, rs, s) =>
+        match rs with
+        | RSp l1 :: RSp l2 :: rs => conv_cells X_type X Γ nctx stress (k tt) L l1 l2 rs s
+        | _ => CFail WRoots
+        end
+      | COk (false, rs, s) => COk (false, skipn 2 rs, s)
+      | CFail w => CFail w
+      end
+    | _, _ => COk (false, rs, s)
+    end.
+  Proof. reflexivity. Qed.
+
+  Lemma conv_cells_sound_g (k : unit -> cbn_fuel) :
+    spec_slot (k tt) -> spec_cells (k tt) -> spec_cells (FS k).
+  Proof.
+    intros hS hC L Q lo G l1 l2 ts1 ts2 rs s b rs' s' hm hr hl1 hl2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite conv_cells_eq in he.
+    destruct l1 as [|a1 l1]; destruct l2 as [|a2 l2].
+    - injection he as <- <- <-. inversion hl1; subst. inversion hl2; subst.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros _. apply cqs_nil.
+    - injection he as <- <- <-.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros hb; discriminate hb.
+    - injection he as <- <- <-.
+      split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros hb; discriminate hb.
+    - inversion hl1 as [|y1 u1 m1 us1 hx1 hm1]; subst.
+      inversion hl2 as [|y2 u2 m2 us2 hx2 hm2]; subst.
+      destruct (conv_slot X_type X Γ nctx stress (k tt) L Conv (SAddr a1) (SAddr a2)
+                  (RSp l1 :: RSp l2 :: rs) s) as [[[b2 rs2] s2]|w] eqn:Ecs;
+        [|discriminate he].
+      assert (hr' : Forall (rwf Q) (RSp l1 :: RSp l2 :: rs))
+        by (constructor; [exact I|constructor; [exact I|exact hr]]).
+      destruct (hS L Q lo G Conv (SAddr a1) (SAddr a2) u1 u2 _ s b2 rs2 s2 hm hr'
+                  ltac:(constructor; exact hx1) ltac:(constructor; exact hx2) Ecs) as [hp1 hc1].
+      destruct b2.
+      + destruct hp1 as (Q1 & lo1 & G1 & hq1 & hm1' & hr1 & hg1).
+        destruct (grq_cons_inv _ _ _ _ _ _ _ hg1) as (q1 & rsA & -> & hqa & hgA).
+        destruct (gpq_RSp_inv _ _ _ _ _ _ hqa) as (l1' & -> & hk1).
+        destruct (grq_cons_inv _ _ _ _ _ _ _ hgA) as (q2 & rsB & -> & hqb & hgB).
+        destruct (gpq_RSp_inv _ _ _ _ _ _ hqb) as (l2' & -> & hk2).
+        cbv beta iota in he.
+        destruct (hC L Q1 lo1 G1 l1' l2' _ _ rsB s2 b rs' s' hm1'
+                    (Forall_inv_tail (Forall_inv_tail hr1)) (hk1 _ hm1) (hk2 _ hm2) he)
+          as [hp hc].
+        split; [exact (post_compose _ _ _ _ _ _ _ _ _ hq1 hgB hp)|].
+        intros hb. apply cqs_cons; [exact (hc1 eq_refl)|].
+        exact (cqs_lift _ _ _ _ _ hLQ hq1 (hc hb)).
+      + cbv beta iota in he. injection he as <- <- <-.
+        split; [exact (post_drop2 _ _ _ _ _ _ _ _ hp1)|]. intros hb; discriminate hb.
+  Qed.
+
+  (** ** [conv_eval] and [conv_term]: the machine, then the values *)
+
+  Lemma conv_eval_eq k L le x1 x2 rs s :
+    conv_eval X_type X Γ nctx stress (FS k) L le x1 x2 rs s =
+    match eval_slot X_type X Γ nctx stress (k tt) x1 [] (RSl x2 :: rs) s with
+    | COk (v1, rs, s) =>
+      match rs with
+      | RSl x2 :: rs =>
+        match eval_slot X_type X Γ nctx stress (k tt) x2 [] (RV v1 :: rs) s with
+        | COk (v2, rs, s) =>
+          match rs with
+          | RV v1 :: rs => conv_value X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+          | _ => CFail WRoots
+          end
+        | CFail w => CFail w
+        end
+      | _ => CFail WRoots
+      end
+    | CFail w => CFail w
+    end.
+  Proof. reflexivity. Qed.
+
+  Lemma conv_term_eq k L le e1 c1 e2 c2 rs s :
+    conv_term X_type X Γ nctx stress (FS k) L le e1 c1 e2 c2 rs s =
+    match whnf X_type X Γ nctx stress (k tt) e1 c1 [] (RE e2 :: rs) s with
+    | COk (v1, rs, s) =>
+      match rs with
+      | RE e2 :: rs =>
+        match whnf X_type X Γ nctx stress (k tt) e2 c2 [] (RV v1 :: rs) s with
+        | COk (v2, rs, s) =>
+          match rs with
+          | RV v1 :: rs => conv_value X_type X Γ nctx stress (k tt) L le v1 v2 rs s
+          | _ => CFail WRoots
+          end
+        | CFail w => CFail w
+        end
+      | _ => CFail WRoots
+      end
+    | CFail w => CFail w
+    end.
+  Proof. reflexivity. Qed.
+
+  Lemma conv_eval_sound_g (k : unit -> cbn_fuel) : spec_value (k tt) -> spec_eval (FS k).
+  Proof.
+    intros hV L Q lo G pb x1 x2 t1 t2 rs s b rs' s' hm hr hx1 hx2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite conv_eval_eq in he.
+    destruct (eval_slot X_type X Γ nctx stress (k tt) x1 [] (RSl x2 :: rs) s)
+      as [[[v1 rs1] s1]|w] eqn:E1; [|discriminate he].
+    destruct (eval_slot_master_hwf X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
+                x1 [] [] t1 _ s v1 rs1 s1 hm (Forall_cons (RSl x2) I hr) hx1 ltac:(constructor) E1)
+      as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & hw1 & hd1).
+    destruct (gren_cons_inv _ _ _ _ _ _ hg1) as (q1 & rs1' & -> & hq1 & hg1').
+    destruct (gpres_RSl_inv _ _ _ _ _ hq1) as (x2' & -> & hk1).
+    cbv beta iota in he.
+    destruct (eval_slot X_type X Γ nctx stress (k tt) x2' [] (RV v1 :: rs1') s1)
+      as [[[v2 rs2] s2]|w] eqn:E2; [|discriminate he].
+    destruct (eval_slot_master_hwf X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
+                x2' [] [] t2 _ s1 v2 rs2 s2 hm1 (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1))
+                (hk1 _ hx2) ltac:(constructor) E2)
+      as (lo2 & G2 & w2 & hm2 & hr2 & hv2 & hg2 & hw2 & hd2).
+    destruct (gren_cons_inv _ _ _ _ _ _ hg2) as (q2 & rs2' & -> & hq2 & hg2').
+    destruct (gpres_RV_inv _ _ _ _ _ hq2) as (v1' & -> & hk2).
+    cbv beta iota in he.
+    destruct (hV L Q lo2 G2 pb v1' v2 w1 w2 rs2' s2 b rs' s' hm2 (Forall_inv_tail hr2)
+                (Forall_inv hr2) hv2 (hk2 _ hw1) hw2 he) as [hp hc].
+    split.
+    - apply (post_compose L Q Q G G2 rs rs2' s' rs' (le_n Q)); [|exact hp].
+      apply (grq_trans Q Q Q G G1 G2 rs rs1' rs2' (le_n Q) (le_n Q));
+        apply grq_of_gren; assumption.
+    - intros hb. exact (cq_red L Q pb t1 t2 w1 w2 hL hLQ hd1 hd2 (hc hb)).
+  Qed.
+
+  Lemma conv_term_sound_g (k : unit -> cbn_fuel) : spec_value (k tt) -> spec_term (FS k).
+  Proof.
+    intros hV L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s' hm hr hs1 hc1 hs2 hc2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite conv_term_eq in he.
+    destruct (whnf X_type X Γ nctx stress (k tt) e1 c1 [] (RE e2 :: rs) s)
+      as [[[v1 rs1] s1]|w] eqn:E1; [|discriminate he].
+    destruct (whnf_master_hwf X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
+                e1 c1 [] [] t1 _ s v1 rs1 s1 hm (Forall_cons (RE e2) I hr) hs1 hc1 ltac:(constructor) E1)
+      as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & hw1 & hd1).
+    destruct (gren_cons_inv _ _ _ _ _ _ hg1) as (q1 & rs1' & -> & hq1 & hg1').
+    destruct (gpres_RE_inv _ _ _ _ _ hq1) as (e2' & -> & hk1).
+    cbv beta iota in he.
+    destruct (whnf X_type X Γ nctx stress (k tt) e2' c2 [] (RV v1 :: rs1') s1)
+      as [[[v2 rs2] s2]|w] eqn:E2; [|discriminate he].
+    destruct (whnf_master_hwf X_type X Γ nctx stress Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
+                e2' c2 [] [] t2 _ s1 v2 rs2 s2 hm1 (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1))
+                (genv_susp _ _ _ _ _ _ _ _ hk1 hs2) (cok_gcx _ _ (proj1 hg1) _ hc2)
+                ltac:(constructor) E2)
+      as (lo2 & G2 & w2 & hm2 & hr2 & hv2 & hg2 & hw2 & hd2).
+    destruct (gren_cons_inv _ _ _ _ _ _ hg2) as (q2 & rs2' & -> & hq2 & hg2').
+    destruct (gpres_RV_inv _ _ _ _ _ hq2) as (v1' & -> & hk2).
+    cbv beta iota in he.
+    destruct (hV L Q lo2 G2 pb v1' v2 w1 w2 rs2' s2 b rs' s' hm2 (Forall_inv_tail hr2)
+                (Forall_inv hr2) hv2 (hk2 _ hw1) hw2 he) as [hp hc].
+    split.
+    - apply (post_compose L Q Q G G2 rs rs2' s' rs' (le_n Q)); [|exact hp].
+      apply (grq_trans Q Q Q G G1 G2 rs rs1' rs2' (le_n Q) (le_n Q));
+        apply grq_of_gren; assumption.
+    - intros hb. exact (cq_red L Q pb t1 t2 w1 w2 hL hLQ hd1 hd2 (hc hb)).
+  Qed.
+
+  (** ** The rows that compare heads and spines *)
+
+  Lemma conv_rows_con_eq k L le h1 sp1 h2 sp2 rs s :
+    conv_rows X_type X Γ nctx stress (FS k) L le (VCon h1 sp1) (VCon h2 sp2) rs s =
+    if (#|sp1| == #|sp2|) && cmp_term X_type X le #|sp1| h1 h2
+    then conv_cells X_type X Γ nctx stress (k tt) L sp1 sp2 rs s else COk (false, rs, s).
+  Proof. reflexivity. Qed.
+
+  Lemma conv_rows_var_eq k L le l1 sp1 l2 sp2 rs s :
+    conv_rows X_type X Γ nctx stress (FS k) L le (VNeu (NVar l1) sp1) (VNeu (NVar l2) sp2) rs s =
+    if l1 == l2 then conv_cells X_type X Γ nctx stress (k tt) L sp1 sp2 rs s
+    else COk (false, rs, s).
+  Proof. reflexivity. Qed.
+
+  Lemma conv_rows_const_eq k L le h1 sp1 h2 sp2 rs s :
+    conv_rows X_type X Γ nctx stress (FS k) L le (VNeu (NConst h1) sp1) (VNeu (NConst h2) sp2)
+      rs s =
+    if cmp_term X_type X Conv #|sp1| h1 h2
+    then conv_cells X_type X Γ nctx stress (k tt) L sp1 sp2 rs s else COk (false, rs, s).
+  Proof. reflexivity. Qed.
+
+  Lemma conv_rows_sort_eq k L le e1 c1 e2 c2 s1 s2 rs s :
+    c1.(c_term) = tSort s1 -> c2.(c_term) = tSort s2 ->
+    conv_rows X_type X Γ nctx stress (FS k) L le (VOpen e1 c1) (VOpen e2 c2) rs s
+    = COk (cmp_sort X_type X le s1 s2, rs, s).
+  Proof.
+    destruct c1 as [i1 p1 t1], c2 as [i2 p2 t2]. cbn. intros -> ->. reflexivity.
+  Qed.
+
+  (** Shared tail of the spine rows: equal heads (up to the head test) and convertible
+    spines give convertible applications. *)
+  Lemma cv_spine L pb h1 h2 us1 us2 :
+    nctx <= L -> (forall Δ, #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) ->
+                    ∥ Σ ;;; Γ ,,, Δ ⊢ h1 ≤[pb] h2 ∥) ->
+    cvs L us1 us2 -> cv L pb (mkApps h1 us1) (mkApps h2 us2).
+  Proof.
+    intros hL hh hs Δ hΔ hcl. destruct (hh Δ hΔ hcl) as [h]. destruct (hs Δ hΔ hcl) as [hs'].
+    constructor. exact (ws_cumul_pb_mkApps (wfΣ := wfΣ) h hs').
+  Qed.
+
+  Lemma conv_rows_con_g (k : unit -> cbn_fuel) :
+    spec_cells (k tt) ->
+    spec_rows_on (FS k) (fun v1 v2 => exists h1 sp1 h2 sp2, v1 = VCon h1 sp1 /\ v2 = VCon h2 sp2).
+  Proof.
+    intros hC L Q lo G pb v1 v2 w1 w2 rs s b rs' s' (h1 & sp1 & h2 & sp2 & -> & ->)
+      hm hr hv1 hv2 hw1 hw2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite conv_rows_con_eq in he.
+    apply g_value_VCon_inv in hw1 as (ts1 & -> & ha1).
+    apply g_value_VCon_inv in hw2 as (ts2 & -> & ha2).
+    cbn in hv1, hv2.
+    destruct ((#|sp1| == #|sp2|) && cmp_term X_type X pb #|sp1| h1 h2) eqn:Et;
+      [|injection he as <- <- <-;
+        split; [exact (post_refl _ _ _ _ _ _ hm hr)|intros hb; discriminate hb]].
+    apply andb_true_iff in Et as [_ Ecmp].
+    destruct (hC L Q lo G sp1 sp2 ts1 ts2 rs s b rs' s' hm hr ha1 ha2 he) as [hp hc].
+    split; [exact hp|]. intros hb u1 u2 e1 e2 s1 s2.
+    apply mkApps_lift0_inv in e1 as (h1' & us1 & -> & eh1 & ->).
+    apply mkApps_lift0_inv in e2 as (h2' & us2 & -> & eh2 & ->).
+    pose proof (lift0_closed_inv _ _ _ hv1 eh1) as ->.
+    pose proof (lift0_closed_inv _ _ _ hv2 eh2) as ->.
+    unfold scl in s1, s2. rewrite on_free_vars_mkApps in s1, s2.
+    apply andb_true_iff in s1 as [sh1 sus1]. apply andb_true_iff in s2 as [sh2 sus2].
+    intros Δ hΔ hcl.
+    destruct (hc hb us1 us2 eq_refl eq_refl sus1 sus2 Δ hΔ hcl) as [hcs].
+    constructor.
+    apply (ws_cumul_pb_mkApps_napp (wfΣ := wfΣ));
+      [exact hcl|exact (scl_open L Δ h1 hL hΔ sh1)|exact (scl_open L Δ h2 hL hΔ sh2)| |exact hcs].
+    pose proof (cmp_term_sound X_type X Σ hΣ pb _ h1 h2 Ecmp) as hcmp.
+    rewrite <- (g_addrs_length _ _ _ ha1), length_map in hcmp. exact hcmp.
+  Qed.
+
+  Lemma conv_rows_const_g (k : unit -> cbn_fuel) :
+    spec_cells (k tt) ->
+    spec_rows_on (FS k) (fun v1 v2 => exists h1 sp1 h2 sp2,
+                           v1 = VNeu (NConst h1) sp1 /\ v2 = VNeu (NConst h2) sp2).
+  Proof.
+    intros hC L Q lo G pb v1 v2 w1 w2 rs s b rs' s' (h1 & sp1 & h2 & sp2 & -> & ->)
+      hm hr hv1 hv2 hw1 hw2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite conv_rows_const_eq in he.
+    apply g_value_VNeu_inv in hw1 as [(l & ts & e & _)|(h1' & ts1 & e & -> & ha1)];
+      [discriminate e|injection e as <-].
+    apply g_value_VNeu_inv in hw2 as [(l & ts & e & _)|(h2' & ts2 & e & -> & ha2)];
+      [discriminate e|injection e as <-].
+    cbn in hv1, hv2.
+    destruct (cmp_term X_type X Conv #|sp1| h1 h2) eqn:Ecmp;
+      [|injection he as <- <- <-;
+        split; [exact (post_refl _ _ _ _ _ _ hm hr)|intros hb; discriminate hb]].
+    destruct (hC L Q lo G sp1 sp2 ts1 ts2 rs s b rs' s' hm hr ha1 ha2 he) as [hp hc].
+    split; [exact hp|]. intros hb u1 u2 e1 e2 s1 s2.
+    apply mkApps_lift0_inv in e1 as (h1' & us1 & -> & eh1 & ->).
+    apply mkApps_lift0_inv in e2 as (h2' & us2 & -> & eh2 & ->).
+    pose proof (lift0_closed_inv _ _ _ hv1 eh1) as ->.
+    pose proof (lift0_closed_inv _ _ _ hv2 eh2) as ->.
+    unfold scl in s1, s2. rewrite on_free_vars_mkApps in s1, s2.
+    apply andb_true_iff in s1 as [sh1 sus1]. apply andb_true_iff in s2 as [sh2 sus2].
+    intros Δ hΔ hcl.
+    destruct (hc hb us1 us2 eq_refl eq_refl sus1 sus2 Δ hΔ hcl) as [hcs].
+    constructor. apply (ws_cumul_eq_pb (wfΣ := wfΣ)).
+    apply (ws_cumul_pb_mkApps_napp (wfΣ := wfΣ));
+      [exact hcl|exact (scl_open L Δ h1 hL hΔ sh1)|exact (scl_open L Δ h2 hL hΔ sh2)| |exact hcs].
+    pose proof (cmp_term_sound X_type X Σ hΣ Conv _ h1 h2 Ecmp) as hcmp.
+    rewrite <- (g_addrs_length _ _ _ ha1), length_map in hcmp. exact hcmp.
+  Qed.
+
+  Lemma conv_rows_var_g (k : unit -> cbn_fuel) :
+    spec_cells (k tt) ->
+    spec_rows_on (FS k) (fun v1 v2 => exists l1 sp1 l2 sp2,
+                           v1 = VNeu (NVar l1) sp1 /\ v2 = VNeu (NVar l2) sp2).
+  Proof.
+    intros hC L Q lo G pb v1 v2 w1 w2 rs s b rs' s' (l1 & sp1 & l2 & sp2 & -> & ->)
+      hm hr hv1 hv2 hw1 hw2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite conv_rows_var_eq in he.
+    apply g_value_VNeu_inv in hw1 as [(l1' & ts1 & e & -> & ha1)|(h & ts & e & _)];
+      [injection e as <-|discriminate e].
+    apply g_value_VNeu_inv in hw2 as [(l2' & ts2 & e & -> & ha2)|(h & ts & e & _)];
+      [injection e as <-|discriminate e].
+    destruct (l1 == l2) eqn:El;
+      [|injection he as <- <- <-;
+        split; [exact (post_refl _ _ _ _ _ _ hm hr)|intros hb; discriminate hb]].
+    apply eqb_eq in El. subst l2.
+    destruct (hC L Q lo G sp1 sp2 ts1 ts2 rs s b rs' s' hm hr ha1 ha2 he) as [hp hc].
+    split; [exact hp|]. intros hb u1 u2 e1 e2 s1 s2.
+    apply mkApps_lift0_inv in e1 as (h1' & us1 & -> & eh1 & ->).
+    apply mkApps_lift0_inv in e2 as (h2' & us2 & -> & eh2 & ->).
+    rewrite eh1 in eh2. apply lift0_inj in eh2. subst h2'.
+    unfold scl in s1, s2. rewrite on_free_vars_mkApps in s1, s2.
+    apply andb_true_iff in s1 as [sh1 sus1]. apply andb_true_iff in s2 as [_ sus2].
+    apply cv_spine; [exact hL| |exact (hc hb us1 us2 eq_refl eq_refl sus1 sus2)].
+    intros Δ hΔ hcl. constructor. apply ws_cumul_pb_refl; [exact hcl|exact (scl_open L Δ h1' hL hΔ sh1)].
+  Qed.
+
+  Lemma conv_rows_sort_g (k : unit -> cbn_fuel) :
+    spec_rows_on (FS k) (fun v1 v2 => exists e1 c1 e2 c2 s1 s2,
+                           v1 = VOpen e1 c1 /\ v2 = VOpen e2 c2
+                           /\ c1.(c_term) = tSort s1 /\ c2.(c_term) = tSort s2).
+  Proof.
+    intros L Q lo G pb v1 v2 w1 w2 rs s b rs' s' (e1 & c1 & e2 & c2 & s1 & s2 & -> & -> & h1 & h2)
+      hm hr hv1 hv2 hw1 hw2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite (conv_rows_sort_eq k L pb e1 c1 e2 c2 s1 s2 rs s h1 h2) in he.
+    injection he as <- <- <-.
+    split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros hcs u1 u2 e1' e2' _ _ Δ hΔ hcl.
+    apply g_value_VOpen_inv in hw1. apply g_value_VOpen_inv in hw2.
+    rewrite h1 in hw1. rewrite h2 in hw2.
+    destruct (g_susp_inv _ _ _ _ _ _ hw1) as (ts1 & _ & _ & ->).
+    destruct (g_susp_inv _ _ _ _ _ _ hw2) as (ts2 & _ & _ & ->).
+    cbn in e1', e2'.
+    destruct u1; cbn in e1'; try discriminate e1'. injection e1' as <-.
+    destruct u2; cbn in e2'; try discriminate e2'. injection e2' as <-.
+    constructor. apply ws_cumul_pb_compare_term; [exact hcl|reflexivity|reflexivity|].
+    constructor. exact (cmp_sort_sound X_type X Σ hΣ pb s1 s2 hcs).
   Qed.
 
 End ConvGhost.
