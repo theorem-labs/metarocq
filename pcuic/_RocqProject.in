@@ -171,4 +171,6 @@ theories/PCUICEtaC4.v
 theories/PCUICEtaHRCommutationA1.v
 # L2 obligation 7: the NEW exact C4, (A) and (B) applied at E := eq (C4-SIDE)
 theories/PCUICEtaCanonC4.v
+# L2 obligation 8 (STAGED AT FollowSpec): S4 glue, F-inst -> base instance comparison
+theories/PCUICEtaFInstGlue.v
 # theories/All.v
