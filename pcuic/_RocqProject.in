@@ -177,4 +177,6 @@ theories/PCUICEtaFInstGlue.v
 theories/PCUICEtaJoinSpec.v
 # L2 obligation 8 (STAGED AT FollowSpec), A4: t ≈ canon t in the E-spec
 theories/PCUICEtaCanonSpec.v
+# L2 obligation 8 (STAGED AT FollowSpec), A4: compare_term_eta is included in the E-spec
+theories/PCUICEtaFInstSpec.v
 # theories/All.v
