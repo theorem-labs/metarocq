@@ -1769,6 +1769,120 @@ Qed.
     eapply eqb_universe_instance_complete in c1; auto.
   Qed.
 
+  (** The same fire-first stage for the second [no] of design §7.3: same head
+      and instance, but the argument lists are not convertible.  The [no] is
+      justified only once neither side can move: then both are constant-headed
+      weak-head normal forms under default flags, so conversion of the two
+      applications would force conversion of their arguments ([herr]). *)
+  Equations(noeqns) unfold_prims_args (Γ : context) (leq : conv_pb)
+            (c : kername) (u : Instance.t) (π1 : stack)
+            (h1 : wtp Γ (tConst c u) π1)
+            (c' : kername) (u' : Instance.t) (π2 : stack)
+            (h2 : wtp Γ (tConst c' u') π2)
+            (herr : ~ (forall Σ, abstract_env_ext_rel X Σ ->
+                        ∥ ws_cumul_pb_terms Σ (Γ,,, stack_context π1)
+                            (decompose_stack π1).1 (decompose_stack π2).1 ∥))
+            (hx : conv_stack_ctx Γ π1 π2)
+            (aux : Aux Term Γ (tConst c u) π1 (tConst c' u') π2 h2)
+    : ConversionResult (conv_term leq Γ (tConst c u) π1 (tConst c' u') π2) :=
+    unfold_prims_args Γ leq c u π1 h1 c' u' π2 h2 herr hx aux
+    with inspect (unfold_one_prim Γ c u π1 h1) := {
+    | @exist (Some (t1', π1')) eqp1 := isconv_red leq t1' π1' (tConst c' u') π2 aux ;
+    | @exist None eqp1 with inspect (unfold_one_prim Γ c' u' π2 h2) := {
+      | @exist (Some (t2', π2')) eqp2 := isconv_red leq (tConst c u) π1 t2' π2' aux ;
+      | @exist None eqp2 := no (NotFoundConstant c)
+      }
+    }.
+  Next Obligation.
+    destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1) as (_ & _ & hrc & _).
+    destruct (hrc _ wfΣ) as [r]. pose proof (hΣ _ wfΣ) as [wΣ].
+    pose proof (h1 _ wfΣ) as h1'. eapply red_welltyped; eauto.
+  Qed.
+  Next Obligation.
+    eapply R_cored. simpl. intros Σ wfΣ.
+    exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1))) Σ wfΣ).
+  Qed.
+  Next Obligation.
+    destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1) as (hctx & _).
+    rewrite hctx.
+    match goal with hw : abstract_env_ext_rel X Σ |- _ => exact (hx _ hw) end.
+  Qed.
+  Next Obligation.
+    destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1) as (hctx & hrz & _).
+    rename H into wfΣ. destruct (hΣ _ wfΣ) as [wΣ].
+    destruct (hrz _ wfΣ) as [r].
+    specialize (h _ wfΣ). rewrite hctx in h.
+    pose proof (h1 _ wfΣ) as h1'. eapply welltyped_zipc_zipp in h1'; auto.
+    etransitivity; [|exact h].
+    eapply (red_conv_cum_l (wfΣ := wfΣ)).
+    eapply into_closed_red; [exact r|fvs|fvs].
+  Qed.
+  Next Obligation.
+    apply h; clear h. intros Σ wfΣ.
+    destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp1) as (hctx & hrz & _).
+    destruct (hΣ _ wfΣ) as [wΣ].
+    destruct (hrz _ wfΣ) as [r].
+    rewrite hctx.
+    pose proof (h1 _ wfΣ) as h1'. eapply welltyped_zipc_zipp in h1'; auto.
+    etransitivity; [|exact (H _ wfΣ)].
+    eapply (red_conv_cum_r (wfΣ := wfΣ)).
+    eapply into_closed_red; [exact r|fvs|fvs].
+  Qed.
+  Next Obligation.
+    destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2) as (_ & _ & hrc & _).
+    destruct (hrc _ wfΣ) as [r]. pose proof (hΣ _ wfΣ) as [wΣ].
+    pose proof (h2 _ wfΣ) as h2'. eapply red_welltyped; eauto.
+  Qed.
+  Next Obligation.
+    unshelve eapply R_cored2.
+    all: try reflexivity.
+    simpl. intros Σ wfΣ.
+    exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2))) Σ wfΣ).
+  Qed.
+  Next Obligation.
+    destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2) as (hctx & _).
+    rewrite hctx.
+    match goal with hw : abstract_env_ext_rel X Σ |- _ => exact (hx _ hw) end.
+  Qed.
+  Next Obligation.
+    destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2) as (hctx & hrz & _).
+    rename H into wfΣ. destruct (hΣ _ wfΣ) as [wΣ].
+    destruct (hrz _ wfΣ) as [r].
+    specialize (h _ wfΣ).
+    pose proof (h2 _ wfΣ) as h2'. eapply welltyped_zipc_zipp in h2'; auto.
+    etransitivity; [exact h|].
+    pose proof (hx _ wfΣ) as [hx'].
+    eapply conv_cum_conv_ctx; eauto.
+    eapply (red_conv_cum_r (wfΣ := wfΣ)).
+    eapply into_closed_red; [exact r|fvs|fvs].
+  Qed.
+  Next Obligation.
+    apply h; clear h. intros Σ wfΣ.
+    destruct (unfold_one_prim_facts _ _ _ _ _ _ _ eqp2) as (hctx & hrz & _).
+    destruct (hΣ _ wfΣ) as [wΣ].
+    destruct (hrz _ wfΣ) as [r].
+    pose proof (h2 _ wfΣ) as h2'. eapply welltyped_zipc_zipp in h2'; auto.
+    etransitivity; [exact (H _ wfΣ)|].
+    pose proof (hx _ wfΣ) as [hx'].
+    eapply conv_cum_conv_ctx; eauto.
+    eapply (red_conv_cum_l (wfΣ := wfΣ)).
+    eapply into_closed_red; [exact r|fvs|fvs].
+  Qed.
+  (* Neither side moves: both are constant-headed weak-head normal forms under
+     default flags, so conversion forces convertible arguments, against herr. *)
+  Next Obligation.
+    apply herr; clear herr. intros Σ wfΣ.
+    pose proof (unfold_one_prim_None _ _ _ _ _ eqp1 _ wfΣ) as [wh1].
+    pose proof (unfold_one_prim_None _ _ _ _ _ eqp2 _ wfΣ) as [wh2].
+    pose proof (hΣ _ wfΣ) as [wΣ].
+    pose proof (hx _ wfΣ) as [hx'].
+    eapply whnf_conv_context in wh2;
+      [|symmetry in hx'; eapply ws_cumul_ctx_pb_forget in hx'; exact hx'].
+    specialize (H _ wfΣ).
+    rewrite !zipp_as_mkApps in H, wh1, wh2.
+    eapply conv_cum_mkApps_inv in H as [(?&?)]; eauto.
+  Qed.
+
   Equations(noeqns) unfold_constants (Γ : context) (leq : conv_pb)
             (c : kername) (u : Instance.t) (π1 : stack)
             (h1 : wtp Γ (tConst c u) π1)
@@ -3699,8 +3813,9 @@ Equations (noeqns) isconv_array_values_aux
             | @exist (Some (ConstantDecl {| cst_body := Some body |})) eq3 :=
               isconv_red leq (subst_instance u body) π1
                              (subst_instance u' body) π2 aux ;
-            (* Inductive or not found *)
-            | @exist _ _ := no (NotFoundConstant c)
+            (* Bodiless, inductive or not found: a registered operation may
+               still take a machine step before the answer is no (§7.3). *)
+            | @exist _ _ := unfold_prims_args Γ leq c u π1 h1 c' u' π2 h2 h hx aux
             }
           } ;
         (* If universes are different, we unfold one of the constants *)
@@ -3991,33 +4106,6 @@ Equations (noeqns) isconv_array_values_aux
       eapply red_const. erewrite abstract_env_lookup_correct'; eauto.
     - now eapply H.
   Qed.
-  Next Obligation.
-    idtac "ERR_H". Show.
-    apply h; clear h. intros Σ wfΣ.
-    rewrite !zipp_as_mkApps in H.
-    destruct (hΣ _ wfΣ).
-    eapply conv_cum_mkApps_inv in H as [(?&?)]; eauto.
-    - apply whnf_mkApps.
-      eapply whne_const.
-      + erewrite abstract_env_lookup_correct'; eauto.
-      + eauto.
-    - apply whnf_mkApps.
-      eapply whne_const.
-      + erewrite abstract_env_lookup_correct'; eauto.
-      + eauto.
-  Qed.
-  Next Obligation.
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-    eapply welltyped_zipc_tConst_inv in h1 as (?&?&?); eauto.
-    unfold declared_constant in *.
-    erewrite abstract_env_lookup_correct in d; eauto. congruence.
-  Qed.
-  Next Obligation.
-  destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-  eapply welltyped_zipc_tConst_inv in h1 as (?&?&?); eauto.
-  unfold declared_constant in *.
-  erewrite abstract_env_lookup_correct in d; eauto. congruence.
-Qed.
   Next Obligation.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
     right; split; [easy|].
@@ -5715,7 +5803,9 @@ Qed.
     with inspect (abstract_env_lookup X c) := {
     | @exist (Some (ConstantDecl {| cst_body := Some body |})) eq :=
       Some (subst_instance u body, π) ;
-    | @exist _ _ := None
+    (* bodiless or not found: a registered operation may take a machine step
+       (design §7.3, last paragraph) *)
+    | @exist _ _ := unfold_one_prim Γ c u π h
     } ;
 
     reducible_head Γ _ π h := None.
@@ -5740,7 +5830,9 @@ Qed.
     intros Σ wfΣ Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
-    all: intro ee ; noconf ee.
+    all: intro ee ; try noconf ee.
+    all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
+                       exact (fst (snd (unfold_one_prim_facts _ _ _ _ _ _ _ ee)) _ wfΣ) end ].
     - eapply unfold_one_fix_red_zipp; eauto.
     - constructor. simpl_stacks.
       eapply red_mkApps_f.
@@ -5772,7 +5864,15 @@ Qed.
     intros Σ wfΣ Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
-    all: intro ee ; noconf ee.
+    all: intro ee ; try noconf ee.
+    all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
+      destruct (unfold_one_prim_shape _ _ _ _ _ _ _ ee) as (args & ρ & l & [ed eξ hr _]);
+      destruct (hr _ wfΣ) as [r]; constructor;
+      pose proof (decompose_stack_snd_nil ed) as hρ;
+      unfold zippx; rewrite ed; subst; rewrite decompose_stack_appstack; rewrite hρ; cbn;
+      rewrite app_nil_r;
+      eapply red_it_mkLambda_or_LetIn;
+      apply decompose_stack_eq in ed; subst; rewrite stack_context_appstack in r; exact r end ].
     - eapply unfold_one_fix_red_zippx; eauto.
     - constructor. unfold zippx.
       case_eq (decompose_stack π). intros l s eq'.
@@ -5807,7 +5907,9 @@ Qed.
     intros Σ wfΣ Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
-    all: intro ee ; noconf ee.
+    all: intro ee ; try noconf ee.
+    all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
+                       exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ ee))) _ wfΣ) end ].
     - eapply unfold_one_fix_cored; eauto.
     - repeat zip fold. eapply cored_context.
       constructor. eapply red_delta.
@@ -5828,7 +5930,11 @@ Qed.
     intros Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
-    all: intro ee ; noconf ee.
+    all: intro ee ; try noconf ee.
+    all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
+      destruct (unfold_one_prim_shape _ _ _ _ _ _ _ ee) as (args & ρ & l & [ed eξ _ _]);
+      rewrite ed; subst; rewrite decompose_stack_appstack;
+      rewrite (decompose_stack_snd_nil ed); reflexivity end ].
     - eapply unfold_one_fix_decompose. eassumption.
     - reflexivity.
     - reflexivity.
@@ -5862,7 +5968,7 @@ Qed.
       All2 (red Σ (Γ,,, stack_context π)) (decompose_stack π).1 args' ×
       whnf RedFlags.default Σ (Γ,,, stack_context π) (mkApps t' args')∥.
   Proof using Type.
-    funelim (reducible_head Γ t π h); intros notapp wh [=].
+    funelim (reducible_head Γ t π h); intros notapp wh H0; try noconf H0.
     - apply whnf_mkApps_inv in wh.
       depelim wh; solve_discr.
       depelim w; solve_discr; try discriminate.
@@ -5892,7 +5998,7 @@ Qed.
       constructor; eexists _, [].
       eauto using whnf_red with pcuic.
     - depelim wh; solve_discr.
-      + apply whne_mkApps_inv in w as [|(?&?&?&?&?&?&?&?)]; auto; try discriminate.
+      + apply whne_mkApps_inv in w as [[|(?&?&?&?&?&?&?&?)]|(?&?&?&?&?&?&?&?&?&?)]; auto; try discriminate.
         depelim w; solve_discr.
         discriminate.
       + rewrite H1.
@@ -5917,13 +6023,16 @@ Qed.
       * constructor. destruct prim as [? []]; constructor; auto.
         eapply All2_same. intros; reflexivity.
       * split; [constructor|]. eapply whnf_prim.
-    - constructor; eexists _, (decompose_stack π).1.
+    (* a bodiless constant on which no registered operation can move: a
+       weak-head normal form under default flags (unfold_one_prim_None) *)
+    - pose proof (unfold_one_prim_None _ _ _ _ _ H0 _ wfΣ) as [wh0].
+      rewrite zipp_as_mkApps in wh0.
+      constructor; eexists _, (decompose_stack π).1.
       clear H. erewrite <- abstract_env_lookup_correct' in e; eauto.
       split; [econstructor|]; eauto.
       split; [eauto with pcuic|].
-      apply whnf_mkApps.
-      eapply whne_const; eauto.
-    - zip fold in h. try clear Heqcall.
+      exact wh0.
+    - clear H0. zip fold in h. try clear Heqcall.
       destruct (hΣ _ wfΣ).
       eapply welltyped_context in h; eauto.
       destruct h as (?&typ); auto.
@@ -5931,7 +6040,7 @@ Qed.
       unshelve eapply declared_constant_to_gen in d; eauto.
       clear H. erewrite <- abstract_env_lookup_correct' in e; eauto.
       congruence.
-    - zip fold in h. try clear Heqcall.
+    - clear H0. zip fold in h. try clear Heqcall.
       destruct (hΣ _ wfΣ).
       eapply welltyped_context in h; eauto.
       destruct h as (?&typ); auto.
