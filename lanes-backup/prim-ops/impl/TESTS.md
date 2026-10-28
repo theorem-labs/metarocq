@@ -138,6 +138,39 @@ to be settled by an end-to-end build once `pcuic` compiles, not by reading a lis
 
 So `safechecker` and `safechecker-plugin` are not reachable, and neither test file can run.
 
+### Measured 2026-10-28: composition `620ea680` — `listDec` fixed, new pcuic frontier
+
+Tips: trunk `1a0d825e` ⊕ B2 `b98ba52c` ⊕ DE `7405dd0d` ⊕ HM `c7646984` ⊕ FG `c86ebbac` ⊕
+KO `464246cb` ⊕ L `7e7dda1d` ⊕ PrimChecker `02eb1fb0` ⊕ P `84a1a856`; all nine merge with no
+conflict, and `git merge-base --is-ancestor` holds for every one against the result.
+Log `/mnt/frac/work/prim-ops/out/compose3-build.log`, per directory in `out/compose3/`.
+
+`utils 0  common 0  template-rocq 0  pcuic 2` (the rest 2 by dependency).
+**`template-rocq` STATUS 0 confirms the `listDec` fix end to end.**
+
+**The pcuic frontier is NOT row F's `PCUICNormal.v:465`.** It is, verbatim, with
+`n_errors=1` in `out/compose3/pcuic.log`:
+`File "./theories/Conversion/PCUICUnivSubstitutionConv.v", line 1549` — `Error: Expects a disjunctive pattern with 24 branches.`
+
+Cause, read from the source. `whd_rel` (`PCUICArityRed.v`) now has **24** constructors; the
+five added by row Q2 are `whd_prim_arg`, `whd_prim_stuck`, `whd_prim_fire`,
+`whd_prim_inert`, `whd_prim_partial`. Row Q2 also gave branch 6 (the stuck constant) a new
+premise `hpo`. `whd_rel_subst_instance` at `:1549` still has the **19-branch** pattern,
+without `hpo` and without branches 20-24. The correct shape is row Q2's own, in
+`PCUICArityRed.v:318-336`. It is the same gap B2 `b98ba52c` just repaired in
+`PCUICWeakeningEnv.v`, in a file B2 did not touch.
+
+This also **hides row F's frontier**: `PCUICConversion.v:10` requires
+`PCUICUnivSubstitutionConv`, and `PCUICNormal.v` requires `PCUICConversion`, so
+`PCUICNormal.v:465` cannot be reached until `:1549` is fixed. Whether `:465` still fails is
+therefore not measured by this run.
+
+**Prediction, NOT measured:** `PCUICExpandLetsCorrectness.v:2269` carries the identical
+19-branch pattern, also without `hpo` (lines 2269-2282 read from the source). I expect it to
+fail the same way once reached. This rests on the same source text that fails at `:1549`,
+which is stronger than the safechecker-plugin claim I withdrew, but it is still a
+prediction until a build reaches it.
+
 ### The pre-H state is NOT separable — only the with-H state will be measured
 
 I had planned a second run with `frac/prim-ops-HM` dropped, to show the D\* and TR\*
