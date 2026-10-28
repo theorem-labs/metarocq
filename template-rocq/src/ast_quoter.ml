@@ -427,13 +427,30 @@ struct
     { retro_int63 : quoted_kernel_name option;
       retro_float64 : quoted_kernel_name option;
       retro_string : quoted_kernel_name option;
-      retro_array : quoted_kernel_name option }
+      retro_array : quoted_kernel_name option;
+      retro_ops : (quoted_kernel_name * Reification.prim_op) list;
+      retro_bool : quoted_inductive option }
+
+  let quote_prim_op : Reification.prim_op -> PrimitiveOps.prim_op = function
+    | Reification.POInt63eq -> PrimitiveOps.Int63eq
+    | Reification.POInt63lt -> PrimitiveOps.Int63lt
+    | Reification.POInt63le -> PrimitiveOps.Int63le
+    | Reification.POInt63land -> PrimitiveOps.Int63land
+    | Reification.POInt63lor -> PrimitiveOps.Int63lor
+    | Reification.POInt63lsl -> PrimitiveOps.Int63lsl
+    | Reification.POInt63lsr -> PrimitiveOps.Int63lsr
+    | Reification.POInt63sub -> PrimitiveOps.Int63sub
+    | Reification.POStringlength -> PrimitiveOps.Stringlength
+    | Reification.POStringget -> PrimitiveOps.Stringget
 
   let quote_retroknowledge r =
     { Environment.Retroknowledge.retro_int63 = r.retro_int63;
       Environment.Retroknowledge.retro_float64 = r.retro_float64;
       Environment.Retroknowledge.retro_string = r.retro_string;
-      Environment.Retroknowledge.retro_array = r.retro_array }
+      Environment.Retroknowledge.retro_array = r.retro_array;
+      Environment.Retroknowledge.retro_ops =
+        List.map (fun (kn, op) -> (kn, quote_prim_op op)) r.retro_ops;
+      Environment.Retroknowledge.retro_bool = r.retro_bool }
 
   let mk_global_env universes declarations retroknowledge = { universes; declarations; retroknowledge }
   let mk_program decls tm = (decls, tm)

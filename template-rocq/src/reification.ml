@@ -1,4 +1,14 @@
 
+(** The primitive operations the quoted environment registers: the quoter-side
+    image of [MetaRocq.Common.PrimitiveOps.prim_op].  It is the same type for
+    every quoter, so the kernel operations are classified once
+    ([Quoter.prim_op_of_kernel]) and each quoter only maps a case to its own
+    representation of the constructor. *)
+type prim_op =
+  | POInt63eq | POInt63lt | POInt63le
+  | POInt63land | POInt63lor | POInt63lsl | POInt63lsr | POInt63sub
+  | POStringlength | POStringget
+
 module type Reification =
 sig
   type t (* this represented quoted Gallina terms *)

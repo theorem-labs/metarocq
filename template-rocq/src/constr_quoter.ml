@@ -426,14 +426,36 @@ struct
     { retro_int63 : quoted_kernel_name option;
       retro_float64 : quoted_kernel_name option;
       retro_string : quoted_kernel_name option;
-      retro_array : quoted_kernel_name option }
+      retro_array : quoted_kernel_name option;
+      retro_ops : (quoted_kernel_name * Reification.prim_op) list;
+      retro_bool : quoted_inductive option }
+
+  let quote_prim_op (op : Reification.prim_op) =
+    Lazy.force
+      (match op with
+       | Reification.POInt63eq -> cInt63eq
+       | Reification.POInt63lt -> cInt63lt
+       | Reification.POInt63le -> cInt63le
+       | Reification.POInt63land -> cInt63land
+       | Reification.POInt63lor -> cInt63lor
+       | Reification.POInt63lsl -> cInt63lsl
+       | Reification.POInt63lsr -> cInt63lsr
+       | Reification.POInt63sub -> cInt63sub
+       | Reification.POStringlength -> cStringlength
+       | Reification.POStringget -> cStringget)
 
   let quote_retroknowledge r =
     let rint63 = to_coq_option (Lazy.force tkername) (fun x -> x) r.retro_int63 in
     let rfloat64 = to_coq_option (Lazy.force tkername) (fun x -> x) r.retro_float64 in
     let rstring = to_coq_option (Lazy.force tkername) (fun x -> x) r.retro_string in
     let rarray = to_coq_option (Lazy.force tkername) (fun x -> x) r.retro_array in
-    constr_mkApp (tmk_retroknowledge, [| rint63; rfloat64; rstring; rarray |])
+    let rops =
+      to_coq_list (prodl tkername tprim_op)
+        (List.map (fun (kn, op) -> pairl tkername tprim_op kn (quote_prim_op op))
+           r.retro_ops)
+    in
+    let rbool = to_coq_option (Lazy.force tIndTy) (fun x -> x) r.retro_bool in
+    constr_mkApp (tmk_retroknowledge, [| rint63; rfloat64; rstring; rarray; rops; rbool |])
 
   let mk_global_env univs decls retro =
     constr_mkApp (tBuild_global_env, [| univs; decls; retro |])
