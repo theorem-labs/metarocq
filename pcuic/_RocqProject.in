@@ -208,4 +208,6 @@ theories/PCUICEtaA6Refutations.v
 # BET-315 eta lane (C4C1b): row C1b refuted — a machine-checked witness that C1b is false
 theories/PCUICEtaC1b.v
 theories/PCUICEtaFracInstances.v
+theories/PCUICEtaA6.v
+theories/PCUICEtaA6Ind.v
 # theories/All.v
