@@ -1392,7 +1392,7 @@ Definition extends_global_env (Σ Σ' : PCUICAst.PCUICEnvironment.global_env) :=
     PCUICAst.PCUICEnvironment.lookup_env Σ' kn = Some decl) /\
   (forall tag, primitive_constant Σ tag = primitive_constant Σ' tag) /\
   (* BET-319 row J2: the operation table and the booleans, which the machine
-     reads, agree too (change log 23) *)
+     reads, agree too (change log 25) *)
   (forall kn, prim_op_of Σ kn = prim_op_of Σ' kn) /\
   primitive_bool Σ = primitive_bool Σ'.
 
@@ -1752,7 +1752,7 @@ Qed.
 
 (** The primitive-type constants, the operation table and the booleans: what
     erasure's irrelevance lemmas need two environments to agree on (BET-319
-    row J2, change log 23).  All three are read off the retroknowledge. *)
+    row J2, change log 25).  All three are read off the retroknowledge. *)
 Definition same_prims (Σ Σ' : global_env) :=
   (forall tag, primitive_constant Σ tag = primitive_constant Σ' tag) /\
   (forall kn, prim_op_of Σ kn = prim_op_of Σ' kn) /\

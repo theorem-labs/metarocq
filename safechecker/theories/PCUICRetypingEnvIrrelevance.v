@@ -41,7 +41,7 @@ Definition Hlookup {cf} (X_type : abstract_env_impl) (X : X_type.π2.π1) (X_typ
     (forall tag,
     abstract_primitive_constant X tag = abstract_primitive_constant X' tag) /\
     (* BET-319 row J2: the machine dispatches on the operation table and reads
-       the booleans back, so both must agree too (change log 23) *)
+       the booleans back, so both must agree too (change log 25) *)
     (forall kn, abstract_prim_op_of X kn = abstract_prim_op_of X' kn) /\
     abstract_primitive_bool X = abstract_primitive_bool X'.
 
