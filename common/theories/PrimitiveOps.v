@@ -1,9 +1,12 @@
 (* Distributed under the terms of the MIT license. *)
 (** * Primitive operations: the one interface used by reduction and the checker
 
-  Every computation on primitive values goes through [prim_op_denote].  The
-  proofs use two facts about it, [prim_op_denote_args] and [prim_op_denote_shape];
-  [prim_op_denote_total] is a satisfying instance (see its comment).  [prim_op] is the set of registered operations,
+  Every computation on primitive values goes through [prim_op_denote].  This
+  file proves two facts about it, [prim_op_denote_args] and
+  [prim_op_denote_shape], and the satisfying instance [prim_op_denote_total]
+  (see its comment); other files prove more, e.g. [prim_op_denote_length]
+  (PCUICParallelReductionConfluence) and [prim_op_denote_nil] (PCUICNormal).
+  [prim_op] is the set of registered operations,
   [prim_lit] the literal arguments they consume and [prim_result] the values they
   produce.  The readback of a result into a term, and the reader turning a term's
   payload into a literal, are per-language and live beside each language's

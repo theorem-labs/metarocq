@@ -45,6 +45,11 @@ Definition Hlookup {cf} (X_type : abstract_env_impl) (X : X_type.π2.π1) (X_typ
     (forall kn, abstract_prim_op_of X kn = abstract_prim_op_of X' kn) /\
     abstract_primitive_bool X = abstract_primitive_bool X'.
 
+(** Satisfying instance of [Hlookup]: an abstract environment agrees with
+    itself.  Every conjunct is a reflexive equality. *)
+Lemma Hlookup_refl {cf} (X_type : abstract_env_impl) (X : X_type.π2.π1) : Hlookup X_type X X_type X.
+Proof. intros Σ _ Σ' _. repeat split; intros; reflexivity. Qed.
+
 Definition reduce_stack_eq {cf} {fl} {nor:normalizing_flags} {X_type : abstract_env_impl} {X : X_type.π2.π1} {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X -> NormalizationIn Σ} Γ t π wi : reduce_stack fl X_type X Γ t π wi = ` (reduce_stack_full fl X_type X Γ t π wi).
 Proof.
   unfold reduce_stack. destruct reduce_stack_full => //.

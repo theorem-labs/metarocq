@@ -264,6 +264,16 @@ Module Retroknowledge.
        && match x.(retro_bool), y.(retro_bool) with Some x, Some y => x == y | _, _ => true end
        && compatible_ops x y.
 
+  (** Satisfying instance of [compatible] (the premise of [extends_r_merge]):
+      every retroknowledge is compatible with itself. *)
+  Lemma compatible_refl r : compatible r r.
+  Proof.
+    have hops : compatible_ops r r.
+    { apply forallb_forall => -[c o] _ /=. destruct (prim_op_of r c) => //. apply eqb_refl. }
+    rewrite /compatible hops andb_true_r.
+    destruct r as [[i|] [f|] [s|] [a|] ops [b|]]; cbn; rewrite ?eqb_refl //.
+  Qed.
+
   Lemma extends_r_merge r1 r2
     : compatible r1 r2 -> extends r2 (merge r1 r2).
   Proof.
@@ -309,6 +319,17 @@ Module Retroknowledge.
         (forall c, In c (map fst r.(retro_ops)) -> ~ In (Some c) (type_constants r)),
         types_distinct r
       & forall i, r.(retro_bool) = Some i -> inductive_ind i = 0].
+
+  (** Satisfying instance of [wf_retro]: the empty retroknowledge, which
+      registers no operation and no type constant. *)
+  Lemma wf_retro_empty : wf_retro empty.
+  Proof.
+    constructor; cbn.
+    - constructor.
+    - intros c [].
+    - unfold types_distinct, disjoint_opt; repeat split; intros c H1 H2; discriminate H1.
+    - intros i [=].
+  Qed.
 
 End Retroknowledge.
 Export (hints) Retroknowledge.
@@ -962,15 +983,21 @@ Module Environment (T : Term).
 
   (** ** Primitive-operation freshness (BET-319)
 
-      [extends] above is LEFT STRUCTURALLY UNCHANGED on purpose: structurally
-      editing it — even to add a trivial conjunct — makes [template-rocq]'s
-      [Recursive Extraction Library Extractable] raise a Rocq extraction anomaly
+      The record [extends] above keeps its fields on purpose: adding a field to
+      it — even a trivial one — makes [template-rocq]'s [Recursive Extraction
+      Library Extractable] raise a Rocq extraction anomaly
       (plugins/extraction/mlutil.ml line 660), module-wide, because [extends] is
-      [Type]-valued and consumed by extracted code.  The trigger is a one-field
-      edit of [extends] itself: the anomaly does not depend on what the new field
+      [Type]-valued and consumed by extracted code.  The trigger is a new field
+      of [extends] itself: the anomaly does not depend on what the new field
       states, on its shape, or on whether a decider for it exists.
 
-      So the primitive-operation freshness condition is carried by a SEPARATE
+      Its MEANING is not unchanged.  Its retroknowledge field,
+      [Retroknowledge.extends], gained two conjuncts ([option_extends] on
+      [retro_bool] and [extends_ops], the operation table), so every premise
+      [extends Σ Σ'] is stronger than before: the larger environment must keep
+      the smaller one's booleans and every operation it registers.
+
+      Because of the anomaly, the primitive-operation freshness condition is carried by a SEPARATE
       relation, [extends_prim := prod extends extends_prim_fresh].  (Not named
       [extends_fresh]: erasure already has an unrelated lemma of that name,
       erasure/theories/EWellformed.v, and the two would shadow each other.)

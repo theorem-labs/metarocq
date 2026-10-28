@@ -780,6 +780,17 @@ Section Check.
   Qed.
 End Check.
 
+(** Satisfying instance of the section hypotheses [lookup_spec] and
+    [lookup_op_spec] of [check_positive_cstr_sound]: an environment's own
+    [lookup_env] and [prim_op_of]. *)
+Lemma check_positive_cstr_sound_env (Σ : global_env) fuel mdecl n Γ t :
+  check_positive_cstr (lookup_env Σ) (prim_op_of Σ) fuel mdecl n Γ t = Checked tt ->
+  positive_cstr Σ mdecl n Γ t.
+Proof.
+  apply (check_positive_cstr_sound (lookup_env Σ) (prim_op_of Σ) Σ
+           (fun _ => eq_refl) (fun _ => eq_refl)).
+Qed.
+
 (** ** Unit tests for what the test suite cannot reach through [MetaRocq SafeCheck] *)
 
 (** Running out of fuel is a rejection with its own message: three nested products with two
