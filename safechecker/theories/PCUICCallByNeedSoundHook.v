@@ -1,38 +1,31 @@
 (* Distributed under the terms of the MIT license. *)
-From Stdlib Require Import BinPos BinNat.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Utils Require String2pos CanonicalTries.
 From MetaRocq.Common Require Import config Kernames.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICReduction
-  PCUICUnivSubst PCUICWfUniverses PCUICWeakeningEnv PCUICWeakeningEnvTyp.
-From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnv PCUICCallByNeed
-  PCUICCallByNeedSound PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx
-  PCUICCallByNeedSoundMemo.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICUnivSubst
+  PCUICWeakeningEnvTyp.
+From MetaRocq.SafeChecker Require Import PCUICCallByNeedSoundMemo.
 
-Import CanonicalTries.
-
-Local Notation key := String2pos.positive.
-Local Notation cidx := String2pos.positive.
-
-(** * BET-298 step 2c: the instance condition at the hook
+(** * The instance condition of the delta rule
 
   [PCUICCallByNeedSoundMemo.delta_red1] reduces [tConst kn ui] to the code the machine's
   [delta] hands back, for every instance, under one premise that only bites when [ui] is
-  empty: [kn]'s universe context must have no variable. [inst_code_nil_ne_subst_instance]
-  shows the premise cannot be dropped — [inst_code []] is the identity where [red_delta]
-  substitutes the empty instance, so the two differ on a polymorphic constant applied to
-  [[]], in any environment. This file discharges the premise from what
-  [PCUICTypeChecker.convert] has at the hook.
+  empty: [kn]'s universe context must have no variable. [inst_code []] is the identity where
+  [red_delta] substitutes the empty instance, so the two differ on a polymorphic constant
+  applied to [[]], in any environment. This file defines the property [consts_okb] that
+  gives the premise ([inst_okb_nil]) and proves it of well-typed terms and of constant
+  bodies. [PCUICCallByNeedSoundEval.machine_sound] discharges the premise with it, and the
+  hook establishes it for the let-bodies of the context in
+  [PCUICCallByNeedSoundHookFrame.eval_section_instance].
 
   [consts_okb Σ t] says that every constant the *machine* can reach from [t] carries an
   instance of the right length: at [tConst kn u], that [lookup_env Σ kn] is a constant
-  whose universe context has exactly [#|u|] variables. It recurses through exactly the
+  whose universe context has exactly [#|u|] variables. It recurses through at least the
   subterms [code_inv]'s [step] takes (application, the two sides of a binder, the three
   of a let, a case's parameters, return clause, discriminee and branch bodies, a
-  projection's argument, and a (co)fixpoint's types and bodies), and no further: the
-  machine never makes a child code at a [tPrim] or inside a case's [pcontext]/[bcontext],
-  so [consts_okb] is [true] there. [consts_okb_step] and [code_inv_consts_okb] carry it
-  along the machine's codes.
+  projection's argument, and a (co)fixpoint's types and bodies); it also enters the
+  arguments of a [tEvar]. The machine never makes a child code at a [tPrim] or inside a
+  case's [pcontext]/[bcontext], so [consts_okb] is [true] there.
+  [PCUICCallByNeedSoundEval.code_inv_consts_okb] carries it along the machine's codes.
 
   [typing_consts_okb] proves it of every well-typed term, by [typing_ind_env] with the
   property that ignores the type, so no substitution lemma is needed: the conclusion term
