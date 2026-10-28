@@ -2503,7 +2503,9 @@ End monad_Alli_nth_forall.
         | Checked hinv => Checked (fun Σ wfΣ => sq (prim_op_tag_declared_of_lookup X_ext Σ wfΣ t kn d hp hl hinv))
         | TypeError e => TypeError e
         end
-      | _ => fun _ => TypeError (UndeclaredConstant kn)
+      | Some (InductiveDecl _) => fun _ =>
+        TypeError (Msg "a registered primitive type names an inductive, not a constant")
+      | None => fun _ => TypeError (UndeclaredConstant kn)
       end eq_refl
     end eq_refl.
 
@@ -2538,9 +2540,9 @@ End monad_Alli_nth_forall.
                     typing_result (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_prim_op_result Σ SBool ∥)) with
           | Some idecl => fun hn =>
             Checked (fun Σ wfΣ => sq (on_prim_op_result_bool_of_lookup X_ext Σ wfΣ i mdecl idecl hb hl hn))
-          | None => fun _ => TypeError (Msg "the registered boolean inductive is not declared")
+          | None => fun _ => TypeError (Msg "the registered boolean inductive's block has no packet of that index")
           end eq_refl
-        | _ => fun _ => TypeError (Msg "the registered boolean inductive is not declared")
+        | _ => fun _ => TypeError (Msg "the registered boolean inductive is not declared as an inductive")
         end eq_refl
       end eq_refl
     end.
@@ -2717,7 +2719,7 @@ End monad_Alli_nth_forall.
             fun hc => ret (fun Σ wfΣ => sq (on_prim_decl_ind X_ext Σ wfΣ kn mdecl
                              (fun _ _ _ => check_prim_bool_decl_spec mdecl hc)))
           else fun _ => raise (X_ext, IllFormedDecl (string_of_kername kn)
-                 (Msg "the inductive registered as the booleans is not the enumeration true, false (design §4.2(b)2)")))
+                 (Msg "the inductive registered as the booleans (retro_bool) is not a monomorphic, parameterless, index-free one-packet block whose two constructors are true then false, both without arguments")))
           eq_refl
         else fun hk => ret (fun Σ wfΣ => sq (on_prim_decl_ind X_ext Σ wfΣ kn mdecl
                          (fun i' hi' hk' => False_rect _ (prim_bool_other hb hk hi' hk')))))
@@ -2756,7 +2758,7 @@ End monad_Alli_nth_forall.
        (fun _ => (abstract_env_ext_empty, IllFormedDecl id (Msg ("non declared level in " ^ print_lset levels ^
                                     " |= " ^ print_constraint_set (ContextSet.constraints univs)))));;
     wfr <- check_dec (abstract_env_ext_empty, IllFormedDecl id
-             (Msg "ill-formed retroknowledge: primitive-operation table or type constants (design §4.2(a))"))
+             (Msg "ill-formed retroknowledge: a kername registered twice as an operation, an operation registered on a primitive type constant, two primitive type constants that are equal, or retro_bool not naming packet 0 of its block"))
            (EnvironmentTyping.dec_wf_retro retro) ;;
     match gc_of_uctx univs as X' return (X' = _ -> EnvCheck X_env_ext_type _) with
     | None => fun _ => raise (abstract_env_ext_empty, IllFormedDecl id (Msg "constraints trivially not satisfiable"))
