@@ -2512,7 +2512,7 @@ Section ConvGhost.
     rewrite conv_eval_eq in he.
     destruct (eval_slot X_type X Γ nctx (k tt) x1 [] (RSl x2 :: rs) s)
       as [[[v1 rs1] s1]|w] eqn:E1; [|discriminate he].
-    destruct (eval_slot_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
+    destruct (eval_slot_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
                 x1 [] [] t1 _ s v1 rs1 s1 hm (Forall_cons (RSl x2) I hr) hx1 ltac:(constructor) E1)
       as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & hw1 & hd1).
     destruct (gren_cons_inv _ _ _ _ _ _ hg1) as (q1 & rs1' & -> & hq1 & hg1').
@@ -2520,7 +2520,7 @@ Section ConvGhost.
     cbv beta iota in he.
     destruct (eval_slot X_type X Γ nctx (k tt) x2' [] (RV v1 :: rs1') s1)
       as [[[v2 rs2] s2]|w] eqn:E2; [|discriminate he].
-    destruct (eval_slot_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
+    destruct (eval_slot_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
                 x2' [] [] t2 _ s1 v2 rs2 s2 hm1 (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1))
                 (hk1 _ hx2) ltac:(constructor) E2)
       as (lo2 & G2 & w2 & hm2 & hr2 & hv2 & hg2 & hw2 & hd2).
@@ -2547,7 +2547,7 @@ Section ConvGhost.
     rewrite conv_term_eq in he.
     destruct (whnf X_type X Γ nctx (k tt) e1 c1 [] (RE e2 :: rs) s)
       as [[[v1 rs1] s1]|w] eqn:E1; [|discriminate he].
-    destruct (whnf_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
+    destruct (whnf_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo G
                 e1 c1 [] [] t1 _ s v1 rs1 s1 hm (Forall_cons (RE e2) I hr) hs1 hc1 ltac:(constructor) E1)
       as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & hw1 & hd1).
     destruct (gren_cons_inv _ _ _ _ _ _ hg1) as (q1 & rs1' & -> & hq1 & hg1').
@@ -2555,7 +2555,7 @@ Section ConvGhost.
     cbv beta iota in he.
     destruct (whnf X_type X Γ nctx (k tt) e2' c2 [] (RV v1 :: rs1') s1)
       as [[[v2 rs2] s2]|w] eqn:E2; [|discriminate he].
-    destruct (whnf_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
+    destruct (whnf_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio (k tt) L Q lo1 G1
                 e2' c2 [] [] t2 _ s1 v2 rs2 s2 hm1 (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1))
                 (genv_susp _ _ _ _ _ _ _ _ hk1 hs2) (cok_gcx _ _ (proj1 hg1) _ hc2)
                 ltac:(constructor) E2)
@@ -4843,7 +4843,7 @@ Proof. intros d. eapply spec_all_ind; eassumption. Qed.
   starts in. Each theorem shows that the premises of [spec_term] hold at the run's inputs (the
   start state satisfies [minv], the inputs have readings, their codes are in the ghost's
   table), that the call returns, and that the conclusion holds: the state part [post] by the
-  machine lemma [whnf_master_hwf] and, for the run that answers [true], the conversion part
+  machine lemma [whnf_master] and, for the run that answers [true], the conversion part
   [cq] by hand, not by the fuel induction. The answers and final states are obtained by
   computation. The only hypotheses are [wf Σ] and [abstract_env_ext_rel X Σ]: the start
   invariant is [run_s2_gok] of [PCUICCallByNeedSoundLevel], the context hypotheses of
@@ -4931,7 +4931,7 @@ Section Witness.
   Qed.
 
   (** The state part: [post] holds after the two [whnf] calls and the [tick] of
-    [conv_value], by [whnf_master_hwf]. *)
+    [conv_value], by [whnf_master]. *)
   Lemma r_post (Γ : context) (nctx : nat) (t u : term) (hnctx : nctx = #|Γ|)
       (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
                 PCUICCallByNeedSoundHook.consts_okb Σ b)
@@ -4945,7 +4945,7 @@ Section Witness.
     post X_type X Γ nctx Σ nctx nctx (run_ghost X_type X t u) [] s3 [].
   Proof.
     intros hm0 E1 E2 E3.
-    destruct (whnf_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio d nctx nctx xH
+    destruct (whnf_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio d nctx nctx xH
                 (run_ghost X_type X t u) env_empty (run_c1 X_type X t) [] [] t [RE env_empty]
                 (run_s2 X_type X t u) v1 [RE env_empty] s1 hm0
                 (Forall_cons (RE env_empty) I (Forall_nil _)) (run_c1_g_susp X_type X nctx t u)
@@ -4953,7 +4953,7 @@ Section Witness.
       as (lo1 & G1 & w1 & hm1 & hr1 & hv1 & hg1 & _ & _).
     assert (hs2 : g_susp nctx nctx G1 env_empty (run_c2 X_type X t u).(c_term) u).
     { rewrite run_c2_term. apply g_susp_env_empty. }
-    destruct (whnf_master_hwf X_type X Γ nctx Σ wfΣ hΣ hnctx hcio d nctx nctx lo1 G1
+    destruct (whnf_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio d nctx nctx lo1 G1
                 env_empty (run_c2 X_type X t u) [] [] u [RV v1] s1 v2 [RV v1] s2 hm1
                 (Forall_cons (RV v1) hv1 (Forall_inv_tail hr1)) hs2
                 (cok_gcx _ _ (proj1 hg1) _ (run_c2_gcok X_type X t u))

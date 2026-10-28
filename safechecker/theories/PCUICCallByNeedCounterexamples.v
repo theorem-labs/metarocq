@@ -306,10 +306,10 @@ End SeamCounterexample.
 
   The cause is a cell left in the heap by an earlier binder. The lambda row allocates
   [CDone (VNeu (NVar lvl) [])] for its fresh variable, and the cell stays after the
-  comparison comes back out of the binder (no collection runs unless
-  [st_room] is spent). At level [lvl] the cell reads [tRel (lvl - S lvl)], which is [tRel 0]
-  by the truncation of [nat] subtraction; at [S lvl] it reads [tRel (S lvl - S lvl)], which is
-  [tRel 0] again; but the lifted ghost is [tRel 1], and [tRel 1] does not reduce to [tRel 0].
+  comparison comes back out of the binder (no collection runs unless [st_room] is spent). At
+  level [lvl] the cell reads [tRel (lvl - S lvl)], which is [tRel 0] by the truncation of [nat]
+  subtraction; at [S lvl] it reads [tRel (S lvl - S lvl)], which is [tRel 0] again; but the
+  lifted ghost is [tRel 1], and [tRel 1] does not reduce to [tRel 0].
   The machine reaches this state: in [Γ = []], comparing [c (fun y => y) (fun y => y)] with
   [c (fun y => (fun w => w) y) (fun y => (fun w => w) y)] for a constructor [c], the first
   pair of arguments takes the lambda row at level 0 and leaves its fresh variable in the

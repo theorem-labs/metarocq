@@ -9,7 +9,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLi
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
   PCUICCallByNeedSoundHook PCUICCallByNeedSoundCong PCUICCallByNeedSoundEval
-  PCUICCallByNeedSoundLevel.
+  PCUICCallByNeedSoundHeapWf PCUICCallByNeedSoundLevel.
 
 Local Notation xpredT := (fun _ : nat => true) (only parsing).
 

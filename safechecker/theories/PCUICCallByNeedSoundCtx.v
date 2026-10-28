@@ -234,8 +234,7 @@ Section CtxMemo.
       end
     end.
 
-  Lemma new_entry_state_ok (lo : positive) (t : term) (u : Instance.t)
-      (s : cbn_state) :
+  Lemma new_entry_state_ok (lo : positive) (t : term) (u : Instance.t) (s : cbn_state) :
     state_ok lo s -> state_ok lo (snd (new_entry X_type X t u s)).
   Proof.
     intros [h1 h2 h3]. split; [rewrite new_entry_next, new_entry_heap; exact h1 | | ].

@@ -9,7 +9,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTy
   PCUICWellScopedCumulativity.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
   PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundMemo
-  PCUICCallByNeedSoundHook PCUICCallByNeedSoundCong PCUICCallByNeedSoundEval.
+  PCUICCallByNeedSoundHook PCUICCallByNeedSoundCong PCUICCallByNeedSoundEval
+  PCUICCallByNeedSoundHeapWf.
 
 Import CanonicalTries.
 
@@ -30,13 +31,11 @@ Local Notation xpred0 := (fun _ : nat => false) (only parsing).
   ([red_unlift], by [red_rename]): that is how a fact at [Q] becomes a fact at [L].
 
   - [gok_raise] lifts the master level, [Q] to [Q + n], with every ghost term lifted by [n]
-    ([gshift]). It needs [hwf Q]: no cell names a fresh variable at a level [>= Q], and the
-    head of every constructor and neutral constant value is closed. That is a whole-heap
-    STRUCTURAL invariant, true at the master level (fresh variables are only allocated
-    below it) but not one the ghost reading can see, so its preservation by the machine is a
-    separate theorem: [machine_hwf] states it, and [PCUICCallByNeedSoundHeapWf] proves it
-    ([machine_hwf_holds], under [#|Γ| <= nctx]; it is false as a closed Prop without that
-    side condition, [machine_hwf_needs_len]). It also needs
+    ([gshift]). It needs [hwf Q] of [PCUICCallByNeedSoundHeapWf]: no cell names a fresh
+    variable at a level [>= Q], and the head of every constructor and neutral constant value
+    is closed. That is a whole-heap STRUCTURAL invariant, true at the master level (fresh
+    variables are only allocated below it) but not one the ghost reading can see; the machine
+    keeps it by [machine_hwf_holds], under [#|Γ| <= nctx]. It also needs
     [gk_hyg], the hygiene of every ghost term, for red weakening
     ([PCUICCallByNeedCounterexamples.red_weakening_needs_hygiene]).
   - [red_unlift] and [red_assum_irrel] do NOT depend on [gk_hyg]: the terms they move are
@@ -66,33 +65,6 @@ Proof. induction n as [|n ih]; cbn; constructor; exact ih. Qed.
 
 Definition gshift (n : nat) (G : ghost) : ghost :=
   mkGhost (fun a => option_map (lift0 n) (G a)) (gc G).
-
-(** ** The structural invariant at the master level *)
-
-Definition vwf (lvl : nat) (v : cbn_value) : Prop :=
-  match v with
-  | VNeu (NVar l) _ => l < lvl
-  | VNeu (NConst h) _ | VCon h _ => closedn 0 h
-  | _ => True
-  end.
-
-Definition cwf (lvl : nat) (cl : cbn_cell) : Prop :=
-  match cl with CDone v => vwf lvl v | _ => True end.
-
-Definition hwf (lvl : nat) (s : cbn_state) : Prop :=
-  forall a cl, heap_get a s = Some cl -> cwf lvl cl.
-
-Definition rwf (lvl : nat) (r : root) : Prop :=
-  match r with RV v => vwf lvl v | RC cl => cwf lvl cl | _ => True end.
-
-Lemma vwf_mono lvl lvl' v : lvl <= lvl' -> vwf lvl v -> vwf lvl' v.
-Proof. intros hle. destruct v as [| | | |[l|h] sp| |]; cbn; try tauto; lia. Qed.
-
-Lemma cwf_mono lvl lvl' cl : lvl <= lvl' -> cwf lvl cl -> cwf lvl' cl.
-Proof. intros hle. destruct cl; cbn; try tauto. apply vwf_mono, hle. Qed.
-
-Lemma hwf_mono lvl lvl' s : lvl <= lvl' -> hwf lvl s -> hwf lvl' s.
-Proof. intros hle h a cl ha. exact (cwf_mono _ _ _ hle (h a cl ha)). Qed.
 
 (** ** Readings commute with the lift of the ghost *)
 
@@ -419,46 +391,12 @@ Section Master.
     mi_gok : gok X_type X Γ nctx Σ (jctx (Q - nctx)) Q lo G s;
     mi_hwf : hwf Q s }.
 
-  (** *** The interface of the structural invariant
-
-    The machine keeps [hwf Q] of the heap, of the roots and of the value it returns, and so
-    does an allocation of a cell that has it. This file only STATES the interface.
-    [PCUICCallByNeedSoundHeapWf] (which imports this file) PROVES it: [machine_hwf_holds]
-    under [#|Γ| <= nctx], [alloc_hwf_holds], and the satisfying instance
-    [machine_hwf_master] at [nctx = #|Γ|]. As a closed Prop [machine_hwf] is FALSE without
-    [#|Γ| <= nctx] ([machine_hwf_needs_len]: with [nctx = 0] and one assumption in [Γ],
-    [gam] allocates [NVar 0] at [Q = 0]). *)
-  Definition machine_hwf_at (d : cbn_fuel) (Q : nat) : Prop :=
-    (forall a rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
-       force X_type X Γ nctx d a rs s = COk (v, rs', s') ->
-       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
-    /\ (forall x stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
-       eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
-       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
-    /\ (forall e c stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
-       whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
-       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
-    /\ (forall e c mfix idx stk rs s v rs' s', hwf Q s -> Forall (rwf Q) rs ->
-       whnf_fix X_type X Γ nctx d e c mfix idx stk rs s = COk (v, rs', s') ->
-       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
-    /\ (forall v stk rs s w rs' s', hwf Q s -> Forall (rwf Q) rs -> vwf Q v ->
-       apply X_type X Γ nctx d v stk rs s = COk (w, rs', s') ->
-       hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q w).
-
-  Definition machine_hwf : Prop := forall d Q, nctx <= Q -> machine_hwf_at d Q.
-
-  Definition alloc_hwf : Prop := forall Q cl rs s a rs' s', nctx <= Q ->
-    hwf Q s -> cwf Q cl -> Forall (rwf Q) rs ->
-    alloc cl rs s = COk (a, rs', s') -> hwf Q s' /\ Forall (rwf Q) rs'.
-
   (** *** The machine at the master level
 
-    [whnf_master] and [eval_slot_master] take [machine_hwf] as a hypothesis [hB]. It cannot
-    be discharged in this file: [PCUICCallByNeedSoundHeapWf], which proves it, imports this
-    file. Consumers should call [whnf_master_hwf] and [eval_slot_master_hwf] of
-    [PCUICCallByNeedSoundHeapWf], the same lemmas with [hB] discharged from [hnctx]. *)
+    [machine_sound] gives the reading of the result, and [machine_hwf_holds], at
+    [#|Γ| <= nctx] from [hnctx], keeps [hwf Q]. *)
 
-  Lemma whnf_master (hB : machine_hwf) d L Q lo G e c stk sts tc rs s v rs' s' :
+  Lemma whnf_master d L Q lo G e c stk sts tc rs s v rs' s' :
     minv L Q lo G s -> Forall (rwf Q) rs ->
     g_susp nctx Q G e c.(c_term) tc -> PCUICCallByNeedSoundEval.cok G c ->
     g_slots nctx Q G stk sts ->
@@ -473,14 +411,14 @@ Section Master.
                 ltac:(lia) hcio d) as (_ & _ & hW & _ & _).
     destruct (hW lo G e c stk sts tc rs s v rs' s' hok hs hc hstk he)
       as (lo' & G' & u & hren & hok' & hv & hr).
-    pose proof (hB d Q ltac:(lia)) as hBd. unfold machine_hwf_at in hBd.
-    destruct hBd as (_ & _ & hBw & _ & _).
-    destruct (hBw e c stk rs s v rs' s' hw hrs he) as (hw' & hrs' & hvw).
+    destruct (machine_hwf_holds X_type X Γ nctx ltac:(lia) d Q ltac:(lia))
+      as (_ & _ & hWf & _ & _).
+    destruct (hWf e c stk rs s v rs' s' he hw hrs) as (hw' & hrs' & hvw).
     exists lo', G', u. split; [constructor; assumption|]. split; [exact hrs'|].
     split; [exact hvw|]. split; [exact hren|]. split; [exact hv|exact hr].
   Qed.
 
-  Lemma eval_slot_master (hB : machine_hwf) d L Q lo G x stk sts tx rs s v rs' s' :
+  Lemma eval_slot_master d L Q lo G x stk sts tx rs s v rs' s' :
     minv L Q lo G s -> Forall (rwf Q) rs ->
     g_slot nctx Q G x tx -> g_slots nctx Q G stk sts ->
     eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
@@ -494,9 +432,9 @@ Section Master.
                 ltac:(lia) hcio d) as (_ & hE & _ & _ & _).
     destruct (hE lo G x stk sts tx rs s v rs' s' hok hx hstk he)
       as (lo' & G' & u & hren & hok' & hv & hr).
-    pose proof (hB d Q ltac:(lia)) as hBd. unfold machine_hwf_at in hBd.
-    destruct hBd as (_ & hBe & _ & _ & _).
-    destruct (hBe x stk rs s v rs' s' hw hrs he) as (hw' & hrs' & hvw).
+    destruct (machine_hwf_holds X_type X Γ nctx ltac:(lia) d Q ltac:(lia))
+      as (_ & hWf & _ & _ & _).
+    destruct (hWf x stk rs s v rs' s' he hw hrs) as (hw' & hrs' & hvw).
     exists lo', G', u. split; [constructor; assumption|]. split; [exact hrs'|].
     split; [exact hvw|]. split; [exact hren|]. split; [exact hv|exact hr].
   Qed.

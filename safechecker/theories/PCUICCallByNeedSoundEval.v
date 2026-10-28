@@ -82,13 +82,13 @@ Local Notation xpredT := (fun _ : nat => true) (only parsing).
 
   ** Collections
 
-  A run may collect when [st_room] is spent. A collection renames every
-  address, so the ghost a call ends with is not an extension of the one it started with:
-  every clause of [machine_sound] says instead that the roots come back renamed and stand,
-  under the new ghost, for what they stood for ([gren]). The ghost of the new heap is built
-  along the collector's walk, at each fresh address from the ghost term of the old address
-  copied there ([collect_ghost]). It needs nothing of the collector beyond its invariant
-  [gc_inv] and [gc_copy_ok] ([PCUICCallByNeedSoundGC]). *)
+  A run may collect when [st_room] is spent. A collection renames every address, so the ghost a
+  call ends with is not an extension of the one it started with: every clause of
+  [machine_sound] says instead that the roots come back renamed and stand, under the new ghost,
+  for what they stood for ([gren]). The ghost of the new heap is built along the collector's
+  walk, at each fresh address from the ghost term of the old address copied there
+  ([collect_ghost]). It needs nothing of the collector beyond its invariant [gc_inv] and
+  [gc_copy_ok] ([PCUICCallByNeedSoundGC]). *)
 
 Lemma forallb_map_All {A B} (f : A -> B) (p : B -> bool) (q : A -> bool) (l : list A) :
   All (fun x => p (f x) = q x) l -> forallb p (map f l) = forallb q l.
@@ -1943,8 +1943,8 @@ Section Eval.
       exact (gk_hyg _ _ _ hok hc _ _ hb).
   Qed.
 
-  (** [alloc] collects when [gc_due] says so: the roots come back
-    renamed ([collect_ghost]) and the new cell is allocated in the new heap. *)
+  (** [alloc] collects when [gc_due] says so: the roots come back renamed ([collect_ghost]) and
+    the new cell is allocated in the new heap. *)
   Lemma alloc_sound lo G cl u rs s a rs' s' :
     gok lo G s -> g_cell G cl u -> (ctx_hyg -> on_free_vars xpredT u) ->
     alloc cl rs s = COk (a, rs', s') ->

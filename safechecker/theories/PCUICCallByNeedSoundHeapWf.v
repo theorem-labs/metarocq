@@ -5,17 +5,20 @@ From MetaRocq.Utils Require CanonicalTries.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTyping.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICCallByNeed PCUICCallByNeedSound
-  PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundEval
-  PCUICCallByNeedSoundLevel.
+  PCUICCallByNeedSoundGC PCUICCallByNeedSoundCtx PCUICCallByNeedSoundEval.
 
 Import CanonicalTries.
 
-(** * The structural invariant survives the machine
+(** * The structural invariant of the heap, and the machine keeps it
 
-  [PCUICCallByNeedSoundLevel] states two interfaces, [machine_hwf] and [alloc_hwf]: every
-  machine function and an allocation keep [hwf Q] of the heap, [rwf Q] of the roots and
-  [vwf Q] of the value they return, at any master level [Q >= nctx]. This file proves both
-  ([machine_hwf_holds], [alloc_hwf_holds]).
+  [hwf Q s]: no cell of the heap holds a fresh variable at a level [>= Q], and the head of
+  every constructor and neutral constant value in it is closed ([vwf] of a value, [cwf] of a
+  cell, [rwf] of a root). [PCUICCallByNeedSoundLevel] needs it at the master level [Q] to
+  raise that level ([gok_raise]). The ghost reading cannot see it, so its preservation is a
+  separate theorem, proved here for two interfaces: [machine_hwf], every machine function
+  keeps [hwf Q] of the heap, [rwf Q] of the roots and [vwf Q] of the value it returns, at any
+  master level [Q >= nctx] ([machine_hwf_holds]); [alloc_hwf], so does an allocation of a
+  cell that has it ([alloc_hwf_holds]).
 
   Why it holds: a fresh variable [NVar l] is made only by [gam], at the level
   [nctx - S j] of an entry [j] of [Γ], so below [nctx] when [#|Γ| <= nctx]; the head of a
@@ -30,9 +33,35 @@ Import CanonicalTries.
   [machine_hwf_holds] needs [#|Γ| <= nctx]; without it the interface is false
   ([machine_hwf_needs_len]): with [nctx = 0] and one assumption in [Γ], [gam] makes
   [NVar 0], which is not below the master level [0]. The machine's runs have [nctx = #|Γ|]
-  ([cbn_conv_answer]), and [machine_hwf_master] is that instance. [whnf_master_hwf] and
-  [eval_slot_master_hwf] are [whnf_master] and [eval_slot_master] with the interface
-  discharged from the master section's own [nctx = #|Γ|]. *)
+  ([cbn_conv_answer]), which is how [PCUICCallByNeedSoundLevel.whnf_master] and
+  [eval_slot_master] use [machine_hwf_holds]. *)
+
+(** ** The invariant *)
+
+Definition vwf (lvl : nat) (v : cbn_value) : Prop :=
+  match v with
+  | VNeu (NVar l) _ => l < lvl
+  | VNeu (NConst h) _ | VCon h _ => closedn 0 h
+  | _ => True
+  end.
+
+Definition cwf (lvl : nat) (cl : cbn_cell) : Prop :=
+  match cl with CDone v => vwf lvl v | _ => True end.
+
+Definition hwf (lvl : nat) (s : cbn_state) : Prop :=
+  forall a cl, heap_get a s = Some cl -> cwf lvl cl.
+
+Definition rwf (lvl : nat) (r : root) : Prop :=
+  match r with RV v => vwf lvl v | RC cl => cwf lvl cl | _ => True end.
+
+Lemma vwf_mono lvl lvl' v : lvl <= lvl' -> vwf lvl v -> vwf lvl' v.
+Proof. intros hle. destruct v as [| | | |[l|h] sp| |]; cbn; try tauto; lia. Qed.
+
+Lemma cwf_mono lvl lvl' cl : lvl <= lvl' -> cwf lvl cl -> cwf lvl' cl.
+Proof. intros hle. destruct cl; cbn; try tauto. apply vwf_mono, hle. Qed.
+
+Lemma hwf_mono lvl lvl' s : lvl <= lvl' -> hwf lvl s -> hwf lvl' s.
+Proof. intros hle h a cl ha. exact (cwf_mono _ _ _ hle (h a cl ha)). Qed.
 
 (** ** The heap: what [bh_cons] adds, for any digit list *)
 
@@ -404,7 +433,12 @@ Proof.
     split; [exact (hwf_alloc_now Q cl s hs hc)|exact hrs].
 Qed.
 
-(** The interface [alloc_hwf] of [PCUICCallByNeedSoundLevel]. *)
+(** An allocation of a cell that keeps the invariant keeps it, at any master level
+  [Q >= nctx]. *)
+Definition alloc_hwf (nctx : nat) : Prop := forall Q cl rs s a rs' s', nctx <= Q ->
+  hwf Q s -> cwf Q cl -> Forall (rwf Q) rs ->
+  alloc cl rs s = COk (a, rs', s') -> hwf Q s' /\ Forall (rwf Q) rs'.
+
 Lemma alloc_hwf_holds nctx : alloc_hwf nctx.
 Proof.
   intros Q cl rs s a rs' s' _ hs hc hrs he. exact (alloc_wf Q cl rs s a rs' s' he hs hc hrs).
@@ -562,8 +596,8 @@ Section Machine.
       exact (ih _ _ _ _ _ _ _ _ _ he hs1 ltac:(rok)).
   Qed.
 
-  (** The five functions of the machine at one fuel. *)
-  Definition mwf (d : cbn_fuel) : Prop :=
+  (** The five functions of the machine at one fuel keep the invariant at [Q]. *)
+  Definition machine_hwf_at (d : cbn_fuel) : Prop :=
     (forall a rs s v rs' s',
        force X_type X Γ nctx d a rs s = COk (v, rs', s') ->
        hwf Q s -> Forall (rwf Q) rs -> hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q v)
@@ -581,7 +615,7 @@ Section Machine.
        hwf Q s -> Forall (rwf Q) rs -> vwf Q v ->
        hwf Q s' /\ Forall (rwf Q) rs' /\ vwf Q w).
 
-  Lemma machine_wf : forall d, mwf d.
+  Lemma machine_wf : forall d, machine_hwf_at d.
   Proof.
     intros d. induction d as [|k ih].
     - (* FO: every call fails, except [apply] with an empty stack *)
@@ -763,27 +797,23 @@ Section Machine.
   Qed.
 End Machine.
 
-(** The interface [machine_hwf] of [PCUICCallByNeedSoundLevel], for every context no longer
-  than [nctx]. *)
+(** The machine keeps the invariant at every fuel and every master level [Q >= nctx]. *)
+Definition machine_hwf {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
+    (Γ : context) (nctx : nat) : Prop :=
+  forall d Q, nctx <= Q -> machine_hwf_at X_type X Γ nctx Q d.
+
+(** [machine_hwf] holds for every context no longer than [nctx]. *)
 Lemma machine_hwf_holds {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1)
     (Γ : context) (nctx : nat) (hlen : #|Γ| <= nctx) :
   machine_hwf X_type X Γ nctx.
-Proof.
-  intros d Q hQ.
-  destruct (machine_wf X_type X Γ nctx hlen Q hQ d) as (hf & hs & hw & hx & ha).
-  split; [|split; [|split; [|split]]].
-  - intros a rs s v rs' s' h1 h2 he. exact (hf _ _ _ _ _ _ he h1 h2).
-  - intros x stk rs s v rs' s' h1 h2 he. exact (hs _ _ _ _ _ _ _ he h1 h2).
-  - intros e c stk rs s v rs' s' h1 h2 he. exact (hw _ _ _ _ _ _ _ _ he h1 h2).
-  - intros e c mfix idx stk rs s v rs' s' h1 h2 he. exact (hx _ _ _ _ _ _ _ _ _ _ he h1 h2).
-  - intros v stk rs s w rs' s' h1 h2 h3 he. exact (ha _ _ _ _ _ _ _ he h1 h2 h3).
-Qed.
+Proof. intros d Q hQ. exact (machine_wf X_type X Γ nctx hlen Q hQ d). Qed.
 
 (** The premise [#|Γ| <= nctx] is needed: with [nctx = 0], one assumption in [Γ] and the
   master level [0], the variable [tRel 0] evaluates to [NVar 0], which is not below [0]. *)
 Lemma machine_hwf_needs_len {cf : checker_flags} (X_type : abstract_env_impl)
     (X : X_type.π2.π1) :
-  ~ machine_hwf X_type X [jdecl] 0.
+  ~ machine_hwf X_type X [vass {| binder_name := nAnon; binder_relevance := Relevant |}
+                            (tSort sProp)] 0.
 Proof.
   intros h.
   destruct (h (FS (fun _ => FS (fun _ => FS (fun _ => FO)))) 0 (le_n 0))
@@ -791,47 +821,13 @@ Proof.
   assert (hs0 : hwf 0 cbn_init).
   { intros a cl ha. unfold heap_get in ha. cbn [cbn_init st_heap] in ha.
     rewrite bh_get_holes in ha. discriminate ha. }
-  assert (E : exists s', whnf X_type X [jdecl] 0
-                           (FS (fun _ => FS (fun _ => FS (fun _ => FO))))
-                           env_empty (mkCode path_nil path_nil (tRel 0)) [] [] cbn_init
-                         = COk (VNeu (NVar 0) [], [], s')).
+  assert (E : exists s',
+    whnf X_type X [vass {| binder_name := nAnon; binder_relevance := Relevant |} (tSort sProp)]
+      0 (FS (fun _ => FS (fun _ => FS (fun _ => FO))))
+      env_empty (mkCode path_nil path_nil (tRel 0)) [] [] cbn_init
+    = COk (VNeu (NVar 0) [], [], s')).
   { eexists; reflexivity. }
   destruct E as [s' E].
-  destruct (hw _ _ _ _ _ _ _ _ hs0 (Forall_nil _) E) as (_ & _ & hv).
+  destruct (hw _ _ _ _ _ _ _ _ E hs0 (Forall_nil _)) as (_ & _ & hv).
   cbn in hv. lia.
 Qed.
-
-(** ** The machine at the master level, with the interface discharged *)
-
-Section MasterProved.
-  Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context (Γ : context) (nctx : nat) (Σ : global_env_ext).
-  Context (wfΣ : wf Σ) (hΣ : abstract_env_ext_rel X Σ) (hnctx : nctx = #|Γ|).
-  Context (hcio : forall j decl b, nth_error Γ j = Some decl -> decl.(decl_body) = Some b ->
-                    PCUICCallByNeedSoundHook.consts_okb Σ b).
-
-  (** The satisfying instance of the interface [machine_hwf] (the hypothesis [hB] of
-    [whnf_master] and [eval_slot_master]) at the level the machine runs at:
-    [cbn_conv_answer] takes [nctx = #|Γ|]. *)
-  Lemma machine_hwf_master : machine_hwf X_type X Γ nctx.
-  Proof. apply machine_hwf_holds. rewrite hnctx. apply le_n. Qed.
-
-  Lemma whnf_master_hwf d L Q lo G e c stk sts tc rs s v rs' s' :
-    minv X_type X Γ nctx Σ L Q lo G s -> Forall (rwf Q) rs ->
-    g_susp nctx Q G e c.(c_term) tc -> PCUICCallByNeedSoundEval.cok G c ->
-    g_slots nctx Q G stk sts ->
-    whnf X_type X Γ nctx d e c stk rs s = COk (v, rs', s') ->
-    exists lo' G' u, minv X_type X Γ nctx Σ L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
-      /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
-      /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tc sts) u.
-  Proof. exact (whnf_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio machine_hwf_master d L Q lo G e c stk sts tc rs s v rs' s'). Qed.
-
-  Lemma eval_slot_master_hwf d L Q lo G x stk sts tx rs s v rs' s' :
-    minv X_type X Γ nctx Σ L Q lo G s -> Forall (rwf Q) rs ->
-    g_slot nctx Q G x tx -> g_slots nctx Q G stk sts ->
-    eval_slot X_type X Γ nctx d x stk rs s = COk (v, rs', s') ->
-    exists lo' G' u, minv X_type X Γ nctx Σ L Q lo' G' s' /\ Forall (rwf Q) rs' /\ vwf Q v
-      /\ gren nctx Q G G' rs rs' /\ g_value nctx Q G' v u
-      /\ cred Γ Σ (jctx (Q - nctx)) (mkApps tx sts) u.
-  Proof. exact (eval_slot_master X_type X Γ nctx Σ wfΣ hΣ hnctx hcio machine_hwf_master d L Q lo G x stk sts tx rs s v rs' s'). Qed.
-End MasterProved.

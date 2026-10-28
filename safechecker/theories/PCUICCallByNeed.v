@@ -36,9 +36,9 @@ Import CanonicalTries.
     callers hold and returns it renamed together with its result. An allocation may run the
     copying collector first, when the cells allocated since the last collection exceed
     twice the live count after it and at least [gc_min]. The collector copies the cells
-    reachable from the roots and from [st_gam] into a
-    fresh heap with new addresses from the old [st_next] on. It does not use the step
-    budget. An address that is not in the heap makes the whole call answer "don't know".
+    reachable from the roots and from [st_gam] into a fresh heap with new addresses from the
+    old [st_next] on. It does not use the step budget. An address that is not in the heap makes
+    the whole call answer "don't know".
   - Code: every term the machine evaluates is the subterm, at a path, of the instantiated
     term of an entry of the code table. A code carries the entry index, the path (encoded
     injectively as a positive, newest step outermost) and that subterm. The table only grows
