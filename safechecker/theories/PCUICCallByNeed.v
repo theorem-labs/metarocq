@@ -1500,28 +1500,6 @@ Proof.
   exact (bh_scan_carry_old _ _ Hd (BLeaf x) pa PEnd None ltac:(congruence)).
 Qed.
 
-(** *** The bound *)
-
-Local Lemma bh_scan_above {A} (h : bheap A) n : bh_digits h n ->
-  forall p acc c, (n < p)%positive -> bh_scan p h acc c = None.
-Proof.
-  induction 1 as [t|h n Hd IH|t h n Hd IH]; intros p acc c Hlt; destruct p as [p|p|]; cbn;
-    rewrite ?bh_scan_nil; try reflexivity; try lia.
-  - destruct (Pos.eq_dec p n) as [->|Hne]; [apply (bh_scan_exact _ _ Hd)|apply IH; lia].
-  - apply IH; lia.
-  - apply IH; lia.
-  - apply IH; lia.
-Qed.
-
-Lemma bh_digits_get_above {A} (h : bheap A) n a :
-  bh_digits h n -> (n <= ha_p a)%positive -> bh_get a h = None.
-Proof.
-  intros Hd Hle; unfold bh_get, bh_find.
-  destruct (Pos.eq_dec (ha_p a) n) as [->|Hne].
-  - rewrite (bh_scan_exact _ _ Hd); reflexivity.
-  - rewrite (bh_scan_above _ _ Hd); [reflexivity|lia].
-Qed.
-
 Local Lemma bh_holes_nth {A} p i (t : btree A) :
   nth_error (bh_holes p) i = Some (DOne t) -> t = BEmpty.
 Proof.
@@ -1559,26 +1537,6 @@ Proof. intros Hok; exact (bh_digits_get_cons_new _ _ _ (bh_ok_digits _ _ _ Hok))
 Lemma bh_get_cons_old {A} lo n h (x : A) a :
   bh_ok lo n h -> a <> HAddr n -> bh_get a (bh_cons x h) = bh_get a h.
 Proof. intros Hok; exact (bh_digits_get_cons_old _ _ _ _ (bh_ok_digits _ _ _ Hok)). Qed.
-
-Lemma bh_get_above {A} lo n (h : bheap A) a :
-  bh_ok lo n h -> (n <= ha_p a)%positive -> bh_get a h = None.
-Proof. intros Hok; exact (bh_digits_get_above _ _ _ (bh_ok_digits _ _ _ Hok)). Qed.
-
-Lemma bh_get_below {A} lo n (h : bheap A) a :
-  bh_ok lo n h -> (lo <= ha_p a)%positive -> (ha_p a < n)%positive ->
-  exists x, bh_get a h = Some x.
-Proof.
-  intros Hok Hlo; induction Hok as [|n h x Hok IH|n h b x h' Hok IH Hu]; intros Hlt.
-  - lia.
-  - destruct (Pos.eq_dec (ha_p a) n) as [E|E].
-    + exists x; destruct a as [pa]; cbn in E; subst pa; exact (bh_get_cons_new _ _ _ _ Hok).
-    + rewrite (bh_get_cons_old _ _ _ _ _ Hok); [apply IH; lia|].
-      destruct a; cbn in E; congruence.
-  - destruct (Pos.eq_dec (ha_p a) (ha_p b)) as [E|E].
-    + exists x; assert (a = b) as -> by (destruct a, b; cbn in E; congruence).
-      exact (bh_get_upd_same _ _ _ _ Hu).
-    + rewrite (bh_get_upd_other _ _ _ _ _ Hu); [exact (IH Hlt)|congruence].
-Qed.
 
 (** ** State *)
 
@@ -1733,12 +1691,6 @@ Definition set_gam (g : PTree.t haddr) (s : cbn_state) : cbn_state :=
 Lemma cbn_init_ok : bh_ok xH cbn_init.(st_next) cbn_init.(st_heap).
 Proof. exact (bh_ok_holes xH). Qed.
 
-Lemma alloc_now_addr c s : fst (alloc_now c s) = HAddr s.(st_next).
-Proof. reflexivity. Qed.
-
-Lemma alloc_now_next c s : (snd (alloc_now c s)).(st_next) = Pos.succ s.(st_next).
-Proof. reflexivity. Qed.
-
 Lemma heap_get_upd_same a c s s' : heap_upd a c s = Some s' -> heap_get a s' = Some c.
 Proof.
   unfold heap_upd, heap_get; destruct (bh_upd a c s.(st_heap)) as [h|] eqn:E; cbn;
@@ -1752,14 +1704,6 @@ Proof.
   unfold heap_upd, heap_get; destruct (bh_upd a c s.(st_heap)) as [h|] eqn:E; cbn;
     [|discriminate].
   intros H Hne; injection H as <-; exact (bh_get_upd_other _ _ _ _ _ E Hne).
-Qed.
-
-Lemma heap_upd_fields a c s s' : heap_upd a c s = Some s' ->
-  s'.(st_next) = s.(st_next) /\ s'.(st_room) = s.(st_room) /\ s'.(st_steps) = s.(st_steps)
-  /\ s'.(st_gam) = s.(st_gam) /\ s'.(st_memo) = s.(st_memo).
-Proof.
-  unfold heap_upd; destruct (bh_upd a c s.(st_heap)); cbn; [|discriminate].
-  intros H; injection H as <-; cbn; auto.
 Qed.
 
 Definition memo_add_entry (e : code_entry) (m : cbn_memo) : cidx * cbn_memo :=
