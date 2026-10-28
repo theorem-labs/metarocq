@@ -45,7 +45,8 @@ From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Primitive.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimitive
-     PCUICLiftSubst PCUICInduction PCUICEquality PCUICReduction PCUICEtaDefs.
+     PCUICLiftSubst PCUICInduction PCUICEquality PCUICReduction PCUICSigmaCalculus
+     PCUICOnFreeVars PCUICEtaDefs.
 
 Local Open Scope type_scope.
 
@@ -641,3 +642,328 @@ Lemma canon_idem t : canon (canon t) = canon t.
 Proof.
   apply upto_domain_r_canon. symmetry. apply upto_domain_r_canon_self.
 Qed.
+
+(** * §6.2 obligation 2: [canon] commutes with the substitution calculus,
+      and preserves scoping (R2)
+
+  Why it goes through at all: [canon_dom] is CLOSED, so it is fixed by every
+  operation here, and substitution can never put a variable into a canonical
+  λ domain. The only arithmetic obligations are length equations, and [canon]
+  is a [map] everywhere it matters, so all of them are [length_map]. *)
+
+Lemma All_map_eq' {A B} (f g : A -> B) l :
+  All (fun x => f x = g x) l -> map f l = map g l.
+Proof. induction 1; cbn; congruence. Qed.
+
+Lemma canon_ctx_length ctx : #|map canon_decl ctx| = #|ctx|.
+Proof. apply length_map. Qed.
+
+(** One congruence solver for every node whose [canon] image is built from the
+   IHs alone. Positional dispatch after [f_equal] is wrong here: [f_equal]
+   discharges the arguments that are already syntactically equal (the preserved
+   binder annotation, and [canon_dom] for a λ), so the number of goals it leaves
+   varies by node. *)
+Local Ltac canon_cong := f_equal; first [reflexivity|eauto].
+
+(** ** [lift] *)
+
+Lemma canon_lift n k t : canon (lift n k t) = lift n k (canon t).
+Proof.
+  induction t in k |- * using term_forall_list_ind; cbn.
+  - (* tRel *) reflexivity.
+  - (* tVar *) reflexivity.
+  - (* tEvar *) f_equal. rewrite !map_map. apply All_map_eq'.
+    eapply All_impl; [exact X|]. cbn. intros ? h. apply h.
+  - (* tSort *) reflexivity.
+  - (* tProd *) canon_cong.
+  - (* tLambda *) canon_cong.
+  - (* tLetIn *) canon_cong.
+  - (* tApp *) canon_cong.
+  - (* tConst *) reflexivity.
+  - (* tInd *) reflexivity.
+  - (* tConstruct *) reflexivity.
+  - (* tCase *) destruct X as (Hpar & _ & Hret).
+    unfold canon_predicate, map_predicate_k; cbn.
+    f_equal; [f_equal|apply IHt|].
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact Hpar|]. cbn. intros ? h. apply h.
+    + rewrite canon_ctx_length. apply Hret.
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact X0|]. cbn. intros br [_ Hb].
+      unfold canon_branch, map_branch_k; cbn.
+      rewrite canon_ctx_length. f_equal. apply Hb.
+  - (* tProj *) canon_cong.
+  - (* tFix *) f_equal. rewrite !map_map. rewrite length_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|apply Hbo].
+  - (* tCoFix *) f_equal. rewrite !map_map. rewrite length_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|apply Hbo].
+  - (* tPrim *) f_equal. destruct p as [? m]; destruct m; cbn in X; cbn;
+      try reflexivity.
+    destruct X as (Hty & Hdef & Hval).
+    unfold mapu_array_model; cbn. rewrite ?map_map.
+    assert (hv : map (fun x : term => canon (lift n k x)) (array_value a)
+               = map (fun x : term => lift n k (canon x)) (array_value a)).
+    { apply All_map_eq'. eapply All_impl; [exact Hval|]. cbn. intros ? h. apply h. }
+    now rewrite hv (Hty k) (Hdef k).
+Qed.
+
+(** ** [rename] *)
+
+Lemma canon_rename f t : canon (rename f t) = rename f (canon t).
+Proof.
+  induction t in f |- * using term_forall_list_ind; cbn.
+  - (* tRel *) reflexivity.
+  - (* tVar *) reflexivity.
+  - (* tEvar *) f_equal. rewrite !map_map. apply All_map_eq'.
+    eapply All_impl; [exact X|]. cbn. intros ? h. apply h.
+  - (* tSort *) reflexivity.
+  - (* tProd *) canon_cong.
+  - (* tLambda *) canon_cong.
+  - (* tLetIn *) canon_cong.
+  - (* tApp *) canon_cong.
+  - (* tConst *) reflexivity.
+  - (* tInd *) reflexivity.
+  - (* tConstruct *) reflexivity.
+  - (* tCase *) destruct X as (Hpar & _ & Hret).
+    unfold canon_predicate, map_predicate_shift; cbn.
+    f_equal; [f_equal|apply IHt|].
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact Hpar|]. cbn. intros ? h. apply h.
+    + rewrite canon_ctx_length. apply Hret.
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact X0|]. cbn. intros br [_ Hb].
+      unfold canon_branch, map_branch_shift; cbn.
+      rewrite canon_ctx_length. f_equal. apply Hb.
+  - (* tProj *) canon_cong.
+  - (* tFix *) f_equal. rewrite !map_map. rewrite length_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|apply Hbo].
+  - (* tCoFix *) f_equal. rewrite !map_map. rewrite length_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|apply Hbo].
+  - (* tPrim *) f_equal. destruct p as [? m]; destruct m; cbn in X; cbn;
+      try reflexivity.
+    destruct X as (Hty & Hdef & Hval).
+    unfold mapu_array_model; cbn. rewrite ?map_map.
+    assert (hv : map (fun x : term => canon (rename f x)) (array_value a)
+               = map (fun x : term => rename f (canon x)) (array_value a)).
+    { apply All_map_eq'. eapply All_impl; [exact Hval|]. cbn. intros ? h. apply h. }
+    now rewrite hv (Hty f) (Hdef f).
+Qed.
+
+(** ** [subst]
+
+  The [tRel] case is where the closedness of [canon_dom] is invisible but the
+  [canon_lift] commutation is not: a substituted body arrives under [lift0 k]. *)
+
+Lemma canon_subst s k t :
+  canon (subst s k t) = subst (map canon s) k (canon t).
+Proof.
+  induction t in k |- * using term_forall_list_ind; cbn.
+  - (* tRel *) destruct (Nat.leb k n); cbn; [|reflexivity].
+    rewrite nth_error_map. destruct (nth_error s (n - k)) as [b|]; cbn.
+    + apply canon_lift.
+    + now rewrite length_map.
+  - (* tVar *) reflexivity.
+  - (* tEvar *) f_equal. rewrite !map_map. apply All_map_eq'.
+    eapply All_impl; [exact X|]. cbn. intros ? h. apply h.
+  - (* tSort *) reflexivity.
+  - (* tProd *) canon_cong.
+  - (* tLambda *) canon_cong.
+  - (* tLetIn *) canon_cong.
+  - (* tApp *) canon_cong.
+  - (* tConst *) reflexivity.
+  - (* tInd *) reflexivity.
+  - (* tConstruct *) reflexivity.
+  - (* tCase *) destruct X as (Hpar & _ & Hret).
+    unfold canon_predicate, map_predicate_k; cbn.
+    f_equal; [f_equal|apply IHt|].
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact Hpar|]. cbn. intros ? h. apply h.
+    + rewrite canon_ctx_length. apply Hret.
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact X0|]. cbn. intros br [_ Hb].
+      unfold canon_branch, map_branch_k; cbn.
+      rewrite canon_ctx_length. f_equal. apply Hb.
+  - (* tProj *) canon_cong.
+  - (* tFix *) f_equal. rewrite !map_map. rewrite length_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|apply Hbo].
+  - (* tCoFix *) f_equal. rewrite !map_map. rewrite length_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|apply Hbo].
+  - (* tPrim *) f_equal. destruct p as [? m]; destruct m; cbn in X; cbn;
+      try reflexivity.
+    destruct X as (Hty & Hdef & Hval).
+    unfold mapu_array_model; cbn. rewrite ?map_map.
+    assert (hv : map (fun x : term => canon (subst s k x)) (array_value a)
+               = map (fun x : term => subst (map canon s) k (canon x)) (array_value a)).
+    { apply All_map_eq'. eapply All_impl; [exact Hval|]. cbn. intros ? h. apply h. }
+    now rewrite hv (Hty k) (Hdef k).
+Qed.
+
+Lemma canon_subst1 a k t :
+  canon (subst1 a k t) = subst1 (canon a) k (canon t).
+Proof. unfold subst1. apply (canon_subst [a]). Qed.
+
+(** ** [subst_instance] (needed by δ: a constant body arrives instantiated)
+
+  [subst_instance_constr] leaves [pcontext]/[bcontext] alone ([id],
+  [PCUICAst.v:419-420]) and rewrites only [array_level] inside a primitive
+  array, which is exactly the field [canon] keeps. So the two commute because
+  they touch disjoint fields. *)
+
+Lemma canon_subst_instance u t :
+  canon (subst_instance u t) = subst_instance u (canon t).
+Proof.
+  induction t using term_forall_list_ind; cbn.
+  - (* tRel *) reflexivity.
+  - (* tVar *) reflexivity.
+  - (* tEvar *) f_equal. rewrite !map_map. apply All_map_eq'.
+    eapply All_impl; [exact X|]. cbn. intros ? h. apply h.
+  - (* tSort *) reflexivity.
+  - (* tProd *) canon_cong.
+  - (* tLambda *) canon_cong.
+  - (* tLetIn *) canon_cong.
+  - (* tApp *) canon_cong.
+  - (* tConst *) reflexivity.
+  - (* tInd *) reflexivity.
+  - (* tConstruct *) reflexivity.
+  - (* tCase *) destruct X as (Hpar & _ & Hret).
+    unfold canon_predicate, map_predicate; cbn.
+    f_equal; [f_equal|apply IHt|].
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact Hpar|]. cbn. intros ? h. apply h.
+    + apply Hret.
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact X0|]. cbn. intros br [_ Hb].
+      unfold canon_branch, map_branch; cbn. f_equal. apply Hb.
+  - (* tProj *) canon_cong.
+  - (* tFix *) f_equal. rewrite !map_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|apply Hbo].
+  - (* tCoFix *) f_equal. rewrite !map_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|apply Hbo].
+  - (* tPrim *) f_equal. destruct p as [? m]; destruct m; cbn in X; cbn;
+      try reflexivity.
+    destruct X as (Hty & Hdef & Hval).
+    unfold mapu_array_model; cbn. rewrite ?map_map.
+    assert (hv : map (fun x : term => canon (subst_instance u x)) (array_value a)
+               = map (fun x : term => subst_instance u (canon x)) (array_value a)).
+    { apply All_map_eq'. eapply All_impl; [exact Hval|]. cbn. intros ? h. apply h. }
+    now rewrite hv Hty Hdef.
+Qed.
+
+(** ** [inst] (A7's sigma-calculus route)
+
+  The only new content over [canon_rename] is that [canon] commutes with [up]:
+  below the cut [up] produces [tRel i], which [canon] fixes, and above it a
+  [rename], which [canon_rename] handles. *)
+
+Lemma canon_up k s i : canon (up k s i) = up k (fun j => canon (s j)) i.
+Proof.
+  unfold up. destruct (k <=? i); [apply canon_rename|reflexivity].
+Qed.
+
+Lemma canon_inst s t : canon (inst s t) = inst (fun j => canon (s j)) (canon t).
+Proof.
+  induction t in s |- * using term_forall_list_ind; cbn.
+  - (* tRel *) reflexivity.
+  - (* tVar *) reflexivity.
+  - (* tEvar *) f_equal. rewrite !map_map. apply All_map_eq'.
+    eapply All_impl; [exact X|]. cbn. intros ? h. apply h.
+  - (* tSort *) reflexivity.
+  - (* tProd *) f_equal; [apply IHt1|].
+    rewrite IHt2. apply inst_ext. intros i. apply canon_up.
+  - (* tLambda *) f_equal.
+    rewrite IHt2. apply inst_ext. intros i. apply canon_up.
+  - (* tLetIn *) f_equal; [apply IHt1|apply IHt2|].
+    rewrite IHt3. apply inst_ext. intros i. apply canon_up.
+  - (* tApp *) f_equal; [apply IHt1|apply IHt2].
+  - (* tConst *) reflexivity.
+  - (* tInd *) reflexivity.
+  - (* tConstruct *) reflexivity.
+  - (* tCase *) destruct X as (Hpar & _ & Hret).
+    unfold canon_predicate, map_predicate_shift; cbn.
+    f_equal; [f_equal|apply IHt|].
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact Hpar|]. cbn. intros ? h. apply h.
+    + rewrite canon_ctx_length Hret. apply inst_ext. intros i.
+      apply canon_up.
+    + rewrite !map_map. apply All_map_eq'.
+      eapply All_impl; [exact X0|]. cbn. intros br [_ Hb].
+      unfold canon_branch, map_branch_shift; cbn.
+      rewrite canon_ctx_length Hb. f_equal. apply inst_ext. intros i.
+      apply canon_up.
+  - (* tProj *) f_equal. apply IHt.
+  - (* tFix *) f_equal. rewrite !map_map. rewrite length_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|].
+    rewrite Hbo. apply inst_ext. intros i. apply canon_up.
+  - (* tCoFix *) f_equal. rewrite !map_map. rewrite length_map.
+    apply All_map_eq'. eapply All_impl; [exact X|]. cbn. intros d [Hty Hbo].
+    unfold canon_def, map_def; cbn. f_equal; [apply Hty|].
+    rewrite Hbo. apply inst_ext. intros i. apply canon_up.
+  - (* tPrim *) f_equal. destruct p as [? m]; destruct m; cbn in X; cbn;
+      try reflexivity.
+    destruct X as (Hty & Hdef & Hval).
+    unfold mapu_array_model; cbn. rewrite ?map_map.
+    assert (hv : map (fun x : term => canon (inst s x)) (array_value a)
+               = map (fun x : term => inst (fun j => canon (s j)) (canon x))
+                     (array_value a)).
+    { apply All_map_eq'. eapply All_impl; [exact Hval|]. cbn. intros ? h. apply h. }
+    now rewrite hv (Hty s) (Hdef s).
+Qed.
+
+(** ** Scoping
+
+  [canon] only ever WEAKENS a scoping obligation: at a λ it replaces the domain
+  by the closed [canon_dom], and everywhere else it either recurses or rewrites
+  a binder name, which [on_free_vars] does not read. The [tCase] contexts are
+  the one place worth stating separately, because [on_free_vars] tests them with
+  [test_context_k] and [canon_decl] leaves every field that test reads. *)
+
+Lemma test_context_k_canon f n ctx :
+  test_context_k f n (map canon_decl ctx) = test_context_k f n ctx.
+Proof.
+  induction ctx as [|d ctx IH]; cbn; [reflexivity|].
+  rewrite IH canon_ctx_length. reflexivity.
+Qed.
+
+Lemma canon_on_free_vars P t : on_free_vars P t -> on_free_vars P (canon t).
+Proof.
+  induction t in P |- * using term_forall_list_ind; cbn; auto.
+  - (* tEvar *) intros h. rewrite forallb_map. solve_all.
+  - (* tProd *) move/andP => [h1 h2]. apply/andP. split; auto.
+  - (* tLambda *) move/andP => [_ h2]. apply/andP. split; [reflexivity|auto].
+  - (* tLetIn *) move/and3P => [h1 h2 h3]. apply/and3P. split; auto.
+  - (* tApp *) move/andP => [h1 h2]. apply/andP. split; auto.
+  - (* tCase *) destruct X as (Hpar & _ & Hret).
+    move/and5P => [hp hr hc hd hbrs]. apply/and5P. split.
+    + rewrite forallb_map. solve_all.
+    + cbn. rewrite canon_ctx_length. now apply Hret.
+    + cbn. rewrite canon_ctx_length test_context_k_canon. exact hc.
+    + now apply IHt.
+    + rewrite forallb_map. cbn. rewrite canon_ctx_length.
+      solve_all. move/andP: b => [hb1 hb2]. apply/andP. split.
+      * rewrite test_context_k_canon. exact hb1.
+      * rewrite canon_ctx_length. now apply b0.
+  - (* tProj *) auto.
+  - (* tFix *) intros h. rewrite forallb_map length_map. solve_all.
+    unfold test_def in *. move/andP: b => [h1 h2]. apply/andP. split; auto.
+  - (* tCoFix *) intros h. rewrite forallb_map length_map. solve_all.
+    unfold test_def in *. move/andP: b => [h1 h2]. apply/andP. split; auto.
+  - (* tPrim *) destruct p as [? m]; destruct m; cbn in X |- *; auto.
+    destruct X as (Hty & Hdef & Hval). simp test_prim.
+    move/and3P => [hv hd ht]. apply/and3P. split.
+    + rewrite forallb_map. solve_all.
+    + now apply Hdef.
+    + now apply Hty.
+Qed.
+
+(** The [Q]-facing corollary: [canon] preserves [is_open_term]. *)
+Lemma canon_is_open_term Γ t : is_open_term Γ t -> is_open_term Γ (canon t).
+Proof. apply canon_on_free_vars. Qed.
