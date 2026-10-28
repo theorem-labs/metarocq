@@ -1464,10 +1464,10 @@ Lemma wf_pop_decl Σ kn decl decls :
   wf_ext ({| universes := Σ.(universes); retroknowledge := Σ.(retroknowledge);
              declarations := decls |}, universes_decl_of_decl decl).
 Proof.
-  intros [] h. rewrite h in o0.
+  intros [o [wr o0]] h. rewrite h in o0.
   depelim o0.
   split. cbn.
-  split; cbn; eauto. cbn.
+  split; [eauto|split; eauto]. cbn.
   now depelim o1.
 Qed.
 
@@ -1477,10 +1477,10 @@ Lemma sq_wf_pop_decl Σ kn decl decls :
   ∥ wf_ext ({| universes := Σ.(universes); retroknowledge := Σ.(retroknowledge);
              declarations := decls |}, universes_decl_of_decl decl) ∥.
 Proof.
-  intros [[]] h; sq. rewrite h in o0.
+  intros [[o [wr o0]]] h; sq. rewrite h in o0.
   depelim o0.
   split. cbn.
-  split; cbn; eauto. cbn.
+  split; [eauto|split; eauto]. cbn.
   now depelim o1.
 Qed.
 
@@ -1552,7 +1552,7 @@ Qed.
 Next Obligation.
   eapply abstract_eq_wf in prop as [equiv [wf]].
   sq.
-  depelim wf; cbn in *. depelim o0. now depelim o1.
+  destruct wf as [o [wr o0]]; cbn in *. depelim o0. now depelim o1.
 Qed.
 Next Obligation.
   eapply abstract_eq_wf in prop as [equiv [wf]].

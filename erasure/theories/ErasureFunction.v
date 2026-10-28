@@ -1390,7 +1390,11 @@ Qed.
 Definition extends_global_env (Σ Σ' : PCUICAst.PCUICEnvironment.global_env) :=
   (forall kn decl, PCUICAst.PCUICEnvironment.lookup_env Σ kn = Some decl ->
     PCUICAst.PCUICEnvironment.lookup_env Σ' kn = Some decl) /\
-  (forall tag, primitive_constant Σ tag = primitive_constant Σ' tag).
+  (forall tag, primitive_constant Σ tag = primitive_constant Σ' tag) /\
+  (* BET-319 row J2: the operation table and the booleans, which the machine
+     reads, agree too (change log 25) *)
+  (forall kn, prim_op_of Σ kn = prim_op_of Σ' kn) /\
+  primitive_bool Σ = primitive_bool Σ'.
 
 Lemma is_erasableb_irrel_global_env {X_type X} {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X -> NormalizationIn Σ} {X_type' X'} {normalization_in' : forall Σ, wf_ext Σ -> Σ ∼_ext X' -> NormalizationIn Σ} {Γ t wt wt'} :
   forall (hl : Hlookup X_type X X_type' X'),
@@ -1539,7 +1543,9 @@ Definition equiv_decls_inter Σ Σ' :=
 
 Definition equiv_env_inter Σ Σ' :=
   (forall kn decl decl', lookup_env Σ kn = Some decl -> lookup_env Σ' kn = Some decl' -> decl = decl') /\
-  (forall tag : Primitive.prim_tag, primitive_constant Σ tag = primitive_constant Σ' tag).
+  (forall tag : Primitive.prim_tag, primitive_constant Σ tag = primitive_constant Σ' tag) /\
+  (forall kn, prim_op_of Σ kn = prim_op_of Σ' kn) /\
+  primitive_bool Σ = primitive_bool Σ'.
 
 Lemma equiv_env_inter_sym Σ Σ' :
   equiv_env_inter Σ Σ' <-> equiv_env_inter Σ' Σ.
@@ -1554,8 +1560,8 @@ Lemma equiv_env_inter_hlookup {cf:checker_flags} (X_type : abstract_env_impl) (X
   (forall Σ Σ', Σ ∼_ext X -> Σ' ∼_ext X' -> equiv_env_inter Σ Σ') -> Hlookup X_type X X_type' X'.
 Proof.
   intros hl Σ HX Σ' HX'.
-  specialize (hl _ _ HX HX') as [hl hr].
-  split.
+  specialize (hl _ _ HX HX') as [hl [hr [hop hb]]].
+  split; [|split; [|split]].
   - intros kn decl decl'.
     specialize (hl kn decl decl').
     rewrite <-(abstract_env_lookup_correct' _ _ HX).
@@ -1564,6 +1570,10 @@ Proof.
     rewrite Hl Hl'. f_equal. eauto.
   - intros tag; rewrite (abstract_primitive_constant_correct _ _ _ HX) (abstract_primitive_constant_correct _ _ _ HX').
     apply hr.
+  - intros kn; rewrite (abstract_prim_op_of_correct _ _ _ HX) (abstract_prim_op_of_correct _ _ _ HX').
+    apply hop.
+  - rewrite (abstract_primitive_bool_correct _ _ HX) (abstract_primitive_bool_correct _ _ HX').
+    exact hb.
 Qed.
 
 
@@ -1584,18 +1594,25 @@ Proof.
   pose proof (abstract_env_exists X) as [[env wf]].
   pose proof (abstract_env_exists X') as [[env' wf']].
   red. intros.
-  specialize (hl _ wf _ wf') as [hl hp].
+  specialize (hl _ wf _ wf') as [hl [hp [hop hb]]].
   pose proof (abstract_make_wf_env_ext_correct X (cst_universes cb) _ _ _ wf H).
   pose proof (abstract_make_wf_env_ext_correct X' (cst_universes cb) _ _ _ wf' H0).
-  split => //.
+  split; [|split; [|split]].
   { intros.
     rewrite -(abstract_env_lookup_correct' _ _ H).
     rewrite -(abstract_env_lookup_correct' _ _ H0). rewrite H3 H4. subst Σ Σ'.
     now specialize (hl _ _ _ H3 H4). }
-  intros.
-  { rewrite (abstract_primitive_constant_correct _ _ _ H).
+  { intros.
+    rewrite (abstract_primitive_constant_correct _ _ _ H).
     rewrite (abstract_primitive_constant_correct _ _ _ H0).
     now rewrite H1 H2. }
+  { intros kn.
+    rewrite (abstract_prim_op_of_correct _ _ _ H).
+    rewrite (abstract_prim_op_of_correct _ _ _ H0).
+    rewrite H1 H2. apply hop. }
+  { rewrite (abstract_primitive_bool_correct _ _ H).
+    rewrite (abstract_primitive_bool_correct _ _ H0).
+    rewrite H1 H2. exact hb. }
 Qed.
 
 Program Fixpoint erase_global_deps
@@ -1634,11 +1651,12 @@ Next Obligation.
   { now eexists. }
   pose proof (abstract_pop_decls_correct X decls prop' _ _ HX H).
   destruct x, Σ as [[] u], H0; cbn in *.
-  subst. sq. inversion H1. subst. destruct wfX. cbn in *.
+  subst. sq. inversion H1. subst. destruct wfX as [onu [wfr o0]]. cbn in *.
   specialize (prop _ HX).
   cbn in prop.
-  rewrite prop in o0. depelim o0. destruct o1.
-  split. 2:exact on_global_decl_d. split => //.
+  rewrite prop in o0. depelim o0. destruct o.
+  split. 2:exact on_global_decl_d.
+  split; [split; [exact onu|split; [exact wfr|exact o0]]|done].
 Qed.
 Next Obligation.
   unshelve eapply (normalization_in (S _)); cbn in *; revgoals; try eassumption; lia.
@@ -1706,11 +1724,12 @@ Next Obligation.
   { now eexists. }
   pose proof (abstract_pop_decls_correct X decls prop' _ _ HX H).
   destruct x, Σ as [[] u], H0; cbn in *.
-  subst. sq. inversion H1. subst. destruct wfX. cbn in *.
+  subst. sq. inversion H1. subst. destruct wfX as [onu [wfr o0]]. cbn in *.
   specialize (prop _ HX).
   cbn in prop.
-  rewrite prop in o0. depelim o0. destruct o1.
-  split. 2:exact on_global_decl_d. split => //.
+  rewrite prop in o0. depelim o0. destruct o.
+  split. 2:exact on_global_decl_d.
+  split; [split; [exact onu|split; [exact wfr|exact o0]]|done].
 Qed.
 Next Obligation.
   unshelve eapply (normalization_in (S _)); cbn in *; revgoals; try eassumption; lia.
@@ -1731,11 +1750,31 @@ assert (prop': forall Σ : global_env, abstract_env_rel X Σ -> exists d, Σ.(de
 now pose proof (abstract_pop_decls_correct X decls prop' _ _ HX H).
 Qed.
 
+(** The primitive-type constants, the operation table and the booleans: what
+    erasure's irrelevance lemmas need two environments to agree on (BET-319
+    row J2, change log 25).  All three are read off the retroknowledge. *)
+Definition same_prims (Σ Σ' : global_env) :=
+  (forall tag, primitive_constant Σ tag = primitive_constant Σ' tag) /\
+  (forall kn, prim_op_of Σ kn = prim_op_of Σ' kn) /\
+  primitive_bool Σ = primitive_bool Σ'.
+
+Lemma same_prims_refl Σ : same_prims Σ Σ.
+Proof. split; [intros; reflexivity|split; [intros; reflexivity|reflexivity]]. Qed.
+
+Lemma same_prims_retro {Σ Σ' Σ0 Σ0'} :
+  retroknowledge Σ0 = retroknowledge Σ -> retroknowledge Σ0' = retroknowledge Σ' ->
+  same_prims Σ Σ' -> same_prims Σ0 Σ0'.
+Proof.
+  intros e e' [hc [ho hb]].
+  unfold same_prims, primitive_constant, prim_op_of, primitive_bool in *.
+  rewrite e e'. split; [exact hc|split; [exact ho|exact hb]].
+Qed.
+
 Lemma erase_global_deps_irr
   X_type deps (X X':X_type.π1) decls
   {normalization_in normalization_in'}
   prf prf' :
-  (forall Σ Σ', Σ ∼ X -> Σ' ∼ X' -> forall tag, primitive_constant Σ tag = primitive_constant Σ' tag) ->
+  (forall Σ Σ', Σ ∼ X -> Σ' ∼ X' -> same_prims Σ Σ') ->
   erase_global_deps deps X decls (normalization_in:=normalization_in) prf =
   erase_global_deps deps X' decls (normalization_in:=normalization_in') prf'.
 Proof.
@@ -1759,24 +1798,28 @@ Proof.
       red. intros.
       pose proof (abstract_make_wf_env_ext_correct (abstract_pop_decls X) (cst_universes c) _ _ _ wf H0).
       pose proof (abstract_make_wf_env_ext_correct (abstract_pop_decls X') (cst_universes c) _ _ _ wf' H1).
-      split => //.
+      specialize (H _ _ wfX wfX').
+      destruct (same_prims_retro (eq_sym Hr) (eq_sym Hr') H) as [hpc [hop hb]].
+      split; [|split; [|split]].
       { intros.
         rewrite -(abstract_env_lookup_correct' _ _ H0).
         rewrite -(abstract_env_lookup_correct' _ _ H1).
         move: H4 H5. rewrite /lookup_env H2 H3 /= Hd Hd'. congruence. }
-      intros.
-      { rewrite (abstract_primitive_constant_correct _ _ _ H0).
-        rewrite (abstract_primitive_constant_correct _ _ _ H1).
-        specialize (H _ _ wfX wfX').
-        rewrite H2 H3 /primitive_constant /= -Hr -Hr'. apply H. } }
-    assert ((forall Σ Σ' : global_env,
-      Σ ∼ abstract_pop_decls X -> Σ' ∼ abstract_pop_decls X' ->
-      forall tag : Primitive.prim_tag, primitive_constant Σ tag = primitive_constant Σ' tag))        .
-    { intros Σ Σ' h h' tag.
+      { intros tag.
+        rewrite (abstract_primitive_constant_correct _ _ _ H0) (abstract_primitive_constant_correct _ _ _ H1).
+        rewrite H2 H3. apply hpc. }
+      { intros kn0.
+        rewrite (abstract_prim_op_of_correct _ _ _ H0) (abstract_prim_op_of_correct _ _ _ H1).
+        rewrite H2 H3. apply hop. }
+      { rewrite (abstract_primitive_bool_correct _ _ H0) (abstract_primitive_bool_correct _ _ H1).
+        rewrite H2 H3. exact hb. } }
+    assert (forall Σ Σ' : global_env,
+      Σ ∼ abstract_pop_decls X -> Σ' ∼ abstract_pop_decls X' -> same_prims Σ Σ').
+    { intros Σ Σ' h h'.
       pose proof (abstract_env_irr _ wf h). subst env.
       pose proof (abstract_env_irr _ wf' h'). subst env'.
       specialize (H _ _ wfX wfX').
-      rewrite /primitive_constant -Hr -Hr'. apply H. }
+      exact (same_prims_retro (eq_sym Hr) (eq_sym Hr') H). }
     specialize (IHdecls (abstract_pop_decls X) (abstract_pop_decls X')).
     destruct KernameSet.mem; cbn.
     f_equal; f_equal. f_equal; now eapply IHdecls.
@@ -1790,21 +1833,20 @@ Proof.
     { intros ? h. rewrite (prf _ h). now eexists. }
     unshelve epose proof (abstract_pop_decls_correct _ _ _ _ _ wfX' wf') as [Hd' [Hu' Hr']]. shelve.
     { intros ? h. rewrite (prf' _ h). now eexists. }
-    assert ((forall Σ Σ' : global_env,
-    Σ ∼ abstract_pop_decls X -> Σ' ∼ abstract_pop_decls X' ->
-    forall tag : Primitive.prim_tag, primitive_constant Σ tag = primitive_constant Σ' tag))        .
-    { intros Σ Σ' h h' tag.
+    assert (forall Σ Σ' : global_env,
+      Σ ∼ abstract_pop_decls X -> Σ' ∼ abstract_pop_decls X' -> same_prims Σ Σ').
+    { intros Σ Σ' h h'.
       pose proof (abstract_env_irr _ wf h). subst env.
       pose proof (abstract_env_irr _ wf' h'). subst env'.
       specialize (H _ _ wfX wfX').
-      rewrite /primitive_constant -Hr -Hr'. apply H. }
+      exact (same_prims_retro (eq_sym Hr) (eq_sym Hr') H). }
     destruct KernameSet.mem; cbn. f_equal. f_equal. 1-2:f_equal. all:now eapply IHdecls.
 Qed.
 
 
 Lemma erase_global_irr X_type (X X':X_type.π1) decls {normalization_in normalization_in'}
 prf prf' :
-(forall Σ Σ', Σ ∼ X -> Σ' ∼ X' -> forall tag, primitive_constant Σ tag = primitive_constant Σ' tag) ->
+(forall Σ Σ', Σ ∼ X -> Σ' ∼ X' -> same_prims Σ Σ') ->
 erase_global X decls (normalization_in:=normalization_in) prf =
 erase_global X' decls (normalization_in:=normalization_in') prf'.
 Proof.
@@ -1828,24 +1870,28 @@ induction decls; eauto. intros. destruct a as [kn []].
     red. intros.
     pose proof (abstract_make_wf_env_ext_correct (abstract_pop_decls X) (cst_universes c) _ _ _ wf H0).
     pose proof (abstract_make_wf_env_ext_correct (abstract_pop_decls X') (cst_universes c) _ _ _ wf' H1).
-    split => //.
+    specialize (H _ _ wfX wfX').
+    destruct (same_prims_retro (eq_sym Hr) (eq_sym Hr') H) as [hpc [hop hb]].
+    split; [|split; [|split]].
     { intros.
       rewrite -(abstract_env_lookup_correct' _ _ H0).
       rewrite -(abstract_env_lookup_correct' _ _ H1).
       move: H4 H5. rewrite /lookup_env H2 H3 /= Hd Hd'. congruence. }
-    intros.
-    { rewrite (abstract_primitive_constant_correct _ _ _ H0).
-      rewrite (abstract_primitive_constant_correct _ _ _ H1).
-      specialize (H _ _ wfX wfX').
-      rewrite H2 H3 /primitive_constant /= -Hr -Hr'. apply H. } }
-  assert ((forall Σ Σ' : global_env,
-    Σ ∼ abstract_pop_decls X -> Σ' ∼ abstract_pop_decls X' ->
-    forall tag : Primitive.prim_tag, primitive_constant Σ tag = primitive_constant Σ' tag))        .
-  { intros Σ Σ' h h' tag.
+    { intros tag.
+      rewrite (abstract_primitive_constant_correct _ _ _ H0) (abstract_primitive_constant_correct _ _ _ H1).
+      rewrite H2 H3. apply hpc. }
+    { intros kn0.
+      rewrite (abstract_prim_op_of_correct _ _ _ H0) (abstract_prim_op_of_correct _ _ _ H1).
+      rewrite H2 H3. apply hop. }
+    { rewrite (abstract_primitive_bool_correct _ _ H0) (abstract_primitive_bool_correct _ _ H1).
+      rewrite H2 H3. exact hb. } }
+  assert (forall Σ Σ' : global_env,
+    Σ ∼ abstract_pop_decls X -> Σ' ∼ abstract_pop_decls X' -> same_prims Σ Σ').
+  { intros Σ Σ' h h'.
     pose proof (abstract_env_irr _ wf h). subst env.
     pose proof (abstract_env_irr _ wf' h'). subst env'.
     specialize (H _ _ wfX wfX').
-    rewrite /primitive_constant -Hr -Hr'. apply H. }
+    exact (same_prims_retro (eq_sym Hr) (eq_sym Hr') H). }
   specialize (IHdecls (abstract_pop_decls X) (abstract_pop_decls X')).
   f_equal; f_equal. f_equal; now eapply IHdecls.
 - cbn.
@@ -1857,14 +1903,13 @@ induction decls; eauto. intros. destruct a as [kn []].
   { intros ? h. rewrite (prf _ h). now eexists. }
   unshelve epose proof (abstract_pop_decls_correct _ _ _ _ _ wfX' wf') as [Hd' [Hu' Hr']]. shelve.
   { intros ? h. rewrite (prf' _ h). now eexists. }
-  assert ((forall Σ Σ' : global_env,
-  Σ ∼ abstract_pop_decls X -> Σ' ∼ abstract_pop_decls X' ->
-  forall tag : Primitive.prim_tag, primitive_constant Σ tag = primitive_constant Σ' tag))        .
-  { intros Σ Σ' h h' tag.
+  assert (forall Σ Σ' : global_env,
+    Σ ∼ abstract_pop_decls X -> Σ' ∼ abstract_pop_decls X' -> same_prims Σ Σ').
+  { intros Σ Σ' h h'.
     pose proof (abstract_env_irr _ wf h). subst env.
     pose proof (abstract_env_irr _ wf' h'). subst env'.
     specialize (H _ _ wfX wfX').
-    rewrite /primitive_constant -Hr -Hr'. apply H. }
+    exact (same_prims_retro (eq_sym Hr) (eq_sym Hr') H). }
   f_equal. f_equal. all:now eapply IHdecls.
 Qed.
 
