@@ -4014,9 +4014,9 @@ Section ConvGhost.
   Definition rbody (ts : list term) (N : nat) (br : branch term) : term :=
     subst ts #|br.(bcontext)| (lift N (#|br.(bcontext)| + #|ts|) br.(bbody)).
 
-  Definition cqb (L Q k : nat) (B1 B2 : term) : Prop :=
+  Definition cqb (L Q k : nat) (pb : conv_pb) (B1 B2 : term) : Prop :=
     forall U1 U2 : term, B1 = lift (Q - L) k U1 -> B2 = lift (Q - L) k U2 ->
-      scl (L + k) U1 -> scl (L + k) U2 -> cv (L + k) Conv U1 U2.
+      scl (L + k) U1 -> scl (L + k) U2 -> cv (L + k) pb U1 U2.
 
   Inductive bcodes (G : ghost) (c : code) : N -> list (branch term) -> Prop :=
   | bcodes_nil i : bcodes G c i []
@@ -4034,7 +4034,7 @@ Section ConvGhost.
       post L Q G rs s' rs' /\
       (b = true -> Forall2 (fun br1 br2 =>
           case_ctx_ok br1.(bcontext) br2.(bcontext) = true
-          /\ cqb L Q #|br1.(bcontext)| (rbody ts1 (Q - nctx + e1.(ev_goff)) br1)
+          /\ cqb L Q #|br1.(bcontext)| Conv (rbody ts1 (Q - nctx + e1.(ev_goff)) br1)
                  (rbody ts2 (Q - nctx + e2.(ev_goff)) br2)) l1 l2).
 
   Definition spec_rows_on (d : cbn_fuel) (R : cbn_value -> cbn_value -> Prop) : Prop :=
@@ -4665,6 +4665,459 @@ Section ConvGhost.
         exact (cqs_lift _ _ _ _ _ hLQ hqA (hc hb)).
       + cbv beta iota in he. injection he as <- <- <-.
         split; [exact (post_drop2 _ _ _ _ _ _ _ _ hpA)|]. intros hb; discriminate hb.
+  Qed.
+
+  (** ** The same-code rule on ghost readings *)
+
+  Lemma shiftnP0 (P : nat -> bool) : shiftnP 0 P =1 P.
+  Proof. intros i. unfold shiftnP. cbn. rewrite Nat.sub_0_r. reflexivity. Qed.
+
+  (** The slots of an environment unlifted where the code uses them, a closed filler
+    elsewhere: the logical slots the same-code rule substitutes. *)
+  Fixpoint pickw (m : nat) (a : term) (i : nat) (ts : list term) : list term :=
+    match ts with
+    | [] => []
+    | t :: ts => (if noccur_between i 1 a then tSort sProp else unl m t) :: pickw m a (S i) ts
+    end.
+
+  Lemma pickw_length m a i ts : #|pickw m a i ts| = #|ts|.
+  Proof.
+    revert i. induction ts as [|t ts ih]; intros i; cbn; [reflexivity|]. rewrite ih. reflexivity.
+  Qed.
+
+  Lemma pickw_lift m a i ts :
+    (forall j u, nth_error ts j = Some u -> noccur_between (i + j) 1 a = false ->
+       u = lift0 m (unl m u)) ->
+    forall j, j < #|ts| -> noccur_between (i + j) 1 a = false ->
+      nth_error (map (lift0 m) (pickw m a i ts)) j = nth_error ts j.
+  Proof.
+    revert i. induction ts as [|t ts ih]; intros i h j hj hn; cbn in hj |- *; [lia|].
+    destruct j as [|j]; cbn.
+    - rewrite Nat.add_0_r in hn. rewrite hn. f_equal. symmetry. apply (h 0 t eq_refl).
+      rewrite Nat.add_0_r. exact hn.
+    - apply ih; [|lia|replace (S i + j) with (i + S j) by lia; exact hn].
+      intros j' u hu hn'. apply (h (S j') u hu). replace (i + S j') with (S i + j') by lia.
+      exact hn'.
+  Qed.
+
+  Lemma pick_all2 L Q a i ts1 ts2 Δ :
+    nctx <= L -> L <= Q -> #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) ->
+    cagree L Q a i ts1 ts2 ->
+    (forall j u, nth_error ts1 j = Some u -> noccur_between (i + j) 1 a = false ->
+       on_free_vars (inq (Q - L) Q) u) ->
+    (forall j u, nth_error ts2 j = Some u -> noccur_between (i + j) 1 a = false ->
+       on_free_vars (inq (Q - L) Q) u) ->
+    ∥ ws_cumul_pb_terms Σ (Γ ,,, Δ) (pickw (Q - L) a i ts1) (pickw (Q - L) a i ts2) ∥.
+  Proof.
+    intros hL hQ hΔ hcl h. induction h as [i|i u1 u2 l1 l2 hd hag ih]; intros h1 h2.
+    - constructor. constructor.
+    - assert (h1' : forall j u, nth_error l1 j = Some u -> noccur_between (S i + j) 1 a = false ->
+                      on_free_vars (inq (Q - L) Q) u).
+      { intros j u hu hn. apply (h1 (S j) u hu). replace (i + S j) with (S i + j) by lia.
+        exact hn. }
+      assert (h2' : forall j u, nth_error l2 j = Some u -> noccur_between (S i + j) 1 a = false ->
+                      on_free_vars (inq (Q - L) Q) u).
+      { intros j u hu hn. apply (h2 (S j) u hu). replace (i + S j) with (S i + j) by lia.
+        exact hn. }
+      destruct (ih h1' h2') as [hall].
+      cbn [pickw]. destruct (noccur_between i 1 a) eqn:En.
+      + constructor. constructor; [|exact hall].
+        apply ws_cumul_pb_refl; [exact hcl|reflexivity].
+      + destruct hd as [hd|hd]; [discriminate hd|].
+        pose proof (h1 0 u1 eq_refl ltac:(rewrite Nat.add_0_r; exact En)) as o1.
+        pose proof (h2 0 u2 eq_refl ltac:(rewrite Nat.add_0_r; exact En)) as o2.
+        destruct (inq_unl _ _ _ o1) as [e1 s1]. destruct (inq_unl _ _ _ o2) as [e2 s2].
+        replace (Q - (Q - L)) with L in s1, s2 by lia.
+        destruct (hd _ _ e1 e2 s1 s2 Δ hΔ hcl) as [hc].
+        constructor. constructor; [exact hc|exact hall].
+  Qed.
+
+  Lemma same_code_cv L Q pb n goff ts1 ts2 a Δ :
+    nctx <= L -> L <= Q -> #|ts1| = n -> #|ts2| = n ->
+    #|Δ| = L - nctx -> is_closed_context (Γ ,,, Δ) ->
+    cagree L Q a 0 ts1 ts2 ->
+    (forall j u, nth_error ts1 j = Some u -> noccur_between (0 + j) 1 a = false ->
+       on_free_vars (inq (Q - L) Q) u) ->
+    (forall j u, nth_error ts2 j = Some u -> noccur_between (0 + j) 1 a = false ->
+       on_free_vars (inq (Q - L) Q) u) ->
+    scl L (subst (pickw (Q - L) a 0 ts1) 0 (lift (L - nctx + goff) n a)) ->
+    ∥ Σ ;;; Γ ,,, Δ ⊢ subst (pickw (Q - L) a 0 ts1) 0 (lift (L - nctx + goff) n a) ≤[pb]
+                     subst (pickw (Q - L) a 0 ts2) 0 (lift (L - nctx + goff) n a) ∥.
+  Proof.
+    intros hL hQ hl1 hl2 hΔ hcl hag h1 h2 hs.
+    destruct (pick_all2 L Q a 0 ts1 ts2 Δ hL hQ hΔ hcl hag h1 h2) as [hall].
+    constructor. apply (ws_cumul_pb_subst_open (wfΣ := wfΣ)); [exact hcl|exact hall|].
+    pose proof (cg_subst_scope_inv (shiftnP L xpred0) (pickw (Q - L) a 0 ts1)
+                  (lift (L - nctx + goff) n a) 0) as hsc.
+    rewrite pickw_length, hl1 in hsc.
+    assert (h0 : on_free_vars (shiftnP 0 (shiftnP L xpred0))
+                   (subst (pickw (Q - L) a 0 ts1) 0 (lift (L - nctx + goff) n a))).
+    { rewrite (on_free_vars_ext _ _ _ (shiftnP0 _)). exact hs. }
+    specialize (hsc h0). rewrite (on_free_vars_ext _ _ _ (shiftnP_add _ _ _)) in hsc.
+    rewrite !app_context_length, fresh_context_length, pickw_length, hl1, hΔ, <- hnctx.
+    assert (E : n + (L - nctx + nctx) = 0 + n + L) by lia. rewrite E. exact hsc.
+  Qed.
+
+  (** Two readings of codes [code_eq] accepts, through environments with the same counts whose
+    used slots agree in the sense of [cq], are convertible at any [conv_pb]. The used slots of a
+    lifted reading are lifts ([cg_occ_inv]); the unused ones do not matter
+    ([subst_agree_lift]). *)
+  Lemma same_code_cq L Q pb n goff ts1 ts2 a1 a2 :
+    nctx <= L -> L <= Q -> #|ts1| = n -> #|ts2| = n ->
+    on_free_vars xpredT a1 -> on_free_vars xpredT a2 ->
+    samec a1 a2 -> cagree L Q a1 0 ts1 ts2 ->
+    cq L Q pb (subst ts1 0 (lift (Q - nctx + goff) n a1))
+              (subst ts2 0 (lift (Q - nctx + goff) n a2)).
+  Proof.
+    intros hL hQ hl1 hl2 hy1 hy2 hsame hag u1 u2 e1 e2 s1 s2 Δ hΔ hcl.
+    assert (hQm : L + (Q - L) = Q) by lia.
+    assert (hN : Q - nctx + goff = (Q - L) + (L - nctx + goff)) by lia.
+    assert (hinv : forall ts a, on_free_vars xpredT a -> #|ts| = n ->
+              on_free_vars (inq (Q - L) Q) (subst ts 0 (lift (Q - nctx + goff) n a)) ->
+              forall j u, nth_error ts j = Some u -> noccur_between (0 + j) 1 a = false ->
+                on_free_vars (inq (Q - L) Q) u).
+    { intros ts a hy hl hT j u hu hn.
+      apply (cg_occ_inv (inq (Q - L) Q) ts (Q - nctx + goff) j u hu a 0 hy hn).
+      rewrite (on_free_vars_ext _ _ _ (shiftnP0 _)). cbn [Nat.add]. rewrite hl. exact hT. }
+    assert (hU : forall ts a U, on_free_vars xpredT a -> #|ts| = n ->
+              subst ts 0 (lift (Q - nctx + goff) n a) = lift0 (Q - L) U ->
+              on_free_vars (inq (Q - L) Q) (subst ts 0 (lift (Q - nctx + goff) n a)) ->
+              U = subst (pickw (Q - L) a 0 ts) 0 (lift (L - nctx + goff) n a)).
+    { intros ts a U hy hl eU hT. apply (lift0_inj (Q - L)). rewrite <- eU.
+      rewrite (lift_susp_read nctx L (Q - L) hL (L - nctx + goff) n a (pickw (Q - L) a 0 ts)
+                 ltac:(rewrite pickw_length; exact hl)).
+      rewrite <- hN.
+      apply subst_agree_lift; [rewrite length_map, pickw_length; reflexivity|symmetry; exact hl|].
+      intros j hj hn. symmetry. apply pickw_lift; [|exact hj|exact hn].
+      intros j' u hu hn'. exact (proj1 (inq_unl _ _ u (hinv ts a hy hl hT j' u hu hn'))). }
+    pose proof (inq_lift0 (Q - L) L u1 s1) as hT1. rewrite hQm, <- e1 in hT1.
+    pose proof (inq_lift0 (Q - L) L u2 s2) as hT2. rewrite hQm, <- e2 in hT2.
+    pose proof (hU ts1 a1 u1 hy1 hl1 e1 hT1) as hU1.
+    destruct hsame as [<-|[hc12]].
+    - pose proof (hU ts2 a1 u2 hy1 hl2 e2 hT2) as hU2.
+      rewrite hU1 in s1 |- *. rewrite hU2.
+      exact (same_code_cv L Q pb n goff ts1 ts2 a1 Δ hL hQ hl1 hl2 hΔ hcl hag
+               (hinv ts1 a1 hy1 hl1 hT1) (hinv ts2 a1 hy1 hl2 hT2) s1).
+    - set (T2' := subst ts2 0 (lift (Q - nctx + goff) n a1)).
+      assert (h12 : compare_term Σ Σ Conv T2' (subst ts2 0 (lift (Q - nctx + goff) n a2))).
+      { apply subst_eq_term.
+        exact (eq_term_upto_univ_lift Σ (compare_universe Σ) (compare_sort Σ) Conv
+                 (Q - nctx + goff) 0 n _ _ hc12). }
+      assert (h21 : compare_term Σ Σ Conv (subst ts2 0 (lift (Q - nctx + goff) n a2)) T2')
+        by (symmetry; exact h12).
+      pose proof (PCUICConfluence.eq_term_upto_univ_napp_on_free_vars h21 hT2) as hT2'.
+      destruct (inq_unl (Q - L) Q T2' hT2') as [eT2' sT2'].
+      replace (Q - (Q - L)) with L in sT2' by lia.
+      pose proof (hU ts2 a1 (unl (Q - L) T2') hy1 hl2 eT2' hT2') as hU2'.
+      assert (hc2 : compare_term Σ Σ Conv (unl (Q - L) T2') u2).
+      { rewrite <- (unl_lift0 (Q - L) u2), <- e2.
+        exact (PCUICRenameConv.eq_term_upto_univ_rename Σ _ _ Conv 0 _ _ _ h12). }
+      rewrite hU1 in s1 |- *.
+      destruct (same_code_cv L Q pb n goff ts1 ts2 a1 Δ hL hQ hl1 hl2 hΔ hcl hag
+                  (hinv ts1 a1 hy1 hl1 hT1) (hinv ts2 a1 hy1 hl2 hT2') s1) as [h1].
+      constructor. refine (@ws_cumul_pb_conv_trans_r cf Σ wfΣ pb (Γ ,,, Δ) _ _ _ h1 _).
+      rewrite <- hU2'.
+      apply ws_cumul_pb_compare_term; [exact hcl|exact (scl_open L Δ _ hL hΔ sT2')|
+                                       exact (scl_open L Δ u2 hL hΔ s2)|exact hc2].
+  Qed.
+
+  (** [code_eq_sound], with the universe checks [code_eq] ran on the way to a syntactic
+    comparison. *)
+  Lemma code_eq_sound_wf (c1 c2 : code) (e1 e2 : code_entry) (s : cbn_state) :
+    ceq_ok X_type X (s.(st_memo)) ->
+    PTree.get c1.(c_entry) ((s.(st_memo)).(m_codes)) = Some e1 -> code_inv e1 c1 ->
+    PTree.get c2.(c_entry) ((s.(st_memo)).(m_codes)) = Some e2 -> code_inv e2 c2 ->
+    fst (code_eq X_type X c1 c2 s) = true ->
+    c1.(c_term) = c2.(c_term)
+    \/ (cbn_ceq_term X_type X c1.(c_term) c2.(c_term) = true
+        /\ entry_wf c1.(c_entry) s = true /\ entry_wf c2.(c_entry) s = true).
+  Proof.
+    intros hq g1 hi1 g2 hi2 hE.
+    destruct (code_eq_sound X_type X c1 c2 e1 e2 s hq g1 hi1 g2 hi2 hE) as [h|h];
+      [left; exact h|].
+    destruct (same_id c1 c2) eqn:Esid.
+    { left. exact (same_id_sound_table _ e1 e2 c1 c2 Esid g1 hi1 g2 hi2). }
+    right. split; [exact h|].
+    unfold code_eq in hE. rewrite Esid in hE.
+    destruct (entry_wf c1.(c_entry) s && entry_wf c2.(c_entry) s) eqn:Ew;
+      [apply andb_true_iff in Ew; exact Ew|cbn in hE; discriminate hE].
+  Qed.
+
+  Lemma conv_same_code_sound_g (k : unit -> cbn_fuel) : spec_scc (k tt) -> spec_same (FS k).
+  Proof.
+    intros hC L Q lo G e1 c1 e2 c2 ts1 ts2 rs s b rs' s' hm hr hc1 hc2 hs1 hs2 he.
+    pose proof hm as [hL hLQ hok hw].
+    rewrite conv_same_code_eq in he.
+    destruct ((e1.(ev_goff) == e2.(ev_goff)) && (e1.(ev_nvals) == e2.(ev_nvals))) eqn:Eeq;
+      [|injection he as <- <- <-;
+        split; [exact (post_refl _ _ _ _ _ _ hm hr)|intros hb; discriminate hb]].
+    apply andb_true_iff in Eeq as [Eg En]. apply eqb_eq in Eg. apply eqb_eq in En.
+    destruct hc1 as [ce1 [hg1 hi1]]. destruct hc2 as [ce2 [hg2 hi2]].
+    destruct (gk_memo _ _ _ _ _ _ _ _ _ _ hok) as (hmi & hmo & hK & hcons & hhy).
+    pose proof (hK _ _ hg1) as hg1'. pose proof (hK _ _ hg2) as hg2'.
+    destruct (memo_inv_code_eq X_type X c1 c2 ce1 ce2 s hmi hg1' hi1 hg2' hi2)
+      as (hmi' & hcodes & hheap & hnext & _ & _ & hgam).
+    assert (hm0 : MI L Q lo G (snd (code_eq X_type X c1 c2 s))).
+    { constructor; [exact hL|exact hLQ| |exact (hwf_heap Q s _ hheap hw)].
+      apply (gok_same X_type X Γ nctx Σ _ Q lo G s); [exact hok|exact hheap|exact hnext|exact hgam|].
+      split; [exact hmi'|]. split; [exact (memo_ok_codes X_type X s _ hcodes hmo)|].
+      rewrite hcodes. split; [exact hK|]. split; [exact hcons|exact hhy]. }
+    assert (hE : forall b0, fst (code_eq X_type X c1 c2 s) = b0 -> b0 = true ->
+                   samec c1.(c_term) c2.(c_term)).
+    { intros b0 Eb0 ->.
+      destruct (code_eq_sound_wf c1 c2 ce1 ce2 s (proj1 (proj2 (proj2 (proj2 hmi))))
+                  hg1' hi1 hg2' hi2 Eb0) as [h|(hceq & hw1 & hw2)]; [left; exact h|right].
+      rewrite (memo_entry_wf X_type X s _ ce1 hmo hg1') in hw1.
+      rewrite (memo_entry_wf X_type X s _ ce2 hmo hg2') in hw2.
+      rewrite (wf_term_univs_correct X_type X Σ hΣ) in hw1, hw2.
+      constructor.
+      exact (cbn_ceq_term_sound X_type X Σ hΣ _ _ (cg_code_inv_wf_universes Σ ce1 c1 hi1 hw1)
+               (cg_code_inv_wf_universes Σ ce2 c2 hi2 hw2) hceq). }
+    destruct (code_eq X_type X c1 c2 s) as [b0 s0] eqn:Ece. cbn [fst snd] in hm0, hE.
+    destruct b0;
+      [|injection he as <- <- <-;
+        split; [exact (post_refl _ _ _ _ _ _ hm0 hr)|intros hb; discriminate hb]].
+    destruct (hC L Q lo G c1.(c_term) 0 _ _ ts1 ts2 rs s0 b rs' s' hm0 hr hs1 hs2 he) as [hp hc].
+    split; [exact hp|]. intros hb. split; [exact Eg|]. split; [exact En|].
+    split; [exact (hE true eq_refl eq_refl)|exact (hc hb)].
+  Qed.
+
+  (** Restates [conv_same_code_sound] on ghost readings: a [true] makes the two readings of
+    the codes convertible at any [conv_pb]. *)
+  Lemma conv_same_code_sound_ghost (d : cbn_fuel) : spec_same d ->
+    forall L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s',
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
+      g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
+      conv_same_code X_type X Γ nctx stress d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+  Proof.
+    intros hS L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s' hm hr hs1 hc1 hs2 hc2 he.
+    pose proof hm as [hL hLQ hok _].
+    destruct (g_susp_inv _ _ _ _ _ _ hs1) as (ts1 & hts1 & hn1 & ->).
+    destruct (g_susp_inv _ _ _ _ _ _ hs2) as (ts2 & hts2 & hn2 & ->).
+    destruct (hS L Q lo G e1 c1 e2 c2 ts1 ts2 rs s b rs' s' hm hr hc1 hc2 hts1 hts2 he)
+      as [hp hc].
+    split; [exact hp|]. intros hb. destruct (hc hb) as (hgo & hnv & hsame & hag).
+    pose proof (gok_codes_hyg X_type X Γ nctx Σ _ Q lo G s hok hhyg) as hch.
+    pose proof (g_slots_length _ _ _ _ _ hts1) as hl1.
+    pose proof (g_slots_length _ _ _ _ _ hts2) as hl2.
+    rewrite <- hgo, <- hnv.
+    apply (same_code_cq L Q pb (ev_nvals e1) (ev_goff e1) ts1 ts2 _ _ hL hLQ);
+      [lia|lia|exact (hch _ hc1)|exact (hch _ hc2)|exact hsame|exact hag].
+  Qed.
+
+  (** The identifier fast path: [same_id] gives one term, so no universe check enters. *)
+  Lemma conv_same_code_sound_same_id_ghost (d : cbn_fuel) : spec_same d ->
+    forall L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s',
+      same_id c1 c2 = true ->
+      MI L Q lo G s -> Forall (rwf Q) rs ->
+      g_susp nctx Q G e1 c1.(c_term) t1 -> gcok G c1 ->
+      g_susp nctx Q G e2 c2.(c_term) t2 -> gcok G c2 ->
+      conv_same_code X_type X Γ nctx stress d L e1 c1 e2 c2 rs s = COk (b, rs', s') ->
+      c1.(c_term) = c2.(c_term) /\ post L Q G rs s' rs' /\ (b = true -> cq L Q pb t1 t2).
+  Proof.
+    intros hS L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s' hsid hm hr hs1 hc1 hs2 hc2 he.
+    split.
+    - destruct hc1 as [ce1 [hg1 hi1]]. destruct hc2 as [ce2 [hg2 hi2]].
+      exact (same_id_sound_table _ ce1 ce2 c1 c2 hsid hg1 hi1 hg2 hi2).
+    - exact (conv_same_code_sound_ghost d hS L Q lo G pb e1 c1 e2 c2 t1 t2 rs s b rs' s'
+               hm hr hs1 hc1 hs2 hc2 he).
+  Qed.
+
+  (** The same-code rule read for a fixpoint value: fixpoint [i] of the two [tFix] codes. *)
+  Lemma cagree_fix L Q m idx idx' i l1 l2 :
+    cagree L Q (tFix m idx) i l1 l2 -> cagree L Q (tFix m idx') i l1 l2.
+  Proof. induction 1; constructor; [exact H|exact IHcagree]. Qed.
+
+  Lemma samec_fix m1 m2 idx1 idx2 i :
+    samec (tFix m1 idx1) (tFix m2 idx2) -> samec (tFix m1 i) (tFix m2 i).
+  Proof.
+    intros [e|[h]]; [injection e as -> _; left; reflexivity|right; constructor].
+    inversion h; subst. constructor. assumption.
+  Qed.
+
+  (** ** [conv_slot] *)
+
+  Lemma conv_slot_eq k L le x1 x2 rs s :
+    conv_slot X_type X Γ nctx stress (FS k) L le x1 x2 rs s =
+    match x1, x2 with
+    | SAddr a1, SAddr a2 =>
+      if haddr_eqb a1 a2 then COk (true, rs, s)
+      else conv_eval X_type X Γ nctx stress (k tt) L le x1 x2 rs s
+    | SInl vs1 n1 o1 c1, SInl vs2 n2 o2 c2 =>
+      match conv_same_code X_type X Γ nctx stress (k tt) L (mkEnv vs1 n1 o1) c1
+              (mkEnv vs2 n2 o2) c2 (RSl x1 :: RSl x2 :: rs) s with
+      | COk (b, rs, s) =>
+        match rs with
+        | RSl x1 :: RSl x2 :: rs =>
+          if b then COk (true, rs, s)
+          else conv_eval X_type X Γ nctx stress (k tt) L le x1 x2 rs s
+        | _ => CFail WRoots
+        end
+      | CFail w => CFail w
+      end
+    | _, _ => conv_eval X_type X Γ nctx stress (k tt) L le x1 x2 rs s
+    end.
+  Proof. reflexivity. Qed.
+
+  Lemma conv_slot_sound_g (k : unit -> cbn_fuel) :
+    spec_eval (k tt) -> spec_same (k tt) -> spec_slot (FS k).
+  Proof.
+    intros hE hS L Q lo G pb x1 x2 t1 t2 rs s b rs' s' hm hr hx1 hx2 he.
+    pose proof hm as [hL hLQ _ _].
+    rewrite conv_slot_eq in he.
+    destruct x1 as [a1|vs1 n1 o1 c1]; destruct x2 as [a2|vs2 n2 o2 c2];
+      cbv beta iota in he;
+      try exact (hE L Q lo G pb _ _ t1 t2 rs s b rs' s' hm hr hx1 hx2 he).
+    - destruct (haddr_eqb a1 a2) eqn:Ea;
+        [|exact (hE L Q lo G pb _ _ t1 t2 rs s b rs' s' hm hr hx1 hx2 he)].
+      injection he as <- <- <-. split; [exact (post_refl _ _ _ _ _ _ hm hr)|]. intros _.
+      apply haddr_eqb_eq in Ea. subst a2.
+      apply g_slot_addr_inv in hx1. apply g_slot_addr_inv in hx2.
+      rewrite hx1 in hx2. injection hx2 as <-. exact (cq_refl _ _ _ _ hL).
+    - assert (hs1 : g_susp nctx Q G (mkEnv vs1 n1 o1) c1.(c_term) t1)
+        by (eapply g_slot_inl_inv; exact hx1).
+      assert (hc1 : gcok G c1) by (eapply g_slot_inl_cok; exact hx1).
+      assert (hs2 : g_susp nctx Q G (mkEnv vs2 n2 o2) c2.(c_term) t2)
+        by (eapply g_slot_inl_inv; exact hx2).
+      assert (hc2 : gcok G c2) by (eapply g_slot_inl_cok; exact hx2).
+      destruct (conv_same_code X_type X Γ nctx stress (k tt) L (mkEnv vs1 n1 o1) c1
+                  (mkEnv vs2 n2 o2) c2 (RSl (SInl vs1 n1 o1 c1) :: RSl (SInl vs2 n2 o2 c2) :: rs) s)
+        as [[[b0 rs0] s0]|w] eqn:Ecs; [|discriminate he].
+      destruct (conv_same_code_sound_ghost (k tt) hS L Q lo G pb _ c1 _ c2 t1 t2 _ s b0 rs0 s0
+                  hm (Forall_cons (RSl _) I (Forall_cons (RSl _) I hr)) hs1 hc1 hs2 hc2 Ecs)
+        as [hp0 hc0].
+      destruct hp0 as (Q1 & lo1 & G1 & hq1 & hm1 & hr1 & hg1).
+      destruct (grq_cons_inv _ _ _ _ _ _ _ hg1) as (q1 & rsA & -> & hqa & hgA).
+      destruct (gpq_RSl_inv _ _ _ _ _ _ hqa) as (y1 & -> & hk1).
+      destruct (grq_cons_inv _ _ _ _ _ _ _ hgA) as (q2 & rsB & -> & hqb & hgB).
+      destruct (gpq_RSl_inv _ _ _ _ _ _ hqb) as (y2 & -> & hk2).
+      cbv beta iota in he.
+      destruct b0.
+      + injection he as <- <- <-.
+        split; [|intros _; exact (hc0 eq_refl)].
+        exists Q1, lo1, G1. split; [exact hq1|]. split; [exact hm1|].
+        split; [exact (Forall_inv_tail (Forall_inv_tail hr1))|exact hgB].
+      + destruct (hE L Q1 lo1 G1 pb y1 y2 _ _ rsB s0 b rs' s' hm1
+                    (Forall_inv_tail (Forall_inv_tail hr1)) (hk1 _ hx1) (hk2 _ hx2) he)
+          as [hp hc].
+        split; [exact (post_compose _ _ _ _ _ _ _ _ _ hq1 hgB hp)|].
+        intros hb. exact (cq_lift _ _ _ _ _ _ hLQ hq1 (hc hb)).
+  Qed.
+
+  (** ** Crossing a binder: the lambda and product rows *)
+
+  Lemma minv_level L L' Q lo G s : MI L Q lo G s -> nctx <= L' -> L' <= Q -> MI L' Q lo G s.
+  Proof. intros [hL hQ hok hw] h1 h2. constructor; assumption. Qed.
+
+  (** The body of a code read through slots lifted by [d] is the lift by [d] at the cut [k]. *)
+  Lemma lift_bodyk d ts N n k t :
+    #|ts| = n ->
+    subst (map (lift0 d) ts) k (lift (d + N) (k + n) t) = lift d k (subst ts k (lift N (k + n) t)).
+  Proof.
+    intros hl. pose proof (distr_lift_subst_rec (lift N (k + n) t) ts d k 0) as h.
+    rewrite !Nat.add_0_r in h. rewrite h. f_equal. rewrite hl.
+    symmetry. apply simpl_lift; lia.
+  Qed.
+
+  Lemma subst_rel_lift1 j U : subst [tRel j] 0 (lift (S j) 1 U) = lift0 j U.
+  Proof.
+    pose proof (cg_subst_fresh_lift j 1 U) as h.
+    replace (map (lift0 j) (idsn 1)) with [tRel j] in h
+      by (cbn; rewrite Nat.add_0_r; reflexivity).
+    rewrite Nat.add_1_r in h. exact h.
+  Qed.
+
+  (** After the domains: one fresh variable at level [L], pushed on both environments, then
+    the bodies at [S L]. *)
+  Definition binder_tail (d : cbn_fuel) (L : nat) (pb : conv_pb) (e1 e2 : cbn_env)
+      (cb1 cb2 : code) (rs : list root) (s : cbn_state) :=
+    match alloc stress (CDone (VNeu (NVar L) [])) (RE e1 :: RE e2 :: rs) s with
+    | COk (x, rs, s) =>
+      match rs with
+      | RE e1 :: RE e2 :: rs =>
+        conv_term X_type X Γ nctx stress d (S L) pb (env_push (SAddr x) e1) cb1
+          (env_push (SAddr x) e2) cb2 rs s
+      | _ => CFail WRoots
+      end
+    | CFail w => CFail w
+    end.
+
+  Lemma binder_tail_g (k : unit -> cbn_fuel) (hT : spec_term (k tt))
+      L Q lo G pb e1 e2 cb1 cb2 ts1 ts2 rs s b rs' s' :
+    MI L Q lo G s -> Forall (rwf Q) rs ->
+    g_slots nctx Q G e1.(ev_vals) ts1 -> e1.(ev_nvals) = #|e1.(ev_vals)| ->
+    g_slots nctx Q G e2.(ev_vals) ts2 -> e2.(ev_nvals) = #|e2.(ev_vals)| ->
+    gcok G cb1 -> gcok G cb2 ->
+    binder_tail (k tt) L pb e1 e2 cb1 cb2 rs s = COk (b, rs', s') ->
+    post L Q G rs s' rs' /\
+    (b = true -> cqb L Q 1 pb
+       (subst ts1 1 (lift (Q - nctx + e1.(ev_goff)) (S e1.(ev_nvals)) cb1.(c_term)))
+       (subst ts2 1 (lift (Q - nctx + e2.(ev_goff)) (S e2.(ev_nvals)) cb2.(c_term)))).
+  Proof.
+    intros hm hr hs1 hn1 hs2 hn2 hc1 hc2 he.
+    pose proof hm as [hL hLQ _ _].
+    pose proof (minv_raise L Q 1 lo G s hm) as hmR.
+    pose proof (rwfs_mono Q (Q + 1) rs ltac:(lia) hr) as hrR.
+    pose proof (grq_raise Q 1 G rs ltac:(lia) hr) as hgR.
+    pose proof (proj2 (g_slot_shift nctx Q 1 ltac:(lia) G) _ _ hs1) as [hs1R _].
+    pose proof (proj2 (g_slot_shift nctx Q 1 ltac:(lia) G) _ _ hs2) as [hs2R _].
+    unfold binder_tail in he.
+    destruct (alloc stress (CDone (VNeu (NVar L) [])) (RE e1 :: RE e2 :: rs) s)
+      as [[[x rs1] s1]|w] eqn:Ea; [|discriminate he].
+    destruct (alloc_fresh_g L (Q + 1) lo (gshift 1 G) L _ s x rs1 s1 hmR
+                (Forall_cons (RE e1) I (Forall_cons (RE e2) I hrR)) ltac:(lia) Ea)
+      as (lo1 & G1 & hm1 & hr1 & hg1 & hx).
+    destruct (gren_cons_inv _ _ _ _ _ _ hg1) as (q1 & rsA & -> & hq1 & hgA).
+    destruct (gpres_RE_inv _ _ _ _ _ hq1) as (f1 & -> & (hn1' & hg1' & hk1)).
+    destruct (gren_cons_inv _ _ _ _ _ _ hgA) as (q2 & rsB & -> & hq2 & hgB).
+    destruct (gpres_RE_inv _ _ _ _ _ hq2) as (f2 & -> & (hn2' & hg2' & hk2)).
+    cbv beta iota in he.
+    pose proof (hk1 _ hs1R) as hf1. pose proof (hk2 _ hs2R) as hf2.
+    pose proof (g_slots_length _ _ _ _ _ hs1) as hl1.
+    pose proof (g_slots_length _ _ _ _ _ hf1) as hl1'. rewrite length_map in hl1'.
+    pose proof (g_slots_length _ _ _ _ _ hs2) as hl2.
+    pose proof (g_slots_length _ _ _ _ _ hf2) as hl2'. rewrite length_map in hl2'.
+    set (j := Q + 1 - S L).
+    assert (hb1 : g_susp nctx (Q + 1) G1 (env_push (SAddr x) f1) cb1.(c_term)
+                    (subst (tRel j :: map (lift0 1) ts1) 0
+                       (lift (Q + 1 - nctx + ev_goff e1) (S (ev_nvals e1)) cb1.(c_term)))).
+    { rewrite <- hg1', <- hn1'. apply (g_susp_of_slots _ _ _ (env_push (SAddr x) f1)).
+      - cbn. constructor; [constructor; exact hx|exact hf1].
+      - cbn. lia. }
+    assert (hb2 : g_susp nctx (Q + 1) G1 (env_push (SAddr x) f2) cb2.(c_term)
+                    (subst (tRel j :: map (lift0 1) ts2) 0
+                       (lift (Q + 1 - nctx + ev_goff e2) (S (ev_nvals e2)) cb2.(c_term)))).
+    { rewrite <- hg2', <- hn2'. apply (g_susp_of_slots _ _ _ (env_push (SAddr x) f2)).
+      - cbn. constructor; [constructor; exact hx|exact hf2].
+      - cbn. lia. }
+    destruct (hT (S L) (Q + 1) lo1 G1 pb _ cb1 _ cb2 _ _ rsB s1 b rs' s'
+                (minv_level L (S L) (Q + 1) lo1 G1 s1 hm1 ltac:(lia) ltac:(lia))
+                (Forall_inv_tail (Forall_inv_tail hr1)) hb1 (cok_gcx _ _ (proj1 hg1) _ hc1)
+                hb2 (cok_gcx _ _ (proj1 hg1) _ hc2) he) as [hp hc].
+    split.
+    - apply (post_compose L Q (Q + 1) G (gshift 1 G) rs rs s' rs' ltac:(lia) hgR).
+      apply (post_compose L (Q + 1) (Q + 1) (gshift 1 G) G1 rs rsB s' rs' (le_n _)
+               (grq_of_gren _ _ _ _ _ hgB)).
+      exact (post_level L (S L) (Q + 1) G1 rsB s' rs' hL ltac:(lia) hp).
+    - intros hbt U1 U2 eU1 eU2 sU1 sU2.
+      rewrite Nat.add_1_r in sU1, sU2 |- *.
+      apply (hc hbt U1 U2); [| |exact sU1|exact sU2].
+      + rewrite subst_cons_app.
+        replace (Q + 1 - nctx + ev_goff e1) with (1 + (Q - nctx + ev_goff e1)) by lia.
+        replace (S (ev_nvals e1)) with (1 + #|ts1|) by lia.
+        rewrite lift_bodyk by reflexivity.
+        replace (1 + #|ts1|) with (S (ev_nvals e1)) by lia. rewrite eU1.
+        rewrite simpl_lift by lia. subst j.
+        replace (1 + (Q - L)) with (S (Q + 1 - S L)) by lia. apply subst_rel_lift1.
+      + rewrite subst_cons_app.
+        replace (Q + 1 - nctx + ev_goff e2) with (1 + (Q - nctx + ev_goff e2)) by lia.
+        replace (S (ev_nvals e2)) with (1 + #|ts2|) by lia.
+        rewrite lift_bodyk by reflexivity.
+        replace (1 + #|ts2|) with (S (ev_nvals e2)) by lia. rewrite eU2.
+        rewrite simpl_lift by lia. subst j.
+        replace (1 + (Q - L)) with (S (Q + 1 - S L)) by lia. apply subst_rel_lift1.
   Qed.
 
 End ConvGhost.
