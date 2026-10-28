@@ -91,6 +91,8 @@ theories/PCUICInductiveInversion.v
 theories/PCUICSR.v
 theories/PCUICClassification.v
 theories/PCUICPrimCanonical.v
+theories/PCUICPrimInstances.v
+theories/PCUICPrimInstanceRules.v
 theories/PCUICCanonicity.v
 
 theories/PCUICCSubst.v

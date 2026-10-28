@@ -790,42 +790,24 @@ Definition po_TR5_holds : po_TR5_ok = true := eq_refl.
     Rocq definition produces such a term: the argument's declared type is the
     registered integer constant, which is neither a sort nor an inductive nor a
     product, so the application is ill-typed and the kernel never builds it.
-    The environment is written by hand, as [arity_delta_spec.v] does, and the
-    statement is a unit lemma, not a run of the checker. *)
+    The statement is a unit lemma, not a run of the checker.
+
+    The environment is [PCUICPrimInstances.Σ_po_bool0], which registers [eqb]
+    as [Int63eq] with [bool] as [retro_bool], and whose well-formedness is
+    proved there ([Σ_po_bool_wf]).  Only the term is ill-typed, on purpose. *)
 
 From MetaRocq.PCUIC Require Import PCUICNormal.
+From MetaRocq.PCUIC Require PCUICPrimInstances.
 
-Definition po_mp : modpath := MPfile ["prim_ops_spec"; "TestSuite"; "MetaRocq"].
-Definition po_kn (s : ident) : kername := (po_mp, s).
-
-(** A bodiless monomorphic constant for the integer tag, and one for the
-    operation.  Neither type matters here: the weak-head constructors read the
-    table and the body, never a type. *)
-Definition po_bodiless : constant_body :=
-  {| cst_type := tSort Sort.type0; cst_body := None;
-     cst_universes := Monomorphic_ctx; cst_relevance := Relevant |}.
-
-Definition po_retro_e : Retroknowledge.t :=
-  {| Retroknowledge.retro_int63 := Some (po_kn "int");
-     Retroknowledge.retro_float64 := None;
-     Retroknowledge.retro_string := None;
-     Retroknowledge.retro_array := None;
-     Retroknowledge.retro_ops := [(po_kn "eq", Int63eq)];
-     Retroknowledge.retro_bool := None |}.
-
-Definition po_Sigma : global_env :=
-  {| universes := ContextSet.empty;
-     declarations := [(po_kn "eq", ConstantDecl po_bodiless);
-                      (po_kn "int", ConstantDecl po_bodiless)];
-     retroknowledge := po_retro_e |}.
-
-(** [eq] applied to a sort and to an integer literal: saturated, the first
+(** [eqb] applied to a sort and to an integer literal: saturated, the first
     argument a weak-head normal form that is not a literal, the second a
     literal.  The application is a weak-head normal form.  In the constructor's
     [map term_of_lit ls ++ a :: rest] shape the literal prefix [ls] is empty,
     the blocking argument [a] is the sort, and [rest] is the trailing literal. *)
 Definition po_rigid_term (u : Instance.t) (s : Sort.t) : term :=
-  mkApps (tConst (po_kn "eq") u) [tSort s; tPrim (prim_int 2%uint63)].
+  mkApps (tConst PCUICPrimInstances.po_eqb_kn u) [tSort s; tPrim (prim_int 2%uint63)].
+
+Definition po_Sigma : global_env := PCUICPrimInstances.Σ_po_bool0.
 
 Example po_E1_whnf u s Γ : whnf RedFlags.default po_Sigma Γ (po_rigid_term u s).
 Proof.

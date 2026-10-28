@@ -4,8 +4,13 @@
 # strings or floats has).  [Print Assumptions] alone only prints, so an axiom or an
 # admitted lemma added later would pass unnoticed without this check.
 # Usage: check_assumptions.sh <file.v> [extra]   (run in test-suite/, after `make`)
-# [extra] is an optional regex of further allowed axiom names, for an axiom that the
-# checked statements themselves name (e.g. Template's [guard_checking]).
+# [extra] is an optional regex of further allowed axiom names, scoped to one file by
+# the Makefile line that passes it.  Two uses: an axiom that the checked statements
+# themselves name (Template's [guard_checking], for prim_ops_instance_template.v),
+# and [FunctionalExtensionality.functional_extensionality_dep] for
+# prim_ops_instance.v, whose instances apply PCUIC metatheory lemmas
+# ([sr_prim_op], [prim_op_head_type], [prim_app_typing_inv]) that use it; it is in
+# the checker's own trusted-base baseline, not added by these proofs.
 # Exit 0 when every reported axiom is allowed; 1 otherwise, naming each other one.
 set -u
 f=$1
