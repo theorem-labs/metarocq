@@ -127,8 +127,11 @@ Definition po_unregistered_lxor : PrimInt63.eqb (PrimInt63.lxor 6 3) 5 = true :=
 Definition po_unregistered_ltsb : PrimInt63.ltsb Uint63Axioms.max_int 0 = true := eq_refl.
 Definition po_unregistered_asr
   : PrimInt63.eqb (PrimInt63.asr Uint63Axioms.max_int 1) Uint63Axioms.max_int = true := eq_refl.
+(* expect: Types are not convertible *)
 Fail MetaRocq SafeCheck po_unregistered_lxor.
+(* expect: Types are not convertible *)
 Fail MetaRocq SafeCheck po_unregistered_ltsb.
+(* expect: Types are not convertible *)
 Fail MetaRocq SafeCheck po_unregistered_asr.
 
 (** ** Part D — conversion, saturation and stuck applications *)
@@ -160,3 +163,34 @@ MetaRocq SafeCheck po_stuck_reflexive.
 (** No computation at all: accepted before and after the rule exists. *)
 Definition po_no_computation (x : int) : PrimInt63.eqb x x = PrimInt63.eqb x x := eq_refl.
 MetaRocq SafeCheck po_no_computation.
+
+(** ** Part E — a known completeness gap: positivity through a primitive operation
+
+    The positivity checker reduces a constructor argument type with its own weak-head
+    machine, [whd_fuel] (safechecker/theories/PCUICPositivityCheck.v), and that machine
+    *refuses* when it meets a registered primitive operation instead of firing it. That
+    is sound and costs only completeness: positivity is refused for a constructor argument
+    whose weak-head reduction has to pass through an operation, although Rocq's kernel,
+    which fires the operation inside [whd_all], accepts the same declaration.
+
+    The two inductives below differ in one thing only. Both use the shape that
+    test-suite/positivity_red.v already accepts as [pr_iota]: an argument type that
+    reaches the block by reducing a match. In [po_pos_ctl] the scrutinee is the
+    constructor [true]; in [po_pos_gap] it is [eqb 1 1], which is [true] only once the
+    operation fires. So the control's acceptance shows that positivity reduces this
+    shape, and the gap's refusal is then due to the operation and nothing else. Rocq's
+    kernel accepts both.
+
+    The [Fail] is expected. It must keep holding until someone makes [whd_fuel] fire
+    registered operations. When it stops holding, that change has landed, and this case
+    must be moved to the accepted side on purpose, not silently. *)
+
+Definition po_pos_sel (b : bool) (X : Set) : Set := if b then X else nat.
+
+Inductive po_pos_ctl : Set := po_pos_ctl_c : po_pos_sel true po_pos_ctl -> po_pos_ctl.
+MetaRocq SafeCheck po_pos_ctl.
+
+Inductive po_pos_gap : Set :=
+  po_pos_gap_c : po_pos_sel (PrimInt63.eqb 1 1) po_pos_gap -> po_pos_gap.
+(* expect: Positivity: *)
+Fail MetaRocq SafeCheck po_pos_gap.
