@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICReflect PCUICTyping
   PCUICArityRed.
 From MetaRocq.SafeChecker Require Import PCUICErrors.
@@ -25,7 +25,8 @@ Import MonadNotation.
   not show it positive, as Rocq's kernel does ([check_strict_positivity],
   kernel/indtypes.ml).  The terms of the nested walk are not well typed, so the typed
   reduction of the safe checker cannot be used: [whd_fuel] is an untyped weak-head
-  machine on a fuel, which follows the relation [whd_rel true] rule by rule.
+  machine on a fuel, which follows the relation [whd_rel true] rule by rule, except that
+  it gives up ([None]) on a registered primitive operation instead of firing it.
 
   Positivity checking reduces let-ins and, in the nested case, walks the constructors of
   another inductive type, which are not subterms of the term being checked.  The check is
@@ -182,6 +183,14 @@ Definition nested_binder : aname := mkBindAnn nAnon Relevant.
 Section Check.
   (** The global environment's declarations, by name. *)
   Context (lookup : kername -> option global_decl).
+  (** The operation table: the registered primitive operation of a constant.  [whd_fuel]
+      does not implement the rule of [whd_rel true] that fires a saturated literal
+      application of a registered operation, so on any registered operation it gives up
+      ([None]) instead of answering that the term is stuck there, which could be false.
+      Giving up is sound: [whd_arg] then keeps the argument as written, and
+      [check_positive_whd] rejects the term.  It costs only completeness: a constructor
+      argument type whose positivity needs an operation to fire is rejected. *)
+  Context (lookup_op : kername -> option prim_op).
 
   (** The declaration of a nesting inductive. *)
   Definition lookup_ind (ind : inductive) :
@@ -201,8 +210,9 @@ Section Check.
     [whd_rel true], one rule per step, and returns the head and arguments the relation
     stops at.  It returns [None] when no rule applies (a variable outside [Γ], a constant
     that the lookup does not declare as a constant, a match or projection on a
-    constructor that has no matching branch or field, a cofixpoint that does not unfold)
-    or when the fuel runs out.  The machine shares nothing, so a reduction that the
+    constructor that has no matching branch or field, a cofixpoint that does not unfold),
+    on a registered primitive operation, whose firing rule it does not implement, or when
+    the fuel runs out.  The machine shares nothing, so a reduction that the
     kernel's lazy machine does in linear time can take exponential time here: the fuel
     bounds the depth of the reduction, not the total work. *)
   Fixpoint whd_fuel (fuel : nat) Γ (t : term) (args : list term) {struct fuel}
@@ -226,7 +236,11 @@ Section Check.
         | Some (ConstantDecl decl) =>
           match decl.(cst_body) with
           | Some body => whd_fuel fuel Γ (subst_instance u body) args
-          | None => Some (tConst c u, args)
+          | None =>
+            match lookup_op c with
+            | Some _ => None
+            | None => Some (tConst c u, args)
+            end
           end
         | _ => None
         end
@@ -494,7 +508,8 @@ Section Check.
 
   (** ** Soundness *)
 
-  Context (Σ : global_env) (lookup_spec : forall kn, lookup kn = lookup_env Σ kn).
+  Context (Σ : global_env) (lookup_spec : forall kn, lookup kn = lookup_env Σ kn)
+    (lookup_op_spec : forall kn, lookup_op kn = prim_op_of Σ kn).
 
   Lemma bind_checked_tt {A} (m : typing_result A) (f : A -> typing_result unit) :
     @bind typing_result _ A unit m f = Checked tt -> ∑ a, (m = Checked a) × (f a = Checked tt).
@@ -536,7 +551,9 @@ Section Check.
       rewrite lookup_spec in hl.
       destruct (cst_body decl) as [body|] eqn:hb.
       + eapply whd_delta; [exact hl|exact hb|now apply IH].
-      + injection e as <- <-. eapply whd_axiom; [exact hl|exact hb].
+      + destruct (lookup_op k) as [op|] eqn:ho; [discriminate|].
+        injection e as <- <-. eapply whd_axiom; [exact hl|exact hb|].
+        now rewrite -lookup_op_spec.
     - (* tCase *)
       destruct (whd_fuel fuel Γ c []) as [[t' cargs]|] eqn:hc; [|discriminate].
       apply IH in hc.
@@ -767,8 +784,8 @@ End Check.
 
 (** Running out of fuel is a rejection with its own message: three nested products with two
     units of fuel. *)
-Lemma check_positive_out_of_fuel lookup mdecl :
-  check_positive_cstr_arg lookup 2 mdecl [] []
+Lemma check_positive_out_of_fuel lookup lookup_op mdecl :
+  check_positive_cstr_arg lookup lookup_op 2 mdecl [] []
     (tProd nested_binder (tSort Sort.type0) (tProd nested_binder (tSort Sort.type0)
       (tProd nested_binder (tSort Sort.type0) (tRel 3))))
   = TypeError (Msg "Nested positivity: out of fuel").
@@ -777,8 +794,8 @@ Proof. reflexivity. Qed.
 (** Weak-head reduction out of fuel answers [None]: a beta-redex needs three units, one
     for the application, one for the contraction and one for the result, so two units
     are not enough. *)
-Lemma whd_fuel_out_of_fuel lookup na A t a :
-  whd_fuel lookup 2 [] (tApp (tLambda na A t) a) [] = None.
+Lemma whd_fuel_out_of_fuel lookup lookup_op na A t a :
+  whd_fuel lookup lookup_op 2 [] (tApp (tLambda na A t) a) [] = None.
 Proof. reflexivity. Qed.
 
 (** A nested occurrence in a block with a covariant universe level is refused for that

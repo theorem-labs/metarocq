@@ -2,6 +2,7 @@
 From Stdlib Require Import RelationClasses ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICInduction
      PCUICReflect PCUICEquality PCUICLiftSubst PCUICCases.
 
@@ -997,6 +998,11 @@ Definition branches_hole := list (branch term) * branch_hole * list (branch term
 Variant stack_entry : Type :=
 | App_l (v : term) (* Hole in head *)
 | App_r (u : term) (* Hole in arg *)
+(* Hole in the argument a primitive operation is evaluating.  The arguments
+   already in weak-head normal form are [done]; those still to evaluate stay
+   on the stack, as [Fix_app] leaves them. *)
+| Prim_app
+    (c : kername) (u : Instance.t) (op : prim_op) (done : list term)
 | Fix_app (* Hole in last arg *)
     (mfix : mfixpoint term) (idx : nat) (args : list term)
 | Fix (mfix : mfix_hole) (idx : nat)
@@ -1110,6 +1116,7 @@ Definition fill_hole (t : term) (se : stack_entry) : term :=
   match se with
   | App_l v => tApp t v
   | App_r u => tApp u t
+  | Prim_app c u op done => tApp (mkApps (tConst c u) done) t
   | Fix_app mfix idx args => tApp (mkApps (tFix mfix idx) args) t
   | Fix mfix idx => tFix (fill_mfix_hole mfix t) idx
   | CoFix_app mfix idx args => tApp (mkApps (tCoFix mfix idx) args) t
@@ -1386,6 +1393,7 @@ Definition closedn_stack_entry k se :=
   match se with
   | App_l v => closedn k v
   | App_r u => closedn k u
+  | Prim_app c u op done => closedn k (mkApps (tConst c u) done)
   | Fix_app mfix idx args => closedn k (mkApps (tFix mfix idx) args)
   | Fix mfix idx => closedn_mfix_hole k mfix
   | CoFix_app mfix idx args => closedn k (mkApps (tCoFix mfix idx) args)
@@ -1431,6 +1439,7 @@ Definition stack_entry_choice (se : stack_entry) : choice :=
   match se with
   | App_l v => app_l
   | App_r u => app_r
+  | Prim_app c u op done => app_r
   | Fix_app mfix idx args => app_r
   | Fix (mfix1, def_hole_type _ _ _, _) idx => fix_mfix_ty #|mfix1|
   | Fix (mfix1, def_hole_body _ _ _, _) idx => fix_mfix_bd #|mfix1|

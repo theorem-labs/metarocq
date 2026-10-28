@@ -4,7 +4,7 @@ From Equations.Type Require Import Relation.
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect Wellfounded Relation_Operators CRelationClasses.
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config Environment Primitive EnvironmentTyping Reflect.
+From MetaRocq.Common Require Import config Environment Primitive PrimitiveOps EnvironmentTyping Reflect.
 From MetaRocq.Template Require Import Ast AstUtils LiftSubst UnivSubst ReflectAst TermEquality WfAst.
 
 Import MonadNotation.
@@ -153,6 +153,106 @@ Proof.
       now apply IHparams.
 Qed.
 
+(** *** Template's side of the primitive-operation interface
+
+  [template_of_lit] builds the term of a literal argument and [lit_of_template]
+  reads one back.  They are Template's half of the pair whose PCUIC twin is in
+  [pcuic/theories/PCUICPrimitiveRed.v]; both languages compute with the one
+  denotation [prim_op_denote] of [common/theories/PrimitiveOps.v], and
+  [trans (template_of_lit l) = tPrim (prim_of_lit l)], so the transport of the
+  rule is the identity on literals. *)
+
+Definition template_of_lit (l : prim_lit) : term :=
+  match l with
+  | LInt i => tInt i
+  | LString s => tString s
+  end.
+
+Definition lit_of_template (t : term) : option prim_lit :=
+  match t with
+  | tInt i => Some (LInt i)
+  | tString s => Some (LString s)
+  | _ => None
+  end.
+
+Lemma lit_of_template_of_lit l : lit_of_template (template_of_lit l) = Some l.
+Proof. by destruct l. Qed.
+
+Lemma lit_of_template_inv t l : lit_of_template t = Some l -> t = template_of_lit l.
+Proof. destruct t => //=; intros [= <-]; reflexivity. Qed.
+
+(** The readback of a result into a term, the twin of
+    [PCUICPrimitiveRed.readback].  [SBool] reads back to a constructor of the
+    inductive registered as [retro_bool], positionally: [true] is constructor 0
+    and [false] constructor 1, which is the kernel's orientation
+    ([Register_ind PIT_bool] stores [((ind,1),(ind,2))], kernel/primred.ml, and
+    kernel constructor indices are 1-based while [tConstruct] is 0-based). *)
+Definition treadback (Σ : global_env) (s : prim_shape) (r : prim_result) : option term :=
+  match s, r with
+  | SInt, RInt i => Some (tInt i)
+  | SBool, RBool b =>
+      match primitive_bool Σ with
+      | Some ind => Some (tConstruct ind (if b then 0 else 1) [])
+      | None => None
+      end
+  | SInt, RBool _ | SBool, RInt _ => None
+  end.
+
+(** *** The arguments of a redex, and the computed reduct
+
+  The twins of [PCUICPrimitiveRed.split_lits] and [PCUICPrimitiveRed.prim_reduct].
+  [whd_rel] below, the graph of the kernel's weak-head machine, asks the same
+  two questions of an application of a registered operation as PCUIC's graph
+  does: which arguments are already literals, and what the rule produces if
+  they all are.  Keeping them here, beside [lit_of_template], is what keeps
+  every other Template file free of a payload match.
+
+  [tsplit_lits] reads the arguments left to right: [inl ls] when every one is a
+  literal, [inr (ls, a, rest)] when [a] is the first that is not.  The
+  decomposition is therefore unique. *)
+
+Fixpoint tsplit_lits (args : list term)
+  : list prim_lit + (list prim_lit * term * list term) :=
+  match args with
+  | [] => inl []
+  | a :: args =>
+      match lit_of_template a with
+      | Some l =>
+          match tsplit_lits args with
+          | inl ls => inl (l :: ls)
+          | inr (ls, b, rest) => inr (l :: ls, b, rest)
+          end
+      | None => inr ([], a, args)
+      end
+  end.
+
+Lemma tsplit_lits_inl {args ls} :
+  tsplit_lits args = inl ls -> args = map template_of_lit ls.
+Proof.
+  induction args as [|a args ih] in ls |- *; cbn.
+  - intros [= <-]; reflexivity.
+  - destruct (lit_of_template a) as [l|] eqn:ha => //.
+    destruct (tsplit_lits args) as [ls'|[[??]?]] eqn:hs => // [= <-].
+    cbn; f_equal; [now apply lit_of_template_inv|now apply ih].
+Qed.
+
+Lemma tsplit_lits_inr {args ls a rest} :
+  tsplit_lits args = inr (ls, a, rest) ->
+  args = map template_of_lit ls ++ a :: rest /\ lit_of_template a = None.
+Proof.
+  induction args as [|b args ih] in ls, a, rest |- *; cbn => //.
+  destruct (lit_of_template b) as [l|] eqn:hb.
+  - destruct (tsplit_lits args) as [ls'|[[ls' a'] rest']] eqn:hs => // [= <- <- <-].
+    destruct (ih _ _ _ eq_refl) as [e hl]. split => //.
+    cbn; f_equal; [now apply lit_of_template_inv|exact e].
+  - intros [= <- <- <-]. split => //.
+Qed.
+
+(** Every operation of the table takes at least one argument, so a saturated
+    application really is an application node. *)
+Lemma arity_pos op : 0 < arity op.
+Proof. destruct op; cbn; lia. Qed.
+
 (** *** One step strong beta-zeta-iota-fix-delta reduction
 
   Inspired by the reduction relation from Coq in Coq [Barras'99].
@@ -211,6 +311,23 @@ Inductive red1 (Σ : global_env) (Γ : context) : term -> term -> Type :=
 | red_delta c decl body (isdecl : declared_constant Σ c decl) u :
     decl.(cst_body) = Some body ->
     red1 Σ Γ (tConst c u) (subst_instance u body)
+
+(** Primitive operation: a registered bodiless constant applied to exactly the
+    literals its operation expects computes, as it does in the kernel
+    (kernel/cClosure.ml: fire only when saturated and every argument is a
+    value).  The form is prefix, as Template's beta is, because applications are
+    n-ary: the arguments beyond the operation's arity stay applied to the
+    reduct.  [cst_body decl = None] keeps this rule disjoint from [red_delta] in
+    every environment; the instance [u] is unconstrained because the operations
+    are monomorphic.  A not-yet-literal argument reaches its redex through
+    [app_red_r].  The PCUIC twin is [PCUICReduction.red_prim_op], and both
+    languages compute with the one denotation [prim_op_denote]. *)
+| red_prim_op c decl u op ls r v rest (isdecl : declared_constant Σ c decl) :
+    prim_op_of Σ c = Some op ->
+    cst_body decl = None ->
+    prim_op_denote op ls = Some r ->
+    treadback Σ (po_shape (info op)) r = Some v ->
+    red1 Σ Γ (tApp (tConst c u) (map template_of_lit ls ++ rest)) (mkApps v rest)
 
 (** Proj *)
 | red_proj p u args arg:
@@ -325,6 +442,16 @@ Lemma red1_ind_all :
         declared_constant Σ c decl ->
         forall u : Instance.t, cst_body decl = Some body -> P Γ (tConst c u) (subst_instance u body)) ->
 
+       (forall (Γ : context) c (decl : constant_body) (u : Instance.t)
+          (op : prim_op) (ls : list prim_lit) (r : prim_result) (v : term)
+          (rest : list term),
+        declared_constant Σ c decl ->
+        prim_op_of Σ c = Some op ->
+        cst_body decl = None ->
+        prim_op_denote op ls = Some r ->
+        treadback Σ (po_shape (info op)) r = Some v ->
+        P Γ (tApp (tConst c u) (map template_of_lit ls ++ rest)) (mkApps v rest)) ->
+
        (forall (Γ : context) p (args : list term) (u : Instance.t) (arg : term),
            nth_error args (p.(proj_npars) + p.(proj_arg)) = Some arg ->
            P Γ (tProj p (mkApps (tConstruct p.(proj_ind) 0 u) args)) arg) ->
@@ -422,7 +549,7 @@ Lemma red1_ind_all :
 
        forall (Γ : context) (t t0 : term), red1 Σ Γ t t0 -> P Γ t t0.
 Proof.
-  intros. rename X33 into Xlast. revert Γ t t0 Xlast.
+  intros. rename X34 into Xlast. revert Γ t t0 Xlast.
   fix aux 4. intros Γ t T.
   move aux at top.
   destruct 1;
@@ -431,14 +558,14 @@ Proof.
           | H : _ |- _ => eapply H; eauto; fail
           end].
 
-  - apply X13.
+  - apply X14.
     revert params params' o.
     fix auxl 3.
     intros params params' [].
     + constructor. split; auto.
     + constructor. auto.
 
-  - eapply X16; eauto.
+  - eapply X17; eauto.
     revert brs brs' o.
     intros brs.
     generalize (case_branches_contexts (ci_ind ind) mdecl idecl p brs).
@@ -449,39 +576,39 @@ Proof.
       intuition auto. auto.
     + constructor. eapply auxl. apply Hl.
 
-  - apply X19.
+  - apply X20.
     revert M2 N2 o.
     fix auxl 3.
     intros l l' Hl. destruct Hl.
     + constructor. split; auto.
     + constructor. auto.
 
-  - apply X22.
+  - apply X23.
     revert l l' o.
     fix auxl 3.
     intros l l' Hl. destruct Hl.
     constructor. split; auto.
     constructor. auto.
 
-  - apply X26.
+  - apply X27.
     revert mfix0 mfix1 o; fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.
 
-  - apply X27.
+  - apply X28.
     revert o. generalize (fix_context mfix0). intros c H28.
     revert mfix0 mfix1 H28; fix auxl 3; intros l l' Hl;
     destruct Hl; constructor; try split; auto; intuition.
 
-  - eapply X28.
+  - eapply X29.
     revert mfix0 mfix1 o; fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.
 
-  - eapply X29.
+  - eapply X30.
     revert o. generalize (fix_context mfix0). intros c H28.
     revert mfix0 mfix1 H28; fix auxl 3; intros l l' Hl; destruct Hl;
       constructor; try split; auto; intuition.
 
-  - eapply X30.
+  - eapply X31.
     revert v v' o. fix auxl 3; intros ? ? Hl; destruct Hl;
       constructor; try split; auto; intuition.
 Defined.
@@ -570,7 +697,8 @@ Inductive whd_rel (zeta : bool) (Σ : global_env) (Γ : context) :
     whd_rel zeta Σ Γ (tConst c u) args h l
 | whd_axiom c u decl args
     (hcst : lookup_env Σ c = Some (ConstantDecl decl))
-    (hbod : decl.(cst_body) = None) :
+    (hbod : decl.(cst_body) = None)
+    (hpo : prim_op_of Σ c = None) :
     whd_rel zeta Σ Γ (tConst c u) args (tConst c u) args
 (** The kernel strips a head cast (kernel/cClosure.ml, [knh] on [FCast]). *)
 | whd_cast c k T args h l
@@ -649,7 +777,55 @@ Inductive whd_rel (zeta : bool) (Σ : global_env) (Γ : context) :
 (** [red_view_other]. *)
 | whd_stop t args
     (hs : whd_stop_head t args) :
-    whd_rel zeta Σ Γ t args t args.
+    whd_rel zeta Σ Γ t args t args
+(** The machine's primitive-operation branch (design §7.2), the twin of
+    [PCUICArityRed]'s: a registered bodiless operation saturated on the stack
+    evaluates its arguments left to right.  [tsplit_lits (firstn (arity op) args)]
+    reads the first [arity op] arguments: [inl ls] when all are literals (the
+    operation fires), [inr (ls, a, rest)] when [a] is the first that is not
+    (reduce it, then re-enter or stop).  Over-application leaves
+    [skipn (arity op) args] on the stack, as the machine does, and as Template's
+    prefix-form [red_prim_op] keeps it applied to the reduct. *)
+| whd_prim_arg c u decl op args ls a rest t cargs lit h l
+    (hcst : lookup_env Σ c = Some (ConstantDecl decl))
+    (hbod : decl.(cst_body) = None)
+    (hpo : prim_op_of Σ c = Some op) (hsat : arity op <= #|args|)
+    (hs : tsplit_lits (firstn (arity op) args) = inr (ls, a, rest))
+    (wa : whd_rel zeta Σ Γ a [] t cargs)
+    (hnl : lit_of_template (mkApps t cargs) = Some lit)
+    (w : whd_rel zeta Σ Γ (tConst c u)
+      (map template_of_lit ls ++ mkApps t cargs :: rest ++ skipn (arity op) args) h l) :
+    whd_rel zeta Σ Γ (tConst c u) args h l
+| whd_prim_stuck c u decl op args ls a rest t cargs
+    (hcst : lookup_env Σ c = Some (ConstantDecl decl))
+    (hbod : decl.(cst_body) = None)
+    (hpo : prim_op_of Σ c = Some op) (hsat : arity op <= #|args|)
+    (hs : tsplit_lits (firstn (arity op) args) = inr (ls, a, rest))
+    (wa : whd_rel zeta Σ Γ a [] t cargs)
+    (hnl : lit_of_template (mkApps t cargs) = None) :
+    whd_rel zeta Σ Γ (tConst c u) args
+      (tConst c u) (map template_of_lit ls ++ mkApps t cargs :: rest ++ skipn (arity op) args)
+| whd_prim_fire c u decl op args ls r v h l
+    (hcst : lookup_env Σ c = Some (ConstantDecl decl))
+    (hbod : decl.(cst_body) = None)
+    (hpo : prim_op_of Σ c = Some op) (hsat : arity op <= #|args|)
+    (hs : tsplit_lits (firstn (arity op) args) = inl ls)
+    (hden : prim_op_denote op ls = Some r)
+    (hrb : treadback Σ (po_shape (info op)) r = Some v)
+    (w : whd_rel zeta Σ Γ v (skipn (arity op) args) h l) :
+    whd_rel zeta Σ Γ (tConst c u) args h l
+| whd_prim_inert c u decl op args ls
+    (hcst : lookup_env Σ c = Some (ConstantDecl decl))
+    (hbod : decl.(cst_body) = None)
+    (hpo : prim_op_of Σ c = Some op) (hsat : arity op <= #|args|)
+    (hs : tsplit_lits (firstn (arity op) args) = inl ls)
+    (hden : prim_op_denote op ls = None) :
+    whd_rel zeta Σ Γ (tConst c u) args (tConst c u) args
+| whd_prim_partial c u decl op args
+    (hcst : lookup_env Σ c = Some (ConstantDecl decl))
+    (hbod : decl.(cst_body) = None)
+    (hpo : prim_op_of Σ c = Some op) (hpart : #|args| < arity op) :
+    whd_rel zeta Σ Γ (tConst c u) args (tConst c u) args.
 
 Derive Signature for whd_rel.
 
@@ -691,6 +867,34 @@ Module TemplateArityRelation <: KernelRedSig TemplateTerm Env.
   Definition arity_red := arity_red.
   Definition whd_rel := whd_rel.
 End TemplateArityRelation.
+
+(** The Template instance of [PrimOpTypeSig] (BET-319 row H; row L owns the rest
+    of this file).  Same skeleton as [PCUICPrimOpType] — a fold of [tImpl] over
+    [tConst kn []] ending in [tConst kn []] or [tInd i []] — so the two arms are
+    related by [trans]. *)
+Module TemplatePrimOpType <: PrimOpTypeSig TemplateTerm Env.
+  Import Env.
+  Definition prim_tag_type (r : Retroknowledge.t) (t : prim_tag) : option term :=
+    option_map (fun kn => tConst kn []) (EnvironmentTyping.retro_type_constant r t).
+  Definition prim_shape_type (r : Retroknowledge.t) (s : prim_shape) : option term :=
+    match s with
+    | SInt => prim_tag_type r primInt
+    | SBool => option_map (fun i => tInd i []) r.(Retroknowledge.retro_bool)
+    end.
+  Fixpoint prim_arg_types (r : Retroknowledge.t) (ts : list prim_tag) (res : term) : option term :=
+    match ts with
+    | [] => Some res
+    | t :: ts => match prim_tag_type r t with
+                 | Some a => option_map (tImpl a) (prim_arg_types r ts res)
+                 | None => None
+                 end
+    end.
+  Definition prim_op_type (r : Retroknowledge.t) (op : prim_op) : option term :=
+    match prim_shape_type r (po_shape (info op)) with
+    | Some res => prim_arg_types r (po_args (info op)) res
+    | None => None
+    end.
+End TemplatePrimOpType.
 
 (** ** Term equality and cumulativity *)
 
@@ -761,7 +965,7 @@ Include TemplateEnvTyping.
 Module TemplateConversion := Conversion TemplateTerm Env TemplateTermUtils TemplateEnvTyping.
 Include TemplateConversion.
 
-Module TemplateGlobalMaps := GlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateArityRelation.
+Module TemplateGlobalMaps := GlobalMaps TemplateTerm Env TemplateTermUtils TemplateEnvTyping TemplateConversion TemplateLookup TemplateArityRelation TemplatePrimOpType.
 Include TemplateGlobalMaps.
 
 Module TemplateConversionPar <: ConversionParSig TemplateTerm Env TemplateTermUtils TemplateEnvTyping.
@@ -1142,6 +1346,7 @@ Module TemplateDeclarationTyping :=
     TemplateTyping
     TemplateLookup
     TemplateArityRelation
+    TemplatePrimOpType
     TemplateGlobalMaps.
 Include TemplateDeclarationTyping.
 
@@ -1552,10 +1757,10 @@ Proof.
   red. cbn. do 2 red in wfΣ. cbn in wfΣ.
   destruct Σ as [univs Σ]; cbn in *.
   set (Σg:= {| universes := univs; declarations := Σ |}) in *.
-  destruct wfΣ; split => //.
-  rename o into ongu. rename o0 into o.
+  destruct wfΣ as [ongu [wfr o]]; split => //; split => //.
   destruct o. { constructor. }
-  rename o0 into Xg. set (wfΣ := (ongu, o) : on_global_env cumul_gen (lift_typing typing) {| universes := univs; declarations := Σ |}).
+  rename o0 into Xg.
+  set (wfΣ := (ongu, (wfr, o)) : on_global_env cumul_gen (lift_typing typing) {| universes := univs; declarations := Σ |}).
   set (Σ':= {| universes := univs; declarations := Σ |}) in *.
   destruct Xg. rename udecl0 into udecl.
   rename on_global_decl_d0 into Xg.

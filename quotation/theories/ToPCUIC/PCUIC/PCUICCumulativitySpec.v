@@ -2,7 +2,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICCumulativitySpec.
 From MetaRocq.Quotation.ToPCUIC Require Import Init.
 From MetaRocq.Quotation.ToPCUIC Require Import (hints) Stdlib.Init Stdlib.Lists.
 From MetaRocq.Quotation.ToPCUIC.Utils Require Import (hints) All_Forall.
-From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) config BasicAst Universes Kernames.
+From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) config BasicAst Universes Kernames PrimitiveOps.
 From MetaRocq.Quotation.ToPCUIC.PCUIC Require Import (hints) PCUICAst PCUICEquality utils.PCUICPrimitive.
 From MetaRocq.Quotation.ToPCUIC.QuotationOf.Common Require Import EnvironmentTyping.Sig.
 

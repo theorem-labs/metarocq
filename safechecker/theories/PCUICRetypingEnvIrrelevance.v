@@ -39,7 +39,11 @@ Definition Hlookup {cf} (X_type : abstract_env_impl) (X : X_type.π2.π1) (X_typ
     lookup_env Σ' kn = Some decl' ->
     abstract_env_lookup X kn = abstract_env_lookup X' kn) /\
     (forall tag,
-    abstract_primitive_constant X tag = abstract_primitive_constant X' tag).
+    abstract_primitive_constant X tag = abstract_primitive_constant X' tag) /\
+    (* BET-319 row J2: the machine dispatches on the operation table and reads
+       the booleans back, so both must agree too (change log 25) *)
+    (forall kn, abstract_prim_op_of X kn = abstract_prim_op_of X' kn) /\
+    abstract_primitive_bool X = abstract_primitive_bool X'.
 
 Definition reduce_stack_eq {cf} {fl} {nor:normalizing_flags} {X_type : abstract_env_impl} {X : X_type.π2.π1} {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X -> NormalizationIn Σ} Γ t π wi : reduce_stack fl X_type X Γ t π wi = ` (reduce_stack_full fl X_type X Γ t π wi).
 Proof.
@@ -163,7 +167,55 @@ Section infer_irrel.
       assert (c0 = c1).
       { congruence. } subst c1.
       destruct c0 as [? [|] ? ?]; simp _reduce_stack.
-      simpl. reccall ih rec rec'. now cbn.
+      1: simpl; reccall ih rec rec'; now cbn.
+      (* bodiless: the operation dispatch (design §7.2) runs the same on both
+         sides, since the environments agree on the operation table and the
+         booleans (Hlookup's last two conjuncts) *)
+      destruct (abstract_env_ext_exists X) as [[ΣX wX]].
+      destruct (abstract_env_ext_exists X') as [[ΣX' wX']].
+      destruct (hl _ wX _ wX') as (_ & _ & hop & hbool).
+      destruct (PCUICSafeReduce.inspect (abstract_prim_op_of X c)) as [o1 e1].
+      destruct (PCUICSafeReduce.inspect (abstract_prim_op_of X' c)) as [o2 e2].
+      destruct o1 as [op|], o2 as [op'|]; try congruence.
+      2:{ simp _reduce_stack. reflexivity. }
+      assert (op' = op) by congruence. subst op'.
+      simp _reduce_stack.
+      destruct (PCUICSafeReduce.inspect (PCUICPosition.decompose_stack π0)) as [[args ρ] eqπ].
+      simp _reduce_stack.
+      destruct (PCUICSafeReduce.inspect (PrimitiveOps.arity op <=? #|args|)) as [[|] hsat];
+        simp _reduce_stack.
+      2: reflexivity.
+      destruct (PCUICSafeReduce.inspect
+                  (PCUICPrimitiveRed.split_lits (firstn (PrimitiveOps.arity op) args)))
+        as [[ls|[[ls a] rest]] eqs]; simp _reduce_stack.
+      { destruct (PCUICSafeReduce.inspect (PrimitiveOps.prim_op_denote op ls)) as [[r|] eqd];
+          simp _reduce_stack.
+        2: reflexivity.
+        (* the readback reads the booleans, on which the environments agree *)
+        set (s := PrimitiveOps.po_shape (PrimitiveOps.info op)).
+        assert (hrb : abstract_readback X_type X s r = abstract_readback X_type' X' s r).
+        { unfold abstract_readback. rewrite hbool. reflexivity. }
+        destruct (PCUICSafeReduce.inspect (abstract_readback X_type X s r)) as [v1 ev1].
+        destruct (PCUICSafeReduce.inspect (abstract_readback X_type' X' s r)) as [v2 ev2].
+        destruct v1 as [v|], v2 as [v'|]; try congruence.
+        - assert (v' = v) by congruence. subst v'.
+          simp _reduce_stack. simpl. reccall ih rec rec'. all: try now cbn.
+        - simp _reduce_stack. bang. }
+      { (* the argument call is the same recursive call on both sides *)
+        match goal with |- context [PCUICSafeReduce.inspect (rec ?t ?s ?hr)] =>
+          match goal with |- context [PCUICSafeReduce.inspect (rec' ?t' ?s' ?hr')] =>
+            pose proof (ih t s hr hr') as E;
+            destruct (PCUICSafeReduce.inspect (rec t s hr)) as [[[t1 ρ1] p1] er1];
+            destruct (PCUICSafeReduce.inspect (rec' t' s' hr')) as [[[t2 ρ2] p2] er2]
+          end end.
+        rewrite <- er1, <- er2 in E. cbn in E. noconf E.
+        simp _reduce_stack.
+        destruct (PCUICSafeReduce.inspect (PCUICPosition.decompose_stack ρ1)) as [[l θ] eql].
+        simp _reduce_stack.
+        destruct (PCUICSafeReduce.inspect (PCUICPrimitiveRed.lit_of_term (mkApps t1 l)))
+          as [[lit|] eqlit]; simp _reduce_stack.
+        - simpl. reccall ih rec rec'. all: try now cbn.
+        - reflexivity. }
     - simp _reduce_stack.
       simpl.
       reccall ih rec rec'.

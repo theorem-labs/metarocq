@@ -49,6 +49,7 @@ theories/Typing/PCUICContextConversionTyp.v
 
 theories/PCUICContextSubst.v
 theories/PCUICCasesContexts.v
+theories/PCUICPrimitiveRed.v
 theories/PCUICReduction.v
 theories/PCUICEtaDefs.v
 theories/PCUICArityRed.v
@@ -90,6 +91,7 @@ theories/PCUICValidity.v
 theories/PCUICInductiveInversion.v
 theories/PCUICSR.v
 theories/PCUICClassification.v
+theories/PCUICPrimCanonical.v
 theories/PCUICCanonicity.v
 
 theories/PCUICCSubst.v

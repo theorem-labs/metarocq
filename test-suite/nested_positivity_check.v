@@ -16,9 +16,12 @@ From MetaRocq.SafeChecker Require Import PCUICErrors PCUICPositivityCheck.
 
 Import MonadNotation.
 
-(** The answer for one constructor type: [None] for accepted, [Some msg] for refused. *)
+(** The answer for one constructor type: [None] for accepted, [Some msg] for refused.
+    The operation table is empty ([fun _ => None]): no fixture below registers a
+    primitive operation, so BET-319 row Q3's refusal on a registered operation cannot
+    fire here and every expected verdict is unchanged. *)
 Definition answer lookup mdecl i t : option string :=
-  match check_positive_cstr lookup positivity_fuel mdecl i [] t with
+  match check_positive_cstr lookup (fun _ => None) positivity_fuel mdecl i [] t with
   | Checked _ => None
   | TypeError (Msg s) => Some s
   | TypeError _ => Some "other error"

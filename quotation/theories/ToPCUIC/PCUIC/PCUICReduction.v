@@ -3,7 +3,7 @@ From MetaRocq.Quotation.ToPCUIC Require Import Init.
 From MetaRocq.Quotation.ToPCUIC Require Import (hints) Stdlib.Init.
 From MetaRocq.Quotation.ToPCUIC Require Import (hints) Equations.Type.
 From MetaRocq.Quotation.ToPCUIC.Utils Require Import (hints) All_Forall.
-From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) BasicAst Universes Kernames.
+From MetaRocq.Quotation.ToPCUIC.Common Require Import (hints) BasicAst Universes Kernames PrimitiveOps.
 From MetaRocq.Quotation.ToPCUIC.PCUIC Require Import (hints) PCUICAst PCUICPrimitive.
 
 #[export] Instance quote_red1 {Σ Γ t u} : ground_quotable (@red1 Σ Γ t u).

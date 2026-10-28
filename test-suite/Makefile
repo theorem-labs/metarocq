@@ -6,6 +6,8 @@ bugs: Makefile.rocq
 	$(MAKE) -f Makefile.rocq TIMED=$(TIMED)
 	bash check_fail_messages.sh nested_positivity.v
 	bash check_fail_messages.sh positivity_red.v
+	bash check_fail_messages.sh prim_ops.v
+	bash check_assumptions.sh prim_ops_instance.v
 
 Makefile.rocq: Makefile _RocqProject
 	rocq makefile -f _RocqProject -o Makefile.rocq

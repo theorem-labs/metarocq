@@ -381,7 +381,7 @@ Lemma plookup_env_extends {Σ Σ' : global_env} kn b :
   plookup_env (firstorder_env' (declarations Σ)) kn = Some b.
 Proof using Type.
   intros [equ [Σ'' eq] eqr]. rewrite eq.
-  clear equ eqr. intros []. clear o.
+  clear equ eqr. intros [o [_ o0]]. clear o.
   rewrite eq in o0. clear eq. move: o0.
   generalize (declarations Σ'). clear Σ'.
   induction Σ''.
@@ -666,6 +666,11 @@ Proof using Type.
       rewrite /check_recursivity_kind E in Hty.
       now eapply (negb_False _ Hfo).
   - eapply inversion_Prim in Hty as [prim_ty [cdecl [wf hp hdecl inv ty cum]]]; eauto.
+      (* The guard on the axiom inversions: [prim_ty] is the registered
+         primitive TYPE constant, which §4.2(a)1 keeps out of the operation
+         table. *)
+      assert (hnop : prim_op_of Σ prim_ty = None).
+      { pose proof Hwf as [_ [wfr _]]. eapply prim_op_of_primitive_constant; tea. }
       now eapply invert_cumul_prim_type_ind in cum; tea.
   - destruct t; inv Hhead.
     + exfalso. now eapply invert_ind_ind in Hty.

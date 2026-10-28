@@ -35,7 +35,7 @@ Proof. intros []. now constructor. Qed.
 Lemma lookup_env_In d Σ : wf Σ -> In d (PEnv.declarations Σ) -> forall d', In d' (PEnv.declarations Σ) ->
   fst d = fst d' -> snd d = snd d'.
 Proof using Type.
-  intros [_].
+  intros [_ [_ o]].
   destruct Σ as [univs decls retro]; cbn in *.
   induction o in d |- *; auto.
   - intros H; inversion H.
@@ -43,13 +43,13 @@ Proof using Type.
     + subst. cbn.
       intros d' [H'|H']; subst; auto.
       intros eq.
-      destruct o0 as [fresh _ _ _].
+      destruct o0 as [fresh ? ? ?].
       subst kn. eapply PCUICTyping.fresh_global_iff_not_In in fresh.
       eapply (in_map fst) in H'.
       now apply fresh in H'.
     + intros d' [H'|H'] eq; subst; cbn in *; auto.
       subst.
-      destruct o0 as [fresh _ _ _].
+      destruct o0 as [fresh ? ? ?].
       eapply PCUICTyping.fresh_global_iff_not_In in fresh.
       eapply (in_map fst) in H.
       now apply fresh in H.
@@ -203,7 +203,7 @@ Proof.
             eapply abstract_pop_decls_correct in hΣpop; tea.
             2:{ intros. pose proof (abstract_env_irr _ HΣ' H). subst Σ0. cbn. now eexists. }
             destruct hΣpop as [? []]. destruct Σpop; cbn in *. subst.
-            depelim wf. depelim o0. depelim o1. cbn in on_global_decl_d.
+            destruct wf as [o [? o0]]. depelim o0. depelim o1. cbn in on_global_decl_d.
             sq. exists ar. split; [|now left].
             unshelve eapply PCUICSR.type_reduction. 4:apply X0. constructor; eauto. now eapply unlift_TermTyp.
             reflexivity. }
@@ -212,11 +212,19 @@ Proof.
           eapply erase_irrel_global_env.
           clear; intros ?? h1 h2.
           pose proof (abstract_env_exists (abstract_pop_decls X)) as [[[] hΣpop]].
-          split; intros.
+          split; [|split; [|split]]; intros.
           do 2 (erewrite <- abstract_env_lookup_correct'; tea).
           eapply abstract_make_wf_env_ext_correct in H; tea.
           eapply abstract_make_wf_env_ext_correct in h2; tea. congruence.
           do 2 (erewrite abstract_primitive_constant_correct; tea).
+          eapply abstract_make_wf_env_ext_correct in H; tea.
+          eapply abstract_make_wf_env_ext_correct in h2; tea. congruence.
+          (* BET-319 row J2: the operation table and the booleans, as for the
+             primitive-type constants *)
+          do 2 (erewrite abstract_prim_op_of_correct; tea).
+          eapply abstract_make_wf_env_ext_correct in H; tea.
+          eapply abstract_make_wf_env_ext_correct in h2; tea. congruence.
+          do 2 (erewrite abstract_primitive_bool_correct; tea).
           eapply abstract_make_wf_env_ext_correct in H; tea.
           eapply abstract_make_wf_env_ext_correct in h2; tea. congruence. } }
         rewrite <- H0.
