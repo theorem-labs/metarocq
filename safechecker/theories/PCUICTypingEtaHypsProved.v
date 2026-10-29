@@ -4,7 +4,7 @@ From Equations.Type Require Import Relation Relation_Properties.
 From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config uGraph PrimitiveOps.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLiftSubst PCUICUnivSubst
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICPrimitive PCUICLiftSubst PCUICUnivSubst
      PCUICSigmaCalculus PCUICEquality PCUICReduction PCUICOnFreeVars PCUICClosed PCUICTyping PCUICCumulativity
      PCUICCumulativitySpec PCUICWellScopedCumulativity PCUICContextSubst PCUICCases PCUICNormal PCUICPosition
      PCUICConversion PCUICFixWitness PCUICWfUniverses PCUICClosedBodies PCUICSpine PCUICWeakeningEnv
@@ -13,9 +13,10 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind
      PCUICEtaA6More PCUICGlobalEnvEta
      PCUICClosedTypEta PCUICWeakeningEnvTypEta PCUICWsCumulEtaCtx
-     PCUICWeakeningTypEta PCUICRenameTypEta PCUICInstTypEta PCUICCasesWfTypEta PCUICGuardClosureEta
+     PCUICWeakeningTypEta PCUICRenameTypEta PCUICInstDefEta PCUICInstTypEta PCUICCasesWfTypEta PCUICGuardClosureEta
      PCUICInversionEta PCUICSREtaConv.
-From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution PCUICSR PCUICInduction PCUICPositionEta.
+From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution PCUICSR PCUICInduction PCUICPositionEta
+  PCUICInstConv PCUICContexts PCUICWeakeningConv.
 From Stdlib Require Import Program.Equality.
 From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta PCUICTypingEtaDefs
   PCUICTypingEtaHyps.
@@ -36,9 +37,16 @@ From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta 
   type as projected from its class at the same parameters ([type of (@field cf H)]); for the two sources not
   in this branch ([ConvTypedFacts], [EtaTypingE]) [<field>_fits] restates the source text and is defined as
   the lemma. The textual comparison is [lanes/eta/etak/hypprove-identity.py].
-  No proof uses a class field, a section variable or an admitted fact: [Print Assumptions] at the end.
-  The lemmas named [hyp_*] are helpers. Integration (replacing a hypothesis by its lemma) is for the
-  owners of the source files. *)
+  No proof uses a class field, a section variable or an admitted fact: [Print Assumptions] at the end
+  (Rocq's primitive-type axioms and [functional_extensionality_dep] only). Where a lemma landed on
+  [frac/eta] inhabits a row ([PCUICSREtaConv] @ [da1eb84b], [Typing/PCUICWeakeningTypEta],
+  [Typing/PCUICRenameTypEta]), the proof is that lemma. [depelim] is Equations' ([DepElim.depelim]): this
+  file loads [Program.Equality] after Equations, and Stdlib's [depelim] would add [eq_rect_eq].
+  Helpers carry a prefix: [hyp_*], [stc_*] (structural spines), [univ_*] (universes), [rdx_*]
+  (reduction), [sbs_*] (substitution), [smh_*] (smash/expand_lets). The section "Duplicate GENUINE
+  hypotheses" derives, as conditional lemmas [hyp_dup_*], the GENUINE hypotheses that repeat a fact
+  stated in another file. Integration (replacing a hypothesis by its lemma) is for the owners of the
+  source files. *)
 
 (** ** REDUCE: fields of [ReduceTypedFacts] ([PCUICSafeReduceEta]) at [wt := welltypedE], [wfP := wf_extE]
     (the named hypothesis [PCUICSafeReduceEtaBridge.reduce_factsE]) *)
@@ -431,13 +439,6 @@ Qed.
 
 Definition type_local_ctx_wf_local_fits {cf : checker_flags} (H : T0_facts) : ltac:(let T := type of (@type_local_ctx_wf_local cf H) in exact T) := @type_local_ctx_wf_local_proved cf.
 
-(** [PCUICSubstitution.subslet_length] at [typingE]. *)
-Lemma stc_subsletE_length {cf : checker_flags} {Σ : global_env_ext} {Γ s Δ} :
-  subsletE Σ Γ s Δ -> #|s| = #|Δ|.
-Proof.
-  induction 1; simpl; f_equal; auto.
-Qed.
-
 (** [PCUICSpine.subslet_app] at [typingE]. *)
 Lemma stc_subsletE_app {cf : checker_flags} (Σ : global_env_ext) Γ s s' Δ Δ' :
   subsletE Σ Γ s (subst_context s' 0 Δ) ->
@@ -447,7 +448,7 @@ Proof.
   induction Δ in s, s', Δ' |- *; simpl; auto; move=> sub'.
   - DepElim.depelim sub'. auto.
   - rewrite subst_context_snoc in sub' => sub''.
-    move:(stc_subsletE_length sub') => /=.
+    move:(subslet_length sub') => /=.
     rewrite /snoc /= subst_context_length /= => Hlen.
     destruct a as [na [b|] ty].
     * DepElim.depelim sub'; simpl in t0, Hlen.
@@ -1156,6 +1157,404 @@ Proof.
 Qed.
 Definition inversion_it_mkProd_or_LetIn_fits {cf : checker_flags} (H : T0_facts) : ltac:(let T := type of (@inversion_it_mkProd_or_LetIn cf H) in exact T) := @inversion_it_mkProd_or_LetIn_proved cf.
 
+(** ** K7 substitution and spine facts: T0 rows 30, 31, 14, 34, 27, 2, 6 (helpers [sbs_*]) *)
+
+(** [PCUICSubstitution.subslet_untyped_subslet] over [subsletE]. *)
+Lemma sbs_subsletE_untyped {cf : checker_flags} {Σ : global_env_ext} {Γ s Δ} :
+  subsletE Σ Γ s Δ -> PCUICSubstitution.untyped_subslet Γ s Δ.
+Proof. induction 1; constructor; auto. Qed.
+
+(** [PCUICSubstitution.subslet_nth_error] over [subsletE]. *)
+Lemma sbs_subsletE_nth_error {cf : checker_flags} {Σ Γ s Δ decl n} :
+  subsletE Σ Γ s Δ ->
+  nth_error Δ n = Some decl ->
+  ∑ t, nth_error s n = Some t ×
+  let ty := subst0 (skipn (S n) s) (decl_type decl) in
+  Σ ;;; Γ |-E t : ty ×
+  match decl_body decl return Type with
+  | Some t' =>
+    let b := subst0 (skipn (S n) s) t' in
+    (t = b)
+  | None => unit
+  end.
+Proof.
+  intros h; induction h as [|Δ s na t T h IH ht|Δ s na t T h IH ht] in n |- *.
+  - intros hn. rewrite nth_error_nil in hn. discriminate.
+  - destruct n as [|n]; cbn.
+    + intros [= <-]. exists t. split; [reflexivity|]. cbn. split; [exact ht|exact tt].
+    + intros hn. exact (IH n hn).
+  - destruct n as [|n]; cbn.
+    + intros [= <-]. exists (subst0 s t). split; [reflexivity|]. cbn. split; [exact ht|reflexivity].
+    + intros hn. exact (IH n hn).
+Qed.
+
+(** The terms of a [subsletE] are open in its context. *)
+Lemma sbs_subsletE_open {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ s Δ} :
+  subsletE Σ Γ s Δ -> forallb (is_open_term Γ) s.
+Proof.
+  intros h; induction h as [|Δ s na t T h IH ht|Δ s na t T h IH ht]; cbn [forallb].
+  - reflexivity.
+  - rewrite IH andb_true_r. exact (subject_is_open_termE ht).
+  - rewrite IH andb_true_r. exact (subject_is_open_termE ht).
+Qed.
+
+Section SbsSigma.
+  Local Open Scope sigma_scope.
+  Local Set Keyed Unification.
+
+  (** [PCUICSubstitution.subslet_well_subst] over [subsletE] / [well_substE]; base's proof. *)
+  Lemma sbs_subslet_well_substE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ} :
+    subsletE Σ Γ s Γ' ->
+    wf_localE Σ (Γ ,,, subst_context s 0 Δ) ->
+    well_substE Σ (Γ ,,, Γ' ,,, Δ) (⇑^#|Δ| (s ⋅n ids)) (Γ ,,, subst_context s 0 Δ).
+  Proof.
+    intros hs hsΔ. split.
+    2: exact (PCUICSubstitution.subslet_usubst (sbs_subsletE_untyped hs)).
+    intros x decl hx. rewrite PCUICInstConv.lift0_inst inst_assoc. revert hx.
+    case: nth_error_app_context => //.
+    { intros d hnth hn [= ->].
+      rewrite {1}Upn_eq subst_consn_lt; len => //. rewrite /subst_fn.
+      rewrite idsn_lt //.
+      eapply meta_convE.
+      - econstructor; auto.
+        rewrite nth_error_app_lt; len => //.
+        now rewrite PCUICSubstitution.nth_error_subst_context hnth.
+      - rewrite /subst_decl. simpl.
+        sigma. rewrite -shiftk_shift -subst_compose_assoc -shiftk_shift.
+        rewrite subst_shift_comm.
+        rewrite -subst_fn_subst_consn. lia_f_equal. }
+    { intros n hnth; len; intros hd [= ->].
+      pose proof (subslet_length hs) as H.
+      move: hnth; case: nth_error_app_context => //.
+      * intros n hnth hx [= ->].
+        rewrite {1}Upn_eq subst_consn_ge; len => //; try lia.
+        rewrite subst_consn_compose.
+        rewrite subst_consn_lt; len; try lia.
+        unfold subst_fn. rewrite nth_error_map.
+        destruct (sbs_subsletE_nth_error hs hnth) as [t [hnths [hty hb]]].
+        rewrite hnths /=. sigma in hty.
+        eapply meta_convE in hty.
+        2:now rewrite skipn_subst ?Upn_0; try lia.
+        eapply (shift_typingE (Δ := subst_context s 0 Δ)) in hty.
+        2:tas.
+        2:now len.
+        rewrite inst_assoc in hty.
+        rewrite Upn_eq.
+        eapply meta_convE; eauto.
+        eapply inst_ext.
+        rewrite (shift_subst_consn_ge (S x)); len; try lia.
+        rewrite subst_compose_assoc.
+        now replace (S x - #|Δ|) with (S (x - #|Δ|)) by lia.
+      * intros n hnth hn [= ->].
+        eapply meta_conv_allE.
+        2:reflexivity.
+        2:{ rewrite Upn_subst_consn_ge; try lia. rewrite compose_ids_l.
+            instantiate (1 := tRel (x - #|s|)).
+            rewrite /shiftk. lia_f_equal. }
+        2:{ econstructor; eauto. }
+        eapply meta_convE.
+        { econstructor; tas.
+          rewrite nth_error_app_context_ge; len; try lia.
+          rewrite H. erewrite <- hnth. lia_f_equal. }
+        rewrite PCUICInstConv.lift0_inst.
+        rewrite Upn_eq.
+        rewrite shift_subst_consn_ge; len; try lia.
+        rewrite subst_consn_compose shift_subst_consn_ge; len; try lia.
+        rewrite H. rewrite shiftk_compose. lia_f_equal.
+    }
+  Qed.
+End SbsSigma.
+
+(** *** Row 31: [substitution_wf_local] (base [PCUICSubstitution.All_local_env_inst], over [type_instE]) *)
+Lemma substitution_wf_local_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl}, subsletE Σ Γ s Γ' -> wf_localE Σ (Γ,,, Γ',,, Δ) -> wf_localE Σ (Γ,,, subst_context s 0 Δ).
+Proof.
+  intros Σ wfΣ Γ Γ' s Δ hs wf.
+  pose proof (env_propE_wf_local type_instE Σ wfΣ _ wf) as X. cbv beta in X.
+  eapply All_local_env_app_inv in X as [_ XΔ].
+  have wfΓ : wf_localE Σ Γ.
+  { apply wf_localE_app_l in wf. exact (wf_localE_app_l _ _ _ wf). }
+  rewrite PCUICInstConv.subst_context_inst_context.
+  eapply (wf_local_app_instE _ (Γ ,,, Γ')); [exact XΔ| |exact wfΓ].
+  pose proof (sbs_subslet_well_substE (Δ := []) hs) as hw.
+  rewrite subst_context_nil in hw. exact (hw wfΓ).
+Qed.
+Definition substitution_wf_local_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@substitution_wf_local cf H) in exact T) := @substitution_wf_local_proved cf.
+
+(** *** Row 30: [substitution] (base [PCUICSubstitution.substitution_prop]: [type_inst] + [subslet_well_subst]) *)
+Lemma substitution_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl} {t : term} {T : term}, subsletE Σ Γ s Γ' -> Σ;;; Γ,,, Γ',,, Δ |-E t : T -> Σ;;; Γ,,, subst_context s 0 Δ |-E subst s #|Δ| t : subst s #|Δ| T.
+Proof.
+  intros Σ wfΣ Γ Γ' s Δ t T hs ht.
+  pose proof (substitution_wf_local_proved (wfΣ := wfΣ) hs (typingE_wf_local ht)) as wfΔ.
+  rewrite !subst_inst.
+  exact (typing_instE Σ _ t T _ _ wfΔ (sbs_subslet_well_substE hs wfΔ) ht).
+Qed.
+Definition substitution_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@substitution cf H) in exact T) := @substitution_proved cf.
+
+(** [PCUICSubstitution.isType_subst] over E. *)
+Lemma sbs_isType_subst {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ s T} :
+  subsletE Σ Γ s Δ -> isTypeE Σ (Γ ,,, Δ) T -> isTypeE Σ Γ (subst0 s T).
+Proof.
+  intros hs (_ & u & hu & _).
+  apply (has_sort_isTypeE u).
+  exact (substitution_proved (Δ := []) hs hu).
+Qed.
+
+(** *** Row 14: [isType_apply] ([PCUICArities.isType_apply]: [isType_tProd] + [isType_subst]) *)
+Lemma isType_apply_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term} {t : term}, isTypeE Σ Γ (tProd na A B) -> Σ;;; Γ |-E t : A -> isTypeE Σ Γ (B {0 := t}).
+Proof.
+  intros Σ wfΣ Γ na A B t (_ & s & hs & _) ht.
+  destruct (inversion_Prod Σ wfΣ hs) as (s1 & s2 & _ & hB & _).
+  apply (has_sort_isTypeE s2).
+  exact (substitution_proved (Γ' := [vass na A]) (Δ := []) (subslet_ass_tip ht) hB).
+Qed.
+Definition isType_apply_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@isType_apply cf H) in exact T) := @isType_apply_proved cf.
+
+(** *** Row 34: [typing_spine_strengthen] (the head cumulativity composes: [ws_cumul_pbE_trans]) *)
+Lemma typing_spine_strengthen_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {args : list term} {U : term}, typing_spineE Σ Γ T args U -> forall T' : term, isTypeE Σ Γ T' -> Σ ;;; Γ ⊢E T' ≤ T -> typing_spineE Σ Γ T' args U.
+Proof.
+  intros Σ wfΣ Γ T args U sp.
+  destruct sp as [ty ty' isty isty' c'|ty hd tl na A B B' isty isP c' hhd sp]; intros T' isT' c.
+  - exact (type_spine_nilE Σ Γ T' ty' isT' isty'
+      (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ c c')).
+  - exact (type_spine_consE Σ Γ T' hd tl na A B B' isT' isP
+      (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ c c') hhd sp).
+Qed.
+Definition typing_spine_strengthen_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@typing_spine_strengthen cf H) in exact T) := @typing_spine_strengthen_proved cf.
+
+(** *** Row 27: [spine_subst_cumul] ([PCUICSpine.subslet_cumul] + [spine_subst_cumul]) *)
+Lemma sbs_subsletE_vass_inv {cf : checker_flags} {Σ Γ args Δ na T} :
+  subsletE Σ Γ args (Δ ,, vass na T) ->
+  ∑ t s, (args = t :: s) × subsletE Σ Γ s Δ × (Σ ;;; Γ |-E t : subst0 s T).
+Proof.
+  intros h. DepElim.depelim h. eexists _, _. split; [reflexivity|split; eassumption].
+Qed.
+
+Lemma sbs_context_subst_cumul {cf : checker_flags} {Σ : global_env_ext} {pb Δ Γ Γ' args s} :
+  PCUICLiftSubst.assumption_context Γ -> PCUICLiftSubst.assumption_context Γ' ->
+  ws_cumul_ctx_pbE_rel pb Σ Δ Γ Γ' ->
+  context_subst Γ args s -> context_subst Γ' args s.
+Proof.
+  intros ass ass' [_ hA].
+  induction hA as [|d d' Γ0 Γ0' hA IH p] in args, s, ass, ass' |- *; intros ctxs.
+  - exact ctxs.
+  - destruct d as [na [b|] T]; [exfalso; inversion ass|].
+    destruct d' as [na' [b'|] T']; [exfalso; inversion ass'|].
+    have ass0 : PCUICLiftSubst.assumption_context Γ0 by inversion ass.
+    have ass0' : PCUICLiftSubst.assumption_context Γ0' by inversion ass'.
+    DepElim.depelim ctxs. constructor. eapply IH; eassumption.
+Qed.
+
+Lemma sbs_subsletE_cumul {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {pb Δ args Γ Γ'} :
+  PCUICLiftSubst.assumption_context Γ -> PCUICLiftSubst.assumption_context Γ' ->
+  wf_localE Σ (Δ ,,, Γ) -> wf_localE Σ (Δ ,,, Γ') ->
+  ws_cumul_ctx_pbE_rel pb Σ Δ Γ Γ' ->
+  subsletE Σ Δ args Γ -> subsletE Σ Δ args Γ'.
+Proof.
+  intros ass ass' wf wf' [cl hA].
+  induction hA as [|d d' Γ0 Γ0' hA IH p] in args, ass, ass', wf, wf' |- *; intros subsl.
+  - exact subsl.
+  - destruct d as [na [b|] T]; [exfalso; inversion ass|].
+    destruct d' as [na' [b'|] T']; [exfalso; inversion ass'|].
+    have ass0 : PCUICLiftSubst.assumption_context Γ0 by inversion ass.
+    have ass0' : PCUICLiftSubst.assumption_context Γ0' by inversion ass'.
+    destruct (sbs_subsletE_vass_inv subsl) as (t & s & -> & subsl' & ht).
+    destruct (All_local_env_tip wf) as [wf0 _].
+    destruct (All_local_env_tip wf') as [wf0' hT'].
+    have subsl'' : subsletE Σ Δ s Γ0'.
+    { eapply IH; eassumption. }
+    constructor; [exact subsl''|].
+    DepElim.depelim p.
+    apply (type_ws_cumul_pb (pb := pb) (subst0 s T) ht).
+    + destruct hT' as (_ & u & hu & _).
+      apply (has_sort_isTypeE u).
+      exact (substitution_proved (Δ := []) subsl'' hu).
+    + refine (untyped_substitution_ws_cumul_pbE (Γ'' := []) (M := T) (N := T')
+        (sbs_subsletE_untyped subsl') (sbs_subsletE_open subsl') _).
+      eassumption.
+Qed.
+
+Lemma spine_subst_cumul_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Δ : list context_decl} {args : list term} {Γ : context} {Γ' : context}, PCUICLiftSubst.assumption_context Γ -> PCUICLiftSubst.assumption_context Γ' -> wf_localE Σ (Δ,,, Γ) -> wf_localE Σ (Δ,,, Γ') -> ws_cumul_ctx_pbE_rel Cumul Σ Δ Γ Γ' -> spine_substE Σ Δ args (List.rev args) Γ -> spine_substE Σ Δ args (List.rev args) Γ'.
+Proof.
+  intros Σ wfΣ Δ args Γ Γ' ass ass' wf wf' a2 [wfΔ _ ctxs subsl].
+  split.
+  - exact wfΔ.
+  - exact wf'.
+  - exact (sbs_context_subst_cumul ass ass' a2 ctxs).
+  - exact (sbs_subsletE_cumul ass ass' wf wf' a2 subsl).
+Qed.
+Definition spine_subst_cumul_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@spine_subst_cumul cf H) in exact T) := @spine_subst_cumul_proved cf.
+
+(** *** Row 6: [ctx_inst_spine_subst] ([PCUICSpine.ctx_inst_spine_subst]) *)
+
+(** [PCUICSubstitution.subslet_def_tip] over [subsletE]. *)
+Lemma sbs_subslet_def_tip {cf : checker_flags} {Σ : global_env_ext} {Γ na t T} :
+  Σ ;;; Γ |-E t : T -> subsletE Σ Γ [t] [vdef na t T].
+Proof.
+  intros h. rewrite -{1}(subst_empty 0 t).
+  apply cons_let_defE; [constructor|]. now rewrite !subst_empty.
+Qed.
+
+(** The substitution of a [ctx_instE] over a reversed context is a [subsletE]
+    (the [subslet] half of [PCUICSpine.ctx_inst_spine_subst], by induction on the instance). *)
+Lemma sbs_ctx_inst_subslet {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ args Δt}
+  (ci : ctx_instE Σ Γ args Δt) :
+  wf_localE Σ (Γ ,,, List.rev Δt) -> subsletE Σ Γ (ctx_inst_subE ci) (List.rev Δt).
+Proof.
+  induction ci as [|na t i inst Δt hi ci IH|na b t inst Δt ci IH]; intros wf;
+    cbn [ctx_inst_subE List.rev] in *.
+  - constructor.
+  - have e : List.rev (subst_telescope [i] 0 Δt) = subst_context [i] 0 (List.rev Δt).
+    { rewrite -{1}(List.rev_involutive Δt) subst_telescope_subst_context. apply List.rev_involutive. }
+    have hs : subsletE Σ Γ [i] [vass na t] := subslet_ass_tip hi.
+    have wf' : wf_localE Σ (Γ ,,, [vass na t] ,,, List.rev Δt) by rewrite -app_context_assoc.
+    rewrite e in IH.
+    exact (stc_subsletE_app _ _ _ _ _ _ (IH (substitution_wf_local_proved (wfΣ := wfΣ) hs wf')) hs).
+  - have wfd : wf_localE Σ (Γ ,,, [vdef na b t] ,,, List.rev Δt) by rewrite -app_context_assoc.
+    destruct (All_local_env_tip (wf_localE_app_l _ _ _ wfd)) as [_ hd0].
+    have hb : Σ ;;; Γ |-E b : t by destruct hd0 as (hb & _).
+    have hs : subsletE Σ Γ [b] [vdef na b t] := sbs_subslet_def_tip hb.
+    have e : List.rev (subst_telescope [b] 0 Δt) = subst_context [b] 0 (List.rev Δt).
+    { rewrite -{1}(List.rev_involutive Δt) subst_telescope_subst_context. apply List.rev_involutive. }
+    rewrite e in IH.
+    exact (stc_subsletE_app _ _ _ _ _ _ (IH (substitution_wf_local_proved (wfΣ := wfΣ) hs wfd)) hs).
+Qed.
+
+Lemma ctx_inst_spine_subst_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Δ : list context_decl} {args : list term}, wf_localE Σ (Γ,,, Δ) -> forall (ci : ctx_instE Σ Γ args (List.rev Δ)), spine_substE Σ Γ args (ctx_inst_subE ci) Δ.
+Proof.
+  intros Σ wfΣ Γ Δ args wf ci.
+  pose proof (make_context_subst_spec _ _ _ (stc_ctx_inst_subE_spec ci)) as msub.
+  rewrite List.rev_involutive in msub.
+  pose proof (sbs_ctx_inst_subslet (wfΣ := wfΣ) ci) as hs.
+  rewrite List.rev_involutive in hs.
+  split.
+  - exact (wf_localE_app_l _ _ _ wf).
+  - exact wf.
+  - exact msub.
+  - exact (hs wf).
+Qed.
+Definition ctx_inst_spine_subst_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@ctx_inst_spine_subst cf H) in exact T) := @ctx_inst_spine_subst_proved cf.
+
+(** *** Row 2: [arity_typing_spine] ([PCUICSpine.arity_typing_spine]) *)
+
+(** [PCUICArities.isType_tLetIn_red] over E: substitution (row 30), [ws_cumul_pbE_LetIn_l_inv],
+    [type_ws_cumul_pb], and [typing_wf_sort_proved] (row 35) for the target sort; no
+    [ws_cumul_pb_Sort_r_inv]. *)
+Lemma sbs_isType_tLetIn_red {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ na t A B} :
+  isTypeE Σ Γ (tLetIn na t A B) -> isTypeE Σ Γ (B {0 := t}).
+Proof.
+  intros (_ & s & H & _).
+  pose proof (typing_wf_sort_proved (Σ := Σ) wfΣ H) as ws.
+  destruct (inversion_LetIn Σ wfΣ H) as (A' & hb & HB & c).
+  assert (ht : Σ ;;; Γ |-E t : A) by (destruct hb as (ht & _); exact ht).
+  assert (HB' : Σ ;;; Γ |-E B {0 := t} : A' {0 := t}).
+  { exact (substitution_proved (wfΣ := wfΣ) (Γ' := [vdef na t A]) (Δ := []) (sbs_subslet_def_tip ht) HB). }
+  apply (has_sort_isTypeE s).
+  exact (type_ws_cumul_pb (pb := Cumul) (A' {0 := t}) HB' (isType_Sort ws (typingE_wf_local HB'))
+    (ws_cumul_pbE_LetIn_l_inv c)).
+Qed.
+
+(** [PCUICArities.typing_spine_letin_inv] over E. *)
+Lemma sbs_typing_spine_letin_inv {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ na b B T args S} :
+  typing_spineE Σ Γ (tLetIn na b B T) args S -> typing_spineE Σ Γ (T {0 := b}) args S.
+Proof.
+  intros Hsp. remember (tLetIn na b B T) as L eqn:eL. revert eL.
+  destruct Hsp as [ty ty' isty isty' c|ty hd tl na' A B0 B' isty isP c hhd sp]; intros ->.
+  - exact (type_spine_nilE Σ Γ _ ty' (sbs_isType_tLetIn_red isty) isty' (ws_cumul_pbE_LetIn_l_inv c)).
+  - exact (type_spine_consE Σ Γ _ hd tl na' A B0 B' (sbs_isType_tLetIn_red isty) isP
+      (ws_cumul_pbE_LetIn_l_inv c) hhd sp).
+Qed.
+
+Lemma sbs_context_subst_def_tip na b ty : context_subst [vdef na b ty] [] [b].
+Proof. rewrite -{2}(subst_empty 0 b). exact (context_subst_def [] [] [] na b ty context_subst_nil). Qed.
+
+Lemma sbs_context_subst_ass_tip na ty a : context_subst [vass na ty] [a] [a].
+Proof. exact (context_subst_ass [] [] [] na ty a context_subst_nil). Qed.
+
+Lemma arity_typing_spine_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : sort} {inst : list term} {s' : sort}, typing_spineE Σ Γ (it_mkProd_or_LetIn Γ' (tSort s)) inst (tSort s') -> [× #|inst| = context_assumptions Γ', leq_sort Σ s s' & ∑ instsubst : list term, spine_substE Σ Γ inst instsubst Γ'].
+Proof.
+  intros Σ wfΣ Γ Γ' s inst s' Hsp. revert s inst s' Hsp.
+  induction Γ' as [|d l IH] using PCUICInduction.ctx_length_rev_ind; intros s inst s' Hsp.
+  - have Hsp0 : typing_spineE Σ Γ (tSort s) inst (tSort s') := Hsp.
+    clear Hsp.
+    remember (tSort s) as S0 eqn:eS. remember (tSort s') as S1 eqn:eS'. revert eS eS'.
+    destruct Hsp0 as [ty ty' isty isty' c|ty hd tl na A B B' isty isP c hhd sp]; intros -> ->.
+    + split; [reflexivity|exact (ws_cumul_pb_Sort_inv Cumul c)|].
+      exists []. split; [exact (isType_wf_local isty)|exact (isType_wf_local isty)|constructor|constructor].
+    + exfalso. exact (ws_cumul_pb_Sort_Prod_inv Cumul c).
+  - pose proof (isType_it_mkProd_or_LetIn_wf_local_proved (wfΣ := wfΣ) (typing_spine_isType_dom Hsp)) as wfΓ'.
+    have wfd : wf_localE Σ (Γ ,,, [d] ,,, l) by rewrite -app_context_assoc.
+    destruct (All_local_env_tip (wf_localE_app_l _ _ _ wfd)) as [_ hd0].
+    rewrite it_mkProd_or_LetIn_app in Hsp.
+    destruct d as [na [b|] ty].
+    + have hb : Σ ;;; Γ |-E b : ty by destruct hd0 as (hb & _).
+      have Hsp1 : typing_spineE Σ Γ (tLetIn na b ty (it_mkProd_or_LetIn l (tSort s))) inst (tSort s') := Hsp.
+      pose proof (sbs_typing_spine_letin_inv (wfΣ := wfΣ) Hsp1) as Hsp2.
+      rewrite /subst1 subst_it_mkProd_or_LetIn in Hsp2.
+      have Hsp3 : typing_spineE Σ Γ (it_mkProd_or_LetIn (subst_context [b] 0 l) (tSort s)) inst (tSort s') := Hsp2.
+      destruct (IH (subst_context [b] 0 l) ltac:(rewrite subst_context_length; lia) _ _ _ Hsp3)
+        as [instlen leq [instsubst [wfdom _ cs subi]]].
+      rewrite context_assumptions_subst in instlen.
+      have hl : #|instsubst| = #|l| by rewrite -(context_subst_length cs) subst_context_length.
+      split.
+      * rewrite context_assumptions_app /=. lia.
+      * exact leq.
+      * exists (instsubst ++ [b]). split.
+        -- exact wfdom.
+        -- exact wfΓ'.
+        -- apply context_subst_app_inv.
+           rewrite -hl skipn_all_app firstn_app_left //.
+           split; [exact cs|exact (sbs_context_subst_def_tip na b ty)].
+        -- exact (stc_subsletE_app _ _ _ _ _ _ subi (sbs_subslet_def_tip hb)).
+    + have Hsp1 : typing_spineE Σ Γ (tProd na ty (it_mkProd_or_LetIn l (tSort s))) inst (tSort s') := Hsp.
+      clear Hsp.
+      remember (tProd na ty (it_mkProd_or_LetIn l (tSort s))) as P0 eqn:eP.
+      remember (tSort s') as S1 eqn:eS'. revert eP eS'.
+      destruct Hsp1 as [ty0 ty' isty isty' c|ty0 hd tl na0 A B B' isty isP c hhd sp]; intros -> ->.
+      * exfalso. exact (ws_cumul_pb_Prod_Sort_inv Cumul c).
+      * destruct (ws_cumul_pb_Prod_Prod_inv c) as [eqna conva cumulB].
+        assert (isty0 : isTypeE Σ Γ ty).
+        { destruct isty as (_ & u & hu & _).
+          destruct (inversion_Prod Σ wfΣ hu) as (s1 & s2 & hA & _ & _).
+          destruct hA as (_ & u1 & hu1 & _). exact (has_sort_isTypeE u1 hu1). }
+        assert (hdty : Σ ;;; Γ |-E hd : ty).
+        { exact (type_ws_cumul_pb (pb := Conv) A hhd isty0 (ws_cumul_pbE_sym_pb conva)). }
+        assert (cumulB' : Σ ;;; Γ ⊢E (it_mkProd_or_LetIn l (tSort s)) {0 := hd} ≤ B {0 := hd}).
+        { exact (substitution0_ws_cumul_pbE (subject_is_open_termE hdty) cumulB). }
+        pose proof (typing_spine_strengthen_proved (wfΣ := wfΣ) sp _
+          (isType_apply_proved (wfΣ := wfΣ) isty hdty) cumulB') as sp1.
+        rewrite /subst1 subst_it_mkProd_or_LetIn in sp1.
+        have sp2 : typing_spineE Σ Γ (it_mkProd_or_LetIn (subst_context [hd] 0 l) (tSort s)) tl (tSort s') := sp1.
+        destruct (IH (subst_context [hd] 0 l) ltac:(rewrite subst_context_length; lia) _ _ _ sp2)
+          as [instlen leq [instsubst [wfdom _ cs subi]]].
+        rewrite context_assumptions_subst in instlen.
+        have hl : #|instsubst| = #|l| by rewrite -(context_subst_length cs) subst_context_length.
+        split.
+        -- rewrite context_assumptions_app /=. lia.
+        -- exact leq.
+        -- exists (instsubst ++ [hd]). split.
+           ++ exact wfdom.
+           ++ exact wfΓ'.
+           ++ apply context_subst_app_inv.
+              rewrite -hl skipn_all_app firstn_app_left //.
+              split; [exact cs|exact (sbs_context_subst_ass_tip na ty hd)].
+           ++ exact (stc_subsletE_app _ _ _ _ _ _ subi (subslet_ass_tip hdty)).
+Qed.
+Definition arity_typing_spine_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@arity_typing_spine cf H) in exact T) := @arity_typing_spine_proved cf.
+
 (** ** Duplicate GENUINE hypotheses (audit C §4.2): each derivation below obtains one GENUINE hypothesis
     from ONE GENUINE hypothesis of another file, by glue only (instantiation, [wf_extE_wfE], a squash,
     the proved symmetry [ws_cumul_ctx_pbE_sym], the embedding of base stacks into η stacks). These are
@@ -1367,6 +1766,13 @@ Print Assumptions red_mkApps_smash_witness_proved.
 Print Assumptions red_rec_arg_check_one_fix_proved.
 Print Assumptions ind_arity_relevant_proved.
 Print Assumptions inversion_it_mkProd_or_LetIn_proved.
+Print Assumptions substitution_proved.
+Print Assumptions substitution_wf_local_proved.
+Print Assumptions isType_apply_proved.
+Print Assumptions typing_spine_strengthen_proved.
+Print Assumptions spine_subst_cumul_proved.
+Print Assumptions ctx_inst_spine_subst_proved.
+Print Assumptions arity_typing_spine_proved.
 
 (** Base comparison: the base twins carry the same axioms. ([depelim] here is Equations' [DepElim.depelim]:
     the import block loads [Program.Equality] after Equations, whose [depelim] would add [eq_rect_eq].) *)
