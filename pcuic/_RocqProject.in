@@ -122,6 +122,9 @@ theories/Bidirectional/BDToPCUIC.v
 theories/Bidirectional/BDFromPCUIC.v
 theories/Bidirectional/BDUnique.v
 theories/Bidirectional/BDStrengthening.v
+# Bidirectional typing over the eta relations (T6): the judgments, their induction principle, instances
+theories/Bidirectional/BDTypingEta.v
+theories/Bidirectional/BDTypingEtaInstances.v
 
 theories/PCUICWeakeningEnv.v
 theories/PCUICWeakeningConfig.v
@@ -140,6 +143,16 @@ theories/Typing/PCUICWeakeningEnvTypEta.v
 theories/Typing/PCUICClosedTypEta.v
 # The universe facts of a well-formed environment for any conversion relation, and wf_extE -> wfE
 theories/PCUICGlobalEnvEta.v
+# Typing infrastructure over typingE: configuration weakening, renaming, weakening, case
+# well-formedness, instantiation, the guard closure, and their satisfying instances
+theories/Typing/PCUICWeakeningConfigTypEta.v
+theories/Syntax/PCUICInstDefEta.v
+theories/PCUICGuardClosureEta.v
+theories/Typing/PCUICRenameTypEta.v
+theories/Typing/PCUICWeakeningTypEta.v
+theories/Typing/PCUICCasesWfTypEta.v
+theories/Typing/PCUICInstTypEta.v
+theories/PCUICTypingEtaCopies1Instances.v
 # The normalization premise over typingE (an assumption, as base NormalizationIn is)
 theories/PCUICSNEta.v
 # The stack with the eta frames, and its positions
