@@ -27,10 +27,11 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICCumulativitySpe
      PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind PCUICEtaA6More PCUICEtaJoinSpec PCUICEtaFInstGlue
      PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
      PCUICInversionEta PCUICSREtaConv.
-(* The landed T0 copies 10, 12 and 14 (frac/eta 59eb717d): the canonical [subsletE]
-   ([PCUICSubstitutionEta]) and [typing_spineE] ([PCUICAritiesEta], the twin of
-   [PCUICArities.typing_spine]), and their lemmas. *)
-From MetaRocq.PCUIC Require Import PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta.
+(* The landed T0 copies 10, 12, 14 (frac/eta 59eb717d) and 15 (frac/eta d49d1c19): the canonical
+   [subsletE] ([PCUICSubstitutionEta]), [typing_spineE] ([PCUICAritiesEta], the twin of
+   [PCUICArities.typing_spine]), [spine_substE] and [ctx_inst_subE] ([PCUICSpineEta]), and their
+   lemmas. *)
+From MetaRocq.PCUIC Require Import PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta.
 (* C9 (cross-lane-commitments.md): E3's global symmetry and transitivity instances for
    [ws_cumul_ctx_pbE Conv] and the term lists ([conv_context_symE], [ws_cumul_pbE_terms_sym],
    [ws_cumul_pbE_terms_trans]), which replace the three [#[local]] instances this file had. *)
@@ -38,10 +39,8 @@ From MetaRocq.PCUIC Require Import PCUICWsCumulEtaInstancesGlobal.
 (* Copy 9 (gated at d46f9387, merged into this branch): [context_conversionE] and
    [closed_context_conversionE], with the statements the forecast block had. *)
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
-(* T2a (a2a2adfc, merged into this branch): [validityE], [inversion_mkAppsE], the shared forecast
-   definitions of copy 15 ([ctx_inst_subE], [spine_substE]), the lemmas it proves for copies 15 and
-   16 and its forecast classes [ValForecastCopy15/16], which are premises of section [SREta]
-   below. *)
+(* T2a (a2a2adfc, merged into this branch): [validityE], [inversion_mkAppsE], the lemmas it proves
+   for copy 16 and its forecast class [ValForecastCopy16], a premise of section [SREta] below. *)
 From MetaRocq.PCUIC Require Import PCUICValidityEta.
 From MetaRocq.PCUIC.Typing Require PCUICUnivSubstitutionTypEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta.
@@ -67,7 +66,7 @@ Arguments Sort.sort_of_product : simpl nomatch.
   import the copy. No proof below the block changes. Nothing here is an axiom: the classes are
   premises of every lemma that uses them, and [Print Assumptions] shows them as such. *)
 
-(* Text and implicit status. The fields of copies 15, 16 and 18 here and in T2a's classes are the
+(* Text and implicit status. The fields of copies 16 and 18 here and in T2a's class are the
    statement note's text (PCUICSREtaCopyStatements.v @ 33a87a58), which writes each binder with
    the implicit status, name and position of base's COMPILED lemma: [{wfΣ : wfE Σ}] where base has
    [{wfΣ : wf Σ}], an explicit environment premise exactly where base has one
@@ -75,18 +74,18 @@ Arguments Sort.sort_of_product : simpl nomatch.
    [declared_constructor_valid_tyE], [type_tCoFix_invE], [type_tFix_invE],
    [wf_cofixpoint_typing_spineE]). The note's [<base>E_statement] Definitions are never referenced
    by name (that would make every argument explicit): their text is copied into class fields, whose
-   projections keep the braces. Copies 10, 12 and 14 (no note text: base twins, base's status) have
-   landed (frac/eta 59eb717d): their classes were deleted after a compiled-form identity check of
-   each field against the landed lemma, and the copies are imported. *)
+   projections keep the braces. Copies 10, 12 and 14 (frac/eta 59eb717d) and copy 15 (frac/eta
+   d49d1c19) have landed: their classes were deleted after a compiled-form identity check of each
+   field against the landed lemma, and the copies are imported. *)
 Local Set Warnings "-unexpected-implicit-declaration".
 
 (** *** Definitions
 
-  [subsletE] and [typing_spineE] are the landed canonical ones (copies 10 and 14, imported above,
-  with their [Derive Signature]); [has_sort_isTypeE], [has_sort_isTypeRelE] and [isWfArityE] are
-  [PCUICTypingEtaNotions]'s; [ctx_inst_subE] and [spine_substE] (with its fields) come from T2a's
-  [PCUICValidityEta], so that ONE of each is in scope. [validityE] and [inversion_mkAppsE] are
-  T2a's proved lemmas. The definitions below are the forecast ones no landed file has yet. *)
+  [subsletE], [typing_spineE], [spine_substE] (with its fields) and [ctx_inst_subE] are the landed
+  canonical ones (copies 10, 14 and 15, imported above, with their [Derive Signature]);
+  [has_sort_isTypeE], [has_sort_isTypeRelE] and [isWfArityE] are [PCUICTypingEtaNotions]'s.
+  [validityE] and [inversion_mkAppsE] are T2a's proved lemmas. The definitions below are the
+  forecast ones no landed file has yet. *)
 
 (* FORECAST-ONLY: proved by copy 16 (PCUICInductivesEta.v, twin of PCUICInductives.v:623 wf_subslet);
    delete when it lands. Text: PCUICSREtaCopyStatements.v, verbatim. *)
@@ -99,127 +98,6 @@ Record wf_subsletE {cf} Σ Γ s Δ :=
    PCUICSREtaCopyStatements.v, verbatim. *)
 Notation decl_ws_cumul_pbE Σ Γ :=
   (All_decls_alpha_pb Conv (fun pb (x0 y0 : term) => ws_cumul_pbE pb Σ Γ x0 y0)).
-
-(** *** Copy 15 ([PCUICSpineEta.v]): the statement note's statements, verbatim
-    ([PCUICSREtaCopyStatements.v] @ [c232bd3d], [<base>E_statement] → field [<base>E]).
-    [ctx_inst_spine_substE], [spine_subst_smashE], [spine_subst_subst_to_extended_list_kE],
-    [type_mkAppsE] and [typing_spine_strengthenE] are fields of T2a's [ValForecastCopy15] (the
-    note's text, environment premise explicit). *)
-
-(* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v); delete when it lands. *)
-Class SRForecastCopy15 := {
-  ctx_inst_cumulE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {pb : conv_pb} {Γ : list context_decl} {i : list term} {Δ Δ' : list context_decl},
-    ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
-    ctx_instE Σ Γ i (List.rev Δ) ->
-    wf_local_relE Σ Γ Δ ->
-    wf_local_relE Σ Γ Δ' ->
-    ctx_instE Σ Γ i (List.rev Δ') ;
-  ctx_inst_instE :
-    forall {cf : checker_flags} (Σ : global_env_ext) (ext : universes_decl) (u : Instance.t)
-      (Γ : context) (i : list term) (Δ : context),
-    PCUICUnivSubstitutionTypEta.wf_global_extE Σ.1 ext ->
-    ctx_instE (Σ.1, ext) Γ i Δ ->
-    consistent_instance_ext Σ ext u ->
-    ctx_instE Σ Γ@[u] (map (subst_instance u) i) Δ@[u] ;
-  ctx_inst_open_termsE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall (Γ : context) (args : list term) (Δ : context),
-    ctx_instE Σ Γ args Δ ->
-    All (fun t : term => is_open_term Γ t) args ;
-  inversion_mkApps_directE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ : context} {f : term} {u : list term} {T : term},
-    isTypeE Σ Γ T ->
-    Σ ;;; Γ |-E mkApps f u : T ->
-    ∑ (A : term) (s' : sort),
-      (Σ ;;; Γ |-E f : A) × (Σ ;;; Γ |-E A : tSort s') × typing_spineE Σ Γ A u T ;
-  spine_subst_appE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {Γ : list context_decl} {Δ : context}
-      {Δ' : list context_decl} {inst inst' insts : list term},
-    #|inst| = context_assumptions Δ ->
-    wf_localE Σ (Γ ,,, Δ ,,, Δ') ->
-    spine_substE Σ Γ inst (skipn #|Δ'| insts) Δ ->
-    spine_substE Σ Γ inst' (firstn #|Δ'| insts) (subst_context (skipn #|Δ'| insts) 0 Δ') ->
-    spine_substE Σ Γ (inst ++ inst') insts (Δ ,,, Δ') ;
-  spine_subst_app_invE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ Δ : context} {Δ' : list context_decl} {inst inst' insts : list term},
-    #|inst| = context_assumptions Δ ->
-    spine_substE Σ Γ (inst ++ inst') insts (Δ ,,, Δ') ->
-    spine_substE Σ Γ inst (skipn #|Δ'| insts) Δ ×
-    spine_substE Σ Γ inst' (firstn #|Δ'| insts) (subst_context (skipn #|Δ'| insts) 0 Δ') ;
-  spine_subst_ctx_instE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {Γ Δ : context} {args s : list term},
-    spine_substE Σ Γ args s Δ ->
-    ctx_instE Σ Γ args (List.rev Δ) ;
-  spine_subst_cumulE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Δ : list context_decl} {args : list term} {Γ Γ' : context},
-    assumption_context Γ -> assumption_context Γ' ->
-    wf_localE Σ (Δ ,,, Γ) ->
-    wf_localE Σ (Δ ,,, Γ') ->
-    ws_cumul_ctx_pbE_rel Cumul Σ Δ Γ Γ' ->
-    spine_substE Σ Δ args (List.rev args) Γ ->
-    spine_substE Σ Δ args (List.rev args) Γ' ;
-  spine_subst_inj_substE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {inst s s' : list term} {Δ : context},
-    spine_substE Σ Γ inst s Δ ->
-    spine_substE Σ Γ inst s' Δ ->
-    s = s' ;
-  subslet_skipnE :
-    forall {cf : checker_flags} (Σ : global_env_ext) (Γ : context) (s : list term) (Δ : context) (n : nat),
-    subsletE Σ Γ s Δ ->
-    subsletE Σ Γ (skipn n s) (skipn n Δ) ;
-  typing_spine_invE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ Δ : context} {T : term} {args args' : list term} {T' : term},
-    #|args| = context_assumptions Δ ->
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
-    ∑ args_sub : list term,
-      spine_substE Σ Γ args args_sub Δ × typing_spineE Σ Γ (subst0 args_sub T) args' T' ;
-  typing_spine_nth_errorE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ Δ : context} {T : term} {args : list term} {n : nat} {arg concl : term},
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args concl ->
-    nth_error args n = Some arg ->
-    n < context_assumptions Δ ->
-    ∑ decl : context_decl,
-      (nth_error (smash_context [] Δ) (context_assumptions Δ - S n) = Some decl) ×
-      (Σ ;;; Γ |-E arg : subst0 (List.rev (firstn n args)) (decl_type decl)) ;
-  wf_local_alphaE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      (Γ Γ' : list context_decl),
-    eq_context_upto_names Γ Γ' ->
-    wf_localE Σ Γ ->
-    wf_localE Σ Γ' ;
-  ws_cumul_ctx_pb_eq_leE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {pb : conv_pb} {Γ Δ : context},
-    ws_cumul_ctx_pbE Conv Σ Γ Δ ->
-    ws_cumul_ctx_pbE pb Σ Γ Δ ;
-  ws_cumul_ctx_pb_rel_smashE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {pb : conv_pb} {Γ Δ Δ' : list context_decl},
-    wf_localE Σ (Γ ,,, Δ) ->
-    wf_localE Σ (Γ ,,, Δ') ->
-    ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
-    ws_cumul_ctx_pbE_rel pb Σ Γ (smash_context [] Δ) (smash_context [] Δ') ;
-  ws_cumul_ctx_pb_rel_transE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {pb : conv_pb} {Γ Δ Δ' Δ'' : list context_decl},
-    ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
-    ws_cumul_ctx_pbE_rel pb Σ Γ Δ' Δ'' ->
-    ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ'' ;
-  ws_cumul_pb_expand_lets_ws_cumul_ctxE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {pb le' : conv_pb} {Γ Δ Δ' : list context_decl} {T T' : term},
-    wf_localE Σ (Γ ,,, Δ) ->
-    wf_localE Σ (Γ ,,, Δ') ->
-    ws_cumul_pbE le' Σ (Γ ,,, Δ) T T' ->
-    ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
-    ws_cumul_pbE le' Σ (Γ ,,, smash_context [] Δ) (expand_lets Δ T) (expand_lets Δ' T')
-}.
 
 (** *** Copy 16 ([PCUICInductivesEta.v]): the statement note's statements, verbatim.
     [declared_projection_type_and_eqE], [isType_mkApps_Ind_invE] and
@@ -366,8 +244,13 @@ Class SRForecastCopy18 := {
     forallb (is_open_term Γ) l ->
     forallb (is_open_term Γ) l' ->
     ws_cumul_pbE_terms Σ Γ l l' ;
-  (* Same proposition as [Typing/PCUICClosedTypEta.isType_is_open_termE] (implicit [Γ T]); this
-     field shadows that name here, as the copy-18 lemma will. *)
+  (* The twin of base [PCUICInductiveInversion.isType_is_open_term] (PCUICInductiveInversion.v:4039,
+     [Arguments {cf Σ wfΣ} Γ T _]), which copy 18 will twin. Checked in compiled form at the switch
+     to frac/eta d49d1c19: the same type as the landed
+     [Typing/PCUICClosedTypEta.isType_is_open_termE] (both-way ascription), but that one is the twin
+     of base [Typing/PCUICClosedTyp.isType_is_open_term], with [Γ T] IMPLICIT
+     ([Arguments {cf Σ wfΣ Γ T} _]); so it is kept. This field shadows that name here, as the
+     copy-18 lemma will. *)
   isType_is_open_termE :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall (Γ : context) (T : term),
@@ -493,16 +376,14 @@ Local Set Warnings "unexpected-implicit-declaration".
 
 Section SREta.
 
-(* FORECAST-ONLY: one premise per class: T2a's two ([PCUICValidityEta], which its lemmas take too)
-   and this block's three; delete each when its copy lands. *)
-Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
-  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
+(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta], which its lemmas take too)
+   and this block's two; delete each when its copy lands. *)
+Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
 
 (* FORECAST-ONLY: the [pcuic] hints that the copies re-register for their E lemmas (note @ 0583b56e:
-   copy 16 [isType_introE]; copy 15 the coercion fields of [spine_substE]; copy 18
-   [isType_is_open_termE]); delete with their rows. *)
+   copy 16 [isType_introE]; copy 18 [isType_is_open_termE]); delete with their rows. Copy 15's,
+   the coercion fields of [spine_substE], are registered globally by [PCUICSpineEta]. *)
 #[local] Hint Resolve isType_introE : pcuic.
-#[local] Hint Resolve inst_ctx_substE inst_subsletE : pcuic.
 #[local] Hint Resolve isType_is_open_termE : pcuic.
 
 (** The E counterparts of base's [typing]-specific [pcuic] hints that SR's [pcuic]/[pcuics]
@@ -1945,7 +1826,7 @@ Proof.
         cbn; intros x.
         intros cl.
         epose proof
-          ( @spine_subst_appE _ cf Σ Γ (subst_instance u (ind_params mdecl))
+          ( @spine_subst_appE cf Σ Γ (subst_instance u (ind_params mdecl))
             (subst_context
               (inds (inductive_mind ci) u (ind_bodies mdecl))
                #|ind_params mdecl| (subst_instance u (cstr_args cdecl)))

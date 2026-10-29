@@ -29,22 +29,21 @@
   ([safechecker/theories/PCUICTypingEtaHyps.v], branch [wip/etak-k7-2026-10-29]):
   [PCUICValidityEtaInstances] type-checks both lemmas against both texts.
 
-  **The forecast block.** Validity uses lemmas of the T0 copies 15 and 16 that are not on this
-  branch. Each is a field of a class of the block below, with the name and the statement the
-  copy commits to: the text of [PCUICSREta.v]'s forecast classes where that file has the lemma,
-  else the exact base twin. The classes are premises ([Context]) of the lemmas that use them,
-  never axioms; [Print Assumptions] shows them as arguments. The block also holds the E twins of
-  the copy-15 definitions the statements mention ([ctx_inst_subE], [spine_substE]: the text of
-  [PCUICSREta.v]; [arity_spineE], [wf_arity_spineE]: base twins). Copies 10, 12 and 14 have
-  landed (frac/eta 59eb717d): their classes, the definitions [subsletE] and [typing_spineE] and
-  the copy lemmas proved here were deleted after a compiled-form identity check, and the landed
-  ones are imported ([PCUICSubstitutionEta], [PCUICContextsEta], [PCUICAritiesEta]);
-  [has_sort_isTypeE] and [isWfArityE] are [PCUICTypingEtaNotions]'s.
+  **The forecast block.** Validity uses lemmas of the T0 copy 16 that are not on this branch.
+  Each is a field of the class of the block below, with the name and the statement the copy
+  commits to: the text of [PCUICSREta.v]'s forecast classes where that file has the lemma, else
+  the exact base twin. The class is a premise ([Context]) of the lemmas that use it, never an
+  axiom; [Print Assumptions] shows it as an argument. Copies 10, 12 and 14 (frac/eta 59eb717d)
+  and copy 15 (frac/eta d49d1c19) have landed: their classes, the definitions [subsletE],
+  [typing_spineE], [ctx_inst_subE], [spine_substE], [arity_spineE], [wf_arity_spineE] and the
+  copy lemmas proved here were deleted after a compiled-form identity check, and the landed
+  ones are imported ([PCUICSubstitutionEta], [PCUICContextsEta], [PCUICAritiesEta],
+  [PCUICSpineEta]); [has_sort_isTypeE] and [isWfArityE] are [PCUICTypingEtaNotions]'s.
 
-  **Local proofs of copy lemmas.** The lemmas of copies 15 and 16 that validity uses and that
-  follow from landed facts (and, for one of them, from a field of the block) in a few lines are
-  PROVED in the section "Copy lemmas proved here", under the name and the statement the copy
-  commits to, so they are not forecasts. When the copy lands, delete them and import it.
+  **Local proofs of copy lemmas.** The lemma of copy 16 that validity uses and that follows from
+  a field of the block in a few lines is PROVED in the section "Copy lemmas proved here", under
+  the name and the statement the copy commits to, so it is not a forecast. When the copy lands,
+  delete it and import it.
 
   **The hypotheses are satisfiable:** [wfE Σ] by any well-formed environment ([wf_incl_E]),
   each typing premise by a concrete derivation; [PCUICValidityEtaInstances] gives an instance
@@ -67,7 +66,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICWeakeningTypEta PCUICUnivSubstitutionTypEta PCUICWfUniversesEta
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICWsCumulEtaSubst PCUICEtaJoinSpec
      PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICInversionEta
-     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta.
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta.
 (* Not imported: its [typing_spineE] is the twin of [PCUICGeneration.typing_spine], not of the
    [PCUICArities] one ([PCUICAritiesEta.typing_spineE], the canonical one, imported above). *)
 From MetaRocq.PCUIC Require PCUICGenerationEta.
@@ -90,115 +89,12 @@ Arguments Nat.sub : simpl never.
   Satisfiability: a field with the text of [PCUICSREta.v] carries that file's source (the
   statement note's verdicts, lanes/eta/sr-statement-note.md); each field with base-twin text
   carries, beside it, the argument that it is not a known-false form. Every field is a typing
-  fact under [wfE] (or [ClosedBodies], [type_mkAppsE]); none has only a [welltypedE] premise
+  fact under [wfE]; none has only a [welltypedE] premise
   about an inductive head, none is a closed-only fixpoint witness hypothesis. *)
 
 (* The braces in the statements record the implicit status of the source; Rocq honours them
    on the class projections. *)
 Local Set Warnings "-unexpected-implicit-declaration".
-
-(** *** Definitions *)
-
-(* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v, twin of PCUICSpine.v:903 ctx_inst_sub);
-   delete when it lands. Text: PCUICSREta.v, verbatim. *)
-Fixpoint ctx_inst_subE {cf : checker_flags} {Σ : global_env_ext} {Γ Δ args}
-  (c : ctx_instE Σ Γ args Δ) {struct c} : list term :=
-  match c return _ with
-  | PCUICTyping.ctx_inst_nil => []
-  | PCUICTyping.ctx_inst_ass na t i inst Δ P c => ctx_inst_subE c ++ [i]
-  | PCUICTyping.ctx_inst_def na b t inst Δ c => ctx_inst_subE c ++ [b]
-  end.
-
-(* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v, twin of PCUICSpine.v:226 spine_subst);
-   delete when it lands. Text: PCUICSREta.v, verbatim. *)
-Record spine_substE {cf : checker_flags} Σ Γ inst s (Δ : context) := mkSpineSubstE {
-  spine_dom_wfE : wf_localE Σ Γ;
-  spine_codom_wfE : wf_localE Σ (Γ ,,, Δ);
-  inst_ctx_substE :> context_subst Δ inst s;
-  inst_subsletE :> subsletE Σ Γ s Δ }.
-Arguments inst_ctx_substE {cf Σ Γ inst s Δ}.
-Arguments inst_subsletE {cf Σ Γ inst s Δ}.
-
-(* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v, twin of PCUICSpine.v:274 arity_spine);
-   delete when it lands. Text: the base twin. *)
-Inductive arity_spineE {cf : checker_flags} (Σ : global_env_ext) (Γ : context) :
-  term -> list term -> term -> Type :=
-| arity_spine_nilE ty : arity_spineE Σ Γ ty [] ty
-| arity_spine_convE ty ty' : isTypeE Σ Γ ty' ->
-  ws_cumul_pbE Cumul Σ Γ ty ty' -> arity_spineE Σ Γ ty [] ty'
-| arity_spine_defE : forall (tl : list term)
-                      (na : aname) (A a B B' : term),
-                    arity_spineE Σ Γ (B {0 := a}) tl B' ->
-                    arity_spineE Σ Γ (tLetIn na a A B) tl B'
-| arity_spine_assE : forall (hd : term) (tl : list term)
-                      (na : aname) (A B B' : term),
-                    Σ ;;; Γ |-E hd : A ->
-                    arity_spineE Σ Γ (B {0 := hd}) tl B' ->
-                    arity_spineE Σ Γ (tProd na A B) (hd :: tl) B'.
-
-Derive Signature for arity_spineE.
-
-(* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v, twin of PCUICSpine.v:291
-   wf_arity_spine); delete when it lands. Text: the base twin. *)
-Record wf_arity_spineE {cf:checker_flags} Σ Γ T args T' :=
-{ wf_arity_spine_wfE : isTypeE Σ Γ T;
-  wf_arity_spine_spineE : arity_spineE Σ Γ T args T' }.
-
-(** *** Copy 15 ([PCUICSpineEta.v]) *)
-
-(* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v); delete when it lands.
-   Text of every field: the statement note's (PCUICSREtaCopyStatements.v @ 33a87a58, which writes
-   base's compiled implicit status: [{wfΣ : wfE Σ}] where base has [{wfΣ : wf Σ}]). The last two
-   are its "C1 additions for T2a" ([PCUICSpine.v:415, 782]). *)
-Class ValForecastCopy15 := {
-  ctx_inst_spine_substE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      {Γ Δ : list context_decl} {args : list term},
-    wf_localE Σ (Γ ,,, Δ) ->
-    forall ci : ctx_instE Σ Γ args (List.rev Δ),
-    spine_substE Σ Γ args (ctx_inst_subE ci) Δ ;
-  spine_subst_smashE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      {Γ : context} {inst s : list term} {Δ : context},
-    spine_substE Σ Γ inst s Δ ->
-    spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ) ;
-  spine_subst_subst_to_extended_list_kE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {args s : list term} {Δ : context},
-    spine_substE Σ Γ args s Δ ->
-    map (subst0 s) (to_extended_list_k Δ 0) = args ;
-  (* NOT TWIN (ADDED ClosedBodies), closedbodies-register row 1, as in the note. *)
-  type_mkAppsE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ},
-    forall {Γ : context} {t : term} {u : list term} {T t_ty : term},
-    Σ ;;; Γ |-E t : t_ty ->
-    typing_spineE Σ Γ t_ty u T ->
-    Σ ;;; Γ |-E mkApps t u : T ;
-  typing_spine_strengthenE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      {Γ : context} {T : term} {args : list term} {U : term},
-    typing_spineE Σ Γ T args U ->
-    forall T' : term,
-    isTypeE Σ Γ T' ->
-    ws_cumul_pbE Cumul Σ Γ T' T ->
-    typing_spineE Σ Γ T' args U ;
-  (* PCUICSpine.v:415 wf_arity_spine_typing_spine; base twin. Not a known-false form: under
-     [wfE], typing premises only. Argued TRUE in t1-case-audit.md §6.1 (Case row); its one raw
-     site, [isType_tLetIn_red] (PCUICArities.v:251), has the route [ws_cumul_pbE_LetIn_l_inv]
-     (PCUICEtaA6.v:361) of §2.2. *)
-  wf_arity_spine_typing_spineE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T args T'},
-    wf_arity_spineE Σ Γ T args T' ->
-    typing_spineE Σ Γ T args T' ;
-  (* PCUICSpine.v:782 spine_subst_smash_app_inv; base twin. Not a known-false form: under
-     [wfE], [spine_substE] premises only, no conversion inversion (t1-case-audit.md §2.2, T15). *)
-  spine_subst_smash_app_invE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ Δ' δ δ'},
-    #|δ| = context_assumptions Δ ->
-    spine_substE Σ Γ (δ ++ δ') (List.rev (δ ++ δ')) (smash_context [] (Δ ,,, Δ')) ->
-    spine_substE Σ Γ δ (List.rev δ) (smash_context [] Δ) ×
-    spine_substE Σ Γ δ' (List.rev δ')
-      (subst_context_let_expand (List.rev δ) Δ (smash_context [] Δ'))
-}.
 
 (** *** Copy 16 ([PCUICInductivesEta.v]) *)
 
@@ -296,22 +192,13 @@ Local Set Warnings "unexpected-implicit-declaration".
 Section ValidityEta.
 
 (* FORECAST-ONLY: one premise per class of the block above; delete each when its copy lands. *)
-Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}.
+Context {V16 : ValForecastCopy16}.
 
 (** ** Copy lemmas proved here
 
   Each has the name and the statement its copy commits to (the text of [PCUICSREta.v] where
   that file has the lemma, else the base twin), and a proof from landed facts. Delete each when
-  its copy lands. The ones of copies 10, 12 and 14 were deleted when those copies landed. *)
-
-(** Copy 15, [PCUICSpine.v:341] [typing_spine_refl]; base twin. *)
-Lemma typing_spine_reflE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T} :
-  isTypeE Σ Γ T ->
-  typing_spineE Σ Γ T [] T.
-Proof.
-  intros isty. constructor; [exact isty|exact isty|].
-  exact (isType_ws_cumul_pbE_refl (pb := Cumul) Γ T isty).
-Qed.
+  its copy lands. The ones of copies 10, 12, 14 and 15 were deleted when those copies landed. *)
 
 (** Copy 16, [PCUICInductives.v:1558] [declared_projection_type]; base twin, from the field
     [declared_projection_type_and_eqE] of the forecast block. *)

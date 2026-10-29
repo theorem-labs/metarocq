@@ -87,15 +87,15 @@
 
   ** The forecast block
 
-  The lemmas take the forecast classes of [BDToPCUICEta] (T2a's [ValForecastCopy15/16], T1's
-  [SRForecastCopy15/16/18], [BDForecastCopy18]) as section [Context]s; they are imported, never
-  redefined (copies 10, 12 and 14 have landed and are imported). This file adds two classes:
+  The lemmas take the forecast classes of [BDToPCUICEta] (T2a's [ValForecastCopy16], T1's
+  [SRForecastCopy16/18], [BDForecastCopy18]) as section [Context]s; they are imported, never
+  redefined (copies 10, 12, 14 and 15 have landed and are imported). This file adds two classes:
   - [BDFromForecastB1]: the one hypothesis of the proved T8 forms that no landed lemma gives,
     [fix_rarg_inductive] (row B1), with the text of [PCUICEtaT8Probe.fix_rarg_inductive_statement];
-    [BDFromForecastB1_fit] and [BDFromForecastB1_of] type-check it against that [Definition]
-    both ways. T8's other hypothesis, E subject reduction, is [PCUICSREta.subject_reductionE],
-    whose own premises are the five classes of section [SREta] (T2a's [ValForecastCopy15/16],
-    T1's [SRForecastCopy15/16/18]), already premises here;
+    [BDFromForecastB1_fit] type-checks the field against that [Definition]. T8's other
+    hypothesis, E subject reduction, is [PCUICSREta.subject_reductionE], whose own premises are
+    the three classes of section [SREta] (T2a's [ValForecastCopy16], T1's [SRForecastCopy16/18]),
+    already premises here;
   - [BDFromForecastCopy18]: ONE copy-18 lemma that the Proj case needs and no class has, base
     [projection_cumulative_indices] ([PCUICInductiveInversion.v:3616]), with the base twin's
     statement.
@@ -121,7 +121,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICWeakeningTypEta PCUICEtaFInst PCUICEtaFInstGlue
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
      PCUICEtaA6 PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
-     PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta
+     PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
      PCUICValidityEta PCUICSREtaConv PCUICSREta BDTypingEta BDToPCUICEta.
 From MetaRocq.PCUIC Require BDFromPCUIC PCUICEtaT8Probe.
 
@@ -139,8 +139,9 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
    [PCUICEtaT8Probe.v], where the statement is defined, and of section [T8Assembly], where [fri]
    is assumed) followed by the body of [PCUICEtaT8Probe.fix_rarg_inductive_statement]
    ([PCUICEtaT8Probe.v:885-890]), verbatim. No binder is implicit, so no implicit status can be
-   lost. [BDFromForecastB1_fit] below type-checks the field against the [Definition], and
-   [BDFromForecastB1_of] the [Definition] against the field. *)
+   lost. [BDFromForecastB1_fit] below type-checks the field against the [Definition]. (The
+   reverse direction is not kept as a declaration: it would take the [Definition] by name as a
+   hypothesis type.) *)
 (* FORECAST-ONLY: proved by row B1 (fix_rarg_inductive, PCUICEtaT8Probe / copy 14-15); delete when it lands *)
 Class BDFromForecastB1 := {
   fix_rarg_inductiveE_fc :
@@ -152,14 +153,10 @@ Class BDFromForecastB1 := {
       ∑ A ind u l, (Σ ;;; Γ |-E a : A) × ws_cumul_pbE Cumul Σ Γ A (mkApps (tInd ind u) l)
 }.
 
-(** The field is the pinned statement, both ways. *)
+(** The field is the pinned statement. *)
 Definition BDFromForecastB1_fit {FB1 : BDFromForecastB1} (cf : checker_flags) (Σ : global_env_ext)
   (wfΣ : wfE Σ) : @PCUICEtaT8Probe.fix_rarg_inductive_statement cf Σ :=
   fix_rarg_inductiveE_fc cf Σ wfΣ.
-Definition BDFromForecastB1_of
-  (h : forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ),
-       @PCUICEtaT8Probe.fix_rarg_inductive_statement cf Σ) : BDFromForecastB1 :=
-  {| fix_rarg_inductiveE_fc := h |}.
 
 (* The braces in the statement record the implicit status of the base twin; they are at the
    head of the field's type, where Rocq keeps them on the projection. *)
@@ -242,11 +239,11 @@ Qed.
 
 Section BDFromPCUICEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's two ([PCUICValidityEta]), T1's three
+(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two
    ([PCUICSREta]), [BDToPCUICEta]'s one, and this file's two (row B1's [fix_rarg_inductive],
    copy 18's [projection_cumulative_indices]); delete each when its row lands. *)
-Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
-  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
+Context {V16 : ValForecastCopy16}
+  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
   {FB1 : BDFromForecastB1} {BF18 : BDFromForecastCopy18}.
 
 (** ** Typed T8, proved (row B1)

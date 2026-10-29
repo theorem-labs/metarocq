@@ -32,7 +32,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICTypingEtaNotions PCUICClosedTypEta PCUICClosedBodies PCUICEtaI5 PCUICWellScopedCumulativityEta
      PCUICWfUniversesEta PCUICWsCumulEtaCtxTyp
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances
-     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICValidityEta.
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICValidityEta.
 
 Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at level 50, Γ, t, u at next level,
   format "Σ  ;;;  Γ  ⊢E  t  ≤  u") : type_scope.
@@ -41,7 +41,7 @@ Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at 
 
 Section ContractFit.
 
-  Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}.
+  Context {V16 : ValForecastCopy16}.
 
   (** The checker's [T2a_facts] (its section variable [{cf : checker_flags}] made a [Context]). *)
   Section Checker.
@@ -119,11 +119,6 @@ Definition wf_local_validityE_inst :=
   wf_local_validityE (Σ := si_Σ) (wfΣ := si_wfE) iv_Γg [vass si_na (tApp (tRel 0) (tRel 1)); vass si_na iv_K]
     iv_wf_Γk.
 
-(** ** The copy lemmas proved in [PCUICValidityEta], applied *)
-
-Definition typing_spine_reflE_inst : typing_spineE si_Σ iv_Γk iv_keta [] iv_keta :=
-  typing_spine_reflE (Σ := si_Σ) (wfΣ := si_wfE) iv_keta_isType.
-
 (** ** Lemmas with a forecast premise: premises and conclusion at concrete arguments *)
 
 (** [validity_envE]'s first component holds in every [wfE] environment, by the sort part of each
@@ -165,7 +160,7 @@ Lemma inversion_mkAppsE_inst :
 Proof.
   split; [exact (iv_app_typed si_Σ [] localenv_nil)|].
   exists iv_PP. split; [exact (iv_id_typed si_Σ [] localenv_nil)|].
-  eapply (type_spine_consE _ _ iv_PP iv_False [] si_na si_P si_P si_P iv_PP_isType iv_PP_isType iv_PP_refl
+  eapply (@type_spine_consE _ _ _ iv_PP iv_False [] si_na si_P si_P si_P iv_PP_isType iv_PP_isType iv_PP_refl
             (iv_False_typed si_Σ [] localenv_nil)).
   exact (type_spine_nilE _ _ _ _ (iv_P_isType [] localenv_nil) (iv_P_isType [] localenv_nil) iv_P_refl).
 Qed.

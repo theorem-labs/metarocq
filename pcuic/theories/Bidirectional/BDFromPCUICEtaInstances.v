@@ -3,8 +3,8 @@
 (** * Satisfying instances of the lemmas of [Bidirectional/BDFromPCUICEta] (row T6)
 
   **The forecast classes are section variables.** Every lemma of [BDFromPCUICEta] takes the
-  forecast classes as premises: the six of [BDToPCUICEta] (T2a's [ValForecastCopy15/16], T1's
-  [SRForecastCopy15/16/18], [BDForecastCopy18]; copies 10, 12 and 14 have landed and their
+  forecast classes as premises: the four of [BDToPCUICEta] (T2a's [ValForecastCopy16], T1's
+  [SRForecastCopy16/18], [BDForecastCopy18]; copies 10, 12, 14 and 15 have landed and their
   classes are gone), [BDFromForecastB1] (row B1's [fix_rarg_inductive], the one hypothesis of
   the proved T8 forms [PCUICEtaT8Probe.T8_*_r] that no landed lemma gives; T8's other
   hypothesis is [PCUICSREta.subject_reductionE]) and [BDFromForecastCopy18]. No instance of a
@@ -75,7 +75,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICEtaI5 PCUICWellScopedCumulativity PCUICWellScopedCumulativityEta PCUICEtaA6 PCUICEquality
      PCUICConversionEtaCongr PCUICEtaFInst PCUICGuardClosure PCUICClosedTypEta
      PCUICEtaPrimOpInstance PCUICInversionEtaInstances
-     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICValidityEta PCUICSREta
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICValidityEta PCUICSREta
      BDTyping BDTypingEta BDTypingEtaInstances BDToPCUICEta BDToPCUICEtaInstances BDFromPCUICEta.
 From MetaRocq.PCUIC Require BDFromPCUIC PCUICFixWitness.
 From Equations.Type Require Import Relation.
@@ -344,9 +344,9 @@ Qed.
 
 Section BDFromPCUICEtaInstances.
 
-(* FORECAST-ONLY: the eight classes of [BDFromPCUICEta]; delete each when its row lands. *)
-Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
-  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
+(* FORECAST-ONLY: the six classes of [BDFromPCUICEta]; delete each when its row lands. *)
+Context {V16 : ValForecastCopy16}
+  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
   {FB1 : BDFromForecastB1} {BF18 : BDFromForecastCopy18}.
 
 (** ** Through an η conversion *)

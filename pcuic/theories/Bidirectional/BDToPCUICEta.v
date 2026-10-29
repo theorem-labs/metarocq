@@ -46,15 +46,15 @@
     [declared_inductive_type_ws_cumul], [on_inductive_inst] and
     [arity_spine_it_mkProd_or_LetIn], three copy lemmas that no forecast class has. Here it is
     the field [isType_mkApps_IndE] of [SRForecastCopy16] (twin of [PCUICInductives.v]
-    [isType_mkApps_Ind]) on the spine [ctx_inst_spine_substE] ([ValForecastCopy15]) builds,
+    [isType_mkApps_Ind]) on the spine [ctx_inst_spine_substE] (copy 15, [PCUICSpineEta]) builds,
     so no forecast is added for them.
   - Base's [Proof using wfΣ] is [Proof.]: the forecast classes are section variables too.
 
   ** The forecast block
 
   The lemmas take the forecast classes of T2a and T1 as section [Context]s:
-  [ValForecastCopy15/16] ([PCUICValidityEta]) and [SRForecastCopy15/16/18] ([PCUICSREta]); they
-  are imported, never redefined (copies 10, 12 and 14 have landed and are imported). ONE copy
+  [ValForecastCopy16] ([PCUICValidityEta]) and [SRForecastCopy16/18] ([PCUICSREta]); they are
+  imported, never redefined (copies 10, 12, 14 and 15 have landed and are imported). ONE copy
   lemma that soundness needs is in none of them: base [ctx_inst_app_weak]
   ([PCUICInductiveInversion.v:3794], copy 18).
   It is the one field of the class [BDForecastCopy18] below, with the base twin's statement.
@@ -76,7 +76,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLi
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd
      PCUICTypingEtaNotions PCUICClosedBodies PCUICClosedTypEta PCUICWeakeningTypEta
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
-     PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta
+     PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
      PCUICValidityEta PCUICSREta BDTypingEta.
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -99,7 +99,7 @@ Local Set Warnings "-unexpected-implicit-declaration".
    [cmp_global_instance_finst] reads the variance of the full arity, as base's comparison
    does once [napp] reaches the arity. The other copy lemmas its base proof uses are the
    checker's [T0_facts] fields [inductive_cumulative_indices] and [ctx_inst_smash] and the
-   [SRForecastCopy15] field [ctx_inst_cumulE]. *)
+   copy-15 lemma [ctx_inst_cumulE] ([PCUICSpineEta]). *)
 Class BDForecastCopy18 := {
   ctx_inst_app_weakE :
     forall {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wfE Σ.1) (ind : inductive)
@@ -120,10 +120,10 @@ Local Set Warnings "unexpected-implicit-declaration".
 
 Section BDToPCUICEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's two ([PCUICValidityEta]), T1's three
+(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two
    ([PCUICSREta]), and this file's one; delete each when its copy lands. *)
-Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
-  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+Context {V16 : ValForecastCopy16}
+  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
 (** Base [wf_local_rel_subst1] ([BDToPCUIC.v:33]). *)
 Lemma wf_local_rel_subst1E `{checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Δ Γ na b t Γ' :

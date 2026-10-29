@@ -3,10 +3,10 @@
 (** * Satisfying instances of the lemmas of [PCUICSREta] (row T1)
 
   **The forecast classes are section variables.** Every lemma of [PCUICSREta] that uses a forecast
-  fact takes the forecast classes as premises: T2a's [ValForecastCopy15/16] ([PCUICValidityEta])
-  and [SRForecastCopy15/16/18] ([PCUICSREta]); copies 10, 12 and 14 have landed and their classes
-  are gone. No instance of a class exists before its copy lands, so the instances below live in
-  section [SRInstances], whose [Context] holds the five classes, and APPLY the lemmas there.
+  fact takes the forecast classes as premises: T2a's [ValForecastCopy16] ([PCUICValidityEta])
+  and [SRForecastCopy16/18] ([PCUICSREta]); copies 10, 12, 14 and 15 have landed and their
+  classes are gone. No instance of a class exists before its copy lands, so the instances below
+  live in section [SRInstances], whose [Context] holds the three classes, and APPLY the lemmas there.
   Everything else each instance needs (the environment, its [wfE], every typing derivation, every
   reduction step) is proved here or in [PCUICInversionEtaInstances], with no class. The instances
   of [subsletE_open_terms] and [substitution_ws_cumul_pbE_subslet], which left this file, are in
@@ -39,7 +39,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICWeakeningTypEta
      PCUICCumulativitySpecEtaClosureInstances PCUICEtaPrimOpInstance
      PCUICInversionEta PCUICInversionEtaInstances
-     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICValidityEta PCUICSREta.
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICValidityEta PCUICSREta.
 From MetaRocq.PCUIC Require PCUICSR.
 
 #[local] Existing Instance default_checker_flags.
@@ -248,8 +248,7 @@ Proof. exists po_int_kn, po_int_body. split; [reflexivity|exact iv_po_declared_i
 Section SRInstances.
 
   (** The forecast classes: section variables (see the header). *)
-  Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
-    {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
+  Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
 
   (** *** [sr_red1E] and its corollaries *)
 
