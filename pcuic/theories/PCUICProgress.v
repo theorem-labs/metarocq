@@ -493,7 +493,7 @@ Proof.
   destruct (Compare_dec.le_dec #|args'| (context_assumptions Δ)). lia. lia.
 Qed.
 
-Lemma declared_constructor_ind_decl {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} {ind c} {mdecl idecl cdecl} :
+Lemma declared_constructor_ind_decl {cf : checker_flags} {Σ : global_env_ext} {ind c} {mdecl idecl cdecl} :
   declared_constructor Σ (ind, c) mdecl idecl cdecl ->
   inductive_ind ind < #|ind_bodies mdecl|.
 Proof.
@@ -560,7 +560,7 @@ Proof.
     eapply wcbv_red_app_left. now apply IHargs.
 Qed.
 
-Lemma typing_spine_sort {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wf Σ} Γ s args T :
+Lemma typing_spine_sort {cf : checker_flags} {Σ : global_env_ext} Γ s args T :
   typing_spine Σ Γ (tSort s) args T -> args = [].
 Proof.
   induction args => //.

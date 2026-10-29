@@ -359,7 +359,7 @@ Proof.
   intros. eapply validity_env; try eassumption.
 Defined.
 
-Lemma wf_local_validity `{cf : checker_flags} {Σ} {wfΣ : wf Σ} Γ Δ :
+Lemma wf_local_validity `{cf : checker_flags} {Σ} Γ Δ :
   wf_local Σ (Γ ,,, Δ) ->
   ∑ us, sorts_local_ctx (lift_typing typing) Σ Γ Δ us.
 Proof.

@@ -93,27 +93,27 @@ Proof.
 Qed.
 #[global] Hint Immediate red_is_open_term : fvs.
 
-Lemma ws_cumul_pb_is_open_term {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ : context} {x y} :
+Lemma ws_cumul_pb_is_open_term {cf : checker_flags} {pb} {Σ : global_env_ext} {Γ : context} {x y} :
   ws_cumul_pb pb Σ Γ x y ->
   [&& is_closed_context Γ, is_open_term Γ x & is_open_term Γ y].
 Proof.
   now induction 1; rewrite ?i ?i0 ?i1 ?i2.
 Qed.
 
-Lemma ws_cumul_pb_is_closed_context {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ : context} {x y} :
+Lemma ws_cumul_pb_is_closed_context {cf : checker_flags} {pb} {Σ : global_env_ext} {Γ : context} {x y} :
   ws_cumul_pb pb Σ Γ x y -> is_closed_context Γ.
 Proof.
   now induction 1; rewrite ?i ?i0 ?i1 ?i2.
 Qed.
 
-Lemma ws_cumul_pb_is_open_term_left {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ}
+Lemma ws_cumul_pb_is_open_term_left {cf : checker_flags} {pb} {Σ : global_env_ext}
   {Γ : context} {x y} :
   ws_cumul_pb pb Σ Γ x y -> is_open_term Γ x.
 Proof.
   now induction 1; rewrite ?i ?i0 ?i1 ?i2.
 Qed.
 
-Lemma ws_cumul_pb_is_open_term_right {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : wf Σ} {Γ : context} {x y} :
+Lemma ws_cumul_pb_is_open_term_right {cf : checker_flags} {pb} {Σ : global_env_ext} {Γ : context} {x y} :
   ws_cumul_pb pb Σ Γ x y -> is_open_term Γ y.
 Proof.
   now induction 1; rewrite ?i ?i0 ?i1.

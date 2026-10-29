@@ -1313,7 +1313,7 @@ Proof.
   now rewrite /forget_types map_map_compose /=.
 Qed.
 
-Lemma subst_instance_case_branch_type {cf : checker_flags} {Σ} {wfΣ : wf Σ} u (ci : case_info) mdecl idecl p predctx br i cdecl :
+Lemma subst_instance_case_branch_type u (ci : case_info) mdecl idecl p predctx br i cdecl :
   let ptm :=
     it_mkLambda_or_LetIn predctx (preturn p)
   in
