@@ -12,6 +12,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd PCUICEtaI5 PCUICWellScopedCumulativityEta
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaSubst PCUICEtaA6
      PCUICClosedTypEta PCUICWeakeningEnvTypEta.
+From MetaRocq.PCUIC Require PCUICInductives.
 From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
 
 (** * ETAK (EtaK7): the η typing facts the η checker needs, as NAMED hypotheses
@@ -143,6 +144,12 @@ Class T0_facts {cf : checker_flags} := {
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context}, wf_localE Σ Γ -> wf_localE Σ (smash_context [] Γ) ;
   wf_local_smash_end :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : list context_decl), wf_localE Σ (Γ,,, Δ) -> wf_localE Σ (Γ,,, smash_context [] Δ) ;
+  isType_weaken :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term}, wf_localE Σ Γ -> isTypeE Σ [] T -> isTypeE Σ Γ T ;
+  isType_it_mkProd_or_LetIn :
+    forall {Σ : global_env_ext} {Γ Δ : list context_decl} {T : term}, wfE Σ.1 -> isTypeE Σ (Γ,,, Δ) T -> isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) ;
+  type_local_ctx_wf :
+    forall {Σ : global_env_ext} {Γ Δ : context} {s : sort}, wfE Σ.1 -> type_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_sort Σ s ;
   wf_case_branches_types' :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info} {p : predicate term} (ps : sort) (args : list term) (brs : list (branch term)), declared_inductive Σ ci mdecl idecl -> isTypeE Σ Γ (mkApps (tInd ci (puinst p)) (pparams p ++ args)) -> wf_predicate mdecl idecl p -> let predctx := case_predicate_context ci mdecl idecl p in Σ;;; Γ,,, predctx |-E preturn p : tSort ps -> let ptm := it_mkLambda_or_LetIn predctx (preturn p) in wf_branches idecl brs -> All2 PCUICEquality.eq_decl_upto_names (pcontext p) (ind_predicate_context ci mdecl idecl) -> All2i (fun (i : nat) (cdecl : constructor_body) (br : branch term) => let cstr_br_ctx := case_branch_context_nopars ci mdecl (puinst p) cdecl in let brctx' := map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in let brctxty := case_branch_type ci mdecl idecl p br ptm i cdecl in [× wf_branch cdecl br, wf_localE Σ (Γ,,, (ind_params mdecl)@[puinst p],,, cstr_br_ctx), wf_localE Σ (Γ,,, (ind_params mdecl)@[puinst p],,, brctx'), wf_localE Σ (Γ,,, brctxty.1) & Σ;;; Γ,,, brctxty.1 |-E brctxty.2 : tSort ps]) 0 (ind_ctors idecl) brs
 }.
@@ -445,6 +452,29 @@ Section Derived.
     eapply All2_sym, All2_impl; [exact h|]. intros a b ab.
     exact (ws_cumul_pbE_sym_pb ab).
   Qed.
+
+  (** Untyped reduction inversions: base's [_cb] versions over [ClosedBodies], with [wfE_ClosedBodies]. *)
+  Lemma invert_red_prod {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {dom codom T : term} :
+    Σ ;;; Γ ⊢ tProd na dom codom ⇝ T ->
+    ∑ dom' codom' : term, [× T = tProd na dom' codom', Σ ;;; Γ ⊢ dom ⇝ dom' & Σ ;;; Γ,, vass na dom ⊢ codom ⇝ codom'].
+  Proof. exact (invert_red_prod_cb (cbΣ := wfE_ClosedBodies Σ)). Qed.
+
+  Lemma invert_red_mkApps_tInd {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {ind : inductive} {u : Instance.t}
+    (args : list term) (c : term) :
+    Σ ;;; Γ ⊢ mkApps (tInd ind u) args ⇝ c ->
+    ∑ args' : list term, [× c = mkApps (tInd ind u) args', on_free_vars_ctx xpred0 Γ & red_terms Σ Γ args args'].
+  Proof. exact (invert_red_mkApps_tInd_cb (cbΣ := wfE_ClosedBodies Σ) args c). Qed.
+
+  Lemma red_it_mkProd_or_LetIn_mkApps_Ind {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {ctx : context}
+    {ind : inductive} {u : Instance.t} {args : list term} {v : term} :
+    Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args) ⇝ v ->
+    ∑ (ctx' : context) (args' : list term), v = it_mkProd_or_LetIn ctx' (mkApps (tInd ind u) args').
+  Proof. exact (PCUICInductives.red_it_mkProd_or_LetIn_mkApps_Ind_cb (wfΣ := wfE_ClosedBodies Σ)). Qed.
+
+  (** [onNpars] of the declaration, from [on_declared_minductiveE]. *)
+  Lemma declared_minductive_ind_npars {Σ : global_env} {wfΣ : wfE Σ} {mdecl : mutual_inductive_body} {ind : kername} :
+    declared_minductive Σ ind mdecl -> ind_npars mdecl = context_assumptions (ind_params mdecl).
+  Proof. intros h. pose proof (on_declared_minductiveE wfΣ h) as onm. now rewrite (onNpars onm). Qed.
 
   (** The specification side, for the [on_global_env cumulSpecE0 …] the environment checker builds. *)
   Lemma red_cumul {Σ : global_env_ext} {Γ : context} {t u : term} : red Σ Γ t u -> JoinE Σ Γ Cumul t u.
