@@ -240,4 +240,5 @@ theories/Bidirectional/BDToPCUICEtaInstances.v
 theories/PCUICEtaT8Probe.v
 # Bidirectional completeness over typingE (row T6, the E copy of BDFromPCUIC; T8 forecast), and its satisfying instances
 theories/Bidirectional/BDFromPCUICEta.v
+theories/Bidirectional/BDFromPCUICEtaInstances.v
 # theories/All.v
