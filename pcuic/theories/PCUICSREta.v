@@ -60,13 +60,15 @@ Arguments Sort.sort_of_product : simpl nomatch.
   import the copy. No proof below the block changes. Nothing here is an axiom: the classes are
   premises of every lemma that uses them, and [Print Assumptions] shows them as such. *)
 
-(* Implicit status. Each field is the note's proposition (sr-statement-note.md @ 0583b56e) with the
-   implicit status of base's SOURCE, which is the status the copies keep (the note: "the copies take
-   implicit status from the base source"). Where base's source binds [{wfΣ : wf Σ}] (a section
-   [Context] or the lemma header) and [About] printed it as an arrow, the note writes [wfE Σ ->] and
-   the field writes [{wfΣ : wfE Σ}]: the same type, and a call site written for base (no [wf]
-   argument) is then also right for the landed copy. Rocq honours the braces on the class
-   projections. *)
+(* Text and implicit status. The fields of copies 15, 16 and 18 here and in T2a's classes are the
+   statement note's text (PCUICSREtaCopyStatements.v @ 33a87a58), which writes each binder with
+   the implicit status, name and position of base's COMPILED lemma: [{wfΣ : wfE Σ}] where base has
+   [{wfΣ : wf Σ}], an explicit environment premise exactly where base has one
+   ([Construct_Ind_ind_eqE], [declared_projection_type_and_eqE], [isType_mkApps_Ind_invE],
+   [declared_constructor_valid_tyE], [type_tCoFix_invE], [type_tFix_invE],
+   [wf_cofixpoint_typing_spineE]). The note's [<base>E_statement] Definitions are never referenced
+   by name (that would make every argument explicit): their text is copied into class fields, whose
+   projections keep the braces. Copies 10, 12 and 14 have no note text: base twins, base's status. *)
 Local Set Warnings "-unexpected-implicit-declaration".
 
 (** *** Definitions
@@ -282,8 +284,8 @@ Class SRForecastCopy15 := {
       (nth_error (smash_context [] Δ) (context_assumptions Δ - S n) = Some decl) ×
       (Σ ;;; Γ |-E arg : subst0 (List.rev (firstn n args)) (decl_type decl)) ;
   wf_local_alphaE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall Γ Γ' : list context_decl,
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+      (Γ Γ' : list context_decl),
     eq_context_upto_names Γ Γ' ->
     wf_localE Σ Γ ->
     wf_localE Σ Γ' ;
@@ -334,10 +336,10 @@ Class SRForecastCopy16 := {
     (inds mind (abstract_instance (ind_universes mdecl)) (ind_bodies mdecl))@[u] =
     inds mind u (ind_bodies mdecl) ;
   isType_mkApps_IndE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body},
-    declared_inductive Σ ind mdecl idecl ->
-    forall {Γ : context} {puinst : Instance.t} {args inst : list term},
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+      {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body}
+      (decli : declared_inductive Σ ind mdecl idecl)
+      {Γ : context} {puinst : Instance.t} {args inst : list term},
     consistent_instance_ext Σ (ind_universes mdecl) puinst ->
     spine_substE Σ Γ args inst (ind_params mdecl ,,, ind_indices idecl)@[puinst] ->
     Σ ;;; Γ |-E mkApps (tInd ind puinst) args : tSort (ind_sort idecl)@[puinst] ;
@@ -372,8 +374,8 @@ Class SRForecastCopy16 := {
 (* FORECAST-ONLY: proved by copy 18 (PCUICInductiveInversionEta.v); delete when it lands. *)
 Class SRForecastCopy18 := {
   Construct_Ind_ind_eqE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ.1 ->
-    forall {Γ : context} {n : nat} {i : inductive} {args : list term} {u : Instance.t}
+    forall {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ.1)
+      {Γ : context} {n : nat} {i : inductive} {args : list term} {u : Instance.t}
       {i' : inductive} {args' : list term} {u' : Instance.t} {mdecl : mutual_inductive_body}
       {idecl : one_inductive_body} {cdecl : constructor_body},
     Σ ;;; Γ |-E mkApps (tConstruct i n u) args : mkApps (tInd i' u') args' ->
@@ -467,11 +469,10 @@ Class SRForecastCopy18 := {
     isTypeE Σ Γ T ->
     is_open_term Γ T ;
   on_constructor_instE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {ind : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-      {cdecl : constructor_body},
-    declared_constructor Σ ind mdecl idecl cdecl ->
-    forall u : Instance.t,
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+      {ind : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
+      {cdecl : constructor_body}
+      (declc : declared_constructor Σ ind mdecl idecl cdecl) (u : Instance.t),
     consistent_instance_ext Σ (ind_universes mdecl) u ->
     wf_localE Σ ((arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,, cstr_args cdecl)@[u]) ×
     (∑ inst : list term,
@@ -480,11 +481,10 @@ Class SRForecastCopy18 := {
          map (subst_instance u) (cstr_indices cdecl))
         inst ((ind_params mdecl)@[u] ,,, (ind_indices idecl)@[u])) ;
   on_constructor_inst_wf_argsE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {ind : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-      {cdecl : constructor_body},
-    declared_constructor Σ ind mdecl idecl cdecl ->
-    forall u : Instance.t,
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+      {ind : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
+      {cdecl : constructor_body}
+      (declc : declared_constructor Σ ind mdecl idecl cdecl) (u : Instance.t),
     consistent_instance_ext Σ (ind_universes mdecl) u ->
     wf_localE Σ ((ind_params mdecl)@[u] ,,,
       subst_context (ind_subst mdecl ind.1 u) #|ind_params mdecl| (cstr_args cdecl)@[u]) ;
@@ -1158,7 +1158,7 @@ Proof.
   split => //.
   rewrite -heq in sp.
   rewrite firstn_all in sp.
-  now apply: (spine_subst_smashE wfΣ).
+  now apply: spine_subst_smashE.
 Qed.
 
 (** Base [lift_judgment_SR] ([:1465]). *)
@@ -1878,7 +1878,7 @@ Proof.
     pose proof typec as typec'.
     eapply inversion_mkAppsE in typec as [A [tyc tyargs]]; auto.
     eapply (inversion_ConstructE Σ wf) in tyc as [mdecl' [idecl' [cdecl [wfl [declc [Hu tyc]]]]]].
-    eapply (typing_spine_strengthenE wf) in tyargs; tea.
+    eapply typing_spine_strengthenE in tyargs; tea.
     have openargs : forallb (is_open_term Γ) args.
     { repeat inv_on_free_vars; auto. }
     clear tyc.
@@ -1960,7 +1960,7 @@ Proof.
     { eapply conv_context_smash_endE; tea. now symmetry. }
     assert (spbrctx : spine_substE Σ Γ (skipn (ind_npars mdecl) args) (List.rev (skipn (ind_npars mdecl) args))
       (smash_context [] prebrctx)).
-    { pose proof (spine_subst_smashE wf idxsubst0).
+    { pose proof (spine_subst_smashE idxsubst0).
       eapply spine_subst_cumulE in X0. eapply X0. all:tea.
       1-2:apply smash_context_assumption_context; pcuic.
       eapply X0.
@@ -1970,8 +1970,8 @@ Proof.
       rewrite (firstn_app_left).
       now rewrite (wf_predicate_length_pars H0).
       intros iparsubst0.
-      clear X5 IHctxi. unshelve epose proof (ctx_inst_spine_substE wf _ Hctxi).
-      eapply PCUICWeakeningTypEta.weaken_wf_localE; tea. exact (on_minductive_wf_params_indices_instE wf isdecl _ cu').
+      clear X5 IHctxi. unshelve epose proof (ctx_inst_spine_substE _ Hctxi).
+      eapply PCUICWeakeningTypEta.weaken_wf_localE; tea. exact (on_minductive_wf_params_indices_instE isdecl _ cu').
       rewrite (spine_subst_inst_substE iparsubst0).
       intros cum.
       eapply ws_cumul_ctx_pb_rel_transE; tea.
@@ -2066,8 +2066,8 @@ Proof.
       move: convidx.
       intros cv convidx.
       eapply (ws_cumul_pbE_terms_subst (Δ := [])) in cv.
-      3:{ exact (spine_subst_smashE wf idxsubst0). }
-      3:{ exact (spine_subst_smashE wf idxsubst0). }
+      3:{ exact (spine_subst_smashE idxsubst0). }
+      3:{ exact (spine_subst_smashE idxsubst0). }
       all:tea. 2:{ eapply wf_local_closed_contextE. eapply wf_local_smash_endE; tea. eapply idxsubst0. }
       2:{ eapply All2_rev => //. }
       rewrite subst_context_nil /= in cv. simpl in cv.
@@ -2255,7 +2255,7 @@ Proof.
     unfold unfold_cofix in H.
     rewrite Hnth in H. noconf H.
     pose proof (validityE Hbody) as vbody.
-    eapply (typing_spine_strengthenE wf) in tsp; [|exact vbody|exact Hcum].
+    eapply typing_spine_strengthenE in tsp; [|exact vbody|exact Hcum].
     have typec' : Σ ;;; Γ |-E mkApps (subst0 (cofix_subst mfix) (dbody d)) args :
       mkApps (tInd ci (puinst p)) (pparams p ++ indices).
     { eapply type_mkAppsE; tea. }
@@ -2299,7 +2299,7 @@ Proof.
     have wfparinds : wf_localE Σ
       (Γ,,, subst_instance (puinst p) (ind_params mdecl,,, ind_indices idecl)).
     { eapply PCUICWeakeningTypEta.weaken_wf_localE; tea.
-      eapply (on_minductive_wf_params_indices_instE wf isdecl _ H1). }
+      eapply (on_minductive_wf_params_indices_instE isdecl _ H1). }
     have ctxi' : ctx_instE Σ Γ (params' ++ indices)
         (List.rev
            (subst_instance p.(puinst) (ind_params mdecl,,, ind_indices idecl))).
@@ -2307,8 +2307,8 @@ Proof.
       eapply OnOne2_app_r in X3.
       unshelve eapply (ctx_inst_merge'E _ _ _ _ _ X6 X5); tea. }
     pose proof X5 as X5'.
-    unshelve epose proof (ctx_inst_spine_substE wf _ X5); tea.
-    eapply (spine_subst_smashE wf) in X4; tea.
+    unshelve epose proof (ctx_inst_spine_substE _ X5); tea.
+    eapply spine_subst_smashE in X4; tea.
     eapply ctx_inst_length in X5. len in X5.
     rewrite context_assumptions_rev in X5. len in X5.
     pose proof (wf_predicate_length_pars H0). simpl in H.
@@ -2322,9 +2322,9 @@ Proof.
     rewrite firstn_app firstn_all Nat.sub_diag /= app_nil_r in spargs.
     rewrite subst_instance_app List.rev_app_distr in X6.
     have lenpars' := (OnOne2_length X3).
-    unshelve epose proof (ctx_inst_spine_substE wf _ ctxi');tea.
+    unshelve epose proof (ctx_inst_spine_substE _ ctxi');tea.
     pose proof (spine_codom_wfE _ _ _ _ _ X4);tea.
-    pose proof (spine_subst_smashE wf X4); tea. all:tea.
+    pose proof (spine_subst_smashE X4); tea. all:tea.
     rewrite subst_instance_app smash_context_app_expand in X9.
     eapply spine_subst_app_invE in X9 as [sppars' spargs']; tea.
     2:len. len in sppars'. len in spargs'.
@@ -2657,7 +2657,7 @@ Proof.
     have lenargs : #|args| = context_assumptions (ind_params mdecl).
     { pose proof (subslet_lengthE sppars) as hl. move: hl; now len. }
     eapply type_Cumul_altE; [econstructor|..]; eauto.
-    + eapply (typing_spine_strengthenE wf) in tsp. 3:tea.
+    + eapply typing_spine_strengthenE in tsp. 3:tea.
       eapply type_mkAppsE. eauto. eauto.
       now eapply validityE in Hbody.
     + now eapply validityE in typecofix.
@@ -2776,7 +2776,7 @@ Proof.
     eapply nth_error_alli in on_projs; eauto.
     2:eapply isdecl. simpl in on_projs.
     epose proof (declared_constructor_valid_tyE _ _ _ _ _ 0 cdecl _ wf wfΓ declc Hu) as Hty.
-    eapply (typing_spine_strengthenE wf) in tyargs; tea.
+    eapply typing_spine_strengthenE in tyargs; tea.
     rewrite -(firstn_skipn (ind_npars mdecl) args0) in tyargs, H |- *.
     assert(#|firstn (ind_npars mdecl) args0| = ind_npars mdecl).
     rewrite firstn_length_le. lia. lia.
@@ -2819,13 +2819,13 @@ Proof.
       eapply (substitutionE (Γ' := subst_instance u (smash_context [] (ind_params mdecl)))
         (Δ := [vass _ _]) (T := tSort _)); eauto.
       rewrite firstn_all2 in iparsubst0. lia.
-      eapply (spine_subst_smashE wf) in iparsubst0; auto.
+      eapply spine_subst_smashE in iparsubst0; auto.
       rewrite subst_instance_smash.
       eapply iparsubst0. exact Hs. simpl.
       rewrite subst_instance_mkApps subst_mkApps /=.
       rewrite [subst_instance_instance _ _](subst_instance_id_mdecl Σ) // subst_instance_to_extended_list.
       rewrite firstn_all2 in iparsubst0. lia.
-      eapply (spine_subst_smashE wf) in iparsubst0; auto.
+      eapply spine_subst_smashE in iparsubst0; auto.
       rewrite subst_instance_smash /=.
       rewrite /to_extended_list (spine_subst_subst_to_extended_list_kE iparsubst0).
       assumption. }
@@ -2913,7 +2913,7 @@ Proof.
     depelim cumdecls. cbn in *. rename eqt into cum.
     eapply (substitution_ws_cumul_pbE_subslet (Γ' := skipn idx (smash_context [] pargctxu1)) (Γ'' := [])
       (s := skipn idx (List.rev (skipn (ind_npars mdecl) args0)))) in cum.
-    2:{ eapply (spine_subst_smashE wf) in idxsubst0; eauto.
+    2:{ eapply spine_subst_smashE in idxsubst0; eauto.
         eapply subslet_skipnE, idxsubst0. }
     assert (skipn idx (List.rev (skipn (ind_npars mdecl) args0)) = (List.rev (firstn parg (skipn (ind_npars mdecl) args0)))) as eq.
     { rewrite /idx skipn_rev. lia_f_equal. rewrite length_skipn; lia. }
@@ -2959,7 +2959,7 @@ Proof.
     eapply (substitution_ws_cumul_pb_subst_convE (Γ := _ ,,, _) (Δ := [])); auto.
     { rewrite -(subst_instance_length u).
       eapply subslet_liftE; eauto. rewrite -eq.
-      eapply (spine_subst_smashE wf) in idxsubst0; eauto.
+      eapply spine_subst_smashE in idxsubst0; eauto.
       eapply subslet_skipnE. eapply idxsubst0. }
     { specialize (projsubsl (Γ ,,, subst_instance u (ind_params mdecl))).
       rewrite -projs_inst_lift.
