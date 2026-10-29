@@ -321,3 +321,11 @@ Proof.
       split; [exact tt|]. exists sProp. split; [exact (fo_F_sort _)|]. split; [exact I|reflexivity].
     + exact fo_body_check.
 Qed.
+
+(** ** Print Assumptions, per lemma *)
+
+Print Assumptions fo_case_typed.
+Print Assumptions fo_case_infer.
+Print Assumptions fo_old_premise_fails.
+Print Assumptions fo_old_bd_premise_fails.
+Print Assumptions fo_new_premise_holds.
