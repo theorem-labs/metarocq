@@ -378,6 +378,10 @@ Section WfEnv.
 End WfEnv.
 
 
+(** Separate database on purpose: base and E hints here can match the SAME goal (abstract-env
+    well-formedness facts with identical heads), so mixing them would let a base hint fire on an E goal;
+    contrast EtaMetaLane's SR E copy, which puts E twins in base's [pcuic] database because there the
+    relation heads are distinct and resolution is type-directed. *)
 Create HintDb wf_envE discriminated.
 Global Hint Constants Opaque : wf_envE.
 Global Hint Variables Opaque : wf_envE.
