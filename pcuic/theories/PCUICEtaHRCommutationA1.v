@@ -1,37 +1,36 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, C4: theorem (A), prover C4A1.
+(** * Theorem (A): strong commutation implies commutation, modulo an equivalence
 
-   [HR_strong_commutation_modulo] : [HR_strong_commutation_modulo_statement]
-   (stated in [PCUICEtaBetaEta], Required here, never retyped).
+   [HR_strong_commutation_modulo] proves [HR_strong_commutation_modulo_statement]
+   ([PCUICEtaBetaEta], Required here for the statement alone).
 
-   Carrier-generic: the proof uses only the relation library of
-   [Equations.Type] and the statement's own hypotheses. [PCUICEtaBetaEta] is
-   Required for the statement alone; the proof uses no PCUIC definition, no
-   reduction and no confluence result. There are no section variables and
-   nothing is assumed: every helper below is a closed lemma whose hypotheses
-   are explicit arguments, and every proof ends in [Qed]. The helpers take the
-   three equivalence laws of [E] unfolded ([forall x, E x x], ...); the
-   [CRelationClasses] classes of the statement are convertible to these forms.
+   Carrier-generic: the proof uses only the relation library of [Equations.Type]
+   and the statement's own hypotheses, no PCUIC definition, no reduction and no
+   confluence result. There are no section variables and nothing is assumed:
+   every lemma below is closed, its hypotheses are explicit arguments, and every
+   proof ends in [Qed]. The lemmas take the three equivalence laws of [E]
+   unfolded ([forall x, E x x], ...); the [CRelationClasses] classes of the
+   statement are convertible to these forms.
 
-   ROUTE. Three diagram-pasting inductions, each on the DIRECT form of
+   Route. Three diagram-pasting inductions, each on the direct form of
    [clos_refl_trans] ([rt_step] / [rt_refl] / [rt_trans]), so a composite
-   derivation is handled by pasting the two IH tiles side by side:
+   derivation is handled by pasting the two induction-hypothesis tiles side by
+   side:
    1. [crt_E_transport]: for any relation [T] that preserves [Q] and whose
       [clos_refl] commutes with [E] on [Q]-elements, [E] transports a [T*]
-      derivation: [E t t' -> T* t u -> ∑ u', T* t' u' × E u u']. Used twice,
-      at [T := S] and at [T := R].
+      derivation: [E t t' -> T* t u -> ∑ u', T* t' u' × E u u']. Used twice, at
+      [T := S] and at [T := R].
    2. [refl_R_vs_crt_S]: [R^=] against [S*] (induction on [S*]); a composite
-      pastes two tiles and transports the lower [S*] leg across [E] by (1)
-      at [S].
-   3. [crt_R_vs_crt_S]: [R*] against [S*] (induction on [R*]); a single step
-      is (2) at [r_step]; a composite pastes two tiles and transports the
-      right [R*] leg across [E] by (1) at [R].
+      pastes two tiles and transports the lower [S*] leg across [E] by (1) at [S].
+   3. [crt_R_vs_crt_S]: [R*] against [S*] (induction on [R*]); a single step is
+      (2) at [r_step]; a composite pastes two tiles and transports the right [R*]
+      leg across [E] by (1) at [R].
 
-   [Q] INVARIANT. The [E]-commutation hypotheses demand [Q] at BOTH ends of the
-   [E] pair. Every induction carries [Q] of its source element(s) as an
-   explicit premise of the induction hypothesis, and every term the proof
-   meets is an [R]/[S]-reduct (through [clos_refl] / [clos_refl_trans]) of a
-   [Q]-element, so its [Q] follows from [cr_Q] / [crt_Q]. *)
+   The [Q] invariant. The [E]-commutation hypotheses demand [Q] at both ends of
+   the [E] pair. Every induction carries [Q] of its source elements as an explicit
+   premise of the induction hypothesis, and every term the proof meets is an
+   [R]/[S]-reduct (through [clos_refl] / [clos_refl_trans]) of a [Q]-element, so
+   its [Q] follows from [cr_Q] / [crt_Q]. *)
 
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.PCUIC Require Import PCUICEtaBetaEta.
@@ -181,7 +180,8 @@ Proof.
 Qed.
 
 (** ** Theorem (A), as the shared statement. The [CRelationClasses] laws are
-    passed as-is: each is convertible to the unfolded form the helpers take. *)
+    passed as they are: each is convertible to the unfolded form the lemmas above
+    take. *)
 
 Theorem HR_strong_commutation_modulo : HR_strong_commutation_modulo_statement.
 Proof.
@@ -190,4 +190,4 @@ Proof.
   exact (crt_R_vs_crt_S R S E Q HQR HQS HErf HEsy HEtr HER HES Htile).
 Qed.
 
-Print Assumptions HR_strong_commutation_modulo.
+(* Print Assumptions HR_strong_commutation_modulo. *)

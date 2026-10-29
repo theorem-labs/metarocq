@@ -1,18 +1,16 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane: red1 lift-strengthening (CONFLUENCE-FREE).
+(** * red1 lift-strengthening
 
-   Reflects one [red1] step on a lifted term back to the unlifted one.
-   SIBLING of the foundation ([PCUICEtaConfluence.v]); nothing here mentions eta.
+   Reflects one [red1] step on a lifted term back to the unlifted one. Nothing
+   here mentions η; it is the one ingredient C3 ([PCUICEtaC3BR]) needs that is
+   about [red1] alone.
 
-   LANE INVARIANT: the C3 assembly's dependency closure must contain no
-   [PCUICConfluence] and no [PCUICParallelReductionConfluence]. This file's
-   import closure is therefore checked before merge: it must NOT transitively
-   reach [PCUICSR] → [PCUICConfluence]. The original route via [BDStrengthening]
-   violated this (BDStrengthening → BDToPCUIC → … → PCUICSR → PCUICConfluence,
-   measured by EtaC3C: closure 91 vs the clean ingredients' 51-55). The fix:
-   port [urenaming_strengthen], [on_ctx_free_vars_strengthenP], and the
-   [unlift] definitions HERE from [BDStrengthening.v] — their proofs are pure
-   renaming/nat arithmetic and need nothing from the BD development. *)
+   The import closure of this file reaches neither [PCUICConfluence] nor
+   [PCUICParallelReductionConfluence], and C3's does not either. Importing base
+   [BDStrengthening] would break that: it reaches [PCUICSR] and so
+   [PCUICConfluence]. So [urenaming_strengthen], [on_ctx_free_vars_strengthenP]
+   and the [unlift] definitions are copied here from that file; their proofs are
+   pure renaming and arithmetic and need nothing else from it. *)
 
 From Stdlib Require Import Morphisms.
 From MetaRocq.Utils Require Import utils.
@@ -59,7 +57,8 @@ Proof.
 Qed.
 
 
-(** Local helpers ported from BDStrengthening (not importable — dirty closure). *)
+(** Local copies from base [BDStrengthening] (see the header: importing it would
+    pull in the confluence files). *)
 Lemma Alli_impl_le {A P Q} {l : list A} {n} :
   Alli P n l -> (forall m x, m <= n + #|l| -> P m x -> Q m x) -> Alli Q n l.
 Proof.
@@ -198,14 +197,15 @@ Proof.
     + apply rename_ren_id.
 Qed.
 
-(** The single-binder corollary the C3 provers Require. No condition on [d].
-    DISCHARGE at a C3 call site (one monotonicity step, NOT [exact]):
-      on_ctx_free_vars xpredT Γ  from  is_closed_context Γ :
+(** The single-binder corollary C3 uses ([PCUICEtaC3BR]). No condition on [d].
+    At a call site the two premises come from the scoping hypotheses by one
+    monotonicity step each:
+      [on_ctx_free_vars xpredT Γ] from [is_closed_context Γ]:
         rewrite on_ctx_free_vars_xpredT; eapply on_free_vars_ctx_impl; [|eassumption]; done.
-      on_free_vars xpredT t      from  is_open_term Γ t :
+      [on_free_vars xpredT t] from [is_open_term Γ t]:
         eapply on_free_vars_impl; [|eassumption]; done.
-    ([is_closed_context] is [on_free_vars_ctx xpred0] (Syntax/PCUICOnFreeVars.v:259),
-     NOT [xpredT]; [on_ctx_free_vars_impl] is commented out at :991.) *)
+    ([is_closed_context] is [on_free_vars_ctx xpred0], not [xpredT], and base's
+    [on_ctx_free_vars_impl] is commented out.) *)
 Lemma red1_strengthening {cf} {Σ : global_env} {wfΣ : ClosedBodies Σ} Γ d t u :
   on_ctx_free_vars xpredT Γ ->
   on_free_vars xpredT t ->

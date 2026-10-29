@@ -1,74 +1,50 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, U1' / F-inst: [compare_term_eta] — DRAFT, NOT PINNED
+(** * [compare_term_eta]: the algorithmic comparison with η (U1', "F-inst")
 
-  **THE CONSTRUCTOR CLAUSE IS AN EXPLICIT HOLE, WAITING ON R3aProbe.** The stream
-  lead has held the pin: one measurement decides how F-inst treats constructors,
-  and it has not landed. So this file does NOT choose. It takes the choice as a
-  parameter, [finst_construct_rule], and everything below is proved for BOTH
-  values. Nothing here commits the lane to either.
+  [compare_term_eta] is the comparison that ends the canonical joins of the η
+  specification ([JoinE], [PCUICEtaI5]). It is a copy of base
+  [eq_term_upto_univ_napp] in which the two constructors that read [napp],
+  [eq_Ind] and [eq_Construct], compare an under-applied head as the kernel's
+  [MustExpand] does: at its full arity, and at [Conv].
 
-  The open question: the non-cumulative constructor pair [p1@{u} A] against
-  [p1@{v} A] was refused at TYPING in one posing. Whether ANY well-typed term
-  can bring the kernel to compare them is being measured.
-  - If no well-typed term reaches it, F-inst follows the SPEC
-    ([FInstFollowSpec]): [ConstructRef] yields [AllIrrelevant] when fully
-    applied, exactly as base [global_variance_gen] does ([PCUICEquality.v:59-67]).
-  - If one does, F-inst follows the KERNEL's constructor rule
-    ([FInstFollowKernel]): instance EQUALITY when [ind_variance = None]
-    ([conversion.ml] V9.2.0 [:220-222]). A repaired route that is faithful to an
-    unfaithful spec buys nothing.
+  ** Why base's comparison does not fit
 
-  **The [tInd] half does NOT depend on that measurement and is settled below.**
+  For an inductive [I1] with [Irrelevant] variance, [I1@{u}] and [I1@{v}] are both
+  [red1]-normal and [eta1]-normal, so every join of them ends in a comparison at
+  [napp 0]. There base [global_variance_gen]'s [arity <=? napp] test fails and the
+  result [AllEqual] demands [eq_universe u v]. The η specification relates them,
+  by a two-step η detour: [I1@{u} ≤sE[Conv] λx:S. I1@{v} (tRel 0)] by [cumul_eta_r]
+  (whose premise is [cumulE_Ind] at [napp 1]), then
+  [λx:S. I1@{v} (tRel 0) ≤sE[Conv] I1@{v}] by [cumul_eta_l] on [cumulE_Refl], glued
+  by [cumulE_Trans]. The kernel accepts the same pair through [MustExpand].
 
-  ** Why the relation has to change at all
+  ** The comparison at full arity, and why at [Conv]
 
-  I5 as obligation 8 wrote it is FALSE. The witness needs no η and no [canon]:
-  [I1@{u}] and [I1@{v}] for an inductive with [Irrelevant] variance are both
-  [red1]-normal and [eta1]-normal, so every join of them ends in
-  [compare_term pb 0]; there [global_variance_gen]'s [arity <=? napp] test fails
-  ([PCUICEquality.v:51], [:56]) and the result [AllEqual] demands
-  [eq_universe u v]. But the SPEC relates them, by a two-step η detour:
+  An under-applied head is compared at [max napp arity]. Because
+  [global_variance_gen]'s only use of [napp] is the [arity <=? napp] test, the
+  variance then no longer reads [napp] at all
+  ([global_variance_eta_napp_irrelevant]).
 
-    [I1@{u} ≤sE[Conv] λx:S. I1@{v} (tRel 0)]   ([cumul_eta_r], :746-751,
-                                                 premise is [cumulE_Ind] at napp 1)
-    [λx:S. I1@{v} (tRel 0) ≤sE[Conv] I1@{v}]   ([cumul_eta_l] on [cumulE_Refl])
-    glued by [cumulE_Trans] (:32-38; its scoping premises hold, [S] is closed).
+  The mode is [Conv] below the arity: every route by which the specification
+  relates an under-applied head is an η detour, and every such detour has its
+  premise at [Conv] ([cumul_eta_l]'s premise, [cumulE_Sym]'s premise, and
+  [cumul_eta_r], which is built from both). [cumulE_Ind]/[cumulE_Construct] at
+  the ambient [pb] apply only to a head that carries its arity's arguments. At
+  [Conv], [cmp_universe_variance] is [True] at [Irrelevant] and [on_rel (cmp_univ
+  Conv)] at [Covariant] and [Invariant], so the per-component relation is an
+  equivalence ([cmp_global_instance_eta_trans]).
 
-  The kernel ACCEPTS these pairs (R3aProbe, [kernel2.log], [STATUS coqc=0]:
-  [(fun A => I1@{u} A) = I1@{v}] and [I1@{u} = I1@{v}] directly at napp 0 through
-  MustExpand, under [@{u v|}] with no constraint). So for the INDUCTIVE witness
-  the spec is FAITHFUL and this is a statement bug in the algorithmic relation
-  only; decision (C) is untouched.
+  ** The constructor rule
 
-  ** The fix, and why it is at [Conv]
-
-  F-inst: an under-applied head is compared at its FULL ARITY, as the kernel's
-  MustExpand does (plan K1). Because [global_variance_gen]'s ONLY use of [napp]
-  is the [arity <=? napp] test, taking [max napp arity] makes that test vacuous:
-  the relation stops reading [napp] at these heads altogether
-  ([global_variance_eta_napp_irrelevant] below). That is the plan's
-  "max [#|l|] arity" rule in closed form, and it is why R3(a) does not merely
-  shrink but DISAPPEARS — there is no napp drop left to lose.
-
-  **Pinned at [Conv], not at [pb]** (stream lead's correction). Checked, not
-  assumed: every route by which the spec relates an UNDER-APPLIED head goes
-  through an η detour, and every such detour has its premise at [Conv] —
-  [cumul_eta_l]'s premise ([PCUICCumulativitySpecEta.v:168-170]),
-  [cumulE_Sym]'s premise ([:40-42]), and [cumul_eta_r], built from both
-  ([:746-751]). [cumulE_Ind]/[cumulE_Construct] at the ambient [pb] are reachable
-  only when the head carries [#|args|] arguments, i.e. the fully applied case. So
-  the spec has no [Cumul]-specific route for an under-applied head, and F-inst at
-  [pb] would break A4 (join ⇒ spec).
-
-  The [Conv] pin is also what makes the RISKIEST lemma go through. At [Conv],
-  [cmp_universe_variance] is [True] at [Irrelevant] and plain
-  [on_rel (cmp_univ Conv)] at both [Covariant] and [Invariant]
-  ([PCUICEquality.v:36-41]), so the per-component relation is an equivalence and
-  the disjunction in [cmp_opt_variance] composes. At [pb = Cumul] it would not.
-  See [cmp_global_instance_eta_trans].
-
-  This file redefines NOTHING that is landed. *)
+  The comparison is parametric in [r : finst_construct_rule]. [FInstFollowKernel]
+  compares a constructor of a non-cumulative inductive by instance equality, as
+  the kernel does; [FInstFollowSpec] uses base [global_variance_gen] as it is.
+  Base [global_variance_gen] itself compares a fully applied constructor of a
+  non-cumulative inductive by instance equality, so both values give the same
+  variance ([global_variance_eta_rule_irrelevant]): the parameter [r] no longer
+  changes the relation. The η specification is characterised by the joins at
+  [FInstFollowKernel] ([I5_FollowKernel]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import RelationClasses.
@@ -80,77 +56,26 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
 
 Local Open Scope type_scope.
 
-(** ** The hole: how F-inst treats constructors *)
+(** ** The constructor rule *)
 
 Variant finst_construct_rule :=
   | FInstFollowSpec
-  (** [ConstructRef] as base does it: [AllIrrelevant] once fully applied. *)
+  (** [ConstructRef] as base [global_variance_gen] does it. *)
   | FInstFollowKernel.
   (** The kernel's rule: instance EQUALITY when the inductive is not cumulative
       ([ind_variance = None]). *)
 
-(** **THE CONSTRUCTOR CLAUSE IS AN OPEN HOLE, pending FRAC's gate (2026-10-28).**
-
-  **AND THE RULING LEAVES ONE THING OPEN THAT BITES HERE.** The stream lead has
-  NOT authorised changing the BASE spec; the spec repair
-  ([global_variance_gen]'s [ConstructRef] case → [AllEqual] when not cumulative)
-  is being SCOPED as a cost, not built. So once U1' follows the kernel and the
-  spec still does not, **I5's spec ⇒ join direction is FALSE** on the witness
-  [Q@{u} (p1@{u} unit)] against [Q@{v} (p1@{v} unit)]: the spec relates them
-  (through [ConstructRef]'s [AllIrrelevant]) and the join, following the kernel,
-  refuses them.
-
-  **So: I5 HOLDS ONLY ONCE THE BASE-SPEC [ConstructRef] REPAIR LANDS.** Do NOT
-  attempt the spec ⇒ join direction for constructors before that repair exists —
-  it is false today, and no proof effort will change that. See
-  [lanes/eta/spec-faithfulness-constructor.md].
-
-
-  The measurement landed and it went the other way from the first report. The
-  non-cumulative constructor pair is NOT unreachable at typing: the direct
-  posing [@eq (P1@{u} unit) (p1@{u} unit) (p1@{v} unit)] is refused, but
-  wrapping it in a cumulative inductive with an Irrelevant universe in a
-  PARAMETER's type, [Q@{*w} (x : P1@{w} unit)], makes
-  [Q@{u} (p1@{u} unit) = Q@{v} (p1@{v} unit)] WELL-TYPED. The kernel then
-  compares the arguments at [Conv] and REFUSES [p1@{u}] vs [p1@{v}], because
-  [P1] is non-cumulative, while MetaRocq's base spec ACCEPTS, since
-  [global_variance_gen]'s [ConstructRef] case ([PCUICEquality.v:59-68]) returns
-  [AllIrrelevant] without ever reading [ind_variance]. (Evidence
-  [lanes/eta/spec-faithfulness-constructor.md], [kernel5.log]:
-  [STATUS base1_noncum coqc=1] against the cumulative control [base2_cum] at
-  [coqc=0].)
-
-  **That is a PRE-EXISTING defect in the BASE spec, not in this route** — the
-  witness has no λ, so η and [canon] are not implicated. Repairing
-  [global_variance_gen] itself is the stream lead's call and [PCUICEquality.v]
-  is NOT touched here. What IS this lane's obligation is the one line below:
-  **U1' must not COPY the defect.** If F-inst followed the spec's present
-  [ConstructRef] behaviour, the restated I5 would inherit an over-acceptance the
-  kernel refuses, and a repaired route that is faithful to an unfaithful spec
-  buys nothing.
-
-  The parameterisation is kept rather than deleted, because it is what makes the
-  difference between the two rules checkable, and because it costs nothing: every
-  lemma below is proved for both. *)
-
-(** **THE HOLE IS STILL OPEN. [finst_rule] is deliberately NOT defined.**
-    Option (b), following the spec's [AllIrrelevant], is RULED OUT: under
-    decision (C) an acceptance beyond the kernel is allowed only for ILL-TYPED
-    terms, and this witness is WELL-TYPED, so keeping it would knowingly certify
-    a defect. Option (a), repairing the base spec's [ConstructRef] case, is the
-    stream lead's recommendation, but it changes I1 — the base spec the checker
-    and everything downstream rest on — so it goes to FRAC and needs its own
-    gate. Whether the SPEC changes decides what this clause must be, so pinning
-    it now would bet on a ruling not yet made. Everything below is therefore
-    proved for BOTH values of [r]. *)
+(** The two values of [r] give the same variance: base [global_variance_gen]
+    compares a fully applied constructor of a non-cumulative inductive by instance
+    equality, which is what [FInstFollowKernel]'s extra branch returns
+    ([global_variance_eta_base], [global_variance_eta_rule_irrelevant]). *)
 
 (** ** Full arity of a head
 
-  [IndRef]: the assumptions among parameters and indices, exactly the count
-  [global_variance_gen] tests ([PCUICEquality.v:51]).
-  [ConstructRef]: [cstr_arity + ind_npars], exactly the count tested at [:62].
-  An absent declaration keeps arity [0], so F-inst then agrees with base on the
-  [AllEqual] fallback. *)
+  [IndRef]: the assumptions among parameters and indices, the count
+  [global_variance_gen] tests. [ConstructRef]: [cstr_arity + ind_npars], the
+  count tested for constructors. An absent declaration keeps arity [0], so F-inst
+  then agrees with base on the [AllEqual] fallback. *)
 
 Definition head_arity_gen lookup (gr : global_reference) : nat :=
   match gr with
@@ -214,13 +139,10 @@ Proof.
     now rewrite !(proj2 (Nat.leb_le _ _) (Nat.le_max_r _ _)).
 Qed.
 
-(** **After repair (a) the two rules coincide** (8780a014, "Use instance equality
-    for fully applied non-cumulative constructors", cherry-picked with [-x]).
-    Base [global_variance_gen] now gives [AllEqual] to a fully applied
-    constructor of a NON-cumulative inductive — exactly what
-    [FInstFollowKernel]'s extra branch returns. So for BOTH values of [r],
-    [global_variance_eta_gen] is base's variance at the full arity, and
-    [FInstFollowKernel]'s extra branch is redundant. *)
+(** **The two rules coincide.** Base [global_variance_gen] gives [AllEqual] to a
+    fully applied constructor of a non-cumulative inductive, which is what
+    [FInstFollowKernel]'s extra branch returns. So for both values of [r],
+    [global_variance_eta_gen] is base's variance at the full arity. *)
 Lemma global_variance_eta_base r lookup gr napp :
   global_variance_eta_gen r lookup gr napp
   = global_variance_gen lookup gr (max napp (head_arity_gen lookup gr)).
@@ -237,22 +159,15 @@ Lemma global_variance_eta_rule_irrelevant r r' lookup gr napp :
   global_variance_eta_gen r lookup gr napp = global_variance_eta_gen r' lookup gr napp.
 Proof. now rewrite !global_variance_eta_base. Qed.
 
-(** ** The F-inst instance comparison — CORRECTION of 5b9cd4ff (2026-10-28)
+(** ** The F-inst instance comparison
 
-  5b9cd4ff compared EVERY head at [Conv]. That was WRONG for heads applied to at
-  least their arity: base [eq_Ind]/[eq_Construct] ([PCUICEquality.v:427], [:431])
-  and the spec's [cumulE_Ind]/[cumulE_Construct]
-  ([PCUICCumulativitySpecEta.v:51-59]) compare those at [pb], so a fully applied
-  cumulative inductive at [Cumul] ([Box@{+u} ≤ Box@{v}], [u < v]) was
-  spec-related but join-refused, and A2 was false
-  ([finst_cumulative_box_witness] below now holds). The lane lead's [Conv]
-  correction was about UNDER-applied heads — every spec route relating one is an
-  η detour at [Conv] — and EtaL2 over-applied it to all heads.
-
-  The comparison MODE is now read from [napp]: [pb] when the head carries at
-  least its arity, [Conv] (with the full-arity variance) below it. The variance
-  lookup is unchanged. R3(a) stays deleted: the η drop goes from [(Conv, n)] to
-  [(pb, m)], and [finst_Conv_pb] shows that is monotone. *)
+  Heads applied to at least their arity are compared at [pb], as base
+  [eq_Ind]/[eq_Construct] and the specification's [cumulE_Ind]/[cumulE_Construct]
+  do; otherwise a fully applied cumulative inductive at [Cumul]
+  ([Box@{+u} ≤ Box@{v}], [u < v]) would be related by the specification but
+  refused by the join ([finst_cumulative_box_witness]). Heads below their arity
+  are compared at [Conv] with the full-arity variance. The step from [(Conv, n)]
+  to [(pb, m)] used by the η case is monotone ([finst_Conv_pb]). *)
 
 Definition finst_mode (Σ : global_env) (gr : global_reference) (pb : conv_pb) (napp : nat) :=
   if head_arity Σ gr <=? napp then pb else Conv.
@@ -262,13 +177,12 @@ Definition cmp_global_instance_eta r Σ cmp_universe pb gr napp :=
 
 (** ** The instance comparison is an equivalence
 
-  Transitivity was flagged as the riskiest step because [cmp_opt_variance] at
-  [Variance v] is a disjunction ([PCUICEquality.v:79]). It is base's proof
-  ([cmp_global_instance_trans], [:614-628]) with [cmp_opt_variance_or_impl],
-  verbatim in structure: base never inspects where the variance or the mode came
-  from. With the mode now [pb] or [Conv], every hypothesis base needs is required
-  at BOTH, and is discharged at the actual mode by [finst_mode_cases]. All hold
-  for BOTH values of the constructor hole [r]. *)
+  Transitivity has to compose the disjunction in [cmp_opt_variance] at [Variance
+  v]. The proof is base's [cmp_global_instance_trans] with
+  [cmp_opt_variance_or_impl]: base never inspects where the variance or the mode
+  came from. With the mode [pb] or [Conv], every hypothesis base needs is
+  required at both, and is discharged at the actual mode by [finst_mode_cases].
+  All of it holds for both values of [r]. *)
 
 Lemma finst_mode_cases (P : conv_pb -> Type) Σ gr pb napp :
   P Conv -> P pb -> P (finst_mode Σ gr pb napp).
@@ -305,7 +219,7 @@ Section FInstInstance.
       all: now symmetry.
   Qed.
 
-  (** The step this lane called riskiest; base's own combinator closes it. *)
+  (** Transitivity of the instance comparison, by base's combinator. *)
   Lemma cmp_global_instance_eta_trans pb gr napp :
     RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pb) ->
     RelationClasses.Transitive (cmp_universe Conv) ->
@@ -348,9 +262,8 @@ Section FInstInstance.
     - intros e; exact e.
   Qed.
 
-  (** **Item (3) of the lane lead's approval: the [(Conv, n) → (pb, m)]
-      monotonicity the η drop relies on.** At [Conv] the mode is [Conv] for
-      every [napp]; the variance does not read [napp]
+  (** The [(Conv, n) → (pb, m)] monotonicity the η case relies on. At [Conv] the
+      mode is [Conv] for every [napp]; the variance does not read [napp]
       ([global_variance_eta_napp_irrelevant]); and a [Conv]-mode comparison
       implies the [pb]-mode or [Conv]-mode one at [m]. *)
   Lemma finst_Conv_pb pb gr n m u u' :
@@ -368,11 +281,10 @@ Section FInstInstance.
 
 End FInstInstance.
 
-(** **Item (1) of the lane lead's approval: the [Box@{+u}] witness now HOLDS.**
-    A cumulative inductive with no parameters and no indices (arity 0), one
-    [Covariant] universe, compared at [Cumul] with [napp 0] and no arguments:
-    [u ≤ v] suffices. Under 5b9cd4ff this demanded [u = v], which is why A2 was
-    false. Stated for ANY such declared inductive, at BOTH constructor rules. *)
+(** **The [Box@{+u}] witness holds.** A cumulative inductive with no parameters
+    and no indices (arity 0), one [Covariant] universe, compared at [Cumul] with
+    [napp 0] and no arguments: [u ≤ v] suffices. Stated for any such declared
+    inductive, at both constructor rules. *)
 Lemma finst_cumulative_box_witness r (Σ : global_env) cmp_universe i mdecl idecl u v :
   declared_inductive_gen (lookup_env Σ) i mdecl idecl ->
   ind_params mdecl = [] -> ind_indices idecl = [] ->
@@ -391,14 +303,13 @@ Proof.
   right. constructor; [exact huv|constructor].
 Qed.
 
-(** **Hypotheses satisfiable (FRAC's standing rule).** The corrected
-    transitivity's three premises are met by the REAL comparison
-    [compare_universe φ], at every [pb], for EVERY [φ] — no well-formedness
-    needed: [compare_universe φ Conv] is [eq_universe φ], transitive by
-    [eq_universe_trans]; [compare_universe φ pb] is transitive by
-    [compare_universe_trans]; and [eq_universe φ ⊆ compare_universe φ pb] is
-    [compare_universe_subrel] ([Universes.v:1329], [:1417], [:1407]). This
-    corollary is that statement, checked. *)
+(** **The hypotheses are satisfiable.** The three premises of the transitivity
+    lemma are met by the real comparison [compare_universe φ], at every [pb], for
+    every [φ], with no well-formedness: [compare_universe φ Conv] is
+    [eq_universe φ], transitive by [eq_universe_trans]; [compare_universe φ pb] is
+    transitive by [compare_universe_trans]; and
+    [eq_universe φ ⊆ compare_universe φ pb] is [compare_universe_subrel]. This
+    corollary is that statement. *)
 Lemma cmp_global_instance_eta_trans_compare {cf : checker_flags} r Σ φ pb gr napp :
   RelationClasses.Transitive (cmp_global_instance_eta r Σ (compare_universe φ) pb gr napp).
 Proof.
@@ -408,15 +319,14 @@ Proof.
   - exact (compare_universe_trans φ pb).
 Qed.
 
-(** ** U1', carrying the open constructor clause
+(** ** U1', the term-level relation
 
-  The term-level relation, parameterised by the open clause [r] so that it is
-  usable now and pins itself the moment the gate rules.
-  It is a faithful copy of [eq_term_upto_univ_napp] ([PCUICEquality.v:399-474])
-  with EXACTLY TWO constructors changed, [eq_Ind] and [eq_Construct] — the only
-  two that read [napp]. Every other constructor is base's. The copy is
-  unavoidable: [napp] is threaded through the inductive, so the variance lookup
-  cannot be swapped from outside. *)
+  A copy of base [eq_term_upto_univ_napp] with exactly two constructors changed,
+  [eq_Ind] and [eq_Construct], the only two that read [napp]. Every other
+  constructor is base's. The copy is needed because [napp] is threaded through
+  the inductive, so the variance lookup cannot be swapped from outside. It is
+  parameterised by [r], which does not change the relation
+  ([global_variance_eta_rule_irrelevant]). *)
 
 Definition cmp_global_instance_finst r Σ cmp_universe pb gr napp :=
   cmp_global_instance_eta r Σ cmp_universe pb gr napp.
@@ -514,8 +424,7 @@ where " Σ ⊢ t <==η[ pb , napp ] u " :=
 Definition compare_term_eta_napp `{checker_flags} Σ φ (pb : conv_pb) napp (t u : term) :=
   eq_term_upto_univ_eta_napp Σ (compare_universe φ) (compare_sort φ) pb napp t u.
 
-(** **U1'. The comparison obligation 8's restated I5 ends in — STILL CARRYING
-    THE OPEN CONSTRUCTOR CLAUSE [r], which FRAC's gate decides.** *)
+(** **U1'.** The comparison that ends the joins of [I5_statement]. *)
 Definition compare_term_eta `{checker_flags} Σ φ (pb : conv_pb) (t u : term) :=
   compare_term_eta_napp Σ φ pb 0 t u.
 
@@ -523,12 +432,10 @@ End FInstRelation.
 
 Derive Signature for eq_term_upto_univ_eta_napp.
 
-(** ** U1' does not copy the base spec's constructor defect
+(** ** Constructors of non-cumulative inductives
 
-  The whole point of pinning the constructor clause at the kernel's rule. For a
-  constructor of a NON-cumulative inductive, F-inst demands instance EQUALITY,
-  where base's [global_variance_gen] would return [AllIrrelevant] and demand
-  only equal lengths. *)
+  For a constructor of a non-cumulative inductive, F-inst at [FInstFollowKernel]
+  demands instance equality, as the kernel and base [global_variance_gen] do. *)
 
 Lemma finst_noncumulative_constructor_AllEqual lookup gr napp :
   noncumulative_constructor_gen lookup gr = true ->
@@ -537,9 +444,9 @@ Proof.
   intros h. unfold global_variance_eta_gen. now rewrite h.
 Qed.
 
-(** The same fact as the lane states it: a non-cumulative constructor head is
-    compared by instance equality, exactly as [conversion.ml:221-222] does, and
-    NOT by [AllIrrelevant]. *)
+(** The same fact at the comparison: a non-cumulative constructor head is
+    compared by instance equality, as the kernel's [convert_constructors_gen]
+    does. *)
 Lemma finst_noncumulative_constructor_instance_eq Σ cmp_universe pb ind k napp u u' :
   noncumulative_constructor_gen (lookup_env Σ) (ConstructRef ind k) = true ->
   cmp_global_instance_finst FInstFollowKernel Σ cmp_universe pb (ConstructRef ind k) napp u u' ->

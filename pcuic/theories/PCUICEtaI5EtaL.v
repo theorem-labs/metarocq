@@ -1,15 +1,14 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 9: the [cumul_eta_l] case of A2, and I5
-      in full
+(** * The [cumul_eta_l] case of A2, and I5 in full
 
-    [I5_eta_l_case_holds] : I5_eta_l_case r Σ          (for every rule [r])
-    [I5_FollowKernel]     : I5_statement FInstFollowKernel Σ   (no premise)
+    [I5_eta_l_case_holds] : I5_eta_l_case r Σ                   (for every rule [r])
+    [I5_FollowKernel]     : I5_statement FInstFollowKernel Σ
 
-  The premise: from a join of [t] and [(↑u) (tRel 0)] in [Γ ,, vass na A], a join
-  of [λ na:A. t] and [u] in [Γ]. Route: [lanes/eta/obligation9-probe.md] §2.
+  The case: from a join of [t] and [(↑u) (tRel 0)] in [Γ ,, vass na A], a join of
+  [λ na:A. t] and [u] in [Γ].
 
-  ** (F), the factorisation, FIRST ([eta_app_factor])
+  ** (F), the factorisation, first ([eta_app_factor])
 
   A chain [(↑ cu) (tRel 0) ⇝* w] of [R_c ∪ eta1] steps in [Γ ,, vass na A], from
   a canonical scoped [cu], is either
@@ -18,20 +17,20 @@
   One step from [(↑ x) (tRel 0)] ([eta_app_step]):
   - [app_red_l]: [red1_strengthening] gives the step from [x];
   - [red_beta]: [x = λ_:S. b] (canonical), contractum [(lift 1 1 b){0 := tRel 0} = b];
-  - [red_fix]: the recursive argument is NOT the [tRel 0] ([is_constructor_app_tRel0]),
-    so the fix already unfolds on [↑ x] — a step of [x] by strengthening;
+  - [red_fix]: the recursive argument is not the [tRel 0]
+    ([is_constructor_app_tRel0]), so the fix already unfolds on [↑ x], and that is
+    a step of [x] by strengthening;
   - [app_red_r]: none, [tRel 0] is an assumption;
   - [eta1]: only inside [↑ x], and [eta1_lift_inv] gives the step from [x].
-  The probe's claim that [red_fix] never fires at the root is corrected here: it
-  can fire, on an earlier argument, and then it is a step of the function part.
 
   ** Cases
   - (A): [v ≈[Conv,0] (↑ x') (tRel 0)] forces [v = (↑ m') (tRel 0)] with
     [x' ≈ m'] ([finst_eta_root]); the left side then η-contracts to [m'].
   - (B): both sides end in a λ; [eqη_Lambda].
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment. [I5_FollowKernel] has no other premise. C4-side. *)
+  **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
+  ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]).
+  [I5_FollowKernel] has no other premise. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -190,8 +189,9 @@ End EtaL.
 
 (** ** I5 in full, at the kernel's constructor rule
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ], by any well-formed
-  environment; the statement's own scoping premises by any scoped pair. *)
+  **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
+  ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); the statement's own
+  scoping premises by any scoped pair. *)
 Theorem I5_FollowKernel {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) :
   I5_statement FInstFollowKernel Σ.
 Proof. exact (I5_obligation8_FollowKernel Σ wfΣ (I5_eta_l_case_holds Σ wfΣ FInstFollowKernel)). Qed.

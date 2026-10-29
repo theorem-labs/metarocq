@@ -1,12 +1,15 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane: proved satisfying instances (FRAC practice) for A6 and A8
+(** * Satisfying instances of the hypotheses of the A6 and A8 lemmas
 
-  Each lemma of [PCUICEtaA6.v], [PCUICEtaA6Ind.v], [PCUICEtaA6More.v] and
-  [PCUICContextConversionEta.v] whose conclusion is not [False] is applied here to
-  a concrete instance with every premise proved: S4's environment [si_Σ] (an
-  inductive, [si_cb]) or the one-axiom environment [sa_Σ] ([sa_wf]), the rule
-  [FInstFollowKernel], closed terms.
+  Each inversion, chain and U1' lemma of [PCUICEtaA6], [PCUICEtaA6Ind],
+  [PCUICEtaA6More] and [PCUICContextConversionEta] whose conclusion is not [False]
+  is applied here to a concrete instance with every premise proved: the
+  environment [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances] (an inductive;
+  [si_cb]) or the one-axiom environment [sa_Σ] ([sa_wf], [sa_clb]), the rule
+  [FInstFollowKernel], closed terms. The small helpers of those files ([BE_*],
+  [All2_BE_*], [eq_binder_annot_*], ...) have no separate instance; each is used
+  inside an instanced lemma, so its premises are met at a concrete call site.
 
   The lemmas that conclude [False] (head clashes: [finst_Sort_Prod],
   [finst_Prod_Sort], [ws_cumul_pbE_Sort_Prod_inv], [ws_cumul_pbE_Prod_Sort_inv],
@@ -14,9 +17,8 @@
   [invert_cumul_ind_sortE], [invert_cumul_axiom_indE], [invert_cumul_axiom_prodE],
   [invert_cumul_it_mkProd_or_LetIn_Sort_IndE], [invert_cumul_prim_type_indE],
   [invert_cumul_prim_type_prodE], [mkApps_rigid_not_Prod], [mkApps_rigid_not_Sort],
-  [eta_normal_Ind], [eta_normal_Const]) have, by design, no satisfying instance of
-  their premises: each IS the statement that the premises are jointly
-  unsatisfiable. C4-side. *)
+  [eta_normal_Ind], [eta_normal_Const]) have no satisfying instance of their
+  premises: each is the statement that the premises are jointly unsatisfiable. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -70,8 +72,7 @@ Proof.
       cbn. intros op h; discriminate h.
 Qed.
 
-(** [sa_wf] gives the confluence spine's premise ([PCUICClosedBodies]), which the η
-    chain takes in place of [wf] (W-c). *)
+(** [sa_wf] gives [ClosedBodies sa_env], the premise of the lemmas above. *)
 Definition sa_clb : ClosedBodies sa_env := @wf_ClosedBodies _ sa_env sa_wf.
 #[local] Existing Instance sa_clb.
 

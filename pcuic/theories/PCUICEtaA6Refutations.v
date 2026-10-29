@@ -1,28 +1,24 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, A6: the two refuted restatement forms
+(** * A6: two inversion forms that are false
 
-  Like [C1b_false]/[C4_false] (PCUICEtaC1b.v): each theorem takes the refuted
-  form as a hypothesis, instantiated at the empty environment, and derives
-  [False].
+  As for [C1b_false]/[C4_false] ([PCUICEtaC1b]): each theorem takes the false form
+  as a hypothesis, instantiated at the empty environment, and derives [False].
 
-  - [A6_D_conv_body_false]: the rev-4 D-row form (i51/i52: λ ≤[pb] λ gives the
-    bodies at [Conv]) is false at [pb = Cumul]. Witness
-    [λx:Prop. Prop x ≤[Cumul] λx:Prop. Type0 x]: both sides η-reduce, to [Prop]
-    and [Type0], which compare at [Cumul]; but [Prop x] and [Type0 x] are
-    βη-normal and differ at [Conv].
-    RETIRED form; REPLACED BY the body at [pb] ([plan.md] A6 restatements, D rows).
-  - [A6_F_raw_false]: the raw F-row form (i9: [tProd … ≤ T] gives [T] reaching a
-    [tProd] by [red ∪ eta1]) is false. Witness
-    [T := λz:Prop. (tProd nb (λy:z.y) Prop) z], related in E to
-    [tProd nb (λ_:S.tRel 0) Prop] by one η step on [canon T], but βη-normal as it
-    stands, because [z] occurs in an inner domain.
-    RETIRED form; REPLACED BY the canonical form, [(R_c ∪ eta1)* (canon T)]
-    reaching the [tProd] ([plan.md] A6 restatements, F rows), and for typed [T] by
-    [T8_Prod_r_inv_statement].
+  - [A6_D_conv_body_false]: the form "λ ≤[pb] λ gives the bodies at [Conv]" is
+    false at [pb = Cumul]. Witness [λx:Prop. Prop x ≤[Cumul] λx:Prop. Type0 x]:
+    both sides η-reduce, to [Prop] and [Type0], which compare at [Cumul]; but
+    [Prop x] and [Type0 x] are βη-normal and differ at [Conv]. The proved form
+    compares the bodies at [pb] ([ws_cumul_pbE_Lambda_inv], [PCUICEtaA6]).
+  - [A6_F_raw_false]: the form "[tProd … ≤ T] gives [T] reaching a [tProd] by
+    [red ∪ eta1]" is false. Witness [T := λz:Prop. (tProd nb (λy:z.y) Prop) z],
+    related in E to [tProd nb (λ_:S.tRel 0) Prop] by one η step on [canon T], but
+    βη-normal as it stands, because [z] occurs in an inner domain. The proved form
+    has the canonical form [canon T] reach the [tProd] by [(R_c ∪ eta1)*]
+    ([ws_cumul_pbE_Prod_r_inv], [PCUICEtaA6]).
 
   Both witnesses are ill-typed; the refuted lemmas are untyped, as base's are.
-  Assumptions: primitive-type axioms only. C4-side (through A1). *)
+  Assumptions: primitive-type axioms only. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -119,7 +115,7 @@ Section Witnesses.
 
 End Witnesses.
 
-(** **RETIRED form 1** (rev-4 D rows, body at [Conv]). *)
+(** **Form 1, refuted** (λ against λ, the bodies at [Conv]). *)
 Theorem A6_D_conv_body_false :
   (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule)
           pb Γ na1 na2 A1 A2 b1 b2,
@@ -135,7 +131,8 @@ Proof.
   subst v v'. depelim e. depelim e1. cbn in *. exact c.
 Qed.
 
-(** **RETIRED form 2** (raw F rows: [T] reaches a [tProd] by [red ∪ eta1]). *)
+(** **Form 2, refuted** (one side a product, the other side's raw term reaching a
+    [tProd] by [red ∪ eta1]). *)
 Theorem A6_F_raw_false :
   (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule)
           pb Γ na dom codom T,

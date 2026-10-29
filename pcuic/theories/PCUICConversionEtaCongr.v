@@ -1,29 +1,29 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, plan row A5: congruences for [ws_cumul_pbE]
+(** * A5: congruences for [ws_cumul_pbE]
 
   New statements over [ws_cumul_pbE] (A1), proved from the join congruences of
-  A2 ([PCUICEtaI5A2.v]) and A3. This is not a copy of [PCUICConversion.v]
-  (prim-ops row F2 edits that file); base lemmas are used by import only.
+  A2 ([PCUICEtaI5A2]) and A3 ([PCUICEtaI5Trans]). This is not a copy of base
+  [PCUICConversion]; base lemmas are used by import only.
 
   - λ: NO annotation and NO domain premise ([ws_cumul_pbE_Lambda]): [canon]
     erases both, which is the point of the E relation.
   - Π, application, [mkApps], projection, evar, sort, constant, inductive and
     constructor spines, primitives, let-in, case, fixpoints, cofixpoints.
-  - The η rule itself ([ws_cumul_pbE_eta_l], [_eta_r]; obligation 9).
+  - The η rule itself ([ws_cumul_pbE_eta_l], [_eta_r]).
   - [it_mkLambda_or_LetIn] and [it_mkProd_or_LetIn] on the codomain.
 
   One base form is weaker here. [ws_cumul_pbE_LetIn_bo] compares the let-body at
   [Conv], as the spec rule [cumulE_LetIn] and U1''s [eqη_LetIn] both do. Base's
-  [ws_cumul_pb_LetIn_bo] allows [pb] there by zeta and substitution, which is
-  A7's substitution lemma for [ws_cumul_pbE]. For the same reason
+  [ws_cumul_pb_LetIn_bo] allows [pb] there by zeta and substitution; the [pb]
+  form is [ws_cumul_pbE_LetIn_bo_pb] ([PCUICWsCumulEtaSubst]). For the same reason
   [ws_cumul_pbE_it_mkProd_or_LetIn_codom] takes the codomain at [pb] only over an
   assumption context; [_codom_conv] covers every context at [Conv].
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment; the scoping premises by any scoped context and terms; every
-  [ws_cumul_pbE] premise by reflexivity ([ws_cumul_pbE_refl]); the universe
-  premises by the reflexivity of [compare_universe]/[compare_sort]. C4-side. *)
+**The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
+  environment ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); the scoping premises by any scoped context and
+  terms; every [ws_cumul_pbE] premise by reflexivity ([ws_cumul_pbE_refl]); the
+  universe premises by the reflexivity of [compare_universe]/[compare_sort]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

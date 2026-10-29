@@ -13,13 +13,12 @@ Set Default Goal Selector "!".
 
 Implicit Types (cf : checker_flags).
 
-(** * Specification of cumulativity with function eta (BET-315, plan I1)
+(** * Specification of cumulativity with function η
 
-  [cumulSpecE0] has the constructors of [cumulSpec0] (renamed [cumulE_*]) plus
-  [cumul_eta_l]. The new rule has no typing premise and ignores the domain of
-  the lambda: this relation is the specification; the checker compares domains
-  as the kernel does (plan decision (C)). [cumul_eta_r] is derived through
-  symmetry. *)
+  [cumulSpecE0] has the constructors of base [cumulSpec0] (renamed [cumulE_*]) plus
+  [cumul_eta_l]. The new rule has no typing premise and ignores the domain of the
+  λ: this relation is the specification; a checker compares domains as the kernel
+  does. [cumul_eta_r] is derived through symmetry. *)
 
 Reserved Notation " Σ ;;; Γ ⊢ t ≤sE[ pb ] u" (at level 50, Γ, t, u at next level,
   format "Σ  ;;;  Γ  ⊢  t  ≤sE[ pb ]  u").

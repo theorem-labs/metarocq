@@ -1,13 +1,13 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, T0 copy 2: the closedness half of [Typing/PCUICClosedTyp.v] over [typingE]
+(** * The closedness half of [Typing/PCUICClosedTyp] over [typingE]
 
-  Base lines 13-552 at trunk 0729d50e (closedness of declarations and of typed
-  terms, up to [declared_constant_closed_body]), copied over [typingE], [wfE],
-  [wf_localE] and [cumulSpecE0] (lanes/eta/t0-plan.md §3 row 2); every lemma takes
-  the suffix [E]; the proofs are base's. It gives the instance
-  [wfE_ClosedBodies]: an environment checked with the η conversion satisfies the
-  confluence spine's premise ([PCUICClosedBodies]). The reduction lemmas of the
-  base file (from [red1_on_free_vars] on) do not mention typing and are not copied. *)
+  Closedness of declarations and of typed terms, up to
+  [declared_constant_closed_body], copied from the base file over [typingE],
+  [wfE], [wf_localE] and [cumulSpecE0]; every lemma takes the suffix [E], and the
+  proofs are base's. It gives the instance [wfE_ClosedBodies]: an environment
+  checked with the η conversion satisfies [ClosedBodies] ([PCUICClosedBodies]),
+  the premise of the reduction metatheory. The reduction lemmas of the base file
+  (from [red1_on_free_vars] on) do not mention typing and are not copied. *)
 From Stdlib Require Import Morphisms.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
@@ -32,7 +32,7 @@ Proof.
   now move/andP: Hs => [] /= -> _.
 Qed.
 
-(** [closed_cstr_branch_context_gen] without its unused [wf Σ] premise. *)
+(** [closed_cstr_branch_context_gen] without its unused well-formedness premise. *)
 Lemma closed_cstr_branch_context_genE {c mdecl cdecl} :
   closed_inductive_decl mdecl ->
   closed_constructor_body mdecl cdecl ->
@@ -569,9 +569,9 @@ Proof.
   easy.
 Qed.
 
-(** The confluence spine's premise holds in an η-checked environment. With
-    [wf_ClosedBodies] ([Typing/PCUICClosedTyp.v]) this gives BOTH instances FRAC
-    requires for the [ClosedBodies] premise. *)
+(** An environment checked with the η conversion satisfies [ClosedBodies]. With
+    [wf_ClosedBodies] ([Typing/PCUICClosedTyp]) both well-formedness notions give
+    the premise of the reduction metatheory. *)
 #[global] Instance wfE_ClosedBodies {cf : checker_flags} (Σ : global_env) {wfΣ : wfE Σ} :
   ClosedBodies Σ.
 Proof.

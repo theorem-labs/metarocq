@@ -1,11 +1,10 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, T0 copy 1: [Typing/PCUICWeakeningEnvTyp.v] over [typingE]
+(** * [Typing/PCUICWeakeningEnvTyp] over [typingE]
 
-  Base file at trunk 0729d50e, copied over [typingE], [wfE], [wf_localE] and
-  [cumulSpecE0] (lanes/eta/t0-plan.md §3 row 1); every lemma takes the suffix [E].
-  Environment weakening of the conversion rule goes through
-  [weakening_env_cumulSpecE] ([PCUICCumulativitySpecEtaClosure], P2). The proofs
-  are base's. *)
+  The base file copied over [typingE], [wfE], [wf_localE] and [cumulSpecE0];
+  every lemma takes the suffix [E]. Environment weakening of the conversion rule
+  goes through [weakening_env_cumulSpecE]
+  ([PCUICCumulativitySpecEtaClosure]). The proofs are base's. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
@@ -21,8 +20,8 @@ From Stdlib Require Import ssreflect.
 Set Default Goal Selector "!".
 Implicit Types (cf : checker_flags).
 
-(** Hypothesis names for [typingE]/[wfE], as [PCUICTyping.my_rename_hyp] gives for
-    [typing]/[wf]: the copied proofs refer to them. *)
+(** Hypothesis names for [typingE]/[wfE], as base [PCUICTyping.my_rename_hyp]
+    gives for [typing]/[wf]: the copied proofs refer to them. *)
 Ltac my_rename_hypE h th :=
   match th with
   | (wfE ?E) => fresh "wf" E

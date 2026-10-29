@@ -1,34 +1,33 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A4: [canon] is
-      invisible to the spec
+(** * A4: [canon] is invisible to the specification
 
     [canon_cumulSpecE] : is_closed_context Γ -> is_open_term Γ t ->
                          Σ ;;; Γ ⊢ t ≤sE[Conv] canon t
 
-  With [cumulE_Sym], also [canon t ≤sE t]. A4 (join ⇒ spec) uses this to step
-  from [t] to the join's starting point [canon t] and back from [canon u] to [u].
+  With [cumulE_Sym], also [canon t ≤sE t]. A4 (join ⇒ spec, [I5_join_to_spec])
+  uses this to step from [t] to the join's starting point [canon t], and back from
+  [canon u] to [u].
 
-  **Why it holds.** [canon] changes only what the spec does not compare:
+  **Why it holds.** [canon] changes only what the specification does not compare:
   - a λ-domain and annotation: [cumulSpecE_lambda_domain]
-    ([PCUICCumulativitySpecEta.v:762]), the one non-congruence case;
-  - a [tProd]/[tLetIn]/fix binder NAME, keeping its relevance: the congruence
-    rules need only [eq_binder_annot], i.e. relevance (gate R1/SC1);
-  - case-context NAMES: [cumul_predicate]/[cumul_branch] compare contexts with
-    [eq_context_upto_names] ([PCUICCumulativitySpec.v:13-17], [:38-40]).
+    ([PCUICCumulativitySpecEta]), the one non-congruence case;
+  - a [tProd]/[tLetIn]/fix binder name, keeping its relevance: the congruence
+    rules need only [eq_binder_annot], i.e. relevance;
+  - case-context names: [cumul_predicate]/[cumul_branch] compare contexts with
+    [eq_context_upto_names] ([PCUICCumulativitySpec]).
 
   **Scoping, threaded, no premise weakened.** [cumulSpecE_lambda_domain] needs
   both λs scoped, so the induction carries [is_closed_context Γ] and
-  [is_open_term Γ t]. The binder cases extend [Γ] with the LEFT side's context
-  (all three spec comparisons use it). Closedness of the [tCase] and [tFix]
-  extensions comes from base's confluence-free
+  [is_open_term Γ t]. The binder cases extend [Γ] with the left side's context
+  (all three specification comparisons use it). Closedness of the [tCase] and
+  [tFix] extensions comes from base's confluence-free
   [on_free_vars_ctx_inst_case_context_weak] and
-  [on_free_vars_ctx_fix_context_weak] ([PCUICOnFreeVars.v:1594], [:1619]), whose
-  hypotheses are exactly the conjuncts [on_free_vars] gives. No new context lemma
-  was needed.
+  [on_free_vars_ctx_fix_context_weak] ([PCUICOnFreeVars]), whose hypotheses are
+  exactly the conjuncts [on_free_vars] gives.
 
-  **Hypotheses satisfiable (FRAC's rule):** yes — any scoped term in a closed
-  context, e.g. every closed term in [[]].
+  **The hypotheses are satisfiable** by any scoped term in a closed context, for
+  example every closed term in [[]].
 
   Dependencies: [PCUICCumulativitySpecEta], [PCUICEtaCanon]. No confluence file. *)
 

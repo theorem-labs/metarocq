@@ -1,16 +1,11 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 — STAGED AT FollowSpec: I5 restated,
-      and A4 (join ⇒ spec)
+(** * I5: the η specification as a canonical join, and A4 (join ⇒ spec)
 
-  NAMING, AS RULED: this is "8 staged at FollowSpec". "Obligation 8 done" is
-  reserved for FollowKernel after repair (a). "I5 in full" is reported only when
-  obligations 8 AND 9 are both green.
+  ** The statement
 
-  ** The restated I5 (pinned here, parametric in the open constructor clause [r])
-
-  The join relation [JoinE] runs on CANONICAL terms under [R_c ∪ eta1] and ends
-  in U1' ([compare_term_eta], corrected at 0ca53659):
+  The join relation [JoinE] runs on canonical terms under [R_c ∪ eta1] and ends in
+  U1' ([compare_term_eta], [PCUICEtaFInst]):
 
     [JoinE r Σ Γ pb t u := ∑ v v', (R_c ∪ eta1)* (canon t) v ×
                                    (R_c ∪ eta1)* (canon u) v' ×
@@ -19,9 +14,10 @@
     [I5_statement r Σ := ∀ Γ pb t u, closed Γ → open t → open u →
                            (t ≤sE[pb] u <~> JoinE r Σ Γ pb t u)]
 
-  A4 (← : join ⇒ spec) is proved HERE, in full, as [I5_join_to_spec].
-  A2 (→ : spec ⇒ join) is the remaining part of obligation 8; its [cumul_eta_l]
-  case is obligation 9's premise, pinned below as [I5_eta_l_case].
+  A4 (← : join ⇒ spec) is proved here, as [I5_join_to_spec]. A2 (→ : spec ⇒ join)
+  is [I5_spec_to_join] ([PCUICEtaI5A2]); its [cumul_eta_l] case is the premise
+  [I5_eta_l_case] below, proved as [I5_eta_l_case_holds] ([PCUICEtaI5EtaL]). The
+  whole statement is [I5_FollowKernel] ([PCUICEtaI5EtaL]).
 
   ** A4's route
 
@@ -30,17 +26,20 @@
   - [t ≤ canon t] and back: [canon_cumulSpecE] (+ [cumulE_Sym]);
   - each [R_c] step is [red1] then [canon]: [red1_cumulSpecE], [canon_cumulSpecE];
   - each [eta1] step: [eta1_cumulSpecE];
-  - [v ≤[pb] v']: [compare_term_eta_cumulSpecE] (S4 under the under-applied heads);
-  - every [cumulE_Trans] intermediate is scoped: [red1] scoping (P-SCOPE's
-    [beta_eta_is_open_term]), [canon_is_open_term], [eta1_on_free_vars].
+  - [v ≤[pb] v']: [compare_term_eta_cumulSpecE] (with the under-applied lemmas of
+    [PCUICCumulativitySpecEtaClosure] at the under-applied heads);
+  - every [cumulE_Trans] intermediate is scoped: [red1] scoping
+    ([beta_eta_is_open_term]), [canon_is_open_term], [eta1_on_free_vars].
 
-  **Hypotheses satisfiable (FRAC's rule).** [I5_join_to_spec]: [wf Σ] for any
-  well-formed environment; scoping for any scoped pair; [JoinE] is inhabited by
-  any term with itself ([canon t ⇝⁰ canon t], comparison reflexive). Non-vacuous
-  witness: [JoinE] relates [λx:nat. id x] and [id] in an environment declaring
-  [id], via one η step on the left ([lanes/eta/obligation9-probe.md] §4).
+  **The hypotheses are satisfiable.** [I5_join_to_spec]: [ClosedBodies Σ], which every well-formed environment satisfies
+  ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); scoping for
+  any scoped pair; [JoinE] is inhabited by any term with itself
+  ([canon t ⇝⁰ canon t], comparison reflexive). [JoinE] also relates
+  [λx:nat. id x] and [id] in an environment declaring [id], by one η step on the
+  left. Instances: [PCUICEtaFracInstances].
 
-  Dependencies: confluence-free ([PCUICEtaScope], the A4 bridges, S4). *)
+  Dependencies: confluence-free ([PCUICEtaScope], the A4 bridges, the under-applied
+  lemmas). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -65,11 +64,9 @@ Definition I5_statement {cf : checker_flags} (r : finst_construct_rule) (Σ : gl
     is_closed_context Γ -> is_open_term Γ t -> is_open_term Γ u ->
     (Σ ;;; Γ ⊢ t ≤sE[pb] u) <~> JoinE r Σ Γ pb t u.
 
-(** **Obligation 9's premise, pinned as a Definition (lane lead's ruling).** The
-    [cumul_eta_l] case of A2 (spec ⇒ join): from the induction hypothesis on
-    [cumul_eta_l]'s premise ([PCUICCumulativitySpecEta.v:168-170]) to the join of
-    the conclusion. Its exact statement and proof route are in
-    [lanes/eta/obligation9-probe.md]. *)
+(** **The [cumul_eta_l] case of A2 (spec ⇒ join), as a Definition.** From the
+    induction hypothesis on [cumul_eta_l]'s premise to the join of the conclusion.
+    Proved for every [r] as [I5_eta_l_case_holds] ([PCUICEtaI5EtaL]). *)
 Definition I5_eta_l_case {cf : checker_flags} (r : finst_construct_rule) (Σ : global_env_ext) : Type :=
   forall Γ pb na A t u,
     is_closed_context Γ ->

@@ -1,33 +1,32 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A3 piece:
-      C1c for [eta1] — an η step commutes with the F-inst comparison
+(** * C1c for [eta1]: an η step commutes with the F-inst comparison
 
     [eta1_finst_l] : eta1 a b -> on_free_vars P a -> a ≈F[pb,napp] a' ->
                      ∑ b', eta1 a' b' × b ≈F[pb,napp] b'
 
-  NEW: base has no η, so nothing here transports. Every congruence case is the
-  obvious one; the induction hypothesis is taken at the subterm's own
-  [(pb, napp)] position.
+  Base has no η, so nothing here transports. Every congruence case is the obvious
+  one; the induction hypothesis is taken at the subterm's own [(pb, napp)]
+  position. A3 ([PCUICEtaI5Trans]) consumes it.
 
   **The root case, and why there is a scoping premise.** If
   [a = λx:A. (lift0 1 m) (tRel 0)] and [a ≈F a'], then [a' = λx:A'. X' (tRel 0)]
   with [lift0 1 m ≈F[Conv,1] X']. For [a'] to be an η-redex, [X'] must be
-  [lift0 1 m'] — variable 0 must not be free in [X']. The comparison preserves
-  free variables (base's [eq_term_upto_univ_napp_on_free_vars], transported at
-  [Conv]), but on 9.2 EVERY [on_free_vars] fact also demands closed case
+  [lift0 1 m'], that is, variable 0 must not be free in [X']. The comparison
+  preserves free variables (base's [eq_term_upto_univ_napp_on_free_vars],
+  transported at [Conv]), but every [on_free_vars] fact also demands closed case
   contexts, so the free-variable fact about [lift0 1 m] cannot be produced from
   nothing: it comes from [on_free_vars P a]. A3 only ever applies this to scoped
   terms, so the premise costs nothing there. Then [m' := unlift 1 0 X'],
   [X' = lift0 1 m'] (renaming extensionality on the free variables), and
-  [m ≈F m'] by renaming both sides with [unlift] ([eq_term_upto_univ_rename],
+  [m ≈F m'] by renaming both sides with [unlift] (base [eq_term_upto_univ_rename],
   transported), lifted from [(Conv,1)] to [(pb,napp)] by [finst_term_Conv_pb].
 
-  **Hypotheses satisfiable:** [on_free_vars P a] by any scoped [a]
-  ([P := shiftnP #|Γ| xpred0]); the subrelations by [compare_universe φ] /
+  **The hypotheses are satisfiable:** [on_free_vars P a] by any scoped [a]
+  ([P := shiftnP #|Γ| xpred0]); the subrelations by [compare_universe φ] and
   [compare_sort φ]; the comparison by any related pair.
 
-  C4-side (through the transport's use of base [PCUICConfluence]). *)
+  Reaches base [PCUICConfluence] through the transport. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

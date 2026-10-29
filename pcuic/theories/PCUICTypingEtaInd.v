@@ -1,13 +1,11 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, T0 prerequisite P1: the induction principle of [typingE]
+(** * The induction principle of [typingE]
 
-  A copy of [PCUICTyping.v]'s size and induction machinery (base lines
-  517-560, 615-629, 646-677, 699-726, 738-1373 at trunk 0729d50e), over [typingE],
-  [wf_localE], [wfE] and [cumulSpecE0] (plan.md row T0; lanes/eta/t0-plan.md §2 P1):
-  [typingE_size], [typingE_wf_local], [env_propE], [typingE_ind_env_app_size],
-  [typingE_ind_env]. The proofs are base's; only the relation names change.
-  Generic pieces ([All_map_size], [globenv_size], [All_local_env_size], ...) are
-  base's and are reused. *)
+  A copy of base [PCUICTyping]'s size and induction machinery over [typingE],
+  [wf_localE], [wfE] and [cumulSpecE0]: [typingE_size], [typingE_wf_local],
+  [env_propE], [typingE_ind_env_app_size], [typingE_ind_env]. The proofs are
+  base's; only the relation names change. Generic pieces ([All_map_size],
+  [globenv_size], [All_local_env_size], ...) are base's and are reused. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICCases

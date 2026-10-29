@@ -1,26 +1,19 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, C3 re-pinned to [upto_domain_r] (plan.md §6.2,
-      obligation 1's re-pin; consumed by obligation 5)
+(** * C3: strong commutation of β and η, up to [upto_domain_r]
 
-  **Provenance.** This is Prover B's C3 proof (`frac/eta` @ `a61dc045`,
-  [PCUICEtaC3B.v], "C3 strong commutation, unconditional"), ported by EtaL2 to
-  the STRONGER relation [upto_domain_r] of [PCUICEtaCanon]: [upto_domain] plus an
-  [eq_binder_annot] premise at Prod, LetIn, Fix and CoFix (gate r2, R1/SC1). The
-  proof is Prover B's; the changes are the binder-carrying cases only. Landed C3
-  is NOT edited and keeps its [upto_domain] statement.
+  [C3R.red1_eta1_strong_commutation]: one [red1] step against one [eta1] step joins,
+  with at most one [red1] step on the η side and [eta1]* on the β side, up to
+  [upto_domain_r] ([PCUICEtaCanon]), which is [upto_domain] plus an
+  [eq_binder_annot] premise at Prod, LetIn, Fix and CoFix.
 
-  **Not free, despite an earlier claim.** The (co)fixpoint lemmas' INPUT,
-  [commut_mfix], carries full [dname] equality, but their OUTPUT relation,
-  [upto_def], did not. The information is in the hypotheses, so the port is
-  mechanical; the proof still has to carry it to the output.
+  The (co)fixpoint lemmas' input, [commut_mfix], carries full [dname] equality; their
+  output relation, [upto_def], carries the binder annotation that [upto_domain_r]
+  needs.
 
-  Everything is wrapped in [Module C3R] so that this file and [PCUICEtaC3B]
-  can be imported together without name clashes ([peta], [commutes], ...).
-  Dropped from the original: its local [upto_domain_refl] instance and its
-  [Derive Signature] for the relation, both now provided by [PCUICEtaCanon].
-
-  Dependencies as landed C3's, plus [PCUICEtaCanon]. No confluence file. *)
+  Everything is wrapped in [Module C3R] ([peta], [commutes], ...). The
+  [upto_domain_r] instances and [Derive Signature] come from [PCUICEtaCanon]. No
+  confluence file is Required. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -31,7 +24,7 @@ From MetaRocq.Common Require Import config BasicAst PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimitive
      PCUICInduction PCUICLiftSubst PCUICSigmaCalculus PCUICEquality PCUICCases
      PCUICOnFreeVars PCUICTyping PCUICReduction PCUICPrimitiveRed PCUICEtaDefs PCUICEtaCanon PCUICClosedBodies.
-(** EtaL2's strengthening lemma; Requires only base files (no eta-lane file). *)
+(** [red1_strengthening]; Requires only base files. *)
 From MetaRocq.PCUIC Require Import PCUICEtaStrengthening.
 
 Import ListNotations.
@@ -985,13 +978,13 @@ Proof.
     + eapply All2_impl; [exact Hval|]. now intros x y [_ ?].
 Qed.
 
-(** ** More commutation cases, standalone and green (no eta_subst)
+(** ** More commutation cases, standalone (no eta_subst)
 
-  The remaining "unlocking" rows ([red_cofix_case], [red_cofix_proj], [red_proj])
-  copy [peta_commut_red_fix]. The δ/ρ rows ([red_delta], [red_rel]) are forced
-  reflexive on the η side (peta on [tConst]/[tRel] is reflexive), so the same red1
-  step re-fires. None needs [wf Σ] or scoping: those bite only when a red1 fires
-  INSIDE an η-redex peta contracts (the [abs_red_r] kernel, see EtaC3B.md). *)
+  The "unlocking" rows ([red_cofix_case], [red_cofix_proj], [red_proj]) copy
+  [peta_commut_red_fix]. The δ/ρ rows ([red_delta], [red_rel]) are forced reflexive
+  on the η side (peta on [tConst]/[tRel] is reflexive), so the same red1 step
+  re-fires. None needs [ClosedBodies Σ] or scoping: those are used only when a red1
+  fires inside an η-redex that peta contracts (the [abs_red_r] case). *)
 
 Lemma peta_commut_red_rel Σ Γ i body u :
   option_map decl_body (nth_error Γ i) = Some (Some body) ->
@@ -1238,29 +1231,27 @@ Qed.
 Lemma is_constructor_nil n : is_constructor n [] = false.
 Proof. unfold is_constructor. now destruct n. Qed.
 
-(** ** The kernel's scoping premise, and why it SURVIVES the induction
+(** ** The scoping premise of the η case, and why it survives the induction
 
-  [red1_strengthening] (EtaL2's, Required below) needs [on_free_vars xpredT t]. That is NOT
-  vacuous on the 9.2 AST: [on_free_vars]'s [tCase] branch
-  (Syntax/PCUICOnFreeVars.v:82,:85) tests
+  [red1_strengthening] needs [on_free_vars xpredT t]. That is not vacuous:
+  [on_free_vars]'s [tCase] branch (Syntax/PCUICOnFreeVars.v) tests
   [test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams|] on
   [pcontext] and on every [bcontext], and that conjunct never mentions [p], so it
-  demands those contexts be CLOSED however permissive [p] is. (The lemmas that would
-  discharge it — [on_free_vars_true], [on_free_vars_xpredT], [test_context_k_true] —
-  are commented out at :139-163.) Base's own [weakening_red1_cb] carries it for the
-  same reason.
+  demands those contexts be closed however permissive [p] is. (The lemmas that would
+  discharge it, [on_free_vars_true], [on_free_vars_xpredT] and [test_context_k_true],
+  are commented out in that file.) Base's [weakening_red1] carries it for the same
+  reason.
 
-  DO NOT TRY TO DROP THIS PREMISE. It is carried, not re-established at each step,
-  and that is exactly why the induction goes through:
-  - under binders it propagates UNCHANGED, because [shiftnP_xpredT] (:129) gives
+  The premise is carried, not re-established at each step, and that is why the
+  induction goes through:
+  - under binders it propagates unchanged, because [shiftnP_xpredT] gives
     [shiftnP n xpredT =1 xpredT];
-  - across the [lift0 1] of the η-redex it is INVARIANT ([ofvT_lift] below), because
+  - across the [lift0 1] of the η-redex it is invariant ([ofvT_lift] below), because
     [lift] leaves [pcontext]/[bcontext] untouched ([map_branch_k] uses [id] on
     [bcontext]), so the p-independent conjunct is literally identical for [M] and
     [lift0 1 M], while every p-dependent conjunct is trivial at [xpredT].
-  It costs the ROUTE nothing: the authoritative C3 already carries [is_open_term Γ t],
-  and [shiftnP n xpred0 ≤ xpredT] pointwise, so [on_free_vars_impl] (:168) discharges
-  it at assembly. Likewise [wf Σ] is already a C3 premise. *)
+  The C3 statement carries [is_open_term Γ t], and [shiftnP n xpred0 ≤ xpredT]
+  pointwise, so [on_free_vars_impl] discharges it there. *)
 
 Notation ofvT := (on_free_vars xpredT).
 
@@ -1416,13 +1407,11 @@ Proof.
     + apply utdr_Lambda. reflexivity.
 Qed.
 
-(** ** Created-redex sub-case 2: [red_fix] created inside the η body — helpers.
+(** ** Created-redex sub-case 2: [red_fix] created inside the η body, helpers.
 
-  NB base HAS [decompose_app_lift] and [lift_is_constructor], but both are inside the
-  commented-out block at Conversion/PCUICWeakeningConv.v:175-208 (same nested-comment
-  trap as [on_free_vars_true] at Syntax/PCUICOnFreeVars.v:139-163). So they are proved
-  locally here — which also keeps the closure clean, since PCUICWeakeningConv is
-  Conversion-level. *)
+  Base has [decompose_app_lift] and [lift_is_constructor], but both are inside a
+  commented-out block of Conversion/PCUICWeakeningConv.v. So they are proved locally
+  here, which also keeps this file free of Conversion-level imports. *)
 
 Lemma decompose_app_rec_lift n k t l :
   decompose_app_rec (lift n k t) (map (lift n k) l) =
@@ -1926,9 +1915,9 @@ Proof.
     + now apply utdr_Proj.
 Qed.
 
-(** The η constructor: the only case that uses [red1_strengthening] (EtaL2's
-    [PCUICEtaStrengthening.v], which Requires only base files), and hence the only
-    consumer of the two scoping premises and of [wf Σ]. *)
+(** The η constructor: the only case that uses [red1_strengthening]
+    ([PCUICEtaStrengthening], which Requires only base files), and hence the only
+    consumer of the two scoping premises and of [ClosedBodies Σ]. *)
 Lemma ofvT_eta_redex na A M :
   ofvT (tLambda na A (tApp (lift0 1 M) (tRel 0))) -> ofvT A × ofvT M.
 Proof.
@@ -2416,15 +2405,17 @@ Proof.
   - now apply commut_Prim.
 Qed.
 
-(** ** C3 (plan.md §3 row C3, in the authoritative form: rows C3-scope and the
-    [wf Σ] row). Hindley strong commutation of one β step against one η step,
-    modulo [upto_domain_r]: ≤1 β step on the η side, η* on the β side.
+(** ** C3. Hindley strong commutation of one β step against one η step, modulo
+    [upto_domain_r]: at most one β step on the η side, η* on the β side.
+
+    Premises: [ClosedBodies Σ], which every well-formed environment satisfies
+    ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]), and the two scoping premises.
 
     The route: [eta1_peta] embeds the η step in one parallel step; the parallel
     step commutes with the β step ([red1_peta_diamond]); [peta_to_eta] unfolds the
-    resulting parallel step into η*. [peta] never appears in the statement. The two
-    scoping premises and [wf Σ] are consumed only by [red1_strengthening] in the η
-    constructor's [app_red_l] sub-case. *)
+    resulting parallel step into η*. [peta] never appears in the statement. The
+    scoping premises and [ClosedBodies Σ] are consumed only by [red1_strengthening]
+    in the η constructor's [app_red_l] sub-case. *)
 Theorem red1_eta1_strong_commutation (Σ : global_env) (Γ : context) (t u v : term) :
   ClosedBodies Σ -> is_closed_context Γ -> is_open_term Γ t ->
   red1 Σ Γ t v -> eta1 t u ->

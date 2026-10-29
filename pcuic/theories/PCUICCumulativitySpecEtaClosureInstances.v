@@ -1,26 +1,27 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, S4: proved instances of the under-applied lemmas (FRAC practice)
+(** * Satisfying instances of the hypotheses of the under-applied lemmas
 
-  Each lemma of S4 (PCUICCumulativitySpecEtaClosure.v) is applied here to a concrete
-  instance with every premise proved, so the premises are shown to be jointly
-  satisfiable:
+  Each under-applied lemma of [PCUICCumulativitySpecEtaClosure] is applied here to
+  a concrete instance with every premise proved, so the premises are shown to be
+  jointly satisfiable:
 
   - [cumulSpecE_ind_underapplied_gen_inst], [cumulSpecE_ind_underapplied_inst];
   - [cumulSpecE_construct_underapplied_gen_inst], [cumulSpecE_construct_underapplied_inst].
 
   The environment [si_env] declares one inductive with one parameter and one
-  constructor, [Inductive I (A : Prop) : Prop := c : I A], and [si_wf] proves it
-  well-formed ([wf]). The instances use [Γ := []], [args = args' = []] and the empty
-  universe instance on both sides; the arity is 1 for both heads, so both are
-  under-applied. C3-side: no confluence file. *)
+  constructor, [Inductive I (A : Prop) : Prop := c : I A]; [si_wf] proves it
+  well-formed, [si_wfE] well-formed for the η typing, and [si_cb] gives
+  [ClosedBodies si_env]. The instances use [Γ := []], [args = args' = []] and the
+  empty universe instance on both sides; the arity is 1 for both heads, so both
+  are under-applied. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Kernames Environment EnvironmentTyping.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
      PCUICEquality PCUICArityRed PCUICCumulativitySpec PCUICCumulativitySpecEta
-     PCUICCumulativitySpecEtaClosure PCUICClosedBodies PCUICClosedTyp.
+     PCUICCumulativitySpecEtaClosure PCUICClosedBodies PCUICClosedTyp PCUICTypingEta.
 
 #[local] Existing Instance default_checker_flags.
 
@@ -191,10 +192,13 @@ Proof.
       cbn. intros i h; discriminate h.
 Qed.
 
-(** [si_wf] gives the confluence spine's premise ([PCUICClosedBodies]), which the η
-    chain takes in place of [wf] (W-c). *)
+(** [si_wf] gives [ClosedBodies si_env], the premise of the η lemmas. *)
 Definition si_cb : ClosedBodies si_env := @wf_ClosedBodies _ si_env si_wf.
 #[local] Existing Instance si_cb.
+
+(** [si_env] is also well formed for the eta typing, so the hypothesis [wfE Σ] of
+    [wfE_ClosedBodies] and of the typing lemmas over [typingE] is satisfiable. *)
+Definition si_wfE : wfE si_env := wf_incl_E si_wf.
 
 (** ** The universe premises *)
 

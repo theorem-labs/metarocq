@@ -1,7 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec): A3, the join
-      relation [JoinE] is transitive
+(** * A3: the join relation [JoinE] is transitive
 
     [I5_join_trans] : is_open_term Γ u ->
                       JoinE r Σ Γ pb t u -> JoinE r Σ Γ pb u w -> JoinE r Σ Γ pb t w
@@ -9,7 +8,7 @@
   ** Route
 
   From [canon t ⇝* v ≈[pb] v' *⇜ canon u] and [canon u ⇝* x ≈[pb] x' *⇜ canon w]:
-  - join [v'] and [x] at [y] by [canon_beta_eta_confluence] (obligation 7):
+  - join [v'] and [x] at [y] by [canon_beta_eta_confluence] ([PCUICEtaCanonC4]):
     [canon u] is canonical ([canon_idem]) and scoped;
   - pull [v ≈ v'] along [v' ⇝* y] by the right-hand C1c: [v ⇝* z ≈ y];
   - push [x ≈ x'] along [x ⇝* y] by the left-hand C1c: [x' ⇝* z'] and [y ≈ z'];
@@ -19,16 +18,15 @@
   - an [R_c] step is [red1] then [canon]: [red1_finst_l]/[red1_finst_r], then
     [finst_canon] (below: [canon] preserves U1');
   - an [eta1] step: [eta1_finst_l], and its flip for the right-hand side.
-  The η-C1c needs the reducing term scoped; every term on both chains is a
-  reduct of the scoped [canon u], so only [u] needs a scoping premise.
+  The η-C1c needs the reducing term scoped; every term on both chains is a reduct
+  of the scoped [canon u], so only [u] needs a scoping premise.
 
-  **Hypotheses satisfiable (FRAC's rule).** [finst_canon]: [Reflexive (cs Conv)]
-  by [compare_sort φ]. [I5_join_trans]: [wf Σ] by any well-formed environment;
-  [is_closed_context Γ] / [is_open_term Γ u] by any scoped context and term; the
-  two joins by [t = u = w] (each [JoinE] is inhabited by [canon t] with itself,
-  [compare_term_eta_refl]).
-
-  C4-side (through the C1c files and obligation 7). *)
+  **The hypotheses are satisfiable.** [finst_canon]: [Reflexive (cs Conv)] by
+  [compare_sort φ]. [I5_join_trans]: [ClosedBodies Σ], which every well-formed environment satisfies
+  ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); [is_closed_context Γ] and
+  [is_open_term Γ u] by any scoped context and term; the two joins by
+  [t = u = w] (each [JoinE] is inhabited by [canon t] with itself,
+  [compare_term_eta_refl]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

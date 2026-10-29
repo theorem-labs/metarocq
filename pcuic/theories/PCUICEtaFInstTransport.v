@@ -1,32 +1,28 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A3 enabler:
-      at [Conv], U1' IS base's relation over a transformed environment
+(** * At [Conv], U1' is base's relation over a transformed environment
 
     [finst_Conv_base] : eq_term_upto_univ_eta_napp r Σ cu cs Conv napp t u
                         <~> eq_term_upto_univ_napp (eta_env r Σ) cu cs Conv napp t u
 
   **Why this exists.** A3 needs C1c (a [red1] step commutes with the comparison)
   for U1'. Base proves C1c for its own relation ([red1_eq_term_upto_univ_l],
-  [PCUICConfluence.v:809-1436], ~630 lines on top of many relation lemmas). At
-  [Conv], U1''s mode is always [Conv], so the only difference from base is the
-  variance LOOKUP: U1' reads the full-arity variance. [eta_env] is an environment
-  in which base's lookup already returns exactly that, so at [Conv] the two
-  relations coincide and base's whole Conv-level library transports for free.
-  Only the [pb]-spine ([App]-left chains and [Prod] codomains at [Cumul]) is not
-  covered, and is handled separately.
+  [PCUICConfluence]), some 630 lines on top of many relation lemmas. At [Conv],
+  U1''s mode is always [Conv], so the only difference from base is the variance
+  lookup: U1' reads the full-arity variance. [eta_env] is an environment in which
+  base's lookup already returns exactly that, so at [Conv] the two relations
+  coincide and base's whole [Conv]-level library transports. Only the [pb]-spine
+  ([App]-left chains and [Prod] codomains at [Cumul]) is not covered, and is
+  handled separately ([PCUICEtaFInstC1c]).
 
   **[eta_env r Σ]** is [Σ] with every inductive's parameters and indices emptied
-  ([ind_params], [ind_npars], [ind_indices]) and every constructor's
-  [cstr_arity] set to 0, so base's [arity <=? napp] test always passes; and,
-  under [FInstFollowKernel] only, the constructors of NON-cumulative blocks
-  removed, so their lookup fails and base returns [AllEqual] — exactly the
-  kernel rule F-inst follows there. It is a comparison device only: nothing
-  types or reduces in it.
+  ([ind_params], [ind_npars], [ind_indices]) and every constructor's [cstr_arity]
+  set to 0, so base's [arity <=? napp] test always passes; and, under
+  [FInstFollowKernel] only, the constructors of non-cumulative blocks removed, so
+  their lookup fails and base returns [AllEqual], which is the kernel rule F-inst
+  follows there. It is a comparison device only: nothing types or reduces in it.
 
-  **Hypotheses satisfiable:** the iff has no hypotheses.
-
-  No confluence file. *)
+  **The iff has no hypotheses.** No confluence file. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

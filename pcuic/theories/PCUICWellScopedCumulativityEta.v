@@ -1,25 +1,25 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, plan row A1: the well-scoped relation [ws_cumul_pbE]
+(** * A1: the well-scoped relation [ws_cumul_pbE]
 
   The E counterpart of base [ws_cumul_pb] ([PCUICWellScopedCumulativity.v]),
-  built on the canonical join [JoinE] (I3 as restated by plan §6.2):
+  built on the canonical join [JoinE] ([PCUICEtaI5]):
 
     [ws_cumul_pbE r pb Σ Γ t u] := [Γ] closed, [t] and [u] open in [Γ], and
                                    [JoinE r Σ Γ pb t u].
 
   It is new statements over [JoinE] and I5, not a copy of the base file:
   - [_forget] to the unscoped join and to the spec [≤sE];
-  - [into_ws_cumul_pbE] from the join, and from the spec (A2 + obligation 9);
+  - [into_ws_cumul_pbE] from the join, and from the spec (A2, with
+    [I5_eta_l_case_holds]);
   - [ws_cumul_pbE_spec_iff]: the relation is the scoped spec (I5);
   - reflexivity, symmetry at [Conv], transitivity (A3), [Conv ⊆ pb];
   - base [ws_cumul_pb ⊆ ws_cumul_pbE] ([cumulAlgo_cumulSpec], [cumulSpec0_incl_E]);
   - closed reduction and closed η steps are in the relation, on either side.
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment; the scoping premises by any scoped context and terms; each
-  [JoinE]/[ws_cumul_pbE] premise by [t = u] ([ws_cumul_pbE_refl]). C4-side
-  (through A3). *)
+**The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
+  environment ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); the scoping premises by any scoped context and
+  terms; each [JoinE]/[ws_cumul_pbE] premise by [t = u] ([ws_cumul_pbE_refl]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

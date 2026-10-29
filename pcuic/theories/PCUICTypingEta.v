@@ -12,17 +12,18 @@ Set Equations With UIP.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
-(** * Typing with function eta (BET-315, plan S5)
+(** * Typing with function η
 
-  [typingE] is a copy of [typing] (`PCUICTyping.v:199-299`) in which the single
+  [typingE] is a copy of base [typing] ([PCUICTyping]) in which the single
   conversion rule [type_Cumul] and the [conv_witness] used by the guard's
-  [wf_fixpoint]/[wf_cofixpoint] premises are re-based on the eta specification
-  [cumulSpecE0] (plan decision (C5)): [typingE] carries one conversion relation.
-  The guard checker [guard_cl] is conversion-free, so [fix_guard]/[cofix_guard]
-  are unchanged; only its closure lemmas move (L4a, [PCUICGuardClosure]).
+  [wf_fixpoint]/[wf_cofixpoint] premises are re-based on the η specification
+  [cumulSpecE0]: [typingE] carries one conversion relation. The guard checker
+  [fix_guard]/[cofix_guard] is unchanged. Its closure predicate [guard_cl]
+  ([PCUICGuardClosure]) does read a conversion, in [gc_ctx], which is base
+  [cumulSpec0]; the η copy of that file is not in this tree.
 
-  [wfE]/[wf_extE] are the E well-formedness classes; [typing_incl_E] and
-  [wf_incl_E] include the base relations into the E ones through
+  [wfE]/[wf_extE] are the η well-formedness classes; [typing_incl_E] and
+  [wf_incl_E] include the base relations into the η ones through
   [cumulSpec0_incl_E]. *)
 
 (** The witness relation re-based on [convSpecE] = [cumulSpecE0 _ _ Conv]. *)

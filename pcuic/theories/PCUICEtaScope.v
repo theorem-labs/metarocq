@@ -1,25 +1,28 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, C4 row P-SCOPE: [beta_eta] preserves scoping.
+(** * [beta_eta] preserves scoping
 
-   Needed so that (A)'s induction can re-apply C3 ([red1_eta1_strong_commutation],
-   which carries [is_closed_context Γ] and [is_open_term Γ t]) at EVERY step of a
-   multi-step reduction.
+   Needed so that (A)'s induction can re-apply C3
+   ([red1_eta1_strong_commutation], which carries [is_closed_context Γ] and
+   [is_open_term Γ t]) at every step of a multi-step reduction.
 
    [is_closed_context Γ] is preserved trivially: [Γ] is fixed ([red1 Σ Γ]; [eta1]
-   is context-free). Only [is_open_term Γ t] varies. [red1]'s half is base
-   ([red1_on_free_vars_cb], Typing/PCUICClosedTyp.v). The only NEW content is that
+   is context-free). Only [is_open_term Γ t] varies. [red1]'s half is base's
+   ([red1_on_free_vars_cb], [Typing/PCUICClosedTyp]). The new content is that
    [eta1] preserves [on_free_vars], whose [eta_red] case needs
+
      on_free_vars (shiftnP 1 p) (lift0 1 t) -> on_free_vars p t,
-   the WINDOW-CONVERSE of [on_free_vars_lift]. 9.2 does not have it, and it is not
-   derivable from [on_free_vars_lift]: [shiftnP 1 p] and [strengthenP 0 1 p] differ
-   exactly at index 0, and "index 0 is not free in [lift0 1 t]" is the content
-   itself (its unconditional form would be [on_free_vars xpredT], FALSE on 9.2).
-   So [on_free_vars_lift_weakenP] proves it by the SAME induction as
+
+   the window-converse of [on_free_vars_lift]. Base does not have it, and it is
+   not derivable from [on_free_vars_lift]: [shiftnP 1 p] and [strengthenP 0 1 p]
+   differ exactly at index 0, and "index 0 is not free in [lift0 1 t]" is the
+   content itself (its unconditional form would be [on_free_vars xpredT], which is
+   false). So [on_free_vars_lift_weakenP] proves it by the same induction as
    [on_free_vars_lift], with [weakenP] (true on the lifted window) in place of
    [strengthenP] (false on it).
 
-   NO NEW PREMISE: the result needs only what C4 already carries
-   ([wf Σ], [is_closed_context Γ], [is_open_term Γ t]). *)
+   The premises are the ones C4 already carries: [ClosedBodies Σ], which every
+   well-formed environment satisfies ([wf_ClosedBodies]; [wfE_ClosedBodies] for
+   [wfE]), [is_closed_context Γ] and [is_open_term Γ t]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations.Type Require Import Relation Relation_Properties.

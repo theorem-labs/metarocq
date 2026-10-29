@@ -1,21 +1,22 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, A6 part 3: remaining rows with a typing-metatheory consumer
+(** * A6, part 3: further inversions that the typing metatheory uses
 
-  Rows of [lanes/eta/inv-base-targets.md], over [ws_cumul_pbE], untyped:
-  - x15 [conv_sort_invE] (C; consumer [PCUICCumulProp]);
-  - x17 [ws_cumul_pbE_LetIn_inv] (T; consumer [PCUICInductiveInversion]);
-  - x18 [ws_cumul_pbE_Prod_Prod_inv_l] (C; consumer [PCUICInductiveInversion]):
-    i11 with the codomain in the LEFT binder's context;
-  - x16 [invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (C; consumer
-    [PCUICFirstorder]), at every [pb];
-  - i37, i38 [invert_cumul_prim_type_indE/_prodE] (C; consumers
-    [PCUICFirstorder], [PCUICSafeLemmata], erasure), at every [pb].
+  Over [ws_cumul_pbE], untyped:
+  - [conv_sort_invE] (used by base [PCUICCumulProp]);
+  - [ws_cumul_pbE_LetIn_inv] (base [PCUICInductiveInversion]);
+  - [ws_cumul_pbE_Prod_Prod_inv_l] (base [PCUICInductiveInversion]): the product
+    inversion with the codomain in the left binder's context;
+  - [invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (base [PCUICFirstorder]), at every
+    [pb];
+  - [invert_cumul_prim_type_indE], [_prodE] (base [PCUICFirstorder],
+    [PCUICSafeLemmata], erasure), at every [pb].
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment; [declared_constant] with [primitive_invariants] by an
-  environment declaring the primitive type; every [ws_cumul_pbE] premise by
-  reflexivity. C4-side. *)
+  **The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
+  environment ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]);
+  [declared_constant] with [primitive_invariants] and [prim_op_of Σ cst = None] by
+  an environment declaring the primitive type; every [ws_cumul_pbE] premise by
+  reflexivity. Instances: [PCUICEtaA6Instances]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -188,9 +189,9 @@ Section A6More.
     exact (WS_trans (wfΣ := wfΣ) h1 h3).
   Qed.
 
-  (** I7 rev 15 C9: the untyped lemma that serves [PCUICInductiveInversion]'s
-      F-row uses. The scoping premises are what base's
-      [red_it_mkProd_or_LetIn_mkApps_Ind_cb] (closed reduction) needs. *)
+  (** The untyped lemma behind the uses in base [PCUICInductiveInversion]. The
+      scoping premises are what base's [red_it_mkProd_or_LetIn_mkApps_Ind_cb]
+      (closed reduction) needs. *)
   Lemma chain_it_mkProd_or_LetIn_mkApps_Ind Γ ctx ind u args T :
     is_closed_context Γ -> is_open_term Γ (it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args)) ->
     chain Γ (canon (it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args))) T ->

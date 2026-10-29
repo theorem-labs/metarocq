@@ -1,43 +1,39 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 1: the canonical-domain map [canon]
+(** * The canonical-domain map [canon]
 
-  The modulo-[upto_domain] form of C4 is REFUTED (plan.md risk row 4, §6.1;
-  [C4_false] at `wip/c4-C4C1b-2026-10-28` @ `73bbb2d1`). The repair is the
-  canonical-domain route of plan.md §6.2: the joins run on terms whose λ domains
-  have been ERASED BEFORE any reduction step, because comparing domain-blind only
-  at the end of a join is too late — an η-expansion upstream can block ι/fix/
-  cofix/proj, and a variable in an inner domain can block η.
+  βη-confluence modulo [upto_domain] is false ([C4_false], [PCUICEtaC1b]). The
+  canonical-domain route runs the joins on terms whose λ domains have been erased
+  before any reduction step, because comparing domain-blind only at the end of a
+  join is too late: an η-expansion upstream can block ι/fix/cofix/proj, and a
+  variable in an inner domain can block η.
 
-  This file is §6.2's obligation 1, the first lemma of the route:
+  This file proves the first lemma of the route:
 
     [upto_domain_r a b <~> canon a = canon b]      ([upto_domain_r_canon_iff])
 
-  **AC1 / R1 / SC1 (binding).** [canon] erases exactly what [upto_domain_r]
-  ignores, no more and no less. In particular it KEEPS the binder RELEVANCE on
-  [tProd], [tLetIn] and fix/cofix [dname], and it does NOT recurse into the
-  [pcontext]/[bcontext] declarations' types or bodies:
+  [canon] erases exactly what [upto_domain_r] ignores, no more and no less. In
+  particular it keeps the binder relevance on [tProd], [tLetIn] and fix/cofix
+  [dname], and it does not recurse into the [pcontext]/[bcontext] declarations'
+  types or bodies:
 
   | node          | [canon]                                          | why                                                      |
   |---------------|--------------------------------------------------|----------------------------------------------------------|
   | [tLambda]     | domain := [canon_dom]; annotation fully erased   | [cumulSpecE_lambda_domain] has no annotation premise      |
-  | [tProd]/[tLetIn] | NAME erased, RELEVANCE kept; recurse         | [cumulE_Prod]/[cumulE_LetIn] need [eq_binder_annot], which IS relevance equality ([BasicAst.v:18-22]) |
-  | [tFix]/[tCoFix] | [dname] NAME erased, relevance kept; recurse  | [cumul_mfixpoint] compares [dname] relevance              |
-  | [tCase]       | [pcontext]/[bcontext] NAMES only; NO recursion into their types or bodies | [eq_decl_upto_names] ([PCUICEquality.v:205-209]) compares relevance and compares declaration types and bodies by [=] |
+  | [tProd]/[tLetIn] | name erased, relevance kept; recurse          | [cumulE_Prod]/[cumulE_LetIn] need [eq_binder_annot], which is relevance equality |
+  | [tFix]/[tCoFix] | [dname] name erased, relevance kept; recurse   | [cumul_mfixpoint] compares [dname] relevance              |
+  | [tCase]       | [pcontext]/[bcontext] names only; no recursion into their types or bodies | [eq_decl_upto_names] compares relevance and compares declaration types and bodies by [=] |
 
-  Erasing the Prod/LetIn/fix relevance too — the pre-R1 wording "every binder
-  annotation set to one fixed value" — is UNSOUND for this route: [tProd {anon,
-  Relevant} S S] and [tProd {anon, Irrelevant} S S] would get the same [canon]
-  form and I5 would join them, while no [≤sE] rule relates them, so I5's
-  join ⇒ spec direction (A4) would be false and the relevance conjuncts the
-  typing metatheory reads out of Prod inversion would go dead.
+  Erasing the Prod/LetIn/fix relevance too would be unsound for this route:
+  [tProd {anon, Relevant} S S] and [tProd {anon, Irrelevant} S S] would get the same
+  [canon] form and the joins would relate them, while no [≤sE] rule does, so the
+  join ⇒ spec direction ([I5_join_to_spec]) would be false.
 
-  [upto_domain] itself is LANDED ([PCUICEtaDefs.v]) and is NOT edited here;
-  [upto_domain_r] is a new, strictly stronger relation defined below, and C3/C1a
-  are re-pinned to it separately.
+  [upto_domain] ([PCUICEtaDefs]) is not edited here; [upto_domain_r] is a strictly
+  stronger relation defined below.
 
   Dependencies: base syntax, [PCUICEquality] (for [eq_binder_annot] and
-  [eq_decl_upto_names]) and [PCUICEtaDefs]. NO confluence file. *)
+  [eq_decl_upto_names]) and [PCUICEtaDefs]. No confluence file. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -120,11 +116,10 @@ Lemma eq_binder_annot_trans' {A B C}
   eq_binder_annot x y -> eq_binder_annot y z -> eq_binder_annot x z.
 Proof. unfold eq_binder_annot. intros e1 e2. now etransitivity. Qed.
 
-(** ** [upto_domain_r] (plan.md §6.2, R1)
+(** ** [upto_domain_r]
 
-  [upto_domain] PLUS an [eq_binder_annot] premise at [utd_Prod], [utd_LetIn],
-  [utd_Fix] and [utd_CoFix]. Everything else is byte-for-byte the landed
-  relation ([PCUICEtaDefs.v:264-339]). *)
+  [upto_domain] plus an [eq_binder_annot] premise at [utd_Prod], [utd_LetIn],
+  [utd_Fix] and [utd_CoFix]. Everything else is [upto_domain] ([PCUICEtaDefs]). *)
 
 Inductive upto_domain_r : term -> term -> Type :=
 | utdr_Rel n : upto_domain_r (tRel n) (tRel n)
@@ -242,13 +237,12 @@ Qed.
 
 (** ** [upto_domain_r] is an equivalence *)
 
-(** The three proofs below dispatch on the SHAPE OF THE GOAL
+(** The three proofs below dispatch on the shape of the goal
    ([lazymatch goal with | |- upto_domain_r (tFix _ _) _ => … ]), not on bullet
-   position. [upto_domain_r] has four more premises than [upto_domain], so any
-   prelude that silently closes one case shifts every later positional bullet and
-   the failure then surfaces several cases away. Shape dispatch also keeps the
-   error message on the case that actually failed. (C4C1b's carry-forward,
-   recorded in [impl/HELPERS.md].) *)
+   position. [upto_domain_r] has four more premises than [upto_domain], so a
+   prelude that silently closes one case would shift every later positional bullet,
+   and the failure would surface several cases away. Shape dispatch also keeps the
+   error message on the case that actually failed. *)
 
 #[global] Instance upto_domain_r_refl : CRelationClasses.Reflexive upto_domain_r.
 Proof.
@@ -404,11 +398,10 @@ Proof.
   end.
 Qed.
 
-(** ** [canon] (plan.md §6.2, AC1 / R1 / SC1)
+(** ** [canon]
 
-  [canon_dom] is CLOSED, which is what makes [canon] preserve scoping
-  (obligation 2) and makes substitution unable to put a variable into a
-  canonical domain. *)
+  [canon_dom] is closed, which is what makes [canon] preserve scoping and makes
+  substitution unable to put a variable into a canonical domain. *)
 
 Definition canon_dom : term := tSort sProp.
 
@@ -420,11 +413,11 @@ Definition canon_na (na : aname) : aname :=
 Definition canon_la : aname :=
   {| binder_name := nAnon; binder_relevance := Relevant |}.
 
-(** Case/branch context declaration: the NAME only. The type and the body are
-   left ALONE — [eq_decl_upto_names] compares them by [=], so recursing here
-   would make [canon] identify strictly more than [upto_domain_r] does and
-   obligation 1 would be false. It would also be pointless: [lift]/[subst] never
-   touch [pcontext] ([map_predicate_k], [PCUICAst.v:83-87]). *)
+(** Case/branch context declaration: the name only. The type and the body are
+   left alone: [eq_decl_upto_names] compares them by [=], so recursing here would
+   make [canon] identify strictly more than [upto_domain_r] does, and
+   [upto_domain_r_canon_iff] would be false. [lift]/[subst] never touch [pcontext]
+   ([map_predicate_k]). *)
 Definition canon_decl (d : context_decl) : context_decl :=
   {| decl_name := canon_na d.(decl_name);
      decl_body := d.(decl_body);
@@ -467,7 +460,7 @@ Fixpoint canon (t : term) : term :=
   | tPrim p => tPrim (map_prim canon p)
   end.
 
-(** ** Binder and declaration arms of obligation 1 *)
+(** ** Binder and declaration arms of [upto_domain_r_canon_iff] *)
 
 Lemma canon_na_eq na na' : eq_binder_annot na na' -> canon_na na = canon_na na'.
 Proof. unfold eq_binder_annot, canon_na. intros e. now rewrite e. Qed.
@@ -518,7 +511,7 @@ Proof.
     [apply compare_vdef|apply compare_vass]; reflexivity.
 Qed.
 
-(** ** Obligation 1, forward: [upto_domain_r] implies [canon]-equality *)
+(** ** Forward: [upto_domain_r] implies [canon]-equality *)
 
 Lemma upto_domain_r_canon t u : upto_domain_r t u -> canon t = canon u.
 Proof.
@@ -564,7 +557,7 @@ Proof.
     now rewrite hv hd ht; f_equal.
 Qed.
 
-(** ** Obligation 1, backward, through [canon]'s own fixed point
+(** ** Backward, through [canon]'s own fixed point
 
    [upto_domain_r t (canon t)] plus symmetry and transitivity gives the backward
    direction without a 15x15 shape analysis. *)
@@ -625,7 +618,7 @@ Proof.
   end.
 Qed.
 
-(** ** Obligation 1 *)
+(** ** [upto_domain_r_canon_iff] *)
 
 Theorem upto_domain_r_canon_iff t u : upto_domain_r t u <~> canon t = canon u.
 Proof.
@@ -636,20 +629,18 @@ Proof.
     rewrite e. symmetry. apply upto_domain_r_canon_self.
 Qed.
 
-(** [canon] is idempotent: canonical terms are exactly its fixed points, which is
-   the [canon t = t] conjunct of §6.2's invariant [Q]. *)
+(** [canon] is idempotent: canonical terms are exactly its fixed points. *)
 Lemma canon_idem t : canon (canon t) = canon t.
 Proof.
   apply upto_domain_r_canon. symmetry. apply upto_domain_r_canon_self.
 Qed.
 
-(** * §6.2 obligation 2: [canon] commutes with the substitution calculus,
-      and preserves scoping (R2)
+(** * [canon] commutes with the substitution calculus, and preserves scoping
 
-  Why it goes through at all: [canon_dom] is CLOSED, so it is fixed by every
-  operation here, and substitution can never put a variable into a canonical
-  λ domain. The only arithmetic obligations are length equations, and [canon]
-  is a [map] everywhere it matters, so all of them are [length_map]. *)
+  [canon_dom] is closed, so it is fixed by every operation here, and substitution
+  can never put a variable into a canonical λ domain. The only arithmetic
+  obligations are length equations, and [canon] is a [map] everywhere it matters,
+  so all of them are [length_map]. *)
 
 Lemma All_map_eq' {A B} (f g : A -> B) l :
   All (fun x => f x = g x) l -> map f l = map g l.
@@ -933,8 +924,7 @@ Proof.
   rewrite IH canon_ctx_length. reflexivity.
 Qed.
 
-(** List helpers, so the main induction needs no [solve_all] (whose behaviour
-    after a partial [cbn] is what made the first draft of this proof fail). *)
+(** List helpers, so the main induction needs no [solve_all]. *)
 
 Lemma forallb_canon_ofv P l :
   All (fun t => forall P, on_free_vars P t -> on_free_vars P (canon t)) l ->

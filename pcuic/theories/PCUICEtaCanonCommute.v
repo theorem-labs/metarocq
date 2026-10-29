@@ -1,30 +1,29 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 5: EXACT strong commutation of [R_c] and [eta1]
+(** * Exact strong commutation of [R_c] and [eta1]
 
     [R_c_eta1_strong_commutation] : ClosedBodies Σ -> is_closed_context Γ ->
       is_open_term Γ t -> canon t = t ->
       R_c Σ Γ t v -> eta1 t u ->
       ∑ z, clos_refl (R_c Σ Γ) u z × clos_refl_trans eta1 v z
 
-  This is (A)'s strong-commutation premise at [E := eq]: at most one [R_c] step
-  on the η side, any number of η steps on the [R_c] side, and the two meet
-  EXACTLY — no modulo relation. That exactness is the whole point of the
-  canonical-domain route: the refuted C4 needed a join modulo [upto_domain],
-  which cannot be made to compose (plan.md risk row 4, §6.1).
+  This is (A)'s strong-commutation premise at [E := eq] ([PCUICEtaCanonC4]): at
+  most one [R_c] step on the η side, any number of η steps on the [R_c] side, and
+  the two meet exactly, with no modulo relation. That exactness is the point of
+  the canonical-domain route: the refuted C4 ([C4_false], [PCUICEtaC1b]) needed a
+  join modulo [upto_domain], which does not compose.
 
-  **Route.** Re-pinned C3 ([C3R.red1_eta1_strong_commutation], [bd33ef35])
-  joins the underlying [red1] step and the η step up to [upto_domain_r]. Then:
-  - [upto_domain_r w w'] gives [canon w = canon w'] (obligation 1), so both
-    sides meet at [z := canon w];
+  **Route.** C3 ([C3R.red1_eta1_strong_commutation], [PCUICEtaC3BR]) joins the
+  underlying [red1] step and the η step up to [upto_domain_r]. Then:
+  - [upto_domain_r w w'] gives [canon w = canon w'] ([upto_domain_r_canon_iff]),
+    so both sides meet at [z := canon w];
   - the η side: a [red1] step from [u] is an [R_c] step by definition; no step
     leaves [u], which is canonical by [eta1_canonical];
-  - the [R_c] side: [eta1* v0 w'] maps through [canon] to [eta1* (canon v0)
-    (canon w')] by [eta1_canon], and [v = canon v0].
+  - the [R_c] side: [eta1* v0 w'] maps through [canon] to
+    [eta1* (canon v0) (canon w')] by [eta1_canon], and [v = canon v0].
 
-  Reads no final comparison, so the R3(a) fence on obligations 8-9 does not
-  touch it. Dependencies: [PCUICEtaC3BR], [PCUICEtaCanonRed],
-  [PCUICEtaCanonEta]. No confluence file. *)
+  Dependencies: [PCUICEtaC3BR], [PCUICEtaCanonRed], [PCUICEtaCanonEta]. No
+  confluence file. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

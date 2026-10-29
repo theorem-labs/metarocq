@@ -1,29 +1,26 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, A6 part 1: inversions for [ws_cumul_pbE] (untyped)
+(** * A6, part 1: inversions for [ws_cumul_pbE] (untyped)
 
-  The rows of [lanes/eta/inv-base-targets.md] for sorts, products, reduction,
-  let-in and λ, restated over [ws_cumul_pbE] in the forms the stream lead pinned
-  ([plan.md], "A6 restatements PINNED"):
-  - the F rows ([*_l_inv], [*_r_inv]): the other side's CANONICAL form reaches
-    the head by [(R_c ∪ eta1)*], with the component comparisons as
-    [ws_cumul_pbE]; the raw form is false ([A6_F_raw_false]);
-  - the D rows (i51, i52): the bodies at [pb], with no annotation or domain
-    conjunct; the [Conv]-body form is false ([A6_D_conv_body_false]).
+  The η versions of base's inversion lemmas for sorts, products, reduction, let-in
+  and λ, over [ws_cumul_pbE]:
+  - the forms "one side is a head" ([*_l_inv], [*_r_inv]): the other side's
+    canonical form reaches the head by [(R_c ∪ eta1)*], with the component
+    comparisons as [ws_cumul_pbE]. The form with the raw term in place of its
+    canonical form is false ([A6_F_raw_false], [PCUICEtaA6Refutations]);
+  - λ against λ ([ws_cumul_pbE_Lambda_inv] and its forms): the bodies at [pb],
+    with no annotation or domain conjunct. The form with the bodies at [Conv] is
+    false ([A6_D_conv_body_false]).
 
   ** Method
   [JoinE] is a pair of [(R_c ∪ eta1)*] chains from the canonical forms that end
   U1'-related. A chain from a rigid head keeps the head ([chain_Sort],
-  [chain_Prod], [chain_Lambda]) and gives a [BE] chain per component; U1'
-  related terms share the head ([finst_*_l], [finst_*_r]); the components are
-  then joined by [BE_JoinE].
+  [chain_Prod]) and gives a [BE] chain per component; U1'-related terms share the
+  head ([finst_*_l], [finst_*_r]); the components are then joined by [BE_JoinE].
 
-  Rows: i1-i5, i8-i11, i22-i25, i40, i41, i47, i48, i51, i52, i53.
-
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment; every [ws_cumul_pbE] premise by reflexivity; the reductions by
-  [rt_refl]. Proved instances: [PCUICEtaFracInstances.v] style, in
-  [PCUICEtaA6Instances.v]. C4-side. *)
+  **The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
+  environment ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); every [ws_cumul_pbE] premise by
+  reflexivity; the reductions by [rt_refl]. Instances: [PCUICEtaA6Instances]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

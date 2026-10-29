@@ -1,29 +1,23 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, C1a re-pinned to [upto_domain_r] (plan.md §6.2,
-      obligation 1's re-pin; consumed by obligation 3)
+(** * C1a for [upto_domain_r]: [upto_domain_r] commutes with [red1]
 
-  [upto_domain_r] commutes with [red1], in the reflexive-closure form:
+  In the reflexive-closure form:
 
     [upto_domain_r t t' -> red1 Σ Γ t u ->
        ∑ u', clos_refl (red1 Σ Γ) t' u' × upto_domain_r u u']
 
-  **Provenance.** This is C4C1a's proof (`wip/c4-C4C1a-2026-10-28` @ `7c18b365`,
-  [PCUICEtaC1a.v]), ported by EtaL2 to the STRONGER relation [upto_domain_r] of
-  [PCUICEtaCanon]: [upto_domain] plus an [eq_binder_annot] premise at Prod,
-  LetIn, Fix and CoFix (gate r2, R1/SC1). The proof is C4C1a's; the changes are
-  the binder-carrying cases only. C1a itself is not merged and is not edited.
+  [upto_domain_r] ([PCUICEtaCanon]) is [upto_domain] plus an [eq_binder_annot]
+  premise at Prod, LetIn, Fix and CoFix.
 
-  **Why the port is mechanical.** [red1] never changes a binder annotation:
-  every congruence rebuilds the term with the related side's OWN binder, and
-  every redex substitutes into bodies without touching binders. So the extra
-  [eq_binder_annot] premises are carried through unchanged, and [lift]/[subst]
+  **Why the binder premises are carried through.** [red1] never changes a binder
+  annotation: every congruence rebuilds the term with the related side's own
+  binder, and every redex substitutes into bodies without touching binders. So the
+  extra [eq_binder_annot] premises are carried through unchanged, and [lift]/[subst]
   leave binders alone.
 
-  **Dropped from C1a, deliberately.** C1a's corollary over [upto_domain_ctx]
-  ([PCUICEtaConfluence], not on this branch) and its use of the pinned
-  [C1a_fixed_statement] ([PCUICEtaBetaEta], whose C4 form is REFUTED). The
-  fixed-context form is restated directly at the end of this file.
+  The general form is [red1_upto_domain_r_bodies] (related contexts); the
+  fixed-context form [red1_upto_domain_r_fixed] is at the end of this file.
 
   Dependencies: base syntax and [red1], [PCUICEtaDefs], [PCUICEtaCanon]. No
   confluence file. *)
@@ -799,7 +793,7 @@ Proof.
       constructor; constructor; assumption.
 Qed.
 
-(** The fixed-context form, the shape obligation 3's simulation consumes. *)
+(** The fixed-context form, the shape [red1_R_c] ([PCUICEtaCanonRed]) consumes. *)
 Theorem red1_upto_domain_r_fixed {Σ Γ t t' u} :
   upto_domain_r t t' -> red1 Σ Γ t u ->
   ∑ u', clos_refl (red1 Σ Γ) t' u' × upto_domain_r u u'.

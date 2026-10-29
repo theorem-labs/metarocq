@@ -11,14 +11,13 @@ From MetaRocq.PCUIC Require Export PCUICEtaDefs.
 Import ListNotations.
 Set Default Goal Selector "!".
 
-(** * η closure on application spines (plan §3 U4, L1)
+(** * η closure on application spines
 
-  The definitions [eta1], [eta1_ind_all], [eta := clos_refl_trans eta1] and
-  [upto_domain] live in [PCUICEtaDefs] (L2); the substitution/lifting cluster
-  ([eta1_subst], [eta_subst_term], [subst_eta], [eta_subst], [eta1_lift],
-  [weakening_eta]) and the one-hole congruence toolkit live in
-  [PCUICEtaConfluence] (L2). This file adds only the spine lemmas that the C3
-  provers require, under the names agreed with EtaL2 / C3Prover3. *)
+  [eta1], [eta1_ind_all], [eta := clos_refl_trans eta1] and [upto_domain] are in
+  [PCUICEtaDefs]; the substitution and lifting cluster ([eta1_subst],
+  [eta_subst_term], [subst_eta], [eta_subst], [eta1_lift], [weakening_eta]) and
+  the one-hole congruence toolkit are in [PCUICEtaConfluence]. This file adds the
+  spine lemmas. *)
 
 Derive Signature for eta1.
 

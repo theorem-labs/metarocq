@@ -1,24 +1,22 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 4: [R_c] is confluent on canonical terms
+(** * [R_c] is confluent on canonical terms
 
     [R_c_confluence] : ClosedBodies Σ -> is_closed_context Γ -> is_open_term Γ t ->
       canon t = t ->
       R_c* t u -> R_c* t v -> ∑ w, R_c* u w × R_c* v w
 
-  **Route.** Base [red_confluence_cb] ([PCUICConfluence.v:3938]) through the
-  simulations of obligation 3: map each [R_c*] chain back to a [red*] chain up
-  to [canon] ([R_c_red]), join there, and map the join forward ([red_R_c]).
+  **Route.** Base [red_confluence_cb] ([PCUICConfluence]) through the simulations
+  of [PCUICEtaCanonRed]: map each [R_c*] chain back to a [red*] chain up to
+  [canon] ([R_c_red]), join there, and map the join forward ([red_R_c]).
 
-  **Why [canon t = t] (the [Q] restriction) is needed.** [red_R_c] lands in
-  [R_c*] from [canon u], not from [u]. The two coincide exactly when [u] is
-  canonical, and [R_c_star_canonical] says every [R_c*]-reduct of a canonical
-  term is canonical, because each [R_c] step ENDS in [canon].
-  The scoping premises are [red_confluence_cb]'s own; the simulations needed none.
+  **Why [canon t = t] is needed.** [red_R_c] lands in [R_c*] from [canon u], not
+  from [u]. The two coincide exactly when [u] is canonical, and
+  [R_c_star_canonical] says every [R_c*]-reduct of a canonical term is canonical,
+  because each [R_c] step ends in [canon]. The scoping premises are
+  [red_confluence_cb]'s own; the simulations need none.
 
-  **This is a C4-side file.** It Requires base [PCUICConfluence], which the
-  lane rules allow for C4 (the β leg). The direction rule binds the other way:
-  no C3-side file may Require this one. *)
+  This file Requires base [PCUICConfluence]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

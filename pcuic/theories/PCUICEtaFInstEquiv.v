@@ -1,25 +1,23 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A3 piece:
-      the U1' relation is reflexive, symmetric and transitive at the TERM level
+(** * U1' is reflexive, symmetric and transitive at the term level
 
-  A3 composes comparisons across a confluence join, so it needs transitivity of
-  the whole relation, not just of the instance comparison (which is
-  [cmp_global_instance_eta_trans], GO evidence, corrected at 0ca53659).
+  A3 ([PCUICEtaI5Trans]) composes comparisons across a confluence join, so it
+  needs transitivity of the whole relation, not only of the instance comparison
+  ([cmp_global_instance_eta_trans], [PCUICEtaFInst]).
 
-  **Provenance.** Base's [eq_term_upto_univ_refl]/[_sym]/[_trans]
-  ([PCUICEquality.v:703-726], [:756-786], [:832-879]), ported to
+  Base's [eq_term_upto_univ_refl]/[_sym]/[_trans] ([PCUICEquality]), ported to
   [eq_term_upto_univ_eta_napp] with constructor renames only. Base finds the
-  instance-level facts by typeclass search; here the corrected U1' instance
-  lemmas are registered as [#[local]] instances, so the same automation finds
-  them. Their premise lists are base's (at both [Conv] and [pb]), so the
-  term-level premise lists below are EXACTLY base's.
+  instance-level facts by typeclass search; here the U1' instance lemmas are
+  registered as [#[local]] instances, so the same automation finds them. Their
+  premise lists are base's (at both [Conv] and [pb]), so the term-level premise
+  lists below are exactly base's.
 
-  **Hypotheses satisfiable (FRAC's rule):** yes, by [compare_universe φ] and
-  [compare_sort φ] at every [pb] for every [φ] — base's own instances
+  **The hypotheses are satisfiable** by [compare_universe φ] and [compare_sort φ]
+  at every [pb] for every [φ]: base's own instances
   ([compare_term_refl]/[_sym]/[_trans] discharge the same lists).
 
-  Parametric in the open constructor clause [r]. No confluence file. *)
+  Parametric in the constructor rule [r]. No confluence file. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import Program.Equality.

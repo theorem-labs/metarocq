@@ -1,32 +1,30 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 5 (first half): [eta1] against [canon]
+(** * [eta1] against [canon]
 
     [eta1_canon]      eta1 a b -> clos_refl eta1 (canon a) (canon b)
     [eta1_canonical]  canon t = t -> eta1 t u -> canon u = u
 
-  [eta1_canon] is what makes (A)'s strong-commutation premise EXACT: an η step
-  maps through [canon] to at most one η step. [eta1_canonical] is the [canon]
-  half of "[eta1] preserves [Q]".
+  [eta1_canon] is what makes (A)'s strong-commutation premise exact
+  ([R_c_eta1_strong_commutation], [PCUICEtaCanonCommute]): an η step maps through
+  [canon] to at most one η step. [eta1_canonical] is the [canon] half of "[eta1]
+  preserves canonicity".
 
-  **Why [eta1_canon] is only reflexive-closure.** A step INSIDE a λ domain
+  **Why [eta1_canon] is only a reflexive closure.** A step inside a λ domain
   ([abs_eta_l]) vanishes under [canon], which erases the domain. Every other step
   survives, and the root contraction survives because [canon] commutes with
-  [lift0 1] ([canon_lift]), so [canon] of an η-redex is again an η-redex.
-  (The converse fails, and nothing here needs it: [canon] can CREATE η-redexes,
-  e.g. C1b's [λx:P. (P (λy:x.y)) x], whose inner domain [x] blocks η until [canon]
-  erases it. Geuvers LICS 1992 records exactly this.)
+  [lift0 1] ([canon_lift]), so [canon] of an η-redex is again an η-redex. The
+  converse fails, and nothing here needs it: [canon] can create η-redexes, for
+  example [λx:P. (P (λy:x.y)) x] ([PCUICEtaC1b]), whose inner domain [x] blocks η
+  until [canon] erases it.
 
-  **The canonicalisation hazard (plan.md §6.2; [r3a-canon-audit.md]) does not
-  arise here, and this is checked rather than assumed.** The hazard is a step
-  that destroys information the FINAL COMPARISON reads; the audit found that
-  η-contraction removes exactly one such thing, the application count [napp] at
-  an under-applied [tInd]/[tConstruct] head. Both lemmas here are statements
-  about [canon], a STRUCTURAL map that never reads [napp]. Concretely, on the
-  lane lead's case: [λx:S. I1@{u} (tRel 0)] is canonical, η-contracts to
-  [I1@{u}], and [canon (I1@{u}) = I1@{u}]. The [napp] drop that contraction
-  causes is real, but it is a property of the later COMPARISON (obligation 8,
-  repaired by F-inst), not of canonicity. Nothing in this file mentions [napp].
+  **[canon] cannot lose what the final comparison reads.** η-contraction does
+  remove the application count [napp] at an under-applied [tInd]/[tConstruct]
+  head, which the comparison reads. Both lemmas here are statements about
+  [canon], a structural map that never reads [napp]: for example
+  [λx:S. I1@{u} (tRel 0)] is canonical, η-contracts to [I1@{u}], and
+  [canon (I1@{u}) = I1@{u}]. The [napp] drop is a property of the comparison
+  ([compare_term_eta], [PCUICEtaFInst]), not of [canon].
 
   Dependencies: [PCUICEtaDefs], [PCUICEtaCanon]. No confluence file. *)
 

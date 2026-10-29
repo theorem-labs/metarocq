@@ -1,28 +1,25 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A3 piece:
-      flipping U1', and C1c on the RIGHT-hand term
+(** * Flipping U1', and C1c on the right-hand term
 
     [finst_flip]   : u ≈F[cu, pb] v -> v ≈F[cu', pb'] u   (cu ⊆ flip cu')
     [red1_finst_r] : u ≈F[pb,napp] u' -> red1 Σ Γ u' v' ->
                      ∑ v, red1 Σ Γ u v × v ≈F[pb,napp] v'
 
-  A3's transitivity pushes the comparison along steps of BOTH terms. U1' is not
-  symmetric at [Cumul], so right-C1c is left-C1c ([red1_finst_l]) for the relation
-  with the universe comparison flipped, exactly as base derives
-  [red1_eq_term_upto_univ_r] from [_l].
+  A3's transitivity pushes the comparison along steps of both terms. U1' is not
+  symmetric at [Cumul], so right-C1c is left-C1c ([red1_finst_l],
+  [PCUICEtaFInstC1c]) for the relation with the universe comparison flipped,
+  exactly as base derives [red1_eq_term_upto_univ_r] from [_l].
 
-  **Provenance.** Base's [cmp_global_instance_flip] and
-  [eq_term_upto_univ_napp_flip] ([PCUICEquality.v:1903-1956]), ported to U1'. The
-  one new point is the instance level: at [(pb, napp)] and [(pb', napp)] the
-  F-inst mode is [pb]/[pb'] or [Conv]/[Conv] TOGETHER (both read [head_arity <=?
-  napp]), so base's per-variance flip lemmas apply in either case.
+  Base's [cmp_global_instance_flip] and [eq_term_upto_univ_napp_flip]
+  ([PCUICEquality]), ported to U1'. The one new point is the instance level: at
+  [(pb, napp)] and [(pb', napp)] the F-inst mode is [pb]/[pb'] or [Conv]/[Conv]
+  together (both read [head_arity <=? napp]), so base's per-variance flip lemmas
+  apply in either case.
 
-  **Hypotheses satisfiable:** the flip premises by [cu' := flip cu] (identity),
-  and the C1c premises by [compare_universe φ] / [compare_sort φ] (as for
-  [red1_finst_l]).
-
-  C4-side (through [red1_finst_l]). *)
+  **The hypotheses are satisfiable:** the flip premises by [cu' := flip cu]
+  (identity), and the C1c premises by [compare_universe φ] and [compare_sort φ],
+  as for [red1_finst_l]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

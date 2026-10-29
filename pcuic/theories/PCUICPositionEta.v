@@ -1,15 +1,13 @@
 (* Distributed under the terms of the MIT license. *)
-(* BET-315 eta lane (L5): copy of Syntax/PCUICPosition.v with the read-time lifted
-   [Eta_app] frame and the focus-dropping [Eta_arg] frame (plan.md rev 11 §2 I7, §3 K3(a)).
-   The structural stack operations keep their base meaning; the eta semantics is a
-   separate view (eta_lift / decompose_stack_eta / zipp_eta / stack_context_eta). The
-   five no-[Eta_arg] side-condition lemmas (zipc_inj, stack_position_atpos,
-   welltyped_zipc_zipp, welltyped_context, welltyped_zipc_stack_context) are restated
-   here. Imported by L5's safechecker copies only.
-   RE-CUT 2026-10-28 onto trunk 0729d50e: the η diff (d84799fa) three-way merged into
-   trunk's PCUICPosition.v, which adds prim-ops' [Prim_app] frame and its clauses in
-   [fill_hole], [closedn_stack_entry] and [stack_entry_choice] (merge without conflict;
-   no proof needed a new [Prim_app] case). *)
+(* A copy of Syntax/PCUICPosition.v whose stack has two more frames: the read-time
+   lifted [Eta_app] frame and the focus-dropping [Eta_arg] frame. The structural stack
+   operations keep their base meaning; the η semantics is a separate view ([eta_lift],
+   [decompose_stack_eta], [zipp_eta], [stack_context_eta]). Every base lemma that is
+   false for a stack containing [Eta_arg] is restated here with the side condition
+   "no [Eta_arg]". The stack also has base's [Prim_app] frame, with its clauses in
+   [fill_hole], [closedn_stack_entry] and [stack_entry_choice]. The only file of this
+   tree that uses this stack is [PCUICSafeConversionEtaK4]; the η conversion checker
+   that would run on it is not in this tree. *)
 From Stdlib Require Import RelationClasses ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
@@ -1055,10 +1053,10 @@ Variant stack_entry : Type :=
 | PrimArray_def (l : Level.t) (l : list term) (ty : term)
 (* Hole in one of the values *)
 | PrimArray_val (l : Level.t) (bef : list term) (after : list term) (def : term) (ty : term)
-(* BET-315 eta: read-time lifted eta frame. [Eta_app na A] holds the eta binder [vass na A]
-   for the eta-aware views but is transparent to [zipc] (fill_hole = identity). *)
+(* Read-time lifted η frame. [Eta_app na A] holds the η binder [vass na A] for the
+   η-aware views but is transparent to [zipc] (fill_hole = identity). *)
 | Eta_app (na : aname) (A : term)
-(* BET-315 eta: focus-dropping virtual-argument frame. [Eta_arg t args] records the real
+(* Focus-dropping virtual-argument frame. [Eta_arg t args] records the real
    head/spine so that [fill_hole _ (Eta_arg t args) = mkApps t args] (the hole is dropped). *)
 | Eta_arg (t : term) (args : list term).
 
@@ -1160,7 +1158,7 @@ Definition fill_hole (t : term) (se : stack_entry) : term :=
   | PrimArray_def l v ty => tPrim (primArray; primArrayModel {| array_level := l; array_value := v; array_default := t; array_type := ty |})
   | PrimArray_ty l v def => tPrim (primArray; primArrayModel {| array_level := l; array_value := v; array_default := def; array_type := t |})
   | PrimArray_val l bef after def ty => tPrim (primArray; primArrayModel {| array_level := l; array_value := bef ++ (t :: after); array_default := def; array_type := ty |})
-  (* BET-315 eta: [Eta_app] is transparent (identity on the focus); [Eta_arg t args]
+  (* [Eta_app] is transparent (identity on the focus); [Eta_arg t args]
      drops the hole and restores the real term [mkApps t args]. *)
   | Eta_app na A => t
   | Eta_arg u args => mkApps u args
@@ -1446,8 +1444,8 @@ Definition closedn_stack_entry k se :=
   | PrimArray_def l v ty => forallb (closedn k) v && closedn k ty
   | PrimArray_ty l v def => forallb (closedn k) v && closedn k def
   | PrimArray_val l bef after def ty => forallb (closedn k) bef && forallb (closedn k) after && closedn k def && closedn k ty
-  (* BET-315 eta: structural closedness. [Eta_app] is transparent (fill_hole = id), so it
-     constrains no focus here; its binder [A] is scoped by the eta [closedn_zip] view. *)
+  (* Structural closedness. [Eta_app] is transparent (fill_hole = id), so it
+     constrains no focus here; its binder [A] is scoped by the η [closedn_zip] view. *)
   | Eta_app na A => true
   | Eta_arg u args => closedn k (mkApps u args)
   end.
@@ -1494,12 +1492,12 @@ Definition stack_entry_choice (se : stack_entry) : choice :=
   | PrimArray_def u v ty => array_def
   | PrimArray_ty u v def => array_ty
   | PrimArray_val l bef aft def ty => array_val #|bef|
-  (* BET-315 eta: never consulted ([stack_position] skips both frames); dummy value. *)
+  (* Never consulted ([stack_position] skips both frames); dummy value. *)
   | Eta_app na A => app_l
   | Eta_arg u args => app_l
   end.
 
-(* BET-315 eta: [stack_position] skips both eta frames. They are transparent to [zipc]
+(* [stack_position] skips both η frames. They are transparent to [zipc]
    ([Eta_app]) or focus-dropping ([Eta_arg]), so neither corresponds to a [choice] step;
    positions therefore descend only through the real structure. *)
 Fixpoint stack_position (π : stack) : position :=
@@ -1530,10 +1528,10 @@ Proof.
   - now destruct (h2 t args).
 Qed.
 
-(* BET-315 eta: a frame-filter predicate. [Eta_app] is transparent and [stack_position]
-   skips it, so it never breaks the position lemmas; [Eta_arg] drops the focus, so the
-   three position/typing lemmas below are restated with the side condition "π has no
-   [Eta_arg]" (plan.md rev 11 §3 K3(a), gate F-2/B-2). *)
+(* A frame-filter predicate. [Eta_app] is transparent and [stack_position] skips it,
+   so it never breaks the position lemmas; [Eta_arg] drops the focus, so the position and
+   typing lemmas below that read the focus are restated with the side condition "π has no
+   [Eta_arg]". *)
 Definition is_Eta_arg (se : stack_entry) : bool :=
   match se with Eta_arg _ _ => true | _ => false end.
 
@@ -1570,12 +1568,12 @@ Proof.
     all: try (rewrite nth_error_snoc; auto).
 Qed.
 
-(* BET-315 eta: the base [stack_position_valid] is FALSE for a stack with a
-   position-contributing frame above an [Eta_arg] — e.g. [App_l v :: Eta_arg w [] :: []]:
-   [stack_position = [app_l]] but [zipc t _ = w], and [validpos w [app_l] = false]
-   (reported to the lane lead). It is restated with "no [Eta_arg]" ([Eta_app] is safe),
-   and a dedicated head-[Eta_arg] form is given for the virtual Args state, where the
-   [Eta_arg] frame is always the head with a no-[Eta_arg] tail. *)
+(* The base [stack_position_valid] is false for a stack with a position-contributing
+   frame above an [Eta_arg], e.g. [App_l v :: Eta_arg w [] :: []]: [stack_position =
+   [app_l]] but [zipc t _ = w], and [validpos w [app_l] = false]. It is restated with
+   "no [Eta_arg]" ([Eta_app] is safe), and a dedicated head-[Eta_arg] form is given for
+   the virtual-argument state, where the [Eta_arg] frame is always the head with a
+   no-[Eta_arg] tail. *)
 Lemma stack_position_valid :
   forall t π, no_Eta_arg π -> validpos (zipc t π) (stack_position π).
 Proof.
@@ -1594,7 +1592,7 @@ Proof.
     all: try (rewrite nth_error_snoc; auto).
 Qed.
 
-(* BET-315 eta: the virtual Args state's stack [Eta_arg u args :: ρ] with [no_Eta_arg ρ].
+(* The virtual-argument state's stack [Eta_arg u args :: ρ] with [no_Eta_arg ρ].
    The head [Eta_arg] drops the focus and contributes no choice, so validity reduces to
    the no-[Eta_arg] lemma on ρ with the real focus [mkApps u args]. *)
 Lemma stack_position_valid_Eta_arg :
@@ -1609,11 +1607,11 @@ Qed.
 Definition stack_pos (t : term) (π : stack) (h : no_Eta_arg π) : pos (zipc t π) :=
   exist (stack_position π) (stack_position_valid t π h).
 
-(* BET-315 eta: the well-formedness invariant of every checker state. A normal state's
-   stack has no [Eta_arg]; the virtual-argument state's stack is [Eta_arg u args :: ρ]
-   with the [Eta_arg] as HEAD and a no-[Eta_arg] tail (nothing above it). [wf_stack]
-   covers both, so [stack_pos_wf] gives a valid position for every pack, including the
-   virtual side, which the K4 order needs. *)
+(* The well-formedness invariant of every checker state. A normal state's stack has
+   no [Eta_arg]; the virtual-argument state's stack is [Eta_arg u args :: ρ] with the
+   [Eta_arg] as head and a no-[Eta_arg] tail (nothing above it). [wf_stack] covers both,
+   so [stack_pos_wf] gives a valid position for every state, including the virtual
+   side, which the termination order of [PCUICSafeConversionEtaK4] needs. *)
 Definition wf_stack (π : stack) : bool :=
   match π with
   | Eta_arg _ _ :: ρ => no_Eta_arg ρ
@@ -1691,9 +1689,9 @@ Section Stacks.
     all: apply app_inj_length_l in eq as (_&eq); noconf eq; auto.
   Qed.
 
-  (* BET-315 eta: false for [Eta_arg] ([fill_hole _ (Eta_arg t args) = mkApps t args]
-     drops the hole, so the conclusion is independent of the focus); [Eta_app] is the
-     identity and so is fine. Restated with the no-[Eta_arg] side condition (plan K3(a)). *)
+  (* False for [Eta_arg] ([fill_hole _ (Eta_arg t args) = mkApps t args] drops the
+     hole, so the conclusion is independent of the focus); [Eta_app] is the identity
+     and so is fine. Restated with the no-[Eta_arg] side condition. *)
   Lemma zipc_inj :
     forall u v π, no_Eta_arg π -> zipc u π = zipc v π -> u = v.
   Proof using Type.
@@ -1923,8 +1921,8 @@ From Stdlib Require Import ssreflect.
 Proof.
   destruct se; simpl => //; try bool_congr. *)
 
-(* BET-315 eta: false for [Eta_arg] (its [fill_hole] drops the focus [t]); [Eta_app] is
-   the identity and [closedn_stack_entry] is [true] there, so it is fine. Restated with
+(* False for [Eta_arg] (its [fill_hole] drops the focus [t]); [Eta_app] is the
+   identity and [closedn_stack_entry] is [true] there, so it is fine. Restated with
    [is_Eta_arg se = false]. *)
 Lemma closedn_fill_hole k t se : is_Eta_arg se = false ->
   closedn k (fill_hole t se) = closedn (#|stack_entry_context se| + k) t &&
@@ -1976,7 +1974,7 @@ Proof.
 Qed.
 
 (* ===================================================================== *)
-(* BET-315 eta: the eta-aware VIEWS (plan.md rev 11 §2 I7, revisions 8-9).  *)
+(* The η-aware views. *)
 (* Two different counts: a LIFT count that stops at the first [Eta_arg], and *)
 (* a framewise CONTEXT view that does not.                                   *)
 (* ===================================================================== *)
@@ -2029,15 +2027,14 @@ Proof.
 Qed.
 
 (* [decompose_stack_eta π]: the spine is lifted by [eta_lift π], and the virtual
-   [tRel 0] is appended exactly when the first non-[App_l] frame is [Eta_app]
-   (plan rev 8/9, D2(a)). *)
+   [tRel 0] is appended exactly when the first non-[App_l] frame is [Eta_app]. *)
 Definition decompose_stack_eta (π : stack) : list term * stack :=
   let '(args, ρ) := decompose_stack π in
   let k := eta_lift π in
   (map (lift0 k) args ++ (if head_is_Eta_app ρ then [tRel 0] else []), drop_eta_app ρ).
 
-(* napp invariant (gate C3): the virtual argument adds exactly one to the spine
-   length precisely when the first non-[App_l] frame is [Eta_app]. *)
+(* The [napp] invariant: the virtual argument adds exactly one to the spine length
+   precisely when the first non-[App_l] frame is [Eta_app]. *)
 Lemma decompose_stack_eta_length π :
   #|(decompose_stack_eta π).1| =
   #|(decompose_stack π).1| + (if head_is_Eta_app (decompose_stack π).2 then 1 else 0).
@@ -2068,10 +2065,10 @@ Proof.
   rewrite mkApps_app. cbn [mkApps]. rewrite -lift_mkApps. reflexivity.
 Qed.
 
-(* Framewise eta context (plan rev 9, D3): EVERY [Eta_app] below the focus contributes
-   its binder at its own position in the stack, whether or not an [Eta_arg] lies between
-   — unlike [eta_lift], which must not, because in the virtual-argument state the focus
-   is the literal [tRel 0] (lift 0) while the context must still carry [vass na A]. *)
+(* Framewise η context: every [Eta_app] below the focus contributes its binder at
+   its own position in the stack, whether or not an [Eta_arg] lies between. [eta_lift]
+   must not do this, because in the virtual-argument state the focus is the literal
+   [tRel 0] (lift 0) while the context must still carry [vass na A]. *)
 Definition stack_entry_context_eta (se : stack_entry) : context :=
   match se with
   | Eta_app na A => [vass na A]
@@ -2100,8 +2097,8 @@ Proof.
 Qed.
 
 (* ===================================================================== *)
-(* BET-315 eta: the three [PCUICSafeLemmata] no-[Eta_arg] side-condition lemmas    *)
-(* (plan K3(a), gate F-2/B-2), restated here with the structural [stack_context].   *)
+(* The [PCUICSafeLemmata] lemmas that read the focus through the stack,           *)
+(* restated with the no-[Eta_arg] side condition and the structural [stack_context]. *)
 (* Helpers [wf_inst_case_context] / [wf_case_inst_case_context] copied verbatim from *)
 (* [PCUICSafeLemmata] (both stack-free) to avoid importing the base stack type.      *)
 (* ===================================================================== *)
@@ -2338,15 +2335,15 @@ Section EtaWelltyped.
 End EtaWelltyped.
 
 (* ===================================================================== *)
-(* BET-315 eta, K4 TERMINATION: the position decreases each obligation needs.  *)
+(* Termination: the position decreases that each descent needs.               *)
 (*                                                                             *)
-(* The measure is the base lexicographic [R_aux] (PCUICSafeConversion.v:191) on *)
+(* The measure is base's lexicographic [R_aux] (PCUICSafeConversion.v) on     *)
 (*   (side-1 term, side-1 position, side-2 term, side-2 position, state).       *)
 (* Both eta frames are transparent to [zipc] ([Eta_app] by [fill_hole = id],    *)
 (* [Eta_arg] because its [fill_hole] restores the real term) and are SKIPPED by *)
 (* [stack_position], so every descent reduces exactly one component. The facts  *)
-(* below are the [eqt] / [positionR] hypotheses that [R_positionR] (:395),      *)
-(* [R_positionR2] (:467) and [R_stateR] (:512) consume.                         *)
+(* below are the [eqt] / [positionR] hypotheses that base [R_positionR],       *)
+(* [R_positionR2] and [R_stateR] (PCUICSafeConversion.v) consume.             *)
 (* ===================================================================== *)
 
 (* --- eta frames are transparent to the measure ------------------------------ *)
@@ -2393,7 +2390,7 @@ Proof.
   apply positionR_poscat_nonil. discriminate.
 Qed.
 
-(* --- (2) the virtual-argument descent of the E [_isconv_args'] --------------- *)
+(* --- (2) the virtual-argument descent of an η-aware [_isconv_args'] ------------ *)
 
 Lemma positionR_repeat_app_l_app_r n :
   positionR (repeat app_l n ++ [app_r]) (repeat app_l n ++ [app_l]).

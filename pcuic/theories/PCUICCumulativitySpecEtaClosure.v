@@ -324,7 +324,7 @@ Proof.
       destruct_head'_prod; eauto.
   - eapply cumulE_Sort; eauto.
   - eapply cumulE_Const; eauto.
-  - (* function eta: the only case absent from the base lemma *)
+  - (* function eta: the case that base's lemma does not have *)
     cbn in HfreeB. move/andP: HfreeB => [onA ont].
     apply cumul_eta_l.
     assert (Hr : rename (shiftn 1 f) (tApp (lift0 1 u) (tRel 0))
@@ -422,16 +422,18 @@ Proof.
   now eapply weakening_cumulSpecE0.
 Qed.
 
-(** * S4: the under-applied inductive / constructor lemmas.
+(** * The under-applied inductive / constructor lemmas
 
-    For heads applied below their cumulativity arity [n], the kernel eta-expands
-    both sides to full arity before comparing instances; in [E] the same is done
-    with [cumul_eta_l]/[cumulSpecE_eta_contract], the eta-expansion domains being
-    irrelevant. [cumulSpecE_ind_underapplied_gen] is the Conv-only induction on the
-    number [k] of missing arguments; [cumulSpecE_ind_underapplied] wraps it with one
-    [pb]-level eta step. The lifted argument hypotheses are transported under the new
-    binders by [weakening_cumulSpecE0_All2] (S3's lift/weakening fragment, gate F-5).
-    [wf Σ.1] and the scoping premises are those of S3 / [cumul_Trans]. *)
+    For heads applied below their cumulativity arity [n], the kernel η-expands both
+    sides to full arity before comparing instances; in [cumulSpecE0] the same is
+    done with [cumul_eta_l]/[cumulSpecE_eta_contract], the η-expansion domains
+    being irrelevant. [cumulSpecE_ind_underapplied_gen] is the [Conv]-only
+    induction on the number [k] of missing arguments;
+    [cumulSpecE_ind_underapplied] wraps it with one [pb]-level η step. The lifted
+    argument hypotheses are transported under the new binders by
+    [weakening_cumulSpecE0_All2] (the lift/weakening fragment above).
+    [ClosedBodies Σ.1] and the scoping premises are those of the closure lemmas
+    above and of [cumul_Trans]. *)
 
 (** Scoping helpers for the fresh eta binder. *)
 Lemma is_open_term_snoc_lift (Γ : context) (d : context_decl) a :
@@ -656,13 +658,13 @@ Qed.
 
 End RenamingEta.
 
-(** * Environment weakening of [cumulSpecE0] (T0 prerequisite P2; t0-plan.md §2)
+(** * Environment weakening of [cumulSpecE0]
 
-  The copy of [weakening_env_cumulSpec0] (`Conversion/PCUICWeakeningEnvConv.v`),
-  generic in the environment's [Pcmp]/[P] as base's is, plus the [cumul_eta_l]
-  case (its premise is the induction hypothesis) and the [cumulE_prim_op] case
-  (the operation table, the declaration and the readback transport along
-  [extends], as in base's [red_prim_op] case of [weakening_env_red1]). *)
+  The copy of base [weakening_env_cumulSpec0] ([Conversion/PCUICWeakeningEnvConv]),
+  generic in the environment's [Pcmp]/[P] as base's is, plus the [cumul_eta_l] case
+  (its premise is the induction hypothesis) and the [cumulE_prim_op] case (the
+  operation table, the declaration and the readback transport along [extends], as
+  in base's [red_prim_op] case of [weakening_env_red1]). *)
 Section ExtendsWfE.
   Context {cf : checker_flags}.
   Context {Pcmp: global_env_ext -> context -> conv_pb -> term -> term -> Type}.

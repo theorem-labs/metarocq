@@ -1,44 +1,31 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, C4 rows U6 / U7 / U8: η alone is confluent.
+(** * η alone is confluent (U6, U7, U8)
 
-   - U6 [eta1_size]: every [eta1] step strictly decreases [PCUICSize.size], so
-     η is strongly normalising.
-   - U7 [eta1_local_confluence]: EXACT local confluence of [eta1] (no
-     [upto_domain]), ported from upstream [origin/eta_postpo:
-     pcuic/theories/PCUICEtaReduction.v:152] (2020 AST) to the 9.2 AST and the
-     shared [eta1] of [PCUICEtaDefs].
-   - U8 [eta1_confluence_upto : U8_statement]: by NEWMAN's lemma from U6 + U7,
-     first EXACTLY ([eta1_confluence]), then weakened to the pinned
-     [upto_domain] form with [upto_domain_refl].
+   - U6 [eta1_size]: every [eta1] step strictly decreases [PCUICSize.size], so η
+     is strongly normalising.
+   - U7 [eta1_local_confluence]: exact local confluence of [eta1] (no
+     [upto_domain]), ported from upstream MetaRocq branch [eta_postpo],
+     [pcuic/theories/PCUICEtaReduction.v] (2020 AST, not in this tree) to the 9.2
+     AST and the shared [eta1] of [PCUICEtaDefs].
+   - U8 [eta1_confluence_upto : U8_statement]: by Newman's lemma from U6 and U7,
+     first exactly ([eta1_confluence]), then weakened to the [upto_domain] form
+     with [upto_domain_refl].
 
-   NEWMAN IS VALID HERE AND ONLY HERE: η alone is SN (U6). It is INVALID for C4
-   as a whole, because βη is not SN (β is not).
-
-   No staged hypothesis: C1b is not needed, because U7 is exact local
-   confluence and the Newman induction never works modulo [upto_domain].
+   Newman is valid here because η alone is SN (U6). It is invalid for βη as a
+   whole, because β is not SN. C1b is not needed: U7 is exact, and the Newman
+   induction never works modulo [upto_domain].
 
    Port notes (what the 9.2 AST forced, relative to the 2020 proof):
-   - The η-redex/inner-step critical pair needs [eta1] reducts of [lift0 1 t]
-     to be lifts ([eta1_lift_inv], upstream [eta1_strengthening]). Its η-redex
-     case needs [lift n (S k) B = lift0 1 t -> B = lift0 1 t'] (upstream
-     [lift_lift_inv0], from [PCUICBasicStrengthening], not in 9.2). Here it is
-     derived ALGEBRAICALLY from base [distr_lift_subst_rec], [simpl_subst_k],
-     [permute_lift] ([eta_lift_lift_inv]); [lift_inj] likewise from
-     [simpl_subst_k]. No new term induction.
+   - The η-redex/inner-step critical pair needs [eta1] reducts of [lift0 1 t] to
+     be lifts ([eta1_lift_inv], upstream [eta1_strengthening]). Its η-redex case
+     needs [lift n (S k) B = lift0 1 t -> B = lift0 1 t'] (upstream
+     [lift_lift_inv0], from [PCUICBasicStrengthening], which is not in this tree).
+     Here it is derived algebraically from base [distr_lift_subst_rec],
+     [simpl_subst_k] and [permute_lift] ([eta_lift_lift_inv]); [lift_inj] likewise
+     from [simpl_subst_k]. No new term induction.
    - [tCase]: the 2020 single predicate congruence is two in 9.2
      ([case_eta_param] on a list, [case_eta_return]); branches are records with
-     [bcontext], so the branch join relation is [on_Trel_eq eta bbody bcontext].
-     That is 16 case/case pairs instead of 9.
-   - Primitive arrays: three new congruences (9 pairs). [prim_val] is a
-     dependent pair, so the array model is recovered by a projection function
-     ([u8_prim_arr]) instead of [injection], which would need UIP on the tag.
-   - fix/cofix: the mixed [dtype]/[dbody] pairs on one list go through one
-     generic list lemma ([u8_OnOne2_join]) with a pointwise commutation.
-
-   Dependencies: [PCUICEtaDefs], [PCUICEtaReduction] (signature of [eta1]),
-   [PCUICEtaConfluence] (η congruence closures, [upto_domain_refl]),
-   [PCUICEtaBetaEta] ([U8_statement]) and base syntax. No [PCUICConfluence],
-   no [PCUICParallelReductionConfluence]. *)
+     [bcontext], so the branch join relation is [on_Trel_eq eta bbody bcontext]. *)
 
 From Stdlib Require Import ssreflect ssrbool Lia Wf_nat.
 From Equations.Type Require Import Relation Relation_Properties.
@@ -657,7 +644,7 @@ Proof.
   exact (u8_eta_trans _ _ _ (eta_CoFix_ty idx _ _ a1) (eta_CoFix_body idx _ _ a2)).
 Qed.
 
-(** ** U7: exact local confluence of [eta1] (port of upstream :152) *)
+(** ** U7: exact local confluence of [eta1] *)
 
 Lemma eta1_local_confluence t u1 u2 :
   eta1 t u1 -> eta1 t u2 -> ∑ v, eta u1 v × eta u2 v.

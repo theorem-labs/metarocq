@@ -1,27 +1,22 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * Shared η definitions for the BET-315 eta lane (C3 provers)
+(** * The two shared η relations
 
-  This file holds ONLY the two syntactic relations the C3 provers must agree on,
-  so that a dropped premise or narrowed quantifier cannot silently fork four
-  proofs of four different lemmas:
-
-  - [eta1] : one η-contraction step plus congruences, ported to the 9.2 AST
-    from [origin/eta_postpo:pcuic/theories/PCUICConversionDef.v:355-523]
-    (reconciled with plan §2 I2 / §3 U3); and
-  - [upto_domain] : syntactic equality that ignores λ domains, λ binder
+  - [eta1]: one η-contraction step plus congruences, ported to the 9.2 AST from
+    upstream MetaRocq branch [eta_postpo], [pcuic/theories/PCUICConversionDef.v];
+  - [upto_domain]: syntactic equality that ignores λ domains, λ binder
     annotations, [tProd]/[tLetIn] binder names and fix/cofix [dname], ported from
-    [origin/eta_postpo:pcuic/theories/PCUICEquality.v:1439-1498] (plan §2 I2 / §3 U1).
+    that branch's [pcuic/theories/PCUICEquality.v].
 
-  The 9.2 reconciliation adds exactly what the newer AST carries and the 2020 AST
-  lacked: the [tCase] predicate is now a record (so the single 2020 case-predicate
-  congruence splits into [case_eta_param] on [pparams] and [case_eta_return] on
-  [preturn], mirroring base [red1]'s [case_red_param]/[case_red_return]); branches
-  and case/branch contexts are records ([bbody]/[bcontext], compared with
-  [eq_context_upto_names] exactly as base [eq_predicate]/[eq_branch]); and primitive
-  arrays appear ([array_eta_*] congruences for [eta1], an [onPrims] case for
-  [upto_domain], mirroring base [red1]'s [array_red_*] and base [eq_Prim]).
-  [eta1] is context-free, as upstream. The C3 statement is NOT in this file. *)
+  Neither upstream file is in this tree. The 9.2 reconciliation adds exactly what
+  the newer AST carries and the 2020 AST lacked: the [tCase] predicate is now a
+  record (so the single 2020 case-predicate congruence splits into
+  [case_eta_param] on [pparams] and [case_eta_return] on [preturn], mirroring base
+  [red1]'s [case_red_param]/[case_red_return]); branches and case/branch contexts
+  are records ([bbody]/[bcontext], compared with [eq_context_upto_names] exactly as
+  base [eq_predicate]/[eq_branch]); and primitive arrays appear ([array_eta_*]
+  congruences for [eta1], an [onPrims] case for [upto_domain], mirroring base
+  [red1]'s [array_red_*] and base [eq_Prim]). [eta1] is context-free, as upstream. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -256,10 +251,10 @@ Defined.
 (** [eta] : the reflexive-transitive closure of [eta1]. *)
 Definition eta := clos_refl_trans eta1.
 
-(** ** Syntactic equality up to λ domains (plan §2 I2 / §3 U1)
+(** ** Syntactic equality up to λ domains
 
-  We ignore λ domains, λ/Prod/LetIn binder annotations and fix/cofix [dname].
-  Universe instances are compared by [eq] (as 2020's [utd_Const]/[utd_Ind]). *)
+  Ignores λ domains, λ/Prod/LetIn binder annotations and fix/cofix [dname].
+  Universe instances are compared by [eq]. *)
 
 Inductive upto_domain : term -> term -> Type :=
 (* Rel/Evar/Var/Sort/App/Const/Ind/Construct/Lambda/Prod/LetIn/Proj/Fix/CoFix below

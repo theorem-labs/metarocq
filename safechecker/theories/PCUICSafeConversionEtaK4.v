@@ -1,37 +1,34 @@
 (* Distributed under the terms of the MIT license. *)
-(* BET-315 eta lane (L5), row K4: the TERMINATION MEASURE for the eta branch, stated
-   over the PCUICPositionEta stack, and its acceptance obligations.
+(* The termination measure of an η-aware conversion checker, over the stack of
+   [PCUICPositionEta], and the descent lemmas such a checker needs. The checker
+   itself is not in this tree.
 
-   K4 is the plan's declared hypothesis (plan.md rev 11 §3, risk rank 2). This file
-   states the measure in Coq — the base lexicographic [R_aux] of
-   safechecker/theories/PCUICSafeConversion.v:191, on
+   The measure is base's lexicographic [R_aux] (safechecker/theories/
+   PCUICSafeConversion.v) on
      (side-1 term, side-1 position, side-2 term, side-2 position, state)
-   — over the new stack, together with the three descent lemmas [R_positionR] (:395),
-   [R_positionR2] (:467) and [R_stateR] (:512), and then DISCHARGES the acceptance
-   list of K4 with them:
+   over the new stack, with base's three descent lemmas [R_positionR],
+   [R_positionR2] and [R_stateR] restated for it. They discharge the four descents:
 
-     (1)  the eta branch with the lambda on side 1   -> R_positionR
-     (1') the eta branch with the lambda on side 2   -> R_positionR2
-     (2)  the virtual-argument descent of the E _isconv_args', entering at Reduction
-          as in base (gate F-1), frame on either side -> R_positionR2 / R_stateR
-     (3)  the same-constant argument call (prog_view_Const -> isconv_args_raw,
-          PCUICSafeConversion.v:3390-3393, the call that killed revision 3-4's outer
-          measure mu)                                  -> R_stateR
+     (1)  the η branch with the λ on side 1          -> R_positionR
+     (1') the η branch with the λ on side 2          -> R_positionR2
+     (2)  the virtual-argument descent of an η-aware _isconv_args', entering at
+          Reduction as in base, frame on either side -> R_positionR2 / R_stateR
+     (3)  the same-constant argument call (prog_view_Const -> isconv_args_raw in
+          base)                                       -> R_stateR
 
-   Both eta frames are transparent to [zipc] ([Eta_app] by [fill_hole = id],
-   [Eta_arg] because its [fill_hole] restores the real term) and are SKIPPED by
-   [stack_position], so no descent raises the measure: each one leaves a prefix of the
-   lexicographic tuple equal and strictly decreases the next component.
+   Both η frames are transparent to [zipc] ([Eta_app] by [fill_hole = id],
+   [Eta_arg] because its [fill_hole] restores the real term) and are skipped by
+   [stack_position], so no descent raises the measure: each one leaves a prefix of
+   the lexicographic tuple equal and strictly decreases the next component.
 
-   The pack carries a [wf_stack] proof for each side (PCUICPositionEta): a normal
+   The state carries a [wf_stack] proof for each side ([PCUICPositionEta]): a normal
    state's stack has no [Eta_arg]; the virtual-argument state's stack has the
    [Eta_arg] as head with a no-[Eta_arg] tail. [stack_pos_wf] then gives a valid
-   position for EVERY pack, the virtual one included.
+   position for every state, the virtual one included.
 
-   Well-foundedness of [R_aux] ([R_aux_Acc], :217) is the base proof over
-   [NormalizationIn] and is untouched by the frames: it is independent of the stack
-   type, depending only on [cored'], [posR] and [stateR]. It is not restated here
-   because no obligation below needs it. *)
+   Well-foundedness of [R_aux] (base [R_aux_Acc], over [NormalizationIn]) does not
+   depend on the stack type, only on [cored'], [posR] and [stateR]; it is not
+   restated here because no lemma below needs it. *)
 From Stdlib Require Import ProofIrrelevance ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config uGraph.
@@ -321,14 +318,13 @@ Section ConversionEtaK4.
     - cbn [stack_pos_wf proj1_sig]. apply positionR_Lambda_bd.
   Qed.
 
-  (** (1') The eta branch with the LAMBDA ON SIDE 2.
+  (** (1') The η branch with the λ on side 2.
 
-      Side 1 is the non-lambda side: it only gains the [Eta_app] frame after its
-      spine, so its term AND its position are unchanged; side 2 descends by
-      [Lambda_bd], its term is unchanged and its position strictly deepens.
-      Components 1-2 are equal and components 3-4 decrease, so this is
-      [R_positionR2] — not [R_positionR], which would need a side-1 decrease that
-      does not exist here (gate F-1's objection to the revision 6-9 entry). *)
+      Side 1 is the non-λ side: it only gains the [Eta_app] frame after its spine,
+      so its term and its position are unchanged; side 2 descends by [Lambda_bd],
+      its term is unchanged and its position strictly deepens. Components 1-2 are
+      equal and components 3-4 decrease, so this is [R_positionR2], not
+      [R_positionR], which would need a side-1 decrease that does not exist here. *)
   Lemma K4_eta_branch_lambda_right :
     forall Γ t1 args ρ1 na A b π2
       (f1  : wf_stack (appstack args (Eta_app na A :: ρ1)))
@@ -350,8 +346,8 @@ Section ConversionEtaK4.
     - cbn [stack_pos_wf proj1_sig]. apply positionR_Lambda_bd.
   Qed.
 
-  (** (2) The VIRTUAL-ARGUMENT DESCENT of the E [_isconv_args'], entering at
-      [Reduction] as in base (gate F-1).
+  (** (2) The virtual-argument descent of an η-aware [_isconv_args'], entering at
+      [Reduction] as in base.
 
       Frame on side 1: side 1's focus becomes the virtual [tRel 0] under the
       focus-dropping [Eta_arg], so its [zipc] is the unchanged real term and its
@@ -422,15 +418,14 @@ Section ConversionEtaK4.
     - cbn. constructor.
   Qed.
 
-  (** (3) The SAME-CONSTANT ARGUMENT CALL
-      ([prog_view_Const] -> [isconv_args_raw], PCUICSafeConversion.v:3390-3393).
+  (** (3) The same-constant argument call ([prog_view_Const] -> [isconv_args_raw]
+      in base).
 
       Both sides keep their term, stack and position; only the state moves from
-      [Term] to [Args]. This is the call on which revision 3-4's outer measure [mu]
-      ROSE (it rises on [c (fun x => x)] vs [c (fun y => y)], plan.md B2(c)), which
-      is why [mu] stays deleted and the base state component carries it: with the eta
-      frames skipped by [stack_position], nothing here changed, and [R_stateR]
-      closes it. *)
+      [Term] to [Args]. A measure on the terms alone rises on this call (on
+      [c (fun x => x)] against [c (fun y => y)]); the base state component carries
+      it: with the η frames skipped by [stack_position], nothing here changed, and
+      [R_stateR] closes it. *)
   Lemma K4_same_constant_args_call :
     forall Γ t1 π1 t2 π2 (f1 : wf_stack π1) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2),
       R Γ (mkpack Γ Args t1 π1 t2 π2 f1 f2 h2)

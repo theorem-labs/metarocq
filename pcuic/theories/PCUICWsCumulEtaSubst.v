@@ -1,10 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, plan row A7: substitution, weakening and universe instances for
-      [ws_cumul_pbE]
+(** * A7: substitution, weakening and universe instances for [ws_cumul_pbE]
 
-  New statements over [JoinE]; base lemmas by import only (no copy of a prim-ops-edited
-  file).
+  New statements over [JoinE]; base lemmas by import only.
 
   - [finst_inst]: U1' is stable under any parallel substitution [inst σ] (so under
     [subst] and [lift]): the same [σ] on both sides, compared by reflexivity.
@@ -14,13 +12,16 @@
   - [untyped_substitution_ws_cumul_pbE], [substitution_ws_cumul_pbE],
     [substitution0_ws_cumul_pbE] (vass, any open term: no typing premise),
     [substitution0_ws_cumul_pbE_vdef], [weakening_ws_cumul_pbE].
-  - A5's tracked gap closed: [ws_cumul_pbE_LetIn_bo_pb] (let-body at [pb]),
+  - the let-body at [pb], which A5 does not give: [ws_cumul_pbE_LetIn_bo_pb],
     [ws_cumul_pbE_LetIn_pb], [ws_cumul_pbE_it_mkProd_or_LetIn_codom_pb] over every
     context.
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed environment;
-  [untyped_subslet Γ s Δ] by [s := []], [Δ := []]; the scoping premises by any scoped
-  context and terms; every [ws_cumul_pbE] premise by reflexivity. C4-side. *)
+**The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
+  environment ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]);
+  [untyped_subslet Γ s Δ] by [s := []], [Δ := []]; the scoping premises by any
+  scoped context and terms; every [ws_cumul_pbE] premise by reflexivity; the
+  [valid_constraints] premise of [subst_instance_ws_cumul_pbE] by an environment
+  without universe constraints. Instances: [PCUICEtaFracInstances]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

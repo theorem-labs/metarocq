@@ -1,39 +1,34 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 7: the NEW C4 — EXACT βη-confluence of
-      [R_c ∪ eta1] on canonical, scoped terms
+(** * Exact βη-confluence of [R_c ∪ eta1] on canonical, scoped terms (C4)
 
     [canon_beta_eta_confluence] : ClosedBodies Σ -> is_closed_context Γ ->
       is_open_term Γ t -> canon t = t ->
       (R_c ∪ eta1)* t u -> (R_c ∪ eta1)* t v ->
       ∑ w, (R_c ∪ eta1)* u w × (R_c ∪ eta1)* v w
 
-  This replaces the REFUTED modulo-[upto_domain] C4 ([C4_false], wip/c4-C4C1b
-  @ 73bbb2d1; plan.md risk row 4, §6.1). It is EXACT: no equivalence in the
-  conclusion. It is the theorem A3 consumes.
+  [ClosedBodies Σ] is satisfied by every well-formed environment ([wf_ClosedBodies];
+  [wfE_ClosedBodies] for [wfE]). βη-confluence modulo [upto_domain] is false
+  ([C4_false], [PCUICEtaC1b]); this statement is exact, with no equivalence in the
+  conclusion. [I5_join_trans] consumes it.
 
-  **Theorems (A) and (B) are applied AS PROVED, at [E := eq].** Nothing in
-  their files is edited:
-  - (A) [HR_strong_commutation_modulo], C4A1's, cherry-picked from 0536d1f2;
-  - (B) [HR_modulo], C4B's 18f37f50 (byte-identical to the copy carried by
-    EtaL2's 2f55b23a, both cherry-picked).
-  Every [E]-hypothesis is trivial at [E := eq] (reflexivity, or a [subst]),
-  exactly as plan.md §6.2 forecast. The invariant is
-  [Q t := is_open_term Γ t × canon t = t].
+  **Theorems (A) and (B) are applied as proved, at [E := eq]:** (A)
+  [HR_strong_commutation_modulo] ([PCUICEtaHRCommutationA1]) and (B) [HR_modulo]
+  ([PCUICEtaHRModulo]). Every [E]-hypothesis is trivial at [E := eq] (reflexivity, or
+  a [subst]). The invariant is [Q t := is_open_term Γ t × canon t = t].
 
   **What each premise comes from.**
-  - [R_c] preserves [Q]: base [red1] scoping (P-SCOPE's [beta_eta_is_open_term],
-    EtaL2's 168bf406) then [canon_is_open_term]; canonicity by [canon_idem].
-  - [eta1] preserves [Q]: P-SCOPE's [eta1_on_free_vars] and [eta1_canonical].
-  - strong commutation: [R_c_eta1_strong_commutation] (obligation 5), which is
-    already EXACT, so the two join points coincide.
-  - [R_c] confluent on [Q]: [R_c_confluence] (obligation 4; C4-side).
-  - [eta1] confluent: C4U6U8's [eta1_confluence] (363f2174), exact, which at
-    [E := eq] is (B)'s "confluent modulo E" premise.
+  - [R_c] preserves [Q]: [red1] scoping ([beta_eta_is_open_term], [PCUICEtaScope])
+    then [canon_is_open_term]; canonicity by [canon_idem].
+  - [eta1] preserves [Q]: [eta1_on_free_vars] and [eta1_canonical].
+  - strong commutation: [R_c_eta1_strong_commutation] ([PCUICEtaCanonCommute]),
+    which is already exact, so the two join points coincide.
+  - [R_c] confluent on [Q]: [R_c_confluence] ([PCUICEtaCanonConfluence]).
+  - [eta1] confluent: [eta1_confluence] ([PCUICEtaU8]), exact, which at [E := eq]
+    is (B)'s "confluent modulo E" premise.
   - [R_c*] and [eta1*] commute: (A)'s conclusion.
 
-  **This is a C4-side file**: through obligation 4 it reaches base
-  [PCUICConfluence], as the lane rules allow. No C3-side file may Require it. *)
+  Through [R_c_confluence] this file Requires base [PCUICConfluence]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -87,7 +82,7 @@ Proof. intros x y e; now symmetry. Qed.
 Lemma eq_trans_c {A} : CRelationClasses.Transitive (fun x y : A => x = y).
 Proof. intros x y z e1 e2; now transitivity y. Qed.
 
-(** ** (A)'s strong-commutation premise, from obligation 5 *)
+(** ** (A)'s strong-commutation premise, from [R_c_eta1_strong_commutation] *)
 
 Lemma Qc_strong_commutation {cf : checker_flags} (Σ : global_env) (wfΣ : ClosedBodies Σ) Γ :
   is_closed_context Γ ->

@@ -1,17 +1,17 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane: FRAC instance for [cumulE_prim_op]
+(** * A satisfying instance for [cumulE_prim_op]
 
-  [cumulE_prim_op] (PCUICCumulativitySpecEta.v) is the copy, in the η
-  specification [cumulSpecE0], of trunk's [cumul_prim_op]
-  (PCUICCumulativitySpec.v).  This file proves a satisfying instance: a concrete
-  primitive conversion that the η spec relates, in a well-formed environment
-  that registers the operation, so the rule is not vacuous in the η setting.
+  [cumulE_prim_op] ([PCUICCumulativitySpecEta]) is the copy, in the η
+  specification [cumulSpecE0], of base [cumul_prim_op] ([PCUICCumulativitySpec]).
+  This file proves a satisfying instance: a concrete primitive conversion that the
+  η specification relates, in a well-formed environment that registers the
+  operation, so the rule is not vacuous.
 
-  The environment [Σ_po] and its well-formedness proof [Σ_po_wf] are copied
-  from trunk's test-suite/prim_ops_instance.v (lines 33-162; the test suite is
-  not a library, so it cannot be imported), with [po_dp] renamed.  It declares
-  [int : Set] and [land : int -> int -> int] and registers [land] as
-  [Int63land].  The instance is [land 1 3 ≤sE[Conv] 1]. *)
+  The environment [Σ_po] and its well-formedness proof [Σ_po_wf] are copied from
+  [test-suite/prim_ops_instance.v] (the test suite is not a library, so it cannot
+  be imported), with [po_dp] renamed. It declares [int : Set] and
+  [land : int -> int -> int] and registers [land] as [Int63land]. The instance is
+  [land 1 3 ≤sE[Conv] 1]. *)
 
 From MetaRocq.Utils Require Import utils.
 From Stdlib Require Import ssreflect PrimInt63.

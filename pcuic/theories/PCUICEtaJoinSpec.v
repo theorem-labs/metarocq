@@ -1,17 +1,16 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A4: join ⇒ spec, bridges
+(** * A4 (join ⇒ spec): the bridges that do not mention U1'
 
-  A4 says a canonical join implies the E-spec relation. It needs the reduction
-  steps of a join to be spec steps. This file holds the bridges that do NOT
-  depend on U1' (whose constructor clause is open, and whose comparison mode is
-  under review — lanes/eta/obligation9-probe.md §7):
+  A4 ([I5_join_to_spec], [PCUICEtaI5]) says a canonical join implies the η
+  specification. It needs the reduction steps of a join to be specification steps.
+  This file holds the bridge for [red1]:
 
     [red1_cumulSpecE] : red1 Σ Γ M N -> Σ ;;; Γ ⊢ M ≤sE[Conv] N
 
-  **Provenance.** Base [red1_cumulSpec] ([PCUICConversion.v:75-143]), ported to
-  the E-spec ([PCUICCumulativitySpecEta.v]) with constructor renames only
-  ([cumul_*] → [cumulE_*], [convSpec] → [convSpecE]). The E-spec is base's
+  It is base [red1_cumulSpec] ([PCUICConversion]), ported to the η specification
+  ([PCUICCumulativitySpecEta]) with constructor renames only ([cumul_*] →
+  [cumulE_*], [convSpec] → [convSpecE]). The η specification is base's
   [cumulSpec0] plus [cumul_eta_l] and scoping premises on [cumulE_Trans]; this
   proof uses neither, so no scoping premise appears.
 

@@ -1,17 +1,17 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, C4: REFUTATIONS of row C1b and of C4 itself.
+(** * Refutations: C1b, βη-confluence modulo [upto_domain] (C4), modulo [E2], and
+   typed C1b.
 
    [C1b_false : C1b_statement -> False] and [C4_false : C4_statement -> False],
-   both over the pinned statements of [PCUICEtaBetaEta]. The C4 witness is at
-   the end of the file; it reuses the C1b normality lemmas.
+   both over the statements of [PCUICEtaBetaEta]. The C4 witness is at the end of
+   the file; it reuses the C1b normality lemmas.
 
-   Row C1b, pinned as [C1b_statement] in [PCUICEtaBetaEta], asks for
+   [C1b_statement] asks for
      [upto_domain t t' -> eta1 t u -> ∑ u', clos_refl eta1 t' u' × upto_domain u u']
-   over the shared [eta1]/[upto_domain] of [PCUICEtaDefs]. This is the exact
-   hypothesis that [HR_A_instantiable] ([PCUICEtaC4Shape]) leaves open, and the
-   (E vs S) hypothesis of [HR_strong_commutation_modulo_statement] and
-   [HR_modulo_statement] ([PCUICEtaBetaEta]) at the instance
-   [S := eta1], [E := upto_domain], [Q := is_open_term Γ].
+   over the shared [eta1]/[upto_domain] of [PCUICEtaDefs]. This is the (E vs S)
+   hypothesis of [HR_strong_commutation_modulo_statement] and [HR_modulo_statement]
+   ([PCUICEtaBetaEta]) at the instance [S := eta1], [E := upto_domain],
+   [Q := is_open_term Γ].
 
    It is FALSE. Witness (all binders are [mkBindAnn nAnon Relevant], [P := tSort sProp]):
 
@@ -20,24 +20,25 @@
      t' = λ x:P. (P (λ y:x. y)) x        t ~ t'   (upto_domain: only an inner
                                                    λ DOMAIN differs, P vs x)
 
-   In [t'] the bound [x] occurs in the inner λ's DOMAIN, so the function part is
-   not [lift0 1] of anything and [t'] is not an η-redex. [t'] has no [eta1]
-   step at all and no [red1] step in any [Σ]/[Γ] (its head is a sort, its every
-   [tRel] is bound by a λ, so is a [vass]). So the only term [t'] reaches, by
-   any number of β or η steps, is [t'] itself; and [upto_domain u t'] fails
-   because [u] is an application and [t'] a λ.
+   In [t'] the bound [x] occurs in the inner λ's domain, so the function part is not
+   [lift0 1] of anything and [t'] is not an η-redex. [t'] has no [eta1] step at all
+   and no [red1] step in any [Σ]/[Γ] (its head is a sort, its every [tRel] is bound
+   by a λ, so is a [vass]). So the only term [t'] reaches, by any number of β or η
+   steps, is [t'] itself; and [upto_domain u t'] fails because [u] is an
+   application and [t'] a λ.
 
    Hence the refutation holds in the strongest form we could state:
-   - for the statement as pinned: [C1b_false : C1b_statement -> False];
-   - relativised to well-scoped terms, the form (A)/(B) actually consume
+   - for the statement as posed: [C1b_false : C1b_statement -> False];
+   - relativised to well-scoped terms, the form (A)/(B) consume
      ([C1b_false_open]; [t], [t'] are closed, so [is_open_term Γ] holds for every [Γ]);
    - with the related side relaxed to [clos_refl_trans (beta_eta1 Σ Γ)], i.e.
      βη-many-steps ([C1b_false_open_betaeta]). So no relaxation of the closure on
-     the related side repairs it; a repair has to change [eta1], [upto_domain]
-     or the (A)/(B) decomposition.
+     the related side repairs it; a repair has to change [eta1], [upto_domain] or
+     the (A)/(B) decomposition.
 
-   Dependencies: [PCUICEtaDefs], [PCUICEtaBetaEta] (for [C1b_statement], [C4_statement],
-   [beta_eta1]), [PCUICTyping] (for [wf]) and base syntax/reduction only. No [Context], no [Axiom], no [Admitted]. *)
+   Dependencies: [PCUICEtaDefs], [PCUICEtaBetaEta] (for [C1b_statement],
+   [C4_statement], [beta_eta1]), [PCUICTyping] (for [wf]) and base syntax/reduction
+   only. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations.Type Require Import Relation Relation_Properties.
@@ -235,8 +236,7 @@ Proof.
   exact (c1b_not_upto Hu).
 Qed.
 
-(** Row C1b as pinned ([C1b_statement], [PCUICEtaBetaEta]); it is verbatim the
-    C1b premise of [HR_A_instantiable]. *)
+(** [C1b_statement] ([PCUICEtaBetaEta]) is false. *)
 Theorem C1b_false : C1b_statement -> False.
 Proof.
   intros H. apply (C1b_false_open []).
@@ -246,16 +246,16 @@ Qed.
 
 (** ** C4 itself is FALSE ([C4_statement], [PCUICEtaBetaEta])
 
-   Same root cause one step further (EtaL2's witness). With [P := tSort sProp]:
+   Same root cause one step further. With [P := tSort sProp]:
 
      c4_s = λz:P. (P (λx:z. ((λy:P. y) x))) z         closed: the inner domain is z
      η then η:  c4_s →η c1b_t = λz:P. (P (λy:P. y)) z  →η c1b_u = P (λy:P. y)
      β:         c4_s →β c1b_t' = λz:P. (P (λx:z. x)) z
 
-   [c1b_u] and [c1b_t'] are βη-normal in every [Σ]/[Γ] (proved by inversion on
-   the [red1] and [eta1] constructors), and [upto_domain c1b_u c1b_t'] fails
-   (application against λ). So the two reducts of [c4_s] have no common
-   reduct modulo [upto_domain]. All premises of [C4_statement] are discharged at
+   [c1b_u] and [c1b_t'] are βη-normal in every [Σ]/[Γ] (proved by inversion on the
+   [red1] and [eta1] constructors), and [upto_domain c1b_u c1b_t'] fails
+   (application against λ). So the two reducts of [c4_s] have no common reduct
+   modulo [upto_domain]. All premises of [C4_statement] are discharged at
    [default_checker_flags], [empty_global_env] (proved [wf]), [Γ := []]. *)
 
 Definition c4_s : term :=
@@ -372,12 +372,12 @@ Qed.
 
 (** ** F1/F2: [E2] does NOT commute with [red1]
 
-   [E2 := clos_refl_sym_trans (upto_domain ∪ eta1)] is the comparison of the
-   design gate's repair (2). It is stated HERE, locally; no shared file changes.
+   [E2 := clos_refl_sym_trans (upto_domain ∪ eta1)] is a wider comparison than
+   [upto_domain]. It is stated here, locally.
 
-   The blockage is in the REDUCTION, not in the comparison: η-expanding a case
-   SCRUTINEE turns a constructor application into a λ, and iota does not fire on
-   a λ. So a term that iota-reduces is [E2]-related to a term that cannot move at
+   The blockage is in the reduction, not in the comparison: η-expanding a case
+   scrutinee turns a constructor application into a λ, and iota does not fire on a
+   λ. So a term that iota-reduces is [E2]-related to a term that cannot move at
    all, by β or by η.
 
    The inductive is a one-constructor, zero-parameter inductive [EtaC1b.I] with
@@ -827,21 +827,20 @@ Proof.
   exact (not_E2_sort _ hasC_f_y (rst_sym _ _ _ HE)).
 Qed.
 
-(** ** [t0]: βη-confluence modulo [E2] is FALSE (design gate r2, S4)
+(** ** [t0]: βη-confluence modulo [E2] is FALSE
 
-   EtaRepairSound's witness ([lanes/eta/plan-gate-r2.md:119-125]): [s] with its
-   head replaced by a constructor, under a projection. With [S := c1b_P]:
+   The witness of [C4_false] with its head replaced by a constructor, under a
+   projection. With [S := c1b_P]:
 
      t0 = tProj p (λz:S. (C (λx:z. ((λy:S.y) x))) z)       closed; the inner domain is z
      η, η, red_proj:  t0 ⇝ λy:S.y                           = N1
      β:               t0 ⇝ tProj p (λz:S. (C (λx:z.x)) z)  = N2
 
    [N1] and [N2] are βη-normal in every [Σ]/[Γ], and they are not [E2]-related:
-   [N2] contains a constructor and [N1] does not ([hasC_E2]). So the conclusion
-   that §6.1 priced ("βη-confluence modulo [E2]") is false, not only its premise.
-   Under the canonical-domain route that replaced it ([canon_beta_eta_confluence],
-   [PCUICEtaCanonC4.v]) [canon t0] joins: β, then the now-unblocked η, then
-   [red_proj], reaches [λx:S.x = canon N1]. *)
+   [N2] contains a constructor and [N1] does not ([hasC_E2]). So βη-confluence
+   modulo [E2] is false, not only its premise. On canonical-domain terms
+   ([canon_beta_eta_confluence], [PCUICEtaCanonC4]) [canon t0] joins: β, then the
+   now-unblocked η, then [red_proj], reaches [λx:S.x = canon N1]. *)
 
 Definition t0_p : projection := {| proj_ind := f_ci.(ci_ind); proj_npars := 0; proj_arg := 0 |}.
 Definition t0_inner : term := tLambda c1b_na (tRel 0) (tApp f_LS (tRel 0)).   (* λx:z. ((λy:S.y) x) *)
@@ -923,18 +922,18 @@ Proof.
   subst u' v'. apply hasC_E2 in HE. vm_compute in HE. discriminate HE.
 Qed.
 
-(** ** Typed C1b is false too (plan.md §6.1, the correction to the correction)
+(** ** Typed C1b is false too
 
-   The witnesses above are ill-typed (a sort applied to an argument), so they
-   say nothing about a TYPED C1b. This one is well-typed, with
-   [Γ := [A : Prop]] ([tc_Γ0]; [Prop] keeps the universe side conditions
-   trivial, nothing below depends on it being [Prop]):
+   The witnesses above are ill-typed (a sort applied to an argument), so they say
+   nothing about a typed C1b. This one is well-typed, with [Γ := [A : Prop]]
+   ([tc_Γ0]; [Prop] keeps the universe side conditions trivial, nothing below
+   depends on it being [Prop]):
 
      t  = λx:A. (λy:A. y) x                 η-contracts to  u = λy:A. y
      t' = λx:A. (λy:((λw:A. A) x). y) x     upto_domain t t', and t' has NO η step
 
    [t'] is η-normal because [x] occurs in the inner domain, and [lift0 1 _] never
-   contains variable 0. The domain is a REDEX that reduces to [A], so [t'] is
+   contains variable 0. The domain is a redex that reduces to [A], so [t'] is
    well-typed: the argument [x : A] is accepted at [(λw:A. A) x] by one β step in
    the cumulativity. So typing does not rescue C1b. *)
 

@@ -1,23 +1,23 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8: A2 (spec ⇒ join), and obligation 8
-      at [FInstFollowKernel]
+(** * A2 (spec ⇒ join), and I5 at [FInstFollowKernel] given the [cumul_eta_l] case
 
     [I5_spec_to_join] : I5_eta_l_case r Σ -> closed Γ -> open t -> open u ->
                         Σ ;;; Γ ⊢ t ≤sE[pb] u -> JoinE r Σ Γ pb t u
     [I5_obligation8_FollowKernel] :
       I5_eta_l_case FInstFollowKernel Σ -> I5_statement FInstFollowKernel Σ
 
-  Induction on [cumulSpecE0] ([cumulSpecE0_rect]), every rule a lemma below:
-  the nine reduction rules by one [red1] step; [cumulE_Trans] by A3
-  ([I5_join_trans]); [cumulE_Sym] by U1' symmetry at [Conv] and
-  [(Conv,0) ⊆ (pb,0)]; the congruences by [BE] chains; the constructor spine by
-  site K3 ([cumul_construct_finst], true at both rules after repair (a));
-  [cumul_eta_l] by the premise [I5_eta_l_case] (obligation 9).
+  Induction on [cumulSpecE0] ([cumulSpecE0_rect]), every rule a lemma below: the
+  ten reduction rules (the nine of base and [cumulE_prim_op]) by one [red1] step;
+  [cumulE_Trans] by A3 ([I5_join_trans]); [cumulE_Sym] by U1' symmetry at [Conv]
+  and [(Conv,0) ⊆ (pb,0)]; the congruences by [BE] chains; the constructor spine by
+  [cumul_construct_finst], true at both constructor rules; [cumul_eta_l] by the
+  premise [I5_eta_l_case], proved as [I5_eta_l_case_holds] ([PCUICEtaI5EtaL]).
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment; the scoping premises by any scoped context and terms;
-  [I5_eta_l_case] is obligation 9's statement. C4-side (through A3).
+  **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
+  ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); the
+  scoping premises by any scoped context and terms; [I5_eta_l_case] by
+  [I5_eta_l_case_holds].
 
   ** The step relation [BE]
 
@@ -27,24 +27,24 @@
     [BE Γ := (red1 Σ Γ ∪ eta1 ∪ "same canon")*]
 
   on raw terms, and moves between the two:
-  - [BE_RE] : [BE Γ x y -> (R_c ∪ eta1)* (canon x) (canon y)] (obligation 3's
-    [red1_R_c], obligation 5's [eta1_canon]);
+  - [BE_RE] : [BE Γ x y -> (R_c ∪ eta1)* (canon x) (canon y)] ([red1_R_c],
+    [eta1_canon]);
   - [RE_BE] : [(R_c ∪ eta1)* x y -> BE Γ x y] (an [R_c] step is a [red1] step
     followed by a "same canon" step, [canon_idem]).
   Every position of every node lifts a [BE] chain by its [red1] and [eta1]
-  congruence constructors ([BE_map], [BE_list]), because [canon] is a
-  homomorphism on every position.
+  congruence constructors ([BE_map], [BE_list]), because [canon] is a homomorphism
+  on every position.
 
   ** Binders whose context differs between the two sides
 
-  The spec compares the bodies of [LetIn] and [Case] in the LEFT term's context.
+  The spec compares the bodies of [LetIn] and [Case] in the left term's context.
   The right term's body lives in a different context (different let-bodies,
   different parameters). Each such congruence is split by A3 ([I5_join_trans])
   into two joins through a middle term:
-  1. change the bodies, keeping the left term's context fields — both chains
-     then run in exactly the context the induction hypothesis gives;
-  2. change the context fields, keeping the (now equal) bodies — no body
-     chain is needed, and the bodies are compared by reflexivity.
+  1. change the bodies, keeping the left term's context fields: both chains then
+     run in exactly the context the induction hypothesis gives;
+  2. change the context fields, keeping the (now equal) bodies: no body chain is
+     needed, and the bodies are compared by reflexivity.
   So no context-reduction lemma is needed. *)
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -472,7 +472,7 @@ Section A2.
     destruct (JoinE_BE _ _ _ _ hj) as (x & y & hx & hy & e). exists x, y. exact (hx, (hy, RF_canon _ _ _ _ e)).
   Qed.
 
-  (** ** The remaining congruences *)
+  (** ** The other congruences *)
 
   Lemma JoinE_sym Γ pb t u : J Γ Conv u t -> J Γ pb t u.
   Proof.
@@ -983,7 +983,7 @@ Section A2.
   Qed.
 
   (** **A2: spec ⇒ join**, for every rule, with [cumul_eta_l] as the named
-      premise [I5_eta_l_case] (obligation 9). *)
+      premise [I5_eta_l_case]. *)
   Theorem I5_spec_to_join (heta : I5_eta_l_case r Σ) Γ pb t u :
     is_closed_context Γ -> is_open_term Γ t -> is_open_term Γ u ->
     Σ ;;; Γ ⊢ t ≤sE[pb] u -> J Γ pb t u.
@@ -1062,7 +1062,7 @@ Section A2.
       exact (All2_dep_J Γ hΓ _ _ H IH hl hr).
     - (* Sort *) intros Γ pb s s' hs _ _ _. now apply JoinE_Sort.
     - (* Const *) intros Γ pb c u u' hu' _ _ _. now apply JoinE_Const.
-    - (* cumul_eta_l: obligation 9's premise *) intros Γ pb na A t u _ IH hΓ hl hr.
+    - (* cumul_eta_l: the premise [I5_eta_l_case] *) intros Γ pb na A t u _ IH hΓ hl hr.
       move: (hl). cbn [on_free_vars]. move/andP => [hA ht].
       apply (heta Γ pb na A t u hΓ hl hr).
       apply IH; [exact (closed_snoc_vass Γ na A hΓ hA)|exact (open_snoc Γ _ t ht)|].
@@ -1072,17 +1072,17 @@ Section A2.
 
 End A2.
 
-(** ** Obligation 8 at [FInstFollowKernel] (after repair (a))
+(** ** I5 at [FInstFollowKernel], given the [cumul_eta_l] case
 
-  The restated I5 at the kernel's constructor rule, for every [cumulSpecE0]
-  rule, with [cumul_eta_l] still the named premise [I5_eta_l_case]
-  (obligation 9). A2 above, A4 ([I5_join_to_spec]) and A3 ([I5_join_trans],
-  used inside A2) are parametric in [r]; this is their instance at
-  [FInstFollowKernel].
+  The statement at the kernel's constructor rule, for every [cumulSpecE0] rule,
+  with [cumul_eta_l] the named premise [I5_eta_l_case]. A2 above, A4
+  ([I5_join_to_spec]) and A3 ([I5_join_trans], used inside A2) are parametric in
+  [r]; this is their instance at [FInstFollowKernel]. [I5_FollowKernel]
+  ([PCUICEtaI5EtaL]) discharges the premise.
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment; [I5_eta_l_case] is obligation 9's statement, discharged there
-  (its probe: [lanes/eta/obligation9-probe.md]). *)
+  **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
+  ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); [I5_eta_l_case] by
+  [I5_eta_l_case_holds]. *)
 Theorem I5_obligation8_FollowKernel {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) :
   I5_eta_l_case FInstFollowKernel Σ -> I5_statement FInstFollowKernel Σ.
 Proof.

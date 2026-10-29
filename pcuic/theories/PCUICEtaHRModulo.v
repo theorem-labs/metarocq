@@ -1,15 +1,15 @@
 (* Distributed under the terms of the MIT license. *)
-(** * BET-315 eta lane, C4: theorem (B), Hindley–Rosen modulo an equivalence.
+(** * Theorem (B): Hindley-Rosen modulo an equivalence
 
    A closed proof of [HR_modulo_statement] ([PCUICEtaBetaEta]). Carrier-generic:
    nothing below mentions a term, a context or a reduction of PCUIC. The file
-   Requires [PCUICEtaBetaEta] only to obtain the fixed statement.
+   Requires [PCUICEtaBetaEta] only to obtain the statement.
 
    Route (no strong normalisation anywhere; Newman is not used):
    - [hr_transport]: an [E]-step moves across a [(union R S)*] sequence, from the
      two E-commutation hypotheses ([clos_refl] form), on [Q]-elements.
    - [hr_commute_R] / [hr_commute_S]: one block [X*] ([X] = [R] or [S]) against
-     ONE union step, joined modulo [E], from R-confluence, S-confluence modulo E
+     one union step, joined modulo [E], from R-confluence, S-confluence modulo E
      and the R*/S* commutation (theorem (A)'s conclusion, a premise here).
    - [hr_strip]: one block [X*] against a whole union sequence (induction on the
      sequence; the tiles are glued by [hr_transport]).
@@ -194,4 +194,4 @@ Proof.
            t u Hu v Ht Hv).
 Qed.
 
-Print Assumptions HR_modulo.
+(* Print Assumptions HR_modulo. *)

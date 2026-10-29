@@ -1,7 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A4: the F-inst
-      comparison is included in the E-spec
+(** * A4: the F-inst comparison is included in the η specification
 
     [finst_cumulSpecE] : ClosedBodies Σ -> is_closed_context Γ ->
       is_open_term Γ (mkApps M args) -> is_open_term Γ (mkApps N args') ->
@@ -9,34 +8,35 @@
       Σ ;;; Γ ⊢ mkApps M args ≤sE[pb] mkApps N args'
     [compare_term_eta_cumulSpecE] : the [args = []] form.
 
-  **Provenance and the one new case.** Base's [eq_term_upto_univ_napp_cumulSpec]
-  ([PCUICConversion.v:163-196]) ported to U1' and the E-spec. Every congruence is
-  base's. The NEW case is the head ([tInd]/[tConstruct]), split by U1''s mode:
+  Base's [eq_term_upto_univ_napp_cumulSpec] ([PCUICConversion]) ported to U1' and
+  the η specification. Every congruence is base's. The new case is the head
+  ([tInd]/[tConstruct]), split by U1''s mode:
   - **fully applied** ([head_arity <= #|args|]): the glue's full half gives
     [cumul_*_univ Σ pb _ #|args|], and [cumulE_Ind]/[cumulE_Construct] apply;
   - **under-applied**: the glue's under half gives [cumul_*_univ Σ Conv _ n] at
-    [n := head_arity], and S4's [cumulSpecE_*_underapplied_gen]
-    ([PCUICCumulativitySpecEtaClosure.v:488], [:570]) applies. The [_gen] form is
-    generic in [n], so neither [declared_*] nor [cstr_args_length] is needed.
+    [n := head_arity], and [cumulSpecE_*_underapplied_gen]
+    ([PCUICCumulativitySpecEtaClosure]) applies. The [_gen] form is generic in
+    [n], so neither [declared_*] nor [cstr_args_length] is needed.
 
-  **Scoping, threaded on both sides, no premise weakened.** S4 needs the
-  arguments scoped and [Γ] closed, so the induction carries scoping for BOTH
-  terms. Binder cases extend [Γ] with the LEFT side's context; the right side's
-  subterms are open there because the two contexts have the same length
-  ([All2_length] of [eq_context_upto_names] / [eq_mfixpoint]). Closedness of the
-  [tCase]/[tFix] extensions: base's [on_free_vars_ctx_inst_case_context_weak],
+  **Scoping, threaded on both sides, no premise weakened.** The under-applied
+  lemmas need the arguments scoped and [Γ] closed, so the induction carries
+  scoping for both terms. Binder cases extend [Γ] with the left side's context;
+  the right side's subterms are open there because the two contexts have the same
+  length ([All2_length] of [eq_context_upto_names] / [eq_mfixpoint]). Closedness
+  of the [tCase]/[tFix] extensions: base's
+  [on_free_vars_ctx_inst_case_context_weak] and
   [on_free_vars_ctx_fix_context_weak].
 
-  **Constructor-rule sites:** none new. The constructor clause is read only
-  through the glue (site K1), which is proved for both values of [r].
+  The constructor rule is read only through the glue, which is proved for both
+  values of [r].
 
-  **Hypotheses satisfiable (FRAC's rule):** yes — [wf Σ] for any well-formed
-  environment; scoping for any scoped pair, e.g. closed terms in [[]]; and the
-  comparison premise for any F-inst-related pair, e.g. a term with itself
-  (reflexivity of the relation at [compare_universe Σ]).
+  **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
+  ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); scoping by any scoped pair,
+  for example closed terms in [[]]; the comparison premise by any F-inst-related
+  pair, for example a term with itself (reflexivity at [compare_universe Σ]).
 
-  Dependencies: [PCUICEtaFInst], [PCUICEtaFInstGlue], S4's closure file. No
-  confluence file. *)
+  Dependencies: [PCUICEtaFInst], [PCUICEtaFInstGlue],
+  [PCUICCumulativitySpecEtaClosure]. No confluence file. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

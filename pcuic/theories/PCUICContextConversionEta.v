@@ -1,26 +1,28 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, plan row A8: context conversion for [ws_cumul_pbE]
+(** * A8: context conversion for [ws_cumul_pbE]
 
-  [ws_cumul_ctx_pbE] is base's [ws_cumul_ctx_pb] ([PCUICWellScopedCumulativity.v:387-389],
-  [:464-465]) with [ws_cumul_pbE] in place of [ws_cumul_pb] (I7 rev 15 C4), so it copies
-  base's scoping: each declaration is compared by [ws_cumul_pbE], which carries
-  [is_closed_context] and [is_open_term].
+  [ws_cumul_ctx_pbE] is base's [ws_cumul_ctx_pb] ([PCUICWellScopedCumulativity])
+  with [ws_cumul_pbE] in place of [ws_cumul_pb], so it copies base's scoping: each
+  declaration is compared by [ws_cumul_pbE], which carries [is_closed_context] and
+  [is_open_term].
 
   ** Method: telescopes
   [Γ ⊢ T ≤ U] is turned into [⊢ Π Γ. T ≤ Π Γ. U] (A7's codomain congruence over every
   context); [Π Γ. X ≡ Π Γ'. X] by A5's binder congruences along [Γ ≡ Γ']
   ([it_mkProd_ctx_congr]); A3 joins the three; the telescope is peeled again on the
-  [Γ'] side ([it_mkProd_inv]: x18 for an assumption, [letin_body_inv] for a definition).
+  [Γ'] side ([it_mkProd_inv]: the Π inversion for an assumption, [letin_body_inv]
+  for a definition).
   No context-reduction confluence is needed.
 
-  Rows: the A8 lemma [ws_cumul_pbE_ws_cumul_ctx]; its symmetry; A6's T rows that wait
-  for it: x4 [cumul_red_ctx_invE], x5/x6 [ws_cumul_pbE_red_ctx_inv], i49
+  Lemmas: [ws_cumul_pbE_ws_cumul_ctx]; its symmetry; and the inversions under a
+  reduced context [cumul_red_ctx_invE], [ws_cumul_pbE_red_ctx_inv] and
   [conv_cum_red_conv_invE].
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed environment; the
-  context relations by reflexivity ([ws_cumul_ctx_pbE_refl]); every [ws_cumul_pbE]
-  premise by reflexivity. C4-side. *)
+**The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
+  environment ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); the context relations by reflexivity
+  ([ws_cumul_ctx_pbE_refl]); every [ws_cumul_pbE] premise by reflexivity. Instances:
+  [PCUICEtaA6Instances]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

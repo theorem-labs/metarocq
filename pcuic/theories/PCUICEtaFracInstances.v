@@ -1,15 +1,15 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane: proved satisfying instances (FRAC practice) for A1, A5, A7 and K6
+(** * Satisfying instances of the hypotheses of the A1, A5, A7 and K6 lemmas
 
-  Each lemma of A1 ([PCUICWellScopedCumulativityEta.v]), A5
-  ([PCUICConversionEtaCongr.v]), A7 ([PCUICWsCumulEtaSubst.v]) and K6
-  ([PCUICEtaK6EtaStep.v]) whose premises are more than [wf]/scoping is applied
-  here to a concrete instance, with every premise proved. The environment is
-  S4's [si_Σ] ([Inductive I (A : Prop) : Prop := c : I A], [si_cb]), the rule
-  is [FInstFollowKernel], and the terms are closed: [fi_P := tSort sProp],
-  a β-redex, an η-redex, a case on [I], an empty fixpoint, an empty array.
-  C4-side. *)
+  Each lemma of A1 ([PCUICWellScopedCumulativityEta]), A5
+  ([PCUICConversionEtaCongr]), A7 ([PCUICWsCumulEtaSubst]) and K6
+  ([PCUICEtaK6EtaStep]) whose premises are more than [ClosedBodies] and scoping is
+  applied here to a concrete instance, with every premise proved. The environment
+  is [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances]
+  ([Inductive I (A : Prop) : Prop := c : I A]; [si_cb]), the rule is
+  [FInstFollowKernel], and the terms are closed: [fi_P := tSort sProp], a β-redex,
+  an η-redex, a case on [I], an empty fixpoint, an empty array. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -62,8 +62,8 @@ Proof.
   exact (I5_join_to_spec si_Σ si_cb r [] pb fi_P fi_P eq_refl eq_refl eq_refl (JoinE_refl si_Σ r [] pb fi_P)).
 Qed.
 
-(** Closes every premise the instances below leave: [wf], the β- and η-facts,
-    reflexive comparisons, scoping by computation, empty lists. *)
+(** Closes every premise the instances below leave: [ClosedBodies] and [wf], the β-
+    and η-facts, reflexive comparisons, scoping by computation, empty lists. *)
 Ltac fi_solve :=
   repeat match goal with
   | |- wf _ => exact si_wf
@@ -286,6 +286,24 @@ Lemma finst_subst_instance_inst :
 Proof.
   apply (finst_subst_instance r si_Σ.1 ConstraintSet.empty ConstraintSet.empty [] fi_valid_empty).
   apply compare_term_eta_refl.
+Qed.
+
+(** [si_Σ] has no universe constraints, so instantiating at the empty instance keeps
+    every constraint valid. *)
+Lemma fi_valid_si :
+  valid_constraints (global_ext_constraints (si_Σ.1, Monomorphic_ctx))
+    (subst_instance_cstrs [] (global_ext_constraints si_Σ)).
+Proof.
+  unfold valid_constraints; cbn. intros v _ c Hc. exfalso.
+  vm_compute in Hc. inversion Hc.
+Qed.
+
+Lemma subst_instance_ws_cumul_pbE_inst :
+  ws_cumul_pbE r Cumul (si_Σ.1, Monomorphic_ctx) (subst_instance [] []) (subst_instance [] fi_P) (subst_instance [] fi_P).
+Proof.
+  apply (subst_instance_ws_cumul_pbE (Σ := si_Σ) (wfΣ := si_cb) Monomorphic_ctx []).
+  - exact fi_valid_si.
+  - fi_ws.
 Qed.
 
 (** ** K6 *)

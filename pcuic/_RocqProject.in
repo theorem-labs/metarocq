@@ -129,98 +129,65 @@ theories/PCUICWeakeningConfig.v
 theories/PCUICCasesHelper.v
 
 
-# BET-315 eta lane (L1): new relations beside the base ones
+# Eta-conversion: the specification with eta (cumulSpecE0), typing over it (typingE), closure lemmas
 theories/PCUICCumulativitySpecEta.v
 theories/PCUICCumulativitySpecEtaClosure.v
 theories/PCUICCumulativitySpecEtaClosureInstances.v
 theories/PCUICTypingEta.v
-# BET-315 eta lane T0 P1: typingE induction principle (lanes/eta/t0-plan.md)
+# Typing infrastructure over typingE: induction principle, environment weakening, closedness
 theories/PCUICTypingEtaInd.v
 theories/Typing/PCUICWeakeningEnvTypEta.v
 theories/Typing/PCUICClosedTypEta.v
-# BET-315 eta lane (L5): stack type with the eta frames + eta views (K3/K4), re-cut from trunk 0729d50e
+# The stack with the eta frames, and its positions
 theories/PCUICPositionEta.v
-# BET-315 eta lane (L2): confluence foundation (eta_subst, red1_eta_ctx_strong)
+# Eta reduction (eta1): substitution, upto_domain, strengthening of red1
 theories/PCUICEtaConfluence.v
 theories/PCUICEtaReduction.v
-# BET-315 eta lane (C3Prover3): C3 strong commutation, four unlocking cases
-theories/PCUICEtaReductionC3.v
-# EtaL2's red1_strengthening (file from 9d7170cb; Requires only base files)
 theories/PCUICEtaStrengthening.v
-# C3 prover B (frac/eta-c3-b): parallel-eta route
-theories/PCUICEtaC3B.v
-# L2 canonical-domain route (plan.md 6.2), obligation 1
+# Canonical domains (canon), upto_domain_r, C1a, and the strong commutation of red1 and eta1 (C3)
 theories/PCUICEtaCanon.v
-# L2 U1' / F-inst pinned definition (plan.md 6.2, R3(a) repair step 1)
 theories/PCUICEtaFInst.v
-# L2 C1a re-pinned to upto_domain_r (plan.md 6.2 obligation 1 re-pin; C4C1a's proof)
 theories/PCUICEtaC1aR.v
-# L2 C3 re-pinned to upto_domain_r (plan.md 6.2 obligation 1 re-pin; Prover B's proof)
 theories/PCUICEtaC3BR.v
-# L2 obligation 3: red1 <-> R_c simulations through canon (plan.md 6.2)
+# Beta-eta confluence on canonical terms (C4): R_c simulations, confluence, commutation
 theories/PCUICEtaCanonRed.v
-# L2 obligation 4: R_c confluent on canonical terms, via base red_confluence (C4-SIDE)
 theories/PCUICEtaCanonConfluence.v
-# L2 obligation 5 (eta1 against canon), confluence-free
 theories/PCUICEtaCanonEta.v
-# L2 obligation 5: exact strong commutation of R_c and eta1 on canonical terms
 theories/PCUICEtaCanonCommute.v
-# BET-315 eta lane (L2): C4/I4 shared definitions (beta_eta, statement, Hindley-Rosen split)
 theories/PCUICEtaBetaEta.v
-# BET-315 eta lane (L2): C4 P-SCOPE (beta_eta preserves scoping)
 theories/PCUICEtaScope.v
-# BET-315 eta lane (L2): C4 shape guard — (A) is instantiable by C3 + P-SCOPE (C4 -> C3 only)
-theories/PCUICEtaC4Shape.v
-# BET-315 eta lane (C4B): theorem (B), Hindley-Rosen modulo E (carrier-generic, MetaRocq-free)
 theories/PCUICEtaHRModulo.v
-# BET-315 eta lane (C4U6U8): U6 eta SN, U7 local confluence (port), U8 by Newman (confluence-free)
 theories/PCUICEtaU8.v
-# BET-315 eta lane (L2): C4 assembly (P-INST) — first file joining C4 to base confluence
-theories/PCUICEtaC4.v
-# BET-315 eta lane (C4A1): theorem (A), strong commutation => commutation modulo E (carrier-generic)
 theories/PCUICEtaHRCommutationA1.v
-# L2 obligation 7: the NEW exact C4, (A) and (B) applied at E := eq (C4-SIDE)
 theories/PCUICEtaCanonC4.v
-# L2 obligation 8 (STAGED AT FollowSpec): S4 glue, F-inst -> base instance comparison
+# The eta specification as a join of canonical reductions (I5): bridges, transitivity, both directions
 theories/PCUICEtaFInstGlue.v
-# L2 obligation 8 (STAGED AT FollowSpec), A4: join => spec bridges independent of U1'
 theories/PCUICEtaJoinSpec.v
-# L2 obligation 8 (STAGED AT FollowSpec), A4: t ≈ canon t in the E-spec
 theories/PCUICEtaCanonSpec.v
-# L2 obligation 8 (STAGED AT FollowSpec), A4: compare_term_eta is included in the E-spec
 theories/PCUICEtaFInstSpec.v
-# L2 obligation 8 (STAGED AT FollowSpec): pinned I5 restatement, A4 (join => spec), obligation 9's premise
 theories/PCUICEtaI5.v
-# L2 obligation 8 (STAGED AT FollowSpec), A3 piece: U1' is reflexive/symmetric/transitive at the term level
 theories/PCUICEtaFInstEquiv.v
-# L2 obligation 8 (STAGED AT FollowSpec), A3 enabler: at Conv, U1' = base relation over eta_env
 theories/PCUICEtaFInstTransport.v
-# L2 obligation 8 (STAGED AT FollowSpec), A3 piece: C1c for U1' (C4-SIDE)
 theories/PCUICEtaFInstC1c.v
-# L2 obligation 8 (STAGED AT FollowSpec), A3 piece: U1' flip and right-hand C1c (C4-SIDE)
 theories/PCUICEtaFInstFlip.v
-# L2 obligation 8 (STAGED AT FollowSpec), A3 piece: eta1 C1c for U1' (C4-SIDE)
 theories/PCUICEtaFInstEtaC1c.v
-# L2 obligation 8 (STAGED AT FollowSpec), A3: JoinE is transitive (C4-SIDE)
 theories/PCUICEtaI5Trans.v
-# L2 obligation 8, A2: spec => join (C4-SIDE)
 theories/PCUICEtaI5A2.v
-# L2 obligation 9: the cumul_eta_l case of A2, and I5 in full (C4-SIDE)
 theories/PCUICEtaI5EtaL.v
-# L2/K6: the I7 eta step into the spec and into the canonical join (C4-SIDE)
 theories/PCUICEtaK6EtaStep.v
-# L3 rows A1 (ws_cumul_pbE over JoinE) and A5 (its congruences), new statements (C4-SIDE)
+# Well-scoped eta-conversion (ws_cumul_pbE): congruences, substitution, inversions, context conversion
 theories/PCUICWellScopedCumulativityEta.v
 theories/PCUICConversionEtaCongr.v
 theories/PCUICWsCumulEtaSubst.v
-theories/PCUICEtaA6Refutations.v
-# BET-315 eta lane (C4C1b): row C1b refuted — a machine-checked witness that C1b is false
-theories/PCUICEtaC1b.v
-theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6.v
 theories/PCUICEtaA6Ind.v
 theories/PCUICEtaA6More.v
 theories/PCUICContextConversionEta.v
+# Refutations of the eta statements that are false
+theories/PCUICEtaA6Refutations.v
+theories/PCUICEtaC1b.v
+# Satisfying instances of the hypotheses of the lemmas above
+theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
 # theories/All.v

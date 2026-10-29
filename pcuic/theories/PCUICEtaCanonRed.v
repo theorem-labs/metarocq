@@ -1,35 +1,33 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 3: β-reduction simulated on canonical forms
+(** * β-reduction simulated on canonical forms
 
-  [R_c] is the canonical-domain reduction of plan.md §6.2: one [red1] step,
-  then re-canonicalise (AC2 — after EVERY step, because δ, ι, [red_rel] and
-  steps under instantiated contexts all produce non-canonical λ-domains).
+  [R_c] is the canonical-domain reduction: one [red1] step, then re-canonicalise
+  (after every step, because δ, ι, [red_rel] and steps under instantiated contexts
+  all produce non-canonical λ-domains).
 
     [R_c Σ Γ t v := ∑ v0, red1 Σ Γ t v0 × v = canon v0]
 
-  This file proves that [red1] and [R_c] simulate each other through [canon],
-  in both directions and lifted to reflexive-transitive closures:
+  This file proves that [red1] and [R_c] simulate each other through [canon], in
+  both directions and lifted to reflexive-transitive closures:
 
     [red1_R_c]   red1 t u            -> R_c^= (canon t) (canon u)
     [red_R_c]    red t u             -> R_c* (canon t) (canon u)
     [R_c_red]    R_c* t v            -> ∑ v0, red t v0 × canon v0 = canon v
 
-  These are exactly what obligation 4 needs to transfer base [red_confluence]
-  to [R_c]: map an [R_c*] chain back to a [red*] chain up to [canon] ([R_c_red]),
-  join there, map forward ([red_R_c]).
+  These transfer base confluence to [R_c] ([R_c_confluence],
+  [PCUICEtaCanonConfluence]): map an [R_c*] chain back to a [red*] chain up to
+  [canon] ([R_c_red]), join there, map forward ([red_R_c]).
 
-  **No scoping premise, so stronger than §6.2 stated it.** The plan says "on
-  [Q]". Both inputs hold for ALL terms — obligation 1's
-  [upto_domain_r_canon_self] and the C1a re-pin [red1_upto_domain_r_fixed]
-  have no [is_open_term] premise — so the simulations do too.
+  **No scoping premise.** Both inputs hold for all terms
+  ([upto_domain_r_canon_self] and [red1_upto_domain_r_fixed] have no [is_open_term]
+  premise), so the simulations do too.
 
-  **Why it needs nothing else.** [upto_domain_r t (canon t)] (obligation 1)
-  plus C1a turns a step from [t] into a step-or-nothing from [canon t] whose
-  result is [upto_domain_r]-related, hence [canon]-equal (obligation 1 again).
+  **Why it needs nothing else.** [upto_domain_r t (canon t)] plus C1a turns a step
+  from [t] into a step-or-nothing from [canon t] whose result is
+  [upto_domain_r]-related, hence [canon]-equal ([upto_domain_r_canon_iff]).
 
-  Reads no final comparison, so the R3(a) fence on obligations 8-9 does not
-  touch it. Dependencies: [PCUICEtaCanon], [PCUICEtaC1aR]. No confluence file. *)
+  Dependencies: [PCUICEtaCanon], [PCUICEtaC1aR]. No confluence file. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -41,7 +39,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICReduction
 
 Local Open Scope type_scope.
 
-(** ** [R_c] (plan.md §6.2, AC2) *)
+(** ** [R_c] *)
 
 Definition R_c Σ Γ (t v : term) : Type := ∑ v0, red1 Σ Γ t v0 × v = canon v0.
 
@@ -52,8 +50,8 @@ Proof. apply upto_domain_r_canon_iff. Qed.
 (** ** One step
 
   A [red1] step from [t] becomes at most one [R_c] step from [canon t].
-  [upto_domain_r (canon t) t] is obligation 1's [upto_domain_r_canon_self],
-  read backwards; C1a then moves the step across the relation. *)
+  [upto_domain_r (canon t) t] is [upto_domain_r_canon_self], read backwards; C1a
+  then moves the step across the relation. *)
 
 Lemma red1_from_canon Σ Γ t u :
   red1 Σ Γ t u ->

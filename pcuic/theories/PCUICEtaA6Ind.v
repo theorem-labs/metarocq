@@ -1,25 +1,29 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, A6 part 2: inductive and axiom spines (untyped)
+(** * A6, part 2: inductive and axiom spines (untyped)
 
-  Rows i30-i36, i42-i46 of [lanes/eta/inv-base-targets.md], over [ws_cumul_pbE]:
-  - i30, i31 (F): the other side's canonical form reaches the spine;
-  - i32, i44 (B1): the instances are compared by F-inst,
+  Over [ws_cumul_pbE]:
+  - one side an inductive spine ([ws_cumul_pbE_Ind_l_inv], [_r_inv]): the other
+    side's canonical form reaches the spine;
+  - both sides inductive spines ([ws_cumul_pbE_Ind_inv]): the instances are
+    compared by F-inst,
     [cmp_global_instance_finst r Σ (compare_universe Σ) pb (IndRef ind) #|l|],
-    i.e. at the variance of [max #|l| arity] with the [finst_mode] disjunction —
+    i.e. at the variance of [max #|l| arity] with the [finst_mode] disjunction;
     base's [cumul_Ind_univ] at [#|l|] is false for under-applied heads;
-  - i33, i34 (F): axiom spines;
-  - i35, i36, i42, i43, i45, i46 (C): head clashes, at every [pb].
+  - axiom spines ([ws_cumul_pbE_Axiom_l_inv], [_r_inv]);
+  - head clashes, at every [pb] ([invert_cumul_ind_prodE], [invert_cumul_sort_indE],
+    [invert_cumul_axiom_indE], ...).
 
   Method as in part 1: a chain from [mkApps (tInd …) l] (or an axiom spine) keeps
   the head and gives a [BE] chain per argument ([chain_mkApps_Ind],
   [chain_mkApps_Const]); U1' keeps the spine ([finst_mkApps_Ind_l/_r],
   [finst_mkApps_Const_l/_r]).
 
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment; [declared_constant Σ cst cdecl] with [cst_body cdecl = None] by
-  an environment with one axiom; every [ws_cumul_pbE] premise by reflexivity.
-  C4-side. *)
+  **The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
+  environment ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]);
+  [declared_constant Σ cst cdecl] with [cst_body cdecl = None] and
+  [prim_op_of Σ cst = None] by an environment with one axiom; every
+  [ws_cumul_pbE] premise by reflexivity. Instances: [PCUICEtaA6Instances]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

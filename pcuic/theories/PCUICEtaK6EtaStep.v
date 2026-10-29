@@ -1,28 +1,27 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, K6: the I7 η step, mapped into the spec and into the join
+(** * K6: the checker's η step, mapped into the specification and into the join
 
-  The checker's η branch (plan I7, the kernel's [conversion.ml:560-580]) compares
-  [t] against [(↑u) (tRel 0)] under the λ's binder, at [Conv], and concludes
-  that [λx:A. t] and [u] are convertible. [isconv_sound] over E needs that step
-  in the spec ([K6_eta_step]), and A3/A6 need it in the canonical join
-  ([K6_eta_step_join]).
+  A conversion checker's η branch (as the kernel's does) compares [t] against
+  [(↑u) (tRel 0)] under the λ's binder, at [Conv], and concludes that [λx:A. t]
+  and [u] are convertible. A soundness proof over the η specification needs that
+  step in the specification ([K6_eta_step]), and A3/A6 need it in the canonical
+  join ([K6_eta_step_join]).
 
     [K6_eta_step]      : JoinE r Σ (Γ ,, vass na A) Conv t ((↑u) (tRel 0)) ->
                          Σ ;;; Γ ⊢ λ na:A. t ≤sE[pb] u
     [K6_eta_step_join] : the same premise -> JoinE r Σ Γ pb (λ na:A. t) u
 
-  [K6_eta_step]: A4 ([I5_join_to_spec]) turns the join into the spec premise of
-  [cumul_eta_l]. [K6_eta_step_join] is obligation 9 ([I5_eta_l_case_holds]),
-  whose factorisation (F) is where [is_constructor_app_tRel0] is used: [red_fix]
-  at the root of [(↑x) (tRel 0)] fires only on an earlier argument.
+  [K6_eta_step]: A4 ([I5_join_to_spec]) turns the join into the specification
+  premise of [cumul_eta_l]. [K6_eta_step_join] is [I5_eta_l_case_holds]
+  ([PCUICEtaI5EtaL]), whose factorisation (F) is where
+  [is_constructor_app_tRel0] is used: [red_fix] at the root of [(↑x) (tRel 0)]
+  fires only on an earlier argument.
 
-  It edits no base file and none of prim-ops' files ([PCUICSafeReduce.v],
-  [PCUICSafeConversion.v], [Syntax/PCUICPosition.v]).
-
-  **Hypotheses satisfiable (FRAC's rule):** [wf Σ] by any well-formed
-  environment; the scoping premises by any scoped context and terms; the join
-  by [t := (↑u) (tRel 0)] (the join of a term with itself). C4-side. *)
+  **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
+  ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); the scoping premises by any
+  scoped context and terms; the join by [t := (↑u) (tRel 0)] (the join of a term
+  with itself). Instances: [PCUICEtaFracInstances]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -50,7 +49,7 @@ Section K6.
     - exact hj.
   Qed.
 
-  (** The η step, into the canonical join (obligation 9). *)
+  (** The η step, into the canonical join. *)
   Theorem K6_eta_step_join Γ pb na A t u :
     is_closed_context Γ -> is_open_term Γ (tLambda na A t) -> is_open_term Γ u ->
     JoinE r Σ (Γ ,, vass na A) Conv t (tApp (lift0 1 u) (tRel 0)) ->

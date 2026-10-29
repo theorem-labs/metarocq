@@ -1,23 +1,21 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec): the S4 glue
+(** * From U1''s instance comparison to the base one
 
-  Glue from U1''s F-inst instance comparison to the BASE instance comparison
-  that the spec's [cumulE_Ind]/[cumulE_Construct] read. It comes in two halves,
-  matching U1''s mode ([finst_mode], corrected from 5b9cd4ff):
-  - **fully applied** ([head_arity <= napp]): F-inst at [pb] IS base at [pb] and
+  Glue from U1''s F-inst instance comparison to the base instance comparison that
+  the specification's [cumulE_Ind]/[cumulE_Construct] read. It comes in two
+  halves, matching U1''s mode ([finst_mode], [PCUICEtaFInst]):
+  - **fully applied** ([head_arity <= napp]): F-inst at [pb] is base at [pb] and
     the same [napp], i.e. [cumul_*_univ Σ pb _ napp], read by [cumulE_*] directly;
   - **under-applied** ([napp < head_arity]): F-inst at [Conv] with the full-arity
-    variance IS base at [Conv] and the full arity, i.e. [cumul_*_univ Σ Conv _ n],
-    read by S4's [cumulSpecE_*_underapplied]
-    ([PCUICCumulativitySpecEtaClosure.v:527], [:609]; frac/eta @ be5ce9b5).
+    variance is base at [Conv] and the full arity, i.e. [cumul_*_univ Σ Conv _ n],
+    read by [cumulSpecE_*_underapplied] ([PCUICCumulativitySpecEtaClosure]).
 
-  **Constructor-rule sites** (site K1 in the list sent to the lane lead):
-  [finst_construct_glue_full] and [finst_construct_glue_under]. Both are
-  parametric in [r] and proved for both values: under [FInstFollowKernel] a
-  non-cumulative constructor compares with [AllEqual], which implies every
-  variance. After repair (a) their statements are unchanged.
-  The [IndRef] halves never read the constructor rule. *)
+  The constructor halves [finst_construct_glue_full] and
+  [finst_construct_glue_under] are parametric in [r] and proved for both values:
+  under [FInstFollowKernel] a non-cumulative constructor compares with
+  [AllEqual], which implies every variance. The [IndRef] halves never read the
+  constructor rule. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

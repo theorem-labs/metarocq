@@ -1,40 +1,36 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * BET-315 eta lane, §6.2 obligation 8 (STAGED AT FollowSpec), A3 piece:
-      C1c for U1' — a [red1] step commutes with the F-inst comparison
+(** * C1c for U1': a [red1] step commutes with the F-inst comparison
 
     [red1_finst_l] : u ≈F[pb,napp] u' -> red1 Σ Γ u v ->
                      ∑ v', red1 Σ Γ u' v' × v ≈F[pb,napp] v'
 
-  The strong one-step form, exactly as base's [red1_eq_term_upto_univ_l]
-  ([PCUICConfluence.v:809]).
+  The strong one-step form, as base's [red1_eq_term_upto_univ_l]
+  ([PCUICConfluence]). A3 ([PCUICEtaI5Trans]) consumes it.
 
-  **Route, and why it is small.** At [Conv], U1' IS base's relation over
-  [eta_env] ([finst_Conv_base]). So:
-  - **pure spines** — a term whose application spine is NOT headed by [tSort],
+  **Route, and why it is small.** At [Conv], U1' is base's relation over
+  [eta_env] ([finst_Conv_base], [PCUICEtaFInstTransport]). So:
+  - **pure spines**: a term whose application spine is not headed by [tSort],
     [tInd], [tConstruct] or [tProd]. There the comparison does not depend on [pb]
     ([finst_pure_Conv]), so C1c is base's C1c at [Conv], transported, then lifted
-    back to [(pb, napp)] by term-level monotonicity ([finst_term_Conv_pb]).
-    Every [red1] case whose source has a pure spine goes this way, including
-    every root redex (β, ζ, rel, ι, fix, cofix-case, cofix-proj, δ, proj).
-  - **the four spine congruences** — [app_red_l] (induction hypothesis at
+    back to [(pb, napp)] by term-level monotonicity ([finst_term_Conv_pb]). Every
+    [red1] case whose source has a pure spine goes this way, including every root
+    redex (β, ζ, rel, ι, fix, cofix-case, cofix-proj, δ, proj).
+  - **the four spine congruences**: [app_red_l] (induction hypothesis at
     [(pb, S napp)]), [app_red_r] and [prod_red_l] (a [Conv] position: base's C1c,
     transported), [prod_red_r] (induction hypothesis at [(pb, 0)], then the
-    assumption-only context change of [context_pres_let_bodies_red1],
-    [PCUICRedTypeIrrelevance.v:94]).
+    assumption-only context change of base [context_pres_let_bodies_red1]).
 
   [finst_term_Conv_pb] is also the term-level [(Conv, n) → (pb, m)] monotonicity
-  that obligation 9's Case (A) uses for the η drop.
+  that the η case of [I5_eta_l_case_holds] uses for the η drop.
 
-  **Hypotheses satisfiable (FRAC's rule):** yes — all are met by
-  [compare_universe φ] and [compare_sort φ] for every [φ]: the preorders and
-  subrelations by base's instances, the [SubstUnivPreserving] ones by base's
-  instances used for [compare_term] (they are [red1_eq_term_upto_univ_l]'s own
-  premises at [Conv]). The comparison premise: any F-inst-related pair, e.g. a
-  term with itself.
+  **The hypotheses are satisfiable** by [compare_universe φ] and
+  [compare_sort φ] for every [φ]: the preorders and subrelations by base's
+  instances, the [SubstUnivPreserving] ones by the instances base uses for
+  [compare_term] (they are [red1_eq_term_upto_univ_l]'s own premises at [Conv]).
+  The comparison premise: any F-inst-related pair, for example a term with itself.
 
-  **C4-side**: it Requires base [PCUICConfluence] for [red1_eq_term_upto_univ_l].
-  No C3-side file may Require it. *)
+  This file Requires base [PCUICConfluence], for [red1_eq_term_upto_univ_l]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
