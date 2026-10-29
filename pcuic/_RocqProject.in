@@ -233,6 +233,9 @@ theories/PCUICTypingEtaCopy16Instances.v
 # Inversion facts on inductive types over typingE (E copy of part of PCUICInductiveInversion), and its satisfying instances
 theories/PCUICInductiveInversionEta.v
 theories/PCUICTypingEtaCopy18aInstances.v
+# (Co)fixpoint witnesses over typingE (E copy of PCUICFixWitness), and its satisfying instances
+theories/PCUICFixWitnessEta.v
+theories/PCUICTypingEtaCopy17Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
