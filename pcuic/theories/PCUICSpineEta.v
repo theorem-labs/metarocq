@@ -71,15 +71,15 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 Ltac splits := repeat split.
 
-Notation spnilE isty isty' w := (type_spine_nilE _ isty isty' w).
-Arguments type_spine_consE {cf Σ Γ ty hd tl na A B B'} : rename.
+Notation spnilE isty isty' w := (PCUICAritiesEta.type_spine_nilE _ isty isty' w).
+Arguments PCUICAritiesEta.type_spine_consE {cf Σ Γ ty hd tl na A B B'} : rename.
 
-Notation spconsE isty isty' w tyhd sp := (@type_spine_consE _ _ _ _ _ _ _ _ _ _ isty isty' w tyhd sp).
+Notation spconsE isty isty' w tyhd sp := (@PCUICAritiesEta.type_spine_consE _ _ _ _ _ _ _ _ _ _ isty isty' w tyhd sp).
 
 Lemma typing_spine_eqE {cf:checker_flags} Σ Γ ty s s' ty' :
   s = s' ->
-  typing_spineE Σ Γ ty s ty' ->
-  typing_spineE Σ Γ ty s' ty'.
+  PCUICAritiesEta.typing_spineE Σ Γ ty s ty' ->
+  PCUICAritiesEta.typing_spineE Σ Γ ty s' ty'.
 Proof. now intros ->. Qed.
 
 Import PCUICOnFreeVars.
@@ -250,11 +250,11 @@ Section WfEnv.
   Qed.
 
   Lemma typing_spine_strengthenE {Γ T args U} :
-    typing_spineE Σ Γ T args U ->
+    PCUICAritiesEta.typing_spineE Σ Γ T args U ->
     forall T',
     isTypeE Σ Γ T' ->
     Σ ;;; Γ ⊢E T' ≤ T ->
-    typing_spineE Σ Γ T' args U.
+    PCUICAritiesEta.typing_spineE Σ Γ T' args U.
   Proof using wfΣ.
     induction 1 in |- *; intros T' isTy redT.
     - constructor; eauto. transitivity ty; auto.
@@ -262,13 +262,13 @@ Section WfEnv.
       pose proof (isType_applyE i0 t); tea.
       forward IHX by pcuic.
       forward IHX by (eapply isType_ws_cumul_pbE_refl; tea).
-      eapply type_spine_consE; eauto.
+      eapply PCUICAritiesEta.type_spine_consE; eauto.
       etransitivity; eauto.
   Qed.
 
   Lemma typing_spine_reflE {Γ T} :
     isTypeE Σ Γ T ->
-    typing_spineE Σ Γ T [] T.
+    PCUICAritiesEta.typing_spineE Σ Γ T [] T.
   Proof using wfΣ.
     intros isty. constructor; auto.
     eauto with pcuic.
@@ -277,7 +277,7 @@ Section WfEnv.
   Lemma inversion_mkApps_directE {Γ f u T} :
     isTypeE Σ Γ T ->
     Σ ;;; Γ |-E mkApps f u : T ->
-    ∑ A s', Σ ;;; Γ |-E f : A × Σ ;;; Γ |-E A : tSort s' × typing_spineE Σ Γ A u T.
+    ∑ A s', Σ ;;; Γ |-E f : A × Σ ;;; Γ |-E A : tSort s' × PCUICAritiesEta.typing_spineE Σ Γ A u T.
   Proof using wfΣ.
     induction u in f, T |- *. simpl. intros.
     { destruct X as (_ & s & X & _). exists T, s. intuition pcuic. eapply typing_spine_reflE. eapply has_sort_isTypeE; eauto. }
@@ -341,7 +341,7 @@ Section WfEnv.
 
   Lemma wf_arity_spine_typing_spineE {Γ T args T'} :
     wf_arity_spineE Σ Γ T args T' ->
-    typing_spineE Σ Γ T args T'.
+    PCUICAritiesEta.typing_spineE Σ Γ T args T'.
   Proof using wfΣ.
     intros [wf sp].
     have wfΓ := isType_wf_localE wf.
@@ -358,7 +358,7 @@ Section WfEnv.
   Import PCUICConversion.
 
   Lemma arity_typing_spineE {Γ Γ' s inst s'} :
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Γ' (tSort s)) inst (tSort s') ->
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Γ' (tSort s)) inst (tSort s') ->
     [× (#|inst| = context_assumptions Γ'), leq_sort (global_ext_constraints Σ) s s' &
       ∑ instsubst, spine_substE Σ Γ inst instsubst Γ'].
   Proof using wfΣ.
@@ -415,7 +415,7 @@ Section WfEnv.
         + rewrite context_assumptions_app /=.
           assert (Hsp' := Hsp).
           rewrite it_mkProd_or_LetIn_app in Hsp'.
-          dependent elimination Hsp' as [spnilE typ tys cum|type_spine_consE typ tys cum tyhd sp].
+          dependent elimination Hsp' as [spnilE typ tys cum|PCUICAritiesEta.type_spine_consE typ tys cum tyhd sp].
           { now eapply ws_cumul_pbE_Prod_Sort_inv in cum. }
           eapply ws_cumul_pbE_Prod_Prod_inv in cum as [eqna conva cumulB].
           eapply (substitution_ws_cumul_pbE_typed (Γ' := [vass na0 A]) (Γ'':=[]) (s := [hd0])) in cumulB; auto.
@@ -495,11 +495,11 @@ Qed.*)
 
   Lemma typing_spine_it_mkProd_or_LetIn_genE {Γ Δ Δ' : context} {T args s s' args' T'} :
     make_context_subst (List.rev Δ) args s' = Some s ->
-    typing_spineE Σ Γ (subst0 s T) args' T' ->
+    PCUICAritiesEta.typing_spineE Σ Γ (subst0 s T) args' T' ->
     #|args| = context_assumptions Δ ->
     subsletE Σ Γ s (Δ' ,,, Δ) ->
     isTypeE Σ Γ (subst0 s' (it_mkProd_or_LetIn Δ T)) ->
-    typing_spineE Σ Γ (subst0 s' (it_mkProd_or_LetIn Δ T)) (args ++ args') T'.
+    PCUICAritiesEta.typing_spineE Σ Γ (subst0 s' (it_mkProd_or_LetIn Δ T)) (args ++ args') T'.
   Proof using wfΣ.
     generalize (le_n #|Δ|).
     generalize (#|Δ|) at 2.
@@ -547,11 +547,11 @@ Qed.*)
 
   Lemma typing_spine_it_mkProd_or_LetInE {Γ Δ T args s args' T'} :
     make_context_subst (List.rev Δ) args [] = Some s ->
-    typing_spineE Σ Γ (subst0 s T) args' T' ->
+    PCUICAritiesEta.typing_spineE Σ Γ (subst0 s T) args' T' ->
     #|args| = context_assumptions Δ ->
     subsletE Σ Γ s Δ ->
     isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) ->
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T'.
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T'.
   Proof using wfΣ.
     intros.
     pose proof (@typing_spine_it_mkProd_or_LetIn_genE Γ Δ [] T args s [] args' T'); auto.
@@ -560,9 +560,9 @@ Qed.*)
 
   Lemma typing_spine_it_mkProd_or_LetIn'E {Γ Δ T args s args' T'} :
     spine_substE Σ Γ args s Δ ->
-    typing_spineE Σ Γ (subst0 s T) args' T' ->
+    PCUICAritiesEta.typing_spineE Σ Γ (subst0 s T) args' T' ->
     isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) ->
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T'.
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T'.
   Proof using wfΣ.
     intros. destruct X as [spine_dom_wf0 spine_codom_wf0 inst_ctx_subst0 inst_subslet0].
     eapply typing_spine_it_mkProd_or_LetInE; eauto.
@@ -575,7 +575,7 @@ Qed.*)
     #|args| = context_assumptions Δ ->
     subsletE Σ Γ s Δ ->
     isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) ->
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args (subst0 s T).
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args (subst0 s T).
   Proof using wfΣ.
     intros.
     pose proof (@typing_spine_it_mkProd_or_LetIn_genE Γ Δ [] T args s [] []); auto.
@@ -589,7 +589,7 @@ Qed.*)
     spine_substE Σ Γ args s Δ ->
     isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) ->
     T' = (subst0 s T) ->
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args T'.
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args T'.
   Proof using wfΣ.
     intros [spine_dom_wf0 spine_codom_wf0 inst_ctx_subst0 inst_subslet0] H ->.
     eapply typing_spine_it_mkProd_or_LetIn_close_make_substE; eauto.
@@ -681,9 +681,9 @@ Qed.*)
   Proof using wfΣ.
     move=> wfl [cs subl].
     split; auto.
-    eapply weaken_wf_localE => //.
-    rewrite -app_context_assoc. eapply weaken_wf_localE => //.
-    eapply weaken_subsletE; eauto.
+    eapply PCUICWeakeningTypEta.weaken_wf_localE => //.
+    rewrite -app_context_assoc. eapply PCUICWeakeningTypEta.weaken_wf_localE => //.
+    eapply PCUICSpineEta.weaken_subsletE; eauto.
   Qed.
 
   Lemma spine_subst_app_invE {Γ Δ Δ' inst inst' insts} :
@@ -1288,7 +1288,7 @@ Qed.
 Lemma type_mkAppsE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
   {Γ t u T t_ty} :
   Σ ;;; Γ |-E t : t_ty ->
-  typing_spineE Σ Γ t_ty u T ->
+  PCUICAritiesEta.typing_spineE Σ Γ t_ty u T ->
   Σ ;;; Γ |-E mkApps t u : T.
 Proof.
   intros Ht Hsp.
@@ -1573,7 +1573,7 @@ Section WfEnv.
   Proof using Type. intros H ->; constructor;auto. Qed.
 
   Lemma typing_spine_wf_localE {Γ T args T'} :
-    typing_spineE Σ Γ T args T' ->
+    PCUICAritiesEta.typing_spineE Σ Γ T args T' ->
     wf_localE Σ Γ.
   Proof using Type.
     move/typing_spine_isType_domE; pcuic.
@@ -1601,10 +1601,10 @@ Section WfEnv.
 
   Lemma typing_spine_invE {Γ Δ : context} {T args args' T'} :
     #|args| = context_assumptions Δ ->
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
     ∑ args_sub,
       spine_substE Σ Γ args args_sub Δ *
-      typing_spineE Σ Γ (subst0 args_sub T) args' T'.
+      PCUICAritiesEta.typing_spineE Σ Γ (subst0 args_sub T) args' T'.
   Proof using wfΣ.
     intros len.
     revert args len T.
@@ -1690,9 +1690,9 @@ Section WfEnv.
 
   Lemma typing_spine_ctx_instE {Γ Δ : context} {T args args' T'} :
     #|args| = context_assumptions Δ ->
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
     ∑ argsi : ctx_instE Σ Γ args (List.rev Δ),
-      typing_spineE Σ Γ (subst0 (ctx_inst_subE argsi) T) args' T'.
+      PCUICAritiesEta.typing_spineE Σ Γ (subst0 (ctx_inst_subE argsi) T) args' T'.
   Proof using wfΣ.
     move=> len /(typing_spine_invE len) [argsub [sp Hargs']].
     exists (spine_subst_ctx_instE sp).
@@ -1700,9 +1700,9 @@ Section WfEnv.
   Qed.
 
   Lemma typing_spine_appE {Γ ty args na A B arg} :
-    typing_spineE Σ Γ ty args (tProd na A B) ->
+    PCUICAritiesEta.typing_spineE Σ Γ ty args (tProd na A B) ->
     Σ ;;; Γ |-E arg : A ->
-    typing_spineE Σ Γ ty (args ++ [arg]) (B {0 := arg}).
+    PCUICAritiesEta.typing_spineE Σ Γ ty (args ++ [arg]) (B {0 := arg}).
   Proof using wfΣ.
     intros H; revert arg.
     dependent induction H.
@@ -1714,7 +1714,7 @@ Section WfEnv.
   Qed.
 
   Lemma typing_spine_nth_errorE {Γ Δ T args n arg concl} :
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args concl ->
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args concl ->
     nth_error args n = Some arg ->
     (n < context_assumptions Δ) ->
     ∑ decl, (nth_error (smash_context [] Δ) (context_assumptions Δ - S n) = Some decl) *
@@ -1848,9 +1848,9 @@ Section WfEnv.
 
   Lemma typing_spine_ctx_inst_smashE {Γ Δ : context} {T args args' T'} :
     #|args| = context_assumptions Δ ->
-    typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
+    PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
     spine_substE Σ Γ args (List.rev args) (smash_context [] Δ) *
-      typing_spineE Σ Γ (subst_let_expand (List.rev args) Δ T) args' T'.
+      PCUICAritiesEta.typing_spineE Σ Γ (subst_let_expand (List.rev args) Δ T) args' T'.
   Proof using wfΣ.
     intros.
     pose proof (typing_spine_isType_domE X).
@@ -1995,7 +1995,7 @@ Section WfEnv.
     Σ;;; Γ |-E mkApps t u : T.
   Proof using wfΣ.
     intros Ht Hty Har.
-    eapply type_mkAppsE; tea.
+    eapply PCUICSpineEta.type_mkAppsE; tea.
     eapply wf_arity_spine_typing_spineE.
     constructor; tas.
   Qed.
