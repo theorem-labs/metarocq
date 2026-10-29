@@ -2419,6 +2419,11 @@ Qed.
   - scoping transfer along [pe] ([pe_on_free_vars]) and the iteration
     ([pe_red_postpone]): 5 min (13:47–13:52Z).
 
+  Mirror screening, measured 2026-10-29: of 3 named landed mirrors tried for B1
+  ([eta1_on_free_vars] → transfer: paid; [red1_upto_domain_r_fixed] → backsim: paid;
+  [HR_strong_commutation_modulo] → iteration: did NOT instantiate, reasons above,
+  cost ~5 min), 2 paid. A named mirror is a hypothesis to try first, not a guarantee.
+
   Induction principles, one per lemma. No lemma calls another lemma recursively,
   and calls between lemmas follow a fixed acyclic order:
   - [pe_beta_head_and_lambda] and [pe_spine_or_lam]: induction on the [pe] derivation;
