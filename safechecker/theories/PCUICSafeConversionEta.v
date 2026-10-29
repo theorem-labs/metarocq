@@ -1494,6 +1494,282 @@ Section Conversion.
      η view of the whole term) and side 2's renamed by its own stack, in side 1's η context.
      They are exactly the premises of [ws_cumul_pbE_Case]/[_Fix]/[_Prim]
      (PCUICConversionEtaCongr) for the renamed terms. *)
+
+  (* ---- Slice B helpers (EtaSliceB). ---- *)
+
+  (* NAMED HYPOTHESIS (slice B, recorded with the K3 integrator EtaConv): the E copy of base
+     [PCUICConvCumInversion.inst_case_ws_cumul_ctx_pb], untyped. Base proves it through
+     [substitution_ws_cumul_ctx_pb_subst_conv] (substitution of convertible substitutions),
+     which has no E copy yet; the obligations [conv_stack_ctx] of the Case_branch and the
+     Case_pred (return) frames need it. Not a known-false form: it has no typing premise and
+     states no conversion witness of a fixpoint type or of an inductive head (CONTRACTS standing
+     rules 1-2); it says that E conversion, a congruence closed under weakening (A5, A7),
+     is closed under substituting convertible parameters and comparable universe instances into
+     a context closed over the parameters, which base proves for [ws_cumul_pb]. Concrete
+     satisfying instance: [B_inst_case_ws_cumul_ctx_pbE_inst] just below (every premise and the
+     conclusion proved at [pk_Σ]). *)
+  Context (inst_case_ws_cumul_ctx_pbE : forall (Σ : global_env_ext), ClosedBodies Σ ->
+    forall (Γ Γ' : context) (pars pars' : list term) (puinst puinst' : Instance.t) (ctx ctx' : context),
+    on_free_vars_ctx (closedP #|pars| xpredT) ctx ->
+    on_free_vars_ctx (closedP #|pars'| xpredT) ctx' ->
+    ws_cumul_ctx_pbE Conv Σ Γ Γ' ->
+    ws_cumul_pbE_terms Σ Γ pars pars' ->
+    cmp_universe_instance (compare_universe Σ Conv) puinst puinst' ->
+    eq_context_upto_names ctx ctx' ->
+    ws_cumul_ctx_pbE Conv Σ (Γ ,,, inst_case_context pars puinst ctx)
+      (Γ' ,,, inst_case_context pars' puinst' ctx')).
+
+  (* The instance: one parameter [Prop], a predicate context mentioning it, empty prefixes. *)
+  Lemma B_inst_case_ws_cumul_ctx_pbE_inst :
+    let Σ := PCUICPositionEtaTyping.pk_Σ in
+    let pars := [PCUICPositionEtaTyping.pk_P] in
+    let ctx := [vass PCUICPositionEtaTyping.pk_na (tRel 0)] in
+    ClosedBodies Σ × on_free_vars_ctx (closedP #|pars| xpredT) ctx ×
+    ws_cumul_ctx_pbE Conv Σ [] [] × ws_cumul_pbE_terms Σ [] pars pars ×
+    cmp_universe_instance (compare_universe Σ Conv) [] [] × eq_context_upto_names ctx ctx ×
+    ws_cumul_ctx_pbE Conv Σ ([] ,,, inst_case_context pars [] ctx) ([] ,,, inst_case_context pars [] ctx).
+  Proof using Type.
+    cbn zeta.
+    pose proof (@PCUICPositionEtaTyping.pk_cb cf) as cb.
+    split; [exact cb|]. split; [reflexivity|]. split; [constructor|].
+    split; [constructor; [|constructor]; eapply ws_cumul_pbE_refl; reflexivity|].
+    split; [constructor|]. split; [reflexivity|].
+    eapply ws_cumul_ctx_pbE_refl; reflexivity.
+  Qed.
+
+  Ltac B_rel wfR := match goal with H : abstract_env_ext_rel X _ |- _ => pose proof H as wfR end.
+
+  (* The binder contexts of a typed case (typingE inversion: only [typeE_Case] and
+     [typeE_Cumul] type a [tCase]). *)
+  Lemma B_typingE_case_ctxs {Σ Γ ci p c brs T} :
+    Σ ;;; Γ |-E tCase ci p c brs : T ->
+    ∑ mdecl idecl, declared_inductive Σ ci.(ci_ind) mdecl idecl ×
+      eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ×
+      All2i (fun i cdecl br => eq_context_upto_names br.(bcontext) (cstr_branch_context ci mdecl cdecl))
+        0 idecl.(ind_ctors) brs.
+  Proof using Type.
+    intros h. remember (tCase ci p c brs) as t eqn:e.
+    induction h; try discriminate e.
+    - injection e as -> -> -> ->.
+      exists mdecl, idecl.
+      match goal with H : case_side_conditions _ _ _ _ _ _ _ _ _ _ _ |- _ => destruct H end.
+      match goal with H : case_branch_typing _ _ _ _ _ _ _ _ _ _ |- _ => destruct H end.
+      split; [assumption|]. split; [assumption|].
+      eapply All2i_impl; [eassumption|]. intros i cdecl br [hb _]. exact hb.
+    - exact (IHh1 e).
+  Qed.
+
+  Lemma B_declared_inductive_uniq {Σ : global_env_ext} (hwf : wf_extE Σ) {ind mdecl idecl mdecl' idecl'} :
+    declared_inductive Σ ind mdecl idecl -> declared_inductive Σ ind mdecl' idecl' ->
+    mdecl = mdecl' /\ idecl = idecl'.
+  Proof using Type.
+    intros d d'.
+    have hwfE : wfE Σ := wf_extE_wfE Σ hwf.
+    have g := declared_inductive_to_gen (wfΣ := hwfE) d.
+    have g' := declared_inductive_to_gen (wfΣ := hwfE) d'.
+    exact (declared_inductive_inj g' g).
+  Qed.
+
+  Lemma B_wt_case_ctxs Σ (wfΣ : abstract_env_ext_rel X Σ) Γ π ci p c brs :
+    no_Eta_arg π -> welltypedE Σ Γ (zipc (tCase ci p c brs) π) ->
+    ∥ ∑ mdecl idecl, declared_inductive Σ ci.(ci_ind) mdecl idecl ×
+      eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ×
+      All2i (fun i cdecl br => eq_context_upto_names br.(bcontext) (cstr_branch_context ci mdecl cdecl))
+        0 idecl.(ind_ctors) brs ∥.
+  Proof using conv_factsE.
+    intros hna h. destruct (heΣ _ wfΣ) as [hwf].
+    destruct (ctf_context Σ Γ _ π hwf hna h) as [T hT].
+    constructor. exact (B_typingE_case_ctxs hT).
+  Qed.
+
+  Lemma B_wt_case_open Σ (wfΣ : abstract_env_ext_rel X Σ) Γ π ci p c brs :
+    no_Eta_arg π -> welltypedE Σ Γ (zipc (tCase ci p c brs) π) ->
+    is_open_term (Γ ,,, stack_context π) (tCase ci p c brs).
+  Proof using conv_factsE.
+    intros hna h. destruct (heΣ _ wfΣ) as [hwf].
+    exact (ref_open_term Σ _ _ hwf (ctf_context Σ Γ _ π hwf hna h)).
+  Qed.
+
+  (* The two cases of a Case view have as many branches (the impossible branches). *)
+  Lemma B_case_brs_length Σ (wfΣ : abstract_env_ext_rel X Σ) Γ ci p c brs π p' c' brs' π' :
+    no_Eta_arg π -> no_Eta_arg π' ->
+    welltypedE Σ Γ (zipc (tCase ci p c brs) π) ->
+    welltypedE Σ Γ (zipc (tCase ci p' c' brs') π') -> #|brs| = #|brs'|.
+  Proof using conv_factsE.
+    intros hna hna' h h'. destruct (heΣ _ wfΣ) as [hwf].
+    destruct (B_wt_case_ctxs Σ wfΣ Γ π ci p c _ hna h) as [(mdecl & idecl & d & _ & hb)].
+    destruct (B_wt_case_ctxs Σ wfΣ Γ π' ci p' c' _ hna' h') as [(mdecl' & idecl' & d' & _ & hb')].
+    destruct (B_declared_inductive_uniq hwf d d') as [-> ->].
+    apply All2i_length in hb. apply All2i_length in hb'. congruence.
+  Qed.
+
+  (* The branch at the same index of the two cases: equal binder names (typing), and both
+     contexts closed over the parameters (scoping). *)
+  Lemma B_case_brs_ctx Σ (wfΣ : abstract_env_ext_rel X Σ) Γ ci p c brs1 b brs2 π p' c' brs1' b' brs2' π' :
+    no_Eta_arg π -> no_Eta_arg π' -> #|brs1| = #|brs1'| ->
+    welltypedE Σ Γ (zipc (tCase ci p c (brs1 ++ b :: brs2)) π) ->
+    welltypedE Σ Γ (zipc (tCase ci p' c' (brs1' ++ b' :: brs2')) π') ->
+    ∥ eq_context_upto_names (bcontext b) (bcontext b') ∥ /\
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams p| (bcontext b) /\
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams p'| (bcontext b').
+  Proof using conv_factsE.
+    intros hna hna' hl h h'.
+    destruct (heΣ _ wfΣ) as [hwf].
+    have ho := B_wt_case_open Σ wfΣ Γ π ci p c _ hna h.
+    have ho' := B_wt_case_open Σ wfΣ Γ π' ci p' c' _ hna' h'.
+    cbn [on_free_vars] in ho, ho'.
+    move/and5P: ho => [_ _ _ _ hb]. move/and5P: ho' => [_ _ _ _ hb'].
+    rewrite forallb_app /= in hb. rewrite forallb_app /= in hb'.
+    move/andP: hb => [_ /andP [/andP [hb _] _]]. move/andP: hb' => [_ /andP [/andP [hb' _] _]].
+    split; [|split; [exact hb|exact hb']].
+    destruct (B_wt_case_ctxs Σ wfΣ Γ π ci p c _ hna h) as [(mdecl & idecl & d & _ & hi)].
+    destruct (B_wt_case_ctxs Σ wfΣ Γ π' ci p' c' _ hna' h') as [(mdecl' & idecl' & d' & _ & hi')].
+    destruct (B_declared_inductive_uniq hwf d d') as [-> ->].
+    have e1 : nth_error (brs1 ++ b :: brs2) #|brs1| = Some b.
+    { rewrite (nth_error_app_ge brs1 (b :: brs2) #|brs1| (le_n _)) Nat.sub_diag. reflexivity. }
+    have e2 : nth_error (brs1' ++ b' :: brs2') #|brs1| = Some b'.
+    { rewrite hl (nth_error_app_ge brs1' (b' :: brs2') #|brs1'| (le_n _)) Nat.sub_diag. reflexivity. }
+    destruct (All2i_nth_error_r _ _ _ _ _ _ hi e1) as [cdecl [ec hc]].
+    destruct (All2i_nth_error_r _ _ _ _ _ _ hi' e2) as [cdecl' [ec' hc']].
+    rewrite ec in ec'. noconf ec'.
+    constructor. etransitivity; [exact hc|]. symmetry. exact hc'.
+  Qed.
+
+  (* The predicates of the two cases: equal binder names (typing), closed contexts (scoping),
+     well-formed universe instances (named field [ctf_wf_universes]). *)
+  Lemma B_case_pred_ctx Σ (wfΣ : abstract_env_ext_rel X Σ) Γ ci p c brs π p' c' brs' π' :
+    no_Eta_arg π -> no_Eta_arg π' ->
+    welltypedE Σ Γ (zipc (tCase ci p c brs) π) ->
+    welltypedE Σ Γ (zipc (tCase ci p' c' brs') π') ->
+    ∥ eq_context_upto_names (pcontext p) (pcontext p') ∥ /\
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams p| (pcontext p) /\
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams p'| (pcontext p') /\
+    forallb (wf_universeb Σ) (map Universe.make' (puinst p)) /\
+    forallb (wf_universeb Σ) (map Universe.make' (puinst p')).
+  Proof using conv_factsE.
+    intros hna hna' h h'.
+    destruct (heΣ _ wfΣ) as [hwf].
+    have ho := B_wt_case_open Σ wfΣ Γ π ci p c brs hna h.
+    have ho' := B_wt_case_open Σ wfΣ Γ π' ci p' c' brs' hna' h'.
+    pose proof (ctf_wf_universes Σ (Γ ,,, stack_context π) (tCase ci p c brs) hwf
+                  (ctf_context Σ Γ (tCase ci p c brs) π hwf hna h)) as hu.
+    pose proof (ctf_wf_universes Σ (Γ ,,, stack_context π') (tCase ci p' c' brs') hwf
+                  (ctf_context Σ Γ (tCase ci p' c' brs') π' hwf hna' h')) as hu'.
+    cbn [on_free_vars] in ho, ho'.
+    move/and5P: ho => [_ _ hc _ _]. move/and5P: ho' => [_ _ hc' _ _].
+    unfold wf_universes in hu, hu'. cbn [on_universes] in hu, hu'.
+    apply andb_prop in hu as [hu _]. apply andb_prop in hu' as [hu' _].
+    split; [|split; [exact hc|split; [exact hc'|split; [exact hu|exact hu']]]].
+    destruct (B_wt_case_ctxs Σ wfΣ Γ π ci p c brs hna h) as [(mdecl & idecl & d & hp & _)].
+    destruct (B_wt_case_ctxs Σ wfΣ Γ π' ci p' c' brs' hna' h') as [(mdecl' & idecl' & d' & hp' & _)].
+    destruct (B_declared_inductive_uniq hwf d d') as [-> ->].
+    constructor. etransitivity; [exact hp|]. symmetry. exact hp'.
+  Qed.
+
+  (* A real frame's binders in the η context, for a context closed over the parameters. *)
+  Lemma B_ctx_inst_case π ps u m :
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|ps| m ->
+    fold_context_k (fun k => eta_rename π k) (inst_case_context ps u m) =
+    inst_case_context (map (eta_rename π 0) ps) u m.
+  Proof using Type.
+    intros hm.
+    change (fold_context_k (fun k => eta_rename π k) (inst_case_context ps u m))
+      with (fold_context_k (fun k => eta_rename π (0 + k)) (inst_case_context ps u m)).
+    rewrite eta_rename_fold_context (PCUICRenameConv.rename_inst_case_context_wf _ _ _ _ hm).
+    f_equal. apply map_ext => t. symmetry. apply eta_rename_rename.
+  Qed.
+
+  Lemma B_ctx_Case_branch Γ ci p c brs1 m brs2 π :
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams p| m ->
+    Γ ,,, stack_context_eta (Case_branch ci p c (brs1, branch_hole_body m, brs2) :: π) =
+    Γ ,,, stack_context_eta π ,,, inst_case_context (map (eta_rename π 0) (pparams p)) (puinst p) m.
+  Proof using Type.
+    intros hm.
+    cbn [stack_context_eta stack_entry_context_eta stack_entry_context branches_hole_context].
+    rewrite (B_ctx_inst_case π _ _ _ hm). now rewrite /app_context app_assoc.
+  Qed.
+
+  Lemma B_ctx_Case_pred_return Γ ci pars u pctx c brs π :
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pars| pctx ->
+    Γ ,,, stack_context_eta (Case_pred ci (pred_hole_return pars u pctx) c brs :: π) =
+    Γ ,,, stack_context_eta π ,,, inst_case_context (map (eta_rename π 0) pars) u pctx.
+  Proof using Type.
+    intros hm.
+    cbn [stack_context_eta stack_entry_context_eta stack_entry_context predicate_hole_context].
+    rewrite (B_ctx_inst_case π _ _ _ hm). now rewrite /app_context app_assoc.
+  Qed.
+
+  (* The η view of the focus under a real frame that is not an application. *)
+  Lemma B_zipp_eta_real t se π :
+    is_eta_frame se = false -> match se with App_l _ => false | _ => true end = true ->
+    zipp_eta t (se :: π) = eta_rename π (#|stack_entry_context se| + 0) t.
+  Proof using Type. intros he ha. destruct se; try discriminate; reflexivity. Qed.
+
+  Lemma B_zipp_eta_Case_branch t ci p c brs1 m brs2 π :
+    zipp_eta t (Case_branch ci p c (brs1, branch_hole_body m, brs2) :: π) = eta_rename π (#|m| + 0) t.
+  Proof using Type.
+    rewrite (B_zipp_eta_real t (Case_branch ci p c (brs1, branch_hole_body m, brs2)) π eq_refl eq_refl).
+    cbn [stack_entry_context branches_hole_context]. now rewrite inst_case_context_length.
+  Qed.
+
+  Lemma B_zipp_eta_Case_pred_return t ci pars u pctx c brs π :
+    zipp_eta t (Case_pred ci (pred_hole_return pars u pctx) c brs :: π) = eta_rename π (#|pctx| + 0) t.
+  Proof using Type.
+    rewrite (B_zipp_eta_real t (Case_pred ci (pred_hole_return pars u pctx) c brs) π eq_refl eq_refl).
+    cbn [stack_entry_context predicate_hole_context]. now rewrite inst_case_context_length.
+  Qed.
+
+  (* A real frame strictly deepens the position (the R descents). *)
+  Lemma B_positionR_frame se π : is_eta_frame se = false ->
+    positionR (stack_position (se :: π)) (stack_position π).
+  Proof using Type.
+    intros he. destruct se; try discriminate; cbn [stack_position];
+      rewrite -{2}(app_nil_r (stack_position π)); apply positionR_poscat; constructor.
+  Qed.
+
+  (* The fixpoint context of two lists of definitions with convertible types. *)
+  Lemma B_ctx_fix_context_gen Σ (cb : ClosedBodies Σ) ΓL ΓR (M M' : mfixpoint term) n Ξ Ξ' :
+    #|Ξ| = n ->
+    ws_cumul_ctx_pbE Conv Σ (ΓL ,,, Ξ) (ΓR ,,, Ξ') ->
+    All2 (fun d d' => ws_cumul_pbE Conv Σ ΓL (dtype d) (dtype d') × eq_binder_annot (dname d) (dname d')) M M' ->
+    ws_cumul_ctx_pbE Conv Σ
+      (ΓL ,,, Ξ ,,, List.rev (mapi_rec (fun i d => vass (dname d) (lift0 i (dtype d))) M n))
+      (ΓR ,,, Ξ' ,,, List.rev (mapi_rec (fun i d => vass (dname d) (lift0 i (dtype d))) M' n)).
+  Proof using Type.
+    intros hn hc hM.
+    induction hM as [|d d' M M' [hd hna] hM IH] in n, Ξ, Ξ', hn, hc |- *; cbn [mapi_rec List.rev].
+    - exact hc.
+    - have hc' : ws_cumul_ctx_pbE Conv Σ (ΓL ,,, (Ξ ,, vass (dname d) (lift0 n (dtype d))))
+                   (ΓR ,,, (Ξ' ,, vass (dname d') (lift0 n (dtype d')))).
+      { constructor; [exact hc|]. constructor; [exact hna|].
+        have hcl := ws_cumul_ctx_pbE_closed_left _ _ _ _ hc.
+        subst n.
+        exact (PCUICWsCumulEtaSubst.weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := cb) (pb := Conv)
+                 (Γ := ΓL) (Γ' := []) (Γ'' := Ξ) hd hcl). }
+      pose proof (IH (S n) (Ξ ,, vass (dname d) (lift0 n (dtype d))) (Ξ' ,, vass (dname d') (lift0 n (dtype d')))
+                    ltac:(cbn; lia) hc') as IH'.
+      rewrite /app_context -!app_assoc. exact IH'.
+  Qed.
+
+  Lemma B_ctx_fix_context Σ (cb : ClosedBodies Σ) ΓL ΓR (M M' : mfixpoint term) :
+    ws_cumul_ctx_pbE Conv Σ ΓL ΓR ->
+    All2 (fun d d' => ws_cumul_pbE Conv Σ ΓL (dtype d) (dtype d') × eq_binder_annot (dname d) (dname d')) M M' ->
+    ws_cumul_ctx_pbE Conv Σ (ΓL ,,, fix_context M) (ΓR ,,, fix_context M').
+  Proof using Type.
+    intros hc hM. exact (B_ctx_fix_context_gen Σ cb ΓL ΓR M M' 0 [] [] eq_refl hc hM).
+  Qed.
+
+  (* A fixpoint body frame's binders in the η context. *)
+  Lemma B_fix_ctx_eta π (M : mfixpoint term) :
+    fold_context_k (fun k => eta_rename π k) (fix_context_alt (map def_sig M)) =
+    fix_context (map (map_def (rename (eta_ren π 0)) (rename (shiftn #|M| (eta_ren π 0)))) M).
+  Proof using Type.
+    rewrite -fix_context_fix_context_alt.
+    change (fold_context_k (fun k => eta_rename π k) (fix_context M))
+      with (fold_context_k (fun k => eta_rename π (0 + k)) (fix_context M)).
+    rewrite eta_rename_fold_context. symmetry. exact (eta_rename_fix_context π 0 M).
+  Qed.
+
   Definition eta_rename_pred (π : stack) (p : predicate term) : predicate term :=
     {| pparams := map (eta_rename π 0) p.(pparams); puinst := p.(puinst);
        pcontext := p.(pcontext); preturn := eta_rename π (#|p.(pcontext)| + 0) p.(preturn) |}.
@@ -1514,6 +1790,36 @@ Section Conversion.
        eq_context_upto_names (pcontext p) (pcontext p') &
        ws_cumul_pbE Conv Σ (Γ ,,, stack_context_eta π ,,, inst_case_predicate_context (eta_rename_pred π p))
          (preturn (eta_rename_pred π p)) (preturn (eta_rename_pred π' p'))].
+
+  (* One branch of the E branch relation from the Reduction result on the branch bodies. *)
+  Lemma B_brs_elem Σ Γ ci p c brs1 m br brs2 π p' c' brs1' m' br' brs2' π' :
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams p| m ->
+    eq_context_upto_names m m' ->
+    conv_cumE Conv Σ (Γ ,,, stack_context_eta (Case_branch ci p c (brs1, branch_hole_body m, brs2) :: π))
+      (zipp_eta br (Case_branch ci p c (brs1, branch_hole_body m, brs2) :: π))
+      (zipp_eta br' (Case_branch ci p' c' (brs1', branch_hole_body m', brs2') :: π')) ->
+    ∥ eq_context_upto_names (bcontext {| bcontext := m; bbody := br |}) (bcontext {| bcontext := m'; bbody := br' |}) ×
+      ws_cumul_pbE Conv Σ (Γ ,,, stack_context_eta π ,,,
+          inst_case_branch_context (eta_rename_pred π p) (eta_rename_br π {| bcontext := m; bbody := br |}))
+        (bbody (eta_rename_br π {| bcontext := m; bbody := br |}))
+        (bbody (eta_rename_br π' {| bcontext := m'; bbody := br' |})) ∥.
+  Proof using Type.
+    intros hm hmm' [h]. constructor. split; [exact hmm'|].
+    rewrite (B_ctx_Case_branch _ _ _ _ _ _ _ _ hm) !B_zipp_eta_Case_branch in h. exact h.
+  Qed.
+
+  (* The return-predicate part of the E predicate relation from the Reduction result. *)
+  Lemma B_pred_ret Σ Γ ci p c brs π ci' p' c' brs' π' :
+    test_context_k (fun k => on_free_vars (closedP k xpredT)) #|pparams p| (pcontext p) ->
+    conv_cumE Conv Σ (Γ ,,, stack_context_eta (Case_pred ci (pred_hole_return (pparams p) (puinst p) (pcontext p)) c brs :: π))
+      (zipp_eta (preturn p) (Case_pred ci (pred_hole_return (pparams p) (puinst p) (pcontext p)) c brs :: π))
+      (zipp_eta (preturn p') (Case_pred ci' (pred_hole_return (pparams p') (puinst p') (pcontext p')) c' brs' :: π')) ->
+    ∥ ws_cumul_pbE Conv Σ (Γ ,,, stack_context_eta π ,,, inst_case_predicate_context (eta_rename_pred π p))
+        (preturn (eta_rename_pred π p)) (preturn (eta_rename_pred π' p')) ∥.
+  Proof using Type.
+    intros hc [h]. constructor.
+    rewrite (B_ctx_Case_pred_return _ _ _ _ _ _ _ _ hc) !B_zipp_eta_Case_pred_return in h. exact h.
+  Qed.
 
   (* Every helper below is called from a T1-guarded view of [_isconv_prog], whose equation
      [hg] it receives; it pushes only real frames, so [virt_ok] holds by [no_Eta_arg]. *)
@@ -1560,97 +1866,79 @@ Section Conversion.
     constructor. constructor.
   Qed.
   Next Obligation.
-    clear aux.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    specialize_Σ wfΣ. destruct (hΣ _ wfΣ).
-    destruct h1 as [h1].
-    apply All2_length in h1 as e1.
-    apply welltyped_zipc_tCase_brs_length in h as (?&?&?&?); eauto.
-    apply welltyped_zipc_tCase_brs_length in h' as (?&?&?&?); eauto.
-    unshelve eapply declared_inductive_to_gen in H, H1; eauto.
-    pose proof (PCUICInductiveInversion.declared_inductive_unique_sig H H1) as u; noconf u.
-    rewrite !length_app in H0, H2.
-    cbn in *.
-    lia.
+    have [hna hna'] := andb_prop _ _ hg.
+    have e := B_case_brs_length Σ wfΣ Γ ci p c _ π p' c' _ π' hna hna' (h Σ wfΣ) (h' Σ wfΣ).
+    destruct (h1 Σ wfΣ) as [hb]. apply All2_length in hb.
+    rewrite !length_app /= in e. lia.
   Qed.
   Next Obligation.
-    clear aux.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    specialize_Σ wfΣ. destruct (hΣ _ wfΣ).
-    destruct h1 as [h1].
-    apply All2_length in h1 as e1.
-    apply welltyped_zipc_tCase_brs_length in h as (?&?&?&?); eauto.
-    apply welltyped_zipc_tCase_brs_length in h' as (?&?&?&?); eauto.
-    unshelve eapply declared_inductive_to_gen in H, H1; eauto.
-    pose proof (PCUICInductiveInversion.declared_inductive_unique_sig H H1) as u; noconf u.
-    rewrite !length_app in H0, H2.
-    cbn in *.
-    lia.
+    have [hna hna'] := andb_prop _ _ hg.
+    have e := B_case_brs_length Σ wfΣ Γ ci p c _ π p' c' _ π' hna hna' (h Σ wfΣ) (h' Σ wfΣ).
+    destruct (h1 Σ wfΣ) as [hb]. apply All2_length in hb.
+    rewrite !length_app /= in e. lia.
   Qed.
   Next Obligation.
-    eapply R_positionR. all: simpl.
-    1: reflexivity.
-    rewrite <- app_nil_r.
-    rewrite stack_position_cons.
-    eapply positionR_poscat.
+    eapply R_positionR; cbn -[stack_position].
+    - constructor. reflexivity.
+    - apply B_positionR_frame. reflexivity.
+  Qed.
+  Next Obligation.
+    B_rel wfR.
+    have [hna hna'] := andb_prop _ _ hg.
+    destruct (hΣ _ wfR) as [cb]. destruct (hx _ wfR) as [hx']. destruct (hp _ wfR) as [[hpars hu _ _]].
+    destruct (h1 _ wfR) as [hb]. apply All2_length in hb.
+    destruct (B_case_brs_ctx Σ wfR Γ ci p c brs1 _ brs2 π p' c' brs1' _ brs2' π' hna hna' hb (h _ wfR) (h' _ wfR))
+      as [[hmm'] [hm hm']].
+    cbn [bcontext] in hmm', hm, hm'.
     constructor.
+    rewrite (B_ctx_Case_branch _ _ _ _ _ _ _ _ hm) (B_ctx_Case_branch _ _ _ _ _ _ _ _ hm').
+    eapply inst_case_ws_cumul_ctx_pbE; tea.
+    - rewrite length_map -test_context_k_closed_on_free_vars_ctx. exact hm.
+    - rewrite length_map -test_context_k_closed_on_free_vars_ctx. exact hm'.
   Qed.
   Next Obligation.
-    eapply case_conv_brs_inv in h1; tea.
-    rename H into wfΣ; pose proof (hΣ _ wfΣ).
-    specialize_Σ wfΣ.
-    sq. destruct h1 as [mdecl [idecl [decli eqp eqp' eqm clm clm']]].
-    transitivity (Γ ,,, stack_context π ,,, inst_case_context (pparams p') (puinst p') m').
-    - unfold app_context; rewrite <-app_assoc.
-      inv_on_free_vars.
-      eapply inst_case_ws_cumul_ctx_pb; tea.
-      * fvs.
-      * fvs.
-      * eapply hp.
-      * eapply hp.
-    - unfold app_context. rewrite <- app_assoc. eapply ws_cumul_ctx_pb_app_same; auto.
-      rewrite on_free_vars_ctx_app.
-      apply andb_true_iff. split; auto. 1:now apply ws_cumul_ctx_pb_closed_left in hx.
-      eapply on_free_vars_ctx_inst_case_context; trea.
-      destruct hp.
-      now eapply (ws_cumul_pb_terms_open_terms_right a).
+    B_rel wfR.
+    have [hna _] := andb_prop _ _ hg.
+    destruct (heΣ _ wfR) as [hwfe]. destruct (hwf _ wfR) as [hw].
+    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ br
+             (Case_branch ci p c (brs1, branch_hole_body m, brs2)) π eq_refl hna (h _ wfR) hw).
   Qed.
   Next Obligation.
-    now rewrite <- app_assoc.
+    B_rel wfR.
+    have [_ hna'] := andb_prop _ _ hg.
+    destruct (heΣ _ wfR) as [hwfe]. destruct (hwf' _ wfR) as [hw].
+    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ br'
+             (Case_branch ci p' c' (brs1', branch_hole_body m', brs2')) π' eq_refl hna' (h' _ wfR) hw).
   Qed.
   Next Obligation.
-    now rewrite <- app_assoc.
+    B_rel wfR. rewrite <- app_assoc. exact (h _ wfR).
   Qed.
   Next Obligation.
-    destruct (case_conv_brs_inv h p' c' brs1' brs2' _ h') as [[mdecl [idecl [decli eqp eqp' eqm clm clm']]]]; tea.
-    specialize_Σ wfΣ.
-    destruct h1 as [h1], h2 as [h2].
-    constructor. apply All2_app.
-    - assumption.
-    - constructor.
-      2: now constructor.
-      simpl.
-      unfold zipp in h2.
-      split; auto.
-      cbn in h2.
-      unfold inst_case_branch_context. cbn.
-      now unfold app_context; rewrite app_assoc.
+    B_rel wfR. rewrite <- app_assoc. exact (h' _ wfR).
   Qed.
   Next Obligation.
-    clear aux. unfold isconv_branches_obligations_obligation_13.
-    eapply R_irrelevance. 2:tea. cbn.
-    f_equal. f_equal. 2:{ f_equal. now rewrite <-app_assoc. }
-    f_equal. f_equal. f_equal. now rewrite <- app_assoc.
+    B_rel wfR.
+    have [hna hna'] := andb_prop _ _ hg.
+    destruct (h1 _ wfR) as [hb1]. have hl := All2_length hb1.
+    destruct (B_case_brs_ctx Σ wfR Γ ci p c brs1 _ brs2 π p' c' brs1' _ brs2' π' hna hna' hl (h _ wfR) (h' _ wfR))
+      as [[hmm'] [hm _]].
+    destruct (B_brs_elem Σ Γ ci p c brs1 m br brs2 π p' c' brs1' m' br' brs2' π' hm hmm' (h2 _ wfR)) as [he].
+    constructor. apply All2_app; [exact hb1|]. constructor; [exact he|constructor].
   Qed.
   Next Obligation.
-    destruct (case_conv_brs_inv h p' c' brs1' brs2' _ h') as [[mdecl [idecl [decli eqp eqp' eqm clm clm']]]]; tea.
-    specialize_Σ wfΣ.
-    destruct h2 as [h2], h3 as [h3].
-    constructor.
-    constructor; auto.
-    unfold zipp in *; simpl in *.
-    split; auto.
-    rewrite app_context_assoc in h2; auto.
+    eapply R_irrelevance; [|eassumption]. cbn. now rewrite <- !app_assoc.
+  Qed.
+  Next Obligation.
+    B_rel wfR.
+    have [hna hna'] := andb_prop _ _ hg.
+    destruct (h1 _ wfR) as [hb1]. have hl := All2_length hb1.
+    destruct (B_case_brs_ctx Σ wfR Γ ci p c brs1 _ brs2 π p' c' brs1' _ brs2' π' hna hna' hl (h _ wfR) (h' _ wfR))
+      as [[hmm'] [hm _]].
+    destruct (B_brs_elem Σ Γ ci p c brs1 m br brs2 π p' c' brs1' m' br' brs2' π' hm hmm' (h2 _ wfR)) as [he].
+    destruct (h3 _ wfR) as [hb3].
+    constructor. constructor; [exact he|exact hb3].
   Qed.
 
   Equations isconv_branches' (Γ : context)
@@ -1703,6 +1991,54 @@ Section Conversion.
     | IndFix => FixMfixMismatch
     | CoIndFix => CoFixMfixMismatch
     end.
+
+  (* Slice B helpers for the fixpoint body frame. *)
+  Lemma B_ctx_Fix_body_fold Γ fk mfix1 na ty ra mfix2 idx π :
+    Γ ,,, stack_context_eta (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx :: π) =
+    Γ ,,, stack_context_eta π ,,,
+      fold_context_k (fun k => eta_rename π k) (fix_context_alt (map def_sig mfix1 ++ (na, ty) :: map def_sig mfix2)).
+  Proof using Type.
+    destruct fk; cbn [mFix_mfix stack_context_eta stack_entry_context_eta stack_entry_context mfix_hole_context];
+      now rewrite /app_context app_assoc.
+  Qed.
+
+  Lemma B_ctx_Fix_body Γ fk mfix1 u mfix2 idx π :
+    Γ ,,, stack_context_eta (mFix_mfix fk (mfix1, def_hole_body u.(dname) u.(dtype) u.(rarg), mfix2) idx :: π) =
+    Γ ,,, stack_context_eta π ,,,
+      fix_context (map (map_def (rename (eta_ren π 0)) (rename (shiftn #|mfix1 ++ u :: mfix2| (eta_ren π 0))))
+        (mfix1 ++ u :: mfix2)).
+  Proof using Type.
+    rewrite -B_fix_ctx_eta map_app B_ctx_Fix_body_fold. reflexivity.
+  Qed.
+
+  Lemma B_zipp_eta_Fix_body fk t mfix1 na ty ra mfix2 idx π (d : def term) :
+    zipp_eta t (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx :: π) =
+    eta_rename π (#|mfix1 ++ d :: mfix2| + 0) t.
+  Proof using Type.
+    have e : #|fix_context_alt (map def_sig mfix1 ++ (na, ty) :: map def_sig mfix2)| = #|mfix1 ++ d :: mfix2|.
+    { rewrite /fix_context_alt List.length_rev mapi_length !length_app /= !length_map. reflexivity. }
+    destruct fk; cbn [mFix_mfix].
+    - rewrite (B_zipp_eta_real t (Fix (mfix1, def_hole_body na ty ra, mfix2) idx) π eq_refl eq_refl).
+      cbn [stack_entry_context mfix_hole_context]. now rewrite e.
+    - rewrite (B_zipp_eta_real t (CoFix (mfix1, def_hole_body na ty ra, mfix2) idx) π eq_refl eq_refl).
+      cbn [stack_entry_context mfix_hole_context]. now rewrite e.
+  Qed.
+
+  (* One body of the E fixpoint-bodies relation from the Reduction result on the bodies. *)
+  Lemma B_fix_body_elem Σ Γ fk mfix1 u mfix2 idx π mfix1' v mfix2' π' :
+    conv_cumE Conv Σ (Γ ,,, stack_context_eta (mFix_mfix fk (mfix1, def_hole_body u.(dname) u.(dtype) u.(rarg), mfix2) idx :: π))
+      (zipp_eta u.(dbody) (mFix_mfix fk (mfix1, def_hole_body u.(dname) u.(dtype) u.(rarg), mfix2) idx :: π))
+      (zipp_eta v.(dbody) (mFix_mfix fk (mfix1', def_hole_body v.(dname) v.(dtype) v.(rarg), mfix2') idx :: π')) ->
+    ∥ ws_cumul_pbE Conv Σ (Γ ,,, stack_context_eta π ,,,
+          fold_context_k (fun k => eta_rename π k) (fix_context_alt (map def_sig mfix1 ++ def_sig u :: map def_sig mfix2)))
+        (eta_rename π (#|mfix1 ++ u :: mfix2| + 0) u.(dbody))
+        (eta_rename π' (#|mfix1' ++ v :: mfix2'| + 0) v.(dbody)) ∥.
+  Proof using Type.
+    intros [h]. constructor.
+    rewrite B_ctx_Fix_body_fold (B_zipp_eta_Fix_body _ _ _ _ _ _ _ _ _ u)
+      (B_zipp_eta_Fix_body _ _ _ _ _ _ _ _ _ v) in h.
+    exact h.
+  Qed.
 
   Equations isws_cumul_pb_fix_types (fk : fix_kind) (Γ : context)
     (idx : nat)
@@ -1778,77 +2114,69 @@ Section Conversion.
       ).
 
   Next Obligation.
-    destruct u. destruct fk. all: eauto.
+    have [hna _] := andb_prop _ _ hg. destruct fk; exact hna.
   Qed.
   Next Obligation.
-    destruct v. destruct fk. all: eauto.
+    have [_ hna'] := andb_prop _ _ hg. destruct fk; exact hna'.
   Qed.
   Next Obligation.
-    eapply R_positionR. all: simpl.
-    - destruct u. destruct fk. all: reflexivity.
-    - rewrite <- app_nil_r, stack_position_cons. destruct fk.
-      + eapply positionR_poscat. constructor.
-      + eapply positionR_poscat. constructor.
+    B_rel wfR. destruct u. destruct fk; exact (h _ wfR).
   Qed.
   Next Obligation.
-    destruct fk.
-    - simpl. eauto.
-    - simpl. eauto.
+    B_rel wfR. destruct v. destruct fk; exact (h' _ wfR).
   Qed.
   Next Obligation.
-    rewrite <- app_assoc. simpl. eauto.
+    eapply R_positionR; cbn -[stack_position].
+    - constructor. destruct u, fk; reflexivity.
+    - apply B_positionR_frame. destruct fk; reflexivity.
   Qed.
   Next Obligation.
-    rewrite <- app_assoc. simpl. eauto.
+    B_rel wfR. destruct fk; exact (hx _ wfR).
   Qed.
   Next Obligation.
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    specialize_Σ wfΣ.
-    destruct hx as [hx], h1 as [h1], h2 as [h2].
-    destruct (hΣ _ wfΣ) as [wΣ].
-    unfold zipp in h2.
-    constructor.
-    apply All2_app. 1: assumption.
-    constructor. 2: constructor.
-    change (true = eqb u.(rarg) v.(rarg)) in eq1.
-    destruct (eqb_specT u.(rarg) v.(rarg)). 2: discriminate.
-    symmetry in eqann.
-    apply eqb_binder_annot_spec in eqann.
-    split; auto.
-    destruct fk; simpl in *; auto.
-    all: intros; erewrite (abstract_env_ext_irr _ _ wfΣ); intuition eauto.
-    Unshelve. all: eauto.
+    have [hna _] := andb_prop _ _ hg.
+    destruct fk; unfold virt_ok; cbn [no_Eta_arg is_Eta_arg negb andb mFix_mfix]; rewrite hna; reflexivity.
   Qed.
   Next Obligation.
-    clear aux.
-    eapply R_irrelevance; tea; cbn.
-    now rewrite <- !app_assoc.
+    have [_ hna'] := andb_prop _ _ hg.
+    destruct fk; unfold virt_ok; cbn [no_Eta_arg is_Eta_arg negb andb mFix_mfix]; rewrite hna'; reflexivity.
   Qed.
   Next Obligation.
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    specialize_Σ wfΣ.
-    destruct hx as [hx], h1 as [h1], h2 as [h2].
-    destruct (hΣ _ wfΣ) as [wΣ].
-    unfold zipp in h2. sq.
-    constructor.
-    2: eauto.
-    change (true = eqb u.(rarg) v.(rarg)) in eq1.
-    destruct (eqb_specT u.(rarg) v.(rarg)). 2: discriminate.
-    symmetry in eqann.
-    apply eqb_binder_annot_spec in eqann.
-    clear eq1.
-    destruct fk.
-    all: split; [ intros; erewrite (abstract_env_ext_irr _ _ wfΣ) | ]; intuition eauto .
-    Unshelve. all: eauto.
+    B_rel wfR. destruct fk; exact (hwf _ wfR).
   Qed.
-
-  Lemma stack_entry_context_mFix_mfix_bd :
-    forall fk na ty ra mfix1 mfix2 idx,
-      stack_entry_context (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx) =
-      fix_context_alt (map def_sig mfix1 ++ (na,ty) :: map def_sig mfix2).
-  Proof using Type.
-    intros fk na ty ra mfix1 mfix2 idx.
-    destruct fk. all: reflexivity.
+  Next Obligation.
+    B_rel wfR. destruct fk; exact (hwf' _ wfR).
+  Qed.
+  Next Obligation.
+    B_rel wfR. rewrite <- app_assoc. exact (h _ wfR).
+  Qed.
+  Next Obligation.
+    B_rel wfR. rewrite <- app_assoc. exact (h' _ wfR).
+  Qed.
+  Next Obligation.
+    destruct h1 as [hb1].
+    destruct (abstract_env_ext_exists X) as [[Σ0 wfΣ0]].
+    destruct (h2 _ wfΣ0) as [h2'].
+    change (true = eqb (rarg u) (rarg v)) in eq1.
+    destruct (eqb_specT (rarg u) (rarg v)) as [er|]; [|discriminate].
+    symmetry in eqann. apply eqb_binder_annot_spec in eqann.
+    constructor. apply All2_app; [exact hb1|]. constructor; [|constructor].
+    split; [|split; assumption].
+    intros Σ' wfΣ'. rewrite (abstract_env_ext_irr _ wfΣ' wfΣ0). destruct fk; exact h2'.
+  Qed.
+  Next Obligation.
+    eapply R_irrelevance; [|eassumption]. cbn. now rewrite <- !app_assoc.
+  Qed.
+  Next Obligation.
+    destruct h3 as [hb3].
+    destruct (abstract_env_ext_exists X) as [[Σ0 wfΣ0]].
+    destruct (h2 _ wfΣ0) as [h2'].
+    change (true = eqb (rarg u) (rarg v)) in eq1.
+    destruct (eqb_specT (rarg u) (rarg v)) as [er|]; [|discriminate].
+    symmetry in eqann. apply eqb_binder_annot_spec in eqann.
+    constructor. constructor; [|exact hb3].
+    split; [|split; assumption].
+    intros Σ' wfΣ'. rewrite (abstract_env_ext_irr _ wfΣ' wfΣ0). destruct fk; exact h2'.
   Qed.
 
   Equations isws_cumul_pb_fix_bodies (fk : fix_kind) (Γ : context) (idx : nat)
@@ -1905,182 +2233,104 @@ Section Conversion.
     False_rect _ _.
 
   Next Obligation.
-    destruct h1 as [h1], ha as [ha].
-    apply All2_length in h1 as e1.
-    apply All2_length in ha as ea.
-    rewrite !length_app in ea. simpl in ea. lia.
+    destruct h1 as [hb1], ha as [hba].
+    apply All2_length in hb1. apply All2_length in hba.
+    rewrite !length_app /= in hba. lia.
   Qed.
   Next Obligation.
-    destruct h1 as [h1], ha as [ha].
-    apply All2_length in h1 as e1.
-    apply All2_length in ha as ea.
-    rewrite !length_app in ea. simpl in ea. lia.
+    destruct h1 as [hb1], ha as [hba].
+    apply All2_length in hb1. apply All2_length in hba.
+    rewrite !length_app /= in hba. lia.
   Qed.
   Next Obligation.
-    destruct u. destruct fk. all: eauto.
+    have [hna _] := andb_prop _ _ hg. destruct fk; exact hna.
   Qed.
   Next Obligation.
-    destruct v. destruct fk. all: eauto.
+    have [_ hna'] := andb_prop _ _ hg. destruct fk; exact hna'.
   Qed.
   Next Obligation.
-    eapply R_positionR. all: simpl.
-    - destruct u. destruct fk. all: reflexivity.
-    - rewrite <- app_nil_r, stack_position_cons.
-      destruct fk.
-      + eapply positionR_poscat. constructor.
-      + eapply positionR_poscat. constructor.
+    B_rel wfR. destruct u. destruct fk; exact (h _ wfR).
   Qed.
   Next Obligation.
-    rename H into wfΣ; specialize_Σ wfΣ.
-    destruct (hΣ _  wfΣ) as [wΣ], ha as [ha], hx as [hx].
-    clear - wfΣ wΣ ha hx. constructor.
-    rewrite 2!stack_entry_context_mFix_mfix_bd.
-    change (dname u, dtype u) with (def_sig u).
-    change (dname v, dtype v) with (def_sig v).
-    repeat match goal with
-    | |- context [ ?f ?x :: map ?f ?l ] =>
-      change (f x :: map f l) with (map f (x :: l))
-    end.
-    rewrite <- 2!map_app.
-    revert ha.
-    generalize (mfix1 ++ u :: mfix2). intro Δ.
-    generalize (mfix1' ++ v :: mfix2'). intro Δ'.
-    intro ha.
-    rewrite !app_context_assoc.
-    revert hx ha.
-    generalize (Γ ,,, stack_context π').
-    generalize (Γ ,,, stack_context π).
-    clear Γ. intros Γ Γ' hx ha.
-    assert (h :
-      All2
-        (fun d d' => (Σ ;;; Γ ⊢ d.2 = d'.2) * eq_binder_annot d.1 d'.1)
-        (map def_sig Δ) (map def_sig Δ')
-    ).
-    { apply All2_map. eapply All2_impl. 1: eassumption.
-      intros [na ty bo ra] [na' ty' bo' ra'] [? [? ?]].
-      specialize (w _ wfΣ). simpl in *. split; tas.
-    }
-    clear ha.
-    revert h.
-    generalize (map def_sig Δ). clear Δ. intro Δ.
-    generalize (map def_sig Δ'). clear Δ'. intro Δ'.
-    intro h.
-    unfold fix_context_alt.
-    match goal with
-    | |- ws_cumul_ctx_pb _ _ (_ ,,, List.rev ?l) (_ ,,, List.rev ?l') =>
-      assert (hi :
-        All2i (fun i d d' =>
-          forall Ξ,
-            is_closed_context (Γ ,,, Ξ) ->
-            #|Ξ| = i ->
-            ws_cumul_decls Conv Σ (Γ ,,, Ξ) d d'
-        ) 0 l l'
-      )
-    end.
-    { eapply All2i_mapi.
-      generalize 0 at 3. intro n.
-      induction h in n |- *. 1: constructor.
-      constructor. 2: eapply IHh.
-      destruct r.
-      intros Ξ cl eΞ. constructor; tas.
-      rewrite <- eΞ.
-      eapply @weakening_ws_cumul_pb with (Γ' := []). all: try assumption.
-
-    }
-    clear h.
-    revert hi.
-    match goal with
-    | |- context [ ws_cumul_ctx_pb _ _ (_ ,,, List.rev ?l) (_ ,,, List.rev ?l') ] =>
-      generalize l' ;
-      generalize l
-    end.
-    clear Δ Δ'. intros Δ Δ' h.
-    apply All2i_rev in h. simpl in h.
-    revert h.
-    rewrite <- (List.length_rev Δ).
-    generalize (List.rev Δ). clear Δ. intro Δ.
-    generalize (List.rev Δ'). clear Δ'. intro Δ'.
-    intro h.
-    set (ln := #|Δ|) in *.
-    set (m := 0) in *.
-    assert (e : ln - m = #|Δ|) by lia.
-    clearbody ln m.
-    induction h.
-    - eauto.
-    - simpl in *.
-      forward IHh by lia.
-      constructor.
-      + eapply IHh.
-      + eapply r0. 2:lia.
-        clear - wΣ IHh. fvs.
+    B_rel wfR. destruct v. destruct fk; exact (h' _ wfR).
   Qed.
   Next Obligation.
-    rewrite <- app_assoc. simpl. eauto.
+    eapply R_positionR; cbn -[stack_position].
+    - constructor. destruct u, fk; reflexivity.
+    - apply B_positionR_frame. destruct fk; reflexivity.
   Qed.
   Next Obligation.
-    rewrite <- app_assoc. simpl. eauto.
+    B_rel wfR.
+    destruct (hΣ _ wfR) as [cb]. destruct (hx _ wfR) as [hx']. destruct ha as [hba].
+    constructor. rewrite !B_ctx_Fix_body.
+    apply B_ctx_fix_context; [exact cb|exact hx'|].
+    apply All2_map. eapply All2_impl; [exact hba|].
+    intros d d' [hd [_ hn]]. cbn [dtype dname map_def]. split; [|exact hn].
+    rewrite -!eta_rename_rename. exact (hd _ wfR).
   Qed.
   Next Obligation.
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    specialize_Σ wfΣ.
-    destruct hx as [hx], h1 as [h1], h2 as [h2], ha as [ha].
-    destruct (hΣ _ wfΣ) as [wΣ].
-    unfold zipp in h2. (* simpl in h2. *)
+    have [hna _] := andb_prop _ _ hg.
+    destruct fk; unfold virt_ok; cbn [no_Eta_arg is_Eta_arg negb andb mFix_mfix]; rewrite hna; reflexivity.
+  Qed.
+  Next Obligation.
+    have [_ hna'] := andb_prop _ _ hg.
+    destruct fk; unfold virt_ok; cbn [no_Eta_arg is_Eta_arg negb andb mFix_mfix]; rewrite hna'; reflexivity.
+  Qed.
+  Next Obligation.
+    B_rel wfR.
+    have [hna _] := andb_prop _ _ hg.
+    destruct (heΣ _ wfR) as [hwfe]. destruct (hwf _ wfR) as [hw].
+    destruct u as [na ty bo ra].
+    have hse : is_eta_frame (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx) = false
+      by destruct fk; reflexivity.
+    have hz : welltypedE Σ Γ (zipc bo (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx :: π))
+      by destruct fk; exact (h _ wfR).
+    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ bo
+             (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx) π hse hna hz hw).
+  Qed.
+  Next Obligation.
+    B_rel wfR.
+    have [_ hna'] := andb_prop _ _ hg.
+    destruct (heΣ _ wfR) as [hwfe]. destruct (hwf' _ wfR) as [hw].
+    destruct v as [na ty bo ra].
+    have hse : is_eta_frame (mFix_mfix fk (mfix1', def_hole_body na ty ra, mfix2') idx) = false
+      by destruct fk; reflexivity.
+    have hz : welltypedE Σ Γ (zipc bo (mFix_mfix fk (mfix1', def_hole_body na ty ra, mfix2') idx :: π'))
+      by destruct fk; exact (h' _ wfR).
+    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ bo
+             (mFix_mfix fk (mfix1', def_hole_body na ty ra, mfix2') idx) π' hse hna' hz hw).
+  Qed.
+  Next Obligation.
+    B_rel wfR. rewrite <- app_assoc. exact (h _ wfR).
+  Qed.
+  Next Obligation.
+    B_rel wfR. rewrite <- app_assoc. exact (h' _ wfR).
+  Qed.
+  Next Obligation.
+    destruct h1 as [hb1].
+    destruct (abstract_env_ext_exists X) as [[Σ0 wfΣ0]].
+    destruct (B_fix_body_elem Σ0 Γ fk mfix1 u mfix2 idx π mfix1' v mfix2' π' (h2 _ wfΣ0)) as [e].
     constructor.
+    rewrite map_app. cbn [map]. rewrite <- !app_assoc. cbn [app].
     apply All2_app.
-    - eapply All2_impl. 1: exact h1.
-      simpl. intros [? ? ? ?] [? ? ? ?] hh.
-      simpl in *.
-      rewrite map_app. simpl.
-      rewrite <- !app_assoc. simpl.
-      assumption.
-    - constructor. 2: constructor.
-      rewrite map_app. simpl.
-      rewrite <- !app_assoc. simpl.
-      destruct u as [na ty bo ra], v as [na' ty' bo' ra']. simpl in *.
-      unfold def_sig at 2. simpl.
-      destruct fk.
-      + intros. erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
-       rewrite app_context_assoc in h2; eauto.
-       + intros. erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
-       rewrite app_context_assoc in h2; eauto.
-    Unshelve. all: eauto.
+    - eapply All2_impl; [exact hb1|]. intros d d' hd Σ' wfΣ'. exact (hd Σ' wfΣ').
+    - constructor; [|constructor].
+      intros Σ' wfΣ'. rewrite (abstract_env_ext_irr _ wfΣ' wfΣ0). exact e.
   Qed.
   Next Obligation.
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    specialize_Σ wfΣ.
-    destruct ha as [ha].
-    constructor.
-    rewrite <- !app_assoc. simpl. assumption.
+    destruct ha as [hba]. constructor. rewrite <- !app_assoc. exact hba.
   Qed.
   Next Obligation.
-    clear aux.
-    eapply R_irrelevance; tea; cbn.
-    now rewrite <- !app_assoc.
+    eapply R_irrelevance; [|eassumption]. cbn. now rewrite <- !app_assoc.
   Qed.
   Next Obligation.
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    specialize_Σ wfΣ.
-    destruct hx as [hx], h1 as [h1], h2 as [h2], h3 as [h3].
-    destruct (hΣ _ wfΣ) as [wΣ].
-    unfold zipp in h2. simpl in h2.
-    constructor.
-    constructor.
-    - destruct u as [na ty bo ra], v as [na' ty' bo' ra']. simpl in *.
-      unfold def_sig at 2. simpl.
-      destruct fk.
-      + intros. erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
-       rewrite app_context_assoc in h2; eauto.
-      + intros. erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
-       rewrite app_context_assoc in h2; eauto.
-
-    - eapply All2_impl. 1: exact h3.
-      simpl. intros [? ? ? ?] [? ? ? ?] hh.
-      simpl in *.
-      rewrite map_app in hh. simpl in hh.
-      rewrite <- !app_assoc in hh. simpl in hh.
-      assumption.
-    Unshelve. all: eauto.
+    destruct h3 as [hb3].
+    destruct (abstract_env_ext_exists X) as [[Σ0 wfΣ0]].
+    destruct (B_fix_body_elem Σ0 Γ fk mfix1 u mfix2 idx π mfix1' v mfix2' π' (h2 _ wfΣ0)) as [e].
+    rewrite map_app in hb3. cbn [map] in hb3. rewrite <- !app_assoc in hb3. cbn [app] in hb3.
+    constructor. constructor.
+    - intros Σ' wfΣ'. rewrite (abstract_env_ext_irr _ wfΣ' wfΣ0). exact e.
+    - exact hb3.
   Qed.
 
   Equations isws_cumul_pb_Fix (fk : fix_kind) (Γ : context)
@@ -2126,13 +2376,12 @@ Section Conversion.
     }.
 
   Next Obligation.
-    destruct h1 as [h1], h2 as [h2].
+    destruct h1 as [hb1], h2 as [hb2].
     constructor.
     rewrite fix_context_fix_context_alt.
-    pose proof (All2_mix h1 h2) as h3.
-    eapply All2_impl. 1: exact h3.
-    intros [? ? ? ?] [? ? ? ?] ?. simpl in *.
-    intuition eauto.
+    pose proof (All2_mix hb1 hb2) as h3.
+    eapply All2_impl; [exact h3|].
+    intros d d' [[ht [hr hn]] hb]. split; [exact ht|]. split; [exact hb|]. split; assumption.
   Qed.
 
   Definition compare_global_instance_correct {Σ}
@@ -2242,100 +2491,29 @@ Section Conversion.
                                             (Γ,,, stack_context π1) ci1 p1 c1 brs1
                                             (Γ,,, stack_context π2) ci2 p2 c2 brs2).
   Next Obligation.
-    destruct p1; auto.
+    constructor. constructor.
   Qed.
   Next Obligation.
-    destruct p2; auto.
+    B_rel wfR. destruct p1. exact (h1 _ wfR).
   Qed.
   Next Obligation.
-    apply R_positionR. all: simpl.
-    1: destruct p1; cbn in *; subst; reflexivity.
-    rewrite stack_position_cons.
-    rewrite <- app_nil_r.
-    eapply positionR_poscat.
-    constructor.
+    B_rel wfR. destruct p2. exact (h2 _ wfR).
   Qed.
   Next Obligation.
-    rewrite <- app_assoc; auto.
+    eapply R_positionR; cbn -[stack_position].
+    - constructor. destruct p1 as [pp pu pc pr]. cbn in eq1. subst pp. reflexivity.
+    - apply B_positionR_frame. reflexivity.
   Qed.
   Next Obligation.
-    rewrite <- app_assoc; auto.
+    rewrite <- app_assoc. exact eq1.
   Qed.
   Next Obligation.
-    specialize_Σ wfΣ.
-    destruct conv_tm, conv_rest.
-    unfold zipp in X; simpl in *.
-    constructor; constructor; auto.
+    rewrite <- app_assoc. exact eq2.
   Qed.
-
-  Lemma case_conv_preds_inv Σ (wfΣ : abstract_env_ext_rel X Σ) {Γ ci p c brs brs' π}
-  (h : wtp Γ (tCase ci p c brs) π)
-  (p' : predicate term) (c' : term)
-  (π' : stack) (h' : wtp Γ (tCase ci p' c' brs') π')
-  (hx : conv_stack_ctx Γ π π')
-  (hp : ∥ ws_cumul_pb_terms Σ (Γ,,, stack_context π) (pparams p) (pparams p') ∥) :
-  ∥ ∑ mdecl idecl,
-    [× declared_inductive Σ ci mdecl idecl,
-      forallb (wf_universeb Σ) (map Universe.make' (puinst p)),
-      forallb (wf_universeb Σ) (map Universe.make' (puinst p')),
-       #|pparams p| = ind_npars mdecl,
-       #|pparams p'| = ind_npars mdecl,
-       eq_context_upto_names p.(pcontext) p'.(pcontext),
-       test_context_k (fun k : nat => on_free_vars (closedP k (fun _ : nat => true)))
-         #|pparams p| p.(pcontext) &
-       test_context_k (fun k : nat => on_free_vars (closedP k (fun _ : nat => true)))
-         #|pparams p'| p'.(pcontext)] ∥.
-  Proof using Type.
-    destruct (hΣ _ wfΣ). specialize_Σ wfΣ.
-    destruct hx as [hx].
-    destruct hp as [hp].
-    eapply welltyped_zipc_zipp in h; auto.
-    eapply welltyped_zipc_zipp in h'; auto.
-    rewrite !zipp_as_mkApps in h, h'.
-    destruct h as [s h]. destruct h' as [s' h'].
-    eapply PCUICValidity.inversion_mkApps in h as [A [hcase _]].
-    eapply PCUICValidity.inversion_mkApps in h' as [A' [hcase' _]].
-    eapply inversion_Case in hcase as [mdecl [idecl [decli [indices [hcase _]]]]]; auto.
-    eapply inversion_Case in hcase' as [mdecl' [idecl' [decli' [indices' [hcase' _]]]]]; auto.
-    pose proof (decli_ := decli); pose proof (decli'_ := decli').
-    unshelve eapply declared_inductive_to_gen in decli, decli'; eauto.
-    destruct (declared_inductive_inj decli decli'). subst mdecl' idecl'.
-    constructor.
-    assert (clp : test_context_k (fun k : nat => on_free_vars (closedP k (fun _ : nat => true)))
-      #|pparams p| p.(pcontext)).
-    { rewrite test_context_k_closed_on_free_vars_ctx.
-      destruct hcase.
-      eapply PCUICConfluence.eq_context_upto_names_on_free_vars.
-      2:symmetry; exact conv_pctx.
-      rewrite <- closedn_ctx_on_free_vars.
-      eapply PCUICClosed.closedn_ctx_upwards.
-      { eapply (closed_ind_predicate_context); tea.
-        eapply declared_minductive_closed; tea. exact decli'_. }
-      rewrite (wf_predicate_length_pars wf_pred).
-      now rewrite (PCUICGlobalEnv.declared_minductive_ind_npars decli_).
-    }
-    rewrite test_context_k_closed_on_free_vars_ctx.
-    exists mdecl, idecl.
-    destruct hcase. destruct hcase'.
-    split; tea.
-    - eapply Forall_forallb; try eapply consistent_instance_wf_sort; eauto.
-      intros; apply wf_universe_iff; eauto.
-    - eapply Forall_forallb; try eapply consistent_instance_wf_sort; eauto.
-      intros; apply wf_universe_iff; eauto.
-    - eapply (wf_predicate_length_pars wf_pred).
-    - eapply (wf_predicate_length_pars wf_pred0).
-    - etransitivity; tea.
-      now symmetry.
-    - now rewrite <- test_context_k_closed_on_free_vars_ctx.
-    - rewrite test_context_k_closed_on_free_vars_ctx.
-      eapply PCUICConfluence.eq_context_upto_names_on_free_vars.
-      2:symmetry; exact conv_pctx0.
-      rewrite <- closedn_ctx_on_free_vars.
-      relativize #|pparams p'|.
-      { eapply (closed_ind_predicate_context); tea.
-        eapply declared_minductive_closed; tea. exact decli'_. }
-      rewrite (wf_predicate_length_pars wf_pred0).
-      now rewrite (PCUICGlobalEnv.declared_minductive_ind_npars decli_).
+  Next Obligation.
+    B_rel wfR.
+    destruct (conv_tm _ wfR) as [hc]. destruct (conv_rest _ wfR) as [hr].
+    constructor. constructor; [exact hc|exact hr].
   Qed.
 
   Definition isconv_predicate_params
@@ -2406,53 +2584,54 @@ Section Conversion.
         }
       }.
   Next Obligation.
-    destruct p1; cbn in *; subst; auto.
+    B_rel wfR. destruct p1. exact (h1 _ wfR).
   Qed.
   Next Obligation.
-    destruct p2; cbn in *; subst; auto.
+    B_rel wfR. destruct p2. exact (h2 _ wfR).
   Qed.
   Next Obligation.
-    apply R_positionR. all: simpl.
-    1: destruct p1; cbn in *; subst; reflexivity.
-    rewrite stack_position_cons.
-    rewrite <- app_nil_r.
-    eapply positionR_poscat.
+    eapply R_positionR; cbn -[stack_position].
+    - constructor. destruct p1; reflexivity.
+    - apply B_positionR_frame. reflexivity.
+  Qed.
+  Next Obligation.
+    B_rel wfR.
+    have [hna hna'] := andb_prop _ _ hg.
+    destruct (hΣ _ wfR) as [cb]. destruct (hx _ wfR) as [hx']. destruct (conv_params _ wfR) as [hpars].
+    destruct (B_case_pred_ctx Σ wfR Γ ci2 p1 c1 brs1 π1 p2 c2 brs2 π2 hna hna' (h1 _ wfR) (h2 _ wfR))
+      as [[hctx] [hc1 [hc2 [hu1 hu2]]]].
+    have hu := eqb_universe_instance_spec _ _ Σ wfR hu1 hu2 (eq_sym eq_insts).
     constructor.
+    rewrite (B_ctx_Case_pred_return _ _ _ _ _ _ _ _ hc1) (B_ctx_Case_pred_return _ _ _ _ _ _ _ _ hc2).
+    eapply inst_case_ws_cumul_ctx_pbE; tea.
+    - rewrite length_map -test_context_k_closed_on_free_vars_ctx. exact hc1.
+    - rewrite length_map -test_context_k_closed_on_free_vars_ctx. exact hc2.
   Qed.
   Next Obligation.
-    rename H into wfΣ.
-    destruct (hΣ _ wfΣ).
-    eapply eq_sym, eqb_universe_instance_spec in eq_insts; eauto.
-    - destruct (case_conv_preds_inv _ wfΣ h1 _ _ _ h2 hx (conv_params _ wfΣ)) as []; tea.
-      specialize_Σ wfΣ.    destruct hx as [hx].
-    destruct conv_params as [conv_params].
-    constructor.
-    unfold app_context; rewrite <- !app_assoc.
-    destruct X1 as [mdecl [idecl []]].
-    etransitivity.
-    * inv_on_free_vars. eapply (inst_case_ws_cumul_ctx_pb d e e0 i1 i2); tea. fvs.
-    * eapply ws_cumul_ctx_pb_app_same. 2:eapply hx.
-      rewrite on_free_vars_ctx_app.
-      apply andb_true_iff. split; auto.
-      1:now eapply ws_cumul_ctx_pb_closed_left in hx.
-      eapply on_free_vars_ctx_inst_case_context; trea.
-      fvs.
-     - destruct (case_conv_preds_inv _ wfΣ h1 _ _ _ h2 hx (conv_params Σ wfΣ)) as []; tea.
-       destruct X1 as [mdecl [idecl []]]. eauto.
-     - destruct (case_conv_preds_inv _ wfΣ h1 _ _ _ h2 hx (conv_params Σ wfΣ)) as []; tea.
-       destruct X1 as [mdecl [idecl []]]. eauto.
+    B_rel wfR.
+    have [hna _] := andb_prop _ _ hg.
+    destruct (heΣ _ wfR) as [hwfe]. destruct (hwf1 _ wfR) as [hw].
+    destruct p1 as [pp pu pc pr].
+    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ pr
+             (Case_pred ci2 (pred_hole_return pp pu pc) c1 brs1) π1 eq_refl hna (h1 _ wfR) hw).
   Qed.
   Next Obligation.
-    unfold zipp in conv_ret; simpl in conv_ret.
-    destruct (case_conv_preds_inv _ wfΣ h1 _ _ _ h2 hx (conv_params Σ wfΣ)) as []; tea.
-    eapply eq_sym, eqb_universe_instance_spec in eq_insts; eauto.
-    - specialize_Σ wfΣ. destruct hx as [hx]. destruct conv_params as [conv_params].
-    destruct conv_ret as [h].
-    split. split; auto.
-    2:rewrite app_context_assoc in h; auto.
-    now destruct X0 as [mdecl [idecl []]].
-    - now destruct X0 as [mdecl [idecl []]].
-    - now destruct X0 as [mdecl [idecl []]].
+    B_rel wfR.
+    have [_ hna'] := andb_prop _ _ hg.
+    destruct (heΣ _ wfR) as [hwfe]. destruct (hwf2 _ wfR) as [hw].
+    destruct p2 as [pp pu pc pr].
+    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ pr
+             (Case_pred ci2 (pred_hole_return pp pu pc) c2 brs2) π2 eq_refl hna' (h2 _ wfR) hw).
+  Qed.
+  Next Obligation.
+    B_rel wfR.
+    have [hna hna'] := andb_prop _ _ hg.
+    destruct (conv_params _ wfR) as [hpars].
+    destruct (B_case_pred_ctx Σ wfR Γ ci2 p1 c1 brs1 π1 p2 c2 brs2 π2 hna hna' (h1 _ wfR) (h2 _ wfR))
+      as [[hctx] [hc1 [_ [hu1 hu2]]]].
+    have hu := eqb_universe_instance_spec _ _ Σ wfR hu1 hu2 (eq_sym eq_insts).
+    destruct (B_pred_ret Σ Γ ci2 p1 c1 brs1 π1 ci2 p2 c2 brs2 π2 hc1 (conv_ret _ wfR)) as [hr].
+    constructor. split; [exact hpars|exact hu|exact hctx|exact hr].
   Qed.
 
 Notation tPrimArray a := (tPrim (primArray; primArrayModel a)).
@@ -2511,30 +2690,29 @@ Equations (noeqns) isconv_array_values_aux
                                             (Γ,,, stack_context π1) a1
                                             (Γ,,, stack_context π2) a2).
   Next Obligation.
-    destruct a1; auto.
+    constructor. constructor.
   Qed.
   Next Obligation.
-    destruct a2; auto.
+    B_rel wfR. destruct a1. exact (h1 _ wfR).
   Qed.
   Next Obligation.
-    apply R_positionR. all: simpl.
-    1: destruct a1; cbn in *; subst; reflexivity.
-    rewrite stack_position_cons.
-    rewrite <- app_nil_r.
-    eapply positionR_poscat.
-    constructor.
+    B_rel wfR. destruct a2. exact (h2 _ wfR).
   Qed.
   Next Obligation.
-    rewrite <- app_assoc; auto.
+    eapply R_positionR; cbn -[stack_position].
+    - constructor. destruct a1 as [al aty adf av]. cbn in eq1. subst av. reflexivity.
+    - apply B_positionR_frame. reflexivity.
   Qed.
   Next Obligation.
-    rewrite <- app_assoc; auto.
+    rewrite <- app_assoc. exact eq1.
   Qed.
   Next Obligation.
-    specialize_Σ wfΣ.
-    destruct conv_tm, conv_rest.
-    unfold zipp in X; simpl in *.
-    constructor; constructor; auto.
+    rewrite <- app_assoc. exact eq2.
+  Qed.
+  Next Obligation.
+    B_rel wfR.
+    destruct (conv_tm _ wfR) as [hc]. destruct (conv_rest _ wfR) as [hr].
+    constructor. constructor; [exact hc|exact hr].
   Qed.
 
   Definition isconv_array_values
