@@ -80,3 +80,5 @@ prim_ops_instance.v
 # FORECAST-ONLY (fc/etak-forecast1): Print Assumptions of the E checker's four roots
 etak_forecast_pa.v
 
+# FORECAST tree only (EtaK7): F1 tests of the E checker at SafeCheck level
+eta_f1.v

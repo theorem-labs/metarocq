@@ -4,6 +4,12 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.SafeChecker Require Import PCUICWfEnvImpl PCUICSafeChecker PCUICSafeConversion.
 From MetaRocq.TemplatePCUIC Require Import TemplateToPCUICShared.
 From MetaRocq.SafeCheckerPlugin Require Import SafeTemplateChecker.
+(* FORECAST tree only (EtaK7, 2026-10-29): the E checker behind the same command (see below). *)
+From MetaRocq.SafeChecker Require PCUICWfEnvImplEta PCUICSafeReduceEta PCUICSafeConversionEta
+  PCUICSafeConversionEtaFacts PCUICSafeReduceEtaBridge PCUICTypingEtaHyps PCUICCallByNeedSoundEta
+  PCUICSafeCheckerEta.
+From MetaRocq.SafeCheckerPlugin Require SafeTemplateCheckerEta SafeTemplateCheckerEtaConv.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping.
 
 (** * Extraction setup for the safechecker phase of MetaRocq.
 
@@ -22,6 +28,8 @@ Set Warnings "-extraction-reserved-identifier".
 Extraction Inline Program.Wf.Fix_F_sub Program.Wf.Fix_sub.
 
 Extraction Inline PCUICSafeConversion.Ret.
+(* FORECAST: the E conversion's [Ret] (uniform arity, stream lead's ruling). *)
+Extraction Inline PCUICSafeConversionEta.Ret.
 
 Extract Inductive Equations.Init.sigma => "( * )" ["(,)"].
 Extract Constant Equations.Init.pr1 => "fst".
@@ -47,15 +55,43 @@ Extract Constant TemplateToPCUICShared.memo_trans => "Trans_memo.memo".
 Extract Constant TemplateToPCUICShared.trans_memo_release => "Trans_memo.release".
 
 Set Extraction Output Directory "src".
-(** The extracted checker runs the real, executable guard check
-    [PCUICWfEnvImpl.real_guard_impl] ([check_guard_gen]). *)
-Definition infer_and_print_template_program_with_guard {cf} {nor} :=
-  @SafeTemplateChecker.infer_and_print_template_program cf nor PCUICWfEnvImpl.real_guard_impl.
+(** The extracted checker runs the real, executable guard check ([check_guard_gen]); on this FORECAST tree
+    through its E-environment twin [PCUICWfEnvImplEta.real_guard_impl]. *)
+(** FORECAST tree only (EtaK7, 2026-10-29; never lands on frac/eta as is; cutover F0 decides the real wiring).
+    [MetaRocq SafeCheck] runs the E checker ([SafeTemplateCheckerEta]) under the SAME name the OCaml glue calls,
+    so the glue and the integ harness are unchanged. The conversion is EtaConv's, through the oracle
+    [SafeTemplateCheckerEtaConv.eta_conv_oracle]; the guard is [PCUICWfEnvImplEta.real_guard_impl]. Every other
+    argument is a Prop (measured: EtaK7.md, PROP MEASUREMENT), so extraction erases it and the extracted
+    signature is base's: the named hypotheses stay HYPOTHESES of this definition (they appear as its binders,
+    which [Print Assumptions] and [About] show), no axiom is added. *)
+(* Build-time evidence that every non-data argument below is a Prop, so extraction erases it. *)
+Check (forall cf, @PCUICSafeReduceEta.ReduceTypedFactsE cf : Prop).
+Check (forall cf, @PCUICSafeConversionEtaFacts.ConvTypedFactsE cf : Prop).
+Check (forall cf, @PCUICTypingEtaHyps.EtaFacts cf : Prop).
+Check (forall cf, @PCUICCallByNeedSoundEta.CbnConvSoundE cf : Prop).
+Definition infer_and_print_template_program_with_guard {cf} {nor}
+  {reduce_factsE : @PCUICSafeReduceEta.ReduceTypedFactsE cf}
+  {conv_factsE : @PCUICSafeConversionEtaFacts.ConvTypedFactsE cf}
+  (* the conversion's two section hypotheses, their types those of [eta_conv_oracle]'s parameters
+     (inferred from the use below, so they cannot diverge from EtaConv's statements) *)
+  closed_context_conversionE welltypedE_context
+  {EtaF : @PCUICTypingEtaHyps.EtaFacts cf}
+  {cbnE : @PCUICCallByNeedSoundEta.CbnConvSoundE cf} :=
+  SafeTemplateCheckerEta.infer_and_print_template_program (cf := cf) (nor := nor)
+    (guard := PCUICWfEnvImplEta.real_guard_impl)
+    (* the machine's full [ReduceTypedFacts welltypedE wf_extE], built from the small class (an [#[export]]
+       instance, given explicitly since its module is only Required here) *)
+    (reduce_factsE := @PCUICSafeReduceEtaBridge.reduce_typed_facts_E cf reduce_factsE)
+    (CO := SafeTemplateCheckerEtaConv.eta_conv_oracle (reduce_factsE := reduce_factsE)
+             (conv_factsE := conv_factsE) closed_context_conversionE welltypedE_context).
 
 Separate Extraction Wf.Fix_sub MakeOrderTac PCUICSafeChecker.typecheck_program
+         PCUICSafeCheckerEta.typecheck_program SafeTemplateCheckerEta.trans_program_unshared
          infer_and_print_template_program_with_guard
          (* What the sharing test [MetaRocq Test Trans Sharing] calls *)
-         SafeTemplateChecker.trans_program_unshared TemplateToPCUICShared.trans_shared
+         (* FORECAST: the glue's [MetaRocq Test Trans Sharing] calls the E module's translations (same names and
+            types as base [SafeTemplateChecker]'s), so no base [SafeTemplateChecker] is extracted *)
+         SafeTemplateCheckerEta.trans_program TemplateToPCUICShared.trans_shared
          TemplateToPCUIC.trans TemplateToPCUIC.trans_global_env TemplateToPCUIC.empty_trans_env
          (* The following directives ensure separate extraction does not produce name clashes *)
          Stdlib.Strings.String UnivSubst PCUICPretty.

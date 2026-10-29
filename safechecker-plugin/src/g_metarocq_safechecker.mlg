@@ -199,10 +199,10 @@ let test_trans_sharing ~require_control ~opaque_access env evm poly c =
   let term = EConstr.to_constr evm c in
   let prog = time (str"Quoting") (quote_safecheck_program ~opaque_access env evm) term in
   let hits_before = Trans_memo.hits () in
-  let shared = time (str"Shared translation") SafeTemplateChecker.trans_program prog in
+  let shared = time (str"Shared translation") SafeTemplateCheckerEta.trans_program prog in
   let hits = Trans_memo.hits () - hits_before in
   let unshared =
-    time (str"Unshared translation") SafeTemplateChecker.trans_program_unshared prog
+    time (str"Unshared translation") SafeTemplateCheckerEta.trans_program_unshared prog
   in
   let equal = time (str"Comparing") (fun () -> Stdlib.compare shared unshared = 0) () in
   let control_ok, control =
