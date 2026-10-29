@@ -40,14 +40,18 @@
   ** The invariant ([eta_safe], syntactic, closed under subterms)
   η creates a redex in exactly four places: a λ as the scrutinee of [tCase] (ι and
   cofix-case), as the argument of [tProj] (projection and cofix-proj), as the
-  [rarg]-th argument of an applied fixpoint, and as an argument of an applied
-  primitive operation. [eta_safe Σ t] says that no subterm of [t] has a λ there.
-  Every other created redex (β with an η-expanded head, a spine whose head is an
-  η-redex) is reached from [t] by extra β steps, so needs nothing.
+  [rarg]-th argument of an applied fixpoint, and as an applied primitive value (the
+  η-expansion [λx. lit x] of a literal applies it). [eta_safe Σ t] says that no
+  subterm of [t] has a λ (resp. an applied primitive value) there, EXCEPT inside a λ
+  domain and inside the declarations of a case's [pcontext]/[bcontext], which
+  [eta_safe] does not read (change 3, history at the end of the file). Every other
+  created redex (β with an η-expanded head, a spine whose head is an η-redex) is
+  reached from [t] by extra β steps, so needs nothing.
 
-  That typing gives the invariant is not proved here: a λ has a product type, and
-  the four positions have an inductive or primitive type (for a fixpoint, its
-  [rarg] type, which [wf_fixpointE] makes convertible to an inductive). The
+  Typing gives the invariant: [typed_eta_safe] below, given the FORECAST-ONLY
+  hypothesis [fix_rarg_inductive]. A λ has a product type, and the four positions
+  have an inductive or primitive type (for a fixpoint, its [rarg] type, which
+  [fix_rarg_inductive] says is an applied inductive). The
   invariant is NOT preserved by β or by fixpoint unfolding as a syntactic
   property: [(λx. tCase x _) (λy. M y)] β-reduces to a λ scrutinee, and unfolding a
   fixpoint turns a recursive call [f (λy. C y)] into a fixpoint spine with a λ
@@ -83,6 +87,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimit
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances.
 From MetaRocq.PCUIC Require PCUICSize PCUICClosedTyp PCUICEtaScope.
 From MetaRocq.PCUIC Require Import PCUICEtaCanon PCUICEtaI5EtaL PCUICEtaC1b.
+From MetaRocq.PCUIC Require Import PCUICEtaCanonRed PCUICEtaT8BackSim.
+From MetaRocq.PCUIC Require PCUICEtaI5A2.
 
 Import ListNotations.
 
@@ -201,7 +207,12 @@ Fixpoint eta_safe (Σ : global_env) (t : term) : bool :=
     - a λ as the argument of a [tProj] ([notLam c] in the [tProj] clause);
     - a λ as the [rarg]-th argument of an applied fixpoint ([spine_safe]);
     - an applied primitive value ([notPrimHead] on every application head).
-    In EVERY subterm except a λ DOMAIN, which change 3 no longer reads.
+    In every subterm EXCEPT a λ DOMAIN (which change 3 no longer reads) and the
+    declaration types and let bodies of a case's [pcontext] and [bcontext] (which the
+    [tCase] clause never read: it reads only the scrutinee, [pparams], [preturn] and
+    each [bbody]). Neither gap matters for soundness: no rule moves λ-domain content
+    out of a domain, and the case-context bodies that [red_rel] or ι inject land in
+    read positions of the reduct, which [Good] checks.
 
     ATTEMPTS TO BREAK change 3, all 2026-10-29, "not found by these attempts":
     (a) reachability of the four positions from a λ domain:
@@ -2957,8 +2968,10 @@ End PrimRoot.
 
   The assembled statement ([pe_postpone]) relates a source [t] in [Γ] to a target [u]
   in [Γ'] with [pe_ctx Γ Γ'] (let bodies related by [pe]); its premises are
-  [Good Σ Γ t] (source side; same two halves as before) and
-  [on_free_vars xpredT u] (target side, for weakening the target step under a λ). *)
+  [Good Σ Γ t] (source side; same two halves as before), [canon t = t] (source side,
+  premise (B): it closes the λ-domain congruence case, bundled with [Good] as
+  [GoodC]) and [on_free_vars xpredT u] (target side, for weakening the target step
+  under a λ). *)
 
 Lemma ofvT_shift k t : on_free_vars (shiftnP k xpredT) t = on_free_vars xpredT t.
 Proof. apply on_free_vars_ext. apply shiftnP_xpredT. Qed.
@@ -3380,6 +3393,124 @@ Qed.
 Lemma pe_Sort_inv s u : pe (tSort s) u -> u = tSort s.
 Proof. intros h. remember (tSort s) as x eqn:E. revert E. destruct h; intros E; now try discriminate E. Qed.
 
+(** ** The two standalone lemmas of the T8 assembly (review note N3)
+
+  (i) [eta_safe_canon]: [eta_safe] cannot see [canon]. It holds only since change 3:
+  under the old λ clause it fails at a λ whose domain is not [eta_safe], because
+  [canon] replaces that domain by [canon_dom]. With [red_canon_backsim] (BackSim) it
+  gives [Good_canon : Good Σ Γ x -> Good Σ Γ (canon x)].
+  (ii) [pe_canon]: [pe] is stable under [canon] on both sides; both sides get the
+  same [canon_la], [canon_dom], [canon_na] and [canon_decl].
+
+  INDUCTION PRINCIPLES: [eta_safe_canon] by [term_forall_list_ind] on [t]
+  (structural); [decompose_app_rec_canon] by structural induction on [t];
+  [forallb_map_eq] by induction on the [All] derivation; [pe_canon] by [pe_ind_all]
+  on the [pe] derivation; [spine_safe_canon] and [Good_canon] use no induction. *)
+
+Lemma forallb_map_eq {A B} (f : A -> B) (p : B -> bool) (q : A -> bool) l :
+  All (fun x => p (f x) = q x) l -> forallb p (map f l) = forallb q l.
+Proof. intros h. induction h as [|x l hx _ IH]; cbn; [reflexivity|]. now rewrite hx IH. Qed.
+
+Lemma notLam_canon t : notLam (canon t) = notLam t.
+Proof. destruct t; reflexivity. Qed.
+
+Lemma notPrimHead_canon t : notPrimHead (canon t) = notPrimHead t.
+Proof. destruct t; reflexivity. Qed.
+
+Lemma decompose_app_rec_canon t l :
+  decompose_app_rec (canon t) (map canon l) =
+  (canon (decompose_app_rec t l).1, map canon (decompose_app_rec t l).2).
+Proof.
+  induction t in l |- *; try reflexivity.
+  match goal with IH : forall l, decompose_app_rec (canon ?f) _ = _ |- context [tApp ?f ?a] =>
+    exact (IH (a :: l)) end.
+Qed.
+
+Lemma decompose_app_canon t :
+  decompose_app (canon t) = (canon (decompose_app t).1, map canon (decompose_app t).2).
+Proof. exact (decompose_app_rec_canon t []). Qed.
+
+Lemma spine_safe_canon Σ t : spine_safe Σ (canon t) = spine_safe Σ t.
+Proof.
+  unfold spine_safe. rewrite decompose_app_canon.
+  destruct (decompose_app t) as [h args]. cbn [fst snd].
+  destruct h as [| | | | | | | | | | | | |mfix idx| |]; try reflexivity.
+  cbn [canon]. unfold unfold_fix. rewrite nth_error_map.
+  destruct (nth_error mfix idx) as [d|]; cbn [option_map]; [|reflexivity].
+  cbn [rarg canon_def]. rewrite nth_error_map.
+  destruct (nth_error args (rarg d)) as [a|]; cbn [option_map]; [|reflexivity].
+  apply notLam_canon.
+Qed.
+
+Lemma eta_safe_canon Σ t : eta_safe Σ (canon t) = eta_safe Σ t.
+Proof.
+  induction t using term_forall_list_ind; cbn [canon eta_safe]; try reflexivity.
+  - (* tEvar *) apply forallb_map_eq. eapply All_impl; [eassumption|]. intros x h. exact h.
+  - (* tProd *) now rewrite IHt1 IHt2.
+  - (* tLambda: change 3 makes the domain invisible *) exact IHt2.
+  - (* tLetIn *) now rewrite IHt1 IHt2 IHt3.
+  - (* tApp *)
+    have hs := spine_safe_canon Σ (tApp t1 t2). cbn [canon] in hs.
+    now rewrite notPrimHead_canon hs IHt1 IHt2.
+  - (* tCase *) destruct X as (Hpar & _ & Hret).
+    unfold canon_predicate; cbn [pparams preturn].
+    rewrite notLam_canon IHt Hret.
+    rewrite (forallb_map_eq canon (eta_safe Σ) (eta_safe Σ) _ Hpar).
+    rewrite (forallb_map_eq (canon_branch canon) (fun br => eta_safe Σ br.(bbody))
+               (fun br => eta_safe Σ br.(bbody))); [|reflexivity].
+    eapply All_impl; [exact X0|]. intros br [_ hb]. exact hb.
+  - (* tProj *) now rewrite notLam_canon IHt.
+  - (* tFix *) apply forallb_map_eq. eapply All_impl; [exact X|].
+    intros d [ht hb]. cbn. now rewrite ht hb.
+  - (* tCoFix *) apply forallb_map_eq. eapply All_impl; [exact X|].
+    intros d [ht hb]. cbn. now rewrite ht hb.
+  - (* tPrim *) destruct p as [? m]; destruct m; cbn in X |- *; try reflexivity.
+    destruct X as (Hty & Hdef & Hval).
+    rewrite (forallb_map_eq canon (eta_safe Σ) (eta_safe Σ) _ Hval).
+    now rewrite Hdef Hty.
+Qed.
+
+(** [Good] transfers to [canon]: this is what change 3 was made for. *)
+Lemma Good_canon Σ Γ x : Good Σ Γ x -> Good Σ Γ (canon x).
+Proof.
+  intros hg t' r. destruct (red_canon_backsim Σ Γ x t' r) as (x' & r' & e).
+  rewrite -(eta_safe_canon Σ t') -e eta_safe_canon. exact (hg x' r').
+Qed.
+
+Lemma pe_canon t t' (H : pe t t') : pe (canon t) (canon t').
+Proof.
+  induction H using pe_ind_all; cbn [canon]; try solve [econstructor; eauto].
+  - (* η: the target is lifted under the binder; [canon] commutes with [lift] *)
+    apply pe_eta.
+    match goal with IH : pe _ (canon (tApp (lift0 1 ?M) (tRel 0))) |- _ =>
+      cbn [canon] in IH; rewrite (canon_lift 1 0 M) in IH; exact IH end.
+  - (* Evar *) constructor. apply All2_map. eapply All2_impl; [eassumption|]. intros x y [_ Hk]. exact Hk.
+  - (* λ: both domains become [canon_dom] *) apply pe_Lambda; [apply pe_refl|assumption].
+  - (* Case *) apply pe_Case; cbn.
+    + apply All2_map. eapply All2_impl; [eassumption|]. intros x y [_ Hk]. exact Hk.
+    + assumption.
+    + match goal with H : pcontext _ = pcontext _ |- _ => now rewrite H end.
+    + assumption.
+    + assumption.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [Hc [_ Hk]]. cbn. split; [now rewrite Hc|exact Hk].
+  - (* Fix *) constructor. apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [exact Ht|]. split; [exact Hb|]. split; [now rewrite Hn|exact Hr].
+  - (* CoFix *) constructor. apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [exact Ht|]. split; [exact Hb|]. split; [now rewrite Hn|exact Hr].
+  - (* Prim *) constructor.
+    match goal with
+    | H : onPrims _ _ _ _ |- _ => destruct H as [i|fl|st|arr arr' Hlvl Hdef Hty Hval]
+    end; cbn; try solve [constructor].
+    constructor; cbn.
+    + exact Hlvl.
+    + destruct Hdef as [_ Hd]. exact Hd.
+    + destruct Hty as [_ Ht]. exact Ht.
+    + apply All2_map. eapply All2_impl; [exact Hval|]. intros x y [_ Hk]. exact Hk.
+Qed.
+
 Section Assembly.
   Context {cf : checker_flags} {Σ : global_env} (cb : ClosedBodies Σ).
 
@@ -3777,14 +3908,18 @@ Section Assembly.
   (** ** (iii) EVERY consumer of [pe_postpone] / [pe_postpone_gen], and how (B) is
       discharged at each (the whole file; [grep] for the two names)
 
-      1. [pe_postpone] itself (the only consumer of [pe_postpone_gen]): DISCHARGED by
-         passing its own visible premise, bundled as [(hg, hcan)].
-      2. [pe_postpone_statement_holds]: DISCHARGED; the pinned statement is now
-         instantiated at the predicate [fun Γ t => Good Σ Γ t × canon t = t], so the
-         premise is part of the predicate the statement quantifies over.
-      3. [pe_postpone_src] (the source-side scoping variant): DISCHARGED by passing
-         its own visible premise.
-      4. [pe_red_postpone], the iteration: CANNOT DISCHARGE IT. This is the finding.
+      1. [pe_postpone] itself (the only consumer of [pe_postpone_gen]): NOT a discharge.
+         It RE-EXPORTS (B) as its own visible premise [canon t = t], bundled with
+         [Good] as [(hg, hcan)] for [pe_postpone_gen].
+      2. [pe_postpone_statement_holds]: NOT a discharge. (B) is FOLDED INTO THE
+         PREDICATE: the pinned statement is instantiated at
+         [fun Γ t => Good Σ Γ t × canon t = t], so it is now proved only for canonical
+         sources, which is WEAKER than the instance at [Good] alone proved before (B).
+      3. [pe_postpone_src] (the source-side scoping variant): NOT a discharge. It
+         RE-EXPORTS (B) as its own visible premise.
+      4. [IterationNeedsCanonicalReducts.pe_red_postpone], the iteration: CANNOT
+         DISCHARGE IT. This is the finding. Quarantined in that module (stream-lead
+         ruling 15:19Z) so that every use names the limitation.
          It applies the postponement to [red]-REDUCTS of the source, and a
          [red]-reduct of a canonical term need not be canonical. Three rules import
          material that [canon] has not touched: [red_delta] (a global constant body),
@@ -3794,11 +3929,15 @@ Section Assembly.
          (PCUICEtaCanon.v, table row [tCase]). Whether the remaining rules preserve
          canonicity is not proved here and is not needed.
          The premise therefore stays VISIBLE and undischarged, as [hcanred].
-      5. The planned assembly (not written): DISCHARGED by construction. It walks the
-         A6 chain, whose [R_c] steps re-canonicalise ([R_c Σ Γ x y] gives
-         [y = canon v0]), and it applies the postponement at [canon T'] for the
-         current reduct [T'], where [canon_idem] gives [canon (canon T') = canon T'].
-         So the assembly never needs [pe_red_postpone].
+      5. The planned assembly (not written): it must DISCHARGE (B) by construction. It
+         walks the A6 chain, whose [R_c] steps re-canonicalise ([R_c Σ Γ x y] gives
+         [y = canon v0], PCUICEtaCanonRed.v:44), and it applies the postponement at
+         [canon T'] for the current reduct [T'], where [canon_idem] gives
+         [canon (canon T') = canon T']. So it never needs [pe_red_postpone]. It needs
+         two lemmas, built first below the assembly section header:
+         (i) [eta_safe Σ (canon t) = eta_safe Σ t], which with [red_canon_backsim]
+             gives [Good Σ Γ x -> Good Σ Γ (canon x)];
+         (ii) [pe w v -> pe (canon w) (canon v)], to restart from [canon w].
       6. No other consumer exists in this file, and the file is not imported by any
          other. *)
   (** **Transfer of scoping along [pe]: CLOSED.** A short corollary of [pe_to_eta]
@@ -3828,14 +3967,36 @@ Section Assembly.
   Lemma pe_postpone_zero Γ t u : pe t u -> ∑ w, red Σ Γ t w × pe w u.
   Proof. intros hp. exists t. split; [apply rt_refl|exact hp]. Qed.
 
+End Assembly.
+
+(** ** Module [IterationNeedsCanonicalReducts]: the iteration over [red], quarantined
+
+  Stream-lead ruling 2026-10-29 15:19Z: [pe_red_postpone] is KEPT, but only inside
+  this module, so every use must be qualified with the module name, which states the
+  limitation. REASON: its premise [hcanred] (canonicity of EVERY [red]-reduct of the
+  source) is NOT DISCHARGED, and in general cannot be: a [red]-reduct of a canonical
+  term need not be canonical, through δ ([red_delta] substitutes a global constant
+  body), [red_rel] (a context let body), and ι ([iota_red] injects the let bodies of
+  the case's own [bcontext] through [expand_lets], and [canon] does not enter
+  [bcontext] bodies: [canon_decl], PCUICEtaCanon.v). [pe_postpone_src] stays outside:
+  it is not a helper of this lemma (which calls [pe_postpone]), and the T8 assembly
+  uses it. The T8 assembly does not use this module: each [R_c] step of the A6 chain
+  re-canonicalises its target ([R_c Σ Γ x y] gives [y = canon v0], and
+  [canon_idem]). *)
+Module IterationNeedsCanonicalReducts.
+
+Section Iteration.
+  Context {cf : checker_flags} {Σ : global_env} (cb : ClosedBodies Σ).
+
   (** **(4) The iteration, and the FINDING that (B) breaks it as it stood.**
 
       With (B) the source must be CANONICAL at every step, and the iteration feeds
       the postponement a [red]-REDUCT of the source. A [red]-reduct of a canonical
-      term need NOT be canonical: [red_delta] substitutes a global constant body and
-      [red_rel] a context let body, and neither is canonical in general (β, ζ, ι,
-      fixpoint and cofixpoint steps do preserve canonicity, since substitution of
-      canonical terms into a canonical term is canonical). So the premise cannot be
+      term need NOT be canonical: [red_delta] substitutes a global constant body,
+      [red_rel] a context let body, and ι ([iota_red]) the let bodies of the case's
+      own [bcontext] through [expand_lets], which [canon] leaves unchanged
+      ([canon_decl], PCUICEtaCanon.v). None of these is canonical in general. So the
+      premise cannot be
       discharged along the iteration, and it appears here as the extra VISIBLE
       premise [hcanred]: canonicity along the source reduction. It is NOT discharged
       in general; the assembly avoids the iteration entirely, because an [R_c] step
@@ -3861,14 +4022,14 @@ Section Assembly.
       does not fit this backward postponement either. *)
   Theorem pe_red_postpone Γ t u v :
     on_ctx_free_vars xpredT Γ ->
-    (* NOT DISCHARGED in general: see the finding above. *)
+    (* NOT DISCHARGED in general: see the finding above and the module comment. *)
     (forall t', red Σ Γ t t' -> canon t' = t') ->
     Good Σ Γ t -> on_free_vars xpredT u -> pe t u -> red Σ Γ u v ->
     ∑ w, red Σ Γ t w × pe w v.
   Proof.
     intros hctx hcanred hg ho hp hr.
     induction hr as [u v r|u|u u1 v h1 IH1 h2 IH2] in t, hcanred, hg, ho, hp |- *.
-    - destruct (pe_postpone Γ t u v hg (hcanred t (rt_refl _ _)) ho hp r) as (w & hw & hpw).
+    - destruct (pe_postpone cb Γ t u v hg (hcanred t (rt_refl _ _)) ho hp r) as (w & hw & hpw).
       exists w. split; [now apply clos_t_rt|exact hpw].
     - exact (pe_postpone_zero Γ t u hp).
     - destruct (IH1 t hcanred hg ho hp) as (w1 & hw1 & hp1).
@@ -3880,7 +4041,9 @@ Section Assembly.
       exists w. split; [eapply rt_trans; eassumption|exact hpw].
   Qed.
 
-End Assembly.
+End Iteration.
+
+End IterationNeedsCanonicalReducts.
 
 (** ** The η half of the backward simulation is FALSE (building refutation)
 
@@ -4051,14 +4214,21 @@ End LambdaBlockTyping.
   CORRECTION: changes 1 and 2 touched ONLY the primitive clause. Change 3 below is
   the FIRST change to the λ clause.
 
-  Change 3: the λ clause stopped reading the DOMAIN
+  ATOMICITY (owner: EtaMetaLane; stream-lead ruling 2026-10-29 15:19Z): change 3 (A)
+  and the canonical-source premise (B) are coupled, and land as ONE commit or not at
+  all. They landed together in commit f973298c.
+
+  Change 3 (A): the λ clause stopped reading the DOMAIN
   ([tLambda _ A b => eta_safe Σ A && eta_safe Σ b] became [tLambda _ _ b => eta_safe Σ b]).
+  It comes with (B): [pe_postpone], [pe_postpone_src] and
+  [pe_postpone_statement_holds] take [canon t = t].
   - DROPPED: the domain conjunct, so the invariant is weaker and no longer reads λ
     domains; [Good_lam_dom] is gone with it (it is no longer provable).
   - Bought: [eta_safe] became insensitive to λ domains and binder names, hence to
     [canon], which is what lets [Good] transfer from [T] to [canon T] through
     [R_c_backsim]; and [pp_prim]'s [eta_safe_lit_eta] got shorter.
-  - Still excludes: the same four positions in every subterm EXCEPT a λ domain — a λ
+  - Still excludes: the same four positions in every subterm EXCEPT a λ domain and the
+    declarations of a case's [pcontext]/[bcontext] (never read) — a λ
     as a [tCase] scrutinee, as a [tProj] argument, as the [rarg]-th argument of an
     applied fixpoint, and an applied primitive value.
   - COUPLED with (B): see the attempts beside the definition of [eta_safe]. Change 3
