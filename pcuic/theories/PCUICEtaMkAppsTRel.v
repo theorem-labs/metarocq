@@ -20,7 +20,7 @@
     of arguments, and gives a [BE] chain per argument ([chain_mkApps_Rel]).
     Reduction of the spine is argumentwise, because [tRel n] has no body
     ([invert_red_mkApps_tRel_cb], from [red_mkApps_tRel_cb]). An η step contracts
-    a λ; the spine is an application with a variable head ([eta_normal_Rel]), so
+    a λ; the spine is an application with a variable head ([PCUICEtaC1b.eta_normal_Rel]), so
     the step falls inside one argument ([eta1_mkApps_rigid_inv]);
   - the comparison that ends the join keeps the spine and compares the arguments
     at [Conv], also when the spines are compared at [Cumul]
@@ -49,10 +49,6 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICEtaI5 PCUICEtaI5A2 PCUICEtaC1b
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICEtaA6 PCUICEtaA6Ind
      PCUICTypingEta PCUICClosedBodies PCUICClosedTyp.
-
-(** A variable is η-normal. *)
-Lemma eta_normal_Rel n w : eta1 (tRel n) w -> False.
-Proof. intros h. inv_eta h. Qed.
 
 Section MkAppsRel.
 
@@ -256,3 +252,64 @@ Proof.
 Qed.
 
 End Instance.
+
+(** ** The premise [decl_body d = None] is necessary
+
+  Base's [ws_cumul_pb_mkApps_tRel] carries the same side condition. With a let-bound
+  [f := λ_:Type. Prop] (its body discards the argument), [f Prop] and [f SProp] both
+  reduce to [Prop], so they are E-convertible, while [Prop] and [SProp] are not. The
+  statement without the premise would make them convertible. *)
+
+Section NeedsNoBody.
+
+#[local] Existing Instance default_checker_flags.
+
+Definition nb_na : aname := mkBindAnn nAnon Relevant.
+Definition nb_T1 : term := tSort (Sort.super sProp).
+Definition nb_body : term := tLambda nb_na nb_T1 (tSort sProp).
+Definition nb_d : context_decl := vdef nb_na nb_body (tProd nb_na nb_T1 nb_T1).
+Definition nb_Γ : context := [nb_d].
+Definition nb_Σ : global_env_ext := (empty_global_env, Monomorphic_ctx).
+Definition nb_cb : ClosedBodies nb_Σ := @wf_ClosedBodies _ nb_Σ (@wf_empty_global_env default_checker_flags).
+#[local] Existing Instance nb_cb.
+
+(** [f (tSort s) ⇝ Prop]: δ, then β. *)
+Lemma nb_red (s : sort) : nb_Σ ;;; nb_Γ ⊢ tApp (tRel 0) (tSort s) ⇝ tSort sProp.
+Proof.
+  apply into_closed_red; [|reflexivity|reflexivity].
+  etransitivity.
+  - apply red1_red. apply app_red_l. apply (red_rel _ _ 0 nb_body). reflexivity.
+  - apply red1_red. exact (red_beta _ _ nb_na nb_T1 (tSort sProp) (tSort s)).
+Qed.
+
+Lemma nb_conv : nb_Σ ;;; nb_Γ ⊢E mkApps (tRel 0) [tSort sProp] ≤ mkApps (tRel 0) [tSort sSProp].
+Proof.
+  cbn [mkApps]. etransitivity.
+  - exact (red_ws_cumul_pbE (nb_red sProp)).
+  - exact (red_ws_cumul_pbE_inv (nb_red sSProp)).
+Qed.
+
+Lemma nb_not_conv : ws_cumul_pbE_terms nb_Σ nb_Γ [tSort sProp] [tSort sSProp] -> False.
+Proof.
+  unfold ws_cumul_pbE_terms. intros h. depelim h.
+  match goal with H : ws_cumul_pbE Conv _ _ (tSort _) (tSort _) |- _ =>
+    have hs := ws_cumul_pbE_Sort_inv Conv H end.
+  cbn in hs. exact hs.
+Qed.
+
+End NeedsNoBody.
+
+Theorem ws_cumul_pbE_mkApps_tRel_needs_no_body :
+  (forall (cf : checker_flags) (Σ : global_env_ext) (cb : ClosedBodies Σ) (Γ : context) (n : nat)
+     (d : context_decl) (u u' : list term),
+     nth_error Γ n = Some d ->
+     Σ ;;; Γ ⊢E mkApps (tRel n) u ≤ mkApps (tRel n) u' ->
+     ws_cumul_pbE_terms Σ Γ u u') -> False.
+Proof.
+  intros H. apply nb_not_conv.
+  exact (H default_checker_flags nb_Σ nb_cb nb_Γ 0 nb_d [tSort sProp] [tSort sSProp] eq_refl nb_conv).
+Qed.
+
+(** [nb_d] has a body, so the premise of [ws_cumul_pbE_mkApps_tRel] excludes it. *)
+Example nb_d_has_body : decl_body nb_d <> None.
+Proof. discriminate. Qed.
