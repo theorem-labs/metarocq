@@ -31,3 +31,5 @@ theories/PCUICTypingEtaDefs.v
 theories/PCUICTypingEtaHyps.v
 # EtaK7: the η type checker (K7)
 theories/PCUICTypeCheckerEta.v
+# EtaK7: the η environment checker (K7)
+theories/PCUICSafeCheckerEta.v

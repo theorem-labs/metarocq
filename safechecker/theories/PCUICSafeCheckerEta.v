@@ -228,6 +228,16 @@ Section OnUdecl.
     eapply In_unfold_inj; try congruence.
   Qed.
 
+  (** [PCUICInductiveInversion.LSet_in_global_bounded] over [wfE], PROVED (its base proof reads only the
+      universe part of the environment; [wf_env_non_var_levels] of [PCUICGlobalEnvEta] is generic in the
+      conversion relation). Used here instead of the U field of the same base name. *)
+  Lemma LSet_in_global_boundedE {Σ : global_env} {l} k :
+    wfE Σ -> LevelSet.In l (global_levels Σ) -> closedu_level k l.
+  Proof using Type.
+    intros wf hin. pose proof (wf_env_non_var_levels Σ (sq wf)) as nv.
+    specialize (nv _ hin). simpl in nv. destruct l; simpl in *; congruence.
+  Qed.
+
   Lemma on_udecl_poly_bounded X inst cstrs :
     wfE X ->
     on_udecl X (Polymorphic_ctx (inst, cstrs)) ->
@@ -244,11 +254,11 @@ Section OnUdecl.
     apply LevelSetProp.Dec.F.union_1 in H0.
     destruct H. eapply LSet_in_poly_bounded in H.
     destruct H0. eapply LSet_in_poly_bounded in H0. simpl. now rewrite H H0.
-    eapply (LSet_in_global_bounded #|inst|) in H0 => //. simpl.
+    eapply (LSet_in_global_boundedE #|inst|) in H0 => //. simpl.
     now rewrite H H0.
-    eapply (LSet_in_global_bounded #|inst|) in H => //. simpl.
+    eapply (LSet_in_global_boundedE #|inst|) in H => //. simpl.
     destruct H0. eapply LSet_in_poly_bounded in H0. simpl. now rewrite H H0.
-    eapply (LSet_in_global_bounded #|inst|) in H0 => //. simpl.
+    eapply (LSet_in_global_boundedE #|inst|) in H0 => //. simpl.
     now rewrite H H0.
   Qed.
 
@@ -552,32 +562,10 @@ Section CheckEnv.
 
   (* Notation " ' pat <- m ;; f " := (bind m (fun pat => f)) (pat pattern, right associativity, at level 100, m at next level). *)
 
-  Lemma inversion_it_mkProd_or_LetIn (Σ : global_env_ext) {wfΣ : wfE Σ}:
-    forall {Γ Δ s A},
-      Σ ;;; Γ |-E it_mkProd_or_LetIn Δ (tSort s) : A ->
-      isTypeE Σ Γ (it_mkProd_or_LetIn Δ (tSort s)).
-  Proof using Type.
-    intros Γ Δ s A h.
-    enough (∑ s', Σ ;;; Γ |-E it_mkProd_or_LetIn Δ (tSort s) : tSort s').
-    1: destruct X as (? & ?); now eapply has_sort_isType.
-    revert Γ s A h.
-    induction Δ using rev_ind; intros.
-    - simpl in h |- *. eapply inversion_Sort in h as (?&?&?).
-      eexists; constructor; eauto. apply wfΣ.
-    - destruct x as [na [b|] ty]; simpl in *;
-      rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= in h *.
-      * eapply inversion_LetIn in h as [s' [? [? ?]]]; auto.
-        specialize (IHΔ _ _ _ t) as [s'' vdefty].
-        exists s''.
-        eapply type_Cumul_alt. econstructor; eauto. pcuic.
-        eapply red_cumul. repeat constructor.
-      * eapply inversion_Prod in h as [? [? [h1 [? ?]]]]; auto.
-        specialize (IHΔ _ _ _ t) as [s'' Hs''].
-        exists (Sort.sort_of_product x s'').
-        eapply type_Cumul'; eauto. econstructor; pcuic.
-        apply unlift_TypUniv in h1. pcuic.
-        reflexivity.
-  Qed.
+  (* Base defines here a local [inversion_it_mkProd_or_LetIn] (isType of a telescope ending in a sort) that
+     base [PCUICSafeChecker] never uses (its uses are all [PCUICSpine.inversion_it_mkProd_or_LetIn]) and no
+     file uses qualified. In this copy it would shadow the T0 field of the same name that those uses need, so
+     it is not copied. *)
 
   Program Fixpoint check_type_local_ctx X_ext {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X_ext -> NormalizationInE Σ}
      Γ Δ s (wfΓ : forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_localE Σ Γ ∥) :
@@ -894,8 +882,9 @@ Section CheckEnv.
     All (wf_ind_type Σ mdecl) mdecl.(ind_bodies).
 
   (** The declared type of an inductive is relevant, as its well-typed reduct,
-      the arity, is. *)
-  Lemma ind_type_relevant {Σ : global_env_ext} {mdecl idecl} :
+      the arity, is. (E: its conclusion is a [Type], where the squashed [EtaFacts] cannot be opened, so it
+      takes the two row classes it uses as instance arguments; callers open them first.) *)
+  Lemma ind_type_relevant {hT0 : T0_facts} {hT1 : T1_facts} {Σ : global_env_ext} {mdecl idecl} :
     wfE Σ.1 -> isTypeE Σ [] idecl.(ind_type) ->
     PCUICReduction.red Σ.1 [] idecl.(ind_type)
       (it_mkProd_or_LetIn mdecl.(ind_params) (it_mkProd_or_LetIn idecl.(ind_indices) (tSort idecl.(ind_sort)))) ->
@@ -912,7 +901,7 @@ Section CheckEnv.
     eapply relevance_super.
   Qed.
 
-  Lemma wf_ind_types_wf_arities (Σ : global_env_ext) (wfX : wfE Σ) mdecl :
+  Lemma wf_ind_types_wf_arities {hT0 : T0_facts} {hT1 : T1_facts} (Σ : global_env_ext) (wfX : wfE Σ) mdecl :
     wf_ind_types Σ mdecl ->
     wf_localE Σ (arities_context mdecl.(ind_bodies)).
   Proof using Type.
@@ -1030,7 +1019,7 @@ Section CheckEnv.
     now eapply inversion_it_mkProd_or_LetIn in Hu.
   Qed.
 
-  Lemma isType_mkApps_inv {Σ : global_env_ext} (wfΣ : wfE Σ) Γ f args :
+  Lemma isType_mkApps_inv {hT2a : T2a_facts} {Σ : global_env_ext} (wfΣ : wfE Σ) Γ f args :
     isTypeE Σ Γ (mkApps f args) ->
     ∑ fty s, (Σ ;;; Γ |-E f : fty) *
       typing_spineE Σ Γ fty args (tSort s).
@@ -1051,7 +1040,11 @@ Section CheckEnv.
     intros H. apply ctx_inst_smash in H. now rewrite List.rev_involutive in H.
   Qed.
 
-  Lemma typing_spine_it_mkProd_or_LetIn_inv {Σ : global_env_ext} {wfX : wfE Σ} {Γ Δ s args s'} :
+  (* base [PCUICSpine.v:32-35]'s pattern notations, over [typing_spineE] (FORECAST-ONLY with [typing_spineE]) *)
+  Local Notation spnil isty isty' w := (@type_spine_nilE _ _ _ _ _ isty isty' w).
+  Local Notation spcons isty isty' w tyhd sp := (@type_spine_consE _ _ _ _ _ _ _ _ _ _ isty isty' w tyhd sp).
+
+  Lemma typing_spine_it_mkProd_or_LetIn_inv {hT6 : T6_facts} {Σ : global_env_ext} {wfX : wfE Σ} {Γ Δ s args s'} :
     wf_localE Σ (Γ ,,, Δ) ->
     typing_spineE Σ Γ (it_mkProd_or_LetIn Δ (tSort s)) args (tSort s') ->
     ctx_instE Σ Γ args (List.rev Δ).
