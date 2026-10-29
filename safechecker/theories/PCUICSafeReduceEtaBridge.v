@@ -15,8 +15,9 @@
     E metatheory already on [frac/eta] ([wfE_ClosedBodies], [typing_closed_contextE],
     [subject_is_open_termE], and [prim_op_readback_on_global_env], which holds for any
     [on_global_env]).
-  - [ReduceTypedFacts welltypedE wf_extE] is the ONE named hypothesis,
-    [reduce_factsE], of the section [BridgeE] below.
+  - [ReduceTypedFacts welltypedE wf_extE] is BUILT here ([reduce_typed_facts_E]) from the
+    smaller class [ReduceTypedFactsE], the ONE named hypothesis of the section [BridgeE]
+    below ([reduce_factsE]), and the six fields proved in [PCUICEtaTypedFactsProved].
   The positions of the two stack files are different types ([PCUICPositionEta] has
   its own [choice]); [stack_position_appstack_bridge] relates their orders. *)
 From MetaRocq.Utils Require Import utils.
@@ -27,6 +28,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICPosit
 From MetaRocq.PCUIC Require PCUICPositionEta.
 From MetaRocq.PCUIC Require PCUICCumulativitySpecEtaClosureInstances PCUICEtaA6Instances.
 From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta PCUICWfEnvEta.
+(* The six proved fields of [ReduceTypedFacts] at [welltypedE] (qualified names; nothing imported). *)
+From MetaRocq.SafeChecker Require PCUICEtaTypedFactsProved.
 
 (** ** The boundary invariant: every stack crossing the boundary is [App_l]-only *)
 
@@ -141,28 +144,59 @@ Proof.
     destruct (prim_op_readback_on_global_env wfΣ hl hop hden) as [v hv]. now exists v.
 Qed.
 
+(** ** The E typed facts, built from the GENUINE ones and the proved ones
+
+    [ReduceTypedFacts welltypedE wf_extE] from the nine fields of
+    [PCUICSafeReduceEta.ReduceTypedFactsE] (the named hypothesis) and the six fields proved in
+    [PCUICEtaTypedFactsProved]. The kernel checks each [rtf_<f>E] against the field [rtf_<f>]
+    at [welltypedE]/[wf_extE]. An instance, so the E sections find [ReduceTypedFacts
+    welltypedE wf_extE] from their [ReduceTypedFactsE] hypothesis; [Qed]: opaque, as the
+    section variable it replaces. *)
+#[export] Instance reduce_typed_facts_E {cf : checker_flags} {G : ReduceTypedFactsE} :
+  ReduceTypedFacts welltypedE wf_extE.
+Proof.
+  constructor.
+  - exact rtf_wt_redE.
+  - exact rtf_contextE.
+  - exact PCUICEtaTypedFactsProved.rtf_rel_proved.
+  - exact PCUICEtaTypedFactsProved.rtf_const_proved.
+  - exact rtf_case_constructE.
+  - exact rtf_proj_constructE.
+  - exact PCUICEtaTypedFactsProved.rtf_cofix_proved.
+  - exact PCUICEtaTypedFactsProved.rtf_app_sort_proved.
+  - exact PCUICEtaTypedFactsProved.rtf_app_prod_proved.
+  - exact PCUICEtaTypedFactsProved.rtf_app_prim_proved.
+  - exact rtf_prim_overappliedE.
+  - exact rtf_fix_arg_whneE.
+  - exact rtf_case_arg_whneE.
+  - exact rtf_proj_arg_whneE.
+  - exact rtf_whnf_red_invE.
+Qed.
+
 (** ** The machine at [welltypedE], and the bridge facts *)
 
 Section BridgeE.
   Context {cf : checker_flags} {no : normalizing_flags}.
 
-  (** THE NAMED HYPOTHESIS of the E instantiation: the typed facts of the machine at
-      [welltypedE] and [wf_extE] (field by field, with the plan row each waits on:
-      [PCUICSafeReduceEta.ReduceTypedFacts]). Its satisfying instance is
-      [PCUICSafeReduceEta.reduce_typed_facts_base], at base [welltyped] and [wf_ext].
+  (** THE NAMED HYPOTHESIS of the E instantiation: the nine GENUINE typed facts of the
+      machine at [welltypedE] and [wf_extE] ([PCUICSafeReduceEta.ReduceTypedFactsE], field by
+      field with the plan row each waits on); the machine's [ReduceTypedFacts welltypedE
+      wf_extE] is [reduce_typed_facts_E] above, from it and six proved fields. Its satisfying
+      instance is [PCUICSafeReduceEta.reduce_typed_facts_base], the same statements at base
+      [welltyped] and [wf_ext].
       (1) That instance shows the hypothesis is consistent and the machine is about
       something real: at [welltyped] it is the base machine. (2) It does NOT discharge
       this instantiation: subject reduction over [typingE] (plan row T1), the inversion
-      and classification facts over [typingE] (rows T0/T6) and the [ClosedBodies] port
+      and classification facts over [typingE] (row T6) and the [ClosedBodies] port
       of [whnf_red_inv] (row W-c) remain this hypothesis until those rows land.
       Not a known-false form: no field states a fixpoint or cofixpoint witness obtained
       from [conv_witnessE] (or any E-conversion witness of a head shape) under
       closedness premises only, the form refuted by ArityLane's η-expanded-domain
       witness. Every field is either a typed form (its premise is [welltypedE] of the
-      term it inverts or classifies, e.g. [rtf_fix_arg_whne] assumes the fixpoint
-      application is [welltypedE]) or untyped ([rtf_whnf_red_inv], about base [red]
+      term it inverts or classifies, e.g. [rtf_fix_arg_whneE] assumes the fixpoint
+      application is [welltypedE]) or untyped ([rtf_whnf_red_invE], about base [red]
       only). *)
-  Context {reduce_factsE : ReduceTypedFacts welltypedE wf_extE}.
+  Context {reduce_factsE : ReduceTypedFactsE}.
 
   Context (flags : RedFlags.t) (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}.
@@ -177,7 +211,7 @@ Section BridgeE.
     (h : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ (PCUICPosition.zip (t, π)))
     : term × PCUICPosition.stack :=
     reduce_stack (wt := welltypedE) (wfP := wf_extE) (EF := reduce_env_facts_E)
-      (TF := reduce_factsE) (hX := abstract_env_wfP_E X_type X)
+      (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
       (normalization_in := normalization_in_wt) flags X_type X Γ t π h.
 
   (** The facts of [PCUICSafeReduceEta] at [welltypedE], stated over [reduce_stack_E]. *)
@@ -186,7 +220,7 @@ Section BridgeE.
     snd (PCUICPosition.decompose_stack π).
   Proof using Type.
     exact (reduce_stack_decompose (wt := welltypedE) (wfP := wf_extE)
-      (EF := reduce_env_facts_E) (TF := reduce_factsE) (hX := abstract_env_wfP_E X_type X)
+      (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
       (normalization_in := normalization_in_wt) flags X_type X Γ t π h).
   Qed.
 
@@ -194,7 +228,7 @@ Section BridgeE.
     ∥ Σ ;;; Γ ⊢ PCUICPosition.zip (t, π) ⇝ PCUICPosition.zip (reduce_stack_E Γ t π h) ∥.
   Proof using Type.
     exact (reduce_stack_sound (wt := welltypedE) (wfP := wf_extE)
-      (EF := reduce_env_facts_E) (TF := reduce_factsE) (hX := abstract_env_wfP_E X_type X)
+      (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
       (normalization_in := normalization_in_wt) flags X_type X Σ wfΣ Γ t π h).
   Qed.
 
@@ -203,7 +237,7 @@ Section BridgeE.
     ∥ whnf flags Σ (Γ ,,, PCUICPosition.stack_context ρ) (PCUICPosition.zipp u ρ) ∥.
   Proof using Type.
     exact (reduce_stack_whnf (wt := welltypedE) (wfP := wf_extE)
-      (EF := reduce_env_facts_E) (TF := reduce_factsE) (hX := abstract_env_wfP_E X_type X)
+      (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
       (normalization_in := normalization_in_wt) flags X_type X Γ t π h Σ wfΣ).
   Qed.
 
@@ -211,7 +245,7 @@ Section BridgeE.
     RedFlags.beta flags -> isred (reduce_stack_E Γ t π h).
   Proof using Type.
     exact (reduce_stack_isred (wt := welltypedE) (wfP := wf_extE)
-      (EF := reduce_env_facts_E) (TF := reduce_factsE) (hX := abstract_env_wfP_E X_type X)
+      (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
       (normalization_in := normalization_in_wt) flags X_type X Γ t π h).
   Qed.
 
@@ -219,7 +253,7 @@ Section BridgeE.
     Req Σ Γ (reduce_stack_E Γ t π h) (t, π).
   Proof using Type.
     exact (reduce_stack_Req (wt := welltypedE) (wfP := wf_extE)
-      (EF := reduce_env_facts_E) (TF := reduce_factsE) (hX := abstract_env_wfP_E X_type X)
+      (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
       (normalization_in := normalization_in_wt) flags X_type X Σ wfΣ Γ t π h).
   Qed.
 
@@ -319,7 +353,7 @@ Section BridgeE.
   Proof using Type.
     intros hn hb. unfold reduce_stack_E.
     exact (reduce_stack_Rel_assum (wt := welltypedE) (wfP := wf_extE)
-      (EF := reduce_env_facts_E) (TF := reduce_factsE) (hX := abstract_env_wfP_E X_type X)
+      (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
       (normalization_in := normalization_in_wt) flags X_type X Γ n decl h hn hb).
   Qed.
 

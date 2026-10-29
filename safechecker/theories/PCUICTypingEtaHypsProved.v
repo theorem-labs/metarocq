@@ -20,6 +20,9 @@ From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution PCUICSR PCUICInduc
 From Stdlib Require Import Program.Equality.
 From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta PCUICTypingEtaDefs
   PCUICTypingEtaHyps.
+(* The eight lemmas of the REDUCE and ConvTypedFacts rows and the universe helpers of row 36 are in
+   [PCUICEtaTypedFactsProved] (moved by EtaIntegrate9, same names and statements); imported here. *)
+From MetaRocq.SafeChecker Require Import PCUICEtaTypedFactsProved.
 
 (** * ETAK (EtaHypProve): the PROVABLE-NOW named hypotheses of the E bundles, proved
 
@@ -29,112 +32,47 @@ From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta 
 
   PRUNED on the forecast tree [fc/etak-forecast1]: EtaK7 integrated the 47 K7 rows (T0 37, U 8, T1 1,
   T6BD 1), with their helpers, into [PCUICTypingEtaHyps] (section "PROVED rows"), where those fields became
-  lemmas; their [<field>_fits] checks here no longer typecheck (a field is no longer a projection; first
+  lemmas; their [<field>_fits] checks no longer typecheck there (a field is no longer a projection; first
   error at the former line 167, [All_mfix_wf_fits]: "The term H has type T0_facts while it is expected to
-  have type global_env * universes_decl"). This file keeps only the rows [PCUICTypingEtaHyps] does not
-  prove, one lemma [<field>_proved] per hypothesis, its statement copied verbatim from its source:
-  - REDUCE (6): fields of [ReduceTypedFacts] ([PCUICSafeReduceEta]) at [wt := welltypedE], [wfP := wf_extE]
-    (the hypothesis [PCUICSafeReduceEtaBridge.reduce_factsE]);
-  - EtaConv (2): fields [ctf_case_brs_length], [ctf_wf_universes] of [ConvTypedFacts]
+  have type global_env * universes_decl"), so they are removed. EtaIntegrate9 moved the 8 lemmas of the
+  REDUCE and ConvTypedFacts rows ([rtf_{rel,const,cofix,app_sort,app_prod,app_prim}_proved],
+  [ctf_{case_brs_length,wf_universes}_proved]) to [PCUICEtaTypedFactsProved] (imported above). This file keeps:
+  - the identity checks [<field>_fits] of those 8 rows: REDUCE (6), fields of [ReduceTypedFacts]
+    ([PCUICSafeReduceEta]) at [wt := welltypedE], [wfP := wf_extE]; EtaConv (2), fields of [ConvTypedFacts]
     ([PCUICSafeConversionEtaFacts] @ [c7cbbe73]) at the same instantiation;
-  - EtaPosK4 (1): section variable [typingE_rename_P] of [EtaTypingE] ([PCUICPositionEtaTyping] @ [767d50c6]);
-  and the section "Duplicate GENUINE hypotheses" ([hyp_dup_*], conditional lemmas, with its helpers [hyp_eta_*]).
-  Names a kept proof uses from the pruned part ([typing_wf_universes_proved]) resolve to
-  [PCUICTypingEtaHyps]' integrated lemmas of the same names and statements.
-  Identity check, by the type checker: after each lemma, [<field>_fits] ascribes the lemma to the field's
-  type as projected from its class ([type of (@field cf H)]); for the sources not in this branch
-  ([ConvTypedFacts], [EtaTypingE]) [<field>_fits] restates the source text and is defined as the lemma.
-  [Print Assumptions] of every kept [<field>_proved] at the end. [depelim] is Equations' ([DepElim.depelim]). *)
+  - EtaPosK4 (1): [typingE_rename_P_proved] and its check ([PCUICPositionEtaTyping] @ [767d50c6]);
+  - the section "Duplicate GENUINE hypotheses" ([hyp_dup_*], conditional lemmas, with its helpers [hyp_eta_*]).
+  Identity check, by the type checker: [<field>_fits] ascribes the lemma to the field's type as projected from
+  its class ([type of (@field cf H)]); for the sources not in this branch ([ConvTypedFacts], [EtaTypingE])
+  [<field>_fits] restates the source text and is defined as the lemma.
+  [Print Assumptions] of the 9 lemmas at the end. [depelim] is Equations' ([DepElim.depelim]). *)
 
 (** ** REDUCE: fields of [ReduceTypedFacts] ([PCUICSafeReduceEta]) at [wt := welltypedE], [wfP := wf_extE]
-    (the named hypothesis [PCUICSafeReduceEtaBridge.reduce_factsE]) *)
+    (the named hypothesis [PCUICSafeReduceEtaBridge.reduce_factsE]). The six lemmas [rtf_*_proved] are in
+    [PCUICEtaTypedFactsProved] (moved by EtaIntegrate9); their identity checks stay here. *)
 
-Lemma rtf_rel_proved {cf : checker_flags} :
-  forall Σ Γ n, wf_extE Σ -> welltypedE Σ Γ (tRel n) -> nth_error Γ n <> None.
-Proof.
-  intros Σ Γ n wfΣ [T h] e.
-  destruct (inversion_Rel Σ (wf_extE_wfE Σ wfΣ) h) as [decl [_ [e' _]]].
-  rewrite e' in e. discriminate.
-Qed.
 Definition rtf_rel_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_rel cf welltypedE wf_extE H) in exact T) := @rtf_rel_proved cf.
 
-Lemma rtf_const_proved {cf : checker_flags} :
-  forall Σ Γ c u, wf_extE Σ -> welltypedE Σ Γ (tConst c u) ->
-    exists decl, declared_constant Σ c decl.
-Proof.
-  intros Σ Γ c u wfΣ [T h].
-  destruct (inversion_Const Σ (wf_extE_wfE Σ wfΣ) h) as [decl [_ [d _]]].
-  now exists decl.
-Qed.
 Definition rtf_const_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_const cf welltypedE wf_extE H) in exact T) := @rtf_const_proved cf.
 
-Lemma rtf_cofix_proved {cf : checker_flags} :
-  forall Σ Γ mfix idx, wf_extE Σ -> welltypedE Σ Γ (tCoFix mfix idx) ->
-    nth_error mfix idx <> None.
-Proof.
-  intros Σ Γ mfix idx wfΣ [T h] e.
-  destruct (inversion_CoFixE Σ (wf_extE_wfE Σ wfΣ) h) as (decl & _ & hn & _).
-  rewrite hn in e. discriminate.
-Qed.
 Definition rtf_cofix_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_cofix cf welltypedE wf_extE H) in exact T) := @rtf_cofix_proved cf.
 
-Lemma rtf_app_sort_proved {cf : checker_flags} :
-  forall Σ Γ s a, wf_extE Σ -> welltypedE Σ Γ (tApp (tSort s) a) -> False.
-Proof.
-  intros Σ Γ s a wfΣ [T h].
-  have wfΣ' : wfE Σ := wf_extE_wfE Σ wfΣ.
-  destruct (inversion_AppE Σ wfΣ' h) as (na & A & B & hf & _ & _).
-  destruct (inversion_Sort Σ wfΣ' hf) as [_ [_ c]].
-  exact (ws_cumul_pb_Sort_Prod_inv (wfΣ := wfΣ') Cumul c).
-Qed.
 Definition rtf_app_sort_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_app_sort cf welltypedE wf_extE H) in exact T) := @rtf_app_sort_proved cf.
 
-Lemma rtf_app_prod_proved {cf : checker_flags} :
-  forall Σ Γ na A B a, wf_extE Σ -> welltypedE Σ Γ (tApp (tProd na A B) a) -> False.
-Proof.
-  intros Σ Γ na A B a wfΣ [T h].
-  have wfΣ' : wfE Σ := wf_extE_wfE Σ wfΣ.
-  destruct (inversion_AppE Σ wfΣ' h) as (na' & A' & B' & hf & _ & _).
-  destruct (inversion_Prod Σ wfΣ' hf) as [s1 [s2 [_ [_ c]]]].
-  exact (ws_cumul_pb_Sort_Prod_inv (wfΣ := wfΣ') Cumul c).
-Qed.
 Definition rtf_app_prod_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_app_prod cf welltypedE wf_extE H) in exact T) := @rtf_app_prod_proved cf.
 
-Lemma rtf_app_prim_proved {cf : checker_flags} :
-  forall Σ Γ p a, wf_extE Σ -> welltypedE Σ Γ (tApp (tPrim p) a) -> False.
-Proof.
-  intros Σ Γ p a wfΣ [T h].
-  have wfΣ' : wfE Σ := wf_extE_wfE Σ wfΣ.
-  destruct (inversion_AppE Σ wfΣ' h) as (na & A & B & hf & _ & _).
-  destruct (inversion_PrimE Σ wfΣ' hf) as (pt & cd & [_ hpc hdecl hinv _ cc]).
-  pose proof wfΣ' as (_ & wfr & _).
-  exact (invert_cumul_prim_type_prodE (wfΣ := wfE_ClosedBodies Σ) hdecl hinv
-           (prim_op_of_primitive_constant Σ _ _ wfr hpc) cc).
-Qed.
 Definition rtf_app_prim_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_app_prim cf welltypedE wf_extE H) in exact T) := @rtf_app_prim_proved cf.
 
 (** ** EtaConv: field [ctf_case_brs_length] of [ConvTypedFacts] ([PCUICSafeConversionEtaFacts] @ [c7cbbe73],
-    not in this branch) at [wt := welltypedE], [wfP := wf_extE] (the hypothesis [conv_factsE]) *)
+    not in this branch) at [wt := welltypedE], [wfP := wf_extE] (the hypothesis [conv_factsE]). The lemma is
+    in [PCUICEtaTypedFactsProved] (moved by EtaIntegrate9). *)
 
-Lemma ctf_case_brs_length_proved {cf : checker_flags} :
-  forall Σ Γ ci p c brs, wf_extE Σ -> welltypedE Σ Γ (tCase ci p c brs) ->
-      exists mib oib, declared_inductive Σ ci mib oib /\ #|brs| = #|ind_ctors oib|.
-Proof.
-  intros Σ Γ ci p c brs _ [T h].
-  remember (tCase ci p c brs) as t0 eqn:heqt. revert ci p c brs heqt.
-  induction h; intros ci' p' c' brs' heqt; try discriminate heqt.
-  - injection heqt; intros; subst.
-    match goal with H : case_branch_typing _ _ _ _ _ _ _ _ _ _ |- _ => destruct H as [_ hbrs] end.
-    exists mdecl, idecl. split; [assumption|]. apply All2i_length in hbrs. lia.
-  - match goal with IH : forall ci0 p0 c0 brs0, _ = tCase ci0 p0 c0 brs0 -> _ |- _ =>
-      exact (IH _ _ _ _ heqt) end.
-Qed.
 Definition ctf_case_brs_length_fits {cf : checker_flags} :
   forall Σ Γ ci p c brs, wf_extE Σ -> welltypedE Σ Γ (tCase ci p c brs) ->
       exists mib oib, declared_inductive Σ ci mib oib /\ #|brs| = #|ind_ctors oib|
@@ -156,16 +94,8 @@ Definition typingE_rename_P_fits {cf : checker_flags} :
     Σ ;;; Γ |-E t : A -> Σ ;;; Δ |-E rename f t : rename f A
   := @typingE_rename_P_proved cf.
 
-(** [ConvTypedFacts.ctf_wf_universes] of EtaConv's [PCUICSafeConversionEtaFacts.v] @ [c7cbbe73] (class not
-    in this branch), at [wt := welltypedE], [wfP := wf_extE]: row 36, as the base instance
-    [conv_typed_facts_base] does with base [typing_wf_universes]. *)
-Lemma ctf_wf_universes_proved {cf : checker_flags} :
-  forall Σ Γ t, wf_extE Σ -> welltypedE Σ Γ t -> wf_universes Σ t.
-Proof.
-  intros Σ Γ t wfΣ [T typ].
-  pose proof (typing_wf_universes_proved (Σ := Σ) (fst wfΣ) typ) as h.
-  apply andb_prop in h as [h _]. exact h.
-Qed.
+(** ** EtaConv: field [ctf_wf_universes] of [ConvTypedFacts] ([PCUICSafeConversionEtaFacts] @ [c7cbbe73]); the
+    lemma is in [PCUICEtaTypedFactsProved]. *)
 Definition ctf_wf_universes_fits {cf : checker_flags} :
   forall Σ Γ t, wf_extE Σ -> welltypedE Σ Γ t -> wf_universes Σ t := @ctf_wf_universes_proved cf.
 

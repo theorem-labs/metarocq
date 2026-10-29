@@ -53,6 +53,8 @@ theories/PCUICTypeCheckerEta.v
 theories/PCUICSafeCheckerEta.v
 # EtaHypProve: the PROVABLE-NOW named hypotheses of the E bundles, proved as <field>_proved
 theories/PCUICTypingEtaHypsProved.v
+# EtaIntegrate9: the proved fields of ReduceTypedFacts/ConvTypedFacts at welltypedE (moved from PCUICTypingEtaHypsProved)
+theories/PCUICEtaTypedFactsProved.v
 # FORECAST-ONLY (fc/etak-forecast1): the call-by-need fast path over the eta environment, and its
 # soundness over welltypedE as a named hypothesis with its base instance
 theories/PCUICCallByNeedEta.v
