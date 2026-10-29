@@ -115,6 +115,9 @@ Section Typed.
 
 End Typed.
 
+(** The E twin of base's registration [PCUICWellScopedCumulativity.v:289]. *)
+#[global] Hint Immediate isType_ws_cumul_pbE_refl : pcuic.
+
 Set Warnings "-uniform-inheritance".
 Coercion wt_cumul_pbE_ws_cumul_pbE : wt_cumul_pbE >-> ws_cumul_pbE.
 Set Warnings "uniform-inheritance".
@@ -223,6 +226,13 @@ End IteratedBetaReduction.
 
 Lemma cumul_decls_reflE {cf : checker_flags} Σ Γ Γ' d : cumul_decls (@JoinE cf) Σ Γ Γ' d d.
 Proof. destruct d as [na [b|] ty]; constructor; try reflexivity; apply JoinE_refl. Qed.
+
+(** Base's instance [cumul_decls_refl] ([PCUICCumulativity.v:52]) in its class form
+    over [JoinE]. Base's instance name is taken by the lemma [cumul_decls_reflE], so
+    the instance is a new constant whose body is that lemma. *)
+#[global]
+Instance cumul_decls_reflE_Reflexive {cf:checker_flags} Σ Γ Γ' : Reflexive (cumul_decls (@JoinE cf) Σ Γ Γ') :=
+  cumul_decls_reflE Σ Γ Γ'.
 
 (** Base [context_cumulativity_wf_app], over [typingE] and [JoinE]. No premise, as
     in base. *)

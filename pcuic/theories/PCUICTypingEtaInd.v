@@ -97,6 +97,24 @@ Proof.
   now apply typingE_wf_local in Hs.
 Defined.
 
+(** The E twins of base's [wf_local] registrations ([PCUICTyping.v:631-644]). The Extern
+    has base's branches with [typing] → [typingE], except base's second,
+    [PCUICTypingDef.typing _ _ _ _ _], which has no E counterpart, since [typingE] is
+    the inductive itself. The last branch is base's [:637] as written there: the
+    notation [lift_typing] applied to [typingE _ _] and one more argument. *)
+#[global]
+Hint Extern 4 (wf_localE _ ?Γ) =>
+  match goal with
+  | [ H : typingE _ _ _ _ |- _ ] => exact (typingE_wf_local H)
+  | [ H : lift_typing0 (typingE _ _) _ |- _ ] => exact (lift_typingE_wf_local H)
+  | [ H : PCUICEnvTyping.lift_typing (typingE _ _) _ |- _ ] => exact (lift_typingE_wf_local H)
+  end : pcuic.
+
+#[global]
+Hint Resolve typingE_wf_local : wf.
+
+#[global]
+Hint Resolve lift_typingE_wf_local : wf.
 
 Definition env_propE `{checker_flags} (P : forall Σ Γ t T, Type) (Pj : forall Σ Γ j, Type) (PΓ : forall Σ Γ, Type) :=
   forall Σ (wfΣ : wfE Σ.1) Γ t T (ty : Σ ;;; Γ |-E t : T),

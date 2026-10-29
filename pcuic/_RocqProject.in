@@ -223,6 +223,9 @@ theories/PCUICSREtaConvInstances.v
 # Context conversion and context cumulativity of typingE, and their satisfying instances
 theories/Typing/PCUICContextConversionTypEta.v
 theories/PCUICTypingEtaCopy9Instances.v
+# Spines over typingE (E copy of PCUICSpine), and its satisfying instances
+theories/PCUICSpineEta.v
+theories/PCUICTypingEtaCopy15Instances.v
 # Validity over typingE (row T2a, the E copy of PCUICValidity)
 theories/PCUICValidityEta.v
 # Subject reduction over typingE (row T1, the E copy of PCUICSR), and its satisfying instances

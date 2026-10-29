@@ -627,6 +627,22 @@ Proof.
   move/isType_closedE. now rewrite is_open_term_closedE.
 Qed.
 
+(** The E twins of base's Externs [Typing/PCUICClosedTyp.v:471] and [:476]. *)
+#[global] Hint Extern 4 (is_open_term ?Γ ?A = true) =>
+  match goal with
+  | [ H : on_type (lift_typing typingE) _ Γ A |- _ ] => exact (isType_is_open_termE H)
+  end : fvs.
+
+#[global] Hint Extern 4 (is_open_term ?Γ ?A = true) =>
+  match goal with
+  | [ H : on_type_rel (lift_typing typingE) _ Γ A _ |- _ ] => exact (isTypeRel_is_open_termE H)
+  end : fvs.
+
+(** The E twin of base's registration [PCUICContextConversion.v:1022] (its two lemmas
+    of this file; base's third, [wf_local_closed_context], has its E twin registered in
+    [Typing/PCUICContextConversionTypEta]). *)
+#[global] Hint Resolve isType_is_open_termE isTypeRel_is_open_termE : fvs.
+
 Lemma declared_inductive_closed_typeE {cf:checker_flags} :
   forall Σ mdecl ind idecl,
     wfE Σ ->
@@ -647,6 +663,9 @@ Proof.
   move/andP: hcl => [] hpars _.
   exact hpars.
 Qed.
+
+(** The E twin of base's registration [PCUICExpandLetsCorrectness.v:3739]. *)
+#[global] Hint Resolve declared_inductive_closed_paramsE : pcuic.
 
 Lemma declared_inductive_closed_constructorsE {cf:checker_flags} {Σ ind mdecl idecl} {wfΣ : wfE Σ} :
   declared_inductive Σ ind mdecl idecl ->
