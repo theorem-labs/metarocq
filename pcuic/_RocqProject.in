@@ -138,6 +138,8 @@ theories/PCUICTypingEta.v
 theories/PCUICTypingEtaInd.v
 theories/Typing/PCUICWeakeningEnvTypEta.v
 theories/Typing/PCUICClosedTypEta.v
+# The universe facts of a well-formed environment for any conversion relation, and wf_extE -> wfE
+theories/PCUICGlobalEnvEta.v
 # The normalization premise over typingE (an assumption, as base NormalizationIn is)
 theories/PCUICSNEta.v
 # The stack with the eta frames, and its positions
