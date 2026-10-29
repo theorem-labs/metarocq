@@ -554,6 +554,19 @@ Ltac unpack_eta_facts :=
   | _ => idtac
   end.
 Ltac sq := unpack_eta_facts; MRSquash.sq.
+(** Open the facts without touching the goal: project them, and unsquash only them when the goal is a Prop
+    (in a Type goal they stay squashed and nothing else changes). For proofs that use a fact before any
+    [sq]. *)
+Ltac open_eta_facts :=
+  unpack_eta_facts;
+  repeat match goal with
+  | H : ∥ ?C ∥ |- _ =>
+      lazymatch C with
+      | @T0_facts _ => idtac | @U_facts _ => idtac | @T1_facts _ => idtac | @T2a_facts _ => idtac
+      | @T6_facts _ => idtac | @T6BD_facts _ => idtac | @T6BDu_facts _ => idtac | @T6BDc_facts _ => idtac
+      end;
+      case H; clear H; intro H
+  end.
 
 (** ** Derived, second part: facts that are proved here from the classes or from facts above *)
 

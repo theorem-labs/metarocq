@@ -23,7 +23,7 @@ From MetaRocq.SafeChecker Require PCUICSafeConversion.
 
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd PCUICSNEta
      PCUICWellScopedCumulativityEta PCUICClosedTypEta PCUICGlobalEnvEta PCUICContextConversionEta
-     PCUICWsCumulEtaCtx PCUICConversionEtaCongr.
+     PCUICWsCumulEtaCtx PCUICConversionEtaCongr PCUICEtaI5 PCUICClosedBodies.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICPositivityCheck PCUICErrorsEta PCUICWfEnvEta
   PCUICWfReductionEta PCUICSafeReduceEta PCUICSafeReduceEtaBridge
@@ -511,6 +511,7 @@ Section CheckEnv.
       typing_result (∑ T, forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ Σ ;;; Γ |-E t : T ∥) :=
     infer_typing X_ext Γ wfΓ t := check_result_forget (infer X_impl X_ext Γ wfΓ t) ;;  ret _.
   Next Obligation.
+    open_eta_facts.
     exists y. intros.
     pose proof (hΣ _ _ H). specialize_Σ H. sq. cbn in *. now apply infering_typing.
   Qed.
@@ -541,6 +542,7 @@ Section CheckEnv.
       '(y ; H) <- check_result_forget (infer_type X_impl X_ext (infer X_impl X_ext) Γ wfΓ t) ;;
       ret (y ; _).
   Next Obligation.
+    open_eta_facts.
     intros. pose proof (abstract_env_ext_wf _ H0). specialize_Σ H0.
     sq. now apply infering_sort_typing.
   Qed.
@@ -969,6 +971,7 @@ Section CheckEnv.
       now apply wf_ind_types_wf_arities in wfar.
     Qed.
     Next Obligation.
+      open_eta_facts.
       pose proof (abstract_env_ext_wf _ H); specialize_Σ H; sq.
       apply wf_ind_types_wf_arities in wfar; eauto.
       now eapply weaken_wf_local; eauto.
@@ -1582,6 +1585,7 @@ Section CheckEnv.
       sq. by [].
     Qed.
     Next Obligation.
+      open_eta_facts.
       pose proof (abstract_env_exists X) as [[Σ0 wfΣ0]].
       specialize (mdeclvar _ wfΣ0). specialize_Σ wfΣ0.
       destruct Xprop as [Xprop ?]; eauto.
@@ -1599,6 +1603,7 @@ Section CheckEnv.
       rewrite wf_ctx_universes_app in a. move/andP: a => [] //.
     Qed.
     Next Obligation.
+      open_eta_facts.
       pose proof (abstract_env_exists X) as [[Σ0 wfΣ0]].
       specialize (mdeclvar _ wfΣ0). specialize_Σ wfΣ0.
       destruct Xprop as [Xprop ?]; eauto.
@@ -1618,6 +1623,7 @@ Section CheckEnv.
     Qed.
 
     Next Obligation.
+      open_eta_facts.
       pose proof (abstract_env_exists X) as [[Σ0 wfΣ0]].
       specialize (mdeclvar _ wfΣ0). specialize_Σ wfΣ0.
       destruct Xprop as [Xprop ?]; eauto.
@@ -1638,6 +1644,7 @@ Section CheckEnv.
       move/andP: wt => [] //.
     Qed.
     Next Obligation.
+      open_eta_facts.
       pose proof (abstract_env_exists X) as [[Σ0 wfΣ0]].
       specialize (mdeclvar _ wfΣ0). specialize_Σ wfΣ0.
       destruct Xprop as [Xprop ?]; eauto.
@@ -1761,6 +1768,7 @@ Section CheckEnv.
       destruct lets_in_constructor_types; congruence.
     Qed.
     Next Obligation.
+      open_eta_facts.
       epose proof (get_wt_indices X_ext wfar wfpars _ _ hnth Hcs).
       destruct HX.
       specialize_Σ H.
@@ -2009,6 +2017,7 @@ End monad_Alli_nth_forall.
     sq. exact I.
   Qed.
   Next Obligation.
+    open_eta_facts.
     pose proof (abstract_env_exists X) as [[Σ0 wfΣ0]].
     specialize (mdeclvar _ wfΣ0). specialize_Σ wfΣ0.
     destruct H0 as [Xprop ?]; eauto.
@@ -2026,6 +2035,7 @@ End monad_Alli_nth_forall.
     move/andP => [] //.
   Qed.
   Next Obligation.
+    open_eta_facts.
     pose proof (abstract_env_exists X) as [[Σ0 wfΣ0]].
     specialize (mdeclvar _ wfΣ0). specialize_Σ wfΣ0.
     destruct H0 as [Xprop ?]; eauto.
