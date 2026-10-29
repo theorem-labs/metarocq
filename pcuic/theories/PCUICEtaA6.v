@@ -107,13 +107,13 @@ Section A6.
         * destruct (IH (canon_na na) (canon A0) (canon B) eq_refl) as (na' & A' & B' & [-> hna hA hB]).
           exists na', A', B'. split.
           -- reflexivity.
-          -- exact (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na) hna).
+          -- exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na) hna).
           -- eapply rt_trans; [apply BE_red1; exact hA0|]. eapply rt_trans; [apply BE_to_canon|exact hA].
           -- eapply rt_trans; [apply BE_to_canon|]. exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na _ A) hB).
         * destruct (IH (canon_na na) (canon A) (canon B0) eq_refl) as (na' & A' & B' & [-> hna hA hB]).
           exists na', A', B'. split.
           -- reflexivity.
-          -- exact (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na) hna).
+          -- exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na) hna).
           -- eapply rt_trans; [apply BE_to_canon|exact hA].
           -- eapply rt_trans; [apply BE_red1; exact hB0|]. eapply rt_trans; [apply BE_to_canon|].
              exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na _ A) hB).
@@ -226,7 +226,7 @@ Section A6.
     destruct (open_Prod_inv Γ na2 A2 B2 ho) as [hA2 hB2].
     exists na2, A2, B2. split.
     - exact hv'.
-    - exact (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na) (eq_binder_annot_trans _ _ _ hna1 hna2)).
+    - exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na) (eq_binder_annot_trans _ _ _ hna1 hna2)).
     - constructor; [exact hΓ|exact hdom|exact hA2|].
       apply (BE_JoinE Σ Γ Conv dom A2 A1 A2).
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
@@ -255,7 +255,7 @@ Section A6.
     - exact hv.
     - apply eq_binder_annot_sym.
       exact (eq_binder_annot_trans _ _ _ hna2 (eq_binder_annot_sym _ _
-               (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na) hna1))).
+               (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na) hna1))).
     - constructor; [exact hΓ|exact hA2|exact hdom|].
       apply (BE_JoinE Σ Γ Conv A2 dom A2 A1).
       + apply rt_refl.
@@ -282,11 +282,11 @@ Section A6.
     destruct (finst_Prod_l _ _ _ _ _ _ e) as (na3 & A3 & B3 & [E hna3 e2 e3]).
     injection E as <- <- <-.
     split.
-    - apply (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na)).
+    - apply (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na)).
       apply (eq_binder_annot_trans _ _ _ hna1).
       apply (eq_binder_annot_trans _ _ _ hna3).
       apply eq_binder_annot_sym.
-      exact (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na') hna2).
+      exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na') hna2).
     - constructor; [exact hΓ|exact hdom|exact hdom'|].
       apply (BE_JoinE Σ Γ Conv dom dom' A1 A2).
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
