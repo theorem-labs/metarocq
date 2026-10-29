@@ -26,6 +26,7 @@
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
 From Equations.Type Require Import Relation Relation_Properties.
+From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEquality PCUICReduction
@@ -52,6 +53,13 @@ Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at level 
   format "Σ  ;;;  Γ  ⊢E  t  ≤  u") : type_scope.
 Notation " Σ ;;; Γ ⊢E t = u " := (ws_cumul_pbE Conv Σ Γ t u) (at level 50, Γ, t, u at next level,
   format "Σ  ;;;  Γ  ⊢E  t  =  u") : type_scope.
+
+(** The E twin of base's [Derive Signature NoConfusion for ws_cumul_pb]
+    ([PCUICWellScopedCumulativity.v:50]). Base's relation is a family indexed by the two
+    terms; [ws_cumul_pbE] is a record with the terms as parameters, so it has no indices
+    and Equations derives no signature for it ("No signature to derive for
+    non-dependent inductive types"): only [NoConfusion] has a twin. *)
+Derive NoConfusion for ws_cumul_pbE.
 
 #[global] Hint Resolve wsE_ctx wsE_left wsE_right : fvs.
 
@@ -205,3 +213,7 @@ Section A1.
   Qed.
 
 End A1.
+
+(** The E twins of base's registrations [PCUICWellScopedCumulativity.v:353] and [:400]. *)
+#[global] Hint Immediate ws_cumul_pbE_refl : pcuic.
+#[global] Hint Resolve red_ws_cumul_pbE red_ws_cumul_pbE_inv : pcuic.
