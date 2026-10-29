@@ -70,7 +70,11 @@ From Stdlib Require Import ssreflect ssrbool.
   - [on_constructor_substE] and [wt_ind_app_varianceE] split an application typed at a sort by
     [inversion_mkApps_directE] ([PCUICSpineEta]), where base uses [inversion_mkApps]
     ([PCUICValidity]).
-  - [cumul_ctx_relSpec_AlgoE] scopes the specification by [into_ws_cumul_pbE_spec].
+  - [cumul_ctx_relSpec_AlgoE] scopes the specification by [into_ws_cumul_pbE_spec], and replaces
+    base's [reflexivity] on the identical-prefix goal, which resolves to the instance
+    [PCUICCumulativity.cumul_ctx_refl] at [Cumul], by an explicit [All2_fold_refl] with
+    [JoinE_refl]: the E side twins base's [conv_ctx_refl] ([conv_ctx_reflE], at [Conv]) but not
+    [cumul_ctx_refl], so no instance closes that goal.
   - [projection_cumulative_indicesE] builds the equal-instance case by [ws_cumul_pb_compare] and
     [ws_cumul_pb_incl_E].
   - [positive_cstr_arg_subst_closedE] and [positive_cstr_arg_substE] substitute by

@@ -21,7 +21,16 @@
     [Irrelevant], with two bound levels [l0], [l1]) for the universe lemmas; [ws_cumul_pb_inst_varianceE]
     transports the η step of [wc_Γ] from the variance environment of [I] to [if_Σ], at the
     instances [l0] and [l1].
-  The instances marked WEAK show satisfiability only; the reason is next to each. *)
+  Every instance that does not reach the whole of a lemma carries a mark. IMPOSSIBLE names a
+  part that cannot hold an η step by the head and the rule set (the [red] and [whd_rel]
+  premises: η relates terms only through [cumul_eta_l] of [cumulSpecE0] or through [JoinE],
+  and [red1] has no η rule). NOT BUILT names a part that this file's environments do not
+  reach, with the missing witness and its cost. Three costs recur: a universe-polymorphic
+  record WITH A PROJECTION (a new inductive, a new environment and its [wfE] proof), a
+  universe-polymorphic inductive WITH A CONSTRUCTOR whose argument holds an under-applied
+  occurrence (the same cost), and an under-applied occurrence of the block's own arity
+  variable, which [positive_cstr_arg] admits only at full arity ([pos_arg_concl] asks
+  [#|l| = ind_realargs]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -238,6 +247,117 @@ Proof.
   - exact (subslet_ass_tipE hX).
 Defined.
 
+(** ** A telescope whose typing holds an η step, over any well-formed context
+
+  [Γ0 ,, g : Prop → Prop ,, k : (Prop → Prop) → Prop ,, y : k g ,, h : (Π x : k (λx:Prop. g x). Prop)
+  ,, w : h y]. The last entry is typed only through the η step: [h] asks for its argument at
+  [k (λx:Prop. g x)] while [y] is declared at [k g]. *)
+
+Definition c18_tel_hty : term := tProd si_na iv_keta (tSort sProp).
+Definition c18_tel_hy : term := tApp (tRel 0) (tRel 1).
+Definition c18_tel : context := iv_Γk ,,, [vass si_na c18_tel_hy; vass si_na c18_tel_hty].
+
+(** [k g ≤sE k (λx:Prop. g x)]: congruence, and the symmetric of one [cumul_eta_l] step. *)
+Lemma c18_spec_eta (Γ : context) : cumulSpecE iv_Σ Γ iv_kg iv_keta.
+Proof.
+  unfold cumulSpecE, iv_kg, iv_keta, iv_eta_g.
+  apply cumulE_App; [apply cumulE_Refl|].
+  apply cumulE_Sym. apply cumul_eta_l. apply cumulE_Refl.
+Qed.
+
+Section C18Tel.
+  Context (Γ0 : context) (wf0 : wf_localE iv_Σ Γ0).
+
+  Lemma c18_tel_wf_Γg : wf_localE iv_Σ (Γ0 ,,, iv_Γg).
+  Proof. exact (iv_wf_vass iv_Σ Γ0 si_na iv_PP _ wf0 (iv_PP_typed iv_Σ Γ0 wf0) Logic.eq_refl). Qed.
+
+  Lemma c18_tel_wf_Γkg : wf_localE iv_Σ (Γ0 ,,, iv_Γkg).
+  Proof.
+    exact (iv_wf_vass iv_Σ (Γ0 ,,, iv_Γg) si_na iv_K _ c18_tel_wf_Γg
+             (c18_K_typed (Γ0 ,,, iv_Γg) c18_tel_wf_Γg) Logic.eq_refl).
+  Qed.
+
+  Lemma c18_tel_kg0_typed : iv_Σ ;;; (Γ0 ,,, iv_Γkg) |-E tApp (tRel 0) (tRel 1) : si_P.
+  Proof.
+    exact (typeE_App _ _ (tRel 0) si_na iv_PP si_P _ (tRel 1) (c18_K_typed _ c18_tel_wf_Γkg)
+             (typeE_Rel _ _ 0 (vass si_na iv_K) c18_tel_wf_Γkg Logic.eq_refl)
+             (typeE_Rel _ _ 1 (vass si_na iv_PP) c18_tel_wf_Γkg Logic.eq_refl)).
+  Qed.
+
+  Lemma c18_tel_wf_Γk : wf_localE iv_Σ (Γ0 ,,, iv_Γk).
+  Proof.
+    exact (iv_wf_vass iv_Σ (Γ0 ,,, iv_Γkg) si_na (tApp (tRel 0) (tRel 1)) sProp c18_tel_wf_Γkg
+             c18_tel_kg0_typed Logic.eq_refl).
+  Qed.
+
+  Lemma c18_tel_eta_g_typed : iv_Σ ;;; (Γ0 ,,, iv_Γk) |-E iv_eta_g : iv_PP.
+  Proof.
+    have w : wf_localE iv_Σ ((Γ0 ,,, iv_Γk) ,, vass si_na si_P) := iv_wf_P iv_Σ (Γ0 ,,, iv_Γk) c18_tel_wf_Γk.
+    unfold iv_eta_g, iv_PP. apply typeE_Lambda.
+    - exact (iv_vass iv_Σ (Γ0 ,,, iv_Γk) si_na si_P _ (iv_P_typed iv_Σ (Γ0 ,,, iv_Γk) c18_tel_wf_Γk) Logic.eq_refl).
+    - exact (typeE_App _ _ (tRel 3) si_na si_P si_P _ (tRel 0) (iv_PP_typed iv_Σ _ w)
+               (typeE_Rel _ _ 3 (vass si_na iv_PP) w Logic.eq_refl)
+               (typeE_Rel _ _ 0 (vass si_na si_P) w Logic.eq_refl)).
+  Qed.
+
+  Lemma c18_tel_keta_typed : iv_Σ ;;; (Γ0 ,,, iv_Γk) |-E iv_keta : si_P.
+  Proof.
+    exact (typeE_App _ _ (tRel 1) si_na iv_PP si_P _ iv_eta_g (c18_K_typed _ c18_tel_wf_Γk)
+             (typeE_Rel _ _ 1 (vass si_na iv_K) c18_tel_wf_Γk Logic.eq_refl) c18_tel_eta_g_typed).
+  Qed.
+
+  Lemma c18_tel_y_typed : iv_Σ ;;; (Γ0 ,,, iv_Γk) |-E tRel 0 : iv_kg.
+  Proof. exact (typeE_Rel _ _ 0 (vass si_na (tApp (tRel 0) (tRel 1))) c18_tel_wf_Γk Logic.eq_refl). Qed.
+
+  (** [y : k g] retyped at [k (λx:Prop. g x)] through the η step only. *)
+  Lemma c18_tel_y_eta : iv_Σ ;;; (Γ0 ,,, iv_Γk) |-E tRel 0 : iv_keta.
+  Proof.
+    exact (typeE_Cumul _ _ (tRel 0) iv_kg iv_keta sProp c18_tel_y_typed c18_tel_keta_typed
+             (c18_spec_eta (Γ0 ,,, iv_Γk))).
+  Qed.
+
+  Lemma c18_tel_hty_typed :
+    iv_Σ ;;; (Γ0 ,,, iv_Γk) |-E c18_tel_hty : tSort (Sort.sort_of_product sProp (Sort.super sProp)).
+  Proof.
+    unfold c18_tel_hty. apply typeE_Prod.
+    - exact (iv_vass_s iv_Σ (Γ0 ,,, iv_Γk) si_na iv_keta sProp c18_tel_keta_typed Logic.eq_refl).
+    - exact (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ (Γ0 ,,, iv_Γk) si_na iv_keta sProp c18_tel_wf_Γk
+                                  c18_tel_keta_typed Logic.eq_refl)).
+  Qed.
+
+  Lemma c18_tel_wf_Γh : wf_localE iv_Σ ((Γ0 ,,, iv_Γk) ,, vass si_na c18_tel_hty).
+  Proof.
+    exact (iv_wf_vass iv_Σ (Γ0 ,,, iv_Γk) si_na c18_tel_hty _ c18_tel_wf_Γk c18_tel_hty_typed Logic.eq_refl).
+  Qed.
+
+  (** [h y : Prop]: the η step of [c18_tel_y_eta] is inside this derivation. *)
+  Lemma c18_tel_hy_typed : iv_Σ ;;; ((Γ0 ,,, iv_Γk) ,, vass si_na c18_tel_hty) |-E c18_tel_hy : si_P.
+  Proof.
+    have w := c18_tel_wf_Γh.
+    exact (typeE_App _ _ (tRel 0) si_na (lift0 1 iv_keta) si_P _ (tRel 1)
+             (weakeningE iv_Σ (Γ0 ,,, iv_Γk) [vass si_na c18_tel_hty] c18_tel_hty _ iv_wfE w c18_tel_hty_typed)
+             (typeE_Rel _ _ 0 (vass si_na c18_tel_hty) w Logic.eq_refl)
+             (weakeningE iv_Σ (Γ0 ,,, iv_Γk) [vass si_na c18_tel_hty] (tRel 0) iv_keta iv_wfE w c18_tel_y_eta)).
+  Qed.
+
+  Lemma c18_tel_wf : wf_localE iv_Σ (Γ0 ,,, c18_tel).
+  Proof.
+    exact (iv_wf_vass iv_Σ ((Γ0 ,,, iv_Γk) ,, vass si_na c18_tel_hty) si_na c18_tel_hy sProp
+             c18_tel_wf_Γh c18_tel_hy_typed Logic.eq_refl).
+  Qed.
+End C18Tel.
+
+(** [Γh := [g; k; y; h]] and [R (h y)], whose argument is typed through the η step. *)
+Definition c18_Γh : context := iv_Γk ,, vass si_na c18_tel_hty.
+
+Lemma c18_wf_Γh : wf_localE iv_Σ c18_Γh.
+Proof. exact (c18_tel_wf_Γh [] localenv_nil). Qed.
+
+Lemma c18_isT_Rhy : isTypeE iv_Σ c18_Γh (mkApps (tInd iv_ind []) [c18_tel_hy]).
+Proof.
+  exact (has_sort_isTypeE _ (iv_RX_typed c18_Γh c18_tel_hy c18_wf_Γh (c18_tel_hy_typed [] localenv_nil))).
+Qed.
+
 (** ** Instances in [iv_Σ] *)
 
 Definition on_constructor_wf_argsE_inst :=
@@ -246,11 +366,17 @@ Definition on_constructor_wf_argsE_inst :=
 Definition on_constructor_substE_inst :=
   on_constructor_substE (Σ := iv_env) (wfΣ := iv_wfE) iv_declared_constructor.
 
+(* NOT BUILT (the universe part): the premises are a declaration and [consistent_instance_ext];
+   [R] is monomorphic, so the only instance is [[]] and [subst_instance []] is the identity. A
+   nonempty instance needs a universe-polymorphic inductive WITH A CONSTRUCTOR (a new inductive,
+   a new environment and its [wfE] proof): [I] of [if_Σ] has none. *)
 Definition on_constructor_instE_inst :=
   on_constructor_instE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor [] c18_cu.
 
+(** The only premise is the typing of [R (h y)], whose argument [h y] is typed through the
+    η step ([c18_tel_y_eta]). [R] has no variance, so the conclusion is at [AllEqual]. *)
 Definition wt_ind_app_varianceE_inst :=
-  wt_ind_app_varianceE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) c18_isT_Rketa.
+  wt_ind_app_varianceE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := c18_Γh) c18_isT_Rhy.
 
 (** The parameters [k g] of [R] after a cumulativity through the η step:
     [R (k (λx:Prop. g x)) ≤ R (k g)]. *)
@@ -268,9 +394,14 @@ Definition inductive_cumulative_indicesE_inst :=
     (c18_cmp_ind 1) iv_Γk [iv_keta] [iv_kg] [iv_keta] [iv_kg] (c18_sp iv_keta c18_keta_typed)
     (c18_sp iv_kg c18_kg_typed) c18_terms.
 
-(* WEAK: [R] is monomorphic, so the two instances are [] and the conclusion compares the type of
-   the projection with itself; the lemma compares one declared type at two instances, where no
-   η step can occur. *)
+(* NOT BUILT (the η step and the universe part). What is true: a comparison of one type at two
+   universe instances CAN hold by an η step and fail in base — [I@{l0}] against [I@{l1}] below
+   [I]'s arity is related by [ws_cumul_pbE_Ind_finst] ([ws_cumul_pbE_Ind_finst_inst]) and
+   refuted by base's clause ([if_cumul_Ind_univ_fails]). It is not reached here because [R] is
+   monomorphic (both instances are [], so the conclusion compares the projection's type with
+   itself) and because [I] has no projection: the witness needs a universe-polymorphic record
+   WITH A PROJECTION whose type holds an under-applied occurrence of a variance-irrelevant
+   inductive — a new inductive, a new environment and its [wfE] proof. *)
 Definition projection_cumulative_indicesE_inst :=
   projection_cumulative_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_projection c18_onudecl c18_cu c18_cu
     (c18_cmp_ind (ind_npars iv_mdecl)).
@@ -278,83 +409,16 @@ Definition projection_cumulative_indicesE_inst :=
 Definition subslet_projs_smashE_inst :=
   subslet_projs_smashE iv_Σ iv_ind iv_mdecl iv_idecl iv_wfE iv_declared_inductive c18_onps iv_Γk (tRel 0) [].
 
-(** The positivity lemmas relate one term (or context) at two universe instances, after the
-    substitution of the inductives; at the monomorphic block [R] both instances are [], so
-    their comparisons are reflexive: WEAK, each at a closed argument or the constructor of [R]. *)
-
-Definition c18_Pβ : term := tApp (tLambda si_na si_P (tRel 0)) si_P.
-
-Lemma c18_red_Pβ (Ξ : context) : red iv_Σ Ξ c18_Pβ si_P.
-Proof. apply red1_red. apply red_beta. Qed.
-
-Lemma c18_cl_ar : closed_ctx (ind_arities iv_mdecl ,,, [])@[[]].
-Proof. reflexivity. Qed.
-
-Lemma c18_refl0 (t : term) : closedn 0 t -> ws_cumul_pbE Conv iv_Σ [] t t.
-Proof. intros h. apply ws_cumul_pbE_refl; [reflexivity|]. by rewrite -is_open_term_closedE. Qed.
-
-(* WEAK: a β step at a closed term, [Γ = Δ = []]. *)
-Definition red_subst_indsE_inst :=
-  red_subst_indsE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (Γ := []) (Δ := [])
-    (a := c18_Pβ) (b := si_P) (u := []) (v := []) ltac:(constructor) c18_cl_ar Logic.eq_refl Logic.eq_refl c18_red_Pβ.
-
-(* WEAK: see above; [t] is a β redex at a closed term. *)
-Definition positive_inds_conv_red_stepE_inst :=
-  positive_inds_conv_red_stepE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (Γ := [])
-    (Δ := []) (t := c18_Pβ) (t' := si_P) (u := []) (u' := []) ltac:(constructor) c18_cl_ar Logic.eq_refl Logic.eq_refl
-    c18_red_Pβ Logic.eq_refl Logic.eq_refl (fun _ _ => c18_refl0 si_P Logic.eq_refl).
-
-Lemma c18_whd_P : whd_rel true iv_Σ.1 (arities_context (ind_bodies iv_mdecl) ,,, []) si_P [] si_P [].
-Proof. apply whd_stop. reflexivity. Qed.
-
-(* WEAK: see above; [ty = ty' = Prop]. *)
-Lemma positive_inds_conv_ass_redE_inst :
-  ws_cumul_pbE Conv iv_Σ [] (subst (ind_subst iv_mdecl iv_ind []) 0 (tProd si_na si_P si_P)@[[]])
-    (subst (ind_subst iv_mdecl iv_ind []) 0 (tProd si_na si_P si_P)@[[]]).
-Proof.
-  refine (positive_inds_conv_ass_redE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl)
-            (Γ := []) (Δ := []) (na := si_na) (ty := si_P) (ty' := si_P) (h := si_P) (l := []) (u := []) (u' := [])
-            ltac:(constructor) c18_cl_ar Logic.eq_refl Logic.eq_refl c18_whd_P Logic.eq_refl Logic.eq_refl Logic.eq_refl _).
-  intros _ Δ' _ clΔ' onl _ _. apply ws_cumul_pbE_refl; [by rewrite -is_closed_ctx_closedE|exact onl].
-Qed.
-
-(* WEAK: see above; [p = Prop], closed. *)
-Definition positive_inds_convE_inst :=
-  positive_inds_convE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (idecl := iv_idecl)
-    (NI := []) (Γ := []) (p := si_P) (u := []) (u' := []) (Δ := []) iv_declared_inductive c18_cu c18_ru I
-    c18_cl_ar (pos_arg_closed _ _ _ _ si_P Logic.eq_refl) Logic.eq_refl Logic.eq_refl Logic.eq_refl Logic.eq_refl Logic.eq_refl ltac:(constructor).
-
-(* WEAK: see above; [t = Prop], closed. *)
-Definition positive_cstr_arg_subst_closedE_inst :=
-  positive_cstr_arg_subst_closedE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl)
-    (idecl := iv_idecl) (Γ := []) (t := si_P) (pb := Cumul) (u := []) (u' := []) iv_declared_inductive c18_cu
-    Logic.eq_refl ltac:(apply ws_cumul_pbE_refl; reflexivity).
-
-(* WEAK: see above; [t] is a β redex at a closed term. *)
-Definition positive_cstr_arg_subst_red_stepE_inst :=
-  positive_cstr_arg_subst_red_stepE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (Γ := [])
-    (t := c18_Pβ) (t' := si_P) (pb := Cumul) (u := []) (u' := []) ltac:(constructor) c18_cl_ar
-    (fun _ Ξ => c18_red_Pβ Ξ) ltac:(apply ws_cumul_pbE_refl; reflexivity) (fun _ => ltac:(apply ws_cumul_pbE_refl; reflexivity)).
-
-(* WEAK: see above; the nested inductive is [R] itself, at the closed argument [∀P:Prop. P]. *)
-Definition positive_cstr_arg_subst_nestedE_inst :=
-  positive_cstr_arg_subst_nestedE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl)
-    (idecl := iv_idecl) (NI := []) (Γ := []) (ind' := iv_ind) (ui := []) (args := [iv_False]) (k := 0) (u := [])
-    (u' := []) iv_declared_inductive c18_cu c18_ru I c18_cl_ar Logic.eq_refl ltac:(repeat constructor) ltac:(constructor)
-    ltac:(apply ws_cumul_pbE_refl; reflexivity) ltac:(constructor).
-
-(* WEAK: see above; [t = Prop], closed. *)
-Definition positive_cstr_arg_substE_inst :=
-  positive_cstr_arg_substE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (idecl := iv_idecl)
-    (Γ := []) (t := si_P) (u := []) (u' := []) iv_declared_inductive c18_cu c18_ru c18_cl_ar
-    ltac:(apply ws_cumul_pbE_refl; reflexivity) (pos_arg_closed _ _ _ _ si_P Logic.eq_refl) ltac:(constructor).
-
 (** A context related to itself. *)
 Lemma c18_rel_refl (Σ : global_env_ext) (Γ Δ : context) :
   is_closed_context (Γ ,,, Δ) -> ws_cumul_ctx_pbE_rel Cumul Σ Γ Δ Δ.
 Proof. intros h. apply ws_cumul_ctx_pbE_rel_app. now apply ws_cumul_ctx_pbE_refl_pb. Qed.
 
-(* WEAK: see above; the arguments [f : A] of [mkR] at the instances [] and []. *)
+(* NOT BUILT (the η step and the universe part): the premise compares the constructor's
+   argument context at the two instances, and [R] is monomorphic, so both are []. The witness
+   needs a universe-polymorphic inductive WITH A CONSTRUCTOR one of whose arguments holds an
+   under-applied occurrence of a variance-irrelevant inductive (a new inductive, a new
+   environment and its [wfE] proof): [I] of [if_Σ] has no constructor. *)
 Definition positive_cstr_closed_argsE_inst :=
   positive_cstr_closed_argsE (Σ := iv_Σ) (wfΣ := iv_wfE) (u := []) (u' := []) iv_declared_constructor c18_cu c18_ru
     ltac:(apply c18_rel_refl; reflexivity).
@@ -365,14 +429,33 @@ Proof.
   apply All_local_env_app_inv in h as [h _]. exact h.
 Qed.
 
-(* WEAK: see above; [Γ = []]. *)
+(** The telescope [c18_tel] over the arities and the smashed parameters: its last entry
+    [w : h y] is typed through the η step, so the [wf_localE] premise holds an η step.
+    NOT BUILT (the universe part): [R] is monomorphic, so [u = u' = []] and the context
+    comparison is reflexive; a nonempty instance needs a universe-polymorphic inductive with
+    a constructor (a new inductive, a new environment and its [wfE] proof). *)
+Lemma c18_wf_ar_pars_tel :
+  wf_localE iv_Σ (subst_instance [] (ind_arities iv_mdecl ,,, smash_context [] (ind_params iv_mdecl) ,,, c18_tel)).
+Proof. exact (c18_tel_wf _ c18_wf_ar_pars). Qed.
+
+Lemma c18_pos_tel :
+  All_local_env (fun Γ j => positive_cstr_arg iv_Σ.1 iv_mdecl []
+    ([] ,,, (smash_context [] (ind_params iv_mdecl) ,,, Γ)) (j_typ j)) c18_tel.
+Proof.
+  repeat (apply localenv_cons_abs; [|cbn; apply pos_arg_closed; reflexivity]). exact localenv_nil.
+Qed.
+
 Lemma positive_cstr_closed_args_subst_aritiesE_inst :
-  ws_cumul_ctx_pbE_rel Cumul iv_Σ (subst_instance [] (smash_context [] (ind_params iv_mdecl))) [] [].
+  ws_cumul_ctx_pbE_rel Cumul iv_Σ (subst_instance [] (smash_context [] (ind_params iv_mdecl)))
+    (subst_context (ind_subst iv_mdecl iv_ind []) (context_assumptions (ind_params iv_mdecl))
+       (subst_instance [] c18_tel))
+    (subst_context (ind_subst iv_mdecl iv_ind []) (context_assumptions (ind_params iv_mdecl))
+       (subst_instance [] c18_tel)).
 Proof.
   destruct (on_declared_constructorE (wfΣ := iv_wfE) iv_declared_constructor) as [_ [cs [_ onc]]].
-  exact (positive_cstr_closed_args_subst_aritiesE (Σ := iv_Σ) (wfΣ := iv_wfE) (u := []) (u' := []) (Γ := [])
-           iv_declared_inductive c18_cu onc c18_ru Logic.eq_refl c18_wf_ar_pars localenv_nil ltac:(constructor)
-           ltac:(apply c18_rel_refl; reflexivity)).
+  exact (positive_cstr_closed_args_subst_aritiesE (Σ := iv_Σ) (wfΣ := iv_wfE) (u := []) (u' := [])
+           (Γ := c18_tel) iv_declared_inductive c18_cu onc c18_ru Logic.eq_refl c18_wf_ar_pars_tel
+           c18_pos_tel ltac:(repeat constructor) ltac:(apply c18_rel_refl; reflexivity)).
 Qed.
 
 (** ** Instances in [if_Σ]: universes *)
@@ -425,16 +508,20 @@ Proof.
   exact (c18_wc_ws (if_Σ.1, _) Cumul).
 Qed.
 
-(* WEAK: the lemma relates one context at two instances; [x : G (λy:Prop. F y)] mentions no
-   universe, so the relation is reflexive. *)
+(** The context [[x : I@{l0}]] at the two instances: the comparison of its one declaration is
+    the under-applied F-inst pair, inside the variance environment of [I]. *)
 Lemma All2_fold_instE_inst :
-  ws_cumul_ctx_pbE_rel Cumul if_Σ (subst_instance [Level.lvar 0] wc_Γ)
-    (subst_instance [Level.lvar 0] [vass c1b_na wc_T]) (subst_instance [Level.lvar 1] [vass c1b_na wc_T]).
+  ws_cumul_ctx_pbE_rel Cumul if_Σ (subst_instance [Level.lvar 0] ([] : context))
+    (subst_instance [Level.lvar 0] [vass if_na (tInd if_ind [Level.lvar 0])])
+    (subst_instance [Level.lvar 1] [vass if_na (tInd if_ind [Level.lvar 0])]).
 Proof.
   refine (All2_fold_instE (Σ := if_Σ) (wfΣ := if_wfE) (le := Cumul) if_mdecl [Variance.Irrelevant] _ _ _
-            [Level.lvar 0] [Level.lvar 1] wc_Γ [vass c1b_na wc_T]
+            [Level.lvar 0] [Level.lvar 1] [] [vass if_na (tInd if_ind [Level.lvar 0])]
             c18_if_onudecl c18_if_onvar c18_if_cu0 c18_if_cu1 Logic.eq_refl c18_if_var _).
-  exact (c18_rel_refl _ wc_Γ [vass c1b_na wc_T] Logic.eq_refl).
+  apply ws_cumul_ctx_pbE_rel_app. constructor; [constructor|].
+  constructor; [reflexivity|].
+  apply (ws_cumul_pbE_Ind_finst (l := []) (l' := []));
+    [cbn; right; repeat constructor|reflexivity|constructor].
 Qed.
 
 Definition consistent_instance_poly_lengthE_inst :=
@@ -460,3 +547,159 @@ Qed.
 
 Definition on_udecl_prop_poly_boundedE_inst :=
   on_udecl_prop_poly_boundedE if_Σ [nAnon; nAnon] (ConstraintSet.singleton c18_cstr) if_wfE c18_onudecl2.
+
+(** ** Positivity in [if_Σ]: the under-applied F-inst pair
+
+  [I] is universe-polymorphic with variance [Irrelevant] and arity one. Below that arity
+  base's clause refutes [I@{l0}] against [I@{l1}] ([if_cumul_Ind_univ_fails]) while the η
+  relation relates them through the full-arity variance ([ws_cumul_pbE_Ind_finst]). Each
+  instance below takes its comparison premise through that pair, at the instances [l0] and
+  [l1], either on the term itself or on the block's arity variable, which [ind_subst]
+  replaces by [I] at the two instances. *)
+
+Lemma c18_if_optvar : cmp_opt_variance (compare_universe if_Σ) Cumul
+  (match ind_variance if_mdecl with Some var => Variance var | None => AllEqual end)
+  [Level.lvar 0] [Level.lvar 1].
+Proof. cbn. right. repeat constructor. Qed.
+
+Lemma c18_if_nvok : nested_variance_ok if_mdecl.
+Proof. cbn. constructor; [discriminate|constructor]. Qed.
+
+Lemma c18_if_cl_ar : closed_ctx (ind_arities if_mdecl ,,, ([] : context))@[[Level.lvar 0]].
+Proof. reflexivity. Qed.
+
+Lemma c18_if_closed_ctx (Δ : context) : closed_ctx Δ -> is_closed_context Δ.
+Proof. intros h. by rewrite -is_closed_ctx_closedE. Qed.
+
+(** [I@{l0} ≤ I@{l1}] with no argument, in the arities context: the premise of
+    [positive_cstr_arg_subst_closedE] at [t := I@{l0}]. *)
+Lemma up_premise :
+  ws_cumul_pbE Cumul if_Σ ((ind_arities if_mdecl)@[[Level.lvar 0]] ,,, ([] : context)@[[Level.lvar 0]])
+    (tInd if_ind [Level.lvar 0])@[[Level.lvar 0]] (tInd if_ind [Level.lvar 0])@[[Level.lvar 1]].
+Proof.
+  apply (ws_cumul_pbE_Ind_finst (Σ := if_Σ) (l := []) (l' := []) (if_finst Cumul)); [reflexivity|constructor].
+Qed.
+
+(** The same pair, in any closed context, at [Conv]. *)
+Lemma c18_if_conv_arity (Δ : context) : is_closed_context Δ ->
+  ws_cumul_pbE Conv if_Σ Δ (tInd if_ind [Level.lvar 0]) (tInd if_ind [Level.lvar 1]).
+Proof.
+  intros h. apply (ws_cumul_pbE_Ind_finst (Σ := if_Σ) (l := []) (l' := []) (if_finst Conv));
+    [exact h|constructor].
+Qed.
+
+(** Base's clause refutes the premise of [up_W6] in the same environment. *)
+Definition up_base_fails := if_cumul_Ind_univ_fails Cumul.
+
+Definition up_W6 :=
+  positive_cstr_arg_subst_closedE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl)
+    (idecl := if_idecl) (Γ := []) (t := tInd if_ind [Level.lvar 0]) (pb := Cumul)
+    (u := [Level.lvar 0]) (u' := [Level.lvar 1]) c18_if_declared c18_if_cu0 Logic.eq_refl up_premise.
+
+(** The conversion premise is the F-inst pair, at two different instances. *)
+Definition positive_cstr_arg_subst_closedE_inst := up_W6.
+
+(** A β redex of [I@{l0}], and the arity variable under a β redex. *)
+Definition c18_if_redex : term := tApp (tLambda if_na (tSort sProp) (tRel 0)) (tInd if_ind [Level.lvar 0]).
+Definition c18_if_rel_redex : term := tApp (tLambda if_na (tSort sProp) (tRel 1)) (tSort sProp).
+
+Lemma c18_if_red w (Ξ : context) : red if_Σ Ξ c18_if_redex@[w] (tInd if_ind [Level.lvar 0])@[w].
+Proof. apply red1_red. apply red_beta. Qed.
+
+Lemma c18_if_rel_red (Ξ : context) : red if_Σ Ξ c18_if_rel_redex (tRel 0).
+Proof. apply red1_red. apply red_beta. Qed.
+
+(* IMPOSSIBLE (the η step): the relation premise and the conclusion are [red], and [red1] has no
+   η rule. The universe part is built: [u] and [v] are the two instances of [I], and the reduct
+   is the arity variable, which [ind_subst] replaces by [I@{l1}]. *)
+Definition red_subst_indsE_inst :=
+  red_subst_indsE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl) (Γ := []) (Δ := [])
+    (a := c18_if_rel_redex) (b := tRel 0) (u := [Level.lvar 0]) (v := [Level.lvar 1])
+    ltac:(constructor) c18_if_cl_ar Logic.eq_refl Logic.eq_refl c18_if_rel_red.
+
+(* IMPOSSIBLE (the reduction premise): as [red_subst_indsE_inst]. The conversion premise and the
+   conclusion are the F-inst pair: the arity variable at the two instances, which [ind_subst]
+   replaces by [I@{l0}] and [I@{l1}] below the arity. *)
+Definition positive_inds_conv_red_stepE_inst :=
+  positive_inds_conv_red_stepE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl)
+    (Γ := []) (Δ := []) (t := c18_if_rel_redex) (t' := tRel 0)
+    (u := [Level.lvar 0]) (u' := [Level.lvar 1]) ltac:(constructor) c18_if_cl_ar Logic.eq_refl
+    Logic.eq_refl c18_if_rel_red Logic.eq_refl Logic.eq_refl
+    (fun _ _ => c18_if_conv_arity [] Logic.eq_refl).
+
+Lemma c18_if_whd : whd_rel true if_Σ.1 (arities_context (ind_bodies if_mdecl) ,,, ([] : context))
+  (tSort sProp) [] (tSort sProp) [].
+Proof. apply whd_stop. reflexivity. Qed.
+
+(* IMPOSSIBLE (the [whd_rel] premise): it is a reduction, and [red1] has no η rule. The
+   conversion premise and the conclusion are the F-inst pair, under one product. *)
+Lemma positive_inds_conv_ass_redE_inst :
+  ws_cumul_pbE Conv if_Σ []
+    (subst (ind_subst if_mdecl if_ind [Level.lvar 0]) 0 (tProd if_na (tSort sProp) (tRel 1))@[[Level.lvar 1]])
+    (subst (ind_subst if_mdecl if_ind [Level.lvar 1]) 0 (tProd if_na (tSort sProp) (tRel 1))@[[Level.lvar 1]]).
+Proof.
+  refine (positive_inds_conv_ass_redE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl)
+            (Γ := []) (Δ := []) (na := if_na) (ty := tSort sProp) (ty' := tRel 1) (h := tSort sProp)
+            (l := []) (u := [Level.lvar 0]) (u' := [Level.lvar 1])
+            ltac:(constructor) c18_if_cl_ar Logic.eq_refl Logic.eq_refl c18_if_whd Logic.eq_refl
+            Logic.eq_refl Logic.eq_refl _).
+  intros _ Δ' _ clΔ' _ _ _. exact (c18_if_conv_arity Δ' (c18_if_closed_ctx Δ' clΔ')).
+Qed.
+
+Lemma c18_if_at_i : mdecl_at_i if_mdecl if_idecl ([] : context) 0.
+Proof. cbn. split; [constructor|split; [constructor|reflexivity]]. Qed.
+
+Lemma c18_if_pos_concl : positive_cstr_arg if_Σ.1 if_mdecl [] [] (mkApps (tRel 0) [tSort sProp]).
+Proof.
+  apply (pos_arg_concl _ _ _ _ [tSort sProp] 0 if_idecl);
+    [reflexivity|repeat constructor|exact c18_if_at_i].
+Qed.
+
+(* NOT BUILT (the η step): the conclusion compares the arity variable at the two instances, and
+   [positive_cstr_arg] admits that variable only at FULL arity ([pos_arg_concl] asks
+   [#|l| = ind_realargs]), where base's clause already relates [I@{l0}] and [I@{l1}] through the
+   variance [Irrelevant]. An η-specific comparison needs the variable under-applied, which the
+   predicate rejects, so the witness needs another inductive whose positivity derivation puts an
+   under-applied occurrence in the compared term (a new inductive, a new environment and its
+   [wfE] proof). The universe part is built: [u ≠ u']. *)
+Definition positive_inds_convE_inst :=
+  positive_inds_convE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl) (idecl := if_idecl)
+    (NI := []) (Γ := []) (p := mkApps (tRel 0) [tSort sProp]) (u := [Level.lvar 0])
+    (u' := [Level.lvar 1]) (Δ := []) c18_if_declared c18_if_cu0 c18_if_optvar c18_if_nvok c18_if_cl_ar
+    c18_if_pos_concl Logic.eq_refl Logic.eq_refl Logic.eq_refl Logic.eq_refl Logic.eq_refl
+    ltac:(constructor).
+
+(** The two β redexes of [I] at the two instances, related through their reducts. *)
+Lemma up_premise7 : ws_cumul_pbE Cumul if_Σ
+  ((ind_arities if_mdecl)@[[Level.lvar 0]] ,,, ([] : context)@[[Level.lvar 0]])
+  c18_if_redex@[[Level.lvar 0]] c18_if_redex@[[Level.lvar 1]].
+Proof.
+  apply (ws_cumul_pb_red_stepE (Σ := if_Σ) (wfΣ := if_wfE) (pb := Cumul)
+           (a' := (tInd if_ind [Level.lvar 0])@[[Level.lvar 0]])
+           (b' := (tInd if_ind [Level.lvar 0])@[[Level.lvar 1]]));
+    [reflexivity|reflexivity|reflexivity|apply c18_if_red|apply c18_if_red|intros _ _; exact up_premise].
+Qed.
+
+(* IMPOSSIBLE (the reduction premise): as [red_subst_indsE_inst]. Both conversion premises are
+   the F-inst pair, on the redex and on its reduct. *)
+Definition positive_cstr_arg_subst_red_stepE_inst :=
+  positive_cstr_arg_subst_red_stepE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl)
+    (Γ := []) (t := c18_if_redex) (t' := tInd if_ind [Level.lvar 0]) (pb := Cumul)
+    (u := [Level.lvar 0]) (u' := [Level.lvar 1]) ltac:(constructor) c18_if_cl_ar c18_if_red
+    up_premise7 (fun _ => up_W6).
+
+(** The nested inductive is [I] itself, under-applied: no argument of its one parameter. *)
+Definition positive_cstr_arg_subst_nestedE_inst :=
+  positive_cstr_arg_subst_nestedE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl)
+    (idecl := if_idecl) (NI := []) (Γ := []) (ind' := if_ind) (ui := [Level.lvar 0]) (args := [])
+    (k := 0) (u := [Level.lvar 0]) (u' := [Level.lvar 1])
+    c18_if_declared c18_if_cu0 c18_if_optvar c18_if_nvok c18_if_cl_ar Logic.eq_refl
+    ltac:(constructor) ltac:(constructor) up_premise ltac:(constructor).
+
+(** The conversion premise is the F-inst pair at the closed term [I@{l0}]. *)
+Definition positive_cstr_arg_substE_inst :=
+  positive_cstr_arg_substE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl)
+    (idecl := if_idecl) (Γ := []) (t := tInd if_ind [Level.lvar 0])
+    (u := [Level.lvar 0]) (u' := [Level.lvar 1]) c18_if_declared c18_if_cu0 c18_if_optvar
+    c18_if_cl_ar up_premise (pos_arg_closed _ _ _ _ (tInd if_ind [Level.lvar 0]) Logic.eq_refl)
+    ltac:(constructor).
