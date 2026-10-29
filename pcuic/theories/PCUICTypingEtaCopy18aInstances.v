@@ -67,7 +67,7 @@ Proof. exact (into_ws_cumul_pbE_spec (c18_wc_spec Σ pb wc_Γ) c18_wc_closed c18
 Lemma c18_wc_args : ws_cumul_pbE_terms rf_Σ wc_Γ [wc_eta_F] [tRel 1].
 Proof.
   exact (ws_cumul_pbE_mkApps_tRel (Γ := wc_Γ) (n := 0) (d := vass c1b_na wc_G_ty) (u := [wc_eta_F])
-           (u' := [tRel 1]) eq_refl eq_refl (c18_wc_ws rf_Σ Cumul)).
+           (u' := [tRel 1]) Logic.eq_refl Logic.eq_refl (c18_wc_ws rf_Σ Cumul)).
 Qed.
 
 (** A β step in an argument of [G]: [(λx:Prop → Prop. x) F ⇝ F]. *)
@@ -87,16 +87,16 @@ Qed.
 
 Definition invert_red_mkApps_tRelE_inst :=
   invert_red_mkApps_tRelE (Σ := rf_Σ) (wfΣ := wc_wfE) (Γ := wc_Γ) (n := 0) (d := vass c1b_na wc_G_ty)
-    (args := [c18_Fβ]) eq_refl eq_refl c18_red_GFβ.
+    (args := [c18_Fβ]) Logic.eq_refl Logic.eq_refl c18_red_GFβ.
 
 Definition closed_red_mkAppsE_inst :=
-  closed_red_mkAppsE (Σ := rf_Σ) (wfΣ := wc_wfE) wc_Γ (tRel 0) [c18_Fβ] [tRel 1] c18_wc_closed eq_refl
+  closed_red_mkAppsE (Σ := rf_Σ) (wfΣ := wc_wfE) wc_Γ (tRel 0) [c18_Fβ] [tRel 1] c18_wc_closed Logic.eq_refl
     (All2_cons c18_red_Fβ All2_nil).
 
 (** [G (λy:Prop. F y) ≤ G F]: the heads are equal, the arguments are η related. *)
 Definition ws_cumul_pb_mkApps_eqE_inst :=
   ws_cumul_pb_mkApps_eqE (Σ := rf_Σ) (wfΣ := wc_wfE) wc_Γ (tRel 0) (tRel 0) [wc_eta_F] [tRel 1]
-    c18_wc_closed eq_refl eq_refl ltac:(constructor) c18_wc_args.
+    c18_wc_closed Logic.eq_refl Logic.eq_refl ltac:(constructor) c18_wc_args.
 
 (** [let x := λy:Prop. F y in G x ≤ let x := F in G x]: the bodies are η related. *)
 Definition c18_Gx : term := tApp (tRel 1) (tRel 0).
@@ -104,7 +104,7 @@ Definition c18_Gx : term := tApp (tRel 1) (tRel 0).
 Definition ws_cumul_pb_LetIn_substE_inst :=
   ws_cumul_pb_LetIn_substE (Σ := rf_Σ) (wfΣ := wc_wfE) (le := Cumul) (Γ := wc_Γ) (na := c1b_na)
     (na' := c1b_na) (b := wc_eta_F) (b' := tRel 1) (ty := rf_F) (ty' := rf_F) (t := c18_Gx) (t' := c18_Gx)
-    eq_refl eq_refl (c18_wc_ws rf_Σ Cumul).
+    Logic.eq_refl Logic.eq_refl (c18_wc_ws rf_Σ Cumul).
 
 (** [(λx:Prop → Prop. G x) (λy:Prop. F y) ≤ G F]: a β step to [G (λy:Prop. F y)], then the η step. *)
 Definition c18_Tβ : term := tApp (tLambda c1b_na rf_F (tApp (tRel 1) (tRel 0))) wc_eta_F.
@@ -117,7 +117,7 @@ Proof. reflexivity. Qed.
 
 Definition ws_cumul_pb_red_stepE_inst :=
   ws_cumul_pb_red_stepE (Σ := rf_Σ) (wfΣ := wc_wfE) (pb := Cumul) (Δ := wc_Γ) (a := c18_Tβ) (a' := wc_T)
-    (b := wc_U) (b' := wc_U) c18_wc_closed eq_refl eq_refl c18_red_Tβ c18_red_U
+    (b := wc_U) (b' := wc_U) c18_wc_closed Logic.eq_refl Logic.eq_refl c18_red_Tβ c18_red_U
     (fun _ _ => c18_wc_ws rf_Σ Cumul).
 
 (** The specification relates [x : G (λy:Prop. F y)] to [x : G F] by the η step. *)
@@ -125,7 +125,7 @@ Lemma c18_cumul_ctx : cumul_ctx_rel cumulSpecE0 rf_Σ wc_Γ [vass c1b_na wc_T] [
 Proof. constructor; [constructor|]. constructor; [reflexivity|]. exact (c18_wc_spec rf_Σ Cumul _). Qed.
 
 Definition cumul_ctx_relSpec_AlgoE_inst :=
-  cumul_ctx_relSpec_AlgoE (Σ := rf_Σ) (wfΣ := wc_wfE) c18_cumul_ctx eq_refl eq_refl.
+  cumul_ctx_relSpec_AlgoE (Σ := rf_Σ) (wfΣ := wc_wfE) c18_cumul_ctx Logic.eq_refl Logic.eq_refl.
 
 (** ** The η kit in [iv_Σ] *)
 
@@ -133,25 +133,25 @@ Lemma c18_K_typed (Γ : context) : wf_localE iv_Σ Γ ->
   iv_Σ ;;; Γ |-E iv_K : tSort (Sort.sort_of_product iv_sPP (Sort.super sProp)).
 Proof.
   intros h. unfold iv_K. apply typeE_Prod.
-  - exact (iv_vass_s iv_Σ Γ si_na iv_PP _ (iv_PP_typed iv_Σ Γ h) eq_refl).
-  - exact (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ Γ si_na iv_PP _ h (iv_PP_typed iv_Σ Γ h) eq_refl)).
+  - exact (iv_vass_s iv_Σ Γ si_na iv_PP _ (iv_PP_typed iv_Σ Γ h) Logic.eq_refl).
+  - exact (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ Γ si_na iv_PP _ h (iv_PP_typed iv_Σ Γ h) Logic.eq_refl)).
 Qed.
 
 Lemma c18_wf_Γg : wf_localE iv_Σ iv_Γg.
-Proof. exact (iv_wf_vass iv_Σ [] si_na iv_PP _ localenv_nil (iv_PP_typed iv_Σ [] localenv_nil) eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ [] si_na iv_PP _ localenv_nil (iv_PP_typed iv_Σ [] localenv_nil) Logic.eq_refl). Qed.
 
 Lemma c18_wf_Γkg : wf_localE iv_Σ iv_Γkg.
-Proof. exact (iv_wf_vass iv_Σ iv_Γg si_na iv_K _ c18_wf_Γg (c18_K_typed iv_Γg c18_wf_Γg) eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ iv_Γg si_na iv_K _ c18_wf_Γg (c18_K_typed iv_Γg c18_wf_Γg) Logic.eq_refl). Qed.
 
 Lemma c18_kg0_typed : iv_Σ ;;; iv_Γkg |-E tApp (tRel 0) (tRel 1) : si_P.
 Proof.
   exact (typeE_App _ _ (tRel 0) si_na iv_PP si_P _ (tRel 1) (c18_K_typed iv_Γkg c18_wf_Γkg)
-           (typeE_Rel _ _ 0 (vass si_na iv_K) c18_wf_Γkg eq_refl)
-           (typeE_Rel _ _ 1 (vass si_na iv_PP) c18_wf_Γkg eq_refl)).
+           (typeE_Rel _ _ 0 (vass si_na iv_K) c18_wf_Γkg Logic.eq_refl)
+           (typeE_Rel _ _ 1 (vass si_na iv_PP) c18_wf_Γkg Logic.eq_refl)).
 Qed.
 
 Lemma c18_wf_Γk : wf_localE iv_Σ iv_Γk.
-Proof. exact (iv_wf_vass iv_Σ iv_Γkg si_na (tApp (tRel 0) (tRel 1)) sProp c18_wf_Γkg c18_kg0_typed eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ iv_Γkg si_na (tApp (tRel 0) (tRel 1)) sProp c18_wf_Γkg c18_kg0_typed Logic.eq_refl). Qed.
 
 Lemma c18_closed_Γk : is_closed_context iv_Γk.
 Proof. exact (wf_local_closed_contextE (Σ := iv_Σ) (wfΣ := iv_wfE) c18_wf_Γk). Qed.
@@ -160,25 +160,25 @@ Proof. exact (wf_local_closed_contextE (Σ := iv_Σ) (wfΣ := iv_wfE) c18_wf_Γk
 Lemma c18_kg_typed : iv_Σ ;;; iv_Γk |-E iv_kg : si_P.
 Proof.
   exact (typeE_App _ _ (tRel 1) si_na iv_PP si_P _ (tRel 2) (c18_K_typed iv_Γk c18_wf_Γk)
-           (typeE_Rel _ _ 1 (vass si_na iv_K) c18_wf_Γk eq_refl)
-           (typeE_Rel _ _ 2 (vass si_na iv_PP) c18_wf_Γk eq_refl)).
+           (typeE_Rel _ _ 1 (vass si_na iv_K) c18_wf_Γk Logic.eq_refl)
+           (typeE_Rel _ _ 2 (vass si_na iv_PP) c18_wf_Γk Logic.eq_refl)).
 Qed.
 
 Lemma c18_eta_g_typed : iv_Σ ;;; iv_Γk |-E iv_eta_g : iv_PP.
 Proof.
   have w : wf_localE iv_Σ (iv_Γk ,, vass si_na si_P) := iv_wf_P iv_Σ iv_Γk c18_wf_Γk.
   unfold iv_eta_g, iv_PP. apply typeE_Lambda.
-  - exact (iv_vass iv_Σ iv_Γk si_na si_P _ (iv_P_typed iv_Σ iv_Γk c18_wf_Γk) eq_refl).
+  - exact (iv_vass iv_Σ iv_Γk si_na si_P _ (iv_P_typed iv_Σ iv_Γk c18_wf_Γk) Logic.eq_refl).
   - exact (typeE_App _ _ (tRel 3) si_na si_P si_P _ (tRel 0) (iv_PP_typed iv_Σ _ w)
-             (typeE_Rel _ _ 3 (vass si_na iv_PP) w eq_refl)
-             (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl)).
+             (typeE_Rel _ _ 3 (vass si_na iv_PP) w Logic.eq_refl)
+             (typeE_Rel _ _ 0 (vass si_na si_P) w Logic.eq_refl)).
 Qed.
 
 (** [k (λx:Prop. g x) : Prop]. *)
 Lemma c18_keta_typed : iv_Σ ;;; iv_Γk |-E iv_keta : si_P.
 Proof.
   exact (typeE_App _ _ (tRel 1) si_na iv_PP si_P _ iv_eta_g (c18_K_typed iv_Γk c18_wf_Γk)
-           (typeE_Rel _ _ 1 (vass si_na iv_K) c18_wf_Γk eq_refl) c18_eta_g_typed).
+           (typeE_Rel _ _ 1 (vass si_na iv_K) c18_wf_Γk Logic.eq_refl) c18_eta_g_typed).
 Qed.
 
 Lemma c18_kg_open : is_open_term iv_Γk iv_kg. Proof. reflexivity. Qed.
@@ -296,13 +296,13 @@ Proof. intros h. apply ws_cumul_pbE_refl; [reflexivity|]. by rewrite -is_open_te
 (* WEAK: a β step at a closed term, [Γ = Δ = []]. *)
 Definition red_subst_indsE_inst :=
   red_subst_indsE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (Γ := []) (Δ := [])
-    (a := c18_Pβ) (b := si_P) (u := []) (v := []) ltac:(constructor) c18_cl_ar eq_refl eq_refl c18_red_Pβ.
+    (a := c18_Pβ) (b := si_P) (u := []) (v := []) ltac:(constructor) c18_cl_ar Logic.eq_refl Logic.eq_refl c18_red_Pβ.
 
 (* WEAK: see above; [t] is a β redex at a closed term. *)
 Definition positive_inds_conv_red_stepE_inst :=
   positive_inds_conv_red_stepE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (Γ := [])
-    (Δ := []) (t := c18_Pβ) (t' := si_P) (u := []) (u' := []) ltac:(constructor) c18_cl_ar eq_refl eq_refl
-    c18_red_Pβ eq_refl eq_refl (fun _ _ => c18_refl0 si_P eq_refl).
+    (Δ := []) (t := c18_Pβ) (t' := si_P) (u := []) (u' := []) ltac:(constructor) c18_cl_ar Logic.eq_refl Logic.eq_refl
+    c18_red_Pβ Logic.eq_refl Logic.eq_refl (fun _ _ => c18_refl0 si_P Logic.eq_refl).
 
 Lemma c18_whd_P : whd_rel true iv_Σ.1 (arities_context (ind_bodies iv_mdecl) ,,, []) si_P [] si_P [].
 Proof. apply whd_stop. reflexivity. Qed.
@@ -314,7 +314,7 @@ Lemma positive_inds_conv_ass_redE_inst :
 Proof.
   refine (positive_inds_conv_ass_redE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl)
             (Γ := []) (Δ := []) (na := si_na) (ty := si_P) (ty' := si_P) (h := si_P) (l := []) (u := []) (u' := [])
-            ltac:(constructor) c18_cl_ar eq_refl eq_refl c18_whd_P eq_refl eq_refl eq_refl _).
+            ltac:(constructor) c18_cl_ar Logic.eq_refl Logic.eq_refl c18_whd_P Logic.eq_refl Logic.eq_refl Logic.eq_refl _).
   intros _ Δ' _ clΔ' onl _ _. apply ws_cumul_pbE_refl; [by rewrite -is_closed_ctx_closedE|exact onl].
 Qed.
 
@@ -322,13 +322,13 @@ Qed.
 Definition positive_inds_convE_inst :=
   positive_inds_convE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (idecl := iv_idecl)
     (NI := []) (Γ := []) (p := si_P) (u := []) (u' := []) (Δ := []) iv_declared_inductive c18_cu c18_ru I
-    c18_cl_ar (pos_arg_closed _ _ _ _ si_P eq_refl) eq_refl eq_refl eq_refl eq_refl eq_refl ltac:(constructor).
+    c18_cl_ar (pos_arg_closed _ _ _ _ si_P Logic.eq_refl) Logic.eq_refl Logic.eq_refl Logic.eq_refl Logic.eq_refl Logic.eq_refl ltac:(constructor).
 
 (* WEAK: see above; [t = Prop], closed. *)
 Definition positive_cstr_arg_subst_closedE_inst :=
   positive_cstr_arg_subst_closedE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl)
     (idecl := iv_idecl) (Γ := []) (t := si_P) (pb := Cumul) (u := []) (u' := []) iv_declared_inductive c18_cu
-    eq_refl ltac:(apply ws_cumul_pbE_refl; reflexivity).
+    Logic.eq_refl ltac:(apply ws_cumul_pbE_refl; reflexivity).
 
 (* WEAK: see above; [t] is a β redex at a closed term. *)
 Definition positive_cstr_arg_subst_red_stepE_inst :=
@@ -340,14 +340,14 @@ Definition positive_cstr_arg_subst_red_stepE_inst :=
 Definition positive_cstr_arg_subst_nestedE_inst :=
   positive_cstr_arg_subst_nestedE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl)
     (idecl := iv_idecl) (NI := []) (Γ := []) (ind' := iv_ind) (ui := []) (args := [iv_False]) (k := 0) (u := [])
-    (u' := []) iv_declared_inductive c18_cu c18_ru I c18_cl_ar eq_refl ltac:(repeat constructor) ltac:(constructor)
+    (u' := []) iv_declared_inductive c18_cu c18_ru I c18_cl_ar Logic.eq_refl ltac:(repeat constructor) ltac:(constructor)
     ltac:(apply ws_cumul_pbE_refl; reflexivity) ltac:(constructor).
 
 (* WEAK: see above; [t = Prop], closed. *)
 Definition positive_cstr_arg_substE_inst :=
   positive_cstr_arg_substE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (mdecl := iv_mdecl) (idecl := iv_idecl)
     (Γ := []) (t := si_P) (u := []) (u' := []) iv_declared_inductive c18_cu c18_ru c18_cl_ar
-    ltac:(apply ws_cumul_pbE_refl; reflexivity) (pos_arg_closed _ _ _ _ si_P eq_refl) ltac:(constructor).
+    ltac:(apply ws_cumul_pbE_refl; reflexivity) (pos_arg_closed _ _ _ _ si_P Logic.eq_refl) ltac:(constructor).
 
 (** A context related to itself. *)
 Lemma c18_rel_refl (Σ : global_env_ext) (Γ Δ : context) :
@@ -371,7 +371,7 @@ Lemma positive_cstr_closed_args_subst_aritiesE_inst :
 Proof.
   destruct (on_declared_constructorE (wfΣ := iv_wfE) iv_declared_constructor) as [_ [cs [_ onc]]].
   exact (positive_cstr_closed_args_subst_aritiesE (Σ := iv_Σ) (wfΣ := iv_wfE) (u := []) (u' := []) (Γ := [])
-           iv_declared_inductive c18_cu onc c18_ru eq_refl c18_wf_ar_pars localenv_nil ltac:(constructor)
+           iv_declared_inductive c18_cu onc c18_ru Logic.eq_refl c18_wf_ar_pars localenv_nil ltac:(constructor)
            ltac:(apply c18_rel_refl; reflexivity)).
 Qed.
 
@@ -421,7 +421,7 @@ Lemma ws_cumul_pb_inst_varianceE_inst :
 Proof.
   refine (ws_cumul_pb_inst_varianceE (Σ := if_Σ) (wfΣ := if_wfE) (le := Cumul) (mdecl := if_mdecl)
             (l := [Variance.Irrelevant]) (Γ := wc_Γ) (u := [Level.lvar 0]) (u' := [Level.lvar 1])
-            c18_if_onudecl c18_if_onvar eq_refl c18_if_cu0 c18_if_cu1 c18_if_var wc_T wc_U _).
+            c18_if_onudecl c18_if_onvar Logic.eq_refl c18_if_cu0 c18_if_cu1 c18_if_var wc_T wc_U _).
   exact (c18_wc_ws (if_Σ.1, _) Cumul).
 Qed.
 
@@ -433,15 +433,15 @@ Lemma All2_fold_instE_inst :
 Proof.
   refine (All2_fold_instE (Σ := if_Σ) (wfΣ := if_wfE) (le := Cumul) if_mdecl [Variance.Irrelevant] _ _ _
             [Level.lvar 0] [Level.lvar 1] wc_Γ [vass c1b_na wc_T]
-            c18_if_onudecl c18_if_onvar c18_if_cu0 c18_if_cu1 eq_refl c18_if_var _).
-  exact (c18_rel_refl _ wc_Γ [vass c1b_na wc_T] eq_refl).
+            c18_if_onudecl c18_if_onvar c18_if_cu0 c18_if_cu1 Logic.eq_refl c18_if_var _).
+  exact (c18_rel_refl _ wc_Γ [vass c1b_na wc_T] Logic.eq_refl).
 Qed.
 
 Definition consistent_instance_poly_lengthE_inst :=
   consistent_instance_poly_lengthE (Σ := if_Σ) (wfΣ := if_wfE) c18_if_cu0.
 
 Definition consistent_instance_validE_inst :=
-  consistent_instance_validE (Σ := if_Σ) (wfΣ := if_wfE) c18_if_cu0 eq_refl.
+  consistent_instance_validE (Σ := if_Σ) (wfΣ := if_wfE) c18_if_cu0 Logic.eq_refl.
 
 Lemma c18_lzero_in : LevelSet.In Level.lzero (global_levels if_env).
 Proof. apply LevelSet.mem_spec. reflexivity. Qed.
