@@ -81,6 +81,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimit
      PCUICEtaC3BR PCUICTypingEtaInd PCUICClosedTypEta PCUICInversionEta PCUICEtaA6 PCUICEtaA6Ind
      PCUICInduction PCUICWfUniverses
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances.
+From MetaRocq.PCUIC Require PCUICSize.
 
 Import ListNotations.
 
@@ -2095,24 +2096,425 @@ Qed.
 
 (** ** Status of the parallel one-step postponement ([pe_postpone_statement])
 
-  Closed above: the β-head case ([pe_postpone_beta], no invariant), the ι and
-  projection root cases ([pe_iota_root], [pe_proj_root], invariant [hnl] on the
-  scrutinee / argument), and their shared spine inversion ([pe_rigid_spine]).
+  Closed above: the β-head case ([pe_postpone_beta], no invariant), the ι,
+  projection, cofix-case and cofix-proj root cases (under [hnl]), and their shared
+  spine inversion ([pe_rigid_spine]).
 
   Open:
-  - cofix-case / cofix-proj roots: [pe_rigid_spine] at a [tCoFix] head as above, plus
-    [pe] copies of [C3R.peta_cofix_subst] and of [unfold_cofix_back];
   - fixpoint and primitive-operation roots: the redex spine may have a PRODUCT type,
     so [hnl] does not hold of its source, and a source such as
     [(λz. λy. G z y) x] (with [G = mkApps (tFix mfix idx) args']) β-reduces to the
     η-expansion [λy. G x y] of the redex, never to the redex spine. The statement still
-    holds there (unfold under the λ, then [pe_eta]), but the reduct's [pe] derivation
-    is not a subderivation of the source's. Route: induction on the SIZE of the
-    source. The head β steps are size-decreasing because a [pe_eta] body contains
-    its bound variable exactly once (η-reduction preserves free-variable occurrence
-    counts), so these substitutions are linear;
+    holds there (unfold under the λ, then [pe_eta)), but the reduct's [pe] derivation
+    is not a subderivation of the source's. Route: well-founded induction on [size']
+    of the source (below). Plain [size] does NOT work: [literal_linearity_false] and
+    [plain_size_grows_head_beta];
   - the generic η-at-the-root case ([pe_eta] source, any [red1] step): [pp_root] with
     the IH on the body;
   - the congruence cases, with [red1] transported along [pe_ctx] (above): [red_rel]
     in a let body unfolds a [pe]-related body ([pe_lift]); case branches use
     [pe_inst_case_context], fixpoint bodies the [fix_context] analogue. *)
+
+(** ** Occurrence counts and the domain-free size
+
+  [occ_gen dom k t] counts the occurrences of [tRel k] in [t] (binder contexts of
+  [tCase] are not terms that substitution touches, and are not counted); with
+  [dom = true] it counts every occurrence, with [dom = false] it skips λ DOMAINS.
+  [size'] is the term size with λ domains not counted.
+
+  Why [size'] is principled: η-contraction [λx:A. M x ↦ M] drops only a λ domain [A]
+  and the λ/application/variable nodes of the redex; it never drops or duplicates
+  anything else. So the count of a variable OUTSIDE λ domains is invariant under η
+  ([pe_occ]), and a measure that does not count domains cannot be inflated by
+  substituting for a variable whose extra occurrences sit in domains, which is
+  exactly what broke plain size ([literal_linearity_false]: the second occurrence of
+  the bound variable is in the domain [P z]). If a third measure is ever needed, its
+  invariance under whatever broke [size'] must be stated first. *)
+
+Fixpoint lsum {A} (f : A -> nat) (l : list A) : nat :=
+  match l with [] => 0 | a :: l => f a + lsum f l end.
+
+Definition prim_lsum (f : term -> nat) (p : prim_val term) : nat :=
+  match p.π2 return nat with
+  | primIntModel _ => 0
+  | primFloatModel _ => 0
+  | primStringModel _ => 0
+  | primArrayModel a => f a.(array_type) + f a.(array_default) + lsum f a.(array_value)
+  end.
+
+Fixpoint occ_gen (dom : bool) (k : nat) (t : term) {struct t} : nat :=
+  match t with
+  | tRel n => if Nat.eqb n k then 1 else 0
+  | tEvar _ l => lsum (occ_gen dom k) l
+  | tProd _ A B => occ_gen dom k A + occ_gen dom (S k) B
+  | tLambda _ A b => (if dom then occ_gen dom k A else 0) + occ_gen dom (S k) b
+  | tLetIn _ b B c => occ_gen dom k b + occ_gen dom k B + occ_gen dom (S k) c
+  | tApp f a => occ_gen dom k f + occ_gen dom k a
+  | tCase _ p c brs =>
+      lsum (occ_gen dom k) p.(pparams) + occ_gen dom (#|p.(pcontext)| + k) p.(preturn)
+      + occ_gen dom k c + lsum (fun br => occ_gen dom (#|br.(bcontext)| + k) br.(bbody)) brs
+  | tProj _ c => occ_gen dom k c
+  | tFix mfix _ => lsum (fun d => occ_gen dom k d.(dtype) + occ_gen dom (#|mfix| + k) d.(dbody)) mfix
+  | tCoFix mfix _ => lsum (fun d => occ_gen dom k d.(dtype) + occ_gen dom (#|mfix| + k) d.(dbody)) mfix
+  | tPrim p => prim_lsum (occ_gen dom k) p
+  | _ => 0
+  end.
+
+Fixpoint size' (t : term) : nat :=
+  match t with
+  | tEvar _ l => S (lsum size' l)
+  | tProd _ A B => S (size' A + size' B)
+  | tLambda _ _ b => S (size' b)
+  | tLetIn _ b B c => S (size' b + size' B + size' c)
+  | tApp f a => S (size' f + size' a)
+  | tCase _ p c brs =>
+      S (lsum size' p.(pparams) + size' p.(preturn) + size' c + lsum (fun br => size' br.(bbody)) brs)
+  | tProj _ c => S (size' c)
+  | tFix mfix _ => S (lsum (fun d => size' d.(dtype) + size' d.(dbody)) mfix)
+  | tCoFix mfix _ => S (lsum (fun d => size' d.(dtype) + size' d.(dbody)) mfix)
+  | tPrim p => S (prim_lsum size' p)
+  | _ => 1
+  end.
+
+(** ** The literal linearity claim is FALSE (building refutation, typable witness)
+
+  The claim first stated for the size route: every [pe]-η body contains its bound
+  variable exactly once, counting ALL occurrences. Witness: in
+  [Γ = A : Prop, P : A → Prop, C : Prop, M' : Π z:A. P z → C], the term
+  [W := λz:A. λy:P z. M' z y] [pe]-reduces to [M'] by two η steps, and the outer body
+  [λy:P z. M' z y] contains [z] twice: in the domain [P z] and in [M' z y]. *)
+
+Definition literal_linearity : Prop :=
+  forall b M', pe b (tApp (lift0 1 M') (tRel 0)) -> occ_gen true 0 b = 1.
+
+Definition lw_PA : term := tProd si_na (tRel 0) si_P.
+Definition lw_TM : term := tProd si_na (tRel 2) (tProd si_na (tApp (tRel 2) (tRel 0)) (tRel 2)).
+Definition lw_Γ : context := [vass si_na lw_TM; vass si_na si_P; vass si_na lw_PA; vass si_na si_P].
+Definition lw_body : term := tLambda si_na (tApp (tRel 3) (tRel 0)) (tApp (tApp (tRel 2) (tRel 1)) (tRel 0)).
+Definition lw_W : term := tLambda si_na (tRel 3) lw_body.
+
+Lemma lw_body_pe : pe lw_body (tApp (lift0 1 (tRel 0)) (tRel 0)).
+Proof. unfold lw_body. apply pe_eta. cbn. apply pe_refl. Qed.
+
+Lemma lw_W_pe : pe lw_W (tRel 0).
+Proof. unfold lw_W. apply pe_eta. exact lw_body_pe. Qed.
+
+Lemma lw_body_occ : (occ_gen true 0 lw_body = 2) * (occ_gen false 0 lw_body = 1).
+Proof. split; reflexivity. Qed.
+
+Theorem literal_linearity_false : literal_linearity -> False.
+Proof. intros H. have e := H _ _ lw_body_pe. rewrite (fst lw_body_occ) in e. discriminate e. Qed.
+
+Section LinearityWitnessTyping.
+  #[local] Existing Instance default_checker_flags.
+  Context (Σ : global_env_ext).
+
+  Lemma lw_ProdA Δ iA : wf_localE Σ Δ -> nth_error Δ iA = Some (vass si_na si_P) ->
+    Σ ;;; Δ |-E tProd si_na (tRel iA) si_P : tSort (Sort.sort_of_product sProp (Sort.super sProp)).
+  Proof.
+    intros hw hA.
+    have hR : Σ ;;; Δ |-E tRel iA : tSort sProp by exact (typeE_Rel _ _ iA _ hw hA).
+    apply typeE_Prod.
+    - exact (iv_vass_s Σ Δ si_na (tRel iA) sProp hR eq_refl).
+    - exact (iv_P_typed Σ _ (iv_wf_vass Σ Δ si_na (tRel iA) sProp hw hR eq_refl)).
+  Qed.
+
+  Lemma lw_Papp Δ iP x : wf_localE Σ Δ -> nth_error Δ iP = Some (vass si_na lw_PA) ->
+    nth_error Δ (S iP) = Some (vass si_na si_P) -> Σ ;;; Δ |-E x : tRel (S iP) ->
+    Σ ;;; Δ |-E tApp (tRel iP) x : si_P.
+  Proof.
+    intros hw hP hA hx.
+    have hR := typeE_Rel _ _ iP _ hw hP. cbn in hR. rewrite Nat.add_0_r in hR.
+    exact (typeE_App _ _ (tRel iP) si_na (tRel (S iP)) si_P _ x (lw_ProdA Δ (S iP) hw hA) hR hx).
+  Qed.
+
+  (** [Π z:A. Π y:P z. C] with [C], [P], [A] at indices [d], [d+1], [d+2]. *)
+  Lemma lw_TM_at Δ d : wf_localE Σ Δ ->
+    nth_error Δ d = Some (vass si_na si_P) -> nth_error Δ (S d) = Some (vass si_na lw_PA) ->
+    nth_error Δ (S (S d)) = Some (vass si_na si_P) ->
+    Σ ;;; Δ |-E tProd si_na (tRel (S (S d))) (tProd si_na (tApp (tRel (S (S d))) (tRel 0)) (tRel (S (S d))))
+      : tSort (Sort.sort_of_product sProp (Sort.sort_of_product sProp sProp)).
+  Proof.
+    intros hw hC hP hA.
+    have hR : Σ ;;; Δ |-E tRel (S (S d)) : tSort sProp by exact (typeE_Rel _ _ _ _ hw hA).
+    have hwz := iv_wf_vass Σ Δ si_na (tRel (S (S d))) sProp hw hR eq_refl.
+    have hz : Σ ;;; Δ ,, vass si_na (tRel (S (S d))) |-E tRel 0 : tRel (S (S (S d)))
+      by exact (typeE_Rel _ _ 0 _ hwz eq_refl).
+    have hPz := lw_Papp _ (S (S d)) (tRel 0) hwz hP hA hz.
+    have hwzy := iv_wf_vass Σ _ si_na _ sProp hwz hPz eq_refl.
+    apply typeE_Prod; [exact (iv_vass_s Σ Δ si_na _ sProp hR eq_refl)|].
+    apply typeE_Prod; [exact (iv_vass_s Σ _ si_na _ sProp hPz eq_refl)|].
+    exact (typeE_Rel _ _ (S (S d)) _ hwzy hC).
+  Qed.
+
+  Lemma lw_Γ_wf : wf_localE Σ lw_Γ.
+  Proof.
+    have hwA := iv_wf_P Σ [] localenv_nil.
+    have hwP := iv_wf_vass Σ _ si_na lw_PA _ hwA (lw_ProdA _ 0 hwA eq_refl) eq_refl.
+    have hwC := iv_wf_P Σ _ hwP.
+    exact (iv_wf_vass Σ _ si_na lw_TM _ hwC (lw_TM_at _ 0 hwC eq_refl eq_refl eq_refl) eq_refl).
+  Qed.
+
+  (** **The witness is typable:** [W : Π z:A. Π y:P z. C] in [lw_Γ]. *)
+  Theorem lw_W_typed :
+    Σ ;;; lw_Γ |-E lw_W : tProd si_na (tRel 3) (tProd si_na (tApp (tRel 3) (tRel 0)) (tRel 3)).
+  Proof.
+    have hw := lw_Γ_wf.
+    have hA : Σ ;;; lw_Γ |-E tRel 3 : tSort sProp by exact (typeE_Rel _ _ 3 _ hw eq_refl).
+    have hwz := iv_wf_vass Σ _ si_na (tRel 3) sProp hw hA eq_refl.
+    have hz : Σ ;;; lw_Γ ,, vass si_na (tRel 3) |-E tRel 0 : tRel 4 by exact (typeE_Rel _ _ 0 _ hwz eq_refl).
+    have hPz := lw_Papp _ 3 (tRel 0) hwz eq_refl eq_refl hz.
+    have hwzy := iv_wf_vass Σ _ si_na _ sProp hwz hPz eq_refl.
+    set Γzy := (lw_Γ ,, vass si_na (tRel 3)) ,, vass si_na (tApp (tRel 3) (tRel 0)) in hwzy |- *.
+    have hM : Σ ;;; Γzy |-E tRel 2 : tProd si_na (tRel 5) (tProd si_na (tApp (tRel 5) (tRel 0)) (tRel 5))
+      by exact (typeE_Rel _ _ 2 _ hwzy eq_refl).
+    have hz' : Σ ;;; Γzy |-E tRel 1 : tRel 5 by exact (typeE_Rel _ _ 1 _ hwzy eq_refl).
+    have hMz : Σ ;;; Γzy |-E tApp (tRel 2) (tRel 1) : tProd si_na (tApp (tRel 4) (tRel 1)) (tRel 4)
+      by exact (typeE_App _ _ _ si_na _ _ _ _ (lw_TM_at Γzy 3 hwzy eq_refl eq_refl eq_refl) hM hz').
+    have hPz' := lw_Papp Γzy 4 (tRel 1) hwzy eq_refl eq_refl hz'.
+    have hwzy' := iv_wf_vass Σ Γzy si_na _ sProp hwzy hPz' eq_refl.
+    have hprod : Σ ;;; Γzy |-E tProd si_na (tApp (tRel 4) (tRel 1)) (tRel 4)
+                   : tSort (Sort.sort_of_product sProp sProp).
+    { apply typeE_Prod; [exact (iv_vass_s Σ _ si_na _ sProp hPz' eq_refl)|].
+      exact (typeE_Rel _ _ 4 _ hwzy' eq_refl). }
+    have hy : Σ ;;; Γzy |-E tRel 0 : tApp (tRel 4) (tRel 1) by exact (typeE_Rel _ _ 0 _ hwzy eq_refl).
+    have hbody : Σ ;;; Γzy |-E tApp (tApp (tRel 2) (tRel 1)) (tRel 0) : tRel 3
+      by exact (typeE_App _ _ _ si_na _ _ _ _ hprod hMz hy).
+    unfold lw_W, lw_body. apply typeE_Lambda; [exact (iv_vass Σ _ si_na _ sProp hA eq_refl)|].
+    apply typeE_Lambda; [exact (iv_vass Σ _ si_na _ sProp hPz eq_refl)|].
+    exact hbody.
+  Qed.
+
+End LinearityWitnessTyping.
+
+(** In a well-formed environment: [si_Σ]. *)
+Lemma lw_W_typed_si :
+  @wfE default_checker_flags si_Σ ×
+  @typingE default_checker_flags si_Σ lw_Γ lw_W
+    (tProd si_na (tRel 3) (tProd si_na (tApp (tRel 3) (tRel 0)) (tRel 3))).
+Proof. split; [exact si_wfE|exact (lw_W_typed si_Σ)]. Qed.
+
+(** **Plain [size] grows under the head β step of the witness** (22 → 27, with an
+    argument [x] of size 10), while [size'] shrinks (18 → 15). The argument [x] is
+    a closed-form term chosen only for its size; it is not typed. *)
+Definition lw_x10 : term :=
+  tLetIn si_na (tRel 0) (tRel 0) (tApp (tApp (tApp (tRel 0) (tRel 0)) (tRel 0)) (tRel 0)).
+
+Theorem plain_size_grows_head_beta {cf : checker_flags} (Σ : global_env) :
+  [× red1 Σ lw_Γ (tApp lw_W lw_x10) (lw_body {0 := lw_x10}),
+     PCUICSize.size (tApp lw_W lw_x10) = 22, PCUICSize.size (lw_body {0 := lw_x10}) = 27,
+     size' (tApp lw_W lw_x10) = 18 & size' (lw_body {0 := lw_x10}) = 15].
+Proof. split; [unfold lw_W; apply red_beta|reflexivity|reflexivity|reflexivity|reflexivity]. Qed.
+
+(** ** (a) [pe] preserves out-of-domain occurrence counts; a [pe]-η body has its
+    bound variable exactly once outside domains *)
+
+Lemma lsum_map {A B} (f : B -> nat) (g : A -> B) l : lsum f (map g l) = lsum (fun x => f (g x)) l.
+Proof. induction l; cbn; congruence. Qed.
+
+Lemma lsum_All_eq {A} (f g : A -> nat) l : All (fun x => f x = g x) l -> lsum f l = lsum g l.
+Proof. induction 1; cbn; congruence. Qed.
+
+Lemma lsum_All2_eq {A B} (f : A -> nat) (g : B -> nat) l l' :
+  All2 (fun x y => f x = g y) l l' -> lsum f l = lsum g l'.
+Proof. induction 1; cbn; congruence. Qed.
+
+Lemma lsum_All_zero {A} (f : A -> nat) l : All (fun x => f x = 0) l -> lsum f l = 0.
+Proof. induction 1; cbn; lia. Qed.
+
+Lemma lsum_lin {A} (F G H : A -> nat) R l :
+  All (fun x => F x + G x = H x + G x * R) l -> lsum F l + lsum G l = lsum H l + lsum G l * R.
+Proof. induction 1; cbn; lia. Qed.
+
+Ltac split4 := f_equal; [f_equal; [f_equal|]|].
+
+Lemma occ_lift_ge d t : forall j i, j <= i -> occ_gen d (S i) (lift 1 j t) = occ_gen d i t.
+Proof.
+  induction t using term_forall_list_ind; intros jj ii hji; cbn; try reflexivity.
+  - destruct (Nat.leb_spec0 jj n) as [h|h]; cbn; [reflexivity|].
+    destruct (Nat.eqb_spec n (S ii)), (Nat.eqb_spec n ii); cbn; lia.
+  - rewrite lsum_map. apply lsum_All_eq. eapply All_impl; [eassumption|]. intros x h. now apply h.
+  - rewrite IHt1 // IHt2 //; lia.
+  - rewrite IHt1 // IHt2 //; lia.
+  - rewrite IHt1 // IHt2 // IHt3 //; lia.
+  - rewrite IHt1 // IHt2 //.
+  - match goal with H : tCasePredProp _ _ _ |- _ => destruct H as (Hpars & _ & Hret) end.
+    try unfold map_branches_k. split4.
+    + rewrite lsum_map. apply lsum_All_eq. eapply All_impl; [exact Hpars|]. intros x h. now apply h.
+    + rewrite Nat.add_succ_r. apply Hret. lia.
+    + match goal with H : forall j i, _ -> occ_gen d (S i) (lift 1 j ?c) = _ |- context [lift 1 jj ?c] =>
+        now apply H end.
+    + rewrite lsum_map. apply lsum_All_eq. eapply All_impl; [eassumption|].
+      intros x [_ h]. cbn. rewrite Nat.add_succ_r. apply h. lia.
+  - rewrite IHt //.
+  - rewrite lsum_map length_map. apply lsum_All_eq. eapply All_impl; [eassumption|].
+    intros x [h1 h2]. cbn. rewrite h1 // Nat.add_succ_r h2 //. lia.
+  - rewrite lsum_map length_map. apply lsum_All_eq. eapply All_impl; [eassumption|].
+    intros x [h1 h2]. cbn. rewrite h1 // Nat.add_succ_r h2 //. lia.
+  - destruct p as [? [i0|f0|s0|arr]]; cbn in *; try reflexivity.
+    match goal with H : _ × _ × All _ _ |- _ => destruct H as (Ht & Hd & Hv) end.
+    rewrite Ht // Hd // lsum_map.
+    rewrite (lsum_All_eq _ (occ_gen d ii) _ (All_impl Hv (fun x h => h jj ii hji))). reflexivity.
+Qed.
+
+Lemma occ_lift_eq d t : forall j, occ_gen d j (lift 1 j t) = 0.
+Proof.
+  induction t using term_forall_list_ind; intros j; cbn; try reflexivity.
+  - destruct (Nat.leb_spec0 j n) as [h|h]; cbn.
+    + destruct (Nat.eqb_spec (S n) j); [lia|reflexivity].
+    + destruct (Nat.eqb_spec n j); [lia|reflexivity].
+  - rewrite lsum_map. apply lsum_All_zero. eapply All_impl; [eassumption|]. intros x h. apply h.
+  - rewrite IHt1 IHt2. reflexivity.
+  - rewrite IHt1 IHt2. now destruct d.
+  - rewrite IHt1 IHt2 IHt3. reflexivity.
+  - rewrite IHt1 IHt2. reflexivity.
+  - match goal with H : tCasePredProp _ _ _ |- _ => destruct H as (Hpars & _ & Hret) end.
+    try unfold map_branches_k.
+    match goal with |- ?A + ?B + ?C + ?D = 0 =>
+      enough (A = 0 /\ B = 0 /\ C = 0 /\ D = 0) by lia; split; [|split; [|split]] end.
+    + rewrite lsum_map. apply lsum_All_zero. eapply All_impl; [exact Hpars|]. intros x h. apply h.
+    + apply Hret.
+    + match goal with H : forall j, occ_gen d j (lift 1 j _) = 0 |- _ => apply H end.
+    + rewrite lsum_map. apply lsum_All_zero. eapply All_impl; [eassumption|]. intros x [_ h]. cbn. apply h.
+  - rewrite IHt. reflexivity.
+  - rewrite lsum_map length_map. apply lsum_All_zero. eapply All_impl; [eassumption|].
+    intros x [h1 h2]. cbn. rewrite h1 h2. reflexivity.
+  - rewrite lsum_map length_map. apply lsum_All_zero. eapply All_impl; [eassumption|].
+    intros x [h1 h2]. cbn. rewrite h1 h2. reflexivity.
+  - destruct p as [? [i0|f0|s0|arr]]; cbn in *; try reflexivity.
+    match goal with H : _ × _ × All _ _ |- _ => destruct H as (Ht & Hd & Hv) end.
+    rewrite Ht Hd lsum_map.
+    rewrite (lsum_All_zero _ _ (All_impl Hv (fun x h => h j))). reflexivity.
+Qed.
+
+(** **(a), first half: [pe] preserves every variable's out-of-domain count.** *)
+Lemma pe_occ t u : pe t u -> forall k, occ_gen false k t = occ_gen false k u.
+Proof.
+  revert t u. apply (pe_ind_all (fun t u => forall k, occ_gen false k t = occ_gen false k u)).
+  - (* η: the dropped domain is not counted; the dropped variable is [tRel 0] *)
+    intros na A b M' hb IH k. cbn. rewrite (IH (S k)). cbn.
+    rewrite occ_lift_ge; [lia|]. lia.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - intros ev l l' al k. cbn. apply lsum_All2_eq. eapply All2_impl; [exact al|]. intros x y [_ h]. apply h.
+  - intros na A A' M M' hA IHA hM IHM k. cbn. now rewrite IHM.
+  - intros f f' x x' hf IHf hx IHx k. cbn. now rewrite IHf IHx.
+  - intros na a a' b b' ha IHa hb IHb k. cbn. now rewrite IHa IHb.
+  - intros na b b' ty ty' x x' hb IHb hty IHty hx IHx k. cbn. now rewrite IHb IHty IHx.
+  - intros ci p p' c c' brs brs' apar eu ectx pret IHret pc IHc abrs k. cbn.
+    have e1 : lsum (occ_gen false k) (pparams p) = lsum (occ_gen false k) (pparams p').
+    { apply lsum_All2_eq. eapply All2_impl; [exact apar|]. intros x y [_ h]. apply h. }
+    have e2 : lsum (fun br => occ_gen false (#|bcontext br| + k) (bbody br)) brs
+              = lsum (fun br => occ_gen false (#|bcontext br| + k) (bbody br)) brs'.
+    { apply lsum_All2_eq. eapply All2_impl; [exact abrs|]. intros x y [hc [_ h]]. rewrite hc. apply h. }
+    rewrite e1 e2 ectx IHret IHc. reflexivity.
+  - intros pr c c' pc IHc k. cbn. now rewrite IHc.
+  - intros mfix mfix' idx am k. cbn. rewrite (All2_length am).
+    apply lsum_All2_eq. eapply All2_impl; [exact am|]. intros x y [[_ h1] [[_ h2] _]]. now rewrite h1 h2.
+  - intros mfix mfix' idx am k. cbn. rewrite (All2_length am).
+    apply lsum_All2_eq. eapply All2_impl; [exact am|]. intros x y [[_ h1] [[_ h2] _]]. now rewrite h1 h2.
+  - intros p p' op k. destruct op as [i|f|s|a a' hl hd hty hval]; cbn; try reflexivity.
+    destruct hd as [_ hd], hty as [_ hty]. rewrite hd hty.
+    rewrite (lsum_All2_eq (occ_gen false k) (occ_gen false k) _ _ (All2_impl hval (fun x y h => snd h k))).
+    reflexivity.
+Qed.
+
+(** **(a), second half: a [pe]-η body has its bound variable exactly once outside
+    λ domains** (with every occurrence counted it can be twice:
+    [literal_linearity_false]). *)
+Corollary pe_eta_body_once b M' : pe b (tApp (lift0 1 M') (tRel 0)) -> occ_gen false 0 b = 1.
+Proof. intros h. rewrite (pe_occ _ _ h 0). cbn. rewrite occ_lift_eq. reflexivity. Qed.
+
+(** ** (b) [size'] strictly decreases at every head β step of a [pe]-η node *)
+
+Lemma size'_lift t : forall n k, size' (lift n k t) = size' t.
+Proof.
+  induction t using term_forall_list_ind; intros n' k'; cbn; try reflexivity.
+  - f_equal. rewrite lsum_map. apply lsum_All_eq. eapply All_impl; [eassumption|]. intros x h. apply h.
+  - now rewrite IHt1 IHt2.
+  - now rewrite IHt2.
+  - now rewrite IHt1 IHt2 IHt3.
+  - now rewrite IHt1 IHt2.
+  - match goal with H : tCasePredProp _ _ _ |- _ => destruct H as (Hpars & _ & Hret) end.
+    try unfold map_branches_k. f_equal. split4.
+    + rewrite lsum_map. apply lsum_All_eq. eapply All_impl; [exact Hpars|]. intros x h. apply h.
+    + apply Hret.
+    + match goal with H : forall n k, size' (lift n k ?c) = size' ?c |- context [lift _ _ ?c] => apply H end.
+    + rewrite lsum_map. apply lsum_All_eq. eapply All_impl; [eassumption|]. intros x [_ h]. cbn. apply h.
+  - now rewrite IHt.
+  - f_equal. rewrite lsum_map. apply lsum_All_eq. eapply All_impl; [eassumption|].
+    intros x [h1 h2]. cbn. now rewrite h1 h2.
+  - f_equal. rewrite lsum_map. apply lsum_All_eq. eapply All_impl; [eassumption|].
+    intros x [h1 h2]. cbn. now rewrite h1 h2.
+  - destruct p as [? [i0|f0|s0|arr]]; cbn in *; try reflexivity.
+    match goal with H : _ × _ × All _ _ |- _ => destruct H as (Ht & Hd & Hv) end.
+    rewrite Ht Hd lsum_map.
+    rewrite (lsum_All_eq _ size' _ (All_impl Hv (fun x h => h n' k'))). reflexivity.
+Qed.
+
+(** Substituting [r] for [tRel k] changes [size'] by [size' r - 1] per out-of-domain
+    occurrence; occurrences in λ domains are not counted on either side. *)
+Lemma size'_subst1 t : forall r k,
+  size' (subst [r] k t) + occ_gen false k t = size' t + occ_gen false k t * size' r.
+Proof.
+  induction t using term_forall_list_ind; intros r k; cbn -[map].
+  - destruct (Nat.leb_spec0 k n) as [h|h].
+    + destruct (n - k) as [|m] eqn:e; cbn.
+      * rewrite size'_lift. destruct (Nat.eqb_spec n k); cbn; lia.
+      * rewrite ?nth_error_nil. cbn. destruct (Nat.eqb_spec n k); cbn; lia.
+    + destruct (Nat.eqb_spec n k); cbn; lia.
+  - reflexivity.
+  - rewrite lsum_map.
+    have := lsum_lin (fun x => size' (subst [r] k x)) (occ_gen false k) size' (size' r) l
+              (All_impl X (fun x h => h r k)).
+    lia.
+  - reflexivity.
+  - have h1 := IHt1 r k. have h2 := IHt2 r (S k). lia.
+  - have h2 := IHt2 r (S k). lia.
+  - have h1 := IHt1 r k. have h2 := IHt2 r k. have h3 := IHt3 r (S k). lia.
+  - have h1 := IHt1 r k. have h2 := IHt2 r k. lia.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - match goal with H : tCasePredProp _ _ _ |- _ => destruct H as (Hpars & _ & Hret) end.
+    try unfold map_branches_k.
+    match goal with
+    |- S (?A' + ?B' + ?C' + ?D' + (?oA + ?oB + ?oC + ?oD)) = S (?sA + ?sB + ?sC + ?sD + _ * _) =>
+      assert (hA : A' + oA = sA + oA * size' r);
+      [|assert (hB : B' + oB = sB + oB * size' r);
+        [|assert (hC : C' + oC = sC + oC * size' r);
+          [|assert (hD : D' + oD = sD + oD * size' r)]]]
+    end.
+    + rewrite lsum_map. apply lsum_lin. eapply All_impl; [exact Hpars|]. intros x h. apply h.
+    + apply Hret.
+    + match goal with H : forall (r : term) (k : nat), _ |- _ => apply H end.
+    + rewrite lsum_map. apply lsum_lin. eapply All_impl; [eassumption|]. intros x [_ h]. cbn. apply h.
+    + lia.
+  - have h := IHt r k. lia.
+  - f_equal. rewrite lsum_map. apply lsum_lin. eapply All_impl; [eassumption|].
+    intros x [h1 h2]. cbn.
+    match goal with |- context [subst [r] ?K' (dbody x)] => have e2 := h2 r K' end.
+    have e1 := h1 r k. lia.
+  - f_equal. rewrite lsum_map. apply lsum_lin. eapply All_impl; [eassumption|].
+    intros x [h1 h2]. cbn.
+    match goal with |- context [subst [r] ?K' (dbody x)] => have e2 := h2 r K' end.
+    have e1 := h1 r k. lia.
+  - destruct p as [? [i0|f0|s0|arr]]; cbn -[map] in *; try reflexivity.
+    match goal with H : _ × _ × All _ _ |- _ => destruct H as (Ht & Hd & Hv) end.
+    rewrite lsum_map.
+    have hv := lsum_lin (fun x => size' (subst [r] k x)) (occ_gen false k) size' (size' r) _
+                 (All_impl Hv (fun x h => h r k)).
+    have ht := Ht r k. have hd := Hd r k. lia.
+Qed.
+
+(** **(b): at a head β step of a [pe]-η node, [size'] strictly decreases** (by 3). *)
+Lemma head_beta_size'_decrease na A b M' r :
+  pe b (tApp (lift0 1 M') (tRel 0)) -> size' (b {0 := r}) < size' (tApp (tLambda na A b) r).
+Proof.
+  intros h. have e := size'_subst1 b r 0. rewrite (pe_eta_body_once _ _ h) in e.
+  unfold subst1. cbn [size']. lia.
+Qed.
