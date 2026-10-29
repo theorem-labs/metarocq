@@ -21,3 +21,7 @@ theories/PCUICSafeConversionEtaK4.v
 # ETAK EtaConv (K3 integrator): the E errors (EtaStackRefusal) and the η conversion checker
 theories/PCUICErrorsEta.v
 theories/PCUICSafeConversionEta.v
+# The reduction machine over an abstract typing (B3 (a)), and its E bridge (EtaReduce)
+theories/PCUICWfReductionEta.v
+theories/PCUICSafeReduceEta.v
+theories/PCUICSafeReduceEtaBridge.v
