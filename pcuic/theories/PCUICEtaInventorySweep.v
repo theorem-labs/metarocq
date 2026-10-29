@@ -1313,6 +1313,16 @@ Proof.
   exists ui2, l2. split; [exact hred|exact hu|exact hl].
 Qed.
 
+(** ** A FORECAST-ONLY definition that is a landed one
+
+  The notation [decl_ws_cumul_pbE] (PCUICSREta.v:96, "proved by copy 18") is, up to η of the
+  inner relation, the landed [ws_cumul_declsE Conv] (PCUICContextConversionEta.v:40): both
+  directions are the identity. *)
+Definition decl_ws_cumul_pbE_to_ws_cumul_declsE {cf : checker_flags} (Σ : global_env_ext) Γ d d' :
+  decl_ws_cumul_pbE Σ Γ d d' -> ws_cumul_declsE Conv Σ Γ d d' := fun h => h.
+Definition ws_cumul_declsE_to_decl_ws_cumul_pbE {cf : checker_flags} (Σ : global_env_ext) Γ d d' :
+  ws_cumul_declsE Conv Σ Γ d d' -> decl_ws_cumul_pbE Σ Γ d d' := fun h => h.
+
 (** ** Assumptions
 
   Every DISCHARGED lemma together, then each class instance, then the REDUCED lemmas: the build
