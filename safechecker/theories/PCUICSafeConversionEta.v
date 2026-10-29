@@ -72,7 +72,15 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
 From MetaRocq.PCUIC Require PCUICWsCumulEtaCtx.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfReductionEta PCUICSafeReduceEta
      PCUICSafeReduceEtaBridge PCUICSafeConversionEtaK4.
-(* LAST among the stack providers, so the η stack shadows the base one. *)
+(* PCUICPositionEta is imported AFTER every module that exports a PCUICPosition name, by
+   design (plan I7): every unqualified same-name reference in this file resolves to the E
+   object (measured from this file's .glob at f384f5c7: 765 unqualified references, all to
+   PCUICPositionEta; the 20 qualified PCUICPosition.<name> ones resolve to base). The
+   imports that follow it (PCUICErrorsEta, PCUICSafeConversionEtaFacts, PCUICMustExpandEta,
+   PCUICWfEnvEta, Equations.Prop.DepElim, Equations.Prop.Equations) export no
+   PCUICPosition name. NO Import of a module exporting a PCUICPosition name may be added
+   after this line without a decision recorded in lanes/eta/cross-lane-commitments.md
+   (C6). *)
 From MetaRocq.PCUIC Require Import PCUICPositionEta.
 (* The E errors (EtaStackRefusal) shadow base PCUICErrors. *)
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta.
