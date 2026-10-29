@@ -89,8 +89,8 @@ src/pCUICPositivityCheck.mli
 src/pCUICPositivityCheck.ml
 src/pCUICSafeChecker.mli
 src/pCUICSafeChecker.ml
-src/safeTemplateChecker.mli
-src/safeTemplateChecker.ml
+# FORECAST tree only (EtaK7): base SafeTemplateChecker is no longer extracted (the glue calls
+# SafeTemplateCheckerEta.trans_program / trans_program_unshared), so it is not linked.
 # FORECAST tree only (EtaK7): the E checker modules the extraction now produces
 src/pCUICWfEnvEta.mli
 src/pCUICWfEnvEta.ml

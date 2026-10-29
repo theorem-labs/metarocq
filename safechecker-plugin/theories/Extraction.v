@@ -89,10 +89,9 @@ Separate Extraction Wf.Fix_sub MakeOrderTac PCUICSafeChecker.typecheck_program
          PCUICSafeCheckerEta.typecheck_program SafeTemplateCheckerEta.trans_program_unshared
          infer_and_print_template_program_with_guard
          (* What the sharing test [MetaRocq Test Trans Sharing] calls *)
-         SafeTemplateChecker.trans_program_unshared TemplateToPCUICShared.trans_shared
-         (* FORECAST: the glue's [MetaRocq Test Trans Sharing] also calls the base shared translation, which the
-            base entry point used to pull into the extraction *)
-         SafeTemplateChecker.trans_program
+         (* FORECAST: the glue's [MetaRocq Test Trans Sharing] calls the E module's translations (same names and
+            types as base [SafeTemplateChecker]'s), so no base [SafeTemplateChecker] is extracted *)
+         SafeTemplateCheckerEta.trans_program TemplateToPCUICShared.trans_shared
          TemplateToPCUIC.trans TemplateToPCUIC.trans_global_env TemplateToPCUIC.empty_trans_env
          (* The following directives ensure separate extraction does not produce name clashes *)
          Stdlib.Strings.String UnivSubst PCUICPretty.
