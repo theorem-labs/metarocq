@@ -892,4 +892,65 @@ Section Instances.
     - constructor.
     - constructor.
   Qed.
+
+  (* Satisfying instances of the rev 13-15 lemmas with premises (plan rev 15: every lemma
+     stated there gets one). The virtual state is nb2a's (rev 15 C6): Γ = [a; f; A], most
+     recent first, focus tRel 0, stack Eta_arg f [] :: App_l a :: Eta_app x A :: []. *)
+  Definition nb_Γ : context := [vass pk_na pk_P; vass pk_na pk_P; vass pk_na pk_P].
+  Definition nb_π : stack := [Eta_arg (tRel 1) []; App_l (tRel 0); Eta_app pk_na (tRel 2)].
+
+  Lemma nb_virt_ok : virt_ok (tRel 0) nb_π = true.
+  Proof. reflexivity. Qed.
+
+  Lemma nb_no_Eta_arg : no_Eta_arg nb_π = false.
+  Proof. reflexivity. Qed.
+
+  Lemma zipp_eta_open_inst : is_open_term (nb_Γ ,,, stack_context_eta nb_π) (zipp_eta (tRel 0) nb_π).
+  Proof. exact (zipp_eta_open nb_Γ (tRel 0) nb_π nb_virt_ok eq_refl eq_refl). Qed.
+
+  Definition virt_ok_focus_inst := virt_ok_focus (tRel 0) nb_π nb_virt_ok nb_no_Eta_arg.
+
+  Definition virt_ok_virtual_inst := virt_ok_virtual (tRel 0) nb_π nb_virt_ok nb_no_Eta_arg.
+
+  Lemma virt_ok_not_head_inst : no_Eta_arg ([] : stack) = true.
+  Proof. exact (virt_ok_not_head (tLambda pk_na pk_P (tRel 0)) [] eq_refl eq_refl). Qed.
+
+  Lemma virt_ok_reduce_inst : virt_ok (tRel 0) (appstack [] (decompose_stack nb_π).2) = true.
+  Proof. exact (virt_ok_reduce (tRel 0) nb_π (tRel 0) [] nb_virt_ok (or_intror (conj eq_refl eq_refl))). Qed.
+
+  (* the mixed state: an η step on the virtual side pushes Eta_app above the Eta_arg *)
+  Lemma virt_ok_eta_step_inst : virt_ok (tRel 0) (appstack [] (Eta_app pk_na pk_P :: nb_π)) = true.
+  Proof. exact (virt_ok_eta_step (tRel 0) [] pk_na pk_P nb_π nb_virt_ok). Qed.
+
+  Definition eta_ren_urenaming_inst := eta_ren_urenaming pk_Γ pk_π eq_refl.
+
+  Lemma nb_wfl0 : wf_localE pk_Σ [vass pk_na pk_P].
+  Proof. exact pk_wflE1. Qed.
+
+  Lemma nb_wfl1 : wf_localE pk_Σ [vass pk_na pk_P; vass pk_na pk_P].
+  Proof. apply localenv_cons_abs; [exact nb_wfl0|exact (pk_vassE _ nb_wfl0)]. Qed.
+
+  Lemma nb_wfl2 : wf_localE pk_Σ nb_Γ.
+  Proof. apply localenv_cons_abs; [exact nb_wfl1|exact (pk_vassE _ nb_wfl1)]. Qed.
+
+  Lemma nb_wfl_eta : wf_localE pk_Σ (nb_Γ ,,, stack_context_eta nb_π).
+  Proof.
+    change (wf_localE pk_Σ (nb_Γ ,, vass pk_na (tRel 2))).
+    apply localenv_cons_abs; [exact nb_wfl2|].
+    split; [exact tt|]. exists sProp.
+    split; [exact (typeE_Rel _ _ 2 (vass pk_na pk_P) nb_wfl2 eq_refl)|].
+    split; [exact I|reflexivity].
+  Qed.
+
+  Lemma wf_localE_focus_context_inst : wf_localE pk_Σ (nb_Γ ,,, focus_context nb_π).
+  Proof. exact (wf_localE_focus_context pk_Σ nb_Γ (tRel 0) nb_π nb_virt_ok nb_no_Eta_arg nb_wfl_eta). Qed.
+
+  Lemma eta_companion_welltypedE_inst :
+    welltypedE pk_Σ ([] ,,, stack_context_eta [Eta_app pk_na pk_P]) (tRel 0).
+  Proof. exact (eta_companion_welltypedE pk_Σ [] [Eta_app pk_na pk_P] 0 (le_n 1) pk_wflE1). Qed.
+
+  Lemma ws_cumul_ctx_pbE_eta_step_inst :
+    ws_cumul_ctx_pbE Conv pk_Σ ([] ,,, stack_context_eta (Lambda_bd pk_na pk_P :: []))
+      ([] ,,, stack_context_eta (appstack [] (Eta_app pk_na (eta_rename [] 0 pk_P) :: []))).
+  Proof. exact (ws_cumul_ctx_pbE_eta_step pk_Σ [] pk_na pk_P [] [] [] eq_refl (All2_fold_nil _)). Qed.
 End Instances.
