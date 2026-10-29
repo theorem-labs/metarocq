@@ -199,6 +199,12 @@ theories/PCUICContextConversionEta.v
 theories/PCUICWsCumulEtaCtx.v
 theories/PCUICWsCumulEtaCtxTyp.v
 theories/PCUICWsCumulEtaCtxInstances.v
+# E copies over typingE: typing notions, typing spines, universe instances, contexts, universes, substitution, arities
+theories/PCUICTypingEtaNotions.v
+theories/PCUICGenerationEta.v
+theories/Typing/PCUICUnivSubstitutionTypEta.v
+theories/PCUICWfUniversesEta.v
+theories/PCUICTypingEtaCopies2Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaC1b.v
