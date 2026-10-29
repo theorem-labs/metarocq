@@ -4263,8 +4263,8 @@ Section Rho.
           eapply pred1_pred1_ctx in a4. eapply on_contexts_app_inv in a4 as [] => //.
           now apply (All2_fold_length predΓ'0).
           eapply pred_mkApps. constructor. pcuic.
-          --- rewrite /rho_fix_context -(fold_fix_context_rho_ctx xpredT) //. solve_all.
-              rewrite (fix_context_map_fix xpredT) //. solve_all.
+          --- rewrite /rho_fix_context -(fold_fix_context_rho_ctx_cb xpredT) //. solve_all.
+              rewrite (fix_context_map_fix_cb xpredT) //. solve_all.
               eapply All2_fold_fold_context_right.
               eapply All2_fold_impl; tea. solve_all.
               eapply All_decls_map_right.
@@ -4272,7 +4272,7 @@ Section Rho.
 
           --- eapply All2_mix; pcuic.
               eapply All2_prod_inv in a1 as [].
-              rewrite /rho_fix_context -(fold_fix_context_rho_ctx xpredT) //. solve_all.
+              rewrite /rho_fix_context -(fold_fix_context_rho_ctx_cb xpredT) //. solve_all.
               eapply All2_impl; [ eassumption | ]; pcuic.
           --- pcuic.
 

@@ -927,14 +927,24 @@ Proof.
            ++ exact hnth.
            ++ now eapply stuck_cofix_case_whne.
       * right. rewrite -![tApp _ _](mkApps_app _ _ [_]). eapply whnf_cofixapp.
-      * exfalso. eapply inversion_Prim in hf as [prim_ty [cdecl [? ? ? ? ? hp]]]; eauto.
+      * exfalso. eapply inversion_Prim in hf as [prim_ty [cdecl [? hpc ? ? ? hp]]]; eauto.
+        (* the guard of the axiom inversions (prim-ops row N): [prim_ty] is the
+           registered primitive TYPE constant, kept out of the operation table *)
+        assert (hnop : prim_op_of Σ prim_ty = None).
+        { pose proof wfΣ as [_ [wfr _]]. eapply prim_op_of_primitive_constant; tea. }
         now eapply invert_cumul_prim_type_prod in hp.
+      * (* whnf_primapp_partial: the head is a bodiless constant, which [axiom_free]
+           excludes *)
+        exfalso. eapply axfree; [eapply declared_constant_from_gen|]; eassumption.
+      * (* whnf_primapp_rigid: the same *)
+        exfalso. eapply axfree; [eapply declared_constant_from_gen|]; eassumption.
   - (* constant *)
     eapply inversion_Const in hty as [decl [wfd [declc [cu cum]]]]; eauto.
     destruct (cst_body decl) eqn:hb.
     + left. eexists. eapply red_delta; tea.
-    + right. apply whnf_ne.
-      unshelve eapply declared_constant_to_gen in declc; eauto.
+    + (* a bodiless constant contradicts [axiom_free]; with prim-ops, [whne_const]
+         would also need it not to be a registered operation *)
+      exfalso. exact (axfree _ _ declc hb).
   - right. eapply (whnf_indapp _ _ [] _ _ []).
   - right. eapply (whnf_cstrapp _ _ [] _ _ _ []).
   - (* case *)

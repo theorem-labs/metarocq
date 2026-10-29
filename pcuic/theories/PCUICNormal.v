@@ -1543,6 +1543,12 @@ Proof.
     + solve_discr.
     + solve_discr.
     + congruence.
+    + (* red_prim_op: its left side is an application of a constant, not a case *)
+      match goal with x : mkApps (tConst _ _) ?l = tCase _ _ _ _ |- _ =>
+        let l' := fresh "l" in remember l as l' eqn:Hl; clear Hl;
+        destruct l' as [|? l' _] using MRList.rev_ind;
+          [discriminate x|rewrite mkApps_app in x; discriminate x]
+      end.
     + now apply whne_case_cofix_dep.
     + now apply whne_case_cofix_dep.
     + match goal with
@@ -2249,6 +2255,12 @@ Proof.
     + solve_discr.
     + solve_discr.
     + congruence.
+    + (* red_prim_op: its left side is an application of a constant, not a case *)
+      match goal with x : mkApps (tConst _ _) ?l = tCase _ _ _ _ |- _ =>
+        let l' := fresh "l" in remember l as l' eqn:Hl; clear Hl;
+        destruct l' as [|? l' _] using MRList.rev_ind;
+          [discriminate x|rewrite mkApps_app in x; discriminate x]
+      end.
     + constructor; auto.
       * eapply OnOne2_All2; eauto.
       * eapply All2_same; intuition auto.
@@ -2441,7 +2453,8 @@ Proof.
     + destruct args using MRList.rev_ind;
         [now rewrite nth_error_nil in e0
         |rewrite mkApps_app in x; discriminate x].
-  - match goal with
+  - depelim eq.
+    match goal with
     | [ H : eq_term_upto_univ_napp _ _ _ _ _ (mkApps (tCoFix _ _) _) _ |- _ ] =>
       apply eq_term_upto_univ_napp_mkApps_l_inv in H as (?&?&(eqhd&?)&->)
     end.

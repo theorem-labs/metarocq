@@ -369,9 +369,24 @@ Proof.
         rewrite /unfold_fix hnth in e. noconf e.
         rewrite /is_constructor harg in e0.
         now rewrite (stuck_cofix_case_isConstruct_app _ sta) in e0.
+    + (* red_prim_op: [tApp f a] would be an application of a constant, but [f] is a
+         stuck case, whose head is a case, a projection or a fixpoint *)
+      exfalso.
+      match type of H with _ = mkApps (tConst ?c ?u) ?l =>
+        assert (st' : stuck_cofix_case (mkApps (tConst c u) l))
+          by (rewrite -H; now apply stuck_cofix_case_app);
+        apply (stuck_cofix_case_mkApps_inv (tConst c u) l eq_refl) in st'
+          as [st'|(?&?&?&?&eq&?&?&?)];
+        [depelim st'; solve_discr|discriminate eq]
+      end.
     + now apply stuck_cofix_case_app, IHst.
     + now apply stuck_cofix_case_app.
   - depelim r; solve_discr.
+    (* red_prim_op: its left side is an application of a constant, not a case *)
+    all: try (exfalso; match goal with H : _ = mkApps (tConst _ _) ?l |- _ =>
+      let l' := fresh "l" in remember l as l' eqn:Hl; clear Hl;
+      destruct l' as [|? l' _] using MRList.rev_ind;
+        [discriminate H|rewrite mkApps_app in H; discriminate H] end).
     + exfalso. eapply stuck_cofix_case_mkApps_construct_absurd; eassumption.
     + exfalso. eapply stuck_cofix_case_mkApps_cofix_absurd; eassumption.
     + now apply stuck_cofix_case_case.
@@ -379,6 +394,11 @@ Proof.
     + now apply stuck_cofix_case_case, IHst.
     + now apply stuck_cofix_case_case.
   - depelim r; solve_discr.
+    (* red_prim_op: its left side is an application of a constant, not a projection *)
+    all: try (exfalso; match goal with H : _ = mkApps (tConst _ _) ?l |- _ =>
+      let l' := fresh "l" in remember l as l' eqn:Hl; clear Hl;
+      destruct l' as [|? l' _] using MRList.rev_ind;
+        [discriminate H|rewrite mkApps_app in H; discriminate H] end).
     + exfalso. eapply stuck_cofix_case_mkApps_cofix_absurd; eassumption.
     + exfalso. eapply stuck_cofix_case_mkApps_construct_absurd; eassumption.
     + now apply stuck_cofix_case_proj, IHst.
