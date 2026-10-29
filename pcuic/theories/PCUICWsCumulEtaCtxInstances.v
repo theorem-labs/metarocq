@@ -18,9 +18,11 @@
   lemma, transitivity), a β-redex against its reduct, two contexts whose let-bodies
   differ or whose assumption types differ, two λ-terms that [compare_term] relates
   without being equal, two different universe instances related by the
-  environment's constraint, a context at [Cumul]. The exceptions are the lemmas
-  whose conclusion is reflexive by statement ([ws_cumul_ctx_pbE_refl_pb],
-  [cumul_decls_reflE], [isType_ws_cumul_pbE_refl]) and the scoping projections.
+  environment's constraint (which a valuation satisfies, [ci_Σu_satisfies]), a
+  context at [Cumul]. The transitivity instances go through a middle term that
+  differs from both ends. The exceptions are the lemmas whose conclusion is
+  reflexive by statement ([ws_cumul_ctx_pbE_refl_pb], [cumul_decls_reflE],
+  [isType_ws_cumul_pbE_refl]) and the scoping projections.
 
   [shiftnP_add3], [subst0_cons] and [subst0_cons_lift] have no premise, so no
   instance. The lemmas [rf_Rel1_normal], [rf_body_normal], [rf_t_normal],
@@ -182,15 +184,40 @@ Proof.
   apply (ws_cumul_declsE_ws_cumul_ctx (pb' := Cumul) (Γ := ci_Γd2) ci_ctx_d).
   constructor; [reflexivity|exact (ci_Rel0_d2 Conv)].
 Qed.
+(** In [ci_Γd2]: the variable against the η-redex [fi_eta] (its let-body [Prop],
+    then an η-expansion), and the η-redex against its contraction [Prop]. Each
+    step relates two different terms, and the middle term [fi_eta] differs from
+    both ends. *)
+Lemma ci_WS_Rel0_eta_d2 : WS Conv ci_Γd2 (tRel 0) fi_eta.
+Proof.
+  apply (WS_trans (Σ := si_Σ) (wfΣ := si_cb) (u := fi_P)); [exact (ci_Rel0_d2 Conv)|].
+  exact (weaken_ws_cumul_pbE (Γ := []) ci_Γd2 eq_refl (ci_WS_eta_r Conv)).
+Qed.
+Lemma ci_WS_eta_d2 : WS Conv ci_Γd2 fi_eta fi_P.
+Proof. exact (weaken_ws_cumul_pbE (Γ := []) ci_Γd2 eq_refl (ci_WS_eta Conv)). Qed.
 Lemma ws_cumul_declsE_trans_inst :
   ws_cumul_declsE Conv si_Σ ci_Γd2 (vass si_na (tRel 0)) (vass si_na fi_P).
 Proof.
-  apply (ws_cumul_declsE_trans (d' := vass si_na fi_P)).
-  - constructor; [reflexivity|exact (ci_Rel0_d2 Conv)].
-  - constructor; [reflexivity|apply ws_cumul_pbE_refl; reflexivity].
+  apply (ws_cumul_declsE_trans (d' := vass si_na fi_eta)).
+  - constructor; [reflexivity|exact ci_WS_Rel0_eta_d2].
+  - constructor; [reflexivity|exact ci_WS_eta_d2].
+Qed.
+(** [ci_Γd1] against [ci_Γd2] through [ci_Γd3]: first the let-bodies by the
+    η-contraction and the types [Prop] against the β-redex [fi_beta], then the
+    types [fi_beta] against its reduct [Prop]. The middle context differs from
+    both ends. *)
+Lemma ci_ctx_d13 : ws_cumul_ctx_pbE Cumul si_Σ ci_Γd1 ci_Γd3.
+Proof.
+  constructor; [constructor|].
+  constructor; [reflexivity|exact (ci_WS_eta Conv)|exact (fi_WS_beta_r Cumul)].
+Qed.
+Lemma ci_ctx_d32 : ws_cumul_ctx_pbE Cumul si_Σ ci_Γd3 ci_Γd2.
+Proof.
+  constructor; [constructor|].
+  constructor; [reflexivity|apply ws_cumul_pbE_refl; reflexivity|exact (fi_WS_beta Cumul)].
 Qed.
 Lemma ws_cumul_ctx_pbE_trans_inst : ws_cumul_ctx_pbE Cumul si_Σ ci_Γd1 ci_Γd2.
-Proof. exact (ws_cumul_ctx_pbE_trans Cumul _ _ _ ws_cumul_ctx_pbE_refl_pb_inst ci_ctx_d). Qed.
+Proof. exact (ws_cumul_ctx_pbE_trans Cumul _ _ _ ci_ctx_d13 ci_ctx_d32). Qed.
 Lemma context_cumulativity_appE_inst :
   ws_cumul_ctx_pbE Conv si_Σ (ci_Γd1 ,,, [vass si_na (tRel 0)]) (ci_Γd1 ,,, [vass si_na fi_P]).
 Proof.
@@ -336,6 +363,23 @@ Proof.
   rewrite !Universe.val_make'. assumption.
 Qed.
 
+(** The constraints of [ci_Σu] are satisfiable: the valuation that sends every
+    bound level to [0] satisfies them. So [ci_eq_univ], and every instance below
+    that uses it, is not vacuous. *)
+Definition ci_val : valuation := {| valuation_mono := fun _ => 1%positive; valuation_poly := fun _ => 0 |}.
+
+Lemma ci_Σu_satisfies : satisfies ci_val (global_ext_constraints ci_Σu).
+Proof.
+  intros c hc.
+  change (ConstraintSet.In c (ConstraintSet.union (ConstraintSet.singleton ci_cstr) (global_constraints si_env))) in hc.
+  apply ConstraintSet.union_spec in hc as [hc|hc].
+  - apply ConstraintSet.singleton_spec in hc. subst c. unfold ci_cstr. constructor. reflexivity.
+  - cbn in hc. now apply ConstraintSet.empty_spec in hc.
+Qed.
+
+Lemma ci_Σu_consistent : consistent (global_ext_constraints ci_Σu).
+Proof. exists ci_val. exact ci_Σu_satisfies. Qed.
+
 Lemma ci_cmp_inst : cmp_universe_instance (eq_universe (global_ext_constraints ci_Σu)) [Level.lvar 0] [Level.lvar 1].
 Proof. constructor; [exact ci_eq_univ|constructor]. Qed.
 
@@ -466,7 +510,8 @@ Lemma cumul_decls_reflE_inst : cumul_decls (@JoinE _) si_Σ [] [] (vass si_na fi
 Proof. apply cumul_decls_reflE. Qed.
 
 (** Context cumulativity of a local environment: [x : (λy:Prop. y) (∀P:Prop. P)]
-    against [x : ∀P:Prop. P], extended by [z : ∀P:Prop. P]. *)
+    against [x : ∀P:Prop. P], extended by [z : (λ_:∀P:Prop. P. Prop) x], whose
+    type mentions [x]. *)
 Definition ci_Γf : context := [vass si_na ci_False].
 Definition ci_Γf' : context := [vass si_na (tApp ci_id ci_False)].
 
@@ -485,13 +530,79 @@ Proof.
   exact (ci_app_typed [] ci_False localenv_nil (ci_False_typed [] localenv_nil)).
 Qed.
 
-Lemma context_cumulativity_wf_appE_inst : wf_localE si_Σ (ci_Γf' ,,, [vass si_na ci_False]).
+(** In every well-formed context cumulative to [ci_Γf], the variable has type
+    [∀P:Prop. P]: the declared type is related to it by the cumulativity, which
+    [typeE_Cumul] uses after weakening it under the declaration. *)
+Lemma ci_x_False_typed_vass na T :
+  JoinE si_Σ [] Cumul T ci_False -> wf_localE si_Σ [vass na T] ->
+  si_Σ ;;; [vass na T] |-E tRel 0 : ci_False.
 Proof.
-  apply (context_cumulativity_wf_appE si_Σ ci_Γf ci_Γf' [vass si_na ci_False]);
+  intros hj hwf.
+  have hT : lift_typing typingE si_Σ [] (j_vass na T).
+  { pose proof hwf as hwf'. depelim hwf'. assumption. }
+  destruct hT as [_ [s [hTs _]]].
+  have hcl : is_closed_context [vass na T] := wf_local_closed_contextE (Σ := si_Σ) (wfΣ := si_wfE) hwf.
+  have hF := ci_False_typed _ hwf.
+  have hR := typeE_Rel si_Σ [vass na T] 0 (vass na T) hwf eq_refl.
+  have hTcl : closedn 0 T := subject_closedE (Σ := si_Σ) (wfΣ := si_wfE) hTs.
+  have ws : ws_cumul_pbE Cumul si_Σ [] T ci_False.
+  { apply into_ws_cumul_pbE; [exact hj|reflexivity| |reflexivity].
+    exact (subject_is_open_termE (Σ := si_Σ) (wfΣ := si_wfE) hTs). }
+  have spec : cumulSpecE si_Σ [vass na T] T ci_False :=
+    ws_cumul_pbE_forget_spec (Σ := si_Σ) (wfΣ := si_cb)
+      (weaken_ws_cumul_pbE (Σ := si_Σ) (wfΣ := si_cb) (Γ := []) [vass na T] hcl ws).
+  change (si_Σ ;;; [vass na T] |-E tRel 0 : lift0 1 T) in hR.
+  rewrite (lift_closed 1 0 T hTcl) in hR.
+  exact (typeE_Cumul _ _ (tRel 0) T ci_False sProp hR hF spec).
+Qed.
+
+Lemma ci_x_False_typed (Γ' : context) :
+  cumul_context (@JoinE _) si_Σ Γ' ci_Γf -> wf_localE si_Σ Γ' -> si_Σ ;;; Γ' |-E tRel 0 : ci_False.
+Proof.
+  intros hc hwf.
+  unfold ci_Γf, cumul_pb_context in hc. depelim hc.
+  match goal with h : All2_fold _ _ [] |- _ => depelim h end.
+  unfold cumul_pb_decls in *.
+  match goal with h : All_decls_alpha_pb _ _ _ _ |- _ => depelim h end.
+  eapply ci_x_False_typed_vass; eassumption.
+Qed.
+
+Definition ci_constP : term := tLambda si_na ci_False fi_P.
+Definition ci_Δx : context := [vass si_na (tApp ci_constP (tRel 0))].
+
+Lemma ci_wf_sort_super_P : wf_sort si_Σ (Sort.super sProp).
+Proof. apply/(wf_sort_reflect si_Σ). reflexivity. Qed.
+
+Lemma ci_Δx_type (Γ' : context) :
+  cumul_context (@JoinE _) si_Σ Γ' ci_Γf -> wf_localE si_Σ Γ' ->
+  lift_typing typingE si_Σ Γ' (j_vass si_na (tApp ci_constP (tRel 0))).
+Proof.
+  intros hc hwf.
+  have hF := ci_False_typed Γ' hwf.
+  have hvF := ci_vass_s_P Γ' hwf.
+  have hwfF : wf_localE si_Σ (Γ' ,, vass si_na ci_False).
+  { apply localenv_cons_abs; [exact hwf|exact (ci_vass_Prop Γ' ci_False hF)]. }
+  have hProd : si_Σ ;;; Γ' |-E tProd si_na ci_False (tSort (Sort.super sProp)) :
+      tSort (Sort.sort_of_product sProp (Sort.super (Sort.super sProp))).
+  { apply typeE_Prod.
+    - split; [exact tt|]. exists sProp. split; [exact hF|]. split; reflexivity.
+    - apply typeE_Sort; [exact hwfF|exact ci_wf_sort_super_P]. }
+  have hLam : si_Σ ;;; Γ' |-E ci_constP : tProd si_na ci_False (tSort (Sort.super sProp)).
+  { unfold ci_constP. apply typeE_Lambda; [exact (ci_vass_Prop Γ' ci_False hF)|].
+    exact (ci_typeE_P _ hwfF). }
+  split; [exact tt|]. exists (Sort.super sProp). split; [|split; [exact I|reflexivity]].
+  exact (typeE_App _ _ ci_constP si_na ci_False (tSort (Sort.super sProp)) _ (tRel 0)
+           hProd hLam (ci_x_False_typed Γ' hc hwf)).
+Qed.
+
+Lemma context_cumulativity_wf_appE_inst : wf_localE si_Σ (ci_Γf' ,,, ci_Δx).
+Proof.
+  apply (context_cumulativity_wf_appE si_Σ ci_Γf ci_Γf' ci_Δx);
     [exact ci_cumul_ctx_f|exact ci_wf_Γf'|].
-  change (ci_Γf ,,, [vass si_na ci_False]) with [vass si_na ci_False; vass si_na ci_False].
+  change (ci_Γf ,,, ci_Δx) with [vass si_na (tApp ci_constP (tRel 0)); vass si_na ci_False].
   apply localenv_cons_abs; [apply localenv_cons_abs; [constructor|]|].
-  all: intros Γ'' _ wf''; exact (ci_vass_Prop Γ'' ci_False (ci_False_typed Γ'' wf'')).
+  - intros Γ'' _ wf''. exact (ci_vass_Prop Γ'' ci_False (ci_False_typed Γ'' wf'')).
+  - intros Γ'' hc wf''. exact (ci_Δx_type Γ'' hc wf'').
 Qed.
 
 (** ** The typing lemmas of the refutation's witness *)
