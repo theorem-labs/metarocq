@@ -16,10 +16,14 @@
   - [rf_Σ] of [PCUICWsCumulEtaCtx] (the empty environment), with the contexts
     [F : Prop → Prop] and [G : (Prop → Prop) → Prop, F : Prop → Prop], in which
     [G (λy:Prop. F y)] and [G F] are related by one η step.
-  Universe instances map the bound levels to [Set], so the instantiation changes
-  the term ([Type@{l0}] becomes [Type@{Set}]), except in the instances marked
-  WEAK: those on the monomorphic inductive [I], on the universe-free block
-  [cp_block], and the weakening instances at a bound level. The typing spine
+  Universe instances map the bound levels to [Set], so the instantiation changes the
+  term ([Type@{l0}] becomes [Type@{Set}]), except in the instances marked NOT BUILT:
+  those on the monomorphic inductive [I] (their missing witness, and what it costs, are
+  written where they start) and the weakening instances, whose two environments have the
+  same level set. The two rows that reached the same weakness through their DATA rather
+  than through [I] are built here instead: the branch-type equation takes a predicate
+  returning [Type@{l0}] ([c2_mp_u]) and the instantiated block is at that level
+  ([c2_block_u]), so instantiating changes both sides of each. The typing spine
   instances compare [I A] with [(λ_:Prop. I _) A], an η-expansion of the head, and
   [G (λy:Prop. F y)] with [G F]. *)
 
@@ -380,21 +384,53 @@ Definition wf_universe_subst_instanceE_inst :=
 Definition wf_sort_subst_instanceE_inst :=
   wf_sort_subst_instanceE up_Σp Monomorphic_ctx [Level.lzero] up_s0 up_wfE up_wf_sort_p up_cu.
 
-(* WEAK: proves satisfiability only; [I], [cp_mp] and [cp_br] mention no
-   universe, so the instance [[Set]] maps both sides to themselves. *)
+(** The predicate of [cp_mp] with its return type AT THE BOUND LEVEL [l0]: the instance
+    [[Set]] maps [Type@{l0}] to [Type@{Set}], so both sides of the equation differ from
+    the terms they are built from. (The inductive [I] and the branch [cp_br] still mention
+    no universe; what the equation computes here is the branch type, which carries the
+    predicate's return type.) *)
+Definition c2_mp_u : predicate term :=
+  {| pparams := pparams cp_mp; puinst := puinst cp_mp; pcontext := pcontext cp_mp;
+     preturn := tSort up_s0 |}.
+
+(** The instantiation is not the identity on this predicate, machine-checked. *)
+Lemma c2_mp_u_moves :
+  eqb (subst_instance [Level.lzero] (preturn c2_mp_u)) (preturn c2_mp_u) = false.
+Proof. reflexivity. Qed.
+
 Definition subst_instance_case_branch_typeE_inst :=
-  @subst_instance_case_branch_typeE _ si_env si_wfE [Level.lzero] cp_ci si_mdecl si_idecl cp_mp
-    (case_predicate_context si_ind si_mdecl si_idecl cp_mp) cp_br 0 si_cdecl.
+  @subst_instance_case_branch_typeE _ si_env si_wfE [Level.lzero] cp_ci si_mdecl si_idecl c2_mp_u
+    (case_predicate_context si_ind si_mdecl si_idecl c2_mp_u) cp_br 0 si_cdecl.
 
 Lemma si_declared_minductive : declared_minductive si_env si_kn si_mdecl.
 Proof. left; reflexivity. Qed.
 
-(* WEAK: proves satisfiability only; the inductive [I] is monomorphic, so its
-   universe context is empty and [wf_ext_wkE] holds with nothing to check. *)
+(** ** NOT BUILT: the instances that need a universe-polymorphic inductive
+
+  Every row below marked [NOT BUILT (polymorphic inductive)] is applied to [I], which is
+  monomorphic: its universe context is empty, its abstract instance is the empty one, and
+  the only universe instance that can be applied to it maps every part of the declaration
+  to itself. Each such row therefore shows its lemma's premises jointly satisfiable, and
+  nothing about what the lemma does to a universe.
+
+  The missing witness is one object: a universe-polymorphic inductive declaration with its
+  [wf] and [wfE] proofs, after which these rows move to it unchanged. Its cost, measured on
+  the monomorphic declaration this file uses: the data and the well-formedness of [I]
+  ([si_cdecl] to [si_wf] of [PCUICCumulativitySpecEtaClosureInstances]) are about 155
+  lines, which a polymorphic declaration repeats over a polymorphic [global_env_ext]; on
+  top of that come the polymorphic [on_udecl] (the [up_on_udecl] pattern of this file, 14
+  lines, where the monomorphic one is [si_on_udecl]) and the [on_variance] obligation,
+  which [ind_variance := None] over a monomorphic context discharges by [reflexivity] and
+  a polymorphic context does not. The η content of this file does not depend on it: the
+  η steps are in the terms, not in the universes. *)
+(* NOT BUILT (polymorphic inductive): proves satisfiability only; the inductive [I] is
+   monomorphic, so its universe context is empty and [wf_ext_wkE] holds with nothing to
+   check. *)
 Definition declared_inductive_wf_ext_wkE_inst :=
   declared_inductive_wf_ext_wkE si_env si_mdecl si_kn si_wfE si_declared_minductive.
-(* WEAK: proves satisfiability only; the inductive [I] is monomorphic, so its
-   universe context is empty and [wf_global_extE] holds with nothing to check. *)
+(* NOT BUILT (polymorphic inductive): proves satisfiability only; the inductive [I] is
+   monomorphic, so its universe context is empty and [wf_global_extE] holds with nothing
+   to check. *)
 Definition declared_inductive_wf_global_extE_inst :=
   declared_inductive_wf_global_extE si_env si_mdecl si_kn si_wfE si_declared_minductive.
 
@@ -459,11 +495,33 @@ Definition subst_instance_ws_cumul_ctx_pbE_rel_inst :=
   PCUICUnivSubstitutionTypEta.subst_instance_ws_cumul_ctx_pbE_rel ci_Σu [Level.lzero; Level.lzero]
     Monomorphic_ctx ci_valid ci_cumul_ctx.
 
-(* WEAK: proves satisfiability only; the block [cp_block] mentions no universe,
-   so instantiating it changes only the environment, not the block. *)
+(** A cofixpoint block AT THE BOUND LEVEL [l0], so that the instantiation changes the
+    block and not only the environment: its declared type is
+    [∀ _ : Type@{l0}. (λ_:Prop. I _) Prop], and its witness for [check_one_cofix] is
+    [∀ _ : Type@{l0}. I Prop], reached by an η-contraction under the product. *)
+Definition c2_dtype_u : term := tProd si_na ci_sl0 (tApp (sp_eta (tInd si_ind [])) si_P).
+Definition c2_witness_u : term := tProd si_na ci_sl0 (tApp (tInd si_ind []) si_P).
+Definition c2_block_u : mfixpoint term :=
+  [{| dname := si_na; dtype := c2_dtype_u; dbody := tRel 0; rarg := 0 |}].
+
+(** The instantiation is not the identity on this block, machine-checked. *)
+Lemma c2_block_u_moves :
+  eqb (subst_instance [Level.lzero; Level.lzero] c2_dtype_u) c2_dtype_u = false.
+Proof. reflexivity. Qed.
+
+Lemma c2_block_u_on_ind :
+  mfix_on_ind check_one_cofix (conv_witnessE ci_Σu []) (fun _ => true) c2_block_u.
+Proof.
+  exists si_kn. split; [discriminate|]. split; [|reflexivity].
+  constructor; [|constructor].
+  exists c2_witness_u. split; [reflexivity|]. split; [reflexivity|].
+  apply cumulE_Prod; [reflexivity|apply cumulE_Refl|].
+  apply cumulE_App; [apply cumulSpecE_eta_contract|apply cumulE_Refl].
+Qed.
+
 Definition subst_instance_mfix_on_indE_inst :=
   subst_instance_mfix_on_indE ci_Σu [] [Level.lzero; Level.lzero] Monomorphic_ctx check_one_cofix
-    (fun _ => true) cp_block (subst_instance_check_one_cofix _) ci_valid (cp_block_on_ind ci_Σu).
+    (fun _ => true) c2_block_u (subst_instance_check_one_cofix _) ci_valid c2_block_u_on_ind.
 
 Definition typing_subst_instanceE_inst :=
   env_propE_typing typing_subst_instanceE up_Σp up_wfE up_Γ _ _ up_x_typed [Level.lzero] Monomorphic_ctx
@@ -510,12 +568,12 @@ Definition isTypeRel_subst_instance_idE_inst :=
 Definition isType_subst_instance_idE_inst :=
   isType_subst_instance_idE up_Σp [] (tSort up_s0) up_wk up_isTypeRel_s0.
 
-(* WEAK: proves satisfiability only; [I] is monomorphic, its abstract instance is
-   empty, so the identity it states is trivial on [ind_sort]. *)
+(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, its
+   abstract instance is empty, so the identity it states is trivial on [ind_sort]. *)
 Definition subst_instance_ind_sort_idE_inst :=
   subst_instance_ind_sort_idE si_env si_mdecl si_ind si_idecl si_wfE si_declared_inductive.
-(* WEAK: proves satisfiability only; [I] is monomorphic, its abstract instance is
-   empty, so the identity it states is trivial on [ind_type]. *)
+(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, its
+   abstract instance is empty, so the identity it states is trivial on [ind_type]. *)
 Definition subst_instance_ind_type_idE_inst :=
   subst_instance_ind_type_idE si_env si_mdecl si_ind si_idecl si_wfE si_declared_inductive.
 
@@ -564,10 +622,19 @@ Proof. apply LevelSet.mem_spec. reflexivity. Qed.
 Lemma e0_wf_instance_l0 : wf_instance up_Σ0 [Level.lvar 0].
 Proof. constructor; [exact e0_wf_level_l0|constructor]. Qed.
 
-(* WEAK (the four [weaken_wf_*E_inst] and the two [wf_universes_weaken*E_inst]):
-   proves satisfiability only; the weakening is at the bound level [l0], which the
-   extension [e0_env] ⊂ [up_env] does not touch, so the conclusion holds in
-   [(up_env, up_univs)] without the weakening. *)
+(* NOT BUILT (an extension that adds a level), the four [weaken_wf_*E_inst] and the two
+   [wf_universes_weaken*E_inst]: proves satisfiability only. [up_env] extends [e0_env] by
+   a declaration and by NO universe, so [global_ext_levels] is the same set on both sides
+   and each conclusion is the premise's own proposition; the weakening is at the bound
+   level [l0], which comes from the shared [up_univs]. The missing witness is a pair of
+   environments whose GLOBAL level sets differ, with a global level in the smaller one;
+   its cost is a second universe environment beside [um_env] with its [wf]/[wfE] proof
+   (the [um_wf] pattern, about 25 lines of LevelSet and ConstraintSet computation) and an
+   [extends] proof. That upgrade would make each conclusion a statement about a strictly
+   larger level set; it would NOT make the conclusion depend on the lemma, because in a
+   concrete finite environment every [wf_level], [wf_universe] and [wf_universes]
+   conclusion is decided by computation. The weakness of a weakening instance is
+   structural here, not a property of this model. *)
 Definition weaken_wf_universeE_inst :=
   weaken_wf_universeE up_Σ0 up_env _ up_wfE e0_up_extends e0_wf_universe_l0.
 Definition weaken_wf_levelE_inst :=
@@ -612,13 +679,13 @@ Proof. reflexivity. Qed.
 Lemma si_closedu_indices : test_context (closedu #|polymorphic_instance (ind_universes si_mdecl)|) (ind_indices si_idecl).
 Proof. reflexivity. Qed.
 
-(* WEAK: proves satisfiability only; [I] is monomorphic, so the bound
-   [#|abstract_instance| = 0] is reached by a context with no universe at all. *)
+(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, so
+   the bound [#|abstract_instance| = 0] is reached by a context with no universe at all. *)
 Definition closed_ind_predicate_contextE_inst :=
   @closed_ind_predicate_contextE _ si_env si_ind si_mdecl si_idecl si_wfE si_declared_inductive
     si_closedu_params si_closedu_indices.
-(* WEAK: proves satisfiability only; [I] is monomorphic, so [inds] carries the
-   empty instance and is universe-closed trivially. *)
+(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, so
+   [inds] carries the empty instance and is universe-closed trivially. *)
 Definition closedu_indsE_inst := @closedu_indsE _ si_env si_kn si_mdecl si_wfE.
 
 (** The judgement [x : Type@{l0} ⊢ x : Type@{l0}] has well-formed universes. *)
@@ -898,9 +965,9 @@ Definition conv_context_smashE_inst :=
   conv_context_smashE ci_Σu [] [ci_d] [ci_d'] ltac:(repeat constructor) c2_conv_ctx_d.
 Definition type_local_ctx_wf_localE_inst := type_local_ctx_wf_localE si_Σ fi_Γ1 _ _ ci_wf_Γ1 c2_tlc.
 Definition sorts_local_ctx_wf_localE_inst := sorts_local_ctx_wf_localE si_Σ fi_Γ1 _ _ ci_wf_Γ1 c2_slc.
-(* WEAK (this and the two [*_local_ctx_instantiateE_inst]): proves satisfiability
-   only; [I] is monomorphic, so its only instance is the empty one, which changes
-   nothing. *)
+(* NOT BUILT (polymorphic inductive), this and the two [*_local_ctx_instantiateE_inst]:
+   proves satisfiability only; [I] is monomorphic, so its only instance is the empty one,
+   which changes nothing. *)
 Definition instantiate_minductiveE_inst :=
   instantiate_minductiveE si_Σ si_kn si_mdecl [] fi_Γ1 (tRel 0) fi_P si_wfE si_declared_minductive' eq_refl
     ci_x_typed.
@@ -990,8 +1057,8 @@ Definition isType_SortE_inst := @isType_SortE _ si_Σ fi_Γ1 sProp ci_wf_sort_P 
 Definition wf_typing_spineE_inst : @wf_typing_spineE _ si_Σ [] (tProd si_na si_P (cp_Ix 0)) [g_A] g_T :=
   (g_cstr_isType, typing_spineE_inst).
 Definition typing_spine_isType_codomE_inst := @typing_spine_isType_codomE _ si_Σ si_wfE _ _ _ _ c2_sp.
-(* WEAK: proves satisfiability only; [I] is monomorphic, so its abstract instance is
-   empty and the substitution is the plain one. *)
+(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, so
+   its abstract instance is empty and the substitution is the plain one. *)
 Definition subslet_inds_genE_inst := @subslet_inds_genE _ si_env si_wfE si_ind si_mdecl si_idecl si_declared_inductive.
 
 Definition consistent_instance_ext_abstract_instanceE_inst :=
@@ -1062,8 +1129,10 @@ Definition subslet_app_closedE_inst :=
   @subslet_app_closedE _ si_Σ [] [ci_False] [ci_False] c2_x c2_x c2_sub c2_sub eq_refl.
 Definition subslet_app_invE_inst :=
   @subslet_app_invE _ si_Σ [] c2_x c2_x [ci_False; ci_False] subslet_app_closedE_inst.
-(* WEAK (this and [on_minductive_wf_paramsE_inst]): proves satisfiability only; [I]
-   is monomorphic, so its only instance is the empty one. *)
+(* NOT BUILT (polymorphic inductive), this and [on_minductive_wf_paramsE_inst]: proves
+   satisfiability only; [I] is monomorphic, so its only instance is the empty one. See
+   "NOT BUILT: the instances that need a universe-polymorphic inductive" above for the
+   witness that is missing and what it costs. *)
 Definition subslet_indsE_inst := @subslet_indsE _ si_Σ si_wfE si_ind [] si_mdecl si_idecl si_declared_inductive eq_refl.
 Definition weaken_subsletE_inst := @weaken_subsletE _ si_Σ si_wfE [ci_False] c2_x fi_Γ1 ci_wf_Γ1 c2_sub.
 Definition isType_substitution_it_mkProd_or_LetInE_inst :=

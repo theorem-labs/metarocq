@@ -17,8 +17,10 @@
   below relates [c9_ΓB] and [c9_ΓA], in the cumulative direction by the η-contraction
   ([c9_cumul_BA]) or as a conversion ([c9_conv_AB]). The two [compare_context] premises
   ([eq_context_cumul_SpecE_inst], [eq_context_cumul_Spec_relE_inst]) relate instead
-  [c9_ΓP = [x : Prop]] and [c9_ΓT = [x : Type₁]]: [compare_term] has no η-step, and it
-  relates [Prop] and [Type₁] at [Cumul]. The typing instances move [w], typed at [h I]
+  [c9_ΓP = [x : Prop]] and [c9_ΓT = [x : Type₁]]: [compare_term] CANNOT relate the η-pair,
+  which is proved at the end of this file ([c9_not_compare_term], [c9_not_compare_ctx],
+  and the same two in the other direction), while it does relate [Prop] and [Type₁] at
+  [Cumul]. The typing instances move [w], typed at [h I]
   in [c9_ΓA], to [c9_ΓB], where its declared type is [h (λy. I y)], so the conclusion
   needs the η-conversion. The [match] of [cp_match_typed]
   ([PCUICTypingEtaCopies1Instances]), weakened into [c9_ΓA], moves to [c9_ΓB] the same
@@ -171,7 +173,9 @@ Proof.
 Qed.
 
 (** [x : Prop] against [x : Type₁]: [compare_term] relates them at [Cumul]
-    ([prop_sub_type] holds in [default_checker_flags]). *)
+    ([prop_sub_type] holds in [default_checker_flags]). The η-pair of this file is NOT an
+    alternative here: [c9_not_compare_ctx] (end of the file) proves that no
+    [compare_context] relates [c9_ΓB] and [c9_ΓA], in either direction. *)
 Definition c9_ΓP : context := [vass si_na si_P].
 Definition c9_ΓT : context := [vass si_na (tSort Sort.type1)].
 
@@ -269,4 +273,59 @@ Proof. exact (weakeningE si_Σ cp_Γ1 c9_Δ _ _ si_wfE c9_wf_ΓA cp_match_typed)
 Lemma context_cumulativityE_match_inst : si_Σ ;;; c9_ΓB |-E lift0 2 cp_match : lift0 2 cp_match_ty.
 Proof.
   exact (context_cumulativityE (Σ := si_Σ) (wfΣ := si_wfE) c9_ΓA c9_match_typed_A c9_wf_ΓB c9_cumul_BA).
+Qed.
+
+(** ** Why the two [compare_context] premises above do not take the η-pair
+
+  [compare_term] is the syntactic comparison. Its only rule at an application
+  ([eq_App]) compares the two arguments, and the arguments here are [λy:Prop. I y] and
+  [I], whose head constructors differ ([tLambda] against [tInd]); the inductive has no
+  rule relating two terms with different head constructors. [c9_not_compare_term] proves
+  exactly that, for every comparison direction, every [pb], every [napp], every
+  environment and every universe comparison, and [c9_not_compare_ctx] carries it to the
+  context pair [c9_ΓB]/[c9_ΓA] that the rest of this file uses. So no instance of
+  [eq_context_cumul_SpecE] or [eq_context_cumul_Spec_relE] can be built on an η step:
+  [c9_ΓP]/[c9_ΓT] is not a weaker choice among several, it is the only kind of pair those
+  two lemmas admit. What the refutation does NOT say: nothing about the η-closure
+  relations ([cumulSpecE0], [ws_cumul_pbE]), which do relate the pair; this is a property
+  of [compare_term] alone.
+
+  [DepElim] is imported here, after every other proof of this file, so that the import
+  cannot change the proof search of anything above. *)
+From Equations.Prop Require Import DepElim.
+
+Lemma c9_not_compare_term Σ' φ pb napp k :
+  PCUICEquality.compare_term_napp Σ' φ pb napp (c9_Bk k) (c9_Ak k) -> False.
+Proof.
+  unfold c9_Bk, c9_Ak, sp_eta, PCUICEquality.compare_term_napp.
+  intros c. depelim c.
+  repeat match goal with h : eq_term_upto_univ_napp _ _ _ _ _ _ _ |- _ => depelim h end.
+Qed.
+
+Lemma c9_not_compare_term_sym Σ' φ pb napp k :
+  PCUICEquality.compare_term_napp Σ' φ pb napp (c9_Ak k) (c9_Bk k) -> False.
+Proof.
+  unfold c9_Bk, c9_Ak, sp_eta, PCUICEquality.compare_term_napp.
+  intros c. depelim c.
+  repeat match goal with h : eq_term_upto_univ_napp _ _ _ _ _ _ _ |- _ => depelim h end.
+Qed.
+
+Lemma c9_not_compare_ctx pb :
+  PCUICContextConversion.compare_context si_Σ pb c9_ΓB c9_ΓA -> False.
+Proof.
+  unfold c9_ΓB, c9_ΓA, snoc.
+  intros c. depelim c.
+  unfold compare_decls in *.
+  repeat match goal with h : All_decls_alpha_pb _ _ _ _ |- _ => depelim h end.
+  eapply (c9_not_compare_term _ _ _ 0 0). eassumption.
+Qed.
+
+Lemma c9_not_compare_ctx_sym pb :
+  PCUICContextConversion.compare_context si_Σ pb c9_ΓA c9_ΓB -> False.
+Proof.
+  unfold c9_ΓB, c9_ΓA, snoc.
+  intros c. depelim c.
+  unfold compare_decls in *.
+  repeat match goal with h : All_decls_alpha_pb _ _ _ _ |- _ => depelim h end.
+  eapply (c9_not_compare_term_sym _ _ _ 0 0). eassumption.
 Qed.
