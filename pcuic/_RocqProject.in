@@ -242,4 +242,6 @@ theories/PCUICEtaT8Probe.v
 theories/PCUICEtaT8BackSim.v
 # Bidirectional completeness over typingE (row T6, the E copy of BDFromPCUIC; T8 forecast), and its satisfying instances
 theories/Bidirectional/BDFromPCUICEta.v
+# Inventory sweep: forecast obligations that landed theorems already give (discharged or reduced)
+theories/PCUICEtaInventorySweep.v
 # theories/All.v
