@@ -138,6 +138,8 @@ theories/PCUICTypingEta.v
 theories/PCUICTypingEtaInd.v
 theories/Typing/PCUICWeakeningEnvTypEta.v
 theories/Typing/PCUICClosedTypEta.v
+# The normalization premise over typingE (an assumption, as base NormalizationIn is)
+theories/PCUICSNEta.v
 # The stack with the eta frames, and its positions
 theories/PCUICPositionEta.v
 # Eta reduction (eta1): substitution, upto_domain, strengthening of red1

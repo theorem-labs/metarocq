@@ -7,7 +7,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICCase
   PCUICTyping PCUICReduction PCUICGlobalEnv PCUICClosed PCUICEquality PCUICRenameDef
   PCUICSigmaCalculus PCUICClosed PCUICOnFreeVars PCUICOnFreeVarsConv PCUICGuardCondition
   PCUICWeakeningEnvConv PCUICWeakeningEnvTyp PCUICClosedConv PCUICClosedTyp PCUICRenameConv
-  PCUICWeakeningConv PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICWeakeningEnv PCUICClosedBodies.
+  PCUICWeakeningConv PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICWeakeningEnv PCUICClosedBodies
+  PCUICInstDef PCUICInstConv PCUICInstTyp PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -157,20 +158,20 @@ Proof.
             rewrite inst_case_predicate_context_rename; eauto.
             apply urenaming_context; eauto.
          ++ rewrite test_context_k_closed_on_free_vars_ctx in Hcontext.
-            unfold inst_case_predicate_context.
+            unfold PCUICCases.inst_case_predicate_context.
             apply on_free_vars_ctx_inst_case_context; eauto.
-         ++ unfold inst_case_predicate_context.
+         ++ unfold PCUICCases.inst_case_predicate_context.
             unfold is_open_term. rewrite length_app.
             rewrite <- shiftnP_add.
             rewrite inst_case_predicate_context_length.
             eassumption.
-         ++ unfold inst_case_predicate_context.
+         ++ unfold PCUICCases.inst_case_predicate_context.
             unfold is_open_term. rewrite length_app.
             rewrite <- shiftnP_add.
             rewrite inst_case_predicate_context_length.
             unshelve erewrite (All2_length _ : #|pcontext _| = #|pcontext _|); shelve_unifiable; tea.
          ++ rewrite test_context_k_closed_on_free_vars_ctx in Hcontext.
-            unfold inst_case_predicate_context. apply on_free_vars_ctx_inst_case_context; eauto.
+            unfold PCUICCases.inst_case_predicate_context. apply on_free_vars_ctx_inst_case_context; eauto.
             +++ eapply All_forallb. apply All_map. apply forallb_All in Hp; eapply All_impl. 1: tea.
                 cbn; intros. eapply urename_is_open_term; eauto.
             +++ unfold pparams. cbn. rewrite length_map. exact Hcontext.
@@ -193,21 +194,21 @@ Proof.
        rewrite inst_case_branch_context_rename; eauto.
        apply urenaming_context; eauto.
        + rewrite -> test_context_k_closed_on_free_vars_ctx in *.
-         unfold inst_case_predicate_context.
+         unfold PCUICCases.inst_case_predicate_context.
          apply on_free_vars_ctx_inst_case_context; eauto.
          repeat toAll; eauto.
-      + unfold inst_case_predicate_context.
+      + unfold PCUICCases.inst_case_predicate_context.
          unfold is_open_term. rewrite length_app.
         rewrite <- shiftnP_add.
         rewrite inst_case_branch_context_length.
         eassumption.
-      + unfold inst_case_predicate_context.
+      + unfold PCUICCases.inst_case_predicate_context.
         unfold is_open_term. rewrite length_app.
         rewrite <- shiftnP_add.
         rewrite inst_case_branch_context_length.
        unshelve erewrite (All2_length _ : #|bcontext _| = #|bcontext _|); shelve_unifiable; tea.
       + rewrite test_context_k_closed_on_free_vars_ctx in Hcontext.
-        unfold inst_case_predicate_context. apply on_free_vars_ctx_inst_case_context; eauto.
+        unfold PCUICCases.inst_case_predicate_context. apply on_free_vars_ctx_inst_case_context; eauto.
        ++ eapply All_forallb. apply All_map. repeat toAll. eapply All_impl. 1: tea.
            cbn; intros. eapply urename_is_open_term; eauto.
        ++ unfold pparams. rewrite -> test_context_k_closed_on_free_vars_ctx in *.
@@ -725,3 +726,506 @@ Lemma weakening_env_cumulSpecE Σ Σ' φ Γ M N :
 Proof using P Pcmp. apply weakening_env_cumulSpecE0 with (pb := Cumul). Qed.
 
 End ExtendsWfE.
+
+(** * Instantiation, universe substitution and configuration weakening of [cumulSpecE0]
+
+  The remainder of the specification's syntactic closure, beside [cumulSpecE_renameP]
+  and [weakening_env_cumulSpecE0] above. Each lemma is its base twin's induction with
+  two more cases:
+  - [cumul_eta_l]: each map commutes with [lift0 1] and fixes [tRel 0], so the eta
+    rule applies again to the mapped terms, with the mapped domain;
+  - [cumulE_prim_op]: the head's literal arguments and its reduct are ground, so each
+    map fixes them, exactly as in the base twins' own [cumul_prim_op] cases.
+  [cumulSpecE_instP] takes [ClosedBodies Σ.1] where base [inst_cumulSpec] takes
+  [wf Σ]: the only use of the environment is the δ case's closed constant body, and
+  [closed_bodies] gives it. *)
+
+Section InstEta.
+
+Context `{cf : checker_flags}.
+
+Lemma cumulSpecE_instP pb (Σ : global_env_ext) Γ Δ σ A B :
+  ClosedBodies Σ.1 ->
+  closed_subst Γ σ Δ ->
+  is_closed_context Γ ->
+  is_open_term Γ A ->
+  is_open_term Γ B ->
+  Σ ;;; Γ ⊢ A ≤sE[pb] B ->
+  Σ ;;; Δ ⊢ A.[σ] ≤sE[pb] B.[σ].
+Proof.
+  intros cb hσ HΓ HfreeA HfreeB e.
+  revert pb Γ A B e Δ σ hσ HΓ HfreeA HfreeB e.
+  induction 1; intros.
+  all: repeat inv_on_free_vars.
+  all: lazymatch goal with
+       | [ H : cumul_predicate_dep _ _ _ |- _ ] => apply cumul_predicate_undep in H
+       | _ => idtac
+       end.
+  all: repeat match goal with
+         | [ H : All2_dep _ _ |- _ ] => apply All2_undep in H
+         end.
+  (* cumulE_prim_op: instantiation fixes the ground head arguments and reduct. *)
+  all: try (rewrite inst_mkApps; cbn [inst];
+    rewrite (map_prim_ground (inst σ) _ (prim_ground_inst σ));
+    match goal with H : PCUICPrimitiveRed.readback _ _ _ = Some ?w |- _ =>
+      rewrite (prim_ground_inst σ w (prim_ground_readback H)) end;
+    eapply cumulE_prim_op; eassumption).
+  - rewrite subst10_inst. sigma. solve [econstructor].
+  - rewrite subst10_inst. sigma. solve [econstructor].
+  - destruct (nth_error Γ i) eqn:hnth; noconf pf.
+    red in hσ. destruct hσ as [_ [_ hσ]]. specialize (hσ _ _ hnth) as IH.
+    specialize IH with (1:=H) as [[x' [decl' [hi [hnth' eqbod]]]]|eqr].
+    * rewrite /= hi. sigma.
+      destruct (decl_body decl') eqn:hdecl => //. noconf eqbod.
+      let H1 := match goal with H : rename _ _ = _ |- _ => H end in
+      rewrite -H1. sigma.
+      relativize (t.[_]); [eapply cumulE_rel|].
+      { now rewrite hnth' /= hdecl. }
+      rewrite lift0_inst. now sigma.
+    * rewrite /= eqr. sigma. reflexivity.
+  - cbn. rewrite inst_mkApps. simpl.
+    rewrite inst_iota_red //.
+    * rewrite length_skipn; lia.
+    * change (bcontext br) with (bcontext (inst_branch σ br)).
+      rewrite closedn_ctx_on_free_vars.
+      eapply nth_error_forallb in p4; tea. simpl in p4.
+      move/andP: p4 => [] clbctx clbod.
+      now rewrite test_context_k_closed_on_free_vars_ctx in clbctx.
+    * eapply cumulE_iota.
+      + rewrite nth_error_map Hbrs /= //.
+      + simpl. now len.
+    - rewrite 2!inst_mkApps. simpl.
+      eapply cumulE_fix.
+      + eapply inst_unfold_fix. eassumption.
+      + eapply is_constructor_inst. assumption.
+    - simpl. rewrite !inst_mkApps. simpl.
+      eapply cumulE_cofix_case.
+      eapply inst_unfold_cofix. eassumption.
+    - simpl. rewrite 2!inst_mkApps. simpl.
+      eapply cumulE_cofix_proj.
+      eapply inst_unfold_cofix. eassumption.
+    - simpl.
+      rewrite inst_closed0.
+      * rewrite closedn_subst_instance.
+        eapply closed_bodies. all: eauto.
+      * eapply cumulE_delta; eauto.
+    - simpl. rewrite inst_mkApps. simpl.
+      eapply cumulE_proj; rewrite nth_error_map. rewrite Hargs. reflexivity.
+    - pose proof hσ.1.
+      eapply cumulE_Trans; try eapply X0; try eapply X2; eauto.
+      eapply inst_is_open_term; eauto.
+    - eapply cumulE_Sym; try eapply X0; eauto.
+    - eapply cumulE_Refl; eauto.
+  - cbn. eapply cumulE_Evar. cbn in *.
+    repeat toAll. eapply All2_impl. 1:tea. cbn; intros.
+    eapply X0.1.2; intuition.
+  - eapply cumulE_App; try apply IHe1; try apply IHe2; eauto.
+  - pose proof hσ.1. cbn; eapply cumulE_Lambda; try apply IHe1; try apply IHe2; eauto;
+    try rewrite shiftnP_S; eauto.
+    * eapply closed_subst_up_vass; eauto. eapply inst_is_open_term; eauto.
+    * rewrite on_free_vars_ctx_snoc. apply andb_and; split; eauto.
+  - eapply cumulE_Prod; try apply IHe1; try apply IHe2; eauto;
+    try rewrite shiftnP_S; eauto.
+    * eapply closed_subst_up_vass; eauto. eapply inst_is_open_term; eauto.
+    * rewrite on_free_vars_ctx_snoc. apply andb_and; split; eauto.
+  - eapply cumulE_LetIn; try apply IHe1; try apply IHe2; eauto; try apply IHe3;
+    try rewrite shiftnP_S; eauto.
+    * eapply closed_subst_up_vdef; eauto; eapply inst_is_open_term; eauto.
+    * rewrite on_free_vars_ctx_snoc_def; eauto.
+  - rename p0 into Hp'; rename p1 into Hreturn'; rename p2 into Hcontext'; rename p3 into Hc'; rename p4 into Hbrs'.
+    rename Hp into Hpold.
+    rename p5 into Hp; rename p6 into Hreturn; rename p7 into Hcontext; rename p8 into Hc; rename p9 into Hbrs.
+    eapply cumulE_Case; fold inst.
+    * unfold cumul_predicate in *; destruct_head'_prod.
+      repeat split; eauto.
+      + eapply All2_map. repeat toAll.
+        eapply All2_impl. 1: tea. cbn; intros. destruct_head'_prod; eauto.
+      + unfold preturn. cbn.
+        unshelve erewrite (All2_length _ : #|pcontext _| = #|pcontext _|); shelve_unifiable; tea.
+        exactly_once (idtac; multimatch goal with H : _ |- _ => eapply H end); eauto.
+        ++ unshelve erewrite <- (All2_length _ : #|pcontext _| = #|pcontext _|); shelve_unifiable; tea.
+           rewrite <- inst_case_predicate_context_length.
+            rewrite inst_case_predicate_context_inst; eauto.
+            eapply closed_subst_ext. 2: symmetry; apply up_Upn.
+            eapply closed_subst_app; eauto. rewrite inst_inst_case_context; eauto.
+            rewrite on_free_vars_ctx_inst_case_context_nil; eauto.
+            +++ rewrite forallb_map. eapply forallb_impl. 2:tea. cbn; intros.
+                eapply inst_is_open_term; eauto.
+            +++ rewrite length_map. rewrite inst_context_on_free_vars ; eauto.
+        ++ unfold PCUICCases.inst_case_predicate_context.
+            apply on_free_vars_ctx_inst_case_context; eauto.
+        ++ unfold PCUICCases.inst_case_predicate_context.
+            unfold is_open_term. rewrite length_app.
+            rewrite <- shiftnP_add.
+            rewrite inst_case_predicate_context_length.
+            eassumption.
+        ++ unfold PCUICCases.inst_case_predicate_context.
+            unfold is_open_term. rewrite length_app.
+            rewrite <- shiftnP_add.
+            rewrite inst_case_predicate_context_length.
+            unshelve erewrite (All2_length _ : #|pcontext _| = #|pcontext _|); shelve_unifiable; tea.
+    * eauto.
+    * rename Hbody into Hbrsbrs'. unfold cumul_branches, cumul_branch in *.
+      repeat toAll.
+      eapply All2_impl. 1: tea. cbn; intros; destruct_head'_prod.
+      unshelve erewrite (All2_length _ : #|bcontext _| = #|bcontext _|); shelve_unifiable; tea.
+      split; eauto.
+      repeat match goal with H : is_true (andb _ _) |- _ => apply andb_and in H; destruct H end.
+      rewrite -> test_context_k_closed_on_free_vars_ctx in *.
+      exactly_once (idtac; multimatch goal with H : _ |- _ => eapply H end); eauto.
+      + unshelve erewrite <- (All2_length _ : #|bcontext _| = #|bcontext _|); shelve_unifiable; tea.
+      rewrite <- (inst_case_branch_context_length p).
+      rewrite inst_case_branch_context_inst; eauto.
+      eapply closed_subst_ext. 2: symmetry; apply up_Upn.
+      eapply closed_subst_app; eauto.
+      rewrite inst_inst_case_context_wf; eauto.
+        ++ rewrite test_context_k_closed_on_free_vars_ctx; tea.
+        ++  rewrite on_free_vars_ctx_inst_case_context_nil; eauto.
+          +++ repeat toAll. eapply All_impl; tea. simpl; intros.
+              eapply inst_is_open_term; eauto.
+          +++ rewrite length_map. tea.
+      + unfold PCUICCases.inst_case_predicate_context.
+        apply on_free_vars_ctx_inst_case_context; eauto.
+        repeat toAll; eauto.
+      + unfold PCUICCases.inst_case_predicate_context.
+        unfold is_open_term. rewrite length_app.
+        rewrite <- shiftnP_add.
+        rewrite inst_case_branch_context_length.
+        eassumption.
+      + unfold PCUICCases.inst_case_predicate_context.
+        unfold is_open_term. rewrite length_app.
+        rewrite <- shiftnP_add.
+        rewrite inst_case_branch_context_length.
+        unshelve erewrite (All2_length _ : #|bcontext _| = #|bcontext _|); shelve_unifiable; tea.
+   - eapply cumulE_Proj; try apply X0; eauto.
+   - cbn. eapply cumulE_Fix. cbn in HfreeA, HfreeB. unfold cumul_mfixpoint in *.
+     repeat toAll. eapply All2_impl. 1: tea. cbn; intros.
+     destruct_head'_prod.
+     repeat split; eauto.
+     * exactly_once (idtac; multimatch goal with H : _ |- _ => eapply H end); eauto.
+       all: cbv [test_def] in *; cbn in *.
+       all: repeat match goal with H : is_true (andb _ _) |- _ => apply andb_and in H; destruct H end.
+       all: tea.
+     * rewrite <- (All2_length X).
+       exactly_once (idtac; multimatch goal with H : _ |- _ => eapply H end); eauto.
+       all: cbv [test_def] in *; cbn in *.
+       all: repeat match goal with H : is_true (andb _ _) |- _ => apply andb_and in H; destruct H end.
+       + rewrite inst_fix_context_up.
+       rewrite <- fix_context_length.
+       eapply closed_subst_ext. 2: symmetry; apply up_Upn.
+       apply closed_subst_app; eauto. rewrite <- inst_fix_context.
+        apply on_free_vars_fix_context.
+         apply All_map.
+         eapply All2_All_left. 1: tea. cbn ; intros.
+         destruct X0 as [[Hx0 _] _].
+         unfold test_def. unfold test_def in Hx0.
+         apply andb_and in Hx0. destruct Hx0 as [Hx0type Hx0body].
+         apply andb_and. cbn. split.
+         ++ eapply inst_is_open_term; eauto.
+         ++ rewrite length_map.
+            rewrite <- fix_context_length. rewrite <- up_Upn.
+            eapply usubst_on_free_vars_shift; eauto.
+            rewrite fix_context_length; eauto.
+        + rewrite on_free_vars_ctx_app.
+         apply andb_and; split; eauto.
+         apply on_free_vars_fix_context.
+         eapply All2_All_left. 1: tea. cbn; intros.
+         apply X0.1.
+         + unfold is_open_term. rewrite length_app.
+         rewrite <- shiftnP_add.
+         rewrite fix_context_length. eauto.
+         + unfold is_open_term. rewrite length_app.
+         rewrite <- shiftnP_add.
+         rewrite fix_context_length.
+         rewrite (All2_length X). eauto.
+   - cbn. rewrite (All2_length X).
+     eapply cumulE_CoFix. cbn in HfreeA, HfreeB. unfold cumul_mfixpoint in *.
+     repeat toAll.
+     eapply All2_impl. 1: tea. cbn; intros.
+     destruct_head'_prod.
+     repeat split; eauto.
+     * exactly_once (idtac; multimatch goal with H : _ |- _ => eapply H end); eauto.
+       all: cbv [test_def] in *; cbn in *.
+       all: repeat match goal with H : is_true (andb _ _) |- _ => apply andb_and in H; destruct H end.
+       all: eauto.
+     * rewrite <- (All2_length X).
+       exactly_once (idtac; multimatch goal with H : _ |- _ => eapply H end); eauto.
+       all: cbv [test_def] in *; cbn in *.
+       all: repeat match goal with H : is_true (andb _ _) |- _ => apply andb_and in H; destruct H end.
+       + rewrite inst_fix_context_up.
+       rewrite <- fix_context_length.
+       eapply closed_subst_ext. 2: symmetry; apply up_Upn.
+       apply closed_subst_app; eauto. rewrite <- inst_fix_context.
+        apply on_free_vars_fix_context.
+         apply All_map.
+         eapply All2_All_left. 1: tea. cbn ; intros.
+         destruct X0 as [[Hx0 _] _].
+         unfold test_def. unfold test_def in Hx0.
+         apply andb_and in Hx0. destruct Hx0 as [Hx0type Hx0body].
+         apply andb_and. cbn. split.
+         ++ eapply inst_is_open_term; eauto.
+         ++ rewrite length_map.
+            rewrite <- fix_context_length. rewrite <- up_Upn.
+            eapply usubst_on_free_vars_shift; eauto.
+            rewrite fix_context_length; eauto.
+        + rewrite on_free_vars_ctx_app.
+         apply andb_and; split; eauto.
+         apply on_free_vars_fix_context.
+         eapply All2_All_left. 1: tea. cbn; intros.
+         apply X0.1.
+         + unfold is_open_term. rewrite length_app.
+         rewrite <- shiftnP_add.
+         rewrite fix_context_length. eauto.
+         + unfold is_open_term. rewrite length_app.
+         rewrite <- shiftnP_add.
+         rewrite fix_context_length.
+         rewrite (All2_length X). eauto.
+   - cbn. eapply cumulE_Prim. depelim X; cbn in HfreeA, HfreeB; rtoProp; constructor; cbn; eauto. solve_all.
+   - cbn. repeat rewrite inst_mkApps. eapply cumulE_Ind.
+     * repeat rewrite length_map; eauto.
+     * repeat toAll.
+       eapply All2_impl. 1: tea. cbn; intros.
+       destruct_head'_prod.
+       eauto.
+   - cbn. repeat rewrite inst_mkApps. eapply cumulE_Construct.
+     * repeat rewrite length_map; eauto.
+     * repeat toAll.
+       eapply All2_impl. 1: tea. cbn; intros.
+       destruct_head'_prod.
+       eauto.
+   - eapply cumulE_Sort; eauto.
+   - eapply cumulE_Const; eauto.
+  - (* function eta: the case base's lemma does not have. [tRel 0] is fixed by
+       [⇑ σ], and [lift0 1] commutes with it. *)
+    assert (Hlift : (lift0 1 u).[⇑ σ] = lift0 1 u.[σ]).
+    { rewrite !lift0_inst !inst_assoc. apply inst_ext.
+      first [ reflexivity | apply shift_Up_comm ]. }
+    assert (Hr : (tApp (lift0 1 u) (tRel 0)).[⇑ σ] = tApp (lift0 1 u.[σ]) (tRel 0)).
+    { cbn [inst]. now rewrite Hlift. }
+    rewrite inst_lam. apply cumul_eta_l.
+    rewrite -Hr.
+    eapply IHe.
+    * eapply closed_subst_ext; [|apply up_Up].
+      eapply closed_subst_up_vass; eauto. eapply inst_is_open_term; eauto.
+    * rewrite on_free_vars_ctx_snoc. apply andb_and; split; eauto.
+    * replace #|Γ ,, vass na A| with (S #|Γ|) by reflexivity.
+      rewrite shiftnP_S. assumption.
+    * cbn [on_free_vars]. apply andb_and. split.
+      + eapply on_free_vars_lift0. eapply on_free_vars_impl; [| exact HfreeB].
+        intros i. rewrite /addnP /shiftnP /=. now repeat nat_compare_specs.
+      + rewrite /shiftnP /=. reflexivity.
+    * exact e.
+Defined.
+
+Lemma convSpecE_instP (Σ : global_env_ext) Γ Δ σ A B :
+  ClosedBodies Σ.1 ->
+  closed_subst Γ σ Δ ->
+  is_closed_context Γ ->
+  is_open_term Γ A ->
+  is_open_term Γ B ->
+  Σ ;;; Γ ⊢ A ≤sE[Conv] B ->
+  Σ ;;; Δ ⊢ A.[σ] ≤sE[Conv] B.[σ].
+Proof. apply cumulSpecE_instP. Qed.
+
+End InstEta.
+
+Section SubstInstanceEta.
+
+Context `{cf : checker_flags}.
+
+(** The E analogue of [cumulSpec_subst_instance] ([Typing/PCUICUnivSubstitutionTyp.v]).
+    No environment premise: the δ case is [subst_instance_two], not closedness. *)
+Lemma cumulSpecE_subst_instance (Σ : global_env_ext) Γ u A B pb univs :
+  valid_constraints (global_ext_constraints (Σ.1, univs))
+                    (subst_instance_cstrs u Σ) ->
+  Σ ;;; Γ ⊢ A ≤sE[pb] B ->
+  (Σ.1,univs) ;;; subst_instance u Γ ⊢ subst_instance u A ≤sE[pb] subst_instance u B.
+Proof.
+  intros e H.
+  induction H; intros; cbn.
+  (* function eta: the case base's lemma does not have, and the one case the
+     congruence solver below cannot close, because [subst_instance] commutes with
+     [lift] only by [subst_instance_lift] and not by conversion. *)
+  all: try lazymatch goal with
+       | [ H : context [ subst_instance _ (tApp (lift0 1 _) (tRel 0)) ] |- _ ] =>
+         apply cumul_eta_l; cbn in H; rewrite subst_instance_lift in H; exact H
+       end.
+  all: try solve [econstructor; intuition eauto].
+  all: lazymatch goal with
+       | [ H : cumul_predicate_dep _ _ _ |- _ ] => apply cumul_predicate_undep in H
+       | _ => idtac
+       end.
+  - rewrite subst_instance_subst. solve [econstructor].
+  - rewrite subst_instance_subst. solve [econstructor].
+  - rewrite subst_instance_lift. eapply cumulE_rel.
+    unfold subst_instance.
+    cbv [option_map subst_instance_context map_context map_decl] in *.
+    rewrite nth_error_map; cbv [option_map].
+    repeat destruct ?; inversion pf; clear pf; try congruence.
+    match goal with H : Some _ = Some _ |- _ => inversion H; clear H end.
+    subst; cbn.
+    reflexivity.
+  - rewrite subst_instance_mkApps. cbn.
+    rewrite iota_red_subst_instance.
+    change (bcontext br) with (bcontext (map_branch (subst_instance u) br)).
+    eapply cumulE_iota; eauto with pcuic.
+    * rewrite nth_error_map Hbrs //.
+    * simpl. now len.
+  - rewrite !subst_instance_mkApps. cbn.
+    eapply cumulE_fix.
+    + unfold unfold_fix in *. destruct (nth_error mfix idx) eqn:E.
+      * match goal with H : Some _ = Some _ |- _ => inversion H; clear H end.
+        rewrite nth_error_map E. cbn.
+        destruct d. cbn in *. cbn in *; try congruence.
+        f_equal. f_equal.
+        now rewrite subst_instance_subst fix_subst_instance_subst.
+      * congruence.
+    + unfold is_constructor in *.
+      destruct (nth_error args narg) eqn:E; try congruence.
+      rewrite nth_error_map E; cbn.
+      now rewrite isConstruct_app_subst_instance.
+  - rewrite !subst_instance_mkApps.
+    unfold unfold_cofix in *. destruct (nth_error mfix idx) eqn:E; try congruence.
+    match goal with H : Some _ = Some _ |- _ => inversion H; clear H end.
+    eapply cumulE_cofix_case.  fold subst_instance_constr.
+    unfold unfold_cofix.
+    rewrite nth_error_map E. cbn.
+    rewrite subst_instance_subst.
+    now rewrite cofix_subst_instance_subst.
+  - unfold unfold_cofix in *.
+    destruct nth_error eqn:E; try congruence.
+    match goal with H : Some _ = Some _ |- _ => inversion H; clear H end.
+    rewrite !subst_instance_mkApps.
+    eapply cumulE_cofix_proj. fold subst_instance.
+    unfold unfold_cofix.
+    rewrite nth_error_map. destruct nth_error; cbn.
+     1: rewrite subst_instance_subst cofix_subst_instance_subst.
+    all: now inversion E.
+  - rewrite subst_instance_two. solve [econstructor; eauto].
+  - (* cumulE_prim_op: the head keeps its constant, and the literal arguments
+       and the reduct are ground, so the instance substitution fixes them *)
+    rewrite subst_instance_mkApps /=.
+    rewrite (map_prim_ground (subst_instance u) ls (prim_ground_subst_instance u)).
+    rewrite (prim_ground_subst_instance u v (prim_ground_readback Hreadback)).
+    eapply cumulE_prim_op; eassumption.
+  - rewrite !subst_instance_mkApps.
+    eapply cumulE_proj. now rewrite nth_error_map Hargs.
+  - eapply cumulE_Trans; intuition eauto.
+    * rewrite on_free_vars_ctx_subst_instance; eauto.
+    * rewrite on_free_vars_subst_instance. unfold is_open_term.
+      replace #|Γ@[u]| with #|Γ|; eauto. rewrite length_map; eauto.
+  - eapply cumulE_Evar. eapply All2_map.
+    repeat toAll.
+    eapply All2_impl.  1: tea. cbn; intros. eapply X0.2; eauto.
+  - eapply cumulE_Case; try solve [intuition eauto; eauto].
+    * cbv [cumul_predicate] in *; destruct_head'_prod. repeat split; eauto; cbn.
+      + apply All2_map. repeat toAll. eapply All2_impl. 1: tea. cbn; intros. destruct_head'_prod; eauto.
+      + apply precompose_subst_instance. eapply cmp_universe_instance_impl.
+        1:now apply eq_universe_subst_instance.
+        eauto.
+      + rewrite -> subst_instance_app, inst_case_predicate_context_subst_instance in *.
+        eauto.
+    * unfold cumul_branches, cumul_branch in *.
+      eapply All2_map. repeat toAll. eapply All2_impl. 1: tea. cbn; intros.
+      repeat split; intuition eauto.
+      rewrite -> subst_instance_app, inst_case_branch_context_subst_instance in *; eauto.
+  - eapply cumulE_Fix. apply All2_map. repeat toAll. eapply All2_impl. 1: tea.
+    cbn; intros; intuition eauto.
+    rewrite -> subst_instance_app, fix_context_subst_instance in *; eauto.
+  - eapply cumulE_CoFix. apply All2_map. repeat toAll. eapply All2_impl. 1: tea.
+    cbn; intros; intuition eauto.
+    rewrite -> subst_instance_app, fix_context_subst_instance in *; eauto.
+  - eapply cumulE_Prim. depelim e0; depelim X; cbn in H; cbn; noconf H; cbn in H; constructor; cbn -[Universe.make]; eauto.
+    + rewrite -!subst_instance_universe_make.
+      eapply eq_universe_subst_instance; tea.
+    + solve_all.
+ - repeat rewrite subst_instance_mkApps. eapply cumulE_Ind.
+    * apply precompose_subst_instance_global.
+      rewrite length_map. eapply cmp_global_instance_impl_same_napp; try eapply H; eauto.
+      { now apply eq_universe_subst_instance. }
+      { now apply compare_universe_subst_instance. }
+    * eapply All2_map. repeat toAll. eapply All2_impl. 1: tea. cbn; intros.
+      eapply X0.2; eauto.
+ - repeat rewrite subst_instance_mkApps. eapply cumulE_Construct.
+    * apply precompose_subst_instance_global. cbn.
+      rewrite length_map. eapply cmp_global_instance_impl_same_napp; try eapply H; eauto.
+      { now apply eq_universe_subst_instance. }
+      { now apply compare_universe_subst_instance. }
+    * eapply All2_map. repeat toAll. eapply All2_impl. 1: tea. cbn; intros.
+      eapply X0.2; eauto.
+  - eapply cumulE_Sort. now apply compare_sort_subst_instance.
+  - eapply cumulE_Const. apply precompose_subst_instance.
+    eapply cmp_universe_instance_impl; eauto.
+    now apply compare_universe_subst_instance.
+Defined.
+
+Lemma convSpecE_subst_instance (Σ : global_env_ext) Γ u A B univs :
+  valid_constraints (global_ext_constraints (Σ.1, univs))
+                    (subst_instance_cstrs u Σ) ->
+  Σ ;;; Γ ⊢ A ≤sE[Conv] B ->
+  (Σ.1,univs) ;;; subst_instance u Γ ⊢ subst_instance u A ≤sE[Conv] subst_instance u B.
+Proof. apply cumulSpecE_subst_instance. Qed.
+
+End SubstInstanceEta.
+
+(** * Configuration weakening of [cumulSpecE0]
+
+  The E analogue of [weakening_config_cumulSpec0] ([Conversion/PCUICWeakeningConfigConv.v]).
+  A weaker configuration changes no term, so both new cases are the rule re-applied to
+  the same terms: the eta case is its own induction hypothesis, and the primitive
+  operation case transports its premises unchanged. *)
+
+Lemma weakening_config_cumulSpecE0 {cf1 cf2} Σ Γ pb M N :
+  config.impl cf1 cf2 ->
+  @cumulSpecE0 cf1 Σ Γ pb M N ->
+  @cumulSpecE0 cf2 Σ Γ pb M N.
+Proof.
+  intros Hcf.
+  induction 1.
+  all: intros.
+  (* function eta: the induction hypothesis is the premise of the same rule. *)
+  all: try lazymatch goal with
+       | [ H : @cumulSpecE0 _ _ _ Conv _ (tApp (lift0 1 _) (tRel 0)) |- _ ] =>
+         apply cumul_eta_l; exact H
+       end.
+  all: try solve [econstructor; try eassumption; intuition auto].
+  all: lazymatch goal with
+       | [ H : cumul_predicate_dep _ _ _ |- _ ] => apply cumul_predicate_undep in H
+       | _ => idtac
+       end.
+  - eapply cumulE_Evar. solve_all.
+  - eapply cumulE_Case.
+    * cbv [cumul_predicate] in *; destruct_head'_prod. repeat split; tas.
+      eapply cmp_universe_instance_impl';
+        [ hnf; intros * ?; eapply (@cmp_universe_config_impl cf1 cf2) | ];
+        eassumption.
+    * assumption.
+    * unfold cumul_branches, cumul_branch in *. solve_all.
+  - eapply cumulE_Fix. unfold cumul_mfixpoint in *. solve_all.
+  - eapply cumulE_CoFix. unfold cumul_mfixpoint in *. solve_all.
+  - eapply cumulE_Prim; solve_all.
+    destruct X; constructor; eauto.
+    * now eapply (@cmp_universe_config_impl cf1 cf2).
+    * solve_all.
+  - eapply cumulE_Ind; eauto. 2:solve_all.
+    eapply @cmp_global_instance_impl; [ .. | eassumption ].
+    3: auto with arith. all: intros ??; now apply (@cmp_universe_config_impl cf1 cf2).
+  - eapply cumulE_Construct; eauto. 2:solve_all.
+    eapply @cmp_global_instance_impl; [ .. | eassumption ].
+    3: auto with arith. all: intros ??; now apply (@cmp_universe_config_impl cf1 cf2).
+  - eapply cumulE_Sort. eapply (@cmp_sort_config_impl cf1 cf2); eassumption.
+  - eapply cumulE_Const. eapply cmp_universe_instance_impl'; eauto; tc.
+    hnf; intros *; eapply (@cmp_universe_config_impl cf1 cf2); eassumption.
+Defined.
+
+Lemma weakening_config_convSpecE {cf1 cf2} Σ Γ M N :
+  config.impl cf1 cf2 ->
+  @cumulSpecE0 cf1 Σ Γ Conv M N ->
+  @cumulSpecE0 cf2 Σ Γ Conv M N.
+Proof. apply weakening_config_cumulSpecE0 with (pb := Conv). Qed.
+
+Lemma weakening_config_cumulSpecE {cf1 cf2} Σ Γ M N :
+  config.impl cf1 cf2 ->
+  @cumulSpecE0 cf1 Σ Γ Cumul M N ->
+  @cumulSpecE0 cf2 Σ Γ Cumul M N.
+Proof. apply weakening_config_cumulSpecE0 with (pb := Cumul). Qed.

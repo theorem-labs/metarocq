@@ -21,7 +21,8 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Kernames Environment EnvironmentTyping.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
      PCUICEquality PCUICArityRed PCUICCumulativitySpec PCUICCumulativitySpecEta
-     PCUICCumulativitySpecEtaClosure PCUICClosedBodies PCUICClosedTyp PCUICTypingEta.
+     PCUICCumulativitySpecEtaClosure PCUICClosedBodies PCUICClosedTyp PCUICTypingEta
+     PCUICSigmaCalculus PCUICInstDef PCUICUnivSubst.
 
 #[local] Existing Instance default_checker_flags.
 
@@ -244,4 +245,78 @@ Proof.
   exact (cumulSpecE_construct_underapplied si_Σ [] Cumul si_ind 0 si_mdecl si_idecl si_cdecl [] [] [] []
            si_cb si_declared_constructor eq_refl eq_refl eq_refl eq_refl
            (le_n 1) (si_cumul_Construct_univ Conv 1) All2_nil).
+Qed.
+
+(** ** Instances of the hypotheses of the S3 remainder
+
+  [cumulSpecE_instP], [cumulSpecE_subst_instance] and [weakening_config_cumulSpecE0]
+  carry a premise that is neither well-formedness nor scoping: a closed substitution,
+  the validity of the instantiated constraints, and an implication between checker
+  configurations. Each is applied here with every premise proved. The related pair is
+  an η-contraction ([cumulSpecE_eta_contract]), so each instance also exercises the
+  [cumul_eta_l] case that these lemmas add to their base twins.
+  [nl_cumulSpecE] has no premise beyond the relation itself, so its instance is the
+  lemma applied to the same pair. *)
+
+Open Scope sigma_scope.
+
+(** A context with one assumption, and the substitution that replaces it by the
+    closed sort [si_P]. *)
+Definition sp_Γ : context := [vass si_na si_P].
+Definition sp_σ : nat -> term := si_P ⋅ ids.
+
+Lemma sp_closed_subst : closed_subst sp_Γ sp_σ [].
+Proof.
+  repeat split.
+  - intros x decl hx. destruct x as [|x]; cbn in hx; [reflexivity|].
+    destruct x; discriminate.
+  - intros x decl hx. destruct x as [|x]; cbn in hx.
+    + injection hx as <-. cbn. intros b hb. discriminate hb.
+    + destruct x; discriminate.
+Qed.
+
+(** The η-contraction used by the three instances: [λ _ : P. (u ↑) 0] contracts to [u]. *)
+Definition sp_eta (u : term) : term := tLambda si_na si_P (tApp (lift0 1 u) (tRel 0)).
+
+(** [si_Σ] has no universe constraints, so instantiating at the empty instance keeps
+    every constraint valid. *)
+Lemma sp_valid_si :
+  valid_constraints (global_ext_constraints (si_Σ.1, Monomorphic_ctx))
+    (subst_instance_cstrs [] (global_ext_constraints si_Σ)).
+Proof.
+  unfold valid_constraints; cbn. intros v _ c Hc. exfalso.
+  vm_compute in Hc. inversion Hc.
+Qed.
+
+Lemma cumulSpecE_instP_inst :
+  si_Σ ;;; [] ⊢ (sp_eta (tRel 0)).[sp_σ] ≤sE[Conv] (tRel 0).[sp_σ].
+Proof.
+  eapply cumulSpecE_instP.
+  - exact si_cb.
+  - exact sp_closed_subst.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - apply cumulSpecE_eta_contract.
+Qed.
+
+Lemma cumulSpecE_subst_instance_inst :
+  (si_Σ.1, Monomorphic_ctx) ;;; subst_instance [] []
+    ⊢ subst_instance [] (sp_eta si_P) ≤sE[Conv] subst_instance [] si_P.
+Proof.
+  apply (cumulSpecE_subst_instance si_Σ [] [] (sp_eta si_P) si_P Conv Monomorphic_ctx sp_valid_si).
+  apply cumulSpecE_eta_contract.
+Qed.
+
+(** Typing under the extraction flags implies typing under the default ones, so the
+    configuration premise is satisfied by a pair of flags that are not equal. *)
+Lemma sp_config_impl : config.impl extraction_checker_flags default_checker_flags.
+Proof. reflexivity. Qed.
+
+Lemma weakening_config_cumulSpecE0_inst :
+  @cumulSpecE0 default_checker_flags si_Σ [] Conv (sp_eta si_P) si_P.
+Proof.
+  apply (@weakening_config_cumulSpecE0 extraction_checker_flags default_checker_flags);
+    [exact sp_config_impl|].
+  apply (@cumulSpecE_eta_contract extraction_checker_flags si_Σ).
 Qed.
