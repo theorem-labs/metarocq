@@ -234,6 +234,24 @@ Fixpoint eta_safe (Σ : global_env) (t : term) : bool :=
           rule that consumes a λ, DISCARDS the domain;
         - [is_constructor] / [isConstruct_app]: these read spine arguments, which come
           from applications, let bodies and [fix_subst], never from a domain.
+        - erasure by [canon] itself (the transfer [Good T → Good (canon T)] of the
+          assembly): [canon] replaces a λ domain by [canon_dom] and erases names. The
+          η refutation's mechanism was a FREE-VARIABLE side condition (η's "x not free
+          in t") satisfied once a domain occurrence of x was erased. [eta_safe] has no
+          free-variable test, and after change 3 it reads no domain, so erasing a
+          domain removes only material it never read; its remaining tests ([isLambda],
+          a [tPrim] head, [decompose_app] / [unfold_fix] / [nth_error] on a fixpoint
+          spine) are shape tests, and [canon] keeps every head constructor and every
+          [rarg]. Expected outcome: [eta_safe Σ (canon t) = eta_safe Σ t]; not yet
+          proved — it is the first lemma of the assembly.
+        - η-expansion creating a domain (the [eta1] steps of the A6 chain): on the
+          canonical side the new domain is [canon_dom], a sort; nothing to read.
+    FORMAL BACKSTOP for the postponement: [pe_postpone_gen] below is PROVED under
+    change 3 and (B), every root and every side condition included, so no mechanism
+    of (a) or (b) can break the postponement itself. For the assembly, [Good] at each
+    reduct [T'] comes from TYPING ([typed_eta_safe], with SR, forecast T1), never from
+    syntactic preservation of [Good] along [red], so a redex carried in a domain that
+    later surfaces is covered by [Good] of the later term.
     FOUND, and the reason (A) and (B) are coupled: with change 3 alone, the λ-DOMAIN
     congruence case of [pe_postpone_gen] would recurse into a domain and apply the
     roots there, where this invariant is now silent. (B) removes that case: on a
@@ -2462,7 +2480,12 @@ Qed.
   - the assembled postponement ([pe_postpone], η-at-root and every congruence case):
     6 min (13:41–13:47Z);
   - scoping transfer along [pe] ([pe_on_free_vars]) and the iteration
-    ([pe_red_postpone]): 5 min (13:47–13:52Z).
+    ([pe_red_postpone]): 5 min (13:47–13:52Z);
+  - refutation of the η backward simulation ([eta1_canon_backsim_false], typed
+    witness [lb_t]): ~25 min (14:05–14:30Z);
+  - change 3 to [eta_safe] and the canonical-source premise (B) ([GoodC], the
+    [canon_*_inv'] projections, the λ-domain case by [pe_Sort_inv]), with the break
+    attempts and the consumer enumeration: ~28 min (14:31–14:59Z).
 
   Mirror screening, measured 2026-10-29: of 3 named landed mirrors tried for B1
   ([eta1_on_free_vars] → transfer: paid; [red1_upto_domain_r_fixed] → backsim: paid;
@@ -3763,11 +3786,13 @@ Section Assembly.
          its own visible premise.
       4. [pe_red_postpone], the iteration: CANNOT DISCHARGE IT. This is the finding.
          It applies the postponement to [red]-REDUCTS of the source, and a
-         [red]-reduct of a canonical term need not be canonical: [red_delta]
-         substitutes a global constant body and [red_rel] a context let body, neither
-         of which is canonical in general. (β, ζ, ι, fixpoint and cofixpoint steps DO
-         preserve canonicity, because substituting canonical terms into a canonical
-         term is canonical, and no rule but δ and [red_rel] imports outside material.)
+         [red]-reduct of a canonical term need not be canonical. Three rules import
+         material that [canon] has not touched: [red_delta] (a global constant body),
+         [red_rel] (a context let body), and ι: [iota_red] injects the let bodies of
+         the case term's own [bcontext] through [expand_lets], and [canon] renames
+         [bcontext] declarations but does not recurse into their bodies
+         (PCUICEtaCanon.v, table row [tCase]). Whether the remaining rules preserve
+         canonicity is not proved here and is not needed.
          The premise therefore stays VISIBLE and undischarged, as [hcanred].
       5. The planned assembly (not written): DISCHARGED by construction. It walks the
          A6 chain, whose [R_c] steps re-canonicalise ([R_c Σ Γ x y] gives
