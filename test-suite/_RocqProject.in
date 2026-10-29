@@ -70,6 +70,7 @@ trans_memo_reset.v
 trans_memo_rejects.v
 unfold.v
 univ.v
+univ_table.v
 vs.v
 ind_fresh_univ.v
 arity_delta.v

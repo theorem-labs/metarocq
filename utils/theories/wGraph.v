@@ -1782,6 +1782,60 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
     Definition pf_distance (ix : index) (x y : pkey) : Nbar.t :=
       pf_lookup (pf_distances ix x) y.
 
+    (** A table of single-source distances over an index: the row of a key, when the
+        table has one, is [pf_distances] from that key. A query that finds its source in
+        the table reads the row instead of running [pf_distances] again. *)
+    Definition pf_table := PTree.t pf_state.
+
+    Definition pf_table_ok (tab : pf_table) (ix : index) : Prop :=
+      forall x d, PTree.get x tab = Some d -> d = pf_distances ix x.
+
+    Definition pf_table_empty : pf_table := PTree.empty pf_state.
+
+    Lemma pf_table_empty_ok ix : pf_table_ok pf_table_empty ix.
+    Proof using Type. intros x d. now rewrite PTree.gempty. Qed.
+
+    (** The table with one row for each vertex of [ix]. *)
+    Definition pf_build_table (ix : index) : pf_table :=
+      VMap.fold (fun _ k tab => PTree.set k (pf_distances ix k) tab)
+        ix.(ix_lookup) pf_table_empty.
+
+    Lemma pf_build_table_ok ix : pf_table_ok (pf_build_table ix) ix.
+    Proof using Type.
+      unfold pf_build_table. rewrite VMap.fold_1.
+      set (l := VMap.elements _). clearbody l.
+      assert (Hinit := pf_table_empty_ok ix). revert Hinit.
+      generalize pf_table_empty.
+      induction l as [|[v k] l IH]; intros tab Htab; cbn [fold_left fst snd]; [exact Htab|].
+      apply IH. intros x d. destruct (pkey_eq_dec x k) as [->|Hne].
+      - rewrite PTree.gss. now intros [= <-].
+      - rewrite (PTree.gso _ _ Hne). apply Htab.
+    Qed.
+
+    (** The distances from [x]: the table's row when it has one, else computed. *)
+    Definition pf_row (tab : pf_table) (ix : index) (x : pkey) : pf_state :=
+      match PTree.get x tab with
+      | Some d => d
+      | None => pf_distances ix x
+      end.
+
+    Lemma pf_row_eq tab ix x :
+      pf_table_ok tab ix -> pf_row tab ix x = pf_distances ix x.
+    Proof using Type.
+      intros Htab. unfold pf_row.
+      destruct (PTree.get x tab) as [d|] eqn:Hx; [exact (Htab x d Hx)|reflexivity].
+    Qed.
+
+    Definition pf_distance_tab (tab : pf_table) (ix : index) (x y : pkey) : Nbar.t :=
+      pf_lookup (pf_row tab ix x) y.
+
+    Lemma pf_distance_tab_eq tab ix x y :
+      pf_table_ok tab ix -> pf_distance_tab tab ix x y = pf_distance ix x y.
+    Proof using Type.
+      intros Htab. unfold pf_distance_tab, pf_distance.
+      now rewrite (pf_row_eq tab ix x Htab).
+    Qed.
+
     Definition bf_state_eqb (m1 m2 : bf_state) : bool :=
       VMap.equal nbar_eqb m1 m2.
 
@@ -3833,6 +3887,38 @@ Module WeightedGraph (V : UsualOrderedType) (VSet : MSetInterface.S with Module 
               | None => false
               end))%bool
       end.
+
+    (** [leqb_vertices_ix] with the distances from the source [x] read through
+        [pf_distance_tab]: from the row of [x] in [tab] when [tab] has one. *)
+    Definition leqb_vertices_ix_tab (tab : pf_table) (ix : index) z x y : bool :=
+      match VMap.find y ix.(ix_lookup) with
+      | Some yi =>
+          match VMap.find x ix.(ix_lookup) with
+          | Some xi =>
+              if is_left (Nbar.le_dec (Some z) (pf_distance_tab tab ix xi yi))
+              then true else false
+          | None => false
+          end
+      | None =>
+          (Z.leb z 0 &&
+            (V.eq_dec x y ||
+              match VMap.find x ix.(ix_lookup) with
+              | Some xi =>
+                  Nbar.le_dec (Some z) (pf_distance_tab tab ix xi ix.(ix_src))
+              | None => false
+              end))%bool
+      end.
+
+    (** With a table whose rows are distances of [ix], the tabled query is the
+        untabled one. *)
+    Lemma leqb_vertices_ix_tab_eq tab ix z x y :
+      pf_table_ok tab ix -> leqb_vertices_ix_tab tab ix z x y = leqb_vertices_ix ix z x y.
+    Proof using Type.
+      intros Htab. unfold leqb_vertices_ix_tab, leqb_vertices_ix.
+      destruct (VMap.find y ix.(ix_lookup)) as [ky|];
+        destruct (VMap.find x ix.(ix_lookup)) as [kx|]; try reflexivity;
+        now rewrite (pf_distance_tab_eq tab ix _ _ Htab).
+    Qed.
 
     Lemma leqb_vertices_correct n x y
       : leq_vertices G n x y <-> leqb_vertices n x y.
