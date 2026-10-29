@@ -478,6 +478,10 @@ Lemma red_terms_open_right {cf : checker_flags} {Σ : global_env_ext} {cb : Clos
   {l l' : list term} : red_terms Σ Γ l l' -> All (is_open_term Γ) l'.
 Proof. induction 1; constructor; auto. eapply closed_red_open_right_cb; eassumption. Qed.
 
+Lemma red_terms_open_left {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {l l' : list term} :
+  red_terms Σ Γ l l' -> All (is_open_term Γ) l.
+Proof. induction 1; constructor; auto. eapply clrel_src; eassumption. Qed.
+
 Section Typecheck.
   Context {cf : checker_flags} {nor : normalizing_flags}.
 
@@ -1870,7 +1874,7 @@ Section Typecheck.
     (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ t)
     : typing_result_comp (∑ i u l, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ Σ ;;; Δ ⊢ t ⇝ mkApps (tInd i u) l ∥) :=
-    match reduce_to_ind (X_type := X_type) Δ t h with
+    match reduce_to_ind Δ t h with
     | Checked_comp r => Checked_comp r
     | TypeError_comp _ na => TypeError_comp err na
     end.
@@ -2396,24 +2400,24 @@ Section Typecheck.
       1-3:do 2 constructor.
       - eauto.
       - sq. erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
-        eapply has_sort_isType; eapply type_Sort; eauto.
+        eapply has_sort_isType; eapply typeE_Sort; eauto.
         now move/@wf_universe_reflect: i.
       - specialize (check_type _ wfΣ) as [].
         sq; eapply checking_typing in X0; eauto. now eapply has_sort_isType.
         erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
-        eapply has_sort_isType; eapply type_Sort; eauto.
+        eapply has_sort_isType; eapply typeE_Sort; eauto.
         now move/@wf_universe_reflect: i.
       - specialize (check_type _ wfΣ) as [].
         sq; eapply checking_typing in X0; eauto. now eapply has_sort_isType.
         erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
-        eapply has_sort_isType; eapply type_Sort; eauto.
+        eapply has_sort_isType; eapply typeE_Sort; eauto.
         now move/@wf_universe_reflect: i.
       - specialize (check_type _ wfΣ) as [].
         specialize (check_default _ wfΣ) as [].
         assert (∥ Σ;;; Γ |-E array_type a : tSort (sType (Universe.make' (array_level a))) ∥) as [].
         { sq. eapply checking_typing in X0; eauto.
           erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
-          eapply has_sort_isType; eapply type_Sort; eauto. now move/@wf_universe_reflect: i. }
+          eapply has_sort_isType; eapply typeE_Sort; eauto. now move/@wf_universe_reflect: i. }
         assert (∥ All (fun x : term => Σ;;; Γ |-E x ◃ array_type a) (array_value a) ∥).
         { induction check_values.
           - repeat constructor.
@@ -2833,11 +2837,19 @@ Section Typecheck.
     all: eauto.
     2: now eapply closed_red_red.
     inversion X7 ; subst.
-    econstructor ; tea.
-    transitivity A ; tea.
-    etransitivity.
-    2: now eapply red_ws_cumul_pb_inv.
-    now eapply red_ws_cumul_pb.
+    (* CANONICAL SWITCH, consumer site (found by the compile, missed by the name sweep: base used
+       [transitivity] on [cumulAlgo] directly): the argument's check [u ◃ A] carries a [JoinE] premise;
+       scoped back by [JoinE_ws_cumul_pbE]: the context closed by [HΓ], the argument's inferred type open by
+       its typing ([infering_typing], [type_is_open_term]), the domain [A] open by the assertion above. *)
+    eapply checkE_Cumul_ws; [eassumption|].
+    pose proof (wfE_ClosedBodies Σ.1 (wfΣ := wf_extE_wfE Σ heΣ)) as cbΣ.
+    transitivity A.
+    + eapply JoinE_ws_cumul_pbE; [ | | eassumption | eassumption].
+      * exact (wf_local_closed_contextE HΓ).
+      * eapply type_is_open_term; eapply infering_typing; eauto.
+    + etransitivity.
+      2: now eapply red_ws_cumul_pb_inv.
+      now eapply red_ws_cumul_pb.
   Qed.
   (* base's failure obligation of [reduce_to_prod] ([infering_prod_infering]) is deleted: refusal above *)
   Next Obligation.
@@ -3339,8 +3351,8 @@ Section Typecheck.
     match goal with hj : All2 (JoinE _ _ Conv) _ _ |- _ =>
       apply (All2_JoinE_ws_cumul_pbE_terms (Σ := Σ) (Γ := Γ)); [ | | | exact hj] end.
     - exact (wf_local_closed_contextE HΓ).
-    - match goal with hr : red_terms _ _ _ ?a |- All _ (firstn _ ?a) =>
-        eapply red_terms_open_right, All2_firstn, hr end.
+    - match goal with hr : red_terms _ _ ?a _ |- All _ (firstn _ ?a) =>
+        eapply red_terms_open_left, All2_firstn, hr end.
     - exact (ctx_inst_open_terms Γ (pparams p) _ wt_params).
   Qed.
 
@@ -3533,7 +3545,7 @@ Section Typecheck.
     move: oni (eq_sym HH).
     intros. rewrite eq in oni.
     destruct ind_ctors as [|? []] eqn:hctors => //.
-    eapply infer_Proj with (pdecl := pdecl).
+    eapply inferE_Proj with (pdecl := pdecl).
     - split. split. eassumption. cbn. rewrite hctors. reflexivity.
       split. symmetry; eassumption. cbn in *.
       now apply Nat.eqb_eq.
