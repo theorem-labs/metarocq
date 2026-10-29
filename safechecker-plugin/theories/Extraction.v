@@ -85,7 +85,9 @@ Definition infer_and_print_template_program_with_guard {cf} {nor}
     (CO := SafeTemplateCheckerEtaConv.eta_conv_oracle (reduce_factsE := reduce_factsE)
              (conv_factsE := conv_factsE) closed_context_conversionE welltypedE_context).
 
-Separate Extraction Wf.Fix_sub MakeOrderTac PCUICSafeChecker.typecheck_program
+(* FORECAST: no base checker root (f0-plan: the whole extracted set contains no base checker module); the
+   E environment checker is a root instead *)
+Separate Extraction Wf.Fix_sub MakeOrderTac
          PCUICSafeCheckerEta.typecheck_program SafeTemplateCheckerEta.trans_program_unshared
          infer_and_print_template_program_with_guard
          (* What the sharing test [MetaRocq Test Trans Sharing] calls *)

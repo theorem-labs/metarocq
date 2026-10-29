@@ -39,13 +39,7 @@ PCUICUnivSubst
 
 PCUICErrors
 PCUICEqualityDec
-PCUICWfEnv
-PCUICSafeReduce
-PCUICSafeConversion
-PCUICCallByNeed
-PCUICTypeChecker
 PCUICPositivityCheck
-PCUICSafeChecker
 PCUICWfEnvEta
 PCUICCallByNeedEta
 PCUICErrorsEta
