@@ -51,8 +51,9 @@
     base builds [conv_context cumulAlgo_gen] by [compare_context_cumul_pb_context]. The fixpoint
     case of [typing_alpha_propE] uses it on [Γ ,,, fix_context mfix ≡Γ Γ ,,, fix_context mfix']
     where base goes through [eq_context Σ Σ] and [eq_context_upto_univ_conv_context].
-  - Base's [ws_cumul_pb_compare] (a [compare_term] is a scoped cumulativity) is
-    [ws_cumul_pb_incl_E] of it.
+  - [eq_context_upto_conv_context_relE]: base turns each α-equal pair into [ws_cumul_pb] by
+    [ws_cumul_pb_compare]; here [upto_names_JoinE] and [into_ws_cumul_pbE] (the bridge
+    [ws_cumul_pb_incl_E] would add [functional_extensionality_dep], which base's twin does not use).
   - Base's [type_Cumul'] ([PCUICTyping]) has no E twin on the tree; the local
     [type_Cumul'E] restates it over [typingE] (from [typeE_Cumul], as base's from
     [type_Cumul]).
@@ -245,8 +246,7 @@ Section Alpha.
     move: (on_free_vars_ctx_app xpred0 Γ Δ0).
     rewrite onΓ a /= => iscl'.
     eapply All_decls_alpha_pb_ws_decl; tea.
-    intros. apply ws_cumul_pb_incl_E. apply ws_cumul_pb_compare => //.
-    now apply eq_term_compare_term, upto_names_impl_eq_term.
+    intros ? ? ? ? ? e. apply into_ws_cumul_pbE; [now apply upto_names_JoinE|..]; assumption.
     rewrite length_app (All2_fold_length IH') -length_app //.
   Qed.
 
