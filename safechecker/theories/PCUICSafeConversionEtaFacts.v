@@ -249,7 +249,9 @@ Qed.
    [tCase] (plan row T6 for the E instance), and the universes of a typed term (a T-row
    fact; the checker paths may not take a base [wf Σ] premise, so the E [welltyped_wf]
    is this field at [welltypedE]). *)
-Class ConvTypedFacts {cf : checker_flags} (wt : global_env_ext -> context -> term -> Prop) (wfP : global_env_ext -> Type) := {
+(* Explicitly [: Prop] (stream lead, 12:20Z): a future Type-valued field is then a compile error,
+   not an argument that survives extraction. *)
+Class ConvTypedFacts {cf : checker_flags} (wt : global_env_ext -> context -> term -> Prop) (wfP : global_env_ext -> Type) : Prop := {
   ctf_context : forall Σ Γ t π, wfP Σ -> no_Eta_arg π -> wt Σ Γ (zipc t π) -> wt Σ (Γ ,,, stack_context π) t;   (* T6 *)
   ctf_case_brs_length : forall Σ Γ ci p c brs, wfP Σ -> wt Σ Γ (tCase ci p c brs) ->
       exists mib oib, declared_inductive Σ ci mib oib /\ #|brs| = #|ind_ctors oib|;  (* T6 *)

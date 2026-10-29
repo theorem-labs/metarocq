@@ -64,7 +64,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICCumulativitySpecEta PCUICTypingEta PCUICSNEta PCUICClosedBodies
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICContextConversionEta
      PCUICEtaK6EtaStep PCUICSigmaCalculus PCUICRenameDef PCUICPositionEtaTyping PCUICClosedTypEta
-     PCUICRenameTypEta.
+     PCUICRenameTypEta PCUICTypingEtaInd.
 (* Loaded, not imported (no shadowing): the E twins of base PCUICConversion's context lemmas,
    used qualified by slice B's [inst_case_ws_cumul_ctx_pbE]. *)
 From MetaRocq.PCUIC Require PCUICWsCumulEtaCtx.
@@ -5307,9 +5307,8 @@ Equations (noeqns) isconv_array_values_aux
             _ _ _ _.
   Next Obligation.
     destruct pp as [s0 t0 π0 t0' π0' g1 g2 hh]. cbn beta iota zeta in *.
-    intros; match goal with
-    | H1 : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ (zipc t0 π0) |- _ =>
-      refine (_isconv s0 Γ t0 π0 g1 H1 t0' π0' g2 hh _) end.
+    unshelve eapply (_isconv s0 Γ t0 π0 g1 _ t0' π0' g2 hh).
+    all: try assumption.
     intros s' t1' π1' t2' π2' f1' f2' h1' h2' hx' hR.
     exact (f (mkpack Γ s' t1' π1' t2' π2' f1' f2' h2') hR h1' h2').
   Defined.
