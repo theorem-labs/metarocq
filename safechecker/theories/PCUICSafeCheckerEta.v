@@ -2178,7 +2178,12 @@ End monad_Alli_nth_forall.
     : typing_result (arity_whnf_result X_ext Γ t) :=
     (* E: base's [let r := …] bindings are inlined and its dependent [match … as b return … = b -> …] is an
        [inspect]: with the let-bound reduct, elaboration did not finish here (out/probe-scfull3.log,
-       probe-scfull5.log); the computed term is the same. *)
+       probe-scfull5.log). The TERM differs from base's (the [inspect] wrapper, the reducts inlined); the
+       COMPUTATION is the same (same scrutinees, same three outcomes; checked by reading [Print arity_whnf]
+       against base's source, out/about-b23-after.log; base's form does not elaborate here); soundness is
+       unaffected because the theorems are about this term. Empirical check of the same-computation claim:
+       forecast run prediction P3 (the 50 baseline-accepted stay accepted); if P3 fails on any of the 50, look
+       here first. *)
     match inspect (whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) []) with
     | exist true eqh =>
       ret (((reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt); conj (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (arity_whnf_direct (normalization_in := normalization_in) X_ext Γ t wt (eq_sym eqh)))
