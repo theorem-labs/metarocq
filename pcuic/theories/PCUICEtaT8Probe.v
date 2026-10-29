@@ -1,41 +1,43 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * T8 (typed postponement): pinned statements, route, and the root cases of
-    one-step η-postponement
+(** * T8 (typed postponement): pinned statements, route, the parallel η-postponement,
+    and the assembly of the [_r] forms
 
   ** What T8 claims
   A well-typed type that is E-convertible to a head form (sort, product, applied
   inductive) reduces to that head form by base [red] alone. The pinned forms are
-  the [Definition]s [T8_*_statement] below; none is proved here. Without typing the
-  claim is false ([A6_F_raw_false]; and [tProj p (λx. C ps X x)] η-reduces then
-  projects, while it is β-stuck).
+  the [Definition]s [T8_*_statement] below. STATUS (2026-10-29): the three [_r] forms
+  are PROVED ([T8_Sort_r], [T8_Prod_r], [T8_Ind_r], section [T8Assembly]) under two
+  FORECAST-ONLY hypotheses, E subject reduction (row T1) and [fix_rarg_inductive];
+  the [_l] forms are not assembled. Without typing the claim is false
+  ([A6_F_raw_false]; and [tProj p (λx. C ps X x)] η-reduces then projects, while it
+  is β-stuck).
 
-  ** Route
+  ** Route (as assembled)
   1. A6 gives, untyped, that the canonical form [canon T] reaches the head by
      [(R_c ∪ eta1)*] ([ws_cumul_pbE_Sort_r_inv], [ws_cumul_pbE_Prod_r_inv],
      [ws_cumul_pbE_Ind_r_inv]).
-  2. Postpone η in that chain: [(R_c ∪ eta1)* ⊆ R_c* · eta1*] on the canonical forms of
-     the reducts of a typed [T]. η is postponed over base [red1] on the actual term;
-     the [R_c] form follows by [red1_R_c] and [eta1_star_canon], because [canon] keeps
-     every λ, every scrutinee position and every fixpoint [rarg]. The one-step
-     commutation is [eta1 t u → red1 Σ Γ u v → ∑ w, red1⁺ t w × eta1* w v]. This
-     file proves it when the [red1] step is a rule applied at the root of [u]
-     ([pp_beta] ... [pp_prim]), and for η at the root of [t] ([pp_root]) or at the
-     head of an application spine ([pp_head_eta]), under any [red1] step. It does
-     not prove the congruence cases (η and the [red1] step in different
-     subterms), which need the [red1] context transport for η-related let bodies
-     and case/fixpoint contexts.
+  2. η is postponed through that chain one step at a time with PARALLEL η ([pe],
+     [eta1* = pe]): an [R_c] step at a canonical source is ONE call of the parallel
+     one-step postponement [pe_postpone_src] (roots [pe_postpone_beta] ...
+     [pe_prim_root], congruences in [pe_postpone_gen]); an [eta1] step is absorbed by
+     [pe_eta1_closed]. The induction is on the canonical chain ([T8_chain_walk]).
+     The single-η root cases [pp_beta] ... [pp_prim] came first and stay as proved;
+     the single-η congruence cases were never needed.
      Statement change: [pp_prim] no longer has the premise [prim_op_of Σ c = Some op]
      (dropped when the primitive clause of [eta_safe] became "no applied primitive
      value"); the lemma without it is stronger, and its callers lose nothing.
-  3. Lift [R_c*] from [canon T] back to [red] on [T] (backward simulation of [red1]
-     through [canon]: [canon_dom] is a normal sort and every redex of [canon T] is
-     the image of a redex of [T]).
-  4. The end of the η* tail is the head form; its source [canon T'] is not a λ,
-     because [T'] (a reduct of [T]) is typed by subject reduction at a sort, and a
-     λ has a product type ([ws_cumul_pbE_Prod_Sort_inv], [invert_cumul_prod_indE]).
-     A non-λ term η-reduces only inside, keeping its head, so [canon T'] is already
-     the head form.
+  3. Each source step is read back as base [red] on the real reduct through [canon]
+     ([red_canon_backsim], BackSim: [canon_dom] is a normal sort and every redex of
+     [canon T] is the image of a redex of [T]); [pe_canon] and [canon_idem]
+     re-canonicalise the source. The η half of such a backward simulation is FALSE
+     ([eta1_canon_backsim_false]), so η is postponed before the read-back, never after.
+  4. The tail: the last source [canon T''] is [pe]-related to the head form. A λ at
+     the top is excluded because [T''] (a reduct of [T]) is typed by subject
+     reduction at a sort, and a λ has a product type ([ws_cumul_pbE_Prod_Sort_inv]).
+     For an applied inductive, λ-headed spine positions (η-expanded partial
+     applications of [tInd]) are NOT kept: they are removed by β steps
+     ([pe_rigid_spine], with [tInd] in [rigid]).
 
   ** The invariant ([eta_safe], syntactic, closed under subterms)
   η creates a redex in exactly four places: a λ as the scrutinee of [tCase] (ι and
@@ -253,8 +255,8 @@ Fixpoint eta_safe (Σ : global_env) (t : term) : bool :=
           domain removes only material it never read; its remaining tests ([isLambda],
           a [tPrim] head, [decompose_app] / [unfold_fix] / [nth_error] on a fixpoint
           spine) are shape tests, and [canon] keeps every head constructor and every
-          [rarg]. Expected outcome: [eta_safe Σ (canon t) = eta_safe Σ t]; not yet
-          proved — it is the first lemma of the assembly.
+          [rarg]. Outcome: [eta_safe_canon] PROVED; the refutation attempt with
+          non-degenerate instances is at the end of the file.
         - η-expansion creating a domain (the [eta1] steps of the A6 chain): on the
           canonical side the new domain is [canon_dom], a sort; nothing to read.
     FORMAL BACKSTOP for the postponement: [pe_postpone_gen] below is PROVED under
@@ -2504,7 +2506,15 @@ Qed.
     witness [lb_t]): ~25 min (14:05–14:30Z);
   - change 3 to [eta_safe] and the canonical-source premise (B) ([GoodC], the
     [canon_*_inv'] projections, the λ-domain case by [pe_Sort_inv]), with the break
-    attempts and the consumer enumeration: ~28 min (14:31–14:59Z).
+    attempts and the consumer enumeration: ~28 min (14:31–14:59Z);
+  - review notes N1–N4, the atomicity record, the [IterationNeedsCanonicalReducts]
+    quarantine, and lemmas (i) [eta_safe_canon] / [Good_canon] and (ii) [pe_canon]:
+    ~13 min (15:12–15:25Z);
+  - the assembly ([T8_chain_walk], the tails, [tInd] in [rigid], [T8_Sort_r],
+    [T8_Prod_r], [T8_Ind_r]): ~8 min (15:25–15:33Z), first green build 15:33:05Z;
+    axiom check by [Print Assumptions] (removed afterwards): 15:33–15:37Z;
+  - refutation attempt on [eta_safe_canon] (instances, [eta_safe_old_canon_false]):
+    ~4 min (15:37–15:41Z).
 
   Mirror screening, measured 2026-10-29: of 3 named landed mirrors tried for B1
   ([eta1_on_free_vars] → transfer: paid; [red1_upto_domain_r_fixed] → backsim: paid;
@@ -3070,7 +3080,9 @@ Section GoodTransport.
 
   (** [Good_lam_dom] is GONE with change 3: [eta_safe] no longer reads λ domains, so
       [Good] of a λ says nothing about its domain. The λ-domain congruence case of
-      [pe_postpone_gen] is discharged by the canonicity premise (B) instead. *)
+      [pe_postpone_gen] is CLOSED instead by the canonicity premise (B) (compiled: that
+      case of [pe_postpone_gen], by [GoodC_lam_dom], [pe_Sort_inv] and
+      [red1_tSort_absurd]); (B) itself is PASSED ON AS A PREMISE to [pe_postpone]. *)
 
   Lemma Good_prod_dom na A B : Good Σ Γ (tProd na A B) -> Good Σ Γ A.
   Proof.
@@ -3913,18 +3925,19 @@ Section Assembly.
   Proof. intros Γ t u v [hg hcan]. exact (pe_postpone Γ t u v hg hcan). Qed.
 
 
-  (** ** (iii) EVERY consumer of [pe_postpone] / [pe_postpone_gen], and how (B) is
-      discharged at each (the whole file; [grep] for the two names)
+  (** ** (iii) EVERY consumer of [pe_postpone] / [pe_postpone_gen], and what happens to
+      (B) at each (the whole file; [grep] for the two names). "DISCHARGED" is used
+      ONLY where a compiled witness supplies (B).
 
-      1. [pe_postpone] itself (the only consumer of [pe_postpone_gen]): NOT a discharge.
-         It RE-EXPORTS (B) as its own visible premise [canon t = t], bundled with
-         [Good] as [(hg, hcan)] for [pe_postpone_gen].
-      2. [pe_postpone_statement_holds]: NOT a discharge. (B) is FOLDED INTO THE
-         PREDICATE: the pinned statement is instantiated at
-         [fun Γ t => Good Σ Γ t × canon t = t], so it is now proved only for canonical
-         sources, which is WEAKER than the instance at [Good] alone proved before (B).
-      3. [pe_postpone_src] (the source-side scoping variant): NOT a discharge. It
-         RE-EXPORTS (B) as its own visible premise.
+      1. [pe_postpone] itself (the only consumer of [pe_postpone_gen]): PASSED ON AS A
+         PREMISE (its own visible premise [canon t = t], bundled with [Good] as
+         [(hg, hcan)] for [pe_postpone_gen]); discharged downstream, see 5.
+      2. [pe_postpone_statement_holds]: FOLDED INTO THE PREDICATE: the pinned statement
+         is instantiated at [fun Γ t => Good Σ Γ t × canon t = t], so it is now proved
+         only for canonical sources, which is WEAKER than the instance at [Good] alone
+         proved before (B). It has no consumer.
+      3. [pe_postpone_src] (the source-side scoping variant): PASSED ON AS A PREMISE
+         (its own visible premise); discharged downstream, see 5.
       4. [IterationNeedsCanonicalReducts.pe_red_postpone], the iteration: CANNOT
          DISCHARGE IT. This is the finding. Quarantined in that module (stream-lead
          ruling 15:19Z) so that every use names the limitation.
@@ -3937,15 +3950,13 @@ Section Assembly.
          (PCUICEtaCanon.v, table row [tCase]). Whether the remaining rules preserve
          canonicity is not proved here and is not needed.
          The premise therefore stays VISIBLE and undischarged, as [hcanred].
-      5. The planned assembly (not written): it must DISCHARGE (B) by construction. It
-         walks the A6 chain, whose [R_c] steps re-canonicalise ([R_c Σ Γ x y] gives
-         [y = canon v0], PCUICEtaCanonRed.v:44), and it applies the postponement at
-         [canon T'] for the current reduct [T'], where [canon_idem] gives
-         [canon (canon T') = canon T']. So it never needs [pe_red_postpone]. It needs
-         two lemmas, built first below the assembly section header:
-         (i) [eta_safe Σ (canon t) = eta_safe Σ t], which with [red_canon_backsim]
-             gives [Good Σ Γ x -> Good Σ Γ (canon x)];
-         (ii) [pe w v -> pe (canon w) (canon v)], to restart from [canon w].
+      5. The assembly, [T8_chain_walk] (section [T8Assembly]): DISCHARGED, compiled
+         witness. At each [R_c] step of the A6 chain it calls [pe_postpone_src] at the
+         canonical source [canon T'] and supplies (B) as [canon_idem T']; it then maps
+         the source steps back to base [red] on [T'] by [red_canon_backsim] and
+         re-canonicalises by [pe_canon]. It never uses [pe_red_postpone]. Its two
+         lemmas are proved: (i) [eta_safe_canon] (with [Good_canon]) and (ii)
+         [pe_canon].
       6. No other consumer exists in this file, and the file is not imported by any
          other. *)
   (** **Transfer of scoping along [pe]: CLOSED.** A short corollary of [pe_to_eta]
@@ -4612,3 +4623,55 @@ Proof. repeat constructor; apply eta_safe_canon. Qed.
   chain, which can be longer), but the lifting step it rests on is false
   ([eta1_canon_backsim_false]), so no such induction is written. *)
 
+
+(** ** DATED ANNOTATION, 2026-10-29 (append-only): change of the pinned postponement
+    statements
+
+  The pinned text earlier in this file is NOT edited; this block records the change
+  (stream-lead item (2), 15:36Z). The definition [pe_postpone_statement] itself is
+  unchanged since 64f42254; what changed is the theorem that instantiates it and the
+  [Good] it is instantiated at.
+
+  [pe_postpone] / [pe_postpone_statement_holds], side by side:
+  (a) BEFORE, at commit 64f42254:
+        [Theorem pe_postpone Γ t u v :
+           Good Σ Γ t -> on_free_vars xpredT u -> pe t u -> red1 Σ Γ u v ->
+           ∑ w, trans_clos (red1 Σ Γ) t w × pe w v]
+        [Corollary pe_postpone_statement_holds : pe_postpone_statement Σ (Good Σ)]
+      with [Good] over the OLD [eta_safe] (λ clause
+      [tLambda _ A b => eta_safe Σ A && eta_safe Σ b], the domain conjunct) and NO
+      canonicity premise.
+  (b) NOW, from commit f973298c (the (A)+(B) commit; 51865536 and every later commit):
+        [Theorem pe_postpone Γ t u v :
+           Good Σ Γ t -> canon t = t -> on_free_vars xpredT u -> pe t u -> red1 Σ Γ u v ->
+           ∑ w, trans_clos (red1 Σ Γ) t w × pe w v]
+        [Corollary pe_postpone_statement_holds :
+           pe_postpone_statement Σ (fun Γ t => Good Σ Γ t × canon t = t)]
+      with [Good] over the NEW [eta_safe] (λ clause [tLambda _ _ b => eta_safe Σ b], no
+      domain conjunct) PLUS the premise [canon t = t]. [pe_postpone_statement_holds]
+      now proves the pinned statement only for canonical sources.
+  NEITHER IMPLIES THE OTHER: (b)'s [Good] is weaker (it accepts λ domains that the old
+  invariant rejected, so (b) applies to sources (a) did not cover), and (b) adds the
+  canonicity premise (so (a) applies to non-canonical sources (b) does not cover).
+  The 64f42254 theorem was true for the old invariant and is no longer in this file.
+
+  [pe_red_postpone], side by side:
+  (a) BEFORE, at commit 64f42254, in section [Assembly]:
+        [Theorem pe_red_postpone Γ t u v :
+           on_ctx_free_vars xpredT Γ -> Good Σ Γ t -> on_free_vars xpredT u -> pe t u ->
+           red Σ Γ u v -> ∑ w, red Σ Γ t w × pe w v]
+      with the OLD [Good] and no canonicity premise.
+  (b) NOW: [IterationNeedsCanonicalReducts.pe_red_postpone] (quarantined, stream-lead
+      ruling 15:19Z), with the NEW [Good] PLUS the premise
+      [hcanred : forall t', red Σ Γ t t' -> canon t' = t'], NOT DISCHARGED (and not
+      dischargeable in general: δ, [red_rel] and ι produce non-canonical reducts).
+  NEITHER IMPLIES THE OTHER, for the same two reasons. The 64f42254 theorem is no
+  longer in this file.
+
+  Related, same date: the heading "The pinned target statements (not proved here)"
+  near the top predates commit b056c37e; since then the three [_r] statements are
+  proved ([T8_Sort_r], [T8_Prod_r], [T8_Ind_r], section [T8Assembly], under the two
+  FORECAST-ONLY hypotheses named there). And the "mixed-chain sketch" paragraph of the
+  history above stays NOT APPLICABLE; [T8_chain_walk] is a different induction on the
+  canonical chain's length, which postpones η BEFORE the read-back through [canon]
+  and so never needs the false η lifting. *)
