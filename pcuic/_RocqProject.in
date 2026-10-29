@@ -220,6 +220,8 @@ theories/PCUICSREtaConvInstances.v
 # Context conversion and context cumulativity of typingE, and their satisfying instances
 theories/Typing/PCUICContextConversionTypEta.v
 theories/PCUICTypingEtaCopy9Instances.v
+# Spines over typingE (E copy of PCUICSpine)
+theories/PCUICSpineEta.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
