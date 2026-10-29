@@ -210,6 +210,8 @@ theories/PCUICInversionEta.v
 # The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
 theories/PCUICSREtaConv.v
 theories/PCUICSREtaConvInstances.v
+# Validity over typingE (row T2a, the E copy of PCUICValidity)
+theories/PCUICValidityEta.v
 # Subject reduction over typingE (row T1, the E copy of PCUICSR), and its satisfying instances
 theories/PCUICSREta.v
 # Refutations of the eta statements that are false
@@ -220,4 +222,5 @@ theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
+theories/PCUICValidityEtaInstances.v
 # theories/All.v
