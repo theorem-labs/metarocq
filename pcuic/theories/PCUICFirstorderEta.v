@@ -23,6 +23,12 @@
   [wfE] context cannot supply it: [firstorder_ind_propositionalE], [plookup_env_extendsE],
   [firstorder_mutind_extE].
 
+  Not copied: base [invert_cumul_it_mkProd_or_LetIn_Sort_Ind] ([:605]). Its landed E form
+  [PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (row x16) is stronger (any [pb],
+  [ClosedBodies]); [firstorder_value_specE] uses it, written qualified, at [Cumul] with
+  [wfE_ClosedBodies]. The base-twin form ([wfE], [Cumul]) is its corollary (checked by
+  ascription of the derived term on integ1 @ [e3069684], 2026-10-29).
+
   ** Proof routes that differ from base (statements do not)
 
   - The zeta steps: base proves [Σ ;;; Γ ⊢ tLetIn na a A B ≤ B {0 := a}] through the
@@ -504,20 +510,6 @@ Proof using V16.
   now eapply typing_spine_isType_domE in Spine.
 Qed.
 
-(** Base [invert_cumul_it_mkProd_or_LetIn_Sort_Ind] ([:605]). *)
-Lemma invert_cumul_it_mkProd_or_LetIn_Sort_IndE {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ s i u args} :
-  Σ ;;; Γ ⊢E it_mkProd_or_LetIn Δ (tSort s) ≤ mkApps (tInd i u) args -> False.
-Proof using Type.
-  induction Δ using PCUICInduction.ctx_length_rev_ind; cbn.
-  - eapply invert_cumul_sort_indE.
-  - rewrite it_mkProd_or_LetIn_app; destruct d as [na [b|] ty]; cbn.
-    * intros hl.
-      eapply ws_cumul_pbE_LetIn_l_inv in hl.
-      rewrite /subst1 PCUICLiftSubst.subst_it_mkProd_or_LetIn in hl.
-      eapply H, hl. now len.
-    * intros hl. now eapply invert_cumul_prod_indE in hl.
-Qed.
-
 (** Base [firstorder_value_spec] ([:618]). *)
 Lemma firstorder_value_specE (Σ:global_env_ext) t i u args :
   wfE Σ -> wf_localE Σ [] ->
@@ -547,10 +539,11 @@ Proof using V16 F16 F18 C16 FO16.
       * rewrite it_mkProd_or_LetIn_app in w. cbn in w.
         eapply ws_cumul_pbE_LetIn_l_inv in w.
         rewrite /subst1 PCUICUnivSubst.subst_instance_it_mkProd_or_LetIn PCUICLiftSubst.subst_it_mkProd_or_LetIn in w.
-        (* This file's [invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (above, in section [cf]):
-           inside its section Rocq gives it no qualified name; the short name resolves to it,
-           not to [PCUICEtaA6More]'s (a different statement: any [pb], [ClosedBodies]). *)
-        now eapply invert_cumul_it_mkProd_or_LetIn_Sort_IndE in w.
+        (* Base [invert_cumul_it_mkProd_or_LetIn_Sort_Ind] ([:605]): the landed, stronger
+           [PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (row x16: any [pb],
+           [ClosedBodies]) at [Cumul], with [wfE_ClosedBodies]. *)
+        now eapply (PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE
+                      (wfΣ := wfE_ClosedBodies Σ (wfΣ := Hwf)) (pb := Cumul)) in w.
       * rewrite it_mkProd_or_LetIn_app in w. cbn in w.
         now eapply invert_cumul_prod_indE in w.
     + eapply inversion_ConstructE in Hty as Hty'; eauto.

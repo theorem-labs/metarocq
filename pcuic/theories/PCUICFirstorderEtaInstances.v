@@ -30,8 +30,8 @@
   - [firstorder_ind_propositionalE_inst]: [N] is first order and not propositional.
 
   **Rows without a non-reflexive instance, with the reason.**
-  - [invert_cumul_it_mkProd_or_LetIn_Sort_IndE]: IMPOSSIBLE (the conclusion is [False]: the
-    lemma states that its premise cannot hold; as in base).
+  - [PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (used by the main theorem in place
+    of a copy): IMPOSSIBLE, recorded in [PCUICEtaA6Instances] (the conclusion is [False]).
   - [firstorder_value_alphaE]: IMPOSSIBLE to make non-reflexive, by the statement: its
     conclusion is [t = t'], so every instance has [t' = t]; the instance runs on [s z]. *)
 
