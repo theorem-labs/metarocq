@@ -579,11 +579,12 @@ Definition into_ws_cumul_pb_termsE_statement : Type :=
   forallb (is_open_term Γ) l' ->
   ws_cumul_pbE_terms Σ Γ l l'.
 
-(** Same proposition as [Typing/PCUICClosedTypEta.isType_is_open_termE] (twin of the
-    homonym [Typing/PCUICClosedTyp.isType_is_open_term]) except that [Γ T] are explicit. *)
+(** The landed [Typing/PCUICClosedTypEta.isType_is_open_termE] (twin of
+    [Typing/PCUICClosedTyp.isType_is_open_term]); it also serves as the twin of base
+    [PCUICInductiveInversion]'s duplicate of that lemma, whose [Γ T] are explicit. *)
 Definition isType_is_open_termE_statement : Prop :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    (Γ : context) (T : term),
+    {Γ : context} {T : term},
   isTypeE Σ Γ T ->
   is_open_term Γ T.
 
