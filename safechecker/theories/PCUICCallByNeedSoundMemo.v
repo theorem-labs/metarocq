@@ -1563,6 +1563,23 @@ Section Memo.
     - discriminate hn.
   Qed.
 
+  (** No code from [cbn_delta], in a sound trie: [kn] is a constant without a body. *)
+  Lemma cbn_delta_axiom (kn : kername) (ui : Instance.t) (s s' : cbn_state) :
+    cbn_delta_ok (s.(cbn_st_memo)) -> cbn_delta X_type X kn ui s = CbnCOk (None, s') ->
+    exists cb : constant_body,
+      abstract_env_lookup X kn = Some (ConstantDecl cb) /\ cb.(cst_body) = None.
+  Proof.
+    intros hd. unfold cbn_delta.
+    destruct (cbn_dt_find kn ((s.(cbn_st_memo)).(cbn_m_delta))) as [[|body insts]|] eqn:Ed.
+    - intros _. exact (hd kn _ Ed).
+    - destruct (cbn_find_inst ui insts) as [[i t]|]; [intros h; discriminate h|].
+      destruct (cbn_delta_new X_type X kn ui body insts s). intros h; discriminate h.
+    - destruct (abstract_env_lookup X kn) as [[cb|mib]|]; try (intros h; discriminate h).
+      destruct (cst_body cb) as [body|] eqn:Eb.
+      + destruct (cbn_delta_new X_type X kn ui body [] s). intros h; discriminate h.
+      + intros _. exists cb. split; [reflexivity|exact Eb].
+  Qed.
+
   Lemma cbn_lookup_env_of_abstract (Σ : global_env_ext) (kn : kername) (d : global_decl) :
     abstract_env_ext_rel X Σ -> abstract_env_lookup X kn = Some d ->
     lookup_env Σ kn = Some d.

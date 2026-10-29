@@ -706,15 +706,36 @@ Section Machine.
           destruct rsa as [|[| |e1| | | |] [|[| | | |k1| |] rsa]]; try discriminate he.
           destruct (cbn_arg_slot_wf _ _ _ _ _ _ _ ea hs ltac:(cbn_rok)) as [hsa hra].
           exact (IHw _ _ _ _ _ _ _ _ he hsa ltac:(cbn_rok)).
-        * (* tConst: delta, or a neutral whose head is the code *)
+        * (* tConst: delta; the primitive-operation rule, whose reduct is a new code and whose
+             arguments are forced; or a neutral whose head is the code *)
           destruct (cbn_delta X_type X kn ui st) as [[r s1]|w] eqn:ed; [|discriminate he].
           pose proof (cbn_delta_wf _ _ _ _ _ ed hs) as hs1.
           destruct r as [c'|].
           -- exact (IHw _ _ _ _ _ _ _ _ he hs1 hrs).
-          -- cbn_dcall he em sp rs1 s2.
-             destruct (cbn_mat_all_wf _ _ _ _ _ _ _ em hs1 hrs) as [hs2 hr2].
-             injection he as <- <- <-. split; [exact hs2|]. split; [exact hr2|].
-             first [reflexivity|rewrite ec; reflexivity].
+          -- cbv beta iota in he.
+             destruct (cbn_prim_step_of X_type X kn stk s1) as [|t rest|i x].
+             ++ cbn_dcall he em sp rs1 s2.
+                destruct (cbn_mat_all_wf _ _ _ _ _ _ _ em hs1 hrs) as [hs2 hr2].
+                injection he as <- <- <-. split; [exact hs2|]. split; [exact hr2|].
+                first [reflexivity|rewrite ec; reflexivity].
+             ++ destruct (cbn_new_entry X_type X t [] s1) as [c2 s2] eqn:en.
+                assert (hs2 : cbn_hwf Q s2).
+                { apply (cbn_hwf_heap Q s1 s2); [|exact hs1].
+                  change s2 with (snd (c2, s2)). rewrite <- en.
+                  exact (proj1 (cbn_new_entry_shape X_type X t [] s1)). }
+                exact (IHw _ _ _ _ _ _ _ _ he hs2 hrs).
+             ++ cbn_dcall he ea a1 rs1 s2.
+                destruct rs1 as [|[| | | |k1| |] rs1]; try discriminate he.
+                destruct (cbn_materialize_wf _ _ _ _ _ _ ea hs1 ltac:(cbn_rok)) as [hs2 hr2].
+                cbn_dcall he ef vf rsf sf.
+                destruct rsf as [|[| | | |k2| |] rsf]; try discriminate he.
+                destruct (IHf _ _ _ _ _ _ ef hs2 ltac:(cbn_rok)) as (hsf & hrf & _).
+                destruct (cbn_value_is_lit vf).
+                ** exact (IHw _ _ _ _ _ _ _ _ he hsf ltac:(cbn_rok)).
+                ** cbn_dcall he em sp rs3 s3.
+                   destruct (cbn_mat_all_wf _ _ _ _ _ _ _ em hsf ltac:(cbn_rok)) as [hs3 hr3].
+                   injection he as <- <- <-. split; [exact hs3|]. split; [exact hr3|].
+                   first [reflexivity|rewrite ec; reflexivity].
         * (* tInd: a constructor value whose head is the code *)
           cbn_dcall he em sp rs1 s1.
           destruct (cbn_mat_all_wf _ _ _ _ _ _ _ em hs hrs) as [hs1 hr1].

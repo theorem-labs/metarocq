@@ -3,15 +3,18 @@
    The machine tests run [cbn_whnf] on a fixed term and check the answer by [vm_compute]. The
    conversion tests run [cbn_conv_answer] and [cbn_conv], the function that
    [PCUICTypeChecker.convert] calls. None of them looks up the environment, so they hold for
-   every abstract environment [X]. The last section is a well-typed input on which the fast
+   every abstract environment [X]. The next section is a well-typed input on which the fast
    path answers [true], with the conversion that [convert_cbn_sound] derives from that
-   answer, for every abstract environment and for a concrete one. *)
+   answer, for every abstract environment and for a concrete one. The last section runs the
+   primitive-operation rule at concrete environments that register an operation. *)
 
 From MetaRocq.Utils Require Import utils.
-From MetaRocq.Common Require Import config.
+From MetaRocq.Common Require Import config PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICTyping PCUICWellScopedCumulativity.
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICWfEnvImpl PCUICCallByNeed
   PCUICCallByNeedSoundHookProof.
+From MetaRocq.TestSuite Require Import prim_ops_instance.
+From Corelib Require Import PrimInt63.
 
 Definition t_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
 Definition t_nat : inductive :=
@@ -251,3 +254,78 @@ Section WellTyped.
     exact (wt_fast_path_sound _ wt_X wt_Σ wt_Σ_rel).
   Qed.
 End WellTyped.
+
+(** * Primitive operations
+
+  The environments of [prim_ops_instance], each with its proof of [wf_ext]: [Σ_po_bool]
+  registers [eqb : int -> int -> bool] as [Int63eq] (a boolean result, read back through the
+  registered [bool]), [Σ_po] registers [land : int -> int -> int] as [Int63land] (an integer
+  result). The abstract environments are the canonical ones built from them. In a reflection
+  proof the kernel compares [P true] with [P (decide ...)], where the decision reduces to
+  [true] only by primitive operations; [t_refl_u] below has that shape. *)
+
+Section PrimOps.
+  Context {guard : abstract_guard_impl}.
+
+  Definition po_bool_X : (@canonical_abstract_env_impl default_checker_flags guard).π2.π1 :=
+    @build_reference_impl_ext default_checker_flags guard Σ_po_bool Σ_po_bool_wf.
+
+  Definition po_int_X : (@canonical_abstract_env_impl default_checker_flags guard).π2.π1 :=
+    @build_reference_impl_ext default_checker_flags guard Σ_po Σ_po_wf.
+
+  Definition t_int (i : PrimInt63.int) : term := tPrim (prim_int i).
+  Definition t_eqb (a b : term) : term := tApp (tApp (tConst po_eqb_kn []) a) b.
+  Definition t_true : term := tConstruct po_bool_ind 0 [].
+
+  (** [Γ = [P : bool -> Prop]]: [P true] against [P (eqb 3 3)]. *)
+  Definition t_reflΓ : context :=
+    [vass t_na (tProd t_na (tInd po_bool_ind []) (tSort sProp))].
+  Definition t_refl_t : term := tApp (tRel 0) t_true.
+  Definition t_refl_u : term := tApp (tRel 0) (t_eqb (t_int 3%uint63) (t_int 3%uint63)).
+
+  (** The syntactic test that [convert] runs first fails on this input, so [convert] reaches
+    the fast path. *)
+  Lemma t_refl_eqb_false cmpu cmps gen :
+    PCUICEqualityDec.eqb_term_upto_univ_napp cmpu cmps gen Conv 0 t_refl_t t_refl_u = false.
+  Proof. reflexivity. Qed.
+
+  (** The fast path answers [true]: [eqb 3 3] computes [true] by the rule. *)
+  Lemma prim_fires_in_reflection :
+    cbn_conv _ po_bool_X Conv t_reflΓ t_refl_t t_refl_u = true.
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** The arguments are evaluated first: [eqb ((fun x => x) 3) 3] against [true]. The beta
+    redex is put in a cell, forced to the literal [3], and the operation fires. *)
+  Lemma prim_forces_its_arguments :
+    cbn_conv _ po_bool_X Conv []
+      (t_eqb (tApp (tLambda t_na (tConst po_int_kn []) (tRel 0)) (t_int 3%uint63))
+         (t_int 3%uint63))
+      t_true = true.
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** The result is the operation's: [eqb 3 4] is [false], so it is not [true]. The machine
+    reaches [false] and compares two different constructors: no rule. *)
+  Lemma prim_computes_false :
+    cbn_conv_answer _ po_bool_X Conv [] (t_eqb (t_int 3%uint63) (t_int 4%uint63)) t_true
+    = CbnNoRule.
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** An argument that is not a literal: with [x : int] in the context, [eqb x 3] is a
+    neutral constant, which is not [true]. *)
+  Lemma prim_stuck_on_variable :
+    cbn_conv_answer _ po_bool_X Conv [vass t_na (tConst po_int_kn [])]
+      (t_eqb (tRel 0) (t_int 3%uint63)) t_true = CbnNoRule.
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma prim_stuck_on_variable_false :
+    cbn_conv _ po_bool_X Conv [vass t_na (tConst po_int_kn [])]
+      (t_eqb (tRel 0) (t_int 3%uint63)) t_true = false.
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** An integer result: [land 6 3] is the literal [2]. *)
+  Lemma prim_int_result :
+    cbn_conv _ po_int_X Conv []
+      (tApp (tApp (tConst po_land_kn []) (t_int 6%uint63)) (t_int 3%uint63)) (t_int 2%uint63)
+    = true.
+  Proof. vm_compute. reflexivity. Qed.
+End PrimOps.
