@@ -33,23 +33,28 @@
     [typing_infer_indE_beta_inst] on [x : (λ B : Prop. I B) A, A : Prop ⊢ x : I A], whose
     inferred type is the β-redex;
   - the (co)fixpoint witness, at a declared type on which the check FAILS
-    ([bd_check_fix_dtype]; [bdf_check_cofix_dtype]) and a β-reduct on which it passes:
-    [wf_fixpointE_wf_fixpoint_red_inst], [mfix_on_ind_conv_redE_fix_inst],
-    [mfix_body_on_conv_redE_fix_inst], [red_fix_witnessE_inst] (the domain
-    [(λ B. I B) A]); [mfix_body_on_conv_redE_cofix_inst], [mfix_on_ind_conv_redE_cofix_inst],
+    ([bd_check_fix_dtype]; [bdf_check_cofix_dtype], [bdf_check_cofix_dtypeβ]) and a β-reduct
+    on which it passes: [wf_fixpointE_wf_fixpoint_red_inst], [mfix_on_ind_conv_redE_fix_inst],
+    [mfix_body_on_conv_redE_fix_inst], [red_fix_witnessE_inst] (the domain [(λ B. I B) A]);
+    [mfix_body_on_conv_redE_cofix_inst], [mfix_on_ind_conv_redE_cofix_inst],
     [red_cofix_witnessE_inst] (the type [(λ B. I B) A] itself);
+    [wf_cofixpointE_wf_cofixpoint_red_inst] and [typing_inferingE_CoFix_inst] (the typed
+    cofixpoint [bdf_cofix_typed] of [iv_Σ], a [CoFinite] record [R], whose declared type is
+    the β-redex [(λ B : Prop. R B) (∀P. P)]: completeness's CoFix case runs the witness lemma
+    on it);
   - completeness per typing rule: [typing_inferingE_<rule>_inst] for Rel, Sort, Prod, Lambda,
-    LetIn, App, Const, Ind, Construct, Case (a [match] whose branch type is a β-redex), Fix
-    and Prim, plus the context lemmas on contexts with a let ([bdf_Γz]) or three declarations.
+    LetIn, App, Const, Ind, Construct, Case (a [match] whose branch type is a β-redex), Proj
+    (through the forecast [projection_cumulative_indicesE]), Fix, CoFix and Prim, plus the
+    context lemmas on contexts with a let ([bdf_Γz]) or three declarations.
 
-  **Rows not inhabited, and why.**
-  - [wf_cofixpointE_wf_cofixpoint_red], and the CoFix case of [bidirectional_from_pcuicE]:
-    NOT BUILT. [wf_cofixpointE] needs a [CoFinite] block ([check_recursivity_kind]), so not
-    [si_Σ], whose [I] is [Finite] (IMPOSSIBLE there: a property of the declaration). The
-    in-tree [CoFinite] environments are [bd_coenv] ([BDTypingEtaInstances], [ClosedBodies]
-    only, no [wfE]) and [fwe_env] ([PCUICFixWitnessEtaCounter], [fwe_wfE], but no typing
-    derivation in it and no constructor). The core of the cofixpoint route is inhabited at
-    [ok := fun _ => true] ([mfix_on_ind_conv_redE_cofix_inst]), which is the same proof.
+  **Rows not inhabited.** None: every lemma of [BDFromPCUICEta] has an instance here, or is a
+  helper that one of these instances runs ([conv_lift_judgmentE], [conv_lift_judgment_univE],
+  [ws_cumul_ctx_pbE_vass], [is_closed_projection_contextE],
+  [untyped_subslet_projection_contextE], the syntactic helpers). Degenerate points: the Fix
+  row ([iv_fix_typed]) has a witness equal to its declared type (the non-degenerate fixpoint
+  witness is [wf_fixpointE_wf_fixpoint_red_inst], whose declaration [bd_mfix] has no typed
+  body: NOT BUILT as a typed fixpoint); the Ind and Construct rows compare a type with
+  itself.
 
   **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
   their E copies: the same set, and the forecast classes are arguments ([About]), not axioms. *)
@@ -61,7 +66,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICReduction PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICClosedBodies PCUICTypingEta
      PCUICTypingEtaInd PCUICTypingEtaNotions PCUICCumulativitySpecEtaClosureInstances PCUICEtaDefs
      PCUICEtaI5 PCUICWellScopedCumulativity PCUICWellScopedCumulativityEta PCUICEtaA6 PCUICEquality
-     PCUICConversionEtaCongr PCUICEtaFInst
+     PCUICConversionEtaCongr PCUICEtaFInst PCUICGuardClosure PCUICClosedTypEta
      PCUICEtaPrimOpInstance PCUICInversionEtaInstances PCUICValidityEta PCUICSREta
      BDTyping BDTypingEta BDTypingEtaInstances BDToPCUICEta BDToPCUICEtaInstances BDFromPCUICEta.
 From MetaRocq.PCUIC Require BDFromPCUIC PCUICFixWitness.
@@ -164,6 +169,82 @@ Lemma bdf_fix_witness : mfix_body_on check_one_fix (conv_witnessE si_Σ bd_Γ1) 
 Proof.
   exists bd_fix_ty. split; [reflexivity|]. split; [reflexivity|].
   exact (ws_cumul_pbE_forget_spec bdf_fix_dtype_ws).
+Qed.
+
+#[local] Instance bdf_iv_cb : ClosedBodies iv_env := @wfE_ClosedBodies _ iv_env iv_wfE.
+
+(** A typed cofixpoint in [iv_Σ] ([PCUICInversionEtaInstances]: the [CoFinite] record
+    [R (A : Prop) := mkR { f : A }]), in the context [p : ∀P:Prop. P]:
+    [cofix g : (λ B : Prop. R B) (∀P. P) := mkR (∀P. P) p]. The declared type is a β-redex,
+    on which [check_one_cofix] fails ([bdf_check_cofix_dtypeβ]); the witness is its reduct
+    [R (∀P. P)] ([bdf_wf_cofix]). *)
+Definition bdf_RFβ : term := tApp (tLambda si_na si_P (iv_R (tRel 0))) iv_False.
+
+Lemma bdf_RFβ_typed (Γ : context) : wf_localE iv_Σ Γ -> iv_Σ ;;; Γ |-E bdf_RFβ : si_P.
+Proof.
+  intros h.
+  refine (typeE_App _ _ (tLambda si_na si_P (iv_R (tRel 0))) si_na si_P si_P _ iv_False
+            (iv_PP_typed iv_Σ Γ h) _ (iv_False_typed iv_Σ Γ h)).
+  apply typeE_Lambda.
+  - exact (iv_vass iv_Σ Γ si_na si_P _ (iv_P_typed iv_Σ Γ h) eq_refl).
+  - exact (iv_RX_typed _ (tRel 0) (iv_wf_P iv_Σ Γ h)
+             (typeE_Rel _ _ 0 (vass si_na si_P) (iv_wf_P iv_Σ Γ h) eq_refl)).
+Qed.
+
+Definition bdf_cofix_dβ : def term :=
+  {| dname := si_na; dtype := bdf_RFβ; dbody := iv_cofix_body; rarg := 0 |}.
+Definition bdf_cmfix : mfixpoint term := [bdf_cofix_dβ].
+Definition bdf_Γcf : context := [vass si_na bdf_RFβ; vass si_na iv_False].
+
+Lemma bdf_check_cofix_dtypeβ : check_one_cofix bdf_cofix_dβ = None.
+Proof. reflexivity. Qed.
+
+Lemma bdf_wf_Γcf : wf_localE iv_Σ bdf_Γcf.
+Proof. exact (iv_wf_vass iv_Σ iv_Γc si_na bdf_RFβ sProp iv_wf_Γc (bdf_RFβ_typed iv_Γc iv_wf_Γc) eq_refl). Qed.
+
+Lemma bdf_RFβ_red (Γ : context) : red iv_Σ Γ bdf_RFβ iv_RF.
+Proof. apply rt_step. exact (red_beta _ _ si_na si_P (iv_R (tRel 0)) iv_False). Qed.
+
+Lemma bdf_cofix_body_typed : iv_Σ ;;; bdf_Γcf |-E iv_cofix_body : lift0 1 bdf_RFβ.
+Proof.
+  pose proof (iv_False_typed iv_Σ bdf_Γcf bdf_wf_Γcf) as hF.
+  pose proof (iv_wf_vass iv_Σ bdf_Γcf iv_fna iv_False sProp bdf_wf_Γcf hF eq_refl) as wF.
+  eapply (typeE_Cumul _ _ _ iv_RF _ sProp).
+  - refine (typeE_App _ _ (tApp (tConstruct iv_ind 0 []) iv_False) iv_fna iv_False iv_RF
+              (Sort.sort_of_product sProp sProp) (tRel 1) _ (iv_mkRF_typed bdf_Γcf bdf_wf_Γcf) _).
+    + apply typeE_Prod; [exact (iv_vass_s iv_Σ bdf_Γcf iv_fna iv_False sProp hF eq_refl)|].
+      exact (iv_RF_typed _ wF).
+    + exact (typeE_Rel _ _ 1 (vass si_na iv_False) bdf_wf_Γcf eq_refl).
+  - exact (bdf_RFβ_typed bdf_Γcf bdf_wf_Γcf).
+  - apply (ws_cumul_pbE_forget_spec (pb := Cumul)).
+    apply (red_ws_cumul_pbE_inv (Σ := iv_Σ)).
+    exact (closed_red_of (Σ := iv_Σ) (Γ := bdf_Γcf) (t := bdf_RFβ) eq_refl eq_refl (bdf_RFβ_red bdf_Γcf)).
+Qed.
+
+Lemma bdf_cofix_guard : cofix_guard iv_Σ iv_Γc bdf_cmfix.
+Proof.
+  change (guard_cl CoFix iv_Σ iv_Γc bdf_cmfix). apply gc_check.
+  split; [vm_compute; reflexivity|]. exists 30. vm_compute. reflexivity.
+Qed.
+
+Lemma bdf_wf_cofix : wf_cofixpointE iv_Σ iv_Γc bdf_cmfix.
+Proof.
+  exists iv_kn. split; [discriminate|]. split; [|reflexivity].
+  constructor; [|constructor].
+  exists iv_RF. split; [reflexivity|]. split; [reflexivity|].
+  apply (ws_cumul_pbE_forget_spec (pb := Conv)).
+  apply (red_ws_cumul_pbE (Σ := iv_Σ)).
+  exact (closed_red_of (Σ := iv_Σ) (Γ := iv_Γc) (t := bdf_RFβ) eq_refl eq_refl (bdf_RFβ_red iv_Γc)).
+Qed.
+
+Lemma bdf_cofix_typed : iv_Σ ;;; iv_Γc |-E tCoFix bdf_cmfix 0 : bdf_RFβ.
+Proof.
+  refine (typeE_CoFix _ _ bdf_cmfix 0 bdf_cofix_dβ iv_wf_Γc bdf_cofix_guard eq_refl _ _ bdf_wf_cofix).
+  - constructor; [|constructor].
+    exact (iv_vass iv_Σ iv_Γc si_na bdf_RFβ sProp (bdf_RFβ_typed iv_Γc iv_wf_Γc) eq_refl).
+  - constructor; [|constructor].
+    exact (iv_vdef iv_Σ bdf_Γcf si_na iv_cofix_body (lift0 1 bdf_RFβ) sProp bdf_cofix_body_typed
+             (bdf_RFβ_typed bdf_Γcf bdf_wf_Γcf) eq_refl).
 Qed.
 
 Section BDFromPCUICEtaInstances.
@@ -295,6 +376,17 @@ Definition typing_inferingE_Case_inst := typing_inferingE (Σ := si_Σ) (wfΣ :=
 Definition typing_inferingE_Fix_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) iv_fix_typed.
 Definition typing_inferingE_Const_inst := typing_inferingE (Σ := Σ_po) (wfΣ := iv_po_wfE) iv_land_typed.
 Definition typing_inferingE_Prim_inst := typing_inferingE (Σ := Σ_po) (wfΣ := iv_po_wfE) iv_prim_typed.
+Definition typing_inferingE_Proj_inst := typing_inferingE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_proj_typed.
+(** CoFix: the declared type is a β-redex; completeness's CoFix case runs
+    [wf_cofixpointE_wf_cofixpoint_red] on it. *)
+Definition typing_inferingE_CoFix_inst := typing_inferingE (Σ := iv_Σ) (wfΣ := iv_wfE) bdf_cofix_typed.
+
+Lemma wf_cofixpointE_wf_cofixpoint_red_inst : wf_cofixpoint_red iv_Σ iv_Γc bdf_cmfix.
+Proof.
+  exact (wf_cofixpointE_wf_cofixpoint_red (Σ := iv_Σ) (wfΣ := iv_wfE) (mfix := bdf_cmfix) iv_wf_Γc
+           (@All_cons _ _ bdf_cofix_dβ _ (has_sort_isTypeE _ (bdf_RFβ_typed iv_Γc iv_wf_Γc)) All_nil)
+           bdf_wf_cofix).
+Qed.
 
 (** ** The judgment and context lemmas *)
 
@@ -380,4 +472,7 @@ Print Assumptions T8Forecast_ind_r_fit.
 Print Assumptions typing_inferingE_eta_inst.
 Print Assumptions typing_infer_indE_beta_inst.
 Print Assumptions wf_fixpointE_wf_fixpoint_red_inst.
+Print Assumptions typing_inferingE_CoFix_inst.
+Print Assumptions typing_inferingE_Proj_inst.
+Print Assumptions wf_cofixpointE_wf_cofixpoint_red_inst.
 About typing_inferingE.
