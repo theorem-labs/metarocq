@@ -1438,6 +1438,18 @@ Section CheckLeq.
     now apply leqb_level_n_spec.
   Qed.
 
+  (** The same comparison reading the distances from a table of rows of [ix]
+      ([pf_table]): equal to [leqb_level_n_ix] for a table whose rows are
+      distances of [ix]. *)
+  Definition leqb_level_n_ix_tab (tab : pf_table) (ix : index) n (l l' : Level.t)
+    := leqb_vertices_ix_tab tab ix n l l'.
+
+  Lemma leqb_level_n_ix_tab_eq tab ix : pf_table_ok tab ix ->
+    forall n l l', leqb_level_n_ix_tab tab ix n l l' = leqb_level_n_ix ix n l l'.
+  Proof using Type.
+    intros Htab n l l'. exact (leqb_vertices_ix_tab_eq tab ix n l l' Htab).
+  Qed.
+
   Definition leqb_expr_n := (leqb_expr_n_gen leqb_level_n).
 
   Lemma leqb_expr_n_spec0_gen leqb_level_n_gen
@@ -2620,6 +2632,23 @@ Section AddLevelsCstrs.
   Lemma add_uctx_ix_empty ix :
     add_uctx_ix (VSet.empty, GoodConstraintSet.empty) ix = ix.
   Proof. reflexivity. Qed.
+
+  (** An extension by a context with no level and no constraint leaves the index as it
+      is. *)
+  Lemma add_uctx_ix_nil uctx ix :
+    VSet.is_empty uctx.1 -> GoodConstraintSet.is_empty uctx.2 -> add_uctx_ix uctx ix = ix.
+  Proof.
+    move=> /VSet.is_empty_spec H1 /GoodConstraintSet.is_empty_spec H2.
+    unfold add_uctx_ix, add_level_edges_ix, add_cstrs_ix. cbv beta zeta.
+    rewrite !VSet.fold_spec GoodConstraintSet.fold_spec.
+    have -> : VSet.elements uctx.1 = [].
+    { destruct (VSet.elements uctx.1) as [|v l] eqn:He; [reflexivity|].
+      exfalso. apply (H1 v), VSet.elements_spec1. rewrite He. now left. }
+    have -> : GoodConstraintSet.elements uctx.2 = [].
+    { destruct (GoodConstraintSet.elements uctx.2) as [|c l] eqn:He; [reflexivity|].
+      exfalso. apply (H2 c), GoodConstraintSet.elements_spec1. rewrite He. now left. }
+    reflexivity.
+  Qed.
 
   Lemma ix_fold_vertices (l : list Level.t) (G : universes_graph) ix Vf :
     is_index_of G ix ->
