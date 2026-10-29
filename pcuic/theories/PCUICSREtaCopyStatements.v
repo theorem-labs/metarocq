@@ -32,23 +32,22 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
    Definition's NAME ([Context (H : X_statement)], [fun H : X_statement => …], a class field
    [f : X_statement], [Lemma l : X_statement]) gets every argument explicit. So does
    [Context (H : <body text>)]. The implicit status is kept only when the BODY TEXT is the type
-   of a class field or of a [fun] binder, which is how lanes/eta/impl/srstmt-implcheck.py
-   checks it (lanes/eta/sr-statement-note.md, "Implicit status"), and when the copy declares
-   [<base>E] with this text. *)
+   of a class field or of a [fun] binder, which is how the compiled-form check reads it, and
+   when the copy declares [<base>E] with this text. *)
 Local Set Warnings "-unexpected-implicit-declaration".
 
-(** * E statements of the copy lemmas that base [PCUICSR] uses (T0 copies 15-18)
+(** * E statements of the copy lemmas that base [PCUICSR] uses
 
-  Forecast file for EtaMetaLane: NOT registered in [_RocqProject.in]; no proof. Each
-  [<base>E_statement] is the statement the E copy (copy 15 [PCUICSpineEta], 16
-  [PCUICInductivesEta], 17 [PCUICFixWitnessEta], 18 [PCUICInductiveInversionEta]) commits to
-  prove under the name [<base>E]. Source: [pcuic/theories/PCUICSR.v] at [d8120081] (identical
-  at [da1eb84b]); the base statements were printed by [About] under [Set Printing All]
-  (lanes/eta/sr-statement-note.md has the table, the use lines and the verdicts).
+  Forecast file: NOT registered in [_RocqProject.in]; no proof. Each [<base>E_statement] is
+  the statement that the E copy of its base file ([PCUICSpineEta], [PCUICInductivesEta],
+  [PCUICFixWitnessEta], [PCUICInductiveInversionEta]) commits to prove under the name
+  [<base>E]. Source: the uses in [pcuic/theories/PCUICSR.v]; the base statements were printed
+  by [About] under [Set Printing All].
 
-  Use: forecast hypotheses or section variables only, NEVER [Admitted]. The landing E SR has
-  ZERO hypotheses left from this set: each is discharged by the copy's [<base>E]. Any change
-  to a statement goes to EtaMetaLane the same minute.
+  Use: forecast hypotheses or section variables only, NEVER [Admitted]. The E subject
+  reduction proof, when it lands, has ZERO hypotheses left from this set: each is discharged
+  by the copy's [<base>E]. Any change to a statement goes to the consumers of this file the
+  same minute.
 
   Twin rule: [typing] → [typingE] ([;;; |-] → [;;; |-E]), [wf_local] → [wf_localE], [wf] →
   [wfE], [wf_global_ext] → [wf_global_extE], [isType] → [isTypeE], [wf_local_rel] →
@@ -57,33 +56,32 @@ Local Set Warnings "-unexpected-implicit-declaration".
   [ws_cumul_pbE_terms], [ws_cumul_ctx_pb] (base notation [Σ ⊢ Γ ≤[pb] Δ]) →
   [ws_cumul_ctx_pbE], [ws_cumul_ctx_pb_rel] → [ws_cumul_ctx_pbE_rel],
   [wf_fixpoint]/[wf_cofixpoint] → [wf_fixpointE]/[wf_cofixpointE], [subslet] → [subsletE]
-  ([PCUICSubstitutionEta], copy 10), [typing_spine] ([PCUICArities]'s) → [typing_spineE]
-  ([PCUICAritiesEta], copy 14; NOT [PCUICGenerationEta.typing_spineE], which is not
+  ([PCUICSubstitutionEta]), [typing_spine] ([PCUICArities]'s) → [typing_spineE]
+  ([PCUICAritiesEta]; NOT [PCUICGenerationEta.typing_spineE], which is not
   imported), and each base definition of the copy files → its E twin below. Reduction
   ([Σ ;;; Γ ⊢ t ⇝ u], [red1]) is unchanged.
 
   [isTypeE] is [PCUICTypingEtaNotions.isTypeE := on_type (lift_typing typingE)].
 
-  Statement labelled NOT TWIN (ADDED ClosedBodies), as the stream lead's class ruling of
-  2026-10-29 09:30Z allows (lanes/eta/closedbodies-register.md, row 1):
+  Statement labelled NOT TWIN (ADDED ClosedBodies), a class of difference that is allowed:
   [type_mkAppsE_statement] adds exactly [{wfΣ : ClosedBodies Σ}] after [Σ], which base
   [PCUICSpine.type_mkApps] has not: [ws_cumul_pbE] → [cumulSpecE] ([ws_cumul_pbE_forget_spec])
   needs it. [wfE] supplies it through [wfE_ClosedBodies] ([Typing/PCUICClosedTypEta.v]).
 
-  The check: this file typechecks against [d8120081] plus the files that
-  [wip/eta-e3-copies2-2026-10-29] @ [1da9a004] (which contains [fork/frac/eta] = [07a50edd])
-  changes; no block is commented. *)
+  The check: this file typechecks against the tree it is merged into, and each statement
+  whose E twin is built is compared with that twin in compiled form (binder names, implicit
+  status, and an ascription each way); no block is commented. *)
 
 (** ** E twins of the copy-file definitions that the statements mention
 
-  FORECAST COPIES: [ctx_inst_subE], [decl_ws_cumul_pbE], [spine_substE], [arity_spineE] and
-  [wf_arity_spineE] (copy 15, [PCUICSpineEta]), [wf_subsletE] (copy 16,
-  [PCUICInductivesEta]) and [decl_ws_cumul_pbE] (copy 18, [PCUICInductiveInversionEta]) below
-  are stand-ins for the definitions those copies will own, with this exact text. Two
-  [Record spine_substE] declarations are two different types, so at landing this file (or the
-  E SR) must import the copies' definitions and delete these. *)
+  FORECAST COPIES: [ctx_inst_subE], [spine_substE], [arity_spineE] and [wf_arity_spineE]
+  ([PCUICSpineEta]), [wf_subsletE] ([PCUICInductivesEta]) and [decl_ws_cumul_pbE]
+  ([PCUICInductiveInversionEta]) below are stand-ins for the definitions those copies own,
+  with this exact text. Two [Record spine_substE] declarations are two different types, so at
+  landing this file (or the E subject reduction proof) must import the copies' definitions
+  and delete these. *)
 
-(** Copy 15, [PCUICSpine.v:903] [ctx_inst_sub] (its argument is over [PCUICSpine]'s
+(** [PCUICSpine.v:903] [ctx_inst_sub] (its argument is over [PCUICSpine]'s
     notation [ctx_inst Σ := ctx_inst (typing Σ)]). [ctx_instE] itself, the twin of the
     notation [PCUICSpine.v:28], is [PCUICTypingEtaNotions.ctx_instE]. The constructors are
     qualified because [PCUICSpine.v:1164] declares a lemma named [ctx_inst_ass]. *)
@@ -95,11 +93,11 @@ Fixpoint ctx_inst_subE {cf : checker_flags} {Σ : global_env_ext} {Γ Δ args}
   | PCUICTyping.ctx_inst_def na b t inst Δ c => ctx_inst_subE c ++ [b]
   end.
 
-(** Copy 18, [PCUICInductiveInversion.v:856] notation [decl_ws_cumul_pb]. *)
+(** [PCUICInductiveInversion.v:856] notation [decl_ws_cumul_pb]. *)
 Notation decl_ws_cumul_pbE Σ Γ :=
   (All_decls_alpha_pb Conv (fun pb (x0 y0 : term) => ws_cumul_pbE pb Σ Γ x0 y0)).
 
-(** Copy 15, [PCUICSpine.v:226] [spine_subst]. *)
+(** [PCUICSpine.v:226] [spine_subst]. *)
 Record spine_substE {cf : checker_flags} Σ Γ inst s (Δ : context) := mkSpineSubstE {
   spine_dom_wfE : wf_localE Σ Γ;
   spine_codom_wfE : wf_localE Σ (Γ ,,, Δ);
@@ -108,7 +106,7 @@ Record spine_substE {cf : checker_flags} Σ Γ inst s (Δ : context) := mkSpineS
 Arguments inst_ctx_substE {cf Σ Γ inst s Δ}.
 Arguments inst_subsletE {cf Σ Γ inst s Δ}.
 
-(** Copy 15, [PCUICSpine.v:274] [arity_spine]. *)
+(** [PCUICSpine.v:274] [arity_spine]. *)
 Inductive arity_spineE {cf : checker_flags} (Σ : global_env_ext) (Γ : context) :
   term -> list term -> term -> Type :=
 | arity_spine_nilE ty : arity_spineE Σ Γ ty [] ty
@@ -128,17 +126,17 @@ Inductive arity_spineE {cf : checker_flags} (Σ : global_env_ext) (Γ : context)
    [noconf] with no name in the text, so the twin carries it too. *)
 Derive Signature for arity_spineE.
 
-(** Copy 15, [PCUICSpine.v:291] [wf_arity_spine]. *)
+(** [PCUICSpine.v:291] [wf_arity_spine]. *)
 Record wf_arity_spineE {cf:checker_flags} Σ Γ T args T' :=
 { wf_arity_spine_wfE : isTypeE Σ Γ T;
   wf_arity_spine_spineE : arity_spineE Σ Γ T args T' }.
 
-(** Copy 16, [PCUICInductives.v:623] [wf_subslet]. *)
+(** [PCUICInductives.v:623] [wf_subslet]. *)
 Record wf_subsletE {cf} Σ Γ s Δ :=
   { wf_subslet_ctxE : wf_localE Σ (Γ ,,, Δ);
     wf_subslet_subsletE :> subsletE Σ Γ s Δ }.
 
-(** ** Copy 15: [PCUICSpine] *)
+(** ** [PCUICSpine] *)
 
 Definition ctx_inst_cumulE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
@@ -232,7 +230,7 @@ Definition subslet_skipnE_statement : Type :=
   subsletE Σ Γ s Δ ->
   subsletE Σ Γ (skipn n s) (skipn n Δ).
 
-(** NOT TWIN (ADDED ClosedBodies), closedbodies-register row 1: the binder
+(** NOT TWIN (ADDED ClosedBodies): the binder
     [{wfΣ : ClosedBodies Σ}] is not in base [PCUICSpine.type_mkApps]; [typeE_Cumul] needs
     [cumulSpecE], and [ws_cumul_pbE_forget_spec] gives it only under [ClosedBodies Σ]. Its SR
     consumers ([PCUICSR.v:2101, 2545, 2937], all in [sr_red1]) hold [wfΣ : wf Σ.1] through
@@ -307,14 +305,14 @@ Definition ws_cumul_pb_expand_lets_ws_cumul_ctxE_statement : Type :=
   ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
   ws_cumul_pbE le' Σ (Γ ,,, smash_context [] Δ) (expand_lets Δ T) (expand_lets Δ' T').
 
-(** C1 addition for EtaMetaLane's T2a ([PCUICSpine.v:415]). *)
+(** Not used by [PCUICSR]; for the E copy of [PCUICValidity] ([PCUICSpine.v:415]). *)
 Definition wf_arity_spine_typing_spineE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {Γ : context} {T : term} {args : list term} {T' : term},
   wf_arity_spineE Σ Γ T args T' ->
   typing_spineE Σ Γ T args T'.
 
-(** C1 addition for EtaMetaLane's T2a ([PCUICSpine.v:782]). *)
+(** Not used by [PCUICSR]; for the E copy of [PCUICValidity] ([PCUICSpine.v:782]). *)
 Definition spine_subst_smash_app_invE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {Γ Δ : context} {Δ' : list context_decl} {δ δ' : list term},
@@ -324,11 +322,11 @@ Definition spine_subst_smash_app_invE_statement : Type :=
   spine_substE Σ Γ δ' (List.rev δ')
     (subst_context_let_expand (List.rev δ) Δ (smash_context [] Δ')).
 
-(** ** Copy 16: [PCUICInductives] *)
+(** ** [PCUICInductives] *)
 
 (** TWIN. Not named in [PCUICSR]'s text: base declares [#[global] Hint Resolve isType_intro :
     pcuic] ([PCUICInductives.v:288-289]) and SR's [pcuic]/[pcuics] tactics search that
-    database, so copy 16 must re-register [isType_introE] in [pcuic]. *)
+    database, so the E copy must re-register [isType_introE] in [pcuic]. *)
 Definition isType_introE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {T : term} {s : sort},
   Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T.
@@ -424,9 +422,9 @@ Definition wf_local_expand_letsE_statement : Type :=
   wf_localE Σ (Γ ,,, Δ ,,, Γ') ->
   wf_localE Σ (Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ').
 
-(** C1 addition for EtaMetaLane's T2a ([PCUICInductives.v:2697]). Route: its base proof
-    reaches [type_it_mkProd_or_LetIn_inv], whose raw-form site goes through
-    [ws_cumul_pbE_LetIn_l_inv] (t0-plan.md:168). *)
+(** Not used by [PCUICSR]; for the E copy of [PCUICValidity] ([PCUICInductives.v:2697]).
+    Route: its base proof reaches [type_it_mkProd_or_LetIn_inv], whose raw-form site goes
+    through [ws_cumul_pbE_LetIn_l_inv]. *)
 Definition isType_case_predicateE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {ci : case_info}
     {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
@@ -441,7 +439,7 @@ Definition isType_case_predicateE_statement : Type :=
       (pre_case_predicate_context_gen ci mdecl idecl params u)
       (tSort ps)).
 
-(** C1 addition for EtaMetaLane's T2a ([PCUICInductives.v:2803]). *)
+(** Not used by [PCUICSR]; for the E copy of [PCUICValidity] ([PCUICInductives.v:2803]). *)
 Definition arity_spine_case_predicateE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {ci : case_info}
     {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
@@ -463,16 +461,17 @@ Definition arity_spine_case_predicateE_statement : Type :=
       (tSort ps))
     (indices ++ [c]) (tSort ps).
 
-(** ** Copy 17: [PCUICFixWitness]
+(** ** [PCUICFixWitness]
 
   [PCUICSR] uses only the class [ShapeCheck] (in its own [mfix_on_ind_red1_body], [:82]) and its
   field [shape_check_dbody] ([:95]), which mention no typing: base, no statement. *)
 
-(** ** Copy 18: [PCUICInductiveInversion]
+(** ** [PCUICInductiveInversion]
 
   [on_constructor_wf_args] ([PCUICInductiveInversion.v:267]) IS used, qualified, at
-  [PCUICSR.v:2397] ([PCUICInductiveInversion.on_constructor_wf_args]); EtaMetaLane closes that
-  site in its E SR with its own [on_constructor_wf_arities_pars_argsE]; no statement here. *)
+  [PCUICSR.v:2397] ([PCUICInductiveInversion.on_constructor_wf_args]); the E subject reduction
+  proof closes that site with its own [on_constructor_wf_arities_pars_argsE]; no statement
+  here. *)
 
 (** TWIN. The universe clause comes over E from [ws_cumul_pbE_Ind_l_inv]
     ([cmp_global_instance_finst] := [cmp_global_instance_eta], [PCUICEtaFInst.v:284]); napp
@@ -691,7 +690,7 @@ Definition wf_case_predicate_contextE_statement : Type :=
   let predctx := case_predicate_context ci mdecl idecl p in
   wf_localE Σ (Γ ,,, predctx).
 
-(** Route (A) of t0-plan §6 risk 5: twin statement, a proof without [mfix_on_ind_inv]. *)
+(** Twin statement, to be proved without [mfix_on_ind_inv]. *)
 Definition wf_cofixpoint_typing_spineE_statement : Prop :=
   forall {cf : checker_flags} (Σ : global_env_ext) (Γ : context) (ind : inductive) (u : Instance.t)
     (mfix : mfixpoint term) (idx : nat) (d : def term) (args args' : list term),
@@ -703,8 +702,8 @@ Definition wf_cofixpoint_typing_spineE_statement : Prop :=
   typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
   check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
 
-(** C1 addition for EtaMetaLane's T6 (the E copy of [Bidirectional/BDToPCUIC]):
-    [PCUICInductiveInversion.v:3794]. Route [INFERENCE]: base's proof reads the universe
+(** Not used by [PCUICSR]; for the E copy of [Bidirectional/BDToPCUIC]
+    ([PCUICInductiveInversion.v:3794]). Route, not yet proved: base's proof reads the universe
     clause of [invert_cumul_ind_ind], false over η below the arity; here [isTypeE] of
     [mkApps (tInd ind u) args] makes [args] the full arity, so [invert_cumul_ind_indE] with
     [finst_ind_glue_full] ([PCUICEtaFInstGlue.v:37]) gives the clause. *)
@@ -721,13 +720,13 @@ Definition ctx_inst_app_weakE_statement : Type :=
   ctx_instE Σ Γ (params ++ skipn (ind_npars mdecl) args)
     (List.rev (subst_instance v (ind_params mdecl ,,, ind_indices idecl))).
 
-(** C1 addition for EtaMetaLane's T6 (the E copy of [Bidirectional/BDFromPCUIC]):
-    [PCUICInductiveInversion.v:3616]. Its base proof inverts only its own universe premise
+(** Not used by [PCUICSR]; for the E copy of [Bidirectional/BDFromPCUIC]
+    ([PCUICInductiveInversion.v:3616]). Its base proof inverts only its own universe premise
     ([cmp_global_instance_ind_inv]), builds cumulativity in the constructing direction
     ([into_ws_cumul_pb], [cumul_ctx_relSpec_Algo]) and reads the declaration's variance clause
     ([on_ctype_variance]); the presumed-false class enters only through
-    [positive_cstr_closed_args], whose closure holds the risk-5 rows of copy 18 (see the
-    note). *)
+    [positive_cstr_closed_args], whose closure holds the presumed-false rows of the
+    [PCUICInductiveInversion] copy. *)
 Definition projection_cumulative_indicesE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {cdecl : constructor_body}
