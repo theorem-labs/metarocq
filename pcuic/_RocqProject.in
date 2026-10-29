@@ -226,6 +226,9 @@ theories/PCUICTypingEtaCopy9Instances.v
 # Spines over typingE (E copy of PCUICSpine), and its satisfying instances
 theories/PCUICSpineEta.v
 theories/PCUICTypingEtaCopy15Instances.v
+# (Co)fixpoint witnesses over typingE (E copy of PCUICFixWitness), and its satisfying instances
+theories/PCUICFixWitnessEta.v
+theories/PCUICTypingEtaCopy17Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
