@@ -1497,7 +1497,7 @@ Section Typecheck.
     destruct (isProd C || isInd (decompose_app C).1).
     - destruct (hC _ wfΣ) as [T hT].
       pose proof (hΣ _ wfΣ) as [wfΣ'].
-      sq. now eapply PCUICClassification.wt_closed_red_refl.
+      sq. now eapply PCUICSafeLemmata.wt_closed_red_refl.
     - exact (hnf_sound Σ wfΣ).
   Qed.
 
