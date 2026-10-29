@@ -3133,3 +3133,383 @@ Proof.
   - eapply (trans_clos_map _ _ (fun z => x :: z)); [|exact IH]. intros a b r. now constructor.
 Qed.
 
+Lemma set_array_default_twice a d d' : set_array_default (set_array_default a d) d' = set_array_default a d'.
+Proof. now destruct a. Qed.
+
+Lemma set_array_type_twice a t t' : set_array_type (set_array_type a t) t' = set_array_type a t'.
+Proof. now destruct a. Qed.
+
+Lemma set_preturn_twice p r r' : set_preturn (set_preturn p r) r' = set_preturn p r'.
+Proof. now destruct p. Qed.
+
+Lemma fix_context_body_irr pre post n t b b' r r' :
+  fix_context (pre ++ {| dname := n; dtype := t; dbody := b; rarg := r |} :: post)
+  = fix_context (pre ++ {| dname := n; dtype := t; dbody := b'; rarg := r' |} :: post).
+Proof. unfold fix_context. rewrite !mapi_app. reflexivity. Qed.
+
+Section RecordSteps.
+  Context (Σ : global_env).
+
+  Lemma tc_branch_body Γ p (x : branch term) w :
+    trans_clos (red1 Σ (Γ ,,, inst_case_branch_context p x)) (bbody x) w ->
+    trans_clos (fun br br' => on_Trel_eq (red1 Σ (Γ ,,, inst_case_branch_context p br)) bbody bcontext br br')
+      x {| bcontext := bcontext x; bbody := w |}.
+  Proof.
+    destruct x as [cx bx]; cbn. intros h.
+    eapply (trans_clos_map _ _ (fun b => {| bcontext := cx; bbody := b |})); [|exact h].
+    intros a b r. split; [exact r|reflexivity].
+  Qed.
+
+  Lemma tc_def_type Γ (d : def term) w :
+    trans_clos (red1 Σ Γ) (dtype d) w ->
+    trans_clos (on_Trel_eq (red1 Σ Γ) dtype (fun x => (dname x, dbody x, rarg x)))
+      d {| dname := dname d; dtype := w; dbody := dbody d; rarg := rarg d |}.
+  Proof.
+    destruct d as [dn dt db dr]; cbn. intros h.
+    eapply (trans_clos_map _ _ (fun t => {| dname := dn; dtype := t; dbody := db; rarg := dr |})); [|exact h].
+    intros a b r. split; [exact r|reflexivity].
+  Qed.
+
+  Lemma tc_def_body Δ (d : def term) w :
+    trans_clos (red1 Σ Δ) (dbody d) w ->
+    trans_clos (on_Trel_eq (red1 Σ Δ) dbody (fun x => (dname x, dtype x, rarg x)))
+      d {| dname := dname d; dtype := dtype d; dbody := w; rarg := rarg d |}.
+  Proof.
+    destruct d as [dn dt db dr]; cbn. intros h.
+    eapply (trans_clos_map _ _ (fun b => {| dname := dn; dtype := dt; dbody := b; rarg := dr |})); [|exact h].
+    intros a b r. split; [exact r|reflexivity].
+  Qed.
+
+  Lemma tc_def_body_inv Δ d d0 :
+    trans_clos (on_Trel_eq (red1 Σ Δ) dbody (fun x => (dname x, dtype x, rarg x))) d d0 ->
+    trans_clos (red1 Σ Δ) (dbody d) (dbody d0) × ((dname d, dtype d, rarg d) = (dname d0, dtype d0, rarg d0)).
+  Proof.
+    induction 1 as [x y [r e]|x y z _ [h1 e1] _ [h2 e2]].
+    - split; [now apply t_step|exact e].
+    - split; [eapply t_trans; eassumption|congruence].
+  Qed.
+
+  (** One body of a (co)fixpoint steps by [red1⁺] in [Γ ,,, fix_context M]: the
+      (co)fixpoint steps by [red1⁺] (each intermediate keeps names and types, so
+      the same [fix_context]). *)
+  Lemma fix_body_steps (isfix : bool) Γ M M0 idx :
+    let T := if isfix then tFix else tCoFix in
+    OnOne2 (fun d d0 => trans_clos (red1 Σ (Γ ,,, fix_context M)) (dbody d) (dbody d0)
+                        × ((dname d, dtype d, rarg d) = (dname d0, dtype d0, rarg d0))) M M0 ->
+    trans_clos (red1 Σ Γ) (T M idx) (T M0 idx).
+  Proof.
+    intros T ho. destruct (OnOne2_split _ _ _ _ ho) as (d & d0 & pre & post & [hb e] & -> & ->).
+    destruct d as [dn dt db dr], d0 as [n0 t0 b0 r0]; cbn in hb, e.
+    injection e as <- <- <-.
+    eapply (trans_clos_map _ _ (fun b => T (pre ++ {| dname := dn; dtype := dt; dbody := b; rarg := dr |} :: post) idx));
+      [|exact hb].
+    intros a b r. destruct isfix; [apply fix_red_body|apply cofix_red_body]; apply OnOne2_app; constructor;
+      (split; [|reflexivity]); cbn; rewrite (fix_context_body_irr pre post dn dt a db dr dr); exact r.
+  Qed.
+
+End RecordSteps.
+
+(** ** The parallel one-step postponement, assembled
+
+  Induction on the [pe] derivation of the source. The root cases call the root
+  lemmas as black boxes ([pe_postpone_beta], [pe_iota_root], [pe_proj_root],
+  [pe_cofix_case_root], [pe_cofix_proj_root], [pe_fix_root], [pe_prim_root]); the
+  [pe_eta] case pushes the target step under the λ ([red1_lift1]); the other cases
+  are congruences, with the target step transported along [pe_ctx]. *)
+
+Section Assembly.
+  Context {cf : checker_flags} {Σ : global_env} (cb : ClosedBodies Σ).
+
+  Definition PPg (t u : term) : Type :=
+    forall Γ Γ' v, pe_ctx Γ Γ' ->
+    (* PREMISE Good, NOT unconditional: (i) typed_eta_safe, proved here with no SR;
+       (ii) preservation of typing along red, E subject reduction, forecast T1. *)
+    Good Σ Γ t ->
+    on_free_vars xpredT u -> red1 Σ Γ' u v ->
+    ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
+
+  Definition pe_defrel (d d' : def term) : Type :=
+    pe d.(dtype) d'.(dtype) × pe d.(dbody) d'.(dbody) × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg).
+
+  Theorem pe_postpone_gen t u : pe t u -> PPg t u.
+  Proof.
+    revert t u. apply pe_ind_all; unfold PPg.
+    - (* η at the root of the source: push the target step under the λ *)
+      intros na A b M' hb IH Γ Γ' v hctx hg hofv hr.
+      have hr' : red1 Σ (Γ' ,, vass na A) (tApp (lift0 1 M') (tRel 0)) (tApp (lift0 1 v) (tRel 0))
+        by (apply app_red_l; exact (red1_lift1 cb Γ' na A _ _ hofv hr)).
+      have hofv' : on_free_vars xpredT (tApp (lift0 1 M') (tRel 0)) by (cbn; now rewrite (ofvT_lift0 _ hofv)).
+      destruct (IH (Γ ,, vass na A) (Γ' ,, vass na A) _ (pe_ctx_vass _ _ _ _ _ _ hctx)
+                  (Good_lam_body _ _ _ _ hg) hofv' hr') as (w' & hw' & hpw').
+      exists (tLambda na A w'). split.
+      + eapply (trans_clos_map _ _ (fun y => tLambda na A y)); [|exact hw']. intros y z r. now apply abs_red_r.
+      + now apply pe_eta.
+    - (* variable: unfold the [pe]-related let body *)
+      intros n Γ Γ' v hctx hg hofv hr. destruct (C3R.red1_tRel_inv hr) as (b' & hb' & ->).
+      destruct (pe_ctx_nth _ _ _ _ hctx hb') as (b & hb & hpb).
+      exists (lift0 (S n) b). split; [apply t_step; now apply red_rel|now apply pe_lift].
+    - intros i Γ Γ' v _ _ _ hr. exfalso. exact (C3R.red1_tVar_absurd hr).
+    - intros s Γ Γ' v _ _ _ hr. exfalso. exact (C3R.red1_tSort_absurd hr).
+    - intros c uu Γ Γ' v _ _ _ hr. destruct (C3R.red1_tConst_inv hr) as (decl & body & hd & hb & ->).
+      exists (subst_instance uu body). split; [apply t_step; eapply red_delta; eassumption|apply pe_refl].
+    - intros ind uu Γ Γ' v _ _ _ hr. exfalso. exact (C3R.red1_tInd_absurd hr).
+    - intros ind k uu Γ Γ' v _ _ _ hr. exfalso. exact (C3R.red1_tConstruct_absurd hr).
+    - (* evar *)
+      intros ev l l' al Γ Γ' v hctx hg hofv hr. destruct (C3R.red1_tEvar_inv hr) as (l1 & -> & ho).
+      have hT : All (fun y => is_true (on_free_vars xpredT y)) l' by (cbn in hofv; now apply forallb_All).
+      destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (Good Σ Γ) (fun y => is_true (on_free_vars xpredT y))
+                  l l' l1 (All2_impl al (fun x y '(hp, ih) => (hp, fun gx ty z hz => ih Γ Γ' z hctx gx ty hz)))
+                  (Good_evar Σ Γ ev l hg) hT ho) as (l0 & ho0 & hp0).
+      exists (tEvar ev l0). split.
+      + eapply (trans_clos_map _ _ (tEvar ev)); [|exact (OnOne2_tc _ _ _ ho0)]. intros a b r. now apply evar_red.
+      + now apply pe_Evar.
+    - (* λ *)
+      intros na A A' M M' hA IHA hM IHM Γ Γ' v hctx hg hofv hr.
+      cbn in hofv. move/andP: hofv => [hoA hoM]. rewrite ofvT_shift in hoM.
+      destruct (C3R.red1_tLambda_inv hr) as [(A'' & -> & hrA)|(M'' & -> & hrM)].
+      + destruct (IHA Γ Γ' A'' hctx (Good_lam_dom Σ Γ _ _ _ hg) hoA hrA) as (w & hw & hpw).
+        exists (tLambda na w M). split; [|now apply pe_Lambda].
+        eapply (trans_clos_map _ _ (fun y => tLambda na y M)); [|exact hw]. intros y z r. now apply abs_red_l.
+      + destruct (IHM (Γ ,, vass na A) (Γ' ,, vass na A') M'' (pe_ctx_vass _ _ _ _ _ _ hctx)
+                    (Good_lam_body _ _ _ _ hg) hoM hrM) as (w & hw & hpw).
+        exists (tLambda na A w). split; [|now apply pe_Lambda].
+        eapply (trans_clos_map _ _ (fun y => tLambda na A y)); [|exact hw]. intros y z r. now apply abs_red_r.
+    - (* application: β, fixpoint and primitive roots, or a congruence *)
+      intros f f' x x' hf IHf hx IHx Γ Γ' v hctx hg hofv hr.
+      destruct (C3R.red1_tApp_inv hr) as
+        [[[[(na & A' & b' & -> & ->)|(mfix & idx & args & narg & fn & E & hu & hc & ->)]
+          |(f'' & -> & hrf)]|(x'' & -> & hrx)]
+        |(c & decl & uu & op & ls & r & E & hop & hd & hb & hden & hrb)].
+      + exact (pe_postpone_beta Σ Γ (tApp f x) na A' b' x' (pe_App _ _ _ _ hf hx)).
+      + have hpe : pe (tApp f x) (mkApps (tFix mfix idx) args) by (rewrite E; now apply pe_App).
+        exact (pe_fix_root Σ Γ (tApp f x) mfix idx args narg fn hg hpe hu hc).
+      + cbn in hofv. move/andP: hofv => [hof hox].
+        destruct (IHf Γ Γ' f'' hctx (Good_app_l Σ Γ _ _ hg) hof hrf) as (w & hw & hpw).
+        exists (tApp w x). split; [|now apply pe_App].
+        eapply (trans_clos_map _ _ (fun y => tApp y x)); [|exact hw]. intros y z r0. now apply app_red_l.
+      + cbn in hofv. move/andP: hofv => [hof hox].
+        destruct (IHx Γ Γ' x'' hctx (Good_app_r Σ Γ _ _ hg) hox hrx) as (w & hw & hpw).
+        exists (tApp f w). split; [|now apply pe_App].
+        eapply (trans_clos_map _ _ (fun y => tApp f y)); [|exact hw]. intros y z r0. now apply app_red_r.
+      + have hpe : pe (tApp f x) (mkApps (tConst c uu) (map term_of_lit ls)) by (rewrite E; now apply pe_App).
+        have hstep : red1 Σ Γ (mkApps (tConst c uu) (map term_of_lit ls)) v by (eapply red_prim_op; eassumption).
+        exact (pe_prim_root cb Γ (tApp f x) c uu ls v hg hpe hstep).
+    - (* product *)
+      intros na a a' b b' ha IHa hb IHb Γ Γ' v hctx hg hofv hr.
+      cbn in hofv. move/andP: hofv => [hoa hob]. rewrite ofvT_shift in hob.
+      destruct (C3R.red1_tProd_inv hr) as [(a'' & -> & hra)|(b'' & -> & hrb)].
+      + destruct (IHa Γ Γ' a'' hctx (Good_prod_dom Σ Γ _ _ _ hg) hoa hra) as (w & hw & hpw).
+        exists (tProd na w b). split; [|now apply pe_Prod].
+        eapply (trans_clos_map _ _ (fun y => tProd na y b)); [|exact hw]. intros y z r. now apply prod_red_l.
+      + destruct (IHb (Γ ,, vass na a) (Γ' ,, vass na a') b'' (pe_ctx_vass _ _ _ _ _ _ hctx)
+                    (Good_prod_cod Σ Γ _ _ _ hg) hob hrb) as (w & hw & hpw).
+        exists (tProd na a w). split; [|now apply pe_Prod].
+        eapply (trans_clos_map _ _ (fun y => tProd na a y)); [|exact hw]. intros y z r. now apply prod_red_r.
+    - (* let: ζ, or a congruence *)
+      intros na b b' ty ty' x x' hb IHb hty IHty hx IHx Γ Γ' v hctx hg hofv hr.
+      cbn in hofv. move/and3P: hofv => [hob hoty hox]. rewrite ofvT_shift in hox.
+      destruct (C3R.red1_tLetIn_inv hr) as [[[->|(b'' & -> & hrb)]|(ty'' & -> & hrty)]|(x'' & -> & hrx)].
+      + exists (x {0 := b}). split; [apply t_step; apply red_zeta|].
+        exact (pe_subst _ _ hx [b] [b'] 0 (All2_cons hb All2_nil)).
+      + destruct (IHb Γ Γ' b'' hctx (Good_letin_def Σ Γ _ _ _ _ hg) hob hrb) as (w & hw & hpw).
+        exists (tLetIn na w ty x). split; [|now apply pe_LetIn].
+        eapply (trans_clos_map _ _ (fun y => tLetIn na y ty x)); [|exact hw]. intros y z r. now apply letin_red_def.
+      + destruct (IHty Γ Γ' ty'' hctx (Good_letin_ty Σ Γ _ _ _ _ hg) hoty hrty) as (w & hw & hpw).
+        exists (tLetIn na b w x). split; [|now apply pe_LetIn].
+        eapply (trans_clos_map _ _ (fun y => tLetIn na b y x)); [|exact hw]. intros y z r. now apply letin_red_ty.
+      + destruct (IHx (Γ ,, vdef na b ty) (Γ' ,, vdef na b' ty') x'' (pe_ctx_vdef _ _ _ _ _ _ _ _ hctx hb)
+                    (Good_letin_body Σ Γ _ _ _ _ hg) hox hrx) as (w & hw & hpw).
+        exists (tLetIn na b ty w). split; [|now apply pe_LetIn].
+        eapply (trans_clos_map _ _ (fun y => tLetIn na b ty y)); [|exact hw]. intros y z r. now apply letin_red_body.
+    - (* case: ι and cofix roots, or a congruence *)
+      intros ci p p' c c' brs brs' apar eu ectx pret IHret pc IHc abrs Γ Γ' v hctx hg hofv hr.
+      have apar0 : All2 pe (pparams p) (pparams p') := All2_impl apar (fun x y h => fst h).
+      have abrs0 : All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs brs'
+        := All2_impl abrs (fun x y h => (fst h, fst (snd h))).
+      have hnl := Good_case_hnl Σ Γ ci p c brs hg.
+      cbn in hofv. move/and5P: hofv => [hopar horet _ hoc hobrs].
+      destruct (C3R.red1_tCase_inv hr) as
+        [[[[[(k & uu & args & br & -> & hnth & hlen & ->)|(mfix & idx & args & narg & fn & -> & hu & ->)]
+           |(par1 & -> & hop)]|(r & -> & hrr)]|(c1 & -> & hrc)]|(brs1 & -> & hob)].
+      + exact (pe_iota_root Σ Γ ci p c brs p' k uu args brs' br hnl apar0 eu pc abrs0 hnth hlen).
+      + exact (pe_cofix_case_root Σ Γ ci p c brs p' mfix idx args narg fn brs' hnl apar0 eu ectx pret pc abrs0 hu).
+      + (* a parameter *)
+        have hT : All (fun y => is_true (on_free_vars xpredT y)) (pparams p') by now apply forallb_All.
+        destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (Good Σ Γ) (fun y => is_true (on_free_vars xpredT y))
+                    _ _ par1 (All2_impl apar (fun x y '(hp, ih) => (hp, fun gx ty z hz => ih Γ Γ' z hctx gx ty hz)))
+                    (Good_case_params Σ Γ ci p c brs hg) hT hop) as (l0 & ho0 & hp0).
+        exists (tCase ci (set_pparams p l0) c brs). split.
+        * rewrite -{1}(C3R.set_pparams_id p).
+          eapply (trans_clos_map _ _ (fun l => tCase ci (set_pparams p l) c brs)); [|exact (OnOne2_tc _ _ _ ho0)].
+          intros a b0 r0. rewrite -(set_pparams_twice p a b0). now apply case_red_param.
+        * apply pe_Case; cbn; [exact hp0|exact eu|exact ectx|exact pret|exact pc|exact abrs0].
+      + (* the return type *)
+        rewrite ofvT_shift in horet.
+        have hctx' : pe_ctx (Γ ,,, inst_case_predicate_context p) (Γ' ,,, inst_case_predicate_context p').
+        { apply pe_ctx_app; [exact hctx|]. unfold inst_case_predicate_context. rewrite -eu -ectx.
+          now apply pe_inst_case_context. }
+        destruct (IHret _ _ r hctx' (Good_case_ret Σ Γ ci p c brs hg) horet hrr) as (w & hw & hpw).
+        exists (tCase ci (set_preturn p w) c brs). split.
+        * rewrite -{1}(C3R.set_preturn_id p).
+          eapply (trans_clos_map _ _ (fun y => tCase ci (set_preturn p y) c brs)); [|exact hw].
+          intros a b0 r0. rewrite -(set_preturn_twice p a b0). now apply case_red_return.
+        * apply pe_Case; cbn; [exact apar0|exact eu|exact ectx|exact hpw|exact pc|exact abrs0].
+      + (* the scrutinee *)
+        destruct (IHc Γ Γ' c1 hctx (Good_case_discr Σ Γ ci p c brs hg) hoc hrc) as (w & hw & hpw).
+        exists (tCase ci p w brs). split; [|apply pe_Case; [exact apar0|exact eu|exact ectx|exact pret|exact hpw|exact abrs0]].
+        eapply (trans_clos_map _ _ (fun y => tCase ci p y brs)); [|exact hw]. intros y z r0. now apply case_red_discr.
+      + (* a branch *)
+        have hT : All (fun br => is_true (on_free_vars xpredT (bbody br))) brs'.
+        { apply forallb_All in hobrs. eapply All_impl; [exact hobrs|]. intros br h.
+          move/andP: h => [_ h]. now rewrite ofvT_shift in h. }
+        destruct (OnOne2_postpone (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y))
+                    (fun br br' => on_Trel_eq (red1 Σ (Γ' ,,, inst_case_branch_context p' br)) bbody bcontext br br')
+                    (fun br br' => on_Trel_eq (red1 Σ (Γ ,,, inst_case_branch_context p br)) bbody bcontext br br')
+                    (fun br => Good Σ (Γ ,,, inst_case_branch_context p br) (bbody br))
+                    (fun br => is_true (on_free_vars xpredT (bbody br))) brs brs' brs1) as (brs0 & ho0 & hp0).
+        { eapply All2_impl; [exact abrs|]. intros x y [hc [hp ih]]. split; [split; [exact hc|exact hp]|].
+          intros gx ty z [hz hcz].
+          have hctxb : pe_ctx (Γ ,,, inst_case_branch_context p x) (Γ' ,,, inst_case_branch_context p' y).
+          { apply pe_ctx_app; [exact hctx|]. unfold inst_case_branch_context. rewrite -eu -hc.
+            now apply pe_inst_case_context. }
+          destruct (ih _ _ _ hctxb gx ty hz) as (w & hw & hpw).
+          exists {| bcontext := bcontext x; bbody := w |}. split; [exact (tc_branch_body Σ Γ p x w hw)|].
+          split; [cbn; congruence|exact hpw]. }
+        { exact (Good_case_brs Σ Γ ci p c brs hg). }
+        { exact hT. }
+        { exact hob. }
+        exists (tCase ci p c brs0). split.
+        * eapply (trans_clos_map _ _ (fun l => tCase ci p c l)); [|exact (OnOne2_tc _ _ _ ho0)].
+          intros a b0 r0. now apply case_red_brs.
+        * apply pe_Case; [exact apar0|exact eu|exact ectx|exact pret|exact pc|exact hp0].
+    - (* projection: projection and cofix-proj roots, or a congruence *)
+      intros pr c c' pc IHc Γ Γ' v hctx hg hofv hr.
+      have hnl := Good_proj_hnl Σ Γ pr c hg.
+      destruct (C3R.red1_tProj_inv hr) as
+        [[(mfix & idx & args & narg & fn & -> & hu & ->)|(args & uu & arg & -> & hnth & ->)]|(c1 & -> & hrc)].
+      + exact (pe_cofix_proj_root Σ Γ pr c mfix idx args narg fn hnl pc hu).
+      + exact (pe_proj_root Σ Γ pr c uu args arg hnl pc hnth).
+      + cbn in hofv. destruct (IHc Γ Γ' c1 hctx (Good_proj Σ Γ _ _ hg) hofv hrc) as (w & hw & hpw).
+        exists (tProj pr w). split; [|now apply pe_Proj].
+        eapply (trans_clos_map _ _ (fun y => tProj pr y)); [|exact hw]. intros y z r. now apply proj_red.
+    - (* fixpoint: a type or a body steps *)
+      intros mfix mfix' idx am Γ Γ' v hctx hg hofv hr.
+      have am0 : All2 pe_defrel mfix mfix'.
+      { eapply All2_impl; [exact am|]. intros x y [[h1 _] [[h2 _] [h3 h4]]]. exact (h1, (h2, (h3, h4))). }
+      have hG := Good_fix_gen Σ Γ true mfix idx hg.
+      cbn in hofv. apply forallb_All in hofv.
+      destruct (C3R.red1_tFix_inv hr) as [(m1 & -> & ho)|(m1 & -> & ho)].
+      + destruct (OnOne2_postpone pe_defrel (on_Trel_eq (red1 Σ Γ') dtype (fun x => (dname x, dbody x, rarg x)))
+                    (on_Trel_eq (red1 Σ Γ) dtype (fun x => (dname x, dbody x, rarg x)))
+                    (fun d => Good Σ Γ (dtype d)) (fun d => is_true (on_free_vars xpredT (dtype d)))
+                    mfix mfix' m1) as (m0 & ho0 & hp0).
+        { eapply All2_impl; [exact am|]. intros x y [[h1 ih] [[h2 _] [h3 h4]]].
+          split; [exact (h1, (h2, (h3, h4)))|]. intros gx ty z [hz e]. injection e as e1 e2 e3.
+          destruct (ih _ _ _ hctx gx ty hz) as (w & hw & hpw).
+          eexists; split; [exact (tc_def_type Σ Γ x w hw)|].
+          cbn. split; [exact hpw|]. split; [rewrite -e2; exact h2|].
+          cbn [dname rarg dtype dbody]. split; congruence. }
+        { eapply All_impl; [exact hG|]. intros d [h _]. exact h. }
+        { eapply All_impl; [exact hofv|]. intros d h. move/andP: h => [h _]. exact h. }
+        { exact ho. }
+        exists (tFix m0 idx). split; [|now apply pe_Fix].
+        eapply (trans_clos_map _ _ (fun m => tFix m idx)); [|exact (OnOne2_tc _ _ _ ho0)].
+        intros a b r. now apply fix_red_ty.
+      + have hctxf : pe_ctx (Γ ,,, fix_context mfix) (Γ' ,,, fix_context mfix')
+          by (apply pe_ctx_app; [exact hctx|apply pe_ctx_fix_context; exact (All2_length am)]).
+        destruct (OnOne2_postpone pe_defrel
+                    (on_Trel_eq (red1 Σ (Γ' ,,, fix_context mfix')) dbody (fun x => (dname x, dtype x, rarg x)))
+                    (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix)) dbody (fun x => (dname x, dtype x, rarg x)))
+                    (fun d => Good Σ (Γ ,,, fix_context mfix) (dbody d)) (fun d => is_true (on_free_vars xpredT (dbody d)))
+                    mfix mfix' m1) as (m0 & ho0 & hp0).
+        { eapply All2_impl; [exact am|]. intros x y [[h1 _] [[h2 ih] [h3 h4]]].
+          split; [exact (h1, (h2, (h3, h4)))|]. intros gx ty z [hz e]. injection e as e1 e2 e3.
+          destruct (ih _ _ _ hctxf gx ty hz) as (w & hw & hpw).
+          eexists; split; [exact (tc_def_body Σ _ x w hw)|].
+          cbn. split; [rewrite -e2; exact h1|]. split; [exact hpw|]. cbn [dname rarg dtype dbody]. split; congruence. }
+        { eapply All_impl; [exact hG|]. intros d [_ h]. exact h. }
+        { eapply All_impl; [exact hofv|]. intros d h. move/andP: h => [_ h]. now rewrite ofvT_shift in h. }
+        { exact ho. }
+        exists (tFix m0 idx). split; [|now apply pe_Fix].
+        apply (fix_body_steps Σ true Γ mfix m0 idx).
+        eapply OnOne2_impl; [exact ho0|]. intros d d0 h. exact (tc_def_body_inv Σ _ d d0 h).
+    - (* cofixpoint: a type or a body steps *)
+      intros mfix mfix' idx am Γ Γ' v hctx hg hofv hr.
+      have hG := Good_fix_gen Σ Γ false mfix idx hg.
+      cbn in hofv. apply forallb_All in hofv.
+      destruct (C3R.red1_tCoFix_inv hr) as [(m1 & -> & ho)|(m1 & -> & ho)].
+      + destruct (OnOne2_postpone pe_defrel (on_Trel_eq (red1 Σ Γ') dtype (fun x => (dname x, dbody x, rarg x)))
+                    (on_Trel_eq (red1 Σ Γ) dtype (fun x => (dname x, dbody x, rarg x)))
+                    (fun d => Good Σ Γ (dtype d)) (fun d => is_true (on_free_vars xpredT (dtype d)))
+                    mfix mfix' m1) as (m0 & ho0 & hp0).
+        { eapply All2_impl; [exact am|]. intros x y [[h1 ih] [[h2 _] [h3 h4]]].
+          split; [exact (h1, (h2, (h3, h4)))|]. intros gx ty z [hz e]. injection e as e1 e2 e3.
+          destruct (ih _ _ _ hctx gx ty hz) as (w & hw & hpw).
+          eexists; split; [exact (tc_def_type Σ Γ x w hw)|].
+          cbn. split; [exact hpw|]. split; [rewrite -e2; exact h2|]. cbn [dname rarg dtype dbody]. split; congruence. }
+        { eapply All_impl; [exact hG|]. intros d [h _]. exact h. }
+        { eapply All_impl; [exact hofv|]. intros d h. move/andP: h => [h _]. exact h. }
+        { exact ho. }
+        exists (tCoFix m0 idx). split; [|now apply pe_CoFix].
+        eapply (trans_clos_map _ _ (fun m => tCoFix m idx)); [|exact (OnOne2_tc _ _ _ ho0)].
+        intros a b r. now apply cofix_red_ty.
+      + have hctxf : pe_ctx (Γ ,,, fix_context mfix) (Γ' ,,, fix_context mfix')
+          by (apply pe_ctx_app; [exact hctx|apply pe_ctx_fix_context; exact (All2_length am)]).
+        destruct (OnOne2_postpone pe_defrel
+                    (on_Trel_eq (red1 Σ (Γ' ,,, fix_context mfix')) dbody (fun x => (dname x, dtype x, rarg x)))
+                    (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix)) dbody (fun x => (dname x, dtype x, rarg x)))
+                    (fun d => Good Σ (Γ ,,, fix_context mfix) (dbody d)) (fun d => is_true (on_free_vars xpredT (dbody d)))
+                    mfix mfix' m1) as (m0 & ho0 & hp0).
+        { eapply All2_impl; [exact am|]. intros x y [[h1 _] [[h2 ih] [h3 h4]]].
+          split; [exact (h1, (h2, (h3, h4)))|]. intros gx ty z [hz e]. injection e as e1 e2 e3.
+          destruct (ih _ _ _ hctxf gx ty hz) as (w & hw & hpw).
+          eexists; split; [exact (tc_def_body Σ _ x w hw)|].
+          cbn. split; [rewrite -e2; exact h1|]. split; [exact hpw|]. cbn [dname rarg dtype dbody]. split; congruence. }
+        { eapply All_impl; [exact hG|]. intros d [_ h]. exact h. }
+        { eapply All_impl; [exact hofv|]. intros d h. move/andP: h => [_ h]. now rewrite ofvT_shift in h. }
+        { exact ho. }
+        exists (tCoFix m0 idx). split; [|now apply pe_CoFix].
+        apply (fix_body_steps Σ false Γ mfix m0 idx).
+        eapply OnOne2_impl; [exact ho0|]. intros d d0 h. exact (tc_def_body_inv Σ _ d d0 h).
+    - (* primitive array: the default, the type, or a value steps *)
+      intros pp pp' op Γ Γ' v hctx hg hofv hr.
+      destruct op as [i|f|st|a a' hl hd hty hval].
+      1-3: destruct (C3R.red1_tPrim_inv hr) as (arr & e & _); discriminate e.
+      destruct (C3R.red1_tPrim_inv hr) as (arr & e & hc).
+      apply (f_equal prim_arr_of) in e. cbn in e. injection e as <-.
+      destruct (Good_prim_arr Σ Γ a hg) as (gd & gt & gv).
+      cbn in hofv. rtoProp.
+      destruct hc as [[(value & -> & ho)|(d & -> & hrd)]|(ty & -> & hrt)].
+      + destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (Good Σ Γ) (fun y => is_true (on_free_vars xpredT y))
+                    _ _ value (All2_impl hval (fun x y '(hp, ih) => (hp, fun gx ty z hz => ih Γ Γ' z hctx gx ty hz)))
+                    gv ltac:(now apply forallb_All) ho) as (l0 & ho0 & hp0).
+        exists (tPrim (primArray; primArrayModel (set_array_value a l0))). split.
+        * rewrite -{1}(C3R.set_array_value_id a).
+          eapply (trans_clos_map _ _ (fun l => tPrim (primArray; primArrayModel (set_array_value a l))));
+            [|exact (OnOne2_tc _ _ _ ho0)].
+          intros l1 l2 r0. rewrite -(set_array_value_twice a l1 l2). now apply array_red_val.
+        * apply pe_Prim. constructor; cbn; [exact hl|exact (fst hd)|exact (fst hty)|exact hp0].
+      + destruct (snd hd Γ Γ' d hctx gd ltac:(assumption) hrd) as (w & hw & hpw).
+        exists (tPrim (primArray; primArrayModel (set_array_default a w))). split.
+        * rewrite -{1}(C3R.set_array_default_id a).
+          eapply (trans_clos_map _ _ (fun x => tPrim (primArray; primArrayModel (set_array_default a x)))); [|exact hw].
+          intros x1 x2 r0. rewrite -(set_array_default_twice a x1 x2). now apply array_red_def.
+        * apply pe_Prim. constructor; cbn; [exact hl|exact hpw|exact (fst hty)|exact (All2_impl hval (fun x y h => fst h))].
+      + destruct (snd hty Γ Γ' ty hctx gt ltac:(assumption) hrt) as (w & hw & hpw).
+        exists (tPrim (primArray; primArrayModel (set_array_type a w))). split.
+        * rewrite -{1}(C3R.set_array_type_id a).
+          eapply (trans_clos_map _ _ (fun x => tPrim (primArray; primArrayModel (set_array_type a x)))); [|exact hw].
+          intros x1 x2 r0. rewrite -(set_array_type_twice a x1 x2). now apply array_red_type.
+        * apply pe_Prim. constructor; cbn; [exact hl|exact (fst hd)|exact hpw|exact (All2_impl hval (fun x y h => fst h))].
+  Qed.
+
+  (** **The parallel one-step postponement: CLOSED**, under the VISIBLE premises
+      [Good Σ Γ t] (two halves: [typed_eta_safe], proved with no SR; preservation by
+      E subject reduction, forecast T1) and [on_free_vars xpredT u] (target scoping). *)
+  Theorem pe_postpone Γ t u v :
+    Good Σ Γ t -> on_free_vars xpredT u -> pe t u -> red1 Σ Γ u v ->
+    ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
+  Proof. intros hg ho h hr. exact (pe_postpone_gen t u h Γ Γ v (pe_ctx_refl Γ) hg ho hr). Qed.
+
+End Assembly.
+
