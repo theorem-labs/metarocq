@@ -82,3 +82,5 @@ etak_forecast_pa.v
 
 # FORECAST tree only (EtaK7): F1 tests of the E checker at SafeCheck level
 eta_f1.v
+# FORECAST-ONLY (fc/etak-forecast1): the refusal message of eta_f1.kf_unfold_first (Redirect)
+etak_forecast_f1_msg.v
