@@ -248,12 +248,27 @@ Proof. destruct (@eta_T0 _ EF) as [H0]. constructor. exact (@hyp_dup_closed_cont
   instance [PCUICPositionEtaTyping.welltyped_context_inst] is at base [welltyped]/[wf] and does NOT discharge
   the [welltypedE] instantiation (row T6 remains); the concrete E instance is [welltypedE_context_inst]
   below. *)
+(* Tags (the lane's convention; "non-degenerate" here: the instance has the head the field is about, in a typed
+   term; see lanes/eta/etak/instance-coverage-9c6bdd2a.md). *)
+(* non-degenerate *)
 Definition rtfc_case_construct_inst := PCUICSafeReduceEtaBridge.rtf_case_constructE_inst.
+(* non-degenerate *)
 Definition rtfc_proj_construct_inst := PCUICSafeReduceEtaBridge.rtf_proj_constructE_inst.
+(* non-degenerate *)
 Definition rtfc_fix_arg_whne_inst := PCUICSafeReduceEtaBridge.rtf_fix_arg_whneE_inst.
+(* non-degenerate *)
 Definition rtfc_case_arg_whne_inst := PCUICSafeReduceEtaBridge.rtf_case_arg_whneE_inst.
+(* non-degenerate *)
 Definition rtfc_proj_arg_whne_inst := PCUICSafeReduceEtaBridge.rtf_proj_arg_whneE_inst.
+(* [rtfc_prim_overapplied]: degenerate: IMPOSSIBLE — the field concludes [False] from a typed term whose head is
+   a registered operation applied to more than its arity; by the typing rules the saturated application has the
+   operation's result type (an inductive or a primitive type constant, never a product), and the E cumulativity
+   relates neither to a product (PCUICEtaA6.v:176-316), so no environment and term satisfy the premises. The
+   argument is on the head and the rule set; it is EtaReduce's, at [PCUICSafeReduceEta.ReduceTypedFacts]. *)
 
+(* degenerate: NOT BUILT — the stack is empty, so the instance does not exercise a frame; a non-degenerate point
+   needs a typed term under a binder frame at E (e.g. [Prod_r] with its context entry). COST: one base typing
+   derivation of a product in [si_Σ], lifted by [typing_incl_E], about 20 lines. *)
 (** [welltypedE_context] (T6) at E, concrete (the FRAC convention of [PCUICSafeReduceEtaBridge]: premises ×
     conclusion, every premise proved): the empty η stack in the bridge's [si_Σ]. *)
 Section WelltypedEContextInst.
