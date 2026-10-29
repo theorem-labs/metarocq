@@ -26,11 +26,14 @@
   - Each site with any [Pcmp] gives the same site with [cmp_scoped Pcmp]:
     [ind_respects_variance_scoped], [cstr_respects_variance_scoped],
     [prim_op_cst_type_scoped] (and [cumul_ctx_rel_scoped], the common step). Their premises
-    are the closedness of the declaration parts the site reads, and nothing else (no
+    are closedness facts about the declaration parts the site reads, and nothing else (no
     typing, no environment): [closed_ctx (params ,,, indices)]; [closed_ctx params],
     [closed_ctx (arities_context bodies)], the closedness of the constructor's arguments
     and of its indices (not of its [cstr_type], which the site does not read);
-    [closed cst_type].
+    [closed cst_type]. They are minimal in which declaration parts they mention, with one
+    exception: the premise [closed_ctx params] of [cstr_respects_variance_scoped] is
+    stronger than the constructor site needs, since the proof uses it only for closedness at
+    level [#|ind_bodies mdecl|]. Nothing depends on that strength.
     [prim_op_type] is closed whatever the operation ([prim_op_type_closed]).
   - In a [wfE] environment: [ind_respects_varianceE_scoped] (a declared inductive with a
     variance), [cstr_respects_varianceE_scoped] (a declared constructor of one) and
