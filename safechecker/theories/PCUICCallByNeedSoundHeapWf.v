@@ -424,6 +424,8 @@ Proof.
     (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next)))
     as [[cbn_gm g1]|w] eqn:e1; [|discriminate he].
   destruct (cbn_rn_roots cp rs g1) as [[rs2 g2]|w] eqn:e2; [|discriminate he].
+  destruct (N.ltb cbn_cells (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))) eqn:ec;
+    [discriminate he|].
   injection he as <- <-.
   pose proof (cbn_rn_ptree_wf cp (cbn_gcw Q) hcp _ _ _ _ hg0 e1) as hg1.
   destruct (cbn_rn_roots_wf cp (cbn_gcw Q) hcp Q _ _ _ _ hg1 e2) as [hg2 hr2].

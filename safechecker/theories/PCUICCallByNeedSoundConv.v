@@ -1335,6 +1335,8 @@ Proof.
     [|discriminate he].
   destruct (cbn_rn_roots (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
     as [[rs2 g2]|w] eqn:e2; [|discriminate he].
+  destruct (N.ltb cbn_cells (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))) eqn:ec;
+    [discriminate he|].
   injection he as <- <-. exact (cbn_rn_roots_skel _ _ _ _ _ e2).
 Qed.
 
