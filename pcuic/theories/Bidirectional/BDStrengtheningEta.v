@@ -21,9 +21,11 @@
   [on_free_vars_ctx_tip], [on_free_vars_it_mkLambda_or_LetIn], [substP_shiftnP],
   [on_free_vars_subst], [on_free_vars_subst0], [unlift_renaming], [unlift], [lift_unlift],
   [lift_unlift_term], [lift_unlift_context], [closedn_ctx_lift_inv], [urenaming_strengthen].
-  ([PCUICEtaStrengthening] declares copies of [unlift_renaming], [unlift], [Alli_impl_le],
-  [on_ctx_free_vars_strengthenP] and [urenaming_strengthen] under the same names; this file does
-  not import it.)
+  ([PCUICEtaStrengthening] declares objects under some of these base names; it is loaded here
+  (through [PCUICEtaT8Probe]) but not imported. The same-name pass finds three shared names that
+  this file references, [lift_unlift_term], [on_ctx_free_vars_strengthenP] and
+  [urenaming_strengthen]; every reference to them is written [BDStrengthening.]-qualified, as in
+  the base proof's objects (cross-lane-commitments.md C6, class (A)).)
 
   ** The renaming of the join (new statements, the E twins of base [conv_renameP] and
   [cumul_renameP])
@@ -990,8 +992,8 @@ Proof.
       eapply typeE_Prop_wf.
       apply typingE_wf_local in Hty.
       eassumption.
-    - eapply (urenaming_strengthen _ _ _ []).
-    - apply (on_ctx_free_vars_strengthenP _ _ []) => //.
+    - eapply (BDStrengthening.urenaming_strengthen _ _ _ []).
+    - apply (BDStrengthening.on_ctx_free_vars_strengthenP _ _ []) => //.
       eapply on_free_vars_ctx_on_ctx_free_vars_xpredT.
       by apply wf_local_closed_contextE.
     - rewrite -on_free_vars_ctx_lift_context.
@@ -1007,11 +1009,11 @@ Proof.
 
   eapply typing_renaming_cond_PE in Hty as [T' [? ?]]; eauto.
   exists T'. split; eauto.
-  - erewrite <- (lift_unlift_term t); eauto.
-  - split; eauto. eapply urenaming_strengthen.
+  - erewrite <- (BDStrengthening.lift_unlift_term t); eauto.
+  - split; eauto. eapply BDStrengthening.urenaming_strengthen.
   - move: wfΓ'' => /wf_local_closed_contextE.
     rewrite on_free_vars_ctx_app => /andP [? ?].
-    apply on_ctx_free_vars_strengthenP.
+    apply BDStrengthening.on_ctx_free_vars_strengthenP.
     all: eapply on_free_vars_ctx_on_ctx_free_vars_xpredT ; eassumption.
   - rewrite on_free_vars_lift -shiftnP_xpredT.
     move: Hty => /subject_closedE.
@@ -1044,11 +1046,11 @@ Proof.
   exists s'; split; [|exact Hcumul2].
   assert (PCUICReduction.red Σ (Γ,,, Γ'') (unlift #|Γ'| #|Γ''| T') (tSort s')).
   { assert (tSort s' = unlift #|Γ'| #|Γ''| (tSort s')) by reflexivity. rewrite H2; clear H2.
-    eapply (red_rename_cb _ _ _ _ _ _ _ (wfE_ClosedBodies Σ)). eapply (urenaming_strengthen _ _ _ _); eauto.
+    eapply (red_rename_cb _ _ _ _ _ _ _ (wfE_ClosedBodies Σ)). eapply (BDStrengthening.urenaming_strengthen _ _ _ _); eauto.
     2-3: eauto. eapply typingE_wf_local in HT''.
     eapply wf_local_closed_contextE in HT''. revert HT''.
     rewrite on_free_vars_ctx_app => /andP [? ?].
-    apply on_ctx_free_vars_strengthenP.
+    apply BDStrengthening.on_ctx_free_vars_strengthenP.
     all: eapply on_free_vars_ctx_on_ctx_free_vars_xpredT; eauto.
   }
   eapply typeE_Cumul; eauto. eapply subject_reductionE; eauto.

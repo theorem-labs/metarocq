@@ -115,10 +115,10 @@ Definition on_free_vars_case_branch_typeE_inst :=
 
 (** The type inferred for [bd_case] is scoped in [bd_ΓFG]. *)
 Definition infering_on_free_varsE_inst : on_free_vars (shiftnP #|bd_ΓFG| xpred0) (tApp bd_case_ptm bd_case_disc) :=
-  infering_on_free_varsE si_Σ si_wfE (shiftnP #|bd_ΓFG| xpred0) bd_ΓFG bd_case _ eq_refl eq_refl inferingE_Case_inst.
+  infering_on_free_varsE si_Σ si_wfE (shiftnP #|bd_ΓFG| xpred0) bd_ΓFG BDTypingEtaInstances.bd_case _ eq_refl eq_refl inferingE_Case_inst.
 
 Definition bidirectional_on_free_varsE_inst : on_free_vars (shiftnP #|bd_ΓFG| xpred0) (tApp bd_case_ptm bd_case_disc) :=
-  fst (snd (snd (snd (snd (bidirectional_on_free_varsE si_Σ si_wfE))))) bd_ΓFG bd_case _ inferingE_Case_inst
+  fst (snd (snd (snd (snd (bidirectional_on_free_varsE si_Σ si_wfE))))) bd_ΓFG BDTypingEtaInstances.bd_case _ inferingE_Case_inst
     (shiftnP #|bd_ΓFG| xpred0) eq_refl eq_refl.
 
 Definition infering_prod_on_free_varsE_inst :=
@@ -135,8 +135,8 @@ Definition rename_mfix_on_ind_redE_inst :=
 
 (** The [match] [bd_case], with its η-related parameters, weakened. *)
 Definition bidirectional_renamingE_inst :
-  si_Σ ;;; bd_ΓFG ,,, bs_x |-E rename (rshiftk 1) bd_case ▹ rename (rshiftk 1) (tApp bd_case_ptm bd_case_disc) :=
-  fst (snd (snd (snd (snd (bidirectional_renamingE si_Σ si_wfE))))) bd_ΓFG bd_case _ inferingE_Case_inst
+  si_Σ ;;; bd_ΓFG ,,, bs_x |-E rename (rshiftk 1) BDTypingEtaInstances.bd_case ▹ rename (rshiftk 1) (tApp bd_case_ptm bd_case_disc) :=
+  fst (snd (snd (snd (snd (bidirectional_renamingE si_Σ si_wfE))))) bd_ΓFG BDTypingEtaInstances.bd_case _ inferingE_Case_inst
     (shiftnP #|bd_ΓFG| xpred0) (bd_ΓFG ,,, bs_x) (rshiftk 1) (bs_ur bd_ΓFG) eq_refl eq_refl.
 
 (** The parameter instance [[G F]] of [bd_case], weakened. *)
