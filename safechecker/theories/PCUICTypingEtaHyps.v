@@ -57,18 +57,19 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
   - Instances. EVERY one of the 44 fields has a concrete satisfying instance, in the final section
     "Instances" of this file (one lemma [<field>_inst] per field, proved without any class field; written
     by EtaK7Inst). Per class, fields = instances: T0_facts 12, U_facts 1, T1_facts 4, T2a_facts 2,
-    T6_facts 1, T6BD_facts 9, T6BDu_facts 9, T6BDc_facts 6. Each instance carries the tag
-    [(* non-degenerate *)]; all 44 are non-degenerate (three of them type through an η step: [validity],
-    [checking_typing], [infering_checking], via [cumul_eta_l]); 0 are IMPOSSIBLE, 0 NOT BUILT. Seven
+    T6_facts 1, T6BD_facts 9, T6BDu_facts 9, T6BDc_facts 6. Each instance carries a tag
+    [(* non-degenerate *)] or [(* degenerate: NOT BUILT — <why> *)]; 42 are non-degenerate (three of them
+    type through an η step: [validity], [checking_typing], [infering_checking], via [cumul_eta_l]), 0 are
+    IMPOSSIBLE and 2 are NOT BUILT ([wf_case_predicate_context], [wf_case_branches_types']: to be
+    discharged by import of copy 18, the E twin of [PCUICInductiveInversion]). Five
     ([inductive_cumulative_indices], [isTypeRel_cstr_type], [isType_mkApps_Ind_inv],
-    [typing_spine_ind_type_inv], [wf_case_branch_type], [wf_case_predicate_context],
-    [wf_case_branches_types']) are at the indexed, cumulative, universe-polymorphic family [J] of
-    [PCUICEtaIdxEnv], whose user arity has a redex; each of the seven has a compiled non-degeneracy lemma
-    [<field>_inst_nondeg]. Non-degenerate instances show
+    [typing_spine_ind_type_inv], [wf_case_branch_type]) are at the indexed, cumulative,
+    universe-polymorphic family [J] of [PCUICEtaIdxEnv], whose user arity has a redex; each of the five has
+    a compiled non-degeneracy lemma [<field>_inst_nondeg]. Non-degenerate instances show
     satisfiability on ordinary typed terms; outside the three η rows none exercises an eta pair;
     the eta-case truth of these hypotheses is established by T6, not by the instance. The
     environment is [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances], [ji_Σ] (or [ji_Σp]) of
-    [PCUICEtaIdxEnv] for the seven fields about indexed inductives, or, for the primitive-operation
+    [PCUICEtaIdxEnv] for those five fields, or, for the primitive-operation
     field of T1, [Σ_po] of [PCUICEtaPrimOpInstance] (convention of [PCUICEtaFracInstances]). An instance
     shows only that the field's premises can hold at a real environment, and does NOT discharge the field
     at [typingE]: subject reduction over [typingE] (row T1), validity (T2a), the inversions and the
@@ -2530,7 +2531,7 @@ End DerivedThree.
   ([T0_facts], [U_facts], [T1_facts], [T2a_facts], [T6_facts], [T6BD_facts], [T6BDu_facts], [T6BDc_facts]),
   in the class order.
   Convention of [PCUICEtaFracInstances]: the environment is [si_Σ] of
-  [PCUICCumulativitySpecEtaClosureInstances] ([Inductive I (A : Prop) : Prop := c : I A]); for the seven
+  [PCUICCumulativitySpecEtaClosureInstances] ([Inductive I (A : Prop) : Prop := c : I A]); for five
   fields about indexed inductives, [ji_Σ] of [PCUICEtaIdxEnv] (the indexed, cumulative,
   universe-polymorphic family [J@{i} (A : Prop) : Π (X : Type@{i}), (λ Z. Z) Prop] with constructor
   [jc : Π (X : Type@{i}), J A X]), or [ji_Σp], its extension by the universe context of [J]; where the
@@ -2551,12 +2552,14 @@ End DerivedThree.
   objects that are equal (T = U, a reflexive reduction or comparison), [(* degenerate: IMPOSSIBLE — … *)]
   (no non-degenerate instance exists, by the head or shape and the rule set, or by a premise with no
   other inhabitant) or [(* degenerate: NOT BUILT — … *)] (one exists and is not built here). Counts:
-  44 non-degenerate; 0 IMPOSSIBLE; 0 NOT BUILT. The seven instances at [J] ([inductive_cumulative_indices],
-  [isTypeRel_cstr_type], [isType_mkApps_Ind_inv], [typing_spine_ind_type_inv], [wf_case_branch_type],
-  [wf_case_predicate_context], [wf_case_branches_types']) each have a lemma [<field>_inst_nondeg] right
-  after them that proves, by computation, the property that makes the point non-degenerate (a non-empty
-  index context, constructor argument list, context or argument list; two different instances; a user
-  arity that is not the built arity and steps to it). Three instances are typed through an η step:
+  42 non-degenerate; 0 IMPOSSIBLE; 2 NOT BUILT ([wf_case_predicate_context] and [wf_case_branches_types']:
+  to be discharged by import of copy 18, the E twin of [PCUICInductiveInversion]; a non-degenerate point at
+  [J] was built in commit 3102d23b and withdrawn). The five instances at [J] ([inductive_cumulative_indices],
+  [isTypeRel_cstr_type], [isType_mkApps_Ind_inv], [typing_spine_ind_type_inv], [wf_case_branch_type]) each
+  have a lemma [<field>_inst_nondeg] right after them that proves, by computation, the property that makes
+  the point non-degenerate (a non-empty index context, constructor argument list, context or argument list;
+  two different instances; a user arity that is not the built arity and steps to it). Three instances are
+  typed through an η step:
   [validity], [checking_typing] and [infering_checking] use the variable [y : k g] of
   [PCUICInversionEtaInstances], typed at [k (λ x : Prop. g x)] by [cumul_eta_l]; their conclusions are
   built in E directly, since base typing has no η and the base lemma cannot reach that point. (The
@@ -3079,7 +3082,7 @@ Qed.
 (** ** Instances of [T0_facts]
 
   Each lemma [<field>_inst] below states the premises and the conclusion of the field [<field>] of
-  [T0_facts] at concrete arguments in [si_Σ], or, for the seven fields about indexed inductives, in [ji_Σ]
+  [T0_facts] at concrete arguments in [si_Σ], or, for five fields about indexed inductives, in [ji_Σ]
   or [ji_Σp] of [PCUICEtaIdxEnv] (the premise [wfE] holds there by [si_wfE] and [ji_wfE]), builds each
   typed premise from a base derivation lifted with [typing_incl_E], and proves the conclusion from the base
   lemma of the same name. (1) This instance shows that the hypothesis is consistent and about something
@@ -3326,65 +3329,78 @@ Lemma wf_case_branch_type_inst_nondeg :
      preturn ji_p <> tSort sProp & Sort.type0 <> sProp].
 Proof. split; intros e; vm_compute in e; congruence. Qed.
 
-(* non-degenerate *)
-(** The predicate context of the case on [J A X] in [ji_Γ]: [(X' : Type@{Set}) (j : J A X')]
-    ([wf_case_predicate_context_inst_nondeg]). *)
+(** A case on [I ti_F]: the predicate [fun (_ : I ti_F) => Prop] and the branch of [c]. *)
+Definition ti_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition ti_p : predicate term :=
+  {| pparams := [ti_F]; puinst := []; pcontext := ind_predicate_context si_ind si_mdecl si_idecl;
+     preturn := si_P |}.
+Definition ti_br : branch term := {| bcontext := []; bbody := si_P |}.
+
+Lemma ti_wfpred : wf_predicate si_mdecl si_idecl ti_p.
+Proof. split; [reflexivity|repeat constructor]. Qed.
+
+Lemma ti_eqctx : All2 PCUICEquality.eq_decl_upto_names (pcontext ti_p) (ind_predicate_context ti_ci si_mdecl si_idecl).
+Proof. cbn. repeat constructor. Qed.
+
+Lemma ti_wfbr : wf_branch si_cdecl ti_br.
+Proof. constructor. Qed.
+
+Lemma ti_wfbrs : wf_branches si_idecl [ti_br].
+Proof. constructor; [exact ti_wfbr|constructor]. Qed.
+
+Lemma ti_isT_case : isType si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])).
+Proof. exact (has_sort_isType _ (ti_IF_ty [] ti_wf_nil)). Qed.
+
+Lemma ti_wf_predctx : wf_local si_Σ ([] ,,, case_predicate_context ti_ci si_mdecl si_idecl ti_p).
+Proof.
+  have h := PCUICInductiveInversion.wf_case_predicate_context (Σ := si_Σ) (wfΣ := si_wf) (Γ := [])
+    (ci := ti_ci) (p := ti_p) (args := []) si_declared_inductive ti_isT_case ti_wfpred.
+  cbv zeta in h. exact h.
+Qed.
+
+Lemma ti_ret_ty :
+  si_Σ ;;; [] ,,, case_predicate_context ti_ci si_mdecl si_idecl ti_p |- preturn ti_p : tSort (Sort.super sProp).
+Proof. exact (ti_P_ty _ ti_wf_predctx). Qed.
+
+(* degenerate: NOT BUILT — args = [] because I has no indices, and Γ = []; a real point needs an indexed family; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it; a non-degenerate point at the family [J] of [PCUICEtaIdxEnv] was built (commit 3102d23b) and withdrawn: to be discharged by import of copy 18 (PCUICInductiveInversion E twin) *)
 Lemma wf_case_predicate_context_inst :
-  [× declared_inductive ji_Σ ji_ci ji_mdecl ji_idecl,
-     isTypeE ji_Σ ji_Γ (mkApps (tInd ji_ci (puinst ji_p)) (pparams ji_p ++ ji_iargs)),
-     wf_predicate ji_mdecl ji_idecl ji_p &
-     let predctx := case_predicate_context ji_ci ji_mdecl ji_idecl ji_p in wf_localE ji_Σ (ji_Γ ,,, predctx)].
+  [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
+     isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
+     wf_predicate si_mdecl si_idecl ti_p &
+     let predctx := case_predicate_context ti_ci si_mdecl si_idecl ti_p in wf_localE si_Σ ([] ,,, predctx)].
 Proof.
-  split; [exact ji_declared_inductive|exact (jiI ji_isT_case)|exact ji_wfpred|].
-  cbv zeta. exact (jiW ji_wf_predctx).
+  split; [exact si_declared_inductive|exact (siI ti_isT_case)|exact ti_wfpred|].
+  cbv zeta. exact (siW ti_wf_predctx).
 Qed.
 
-(** Non-degeneracy: a non-empty context and index argument list, an index, and a predicate context with
-    the index binder besides the inductive's. *)
-Lemma wf_case_predicate_context_inst_nondeg :
-  [× ji_Γ <> [], ji_iargs <> [], ind_indices ji_idecl <> [] &
-     #|case_predicate_context ji_ci ji_mdecl ji_idecl ji_p| = 2].
-Proof.
-  split; [intros e; vm_compute in e; congruence|intros e; vm_compute in e; congruence
-         |intros e; vm_compute in e; congruence|vm_compute; reflexivity].
-Qed.
-
-(* non-degenerate *)
-(** The case on [J A X] in [ji_Γ] of [wf_case_branch_type_inst], with its one branch
-    ([wf_case_branches_types'_inst_nondeg]). *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it; a non-degenerate point at the family [J] of [PCUICEtaIdxEnv] was built (commit 3102d23b) and withdrawn: to be discharged by import of copy 18 (PCUICInductiveInversion E twin) *)
 Lemma wf_case_branches_types'_inst :
-  [× declared_inductive ji_Σ ji_ci ji_mdecl ji_idecl,
-     isTypeE ji_Σ ji_Γ (mkApps (tInd ji_ci (puinst ji_p)) (pparams ji_p ++ ji_iargs)),
-     wf_predicate ji_mdecl ji_idecl ji_p,
-     ji_Σ ;;; ji_Γ ,,, case_predicate_context ji_ci ji_mdecl ji_idecl ji_p |-E preturn ji_p : tSort Sort.type0,
-     wf_branches ji_idecl [ji_br],
-     All2 PCUICEquality.eq_decl_upto_names (pcontext ji_p) (ind_predicate_context ji_ci ji_mdecl ji_idecl) &
-     let predctx := case_predicate_context ji_ci ji_mdecl ji_idecl ji_p in
-     let ptm := it_mkLambda_or_LetIn predctx (preturn ji_p) in
+  [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
+     isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
+     wf_predicate si_mdecl si_idecl ti_p,
+     si_Σ ;;; [] ,,, case_predicate_context ti_ci si_mdecl si_idecl ti_p |-E preturn ti_p : tSort (Sort.super sProp),
+     wf_branches si_idecl [ti_br],
+     All2 PCUICEquality.eq_decl_upto_names (pcontext ti_p) (ind_predicate_context ti_ci si_mdecl si_idecl) &
+     let predctx := case_predicate_context ti_ci si_mdecl si_idecl ti_p in
+     let ptm := it_mkLambda_or_LetIn predctx (preturn ti_p) in
      All2i (fun (i : nat) (cdecl : constructor_body) (br : branch term) =>
-       let cstr_br_ctx := case_branch_context_nopars ji_ci ji_mdecl (puinst ji_p) cdecl in
+       let cstr_br_ctx := case_branch_context_nopars ti_ci si_mdecl (puinst ti_p) cdecl in
        let brctx' := map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in
-       let brctxty := case_branch_type ji_ci ji_mdecl ji_idecl ji_p br ptm i cdecl in
+       let brctxty := case_branch_type ti_ci si_mdecl si_idecl ti_p br ptm i cdecl in
        [× wf_branch cdecl br,
-          wf_localE ji_Σ (ji_Γ ,,, (ind_params ji_mdecl)@[puinst ji_p] ,,, cstr_br_ctx),
-          wf_localE ji_Σ (ji_Γ ,,, (ind_params ji_mdecl)@[puinst ji_p] ,,, brctx'),
-          wf_localE ji_Σ (ji_Γ ,,, brctxty.1) &
-          ji_Σ ;;; ji_Γ ,,, brctxty.1 |-E brctxty.2 : tSort Sort.type0]) 0 (ind_ctors ji_idecl) [ji_br]].
+          wf_localE si_Σ ([] ,,, (ind_params si_mdecl)@[puinst ti_p] ,,, cstr_br_ctx),
+          wf_localE si_Σ ([] ,,, (ind_params si_mdecl)@[puinst ti_p] ,,, brctx'),
+          wf_localE si_Σ ([] ,,, brctxty.1) &
+          si_Σ ;;; [] ,,, brctxty.1 |-E brctxty.2 : tSort (Sort.super sProp)]) 0 (ind_ctors si_idecl) [ti_br]].
 Proof.
-  have hb := PCUICInductiveInversion.wf_case_branches_types' (Σ := ji_Σ) (wfΣ := ji_wf) (Γ := ji_Γ) (ci := ji_ci)
-    (p := ji_p) Sort.type0 ji_iargs [ji_br] ji_declared_inductive ji_isT_case ji_wfpred ji_ret_ty ji_wfbrs ji_eqctx.
-  split; [exact ji_declared_inductive|exact (jiI ji_isT_case)|exact ji_wfpred|exact (jiT ji_ret_ty)
-         |exact ji_wfbrs|exact ji_eqctx|].
+  have hb := PCUICInductiveInversion.wf_case_branches_types' (Σ := si_Σ) (wfΣ := si_wf) (Γ := []) (ci := ti_ci)
+    (p := ti_p) (Sort.super sProp) [] [ti_br] si_declared_inductive ti_isT_case ti_wfpred ti_ret_ty ti_wfbrs ti_eqctx.
+  split; [exact si_declared_inductive|exact (siI ti_isT_case)|exact ti_wfpred|exact (siT ti_ret_ty)
+         |exact ti_wfbrs|exact ti_eqctx|].
   cbv zeta in hb |- *.
   eapply All2i_impl; [exact hb|]. intros i cdecl br [b1 b2 b3 b4 b5].
-  split; [exact b1|exact (jiW b2)|exact (jiW b3)|exact (jiW b4)|exact (jiT b5)].
+  split; [exact b1|exact (siW b2)|exact (siW b3)|exact (siW b4)|exact (siT b5)].
 Qed.
-
-(** Non-degeneracy: as for [wf_case_branch_type_inst]. *)
-Lemma wf_case_branches_types'_inst_nondeg :
-  [× ji_Γ <> [], ji_iargs <> [], ind_indices ji_idecl <> [], cstr_args ji_cdecl <> [], bcontext ji_br <> [],
-     preturn ji_p <> tSort sProp & Sort.type0 <> sProp].
-Proof. split; intros e; vm_compute in e; congruence. Qed.
 
 (** ** Instances of [U_facts]
 

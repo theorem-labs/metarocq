@@ -583,9 +583,6 @@ Proof. cbn. repeat constructor. Qed.
 Lemma ji_wfbr : wf_branch ji_cdecl ji_br.
 Proof. repeat constructor. Qed.
 
-Lemma ji_wfbrs : wf_branches ji_idecl [ji_br].
-Proof. constructor; [exact ji_wfbr|constructor]. Qed.
-
 Lemma ji_isT_case : isType ji_Σ ji_Γ (mkApps (tInd ji_ci (puinst ji_p)) (pparams ji_p ++ ji_iargs)).
 Proof. exact (has_sort_isType _ ji_JAX_ty). Qed.
 
