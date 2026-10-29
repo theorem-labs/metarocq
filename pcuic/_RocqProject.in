@@ -138,6 +138,16 @@ theories/PCUICTypingEta.v
 theories/PCUICTypingEtaInd.v
 theories/Typing/PCUICWeakeningEnvTypEta.v
 theories/Typing/PCUICClosedTypEta.v
+# Typing infrastructure over typingE: configuration weakening, renaming, weakening, case
+# well-formedness, instantiation, the guard closure, and their satisfying instances
+theories/Typing/PCUICWeakeningConfigTypEta.v
+theories/Syntax/PCUICInstDefEta.v
+theories/PCUICGuardClosureEta.v
+theories/Typing/PCUICRenameTypEta.v
+theories/Typing/PCUICWeakeningTypEta.v
+theories/Typing/PCUICCasesWfTypEta.v
+theories/Typing/PCUICInstTypEta.v
+theories/PCUICTypingEtaCopies1Instances.v
 # The normalization premise over typingE (an assumption, as base NormalizationIn is)
 theories/PCUICSNEta.v
 # The stack with the eta frames, and its positions
