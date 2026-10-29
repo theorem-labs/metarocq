@@ -3,6 +3,8 @@
 theories/PCUICEqualityDec.v
 theories/PCUICErrors.v
 theories/PCUICWfEnv.v
+# The abstract environment over the eta well-formedness wfE/wf_extE (EtaWfEnv)
+theories/PCUICWfEnvEta.v
 theories/PCUICSafeReduce.v
 theories/PCUICSafeConversion.v
 theories/PCUICWfReduction.v
