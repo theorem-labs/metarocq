@@ -28,7 +28,9 @@
     [prim_op_cst_type_scoped] (and [cumul_ctx_rel_scoped], the common step). Their premises
     are the closedness of the declaration parts the site reads, and nothing else (no
     typing, no environment): [closed_ctx (params ,,, indices)]; [closed_ctx params],
-    [closed_ctx (arities_context bodies)] and [closed_constructor_body]; [closed cst_type].
+    [closed_ctx (arities_context bodies)], the closedness of the constructor's arguments
+    and of its indices (not of its [cstr_type], which the site does not read);
+    [closed cst_type].
     [prim_op_type] is closed whatever the operation ([prim_op_type_closed]).
   - In a [wfE] environment: [ind_respects_varianceE_scoped] (a declared inductive with a
     variance), [cstr_respects_varianceE_scoped] (a declared constructor of one) and
@@ -53,11 +55,17 @@
     the constructor, [tRel 0], with itself in [K : Type@{u1} -> Prop, X : Type@{u1}].
     [ind_respects_varianceE_scoped_inst] and [cstr_respects_varianceE_scoped_inst] apply
     the lemmas there; [ws_ind_pair_scoped] and [ws_cstr_index_scoped] read the compared
-    pairs back out of their conclusions.
+    pairs back out of their conclusions. [cstr_respects_variance_scoped_inst] applies the
+    closedness-only form, over base's [cumulSpec0], to the check of [k] that
+    [ws_on_constructor] proves.
   - [Σ_po0] ([PCUICEtaPrimOpInstance]) registers [land : int -> int -> int] as the
-    operation [Int63land]; it is proved [wf] here ([po_wf], the unsquashed proof of
-    [Σ_po_wf]), hence [wfE] ([po_wfE]). [prim_op_cst_typeE_scoped_inst] applies the lemma
-    to [land]. [ws_wfE_scoped_inst] and [po_wfE_scoped_inst] apply [wfE_scoped] to both
+    operation [Int63land]; it is proved [wf] here ([po_wf], the [wf] half of the proof of
+    [Σ_po_wf], unsquashed; [Σ_po_wf] also proves [on_udecl]), hence [wfE] ([po_wfE]).
+    [prim_op_cst_typeE_scoped_inst] applies the lemma to [land]. Its limit: the pair it
+    compares is [po_land_ty] with itself ([po_wf] proves the conversion by [cumul_Refl]),
+    in the empty context, so its scoping content is only that [po_land_ty] is closed; no
+    lemma reads that pair back out of the conclusion, unlike [ws_ind_pair_scoped].
+    [ws_wfE_scoped_inst] and [po_wfE_scoped_inst] apply [wfE_scoped] to both
     environments. *)
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -146,15 +154,18 @@ Proof.
   eapply closedn_ctx_upwards. rewrite -rev_map_spec. eapply IHl => //. lia.
 Qed.
 
+(** The premises are the closedness of the parameters, of the arities of the block, of the
+    constructor's arguments and of its indices: the parts the site reads. The closedness
+    of [cstr_type], the third conjunct of [closed_constructor_body], is not needed. *)
 Lemma cstr_respects_variance_scoped {Pcmp Σ mdecl v cs} :
   closed_ctx (ind_params mdecl) ->
   closed_ctx (arities_context (ind_bodies mdecl)) ->
-  closed_constructor_body mdecl cs ->
+  closedn_ctx (#|ind_bodies mdecl| + #|ind_params mdecl|) (cstr_args cs) ->
+  forallb (closedn (#|ind_bodies mdecl| + #|ind_params mdecl| + #|cstr_args cs|)) (cstr_indices cs) ->
   cstr_respects_variance Pcmp Σ mdecl v cs ->
   cstr_respects_variance (cmp_scoped Pcmp) Σ mdecl v cs.
 Proof.
-  intros clpars clar.
-  rewrite /closed_constructor_body => /andP[/andP[clargs clinds] _].
+  intros clpars clar clargs clinds.
   have clparsB : closedn_ctx #|ind_bodies mdecl| (ind_params mdecl).
   { eapply closedn_ctx_upwards; [exact clpars|lia]. }
   rewrite /cstr_respects_variance.
@@ -278,14 +289,15 @@ Section WfE.
     { move: (declared_inductive_closed_pars_indicesE (wfΣ := wfΣ) (proj1 hc)).
       by rewrite closedn_ctx_app => /andP[]. }
     have clar := closed_inductive_decl_arities (declared_minductive_closedE (wfΣ := wfΣ) (proj1 (proj1 hc))).
-    have clcs := declared_constructor_closedE (wfΣ := wfΣ) hc.
+    move: (declared_constructor_closedE (wfΣ := wfΣ) hc).
+    rewrite /closed_constructor_body => /andP[/andP[clargs clinds] _].
     destruct hc as [[hm hi] hn].
     have hm' := declared_minductive_to_gen (wfΣ := wfΣ) hm.
     destruct (lookup_on_global_env wfΣ hm') as (Σ' & wfΣ' & ext & ond).
     exists Σ'. split; [exact wfΣ'|exact ext|]. hnf in ond.
     have oib := Alli_nth_error _ _ _ _ _ _ ond.(onInductives) hi.
     destruct (All2_nth_error_Some _ _ oib.(onConstructors) hn) as (cs & _ & oc).
-    exact (cstr_respects_variance_scoped clpars clar clcs (oc.(on_ctype_variance) v hv)).
+    exact (cstr_respects_variance_scoped clpars clar clargs clinds (oc.(on_ctype_variance) v hv)).
   Qed.
 
   Lemma prim_op_cst_typeE_scoped {Σ : global_env} {wfΣ : wfE Σ} {kn cb op} :
@@ -325,9 +337,10 @@ Section WfE.
     - exact oib.(onArityRed).
     - eapply All2_impl; [exact (All2_All_mix_left (forallb_All _ _ clctors) oib.(onConstructors))|].
       intros cdecl cs [clcs oc].
+      move: clcs; rewrite /closed_constructor_body => /andP[/andP[clargs clinds] _].
       destruct oc as [h1 h2 h3 h4 h5 h6 hvar h8].
       constructor; [exact h1|exact h2|exact h3|exact h4|exact h5|exact h6| |exact h8].
-      intros v hv. exact (cstr_respects_variance_scoped clpars clar clcs (hvar v hv)).
+      intros v hv. exact (cstr_respects_variance_scoped clpars clar clargs clinds (hvar v hv)).
     - exact oib.(onProjections).
     - exact oib.(ind_sorts).
     - exact oib.(ind_relevance_compat).
@@ -591,6 +604,14 @@ Definition ind_respects_varianceE_scoped_inst :=
 Definition cstr_respects_varianceE_scoped_inst :=
   cstr_respects_varianceE_scoped (wfΣ := ws_wfE) ws_declared_constructor eq_refl.
 
+(** [cstr_respects_variance_scoped] itself, over base's [cumulSpec0], on the check of [k]
+    that [ws_on_constructor] proves. Its four closedness premises hold by computation. *)
+Definition cstr_respects_variance_scoped_inst :
+  cstr_respects_variance (cmp_scoped cumulSpec0) ws_Σ0 ws_mdecl [Variance.Covariant] ws_cdecl :=
+  cstr_respects_variance_scoped (Pcmp := cumulSpec0) (mdecl := ws_mdecl) (v := [Variance.Covariant])
+    (cs := ws_cdecl) eq_refl eq_refl eq_refl eq_refl
+    (on_ctype_variance ws_on_constructor [Variance.Covariant] eq_refl).
+
 Definition ws_wfE_scoped_inst := wfE_scoped ws_wfE.
 
 (** The pair the variance check of [K] compares, read off the conclusion of
@@ -617,7 +638,7 @@ Proof.
   inversion h as [|? ? ? ? hx _]; subst. exact hx.
 Qed.
 
-(** A primitive operation. [po_wf] is the proof of [Σ_po_wf] without its squash. *)
+(** A primitive operation. [po_wf] is the [wf] half of the proof of [Σ_po_wf], unsquashed. *)
 Lemma po_wf : wf Σ_po0.
 Proof.
   split; [exact po_univs_ok|]. split; [exact po_retro_wf|].
@@ -644,6 +665,8 @@ Qed.
 
 Definition po_wfE : wfE Σ_po0 := wf_incl_E po_wf.
 
+(** The pair compared is [po_land_ty] with itself in the empty context (the [cumul_Refl]
+    in [po_wf] above). *)
 Definition prim_op_cst_typeE_scoped_inst :=
   prim_op_cst_typeE_scoped (wfΣ := po_wfE) (kn := po_land_kn) (cb := po_land_body)
     (or_introl eq_refl) Σ_po_registers.
