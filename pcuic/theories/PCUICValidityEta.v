@@ -29,21 +29,13 @@
   ([safechecker/theories/PCUICTypingEtaHyps.v], branch [wip/etak-k7-2026-10-29]):
   [PCUICValidityEtaInstances] type-checks both lemmas against both texts.
 
-  **The forecast block.** Validity uses lemmas of the T0 copy 16 that are not on this branch.
-  Each is a field of the class of the block below, with the name and the statement the copy
-  commits to: the text of [PCUICSREta.v]'s forecast classes where that file has the lemma, else
-  the exact base twin. The class is a premise ([Context]) of the lemmas that use it, never an
-  axiom; [Print Assumptions] shows it as an argument. Copies 10, 12 and 14 (frac/eta 59eb717d)
-  and copy 15 (frac/eta d49d1c19) have landed: their classes, the definitions [subsletE],
-  [typing_spineE], [ctx_inst_subE], [spine_substE], [arity_spineE], [wf_arity_spineE] and the
-  copy lemmas proved here were deleted after a compiled-form identity check, and the landed
-  ones are imported ([PCUICSubstitutionEta], [PCUICContextsEta], [PCUICAritiesEta],
-  [PCUICSpineEta]); [has_sort_isTypeE] and [isWfArityE] are [PCUICTypingEtaNotions]'s.
-
-  **Local proofs of copy lemmas.** The lemma of copy 16 that validity uses and that follows from
-  a field of the block in a few lines is PROVED in the section "Copy lemmas proved here", under
-  the name and the statement the copy commits to, so it is not a forecast. When the copy lands,
-  delete it and import it.
+  **No forecast.** Copies 10, 12 and 14 (frac/eta 59eb717d), copy 15 (frac/eta d49d1c19) and
+  copy 16 (frac/eta 0fb43f10) have landed: the forecast classes of this file, the definitions
+  [subsletE], [typing_spineE], [ctx_inst_subE], [spine_substE], [arity_spineE],
+  [wf_arity_spineE] and the copy lemmas it proved ([declared_projection_typeE] the last) were
+  deleted after a compiled-form identity check, and the landed ones are imported
+  ([PCUICSubstitutionEta], [PCUICContextsEta], [PCUICAritiesEta], [PCUICSpineEta],
+  [PCUICInductivesEta]); [has_sort_isTypeE] and [isWfArityE] are [PCUICTypingEtaNotions]'s.
 
   **The hypotheses are satisfiable:** [wfE Σ] by any well-formed environment ([wf_incl_E]),
   each typing premise by a concrete derivation; [PCUICValidityEtaInstances] gives an instance
@@ -66,7 +58,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICWeakeningTypEta PCUICUnivSubstitutionTypEta PCUICWfUniversesEta
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICWsCumulEtaSubst PCUICEtaJoinSpec
      PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICInversionEta
-     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta.
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICInductivesEta.
 (* Not imported: its [typing_spineE] is the twin of [PCUICGeneration.typing_spine], not of the
    [PCUICArities] one ([PCUICAritiesEta.typing_spineE], the canonical one, imported above). *)
 From MetaRocq.PCUIC Require PCUICGenerationEta.
@@ -79,141 +71,7 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 Arguments Nat.sub : simpl never.
 
-(** ** FORECAST BLOCK
-
-  Every class field below is a FORECAST: an E copy that is not on this branch will prove it,
-  under exactly this name and with exactly this statement. Landing a copy is: delete its class
-  here (and its definitions), delete its [Context] line in section [ValidityEta], import the
-  copy. No proof below the block changes. Nothing here is an axiom.
-
-  Satisfiability: a field with the text of [PCUICSREta.v] carries that file's source (the
-  statement note's verdicts, lanes/eta/sr-statement-note.md); each field with base-twin text
-  carries, beside it, the argument that it is not a known-false form. Every field is a typing
-  fact under [wfE]; none has only a [welltypedE] premise
-  about an inductive head, none is a closed-only fixpoint witness hypothesis. *)
-
-(* The braces in the statements record the implicit status of the source; Rocq honours them
-   on the class projections. *)
-Local Set Warnings "-unexpected-implicit-declaration".
-
-(** *** Copy 16 ([PCUICInductivesEta.v]) *)
-
-(* FORECAST-ONLY: proved by copy 16 (PCUICInductivesEta.v); delete when it lands.
-   Text of every field: the statement note's (PCUICSREtaCopyStatements.v @ 33a87a58). The last
-   two are its "C1 additions for T2a" ([PCUICInductives.v:2697, 2803]). *)
-Class ValForecastCopy16 := {
-  declared_projection_type_and_eqE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {mdecl : mutual_inductive_body}
-      {idecl : one_inductive_body} {p : projection} {cdecl : constructor_body} {pdecl : projection_body}
-      (wfΣ : wfE Σ.1) (Hdecl : declared_projection Σ p mdecl idecl cdecl pdecl),
-    let u := abstract_instance (ind_universes mdecl) in
-    (ind_ctors idecl = [cdecl] ×
-     isTypeE (Σ.1, ind_universes mdecl)
-       (vass {| binder_name := nNamed (ind_name idecl); binder_relevance := ind_relevance idecl |}
-          (mkApps (tInd (proj_ind p) u) (to_extended_list (smash_context [] (ind_params mdecl)))) ::
-        smash_context [] (ind_params mdecl)) (proj_type pdecl)) ×
-    (∑ decl : context_decl,
-      [× nth_error (smash_context [] (cstr_args cdecl))
-           (context_assumptions (cstr_args cdecl) - S (proj_arg p)) = Some decl,
-         isTypeE (Σ.1, ind_universes mdecl)
-           (arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,,
-            skipn (context_assumptions (cstr_args cdecl) - proj_arg p) (smash_context [] (cstr_args cdecl)))
-           (decl_type decl),
-         wf_localE (Σ.1, ind_universes mdecl)
-           (arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,, smash_context [] (cstr_args cdecl)),
-         projection_type mdecl (proj_ind p) (proj_arg p) (decl_type decl) = proj_type pdecl &
-         projection_type mdecl (proj_ind p) (proj_arg p) (decl_type decl) =
-         projection_type' mdecl (proj_ind p) (proj_arg p) (decl_type decl)]) ;
-  isType_mkApps_Ind_invE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {ind : inductive} {u : Instance.t}
-      {args : list term} (wfΣ : wfE Σ.1)
-      {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-      (declm : declared_inductive Σ.1 ind mdecl idecl),
-    wf_localE Σ Γ ->
-    isTypeE Σ Γ (mkApps (tInd ind u) args) ->
-    ∑ parsubst argsubst : list term,
-      let parctx := (ind_params mdecl)@[u] in
-      let argctx := subst_context parsubst 0 (ind_indices idecl)@[u] in
-      [× spine_substE Σ Γ (firstn (ind_npars mdecl) args) parsubst parctx,
-         spine_substE Σ Γ (skipn (ind_npars mdecl) args) argsubst argctx,
-         #|firstn (ind_npars mdecl) args| = ind_npars mdecl,
-         #|skipn (ind_npars mdecl) args| = context_assumptions (ind_indices idecl) &
-         consistent_instance_ext Σ (ind_universes mdecl) u] ;
-  on_minductive_wf_params_indices_instE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body}
-      (decli : declared_inductive Σ ind mdecl idecl) (u : Instance.t),
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    wf_localE Σ ((ind_params mdecl ,,, ind_indices idecl)@[u]) ;
-  (* PCUICInductives.v:2697 isType_case_predicate; base twin. Not a known-false form: under
-     [wfE], typing premises only. Argued TRUE in t1-case-audit.md §6.1 (Case row) and §6.2: its
-     raw site [type_it_mkProd_or_LetIn_inv] (PCUICSpine.v:1719) is routed through
-     [ws_cumul_pbE_LetIn_l_inv]. *)
-  isType_case_predicateE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ} {ci : case_info}
-      {mdecl idecl} u params ps,
-    wf_localE Σ Γ ->
-    declared_inductive Σ ci mdecl idecl ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    wf_sort Σ ps ->
-    spine_substE Σ Γ params (List.rev params) (smash_context [] (subst_instance u (ind_params mdecl))) ->
-    isTypeE Σ Γ
-      (it_mkProd_or_LetIn
-        (pre_case_predicate_context_gen ci mdecl idecl params u)
-        (tSort ps)) ;
-  (* PCUICInductives.v:2803 arity_spine_case_predicate; base twin. Not a known-false form: under
-     [wfE]; the premise on [c] is a typing derivation, not [welltypedE]. Argued TRUE in
-     t1-case-audit.md §6.1 (Case row). *)
-  arity_spine_case_predicateE :
-    forall {cf: checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ} {ci : case_info}
-      {mdecl idecl} {u params indices ps} {c},
-    wf_localE Σ Γ ->
-    declared_inductive Σ ci mdecl idecl ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    wf_sort Σ ps ->
-    spine_substE Σ Γ params (List.rev params)
-      (smash_context [] (subst_instance u (ind_params mdecl))) ->
-    spine_substE Σ Γ indices (List.rev indices)
-      (subst_context_let_expand (List.rev params)
-          (subst_instance u (ind_params mdecl))
-          (smash_context [] (subst_instance u (ind_indices idecl)))) ->
-    Σ ;;; Γ |-E c : mkApps (tInd ci u) (params ++ indices) ->
-    arity_spineE Σ Γ
-      (it_mkProd_or_LetIn
-        (pre_case_predicate_context_gen ci mdecl idecl params u)
-        (tSort ps))
-      (indices ++ [c]) (tSort ps)
-}.
-
-Local Set Warnings "unexpected-implicit-declaration".
-
-(** ** End of the FORECAST BLOCK *)
-
 Section ValidityEta.
-
-(* FORECAST-ONLY: one premise per class of the block above; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16}.
-
-(** ** Copy lemmas proved here
-
-  Each has the name and the statement its copy commits to (the text of [PCUICSREta.v] where
-  that file has the lemma, else the base twin), and a proof from landed facts. Delete each when
-  its copy lands. The ones of copies 10, 12, 14 and 15 were deleted when those copies landed. *)
-
-(** Copy 16, [PCUICInductives.v:1558] [declared_projection_type]; base twin, from the field
-    [declared_projection_type_and_eqE] of the forecast block. *)
-Lemma declared_projection_typeE {cf:checker_flags} {Σ : global_env_ext} {mdecl idecl p cdecl pdecl} :
-  wfE Σ.1 ->
-  declared_projection Σ p mdecl idecl cdecl pdecl ->
-  let u := abstract_instance (ind_universes mdecl) in
-  isTypeE (Σ.1, ind_universes mdecl)
-    ((vass {| binder_name := nNamed idecl.(ind_name); binder_relevance := idecl.(ind_relevance) |} (mkApps (tInd p.(proj_ind) u)
-          (to_extended_list (smash_context [] (ind_params mdecl)))))::
-        smash_context [] (ind_params mdecl)) pdecl.(proj_type).
-Proof.
-  intros wfΣ declp u.
-  exact (declared_projection_type_and_eqE wfΣ declp).1.2.
-Qed.
 
 (** ** The copy of [PCUICValidity] *)
 

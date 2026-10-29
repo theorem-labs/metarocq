@@ -3,10 +3,10 @@
 (** * Satisfying instances of the lemmas of [Bidirectional/BDUniqueEta] (row T6)
 
   **The forecast classes are section variables.** Every lemma of [BDUniqueEta] uses soundness,
-  validity or completeness, so it takes the classes
-  of [BDToPCUICEta] and [BDFromPCUICEta] as premises. No instance of a class exists before its
-  copy lands, so the instances below are applied in section [BDUniqueClassInstances], whose
-  [Context] holds the five classes, as [BDToPCUICEtaInstances] does. Every derivation they need
+  validity or completeness, so it takes the classes of [BDToPCUICEta] as premises. No
+  instance of a class exists before its copy lands, so the instances below are applied in
+  section [BDUniqueClassInstances], whose [Context] holds the two classes, as
+  [BDToPCUICEtaInstances] does. Every derivation they need
   is built here, in [PCUICInversionEtaInstances], [BDTypingEtaInstances] or
   [BDToPCUICEtaInstances], with no class.
 
@@ -165,9 +165,7 @@ Qed.
 
 Section BDUniqueClassInstances.
 
-  Context {V16 : ValForecastCopy16}
-    {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-    {BF18 : BDFromForecastCopy18}.
+  Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
   (** The main theorem's inference component, on the two types of [f (∀P.P)]. *)
   Definition bidirectional_uniqueE_inst :

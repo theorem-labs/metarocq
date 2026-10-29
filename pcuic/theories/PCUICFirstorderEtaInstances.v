@@ -407,8 +407,7 @@ Definition firstorder_value_alphaE_inst : fo_sz = fo_sz :=
 Section FirstorderEtaInstances.
 
 (* FORECAST-ONLY: the classes of [PCUICFirstorderEta]; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16} {FO16 : FirstorderForecastCopy16}.
+Context {F18 : SRForecastCopy18}.
 
 Definition instantiated_typing_spine_firstorder_spineE_inst :
   firstorder_spineE fo_Σ [] (tProd fo_na fo_N fo_N) [tConstruct fo_ind 0 []] fo_N :=

@@ -2,11 +2,11 @@
 
 (** * Satisfying instances of the lemmas of [PCUICSREta] (row T1)
 
-  **The forecast classes are section variables.** Every lemma of [PCUICSREta] that uses a forecast
-  fact takes the forecast classes as premises: T2a's [ValForecastCopy16] ([PCUICValidityEta])
-  and [SRForecastCopy16/18] ([PCUICSREta]); copies 10, 12, 14 and 15 have landed and their
-  classes are gone. No instance of a class exists before its copy lands, so the instances below
-  live in section [SRInstances], whose [Context] holds the three classes, and APPLY the lemmas there.
+  **The forecast class is a section variable.** Every lemma of [PCUICSREta] that uses a forecast
+  fact takes its forecast class [SRForecastCopy18] (copy 18b) as a premise; copies 10, 12, 14, 15,
+  16 and 18a have landed and their classes are gone. No instance of a class exists before its copy
+  lands, so the instances below live in section [SRInstances], whose [Context] holds the class,
+  and APPLY the lemmas there.
   Everything else each instance needs (the environment, its [wfE], every typing derivation, every
   reduction step) is proved here or in [PCUICInversionEtaInstances], with no class. The instances
   of [subsletE_open_terms] and of the [subsletE] substitution lemma, which left this file, are in
@@ -40,7 +40,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICWeakeningTypEta
      PCUICCumulativitySpecEtaClosureInstances PCUICEtaPrimOpInstance
      PCUICInversionEta PCUICInversionEtaInstances
-     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICValidityEta PCUICSREta.
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICInductivesEta
+     PCUICValidityEta PCUICSREta.
 From MetaRocq.PCUIC Require PCUICSR.
 
 #[local] Existing Instance default_checker_flags.
@@ -249,7 +250,7 @@ Proof. exists po_int_kn, po_int_body. split; [reflexivity|exact iv_po_declared_i
 Section SRInstances.
 
   (** The forecast classes: section variables (see the header). *)
-  Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
+  Context {F18 : SRForecastCopy18}.
 
   (** *** [sr_red1E] and its corollaries *)
 
@@ -399,7 +400,7 @@ Section SRInstances.
       iv_declared_projection (has_sort_isTypeE sProp (iv_RF_typed [] localenv_nil)).
 
   Definition on_constructor_wf_argsE_inst :=
-    on_constructor_wf_argsE (Σ := si_Σ) (wfΣ := si_wfE) (u := []) si_declared_constructor eq_refl.
+    PCUICSREta.on_constructor_wf_argsE (Σ := si_Σ) (wfΣ := si_wfE) (u := []) si_declared_constructor eq_refl.
 
   Definition on_constructor_closed_indicesE_inst :=
     on_constructor_closed_indicesE (Σ := si_Σ) (wfΣ := si_wfE) si_declared_constructor.

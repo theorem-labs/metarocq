@@ -41,12 +41,13 @@
 
   ** The forecast block
 
-  Section premises: T2a's [ValForecastCopy16], T1's [SRForecastCopy16]/[SRForecastCopy18]
-  ([Construct_Ind_ind_eqE], [declared_constructor_valid_tyE], [isType_is_open_termE]) and
-  [PCUICClassificationEta]'s [ClassifForecastCopy16] (they enter through [invert_ind_indE],
-  [invert_fix_indE] and [typing_cofix_coindE]), imported, never redefined, and one new class,
-  [FirstorderForecastCopy16]: copy 16's [declared_inductive_type_ws_cumulE], which no class has.
-  [Print Assumptions] in [PCUICFirstorderEtaInstances] shows every class as an argument. *)
+  Section premise: T1's [SRForecastCopy18] ([Construct_Ind_ind_eqE],
+  [declared_constructor_valid_tyE], [isType_is_open_termE]; it enters through [invert_ind_indE],
+  [invert_fix_indE] and [typing_cofix_coindE]), imported, never redefined. Copy 16 has landed
+  (frac/eta 0fb43f10): T2a's, T1's, [PCUICClassificationEta]'s and this file's copy-16 classes
+  ([FirstorderForecastCopy16]: [declared_inductive_type_ws_cumulE]) were deleted after a
+  compiled-form identity check of each field, and [PCUICInductivesEta] is imported. [Print
+  Assumptions] in [PCUICFirstorderEtaInstances] shows the class as an argument. *)
 
 From Stdlib Require Import Program ssreflect ssrbool List.
 From MetaRocq.Utils Require Import utils MRRelations.
@@ -73,33 +74,11 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
   PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
   PCUICEtaA6 PCUICEtaA6Ind PCUICEtaA6More PCUICContextConversionEta PCUICWsCumulEtaCtx
   PCUICWsCumulEtaCtxTyp PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta
-  PCUICAritiesEta PCUICSpineEta PCUICWsCumulEtaInstancesGlobal PCUICValidityEta PCUICSREta
-  PCUICClassificationEta.
+  PCUICAritiesEta PCUICSpineEta PCUICWsCumulEtaInstancesGlobal PCUICInductivesEta PCUICValidityEta
+  PCUICSREta PCUICClassificationEta.
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta.
 From Equations.Type Require Import Relation.
-
-(** ** FORECAST BLOCK *)
-
-Local Set Warnings "-unexpected-implicit-declaration".
-
-(* FORECAST-ONLY: proved by copy 16 (PCUICInductivesEta.v); delete when it lands.
-   The field is the base twin's compiled statement with the relations renamed; the text is that
-   of copy 16 on fork/wip/eta-e3-copy16-2026-10-29 @ 2f1cba83 (PCUICInductivesEta.v:215). *)
-Class FirstorderForecastCopy16 := {
-  (* PCUICInductives.v:348 declared_inductive_type_ws_cumul (section OnInductives, :291). *)
-  declared_inductive_type_ws_cumulE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body}
-      (decli : declared_inductive Σ ind mdecl idecl) (Γ : context) (u : Instance.t),
-    wf_localE Σ Γ ->
-    Σ ;;; Γ ⊢E subst_instance u (ind_type idecl) =
-      subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl)))
-}.
-
-Local Set Warnings "unexpected-implicit-declaration".
-
-(** ** End of the FORECAST BLOCK *)
 
 Section cf.
 
@@ -247,11 +226,9 @@ Qed.
 
 Section FirstorderForecastE.
 
-(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two
-   ([PCUICSREta]), [PCUICClassificationEta]'s one and this file's one; delete each when its copy
-   lands. A lemma takes a class only where its proof names it in [Proof using]. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16} {FO16 : FirstorderForecastCopy16}.
+(* FORECAST-ONLY: T1's class ([PCUICSREta]); delete it when copy 18b lands. A lemma takes the
+   class only where its proof names it in [Proof using]. *)
+Context {F18 : SRForecastCopy18}.
 
 (** Base [instantiated_typing_spine_firstorder_spine] ([:314]). *)
 Lemma instantiated_typing_spine_firstorder_spineE {Σ : global_env_ext} {wfΣ : wfE Σ} Γ T args T' :
@@ -259,7 +236,7 @@ Lemma instantiated_typing_spine_firstorder_spineE {Σ : global_env_ext} {wfΣ : 
   PCUICSpineEta.arity_spineE Σ Γ T args T' ->
   isTypeE Σ Γ T ->
   firstorder_spineE Σ Γ T args T'.
-Proof using V16.
+Proof using.
   intros hi hsp.
   revert hi; induction hsp; intros hi isty.
   - constructor => //. now eapply isType_ws_cumul_pbE_refl.
@@ -341,7 +318,7 @@ Lemma firstorder_argsE {Σ : global_env_ext} {wfΣ : wfE Σ} { mind cbody i n ui
   PCUICAritiesEta.typing_spineE Σ [] (type_of_constructor mind cbody (i, n) ui) args (mkApps (tInd i u) pandi) ->
   firstorder_ind Σ (@firstorder_env Σ) i ->
   firstorder_spineE Σ [] (type_of_constructor mind cbody (i, n) ui) args (mkApps (tInd i u) pandi).
-Proof using V16.
+Proof using.
   intros Hdecl Hspine Hind. revert Hspine.
   unshelve edestruct @declared_constructor_invE with (Hdecl := Hdecl); eauto. exact weaken_env_prop_typingE.
 
@@ -517,7 +494,7 @@ Lemma firstorder_value_specE (Σ:global_env_ext) t i u args :
   PCUICWcbvEval.value Σ t ->
   firstorder_ind Σ (firstorder_env Σ) i ->
   firstorder_valueE Σ [] t.
-Proof using V16 F16 F18 C16 FO16.
+Proof using F18.
   intros Hwf Hwfl Hty Hvalue.
   revert i u args Hty.
 

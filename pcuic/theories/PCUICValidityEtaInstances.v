@@ -6,20 +6,20 @@
   ([safechecker/theories/PCUICTypingEtaHyps.v], branch [wip/etak-k7-2026-10-29] @ [0bbee83d]) and
   the two fields of [SRForecastT2a] ([PCUICSREta.v]) are copied here verbatim and inhabited by
   [validityE] and [inversion_mkAppsE]: [T2a_inversion_mkApps_fit], [T2a_validity_fit],
-  [SR_T2a_validityE_fit], [SR_T2a_inversion_mkAppsE_fit]. They take the forecast classes of
-  [PCUICValidityEta] as premises, as the two lemmas do.
+  [SR_T2a_validityE_fit], [SR_T2a_inversion_mkAppsE_fit].
 
   **The instances.** Each lemma family of [PCUICValidityEta] with a premise has an instance below,
   in [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]: [Inductive I (A : Prop) : Prop := c : I A])
   or [iv_Σ] ([PCUICInversionEtaInstances]: a coinductive record with one projection), using the
   derivations of [PCUICInversionEtaInstances]:
   - a lemma that needs no forecast class is APPLIED to concrete premises, each proved;
-  - a lemma that needs a forecast class ([validity_envE], [validityE], [inversion_mkAppsE],
-    [type_App'E], [type_mkApps_arityE], [declared_projection_typeE]) cannot be applied without
-    an instance of that class, so its instance states the premises AND the conclusion at
-    concrete arguments, each proved without the lemma and without any class.
-  The copy lemmas of copies 10, 12 and 14 that [PCUICValidityEta] proved before those copies
-  landed are gone from it; their instances are in [PCUICTypingEtaCopies2Instances].
+  - a lemma that needed a forecast class before copy 16 landed (frac/eta 0fb43f10:
+    [validity_envE], [validityE], [inversion_mkAppsE], [type_App'E], [type_mkApps_arityE],
+    [declared_projection_typeE], now copy 16's) has an instance that states the premises AND the
+    conclusion at concrete arguments, each proved without the lemma and without any class.
+  The copy lemmas of copies 10, 12, 14 and 16 that [PCUICValidityEta] proved before those copies
+  landed are gone from it; their instances are in [PCUICTypingEtaCopies2Instances] and
+  [PCUICTypingEtaCopy16Instances].
   The derivation of [validityE_inst] ends in an η step: in the context
   [g : Prop → Prop, k : (Prop → Prop) → Prop, y : k g] the variable [y] is typed at
   [k (λx:Prop. g x)] ([iv_rel_typed]). *)
@@ -32,7 +32,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICTypingEtaNotions PCUICClosedTypEta PCUICClosedBodies PCUICEtaI5 PCUICWellScopedCumulativityEta
      PCUICWfUniversesEta PCUICWsCumulEtaCtxTyp
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances
-     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICValidityEta.
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICInductivesEta
+     PCUICValidityEta.
 
 Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at level 50, Γ, t, u at next level,
   format "Σ  ;;;  Γ  ⊢E  t  ≤  u") : type_scope.
@@ -40,8 +41,6 @@ Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at 
 (** ** The T2a contracts, verbatim, inhabited by the E lemmas *)
 
 Section ContractFit.
-
-  Context {V16 : ValForecastCopy16}.
 
   (** The checker's [T2a_facts] (its section variable [{cf : checker_flags}] made a [Context]). *)
   Section Checker.

@@ -44,11 +44,11 @@
 
   ** The forecast block
 
-  The lemmas take the forecast classes of [BDToPCUICEta] (T2a's [ValForecastCopy16], T1's
-  [SRForecastCopy16/18], [BDForecastCopy18]) and [BDFromPCUICEta]'s [BDFromForecastCopy18] as
-  section [Context]s, because they use soundness ([infering_typingE], ...), validity and
-  completeness ([typing_inferingE], ...); they are imported, never redefined. This file adds no
-  class. [Print Assumptions] in [BDUniqueEtaInstances] shows every class as an argument.
+  The lemmas take the forecast classes of [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b,
+  and [BDForecastCopy18], copy 18a, kept for a binder-name mismatch) as section [Context]s,
+  because they use soundness ([infering_typingE], ...), validity and completeness
+  ([typing_inferingE], ...); they are imported, never redefined. This file adds no class.
+  [Print Assumptions] in [BDUniqueEtaInstances] shows every class as an argument.
 
   ** Same names
 
@@ -85,11 +85,9 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 Section BDUniqueEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two ([PCUICSREta]),
-   [BDToPCUICEta]'s one and [BDFromPCUICEta]'s one; delete each when its row lands. *)
-Context {V16 : ValForecastCopy16}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-  {BF18 : BDFromForecastCopy18}.
+(* FORECAST-ONLY: one premise per class: T1's one ([PCUICSREta]) and [BDToPCUICEta]'s one; delete
+   each when its row lands. *)
+Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
 Section BDUnique.
 

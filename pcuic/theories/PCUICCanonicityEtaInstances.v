@@ -26,8 +26,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICSN PC
 Section CanonicityEtaInstances.
 
 (* FORECAST-ONLY: the classes of [PCUICCanonicityEta]; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16} {N20 : CanonForecastCopy20}.
+Context {F18 : SRForecastCopy18} {N20 : CanonForecastCopy20}.
 
 (* Base's normalization premise (by design, never discharged). *)
 Context {nor : normalizing_flags} {nin : NormalizationInE si_Σ}.

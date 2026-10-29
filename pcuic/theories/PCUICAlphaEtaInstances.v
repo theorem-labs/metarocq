@@ -15,8 +15,8 @@
 
   **Lemmas without a forecast class** are applied to these, every premise proved here.
   **Lemmas with a forecast class** ([typing_alpha_propE] and its corollaries, which use
-  [validityE] of T2a and the copy-16/18 fields of T1) are applied in section [AlphaClassInstances],
-  whose [Context] holds the three classes, as [BDToPCUICEtaInstances] does: no instance of a class
+  [validityE] of T2a and the copy-18 field of T1) are applied in section [AlphaClassInstances],
+  whose [Context] holds T1's class, as [BDToPCUICEtaInstances] does: no instance of a class
   exists before its copy lands. Everything else they need is proved without a class.
 
   **Non-degeneracy.** Every instance relates two syntactically different terms, contexts or
@@ -189,7 +189,7 @@ Qed.
 
 Section AlphaClassInstances.
 
-  Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
+  Context {F18 : SRForecastCopy18}.
 
   (** The η derivation, through the main theorem's typing component, into the renamed context. *)
   Definition typing_alpha_propE_inst : si_Σ ;;; al_Γk |-E tRel 0 : iv_keta :=

@@ -19,10 +19,9 @@
 
   - [NormalizationInE Σ] is base's [NormalizationIn Σ] premise over [welltypedE]: a PREMISE,
     as in base, not a forecast. Nothing proves it (strong normalization; [PCUICSNEta]'s header).
-  - Forecast classes (imported, never redefined): those of [PCUICCanonicityEta], i.e. T2a's
-    [ValForecastCopy16], T1's [SRForecastCopy16]/[SRForecastCopy18],
-    [PCUICClassificationEta]'s [ClassifForecastCopy16] and [PCUICCanonicityEta]'s
-    [CanonForecastCopy20] (base [wh_normalization], copy 20). This file adds no class.
+  - Forecast classes (imported, never redefined): those of [PCUICCanonicityEta], i.e. T1's
+    [SRForecastCopy18] (copy 18b) and [PCUICCanonicityEta]'s [CanonForecastCopy20] (base
+    [wh_normalization], copy 20). This file adds no class.
     Instances: [PCUICConsistencyEtaInstances]. *)
 
 From Stdlib Require Import ssreflect.
@@ -40,8 +39,7 @@ From Equations Require Import Equations.
 Section ConsistencyEta.
 
 (* FORECAST-ONLY: the classes of [PCUICCanonicityEta]; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16} {N20 : CanonForecastCopy20}.
+Context {F18 : SRForecastCopy18} {N20 : CanonForecastCopy20}.
 
 (** Base [pcuic_consistent] ([:40]). *)
 Theorem pcuic_consistentE {cf:checker_flags} {nor : normalizing_flags} Σ

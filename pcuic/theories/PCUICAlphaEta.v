@@ -64,11 +64,11 @@
 
   ** The forecast block
 
-  The lemmas take the forecast classes of T2a ([ValForecastCopy16], [PCUICValidityEta]: its
-  [validityE] and the field [on_minductive_wf_params_indices_instE]) and of T1 ([SRForecastCopy16]
-  field [isType_mkApps_IndE], [SRForecastCopy18] field [wf_case_branches_types'E],
-  [PCUICSREta]) as section [Context]s; they are imported, never redefined. This file adds no
-  class. [Print Assumptions] in [PCUICAlphaEtaInstances] shows every class as an argument.
+  The lemmas take T1's forecast class [SRForecastCopy18] ([PCUICSREta]; its field
+  [wf_case_branches_types'E]) as a section [Context]; it is imported, never redefined. The
+  copy-16 facts ([validityE]'s, [on_minductive_wf_params_indices_instE], [isType_mkApps_IndE])
+  come from the landed [PCUICInductivesEta] (frac/eta 0fb43f10). This file adds no class.
+  [Print Assumptions] in [PCUICAlphaEtaInstances] shows the class as an argument.
 
   **The hypotheses are satisfiable:** [wfE Σ] by any well-formed environment ([wf_incl_E]),
   each typing premise by a concrete derivation; [PCUICAlphaEtaInstances] gives an instance of
@@ -89,7 +89,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICEtaCanon PCUICEtaI5 PCUICEtaI5A2 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
      PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
      PCUICContextConversionTypEta PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta
-     PCUICAritiesEta PCUICSpineEta PCUICValidityEta PCUICSREta.
+     PCUICAritiesEta PCUICSpineEta PCUICInductivesEta PCUICValidityEta PCUICSREta.
 
 From Equations Require Import Equations.
 
@@ -178,9 +178,8 @@ Qed.
 
 Section AlphaEta.
 
-(* FORECAST-ONLY: T2a's class ([PCUICValidityEta]) and T1's two ([PCUICSREta]); delete each when
-   its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
+(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b); delete it when its copy lands. *)
+Context {F18 : SRForecastCopy18}.
 
 (** The E counterparts of base's [typing]-specific [pcuic] hints ([PCUICTyping.has_sort_isType],
     [typing_wf_local]), as in [PCUICSREta]. *)

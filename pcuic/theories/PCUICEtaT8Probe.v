@@ -1061,9 +1061,9 @@ Section TypedSafe.
     E form and (c) its status. Each link is labelled BUILT (its status rests on a compiled lemma,
     refutation or check) or ARGUED (it rests on reading a proof):
     - [PCUICValidity.inversion_mkApps] ([PCUICValidity.v:381]) types the head and a spine; its E
-      form [PCUICValidityEta.inversion_mkAppsE] is neither refuted nor T8-shaped, but it rests on
-      validity (row T2a, forecast class [ValForecastCopy16]), which [fri_spine] avoids. BUILT (the
-      E form is compiled; the class is an argument of its compiled statement).
+      form [PCUICValidityEta.inversion_mkAppsE] is neither refuted nor T8-shaped; it rests on
+      validity (row T2a, which took the forecast class [ValForecastCopy16] until copy 16 landed),
+      which [fri_spine] avoids. BUILT (the E form is compiled).
     - [PCUICClassification.wf_fixpoint_spine] ([PCUICClassification.v:390]) reads the
       [rarg]-th assumption off the spine. Its E form [PCUICClassificationEta.wf_fixpoint_spineE]
       now exists (integration branch), through [mfix_on_ind_spine_witnessE_fix] and

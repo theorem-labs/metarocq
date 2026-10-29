@@ -37,8 +37,8 @@
   [cmp_global_instance_finst] at [#|l|]; base's conclusion is [cmp_ind_universes] at [#|args|]
   (base [cmp_global_instance] at [Cumul]). They agree at full application
   ([finst_ind_glue_full], [PCUICEtaFInstGlue]). The typing premise gives it: validity types
-  [mkApps (tInd ind ui) args] at a sort, and the landed forecast field [isType_mkApps_Ind_invE]
-  ([ValForecastCopy16]) gives [#|args| = ind_npars + context_assumptions indices], which is the
+  [mkApps (tInd ind ui) args] at a sort, and copy 16's [isType_mkApps_Ind_invE]
+  ([PCUICInductivesEta]) gives [#|args| = ind_npars + context_assumptions indices], which is the
   head's full arity ([isTypeE_mkApps_Ind_head_arity] below). No statement changes.
 
   ** The (co)fixpoint witness: conversion witness ⇒ reduction witness, TYPED (proved here)
@@ -82,18 +82,18 @@
     ([untyped_subslet_assumption_context]: the projection context is an assumption context of
     the right length), and the closedness of the projection context comes from the closed
     parameters ([declared_inductive_closed_paramsE]) instead of [wf_projection_context]. The
-    instances' consistency comes from [isType_mkApps_Ind_invE] ([ValForecastCopy16]) in place of
+    instances' consistency comes from [isType_mkApps_Ind_invE] (copy 16) in place of
     base [invert_type_mkApps_ind].
 
   ** The forecast block
 
-  The lemmas take the forecast classes of [BDToPCUICEta] (T2a's [ValForecastCopy16], T1's
-  [SRForecastCopy16/18], [BDForecastCopy18]) as section [Context]s; they are imported, never
-  redefined (copies 10, 12, 14 and 15 have landed and are imported). This file adds one class:
-  - [BDFromForecastCopy18]: ONE copy-18 lemma that the Proj case needs and no class has, base
-    [projection_cumulative_indices] ([PCUICInductiveInversion.v:3616]), with the base twin's
-    statement.
-  [Print Assumptions] in [BDFromPCUICEtaInstances] shows every class as an argument.
+  The lemmas take the forecast classes of [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b, and
+  [BDForecastCopy18], copy 18a's [ctx_inst_app_weakE], kept for a binder-name mismatch) as
+  section [Context]s; they are imported, never redefined. Copies 10, 12, 14, 15, 16 and 18a have
+  landed and are imported; this file's [BDFromForecastCopy18] (copy 18a's
+  [projection_cumulative_indicesE], [PCUICInductiveInversionEta]) was deleted after a
+  compiled-form identity check. [Print Assumptions] in [BDFromPCUICEtaInstances] shows every
+  class as an argument.
 
   ** The checker's facts
 
@@ -116,6 +116,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
      PCUICEtaA6 PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
      PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
+     PCUICInductivesEta PCUICInductiveInversionEta
      PCUICValidityEta PCUICSREtaConv PCUICSREta BDTypingEta BDToPCUICEta.
 From MetaRocq.PCUIC Require BDFromPCUIC PCUICEtaT8Probe.
 
@@ -125,7 +126,7 @@ From Equations.Prop Require Import DepElim.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
-(** ** FORECAST BLOCK *)
+(** ** Forecast notes *)
 
 (* Row B1's [fix_rarg_inductive] is PROVED ([PCUICEtaT8Probe.fix_rarg_inductive], section
    [FixRargInductive]), and T8 is used through the two-hypothesis forms [PCUICEtaT8Probe.T8_*_r_two],
@@ -133,39 +134,6 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
    compiled check: its field has the type of [PCUICEtaT8Probe.fix_rarg_inductive] (both-way
    ascription), with [cf] and [Σ] explicit where the proved lemma has them implicit. *)
 
-(* The braces in the statement record the implicit status of the base twin; they are at the
-   head of the field's type, where Rocq keeps them on the projection. *)
-
-(* FORECAST-ONLY: proved by copy 18 (PCUICInductiveInversionEta.v); delete when it lands.
-   Text: the base twin, PCUICInductiveInversion.v:3616 [projection_cumulative_indices], with
-   [wf] → [wfE] and the cumulativity [Σ ;;; _ ⊢ _ ≤ _] → [Σ ;;; _ ⊢E _ ≤ _]; nothing else.
-   Used once, in the Proj case of [bidirectional_from_pcuicE] (base [BDFromPCUIC.v:339]).
-   No class has it: the checker's bundle has only the inductive analogue
-   [inductive_cumulative_indices] (its [T0_facts]). Not a known-false form: no conversion
-   premise, under [wfE]; for a projection's inductive (no indices) [ind_npars] is the full
-   arity, so [cmp_ind_universes] reads the declared variance. Its base proof
-   (PCUICInductiveInversion.v:3625-3765) either finds the two instances equal up to
-   [eq_term_upto_univ] (base ⊆ E, [ws_cumul_pb_incl_E]) or reads the variance clause
-   [on_ctype_variance] of the declaration, which [wfE] states with E cumulativity
-   ([cumulSpecE0]), and turns it into the conclusion with [cumul_ctx_relSpec_Algo],
-   [All2_fold_inst], [positive_cstr_closed_args], [weakening_ws_cumul_pb] and
-   [untyped_substitution_ws_cumul_pb]; the E copies of the first three are copy-18 rows not on
-   this branch (the last two are landed: [weakening_ws_cumul_pbE],
-   [untyped_substitution_ws_cumul_pbE]). *)
-Class BDFromForecastCopy18 := {
-  projection_cumulative_indicesE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {mdecl idecl cdecl p pdecl u u' },
-    declared_projection Σ p mdecl idecl cdecl pdecl ->
-    on_udecl_prop Σ (ind_universes mdecl) ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    consistent_instance_ext Σ (ind_universes mdecl) u' ->
-    cmp_ind_universes Σ p.(proj_ind) (ind_npars mdecl) u u' ->
-    Σ ;;; projection_context p.(proj_ind) mdecl idecl u ⊢E
-      subst_instance u pdecl.(proj_type) ≤ subst_instance u' pdecl.(proj_type)
-}.
-
-(** ** End of the FORECAST BLOCK *)
 
 (** ** Syntactic and untyped helpers (no class) *)
 
@@ -214,12 +182,10 @@ Qed.
 
 Section BDFromPCUICEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two
-   ([PCUICSREta]), [BDToPCUICEta]'s one, and this file's one (copy 18's
-   [projection_cumulative_indices]); delete each when its row lands. *)
-Context {V16 : ValForecastCopy16}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-  {BF18 : BDFromForecastCopy18}.
+(* FORECAST-ONLY: one premise per class: T1's one ([PCUICSREta], copy 18b) and [BDToPCUICEta]'s
+   one (copy 18a's [ctx_inst_app_weakE], kept: binder-name mismatch); delete each when its row
+   lands. *)
+Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
 (** ** Typed T8, proved (row B1)
 

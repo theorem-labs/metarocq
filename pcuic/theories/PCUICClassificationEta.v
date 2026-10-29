@@ -82,10 +82,12 @@
 
   ** The forecast block
 
-  Section premises: T2a's [ValForecastCopy16] and T1's [SRForecastCopy16]/[SRForecastCopy18]
-  (imported, never redefined; they enter through [subject_reductionE], [isType_redE] and the
-  T8 forms), and one new class, [ClassifForecastCopy16]: three copy-16 lemmas no class has.
-  [Print Assumptions] in [PCUICClassificationEtaInstances] shows every class as an argument. *)
+  Section premise: T1's [SRForecastCopy18] (imported, never redefined; it enters through
+  [subject_reductionE], [isType_redE] and the T8 forms). Copy 16 has landed (frac/eta
+  0fb43f10): T2a's [ValForecastCopy16], T1's [SRForecastCopy16] and this file's
+  [ClassifForecastCopy16] were deleted after a compiled-form identity check of each field, and
+  [PCUICInductivesEta] is imported. [Print Assumptions] in [PCUICClassificationEtaInstances]
+  shows the class as an argument. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -112,7 +114,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
   PCUICEtaA6 PCUICEtaA6Ind PCUICEtaA6More PCUICContextConversionEta PCUICWsCumulEtaCtx
   PCUICWsCumulEtaCtxTyp PCUICInversionEta PCUICSREtaConv
   PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
-  PCUICWsCumulEtaInstancesGlobal PCUICValidityEta PCUICSREta.
+  PCUICWsCumulEtaInstancesGlobal PCUICInductivesEta PCUICValidityEta PCUICSREta.
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta PCUICEtaT8Probe BDFromPCUICEta PCUICPrincipalityEta.
 
@@ -123,47 +125,6 @@ From Stdlib Require Import ssreflect ssrbool.
 From Equations.Type Require Import Relation Relation_Properties.
 
 Set Default Proof Using "Type*".
-
-(** ** FORECAST BLOCK *)
-
-Local Set Warnings "-unexpected-implicit-declaration".
-
-(* FORECAST-ONLY: proved by copy 16 (PCUICInductivesEta.v); delete when it lands.
-   Each field is the base twin's compiled statement with the relations renamed; the text is
-   that of copy 16 on fork/wip/eta-e3-copy16-2026-10-29 @ 2f1cba83 (PCUICInductivesEta.v:187,
-   :259, :1441). *)
-Class ClassifForecastCopy16 := {
-  (* PCUICInductives.v:320 declared_inductive_valid_type (section OnInductives, :291). *)
-  declared_inductive_valid_typeE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body}
-      (decli : declared_inductive Σ ind mdecl idecl) (Γ : context) (u : Instance.t),
-    wf_localE Σ Γ ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    isTypeRelE Σ Γ (subst_instance u idecl.(ind_type)) rel_of_Type ;
-  (* PCUICInductives.v:392 typing_spine_ind_type_inv (section OnInductives, :291). *)
-  typing_spine_ind_type_invE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body}
-      (decli : declared_inductive Σ ind mdecl idecl) (Γ : context) (u : Instance.t)
-      (args : list term) (T : term),
-    wf_localE Σ Γ ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    PCUICAritiesEta.typing_spineE Σ Γ (subst_instance u (ind_type idecl)) args T ->
-    PCUICAritiesEta.typing_spineE Σ Γ
-      (subst_instance u (it_mkProd_or_LetIn (ind_params mdecl ,,, ind_indices idecl) (tSort (ind_sort idecl))))
-      args T ;
-  (* PCUICInductives.v:2268 red_it_mkProd_or_LetIn_to_smash. *)
-  red_it_mkProd_or_LetIn_to_smashE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : context) (T : term),
-    is_closed_context Γ ->
-    is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
-    Σ ;;; Γ ⊢ it_mkProd_or_LetIn Δ T ⇝ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T)
-}.
-
-Local Set Warnings "unexpected-implicit-declaration".
-
-(** ** End of the FORECAST BLOCK *)
 
 (** ** Helpers with no class *)
 
@@ -233,12 +194,10 @@ Qed.
 
 Section ClassificationEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two
-   ([PCUICSREta]) and this file's one; delete each when its copy lands. Under
-   [Proof using Type*] a class is a premise of a lemma only where its proof names it in
+(* FORECAST-ONLY: T1's class ([PCUICSREta]); delete it when copy 18b lands. Under
+   [Proof using Type*] the class is a premise of a lemma only where its proof names it in
    [Proof using]. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16}.
+Context {F18 : SRForecastCopy18}.
 
 (** ** Typed T8, left form at a sort
 
@@ -252,7 +211,7 @@ Lemma T8_Sort_l_plug :
     wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
     ws_cumul_pbE pb Σ Γ (tSort s) T ->
     ∑ s'', Σ ;;; Γ ⊢ T ⇝ tSort s'' × compare_sort Σ pb s s''.
-Proof using V16 F16 F18.
+Proof using F18.
   intros cf Σ Γ pb T s s' wfΣ hT hc.
   have cb : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
   destruct (ws_cumul_pbE_Sort_l_inv (Σ := Σ) pb hc) as (s1 & hch & _).
@@ -279,7 +238,7 @@ Section ArityCorollariesE.
       Σ ;;; Γ ⊢E C ≤ T ->
       isTypeE Σ Γ C ->
       Is_conv_to_Arity Σ Γ C.
-  Proof using V16 F16 F18 Type*.
+  Proof using F18 Type*.
     intros Γ C T a h isC.
     have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
     remember (arity_spine_len T) as n eqn:hn.
@@ -322,7 +281,7 @@ Section ArityCorollariesE.
       Σ ;;; Γ ⊢E C ≤ T ->
       isTypeE Σ Γ T ->
       Is_conv_to_Arity Σ Γ T.
-  Proof using V16 F16 F18 Type*.
+  Proof using F18 Type*.
     intros Γ C T a h isT.
     have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
     remember (arity_spine_len C) as n eqn:hn.
@@ -367,7 +326,7 @@ Lemma isArity_typing_spineE {cf:checker_flags} {Σ : global_env_ext} {Γ L T T'}
   PCUICAritiesEta.typing_spineE Σ Γ T' L T ->
   Is_conv_to_Arity Σ Γ T' ->
   Is_conv_to_Arity Σ Γ T.
-Proof using V16 F16 F18 Type*.
+Proof using F18 Type*.
   intros wfΓ sp.
   have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
   induction sp as [ty ty' isty isty' w|ty hd tl na A B B' isty isP w hhd sp IHsp]; intros isc.
@@ -392,7 +351,7 @@ Section AritiesE.
   (** x2, base [invert_cumul_arity_l_gen] ([:83]), with [isTypeE Σ Γ T] (Class A'). *)
   Lemma invert_cumul_arity_l_genE (Γ : context) (C T : term) :
     Is_conv_to_Arity Σ Γ C -> Σ ;;; Γ ⊢E C ≤ T -> isTypeE Σ Γ T -> Is_conv_to_Arity Σ Γ T.
-  Proof using V16 F16 F18 Type*.
+  Proof using F18 Type*.
     intros [ar [red isA]]. sq.
     intros cum isT.
     have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
@@ -404,7 +363,7 @@ Section AritiesE.
   (** x3, base [invert_cumul_arity_r_gen] ([:93]), with [isTypeE Σ Γ T] (Class A'). *)
   Lemma invert_cumul_arity_r_genE (Γ : context) (C T : term) :
     Is_conv_to_Arity Σ Γ C -> Σ;;; Γ ⊢E T ≤ C -> isTypeE Σ Γ T -> Is_conv_to_Arity Σ Γ T.
-  Proof using V16 F16 F18 Type*.
+  Proof using F18 Type*.
     intros [ar [red isA]]. sq.
     intros cum isT.
     have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
@@ -426,7 +385,7 @@ Section AritiesE.
     wf_localE Σ Γ ->
     PCUICAritiesEta.typing_spineE Σ Γ T l (mkApps (tInd i u) args) ->
     Is_conv_to_Arity Σ Γ T -> False.
-  Proof using V16 F16 F18 Type*.
+  Proof using F18 Type*.
     intros wf sp isc.
     eapply (isArity_typing_spineE wf sp) in isc.
     now eapply Is_conv_to_Arity_indE.
@@ -453,7 +412,7 @@ Section SpinesE.
     ∑ mind tw,
       [× Σ ;;; Γ ⊢ dtype decl ⇝ tw, check_one_fix (def_with_type decl tw) = Some mind, ok mind,
          isTypeE Σ Γ tw & PCUICAritiesEta.typing_spineE Σ Γ tw args ty].
-  Proof using V16 F16 F18 Type*.
+  Proof using F18 Type*.
     move=> [mind [_ [hall hck]]] nthe isty sp.
     have wfΓ : wf_localE Σ Γ := isType_wf_localE isty.
     assert (clΓ : is_closed_context Γ) by exact (wf_local_closed_contextE wfΓ).
@@ -478,7 +437,7 @@ Section SpinesE.
     ∑ mind tw,
       [× Σ ;;; Γ ⊢ dtype decl ⇝ tw, check_one_cofix (def_with_type decl tw) = Some mind, ok mind,
          isTypeE Σ Γ tw & PCUICAritiesEta.typing_spineE Σ Γ tw args ty].
-  Proof using V16 F16 F18 Type*.
+  Proof using F18 Type*.
     move=> [mind [_ [hall hck]]] nthe isty sp.
     have wfΓ : wf_localE Σ Γ := isType_wf_localE isty.
     assert (clΓ : is_closed_context Γ) by exact (wf_local_closed_contextE wfΓ).
@@ -497,7 +456,7 @@ Section SpinesE.
     is_closed_context Γ ->
     is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
     Σ ;;; Γ ⊢E it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T) = it_mkProd_or_LetIn Δ T.
-  Proof using C16 Type*.
+  Proof using Type*.
     intros clΓ clp. symmetry. eapply red_ws_cumul_pbE.
     now apply red_it_mkProd_or_LetIn_to_smashE.
   Qed.
@@ -506,7 +465,7 @@ Section SpinesE.
   Lemma typing_spine_smashE Γ Δ T args T' :
     PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args T' ->
     PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T)) args T'.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros sp.
     pose proof (typing_spine_isType_domE sp) as ty.
     pose proof (red_it_mkProd_or_LetIn_to_smashE (wfΣ := wfΣ) Γ Δ T
@@ -703,7 +662,7 @@ Section SpinesE.
       check_recursivity_kind (lookup_env Σ) (inductive_mind ind) Finite
     | None => ∑ na dom codom, Σ ;;; Γ ⊢E tProd na dom codom ≤ ty
     end.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     move=> [_ [_ hm]] nthe isty sp.
     destruct (mfix_on_ind_spine_witnessE_fix _ _ _ _ _ _ hm nthe isty sp)
       as [mind' [tw [r cfix ck istw sp']]].
@@ -719,9 +678,9 @@ Section SpinesE.
     len in H. simpl in H.
     eapply typing_spine_smashE in sp.
     destruct (nth_error args rarg) eqn:hargs.
-    - (* This file's [typing_spine_nth_errorE] (above): inside its section Rocq gives it no
-         qualified name; the short name resolves to it, not to [PCUICSpineEta]'s. *)
-      eapply typing_spine_nth_errorE in sp; eauto; cycle 1.
+    - (* This file's [typing_spine_nth_errorE] (above), not [PCUICSpineEta]'s: while its
+         Section is open it is named by the Section's name, [SpinesE.typing_spine_nth_errorE]. *)
+      eapply SpinesE.typing_spine_nth_errorE in sp; eauto; cycle 1.
       * eapply smash_context_assumption_context; constructor.
       * eapply wf_local_smash_endE; eauto.
         destruct istw as (_ & s & Hs & _).
@@ -758,7 +717,7 @@ Section SpinesE.
     else
       (#|args| = context_assumptions Γ') *
       (Σ ;;; Γ ⊢E subst (List.rev args) 0 (expand_lets Γ' T) ≤ ty).
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     move=> hm nthe isty sp.
     destruct (mfix_on_ind_spine_witnessE_cofix _ _ _ _ _ _ hm nthe isty sp)
       as [mind' [tw [r cfix ck istw sp']]].
@@ -855,7 +814,7 @@ Section classificationE.
   Lemma typing_cofix_coindE {Γ mfix idx args ind u indargs} :
     Σ ;;; Γ |-E mkApps (tCoFix mfix idx) args : mkApps (tInd ind u) indargs ->
     check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros tyarg.
     have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
     eapply inversion_mkAppsE in tyarg as [A [Hcof sp]]; auto.
@@ -908,7 +867,7 @@ Section classificationE.
   (** Base [invert_ind_ind] ([:639]). *)
   Lemma invert_ind_indE Γ ind u args ind' u' args' :
     Σ;;; Γ |-E mkApps (tInd ind u) args : mkApps (tInd ind' u') args' -> False.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros typ.
     eapply inversion_mkAppsE in typ as (?&?&?); auto.
     eapply inversion_IndE in t as (?&?&wfΓ&decl&cu&?); auto.
@@ -930,7 +889,7 @@ Section classificationE.
     | _ => True
     end ->
     Σ;;; Γ |-E mkApps (tFix mfix i) args : mkApps (tInd ind u) args' -> False.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros no_arg typ.
     eapply inversion_mkAppsE in typ as (?&?&?); eauto.
     eapply inversion_FixE in t as (? & ? & ? & ? & ? & ? & ?); auto.
@@ -950,7 +909,7 @@ Section classificationE.
     Σ ;;; Γ |-E t : ty ->
     Γ = [] ->
     False.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros axfree ne typed.
     induction ne in free, t, ty, axfree, ne, typed |- *; intros ->; simpl in *; try discriminate.
     - apply inversion_RelE in typed as (?&?&?&?); auto.
@@ -997,7 +956,7 @@ Section classificationE.
     wh_neutral Σ [] t ->
     Σ ;;; [] |-E t : ty ->
     False.
-  Proof using V16 F16 F18 C16 Type*. eauto using wh_neutral_empty_genE. Qed.
+  Proof using F18 Type*. eauto using wh_neutral_empty_genE. Qed.
 
   (** Base [whnf_classification'] ([:742]). *)
   Lemma whnf_classification'E t i u args :
@@ -1005,7 +964,7 @@ Section classificationE.
     wh_normal Σ [] t ->
     Σ ;;; [] |-E t : mkApps (tInd i u) args ->
     construct_cofix_discr (head t).
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros axfree ne typed.
     have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
     pose proof (subject_closedE typed) as cl.
@@ -1048,7 +1007,7 @@ Section classificationE.
     wh_normal Σ [] t ->
     Σ ;;; [] |-E t : mkApps (tInd i u) args ->
     construct_cofix_discr (head t).
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros axfree; eapply axiom_free_axiom_free_value in axfree.
     intros; eapply whnf_classification'E; eauto.
   Qed.
@@ -1059,7 +1018,7 @@ Section classificationE.
     Σ ;;; [] |-E t : mkApps (tInd ind u) indargs ->
     wh_normal Σ [] t ->
     isConstruct_app t.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros axfree ck typed whnf.
     rewrite /isConstruct_app.
     eapply whnf_classification'E in whnf; eauto.
@@ -1077,7 +1036,7 @@ Section classificationE.
     Σ ;;; [] |-E t : mkApps (tInd ind u) indargs ->
     wh_normal Σ [] t ->
     isConstruct_app t.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros axfree; eapply axiom_free_axiom_free_value in axfree.
     intros; eapply ind_whnf_classification'E; eauto.
   Qed.
@@ -1090,7 +1049,7 @@ Section classificationE.
     | Some a => axiom_free_value Σ [] a -> wh_normal Σ [] a -> isConstruct_app a
     | None => ∑ na dom codom, Σ ;;; [] ⊢E tProd na dom codom ≤ ty
     end.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros typed unf.
     eapply inversion_mkAppsE in typed as (? & ? & ?); eauto.
     eapply inversion_FixE in t as (? & ? & ? & ? & ? & ? & ?); auto.
@@ -1116,7 +1075,7 @@ Section classificationE.
   Lemma wcbveval_redE t ty u :
     Σ ;;; [] |-E t : ty ->
     eval Σ t u -> red Σ [] t u.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros Hc He.
     have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
     revert ty Hc.
@@ -1294,7 +1253,7 @@ Section classificationE.
   (** Base [subject_reduction_eval] ([:1055]). *)
   Theorem subject_reduction_evalE {t u T} :
     Σ ;;; [] |-E t : T -> eval Σ t u -> Σ ;;; [] |-E u : T.
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros Hty Hred.
     eapply wcbveval_redE in Hred; eauto. eapply subject_reductionE; eauto.
   Qed.
@@ -1304,7 +1263,7 @@ Section classificationE.
     Σ ;;; [] |-E t : mkApps (tInd i u) args ->
     value Σ t ->
     construct_cofix_discr (head t).
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros Ht Hvalue.
     eapply value_axiom_free in Hvalue as H.
     eapply whnf_classification'E; eauto.
@@ -1318,7 +1277,7 @@ Section classificationE.
     Σ ;;; [] |-E t : mkApps (tInd i u) args ->
     forall t', eval Σ t t' ->
     construct_cofix_discr (head t').
-  Proof using V16 F16 F18 C16 Type*.
+  Proof using F18 Type*.
     intros Ht t' eval.
     pose proof (subject_closedE Ht).
     eapply subject_reductionE in Ht. 3:eapply wcbveval_redE; eauto. 2:auto.

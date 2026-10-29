@@ -11,8 +11,8 @@
 
   ** The forecast block
 
-  Section premises: the classes of [PCUICClassificationEta] (T2a's [ValForecastCopy16], T1's
-  [SRForecastCopy16]/[SRForecastCopy18], [ClassifForecastCopy16]), imported, and one new class,
+  Section premises: the class of [PCUICClassificationEta] (T1's [SRForecastCopy18], copy 18b),
+  imported, and one new class,
   [CanonForecastCopy20]: base [wh_normalization] ([PCUICNormalization.v:24]), whose E copy is
   copy 20 ([PCUICNormalizationEta], ArityLane), built on [PCUICProgressEta]. *)
 
@@ -50,8 +50,7 @@ Section CanonicityEta.
 
 (* FORECAST-ONLY: the classes of [PCUICClassificationEta] and this file's one; delete each when
    its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16} {N20 : CanonForecastCopy20}.
+Context {F18 : SRForecastCopy18} {N20 : CanonForecastCopy20}.
 
 (** Base [pcuic_canonicity] ([:20]). *)
 Lemma pcuic_canonicityE {cf:checker_flags} {nor : normalizing_flags} Σ {normalization_in: NormalizationInE Σ} t i u args :

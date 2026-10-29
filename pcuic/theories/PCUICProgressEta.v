@@ -40,9 +40,8 @@
 
   ** The forecast block
 
-  Section premises: the classes of [PCUICClassificationEta] (T2a's [ValForecastCopy16], T1's
-  [SRForecastCopy16]/[SRForecastCopy18], [ClassifForecastCopy16]), imported, and one new
-  class, [ProgForecastCopy18]: two copy-18 lemmas no class has. *)
+  Section premises: the class of [PCUICClassificationEta] (T1's [SRForecastCopy18], copy 18b),
+  imported, and one new class, [ProgForecastCopy18]: two copy-18b lemmas no class has. *)
 
 From Stdlib Require Import ssreflect.
 From Stdlib Require ssrbool.
@@ -106,8 +105,7 @@ Local Set Warnings "unexpected-implicit-declaration".
 Section EvalCaseE.
 
 (* FORECAST-ONLY: the classes of [PCUICClassificationEta]; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16}.
+Context {F18 : SRForecastCopy18}.
 
 (** Base [eval_tCase] ([PCUICProgress.v:23]). *)
 Lemma eval_tCaseE {cf : checker_flags} {Σ : global_env_ext}  ci p discr brs res T :
@@ -582,8 +580,7 @@ Section ProgressE.
 
 (* FORECAST-ONLY: the classes of [PCUICClassificationEta] and this file's one; delete each when
    its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16} {P18 : ProgForecastCopy18}.
+Context {F18 : SRForecastCopy18} {P18 : ProgForecastCopy18}.
 
 (** Base [typing_spine_length] ([:488]). *)
 Lemma typing_spine_lengthE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ ind u args args' T' :

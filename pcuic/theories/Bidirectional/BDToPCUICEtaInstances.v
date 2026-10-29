@@ -3,11 +3,11 @@
 (** * Satisfying instances of the lemmas of [Bidirectional/BDToPCUICEta] (row T6)
 
   **The forecast classes are section variables.** Every lemma of [BDToPCUICEta] that uses a
-  forecast fact takes the forecast classes as premises: T2a's [ValForecastCopy16]
-  ([PCUICValidityEta]), T1's [SRForecastCopy16/18] ([PCUICSREta]) and [BDForecastCopy18]
-  ([BDToPCUICEta]); copies 10, 12, 14 and 15 have landed and their classes are gone. No instance
-  of a class exists before its copy lands, so the instances below live in section
-  [BDToPCUICEtaInstances], whose [Context] holds the four classes, and APPLY the lemmas there.
+  forecast fact takes the forecast classes as premises: T1's [SRForecastCopy18] ([PCUICSREta],
+  copy 18b) and [BDForecastCopy18] ([BDToPCUICEta], copy 18a, kept for a binder-name mismatch);
+  copies 10, 12, 14, 15 and 16 have landed and their classes are gone. No instance of a class
+  exists before its copy lands, so the instances below live in section
+  [BDToPCUICEtaInstances], whose [Context] holds the two classes, and APPLY the lemmas there.
   Everything else each instance needs (the environment, its [wfE], every typing and
   bidirectional derivation) is proved here, in [PCUICInversionEtaInstances] or in
   [BDTypingEtaInstances], with no class.
@@ -186,9 +186,8 @@ Qed.
 
 Section BDToPCUICEtaInstances.
 
-(* FORECAST-ONLY: the four classes of [BDToPCUICEta]; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+(* FORECAST-ONLY: the two classes of [BDToPCUICEta]; delete each when its copy lands. *)
+Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
 (** ** The prelude lemmas *)
 

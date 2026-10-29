@@ -44,20 +44,18 @@
   - Case, the type of the scrutinee's target: base types
     [mkApps (tInd ci (puinst p)) (pparams p ++ indices)] with [type_mkApps_arity],
     [declared_inductive_type_ws_cumul], [on_inductive_inst] and
-    [arity_spine_it_mkProd_or_LetIn], three copy lemmas that no forecast class has. Here it is
-    the field [isType_mkApps_IndE] of [SRForecastCopy16] (twin of [PCUICInductives.v]
-    [isType_mkApps_Ind]) on the spine [ctx_inst_spine_substE] (copy 15, [PCUICSpineEta]) builds,
-    so no forecast is added for them.
+    [arity_spine_it_mkProd_or_LetIn], three copy lemmas. Here it is copy 16's
+    [isType_mkApps_IndE] ([PCUICInductivesEta], twin of [PCUICInductives.v] [isType_mkApps_Ind])
+    on the spine [ctx_inst_spine_substE] (copy 15, [PCUICSpineEta]) builds.
   - Base's [Proof using wfΣ] is [Proof.]: the forecast classes are section variables too.
 
   ** The forecast block
 
-  The lemmas take the forecast classes of T2a and T1 as section [Context]s:
-  [ValForecastCopy16] ([PCUICValidityEta]) and [SRForecastCopy16/18] ([PCUICSREta]); they are
-  imported, never redefined (copies 10, 12, 14 and 15 have landed and are imported). ONE copy
-  lemma that soundness needs is in none of them: base [ctx_inst_app_weak]
-  ([PCUICInductiveInversion.v:3794], copy 18).
-  It is the one field of the class [BDForecastCopy18] below, with the base twin's statement.
+  The lemmas take T1's forecast class [SRForecastCopy18] ([PCUICSREta], copy 18b) as a section
+  [Context]; it is imported, never redefined (copies 10, 12, 14, 15 and 16 have landed and are
+  imported). ONE copy lemma that soundness needs is in no other class: base [ctx_inst_app_weak]
+  ([PCUICInductiveInversion.v:3794], copy 18a). It is the one field of the class
+  [BDForecastCopy18] below, with the base twin's statement.
   [Print Assumptions] in [BDToPCUICEtaInstances] shows every class as an argument.
 
   ** The checker's facts
@@ -77,7 +75,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICTypingEtaNotions PCUICClosedBodies PCUICClosedTypEta PCUICWeakeningTypEta
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
      PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
-     PCUICValidityEta PCUICSREta BDTypingEta.
+     PCUICInductivesEta PCUICValidityEta PCUICSREta BDTypingEta.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -88,7 +86,12 @@ From Equations.Prop Require Import DepElim.
 (* The braces in the statement record the implicit status of the base twin. *)
 Local Set Warnings "-unexpected-implicit-declaration".
 
-(* FORECAST-ONLY: proved by copy 18 (PCUICInductiveInversionEta.v); delete when it lands.
+(* FORECAST-ONLY: copy 18a ([PCUICInductiveInversionEta.v]) has landed, but KEPT: the landed
+   [PCUICInductiveInversionEta.ctx_inst_app_weakE] ([PCUICInductiveInversionEta.v:1492]) has the
+   same type (both-way ascription, frac/eta 0fb43f10) and the same implicit status, but names its
+   [checker_flags] binder [H], as base [PCUICInductiveInversion.ctx_inst_app_weak] does
+   ([Arguments {H} ...]), where this field names it [cf]. A binder-name difference is a statement
+   difference: it goes to the stream lead, it is not adapted here.
    Text: the base twin, PCUICInductiveInversion.v:3794 [ctx_inst_app_weak], with [wf] → [wfE],
    [wf_local] → [wf_localE], [isType] → [isTypeE], [ctx_inst Σ] → [ctx_instE Σ], the
    cumulativity [Σ ;;; Γ ⊢ _ ≤ _] → [ws_cumul_pbE Cumul]. Not a known-false form: typing
@@ -120,10 +123,9 @@ Local Set Warnings "unexpected-implicit-declaration".
 
 Section BDToPCUICEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two
-   ([PCUICSREta]), and this file's one; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+(* FORECAST-ONLY: one premise per class: T1's one ([PCUICSREta]) and this file's one; delete each
+   when its copy lands. *)
+Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
 (** Base [wf_local_rel_subst1] ([BDToPCUIC.v:33]). *)
 Lemma wf_local_rel_subst1E `{checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Δ Γ na b t Γ' :

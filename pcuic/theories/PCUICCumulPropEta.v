@@ -95,11 +95,10 @@
 
   ** Statement changes: none. Every twin restates base with the relation changed; an
   environment binder of base stays a binder ([wf] → [wfE], [wf_ext] → [wf_extE]), also where
-  the E proof does not use it. [typing_leq_term_prop_genE] and [typing_leq_term_propE] take
-  the forecast class [ValForecastCopy16] ([PCUICValidityEta], imported, not redefined) as a
-  section premise: the Proj case reads the consistency of the two instances from
-  [isType_mkApps_Ind_invE] and [validityE] as base does from [isType_mkApps_Ind_inv] and
-  [validity] (copy 16 not landed).
+  the E proof does not use it. The Proj case reads the consistency of the two instances from
+  copy 16's [isType_mkApps_Ind_invE] ([PCUICInductivesEta]) and [validityE] as base does from
+  [isType_mkApps_Ind_inv] and [validity]; no forecast class is a premise (copy 16 landed at
+  frac/eta 0fb43f10).
 
   ** Locality: [cumul_prop_transitiveE] and [cumul_prop_sym'E] are [Global] instances
   because their base twins are ([PCUICCumulProp.v:464], [:959]); their classes mention
@@ -126,8 +125,7 @@
 
   **The hypotheses are satisfiable:** [wfE Σ]/[wf_extE Σ] by any well-formed environment
   ([wf_incl_E], [wf_ext_incl_E]); every [cumul_propE] and [ws_cumul_pbE] premise by
-  reflexivity or by the η pair [λx:Prop. f x], [f]; [ValForecastCopy16] is a forecast class
-  (copy 16), a premise, never an axiom. Instances, each non-degenerate:
+  reflexivity or by the η pair [λx:Prop. f x], [f]. Instances, each non-degenerate:
   [PCUICCumulPropEtaInstances]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -143,7 +141,8 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpec PCUICCumulativitySpecEt
      PCUICEtaFInstC1c PCUICEtaFInstFlip PCUICEtaFInstEtaC1c PCUICEtaFInstGlue PCUICEtaFInstTransport
      PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
      PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind PCUICEtaA6More PCUICContextConversionEta
-     PCUICInversionEta PCUICSubstitutionEta PCUICSpineEta PCUICWsCumulEtaCtx PCUICValidityEta.
+     PCUICInversionEta PCUICSubstitutionEta PCUICSpineEta PCUICWsCumulEtaCtx PCUICInductivesEta
+     PCUICValidityEta.
 From MetaRocq.PCUIC.Typing Require Import PCUICClosedTypEta PCUICContextConversionTypEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta.
 From MetaRocq.PCUIC.Bidirectional Require BDFromPCUICEta.
@@ -1074,10 +1073,6 @@ Qed.
 
 Section MainE.
 
-(* FORECAST-ONLY: the class of copy 16 that [validityE] and [isType_mkApps_Ind_invE] belong to
-   ([PCUICValidityEta.v:104], imported, not redefined); delete with that class. *)
-Context {V16 : ValForecastCopy16}.
-
 (** Well-typed terms in the leq_term relation live in the same sort hierarchy. *)
 Lemma typing_leq_term_prop_genE :
   env_propE
@@ -1094,7 +1089,7 @@ Lemma typing_leq_term_prop_genE :
       forall pb n, compare_term_napp Σ Σ pb n t' t ->
       Σ ;;; Γ |-E T ~~ T') j)
     (fun Σ Γ => wf_localE Σ Γ).
-Proof using V16 Hcf cf.
+Proof using Hcf cf.
   eapply typingE_ind_env.
   { intros ???? H ?. apply lift_typing_impl with (1 := H) => ?? [] ?? ?? //. eauto. }
   1: now auto.
@@ -1369,7 +1364,7 @@ Lemma typing_leq_term_propE (Σ : global_env_ext) Γ t t' T T' :
   Σ ;;; Γ |-E t' : T' ->
   forall pb n, compare_term_napp Σ Σ pb n t' t ->
   Σ ;;; Γ |-E T ~~ T'.
-Proof using V16 Hcf cf.
+Proof using Hcf cf.
   intros.
   now eapply (env_propE_typing typing_leq_term_prop_genE).
 Qed.

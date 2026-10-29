@@ -19,8 +19,8 @@
   [ws_cumul_pbE_Axiom_l_inv] and [chain_ws_cumul_pbE_Conv] give the needed E conversion with no
   typing premise; it is copied ([typing_leq_termE], [typing_eq_termE]).
 
-  Forecast classes (imported, never redefined): [ValForecastCopy16], [SRForecastCopy16],
-  [SRForecastCopy18], [BDFromForecastCopy18]. Instances: [PCUICPrincipalityEtaInstances].
+  Forecast class (imported, never redefined): [SRForecastCopy18] (copy 18b). Copies 16 and 18a
+  have landed (frac/eta 0fb43f10). Instances: [PCUICPrincipalityEtaInstances].
 
   One home for shared helpers: [closed_red_confluence_cb] and [invert_red_sort_cb] are used by
   [Bidirectional/BDUniqueEta], [chain_ws_cumul_pbE_Conv] and [T8_Prod_l_plug] by
@@ -43,6 +43,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICEtaI5 PCUICEtaI5A2 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
      PCUICEtaA6 PCUICEtaA6Ind PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
      PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
+     PCUICInductivesEta PCUICInductiveInversionEta
      PCUICValidityEta PCUICSREtaConv PCUICSREta BDTypingEta BDToPCUICEta BDFromPCUICEta.
 From MetaRocq.PCUIC Require Import PCUICWsCumulEtaInstancesGlobal.
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
@@ -121,12 +122,9 @@ Qed.
 
 Section PrincipalityEta.
 
-(* FORECAST-ONLY: the classes of the lemmas used here, imported, never redefined: T2a's
-   [ValForecastCopy16] ([PCUICValidityEta]), T1's [SRForecastCopy16]/[SRForecastCopy18]
-   ([PCUICSREta]) and copy 18's [projection_cumulative_indicesE] ([BDFromForecastCopy18],
-   [Bidirectional/BDFromPCUICEta]); delete each when its row lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {BF18 : BDFromForecastCopy18}.
+(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b), the one class of the lemmas used here,
+   imported, never redefined; delete it when its copy lands. *)
+Context {F18 : SRForecastCopy18}.
 
 (** [Prod_l], from the proved [Prod_r] ([T8_Prod_r_plug]) by [T8_Prod_l_of_r]. Its type is the
     body of the pinned [PCUICEtaT8Probe.T8_Prod_l_statement] (:144-151) under
@@ -439,7 +437,7 @@ Section Principality.
          here, as in [BDFromPCUICEta]'s Proj case, the substitutions are untyped
          ([untyped_subslet_projection_contextE]), the context is closed by
          [is_closed_projection_contextE], the instances' consistency comes from
-         [isType_mkApps_Ind_invE] ([ValForecastCopy16]) in place of base
+         [isType_mkApps_Ind_invE] (copy 16) in place of base
          [invert_type_mkApps_ind], and base's two steps (the arguments, then the instances) are
          one [substitution_ws_cumul_pbE_subst_conv]. *)
       have decli : declared_inductive Σ ind x6 x7 := MRProd.proj1 (MRProd.proj1 d).

@@ -61,10 +61,10 @@
 
   [on_free_vars_typeE], [typing_renaming_cond_PE], [strengtheningE] and [strengthening_typeE] use
   soundness, completeness, validity and subject reduction, so they take the forecast classes of
-  [BDToPCUICEta] (T2a's [ValForecastCopy16], T1's [SRForecastCopy16/18], [BDForecastCopy18]) and
-  [BDFromPCUICEta]'s [BDFromForecastCopy18] as section [Context]s; they are imported, never
-  redefined. The scoping and renaming lemmas use none. This file adds no class. [Print
-  Assumptions] in [BDStrengtheningEtaInstances] shows every class as an argument. *)
+  [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b, and [BDForecastCopy18], copy 18a, kept for
+  a binder-name mismatch) as section [Context]s; they are imported, never redefined. The
+  scoping and renaming lemmas use none. This file adds no class. [Print Assumptions] in
+  [BDStrengtheningEtaInstances] shows every class as an argument. *)
 
 From Stdlib Require Import Bool List Arith Lia.
 From Stdlib Require String.
@@ -929,11 +929,9 @@ End BDRenaming.
 
 Section BDStrengtheningEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two ([PCUICSREta]),
-   [BDToPCUICEta]'s one and [BDFromPCUICEta]'s one; delete each when its row lands. *)
-Context {V16 : ValForecastCopy16}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-  {BF18 : BDFromForecastCopy18}.
+(* FORECAST-ONLY: one premise per class: T1's one ([PCUICSREta]) and [BDToPCUICEta]'s one; delete
+   each when its row lands. *)
+Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
 (** Base [on_free_vars_type] ([BDStrengthening.v:523]). *)
 Lemma on_free_vars_typeE `{checker_flags} P Σ (wfΣ : wfE Σ.1) Γ t T :

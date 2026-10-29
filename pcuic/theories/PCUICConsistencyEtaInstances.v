@@ -112,8 +112,7 @@ Proof. exact (typeE_Ind _ _ cs_ind [] False_mib False_oib localenv_nil cs_declar
 Section ConsistencyEtaInstances.
 
 (* FORECAST-ONLY: the classes of [PCUICConsistencyEta]; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16} {N20 : CanonForecastCopy20}.
+Context {F18 : SRForecastCopy18} {N20 : CanonForecastCopy20}.
 
 (* Base's normalization premise (by design, never discharged). *)
 Context {nor : normalizing_flags} {nin : NormalizationInE cs_Σ}.

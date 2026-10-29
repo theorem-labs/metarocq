@@ -15,7 +15,7 @@
   **Lemmas without a forecast class** are applied here; the four that use soundness,
   completeness, validity or subject reduction ([on_free_vars_typeE], [typing_renaming_cond_PE],
   [strengtheningE], [strengthening_typeE]) are applied in section [BDStrengtheningClassInstances],
-  whose [Context] holds the five classes, as [BDToPCUICEtaInstances] does.
+  whose [Context] holds the two classes, as [BDToPCUICEtaInstances] does.
 
   **Non-degeneracy.**
   - [eta1_rename_inst], [RE_renameP_inst], [JoinE_renameP_inst], [cumul_renamePE_inst],
@@ -154,9 +154,7 @@ Qed.
 
 Section BDStrengtheningClassInstances.
 
-  Context {V16 : ValForecastCopy16}
-    {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-    {BF18 : BDFromForecastCopy18}.
+  Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
   (** The η-typed [x : G F] in [bd_Γη]. *)
   Definition bs_eta_typed : si_Σ ;;; bd_Γη |-E tRel 0 : tApp (tRel 2) (tRel 1) :=

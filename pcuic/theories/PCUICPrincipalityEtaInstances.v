@@ -228,9 +228,8 @@ Proof. exact (isWfArity_sortE si_Σ iv_Γ1 sProp iv_wf_Γ1 I). Qed.
 
 Section PrincipalityEtaInstances.
 
-(* FORECAST-ONLY: the four classes of [PCUICPrincipalityEta]; delete each when its row lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {BF18 : BDFromForecastCopy18}.
+(* FORECAST-ONLY: the class of [PCUICPrincipalityEta]; delete it when its row lands. *)
+Context {F18 : SRForecastCopy18}.
 
 (** [Prod_l] at the variable [z], which reduces to [∀P:Prop. P] by unfolding the let. *)
 Lemma T8_Prod_l_plug_inst :

@@ -2,11 +2,11 @@
 
 (** * Satisfying instances of the lemmas of [PCUICClassificationEta] (row T6)
 
-  **The forecast classes are section variables.** The lemmas of [PCUICClassificationEta] that
-  need them take T2a's [ValForecastCopy16], T1's [SRForecastCopy16]/[SRForecastCopy18] and the
-  file's [ClassifForecastCopy16] as premises. No instance of a class exists before its copy
-  lands, so the instances below live in section [ClassificationEtaInstances], whose [Context]
-  holds the four classes, and APPLY the lemmas there. Every derivation each instance needs is
+  **The forecast class is a section variable.** The lemmas of [PCUICClassificationEta] that
+  need it take T1's [SRForecastCopy18] (copy 18b) as a premise (copy 16 has landed and its
+  classes are gone). No instance of a class exists before its copy lands, so the instances below
+  live in section [ClassificationEtaInstances], whose [Context] holds the class, and APPLY the
+  lemmas there. Every derivation each instance needs is
   built here or taken from the landed instance files, with no class.
 
   **The environments** are [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]:
@@ -267,9 +267,8 @@ Proof. intros h. vm_compute in h. discriminate h. Qed.
 
 Section ClassificationEtaInstances.
 
-(* FORECAST-ONLY: the four classes of [PCUICClassificationEta]; delete each when its copy lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16}.
+(* FORECAST-ONLY: the class of [PCUICClassificationEta]; delete it when its copy lands. *)
+Context {F18 : SRForecastCopy18}.
 
 (** ** The arity corollaries, Class A' *)
 

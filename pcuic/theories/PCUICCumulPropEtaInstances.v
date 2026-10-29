@@ -11,10 +11,11 @@
     instantiate otherwise than at [Prop]/[SProp] on both sides (a property of the statement: the
     premises [Sort.is_prop u]/[Sort.is_sprop u] force the sort, and a [cumul_propE] between two
     sorts is their comparison); the instances are at [Prop] and [SProp].
-  - [typing_leq_term_prop_genE], [typing_leq_term_propE]: they take the forecast class
-    [ValForecastCopy16] (copy 16, not landed), so, as in [PCUICValidityEtaInstances], the
-    instance [typing_leq_term_propE_inst] states the premises AND the conclusion at concrete
-    arguments, each proved without the lemma and without any class. The pair is the η one:
+  - [typing_leq_term_prop_genE], [typing_leq_term_propE]: they took the forecast class
+    [ValForecastCopy16] until copy 16 landed (frac/eta 0fb43f10), so, as in
+    [PCUICValidityEtaInstances], the instance [typing_leq_term_propE_inst] states the premises
+    AND the conclusion at concrete arguments, each proved without the lemma and without any
+    class. The pair is the η one:
     the variable [x] typed at [G F] and at [G (λy:Prop. F y)]
     ([PCUICCumulPropEtaRefutations], [tw_witness_typed]).
 
@@ -315,7 +316,7 @@ Section NoPropSub.
       eq_refl eq_refl eq_refl ltac:(reflexivity) (All2_cons cpi_eta_cp All2_nil).
 
   (** The η-typed variable ([tw_witness_typed]): the premises of [typing_leq_term_propE] and its
-      conclusion, the conclusion proved without the lemma (which takes [ValForecastCopy16]). *)
+      conclusion, the conclusion proved without the lemma. *)
   Lemma typing_leq_term_propE_inst :
     [× wfE tw_Σ.1, tw_Σ ;;; tw_Γ |-E tRel 0 : tw_Geta, on_udecl tw_Σ.1 tw_Σ.2,
        tw_Σ ;;; tw_Γ |-E tRel 0 : tw_GF, compare_term_napp tw_Σ tw_Σ Conv 0 (tRel 0) (tRel 0) &
