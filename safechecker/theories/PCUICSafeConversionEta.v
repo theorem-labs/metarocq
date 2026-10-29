@@ -57,6 +57,9 @@ From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfReductionEta PC
 From MetaRocq.PCUIC Require Import PCUICPositionEta.
 (* The E errors (EtaStackRefusal) shadow base PCUICErrors. *)
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta.
+(* The E view algebra and the typed-facts class ConvTypedFacts (EtaConv's helper file), and
+   K1's MustExpand (EtaK1). *)
+From MetaRocq.SafeChecker Require Import PCUICSafeConversionEtaFacts PCUICMustExpandEta.
 (* LAST (ENV contract). *)
 From MetaRocq.SafeChecker Require Import PCUICWfEnvEta.
 
@@ -74,13 +77,6 @@ Instance red_brs_refl Σ p Γ: CRelationClasses.Reflexive (@red_brs Σ p Γ).
 Proof.
   intros brs.
   eapply All2_same; unfold on_Trel; split; reflexivity.
-Qed.
-
-#[global]
-Instance conv_cum_trans {cf leq} {Σ : global_env_ext} {Γ} : wf Σ -> RelationClasses.Transitive (@conv_cum cf leq Σ Γ).
-Proof.
-  intros x y z; unfold conv_cum. intros; sq.
-  now etransitivity.
 Qed.
 
 (** * Conversion for PCUIC without fuel
@@ -105,6 +101,11 @@ Section Conversion.
      its fields are T1/T6 facts; its base instance [reduce_typed_facts_base] is restated at the
      end of this file). *)
   Context {reduce_factsE : ReduceTypedFacts welltypedE wf_extE}.
+
+  (* The named typed facts of the conversion itself (plan rows T6 and T-row, fields
+     [ctf_context], [ctf_case_brs_length], [ctf_wf_universes]); base instance
+     [conv_typed_facts_base] in PCUICSafeConversionEtaFacts, restated at the end of this file. *)
+  Context {conv_factsE : ConvTypedFacts welltypedE wf_extE}.
 
   Local Definition heΣ Σ (wfΣ : abstract_env_ext_rel X Σ) :
     ∥ wf_extE Σ ∥ :=  abstract_env_ext_wf _ wfΣ.
@@ -620,6 +621,13 @@ Section Conversion.
 
   (* The E counterpart of base [conv_cum]. *)
   Definition conv_cumE leq Σ Γ t u := ∥ ws_cumul_pbE leq Σ Γ t u ∥.
+
+  (* Base [conv_cum_trans] took [wf Σ]; the E environment gives [ClosedBodies Σ]
+     ([abstract_env_ext_closed_bodies]), which is all A3's transitivity needs. *)
+  Lemma conv_cumE_trans {leq Σ Γ} : ClosedBodies Σ -> RelationClasses.Transitive (conv_cumE leq Σ Γ).
+  Proof using Type.
+    intros cb x y z [h1] [h2]. constructor. etransitivity; eassumption.
+  Qed.
 
   (* I7 S13: [conv_term] reads the η views, in the η context of side 1. *)
   Notation conv_term leq Γ t π t' π' :=
@@ -1331,29 +1339,6 @@ Section Conversion.
     rewrite !zipc_appstack. intros ez. apply zipc_inj in ez. now apply hne.
   Qed.
 
-  (** A reduct of a constant-headed weak-head normal form under default flags
-      keeps its head and reduces only its arguments. *)
-  Lemma whnf_red_mkApps_tConst_inv {Σ Γ c u args t} :
-    whnf_red Σ Γ (mkApps (tConst c u) args) t ->
-    ∑ args', (t = mkApps (tConst c u) args') × All2 (red Σ Γ) args args'.
-  Proof using Type.
-    revert t. induction args as [|x args ih] using rev_ind; intros t h.
-    - depelim h. exists []. split; [reflexivity|constructor].
-    - rewrite mkApps_app in h. cbn in h. depelim h.
-      destruct (ih _ h) as [args' [-> ha]].
-      exists (args' ++ [arg']). split; [now rewrite mkApps_app|].
-      apply All2_app; [exact ha|constructor; [assumption|constructor]].
-  Qed.
-
-  Lemma closed_red_whnf_mkApps_tConst {Σ : global_env_ext} {wfΣ : wf Σ} {Γ c u args t} :
-    whnf RedFlags.default Σ Γ (mkApps (tConst c u) args) ->
-    Σ ;;; Γ ⊢ mkApps (tConst c u) args ⇝ t ->
-    ∑ args', (t = mkApps (tConst c u) args') × All2 (red Σ Γ) args args'.
-  Proof using Type.
-    intros wh r. eapply whnf_red_inv in r; tea.
-    exact (whnf_red_mkApps_tConst_inv r).
-  Qed.
-
   Inductive prog_view : term -> term -> Type :=
   | prog_view_App u1 v1 u2 v2 :
       prog_view (tApp u1 v1) (tApp u2 v2)
@@ -1436,19 +1421,17 @@ Section Conversion.
 
   Arguments LevelSet.mem : simpl never.
 
+  (* E form (base took [wf Σ] through heΣ and returned the instance consistency, which no
+     remaining use reads): T6 through [ctf_context] and [rtf_const]. *)
   Lemma welltyped_zipc_tConst_inv Σ (wfΣ : abstract_env_ext_rel X Σ) Γ c u π :
-    welltyped Σ Γ (zipc (tConst c u) π) ->
-    exists cst,
-      declared_constant Σ c cst
-      × consistent_instance_ext Σ (cst_universes cst) u.
-  Proof using Type.
-    intros h.
-    zip fold in h.
-    destruct (heΣ _ wfΣ).
-    apply welltyped_context in h; auto.
-    destruct h as (?&typ).
-    apply inversion_Const in typ as (?&?&?&wfu&_); auto.
-    now unfold declared_constant in d.
+    no_Eta_arg π ->
+    welltypedE Σ Γ (zipc (tConst c u) π) ->
+    exists cst, declared_constant Σ c cst.
+  Proof using reduce_factsE conv_factsE.
+    intros hna h.
+    destruct (heΣ _ wfΣ) as [hwf].
+    apply (ctf_context Σ Γ _ π hwf hna) in h.
+    exact (rtf_const Σ _ c u hwf h).
   Qed.
 
   Lemma red_conv_cum_l {leq Γ u v Σ}{wfΣ : abstract_env_ext_rel X Σ} :
@@ -1481,7 +1464,7 @@ Section Conversion.
       weak-head run), on the left, else on the right, as the kernel does inside
       lazy unfolding ([unfold_ref_with_args], kernel/cClosure.ml).  When
       neither side moves, the answer is no; under G7 it carries no proof (base
-      justified it by [closed_red_whnf_mkApps_tConst]; [ne] is now unused). *)
+      justified it by [closed_red_whnf_mkApps_tConst], deleted here; [ne] is now unused). *)
   Equations(noeqns) unfold_prims (Γ : context) (leq : conv_pb)
             (c : kername) (u : Instance.t) (π1 : stack) (f1 : wf_stack π1)
             (h1 : wtp Γ (tConst c u) π1)
@@ -1768,19 +1751,16 @@ Section Conversion.
     first [solve_unfold_constants aux eq1 eq2 Σ wfΣ | solve_unfold_constants aux eq1 eq2 Σ H].
   Qed.
 
+  (* E form: T6 through [ctf_context] and [ctf_case_brs_length]. *)
   Lemma welltyped_zipc_tCase_brs_length Σ (wfΣ : abstract_env_ext_rel X Σ) Γ ci motive discr brs π :
-    welltyped Σ Γ (zipc (tCase ci motive discr brs) π) ->
+    no_Eta_arg π ->
+    welltypedE Σ Γ (zipc (tCase ci motive discr brs) π) ->
     exists mib oib, declared_inductive Σ ci mib oib /\ #|brs| = #|ind_ctors oib|.
-  Proof using Type.
-    pose proof (hΣ _ wfΣ). sq.
-    intros wf.
-    zip fold in wf.
-    apply welltyped_context in wf; [|auto].
-    destruct wf as [ctyp typ].
-    apply inversion_Case in typ as (mdecl&idecl&?&?&[]&?); auto.
-    exists mdecl, idecl.
-    split; [easy|].
-    now apply All2i_length in brs_ty.
+  Proof using conv_factsE.
+    intros hna h.
+    destruct (heΣ _ wfΣ) as [hwf].
+    apply (ctf_context Σ Γ _ π hwf hna) in h.
+    exact (ctf_case_brs_length Σ _ ci motive discr brs hwf h).
   Qed.
 
   Lemma case_conv_brs_inv {Γ ci br br' p c brs1 brs2 π}
@@ -2488,27 +2468,20 @@ Section Conversion.
     all: rewrite -> wf_universeb_instance_forall in *; now eapply wf_instance_iff.
   Qed.
 
-  Lemma welltyped_zipp_inv Σ Γ t π :
-    wf Σ ->  welltyped Σ Γ (zipp t π) -> welltyped Σ Γ t.
-  Proof using Type.
-    induction π; cbn; auto.
-    unfold zipp.
-    destruct decompose_stack.
-    intros ? [s' Hs].
-    eapply PCUICValidity.inversion_mkApps in Hs as [? []].
-    now exists x.
+  (* Base [welltyped_zipp_inv]/[welltyped_zipc_inv]/[welltyped_wf] took [wf Σ], which the E
+     environment does not give (wfE does not imply wf). E forms: the stack inversion is the
+     named hypothesis [ctf_context] (T6), stated with "π has no Eta_arg" (every use is under
+     T1); well-formed universes of an E-typed term is the named hypothesis
+     [ctf_wf_universes] (T-row). Both are fields of [ConvTypedFacts welltypedE wf_extE]. *)
+  Lemma welltyped_zipc_inv Σ Γ t π : wf_extE Σ -> no_Eta_arg π ->
+    welltypedE Σ Γ (zipc t π) -> welltypedE Σ (Γ,,, stack_context π) t.
+  Proof using conv_factsE.
+    intros hwf hna Ht. exact (ctf_context Σ Γ t π hwf hna Ht).
   Qed.
 
-  Lemma welltyped_zipc_inv Σ Γ t π : wf Σ -> welltyped Σ Γ (zipc t π) -> welltyped Σ (Γ,,, stack_context π) t.
-  Proof using Type.
-    intros ? Ht. apply welltyped_zipc_zipp in Ht; eauto.
-    apply welltyped_zipp_inv in Ht; eauto.
-  Defined.
-
-  Lemma welltyped_wf Σ Γ t : wf Σ -> welltyped Σ Γ t -> wf_universes Σ t.
-  Proof using Type.
-    intros ? [? Ht]. apply typing_wf_universes in Ht; eauto.
-    cbn in Ht. rtoProp; intuition.
+  Lemma welltyped_wf Σ Γ t : wf_extE Σ -> welltypedE Σ Γ t -> wf_universes Σ t.
+  Proof using conv_factsE.
+    intros hwf Ht. exact (ctf_wf_universes Σ Γ t hwf Ht).
   Qed.
 
   Equations (noeqns) isconv_predicate_params_aux
@@ -3705,12 +3678,17 @@ Equations (noeqns) isconv_array_values_aux
     Unshelve. all:eauto.
   Qed.
 
-  Lemma wt_zip_mkapps Σ (wfΣ:abstract_env_ext_rel X Σ) Γ f π : welltyped Σ Γ (zipc f π) -> is_open_term (Γ ,,, stack_context π) (mkApps f (decompose_stack π).1).
-  Proof using Type.
-    pose (heΣ _ wfΣ).
-    sq.
-    intros. apply welltyped_zipc_zipp in H; auto.
-    rewrite zipp_as_mkApps in H. fvs.
+  (* E form: scoping from [ref_open_term] (ReduceEnvFacts at E, PROVED in the bridge) on the
+     structural spine, which [wt_zipc_stack_context] types. *)
+  Lemma wt_zip_mkapps Σ (wfΣ:abstract_env_ext_rel X Σ) Γ f π :
+    no_Eta_arg π ->
+    welltypedE Σ Γ (zipc f π) -> is_open_term (Γ ,,, stack_context π) (mkApps f (decompose_stack π).1).
+  Proof using conv_factsE.
+    intros hna h.
+    destruct (heΣ _ wfΣ) as [hwf].
+    destruct (decompose_stack π) as [args ρ] eqn:hd. cbn [fst].
+    eapply (ref_open_term (wt := welltypedE) (wfP := wf_extE) Σ _ _ hwf).
+    exact (wt_zipc_stack_context Σ Γ f π ρ args hwf hna hd h).
   Qed.
 
   Next Obligation.
