@@ -380,17 +380,17 @@ Proof.
       [exact (hc1 hcl)|exact (hh b cl' hb')].
 Qed.
 
-Lemma cbn_gc_copy_wf Q : forall f a g a' g', cbn_gcw Q g -> cbn_gc_copy f a g = CbnCOk (a', g') ->
-  cbn_gcw Q g'.
+Lemma cbn_gc_copy_wf Q : forall lim f a g a' g', cbn_gcw Q g ->
+  cbn_gc_copy lim f a g = CbnCOk (a', g') -> cbn_gcw Q g'.
 Proof.
-  intros f. induction f as [|k ih]; intros a g a' g' hg he.
+  intros lim f. induction f as [|k ih]; intros a g a' g' hg he.
   - rewrite cbn_gc_copy_FO in he.
     destruct (cbn_bh_get a g.(cbn_g_old)) as [[| | |b]|]; try discriminate he.
     injection he as <- <-. exact hg.
   - rewrite cbn_gc_copy_FS in he.
     destruct (cbn_bh_get a g.(cbn_g_old)) as [cl|] eqn:ea; [|discriminate he].
     pose proof (proj1 hg a cl ea) as hcl.
-    assert (hcp : forall a g a' g', cbn_gcw Q g -> cbn_gc_copy (k tt) a g = CbnCOk (a', g') ->
+    assert (hcp : forall a g a' g', cbn_gcw Q g -> cbn_gc_copy lim (k tt) a g = CbnCOk (a', g') ->
       cbn_gcw Q g')
       by (intros; eapply ih; eassumption).
     destruct cl as [vs n o c|v| |b].
@@ -403,6 +403,10 @@ Proof.
          | context [cbn_bh_upd ?a0 ?x0 ?o0] =>
            destruct (cbn_bh_upd a0 x0 o0) as [old|] eqn:e2; [|discriminate he]
          end;
+         lazymatch type of he with
+         | context [Pos.leb ?x0 ?y0] =>
+           destruct (Pos.leb x0 y0) eqn:eb; [discriminate he|]
+         end;
          injection he as <- <-;
          exact (cbn_gc_copy_step Q _ _ _ _ _ _ _ _ _ hcp hg hcl e1 e2).
 Qed.
@@ -412,7 +416,8 @@ Lemma cbn_collect_wf Q rs s rs' s' :
   cbn_hwf Q s -> Forall (cbn_rwf Q) rs -> cbn_hwf Q s' /\ Forall (cbn_rwf Q) rs'.
 Proof.
   intros he hs hrs. rewrite cbn_collect_eq in he.
-  set (cp := cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) in he.
+  set (cp := cbn_gc_copy (Pos.add s.(cbn_st_next) cbn_cells)
+               (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) in he.
   assert (hcp : forall a g a' g', cbn_gcw Q g -> cp a g = CbnCOk (a', g') -> cbn_gcw Q g')
     by (intros; eapply cbn_gc_copy_wf; eassumption).
   assert (hg0 : cbn_gcw Q (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next))
@@ -424,8 +429,6 @@ Proof.
     (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next)))
     as [[cbn_gm g1]|w] eqn:e1; [|discriminate he].
   destruct (cbn_rn_roots cp rs g1) as [[rs2 g2]|w] eqn:e2; [|discriminate he].
-  destruct (N.ltb cbn_cells (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))) eqn:ec;
-    [discriminate he|].
   injection he as <- <-.
   pose proof (cbn_rn_ptree_wf cp (cbn_gcw Q) hcp _ _ _ _ hg0 e1) as hg1.
   destruct (cbn_rn_roots_wf cp (cbn_gcw Q) hcp Q _ _ _ _ hg1 e2) as [hg2 hr2].

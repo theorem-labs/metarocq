@@ -50,8 +50,10 @@ Import CanonicalTries.
     cached by the ordered pair of identifiers for the rest of the call.
   - Bounds: every function is a structural [Fixpoint] on a lazily generated [cbn_fuel] (the
     recursion depth, in effect unbounded), and every machine, read-back and comparison step
-    takes one unit of an [N] step budget. A collection that finds more live cells than the
-    [N] live-cell budget stops the call too. Out of budget means "don't know".
+    takes one unit of an [N] step budget. Memory is bounded too: a collection stops copying
+    as soon as its new heap reaches the live-cell budget, and the allocations it then allows
+    are capped at that budget as well, so a collection holds at most about three times it.
+    Out of budget means "don't know".
   - Delta: constant bodies are looked up once per [cbn_conv] call and memoised by kername;
     one code entry per (constant, syntactic instance).
   - Primitive operations: a bodiless constant that the environment registers as an operation,
@@ -174,10 +176,13 @@ Definition cbn_depth : cbn_fuel := cbn_fuel_of_pos 4611686018427387904%positive 
   it was chosen by measurement, not derived. *)
 Definition cbn_steps : N := 4000000000%N.
 
-(** Live-cell budget of one [cbn_conv] call: a collection that finds more live cells than
-  this answers "don't know", and [convert] then runs [isconv_term]. Like [cbn_steps] it
-  bounds only what such a call costs; it cannot change a verdict. *)
-Definition cbn_cells : N := 4000000000%N.
+(** Live-cell budget of one [cbn_conv] call: the collector stops copying, and the call answers
+  "don't know", as soon as the new heap holds this many cells, and [cbn_gc_room] never allows
+  more than this many allocations before the next collection, so a collection holds at most
+  about [3 * cbn_cells] cells. [convert] then runs [isconv_term]. Like [cbn_steps] it bounds
+  only what such a call costs; it cannot change a verdict. It is a [positive] because the
+  collector adds it to a heap address. *)
+Definition cbn_cells : positive := 4000000000%positive.
 
 (** The collector runs when the cells allocated since the last collection exceed
   [max (2 * live) cbn_gc_min]. [cbn_gc_min] keeps a small heap from being collected after every few
@@ -185,8 +190,10 @@ Definition cbn_cells : N := 4000000000%N.
 Definition cbn_gc_min : N := 1000000%N.
 
 (** The allocations allowed before the next collection, after a collection that copied
-  [live] cells. *)
-Definition cbn_gc_room (live : N) : N := N.succ (N.max (N.double live) cbn_gc_min).
+  [live] cells; never more than [cbn_cells], so the old heap of the next collection holds at
+  most [2 * cbn_cells + 1] cells. *)
+Definition cbn_gc_room (live : N) : N :=
+  N.succ (N.min (Npos cbn_cells) (N.max (N.double live) cbn_gc_min)).
 
 (** ** Results *)
 
@@ -1787,9 +1794,11 @@ Record cbn_gc_state := cbn_mkGc {
 (** Copy the cell at [a] of the old heap and the cells it reaches, children first; give it
   the next new address and leave that address in the old heap. [f] bounds the depth of the
   walk: [cbn_st_next] units, more than the number of cells, so a heap without cycles is
-  never cut off. *)
-Fixpoint cbn_gc_copy (f : cbn_fuel) (a : cbn_haddr) (g : cbn_gc_state) {struct f}
-  : cbn_res (cbn_haddr * cbn_gc_state) :=
+  never cut off. [lim] bounds the new heap: a copy that would take the address [lim] or
+  above answers "don't know" ([CbnWCells]) instead of writing the cell, so a returned state
+  has [cbn_g_next] at most [lim]. *)
+Fixpoint cbn_gc_copy (lim : positive) (f : cbn_fuel) (a : cbn_haddr) (g : cbn_gc_state)
+  {struct f} : cbn_res (cbn_haddr * cbn_gc_state) :=
   match cbn_bh_get a g.(cbn_g_old) with
   | None => CbnCFail CbnWGcDangling
   | Some (CbnCFwd a') => CbnCOk (a', g)
@@ -1797,11 +1806,13 @@ Fixpoint cbn_gc_copy (f : cbn_fuel) (a : cbn_haddr) (g : cbn_gc_state) {struct f
     match f with
     | CbnFO => CbnCFail CbnWGcFuel
     | CbnFS k =>
-      cbn2 (cl, g) := cbn_rn_cell (cbn_gc_copy (k tt)) cl g in
+      cbn2 (cl, g) := cbn_rn_cell (cbn_gc_copy lim (k tt)) cl g in
       let a' := CbnHAddr g.(cbn_g_next) in
       match cbn_bh_upd a (CbnCFwd a') g.(cbn_g_old) with
-      | Some old => CbnCOk (a', cbn_mkGc old (cbn_bh_cons cl g.(cbn_g_heap))
-        (Pos.succ g.(cbn_g_next)))
+      | Some old =>
+        if Pos.leb lim g.(cbn_g_next) then CbnCFail CbnWCells
+        else CbnCOk (a', cbn_mkGc old (cbn_bh_cons cl g.(cbn_g_heap))
+          (Pos.succ g.(cbn_g_next)))
       | None => CbnCFail CbnWGcDangling
       end
     end
@@ -1809,18 +1820,18 @@ Fixpoint cbn_gc_copy (f : cbn_fuel) (a : cbn_haddr) (g : cbn_gc_state) {struct f
 
 (** Copy what [rs] and [cbn_st_gam] reach into a fresh heap whose addresses start at the old
   [cbn_st_next] (the addresses below are dropped), and rename [rs] and [cbn_st_gam]. No step is
-  taken from the budget. A collection that finds more live cells than [cbn_cells] answers
-  "don't know". *)
+  taken from the budget. The copy stops, with "don't know" ([CbnWCells]), as soon as the new
+  heap reaches [cbn_cells] cells; [cbn_gc_room] caps the allocations allowed before the next
+  collection at the same number, so a collection holds at most about [3 * cbn_cells] cells:
+  up to [2 * cbn_cells] in the old heap and at most [cbn_cells] in the new one. *)
 Definition cbn_collect (rs : list cbn_root) (s : cbn_state) : cbn_res (list cbn_root * cbn_state) :=
   let onext := s.(cbn_st_next) in
-  let copy := cbn_gc_copy (cbn_fuel_of_pos onext (fun _ => CbnFO)) in
+  let copy := cbn_gc_copy (Pos.add onext cbn_cells) (cbn_fuel_of_pos onext (fun _ => CbnFO)) in
   let g := cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes onext) onext in
   cbn2 (gm, g) := cbn_rn_ptree copy s.(cbn_st_gam) g in
   cbn2 (rs, g) := cbn_rn_roots copy rs g in
-  let live := N.sub (Npos g.(cbn_g_next)) (Npos onext) in
-  if N.ltb cbn_cells live then CbnCFail CbnWCells else
   CbnCOk (rs, cbn_mkState g.(cbn_g_heap) g.(cbn_g_next)
-    (cbn_gc_room live)
+    (cbn_gc_room (N.sub (Npos g.(cbn_g_next)) (Npos onext)))
              s.(cbn_st_steps) gm s.(cbn_st_memo)).
 
 Definition cbn_gc_due (s : cbn_state) : bool :=

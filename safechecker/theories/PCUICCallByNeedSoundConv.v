@@ -1328,15 +1328,15 @@ Lemma cbn_collect_skel (rs : list cbn_root) (s : cbn_state) rs' s' :
   cbn_collect rs s = CbnCOk (rs', s') -> cbn_mp_roots cbn_kc rs' = cbn_mp_roots cbn_kc rs.
 Proof.
   intros he. rewrite cbn_collect_eq in he.
-  destruct (cbn_rn_ptree (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO)))
+  destruct (cbn_rn_ptree (cbn_gc_copy (Pos.add s.(cbn_st_next) cbn_cells)
+    (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO)))
     s.(cbn_st_gam)
               (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))) as
                 [[cbn_gm g1]|w] eqn:e1;
     [|discriminate he].
-  destruct (cbn_rn_roots (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
+  destruct (cbn_rn_roots (cbn_gc_copy (Pos.add s.(cbn_st_next) cbn_cells)
+    (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
     as [[rs2 g2]|w] eqn:e2; [|discriminate he].
-  destruct (N.ltb cbn_cells (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))) eqn:ec;
-    [discriminate he|].
   injection he as <- <-. exact (cbn_rn_roots_skel _ _ _ _ _ e2).
 Qed.
 

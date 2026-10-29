@@ -1837,10 +1837,10 @@ Section Eval.
 
     (** One copied cell: its children are renamed, the copy goes to the fresh address
       [cbn_g_next], and the ghost of the new heap is extended there by the old ghost term. *)
-    Lemma cbn_gc_copy_g_write k a g cl cl1 g1 old Gn :
-      cbn_cpg (cbn_gc_copy k) -> cbn_gcg Gn g -> cbn_bh_get a g.(cbn_g_old) = Some cl ->
+    Lemma cbn_gc_copy_g_write lim k a g cl cl1 g1 old Gn :
+      cbn_cpg (cbn_gc_copy lim k) -> cbn_gcg Gn g -> cbn_bh_get a g.(cbn_g_old) = Some cl ->
         cbn_cell_fwd cl = None ->
-      cbn_rn_cell (cbn_gc_copy k) cl g = CbnCOk (cl1, g1) ->
+      cbn_rn_cell (cbn_gc_copy lim k) cl g = CbnCOk (cl1, g1) ->
       cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old) = Some old ->
       cbn_gc_inv s.(cbn_st_heap) s.(cbn_st_next)
         (cbn_mkGc old (cbn_bh_cons cl1 g1.(cbn_g_heap)) (Pos.succ g1.(cbn_g_next))) ->
@@ -1897,9 +1897,9 @@ Section Eval.
         exact (cbn_gg_rng _ _ hg1 _ _ hb).
     Qed.
 
-    Lemma cbn_gc_copy_g : forall f, cbn_cpg (cbn_gc_copy f).
+    Lemma cbn_gc_copy_g : forall lim f, cbn_cpg (cbn_gc_copy lim f).
     Proof.
-      intros f. induction f as [|k ih]; intros a g a' g' Gn hg he.
+      intros lim f. induction f as [|k ih]; intros a g a' g' Gn hg he.
       - rewrite cbn_gc_copy_FO in he.
         destruct (cbn_bh_get a g.(cbn_g_old)) as [cl|] eqn:ea; [|discriminate].
         destruct cl as [vals n o c|v| |b]; try discriminate.
@@ -1907,36 +1907,39 @@ Section Eval.
         exists Gn. split; [exact hg|]. split; [apply cbn_gext_refl|].
         intros t ht. exact (cbn_gg_fwd _ _ hg _ _ _ ea ht).
       - pose proof he as he0.
-        destruct (cbn_gc_copy_ok s.(cbn_st_heap) s.(cbn_st_next) (CbnFS k) a g a' g'
+        destruct (cbn_gc_copy_ok s.(cbn_st_heap) s.(cbn_st_next) lim (CbnFS k) a g a' g'
           (cbn_gg_inv _ _ hg) he0)
           as [hst _].
         rewrite cbn_gc_copy_FS in he.
         destruct (cbn_bh_get a g.(cbn_g_old)) as [cl|] eqn:ea; [|discriminate].
         destruct cl as [vals n o c|v| |b].
-        + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) (CbnCSusp vals n o c) g) as
+        + destruct (cbn_rn_cell (cbn_gc_copy lim (k tt)) (CbnCSusp vals n o c) g) as
           [[cl1 g1]|w] eqn:e1;
             [|discriminate].
           destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
             [old|] eqn:e2;
             [|discriminate].
+          destruct (Pos.leb lim g1.(cbn_g_next)) eqn:eb; [discriminate he|].
           inversion he; subst; clear he.
-          exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
+          exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
                    (cbn_step_inv _ _ _ _ hst)).
-        + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) (CbnCDone v) g) as [[cl1 g1]|w] eqn:e1;
+        + destruct (cbn_rn_cell (cbn_gc_copy lim (k tt)) (CbnCDone v) g) as [[cl1 g1]|w] eqn:e1;
             [|discriminate].
           destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
             [old|] eqn:e2;
             [|discriminate].
+          destruct (Pos.leb lim g1.(cbn_g_next)) eqn:eb; [discriminate he|].
           inversion he; subst; clear he.
-          exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
+          exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
                    (cbn_step_inv _ _ _ _ hst)).
-        + destruct (cbn_rn_cell (cbn_gc_copy (k tt)) CbnCBusy g) as [[cl1 g1]|w] eqn:e1;
+        + destruct (cbn_rn_cell (cbn_gc_copy lim (k tt)) CbnCBusy g) as [[cl1 g1]|w] eqn:e1;
           [|discriminate].
           destruct (cbn_bh_upd a (CbnCFwd (CbnHAddr g1.(cbn_g_next))) g1.(cbn_g_old)) as
             [old|] eqn:e2;
             [|discriminate].
+          destruct (Pos.leb lim g1.(cbn_g_next)) eqn:eb; [discriminate he|].
           inversion he; subst; clear he.
-          exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
+          exact (cbn_gc_copy_g_write _ _ _ _ _ _ _ _ _ (ih tt) hg ea eq_refl e1 e2
                    (cbn_step_inv _ _ _ _ hst)).
         + inversion he; subst; clear he.
           exists Gn. split; [exact hg|]. split; [apply cbn_gext_refl|].
@@ -1954,15 +1957,15 @@ Section Eval.
       intros he.
       destruct (cbn_collect_sound rs s rs' s' (cbn_gk_nofwd _ _ _ hok) he) as (hso & hnf & _ & _).
       rewrite cbn_collect_eq in he.
-      destruct (cbn_rn_ptree (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO)))
+      destruct (cbn_rn_ptree (cbn_gc_copy (Pos.add s.(cbn_st_next) cbn_cells)
+        (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO)))
         s.(cbn_st_gam)
                   (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))) as
                     [[gm1 g1]|w1] eqn:e1;
         [|discriminate].
-      destruct (cbn_rn_roots (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
+      destruct (cbn_rn_roots (cbn_gc_copy (Pos.add s.(cbn_st_next) cbn_cells)
+        (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
         as [[rs2 g2]|w2] eqn:e2; [|discriminate].
-      destruct (N.ltb cbn_cells (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))) eqn:ec;
-        [discriminate he|].
       inversion he; subst; clear he.
       assert (hg0 : cbn_gcg (cbn_mkGhost (fun _ => None) (cbn_gc G))
                       (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))).
@@ -1978,8 +1981,10 @@ Section Eval.
         - intros b cl hc. rewrite cbn_bh_get_holes in hc. discriminate.
         - intros b t hb. discriminate hb.
         - intros b t hb. discriminate hb. }
-      destruct (cbn_rn_ptree_g _ (cbn_gc_copy_g _) _ _ _ _ _ hg0 e1) as (Gn1 & hg1 & hx1 & hgam).
-      destruct (cbn_rn_roots_g _ (cbn_gc_copy_g _) _ _ _ _ _ hg1 e2) as (Gn2 & hg2 & hx2 & hroots).
+      destruct (cbn_rn_ptree_g _ (cbn_gc_copy_g _ _) _ _ _ _ _ hg0 e1)
+        as (Gn1 & hg1 & hx1 & hgam).
+      destruct (cbn_rn_roots_g _ (cbn_gc_copy_g _ _) _ _ _ _ _ hg1 e2)
+        as (Gn2 & hg2 & hx2 & hroots).
       exists Gn2. split; [exact (cbn_gg_codes _ _ hg2)|]. split; [exact hroots|].
       split.
       - exact hso.
