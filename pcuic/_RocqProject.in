@@ -229,6 +229,7 @@ theories/PCUICSpineEta.v
 theories/PCUICTypingEtaCopy15Instances.v
 # Inductive declarations and projections over typingE (E copy of PCUICInductives), and its satisfying instances
 theories/PCUICInductivesEta.v
+theories/PCUICTypingEtaCopy16Instances.v
 # Inversion facts on inductive types over typingE (E copy of part of PCUICInductiveInversion), and its satisfying instances
 theories/PCUICInductiveInversionEta.v
 theories/PCUICTypingEtaCopy18aInstances.v
