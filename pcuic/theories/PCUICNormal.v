@@ -2010,7 +2010,12 @@ Lemma whnf_red_trans {cf:checker_flags} {Σ : global_env_ext} Γ x y z : wf Σ -
 Proof.
   intros wf onΓ onx xy yz.
   revert onx z yz.
-  induction xy; intros onx z yz; depelim yz; repeat inv_on_free_vars; eauto using whnf_red.
+  (* [Equations.Prop.DepElim.depelim] is written out here and below on purpose. In this file a plain
+     [depelim] is Stdlib Program's, because [Program] is imported after [Equations]; Program's version
+     discharges the [existT] equations with [simplification_existT2], which uses the axiom
+     [Eqdep.Eq_rect_eq.eq_rect_eq] (UIP). Equations' version needs no axiom here. Do not shorten it
+     back to [depelim]: that silently puts the axiom back into every checker that uses this lemma. *)
+  induction xy; intros onx z yz; Equations.Prop.DepElim.depelim yz; repeat inv_on_free_vars; eauto using whnf_red.
   - constructor.
     eapply All2_trans; eauto.
     typeclasses eauto.
@@ -2140,8 +2145,9 @@ Proof.
     eapply context_pres_let_bodies_red; eauto.
     apply fix_context_pres_let_bodies.
     now apply All2_length in a.
-  - constructor. depelim o; depelim o0; constructor; eauto.
-    * rewrite -x //.
+  - (* One sentence: a sentence that starts with [Equations.] parses as the [Equations] command. *)
+    constructor; Equations.Prop.DepElim.depelim o; Equations.Prop.DepElim.depelim o0; constructor; eauto.
+    * etransitivity; tea.
     * etransitivity; tea.
     * etransitivity; tea.
     * eapply All2_trans; eauto.

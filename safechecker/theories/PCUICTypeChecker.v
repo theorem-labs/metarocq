@@ -227,11 +227,21 @@ Lemma substitution_wf_local_rel `{checker_flags} {Σ} {wfΣ : wf Σ} {Γ Γ' s �
       wf_local_rel Σ Γ (subst_context s 0 Δ).
     Proof.
       intros Hs Ht.
+      (* [Equations.Prop.DepElim.depelim] is written out below on purpose, and in every proof of this
+         file that writes it out. In this file a plain [depelim] is Stdlib Program's, because [Program]
+         is imported after [Equations]; Program's version discharges the [JMeq] and [existT] equations
+         with [simplification_heq] / [simplification_existT2], which use the axiom
+         [Eqdep.Eq_rect_eq.eq_rect_eq] (UIP). Equations' version needs no axiom here. The full path does
+         not depend on the import order ([Equations.Type.DepElim] has a [depelim] too). At the start of
+         a sentence it is in parentheses: a sentence that starts with [Equations.] parses as the
+         [Equations] command. Do not shorten it back to [depelim]: that silently puts the axiom back
+         into every checker that uses these proofs. A plain [depelim] stays only where Print
+         Assumptions shows that it needs no axiom. *)
       induction Δ as [|[? [] ?] Δ] in Γ', Hs, Ht |- * .
       - constructor.
       - cbn.
         rewrite subst_context_snoc.
-        rewrite app_context_cons in Ht ; depelim Ht.
+        rewrite app_context_cons in Ht ; Equations.Prop.DepElim.depelim Ht.
         constructor ; cbn.
         + eapply IHΔ ; tea.
         + rewrite Nat.add_0_r.
@@ -240,7 +250,7 @@ Lemma substitution_wf_local_rel `{checker_flags} {Σ} {wfΣ : wf Σ} {Γ Γ' s �
           now eapply substitution.
       - cbn.
         rewrite subst_context_snoc.
-        rewrite app_context_cons in Ht ; depelim Ht.
+        rewrite app_context_cons in Ht ; Equations.Prop.DepElim.depelim Ht.
         constructor ; cbn.
         + eapply IHΔ ; tea.
         + rewrite Nat.add_0_r.
@@ -800,7 +810,8 @@ Section Typecheck.
       wf_local Σ (Γ ,, d) ->
       wf_local Σ Γ * wt_decl Σ Γ d.
     Proof using Type.
-      intros wfd; depelim wfd; split; simpl; pcuic.
+      (* Equations' depelim: see the comment in [substitution_wf_local_rel]. *)
+      intros wfd; Equations.Prop.DepElim.depelim wfd; split; simpl; pcuic.
       all: destruct l as (Hb & s & Ht & _); cbn in Hb, Ht.
       all: now eexists.
     Qed.
@@ -848,15 +859,16 @@ Section Typecheck.
         destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
         specialize_Σ wfΣ. sq. now depelim H.
       Qed.
+      (* Equations' depelim in the obligations below: see the comment in [substitution_wf_local_rel]. *)
       Next Obligation.
-        specialize_Σ wfΣ. sq. now depelim wfΔ.
+        specialize_Σ wfΣ. sq. now Equations.Prop.DepElim.depelim wfΔ.
       Qed.
       Next Obligation.
-        specialize_Σ wfΣ. sq. now depelim wfΔ'.
+        specialize_Σ wfΣ. sq. now Equations.Prop.DepElim.depelim wfΔ'.
       Qed.
       Next Obligation.
         specialize_Σ wfΣ. sq.
-        depelim wfΔ; simpl.
+        (Equations.Prop.DepElim.depelim wfΔ); simpl.
         all: destruct l as (Hb & s' & Ht & _); cbn in Hb, Ht.
         all: repeat (eexists; eauto).
       Qed.
@@ -879,12 +891,12 @@ Section Typecheck.
       Next Obligation.
         apply absurd; intros. pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
         eapply ws_cumul_ctx_pb_rel_app in H.
-        now depelim H.
+        now Equations.Prop.DepElim.depelim H.
       Qed.
       Next Obligation.
         apply absurd; intros. pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
         eapply ws_cumul_ctx_pb_rel_app in H.
-        depelim H.
+        (Equations.Prop.DepElim.depelim H).
         now apply ws_cumul_ctx_pb_rel_app.
       Qed.
 
@@ -954,18 +966,19 @@ Section Typecheck.
       destruct (abstract_env_ext_exists X) as [[Σ wfΣ]]; specialize_Σ wfΣ.
       now sq.
     Qed.
+    (* Equations' depelim in the obligations below: see the comment in [substitution_wf_local_rel]. *)
     Next Obligation.
       sq.
-      depelim HΔ.
+      (Equations.Prop.DepElim.depelim HΔ).
     Qed.
     Next Obligation.
       destruct (abstract_env_ext_exists X) as [[Σ wfΣ]]; specialize_Σ wfΣ.
-      sq; depelim H.
+      sq; Equations.Prop.DepElim.depelim H.
     Qed.
     Next Obligation.
       specialize_Σ wfΣ; sq. eapply All_local_env_app_inv in wfΔ as [wt _].
       eapply isTypeRel_isType.
-      now depelim wt.
+      now Equations.Prop.DepElim.depelim wt.
     Qed.
     Next Obligation.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
@@ -977,10 +990,10 @@ Section Typecheck.
       apply checking_typing ; auto.
       apply All_local_rel_app_inv in wfΔ as [wt _].
       eapply isTypeRel_isType.
-      now depelim wt.
+      now Equations.Prop.DepElim.depelim wt.
     Qed.
     Next Obligation.
-      sq. depelim HΔ. now apply assumption_context_subst_telescope.
+      sq. (Equations.Prop.DepElim.depelim HΔ). now apply assumption_context_subst_telescope.
     Qed.
     Next Obligation.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
@@ -992,12 +1005,12 @@ Section Typecheck.
     Qed.
     Next Obligation.
       apply absurd. intros; specialize_Σ wfΣ. sq.
-      now depelim H.
+      now Equations.Prop.DepElim.depelim H.
     Qed.
     Next Obligation.
       apply absurd. intros; pose (hΣ _ wfΣ); specialize_Σ wfΣ. sq.
       apply typing_checking.
-      now depelim H.
+      now Equations.Prop.DepElim.depelim H.
     Qed.
 
     Equations check_ws_cumul_pb_terms Γ ts ts' (wts : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ All (welltyped Σ Γ) ts ∥) (wts' : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ All (welltyped Σ Γ) ts' ∥) :
@@ -1328,7 +1341,8 @@ Section Typecheck.
     eapply eq_context_upto_names_binder_annot in e.
     rewrite /ind_predicate_context in e.
     rewrite /idecl_binder.
-    destruct (forget_types (pcontext p)); depelim e; cbn in *.
+    (* Equations' depelim: see the comment in [substitution_wf_local_rel]. *)
+    destruct (forget_types (pcontext p)); Equations.Prop.DepElim.depelim e; cbn in *.
     constructor. now cbn.
     now do 2 eapply (proj1 (eq_annots_fold _ _ _)) in e.
   Qed.
@@ -1395,7 +1409,8 @@ Section Typecheck.
     - len.
     - rewrite skipn_all_app.
       eapply isTypeRel_isType.
-      now depelim wf_types.
+      (* Equations' depelim: see the comment in [substitution_wf_local_rel]. *)
+      now Equations.Prop.DepElim.depelim wf_types.
   Qed.
   Next Obligation.
     pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ; sq.
@@ -1670,7 +1685,8 @@ Section Typecheck.
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ isType Σ Γ (dtype d) ∥.
   Proof.
     intros h Σ wfΣ. destruct (h _ wfΣ) as [hall]. sq.
-    eapply isTypeRel_isType. now depelim hall.
+    (* Equations' depelim: see the comment in [substitution_wf_local_rel]. *)
+    eapply isTypeRel_isType. now Equations.Prop.DepElim.depelim hall.
   Qed.
 
   Lemma wf_types_tail {d mfix} :
@@ -2206,23 +2222,24 @@ Section Typecheck.
         sq; constructor; eauto.
         erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
         now move/@wf_universe_reflect: i.
+      (* Equations' depelim in the four bullets below: see the comment in [substitution_wf_local_rel]. *)
       - destruct (abstract_env_ext_exists X) as [[Σ hΣ]].
         specialize (H _ hΣ) as [tyh].
-        depelim tyh. eapply absurd. solve_all.
+        (Equations.Prop.DepElim.depelim tyh). eapply absurd. solve_all.
         pose proof (abstract_env_ext_irr _ wfΣ hΣ). now subst Σ0.
       - destruct (abstract_env_ext_exists X) as [[Σ hΣ]].
         specialize (H _ hΣ) as [tyh].
         specialize (check_type _ hΣ) as [].
-        depelim tyh. eapply absurd. intros.
+        (Equations.Prop.DepElim.depelim tyh). eapply absurd. intros.
         pose proof (abstract_env_ext_irr _ wfΣ hΣ). now subst Σ0.
       - destruct (abstract_env_ext_exists X) as [[Σ hΣ]].
         specialize (H _ hΣ) as [tyh].
-        depelim tyh. eapply absurd. intros.
+        (Equations.Prop.DepElim.depelim tyh). eapply absurd. intros.
         pose proof (abstract_env_ext_irr _ wfΣ hΣ). now subst Σ0.
       - destruct (abstract_env_ext_exists X) as [[Σ hΣ]].
         specialize (H _ hΣ) as [tyh].
         erewrite <- abstract_env_ext_wf_universeb_correct in absurd; tea.
-        eapply absurd. depelim tyh.
+        eapply absurd. (Equations.Prop.DepElim.depelim tyh).
         now move/wf_universe_reflect: wfl.
     Qed.
   End check_primitive.
