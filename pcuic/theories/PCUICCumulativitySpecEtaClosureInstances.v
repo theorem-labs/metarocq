@@ -22,7 +22,7 @@ From MetaRocq.Common Require Import config BasicAst Universes Kernames Environme
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
      PCUICEquality PCUICArityRed PCUICCumulativitySpec PCUICCumulativitySpecEta
      PCUICCumulativitySpecEtaClosure PCUICClosedBodies PCUICClosedTyp PCUICTypingEta
-     PCUICSigmaCalculus PCUICInstDef PCUICUnivSubst.
+     PCUICSigmaCalculus PCUICInstDef PCUICUnivSubst PCUICNamelessDef.
 
 #[local] Existing Instance default_checker_flags.
 
@@ -247,7 +247,8 @@ Proof.
            (le_n 1) (si_cumul_Construct_univ Conv 1) All2_nil).
 Qed.
 
-(** ** Instances of the hypotheses of the S3 remainder
+(** ** Instances of the hypotheses of the closure lemmas for instantiation,
+       universe substitution, the nameless translation and configuration weakening
 
   [cumulSpecE_instP], [cumulSpecE_subst_instance] and [weakening_config_cumulSpecE0]
   carry a premise that is neither well-formedness nor scoping: a closed substitution,
@@ -320,3 +321,7 @@ Proof.
     [exact sp_config_impl|].
   apply (@cumulSpecE_eta_contract extraction_checker_flags si_Σ).
 Qed.
+
+Lemma nl_cumulSpecE_inst :
+  nlg si_Σ ;;; nlctx [] ⊢ nl (sp_eta si_P) ≤sE[Conv] nl si_P.
+Proof. apply nl_cumulSpecE. apply cumulSpecE_eta_contract. Qed.

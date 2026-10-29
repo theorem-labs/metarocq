@@ -8,7 +8,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICCase
   PCUICSigmaCalculus PCUICClosed PCUICOnFreeVars PCUICOnFreeVarsConv PCUICGuardCondition
   PCUICWeakeningEnvConv PCUICWeakeningEnvTyp PCUICClosedConv PCUICClosedTyp PCUICRenameConv
   PCUICWeakeningConv PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICWeakeningEnv PCUICClosedBodies
-  PCUICInstDef PCUICInstConv PCUICInstTyp PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp.
+  PCUICInstDef PCUICInstConv PCUICInstTyp PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp
+  PCUICNamelessDef PCUICNamelessConv.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -1229,3 +1230,282 @@ Lemma weakening_config_cumulSpecE {cf1 cf2} Σ Γ M N :
   @cumulSpecE0 cf1 Σ Γ Cumul M N ->
   @cumulSpecE0 cf2 Σ Γ Cumul M N.
 Proof. apply weakening_config_cumulSpecE0 with (pb := Cumul). Qed.
+
+(** * Closure of [cumulSpecE0] under the nameless translation
+
+  [nl_cumulSpecE]: erasing the binder names ([nl] on terms, [nlctx] on contexts,
+  [nlg] on the environment) preserves the specification with eta, at either
+  [conv_pb].
+
+  The proof is a direct induction on [cumulSpecE0] ([cumulSpecE0_rect]), the
+  induction of [cumulSpecE_renameP] with [nl] in place of [rename f]. Base's
+  [nl_cumulSpec] goes through the algorithmic relation and confluence instead; this
+  proof uses neither, and needs no premise at all.
+  - The reduction cases are those of [nl_red1]: [nl] commutes with [subst], [lift],
+    [subst_instance], [mkApps], [iota_red] ([nl_iota_red]), [unfold_fix] and
+    [unfold_cofix] ([nl_unfold_fix], [nl_unfold_cofix]) and [is_constructor]
+    ([nl_is_constructor]).
+  - [cumulE_prim_op]: the literal arguments and the reduct are ground, so [nl] fixes
+    them ([nl_prim_ground]); [nl_global_env] keeps the retroknowledge, so
+    [prim_op_of] and the readback are unchanged, and maps the declaration list, so
+    [declared_constant] transports ([nl_declared_constant]) with no well-formedness
+    premise.
+  - [cumulE_Trans]: its scoping premises transport along [nl]
+    ([nl_is_closed_context], [nl_is_open_term]).
+  - [cumul_eta_l]: [nl] commutes with [lift] ([nl_lift]) and fixes [tRel 0], and the
+    eta rule does not compare binder annotations. *)
+
+(** Ground terms (the literal arguments and the reduct of [cumulE_prim_op]) carry no binder. *)
+Lemma nl_prim_ground t : prim_ground t -> nl t = t.
+Proof. intros [[[] ->]|[? [? ->]]]; reflexivity. Qed.
+
+(** [nl_global_env] maps the declaration list, so a declared constant stays declared, with
+    its name-erased body. *)
+Lemma nl_declared_constant (Σ : global_env) c decl :
+  declared_constant Σ c decl ->
+  declared_constant (nl_global_env Σ) c (nl_constant_body decl).
+Proof.
+  unfold declared_constant. intros H.
+  eapply (in_map (on_snd nl_global_decl)) in H. exact H.
+Qed.
+
+Lemma nl_fix_subst mfix :
+  map nl (fix_subst mfix) = fix_subst (map (map_def_anon nl nl) mfix).
+Proof.
+  unfold fix_subst. rewrite length_map.
+  induction #|mfix| as [|n IHn]; cbn; [reflexivity|].
+  rewrite IHn. reflexivity.
+Qed.
+
+Lemma nl_cofix_subst mfix :
+  map nl (cofix_subst mfix) = cofix_subst (map (map_def_anon nl nl) mfix).
+Proof.
+  unfold cofix_subst. rewrite length_map.
+  induction #|mfix| as [|n IHn]; cbn; [reflexivity|].
+  rewrite IHn. reflexivity.
+Qed.
+
+Lemma nl_unfold_fix mfix idx narg fn :
+  unfold_fix mfix idx = Some (narg, fn) ->
+  unfold_fix (map (map_def_anon nl nl) mfix) idx = Some (narg, nl fn).
+Proof.
+  unfold unfold_fix. rewrite nth_error_map.
+  destruct (nth_error mfix idx) as [d|]; cbn; [|intros Hf; discriminate Hf].
+  intros [= Hn Hf]. subst narg fn.
+  rewrite nl_subst nl_fix_subst. reflexivity.
+Qed.
+
+Lemma nl_unfold_cofix mfix idx narg fn :
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  unfold_cofix (map (map_def_anon nl nl) mfix) idx = Some (narg, nl fn).
+Proof.
+  unfold unfold_cofix. rewrite nth_error_map.
+  destruct (nth_error mfix idx) as [d|]; cbn; [|intros Hf; discriminate Hf].
+  intros [= Hn Hf]. subst narg fn.
+  rewrite nl_subst nl_cofix_subst. reflexivity.
+Qed.
+
+Lemma nl_is_constructor narg args :
+  is_constructor narg (map nl args) = is_constructor narg args.
+Proof.
+  rewrite /is_constructor nth_error_map.
+  destruct (nth_error args narg) as [t|]; [cbn [option_map]|reflexivity].
+  rewrite /isConstruct_app nl_decompose_app.
+  destruct (decompose_app t) as [hd l]; cbn [fst].
+  destruct hd; reflexivity.
+Qed.
+
+Lemma nl_inst_case_predicate_context p :
+  nlctx (PCUICCases.inst_case_predicate_context p) =
+  PCUICCases.inst_case_predicate_context (nl_predicate nl p).
+Proof. exact (nl_inst_case_context (pparams p) (puinst p) (pcontext p)). Qed.
+
+Lemma nl_inst_case_branch_context p br :
+  nlctx (inst_case_branch_context p br) =
+  inst_case_branch_context (nl_predicate nl p) (nl_branch nl br).
+Proof. exact (nl_inst_case_context (pparams p) (puinst p) (bcontext br)). Qed.
+
+Lemma nl_iota_red npar p args br :
+  nl (iota_red npar p args br) =
+  iota_red npar (nl_predicate nl p) (map nl args) (nl_branch nl br).
+Proof.
+  rewrite /iota_red nl_subst map_rev map_skipn nl_expand_lets nl_inst_case_branch_context.
+  reflexivity.
+Qed.
+
+(** The scoping premises of [cumulE_Trans] transport along [nl]. *)
+Lemma nl_is_closed_context Γ : is_closed_context Γ -> is_closed_context (nlctx Γ).
+Proof.
+  intros H. rewrite -is_closed_ctx_closed. apply closed_nlctx.
+  rewrite is_closed_ctx_closed. exact H.
+Qed.
+
+Lemma nl_is_open_term Γ t : is_open_term Γ t -> is_open_term (nlctx Γ) (nl t).
+Proof.
+  intros H. rewrite -is_open_term_closed nlctx_length. apply closed_nl.
+  rewrite is_open_term_closed. exact H.
+Qed.
+
+Lemma nl_cumulSpecE {cf : checker_flags} (Σ : global_env_ext) Γ pb A B :
+  Σ ;;; Γ ⊢ A ≤sE[pb] B ->
+  nlg Σ ;;; nlctx Γ ⊢ nl A ≤sE[pb] nl B.
+Proof.
+  destruct Σ as [Σ φ]. cbn [nlg].
+  revert Γ pb A B.
+  apply (cumulSpecE0_rect cf (Σ, φ)
+           (fun _ _ Γ pb A B _ => @cumulSpecE0 cf (nl_global_env Σ, φ) (nlctx Γ) pb (nl A) (nl B))).
+  - (* cumulE_beta *)
+    intros Γ pb na t b a; cbv beta. cbn [nl]. unfold subst1. rewrite nl_subst.
+    apply cumulE_beta.
+  - (* cumulE_zeta *)
+    intros Γ pb na b t b'; cbv beta. cbn [nl]. unfold subst1. rewrite nl_subst.
+    apply cumulE_zeta.
+  - (* cumulE_rel *)
+    intros Γ pb i body pf; cbv beta. cbn [nl]. rewrite nl_lift.
+    apply cumulE_rel. unfold nlctx. rewrite nth_error_map.
+    destruct (nth_error Γ i) as [d|]; cbn in pf |- *; [|discriminate].
+    apply some_inj in pf. rewrite pf. reflexivity.
+  - (* cumulE_iota *)
+    intros Γ pb ci c u args p brs br Hbrs Hnargs; cbv beta. cbn [nl].
+    rewrite nl_mkApps nl_iota_red. cbn [nl].
+    apply cumulE_iota.
+    + rewrite nth_error_map Hbrs. reflexivity.
+    + rewrite length_map Hnargs. f_equal. symmetry.
+      exact (nl_context_assumptions (bcontext br)).
+  - (* cumulE_fix *)
+    intros Γ pb mfix idx args narg fn Hufix Hisctor; cbv beta.
+    rewrite !nl_mkApps. cbn [nl].
+    eapply cumulE_fix with (narg := narg).
+    + exact (nl_unfold_fix mfix idx narg fn Hufix).
+    + rewrite nl_is_constructor. exact Hisctor.
+  - (* cumulE_cofix_case *)
+    intros Γ pb ci p mfix idx args narg fn brs Hucofix; cbv beta. cbn [nl].
+    rewrite !nl_mkApps. cbn [nl].
+    eapply cumulE_cofix_case with (narg := narg).
+    exact (nl_unfold_cofix mfix idx narg fn Hucofix).
+  - (* cumulE_cofix_proj *)
+    intros Γ pb p mfix idx args narg fn Hucofix; cbv beta. cbn [nl].
+    rewrite !nl_mkApps. cbn [nl].
+    eapply cumulE_cofix_proj with (narg := narg).
+    exact (nl_unfold_cofix mfix idx narg fn Hucofix).
+  - (* cumulE_delta *)
+    intros Γ pb c decl body Hdecl u Hbody; cbv beta. cbn [nl].
+    rewrite nl_subst_instance.
+    eapply cumulE_delta with (decl := nl_constant_body decl).
+    + exact (nl_declared_constant Σ c decl Hdecl).
+    + cbn. rewrite Hbody. reflexivity.
+  - (* cumulE_prim_op: the head arguments and the reduct are ground *)
+    intros Γ pb c decl u op ls r v Hop Hdecl Hbody Hdenote Hreadback; cbv beta.
+    rewrite nl_mkApps. cbn [nl].
+    rewrite (map_prim_ground nl ls nl_prim_ground).
+    rewrite (nl_prim_ground v (prim_ground_readback Hreadback)).
+    eapply cumulE_prim_op with (decl := nl_constant_body decl) (op := op) (r := r).
+    + exact Hop.
+    + exact (nl_declared_constant Σ c decl Hdecl).
+    + cbn. rewrite Hbody. reflexivity.
+    + exact Hdenote.
+    + exact Hreadback.
+  - (* cumulE_proj *)
+    intros Γ pb p args u arg Hargs; cbv beta. cbn [nl].
+    rewrite nl_mkApps. cbn [nl].
+    apply cumulE_proj. rewrite nth_error_map Hargs. reflexivity.
+  - (* cumulE_Trans *)
+    intros Γ pb t u v Hcl Hu Htu IHtu Huv IHuv; cbv beta in *.
+    eapply cumulE_Trans with (u := nl u).
+    + exact (nl_is_closed_context Γ Hcl).
+    + exact (nl_is_open_term Γ u Hu).
+    + exact IHtu.
+    + exact IHuv.
+  - (* cumulE_Sym *)
+    intros Γ pb t u Hut IHut; cbv beta in *.
+    apply cumulE_Sym. exact IHut.
+  - (* cumulE_Refl *)
+    intros Γ pb t; cbv beta. apply cumulE_Refl.
+  - (* cumulE_Evar *)
+    intros Γ pb ev l l' Hl IHl; cbv beta in *. apply All2_undep in IHl.
+    cbn [nl]. apply cumulE_Evar. apply All2_map. exact IHl.
+  - (* cumulE_App *)
+    intros Γ pb t t' u u' Ht IHt Hu IHu; cbv beta in *. cbn [nl].
+    apply cumulE_App; [exact IHt|exact IHu].
+  - (* cumulE_Lambda *)
+    intros Γ pb na na' ty ty' t t' Hna Hty IHty Ht IHt; cbv beta in *. cbn [nl].
+    apply cumulE_Lambda; [exact Hna|exact IHty|exact IHt].
+  - (* cumulE_Prod *)
+    intros Γ pb na na' a a' b b' Hna Ha IHa Hb IHb; cbv beta in *. cbn [nl].
+    apply cumulE_Prod; [exact Hna|exact IHa|exact IHb].
+  - (* cumulE_LetIn *)
+    intros Γ pb na na' t t' ty ty' u u' Hna Ht IHt Hty IHty Hu IHu; cbv beta in *. cbn [nl].
+    apply cumulE_LetIn; [exact Hna|exact IHt|exact IHty|exact IHu].
+  - (* cumulE_Case *)
+    intros Γ pb indn p p' c c' brs brs' Hp IHp Hc IHc Hbody IHbody; cbv beta in *.
+    apply cumul_predicate_undep in IHp. apply All2_undep in IHbody.
+    destruct Hp as [_ [Hu [Hctx _]]].
+    destruct IHp as [IHpars [_ [_ IHret]]]. cbv beta in IHpars, IHret.
+    rewrite nlctx_app_context nl_inst_case_predicate_context in IHret.
+    cbn [nl]. apply cumulE_Case.
+    + split; [|split; [|split]].
+      * apply All2_map. exact IHpars.
+      * exact Hu.
+      * apply eq_context_nl_IH. exact Hctx.
+      * exact IHret.
+    + exact IHc.
+    + unfold cumul_branches. apply All2_map.
+      eapply All2_impl; [exact (All2_prod _ _ _ _ Hbody IHbody)|].
+      intros br br' [[Hbctx _] Hbr]. cbv beta in Hbr.
+      rewrite nlctx_app_context nl_inst_case_branch_context in Hbr.
+      split; [apply eq_context_nl_IH; exact Hbctx|exact Hbr].
+  - (* cumulE_Proj *)
+    intros Γ pb p c c' Hc IHc; cbv beta in *. cbn [nl].
+    apply cumulE_Proj. exact IHc.
+  - (* cumulE_Fix *)
+    intros Γ pb mfix mfix' idx H IH; cbv beta in *. apply All2_undep in IH.
+    cbn [nl]. apply cumulE_Fix. unfold cumul_mfixpoint. apply All2_map.
+    eapply All2_impl; [exact (All2_prod _ _ _ _ H IH)|].
+    intros x y [[_ [_ [Hr Hn]]] [IHty IHbo]]. cbv beta in IHty, IHbo.
+    rewrite nlctx_app_context nl_fix_context in IHbo.
+    split; [exact IHty|]. split; [exact IHbo|]. split; [exact Hr|exact Hn].
+  - (* cumulE_CoFix *)
+    intros Γ pb mfix mfix' idx H IH; cbv beta in *. apply All2_undep in IH.
+    cbn [nl]. apply cumulE_CoFix. unfold cumul_mfixpoint. apply All2_map.
+    eapply All2_impl; [exact (All2_prod _ _ _ _ H IH)|].
+    intros x y [[_ [_ [Hr Hn]]] [IHty IHbo]]. cbv beta in IHty, IHbo.
+    rewrite nlctx_app_context nl_fix_context in IHbo.
+    split; [exact IHty|]. split; [exact IHbo|]. split; [exact Hr|exact Hn].
+  - (* cumulE_Prim *)
+    intros Γ pb p p' e IH; cbv beta in *. cbn [nl]. apply cumulE_Prim.
+    destruct IH as [i|f|s|a a' hre eqdef eqty eqt _ IHdef IHty IHvals]; constructor.
+    + exact hre.
+    + exact IHdef.
+    + exact IHty.
+    + apply All2_undep in IHvals. apply All2_map. exact IHvals.
+  - (* cumulE_Ind *)
+    intros Γ pb i u u' args args' Hu Hargs IHargs; cbv beta in *.
+    apply All2_undep in IHargs.
+    rewrite !nl_mkApps. cbn [nl]. apply cumulE_Ind.
+    + rewrite length_map. exact (cmp_global_instance_nl _ _ _ _ _ _ _ Hu).
+    + apply All2_map. exact IHargs.
+  - (* cumulE_Construct *)
+    intros Γ pb i k u u' args args' Hu Hargs IHargs; cbv beta in *.
+    apply All2_undep in IHargs.
+    rewrite !nl_mkApps. cbn [nl]. apply cumulE_Construct.
+    + rewrite length_map. exact (cmp_global_instance_nl _ _ _ _ _ _ _ Hu).
+    + apply All2_map. exact IHargs.
+  - (* cumulE_Sort *)
+    intros Γ pb s s' Hs; cbv beta. cbn [nl]. apply cumulE_Sort. exact Hs.
+  - (* cumulE_Const *)
+    intros Γ pb c u u' Hu; cbv beta. cbn [nl]. apply cumulE_Const. exact Hu.
+  - (* cumul_eta_l: the case base's induction does not have *)
+    intros Γ pb na A t u Ht IHt; cbv beta in *. cbn [nl] in IHt |- *.
+    rewrite nl_lift in IHt.
+    apply cumul_eta_l. exact IHt.
+Qed.
+
+Lemma nl_convSpecE {cf : checker_flags} (Σ : global_env_ext) Γ A B :
+  Σ ;;; Γ ⊢ A ≤sE[Conv] B ->
+  nlg Σ ;;; nlctx Γ ⊢ nl A ≤sE[Conv] nl B.
+Proof. apply nl_cumulSpecE. Qed.
+
+Lemma nl_cumulSpecE_Cumul {cf : checker_flags} (Σ : global_env_ext) Γ A B :
+  Σ ;;; Γ ⊢ A ≤sE[Cumul] B ->
+  nlg Σ ;;; nlctx Γ ⊢ nl A ≤sE[Cumul] nl B.
+Proof. apply nl_cumulSpecE. Qed.
