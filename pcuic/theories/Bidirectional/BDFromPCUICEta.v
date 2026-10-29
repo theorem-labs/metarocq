@@ -87,13 +87,12 @@
 
   ** The forecast block
 
-  The lemmas take the forecast classes of [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b, and
-  [BDForecastCopy18], copy 18a's [ctx_inst_app_weakE], kept for a binder-name mismatch) as
-  section [Context]s; they are imported, never redefined. Copies 10, 12, 14, 15, 16 and 18a have
+  The lemmas take the forecast class of [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b) as a
+  section [Context]; it is imported, never redefined. Copies 10, 12, 14, 15, 16 and 18a have
   landed and are imported; this file's [BDFromForecastCopy18] (copy 18a's
-  [projection_cumulative_indicesE], [PCUICInductiveInversionEta]) was deleted after a
-  compiled-form identity check. [Print Assumptions] in [BDFromPCUICEtaInstances] shows every
-  class as an argument.
+  [projection_cumulative_indicesE], [PCUICInductiveInversionEta]) and [BDToPCUICEta]'s
+  [BDForecastCopy18] were deleted after a compiled-form identity check. [Print Assumptions] in
+  [BDFromPCUICEtaInstances] shows the class as an argument.
 
   ** The checker's facts
 
@@ -182,10 +181,8 @@ Qed.
 
 Section BDFromPCUICEta.
 
-(* FORECAST-ONLY: one premise per class: T1's one ([PCUICSREta], copy 18b) and [BDToPCUICEta]'s
-   one (copy 18a's [ctx_inst_app_weakE], kept: binder-name mismatch); delete each when its row
-   lands. *)
-Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b); delete it when its row lands. *)
+Context {F18 : SRForecastCopy18}.
 
 (** ** Typed T8, proved (row B1)
 

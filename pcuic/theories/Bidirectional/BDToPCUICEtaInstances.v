@@ -2,12 +2,11 @@
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDToPCUICEta] (row T6)
 
-  **The forecast classes are section variables.** Every lemma of [BDToPCUICEta] that uses a
-  forecast fact takes the forecast classes as premises: T1's [SRForecastCopy18] ([PCUICSREta],
-  copy 18b) and [BDForecastCopy18] ([BDToPCUICEta], copy 18a, kept for a binder-name mismatch);
-  copies 10, 12, 14, 15 and 16 have landed and their classes are gone. No instance of a class
-  exists before its copy lands, so the instances below live in section
-  [BDToPCUICEtaInstances], whose [Context] holds the two classes, and APPLY the lemmas there.
+  **The forecast class is a section variable.** Every lemma of [BDToPCUICEta] that uses a
+  forecast fact takes T1's [SRForecastCopy18] ([PCUICSREta], copy 18b) as a premise; copies 10,
+  12, 14, 15, 16 and 18a have landed and their classes are gone. No instance of a class exists
+  before its copy lands, so the instances below live in section [BDToPCUICEtaInstances], whose
+  [Context] holds the class, and APPLY the lemmas there.
   Everything else each instance needs (the environment, its [wfE], every typing and
   bidirectional derivation) is proved here, in [PCUICInversionEtaInstances] or in
   [BDTypingEtaInstances], with no class.
@@ -28,7 +27,7 @@
     comparison [All2 (JoinE si_Σ bd_ΓFG Conv) [G (λ y. F y)] [G F]] is an η step between
     syntactically different terms ([bd_case_pars_differ]). Soundness goes through its Case
     branch: the joins become [ws_cumul_pbE] ([into_ws_cumul_pbE]), [ws_cumul_pbE_Ind] relates
-    the scrutinee's type to the match's, the forecast [ctx_inst_app_weakE] extends the
+    the scrutinee's type to the match's, copy 18a's [ctx_inst_app_weakE] extends the
     parameters with the indices, and [typeE_Case] gets the scrutinee by a [typeE_Cumul].
   - the inferred sort, product and inductive ([bd_X_sort], [bd_G_prod], [bd_case_disc_ind]) are
     applications or variables of a non-empty context; [lift_sorting_lift_typingE_inst] and
@@ -186,8 +185,8 @@ Qed.
 
 Section BDToPCUICEtaInstances.
 
-(* FORECAST-ONLY: the two classes of [BDToPCUICEta]; delete each when its copy lands. *)
-Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+(* FORECAST-ONLY: the class of [BDToPCUICEta]; delete it when its copy lands. *)
+Context {F18 : SRForecastCopy18}.
 
 (** ** The prelude lemmas *)
 

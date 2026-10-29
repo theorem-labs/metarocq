@@ -165,7 +165,7 @@ Qed.
 
 Section BDUniqueClassInstances.
 
-  Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+  Context {F18 : SRForecastCopy18}.
 
   (** The main theorem's inference component, on the two types of [f (∀P.P)]. *)
   Definition bidirectional_uniqueE_inst :

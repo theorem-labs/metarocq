@@ -2,14 +2,13 @@
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDFromPCUICEta] (row T6)
 
-  **The forecast classes are section variables.** Every lemma of [BDFromPCUICEta] takes the
-  forecast classes as premises: the two of [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b,
-  and [BDForecastCopy18], copy 18a's [ctx_inst_app_weakE], kept for a binder-name mismatch);
-  copies 10, 12, 14, 15, 16 and 18a have landed and their other classes are gone. T8 enters
-  through the proved two-hypothesis forms [PCUICEtaT8Probe.T8_*_r_two], whose one hypothesis is
-  [PCUICSREta.subject_reductionE] (row B1's [fix_rarg_inductive] is proved there). No instance
-  of a class exists before its row lands, so the instances below live in section
-  [BDFromPCUICEtaInstances], whose [Context] holds the two classes, and APPLY the lemmas
+  **The forecast class is a section variable.** Every lemma of [BDFromPCUICEta] takes T1's
+  [SRForecastCopy18] (copy 18b) as a premise; copies 10, 12, 14, 15, 16 and 18a have landed and
+  their classes are gone. T8 enters through the proved two-hypothesis forms
+  [PCUICEtaT8Probe.T8_*_r_two], whose one hypothesis is [PCUICSREta.subject_reductionE] (row B1's
+  [fix_rarg_inductive] is proved there). No instance of a class exists before its row lands, so
+  the instances below live in section [BDFromPCUICEtaInstances], whose [Context] holds the
+  class, and APPLY the lemmas
   there. Everything else each instance needs (the environment, its [wfE], every typing
   derivation) is built here or in the landed instance files ([PCUICInversionEtaInstances],
   [BDTypingEtaInstances], [BDToPCUICEtaInstances]), with no class.
@@ -344,8 +343,8 @@ Qed.
 
 Section BDFromPCUICEtaInstances.
 
-(* FORECAST-ONLY: the two classes of [BDFromPCUICEta]; delete each when its row lands. *)
-Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+(* FORECAST-ONLY: the class of [BDFromPCUICEta]; delete it when its row lands. *)
+Context {F18 : SRForecastCopy18}.
 
 (** ** Through an η conversion *)
 

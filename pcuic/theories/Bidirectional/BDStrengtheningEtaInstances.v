@@ -154,7 +154,7 @@ Qed.
 
 Section BDStrengtheningClassInstances.
 
-  Context {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+  Context {F18 : SRForecastCopy18}.
 
   (** The η-typed [x : G F] in [bd_Γη]. *)
   Definition bs_eta_typed : si_Σ ;;; bd_Γη |-E tRel 0 : tApp (tRel 2) (tRel 1) :=
