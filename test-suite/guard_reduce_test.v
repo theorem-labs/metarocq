@@ -183,6 +183,13 @@ Definition mcofix2 := [{| dname := na; dtype := v "T"; dbody := tApp tS (v "n");
 Check eq_refl : hs (tCase ci_nat p_nat (tCoFix mcofix2 0) [br_O; br_S])
   = Stepped (tCase ci_nat p_nat (tApp tS (v "n")) [br_O; br_S]) [v "T"].
 Check eq_refl : hs (tProj pr_y (tCoFix mcofix2 0)) = Stepped (tProj pr_y (tApp tS (v "n"))) [v "T"].
+(** The same step when the case's [ci_cofix_nondep] is unset: the reducer does
+    not read the flag, as Rocq's kernel does not ([cClosure.ml] contracts a
+    cofixpoint under every match), although PCUIC's [red_cofix_case] needs it. *)
+Check eq_refl : hs (tCase {| ci_ind := nat_ind; ci_npar := 0; ci_relevance := Relevant;
+                             ci_cofix_nondep := false |} p_nat (tCoFix mcofix 0) [br_O; br_S])
+  = Stepped (tCase {| ci_ind := nat_ind; ci_npar := 0; ci_relevance := Relevant;
+                      ci_cofix_nondep := false |} p_nat (tApp tS (tCoFix mcofix 0)) [br_O; br_S]) [].
 (** A cofix outside a match or a projection is stuck. *)
 Check eq_refl : hs (tCoFix mcofix 0) = Stuck.
 

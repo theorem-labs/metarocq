@@ -105,6 +105,32 @@ Definition cc_head (s : cc_nstream) : nat := match s with cc_ncons a _ => a end.
 Definition cc_head_zeros : cc_head cc_zeros = 0 := eq_refl.
 MetaRocq SafeCheck cc_head_zeros.
 
+(* A6: a fixpoint whose recursive call goes through a cofixpoint matched DEPENDENTLY.
+   The guard condition unfolds the cofixpoint under the match, as Rocq's kernel does,
+   and so finds the argument [m]; PCUIC does not unfold it there. A guard that tested
+   the flag, or a guard closure that required the return type not to mention the
+   matched value, would refuse it. *)
+#[universes(template=no)]
+CoInductive cc_box : Set := cc_mkbox (n : nat).
+Definition cc_boxty (b : cc_box) : Set := match b with cc_mkbox _ => nat end.
+Fixpoint cc_dep_fix (n : nat) : nat :=
+  match n with
+  | 0 => 0
+  | S m => cc_dep_fix (match (cofix k : cc_box := cc_mkbox m) as b return cc_boxty b
+                       with cc_mkbox x => x end)
+  end.
+MetaRocq SafeCheck cc_dep_fix.
+
+(* A7: the cofixpoint counterpart: a guarded call reached by unfolding a cofixpoint
+   under a dependent match. *)
+#[universes(template=no)]
+CoInductive cc_s : Set := cc_scons (a : nat) (rest : cc_s).
+Definition cc_sty (s : cc_s) : Set := match s with cc_scons _ _ => cc_s end.
+CoFixpoint cc_dep_cofix : cc_s :=
+  cc_scons 0 (match (cofix h (s : cc_s) : cc_s := cc_scons 1 s) cc_dep_cofix as z return cc_sty z
+              with cc_scons _ y => y end).
+MetaRocq SafeCheck cc_dep_cofix.
+
 (** * Refused
 
    The refusal is pinned so that a reduction site that stops testing the flag, and
