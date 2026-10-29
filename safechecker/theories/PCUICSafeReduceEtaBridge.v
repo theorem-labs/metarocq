@@ -24,7 +24,7 @@ From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICPosition
      PCUICNormal PCUICReduction PCUICSafeLemmata PCUICWellScopedCumulativity
      PCUICConversion PCUICClosedBodies PCUICTypingEta PCUICSN PCUICSNEta PCUICClosedTypEta
-     PCUICEquality PCUICCumulativitySpec.
+     PCUICEquality PCUICCumulativitySpec PCUICArityRed.
 From MetaRocq.PCUIC Require PCUICPositionEta.
 From MetaRocq.PCUIC Require PCUICCumulativitySpecEtaClosureInstances PCUICEtaA6Instances.
 From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta PCUICWfEnvEta.
@@ -440,46 +440,47 @@ Section FracInstancesE.
   Definition fx_mfix : mfixpoint term := [fx_def].
   Definition fx_Γ : context := [vass SI.si_na fx_I].
 
-  Lemma si_vass_gen Γ (na : aname) A s : SI.si_Σ ;;; Γ |- A : tSort s ->
-    isSortRel s na.(binder_relevance) -> lift_typing typing SI.si_Σ Γ (j_vass na A).
+  (** Typing helpers, for any environment [Σ] (used at [si_Σ] and at [co_Σ] below). *)
+  Lemma si_vass_gen {Σ : global_env_ext} Γ (na : aname) A s : Σ ;;; Γ |- A : tSort s ->
+    isSortRel s na.(binder_relevance) -> lift_typing typing Σ Γ (j_vass na A).
   Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
 
-  Lemma si_vass_s_gen Γ (na : aname) A s : SI.si_Σ ;;; Γ |- A : tSort s ->
-    isSortRel s na.(binder_relevance) -> lift_typing typing SI.si_Σ Γ (j_vass_s na A s).
+  Lemma si_vass_s_gen {Σ : global_env_ext} Γ (na : aname) A s : Σ ;;; Γ |- A : tSort s ->
+    isSortRel s na.(binder_relevance) -> lift_typing typing Σ Γ (j_vass_s na A s).
   Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [reflexivity|exact r]. Qed.
 
-  Lemma si_typrel Γ T s rel : SI.si_Σ ;;; Γ |- T : tSort s -> isSortRel s rel ->
-    lift_typing typing SI.si_Σ Γ (TypRel T rel).
+  Lemma si_typrel {Σ : global_env_ext} Γ T s rel : Σ ;;; Γ |- T : tSort s -> isSortRel s rel ->
+    lift_typing typing Σ Γ (TypRel T rel).
   Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
 
-  Lemma si_termtyp Γ t T s rel : SI.si_Σ ;;; Γ |- t : T -> SI.si_Σ ;;; Γ |- T : tSort s ->
-    isSortRel s rel -> lift_typing typing SI.si_Σ Γ (TermTypRel t T rel).
+  Lemma si_termtyp {Σ : global_env_ext} Γ t T s rel : Σ ;;; Γ |- t : T -> Σ ;;; Γ |- T : tSort s ->
+    isSortRel s rel -> lift_typing typing Σ Γ (TermTypRel t T rel).
   Proof. intros ht h r. split; [exact ht|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
 
-  Lemma si_wf_cons Γ (na : aname) A s : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- A : tSort s ->
-    isSortRel s na.(binder_relevance) -> wf_local SI.si_Σ (Γ ,, vass na A).
+  Lemma si_wf_cons {Σ : global_env_ext} Γ (na : aname) A s : wf_local Σ Γ -> Σ ;;; Γ |- A : tSort s ->
+    isSortRel s na.(binder_relevance) -> wf_local Σ (Γ ,, vass na A).
   Proof. intros hΓ h r. apply localenv_cons_abs; [exact hΓ|exact (si_vass_gen Γ na A s h r)]. Qed.
 
-  Lemma si_Prop_typed Γ : wf_local SI.si_Σ Γ ->
-    SI.si_Σ ;;; Γ |- tSort sProp : tSort (Sort.super sProp).
+  Lemma si_Prop_typed {Σ : global_env_ext} Γ : wf_local Σ Γ ->
+    Σ ;;; Γ |- tSort sProp : tSort (Sort.super sProp).
   Proof. intros h. apply type_Sort; [exact h|cbn; trivial]. Qed.
 
-  Lemma fx_P_typed Γ : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- fx_P : tSort sProp.
+  Lemma fx_P_typed {Σ : global_env_ext} Γ : wf_local Σ Γ -> Σ ;;; Γ |- fx_P : tSort sProp.
   Proof.
     intros h.
-    assert (h' : wf_local SI.si_Σ (Γ ,, vass SI.si_na (tSort sProp)))
+    assert (h' : wf_local Σ (Γ ,, vass SI.si_na (tSort sProp)))
       by (apply (si_wf_cons _ _ _ (Sort.super sProp) h (si_Prop_typed _ h)); reflexivity).
     exact (type_Prod _ _ SI.si_na (tSort sProp) (tRel 0) (Sort.super sProp) sProp
       (si_vass_s_gen _ SI.si_na _ _ (si_Prop_typed _ h) eq_refl)
       (type_Rel _ _ 0 (vass SI.si_na (tSort sProp)) h' eq_refl)).
   Qed.
 
-  Lemma si_arity_typed Γ : wf_local SI.si_Σ Γ ->
-    SI.si_Σ ;;; Γ |- tProd SI.si_na (tSort sProp) (tSort sProp)
+  Lemma si_arity_typed {Σ : global_env_ext} Γ : wf_local Σ Γ ->
+    Σ ;;; Γ |- tProd SI.si_na (tSort sProp) (tSort sProp)
       : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)).
   Proof.
     intros h.
-    assert (h' : wf_local SI.si_Σ (Γ ,, vass SI.si_na (tSort sProp)))
+    assert (h' : wf_local Σ (Γ ,, vass SI.si_na (tSort sProp)))
       by (apply (si_wf_cons _ _ _ (Sort.super sProp) h (si_Prop_typed _ h)); reflexivity).
     exact (type_Prod _ _ SI.si_na (tSort sProp) (tSort sProp) (Sort.super sProp) (Sort.super sProp)
       (si_vass_s_gen _ SI.si_na _ _ (si_Prop_typed _ h) eq_refl) (si_Prop_typed _ h')).
@@ -696,6 +697,185 @@ Section FracInstancesE.
       exact (cs_case_typed fx_Γ (tRel 0) fx_wf_Γ
         (type_Rel _ _ 0 (vass SI.si_na fx_I) fx_wf_Γ eq_refl)).
     - constructor. apply whne_rel. reflexivity.
+  Qed.
+
+  (** *** A cofixpoint on a coinductive copy of [I]
+
+      No environment on [frac/eta] declares a coinductive type, so [co_Σ] declares
+      [CoInductive CoI (A : Prop) : Prop := c : CoI A]: the declaration of [si_Σ] with
+      [ind_finite := CoFinite], under another name. Its well-formedness proof is
+      [si_wf]'s, step by step. *)
+
+  Definition co_kn : kername := (MPfile ["SInst"], "CoI").
+  Definition co_ind : inductive := {| inductive_mind := co_kn; inductive_ind := 0 |}.
+  Definition co_mdecl : mutual_inductive_body :=
+    {| ind_finite := CoFinite; ind_npars := 1; ind_params := SI.si_params;
+       ind_bodies := [SI.si_idecl]; ind_universes := Monomorphic_ctx; ind_variance := None |}.
+  Definition co_env : global_env :=
+    {| universes := ContextSet.empty; declarations := [(co_kn, InductiveDecl co_mdecl)];
+       retroknowledge := Retroknowledge.empty |}.
+  Definition co_Σ : global_env_ext := (co_env, Monomorphic_ctx).
+
+  Lemma co_on_constructor :
+    on_constructor cumulSpec0 (lift_typing typing) SI.si_Σ0 co_mdecl 0 SI.si_idecl []
+      SI.si_cdecl [].
+  Proof.
+    unshelve econstructor.
+    - reflexivity.
+    - reflexivity.
+    - exact (SI.si_vass _ (mkBindAnn nAnon Relevant) _ _ SI.si_ctype_typed eq_refl).
+    - exact tt.
+    - constructor.
+    - cbn. eapply pos_ass.
+      + apply pos_arg_closed. reflexivity.
+      + exact (pos_concl _ _ _ [vass SI.si_na SI.si_P] [tRel 0]
+          (All_cons (x := tRel 0) (eq_refl : is_true (closedn 1 (tRel 0))) All_nil)).
+    - intros v e. discriminate e.
+    - destruct lets_in_constructor_types; [exact I|reflexivity].
+  Qed.
+
+  Lemma co_on_ind_body :
+    on_ind_body cumulSpec0 (lift_typing typing) SI.si_Σ0 co_kn co_mdecl 0 SI.si_idecl.
+  Proof.
+    unshelve econstructor.
+    - exact [[]].
+    - exists (tSort sProp). split; [reflexivity|].
+      apply arity_red_sort. apply whd_stop. reflexivity.
+    - exact (SI.si_vass _ (mkBindAnn nAnon rel_of_Type) _ _
+        (SI.si_arity_typed [] SI.si_wf_nil) eq_refl).
+    - exact (SI.si_vass _ (mkBindAnn nAnon rel_of_Type) _ _
+        (SI.si_arity_typed [] SI.si_wf_nil) eq_refl).
+    - constructor; [exact co_on_constructor|constructor].
+    - exact I.
+    - reflexivity.
+    - reflexivity.
+    - exact I.
+  Qed.
+
+  Lemma co_on_inductive : on_inductive cumulSpec0 (lift_typing typing) SI.si_Σ0 co_kn co_mdecl.
+  Proof.
+    constructor.
+    - constructor; [exact co_on_ind_body|constructor].
+    - exact (SI.si_wf_P [] SI.si_wf_nil).
+    - reflexivity.
+    - reflexivity.
+  Qed.
+
+  Lemma co_wf : wf co_env.
+  Proof.
+    split.
+    - split; [|split].
+      + intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+      + intros x Hx.
+        change (LevelSet.In x (LevelSet.union (ContextSet.levels ContextSet.empty)
+                                              (LevelSet.singleton Level.lzero))) in Hx.
+        apply LevelSet.union_spec in Hx as [Hx|Hx].
+        * exfalso. eapply LevelSet.empty_spec. exact Hx.
+        * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
+      + exists SI.si_val. intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+    - split.
+      { constructor; cbn; [constructor|intros c []|repeat split; intros c h; discriminate h
+                          |intros i h; discriminate h]. }
+      apply globenv_decl; [constructor|].
+      constructor.
+      + constructor.
+      + exact SI.si_on_udecl.
+      + exact co_on_inductive.
+      + cbn. intros i h; discriminate h.
+  Qed.
+
+  Lemma co_wf_ext : wf_ext co_Σ.
+  Proof. split; [exact co_wf|exact SI.si_on_udecl]. Qed.
+
+  Lemma co_wf_extE : wf_extE co_Σ.
+  Proof. exact (wf_ext_incl_E co_wf_ext). Qed.
+
+  Lemma co_declared_inductive : declared_inductive co_Σ co_ind co_mdecl SI.si_idecl.
+  Proof. split; [left; reflexivity|reflexivity]. Qed.
+
+  Lemma co_declared_constructor :
+    declared_constructor co_Σ (co_ind, 0) co_mdecl SI.si_idecl SI.si_cdecl.
+  Proof. split; [exact co_declared_inductive|reflexivity]. Qed.
+
+  Definition co_I : term := tApp (tInd co_ind []) fx_P.
+  Definition co_c : term := tApp (tConstruct co_ind 0 []) fx_P.
+  Definition co_def : def term := {| dname := SI.si_na; dtype := co_I; dbody := co_c; rarg := 0 |}.
+  Definition co_mfix : mfixpoint term := [co_def].
+  Definition co_ctor_ty : term :=
+    tProd SI.si_na (tSort sProp) (tApp (tInd co_ind []) (tRel 0)).
+
+  Lemma co_I_typed Γ : wf_local co_Σ Γ -> co_Σ ;;; Γ |- co_I : tSort sProp.
+  Proof.
+    intros h.
+    exact (type_App _ _ (tInd co_ind []) SI.si_na (tSort sProp) (tSort sProp) _ fx_P
+      (si_arity_typed Γ h)
+      (type_Ind _ _ co_ind [] co_mdecl SI.si_idecl h co_declared_inductive eq_refl)
+      (fx_P_typed Γ h)).
+  Qed.
+
+  Lemma co_ctor_ty_typed Γ : wf_local co_Σ Γ -> co_Σ ;;; Γ |- co_ctor_ty : tSort sProp.
+  Proof.
+    intros h.
+    assert (h' : wf_local co_Σ (Γ ,, vass SI.si_na (tSort sProp)))
+      by (apply (si_wf_cons _ _ _ (Sort.super sProp) h (si_Prop_typed _ h)); reflexivity).
+    exact (type_Prod _ _ SI.si_na (tSort sProp) (tApp (tInd co_ind []) (tRel 0))
+      (Sort.super sProp) sProp
+      (si_vass_s_gen _ SI.si_na _ _ (si_Prop_typed _ h) eq_refl)
+      (type_App _ _ (tInd co_ind []) SI.si_na (tSort sProp) (tSort sProp) _ (tRel 0)
+        (si_arity_typed _ h')
+        (type_Ind _ _ co_ind [] co_mdecl SI.si_idecl h' co_declared_inductive eq_refl)
+        (type_Rel _ _ 0 (vass SI.si_na (tSort sProp)) h' eq_refl))).
+  Qed.
+
+  Lemma co_c_typed Γ : wf_local co_Σ Γ -> co_Σ ;;; Γ |- co_c : co_I.
+  Proof.
+    intros h.
+    exact (type_App _ _ (tConstruct co_ind 0 []) SI.si_na (tSort sProp)
+      (tApp (tInd co_ind []) (tRel 0)) sProp fx_P
+      (co_ctor_ty_typed _ h)
+      (type_Construct _ _ co_ind 0 [] co_mdecl SI.si_idecl SI.si_cdecl h
+        co_declared_constructor eq_refl)
+      (fx_P_typed _ h)).
+  Qed.
+
+  Lemma co_guard : cofix_guard co_Σ [] co_mfix.
+  Proof.
+    unfold cofix_guard. cbn. apply gc_check. split; [vm_compute; reflexivity|].
+    exists 100. vm_compute. reflexivity.
+  Qed.
+
+  Lemma co_wf_cofixpoint : wf_cofixpoint co_Σ [] co_mfix.
+  Proof.
+    exists co_kn. split; [discriminate|]. split.
+    - constructor; [|constructor].
+      exists co_I. split; [reflexivity|]. split; [reflexivity|apply cumul_Refl].
+    - vm_compute. reflexivity.
+  Qed.
+
+  Lemma co_cofix_typed : co_Σ ;;; [] |- tCoFix co_mfix 0 : co_I.
+  Proof.
+    assert (h0 : wf_local co_Σ []) by constructor.
+    eapply (type_CoFix _ _ co_mfix 0 co_def).
+    - exact h0.
+    - exact co_guard.
+    - reflexivity.
+    - constructor; [|constructor].
+      exact (si_typrel _ _ sProp Relevant (co_I_typed _ h0) eq_refl).
+    - constructor; [|constructor].
+      assert (h1 : wf_local co_Σ ([] ,, vass SI.si_na co_I))
+        by (apply (si_wf_cons _ _ _ sProp h0 (co_I_typed _ h0)); reflexivity).
+      exact (si_termtyp ([] ,, vass SI.si_na co_I) co_c co_I sProp Relevant
+        (co_c_typed _ h1) (co_I_typed _ h1) eq_refl).
+    - exact co_wf_cofixpoint.
+  Qed.
+
+  (** [rtf_cofix] (T6): [cofix f : CoI P := c P]. *)
+  Lemma rtf_cofix_inst :
+    wf_extE co_Σ × welltypedE co_Σ [] (tCoFix co_mfix 0) × nth_error co_mfix 0 <> None.
+  Proof.
+    split; [exact co_wf_extE|]. split.
+    - econstructor. exact (typing_incl_E (Σ := co_Σ) co_wf co_cofix_typed).
+    - discriminate.
   Qed.
 
 End FracInstancesE.
