@@ -38,8 +38,15 @@
     real weakening ([wf_rel_weakE_inst]); [wf_local_rel_subst1E_inst] substitutes the let-bound
     variable that the declaration above it mentions.
 
-  **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
-  their E copies: the same set, and the forecast classes are arguments ([About]), not axioms. *)
+  **The forecast field [ctx_inst_app_weakE].** [ctx_inst_app_weakE_inst] gives, with no class,
+  concrete values that satisfy all its premises and its conclusion; its conversion premise
+  [I (G (λ y. F y)) ≤ I (G F)] is an η step, not reflexive. [ctx_inst_app_weakE_applied]
+  applies the field to those premises.
+
+  **Assumptions and compiled forms.** The end of this file prints the assumptions of base's main
+  theorems and of their E copies (the same set; the forecast classes are arguments, [About],
+  not axioms), and, with [Set Printing All], the compiled form of each [T6BD_facts] field (its
+  fit), of its E lemma and of its base twin. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -182,6 +189,50 @@ Proof.
            (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) w eq_refl) eq_refl).
 Qed.
 
+(** ** A satisfying instance of the forecast field [ctx_inst_app_weakE] ([BDForecastCopy18])
+
+  Proved here without any class. The values: [Σ := si_Σ] with [si_wfE]; the inductive [I] of
+  [si_Σ] ([si_declared_inductive]); [Γ := bd_ΓFG] ([F : Prop → Prop; G : (Prop → Prop) → Prop]);
+  [u = v = []]; [args := [G (λ y : Prop. F y)]], [params := [G F]]. Every premise holds and the
+  conclusion is exhibited.
+  - [isTypeE] of the FULL application [I (G (λ y. F y)) : Prop] ([I] has one parameter, no
+    index).
+  - The conversion premise [I (G (λ y. F y)) ≤ I (G F)] is NOT reflexive: the two parameter
+    lists differ (the eighth component, from [bd_case_pars_differ]); one η step
+    [λ y. F y ⇝η F] under [G] relates them ([bd_case_eta_step]), so its proof is
+    [eta1_ws_cumul_pbE].
+  - [I] has no index, so [skipn (ind_npars si_mdecl) args = []] and the conclusion is the
+    parameter instance read at the full context [ind_params ,,, ind_indices]. *)
+Lemma ctx_inst_app_weakE_inst :
+  let Γ := bd_ΓFG in
+  let params := [bd_GF] in
+  let args := [bd_X] in
+  [× wfE si_Σ.1,
+     declared_inductive si_Σ.1 si_ind si_mdecl si_idecl,
+     wf_localE si_Σ Γ,
+     isTypeE si_Σ Γ (mkApps (tInd si_ind []) args),
+     consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
+     ctx_instE si_Σ Γ params (List.rev (subst_instance [] (ind_params si_mdecl))),
+     si_Σ ;;; Γ ⊢E mkApps (tInd si_ind []) args ≤ mkApps (tInd si_ind []) (params ++ skipn (ind_npars si_mdecl) args),
+     args <> params &
+     ctx_instE si_Σ Γ (params ++ skipn (ind_npars si_mdecl) args)
+       (List.rev (subst_instance [] (ind_params si_mdecl ,,, ind_indices si_idecl)))].
+Proof.
+  cbv zeta. split.
+  - exact si_wfE.
+  - exact si_declared_inductive.
+  - exact bdi_wfFG.
+  - exact (has_sort_isTypeE sProp (iv_IX_typed bd_ΓFG bd_X bdi_wfFG bdi_X_typed)).
+  - exact bd_case_cons.
+  - change (ctx_instE si_Σ bd_ΓFG [bd_GF] [vass si_na si_P]).
+    econstructor; [exact bdi_GF_typed|constructor].
+  - apply eta1_ws_cumul_pbE; [reflexivity|reflexivity|].
+    exact (app_eta_r _ _ (tInd si_ind []) bd_case_eta_step).
+  - unfold bd_X, bd_GF, bd_lam. discriminate.
+  - change (ctx_instE si_Σ bd_ΓFG [bd_GF] [vass si_na si_P]).
+    econstructor; [exact bdi_GF_typed|constructor].
+Qed.
+
 Section BDToPCUICEtaInstances.
 
 (* FORECAST-ONLY: the eleven classes of [BDToPCUICEta]; delete each when its copy lands. *)
@@ -189,6 +240,17 @@ Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCo
   {V16 : ValForecastCopy16} {F10 : SRForecastCopy10}
   {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
   {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+
+(** The field [ctx_inst_app_weakE] applied to the premises of [ctx_inst_app_weakE_inst]: they
+    are its premises, and its conclusion is the instance's last component. *)
+Lemma ctx_inst_app_weakE_applied :
+  ctx_instE si_Σ bd_ΓFG ([bd_GF] ++ skipn (ind_npars si_mdecl) [bd_X])
+    (List.rev (subst_instance [] (ind_params si_mdecl ,,, ind_indices si_idecl))).
+Proof.
+  destruct ctx_inst_app_weakE_inst as [hwf hdecl hΓ hty hcons hpars hcum _ _].
+  exact (ctx_inst_app_weakE si_Σ hwf si_ind si_mdecl si_idecl hdecl bd_ΓFG hΓ [bd_GF] [bd_X] [] []
+           hty hcons hpars hcum).
+Qed.
 
 (** ** The prelude lemmas *)
 
@@ -298,5 +360,46 @@ Print Assumptions ctx_inst_bd_typingE.
 Print Assumptions T6BD_checking_typing_fit.
 Print Assumptions infering_typingE_Case_inst.
 Print Assumptions checking_typingE_eta_inst.
+Print Assumptions ctx_inst_app_weakE_inst.
 About checking_typingE.
 About bidirectional_to_pcuicE.
+
+(** ** Compiled forms of the ten [T6BD_facts] fields
+
+  For each field: the fit (the field's text, compiled here), the E lemma, and its base twin in
+  [BDToPCUIC], printed with [Set Printing All]. Renaming the E relations to the base names in
+  the first two must give the third (the forecast classes, printed as leading arrows, set
+  aside). *)
+Set Printing All.
+Set Printing Width 100000.
+Check @T6BD_checking_typing_fit.
+Check @checking_typingE.
+Check @BDToPCUIC.checking_typing.
+Check @T6BD_ctx_inst_bd_typing_fit.
+Check @ctx_inst_bd_typingE.
+Check @BDToPCUIC.ctx_inst_bd_typing.
+Check @T6BD_infering_ind_typing_fit.
+Check @infering_ind_typingE.
+Check @BDToPCUIC.infering_ind_typing.
+Check @T6BD_infering_prod_typing_fit.
+Check @infering_prod_typingE.
+Check @BDToPCUIC.infering_prod_typing.
+Check @T6BD_infering_sort_isTypeRel_fit.
+Check @infering_sort_isTypeRelE.
+Check @BDToPCUIC.infering_sort_isTypeRel.
+Check @T6BD_infering_sort_typing_fit.
+Check @infering_sort_typingE.
+Check @BDToPCUIC.infering_sort_typing.
+Check @T6BD_infering_typing_fit.
+Check @infering_typingE.
+Check @BDToPCUIC.infering_typing.
+Check @T6BD_lift_sorting_lift_typing_fit.
+Check @lift_sorting_lift_typingE.
+Check @BDToPCUIC.lift_sorting_lift_typing.
+Check @T6BD_wf_local_bd_rel_typing_fit.
+Check @wf_local_bd_rel_typingE.
+Check @BDToPCUIC.wf_local_bd_rel_typing.
+Check @T6BD_wf_rel_weak_fit.
+Check @wf_rel_weakE.
+Check @BDToPCUIC.wf_rel_weak.
+Unset Printing All.
