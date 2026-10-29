@@ -205,6 +205,7 @@ theories/PCUICGenerationEta.v
 theories/Typing/PCUICUnivSubstitutionTypEta.v
 theories/PCUICWfUniversesEta.v
 theories/PCUICSubstitutionEta.v
+theories/PCUICContextsEta.v
 theories/PCUICTypingEtaCopies2Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
