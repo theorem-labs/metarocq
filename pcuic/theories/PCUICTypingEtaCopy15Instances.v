@@ -134,16 +134,16 @@ Proof.
   apply ws_cumul_pbE_refl; [exact (wf_local_closed_contextE (Σ := rf_Σ) (wfΣ := wc_wfE) k_wf_ΓΔ)|reflexivity].
 Qed.
 
-Lemma k_sp_Prop : typing_spineE rf_Σ k_Γ (tSort sProp) [] (tSort sProp).
+Lemma k_sp_Prop : PCUICAritiesEta.typing_spineE rf_Σ k_Γ (tSort sProp) [] (tSort sProp).
 Proof.
-  apply type_spine_nilE; [exact k_isT_Prop|exact k_isT_Prop|].
+  apply PCUICAritiesEta.type_spine_nilE; [exact k_isT_Prop|exact k_isT_Prop|].
   exact (isType_ws_cumul_pbE_refl (wfΣ := wc_wfE) _ _ k_isT_Prop).
 Qed.
 
 (** The spine [Π x : G (λy:Prop. F y). Prop] applied to [a : G F]: its head comparison and
     its argument go through the η step. *)
-Lemma k_spη : typing_spineE rf_Σ k_Γ k_PT [tRel 0] (tSort sProp).
-Proof. eapply type_spine_consE; [exact k_isT_PT|exact k_isT_PU|exact (k_PT_η Cumul)|exact k_a_U|exact k_sp_Prop]. Qed.
+Lemma k_spη : PCUICAritiesEta.typing_spineE rf_Σ k_Γ k_PT [tRel 0] (tSort sProp).
+Proof. eapply PCUICAritiesEta.type_spine_consE; [exact k_isT_PT|exact k_isT_PU|exact (k_PT_η Cumul)|exact k_a_U|exact k_sp_Prop]. Qed.
 
 (** [λx : G (λy:Prop. F y). G (λy:Prop. F y)], of type [k_PT]. *)
 Definition k_t : term := tLambda c1b_na k_T (lift0 1 k_T).
@@ -237,16 +237,16 @@ Definition substitution_ws_cumul_pbE_typed_inst :=
   @substitution_ws_cumul_pbE_typed _ rf_Σ wc_wfE Cumul k_Γ k_Δ' [] [tRel 0] _ _ k_sub_U (k_η_Δ' Cumul).
 
 (** The empty spine at [G F], strengthened to [G (λy:Prop. F y)] by the η step. *)
-Lemma k_sp_U_refl : typing_spineE rf_Σ k_Γ k_U [] k_U.
+Lemma k_sp_U_refl : PCUICAritiesEta.typing_spineE rf_Σ k_Γ k_U [] k_U.
 Proof. exact (@typing_spine_reflE _ rf_Σ wc_wfE k_Γ k_U k_isT_U). Qed.
 Definition typing_spine_strengthenE_inst :=
   @typing_spine_strengthenE _ rf_Σ wc_wfE k_Γ k_U [] k_U k_sp_U_refl k_T k_isT_T (k_η Cumul).
 Definition typing_spine_reflE_inst := @typing_spine_reflE _ rf_Σ wc_wfE k_Γ k_T k_isT_T.
 
 (** [(λx : G (λy:Prop. F y). G (λy:Prop. F y)) a : Prop], typed through [k_spη]. *)
-Definition type_mkAppsE_inst := @type_mkAppsE _ rf_Σ k_cb k_Γ k_t [tRel 0] (tSort sProp) k_PT k_t_typed k_spη.
+Definition type_mkAppsE_inst := @PCUICSpineEta.type_mkAppsE _ rf_Σ k_cb k_Γ k_t [tRel 0] (tSort sProp) k_PT k_t_typed k_spη.
 Definition inversion_mkApps_directE_inst :=
-  @inversion_mkApps_directE _ rf_Σ wc_wfE k_Γ k_t [tRel 0] (tSort sProp) k_isT_Prop type_mkAppsE_inst.
+  @inversion_mkApps_directE _ rf_Σ wc_wfE k_Γ k_t [tRel 0] (tSort sProp) k_isT_Prop PCUICTypingEtaCopy15Instances.type_mkAppsE_inst.
 
 (** [y : x] under [x := ∀P:Prop. P]. *)
 Definition subst_type_local_ctxE_inst :=
@@ -446,8 +446,8 @@ Definition typing_spine_ctx_instE_inst :=
 
 (** The empty spine from [Π x : G (λy:Prop. F y). Prop] to [Π x : G F. Prop] (η), extended
     by [a : G F]. *)
-Lemma k_sp_PT_PU : typing_spineE rf_Σ k_Γ k_PT [] k_PU.
-Proof. apply type_spine_nilE; [exact k_isT_PT|exact k_isT_PU|exact (k_PT_η Cumul)]. Qed.
+Lemma k_sp_PT_PU : PCUICAritiesEta.typing_spineE rf_Σ k_Γ k_PT [] k_PU.
+Proof. apply PCUICAritiesEta.type_spine_nilE; [exact k_isT_PT|exact k_isT_PU|exact (k_PT_η Cumul)]. Qed.
 Definition typing_spine_appE_inst :=
   @typing_spine_appE _ rf_Σ wc_wfE k_Γ k_PT [] c1b_na k_U (tSort sProp) (tRel 0) k_sp_PT_PU k_a_U.
 Definition typing_spine_nth_errorE_inst :=

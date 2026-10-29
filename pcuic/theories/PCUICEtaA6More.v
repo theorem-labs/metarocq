@@ -117,11 +117,11 @@ Section A6More.
     destruct (finst_Prod_l _ _ _ _ _ _ e) as (na3 & A3 & B3 & [E hna3 e2 e3]).
     injection E as <- <- <-.
     split.
-    - apply (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na)).
+    - apply (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na)).
       apply (eq_binder_annot_trans _ _ _ hna1).
       apply (eq_binder_annot_trans _ _ _ hna3).
       apply eq_binder_annot_sym.
-      exact (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na') hna2).
+      exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na') hna2).
     - constructor; [exact hΓ|exact hA|exact hA'|].
       apply (BE_JoinE Σ Γ Conv A A' A1 A2).
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
