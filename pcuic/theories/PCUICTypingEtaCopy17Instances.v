@@ -30,20 +30,24 @@
   | [mfix_body_on_red_convE] | WEAK, IMPOSSIBLE (below) |
   | [shape_check_eq_term_uptoE] | WEAK, IMPOSSIBLE (below) |
 
-  The two WEAK instances: no η step can occur in any premise of these lemmas, by the rule sets.
+  The two WEAK instances are tagged IMPOSSIBLE because of the RULE SETS of the relations in
+  their premises, which contain no η rule:
   - [mfix_body_on_red_convE]: its premises are [ClosedBodies Σ] (closedness of constant bodies
     and freshness of names), [is_closed_context Γ] and [is_open_term Γ (dtype d)] (booleans of
     [on_free_vars]), and [mfix_body_on check (red Σ Γ) mind d] (an equation on [check] and a
-    [red] derivation). [red] is the reflexive-transitive closure of [red1], whose rules (β, ζ, δ,
-    ι, fix, cofix, projection, primitive, congruences) have no η rule. In Coq:
-    [c17_red_lambda_head] shows that a [red] derivation keeps a λ at the head, so
-    [c17_red_no_eta_contraction]: an η-contraction [λx:A. f x ⇝ f] is never a [red] derivation
-    when [f] is not itself a λ. The instance still runs in [c17_env] (its [ClosedBodies] comes
-    from [c17_wfE]) on the declared type above.
-  - [shape_check_eq_term_uptoE]: its only premise is [eq_term_upto_univ], whose rules relate
-    two terms with the same head constructor only; [c17_eq_term_lambda_head] shows in Coq that a
-    λ is related only to a λ, so an η pair [λx:A. f x], [f] (with [f] not a λ) is never related
-    ([c17_eq_term_no_eta]). The instance relates two terms that differ in a binder name.
+    [red] derivation). [red] is the reflexive-transitive closure of [red1], whose 32
+    constructors ([PCUICReduction.v]: 10 head rules [red_beta], [red_zeta], [red_rel],
+    [red_iota], [red_fix], [red_cofix_case], [red_cofix_proj], [red_delta], [red_prim_op],
+    [red_proj], and 22 congruences) contain no η rule. The instance runs in [c17_env] (its
+    [ClosedBodies] comes from [c17_wfE]) on the declared type above.
+  - [shape_check_eq_term_uptoE]: its premise is [eq_term_upto_univ], whose 16 constructors
+    ([PCUICEquality.v], [eq_Rel] … [eq_Prim]) each relate two terms with the same head
+    constructor; none is an η rule. The instance relates two terms that differ in a binder name.
+  The Coq lemmas [c17_red_no_eta_contraction] and [c17_eq_term_no_eta] below are spot checks of
+  that property, not proofs of the tags: each proves one shape, in one direction, at the top
+  level only (a [red] derivation never contracts [λx:A. f x] to [f] when [f] is not a λ; the
+  pair with the λ on the left is never related by [eq_term_upto_univ_napp]). They say nothing
+  about η-expansion, about steps under a binder, or about the λ on the right.
 
   The class [ShapeCheckE] is inhabited by [check_one_fix_shapeE] and [check_one_cofix_shapeE]
   ([PCUICFixWitnessEta]). *)
@@ -298,7 +302,8 @@ Proof. reflexivity. Qed.
 Lemma c17_open_dty : is_open_term c17_Γb c17_dty.
 Proof. reflexivity. Qed.
 
-(** ** The rule-set facts behind the two WEAK instances *)
+(** ** Spot checks of the rule-set property behind the two WEAK instances (one shape, one
+    direction, top level only; the tags rest on the constructor lists, see the header) *)
 
 Lemma c17_red1_lambda_head (Σ : global_env) (Γ : context) na A b u :
   red1 Σ Γ (tLambda na A b) u -> ∑ A' b', u = tLambda na A' b'.

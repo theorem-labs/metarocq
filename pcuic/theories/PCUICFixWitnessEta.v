@@ -58,10 +58,15 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICTy
     imports): [destInd_mind_eq_term_upto], [check_one_fix_eq_term_upto],
     [check_one_cofix_eq_term_upto], [check_one_fix_inv], [check_one_cofix_inv],
     [check_one_cofix_it_mkProd], [has_rec_arg_nth_error];
-  - [mfix_body_on_conv_closed_red] and [mfix_on_ind_inv]: their E forms (premises
-    [is_closed_context] and [is_open_term] only) are FALSE, refuted in
-    [PCUICFixWitnessEtaCounter.v] ([mfix_body_on_conv_closed_redE_fix_false],
-    [mfix_body_on_conv_closed_redE_cofix_false], [mfix_body_on_conv_closed_redE_false]);
+  - [mfix_body_on_conv_closed_red] and [mfix_on_ind_inv]: their E forms by this file's renaming
+    ([wf] → [wfE], [ShapeCheck] → [ShapeCheckE], [conv_witness] → [conv_witnessE]; premises
+    [is_closed_context] and [is_open_term] only) are FALSE, proved at the end of this file:
+    [mfix_body_on_conv_closed_redE_twin_false] and [mfix_on_ind_invE_twin_false]. The first
+    reduces to [PCUICFixWitnessEtaCounter.mfix_body_on_conv_closed_redE_fix_false], which
+    refutes a different form (base's [wf Σ] and [ShapeCheck], with [conv_witnessE]), through
+    [wf_incl_E] and the instance [check_one_fix_shapeE]. The second uses the cofixpoint witness
+    of [PCUICFixWitnessEtaCounter.v] ([fwe_cofix_d], whose declared type is [red1]-normal and
+    fails [check_one_cofix]); that file has no theorem about [mfix_on_ind_inv];
   - [mfix_body_on_conv_red] and [mfix_on_ind_conv_red]: their base proofs go through
     [mfix_body_on_conv_closed_red]. Over η the conversion witness gives a reduction witness only
     for a TYPED declared type, by a typed reduct lemma proved with subject reduction over
@@ -288,4 +293,47 @@ Proof.
   rewrite /expand_lets /expand_lets_k /= in h.
   eexists.
   transitivity (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l)); [exact r|exact h].
+Qed.
+
+(** ** The two closed-only forms that are not copied are false
+
+  The statements are base's [mfix_body_on_conv_closed_red] and [mfix_on_ind_inv] with this
+  file's renaming, under [-> False]. [PCUICFixWitnessEtaCounter] (witnesses) and [PCUICEtaC1b]
+  ([rt_from_normal]) are required here, without Import, so they reach no proof above; neither
+  declares a global hint, instance or [Arguments]. *)
+
+From MetaRocq.PCUIC Require PCUICEtaC1b PCUICFixWitnessEtaCounter.
+
+Lemma mfix_body_on_conv_closed_redE_twin_false :
+  (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ)
+     (check : def term -> option kername) (shape : ShapeCheckE check) Γ mind d,
+     is_closed_context Γ -> is_open_term Γ (dtype d) ->
+     mfix_body_on check (conv_witnessE Σ Γ) mind d ->
+     mfix_body_on check (closed_red Σ Γ) mind d) -> False.
+Proof.
+  intros H. apply PCUICFixWitnessEtaCounter.mfix_body_on_conv_closed_redE_fix_false.
+  intros cf Σ wfΣ shape Γ mind d hΓ hd hm.
+  exact (H cf Σ (wf_incl_E wfΣ) check_one_fix check_one_fix_shapeE Γ mind d hΓ hd hm).
+Qed.
+
+Lemma mfix_on_ind_invE_twin_false :
+  (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ)
+     (check : def term -> option kername) (shape : ShapeCheckE check) ok Γ mfix idx decl,
+     is_closed_context Γ -> is_open_term Γ (dtype decl) ->
+     mfix_on_ind check (conv_witnessE Σ Γ) ok mfix ->
+     nth_error mfix idx = Some decl ->
+     ∑ mind ty,
+       [× Σ ;;; Γ ⊢ dtype decl ⇝ ty, check (def_with_type decl ty) = Some mind & ok mind]) -> False.
+Proof.
+  intros H.
+  destruct (H default_checker_flags PCUICFixWitnessEtaCounter.fwe_Σ PCUICFixWitnessEtaCounter.fwe_wfE
+     PCUICTyping.check_one_cofix check_one_cofix_shapeE
+     (fun mind => check_recursivity_kind (lookup_env PCUICFixWitnessEtaCounter.fwe_Σ) mind CoFinite)
+     [] [PCUICFixWitnessEtaCounter.fwe_cofix_d] 0 PCUICFixWitnessEtaCounter.fwe_cofix_d
+     Logic.eq_refl PCUICFixWitnessEtaCounter.fwe_lam_open
+     (@PCUICFixWitnessEtaCounter.fwe_wf_cofixpointE default_checker_flags) Logic.eq_refl)
+    as [mind [ty [r hc _]]].
+  have e := PCUICEtaC1b.rt_from_normal _ _ _
+    (PCUICFixWitnessEtaCounter.fwe_red_normal_lam PCUICFixWitnessEtaCounter.fwe_Σ []) (clrel_rel r).
+  subst ty. rewrite PCUICFixWitnessEtaCounter.fwe_check_cofix_dtype in hc. discriminate hc.
 Qed.
