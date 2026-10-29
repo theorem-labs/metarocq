@@ -223,4 +223,6 @@ theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
 # Typed postponement (T8): pinned statements and the root cases of one-step eta postponement
 theories/PCUICEtaT8Probe.v
+# T8 step 3: R_c* on canon T read back as base red on T (backward simulation through canon)
+theories/PCUICEtaT8BackSim.v
 # theories/All.v
