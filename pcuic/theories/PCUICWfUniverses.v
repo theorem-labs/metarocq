@@ -1145,7 +1145,7 @@ Qed.
       eapply wf_ctx_universes_closed in wfindis => //.
       rewrite (consistent_instance_length H2).
       erewrite closedu_compare_decls; tea.
-      rewrite closed_ind_predicate_context // /=.
+      rewrite (closed_ind_predicate_context (Σ:=Σ)) // /=.
       unfold test_branch.
       apply/andP; split.
       * have wfbrctx : All (fun cdecl =>

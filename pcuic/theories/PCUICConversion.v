@@ -2302,7 +2302,7 @@ Section ConvRedConv.
       is_open_term (Γ ,,, inst_case_branch_context p br) br.(bbody))) in h.
     2:{ intros x y [eq cv].
         split; [eapply ws_cumul_pb_is_open_term_left|eapply ws_cumul_pb_is_open_term_right]; tea.
-        instantiate (1:=bbody x). instantiate (1 := Conv).
+        instantiate (1:=bbody x). instantiate (2 := Conv).
         eapply ws_cumul_pb_eq_context_upto; tea.
         { eapply eq_context_upto_names_eq_context_upto; tc.
           now eapply eq_context_upto_names_inst_case_context. }
