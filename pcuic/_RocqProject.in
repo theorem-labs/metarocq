@@ -233,6 +233,8 @@ theories/PCUICTypingEtaCopy16Instances.v
 # Inversion facts on inductive types over typingE (E copy of part of PCUICInductiveInversion), and its satisfying instances
 theories/PCUICInductiveInversionEta.v
 theories/PCUICTypingEtaCopy18aInstances.v
+# The rest of that copy: the case predicate and case branch facts, and its satisfying instances
+theories/PCUICInductiveInversionEtaB.v
 # (Co)fixpoint witnesses over typingE (E copy of PCUICFixWitness), and its satisfying instances
 theories/PCUICFixWitnessEta.v
 theories/PCUICTypingEtaCopy17Instances.v
