@@ -402,6 +402,33 @@ Proof.
   eexists. eauto.
 Qed.
 
+Lemma wf_cofixpoint_typing_spineE {cf:checker_flags} (Σ : global_env_ext) Γ ind u mfix idx d args args' :
+  wfE Σ.1 -> wf_localE Σ Γ ->
+  wf_cofixpointE Σ Γ mfix ->
+  nth_error mfix idx = Some d ->
+  isTypeE Σ Γ (dtype d) ->
+  typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
+  check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
+Proof.
+  intros wfΣ wfΓ wfcofix Hnth wat sp.
+  (* Route (A): the conversion witness of [wf_cofixpointE] is used as it stands. Base turns it
+     into a REDUCT of the declared type ([mfix_on_ind_inv]); the closed-only E form of that step
+     is false (PCUICFixWitnessEtaCounter), so the witness enters [ws_cumul_pbE] directly, through
+     [into_ws_cumul_pbE_spec] and [ws_cumul_pbE_sym_pb]. *)
+  destruct wfcofix as [mind [ne [hall hck]]].
+  eapply nth_error_all in hall; tea.
+  destruct hall as [ty [hc [opty cv]]].
+  eapply check_one_cofix_inv in hc as [ctx [i [u0 [l eqty]]]]. subst ty.
+  have hcum : Σ ;;; Γ ⊢E it_mkProd_or_LetIn ctx
+      (mkApps (tInd {| inductive_mind := mind; inductive_ind := i |} u0) l) ≤ dtype d.
+  { eapply ws_cumul_pbE_sym_pb.
+    eapply into_ws_cumul_pbE_spec;
+      [exact cv|exact (wf_local_closed_contextE wfΓ)|exact (isType_is_open_termE wat)|exact opty]. }
+  have heq : {| inductive_mind := mind; inductive_ind := i |} = ind.
+  { eapply (typing_spine_it_mkProd_Ind_invE sp); [exact hcum|reflexivity]. }
+  now subst ind.
+Qed.
+
 Notation "⋆" := ltac:(solve [pcuic]) (only parsing).
 
 Notation decl_ws_cumul_pbE Σ Γ := (All_decls_alpha_pb Conv
@@ -584,6 +611,21 @@ Proof.
   exact (declared_inductive_closed_paramsE H).
 Qed.
 
+Lemma into_ws_cumul_pb_termsE {cf} {Σ} {wfΣ : wfE Σ} {Γ l l'} :
+  All2 (convSpecE Σ Γ) l l' ->
+  is_closed_context Γ ->
+  forallb (is_open_term Γ) l ->
+  forallb (is_open_term Γ) l' ->
+  ws_cumul_pbE_terms Σ Γ l l'.
+Proof.
+  (* [ws_cumul_pbE_terms] is a Definition where base's [ws_cumul_pb_terms] is a Notation *)
+  unfold ws_cumul_pbE_terms.
+  solve_all.
+  (* I5: the specification enters [ws_cumul_pbE] through [into_ws_cumul_pbE_spec],
+     where base uses [PCUICConversion.convSpec_convAlgo_curry] *)
+  eapply into_ws_cumul_pbE_spec; tea.
+Qed.
+
 Lemma on_constructor_closed_indicesE {cf} {Σ} {wfΣ : wfE Σ} :
   forall {i mdecl idecl cdecl},
   declared_constructor Σ.1 i mdecl idecl cdecl ->
@@ -746,6 +788,8 @@ Qed.
     for the other under an ascription, both ways); only the implicit status of [Γ] and [T]
     differs, which is not part of the type. So no second E constant is declared: the landed one
     is registered on [pcuic], which is what base's second declaration adds. *)
+(* REMOVED AT THE MERGE of fork/frac/eta >= 3953e0f5, which adds this same registration at the
+   end of PCUICInductiveInversionEta.v; two registrations of one hint must not land. *)
 #[global] Hint Immediate PCUICClosedTypEta.isType_is_open_termE : pcuic.
 
 Lemma arity_spine_to_extended_listE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ} T :
