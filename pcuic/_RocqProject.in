@@ -262,6 +262,19 @@ theories/Bidirectional/BDUniqueEtaInstances.v
 # Strengthening of bidirectional typing over the eta relations (row T6, the E copy of BDStrengthening), and its satisfying instances
 theories/Bidirectional/BDStrengtheningEta.v
 theories/Bidirectional/BDStrengtheningEtaInstances.v
+# The E copy of PCUICCumulProp (row T6): cumul_propE, its refutations, and its satisfying instances
+theories/PCUICCumulPropEta.v
+theories/PCUICCumulPropEtaRefutations.v
+theories/PCUICCumulPropEtaInstances.v
+# Classification over typingE (row T6, the E copy of PCUICClassification), and its satisfying instances
+theories/PCUICClassificationEta.v
+theories/PCUICClassificationEtaInstances.v
+# Progress over typingE (row T6, the E copy of PCUICProgress), and its satisfying instances
+theories/PCUICProgressEta.v
+theories/PCUICProgressEtaInstances.v
+# Canonicity over typingE (row T6, the E copy of PCUICCanonicity), and its satisfying instances
+theories/PCUICCanonicityEta.v
+theories/PCUICCanonicityEtaInstances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
 # T8 step 3: R_c* on canon T read back as base red on T (backward simulation through canon)
