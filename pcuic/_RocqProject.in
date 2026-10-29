@@ -203,6 +203,15 @@ theories/PCUICContextConversionEta.v
 theories/PCUICWsCumulEtaCtx.v
 theories/PCUICWsCumulEtaCtxTyp.v
 theories/PCUICWsCumulEtaCtxInstances.v
+# E copies over typingE: typing notions, typing spines, universe instances, contexts, universes, substitution, arities
+theories/PCUICTypingEtaNotions.v
+theories/PCUICGenerationEta.v
+theories/Typing/PCUICUnivSubstitutionTypEta.v
+theories/PCUICWfUniversesEta.v
+theories/PCUICSubstitutionEta.v
+theories/PCUICContextsEta.v
+theories/PCUICAritiesEta.v
+theories/PCUICTypingEtaCopies2Instances.v
 # Inversion of typingE (E copy of PCUICInversion)
 theories/PCUICInversionEta.v
 # The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
