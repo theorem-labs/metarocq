@@ -7,11 +7,11 @@
   A well-typed type that is E-convertible to a head form (sort, product, applied
   inductive) reduces to that head form by base [red] alone. The pinned forms are
   the [Definition]s [T8_*_statement] below. STATUS (2026-10-29): the three [_r] forms
-  are PROVED ([T8_Sort_r], [T8_Prod_r], [T8_Ind_r], section [T8Assembly]) under two
-  FORECAST-ONLY hypotheses, E subject reduction (row T1) and [fix_rarg_inductive];
-  the [_l] forms are not assembled. Without typing the claim is false
-  ([A6_F_raw_false]; and [tProj p (λx. C ps X x)] η-reduces then projects, while it
-  is β-stuck).
+  are PROVED ([T8_Sort_r], [T8_Prod_r], [T8_Ind_r], section [T8Assembly]) under one
+  FORECAST-ONLY hypothesis, E subject reduction (row T1); [fix_rarg_inductive] is
+  proved (section [FixRargInductive]). The [_l] forms are not assembled. Without
+  typing the claim is false ([A6_F_raw_false]; and [tProj p (λx. C ps X x)]
+  η-reduces then projects, while it is β-stuck).
 
   ** Route (as assembled)
   1. A6 gives, untyped, that the canonical form [canon T] reaches the head by
@@ -50,10 +50,9 @@
   created redex (β with an η-expanded head, a spine whose head is an η-redex) is
   reached from [t] by extra β steps, so needs nothing.
 
-  Typing gives the invariant: [typed_eta_safe] below, given the FORECAST-ONLY
-  hypothesis [fix_rarg_inductive]. A λ has a product type, and the four positions
-  have an inductive or primitive type (for a fixpoint, its [rarg] type, which
-  [fix_rarg_inductive] says is an applied inductive). The
+  Typing gives the invariant: [typed_eta_safe] below. A λ has a product type, and the
+  four positions have an inductive or primitive type (for a fixpoint, its [rarg]
+  type, which [fix_rarg_inductive] proves is an applied inductive). The
   invariant is NOT preserved by β or by fixpoint unfolding as a syntactic
   property: [(λx. tCase x _) (λy. M y)] β-reduces to a λ scrutinee, and unfolding a
   fixpoint turns a recursive call [f (λy. C y)] into a fixpoint spine with a λ
@@ -91,6 +90,9 @@ From MetaRocq.PCUIC Require PCUICSize PCUICClosedTyp PCUICEtaScope.
 From MetaRocq.PCUIC Require Import PCUICEtaCanon PCUICEtaI5EtaL PCUICEtaC1b.
 From MetaRocq.PCUIC Require Import PCUICEtaCanonRed PCUICEtaT8BackSim.
 From MetaRocq.PCUIC Require PCUICEtaI5A2.
+(* Loaded already through the imports above; required here for the qualified names in
+   section [FixRargInductive]. *)
+From MetaRocq.PCUIC Require PCUICClosed PCUICContexts PCUICSubstitution PCUICWsCumulEtaSubst.
 
 Import ListNotations.
 
@@ -817,6 +819,165 @@ Proof.
   - assumption.
 Qed.
 
+(** ** [fix_rarg_inductive]: the [rarg]-th argument of a typed applied fixpoint
+
+  The route uses neither T8 nor [typed_eta_safe], and it never types the
+  [wf_fixpointE] witness (review note N3, [lanes/eta/meta/t8-assembly-review.md]):
+  - [inversion_mkApps_fri]: [inversion_AppE], one argument at a time, gives a typing
+    of the head and a spine [fri_spine]. Each link of the spine compares the current
+    type with a product ([ws_cumul_pbE]) and types the argument at that product's
+    domain. Unlike [PCUICAritiesEta.typing_spineE], the spine has no [isTypeE]
+    premises, so it needs no validity (base [inversion_mkApps], [PCUICValidity.v:381],
+    uses validity for them);
+  - [inversion_FixE] gives [dtype decl ≤ A] for the head's type [A], and
+    [wf_fixpointE] gives a witness [ty] with [conv_witnessE Σ Γ (dtype decl) ty], on
+    which [check_one_fix] finds an applied inductive at the [rarg]-th assumption of
+    [smash_context [] ctx], where [decompose_prod_assum [] ty = (ctx, concl)];
+  - [fri_walk] walks the telescope of [ty] along the spine. A let-in goes by
+    [ws_cumul_pbE_LetIn_l_inv], as [smash_context] substitutes it away. A product goes
+    by [ws_cumul_pbE_Prod_Prod_inv]: its domain is E-convertible to the spine's domain,
+    and its codomain, substituted by the argument ([substitution0_ws_cumul_pbE], no
+    typing premise), stays below the spine's next type. *)
+Section FixRargInductive.
+  Context {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ).
+
+  Let cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
+
+  (** A typing spine without the [isTypeE] premises of [PCUICAritiesEta.typing_spineE]. *)
+  Inductive fri_spine (Γ : context) : term -> list term -> term -> Type :=
+  | fri_spine_nil A B : ws_cumul_pbE Cumul Σ Γ A B -> fri_spine Γ A [] B
+  | fri_spine_cons A na D B hd tl T :
+      ws_cumul_pbE Cumul Σ Γ A (tProd na D B) ->
+      Σ ;;; Γ |-E hd : D ->
+      fri_spine Γ (B {0 := hd}) tl T ->
+      fri_spine Γ A (hd :: tl) T.
+
+  Lemma fri_spine_strengthen Γ A A' l T :
+    fri_spine Γ A' l T -> ws_cumul_pbE Cumul Σ Γ A A' -> fri_spine Γ A l T.
+  Proof.
+    intros h. destruct h as [A1 T1 hAT|A1 na D B hd tl T1 hP hhd hsp]; intros hA.
+    - exact (fri_spine_nil Γ A T1 (ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cbΣ) _ _ _ hA hAT)).
+    - exact (fri_spine_cons Γ A na D B hd tl T1
+               (ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cbΣ) _ _ _ hA hP) hhd hsp).
+  Qed.
+
+  Lemma inversion_mkApps_fri Γ f args T :
+    Σ ;;; Γ |-E mkApps f args : T -> ∑ A, (Σ ;;; Γ |-E f : A) × fri_spine Γ A args T.
+  Proof.
+    induction args as [|x args IH] in f, T |- *; intros h.
+    - exists T. split; [exact h|].
+      exact (fri_spine_nil Γ T T (ws_cumul_pbE_refl (Σ := Σ)
+               (typing_closed_contextE (wfΣ := wfΣ) h) (type_is_open_termE (wfΣ := wfΣ) h))).
+    - destruct (IH (tApp f x) T h) as (A & hA & hsp).
+      destruct (inversion_AppE Σ wfΣ hA) as (na & D & B & hf & hx & hB).
+      exists (tProd na D B). split; [exact hf|].
+      exact (fri_spine_cons Γ (tProd na D B) na D B x args T
+               (ws_cumul_pbE_refl (Σ := Σ)
+                  (typing_closed_contextE (wfΣ := wfΣ) hf) (type_is_open_termE (wfΣ := wfΣ) hf))
+               hx (fri_spine_strengthen Γ _ _ args T hsp hB)).
+  Qed.
+
+  Lemma fri_nth_error_rev_subst_context s k Δ m d :
+    nth_error (List.rev Δ) m = Some d ->
+    ∑ k', nth_error (List.rev (subst_context s k Δ)) m = Some (subst_decl s k' d).
+  Proof.
+    intros h.
+    have hm : m < #|Δ|.
+    { have := nth_error_Some_length h. now rewrite List.length_rev. }
+    rewrite (nth_error_rev_inv Δ m hm) in h.
+    have hm' : m < #|subst_context s k Δ|.
+    { rewrite subst_context_length. exact hm. }
+    exists (#|Δ| - S (#|Δ| - S m) + k).
+    rewrite (nth_error_rev_inv _ m hm') PCUICSubstitution.nth_error_subst_context
+      subst_context_length h.
+    reflexivity.
+  Qed.
+
+  Lemma fri_ind_headed_subst s k t :
+    (∑ ind u l, t = mkApps (tInd ind u) l) ->
+    ∑ ind u l, subst s k t = mkApps (tInd ind u) l.
+  Proof.
+    intros (ind & u & l & ->). exists ind, u, (map (subst s k) l).
+    exact (PCUICLiftSubst.subst_mkApps s k (tInd ind u) l).
+  Qed.
+
+  (** The walk, by induction on the length of the telescope [ctx]. *)
+  Lemma fri_walk Γ ctx : forall concl A args T n d a,
+    fri_spine Γ A args T ->
+    ws_cumul_pbE Cumul Σ Γ (it_mkProd_or_LetIn ctx concl) A ->
+    nth_error (List.rev (smash_context [] ctx)) n = Some d ->
+    (∑ ind u l, decl_type d = mkApps (tInd ind u) l) ->
+    nth_error args n = Some a ->
+    ∑ D ind u l, (Σ ;;; Γ |-E a : D) × ws_cumul_pbE Cumul Σ Γ D (mkApps (tInd ind u) l).
+  Proof.
+    induction ctx as [|d0 ctx IH] using ctx_length_rev_ind;
+      intros concl A args T n d a hsp hc hn hd ha.
+    - destruct n; cbn in hn; discriminate hn.
+    - destruct d0 as [na [b|] ty].
+      + (* a let-in: its zeta step, as [smash_context] substitutes it *)
+        rewrite PCUICClosed.smash_context_app_def in hn.
+        rewrite it_mkProd_or_LetIn_app in hc. cbn in hc.
+        apply (ws_cumul_pbE_LetIn_l_inv (Σ := Σ) (wfΣ := cbΣ)) in hc.
+        rewrite /subst1 PCUICLiftSubst.subst_it_mkProd_or_LetIn in hc.
+        have hlen : #|subst_context [b] 0 ctx| <= #|ctx|.
+        { rewrite subst_context_length. lia. }
+        exact (IH _ hlen _ _ _ _ _ _ _ hsp hc hn hd ha).
+      + (* an assumption: compared with the spine's product *)
+        rewrite PCUICClosed.smash_context_app_ass List.rev_app_distr in hn.
+        rewrite it_mkProd_or_LetIn_app in hc. cbn in hc.
+        revert hc ha.
+        destruct hsp as [A0 T0 hAT|A0 na' D B hd' tl T0 hA hhd hsp]; intros hc ha.
+        { destruct n; cbn in ha; discriminate ha. }
+        have hp := ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cbΣ) _ _ _ hc hA.
+        destruct (ws_cumul_pbE_Prod_Prod_inv (Σ := Σ) hp) as [_ hdom hcod].
+        destruct n as [|n]; cbn in hn, ha.
+        * injection hn as <-. injection ha as <-.
+          destruct hd as (ind & u & l & e). cbn in e. subst ty.
+          exists D, ind, u, l. split; [exact hhd|].
+          exact (ws_cumul_pbE_sym_pb (Σ := Σ) hdom).
+        * have hs := PCUICWsCumulEtaSubst.substitution0_ws_cumul_pbE (Σ := Σ) (wfΣ := cbΣ)
+                       (subject_is_open_termE (wfΣ := wfΣ) hhd) hcod.
+          rewrite /subst1 PCUICLiftSubst.subst_it_mkProd_or_LetIn in hs.
+          destruct (fri_nth_error_rev_subst_context [hd'] 0 _ _ _ hn) as [k' hn'].
+          rewrite -PCUICContexts.smash_context_subst_empty in hn'.
+          have hlen : #|subst_context [hd'] 0 ctx| <= #|ctx|.
+          { rewrite subst_context_length. lia. }
+          exact (IH _ hlen _ _ _ _ _ _ _ hsp hs hn' (fri_ind_headed_subst [hd'] k' _ hd) ha).
+  Qed.
+
+  (** [fix_rarg_inductive_statement] (section [TypedSafe] below), with its text. *)
+  Lemma fix_rarg_inductive_gen Γ mfix idx args narg fn a T :
+    Σ ;;; Γ |-E mkApps (tFix mfix idx) args : T ->
+    unfold_fix mfix idx = Some (narg, fn) ->
+    nth_error args narg = Some a ->
+    ∑ A ind u l, (Σ ;;; Γ |-E a : A) × ws_cumul_pbE Cumul Σ Γ A (mkApps (tInd ind u) l).
+  Proof.
+    intros h hu ha.
+    destruct (inversion_mkApps_fri _ _ _ _ h) as (A0 & hf & hsp).
+    destruct (inversion_FixE Σ wfΣ hf) as (decl & _ & hnth & _ & _ & hwf & hle).
+    rewrite /unfold_fix hnth /= in hu. injection hu as <- _.
+    destruct hwf as (_ & _ & mind & _ & hall & _).
+    destruct (All_nth_error _ _ _ _ _ hall hnth) as (ty & hchk & hop & hconv).
+    move: hchk. rewrite /check_one_fix /def_with_type /=.
+    case hdec: (decompose_prod_assum [] ty) => [ctx concl].
+    case hn: (nth_error _ _) => [argd|] //.
+    case hda: (decompose_app _) => [hd args'] hchk.
+    have hih : ∑ ind u l, decl_type argd = mkApps (tInd ind u) l.
+    { rewrite (PCUICAstUtils.decompose_app_inv hda).
+      destruct hd; cbn in hchk; try discriminate hchk.
+      do 3 eexists; reflexivity. }
+    have ety := PCUICSubstitution.decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ hdec.
+    cbn in ety.
+    have hc : ws_cumul_pbE Conv Σ Γ (dtype decl) ty :=
+      into_ws_cumul_pbE_spec (Σ := Σ) (wfΣ := cbΣ) (pb := Conv) hconv (wsE_ctx hle) (wsE_left hle) hop.
+    have hc' : ws_cumul_pbE Cumul Σ Γ ty A0 :=
+      ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cbΣ) _ _ _ (ws_cumul_pbE_sym_pb (Σ := Σ) hc) hle.
+    rewrite ety in hc'.
+    exact (fri_walk Γ ctx concl A0 args T (rarg decl) argd a hsp hc' hn hih ha).
+  Qed.
+
+End FixRargInductive.
+
 Section TypedSafe.
   Context {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ).
 
@@ -869,9 +1030,10 @@ Section TypedSafe.
     intros h. destruct u; try reflexivity. exfalso. exact (typed_prim_not_prod _ _ _ _ _ h).
   Qed.
 
-  (** The one statement used here that the tree does not give: the [rarg]-th argument of
-      a typed applied fixpoint has a type that is E-convertible to an applied inductive.
-      Its proof needs the E typing spine: the spine's domains are E-convertible to the
+  (** The statement used here that the base typing lemmas do not give: the [rarg]-th
+      argument of a typed applied fixpoint has a type that is E-convertible to an
+      applied inductive. Proved below ([fix_rarg_inductive], by [fix_rarg_inductive_gen]
+      of section [FixRargInductive]): the spine's domains are E-convertible to the
       products of a type that [wf_fixpointE] relates to a telescope whose [rarg]-th
       assumption is an applied inductive.
 
@@ -880,7 +1042,7 @@ Section TypedSafe.
       its premise is a typing of the whole applied fixpoint, not a [welltypedE]-only
       premise on an inductive-head term, and its conclusion is only an E-CONVERSION of
       the argument's type with an applied inductive, which the η-expansion [λx:A. I x]
-      would satisfy too; it claims no reduction. Satisfying instance:
+      would satisfy too; it claims no reduction. Satisfying instance of its premises:
       [fix_rarg_inductive_instance] below. *)
   Definition fix_rarg_inductive_statement : Type :=
     forall Γ mfix idx args narg fn a T,
@@ -889,8 +1051,8 @@ Section TypedSafe.
       nth_error args narg = Some a ->
       ∑ A ind u l, (Σ ;;; Γ |-E a : A) × ws_cumul_pbE Cumul Σ Γ A (mkApps (tInd ind u) l).
 
-  (* FORECAST-ONLY: provable from the E copies of PCUICArities.typing_spine / PCUICSpine (copies 14/15) *)
-  Context (fix_rarg_inductive : fix_rarg_inductive_statement).
+  Lemma fix_rarg_inductive : fix_rarg_inductive_statement.
+  Proof. exact (@fix_rarg_inductive_gen cf Σ wfΣ). Qed.
 
   Lemma typed_spine_safe Γ t T : Σ ;;; Γ |-E t : T -> spine_safe Σ t.
   Proof.
@@ -910,7 +1072,7 @@ Section TypedSafe.
         eapply IH; eassumption
     end.
 
-  (** Every typed term satisfies the invariant (given [fix_rarg_inductive]). *)
+  (** Every typed term satisfies the invariant. *)
   Theorem typed_eta_safe Γ t T : Σ ;;; Γ |-E t : T -> eta_safe Σ t.
   Proof.
     induction t in Γ, T |- * using term_forall_list_ind; intros ht; cbn [eta_safe]; try reflexivity.
@@ -1106,8 +1268,8 @@ Proof.
   constructor; [apply ws_cumul_pbE_refl; reflexivity|constructor].
 Qed.
 
-(** A satisfying instance of [fix_rarg_inductive_statement] (the hypothesis of
-    [typed_eta_safe]): in [si_Σ], [fix f (x : I (∀P:Prop. P)) : I (∀P:Prop. P) := x]
+(** A satisfying instance of the premises of [fix_rarg_inductive_statement] (proved by
+    [fix_rarg_inductive]): in [si_Σ], [fix f (x : I (∀P:Prop. P)) : I (∀P:Prop. P) := x]
     applied to [c (∀P:Prop. P)]; the [rarg]-th argument [c (∀P:Prop. P)] has the
     type [I (∀P:Prop. P)], an applied inductive. *)
 Definition t8_ca : term := tApp (tConstruct si_ind 0 []) iv_False.
@@ -2475,8 +2637,8 @@ Qed.
   Each of these roots assumes [hnl]: NO REDUCT of the scrutinee (or projection
   argument) [c0] is a λ. These roots are NOT unconditional. For a typed source,
   [hnl] follows from two halves, and only the first is proved here:
-  - (i) TYPING ⇒ INVARIANT: [typed_eta_safe] (this file, given the FORECAST-ONLY
-    hypothesis [fix_rarg_inductive]) says that a typed term is [eta_safe], and so
+  - (i) TYPING ⇒ INVARIANT: [typed_eta_safe] (this file, with [fix_rarg_inductive]
+    proved) says that a typed term is [eta_safe], and so
     has no λ in scrutinee or projection-argument position. This half needs no
     subject reduction.
   - (ii) PRESERVATION: every reduct of the typed source is still typed. That is E
@@ -4095,10 +4257,9 @@ End IterationNeedsCanonicalReducts.
   inversion inside [pe_rigid_spine] is the existing [size']-bounded one; nothing new
   inducts on [size'].
 
-  HYPOTHESES of this section, both FORECAST-ONLY: [fri] (the hypothesis
-  [fix_rarg_inductive] of [typed_eta_safe], restated because that section is
-  closed) and [subject_reduction] (row T1, exactly the contract's form). Validity
-  (row T2a) is not used. *)
+  HYPOTHESIS of this section, FORECAST-ONLY: [subject_reduction] (row T1, exactly the
+  contract's form). [fix_rarg_inductive] of [typed_eta_safe] is proved (section
+  [FixRargInductive]). Validity (row T2a) is not used. *)
 
 Lemma rt_eta1_union {R : term -> term -> Type} a b :
   clos_refl_trans eta1 a b -> clos_refl_trans (union R eta1) a b.
@@ -4132,9 +4293,7 @@ Qed.
 
 Section T8Assembly.
   Context {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ).
-  (* FORECAST-ONLY: provable from the E copies of PCUICArities.typing_spine / PCUICSpine (copies 14/15) *)
-  Context (fri : @fix_rarg_inductive_statement cf Σ).
-  (* FORECAST-ONLY: rows T1/T2a *)
+  (* FORECAST-ONLY: row T1 *)
   Context (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
     Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T).
 
@@ -4158,7 +4317,7 @@ Section T8Assembly.
     Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T' -> Good Σ Γ (canon T').
   Proof.
     intros h r. apply Good_canon. intros T'' r'.
-    apply (typed_eta_safe wfΣ fri Γ T'' (tSort s)).
+    apply (typed_eta_safe wfΣ Γ T'' (tSort s)).
     apply (T8_reduct_typed Γ T s T'' h). eapply rt_trans; eassumption.
   Qed.
 
@@ -4674,4 +4833,6 @@ Proof. repeat constructor; apply eta_safe_canon. Qed.
   FORECAST-ONLY hypotheses named there). And the "mixed-chain sketch" paragraph of the
   history above stays NOT APPLICABLE; [T8_chain_walk] is a different induction on the
   canonical chain's length, which postpones η BEFORE the read-back through [canon]
-  and so never needs the false η lifting. *)
+  and so never needs the false η lifting.
+  Note (2026-10-29): the two theorems that the 13:46Z/13:55Z reports described — pe_postpone without the canonicity premise, and pe_red_postpone unrestricted, both at 64f42254 under the old eta_safe — are NO LONGER IN THIS FILE; look at commit 64f42254 for them.
+  Note (2026-10-29): [fix_rarg_inductive] is now proved (section [FixRargInductive]), so the [_r] theorems of section [T8Assembly] have one FORECAST-ONLY hypothesis, [subject_reduction] (row T1). *)
