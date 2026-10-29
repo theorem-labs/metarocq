@@ -51,8 +51,8 @@ From Equations Require Import Equations.
 
   [substitution_wt_cumul_pbE] is base [substitution_wt_cumul_pb] with the twin
   statement, on another proof route: base goes through [wt_cumul_pb_equalityP],
-  whose E form is false (refuted below); here the join is substituted by A7's
-  [untyped_substitution_ws_cumul_pbE], after [wt_cumul_pbE_ws_cumul_pbE]. The
+  whose E form is false (refuted below); here the join is substituted by
+  [untyped_substitution_ws_cumul_pbE] ([PCUICWsCumulEtaSubst]), after [wt_cumul_pbE_ws_cumul_pbE]. The
   route needs the substituted terms open, which [subsletE_open_terms] (a new
   helper, no base twin) gives from their typing. The proof of
   [substitution_propE] uses [on_wf_global_env_implE], the twin of
@@ -799,7 +799,7 @@ Proof.
 Qed.
 
 (** Substitution into a *well-typed* cumulativity/conversion derivation: the twin
-    of base [substitution_wt_cumul_pb], on the A7 route (see the header). *)
+    of base [substitution_wt_cumul_pb], on the route of the header. *)
 
 Lemma substitution_wt_cumul_pbE {cf} {Σ} {wfΣ : wfE Σ} {pb Γ Γ' Γ'' s M N} :
   subsletE Σ Γ s Γ' ->

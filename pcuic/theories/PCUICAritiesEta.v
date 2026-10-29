@@ -59,11 +59,11 @@ From Equations Require Import Equations.
   [consistent_instance_ext_abstract_instanceE].
 
   Proof routes that differ from base (statements are twins): [isType_tLetIn_redE]
-  goes through A6's [ws_cumul_pbE_LetIn_l_inv] in place of base's
+  goes through [ws_cumul_pbE_LetIn_l_inv] ([PCUICEtaA6]) in place of base's
   [ws_cumul_pb_Sort_r_inv] and [invert_red_letin]; [typing_spine_prodE] closes the
   head comparison by [isType_ws_cumul_pbE_refl].
 
-  Not copied: [invert_cumul_arity_l] (a later row); [isArity_it_mkProd_or_LetIn],
+  Not copied here: [invert_cumul_arity_l]; [isArity_it_mkProd_or_LetIn],
   [sort_of_products], [leq_sort_sort_of_products_mon] and
   [subst_telescope_subst_instance], which mention none of the relations and are
   used from base; the notation [isWAT] (base's [isWfArity typing] has no use); the
