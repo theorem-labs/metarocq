@@ -13,7 +13,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind
      PCUICEtaA6More PCUICGlobalEnvEta
      PCUICClosedTypEta PCUICWeakeningEnvTypEta PCUICWsCumulEtaCtx
-     PCUICWeakeningTypEta PCUICRenameTypEta PCUICInstTypEta PCUICCasesWfTypEta PCUICGuardClosureEta.
+     PCUICWeakeningTypEta PCUICRenameTypEta PCUICInstTypEta PCUICCasesWfTypEta PCUICGuardClosureEta
+     PCUICInversionEta.
 From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution.
 From Stdlib Require Import Program.Equality.
 From MetaRocq.SafeChecker Require Import PCUICSafeReduceEta PCUICTypingEtaDefs PCUICTypingEtaHyps.
@@ -66,11 +67,9 @@ Lemma rtf_cofix_proved {cf : checker_flags} :
   forall Σ Γ mfix idx, wf_extE Σ -> welltypedE Σ Γ (tCoFix mfix idx) ->
     nth_error mfix idx <> None.
 Proof.
-  intros Σ Γ mfix idx _ [T h].
-  remember (tCoFix mfix idx) as t0 eqn:heqt. revert mfix idx heqt.
-  induction h; intros mfix' idx' heqt; try discriminate heqt.
-  - injection heqt; intros; subst. congruence.
-  - match goal with IH : forall m i, _ = tCoFix m i -> _ |- _ => exact (IH _ _ heqt) end.
+  intros Σ Γ mfix idx wfΣ [T h] e.
+  destruct (inversion_CoFixE Σ (wf_extE_wfE Σ wfΣ) h) as (decl & _ & hn & _).
+  rewrite hn in e. discriminate.
 Qed.
 Definition rtf_cofix_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_cofix cf welltypedE wf_extE H) in exact T) := @rtf_cofix_proved cf.
@@ -80,13 +79,9 @@ Lemma rtf_app_sort_proved {cf : checker_flags} :
 Proof.
   intros Σ Γ s a wfΣ [T h].
   have wfΣ' : wfE Σ := wf_extE_wfE Σ wfΣ.
-  remember (tApp (tSort s) a) as t0 eqn:heqt. revert s a heqt.
-  induction h; intros s' a' heqt; try discriminate heqt.
-  - injection heqt; intros; subst.
-    match goal with H : typingE _ _ (tSort _) (tProd _ _ _) |- _ =>
-      destruct (inversion_Sort Σ wfΣ' H) as [_ [_ c]] end.
-    exact (ws_cumul_pb_Sort_Prod_inv (wfΣ := wfΣ') Cumul c).
-  - match goal with IH : forall s0 a0, _ = tApp (tSort s0) a0 -> False |- _ => exact (IH _ _ heqt) end.
+  destruct (inversion_AppE Σ wfΣ' h) as (na & A & B & hf & _ & _).
+  destruct (inversion_Sort Σ wfΣ' hf) as [_ [_ c]].
+  exact (ws_cumul_pb_Sort_Prod_inv (wfΣ := wfΣ') Cumul c).
 Qed.
 Definition rtf_app_sort_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_app_sort cf welltypedE wf_extE H) in exact T) := @rtf_app_sort_proved cf.
@@ -96,48 +91,23 @@ Lemma rtf_app_prod_proved {cf : checker_flags} :
 Proof.
   intros Σ Γ na A B a wfΣ [T h].
   have wfΣ' : wfE Σ := wf_extE_wfE Σ wfΣ.
-  remember (tApp (tProd na A B) a) as t0 eqn:heqt. revert na A B a heqt.
-  induction h; intros na' A' B' a' heqt; try discriminate heqt.
-  - injection heqt; intros; subst.
-    match goal with H : typingE _ _ (tProd _ _ _) (tProd _ _ _) |- _ =>
-      destruct (inversion_Prod Σ wfΣ' H) as [s1 [s2 [_ [_ c]]]] end.
-    exact (ws_cumul_pb_Sort_Prod_inv (wfΣ := wfΣ') Cumul c).
-  - match goal with IH : forall na0 A0 B0 a0, _ = tApp (tProd na0 A0 B0) a0 -> False |- _ =>
-      exact (IH _ _ _ _ heqt) end.
+  destruct (inversion_AppE Σ wfΣ' h) as (na' & A' & B' & hf & _ & _).
+  destruct (inversion_Prod Σ wfΣ' hf) as [s1 [s2 [_ [_ c]]]].
+  exact (ws_cumul_pb_Sort_Prod_inv (wfΣ := wfΣ') Cumul c).
 Qed.
 Definition rtf_app_prod_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_app_prod cf welltypedE wf_extE H) in exact T) := @rtf_app_prod_proved cf.
-
-(** The inversion of a primitive value over [typingE] (as K7's [inversion_*] in [PCUICTypingEtaHyps]). *)
-Lemma hyp_inversion_Prim {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ p T} :
-  Σ ;;; Γ |-E tPrim p : T ->
-  ∑ prim_ty cdecl, [× primitive_constant Σ (prim_val_tag p) = Some prim_ty,
-    declared_constant Σ prim_ty cdecl, primitive_invariants (prim_val_tag p) cdecl &
-    Σ ;;; Γ ⊢E prim_type p prim_ty ≤ T].
-Proof.
-  intros h. remember (tPrim p) as t0 eqn:heqt. revert p heqt.
-  induction h; intros p' heqt; try discriminate heqt.
-  - injection heqt; intros; subst. exists prim_ty, cdecl. split; try assumption.
-    eapply typing_ws_cumul_pbE. eapply typeE_Prim; eassumption.
-  - match goal with IH : forall p0, _ = tPrim p0 -> _ |- _ =>
-      destruct (IH _ heqt) as (pt & cd & [e1 e2 e3 cc]) end.
-    exists pt, cd. split; try assumption. refine (cumul_stepE _ _ _ cc); eassumption.
-Qed.
 
 Lemma rtf_app_prim_proved {cf : checker_flags} :
   forall Σ Γ p a, wf_extE Σ -> welltypedE Σ Γ (tApp (tPrim p) a) -> False.
 Proof.
   intros Σ Γ p a wfΣ [T h].
   have wfΣ' : wfE Σ := wf_extE_wfE Σ wfΣ.
-  remember (tApp (tPrim p) a) as t0 eqn:heqt. revert p a heqt.
-  induction h; intros p' a' heqt; try discriminate heqt.
-  - injection heqt; intros; subst.
-    match goal with H : typingE _ _ (tPrim _) (tProd _ _ _) |- _ =>
-      destruct (hyp_inversion_Prim Σ wfΣ' H) as (pt & cd & [hpc hdecl hinv cc]) end.
-    pose proof wfΣ' as (_ & wfr & _).
-    exact (invert_cumul_prim_type_prodE (wfΣ := wfE_ClosedBodies Σ) hdecl hinv
-             (prim_op_of_primitive_constant Σ _ _ wfr hpc) cc).
-  - match goal with IH : forall p0 a0, _ = tApp (tPrim p0) a0 -> False |- _ => exact (IH _ _ heqt) end.
+  destruct (inversion_AppE Σ wfΣ' h) as (na & A & B & hf & _ & _).
+  destruct (inversion_PrimE Σ wfΣ' hf) as (pt & cd & [_ hpc hdecl hinv _ cc]).
+  pose proof wfΣ' as (_ & wfr & _).
+  exact (invert_cumul_prim_type_prodE (wfΣ := wfE_ClosedBodies Σ) hdecl hinv
+           (prim_op_of_primitive_constant Σ _ _ wfr hpc) cc).
 Qed.
 Definition rtf_app_prim_fits {cf : checker_flags} (H : ReduceTypedFacts welltypedE wf_extE) :
   ltac:(let T := type of (@rtf_app_prim cf welltypedE wf_extE H) in exact T) := @rtf_app_prim_proved cf.
@@ -193,6 +163,103 @@ Proof. intros Σ n Γ ty r isdecl. exact (isTypeRel_liftE isdecl). Qed.
 Definition isTypeRel_lift_fits {cf : checker_flags} (H : @T0_facts cf) :
   ltac:(let T := type of (@isTypeRel_lift cf H) in exact T) := @isTypeRel_lift_proved cf.
 
+Lemma isType_lift_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {n : nat} {Γ : list context_decl} {ty : term} (isdecl : n <= #|Γ|), wfE Σ -> wf_localE Σ Γ -> isTypeE Σ (skipn n Γ) ty -> isTypeE Σ Γ (lift0 n ty).
+Proof. intros Σ n Γ ty isdecl. exact (isType_liftE isdecl). Qed.
+Definition isType_lift_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@isType_lift cf H) in exact T) := @isType_lift_proved cf.
+
+Lemma weaken_ctx_proved {cf : checker_flags} :
+    forall {Σ : global_env × universes_decl} {Γ : context} {t : term} {T : term} (Δ : context), wfE Σ.1 -> wf_localE Σ Δ -> Σ;;; Γ |-E t : T -> Σ;;; Δ,,, Γ |-E t : T.
+Proof. intros Σ Γ t T Δ. exact (weaken_ctxE Δ). Qed.
+Definition weaken_ctx_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@weaken_ctx cf H) in exact T) := @weaken_ctx_proved cf.
+
+Lemma weaken_wf_local_proved {cf : checker_flags} :
+    forall {Σ : global_env × universes_decl} {Δ : context} (Γ : context), wfE Σ.1 -> wf_localE Σ Γ -> wf_localE Σ Δ -> wf_localE Σ (Γ,,, Δ).
+Proof. intros Σ Δ Γ. exact (weaken_wf_localE Γ). Qed.
+Definition weaken_wf_local_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@weaken_wf_local cf H) in exact T) := @weaken_wf_local_proved cf.
+
+Lemma weakening_wf_local_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Γ' : list context_decl} {Γ'' : list context_decl}, wf_localE Σ (Γ,,, Γ') -> wf_localE Σ (Γ,,, Γ'') -> wf_localE Σ (Γ,,, Γ'',,, lift_context #|Γ''| 0 Γ').
+Proof. intros Σ wfΣ Γ Γ' Γ''. exact (weakening_wf_localE (wfΣ := wfΣ)). Qed.
+Definition weakening_wf_local_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@weakening_wf_local cf H) in exact T) := @weakening_wf_local_proved cf.
+
+Lemma isType_weaken_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term}, wf_localE Σ Γ -> isTypeE Σ [] T -> isTypeE Σ Γ T.
+Proof.
+  intros Σ wfΣ Γ T wfΓ h. exact (lift_typing_weaken_ctxE Σ [] Γ _ wfΣ wfΓ h).
+Qed.
+Definition isType_weaken_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@isType_weaken cf H) in exact T) := @isType_weaken_proved cf.
+
+Lemma wf_rel_weak_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context), wf_localE Σ Γ -> forall (Γ' : context), wf_localE Σ Γ' -> wf_local_relE Σ Γ Γ'.
+Proof.
+  intros Σ wfΣ Γ wfΓ Γ' wfΓ'.
+  induction wfΓ' as [|Δ na t wfΔ IH h|Δ na b t wfΔ IH h].
+  - exact All_local_rel_nil.
+  - apply All_local_rel_abs; [exact IH|].
+    exact (lift_typing_weaken_ctxE Σ Δ Γ _ wfΣ wfΓ h).
+  - apply All_local_rel_def; [exact IH|].
+    exact (lift_typing_weaken_ctxE Σ Δ Γ _ wfΣ wfΓ h).
+Qed.
+Definition wf_rel_weak_fits {cf : checker_flags} (H : @T6BD_facts cf) :
+  ltac:(let T := type of (@wf_rel_weak cf H) in exact T) := @wf_rel_weak_proved cf.
+
+(** ** K7: inversions of products *)
+
+Lemma isType_tProd_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, isTypeE Σ Γ (tProd na A B) <~> isTypeRelE Σ Γ A (binder_relevance na) × isTypeE Σ (Γ,, vass na A) B.
+Proof.
+  intros Σ wfΣ Γ na A B. split; intro HH.
+  - destruct HH as (_ & s & H & _).
+    destruct (inversion_Prod Σ wfΣ H) as [s1 [s2 [HA [HB _]]]].
+    apply lift_sorting_forget_univ in HA.
+    split; [exact HA|exact (has_sort_isTypeE _ HB)].
+  - destruct HH as [HA HB].
+    pose proof (lift_sorting_extract HA).
+    destruct HB as (_ & sB & HB & _).
+    eapply has_sort_isTypeE.
+    eapply typeE_Prod; eassumption.
+Qed.
+Definition isType_tProd_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@isType_tProd cf H) in exact T) := @isType_tProd_proved cf.
+
+Lemma welltyped_prod_codomain_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, welltypedE Σ Γ (tProd na A B) -> welltypedE Σ (Γ,, vass na A) B.
+Proof.
+  intros Σ wfΣ Γ na A B [T hT].
+  destruct (inversion_Prod Σ wfΣ hT) as (s1 & s2 & _ & hB & _).
+  econstructor. exact hB.
+Qed.
+Definition welltyped_prod_codomain_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@welltyped_prod_codomain cf H) in exact T) := @welltyped_prod_codomain_proved cf.
+
+(** [PCUICArities.it_mkProd_or_LetIn_wf_local] over [typingE]. *)
+Lemma hyp_it_mkProd_or_LetIn_wf_local {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ T U} :
+  Σ ;;; Γ |-E it_mkProd_or_LetIn Δ T : U -> wf_localE Σ (Γ ,,, Δ).
+Proof.
+  move: Γ T U. induction Δ as [|d Δ IHΔ] using rev_ind => Γ T U.
+  - cbn. intros h. exact (typingE_wf_local h).
+  - rewrite it_mkProd_or_LetIn_app. destruct d as [na [b|] ty]; cbn; move=> H.
+    + destruct (inversion_LetIn Σ wfΣ H) as (A & _ & HT & _).
+      apply IHΔ in HT. rewrite /app_context -app_assoc. exact HT.
+    + destruct (inversion_Prod Σ wfΣ H) as (s1 & s2 & _ & HT & _).
+      apply IHΔ in HT. rewrite /app_context -app_assoc. exact HT.
+Qed.
+
+Lemma isType_it_mkProd_or_LetIn_wf_local_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Δ : context} {T : term}, isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) -> wf_localE Σ (Γ,,, Δ).
+Proof.
+  intros Σ wfΣ Γ Δ T (_ & s & Hs & _). exact (hyp_it_mkProd_or_LetIn_wf_local (wfΣ := wfΣ) Hs).
+Qed.
+Definition isType_it_mkProd_or_LetIn_wf_local_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@isType_it_mkProd_or_LetIn_wf_local cf H) in exact T) :=
+  @isType_it_mkProd_or_LetIn_wf_local_proved cf.
+
 Print Assumptions rtf_rel_proved.
 Print Assumptions rtf_const_proved.
 Print Assumptions rtf_cofix_proved.
@@ -203,3 +270,12 @@ Print Assumptions ctf_case_brs_length_proved.
 Print Assumptions typingE_rename_P_proved.
 Print Assumptions All_mfix_wf_proved.
 Print Assumptions isTypeRel_lift_proved.
+Print Assumptions isType_lift_proved.
+Print Assumptions weaken_ctx_proved.
+Print Assumptions weaken_wf_local_proved.
+Print Assumptions weakening_wf_local_proved.
+Print Assumptions isType_weaken_proved.
+Print Assumptions wf_rel_weak_proved.
+Print Assumptions isType_tProd_proved.
+Print Assumptions welltyped_prod_codomain_proved.
+Print Assumptions isType_it_mkProd_or_LetIn_wf_local_proved.
