@@ -52,6 +52,7 @@ theories/PCUICContextSubst.v
 theories/PCUICCasesContexts.v
 theories/PCUICPrimitiveRed.v
 theories/PCUICReduction.v
+theories/PCUICEtaDefs.v
 theories/PCUICArityRed.v
 theories/PCUICRecArgs.v
 theories/PCUICGuardReduce.v
@@ -127,4 +128,68 @@ theories/PCUICWeakeningConfig.v
 
 theories/PCUICCasesHelper.v
 
+
+# Eta-conversion: the specification with eta (cumulSpecE0), typing over it (typingE), closure lemmas
+theories/PCUICCumulativitySpecEta.v
+theories/PCUICCumulativitySpecEtaClosure.v
+theories/PCUICCumulativitySpecEtaClosureInstances.v
+theories/PCUICTypingEta.v
+# Typing infrastructure over typingE: induction principle, environment weakening, closedness
+theories/PCUICTypingEtaInd.v
+theories/Typing/PCUICWeakeningEnvTypEta.v
+theories/Typing/PCUICClosedTypEta.v
+# The normalization premise over typingE (an assumption, as base NormalizationIn is)
+theories/PCUICSNEta.v
+# The stack with the eta frames, and its positions
+theories/PCUICPositionEta.v
+# Eta reduction (eta1): substitution, upto_domain, strengthening of red1
+theories/PCUICEtaConfluence.v
+theories/PCUICEtaReduction.v
+theories/PCUICEtaStrengthening.v
+# Canonical domains (canon), upto_domain_r, C1a, and the strong commutation of red1 and eta1 (C3)
+theories/PCUICEtaCanon.v
+theories/PCUICEtaFInst.v
+theories/PCUICEtaC1aR.v
+theories/PCUICEtaC3BR.v
+# Beta-eta confluence on canonical terms (C4): R_c simulations, confluence, commutation
+theories/PCUICEtaCanonRed.v
+theories/PCUICEtaCanonConfluence.v
+theories/PCUICEtaCanonEta.v
+theories/PCUICEtaCanonCommute.v
+theories/PCUICEtaBetaEta.v
+theories/PCUICEtaScope.v
+theories/PCUICEtaHRModulo.v
+theories/PCUICEtaU8.v
+theories/PCUICEtaHRCommutationA1.v
+theories/PCUICEtaCanonC4.v
+# The eta specification as a join of canonical reductions (I5): bridges, transitivity, both directions
+theories/PCUICEtaFInstGlue.v
+theories/PCUICEtaJoinSpec.v
+theories/PCUICEtaCanonSpec.v
+theories/PCUICEtaFInstSpec.v
+theories/PCUICEtaI5.v
+theories/PCUICEtaFInstEquiv.v
+theories/PCUICEtaFInstTransport.v
+theories/PCUICEtaFInstC1c.v
+theories/PCUICEtaFInstFlip.v
+theories/PCUICEtaFInstEtaC1c.v
+theories/PCUICEtaI5Trans.v
+theories/PCUICEtaI5A2.v
+theories/PCUICEtaI5EtaL.v
+theories/PCUICEtaK6EtaStep.v
+# Well-scoped eta-conversion (ws_cumul_pbE): congruences, substitution, inversions, context conversion
+theories/PCUICWellScopedCumulativityEta.v
+theories/PCUICConversionEtaCongr.v
+theories/PCUICWsCumulEtaSubst.v
+theories/PCUICEtaA6.v
+theories/PCUICEtaA6Ind.v
+theories/PCUICEtaA6More.v
+theories/PCUICContextConversionEta.v
+# Refutations of the eta statements that are false
+theories/PCUICEtaA6Refutations.v
+theories/PCUICEtaC1b.v
+# Satisfying instances of the hypotheses of the lemmas above
+theories/PCUICEtaFracInstances.v
+theories/PCUICEtaA6Instances.v
+theories/PCUICEtaPrimOpInstance.v
 # theories/All.v

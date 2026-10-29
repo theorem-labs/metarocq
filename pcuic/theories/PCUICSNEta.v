@@ -1,0 +1,74 @@
+(* Distributed under the terms of the MIT license. *)
+(** * The normalization premise over [typingE]
+
+  [NormalizationInE] and [NormalizationE] are the copies of [NormalizationIn] and
+  [Normalization] ([PCUICSN.v]) with [welltyped] replaced by [welltypedE] and, in
+  [NormalizationE], [wf_ext] replaced by [wf_extE] ([PCUICTypingEta.v]). They are
+  meant as the normalization premise of a checker for the η relation, in the place
+  where the base checker takes [NormalizationIn].
+
+  **Nothing in this development proves [NormalizationInE], and nothing proves
+  [NormalizationE].** They are assumptions, exactly as base [NormalizationIn] and
+  [Normalization] are: the library states strong normalization as a class and takes
+  it as a hypothesis of every function that needs it, and this file does the same for
+  the η relation. There is no satisfying instance here, and no instance is possible
+  here: [welltypedE Σ Γ t] holds of terms with β-redexes in every environment, so a
+  satisfying instance of [NormalizationInE Σ] for a concrete [Σ] would be a proof of
+  strong normalization of PCUIC, which the library does not have for base
+  [NormalizationIn] either. A reader must treat a theorem with this premise as
+  conditional on it.
+
+  **How they relate to base's.** The only implications proved here run from these
+  classes to base's:
+
+  - [NormalizationInE_NormalizationIn] : for [Σ] with [wf Σ],
+    [NormalizationInE Σ -> NormalizationIn Σ].
+  - [NormalizationE_Normalization] : [NormalizationE -> Normalization], with no
+    premise on the environment ([NormalizationE] quantifies over [wf_extE]
+    environments, [Normalization] over the [wf_ext] ones, and [wf_ext_incl_E] maps
+    the latter into the former).
+
+  Both hold because [welltyped Σ Γ t -> welltypedE Σ Γ t] under [wf Σ]
+  ([typing_incl_E], [PCUICTypingEta.v]): a term typable in the base system is typable
+  in the η system. The reverse implications are not proved here and do not follow
+  from [typing_incl_E]; they would need an argument that the η-typable terms
+  normalize whenever the base-typable ones do.
+
+  Both conclusions are about the SAME reduction [cored Σ Γ] (base reduction). The two
+  pairs differ in different ways:
+  - [NormalizationInE Σ] and [NormalizationIn Σ] are both stated for one [Σ] with no
+    premise on it, and differ only in which terms they are asserted of: the
+    [welltypedE] terms against the [welltyped] ones.
+  - [NormalizationE] and [Normalization] differ in that and also in which
+    environments they cover: every [wf_extE] environment against every [wf_ext] one.
+  So [NormalizationE] asserts normalization of at least the terms [Normalization]
+  covers, in at least the environments it covers. Both inclusions are proved
+  ([typing_incl_E], [wf_ext_incl_E], [PCUICTypingEta.v]); neither is proved strict. *)
+From MetaRocq.Utils Require Import utils.
+From MetaRocq.Common Require Import config.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICReduction
+     PCUICSafeLemmata PCUICSN PCUICTypingEta.
+
+Class NormalizationInE {cf : checker_flags} {no : normalizing_flags} (Σ : global_env_ext) :=
+  normalization_inE :
+    forall Γ t,
+      welltypedE Σ Γ t ->
+      Acc (cored Σ Γ) t.
+Class NormalizationE {cf : checker_flags} {no : normalizing_flags} :=
+  normalizationE : forall Σ, wf_extE Σ -> NormalizationInE Σ.
+#[export] Hint Mode NormalizationInE - - + : typeclass_instances.
+#[export] Typeclasses Opaque NormalizationE.
+
+Lemma NormalizationInE_NormalizationIn {cf : checker_flags} {no : normalizing_flags}
+  (Σ : global_env_ext) (wfΣ : wf Σ) :
+  NormalizationInE Σ -> NormalizationIn Σ.
+Proof.
+  intros h Γ t [A ht]. apply h. econstructor. exact (typing_incl_E wfΣ ht).
+Qed.
+
+Lemma NormalizationE_Normalization {cf : checker_flags} {no : normalizing_flags} :
+  NormalizationE -> Normalization.
+Proof.
+  intros h Σ wfΣ. apply NormalizationInE_NormalizationIn; [exact wfΣ|].
+  apply h. now apply wf_ext_incl_E.
+Qed.
