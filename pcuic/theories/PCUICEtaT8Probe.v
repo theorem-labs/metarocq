@@ -1771,350 +1771,6 @@ Ltac rigid_contra :=
       subst hd; cbn in hrig; discriminate hrig
   end.
 
-Section RigidInv.
-  Context (Σ : global_env) (Γ : context) (c0 : term)
-          (hnl : forall c', red Σ Γ c0 c' -> notLam c').
-
-  Definition rigid_inv_concl hd args :=
-    ∑ h0 args0, red Σ Γ c0 (mkApps h0 args0) × notLam h0 × pe h0 hd × All2 pe args0 args.
-
-  Lemma pe_rigid_inv t u : pe t u ->
-    forall s s' rest rest', All2 pe s s' -> All2 pe rest rest' -> head_unbound #|s'| u ->
-    red Σ Γ c0 (mkApps (subst s 0 t) rest) ->
-    forall hd args, rigid hd -> mkApps (subst s' 0 u) rest' = mkApps hd args ->
-    rigid_inv_concl hd args.
-  Proof.
-    revert t u.
-    apply (pe_ind_all (fun t u =>
-      forall s s' rest rest', All2 pe s s' -> All2 pe rest rest' -> head_unbound #|s'| u ->
-      red Σ Γ c0 (mkApps (subst s 0 t) rest) ->
-      forall hd args, rigid hd -> mkApps (subst s' 0 u) rest' = mkApps hd args ->
-      rigid_inv_concl hd args)).
-    - (* η-expanded head: β, then the body with the argument pushed on [s] *)
-      intros na A b M' hb IH s s' rest rest' hs hr hu hred hd args hrig E.
-      destruct rest as [|r rest0].
-      + exfalso. specialize (hnl _ hred). cbn in hnl. discriminate hnl.
-      + destruct rest' as [|r' rest0']; [depelim hr|].
-        depelim hr.
-        have hs' : All2 pe (r :: s) (r' :: s') by (constructor; assumption).
-        have hu' : head_unbound #|r' :: s'| (tApp (lift0 1 M') (tRel 0)).
-        { rewrite head_unbound_app. now apply head_unbound_lift. }
-        have hred' : red Σ Γ c0 (mkApps (subst (r :: s) 0 b) rest0).
-        { eapply rt_trans; [exact hred|]. apply rt_step.
-          rewrite -subst_cons_beta.
-          change (mkApps (subst s 0 (tLambda na A b)) (r :: rest0))
-            with (mkApps (tApp (tLambda na (subst s 0 A) (subst s 1 b)) r) rest0).
-          apply red1_mkApps_f. apply red_beta. }
-        have e : subst (r' :: s') 0 (tApp (lift0 1 M') (tRel 0)) = tApp (subst s' 0 M') r'.
-        { cbn [subst]. rewrite subst_cons_lift1. cbn. now rewrite lift0_id. }
-        apply (IH (r :: s) (r' :: s') rest0 rest0' hs' ltac:(assumption) hu' hred' hd args hrig).
-        rewrite e. exact E.
-    - (* a variable head: not substituted ([head_unbound]), so not rigid *)
-      intros n s s' rest rest' hs hr hu hred hd args hrig E. exfalso.
-      rewrite /head_unbound /= in hu.
-      have hn : nth_error s' n = None by (apply nth_error_None; apply Nat.leb_le; exact hu).
-      have e : subst s' 0 (tRel n) = tRel (n - #|s'|) by (cbn; rewrite Nat.sub_0_r hn; reflexivity).
-      rewrite e in E.
-      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 _]. subst hd. discriminate hrig.
-    - intros; rigid_contra.
-    - intros; rigid_contra.
-    - (* constant *)
-      intros c uu s s' rest rest' hs hr hu hred hd args hrig E.
-      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
-      exists (tConst c uu), rest. split; [exact hred|split; [reflexivity|split; [apply pe_Const|exact hr]]].
-    - intros; rigid_contra.
-    - (* constructor *)
-      intros ind k uu s s' rest rest' hs hr hu hred hd args hrig E.
-      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
-      exists (tConstruct ind k uu), rest.
-      split; [exact hred|split; [reflexivity|split; [apply pe_Construct|exact hr]]].
-    - intros; rigid_contra.
-    - intros; rigid_contra.
-    - (* application: push the argument on the stack *)
-      intros f f' x x' hf IHf hx IHx s s' rest rest' hs hr hu hred hd args hrig E.
-      rewrite head_unbound_app in hu.
-      exact (IHf s s' (subst s 0 x :: rest) (subst s' 0 x' :: rest') hs
-               (All2_cons (pe_subst _ _ hx s s' 0 hs) hr) hu hred hd args hrig E).
-    - intros; rigid_contra.
-    - intros; rigid_contra.
-    - intros; rigid_contra.
-    - intros; rigid_contra.
-    - (* fixpoint *)
-      intros mfix mfix' idx am s s' rest rest' hs hr hu hred hd args hrig E.
-      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
-      exists (subst s 0 (tFix mfix idx)), rest. split; [exact hred|split; [reflexivity|split; [|exact hr]]].
-      apply pe_subst; [|exact hs]. apply pe_Fix.
-      eapply All2_impl; [exact am|]. intros d d' [[ht _] [[hb _] [hn hrr]]]. exact (ht, (hb, (hn, hrr))).
-    - (* cofixpoint *)
-      intros mfix mfix' idx am s s' rest rest' hs hr hu hred hd args hrig E.
-      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
-      exists (subst s 0 (tCoFix mfix idx)), rest. split; [exact hred|split; [reflexivity|split; [|exact hr]]].
-      apply pe_subst; [|exact hs]. apply pe_CoFix.
-      eapply All2_impl; [exact am|]. intros d d' [[ht _] [[hb _] [hn hrr]]]. exact (ht, (hb, (hn, hrr))).
-    - intros; rigid_contra.
-  Qed.
-
-  (** **The spine inversion the parallel ι / projection / fixpoint / cofixpoint root
-      cases need: CLOSED** (given [hnl]). *)
-  Corollary pe_rigid_spine u hd args :
-    pe c0 u -> rigid hd -> u = mkApps hd args -> rigid_inv_concl hd args.
-  Proof.
-    intros h hrig ->.
-    have hu : head_unbound #|@nil term| (mkApps hd args).
-    { rewrite /head_unbound decompose_app_mkApps; [exact (rigid_notApp _ hrig)|].
-      destruct hd; cbn; reflexivity. }
-    have hred : red Σ Γ c0 (mkApps (subst [] 0 c0) []) by (cbn; rewrite subst_empty; apply rt_refl).
-    exact (pe_rigid_inv _ _ h [] [] [] [] All2_nil All2_nil hu hred hd args hrig
-             ltac:(cbn; now rewrite subst_empty)).
-  Qed.
-
-End RigidInv.
-
-(** ** [pe] on contexts, [expand_lets] and [iota_red] (copied from the [C3R.peta_*]
-    lemmas, with [pe] for [peta]) *)
-
-Definition pe_decl (d d' : context_decl) : Type :=
-  match decl_body d, decl_body d' with
-  | Some b, Some b' => pe b b'
-  | None, None => unit
-  | _, _ => Empty_set
-  end.
-
-Definition pe_ctx := All2 pe_decl.
-
-Lemma pe_ctx_assumptions Γ Δ : pe_ctx Γ Δ -> context_assumptions Γ = context_assumptions Δ.
-Proof.
-  induction 1 as [|d d' Γ Δ Hd H IH]; [reflexivity|].
-  destruct d as [na [b|] ty], d' as [na' [b'|] ty']; cbn in *; try destruct Hd; congruence.
-Qed.
-
-Lemma pe_subst_context ss ss' k ctx :
-  All2 pe ss ss' -> pe_ctx (subst_context ss k ctx) (subst_context ss' k ctx).
-Proof.
-  intros Hs. induction ctx as [|d ctx IH]; [constructor|].
-  rewrite !subst_context_snoc. constructor; [|exact IH].
-  destruct d as [na [b|] ty]; cbn; [|exact tt].
-  apply pe_subst; [apply pe_refl|exact Hs].
-Qed.
-
-Lemma pe_inst_case_context params params' puinst ctx :
-  All2 pe params params' ->
-  pe_ctx (inst_case_context params puinst ctx) (inst_case_context params' puinst ctx).
-Proof. intros H. unfold inst_case_context. apply pe_subst_context. now apply All2_rev. Qed.
-
-Lemma pe_extended_subst Γ Γ' n : pe_ctx Γ Γ' -> All2 pe (extended_subst Γ n) (extended_subst Γ' n).
-Proof.
-  intros H. induction H as [|d d' Γ Γ' Hd H IH] in n |- *; [constructor|].
-  destruct d as [na [b|] ty], d' as [na' [b'|] ty']; cbn in Hd |- *.
-  - constructor; [|apply IH].
-    rewrite (pe_ctx_assumptions _ _ H) !extended_subst_length (All2_length H).
-    apply pe_subst; [exact (pe_lift _ _ _ Hd _)|apply IH].
-  - destruct Hd.
-  - destruct Hd.
-  - constructor; [apply pe_Rel|apply IH].
-Qed.
-
-Lemma pe_expand_lets Γ Γ' t t' : pe_ctx Γ Γ' -> pe t t' -> pe (expand_lets Γ t) (expand_lets Γ' t').
-Proof.
-  intros H Ht. unfold expand_lets, expand_lets_k.
-  rewrite (pe_ctx_assumptions _ _ H) (All2_length H).
-  apply pe_subst; [now apply pe_lift|now apply pe_extended_subst].
-Qed.
-
-Lemma pe_iota_red npar p p' args args' br br' :
-  All2 pe args args' -> All2 pe (pparams p) (pparams p') ->
-  puinst p = puinst p' -> bcontext br = bcontext br' -> pe (bbody br) (bbody br') ->
-  pe (iota_red npar p args br) (iota_red npar p' args' br').
-Proof.
-  intros Ha Hp Hu Hc Hb. unfold iota_red.
-  apply pe_subst; [|now apply All2_rev, All2_skipn].
-  apply pe_expand_lets; [|exact Hb].
-  unfold inst_case_branch_context. rewrite Hu Hc.
-  now apply pe_inst_case_context.
-Qed.
-
-(** *** The premise [hnl] of the ι, projection, cofix-case and cofix-proj roots
-
-  Each of these roots assumes [hnl]: NO REDUCT of the scrutinee (or projection
-  argument) [c0] is a λ. These roots are NOT unconditional. For a typed source,
-  [hnl] follows from two halves, and only the first is proved here:
-  - (i) TYPING ⇒ INVARIANT: [typed_eta_safe] (this file, given the FORECAST-ONLY
-    hypothesis [fix_rarg_inductive]) says that a typed term is [eta_safe], and so
-    has no λ in scrutinee or projection-argument position. This half needs no
-    subject reduction.
-  - (ii) PRESERVATION: every reduct of the typed source is still typed. That is E
-    subject reduction, forecast row T1. It is neither proved nor used in this
-    file. Only with (ii) does (i) apply to each reduct of [c0] and give [hnl].
-
-  Measured time per case group (from commit times): β-head and the [pe] definition,
-  11 min (11:36–11:47Z); [eta1* = pe], 8 min (12:02–12:10Z); rigid-spine inversion,
-  7 min (12:10–12:17Z); ι and projection roots with the [pe_ctx] copies, 7 min
-  (12:18–12:25Z); cofix-case and cofix-proj roots with their helpers, 6 min (12:31–12:37Z).
-
-  Induction principles used by the proved parallel lemmas, one per lemma, with
-  no recursion between lemmas: [pe_beta_head_and_lambda] and [pe_rigid_inv] use
-  induction on the [pe] derivation; [pe_eta1_closed], [eta1_pe] and [pe_to_eta]
-  use induction on the [pe] or [eta1] derivation; [eta_pe_step] uses induction on
-  [clos_refl_trans]. The root lemmas below do no induction of their own: they call
-  [pe_rigid_spine]. *)
-
-(** **The parallel ι root case: CLOSED, under [hnl].** The source is a [pe_Case]
-    whose scrutinee [c0] is a [pe]-source of the constructor application. The
-    [pe_eta] source, an η-expansion of the whole redex, is the generic
-    η-at-the-root case, as in [pp_root]. *)
-Lemma pe_iota_root Σ Γ ci p0 c0 brs0 p c uu args brs br :
-  (forall c', red Σ Γ c0 c' -> notLam c') ->
-  All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) ->
-  pe c0 (mkApps (tConstruct ci.(ci_ind) c uu) args) ->
-  All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs0 brs ->
-  nth_error brs c = Some br -> #|args| = (ci.(ci_npar) + context_assumptions br.(bcontext))%nat ->
-  ∑ w, trans_clos (red1 Σ Γ) (tCase ci p0 c0 brs0) w × pe w (iota_red ci.(ci_npar) p args br).
-Proof.
-  intros hnl hpar hu hc hbrs hnth hlen.
-  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tConstruct ci.(ci_ind) c uu) args hc eq_refl eq_refl)
-    as (h0 & args0 & hred & hnlh & hph & hargs).
-  depelim hph; [cbn in hnlh; discriminate hnlh|].
-  destruct (All2_nth_error_Some_r c br hbrs hnth) as (br0 & hnth0 & (hctx & hbody)).
-  exists (iota_red ci.(ci_npar) p0 args0 br0). split.
-  - eapply rt_trans_clos; [apply red_case_c; exact hred|].
-    apply t_step. eapply red_iota; [exact hnth0|].
-    rewrite (All2_length hargs) hctx. exact hlen.
-  - now apply pe_iota_red.
-Qed.
-
-(** **The parallel projection root case: CLOSED, under [hnl]** (same shape as
-    [pe_iota_root]). *)
-Lemma pe_proj_root Σ Γ pr c0 uu args arg :
-  (forall c', red Σ Γ c0 c' -> notLam c') ->
-  pe c0 (mkApps (tConstruct pr.(proj_ind) 0 uu) args) ->
-  nth_error args (pr.(proj_npars) + pr.(proj_arg)) = Some arg ->
-  ∑ w, trans_clos (red1 Σ Γ) (tProj pr c0) w × pe w arg.
-Proof.
-  intros hnl hc hnth.
-  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tConstruct pr.(proj_ind) 0 uu) args hc eq_refl eq_refl)
-    as (h0 & args0 & hred & hnlh & hph & hargs).
-  depelim hph; [cbn in hnlh; discriminate hnlh|].
-  destruct (All2_nth_error_Some_r _ arg hargs hnth) as (arg0 & hnth0 & hp).
-  exists arg0. split; [|exact hp].
-  eapply rt_trans_clos; [apply red_proj_c; exact hred|].
-  apply t_step. now apply red_proj.
-Qed.
-
-Lemma pe_mkApps f f' args args' : pe f f' -> All2 pe args args' -> pe (mkApps f args) (mkApps f' args').
-Proof.
-  intros Hf Ha. induction Ha in f, f', Hf |- *; cbn; [assumption|].
-  apply IHHa. now apply pe_App.
-Qed.
-
-Definition pe_def (d d' : def term) : Type :=
-  pe d.(dtype) d'.(dtype) × pe d.(dbody) d'.(dbody) × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg).
-
-Lemma pe_fix_subst mfix mfix' : All2 pe_def mfix mfix' -> All2 pe (fix_subst mfix) (fix_subst mfix').
-Proof.
-  intros H. pose proof (All2_length H) as Hl.
-  unfold fix_subst. rewrite Hl.
-  generalize #|mfix'|. intros n. induction n; cbn; constructor; auto.
-  now apply pe_Fix.
-Qed.
-
-Lemma pe_cofix_subst mfix mfix' : All2 pe_def mfix mfix' -> All2 pe (cofix_subst mfix) (cofix_subst mfix').
-Proof.
-  intros H. pose proof (All2_length H) as Hl.
-  unfold cofix_subst. rewrite Hl.
-  generalize #|mfix'|. intros n. induction n; cbn; constructor; auto.
-  now apply pe_CoFix.
-Qed.
-
-(** Unfolding read backwards: the [pe]-source of an unfoldable (co)fixpoint unfolds
-    to a [pe]-source of the unfolding. *)
-Lemma pe_unfold_fix_back mfix0 mfix idx narg fn :
-  All2 pe_def mfix0 mfix -> unfold_fix mfix idx = Some (narg, fn) ->
-  ∑ fn0, unfold_fix mfix0 idx = Some (narg, fn0) × pe fn0 fn.
-Proof.
-  intros ha. unfold unfold_fix.
-  destruct (nth_error mfix idx) as [d|] eqn:hd; [|discriminate].
-  intros [= <- <-].
-  destruct (All2_nth_error_Some_r idx d ha hd) as (d0 & hd0 & (_ & hb & _ & hr)).
-  rewrite hd0. eexists; split; [now rewrite hr|].
-  apply (pe_subst _ _ hb). now apply pe_fix_subst.
-Qed.
-
-Lemma pe_unfold_cofix_back mfix0 mfix idx narg fn :
-  All2 pe_def mfix0 mfix -> unfold_cofix mfix idx = Some (narg, fn) ->
-  ∑ fn0, unfold_cofix mfix0 idx = Some (narg, fn0) × pe fn0 fn.
-Proof.
-  intros ha. unfold unfold_cofix.
-  destruct (nth_error mfix idx) as [d|] eqn:hd; [|discriminate].
-  intros [= <- <-].
-  destruct (All2_nth_error_Some_r idx d ha hd) as (d0 & hd0 & (_ & hb & _ & hr)).
-  rewrite hd0. eexists; split; [now rewrite hr|].
-  apply (pe_subst _ _ hb). now apply pe_cofix_subst.
-Qed.
-
-(** **The parallel cofix-case root case: CLOSED, under [hnl]** (same shape as
-    [pe_iota_root]; the scrutinee's cofixpoint is unfolded through
-    [pe_unfold_cofix_back]). *)
-Lemma pe_cofix_case_root Σ Γ ip p0 c0 brs0 p mfix idx args narg fn brs :
-  (forall c', red Σ Γ c0 c' -> notLam c') ->
-  All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) -> p0.(pcontext) = p.(pcontext) ->
-  pe p0.(preturn) p.(preturn) ->
-  pe c0 (mkApps (tCoFix mfix idx) args) ->
-  All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs0 brs ->
-  unfold_cofix mfix idx = Some (narg, fn) ->
-  ∑ w, trans_clos (red1 Σ Γ) (tCase ip p0 c0 brs0) w × pe w (tCase ip p (mkApps fn args) brs).
-Proof.
-  intros hnl hpar hu hctx hret hc hbrs hunf.
-  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tCoFix mfix idx) args hc eq_refl eq_refl)
-    as (h0 & args0 & hred & hnlh & hph & hargs).
-  depelim hph; [cbn in hnlh; discriminate hnlh|].
-  match goal with H : All2 _ ?m mfix |- _ =>
-    destruct (pe_unfold_cofix_back m mfix idx narg fn H hunf) as (fn0 & hu0 & hfn) end.
-  exists (tCase ip p0 (mkApps fn0 args0) brs0). split.
-  - eapply rt_trans_clos; [apply red_case_c; exact hred|].
-    apply t_step. eapply red_cofix_case. exact hu0.
-  - apply pe_Case; [exact hpar|exact hu|exact hctx|exact hret|apply pe_mkApps; [exact hfn|exact hargs]|exact hbrs].
-Qed.
-
-(** **The parallel cofix-proj root case: CLOSED, under [hnl].** *)
-Lemma pe_cofix_proj_root Σ Γ pr c0 mfix idx args narg fn :
-  (forall c', red Σ Γ c0 c' -> notLam c') ->
-  pe c0 (mkApps (tCoFix mfix idx) args) ->
-  unfold_cofix mfix idx = Some (narg, fn) ->
-  ∑ w, trans_clos (red1 Σ Γ) (tProj pr c0) w × pe w (tProj pr (mkApps fn args)).
-Proof.
-  intros hnl hc hunf.
-  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tCoFix mfix idx) args hc eq_refl eq_refl)
-    as (h0 & args0 & hred & hnlh & hph & hargs).
-  depelim hph; [cbn in hnlh; discriminate hnlh|].
-  match goal with H : All2 _ ?m mfix |- _ =>
-    destruct (pe_unfold_cofix_back m mfix idx narg fn H hunf) as (fn0 & hu0 & hfn) end.
-  exists (tProj pr (mkApps fn0 args0)). split.
-  - eapply rt_trans_clos; [apply red_proj_c; exact hred|].
-    apply t_step. eapply red_cofix_proj. exact hu0.
-  - apply pe_Proj. apply pe_mkApps; [exact hfn|exact hargs].
-Qed.
-
-(** ** Status of the parallel one-step postponement ([pe_postpone_statement])
-
-  Closed above: the β-head case ([pe_postpone_beta], no invariant), the ι,
-  projection, cofix-case and cofix-proj root cases (under [hnl]), and their shared
-  spine inversion ([pe_rigid_spine]).
-
-  Open:
-  - fixpoint and primitive-operation roots: the redex spine may have a PRODUCT type,
-    so [hnl] does not hold of its source, and a source such as
-    [(λz. λy. G z y) x] (with [G = mkApps (tFix mfix idx) args']) β-reduces to the
-    η-expansion [λy. G x y] of the redex, never to the redex spine. The statement still
-    holds there (unfold under the λ, then [pe_eta)), but the reduct's [pe] derivation
-    is not a subderivation of the source's. Route: well-founded induction on [size']
-    of the source (below). Plain [size] does NOT work: [literal_linearity_false] and
-    [plain_size_grows_head_beta];
-  - the generic η-at-the-root case ([pe_eta] source, any [red1] step): [pp_root] with
-    the IH on the body;
-  - the congruence cases, with [red1] transported along [pe_ctx] (above): [red_rel]
-    in a let body unfolds a [pe]-related body ([pe_lift]); case branches use
-    [pe_inst_case_context], fixpoint bodies the [fix_context] analogue. *)
-
 (** ** Occurrence counts and the domain-free size
 
   [occ_gen dom k t] counts the occurrences of [tRel k] in [t] (binder contexts of
@@ -2518,3 +2174,387 @@ Proof.
   intros h. have e := size'_subst1 b r 0. rewrite (pe_eta_body_once _ _ h) in e.
   unfold subst1. cbn [size']. lia.
 Qed.
+
+Lemma size'_mkApps_lt f g l : size' f < size' g -> size' (mkApps f l) < size' (mkApps g l).
+Proof. induction l in f, g |- *; cbn; intros h; [exact h|]. apply IHl. cbn. lia. Qed.
+
+Lemma subst_shift_eta_target s M :
+  subst s 1 (tApp (lift0 1 M) (tRel 0)) = tApp (lift0 1 (subst s 0 M)) (tRel 0).
+Proof. have e := commut_lift_subst_rec M s 1 0 0 (le_n 0). cbn in e |- *. now rewrite e. Qed.
+
+Section RigidInv.
+  Context (Σ : global_env) (Γ : context) (c0 : term).
+
+  Definition rigid_inv_concl hd args :=
+    ∑ h0 args0, red Σ Γ c0 (mkApps h0 args0) × notLam h0 × pe h0 hd × All2 pe args0 args.
+
+  (** The λ alternative: [c0] reduces, by head β steps that never increase [size'],
+      to a λ whose body is a [pe]-source of the η-expansion of the spine. *)
+  Definition rigid_lam_concl hd args :=
+    ∑ na A B, red Σ Γ c0 (tLambda na A B) × (size' (tLambda na A B) <= size' c0)
+      × pe B (tApp (lift0 1 (mkApps hd args)) (tRel 0)).
+
+  (** A [pe]-source of a rigid spine reduces either to a spine with a [pe]-related
+      head and arguments, or to a λ (the η-expansion case). Every reduction step it
+      takes is a head β step at a [pe]-η node, which strictly decreases [size']
+      ([head_beta_size'_decrease]); the invariant [size' … <= size' c0] records it. *)
+  Lemma pe_spine_or_lam t u : pe t u ->
+    forall s s' rest rest', All2 pe s s' -> All2 pe rest rest' -> head_unbound #|s'| u ->
+    red Σ Γ c0 (mkApps (subst s 0 t) rest) -> size' (mkApps (subst s 0 t) rest) <= size' c0 ->
+    forall hd args, rigid hd -> mkApps (subst s' 0 u) rest' = mkApps hd args ->
+    rigid_inv_concl hd args + rigid_lam_concl hd args.
+  Proof.
+    revert t u.
+    apply (pe_ind_all (fun t u =>
+      forall s s' rest rest', All2 pe s s' -> All2 pe rest rest' -> head_unbound #|s'| u ->
+      red Σ Γ c0 (mkApps (subst s 0 t) rest) -> size' (mkApps (subst s 0 t) rest) <= size' c0 ->
+      forall hd args, rigid hd -> mkApps (subst s' 0 u) rest' = mkApps hd args ->
+      rigid_inv_concl hd args + rigid_lam_concl hd args)).
+    - (* η-expanded head *)
+      intros na A b M' hb IH s s' rest rest' hs hr hu hred hsz hd args hrig E.
+      destruct rest as [|r rest0].
+      + (* no argument: the term is the λ itself *)
+        depelim hr. right. exists na, (subst s 0 A), (subst s 1 b).
+        split; [exact hred|split; [exact hsz|]].
+        cbn in E. rewrite -E -subst_shift_eta_target. exact (pe_subst _ _ hb s s' 1 hs).
+      + (* an argument: one β step, then the body with the argument pushed on [s] *)
+        destruct rest' as [|r' rest0']; [depelim hr|].
+        depelim hr.
+        have hs' : All2 pe (r :: s) (r' :: s') by (constructor; assumption).
+        have hu' : head_unbound #|r' :: s'| (tApp (lift0 1 M') (tRel 0)).
+        { rewrite head_unbound_app. now apply head_unbound_lift. }
+        have hred' : red Σ Γ c0 (mkApps (subst (r :: s) 0 b) rest0).
+        { eapply rt_trans; [exact hred|]. apply rt_step.
+          rewrite -subst_cons_beta.
+          change (mkApps (subst s 0 (tLambda na A b)) (r :: rest0))
+            with (mkApps (tApp (tLambda na (subst s 0 A) (subst s 1 b)) r) rest0).
+          apply red1_mkApps_f. apply red_beta. }
+        have hlt : size' (mkApps (subst (r :: s) 0 b) rest0)
+                   < size' (mkApps (subst s 0 (tLambda na A b)) (r :: rest0)).
+        { rewrite -subst_cons_beta.
+          change (mkApps (subst s 0 (tLambda na A b)) (r :: rest0))
+            with (mkApps (tApp (tLambda na (subst s 0 A) (subst s 1 b)) r) rest0).
+          apply size'_mkApps_lt. apply (head_beta_size'_decrease _ _ _ (subst s' 0 M')).
+          rewrite -subst_shift_eta_target. exact (pe_subst _ _ hb s s' 1 hs). }
+        have e : subst (r' :: s') 0 (tApp (lift0 1 M') (tRel 0)) = tApp (subst s' 0 M') r'.
+        { cbn [subst]. rewrite subst_cons_lift1. cbn. now rewrite lift0_id. }
+        apply (IH (r :: s) (r' :: s') rest0 rest0' hs' ltac:(assumption) hu' hred' ltac:(lia) hd args hrig).
+        rewrite e. exact E.
+    - (* a variable head: not substituted ([head_unbound]), so not rigid *)
+      intros n s s' rest rest' hs hr hu hred hsz hd args hrig E. exfalso.
+      rewrite /head_unbound /= in hu.
+      have hn : nth_error s' n = None by (apply nth_error_None; apply Nat.leb_le; exact hu).
+      have e : subst s' 0 (tRel n) = tRel (n - #|s'|) by (cbn; rewrite Nat.sub_0_r hn; reflexivity).
+      rewrite e in E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 _]. subst hd. discriminate hrig.
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - (* constant *)
+      intros c uu s s' rest rest' hs hr hu hred hsz hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      left. exists (tConst c uu), rest.
+      split; [exact hred|split; [reflexivity|split; [apply pe_Const|exact hr]]].
+    - intros; rigid_contra.
+    - (* constructor *)
+      intros ind k uu s s' rest rest' hs hr hu hred hsz hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      left. exists (tConstruct ind k uu), rest.
+      split; [exact hred|split; [reflexivity|split; [apply pe_Construct|exact hr]]].
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - (* application: push the argument on the stack *)
+      intros f f' x x' hf IHf hx IHx s s' rest rest' hs hr hu hred hsz hd args hrig E.
+      rewrite head_unbound_app in hu.
+      exact (IHf s s' (subst s 0 x :: rest) (subst s' 0 x' :: rest') hs
+               (All2_cons (pe_subst _ _ hx s s' 0 hs) hr) hu hred hsz hd args hrig E).
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - (* fixpoint *)
+      intros mfix mfix' idx am s s' rest rest' hs hr hu hred hsz hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      left. exists (subst s 0 (tFix mfix idx)), rest.
+      split; [exact hred|split; [reflexivity|split; [|exact hr]]].
+      apply pe_subst; [|exact hs]. apply pe_Fix.
+      eapply All2_impl; [exact am|]. intros d d' [[ht _] [[hb _] [hn hrr]]]. exact (ht, (hb, (hn, hrr))).
+    - (* cofixpoint *)
+      intros mfix mfix' idx am s s' rest rest' hs hr hu hred hsz hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      left. exists (subst s 0 (tCoFix mfix idx)), rest.
+      split; [exact hred|split; [reflexivity|split; [|exact hr]]].
+      apply pe_subst; [|exact hs]. apply pe_CoFix.
+      eapply All2_impl; [exact am|]. intros d d' [[ht _] [[hb _] [hn hrr]]]. exact (ht, (hb, (hn, hrr))).
+    - intros; rigid_contra.
+  Qed.
+
+  Lemma pe_spine_or_lam_top u hd args :
+    pe c0 u -> rigid hd -> u = mkApps hd args -> rigid_inv_concl hd args + rigid_lam_concl hd args.
+  Proof.
+    intros h hrig ->.
+    have hu : head_unbound #|@nil term| (mkApps hd args).
+    { rewrite /head_unbound decompose_app_mkApps; [exact (rigid_notApp _ hrig)|].
+      destruct hd; cbn; reflexivity. }
+    have hred : red Σ Γ c0 (mkApps (subst [] 0 c0) []) by (cbn; rewrite subst_empty; apply rt_refl).
+    have hsz : size' (mkApps (subst [] 0 c0) []) <= size' c0 by (cbn; rewrite subst_empty; lia).
+    exact (pe_spine_or_lam _ _ h [] [] [] [] All2_nil All2_nil hu hred hsz hd args hrig
+             ltac:(cbn; now rewrite subst_empty)).
+  Qed.
+
+  (** **The spine inversion the parallel ι / projection / cofixpoint root cases
+      need: CLOSED** (given [hnl], which excludes the λ alternative). *)
+  Corollary pe_rigid_spine (hnl : forall c', red Σ Γ c0 c' -> notLam c') u hd args :
+    pe c0 u -> rigid hd -> u = mkApps hd args -> rigid_inv_concl hd args.
+  Proof.
+    intros h hrig hE.
+    destruct (pe_spine_or_lam_top u hd args h hrig hE) as [hs|(na & A & B & hr & _ & _)]; [exact hs|].
+    exfalso. specialize (hnl _ hr). cbn in hnl. discriminate hnl.
+  Qed.
+
+End RigidInv.
+
+(** ** [pe] on contexts, [expand_lets] and [iota_red] (copied from the [C3R.peta_*]
+    lemmas, with [pe] for [peta]) *)
+
+Definition pe_decl (d d' : context_decl) : Type :=
+  match decl_body d, decl_body d' with
+  | Some b, Some b' => pe b b'
+  | None, None => unit
+  | _, _ => Empty_set
+  end.
+
+Definition pe_ctx := All2 pe_decl.
+
+Lemma pe_ctx_assumptions Γ Δ : pe_ctx Γ Δ -> context_assumptions Γ = context_assumptions Δ.
+Proof.
+  induction 1 as [|d d' Γ Δ Hd H IH]; [reflexivity|].
+  destruct d as [na [b|] ty], d' as [na' [b'|] ty']; cbn in *; try destruct Hd; congruence.
+Qed.
+
+Lemma pe_subst_context ss ss' k ctx :
+  All2 pe ss ss' -> pe_ctx (subst_context ss k ctx) (subst_context ss' k ctx).
+Proof.
+  intros Hs. induction ctx as [|d ctx IH]; [constructor|].
+  rewrite !subst_context_snoc. constructor; [|exact IH].
+  destruct d as [na [b|] ty]; cbn; [|exact tt].
+  apply pe_subst; [apply pe_refl|exact Hs].
+Qed.
+
+Lemma pe_inst_case_context params params' puinst ctx :
+  All2 pe params params' ->
+  pe_ctx (inst_case_context params puinst ctx) (inst_case_context params' puinst ctx).
+Proof. intros H. unfold inst_case_context. apply pe_subst_context. now apply All2_rev. Qed.
+
+Lemma pe_extended_subst Γ Γ' n : pe_ctx Γ Γ' -> All2 pe (extended_subst Γ n) (extended_subst Γ' n).
+Proof.
+  intros H. induction H as [|d d' Γ Γ' Hd H IH] in n |- *; [constructor|].
+  destruct d as [na [b|] ty], d' as [na' [b'|] ty']; cbn in Hd |- *.
+  - constructor; [|apply IH].
+    rewrite (pe_ctx_assumptions _ _ H) !extended_subst_length (All2_length H).
+    apply pe_subst; [exact (pe_lift _ _ _ Hd _)|apply IH].
+  - destruct Hd.
+  - destruct Hd.
+  - constructor; [apply pe_Rel|apply IH].
+Qed.
+
+Lemma pe_expand_lets Γ Γ' t t' : pe_ctx Γ Γ' -> pe t t' -> pe (expand_lets Γ t) (expand_lets Γ' t').
+Proof.
+  intros H Ht. unfold expand_lets, expand_lets_k.
+  rewrite (pe_ctx_assumptions _ _ H) (All2_length H).
+  apply pe_subst; [now apply pe_lift|now apply pe_extended_subst].
+Qed.
+
+Lemma pe_iota_red npar p p' args args' br br' :
+  All2 pe args args' -> All2 pe (pparams p) (pparams p') ->
+  puinst p = puinst p' -> bcontext br = bcontext br' -> pe (bbody br) (bbody br') ->
+  pe (iota_red npar p args br) (iota_red npar p' args' br').
+Proof.
+  intros Ha Hp Hu Hc Hb. unfold iota_red.
+  apply pe_subst; [|now apply All2_rev, All2_skipn].
+  apply pe_expand_lets; [|exact Hb].
+  unfold inst_case_branch_context. rewrite Hu Hc.
+  now apply pe_inst_case_context.
+Qed.
+
+(** *** The premise [hnl] of the ι, projection, cofix-case and cofix-proj roots
+
+  Each of these roots assumes [hnl]: NO REDUCT of the scrutinee (or projection
+  argument) [c0] is a λ. These roots are NOT unconditional. For a typed source,
+  [hnl] follows from two halves, and only the first is proved here:
+  - (i) TYPING ⇒ INVARIANT: [typed_eta_safe] (this file, given the FORECAST-ONLY
+    hypothesis [fix_rarg_inductive]) says that a typed term is [eta_safe], and so
+    has no λ in scrutinee or projection-argument position. This half needs no
+    subject reduction.
+  - (ii) PRESERVATION: every reduct of the typed source is still typed. That is E
+    subject reduction, forecast row T1. It is neither proved nor used in this
+    file. Only with (ii) does (i) apply to each reduct of [c0] and give [hnl].
+
+  Measured time per case group (from commit times): β-head and the [pe] definition,
+  11 min (11:36–11:47Z); [eta1* = pe], 8 min (12:02–12:10Z); rigid-spine inversion,
+  7 min (12:10–12:17Z); ι and projection roots with the [pe_ctx] copies, 7 min
+  (12:18–12:25Z); cofix-case and cofix-proj roots with their helpers, 6 min (12:31–12:37Z).
+
+  Induction principles used by the proved parallel lemmas, one per lemma, with
+  no recursion between lemmas: [pe_beta_head_and_lambda] and [pe_rigid_inv] use
+  induction on the [pe] derivation; [pe_eta1_closed], [eta1_pe] and [pe_to_eta]
+  use induction on the [pe] or [eta1] derivation; [eta_pe_step] uses induction on
+  [clos_refl_trans]. The root lemmas below do no induction of their own: they call
+  [pe_rigid_spine]. *)
+
+(** **The parallel ι root case: CLOSED, under [hnl].** The source is a [pe_Case]
+    whose scrutinee [c0] is a [pe]-source of the constructor application. The
+    [pe_eta] source, an η-expansion of the whole redex, is the generic
+    η-at-the-root case, as in [pp_root]. *)
+Lemma pe_iota_root Σ Γ ci p0 c0 brs0 p c uu args brs br :
+  (forall c', red Σ Γ c0 c' -> notLam c') ->
+  All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) ->
+  pe c0 (mkApps (tConstruct ci.(ci_ind) c uu) args) ->
+  All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs0 brs ->
+  nth_error brs c = Some br -> #|args| = (ci.(ci_npar) + context_assumptions br.(bcontext))%nat ->
+  ∑ w, trans_clos (red1 Σ Γ) (tCase ci p0 c0 brs0) w × pe w (iota_red ci.(ci_npar) p args br).
+Proof.
+  intros hnl hpar hu hc hbrs hnth hlen.
+  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tConstruct ci.(ci_ind) c uu) args hc eq_refl eq_refl)
+    as (h0 & args0 & hred & hnlh & hph & hargs).
+  depelim hph; [cbn in hnlh; discriminate hnlh|].
+  destruct (All2_nth_error_Some_r c br hbrs hnth) as (br0 & hnth0 & (hctx & hbody)).
+  exists (iota_red ci.(ci_npar) p0 args0 br0). split.
+  - eapply rt_trans_clos; [apply red_case_c; exact hred|].
+    apply t_step. eapply red_iota; [exact hnth0|].
+    rewrite (All2_length hargs) hctx. exact hlen.
+  - now apply pe_iota_red.
+Qed.
+
+(** **The parallel projection root case: CLOSED, under [hnl]** (same shape as
+    [pe_iota_root]). *)
+Lemma pe_proj_root Σ Γ pr c0 uu args arg :
+  (forall c', red Σ Γ c0 c' -> notLam c') ->
+  pe c0 (mkApps (tConstruct pr.(proj_ind) 0 uu) args) ->
+  nth_error args (pr.(proj_npars) + pr.(proj_arg)) = Some arg ->
+  ∑ w, trans_clos (red1 Σ Γ) (tProj pr c0) w × pe w arg.
+Proof.
+  intros hnl hc hnth.
+  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tConstruct pr.(proj_ind) 0 uu) args hc eq_refl eq_refl)
+    as (h0 & args0 & hred & hnlh & hph & hargs).
+  depelim hph; [cbn in hnlh; discriminate hnlh|].
+  destruct (All2_nth_error_Some_r _ arg hargs hnth) as (arg0 & hnth0 & hp).
+  exists arg0. split; [|exact hp].
+  eapply rt_trans_clos; [apply red_proj_c; exact hred|].
+  apply t_step. now apply red_proj.
+Qed.
+
+Lemma pe_mkApps f f' args args' : pe f f' -> All2 pe args args' -> pe (mkApps f args) (mkApps f' args').
+Proof.
+  intros Hf Ha. induction Ha in f, f', Hf |- *; cbn; [assumption|].
+  apply IHHa. now apply pe_App.
+Qed.
+
+Definition pe_def (d d' : def term) : Type :=
+  pe d.(dtype) d'.(dtype) × pe d.(dbody) d'.(dbody) × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg).
+
+Lemma pe_fix_subst mfix mfix' : All2 pe_def mfix mfix' -> All2 pe (fix_subst mfix) (fix_subst mfix').
+Proof.
+  intros H. pose proof (All2_length H) as Hl.
+  unfold fix_subst. rewrite Hl.
+  generalize #|mfix'|. intros n. induction n; cbn; constructor; auto.
+  now apply pe_Fix.
+Qed.
+
+Lemma pe_cofix_subst mfix mfix' : All2 pe_def mfix mfix' -> All2 pe (cofix_subst mfix) (cofix_subst mfix').
+Proof.
+  intros H. pose proof (All2_length H) as Hl.
+  unfold cofix_subst. rewrite Hl.
+  generalize #|mfix'|. intros n. induction n; cbn; constructor; auto.
+  now apply pe_CoFix.
+Qed.
+
+(** Unfolding read backwards: the [pe]-source of an unfoldable (co)fixpoint unfolds
+    to a [pe]-source of the unfolding. *)
+Lemma pe_unfold_fix_back mfix0 mfix idx narg fn :
+  All2 pe_def mfix0 mfix -> unfold_fix mfix idx = Some (narg, fn) ->
+  ∑ fn0, unfold_fix mfix0 idx = Some (narg, fn0) × pe fn0 fn.
+Proof.
+  intros ha. unfold unfold_fix.
+  destruct (nth_error mfix idx) as [d|] eqn:hd; [|discriminate].
+  intros [= <- <-].
+  destruct (All2_nth_error_Some_r idx d ha hd) as (d0 & hd0 & (_ & hb & _ & hr)).
+  rewrite hd0. eexists; split; [now rewrite hr|].
+  apply (pe_subst _ _ hb). now apply pe_fix_subst.
+Qed.
+
+Lemma pe_unfold_cofix_back mfix0 mfix idx narg fn :
+  All2 pe_def mfix0 mfix -> unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ fn0, unfold_cofix mfix0 idx = Some (narg, fn0) × pe fn0 fn.
+Proof.
+  intros ha. unfold unfold_cofix.
+  destruct (nth_error mfix idx) as [d|] eqn:hd; [|discriminate].
+  intros [= <- <-].
+  destruct (All2_nth_error_Some_r idx d ha hd) as (d0 & hd0 & (_ & hb & _ & hr)).
+  rewrite hd0. eexists; split; [now rewrite hr|].
+  apply (pe_subst _ _ hb). now apply pe_cofix_subst.
+Qed.
+
+(** **The parallel cofix-case root case: CLOSED, under [hnl]** (same shape as
+    [pe_iota_root]; the scrutinee's cofixpoint is unfolded through
+    [pe_unfold_cofix_back]). *)
+Lemma pe_cofix_case_root Σ Γ ip p0 c0 brs0 p mfix idx args narg fn brs :
+  (forall c', red Σ Γ c0 c' -> notLam c') ->
+  All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) -> p0.(pcontext) = p.(pcontext) ->
+  pe p0.(preturn) p.(preturn) ->
+  pe c0 (mkApps (tCoFix mfix idx) args) ->
+  All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs0 brs ->
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ w, trans_clos (red1 Σ Γ) (tCase ip p0 c0 brs0) w × pe w (tCase ip p (mkApps fn args) brs).
+Proof.
+  intros hnl hpar hu hctx hret hc hbrs hunf.
+  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tCoFix mfix idx) args hc eq_refl eq_refl)
+    as (h0 & args0 & hred & hnlh & hph & hargs).
+  depelim hph; [cbn in hnlh; discriminate hnlh|].
+  match goal with H : All2 _ ?m mfix |- _ =>
+    destruct (pe_unfold_cofix_back m mfix idx narg fn H hunf) as (fn0 & hu0 & hfn) end.
+  exists (tCase ip p0 (mkApps fn0 args0) brs0). split.
+  - eapply rt_trans_clos; [apply red_case_c; exact hred|].
+    apply t_step. eapply red_cofix_case. exact hu0.
+  - apply pe_Case; [exact hpar|exact hu|exact hctx|exact hret|apply pe_mkApps; [exact hfn|exact hargs]|exact hbrs].
+Qed.
+
+(** **The parallel cofix-proj root case: CLOSED, under [hnl].** *)
+Lemma pe_cofix_proj_root Σ Γ pr c0 mfix idx args narg fn :
+  (forall c', red Σ Γ c0 c' -> notLam c') ->
+  pe c0 (mkApps (tCoFix mfix idx) args) ->
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ w, trans_clos (red1 Σ Γ) (tProj pr c0) w × pe w (tProj pr (mkApps fn args)).
+Proof.
+  intros hnl hc hunf.
+  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tCoFix mfix idx) args hc eq_refl eq_refl)
+    as (h0 & args0 & hred & hnlh & hph & hargs).
+  depelim hph; [cbn in hnlh; discriminate hnlh|].
+  match goal with H : All2 _ ?m mfix |- _ =>
+    destruct (pe_unfold_cofix_back m mfix idx narg fn H hunf) as (fn0 & hu0 & hfn) end.
+  exists (tProj pr (mkApps fn0 args0)). split.
+  - eapply rt_trans_clos; [apply red_proj_c; exact hred|].
+    apply t_step. eapply red_cofix_proj. exact hu0.
+  - apply pe_Proj. apply pe_mkApps; [exact hfn|exact hargs].
+Qed.
+
+(** ** Status of the parallel one-step postponement ([pe_postpone_statement])
+
+  Closed above: the β-head case ([pe_postpone_beta], no invariant), the ι,
+  projection, cofix-case and cofix-proj root cases (under [hnl]), and their shared
+  spine inversion ([pe_rigid_spine]).
+
+  Open:
+  - fixpoint and primitive-operation roots: the redex spine may have a PRODUCT type,
+    so [hnl] does not hold of its source, and a source such as
+    [(λz. λy. G z y) x] (with [G = mkApps (tFix mfix idx) args']) β-reduces to the
+    η-expansion [λy. G x y] of the redex, never to the redex spine. The statement still
+    holds there (unfold under the λ, then [pe_eta)), but the reduct's [pe] derivation
+    is not a subderivation of the source's. Route: well-founded induction on [size']
+    of the source (below). Plain [size] does NOT work: [literal_linearity_false] and
+    [plain_size_grows_head_beta];
+  - the generic η-at-the-root case ([pe_eta] source, any [red1] step): [pp_root] with
+    the IH on the body;
+  - the congruence cases, with [red1] transported along [pe_ctx] (above): [red_rel]
+    in a let body unfolds a [pe]-related body ([pe_lift]); case branches use
+    [pe_inst_case_context], fixpoint bodies the [fix_context] analogue. *)
+
