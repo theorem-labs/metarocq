@@ -8,18 +8,35 @@
   for the η typing by [iv_wfE]). The context is
   [Γk := [y : k g; k : (Prop → Prop) → Prop; g : Prop → Prop]], in which [y : k g] is retyped at
   [k (λx:Prop. g x)] by one η step ([c16_y_eta]); [Γr := Γk ,, r : R (k g)], in which [r] is
-  retyped at [R (k (λx:Prop. g x))] by the same step under [R] ([c16_r_eta]); and
-  [Γz := Γk ,, z := y : k (λx:Prop. g x)], whose let-in body is typed through the η step.
-  The instances whose hypotheses carry a typing judgement, a substitution or a context over these
-  retypings go through the η step: [wf_subsletE], [wf_subslet_domE], [isType_it_mkProd_or_LetIn_substE],
+  retyped at [R (k (λx:Prop. g x))] by the same step under [R] ([c16_r_eta]);
+  [Γz := Γk ,, z := y : k (λx:Prop. g x)], whose let-in body is typed through the η step; and
+  [Γh := Γk ,, h : Π x : k (λx:Prop. g x). Prop], in which [h y : Prop] applies [h] to [y] at
+  [k (λx:Prop. g x)], so that its derivation contains the η step ([c16_hy_typed]).
+  The instances whose hypotheses carry a typing judgement, a substitution, a spine or a context
+  over these retypings go through the η step: [on_inductive_instE],
+  [declared_inductive_valid_typeE], [declared_inductive_type_closed_redE],
+  [declared_inductive_type_ws_cumulE], [isType_ind_arity_instE], [type_Ind_arity_formE] and
+  [wf_ind_predicateE] (their context premise is [Γz]); [isType_introE], [typing_spine_ind_typeE],
+  [typing_spine_ind_type_invE], [isType_mkApps_IndE], [wf_subsletE], [wf_subslet_domE],
+  [isType_it_mkProd_or_LetIn_invE], [isType_it_mkProd_or_LetIn_substE],
   [subslet_extended_substE], [context_subst_to_extended_list_kE], [spine_subst_smash_invE],
-  [isType_it_mkProd_or_LetIn_smashE], [projection_subsletE], [wf_local_expand_letsE],
-  [typing_expand_lets_genE], [map_subst_let_expand_k_to_extended_list_liftE],
-  [map_subst_let_expand_to_extended_listE], [subslet_smash_contextE], [spine_subst_expand_letsE],
-  [red_it_mkProd_or_LetIn_to_smashE] and [arity_spine_case_predicateE].
-  The instances marked WEAK show satisfiability only; the reason is next to each. The comparison
-  of [type_local_ctx_cumE] is between two sorts ([Prop ≤ Type]), where no η step can occur
-  (marked NO η). [conv_ctx_reflE] has no premise; it is applied to [Γk]. *)
+  [type_local_ctx_cumE], [type_local_ctx_wfE], [isType_it_mkProd_or_LetInE],
+  [isType_it_mkProd_or_LetIn_smashE], [typing_spine_to_extended_listE],
+  [invert_type_mkApps_indE], [isType_mkApps_Ind_invE], [isType_mkApps_Ind_inv'E],
+  [projection_subsletE], [wf_local_expand_letsE], [typing_expand_lets_genE],
+  [map_subst_let_expand_k_to_extended_list_liftE], [map_subst_let_expand_to_extended_listE],
+  [subslet_smash_contextE], [spine_subst_expand_letsE], [isType_case_predicateE] and
+  [arity_spine_case_predicateE].
+  A mark NOT BUILT names a part of an instance that a cheap witness does not reach, the missing
+  witness and its cost. [R] is monomorphic, so its only universe instance is [[]] and
+  [subst_instance []] is the identity: a nonempty instance needs a universe-polymorphic
+  inductive (a new inductive, a new environment and its [wfE] proof). Every instance at [[]] of
+  a lemma with a [consistent_instance_ext] premise is marked NOT BUILT for that part; the
+  instances so marked without an η step have only declarations and that premise. A mark
+  IMPOSSIBLE names a part that cannot contain an η step by the head and the rule set: the
+  comparison of [type_local_ctx_cumE] is between two sorts ([Prop ≤ Type]), and the premises of
+  [red_it_mkProd_or_LetIn_to_smashE] are booleans. [conv_ctx_reflE] has no premise; it is
+  applied to [Γk]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -201,6 +218,48 @@ Qed.
 Lemma c16_isT_Px : isTypeE iv_Σ iv_Γk c16_Px.
 Proof. exact (has_sort_isTypeE _ c16_Px_typed). Qed.
 
+(** *** [Γh := Γk ,, h : Π x : k (λx:Prop. g x). Prop] and [h y : Prop] *)
+
+Definition c16_Γh : context := iv_Γk ,, vass si_na c16_Px.
+
+Lemma c16_wf_Γh : wf_localE iv_Σ c16_Γh.
+Proof. exact (iv_wf_vass iv_Σ iv_Γk si_na c16_Px _ c16_wf_Γk c16_Px_typed eq_refl). Qed.
+
+(** [h y]: [y : k g] is used at [k (λx:Prop. g x)]. *)
+Definition c16_hy : term := tApp (tRel 0) (tRel 1).
+
+Lemma c16_y_eta_h : iv_Σ ;;; c16_Γh |-E tRel 1 : lift0 1 iv_keta.
+Proof. exact (weakeningE iv_Σ iv_Γk [vass si_na c16_Px] (tRel 0) iv_keta iv_wfE c16_wf_Γh c16_y_eta). Qed.
+
+Lemma c16_Px_h : iv_Σ ;;; c16_Γh |-E tProd si_na (lift0 1 iv_keta) (tSort sProp) :
+  tSort (Sort.sort_of_product sProp (Sort.super sProp)).
+Proof. exact (weakeningE iv_Σ iv_Γk [vass si_na c16_Px] c16_Px _ iv_wfE c16_wf_Γh c16_Px_typed). Qed.
+
+Lemma c16_h_typed : iv_Σ ;;; c16_Γh |-E tRel 0 : tProd si_na (lift0 1 iv_keta) (tSort sProp).
+Proof. exact (typeE_Rel _ _ 0 (vass si_na c16_Px) c16_wf_Γh eq_refl). Qed.
+
+(** [h y : Prop]; the η step is inside this derivation (through [c16_y_eta]). *)
+Lemma c16_hy_typed : iv_Σ ;;; c16_Γh |-E c16_hy : tSort sProp.
+Proof.
+  exact (typeE_App _ _ (tRel 0) si_na (lift0 1 iv_keta) (tSort sProp) _ (tRel 1) c16_Px_h c16_h_typed c16_y_eta_h).
+Qed.
+
+(** [w : h y] as a telescope of sort [Prop] over [Γh]. *)
+Definition c16_Δhy : context := [vass si_na c16_hy].
+
+Lemma c16_tlc_hy : type_local_ctx (lift_typing typingE) iv_Σ c16_Γh c16_Δhy sProp.
+Proof.
+  cbn. split; [cbn; trivial|]. exact (iv_vass_s iv_Σ c16_Γh si_na c16_hy sProp c16_hy_typed eq_refl).
+Qed.
+
+(** [Π w : h y. Prop] over [Γh]. *)
+Lemma c16_isT_Phy : isTypeE iv_Σ c16_Γh (it_mkProd_or_LetIn c16_Δhy (tSort sProp)).
+Proof.
+  exact (has_sort_isTypeE _ (typeE_Prod _ _ si_na c16_hy (tSort sProp) sProp (Sort.super sProp)
+           (iv_vass_s iv_Σ c16_Γh si_na c16_hy sProp c16_hy_typed eq_refl)
+           (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ c16_Γh si_na c16_hy sProp c16_wf_Γh c16_hy_typed eq_refl)))).
+Qed.
+
 (** [let z := y : k (λx:Prop. g x) in Prop]. *)
 Definition c16_Pz : term := it_mkProd_or_LetIn c16_Δz (tSort sProp).
 
@@ -226,11 +285,13 @@ Qed.
 (** [conv_ctx_reflE] has no premise; applied to [Γk]. *)
 Definition conv_ctx_reflE_inst := conv_ctx_reflE iv_Σ iv_Γk.
 
-(* WEAK: proves satisfiability only; [R] is monomorphic, so the instance is empty and
-   [subst_instance []] is the identity. *)
+(* NOT BUILT (the universe part): the premises are a declaration and [consistent_instance_ext];
+   [R] is monomorphic, so the only instance is [[]] and [subst_instance []] is the identity. A
+   nonempty instance needs a universe-polymorphic inductive (a new inductive, a new environment
+   and its [wfE] proof). *)
 Definition wf_arities_context_instE_inst :=
   @wf_arities_context_instE _ iv_Σ iv_wfE iv_kn iv_mdecl [] (proj1 iv_declared_inductive) c16_cu.
-(* WEAK: as above, [R] is monomorphic. *)
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition instantiate_indsE_inst :=
   @instantiate_indsE _ iv_Σ iv_wfE [] iv_kn iv_mdecl (proj1 iv_declared_inductive) c16_cu.
 
@@ -238,8 +299,10 @@ Definition declared_inductive_arity_isTypeRelE_inst :=
   @declared_inductive_arity_isTypeRelE _ iv_env iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
 Definition on_minductive_wf_params_indicesE_inst :=
   @on_minductive_wf_params_indicesE _ iv_env iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
-(* WEAK: proves satisfiability only; the declared type of [R] is its arity, so the reduction
-   has no step. *)
+(* NOT BUILT (the reduction step): the declared type of [R] is its arity, so the reduction has
+   no step. A step needs an inductive whose declared arity is a redex, since the declaration asks
+   only that its declared arity reduce to the built one (a new inductive, a new environment and
+   its [wfE] proof). *)
 Definition declared_inductive_typeE_inst :=
   @declared_inductive_typeE _ iv_env iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
 
@@ -249,77 +312,80 @@ Proof. apply red1_red. unfold iv_id. apply red_beta. Qed.
 Definition closed_red_from_emptyE_inst :=
   @closed_red_from_emptyE _ iv_Σ iv_wfE iv_Γk (tApp iv_id iv_False) iv_False c16_closed_Γk eq_refl c16_red_beta.
 
-Definition isType_introE_inst := @isType_introE _ iv_Σ iv_Γk iv_keta sProp c16_keta_typed.
+(** [h y : Prop], typed through the η step. *)
+Definition isType_introE_inst := @isType_introE _ iv_Σ c16_Γh c16_hy sProp c16_hy_typed.
 
-(* WEAK: [R] is monomorphic (empty instance). *)
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition on_minductive_wf_params_indices_instE_inst :=
   @on_minductive_wf_params_indices_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive [] c16_cu.
-(* WEAK: [R] is monomorphic (empty instance). *)
-Definition on_inductive_instE_inst :=
-  @on_inductive_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] c16_wf_Γk c16_cu.
-(* WEAK: [R] is monomorphic (empty instance). *)
-Definition declared_inductive_valid_typeE_inst :=
-  @declared_inductive_valid_typeE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] c16_wf_Γk c16_cu.
-(* WEAK: the declared type of [R] is its arity (no reduction step) and [R] is monomorphic. *)
-Definition declared_inductive_type_closed_redE_inst :=
-  @declared_inductive_type_closed_redE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] c16_wf_Γk.
-(* WEAK: the declared type of [R] is its arity (the conversion is reflexive) and [R] is
-   monomorphic. *)
-Definition declared_inductive_type_ws_cumulE_inst :=
-  @declared_inductive_type_ws_cumulE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] c16_wf_Γk.
-(* WEAK: [R] is monomorphic (empty instance). *)
-Definition isType_ind_arity_instE_inst :=
-  @isType_ind_arity_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] c16_wf_Γk c16_cu.
 
-(** The spine [Π A:Prop. Prop] applied to [k (λx:Prop. g x)]. *)
-Lemma c16_isT_arity : isTypeE iv_Σ iv_Γk si_arity.
-Proof. exact (has_sort_isTypeE _ (iv_PP_typed iv_Σ iv_Γk c16_wf_Γk)). Qed.
-Lemma c16_isT_Prop : isTypeE iv_Σ iv_Γk (tSort sProp).
-Proof. exact (has_sort_isTypeE _ (iv_P_typed iv_Σ iv_Γk c16_wf_Γk)). Qed.
-Lemma c16_sp_arity : typing_spineE iv_Σ iv_Γk si_arity [iv_keta] (tSort sProp).
+(** The six lemmas below and [wf_ind_predicateE] take the context [Γz], whose let-in body is
+    typed through the η step. *)
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+Definition on_inductive_instE_inst :=
+  @on_inductive_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz c16_cu.
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+Definition declared_inductive_valid_typeE_inst :=
+  @declared_inductive_valid_typeE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz c16_cu.
+(* NOT BUILT (the reduction step and the universe part): as [declared_inductive_typeE_inst]
+   (an inductive whose declared arity is a redex) and as [wf_arities_context_instE_inst] (a
+   universe-polymorphic inductive). *)
+Definition declared_inductive_type_closed_redE_inst :=
+  @declared_inductive_type_closed_redE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz.
+(* NOT BUILT (the reduction step and the universe part): as
+   [declared_inductive_type_closed_redE_inst] (here the conversion is reflexive). *)
+Definition declared_inductive_type_ws_cumulE_inst :=
+  @declared_inductive_type_ws_cumulE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz.
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+Definition isType_ind_arity_instE_inst :=
+  @isType_ind_arity_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz c16_cu.
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+Definition type_Ind_arity_formE_inst :=
+  @type_Ind_arity_formE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz c16_cu.
+
+(** The spine [Π A:Prop. Prop] applied to [h y]: its argument is typed through the η step. *)
+Lemma c16_isT_arity : isTypeE iv_Σ c16_Γh si_arity.
+Proof. exact (has_sort_isTypeE _ (iv_PP_typed iv_Σ c16_Γh c16_wf_Γh)). Qed.
+Lemma c16_isT_Prop : isTypeE iv_Σ c16_Γh (tSort sProp).
+Proof. exact (has_sort_isTypeE _ (iv_P_typed iv_Σ c16_Γh c16_wf_Γh)). Qed.
+Lemma c16_sp_arity : typing_spineE iv_Σ c16_Γh si_arity [c16_hy] (tSort sProp).
 Proof.
-  eapply type_spine_consE; [exact c16_isT_arity|exact c16_isT_arity| |exact c16_keta_typed|].
+  eapply type_spine_consE; [exact c16_isT_arity|exact c16_isT_arity| |exact c16_hy_typed|].
   - exact (isType_ws_cumul_pbE_refl (Σ := iv_Σ) (wfΣ := iv_wfE) _ _ c16_isT_arity).
   - apply type_spine_nilE; [exact c16_isT_Prop|exact c16_isT_Prop|].
     exact (isType_ws_cumul_pbE_refl (Σ := iv_Σ) (wfΣ := iv_wfE) _ _ c16_isT_Prop).
 Qed.
 
-(* WEAK: the arity of [R] is [Π A:Prop. Prop]: the spine compares sorts and products of sorts,
-   so no η step can be part of it; [R] is monomorphic. *)
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition typing_spine_ind_typeE_inst :=
-  @typing_spine_ind_typeE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] [iv_keta] (tSort sProp)
-    c16_wf_Γk c16_cu c16_sp_arity.
-(* WEAK: [R] is monomorphic (empty instance). *)
-Definition type_Ind_arity_formE_inst :=
-  @type_Ind_arity_formE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] c16_wf_Γk c16_cu.
-(* WEAK: as for [typing_spine_ind_typeE_inst]. *)
+  @typing_spine_ind_typeE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γh [] [c16_hy] (tSort sProp)
+    c16_wf_Γh c16_cu c16_sp_arity.
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition typing_spine_ind_type_invE_inst :=
-  @typing_spine_ind_type_invE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] [iv_keta] (tSort sProp)
-    c16_wf_Γk c16_cu c16_sp_arity.
+  @typing_spine_ind_type_invE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γh [] [c16_hy] (tSort sProp)
+    c16_wf_Γh c16_cu c16_sp_arity.
 
 Definition oiE_inst := @PCUICInductivesEta.oiE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
 Definition oibE_inst := @PCUICInductivesEta.oibE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
 Definition on_inductive_sortE_inst :=
   @on_inductive_sortE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
-(* WEAK: [R] is monomorphic (empty instance). *)
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition on_inductive_sort_instE_inst :=
   @on_inductive_sort_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive [] c16_cu.
 
-(** [A := k (λx:Prop. g x)] for the parameters of [R]. *)
-Lemma c16_wf_Γpar : wf_localE iv_Σ (iv_Γk ,,, si_params).
-Proof. exact (iv_wf_P iv_Σ iv_Γk c16_wf_Γk). Qed.
-Lemma c16_cs_par : context_subst si_params [iv_keta] [iv_keta].
-Proof. exact (context_subst_ass [] [] [] si_na si_P iv_keta context_subst_nil). Qed.
-Definition c16_sp_par : spine_substE iv_Σ iv_Γk [iv_keta] [iv_keta] si_params :=
-  {| spine_dom_wfE := c16_wf_Γk; spine_codom_wfE := c16_wf_Γpar; inst_ctx_substE := c16_cs_par;
-     inst_subsletE := subslet_ass_tipE c16_keta_typed |}.
+(** [A := h y] for the parameters of [R]: the substitution types [h y] through the η step. *)
+Lemma c16_wf_Γhpar : wf_localE iv_Σ (c16_Γh ,,, si_params).
+Proof. exact (iv_wf_P iv_Σ c16_Γh c16_wf_Γh). Qed.
+Lemma c16_cs_hy : context_subst si_params [c16_hy] [c16_hy].
+Proof. exact (context_subst_ass [] [] [] si_na si_P c16_hy context_subst_nil). Qed.
+Definition c16_sp_hy : spine_substE iv_Σ c16_Γh [c16_hy] [c16_hy] si_params :=
+  {| spine_dom_wfE := c16_wf_Γh; spine_codom_wfE := c16_wf_Γhpar; inst_ctx_substE := c16_cs_hy;
+     inst_subsletE := subslet_ass_tipE c16_hy_typed |}.
 
-(* WEAK: the parameter of [R] is a proposition: no η step can occur in the spine of [R]
-   (the argument [k (λx:Prop. g x)] is the η-expanded form, typed directly); [R] is
-   monomorphic. *)
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition isType_mkApps_IndE_inst :=
-  @isType_mkApps_IndE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive iv_Γk [] [iv_keta] [iv_keta]
-    c16_cu c16_sp_par.
+  @isType_mkApps_IndE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γh [] [c16_hy] [c16_hy]
+    c16_cu c16_sp_hy.
 
 Definition untyped_subslet_projsE_inst :=
   untyped_subslet_projsE iv_Σ iv_ind iv_mdecl iv_idecl iv_wfE iv_declared_inductive c16_onps.
@@ -329,12 +395,14 @@ Definition wf_subsletE_inst : wf_subsletE iv_Σ iv_Γk [tRel 0] c16_Δx :=
   {| wf_subslet_ctxE := c16_wf_Γx; wf_subslet_subsletE := subslet_ass_tipE c16_y_eta |}.
 Definition wf_subslet_domE_inst := wf_subslet_domE wf_subsletE_inst.
 
+(** [Π w : h y. Prop], typed through the η step. *)
 Definition isType_it_mkProd_or_LetIn_invE_inst :=
-  @isType_it_mkProd_or_LetIn_invE _ iv_Σ iv_wfE iv_Γk c16_Δx (tSort sProp) c16_isT_Px.
+  @isType_it_mkProd_or_LetIn_invE _ iv_Σ iv_wfE c16_Γh c16_Δhy (tSort sProp) c16_isT_Phy.
 Definition isType_it_mkProd_or_LetIn_substE_inst :=
   @isType_it_mkProd_or_LetIn_substE _ iv_Σ iv_wfE iv_Γk c16_Δx [tRel 0] [tRel 0] (tSort sProp) c16_isT_Px c16_sp_x.
 
-Definition subslet_extended_substE_inst := subslet_extended_substE iv_Σ c16_Γz iv_wfE c16_wf_Γz.
+Definition c16_subslet_extended_substE_inst :=
+  PCUICInductivesEta.subslet_extended_substE iv_Σ c16_Γz iv_wfE c16_wf_Γz.
 Definition context_subst_to_extended_list_kE_inst := context_subst_to_extended_list_kE iv_Σ c16_Γz iv_wfE c16_wf_Γz.
 Definition spine_subst_smash_invE_inst := @spine_subst_smash_invE _ iv_Σ c16_Γz iv_wfE c16_wf_Γz.
 
@@ -385,11 +453,6 @@ Definition declared_projection_typeE_inst :=
 Definition declared_projection_type_and_eqE_inst :=
   @declared_projection_type_and_eqE _ iv_Σ iv_mdecl iv_idecl iv_proj iv_cdecl iv_pdecl iv_wfE iv_declared_projection.
 
-(** [x : k (λx:Prop. g x)] as a telescope of sort [Prop]. *)
-Lemma c16_tlc : type_local_ctx (lift_typing typingE) iv_Σ iv_Γk c16_Δx sProp.
-Proof.
-  cbn. split; [cbn; trivial|]. exact (iv_vass_s iv_Σ iv_Γk si_na iv_keta sProp c16_keta_typed eq_refl).
-Qed.
 Lemma c16_wf_sort_Prop : wf_sort iv_Σ sProp.
 Proof. cbn; trivial. Qed.
 Lemma c16_wf_sort_Type : wf_sort iv_Σ (Sort.super sProp).
@@ -398,38 +461,74 @@ Proof. apply wf_sort_super; cbn; trivial. Qed.
 Lemma c16_leq_Prop_Type : leq_sort (global_ext_constraints iv_Σ) sProp (Sort.super sProp).
 Proof. cbn; trivial. Qed.
 
-(* NO η: the comparison of this lemma is between two sorts ([Prop ≤ Type]), where no η step
-   can occur. *)
+(* IMPOSSIBLE (the comparison): it is between two sorts ([Prop ≤ Type]), where no η step can
+   occur. The telescope [w : h y] of the [type_local_ctx] premise is typed through the η step. *)
 Definition type_local_ctx_cumE_inst :=
-  @type_local_ctx_cumE _ iv_Σ iv_Γk c16_Δx sProp (Sort.super sProp) iv_wfE c16_wf_sort_Type c16_leq_Prop_Type c16_tlc.
-Definition type_local_ctx_wfE_inst := @type_local_ctx_wfE _ iv_Σ iv_Γk c16_Δx sProp iv_wfE c16_tlc.
-Definition isType_it_mkProd_or_LetInE_inst :=
-  isType_it_mkProd_or_LetInE iv_Σ iv_Γk c16_Δx sProp sProp iv_wfE c16_wf_Γk c16_tlc c16_wf_sort_Prop.
+  @type_local_ctx_cumE _ iv_Σ c16_Γh c16_Δhy sProp (Sort.super sProp) iv_wfE c16_wf_sort_Type c16_leq_Prop_Type
+    c16_tlc_hy.
+Definition type_local_ctx_wfE_inst := @type_local_ctx_wfE _ iv_Σ c16_Γh c16_Δhy sProp iv_wfE c16_tlc_hy.
+Definition c16_isType_it_mkProd_or_LetInE_inst :=
+  PCUICInductivesEta.isType_it_mkProd_or_LetInE iv_Σ c16_Γh c16_Δhy sProp sProp iv_wfE c16_wf_Γh c16_tlc_hy
+    c16_wf_sort_Prop.
 Definition isType_it_mkProd_or_LetIn_smashE_inst :=
   isType_it_mkProd_or_LetIn_smashE iv_Σ iv_Γk c16_Δz sProp iv_wfE (has_sort_isTypeE _ c16_Pz_sort).
 
-(* WEAK: the spine is over the arity [Π A:Prop. Prop] (sorts only, no η step can occur) and [R]
-   is monomorphic. *)
-Definition typing_spine_to_extended_listE_inst :=
-  typing_spine_to_extended_listE iv_Σ si_params [] sProp iv_wfE
-    (has_sort_isTypeE _ (iv_PP_typed iv_Σ [] localenv_nil)).
+(** The telescope [w : P'] with the closed proposition
+    [P' := Π g:Prop→Prop. Π k:(Prop→Prop)→Prop. Π y:k g. Π h:(k (λx:Prop. g x) → Prop). h y],
+    whose typing contains the η step (at [h y]). *)
+Definition c16_P4 : term := tProd si_na c16_Px c16_hy.
+Definition c16_P3 : term := tProd si_na (tApp (tRel 0) (tRel 1)) c16_P4.
+Definition c16_P2 : term := tProd si_na iv_K c16_P3.
+Definition c16_P' : term := tProd si_na iv_PP c16_P2.
 
+Lemma c16_P4_typed : iv_Σ ;;; iv_Γk |-E c16_P4 : tSort sProp.
+Proof.
+  exact (typeE_Prod _ _ si_na c16_Px c16_hy (Sort.sort_of_product sProp (Sort.super sProp)) sProp
+           (iv_vass_s iv_Σ iv_Γk si_na c16_Px _ c16_Px_typed eq_refl) c16_hy_typed).
+Qed.
+Lemma c16_P3_typed : iv_Σ ;;; iv_Γkg |-E c16_P3 : tSort sProp.
+Proof.
+  exact (typeE_Prod _ _ si_na (tApp (tRel 0) (tRel 1)) c16_P4 sProp sProp
+           (iv_vass_s iv_Σ iv_Γkg si_na _ sProp c16_kg0_typed eq_refl) c16_P4_typed).
+Qed.
+Lemma c16_P2_typed : iv_Σ ;;; iv_Γg |-E c16_P2 : tSort sProp.
+Proof.
+  exact (typeE_Prod _ _ si_na iv_K c16_P3 (Sort.sort_of_product iv_sPP (Sort.super sProp)) sProp
+           (iv_vass_s iv_Σ iv_Γg si_na iv_K _ (c16_K_typed iv_Γg c16_wf_Γg) eq_refl) c16_P3_typed).
+Qed.
+Lemma c16_P'_typed : iv_Σ ;;; [] |-E c16_P' : tSort sProp.
+Proof.
+  exact (typeE_Prod _ _ si_na iv_PP c16_P2 iv_sPP sProp
+           (iv_vass_s iv_Σ [] si_na iv_PP _ (iv_PP_typed iv_Σ [] localenv_nil) eq_refl) c16_P2_typed).
+Qed.
+
+Definition c16_ΔP' : context := [vass si_na c16_P'].
+Lemma c16_isT_ΔP' : isTypeE iv_Σ [] (it_mkProd_or_LetIn c16_ΔP' (tSort sProp)).
+Proof.
+  exact (has_sort_isTypeE _ (typeE_Prod _ _ si_na c16_P' (tSort sProp) sProp (Sort.super sProp)
+           (iv_vass_s iv_Σ [] si_na c16_P' sProp c16_P'_typed eq_refl)
+           (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ [] si_na c16_P' sProp localenv_nil c16_P'_typed eq_refl)))).
+Qed.
+Definition typing_spine_to_extended_listE_inst :=
+  typing_spine_to_extended_listE iv_Σ c16_ΔP' [] sProp iv_wfE c16_isT_ΔP'.
+
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition wf_projection_contextE_inst :=
   @wf_projection_contextE _ iv_Σ iv_mdecl iv_idecl iv_proj iv_cdecl iv_pdecl [] iv_wfE iv_declared_projection c16_cu.
 
-(* WEAK: the parameter of [R] is a proposition: the spine of [R (k (λx:Prop. g x))] compares
-   sorts only, so no η step can be part of it. *)
+(** [R (h y)], typed through the η step. *)
+Lemma c16_Rhy_typed : iv_Σ ;;; c16_Γh |-E iv_R c16_hy : si_P.
+Proof. exact (iv_RX_typed c16_Γh c16_hy c16_wf_Γh c16_hy_typed). Qed.
+
 Definition invert_type_mkApps_indE_inst :=
-  invert_type_mkApps_indE iv_Σ iv_Γk iv_ind [] [iv_keta] (tSort sProp) iv_mdecl iv_idecl iv_wfE iv_declared_inductive
-    (iv_RX_typed iv_Γk iv_keta c16_wf_Γk c16_keta_typed).
-(* WEAK: as above. *)
+  invert_type_mkApps_indE iv_Σ c16_Γh iv_ind [] [c16_hy] (tSort sProp) iv_mdecl iv_idecl iv_wfE iv_declared_inductive
+    c16_Rhy_typed.
 Definition isType_mkApps_Ind_invE_inst :=
-  @isType_mkApps_Ind_invE _ iv_Σ iv_Γk iv_ind [] [iv_keta] iv_wfE iv_mdecl iv_idecl iv_declared_inductive c16_wf_Γk
-    (has_sort_isTypeE _ (iv_RX_typed iv_Γk iv_keta c16_wf_Γk c16_keta_typed)).
-(* WEAK: as above. *)
+  @isType_mkApps_Ind_invE _ iv_Σ c16_Γh iv_ind [] [c16_hy] iv_wfE iv_mdecl iv_idecl iv_declared_inductive c16_wf_Γh
+    (has_sort_isTypeE _ c16_Rhy_typed).
 Definition isType_mkApps_Ind_inv'E_inst :=
-  @isType_mkApps_Ind_inv'E _ iv_Σ iv_Γk iv_ind [] [iv_keta] iv_wfE iv_mdecl iv_idecl iv_declared_inductive c16_wf_Γk
-    (has_sort_isTypeE _ (iv_RX_typed iv_Γk iv_keta c16_wf_Γk c16_keta_typed)).
+  @isType_mkApps_Ind_inv'E _ iv_Σ c16_Γh iv_ind [] [c16_hy] iv_wfE iv_mdecl iv_idecl iv_declared_inductive c16_wf_Γh
+    (has_sort_isTypeE _ c16_Rhy_typed).
 
 (** [r : R (k (λx:Prop. g x))], typed through the η step, projected. *)
 Definition projection_subsletE_inst :=
@@ -467,8 +566,10 @@ Definition closed_red_it_mkProd_or_LetIn_assum_nthE_inst :=
   @closed_red_it_mkProd_or_LetIn_assum_nthE _ iv_Σ iv_wfE iv_Γk [vass si_na c16_bkg] (tSort sProp) 0
     (vass si_na c16_bkg) iv_kg ltac:(repeat constructor) eq_refl eq_refl c16_cred_bkg.
 
-(** [let z := y : k (λx:Prop. g x) in Prop] reduces to its smashed form (a ζ-step); its let-in
-    body is typed through η. *)
+(** [let z := y : k (λx:Prop. g x) in Prop] reduces to its smashed form (a ζ-step). *)
+(* IMPOSSIBLE (η): the premises are the booleans [is_closed_context] and [is_open_term], so no
+   η derivation can be part of them (the [is_open_term] proof here goes through the typing of
+   the let-in, whose body is typed through η). *)
 Definition red_it_mkProd_or_LetIn_to_smashE_inst :=
   @red_it_mkProd_or_LetIn_to_smashE _ iv_Σ iv_wfE iv_Γk c16_Δz (tSort sProp) c16_closed_Γk
     (subject_is_open_termE (Σ := iv_Σ) (wfΣ := iv_wfE) c16_Pz_typed).
@@ -520,12 +621,15 @@ Definition spine_subst_expand_letsE_inst :=
 (** Case predicates on [R]. *)
 Definition c16_ci : case_info := {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant |}.
 
-(* [R] is monomorphic (empty instance); the predicate context is that of [R]. *)
+(* The context is [Γz], whose let-in body is typed through the η step; the predicate context is
+   that of [R]. NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition wf_ind_predicateE_inst :=
-  @wf_ind_predicateE _ iv_Σ iv_wfE iv_Γk c16_ci iv_mdecl iv_idecl [] c16_wf_Γk iv_declared_inductive c16_cu.
+  @wf_ind_predicateE _ iv_Σ iv_wfE c16_Γz c16_ci iv_mdecl iv_idecl [] c16_wf_Γz iv_declared_inductive c16_cu.
+(* The parameter [h y] is typed through the η step. NOT BUILT (the universe part): as
+   [wf_arities_context_instE_inst]. *)
 Definition isType_case_predicateE_inst :=
-  @isType_case_predicateE _ iv_Σ iv_wfE iv_Γk c16_ci iv_mdecl iv_idecl [] [iv_keta] sProp
-    c16_wf_Γk iv_declared_inductive c16_cu c16_wf_sort_Prop c16_sp_par.
+  @isType_case_predicateE _ iv_Σ iv_wfE c16_Γh c16_ci iv_mdecl iv_idecl [] [c16_hy] sProp
+    c16_wf_Γh iv_declared_inductive c16_cu c16_wf_sort_Prop c16_sp_hy.
 
 (** The parameters [A := k (λx:Prop. g x)] in [Γr], and no index. *)
 Lemma c16_wf_Γrpar : wf_localE iv_Σ (c16_Γr ,,, si_params).
@@ -541,6 +645,7 @@ Definition c16_sp_nil : spine_substE iv_Σ c16_Γr [] [] [] :=
      inst_subsletE := emptysletE iv_Σ c16_Γr |}.
 
 (** The scrutinee [r : R (k (λx:Prop. g x))] is typed through the η step. *)
+(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition arity_spine_case_predicateE_inst :=
   @arity_spine_case_predicateE _ iv_Σ iv_wfE c16_Γr c16_ci iv_mdecl iv_idecl [] [c16_keta1] [] sProp (tRel 0)
     c16_wf_Γr iv_declared_inductive c16_cu c16_wf_sort_Prop c16_sp_par1 c16_sp_nil c16_r_eta.

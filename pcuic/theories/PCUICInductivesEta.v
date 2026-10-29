@@ -448,7 +448,7 @@ Proof.
     rewrite /to_extended_list.
     rewrite -extended_subst_to_extended_list_k.
     eapply context_subst_to_extended_list_kE; eauto.
-  - now apply subslet_extended_substE.
+  - now apply PCUICInductivesEta.subslet_extended_substE.
 Qed.
 
 Lemma wf_projection_context_genE {cf:checker_flags} {Σ : global_env_ext} {mdecl ind idecl cdecl} :
