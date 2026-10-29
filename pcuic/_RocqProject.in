@@ -236,4 +236,6 @@ theories/PCUICSREtaInstances.v
 # Bidirectional soundness over typingE (row T6, the E copy of BDToPCUIC), and its satisfying instances
 theories/Bidirectional/BDToPCUICEta.v
 theories/Bidirectional/BDToPCUICEtaInstances.v
+# Typed postponement (T8): pinned statements and the root cases of one-step eta postponement
+theories/PCUICEtaT8Probe.v
 # theories/All.v
