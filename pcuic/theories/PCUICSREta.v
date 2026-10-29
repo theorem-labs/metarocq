@@ -147,6 +147,11 @@ Definition has_sort_isTypeRelE {cf Σ} {Γ T} s r :
   isSortRel s r -> Σ ;;; Γ |-E T : tSort s -> isTypeRelE Σ Γ T r.
 Proof. repeat (eexists; tea). Defined.
 
+(* FORECAST-ONLY: defined by T2a (PCUICValidityEta.v @ a2a2adfc:88, twin of PCUICTyping.v:470
+   isWfArity); delete when that file is imported. Text: that file's, verbatim. *)
+Definition isWfArityE {cf:checker_flags} Σ (Γ : context) T :=
+  (isTypeE Σ Γ T × { ctx & { s & (destArity [] T = Some (ctx, s)) } }).
+
 (** *** T2a: the twins of the [PCUICValidity] lemmas that [PCUICSR] uses
 
   No statement note covers T2a. Each field is the exact twin of its base lemma (relation renamed,
@@ -3545,5 +3550,404 @@ Proof.
   specialize (forall_u _ Hu).
   eapply typeE_Cumul; tea.
 Qed.
+
+(** *** The theorem *)
+
+(** Base [sr_red1] ([:1942]). *)
+Lemma sr_red1E {cf:checker_flags} :
+  env_propE SR_red1E
+    (fun Σ Γ j =>
+      lift_typing0 (fun t T => Σ ;;; Γ |-E t : T × forall u, Σ ;;; Γ ⊢ t ⇝1 u -> Σ ;;; Γ |-E u : T) j)
+      (fun Σ Γ => wf_localE Σ Γ ×
+        (forall Γ' Δ' Δ,
+          Γ = Γ' ,,, Δ' ->
+          OnOne2_local_env (fun Δ : context => on_one_decl (closed_red1 Σ (Γ',,, Δ))) Δ' Δ ->
+          wf_local_relE Σ Γ' Δ)).
+Proof.
+  apply typingE_ind_env.
+  - exact sr_red1E_Pj.
+  - exact sr_red1E_ctx.
+  - exact sr_red1E_Rel.
+  - exact sr_red1E_Sort.
+  - exact sr_red1E_Prod.
+  - exact sr_red1E_Lambda.
+  - exact sr_red1E_LetIn.
+  - exact sr_red1E_App.
+  - exact sr_red1E_Const.
+  - exact sr_red1E_Ind.
+  - exact sr_red1E_Construct.
+  - exact sr_red1E_Case.
+  - exact sr_red1E_Proj.
+  - exact sr_red1E_Fix.
+  - exact sr_red1E_CoFix.
+  - exact sr_red1E_Prim.
+  - exact sr_red1E_Cumul.
+Qed.
+
+(** ** Corollaries ([:3634-3703]) *)
+
+(** Base [sr_stmt] ([:3634]). *)
+Definition sr_stmtE {cf:checker_flags} (Σ : global_env_ext) Γ t T :=
+  forall u, red Σ Γ t u -> Σ ;;; Γ |-E u : T.
+
+(** Base [typing_closed_red1] ([:3637]). *)
+Lemma typing_closed_red1E {cf:checker_flags} {Σ : global_env_ext} {Γ t u T} {wfΣ : wfE Σ} :
+   Σ ;;; Γ |-E t : T ->
+   red1 Σ Γ t u ->
+   Σ ;;; Γ ⊢ t ⇝1 u.
+Proof.
+  intros Ht hr. split; auto.
+  * now apply typingE_wf_local, wf_local_closed_contextE in Ht.
+  * now eapply subject_is_open_termE.
+Qed.
+
+(** Base [typing_closed_red] ([:3647]). *)
+Lemma typing_closed_redE {cf:checker_flags} {Σ : global_env_ext} {Γ t u T} {wfΣ : wfE Σ} :
+   Σ ;;; Γ |-E t : T ->
+   red Σ Γ t u ->
+   Σ ;;; Γ ⊢ t ⇝ u.
+Proof.
+  intros Ht hr. split; auto.
+  * now apply typingE_wf_local, wf_local_closed_contextE in Ht.
+  * now eapply subject_is_open_termE.
+Qed.
+
+(** Base [subject_reduction1] ([:3657]). *)
+Lemma subject_reduction1E {cf Σ} {wfΣ : wfE Σ} {Γ t u T}
+  : Σ ;;; Γ |-E t : T -> red1 Σ Γ t u -> Σ ;;; Γ |-E u : T.
+Proof.
+  intros. eapply (env_propE_typing sr_red1E); tea.
+  now eapply typing_closed_red1E.
+Qed.
+
+(** Base [subject_reduction] ([:3664]); the field [subject_reduction] of [T1_facts]. *)
+Theorem subject_reductionE {cf:checker_flags} :
+  forall (Σ : global_env_ext) Γ t u T, wfE Σ -> Σ ;;; Γ |-E t : T -> red Σ Γ t u -> Σ ;;; Γ |-E u : T.
+Proof.
+  intros * wfΣ Hty Hred.
+  induction Hred; eauto.
+  eapply (env_propE_typing sr_red1E); eauto.
+  now eapply typing_closed_red1E.
+Qed.
+
+(** Base [subject_reduction1_closed] ([:3673]). *)
+Corollary subject_reduction1_closedE {cf:checker_flags} :
+  forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
+  Σ ;;; Γ |-E t : T -> Σ ;;; Γ ⊢ t ⇝1 u -> Σ ;;; Γ |-E u : T.
+Proof.
+  intros * wfΣ Hty Hred.
+  now eapply (env_propE_typing sr_red1E).
+Qed.
+
+(** Base [subject_reduction_closed] ([:3681]). *)
+Corollary subject_reduction_closedE {cf:checker_flags} :
+  forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
+  Σ ;;; Γ |-E t : T -> Σ ;;; Γ ⊢ t ⇝ u -> Σ ;;; Γ |-E u : T.
+Proof.
+  intros * wfΣ Hty Hred.
+  eapply subject_reductionE; tea. apply Hred.
+Qed.
+
+(** Base [type_reduction] ([:3689]). Base's [conv_cumul] of [PCUICCumulativity.red_conv] is
+    [JoinE_red_l]. *)
+Lemma type_reductionE {cf} {Σ} {wfΣ : wfE Σ} {Γ t A B} :
+  Σ ;;; Γ |-E t : A -> red Σ Γ A B -> Σ ;;; Γ |-E t : B.
+Proof.
+  intros Ht Hr.
+  eapply type_Cumul_altE. eassumption.
+  apply lift_sorting_it_impl_gen with (validityE Ht) => // HA.
+  eapply subject_reductionE; eassumption.
+  now apply JoinE_red_l.
+Qed.
+
+(** Base [type_reduction_closed] ([:3699]); the field [type_reduction_closed] of [T1_facts]. *)
+Lemma type_reduction_closedE {cf} {Σ} {wfΣ : wfE Σ} {Γ t A B} :
+  Σ ;;; Γ |-E t : A -> Σ ;;; Γ ⊢ A ⇝ B -> Σ ;;; Γ |-E t : B.
+Proof.
+  intros Ht Hr. eapply type_reductionE; tea. exact Hr.
+Qed.
+
+(** ** Base section [SRContext] ([:3705-3976]). Its syntactic lemmas ([red1_ctx_app],
+    [red1_red_ctx], [closed_red1_ctx], [red_ctx_clos_rt_red1_ctx],
+    [eq_context_upto_names_upto_names], [red_ctx_app_context_l]) are base's. *)
+Section SRContextE.
+  Context {cf:checker_flags}.
+
+  (** Base [wf_local_isType_nth] ([:3739]). *)
+  Lemma wf_local_isType_nthE {Σ} {wfΣ : wfE Σ} Γ n decl :
+    wf_localE Σ Γ ->
+    nth_error Γ n = Some decl ->
+    ∑ s, Σ ;;; Γ |-E lift0 (S n) (decl_type decl) : tSort s.
+  Proof.
+    intros wfΓ Hnth.
+    eapply All_local_env_nth_error in wfΓ as H; tea.
+    apply nth_error_Some_length in Hnth.
+    destruct H as (_ & s & Hs & _).
+    eapply weakeningE with (Γ' := firstn (S n) Γ) in Hs; cbn in Hs; eauto.
+    2: rewrite /app_context firstn_skipn //.
+    rewrite firstn_length_le // /app_context firstn_skipn in Hs.
+    now eexists.
+  Qed.
+
+  (** Base [subject_reduction_ctx] ([:3757]). Base's algorithmic context conversion
+      [conv_context cumulAlgo_gen] is [conv_context (@JoinE cf)]; its [red_conv] steps are
+      [JoinE_red_l]. *)
+  Lemma subject_reduction_ctxE {Σ} {wfΣ : wfE Σ} Γ Γ' t T :
+    red1_ctx Σ Γ Γ' ->
+    Σ ;;; Γ |-E t : T -> Σ ;;; Γ' |-E t : T.
+  Proof.
+    assert(OnOne2_local_env
+      (fun (Δ : context) => on_one_decl
+         (fun (t t' : term) => red1 Σ.1 Δ t t')) Γ Γ' ->
+         conv_context (@JoinE cf) Σ Γ Γ').
+    { clear. induction 1.
+      - destruct p as [<- r]. constructor; auto.
+        reflexivity. constructor. reflexivity.
+        now apply JoinE_red_l, red1_red.
+      - destruct p; subst. constructor.
+        reflexivity.
+        destruct s as [[red ->]|[red ->]].
+        all: constructor; try reflexivity; try apply JoinE_refl; now apply JoinE_red_l, red1_red.
+      - constructor; auto.
+        destruct d as [na [b|] ty]; constructor; try reflexivity; apply JoinE_refl. }
+    intros r H.
+    specialize (X r).
+    assert(wf_localE Σ Γ').
+    apply typingE_wf_local in H.
+    induction H in Γ', r, X |-  *; depelim r.
+    - constructor; auto. cbn in o.
+      destruct o as [<- r].
+      apply lift_sorting_it_impl_gen with t1 => // Hs.
+      eapply subject_reduction1E in Hs; eauto.
+    - depelim X.
+      constructor; auto.
+      apply lift_sorting_it_impl_gen with t1 => // Hs.
+      eapply context_conversionE; eauto.
+    - depelim X.
+      destruct o as [<- [[r ->]|[r <-]]].
+      all: constructor; auto.
+      all: apply lift_sorting_it_impl_gen with t1 => // Hs.
+      + eapply type_reductionE; tea. pcuic.
+      + eapply subject_reduction1E; eauto.
+      + eapply subject_reduction1E; eauto.
+    - depelim X.
+      constructor; auto.
+      apply lift_sorting_it_impl_gen with t1 => // Hs.
+      all: eapply context_conversionE; eauto.
+    - eapply context_conversionE; eauto.
+  Qed.
+
+  (** Base [wf_local_red1] ([:3804]). *)
+  Lemma wf_local_red1E {Σ} {wfΣ : wfE Σ} {Γ Γ'} :
+    red1_ctx Σ Γ Γ' -> wf_localE Σ Γ -> wf_localE Σ Γ'.
+  Proof.
+    induction 1; cbn in *.
+    - destruct p as [-> r]. intro e. inversion e; subst; cbn in *.
+      constructor; tas.
+      apply lift_sorting_it_impl_gen with X0 => // Hs.
+      eapply subject_reduction1E; tea.
+    - intro e. inversion e; subst; cbn in *.
+      destruct p as [-> [[? []]|[? []]]]; constructor; cbn; tas.
+      all: apply lift_sorting_it_impl_gen with X0 => // Hs.
+      + eapply type_reductionE; tea. pcuic.
+      + eapply subject_reduction1E; tea.
+      + eapply subject_reduction1E; tea.
+    - intro H; inversion H; subst; constructor; cbn in *; auto.
+      all: apply lift_sorting_it_impl_gen with X1 => // Hs.
+      all: eapply subject_reduction_ctxE; tea.
+  Qed.
+
+  (** Base [wf_local_red] ([:3846]). *)
+  Lemma wf_local_redE {Σ} {wfΣ : wfE Σ} {Γ Γ'} :
+    red_ctx Σ Γ Γ' -> wf_localE Σ Γ -> wf_localE Σ Γ'.
+  Proof.
+    intros h. red in h. apply red_ctx_clos_rt_red1_ctx in h.
+    induction h; eauto using wf_local_red1E.
+  Qed.
+
+  (** Base [wf_local_subst1] ([:3861]). *)
+  Lemma wf_local_subst1E {Σ} {wfΣ : wfE Σ} Γ na b t Γ' :
+      wf_localE Σ (Γ ,,, [],, vdef na b t ,,, Γ') ->
+      wf_localE Σ (Γ ,,, subst_context [b] 0 Γ').
+  Proof.
+    induction Γ' as [|d Γ']; [now inversion 1|].
+    change (d :: Γ') with (Γ' ,, d).
+    destruct d as [na' [bd|] ty]; rewrite !app_context_cons; intro HH.
+    - rewrite subst_context_snoc0. simpl.
+      inversion HH; subst; cbn in *.
+      change (Γ,, vdef na b t ,,, Γ') with (Γ ,,, [vdef na b t] ,,, Γ') in *.
+      assert (subsletE Σ Γ [b] [vdef na b t]). {
+        pose proof (cons_let_defE Σ Γ [] [] na b t) as XX.
+        rewrite !subst_empty in XX. apply XX. constructor.
+        apply wf_localE_app_l in X. inversion X; subst; cbn in *; now eapply unlift_TermTyp.
+      }
+      constructor; cbn; auto.
+      apply lift_typing_f_impl with (1 := X0) => // ?? Hs.
+      eapply substitutionE; tea.
+    - rewrite subst_context_snoc0. simpl.
+      inversion HH; subst; cbn in *.
+      change (Γ,, vdef na b t ,,, Γ') with (Γ ,,, [vdef na b t] ,,, Γ') in *.
+      assert (subsletE Σ Γ [b] [vdef na b t]). {
+        pose proof (cons_let_defE Σ Γ [] [] na b t) as XX.
+        rewrite !subst_empty in XX. apply XX. constructor.
+        apply wf_localE_app_l in X. inversion X; subst; cbn in *; now eapply unlift_TermTyp. }
+      constructor; cbn; auto.
+      apply lift_typing_f_impl with (1 := X0) => // ?? Hs.
+      eapply substitutionE; tea.
+  Qed.
+
+  (** Base [isType_red1] ([:3899]). *)
+  Lemma isType_red1E {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ A B} :
+     isTypeE Σ Γ A ->
+     red1 Σ Γ A B ->
+     isTypeE Σ Γ B.
+  Proof.
+    intros HT red.
+    apply lift_sorting_it_impl_gen with HT => // Hs.
+    eapply subject_reduction1E; eauto.
+  Qed.
+
+  (** Base [isWfArity_red1] ([:3909]). *)
+  Lemma isWfArity_red1E {Σ} {wfΣ : wfE Σ} {Γ A B} :
+    isWfArityE Σ Γ A ->
+    red1 Σ Γ A B ->
+    isWfArityE Σ Γ B.
+  Proof.
+    intros [isty H] re.
+    split. eapply isType_red1E; eauto.
+    clear isty; revert H.
+    induction re using red1_ind_all.
+    (* red_prim_op: a tConst-headed application is not an arity. *)
+    all: try (intros [?ctxp [?sp Hdp]];
+              match type of Hdp with
+              | destArity [] (mkApps (tConst _ _) (map term_of_lit ?ls)) = _ =>
+                  destruct ls using MRList.rev_ind;
+                  [ cbn in Hdp; discriminate
+                  | rewrite map_app mkApps_app in Hdp; cbn in Hdp; discriminate ]
+              end).
+    all: intros [ctx [s H1]]; cbn in *; try discriminate.
+    - rewrite destArity_app in H1.
+      case_eq (destArity [] b'); [intros [ctx' s']|]; intro ee;
+        [|rewrite ee in H1; discriminate].
+      pose proof (subst_destArity [] b' [b] 0) as H; cbn in H.
+      rewrite ee in H. eexists _, s'. eassumption.
+    - rewrite destArity_tFix in H1; discriminate.
+    - rewrite destArity_app in H1.
+      case_eq (destArity [] b'); [intros [ctx' s']|]; intro ee;
+        rewrite ee in H1; [|discriminate].
+      eexists _, s'. cbn. rewrite destArity_app ee. reflexivity.
+    - rewrite destArity_app in H1.
+      case_eq (destArity [] b'); [intros [ctx' s']|]; intro ee;
+        rewrite ee in H1; [|discriminate].
+      eexists _, s'. cbn. rewrite destArity_app ee. reflexivity.
+    - rewrite destArity_app in H1.
+      case_eq (destArity [] b'); [intros [ctx' s']|]; intro ee;
+        rewrite ee in H1; [|discriminate].
+      forward IHre. { eexists _, s'; tea. }
+      destruct IHre as [ctx'' [s'' ee']].
+      eexists _, s''. cbn. rewrite destArity_app ee'. reflexivity.
+    - rewrite destArity_app in H1.
+      case_eq (destArity [] M2); [intros [ctx' s']|]; intro ee;
+        rewrite ee in H1; [|discriminate].
+      eexists _, s'. cbn. rewrite destArity_app ee. reflexivity.
+    - rewrite destArity_app in H1.
+      case_eq (destArity [] M2); [intros [ctx' s']|]; intro ee;
+        rewrite ee in H1; [|discriminate].
+      forward IHre. { eexists _, s'; tea. }
+      destruct IHre as [ctx'' [s'' ee']].
+      eexists _, s''. cbn. rewrite destArity_app ee'. reflexivity.
+  Qed.
+
+  (** Base [isWfArity_red] ([:3959]). *)
+  Lemma isWfArity_redE {Σ} {wfΣ : wfE Σ} {Γ A B} :
+    isWfArityE Σ Γ A ->
+    red Σ Γ A B ->
+    isWfArityE Σ Γ B.
+  Proof.
+    induction 2 using red_rect'.
+    - easy.
+    - now eapply isWfArity_red1E.
+  Qed.
+
+  (** Base [isType_red] ([:3969]); the field [isType_red] of [T1_facts]. *)
+  Lemma isType_redE {Σ} {wfΣ : wfE Σ} {Γ T U} :
+    isTypeE Σ Γ T -> red Σ Γ T U -> isTypeE Σ Γ U.
+  Proof.
+    intros HT red; apply lift_sorting_it_impl_gen with HT => // Hs.
+    eapply subject_reductionE; eauto.
+  Qed.
+
+End SRContextE.
+
+(** Base [isType_tLetIn] ([:3978]). Base reads a reduct [tSort s'] of the let-in's type off
+    [ws_cumul_pb_Sort_r_inv]; over E only a canonical-form chain is available
+    ([ws_cumul_pbE_Sort_r_inv], [PCUICEtaA6.v:207]), so this takes the T1 audit's route (§5),
+    with no reduct: [ws_cumul_pbE_LetIn_l_inv] gives [A'{0:=t} ≤ tSort s] in [Γ];
+    [weakening_ws_cumul_pbE] moves it under the [vdef]; [red_expand_letE] gives
+    [A' ⇝ lift0 1 (A'{0:=t})] there; transitivity. The sort is the one of the hypothesis, and
+    [typing_wf_sortE] (copy 13) gives its well-formedness. *)
+Lemma isType_tLetInE {cf} {Σ} {HΣ' : wfE Σ} {Γ} {na t A B}
+  : isTypeE Σ Γ (tLetIn na t A B)
+    <~> (lift_typing typingE Σ Γ (j_vdef na t A) × isTypeE Σ (Γ,, vdef na t A) B).
+Proof.
+  split; intro HH.
+  - destruct HH as (_ & s & H & _).
+    pose proof (typing_wf_sortE HΣ' H) as wfs.
+    apply inversion_LetInE in H as (A' & HtA & HB & H); tas.
+    split; tas.
+    have wfΓd := typingE_wf_local HB.
+    eapply has_sort_isTypeE.
+    eapply (type_ws_cumul_pbE (pb := Cumul) A'); [exact HB| |].
+    + eapply has_sort_isTypeE. eapply typeE_Sort; tea.
+    + apply ws_cumul_pbE_LetIn_l_inv in H.
+      eapply (weakening_ws_cumul_pbE (Γ' := []) (Γ'' := [vdef na t A])) in H.
+      2: exact (wf_local_closed_contextE wfΓd).
+      cbn in H.
+      etransitivity; [|exact H].
+      eapply red_ws_cumul_pbE, red_expand_letE; tea.
+      exact (type_is_open_termE HB).
+  - destruct HH as (HtA & HB).
+    apply lift_sorting_f_it_impl with HB => // Hs.
+    eapply type_reductionE; tas.
+    * econstructor; tea.
+    * apply red1_red.
+      apply red_zeta with (b':=tSort _).
+Qed.
+
+(** ** The checker's contract: [T1_facts] and [T2a_facts]
+
+  The fields of [T1_facts] and [T2a_facts] of the checker's [safechecker/theories/
+  PCUICTypingEtaHyps.v] ([wip/etak-k7-2026-10-29] @ [0bbee83d]), verbatim, each inhabited by its
+  lemma here. The [T1] fits are this file's theorems (under the forecast block); the [T2a] fits
+  are the forecast fields themselves: they show that the T2a contract written above is the
+  checker's. *)
+
+Definition T1_isType_prim_arg_types_fit {cf : checker_flags} :
+  forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {tags : list prim_tag} {res : term} {T : term}, wf_localE Σ Γ -> (forall t : prim_tag, In t tags -> t <> primArray) -> All (prim_op_tag_declared Σ) tags -> PCUICPrimOpType.prim_arg_types (retroknowledge Σ.1) tags res = Some T -> isTypeE Σ Γ res -> isTypeE Σ Γ T
+  := @isType_prim_arg_typesE cf.
+
+Definition T1_isType_prim_shape_type_fit {cf : checker_flags} :
+  forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {s : PrimitiveOps.prim_shape} {res : term}, wf_localE Σ Γ -> PCUICPrimOpType.prim_shape_type (retroknowledge Σ.1) s = Some res -> on_prim_op_result Σ s -> isTypeE Σ Γ res
+  := @isType_prim_shape_typeE cf.
+
+Definition T1_isType_red_fit {cf : checker_flags} :
+  forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {U : term}, isTypeE Σ Γ T -> PCUICReduction.red Σ Γ T U -> isTypeE Σ Γ U
+  := @isType_redE cf.
+
+Definition T1_subject_reduction_fit {cf : checker_flags} :
+  forall (Σ : global_env_ext) (Γ : context) (t : term) (u : term) (T : term), wfE Σ -> Σ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ;;; Γ |-E u : T
+  := @subject_reductionE cf.
+
+Definition T1_type_reduction_closed_fit {cf : checker_flags} :
+  forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {A : term} {B : term}, Σ;;; Γ |-E t : A -> Σ ;;; Γ ⊢ A ⇝ B -> Σ;;; Γ |-E t : B
+  := @type_reduction_closedE cf.
+
+Definition T2a_inversion_mkApps_fit {cf : checker_flags} :
+  forall {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ : context} {f : term} {u : list term} {T : term}, Σ;;; Γ |-E mkApps f u : T -> ∑ A : term, Σ;;; Γ |-E f : A × typing_spineE Σ Γ A u T
+  := fun Σ wfΣ Γ f u T h => inversion_mkAppsE h.
+
+Definition T2a_validity_fit {cf : checker_flags} :
+  forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {T : term}, Σ;;; Γ |-E t : T -> isTypeE Σ Γ T
+  := fun Σ wfΣ Γ t T h => validityE h.
 
 End SREta.
