@@ -13,18 +13,13 @@
 
   F-inst's variance is base's at the head's full arity ([global_variance_eta_gen]),
   so both halves are base's lemmas at that arity. A non-cumulative constructor
-  gets [AllEqual] there, as base gives it.
-
-  The reverse direction, base ⇒ F-inst, holds at every [(pb, napp)]: for the instance
-  comparison ([cumul_ind_finst], [cumul_construct_finst]) and for the whole term comparison
-  ([eq_term_upto_univ_napp_finst]). *)
+  gets [AllEqual] there, as base gives it. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Environment EnvironmentTyping.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICEquality PCUICEtaFInst.
-From Equations.Prop Require Import DepElim.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICEquality PCUICEtaFInst.
 
 Local Open Scope type_scope.
 
@@ -136,13 +131,36 @@ Proof.
     exact (cmp_global_instance_construct_under Σ cu pb i k napp u u' hlt h).
 Qed.
 
+(** ** Arity bridges: [head_arity] is the count S4's lemmas state *)
+
+Lemma head_arity_ind (Σ : global_env) i mdecl idecl :
+  declared_inductive_gen (lookup_env Σ) i mdecl idecl ->
+  head_arity Σ (IndRef i) = context_assumptions (ind_params mdecl ,,, ind_indices idecl).
+Proof. intros h. unfold head_arity_gen. now rewrite (declared_inductive_lookup_gen h). Qed.
+
+Lemma head_arity_construct (Σ : global_env) i k mdecl idecl cdecl :
+  declared_constructor_gen (lookup_env Σ) (i, k) mdecl idecl cdecl ->
+  head_arity Σ (ConstructRef i k) = (cstr_arity cdecl + ind_npars mdecl)%nat.
+Proof.
+  intros h. unfold head_arity_gen.
+  now rewrite (declared_constructor_lookup_gen (id := (i, k)) h).
+Qed.
+
 (** ** The term-level reverse glue: base comparison ⇒ U1'
 
-  Base [eq_term_upto_univ_napp] at [(pb, napp)] implies U1' ([eq_term_upto_univ_eta_napp]) at the
-  same [(pb, napp)], for any universe and sort comparisons. The two relations differ only at
-  [eq_Ind]/[eq_Construct], where [cumul_ind_finst]/[cumul_construct_finst] carry base's instance
-  comparison over; every other constructor is base's. The proof is base's
-  [eq_term_upto_univ_impl] with those two cases replaced. *)
+  The reverse direction holds for the whole term comparison, not only for the instance
+  comparison ([cumul_ind_finst], [cumul_construct_finst]). This part comes after the declarations
+  above, with the two Requires its proof needs (term induction, dependent elimination), so that
+  their source positions stay as they were. *)
+
+From MetaRocq.PCUIC Require Import PCUICInduction.
+From Equations.Prop Require Import DepElim.
+
+(** Base [eq_term_upto_univ_napp] at [(pb, napp)] implies U1' ([eq_term_upto_univ_eta_napp]) at
+    the same [(pb, napp)], for any universe and sort comparisons. The two relations differ only
+    at [eq_Ind]/[eq_Construct], where [cumul_ind_finst]/[cumul_construct_finst] carry base's
+    instance comparison over; every other constructor is base's. The proof is base's
+    [eq_term_upto_univ_impl] with those two cases replaced. *)
 Lemma eq_term_upto_univ_napp_finst (Σ : global_env) cu cs pb napp t u :
   eq_term_upto_univ_napp Σ cu cs pb napp t u ->
   eq_term_upto_univ_eta_napp Σ cu cs pb napp t u.
@@ -165,19 +183,4 @@ Proof.
     cbn. intros x [? ?] y (?&?&?&?). repeat split; eauto.
   - intros h; depelim h. depelim o; constructor; cbn in X; constructor; intuition eauto.
     solve_all.
-Qed.
-
-(** ** Arity bridges: [head_arity] is the count S4's lemmas state *)
-
-Lemma head_arity_ind (Σ : global_env) i mdecl idecl :
-  declared_inductive_gen (lookup_env Σ) i mdecl idecl ->
-  head_arity Σ (IndRef i) = context_assumptions (ind_params mdecl ,,, ind_indices idecl).
-Proof. intros h. unfold head_arity_gen. now rewrite (declared_inductive_lookup_gen h). Qed.
-
-Lemma head_arity_construct (Σ : global_env) i k mdecl idecl cdecl :
-  declared_constructor_gen (lookup_env Σ) (i, k) mdecl idecl cdecl ->
-  head_arity Σ (ConstructRef i k) = (cstr_arity cdecl + ind_npars mdecl)%nat.
-Proof.
-  intros h. unfold head_arity_gen.
-  now rewrite (declared_constructor_lookup_gen (id := (i, k)) h).
 Qed.

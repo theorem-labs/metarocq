@@ -87,7 +87,9 @@ From Stdlib Require Import ssreflect ssrbool.
   qualified, for instance [PCUICWsCumulEtaCtx.subst_instance_ws_cumul_ctx_pbE_rel] (the twin of
   [PCUICConversion.subst_instance_ws_cumul_ctx_pb_rel]; [Typing/PCUICUnivSubstitutionTypEta]
   declares a different lemma of that name), [PCUICWeakeningTypEta.weaken_wf_localE] and
-  [PCUICSpine.closed_ctx_subst]. *)
+  [PCUICSpine.closed_ctx_subst]. A reference that resolves to another object than the same name
+  in the base twin is written qualified too: [PCUICCumulativitySpec.cumul_ctx_rel] (the context
+  relation over a given comparison), where base's twins read [PCUICCumulativity.cumul_ctx_rel]. *)
 
 Local Set SimplIsCbn.
 
@@ -1058,7 +1060,7 @@ Lemma All2_fold_instE {cf} {le} {Σ} {wfΣ : wfE Σ} mdecl l v i i' u u' (Γ' Γ
   ws_cumul_ctx_pbE_rel le (Σ.1, v) (subst_instance i Γ') (subst_instance i Γ) (subst_instance i' Γ) ->
   ws_cumul_ctx_pbE_rel le Σ (subst_instance u Γ') (subst_instance u Γ) (subst_instance u' Γ).
 Proof.
-  unfold cumul_ctx_rel.
+  unfold PCUICCumulativitySpec.cumul_ctx_rel.
   intros onu onv cu cu' vari Ru.
   induction Γ as [|[na [b|] ty] tl]; simpl.
   - constructor. destruct X.
@@ -1089,7 +1091,7 @@ Proof.
 Qed.
 
 Lemma cumul_ctx_relSpec_AlgoE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ Δ'}
-  (c : cumul_ctx_rel cumulSpecE0 Σ Γ Δ Δ') :
+  (c : PCUICCumulativitySpec.cumul_ctx_rel cumulSpecE0 Σ Γ Δ Δ') :
   is_closed_context (Γ ,,, Δ) ->
   is_closed_context (Γ ,,, Δ') ->
   ws_cumul_ctx_pbE_rel Cumul Σ Γ Δ Δ'.
