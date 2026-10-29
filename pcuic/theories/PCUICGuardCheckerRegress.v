@@ -316,7 +316,7 @@ Definition tf_block : mfixpoint term :=
      dtype := tProd (nm "x") (tind "T") (tind "nat");
      dbody :=
        tLambda (nm "x") (tind "T")
-         (tCase {| ci_ind := ind "T"; ci_npar := 0; ci_relevance := Relevant |}
+         (tCase {| ci_ind := ind "T"; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}
             {|
               pparams := [];
               puinst := [];
@@ -326,7 +326,7 @@ Definition tf_block : mfixpoint term :=
             [{|
                bcontext := [vass (nm "y") (tApp (tind "Str") (tind "T"))];
                bbody :=
-                 tCase {| ci_ind := ind "Str"; ci_npar := 1; ci_relevance := Relevant |}
+                 tCase {| ci_ind := ind "Str"; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}
                    {|
                      pparams := [tind "T"];
                      puinst := [];
@@ -403,7 +403,7 @@ Definition g_fix_block : mfixpoint term :=
                 |}]
                0)
             (tcstr "nat" 0))
-         (tCase {| ci_ind := ind "Stream"; ci_npar := 0; ci_relevance := Relevant |}
+         (tCase {| ci_ind := ind "Stream"; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}
             {|
               pparams := [];
               puinst := [];
@@ -429,7 +429,7 @@ Definition g_iota_block : mfixpoint term :=
      dname := nm "g";
      dtype := tind "Stream";
      dbody :=
-       tCase {| ci_ind := ind "box"; ci_npar := 0; ci_relevance := Relevant |}
+       tCase {| ci_ind := ind "box"; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}
          {|
            pparams := [];
            puinst := [];
@@ -437,7 +437,7 @@ Definition g_iota_block : mfixpoint term :=
            preturn := tind "Stream"
          |}
          (tApp (tcstr "box" 0)
-            (tCase {| ci_ind := ind "Stream"; ci_npar := 0; ci_relevance := Relevant |}
+            (tCase {| ci_ind := ind "Stream"; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}
                {|
                  pparams := [];
                  puinst := [];
@@ -470,7 +470,7 @@ Definition g_proj_block : mfixpoint term :=
        tProj {| proj_ind := ind "pr"; proj_npars := 0; proj_arg := 1 |}
          (tApp
             (tApp (tcstr "pr" 0)
-               (tCase {| ci_ind := ind "Stream"; ci_npar := 0; ci_relevance := Relevant |}
+               (tCase {| ci_ind := ind "Stream"; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}
                   {|
                     pparams := [];
                     puinst := [];
@@ -536,7 +536,7 @@ Definition fnat_block : mfixpoint term :=
      dtype := tProd (nm "n") (tind "nat") (tind "nat");
      dbody :=
        tLambda (nm "n") (tind "nat")
-         (tCase {| ci_ind := ind "nat"; ci_npar := 0; ci_relevance := Relevant |}
+         (tCase {| ci_ind := ind "nat"; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}
             {|
               pparams := [];
               puinst := [];

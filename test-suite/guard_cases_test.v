@@ -149,7 +149,7 @@ Definition syn_check (m : mfixpoint term) : guard_result :=
     body [tApp (tRel 1) (tRel 0)] means [f n].  The [O] branch's declared
     context is empty; the one wrong change is the added [let]. *)
 
-Definition ci_nat : case_info := {| ci_ind := i_nat; ci_npar := 0; ci_relevance := Relevant |}.
+Definition ci_nat : case_info := {| ci_ind := i_nat; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition p_nat : predicate term :=
   {| pparams := []; puinst := []; pcontext := pctx i_nat; preturn := tNat |}.
 
@@ -186,7 +186,7 @@ Proof. vm_compute. reflexivity. Qed.
     [f] applied to a subterm of [n]; ι-reduction uses [node leaf] and gives
     [f (node leaf)]. *)
 
-Definition ci_L : case_info := {| ci_ind := i_L; ci_npar := 0; ci_relevance := Relevant |}.
+Definition ci_L : case_info := {| ci_ind := i_L; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition p_L : predicate term :=
   {| pparams := []; puinst := []; pcontext := pctx i_L; preturn := tL |}.
 
@@ -221,7 +221,7 @@ Proof. vm_compute. reflexivity. Qed.
     denote [f] and [n], so the branch body [y z] reduces to [f n].  The one
     wrong change is the empty [pparams] (the declaration has two). *)
 
-Definition ci_W : case_info := {| ci_ind := i_W; ci_npar := 2; ci_relevance := Relevant |}.
+Definition ci_W : case_info := {| ci_ind := i_W; ci_npar := 2; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition p_W (pars : list term) : predicate term :=
   {| pparams := pars; puinst := []; pcontext := pctx i_W; preturn := tNat |}.
 

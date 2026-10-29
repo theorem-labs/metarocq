@@ -134,8 +134,9 @@ Proof.
 Qed.
 
 (** The node condition of a [tCase], as a boolean.  Its last conjunct is
-    typing's own condition on a case over a coinductive type: the return type
-    does not mention the scrutinee, variable 0 of the predicate context. *)
+    typing's own condition on a case over a coinductive type: when the case's
+    [ci_cofix_nondep] is set, the return type does not mention the scrutinee,
+    variable 0 of the predicate context. *)
 Definition wf_case_node (Σ : global_env) (ci : case_info)
   (p : predicate term) (brs : list (branch term)) : bool :=
   match lookup_inductive Σ ci.(ci_ind) with
@@ -148,7 +149,8 @@ Definition wf_case_node (Σ : global_env) (ci : case_info)
       eqb_context_alpha br.(bcontext) (cstr_branch_context ci.(ci_ind) mdecl cdecl))
       idecl.(ind_ctors) brs &&
     (is_cofinite mdecl.(ind_finite) ==>
-     on_free_vars (strengthenP 0 1 xpredT) p.(preturn))
+     (ci.(ci_cofix_nondep) ==>
+      on_free_vars (strengthenP 0 1 xpredT) p.(preturn)))
   | None => false
   end.
 
@@ -166,7 +168,8 @@ Definition wf_case_spec (Σ : global_env) (ci : case_info)
         eq_context_upto_names br.(bcontext) (cstr_branch_context ci.(ci_ind) mdecl cdecl))
         idecl.(ind_ctors) brs ∥ /\
     (is_cofinite mdecl.(ind_finite) ==>
-     on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true.
+     (ci.(ci_cofix_nondep) ==>
+      on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) = true.
 
 Lemma wf_case_node_elim {Σ ci p brs} :
   wf_case_node Σ ci p brs -> wf_case_spec Σ ci p brs.
@@ -198,7 +201,8 @@ Lemma wf_case_node_intro {Σ ci p brs mdecl idecl} :
     eq_context_upto_names br.(bcontext) (cstr_branch_context ci.(ci_ind) mdecl cdecl))
     idecl.(ind_ctors) brs ->
   (is_cofinite mdecl.(ind_finite) ==>
-   on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true ->
+   (ci.(ci_cofix_nondep) ==>
+    on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) = true ->
   wf_case_node Σ ci p brs.
 Proof.
   intros hd e1 e2 e3 e4 e5 e6.

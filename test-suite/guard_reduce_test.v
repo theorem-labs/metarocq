@@ -87,7 +87,7 @@ Check eq_refl : hs (tApp tS tO) = Stuck.
 
 (** ** ι *)
 
-Definition ci_nat : case_info := {| ci_ind := nat_ind; ci_npar := 0; ci_relevance := Relevant |}.
+Definition ci_nat : case_info := {| ci_ind := nat_ind; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition p_nat : predicate term :=
   {| pparams := []; puinst := []; pcontext := [vass na tNat]; preturn := v "P" |}.
 Definition br_O := {| bcontext := []; bbody := v "a" |}.
@@ -115,7 +115,7 @@ Check eq_refl : hs (tCase ci_nat p_nat tS [br_O; br_S]) = StepBad err_case_arity
 (** Parameters: [box A] with one constructor [mk (A) (x : A)]; the
     parameters of the predicate and of the constructor are discarded, and
     the branch context is instantiated with the parameters. *)
-Definition ci_box : case_info := {| ci_ind := box_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition ci_box : case_info := {| ci_ind := box_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition p_box : predicate term :=
   {| pparams := [tNat]; puinst := []; pcontext := [vass na (tInd box_ind [])]; preturn := v "P" |}.
 Definition br_box := {| bcontext := [vass na (tRel 0)]; bbody := tRel 0 |}.
