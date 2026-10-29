@@ -35,7 +35,6 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
 
 #[local] Existing Instance default_checker_flags.
 
-
 (** ** A one-axiom environment *)
 
 Definition sa_kn : kername := (MPfile ["SInst"], "A").

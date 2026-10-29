@@ -78,8 +78,10 @@ Definition head_arity_gen lookup (gr : global_reference) : nat :=
 
 Notation head_arity Σ := (head_arity_gen (lookup_env Σ)).
 
-(** Is the head a constructor of a NON-cumulative inductive? Below its full
-    arity that is the head whose variance is not base's [AllEqual] fallback. *)
+(** Is the head a constructor of a NON-cumulative inductive? Such a head is
+    compared by instance equality at every arity
+    ([finst_noncumulative_constructor_AllEqual],
+    [finst_noncumulative_constructor_instance_eq]). *)
 Definition noncumulative_constructor_gen lookup (gr : global_reference) : bool :=
   match gr with
   | ConstructRef ind k =>
