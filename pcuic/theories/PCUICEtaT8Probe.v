@@ -1019,3 +1019,414 @@ Proof.
 Qed.
 
 End Instances.
+
+(** ** Development-style parallel η ([pe])
+
+  [pe] is [C3R.peta] with one change: the η rule contracts a λ whose body REDUCES (in
+  parallel) to an η-redex body, [pe b ((lift0 1 M') (tRel 0)) → pe (λ. b) M'], instead
+  of one whose body syntactically is one. So [pe] absorbs η-redexes created by inner
+  η steps, which is what makes it closed under a following [eta1] step and lets the
+  parallel one-step postponement iterate with the invariant needed only on [red]
+  reducts of a typed term. *)
+
+Inductive pe : term -> term -> Type :=
+| pe_eta na A b M' :
+    pe b (tApp (lift0 1 M') (tRel 0)) ->
+    pe (tLambda na A b) M'
+| pe_Rel n : pe (tRel n) (tRel n)
+| pe_Var i : pe (tVar i) (tVar i)
+| pe_Sort s : pe (tSort s) (tSort s)
+| pe_Const c u : pe (tConst c u) (tConst c u)
+| pe_Ind ind u : pe (tInd ind u) (tInd ind u)
+| pe_Construct ind n u : pe (tConstruct ind n u) (tConstruct ind n u)
+| pe_Evar ev l l' : All2 pe l l' -> pe (tEvar ev l) (tEvar ev l')
+| pe_Lambda na A A' M M' : pe A A' -> pe M M' -> pe (tLambda na A M) (tLambda na A' M')
+| pe_App t t' u u' : pe t t' -> pe u u' -> pe (tApp t u) (tApp t' u')
+| pe_Prod na a a' b b' : pe a a' -> pe b b' -> pe (tProd na a b) (tProd na a' b')
+| pe_LetIn na b b' ty ty' u u' :
+    pe b b' -> pe ty ty' -> pe u u' -> pe (tLetIn na b ty u) (tLetIn na b' ty' u')
+| pe_Case ci p p' c c' brs brs' :
+    All2 pe p.(pparams) p'.(pparams) ->
+    p.(puinst) = p'.(puinst) ->
+    p.(pcontext) = p'.(pcontext) ->
+    pe p.(preturn) p'.(preturn) ->
+    pe c c' ->
+    All2 (fun x y => x.(bcontext) = y.(bcontext) × pe x.(bbody) y.(bbody)) brs brs' ->
+    pe (tCase ci p c brs) (tCase ci p' c' brs')
+| pe_Proj pr c c' : pe c c' -> pe (tProj pr c) (tProj pr c')
+| pe_Fix mfix mfix' idx :
+    All2 (fun d d' => pe d.(dtype) d'.(dtype) × pe d.(dbody) d'.(dbody)
+                      × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)) mfix mfix' ->
+    pe (tFix mfix idx) (tFix mfix' idx)
+| pe_CoFix mfix mfix' idx :
+    All2 (fun d d' => pe d.(dtype) d'.(dtype) × pe d.(dbody) d'.(dbody)
+                      × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)) mfix mfix' ->
+    pe (tCoFix mfix idx) (tCoFix mfix' idx)
+| pe_Prim p p' : onPrims pe eq p p' -> pe (tPrim p) (tPrim p').
+
+Derive Signature for pe.
+
+Lemma pe_refl t : pe t t.
+Proof.
+  induction t using term_forall_list_ind; try solve [constructor; auto].
+  - constructor. now apply All_All2 with (1 := X).
+  - destruct X as (Hpars & _ & Hret).
+    constructor.
+    + now apply All_All2 with (1 := Hpars).
+    + reflexivity.
+    + reflexivity.
+    + exact Hret.
+    + assumption.
+    + apply All_All2 with (1 := X0). intros x [_ Hb]. split; auto.
+  - constructor. apply All_All2 with (1 := X). intros d [Ht Hb]. repeat split; auto.
+  - constructor. apply All_All2 with (1 := X). intros d [Ht Hb]. repeat split; auto.
+  - constructor. destruct p as [? []]; cbn in X |- *.
+    1-3: constructor.
+    destruct X as (Ht & Hd & Hv).
+    constructor.
+    + reflexivity.
+    + exact Hd.
+    + exact Ht.
+    + now apply All_All2 with (1 := Hv).
+Qed.
+
+Lemma pe_ind_all (P : term -> term -> Type) :
+  (forall na A b M', pe b (tApp (lift0 1 M') (tRel 0)) -> P b (tApp (lift0 1 M') (tRel 0)) ->
+     P (tLambda na A b) M') ->
+  (forall n, P (tRel n) (tRel n)) ->
+  (forall i, P (tVar i) (tVar i)) ->
+  (forall s, P (tSort s) (tSort s)) ->
+  (forall c u, P (tConst c u) (tConst c u)) ->
+  (forall ind u, P (tInd ind u) (tInd ind u)) ->
+  (forall ind n u, P (tConstruct ind n u) (tConstruct ind n u)) ->
+  (forall ev l l', All2 (Trel_conj pe P) l l' -> P (tEvar ev l) (tEvar ev l')) ->
+  (forall na A A' M M', pe A A' -> P A A' -> pe M M' -> P M M' ->
+     P (tLambda na A M) (tLambda na A' M')) ->
+  (forall t t' u u', pe t t' -> P t t' -> pe u u' -> P u u' ->
+     P (tApp t u) (tApp t' u')) ->
+  (forall na a a' b b', pe a a' -> P a a' -> pe b b' -> P b b' ->
+     P (tProd na a b) (tProd na a' b')) ->
+  (forall na b b' ty ty' u u', pe b b' -> P b b' -> pe ty ty' -> P ty ty' ->
+     pe u u' -> P u u' -> P (tLetIn na b ty u) (tLetIn na b' ty' u')) ->
+  (forall ci p p' c c' brs brs',
+     All2 (Trel_conj pe P) p.(pparams) p'.(pparams) ->
+     p.(puinst) = p'.(puinst) ->
+     p.(pcontext) = p'.(pcontext) ->
+     pe p.(preturn) p'.(preturn) -> P p.(preturn) p'.(preturn) ->
+     pe c c' -> P c c' ->
+     All2 (fun x y => (x.(bcontext) = y.(bcontext))
+                      × Trel_conj pe P x.(bbody) y.(bbody)) brs brs' ->
+     P (tCase ci p c brs) (tCase ci p' c' brs')) ->
+  (forall pr c c', pe c c' -> P c c' -> P (tProj pr c) (tProj pr c')) ->
+  (forall mfix mfix' idx,
+     All2 (fun d d' => Trel_conj pe P d.(dtype) d'.(dtype)
+                       × Trel_conj pe P d.(dbody) d'.(dbody)
+                       × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)) mfix mfix' ->
+     P (tFix mfix idx) (tFix mfix' idx)) ->
+  (forall mfix mfix' idx,
+     All2 (fun d d' => Trel_conj pe P d.(dtype) d'.(dtype)
+                       × Trel_conj pe P d.(dbody) d'.(dbody)
+                       × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)) mfix mfix' ->
+     P (tCoFix mfix idx) (tCoFix mfix' idx)) ->
+  (forall p p', onPrims (Trel_conj pe P) eq p p' -> P (tPrim p) (tPrim p')) ->
+  forall t t', pe t t' -> P t t'.
+Proof.
+  intros Heta HRel HVar HSort HConst HInd HCtor HEvar HLam HApp HProd HLet
+         HCase HProj HFix HCoFix HPrim.
+  fix aux 3. intros t t' H. move aux at top.
+  destruct H as
+    [ na A b M' pM
+    | n | i | s | cst u | ind u | ind k u
+    | ev l l' al
+    | na A A' M M' pA pM
+    | f f' u u' pf pu
+    | na a a' b b' pa pb
+    | na b b' ty ty' u u' pb pty pu
+    | ci p p' c c' brs brs' apar eu ectx pret pc abrs
+    | pr c c' pc
+    | mfix mfix' idx am
+    | mfix mfix' idx am
+    | pp pp' op ].
+  - eapply Heta; [exact pM|apply aux; exact pM].
+  - apply HRel.
+  - apply HVar.
+  - apply HSort.
+  - apply HConst.
+  - apply HInd.
+  - apply HCtor.
+  - eapply HEvar. revert l l' al.
+    fix auxl 3. intros l l' Hl; destruct Hl.
+    + constructor.
+    + constructor; [split; [assumption|apply aux; assumption]|apply auxl; assumption].
+  - eapply HLam; [exact pA|apply aux; exact pA|exact pM|apply aux; exact pM].
+  - eapply HApp; [exact pf|apply aux; exact pf|exact pu|apply aux; exact pu].
+  - eapply HProd; [exact pa|apply aux; exact pa|exact pb|apply aux; exact pb].
+  - eapply HLet; [exact pb|apply aux; exact pb|exact pty|apply aux; exact pty
+               |exact pu|apply aux; exact pu].
+  - eapply HCase; [| exact eu | exact ectx | exact pret | apply aux; exact pret
+                  | exact pc | apply aux; exact pc |].
+    + revert apar. generalize (pparams p) (pparams p').
+      fix auxl 3. intros l l' Hl; destruct Hl.
+      * constructor.
+      * constructor; [split; [assumption|apply aux; assumption]|apply auxl; assumption].
+    + revert abrs. generalize brs brs'.
+      fix auxl 3. intros l l' Hl; destruct Hl as [|x y ll ll' rh rt].
+      * constructor.
+      * constructor; [|apply auxl; exact rt].
+        destruct rh as [Hc Hb]. split; [exact Hc|].
+        split; [exact Hb|apply aux; exact Hb].
+  - eapply HProj; [exact pc|apply aux; exact pc].
+  - eapply HFix. revert am. generalize mfix mfix'.
+    fix auxl 3. intros l l' Hl; destruct Hl as [|x y ll ll' rh rt].
+    + constructor.
+    + constructor; [|apply auxl; exact rt].
+      destruct rh as [Hty [Hbo [Hn Hr]]].
+      split; [split; [exact Hty|apply aux; exact Hty]|].
+      split; [split; [exact Hbo|apply aux; exact Hbo]|].
+      split; assumption.
+  - eapply HCoFix. revert am. generalize mfix mfix'.
+    fix auxl 3. intros l l' Hl; destruct Hl as [|x y ll ll' rh rt].
+    + constructor.
+    + constructor; [|apply auxl; exact rt].
+      destruct rh as [Hty [Hbo [Hn Hr]]].
+      split; [split; [exact Hty|apply aux; exact Hty]|].
+      split; [split; [exact Hbo|apply aux; exact Hbo]|].
+      split; assumption.
+  - eapply HPrim. destruct op; try solve [constructor].
+    constructor;
+      [ assumption
+      | split; [assumption|apply aux; assumption]
+      | split; [assumption|apply aux; assumption]
+      | ].
+    match goal with H : All2 pe _ _ |- _ => revert H end.
+    generalize (array_value a) (array_value a').
+    fix auxl 3. intros l l' Hl; destruct Hl.
+    + constructor.
+    + constructor; [split; [assumption|apply aux; assumption]|apply auxl; assumption].
+Qed.
+
+Lemma pe_lift np t t' (H : pe t t') : forall k, pe (lift np k t) (lift np k t').
+Proof.
+  induction H using pe_ind_all; intros k; cbn; try solve [econstructor; eauto].
+  - (* eta *)
+    apply pe_eta.
+    have e : lift np (S k) (lift0 1 M') = lift0 1 (lift np k M').
+    { rewrite (permute_lift M' np k 1 0 (Nat.le_0_l k)). now rewrite Nat.add_1_r. }
+    rewrite -e. match goal with IH : forall k, pe (lift np k _) (lift np k _) |- _ => exact (IH (S k)) end.
+  - constructor. apply All2_map.
+    eapply All2_impl; [eassumption|]. intros x y [_ Hk]. apply Hk.
+  - apply pe_Case; cbn.
+    + apply All2_map. eapply All2_impl; [eassumption|]. intros x y [_ Hk]. apply Hk.
+    + assumption.
+    + assumption.
+    + match goal with H : pcontext _ = pcontext _ |- _ => rewrite H end. eauto.
+    + eauto.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [Hc [_ Hk]]. cbn. split; [exact Hc|]. rewrite Hc. apply Hk.
+  - constructor.
+    match goal with H : All2 _ ?m ?m' |- _ => pose proof (All2_length H) as Hlen end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht|]. split; [rewrite Hlen; apply Hb|]. split; [exact Hn|exact Hr].
+  - constructor.
+    match goal with H : All2 _ ?m ?m' |- _ => pose proof (All2_length H) as Hlen end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht|]. split; [rewrite Hlen; apply Hb|]. split; [exact Hn|exact Hr].
+  - constructor.
+    match goal with
+    | H : onPrims _ _ _ _ |- _ => destruct H as [i|fl|st|arr arr' Hlvl Hdef Hty Hval]
+    end; cbn; try solve [constructor].
+    constructor; cbn.
+    + exact Hlvl.
+    + destruct Hdef as [_ Hd]. apply Hd.
+    + destruct Hty as [_ Ht]. apply Ht.
+    + apply All2_map. eapply All2_impl; [exact Hval|]. intros x y [_ Hk]. apply Hk.
+Qed.
+
+Lemma pe_subst M M' (H : pe M M') :
+  forall ss ss' k, All2 pe ss ss' -> pe (subst ss k M) (subst ss' k M').
+Proof.
+  induction H using pe_ind_all; intros ss ss' k HS; cbn; try solve [econstructor; eauto].
+  - (* eta *)
+    apply pe_eta. rewrite -commut_lift_subst.
+    match goal with IH : forall ss ss' k, All2 pe ss ss' -> _ |- _ => exact (IH ss ss' (S k) HS) end.
+  - destruct (le_lt_dec k n) as [Hle|Hlt].
+    + assert (Hb : Nat.leb k n = true) by (apply Nat.leb_le; exact Hle).
+      rewrite Hb.
+      destruct (nth_error ss (n - k)) as [b|] eqn:Hs.
+      * destruct (All2_nth_error_Some _ _ HS Hs) as (b' & Hs' & Hbb).
+        rewrite Hs'. now apply pe_lift.
+      * rewrite (All2_nth_error_None _ HS Hs). rewrite (All2_length HS). apply pe_Rel.
+    + assert (Hb : Nat.leb k n = false) by (apply Nat.leb_gt; exact Hlt).
+      rewrite Hb. apply pe_Rel.
+  - constructor. apply All2_map.
+    eapply All2_impl; [eassumption|]. intros x y [_ Hk]. apply Hk; assumption.
+  - apply pe_Case; cbn.
+    + apply All2_map. eapply All2_impl; [eassumption|]. intros x y [_ Hk]. apply Hk; assumption.
+    + assumption.
+    + assumption.
+    + match goal with He : pcontext _ = pcontext _ |- _ => rewrite He end. eauto.
+    + eauto.
+    + apply All2_map. eapply All2_impl; [eassumption|].
+      intros x y [Hc [_ Hk]]. cbn. split; [exact Hc|]. rewrite Hc. apply Hk; assumption.
+  - constructor.
+    match goal with
+    | |- All2 _ (map _ ?m) (map _ ?m') =>
+        match goal with He : All2 _ m m' |- _ => pose proof (All2_length He) as Hlen end
+    end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht; assumption|].
+    split; [rewrite Hlen; apply Hb; assumption|]. split; [exact Hn|exact Hr].
+  - constructor.
+    match goal with
+    | |- All2 _ (map _ ?m) (map _ ?m') =>
+        match goal with He : All2 _ m m' |- _ => pose proof (All2_length He) as Hlen end
+    end.
+    apply All2_map. eapply All2_impl; [eassumption|].
+    intros x y [[_ Ht] [[_ Hb] [Hn Hr]]]. cbn.
+    split; [apply Ht; assumption|].
+    split; [rewrite Hlen; apply Hb; assumption|]. split; [exact Hn|exact Hr].
+  - constructor.
+    match goal with
+    | He : onPrims _ _ _ _ |- _ => destruct He as [i|fl|st|arr arr' Hlvl Hdef Hty Hval]
+    end; cbn; try solve [constructor].
+    constructor; cbn.
+    + exact Hlvl.
+    + destruct Hdef as [_ Hd]. apply Hd; assumption.
+    + destruct Hty as [_ Ht]. apply Ht; assumption.
+    + apply All2_map. eapply All2_impl; [exact Hval|]. intros x y [_ Hk]. apply Hk; assumption.
+Qed.
+
+(** ** The parallel one-step postponement: statement, and its β-head case
+
+  The statement the iteration needs ([Good] is [eta_safe] of every [red] reduct of
+  [t], which typing gives through [typed_eta_safe] and E subject reduction):
+
+    [pe t u -> red1 Σ Γ u v -> ∑ w, red1⁺ t w × pe w v].
+
+  Its β-head case: [u] is a β-redex, possibly at the head of an application spine,
+  and [t] is an η-expansion of it at any depth (the head λ itself η-expanded, the
+  whole redex η-expanded, or both). It needs no invariant and closes by induction on
+  the [pe] derivation of [t], jointly with the fact that a [pe]-source of a λ reduces
+  to a λ (the η-expanded head λ is unfolded by β steps inside it). *)
+
+Definition pe_postpone_statement (Σ : global_env) (Good : context -> term -> Type) : Type :=
+  forall Γ t u v, Good Γ t -> pe t u -> red1 Σ Γ u v -> ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
+
+Lemma mkApps_tApp_is_tApp f a rest : ∑ g b, mkApps (tApp f a) rest = tApp g b.
+Proof.
+  induction rest as [|r rest _] using MRList.rev_ind; [now exists f, a|].
+  rewrite mkApps_app. cbn. now do 2 eexists.
+Qed.
+
+Lemma trans_clos_map {A B} (R : A -> A -> Type) (S : B -> B -> Type) (f : A -> B) :
+  (forall x y, R x y -> S (f x) (f y)) -> forall x y, trans_clos R x y -> trans_clos S (f x) (f y).
+Proof.
+  intros hf x y h. induction h; [apply t_step; now apply hf|eapply t_trans; eassumption].
+Qed.
+
+Lemma rt_map {A B} (R : A -> A -> Type) (S : B -> B -> Type) (f : A -> B) :
+  (forall x y, R x y -> S (f x) (f y)) -> forall x y, clos_refl_trans R x y -> clos_refl_trans S (f x) (f y).
+Proof.
+  intros hf x y h. induction h as [x y r|x|x y w _ IH1 _ IH2].
+  - apply rt_step. now apply hf.
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma rt_trans_clos {A} (R : A -> A -> Type) x y z :
+  clos_refl_trans R x y -> trans_clos R y z -> trans_clos R x z.
+Proof.
+  intros h. induction h as [x y r|x|x y w _ IH1 _ IH2] in z |- *; intros h'.
+  - eapply t_trans; [apply t_step; exact r|exact h'].
+  - exact h'.
+  - apply IH1. apply IH2. exact h'.
+Qed.
+
+Ltac pe_impossible :=
+  split; intros * E;
+  [ match type of E with
+    | _ = mkApps (tApp ?f ?a) ?rest =>
+        let g := fresh "g" in let b := fresh "b" in let e := fresh "e" in
+        destruct (mkApps_tApp_is_tApp f a rest) as (g & b & e); rewrite e in E; discriminate E
+    end
+  | discriminate E ].
+
+Section BetaHead.
+  Context (Σ : global_env).
+
+  Lemma pe_beta_head_and_lambda t u (h : pe t u) :
+    (forall Γ na A' b' a' rest, u = mkApps (tApp (tLambda na A' b') a') rest ->
+       ∑ w, trans_clos (red1 Σ Γ) t w × pe w (mkApps (b' {0 := a'}) rest)) ×
+    (forall Γ na A' b', u = tLambda na A' b' ->
+       ∑ nb B b0, clos_refl_trans (red1 Σ Γ) t (tLambda nb B b0) × pe b0 b').
+  Proof.
+    induction h as
+      [ na A b M' hb IH
+      | n | i | s | cst uu | ind uu | ind k uu
+      | ev l l' al
+      | na A A' M M' hA IHA hM IHM
+      | f f' x x' hf IHf hx IHx
+      | na a a' b b' ha IHa hb IHb
+      | na b b' ty ty' x x' hb IHb hty IHty hx IHx
+      | ci p p' c c' brs brs' apar eu ectx pret IHret pc IHc abrs
+      | pr c c' pc IHc
+      | mfix mfix' idx am
+      | mfix mfix' idx am
+      | pp pp' op ].
+    all: try solve [pe_impossible].
+    - (* pe_eta: the redex (or the λ) is η-expanded as a whole *)
+      destruct IH as [IH1 _]. split.
+      + intros Γ na' A' b' a' rest ->.
+        destruct (IH1 (Γ ,, vass na A) na' (lift0 1 A') (lift 1 1 b') (lift0 1 a')
+                    (map (lift0 1) rest ++ [tRel 0])) as (w & hr & hp).
+        { rewrite mkApps_app lift_mkApps. reflexivity. }
+        exists (tLambda na A w). split.
+        * eapply (trans_clos_map _ _ (fun y => tLambda na A y)); [|exact hr].
+          intros y z r. now apply abs_red_r.
+        * apply pe_eta.
+          have e : tApp (lift0 1 (mkApps (b' {0 := a'}) rest)) (tRel 0)
+                   = mkApps ((lift 1 1 b') {0 := lift0 1 a'}) (map (lift0 1) rest ++ [tRel 0]).
+          { rewrite mkApps_app lift_mkApps. cbn. f_equal. f_equal. apply distr_lift_subst10. }
+          rewrite e. exact hp.
+      + intros Γ na' A' b' ->.
+        destruct (IH1 (Γ ,, vass na A) na' (lift0 1 A') (lift 1 1 b') (tRel 0) []) as (w & hr & hp).
+        { reflexivity. }
+        cbn in hp. rewrite C3R.subst_rel0_lift_id0 in hp.
+        exists na, A, w. split; [|exact hp].
+        apply clos_t_rt. eapply (trans_clos_map _ _ (fun y => tLambda na A y)); [|exact hr].
+        intros y z r. now apply abs_red_r.
+    - (* pe_Lambda: the λ itself *)
+      split.
+      + intros * E. match type of E with _ = mkApps (tApp ?f ?a) ?r =>
+          destruct (mkApps_tApp_is_tApp f a r) as (g & b0 & e) end.
+        rewrite e in E. discriminate E.
+      + intros Γ na' A'' b'' E. injection E as _ _ ->.
+        do 3 eexists. split; [apply rt_refl|exact hM].
+    - (* pe_App: the redex, or a spine around it *)
+      destruct IHf as [IHf1 IHf2]. split; [|intros * E; discriminate E].
+      intros Γ na A' b' a' rest E.
+      destruct rest as [|r rest _] using MRList.rev_ind.
+      + cbn in E. injection E as -> ->.
+        destruct (IHf2 Γ na A' b' eq_refl) as (nb & B & b0 & hr & hp).
+        exists (b0 {0 := x}). split.
+        * eapply rt_trans_clos.
+          -- eapply (rt_map _ _ (fun y => tApp y x)); [|exact hr]. intros y z r. now apply app_red_l.
+          -- apply t_step. apply red_beta.
+        * exact (pe_subst _ _ hp [x] [a'] 0 (All2_cons hx All2_nil)).
+      + rewrite mkApps_app in E. cbn in E. injection E as -> ->.
+        destruct (IHf1 Γ na A' b' a' rest eq_refl) as (w & hr & hp).
+        exists (tApp w x). split.
+        * eapply (trans_clos_map _ _ (fun y => tApp y x)); [|exact hr].
+          intros y z r0. now apply app_red_l.
+        * rewrite mkApps_app. cbn. now apply pe_App.
+  Qed.
+
+  (** **The β-head case of the parallel one-step postponement: CLOSED.** *)
+  Lemma pe_postpone_beta Γ t na A' b' a' :
+    pe t (tApp (tLambda na A' b') a') -> ∑ w, trans_clos (red1 Σ Γ) t w × pe w (b' {0 := a'}).
+  Proof. intros h. exact (fst (pe_beta_head_and_lambda _ _ h) Γ na A' b' a' [] eq_refl). Qed.
+
+End BetaHead.
