@@ -1730,7 +1730,7 @@ Proof. split; [intros h; exact (eta_pe_step _ _ h t (pe_refl t))|exact (pe_to_et
   the target's spine head is not one of the substituted variables. *)
 
 Definition rigid (h : term) : bool :=
-  match h with tConstruct _ _ _ | tFix _ _ | tCoFix _ _ | tConst _ _ => true | _ => false end.
+  match h with tConstruct _ _ _ | tFix _ _ | tCoFix _ _ | tConst _ _ | tPrim _ => true | _ => false end.
 
 Lemma rigid_notApp h : rigid h -> ~~ isApp h.
 Proof. destruct h; cbn; auto. Qed.
@@ -2285,7 +2285,16 @@ Section RigidInv.
       split; [exact hred|split; [reflexivity|split; [|exact hr]]].
       apply pe_subst; [|exact hs]. apply pe_CoFix.
       eapply All2_impl; [exact am|]. intros d d' [[ht _] [[hb _] [hn hrr]]]. exact (ht, (hb, (hn, hrr))).
-    - intros; rigid_contra.
+    - (* primitive value *)
+      intros pp pp' op s s' rest rest' hs hr hu hred hsz hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      left. exists (subst s 0 (tPrim pp)), rest.
+      split; [exact hred|split; [reflexivity|split; [|exact hr]]].
+      apply pe_subst; [|exact hs]. apply pe_Prim.
+      destruct op as [i|f|st|a a' hl hd' hty hval]; constructor; try assumption.
+      + exact (fst hd').
+      + exact (fst hty).
+      + eapply All2_impl; [exact hval|]. intros x y [h _]. exact h.
   Qed.
 
   Lemma pe_spine_or_lam_top u hd args :
@@ -2389,16 +2398,31 @@ Qed.
     subject reduction, forecast row T1. It is neither proved nor used in this
     file. Only with (ii) does (i) apply to each reduct of [c0] and give [hnl].
 
-  Measured time per case group (from commit times): β-head and the [pe] definition,
-  11 min (11:36–11:47Z); [eta1* = pe], 8 min (12:02–12:10Z); rigid-spine inversion,
-  7 min (12:10–12:17Z); ι and projection roots with the [pe_ctx] copies, 7 min
-  (12:18–12:25Z); cofix-case and cofix-proj roots with their helpers, 6 min (12:31–12:37Z).
+  Measured time per root group (wall clock, from commit times; build cycles of about
+  1 min each included):
+  - β-head and the [pe] definition: 11 min (11:36–11:47Z);
+  - [eta1* = pe]: 8 min (12:02–12:10Z);
+  - rigid-spine inversion: 7 min (12:10–12:17Z);
+  - ι and projection roots, with the [pe_ctx] copies: 7 min (12:18–12:25Z);
+  - cofix-case and cofix-proj roots, with their helpers: 6 min (12:31–12:37Z);
+  - measure lemmas (literal-linearity refutation with the typed witness, plain-size
+    growth, [pe_occ], [pe_eta_body_once], [size'_subst1],
+    [head_beta_size'_decrease]): 26 min (12:38–13:04Z);
+  - λ alternative of the inversion ([pe_spine_or_lam]): 5 min (13:04–13:09Z);
+  - fixpoint root: 7 min (13:09–13:16Z);
+  - primitive-operation root: 5 min (13:17–13:22Z).
 
-  Induction principles used by the proved parallel lemmas, one per lemma, with
-  no recursion between lemmas: [pe_beta_head_and_lambda] and [pe_rigid_inv] use
-  induction on the [pe] derivation; [pe_eta1_closed], [eta1_pe] and [pe_to_eta]
-  use induction on the [pe] or [eta1] derivation; [eta_pe_step] uses induction on
-  [clos_refl_trans]. The root lemmas below do no induction of their own: they call
+  Induction principles, one per lemma. No lemma calls another lemma recursively,
+  and calls between lemmas follow a fixed acyclic order:
+  - [pe_beta_head_and_lambda] and [pe_spine_or_lam]: induction on the [pe] derivation;
+  - [pe_eta1_closed], [eta1_pe], [pe_to_eta], [pe_occ]: induction on the [pe] or
+    [eta1] derivation;
+  - [occ_lift_ge], [occ_lift_eq], [size'_lift], [size'_subst1]: induction on the term;
+  - [eta_pe_step]: induction on [clos_refl_trans];
+  - [pe_fix_root_n], [pe_prim_root_n], [no_pe_source_app_prim_n]: induction on a
+    bound [n >= size' t], whose only recursive call is on the body of a λ-reduct
+    with its decrease proved at the call.
+  The ι, projection and cofix roots do no induction of their own: they call
   [pe_rigid_spine]. *)
 
 (** **The parallel ι root case: CLOSED, under [hnl].** The source is a [pe_Case]
@@ -2406,6 +2430,9 @@ Qed.
     [pe_eta] source, an η-expansion of the whole redex, is the generic
     η-at-the-root case, as in [pp_root]. *)
 Lemma pe_iota_root Σ Γ ci p0 c0 brs0 p c uu args brs br :
+  (* PREMISE hnl, NOT unconditional: (i) typed_eta_safe, typing ⇒ invariant, proved here
+     with no SR; (ii) preservation of typing along red, E subject reduction, forecast T1,
+     not proved here. *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) ->
   pe c0 (mkApps (tConstruct ci.(ci_ind) c uu) args) ->
@@ -2428,6 +2455,7 @@ Qed.
 (** **The parallel projection root case: CLOSED, under [hnl]** (same shape as
     [pe_iota_root]). *)
 Lemma pe_proj_root Σ Γ pr c0 uu args arg :
+  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (forecast T1). *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   pe c0 (mkApps (tConstruct pr.(proj_ind) 0 uu) args) ->
   nth_error args (pr.(proj_npars) + pr.(proj_arg)) = Some arg ->
@@ -2498,6 +2526,7 @@ Qed.
     [pe_iota_root]; the scrutinee's cofixpoint is unfolded through
     [pe_unfold_cofix_back]). *)
 Lemma pe_cofix_case_root Σ Γ ip p0 c0 brs0 p mfix idx args narg fn brs :
+  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (forecast T1). *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) -> p0.(pcontext) = p.(pcontext) ->
   pe p0.(preturn) p.(preturn) ->
@@ -2520,6 +2549,7 @@ Qed.
 
 (** **The parallel cofix-proj root case: CLOSED, under [hnl].** *)
 Lemma pe_cofix_proj_root Σ Γ pr c0 mfix idx args narg fn :
+  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (forecast T1). *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   pe c0 (mkApps (tCoFix mfix idx) args) ->
   unfold_cofix mfix idx = Some (narg, fn) ->
@@ -2539,19 +2569,19 @@ Qed.
 
 (** ** Status of the parallel one-step postponement ([pe_postpone_statement])
 
-  Closed above: the β-head case ([pe_postpone_beta], no invariant), the ι,
-  projection, cofix-case and cofix-proj root cases (under [hnl]), and their shared
-  spine inversion ([pe_rigid_spine]).
+  Closed above and below: the β-head case ([pe_postpone_beta], no invariant), the
+  ι, projection, cofix-case and cofix-proj root cases (under [hnl]), their shared
+  spine inversion ([pe_rigid_spine]), and the fixpoint and primitive-operation
+  roots ([pe_fix_root], [pe_prim_root], under [Good], by induction on [size']).
 
-  Open:
-  - fixpoint and primitive-operation roots: the redex spine may have a PRODUCT type,
-    so [hnl] does not hold of its source, and a source such as
-    [(λz. λy. G z y) x] (with [G = mkApps (tFix mfix idx) args']) β-reduces to the
-    η-expansion [λy. G x y] of the redex, never to the redex spine. The statement still
-    holds there (unfold under the λ, then [pe_eta)), but the reduct's [pe] derivation
-    is not a subderivation of the source's. Route: well-founded induction on [size']
-    of the source (below). Plain [size] does NOT work: [literal_linearity_false] and
-    [plain_size_grows_head_beta];
+  Why the fixpoint and primitive roots need [size']: the redex spine may have a
+  PRODUCT type, so [hnl] does not hold of its source, and a source such as
+  [(λz. λy. G z y) x] (with [G = mkApps (tFix mfix idx) args']) β-reduces to the
+  η-expansion [λy. G x y] of the redex, never to the redex spine. The reduct's [pe]
+  derivation is not a subderivation of the source's. Plain [size] does NOT work
+  ([literal_linearity_false], [plain_size_grows_head_beta]).
+
+  Open (not started, on hold):
   - the generic η-at-the-root case ([pe_eta] source, any [red1] step): [pp_root] with
     the IH on the body;
   - the congruence cases, with [red1] transported along [pe_ctx] (above): [red_rel]
@@ -2622,6 +2652,9 @@ Section FixRoot.
   Context (Σ : global_env).
 
   Lemma pe_fix_root_n n : forall Γ t mfix idx args narg fn,
+    (* PREMISE Good, NOT unconditional: (i) typed_eta_safe, typing ⇒ invariant, proved here
+       with no SR; (ii) preservation of typing along red, E subject reduction, forecast T1,
+       not proved here. *)
     size' t <= n -> Good Σ Γ t -> pe t (mkApps (tFix mfix idx) args) ->
     unfold_fix mfix idx = Some (narg, fn) -> is_constructor narg args = true ->
     ∑ w, trans_clos (red1 Σ Γ) t w × pe w (mkApps fn args).
@@ -2688,4 +2721,155 @@ Section FixRoot.
   Proof. exact (pe_fix_root_n (size' t) Γ t mfix idx args narg fn (le_n _)). Qed.
 
 End FixRoot.
+
+(** ** The parallel primitive-operation root, by well-founded induction on [size']
+
+  Same structure as the fixpoint root. Two differences: the target is a primitive
+  redex followed by EXTRA arguments (under a λ the spine gains [tRel 0], which is not
+  a literal, so the redex is the prefix); and the argument positions of the redex
+  must be literals, so a [pe]-source of a literal must reduce to it ([pe_lit_red]).
+  That uses [no_pe_source_app_prim_n]: a [Good] term never [pe]-reduces to an
+  APPLIED primitive value, by the same induction on [size'], whose only recursive
+  call is on the body of a λ-reduct. *)
+
+Section PrimRoot.
+  Context {cf : checker_flags} {Σ : global_env} (cb : ClosedBodies Σ).
+
+  Lemma Good_red Γ t t' : Good Σ Γ t -> red Σ Γ t t' -> Good Σ Γ t'.
+  Proof. intros hg hr t'' h. apply hg. eapply rt_trans; eassumption. Qed.
+
+  Lemma Good_lam_body Γ na A B : Good Σ Γ (tLambda na A B) -> Good Σ (Γ ,, vass na A) B.
+  Proof.
+    intros hg B' hB.
+    have hr : red Σ Γ (tLambda na A B) (tLambda na A B') by (apply red_abs; [apply rt_refl|exact hB]).
+    have hs := hg _ hr. cbn in hs. move/andP: hs => [_ hs]. exact hs.
+  Qed.
+
+  Lemma Good_arg Γ h pre a post : Good Σ Γ (mkApps h (pre ++ a :: post)) -> Good Σ Γ a.
+  Proof.
+    intros hg a' hr.
+    have hred : red Σ Γ (mkApps h (pre ++ a :: post)) (mkApps h (pre ++ a' :: post)).
+    { apply red_mkApps; [apply rt_refl|].
+      apply All2_app; [apply All2_refl; intros; apply rt_refl|].
+      constructor; [exact hr|apply All2_refl; intros; apply rt_refl]. }
+    have hs := eta_safe_mkApps_args _ _ _ (hg _ hred). rewrite forallb_app /= in hs.
+    move/andP: hs => [_ /andP [hs _]]. exact hs.
+  Qed.
+
+  Lemma eta_safe_mkApps_prim p args : args <> [] -> eta_safe Σ (mkApps (tPrim p) args) = false.
+  Proof.
+    induction args as [|x l IH] using MRList.rev_ind; [congruence|]. intros _.
+    rewrite mkApps_app. cbn [mkApps eta_safe].
+    destruct l as [|y l'].
+    - reflexivity.
+    - rewrite IH; [discriminate|]. now rewrite andb_false_r.
+  Qed.
+
+  Lemma snoc_not_nil {A} (l : list A) x : l ++ [x] <> [].
+  Proof. intros e. apply app_eq_nil in e as [_ e]. discriminate e. Qed.
+
+  (** A [Good] term is never a [pe]-source of an applied primitive value. Only
+      recursive call: on the body [B] of a λ-reduct, with [size' B < size' a]. *)
+  Lemma no_pe_source_app_prim_n n : forall Γ a p xs,
+    size' a <= n -> Good Σ Γ a -> pe a (mkApps (tPrim p) xs) -> xs <> [] -> False.
+  Proof.
+    induction n as [|n IH]; intros Γ a p xs hsz hg hpe hne.
+    { have := size'_pos a. lia. }
+    destruct (pe_spine_or_lam_top Σ Γ a _ (tPrim p) xs hpe eq_refl eq_refl) as [hs|hl].
+    - destruct hs as (h0 & args0 & hred & hnlh & hph & hargs).
+      depelim hph; [cbn in hnlh; discriminate hnlh|].
+      have hne0 : args0 <> [] by (intros ->; depelim hargs; congruence).
+      have hs := hg _ hred. rewrite (eta_safe_mkApps_prim _ _ hne0) in hs. discriminate hs.
+    - destruct hl as (na & A & B & hred & hszl & hpB).
+      rewrite lift_mkApps_eta_target in hpB. cbn [lift] in hpB.
+      exact (IH (Γ ,, vass na A) B _ _ ltac:(cbn in hszl; lia)
+               (Good_lam_body _ _ _ _ (Good_red _ _ _ hg hred)) hpB (snoc_not_nil _ _)).
+  Qed.
+
+  (** A [Good] [pe]-source of a literal reduces to that literal. *)
+  Lemma pe_lit_red Γ a l : Good Σ Γ a -> pe a (term_of_lit l) -> red Σ Γ a (term_of_lit l).
+  Proof.
+    intros hg hpe.
+    destruct (pe_spine_or_lam_top Σ Γ a _ (term_of_lit l) [] hpe eq_refl eq_refl) as [hs|hl].
+    - destruct hs as (h0 & args0 & hred & hnlh & hph & hargs). depelim hargs. cbn in hred.
+      destruct l as [i|s0]; cbn in hph |- *; depelim hph; try (cbn in hnlh; discriminate hnlh);
+        match goal with H : onPrims _ _ _ _ |- _ => depelim H end; exact hred.
+    - destruct hl as (na & A & B & hred & hszl & hpB). exfalso.
+      have hgB := Good_lam_body _ _ _ _ (Good_red _ _ _ hg hred).
+      destruct l as [i|s0]; cbn in hpB;
+        exact (no_pe_source_app_prim_n (size' B) _ B _ [tRel 0] (le_n _) hgB hpB ltac:(discriminate)).
+  Qed.
+
+  Lemma pe_lits_red Γ h pre a0s post ls :
+    Good Σ Γ (mkApps h (pre ++ a0s ++ post)) -> All2 pe a0s (map term_of_lit ls) ->
+    All2 (red Σ Γ) a0s (map term_of_lit ls).
+  Proof.
+    induction a0s as [|a a0s IH] in pre, ls |- *; intros hg ha; destruct ls as [|l ls]; cbn in ha |- *;
+      depelim ha.
+    - constructor.
+    - constructor.
+      + apply pe_lit_red; [|assumption]. exact (Good_arg _ h pre a (a0s ++ post) hg).
+      + apply (IH (pre ++ [a]) ls); [|assumption]. rewrite -app_assoc. exact hg.
+  Qed.
+
+  Lemma lift_prim_spine n k c uu ls :
+    lift n k (mkApps (tConst c uu) (map term_of_lit ls)) = mkApps (tConst c uu) (map term_of_lit ls).
+  Proof.
+    rewrite lift_mkApps map_map. cbn. f_equal. apply map_ext. intros []; reflexivity.
+  Qed.
+
+  Lemma ofv_prim_spine c uu ls : on_free_vars xpredT (mkApps (tConst c uu) (map term_of_lit ls)).
+  Proof.
+    rewrite on_free_vars_mkApps. cbn. induction ls as [|l ls IH]; [reflexivity|].
+    destruct l; cbn; exact IH.
+  Qed.
+
+  Lemma pe_prim_root_n n : forall Γ t c uu ls extra v,
+    (* PREMISE Good, NOT unconditional: (i) typed_eta_safe, typing ⇒ invariant, proved here
+       with no SR; (ii) preservation of typing along red, E subject reduction, forecast T1,
+       not proved here. *)
+    size' t <= n -> Good Σ Γ t ->
+    pe t (mkApps (mkApps (tConst c uu) (map term_of_lit ls)) extra) ->
+    red1 Σ Γ (mkApps (tConst c uu) (map term_of_lit ls)) v ->
+    ∑ w, trans_clos (red1 Σ Γ) t w × pe w (mkApps v extra).
+  Proof.
+    induction n as [|n IH]; intros Γ t c uu ls extra v hsz hgood hpe hstep.
+    { exfalso. have := size'_pos t. lia. }
+    rewrite -mkApps_app in hpe.
+    destruct (pe_spine_or_lam_top Σ Γ t _ (tConst c uu) _ hpe eq_refl eq_refl) as [hs|hl].
+    - (* the source reduces to the primitive spine: reduce its literal arguments, fire *)
+      destruct hs as (h0 & args0 & hred & hnlh & hph & hargs).
+      depelim hph; [cbn in hnlh; discriminate hnlh|].
+      destruct (All2_app_inv_r _ _ _ _ _ _ hargs) as (a0s & b0s & -> & hlits & hext).
+      have hlr := pe_lits_red Γ (tConst c uu) [] a0s b0s ls (Good_red _ _ _ hgood hred) hlits.
+      exists (mkApps v b0s). split.
+      + eapply rt_trans_clos.
+        * eapply rt_trans; [exact hred|]. apply red_mkApps; [apply rt_refl|].
+          apply All2_app; [exact hlr|apply All2_refl; intros; apply rt_refl].
+        * apply t_step. rewrite mkApps_app. now apply red1_mkApps_f.
+      + apply pe_mkApps; [apply pe_refl|exact hext].
+    - (* the source reduces to a λ: recurse on its BODY, with [size'] decreasing *)
+      destruct hl as (na & A & B & hred & hszl & hpB).
+      have hszB : size' B <= n by (cbn in hszl; lia).
+      rewrite mkApps_app lift_mkApps_eta_target lift_prim_spine in hpB.
+      have hstep' : red1 Σ (Γ ,, vass na A) (mkApps (tConst c uu) (map term_of_lit ls)) (lift0 1 v).
+      { rewrite -{1}(lift_prim_spine 1 0 c uu ls).
+        exact (red1_lift1 cb Γ na A _ _ (ofv_prim_spine c uu ls) hstep). }
+      destruct (IH (Γ ,, vass na A) B c uu ls _ _ hszB (Good_lam_body _ _ _ _ (Good_red _ _ _ hgood hred))
+                  hpB hstep') as (w' & hw' & hpw').
+      exists (tLambda na A w'). split.
+      + eapply rt_trans_clos; [exact hred|].
+        eapply (trans_clos_map _ _ (fun y => tLambda na A y)); [|exact hw'].
+        intros y z r. now apply abs_red_r.
+      + apply pe_eta. rewrite lift_mkApps_eta_target. exact hpw'.
+  Qed.
+
+  (** **The parallel primitive-operation root: CLOSED, under [Good].** *)
+  Theorem pe_prim_root Γ t c uu ls v :
+    Good Σ Γ t -> pe t (mkApps (tConst c uu) (map term_of_lit ls)) ->
+    red1 Σ Γ (mkApps (tConst c uu) (map term_of_lit ls)) v ->
+    ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
+  Proof. intros hg hpe hstep. exact (pe_prim_root_n (size' t) Γ t c uu ls [] v (le_n _) hg hpe hstep). Qed.
+
+End PrimRoot.
 
