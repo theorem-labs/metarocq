@@ -27,8 +27,10 @@ From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICSafeR
 
 Section EtaOracle.
   Context {cf : checker_flags} {nor : normalizing_flags}.
-  Context {reduce_factsE : ReduceTypedFacts welltypedE wf_extE}.
-  Context {conv_factsE : ConvTypedFacts welltypedE wf_extE}.
+  (* EtaIntegrate9 (36907f06): the conversion's section binds the small Prop classes of its GENUINE fields;
+     the full classes come from the instances [reduce_typed_facts_E] / [conv_typed_facts_E]. *)
+  Context {reduce_factsE : ReduceTypedFactsE}.
+  Context {conv_factsE : ConvTypedFactsE}.
   Context (closed_context_conversionE : ∥ forall (Σ : global_env_ext), wfE Σ.1 -> forall Γ t T Γ',
     Σ ;;; Γ |-E t : T -> wf_localE Σ Γ' -> ws_cumul_ctx_pbE Conv Σ Γ Γ' -> Σ ;;; Γ' |-E t : T ∥).
   Context (welltypedE_context : forall (Σ : global_env_ext), wfE Σ.1 -> forall Γ t,
