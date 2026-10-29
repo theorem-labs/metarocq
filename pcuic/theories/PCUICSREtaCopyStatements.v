@@ -71,7 +71,7 @@ Local Set Warnings "-unexpected-implicit-declaration".
   needs it. [wfE] supplies it through [wfE_ClosedBodies] ([Typing/PCUICClosedTypEta.v]).
 
   The check: this file typechecks against [d8120081] plus the files that
-  [wip/eta-e3-copies2-2026-10-29] @ [3353f43a] (which contains [fork/frac/eta] = [da1eb84b])
+  [wip/eta-e3-copies2-2026-10-29] @ [1da9a004] (which contains [fork/frac/eta] = [07a50edd])
   changes; no block is commented. *)
 
 (** ** E twins of the copy-file definitions that the statements mention
@@ -702,3 +702,21 @@ Definition wf_cofixpoint_typing_spineE_statement : Prop :=
   isTypeE Σ Γ (dtype d) ->
   typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
   check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
+
+(** C1 addition for EtaMetaLane's T6 (the E copy of [Bidirectional/BDToPCUIC]):
+    [PCUICInductiveInversion.v:3794]. Route [INFERENCE]: base's proof reads the universe
+    clause of [invert_cumul_ind_ind], false over η below the arity; here [isTypeE] of
+    [mkApps (tInd ind u) args] makes [args] the full arity, so [invert_cumul_ind_indE] with
+    [finst_ind_glue_full] ([PCUICEtaFInstGlue.v:37]) gives the clause. *)
+Definition ctx_inst_app_weakE_statement : Type :=
+  forall {H : checker_flags} (Σ : global_env_ext) (wfΣ : wfE Σ.1) (ind : inductive)
+    (mdecl : mutual_inductive_body) (idecl : one_inductive_body)
+    (isdecl : declared_inductive Σ.1 ind mdecl idecl) (Γ : context) (wfΓ : wf_localE Σ Γ)
+    (params args : list term) (u v : Instance.t),
+  isTypeE Σ Γ (mkApps (tInd ind u) args) ->
+  consistent_instance_ext Σ (ind_universes mdecl) v ->
+  ctx_instE Σ Γ params (List.rev (subst_instance v (ind_params mdecl))) ->
+  ws_cumul_pbE Cumul Σ Γ (mkApps (tInd ind u) args)
+    (mkApps (tInd ind v) (params ++ skipn (ind_npars mdecl) args)) ->
+  ctx_instE Σ Γ (params ++ skipn (ind_npars mdecl) args)
+    (List.rev (subst_instance v (ind_params mdecl ,,, ind_indices idecl))).
