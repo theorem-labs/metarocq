@@ -193,6 +193,7 @@ theories/PCUICEtaK6EtaStep.v
 # Well-scoped eta-conversion (ws_cumul_pbE): congruences, substitution, inversions, context conversion
 theories/PCUICWellScopedCumulativityEta.v
 theories/PCUICConversionEtaCongr.v
+theories/PCUICConversionEtaCongrFinst.v
 theories/PCUICWsCumulEtaSubst.v
 theories/PCUICEtaA6.v
 theories/PCUICEtaA6Ind.v
@@ -216,10 +217,14 @@ theories/PCUICInversionEta.v
 # The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
 theories/PCUICSREtaConv.v
 theories/PCUICSREtaConvInstances.v
+# Context conversion and context cumulativity of typingE, and their satisfying instances
+theories/Typing/PCUICContextConversionTypEta.v
+theories/PCUICTypingEtaCopy9Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
 theories/PCUICEtaC1b.v
+theories/PCUICFixWitnessEtaCounter.v
 # Satisfying instances of the hypotheses of the lemmas above
 theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
