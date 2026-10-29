@@ -31,7 +31,40 @@ From Stdlib Require Import ssreflect ssrbool.
 
 (** * Spines over [typingE]
 
-  The E copy of [PCUICSpine]. *)
+  The E copy of [PCUICSpine]. Each declaration of the base file that mentions typing,
+  [wf_local], [wf], [isType], [subslet], the spines or the cumulativity is copied; its E name is
+  the base name with the suffix [E], and its statement is the base statement with only the
+  relations renamed: [typing] → [typingE], [wf_local] → [wf_localE], [wf] → [wfE], [isType] →
+  [isTypeE], [wf_local_rel] → [wf_local_relE], [ctx_inst Σ] → [ctx_instE Σ], [subslet] →
+  [subsletE], [typing_spine] → [typing_spineE] (the one of [PCUICAritiesEta]), [spine_subst],
+  [arity_spine], [wf_arity_spine], [ctx_inst_sub] → their E definitions here,
+  [Σ ;;; Γ ⊢ t ≤[pb] u] → [Σ ;;; Γ ⊢E t ≤[pb] u], [Σ ⊢ Γ ≤[pb] Δ] →
+  [ws_cumul_ctx_pbE pb Σ Γ Δ], [ws_cumul_ctx_pb_rel] → [ws_cumul_ctx_pbE_rel],
+  [ws_cumul_pb_terms] → [ws_cumul_pbE_terms]. Implicit status, binder names and positions are
+  base's; section premises are base's ([Proof using] kept).
+
+  The E definitions [spine_substE] (with its fields, [Arguments], coercions and hint),
+  [arity_spineE] ([Derive Signature]), [wf_arity_spineE] and [ctx_inst_subE] are the canonical
+  ones; the notations [spnilE], [spconsE] and the [Arguments] of [type_spine_consE] are the
+  twins of base's.
+
+  [type_mkAppsE] is NOT a twin: it ADDS [ClosedBodies Σ] (its comment says why).
+  [substitution_ws_cumul_pbE_typed] is the twin of [PCUICConversion.substitution_ws_cumul_pb]
+  (over [subsletE] and [wfE]); the name [substitution_ws_cumul_pbE] is
+  [PCUICWsCumulEtaSubst]'s untyped lemma.
+
+  Proof routes that differ from base (statements are twins): [type_it_mkProd_or_LetIn_invE]
+  inverts the let-in by [ws_cumul_pbE_LetIn_l_inv] and then expands the let ([red_expand_letE])
+  and weakens, with no comparison of reducts; [wf_arity_spine_typing_spineE] builds its ζ step
+  by [red_ws_cumul_pbE]; [arity_spine_it_mkProd_or_LetIn_SortE] and [ctx_inst_eq_contextE]
+  include [compare_term] in the spec ([eq_term_upto_univ_cumulSpecE],
+  [into_ws_cumul_pbE_spec]); [all_rels_substE] weakens the reduction under [ClosedBodies]
+  ([weakening_red_cb]); [ws_cumul_pb_terms_ws_cumul_ctxE] uses [ws_cumul_pbE_ws_cumul_ctx_pb].
+
+  Not copied: [red_expand_let] (its E twin [red_expand_letE] is [PCUICSREtaConv]'s), the
+  declarations that mention none of the relations (used from base, which this file imports),
+  and base's global [Hint Rewrite all_rels_length : len] and [Derive Signature for ctx_inst],
+  which act through that import. *)
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
