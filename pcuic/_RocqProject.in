@@ -189,6 +189,8 @@ theories/PCUICContextConversionEta.v
 theories/PCUICWsCumulEtaCtx.v
 theories/PCUICWsCumulEtaCtxTyp.v
 theories/PCUICWsCumulEtaCtxInstances.v
+# Inversion of typingE (E copy of PCUICInversion)
+theories/PCUICInversionEta.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaC1b.v
@@ -196,4 +198,5 @@ theories/PCUICEtaC1b.v
 theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
+theories/PCUICInversionEtaInstances.v
 # theories/All.v
