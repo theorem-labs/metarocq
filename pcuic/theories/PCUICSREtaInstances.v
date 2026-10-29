@@ -16,7 +16,9 @@
   - [Σ_po]: [int : Set], [land : int -> int -> int] registered as [Int63land], the primitive
     integers on [int], with [iv_po_wfE];
   - [iv_Σ]: [CoInductive R (A : Prop) : Prop := mkR { f : A }], with [iv_wfE];
-  - [sri_c_Σ] (here): [Definition c : Prop := ∀P:Prop. P], with [sri_c_wf]/[sri_c_wfE].
+  - [sri_c_Σ] (here): [Definition c : Prop := ∀P:Prop. P], with [sri_c_wf]/[sri_c_wfE];
+  - [sri_arr_Σ] (here): [int : Set] and [array : Type@{u} -> Type@{u}] registered as the primitive
+    integers and arrays, with [sri_arr_wf]/[sri_arr_wfE].
 
   **Coverage of the 17 premise lemmas of [sr_red1E].** Each [sr_red1E_<rule>] is APPLIED to
   concrete arguments in [sr_red1E_<rule>_inst]: a concrete derivation with that head, and every
@@ -30,23 +32,24 @@
   | [sr_red1E_Pj] | [sr_red1E_Pj_inst] | [z := (λx:Prop. x) (∀P:Prop. P) : Prop]; its term steps (β) |
   | [sr_red1E_ctx] | [sr_red1E_ctx_inst] | context [z : (λx. x) (∀P. P)] steps to [z : ∀P. P]; [All_local_env_over] on a transparent [wf_localE] |
   | [sr_red1E_Rel] | [sr_red1E_Rel_inst] | δ of the let-bound [z := ∀P:Prop. P] |
-  | [sr_red1E_Sort] | [sr_red1E_Sort_inst] | normal form, no reduct exists: [red1] has no rule for [tSort] |
+  | [sr_red1E_Sort] | [sr_red1E_Sort_inst] | IMPOSSIBLE (normal form): [red1] has no rule with [tSort] as the redex |
   | [sr_red1E_Prod] | [sr_red1E_Prod_inst] | the domain [(λx. x) (∀P. P)] steps |
   | [sr_red1E_Lambda] | [sr_red1E_Lambda_inst] | the domain of [λz:(λx. x) (∀P. P). z] steps |
   | [sr_red1E_LetIn] | [sr_red1E_LetIn_inst] | ζ on [let z : Prop := ∀P. P in z] |
   | [sr_red1E_App] | [sr_red1E_App_inst] | β on [(λx:Prop. x) (∀P:Prop. P)] |
   | [sr_red1E_Const] | [sr_red1E_Const_inst] | δ of [c := ∀P:Prop. P] in [sri_c_Σ] (a defined constant; [wf] proved: [sri_c_wf]) |
-  | [sr_red1E_Ind] | [sr_red1E_Ind_inst] | normal form, no reduct exists: [red1] has no rule for [tInd] |
-  | [sr_red1E_Construct] | [sr_red1E_Construct_inst] | normal form, no reduct exists: [red1] has no rule for [tConstruct] |
+  | [sr_red1E_Ind] | [sr_red1E_Ind_inst] | IMPOSSIBLE (normal form): no [red1] rule with [tInd] as the redex |
+  | [sr_red1E_Construct] | [sr_red1E_Construct_inst] | IMPOSSIBLE (normal form): no [red1] rule with [tConstruct] as the redex |
   | [sr_red1E_Case] | [sr_red1E_Case_inst] | ι on [match c x with c => c x end] |
   | [sr_red1E_Proj] | [sr_red1E_Proj_inst] | [f (mkR (∀P. P) z)] steps to [z] |
   | [sr_red1E_Fix] | [sr_red1E_Fix_inst] | body step [λx. (λy. y) x ⇝ λx. x] of [fix f (x : I (∀P. P)) := …] ([fix_red_body]) |
   | [sr_red1E_CoFix] | [sr_red1E_CoFix_inst] | body step [mkR (∀P. P) ((λy. y) z) ⇝ mkR (∀P. P) z] ([cofix_red_body]) |
-  | [sr_red1E_Prim] | [sr_red1E_Prim_inst] | normal form, no reduct exists: an integer literal; [red1]'s only [tPrim] rules are array congruences |
+  | [sr_red1E_Prim] | [sr_red1E_Prim_inst] | the array literal [[| (λx:int. x) 1 | 1 : int |]] in [sri_arr_Σ] steps by [array_red_val] (β on its element) |
   | [sr_red1E_Cumul] | [sr_red1E_Cumul_inst] | conversion by η ([k g ≤ k (λx. g x)], [cumul_eta_l]), then β |
 
-  None of the 17 is left uncovered. 13 take a real step. The other 4 (Sort, Ind, Construct, Prim)
-  are normal forms by construction: no reduct exists, so the conclusion can only be vacuous.
+  None of the 17 is left uncovered. 14 take a real step. The other 3 (Sort, Ind, Construct) are
+  IMPOSSIBLE: [red1] has no rule whose redex has that head, so no reduct exists and the conclusion
+  can only be vacuous.
 
   **Non-degeneracy.** Each subject-reduction instance takes a real reduction step of a term with a
   real typing derivation. The steps: β ([sr_red1E_beta_inst]), ζ ([subject_reduction1E_zeta_inst]),
@@ -70,6 +73,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICCumulativitySpecEtaClosureInstances PCUICEtaPrimOpInstance
      PCUICInversionEta PCUICInversionEtaInstances PCUICValidityEta PCUICSREta.
 From MetaRocq.PCUIC Require PCUICSR.
+From MetaRocq.PCUIC Require PCUICWfUniverses.
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
@@ -468,6 +472,140 @@ Proof.
   apply cofix_red_body. constructor. split; [|reflexivity]. cbn.
   apply app_red_r. exact (red_beta _ _ si_na iv_False (tRel 0) (tRel 1)).
 Qed.
+
+(** *** An environment with the primitive arrays registered, for [sr_red1E_Prim]
+
+  [int : Set] (as in [Σ_po]) and [array : Type@{u} -> Type@{u}], polymorphic in one level with
+  the primitive invariants of [primArray] ([array_uctx]), registered as the array type. *)
+
+Definition sri_arr_kn : kername := (MPfile ["SRInst"], "array").
+Definition sri_s : sort := sType (Universe.make' (Level.lvar 0)).
+Definition sri_arr_decl : constant_body :=
+  {| cst_type := tImpl (tSort sri_s) (tSort sri_s); cst_body := None;
+     cst_universes := Polymorphic_ctx array_uctx; cst_relevance := Relevant |}.
+Definition sri_arr_retro : Retroknowledge.t :=
+  {| Retroknowledge.retro_int63 := Some po_int_kn;
+     Retroknowledge.retro_float64 := None;
+     Retroknowledge.retro_string := None;
+     Retroknowledge.retro_array := Some sri_arr_kn;
+     Retroknowledge.retro_ops := [];
+     Retroknowledge.retro_bool := None |}.
+Definition sri_arr_pre : global_env :=
+  {| universes := po_univs; declarations := [(po_int_kn, ConstantDecl po_int_body)];
+     retroknowledge := sri_arr_retro |}.
+Definition sri_arr_env : global_env :=
+  {| universes := po_univs;
+     declarations := [(sri_arr_kn, ConstantDecl sri_arr_decl); (po_int_kn, ConstantDecl po_int_body)];
+     retroknowledge := sri_arr_retro |}.
+Definition sri_arr_Σ : global_env_ext := (sri_arr_env, Monomorphic_ctx).
+
+Lemma sri_arr_retro_wf : Retroknowledge.wf_retro sri_arr_retro.
+Proof.
+  constructor; cbn.
+  - constructor.
+  - intros c [].
+  - unfold Retroknowledge.types_distinct, Retroknowledge.disjoint_opt; cbn;
+      repeat split; intros c H1 H2; cbv in H1, H2; congruence.
+  - intros i [=].
+Qed.
+
+(** [po_udecl_ok]'s proof, for the polymorphic context [array_uctx] (level [lvar 0], no
+    constraint). *)
+Lemma sri_arr_udecl_ok : on_udecl po_univs (Polymorphic_ctx array_uctx).
+Proof.
+  repeat split; cbn.
+  - intros l Hl Hg. apply LevelSetFact.mem_1 in Hl, Hg.
+    destruct l as [|s|n]; vm_compute in Hl, Hg; discriminate.
+  - intros i; rewrite ConstraintSetFact.empty_iff //.
+  - red. rewrite /univs_ext_constraints /=. unshelve eexists.
+    + econstructor; eauto. intros; exact 1%positive.
+    + red. intros c hc. apply ConstraintSetFact.union_iff in hc as [hc|hc]; inversion hc.
+  - apply consistent_extension_on_empty.
+Qed.
+
+Lemma sri_arr_wfs : wf_sort (sri_arr_pre, Polymorphic_ctx array_uctx) sri_s.
+Proof.
+  simpl. intros l hin%LevelExprSet.singleton_spec. subst l. simpl.
+  apply LevelSetFact.mem_2. vm_compute. reflexivity.
+Qed.
+
+(** [array]'s type [Type@{u} -> Type@{u}], under its universe context (base typing). *)
+Lemma sri_arr_ty_typed :
+  (sri_arr_pre, Polymorphic_ctx array_uctx) ;;; [] |- tImpl (tSort sri_s) (tSort sri_s)
+    : tSort (Sort.sort_of_product (Sort.super sri_s) (Sort.super sri_s)).
+Proof.
+  have hs : forall Γ, wf_local (sri_arr_pre, Polymorphic_ctx array_uctx) Γ ->
+      (sri_arr_pre, Polymorphic_ctx array_uctx) ;;; Γ |- tSort sri_s : tSort (Sort.super sri_s).
+  { intros Γ h. apply type_Sort; [exact h|exact sri_arr_wfs]. }
+  have hj : lift_typing typing (sri_arr_pre, Polymorphic_ctx array_uctx) []
+              (j_vass_s sri_iA (tSort sri_s) (Sort.super sri_s)).
+  { split; [exact tt|]. exists (Sort.super sri_s). split; [exact (hs [] localenv_nil)|].
+    split; reflexivity. }
+  have w1 : wf_local (sri_arr_pre, Polymorphic_ctx array_uctx) [vass sri_iA (tSort sri_s)].
+  { constructor; [constructor|]. eapply lift_sorting_forget_univ, hj. }
+  unfold tImpl. apply type_Prod; [exact hj|]. exact (hs _ w1).
+Qed.
+
+(** [Σ_po_wf]'s proof, with the array type in place of [land]. *)
+Lemma sri_arr_wf : wf sri_arr_env.
+Proof.
+  split; [exact po_univs_ok|]. split; [exact sri_arr_retro_wf|].
+  cbn. constructor.
+  - constructor; [constructor|].
+    econstructor.
+    + constructor.
+    + exact po_udecl_ok.
+    + cbn. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split. apply po_int_type.
+    + cbn. intros op hop. discriminate hop.
+  - econstructor.
+    + constructor; [intros [=]|constructor].
+    + exact sri_arr_udecl_ok.
+    + cbn. split; [exact tt|]. exists (Sort.sort_of_product (Sort.super sri_s) (Sort.super sri_s)).
+      repeat split. exact sri_arr_ty_typed.
+    + cbn. intros op hop. discriminate hop.
+Qed.
+
+Definition sri_arr_wfE : wfE sri_arr_env := wf_incl_E sri_arr_wf.
+
+Lemma sri_arr_declared : declared_constant sri_arr_Σ sri_arr_kn sri_arr_decl.
+Proof. now left. Qed.
+
+Lemma sri_arr_int_declared : declared_constant sri_arr_Σ po_int_kn po_int_body.
+Proof. right; left; reflexivity. Qed.
+
+Lemma sri_arr_int_typed (Γ : context) (h : wf_localE sri_arr_Σ Γ) :
+  sri_arr_Σ ;;; Γ |-E sri_int : tSort (sType (Universe.make' Level.lzero)).
+Proof. exact (typeE_Const _ _ po_int_kn [] po_int_body h sri_arr_int_declared eq_refl). Qed.
+
+Lemma sri_arr_one_typed (Γ : context) (h : wf_localE sri_arr_Σ Γ) :
+  sri_arr_Σ ;;; Γ |-E tPrim (prim_int 1%uint63) : sri_int.
+Proof.
+  refine (typeE_Prim sri_arr_Σ Γ (prim_int 1%uint63) po_int_kn po_int_body h eq_refl sri_arr_int_declared _ _).
+  - split; reflexivity.
+  - constructor.
+Qed.
+
+(** [(λx:int. x) 1 : int], the array element that steps. *)
+Definition sri_arr_idint : term := tLambda sri_iA sri_int (tRel 0).
+Definition sri_arr_redex : term := tApp sri_arr_idint (tPrim (prim_int 1%uint63)).
+
+Lemma sri_arr_redex_typed (Γ : context) (h : wf_localE sri_arr_Σ Γ) : sri_arr_Σ ;;; Γ |-E sri_arr_redex : sri_int.
+Proof.
+  have hi := sri_arr_int_typed Γ h.
+  have w := iv_wf_vass sri_arr_Σ Γ sri_iA sri_int _ h hi eq_refl.
+  have hi' := sri_arr_int_typed _ w.
+  exact (typeE_App _ _ sri_arr_idint sri_iA sri_int sri_int _ (tPrim (prim_int 1%uint63))
+           (typeE_Prod _ _ sri_iA sri_int sri_int _ _ (iv_vass_s sri_arr_Σ Γ sri_iA sri_int _ hi eq_refl) hi')
+           (typeE_Lambda _ _ sri_iA sri_int (tRel 0) sri_int (iv_vass sri_arr_Σ Γ sri_iA sri_int _ hi eq_refl)
+              (typeE_Rel _ _ 0 (vass sri_iA sri_int) w eq_refl))
+           (sri_arr_one_typed Γ h)).
+Qed.
+
+(** The array literal [[| v | 1 : int |]] at level [Set]. *)
+Definition sri_arr (v : term) : array_model term :=
+  {| array_level := Level.lzero; array_type := sri_int; array_default := tPrim (prim_int 1%uint63);
+     array_value := [v] |}.
+Definition sri_arr_p (v : term) : prim_val := (primArray; primArrayModel (sri_arr v)).
 
 Section SRInstances.
 
@@ -1026,16 +1164,24 @@ Section SRInstances.
     - constructor; [exact (sri_Pj iv_wfE lb)|constructor].
   Qed.
 
-  (** Premise 16, primitive values: the integer literal [1] is a normal form, no reduct exists
-      ([red1]'s only [tPrim] rules are the array congruences); the conclusion is vacuous. *)
+  (** Premise 16, primitive values: the array literal [[| (λx:int. x) 1 | 1 : int |]] steps by the
+      array congruence [array_red_val] (β on its element). *)
   Lemma sr_red1E_Prim_inst :
-    forall u, closed_red1 Σ_po [] (tPrim iv_one) u -> Σ_po ;;; [] |-E u : prim_type iv_one po_int_kn.
+    sri_arr_Σ ;;; [] |-E tPrim (sri_arr_p (tPrim (prim_int 1%uint63))) : prim_type (sri_arr_p sri_arr_redex) sri_arr_kn.
   Proof.
-    refine (sr_red1E_Prim Σ_po iv_po_wfE [] localenv_nil iv_one po_int_kn po_int_body
-              (sri_PΓ iv_po_wfE iv_prim_typed) eq_refl iv_po_declared_int _ _ _).
+    pose (wlu := PCUICWfUniverses.wf_sort_type0 sri_arr_Σ : wf_universe sri_arr_Σ (Universe.make' Level.lzero)).
+    pose (hty := sri_arr_int_typed [] localenv_nil).
+    pose (hdef := sri_arr_one_typed [] localenv_nil).
+    pose (hval := sri_arr_redex_typed [] localenv_nil).
+    refine (sr_red1E_Prim sri_arr_Σ sri_arr_wfE [] localenv_nil (sri_arr_p sri_arr_redex) sri_arr_kn sri_arr_decl
+              (sri_PΓ sri_arr_wfE hdef) eq_refl sri_arr_declared _ _ _ _ _).
     - split; reflexivity.
-    - constructor.
-    - constructor.
+    - econstructor; [exact wlu|exact hty|exact hdef|constructor; [exact hval|constructor]].
+    - econstructor; [exact wlu|exact (sri_SR sri_arr_wfE hty)|exact (sri_SR sri_arr_wfE hdef)|].
+      constructor; [exact (sri_SR sri_arr_wfE hval)|constructor].
+    - split; [reflexivity|reflexivity|].
+      exact (array_red_val _ _ (sri_arr sri_arr_redex) [tPrim (prim_int 1%uint63)]
+               ltac:(constructor; exact (red_beta _ _ sri_iA sri_int (tRel 0) (tPrim (prim_int 1%uint63))))).
   Qed.
 
   (** Premise 17, the conversion rule, at the η step: [(λz:Prop. y) (∀P:Prop. P) : k g] and
