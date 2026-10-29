@@ -57,7 +57,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICClosed PCUICClosedTyp PCUICConvCumInversion
      PCUICCumulativitySpecEta PCUICTypingEta PCUICSNEta PCUICClosedBodies
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICContextConversionEta
-     PCUICEtaK6EtaStep PCUICPositionEtaTyping.
+     PCUICEtaK6EtaStep PCUICSigmaCalculus PCUICRenameDef PCUICPositionEtaTyping.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfReductionEta PCUICSafeReduceEta
      PCUICSafeReduceEtaBridge PCUICSafeConversionEtaK4.
 (* LAST among the stack providers, so the η stack shadows the base one. *)
