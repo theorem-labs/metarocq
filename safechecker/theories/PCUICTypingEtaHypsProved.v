@@ -14,7 +14,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICEtaA6More PCUICGlobalEnvEta
      PCUICClosedTypEta PCUICWeakeningEnvTypEta PCUICWsCumulEtaCtx
      PCUICWeakeningTypEta PCUICRenameTypEta PCUICInstTypEta PCUICCasesWfTypEta PCUICGuardClosureEta
-     PCUICInversionEta.
+     PCUICInversionEta PCUICSREtaConv.
 From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution PCUICSR PCUICInduction PCUICPositionEta.
 From Stdlib Require Import Program.Equality.
 From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta PCUICTypingEtaDefs
@@ -914,6 +914,248 @@ Qed.
 Definition isType_it_mkProd_or_LetIn_fits {cf : checker_flags} (H : @T0_facts cf) :
   ltac:(let T := type of (@isType_it_mkProd_or_LetIn cf H) in exact T) := @isType_it_mkProd_or_LetIn_proved cf.
 
+(** ** K7 reduction facts and telescope inversions: U rows [closed_red_confluence], [closed_red_from_empty],
+    [red_expand_let], [red_it_mkProd_or_LetIn_smash], [red_mkApps_smash_witness],
+    [red_rec_arg_check_one_fix]; T0 rows [inversion_it_mkProd_or_LetIn], [ind_arity_relevant].
+    Reduction is unchanged in E: the base proofs go through over [ClosedBodies Σ], which [wfE Σ] gives
+    ([wfE_ClosedBodies]); three U rows are inhabited directly by lemmas landed in [PCUICSREtaConv]
+    ([frac/eta] @ [da1eb84b]). Helpers carry the prefix [rdx_]. *)
+
+(** [closed_red_confluence] (U): base [PCUICContextConversion.closed_red_confluence] over
+    [red_confluence_cb] ([PCUICConfluence.v:4070]). *)
+Lemma closed_red_confluence_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {t : term} {u : term} {v : term}, Σ ;;; Γ ⊢ t ⇝ u -> Σ ;;; Γ ⊢ t ⇝ v -> ∑ v' : term, Σ ;;; Γ ⊢ u ⇝ v' × Σ ;;; Γ ⊢ v ⇝ v'.
+Proof.
+  intros Σ wfΣ Γ t u v [clΓ clT r] [clΓ' clT' r'].
+  pose proof (wfE_ClosedBodies Σ) as cbΣ.
+  have clu : is_open_term Γ u := red_is_open_term_cb (cf := cf) (wfΣ := cbΣ) t u r clΓ clT.
+  have clv : is_open_term Γ v := red_is_open_term_cb (cf := cf) (wfΣ := cbΣ) t v r' clΓ clT.
+  destruct (PCUICConfluence.red_confluence_cb (Γ := exist Γ clΓ) (t := exist t clT) r r') as [v' [redl redr]].
+  exists v'. split.
+  - exact (into_closed_red redl clΓ clu).
+  - exact (into_closed_red redr clΓ clv).
+Qed.
+Definition closed_red_confluence_fits {cf : checker_flags} (H : U_facts) : ltac:(let T := type of (@closed_red_confluence cf H) in exact T) := @closed_red_confluence_proved cf.
+
+(** [closed_red_from_empty] (U): inhabited by the landed [closed_red_from_empty_cb]
+    ([pcuic/theories/PCUICSREtaConv.v:524], [frac/eta] @ [da1eb84b]), at [wfE_ClosedBodies Σ]. *)
+Lemma closed_red_from_empty_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {M : term} {N : term}, on_free_vars_ctx xpred0 Γ -> closed M -> PCUICReduction.red Σ [] M N -> Σ ;;; Γ ⊢ M ⇝ N.
+Proof.
+  intros Σ wfΣ Γ M N.
+  exact (@closed_red_from_empty_cb cf Σ (wfE_ClosedBodies Σ) Γ M N).
+Qed.
+Definition closed_red_from_empty_fits {cf : checker_flags} (H : U_facts) : ltac:(let T := type of (@closed_red_from_empty cf H) in exact T) := @closed_red_from_empty_proved cf.
+
+(** [red_expand_let] (U): inhabited by the landed [red_expand_letE] ([PCUICSREtaConv.v:512]). *)
+Lemma red_expand_let_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {na : aname} {b : term} {ty : term} {t : term}, wf_localE Σ (Γ,,, [vdef na b ty]) -> on_free_vars (shiftnP #|Γ,,, [vdef na b ty]| (fun _ : nat => false)) t -> Σ ;;; Γ,, vdef na b ty ⊢ t ⇝ lift0 1 (t {0 := b}).
+Proof.
+  intros Σ wfΣ Γ na b ty t.
+  exact (@red_expand_letE cf Σ wfΣ Γ na b ty t).
+Qed.
+Definition red_expand_let_fits {cf : checker_flags} (H : U_facts) : ltac:(let T := type of (@red_expand_let cf H) in exact T) := @red_expand_let_proved cf.
+
+(** [red_it_mkProd_or_LetIn_smash] (U): inhabited by the landed [red_it_mkProd_or_LetIn_smash_cb]
+    ([PCUICSREtaConv.v:540]), at [wfE_ClosedBodies Σ]. *)
+Lemma red_it_mkProd_or_LetIn_smash_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (ctx : context) (t : term) (u : term) (n : nat) (c : context_decl), Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx t ⇝ u -> nth_error (List.rev (smash_context [] ctx)) n = Some c -> ∑ (ctx' : context) (t' : term) (d : context_decl), [× decompose_prod_assum [] u = (ctx', t'), nth_error (List.rev (smash_context [] ctx')) n = Some d & Σ ;;; Γ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx) ⊢ decl_type c ⇝ decl_type d].
+Proof.
+  intros Σ wfΣ.
+  exact (@red_it_mkProd_or_LetIn_smash_cb cf Σ (wfE_ClosedBodies Σ)).
+Qed.
+Definition red_it_mkProd_or_LetIn_smash_fits {cf : checker_flags} (H : U_facts) : ltac:(let T := type of (@red_it_mkProd_or_LetIn_smash cf H) in exact T) := @red_it_mkProd_or_LetIn_smash_proved cf.
+
+(** The base proof scripts below come from [PCUICInductives.v] and [PCUICFixWitness.v]; they run with
+    the settings and imports of [PCUICInductives.v] (all modules already loaded), kept local by the
+    section. *)
+Section RdxBaseScripts.
+Import PCUICTactics PCUICInduction PCUICContexts PCUICSubstitution.
+Local Set SimplIsCbn.
+Local Arguments subst_context !s _ !Γ.
+Local Arguments it_mkProd_or_LetIn !l _.
+
+(** Base [PCUICInductives.red_it_mkProd_or_LetIn_to_smash] (:2268): its [wf] premise is unused, so the
+    same script proves it with no environment premise. *)
+Lemma rdx_red_it_mkProd_or_LetIn_to_smash {Σ : global_env_ext} Γ Δ T :
+  is_closed_context Γ ->
+  is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
+  Σ ;;; Γ ⊢ it_mkProd_or_LetIn Δ T ⇝ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T).
+Proof.
+  intros clΓ clt.
+  eapply into_closed_red => //.
+  clear clΓ clt.
+  induction Δ in Γ, T |- * using ctx_length_rev_ind; simpl; auto.
+  - rewrite expand_lets_nil. reflexivity.
+  - rewrite PCUICContexts.smash_context_app_expand /=.
+    destruct d as [na [b|] ty].
+    * rewrite expand_lets_vdef {1}it_mkProd_or_LetIn_app /= subst_context_nil app_context_nil_l.
+      rewrite PCUICContexts.expand_lets_smash_context /= PCUICContexts.expand_lets_k_ctx_nil.
+      rewrite /expand_lets_ctx /expand_lets_k_ctx /= subst_empty lift0_id lift0_context.
+      rewrite /mkProd_or_LetIn /=.
+      etransitivity.
+      + eapply red1_red, red_zeta.
+      + rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r.
+        now eapply X; len.
+    * rewrite expand_lets_vass it_mkProd_or_LetIn_app /=.
+      rewrite it_mkProd_or_LetIn_app /=.
+      eapply red_prod. reflexivity.
+      rewrite PCUICContexts.expand_lets_smash_context /= PCUICContexts.expand_lets_k_ctx_nil.
+      rewrite expand_lets_ctx_assumption_context. repeat constructor.
+      now eapply X.
+Qed.
+
+(** [red_mkApps_smash_witness] (U): the script of base [PCUICFixWitness.red_mkApps_smash_witness]. *)
+Lemma red_mkApps_smash_witness_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {C : term} {ctx : context} {i : inductive} {u : Instance.t} {l : list term}, Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) -> ∑ l' : list term, Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn (smash_context [] ctx) (mkApps (tInd i u) l').
+Proof.
+  intros Σ wfΣ Γ C ctx i u l r.
+  pose proof (wfE_ClosedBodies Σ) as cbΣ.
+  have clΓ := clrel_ctx r.
+  have opr : is_open_term Γ (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l))
+    := closed_red_open_right_cb (cf := cf) r.
+  have h : Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ⇝
+           it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx (mkApps (tInd i u) l)).
+  { now eapply rdx_red_it_mkProd_or_LetIn_to_smash. }
+  rewrite expand_lets_mkApps in h.
+  rewrite /expand_lets /expand_lets_k /= in h.
+  eexists.
+  transitivity (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l)); [exact r|exact h].
+Qed.
+
+(** Base [PCUICInductives.closed_red_it_mkProd_or_LetIn_assum_nth] (:2246): its [wf] premise is unused. *)
+Lemma rdx_closed_red_it_mkProd_or_LetIn_assum_nth {Σ : global_env_ext} Γ sctx T n c A' :
+  assumption_context sctx ->
+  is_open_term Γ (it_mkProd_or_LetIn sctx T) ->
+  nth_error (List.rev sctx) n = Some c ->
+  Σ ;;; Γ ,,, skipn (#|sctx| - n) sctx ⊢ decl_type c ⇝ A' ->
+  ∑ sctx',
+    [× assumption_context sctx',
+       #|sctx'| = #|sctx|,
+       nth_error (List.rev sctx') n = Some (vass (decl_name c) A'),
+       (forall i, i <> n -> nth_error (List.rev sctx') i = nth_error (List.rev sctx) i) &
+       Σ ;;; Γ ⊢ it_mkProd_or_LetIn sctx T ⇝ it_mkProd_or_LetIn sctx' T].
+Proof.
+  intros ass op hnth hred.
+  have clΓ : is_closed_context Γ.
+  { move: (clrel_ctx hred). rewrite on_free_vars_ctx_app => /andP[] //. }
+  destruct (PCUICInductives.red_it_mkProd_or_LetIn_assum_nth (Σ := Σ) Γ sctx T n c A' ass hnth (clrel_rel hred))
+    as [sctx' [ass' hlen hnth' hother r]].
+  exists sctx'; split; try assumption.
+  now apply into_closed_red.
+Qed.
+
+(** [red_rec_arg_check_one_fix] (U): the script of base [PCUICInductives.red_rec_arg_check_one_fix]
+    over the two helpers above. *)
+Lemma red_rec_arg_check_one_fix_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (d : def term) (ctx : context) (concl : term) (c : context_decl) (ind : inductive) (u : Instance.t) (args : list term), on_free_vars (shiftnP #|Γ| xpred0) (dtype d) -> decompose_prod_assum [] (dtype d) = (ctx, concl) -> nth_error (List.rev (smash_context [] ctx)) (rarg d) = Some c -> Σ ;;; Γ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx) ⊢ decl_type c ⇝ mkApps (tInd ind u) args -> has_rec_arg d × (∑ ty : term, Σ ;;; Γ ⊢ dtype d ⇝ ty × check_one_fix (def_with_type d ty) = Some (inductive_mind ind)).
+Proof.
+  intros Σ wfΣ Γ d ctx concl c ind u args op decomp hnth hred.
+  pose proof (wfE_ClosedBodies Σ) as cbΣ.
+  have clΓ : is_closed_context Γ.
+  { move: (clrel_ctx hred). rewrite on_free_vars_ctx_app => /andP[] //. }
+  have eqty := PCUICSubstitution.decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
+  cbn in eqty.
+  have r1 : Σ ;;; Γ ⊢ dtype d ⇝ it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx concl).
+  { rewrite eqty. apply rdx_red_it_mkProd_or_LetIn_to_smash => //. now rewrite -eqty. }
+  have ass : assumption_context (smash_context [] ctx).
+  { apply PCUICContexts.smash_context_assumption_context; constructor. }
+  destruct (rdx_closed_red_it_mkProd_or_LetIn_assum_nth Γ _ _ _ _ _ ass (closed_red_open_right_cb (cf := cf) r1) hnth hred)
+    as [sctx' [ass' hlen hnth' _ r2]].
+  split.
+  - have hlt := nth_error_Some_length hnth. rewrite List.length_rev smash_context_length /= in hlt.
+    rewrite /has_rec_arg decomp /=. now apply Nat.ltb_lt.
+  - exists (it_mkProd_or_LetIn sctx' (expand_lets ctx concl)). split.
+    + now transitivity (it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx concl)).
+    + eapply PCUICInductives.check_one_fix_it_mkProd_or_LetIn_assum; [exact ass'|exact hnth'|reflexivity].
+Qed.
+
+End RdxBaseScripts.
+
+Definition red_mkApps_smash_witness_fits {cf : checker_flags} (H : U_facts) : ltac:(let T := type of (@red_mkApps_smash_witness cf H) in exact T) := @red_mkApps_smash_witness_proved cf.
+Definition red_rec_arg_check_one_fix_fits {cf : checker_flags} (H : U_facts) : ltac:(let T := type of (@red_rec_arg_check_one_fix cf H) in exact T) := @red_rec_arg_check_one_fix_proved cf.
+
+(** ** T0 rows [ind_arity_relevant] and [inversion_it_mkProd_or_LetIn] *)
+
+(** A sort comparison as a [ws_cumul_pbE] between the two sorts. *)
+Lemma rdx_sort_le {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {a b : sort} :
+  is_closed_context Γ -> leq_sort Σ a b -> Σ ;;; Γ ⊢E tSort a ≤ tSort b.
+Proof.
+  intros clΓ h.
+  apply into_ws_cumul_pbE_spec; [|exact clΓ|reflexivity|reflexivity].
+  apply eq_term_upto_univ_cumulSpec. constructor. exact h.
+Qed.
+
+(** The let-in step of row 9's route (hyp-audit-C §3.5 row 9): [ws_cumul_pbE_LetIn_l_inv]
+    ([PCUICEtaA6.v:361]), [red_expand_letE], [weakening_ws_cumul_pbE] ([PCUICWsCumulEtaSubst.v:189]). *)
+Lemma rdx_letin_le_sort {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname}
+  {b B A : term} {s : sort} :
+  wf_localE Σ (Γ ,, vdef na b B) -> is_open_term (Γ ,, vdef na b B) A ->
+  Σ ;;; Γ ⊢E tLetIn na b B A ≤ tSort s -> Σ ;;; Γ ,, vdef na b B ⊢E A ≤ tSort s.
+Proof.
+  intros wfΓ opA c.
+  have c1 : Σ ;;; Γ ⊢E A {0 := b} ≤ tSort s by exact (ws_cumul_pbE_LetIn_l_inv c).
+  have clΓ : is_closed_context (Γ ,,, [vdef na b B]) by exact (wf_local_closed_contextE wfΓ).
+  have w : Σ ;;; Γ ,, vdef na b B ⊢E lift0 1 (A {0 := b}) ≤ tSort s
+    by exact (weakening_ws_cumul_pbE (Γ := Γ) (Γ' := []) (Γ'' := [vdef na b B]) c1 clΓ).
+  have r : Σ ;;; Γ ,, vdef na b B ⊢ A ⇝ lift0 1 (A {0 := b}) by exact (@red_expand_letE cf Σ wfΣ Γ na b B A wfΓ opA).
+  exact (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _ (red_ws_cumul_pb (pb := Cumul) r) w).
+Qed.
+
+(** Inversion of a typed telescope that stops before the final cumulativity: the body has a type
+    below the telescope's sort. Unlike [inversion_it_mkProd_or_LetIn], it needs no [wf_sort] of that
+    sort, because it never retypes the body at it. *)
+Lemma rdx_inversion_it_mkProd_or_LetIn_le {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+  (Δ : context) : forall (Γ : context) (T X : term) (s : sort),
+  Σ ;;; Γ |-E it_mkProd_or_LetIn Δ T : X -> Σ ;;; Γ ⊢E X ≤ tSort s ->
+  ∑ X' : term, Σ ;;; Γ ,,, Δ |-E T : X' × Σ ;;; Γ ,,, Δ ⊢E X' ≤ tSort s.
+Proof.
+  induction Δ as [|d Δ IH]; intros Γ T X s h c.
+  - exists X. split; assumption.
+  - destruct (IH Γ (mkProd_or_LetIn d T) X s h c) as [X1 [h1 c1]].
+    destruct d as [na [b|] ty]; cbn [mkProd_or_LetIn decl_body decl_name decl_type] in h1.
+    + destruct (inversion_LetIn Σ wfΣ h1) as [A [_ [hA cA]]].
+      exists A. split; [exact hA|].
+      apply rdx_letin_le_sort.
+      * exact (typingE_wf_local hA).
+      * exact (type_is_open_termE hA).
+      * exact (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _ cA c1).
+    + destruct (inversion_Prod Σ wfΣ h1) as [s1 [s2 [_ [hB cB]]]].
+      exists (tSort s2). split; [exact hB|].
+      have clΓ : is_closed_context (Γ ,,, Δ ,, vass na ty) by exact (wf_local_closed_contextE (typingE_wf_local hB)).
+      have hle : leq_sort Σ (Sort.sort_of_product s1 s2) s
+        by exact (ws_cumul_pbE_Sort_inv Cumul (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _ cB c1)).
+      exact (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _
+               (rdx_sort_le clΓ (leq_sort_product _ s1 s2)) (rdx_sort_le clΓ hle)).
+Qed.
+
+(** [ind_arity_relevant] (T0, row 7): base [PCUICInductiveInversion.ind_arity_relevant] with
+    [rdx_inversion_it_mkProd_or_LetIn_le] in place of [inversion_it_mkProd_or_LetIn], then K7
+    [inversion_Sort], [ws_cumul_pbE_Sort_inv] ([PCUICEtaA6.v:176]), [leq_relevance], [relevance_super]. *)
+Lemma ind_arity_relevant_proved {cf : checker_flags} : forall (Σ : global_env_ext) (mdecl : mutual_inductive_body) (idecl : one_inductive_body), wfE Σ.1 -> let ind_type := it_mkProd_or_LetIn (ind_params mdecl) (it_mkProd_or_LetIn (ind_indices idecl) (tSort (ind_sort idecl))) in isTypeE Σ [] ind_type -> isTypeRelE Σ [] ind_type rel_of_Type.
+Proof.
+  intros Σ mdecl idecl wfΣ ind_type (_ & s & Hs & _ & _).
+  repeat (eexists; tea). cbn in Hs |- *.
+  rewrite /ind_type in Hs.
+  rewrite -it_mkProd_or_LetIn_app in Hs.
+  destruct (rdx_inversion_it_mkProd_or_LetIn_le (wfΣ := wfΣ) _ _ _ _ s Hs (typing_ws_cumul_pbE (le := Cumul) Hs))
+    as [X [hX cX]].
+  destruct (inversion_Sort Σ wfΣ hX) as [_ [_ cS]].
+  have hle : leq_sort Σ (Sort.super (ind_sort idecl)) s
+    by exact (ws_cumul_pbE_Sort_inv Cumul (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _ cS cX)).
+  eapply leq_relevance; tea.
+  eapply relevance_super.
+Qed.
+Definition ind_arity_relevant_fits {cf : checker_flags} (H : T0_facts) : ltac:(let T := type of (@ind_arity_relevant cf H) in exact T) := @ind_arity_relevant_proved cf.
+
+(** [inversion_it_mkProd_or_LetIn] (T0, row 9): base [PCUICSpine.inversion_it_mkProd_or_LetIn] reaches
+    the body's sort through [type_it_mkProd_or_LetIn_inv]; here [rdx_inversion_it_mkProd_or_LetIn_le]
+    gives a type of the body below [tSort s], and K7 [type_ws_cumul_pb] retypes it at [tSort s], whose
+    well-formedness is [typing_wf_sort_proved] (row 35, above). *)
+Lemma inversion_it_mkProd_or_LetIn_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Δ : context} {t : term} {s : sort}, Σ;;; Γ |-E it_mkProd_or_LetIn Δ t : tSort s -> Σ;;; Γ,,, Δ |-E t : tSort s.
+Proof.
+  intros Σ wfΣ Γ Δ t s h.
+  destruct (rdx_inversion_it_mkProd_or_LetIn_le Δ Γ t (tSort s) s h (typing_ws_cumul_pbE (le := Cumul) h))
+    as [X [hX cX]].
+  apply (type_ws_cumul_pb (pb := Cumul) X hX); [|exact cX].
+  apply isType_Sort; [exact (typing_wf_sort_proved wfΣ h)|exact (typingE_wf_local hX)].
+Qed.
+Definition inversion_it_mkProd_or_LetIn_fits {cf : checker_flags} (H : T0_facts) : ltac:(let T := type of (@inversion_it_mkProd_or_LetIn cf H) in exact T) := @inversion_it_mkProd_or_LetIn_proved cf.
+
 (** ** Duplicate GENUINE hypotheses (audit C §4.2): each derivation below obtains one GENUINE hypothesis
     from ONE GENUINE hypothesis of another file, by glue only (instantiation, [wf_extE_wfE], a squash,
     the proved symmetry [ws_cumul_ctx_pbE_sym], the embedding of base stacks into η stacks). These are
@@ -1117,6 +1359,14 @@ Print Assumptions typing_wf_sort_proved.
 Print Assumptions isType_wf_universes_proved.
 Print Assumptions ctf_wf_universes_proved.
 Print Assumptions isType_it_mkProd_or_LetIn_proved.
+Print Assumptions closed_red_confluence_proved.
+Print Assumptions closed_red_from_empty_proved.
+Print Assumptions red_expand_let_proved.
+Print Assumptions red_it_mkProd_or_LetIn_smash_proved.
+Print Assumptions red_mkApps_smash_witness_proved.
+Print Assumptions red_rec_arg_check_one_fix_proved.
+Print Assumptions ind_arity_relevant_proved.
+Print Assumptions inversion_it_mkProd_or_LetIn_proved.
 
 (** Base comparison: the base twins carry the same axioms. ([depelim] here is Equations' [DepElim.depelim]:
     the import block loads [Program.Equality] after Equations, whose [depelim] would add [eq_rect_eq].) *)
