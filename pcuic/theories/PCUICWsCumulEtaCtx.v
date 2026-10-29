@@ -643,7 +643,7 @@ Section RelCB.
   Qed.
 
   (** Base [ws_cumul_pb_it_mkProd_or_LetIn], under [ClosedBodies Σ]. The let-body
-      at [pb] is A7's [ws_cumul_pbE_LetIn_pb]. *)
+      at [pb] is [ws_cumul_pbE_LetIn_pb] ([PCUICWsCumulEtaSubst]). *)
   Lemma ws_cumul_pbE_it_mkProd_or_LetIn {pb} (Δ Γ Γ' : context) (B B' : term) :
     ws_cumul_ctx_pbE_rel Conv Σ Δ Γ Γ' ->
     WS pb (Δ ,,, Γ) B B' ->
@@ -738,7 +738,9 @@ Section RelCB.
     - apply IH; [move: hu => /= /andP []|move: hu' => /= /andP []]; auto.
   Qed.
 
-  (** Base [subst_instance_ws_cumul_ctx_pb_rel], under [ClosedBodies Σ]. *)
+  (** Base [PCUICConversion.subst_instance_ws_cumul_ctx_pb_rel], under
+      [ClosedBodies Σ]. ([Typing/PCUICUnivSubstitutionTyp] has a different lemma of
+      the same name, over [cumul_context cumulSpec0].) *)
   Lemma subst_instance_ws_cumul_ctx_pbE_rel {Γ Δ u u' pb} :
     is_closed_context (Γ ,,, Δ) ->
     cmp_universe_instance (eq_universe Σ) u u' ->
@@ -934,7 +936,10 @@ Proof.
   subst v v'. depelim c.
 Qed.
 
-(** The same statement under the name of base's other copy, [ws_cumul_pb_alt_closed]. *)
+(** The same statement, up to binder order, as base's other copy
+    [ws_cumul_pb_alt_closed]: base binds [pb] before [Σ]; here [pb] comes after
+    [wfΣ]. The binders are independent, so the two orders give equivalent
+    statements. *)
 Corollary ws_cumul_pbE_alt_closed_false :
   (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wf Σ) pb Γ t u,
      ws_cumul_pbE pb Σ Γ t u ->
