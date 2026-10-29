@@ -7,7 +7,7 @@ From MetaRocq.SafeCheckerPlugin Require Import SafeTemplateChecker.
 (* FORECAST tree only (EtaK7, 2026-10-29): the E checker behind the same command (see below). *)
 From MetaRocq.SafeChecker Require PCUICWfEnvImplEta PCUICSafeReduceEta PCUICSafeConversionEta
   PCUICSafeConversionEtaFacts PCUICSafeReduceEtaBridge PCUICTypingEtaHyps PCUICCallByNeedSoundEta
-  PCUICSafeCheckerEta.
+  PCUICSafeCheckerEta PCUICEtaFactsCompose.
 From MetaRocq.SafeCheckerPlugin Require SafeTemplateCheckerEta SafeTemplateCheckerEtaConv.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping.
 
@@ -65,25 +65,28 @@ Set Extraction Output Directory "src".
     signature is base's: the named hypotheses stay HYPOTHESES of this definition (they appear as its binders,
     which [Print Assumptions] and [About] show), no axiom is added. *)
 (* Build-time evidence that every non-data argument below is a Prop, so extraction erases it. *)
-Check (forall cf, @PCUICSafeReduceEta.ReduceTypedFactsE cf : Prop).
-Check (forall cf, @PCUICSafeConversionEtaFacts.ConvTypedFactsE cf : Prop).
+Check (forall cf, @PCUICEtaFactsCompose.ReduceTypedFactsCoreE cf : Prop).
+Check (forall cf, @PCUICEtaFactsCompose.WelltypedEContextE cf : Prop).
 Check (forall cf, @PCUICTypingEtaHyps.EtaFacts cf : Prop).
 Check (forall cf, @PCUICCallByNeedSoundEta.CbnConvSoundE cf : Prop).
 Definition infer_and_print_template_program_with_guard {cf} {nor}
-  {reduce_factsE : @PCUICSafeReduceEta.ReduceTypedFactsE cf}
-  {conv_factsE : @PCUICSafeConversionEtaFacts.ConvTypedFactsE cf}
-  (* the conversion's two section hypotheses, their types those of [eta_conv_oracle]'s parameters
-     (inferred from the use below, so they cannot diverge from EtaConv's statements) *)
-  closed_context_conversionE welltypedE_context
+  (* EtaK7 dedup (lane lead, 2026-10-29): the six REDUCE facts that nothing else states and EtaPosK4's
+     [welltypedE_context]; the conversion's [ReduceTypedFactsE], [ConvTypedFactsE] and
+     [closed_context_conversionE] are built from these and [EtaF] inside [eta_conv_oracle]
+     ([PCUICEtaFactsCompose]), so each fact is a binder of this definition once *)
+  {reduce_coreE : @PCUICEtaFactsCompose.ReduceTypedFactsCoreE cf}
+  {wt_contextE : @PCUICEtaFactsCompose.WelltypedEContextE cf}
   {EtaF : @PCUICTypingEtaHyps.EtaFacts cf}
   {cbnE : @PCUICCallByNeedSoundEta.CbnConvSoundE cf} :=
   SafeTemplateCheckerEta.infer_and_print_template_program (cf := cf) (nor := nor)
     (guard := PCUICWfEnvImplEta.real_guard_impl)
-    (* the machine's full [ReduceTypedFacts welltypedE wf_extE], built from the small class (an [#[export]]
-       instance, given explicitly since its module is only Required here) *)
-    (reduce_factsE := @PCUICSafeReduceEtaBridge.reduce_typed_facts_E cf reduce_factsE)
-    (CO := SafeTemplateCheckerEtaConv.eta_conv_oracle (reduce_factsE := reduce_factsE)
-             (conv_factsE := conv_factsE) closed_context_conversionE welltypedE_context).
+    (* the machine's full [ReduceTypedFacts welltypedE wf_extE], built from the small class, itself built
+       ([#[export]] instances, given explicitly since their modules are only Required here) *)
+    (reduce_factsE := @PCUICSafeReduceEtaBridge.reduce_typed_facts_E cf
+                        (PCUICEtaFactsCompose.reduce_typed_facts_E_of_core (C := reduce_coreE) (EF := EtaF)
+                           (WC := wt_contextE)))
+    (CO := SafeTemplateCheckerEtaConv.eta_conv_oracle (cf := cf) (nor := nor) (EtaF := EtaF)
+             (reduce_coreE := reduce_coreE) (wt_contextE := wt_contextE)).
 
 (* FORECAST: no base checker root (f0-plan: the whole extracted set contains no base checker module); the
    E environment checker is a root instead *)
