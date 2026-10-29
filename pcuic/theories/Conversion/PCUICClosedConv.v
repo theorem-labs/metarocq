@@ -123,7 +123,7 @@ Proof.
   - simpl. eauto.
 Qed.
 
-Lemma closed_cstr_branch_context_gen {cf : checker_flags} {Σ} {wfΣ : wf Σ} {c mdecl cdecl} :
+Lemma closed_cstr_branch_context_gen {c mdecl cdecl} :
   closed_inductive_decl mdecl ->
   closed_constructor_body mdecl cdecl ->
   closedn_ctx (context_assumptions mdecl.(ind_params)) (cstr_branch_context c mdecl cdecl).

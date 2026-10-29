@@ -346,7 +346,7 @@ Section Alpha.
   Qed.
 
   Import PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp.
-  Lemma inst_case_predicate_context_eq {Σ : global_env_ext} {wfΣ : wf Σ} {ind mdecl idecl p} :
+  Lemma inst_case_predicate_context_eq {ind mdecl idecl p} :
     wf_predicate mdecl idecl p ->
     eq_context_upto_names (ind_predicate_context ind mdecl idecl) (pcontext p) ->
     eq_context_upto_names (case_predicate_context ind mdecl idecl p) (inst_case_predicate_context p).

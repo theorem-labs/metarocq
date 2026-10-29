@@ -998,7 +998,7 @@ Section CheckerFlags.
     intros clΓ. apply closedu_reln => //.
   Qed.
 
-  Lemma closed_ind_predicate_context {Σ ind mdecl idecl} {wfΣ : wf Σ} :
+  Lemma closed_ind_predicate_context {Σ ind mdecl idecl} :
     declared_inductive Σ ind mdecl idecl ->
     closedu_ctx #|polymorphic_instance (ind_universes mdecl)|
         (ind_params mdecl) ->

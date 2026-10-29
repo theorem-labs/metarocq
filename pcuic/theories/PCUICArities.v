@@ -257,7 +257,7 @@ Section WfEnv.
       repeat constructor; eauto with fvs.
   Qed.
 
-  Lemma isType_tLetIn_dom {Γ} (HΓ : wf_local Σ Γ) {na t A B}
+  Lemma isType_tLetIn_dom {Γ na t A B}
     : isType Σ Γ (tLetIn na t A B) -> Σ ;;; Γ |- t : A.
   Proof using wfΣ.
     intros (_ & s & H & _).
