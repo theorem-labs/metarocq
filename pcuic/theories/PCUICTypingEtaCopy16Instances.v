@@ -60,55 +60,55 @@ Lemma c16_K_typed (Γ : context) : wf_localE iv_Σ Γ ->
   iv_Σ ;;; Γ |-E iv_K : tSort (Sort.sort_of_product iv_sPP (Sort.super sProp)).
 Proof.
   intros h. unfold iv_K. apply typeE_Prod.
-  - exact (iv_vass_s iv_Σ Γ si_na iv_PP _ (iv_PP_typed iv_Σ Γ h) eq_refl).
-  - exact (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ Γ si_na iv_PP _ h (iv_PP_typed iv_Σ Γ h) eq_refl)).
+  - exact (iv_vass_s iv_Σ Γ si_na iv_PP _ (iv_PP_typed iv_Σ Γ h) Logic.eq_refl).
+  - exact (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ Γ si_na iv_PP _ h (iv_PP_typed iv_Σ Γ h) Logic.eq_refl)).
 Qed.
 
 Lemma c16_wf_Γg : wf_localE iv_Σ iv_Γg.
-Proof. exact (iv_wf_vass iv_Σ [] si_na iv_PP _ localenv_nil (iv_PP_typed iv_Σ [] localenv_nil) eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ [] si_na iv_PP _ localenv_nil (iv_PP_typed iv_Σ [] localenv_nil) Logic.eq_refl). Qed.
 
 Lemma c16_wf_Γkg : wf_localE iv_Σ iv_Γkg.
-Proof. exact (iv_wf_vass iv_Σ iv_Γg si_na iv_K _ c16_wf_Γg (c16_K_typed iv_Γg c16_wf_Γg) eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ iv_Γg si_na iv_K _ c16_wf_Γg (c16_K_typed iv_Γg c16_wf_Γg) Logic.eq_refl). Qed.
 
 Lemma c16_kg0_typed : iv_Σ ;;; iv_Γkg |-E tApp (tRel 0) (tRel 1) : si_P.
 Proof.
   exact (typeE_App _ _ (tRel 0) si_na iv_PP si_P _ (tRel 1) (c16_K_typed iv_Γkg c16_wf_Γkg)
-           (typeE_Rel _ _ 0 (vass si_na iv_K) c16_wf_Γkg eq_refl)
-           (typeE_Rel _ _ 1 (vass si_na iv_PP) c16_wf_Γkg eq_refl)).
+           (typeE_Rel _ _ 0 (vass si_na iv_K) c16_wf_Γkg Logic.eq_refl)
+           (typeE_Rel _ _ 1 (vass si_na iv_PP) c16_wf_Γkg Logic.eq_refl)).
 Qed.
 
 Lemma c16_wf_Γk : wf_localE iv_Σ iv_Γk.
-Proof. exact (iv_wf_vass iv_Σ iv_Γkg si_na (tApp (tRel 0) (tRel 1)) sProp c16_wf_Γkg c16_kg0_typed eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ iv_Γkg si_na (tApp (tRel 0) (tRel 1)) sProp c16_wf_Γkg c16_kg0_typed Logic.eq_refl). Qed.
 
 Lemma c16_closed_Γk : is_closed_context iv_Γk.
 Proof. exact (wf_local_closed_contextE (Σ := iv_Σ) (wfΣ := iv_wfE) c16_wf_Γk). Qed.
 
 Lemma c16_y_typed : iv_Σ ;;; iv_Γk |-E tRel 0 : iv_kg.
-Proof. exact (typeE_Rel _ _ 0 (vass si_na (tApp (tRel 0) (tRel 1))) c16_wf_Γk eq_refl). Qed.
+Proof. exact (typeE_Rel _ _ 0 (vass si_na (tApp (tRel 0) (tRel 1))) c16_wf_Γk Logic.eq_refl). Qed.
 
 (** [k g : Prop]. *)
 Lemma c16_kg_typed : iv_Σ ;;; iv_Γk |-E iv_kg : si_P.
 Proof.
   exact (typeE_App _ _ (tRel 1) si_na iv_PP si_P _ (tRel 2) (c16_K_typed iv_Γk c16_wf_Γk)
-           (typeE_Rel _ _ 1 (vass si_na iv_K) c16_wf_Γk eq_refl)
-           (typeE_Rel _ _ 2 (vass si_na iv_PP) c16_wf_Γk eq_refl)).
+           (typeE_Rel _ _ 1 (vass si_na iv_K) c16_wf_Γk Logic.eq_refl)
+           (typeE_Rel _ _ 2 (vass si_na iv_PP) c16_wf_Γk Logic.eq_refl)).
 Qed.
 
 Lemma c16_eta_g_typed : iv_Σ ;;; iv_Γk |-E iv_eta_g : iv_PP.
 Proof.
   have w : wf_localE iv_Σ (iv_Γk ,, vass si_na si_P) := iv_wf_P iv_Σ iv_Γk c16_wf_Γk.
   unfold iv_eta_g, iv_PP. apply typeE_Lambda.
-  - exact (iv_vass iv_Σ iv_Γk si_na si_P _ (iv_P_typed iv_Σ iv_Γk c16_wf_Γk) eq_refl).
+  - exact (iv_vass iv_Σ iv_Γk si_na si_P _ (iv_P_typed iv_Σ iv_Γk c16_wf_Γk) Logic.eq_refl).
   - exact (typeE_App _ _ (tRel 3) si_na si_P si_P _ (tRel 0) (iv_PP_typed iv_Σ _ w)
-             (typeE_Rel _ _ 3 (vass si_na iv_PP) w eq_refl)
-             (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl)).
+             (typeE_Rel _ _ 3 (vass si_na iv_PP) w Logic.eq_refl)
+             (typeE_Rel _ _ 0 (vass si_na si_P) w Logic.eq_refl)).
 Qed.
 
 (** [k (λx:Prop. g x) : Prop]. *)
 Lemma c16_keta_typed : iv_Σ ;;; iv_Γk |-E iv_keta : si_P.
 Proof.
   exact (typeE_App _ _ (tRel 1) si_na iv_PP si_P _ iv_eta_g (c16_K_typed iv_Γk c16_wf_Γk)
-           (typeE_Rel _ _ 1 (vass si_na iv_K) c16_wf_Γk eq_refl) c16_eta_g_typed).
+           (typeE_Rel _ _ 1 (vass si_na iv_K) c16_wf_Γk Logic.eq_refl) c16_eta_g_typed).
 Qed.
 
 (** [k g ≤ k (λx:Prop. g x)]: congruence, and the symmetric of one [cumul_eta_l] step. *)
@@ -147,7 +147,7 @@ Lemma c16_Rkg_typed : iv_Σ ;;; iv_Γk |-E iv_R iv_kg : si_P.
 Proof. exact (iv_RX_typed iv_Γk iv_kg c16_wf_Γk c16_kg_typed). Qed.
 
 Lemma c16_wf_Γr : wf_localE iv_Σ c16_Γr.
-Proof. exact (iv_wf_vass iv_Σ iv_Γk si_na (iv_R iv_kg) sProp c16_wf_Γk c16_Rkg_typed eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ iv_Γk si_na (iv_R iv_kg) sProp c16_wf_Γk c16_Rkg_typed Logic.eq_refl). Qed.
 
 Lemma c16_keta1_typed : iv_Σ ;;; c16_Γr |-E c16_keta1 : si_P.
 Proof. exact (weakeningE iv_Σ iv_Γk [vass si_na (iv_R iv_kg)] iv_keta si_P iv_wfE c16_wf_Γr c16_keta_typed). Qed.
@@ -156,7 +156,7 @@ Lemma c16_Rketa1_typed : iv_Σ ;;; c16_Γr |-E iv_R c16_keta1 : si_P.
 Proof. exact (iv_RX_typed c16_Γr c16_keta1 c16_wf_Γr c16_keta1_typed). Qed.
 
 Lemma c16_r_typed : iv_Σ ;;; c16_Γr |-E tRel 0 : iv_R c16_kg1.
-Proof. exact (typeE_Rel _ _ 0 (vass si_na (iv_R iv_kg)) c16_wf_Γr eq_refl). Qed.
+Proof. exact (typeE_Rel _ _ 0 (vass si_na (iv_R iv_kg)) c16_wf_Γr Logic.eq_refl). Qed.
 
 Lemma c16_spec_R : cumulSpecE iv_Σ c16_Γr (iv_R c16_kg1) (iv_R c16_keta1).
 Proof.
@@ -181,7 +181,7 @@ Definition c16_Γz : context := iv_Γk ,,, c16_Δz.
 Lemma c16_wf_Γz : wf_localE iv_Σ c16_Γz.
 Proof.
   apply localenv_cons_def; [exact c16_wf_Γk|].
-  exact (iv_vdef iv_Σ iv_Γk si_na (tRel 0) iv_keta sProp c16_y_eta c16_keta_typed eq_refl).
+  exact (iv_vdef iv_Σ iv_Γk si_na (tRel 0) iv_keta sProp c16_y_eta c16_keta_typed Logic.eq_refl).
 Qed.
 
 Lemma c16_keta_z_typed : iv_Σ ;;; c16_Γz |-E lift0 1 iv_keta : si_P.
@@ -195,7 +195,7 @@ Proof. exact (weakeningE iv_Σ iv_Γk c16_Δz (tRel 0) iv_keta iv_wfE c16_wf_Γz
 Definition c16_Δx : context := [vass si_na iv_keta].
 
 Lemma c16_wf_Γx : wf_localE iv_Σ (iv_Γk ,,, c16_Δx).
-Proof. exact (iv_wf_vass iv_Σ iv_Γk si_na iv_keta sProp c16_wf_Γk c16_keta_typed eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ iv_Γk si_na iv_keta sProp c16_wf_Γk c16_keta_typed Logic.eq_refl). Qed.
 
 Lemma c16_cs_x : context_subst c16_Δx [tRel 0] [tRel 0].
 Proof. exact (context_subst_ass [] [] [] si_na iv_keta (tRel 0) context_subst_nil). Qed.
@@ -211,7 +211,7 @@ Definition c16_Px : term := it_mkProd_or_LetIn c16_Δx (tSort sProp).
 Lemma c16_Px_typed : iv_Σ ;;; iv_Γk |-E c16_Px : tSort (Sort.sort_of_product sProp (Sort.super sProp)).
 Proof.
   change (iv_Σ ;;; iv_Γk |-E tProd si_na iv_keta (tSort sProp) : tSort (Sort.sort_of_product sProp (Sort.super sProp))).
-  apply typeE_Prod; [exact (iv_vass_s iv_Σ iv_Γk si_na iv_keta sProp c16_keta_typed eq_refl)|].
+  apply typeE_Prod; [exact (iv_vass_s iv_Σ iv_Γk si_na iv_keta sProp c16_keta_typed Logic.eq_refl)|].
   exact (iv_P_typed iv_Σ _ c16_wf_Γx).
 Qed.
 
@@ -223,7 +223,7 @@ Proof. exact (has_sort_isTypeE _ c16_Px_typed). Qed.
 Definition c16_Γh : context := iv_Γk ,, vass si_na c16_Px.
 
 Lemma c16_wf_Γh : wf_localE iv_Σ c16_Γh.
-Proof. exact (iv_wf_vass iv_Σ iv_Γk si_na c16_Px _ c16_wf_Γk c16_Px_typed eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ iv_Γk si_na c16_Px _ c16_wf_Γk c16_Px_typed Logic.eq_refl). Qed.
 
 (** [h y]: [y : k g] is used at [k (λx:Prop. g x)]. *)
 Definition c16_hy : term := tApp (tRel 0) (tRel 1).
@@ -236,7 +236,7 @@ Lemma c16_Px_h : iv_Σ ;;; c16_Γh |-E tProd si_na (lift0 1 iv_keta) (tSort sPro
 Proof. exact (weakeningE iv_Σ iv_Γk [vass si_na c16_Px] c16_Px _ iv_wfE c16_wf_Γh c16_Px_typed). Qed.
 
 Lemma c16_h_typed : iv_Σ ;;; c16_Γh |-E tRel 0 : tProd si_na (lift0 1 iv_keta) (tSort sProp).
-Proof. exact (typeE_Rel _ _ 0 (vass si_na c16_Px) c16_wf_Γh eq_refl). Qed.
+Proof. exact (typeE_Rel _ _ 0 (vass si_na c16_Px) c16_wf_Γh Logic.eq_refl). Qed.
 
 (** [h y : Prop]; the η step is inside this derivation (through [c16_y_eta]). *)
 Lemma c16_hy_typed : iv_Σ ;;; c16_Γh |-E c16_hy : tSort sProp.
@@ -247,17 +247,17 @@ Qed.
 (** [w : h y] as a telescope of sort [Prop] over [Γh]. *)
 Definition c16_Δhy : context := [vass si_na c16_hy].
 
-Lemma c16_tlc_hy : type_local_ctx (lift_typing typingE) iv_Σ c16_Γh c16_Δhy sProp.
+Lemma c16_tlc_hy : type_local_ctx (PCUICTyping.lift_typing typingE) iv_Σ c16_Γh c16_Δhy sProp.
 Proof.
-  cbn. split; [cbn; trivial|]. exact (iv_vass_s iv_Σ c16_Γh si_na c16_hy sProp c16_hy_typed eq_refl).
+  cbn. split; [cbn; trivial|]. exact (iv_vass_s iv_Σ c16_Γh si_na c16_hy sProp c16_hy_typed Logic.eq_refl).
 Qed.
 
 (** [Π w : h y. Prop] over [Γh]. *)
 Lemma c16_isT_Phy : isTypeE iv_Σ c16_Γh (it_mkProd_or_LetIn c16_Δhy (tSort sProp)).
 Proof.
   exact (has_sort_isTypeE _ (typeE_Prod _ _ si_na c16_hy (tSort sProp) sProp (Sort.super sProp)
-           (iv_vass_s iv_Σ c16_Γh si_na c16_hy sProp c16_hy_typed eq_refl)
-           (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ c16_Γh si_na c16_hy sProp c16_wf_Γh c16_hy_typed eq_refl)))).
+           (iv_vass_s iv_Σ c16_Γh si_na c16_hy sProp c16_hy_typed Logic.eq_refl)
+           (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ c16_Γh si_na c16_hy sProp c16_wf_Γh c16_hy_typed Logic.eq_refl)))).
 Qed.
 
 (** [let z := y : k (λx:Prop. g x) in Prop]. *)
@@ -266,12 +266,12 @@ Definition c16_Pz : term := it_mkProd_or_LetIn c16_Δz (tSort sProp).
 Lemma c16_Pz_typed : iv_Σ ;;; iv_Γk |-E c16_Pz : tLetIn si_na (tRel 0) iv_keta (tSort (Sort.super sProp)).
 Proof.
   change (iv_Σ ;;; iv_Γk |-E tLetIn si_na (tRel 0) iv_keta (tSort sProp) : tLetIn si_na (tRel 0) iv_keta (tSort (Sort.super sProp))).
-  apply typeE_LetIn; [exact (iv_vdef iv_Σ iv_Γk si_na (tRel 0) iv_keta sProp c16_y_eta c16_keta_typed eq_refl)|].
+  apply typeE_LetIn; [exact (iv_vdef iv_Σ iv_Γk si_na (tRel 0) iv_keta sProp c16_y_eta c16_keta_typed Logic.eq_refl)|].
   exact (iv_P_typed iv_Σ _ c16_wf_Γz).
 Qed.
 
 Lemma c16_Type_typed : iv_Σ ;;; iv_Γk |-E tSort (Sort.super sProp) : tSort (Sort.super (Sort.super sProp)).
-Proof. apply typeE_Sort; [exact c16_wf_Γk|apply wf_sort_super; cbn; trivial]. Qed.
+Proof. apply typeE_Sort; [exact c16_wf_Γk|apply PCUICUnivSubstitutionConv.wf_sort_super; cbn; trivial]. Qed.
 
 (** [let z := y : k (λx:Prop. g x) in Prop : Type], by the ζ-step of its type. *)
 Lemma c16_Pz_sort : iv_Σ ;;; iv_Γk |-E c16_Pz : tSort (Sort.super sProp).
@@ -290,10 +290,10 @@ Definition conv_ctx_reflE_inst := conv_ctx_reflE iv_Σ iv_Γk.
    nonempty instance needs a universe-polymorphic inductive (a new inductive, a new environment
    and its [wfE] proof). *)
 Definition wf_arities_context_instE_inst :=
-  @wf_arities_context_instE _ iv_Σ iv_wfE iv_kn iv_mdecl [] (proj1 iv_declared_inductive) c16_cu.
+  @wf_arities_context_instE _ iv_Σ iv_wfE iv_kn iv_mdecl [] (MRProd.proj1 iv_declared_inductive) c16_cu.
 (* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
 Definition instantiate_indsE_inst :=
-  @instantiate_indsE _ iv_Σ iv_wfE [] iv_kn iv_mdecl (proj1 iv_declared_inductive) c16_cu.
+  @instantiate_indsE _ iv_Σ iv_wfE [] iv_kn iv_mdecl (MRProd.proj1 iv_declared_inductive) c16_cu.
 
 Definition declared_inductive_arity_isTypeRelE_inst :=
   @declared_inductive_arity_isTypeRelE _ iv_env iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
@@ -310,7 +310,7 @@ Definition declared_inductive_typeE_inst :=
 Lemma c16_red_beta : red iv_Σ [] (tApp iv_id iv_False) iv_False.
 Proof. apply red1_red. unfold iv_id. apply red_beta. Qed.
 Definition closed_red_from_emptyE_inst :=
-  @closed_red_from_emptyE _ iv_Σ iv_wfE iv_Γk (tApp iv_id iv_False) iv_False c16_closed_Γk eq_refl c16_red_beta.
+  @closed_red_from_emptyE _ iv_Σ iv_wfE iv_Γk (tApp iv_id iv_False) iv_False c16_closed_Γk Logic.eq_refl c16_red_beta.
 
 (** [h y : Prop], typed through the η step. *)
 Definition isType_introE_inst := @isType_introE _ iv_Σ c16_Γh c16_hy sProp c16_hy_typed.
@@ -348,11 +348,11 @@ Lemma c16_isT_arity : isTypeE iv_Σ c16_Γh si_arity.
 Proof. exact (has_sort_isTypeE _ (iv_PP_typed iv_Σ c16_Γh c16_wf_Γh)). Qed.
 Lemma c16_isT_Prop : isTypeE iv_Σ c16_Γh (tSort sProp).
 Proof. exact (has_sort_isTypeE _ (iv_P_typed iv_Σ c16_Γh c16_wf_Γh)). Qed.
-Lemma c16_sp_arity : typing_spineE iv_Σ c16_Γh si_arity [c16_hy] (tSort sProp).
+Lemma c16_sp_arity : PCUICAritiesEta.typing_spineE iv_Σ c16_Γh si_arity [c16_hy] (tSort sProp).
 Proof.
-  eapply type_spine_consE; [exact c16_isT_arity|exact c16_isT_arity| |exact c16_hy_typed|].
+  eapply PCUICAritiesEta.type_spine_consE; [exact c16_isT_arity|exact c16_isT_arity| |exact c16_hy_typed|].
   - exact (isType_ws_cumul_pbE_refl (Σ := iv_Σ) (wfΣ := iv_wfE) _ _ c16_isT_arity).
-  - apply type_spine_nilE; [exact c16_isT_Prop|exact c16_isT_Prop|].
+  - apply PCUICAritiesEta.type_spine_nilE; [exact c16_isT_Prop|exact c16_isT_Prop|].
     exact (isType_ws_cumul_pbE_refl (Σ := iv_Σ) (wfΣ := iv_wfE) _ _ c16_isT_Prop).
 Qed.
 
@@ -424,9 +424,9 @@ Lemma c16_IH : forall i0 : nat, i0 < 1 -> forall x, nth_error (ind_projs iv_idec
      vass {| binder_name := nNamed (ind_name iv_idecl); binder_relevance := ind_relevance iv_idecl |}
        (mkApps (tInd iv_ind (abstract_instance (ind_universes iv_mdecl)))
           (to_extended_list (smash_context [] (ind_params iv_mdecl))))) x.(proj_type)
-  × (∑ decl : context_decl,
+  × (∑ decl : PCUICEnvironment.context_decl,
        [× nth_error (smash_context [] (cstr_args iv_cdecl))
-           (context_assumptions (cstr_args iv_cdecl) - S i0) = Some decl,
+           (context_assumptions (cstr_args iv_cdecl) - Datatypes.S i0) = Some decl,
          isTypeE (iv_Σ.1, ind_universes iv_mdecl)
            (arities_context (ind_bodies iv_mdecl),,, ind_params iv_mdecl,,,
             skipn (context_assumptions (cstr_args iv_cdecl) - i0)
@@ -444,10 +444,10 @@ Proof.
 Qed.
 
 Definition declared_projections_subslet_indE_inst :=
-  declared_projections_subslet_indE (Σ := iv_Σ) iv_wfE iv_declared_inductive iv_cdecl eq_refl
-    (on_projections_decl c16_onps) 1 c16_IH c16_onps (le_n 1) eq_refl eq_refl.
+  declared_projections_subslet_indE (Σ := iv_Σ) iv_wfE iv_declared_inductive iv_cdecl Logic.eq_refl
+    (on_projections_decl c16_onps) 1 c16_IH c16_onps (le_n 1) Logic.eq_refl Logic.eq_refl.
 Definition declared_projections_subsletE_inst :=
-  declared_projections_subsletE (Σ := iv_Σ) iv_wfE iv_declared_inductive iv_cdecl eq_refl c16_onps 1 (le_n 1).
+  declared_projections_subsletE (Σ := iv_Σ) iv_wfE iv_declared_inductive iv_cdecl Logic.eq_refl c16_onps 1 (le_n 1).
 Definition declared_projection_typeE_inst :=
   @declared_projection_typeE _ iv_Σ iv_mdecl iv_idecl iv_proj iv_cdecl iv_pdecl iv_wfE iv_declared_projection.
 Definition declared_projection_type_and_eqE_inst :=
@@ -456,7 +456,7 @@ Definition declared_projection_type_and_eqE_inst :=
 Lemma c16_wf_sort_Prop : wf_sort iv_Σ sProp.
 Proof. cbn; trivial. Qed.
 Lemma c16_wf_sort_Type : wf_sort iv_Σ (Sort.super sProp).
-Proof. apply wf_sort_super; cbn; trivial. Qed.
+Proof. apply PCUICUnivSubstitutionConv.wf_sort_super; cbn; trivial. Qed.
 (** [Prop ≤ Type]: the cumulativity of the two sorts. *)
 Lemma c16_leq_Prop_Type : leq_sort (global_ext_constraints iv_Σ) sProp (Sort.super sProp).
 Proof. cbn; trivial. Qed.
@@ -484,30 +484,30 @@ Definition c16_P' : term := tProd si_na iv_PP c16_P2.
 Lemma c16_P4_typed : iv_Σ ;;; iv_Γk |-E c16_P4 : tSort sProp.
 Proof.
   exact (typeE_Prod _ _ si_na c16_Px c16_hy (Sort.sort_of_product sProp (Sort.super sProp)) sProp
-           (iv_vass_s iv_Σ iv_Γk si_na c16_Px _ c16_Px_typed eq_refl) c16_hy_typed).
+           (iv_vass_s iv_Σ iv_Γk si_na c16_Px _ c16_Px_typed Logic.eq_refl) c16_hy_typed).
 Qed.
 Lemma c16_P3_typed : iv_Σ ;;; iv_Γkg |-E c16_P3 : tSort sProp.
 Proof.
   exact (typeE_Prod _ _ si_na (tApp (tRel 0) (tRel 1)) c16_P4 sProp sProp
-           (iv_vass_s iv_Σ iv_Γkg si_na _ sProp c16_kg0_typed eq_refl) c16_P4_typed).
+           (iv_vass_s iv_Σ iv_Γkg si_na _ sProp c16_kg0_typed Logic.eq_refl) c16_P4_typed).
 Qed.
 Lemma c16_P2_typed : iv_Σ ;;; iv_Γg |-E c16_P2 : tSort sProp.
 Proof.
   exact (typeE_Prod _ _ si_na iv_K c16_P3 (Sort.sort_of_product iv_sPP (Sort.super sProp)) sProp
-           (iv_vass_s iv_Σ iv_Γg si_na iv_K _ (c16_K_typed iv_Γg c16_wf_Γg) eq_refl) c16_P3_typed).
+           (iv_vass_s iv_Σ iv_Γg si_na iv_K _ (c16_K_typed iv_Γg c16_wf_Γg) Logic.eq_refl) c16_P3_typed).
 Qed.
 Lemma c16_P'_typed : iv_Σ ;;; [] |-E c16_P' : tSort sProp.
 Proof.
   exact (typeE_Prod _ _ si_na iv_PP c16_P2 iv_sPP sProp
-           (iv_vass_s iv_Σ [] si_na iv_PP _ (iv_PP_typed iv_Σ [] localenv_nil) eq_refl) c16_P2_typed).
+           (iv_vass_s iv_Σ [] si_na iv_PP _ (iv_PP_typed iv_Σ [] localenv_nil) Logic.eq_refl) c16_P2_typed).
 Qed.
 
 Definition c16_ΔP' : context := [vass si_na c16_P'].
 Lemma c16_isT_ΔP' : isTypeE iv_Σ [] (it_mkProd_or_LetIn c16_ΔP' (tSort sProp)).
 Proof.
   exact (has_sort_isTypeE _ (typeE_Prod _ _ si_na c16_P' (tSort sProp) sProp (Sort.super sProp)
-           (iv_vass_s iv_Σ [] si_na c16_P' sProp c16_P'_typed eq_refl)
-           (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ [] si_na c16_P' sProp localenv_nil c16_P'_typed eq_refl)))).
+           (iv_vass_s iv_Σ [] si_na c16_P' sProp c16_P'_typed Logic.eq_refl)
+           (iv_P_typed iv_Σ _ (iv_wf_vass iv_Σ [] si_na c16_P' sProp localenv_nil c16_P'_typed Logic.eq_refl)))).
 Qed.
 Definition typing_spine_to_extended_listE_inst :=
   typing_spine_to_extended_listE iv_Σ c16_ΔP' [] sProp iv_wfE c16_isT_ΔP'.
@@ -551,7 +551,7 @@ Proof. apply c16_open_bkg_prod; reflexivity. Qed.
 
 Definition red_it_mkProd_or_LetIn_smashE_inst :=
   @red_it_mkProd_or_LetIn_smashE _ iv_Σ iv_wfE iv_Γk [vass si_na c16_bkg] (tSort sProp)
-    (tProd si_na iv_kg (tSort sProp)) 0 (vass si_na c16_bkg) c16_red_prod_Prop eq_refl.
+    (tProd si_na iv_kg (tSort sProp)) 0 (vass si_na c16_bkg) c16_red_prod_Prop Logic.eq_refl.
 
 Lemma c16_red_prod_R : iv_Σ ;;; iv_Γk ⊢ it_mkProd_or_LetIn [vass si_na c16_bkg] (mkApps (tInd iv_ind []) [iv_keta]) ⇝
   tProd si_na iv_kg (mkApps (tInd iv_ind []) [iv_keta]).
@@ -564,7 +564,7 @@ Lemma c16_cred_bkg : iv_Σ ;;; iv_Γk ⊢ c16_bkg ⇝ iv_kg.
 Proof. apply into_closed_red; [exact c16_red_bkg|exact c16_closed_Γk|reflexivity]. Qed.
 Definition closed_red_it_mkProd_or_LetIn_assum_nthE_inst :=
   @closed_red_it_mkProd_or_LetIn_assum_nthE _ iv_Σ iv_wfE iv_Γk [vass si_na c16_bkg] (tSort sProp) 0
-    (vass si_na c16_bkg) iv_kg ltac:(repeat constructor) eq_refl eq_refl c16_cred_bkg.
+    (vass si_na c16_bkg) iv_kg ltac:(repeat constructor) Logic.eq_refl Logic.eq_refl c16_cred_bkg.
 
 (** [let z := y : k (λx:Prop. g x) in Prop] reduces to its smashed form (a ζ-step). *)
 (* IMPOSSIBLE (η): the premises are the booleans [is_closed_context] and [is_open_term], so no
@@ -585,12 +585,12 @@ Proof.
 Qed.
 Definition red_rec_arg_check_one_fixE_inst :=
   @red_rec_arg_check_one_fixE _ iv_Σ iv_wfE iv_Γk c16_fixd [vass si_na c16_bR] (tSort sProp) (vass si_na c16_bR)
-    iv_ind [] [iv_kg] eq_refl eq_refl eq_refl c16_cred_bR.
+    iv_ind [] [iv_kg] Logic.eq_refl Logic.eq_refl Logic.eq_refl c16_cred_bR.
 
 (** The context [Γk ,,, [z := y] ,,, [w : k (λx:Prop. g x)]]. *)
 Definition c16_Δw : context := [vass si_na (lift0 1 iv_keta)].
 Lemma c16_wf_Γzw : wf_localE iv_Σ (iv_Γk ,,, c16_Δz ,,, c16_Δw).
-Proof. exact (iv_wf_vass iv_Σ c16_Γz si_na (lift0 1 iv_keta) sProp c16_wf_Γz c16_keta_z_typed eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ c16_Γz si_na (lift0 1 iv_keta) sProp c16_wf_Γz c16_keta_z_typed Logic.eq_refl). Qed.
 
 Definition wf_local_expand_letsE_inst :=
   @wf_local_expand_letsE _ iv_Σ iv_wfE iv_Γk c16_Δz c16_Δw c16_wf_Γzw.
