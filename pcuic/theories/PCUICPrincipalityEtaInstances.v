@@ -45,15 +45,15 @@ Definition pr_let_beta : term := tLetIn si_na iv_False si_P (tApp iv_id (tRel 0)
 
 Lemma pr_let_beta_zeta : si_Σ ;;; [] ⊢ pr_let_beta ⇝ tApp iv_id iv_False.
 Proof.
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := pr_let_beta) eq_refl eq_refl
-           (red1_red _ _ _ _ (red_zeta _ _ si_na iv_False si_P (tApp iv_id (tRel 0))))).
+  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := pr_let_beta) Logic.eq_refl Logic.eq_refl
+           (red1_red _ _ _ _ (PCUICReduction.red_zeta _ _ si_na iv_False si_P (tApp iv_id (tRel 0))))).
 Qed.
 
 Lemma pr_let_beta_body : si_Σ ;;; [] ⊢ pr_let_beta ⇝ tLetIn si_na iv_False si_P (tRel 0).
 Proof.
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := pr_let_beta) eq_refl eq_refl
-           (red1_red _ _ _ _ (letin_red_body _ _ si_na iv_False si_P _ _
-              (red_beta _ _ si_na si_P (tRel 0) (tRel 0))))).
+  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := pr_let_beta) Logic.eq_refl Logic.eq_refl
+           (red1_red _ _ _ _ (PCUICReduction.letin_red_body _ _ si_na iv_False si_P _ _
+              (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) (tRel 0))))).
 Qed.
 
 Lemma closed_red_confluence_cb_inst :
@@ -64,31 +64,31 @@ Proof. exact (closed_red_confluence_cb pr_let_beta_zeta pr_let_beta_body). Qed.
 Lemma invert_red_sort_cb_inst : tSort sProp = tSort sProp.
 Proof.
   exact (invert_red_sort_cb (Σ := si_Σ) [] sProp (tSort sProp)
-           (closed_red_of (Σ := si_Σ) (Γ := []) (t := tSort sProp) eq_refl eq_refl (rt_refl _ _))).
+           (closed_red_of (Σ := si_Σ) (Γ := []) (t := tSort sProp) Logic.eq_refl Logic.eq_refl (Equations.Type.Relation.rt_refl _ _))).
 Qed.
 
 (** A chain of one [R_c] step (β) from [canon ((λx:Prop. x) A)], in [A : Prop], to [A]. *)
-Lemma pr_chain : clos_refl_trans (union (R_c si_Σ bd_Γ1) eta1) (canon (tApp iv_id (tRel 0))) (tRel 0).
+Lemma pr_chain : Equations.Type.Relation.clos_refl_trans (Equations.Type.Relation.union (R_c si_Σ bd_Γ1) eta1) (canon (tApp iv_id (tRel 0))) (tRel 0).
 Proof.
   have e : canon (tApp iv_id (tRel 0)) = tApp iv_id (tRel 0) by reflexivity.
-  rewrite e. apply rt_step. left. exists (tRel 0). split; [|reflexivity].
-  exact (red_beta _ _ si_na si_P (tRel 0) (tRel 0)).
+  rewrite e. apply Equations.Type.Relation.rt_step. left. exists (tRel 0). split; [|reflexivity].
+  exact (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) (tRel 0)).
 Qed.
 
 Lemma chain_ws_cumul_pbE_Conv_inst : ws_cumul_pbE Conv si_Σ bd_Γ1 (tApp iv_id (tRel 0)) (tRel 0).
-Proof. exact (chain_ws_cumul_pbE_Conv (Σ := si_Σ) bd_Γ1 (tApp iv_id (tRel 0)) (tRel 0) eq_refl eq_refl pr_chain). Qed.
+Proof. exact (chain_ws_cumul_pbE_Conv (Σ := si_Σ) bd_Γ1 (tApp iv_id (tRel 0)) (tRel 0) Logic.eq_refl Logic.eq_refl pr_chain). Qed.
 
 (** ** Typing derivations, without any class *)
 
 (** In [bdf_Γz = [x : z; z := ∀P:Prop. P]], [z : Prop]. *)
 Lemma pr_z_typed : si_Σ ;;; bdf_Γz |-E tRel 1 : tSort sProp.
-Proof. exact (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) bdi_wf_subst1_prem eq_refl). Qed.
+Proof. exact (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) bdi_wf_subst1_prem Logic.eq_refl). Qed.
 
 (** [z ⇝ ∀P:Prop. P], so [∀P:Prop. P ≤ z]. *)
 Lemma pr_z_red : si_Σ ;;; bdf_Γz ⊢ tRel 1 ⇝ iv_False.
 Proof.
-  exact (closed_red_of (Σ := si_Σ) (Γ := bdf_Γz) (t := tRel 1) eq_refl eq_refl
-           (red1_red _ _ _ _ (red_rel _ bdf_Γz 1 iv_False eq_refl))).
+  exact (closed_red_of (Σ := si_Σ) (Γ := bdf_Γz) (t := tRel 1) Logic.eq_refl Logic.eq_refl
+           (red1_red _ _ _ _ (PCUICReduction.red_rel _ bdf_Γz 1 iv_False Logic.eq_refl))).
 Qed.
 
 Lemma pr_False_le_z : ws_cumul_pbE Cumul si_Σ bdf_Γz iv_False (tRel 1).
@@ -98,13 +98,13 @@ Proof. exact (red_ws_cumul_pbE_inv (Σ := si_Σ) pr_z_red). Qed.
 Definition pr_prod_let : term := tProd si_na bdf_let si_P.
 
 Lemma pr_wf_let : wf_localE si_Σ ([] ,, vass si_na bdf_let).
-Proof. exact (iv_wf_vass si_Σ [] si_na bdf_let sProp localenv_nil bdf_let_sort_typed eq_refl). Qed.
+Proof. exact (iv_wf_vass si_Σ [] si_na bdf_let sProp localenv_nil bdf_let_sort_typed Logic.eq_refl). Qed.
 
 Lemma pr_prod_let_typed :
   si_Σ ;;; [] |-E pr_prod_let : tSort (Sort.sort_of_product sProp (Sort.super sProp)).
 Proof.
   apply typeE_Prod.
-  - exact (iv_vass_s si_Σ [] si_na bdf_let sProp bdf_let_sort_typed eq_refl).
+  - exact (iv_vass_s si_Σ [] si_na bdf_let sProp bdf_let_sort_typed Logic.eq_refl).
   - exact (iv_P_typed si_Σ _ pr_wf_let).
 Qed.
 
@@ -126,21 +126,21 @@ Proof. exact (iv_wf_P si_Σ bdf_Γz bdi_wf_subst1_prem). Qed.
 Lemma pr_x_False_typed : si_Σ ;;; pr_Γzp |-E tRel 1 : iv_False.
 Proof.
   eapply (typeE_Cumul _ _ (tRel 1) (tRel 2) iv_False sProp).
-  - exact (typeE_Rel _ _ 1 (vass si_na (tRel 0)) pr_wf_Γzp eq_refl).
+  - exact (typeE_Rel _ _ 1 (vass si_na (tRel 0)) pr_wf_Γzp Logic.eq_refl).
   - exact (iv_False_typed si_Σ pr_Γzp pr_wf_Γzp).
   - apply (ws_cumul_pbE_forget_spec (pb := Cumul)).
     apply (red_ws_cumul_pbE (Σ := si_Σ)).
-    exact (closed_red_of (Σ := si_Σ) (Γ := pr_Γzp) (t := tRel 2) eq_refl eq_refl
-             (red1_red _ _ _ _ (red_rel _ pr_Γzp 2 iv_False eq_refl))).
+    exact (closed_red_of (Σ := si_Σ) (Γ := pr_Γzp) (t := tRel 2) Logic.eq_refl Logic.eq_refl
+             (red1_red _ _ _ _ (PCUICReduction.red_rel _ pr_Γzp 2 iv_False Logic.eq_refl))).
 Qed.
 
 Lemma pr_eta_x_False_typed : si_Σ ;;; bdf_Γz |-E pr_eta_x : iv_False.
 Proof.
   apply typeE_Lambda.
-  - exact (iv_vass si_Σ bdf_Γz si_na si_P _ (iv_P_typed si_Σ bdf_Γz bdi_wf_subst1_prem) eq_refl).
+  - exact (iv_vass si_Σ bdf_Γz si_na si_P _ (iv_P_typed si_Σ bdf_Γz bdi_wf_subst1_prem) Logic.eq_refl).
   - exact (typeE_App _ _ (tRel 1) si_na si_P (tRel 0) sProp (tRel 0)
              (iv_False_typed si_Σ pr_Γzp pr_wf_Γzp) pr_x_False_typed
-             (typeE_Rel _ _ 0 (vass si_na si_P) pr_wf_Γzp eq_refl)).
+             (typeE_Rel _ _ 0 (vass si_na si_P) pr_wf_Γzp Logic.eq_refl)).
 Qed.
 
 Lemma pr_eta_x_typed : si_Σ ;;; bdf_Γz |-E pr_eta_x : tRel 1.
@@ -154,13 +154,13 @@ Qed.
 Definition pr_Γr : context := [vass si_na bdf_RFβ].
 
 Lemma pr_wf_Γr : wf_localE iv_Σ pr_Γr.
-Proof. exact (iv_wf_vass iv_Σ [] si_na bdf_RFβ sProp localenv_nil (bdf_RFβ_typed [] localenv_nil) eq_refl). Qed.
+Proof. exact (iv_wf_vass iv_Σ [] si_na bdf_RFβ sProp localenv_nil (bdf_RFβ_typed [] localenv_nil) Logic.eq_refl). Qed.
 
 Lemma pr_r_typed : iv_Σ ;;; pr_Γr |-E tRel 0 : bdf_RFβ.
-Proof. exact (typeE_Rel _ _ 0 (vass si_na bdf_RFβ) pr_wf_Γr eq_refl). Qed.
+Proof. exact (typeE_Rel _ _ 0 (vass si_na bdf_RFβ) pr_wf_Γr Logic.eq_refl). Qed.
 
 Lemma pr_RFβ_red : iv_Σ ;;; pr_Γr ⊢ bdf_RFβ ⇝ iv_RF.
-Proof. exact (closed_red_of (Σ := iv_Σ) (Γ := pr_Γr) (t := bdf_RFβ) eq_refl eq_refl (bdf_RFβ_red pr_Γr)). Qed.
+Proof. exact (closed_red_of (Σ := iv_Σ) (Γ := pr_Γr) (t := bdf_RFβ) Logic.eq_refl Logic.eq_refl (bdf_RFβ_red pr_Γr)). Qed.
 
 Lemma pr_r_RF_typed : iv_Σ ;;; pr_Γr |-E tRel 0 : mkApps (tInd iv_ind []) [iv_False].
 Proof.
@@ -172,8 +172,8 @@ Definition pr_idF : term := tApp iv_id iv_False.
 
 Lemma pr_RidF_red : iv_Σ ;;; pr_Γr ⊢ iv_R pr_idF ⇝ iv_RF.
 Proof.
-  exact (closed_red_of (Σ := iv_Σ) (Γ := pr_Γr) (t := iv_R pr_idF) eq_refl eq_refl
-           (red1_red _ _ _ _ (app_red_r _ _ _ _ _ (red_beta _ _ si_na si_P (tRel 0) iv_False)))).
+  exact (closed_red_of (Σ := iv_Σ) (Γ := pr_Γr) (t := iv_R pr_idF) Logic.eq_refl Logic.eq_refl
+           (red1_red _ _ _ _ (PCUICReduction.app_red_r _ _ _ _ _ (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) iv_False)))).
 Qed.
 
 Lemma pr_r_RidF_typed : iv_Σ ;;; pr_Γr |-E tRel 0 : mkApps (tInd iv_ind []) [pr_idF].
@@ -189,17 +189,17 @@ Qed.
 Lemma pr_proj_typed : iv_Σ ;;; pr_Γr |-E tProj iv_proj (tRel 0) : iv_False.
 Proof.
   exact (typeE_Proj _ _ iv_proj (tRel 0) [] iv_mdecl iv_idecl iv_cdecl iv_pdecl [iv_False]
-           iv_declared_projection pr_r_RF_typed eq_refl).
+           iv_declared_projection pr_r_RF_typed Logic.eq_refl).
 Qed.
 
 (** [∀_:Prop. Set], a type of the sort [pr_sPS]; [∀_:Prop. Prop] is below it up to universes. *)
 Definition pr_PS : term := tProd si_na si_P (tSort Sort.type0).
-Definition pr_sPS : sort := Sort.sort_of_product (Sort.super sProp) (Sort.super Sort.type0).
+Definition pr_sPS : Universes.sort := Sort.sort_of_product (Sort.super sProp) (Sort.super Sort.type0).
 
 Lemma pr_PS_typed : si_Σ ;;; [] |-E pr_PS : tSort pr_sPS.
 Proof.
   apply typeE_Prod.
-  - exact (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+  - exact (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl).
   - apply typeE_Sort; [exact (iv_wf_P si_Σ [] localenv_nil)|apply/(PCUICWfUniverses.wf_sort_reflect si_Σ); reflexivity].
 Qed.
 
@@ -212,10 +212,10 @@ Definition pr_lam' : term := tLambda pr_nx si_P (tRel 0).
 
 Lemma pr_lam'_typed : si_Σ ;;; [] |-E pr_lam' : tProd pr_nx si_P si_P.
 Proof.
-  have w := iv_wf_vass si_Σ [] pr_nx si_P _ localenv_nil (iv_P_typed si_Σ [] localenv_nil) eq_refl.
+  have w := iv_wf_vass si_Σ [] pr_nx si_P _ localenv_nil (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl.
   apply typeE_Lambda.
-  - exact (iv_vass si_Σ [] pr_nx si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl).
-  - exact (typeE_Rel _ _ 0 (vass pr_nx si_P) w eq_refl).
+  - exact (iv_vass si_Σ [] pr_nx si_P _ (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl).
+  - exact (typeE_Rel _ _ 0 (vass pr_nx si_P) w Logic.eq_refl).
 Qed.
 
 Lemma pr_id_eq_lam' : eq_term empty_global_env si_Σ iv_id pr_lam'.
@@ -255,7 +255,7 @@ Lemma common_typingE_eta_inst :
   ∑ C, si_Σ ;;; bd_Γη ⊢E C ≤ lift0 1 bd_X × si_Σ ;;; bd_Γη ⊢E C ≤ tApp (tRel 2) (tRel 1) ×
        si_Σ ;;; bd_Γη |-E tRel 0 : C.
 Proof.
-  exact (common_typingE si_Σ pr_si_wfext (typeE_Rel _ _ 0 (vass si_na bd_X) bdi_wfη eq_refl) bdf_eta_typed).
+  exact (common_typingE si_Σ pr_si_wfext (typeE_Rel _ _ 0 (vass si_na bd_X) bdi_wfη Logic.eq_refl) bdf_eta_typed).
 Qed.
 
 Lemma principal_typeE_eta_inst :

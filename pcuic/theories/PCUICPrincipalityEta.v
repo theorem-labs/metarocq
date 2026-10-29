@@ -90,12 +90,12 @@ Qed.
 (** A chain from [canon T] to [H] is an E conversion of [T] and [H]. *)
 Lemma chain_ws_cumul_pbE_Conv {cf : checker_flags} {Σ : global_env_ext} {cb : ClosedBodies Σ} Γ T H :
   is_closed_context Γ -> is_open_term Γ T ->
-  clos_refl_trans (union (R_c Σ Γ) eta1) (canon T) H -> ws_cumul_pbE Conv Σ Γ T H.
+  Equations.Type.Relation.clos_refl_trans (Equations.Type.Relation.union (R_c Σ Γ) eta1) (canon T) H -> ws_cumul_pbE Conv Σ Γ T H.
 Proof.
   intros hΓ hT hch.
   have hcan : canon H = H := chain_canonical (Σ := Σ) Γ (canon T) H (canon_idem T) hch.
   constructor; [exact hΓ|exact hT|exact (chain_open (Σ := Σ) (wfΣ := cb) Γ T H hΓ hT hch)|].
-  exists H, H. split; [exact hch|split; [rewrite hcan; apply rt_refl|apply compare_term_eta_refl]].
+  exists H, H. split; [exact hch|split; [rewrite hcan; apply Equations.Type.Relation.rt_refl|apply compare_term_eta_refl]].
 Qed.
 
 Lemma T8_Prod_l_of_r {cf : checker_flags} (Σ : global_env_ext) :
@@ -437,7 +437,7 @@ Section Principality.
          [isType_mkApps_Ind_invE] ([ValForecastCopy16]) in place of base
          [invert_type_mkApps_ind], and base's two steps (the arguments, then the instances) are
          one [substitution_ws_cumul_pbE_subst_conv]. *)
-      have decli : declared_inductive Σ ind x6 x7 := proj1 (proj1 d).
+      have decli : declared_inductive Σ ind x6 x7 := MRProd.proj1 (MRProd.proj1 d).
       assert (cu' : consistent_instance_ext Σ (ind_universes x6) u').
       { eapply type_reductionE in t2. 2:eapply redr.
         destruct (isType_mkApps_Ind_invE wfΣ' decli (typingE_wf_local t2) (validityE t2)) as (? & ? & hs).
@@ -454,7 +454,7 @@ Section Principality.
       pose proof (typing_closed_contextE t1) as clΓ.
       have onud : PCUICWeakeningEnv.on_udecl_prop Σ (ind_universes x6).
       { unshelve eapply declared_projection_to_gen in d ; eauto.
-        eapply (PCUICWeakeningEnv.weaken_lookup_on_global_env' _ _ _ (wfΣ' : wfE _) (proj1 (proj1 (proj1 d)))). }
+        eapply (PCUICWeakeningEnv.weaken_lookup_on_global_env' _ _ _ (wfΣ' : wfE _) (MRProd.proj1 (MRProd.proj1 (MRProd.proj1 d)))). }
       (* The universe clause of [Ind_r] at full application ([finst_ind_glue_full]): validity
          types [mkApps (tInd ind x5) x10] at a sort. *)
       pose proof (isTypeE_mkApps_Ind_head_arity (typingE_wf_local t1) (validityE t1)) as harity.
@@ -464,7 +464,7 @@ Section Principality.
         (untyped_subslet_projection_contextE (p := p) u' d hlen')
         (untyped_subslet_projection_contextE (p := p) x5 d e0)
         (All2_cons (ws_cumul_pbE_refl clΓ (subject_is_open_termE t1)) (All2_rev _ _ _ _ _ hx))
-        (is_closed_context_weaken _ _ clΓ (is_closed_projection_contextE x5 d))
+        (PCUICInductiveInversion.is_closed_context_weaken _ _ clΓ (is_closed_projection_contextE x5 d))
         (weaken_ws_cumul_pbE Γ clΓ (projection_cumulative_indicesE d onud cu' cu hcmp))).
 
     - pose proof (typingE_wf_local hA).
@@ -594,7 +594,7 @@ Proof.
   all: have cbΣ : ClosedBodies Σ := @wfE_ClosedBodies _ Σ wfΣ.
 
   - eapply inversion_SortE in X0 as [wf [wfs cum]]; auto.
-    have hsup : isTypeE Σ Γ (tSort (Sort.super u)) by (eapply isType_SortE; [now apply wf_sort_super|exact wfΓ]).
+    have hsup : isTypeE Σ Γ (tSort (Sort.super u)) by (eapply isType_SortE; [now apply PCUICWfUniverses.wf_sort_super|exact wfΓ]).
     destruct hsup as (_ & ss & hss & _).
     eapply (typeE_Cumul _ _ _ (tSort (Sort.super s)) _ ss); [constructor; auto|exact hss|].
     apply cumulE_Sort. now apply leq_sort_super.
@@ -725,7 +725,7 @@ Proof.
        (Typing/PCUICClosedTyp.v:619, 638) take base [wf]; their two-line proofs over the landed
        [declared_minductive_closedE] / [declared_constructor_closedE]. *)
     have clar : closed_ctx (arities_context (ind_bodies mdecl)).
-    { pose proof (declared_minductive_closedE (proj1 (proj1 declc))) as h.
+    { pose proof (declared_minductive_closedE (MRProd.proj1 (MRProd.proj1 declc))) as h.
       move/andP: h => [] _ clbs.
       induction (ind_bodies mdecl) => //.
       rewrite /arities_context /= rev_map_spec /=.
@@ -756,16 +756,16 @@ Proof.
       + simpl. eapply ws_cumul_pbE_refl; [apply clctx|].
         rewrite on_free_vars_subst_instance. move: cld. now len.
     * apply ws_cumul_pb_incl_E. constructor; auto.
-      { eapply on_free_vars_subst. eapply inds_is_open_terms.
+      { eapply PCUICOnFreeVars.on_free_vars_subst. eapply inds_is_open_terms.
         len. len in cld. rewrite shiftnP_add.
         now rewrite on_free_vars_subst_instance. }
-      { eapply on_free_vars_subst. eapply inds_is_open_terms.
+      { eapply PCUICOnFreeVars.on_free_vars_subst. eapply inds_is_open_terms.
         len. len in cld. rewrite shiftnP_add.
         now rewrite on_free_vars_subst_instance. }
       eapply PCUICEquality.subst_eq_term.
       eapply PCUICUnivSubstitutionConv.eq_term_upto_univ_subst_instance; eauto; typeclasses eauto.
 
-  - eassert (ctx_inst _ _ _ _) as Hctxi by now eapply ctx_inst_impl with (1 := X5).
+  - eassert (PCUICTyping.ctx_inst _ _ _ _) as Hctxi by now eapply PCUICTyping.ctx_inst_impl with (1 := X5).
     assert (hty : isTypeE Σ Γ (mkApps ptm (indices ++ [c]))).
     { eapply validityE. econstructor; eauto. all:split; eauto.
       solve_all. }
@@ -813,7 +813,7 @@ Proof.
     * exact (typeE_Proj _ _ p c0 u mdecl idecl cdecl pdecl args isdecl hc0' H).
     * eapply validityE; eauto.
       eapply typeE_Proj; eauto.
-    * pose proof (is_closed_context_weaken _ _ clΓ (is_closed_projection_contextE (p := p) u isdecl)) as clctx.
+    * pose proof (PCUICInductiveInversion.is_closed_context_weaken _ _ clΓ (is_closed_projection_contextE (p := p) u isdecl)) as clctx.
       eapply (substitution_ws_cumul_pbE_subst_conv (Δ := []));
         [exact (untyped_subslet_projection_contextE u isdecl H)
         |exact (untyped_subslet_projection_contextE u isdecl H)| |exact clctx|].
@@ -826,7 +826,7 @@ Proof.
       + eapply ws_cumul_pbE_refl => //.
         epose proof (declared_projection_closedE isdecl).
         rewrite on_free_vars_subst_instance; len. len.
-        rewrite -(declared_minductive_ind_nparsE (proj1 (proj1 (proj1 isdecl)))).
+        rewrite -(declared_minductive_ind_nparsE (MRProd.proj1 (MRProd.proj1 (MRProd.proj1 isdecl)))).
         eapply closedn_on_free_vars in H0.
         now rewrite -plus_Sn_m -shiftnP_add.
 
@@ -864,7 +864,7 @@ Proof.
     simp prim_type in w |- *.
     (* The guard on ws_cumul_pbE_Axiom_l_inv: prim_ty is a registered primitive
        TYPE constant, which §4.2(a)1 keeps out of the operation table. *)
-    assert (hnop : prim_op_of Σ prim_ty = None).
+    assert (hnop : PCUICEnvironment.prim_op_of Σ prim_ty = None).
     { pose proof wfΣ as [_ [wfr _]]. eapply prim_op_of_primitive_constant; tea. }
     destruct (ws_cumul_pbE_Axiom_l_inv (args := [_]) (declared_constant_from_gen H0) ltac:(eapply p) hnop w)
       as [u' [args' [hch a3 c0]]].
