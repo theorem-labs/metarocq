@@ -286,40 +286,8 @@ Section Conversion.
     forall Σ, abstract_env_ext_rel X Σ ->
       ∥ whnf RedFlags.nodelta Σ (Γ ,,, stack_context_eta π) (zipp_eta t π) ∥.
 
-  Lemma eta_pair {A B} (p q : A * B) :
-    p = q ->
-    (p.1, p.2) = (q.1, q.2).
-  Proof using Type. now destruct p, q. Qed.
-
-  Ltac is_var t :=
-    match goal with
-    | v : _ |- _ =>
-      match t with
-      | v => idtac
-      end
-    end.
-
-  Lemma zipp_stack_cat_decompose_stack t π π' :
-    zipp t (π ++ (decompose_stack π').2) = zipp t π.
-  Proof using Type.
-    rewrite zipp_stack_cat; auto.
-    destruct decompose_stack eqn:decomp.
-    now apply decompose_stack_noStackApp in decomp.
-  Qed.
-
-  Lemma zipc_decompose_stack_empty t π :
-    (decompose_stack π).2 = [] ->
-    zipc t π = zipp t π.
-  Proof using Type.
-    destruct decompose_stack eqn:decomp.
-    apply decompose_stack_eq in decomp as ->.
-    cbn; intros ->.
-    rewrite zipc_appstack zipp_as_mkApps decompose_stack_appstack.
-    cbn.
-    now rewrite app_nil_r.
-  Qed.
-
-  (* E: reduction is called only through [reduce_args_E] (REDUCE contract); its four facts. *)
+  (* E: reduction is called only through [reduce_args_E] (REDUCE contract); its four facts
+     (used by slice C's fixpoint-unfolding obligations). *)
   Ltac reduce_args_facts Σ wfΣ :=
     repeat
       match goal with
@@ -333,83 +301,6 @@ Section Conversion.
         rewrite <- H in rid, whid, isr; cbn in rid, whid, isr;
         clear H
       end.
-
-  Lemma zipc_unfold_decompose_stack t π :
-    zipc t π = zipc (mkApps t (decompose_stack π).1) (decompose_stack π).2.
-  Proof using Type.
-    rewrite <- zipc_appstack.
-    destruct (decompose_stack π) eqn:decomp.
-    now apply decompose_stack_eq in decomp as ->.
-  Qed.
-
-  Ltac simpl_stacks :=
-    (repeat
-       match goal with
-       | [H: (?a, ?b) = decompose_stack ?π |- _] =>
-         is_var a;
-         is_var b;
-         apply eta_pair in H; cbn in H; noconf H
-       end);
-    (repeat
-       match goal with
-       | [H: context[decompose_stack (appstack ?l ?ρ)] |- _] =>
-         (rewrite (decompose_stack_appstack l ρ) in H; cbn in H) || fail 2
-       | [H: context[stack_context (?π ++ ?π')] |- _] =>
-         (rewrite (stack_context_stack_cat π' π) in H; cbn in H) || fail 2
-       | [H: (decompose_stack ?π).2 = [], H': context[stack_context ?π] |- _] =>
-         (rewrite <- (stack_context_decompose π), H in H'; cbn in H') || fail 2
-       | [H: (decompose_stack ?π).2 = [], H': context[zipc ?t ?π] |- _] =>
-         (rewrite (zipc_decompose_stack_empty t π H) in H'; cbn in H') || fail 2
-       | [H: context[stack_context (decompose_stack ?π).2] |- _] =>
-         (rewrite (stack_context_decompose π) in H; cbn in H) || fail 2
-       | [H: context[zipp ?t (?π ++ (decompose_stack ?π').2)] |- _] =>
-         (rewrite (zipp_stack_cat_decompose_stack t π π') in H; cbn in H) || fail 2
-       | [H: context[zipc ?t (appstack ?args ?π)] |- _] =>
-         (rewrite (@zipc_appstack t args π) in H; cbn in H) || fail 2
-       | [H: context[zipc ?t (?π ++ ?π')] |- _] =>
-         (rewrite (zipc_stack_cat t π π') in H; cbn in H) || fail 2
-       | [H: context[zip (mkApps ?t (decompose_stack ?π).1, decompose_stack ?π).2] |- _] =>
-         unfold zip in H
-       | [H: context[zipc (mkApps ?t (decompose_stack ?π).1) (decompose_stack ?π).2] |- _] =>
-         (rewrite <- (zipc_unfold_decompose_stack t π) in H; cbn in H) || fail 2
-       | [H: isStackApp ?π = false, H': context[zipp ?t ?π] |- _] =>
-         (rewrite (zipp_noStackApp t π H) in H'; cbn in H') || fail 2
-       | [H: (decompose_stack ?π).2 = (decompose_stack ?π').2, H': context[stack_context ?π] |- _] =>
-         (rewrite <- (stack_context_decompose π), H, (stack_context_decompose π') in H'; cbn in H')
-         || fail 2
-
-       | [|- context[decompose_stack (appstack ?l ?ρ)]] =>
-         (rewrite (decompose_stack_appstack l ρ); cbn) || fail 2
-       | [|- context[stack_context (?π ++ ?π')]] =>
-         (rewrite (stack_context_stack_cat π' π); cbn) || fail 2
-       | [H: (decompose_stack ?π).2 = [] |- context[stack_context ?π]] =>
-         (rewrite <- (stack_context_decompose π), H; cbn) || fail 2
-       | [H: (decompose_stack ?π).2 = [] |- context[zipc ?t ?π]] =>
-         (rewrite (zipc_decompose_stack_empty t π H); cbn) || fail 2
-       | [|- context[stack_context (decompose_stack ?π).2]] =>
-         (rewrite (stack_context_decompose π); cbn) || fail 2
-       | [|- context[zipp ?t (?π ++ (decompose_stack ?π').2)]] =>
-         (rewrite (zipp_stack_cat_decompose_stack t π π'); cbn) || fail 2
-       | [|- context[zipc ?t (appstack ?args ?π)]] =>
-         (rewrite (@zipc_appstack t args π); cbn) || fail 2
-       | [|- context[zipc ?t (?π ++ ?π')]] =>
-         (rewrite (zipc_stack_cat t π π'); cbn) || fail 2
-       | [|- context[zip (mkApps ?t (decompose_stack ?π).1, decompose_stack ?π).2]] =>
-         unfold zip
-       | [|- context[zipc (mkApps ?t (decompose_stack ?π).1) (decompose_stack ?π).2]] =>
-         (rewrite <- (zipc_unfold_decompose_stack t π); cbn) || fail 2
-       | [H: isStackApp ?π = false |- context[zipp ?t ?π]] =>
-         (rewrite (zipp_noStackApp t π H); cbn) || fail 2
-       | [H: (decompose_stack ?π).2 = (decompose_stack ?π').2 |- context[stack_context ?π]] =>
-         (rewrite <- (stack_context_decompose π), H, (stack_context_decompose π'); cbn) || fail 2
-       end);
-    repeat
-      match goal with
-      | [H: context[zipp ?t ?π] |- _] => rewrite (zipp_as_mkApps t π) in H
-      | [|- context[zipp ?t ?π]] => rewrite (zipp_as_mkApps t π)
-      end.
-
-  Ltac simpl_reduce_stack Σ wfΣ := reduce_args_facts Σ wfΣ ; simpl_stacks.
 
   (* Tailored view for isconv_prog and precondition for fallback case *)
   Equations prog_discr (t1 t2 : term) : Prop :=
