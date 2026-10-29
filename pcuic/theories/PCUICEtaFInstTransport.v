@@ -17,10 +17,10 @@
 
   **[eta_env Σ]** is [Σ] with every inductive's parameters and indices emptied
   ([ind_params], [ind_npars], [ind_indices]) and every constructor's [cstr_arity]
-  set to 0, so base's [arity <=? napp] test always passes; and the constructors
-  of non-cumulative blocks removed, so their lookup fails and base returns
-  [AllEqual], which is the kernel rule F-inst follows there. It is a comparison
-  device only: nothing types or reduces in it.
+  set to 0, so base's [arity <=? napp] test always passes. Base then reads
+  [ind_variance], which is kept, and so gives a non-cumulative constructor
+  [AllEqual], the kernel's rule. It is a comparison device only: nothing types or
+  reduces in it.
 
   **The iff has no hypotheses.** No confluence file. *)
 
@@ -38,20 +38,14 @@ Definition eta_cstr (c : constructor_body) : constructor_body :=
   {| cstr_name := cstr_name c; cstr_args := cstr_args c; cstr_indices := cstr_indices c;
      cstr_type := cstr_type c; cstr_arity := 0 |}.
 
-Definition eta_idecl (drop : bool) (i : one_inductive_body) : one_inductive_body :=
+Definition eta_idecl (i : one_inductive_body) : one_inductive_body :=
   {| ind_name := ind_name i; ind_indices := []; ind_sort := ind_sort i; ind_type := ind_type i;
-     ind_kelim := ind_kelim i;
-     ind_ctors := if drop then [] else map eta_cstr (ind_ctors i);
+     ind_kelim := ind_kelim i; ind_ctors := map eta_cstr (ind_ctors i);
      ind_projs := ind_projs i; ind_relevance := ind_relevance i |}.
-
-(** Drop the constructors of a non-cumulative block: there F-inst follows the
-    kernel's rule and compares by instance equality. *)
-Definition eta_drop (m : mutual_inductive_body) : bool :=
-  match ind_variance m with None => true | Some _ => false end.
 
 Definition eta_mdecl (m : mutual_inductive_body) : mutual_inductive_body :=
   {| ind_finite := ind_finite m; ind_npars := 0; ind_params := [];
-     ind_bodies := map (eta_idecl (eta_drop m)) (ind_bodies m);
+     ind_bodies := map eta_idecl (ind_bodies m);
      ind_universes := ind_universes m; ind_variance := ind_variance m |}.
 
 Definition eta_gdecl (d : global_decl) : global_decl :=
@@ -97,17 +91,12 @@ Proof.
     rewrite nth_error_map.
     destruct (nth_error (ind_bodies m) (inductive_ind ind)) as [idecl|]; cbn;
       [|reflexivity].
-    unfold eta_drop.
-    (* Non-cumulative blocks lose their constructors, so base's lookup fails and
-       returns [AllEqual]; cumulative ones keep them with arity zeroed. *)
-    destruct (ind_variance m) as [var|] eqn:hv; cbn.
-    + rewrite nth_error_map.
-      destruct (nth_error (ind_ctors idecl) k) as [cdecl|]; cbn; [|reflexivity].
-      rewrite (proj2 (Nat.leb_le _ (max napp _)) (Nat.le_max_r _ _)) hv.
-      reflexivity.
-    + rewrite nth_error_nil.
-      destruct (nth_error (ind_ctors idecl) k) as [cdecl|]; cbn; rewrite ?hv;
-        first [reflexivity | now destruct (_ <=? _)].
+    (* Constructors keep their place with arity 0; both sides then read the same
+       [ind_variance]. *)
+    rewrite nth_error_map.
+    destruct (nth_error (ind_ctors idecl) k) as [cdecl|]; cbn; [|reflexivity].
+    rewrite (proj2 (Nat.leb_le _ (max napp _)) (Nat.le_max_r _ _)).
+    reflexivity.
 Qed.
 
 (** At [Conv], the F-inst instance comparison IS base's in [eta_env]. *)

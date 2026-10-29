@@ -118,12 +118,6 @@ Proof.
     now rewrite !(proj2 (Nat.leb_le _ _) (Nat.le_max_r _ _)).
 Qed.
 
-(** The lookup is base's variance at the full arity, by definition. *)
-Lemma global_variance_eta_base lookup gr napp :
-  global_variance_eta_gen lookup gr napp
-  = global_variance_gen lookup gr (max napp (head_arity_gen lookup gr)).
-Proof. reflexivity. Qed.
-
 (** ** The F-inst instance comparison
 
   Heads applied to at least their arity are compared at [pb], as base
