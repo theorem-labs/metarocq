@@ -281,7 +281,7 @@ Qed.
 
 (** [prim_val] is a dependent pair; read the array model through a function
     instead of [injection]. *)
-Definition u8_prim_arr (p : prim_val term) : option (array_model term) :=
+Definition u8_prim_arr (p : PCUICPrimitive.prim_val term) : option (array_model term) :=
   match p.π2 with
   | primArrayModel a => Some a
   | _ => None
@@ -294,7 +294,7 @@ Definition u8_term_arr (t : term) : option (array_model term) :=
   end.
 
 Lemma u8_prim_arr_inj (a b : array_model term) :
-  @eq (prim_val term) (primArray; primArrayModel a) (primArray; primArrayModel b) -> a = b.
+  @eq (PCUICPrimitive.prim_val term) (primArray; primArrayModel a) (primArray; primArrayModel b) -> a = b.
 Proof. intros E. apply (f_equal u8_prim_arr) in E. cbn in E. injection E as E. exact E. Qed.
 
 Lemma u8_lift_prim_arr_inv n k M arr :

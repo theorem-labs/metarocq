@@ -67,9 +67,11 @@
   [conv_witnessE] ([PCUICTypingEta.v:30-31], [convSpecE]) passes it. [red] is unchanged in
   the η world, so the witness is base's definition, reused, as the forecast does.
   - Soundness direction, red ⇒ [conv_witnessE]: TRUE, proved below
-    ([mfix_body_on_red_convE], [wf_fixpoint_red_wf_fixpointE],
-    [wf_cofixpoint_red_wf_cofixpointE], and the typed form [mfix_on_ind_red_convE], the
-    twin of [PCUICFixWitness.v:256-266] with [wf] replaced by [wfE]). A closed reduction is
+    ([wf_fixpoint_red_wf_fixpointE], [wf_cofixpoint_red_wf_cofixpointE]) from
+    [mfix_body_on_red_convE], the twin of [PCUICFixWitness.v:244-254] with [wf Σ] replaced
+    by [ClosedBodies Σ]. It and the typed form [mfix_on_ind_red_convE] (the twin of
+    [PCUICFixWitness.v:256-266] with [wf] replaced by [wfE]) live in copy 17's
+    [PCUICFixWitnessEta], imported here (cross-lane commitment C4). A closed reduction is
     a [ws_cumul_pbE] ([red_ws_cumul_pbE]), hence a [convSpecE]
     ([ws_cumul_pbE_forget_spec]); the premise is [ClosedBodies Σ], not base [wf Σ].
   - Completeness direction, [conv_witnessE] ⇒ red (base [mfix_on_ind_conv_red],
@@ -93,7 +95,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
   PCUICLiftSubst PCUICUnivSubst PCUICEquality PCUICUtils
   PCUICPosition PCUICTyping PCUICCumulativity PCUICReduction PCUICOnFreeVars
   PCUICWellScopedCumulativity PCUICClosedBodies PCUICCumulativitySpecEta PCUICTypingEta
-  PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICClosedTypEta BDTyping.
+  PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICClosedTypEta BDTyping PCUICFixWitnessEta.
 
 From MetaRocq.Utils Require Export LibHypsNaming.
 From Stdlib Require Import ssreflect.
@@ -270,23 +272,11 @@ Proof. intros hΓ hT hT' hj. exact (into_ws_cumul_pbE hj hΓ hT hT'). Qed.
 
 (** ** The (co)fixpoint witness: red ⇒ [conv_witnessE] (design point B, soundness)
 
-  [mfix_body_on_red_convE] is the twin of [PCUICFixWitness.v:244-254], with [wf Σ]
-  replaced by [ClosedBodies Σ] (a reduction fact). *)
+  Per declaration, copy 17's [mfix_body_on_red_convE] ([PCUICFixWitnessEta]), the twin of
+  [PCUICFixWitness.v:244-254] with [wf Σ] replaced by [ClosedBodies Σ] (a reduction fact). *)
 
 Section FixWitnessRedConv.
   Context {cf : checker_flags} {Σ : global_env_ext} {cb : ClosedBodies Σ}.
-
-  Lemma mfix_body_on_red_convE {check Γ mind d} :
-    is_closed_context Γ -> is_open_term Γ (dtype d) ->
-    mfix_body_on check (red Σ Γ) mind d ->
-    mfix_body_on check (conv_witnessE Σ Γ) mind d.
-  Proof using cb.
-    intros clΓ opd [ty [hc r]].
-    have cr : Σ ;;; Γ ⊢ dtype d ⇝ ty := {| clrel_ctx := clΓ; clrel_src := opd; clrel_rel := r |}.
-    exists ty; split => //; split.
-    - exact (closed_red_open_right_cb cr).
-    - exact (ws_cumul_pbE_forget_spec (red_ws_cumul_pbE (pb := Conv) cr)).
-  Qed.
 
   Lemma wf_fixpoint_red_wf_fixpointE {Γ mfix} :
     is_closed_context Γ -> All (fun d => is_open_term Γ (dtype d)) mfix ->
@@ -310,23 +300,6 @@ Section FixWitnessRedConv.
   Qed.
 
 End FixWitnessRedConv.
-
-(** The typed form: the twin of [PCUICFixWitness.v:256-266] ([mfix_on_ind_red_conv]),
-    with [wf], [wf_local], [isType] replaced by [wfE], [wf_localE], [isType] over
-    [typingE]. This is the form base's soundness proof calls ([BDToPCUIC.v:366,394]). *)
-Lemma mfix_on_ind_red_convE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-  {check ok Γ mfix} :
-  wf_localE Σ Γ -> All (fun d => on_type (lift_typing typingE) Σ Γ (dtype d)) mfix ->
-  mfix_on_ind check (red Σ Γ) ok mfix ->
-  mfix_on_ind check (conv_witnessE Σ Γ) ok mfix.
-Proof.
-  intros wfΓ alltys. apply mfix_on_ind_All2; [|easy].
-  apply All_All2_refl. eapply All_impl; [exact alltys|]. intros d isty m.
-  apply mfix_body_on_red_convE.
-  - exact (wf_local_closed_contextE wfΓ).
-  - exact (isType_is_open_termE isty).
-Qed.
-
 
 Definition tybranchesE {cf} Σ Γ ci mdecl idecl p ptm n ctors brs :=
   All2i

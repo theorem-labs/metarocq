@@ -198,6 +198,7 @@ theories/PCUICWsCumulEtaSubst.v
 theories/PCUICEtaA6.v
 theories/PCUICEtaA6Ind.v
 theories/PCUICEtaA6More.v
+theories/PCUICEtaMkAppsTRel.v
 theories/PCUICContextConversionEta.v
 # Context-relative facts for ws_cumul_pbE and ws_cumul_ctx_pbE, and their satisfying instances
 theories/PCUICWsCumulEtaCtx.v
@@ -226,6 +227,15 @@ theories/PCUICTypingEtaCopy9Instances.v
 # Spines over typingE (E copy of PCUICSpine), and its satisfying instances
 theories/PCUICSpineEta.v
 theories/PCUICTypingEtaCopy15Instances.v
+# Inductive declarations and projections over typingE (E copy of PCUICInductives), and its satisfying instances
+theories/PCUICInductivesEta.v
+theories/PCUICTypingEtaCopy16Instances.v
+# Inversion facts on inductive types over typingE (E copy of part of PCUICInductiveInversion), and its satisfying instances
+theories/PCUICInductiveInversionEta.v
+theories/PCUICTypingEtaCopy18aInstances.v
+# (Co)fixpoint witnesses over typingE (E copy of PCUICFixWitness), and its satisfying instances
+theories/PCUICFixWitnessEta.v
+theories/PCUICTypingEtaCopy17Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
@@ -238,4 +248,6 @@ theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
+# Shared model environment for satisfying instances: a universe-polymorphic cumulative indexed inductive with a redex arity (ETAK)
+theories/PCUICEtaIdxEnv.v
 # theories/All.v

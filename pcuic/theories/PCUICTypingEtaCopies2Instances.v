@@ -1027,17 +1027,17 @@ Lemma c2_ws_I_A : ws_cumul_pbE Cumul si_Σ [] c2_I_A g_T.
 Proof.
   apply (into_ws_cumul_pbE_spec (Σ := si_Σ) (wfΣ := si_cb) g_cumul); [reflexivity|reflexivity|reflexivity].
 Qed.
-Lemma c2_sp : typing_spineE si_Σ [] (tProd si_na si_P (cp_Ix 0)) [g_A] g_T.
+Lemma c2_sp : PCUICAritiesEta.typing_spineE si_Σ [] (tProd si_na si_P (cp_Ix 0)) [g_A] g_T.
 Proof.
-  eapply type_spine_consE.
+  eapply PCUICAritiesEta.type_spine_consE.
   - exact g_cstr_isType.
   - exact g_cstr_isType.
   - exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) (wfΣ := si_wfE) _ _ g_cstr_isType).
   - exact c2_False0.
-  - apply type_spine_nilE; [exact c2_isT_I_A|exact g_T_isType|exact c2_ws_I_A].
+  - apply PCUICAritiesEta.type_spine_nilE; [exact c2_isT_I_A|exact g_T_isType|exact c2_ws_I_A].
 Qed.
-Lemma c2_sp_wc : typing_spineE rf_Σ wc_Γ wc_T [] wc_U.
-Proof. apply type_spine_nilE; [exact (wc_isType _ wc_T_typed)|exact (wc_isType _ wc_U_typed)|exact (c2_wc_ws Cumul)]. Qed.
+Lemma c2_sp_wc : PCUICAritiesEta.typing_spineE rf_Σ wc_Γ wc_T [] wc_U.
+Proof. apply PCUICAritiesEta.type_spine_nilE; [exact (wc_isType _ wc_T_typed)|exact (wc_isType _ wc_U_typed)|exact (c2_wc_ws Cumul)]. Qed.
 
 Definition c2_letT : term := tLetIn si_na ci_False fi_P (tRel 0).
 Lemma c2_letT_typed : si_Σ ;;; [] |-E c2_letT : tSort sProp.
@@ -1084,29 +1084,29 @@ Definition wf_local_assE_inst := @wf_local_assE _ si_Σ [] si_na fi_P localenv_n
 Definition wf_local_defE_inst :=
   @wf_local_defE _ si_Σ [] si_na ci_False fi_P localenv_nil (ci_vass_P [] localenv_nil) c2_False0.
 Definition isType_applyE_inst := @isType_applyE _ si_Σ si_wfE [] si_na fi_P (tRel 0) ci_False c2_isT_False c2_False0.
-Lemma c2_sp_let_nil : typing_spineE si_Σ [] c2_letT [] ci_False.
+Lemma c2_sp_let_nil : PCUICAritiesEta.typing_spineE si_Σ [] c2_letT [] ci_False.
 Proof.
-  apply type_spine_nilE; [exact c2_isT_letT|exact c2_isT_False|].
+  apply PCUICAritiesEta.type_spine_nilE; [exact c2_isT_letT|exact c2_isT_False|].
   exact (@ws_cumul_pbE_zetaE _ si_Σ si_wfE Cumul [] si_na ci_False fi_P (tRel 0) c2_isT_letT).
 Qed.
 Definition typing_spine_letin_invE_inst := @typing_spine_letin_invE _ si_Σ si_wfE [] _ _ _ _ _ _ c2_sp_let_nil.
-Lemma c2_sp_False_nil : typing_spineE si_Σ [] ci_False [] ci_False.
+Lemma c2_sp_False_nil : PCUICAritiesEta.typing_spineE si_Σ [] ci_False [] ci_False.
 Proof.
-  apply type_spine_nilE; [exact c2_isT_False|exact c2_isT_False|].
+  apply PCUICAritiesEta.type_spine_nilE; [exact c2_isT_False|exact c2_isT_False|].
   exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) (wfΣ := si_wfE) _ _ c2_isT_False).
 Qed.
 Definition typing_spine_letinE_inst :=
   @typing_spine_letinE _ si_Σ si_wfE [] si_na ci_False fi_P (tRel 0) [] ci_False c2_isT_letT c2_sp_False_nil.
-Lemma c2_sp_wc_refl : typing_spineE rf_Σ wc_Γ wc_T [] wc_T.
+Lemma c2_sp_wc_refl : PCUICAritiesEta.typing_spineE rf_Σ wc_Γ wc_T [] wc_T.
 Proof.
-  apply type_spine_nilE; [exact (wc_isType _ wc_T_typed)|exact (wc_isType _ wc_T_typed)|].
+  apply PCUICAritiesEta.type_spine_nilE; [exact (wc_isType _ wc_T_typed)|exact (wc_isType _ wc_T_typed)|].
   exact (isType_ws_cumul_pbE_refl (Σ := rf_Σ) (wfΣ := wc_wfE) _ _ (wc_isType _ wc_T_typed)).
 Qed.
 (** The empty spine at [G (λy:Prop. F y)], widened to [G F] by the η step. *)
 Definition typing_spine_weaken_conclE_inst :=
   @typing_spine_weaken_conclE _ rf_Σ wc_wfE wc_Γ wc_T [] wc_T wc_U c2_sp_wc_refl (c2_wc_ws Cumul) (wc_isType _ wc_U_typed).
-Lemma c2_sp_tail : typing_spineE si_Σ [] ((cp_Ix 0) {0 := g_A}) [] g_T.
-Proof. apply type_spine_nilE; [exact c2_isT_I_A|exact g_T_isType|exact c2_ws_I_A]. Qed.
+Lemma c2_sp_tail : PCUICAritiesEta.typing_spineE si_Σ [] ((cp_Ix 0) {0 := g_A}) [] g_T.
+Proof. apply PCUICAritiesEta.type_spine_nilE; [exact c2_isT_I_A|exact g_T_isType|exact c2_ws_I_A]. Qed.
 Definition typing_spine_prodE_inst :=
   @typing_spine_prodE _ si_Σ si_wfE [] si_na g_A si_P (cp_Ix 0) [] g_T c2_sp_tail g_cstr_isType c2_False0.
 Definition typing_spine_WAT_conclE_inst := @typing_spine_WAT_conclE _ si_Σ _ _ _ _ c2_sp.

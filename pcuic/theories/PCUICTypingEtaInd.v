@@ -327,7 +327,7 @@ Lemma typingE_ind_env_app_size `{cf : checker_flags} :
        wf_cofixpointE Σ Γ mfix ->
        P Σ Γ (tCoFix mfix n) decl.(dtype)) ->
 
-  (forall Σ (wfΣ : wfE Σ.1) (Γ : context) (wfΓ : wf_localE Σ Γ) (p : prim_val term) prim_ty cdecl,
+  (forall Σ (wfΣ : wfE Σ.1) (Γ : context) (wfΓ : wf_localE Σ Γ) (p : PCUICPrimitive.prim_val term) prim_ty cdecl,
       PΓ Σ Γ ->
       primitive_constant Σ (prim_val_tag p) = Some prim_ty ->
       declared_constant Σ prim_ty cdecl ->
@@ -792,7 +792,7 @@ Lemma typingE_ind_env `{cf : checker_flags} :
         wf_cofixpointE Σ Γ mfix ->
         P Σ Γ (tCoFix mfix n) decl.(dtype)) ->
 
-    (forall Σ (wfΣ : wfE Σ.1) (Γ : context) (wfΓ : wf_localE Σ Γ) (p : prim_val term) prim_ty cdecl,
+    (forall Σ (wfΣ : wfE Σ.1) (Γ : context) (wfΓ : wf_localE Σ Γ) (p : PCUICPrimitive.prim_val term) prim_ty cdecl,
         PΓ Σ Γ ->
         primitive_constant Σ (prim_val_tag p) = Some prim_ty ->
         declared_constant Σ prim_ty cdecl ->
