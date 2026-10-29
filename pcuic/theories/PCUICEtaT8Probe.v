@@ -1713,3 +1713,157 @@ Qed.
 (** **[eta1* = pe]: CLOSED.** *)
 Theorem eta_iff_pe t u : (eta t u -> pe t u) × (pe t u -> eta t u).
 Proof. split; [intros h; exact (eta_pe_step _ _ h t (pe_refl t))|exact (pe_to_eta t u)]. Qed.
+
+(** ** The parallel root cases: a [pe]-source of a rigid spine
+
+  The ι, projection, fixpoint and cofixpoint root cases of the parallel
+  postponement need: a [pe]-source [c0] of a spine with a rigid head (constructor,
+  fixpoint, cofixpoint, constant) reduces to a spine with a [pe]-related head and
+  [pe]-related arguments. η-expanded heads, nested at any depth, are removed by β
+  steps; a λ can appear only as a REDUCT of [c0], which the hypothesis [hnl]
+  excludes (it holds of a typed scrutinee, a projection argument or a [rarg]-th
+  fixpoint argument, by [typed_eta_safe] on the typed reducts of the term).
+
+  The induction is on the [pe] derivation of the spine head, carrying the pending
+  substitution [s] that the β steps build ([subst_cons_beta]); [head_unbound] says
+  the target's spine head is not one of the substituted variables. *)
+
+Definition rigid (h : term) : bool :=
+  match h with tConstruct _ _ _ | tFix _ _ | tCoFix _ _ | tConst _ _ => true | _ => false end.
+
+Lemma rigid_notApp h : rigid h -> ~~ isApp h.
+Proof. destruct h; cbn; auto. Qed.
+
+Definition head_unbound (n : nat) (u : term) : bool :=
+  match fst (decompose_app u) with tRel k => Nat.leb n k | _ => true end.
+
+Lemma head_lift n k t : fst (decompose_app (lift n k t)) = lift n k (fst (decompose_app t)).
+Proof.
+  induction t; try reflexivity.
+  change (fst (decompose_app_rec (lift n k t1) [lift n k t2]) = lift n k (fst (decompose_app_rec t1 [t2]))).
+  rewrite !fst_decompose_app_rec. exact IHt1.
+Qed.
+
+Lemma head_unbound_lift n M : head_unbound n M -> head_unbound (S n) (lift0 1 M).
+Proof. rewrite /head_unbound head_lift. destruct (fst (decompose_app M)); cbn; auto. Qed.
+
+Lemma head_unbound_app n f x : head_unbound n (tApp f x) = head_unbound n f.
+Proof.
+  rewrite /head_unbound. change (decompose_app (tApp f x)) with (decompose_app_rec f [x]).
+  now rewrite fst_decompose_app_rec.
+Qed.
+
+Lemma subst_cons_lift1 r s M : subst (r :: s) 0 (lift0 1 M) = subst s 0 M.
+Proof.
+  rewrite (subst_app_simpl [r] s 0 (lift0 1 M)).
+  have e := commut_lift_subst_rec M s 1 0 0 (le_n 0). cbn in e |- *. rewrite -e.
+  exact (subst1_lift0 _ _).
+Qed.
+
+Lemma subst_cons_beta r s b : (subst s 1 b) {0 := r} = subst (r :: s) 0 b.
+Proof. symmetry. exact (subst_app_simpl [r] s 0 b). Qed.
+
+Ltac rigid_contra :=
+  match goal with
+  | E : mkApps _ _ = mkApps ?hd _, hrig : is_true (rigid ?hd) |- _ =>
+      exfalso; destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 _];
+      subst hd; cbn in hrig; discriminate hrig
+  end.
+
+Section RigidInv.
+  Context (Σ : global_env) (Γ : context) (c0 : term)
+          (hnl : forall c', red Σ Γ c0 c' -> notLam c').
+
+  Definition rigid_inv_concl hd args :=
+    ∑ h0 args0, red Σ Γ c0 (mkApps h0 args0) × pe h0 hd × All2 pe args0 args.
+
+  Lemma pe_rigid_inv t u : pe t u ->
+    forall s s' rest rest', All2 pe s s' -> All2 pe rest rest' -> head_unbound #|s'| u ->
+    red Σ Γ c0 (mkApps (subst s 0 t) rest) ->
+    forall hd args, rigid hd -> mkApps (subst s' 0 u) rest' = mkApps hd args ->
+    rigid_inv_concl hd args.
+  Proof.
+    revert t u.
+    apply (pe_ind_all (fun t u =>
+      forall s s' rest rest', All2 pe s s' -> All2 pe rest rest' -> head_unbound #|s'| u ->
+      red Σ Γ c0 (mkApps (subst s 0 t) rest) ->
+      forall hd args, rigid hd -> mkApps (subst s' 0 u) rest' = mkApps hd args ->
+      rigid_inv_concl hd args)).
+    - (* η-expanded head: β, then the body with the argument pushed on [s] *)
+      intros na A b M' hb IH s s' rest rest' hs hr hu hred hd args hrig E.
+      destruct rest as [|r rest0].
+      + exfalso. specialize (hnl _ hred). cbn in hnl. discriminate hnl.
+      + destruct rest' as [|r' rest0']; [depelim hr|].
+        depelim hr.
+        have hs' : All2 pe (r :: s) (r' :: s') by (constructor; assumption).
+        have hu' : head_unbound #|r' :: s'| (tApp (lift0 1 M') (tRel 0)).
+        { rewrite head_unbound_app. now apply head_unbound_lift. }
+        have hred' : red Σ Γ c0 (mkApps (subst (r :: s) 0 b) rest0).
+        { eapply rt_trans; [exact hred|]. apply rt_step.
+          rewrite -subst_cons_beta.
+          change (mkApps (subst s 0 (tLambda na A b)) (r :: rest0))
+            with (mkApps (tApp (tLambda na (subst s 0 A) (subst s 1 b)) r) rest0).
+          apply red1_mkApps_f. apply red_beta. }
+        have e : subst (r' :: s') 0 (tApp (lift0 1 M') (tRel 0)) = tApp (subst s' 0 M') r'.
+        { cbn [subst]. rewrite subst_cons_lift1. cbn. now rewrite lift0_id. }
+        apply (IH (r :: s) (r' :: s') rest0 rest0' hs' ltac:(assumption) hu' hred' hd args hrig).
+        rewrite e. exact E.
+    - (* a variable head: not substituted ([head_unbound]), so not rigid *)
+      intros n s s' rest rest' hs hr hu hred hd args hrig E. exfalso.
+      rewrite /head_unbound /= in hu.
+      have hn : nth_error s' n = None by (apply nth_error_None; apply Nat.leb_le; exact hu).
+      have e : subst s' 0 (tRel n) = tRel (n - #|s'|) by (cbn; rewrite Nat.sub_0_r hn; reflexivity).
+      rewrite e in E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 _]. subst hd. discriminate hrig.
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - (* constant *)
+      intros c uu s s' rest rest' hs hr hu hred hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      exists (tConst c uu), rest. split; [exact hred|split; [apply pe_Const|exact hr]].
+    - intros; rigid_contra.
+    - (* constructor *)
+      intros ind k uu s s' rest rest' hs hr hu hred hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      exists (tConstruct ind k uu), rest. split; [exact hred|split; [apply pe_Construct|exact hr]].
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - (* application: push the argument on the stack *)
+      intros f f' x x' hf IHf hx IHx s s' rest rest' hs hr hu hred hd args hrig E.
+      rewrite head_unbound_app in hu.
+      exact (IHf s s' (subst s 0 x :: rest) (subst s' 0 x' :: rest') hs
+               (All2_cons (pe_subst _ _ hx s s' 0 hs) hr) hu hred hd args hrig E).
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - intros; rigid_contra.
+    - (* fixpoint *)
+      intros mfix mfix' idx am s s' rest rest' hs hr hu hred hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      exists (subst s 0 (tFix mfix idx)), rest. split; [exact hred|split; [|exact hr]].
+      apply pe_subst; [|exact hs]. apply pe_Fix.
+      eapply All2_impl; [exact am|]. intros d d' [[ht _] [[hb _] [hn hrr]]]. exact (ht, (hb, (hn, hrr))).
+    - (* cofixpoint *)
+      intros mfix mfix' idx am s s' rest rest' hs hr hu hred hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      exists (subst s 0 (tCoFix mfix idx)), rest. split; [exact hred|split; [|exact hr]].
+      apply pe_subst; [|exact hs]. apply pe_CoFix.
+      eapply All2_impl; [exact am|]. intros d d' [[ht _] [[hb _] [hn hrr]]]. exact (ht, (hb, (hn, hrr))).
+    - intros; rigid_contra.
+  Qed.
+
+  (** **The spine inversion the parallel ι / projection / fixpoint / cofixpoint root
+      cases need: CLOSED** (given [hnl]). *)
+  Corollary pe_rigid_spine u hd args :
+    pe c0 u -> rigid hd -> u = mkApps hd args -> rigid_inv_concl hd args.
+  Proof.
+    intros h hrig ->.
+    have hu : head_unbound #|@nil term| (mkApps hd args).
+    { rewrite /head_unbound decompose_app_mkApps; [exact (rigid_notApp _ hrig)|].
+      destruct hd; cbn; reflexivity. }
+    have hred : red Σ Γ c0 (mkApps (subst [] 0 c0) []) by (cbn; rewrite subst_empty; apply rt_refl).
+    exact (pe_rigid_inv _ _ h [] [] [] [] All2_nil All2_nil hu hred hd args hrig
+             ltac:(cbn; now rewrite subst_empty)).
+  Qed.
+
+End RigidInv.
