@@ -2157,6 +2157,361 @@ Lemma stack_context_eta_Eta_app na A π :
 Proof. reflexivity. Qed.
 
 (* ===================================================================== *)
+(* K3a: the pure lemmas about the η views (plan I7 rev 12-15).             *)
+(* ===================================================================== *)
+
+(* One equation per real frame, so that the inductions below do not enumerate frames. *)
+Lemma eta_rename_real se π d t : is_eta_frame se = false ->
+  eta_rename (se :: π) d t = eta_rename π (#|stack_entry_context se| + d) t.
+Proof. destruct se; first [discriminate | reflexivity]. Qed.
+
+Lemma eta_ren_real se π d : is_eta_frame se = false ->
+  eta_ren (se :: π) d = eta_ren π (#|stack_entry_context se| + d).
+Proof. destruct se; first [discriminate | reflexivity]. Qed.
+
+Lemma eta_lift_real se π : is_eta_frame se = false -> eta_lift (se :: π) = eta_lift π.
+Proof. destruct se; first [discriminate | reflexivity]. Qed.
+
+Lemma eta_segment_real se π : is_eta_frame se = false ->
+  eta_segment (se :: π) = se :: eta_segment π.
+Proof. destruct se; first [discriminate | reflexivity]. Qed.
+
+Lemma stack_context_eta_real se π : is_eta_frame se = false ->
+  stack_context_eta (se :: π) =
+  fold_context_k (fun k => eta_rename π k) (stack_entry_context se) ++ stack_context_eta π.
+Proof. destruct se; first [discriminate | reflexivity]. Qed.
+
+Lemma eta_rename_Eta_app na A π d t :
+  eta_rename (Eta_app na A :: π) d t = eta_rename π (S d) (lift 1 d t).
+Proof. reflexivity. Qed.
+
+Lemma eta_rename_appstack args π d t : eta_rename (appstack args π) d t = eta_rename π d t.
+Proof.
+  induction args as [|a args IH]; [reflexivity|].
+  change (appstack (a :: args) π) with (App_l a :: appstack args π).
+  exact IH.
+Qed.
+
+Lemma rename_rename_eta f g t : rename f (rename g t) = rename (f ∘ g) t.
+Proof. exact (rename_compose f g t). Qed.
+
+(* rev 15 (C6) *)
+Lemma eta_rename_rename π d t : eta_rename π d t = rename (eta_ren π d) t.
+Proof.
+  induction π as [|se π IH] in d, t |- *.
+  - exact (eq_sym (eq_trans (rename_ext id ren_id (fun x => eq_refl) t) (rename_ren_id t))).
+  - destruct (is_eta_frame se) eqn:he.
+    + destruct se; try discriminate he.
+      * (* Eta_app *)
+        rewrite eta_rename_Eta_app IH lift_rename rename_rename_eta. reflexivity.
+      * (* Eta_arg *)
+        exact (eq_sym (eq_trans (rename_ext id ren_id (fun x => eq_refl) t) (rename_ren_id t))).
+    + rewrite eta_rename_real // eta_ren_real //.
+Qed.
+
+(* rev 15 (C6) *)
+Lemma eta_ren_shiftn π k d : eta_ren π (k + d) =1 shiftn k (eta_ren π d).
+Proof.
+  induction π as [|se π IH] in d |- *.
+  - intros n. exact (eq_sym (shiftn_id k n)).
+  - destruct (is_eta_frame se) eqn:he.
+    + destruct se; try discriminate he.
+      * (* Eta_app *)
+        intros n.
+        change (eta_ren π (S (k + d)) (lift_renaming 1 (k + d) n) =
+                shiftn k (fun x => eta_ren π (S d) (lift_renaming 1 d x)) n).
+        rewrite -Nat.add_succ_r.
+        transitivity (shiftn k (eta_ren π (S d)) (lift_renaming 1 (k + d) n)).
+        { exact (IH (S d) _). }
+        transitivity (shiftn k (eta_ren π (S d)) (shiftn k (lift_renaming 1 d) n)).
+        { f_equal. symmetry. exact (shiftn_lift_renaming 1 k d n). }
+        exact (shiftn_compose k (eta_ren π (S d)) (lift_renaming 1 d) n).
+      * (* Eta_arg *)
+        intros n. exact (eq_sym (shiftn_id k n)).
+    + intros n. rewrite !eta_ren_real //.
+      replace (#|stack_entry_context se| + (k + d)) with (k + (#|stack_entry_context se| + d)) by lia.
+      exact (IH _ n).
+Qed.
+
+Lemma eta_ren_S π d : eta_ren π (S d) =1 shiftn 1 (eta_ren π d).
+Proof. exact (eta_ren_shiftn π 1 d). Qed.
+
+(* rev 15 (C6) *)
+Lemma eta_rename_fold_context π d Δ :
+  fold_context_k (fun k => eta_rename π (d + k)) Δ = rename_context (eta_ren π d) Δ.
+Proof.
+  unfold rename_context. apply fold_context_k_ext. intros k t.
+  rewrite eta_rename_rename. apply rename_ext. intros x.
+  rewrite Nat.add_comm. apply eta_ren_shiftn.
+Qed.
+
+(* rev 13 *)
+Lemma eta_rename_lift0 π t : eta_rename π 1 (lift0 1 t) = lift0 1 (eta_rename π 0 t).
+Proof.
+  rewrite !eta_rename_rename !lift_rename !rename_rename_eta.
+  apply rename_ext. intros n.
+  change (eta_ren π 1 (S n) = S (eta_ren π 0 n)).
+  exact (eq_trans (eta_ren_shiftn π 1 0 (S n)) (shiftn_1_S _ n)).
+Qed.
+
+(* rev 13: renaming commutes with binders (the λ-congruence obligation, body state ⇒ λ state),
+   and likewise tProd, tLetIn, tCase (predicate/branch contexts at d + #|ctx|), tFix/tCoFix
+   (d + #|mfix|). *)
+Lemma eta_rename_tLambda π d na A b :
+  eta_rename π d (tLambda na A b) = tLambda na (eta_rename π d A) (eta_rename π (S d) b).
+Proof.
+  rewrite !eta_rename_rename. cbn [rename]. f_equal.
+  apply rename_ext. intros x. exact (eq_sym (eta_ren_S π d x)).
+Qed.
+
+Lemma eta_rename_tProd π d na A B :
+  eta_rename π d (tProd na A B) = tProd na (eta_rename π d A) (eta_rename π (S d) B).
+Proof.
+  rewrite !eta_rename_rename. cbn [rename]. f_equal.
+  apply rename_ext. intros x. exact (eq_sym (eta_ren_S π d x)).
+Qed.
+
+Lemma eta_rename_tLetIn π d na b B t :
+  eta_rename π d (tLetIn na b B t) =
+  tLetIn na (eta_rename π d b) (eta_rename π d B) (eta_rename π (S d) t).
+Proof.
+  rewrite !eta_rename_rename. cbn [rename]. f_equal.
+  apply rename_ext. intros x. exact (eq_sym (eta_ren_S π d x)).
+Qed.
+
+Lemma eta_rename_tCase π d ci p c brs :
+  eta_rename π d (tCase ci p c brs) =
+  tCase ci {| pparams := map (eta_rename π d) p.(pparams); puinst := p.(puinst);
+              pcontext := p.(pcontext);
+              preturn := eta_rename π (#|p.(pcontext)| + d) p.(preturn) |}
+        (eta_rename π d c)
+        (map (fun br => {| bcontext := br.(bcontext);
+                           bbody := eta_rename π (#|br.(bcontext)| + d) br.(bbody) |}) brs).
+Proof.
+  rewrite (eta_rename_rename π d (tCase _ _ _ _)) (eta_rename_rename π d c).
+  cbn [rename]. unfold map_predicate_shift, map_branch_shift. cbn [pparams puinst pcontext preturn].
+  f_equal.
+  - f_equal.
+    + apply map_ext. intros x. symmetry. apply eta_rename_rename.
+    + rewrite eta_rename_rename. apply rename_ext. intros x. symmetry. apply eta_ren_shiftn.
+  - apply map_ext. intros br. f_equal.
+    rewrite eta_rename_rename. apply rename_ext. intros x. symmetry. apply eta_ren_shiftn.
+Qed.
+
+Lemma eta_rename_tFix π d mfix idx :
+  eta_rename π d (tFix mfix idx) =
+  tFix (map (map_def (eta_rename π d) (eta_rename π (#|mfix| + d))) mfix) idx.
+Proof.
+  rewrite eta_rename_rename. cbn [rename]. f_equal.
+  apply map_ext. intros [na ty bo ra]. unfold map_def. cbn [dname dtype dbody rarg].
+  f_equal; rewrite eta_rename_rename; try reflexivity.
+  apply rename_ext. intros x. symmetry. apply eta_ren_shiftn.
+Qed.
+
+Lemma eta_rename_tCoFix π d mfix idx :
+  eta_rename π d (tCoFix mfix idx) =
+  tCoFix (map (map_def (eta_rename π d) (eta_rename π (#|mfix| + d))) mfix) idx.
+Proof.
+  rewrite eta_rename_rename. cbn [rename]. f_equal.
+  apply map_ext. intros [na ty bo ra]. unfold map_def. cbn [dname dtype dbody rarg].
+  f_equal; rewrite eta_rename_rename; try reflexivity.
+  apply rename_ext. intros x. symmetry. apply eta_ren_shiftn.
+Qed.
+
+(* rev 13: reduces to rev 12 when no real binder frame lies above an Eta_app in its
+   segment. The general [d] form first. *)
+Lemma eta_rename_no_binders_gen π d t :
+  (forall se, In se (eta_segment π) -> is_eta_frame se = false -> #|stack_entry_context se| = 0) ->
+  eta_rename π d t = lift (eta_lift π) d t.
+Proof.
+  induction π as [|se π IH] in d, t |- *; intros h.
+  - cbn. now rewrite lift0_id.
+  - destruct (is_eta_frame se) eqn:he.
+    + destruct se; try discriminate he.
+      * (* Eta_app *)
+        rewrite eta_rename_Eta_app IH.
+        { intros se' hin hse'. apply h; [cbn; now right | exact hse']. }
+        cbn [eta_lift]. rewrite simpl_lift; try lia.
+        f_equal. lia.
+      * (* Eta_arg *)
+        cbn. now rewrite lift0_id.
+    + rewrite eta_rename_real // eta_lift_real //.
+      have h0 : #|stack_entry_context se| = 0.
+      { apply h; [rewrite eta_segment_real //; now left | exact he]. }
+      rewrite h0. apply IH.
+      intros se' hin hse'. apply h; [rewrite eta_segment_real //; now right | exact hse'].
+Qed.
+
+Lemma eta_rename_no_binders π t :
+  (forall se, In se (eta_segment π) -> is_eta_frame se = false -> #|stack_entry_context se| = 0) ->
+  eta_rename π 0 t = lift0 (eta_lift π) t.
+Proof. apply eta_rename_no_binders_gen. Qed.
+
+Lemma eta_virtuals_S m : eta_virtuals (S m) = map (lift0 1) (eta_virtuals m) ++ [tRel 0].
+Proof.
+  unfold eta_virtuals. cbn [seq List.rev]. rewrite map_app. cbn [map]. f_equal.
+  rewrite -seq_shift -List.map_rev !map_map. apply map_ext. intros x. reflexivity.
+Qed.
+
+Lemma decompose_stack_eta_eq π args ρ : decompose_stack π = (args, ρ) ->
+  decompose_stack_eta π = (map (eta_rename ρ 0) args ++ eta_virtuals (eta_run ρ), drop_eta_run ρ).
+Proof. intros h. unfold decompose_stack_eta. now rewrite h. Qed.
+
+(* rev 13 (N2): the general η-step equation, for every ρ, no eta_lift premise *)
+Lemma zipp_eta_eta_step t args na A ρ :
+  isStackApp ρ = false ->
+  zipp_eta t (appstack args (Eta_app na A :: ρ))
+  = tApp (lift0 1 (zipp_eta t (appstack args ρ))) (tRel 0).
+Proof.
+  intros hρ.
+  have hd1 : decompose_stack (appstack args (Eta_app na A :: ρ)) = (args, Eta_app na A :: ρ).
+  { rewrite decompose_stack_appstack. cbn. now rewrite app_nil_r. }
+  have hdρ : decompose_stack ρ = ([], ρ).
+  { destruct ρ as [|[] ρ]; first [reflexivity | discriminate]. }
+  have hd2 : decompose_stack (appstack args ρ) = (args, ρ).
+  { rewrite decompose_stack_appstack hdρ. cbn. now rewrite app_nil_r. }
+  unfold zipp_eta.
+  rewrite (decompose_stack_eta_eq _ _ _ hd1) (decompose_stack_eta_eq _ _ _ hd2).
+  cbn [fst]. rewrite !eta_rename_appstack eta_rename_Eta_app.
+  change (eta_run (Eta_app na A :: ρ)) with (S (eta_run ρ)).
+  rewrite eta_virtuals_S.
+  change (eta_rename (Eta_app na A :: ρ) 0) with (fun u => eta_rename ρ 1 (lift 1 0 u)).
+  rewrite app_assoc mkApps_app. cbn [mkApps]. f_equal.
+  rewrite lift_mkApps map_app map_map eta_rename_lift0. f_equal. f_equal.
+  apply map_ext. intros u. apply eta_rename_lift0.
+Qed.
+
+(* rev 13 (B2) *)
+Lemma virtual_focus_nth m j : j < m -> nth_error (eta_virtuals m) j = Some (virtual_focus m j).
+Proof.
+  induction m as [|m IH] in j |- *; intros hj; [lia|].
+  rewrite eta_virtuals_S.
+  destruct (Nat.lt_ge_cases j m) as [hlt|hge].
+  - have hl : j < #|map (lift0 1) (eta_virtuals m)| by rewrite length_map eta_virtuals_length.
+    rewrite (nth_error_app_lt _ _ _ hl) nth_error_map (IH _ hlt).
+    unfold virtual_focus. cbn. do 2 f_equal. lia.
+  - have hj' : j = m by lia. subst j.
+    have hl : #|map (lift0 1) (eta_virtuals m)| <= m by rewrite length_map eta_virtuals_length.
+    rewrite (nth_error_app_ge _ _ _ hl) length_map eta_virtuals_length Nat.sub_diag.
+    unfold virtual_focus. cbn. do 2 f_equal. lia.
+Qed.
+
+(* rev 14 (NB2) *)
+Lemma stack_context_eta_Eta_arg_appstack u args π :
+  stack_context_eta (Eta_arg u [] :: appstack args π) = stack_context_eta π.
+Proof. cbn [stack_context_eta stack_entry_context_eta app]. apply stack_context_eta_appstack. Qed.
+
+(* rev 14 (NB1) *)
+Lemma stack_context_eta_eta_step_lambda na A π :
+  stack_context_eta (Lambda_bd na A :: π) = vass na (eta_rename π 0 A) :: stack_context_eta π.
+Proof. reflexivity. Qed.
+
+Lemma stack_context_eta_eta_step_other args na A' ρ :
+  stack_context_eta (appstack args (Eta_app na A' :: ρ)) = vass na A' :: stack_context_eta ρ.
+Proof. rewrite stack_context_eta_appstack. reflexivity. Qed.
+
+(* rev 15 (C1) *)
+Lemma positionR_App_r_appstack_gen t a l π : #|a| < #|l| ->
+  positionR (stack_position (App_r t :: appstack a π)) (stack_position (appstack l π)).
+Proof.
+  intros hlt.
+  cbn [stack_position stack_entry_choice].
+  rewrite !stack_position_appstack -!app_assoc.
+  apply positionR_poscat.
+  replace #|l| with (#|a| + S (#|l| - S #|a|)) by lia.
+  rewrite repeat_app.
+  apply positionR_poscat. cbn [repeat]. constructor.
+Qed.
+
+(* The second component of [decompose_stack] decomposes to itself. *)
+Lemma decompose_stack_snd_idem π :
+  decompose_stack (decompose_stack π).2 = ([], (decompose_stack π).2).
+Proof.
+  induction π as [|se π IH]; [reflexivity|].
+  destruct se; try reflexivity.
+  cbn [decompose_stack]. destruct (decompose_stack π) as [l ρ]. exact IH.
+Qed.
+
+(* The run at the head of a stack: its k-th binder is the vass of an Eta_app. *)
+Lemma stack_context_eta_run_vass π k : k < eta_run π ->
+  ∑ decl, nth_error (stack_context_eta π) k = Some decl × decl_body decl = None.
+Proof.
+  induction π as [|se π IH] in k |- *; intros hk; cbn [eta_run] in hk; [lia|].
+  destruct se; cbn [eta_run] in hk; try lia.
+  destruct k as [|k].
+  - eexists; split; reflexivity.
+  - cbn. apply IH. lia.
+Qed.
+
+(* rev 14 (B4, T0): what T0 supplies to G1, G2 and G5 *)
+Lemma virt_ok_focus t π : virt_ok t π = true -> no_Eta_arg π = false ->
+  ∑ k decl, [× t = tRel k, (decompose_stack π).1 = [],
+               nth_error (focus_context π) k = Some decl & decl_body decl = None].
+Proof.
+  unfold virt_ok, focus_context. intros hv hna. rewrite hna in hv. cbn [orb] in hv.
+  destruct (decompose_stack π) as [args ρ] eqn:hd. cbn [fst snd] in hv |- *.
+  destruct t; cbn in hv; try discriminate hv.
+  destruct (drop_eta_run ρ) as [|se σ] eqn:hdr; cbn in hv; try discriminate hv.
+  destruct se; cbn in hv; try discriminate hv.
+  move/andP: hv => [hnil hlt].
+  destruct args; [|discriminate hnil].
+  apply Nat.ltb_lt in hlt.
+  destruct (decompose_stack σ) as [args' σ'] eqn:hdσ. cbn [snd] in hlt.
+  destruct (stack_context_eta_run_vass σ' n hlt) as [decl [hn hb]].
+  exists n, decl. split; [reflexivity|reflexivity| |exact hb].
+  cbn [stack_context_eta stack_entry_context_eta app].
+  apply decompose_stack_eq in hdσ. subst σ. rewrite stack_context_eta_appstack. exact hn.
+Qed.
+
+(* rev 15 (C6) *)
+Lemma virt_ok_not_head t π : virt_ok t π = true -> reducible_head_shape t = true -> no_Eta_arg π = true.
+Proof.
+  intros hv hs. unfold virt_ok in hv. destruct (no_Eta_arg π); [reflexivity|].
+  cbn [orb] in hv. destruct (decompose_stack π) as [args ρ].
+  destruct t; cbn in hs, hv; congruence.
+Qed.
+
+(* rev 15 (C6): T0's equation is preserved *)
+Lemma virt_ok_reduce t π t' args' : virt_ok t π = true ->
+  (no_Eta_arg π = true \/ (t' = t /\ args' = [])) ->
+  virt_ok t' (appstack args' (decompose_stack π).2) = true.
+Proof.
+  intros hv hor.
+  destruct (no_Eta_arg π) eqn:hna.
+  - unfold virt_ok. apply/orP; left. rewrite no_Eta_arg_appstack.
+    destruct (decompose_stack π) as [args ρ] eqn:hd. cbn [snd].
+    apply decompose_stack_eq in hd. subst π. now rewrite no_Eta_arg_appstack in hna.
+  - destruct hor as [hor|[-> ->]]; [discriminate hor|].
+    cbn [appstack map app].
+    have hargs : (decompose_stack π).1 = [].
+    { unfold virt_ok in hv. rewrite hna in hv. cbn [orb] in hv.
+      destruct (decompose_stack π) as [args ρ]. cbn [fst].
+      destruct t; cbn in hv; try discriminate hv.
+      destruct (drop_eta_run ρ) as [|[] σ]; cbn in hv; try discriminate hv.
+      move/andP: hv => [hnil _]. destruct args; [reflexivity|discriminate hnil]. }
+    destruct (decompose_stack π) as [args ρ] eqn:hd. cbn [fst snd] in hargs |- *. subst args.
+    apply decompose_stack_eq in hd. subst π. exact hv.
+Qed.
+
+(* rev 15 (C6) *)
+Lemma virt_ok_eta_step t args na A ρ :
+  virt_ok t (appstack args ρ) = true -> virt_ok t (appstack args (Eta_app na A :: ρ)) = true.
+Proof.
+  unfold virt_ok. rewrite !no_Eta_arg_appstack. cbn [no_Eta_arg is_Eta_arg negb andb].
+  destruct (no_Eta_arg ρ) eqn:hna; [reflexivity|]. cbn [orb].
+  rewrite !decompose_stack_appstack. cbn [decompose_stack fst snd].
+  destruct (decompose_stack ρ) as [l σ] eqn:hd. cbn [fst snd].
+  intros hv.
+  destruct t; cbn in hv; try discriminate hv.
+  destruct (drop_eta_run σ) as [|se σ'] eqn:hdr; cbn in hv; try discriminate hv.
+  destruct se; cbn in hv; try discriminate hv.
+  move/andP: hv => [hnil hlt].
+  destruct args; [|discriminate hnil]. destruct l; [|discriminate hnil].
+  apply decompose_stack_eq in hd. cbn in hd. subst ρ.
+  cbn. rewrite hdr. cbn. exact hlt.
+Qed.
+
+(* ===================================================================== *)
 (* The [PCUICSafeLemmata] lemmas that read the focus through the stack,           *)
 (* restated with the no-[Eta_arg] side condition and the structural [stack_context]. *)
 (* Helpers [wf_inst_case_context] / [wf_case_inst_case_context] copied verbatim from *)
