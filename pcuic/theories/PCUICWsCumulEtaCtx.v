@@ -392,8 +392,8 @@ End ContextCumulativity.
     lemma. Base's [wf Σ] is [ClosedBodies Σ] here, as for [ws_cumul_declsE_trans]. *)
 #[global]
 Instance ws_cumul_declsE_Transitive {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
-  {Γ : context} : Transitive (ws_cumul_declsE pb Σ Γ) :=
-  fun _ _ _ => ws_cumul_declsE_trans.
+  {Γ : context} : Transitive (ws_cumul_declsE pb Σ Γ).
+Proof. exact (fun _ _ _ => ws_cumul_declsE_trans). Qed.
 
 (** ** Substitution of convertible terms *)
 
