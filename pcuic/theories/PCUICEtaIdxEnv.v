@@ -111,117 +111,113 @@ Proof.
   intros h. apply LevelSet.for_all_spec; first [exact h | intros x y e; hnf in e; subst; reflexivity].
 Qed.
 
-(** ** Typing in any extension *)
+(** ** Typing in any extension
 
-Section AnyExt.
-  Context (Σ : global_env_ext).
+  The environment is an explicit argument of each lemma (no section variable), instantiated below at
+  [ji_Σ0], [ji_Σ] and [ji_Σp]. *)
 
-  Lemma ji_vass (Γ : context) (na : aname) A s :
-    Σ ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) -> lift_typing typing Σ Γ (j_vass na A).
-  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
+Lemma ji_vass (Σ : global_env_ext) (Γ : context) (na : aname) A s :
+  Σ ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) -> lift_typing typing Σ Γ (j_vass na A).
+Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
 
-  Lemma ji_vass_s (Γ : context) (na : aname) A s :
-    Σ ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) -> lift_typing typing Σ Γ (j_vass_s na A s).
-  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [reflexivity|exact r]. Qed.
+Lemma ji_vass_s (Σ : global_env_ext) (Γ : context) (na : aname) A s :
+  Σ ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) -> lift_typing typing Σ Γ (j_vass_s na A s).
+Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [reflexivity|exact r]. Qed.
 
-  Lemma ji_wf_cons (Γ : context) (na : aname) A s :
-    wf_local Σ Γ -> Σ ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) -> wf_local Σ (Γ ,, vass na A).
-  Proof. intros h hA r. apply localenv_cons_abs; [exact h|exact (ji_vass Γ na A s hA r)]. Qed.
+Lemma ji_wf_cons (Σ : global_env_ext) (Γ : context) (na : aname) A s :
+  wf_local Σ Γ -> Σ ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) -> wf_local Σ (Γ ,, vass na A).
+Proof. intros h hA r. apply localenv_cons_abs; [exact h|exact (ji_vass Σ Γ na A s hA r)]. Qed.
 
-  Lemma ji_P_ty (Γ : context) : wf_local Σ Γ -> Σ ;;; Γ |- si_P : tSort (Sort.super sProp).
-  Proof. intros h. apply type_Sort; [exact h|cbn; trivial]. Qed.
+Lemma ji_P_ty (Σ : global_env_ext) (Γ : context) : wf_local Σ Γ -> Σ ;;; Γ |- si_P : tSort (Sort.super sProp).
+Proof. intros h. apply type_Sort; [exact h|cbn; trivial]. Qed.
 
-  Lemma ji_P1_ty (Γ : context) :
-    wf_local Σ Γ -> Σ ;;; Γ |- tSort (Sort.super sProp) : tSort (Sort.super (Sort.super sProp)).
-  Proof. intros h. apply type_Sort; [exact h|exact (PCUICWfUniverses.wf_sort_type1 Σ)]. Qed.
+Lemma ji_P1_ty (Σ : global_env_ext) (Γ : context) :
+  wf_local Σ Γ -> Σ ;;; Γ |- tSort (Sort.super sProp) : tSort (Sort.super (Sort.super sProp)).
+Proof. intros h. apply type_Sort; [exact h|exact (PCUICWfUniverses.wf_sort_type1 Σ)]. Qed.
 
-  Lemma ji_wf_A (Γ : context) : wf_local Σ Γ -> wf_local Σ (Γ ,, vass si_na si_P).
-  Proof. intros h. exact (ji_wf_cons Γ si_na si_P _ h (ji_P_ty Γ h) eq_refl). Qed.
+Lemma ji_wf_A (Σ : global_env_ext) (Γ : context) : wf_local Σ Γ -> wf_local Σ (Γ ,, vass si_na si_P).
+Proof. intros h. exact (ji_wf_cons Σ Γ si_na si_P _ h (ji_P_ty Σ Γ h) eq_refl). Qed.
 
-  (** [(λ Z : Type@{Set+1}. Z) Prop : Type@{Set+1}]. *)
-  Lemma ji_redex_ty (Γ : context) : wf_local Σ Γ -> Σ ;;; Γ |- ji_redex : tSort (Sort.super sProp).
-  Proof.
-    intros h. unfold ji_redex.
-    have hZ : wf_local Σ (Γ ,, vass ji_naZ (tSort (Sort.super sProp))) :=
-      ji_wf_cons Γ ji_naZ _ _ h (ji_P1_ty Γ h) eq_refl.
-    refine (type_App _ _ _ ji_naZ (tSort (Sort.super sProp)) (tSort (Sort.super sProp)) _ (tSort sProp) _ _ _).
-    - apply type_Prod; [exact (ji_vass_s _ ji_naZ _ _ (ji_P1_ty Γ h) eq_refl)|exact (ji_P1_ty _ hZ)].
-    - apply type_Lambda; [exact (ji_vass _ ji_naZ _ _ (ji_P1_ty Γ h) eq_refl)|].
-      exact (type_Rel _ _ 0 (vass ji_naZ (tSort (Sort.super sProp))) hZ eq_refl).
-    - exact (ji_P_ty Γ h).
-  Qed.
+(** [(λ Z : Type@{Set+1}. Z) Prop : Type@{Set+1}]. *)
+Lemma ji_redex_ty (Σ : global_env_ext) (Γ : context) :
+  wf_local Σ Γ -> Σ ;;; Γ |- ji_redex : tSort (Sort.super sProp).
+Proof.
+  intros h. unfold ji_redex.
+  have hZ : wf_local Σ (Γ ,, vass ji_naZ (tSort (Sort.super sProp))) :=
+    ji_wf_cons Σ Γ ji_naZ _ _ h (ji_P1_ty Σ Γ h) eq_refl.
+  refine (type_App _ _ _ ji_naZ (tSort (Sort.super sProp)) (tSort (Sort.super sProp)) _ (tSort sProp) _ _ _).
+  - apply type_Prod; [exact (ji_vass_s Σ _ ji_naZ _ _ (ji_P1_ty Σ Γ h) eq_refl)|exact (ji_P1_ty Σ _ hZ)].
+  - apply type_Lambda; [exact (ji_vass Σ _ ji_naZ _ _ (ji_P1_ty Σ Γ h) eq_refl)|].
+    exact (type_Rel _ _ 0 (vass ji_naZ (tSort (Sort.super sProp))) hZ eq_refl).
+  - exact (ji_P_ty Σ Γ h).
+Qed.
 
-  (** [(λ Z. Z) Prop ≤ Prop], by β. *)
-  Lemma ji_redex_cumul (Γ : context) : Σ ;;; Γ |- ji_redex <=s tSort sProp.
-  Proof. exact (cumul_beta Σ Γ Cumul ji_naZ (tSort (Sort.super sProp)) (tRel 0) (tSort sProp)). Qed.
+(** [(λ Z. Z) Prop ≤ Prop], by β. *)
+Lemma ji_redex_cumul (Σ : global_env_ext) (Γ : context) : Σ ;;; Γ |- ji_redex <=s tSort sProp.
+Proof. exact (cumul_beta Σ Γ Cumul ji_naZ (tSort (Sort.super sProp)) (tRel 0) (tSort sProp)). Qed.
 
-End AnyExt.
+(** ** Typing in an extension that declares the level [i] ([hs : wf_sort Σ ji_s]) *)
 
-(** ** Typing in an extension that declares the level [i] *)
+Lemma ji_T_ty (Σ : global_env_ext) (hs : wf_sort Σ ji_s) (Γ : context) :
+  wf_local Σ Γ -> Σ ;;; Γ |- ji_T : tSort (Sort.super ji_s).
+Proof. intros h. apply type_Sort; [exact h|exact hs]. Qed.
 
-Section PolyExt.
-  Context (Σ : global_env_ext) (hs : wf_sort Σ ji_s).
+Lemma ji_wf_X (Σ : global_env_ext) (hs : wf_sort Σ ji_s) (Γ : context) :
+  wf_local Σ Γ -> wf_local Σ (Γ ,, vass ji_naX ji_T).
+Proof. intros h. exact (ji_wf_cons Σ Γ ji_naX ji_T _ h (ji_T_ty Σ hs Γ h) eq_refl). Qed.
 
-  Lemma ji_T_ty (Γ : context) : wf_local Σ Γ -> Σ ;;; Γ |- ji_T : tSort (Sort.super ji_s).
-  Proof. intros h. apply type_Sort; [exact h|exact hs]. Qed.
+Lemma ji_arity_ty (Σ : global_env_ext) (hs : wf_sort Σ ji_s) (Γ : context) : wf_local Σ Γ ->
+  Σ ;;; Γ |- ji_arity : tSort (Sort.sort_of_product (Sort.super sProp)
+                                 (Sort.sort_of_product (Sort.super ji_s) (Sort.super sProp))).
+Proof.
+  intros h. have h1 := ji_wf_A Σ Γ h. have h2 := ji_wf_X Σ hs _ h1. unfold ji_arity.
+  apply type_Prod; [exact (ji_vass_s Σ _ si_na _ _ (ji_P_ty Σ Γ h) eq_refl)|].
+  apply type_Prod; [exact (ji_vass_s Σ _ ji_naX _ _ (ji_T_ty Σ hs _ h1) eq_refl)|].
+  exact (ji_redex_ty Σ _ h2).
+Qed.
 
-  Lemma ji_wf_X (Γ : context) : wf_local Σ Γ -> wf_local Σ (Γ ,, vass ji_naX ji_T).
-  Proof. intros h. exact (ji_wf_cons Σ Γ ji_naX ji_T _ h (ji_T_ty Γ h) eq_refl). Qed.
+Lemma ji_built_ty (Σ : global_env_ext) (hs : wf_sort Σ ji_s) (Γ : context) : wf_local Σ Γ ->
+  Σ ;;; Γ |- ji_built : tSort (Sort.sort_of_product (Sort.super sProp)
+                                 (Sort.sort_of_product (Sort.super ji_s) (Sort.super sProp))).
+Proof.
+  intros h. have h1 := ji_wf_A Σ Γ h. have h2 := ji_wf_X Σ hs _ h1. unfold ji_built.
+  apply type_Prod; [exact (ji_vass_s Σ _ si_na _ _ (ji_P_ty Σ Γ h) eq_refl)|].
+  apply type_Prod; [exact (ji_vass_s Σ _ ji_naX _ _ (ji_T_ty Σ hs _ h1) eq_refl)|].
+  exact (ji_P_ty Σ _ h2).
+Qed.
 
-  Lemma ji_arity_ty (Γ : context) : wf_local Σ Γ ->
-    Σ ;;; Γ |- ji_arity : tSort (Sort.sort_of_product (Sort.super sProp)
-                                   (Sort.sort_of_product (Sort.super ji_s) (Sort.super sProp))).
-  Proof.
-    intros h. have h1 := ji_wf_A Σ Γ h. have h2 := ji_wf_X _ h1. unfold ji_arity.
-    apply type_Prod; [exact (ji_vass_s Σ _ si_na _ _ (ji_P_ty Σ Γ h) eq_refl)|].
-    apply type_Prod; [exact (ji_vass_s Σ _ ji_naX _ _ (ji_T_ty _ h1) eq_refl)|].
-    exact (ji_redex_ty Σ _ h2).
-  Qed.
+Definition ji_Γi : context := [vass ji_naJ ji_arity].
 
-  Lemma ji_built_ty (Γ : context) : wf_local Σ Γ ->
-    Σ ;;; Γ |- ji_built : tSort (Sort.sort_of_product (Sort.super sProp)
-                                   (Sort.sort_of_product (Sort.super ji_s) (Sort.super sProp))).
-  Proof.
-    intros h. have h1 := ji_wf_A Σ Γ h. have h2 := ji_wf_X _ h1. unfold ji_built.
-    apply type_Prod; [exact (ji_vass_s Σ _ si_na _ _ (ji_P_ty Σ Γ h) eq_refl)|].
-    apply type_Prod; [exact (ji_vass_s Σ _ ji_naX _ _ (ji_T_ty _ h1) eq_refl)|].
-    exact (ji_P_ty Σ _ h2).
-  Qed.
+Lemma ji_wf_Γi (Σ : global_env_ext) (hs : wf_sort Σ ji_s) : wf_local Σ ji_Γi.
+Proof.
+  apply localenv_cons_abs; [constructor|].
+  exact (ji_vass Σ _ ji_naJ _ _ (ji_arity_ty Σ hs [] localenv_nil) eq_refl).
+Qed.
 
-  Definition ji_Γi : context := [vass ji_naJ ji_arity].
-
-  Lemma ji_wf_Γi : wf_local Σ ji_Γi.
-  Proof.
-    apply localenv_cons_abs; [constructor|].
-    exact (ji_vass Σ _ ji_naJ _ _ (ji_arity_ty [] localenv_nil) eq_refl).
-  Qed.
-
-  (** [Π (A : Prop) (X : Type@{i}). J A X : Prop]: [J A X] has type [(λ Z. Z) Prop], which reduces to
-      [Prop]. *)
-  Lemma ji_ctype_ty :
-    Σ ;;; ji_Γi |- cstr_type ji_cdecl
-      : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.sort_of_product (Sort.super ji_s) sProp)).
-  Proof.
-    have h1 := ji_wf_A Σ ji_Γi ji_wf_Γi. have h2 := ji_wf_X _ h1. cbn [cstr_type ji_cdecl].
-    apply type_Prod; [exact (ji_vass_s Σ _ si_na _ _ (ji_P_ty Σ _ ji_wf_Γi) eq_refl)|].
-    apply type_Prod; [exact (ji_vass_s Σ _ ji_naX _ _ (ji_T_ty _ h1) eq_refl)|].
-    have hJ : Σ ;;; ((ji_Γi ,, vass si_na si_P) ,, vass ji_naX ji_T) |- tRel 2 : ji_arity :=
-      type_Rel _ _ 2 (vass ji_naJ ji_arity) h2 eq_refl.
-    have hJA : Σ ;;; ((ji_Γi ,, vass si_na si_P) ,, vass ji_naX ji_T) |- tApp (tRel 2) (tRel 1)
-                 : tProd ji_naX ji_T ji_redex :=
-      type_App _ _ (tRel 2) si_na si_P (tProd ji_naX ji_T ji_redex) _ (tRel 1)
-        (ji_arity_ty _ h2) hJ (type_Rel _ _ 1 (vass si_na si_P) h2 eq_refl).
-    have hJAX : Σ ;;; ((ji_Γi ,, vass si_na si_P) ,, vass ji_naX ji_T) |- tApp (tApp (tRel 2) (tRel 1)) (tRel 0)
-                  : ji_redex :=
-      type_App _ _ (tApp (tRel 2) (tRel 1)) ji_naX ji_T ji_redex _ (tRel 0)
-        (type_Prod _ _ ji_naX ji_T ji_redex _ _ (ji_vass_s Σ _ ji_naX _ _ (ji_T_ty _ h2) eq_refl)
-           (ji_redex_ty Σ _ (ji_wf_X _ h2)))
-        hJA (type_Rel _ _ 0 (vass ji_naX ji_T) h2 eq_refl).
-    exact (type_Cumul _ _ _ ji_redex (tSort sProp) (Sort.super sProp) hJAX (ji_P_ty Σ _ h2)
-             (ji_redex_cumul Σ _)).
-  Qed.
-
-End PolyExt.
+(** [Π (A : Prop) (X : Type@{i}). J A X : Prop]: [J A X] has type [(λ Z. Z) Prop], which reduces to
+    [Prop]. *)
+Lemma ji_ctype_ty (Σ : global_env_ext) (hs : wf_sort Σ ji_s) :
+  Σ ;;; ji_Γi |- cstr_type ji_cdecl
+    : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.sort_of_product (Sort.super ji_s) sProp)).
+Proof.
+  have h1 := ji_wf_A Σ ji_Γi (ji_wf_Γi Σ hs). have h2 := ji_wf_X Σ hs _ h1. cbn [cstr_type ji_cdecl].
+  apply type_Prod; [exact (ji_vass_s Σ _ si_na _ _ (ji_P_ty Σ _ (ji_wf_Γi Σ hs)) eq_refl)|].
+  apply type_Prod; [exact (ji_vass_s Σ _ ji_naX _ _ (ji_T_ty Σ hs _ h1) eq_refl)|].
+  have hJ : Σ ;;; ((ji_Γi ,, vass si_na si_P) ,, vass ji_naX ji_T) |- tRel 2 : ji_arity :=
+    type_Rel _ _ 2 (vass ji_naJ ji_arity) h2 eq_refl.
+  have hJA : Σ ;;; ((ji_Γi ,, vass si_na si_P) ,, vass ji_naX ji_T) |- tApp (tRel 2) (tRel 1)
+               : tProd ji_naX ji_T ji_redex :=
+    type_App _ _ (tRel 2) si_na si_P (tProd ji_naX ji_T ji_redex) _ (tRel 1)
+      (ji_arity_ty Σ hs _ h2) hJ (type_Rel _ _ 1 (vass si_na si_P) h2 eq_refl).
+  have hJAX : Σ ;;; ((ji_Γi ,, vass si_na si_P) ,, vass ji_naX ji_T) |- tApp (tApp (tRel 2) (tRel 1)) (tRel 0)
+                : ji_redex :=
+    type_App _ _ (tApp (tRel 2) (tRel 1)) ji_naX ji_T ji_redex _ (tRel 0)
+      (type_Prod _ _ ji_naX ji_T ji_redex _ _ (ji_vass_s Σ _ ji_naX _ _ (ji_T_ty Σ hs _ h2) eq_refl)
+         (ji_redex_ty Σ _ (ji_wf_X Σ hs _ h2)))
+      hJA (type_Rel _ _ 0 (vass ji_naX ji_T) h2 eq_refl).
+  exact (type_Cumul _ _ _ ji_redex (tSort sProp) (Sort.super sProp) hJAX (ji_P_ty Σ _ h2)
+           (ji_redex_cumul Σ _)).
+Qed.
 
 (** ** The declaration is well formed *)
 
