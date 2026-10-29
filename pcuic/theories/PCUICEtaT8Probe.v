@@ -81,7 +81,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimit
      PCUICEtaC3BR PCUICTypingEtaInd PCUICClosedTypEta PCUICInversionEta PCUICEtaA6 PCUICEtaA6Ind
      PCUICInduction PCUICWfUniverses
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances.
-From MetaRocq.PCUIC Require PCUICSize.
+From MetaRocq.PCUIC Require PCUICSize PCUICClosedTyp PCUICEtaScope.
 
 Import ListNotations.
 
@@ -1356,7 +1356,8 @@ Qed.
   to a λ (the η-expanded head λ is unfolded by β steps inside it). *)
 
 Definition pe_postpone_statement (Σ : global_env) (Good : context -> term -> Type) : Type :=
-  forall Γ t u v, Good Γ t -> pe t u -> red1 Σ Γ u v -> ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
+  forall Γ t u v, Good Γ t -> on_free_vars xpredT u -> pe t u -> red1 Σ Γ u v ->
+  ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
 
 Lemma mkApps_tApp_is_tApp f a rest : ∑ g b, mkApps (tApp f a) rest = tApp g b.
 Proof.
@@ -2410,7 +2411,13 @@ Qed.
     [head_beta_size'_decrease]): 26 min (12:38–13:04Z);
   - λ alternative of the inversion ([pe_spine_or_lam]): 5 min (13:04–13:09Z);
   - fixpoint root: 7 min (13:09–13:16Z);
-  - primitive-operation root: 5 min (13:17–13:22Z).
+  - primitive-operation root: 5 min (13:17–13:22Z);
+  - assembly infrastructure ([pe_ctx] helpers, [Good] transport per position,
+    [OnOne2_postpone]): 15 min (13:26–13:41Z);
+  - the assembled postponement ([pe_postpone], η-at-root and every congruence case):
+    6 min (13:41–13:47Z);
+  - scoping transfer along [pe] ([pe_on_free_vars]) and the iteration
+    ([pe_red_postpone]): 5 min (13:47–13:52Z).
 
   Induction principles, one per lemma. No lemma calls another lemma recursively,
   and calls between lemmas follow a fixed acyclic order:
@@ -3211,11 +3218,18 @@ End RecordSteps.
 
 (** ** The parallel one-step postponement, assembled
 
-  Induction on the [pe] derivation of the source. The root cases call the root
-  lemmas as black boxes ([pe_postpone_beta], [pe_iota_root], [pe_proj_root],
-  [pe_cofix_case_root], [pe_cofix_proj_root], [pe_fix_root], [pe_prim_root]); the
-  [pe_eta] case pushes the target step under the λ ([red1_lift1]); the other cases
-  are congruences, with the target step transported along [pe_ctx]. *)
+  INDUCTION PRINCIPLE: structural on the [pe] derivation of the source ([pe_ind_all]),
+  one case per [pe] constructor. The root cases call the root lemmas as black boxes
+  ([pe_postpone_beta], [pe_iota_root], [pe_proj_root], [pe_cofix_case_root],
+  [pe_cofix_proj_root], [pe_fix_root], [pe_prim_root]); the [pe_eta] case pushes the
+  target step under the λ ([red1_lift1]); the other cases are congruences, with the
+  target step transported along [pe_ctx].
+
+  POSITIVITY: the source side is [red1⁺] ([trans_clos]), NEVER zero steps. The
+  β-head case already needs two steps, on [(λx. (λy. M) x) a]. The iteration below
+  ([pe_red_postpone]) weakens it to [red] only at the end, where the target's
+  reflexive step needs a reflexive source step. Nothing here needs a strict
+  decrease: the [size'] measure is confined to the fixpoint and primitive roots. *)
 
 Section Assembly.
   Context {cf : checker_flags} {Σ : global_env} (cb : ClosedBodies Σ).
@@ -3510,6 +3524,72 @@ Section Assembly.
     Good Σ Γ t -> on_free_vars xpredT u -> pe t u -> red1 Σ Γ u v ->
     ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
   Proof. intros hg ho h hr. exact (pe_postpone_gen t u h Γ Γ v (pe_ctx_refl Γ) hg ho hr). Qed.
+
+  Corollary pe_postpone_statement_holds : pe_postpone_statement Σ (Good Σ).
+  Proof. intros Γ t u v. exact (pe_postpone Γ t u v). Qed.
+
+  (** **Transfer of scoping along [pe]: CLOSED.** A short corollary of [pe_to_eta]
+      ([pe ⊆ eta1*]) and the landed [eta1_on_free_vars] (PCUICEtaScope.v), by
+      induction on the closure. So the target premise [on_free_vars xpredT u] of
+      [pe_postpone] follows from the same premise on the source. *)
+  Lemma pe_on_free_vars P t u : pe t u -> on_free_vars P t -> on_free_vars P u.
+  Proof.
+    intros h. apply pe_to_eta in h.
+    induction h as [x y r|x|x y z _ IH1 _ IH2]; intros hx.
+    - exact (PCUICEtaScope.eta1_on_free_vars x y r P hx).
+    - exact hx.
+    - exact (IH2 (IH1 hx)).
+  Qed.
+
+  Corollary pe_postpone_src Γ t u v :
+    Good Σ Γ t -> on_free_vars xpredT t -> pe t u -> red1 Σ Γ u v ->
+    ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
+  Proof. intros hg ho h hr. exact (pe_postpone Γ t u v hg (pe_on_free_vars _ _ _ h ho) h hr). Qed.
+
+  (** The ZERO-step pullback, as its own named case: when the target takes no step,
+      the source takes none either and the [pe] relation is unchanged. This is the
+      only place where the source side is reflexive; [pe_postpone] itself always
+      gives [red1⁺]. *)
+  Lemma pe_postpone_zero Γ t u : pe t u -> ∑ w, red Σ Γ t w × pe w u.
+  Proof. intros hp. exists t. split; [apply rt_refl|exact hp]. Qed.
+
+  (** **(4) The iteration: [pe] followed by [red] is [red] followed by [pe]: CLOSED**,
+      under the VISIBLE premises [Good Σ Γ t] (carried along the source reduction by
+      [Good_red]), [on_free_vars xpredT u] (carried along the target reduction by
+      [red_on_free_vars_cb]) and [on_ctx_free_vars xpredT Γ] (needed for the latter).
+
+      INDUCTION PRINCIPLE: structural on the [clos_refl_trans] derivation of the
+      target reduction, generalised over the source [t] and its premises. Three
+      cases: [rt_step] calls [pe_postpone] (source side [red1⁺], weakened to [red]
+      by [clos_t_rt]); [rt_refl] is the zero-step pullback [pe_postpone_zero];
+      [rt_trans] composes, re-establishing [Good] on the new source by [Good_red]
+      and the target scoping by [red_on_free_vars_cb]. No step needs a strict
+      decrease: the derivation shrinks structurally.
+
+      Proved by this new induction, not by instantiating a landed mirror.
+      [HR_strong_commutation_modulo] (PCUICEtaHRCommutationA1.v) cannot be
+      instantiated, for two reasons: its tile allows at most ONE [R] step
+      ([clos_refl R]) where [pe_postpone] needs [red1⁺] (the β-head case takes two
+      steps on [(λx. (λy. M) x) a]), and its invariant [Q] sits on the common source
+      (here the η-REDUCT [u]) while [Good] is a property of the η-EXPANSION [t], which
+      no invariance of [Q] under [S] steps can supply. The C3R [commutes] machinery
+      (PCUICEtaC3BR.v) is the forward direction (the [peta] SOURCE reduces), so it
+      does not fit this backward postponement either. *)
+  Theorem pe_red_postpone Γ t u v :
+    on_ctx_free_vars xpredT Γ ->
+    Good Σ Γ t -> on_free_vars xpredT u -> pe t u -> red Σ Γ u v ->
+    ∑ w, red Σ Γ t w × pe w v.
+  Proof.
+    intros hctx hg ho hp hr. induction hr as [u v r|u|u u1 v h1 IH1 h2 IH2] in t, hg, ho, hp |- *.
+    - destruct (pe_postpone Γ t u v hg ho hp r) as (w & hw & hpw).
+      exists w. split; [now apply clos_t_rt|exact hpw].
+    - exact (pe_postpone_zero Γ t u hp).
+    - destruct (IH1 t hg ho hp) as (w1 & hw1 & hp1).
+      have ho1 : on_free_vars xpredT u1
+        := @PCUICClosedTyp.red_on_free_vars_cb cf xpredT (Σ, Monomorphic_ctx) Γ u u1 cb h1 ho hctx.
+      destruct (IH2 w1 (Good_red _ _ _ hg hw1) ho1 hp1) as (w & hw & hpw).
+      exists w. split; [eapply rt_trans; eassumption|exact hpw].
+  Qed.
 
 End Assembly.
 
