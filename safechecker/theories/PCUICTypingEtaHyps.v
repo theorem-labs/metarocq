@@ -32,7 +32,8 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
 
   Each fact is the base lemma with [typing] → [typingE], [wf]/[wf_ext] → [wfE]/[wf_extE],
   [wf_local] → [wf_localE], [isType] → [isTypeE], [welltyped] → [welltypedE], the bidirectional judgments →
-  their E copies ([PCUICTypingEtaDefs]), and the well-scoped cumulativity → [ws_cumul_pbE]. It keeps the
+  the canonical E judgments of EtaMetaLane's [BDTypingEta] (re-exported by [PCUICTypingEtaDefs]), and the
+  well-scoped cumulativity → [ws_cumul_pbE]. It keeps the
   base lemma's NAME, so the copies' proof scripts read as base's; this file is imported LAST.
 
   - Facts no row has proved yet are fields of one class per plan row ([T0_facts], [T1_facts], [T2a_facts],
@@ -57,11 +58,14 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
     "Instances" of this file (one lemma [<field>_inst] per field, proved without any class field; written
     by EtaK7Inst). Per class, fields = instances: T0_facts 12, U_facts 1, T1_facts 4, T2a_facts 2,
     T6_facts 1, T6BD_facts 9, T6BDu_facts 9, T6BDc_facts 6. Each instance carries a tag
-    [(* non-degenerate *)] or [(* degenerate: <why> *)]; 10 are non-degenerate: all six of T6BDc,
-    [closed_context_cumulativity], [on_minductive_wf_params], [on_minductive_wf_params_indices_inst],
-    [infering_ind_typing]; 34 are degenerate (empty context or list, a Prop-sort subject, or equal compared
-    objects). The 10 non-degenerate instances show satisfiability on ordinary typed terms; none exercises
-    an eta pair; the eta-case truth of these hypotheses is established by T6, not by the instance. The
+    [(* non-degenerate *)] or [(* degenerate: NOT BUILT — <why> *)]; 37 are non-degenerate (three of them
+    type through an η step: [validity], [checking_typing], [infering_checking], via [cumul_eta_l]), 0 are
+    IMPOSSIBLE and 7 are NOT BUILT ([inductive_cumulative_indices], [isTypeRel_cstr_type],
+    [isType_mkApps_Ind_inv], [typing_spine_ind_type_inv], [wf_case_branch_type], [wf_case_predicate_context],
+    [wf_case_branches_types']: each needs a new inductive declaration, an indexed family or one with a redex
+    in its arity; list and reasons at the top of the section "Instances"). Non-degenerate instances show
+    satisfiability on ordinary typed terms; outside the three η rows none exercises an eta pair;
+    the eta-case truth of these hypotheses is established by T6, not by the instance. The
     environment is [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances], or, for the primitive-operation
     field of T1, [Σ_po] of [PCUICEtaPrimOpInstance] (convention of [PCUICEtaFracInstances]). An instance
     shows only that the field's premises can hold at a real environment, and does NOT discharge the field
@@ -2537,21 +2541,27 @@ End DerivedThree.
   name (qualified) applied at that point and lifted to E; the equivalences, the bidirectional conclusions
   and the reflexive reductions of [T6BDu_facts] are built directly. No proof uses a field of a class.
 
-  Each instance has a tag on the line above it: [(* non-degenerate *)], or [(* degenerate: <why> *)] when
-  its point has an empty context or list where the field quantifies over one, a subject that is the sort
-  Prop, or two compared objects that are equal (T = U, a reflexive reduction or comparison). Non-degenerate
-  (10): the six [T6BDc_facts] instances (in the context [A : Prop], on [I A] and [c A]),
-  [closed_context_cumulativity] (a β-redex in the context), [on_minductive_wf_params],
-  [on_minductive_wf_params_indices_inst] and [infering_ind_typing]. The other 34 are degenerate: each still
-  meets every premise of its field, at a weaker point. (The instances of the 47 fields proved in the
-  section "PROVED rows" are removed: a proved lemma needs none.)
+  Each instance has a tag on the line above it: [(* non-degenerate *)], or, when its point has an empty
+  context or list where the field quantifies over one, a subject that is the sort Prop, or two compared
+  objects that are equal (T = U, a reflexive reduction or comparison), [(* degenerate: IMPOSSIBLE — … *)]
+  (no non-degenerate instance exists, by the head or shape and the rule set, or by a premise with no
+  other inhabitant) or [(* degenerate: NOT BUILT — … *)] (one exists and is not built here). Counts:
+  37 non-degenerate; 0 IMPOSSIBLE; 7 NOT BUILT ([inductive_cumulative_indices], [isTypeRel_cstr_type],
+  [isType_mkApps_Ind_inv], [wf_case_branch_type], [wf_case_predicate_context] and
+  [wf_case_branches_types'] need an indexed inductive family; [typing_spine_ind_type_inv] needs an
+  inductive whose user arity reduces non-trivially to the built one, which [on_ind_body]'s [ind_arity_red]
+  allows). Three instances are typed through an η step:
+  [validity], [checking_typing] and [infering_checking] use the variable [y : k g] of
+  [PCUICInversionEtaInstances], typed at [k (λ x : Prop. g x)] by [cumul_eta_l]; their conclusions are
+  built in E directly, since base typing has no η and the base lemma cannot reach that point. (The
+  instances of the 47 fields proved in the section "PROVED rows" are removed: a proved lemma needs none.)
 
   (1) Such an instance shows that the hypothesis is consistent and about something real. (2) It does NOT
   discharge the hypothesis at [typingE]: each field remains a hypothesis until its plan row lands (T0, T1,
   T2a, T6; T6BDc also needs T8; U is untyped plumbing over [wfE_ClosedBodies]). *)
 
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEtaClosureInstances PCUICEtaFracInstances
-     PCUICEtaPrimOpInstance.
+     PCUICEtaPrimOpInstance PCUICInversionEtaInstances.
 From MetaRocq.PCUIC Require PCUICValidity PCUICSR PCUICArities PCUICContexts PCUICSubstitution
      PCUICWeakeningTyp PCUICContextConversion PCUICClassification PCUICClosedTyp.
 
@@ -2911,6 +2921,183 @@ Proof. right; left; reflexivity. Qed.
 Lemma ti_po_int_tag : prim_op_tag_declared Σ_po primInt.
 Proof. exists po_int_kn, po_int_body; split; [reflexivity|exact ti_po_int_declared|split; reflexivity]. Qed.
 
+(** *** Helpers of the upgraded instances
+
+  In [ti_ΓP = [A : Prop]]: the spine of [I A] and the substitution of [A] for the parameter of [I]; the
+  β-redex [(λ X : Prop. X) A] ([ti_idA]) and its reduct [A]; [I A] at [Type] by cumulativity; the context
+  [x : I ((λ X : Prop. X) A)] ([ti_ΓX]); [f : Π _ : (λ X : Prop. X) A. (λ X : Prop. X) A] ([ti_Γf]) and
+  [a : A] after it ([ti_Γfa]); the telescope [(X : Prop) (Y := X)] with a let-in ([ti_Δlet]). In [Σ_po]:
+  the context [x : int] ([ti_Γint]). *)
+
+Lemma ti_tspine_IA : PCUICArities.typing_spine si_Σ ti_ΓP (ind_type si_idecl)@[[]] [tRel 0] (tSort sProp).
+Proof.
+  exact (fst (PCUICInductives.invert_type_mkApps_ind si_Σ ti_ΓP si_ind [] [tRel 0] (tSort sProp) si_mdecl si_idecl
+                si_wf si_declared_inductive ti_IA_ty)).
+Qed.
+
+Lemma ti_spine_A : PCUICSpine.spine_subst si_Σ ti_ΓP [tRel 0] [tRel 0] ti_ΓP.
+Proof.
+  split.
+  - exact ti_wf_ΓP.
+  - exact (ti_wf_P ti_ΓP ti_wf_ΓP).
+  - exact (context_subst_ass [] [] [] si_na si_P (tRel 0) context_subst_nil).
+  - exact (PCUICSubstitution.cons_let_ass si_Σ ti_ΓP [] [] si_na (tRel 0) si_P
+             (PCUICSubstitution.emptyslet si_Σ ti_ΓP) ti_A_ty).
+Qed.
+
+Definition ti_idP : term := tLambda si_na si_P (tRel 0).
+Definition ti_idA : term := tApp ti_idP (tRel 0).
+
+Lemma ti_idP_ty Γ : wf_local si_Σ Γ -> si_Σ ;;; Γ |- ti_idP : tProd si_na si_P si_P.
+Proof.
+  intros h.
+  exact (type_Lambda _ _ si_na si_P (tRel 0) si_P (ti_vass _ si_na si_P _ (ti_P_ty Γ h) eq_refl)
+           (type_Rel _ _ 0 (vass si_na si_P) (ti_wf_P Γ h) eq_refl)).
+Qed.
+
+(** [(λ X : Prop. X) a : Prop] for every proposition [a]. *)
+Lemma ti_idapp_ty Γ a : wf_local si_Σ Γ -> si_Σ ;;; Γ |- a : si_P -> si_Σ ;;; Γ |- tApp ti_idP a : si_P.
+Proof.
+  intros h ha. exact (type_App _ _ ti_idP si_na si_P si_P _ a (ti_arity_ty Γ h) (ti_idP_ty Γ h) ha).
+Qed.
+
+Lemma ti_idA_ty : si_Σ ;;; ti_ΓP |- ti_idA : si_P.
+Proof. exact (ti_idapp_ty ti_ΓP (tRel 0) ti_wf_ΓP ti_A_ty). Qed.
+
+Lemma ti_red_idA : si_Σ ;;; ti_ΓP ⊢ ti_idA ⇝ tRel 0.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_ΓP si_na si_P (tRel 0) (tRel 0)). Qed.
+
+(** [I A : Type], by the cumulativity [Prop ≤ Type]. *)
+Lemma ti_IA_ty1 : si_Σ ;;; ti_ΓP |- ti_IA : tSort (Sort.super sProp).
+Proof.
+  refine (type_Cumul _ _ ti_IA (tSort sProp) (tSort (Sort.super sProp)) _ ti_IA_ty (ti_P1_ty ti_ΓP ti_wf_ΓP) _).
+  apply cumul_Sort. first [exact eq_refl|exact I|cbn; trivial].
+Qed.
+
+(** [x : I ((λ X : Prop. X) A)] over [ti_ΓP]. *)
+Definition ti_ΓX : context := ti_ΓP ,, vass si_na (tApp (tInd si_ind []) ti_idA).
+
+Lemma ti_wf_ΓX : wf_local si_Σ ti_ΓX.
+Proof.
+  exact (ti_wf_cons ti_ΓP si_na (tApp (tInd si_ind []) ti_idA) sProp ti_wf_ΓP
+           (ti_Iapp_ty ti_ΓP ti_idA ti_wf_ΓP ti_idA_ty) eq_refl).
+Qed.
+
+Lemma ti_red_idA1 : si_Σ ;;; ti_ΓX ⊢ tApp ti_idP (tRel 1) ⇝ tRel 1.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_ΓX si_na si_P (tRel 0) (tRel 1)). Qed.
+
+Lemma ti_red_IidA1 : si_Σ ;;; ti_ΓX ⊢ tApp (tInd si_ind []) (tApp ti_idP (tRel 1)) ⇝ tApp (tInd si_ind []) (tRel 1).
+Proof.
+  split; [reflexivity|reflexivity|]. apply rt_step. apply app_red_r.
+  exact (red_beta si_Σ ti_ΓX si_na si_P (tRel 0) (tRel 1)).
+Qed.
+
+(** [f : Π _ : (λ X : Prop. X) A. (λ X : Prop. X) A] over [ti_ΓP], then [a : A]; [ti_Tf] is the type of [f]
+    in [ti_Γf]. *)
+Definition ti_pidA : term := tProd si_na ti_idA (tApp ti_idP (tRel 1)).
+Definition ti_Γf : context := ti_ΓP ,, vass si_na ti_pidA.
+Definition ti_Γfa : context := ti_Γf ,, vass si_na (tRel 1).
+Definition ti_Tf : term := tProd si_na (tApp ti_idP (tRel 1)) (tApp ti_idP (tRel 2)).
+
+Lemma ti_pidA_ty : si_Σ ;;; ti_ΓP |- ti_pidA : tSort (Sort.sort_of_product sProp sProp).
+Proof.
+  have h1 : wf_local si_Σ (ti_ΓP ,, vass si_na ti_idA) :=
+    ti_wf_cons ti_ΓP si_na ti_idA sProp ti_wf_ΓP ti_idA_ty eq_refl.
+  exact (type_Prod _ _ si_na ti_idA (tApp ti_idP (tRel 1)) sProp sProp
+           (ti_vass_s ti_ΓP si_na ti_idA sProp ti_idA_ty eq_refl)
+           (ti_idapp_ty _ (tRel 1) h1 (type_Rel _ _ 1 (vass si_na si_P) h1 eq_refl))).
+Qed.
+
+Lemma ti_wf_Γf : wf_local si_Σ ti_Γf.
+Proof. exact (ti_wf_cons ti_ΓP si_na ti_pidA (Sort.sort_of_product sProp sProp) ti_wf_ΓP ti_pidA_ty eq_refl). Qed.
+
+Lemma ti_wf_Γfa : wf_local si_Σ ti_Γfa.
+Proof.
+  exact (ti_wf_cons ti_Γf si_na (tRel 1) sProp ti_wf_Γf (type_Rel _ _ 1 (vass si_na si_P) ti_wf_Γf eq_refl) eq_refl).
+Qed.
+
+Lemma ti_red_A1f : si_Σ ;;; ti_Γf ⊢ tApp ti_idP (tRel 1) ⇝ tRel 1.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_Γf si_na si_P (tRel 0) (tRel 1)). Qed.
+
+Lemma ti_red_B1f : si_Σ ;;; ti_Γf ,, vass si_na (tApp ti_idP (tRel 1)) ⊢ tApp ti_idP (tRel 2) ⇝ tRel 2.
+Proof.
+  split; [reflexivity|reflexivity|]. apply rt_step.
+  exact (red_beta si_Σ (ti_Γf ,, vass si_na (tApp ti_idP (tRel 1))) si_na si_P (tRel 0) (tRel 2)).
+Qed.
+
+Lemma ti_red_Tf : si_Σ ;;; ti_Γf ⊢ ti_Tf ⇝ tProd si_na (tRel 1) (tRel 2).
+Proof.
+  split; [reflexivity|reflexivity|].
+  eapply rt_trans; [apply rt_step; apply prod_red_l; exact (red_beta si_Σ ti_Γf si_na si_P (tRel 0) (tRel 1))|].
+  apply rt_step. apply prod_red_r.
+  exact (red_beta si_Σ (ti_Γf ,, vass si_na (tRel 1)) si_na si_P (tRel 0) (tRel 2)).
+Qed.
+
+Lemma ti_red_A2fa : si_Σ ;;; ti_Γfa ⊢ tApp ti_idP (tRel 2) ⇝ tRel 2.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_Γfa si_na si_P (tRel 0) (tRel 2)). Qed.
+
+Lemma ti_red_Tfa :
+  si_Σ ;;; ti_Γfa ⊢ tProd si_na (tApp ti_idP (tRel 2)) (tApp ti_idP (tRel 3)) ⇝ tProd si_na (tRel 2) (tRel 3).
+Proof.
+  split; [reflexivity|reflexivity|].
+  eapply rt_trans; [apply rt_step; apply prod_red_l; exact (red_beta si_Σ ti_Γfa si_na si_P (tRel 0) (tRel 2))|].
+  apply rt_step. apply prod_red_r.
+  exact (red_beta si_Σ (ti_Γfa ,, vass si_na (tRel 2)) si_na si_P (tRel 0) (tRel 3)).
+Qed.
+
+(** The telescope [(X : Prop) (Y : Prop := X)], as a context ([Y] first). *)
+Definition ti_Δlet : context := [vdef si_na (tRel 0) si_P; vass si_na si_P].
+
+Lemma ti_wf_Δlet : wf_local si_Σ (ti_ΓP ,,, ti_Δlet).
+Proof.
+  have h1 := ti_wf_P ti_ΓP ti_wf_ΓP.
+  change (wf_local si_Σ ((ti_ΓP ,, vass si_na si_P) ,, vdef si_na (tRel 0) si_P)).
+  apply localenv_cons_def; [exact h1|].
+  split; [exact (type_Rel _ _ 0 (vass si_na si_P) h1 eq_refl)|].
+  exists (Sort.super sProp). split; [exact (ti_P_ty _ h1)|split; [exact I|reflexivity]].
+Qed.
+
+Lemma ti_wf_letA : wf_local si_Σ (ti_ΓP ,, vdef si_na (tRel 0) si_P).
+Proof.
+  apply localenv_cons_def; [exact ti_wf_ΓP|].
+  split; [exact ti_A_ty|].
+  exists (Sort.super sProp). split; [exact (ti_P_ty _ ti_wf_ΓP)|split; [exact I|reflexivity]].
+Qed.
+
+(** [let Y : Prop := A in Prop ⇝ Prop] (ζ). *)
+Lemma ti_red_TL : si_Σ ;;; ti_ΓP ⊢ tLetIn si_na (tRel 0) si_P si_P ⇝ tSort sProp.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_zeta si_Σ ti_ΓP si_na (tRel 0) si_P si_P). Qed.
+
+(** The spine of [Π X : Prop. let Y : Prop := X in Prop] applied to [A]. *)
+Lemma ti_tspine_let :
+  PCUICArities.typing_spine si_Σ ti_ΓP (it_mkProd_or_LetIn ti_Δlet (tSort sProp)) [tRel 0] (tSort sProp).
+Proof.
+  have hT : isType si_Σ ti_ΓP (it_mkProd_or_LetIn ti_Δlet (tSort sProp)).
+  { apply (PCUICInductiveInversion.isType_it_mkProd_or_LetIn (Σ := si_Σ) (Γ := ti_ΓP) (Δ := ti_Δlet) si_wf).
+    exact (has_sort_isType _ (ti_P_ty _ ti_wf_Δlet)). }
+  have hL : isType si_Σ ti_ΓP (tLetIn si_na (tRel 0) si_P (tSort sProp)).
+  { apply (PCUICInductiveInversion.isType_it_mkProd_or_LetIn (Σ := si_Σ) (Γ := ti_ΓP)
+             (Δ := [vdef si_na (tRel 0) si_P]) (T := tSort sProp) si_wf).
+    exact (has_sort_isType _ (ti_P_ty _ ti_wf_letA)). }
+  refine (PCUICArities.type_spine_cons (na := si_na) (A := si_P) (B := tLetIn si_na (tRel 0) si_P (tSort sProp))
+            hT hT (ti_ws_refl ti_ΓP (tProd si_na si_P (tLetIn si_na (tRel 0) si_P (tSort sProp))) eq_refl eq_refl)
+            ti_A_ty _).
+  econstructor.
+  - exact hL.
+  - exact (has_sort_isType _ (ti_P_ty ti_ΓP ti_wf_ΓP)).
+  - exact (PCUICWellScopedCumulativity.red_ws_cumul_pb (Σ := si_Σ) (wfΣ := si_wf) ti_red_TL).
+Qed.
+
+(** [x : int] in [Σ_po]. *)
+Definition ti_Γint : context := [vass si_na (tConst po_int_kn [])].
+
+Lemma ti_wf_Γint : wf_local Σ_po ti_Γint.
+Proof.
+  apply localenv_cons_abs; [constructor|].
+  split; [exact tt|]. exists Sort.type0.
+  split; [exact (po_int_typed Σ_po [] ltac:(constructor) ti_po_int_declared)|split; [exact I|reflexivity]].
+Qed.
+
 (** ** Instances of [T0_facts]
 
   Each lemma [<field>_inst] below states the premises and the conclusion of the field [<field>] of
@@ -2938,7 +3125,7 @@ Proof.
                 (pb := Cumul) (Γ' := ti_ΓF) ht ti_wf_ΓF hctx)).
 Qed.
 
-(* degenerate: Γ = [], u = u', pars = pars', and I has no indices, so the conclusion compares two empty contexts *)
+(* degenerate: NOT BUILT — I has no indices, so the conclusion compares two empty index contexts (also Γ = [], u = u', pars = pars'); a real point needs an indexed family, and u ≠ u' a cumulative universe-polymorphic one *)
 Lemma inductive_cumulative_indices_inst :
   [× declared_inductive si_Σ si_ind si_mdecl si_idecl,
      consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
@@ -2966,20 +3153,20 @@ Proof.
   cbv zeta in hb |- *. destruct hb as [hc _]. split; [exact hc|cbn; constructor].
 Qed.
 
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma invert_type_mkApps_ind_inst :
   [× wfE si_Σ.1, declared_inductive si_Σ.1 si_ind si_mdecl si_idecl,
-     si_Σ ;;; [] |-E mkApps (tInd si_ind []) [ti_F] : tSort sProp &
-     typing_spineE si_Σ [] (ind_type si_idecl)@[[]] [ti_F] (tSort sProp) ×
+     si_Σ ;;; ti_ΓP |-E mkApps (tInd si_ind []) [tRel 0] : tSort sProp &
+     typing_spineE si_Σ ti_ΓP (ind_type si_idecl)@[[]] [tRel 0] (tSort sProp) ×
      consistent_instance_ext si_Σ (ind_universes si_mdecl) []].
 Proof.
-  have h : si_Σ ;;; [] |- mkApps (tInd si_ind []) [ti_F] : tSort sProp := ti_IF_ty [] ti_wf_nil.
-  destruct (PCUICInductives.invert_type_mkApps_ind si_Σ [] si_ind [] [ti_F] (tSort sProp) si_mdecl si_idecl
+  have h : si_Σ ;;; ti_ΓP |- mkApps (tInd si_ind []) [tRel 0] : tSort sProp := ti_IA_ty.
+  destruct (PCUICInductives.invert_type_mkApps_ind si_Σ ti_ΓP si_ind [] [tRel 0] (tSort sProp) si_mdecl si_idecl
               si_wf si_declared_inductive h) as [hs hc].
   split; [exact si_wfE|exact si_declared_inductive|exact (siT h)|split; [exact (siTS hs)|exact hc]].
 Qed.
 
-(* degenerate: c has no arguments and I has no indices, so the ctx_inst premise is over empty lists *)
+(* degenerate: NOT BUILT — c has no arguments and I has no indices, so the ctx_inst premise is over empty lists, and the user arity of I is already the built arity (the red premise is reflexive); a real point needs an indexed family *)
 Lemma isTypeRel_cstr_type_inst :
   [× wfE si_Σ.1,
      nth_error (ind_bodies si_mdecl) 0 = Some si_idecl,
@@ -3015,38 +3202,38 @@ Proof.
                  eq_refl eq_refl hT hr hT' eq_refl hci hC)).
 Qed.
 
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma isType_mkApps_Ind_inst :
   [× declared_inductive si_Σ si_ind si_mdecl si_idecl,
      consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
-     spine_substE si_Σ [] [ti_F] [ti_F] (ind_params si_mdecl ,,, ind_indices si_idecl)@[[]] &
-     si_Σ ;;; [] |-E mkApps (tInd si_ind []) [ti_F] : tSort (ind_sort si_idecl)@[[]]].
+     spine_substE si_Σ ti_ΓP [tRel 0] [tRel 0] (ind_params si_mdecl ,,, ind_indices si_idecl)@[[]] &
+     si_Σ ;;; ti_ΓP |-E mkApps (tInd si_ind []) [tRel 0] : tSort (ind_sort si_idecl)@[[]]].
 Proof.
-  pose proof (ti_spine_F :
-    PCUICSpine.spine_subst si_Σ [] [ti_F] [ti_F] (ind_params si_mdecl ,,, ind_indices si_idecl)@[[]]) as hs.
+  pose proof (ti_spine_A :
+    PCUICSpine.spine_subst si_Σ ti_ΓP [tRel 0] [tRel 0] (ind_params si_mdecl ,,, ind_indices si_idecl)@[[]]) as hs.
   split; [exact si_declared_inductive|exact ti_cons|exact (siS hs)|].
-  exact (siT (PCUICInductives.isType_mkApps_Ind (Σ := si_Σ) (wfΣ := si_wf) si_declared_inductive (Γ := [])
+  exact (siT (PCUICInductives.isType_mkApps_Ind (Σ := si_Σ) (wfΣ := si_wf) si_declared_inductive (Γ := ti_ΓP)
                 ti_cons hs)).
 Qed.
 
-(* degenerate: Γ = [] *)
+(* degenerate: NOT BUILT — I has no indices, so the index half of the split (skipn ind_npars args, argsubst) is empty; a real point needs an indexed family (Γ = [A : Prop] and the parameter A are real) *)
 Lemma isType_mkApps_Ind_inv_inst :
-  [× wfE si_Σ.1, declared_inductive si_Σ.1 si_ind si_mdecl si_idecl, wf_localE si_Σ [],
-     isTypeE si_Σ [] (mkApps (tInd si_ind []) [ti_F]) &
+  [× wfE si_Σ.1, declared_inductive si_Σ.1 si_ind si_mdecl si_idecl, wf_localE si_Σ ti_ΓP,
+     isTypeE si_Σ ti_ΓP (mkApps (tInd si_ind []) [tRel 0]) &
      ∑ parsubst argsubst : list term,
        let parctx := (ind_params si_mdecl)@[[]] in
        let argctx := subst_context parsubst 0 (ind_indices si_idecl)@[[]] in
-       [× spine_substE si_Σ [] (firstn (ind_npars si_mdecl) [ti_F]) parsubst parctx,
-          spine_substE si_Σ [] (skipn (ind_npars si_mdecl) [ti_F]) argsubst argctx,
-          #|firstn (ind_npars si_mdecl) [ti_F]| = ind_npars si_mdecl,
-          #|skipn (ind_npars si_mdecl) [ti_F]| = context_assumptions (ind_indices si_idecl) &
+       [× spine_substE si_Σ ti_ΓP (firstn (ind_npars si_mdecl) [tRel 0]) parsubst parctx,
+          spine_substE si_Σ ti_ΓP (skipn (ind_npars si_mdecl) [tRel 0]) argsubst argctx,
+          #|firstn (ind_npars si_mdecl) [tRel 0]| = ind_npars si_mdecl,
+          #|skipn (ind_npars si_mdecl) [tRel 0]| = context_assumptions (ind_indices si_idecl) &
           consistent_instance_ext si_Σ (ind_universes si_mdecl) []]].
 Proof.
-  have hI : isType si_Σ [] (mkApps (tInd si_ind []) [ti_F]) := has_sort_isType _ (ti_IF_ty [] ti_wf_nil).
-  destruct (PCUICInductives.isType_mkApps_Ind_inv (Σ := si_Σ) (Γ := []) si_wf si_declared_inductive ti_wf_nil hI)
+  have hI : isType si_Σ ti_ΓP (mkApps (tInd si_ind []) [tRel 0]) := has_sort_isType _ ti_IA_ty.
+  destruct (PCUICInductives.isType_mkApps_Ind_inv (Σ := si_Σ) (Γ := ti_ΓP) si_wf si_declared_inductive ti_wf_ΓP hI)
     as [ps [as' h]].
   cbv zeta in h. destruct h as [h1 h2 h3 h4 h5].
-  split; [exact si_wfE|exact si_declared_inductive|constructor|exact (siI hI)|].
+  split; [exact si_wfE|exact si_declared_inductive|exact (siW ti_wf_ΓP)|exact (siI hI)|].
   exists ps, as'. cbv zeta.
   split; [exact (siS h1)|exact (siS h2)|exact h3|exact h4|exact h5].
 Qed.
@@ -3074,18 +3261,18 @@ Qed.
 Lemma ti_Rel0_ty : si_Σ ;;; [] ,,, ti_ΓP ,,, [] |- tRel 0 : si_P.
 Proof. exact (type_Rel _ _ 0 (vass si_na si_P) ti_wf_ΓP eq_refl). Qed.
 
-(* degenerate: Γ = [], and ind_type of I already is the it_mkProd_or_LetIn form *)
+(* degenerate: NOT BUILT — the user arity of I is already the built arity, so the premise's and the conclusion's spines are over the same type; on_ind_body's ind_arity_red only asks the user arity to REDUCE to the built one, so an inductive declared with a redex in its arity gives a real point (Γ = [A : Prop] and the argument A are real) *)
 Lemma typing_spine_ind_type_inv_inst :
-  [× declared_inductive si_Σ si_ind si_mdecl si_idecl, wf_localE si_Σ [],
+  [× declared_inductive si_Σ si_ind si_mdecl si_idecl, wf_localE si_Σ ti_ΓP,
      consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
-     typing_spineE si_Σ [] (ind_type si_idecl)@[[]] [ti_F] (tSort sProp) &
-     typing_spineE si_Σ []
+     typing_spineE si_Σ ti_ΓP (ind_type si_idecl)@[[]] [tRel 0] (tSort sProp) &
+     typing_spineE si_Σ ti_ΓP
        (it_mkProd_or_LetIn (ind_params si_mdecl ,,, ind_indices si_idecl) (tSort (ind_sort si_idecl)))@[[]]
-       [ti_F] (tSort sProp)].
+       [tRel 0] (tSort sProp)].
 Proof.
-  split; [exact si_declared_inductive|constructor|exact ti_cons|exact (siTS ti_tspine_IF)|].
+  split; [exact si_declared_inductive|exact (siW ti_wf_ΓP)|exact ti_cons|exact (siTS ti_tspine_IA)|].
   exact (siTS (PCUICInductives.typing_spine_ind_type_inv (Σ := si_Σ) (wfΣ := si_wf) si_declared_inductive
-                 [] [] [ti_F] (tSort sProp) ti_wf_nil ti_cons ti_tspine_IF)).
+                 ti_ΓP [] [tRel 0] (tSort sProp) ti_wf_ΓP ti_cons ti_tspine_IA)).
 Qed.
 
 (** A case on [I ti_F]: the predicate [fun (_ : I ti_F) => Prop] and the branch of [c]. *)
@@ -3121,7 +3308,7 @@ Lemma ti_ret_ty :
   si_Σ ;;; [] ,,, case_predicate_context ti_ci si_mdecl si_idecl ti_p |- preturn ti_p : tSort (Sort.super sProp).
 Proof. exact (ti_P_ty _ ti_wf_predctx). Qed.
 
-(* degenerate: Γ = [], args = [] (I has no indices), c has no arguments, and the return type is Prop *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments *)
 Lemma wf_case_branch_type_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -3150,7 +3337,7 @@ Proof.
   cbv zeta. split; [exact b1|exact (siW b2)|exact (siW b3)|exact (siW b4)|exact (siT b5)].
 Qed.
 
-(* degenerate: Γ = [] and args = [] *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, and Γ = []; a real point needs an indexed family *)
 Lemma wf_case_predicate_context_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -3161,7 +3348,7 @@ Proof.
   cbv zeta. exact (siW ti_wf_predctx).
 Qed.
 
-(* degenerate: Γ = [], args = [] (I has no indices), c has no arguments, and the return type is Prop *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments *)
 Lemma wf_case_branches_types'_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -3202,14 +3389,18 @@ Qed.
 (** [let x : Prop := ti_F in I x], whose telescope has a let-in. *)
 Definition ti_CLet : term := tLetIn si_na ti_F si_P (tApp (tInd si_ind []) (tRel 0)).
 
-(* degenerate: Γ = [], and t = t' = Prop *)
+(* non-degenerate *)
 Lemma whnf_red_inv_inst :
-  [× wfE si_Σ, whnf RedFlags.default si_Σ [] si_P, si_Σ ;;; [] ⊢ si_P ⇝ si_P & whnf_red si_Σ [] si_P si_P].
+  [× wfE si_Σ, whnf RedFlags.default si_Σ ti_ΓP (tProd si_na ti_idA si_P),
+     si_Σ ;;; ti_ΓP ⊢ tProd si_na ti_idA si_P ⇝ tProd si_na (tRel 0) si_P &
+     whnf_red si_Σ ti_ΓP (tProd si_na ti_idA si_P) (tProd si_na (tRel 0) si_P)].
 Proof.
-  have hn : whnf RedFlags.default si_Σ [] si_P by apply whnf_sort.
-  have hr : si_Σ ;;; [] ⊢ si_P ⇝ si_P := ti_cr_refl [] si_P eq_refl eq_refl.
+  have hn : whnf RedFlags.default si_Σ ti_ΓP (tProd si_na ti_idA si_P) by apply whnf_prod.
+  have hr : si_Σ ;;; ti_ΓP ⊢ tProd si_na ti_idA si_P ⇝ tProd si_na (tRel 0) si_P.
+  { split; [reflexivity|reflexivity|]. apply rt_step. apply prod_red_l.
+    exact (red_beta si_Σ ti_ΓP si_na si_P (tRel 0) (tRel 0)). }
   split; [exact si_wfE|exact hn|exact hr|].
-  exact (PCUICNormal.whnf_red_inv (Σ := si_Σ) [] si_P si_P si_wf hn hr).
+  exact (PCUICNormal.whnf_red_inv (Σ := si_Σ) ti_ΓP _ _ si_wf hn hr).
 Qed.
 
 (** ** Instances of [T1_facts]
@@ -3222,52 +3413,49 @@ Qed.
   does NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan row T1 (subject
   reduction over [typingE]) lands. *)
 
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma isType_prim_shape_type_inst :
-  [× wf_localE Σ_po [],
+  [× wf_localE Σ_po ti_Γint,
      PCUICPrimOpType.prim_shape_type (retroknowledge Σ_po.1) SInt = Some (tConst po_int_kn []),
-     on_prim_op_result Σ_po SInt & isTypeE Σ_po [] (tConst po_int_kn [])].
+     on_prim_op_result Σ_po SInt & isTypeE Σ_po ti_Γint (tConst po_int_kn [])].
 Proof.
   have hres : on_prim_op_result Σ_po SInt := ti_po_int_tag.
-  split; [constructor|reflexivity|exact hres|].
-  exact (ti_isType Σ_po ti_po_wf (PCUICSR.isType_prim_shape_type (Σ := Σ_po) (wfΣ := ti_po_wf) (Γ := [])
-           (s := SInt) (res := tConst po_int_kn []) ltac:(constructor) eq_refl hres)).
+  split; [exact (ti_wfl Σ_po ti_po_wf ti_wf_Γint)|reflexivity|exact hres|].
+  exact (ti_isType Σ_po ti_po_wf (PCUICSR.isType_prim_shape_type (Σ := Σ_po) (wfΣ := ti_po_wf) (Γ := ti_Γint)
+           (s := SInt) (res := tConst po_int_kn []) ti_wf_Γint eq_refl hres)).
 Qed.
 
-(* degenerate: T = U = Prop (reflexive reduction), and Γ = [] *)
+(* non-degenerate *)
 Lemma isType_red_inst :
-  [× isTypeE si_Σ [] si_P, PCUICReduction.red si_Σ [] si_P si_P & isTypeE si_Σ [] si_P].
+  [× isTypeE si_Σ ti_ΓP ti_idA, PCUICReduction.red si_Σ ti_ΓP ti_idA (tRel 0) & isTypeE si_Σ ti_ΓP (tRel 0)].
 Proof.
-  have h : isType si_Σ [] si_P := has_sort_isType _ (ti_P_ty [] ti_wf_nil).
-  have hr : PCUICReduction.red si_Σ [] si_P si_P by apply rt_refl.
+  have h : isType si_Σ ti_ΓP ti_idA := has_sort_isType sProp ti_idA_ty.
+  have hr : PCUICReduction.red si_Σ ti_ΓP ti_idA (tRel 0) := clrel_rel ti_red_idA.
   split; [exact (siI h)|exact hr|].
   exact (siI (PCUICSR.isType_red (Σ := si_Σ) (wfΣ := si_wf) h hr)).
 Qed.
 
-(** [let x : Prop := ti_F in x] reduces (ζ) to [ti_F]. *)
-Lemma ti_red_zeta : PCUICReduction.red si_Σ [] (tLetIn si_na ti_F si_P (tRel 0)) ti_F.
-Proof. apply rt_step. exact (red_zeta _ _ si_na ti_F si_P (tRel 0)). Qed.
-
-(* degenerate: Γ = [] (the ζ-reduction of let x := ∀ A : Prop. A in x is real) *)
+(* non-degenerate *)
 Lemma subject_reduction_inst :
-  [× wfE si_Σ, si_Σ ;;; [] |-E tLetIn si_na ti_F si_P (tRel 0) : tLetIn si_na ti_F si_P si_P,
-     PCUICReduction.red si_Σ [] (tLetIn si_na ti_F si_P (tRel 0)) ti_F &
-     si_Σ ;;; [] |-E ti_F : tLetIn si_na ti_F si_P si_P].
+  [× wfE si_Σ, si_Σ ;;; ti_ΓP |-E ti_idA : si_P, PCUICReduction.red si_Σ ti_ΓP ti_idA (tRel 0) &
+     si_Σ ;;; ti_ΓP |-E tRel 0 : si_P].
 Proof.
-  split; [exact si_wfE|exact (siT ti_LetIn_ty)|exact ti_red_zeta|].
-  exact (siT (PCUICSR.subject_reduction si_Σ [] _ _ _ si_wf ti_LetIn_ty ti_red_zeta)).
+  have hr : PCUICReduction.red si_Σ ti_ΓP ti_idA (tRel 0) := clrel_rel ti_red_idA.
+  split; [exact si_wfE|exact (siT ti_idA_ty)|exact hr|].
+  exact (siT (PCUICSR.subject_reduction si_Σ ti_ΓP _ _ _ si_wf ti_idA_ty hr)).
 Qed.
 
-(* degenerate: Γ = [] (the ζ-reduction of the type is real) *)
+(** [x : (λ X : Prop. X) ti_F ⊢ x : ti_F], the type reduced by β. *)
+Lemma ti_red_bF_ΓbF : si_Σ ;;; ti_ΓbF ⊢ ti_bF ⇝ ti_F.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_ΓbF si_na si_P (tRel 0) ti_F). Qed.
+
+(* non-degenerate *)
 Lemma type_reduction_closed_inst :
-  [× si_Σ ;;; [] |-E tLetIn si_na ti_F si_P (tRel 0) : tLetIn si_na ti_F si_P si_P,
-     si_Σ ;;; [] ⊢ tLetIn si_na ti_F si_P si_P ⇝ si_P &
-     si_Σ ;;; [] |-E tLetIn si_na ti_F si_P (tRel 0) : si_P].
+  [× si_Σ ;;; ti_ΓbF |-E tRel 0 : ti_bF, si_Σ ;;; ti_ΓbF ⊢ ti_bF ⇝ ti_F & si_Σ ;;; ti_ΓbF |-E tRel 0 : ti_F].
 Proof.
-  have hr : si_Σ ;;; [] ⊢ tLetIn si_na ti_F si_P si_P ⇝ si_P.
-  { split; [reflexivity|reflexivity|]. apply rt_step. exact (red_zeta _ _ si_na ti_F si_P si_P). }
-  split; [exact (siT ti_LetIn_ty)|exact hr|].
-  exact (siT (PCUICSR.type_reduction_closed (Σ := si_Σ) (wfΣ := si_wf) ti_LetIn_ty hr)).
+  have ht : si_Σ ;;; ti_ΓbF |- tRel 0 : ti_bF := type_Rel _ _ 0 (vass si_na ti_bF) ti_wf_ΓbF eq_refl.
+  split; [exact (siT ht)|exact ti_red_bF_ΓbF|].
+  exact (siT (PCUICSR.type_reduction_closed (Σ := si_Σ) (wfΣ := si_wf) ht ti_red_bF_ΓbF)).
 Qed.
 
 (** ** Instances of [T2a_facts]
@@ -3279,24 +3467,24 @@ Qed.
   NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan row T2a (validity
   over [typingE]) lands. *)
 
-(* degenerate: Γ = [] (the application I (∀ A : Prop. A) is real) *)
+(* non-degenerate *)
 Lemma inversion_mkApps_inst :
-  si_Σ ;;; [] |-E mkApps (tInd si_ind []) [ti_F] : tSort sProp ×
-  ∑ A : term, si_Σ ;;; [] |-E tInd si_ind [] : A × typing_spineE si_Σ [] A [ti_F] (tSort sProp).
+  si_Σ ;;; ti_ΓP |-E mkApps (tConstruct si_ind 0 []) [tRel 0] : ti_IA ×
+  ∑ A : term, si_Σ ;;; ti_ΓP |-E tConstruct si_ind 0 [] : A × typing_spineE si_Σ ti_ΓP A [tRel 0] ti_IA.
 Proof.
-  have h : si_Σ ;;; [] |- mkApps (tInd si_ind []) [ti_F] : tSort sProp := ti_IF_ty [] ti_wf_nil.
+  have h : si_Σ ;;; ti_ΓP |- mkApps (tConstruct si_ind 0 []) [tRel 0] : ti_IA := ti_cA_ty.
   split; [exact (siT h)|].
   destruct (PCUICValidity.inversion_mkApps (Σ := si_Σ) (wfΣ := si_wf) h) as [A [h1 h2]].
   exists A. split; [exact (siT h1)|exact (siTS h2)].
 Qed.
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(** [validity] at the η-typed variable of [PCUICInversionEtaInstances]: [y : k g ⊢ y : k (λ x : Prop. g x)]
+    ([iv_rel_typed], a derivation that ends in [typeE_Cumul] with [cumul_eta_l]); its type is a type
+    ([iv_keta_typed]). *)
+(* non-degenerate *)
 Lemma validity_inst :
-  si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp) × isTypeE si_Σ [] (tSort (Sort.super sProp)).
-Proof.
-  have h := ti_P_ty [] ti_wf_nil.
-  split; [exact (siT h)|exact (siI (PCUICValidity.validity (Σ := si_Σ) (wfΣ := si_wf) h))].
-Qed.
+  si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta × isTypeE si_Σ iv_Γk iv_keta.
+Proof. split; [exact iv_rel_typed|exact (has_sort_isTypeE sProp iv_keta_typed)]. Qed.
 
 (** ** Instances of [T6_facts]
 
@@ -3307,17 +3495,15 @@ Qed.
   consistent and about something real. (2) It does NOT discharge the hypothesis at [typingE]: the field
   remains a hypothesis until plan row T6 (inversion and classification over [typingE]) lands. *)
 
-(* degenerate: Γ = [], and Δ has no let-in, so smash_context and expand_lets are the identity *)
+(* non-degenerate *)
 Lemma typing_spine_smash_inst :
-  [× wfE si_Σ.1, typing_spineE si_Σ [] (it_mkProd_or_LetIn ti_ΓP (tSort sProp)) [ti_F] (tSort sProp) &
-     typing_spineE si_Σ [] (it_mkProd_or_LetIn (smash_context [] ti_ΓP) (expand_lets ti_ΓP (tSort sProp)))
-       [ti_F] (tSort sProp)].
+  [× wfE si_Σ.1, typing_spineE si_Σ ti_ΓP (it_mkProd_or_LetIn ti_Δlet (tSort sProp)) [tRel 0] (tSort sProp) &
+     typing_spineE si_Σ ti_ΓP (it_mkProd_or_LetIn (smash_context [] ti_Δlet) (expand_lets ti_Δlet (tSort sProp)))
+       [tRel 0] (tSort sProp)].
 Proof.
-  have hs : PCUICArities.typing_spine si_Σ [] (it_mkProd_or_LetIn ti_ΓP (tSort sProp)) [ti_F] (tSort sProp) :=
-    ti_tspine_IF.
-  split; [exact si_wfE|exact (siTS hs)|].
-  exact (siTS (PCUICClassification.typing_spine_smash (Σ := si_Σ) si_wf [] ti_ΓP (tSort sProp) [ti_F]
-                 (tSort sProp) hs)).
+  split; [exact si_wfE|exact (siTS ti_tspine_let)|].
+  exact (siTS (PCUICClassification.typing_spine_smash (Σ := si_Σ) si_wf ti_ΓP ti_Δlet (tSort sProp) [tRel 0]
+                 (tSort sProp) ti_tspine_let)).
 Qed.
 
 (** *** Bidirectional derivations over E in [si_Σ], built with the constructors of [BDTypingEta]; the
@@ -3330,27 +3516,6 @@ Proof. apply inferE_Sort. exact ti_wfs. Qed.
 Lemma ti_bdsP Γ : si_Σ ;;; Γ |-E si_P ▹□ Sort.super sProp.
 Proof. eapply inferE_sort_Sort; [exact (ti_bdP Γ)|apply rt_refl]. Qed.
 
-Lemma ti_bdcP : si_Σ ;;; [] |-E si_P ◃ tSort (Sort.super sProp).
-Proof. eapply checkE_Cumul; [exact (ti_bdP [])|exact (JoinE_refl si_Σ [] Cumul (tSort (Sort.super sProp)))]. Qed.
-
-Lemma ti_lsP Γ : lift_sorting (checkingE si_Σ Γ) (infering_sortE si_Σ Γ) (j_vass si_na si_P).
-Proof. split; [exact tt|]. exists (Sort.super sProp). split; [exact (ti_bdsP Γ)|split; [exact I|reflexivity]]. Qed.
-
-Lemma ti_bdF : si_Σ ;;; [] |-E ti_F ▹ tSort (Sort.sort_of_product (Sort.super sProp) sProp).
-Proof.
-  apply inferE_Prod.
-  - split; [exact tt|]. exists (Sort.super sProp). split; [exact (ti_bdsP [])|split; reflexivity].
-  - eapply inferE_sort_Sort.
-    + econstructor. reflexivity.
-    + apply rt_refl.
-Qed.
-
-Lemma ti_bdcF : si_Σ ;;; [] |-E ti_F ◃ si_P.
-Proof. eapply checkE_Cumul; [exact ti_bdF|exact (JoinE_refl si_Σ [] Cumul si_P)]. Qed.
-
-Lemma ti_bdsF : si_Σ ;;; [] |-E ti_F ▹□ sProp.
-Proof. eapply inferE_sort_Sort; [exact ti_bdF|apply rt_refl]. Qed.
-
 Lemma ti_bdInd Γ : si_Σ ;;; Γ |-E tInd si_ind [] ▹ (ind_type si_idecl)@[[]].
 Proof. econstructor; [exact si_declared_inductive|exact ti_cons]. Qed.
 
@@ -3362,12 +3527,6 @@ Proof. econstructor. reflexivity. Qed.
 
 Lemma ti_bdiRel : si_Σ ;;; ti_ΓI |-E tRel 0 ▹{si_ind} ([], [ti_F]).
 Proof. eapply inferE_ind_Ind; [exact ti_bdRel|apply rt_refl]. Qed.
-
-Lemma ti_bdctx : wf_local_bd_relE si_Σ [] ti_ΓP.
-Proof. constructor; [constructor|]. exact (ti_lsP _). Qed.
-
-Lemma ti_relctx : wf_local_relE si_Σ [] ti_ΓP.
-Proof. constructor; [constructor|]. exact (siL (ti_vass [] si_na si_P _ (ti_P_ty [] ti_wf_nil) eq_refl)). Qed.
 
 (** In [ti_ΓP = [A : Prop]]: [A], [I A] and [c A]. *)
 Lemma ti_bdA : si_Σ ;;; ti_ΓP |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na si_P)).
@@ -3407,6 +3566,175 @@ Qed.
 Lemma ti_bdccA : si_Σ ;;; ti_ΓP |-E ti_cA ◃ ti_IA.
 Proof. eapply checkE_Cumul; [exact ti_bdcAi|exact (JoinE_refl si_Σ ti_ΓP Cumul ti_IA)]. Qed.
 
+(** In [ti_ΓP]: the derivations the T6BD and T6BDc instances share. *)
+Lemma ti_ci2C : PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_IA; ti_cA] ti_Δ2.
+Proof.
+  econstructor; [exact ti_bdcIA|].
+  change (PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_cA] [vass si_na ti_IA]).
+  econstructor; [exact ti_bdccA|]. cbn. constructor.
+Qed.
+
+Lemma ti_ltJ : lift_typing typing si_Σ ti_ΓP (Judge (Some ti_cA) ti_IA None (Some Relevant)).
+Proof. split; [exact ti_cA_ty|]. exists sProp. split; [exact ti_IA_ty|split; [exact I|reflexivity]]. Qed.
+
+Lemma ti_lsJ :
+  lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (Judge (Some ti_cA) ti_IA None (Some Relevant)).
+Proof. split; [exact ti_bdccA|]. exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]]. Qed.
+
+Lemma ti_relIA : wf_local_relE si_Σ ti_ΓP ti_ΓIA.
+Proof. constructor; [constructor|]. exact (siL (ti_vass ti_ΓP si_na ti_IA sProp ti_IA_ty eq_refl)). Qed.
+
+Lemma ti_bdrelIA : wf_local_bd_relE si_Σ ti_ΓP ti_ΓIA.
+Proof.
+  constructor; [constructor|]. split; [exact tt|].
+  exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]].
+Qed.
+
+(** The η-typed variable of [PCUICInversionEtaInstances]: in [iv_Γk = [y : k g; k : (Prop → Prop) → Prop;
+    g : Prop → Prop]], [y] infers [k g] and checks against [k (λ x : Prop. g x)] through the η join
+    [iv_join_eta] (one [cumul_eta_l] step). *)
+Lemma ti_bdy : si_Σ ;;; iv_Γk |-E tRel 0 ▹ iv_kg.
+Proof.
+  have h : si_Σ ;;; iv_Γk |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na (tApp (tRel 0) (tRel 1)))).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdcy : si_Σ ;;; iv_Γk |-E tRel 0 ◃ iv_keta.
+Proof. eapply checkE_Cumul; [exact ti_bdy|exact iv_join_eta]. Qed.
+
+(** In [ti_ΓX]: [x] infers [I ((λ X. X) A)], an applied [I] as it is and, after β, [I A]. *)
+Lemma ti_bdX : si_Σ ;;; ti_ΓX |-E tRel 0 ▹ tApp (tInd si_ind []) (tApp ti_idP (tRel 1)).
+Proof.
+  have h : si_Σ ;;; ti_ΓX |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na (tApp (tInd si_ind []) ti_idA))).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdiX1 : si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tApp ti_idP (tRel 1)]).
+Proof. eapply inferE_ind_Ind; [exact ti_bdX|apply rt_refl]. Qed.
+
+Lemma ti_bdiX2 : si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tRel 1]).
+Proof. eapply inferE_ind_Ind; [exact ti_bdX|exact (clrel_rel ti_red_IidA1)]. Qed.
+
+(** In [ti_Γf]: [f] infers [ti_Tf], a product as it is ([ti_bdpf1]) and after two β-steps ([ti_bdpf2]). *)
+Lemma ti_bdf : si_Σ ;;; ti_Γf |-E tRel 0 ▹ ti_Tf.
+Proof.
+  have h : si_Σ ;;; ti_Γf |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na ti_pidA)).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdpf1 : si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tApp ti_idP (tRel 1), tApp ti_idP (tRel 2)).
+Proof. eapply inferE_prod_Prod; [exact ti_bdf|apply rt_refl]. Qed.
+
+Lemma ti_bdpf2 : si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tRel 1, tRel 2).
+Proof. eapply inferE_prod_Prod; [exact ti_bdf|exact (clrel_rel ti_red_Tf)]. Qed.
+
+(** In [ti_Γfa]: [f a] infers [(λ X. X) A] through [ti_bdpfa1] and [A] through [ti_bdpfa2]. *)
+Lemma ti_bdfa : si_Σ ;;; ti_Γfa |-E tRel 1 ▹ tProd si_na (tApp ti_idP (tRel 2)) (tApp ti_idP (tRel 3)).
+Proof.
+  have h : si_Σ ;;; ti_Γfa |-E tRel 1 ▹ lift0 (S 1) (decl_type (vass si_na ti_pidA)).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdpfa1 : si_Σ ;;; ti_Γfa |-E tRel 1 ▹Π (si_na, tApp ti_idP (tRel 2), tApp ti_idP (tRel 3)).
+Proof. eapply inferE_prod_Prod; [exact ti_bdfa|apply rt_refl]. Qed.
+
+Lemma ti_bdpfa2 : si_Σ ;;; ti_Γfa |-E tRel 1 ▹Π (si_na, tRel 2, tRel 3).
+Proof. eapply inferE_prod_Prod; [exact ti_bdfa|exact (clrel_rel ti_red_Tfa)]. Qed.
+
+Lemma ti_bda : si_Σ ;;; ti_Γfa |-E tRel 0 ▹ tRel 2.
+Proof.
+  have h : si_Σ ;;; ti_Γfa |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na (tRel 1))).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdfa1 : si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ tApp ti_idP (tRel 2).
+Proof.
+  change (si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ ((tApp ti_idP (tRel 3)) {0 := tRel 0})).
+  eapply inferE_App; [exact ti_bdpfa1|].
+  eapply checkE_Cumul; [exact ti_bda|].
+  exact (JoinE_red_r si_Σ ti_Γfa Cumul (tRel 2) (tApp ti_idP (tRel 2)) (clrel_rel ti_red_A2fa)).
+Qed.
+
+Lemma ti_bdfa2 : si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ tRel 2.
+Proof.
+  change (si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ ((tRel 3) {0 := tRel 0})).
+  eapply inferE_App; [exact ti_bdpfa2|].
+  eapply checkE_Cumul; [exact ti_bda|exact (JoinE_refl si_Σ ti_Γfa Cumul (tRel 2))].
+Qed.
+
+(** In [ti_ΓP]: [let x : Prop := A in x] infers [let x : Prop := A in Prop], which reduces (ζ) to [Prop]. *)
+Definition ti_tL : term := tLetIn si_na (tRel 0) si_P (tRel 0).
+
+Lemma ti_bdL : si_Σ ;;; ti_ΓP |-E ti_tL ▹ tLetIn si_na (tRel 0) si_P si_P.
+Proof.
+  have hb : si_Σ ;;; ti_ΓP ,, vdef si_na (tRel 0) si_P |-E tRel 0 ▹ lift0 (S 0) (decl_type (vdef si_na (tRel 0) si_P)).
+  { econstructor. reflexivity. }
+  have hj : lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (j_vdef si_na (tRel 0) si_P).
+  { split; [exact ti_bdcA|]. exists (Sort.super sProp).
+    split; [exact (ti_bdsP ti_ΓP)|split; [exact I|reflexivity]]. }
+  eapply inferE_LetIn; [exact hj|exact hb].
+Qed.
+
+Lemma ti_bdsL : si_Σ ;;; ti_ΓP |-E ti_tL ▹□ sProp.
+Proof. eapply inferE_sort_Sort; [exact ti_bdL|exact (clrel_rel ti_red_TL)]. Qed.
+
+(** In [ti_ΓP]: [λ X : Prop. X] infers [Π X : Prop. Prop], and [(λ X : Prop. X) A] checks against [Prop]. *)
+Lemma ti_bdidP : si_Σ ;;; ti_ΓP |-E ti_idP ▹ tProd si_na si_P si_P.
+Proof.
+  have hb : si_Σ ;;; ti_ΓP ,, vass si_na si_P |-E tRel 0 ▹ si_P.
+  { have h : si_Σ ;;; ti_ΓP ,, vass si_na si_P |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na si_P)).
+    { econstructor. reflexivity. }
+    exact h. }
+  eapply inferE_Lambda; [|exact hb].
+  split; [exact tt|]. exists (Sort.super sProp). split; [exact (ti_bdsP ti_ΓP)|split; [exact I|reflexivity]].
+Qed.
+
+Lemma ti_bdidA : si_Σ ;;; ti_ΓP |-E ti_idA ▹ si_P.
+Proof.
+  change (si_Σ ;;; ti_ΓP |-E tApp ti_idP (tRel 0) ▹ (si_P {0 := tRel 0})).
+  eapply inferE_App; [|exact ti_bdcA].
+  eapply inferE_prod_Prod; [exact ti_bdidP|apply rt_refl].
+Qed.
+
+Lemma ti_bdcidA : si_Σ ;;; ti_ΓP |-E ti_idA ◃ si_P.
+Proof. eapply checkE_Cumul; [exact ti_bdidA|exact (JoinE_refl si_Σ ti_ΓP Cumul si_P)]. Qed.
+
+(** [let x : Prop := (λ X : Prop. X) A in x] infers [let x : Prop := (λ X : Prop. X) A in Prop], which reaches
+    [Prop] by ζ at once ([ti_red_TL2a]) or by β in the let value and then ζ ([ti_red_TL2b]). *)
+Definition ti_tL2 : term := tLetIn si_na ti_idA si_P (tRel 0).
+Definition ti_TL2 : term := tLetIn si_na ti_idA si_P si_P.
+
+Lemma ti_bdL2 : si_Σ ;;; ti_ΓP |-E ti_tL2 ▹ ti_TL2.
+Proof.
+  have hb : si_Σ ;;; ti_ΓP ,, vdef si_na ti_idA si_P |-E tRel 0 ▹ lift0 (S 0) (decl_type (vdef si_na ti_idA si_P)).
+  { econstructor. reflexivity. }
+  have hj : lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (j_vdef si_na ti_idA si_P).
+  { split; [exact ti_bdcidA|]. exists (Sort.super sProp).
+    split; [exact (ti_bdsP ti_ΓP)|split; [exact I|reflexivity]]. }
+  eapply inferE_LetIn; [exact hj|exact hb].
+Qed.
+
+Lemma ti_red_TL2a : PCUICReduction.red si_Σ ti_ΓP ti_TL2 (tSort sProp).
+Proof. apply rt_step. exact (red_zeta si_Σ ti_ΓP si_na ti_idA si_P si_P). Qed.
+
+Lemma ti_red_TL2b : PCUICReduction.red si_Σ ti_ΓP ti_TL2 (tSort sProp).
+Proof.
+  eapply rt_trans.
+  - apply rt_step. apply letin_red_def. exact (red_beta si_Σ ti_ΓP si_na si_P (tRel 0) (tRel 0)).
+  - apply rt_step. exact (red_zeta si_Σ ti_ΓP si_na (tRel 0) si_P si_P).
+Qed.
+
+Lemma ti_bdsL2a : si_Σ ;;; ti_ΓP |-E ti_tL2 ▹□ sProp.
+Proof. eapply inferE_sort_Sort; [exact ti_bdL2|exact ti_red_TL2a]. Qed.
+
+Lemma ti_bdsL2b : si_Σ ;;; ti_ΓP |-E ti_tL2 ▹□ sProp.
+Proof. eapply inferE_sort_Sort; [exact ti_bdL2|exact ti_red_TL2b]. Qed.
+
 (** ** Instances of [T6BD_facts]
 
   Each lemma [<field>_inst] states the premises and the conclusion of the field [<field>] of [T6BD_facts]
@@ -3416,25 +3744,27 @@ Proof. eapply checkE_Cumul; [exact ti_bdcAi|exact (JoinE_refl si_Σ ti_ΓP Cumul
   real. (2) It does NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan
   row T6 (bidirectional soundness over E) lands. *)
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(** [checking_typing] at the η-typed variable [y : k g] of [PCUICInversionEtaInstances]: [y] checks against
+    [k (λ x : Prop. g x)] through the η join, and the conclusion is [iv_rel_typed], whose derivation ends in
+    [typeE_Cumul] with [cumul_eta_l]. *)
+(* non-degenerate *)
 Lemma checking_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], isTypeE si_Σ [] (tSort (Sort.super sProp)),
-     si_Σ ;;; [] |-E si_P ◃ tSort (Sort.super sProp) & si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp)].
+  [× wfE si_Σ, wf_localE si_Σ iv_Γk, isTypeE si_Σ iv_Γk iv_keta, si_Σ ;;; iv_Γk |-E tRel 0 ◃ iv_keta &
+     si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta].
 Proof.
-  split; [exact si_wfE|constructor|exact (siI (has_sort_isType _ (ti_P1_ty [] ti_wf_nil)))|exact ti_bdcP|].
-  exact (siT (ti_P_ty [] ti_wf_nil)).
+  split; [exact si_wfE|exact iv_wf_Γk|exact (has_sort_isTypeE sProp iv_keta_typed)|exact ti_bdcy|exact iv_rel_typed].
 Qed.
 
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma ctx_inst_bd_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ ([] ,,, ti_ΓP),
-     PCUICTyping.ctx_inst (checkingE si_Σ) [] [ti_F] (List.rev ti_ΓP) &
-     ctx_instE si_Σ [] [ti_F] (List.rev ti_ΓP)].
+  [× wfE si_Σ, wf_localE si_Σ (ti_ΓP ,,, List.rev ti_Δ2),
+     PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_IA; ti_cA] (List.rev (List.rev ti_Δ2)) &
+     ctx_instE si_Σ ti_ΓP [ti_IA; ti_cA] (List.rev (List.rev ti_Δ2))].
 Proof.
-  have hc : PCUICTyping.ctx_inst (checkingE si_Σ) [] [ti_F] (List.rev ti_ΓP).
-  { cbn. econstructor; [exact ti_bdcF|cbn; constructor]. }
-  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact hc|].
-  exact (siCI (PCUICSpine.spine_subst_ctx_inst ti_spine_F)).
+  have h1 := ti_wf_P ti_ΓP ti_wf_ΓP.
+  have hw : wf_local si_Σ (ti_ΓP ,,, List.rev ti_Δ2) :=
+    ti_wf_cons _ si_na (tRel 0) sProp h1 (type_Rel _ _ 0 (vass si_na si_P) h1 eq_refl) eq_refl.
+  split; [exact si_wfE|exact (siW hw)|exact ti_ci2C|exact (siCI ti_ci2B)].
 Qed.
 
 (* non-degenerate *)
@@ -3446,46 +3776,44 @@ Proof.
   exact (siT (type_Rel _ _ 0 (vass si_na ti_IF) ti_wf_ΓI eq_refl)).
 Qed.
 
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma infering_prod_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E tInd si_ind [] ▹Π (si_na, si_P, tSort sProp) &
-     si_Σ ;;; [] |-E tInd si_ind [] : tProd si_na si_P (tSort sProp)].
-Proof. split; [exact si_wfE|constructor|exact (ti_bdpInd [])|exact (siT (ti_Ind_ty [] ti_wf_nil))]. Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E tConstruct si_ind 0 [] ▹Π (si_na, si_P, ti_IA) &
+     si_Σ ;;; ti_ΓP |-E tConstruct si_ind 0 [] : tProd si_na si_P ti_IA].
+Proof.
+  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact (ti_bdpC ti_ΓP)|exact (siT (ti_Construct_ty ti_ΓP ti_wf_ΓP))].
+Qed.
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(* non-degenerate *)
 Lemma infering_sort_isTypeRel_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp &
-     isTypeRelE si_Σ [] si_P (relevance_of_sort (Sort.super sProp))].
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_IA ▹□ sProp &
+     isTypeRelE si_Σ ti_ΓP ti_IA (relevance_of_sort (sProp : sort))].
 Proof.
-  split; [exact si_wfE|constructor|exact (ti_bdsP [])|].
-  exact (siIR (has_sort_isTypeRel (Sort.super sProp) _ eq_refl (ti_P_ty [] ti_wf_nil))).
+  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdsIA|].
+  exact (siIR (has_sort_isTypeRel sProp _ eq_refl ti_IA_ty)).
 Qed.
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(* non-degenerate *)
 Lemma infering_sort_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp &
-     si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp)].
-Proof. split; [exact si_wfE|constructor|exact (ti_bdsP [])|exact (siT (ti_P_ty [] ti_wf_nil))]. Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_IA ▹□ sProp & si_Σ ;;; ti_ΓP |-E ti_IA : tSort sProp].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdsIA|exact (siT ti_IA_ty)]. Qed.
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(* non-degenerate *)
 Lemma infering_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp) &
-     si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp)].
-Proof. split; [exact si_wfE|constructor|exact (ti_bdP [])|exact (siT (ti_P_ty [] ti_wf_nil))]. Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_cA ▹ ti_IA & si_Σ ;;; ti_ΓP |-E ti_cA : ti_IA].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdcAi|exact (siT ti_cA_ty)]. Qed.
 
-(* degenerate: Γ = [], and the subject is Prop *)
+(* non-degenerate *)
 Lemma lift_sorting_lift_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], lift_sorting (checkingE si_Σ []) (infering_sortE si_Σ []) (j_vass si_na si_P) &
-     lift_typing typingE si_Σ [] (j_vass si_na si_P)].
-Proof.
-  split; [exact si_wfE|constructor|exact (ti_lsP [])|].
-  exact (siL (ti_vass [] si_na si_P _ (ti_P_ty [] ti_wf_nil) eq_refl)).
-Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP,
+     lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (Judge (Some ti_cA) ti_IA None (Some Relevant)) &
+     lift_typing typingE si_Σ ti_ΓP (Judge (Some ti_cA) ti_IA None (Some Relevant))].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_lsJ|exact (siL ti_ltJ)]. Qed.
 
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma wf_local_bd_rel_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], wf_local_bd_relE si_Σ [] ti_ΓP & wf_local_relE si_Σ [] ti_ΓP].
-Proof. split; [exact si_wfE|constructor|exact ti_bdctx|exact ti_relctx]. Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, wf_local_bd_relE si_Σ ti_ΓP ti_ΓIA & wf_local_relE si_Σ ti_ΓP ti_ΓIA].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdrelIA|exact ti_relIA]. Qed.
 
 (** ** Instances of [T6BDu_facts]
 
@@ -3496,100 +3824,100 @@ Proof. split; [exact si_wfE|constructor|exact ti_bdctx|exact ti_relctx]. Qed.
   and about something real. (2) It does NOT discharge the hypothesis at [typingE]: the field remains a
   hypothesis until plan row T6 (bidirectional uniqueness over E) lands. *)
 
-(* degenerate: Γ = [], the subject t is Prop, and T = T' *)
+(** [infering_checking] at the η-typed variable [y : k g]: [y] infers [k g] and checks against
+    [k (λ x : Prop. g x)]; the conclusion is the η comparison [into_ws_cumulE_inst]. *)
+(* non-degenerate *)
 Lemma infering_checking_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], on_free_vars (shiftnP #|([] : context)| xpred0) (tSort (Sort.super sProp)),
-     si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp), si_Σ ;;; [] |-E si_P ◃ tSort (Sort.super sProp) &
-     si_Σ ;;; [] ⊢E tSort (Sort.super sProp) ≤ tSort (Sort.super sProp)].
-Proof.
-  split; [exact si_wfE|constructor|reflexivity|exact (ti_bdP [])|exact ti_bdcP|].
-  exact (fi_ws Cumul [] (tSort (Sort.super sProp)) eq_refl eq_refl).
-Qed.
+  [× wfE si_Σ, wf_localE si_Σ iv_Γk, on_free_vars (shiftnP #|iv_Γk| xpred0) iv_keta,
+     si_Σ ;;; iv_Γk |-E tRel 0 ▹ iv_kg, si_Σ ;;; iv_Γk |-E tRel 0 ◃ iv_keta &
+     si_Σ ;;; iv_Γk ⊢E iv_kg ≤ iv_keta].
+Proof. split; [exact si_wfE|exact iv_wf_Γk|reflexivity|exact ti_bdy|exact ti_bdcy|exact into_ws_cumulE_inst]. Qed.
 
-(* degenerate: the two inferences are the same derivation (ind = ind', args = args'), and the reductions are reflexive *)
+(* non-degenerate *)
 Lemma infering_ind_ind_inst :
-  [× wfE si_Σ, wf_localE si_Σ ti_ΓI, si_Σ ;;; ti_ΓI |-E tRel 0 ▹{si_ind} ([], [ti_F]),
-     si_Σ ;;; ti_ΓI |-E tRel 0 ▹{si_ind} ([], [ti_F]) &
-     ∑ args'' : list term, [× si_ind = si_ind, ([] : Instance.t) = [], red_terms si_Σ ti_ΓI [ti_F] args'' &
-                               red_terms si_Σ ti_ΓI [ti_F] args'']].
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓX, si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tApp ti_idP (tRel 1)]),
+     si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tRel 1]) &
+     ∑ args'' : list term, [× si_ind = si_ind, ([] : Instance.t) = [],
+                              red_terms si_Σ ti_ΓX [tApp ti_idP (tRel 1)] args'' & red_terms si_Σ ti_ΓX [tRel 1] args'']].
 Proof.
-  have hr : red_terms si_Σ ti_ΓI [ti_F] [ti_F] := All2_cons (ti_cr_refl ti_ΓI ti_F eq_refl eq_refl) All2_nil.
-  split; [exact si_wfE|exact (siW ti_wf_ΓI)|exact ti_bdiRel|exact ti_bdiRel|].
-  exists [ti_F]. split; [reflexivity|reflexivity|exact hr|exact hr].
+  split; [exact si_wfE|exact (siW ti_wf_ΓX)|exact ti_bdiX1|exact ti_bdiX2|].
+  exists [tRel 1].
+  split; [reflexivity|reflexivity|exact (All2_cons ti_red_idA1 All2_nil)
+         |exact (All2_cons (ti_cr_refl ti_ΓX (tRel 1) eq_refl eq_refl) All2_nil)].
 Qed.
 
-(* degenerate: the reductions are reflexive *)
+(* non-degenerate *)
 Lemma infering_ind_infering_inst :
-  [× wfE si_Σ, wf_localE si_Σ ti_ΓI, si_Σ ;;; ti_ΓI |-E tRel 0 ▹{si_ind} ([], [ti_F]),
-     si_Σ ;;; ti_ΓI |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na ti_IF)) &
-     ∑ args' : list term, si_Σ ;;; ti_ΓI ⊢ lift0 (S 0) (decl_type (vass si_na ti_IF)) ⇝ mkApps (tInd si_ind []) args' ×
-       red_terms si_Σ ti_ΓI [ti_F] args'].
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓX, si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tApp ti_idP (tRel 1)]),
+     si_Σ ;;; ti_ΓX |-E tRel 0 ▹ tApp (tInd si_ind []) (tApp ti_idP (tRel 1)) &
+     ∑ args' : list term,
+       si_Σ ;;; ti_ΓX ⊢ tApp (tInd si_ind []) (tApp ti_idP (tRel 1)) ⇝ mkApps (tInd si_ind []) args' ×
+       red_terms si_Σ ti_ΓX [tApp ti_idP (tRel 1)] args'].
 Proof.
-  have hr : red_terms si_Σ ti_ΓI [ti_F] [ti_F] := All2_cons (ti_cr_refl ti_ΓI ti_F eq_refl eq_refl) All2_nil.
-  split; [exact si_wfE|exact (siW ti_wf_ΓI)|exact ti_bdiRel|exact ti_bdRel|].
-  exists [ti_F]. split; [exact (ti_cr_refl ti_ΓI ti_IF eq_refl eq_refl)|exact hr].
+  split; [exact si_wfE|exact (siW ti_wf_ΓX)|exact ti_bdiX1|exact ti_bdX|].
+  exists [tRel 1]. split; [exact ti_red_IidA1|exact (All2_cons ti_red_idA1 All2_nil)].
 Qed.
 
-(* degenerate: Γ = [], and the reductions are reflexive *)
+(* non-degenerate *)
 Lemma infering_prod_infering_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E tInd si_ind [] ▹Π (si_na, si_P, tSort sProp),
-     si_Σ ;;; [] |-E tInd si_ind [] ▹ (ind_type si_idecl)@[[]] &
-     ∑ A' B' : term, [× si_Σ ;;; [] ⊢ (ind_type si_idecl)@[[]] ⇝ tProd si_na A' B', si_Σ ;;; [] ⊢ si_P ⇝ A' &
-                        si_Σ ;;; [] ,, vass si_na si_P ⊢ tSort sProp ⇝ B']].
+  [× wfE si_Σ, wf_localE si_Σ ti_Γf,
+     si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tApp ti_idP (tRel 1), tApp ti_idP (tRel 2)),
+     si_Σ ;;; ti_Γf |-E tRel 0 ▹ ti_Tf &
+     ∑ A' B' : term, [× si_Σ ;;; ti_Γf ⊢ ti_Tf ⇝ tProd si_na A' B', si_Σ ;;; ti_Γf ⊢ tApp ti_idP (tRel 1) ⇝ A' &
+                        si_Σ ;;; ti_Γf ,, vass si_na (tApp ti_idP (tRel 1)) ⊢ tApp ti_idP (tRel 2) ⇝ B']].
 Proof.
-  split; [exact si_wfE|constructor|exact (ti_bdpInd [])|exact (ti_bdInd [])|].
-  exists si_P, (tSort sProp).
-  split; [exact (ti_cr_refl [] si_arity eq_refl eq_refl)|exact (ti_cr_refl [] si_P eq_refl eq_refl)
-         |exact (ti_cr_refl ti_ΓP (tSort sProp) eq_refl eq_refl)].
+  split; [exact si_wfE|exact (siW ti_wf_Γf)|exact ti_bdpf1|exact ti_bdf|].
+  exists (tRel 1), (tRel 2). split; [exact ti_red_Tf|exact ti_red_A1f|exact ti_red_B1f].
 Qed.
 
-(* degenerate: Γ = [], the two inferences are the same derivation, and the reductions are reflexive *)
+(* non-degenerate *)
 Lemma infering_prod_prod_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E tInd si_ind [] ▹Π (si_na, si_P, tSort sProp),
-     si_Σ ;;; [] |-E tInd si_ind [] ▹Π (si_na, si_P, tSort sProp) &
-     ∑ A'' B'' : term, [× si_na = si_na, si_Σ ;;; [] ⊢ si_P ⇝ A'', si_Σ ;;; [] ⊢ si_P ⇝ A'',
-                          si_Σ ;;; [] ,, vass si_na si_P ⊢ tSort sProp ⇝ B'' &
-                          si_Σ ;;; [] ,, vass si_na si_P ⊢ tSort sProp ⇝ B'']].
+  [× wfE si_Σ, wf_localE si_Σ ti_Γf,
+     si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tApp ti_idP (tRel 1), tApp ti_idP (tRel 2)),
+     si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tRel 1, tRel 2) &
+     ∑ A'' B'' : term, [× si_na = si_na, si_Σ ;;; ti_Γf ⊢ tApp ti_idP (tRel 1) ⇝ A'', si_Σ ;;; ti_Γf ⊢ tRel 1 ⇝ A'',
+                          si_Σ ;;; ti_Γf ,, vass si_na (tApp ti_idP (tRel 1)) ⊢ tApp ti_idP (tRel 2) ⇝ B'' &
+                          si_Σ ;;; ti_Γf ,, vass si_na (tRel 1) ⊢ tRel 2 ⇝ B'']].
 Proof.
-  have hA := ti_cr_refl [] si_P eq_refl eq_refl.
-  have hB := ti_cr_refl ti_ΓP (tSort sProp) eq_refl eq_refl.
-  split; [exact si_wfE|constructor|exact (ti_bdpInd [])|exact (ti_bdpInd [])|].
-  exists si_P, (tSort sProp). split; [reflexivity|exact hA|exact hA|exact hB|exact hB].
+  split; [exact si_wfE|exact (siW ti_wf_Γf)|exact ti_bdpf1|exact ti_bdpf2|].
+  exists (tRel 1), (tRel 2).
+  split; [reflexivity|exact ti_red_A1f|exact (ti_cr_refl ti_Γf (tRel 1) eq_refl eq_refl)|exact ti_red_B1f
+         |exact (ti_cr_refl (ti_Γf ,, vass si_na (tRel 1)) (tRel 2) eq_refl eq_refl)].
 Qed.
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(* non-degenerate *)
 Lemma infering_sort_infering_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp,
-     si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp) &
-     si_Σ ;;; [] ⊢ tSort (Sort.super sProp) ⇝ tSort (Sort.super sProp)].
-Proof.
-  split; [exact si_wfE|constructor|exact (ti_bdsP [])|exact (ti_bdP [])|].
-  exact (ti_cr_refl [] (tSort (Sort.super sProp)) eq_refl eq_refl).
-Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_tL ▹□ sProp,
+     si_Σ ;;; ti_ΓP |-E ti_tL ▹ tLetIn si_na (tRel 0) si_P si_P &
+     si_Σ ;;; ti_ΓP ⊢ tLetIn si_na (tRel 0) si_P si_P ⇝ tSort sProp].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdsL|exact ti_bdL|exact ti_red_TL]. Qed.
 
-(* degenerate: Γ = [], the subject t is Prop, and u = u' *)
+(** Two [▹□] derivations of one term: the same inference, then two different reductions of its type to
+    [Prop] (ζ at once; β in the let value, then ζ). *)
+(* non-degenerate *)
 Lemma infering_sort_sort_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp,
-     si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp & Sort.super sProp = Sort.super sProp].
-Proof. split; [exact si_wfE|constructor|exact (ti_bdsP [])|exact (ti_bdsP [])|reflexivity]. Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_tL2 ▹□ sProp, si_Σ ;;; ti_ΓP |-E ti_tL2 ▹□ sProp &
+     (sProp : sort) = sProp].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdsL2a|exact ti_bdsL2b|reflexivity]. Qed.
 
-(* degenerate: Γ = [], the subject t is Prop, and T = T' *)
+(* non-degenerate *)
 Lemma infering_unique_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp),
-     si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp) &
-     ∑ T'' : term, si_Σ ;;; [] ⊢ tSort (Sort.super sProp) ⇝ T'' × si_Σ ;;; [] ⊢ tSort (Sort.super sProp) ⇝ T''].
+  [× wfE si_Σ, wf_localE si_Σ ti_Γfa, si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ tApp ti_idP (tRel 2),
+     si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ tRel 2 &
+     ∑ T'' : term, si_Σ ;;; ti_Γfa ⊢ tApp ti_idP (tRel 2) ⇝ T'' × si_Σ ;;; ti_Γfa ⊢ tRel 2 ⇝ T''].
 Proof.
-  have h := ti_cr_refl [] (tSort (Sort.super sProp)) eq_refl eq_refl.
-  split; [exact si_wfE|constructor|exact (ti_bdP [])|exact (ti_bdP [])|].
-  exists (tSort (Sort.super sProp)). split; [exact h|exact h].
+  split; [exact si_wfE|exact (siW ti_wf_Γfa)|exact ti_bdfa1|exact ti_bdfa2|].
+  exists (tRel 2). split; [exact ti_red_A2fa|exact (ti_cr_refl ti_Γfa (tRel 2) eq_refl eq_refl)].
 Qed.
 
-(* degenerate: Γ = [], T = Prop, and rel = rel' *)
+(** The two witnesses type [I A] at two different sorts: [Prop], and [Type] by cumulativity. *)
+(* non-degenerate *)
 Lemma isTypeRel_unique_inst :
-  [× wfE si_Σ, isTypeRelE si_Σ [] si_P Relevant, isTypeRelE si_Σ [] si_P Relevant & Relevant = Relevant].
+  [× wfE si_Σ, isTypeRelE si_Σ ti_ΓP ti_IA Relevant, isTypeRelE si_Σ ti_ΓP ti_IA Relevant & Relevant = Relevant].
 Proof.
-  have h := siIR (has_sort_isTypeRel (Sort.super sProp) Relevant eq_refl (ti_P_ty [] ti_wf_nil)).
-  split; [exact si_wfE|exact h|exact h|reflexivity].
+  split; [exact si_wfE| | |reflexivity].
+  - exact (siIR (has_sort_isTypeRel sProp Relevant eq_refl ti_IA_ty)).
+  - exact (siIR (has_sort_isTypeRel (Sort.super sProp) Relevant eq_refl ti_IA_ty1)).
 Qed.
 
 (** ** Instances of [T6BDc_facts]
@@ -3608,24 +3936,13 @@ Qed.
 Lemma ctx_inst_typing_bd_inst :
   [× wfE si_Σ, ctx_instE si_Σ ti_ΓP [ti_IA; ti_cA] ti_Δ2 &
      PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_IA; ti_cA] ti_Δ2].
-Proof.
-  have hc : PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_IA; ti_cA] ti_Δ2.
-  { econstructor; [exact ti_bdcIA|].
-    change (PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_cA] [vass si_na ti_IA]).
-    econstructor; [exact ti_bdccA|]. cbn. constructor. }
-  split; [exact si_wfE|exact (siCI ti_ci2B)|exact hc].
-Qed.
+Proof. split; [exact si_wfE|exact (siCI ti_ci2B)|exact ti_ci2C]. Qed.
 
 (* non-degenerate *)
 Lemma lift_typing_lift_sorting_inst :
   [× wfE si_Σ, lift_typing typingE si_Σ ti_ΓP (Judge (Some ti_cA) ti_IA None (Some Relevant)) &
      lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (Judge (Some ti_cA) ti_IA None (Some Relevant))].
-Proof.
-  have hb : lift_typing typing si_Σ ti_ΓP (Judge (Some ti_cA) ti_IA None (Some Relevant)).
-  { split; [exact ti_cA_ty|]. exists sProp. split; [exact ti_IA_ty|split; [exact I|reflexivity]]. }
-  split; [exact si_wfE|exact (siL hb)|].
-  split; [exact ti_bdccA|]. exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]].
-Qed.
+Proof. split; [exact si_wfE|exact (siL ti_ltJ)|exact ti_lsJ]. Qed.
 
 (* non-degenerate *)
 Lemma typing_checking_inst :
@@ -3652,12 +3969,7 @@ Qed.
 (* non-degenerate *)
 Lemma wf_local_rel_wf_local_bd_inst :
   [× wfE si_Σ, wf_local_relE si_Σ ti_ΓP ti_ΓIA & wf_local_bd_relE si_Σ ti_ΓP ti_ΓIA].
-Proof.
-  split; [exact si_wfE| |].
-  - constructor; [constructor|]. exact (siL (ti_vass ti_ΓP si_na ti_IA sProp ti_IA_ty eq_refl)).
-  - constructor; [constructor|]. split; [exact tt|].
-    exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]].
-Qed.
+Proof. split; [exact si_wfE|exact ti_relIA|exact ti_bdrelIA]. Qed.
 
 (** ** Base names of the [PCUICTyping] helpers, over E
 
