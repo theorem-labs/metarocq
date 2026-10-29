@@ -92,9 +92,12 @@ Local Set Warnings "-unexpected-implicit-declaration".
    cumulativity [Σ ;;; Γ ⊢ _ ≤ _] → [ws_cumul_pbE Cumul]. Not a known-false form: typing
    premises only, under [wfE]. Its base proof reads the universe clause of
    [invert_cumul_ind_ind], which is false over η below the arity
-   ([PCUICEtaIndInvRefutations]); here the scrutinee's type is a type, so its spine is the
-   full arity, where the landed [invert_cumul_ind_indE] ([cmp_global_instance_finst]) gives
-   that clause. *)
+   ([PCUICEtaIndInvRefutations]). Here [isTypeE] of [mkApps (tInd ind u) args] makes [args]
+   the full arity, where the landed [invert_cumul_ind_indE] gives the clause:
+   [cmp_global_instance_finst] reads the variance of the full arity, as base's comparison
+   does once [napp] reaches the arity. The other copy lemmas its base proof uses are the
+   checker's [T0_facts] fields [inductive_cumulative_indices] and [ctx_inst_smash] and the
+   [SRForecastCopy15] field [ctx_inst_cumulE]. *)
 Class BDForecastCopy18 := {
   ctx_inst_app_weakE :
     forall {cf : checker_flags} (Σ : global_env_ext) (wfΣ : wfE Σ.1) (ind : inductive)
