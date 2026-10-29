@@ -999,8 +999,8 @@ Section A2.
     - (* rel *) intros Γ pb i body pf _ _ _. apply JoinE_red1. exact (red_rel _ _ i body pf).
     - (* iota *) intros Γ pb ci c u args p brs br hbr hn _ _ _. apply JoinE_red1. exact (red_iota _ _ ci c u args p brs br hbr hn).
     - (* fix *) intros Γ pb mfix idx args narg fn hf hc _ _ _. apply JoinE_red1. exact (red_fix _ _ mfix idx args narg fn hf hc).
-    - (* cofix case *) intros Γ pb ci p mfix idx args narg fn brs hf _ _ _. apply JoinE_red1.
-      exact (red_cofix_case _ _ ci p mfix idx args narg fn brs hf).
+    - (* cofix case *) intros Γ pb ci p mfix idx args narg fn brs hnd hf _ _ _. apply JoinE_red1.
+      exact (red_cofix_case _ _ ci p mfix idx args narg fn brs hnd hf).
     - (* cofix proj *) intros Γ pb p mfix idx args narg fn hf _ _ _. apply JoinE_red1.
       exact (red_cofix_proj _ _ p mfix idx args narg fn hf).
     - (* delta *) intros Γ pb c decl body hd u hb _ _ _. apply JoinE_red1. exact (red_delta _ _ c decl body hd u hb).

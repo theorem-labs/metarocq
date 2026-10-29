@@ -502,14 +502,14 @@ Proof.
       now rewrite -(is_constructor_upto narg _ _ eargs).
     + now apply upto_domain_r_mkApps.
   - (* red_cofix_case *)
-    intros Γ ci p mfix idx args narg fn brs hunf Γ' t' hΓ e.
+    intros Γ ci p mfix idx args narg fn brs hnd hunf Γ' t' hΓ e.
     destruct (upto_domain_r_tCase_inv _ _ _ _ _ e)
       as (p' & c' & brs' & -> & hpar & hinst & hctx & hret & hc & hbrs).
     destruct (upto_domain_r_mkApps_inv _ _ _ hc) as (f' & args' & -> & ef & eargs).
     destruct (upto_domain_r_tCoFix_inv _ _ _ ef) as (mfix' & -> & hm).
     destruct (upto_domain_r_unfold_cofix _ _ _ _ _ hm hunf) as (fn' & hunf' & efn).
     exists (tCase ci p' (mkApps fn' args') brs'). split.
-    + apply r_step. eapply red_cofix_case; exact hunf'.
+    + apply r_step. eapply red_cofix_case; [exact hnd|exact hunf'].
     + constructor; try assumption. now apply upto_domain_r_mkApps.
   - (* red_cofix_proj *)
     intros Γ pr mfix idx args narg fn hunf Γ' t' hΓ e.

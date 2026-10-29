@@ -90,7 +90,7 @@ Proof.
      + eapply rename_unfold_fix. eassumption.
      + rewrite -is_constructor_rename. assumption.
    - rewrite 2!rename_mkApps. simpl.
-     eapply cumulE_cofix_case.
+     eapply cumulE_cofix_case; [assumption|].
      eapply rename_unfold_cofix. eassumption.
    - rewrite 2!rename_mkApps. simpl.
      eapply cumulE_cofix_proj.
@@ -800,7 +800,7 @@ Proof.
       + eapply inst_unfold_fix. eassumption.
       + eapply is_constructor_inst. assumption.
     - simpl. rewrite !inst_mkApps. simpl.
-      eapply cumulE_cofix_case.
+      eapply cumulE_cofix_case; [assumption|].
       eapply inst_unfold_cofix. eassumption.
     - simpl. rewrite 2!inst_mkApps. simpl.
       eapply cumulE_cofix_proj.
@@ -1088,7 +1088,7 @@ Proof.
   - rewrite !subst_instance_mkApps.
     unfold unfold_cofix in *. destruct (nth_error mfix idx) eqn:E; try congruence.
     match goal with H : Some _ = Some _ |- _ => inversion H; clear H end.
-    eapply cumulE_cofix_case.  fold subst_instance_constr.
+    eapply cumulE_cofix_case; [assumption|]. fold subst_instance_constr.
     unfold unfold_cofix.
     rewrite nth_error_map E. cbn.
     rewrite subst_instance_subst.
@@ -1385,9 +1385,9 @@ Proof.
     + exact (nl_unfold_fix mfix idx narg fn Hufix).
     + rewrite nl_is_constructor. exact Hisctor.
   - (* cumulE_cofix_case *)
-    intros Γ pb ci p mfix idx args narg fn brs Hucofix; cbv beta. cbn [nl].
+    intros Γ pb ci p mfix idx args narg fn brs Hnondep Hucofix; cbv beta. cbn [nl].
     rewrite !nl_mkApps. cbn [nl].
-    eapply cumulE_cofix_case with (narg := narg).
+    eapply cumulE_cofix_case with (narg := narg); [exact Hnondep|].
     exact (nl_unfold_cofix mfix idx narg fn Hucofix).
   - (* cumulE_cofix_proj *)
     intros Γ pb p mfix idx args narg fn Hucofix; cbv beta. cbn [nl].

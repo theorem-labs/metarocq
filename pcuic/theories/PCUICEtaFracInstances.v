@@ -195,7 +195,8 @@ Lemma ws_cumul_pbE_Prim_inst :
   WS Cumul [] (tPrim (primArray; primArrayModel fi_arr)) (tPrim (primArray; primArrayModel fi_arr)).
 Proof. unshelve eapply ws_cumul_pbE_Prim; fi_solve. Qed.
 
-Definition fi_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition fi_ci : case_info :=
+  {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition fi_p : predicate term := {| pparams := [fi_P]; puinst := []; pcontext := []; preturn := fi_P |}.
 
 Lemma ws_cumul_pbE_Case_inst : WS Cumul [] (tCase fi_ci fi_p fi_beta []) (tCase fi_ci fi_p fi_P []).

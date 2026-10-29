@@ -386,7 +386,8 @@ Qed.
    arity 0 and no arguments; F2 a branch of arity 1 and one argument. *)
 
 Definition f_ci : case_info :=
-  {| ci_ind := mkInd (MPfile ["EtaC1b"%bs], "I"%bs) 0; ci_npar := 0; ci_relevance := Relevant |}.
+  {| ci_ind := mkInd (MPfile ["EtaC1b"%bs], "I"%bs) 0; ci_npar := 0; ci_relevance := Relevant;
+     ci_cofix_nondep := true |}.
 Definition f_p : predicate term :=
   {| pparams := []; puinst := []; pcontext := []; preturn := c1b_P |}.
 Definition f_br : branch term := {| bcontext := []; bbody := c1b_P |}.

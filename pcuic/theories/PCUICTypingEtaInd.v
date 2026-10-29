@@ -266,7 +266,8 @@ Lemma typingE_ind_env_app_size `{cf : checker_flags} :
           (List.rev (subst_instance p.(puinst) (mdecl.(ind_params) ,,, idecl.(ind_indices) : context))) ->
         Σ ;;; Γ |-E c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
         P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
-        (isCoFinite mdecl.(ind_finite) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true ->
+        (isCoFinite mdecl.(ind_finite) ==>
+         (ci.(ci_cofix_nondep) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) = true ->
         let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
         wf_branches idecl brs ->
         All2i (fun i cdecl br =>
@@ -731,7 +732,8 @@ Lemma typingE_ind_env `{cf : checker_flags} :
         (List.rev (subst_instance p.(puinst) (mdecl.(ind_params) ,,, idecl.(ind_indices) : context))) ->
       Σ ;;; Γ |-E c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
       P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
-      (isCoFinite mdecl.(ind_finite) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true ->
+      (isCoFinite mdecl.(ind_finite) ==>
+       (ci.(ci_cofix_nondep) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) = true ->
       let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
       wf_branches idecl brs ->
       All2i (fun i cdecl br =>

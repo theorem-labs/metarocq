@@ -1040,18 +1040,19 @@ Proof.
 Qed.
 
 Lemma peta_commut_red_cofix_case Σ Γ ip p mfix idx args narg fn brs u :
+  ip.(ci_cofix_nondep) ->
   unfold_cofix mfix idx = Some (narg, fn) ->
   peta (tCase ip p (mkApps (tCoFix mfix idx) args) brs) u ->
   ∑ w w', clos_refl (red1 Σ Γ) u w
         × peta (tCase ip p (mkApps fn args) brs) w' × upto_domain_r w w'.
 Proof.
-  intros Hunf Hp. depelim Hp.
+  intros Hnd Hunf Hp. depelim Hp.
   match goal with Hd : peta (mkApps (tCoFix _ _) _) _ |- _ =>
     apply peta_mkApps_inv in Hd as (f' & args' & Hc & Hf & Ha) end. depelim Hf.
   match goal with Hm : All2 _ mfix ?m |- _ =>
     destruct (peta_unfold_cofix _ m _ _ _ Hm Hunf) as (fn' & Hunf' & Hfn) end.
   eexists _, _. repeat split.
-  - apply r_step. rewrite Hc. eapply red_cofix_case; exact Hunf'.
+  - apply r_step. rewrite Hc. eapply red_cofix_case; [exact Hnd|exact Hunf'].
   - eapply peta_Case; try eassumption. apply peta_mkApps; eassumption.
   - reflexivity.
 Qed.
@@ -2172,7 +2173,8 @@ Lemma red1_tCase_inv {Σ Γ ci p c brs v} :
      × (#|args| = (ci.(ci_npar) + context_assumptions br.(bcontext))%nat)
      × (v = iota_red ci.(ci_npar) p args br))
   + (∑ mfix idx args narg fn, (c = mkApps (tCoFix mfix idx) args)
-     × (unfold_cofix mfix idx = Some (narg, fn)) × (v = tCase ci p (mkApps fn args) brs))
+     × (unfold_cofix mfix idx = Some (narg, fn)) × is_true ci.(ci_cofix_nondep)
+     × (v = tCase ci p (mkApps fn args) brs))
   + (∑ par1, (v = tCase ci (set_pparams p par1) c brs) × OnOne2 (red1 Σ Γ) p.(pparams) par1)
   + (∑ r, (v = tCase ci (set_preturn p r) c brs)
      × red1 Σ (Γ ,,, inst_case_predicate_context p) p.(preturn) r)
@@ -2222,10 +2224,10 @@ Proof.
   { now apply peta_Case. }
   destruct (red1_tCase_inv Hr)
     as [[[[[(k & uu & args & br & -> & Hnth & Hlen & ->)
-           |(mfix & idx & args & narg & fn & -> & Hunf & ->)]
+           |(mfix & idx & args & narg & fn & -> & Hunf & Hnd & ->)]
           |(par1 & -> & Ho)]|(r & -> & Hrr)]|(c1 & -> & Hrc)]|(brs1 & -> & Ho)].
   - exact (peta_commut_red_iota Σ Δ ci k uu args p brs br _ Hnth Hlen HP).
-  - exact (peta_commut_red_cofix_case Σ Δ ci p mfix idx args narg fn brs _ Hunf HP).
+  - exact (peta_commut_red_cofix_case Σ Δ ci p mfix idx args narg fn brs _ Hnd Hunf HP).
   - (* parameters *)
     destruct (OnOne2_commut (red1 Σ Γ) (red1 Σ Δ) peta upto_domain_r (fun x => is_true (ofvT x))
                 (pparams p) (pparams p') par1 (fun x => upto_domain_r_refl x))

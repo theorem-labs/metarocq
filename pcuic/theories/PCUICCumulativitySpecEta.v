@@ -143,8 +143,10 @@ Inductive cumulSpecE0 {cf : checker_flags} (Σ : global_env_ext) Γ (pb : conv_p
     is_constructor narg args = true ->
     Σ ;;; Γ ⊢ mkApps (tFix mfix idx) args ≤sE[pb] mkApps fn args
 
-(** CoFix-case unfolding *)
+(** CoFix-case unfolding, only under a case whose return type does not depend on the
+    scrutinee ([ci_cofix_nondep]) *)
 | cumulE_cofix_case : forall ip p mfix idx args narg fn brs,
+    ip.(ci_cofix_nondep) ->
     unfold_cofix mfix idx = Some (narg, fn) ->
     Σ ;;; Γ ⊢ tCase ip p (mkApps (tCoFix mfix idx) args) brs ≤sE[pb] tCase ip p (mkApps fn args) brs
 
@@ -223,9 +225,10 @@ Lemma cumulSpecE0_rect :
     (* cofix unfolding *)
     (forall (Γ : context) (pb : conv_pb) ci (p : predicate term) (mfix : mfixpoint term) (idx : nat)
             (args : list term) (narg : nat) (fn : term) (brs : list (branch term))
+            (Hnondep : ci.(ci_cofix_nondep))
             (Hucofix : unfold_cofix mfix idx = Some (narg, fn)),
         P cf Σ Γ pb (tCase ci p (mkApps (tCoFix mfix idx) args) brs) (tCase ci p (mkApps fn args) brs)
-          (cumulE_cofix_case _ _ _ _ _ _ _ _ _ _ _ Hucofix)) ->
+          (cumulE_cofix_case _ _ _ _ _ _ _ _ _ _ _ Hnondep Hucofix)) ->
 
     (forall (Γ : context) (pb : conv_pb) (p : projection) (mfix : mfixpoint term) (idx : nat) (args : list term)
             (narg : nat) (fn : term)
@@ -517,9 +520,10 @@ Lemma convSpecE0_ind_all :
       (* cofix unfolding *)
        (forall (Γ : context) ci (p : predicate term) (mfix : mfixpoint term) (idx : nat)
                (args : list term) (narg : nat) (fn : term) (brs : list (branch term))
+               (Hnondep : ci.(ci_cofix_nondep))
                (Hucofix : unfold_cofix mfix idx = Some (narg, fn)),
            P cf Σ Γ Conv (tCase ci p (mkApps (tCoFix mfix idx) args) brs) (tCase ci p (mkApps fn args) brs)
-             (cumulE_cofix_case _ _ _ _ _ _ _ _ _ _ _ Hucofix)) ->
+             (cumulE_cofix_case _ _ _ _ _ _ _ _ _ _ _ Hnondep Hucofix)) ->
 
        (forall (Γ : context) (p : projection) (mfix : mfixpoint term) (idx : nat) (args : list term)
                (narg : nat) (fn : term)
