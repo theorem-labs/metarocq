@@ -1759,18 +1759,18 @@ Proof.
 Qed.
 
 (** Leaves: no [red1] reduct, so nothing to commute. *)
-Lemma commut_Var Σ i : C3R.commutes Σ (tVar i) (tVar i).
+Lemma commut_Var Σ i : commutes Σ (tVar i) (tVar i).
 Proof. intros Γ Δ v _ _ _ Hr. destruct (red1_tVar_absurd Hr). Qed.
-Lemma commut_Sort Σ s : C3R.commutes Σ (tSort s) (tSort s).
+Lemma commut_Sort Σ s : commutes Σ (tSort s) (tSort s).
 Proof. intros Γ Δ v _ _ _ Hr. destruct (red1_tSort_absurd Hr). Qed.
-Lemma commut_Ind Σ ind uu : C3R.commutes Σ (tInd ind uu) (tInd ind uu).
+Lemma commut_Ind Σ ind uu : commutes Σ (tInd ind uu) (tInd ind uu).
 Proof. intros Γ Δ v _ _ _ Hr. destruct (red1_tInd_absurd Hr). Qed.
-Lemma commut_Construct Σ ind k uu : C3R.commutes Σ (tConstruct ind k uu) (tConstruct ind k uu).
+Lemma commut_Construct Σ ind k uu : commutes Σ (tConstruct ind k uu) (tConstruct ind k uu).
 Proof. intros Γ Δ v _ _ _ Hr. destruct (red1_tConstruct_absurd Hr). Qed.
 
 (** [tRel]: the only place [red1] reads its context. The η side reads the
     [peta]-related body from [Δ]; [peta_lift] relates the two reducts. *)
-Lemma commut_Rel Σ n : C3R.commutes Σ (tRel n) (tRel n).
+Lemma commut_Rel Σ n : commutes Σ (tRel n) (tRel n).
 Proof.
   intros Γ Δ v HΔ _ _ Hr.
   destruct (red1_tRel_inv Hr) as (body & Hb & ->).
@@ -1784,7 +1784,7 @@ Proof.
   - reflexivity.
 Qed.
 
-Lemma commut_Const Σ c uu : C3R.commutes Σ (tConst c uu) (tConst c uu).
+Lemma commut_Const Σ c uu : commutes Σ (tConst c uu) (tConst c uu).
 Proof.
   intros Γ Δ v _ _ _ Hr.
   destruct (red1_tConst_inv Hr) as (decl & body & Hdecl & Hbody & ->).
@@ -1792,8 +1792,8 @@ Proof.
 Qed.
 
 Lemma commut_Lambda Σ na A A' M M' :
-  peta A A' -> C3R.commutes Σ A A' -> peta M M' -> C3R.commutes Σ M M' ->
-  C3R.commutes Σ (tLambda na A M) (tLambda na A' M').
+  peta A A' -> commutes Σ A A' -> peta M M' -> commutes Σ M M' ->
+  commutes Σ (tLambda na A M) (tLambda na A' M').
 Proof.
   intros pA IA pM IM Γ Δ v HΔ HΓ Ht Hr.
   cbn in Ht. move/andP: Ht => [HA HM]. rewrite ofvT_shiftnP in HM.
@@ -1814,8 +1814,8 @@ Proof.
 Qed.
 
 Lemma commut_Prod Σ na A A' B B' :
-  peta A A' -> C3R.commutes Σ A A' -> peta B B' -> C3R.commutes Σ B B' ->
-  C3R.commutes Σ (tProd na A B) (tProd na A' B').
+  peta A A' -> commutes Σ A A' -> peta B B' -> commutes Σ B B' ->
+  commutes Σ (tProd na A B) (tProd na A' B').
 Proof.
   intros pA IA pB IB Γ Δ v HΔ HΓ Ht Hr.
   cbn in Ht. move/andP: Ht => [HA HB]. rewrite ofvT_shiftnP in HB.
@@ -1836,9 +1836,9 @@ Proof.
 Qed.
 
 Lemma commut_LetIn Σ na b b' ty ty' B B' :
-  peta b b' -> C3R.commutes Σ b b' -> peta ty ty' -> C3R.commutes Σ ty ty' ->
-  peta B B' -> C3R.commutes Σ B B' ->
-  C3R.commutes Σ (tLetIn na b ty B) (tLetIn na b' ty' B').
+  peta b b' -> commutes Σ b b' -> peta ty ty' -> commutes Σ ty ty' ->
+  peta B B' -> commutes Σ B B' ->
+  commutes Σ (tLetIn na b ty B) (tLetIn na b' ty' B').
 Proof.
   intros pb Ib pty Ity pB IB Γ Δ v HΔ HΓ Ht Hr.
   cbn in Ht. move/and3P: Ht => [Hb Hty HB]. rewrite ofvT_shiftnP in HB.
@@ -1867,8 +1867,8 @@ Proof.
 Qed.
 
 Lemma commut_App Σ f f' a a' :
-  peta f f' -> C3R.commutes Σ f f' -> peta a a' -> C3R.commutes Σ a a' ->
-  C3R.commutes Σ (tApp f a) (tApp f' a').
+  peta f f' -> commutes Σ f f' -> peta a a' -> commutes Σ a a' ->
+  commutes Σ (tApp f a) (tApp f' a').
 Proof.
   intros pf If pa Ia Γ Δ v HΔ HΓ Ht Hr.
   cbn in Ht. move/andP: Ht => [Hf Ha].
@@ -1899,7 +1899,7 @@ Proof.
 Qed.
 
 Lemma commut_Proj Σ pr c c' :
-  peta c c' -> C3R.commutes Σ c c' -> C3R.commutes Σ (tProj pr c) (tProj pr c').
+  peta c c' -> commutes Σ c c' -> commutes Σ (tProj pr c) (tProj pr c').
 Proof.
   intros pc Ic Γ Δ v HΔ HΓ Ht Hr. cbn in Ht.
   destruct (red1_tProj_inv Hr)
@@ -1927,8 +1927,8 @@ Qed.
 Section Kernel.
 Context {cf : checker_flags}.
 Lemma commut_eta (Σ : global_env) (wfΣ : ClosedBodies Σ) na A M M' :
-  peta M M' -> C3R.commutes Σ M M' ->
-  C3R.commutes Σ (tLambda na A (tApp (lift0 1 M) (tRel 0))) M'.
+  peta M M' -> commutes Σ M M' ->
+  commutes Σ (tLambda na A (tApp (lift0 1 M) (tRel 0))) M'.
 Proof.
   intros pM IM Γ Δ v HΔ HΓ Ht Hr.
   destruct (ofvT_eta_redex _ _ _ Ht) as [HA HM].
@@ -2022,8 +2022,8 @@ Proof.
 Qed.
 
 Lemma commut_Evar Σ ev l l' :
-  All2 (fun x y => peta x y × C3R.commutes Σ x y) l l' ->
-  C3R.commutes Σ (tEvar ev l) (tEvar ev l').
+  All2 (fun x y => peta x y × commutes Σ x y) l l' ->
+  commutes Σ (tEvar ev l) (tEvar ev l').
 Proof.
   intros Hl Γ Δ v HΔ HΓ Ht Hr. cbn in Ht.
   destruct (red1_tEvar_inv Hr) as (l1 & -> & Ho).
@@ -2049,8 +2049,8 @@ Notation upto_def :=
               × x.(rarg) = y.(rarg)).
 
 Notation commut_mfix Σ mfix mfix' :=
-  (All2 (fun d d' => (peta d.(dtype) d'.(dtype) × C3R.commutes Σ d.(dtype) d'.(dtype))
-                     × (peta d.(dbody) d'.(dbody) × C3R.commutes Σ d.(dbody) d'.(dbody))
+  (All2 (fun d d' => (peta d.(dtype) d'.(dtype) × commutes Σ d.(dtype) d'.(dtype))
+                     × (peta d.(dbody) d'.(dbody) × commutes Σ d.(dbody) d'.(dbody))
                      × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg)) mfix mfix').
 
 Lemma upto_def_refl d : upto_def d d.
@@ -2124,7 +2124,7 @@ Proof.
 Qed.
 
 Lemma commut_Fix Σ mfix mfix' idx :
-  commut_mfix Σ mfix mfix' -> C3R.commutes Σ (tFix mfix idx) (tFix mfix' idx).
+  commut_mfix Σ mfix mfix' -> commutes Σ (tFix mfix idx) (tFix mfix' idx).
 Proof.
   intros Hm Γ Δ v HΔ HΓ Ht Hr. cbn in Ht.
   destruct (red1_tFix_inv Hr) as [(m1 & -> & Ho)|(m1 & -> & Ho)].
@@ -2142,7 +2142,7 @@ Proof.
 Qed.
 
 Lemma commut_CoFix Σ mfix mfix' idx :
-  commut_mfix Σ mfix mfix' -> C3R.commutes Σ (tCoFix mfix idx) (tCoFix mfix' idx).
+  commut_mfix Σ mfix mfix' -> commutes Σ (tCoFix mfix idx) (tCoFix mfix' idx).
 Proof.
   intros Hm Γ Δ v HΔ HΓ Ht Hr. cbn in Ht.
   destruct (red1_tCoFix_inv Hr) as [(m1 & -> & Ho)|(m1 & -> & Ho)].
@@ -2204,13 +2204,13 @@ Lemma All2_upto_branch_refl brs :
 Proof. apply All2_same. intros; split; reflexivity. Qed.
 
 Lemma commut_Case Σ ci p p' c c' brs brs' :
-  All2 (fun x y => peta x y × C3R.commutes Σ x y) p.(pparams) p'.(pparams) ->
+  All2 (fun x y => peta x y × commutes Σ x y) p.(pparams) p'.(pparams) ->
   p.(puinst) = p'.(puinst) -> p.(pcontext) = p'.(pcontext) ->
-  peta p.(preturn) p'.(preturn) -> C3R.commutes Σ p.(preturn) p'.(preturn) ->
-  peta c c' -> C3R.commutes Σ c c' ->
+  peta p.(preturn) p'.(preturn) -> commutes Σ p.(preturn) p'.(preturn) ->
+  peta c c' -> commutes Σ c c' ->
   All2 (fun x y => (x.(bcontext) = y.(bcontext))
-                   × (peta x.(bbody) y.(bbody) × C3R.commutes Σ x.(bbody) y.(bbody))) brs brs' ->
-  C3R.commutes Σ (tCase ci p c brs) (tCase ci p' c' brs').
+                   × (peta x.(bbody) y.(bbody) × commutes Σ x.(bbody) y.(bbody))) brs brs' ->
+  commutes Σ (tCase ci p c brs) (tCase ci p' c' brs').
 Proof.
   intros Hpar Hu Hpc pr Ir pc Ic Hbrs Γ Δ v HΔ HΓ Ht Hr.
   cbn in Ht. move/and5P: Ht => [Hpars Hret Hpctx Hc Hbrsf].
@@ -2332,8 +2332,8 @@ Lemma set_array_type_id a : set_array_type a (array_type a) = a.
 Proof. now destruct a. Qed.
 
 Lemma commut_Prim Σ p p' :
-  onPrims (fun x y => peta x y × C3R.commutes Σ x y) eq p p' ->
-  C3R.commutes Σ (tPrim p) (tPrim p').
+  onPrims (fun x y => peta x y × commutes Σ x y) eq p p' ->
+  commutes Σ (tPrim p) (tPrim p').
 Proof.
   intros Hp Γ Δ v HΔ HΓ Ht Hr.
   destruct (red1_tPrim_inv Hr) as (arr & -> & Hcase).
@@ -2383,7 +2383,7 @@ Section Assembly.
 Context {cf : checker_flags}.
 (** Parallel η commutes with one β step, modulo [upto_domain_r]. The induction only
     dispatches: every [peta] constructor is its own [commut_*] lemma above. *)
-Lemma red1_peta_diamond (Σ : global_env) (wfΣ : ClosedBodies Σ) t u : peta t u -> C3R.commutes Σ t u.
+Lemma red1_peta_diamond (Σ : global_env) (wfΣ : ClosedBodies Σ) t u : peta t u -> commutes Σ t u.
 Proof.
   induction 1 using peta_ind_all.
   - eapply (commut_eta Σ wfΣ); eassumption.
