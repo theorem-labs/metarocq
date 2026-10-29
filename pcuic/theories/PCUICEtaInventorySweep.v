@@ -33,7 +33,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICUn
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaCtx
      PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind.
 From MetaRocq.PCUIC.Typing Require PCUICContextConversionTypEta PCUICUnivSubstitutionTypEta
-     PCUICWeakeningTypEta PCUICWeakeningEnvTypEta.
+     PCUICWeakeningTypEta PCUICWeakeningEnvTypEta PCUICInstTypEta PCUICRenameTypEta.
+From MetaRocq.PCUIC Require Import PCUICInstDef PCUICInstConv PCUICInstDefEta PCUICTypingEtaInd.
 From MetaRocq.PCUIC Require PCUICClosedTypEta BDToPCUICEta BDFromPCUICEta PCUICEtaT8Probe PCUICEtaT8BackSim.
 From MetaRocq.PCUIC Require Import PCUICValidityEta PCUICSREta.
 From Equations Require Import Equations.
@@ -392,6 +393,399 @@ Qed.
 
 Definition subslet_indsE_fit (F : ValForecastCopy14) :=
   (@subslet_indsE_landed : ltac:(let t := type of (@subslet_indsE F) in exact t)).
+
+(** ** Copy 10: the substitution lemmas, from the landed instantiation lemma
+
+  [ValForecastCopy10] (PCUICValidityEta.v:187-205: [isType_substitutionE], [substitutionE],
+  [substitution0E]) and [SRForecastCopy10]'s [substitution_letE], [substitution_wf_localE]
+  (PCUICSREta.v:134-143). Landed, MORE GENERAL: [type_instE] / [typing_instE]
+  (Typing/PCUICInstTypEta.v:377, :649), typing preservation under ANY well-typed
+  substitution [σ]; a substitution [s] for [Γ'] is the instance [σ := ⇑^#|Δ| (s ⋅n ids)].
+  Base proves the substitution lemmas exactly so ([PCUICSubstitution.v:1665-1887]); the glue,
+  [subslet_nth_errorE], [usubst_well_substE] and [subslet_well_substE], is base's proof with
+  the landed E lemmas ([shift_typingE], [meta_convE], [subslet_usubst] on the untyped
+  substitution). DISCHARGED, all five. *)
+
+Section SubstitutionFromInst.
+  Local Open Scope sigma_scope.
+
+  (** Base [subslet_nth_error] (PCUICSubstitution.v:84). *)
+  Lemma subslet_nth_errorE {cf : checker_flags} {Σ Γ s Δ decl n} :
+    subsletE Σ Γ s Δ ->
+    nth_error Δ n = Some decl ->
+    ∑ t, nth_error s n = Some t ×
+    let ty := subst0 (skipn (S n) s) (decl_type decl) in
+    Σ ;;; Γ |-E t : ty ×
+    match decl_body decl return Type with
+    | Some t' =>
+      let b := subst0 (skipn (S n) s) t' in
+      (t = b)
+    | None => unit
+    end.
+  Proof.
+    induction 1 in n |- *; simpl; auto; destruct n; simpl; try congruence.
+    - intros [= <-]. exists t; split; auto.
+      simpl. split; auto.
+    - intros. destruct decl as [na' [b|] ty]; cbn in *.
+      + specialize (IHX _ H) as [t' [hnth [hty heq]]]. exists t'; intuition auto.
+      + now apply IHX.
+    - intros [= <-]. eexists; split; eauto.
+      simpl. split; auto.
+    - apply IHX.
+  Qed.
+
+  (** Base [usubst_well_subst] (PCUICSubstitution.v:1665). *)
+  Lemma usubst_well_substE {cf : checker_flags} {Σ : global_env_ext} {Γ σ Δ} :
+    usubst Γ σ Δ ->
+    (forall x decl, nth_error Γ x = Some decl ->
+      Σ ;;; Δ |-E σ x : (decl.(decl_type)).[↑^(S x) ∘s σ]) ->
+    well_substE Σ Γ σ Δ.
+  Proof.
+    intros us hty. split; eauto.
+    intros x decl hnth. specialize (hty x decl hnth). now sigma.
+  Qed.
+
+  (** Base [subslet_well_subst] (PCUICSubstitution.v:1675). *)
+  Lemma subslet_well_substE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ} :
+    subsletE Σ Γ s Γ' ->
+    wf_localE Σ (Γ ,,, subst_context s 0 Δ) ->
+    well_substE Σ (Γ ,,, Γ' ,,, Δ) (⇑^#|Δ| (s ⋅n ids)) (Γ ,,, subst_context s 0 Δ).
+  Proof.
+    intros hs hsΔ.
+    apply usubst_well_substE.
+    - apply (subslet_usubst (subslet_untyped_subsletE_landed _ _ _ _ hs)).
+    - intros x decl.
+      case: nth_error_app_context => //.
+      { intros d hnth hn [= ->].
+        rewrite {1}Upn_eq subst_consn_lt; len => //. rewrite /subst_fn.
+        rewrite idsn_lt //.
+        eapply PCUICRenameTypEta.meta_convE.
+        - econstructor; auto.
+          rewrite nth_error_app_lt; len => //.
+          now rewrite nth_error_subst_context hnth.
+        - rewrite /subst_decl. simpl.
+          sigma. rewrite -shiftk_shift -subst_compose_assoc -shiftk_shift.
+          rewrite subst_shift_comm.
+          rewrite -subst_fn_subst_consn. lia_f_equal. }
+      { intros n hnth; len; intros hd [= ->].
+        pose proof (subslet_lengthE_landed hs).
+        move: hnth; case: nth_error_app_context => //.
+        * intros n hnth hx [= ->].
+          rewrite {1}Upn_eq subst_consn_ge; len => //; try lia.
+          rewrite subst_consn_compose.
+          rewrite subst_consn_lt; len; try lia.
+          unfold subst_fn. rewrite nth_error_map.
+          destruct (subslet_nth_errorE hs hnth) as [t [hnths [hty hb]]].
+          rewrite hnths /=. sigma in hty.
+          eapply PCUICRenameTypEta.meta_convE in hty.
+          2:now rewrite skipn_subst ?Upn_0; try lia.
+          eapply (PCUICWeakeningTypEta.shift_typingE (Δ := subst_context s 0 Δ)) in hty.
+          2:tas.
+          2:now len.
+          rewrite inst_assoc in hty.
+          rewrite Upn_eq.
+          eapply PCUICRenameTypEta.meta_convE; eauto.
+          eapply inst_ext.
+          rewrite (shift_subst_consn_ge (S x)); len; try lia.
+          rewrite subst_compose_assoc.
+          now replace (S x - #|Δ|) with (S (x - #|Δ|)) by lia.
+        * intros n hnth hn [= ->].
+          eapply PCUICRenameTypEta.meta_conv_allE.
+          2:reflexivity.
+          2:{ rewrite Upn_subst_consn_ge; try lia. rewrite compose_ids_l.
+              instantiate (1 := tRel (x - #|s|)).
+              rewrite /shiftk. lia_f_equal. }
+          2:{ econstructor; eauto. }
+          eapply PCUICRenameTypEta.meta_convE.
+          { econstructor; tas.
+            rewrite nth_error_app_context_ge; len; try lia.
+            rewrite H. erewrite <- hnth. lia_f_equal. }
+          rewrite lift0_inst.
+          rewrite Upn_eq.
+          rewrite shift_subst_consn_ge; len; try lia.
+          rewrite subst_consn_compose shift_subst_consn_ge; len; try lia.
+          rewrite H. rewrite shiftk_compose. lia_f_equal.
+      }
+  Qed.
+
+  (** [substitution_wf_localE] (PCUICSREta.v:139), base [substitution_wf_local] /
+      [All_local_env_inst] (PCUICSubstitution.v:1738, :1856): the context half of [type_instE],
+      read off a typing in the context ([tSort sProp]), then [wf_local_app_instE]
+      (Typing/PCUICInstTypEta.v:312). *)
+  Lemma substitution_wf_localE_landed :
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ},
+    subsletE Σ Γ s Γ' ->
+    wf_localE Σ (Γ ,,, Γ' ,,, Δ) ->
+    wf_localE Σ (Γ ,,, subst_context s 0 Δ).
+  Proof.
+    intros cf Σ wfΣ Γ Γ' s Δ sub wf.
+    pose proof (typeE_Sort _ _ sProp wf) as ty. forward ty; [now simpl|].
+    destruct (PCUICInstTypEta.type_instE Σ wfΣ _ _ _ ty) as [_ [HΓ _]].
+    have HΓ0 : wf_localE Σ Γ.
+    { apply All_local_env_app_inv in wf as [wf _]. now apply All_local_env_app_inv in wf as [wf _]. }
+    rewrite subst_context_inst_context.
+    eapply (PCUICInstTypEta.wf_local_app_instE _ (Γ ,,, Γ')); eauto.
+    - now eapply All_local_env_app_inv in HΓ as [].
+    - eapply (subslet_well_substE (Δ := [])) in sub;
+        rewrite ?subst_context_nil in sub |- *.
+      + apply sub.
+      + exact HΓ0.
+  Qed.
+
+  Definition substitution_wf_localE_fit (F : SRForecastCopy10) :=
+    (@substitution_wf_localE_landed
+       : ltac:(let t := type of (@substitution_wf_localE F) in exact t)).
+
+  (** [substitutionE] (PCUICValidityEta.v:195), base [substitution] (PCUICSubstitution.v:1795). *)
+  Lemma substitutionE_landed :
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ t T},
+    subsletE Σ Γ s Γ' ->
+    Σ ;;; Γ ,,, Γ' ,,, Δ |-E t : T ->
+    Σ ;;; Γ ,,, subst_context s 0 Δ |-E subst s #|Δ| t : subst s #|Δ| T.
+  Proof.
+    intros cf Σ wfΣ Γ Γ' s Δ t T hs ht.
+    have wfs := substitution_wf_localE_landed (wfΣ := wfΣ) hs (typingE_wf_local ht).
+    rewrite !subst_inst.
+    eapply (@PCUICInstTypEta.typing_instE cf Σ _ _ _ _ _ wfΣ); [exact wfs| |exact ht].
+    now eapply (subslet_well_substE (wfΣ := wfΣ)).
+  Qed.
+
+  Definition substitutionE_fit (F : ValForecastCopy10) :=
+    (@substitutionE_landed : ltac:(let t := type of (@substitutionE F) in exact t)).
+
+  (** [isType_substitutionE] (PCUICValidityEta.v:189), base [isType_substitution]
+      (PCUICSubstitution.v:1824). *)
+  Lemma isType_substitutionE_landed :
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ T},
+    subsletE Σ Γ s Γ' ->
+    isTypeE Σ (Γ ,,, Γ' ,,, Δ) T ->
+    isTypeE Σ (Γ ,,, subst_context s 0 Δ) (subst s #|Δ| T).
+  Proof.
+    intros cf Σ wfΣ Γ Γ' s Δ T hs HT.
+    apply lift_typing_f_impl with (1 := HT) => // ?? Ht.
+    eapply substitutionE_landed in Ht; tea.
+  Qed.
+
+  Definition isType_substitutionE_fit (F : ValForecastCopy10) :=
+    (@isType_substitutionE_landed : ltac:(let t := type of (@isType_substitutionE F) in exact t)).
+
+  (** [substitution0E] (PCUICValidityEta.v:201), base [substitution0] (PCUICSubstitution.v:1865). *)
+  Lemma substitution0E_landed :
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ n u U t T},
+    Σ ;;; Γ ,, vass n U |-E t : T -> Σ ;;; Γ |-E u : U ->
+    Σ ;;; Γ |-E t {0 := u} : T {0 := u}.
+  Proof.
+    intros cf Σ wfΣ Γ n u U t T Ht Hu.
+    eapply (substitutionE_landed (Γ' := [vass n U]) (Δ := [])); tea.
+    now eapply subslet_ass_tipE_landed.
+  Qed.
+
+  Definition substitution0E_fit (F : ValForecastCopy10) :=
+    (@substitution0E_landed : ltac:(let t := type of (@substitution0E F) in exact t)).
+
+  (** [substitution_letE] (PCUICSREta.v:134), base [substitution_let] (PCUICSubstitution.v:1876). *)
+  Lemma substitution_letE_landed :
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ n u U t T},
+    Σ ;;; Γ ,, vdef n u U |-E t : T ->
+    Σ ;;; Γ |-E t {0 := u} : T {0 := u}.
+  Proof.
+    intros cf Σ wfΣ Γ n u U t T Ht.
+    assert ((wf_localE Σ Γ) * (Σ ;;; Γ |-E u : U)%type) as [wfΓ tyu].
+    { apply typingE_wf_local in Ht.
+      depelim Ht; split; tas. now destruct l as (? & _). }
+    eapply (substitutionE_landed (Γ' := [vdef n u U]) (Δ := [])); tea.
+    eapply subslet_defE_landed; [constructor| |]; now rewrite !subst_empty.
+  Qed.
+
+  Definition substitution_letE_fit (F : SRForecastCopy10) :=
+    (@substitution_letE_landed : ltac:(let t := type of (@substitution_letE F) in exact t)).
+
+End SubstitutionFromInst.
+
+(** ** Copy 12: [wf_local_smash_endE] and [typing_expand_letsE] (PCUICSREta.v:168, :173)
+
+  Base [PCUICContexts.v:340-377, 636-694]; the only typed steps are [substitution],
+  [weakening_typing] and [subslet_lift], all discharged or landed above
+  ([substitutionE_landed], [weakening_typingE] (Typing/PCUICWeakeningTypEta.v:73),
+  [subslet_liftE_landed]). DISCHARGED, both. *)
+
+Lemma wf_local_rel_smash_context_genE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+  {Γ Δ Δ'} :
+  wf_localE Σ (Δ' ,,, Γ) ->
+  wf_local_relE Σ (Δ' ,,, Γ) Δ ->
+  wf_local_relE Σ Δ' (smash_context Δ Γ).
+Proof.
+  induction Γ in Δ |- *; simpl; auto.
+  intros wfΓ wfΔ. depelim wfΓ; simpl.
+  - apply IHΓ; auto. eapply All_local_env_app; auto.
+    + constructor; auto.
+    + eapply All_local_env_impl; eauto. simpl; intros.
+      now rewrite app_context_assoc.
+  - apply IHΓ; auto.
+    apply All_local_env_fold, All_local_env_impl with (1 := wfΔ).
+    intros Γ' j X.
+    apply lift_typing_f_impl with (1 := X) => // ?? HT.
+    rewrite Nat.add_0_r.
+    eapply (substitutionE_landed (wfΣ := wfΣ) (Γ' := [vdef na b t]) (s := [b])) in HT; eauto.
+    rewrite -{1}(subst_empty 0 b).
+    repeat constructor.
+    rewrite !subst_empty.
+    now eapply unlift_TermTyp.
+Qed.
+
+Lemma wf_local_smash_endE_landed :
+  forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ,
+  wf_localE Σ (Γ ,,, Δ) -> wf_localE Σ (Γ ,,, smash_context [] Δ).
+Proof.
+  intros cf Σ wfΣ Γ Δ wf.
+  apply All_local_env_app.
+  - now apply All_local_env_app_inv in wf.
+  - eapply (wf_local_rel_smash_context_genE (wfΣ := wfΣ)); [exact wf|constructor].
+Qed.
+
+Definition wf_local_smash_endE_fit (F : SRForecastCopy12) :=
+  (@wf_local_smash_endE_landed : ltac:(let t := type of (@wf_local_smash_endE F) in exact t)).
+
+(** Base [subslet_extended_subst] (PCUICContexts.v:636). *)
+Lemma subslet_extended_substE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ :
+  wf_localE Σ (Γ ,,, Δ) ->
+  subsletE Σ (Γ ,,, smash_context [] Δ)
+    (extended_subst Δ 0)
+    (lift_context (context_assumptions Δ) 0 Δ).
+Proof.
+  move=> wfΔ.
+  eapply All_local_env_app_inv in wfΔ as [wfΓ wfΔ].
+  induction Δ as [|[na [d|] ?] ?] in wfΔ |- *; simpl; try constructor.
+  - depelim wfΔ. repeat red in l, l0.
+    specialize (IHΔ wfΔ).
+    rewrite lift_context_snoc /lift_decl /= /map_decl /=.
+    len.
+    constructor => //.
+    apply unlift_TermTyp in l.
+    eapply (PCUICWeakeningTypEta.weakening_typingE (wfΣ := wfΣ) (Γ'' := smash_context [] Δ)) in l.
+    + len in l. simpl in l. simpl.
+      eapply (substitutionE_landed (wfΣ := wfΣ) (Δ := [])) in l; tea.
+    + eapply (wf_local_smash_endE_landed (wfΣ := wfΣ)). now eapply All_local_env_app.
+  - rewrite smash_context_acc. simpl.
+    rewrite /map_decl /= /map_decl /=. simpl.
+    depelim wfΔ.
+    specialize (IHΔ wfΔ).
+    rewrite lift_context_snoc /lift_decl /= /map_decl /=.
+    assert (wf_localE Σ (Γ ,,, smash_context [] Δ)).
+    { eapply (wf_local_smash_endE_landed (wfΣ := wfΣ)). now eapply All_local_env_app. }
+    assert (wf_localE Σ (Γ ,,, smash_context [] Δ ,, mkdecl na None
+        (subst0 (extended_subst Δ 0) (lift (context_assumptions Δ) #|Δ| decl_type)))).
+    { simpl. constructor; tas.
+      eapply lift_typing_f_impl with (f := fun t => _ (_ t)) (1 := l) => // ?? Hs.
+      eapply (PCUICWeakeningTypEta.weakening_typingE (wfΣ := wfΣ) (Γ'' := smash_context [] Δ)) in Hs; tas.
+      len in Hs.
+      now eapply (substitutionE_landed (wfΣ := wfΣ) (Δ := [])) in Hs. }
+    constructor.
+    + rewrite (lift_extended_subst _ 1).
+      rewrite -(PCUICWeakeningConv.lift_context_lift_context 1 _).
+      eapply (subslet_liftE_landed (wfΣ := wfΣ) _ [_]); eauto.
+    + eapply PCUICRenameTypEta.meta_convE.
+      * econstructor; tas. reflexivity.
+      * simpl. rewrite (lift_extended_subst _ 1).
+        rewrite distr_lift_subst. f_equal. len.
+        now rewrite simpl_lift; try lia.
+Qed.
+
+Lemma typing_expand_letsE_landed :
+  forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ t T,
+  Σ ;;; Γ ,,, Δ |-E t : T ->
+  Σ ;;; Γ ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T.
+Proof.
+  intros cf Σ wfΣ Γ Δ t T Ht.
+  rewrite /expand_lets /expand_lets_k.
+  pose proof (typingE_wf_local Ht) as wfΓΔ.
+  eapply (PCUICWeakeningTypEta.weakening_typingE (wfΣ := wfΣ) (Γ'' := smash_context [] Δ)) in Ht.
+  - len in Ht. simpl in Ht. simpl.
+    eapply (substitutionE_landed (wfΣ := wfΣ) (Δ := [])) in Ht; tea.
+    now eapply subslet_extended_substE.
+  - now eapply (wf_local_smash_endE_landed (wfΣ := wfΣ)).
+Qed.
+
+Definition typing_expand_letsE_fit (F : SRForecastCopy12) :=
+  (@typing_expand_letsE_landed : ltac:(let t := type of (@typing_expand_letsE F) in exact t)).
+
+(** [wf_local_expand_letsE] and [typing_expand_lets_genE] (copy 16, PCUICSREta.v:359, :365), base
+    [wf_local_expand_lets] / [typing_expand_lets_gen] (PCUICInductives.v:2360-2393): the same
+    three typed steps ([weakening_wf_localE] / [weakening_typingE], the substitution lemmas,
+    [subslet_extended_substE]). DISCHARGED, both. *)
+Lemma wf_local_expand_letsE_landed :
+  forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
+  forall {Γ Δ Γ' : list context_decl},
+  wf_localE Σ (Γ ,,, Δ ,,, Γ') ->
+  wf_localE Σ (Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ').
+Proof.
+  intros cf Σ wfΣ Γ Δ Γ' hwf.
+  rewrite /expand_lets_ctx /expand_lets_k_ctx.
+  destruct (All_local_env_app_inv hwf) as [wfΓΔ _].
+  rewrite -app_context_assoc in hwf.
+  eapply (PCUICWeakeningTypEta.weakening_wf_localE (wfΣ := wfΣ) (Γ'' := smash_context [] Δ)) in hwf.
+  - len in hwf. simpl in hwf. simpl.
+    rewrite lift_context_app app_context_assoc Nat.add_0_r in hwf.
+    eapply (substitution_wf_localE_landed (wfΣ := wfΣ)) in hwf; tea.
+    now eapply (subslet_extended_substE (wfΣ := wfΣ)).
+  - now eapply (wf_local_smash_endE_landed (wfΣ := wfΣ)).
+Qed.
+
+Definition wf_local_expand_letsE_fit (F : SRForecastCopy16) :=
+  (@wf_local_expand_letsE_landed : ltac:(let t := type of (@wf_local_expand_letsE F) in exact t)).
+
+Lemma typing_expand_lets_genE_landed :
+  forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
+  forall {Γ Δ Γ' : list context_decl} {t T : term},
+  Σ ;;; Γ ,,, Δ ,,, Γ' |-E t : T ->
+  Σ ;;; Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ' |-E
+    expand_lets_k Δ #|Γ'| t : expand_lets_k Δ #|Γ'| T.
+Proof.
+  intros cf Σ wfΣ Γ Δ Γ' t T Ht.
+  rewrite /expand_lets /expand_lets_k.
+  pose proof (typingE_wf_local Ht) as X.
+  rewrite -app_context_assoc in Ht.
+  eapply (PCUICWeakeningTypEta.weakening_typingE (wfΣ := wfΣ) (Γ'' := smash_context [] Δ)) in Ht.
+  - len in Ht. simpl in Ht. simpl.
+    rewrite lift_context_app app_context_assoc Nat.add_0_r in Ht.
+    eapply (substitutionE_landed (wfΣ := wfΣ)) in Ht; tea.
+    + now len in Ht.
+    + eapply (subslet_extended_substE (wfΣ := wfΣ)). now apply All_local_env_app_inv in X.
+  - eapply (wf_local_smash_endE_landed (wfΣ := wfΣ)). now apply All_local_env_app_inv in X.
+Qed.
+
+Definition typing_expand_lets_genE_fit (F : SRForecastCopy16) :=
+  (@typing_expand_lets_genE_landed
+     : ltac:(let t := type of (@typing_expand_lets_genE F) in exact t)).
+
+(** ** Whole classes with every field discharged: instances from landed theorems only *)
+
+Definition SRForecastCopy10_landed : SRForecastCopy10 :=
+  {| subslet_ass_tipE := @subslet_ass_tipE_landed;
+     subslet_defE := @subslet_defE_landed;
+     subslet_lengthE := @subslet_lengthE_landed;
+     subslet_untyped_subsletE := @subslet_untyped_subsletE_landed;
+     substitution_letE := @substitution_letE_landed;
+     substitution_wf_localE := @substitution_wf_localE_landed;
+     wf_arities_contextE := @wf_arities_contextE_landed |}.
+
+Definition SRForecastCopy12_landed : SRForecastCopy12 :=
+  {| sorts_local_ctx_wf_localE := @sorts_local_ctx_wf_localE_landed;
+     subslet_liftE := @subslet_liftE_landed;
+     typing_expand_letsE := @typing_expand_letsE_landed;
+     wf_local_smash_endE := @wf_local_smash_endE_landed |}.
+
+Definition SRForecastCopy14_landed : SRForecastCopy14 :=
+  {| on_minductive_wf_paramsE := @on_minductive_wf_paramsE_landed;
+     ws_cumul_ctx_pb_appE := @ws_cumul_ctx_pb_appE_landed |}.
+
+Definition ValForecastCopy10_landed : ValForecastCopy10 :=
+  {| isType_substitutionE := @isType_substitutionE_landed;
+     substitutionE := @substitutionE_landed;
+     substitution0E := @substitution0E_landed |}.
+
+Definition ValForecastCopy14_landed : ValForecastCopy14 :=
+  {| subslet_indsE := @subslet_indsE_landed |}.
 
 (** ** Copy 16 ([SRForecastCopy16], PCUICSREta.v:325-370) and copy 15 of T2a
     ([ValForecastCopy15], PCUICValidityEta.v:227-275) *)
