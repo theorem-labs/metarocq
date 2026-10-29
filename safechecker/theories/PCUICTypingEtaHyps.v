@@ -2774,16 +2774,6 @@ Proof.
            (type_Rel _ _ 0 (vdef si_na ti_F si_P) ti_wf_def eq_refl)).
 Qed.
 
-(** The spine of [I ti_F]. *)
-Lemma ti_tspine_IF : PCUICArities.typing_spine si_Σ [] (ind_type si_idecl)@[[]] [ti_F] (tSort sProp).
-Proof.
-  exact (fst (PCUICInductives.invert_type_mkApps_ind si_Σ [] si_ind [] [ti_F] (tSort sProp) si_mdecl si_idecl
-                si_wf si_declared_inductive (ti_IF_ty [] ti_wf_nil))).
-Qed.
-
-Lemma ti_spine_nil : PCUICSpine.spine_subst si_Σ [] [] [] [].
-Proof. split; [exact ti_wf_nil|exact ti_wf_nil|constructor|constructor]. Qed.
-
 (** Base reflexive comparisons. *)
 Lemma ti_ws_refl {pb} (Γ : context) (t : term) :
   is_closed_context Γ -> is_open_term Γ t -> si_Σ ;;; Γ ⊢ t ≤[pb] t.
@@ -3266,10 +3256,6 @@ Proof.
   exact (siW (PCUICInductives.on_minductive_wf_params_indices_inst (Σ := si_Σ) (wfΣ := si_wf)
                 si_declared_inductive [] ti_cons)).
 Qed.
-
-
-Lemma ti_Rel0_ty : si_Σ ;;; [] ,,, ti_ΓP ,,, [] |- tRel 0 : si_P.
-Proof. exact (type_Rel _ _ 0 (vass si_na si_P) ti_wf_ΓP eq_refl). Qed.
 
 (* non-degenerate *)
 (** The spine of [J A X] over the user arity of [J], which has a β-redex ([ji_tspine_JAX]); the conclusion
