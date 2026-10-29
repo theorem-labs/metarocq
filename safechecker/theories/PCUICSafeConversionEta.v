@@ -40,8 +40,8 @@
      [K4_virtual_descent_frame_left/_right], [K4_same_constant_args_call], and
      [conv_stack_ctx_eta X Γ π1 π2 := forall Σ, abstract_env_ext_rel X Σ ->
      ∥ ws_cumul_ctx_pbE Conv Σ (Γ ,,, stack_context_eta π1) (Γ ,,, stack_context_eta π2) ∥].
-     Base's [R_aux_irrelevance], [R_irrelevance], [R_cored], [R_aux_cored2], [R_cored2] are not
-     in K4: this file keeps them, over K4's R_aux/R.
+     Base's [R_aux_irrelevance], [R_irrelevance], [R_cored], [R_aux_cored2], [R_cored2] over the
+     K4 pack are in K4 since 767d50c6 (CONTRACTS K4 entry 07:47Z).
    ============================================================================================= *)
 From Stdlib Require Import ProofIrrelevance ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -138,14 +138,15 @@ Section Conversion.
 
   Local Notation pack := (PCUICSafeConversionEtaK4.pack X_type X).
   Local Notation mkpack := (PCUICSafeConversionEtaK4.mkpack X_type X).
-  Local Notation st := (PCUICSafeConversionEtaK4.st X_type X).
-  Local Notation tm1 := (PCUICSafeConversionEtaK4.tm1 X_type X).
-  Local Notation stk1 := (PCUICSafeConversionEtaK4.stk1 X_type X).
-  Local Notation tm2 := (PCUICSafeConversionEtaK4.tm2 X_type X).
-  Local Notation stk2 := (PCUICSafeConversionEtaK4.stk2 X_type X).
-  Local Notation swf1 := (PCUICSafeConversionEtaK4.swf1 X_type X).
-  Local Notation swf2 := (PCUICSafeConversionEtaK4.swf2 X_type X).
-  Local Notation wth := (PCUICSafeConversionEtaK4.wth X_type X).
+  (* K4's [Arguments st {_} _] are section-local, so Γ is explicit after the section: pass it as _. *)
+  Local Notation st := (PCUICSafeConversionEtaK4.st X_type X _).
+  Local Notation tm1 := (PCUICSafeConversionEtaK4.tm1 X_type X _).
+  Local Notation stk1 := (PCUICSafeConversionEtaK4.stk1 X_type X _).
+  Local Notation tm2 := (PCUICSafeConversionEtaK4.tm2 X_type X _).
+  Local Notation stk2 := (PCUICSafeConversionEtaK4.stk2 X_type X _).
+  Local Notation swf1 := (PCUICSafeConversionEtaK4.swf1 X_type X _).
+  Local Notation swf2 := (PCUICSafeConversionEtaK4.swf2 X_type X _).
+  Local Notation wth := (PCUICSafeConversionEtaK4.wth X_type X _).
   Local Notation wterm := (PCUICSafeConversionEtaK4.wterm X_type X).
   Local Notation R_aux := (PCUICSafeConversionEtaK4.R_aux X_type X).
   Local Notation R := (PCUICSafeConversionEtaK4.R X_type X).
@@ -158,6 +159,9 @@ Section Conversion.
   Local Notation K4_virtual_descent_frame_left := (PCUICSafeConversionEtaK4.K4_virtual_descent_frame_left X_type X).
   Local Notation K4_virtual_descent_frame_right := (PCUICSafeConversionEtaK4.K4_virtual_descent_frame_right X_type X).
   Local Notation K4_same_constant_args_call := (PCUICSafeConversionEtaK4.K4_same_constant_args_call X_type X).
+  Local Notation R_irrelevance := (PCUICSafeConversionEtaK4.R_irrelevance X_type X).
+  Local Notation R_cored := (PCUICSafeConversionEtaK4.R_cored X_type X).
+  Local Notation R_cored2 := (PCUICSafeConversionEtaK4.R_cored2 X_type X).
 
   Notation pzt u := (zipc (tm1 u) (stk1 u)) (only parsing).
   Notation pps1 u := (stack_pos_wf (tm1 u) (stk1 u) (swf1 u)) (only parsing).
@@ -172,92 +176,7 @@ Section Conversion.
     exact (@PCUICSafeConversionEtaK4.R_Acc _ _ X_type X normalization_in Γ u).
   Qed.
 
-  (* Base's remaining measure lemmas ([R_aux_irrelevance], [R_irrelevance], [R_cored],
-     [R_aux_cored2], [R_cored2]), over K4's R_aux; asked of EtaPosK4 for K4, local until
-     then. *)
   Notation eq_term Σ t u := (eq_term Σ Σ t u).
-
-  Lemma R_aux_irrelevance Γ x y z :
-    ((x.π1; x.π2.1), (existT (fun x => pos x × state) (` x.π2.2.π1) x.π2.2.π2)) =
-    ((y.π1; y.π2.1), (existT (fun x => pos x × state) (` y.π2.2.π1) y.π2.2.π2)) ->
-    R_aux Γ z x -> R_aux Γ z y.
-  Proof using Type.
-    destruct x as [t [pt [w [pw s]]]], y as [t' [pt' [w' [pw' s']]]].
-    destruct z as [tz [ptz [wz [pwz sz]]]].
-    cbn. intros [=]. subst. noconf H1. destruct w as [w wt], w' as [w' wt'].
-    cbn in *. subst w'. noconf H3.
-    unfold PCUICSafeConversionEtaK4.R_aux.
-    intros hr. depelim hr.
-    - now constructor.
-    - cbn in H.
-      eapply right_dlexmod with e. cbn.
-      depelim H.
-      * constructor. exact H.
-      * constructor 2.
-        depelim H.
-        + now constructor.
-        + eapply right_dlexmod with e0. cbn in H.
-          depelim H.
-          { constructor 1. cbn. exact H. }
-          { constructor 2. exact H. }
-  Qed.
-
-  Lemma R_irrelevance Γ x y z :
-    (st x, tm1 x, stk1 x, tm2 x, stk2 x) =
-    (st y, tm1 y, stk1 y, tm2 y, stk2 y) ->
-    R Γ z x -> R Γ z y.
-  Proof using Type.
-    destruct x as [s t π t' π' f1 f2 h], y as [s0 u ρ u' ρ' g1 g2 h']; cbn.
-    intros [=]; subst.
-    rewrite (uip f1 g1) (uip f2 g2).
-    unfold PCUICSafeConversionEtaK4.R. eapply R_aux_irrelevance; cbn.
-    reflexivity.
-  Qed.
-
-  Lemma R_cored :
-    forall Γ p1 p2,
-      (forall Σ (wfΣ : abstract_env_ext_rel X Σ), cored Σ Γ (pzt p1) (pzt p2)) ->
-      R Γ p1 p2.
-  Proof using Type.
-    intros Γ p1 p2 h.
-    left. intros. eapply cored_cored'. eapply h; eauto.
-  Qed.
-
-  Lemma R_aux_cored2 :
-    forall Γ t1 t2 (p1 : pos t1) (p2 : pos t2) w1 w2 q1 q2 s1 s2,
-      (eqt t1 t2) ->
-      ` p1 = ` p2 ->
-      (forall Σ (wfΣ : abstract_env_ext_rel X Σ), cored' Σ Γ (` w1) (` w2)) ->
-      R_aux Γ (t1 ; (p1, (w1 ; (q1, s1)))) (t2 ; (p2, (w2 ; (q2, s2)))).
-  Proof using Type.
-    intros Γ t1 t2 [p1 hp1] [p2 hp2] [t1' h1'] [t2' h2'] q1 q2 s1 s2 e1 e2 h.
-    cbn in e2. cbn in h. subst.
-    unshelve eright.
-    - auto.
-    - unfold R_aux_obligations_obligation_1. simpl.
-      match goal with
-      | |- context [ exist p2 ?hp1 ] =>
-        assert (e : hp1 = hp2) by eapply uip
-      end.
-      rewrite e.
-      right.
-      left. assumption.
-  Qed.
-
-  Lemma R_cored2 :
-    forall Γ p1 p2,
-      (eqt (pzt p1) (pzt p2)) ->
-      ` (pps1 p1) = ` (pps1 p2) ->
-      (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-          cored Σ Γ (` (pwt p1)) (` (pwt p2))) ->
-      R Γ p1 p2.
-  Proof using Type.
-    intros Γ [s1 t1 π1 ρ1 t1' f1 g1 h1] [s2 t2 π2 ρ2 t2' f2 g2 h2] e1 e2 h. simpl in *.
-    eapply R_aux_cored2. all: simpl. all: auto.
-    destruct s1, s2.
-    all: intros; eapply cored_cored'.
-    all: eauto.
-  Qed.
 
 
   Definition abstract_env_compare_global_instance := compare_global_instance (abstract_env_lookup X) (abstract_env_compare_universe X).
@@ -363,19 +282,18 @@ Section Conversion.
     now rewrite app_nil_r.
   Qed.
 
-  Ltac reduce_stack_facts Σ wfΣ :=
+  (* E: reduction is called only through [reduce_args_E] (REDUCE contract); its four facts. *)
+  Ltac reduce_args_facts Σ wfΣ :=
     repeat
       match goal with
-      | [H: (?a, ?b) = reduce_stack ?f _ ?X ?Γ ?t ?π ?h |- _] =>
+      | [H: (?a, ?b) = reduce_args_E ?f ?XT ?X ?Γ ?t ?args ?h |- _] =>
         let rid := fresh "r" in
-        let decompid := fresh "d" in
         let whid := fresh "w" in
         let isr := fresh "isr" in
-        pose proof (reduce_stack_sound f _ X Σ wfΣ Γ t π h) as [rid];
-        pose proof (reduce_stack_decompose f _ X Γ t π h) as decompid;
-        pose proof (reduce_stack_whnf f _ X Γ t π h Σ wfΣ) as whid;
-        pose proof (reduce_stack_isred f _ X Γ t π h) as isr;
-        rewrite <- H in rid, decompid, whid, isr; cbn in rid, decompid, whid, isr;
+        pose proof (reduce_args_E_sound f XT X Σ wfΣ Γ t args h) as [rid];
+        pose proof (reduce_args_E_whnf f XT X Σ wfΣ Γ t args h) as [whid];
+        pose proof (reduce_args_E_isred f XT X Γ t args h) as isr;
+        rewrite <- H in rid, whid, isr; cbn in rid, whid, isr;
         clear H
       end.
 
@@ -454,7 +372,7 @@ Section Conversion.
       | [|- context[zipp ?t ?π]] => rewrite (zipp_as_mkApps t π)
       end.
 
-  Ltac simpl_reduce_stack Σ wfΣ := reduce_stack_facts Σ wfΣ ; simpl_stacks.
+  Ltac simpl_reduce_stack Σ wfΣ := reduce_args_facts Σ wfΣ ; simpl_stacks.
 
   (* Tailored view for isconv_prog and precondition for fallback case *)
   Equations prog_discr (t1 t2 : term) : Prop :=
@@ -762,7 +680,7 @@ Section Conversion.
     destruct hh as [na [A' [B' [? [? ?]]]]].
     eexists. eassumption.
   Qed.
-  Transparent reduce_stack.
+  Transparent reduce_args_E.
 
   Derive NoConfusion NoConfusionHom for option.
 
@@ -941,22 +859,21 @@ Section Conversion.
     pose proof (heΣ _ wfΣ); sq.
     eapply welltyped_zipc_stack_context ; eauto.
   Qed.
-  Transparent reduce_stack.
+  Transparent reduce_args_E.
 
   (** The machine's facts on the [zipp]-form run: its result reduces from the
-      application, has no stack tail, and is a weak-head normal form. *)
+      application and is a weak-head normal form (reduce_args_E's facts). *)
   Ltac prim_step_facts Σ wfΣ eqr :=
     match type of eqr with
-    | _ = reduce_stack ?f _ ?X ?Γ ?t ?π ?hh =>
-      let r := fresh "r" in let d := fresh "d" in let wh := fresh "wh" in
-      pose proof (reduce_stack_sound f _ X Σ wfΣ Γ t π hh) as [r];
-      pose proof (reduce_stack_decompose f _ X Γ t π hh) as d;
-      pose proof (reduce_stack_whnf f _ X Γ t π hh Σ wfΣ) as wh;
-      rewrite <- eqr in r, d, wh; cbn in r, d, wh
+    | _ = reduce_args_E ?f ?XT ?X ?Γ ?t ?args ?hh =>
+      let r := fresh "r" in let wh := fresh "wh" in
+      pose proof (reduce_args_E_sound f XT X Σ wfΣ Γ t args hh) as [r];
+      pose proof (reduce_args_E_whnf f XT X Σ wfΣ Γ t args hh) as [wh];
+      rewrite <- eqr in r, wh; cbn in r, wh
     end.
 
-  Lemma unfold_one_prim_shape Γ c u π h t' ξ :
-    Some (t', ξ) = unfold_one_prim Γ c u π h ->
+  Lemma unfold_one_prim_shape Γ c u π hna h t' ξ :
+    Some (t', ξ) = unfold_one_prim Γ c u π hna h ->
     ∑ args ρ l,
       [× decompose_stack π = (args, ρ), ξ = appstack l ρ,
          (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
@@ -991,8 +908,8 @@ Section Conversion.
 
   (** What a successful step gives a re-entry: the stack keeps its context, the
       application reduces in [zipp] and in [zipc] form, and the step is strict. *)
-  Lemma unfold_one_prim_facts Γ c u π h t' ξ :
-    Some (t', ξ) = unfold_one_prim Γ c u π h ->
+  Lemma unfold_one_prim_facts Γ c u π hna h t' ξ :
+    Some (t', ξ) = unfold_one_prim Γ c u π hna h ->
     (stack_context ξ = stack_context π) ×
     (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
        ∥ red Σ (Γ ,,, stack_context π) (zipp (tConst c u) π) (zipp t' ξ) ∥) ×
@@ -2596,6 +2513,10 @@ Equations (noeqns) isconv_array_values_aux
   (* See https://github.com/coq/coq/blob/master/kernel/reduction.ml#L367 *)
   (* T1 (rev 14 B4): every view except [prog_view_other] needs both stacks without Eta_arg; the
      equation [hg] is passed to the helper Equations. On false: the deliberate refusal point. *)
+  (* Whether [prog_viewc] answers [prog_view_other] (the T1 refusal branch keeps [t1], [t2]). *)
+  Definition prog_view_other_b (t1 t2 : term) : bool :=
+    match prog_viewc t1 t2 with prog_view_other _ _ _ => true | _ => false end.
+
   Opaque reduce_args_E.
   Equations(noeqns) _isconv_prog (Γ : context) (leq : conv_pb)
             (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
@@ -2610,9 +2531,9 @@ Equations (noeqns) isconv_array_values_aux
 
     _isconv_prog Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2 ir1 ir2 aux
     with inspect (no_Eta_arg π1 && no_Eta_arg π2) := {
-    | @exist false _ with prog_viewc t1 t2 := {
-      | prog_view_other t1 t2 h := isconv_fallback leq t1 π1 t2 π2 aux ;
-      | _ := no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
+    | @exist false _ with inspect (prog_view_other_b t1 t2) := {
+      | @exist true hother := isconv_fallback leq t1 π1 t2 π2 aux ;
+      | @exist false _ := no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
       } ;
     | @exist true hg with prog_viewc t1 t2 := {
     | prog_view_App _ _ _ _ := False_rect _ _;
@@ -2628,14 +2549,14 @@ Equations (noeqns) isconv_array_values_aux
                              (subst_instance u' body) π2 aux ;
             (* Bodiless, inductive or not found: a registered operation may
                still take a machine step before the answer is no (§7.3). *)
-            | @exist _ _ := unfold_prims_args Γ leq c u π1 f1 h1 c' u' π2 f2 h2 hx hg hwf1 hwf2 aux
+            | @exist _ _ := unfold_prims_args Γ leq c u π1 f1 h1 c' u' π2 f2 h2 hx (eq_sym hg) hwf1 hwf2 aux
             }
           } ;
         (* If universes are different, we unfold one of the constants *)
-        | @exist false uneq_u := unfold_constants Γ leq c u π1 f1 h1 c' u' π2 f2 h2 _ hx hg hwf1 hwf2 aux
+        | @exist false uneq_u := unfold_constants Γ leq c u π1 f1 h1 c' u' π2 f2 h2 _ hx (eq_sym hg) hwf1 hwf2 aux
         } ;
       (* If the two constants are different, we unfold one of them *)
-      | right uneq_c := unfold_constants Γ leq c u π1 f1 h1 c' u' π2 f2 h2 _ hx hg hwf1 hwf2 aux
+      | right uneq_c := unfold_constants Γ leq c u π1 f1 h1 c' u' π2 f2 h2 _ hx (eq_sym hg) hwf1 hwf2 aux
       } ;
 
     | prog_view_Lambda na A1 t1 na' A2 t2
@@ -2688,11 +2609,11 @@ Equations (noeqns) isconv_array_values_aux
           | @exist cred' eq3 with inspect (eqb_term cred' c') := {
             | @exist true eq4 with inspect (eqb ci ci') := {
               | @exist true eq5
-                  with isconv_predicate Γ ci p c brs π1 f1 _ ci' p' c' brs' π2 f2 _ hx hg hwf1 hwf2 _ aux := {
+                  with isconv_predicate Γ ci p c brs π1 f1 _ ci' p' c' brs' π2 f2 _ hx (eq_sym hg) hwf1 hwf2 _ aux := {
                 | Success convp with isconv_red_raw Conv
                                   c (Case_discr ci p brs :: π1)
                                   c' (Case_discr ci' p' brs' :: π2) aux := {
-                  | Success convdiscr with isconv_branches' Γ ci p c brs π1 f1 _ ci' p' c' brs' π2 f2 _ hx hg hwf1 hwf2 _ _ aux := {
+                  | Success convdiscr with isconv_branches' Γ ci p c brs π1 f1 _ ci' p' c' brs' π2 f2 _ hx (eq_sym hg) hwf1 hwf2 _ _ aux := {
                     | Success convbrs with isconv_args_raw leq (tCase ci p c brs) π1 (tCase ci' p' c' brs') π2 aux := {
                       | Success convargs := yes ;
                       | Error e := no e
@@ -2780,7 +2701,7 @@ Equations (noeqns) isconv_array_values_aux
             }
           } ;
         | @exist None eq1 with inspect (eqb idx idx') := {
-          | @exist true eq4 with isws_cumul_pb_Fix IndFix Γ mfix idx π1 f1 _ mfix' idx' π2 f2 _ hx hg hwf1 hwf2 _ aux := {
+          | @exist true eq4 with isws_cumul_pb_Fix IndFix Γ mfix idx π1 f1 _ mfix' idx' π2 f2 _ hx (eq_sym hg) hwf1 hwf2 _ aux := {
             | Success convfix with isconv_args_raw leq (tFix mfix idx) π1 (tFix mfix' idx') π2 aux := {
               | Success convargs := yes ;
               | Error e := no e
@@ -2799,7 +2720,7 @@ Equations (noeqns) isconv_array_values_aux
 
     | prog_view_CoFix mfix idx mfix' idx'
       with inspect (eqb idx idx') := {
-      | @exist true eq4 with isws_cumul_pb_Fix CoIndFix Γ mfix idx π1 f1 _ mfix' idx' π2 f2 _ hx hg hwf1 hwf2 _ aux := {
+      | @exist true eq4 with isws_cumul_pb_Fix CoIndFix Γ mfix idx π1 f1 _ mfix' idx' π2 f2 _ hx (eq_sym hg) hwf1 hwf2 _ aux := {
         | Success convfix with isconv_args_raw leq (tCoFix mfix idx) π1 (tCoFix mfix' idx') π2 aux := {
           | Success convargs := yes ;
           | Error e := no e
@@ -2833,7 +2754,7 @@ Equations (noeqns) isconv_array_values_aux
                 (array_type a') (PrimArray_ty a'.(array_level) a'.(array_value) a'.(array_default) :: π2) aux := {
               | Success convdiscrty with isconv_red_raw Conv (array_default a) (PrimArray_def a.(array_level) a.(array_value) a.(array_type) :: π1)
                   (array_default a') (PrimArray_def a'.(array_level) a'.(array_value) a'.(array_type) :: π2) aux := {
-                | Success convdiscrdef with isconv_array_values Γ a π1 f1 _ a' π2 f2 _ hx hg hwf1 hwf2 aux := {
+                | Success convdiscrdef with isconv_array_values Γ a π1 f1 _ a' π2 f2 _ hx (eq_sym hg) hwf1 hwf2 aux := {
                   | Success convdiscrval := yes
                   | Error e := no (ArrayNotConvertibleValues (Γ ,,, stack_context π1) a (Γ ,,, stack_context π2) a' e)
                 }
@@ -4251,7 +4172,7 @@ Equations (noeqns) isconv_array_values_aux
         Some (subst_instance u body, π) ;
       (* bodiless or not found: a registered operation may take a machine step
          (design §7.3, last paragraph) *)
-      | @exist _ _ := unfold_one_prim Γ c u π hna h
+      | @exist _ _ := unfold_one_prim Γ c u π (eq_sym hna) h
       }
     } ;
 
@@ -4715,7 +4636,7 @@ Equations (noeqns) isconv_array_values_aux
 
     isconv_full s Γ t1 π1 f1 h1 t2 π2 f2 h2 hx :=
       Fix_F (R := R Γ)
-            (fun '(mkpack s' t1' π1' t2' π2' f1' f2' h2') =>
+            (fun '(PCUICSafeConversionEtaK4.mkpack s' t1' π1' t2' π2' f1' f2' h2') =>
               wtp Γ t1' π1' ->
               wtp Γ t2' π2' ->
               Ret s' Γ t1' π1' t2' π2'
@@ -4796,7 +4717,7 @@ Equations (noeqns) isconv_array_values_aux
      Under decision (C) a refusal claims nothing, and [ConversionResult] carries no
      [~P] payload to prove them from. *)
 
-  Transparent reduce_stack.
+  Transparent reduce_args_E.
 
 End Conversion.
 
