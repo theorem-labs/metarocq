@@ -250,6 +250,9 @@ theories/PCUICEtaT8Probe.v
 # Bidirectional completeness over typingE (row T6, the E copy of BDFromPCUIC; T8 forecast), and its satisfying instances
 theories/Bidirectional/BDFromPCUICEta.v
 theories/Bidirectional/BDFromPCUICEtaInstances.v
+# Principality over typingE (row T2b, the E copy of PCUICPrincipality), and its satisfying instances
+theories/PCUICPrincipalityEta.v
+theories/PCUICPrincipalityEtaInstances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
 # T8 step 3: R_c* on canon T read back as base red on T (backward simulation through canon)
