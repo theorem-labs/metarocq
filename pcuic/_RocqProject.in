@@ -187,6 +187,10 @@ theories/PCUICEtaA6.v
 theories/PCUICEtaA6Ind.v
 theories/PCUICEtaA6More.v
 theories/PCUICContextConversionEta.v
+# Context-relative facts for ws_cumul_pbE and ws_cumul_ctx_pbE, and their satisfying instances
+theories/PCUICWsCumulEtaCtx.v
+theories/PCUICWsCumulEtaCtxTyp.v
+theories/PCUICWsCumulEtaCtxInstances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaC1b.v
