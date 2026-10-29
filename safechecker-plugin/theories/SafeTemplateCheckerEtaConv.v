@@ -41,11 +41,16 @@ Section EtaOracle.
     (Γ : context) (pb : conv_pb)
     (t : term) (ht : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t)
     (u : term) (hu : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ u) : option ConversionError :=
-    match isconv_term X_type X (normalization_in := normalization_in)
+    match isconv_term X_type X (normalization_in := normalization_in) (reduce_factsE := reduce_factsE) (conv_factsE := conv_factsE)
             closed_context_conversionE welltypedE_context Γ pb t ht u hu with
     | ConvSuccess => None
     | ConvError e => Some e
     end.
+
+  (* Without this hint the kernel check of the [Qed] below did not finish (> 60 s, out/probe-or2.log): the kernel
+     unfolded [isconv_term] instead of comparing its arguments. Unfolding last costs nothing in correctness
+     (the kernel still unfolds when needed); with it the [Qed] takes 0.002 s (out/probe-or3.log). *)
+  Local Strategy opaque [isconv_term].
 
   Lemma eta_oracle_conv_sound (X_type : abstract_env_impl) (X : X_type.π2.π1)
     {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ} Γ pb t ht u hu :
@@ -53,9 +58,9 @@ Section EtaOracle.
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ ws_cumul_pbE pb Σ Γ t u ∥.
   Proof.
     intros hc Σ wfΣ. unfold eta_oracle_conv in hc.
-    destruct (isconv_term X_type X (normalization_in := normalization_in)
+    destruct (isconv_term X_type X (normalization_in := normalization_in) (reduce_factsE := reduce_factsE) (conv_factsE := conv_factsE)
                 closed_context_conversionE welltypedE_context Γ pb t ht u hu) eqn:hconv; [|discriminate].
-    exact (isconv_term_sound X_type X (normalization_in := normalization_in)
+    exact (isconv_term_sound X_type X (normalization_in := normalization_in) (reduce_factsE := reduce_factsE) (conv_factsE := conv_factsE)
              closed_context_conversionE welltypedE_context Σ wfΣ Γ pb t ht u hu hconv).
   Qed.
 
