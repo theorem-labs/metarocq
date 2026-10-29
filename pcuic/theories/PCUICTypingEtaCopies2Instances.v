@@ -867,3 +867,221 @@ Definition on_wf_global_env_implE_inst :
   on_global_env cumulSpecE0 (fun Σ Γ _ => wf_localE Σ Γ) si_env :=
   @on_wf_global_env_implE _ si_env si_wfE (lift_typing typingE) (fun Σ Γ _ => wf_localE Σ Γ)
     (fun Σ Γ j _ _ _ h => lift_typingE_wf_local h) si_wfE.
+
+(** ** [PCUICContextsEta]
+
+  In [si_Σ]: the context [x : Prop, y : x] ([c2_Γxy]) and the context
+  [z := ∀P:Prop. P : Prop, y : z] ([c2_Γlet]), which smashing changes into
+  [y : ∀P:Prop. P]. *)
+
+Lemma c2_vass_s_x : lift_typing typingE si_Σ fi_Γ1 (j_vass_s si_na (tRel 0) sProp).
+Proof. split; [exact tt|]. exists sProp. split; [exact ci_x_typed|]. split; reflexivity. Qed.
+Lemma c2_tlc : type_local_ctx (lift_typing typingE) si_Σ fi_Γ1 [vass si_na (tRel 0)] sProp.
+Proof. split; [exact ci_wf_sort_P|exact c2_vass_s_x]. Qed.
+Lemma c2_slc : sorts_local_ctx (lift_typing typingE) si_Σ fi_Γ1 [vass si_na (tRel 0)] [sProp].
+Proof. split; [constructor|exact c2_vass_s_x]. Qed.
+Lemma c2_tlc_P : type_local_ctx (lift_typing typingE) si_Σ [] c2_x (Sort.super sProp).
+Proof. split; [exact ci_wf_sort_super_P|exact (ci_vass_s_P [] localenv_nil)]. Qed.
+Lemma c2_slc_P : sorts_local_ctx (lift_typing typingE) si_Σ [] c2_x [Sort.super sProp].
+Proof. split; [constructor|exact (ci_vass_s_P [] localenv_nil)]. Qed.
+
+Definition c2_Γlet : context := [vass si_na (tRel 0); vdef si_na ci_False fi_P].
+Lemma c2_wf_Γlet : wf_localE si_Σ c2_Γlet.
+Proof. apply localenv_cons_abs; [exact c2_wf_d|exact (ci_vass_Prop _ (tRel 0) c2_d_typed)]. Qed.
+Lemma c2_rel_let : wf_local_relE si_Σ ([] ,,, [vdef si_na ci_False fi_P]) [vass si_na (tRel 0)].
+Proof. apply localenv_cons_abs; [constructor|exact (ci_vass_Prop _ (tRel 0) c2_d_typed)]. Qed.
+
+Lemma c2_conv_ctx_d : All2_fold (fun Δ Δ' => conv_decls cumulSpecE0 ci_Σu ([] ,,, Δ) ([] ,,, Δ')) [ci_d] [ci_d'].
+Proof. constructor; [constructor|exact ci_conv_decls]. Qed.
+(** [λ_:Prop. Type@{l0} _] against [Type@{l1}]: both contexts are assumptions. *)
+Definition conv_context_smashE_inst :=
+  conv_context_smashE ci_Σu [] [ci_d] [ci_d'] ltac:(repeat constructor) c2_conv_ctx_d.
+Definition type_local_ctx_wf_localE_inst := type_local_ctx_wf_localE si_Σ fi_Γ1 _ _ ci_wf_Γ1 c2_tlc.
+Definition sorts_local_ctx_wf_localE_inst := sorts_local_ctx_wf_localE si_Σ fi_Γ1 _ _ ci_wf_Γ1 c2_slc.
+(* WEAK (this and the two [*_local_ctx_instantiateE_inst]): proves satisfiability
+   only; [I] is monomorphic, so its only instance is the empty one, which changes
+   nothing. *)
+Definition instantiate_minductiveE_inst :=
+  instantiate_minductiveE si_Σ si_kn si_mdecl [] fi_Γ1 (tRel 0) fi_P si_wfE si_declared_minductive' eq_refl
+    ci_x_typed.
+Definition type_local_ctx_instantiateE_inst :=
+  type_local_ctx_instantiateE si_Σ si_kn si_mdecl fi_Γ1 [vass si_na (tRel 0)] [] sProp si_wfE
+    si_declared_minductive' c2_tlc eq_refl.
+Definition sorts_local_ctx_instantiateE_inst :=
+  sorts_local_ctx_instantiateE si_Σ si_kn si_mdecl fi_Γ1 [vass si_na (tRel 0)] [] [sProp] si_wfE
+    si_declared_minductive' c2_slc eq_refl.
+(** [y : x] under [x := ∀P:Prop. P]. *)
+Definition subst_type_local_ctxE_inst :=
+  subst_type_local_ctxE si_Σ [] c2_x [vass si_na (tRel 0)] [ci_False] sProp si_wfE ci_wf_Γ1 c2_tlc c2_sub.
+Definition subst_sorts_local_ctxE_inst :=
+  subst_sorts_local_ctxE si_Σ [] c2_x [vass si_na (tRel 0)] [ci_False] [sProp] si_wfE ci_wf_Γ1 c2_slc c2_sub.
+Definition weaken_type_local_ctxE_inst :=
+  weaken_type_local_ctxE si_Σ fi_Γ1 [] c2_x (Sort.super sProp) si_wfE ci_wf_Γ1 c2_tlc_P.
+Definition weaken_sorts_local_ctxE_inst :=
+  weaken_sorts_local_ctxE si_Σ fi_Γ1 [] c2_x [Sort.super sProp] si_wfE ci_wf_Γ1 c2_slc_P.
+(** Smashing the let [z := ∀P:Prop. P] under [y : z]. *)
+Definition wf_local_rel_smash_context_genE_inst :=
+  @wf_local_rel_smash_context_genE _ si_Σ si_wfE [vdef si_na ci_False fi_P] [vass si_na (tRel 0)] []
+    c2_wf_d c2_rel_let.
+Definition wf_local_rel_smash_contextE_inst :=
+  @wf_local_rel_smash_contextE _ si_Σ si_wfE c2_Γlet [] c2_wf_Γlet.
+Definition wf_local_smash_endE_inst := @wf_local_smash_endE _ si_Σ si_wfE [] c2_Γlet c2_wf_Γlet.
+Definition wf_local_rel_emptyE_inst := snd (@wf_local_rel_emptyE _ si_Σ c2_Γlet) c2_wf_Γlet.
+Definition wf_local_smash_contextE_inst := @wf_local_smash_contextE _ si_Σ si_wfE c2_Γlet c2_wf_Γlet.
+(** [x := x] lifted over [y : x]. *)
+Definition subslet_liftE_inst := @subslet_liftE _ si_Σ si_wfE fi_Γ1 [vass si_na (tRel 0)] [tRel 0] c2_x
+  c2_wf_Γxy c2_sub_x.
+Definition subslet_extended_substE_inst := @subslet_extended_substE _ si_Σ si_wfE [] c2_Γlet c2_wf_Γlet.
+Definition typing_expand_letsE_inst :=
+  @typing_expand_letsE _ si_Σ si_wfE [] [vdef si_na ci_False fi_P] (tRel 0) _ c2_d_typed.
+
+(** ** [PCUICAritiesEta]
+
+  The canonical typing spines: [c (∀P:Prop. P) : (λ_:Prop. I _) (∀P:Prop. P)] in
+  [si_Σ] ([c2_sp], an η-expanded head at its end), and the empty spine from
+  [G (λy:Prop. F y)] to [G F] in [rf_Σ] ([c2_sp_wc], an η step). The let-type
+  [let z := ∀P:Prop. P : Prop in z] ([c2_letT]) exercises the let-in lemmas. *)
+
+Definition c2_I_A : term := tApp (tInd si_ind []) g_A.
+Lemma cp_cstr_app_typed : si_Σ ;;; [] |-E tApp (tConstruct si_ind 0 []) g_A : c2_I_A.
+Proof.
+  exact (typeE_App _ _ (tConstruct si_ind 0 []) si_na si_P (cp_Ix 0) _ g_A
+           (cp_cstr_prod_typed [] localenv_nil) (cp_cstr_typed [] localenv_nil) c2_False0).
+Qed.
+Lemma c2_I_A_typed : si_Σ ;;; [] |-E c2_I_A : tSort sProp.
+Proof.
+  unfold c2_I_A.
+  exact (typeE_App _ _ (tInd si_ind []) si_na si_P (tSort sProp) _ g_A
+           (cp_arity_typedE [] localenv_nil) (cp_ind_typed [] localenv_nil) c2_False0).
+Qed.
+Lemma c2_isT_I_A : isTypeE si_Σ [] c2_I_A.
+Proof. exact (has_sort_isTypeE _ c2_I_A_typed). Qed.
+Lemma c2_ws_I_A : ws_cumul_pbE Cumul si_Σ [] c2_I_A g_T.
+Proof.
+  apply (into_ws_cumul_pbE_spec (Σ := si_Σ) (wfΣ := si_cb) g_cumul); [reflexivity|reflexivity|reflexivity].
+Qed.
+Lemma c2_sp : typing_spineE si_Σ [] (tProd si_na si_P (cp_Ix 0)) [g_A] g_T.
+Proof.
+  eapply type_spine_consE.
+  - exact g_cstr_isType.
+  - exact g_cstr_isType.
+  - exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) (wfΣ := si_wfE) _ _ g_cstr_isType).
+  - exact c2_False0.
+  - apply type_spine_nilE; [exact c2_isT_I_A|exact g_T_isType|exact c2_ws_I_A].
+Qed.
+Lemma c2_sp_wc : typing_spineE rf_Σ wc_Γ wc_T [] wc_U.
+Proof. apply type_spine_nilE; [exact (wc_isType _ wc_T_typed)|exact (wc_isType _ wc_U_typed)|exact (c2_wc_ws Cumul)]. Qed.
+
+Definition c2_letT : term := tLetIn si_na ci_False fi_P (tRel 0).
+Lemma c2_letT_typed : si_Σ ;;; [] |-E c2_letT : tSort sProp.
+Proof.
+  eapply typeE_Cumul.
+  - apply typeE_LetIn; [|exact c2_d_typed]. split; [exact c2_False0|].
+    exists (Sort.super sProp). split; [exact (ci_typeE_P [] localenv_nil)|]. split; reflexivity.
+  - exact (ci_typeE_P [] localenv_nil).
+  - apply convSpecE_cumulSpecE, red1_cumulSpecE. apply red_zeta.
+Qed.
+Lemma c2_isT_letT : isTypeE si_Σ [] c2_letT.
+Proof. exact (has_sort_isTypeE _ c2_letT_typed). Qed.
+Lemma c2_isT_False : isTypeE si_Σ [] ci_False.
+Proof. exact (has_sort_isTypeE _ c2_False0). Qed.
+
+Definition isType_SortE_inst := @isType_SortE _ si_Σ fi_Γ1 sProp ci_wf_sort_P ci_wf_Γ1.
+Definition wf_typing_spineE_inst : @wf_typing_spineE _ si_Σ [] (tProd si_na si_P (cp_Ix 0)) [g_A] g_T :=
+  (g_cstr_isType, typing_spineE_inst).
+Definition typing_spine_isType_codomE_inst := @typing_spine_isType_codomE _ si_Σ si_wfE _ _ _ _ c2_sp.
+(* WEAK: proves satisfiability only; [I] is monomorphic, so its abstract instance is
+   empty and the substitution is the plain one. *)
+Definition subslet_inds_genE_inst := @subslet_inds_genE _ si_env si_wfE si_ind si_mdecl si_idecl si_declared_inductive.
+
+Definition into_ws_cumul_specE_inst :=
+  into_ws_cumul_specE si_Σ si_wfE (cp_cstr_app_typed) g_T_typed g_cumul.
+Definition typing_ws_cumul_pbE_inst := typing_ws_cumul_pbE si_Σ si_wfE Cumul [] _ _ c2_letT_typed.
+Definition inversion_ProdE_inst := inversion_ProdE si_Σ si_wfE c2_False0.
+Definition inversion_LetInE_inst := inversion_LetInE si_Σ si_wfE c2_letT_typed.
+Definition consistent_instance_ext_abstract_instanceE_inst :=
+  consistent_instance_ext_abstract_instanceE up_env up_univs up_wfE up_global_ext.
+Lemma c2_l0_in_union : LevelSet.In (Level.lvar 0)
+  (LevelSet.union (fold_right LevelSet.add LevelSet.empty (unfold 1 Level.lvar)) (global_levels up_env)).
+Proof. apply LevelSet.mem_spec. reflexivity. Qed.
+Definition subst_instance_level_absE_inst := subst_instance_level_absE (Level.lvar 0) 1 up_env up_wfE c2_l0_in_union.
+
+(** [x : λ_:Prop. Prop] against [x : Prop] (η), extended by [y : Prop]. *)
+Definition ws_cumul_ctx_pb_vassE_inst :=
+  @ws_cumul_ctx_pb_vassE _ si_Σ [] [] si_na si_na fi_eta fi_P Cumul eq_refl ltac:(constructor) (ci_WS_eta Cumul).
+Definition ws_cumul_ctx_pb_appE_inst :=
+  fst (@ws_cumul_ctx_pb_appE _ si_Σ si_wfE Cumul [] [] [vass si_na fi_eta] [vass si_na fi_P] eq_refl)
+    ws_cumul_ctx_pb_vassE_inst.
+Definition isType_tProdE_inst := fst (@isType_tProdE _ si_Σ si_wfE [] si_na fi_P (tRel 0)) c2_isT_False.
+(** [c (∀P:Prop. P) : I (∀P:Prop. P)] retyped at [(λ_:Prop. I _) (∀P:Prop. P)]. *)
+Definition type_ws_cumul_pbE_inst :=
+  @type_ws_cumul_pbE _ si_Σ si_cb Cumul [] _ c2_I_A g_T cp_cstr_app_typed g_T_isType c2_ws_I_A.
+Definition isType_tLetIn_redE_inst := @isType_tLetIn_redE _ si_Σ si_wfE [] localenv_nil _ _ _ _ c2_isT_letT.
+Definition isType_tLetIn_domE_inst := @isType_tLetIn_domE _ si_Σ si_wfE [] localenv_nil _ _ _ _ c2_isT_letT.
+Definition wf_local_assE_inst := @wf_local_assE _ si_Σ [] si_na fi_P localenv_nil (ci_vass_P [] localenv_nil).
+Definition wf_local_defE_inst :=
+  @wf_local_defE _ si_Σ [] si_na ci_False fi_P localenv_nil (ci_vass_P [] localenv_nil) c2_False0.
+Definition isType_applyE_inst := @isType_applyE _ si_Σ si_wfE [] si_na fi_P (tRel 0) ci_False c2_isT_False c2_False0.
+Lemma c2_sp_let_nil : typing_spineE si_Σ [] c2_letT [] ci_False.
+Proof.
+  apply type_spine_nilE; [exact c2_isT_letT|exact c2_isT_False|].
+  exact (@ws_cumul_pbE_zetaE _ si_Σ si_wfE Cumul [] si_na ci_False fi_P (tRel 0) c2_isT_letT).
+Qed.
+Definition typing_spine_letin_invE_inst := @typing_spine_letin_invE _ si_Σ si_wfE [] _ _ _ _ _ _ c2_sp_let_nil.
+Lemma c2_sp_False_nil : typing_spineE si_Σ [] ci_False [] ci_False.
+Proof.
+  apply type_spine_nilE; [exact c2_isT_False|exact c2_isT_False|].
+  exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) (wfΣ := si_wfE) _ _ c2_isT_False).
+Qed.
+Definition typing_spine_letinE_inst :=
+  @typing_spine_letinE _ si_Σ si_wfE [] si_na ci_False fi_P (tRel 0) [] ci_False c2_isT_letT c2_sp_False_nil.
+Lemma c2_sp_wc_refl : typing_spineE rf_Σ wc_Γ wc_T [] wc_T.
+Proof.
+  apply type_spine_nilE; [exact (wc_isType _ wc_T_typed)|exact (wc_isType _ wc_T_typed)|].
+  exact (isType_ws_cumul_pbE_refl (Σ := rf_Σ) (wfΣ := wc_wfE) _ _ (wc_isType _ wc_T_typed)).
+Qed.
+(** The empty spine at [G (λy:Prop. F y)], widened to [G F] by the η step. *)
+Definition typing_spine_weaken_conclE_inst :=
+  @typing_spine_weaken_conclE _ rf_Σ wc_wfE wc_Γ wc_T [] wc_T wc_U c2_sp_wc_refl (c2_wc_ws Cumul) (wc_isType _ wc_U_typed).
+Lemma c2_sp_tail : typing_spineE si_Σ [] ((cp_Ix 0) {0 := g_A}) [] g_T.
+Proof. apply type_spine_nilE; [exact c2_isT_I_A|exact g_T_isType|exact c2_ws_I_A]. Qed.
+Definition typing_spine_prodE_inst :=
+  @typing_spine_prodE _ si_Σ si_wfE [] si_na g_A si_P (cp_Ix 0) [] g_T c2_sp_tail g_cstr_isType c2_False0.
+Definition typing_spine_WAT_conclE_inst := @typing_spine_WAT_conclE _ si_Σ _ _ _ _ c2_sp.
+Definition typing_spine_isType_domE_inst := @typing_spine_isType_domE _ si_Σ _ _ _ _ c2_sp.
+Definition c2_x_sort : si_Σ ;;; [] ,, vass si_na fi_P |-E tRel 0 : tSort sProp := ci_x_typed.
+Definition type_mkProd_or_LetInE_inst :=
+  @type_mkProd_or_LetInE _ si_Σ si_wfE [] (vass si_na fi_P) (Sort.super sProp) (tRel 0) sProp
+    (ci_vass_s_P [] localenv_nil) c2_x_sort.
+Lemma c2_jd : lift_typing typingE si_Σ [] (j_decl_s (vdef si_na ci_False fi_P) (Some (Sort.super sProp))).
+Proof. split; [exact c2_False0|]. exists (Sort.super sProp). split; [exact (ci_typeE_P [] localenv_nil)|]. split; reflexivity. Qed.
+Definition type_mkProd_or_LetInE_let_inst :=
+  @type_mkProd_or_LetInE _ si_Σ si_wfE [] (vdef si_na ci_False fi_P) (Sort.super sProp) (tRel 0) sProp c2_jd c2_d_typed.
+Definition type_it_mkProd_or_LetInE_inst :=
+  @type_it_mkProd_or_LetInE _ si_Σ si_wfE [] c2_x (Sort.super sProp) (tRel 0) sProp ci_wf_sort_super_P c2_tlc_P ci_x_typed.
+Definition type_it_mkProd_or_LetIn_sortsE_inst :=
+  @type_it_mkProd_or_LetIn_sortsE _ si_Σ si_wfE [] c2_x [Sort.super sProp] (tRel 0) sProp c2_slc_P ci_x_typed.
+Definition isType_it_mkProd_or_LetInE_inst :=
+  @isType_it_mkProd_or_LetInE _ si_Σ si_wfE [] c2_x [Sort.super sProp] (tRel 0) c2_slc_P c2_isT_x.
+Definition subslet_app_closedE_inst :=
+  @subslet_app_closedE _ si_Σ [] [ci_False] [ci_False] c2_x c2_x c2_sub c2_sub eq_refl.
+Definition subslet_app_invE_inst :=
+  @subslet_app_invE _ si_Σ [] c2_x c2_x [ci_False; ci_False] subslet_app_closedE_inst.
+(* WEAK (this and [on_minductive_wf_paramsE_inst]): proves satisfiability only; [I]
+   is monomorphic, so its only instance is the empty one. *)
+Definition subslet_indsE_inst := @subslet_indsE _ si_Σ si_wfE si_ind [] si_mdecl si_idecl si_declared_inductive eq_refl.
+Definition weaken_subsletE_inst := @weaken_subsletE _ si_Σ si_wfE [ci_False] c2_x fi_Γ1 ci_wf_Γ1 c2_sub.
+Definition isType_substitution_it_mkProd_or_LetInE_inst :=
+  @isType_substitution_it_mkProd_or_LetInE _ si_Σ si_wfE [] c2_x (tRel 0) [ci_False] c2_sub c2_isT_False.
+Definition isType_substitution_it_mkProd_or_LetInE_let_inst :=
+  @isType_substitution_it_mkProd_or_LetInE _ si_Σ si_wfE [] [vdef si_na ci_False fi_P] (tRel 0) [ci_False]
+    c2_subd c2_isT_letT.
+Definition on_minductive_wf_paramsE_inst :=
+  @on_minductive_wf_paramsE _ si_Σ si_wfE si_kn si_mdecl [] si_declared_minductive' eq_refl.
+Definition it_mkProd_or_LetIn_wf_localE_inst :=
+  @it_mkProd_or_LetIn_wf_localE _ si_Σ si_wfE [] c2_x (tRel 0) _ c2_False0.
+Definition it_mkProd_or_LetIn_wf_localE_let_inst :=
+  @it_mkProd_or_LetIn_wf_localE _ si_Σ si_wfE [] [vdef si_na ci_False fi_P] (tRel 0) _ c2_letT_typed.
+Definition isType_it_mkProd_or_LetIn_wf_localE_inst :=
+  @isType_it_mkProd_or_LetIn_wf_localE _ si_Σ si_wfE [] c2_x (tRel 0) c2_isT_False.
+Definition isType_weakenE_inst := @isType_weakenE _ si_Σ si_wfE fi_Γ1 ci_False ci_wf_Γ1 c2_isT_False.
