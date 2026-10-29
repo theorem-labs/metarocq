@@ -2600,7 +2600,8 @@ Equations (noeqns) isconv_array_values_aux
     intros r. unfold zipp. destruct (decompose_stack π) as [args ρ]. now apply red_mkApps_f.
   Qed.
 
-  Lemma sliceC_open_ctx_len Γ1 Γ2 t : #|Γ1| = #|Γ2| -> is_open_term Γ2 t -> is_open_term Γ1 t.
+  Lemma sliceC_open_ctx_len (Γ1 Γ2 : context) (t : term) :
+    #|Γ1| = #|Γ2| -> is_open_term Γ2 t -> is_open_term Γ1 t.
   Proof. intros e h. rewrite e. exact h. Qed.
 
   Lemma sliceC_eta_rename_tProj π d p c : eta_rename π d (tProj p c) = tProj p (eta_rename π d c).
@@ -2629,11 +2630,6 @@ Equations (noeqns) isconv_array_values_aux
       apply rename_ext. exact (eta_ren_shiftn π #|mfix| 0).
     - exact (eq_sym (eta_rename_fold_context π 0 (fix_context mfix))).
   Qed.
-
-  Lemma sliceC_dlexprod_fst {A} {B : A -> Type} (leA : A -> A -> Prop)
-    (leB : forall x, B x -> B x -> Prop) x y :
-    dlexprod leA leB x y -> leA x.π1 y.π1 \/ x.π1 = y.π1.
-  Proof. intros h. destruct h; [left; assumption|right; reflexivity]. Qed.
 
   (* A rigid head in a whnf η view carries no argument and no virtual argument. *)
   Lemma sliceC_zipp_eta_rigid Γ t π :
@@ -2756,21 +2752,15 @@ Equations (noeqns) isconv_array_values_aux
     cored Σ Γ (reduce_termE f Γ t h) t.
   Proof.
     intros hneq.
+    destruct (sliceC_reduce_termE_red Σ wfΣ f Γ t h) as [r].
+    apply (red_neq_cored Σ Γ t (reduce_termE f Γ t h) r).
+    intros e. rewrite -e in hneq.
     pose proof (sliceC_eqb_term_refl Σ wfΣ Γ t (h Σ wfΣ)) as hrefl.
-    unfold reduce_termE, PCUICSafeReduceEta.reduce_term in *.
-    destruct (PCUICSafeReduceEta.reduce_stack_Req (wt := welltypedE) (wfP := wf_extE)
-                (normalization_in := normalization_in) f X_type X Σ wfΣ Γ t [] h) as [e|hr].
-    - rewrite e in hneq. cbn [PCUICPosition.zip PCUICPosition.zipc fst snd] in hneq.
-      rewrite hneq in hrefl. discriminate hrefl.
-    - unfold PCUICSafeReduceEta.R, PCUICSafeReduceEta.R_aux in hr.
-      destruct (sliceC_dlexprod_fst _ _ _ _ hr) as [hc|he]; [exact hc|].
-      cbn [projT1] in he. rewrite he in hneq.
-      cbn [PCUICPosition.zip PCUICPosition.zipc fst snd] in hneq.
-      rewrite hneq in hrefl. discriminate hrefl.
+    rewrite hneq in hrefl. discriminate hrefl.
   Qed.
 
   (* whnf of the η view after [reduce_args_E] (G2b: [eta_head_ok]). *)
-  Lemma sliceC_whnf_reduced (Σ : global_env) Γ π fn' args' :
+  Lemma sliceC_whnf_reduced (Σ : global_env_ext) Γ π fn' args' :
     no_Eta_arg (decompose_stack π).2 -> isApp fn' = false ->
     whnf RedFlags.nodelta Σ (Γ ,,, stack_context (decompose_stack π).2) (mkApps fn' args') ->
     eta_head_ok fn' (decompose_stack π).2 ->
@@ -3071,7 +3061,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb]. destruct (heΣ _ wfΣ) as [hwf].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h _ wfΣ) as [hargs].
     pose proof (ctf_wf_universes Σ _ _ hwf (ctf_context Σ Γ _ π1 hwf hna1 (h1 Σ wfΣ))) as hu.
     pose proof (ctf_wf_universes Σ _ _ hwf (ctf_context Σ Γ _ π2 hwf hna2 (h2 Σ wfΣ))) as hu'.
@@ -3093,20 +3083,20 @@ Equations (noeqns) isconv_array_values_aux
              (red_context_zip_eta Σ Γ _ _ π2 (red_const Σ eq3))).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored. intros Σ wfΣ.
-    pose proof (abstract_env_lookup_correct' X c' wfΣ) as el. rewrite <- el in eq3.
-    exact (cored_context_eta Σ Γ _ _ π1 hna1 (cored_const Σ eq3)).
+    pose proof (eq_trans eq3 (eq_sym (abstract_env_lookup_correct' X c' wfΣ))) as eq3'.
+    exact (cored_context_eta Σ Γ _ _ π1 hna1 (cored_const Σ eq3')).
   Qed.
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
-    pose proof (abstract_env_lookup_correct' X c' wfΣ) as el. rewrite <- el in eq3.
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
+    pose proof (eq_trans eq3 (eq_sym (abstract_env_lookup_correct' X c' wfΣ))) as eq3'.
     destruct (sliceC_closed_red_zipp Σ wfΣ Γ (tConst c' u) body@[u] π1 hna1 (h1 Σ wfΣ)
-                (sliceC_closed_ctx Σ wfΣ Γ π1 hwf1) (red_const Σ eq3)) as [r1].
+                (sliceC_closed_ctx Σ wfΣ Γ π1 hwf1) (red_const Σ eq3')) as [r1].
     destruct (sliceC_closed_red_zipp Σ wfΣ Γ (tConst c' u') body@[u'] π2 hna2 (h2 Σ wfΣ)
-                (sliceC_closed_ctx Σ wfΣ Γ π2 hwf2) (red_const Σ eq3)) as [r2].
+                (sliceC_closed_ctx Σ wfΣ Γ π2 hwf2) (red_const Σ eq3')) as [r2].
     destruct (h Σ wfΣ) as [h'], (hx Σ wfΣ) as [hx'].
     constructor.
     eapply WS8_trans; [exact (red_ws_cumul_pbE r1)|].
@@ -3138,14 +3128,14 @@ Equations (noeqns) isconv_array_values_aux
   Qed.
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hwf1 Σ wfΣ) as [hl].
     exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ Γ t1 (Lambda_bd na A1) π1
              eq_refl hna1 (h1 Σ wfΣ) hl).
   Qed.
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hwf2 Σ wfΣ) as [hl].
     exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ Γ t2 (Lambda_bd na' A2) π2
              eq_refl hna2 (h2 Σ wfΣ) hl).
@@ -3179,14 +3169,14 @@ Equations (noeqns) isconv_array_values_aux
   Qed.
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hwf1 Σ wfΣ) as [hl].
     exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ Γ B1 (Prod_r na A1) π1
              eq_refl hna1 (h1 Σ wfΣ) hl).
   Qed.
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hwf2 Σ wfΣ) as [hl].
     exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ Γ B2 (Prod_r na' A2) π2
              eq_refl hna2 (h2 Σ wfΣ) hl).
@@ -3204,13 +3194,13 @@ Equations (noeqns) isconv_array_values_aux
   (* tCase *)
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    pose proof (virt_ok_not_head _ _ hv1 eq_refl) as hna1.
     destruct (heΣ _ wfΣ) as [hwf].
     exact (ctf_context Σ Γ c (Case_discr ci p brs :: π1) hwf hna1 (h1 Σ wfΣ)).
   Qed.
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    pose proof (virt_ok_not_head _ _ hv2 eq_refl) as hna2.
     destruct (heΣ _ wfΣ) as [hwf].
     exact (ctf_context Σ Γ c' (Case_discr ci' p' brs' :: π2) hwf hna2 (h2 Σ wfΣ)).
   Qed.
@@ -3230,7 +3220,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (eqb_eq _ _ (eq_sym eq5)) as eci. subst ci'.
     destruct (convp Σ wfΣ) as [[hpars hu hctx hret]].
     destruct (convdiscr Σ wfΣ) as [hc].
@@ -3250,7 +3240,7 @@ Equations (noeqns) isconv_array_values_aux
     exact (All2_map hbrs).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
     match goal with
     | |- context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
@@ -3259,7 +3249,7 @@ Equations (noeqns) isconv_array_values_aux
              (red_context_zip_eta Σ Γ _ _ (Case_discr ci' p' brs' :: π2) r)).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored2; [constructor; reflexivity|reflexivity|].
     intros Σ wfΣ.
     match type of eq4 with
@@ -3271,7 +3261,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h Σ wfΣ) as [h'], (hx Σ wfΣ) as [hx'].
     match type of h' with
     | context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
@@ -3283,7 +3273,7 @@ Equations (noeqns) isconv_array_values_aux
     exact (red_ws_cumul_pbE_inv r2).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
     match goal with
     | |- context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
@@ -3292,7 +3282,7 @@ Equations (noeqns) isconv_array_values_aux
              (red_context_zip_eta Σ Γ _ _ (Case_discr ci p brs :: π1) r)).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored. intros Σ wfΣ.
     match type of eq3 with
     | false = eqb_term (reduce_termE ?f ?Γ' ?t ?hh) _ =>
@@ -3303,7 +3293,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h Σ wfΣ) as [h'].
     match type of h' with
     | context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
@@ -3316,13 +3306,13 @@ Equations (noeqns) isconv_array_values_aux
   (* tProj *)
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    pose proof (virt_ok_not_head _ _ hv1 eq_refl) as hna1.
     destruct (heΣ _ wfΣ) as [hwf].
     exact (ctf_context Σ Γ c (Proj p :: π1) hwf hna1 (h1 Σ wfΣ)).
   Qed.
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    pose proof (virt_ok_not_head _ _ hv2 eq_refl) as hna2.
     destruct (heΣ _ wfΣ) as [hwf].
     exact (ctf_context Σ Γ c' (Proj p' :: π2) hwf hna2 (h2 Σ wfΣ)).
   Qed.
@@ -3344,7 +3334,7 @@ Equations (noeqns) isconv_array_values_aux
     apply ws_cumul_pbE_Proj_c. exact hc.
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
     match goal with
     | |- context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
@@ -3353,7 +3343,7 @@ Equations (noeqns) isconv_array_values_aux
              (red_context_zip_eta Σ Γ _ _ (Proj p' :: π2) r)).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored2; [constructor; reflexivity|reflexivity|].
     intros Σ wfΣ.
     match type of eq4 with
@@ -3365,7 +3355,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h Σ wfΣ) as [h'], (hx Σ wfΣ) as [hx'].
     match type of h' with
     | context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
@@ -3377,7 +3367,7 @@ Equations (noeqns) isconv_array_values_aux
     exact (red_ws_cumul_pbE_inv r2).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
     match goal with
     | |- context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
@@ -3386,7 +3376,7 @@ Equations (noeqns) isconv_array_values_aux
              (red_context_zip_eta Σ Γ _ _ (Proj p :: π1) r)).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored. intros Σ wfΣ.
     match type of eq3 with
     | false = eqb_term (reduce_termE ?f ?Γ' ?t ?hh) _ =>
@@ -3397,7 +3387,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h Σ wfΣ) as [h'].
     match type of h' with
     | context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
@@ -3423,7 +3413,7 @@ Equations (noeqns) isconv_array_values_aux
   (* tFix: unfolding on side 1. [θ'] is side 1's stack tail (unfold_one_fix_decompose). *)
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    pose proof (virt_ok_not_head _ _ hv1 eq_refl) as hna1.
     destruct (heΣ _ wfΣ) as [hwf].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
@@ -3437,7 +3427,7 @@ Equations (noeqns) isconv_array_values_aux
     exact (ctf_context Σ Γ _ _ hwf (sliceC_no_Eta_arg_decompose π1 hna1) hw).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
@@ -3451,7 +3441,7 @@ Equations (noeqns) isconv_array_values_aux
              (red_context_zip_eta Σ Γ _ _ _ (clrel_rel r))).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
     pose proof (decompose_stack_eq _ _ _ (eq_sym eq2)) as eθ.
@@ -3471,7 +3461,7 @@ Equations (noeqns) isconv_array_values_aux
     exact (hx Σ wfΣ).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
     exact (virt_ok_reduce _ _ _ _ hv1 (or_introl hna1)).
@@ -3484,24 +3474,24 @@ Equations (noeqns) isconv_array_values_aux
     exact (hwf1 Σ wfΣ).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
-    symmetry in g3. unfold rebuilt_ok in g3. apply andb_prop in g3 as [_ hok].
+    pose proof (eq_sym g3) as g3'. unfold rebuilt_ok in g3'. apply andb_prop in g3' as [_ hok].
     match type of eq3 with
     | (_, _) = reduce_args_E ?f ?XT ?XX ?Γ' ?t ?args ?hh =>
         pose proof (reduce_args_E_isred f XT XX Γ' t args hh eq_refl) as [ha _]
     end.
     rewrite <- eq3 in ha. cbn [fst] in ha.
     split; [exact ha|].
-    intros Σ wfΣ. reduce_args_facts Σ wfΣ. destruct w as [w].
+    intros Σ wfΣ. reduce_args_facts Σ wfΣ.
     constructor.
     exact (sliceC_whnf_reduced Σ Γ π1 fn' args' (sliceC_no_Eta_arg_decompose π1 hna1) ha w hok).
   Qed.
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
     pose proof (decompose_stack_eq _ _ _ (eq_sym eq2)) as eθ.
@@ -3520,7 +3510,7 @@ Equations (noeqns) isconv_array_values_aux
   (* tFix: unfolding on side 2. *)
   Next Obligation.
     rename H into wfΣ.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    pose proof (virt_ok_not_head _ _ hv2 eq_refl) as hna2.
     destruct (heΣ _ wfΣ) as [hwf].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
@@ -3534,7 +3524,7 @@ Equations (noeqns) isconv_array_values_aux
     exact (ctf_context Σ Γ _ _ hwf (sliceC_no_Eta_arg_decompose π2 hna2) hw).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
@@ -3548,7 +3538,7 @@ Equations (noeqns) isconv_array_values_aux
              (red_context_zip_eta Σ Γ _ _ _ (clrel_rel r))).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
     pose proof (decompose_stack_eq _ _ _ (eq_sym eq2)) as eθ.
@@ -3569,7 +3559,7 @@ Equations (noeqns) isconv_array_values_aux
     exact (hx Σ wfΣ).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
     exact (virt_ok_reduce _ _ _ _ hv2 (or_introl hna2)).
@@ -3582,24 +3572,24 @@ Equations (noeqns) isconv_array_values_aux
     exact (hwf2 Σ wfΣ).
   Qed.
   Next Obligation.
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
-    symmetry in g3. unfold rebuilt_ok in g3. apply andb_prop in g3 as [_ hok].
+    pose proof (eq_sym g3) as g3'. unfold rebuilt_ok in g3'. apply andb_prop in g3' as [_ hok].
     match type of eq3 with
     | (_, _) = reduce_args_E ?f ?XT ?XX ?Γ' ?t ?args ?hh =>
         pose proof (reduce_args_E_isred f XT XX Γ' t args hh eq_refl) as [ha _]
     end.
     rewrite <- eq3 in ha. cbn [fst] in ha.
     split; [exact ha|].
-    intros Σ wfΣ. reduce_args_facts Σ wfΣ. destruct w as [w].
+    intros Σ wfΣ. reduce_args_facts Σ wfΣ.
     constructor.
     exact (sliceC_whnf_reduced Σ Γ π2 fn' args' (sliceC_no_Eta_arg_decompose π2 hna2) ha w hok).
   Qed.
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     pose proof (unfold_one_fix_decompose _ _ _ _ _ _ _ eq1) as d1.
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
     pose proof (decompose_stack_eq _ _ _ (eq_sym eq2)) as eθ.
@@ -3713,7 +3703,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     rename H into wfΣ.
     destruct (hΣ _ wfΣ) as [cb]. destruct (heΣ _ wfΣ) as [hwf].
-    symmetry in hg; apply andb_prop in hg as [hna1 hna2].
+    destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     assert (hl1 : wf_universe Σ (Universe.make' (array_level a))).
     { pose proof (ctf_wf_universes Σ _ _ hwf (ctf_context Σ Γ _ π1 hwf hna1 (h1 Σ wfΣ))) as hu.
       cbn -[wf_universeb] in hu. move/andP: hu => [/andP [/andP [hu _] _] _].
