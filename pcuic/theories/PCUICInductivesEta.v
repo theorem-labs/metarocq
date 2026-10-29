@@ -43,10 +43,11 @@ From Equations Require Import Equations.
   The record [wf_subsletE] (fields [wf_subslet_ctxE], [wf_subslet_subsletE], the latter a
   coercion as in base) is the canonical one. [conv_ctx_reflE] is the twin of
   [PCUICCumulativity.conv_ctx_refl], the instance that base's [Hint Resolve conv_ctx_refl :
-  pcuic] resolves to; this file registers [conv_ctx_reflE] and [isType_introE] in [pcuic] as base
-  registers [conv_ctx_refl] and [isType_intro]. Base's [Arguments] of [subst_context] and
-  [it_mkProd_or_LetIn] and its [Hint Rewrite … : len] lines are about syntactic functions; they
-  act through the import of [PCUICInductives] and are not repeated.
+  pcuic] resolves to; it is a global instance, as base's, and this file registers it and
+  [isType_introE] in [pcuic] as base registers [conv_ctx_refl] and [isType_intro]. Base's
+  [Arguments] of [subst_context] and [it_mkProd_or_LetIn] and its [Hint Rewrite … : len] lines
+  are about syntactic functions; they act through the import of [PCUICInductives] and are not
+  repeated.
 
   Proof routes that differ from base (statements are twins): [closed_red_from_emptyE] and
   [red_it_mkProd_or_LetIn_smashE] are the corollaries, through [wfE_ClosedBodies], of
@@ -73,8 +74,9 @@ Local Set SimplIsCbn.
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 (** The twin of [PCUICCumulativity.conv_ctx_refl] (the instance that base's [Hint Resolve
-    conv_ctx_refl : pcuic] resolves to): reflexivity of context conversion over [JoinE]. *)
-Lemma conv_ctx_reflE {cf : checker_flags} (Σ : global_env_ext) :
+    conv_ctx_refl : pcuic] resolves to): reflexivity of context conversion over [JoinE], a global
+    instance as base's. *)
+#[global] Instance conv_ctx_reflE {cf : checker_flags} (Σ : global_env_ext) :
   CRelationClasses.Reflexive (All2_fold (cumul_pb_decls (@JoinE cf) Conv Σ)).
 Proof.
   intros Γ. eapply PCUICConfluence.All2_fold_refl. intros ? [na [b|] ty]; constructor; try reflexivity; apply JoinE_refl.
