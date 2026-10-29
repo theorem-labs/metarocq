@@ -12,8 +12,24 @@
     at each position;
   - [ws_cumul_pbE_terms_trans] : [Transitive (All2 (ws_cumul_pbE Conv Σ Γ))], by
     [ws_cumul_pbE_trans] at each position.
-  Each takes [ClosedBodies Σ] where its base twin takes [wf Σ]. [ws_cumul_pbE_sym] needs
-  no premise, so [ws_cumul_pbE_terms_sym] does not use its [ClosedBodies] argument.
+  [ws_cumul_pbE_sym] needs no premise, so [ws_cumul_pbE_terms_sym] does not use its
+  [ClosedBodies] argument.
+
+  Compiled forms against the base twins ([About]). Each instance takes [ClosedBodies Σ]
+  where its base twin takes [wf Σ]; in addition:
+  - [conv_context_symE]: no other difference. Both have [Σ] implicit
+    ([Arguments conv_context_symE {cf Σ cbΣ} x y _], base [{cf Σ wfΣ} x y _]).
+  - [ws_cumul_pbE_terms_sym]: base [ws_cumul_pb_terms_sym] has [Σ] and [Γ] EXPLICIT
+    ([Arguments ws_cumul_pb_terms_sym {cf} Σ {wfΣ} Γ x y _]); here both are implicit
+    ([{cf Σ cbΣ Γ} x y _]). Base's head is [All2 (ws_cumul_pb Conv Σ Γ)] (its
+    [ws_cumul_pb_terms] is a notation); here the head is the definition [ws_cumul_pbE_terms].
+  - [ws_cumul_pbE_terms_trans]: base [ws_cumul_pb_terms_trans] has [Γ] EXPLICIT
+    ([Arguments ws_cumul_pb_terms_trans {cf Σ wfΣ} Γ x y z _ _]); here it is implicit
+    ([{cf Σ cbΣ Γ} x y z _ _]). Both heads are [All2].
+  Resolution by [symmetry] and [transitivity] does not see the difference in implicit
+  status. A proof that names a base term-list instance with explicit [Σ] or [Γ] must drop
+  them for the twin; no base proof names [ws_cumul_pb_terms_sym] or
+  [ws_cumul_pb_terms_trans].
 
   Base's [ws_cumul_pb_terms Σ Γ] is a notation for [All2 (ws_cumul_pb Conv Σ Γ)], and its
   transitivity instance is stated on [All2]. [ws_cumul_pbE_terms] is a [Definition] of
@@ -21,6 +37,28 @@
   [transitivity] find these instances on a goal written with [ws_cumul_pbE_terms] and on
   one written with [All2]. [PCUICWsCumulEtaInstancesGlobalInstances] proves one use of
   each instance on each form.
+
+  Importing this file changes what [symmetry] resolves to on term lists. Without it,
+  [symmetry] on a term list (either form) already succeeds with no premise, through
+  [All2_symP] ([PCUICEquality]) and [ws_cumul_pbE_sym]. With it imported, and a
+  [ClosedBodies Σ] instance in scope, [symmetry] resolves to [ws_cumul_pbE_terms_sym],
+  and the proof term contains that instance. The instance can be a section variable
+  [{cb : ClosedBodies Σ}], or [wfE_ClosedBodies] ([PCUICClosedTypEta]) applied to a section
+  variable [{wfΣ : wfE Σ}]. So a lemma whose only use of that variable is such a [symmetry]
+  keeps the variable in its compiled statement once this file is imported, where without
+  the import Rocq drops it. With no such instance in scope, [symmetry] still takes the
+  premise-free route. [symmetry] on [ws_cumul_ctx_pbE Conv] and [transitivity] on term
+  lists find no instance without this file, so their uses need the import and its premise
+  in any case. Base behaves the same way: [ws_cumul_pb_sym] needs no premise, and once
+  [PCUICConversion] is imported, [symmetry] on [ws_cumul_pb_terms] resolves to
+  [ws_cumul_pb_terms_sym] and keeps a [{wfΣ : wf Σ}] section variable.
+
+  Rule for a file that imports this one: list its lemmas whose proofs call [symmetry] or
+  [transitivity] on [ws_cumul_ctx_pbE Conv] or on term lists ([ws_cumul_pbE_terms], or
+  [All2 (ws_cumul_pbE Conv Σ Γ)]), and compare each one's compiled binder list ([About])
+  with and without the import. The only importer is
+  [PCUICWsCumulEtaInstancesGlobalInstances]; its lemmas are stated on the concrete
+  environment [si_Σ], so they have no binder to gain.
 
   A file that needs the instances imports this file; [PCUICContextConversionEta] and
   [PCUICConversionEtaCongr] do not declare them, so importing those files does not put
