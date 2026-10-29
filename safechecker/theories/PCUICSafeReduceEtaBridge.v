@@ -341,9 +341,18 @@ End BridgeE.
     environment and concrete closed terms, every premise proved (the [welltypedE] ones
     by [typing_incl_E] of a base derivation, [wf_extE] by [wf_ext_incl_E], closed
     bodies by [wfE_ClosedBodies]) and the field's conclusion proved there directly,
-    without the field. Environments: [si_Σ] ([Inductive I (A : Prop) : Prop := c : I A],
-    [PCUICCumulativitySpecEtaClosureInstances]) and, for the constant field, the
-    one-axiom [sa_Σ] ([PCUICEtaA6Instances]). Each lemma states [premises /\ conclusion].
+    without the field. Each lemma states [premises × conclusion]. Environments:
+    - [si_Σ] ([Inductive I (A : Prop) : Prop := c : I A],
+      [PCUICCumulativitySpecEtaClosureInstances]): [rtf_wt_red_inst],
+      [rtf_context_inst], [rtf_rel_inst], [rtf_whnf_red_inv_inst],
+      [rtf_fix_arg_whne_inst] ([(fix f (x : I P) := x) x]), [rtf_case_construct_inst]
+      and [rtf_case_arg_whne_inst] (a case on [I P] with the branch [c P]);
+    - [sa_Σ] (one axiom, [PCUICEtaA6Instances]): [rtf_const_inst];
+    - [co_Σ] ([CoInductive CoI (A : Prop) : Prop := c : CoI A], declared below, as no
+      environment on [frac/eta] has a coinductive type): [rtf_cofix_inst];
+    - [rec_Σ] ([Record R (A : Prop) : Prop := mk { r : A }], declared below, as no
+      environment on [frac/eta] has a record): [rtf_proj_construct_inst],
+      [rtf_proj_arg_whne_inst].
     The four fields concluding [False] ([rtf_app_sort], [rtf_app_prod], [rtf_app_prim],
     [rtf_prim_overapplied]) have no such instance by design (their premise is
     unsatisfiable); see their argument in [PCUICSafeReduceEta.ReduceTypedFacts]. *)
