@@ -82,6 +82,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimit
      PCUICInduction PCUICWfUniverses
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances.
 From MetaRocq.PCUIC Require PCUICSize PCUICClosedTyp PCUICEtaScope.
+From MetaRocq.PCUIC Require Import PCUICEtaCanon PCUICEtaI5EtaL PCUICEtaC1b.
 
 Import ListNotations.
 
@@ -3597,4 +3598,180 @@ Section Assembly.
   Qed.
 
 End Assembly.
+
+(** ** The η half of the backward simulation is FALSE (building refutation)
+
+  The "convert first, postpone second" route needs the mirror of [R_c_back1] for η:
+  an [eta1] step on [canon t] read back as [eta1] steps on [t].
+
+  STEP FORM, as pinned: the lemma fails in EVERY form — not only "exactly one step",
+  but also [clos_refl eta1] and [eta1*] ([eta1_canon_backsim_false] refutes the
+  [eta1*] form, and the witness has NO η step at all, so the weaker forms fail with
+  the same witness).
+
+  Why the expectation ("[canon] rewrites only λ DOMAINS, so it cannot create or
+  remove an η-redex outside a domain") does not hold: a λ domain is PART of the η
+  pattern. The η rule's left side is [λ _:A. (lift0 1 f) (tRel 0)], and the side
+  condition is that the body is a [lift0 1], i.e. that the bound variable does NOT
+  occur in [f] — including inside [f]'s own λ domains. Erasing those domains can
+  delete the only occurrence, turning a non-redex into a redex. Base [red1] has no
+  such side condition, which is why [PCUICEtaT8BackSim] goes through.
+
+  Witness, TYPABLE (typing proved below, [lb_t_typed]): in [Γ = P : Prop],
+    [lb_t := λ _:Prop. ((λ _:Prop. λ _:x. P) x)],
+  where [x] is the outer variable. The inner λ's DOMAIN is [x], so the middle λ is
+  not a [lift0 1] of anything ([lift 1 1] never yields [tRel 1]) and [lb_t] has no η
+  step at all ([lb_t_eta_normal]). After [canon] that domain becomes [canon_dom],
+  the middle λ becomes [lift0 1 lb_u], and [canon lb_t] η-contracts
+  ([lb_canon_eta]). *)
+
+Definition lb_inner : term := tLambda si_na (tRel 1) (tRel 3).
+Definition lb_f : term := tLambda si_na si_P lb_inner.
+Definition lb_b : term := tApp lb_f (tRel 0).
+Definition lb_t : term := tLambda si_na si_P lb_b.
+Definition lb_u : term := tLambda canon_la canon_dom (tLambda canon_la canon_dom (tRel 2)).
+Definition lb_Γ : context := [vass si_na si_P].
+
+Lemma lb_canon_t : canon lb_t = eta_redex canon_la canon_dom lb_u.
+Proof. reflexivity. Qed.
+
+(** [canon lb_t] η-contracts to [lb_u]. *)
+Lemma lb_canon_eta : eta1 (canon lb_t) lb_u.
+Proof. rewrite lb_canon_t. apply eta_red. Qed.
+
+(** [lb_t] itself has no η step: the root rule is blocked by the domain [tRel 1]
+    (no term lifts to it at level 1), and every subterm is η-normal. *)
+Lemma lb_inner_eta_normal y : eta1 lb_inner y -> False.
+Proof.
+  intros h. remember lb_inner as z eqn:E. revert E.
+  destruct h; intros E; unfold lb_inner in E; try discriminate E;
+    injection E as E1 E2 E3; subst;
+    first [ congruence | exact (eta1_tRel_absurd _ _ ltac:(eassumption)) ].
+Qed.
+
+Lemma lb_f_eta_normal y : eta1 lb_f y -> False.
+Proof.
+  intros h. remember lb_f as z eqn:E. revert E.
+  destruct h; intros E; unfold lb_f in E; try discriminate E;
+    injection E as E1 E2 E3; subst;
+    first [ congruence
+          | exact (eta_normal_Sort _ _ ltac:(eassumption))
+          | exact (lb_inner_eta_normal _ ltac:(eassumption)) ].
+Qed.
+
+Lemma lb_b_eta_normal y : eta1 lb_b y -> False.
+Proof.
+  intros h. remember lb_b as z eqn:E. revert E.
+  destruct h; intros E; unfold lb_b in E; try discriminate E;
+    injection E as E1 E2; subst;
+    first [ exact (lb_f_eta_normal _ ltac:(eassumption))
+          | exact (eta1_tRel_absurd _ _ ltac:(eassumption)) ].
+Qed.
+
+(** The decisive step: the root η rule is blocked on [lb_t], because the inner λ has
+    the outer variable in its DOMAIN, and [lift 1 1] never produces [tRel 1]. *)
+Lemma lb_t_eta_normal y : eta1 lb_t y -> False.
+Proof.
+  intros h. remember lb_t as z eqn:E. revert E.
+  destruct h; intros E; unfold lb_t in E; try discriminate E.
+  - (* eta_red *)
+    injection E as E1 E2 E3. unfold lb_f in E3.
+    match type of E3 with context [lift 1 0 ?x] => destruct x end; cbn in E3; try discriminate E3.
+    injection E3 as _ _ E4. unfold lb_inner in E4.
+    match type of E4 with context [lift 1 1 ?x] => destruct x end; cbn in E4; try discriminate E4.
+    injection E4 as _ E5 _.
+    match type of E5 with context [lift 1 1 ?x] => destruct x end; cbn in E5; try discriminate E5.
+    injection E5 as E5. match goal with n : nat |- _ => destruct (Nat.leb_spec0 1 n) end; lia.
+  - (* abs_eta_l: a step in the domain [si_P], a sort *)
+    injection E as _ E _. subst. exact (eta_normal_Sort _ _ ltac:(eassumption)).
+  - (* abs_eta_r: a step in the body [lb_b] *)
+    injection E as _ _ E. subst. exact (lb_b_eta_normal _ ltac:(eassumption)).
+Qed.
+
+Lemma lb_u_ne : lb_u <> canon lb_t.
+Proof. rewrite lb_canon_t. intros e. unfold lb_u in e. congruence. Qed.
+
+(** **The η backward simulation is FALSE**, in its [eta1*] form (hence also in the
+    one-step and [clos_refl] forms). *)
+Definition eta1_canon_backsim_statement : Type :=
+  forall t w, eta1 (canon t) w -> ∑ t', clos_refl_trans eta1 t t' × canon t' = w.
+
+Theorem eta1_canon_backsim_false : eta1_canon_backsim_statement -> False.
+Proof.
+  intros H. destruct (H lb_t lb_u lb_canon_eta) as (t' & hr & e).
+  rewrite (rt_from_normal eta1 lb_t t' lb_t_eta_normal hr) in e.
+  exact (lb_u_ne (eq_sym e)).
+Qed.
+
+(** The witness is TYPABLE: [lb_t : Π _:Prop. Π _:x. Prop] in [Γ = P : Prop]. No
+    conversion step is needed: the application [lb_f x] matches its domain [Prop]
+    syntactically, and the blocking occurrence of [x] sits in the domain of the
+    INNER λ. *)
+Section LambdaBlockTyping.
+  #[local] Existing Instance default_checker_flags.
+
+  Theorem lb_t_typed : wfE si_Σ × ∑ T, si_Σ ;;; lb_Γ |-E lb_t : T.
+  Proof.
+    split; [exact si_wfE|].
+    have hw0 : wf_localE si_Σ lb_Γ := iv_wf_P si_Σ [] localenv_nil.
+    have hw1 := iv_wf_P si_Σ _ hw0.
+    have hw2 := iv_wf_P si_Σ _ hw1.
+    have hR1 : si_Σ ;;; (lb_Γ ,, vass si_na si_P) ,, vass si_na si_P |-E tRel 1 : tSort sProp
+      := typeE_Rel _ _ 1 (vass si_na si_P) hw2 eq_refl.
+    have hw3 := iv_wf_vass si_Σ _ si_na (tRel 1) sProp hw2 hR1 eq_refl.
+    have hR3 : si_Σ ;;; ((lb_Γ ,, vass si_na si_P) ,, vass si_na si_P) ,, vass si_na (tRel 1)
+                 |-E tRel 3 : tSort sProp
+      := typeE_Rel _ _ 3 (vass si_na si_P) hw3 eq_refl.
+    have hinner : si_Σ ;;; (lb_Γ ,, vass si_na si_P) ,, vass si_na si_P
+                    |-E lb_inner : tProd si_na (tRel 1) si_P.
+    { apply typeE_Lambda; [exact (iv_vass si_Σ _ si_na (tRel 1) sProp hR1 eq_refl)|exact hR3]. }
+    have hf : si_Σ ;;; lb_Γ ,, vass si_na si_P
+                |-E lb_f : tProd si_na si_P (tProd si_na (tRel 1) si_P).
+    { apply typeE_Lambda; [exact (iv_vass si_Σ _ si_na si_P _ (iv_P_typed si_Σ _ hw1) eq_refl)|exact hinner]. }
+    have hcod : si_Σ ;;; (lb_Γ ,, vass si_na si_P) ,, vass si_na si_P
+                  |-E tProd si_na (tRel 1) si_P : tSort (Sort.sort_of_product sProp (Sort.super sProp)).
+    { apply typeE_Prod; [exact (iv_vass_s si_Σ _ si_na (tRel 1) sProp hR1 eq_refl)|].
+      exact (iv_P_typed si_Σ _ hw3). }
+    have hprod : si_Σ ;;; lb_Γ ,, vass si_na si_P
+                   |-E tProd si_na si_P (tProd si_na (tRel 1) si_P)
+                   : tSort (Sort.sort_of_product (Sort.super sProp)
+                              (Sort.sort_of_product sProp (Sort.super sProp))).
+    { apply typeE_Prod; [|exact hcod].
+      exact (iv_vass_s si_Σ _ si_na si_P _ (iv_P_typed si_Σ _ hw1) eq_refl). }
+    have hx : si_Σ ;;; lb_Γ ,, vass si_na si_P |-E tRel 0 : si_P
+      := typeE_Rel _ _ 0 (vass si_na si_P) hw1 eq_refl.
+    have happ := typeE_App _ _ lb_f si_na si_P (tProd si_na (tRel 1) si_P) _ (tRel 0) hprod hf hx.
+    eexists. unfold lb_t, lb_b.
+    apply typeE_Lambda; [exact (iv_vass si_Σ _ si_na si_P _ (iv_P_typed si_Σ _ hw0) eq_refl)|exact happ].
+  Qed.
+
+End LambdaBlockTyping.
+
+(** ** History of the [eta_safe] invariant (every change so far)
+
+  Change 1: the primitive POSITION was added.
+  - ADDED: a clause for the arguments of an applied primitive operation.
+  - Bought: the primitive-operation root [pp_prim]; an η-expansion [λx. lit x] of a
+    literal argument is excluded, so the redex's arguments stay literals.
+  - Still excludes: a λ as the scrutinee of [tCase], as the argument of [tProj], as
+    the [rarg]-th argument of an applied fixpoint, and the new primitive position.
+
+  Change 2: the primitive CLAUSE was restated as "no applied primitive value".
+  - DROPPED: the dependence on [prim_op_of Σ c = Some op], so [pp_prim] lost that
+    premise and became a STRONGER lemma. ADDED: [notPrimHead] on every application
+    head.
+  - Bought: the clause follows from typing with no extra hypothesis
+    ([typed_prim_not_prod]), because a primitive value never has a product type.
+  - Still excludes: the same four positions; the primitive clause now excludes EVERY
+    applied primitive value, not only an argument of a registered operation.
+
+  Both changes moved only the primitive clause. The λ clause has never changed: it
+  still inspects the DOMAIN ([tLambda _ A b => eta_safe Σ A && eta_safe Σ b]), which
+  is what makes [Good] fail to transfer from [T] to [canon T]. Any further change to
+  [eta_safe] is reported before it is made.
+
+  Induction principle for the mixed-chain sketch: NOT APPLICABLE. The sketch was to
+  induct on the CANONICAL chain's length, fixed before lifting (never on the lifted
+  chain, which can be longer), but the lifting step it rests on is false
+  ([eta1_canon_backsim_false]), so no such induction is written. *)
 
