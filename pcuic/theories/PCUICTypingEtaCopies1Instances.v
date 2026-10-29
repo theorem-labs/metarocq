@@ -639,7 +639,7 @@ Qed.
   [I x], and the single branch returns [c x] at the branch type [(λ z : I x. I x) (c x)],
   which a β-step relates to [I x]. *)
 
-Definition cp_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition cp_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition cp_mp : predicate term :=
   {| pparams := [tRel 0]; puinst := []; pcontext := ind_predicate_context si_ind si_mdecl si_idecl;
      preturn := cp_Ix 1 |}.

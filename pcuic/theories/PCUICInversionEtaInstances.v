@@ -335,7 +335,7 @@ Qed.
 
 Definition iv_Ix (k : nat) : term := tApp (tInd si_ind []) (tRel k).
 Definition iv_Γ1 : context := [vass si_na si_P].
-Definition iv_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition iv_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition iv_mp : predicate term :=
   {| pparams := [tRel 0]; puinst := []; pcontext := ind_predicate_context si_ind si_mdecl si_idecl;
      preturn := iv_Ix 1 |}.

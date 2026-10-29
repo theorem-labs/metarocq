@@ -14,7 +14,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICClosedTypEta PCUICWeakeningEnvTypEta.
 (** [ws_cumul_ctx_pbE_rel] and [ws_cumul_ctx_pbE_rel_app] are canonical in [PCUICWsCumulEtaCtx] (P3, ArityLane). *)
 From MetaRocq.PCUIC Require Import PCUICWsCumulEtaCtx.
-From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution.
+From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution PCUICSafeLemmata.
 From Stdlib Require Import Program.Equality.
 From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
 
@@ -1687,7 +1687,7 @@ Proof.
 Qed.
 
 (** A case on [I ti_F]: the predicate [fun (_ : I ti_F) => Prop] and the branch of [c]. *)
-Definition ti_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition ti_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition ti_p : predicate term :=
   {| pparams := [ti_F]; puinst := []; pcontext := ind_predicate_context si_ind si_mdecl si_idecl;
      preturn := si_P |}.
@@ -2090,7 +2090,7 @@ Proof.
   have hs : PCUICArities.typing_spine si_Σ [] (it_mkProd_or_LetIn ti_ΓP (tSort sProp)) [ti_F] (tSort sProp) :=
     ti_tspine_IF.
   split; [exact si_wfE|exact (siTS hs)|].
-  exact (siTS (PCUICClassification.typing_spine_smash (Σ := si_Σ) si_wf [] ti_ΓP (tSort sProp) [ti_F]
+  exact (siTS (PCUICSafeLemmata.typing_spine_smash (Σ := si_Σ) si_wf [] ti_ΓP (tSort sProp) [ti_F]
                  (tSort sProp) hs)).
 Qed.
 

@@ -226,7 +226,7 @@ Qed.
 Definition ru_na : aname := mkBindAnn nAnon Relevant.
 Definition ru_ci : case_info :=
   {| ci_ind := {| inductive_mind := (MPfile [], "I"); inductive_ind := 0 |};
-     ci_npar := 0; ci_relevance := Relevant |}.
+     ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 (* a case whose predicate context mentions a variable outside it: ill-scoped *)
 Definition ru_pred (r : term) : predicate term :=
   {| pparams := []; puinst := []; pcontext := [vdef ru_na (tRel 5) (tSort sProp)]; preturn := r |}.
