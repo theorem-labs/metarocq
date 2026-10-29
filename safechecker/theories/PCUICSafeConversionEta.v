@@ -126,13 +126,14 @@ Section Conversion.
   Context {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}.
 
   (* REDUCE contract: the named E-facts hypothesis of the reduction machine (EtaReduce's class;
-     its fields are T1/T6 facts; its base instance [reduce_typed_facts_base] is restated at the
-     end of this file). *)
+     its fields are T1/T6 facts; its base instance [reduce_typed_facts_base] is restated as
+     [reduce_factsE_base_inst] after the section). *)
   Context {reduce_factsE : ReduceTypedFacts welltypedE wf_extE}.
 
   (* The named typed facts of the conversion itself (plan rows T6 and T-row, fields
      [ctf_context], [ctf_case_brs_length], [ctf_wf_universes]); base instance
-     [conv_typed_facts_base] in PCUICSafeConversionEtaFacts, restated at the end of this file. *)
+     [conv_typed_facts_base] in PCUICSafeConversionEtaFacts, restated as [conv_factsE_base_inst]
+     after the section. *)
   Context {conv_factsE : ConvTypedFacts welltypedE wf_extE}.
 
   (* EtaPosK4's section EtaTypingE (PCUICPositionEtaTyping) takes three named hypotheses;
@@ -5288,6 +5289,23 @@ Equations (noeqns) isconv_array_values_aux
   Transparent reduce_args_E.
 
 End Conversion.
+
+(* Satisfying instances of the named hypotheses of section [Conversion], at base typing,
+   restated here so that each hypothesis has its instance in this file (the squashed
+   [closed_context_conversionE] has [closed_context_conversionE_base_inst] above). Each one
+   (1) shows the hypothesis is consistent, so the theorems above are about something real, and
+   (2) does NOT discharge the [welltypedE]/[typingE] instantiation, which waits for the rows named
+   at each hypothesis (reduce_factsE: T1/T6; conv_factsE: T6 and the universes T-row;
+   closed_context_conversionE: T0; welltypedE_context: T6/T2a). *)
+Lemma reduce_factsE_base_inst {cf : checker_flags} : ReduceTypedFacts welltyped wf_ext.
+Proof. exact reduce_typed_facts_base. Qed.
+
+Lemma conv_factsE_base_inst {cf : checker_flags} : ConvTypedFacts welltyped wf_ext.
+Proof. exact conv_typed_facts_base. Qed.
+
+Lemma welltypedE_context_base_inst {cf : checker_flags} (Σ : global_env_ext) : wf Σ.1 -> forall Γ t,
+  no_Eta_arg (snd t) -> welltyped Σ Γ (zip t) -> welltyped Σ (Γ ,,, stack_context (snd t)) (fst t).
+Proof. exact (welltyped_context_inst Σ). Qed.
 
 (*
 From MetaRocq.SafeChecker Require Import PCUICWfEnvImpl.
