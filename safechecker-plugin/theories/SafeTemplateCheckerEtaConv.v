@@ -48,8 +48,9 @@ Section EtaOracle.
     end.
 
   (* Without this hint the kernel check of the [Qed] below did not finish (> 60 s, out/probe-or2.log): the kernel
-     unfolded [isconv_term] instead of comparing its arguments. Unfolding last costs nothing in correctness
-     (the kernel still unfolds when needed); with it the [Qed] takes 0.002 s (out/probe-or3.log). *)
+     unfolded [isconv_term] instead of comparing its arguments; with it the [Qed] takes 0.002 s (out/probe-or3.log).
+     It changes the unfolding order only, not the term and not the statement; [Local] keeps it out of every file
+     that imports this one; it is not soundness-relevant (the kernel still unfolds when it must). *)
   Local Strategy opaque [isconv_term].
 
   Lemma eta_oracle_conv_sound (X_type : abstract_env_impl) (X : X_type.π2.π1)
