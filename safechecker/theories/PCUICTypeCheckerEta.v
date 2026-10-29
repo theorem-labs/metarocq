@@ -31,6 +31,8 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICErrorsEta PCUICWfEnvEta
   PCUICWfReductionEta PCUICSafeReduceEta PCUICSafeReduceEtaBridge
   PCUICTypingEtaDefs PCUICTypingEtaHyps.
+(* FORECAST-ONLY (fc/etak-forecast1, FO2): integ-all7's call-by-need fast path, over the η environment. *)
+From MetaRocq.SafeChecker Require PCUICCallByNeedEta PCUICCallByNeedSoundEta.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -500,6 +502,12 @@ Section Typecheck.
   (** The η typing facts ([PCUICTypingEtaHyps]): one implicit Prop premise; [sq] opens it. *)
   Context {EtaF : EtaFacts}.
 
+  (** FORECAST-ONLY (fc/etak-forecast1, FO2): the soundness of the call-by-need fast path over
+      [welltypedE], the named hypothesis [PCUICCallByNeedSoundEta.cbn_conv_soundE] (a Prop class, erased
+      by extraction; its base instance and the two sentences are in [PCUICCallByNeedSoundEta]).
+      Reconciled at the landing of [convert_cbn_soundE]. *)
+  Context {cbnE : PCUICCallByNeedSoundEta.CbnConvSoundE}.
+
   Local Notation reduce_to_sort := (reduce_to_sort (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
   Local Notation reduce_to_prod := (reduce_to_prod (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
   Local Notation reduce_to_ind := (reduce_to_ind (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
@@ -563,9 +571,14 @@ Section Typecheck.
     CoreTactics.equations_simpl;
     try Tactics.program_solve_wf.
 
+  Opaque PCUICCallByNeedEta.cbn_conv.
+
   (* replaces convert and convert_leq *)
   (** K7: success from [oracle_conv_sound]; a failure is a refusal (G7: the η conversion's failure carries
-      no proof), so base's failure obligation, which used [isconv_term_complete], is deleted. *)
+      no proof), so base's failure obligation, which used [isconv_term_complete], is deleted.
+      FORECAST-ONLY (fc/etak-forecast1, FO2): integ-all7's call-by-need fast path ([cbn_conv], BET-298) runs
+      before the oracle, as it runs before [isconv_term] in integ-all7's [PCUICTypeChecker.convert]; its
+      [true] is accepted with the named hypothesis [cbn_conv_soundE]. *)
   Equations convert (le : conv_pb) Γ t u
           (ht : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ t)
           (hu : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ u)
@@ -573,14 +586,16 @@ Section Typecheck.
     convert le Γ t u ht hu
       with inspect (eqb_term_upto_univ (abstract_env_compare_universe X) (abstract_env_compare_sort X) (abstract_env_compare_global_instance _ X) le t u) := {
         | @exist true He := ret _ ;
-        | @exist false He with
-          inspect (oracle_conv CO X_type X Γ le t ht u hu) := {
-          | @exist None Hc := ret _ ;
-          | @exist (Some e) Hc :=
-            let t' := hnf Γ t ht in
-            let u' := hnf Γ u hu in
-            Refused_c (NotCumulSmaller false X Γ t u t' u' e)
-      }}.
+        | @exist false He with inspect (PCUICCallByNeedEta.cbn_conv X_type X le Γ t u) := {
+          | @exist true Hcbn := ret _ ;
+          | @exist false Hcbn with
+            inspect (oracle_conv CO X_type X Γ le t ht u hu) := {
+            | @exist None Hc := ret _ ;
+            | @exist (Some e) Hc :=
+              let t' := hnf Γ t ht in
+              let u' := hnf Γ u hu in
+              Refused_c (NotCumulSmaller false X Γ t u t' u' e)
+      }}}.
   Next Obligation.
     unfold eqb_term_upto_univ_napp in He. pose proof (heΣ _ wfΣ) as [heΣ].
     specialize_Σ wfΣ.
@@ -598,8 +613,14 @@ Section Typecheck.
     - exact (subject_is_open_termE (wfΣ := wf_extE_wfE Σ heΣ) hu).
   Qed.
   Next Obligation.
+    (* FORECAST-ONLY (FO2): the call-by-need fast path's [true], by the named hypothesis
+       [PCUICCallByNeedSoundEta.cbn_conv_soundE] (base: [PCUICCallByNeedSoundHookProof.convert_cbn_sound]). *)
+    exact (PCUICCallByNeedSoundEta.cbn_conv_soundE X_type X le Γ t u ht hu Hcbn Σ wfΣ).
+  Qed.
+  Next Obligation.
     symmetry in Hc. exact (oracle_conv_sound CO X_type X Γ le t ht u hu Hc Σ wfΣ).
   Qed.
+  Transparent PCUICCallByNeedEta.cbn_conv.
 
   Definition wt_decl (Σ : global_env_ext) Γ d :=
     match d with
@@ -2444,36 +2465,50 @@ Section Typecheck.
     now exists t.
   Qed.
 
-  (** A case on a coinductive type is allowed only when its return type does not
-      mention the scrutinee, variable 0 of the predicate context. *)
-  Definition check_nondep_cofinite (mdecl : mutual_inductive_body) (p : predicate term)
+  (** A case on a coinductive type whose [ci_cofix_nondep] flag is set, the flag a
+      cofixpoint scrutinee unfolds under, is allowed only when its return type does
+      not mention the scrutinee, variable 0 of the predicate context.
+      (Re-synced from integ-all7's [PCUICTypeChecker], BET-339.) *)
+  Definition check_nondep_cofinite (ci : case_info) (mdecl : mutual_inductive_body)
+    (p : predicate term)
     : typing_result_comp
-        (is_true (isCoFinite (ind_finite mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) :=
-    if isCoFinite (ind_finite mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn)
+        (is_true (isCoFinite (ind_finite mdecl) ==>
+                  (ci.(ci_cofix_nondep) ==>
+                   on_free_vars (strengthenP 0 1 xpredT) p.(preturn)))) :=
+    if isCoFinite (ind_finite mdecl) ==>
+       (ci.(ci_cofix_nondep) ==> on_free_vars (strengthenP 0 1 xpredT) p.(preturn))
       as b return typing_result_comp (is_true b)
     then Checked_comp eq_refl
     else TypeError_comp (Msg "Dependent case on coinductive") diff_false_true.
 
-  (** On a coinductive [stream], [match s return s = s with ... end] is refused and
-      a return type that mentions only an outer variable is accepted. *)
+  (** On a coinductive [stream], [match s return s = s with ... end] is refused when
+      the flag is set and accepted when it is unset; a return type that mentions only
+      an outer variable is accepted either way. *)
   Lemma check_nondep_cofinite_stream :
     let stream := mkInd (MPfile [], "stream") 0 in
     let eq_ind := mkInd (MPfile [], "eq") 0 in
     let mdecl := {| ind_finite := CoFinite; ind_npars := 0; ind_params := [];
                     ind_bodies := []; ind_universes := Monomorphic_ctx; ind_variance := None |} in
+    let ci (nondep : bool) := {| ci_ind := stream; ci_npar := 0; ci_relevance := Relevant;
+                                 ci_cofix_nondep := nondep |} in
     let pred (ret : term) := {| pparams := []; puinst := [];
                        pcontext := [vass (mkBindAnn nAnon Relevant) (tInd stream [])];
                        preturn := ret |} in
-    match check_nondep_cofinite mdecl (pred (mkApps (tInd eq_ind []) [tInd stream []; tRel 0; tRel 0])) with
+    let dep := pred (mkApps (tInd eq_ind []) [tInd stream []; tRel 0; tRel 0]) in
+    match check_nondep_cofinite (ci true) mdecl dep with
     | TypeError_comp e _ => e = Msg "Dependent case on coinductive"
     | Checked_comp _ => False
     end /\
-    match check_nondep_cofinite mdecl (pred (tRel 1)) with
+    match check_nondep_cofinite (ci false) mdecl dep with
+    | TypeError_comp _ _ => False
+    | Checked_comp _ => True
+    end /\
+    match check_nondep_cofinite (ci true) mdecl (pred (tRel 1)) with
     | TypeError_comp _ _ => False
     | Checked_comp _ => True
     end.
   Proof using Type.
-    vm_compute. split; [reflexivity | exact I].
+    vm_compute. split; [reflexivity | split; exact I].
   Qed.
 
   Equations infer (Γ : context) (HΓ : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ wf_localE Σ Γ ∥) (t : term)
@@ -2567,7 +2602,7 @@ Section Typecheck.
     d <- lookup_ind_decl ci.(ci_ind) ;;
     (*let (mdecl;(idecl;isdecl)):= d in*)
     let mdecl := d.π1 in let idecl := d.π2.π1 in let isdecl := d.π2.π2 in
-    check_coind <- check_of_comp (check_nondep_cofinite mdecl p) ;;
+    check_coind <- check_of_comp (check_nondep_cofinite ci mdecl p) ;;
     check_eq_true (eqb (ind_npars mdecl) ci.(ci_npar))
                   (Msg "not the right number of parameters") ;;
     (* let '(params, indices) := chop ci.(ci_npar) args in *)
