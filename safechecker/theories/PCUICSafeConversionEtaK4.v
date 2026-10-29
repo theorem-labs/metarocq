@@ -371,6 +371,95 @@ Section ConversionEtaK4.
     apply R_aux_Acc. assumption.
   Qed.
 
+  (* base [R_aux_irrelevance] (PCUICSafeConversion.v:324-347) *)
+  Lemma R_aux_irrelevance Γ x y z :
+    ((x.π1; x.π2.1), (existT (fun x => pos x × state) (` x.π2.2.π1) x.π2.2.π2)) =
+    ((y.π1; y.π2.1), (existT (fun x => pos x × state) (` y.π2.2.π1) y.π2.2.π2)) ->
+    R_aux Γ z x -> R_aux Γ z y.
+  Proof using Type.
+    destruct x as [t [pt [w [pw s]]]], y as [t' [pt' [w' [pw' s']]]].
+    destruct z as [tz [ptz [wz [pwz sz]]]].
+    cbn. intros [=]. subst. noconf H1. destruct w as [w wt], w' as [w' wt'].
+    cbn in *. subst w'. noconf H3.
+    unfold R_aux.
+    intros hr. depelim hr.
+    - now constructor.
+    - cbn in H.
+      eapply right_dlexmod with e. cbn.
+      depelim H.
+      * constructor. exact H.
+      * constructor 2.
+        depelim H.
+        + now constructor.
+        + eapply right_dlexmod with e0. cbn in H.
+          depelim H.
+          { constructor 1. cbn. exact H. }
+          { constructor 2. exact H. }
+  Qed.
+
+  (* base [R_irrelevance] (PCUICSafeConversion.v:349-358). The packs also differ in their
+     [wf_stack] witnesses, which are proofs of a boolean equality, hence equal by [uip]
+     (decidable equality on bool, no axiom). *)
+  Lemma R_irrelevance Γ x y z :
+    (x.(st), x.(tm1), x.(stk1), x.(tm2), x.(stk2)) =
+    (y.(st), y.(tm1), y.(stk1), y.(tm2), y.(stk2)) ->
+    R Γ z x -> R Γ z y.
+  Proof using Type.
+    destruct x as [s t1 π1 t2 π2 f1 f2 h], y as [s' t1' π1' t2' π2' f1' f2' h']; cbn.
+    intros [=]; subst.
+    assert (f1 = f1') as -> by apply uip.
+    assert (f2 = f2') as -> by apply uip.
+    unfold R. eapply R_aux_irrelevance; cbn.
+    reflexivity.
+  Qed.
+
+  (* base [R_cored] (PCUICSafeConversion.v:360-367) *)
+  Lemma R_cored :
+    forall Γ p1 p2,
+      (forall Σ (wfΣ : abstract_env_ext_rel X Σ), cored Σ Γ (pzt p1) (pzt p2)) ->
+      R Γ p1 p2.
+  Proof using Type.
+    intros Γ p1 p2 h.
+    left. intros. eapply cored_cored'. eapply h; eauto.
+  Qed.
+
+  (* base [R_aux_cored2] (PCUICSafeConversion.v:393-412) *)
+  Lemma R_aux_cored2 :
+    forall Γ t1 t2 (p1 : pos t1) (p2 : pos t2) w1 w2 q1 q2 s1 s2,
+      (eqt t1 t2) ->
+      ` p1 = ` p2 ->
+      (forall Σ (wfΣ : abstract_env_ext_rel X Σ), cored' Σ Γ (` w1) (` w2)) ->
+      R_aux Γ (t1 ; (p1, (w1 ; (q1, s1)))) (t2 ; (p2, (w2 ; (q2, s2)))).
+  Proof using Type.
+    intros Γ t1 t2 [p1 hp1] [p2 hp2] [t1' h1'] [t2' h2'] q1 q2 s1 s2 e1 e2 h.
+    cbn in e2. cbn in h. subst.
+    unshelve eright.
+    - auto.
+    - unfold R_aux_obligations_obligation_1. simpl.
+      match goal with
+      | |- context [ exist p2 ?hp1 ] =>
+        assert (e : hp1 = hp2) by eapply uip
+      end.
+      rewrite e.
+      right.
+      left. assumption.
+  Qed.
+
+  (* base [R_cored2] (PCUICSafeConversion.v:414-427) *)
+  Lemma R_cored2 :
+    forall Γ p1 p2,
+      (eqt (pzt p1) (pzt p2)) ->
+      ` (pps1 p1) = ` (pps1 p2) ->
+      (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+          cored Σ Γ (` (pwt p1)) (` (pwt p2))) ->
+      R Γ p1 p2.
+  Proof using Type.
+    intros Γ [s1 t1 π1 u1 σ1 f1 g1 h1] [s2 t2 π2 u2 σ2 f2 g2 h2] e1 e2 h. simpl in *.
+    eapply R_aux_cored2. all: simpl. all: auto.
+    all: intros; eapply cored_cored'.
+    all: eauto.
+  Qed.
+
   (** The three descent lemmas the obligations are discharged with. *)
 
   Lemma R_aux_positionR :
