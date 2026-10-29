@@ -23,7 +23,9 @@
   [J@{a}]. [ji_wf] proves [wf ji_env], [ji_wfE] [wfE ji_env]; [ji_wf_ext] and [ji_wf_extE] prove the
   monomorphic extension [ji_Σ] well formed, [ji_wf_extp] the extension [ji_Σp] by the universe context
   of [J]. The section "Base derivations" gives the base typing facts the instances of
-  [PCUICTypingEtaHyps] lift to the η typing. No axiom is used. *)
+  [PCUICTypingEtaHyps] lift to the η typing. [Print Assumptions ji_wf] lists the same 34 names as for
+  [si_wf] and base [typing_incl_E]: the primitive types and operations, their specification axioms and
+  [FloatAxioms.SF2Prim_Prim2SF]; this file adds no axiom (2026-10-29, at commit c131097f). *)
 
 From Stdlib Require Import ssreflect ssrbool Lia ZArith.
 From MetaRocq.Utils Require Import utils.
