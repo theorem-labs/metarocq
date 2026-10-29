@@ -27,7 +27,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICEtaA6More PCUICEtaMkAppsTRel
      PCUICEtaI5 PCUICInversionEta PCUICSREtaConv PCUICSpineEta PCUICInductivesEta
      PCUICWsCumulEtaInstancesGlobal.
-From MetaRocq.PCUIC Require PCUICWfUniversesEta.
+From MetaRocq.PCUIC Require PCUICWfUniversesEta PCUICEtaI5A2.
 
 From Equations.Type Require Import Relation_Properties.
 From Equations.Prop Require Import DepElim.
@@ -56,10 +56,11 @@ From Stdlib Require Import ssreflect ssrbool.
   relations, used from base, which this file imports.
 
   Proof routes that differ from base (the statements are twins):
-  - [ws_cumul_pb_mkApps_eqE] goes by congruence: the head comparison [compare_term_napp] gives
-    [mkApps f u ≤ mkApps f' u] through the inclusion of the base relation ([ws_cumul_pb_compare],
-    [ws_cumul_pb_incl_E]), and [ws_cumul_pbE_mkApps] relates the arguments. Base compares
-    common reducts through [ws_cumul_pb_terms_confl].
+  - [ws_cumul_pb_mkApps_eqE] builds the join directly: each argument pair's join gives reducts
+    ([PCUICEtaI5A2.All2_JoinE_ex]), and the head comparison [compare_term_napp] is U1' at the
+    same [napp] ([eq_term_upto_univ_napp_finst], [PCUICEtaFInstGlue]), so the two spines over
+    those reducts are compared by [PCUICEtaI5A2.RF_mkApps]. Base compares common reducts through
+    [ws_cumul_pb_terms_confl].
   - [positive_cstr_arg_subst_nestedE] reads the universe clause of [invert_cumul_ind_indE]
     ([cmp_global_instance_finst] at the number of arguments) and rebuilds the conclusion with
     [ws_cumul_pbE_Ind_finst] ([PCUICConversionEtaCongrFinst]), which takes that clause.
@@ -236,17 +237,18 @@ Lemma ws_cumul_pb_mkApps_eqE {cf} {Σ} {wfΣ : wfE Σ} Γ f f' u u' :
   Σ ;;; Γ ⊢E mkApps f u ≤ mkApps f' u'.
 Proof.
   intros onΓ onf onf' eqf equ.
-  have onu := WT_open_left equ.
-  transitivity (mkApps f' u).
-  - apply ws_cumul_pb_incl_E. eapply ws_cumul_pb_compare.
-    + exact onΓ.
-    + rewrite on_free_vars_mkApps onf onu //.
-    + rewrite on_free_vars_mkApps onf' onu //.
-    + eapply eq_term_upto_univ_napp_mkApps.
-      * now rewrite Nat.add_0_r.
-      * eapply All2_refl. intros x. reflexivity.
-  - eapply ws_cumul_pbE_mkApps; [|exact equ].
-    apply ws_cumul_pbE_refl; [exact onΓ|exact onf'].
+  destruct (PCUICEtaI5A2.All2_JoinE_ex Σ Γ u u' (WT_join equ)) as (lx & ly & hlx & hly & hxy).
+  constructor.
+  - exact onΓ.
+  - rewrite on_free_vars_mkApps onf (WT_open_left equ) //.
+  - rewrite on_free_vars_mkApps onf' (WT_open_right equ) //.
+  - apply (PCUICEtaI5A2.BE_JoinE Σ Γ Cumul _ _ (mkApps f lx) (mkApps f' ly)).
+    + exact (PCUICEtaI5A2.BE_mkApps_args Σ Γ _ _ _ hlx).
+    + exact (PCUICEtaI5A2.BE_mkApps_args Σ Γ _ _ _ hly).
+    + rewrite !PCUICEtaI5A2.canon_mkApps.
+      apply PCUICEtaI5A2.RF_mkApps; [|apply All2_map; exact hxy].
+      rewrite Nat.add_0_l length_map -(All2_length hlx).
+      apply PCUICEtaI5A2.RF_canon. exact (eq_term_upto_univ_napp_finst _ _ _ _ _ _ _ eqf).
 Qed.
 
 Lemma ws_cumul_pb_LetIn_substE {cf} {Σ} {wfΣ : wfE Σ} {le Γ na na' b b' ty ty' t t'} :
@@ -1096,7 +1098,8 @@ Proof.
   eapply ws_cumul_ctx_pbE_rel_app.
   apply into_ws_cumul_ctx_pbE; eauto with fvs.
   apply All2_fold_app; auto.
-  (* base's [reflexivity] resolves to [cumul_ctx_refl]; the [JoinE] twin is not an instance *)
+  (* base's [reflexivity] resolves to [cumul_ctx_refl], at [Cumul]; that instance has no [JoinE]
+     twin (the instance [conv_ctx_reflE] is at [Conv]) *)
   { eapply PCUICConfluence.All2_fold_refl. intros ? [na [b|] ty]; constructor; try reflexivity; apply JoinE_refl. }
   induction c; try solve[constructor; auto].
   move: wf; rewrite /= on_free_vars_ctx_snoc => /andP[] h0 h1.

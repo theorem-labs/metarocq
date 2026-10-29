@@ -13,13 +13,18 @@
 
   F-inst's variance is base's at the head's full arity ([global_variance_eta_gen]),
   so both halves are base's lemmas at that arity. A non-cumulative constructor
-  gets [AllEqual] there, as base gives it. *)
+  gets [AllEqual] there, as base gives it.
+
+  The reverse direction, base ⇒ F-inst, holds at every [(pb, napp)]: for the instance
+  comparison ([cumul_ind_finst], [cumul_construct_finst]) and for the whole term comparison
+  ([eq_term_upto_univ_napp_finst]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Environment EnvironmentTyping.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICEquality PCUICEtaFInst.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICEquality PCUICEtaFInst.
+From Equations.Prop Require Import DepElim.
 
 Local Open Scope type_scope.
 
@@ -129,6 +134,37 @@ Proof.
   - rewrite (finst_mode_under Σ (ConstructRef i k) pb napp hlt).
     apply cmp_instance_opt_variance.
     exact (cmp_global_instance_construct_under Σ cu pb i k napp u u' hlt h).
+Qed.
+
+(** ** The term-level reverse glue: base comparison ⇒ U1'
+
+  Base [eq_term_upto_univ_napp] at [(pb, napp)] implies U1' ([eq_term_upto_univ_eta_napp]) at the
+  same [(pb, napp)], for any universe and sort comparisons. The two relations differ only at
+  [eq_Ind]/[eq_Construct], where [cumul_ind_finst]/[cumul_construct_finst] carry base's instance
+  comparison over; every other constructor is base's. The proof is base's
+  [eq_term_upto_univ_impl] with those two cases replaced. *)
+Lemma eq_term_upto_univ_napp_finst (Σ : global_env) cu cs pb napp t u :
+  eq_term_upto_univ_napp Σ cu cs pb napp t u ->
+  eq_term_upto_univ_eta_napp Σ cu cs pb napp t u.
+Proof.
+  induction t in pb, napp, u |- * using term_forall_list_ind;
+    try (inversion 1; subst; constructor; eauto; fail).
+  - inversion 1; subst; constructor.
+    eapply All2_impl'; tea.
+    eapply All_impl; eauto.
+  - inversion 1; subst; constructor. now apply cumul_ind_finst.
+  - inversion 1; subst; constructor. now apply cumul_construct_finst.
+  - inversion 1; subst; constructor; unfold eq_predicate, eq_branches, eq_branch in *; eauto; solve_all.
+  - inversion 1; subst; constructor.
+    eapply All2_impl'; tea.
+    eapply All_impl; eauto.
+    cbn. intros x [? ?] y (?&?&?&?). repeat split; eauto.
+  - inversion 1; subst; constructor.
+    eapply All2_impl'; tea.
+    eapply All_impl; eauto.
+    cbn. intros x [? ?] y (?&?&?&?). repeat split; eauto.
+  - intros h; depelim h. depelim o; constructor; cbn in X; constructor; intuition eauto.
+    solve_all.
 Qed.
 
 (** ** Arity bridges: [head_arity] is the count S4's lemmas state *)
