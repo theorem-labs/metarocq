@@ -19,7 +19,7 @@ Definition t_nat : inductive :=
 Definition t_O : term := tConstruct t_nat 0 [].
 Definition t_S : term := tConstruct t_nat 1 [].
 Definition t_ci (npar : nat) : case_info :=
-  {| ci_ind := t_nat; ci_npar := npar; ci_relevance := Relevant |}.
+  {| ci_ind := t_nat; ci_npar := npar; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition t_pred : predicate term :=
   {| pparams := []; puinst := []; pcontext := []; preturn := tSort sProp |}.
 

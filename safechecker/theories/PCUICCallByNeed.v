@@ -1605,7 +1605,8 @@ Definition cbn_inductive_eqb (i1 i2 : inductive) : bool :=
 
 Definition cbn_case_info_eqb (c1 c2 : case_info) : bool :=
   cbn_inductive_eqb c1.(ci_ind) c2.(ci_ind) && Nat.eqb c1.(ci_npar) c2.(ci_npar)
-  && eqb c1.(ci_relevance) c2.(ci_relevance).
+  && eqb c1.(ci_relevance) c2.(ci_relevance)
+  && Bool.eqb c1.(ci_cofix_nondep) c2.(ci_cofix_nondep).
 
 (** *** The delta memo: a binary trie on the bits of the constant's identifier, each node
   with the module paths of the constants whose identifier ends there *)

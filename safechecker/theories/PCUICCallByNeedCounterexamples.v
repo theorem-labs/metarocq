@@ -497,7 +497,7 @@ Definition cbn_rw_na : aname := {| binder_name := nAnon; binder_relevance := Rel
 Definition cbn_rw_ind : inductive :=
   {| inductive_mind := (MPfile ["RW"], "rw"); inductive_ind := 0 |}.
 Definition cbn_rw_ci : case_info := {| ci_ind := cbn_rw_ind; ci_npar := 0; ci_relevance :=
-  Relevant |}.
+  Relevant; ci_cofix_nondep := true |}.
 #[local] Definition cbn_rw_p : predicate term :=
   {| pparams := []; puinst := []; pcontext := []; preturn := tSort sProp |}.
 (** A branch whose context is one let-binding of [tRel 0]: a variable outside the match. *)

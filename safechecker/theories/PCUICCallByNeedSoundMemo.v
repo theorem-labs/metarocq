@@ -139,11 +139,12 @@ Qed.
 
 Lemma cbn_case_info_eqb_eq (c1 c2 : case_info) : cbn_case_info_eqb c1 c2 = true -> c1 = c2.
 Proof.
-  destruct c1 as [i1 n1 r1], c2 as [i2 n2 r2]. unfold cbn_case_info_eqb. cbn.
-  intros h. apply Bool.andb_true_iff in h as [h1 h2].
+  destruct c1 as [i1 n1 r1 d1], c2 as [i2 n2 r2 d2]. unfold cbn_case_info_eqb. cbn.
+  intros h. apply Bool.andb_true_iff in h as [h0 hd].
+  apply Bool.andb_true_iff in h0 as [h1 h2].
   apply Bool.andb_true_iff in h1 as [h3 h4].
   apply cbn_inductive_eqb_eq in h3. apply PeanoNat.Nat.eqb_eq in h4.
-  apply eqb_eq in h2. subst. reflexivity.
+  apply eqb_eq in h2. apply Bool.eqb_prop in hd. subst. reflexivity.
 Qed.
 
 Lemma cbn_instance_eqb_eq (u v : Instance.t) : Instance.eqb u v = true -> u = v.
