@@ -250,6 +250,10 @@ theories/PCUICEtaT8Probe.v
 # Bidirectional completeness over typingE (row T6, the E copy of BDFromPCUIC; T8 forecast), and its satisfying instances
 theories/Bidirectional/BDFromPCUICEta.v
 theories/Bidirectional/BDFromPCUICEtaInstances.v
+# The E copy of PCUICCumulProp (row T6): cumul_propE, its refutations, and its satisfying instances
+theories/PCUICCumulPropEta.v
+theories/PCUICCumulPropEtaRefutations.v
+theories/PCUICCumulPropEtaInstances.v
 # Classification over typingE (row T6, the E copy of PCUICClassification), and its satisfying instances
 theories/PCUICClassificationEta.v
 theories/PCUICClassificationEtaInstances.v
