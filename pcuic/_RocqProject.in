@@ -205,6 +205,18 @@ theories/PCUICContextConversionEta.v
 theories/PCUICWsCumulEtaCtx.v
 theories/PCUICWsCumulEtaCtxTyp.v
 theories/PCUICWsCumulEtaCtxInstances.v
+# E copies over typingE: typing notions, typing spines, universe instances, contexts, universes, substitution, arities
+theories/PCUICTypingEtaNotions.v
+theories/PCUICGenerationEta.v
+theories/Typing/PCUICUnivSubstitutionTypEta.v
+theories/PCUICWfUniversesEta.v
+theories/PCUICSubstitutionEta.v
+theories/PCUICContextsEta.v
+theories/PCUICAritiesEta.v
+theories/PCUICTypingEtaCopies2Instances.v
+# Global symmetry and transitivity instances for ws_cumul_ctx_pbE and ws_cumul_pbE_terms, and their uses
+theories/PCUICWsCumulEtaInstancesGlobal.v
+theories/PCUICWsCumulEtaInstancesGlobalInstances.v
 # Inversion of typingE (E copy of PCUICInversion)
 theories/PCUICInversionEta.v
 # The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
@@ -227,4 +239,6 @@ theories/PCUICInversionEtaInstances.v
 theories/PCUICEtaFO4Instances.v
 # K3a: the semantic and typed lemmas about the eta views of PCUICPositionEta
 theories/PCUICPositionEtaTyping.v
+# The comparisons wfE makes are between scoped pairs, and their satisfying instances
+theories/PCUICWfEScope.v
 # theories/All.v
