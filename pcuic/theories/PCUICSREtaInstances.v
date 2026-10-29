@@ -14,7 +14,37 @@
   [PCUICInversionEtaInstances]):
   - [si_Σ]: [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE];
   - [Σ_po]: [int : Set], [land : int -> int -> int] registered as [Int63land], the primitive
-    integers on [int], with [iv_po_wfE].
+    integers on [int], with [iv_po_wfE];
+  - [iv_Σ]: [CoInductive R (A : Prop) : Prop := mkR { f : A }], with [iv_wfE].
+
+  **Coverage of the 17 premise lemmas of [sr_red1E].** Each [sr_red1E_<rule>] is APPLIED to
+  concrete arguments in [sr_red1E_<rule>_inst]: a concrete derivation with that head, and every
+  induction-hypothesis premise discharged by [sr_red1E] at the concrete sub-derivations
+  ([sri_SR], [sri_Pj], [sri_conj], [sri_PΓ], [sri_glob]). "Step" means the instance applies the
+  lemma's conclusion to that concrete closed step; "vacuous" means the term has no reduct, so the
+  instance states the lemma's conclusion as such.
+
+  | premise lemma | instance | why non-degenerate |
+  |---|---|---|
+  | [sr_red1E_Pj] | [sr_red1E_Pj_inst] | [z := (λx:Prop. x) (∀P:Prop. P) : Prop]; its term steps (β) |
+  | [sr_red1E_ctx] | [sr_red1E_ctx_inst] | context [z : (λx. x) (∀P. P)] steps to [z : ∀P. P]; [All_local_env_over] on a transparent [wf_localE] |
+  | [sr_red1E_Rel] | [sr_red1E_Rel_inst] | δ of the let-bound [z := ∀P:Prop. P] |
+  | [sr_red1E_Sort] | [sr_red1E_Sort_inst] | vacuous: [Prop] has no reduct |
+  | [sr_red1E_Prod] | [sr_red1E_Prod_inst] | the domain [(λx. x) (∀P. P)] steps |
+  | [sr_red1E_Lambda] | [sr_red1E_Lambda_inst] | the domain of [λz:(λx. x) (∀P. P). z] steps |
+  | [sr_red1E_LetIn] | [sr_red1E_LetIn_inst] | ζ on [let z : Prop := ∀P. P in z] |
+  | [sr_red1E_App] | [sr_red1E_App_inst] | β on [(λx:Prop. x) (∀P:Prop. P)] |
+  | [sr_red1E_Const] | [sr_red1E_Const_inst] | vacuous: [land] has no body and arity 2 |
+  | [sr_red1E_Ind] | [sr_red1E_Ind_inst] | vacuous: [tInd] has no reduct |
+  | [sr_red1E_Construct] | [sr_red1E_Construct_inst] | vacuous: [tConstruct] has no reduct |
+  | [sr_red1E_Case] | [sr_red1E_Case_inst] | ι on [match c x with c => c x end] |
+  | [sr_red1E_Proj] | [sr_red1E_Proj_inst] | [f (mkR (∀P. P) z)] steps to [z] |
+  | [sr_red1E_Fix] | [sr_red1E_Fix_inst] | vacuous: no redex in the fixpoint's types or bodies |
+  | [sr_red1E_CoFix] | [sr_red1E_CoFix_inst] | vacuous: no redex in the cofixpoint's types or bodies |
+  | [sr_red1E_Prim] | [sr_red1E_Prim_inst] | vacuous: the literal [1] has no reduct |
+  | [sr_red1E_Cumul] | [sr_red1E_Cumul_inst] | conversion by η ([k g ≤ k (λx. g x)], [cumul_eta_l]), then β |
+
+  None of the 17 is left uncovered; 10 take a real step, 7 are vacuous.
 
   **Non-degeneracy.** Each subject-reduction instance takes a real reduction step of a term with a
   real typing derivation. The steps: β ([sr_red1E_beta_inst]), ζ ([subject_reduction1E_zeta_inst]),
@@ -30,7 +60,7 @@ From Stdlib Require Import ssreflect ssrbool PrimInt63.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Kernames Environment EnvironmentTyping
      PrimitiveOps.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICOnOne PCUICTyping
      PCUICCases PCUICCasesContexts PCUICEquality PCUICReduction PCUICConfluence PCUICWellScopedCumulativity
      PCUICPrimitiveRed PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd PCUICTypingEtaNotions
      PCUICClosedTypEta PCUICClosedBodies PCUICEtaI5 PCUICWellScopedCumulativityEta
@@ -241,6 +271,54 @@ Proof. exists po_int_kn, po_int_body. split; [reflexivity|exact iv_po_declared_i
 
 Lemma sri_tag_declared : prim_op_tag_declared Σ_po primInt.
 Proof. exists po_int_kn, po_int_body. split; [reflexivity|exact iv_po_declared_int|split; reflexivity]. Qed.
+
+(** *** Pieces for the direct instances of the 17 premise lemmas *)
+
+(** [z : (λx:Prop. x) (∀P:Prop. P)] with a TRANSPARENT [wf_localE] derivation, so that
+    [All_local_env_over] can be built on it ([sr_red1E_ctx_inst]). *)
+Definition sri_wfz_tu : lift_typing typingE si_Σ [] (j_vass si_na sri_A) :=
+  iv_vass si_Σ [] si_na sri_A sProp (iv_app_typed si_Σ [] localenv_nil) eq_refl.
+
+Definition sri_wfz : wf_localE si_Σ sri_Γz.
+Proof. apply localenv_cons_abs; [constructor|exact sri_wfz_tu]. Defined.
+
+(** ι as a closed step. *)
+Lemma sri_iota_cr1 : closed_red1 si_Σ iv_Γ1 iv_match (iota_red 1 iv_mp [tRel 0] iv_br).
+Proof. split; [reflexivity|reflexivity|exact sri_iota_red]. Qed.
+
+(** [k g] in [iv_Γk], and the η-typed redex typed first at [k g] (the [Cumul] instance then
+    moves it to [k (λx:Prop. g x)] by [iv_spec_eta]). *)
+Lemma sri_kg_typed : si_Σ ;;; iv_Γk |-E iv_kg : si_P.
+Proof. exact (weakeningE si_Σ iv_Γkg [vass si_na (tApp (tRel 0) (tRel 1))] _ _ si_wfE iv_wf_Γk iv_kg0_typed). Qed.
+
+Lemma sri_eta_redex_kg : si_Σ ;;; iv_Γk |-E sri_eta_redex : iv_kg.
+Proof.
+  have w := iv_wf_P si_Σ iv_Γk iv_wf_Γk.
+  have hy : si_Σ ;;; iv_Γk ,, vass si_na si_P |-E tRel 1 : lift0 1 iv_kg.
+  { exact (weakeningE si_Σ iv_Γk [vass si_na si_P] (tRel 0) iv_kg si_wfE w iv_y_typed). }
+  have hk : si_Σ ;;; iv_Γk ,, vass si_na si_P |-E lift0 1 iv_kg : tSort sProp.
+  { exact (weakeningE si_Σ iv_Γk [vass si_na si_P] iv_kg si_P si_wfE w sri_kg_typed). }
+  have hP := iv_P_typed si_Σ iv_Γk iv_wf_Γk.
+  exact (typeE_App _ _ (tLambda si_na si_P (tRel 1)) si_na si_P (lift0 1 iv_kg) _ iv_False
+           (typeE_Prod _ _ si_na si_P (lift0 1 iv_kg) _ sProp (iv_vass_s si_Σ iv_Γk si_na si_P _ hP eq_refl) hk)
+           (typeE_Lambda _ _ si_na si_P (tRel 1) (lift0 1 iv_kg) (iv_vass si_Σ iv_Γk si_na si_P _ hP eq_refl) hy)
+           (iv_False_typed si_Σ iv_Γk iv_wf_Γk)).
+Qed.
+
+(** [mkR (∀P:Prop. P) z : R (∀P:Prop. P)] in [z : ∀P:Prop. P], whose projection [f] steps to [z]. *)
+Definition sri_mkRz : term := mkApps (tConstruct iv_ind 0 []) [iv_False; tRel 0].
+
+Lemma sri_mkRz_typed : iv_Σ ;;; iv_Γc |-E sri_mkRz : mkApps (tInd (proj_ind iv_proj) []) [iv_False].
+Proof.
+  have hF := iv_False_typed iv_Σ iv_Γc iv_wf_Γc.
+  have wF := iv_wf_vass iv_Σ iv_Γc iv_fna iv_False sProp iv_wf_Γc hF eq_refl.
+  exact (typeE_App _ _ (tApp (tConstruct iv_ind 0 []) iv_False) iv_fna iv_False iv_RF
+           (Sort.sort_of_product sProp sProp) (tRel 0)
+           (typeE_Prod _ _ iv_fna iv_False iv_RF sProp sProp
+              (iv_vass_s iv_Σ iv_Γc iv_fna iv_False sProp hF eq_refl) (iv_RF_typed _ wF))
+           (iv_mkRF_typed iv_Γc iv_wf_Γc)
+           (typeE_Rel _ _ 0 (vass si_na iv_False) iv_wf_Γc eq_refl)).
+Qed.
 
 Section SRInstances.
 
@@ -599,6 +677,228 @@ Section SRInstances.
     subst decl.
     exact (typing_spine_prim_arg_typesE (Σ := Σ_po) (wfΣ := iv_po_wfE) (r := po_retro) (tags := [primInt; primInt])
              (res := sri_int) (ls := [LInt 1%uint63; LInt 3%uint63]) po_land_ty A eq_refl hle eq_refl sp).
+  Qed.
+
+  (** *** The 17 premise lemmas of [sr_red1E], each applied directly
+
+    Each [sr_red1E_<rule>_inst] applies [sr_red1E_<rule>] to a concrete derivation with that
+    head; every premise is proved here: the typing and judgment premises by concrete
+    derivations, the induction-hypothesis premises ([P], [Pj], [PΓ], the global [Pj]) by
+    [sr_red1E] at those sub-derivations ([sri_SR], [sri_Pj], [sri_conj], [sri_PΓ], [sri_glob]).
+    Where the term has a reduct, the instance then applies the lemma's conclusion to a concrete
+    closed step (the header's table). *)
+
+  (* The environment is [(Σ, ud)], so that the [wfE] argument (stated over [Σ : global_env]) fixes
+     [Σ] by unification at the call sites. *)
+  Lemma sri_SR {Σ : global_env} {ud : universes_decl} (wfΣ : wfE Σ) {Γ t T} (h : (Σ, ud) ;;; Γ |-E t : T) :
+    forall u, closed_red1 (Σ, ud) Γ t u -> (Σ, ud) ;;; Γ |-E u : T.
+  Proof. exact (env_propE_typing sr_red1E (Σ, ud) wfΣ Γ t T h). Qed.
+
+  Lemma sri_PΓ {Σ : global_env} {ud : universes_decl} (wfΣ : wfE Σ) {Γ t T} (h : (Σ, ud) ;;; Γ |-E t : T) :
+    wf_localE (Σ, ud) Γ ×
+    (forall Γ' Δ' Δ, Γ = Γ' ,,, Δ' ->
+       OnOne2_local_env (fun Δ : context => on_one_decl (closed_red1 (Σ, ud) (Γ' ,,, Δ))) Δ' Δ ->
+       wf_local_relE (Σ, ud) Γ' Δ).
+  Proof. exact (sr_red1E (Σ, ud) wfΣ Γ t T h).2.1. Qed.
+
+  Lemma sri_glob {Σ : global_env} {ud : universes_decl} (wfΣ : wfE Σ) {Γ t T} (h : (Σ, ud) ;;; Γ |-E t : T) :
+    on_global_env cumulSpecE0
+      (fun Σ Γ j => lift_typing0 (fun t T => Σ ;;; Γ |-E t : T × (forall u, closed_red1 Σ Γ t u -> Σ ;;; Γ |-E u : T)) j)
+      Σ.
+  Proof. exact (sr_red1E (Σ, ud) wfΣ Γ t T h).1. Qed.
+
+  Lemma sri_Pj {Σ : global_env} {ud : universes_decl} (wfΣ : wfE Σ) {Γ j} (h : lift_typing typingE (Σ, ud) Γ j) :
+    lift_typing0 (fun t T => (Σ, ud) ;;; Γ |-E t : T × (forall u, closed_red1 (Σ, ud) Γ t u -> (Σ, ud) ;;; Γ |-E u : T)) j.
+  Proof. apply lift_typing_impl with (1 := h) => t T ht. split; [exact ht|exact (sri_SR wfΣ ht)]. Qed.
+
+  Lemma sri_conj {Σ : global_env} {ud : universes_decl} (wfΣ : wfE Σ) {Γ j} (h : lift_typing typingE (Σ, ud) Γ j) :
+    lift_typing_conj (typingE (Σ, ud)) (fun Γ t T => forall u, closed_red1 (Σ, ud) Γ t u -> (Σ, ud) ;;; Γ |-E u : T) Γ j.
+  Proof. apply lift_typing_impl with (1 := h) => t T ht. split; [exact ht|exact (sri_SR wfΣ ht)]. Qed.
+
+  (** Premise 1, the judgement predicate: [let z : Prop := (λx:Prop. x) (∀P:Prop. P)]; its term
+      component then steps. *)
+  Lemma sr_red1E_Pj_inst : si_Σ ;;; [] |-E iv_False : si_P.
+  Proof.
+    pose (hj := iv_vdef si_Σ [] si_na sri_A si_P _ (iv_app_typed si_Σ [] localenv_nil)
+                  (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+    pose proof (sr_red1E_Pj si_Σ si_wfE [] (j_vdef si_na sri_A si_P) (sri_conj si_wfE hj)) as h.
+    exact (h.1.2 iv_False (sri_cr1 [] eq_refl)).
+  Qed.
+
+  (** Premise 2, contexts: [z : (λx:Prop. x) (∀P:Prop. P)]; the context steps to [z : ∀P:Prop. P]. *)
+  Lemma sr_red1E_ctx_inst : wf_local_relE si_Σ [] [vass si_na iv_False].
+  Proof.
+    refine ((sr_red1E_ctx si_Σ si_wfE sri_Γz sri_wfz _ _).2 [] sri_Γz [vass si_na iv_False] eq_refl _).
+    - unfold sri_wfz. econstructor; [constructor|]. exact (sri_SR si_wfE sri_wfz_tu.2.π2.1).
+    - apply localenv_cons_abs; [constructor|exact (sri_Pj si_wfE sri_wfz_tu)].
+    - constructor. split; [reflexivity|exact (sri_cr1 ([] ,,, []) eq_refl)].
+  Qed.
+
+  (** Premise 3, variables: δ of the let-bound [z := ∀P:Prop. P]. *)
+  Lemma sr_red1E_Rel_inst : si_Σ ;;; [vdef si_na iv_False si_P] |-E lift0 1 iv_False : lift0 1 si_P.
+  Proof.
+    pose (wd := iv_wf_vdef si_Σ [] localenv_nil).
+    pose (ht := typeE_Rel _ _ 0 (vdef si_na iv_False si_P) wd eq_refl).
+    refine (sr_red1E_Rel si_Σ si_wfE _ wd 0 (vdef si_na iv_False si_P) eq_refl (sri_PΓ si_wfE ht) _ _).
+    split; [reflexivity|reflexivity|exact (red_rel si_Σ [vdef si_na iv_False si_P] 0 iv_False eq_refl)].
+  Qed.
+
+  (** Premise 4, sorts: [Prop] has no reduct; the lemma is applied, its conclusion is vacuous. *)
+  Lemma sr_red1E_Sort_inst :
+    forall u, closed_red1 si_Σ [] (tSort sProp) u -> si_Σ ;;; [] |-E u : tSort (Sort.super sProp).
+  Proof.
+    exact (sr_red1E_Sort si_Σ si_wfE [] localenv_nil sProp
+             (sri_PΓ si_wfE (iv_P_typed si_Σ [] localenv_nil)) ltac:(cbn; trivial)).
+  Qed.
+
+  (** Premise 5, products: the domain [(λx:Prop. x) (∀P:Prop. P)] steps. *)
+  Lemma sr_red1E_Prod_inst :
+    si_Σ ;;; [] |-E tProd si_na iv_False si_P : tSort (Sort.sort_of_product sProp (Sort.super sProp)).
+  Proof.
+    pose (lt := iv_vass_s si_Σ [] si_na sri_A sProp (iv_app_typed si_Σ [] localenv_nil) eq_refl).
+    pose (hb := iv_P_typed si_Σ sri_Γz sri_wf_Γz).
+    refine (sr_red1E_Prod si_Σ si_wfE [] localenv_nil si_na sri_A si_P sProp (Sort.super sProp)
+              (sri_PΓ si_wfE (iv_app_typed si_Σ [] localenv_nil)) lt (sri_Pj si_wfE lt) hb (sri_SR si_wfE hb) _ _).
+    split; [reflexivity|reflexivity|exact sri_arity_red].
+  Qed.
+
+  (** Premise 6, λ-abstractions: the domain of [λz:(λx:Prop. x) (∀P:Prop. P). z] steps. *)
+  Lemma sr_red1E_Lambda_inst : si_Σ ;;; [] |-E tLambda si_na iv_False (tRel 0) : tProd si_na sri_A sri_A.
+  Proof.
+    pose (lt := iv_vass si_Σ [] si_na sri_A sProp (iv_app_typed si_Σ [] localenv_nil) eq_refl).
+    refine (sr_red1E_Lambda si_Σ si_wfE [] localenv_nil si_na sri_A (tRel 0) sri_A
+              (sri_PΓ si_wfE (iv_app_typed si_Σ [] localenv_nil)) lt (sri_Pj si_wfE lt) sri_z_typed
+              (sri_SR si_wfE sri_z_typed) _ _).
+    split; [reflexivity|reflexivity|exact (abs_red_l _ _ si_na sri_A iv_False (tRel 0) (sri_beta []))].
+  Qed.
+
+  (** Premise 7, let-ins: ζ on [let z : Prop := ∀P:Prop. P in z]. *)
+  Lemma sr_red1E_LetIn_inst : si_Σ ;;; [] |-E iv_False : tLetIn si_na iv_False si_P si_P.
+  Proof.
+    pose (wd := iv_wf_vdef si_Σ [] localenv_nil).
+    pose (hb := typeE_Rel _ _ 0 (vdef si_na iv_False si_P) wd eq_refl).
+    refine (sr_red1E_LetIn si_Σ si_wfE [] localenv_nil si_na iv_False si_P (tRel 0) (lift0 1 si_P)
+              (sri_PΓ si_wfE (iv_P_typed si_Σ [] localenv_nil)) (iv_vdef_False si_Σ [] localenv_nil)
+              (sri_Pj si_wfE (iv_vdef_False si_Σ [] localenv_nil)) hb (sri_SR si_wfE hb) _ _).
+    split; [reflexivity|reflexivity|exact (red_zeta _ _ si_na iv_False si_P (tRel 0))].
+  Qed.
+
+  (** Premise 8, applications: β on [(λx:Prop. x) (∀P:Prop. P)]. *)
+  Lemma sr_red1E_App_inst : si_Σ ;;; [] |-E iv_False : si_P.
+  Proof.
+    pose (hP := iv_PP_typed si_Σ [] localenv_nil).
+    pose (hid := iv_id_typed si_Σ [] localenv_nil).
+    pose (hF := iv_False_typed si_Σ [] localenv_nil).
+    exact (sr_red1E_App si_Σ si_wfE [] localenv_nil iv_id si_na si_P si_P iv_False iv_sPP
+             (sri_PΓ si_wfE hF) hP (sri_SR si_wfE hP) hid (sri_SR si_wfE hid) hF (sri_SR si_wfE hF)
+             _ (sri_cr1 [] eq_refl)).
+  Qed.
+
+  (** Premise 9, constants: [land] in [Σ_po] has no body and arity 2; the conclusion is vacuous. *)
+  Lemma sr_red1E_Const_inst :
+    forall u, closed_red1 Σ_po [] (tConst po_land_kn []) u ->
+      Σ_po ;;; [] |-E u : subst_instance [] (cst_type po_land_body).
+  Proof.
+    exact (sr_red1E_Const Σ_po iv_po_wfE [] localenv_nil po_land_kn [] po_land_body
+             (sri_glob iv_po_wfE iv_land_typed) (sri_PΓ iv_po_wfE iv_land_typed) Σ_po_declared_land eq_refl).
+  Qed.
+
+  (** Premises 10 and 11, inductives and constructors: no reduct; the conclusions are vacuous. *)
+  Lemma sr_red1E_Ind_inst :
+    forall u, closed_red1 si_Σ [] (tInd si_ind []) u -> si_Σ ;;; [] |-E u : subst_instance [] (ind_type si_idecl).
+  Proof.
+    pose (h := iv_ind_typed [] localenv_nil).
+    exact (sr_red1E_Ind si_Σ si_wfE [] localenv_nil si_ind [] si_mdecl si_idecl si_declared_inductive
+             (sri_glob si_wfE h) (sri_PΓ si_wfE h) eq_refl).
+  Qed.
+
+  Lemma sr_red1E_Construct_inst :
+    forall u, closed_red1 si_Σ [] (tConstruct si_ind 0 []) u ->
+      si_Σ ;;; [] |-E u : type_of_constructor si_mdecl si_cdecl (si_ind, 0) [].
+  Proof.
+    pose (h := iv_cstr_typed [] localenv_nil).
+    exact (sr_red1E_Construct si_Σ si_wfE [] localenv_nil si_ind 0 [] si_mdecl si_idecl si_cdecl
+             si_declared_constructor (sri_glob si_wfE h) (sri_PΓ si_wfE h) eq_refl).
+  Qed.
+
+  (** Premise 12, case analyses: ι on the [match] of [PCUICInversionEtaInstances]. *)
+  Lemma sr_red1E_Case_inst : si_Σ ;;; iv_Γ1 |-E iv_disc : iv_match_ty.
+  Proof.
+    rewrite -sri_iota_reduct.
+    refine (sr_red1E_Case si_Σ si_wfE iv_Γ1 iv_wf_Γ1 iv_ci iv_mp iv_disc [iv_br] [] sProp si_mdecl si_idecl
+              si_declared_inductive (sri_glob si_wfE iv_disc_typed) (sri_PΓ si_wfE iv_disc_typed) eq_refl
+              (alpha_eq_reflexive (pcontext iv_mp)) iv_wf_mp eq_refl iv_wf_pctx iv_pret_typed
+              (sri_SR si_wfE iv_pret_typed) (sri_PΓ si_wfE iv_pret_typed) _ eq_refl _
+              iv_disc_typed (sri_SR si_wfE iv_disc_typed) eq_refl _ _ _ sri_iota_cr1).
+    - reflexivity.
+    - econstructor; [|constructor]. split; [exact iv_x_typed|exact (sri_SR si_wfE iv_x_typed)].
+    - constructor; [exact iv_wf_br|constructor].
+    - constructor; [|constructor]. split; [constructor|]. cbv zeta. split; [|split].
+      + exact (sri_PΓ si_wfE iv_br_typed).
+      + split; [exact iv_br_typed|exact (sri_SR si_wfE iv_br_typed)].
+      + split; [exact iv_bty_typed|exact (sri_SR si_wfE iv_bty_typed)].
+  Qed.
+
+  (** Premise 13, projections: [f (mkR (∀P:Prop. P) z)] steps to [z]. *)
+  Lemma sr_red1E_Proj_inst : iv_Σ ;;; iv_Γc |-E tRel 0 : iv_False.
+  Proof.
+    refine (sr_red1E_Proj iv_Σ iv_wfE iv_Γc iv_wf_Γc iv_proj sri_mkRz [] iv_mdecl iv_idecl iv_cdecl iv_pdecl
+              iv_declared_projection [iv_False] (sri_glob iv_wfE sri_mkRz_typed) (sri_PΓ iv_wfE sri_mkRz_typed)
+              sri_mkRz_typed (sri_SR iv_wfE sri_mkRz_typed) eq_refl _ _).
+    split; [reflexivity|reflexivity|exact (red_proj iv_Σ iv_Γc iv_proj [iv_False; tRel 0] [] (tRel 0) eq_refl)].
+  Qed.
+
+  (** Premise 14, fixpoints: [fix f (x : I (∀P:Prop. P)) := x] has no redex in its types or bodies;
+      the conclusion is vacuous. *)
+  Lemma sr_red1E_Fix_inst :
+    forall u, closed_red1 si_Σ [] (tFix iv_mfix 0) u -> si_Σ ;;; [] |-E u : iv_fix_ty.
+  Proof.
+    pose (lt := iv_vass si_Σ [] si_na iv_fix_ty _ (iv_fix_ty_typed [] localenv_nil) eq_refl).
+    pose (lb := iv_vdef si_Σ iv_Γf si_na _ (lift0 1 iv_fix_ty) _ iv_fix_body_typed
+                  (iv_fix_ty_typed iv_Γf iv_wf_Γf) eq_refl).
+    refine (sr_red1E_Fix si_Σ si_wfE [] localenv_nil iv_mfix 0 _ iv_fix_guard eq_refl
+              (sri_PΓ si_wfE iv_fix_body_typed) _ _ _ _ iv_wf_fix).
+    - constructor; [exact lt|constructor].
+    - constructor; [exact (sri_Pj si_wfE lt)|constructor].
+    - constructor; [exact lb|constructor].
+    - constructor; [exact (sri_Pj si_wfE lb)|constructor].
+  Qed.
+
+  (** Premise 15, cofixpoints: the cofixpoint of [PCUICInversionEtaInstances] has no redex in its
+      types or bodies; the conclusion is vacuous. *)
+  Lemma sr_red1E_CoFix_inst :
+    forall u, closed_red1 iv_Σ iv_Γc (tCoFix iv_cmfix 0) u -> iv_Σ ;;; iv_Γc |-E u : iv_RF.
+  Proof.
+    pose (lt := iv_vass iv_Σ iv_Γc si_na iv_RF sProp (iv_RF_typed iv_Γc iv_wf_Γc) eq_refl).
+    pose (lb := iv_vdef iv_Σ iv_Γcf si_na iv_cofix_body (lift0 1 iv_RF) sProp iv_cofix_body_typed
+                  (iv_RF_typed iv_Γcf iv_wf_Γcf) eq_refl).
+    refine (sr_red1E_CoFix iv_Σ iv_wfE iv_Γc iv_wf_Γc iv_cmfix 0 _ iv_cofix_guard eq_refl
+              (sri_PΓ iv_wfE iv_cofix_body_typed) _ _ _ _ iv_wf_cofix).
+    - constructor; [exact lt|constructor].
+    - constructor; [exact (sri_Pj iv_wfE lt)|constructor].
+    - constructor; [exact lb|constructor].
+    - constructor; [exact (sri_Pj iv_wfE lb)|constructor].
+  Qed.
+
+  (** Premise 16, primitive values: the literal [1] has no reduct; the conclusion is vacuous. *)
+  Lemma sr_red1E_Prim_inst :
+    forall u, closed_red1 Σ_po [] (tPrim iv_one) u -> Σ_po ;;; [] |-E u : prim_type iv_one po_int_kn.
+  Proof.
+    refine (sr_red1E_Prim Σ_po iv_po_wfE [] localenv_nil iv_one po_int_kn po_int_body
+              (sri_PΓ iv_po_wfE iv_prim_typed) eq_refl iv_po_declared_int _ _ _).
+    - split; reflexivity.
+    - constructor.
+    - constructor.
+  Qed.
+
+  (** Premise 17, the conversion rule, at the η step: [(λz:Prop. y) (∀P:Prop. P) : k g] and
+      [k g ≤ k (λx:Prop. g x)] ([iv_spec_eta], a [cumul_eta_l] step); the redex then steps. *)
+  Lemma sr_red1E_Cumul_inst : si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta.
+  Proof.
+    refine (sr_red1E_Cumul si_Σ si_wfE iv_Γk iv_wf_Γk sri_eta_redex iv_kg iv_keta sProp
+              (sri_PΓ si_wfE iv_y_typed) sri_eta_redex_kg (sri_SR si_wfE sri_eta_redex_kg)
+              iv_keta_typed (sri_SR si_wfE iv_keta_typed) iv_spec_eta _ _).
+    split; [reflexivity|reflexivity|exact (red_beta si_Σ iv_Γk si_na si_P (tRel 1) iv_False)].
   Qed.
 
 End SRInstances.
