@@ -76,13 +76,31 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimit
      PCUICEtaDefs PCUICEtaReduction PCUICEtaConfluence PCUICEtaFInst
      PCUICTypingEta PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
      PCUICEtaC3BR PCUICTypingEtaInd PCUICClosedTypEta PCUICInversionEta PCUICEtaA6 PCUICEtaA6Ind
-     PCUICInduction.
+     PCUICInduction PCUICWfUniverses
+     PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances.
 
 Import ListNotations.
 
 Set Default Goal Selector "!".
 
-(** ** The pinned target statements (not proved here) *)
+(** ** The pinned target statements (not proved here)
+
+  Satisfying instances: [T8_*_instance] below. [wf_localE Σ Γ] is not a premise:
+  the typing premise gives it ([T8_typing_wf_localE]).
+
+  Falsity check, no counterexample found. A counterexample is a typed [T : tSort s'],
+  E-convertible to the head form, whose base reducts never reach a head form. E adds
+  only function η to base conversion, so the head form must appear through η. The
+  candidates and why each fails:
+  - [T] a λ (for example [λz:D. (tProd na (λy:z.y) B) z], the witness of
+    [A6_F_raw_false]): a typed λ has a product type, which is not E-convertible to
+    a sort ([ws_cumul_pbE_Prod_Sort_inv]), so [T : tSort s'] excludes it;
+  - [T] the η-expansion [λx:A. I x] of an under-applied inductive: a λ again. Under
+    [welltypedE] alone, instead of [T : tSort s'], it is a typable counterexample
+    to the [Ind] forms;
+  - [T] a stuck elimination (a [match], projection or fixpoint on a neutral term):
+    [canon] keeps it, the [(R_c ∪ eta1)*] chains from it keep the elimination, and
+    the chains from a head form keep the head, so no [JoinE] relates them. *)
 
 Section Statements.
   Context {cf : checker_flags}.
@@ -872,3 +890,132 @@ Section TypedSafe.
   Qed.
 
 End TypedSafe.
+
+(** ** Concrete satisfying instances of the pinned statements
+
+  In [si_Σ] ([Inductive I (A : Prop) : Prop := c : I A], well formed for the η typing
+  by [si_wfE]). Each [T] is typed at a sort, is E-convertible to the head form, and
+  reaches it by one β step; each lemma proves the premises of the statement for
+  that [T] and its conclusion. The six statements share three terms:
+  - [t8_sortT := (λx:Prop. Prop) (∀P:Prop. P)], reaching [Prop];
+  - [t8_prodT := (λx:Prop. x) (∀P:Prop. P)], reaching the product [∀P:Prop. P];
+  - [t8_indT := (λz:I x. I x) (c x)] in [x : Prop], reaching [I x]. *)
+
+Section Instances.
+
+#[local] Existing Instance default_checker_flags.
+
+Definition t8_sortT : term := tApp (tLambda si_na si_P si_P) iv_False.
+Definition t8_prodT : term := tApp iv_id iv_False.
+Definition t8_indT : term := tApp (tLambda iv_zna (iv_Ix 0) (iv_Ix 1)) iv_disc.
+Definition t8_indH : term := mkApps (tInd si_ind []) [tRel 0].
+
+Lemma t8_sortT_typed : si_Σ ;;; [] |-E t8_sortT : tSort (Sort.super sProp).
+Proof.
+  assert (w1 : wf_localE si_Σ ([] ,, vass si_na si_P)) by exact (iv_wf_P si_Σ [] localenv_nil).
+  assert (hSS : si_Σ ;;; [] ,, vass si_na si_P |-E tSort (Sort.super sProp)
+               : tSort (Sort.super (Sort.super sProp))).
+  { apply typeE_Sort; [exact w1|]. apply wf_sort_super. exact I. }
+  refine (typeE_App _ _ (tLambda si_na si_P si_P) si_na si_P (tSort (Sort.super sProp)) _ iv_False
+            _ _ (iv_False_typed si_Σ [] localenv_nil)).
+  - apply typeE_Prod; [|exact hSS].
+    exact (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+  - apply typeE_Lambda; [|exact (iv_P_typed si_Σ _ w1)].
+    exact (iv_vass si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+Qed.
+
+Lemma t8_sortT_red : si_Σ ;;; [] ⊢ t8_sortT ⇝ tSort sProp.
+Proof.
+  split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ [] si_na si_P si_P iv_False).
+Qed.
+
+Lemma t8_prodT_red : si_Σ ;;; [] ⊢ t8_prodT ⇝ iv_False.
+Proof.
+  split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ [] si_na si_P (tRel 0) iv_False).
+Qed.
+
+Lemma t8_indT_red : si_Σ ;;; iv_Γ1 ⊢ t8_indT ⇝ t8_indH.
+Proof.
+  split; [reflexivity|reflexivity|]. apply rt_step.
+  exact (red_beta si_Σ iv_Γ1 iv_zna (iv_Ix 0) (iv_Ix 1) iv_disc).
+Qed.
+
+Lemma t8_cmp_refl pb : cmp_global_instance_finst si_Σ.1 (compare_universe si_Σ) pb (IndRef si_ind) 1 [] [].
+Proof. unfold cmp_global_instance_finst. apply cmp_global_instance_eta_refl; tc. Qed.
+
+Lemma t8_sort_cmp pb : compare_sort si_Σ pb sProp sProp.
+Proof. destruct pb; cbn; first [reflexivity | exact I | trivial]. Qed.
+
+Lemma T8_Sort_r_instance pb :
+  [× wfE si_Σ, si_Σ ;;; [] |-E t8_sortT : tSort (Sort.super sProp),
+     ws_cumul_pbE pb si_Σ [] t8_sortT (tSort sProp) &
+     ∑ s'', si_Σ ;;; [] ⊢ t8_sortT ⇝ tSort s'' × compare_sort si_Σ pb s'' sProp].
+Proof.
+  split; [exact si_wfE|exact t8_sortT_typed|exact (red_ws_cumul_pbE (Σ := si_Σ) (wfΣ := si_cb) t8_sortT_red)|].
+  exists sProp. split; [exact t8_sortT_red|apply t8_sort_cmp].
+Qed.
+
+Lemma T8_Sort_l_instance pb :
+  [× wfE si_Σ, si_Σ ;;; [] |-E t8_sortT : tSort (Sort.super sProp),
+     ws_cumul_pbE pb si_Σ [] (tSort sProp) t8_sortT &
+     ∑ s'', si_Σ ;;; [] ⊢ t8_sortT ⇝ tSort s'' × compare_sort si_Σ pb sProp s''].
+Proof.
+  split; [exact si_wfE|exact t8_sortT_typed|exact (red_ws_cumul_pbE_inv (Σ := si_Σ) (wfΣ := si_cb) t8_sortT_red)|].
+  exists sProp. split; [exact t8_sortT_red|apply t8_sort_cmp].
+Qed.
+
+Lemma T8_Prod_r_instance pb :
+  [× wfE si_Σ, si_Σ ;;; [] |-E t8_prodT : tSort sProp,
+     ws_cumul_pbE pb si_Σ [] t8_prodT (tProd si_na si_P (tRel 0)) &
+     ∑ na' dom' codom',
+       [× si_Σ ;;; [] ⊢ t8_prodT ⇝ tProd na' dom' codom', eq_binder_annot na' si_na,
+          ws_cumul_pbE Conv si_Σ [] dom' si_P &
+          ws_cumul_pbE pb si_Σ ([] ,, vass si_na si_P) codom' (tRel 0)]].
+Proof.
+  split; [exact si_wfE|exact (iv_app_typed si_Σ [] localenv_nil)
+         |exact (red_ws_cumul_pbE (Σ := si_Σ) (wfΣ := si_cb) t8_prodT_red)|].
+  exists si_na, si_P, (tRel 0).
+  split; [exact t8_prodT_red|reflexivity|apply ws_cumul_pbE_refl; reflexivity|apply ws_cumul_pbE_refl; reflexivity].
+Qed.
+
+Lemma T8_Prod_l_instance pb :
+  [× wfE si_Σ, si_Σ ;;; [] |-E t8_prodT : tSort sProp,
+     ws_cumul_pbE pb si_Σ [] (tProd si_na si_P (tRel 0)) t8_prodT &
+     ∑ na' dom' codom',
+       [× si_Σ ;;; [] ⊢ t8_prodT ⇝ tProd na' dom' codom', eq_binder_annot si_na na',
+          ws_cumul_pbE Conv si_Σ [] si_P dom' &
+          ws_cumul_pbE pb si_Σ ([] ,, vass si_na si_P) (tRel 0) codom']].
+Proof.
+  split; [exact si_wfE|exact (iv_app_typed si_Σ [] localenv_nil)
+         |exact (red_ws_cumul_pbE_inv (Σ := si_Σ) (wfΣ := si_cb) t8_prodT_red)|].
+  exists si_na, si_P, (tRel 0).
+  split; [exact t8_prodT_red|reflexivity|apply ws_cumul_pbE_refl; reflexivity|apply ws_cumul_pbE_refl; reflexivity].
+Qed.
+
+Lemma T8_Ind_r_instance pb :
+  [× wfE si_Σ, si_Σ ;;; iv_Γ1 |-E t8_indT : tSort sProp,
+     ws_cumul_pbE pb si_Σ iv_Γ1 t8_indT (mkApps (tInd si_ind []) [tRel 0]) &
+     ∑ ui' l',
+       [× si_Σ ;;; iv_Γ1 ⊢ t8_indT ⇝ mkApps (tInd si_ind ui') l',
+          cmp_global_instance_finst si_Σ.1 (compare_universe si_Σ) pb (IndRef si_ind) #|[tRel 0]| ui' [] &
+          ws_cumul_pbE_terms si_Σ iv_Γ1 l' [tRel 0]]].
+Proof.
+  split; [exact si_wfE|exact iv_bty_typed|exact (red_ws_cumul_pbE (Σ := si_Σ) (wfΣ := si_cb) t8_indT_red)|].
+  exists [], [tRel 0]. split; [exact t8_indT_red|apply t8_cmp_refl|].
+  constructor; [apply ws_cumul_pbE_refl; reflexivity|constructor].
+Qed.
+
+Lemma T8_Ind_l_instance pb :
+  [× wfE si_Σ, si_Σ ;;; iv_Γ1 |-E t8_indT : tSort sProp,
+     ws_cumul_pbE pb si_Σ iv_Γ1 (mkApps (tInd si_ind []) [tRel 0]) t8_indT &
+     ∑ ui' l',
+       [× si_Σ ;;; iv_Γ1 ⊢ t8_indT ⇝ mkApps (tInd si_ind ui') l',
+          cmp_global_instance_finst si_Σ.1 (compare_universe si_Σ) pb (IndRef si_ind) #|[tRel 0]| [] ui' &
+          All2 (ws_cumul_pbE Conv si_Σ iv_Γ1) [tRel 0] l']].
+Proof.
+  split; [exact si_wfE|exact iv_bty_typed|exact (red_ws_cumul_pbE_inv (Σ := si_Σ) (wfΣ := si_cb) t8_indT_red)|].
+  exists [], [tRel 0]. split; [exact t8_indT_red|apply t8_cmp_refl|].
+  constructor; [apply ws_cumul_pbE_refl; reflexivity|constructor].
+Qed.
+
+End Instances.
