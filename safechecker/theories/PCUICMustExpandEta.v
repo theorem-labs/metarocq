@@ -142,6 +142,7 @@ Proof. case=> *; repeat split; intros; reflexivity. Qed.
 
 Section MustExpandCheck.
 
+  (* Computational parameter, not a hypothesis. Instance: [lookup_env k1_env] (end of file). *)
   Context (lookup : kername -> option global_decl).
 
   (** The full-arity context of a head at instance [u]: [ind_params ,,, ind_indices]
@@ -173,6 +174,7 @@ Section MustExpandCheck.
     let Δs := smash_context [] Δ in
     map decl_type (subst_context (List.rev args) 0 (firstn (#|Δs| - #|args|) Δs)).
 
+  (* Computational parameters, not hypotheses. Instances: [k1_eqb_tm], [k1_cmp_inst]. *)
   Context (eqb_tm : term -> term -> bool)
           (cmp_inst : conv_pb -> global_reference -> nat -> Instance.t -> Instance.t -> bool).
 
@@ -224,6 +226,11 @@ End MustExpandCheck.
 
 Section MustExpandSound.
 
+  (* The one hypothesis of this file: [cb]. Satisfying instance: [k1_ClosedBodies] (end of
+     file, environment [k1_env]); every well-formed environment also gives one
+     ([wf_ClosedBodies], [wfE_ClosedBodies]). It states closed constant bodies and fresh
+     names only; it mentions no conversion witness, so it is not the closed-only
+     fix/cofix-witness form refuted over η (ArityLane's [conv_witnessE] counterexample). *)
   Context {cf : checker_flags} (Σ : global_env_ext) {cb : ClosedBodies Σ}.
 
   (** Over the specification: S4's under-applied lemmas at the arity [n]. *)
@@ -279,7 +286,11 @@ Section MustExpandSound.
   (** The lemma the checker's K1 obligation applies. [hcmp] is what
       [compare_global_instance_correct] gives for [abstract_env_compare_global_instance];
       [wf_universes] of the heads comes from their well-typedness, as for base's
-      [cmpb_term_correct]. *)
+      [cmpb_term_correct]. Every premise has a proved instance at the end of the file:
+      [hcmp] by [k1_cmp_inst_sound]; the check by [k1_check_I1] / [k1_check_c1] /
+      [k1_check_napp1]; the rest in [must_expand_check_sound_inst] /
+      [must_expand_check_sound_c1_inst] / [must_expand_check_sound_napp1_inst]. No premise
+      states a conversion witness of a [dtype] or head shape. *)
   Lemma must_expand_check_sound (lookup : kername -> option global_decl)
     (eqb_tm : term -> term -> bool)
     (cmp_inst : conv_pb -> global_reference -> nat -> Instance.t -> Instance.t -> bool)
