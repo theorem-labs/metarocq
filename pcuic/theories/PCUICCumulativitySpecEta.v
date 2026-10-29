@@ -144,7 +144,21 @@ Inductive cumulSpecE0 {cf : checker_flags} (Σ : global_env_ext) Γ (pb : conv_p
     Σ ;;; Γ ⊢ mkApps (tFix mfix idx) args ≤sE[pb] mkApps fn args
 
 (** CoFix-case unfolding, only under a case whose return type does not depend on the
-    scrutinee ([ci_cofix_nondep]) *)
+    scrutinee ([ci_cofix_nondep]).
+
+    The premise [ip.(ci_cofix_nondep)] mirrors the base rule
+    [PCUICCumulativitySpec.cumul_cofix_case] as BET-339 defines it: a cofixpoint
+    scrutinee unfolds only under a match whose return clause cannot depend on it,
+    because unfolding under a dependent one breaks subject reduction.
+
+    FORECAST-TREE-ONLY CHANGE (commit 1e5bec98).  This file's own base, [frac/eta] at
+    56b92b56, predates the [ci_cofix_nondep] field of [case_info], so the premise exists
+    only on a tree that carries BET-339.  The real landing of this change belongs to the
+    cutover F0, not here.
+
+    Without the premise the E relation would be strictly WIDER than base conversion in
+    exactly the direction BET-339 closed: [cumulSpec0_incl_E] would still compile while
+    [cumulSpecE0] admitted the step base no longer admits. *)
 | cumulE_cofix_case : forall ip p mfix idx args narg fn brs,
     ip.(ci_cofix_nondep) ->
     unfold_cofix mfix idx = Some (narg, fn) ->
