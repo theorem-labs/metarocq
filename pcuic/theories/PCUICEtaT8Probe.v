@@ -1932,10 +1932,35 @@ Proof.
   now apply pe_inst_case_context.
 Qed.
 
-(** **The parallel ι root case: CLOSED.** The source is a [pe_Case] whose scrutinee
-    [c0] is a [pe]-source of the constructor application (the [pe_eta] source, an
-    η-expansion of the whole redex, is the generic η-at-the-root case, as in
-    [pp_root]). The only premise beyond the [pe] data is [hnl] on [c0]. *)
+(** *** The premise [hnl] of the ι, projection, cofix-case and cofix-proj roots
+
+  Each of these roots assumes [hnl]: NO REDUCT of the scrutinee (or projection
+  argument) [c0] is a λ. These roots are NOT unconditional. For a typed source,
+  [hnl] follows from two halves, and only the first is proved here:
+  - (i) TYPING ⇒ INVARIANT: [typed_eta_safe] (this file, given the FORECAST-ONLY
+    hypothesis [fix_rarg_inductive]) says that a typed term is [eta_safe], and so
+    has no λ in scrutinee or projection-argument position. This half needs no
+    subject reduction.
+  - (ii) PRESERVATION: every reduct of the typed source is still typed. That is E
+    subject reduction, forecast row T1. It is neither proved nor used in this
+    file. Only with (ii) does (i) apply to each reduct of [c0] and give [hnl].
+
+  Measured time per case group (from commit times): β-head and the [pe] definition,
+  11 min (11:36–11:47Z); [eta1* = pe], 8 min (12:02–12:10Z); rigid-spine inversion,
+  7 min (12:10–12:17Z); ι and projection roots with the [pe_ctx] copies, 7 min
+  (12:18–12:25Z); cofix-case and cofix-proj roots with their helpers, 6 min (12:31–12:37Z).
+
+  Induction principles used by the proved parallel lemmas, one per lemma, with
+  no recursion between lemmas: [pe_beta_head_and_lambda] and [pe_rigid_inv] use
+  induction on the [pe] derivation; [pe_eta1_closed], [eta1_pe] and [pe_to_eta]
+  use induction on the [pe] or [eta1] derivation; [eta_pe_step] uses induction on
+  [clos_refl_trans]. The root lemmas below do no induction of their own: they call
+  [pe_rigid_spine]. *)
+
+(** **The parallel ι root case: CLOSED, under [hnl].** The source is a [pe_Case]
+    whose scrutinee [c0] is a [pe]-source of the constructor application. The
+    [pe_eta] source, an η-expansion of the whole redex, is the generic
+    η-at-the-root case, as in [pp_root]. *)
 Lemma pe_iota_root Σ Γ ci p0 c0 brs0 p c uu args brs br :
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) ->
@@ -1956,7 +1981,8 @@ Proof.
   - now apply pe_iota_red.
 Qed.
 
-(** **The parallel projection root case: CLOSED** (same shape as [pe_iota_root]). *)
+(** **The parallel projection root case: CLOSED, under [hnl]** (same shape as
+    [pe_iota_root]). *)
 Lemma pe_proj_root Σ Γ pr c0 uu args arg :
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   pe c0 (mkApps (tConstruct pr.(proj_ind) 0 uu) args) ->
@@ -1971,6 +1997,100 @@ Proof.
   exists arg0. split; [|exact hp].
   eapply rt_trans_clos; [apply red_proj_c; exact hred|].
   apply t_step. now apply red_proj.
+Qed.
+
+Lemma pe_mkApps f f' args args' : pe f f' -> All2 pe args args' -> pe (mkApps f args) (mkApps f' args').
+Proof.
+  intros Hf Ha. induction Ha in f, f', Hf |- *; cbn; [assumption|].
+  apply IHHa. now apply pe_App.
+Qed.
+
+Definition pe_def (d d' : def term) : Type :=
+  pe d.(dtype) d'.(dtype) × pe d.(dbody) d'.(dbody) × d.(dname) = d'.(dname) × d.(rarg) = d'.(rarg).
+
+Lemma pe_fix_subst mfix mfix' : All2 pe_def mfix mfix' -> All2 pe (fix_subst mfix) (fix_subst mfix').
+Proof.
+  intros H. pose proof (All2_length H) as Hl.
+  unfold fix_subst. rewrite Hl.
+  generalize #|mfix'|. intros n. induction n; cbn; constructor; auto.
+  now apply pe_Fix.
+Qed.
+
+Lemma pe_cofix_subst mfix mfix' : All2 pe_def mfix mfix' -> All2 pe (cofix_subst mfix) (cofix_subst mfix').
+Proof.
+  intros H. pose proof (All2_length H) as Hl.
+  unfold cofix_subst. rewrite Hl.
+  generalize #|mfix'|. intros n. induction n; cbn; constructor; auto.
+  now apply pe_CoFix.
+Qed.
+
+(** Unfolding read backwards: the [pe]-source of an unfoldable (co)fixpoint unfolds
+    to a [pe]-source of the unfolding. *)
+Lemma pe_unfold_fix_back mfix0 mfix idx narg fn :
+  All2 pe_def mfix0 mfix -> unfold_fix mfix idx = Some (narg, fn) ->
+  ∑ fn0, unfold_fix mfix0 idx = Some (narg, fn0) × pe fn0 fn.
+Proof.
+  intros ha. unfold unfold_fix.
+  destruct (nth_error mfix idx) as [d|] eqn:hd; [|discriminate].
+  intros [= <- <-].
+  destruct (All2_nth_error_Some_r idx d ha hd) as (d0 & hd0 & (_ & hb & _ & hr)).
+  rewrite hd0. eexists; split; [now rewrite hr|].
+  apply (pe_subst _ _ hb). now apply pe_fix_subst.
+Qed.
+
+Lemma pe_unfold_cofix_back mfix0 mfix idx narg fn :
+  All2 pe_def mfix0 mfix -> unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ fn0, unfold_cofix mfix0 idx = Some (narg, fn0) × pe fn0 fn.
+Proof.
+  intros ha. unfold unfold_cofix.
+  destruct (nth_error mfix idx) as [d|] eqn:hd; [|discriminate].
+  intros [= <- <-].
+  destruct (All2_nth_error_Some_r idx d ha hd) as (d0 & hd0 & (_ & hb & _ & hr)).
+  rewrite hd0. eexists; split; [now rewrite hr|].
+  apply (pe_subst _ _ hb). now apply pe_cofix_subst.
+Qed.
+
+(** **The parallel cofix-case root case: CLOSED, under [hnl]** (same shape as
+    [pe_iota_root]; the scrutinee's cofixpoint is unfolded through
+    [pe_unfold_cofix_back]). *)
+Lemma pe_cofix_case_root Σ Γ ip p0 c0 brs0 p mfix idx args narg fn brs :
+  (forall c', red Σ Γ c0 c' -> notLam c') ->
+  All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) -> p0.(pcontext) = p.(pcontext) ->
+  pe p0.(preturn) p.(preturn) ->
+  pe c0 (mkApps (tCoFix mfix idx) args) ->
+  All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs0 brs ->
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ w, trans_clos (red1 Σ Γ) (tCase ip p0 c0 brs0) w × pe w (tCase ip p (mkApps fn args) brs).
+Proof.
+  intros hnl hpar hu hctx hret hc hbrs hunf.
+  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tCoFix mfix idx) args hc eq_refl eq_refl)
+    as (h0 & args0 & hred & hnlh & hph & hargs).
+  depelim hph; [cbn in hnlh; discriminate hnlh|].
+  match goal with H : All2 _ ?m mfix |- _ =>
+    destruct (pe_unfold_cofix_back m mfix idx narg fn H hunf) as (fn0 & hu0 & hfn) end.
+  exists (tCase ip p0 (mkApps fn0 args0) brs0). split.
+  - eapply rt_trans_clos; [apply red_case_c; exact hred|].
+    apply t_step. eapply red_cofix_case. exact hu0.
+  - apply pe_Case; [exact hpar|exact hu|exact hctx|exact hret|apply pe_mkApps; [exact hfn|exact hargs]|exact hbrs].
+Qed.
+
+(** **The parallel cofix-proj root case: CLOSED, under [hnl].** *)
+Lemma pe_cofix_proj_root Σ Γ pr c0 mfix idx args narg fn :
+  (forall c', red Σ Γ c0 c' -> notLam c') ->
+  pe c0 (mkApps (tCoFix mfix idx) args) ->
+  unfold_cofix mfix idx = Some (narg, fn) ->
+  ∑ w, trans_clos (red1 Σ Γ) (tProj pr c0) w × pe w (tProj pr (mkApps fn args)).
+Proof.
+  intros hnl hc hunf.
+  destruct (pe_rigid_spine Σ Γ c0 hnl _ (tCoFix mfix idx) args hc eq_refl eq_refl)
+    as (h0 & args0 & hred & hnlh & hph & hargs).
+  depelim hph; [cbn in hnlh; discriminate hnlh|].
+  match goal with H : All2 _ ?m mfix |- _ =>
+    destruct (pe_unfold_cofix_back m mfix idx narg fn H hunf) as (fn0 & hu0 & hfn) end.
+  exists (tProj pr (mkApps fn0 args0)). split.
+  - eapply rt_trans_clos; [apply red_proj_c; exact hred|].
+    apply t_step. eapply red_cofix_proj. exact hu0.
+  - apply pe_Proj. apply pe_mkApps; [exact hfn|exact hargs].
 Qed.
 
 (** ** Status of the parallel one-step postponement ([pe_postpone_statement])
