@@ -75,7 +75,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils PCUICPrimit
      PCUICTyping PCUICWellScopedCumulativity PCUICClosedBodies PCUICWeakeningConv
      PCUICEtaDefs PCUICEtaReduction PCUICEtaConfluence PCUICEtaFInst
      PCUICTypingEta PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
-     PCUICEtaC3BR.
+     PCUICEtaC3BR PCUICTypingEtaInd PCUICClosedTypEta PCUICInversionEta PCUICEtaA6 PCUICEtaA6Ind
+     PCUICInduction.
 
 Import ListNotations.
 
@@ -140,6 +141,10 @@ End Statements.
 
 Definition notLam (t : term) : bool := ~~ isLambda t.
 
+(** A primitive value is never a function, so it is never applied in a typed term.
+    The η-expansion [λx. lit x] of a literal contains such an application. *)
+Definition notPrimHead (t : term) : bool := match t with tPrim _ => false | _ => true end.
+
 Definition spine_safe (Σ : global_env) (t : term) : bool :=
   match decompose_app t with
   | (tFix mfix idx, args) =>
@@ -148,8 +153,6 @@ Definition spine_safe (Σ : global_env) (t : term) : bool :=
           match nth_error args narg with Some a => notLam a | None => true end
       | None => true
       end
-  | (tConst c _, args) =>
-      match prim_op_of Σ c with Some _ => forallb notLam args | None => true end
   | _ => true
   end.
 
@@ -159,7 +162,7 @@ Fixpoint eta_safe (Σ : global_env) (t : term) : bool :=
   | tProd _ A B => eta_safe Σ A && eta_safe Σ B
   | tLambda _ A b => eta_safe Σ A && eta_safe Σ b
   | tLetIn _ b B c => eta_safe Σ b && eta_safe Σ B && eta_safe Σ c
-  | tApp f a => spine_safe Σ t && eta_safe Σ f && eta_safe Σ a
+  | tApp f a => notPrimHead f && spine_safe Σ t && eta_safe Σ f && eta_safe Σ a
   | tCase _ p c brs =>
       notLam c && eta_safe Σ c && forallb (eta_safe Σ) p.(pparams) && eta_safe Σ p.(preturn)
       && forallb (fun br => eta_safe Σ br.(bbody)) brs
@@ -191,12 +194,16 @@ Proof.
   rewrite hu. cbv beta iota. rewrite hn. exact id.
 Qed.
 
-Lemma spine_safe_prim Σ c u args op :
-  prim_op_of Σ c = Some op -> spine_safe Σ (mkApps (tConst c u) args) -> forallb notLam args.
+Lemma eta_safe_mkApps_args Σ h args : eta_safe Σ (mkApps h args) -> forallb (eta_safe Σ) args.
 Proof.
-  intros hop. unfold spine_safe. rewrite decompose_app_mkApps //. cbv beta iota.
-  rewrite hop. exact id.
+  induction args as [|a l IH] using MRList.rev_ind; [reflexivity|].
+  rewrite mkApps_app forallb_app. cbn [mkApps eta_safe forallb]. move/andP => [/andP [_ h1] h2].
+  by rewrite (IH h1) h2.
 Qed.
+
+(** The η-expansion of a literal is never [eta_safe]. *)
+Lemma eta_safe_lit_eta Σ na A l : eta_safe Σ (eta_redex na A (term_of_lit l)) = false.
+Proof. destruct l; cbn; now rewrite andb_false_r. Qed.
 
 Lemma forallb_app_cons_mid {A} (f : A -> bool) pre a post : forallb f (pre ++ a :: post) -> f a.
 Proof. rewrite forallb_app. move/andP => [_ /= /andP [h _]]. exact h. Qed.
@@ -386,10 +393,11 @@ Proof.
     + right. rewrite mkApps_app. exact hr.
 Qed.
 
-Lemma eta1_lit_isLambda a l : eta1 a (term_of_lit l) -> isLambda a = true.
+Lemma eta1_lit_inv a l : eta1 a (term_of_lit l) -> ∑ na A, a = eta_redex na A (term_of_lit l).
 Proof.
   intros h. remember (term_of_lit l) as x eqn:E. revert E.
-  destruct h; intros E; try reflexivity; destruct l; discriminate E.
+  destruct h; intros E; try (destruct l; discriminate E).
+  subst. now do 2 eexists.
 Qed.
 
 Lemma nth_error_at_pre {A} (pre post : list A) a : nth_error (pre ++ a :: post) #|pre| = Some a.
@@ -670,14 +678,14 @@ Section Roots.
   Qed.
 
   (** Primitive operation. NEEDS-INVARIANT for one sub-case: an argument is a λ
-      that η-contracts to a literal. CLOSED otherwise. *)
-  Lemma pp_prim Γ t c uu op ls v :
-    prim_op_of Σ c = Some op ->
+      that η-contracts to a literal, i.e. [λx. lit x], which applies a primitive
+      value. CLOSED otherwise. *)
+  Lemma pp_prim Γ t c uu ls v :
     red1 Σ Γ (mkApps (tConst c uu) (map term_of_lit ls)) v ->
     on_free_vars xpredT t -> eta_safe Σ t ->
     eta1 t (mkApps (tConst c uu) (map term_of_lit ls)) -> PP Σ Γ t v.
   Proof.
-    intros hop hred ho hs he.
+    intros hred ho hs he.
     destruct (eta1_mkApps_tgt _ _ _ he) as [[[h0 [hh ->]]|[args0 [ha ->]]]|(na & A & args1 & args2 & e & ->)].
     - depelim hh. now apply (pp_head_eta cb).
     - exfalso.
@@ -685,11 +693,182 @@ Section Roots.
       have hin : In a (map term_of_lit ls).
       { rewrite hm. apply in_or_app. right. now left. }
       apply in_map_iff in hin as [lit [<- _]].
-      have hl := eta1_lit_isLambda _ _ ha0.
-      have hsp := eta_safe_spine _ _ _ (app_cons_not_nil pre post a0) hs.
-      have hn := forallb_app_cons_mid _ _ _ _ (spine_safe_prim _ _ _ _ _ hop hsp).
-      unfold notLam in hn. rewrite hl in hn. discriminate hn.
+      destruct (eta1_lit_inv _ _ ha0) as (na & A & ->).
+      have hn := forallb_app_cons_mid _ _ _ _ (eta_safe_mkApps_args _ _ _ hs).
+      cbn beta in hn. rewrite eta_safe_lit_eta in hn. discriminate hn.
     - rewrite e mkApps_app in hred. now apply (pp_head_eta cb).
   Qed.
 
 End Roots.
+
+(** ** The context premise of the pinned statements
+
+  [wf_localE Σ Γ] is not a premise of [T8_*_statement]: the typing premise gives it. *)
+Lemma T8_typing_wf_localE {cf : checker_flags} {Σ : global_env_ext} Γ T s :
+  Σ ;;; Γ |-E T : tSort s -> wf_localE Σ Γ.
+Proof. exact typingE_wf_local. Qed.
+
+(** ** Typing gives the invariant *)
+
+Lemma ctx_inst_typed {cf : checker_flags} {Σ : global_env_ext} Γ l Δ :
+  ctx_inst (typingE Σ) Γ l Δ -> All (fun t => ∑ T, Σ ;;; Γ |-E t : T) l.
+Proof.
+  induction 1.
+  - constructor.
+  - constructor; [eexists; eassumption|assumption].
+  - assumption.
+Qed.
+
+Section TypedSafe.
+  Context {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ).
+
+  Let cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
+
+  (** An inversion lemma of [PCUICInversionEta], with or without its [wfE] argument. *)
+  Ltac invE lem h hi := first [pose proof (lem Σ wfΣ _ _ _ _ _ _ h) as hi
+                              | pose proof (lem Σ wfΣ _ _ _ _ _ h) as hi
+                              | pose proof (lem Σ wfΣ _ _ _ _ h) as hi
+                              | pose proof (lem Σ wfΣ _ _ _ h) as hi
+                              | pose proof (lem Σ wfΣ h) as hi
+                              | pose proof (lem Σ h) as hi].
+
+  (** A λ never has an inductive type: its type is a product. *)
+  Lemma typed_lambda_not_ind_ty Γ na A b ind u l :
+    Σ ;;; Γ |-E tLambda na A b : mkApps (tInd ind u) l -> False.
+  Proof.
+    intros h. invE inversion_LambdaE h hi. destruct hi as (B & _ & _ & hc).
+    exact (invert_cumul_prod_indE (Σ := Σ) (wfΣ := cbΣ) hc).
+  Qed.
+
+  Lemma typed_lambda_not_ind Γ na A b T ind u l :
+    Σ ;;; Γ |-E tLambda na A b : T -> ws_cumul_pbE Cumul Σ Γ T (mkApps (tInd ind u) l) -> False.
+  Proof.
+    intros h hT. invE inversion_LambdaE h hi. destruct hi as (B & _ & _ & hc).
+    exact (invert_cumul_prod_indE (Σ := Σ) (wfΣ := cbΣ)
+             (ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cbΣ) _ _ _ hc hT)).
+  Qed.
+
+  Lemma typed_notLam_ind Γ c ind u l : Σ ;;; Γ |-E c : mkApps (tInd ind u) l -> notLam c.
+  Proof.
+    intros h. destruct c; try reflexivity. exfalso. exact (typed_lambda_not_ind_ty _ _ _ _ _ _ _ h).
+  Qed.
+
+  (** A primitive value never has a product type: its type is an axiom (applied, for
+      arrays), which is not a primitive operation. *)
+  Lemma typed_prim_not_prod Γ p na A B : Σ ;;; Γ |-E tPrim p : tProd na A B -> False.
+  Proof.
+    intros h. invE inversion_PrimE h hi.
+    destruct hi as [prim_ty [cdecl [_ hpc hdecl hinv _ hcum]]].
+    have hop : prim_op_of Σ prim_ty = None.
+    { pose proof wfΣ as [_ [wfr _]]. exact (prim_op_of_primitive_constant _ _ _ wfr hpc). }
+    destruct p as [? []]; cbn in hinv; destruct hinv as [_ hb _]; simp prim_type in hcum.
+    1-3: exact (invert_cumul_axiom_prodE (Σ := Σ) (wfΣ := cbΣ) (args := []) hdecl hb hop hcum).
+    exact (invert_cumul_axiom_prodE (Σ := Σ) (wfΣ := cbΣ) (args := [_]) hdecl hb hop hcum).
+  Qed.
+
+  Lemma typed_notPrimHead Γ u na A B : Σ ;;; Γ |-E u : tProd na A B -> notPrimHead u.
+  Proof.
+    intros h. destruct u; try reflexivity. exfalso. exact (typed_prim_not_prod _ _ _ _ _ h).
+  Qed.
+
+  (** FINDING (a statement this file needs and the tree does not give): the [rarg]-th
+      argument of a typed applied fixpoint has a type E-convertible to an applied
+      inductive. Its proof needs the E typing spine (E copy of [PCUICArities]'
+      [typing_spine] and of [PCUICSpine], not in this tree): the spine's domains are
+      E-convertible to the products of a type that [wf_fixpointE] relates to a
+      telescope whose [rarg]-th assumption is an applied inductive. *)
+  Definition fix_rarg_inductive_statement : Type :=
+    forall Γ mfix idx args narg fn a T,
+      Σ ;;; Γ |-E mkApps (tFix mfix idx) args : T ->
+      unfold_fix mfix idx = Some (narg, fn) ->
+      nth_error args narg = Some a ->
+      ∑ A ind u l, (Σ ;;; Γ |-E a : A) × ws_cumul_pbE Cumul Σ Γ A (mkApps (tInd ind u) l).
+
+  Context (fix_rarg_inductive : fix_rarg_inductive_statement).
+
+  Lemma typed_spine_safe Γ t T : Σ ;;; Γ |-E t : T -> spine_safe Σ t.
+  Proof.
+    intros ht. unfold spine_safe.
+    destruct (decompose_app t) as [h args] eqn:ed.
+    destruct h; cbv beta iota; try reflexivity.
+    destruct (unfold_fix mfix idx) as [[narg fn]|] eqn:hu; cbv beta iota; [|reflexivity].
+    destruct (nth_error args narg) as [a|] eqn:hn; cbv beta iota; [|reflexivity].
+    apply decompose_app_inv in ed. subst t.
+    destruct (fix_rarg_inductive _ _ _ _ _ _ _ _ ht hu hn) as (A & ind & u & l & ha & hA).
+    destruct a; try reflexivity.
+    exfalso. exact (typed_lambda_not_ind _ _ _ _ _ _ _ _ ha hA).
+  Qed.
+
+  Ltac apply_ih := match goal with
+    | IH : forall _ _, _ -> is_true (eta_safe ?S ?x) |- is_true (eta_safe ?S ?x) =>
+        eapply IH; eassumption
+    end.
+
+  (** Every typed term satisfies the invariant (given [fix_rarg_inductive]). *)
+  Theorem typed_eta_safe Γ t T : Σ ;;; Γ |-E t : T -> eta_safe Σ t.
+  Proof.
+    induction t in Γ, T |- * using term_forall_list_ind; intros ht; cbn [eta_safe]; try reflexivity.
+    - (* tEvar *) exfalso. exact (inversion_EvarE Σ ht).
+    - (* tProd *) invE inversion_ProdE ht hi. destruct hi as (s1 & s2 & hA & hB & _).
+      destruct hA as (_ & s & hA & _). hnf in hA.
+      apply/andP; split; apply_ih.
+    - (* tLambda *) invE inversion_LambdaE ht hi. destruct hi as (B & hA & hb & _).
+      destruct hA as (_ & s & hA & _). hnf in hA.
+      apply/andP; split; apply_ih.
+    - (* tLetIn *) invE inversion_LetInE ht hi. destruct hi as (A & hbB & hc & _).
+      destruct hbB as (hb & s & hB & _). hnf in hb. hnf in hB.
+      rtoProp; repeat split; apply_ih.
+    - (* tApp *) invE inversion_AppE ht hi. destruct hi as (na & A & B & hu & hv & _).
+      rtoProp; repeat split.
+      + eapply typed_notPrimHead; exact hu.
+      + eapply typed_spine_safe; exact ht.
+      + apply_ih.
+      + apply_ih.
+    - (* tCase *)
+      destruct X as (Hpars & _ & Hret).
+      invE inversion_CaseE ht hi.
+      destruct hi as (mdecl & idecl & isdecl & indices & hdata & _).
+      destruct hdata.
+      rtoProp; repeat split.
+      + eapply typed_notLam_ind; eassumption.
+      + apply_ih.
+      + match goal with H : ctx_inst _ _ _ _ |- _ =>
+          pose proof (fst (All_app (ctx_inst_typed _ _ _ H))) as hp end.
+        eapply All_forallb'; [exact (All_mix Hpars hp)|]. intros x [ih [Tx hx]]. exact (ih _ _ hx).
+      + eapply Hret; eassumption.
+      + match goal with
+        | |- is_true (forallb _ ?brs) =>
+          match goal with H : All2i _ _ _ brs |- _ =>
+            have hb : All (fun br => ∑ Γ' T', Σ ;;; Γ' |-E bbody br : T') brs
+              by (eapply All2i_All_right; [exact H|];
+                  intros i x y (_ & _ & hbd & _); eexists _, _; exact hbd)
+          end
+        end.
+        eapply All_forallb'; [exact (All_mix X0 hb)|]. intros x [[_ ih] (Γ' & T' & hx)].
+        exact (ih _ _ hx).
+    - (* tProj *) invE inversion_ProjE ht hi.
+      destruct hi as (u & mdecl & idecl & cdecl & pdecl & args & _ & hc & _).
+      apply/andP; split; [eapply typed_notLam_ind; exact hc|apply_ih].
+    - (* tFix *) invE inversion_FixE ht hi.
+      destruct hi as (decl & _ & _ & htys & hbodies & _).
+      eapply All_forallb'; [exact (All_mix X (All_mix htys hbodies))|].
+      intros d [[iht ihb] [hty hbd]]. apply/andP; split.
+      + destruct hty as (_ & s & hs & _). hnf in hs. exact (iht _ _ hs).
+      + destruct hbd as (hb & _). hnf in hb. exact (ihb _ _ hb).
+    - (* tCoFix *) invE inversion_CoFixE ht hi.
+      destruct hi as (decl & _ & _ & htys & hbodies & _).
+      eapply All_forallb'; [exact (All_mix X (All_mix htys hbodies))|].
+      intros d [[iht ihb] [hty hbd]]. apply/andP; split.
+      + destruct hty as (_ & s & hs & _). hnf in hs. exact (iht _ _ hs).
+      + destruct hbd as (hb & _). hnf in hb. exact (ihb _ _ hb).
+    - (* tPrim *)
+      destruct p as [? []]; cbn in X |- *; try reflexivity.
+      invE inversion_PrimE ht hi. destruct hi as [prim_ty [cdecl [_ _ _ _ hhyps _]]].
+      depelim hhyps. destruct X as (Ht & Hd & Hv).
+      rtoProp; repeat split.
+      + eapply All_forallb'; [exact (All_mix Hv hvalue)|]. intros y [ih hy]. exact (ih _ _ hy).
+      + exact (Hd _ _ hdef).
+      + exact (Ht _ _ hty).
+  Qed.
+
+End TypedSafe.
