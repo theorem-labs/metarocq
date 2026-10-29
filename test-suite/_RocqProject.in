@@ -77,4 +77,6 @@ arity_delta_spec.v
 prim_ops.v
 prim_ops_spec.v
 prim_ops_instance.v
+# FORECAST-ONLY (fc/etak-forecast1): Print Assumptions of the E checker's four roots
+etak_forecast_pa.v
 
