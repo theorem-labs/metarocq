@@ -193,6 +193,7 @@ theories/PCUICEtaK6EtaStep.v
 # Well-scoped eta-conversion (ws_cumul_pbE): congruences, substitution, inversions, context conversion
 theories/PCUICWellScopedCumulativityEta.v
 theories/PCUICConversionEtaCongr.v
+theories/PCUICConversionEtaCongrFinst.v
 theories/PCUICWsCumulEtaSubst.v
 theories/PCUICEtaA6.v
 theories/PCUICEtaA6Ind.v
