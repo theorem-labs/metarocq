@@ -1,19 +1,20 @@
 (* Distributed under the terms of the MIT license. *)
 (* A copy of Syntax/PCUICPosition.v whose stack has two more frames: the read-time
-   lifted [Eta_app] frame and the focus-dropping [Eta_arg] frame. The structural stack
-   operations keep their base meaning; the η semantics is a separate view ([eta_lift],
-   [decompose_stack_eta], [zipp_eta], [stack_context_eta]). Every base lemma that is
-   false for a stack containing [Eta_arg] is restated here with the side condition
-   "no [Eta_arg]". The stack also has base's [Prim_app] frame, with its clauses in
-   [fill_hole], [closedn_stack_entry] and [stack_entry_choice]. The only file of this
-   tree that uses this stack is [PCUICSafeConversionEtaK4]; the η conversion checker
-   that would run on it is not in this tree. *)
+   [Eta_app] frame and the focus-dropping [Eta_arg] frame. The structural stack
+   operations keep their base meaning; the η semantics is a separate view, implemented
+   as plan.md §2 I7 revisions 12-15 state it ([eta_run], [drop_eta_run], [eta_virtuals],
+   [eta_rename], [decompose_stack_eta], [zipp_eta], [stack_context_eta], [focus_context],
+   [virt_ok], [eta_ren]). Every base lemma that is false for a stack containing
+   [Eta_arg] is restated here with the side condition "no [Eta_arg]". The stack also has
+   base's [Prim_app] frame, with its clauses in [fill_hole], [closedn_stack_entry] and
+   [stack_entry_choice]. The typed lemmas about the η views are in
+   [PCUICPositionEtaTyping]; the termination measure is in [PCUICSafeConversionEtaK4]. *)
 From Stdlib Require Import RelationClasses ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.Common Require Import PrimitiveOps.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICInduction
-     PCUICReflect PCUICEquality PCUICLiftSubst PCUICCases
+     PCUICReflect PCUICEquality PCUICLiftSubst PCUICSigmaCalculus PCUICCases
      PCUICAstUtils PCUICUnivSubst PCUICTyping
      PCUICCasesContexts PCUICGlobalEnv
      PCUICAlpha PCUICInversion PCUICSubstitution
@@ -1571,9 +1572,9 @@ Qed.
 (* The base [stack_position_valid] is false for a stack with a position-contributing
    frame above an [Eta_arg], e.g. [App_l v :: Eta_arg w [] :: []]: [stack_position =
    [app_l]] but [zipc t _ = w], and [validpos w [app_l] = false]. It is restated with
-   "no [Eta_arg]" ([Eta_app] is safe), and a dedicated head-[Eta_arg] form is given for
-   the virtual-argument state, where the [Eta_arg] frame is always the head with a
-   no-[Eta_arg] tail. *)
+   "no [Eta_arg]" ([Eta_app] is safe); [stack_position_valid_wf] below covers every
+   stack of the widened invariant [wf_stack], where only η frames lie above an
+   [Eta_arg]. *)
 Lemma stack_position_valid :
   forall t π, no_Eta_arg π -> validpos (zipc t π) (stack_position π).
 Proof.
@@ -1592,47 +1593,57 @@ Proof.
     all: try (rewrite nth_error_snoc; auto).
 Qed.
 
-(* The virtual-argument state's stack [Eta_arg u args :: ρ] with [no_Eta_arg ρ].
-   The head [Eta_arg] drops the focus and contributes no choice, so validity reduces to
-   the no-[Eta_arg] lemma on ρ with the real focus [mkApps u args]. *)
-Lemma stack_position_valid_Eta_arg :
-  forall t u args ρ, no_Eta_arg ρ ->
-    validpos (zipc t (Eta_arg u args :: ρ)) (stack_position (Eta_arg u args :: ρ)).
-Proof.
-  intros t u args ρ hρ.
-  cbn [stack_position zipc fill_hole].
-  now apply stack_position_valid.
-Qed.
-
 Definition stack_pos (t : term) (π : stack) (h : no_Eta_arg π) : pos (zipc t π) :=
   exist (stack_position π) (stack_position_valid t π h).
 
-(* The well-formedness invariant of every checker state. A normal state's stack has
-   no [Eta_arg]; the virtual-argument state's stack is [Eta_arg u args :: ρ] with the
-   [Eta_arg] as head and a no-[Eta_arg] tail (nothing above it). [wf_stack] covers both,
-   so [stack_pos_wf] gives a valid position for every state, including the virtual
-   side, which the termination order of [PCUICSafeConversionEtaK4] needs. *)
-Definition wf_stack (π : stack) : bool :=
+(* plan I7 rev 12 (D-b). *)
+Definition is_eta_frame (se : stack_entry) : bool :=
+  match se with Eta_app _ _ | Eta_arg _ _ => true | _ => false end.
+
+(* The well-formedness invariant of every checker state (plan I7 rev 12, D-b; replaces
+   rev 11's "an [Eta_arg] only as the head, with a no-[Eta_arg] tail"). Only η frames lie
+   above the last [Eta_arg], and no [Eta_arg] lies below the first real frame. A normal
+   state's stack has no [Eta_arg]; the virtual side's stack is [Eta_arg u [] :: ρ]; an η
+   step on the virtual side pushes [Eta_app] ABOVE that [Eta_arg]. Positions stay valid,
+   because both η frames are skipped by [stack_position] and [Eta_arg] restores the real
+   term, so [stack_pos_wf] gives a valid position for every state. *)
+Fixpoint wf_stack (π : stack) : bool :=
   match π with
-  | Eta_arg _ _ :: ρ => no_Eta_arg ρ
-  | _ => no_Eta_arg π
+  | [] => true
+  | se :: ρ => if is_eta_frame se then wf_stack ρ else no_Eta_arg ρ
   end.
 
 Lemma wf_stack_no_Eta_arg π : no_Eta_arg π -> wf_stack π.
 Proof.
-  intro h. destruct π as [|a ρ]; [exact h|].
-  destruct a; try exact h.
-  (* Eta_arg head: no_Eta_arg (Eta_arg..::ρ) is false *)
-  cbn in h. discriminate h.
+  induction π as [|se ρ IH]; [reflexivity|].
+  cbn [no_Eta_arg wf_stack]. intro h. apply andb_prop in h as [hse hρ].
+  destruct se; cbn in hse |- *; first [discriminate | exact hρ | exact (IH hρ)].
 Qed.
 
-Lemma stack_position_valid_wf t π :
-  wf_stack π -> validpos (zipc t π) (stack_position π).
+Lemma wf_stack_Eta_arg u args ρ : wf_stack ρ -> wf_stack (Eta_arg u args :: ρ).
+Proof. intro h. exact h. Qed.
+
+Lemma wf_stack_Eta_app na A ρ : wf_stack ρ -> wf_stack (Eta_app na A :: ρ).
+Proof. intro h. exact h. Qed.
+
+(* the η step: on the virtual side the spine is empty; on a real side ρ has no Eta_arg *)
+Lemma wf_stack_eta_step args na A ρ :
+  (args = [] /\ wf_stack ρ) \/ no_Eta_arg ρ -> wf_stack (appstack args (Eta_app na A :: ρ)).
 Proof.
-  intro h. destruct π as [|a ρ].
-  - now apply stack_position_valid.
-  - destruct a; try (apply stack_position_valid; exact h).
-    apply stack_position_valid_Eta_arg; exact h.
+  intros [[-> h] | h].
+  - exact h.
+  - destruct args as [|a args].
+    + exact (wf_stack_no_Eta_arg ρ h).
+    + change (is_true (no_Eta_arg (appstack args (Eta_app na A :: ρ)))).
+      rewrite no_Eta_arg_appstack. exact h.
+Qed.
+
+Lemma stack_position_valid_wf t π : wf_stack π -> validpos (zipc t π) (stack_position π).
+Proof.
+  induction π as [|se ρ IH] in t |- *; intro h; [reflexivity|].
+  destruct se; cbn [wf_stack is_eta_frame] in h;
+    try solve [apply stack_position_valid; cbn [no_Eta_arg is_Eta_arg negb andb]; exact h].
+  all: cbn [zipc fill_hole stack_position]; apply IH; exact h.
 Qed.
 
 Definition stack_pos_wf (t : term) (π : stack) (h : wf_stack π) : pos (zipc t π) :=
@@ -1974,20 +1985,12 @@ Proof.
 Qed.
 
 (* ===================================================================== *)
-(* The η-aware views. *)
-(* Two different counts: a LIFT count that stops at the first [Eta_arg], and *)
-(* a framewise CONTEXT view that does not.                                   *)
+(* The η-aware views: plan.md §2 I7 revisions 12-15, verbatim.              *)
 (* ===================================================================== *)
 
-Definition head_is_Eta_app (π : stack) : bool :=
-  match π with Eta_app _ _ :: _ => true | _ => false end.
-
-Definition drop_eta_app (π : stack) : stack :=
-  match π with Eta_app _ _ :: π => π | _ => π end.
-
 (* [eta_lift π] = the number of [Eta_app] frames in π BEFORE the first [Eta_arg]
-   frame (every eta binder between the current focus and where the lift was
-   introduced). Real frames are passed through; the first [Eta_arg] stops it. *)
+   frame. Rev 13 keeps it only for the lemma that ties [eta_rename] to rev 12's
+   reading ([eta_rename_no_binders]); it is no longer a view. *)
 Fixpoint eta_lift (π : stack) : nat :=
   match π with
   | [] => 0
@@ -2010,8 +2013,8 @@ Proof.
   cbn [eta_lift]. exact IH.
 Qed.
 
-(* Invariant tying the two (plan K3a): the lift count never exceeds the number of
-   [Eta_app] frames, with equality exactly when π has no [Eta_arg]. *)
+(* The lift count never exceeds the number of [Eta_app] frames, with equality
+   exactly when π has no [Eta_arg]. *)
 Lemma eta_lift_le_count π : eta_lift π <= count_Eta_app π.
 Proof.
   induction π as [|a π IH]; cbn; auto.
@@ -2026,75 +2029,132 @@ Proof.
   destruct a; cbn in ha; try discriminate ha; cbn; rewrite ?IH; auto.
 Qed.
 
-(* [decompose_stack_eta π]: the spine is lifted by [eta_lift π], and the virtual
-   [tRel 0] is appended exactly when the first non-[App_l] frame is [Eta_app]. *)
-Definition decompose_stack_eta (π : stack) : list term * stack :=
-  let '(args, ρ) := decompose_stack π in
-  let k := eta_lift π in
-  (map (lift0 k) args ++ (if head_is_Eta_app ρ then [tRel 0] else []), drop_eta_app ρ).
+(* rev 12 (D-a): the run of consecutive [Eta_app] frames at the head of a stack. *)
+Fixpoint eta_run (π : stack) : nat :=
+  match π with
+  | Eta_app _ _ :: π => S (eta_run π)
+  | _ => 0
+  end.
 
-(* The [napp] invariant: the virtual argument adds exactly one to the spine length
-   precisely when the first non-[App_l] frame is [Eta_app]. *)
-Lemma decompose_stack_eta_length π :
-  #|(decompose_stack_eta π).1| =
-  #|(decompose_stack π).1| + (if head_is_Eta_app (decompose_stack π).2 then 1 else 0).
-Proof.
-  unfold decompose_stack_eta.
-  destruct (decompose_stack π) as [args ρ] eqn:E; cbn.
-  destruct (head_is_Eta_app ρ) eqn:He; cbn; len; lia.
-Qed.
+(* rev 12: replaces rev 11's [drop_eta_app] (which dropped one frame). *)
+Fixpoint drop_eta_run (π : stack) : stack :=
+  match π with
+  | Eta_app _ _ :: π => drop_eta_run π
+  | _ => π
+  end.
+
+(* rev 12: the virtual arguments of a run of m frames, oldest binder first:
+   eta_virtuals 0 = [], eta_virtuals 1 = [tRel 0], eta_virtuals 2 = [tRel 1; tRel 0]. *)
+Definition eta_virtuals (m : nat) : list term := map tRel (List.rev (seq 0 m)).
+
+(* rev 13 (B1): the renaming the η frames below a focus impose on it, as the kernel's
+   [el_lift]. Walking from the focus down to the first [Eta_arg], [d] counts the
+   structural binders passed, and each [Eta_app] shifts by 1 only the variables at or
+   above [d]. *)
+Fixpoint eta_rename (π : stack) (d : nat) (t : term) : term :=
+  match π with
+  | [] => t
+  | Eta_arg _ _ :: _ => t
+  | Eta_app _ _ :: π => eta_rename π (S d) (lift 1 d t)
+  | se :: π => eta_rename π (#|stack_entry_context se| + d) t
+  end.
+
+(* rev 13: eta_segment π := the frames of π before its first Eta_arg *)
+Fixpoint eta_segment (π : stack) : stack :=
+  match π with
+  | [] => []
+  | Eta_arg _ _ :: _ => []
+  | se :: π => se :: eta_segment π
+  end.
+
+(* rev 13: head and real spine read through the same renaming; virtual tail as rev 12
+   (one virtual argument per frame of the run at the head of ρ). *)
+Definition decompose_stack_eta (π : stack) : list term × stack :=
+  let '(args, ρ) := decompose_stack π in
+  (map (eta_rename ρ 0) args ++ eta_virtuals (eta_run ρ), drop_eta_run ρ).
 
 Definition zipp_eta (t : term) (π : stack) : term :=
-  mkApps (lift0 (eta_lift π) t) (decompose_stack_eta π).1.
+  mkApps (eta_rename π 0 t) (decompose_stack_eta π).1.
 
-(* The defining equation of the eta step (plan I7): in a state whose head non-[App_l]
-   frame is [Eta_app] (with a lift-0 tail), the eta reading of the non-lambda side is
-   the lifted head applied to the real spine and the virtual [tRel 0]. *)
-Lemma zipp_eta_Eta_app t2 args na A ρ :
-  eta_lift ρ = 0 ->
-  zipp_eta t2 (appstack args (Eta_app na A :: ρ)) =
-  tApp (lift0 1 (mkApps t2 args)) (tRel 0).
-Proof.
-  intros hρ.
-  assert (Hd : decompose_stack (appstack args (Eta_app na A :: ρ)) = (args, Eta_app na A :: ρ)).
-  { rewrite decompose_stack_appstack. cbn. now rewrite app_nil_r. }
-  assert (Hk : eta_lift (appstack args (Eta_app na A :: ρ)) = 1).
-  { rewrite eta_lift_appstack. cbn [eta_lift]. now rewrite hρ. }
-  unfold zipp_eta, decompose_stack_eta.
-  rewrite Hd Hk. cbn.
-  rewrite mkApps_app. cbn [mkApps]. rewrite -lift_mkApps. reflexivity.
-Qed.
-
-(* Framewise η context: every [Eta_app] below the focus contributes its binder at
-   its own position in the stack, whether or not an [Eta_arg] lies between. [eta_lift]
-   must not do this, because in the virtual-argument state the focus is the literal
-   [tRel 0] (lift 0) while the context must still carry [vass na A]. *)
-Definition stack_entry_context_eta (se : stack_entry) : context :=
+(* rev 13: a real frame's declarations are renamed by the η frames below it, in its
+   segment; each [Eta_app] contributes its binder, at its own position in the stack. *)
+Definition stack_entry_context_eta (se : stack_entry) (below : stack) : context :=
   match se with
   | Eta_app na A => [vass na A]
   | Eta_arg _ _ => []
-  | _ => stack_entry_context se
+  | se => fold_context_k (fun k => eta_rename below k) (stack_entry_context se)
   end.
 
-Definition stack_context_eta : stack -> context :=
-  flat_map stack_entry_context_eta.
+Fixpoint stack_context_eta (π : stack) : context :=
+  match π with
+  | [] => []
+  | se :: π => stack_entry_context_eta se π ++ stack_context_eta π
+  end.
+
+(* rev 13 (B2): virtual pair j (0-based) of m on side i. Side i's state for virtual pair
+   j: focus [virtual_focus m j], stack [Eta_arg ti [] :: ρi] (rev 14 NB2). *)
+Definition virtual_focus (m j : nat) : term := tRel (m - 1 - j).
+
+(* rev 13 (F-9, N1): the focus's own context, which the two [_isconv_red] sites pass to
+   [reduce_stack]. *)
+Definition focus_context (π : stack) : context :=
+  let ρ := drop_eta_run (decompose_stack π).2 in
+  match ρ with
+  | Eta_arg _ _ :: _ => stack_context_eta ρ
+  | _ => stack_context π
+  end.
+
+Definition is_nil {A} (l : list A) : bool :=
+  match l with [] => true | _ => false end.
+
+(* rev 14 (B4, T0): checked at [_isconv_red] entry, for each side. *)
+Definition virt_ok (t : term) (π : stack) : bool :=
+  no_Eta_arg π ||
+  (let '(args, ρ) := decompose_stack π in
+   match t, drop_eta_run ρ with
+   | tRel k, Eta_arg _ _ :: σ => is_nil args && Nat.ltb k (eta_run (decompose_stack σ).2)
+   | _, _ => false
+   end).
+
+(* rev 15 (C6): [eta_rename π d] as a renaming; composes
+   [shiftn d (lift_renaming 1 0)] (= [lift_renaming 1 d]) per [Eta_app]. *)
+Fixpoint eta_ren (π : stack) (d : nat) : nat -> nat :=
+  match π with
+  | [] => id
+  | Eta_arg _ _ :: _ => id
+  | Eta_app _ _ :: π => eta_ren π (S d) ∘ lift_renaming 1 d
+  | se :: π => eta_ren π (#|stack_entry_context se| + d)
+  end.
+
+(* rev 15 (C6): the one shape test [virt_ok_not_head] needs ([isCase], [isProj] and
+   [isConst] do not exist in base). *)
+Definition reducible_head_shape (t : term) : bool :=
+  match t with tFix _ _ | tCase _ _ _ _ | tProj _ _ | tConst _ _ | tLambda _ _ _ => true | _ => false end.
+
+Lemma eta_virtuals_length m : #|eta_virtuals m| = m.
+Proof. unfold eta_virtuals. now rewrite length_map List.length_rev length_seq. Qed.
+
+(* napp invariant (gate C3/F-4), rev 12: counts every virtual argument of the run *)
+Lemma decompose_stack_eta_length π :
+  #|(decompose_stack_eta π).1| = #|(decompose_stack π).1| + eta_run (decompose_stack π).2.
+Proof.
+  unfold decompose_stack_eta.
+  destruct (decompose_stack π) as [args ρ]; cbn.
+  rewrite length_app length_map eta_virtuals_length. reflexivity.
+Qed.
 
 Lemma stack_context_eta_appstack args π :
   stack_context_eta (appstack args π) = stack_context_eta π.
 Proof.
-  unfold appstack. induction args as [|a args IH]; cbn; auto.
+  induction args as [|a args IH]; [reflexivity|].
+  change (appstack (a :: args) π) with (App_l a :: appstack args π).
+  cbn [stack_context_eta stack_entry_context_eta stack_entry_context].
+  rewrite IH. reflexivity.
 Qed.
 
 Lemma stack_context_eta_Eta_app na A π :
   stack_context_eta (Eta_app na A :: π) = vass na A :: stack_context_eta π.
 Proof. reflexivity. Qed.
-
-Lemma stack_context_eta_cat π ρ :
-  stack_context_eta (ρ ++ π) = stack_context_eta π ,,, stack_context_eta ρ.
-Proof.
-  unfold stack_context_eta.
-  rewrite !flat_map_concat_map map_app concat_app; auto.
-Qed.
 
 (* ===================================================================== *)
 (* The [PCUICSafeLemmata] lemmas that read the focus through the stack,           *)
@@ -2371,8 +2431,12 @@ Lemma zipc_Eta_arg_appstack t u args ρ :
   zipc t (Eta_arg u args :: ρ) = zipc u (appstack args ρ).
 Proof. cbn [zipc fill_hole]. now rewrite zipc_appstack. Qed.
 
-Lemma wf_stack_Eta_arg u args ρ : no_Eta_arg ρ -> wf_stack (Eta_arg u args :: ρ).
-Proof. intro h. exact h. Qed.
+(* rev 14 (NB2): every [Eta_arg] push uses [] as its argument list. *)
+Lemma zipc_Eta_arg_nil t u π : zipc t (Eta_arg u [] :: π) = zipc u π.
+Proof. reflexivity. Qed.
+
+Lemma stack_position_Eta_arg u args π : stack_position (Eta_arg u args :: π) = stack_position π.
+Proof. reflexivity. Qed.
 
 (* --- (1)/(1') the eta branch: the lambda side descends by [Lambda_bd] -------- *)
 
