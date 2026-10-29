@@ -14,3 +14,5 @@ theories/PCUICSafeRetyping.v
 theories/PCUICRetypingEnvIrrelevance.v
 # The termination measure over the stack with the eta frames, and its descent lemmas
 theories/PCUICSafeConversionEtaK4.v
+# K1: the kernel's MustExpand for under-applied inductive/constructor heads (pure test + soundness)
+theories/PCUICMustExpandEta.v
