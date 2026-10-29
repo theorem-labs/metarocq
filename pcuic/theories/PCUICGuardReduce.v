@@ -14,6 +14,11 @@ Set Default Goal Selector "!".
   [red_cofix_proj]) and the congruences that bring a redex to the head
   (the function of an application, the scrutinee of a match, the argument of
   a projection, the recursive argument of a fixpoint application).
+  One deliberate difference: [red_cofix_case] fires only when the case's
+  [ci_cofix_nondep] is set, while [head_step] contracts a cofixpoint under every
+  match, as Rocq's kernel does ([cClosure.ml]).  The guard then accepts nothing
+  the kernel refuses; [red1] is a subset of the reduction the guard reasons with,
+  so strong normalization for the latter gives it for [red1].
 
   Each step returns, next to its reduct, the list of the subterms of the
   redex that do not occur in the reduct (the discarded parts), so that a

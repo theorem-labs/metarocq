@@ -15,10 +15,9 @@
     a free index) are made by editing a quoted block or its environment
     ([run_gen]).  The check runs directly, without the case well-formedness
     test of [check_guard_impl]: some shapes below match on a coinductive
-    type with a return type that mentions the scrutinee, which PCUIC's typing
-    refuses (only a non-dependent case on a coinductive is typable), and the
-    guard check must give its own answer on them as well.  Every assertion is
-    an [Example] proved by [vm_compute; reflexivity]. *)
+    type with a return type that mentions the scrutinee, and the guard check
+    must give its own answer on them whatever the case information says.
+    Every assertion is an [Example] proved by [vm_compute; reflexivity]. *)
 From MetaRocq.Utils Require Import utils bytestring.
 From MetaRocq.Template Require Import Loader.
 From MetaRocq.Template Require Ast.
