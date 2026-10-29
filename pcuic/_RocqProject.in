@@ -233,4 +233,6 @@ theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
+# The comparisons wfE makes are between scoped pairs, and their satisfying instances
+theories/PCUICWfEScope.v
 # theories/All.v
