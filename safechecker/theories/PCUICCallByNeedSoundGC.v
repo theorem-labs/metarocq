@@ -581,6 +581,8 @@ Lemma cbn_collect_eq (rs : list cbn_root) (s : cbn_state) :
   | CbnCOk (gm, g1) =>
     match cbn_rn_roots (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1 with
     | CbnCOk (rs2, g2) =>
+      if N.ltb cbn_cells (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))
+      then CbnCFail CbnWCells else
       CbnCOk (rs2, cbn_mkState g2.(cbn_g_heap) g2.(cbn_g_next)
              (cbn_gc_room (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))) s.(cbn_st_steps) gm
              s.(cbn_st_memo))
@@ -608,6 +610,8 @@ Proof.
     [|discriminate].
   destruct (cbn_rn_roots (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
     as [[rs2 g2]|w2] eqn:e2; [|discriminate].
+  destruct (N.ltb cbn_cells (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))) eqn:ec;
+    [discriminate he|].
   inversion he; subst; clear he.
   assert (hinv0 : cbn_gc_inv s.(cbn_st_heap) s.(cbn_st_next)
                     (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))).

@@ -50,7 +50,8 @@ Import CanonicalTries.
     cached by the ordered pair of identifiers for the rest of the call.
   - Bounds: every function is a structural [Fixpoint] on a lazily generated [cbn_fuel] (the
     recursion depth, in effect unbounded), and every machine, read-back and comparison step
-    takes one unit of an [N] step budget. Out of budget means "don't know".
+    takes one unit of an [N] step budget. A collection that finds more live cells than the
+    [N] live-cell budget stops the call too. Out of budget means "don't know".
   - Delta: constant bodies are looked up once per [cbn_conv] call and memoised by kername;
     one code entry per (constant, syntactic instance).
   - Primitive operations: a bodiless constant that the environment registers as an operation,
@@ -173,6 +174,11 @@ Definition cbn_depth : cbn_fuel := cbn_fuel_of_pos 4611686018427387904%positive 
   it was chosen by measurement, not derived. *)
 Definition cbn_steps : N := 4000000000%N.
 
+(** Live-cell budget of one [cbn_conv] call: a collection that finds more live cells than
+  this answers "don't know", and [convert] then runs [isconv_term]. Like [cbn_steps] it
+  bounds only what such a call costs; it cannot change a verdict. *)
+Definition cbn_cells : N := 4000000000%N.
+
 (** The collector runs when the cells allocated since the last collection exceed
   [max (2 * live) cbn_gc_min]. [cbn_gc_min] keeps a small heap from being collected after every few
   allocations; its value was chosen by measurement, not derived. *)
@@ -193,6 +199,7 @@ Inductive cbn_why :=
 | CbnWShape       (* a term or value shape the machine does not handle *)
 | CbnWCtx         (* a free variable beyond the context *)
 | CbnWDelta       (* a constant that is not in the environment *)
+| CbnWCells       (* the live-cell budget ran out *)
 | CbnWGcDangling  (* the collector met an address that is not in the heap *)
 | CbnWGcFuel      (* the collector's walk ran out of fuel *)
 | CbnWRoots.      (* returned roots of an unexpected shape (an internal error) *)
@@ -1802,15 +1809,18 @@ Fixpoint cbn_gc_copy (f : cbn_fuel) (a : cbn_haddr) (g : cbn_gc_state) {struct f
 
 (** Copy what [rs] and [cbn_st_gam] reach into a fresh heap whose addresses start at the old
   [cbn_st_next] (the addresses below are dropped), and rename [rs] and [cbn_st_gam]. No step is
-  taken from the budget. *)
+  taken from the budget. A collection that finds more live cells than [cbn_cells] answers
+  "don't know". *)
 Definition cbn_collect (rs : list cbn_root) (s : cbn_state) : cbn_res (list cbn_root * cbn_state) :=
   let onext := s.(cbn_st_next) in
   let copy := cbn_gc_copy (cbn_fuel_of_pos onext (fun _ => CbnFO)) in
   let g := cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes onext) onext in
   cbn2 (gm, g) := cbn_rn_ptree copy s.(cbn_st_gam) g in
   cbn2 (rs, g) := cbn_rn_roots copy rs g in
+  let live := N.sub (Npos g.(cbn_g_next)) (Npos onext) in
+  if N.ltb cbn_cells live then CbnCFail CbnWCells else
   CbnCOk (rs, cbn_mkState g.(cbn_g_heap) g.(cbn_g_next)
-    (cbn_gc_room (N.sub (Npos g.(cbn_g_next)) (Npos onext)))
+    (cbn_gc_room live)
              s.(cbn_st_steps) gm s.(cbn_st_memo)).
 
 Definition cbn_gc_due (s : cbn_state) : bool :=

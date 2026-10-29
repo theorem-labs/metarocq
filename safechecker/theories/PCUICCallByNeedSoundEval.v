@@ -1961,6 +1961,8 @@ Section Eval.
         [|discriminate].
       destruct (cbn_rn_roots (cbn_gc_copy (cbn_fuel_of_pos s.(cbn_st_next) (fun _ => CbnFO))) rs g1)
         as [[rs2 g2]|w2] eqn:e2; [|discriminate].
+      destruct (N.ltb cbn_cells (N.sub (Npos g2.(cbn_g_next)) (Npos s.(cbn_st_next)))) eqn:ec;
+        [discriminate he|].
       inversion he; subst; clear he.
       assert (hg0 : cbn_gcg (cbn_mkGhost (fun _ => None) (cbn_gc G))
                       (cbn_mkGc s.(cbn_st_heap) (cbn_bh_holes s.(cbn_st_next)) s.(cbn_st_next))).
