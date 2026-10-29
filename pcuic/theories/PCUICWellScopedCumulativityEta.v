@@ -1,6 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * A1: the well-scoped relation [ws_cumul_pbE]
+(** * The well-scoped relation [ws_cumul_pbE]
 
   The E counterpart of base [ws_cumul_pb] ([PCUICWellScopedCumulativity.v]),
   built on the canonical join [JoinE] ([PCUICEtaI5]):
@@ -8,13 +8,15 @@
     [ws_cumul_pbE pb Σ Γ t u] := [Γ] closed, [t] and [u] open in [Γ], and
                                  [JoinE Σ Γ pb t u].
 
-  It is new statements over [JoinE] and I5, not a copy of the base file:
+  It is new statements over [JoinE] and the canonical-join results ([PCUICEtaI5]), not a copy of the base file:
   - [_forget] to the unscoped join and to the spec [≤sE];
-  - [into_ws_cumul_pbE] from the join, and from the spec (A2, with
+  - [into_ws_cumul_pbE] from the join, and from the spec ([PCUICEtaI5A2], with
     [I5_eta_l_case_holds]);
-  - [ws_cumul_pbE_spec_iff]: the relation is the scoped spec (I5);
-  - reflexivity, symmetry at [Conv], transitivity (A3), [Conv ⊆ pb];
+  - [ws_cumul_pbE_spec_iff]: the relation is the scoped spec ([I5_join_to_spec], [I5_spec_to_join]);
+  - reflexivity, symmetry at [Conv], transitivity ([PCUICEtaI5Trans]), [Conv ⊆ pb];
   - base [ws_cumul_pb ⊆ ws_cumul_pbE] ([cumulAlgo_cumulSpec], [cumulSpec0_incl_E]);
+  - the notations [Σ ;;; Γ ⊢E t ≤[pb] u], [Σ ;;; Γ ⊢E t ≤ u] and [Σ ;;; Γ ⊢E t = u],
+    the counterparts of base's [⊢] notations for [ws_cumul_pb];
   - closed reduction and closed η steps are in the relation, on either side.
 
 **The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
@@ -24,6 +26,7 @@
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
 From Equations.Type Require Import Relation Relation_Properties.
+From Equations Require Import Equations.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEquality PCUICReduction
@@ -43,6 +46,20 @@ Arguments wsE_ctx {cf pb Σ Γ t u}.
 Arguments wsE_left {cf pb Σ Γ t u}.
 Arguments wsE_right {cf pb Σ Γ t u}.
 Arguments wsE_join {cf pb Σ Γ t u}.
+
+Notation " Σ ;;; Γ ⊢E t ≤[ pb ] u " := (ws_cumul_pbE pb Σ Γ t u) (at level 50, Γ, t, u at next level,
+  format "Σ  ;;;  Γ  ⊢E  t  ≤[ pb ]  u") : type_scope.
+Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at level 50, Γ, t, u at next level,
+  format "Σ  ;;;  Γ  ⊢E  t  ≤  u") : type_scope.
+Notation " Σ ;;; Γ ⊢E t = u " := (ws_cumul_pbE Conv Σ Γ t u) (at level 50, Γ, t, u at next level,
+  format "Σ  ;;;  Γ  ⊢E  t  =  u") : type_scope.
+
+(** The E twin of base's [Derive Signature NoConfusion for ws_cumul_pb]
+    ([PCUICWellScopedCumulativity.v:50]). Base's relation is a family indexed by the two
+    terms; [ws_cumul_pbE] is a record with the terms as parameters, so it has no indices
+    and Equations derives no signature for it ("No signature to derive for
+    non-dependent inductive types"): only [NoConfusion] has a twin. *)
+Derive NoConfusion for ws_cumul_pbE.
 
 #[global] Hint Resolve wsE_ctx wsE_left wsE_right : fvs.
 
@@ -196,3 +213,7 @@ Section A1.
   Qed.
 
 End A1.
+
+(** The E twins of base's registrations [PCUICWellScopedCumulativity.v:353] and [:400]. *)
+#[global] Hint Immediate ws_cumul_pbE_refl : pcuic.
+#[global] Hint Resolve red_ws_cumul_pbE red_ws_cumul_pbE_inv : pcuic.
