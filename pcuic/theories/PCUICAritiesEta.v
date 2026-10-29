@@ -12,7 +12,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction
      PCUICClosedTypEta PCUICWeakeningEnvTypEta PCUICRenameTypEta PCUICWeakeningTypEta
      PCUICUnivSubstitutionTypEta PCUICWfUniversesEta PCUICSubstitutionEta PCUICContextsEta
      PCUICWellScopedCumulativityEta PCUICContextConversionEta PCUICEtaA6 PCUICEtaJoinSpec
-     PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp.
+     PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICInversionEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta.
 
 From Equations.Prop Require Import DepElim.
@@ -52,11 +52,11 @@ From Equations Require Import Equations.
   BEFORE its own [typing_spine], so it refers to [PCUICGeneration.typing_spine];
   its twin refers to [PCUICGenerationEta.typing_spineE] (required, not imported).
 
-  Copied from [PCUICInversion] for the proofs here (no E copy of that file exists):
-  [typing_ws_cumul_pbE], [inversion_ProdE], [inversion_LetInE], with the helper
-  [into_ws_cumul_specE] (no base twin: base's [into_ws_cumul] takes the algorithmic
-  relation; this one takes the spec relation of [typeE_Cumul]). Copied from
-  [Conversion/PCUICUnivSubstitutionConv]: [consistent_instance_ext_abstract_instanceE].
+  The inversions come from [PCUICInversionEta] ([inversion_ProdE],
+  [inversion_LetInE]), as base's come from [PCUICInversion]. Copied from
+  [Conversion/PCUICUnivSubstitutionConv] for the proofs here (no E copy of that
+  file exists): [subst_instance_level_absE] and
+  [consistent_instance_ext_abstract_instanceE].
 
   Proof routes that differ from base (statements are twins): [isType_tLetIn_redE]
   goes through A6's [ws_cumul_pbE_LetIn_l_inv] in place of base's
@@ -108,70 +108,6 @@ Lemma typing_spine_isType_codomE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ 
 Proof.
   induction 1; auto.
 Qed.
-
-(** ** The inversions of [PCUICInversion] that the proofs below use, over [typingE] *)
-
-Section InversionE.
-
-  Context {cf : checker_flags}.
-  Context (Σ : global_env_ext).
-  Context (wfΣ : wfE Σ).
-
-  Lemma into_ws_cumul_specE {Γ t T U s} :
-    Σ ;;; Γ |-E t : T ->
-    Σ ;;; Γ |-E U : tSort s ->
-    cumulSpecE Σ Γ T U ->
-    ws_cumul_pbE Cumul Σ Γ T U.
-  Proof using wfΣ.
-    intros hT hU hc.
-    apply (into_ws_cumul_pbE_spec (Σ := Σ) hc).
-    - exact (wf_local_closed_contextE (wfΣ := wfΣ) (typingE_wf_local hT)).
-    - exact (type_is_open_termE (wfΣ := wfΣ) hT).
-    - exact (subject_is_open_termE (wfΣ := wfΣ) hU).
-  Qed.
-
-  Lemma typing_ws_cumul_pbE le Γ t T :
-    Σ ;;; Γ |-E t : T ->
-    ws_cumul_pbE le Σ Γ T T.
-  Proof using wfΣ.
-    intros ht. apply ws_cumul_pbE_refl.
-    - exact (wf_local_closed_contextE (wfΣ := wfΣ) (typingE_wf_local ht)).
-    - exact (type_is_open_termE (wfΣ := wfΣ) ht).
-  Qed.
-
-  Lemma inversion_ProdE :
-    forall {Γ na A B T},
-      Σ ;;; Γ |-E tProd na A B : T ->
-      ∑ s1 s2,
-        lift_typing typingE Σ Γ (j_vass_s na A s1) ×
-        Σ ;;; Γ ,, vass na A |-E B : tSort s2 ×
-        ws_cumul_pbE Cumul Σ Γ (tSort (Sort.sort_of_product s1 s2)) T.
-  Proof using wfΣ.
-    intros Γ na A B T h. dependent induction h.
-    - exists s1, s2. split; [assumption|split; [assumption|]].
-      eapply typing_ws_cumul_pbE. econstructor; eassumption.
-    - destruct IHh1 as (s1 & s2 & hA & hB & hle).
-      exists s1, s2. split; [assumption|split; [assumption|]].
-      etransitivity; [exact hle|]. eapply into_ws_cumul_specE; eassumption.
-  Qed.
-
-  Lemma inversion_LetInE :
-    forall {Γ na b B t T},
-      Σ ;;; Γ |-E tLetIn na b B t : T ->
-      ∑ A,
-        lift_typing typingE Σ Γ (j_vdef na b B) ×
-        Σ ;;; Γ ,, vdef na b B |-E t : A ×
-        ws_cumul_pbE Cumul Σ Γ (tLetIn na b B A) T.
-  Proof using wfΣ.
-    intros Γ na b B t T h. dependent induction h.
-    - exists A. split; [assumption|split; [assumption|]].
-      eapply typing_ws_cumul_pbE. econstructor; eassumption.
-    - destruct IHh1 as (A' & hb & ht & hle).
-      exists A'. split; [assumption|split; [assumption|]].
-      etransitivity; [exact hle|]. eapply into_ws_cumul_specE; eassumption.
-  Qed.
-
-End InversionE.
 
 (* The base proof runs under [Set SimplIsCbn] (set in its file). *)
 Section AbstractInstanceE.

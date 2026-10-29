@@ -122,6 +122,9 @@ theories/Bidirectional/BDToPCUIC.v
 theories/Bidirectional/BDFromPCUIC.v
 theories/Bidirectional/BDUnique.v
 theories/Bidirectional/BDStrengthening.v
+# Bidirectional typing over the eta relations (T6): the judgments, their induction principle, instances
+theories/Bidirectional/BDTypingEta.v
+theories/Bidirectional/BDTypingEtaInstances.v
 
 theories/PCUICWeakeningEnv.v
 theories/PCUICWeakeningConfig.v
@@ -208,11 +211,18 @@ theories/PCUICSubstitutionEta.v
 theories/PCUICContextsEta.v
 theories/PCUICAritiesEta.v
 theories/PCUICTypingEtaCopies2Instances.v
+# Inversion of typingE (E copy of PCUICInversion)
+theories/PCUICInversionEta.v
+# The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
+theories/PCUICSREtaConv.v
+theories/PCUICSREtaConvInstances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
+theories/PCUICEtaIndInvRefutations.v
 theories/PCUICEtaC1b.v
 # Satisfying instances of the hypotheses of the lemmas above
 theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
+theories/PCUICInversionEtaInstances.v
 # theories/All.v

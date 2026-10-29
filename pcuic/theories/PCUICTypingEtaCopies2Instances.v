@@ -994,11 +994,6 @@ Definition typing_spine_isType_codomE_inst := @typing_spine_isType_codomE _ si_�
    empty and the substitution is the plain one. *)
 Definition subslet_inds_genE_inst := @subslet_inds_genE _ si_env si_wfE si_ind si_mdecl si_idecl si_declared_inductive.
 
-Definition into_ws_cumul_specE_inst :=
-  into_ws_cumul_specE si_Σ si_wfE (cp_cstr_app_typed) g_T_typed g_cumul.
-Definition typing_ws_cumul_pbE_inst := typing_ws_cumul_pbE si_Σ si_wfE Cumul [] _ _ c2_letT_typed.
-Definition inversion_ProdE_inst := inversion_ProdE si_Σ si_wfE c2_False0.
-Definition inversion_LetInE_inst := inversion_LetInE si_Σ si_wfE c2_letT_typed.
 Definition consistent_instance_ext_abstract_instanceE_inst :=
   consistent_instance_ext_abstract_instanceE up_env up_univs up_wfE up_global_ext.
 Lemma c2_l0_in_union : LevelSet.In (Level.lvar 0)
