@@ -199,6 +199,9 @@ theories/PCUICContextConversionEta.v
 theories/PCUICWsCumulEtaCtx.v
 theories/PCUICWsCumulEtaCtxTyp.v
 theories/PCUICWsCumulEtaCtxInstances.v
+# Context conversion and context cumulativity of typingE, and their satisfying instances
+theories/Typing/PCUICContextConversionTypEta.v
+theories/PCUICTypingEtaCopy9Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaC1b.v
