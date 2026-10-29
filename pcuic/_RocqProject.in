@@ -213,6 +213,9 @@ theories/PCUICSubstitutionEta.v
 theories/PCUICContextsEta.v
 theories/PCUICAritiesEta.v
 theories/PCUICTypingEtaCopies2Instances.v
+# Global symmetry and transitivity instances for ws_cumul_ctx_pbE and ws_cumul_pbE_terms, and their uses
+theories/PCUICWsCumulEtaInstancesGlobal.v
+theories/PCUICWsCumulEtaInstancesGlobalInstances.v
 # Inversion of typingE (E copy of PCUICInversion)
 theories/PCUICInversionEta.v
 # The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
@@ -238,4 +241,6 @@ theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
+# The comparisons wfE makes are between scoped pairs, and their satisfying instances
+theories/PCUICWfEScope.v
 # theories/All.v
