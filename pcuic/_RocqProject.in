@@ -253,6 +253,15 @@ theories/Bidirectional/BDFromPCUICEtaInstances.v
 # Principality over typingE (row T2b, the E copy of PCUICPrincipality), and its satisfying instances
 theories/PCUICPrincipalityEta.v
 theories/PCUICPrincipalityEtaInstances.v
+# Typing under alpha-equivalence over typingE (row T6, the E copy of PCUICAlpha), and its satisfying instances
+theories/PCUICAlphaEta.v
+theories/PCUICAlphaEtaInstances.v
+# Uniqueness of inferred types over the eta relations (row T6, the E copy of BDUnique), and its satisfying instances
+theories/Bidirectional/BDUniqueEta.v
+theories/Bidirectional/BDUniqueEtaInstances.v
+# Strengthening of bidirectional typing over the eta relations (row T6, the E copy of BDStrengthening), and its satisfying instances
+theories/Bidirectional/BDStrengtheningEta.v
+theories/Bidirectional/BDStrengtheningEtaInstances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
 # T8 step 3: R_c* on canon T read back as base red on T (backward simulation through canon)
