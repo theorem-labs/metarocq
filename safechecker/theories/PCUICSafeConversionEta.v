@@ -1,15 +1,41 @@
 (* Distributed under the terms of the MIT license. *)
 (* BET-64 ETAK (EtaConv), plan row K3: the η conversion checker, an E copy of
    PCUICSafeConversion.v (cut from trunk 0729d50e, prim-ops rows I/J in; scaffold
-   e24d0aec).
-   STAGE G7 (this commit): plan.md I7 rev 14 (G7) applied to the base text, still
-   over BASE PCUICPosition, PCUICSafeReduce, PCUICWfEnv and base typing, so that the
-   G7 step is checked on its own: ConversionResult has no [~P] payload, every
-   [Error e h] match lost [h], the 86 obligations that only proved the payload are
+   e24d0aec). Normative design: lanes/eta/plan.md §2 I7, revisions 12-15.
+
+   G7 (plan I7 rev 14), done in commit 9425b658: ConversionResult has no [~P] payload,
+   every [Error e h] match lost [h], the 86 obligations that only proved the payload are
    deleted (289 -> 203 [Next Obligation]s), base's [herr] argument of
-   [unfold_prims_args] is dropped, and [isconv_complete]/[isconv_term_complete] are
-   deleted (K6 row). The switch to the E world (PCUICPositionEta last, K4,
-   PCUICSafeReduceEta through reduce_args_E, welltypedE, the η step) follows. *)
+   [unfold_prims_args] is dropped, [isconv_complete]/[isconv_term_complete] are deleted.
+
+   ===================== CONTRACTS ASSUMED (lanes/eta/etak/CONTRACTS.md) =====================
+   A mismatch with an owner's entry must show here at once; this block is updated whenever an
+   owner's entry changes the form.
+   - ENV (EtaWfEnv, entry 06:55Z, fork/wip/etak-wfenv-2026-10-29 @ b86b8cc5): PCUICWfEnvEta is
+     base PCUICWfEnv with the same names; [abstract_env_ext_wf X : abstract_env_ext_rel X Σ ->
+     ∥ wf_extE Σ ∥], [abstract_env_ext_sq_wf : ∥ wfE Σ ∥], [abstract_env_ext_closed_bodies :
+     ∥ ClosedBodies Σ ∥]; imported LAST. Section premise
+     [normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ].
+   - REDUCE (EtaReduce, entry 06:58Z): the bridge PCUICSafeReduceEtaBridge over
+     PCUICSafeReduceEta (base PCUICPosition.stack, welltypedE): [reduce_args_E flags X_type X Γ t
+     args h] with [h : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ (PCUICPosition.zip
+     (t, PCUICPosition.appstack args []))]; facts [reduce_args_E_sound/_whnf/_isred/_Req],
+     [reduce_stack_app_only], [app_only_zip], [stack_position_appstack_bridge],
+     [stack_context_appstack_bridge], [zipp_appstack_bridge], [reduce_stack_vass],
+     [reduce_args_E_vass]; the named E-facts hypothesis is the class instance
+     [reduce_factsE : ReduceTypedFacts welltypedE wf_extE]. Other E uses of the machine
+     ([reduce_term]) are [@PCUICSafeReduceEta.reduce_term (wt := welltypedE) (wfP := wf_extE)].
+     The conversion calls reduction ONLY through these (plan rev 14 "B3 conditions").
+   - POSITION (EtaPosK4, entry 06:48Z, @ 60266608): plan I7 rev 12-15 Coq text verbatim
+     ([wf_stack], [eta_run], [drop_eta_run], [eta_virtuals], [eta_rename], [decompose_stack_eta],
+     [zipp_eta], [stack_entry_context_eta se below], [stack_context_eta], [virtual_focus],
+     [focus_context], [is_nil], [virt_ok], [eta_ren], [reducible_head_shape]).
+     [conv_stack_ctx_eta] reads [ws_cumul_ctx_pbE Conv Σ (Γ ,,, stack_context_eta π1)
+     (Γ ,,, stack_context_eta π2)] (the tree's [ws_cumul_ctx_pbE] has no FInst argument).
+   - K4 (EtaPosK4): [pack] with the [wf_stack] fields, [R], [R_Acc], the descent lemmas of
+     rev 14/15, over welltypedE and NormalizationInE. UNTIL K4 is announced over welltypedE,
+     this file keeps its own copy of [pack]/[R_aux]/[R]/[R_Acc] in exactly that form.
+   ============================================================================================= *)
 From Stdlib Require Import ProofIrrelevance ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config uGraph.
@@ -21,10 +47,18 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICOnFreeVars PCUICWellScopedCumulativity
      PCUICWeakeningEnvConv PCUICWeakeningEnvTyp
      PCUICWeakeningConv PCUICWeakeningTyp
-     PCUICClosed PCUICClosedTyp PCUICConvCumInversion.
-From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICSafeReduce PCUICEqualityDec.
-(* LAST: the E errors (EtaStackRefusal) shadow base PCUICErrors (pulled in by PCUICSafeReduce). *)
+     PCUICClosed PCUICClosedTyp PCUICConvCumInversion
+     PCUICCumulativitySpecEta PCUICTypingEta PCUICSNEta PCUICClosedBodies
+     PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICContextConversionEta
+     PCUICEtaK6EtaStep.
+From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfReductionEta PCUICSafeReduceEta
+     PCUICSafeReduceEtaBridge.
+(* LAST among the stack providers, so the η stack shadows the base one. *)
+From MetaRocq.PCUIC Require Import PCUICPositionEta.
+(* The E errors (EtaStackRefusal) shadow base PCUICErrors. *)
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta.
+(* LAST (ENV contract). *)
+From MetaRocq.SafeChecker Require Import PCUICWfEnvEta.
 
 From Equations.Prop Require Import DepElim.
 From Equations Require Import Equations.
@@ -64,13 +98,19 @@ Section Conversion.
 
   Context (X : X_type.π2.π1).
 
-  Context {normalization_in : forall Σ, wf_ext Σ -> Σ ∼_ext X -> NormalizationIn Σ}.
+  (* ENV contract: the normalization premise over welltypedE. *)
+  Context {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}.
+
+  (* REDUCE contract: the named E-facts hypothesis of the reduction machine (EtaReduce's class;
+     its fields are T1/T6 facts; its base instance [reduce_typed_facts_base] is restated at the
+     end of this file). *)
+  Context {reduce_factsE : ReduceTypedFacts welltypedE wf_extE}.
 
   Local Definition heΣ Σ (wfΣ : abstract_env_ext_rel X Σ) :
-    ∥ wf_ext Σ ∥ :=  abstract_env_ext_wf _ wfΣ.
+    ∥ wf_extE Σ ∥ :=  abstract_env_ext_wf _ wfΣ.
 
   Local Definition hΣ Σ (wfΣ : abstract_env_ext_rel X Σ) :
-    ∥ wf Σ ∥ := abstract_env_ext_sq_wf _ _ _ wfΣ.
+    ∥ ClosedBodies Σ ∥ := abstract_env_ext_closed_bodies _ _ _ wfΣ.
 
   Set Equations Transparent.
   Set Equations With UIP.
@@ -120,16 +160,20 @@ Section Conversion.
   Qed.
 
   Notation wtp Γ t π :=
-    (forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ (zipc t π)) (only parsing).
+    (forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (zipc t π)) (only parsing).
 
   Set Primitive Projections.
 
+  (* K4's pack (plan rev 12-15): base's pack plus the [wf_stack] witness of each side's
+     stack, which makes [stack_pos_wf] total over the virtual-argument states. *)
   Record pack (Γ : context) := mkpack {
     st   : state ;
     tm1  : term ;
     stk1 : stack ;
     tm2  : term ;
     stk2 : stack ;
+    swf1 : wf_stack stk1 ;
+    swf2 : wf_stack stk2 ;
     wth  : wtp Γ tm2 stk2
   }.
 
@@ -138,21 +182,31 @@ Section Conversion.
   Arguments stk1 {_} _.
   Arguments tm2 {_} _.
   Arguments stk2 {_} _.
+  Arguments swf1 {_} _.
+  Arguments swf2 {_} _.
   Arguments wth {_} _.
 
-  Definition wterm Γ := { t : term | forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ t }.
+  Definition wterm Γ := { t : term | forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ t }.
 
   Definition wcored Γ (u v : wterm Γ) :=
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), cored' Σ Γ (` u) (` v).
+
+  Lemma normalization_uptoE Σ (wfΣ : abstract_env_ext_rel X Σ) Γ u :
+    welltypedE Σ Γ u -> Acc (cored' Σ Γ) u.
+  Proof using normalization_in.
+    intros h. destruct (heΣ _ wfΣ) as [hwf].
+    eapply Acc_cored_cored'.
+    - exact (@normalization_inE _ _ Σ (normalization_in Σ hwf wfΣ) Γ u h).
+    - constructor. reflexivity.
+  Qed.
 
   Lemma wcored_wf :
     forall Γ, well_founded (wcored Γ).
   Proof using normalization_in.
     intros Γ [u hu].
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-    pose proof (heΣ _ wfΣ) as [heΣ].
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (hu _ wfΣ) as h.
-    apply normalization_upto in h. 2: now apply normalization_in.
+    apply (normalization_uptoE _ wfΣ) in h.
     dependent induction h.
     constructor. intros [y hy] r.
     unfold wcored in r. cbn in r.
@@ -215,7 +269,7 @@ Section Conversion.
 
   Lemma R_aux_Acc :
     forall Γ t p w q s,
-      (forall Σ, abstract_env_ext_rel X Σ -> welltyped Σ Γ t) ->
+      (forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t) ->
       Acc (R_aux Γ) (t ; (p, (w ; (q, s)))).
   Proof using normalization_in.
     intros Γ t p w q s ht.
@@ -303,18 +357,17 @@ Section Conversion.
           -- left. unfold posR in *.
              simpl in *. assumption.
           -- right. assumption.
-    - pose proof (heΣ _ wfΣ) as [?].
-      eapply Acc_equiv; try eapply normalization_upto; eauto.
+    - eapply Acc_equiv; try eapply (normalization_uptoE _ wfΣ); eauto.
       split; eauto; intros.
       erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
     Unshelve. all: eauto.
   Qed.
 
   Notation pzt u := (zipc (tm1 u) (stk1 u)) (only parsing).
-  Notation pps1 u := (stack_pos (tm1 u) (stk1 u)) (only parsing).
-  Notation pwt u := (exist (P := fun t => forall Σ, abstract_env_ext_rel X Σ -> welltyped Σ _ t)
+  Notation pps1 u := (stack_pos_wf (tm1 u) (stk1 u) (swf1 u)) (only parsing).
+  Notation pwt u := (exist (P := fun t => forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ _ t)
                                  _ (fun Σ wfΣ => wth u Σ wfΣ)) (only parsing).
-  Notation pps2 u := (stack_pos (tm2 u) (stk2 u)) (only parsing).
+  Notation pps2 u := (stack_pos_wf (tm2 u) (stk2 u) (swf2 u)) (only parsing).
 
   Notation obpack u:=
     (pzt u ; (pps1 u, (pwt u; (pps2 u, st u)))) (only parsing).
@@ -324,7 +377,7 @@ Section Conversion.
 
   Lemma R_Acc :
     forall Γ u,
-      (forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ (zipc (tm1 u) (stk1 u))) ->
+      (forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (zipc (tm1 u) (stk1 u))) ->
       Acc (R Γ) u.
   Proof using normalization_in.
     intros Γ u h.
@@ -364,8 +417,9 @@ Section Conversion.
     (y.(st), y.(tm1), y.(stk1), y.(tm2), y.(stk2)) ->
     R Γ z x -> R Γ z y.
   Proof using Type.
-    destruct x, y; cbn.
+    destruct x as [s t π t' π' f1 f2 h], y as [s0 u ρ u' ρ' g1 g2 h']; cbn.
     intros [=]; subst.
+    rewrite (uip f1 g1) (uip f2 g2).
     unfold R. eapply R_aux_irrelevance; cbn.
     reflexivity.
   Qed.
@@ -397,7 +451,7 @@ Section Conversion.
       positionR (` (pps1 p1)) (` (pps1 p2)) ->
       R Γ p1 p2.
   Proof using Type.
-    intros Γ [s1 t1 π1 ρ1 t1' h1] [s2 t2 π2 ρ2 t2' h2] e h. simpl in *.
+    intros Γ [s1 t1 π1 ρ1 t1' f1 g1 h1] [s2 t2 π2 ρ2 t2' f2 g2 h2] e h. simpl in *.
     eapply R_aux_positionR ; simpl.
     - assumption.
     - assumption.
@@ -432,7 +486,7 @@ Section Conversion.
           cored Σ Γ (` (pwt p1)) (` (pwt p2))) ->
       R Γ p1 p2.
   Proof using Type.
-    intros Γ [s1 t1 π1 ρ1 t1' h1] [s2 t2 π2 ρ2 t2' h2] e1 e2 h. simpl in *.
+    intros Γ [s1 t1 π1 ρ1 t1' f1 g1 h1] [s2 t2 π2 ρ2 t2' f2 g2 h2] e1 e2 h. simpl in *.
     eapply R_aux_cored2. all: simpl. all: auto.
     destruct s1, s2.
     all: intros; eapply cored_cored'.
@@ -471,7 +525,7 @@ Section Conversion.
       positionR (` (pps2 p1)) (` (pps2 p2)) ->
       R Γ p1 p2.
   Proof using Type.
-    intros Γ [s1 t1 π1 ρ1 t1' h1] [s2 t2 π2 ρ2 t2' h2] e1 e2 e3 h.
+    intros Γ [s1 t1 π1 ρ1 t1' f1 g1 h1] [s2 t2 π2 ρ2 t2' f2 g2 h2] e1 e2 e3 h.
     simpl in *.
     eapply R_aux_positionR2. all: simpl. all: auto.
   Qed.
@@ -517,7 +571,7 @@ Section Conversion.
       stateR (st p1) (st p2) ->
       R Γ p1 p2.
   Proof using Type.
-    intros Γ [s1 t1 π1 ρ1 t1' h1] [s2 t2 π2 ρ2 t2' h2] e1 e2 e3 e4 h.
+    intros Γ [s1 t1 π1 ρ1 t1' f1 g1 h1] [s2 t2 π2 ρ2 t2' f2 g2 h2] e1 e2 e3 e4 h.
     simpl in *.
     eapply R_aux_stateR. all: simpl. all: auto.
   Qed.
@@ -529,10 +583,6 @@ Section Conversion.
   Notation cmpb_term pb := (eqb_term_upto_univ (abstract_env_compare_universe X) (abstract_env_compare_sort X) abstract_env_compare_global_instance pb).
   Notation eqb_term := (cmpb_term Conv).
   Notation leqb_term := (cmpb_term Cumul).
-
-  Definition eqb_term_stack t1 π1 t2 π2 :=
-    eqb_ctx (stack_context π1) (stack_context π2) &&
-    eqb_term (zipp t1 π1) (zipp t2 π2).
 
   Lemma iff_reflect (P : Prop) (b : bool) :
     P <-> b -> reflect P b.
@@ -560,15 +610,21 @@ Section Conversion.
     symmetry; apply reflect_iff. eapply wf_instanceP.
   Qed.
 
-  Notation conv_stack_ctx Γ π1 π2 :=
-    (forall Σ, abstract_env_ext_rel X Σ -> ∥ (Σ ⊢ Γ ,,, stack_context π1 = Γ ,,, stack_context π2) ∥).
+  (* rev 14 NB1: the conversion state compares the η contexts. (K4 will define it; this
+     local copy has exactly the form of EtaPosK4's entry, 06:48Z.) *)
+  Definition conv_stack_ctx_eta (Γ : context) (π1 π2 : stack) : Prop :=
+    forall Σ, abstract_env_ext_rel X Σ ->
+      ∥ ws_cumul_ctx_pbE Conv Σ (Γ ,,, stack_context_eta π1) (Γ ,,, stack_context_eta π2) ∥.
 
+  Notation conv_stack_ctx Γ π1 π2 := (conv_stack_ctx_eta Γ π1 π2) (only parsing).
+
+  (* The E counterpart of base [conv_cum]. *)
+  Definition conv_cumE leq Σ Γ t u := ∥ ws_cumul_pbE leq Σ Γ t u ∥.
+
+  (* I7 S13: [conv_term] reads the η views, in the η context of side 1. *)
   Notation conv_term leq Γ t π t' π' :=
-    (forall Σ, abstract_env_ext_rel X Σ -> conv_cum leq Σ (Γ ,,, stack_context π) (zipp t π) (zipp t' π'))
-      (only parsing).
-
-  Notation alt_conv_term Γ t π t' π' :=
-    (forall Σ, abstract_env_ext_rel X Σ -> ∥ Σ ;;; Γ ,,, stack_context π ⊢ zipp t π = zipp t' π' ∥)
+    (forall Σ, abstract_env_ext_rel X Σ ->
+       conv_cumE leq Σ (Γ ,,, stack_context_eta π) (zipp_eta t π) (zipp_eta t' π'))
       (only parsing).
 
   (* G7 (plan.md I7 rev 14): the E ConversionResult drops base's [~P] payload
@@ -581,27 +637,11 @@ Section Conversion.
   Arguments Success {_} _.
   Arguments Error {_} _.
 
+  (* I7: [isred_full]/whnf reads the η view (one of the eleven η-view sites). *)
   Definition isred_full Γ t π :=
     isApp t = false /\
-    forall Σ, abstract_env_ext_rel X Σ -> ∥whnf RedFlags.nodelta Σ (Γ,,, stack_context π) (zipp t π)∥.
-
-  Lemma isred_full_nobeta Γ t π :
-    isred_full Γ t π ->
-    isLambda t ->
-    isStackApp π = false.
-  Proof using Type.
-    intros (?&isr) islam.
-    destruct t; cbn in *; try easy.
-    unfold zipp in isr.
-    destruct π as [|[]]; cbn in *; try easy.
-    destruct (decompose_stack π) in isr.
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    destruct (isr _ wfΣ) as [isr'].
-    depelim isr'; rewrite -> mkApps_tApp in *; try solve [solve_discr].
-    apply whne_mkApps_inv in w; [|easy].
-    destruct w as [[w|(?&?&?&?&?&?&?&?)]|(?&?&?&?&?&?&?&?&?&?)]; [|discriminate|discriminate].
-    depelim w; solve_discr; discriminate.
-   Qed.
+    forall Σ, abstract_env_ext_rel X Σ ->
+      ∥ whnf RedFlags.nodelta Σ (Γ ,,, stack_context_eta π) (zipp_eta t π) ∥.
 
   Lemma eta_pair {A B} (p q : A * B) :
     p = q ->
@@ -742,11 +782,16 @@ Section Conversion.
     prog_discr (tPrim _) (tPrim _) := False ;
     prog_discr _ _ := True.
 
-  (* Note that the arity of this should be the same for all s as otherwise
-     the extracted code is not correct *)
+  (* rev 15 C7: base's Ret plus the four new arguments [hv_i] (T0's [virt_ok]) and [hwf_i]
+     (the η contexts are well formed), unconditional and in the same position for every
+     [s] (the arity must be the same for all [s], else the extracted code is wrong).
+     The Args result reads the η argument lists, in side 1's η context. *)
   Definition Ret s Γ t π t' π' :=
     forall (leq : conv_pb),
       conv_stack_ctx Γ π π' ->
+      virt_ok t π = true -> virt_ok t' π' = true ->
+      (forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π) ∥) ->
+      (forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π') ∥) ->
       (match s with Fallback | Term => isred_full Γ t π | _ => True end) ->
       (match s with Fallback | Term => isred_full Γ t' π' | _ => True end) ->
       (match s with | Fallback => prog_discr t t' | _ => True end) ->
@@ -754,22 +799,32 @@ Section Conversion.
       | Reduction
       | Term
       | Fallback => ConversionResult (conv_term leq Γ t π t' π')
-      | Args => ConversionResult (forall Σ, abstract_env_ext_rel X Σ -> ∥ws_cumul_pb_terms Σ (Γ,,, stack_context π)
-                                   (decompose_stack π).1
-                                   (decompose_stack π').1∥)
+      | Args => ConversionResult (forall Σ, abstract_env_ext_rel X Σ ->
+                   ∥ ws_cumul_pbE_terms Σ (Γ ,,, stack_context_eta π)
+                       (decompose_stack_eta π).1 (decompose_stack_eta π').1 ∥)
       end.
 
-  Definition Aux s Γ t1 π1 t2 π2 h2 :=
+  Definition Aux s Γ t1 π1 t2 π2 (f1 : wf_stack π1) (f2 : wf_stack π2) h2 :=
      forall s' t1' π1' t2' π2'
+       (f1' : wf_stack π1') (f2' : wf_stack π2')
        (h1' : wtp Γ t1' π1')
        (h2' : wtp Γ t2' π2'),
        conv_stack_ctx Γ π1 π2 ->
        R Γ
-         (mkpack Γ s' t1' π1' t2' π2' h2')
-         (mkpack Γ s t1 π1 t2 π2 h2) ->
+         (mkpack Γ s' t1' π1' t2' π2' f1' f2' h2')
+         (mkpack Γ s t1 π1 t2 π2 f1 f2 h2) ->
        Ret s' Γ t1' π1' t2' π2'.
 
-  Notation expand aux := (fun a b c d e f g h i => aux _ _ _ _ _ _ _ _ _) (only parsing).
+  (* rev 15 C2: the E [_isconv_args'] measures every call against the entry pack [y], a fixed
+     parameter (base's [Aux'] measures against the current state and moves back by [expand],
+     which the side-1 virtual call cannot satisfy: its side-1 position equals the entry's). *)
+  Definition AuxE' Γ (y : pack Γ) :=
+    forall s' t1' π1' t2' π2' (f1' : wf_stack π1') (f2' : wf_stack π2')
+      (h1' : wtp Γ t1' π1') (h2' : wtp Γ t2' π2'),
+      R Γ (mkpack Γ s' t1' π1' t2' π2' f1' f2' h2') y ->
+      Ret s' Γ t1' π1' t2' π2'.
+
+  Notation expand aux := (fun a b c d e f g h i j k => aux _ _ _ _ _ _ _ _ _ _ _) (only parsing).
 
   Local Notation yes := (Success _) (only parsing).
   Local Notation no := (fun e => Error e) (only parsing).
@@ -783,14 +838,16 @@ Section Conversion.
     (match e with Success h => Success _ | Error er => Error er end)
     (only parsing).
 
+  (* The holes after the states: [f1' f2' h1' h2' hx R], then Ret's [leq hx' hv1 hv2 hwf1 hwf2]
+     and the three state-dependent premises. *)
   Notation isconv_red_raw leq t1 π1 t2 π2 aux :=
-    (aux Reduction t1 π1 t2 π2 _ _ _ _ leq _ I I I) (only parsing).
+    (aux Reduction t1 π1 t2 π2 _ _ _ _ _ _ leq _ _ _ _ _ I I I) (only parsing).
   Notation isconv_prog_raw leq t1 π1 t2 π2 aux :=
-    (aux Term t1 π1 t2 π2 _ _ _ _ leq _ _ _ I) (only parsing).
+    (aux Term t1 π1 t2 π2 _ _ _ _ _ _ leq _ _ _ _ _ _ _ I) (only parsing).
   Notation isconv_args_raw leq t1 π1 t2 π2 aux :=
-    (aux Args t1 π1 t2 π2 _ _ _ _ leq _ I I I) (only parsing).
+    (aux Args t1 π1 t2 π2 _ _ _ _ _ _ leq _ _ _ _ _ I I I) (only parsing).
   Notation isconv_fallback_raw leq t1 π1 t2 π2 aux :=
-    (aux Fallback t1 π1 t2 π2 _ _ _ _ leq _ _ _ _) (only parsing).
+    (aux Fallback t1 π1 t2 π2 _ _ _ _ _ _ leq _ _ _ _ _ _ _ _) (only parsing).
 
   Notation isconv_red leq t1 π1 t2 π2 aux :=
     (repack (isconv_red_raw leq t1 π1 t2 π2 aux)) (only parsing).
@@ -801,25 +858,40 @@ Section Conversion.
   Notation isconv_fallback leq t1 π1 t2 π2 aux :=
     (repack (isconv_fallback_raw leq t1 π1 t2 π2 aux)) (only parsing).
 
+  (* G2 (rev 14 B4) and G2b (EtaConv, see the log's STATEMENT CHANGES): the rebuilt stack is
+     well formed, and a rigid head (λ, Π, sort, primitive) carries no pending η run, without
+     which the Term state's [isred_full] (whnf of the η view) is false. *)
+  Definition rebuilt_ok (t' : term) (args' : list term) (ρ : stack) : bool :=
+    wf_stack (appstack args' ρ) && eta_head_ok t' ρ.
+
+  (* rev 13 B3/F-9: reduction runs on the decomposed spine only, through reduce_args_E, in the
+     focus's own context (the η context on an Eta_arg side). *)
   Equations(noeqns) _isconv_red (Γ : context) (leq : conv_pb)
-            (t1 : term) (π1 : stack) (h1 : wtp Γ t1 π1)
-            (t2 : term) (π2 : stack) (h2 : wtp Γ t2 π2)
+            (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
+            (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
             (hx : conv_stack_ctx Γ π1 π2)
-            (aux : Aux Reduction Γ t1 π1 t2 π2 h2)
+            (hv1 : virt_ok t1 π1 = true) (hv2 : virt_ok t2 π2 = true)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π2) ∥)
+            (aux : Aux Reduction Γ t1 π1 t2 π2 f1 f2 h2)
     : ConversionResult (conv_term leq Γ t1 π1 t2 π2) :=
 
-    _isconv_red Γ leq t1 π1 h1 t2 π2 h2 hx aux
+    _isconv_red Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2 aux
     with inspect (decompose_stack π1) := {
     | @exist (args1, ρ1) e1 with inspect (decompose_stack π2) := {
       | @exist (args2, ρ2) e2
-        with inspect (reduce_stack RedFlags.nodelta _ X
-                                   (Γ ,,, stack_context π1)
-                                   t1 (appstack args1 []) _) := {
-        | @exist (t1',π1') eq1
-          with inspect (reduce_stack RedFlags.nodelta _ X
-                                     (Γ ,,, stack_context π2)
-                                     t2 (appstack args2 []) _) := {
-          | @exist (t2',π2') eq2 => isconv_prog leq t1' (π1' ++ ρ1) t2' (π2' ++ ρ2) aux
+        with inspect (reduce_args_E RedFlags.nodelta X_type X
+                                    (Γ ,,, focus_context π1) t1 args1 _) := {
+        | @exist (t1', args1') eq1
+          with inspect (reduce_args_E RedFlags.nodelta X_type X
+                                      (Γ ,,, focus_context π2) t2 args2 _) := {
+          | @exist (t2', args2') eq2
+            with inspect (rebuilt_ok t1' args1' ρ1 && rebuilt_ok t2' args2' ρ2) := {
+            | @exist true g2 =>
+              isconv_prog leq t1' (appstack args1' ρ1) t2' (appstack args2' ρ2) aux ;
+            | @exist false _ =>
+              no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
+            }
           }
         }
       }
@@ -967,23 +1039,30 @@ Section Conversion.
     eapply h; eauto.
   Qed.
 
-  Opaque reduce_stack.
+  Opaque reduce_args_E.
+  (* T4 (rev 14 B4): the push [appstack l (App_l … :: θ)] needs a stack without Eta_arg; on
+     false the answer is [None] (dead on reachable states: [virt_ok_not_head]). Site 3 of the
+     11 reduce_stack sites: [args := []]. *)
   Equations unfold_one_fix (Γ : context) (mfix : mfixpoint term)
             (idx : nat) (π : stack) (h : wtp Γ (tFix mfix idx) π)
     : option (term * stack) :=
 
-    unfold_one_fix Γ mfix idx π h with inspect (unfold_fix mfix idx) := {
-    | @exist (Some (arg, fn)) eq1 with inspect (decompose_stack_at π arg) := {
-      | @exist (Some (l, c, θ)) eq2 with inspect (reduce_stack RedFlags.default _ X
-                                                               (Γ ,,, stack_context θ) c [] _) := {
-        | @exist (cred, ρ) eq3 with construct_viewc cred := {
-          | view_construct ind n ui := Some (fn, appstack l (App_l (zipc (tConstruct ind n ui) ρ) :: θ)) ;
-          | view_other cred h' := None
-          }
+    unfold_one_fix Γ mfix idx π h with inspect (no_Eta_arg π) := {
+    | @exist false _ := None ;
+    | @exist true hna with inspect (unfold_fix mfix idx) := {
+      | @exist (Some (arg, fn)) eq1 with inspect (decompose_stack_at π arg) := {
+        | @exist (Some (l, c, θ)) eq2 with inspect (reduce_args_E RedFlags.default X_type X
+                                                     (Γ ,,, stack_context θ) c [] _) := {
+          | @exist (cred, args') eq3 with construct_viewc cred := {
+            | view_construct ind n ui :=
+              Some (fn, appstack l (App_l (mkApps (tConstruct ind n ui) args') :: θ)) ;
+            | view_other cred h' := None
+            }
+          } ;
+        | _ := None
         } ;
       | _ := None
-      } ;
-    | _ := None
+      }
     }.
   Next Obligation.
     destruct (hΣ _ wfΣ).
@@ -1048,54 +1127,6 @@ Section Conversion.
         cbn in hd. subst.
         rewrite zipc_appstack. cbn.
         unfold isConstruct_app. rewrite decompose_app_mkApps; auto.
-  Qed.
-
-  Lemma unfold_one_fix_red_zippx :
-    forall Γ mfix idx π h fn ξ,
-      Some (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
-      forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ red (fst Σ) Γ (zippx (tFix mfix idx) π) (zippx fn ξ) ∥.
-  Proof using Type.
-    intros Γ mfix idx π h fn ξ eq Σ wfΣ.
-    revert eq.
-    apply_funelim (unfold_one_fix Γ mfix idx π h); intros; noconf eq.
-    unfold zippx.
-    pose proof (eq_sym eq2) as eq.
-    pose proof (decompose_stack_at_eq _ _ _ _ _ eq). subst.
-    rewrite 2!decompose_stack_appstack. simpl.
-    case_eq (decompose_stack θ). intros l' s' e'.
-    simpl.
-    match type of eq3 with
-    | _ = reduce_stack ?flags _ ?X ?Γ ?t ?π ?h =>
-      pose proof (reduce_stack_sound flags _ X Σ wfΣ Γ t π h) as [r1] ;
-      pose proof (reduce_stack_decompose flags _ X Γ t π h) as hd
-    end.
-    rewrite <- eq3 in r1. cbn in r1.
-    rewrite <- eq3 in hd. cbn in hd.
-    constructor. eapply red_it_mkLambda_or_LetIn.
-    rewrite 2!mkApps_app. cbn. eapply red_mkApps_f.
-    pose proof (decompose_stack_eq _ _ _ e'). subst.
-    rewrite stack_context_appstack in r1.
-    eapply trans_red.
-    - eapply red_app_r. exact r1.
-    - repeat lazymatch goal with
-      | |- context [ tApp (mkApps ?t ?l) ?u ] =>
-        replace (tApp (mkApps t l) u) with (mkApps t (l ++ [u]))
-          by (rewrite mkApps_app ; reflexivity)
-      end.
-      eapply red_fix.
-      + symmetry. eassumption.
-      + unfold is_constructor.
-        pose proof (eq_sym eq2) as eql.
-        apply decompose_stack_at_length in eql. subst.
-        rewrite -> nth_error_app_ge by auto.
-        replace (#|l| - #|l|) with 0 by lia. cbn.
-        case_eq (decompose_stack ρ). intros l0 s1 ee.
-        rewrite ee in hd.
-        pose proof (decompose_stack_eq _ _ _ ee). subst.
-        cbn in hd. subst.
-        rewrite zipc_appstack. cbn.
-        unfold isConstruct_app. rewrite -> decompose_app_mkApps by auto.
-        reflexivity.
   Qed.
 
   Lemma unfold_one_fix_red :
@@ -1197,96 +1228,24 @@ Section Conversion.
     reflexivity.
   Qed.
 
-  Lemma unfold_one_fix_None Γ mfix idx π wf :
-    None = unfold_one_fix Γ mfix idx π wf ->
-    ∥∑args,
-     forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-      All2 (red Σ (Γ,,, stack_context π)) (decompose_stack π).1 args ×
-      whnf RedFlags.default Σ (Γ,,, stack_context π) (mkApps (tFix mfix idx) args)∥.
-  Proof using Type.
-    funelim (unfold_one_fix Γ mfix idx π wf).
-    all: intros [=].
-    - constructor; eexists _; split; [apply All2_same; reflexivity|].
-      eapply whnf_fixapp.
-      clear -e. unfold unfold_fix in e. now destruct nth_error.
-    - constructor; eexists _; split; [apply All2_same; reflexivity|].
-      eapply whnf_fixapp.
-      clear -e eq1. unfold unfold_fix in eq1. symmetry in e.
-      destruct (decompose_stack π) eqn:decomp.
-      apply decompose_stack_noStackApp in decomp as ?.
-      apply decompose_stack_eq in decomp as ->.
-      apply decompose_stack_at_appstack_None in e; eauto.
-      destruct nth_error ; [|now right].
-      left. eexists; split; eauto; cbn. now inversion eq1.
-    - try clear Heqcall. destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-      match type of eq3 with
-      | _ = reduce_stack ?a ?b ?c ?d ?e ?f ?g =>
-        pose proof (reduce_stack_sound a b c Σ wfΣ d e f g) as [r];
-        pose proof (reduce_stack_whnf a b c d e f g) as wh;
-        pose proof (reduce_stack_decompose a b c d e f g) as decomp;
-        pose proof (reduce_stack_isred a b c d e f g) as isr
-      end.
-      rewrite <- eq3 in r, wh, decomp, isr.
-      specialize (isr eq_refl) as (noapp&_).
-      cbn in *.
-      clear H eq3 H0.
-      destruct (heΣ Σ wfΣ).
-      symmetry in eq2.
-      apply decompose_stack_at_length in eq2 as ?.
-      apply decompose_stack_at_eq in eq2 as ->.
-      rewrite stack_context_appstack.
-      cbn. specialize (h Σ wfΣ).
-      apply welltyped_zipc_zipp in h; auto.
-      rewrite <- (stack_context_decompose ρ), decomp in wh.
-      change (App_l c :: θ) with (appstack [c] θ) in *.
-      rewrite !decompose_stack_appstack.
-      rewrite zipp_as_mkApps !decompose_stack_appstack in h.
-      destruct h as (ty&typ).
-      cbn in *.
-      rewrite stack_context_appstack in typ.
-      cbn in *.
-      destruct (decompose_stack ρ) eqn:decomp'.
-      apply decompose_stack_eq in decomp' as ->.
-      rewrite zipc_appstack in r.
-      rewrite zipp_appstack in wh.
-      cbn in *; subst; cbn in *.
-      destruct (hΣ Σ wfΣ), (wh Σ wfΣ).
-      constructor; exists (l ++ (mkApps cred l0) :: (decompose_stack θ).1).
-      intros. erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
-      eapply PCUICSR.subject_reduction in typ.
-      2: eauto.
-      2: apply red_mkApps; [reflexivity|].
-      1: split.
-      1,3: apply All2_app; [apply All2_same; reflexivity|].
-      1,2: constructor; [|apply All2_same; reflexivity].
-      1-2: eapply r.
-      inversion H1. unfold unfold_fix in H0.
-      case_eq (nth_error mfix idx); [intros d e | intro e]; rewrite e in H0; inversion H0.
-      apply whnf_ne.
-      econstructor.
-      + eauto.
-      + rewrite -> nth_error_snoc by easy.
-        eauto.
-      + eapply whnf_fix_arg_whne; eauto.
-        now destruct cred.
-      Unshelve. eauto.
-  Qed.
-
   (** A full weak-head run of the default-flag machine ([reduce_stack]) on a
       constant-headed state, in [zipp] form (design §7.3, steps 1 and 2).
       [None] when it makes no progress, that is when the application is already
       a weak-head normal form under default flags: an axiom, or an unsaturated,
       inert, stuck or rigid operation. *)
-  Opaque reduce_stack.
+  Opaque reduce_args_E.
+  (* Site 11 of the 11 reduce_stack sites: [args := (decompose_stack π).1]. Called only from
+     the Const view of [_isconv_prog], under T1, which supplies [hna]. *)
   Equations unfold_one_prim (Γ : context) (c : kername) (u : Instance.t) (π : stack)
+            (hna : no_Eta_arg π = true)
             (h : wtp Γ (tConst c u) π) : option (term * stack) :=
-    unfold_one_prim Γ c u π h with inspect (decompose_stack π) := {
+    unfold_one_prim Γ c u π hna h with inspect (decompose_stack π) := {
     | @exist (args, ρ) eqd
-      with inspect (reduce_stack RedFlags.default _ X (Γ ,,, stack_context π)
-                     (tConst c u) (appstack args []) _) := {
-      | @exist (t', π') eqr with inspect (eqb (zipp t' π') (mkApps (tConst c u) args)) := {
+      with inspect (reduce_args_E RedFlags.default X_type X (Γ ,,, stack_context π)
+                     (tConst c u) args _) := {
+      | @exist (t', args') eqr with inspect (eqb (mkApps t' args') (mkApps (tConst c u) args)) := {
         | @exist true _ := None ;
-        | @exist false _ := Some (t', π' ++ ρ)
+        | @exist false _ := Some (t', appstack args' ρ)
         }
       }
     }.
@@ -1341,26 +1300,6 @@ Section Conversion.
       unfold zipp in hne. rewrite decompose_stack_appstack in hne. cbn in hne.
       rewrite app_nil_r in hne. rewrite heq in hne.
       rewrite eqb_refl in hne. discriminate hne.
-  Qed.
-
-  Lemma unfold_one_prim_None Γ c u π h :
-    None = unfold_one_prim Γ c u π h ->
-    forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-      ∥ whnf RedFlags.default Σ (Γ ,,, stack_context π) (zipp (tConst c u) π) ∥.
-  Proof using Type.
-    funelim (unfold_one_prim Γ c u π h); intros [=].
-    intros Σ wfΣ.
-    prim_step_facts Σ wfΣ eqr.
-    rewrite decompose_stack_appstack in d. cbn in d.
-    destruct (decompose_stack π') as [l s] eqn:ed. cbn in d. subst s.
-    apply decompose_stack_eq in ed. subst π'.
-    match goal with H : true = eqb _ _ |- _ => pose proof H as heqb end.
-    symmetry in heqb. apply eqb_eq in heqb.
-    unfold zipp in heqb, wh |- *. rewrite decompose_stack_appstack in heqb, wh. cbn in heqb, wh.
-    rewrite app_nil_r in heqb, wh.
-    rewrite <- eqd. cbn.
-    rewrite stack_context_appstack in wh. cbn in wh.
-    rewrite heqb in wh. exact wh.
   Qed.
 
   (** What a successful step gives a re-entry: the stack keeps its context, the
@@ -1476,14 +1415,6 @@ Section Conversion.
 
     prog_viewc u v := prog_view_other u v I.
 
-  Lemma welltyped_wf_local Σ Γ t :
-    welltyped Σ Γ t ->
-    ∥ wf_local Σ Γ ∥.
-  Proof using Type.
-    intros []; sq.
-    eapply typing_wf_local in X0; eauto.
-  Qed.
-
   Definition eqb_universe_instance :=
     compare_universe_instance (abstract_env_compare_universe X Conv).
 
@@ -1504,93 +1435,6 @@ Section Conversion.
   Qed.
 
   Arguments LevelSet.mem : simpl never.
-
-  Lemma compare_universeb_complete Σ (wfΣ : abstract_env_ext_rel X Σ) pb u u' :
-    wf_universe Σ u ->
-    wf_universe Σ u' ->
-    compare_universe (global_ext_constraints Σ) pb u u' ->
-    abstract_env_compare_universe X pb u u'.
-  Proof using Type.
-    intros all1 all2 conv.
-    destruct (heΣ _ wfΣ).
-    eapply abstract_env_compare_universe_correct; eauto.
-Qed.
-
-  Lemma get_level_make l :
-    LevelExpr.get_level (LevelExpr.make l) = l.
-  Proof using Type. now destruct l. Qed.
-
-  Lemma compare_universeb_make_complete Σ (wfΣ : abstract_env_ext_rel X Σ) pb x y :
-    wf_level Σ x ->
-    wf_level Σ y ->
-    compare_universe (global_ext_constraints Σ) pb (Universe.make' x) (Universe.make' y) ->
-    abstract_env_compare_universe X pb (Universe.make' x) (Universe.make' y).
-  Proof using Type.
-    intros wfx wfy r.
-    eapply compare_universeb_complete; eauto.
-    - intros ? ->%LevelExprSet.singleton_spec; auto.
-    - intros ? ->%LevelExprSet.singleton_spec; auto.
-  Qed.
-
-  Lemma eqb_universe_instance_complete Σ (wfΣ : abstract_env_ext_rel X Σ) u u' :
-    wf_instance Σ u ->
-    wf_instance Σ u' ->
-    cmp_universe_instance (eq_universe (global_ext_constraints Σ)) u u' ->
-    eqb_universe_instance u u'.
-  Proof using Type.
-    intros memu memu'.
-    eapply introT.
-    unfold wf_instance in *.
-    eapply reflect_reflectT, reflect_cmp_universe_instance with (p := wf_universeb Σ); tea.
-    1: intros ????; eapply iff_reflect, abstract_env_compare_universe_correct with (conv_pb := Conv); tea.
-    1,2: now eapply wf_universe_iff.
-    all: solve_all; eapply wf_universe_iff; intros ? ->%LevelExprSet.singleton_spec; auto.
-  Qed.
-
-  Lemma compare_universe_variance_complete Σ (wfΣ : abstract_env_ext_rel X Σ) pb v u u' :
-    wf_level Σ u ->
-    wf_level Σ u' ->
-    cmp_universe_variance (compare_universe Σ) pb v u u' ->
-    compare_universe_variance (abstract_env_compare_universe X) pb v u u'.
-  Proof using Type.
-    intros memu memu' r.
-    destruct v; cbn in *; eauto.
-    - eapply compare_universeb_make_complete; eauto.
-    - eapply compare_universeb_make_complete with (pb := Conv); eauto.
-  Qed.
-
-  Lemma compare_universe_instance_variance_complete Σ (wfΣ : abstract_env_ext_rel X Σ) pb v u u' :
-    wf_instance Σ u ->
-    wf_instance Σ u' ->
-    cmp_universe_instance_variance (compare_universe Σ) pb v u u' ->
-    compare_universe_instance_variance (abstract_env_compare_universe X) pb v u u'.
-  Proof using Type.
-    intros memu memu' r.
-    induction r in memu, memu' |- *; cbnr.
-    - depelim memu.
-      depelim memu'.
-      apply Bool.andb_true_iff.
-      split.
-      + eapply compare_universe_variance_complete; eauto.
-      + now apply IHr.
-  Qed.
-
-
-  Lemma consistent_instance_ext_wf Σ udecl u :
-    consistent_instance_ext Σ udecl u ->
-    wf_instance Σ u.
-  Proof using Type.
-    intros cons.
-    unfold consistent_instance_ext, consistent_instance in *.
-    destruct udecl.
-    - destruct u; cbn in *; [|congruence].
-      constructor.
-    - destruct cons as (mems&_&_).
-      apply forallb_Forall in mems.
-      eapply Forall_impl; eauto.
-      cbn.
-      intros ? ?%LevelSet.mem_spec; auto.
-  Qed.
 
   Lemma welltyped_zipc_tConst_inv Σ (wfΣ : abstract_env_ext_rel X Σ) Γ c u π :
     welltyped Σ Γ (zipc (tConst c u) π) ->
@@ -1639,18 +1483,21 @@ Qed.
       neither side moves, the answer is no; under G7 it carries no proof (base
       justified it by [closed_red_whnf_mkApps_tConst]; [ne] is now unused). *)
   Equations(noeqns) unfold_prims (Γ : context) (leq : conv_pb)
-            (c : kername) (u : Instance.t) (π1 : stack)
+            (c : kername) (u : Instance.t) (π1 : stack) (f1 : wf_stack π1)
             (h1 : wtp Γ (tConst c u) π1)
-            (c' : kername) (u' : Instance.t) (π2 : stack)
+            (c' : kername) (u' : Instance.t) (π2 : stack) (f2 : wf_stack π2)
             (h2 : wtp Γ (tConst c' u') π2)
             (ne : c <> c' \/ (c = c' /\ ~eqb_universe_instance u u'))
             (hx : conv_stack_ctx Γ π1 π2)
-            (aux : Aux Term Γ (tConst c u) π1 (tConst c' u') π2 h2)
+            (hg : no_Eta_arg π1 && no_Eta_arg π2 = true)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π2) ∥)
+            (aux : Aux Term Γ (tConst c u) π1 (tConst c' u') π2 f1 f2 h2)
     : ConversionResult (conv_term leq Γ (tConst c u) π1 (tConst c' u') π2) :=
-    unfold_prims Γ leq c u π1 h1 c' u' π2 h2 ne hx aux
-    with inspect (unfold_one_prim Γ c u π1 h1) := {
+    unfold_prims Γ leq c u π1 f1 h1 c' u' π2 f2 h2 ne hx hg hwf1 hwf2 aux
+    with inspect (unfold_one_prim Γ c u π1 _ h1) := {
     | @exist (Some (t1', π1')) eqp1 := isconv_red leq t1' π1' (tConst c' u') π2 aux ;
-    | @exist None eqp1 with inspect (unfold_one_prim Γ c' u' π2 h2) := {
+    | @exist None eqp1 with inspect (unfold_one_prim Γ c' u' π2 _ h2) := {
       | @exist (Some (t2', π2')) eqp2 := isconv_red leq (tConst c u) π1 t2' π2' aux ;
       | @exist None eqp2 := no (NotFoundConstants c c')
       }
@@ -1715,17 +1562,20 @@ Qed.
       [herr] argument, the [~P] payload of the argument comparison that only
       justified this [no], is dropped with the payload.) *)
   Equations(noeqns) unfold_prims_args (Γ : context) (leq : conv_pb)
-            (c : kername) (u : Instance.t) (π1 : stack)
+            (c : kername) (u : Instance.t) (π1 : stack) (f1 : wf_stack π1)
             (h1 : wtp Γ (tConst c u) π1)
-            (c' : kername) (u' : Instance.t) (π2 : stack)
+            (c' : kername) (u' : Instance.t) (π2 : stack) (f2 : wf_stack π2)
             (h2 : wtp Γ (tConst c' u') π2)
             (hx : conv_stack_ctx Γ π1 π2)
-            (aux : Aux Term Γ (tConst c u) π1 (tConst c' u') π2 h2)
+            (hg : no_Eta_arg π1 && no_Eta_arg π2 = true)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π2) ∥)
+            (aux : Aux Term Γ (tConst c u) π1 (tConst c' u') π2 f1 f2 h2)
     : ConversionResult (conv_term leq Γ (tConst c u) π1 (tConst c' u') π2) :=
-    unfold_prims_args Γ leq c u π1 h1 c' u' π2 h2 hx aux
-    with inspect (unfold_one_prim Γ c u π1 h1) := {
+    unfold_prims_args Γ leq c u π1 f1 h1 c' u' π2 f2 h2 hx hg hwf1 hwf2 aux
+    with inspect (unfold_one_prim Γ c u π1 _ h1) := {
     | @exist (Some (t1', π1')) eqp1 := isconv_red leq t1' π1' (tConst c' u') π2 aux ;
-    | @exist None eqp1 with inspect (unfold_one_prim Γ c' u' π2 h2) := {
+    | @exist None eqp1 with inspect (unfold_one_prim Γ c' u' π2 _ h2) := {
       | @exist (Some (t2', π2')) eqp2 := isconv_red leq (tConst c u) π1 t2' π2' aux ;
       | @exist None eqp2 := no (NotFoundConstant c)
       }
@@ -1784,16 +1634,19 @@ Qed.
   Qed.
 
   Equations(noeqns) unfold_constants (Γ : context) (leq : conv_pb)
-            (c : kername) (u : Instance.t) (π1 : stack)
+            (c : kername) (u : Instance.t) (π1 : stack) (f1 : wf_stack π1)
             (h1 : wtp Γ (tConst c u) π1)
-            (c' : kername) (u' : Instance.t) (π2 : stack)
+            (c' : kername) (u' : Instance.t) (π2 : stack) (f2 : wf_stack π2)
             (h2 : wtp Γ (tConst c' u') π2)
             (ne : c <> c' \/ (c = c' /\ ~eqb_universe_instance u u'))
             (hx : conv_stack_ctx Γ π1 π2)
-            (aux : Aux Term Γ (tConst c u) π1 (tConst c' u') π2 h2)
+            (hg : no_Eta_arg π1 && no_Eta_arg π2 = true)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π2) ∥)
+            (aux : Aux Term Γ (tConst c u) π1 (tConst c' u') π2 f1 f2 h2)
     : ConversionResult (conv_term leq Γ (tConst c u) π1 (tConst c' u') π2) :=
 
-    unfold_constants Γ leq c u π1 h1 c' u' π2 h2 ne hx aux
+    unfold_constants Γ leq c u π1 f1 h1 c' u' π2 f2 h2 ne hx hg hwf1 hwf2 aux
     with inspect (abstract_env_lookup X c') := {
     | @exist (Some (ConstantDecl {| cst_body := Some b |})) eq1 :=
       isconv_red leq (tConst c u) π1 (subst_instance u' b) π2 aux ;
@@ -1804,7 +1657,7 @@ Qed.
                         (tConst c' u') π2 aux ;
       (* Both bodiless or not found: a registered operation may still take a
          machine step before the answer is no (design §7.3, [unfold_prims]). *)
-      | @exist _ eq2 := unfold_prims Γ leq c u π1 h1 c' u' π2 h2 ne hx aux
+      | @exist _ eq2 := unfold_prims Γ leq c u π1 f1 h1 c' u' π2 f2 h2 ne hx hg hwf1 hwf2 aux
       }
     }.
 (*
@@ -1929,120 +1782,6 @@ Qed.
     split; [easy|].
     now apply All2i_length in brs_ty.
   Qed.
-
-  Equations (noeqns) isconv_context_aux
-            (Γ Γ' Δ Δ' : context)
-            (cc : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥Σ ⊢ Γ = Γ'∥)
-            (check :
-               forall (leq : conv_pb) (Δh : context_hole) (t : term) (Δh' : context_hole) (t' : term),
-                 Δ = fill_context_hole Δh t ->
-                 Δ' = fill_context_hole Δh' t' ->
-                 (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ ws_cumul_ctx_pb_rel Conv Σ Γ (context_hole_context Δh) (context_hole_context Δh')∥) ->
-                 ConversionResult (forall Σ (wfΣ : abstract_env_ext_rel X Σ), conv_cum leq Σ (Γ,,, context_hole_context Δh) t t'))
-            (Δpre Δ'pre Δpost Δ'post : context)
-            (eq : Δ = Δpre ,,, Δpost)
-            (eq' : Δ' = Δ'pre ,,, Δ'post) :
-    ConversionResult (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ws_cumul_ctx_pb_rel Conv Σ Γ Δpre Δ'pre∥) by struct Δpre := {
-
-    isconv_context_aux Γ Γ' Δ Δ' cc check [] [] Δpost Δ'post eq eq' => yes;
-
-    isconv_context_aux Γ Γ' Δ Δ' cc check
-                           (mkdecl na bd ty :: Δpre)
-                           (mkdecl na' bd' ty' :: Δ'pre)
-                           Δpost Δ'post eq eq'
-      with isconv_context_aux
-             Γ Γ' Δ Δ' cc check Δpre Δ'pre
-             (Δpost ++ [mkdecl na bd ty])
-             (Δ'post ++ [mkdecl na' bd' ty']) _ _ := {
-
-      | Error ce => no ce;
-
-      | Success conv_rest
-        with inspect (eqb_binder_annot na na') := {
-
-        | exist false neq_binders => no (ContextNotConvertibleAnn
-                                           (Γ,,, Δpre) (mkdecl na bd ty)
-                                           (Γ',,, Δ'pre) (mkdecl na' bd' ty'));
-
-        | exist true eq_binders
-          with check Conv
-               (Δpre, decl_hole_type na bd, Δpost) ty
-               (Δ'pre, decl_hole_type na' bd', Δ'post) ty'
-               _ _ conv_rest := {
-
-          | Error ce => no (ContextNotConvertibleType
-                                            (Γ,,, Δpre) (mkdecl na bd ty)
-                                            (Γ',,, Δ'pre) (mkdecl na' bd' ty'));
-
-          | Success conv_type with bd, bd' := {
-
-            | Some body | Some body'
-                with check Conv
-                     (Δpre, decl_hole_body na ty, Δpost) body
-                     (Δ'pre, decl_hole_body na' ty', Δ'post) body'
-                     _ _ conv_rest := {
-              | Error ce => no (ContextNotConvertibleBody
-                                                (Γ,,, Δpre) (mkdecl na bd ty)
-                                                (Γ',,, Δ'pre) (mkdecl na' bd' ty'));
-
-              | Success conv_body => yes
-              };
-
-            | None | None => yes;
-
-            | _ | _ => no (ContextNotConvertibleBody
-                             (Γ,,, Δpre) (mkdecl na bd ty)
-                             (Γ',,, Δ'pre) (mkdecl na' bd' ty'))
-            }
-          }
-        }
-      };
-
-    isconv_context_aux Γ Γ' Δ Δ' cc check
-                       Δpre Δ'pre Δpost Δ'post eq eq' => no ContextNotConvertibleLength
-    }.
-  Next Obligation.
-    pose proof (heΣ _ wfΣ). specialize (cc _ wfΣ). sq.
-    constructor; fvs.
-    - constructor.
-  Qed.
-  Next Obligation.
-    unfold app_context.
-    rewrite <- app_assoc; auto.
-  Qed.
-  Next Obligation.
-    unfold app_context.
-    rewrite <- app_assoc; auto.
-  Qed.
-  Next Obligation.
-    unfold conv_cum in conv_type, conv_body.
-    pose proof (hΣ _ wfΣ). specialize_Σ wfΣ.
-    sq. constructor; fvs.
-    constructor; auto.
-    * now destruct conv_rest.
-    * constructor; auto.
-      apply eqb_annot_spec; auto.
-  Qed.
-  Next Obligation.
-    red in conv_type. pose proof (hΣ _ wfΣ). specialize_Σ wfΣ.
-    sq. constructor; fvs.
-    constructor; auto.
-    * now destruct conv_rest.
-    * constructor; auto.
-      apply eqb_annot_spec; auto.
-  Qed.
-
-  Definition isconv_context
-            (Γ Γ' Δ Δ' : context)
-            (cc : forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ Σ ⊢ Γ = Γ' ∥)
-            (check :
-               forall (leq : conv_pb) (Δh : context_hole) (t : term) (Δh' : context_hole) (t' : term),
-                 Δ = fill_context_hole Δh t ->
-                 Δ' = fill_context_hole Δh' t' ->
-                 (forall Σ (wfΣ : abstract_env_ext_rel X Σ),  ∥ws_cumul_ctx_pb_rel Conv Σ Γ (context_hole_context Δh) (context_hole_context Δh')∥) ->
-                 ConversionResult (forall Σ (wfΣ : abstract_env_ext_rel X Σ), conv_cum leq Σ (Γ,,, context_hole_context Δh) t t'))
-    : ConversionResult (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ws_cumul_ctx_pb_rel Conv Σ Γ Δ Δ'∥) :=
-    isconv_context_aux Γ Γ' Δ Δ' cc check Δ Δ' [] [] eq_refl eq_refl.
 
   Lemma case_conv_brs_inv {Γ ci br br' p c brs1 brs2 π}
   (h : wtp Γ (tCase ci p c (brs1 ++ br :: brs2)) π)
@@ -2443,19 +2182,6 @@ Qed.
     Unshelve. all: eauto.
   Qed.
 
-  (* TODO MOVE *)
-  Lemma conv_context_decl Pcmp :
-    forall Σ Γ Δ d d',
-      conv_context Pcmp Σ Γ Δ ->
-      conv_decls Pcmp Σ Γ Δ d d' ->
-      conv_context Pcmp Σ (Γ ,, d) (Δ ,, d').
-  Proof using Type.
-    intros Γ Δ d d' hx h.
-    destruct h.
-    all: constructor. all: try assumption.
-    all: constructor. all: assumption.
-  Qed.
-
   Lemma stack_entry_context_mFix_mfix_bd :
     forall fk na ty ra mfix1 mfix2 idx,
       stack_entry_context (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx) =
@@ -2728,40 +2454,6 @@ Qed.
     intuition eauto.
   Qed.
 
-  Lemma invert_type_mkApps_tProd Σ (wfΣ : abstract_env_ext_rel X Σ) Γ na A b args T :
-    Σ;;; Γ |- mkApps (tProd na A b) args : T -> args = [].
-  Proof using Type.
-    intros typ.
-    destruct (hΣ _ wfΣ).
-    apply PCUICValidity.inversion_mkApps in typ as (?&[typ_prod typ_args]).
-    apply inversion_Prod in typ_prod as (?&?&h1&?&?); [|easy].
-    eapply PCUICSpine.typing_spine_strengthen in typ_args; eauto.
-    2:{ eapply PCUICArities.isType_Sort. 2:pcuic.
-        eapply unlift_TypUniv in h1.
-        eapply wf_sort_product; now eapply typing_wf_sort. }
-    clear -typ_args.
-    depelim typ_args.
-    - easy.
-    - now apply ws_cumul_pb_Sort_Prod_inv in w.
-  Qed.
-
-  Lemma welltyped_zipc_tProd_appstack_nil Σ (wfΣ : abstract_env_ext_rel X Σ) {Γ na A B l ρ} :
-    welltyped Σ Γ (zipc (tProd na A B) (appstack l ρ)) -> l = [].
-  Proof using Type.
-    pose proof (hΣ _ wfΣ) as [hΣ].
-    intros wh.
-    rewrite zipc_appstack in wh.
-    zip fold in wh.
-    apply welltyped_context in wh; [|easy].
-    cbn in wh.
-    destruct l as [|? ? _] using List.rev_ind; [easy|].
-    rewrite mkApps_app in wh.
-    cbn in wh. destruct wh as (?&typ); auto.
-    change (tApp ?h ?a) with (mkApps h [a]) in typ.
-    rewrite <-mkApps_app in typ.
-    now apply invert_type_mkApps_tProd in typ.
-  Qed.
-
   Definition compare_global_instance_correct {Σ}
     (wfΣ : abstract_env_ext_rel X Σ) pb ref n l l' :
       wf_instance Σ l ->
@@ -2796,56 +2488,6 @@ Qed.
     all: rewrite -> wf_universeb_instance_forall in *; now eapply wf_instance_iff.
   Qed.
 
-  (** The discriminee of a stuck case is neutral.  The case's own typing
-      (change log 16(d)) types the discriminee at an inductive, which dismisses
-      the two non-neutral primitive shapes of row F's
-      [whnf_whne_nodelta_upgrade]: an unsaturated operation has a product type,
-      and a rigid one is stuck on its blocking argument ([prim_rigid_arg_whne]). *)
-  Lemma reduced_case_discriminee_whne Σ (wfΣ : abstract_env_ext_rel X Σ) Γ π ci p c brs h :
-    eqb_term (reduce_term
-                RedFlags.default
-                _ X (Γ,,, stack_context π) c h) c = true ->
-    isred_full Γ (tCase ci p c brs) π ->
-    welltyped Σ Γ (zipc (tCase ci p c brs) π) ->
-    ∥whne RedFlags.default Σ (Γ,,, stack_context π) c∥.
-  Proof using Type.
-    intros eq ir ht. pose proof (heΣ _ wfΣ) as [[]].
-    pose proof (hΣ _ wfΣ).
-    edestruct ir as (_&[wh]); eauto.
-    eapply cmpb_term_correct in eq; tea.
-    - epose proof (reduce_term_complete _ _ _ _ _ _ _ h) as [wh'].
-      eapply whnf_eq_term in eq; [|exact wh'].
-      rewrite zipp_as_mkApps in wh.
-      depelim wh; solve_discr.
-      apply whne_mkApps_inv in w as [[w|(?&?&?&?&?&?&?&?)]|(?&?&?&?&?&?&?&?&?&?)]; [|easy|easy|easy].
-      depelim w; cbn in *; try easy; solve_discr.
-      eapply whnf_whne_nodelta_upgrade in eq; [|exact w].
-      destruct eq as [hne|hnn]; [now constructor|].
-      pose proof (hΣ _ wfΣ) as [wΣ'].
-      (* ht is already about Σ *)
-      change (welltyped Σ Γ (zip (tCase ci p c brs, π))) in ht.
-      eapply welltyped_context in ht; [|exact wΣ'].
-      cbn in ht. destruct ht as [T hT].
-      apply inversion_Case in hT as (?&?&isdecl&?&[]&?); auto.
-      constructor.
-      destruct hnn as [c0 u0 decl op args hl hb hop hlt|c0 u0 decl op ls a rest hl hb hop hlen hwa hnl].
-      * exfalso.
-        destruct (PCUICSR.prim_app_typing_inv (wfΣ := wΣ') hop scrut_ty (Nat.lt_le_incl _ _ hlt))
-          as [_ hprod].
-        destruct (hprod hlt) as (na & A & B & hle).
-        exact (invert_cumul_prod_ind hle).
-      * eapply whne_primapp_stuck; try eassumption.
-        eapply (prim_rigid_arg_whne (wfΣ := wΣ')); eassumption.
-    - pose proof (reduce_term_sound RedFlags.default X_type X (Γ,,, stack_context π) c h) as Hreduce.
-      specialize_Σ wfΣ. pose proof (h _ wfΣ) as [C hc]. sq.
-      apply closed_red_red in Hreduce. eapply PCUICSR.subject_reduction in hc; eauto.
-      Opaque reduce_term.
-      eapply typing_wf_universes in hc as [? ?]%andb_and; eauto.
-    - clear eq. specialize_Σ wfΣ. sq. destruct h as [? h].
-      eapply typing_wf_universes in h as [h h']%andb_and; eauto.
-    Unshelve. all:eauto.
-  Qed.
-
   Lemma welltyped_zipp_inv Σ Γ t π :
     wf Σ ->  welltyped Σ Γ (zipp t π) -> welltyped Σ Γ t.
   Proof using Type.
@@ -2867,207 +2509,6 @@ Qed.
   Proof using Type.
     intros ? [? Ht]. apply typing_wf_universes in Ht; eauto.
     cbn in Ht. rtoProp; intuition.
-  Qed.
-
-  Lemma inv_reduced_discriminees_case Σ (wfΣ : abstract_env_ext_rel X Σ) leq Γ π π' ci ci' p p' c c' brs brs' h h' :
-    conv_stack_ctx Γ π π' ->
-    true = eqb_term (reduce_term
-                       RedFlags.default
-                       _ X (Γ,,, stack_context π) c h) c ->
-    true = eqb_term (reduce_term
-                       RedFlags.default
-                       _ X (Γ,,, stack_context π') c' h') c' ->
-    welltyped Σ Γ (zipc (tCase ci p c brs) π) ->
-    welltyped Σ Γ (zipc (tCase ci' p' c' brs') π') ->
-    isred_full Γ (tCase ci p c brs) π ->
-    isred_full Γ (tCase ci' p' c' brs') π' ->
-    conv_cum
-      leq Σ (Γ,,, stack_context π)
-      (zipp (tCase ci p c brs) π)
-      (zipp (tCase ci' p' c' brs') π') ->
-    ∥[× ci = ci',
-     ws_cumul_pb_predicate Σ (Γ,,, stack_context π) p p',
-     Σ;;; Γ,,, stack_context π ⊢ c = c',
-     ws_cumul_pb_brs Σ (Γ,,, stack_context π) p brs brs' &
-     ws_cumul_pb_terms Σ (Γ,,, stack_context π) (decompose_stack π).1 (decompose_stack π').1]∥.
-  Proof using Type.
-    eintros [] c_is_red%eq_sym c'_is_red%eq_sym wtc wtc' isr1 isr2 cc; eauto.
-    eapply reduced_case_discriminee_whne in c_is_red as wh1; eauto.
-    all: idtac.
-    eapply reduced_case_discriminee_whne in c'_is_red as wh2; eauto.
-    all: idtac.
-    destruct (hΣ _ wfΣ) as [hΣ], wh1 as [wh1], wh2 as [wh2].
-    rewrite !zipp_as_mkApps in cc.
-    eapply whne_conv_context in wh2.
-    2:{ symmetry in X0. eapply ws_cumul_ctx_pb_forget in X0. exact X0. }
-    apply conv_cum_mkApps_inv in cc as [(ws_cumul_pb_Case&conv_args)]; eauto using whnf_mkApps.
-    red in isr1.
-    eapply welltyped_zipc_zipp, welltyped_zipp_inv in wtc; eauto.
-    eapply welltyped_zipc_zipp, welltyped_zipp_inv in wtc'; eauto.
-    destruct wtc. eapply inversion_Case in X1 as [mdecl [idecl [isdecl [indices [[] ?]]]]]; tea.
-    destruct wtc'. eapply inversion_Case in X1 as [mdecl' [idecl' [isdecl' [indices' [[] ?]]]]] ; tea; eauto.
-    eapply conv_cum_tCase_inv in ws_cumul_pb_Case; eauto.
-    destruct ws_cumul_pb_Case as [[<- ? ? ?]].
-    split; split; auto.
-  Qed.
-
-  (** The body of a stuck projection is neutral.  As for a case, the
-      projection's typing (change log 16(d)) types the body at an inductive,
-      which dismisses the two non-neutral primitive shapes. *)
-  Lemma reduced_proj_body_whne Σ (wfΣ : abstract_env_ext_rel X Σ) Γ π p c h :
-    true = eqb_term (reduce_term
-                RedFlags.default
-                _ X (Γ,,, stack_context π) c h) c ->
-    isred_full Γ (tProj p c) π ->
-    welltyped Σ Γ (zipc (tProj p c) π) ->
-    ∥whne RedFlags.default Σ (Γ,,, stack_context π) c∥.
-  Proof using Type.
-    intros eq%eq_sym ir ht.
-    edestruct ir as (_&[wh]); eauto.
-    pose proof (hΣ _ wfΣ).
-    eapply cmpb_term_correct in eq; tea.
-    - epose proof (reduce_term_complete _ _ _ _ _ _ _ h) as [wh'].
-      eapply whnf_eq_term in eq; [|exact wh'].
-      rewrite zipp_as_mkApps in wh.
-      depelim wh; solve_discr.
-      apply whne_mkApps_inv in w as [[w|(?&?&?&?&?&?&?&?)]|(?&?&?&?&?&?&?&?&?&?)]; [|easy|easy|easy].
-      depelim w; cbn in *; try easy; solve_discr.
-      eapply whnf_whne_nodelta_upgrade in eq; [|exact w].
-      destruct eq as [hne|hnn]; [now constructor|].
-      pose proof (hΣ _ wfΣ) as [wΣ'].
-      change (welltyped Σ Γ (zip (tProj p c, π))) in ht.
-      eapply welltyped_context in ht; [|exact wΣ'].
-      cbn in ht. destruct ht as [T hT].
-      apply inversion_Proj in hT as (u'&mdecl&idecl&cdecl&pdecl&args&?&hc&?&?); auto.
-      constructor.
-      destruct hnn as [c0 u0 decl op args0 hl hb hop hlt|c0 u0 decl op ls a rest hl hb hop hlen hwa hnl].
-      * exfalso.
-        destruct (PCUICSR.prim_app_typing_inv (wfΣ := wΣ') hop hc (Nat.lt_le_incl _ _ hlt))
-          as [_ hprod].
-        destruct (hprod hlt) as (na & A & B & hle).
-        exact (invert_cumul_prod_ind hle).
-      * eapply whne_primapp_stuck; try eassumption.
-        eapply (prim_rigid_arg_whne (wfΣ := wΣ')); eassumption.
-    - pose proof (reduce_term_sound RedFlags.default X_type X (Γ,,, stack_context π) c h) as Hreduce.
-      specialize_Σ wfΣ. pose proof (h _ wfΣ) as [C hc]. sq.
-      apply closed_red_red in Hreduce. eapply PCUICSR.subject_reduction in hc; eauto.
-      Opaque reduce_term.
-      eapply typing_wf_universes in hc as [? ?]%andb_and; eauto.
-    - clear eq. specialize_Σ wfΣ. sq. destruct h as [? h].
-    eapply typing_wf_universes in h as [h h']%andb_and; eauto.
-    Unshelve. all:eauto.
-  Qed.
-
-  Lemma inv_reduced_body_proj Σ (wfΣ : abstract_env_ext_rel X Σ) leq Γ π π' p p' c c' h h' :
-    conv_stack_ctx Γ π π' ->
-    true = eqb_term (reduce_term
-                       RedFlags.default
-                       _ X (Γ,,, stack_context π) c h) c ->
-    true = eqb_term (reduce_term
-                       RedFlags.default
-                      _ X (Γ,,, stack_context π') c' h') c' ->
-    isred_full Γ (tProj p c) π ->
-    isred_full Γ (tProj p' c') π' ->
-    welltyped Σ Γ (zipc (tProj p c) π) ->
-    welltyped Σ Γ (zipc (tProj p' c') π') ->
-    conv_cum leq Σ (Γ,,, stack_context π) (zipp (tProj p c) π) (zipp (tProj p' c') π') ->
-    ∥p = p' ×
-     Σ;;; Γ,,, stack_context π ⊢ c = c' ×
-     ws_cumul_pb_terms Σ (Γ,,, stack_context π) (decompose_stack π).1 (decompose_stack π').1∥.
-  Proof using Type.
-    eintros [] c_is_red c'_is_red isr1 isr2 wtp1 wtp2 cc; eauto.
-    eapply reduced_proj_body_whne in c_is_red as wh1; eauto.
-    eapply reduced_proj_body_whne in c'_is_red as wh2; eauto.
-    destruct (hΣ _ wfΣ) as [hΣ], wh1 as [wh1], wh2 as [wh2].
-    rewrite !zipp_as_mkApps in cc.
-    eapply whne_conv_context in wh2.
-    2:{ symmetry in X0. eapply ws_cumul_ctx_pb_forget in X0. exact X0. }
-    apply conv_cum_mkApps_inv in cc as [(conv_proj&conv_args)]; eauto using whnf_mkApps.
-    eapply conv_cum_tProj_inv in conv_proj; eauto.
-    destruct conv_proj as [(<-&?)].
-    constructor; auto.
-  Qed.
-
-  Lemma conv_cum_red_conv_inv Σ (wfΣ : abstract_env_ext_rel X Σ) leq Γ Γ' t1 t2 t1' t2' :
-    ws_cumul_ctx_pb Conv Σ Γ Γ' ->
-    red Σ Γ t1 t1' ->
-    red Σ Γ' t2 t2' ->
-    sq_ws_cumul_pb leq Σ Γ t1 t2 ->
-    sq_ws_cumul_pb leq Σ Γ t1' t2'.
-  Proof using Type.
-    intros. destruct (hΣ _ wfΣ) as [wΣ].
-    eapply conv_cum_red_conv_inv; eauto.
-    all:eapply into_closed_red; tea.
-    * fvs.
-    * destruct H; fvs.
-    * fvs.
-    * destruct H. rewrite <-(All2_fold_length X0). now eapply ws_cumul_pb_is_open_term_right.
-  Qed.
-
-  Lemma inv_stuck_fixes Σ (wfΣ : abstract_env_ext_rel X Σ) leq Γ mfix idx π mfix' idx' π' h h' :
-    conv_stack_ctx Γ π π' ->
-    None = unfold_one_fix Γ mfix idx π h ->
-    None = unfold_one_fix Γ mfix' idx' π' h' ->
-    conv_cum leq Σ (Γ,,, stack_context π) (zipp (tFix mfix idx) π) (zipp (tFix mfix' idx') π') ->
-    ∥[× idx = idx',
-     All2 (fun d d' =>
-             rarg d = rarg d' × eq_binder_annot d.(dname) d'.(dname) ×
-             Σ;;; Γ,,, stack_context π ⊢ dtype d = dtype d' ×
-             Σ;;; Γ,,, stack_context π,,, fix_context mfix ⊢ dbody d = dbody d')
-          mfix mfix' &
-     ws_cumul_pb_terms Σ (Γ,,, stack_context π) (decompose_stack π).1 (decompose_stack π').1]∥.
-  Proof using Type.
-    eintros [?] uf1 uf2 cc; eauto.
-    rewrite !zipp_as_mkApps in cc; eauto.
-    apply unfold_one_fix_None in uf1.
-    edestruct uf1 as [(?&?&?)]; eauto.
-    apply unfold_one_fix_None in uf2.
-    edestruct uf2 as [(?&?&?)]; eauto.
-    destruct (hΣ _ wfΣ).
-    eapply conv_cum_red_conv_inv in cc.
-    2: eassumption.
-    2: exact X0.
-    2: eapply red_mkApps; [reflexivity|exact a].
-    2: apply red_mkApps; [reflexivity|exact a0].
-    apply conv_cum_mkApps_inv in cc as [(ws_cumul_pb_Fix&conv_args)]; auto.
-    2:{ eapply whnf_conv_context; eauto.
-        symmetry in X0. now eapply ws_cumul_ctx_pb_forget in X0. }
-    apply conv_cum_tFix_inv in ws_cumul_pb_Fix as [(<-&?)]; auto.
-    sq; split; auto.
-    * eapply All2_impl; tea; cbn. intros ? ? []. repeat split; auto.
-    * eapply ws_cumul_pb_terms_red_conv; eauto.
-      all:eapply into_red_terms; tea.
-      1,3:fvs.
-      + specialize_Σ wfΣ. eapply welltyped_zipc_zipp in h; auto.
-        destruct h as [s h].
-        rewrite zipp_as_mkApps in h.
-        eapply subject_is_open_term in h.
-        rewrite on_free_vars_mkApps in h. now apply andb_true_iff in h.
-      + specialize_Σ wfΣ. eapply welltyped_zipc_zipp in h'; auto.
-        destruct h' as [s h'].
-        rewrite zipp_as_mkApps in h'.
-        eapply subject_is_open_term in h'.
-        rewrite on_free_vars_mkApps in h'. now apply andb_true_iff in h'.
-  Qed.
-
-  Lemma inv_stuck_cofixes Σ (wfΣ : abstract_env_ext_rel X Σ) leq Γ mfix idx π mfix' idx' π' :
-    conv_stack_ctx Γ π π' ->
-    conv_cum leq Σ (Γ,,, stack_context π) (zipp (tCoFix mfix idx) π) (zipp (tCoFix mfix' idx') π') ->
-    ∥idx = idx' ×
-     All2 (fun d d' =>
-             rarg d = rarg d' × eq_binder_annot d.(dname) d'.(dname) ×
-             Σ;;; Γ,,, stack_context π ⊢ dtype d = dtype d' ×
-             Σ;;; Γ,,, stack_context π,,, fix_context mfix ⊢ dbody d = dbody d')
-          mfix mfix' ×
-     ws_cumul_pb_terms Σ (Γ,,, stack_context π) (decompose_stack π).1 (decompose_stack π').1∥.
-  Proof using Type.
-    eintros [?] cc; eauto. specialize_Σ wfΣ.
-    rewrite !zipp_as_mkApps in cc.
-    destruct (hΣ _ wfΣ).
-    apply conv_cum_mkApps_inv in cc as [(ws_cumul_pb_CoFix&conv_args)]; auto.
-    apply conv_cum_tCoFix_inv in ws_cumul_pb_CoFix as [(<-&?)]; auto.
-    constructor; split; [|split]; auto.
-    eapply All2_impl; tea. intros ? ? []. repeat split; auto.
   Qed.
 
   Equations (noeqns) isconv_predicate_params_aux
@@ -3216,18 +2657,6 @@ Qed.
         eapply declared_minductive_closed; tea. exact decli'_. }
       rewrite (wf_predicate_length_pars wf_pred0).
       now rewrite (PCUICGlobalEnv.declared_minductive_ind_npars decli_).
-  Qed.
-
-  Definition forallb2_proper A B (R R' : A -> B -> bool) l l':
-    (forall a b, R a b = R' a b) ->
-    forallb2 R l l' =
-    forallb2 R' l l'.
-  Proof using Type.
-    intro e. revert l'.
-    induction l; destruct l'; eauto.
-    cbn; intros. rewrite <- e.
-    apply eq_true_iff_eq. split; intros.
-     all: apply andb_and; now apply andb_and in H.
   Qed.
 
   Definition isconv_predicate_params
@@ -3426,30 +2855,28 @@ Equations (noeqns) isconv_array_values_aux
     (aux : Aux Term Γ (tPrimArray a1) π1 (tPrimArray a2) π2 h2) :=
     isconv_array_values_aux Γ a1 π1 h1 a2 π2 h2 hx aux [] [] a1.(array_value) a2.(array_value) eq_refl eq_refl.
 
-  Lemma conv_cum_red_inv Σ (wfΣ : abstract_env_ext_rel X Σ) leq Γ t1 t2 t1' t2' :
-    red Σ Γ t1 t1' ->
-    red Σ Γ t2 t2' ->
-    sq_ws_cumul_pb leq Σ Γ t1 t2 ->
-    sq_ws_cumul_pb leq Σ Γ t1' t2'.
-  Proof using Type.
-    intros. destruct (hΣ _ wfΣ).
-    destruct H. eapply conv_cum_red_inv; tea. 3:split; eauto.
-    all:eapply into_closed_red; tea; fvs.
-  Qed.
-
-
-
   (* See https://github.com/coq/coq/blob/master/kernel/reduction.ml#L367 *)
-  Opaque reduce_stack.
+  (* T1 (rev 14 B4): every view except [prog_view_other] needs both stacks without Eta_arg; the
+     equation [hg] is passed to the helper Equations. On false: the deliberate refusal point. *)
+  Opaque reduce_args_E.
   Equations(noeqns) _isconv_prog (Γ : context) (leq : conv_pb)
-            (t1 : term) (π1 : stack) (h1 : wtp Γ t1 π1)
-            (t2 : term) (π2 : stack) (h2 : wtp Γ t2 π2)
+            (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
+            (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
             (hx : conv_stack_ctx Γ π1 π2)
+            (hv1 : virt_ok t1 π1 = true) (hv2 : virt_ok t2 π2 = true)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π2) ∥)
             (ir1 : isred_full Γ t1 π1) (ir2 : isred_full Γ t2 π2)
-            (aux : Aux Term Γ t1 π1 t2 π2 h2)
+            (aux : Aux Term Γ t1 π1 t2 π2 f1 f2 h2)
     : ConversionResult (conv_term leq Γ t1 π1 t2 π2) :=
 
-    _isconv_prog Γ leq t1 π1 h1 t2 π2 h2 hx ir1 ir2 aux with prog_viewc t1 t2 := {
+    _isconv_prog Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2 ir1 ir2 aux
+    with inspect (no_Eta_arg π1 && no_Eta_arg π2) := {
+    | @exist false _ with prog_viewc t1 t2 := {
+      | prog_view_other t1 t2 h := isconv_fallback leq t1 π1 t2 π2 aux ;
+      | _ := no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
+      } ;
+    | @exist true hg with prog_viewc t1 t2 := {
     | prog_view_App _ _ _ _ := False_rect _ _;
 
     | prog_view_Const c u c' u' with eq_dec c c' := {
@@ -3463,14 +2890,14 @@ Equations (noeqns) isconv_array_values_aux
                              (subst_instance u' body) π2 aux ;
             (* Bodiless, inductive or not found: a registered operation may
                still take a machine step before the answer is no (§7.3). *)
-            | @exist _ _ := unfold_prims_args Γ leq c u π1 h1 c' u' π2 h2 hx aux
+            | @exist _ _ := unfold_prims_args Γ leq c u π1 f1 h1 c' u' π2 f2 h2 hx hg hwf1 hwf2 aux
             }
           } ;
         (* If universes are different, we unfold one of the constants *)
-        | @exist false uneq_u := unfold_constants Γ leq c u π1 h1 c' u' π2 h2 _ hx aux
+        | @exist false uneq_u := unfold_constants Γ leq c u π1 f1 h1 c' u' π2 f2 h2 _ hx hg hwf1 hwf2 aux
         } ;
       (* If the two constants are different, we unfold one of them *)
-      | right uneq_c := unfold_constants Γ leq c u π1 h1 c' u' π2 h2 _ hx aux
+      | right uneq_c := unfold_constants Γ leq c u π1 f1 h1 c' u' π2 f2 h2 _ hx hg hwf1 hwf2 aux
       } ;
 
     | prog_view_Lambda na A1 t1 na' A2 t2
@@ -3517,17 +2944,17 @@ Equations (noeqns) isconv_array_values_aux
       } ;
 
     | prog_view_Case ci p c brs ci' p' c' brs'
-      with inspect (reduce_term RedFlags.default _ X (Γ ,,, stack_context π1) c _) := {
+      with inspect (reduce_termE RedFlags.default (Γ ,,, stack_context π1) c _) := {
       | @exist cred eq1 with inspect (eqb_term cred c) := {
-        | @exist true eq2 with inspect (reduce_term RedFlags.default _ X (Γ ,,, stack_context π2) c' _) := {
+        | @exist true eq2 with inspect (reduce_termE RedFlags.default (Γ ,,, stack_context π2) c' _) := {
           | @exist cred' eq3 with inspect (eqb_term cred' c') := {
             | @exist true eq4 with inspect (eqb ci ci') := {
               | @exist true eq5
-                  with isconv_predicate Γ ci p c brs π1 _ ci' p' c' brs' π2 _ _ _ aux := {
+                  with isconv_predicate Γ ci p c brs π1 f1 _ ci' p' c' brs' π2 f2 _ hx hg hwf1 hwf2 _ aux := {
                 | Success convp with isconv_red_raw Conv
                                   c (Case_discr ci p brs :: π1)
                                   c' (Case_discr ci' p' brs' :: π2) aux := {
-                  | Success convdiscr with isconv_branches' Γ ci p c brs π1 _ ci' p' c' brs' π2 _ _ _ _ aux := {
+                  | Success convdiscr with isconv_branches' Γ ci p c brs π1 f1 _ ci' p' c' brs' π2 f2 _ hx hg hwf1 hwf2 _ _ aux := {
                     | Success convbrs with isconv_args_raw leq (tCase ci p c brs) π1 (tCase ci' p' c' brs') π2 aux := {
                       | Success convargs := yes ;
                       | Error e := no e
@@ -3560,9 +2987,9 @@ Equations (noeqns) isconv_array_values_aux
         }
       } ;
 
-    | prog_view_Proj p c p' c' with inspect (reduce_term RedFlags.default _ X (Γ ,,, stack_context π1) c _) := {
+    | prog_view_Proj p c p' c' with inspect (reduce_termE RedFlags.default (Γ ,,, stack_context π1) c _) := {
       | @exist cred eq1 with inspect (eqb_term cred c) := {
-        | @exist true eq3 with inspect (reduce_term RedFlags.default _ X (Γ ,,, stack_context π2) c' _) := {
+        | @exist true eq3 with inspect (reduce_termE RedFlags.default (Γ ,,, stack_context π2) c' _) := {
           | @exist cred' eq2 with inspect (eqb_term cred' c') := {
             | @exist true eq4 with inspect (eqb p p') := {
               | @exist true eq5 with isconv_red_raw Conv c (Proj p :: π1) c' (Proj p' :: π2) aux := {
@@ -3594,22 +3021,28 @@ Equations (noeqns) isconv_array_values_aux
       with inspect (unfold_one_fix Γ mfix idx π1 _) := {
       | @exist (Some (fn, θ)) eq1 with inspect (decompose_stack θ) := {
         | @exist (l', θ') eq2
-          with inspect (reduce_stack RedFlags.nodelta _ X (Γ ,,, stack_context θ') fn (appstack l' []) _) := {
-          | @exist (fn', ρ) eq3 :=
-            isconv_prog leq fn' (ρ ++ θ') (tFix mfix' idx') π2 aux
+          with inspect (reduce_args_E RedFlags.nodelta X_type X (Γ ,,, stack_context θ') fn l' _) := {
+          | @exist (fn', args') eq3 with inspect (rebuilt_ok fn' args' θ') := {
+            | @exist true g3 := isconv_prog leq fn' (appstack args' θ') (tFix mfix' idx') π2 aux ;
+            | @exist false _ := no (EtaStackRefusal (Γ ,,, stack_context π1) (tFix mfix idx)
+                                                    (Γ ,,, stack_context π2) (tFix mfix' idx'))
+            }
           }
         } ;
       | @exist None eee with inspect (unfold_one_fix Γ mfix' idx' π2 _) := {
         | @exist (Some (fn, θ)) eq1
           with inspect (decompose_stack θ) := {
           | @exist (l', θ') eq2
-            with inspect (reduce_stack RedFlags.nodelta _ X (Γ ,,, stack_context θ') fn (appstack l' []) _) := {
-            | @exist (fn', ρ) eq3 :=
-              isconv_prog leq (tFix mfix idx) π1 fn' (ρ ++ θ') aux
+            with inspect (reduce_args_E RedFlags.nodelta X_type X (Γ ,,, stack_context θ') fn l' _) := {
+            | @exist (fn', args') eq3 with inspect (rebuilt_ok fn' args' θ') := {
+              | @exist true g3 := isconv_prog leq (tFix mfix idx) π1 fn' (appstack args' θ') aux ;
+              | @exist false _ := no (EtaStackRefusal (Γ ,,, stack_context π1) (tFix mfix idx)
+                                                      (Γ ,,, stack_context π2) (tFix mfix' idx'))
+              }
             }
           } ;
         | @exist None eq1 with inspect (eqb idx idx') := {
-          | @exist true eq4 with isws_cumul_pb_Fix IndFix Γ mfix idx π1 _ mfix' idx' π2 _ _ _ aux := {
+          | @exist true eq4 with isws_cumul_pb_Fix IndFix Γ mfix idx π1 f1 _ mfix' idx' π2 f2 _ hx hg hwf1 hwf2 _ aux := {
             | Success convfix with isconv_args_raw leq (tFix mfix idx) π1 (tFix mfix' idx') π2 aux := {
               | Success convargs := yes ;
               | Error e := no e
@@ -3628,7 +3061,7 @@ Equations (noeqns) isconv_array_values_aux
 
     | prog_view_CoFix mfix idx mfix' idx'
       with inspect (eqb idx idx') := {
-      | @exist true eq4 with isws_cumul_pb_Fix CoIndFix Γ mfix idx π1 _ mfix' idx' π2 _ _ _ aux := {
+      | @exist true eq4 with isws_cumul_pb_Fix CoIndFix Γ mfix idx π1 f1 _ mfix' idx' π2 f2 _ hx hg hwf1 hwf2 _ aux := {
         | Success convfix with isconv_args_raw leq (tCoFix mfix idx) π1 (tCoFix mfix' idx') π2 aux := {
           | Success convargs := yes ;
           | Error e := no e
@@ -3662,7 +3095,7 @@ Equations (noeqns) isconv_array_values_aux
                 (array_type a') (PrimArray_ty a'.(array_level) a'.(array_value) a'.(array_default) :: π2) aux := {
               | Success convdiscrty with isconv_red_raw Conv (array_default a) (PrimArray_def a.(array_level) a.(array_value) a.(array_type) :: π1)
                   (array_default a') (PrimArray_def a'.(array_level) a'.(array_value) a'.(array_type) :: π2) aux := {
-                | Success convdiscrdef with isconv_array_values Γ a π1 _ a' π2 _ hx aux := {
+                | Success convdiscrdef with isconv_array_values Γ a π1 f1 _ a' π2 f2 _ hx hg hwf1 hwf2 aux := {
                   | Success convdiscrval := yes
                   | Error e := no (ArrayNotConvertibleValues (Γ ,,, stack_context π1) a (Γ ,,, stack_context π2) a' e)
                 }
@@ -3676,7 +3109,7 @@ Equations (noeqns) isconv_array_values_aux
 
     | prog_view_other t1 t2 h :=
       isconv_fallback leq t1 π1 t2 π2 aux
-    }.
+    } }.
 
   (* tApp *)
   Next Obligation.
@@ -4581,60 +4014,187 @@ Equations (noeqns) isconv_array_values_aux
     simpl. constructor.
   Qed.
 
-  Definition Aux' Γ t1 args1 l1 π1 t2 π2 h2 :=
-    forall u1 u2 ca1 a1 ρ2
-      (h1' : wtp Γ u1 (App_r (mkApps t1 ca1) :: appstack a1 π1))
-      (h2' : wtp Γ u2 ρ2),
-      let x :=
-        mkpack Γ Reduction u1 (App_r (mkApps t1 ca1) :: (appstack a1 π1)) u2 ρ2 h2'
-      in
-      let y := mkpack Γ Args (mkApps t1 args1) (appstack l1 π1) t2 π2 h2 in
-      (S #|ca1| + #|a1| = #|args1| + #|l1|)%nat ->
-      pzt x = pzt y /\
-      positionR (` (pps1 x)) (` (pps1 y)) ->
-      Ret Reduction Γ u1 (App_r (mkApps t1 ca1) :: (appstack a1 π1)) u2 ρ2.
+  (* The E Args machinery (plan I7 rev 13 B2, rev 14 NB2, rev 15 C1/C2).
+     The entry pack [y] is the Args pack [_isconv_args] builds, with side i at
+     (ti, appstack Li θi), θi := (decompose_stack πi).2; every call is measured against it
+     ([AuxE']). Side 1 keeps its head [t1] and its consumed arguments [args1] apart; side 2
+     folds its consumed arguments [ca2] into its head ([mkApps t2 ca2]), as base.
+     The η argument list of side i is [map (eta_rename θi 0) Li ++ eta_virtuals (eta_run θi)]
+     (decompose_stack_eta), compared pairwise in side 1's η context [Γ ,,, stack_context_eta θ1]
+     (which is also that of every state below: App_r and Eta_arg [] push no η declaration).
+     Real pairs: T3 guard, then base's App_r descent (R_positionR,
+     positionR_App_r_appstack_gen). Virtual pairs (after the real spine of one side): the
+     virtual side is (virtual_focus m j, Eta_arg ti [] :: appstack Li θi) (rev 14 NB2, in the
+     shape of K4_virtual_descent_frame_left/_right, rev 15 C1), the real side is guarded by G4.
+     When both real spines are consumed the two virtual tails are syntactically equal iff they
+     have the same length ([skipn j (eta_virtuals m) = eta_virtuals (m - j)]). *)
 
+  Notation Epack Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h2 :=
+    (mkpack Γ Args t1 (appstack L1 θ1) t2 (appstack L2 θ2) f1 f2 h2) (only parsing).
+
+  Notation args_spec Γ θ1 θ2 l1 vs1 l2 vs2 :=
+    (forall Σ, abstract_env_ext_rel X Σ ->
+       ∥ ws_cumul_pbE_terms Σ (Γ ,,, stack_context_eta θ1)
+           (map (eta_rename θ1 0) l1 ++ vs1) (map (eta_rename θ2 0) l2 ++ vs2) ∥) (only parsing).
+
+  (* Both real spines consumed: the remaining virtual tails. *)
+  Equations(noeqns) _isconv_args_vv (Γ : context) (θ1 θ2 : stack)
+            (t1 : term) (args1 : list term) (t2 : term) (ca2 : list term)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta θ1) ∥)
+            (j1 j2 : nat)
+    : ConversionResult (args_spec Γ θ1 θ2 [] (skipn j1 (eta_virtuals (eta_run θ1)))
+                                         [] (skipn j2 (eta_virtuals (eta_run θ2)))) :=
+    _isconv_args_vv Γ θ1 θ2 t1 args1 t2 ca2 hwf1 j1 j2
+    with inspect (Nat.eqb (eta_run θ1 - j1) (eta_run θ2 - j2)) := {
+    | @exist true eqm := yes ;
+    | @exist false _ := no (StackMismatch (Γ ,,, stack_context θ1) t1 args1 []
+                                          (Γ ,,, stack_context θ2) t2 [])
+    }.
+
+  (* Side 1's real spine consumed (it is [L1] entirely): its virtual j1 against side 2's
+     real arguments [l2]. *)
+  Equations(noeqns) _isconv_args_vl (leq : conv_pb) (Γ : context)
+            (t1 : term) (L1 : list term) (θ1 : stack) (t2 : term) (L2 : list term) (θ2 : stack)
+            (f1 : wf_stack (appstack L1 θ1)) (f2 : wf_stack (appstack L2 θ2))
+            (h1 : wtp Γ t1 (appstack L1 θ1)) (h2 : wtp Γ t2 (appstack L2 θ2))
+            (hθ1 : isStackApp θ1 = false) (hθ2 : isStackApp θ2 = false)
+            (hx : conv_stack_ctx Γ θ1 θ2)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta θ1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta θ2) ∥)
+            (aux : AuxE' Γ (Epack Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h2))
+            (j1 : nat) (ca2 l2 : list term) (e2 : ca2 ++ l2 = L2)
+    : ConversionResult (args_spec Γ θ1 θ2 [] (skipn j1 (eta_virtuals (eta_run θ1)))
+                                         l2 (eta_virtuals (eta_run θ2))) by struct l2 :=
+    _isconv_args_vl leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux j1 ca2 (u2 :: l2) e2
+    with inspect (Nat.ltb j1 (eta_run θ1)) := {
+    | @exist false _ := no (StackMismatch (Γ ,,, stack_context θ1) t1 L1 []
+                                          (Γ ,,, stack_context θ2) (mkApps t2 ca2) (u2 :: l2)) ;
+    | @exist true hj with inspect (no_Eta_arg θ2) := {          (* G4 *)
+      | @exist false _ := no (EtaStackRefusal (Γ ,,, stack_context_eta θ1) (virtual_focus (eta_run θ1) j1)
+                                              (Γ ,,, stack_context θ2) u2) ;
+      | @exist true g4
+        with aux Reduction (virtual_focus (eta_run θ1) j1) (Eta_arg t1 [] :: appstack L1 θ1)
+                           u2 (App_r (mkApps t2 ca2) :: appstack l2 θ2)
+                           _ _ _ _ _ Conv _ _ _ _ _ I I I := {
+        | Success H1
+          with _isconv_args_vl leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux
+                               (S j1) (ca2 ++ [u2]) l2 _ := {
+          | Success H2 := yes ;
+          | Error e := no (StackTailError leq (Γ ,,, stack_context θ1) t1 L1
+                                          (virtual_focus (eta_run θ1) j1) []
+                                          (Γ ,,, stack_context θ2) (mkApps t2 ca2) u2 l2 e)
+          } ;
+        | Error e := no (StackHeadError leq (Γ ,,, stack_context θ1) t1 L1
+                                        (virtual_focus (eta_run θ1) j1) []
+                                        (Γ ,,, stack_context θ2) (mkApps t2 ca2) u2 l2 e)
+        }
+      }
+    } ;
+    _isconv_args_vl leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux j1 ca2 [] e2
+    with _isconv_args_vv Γ θ1 θ2 t1 L1 t2 ca2 hwf1 j1 0 := {
+    | Success H := yes ;
+    | Error e := no e
+    }.
+
+  (* Side 2's real spine consumed: side 1's real arguments [l1] against side 2's virtual j2. *)
+  Equations(noeqns) _isconv_args_vr (leq : conv_pb) (Γ : context)
+            (t1 : term) (L1 : list term) (θ1 : stack) (t2 : term) (L2 : list term) (θ2 : stack)
+            (f1 : wf_stack (appstack L1 θ1)) (f2 : wf_stack (appstack L2 θ2))
+            (h1 : wtp Γ t1 (appstack L1 θ1)) (h2 : wtp Γ t2 (appstack L2 θ2))
+            (hθ1 : isStackApp θ1 = false) (hθ2 : isStackApp θ2 = false)
+            (hx : conv_stack_ctx Γ θ1 θ2)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta θ1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta θ2) ∥)
+            (aux : AuxE' Γ (Epack Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h2))
+            (args1 l1 : list term) (e1 : args1 ++ l1 = L1) (j2 : nat)
+    : ConversionResult (args_spec Γ θ1 θ2 l1 (eta_virtuals (eta_run θ1))
+                                         [] (skipn j2 (eta_virtuals (eta_run θ2)))) by struct l1 :=
+    _isconv_args_vr leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux args1 (u1 :: l1) e1 j2
+    with inspect (Nat.ltb j2 (eta_run θ2)) := {
+    | @exist false _ := no (StackMismatch (Γ ,,, stack_context θ1) t1 args1 (u1 :: l1)
+                                          (Γ ,,, stack_context θ2) (mkApps t2 L2) []) ;
+    | @exist true hj with inspect (no_Eta_arg θ1) := {          (* G4 *)
+      | @exist false _ := no (EtaStackRefusal (Γ ,,, stack_context θ1) u1
+                                              (Γ ,,, stack_context_eta θ2) (virtual_focus (eta_run θ2) j2)) ;
+      | @exist true g4
+        with aux Reduction u1 (App_r (mkApps t1 args1) :: appstack l1 θ1)
+                           (virtual_focus (eta_run θ2) j2) (Eta_arg t2 [] :: appstack L2 θ2)
+                           _ _ _ _ _ Conv _ _ _ _ _ I I I := {
+        | Success H1
+          with _isconv_args_vr leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux
+                               (args1 ++ [u1]) l1 _ (S j2) := {
+          | Success H2 := yes ;
+          | Error e := no (StackTailError leq (Γ ,,, stack_context θ1) t1 args1 u1 l1
+                                          (Γ ,,, stack_context θ2) (mkApps t2 L2)
+                                          (virtual_focus (eta_run θ2) j2) [] e)
+          } ;
+        | Error e := no (StackHeadError leq (Γ ,,, stack_context θ1) t1 args1 u1 l1
+                                        (Γ ,,, stack_context θ2) (mkApps t2 L2)
+                                        (virtual_focus (eta_run θ2) j2) [] e)
+        }
+      }
+    } ;
+    _isconv_args_vr leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux args1 [] e1 j2
+    with _isconv_args_vv Γ θ1 θ2 t1 args1 t2 L2 hwf1 0 j2 := {
+    | Success H := yes ;
+    | Error e := no e
+    }.
+
+  (* The real phase: both sides have real arguments left (base's recursion), T3 before the
+     App_r push; then the virtual tails. *)
   Equations(noeqns) _isconv_args' (leq : conv_pb) (Γ : context)
-            (t1 : term) (args1 : list term)
-            (l1 : list term) (π1 : stack)
-            (h1 : wtp Γ (mkApps t1 args1) (appstack l1 π1))
-            (hπ1 : isStackApp π1 = false)
-            (t2 : term)
-            (l2 : list term) (π2 : stack)
-            (h2 : wtp Γ t2 (appstack l2 π2))
-            (hπ2 : isStackApp π2 = false)
-            (hx : conv_stack_ctx Γ π1 π2)
-            (aux : Aux' Γ t1 args1 l1 π1 t2 (appstack l2 π2) h2)
-    : ConversionResult (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ws_cumul_pb_terms Σ (Γ,,, stack_context π1) l1 l2∥) by struct l1 :=
-    _isconv_args' leq Γ t1 args1 (u1 :: l1) π1 h1 hπ1 t2 (u2 :: l2) π2 h2 hπ2 hx aux
-    with aux u1 u2 args1 l1 (App_r t2 :: (appstack l2 π2)) _ _ _ _ Conv _ I I I := {
-    | Success H1 with _isconv_args' leq Γ t1 (args1 ++ [u1]) l1 π1 _ _ (tApp t2 u2) l2 π2 _ _ _ (expand aux) := {
-      | Success H2 := yes ;
+            (t1 : term) (L1 : list term) (θ1 : stack) (t2 : term) (L2 : list term) (θ2 : stack)
+            (f1 : wf_stack (appstack L1 θ1)) (f2 : wf_stack (appstack L2 θ2))
+            (h1 : wtp Γ t1 (appstack L1 θ1)) (h2 : wtp Γ t2 (appstack L2 θ2))
+            (hθ1 : isStackApp θ1 = false) (hθ2 : isStackApp θ2 = false)
+            (hx : conv_stack_ctx Γ θ1 θ2)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta θ1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta θ2) ∥)
+            (aux : AuxE' Γ (Epack Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h2))
+            (args1 l1 : list term) (e1 : args1 ++ l1 = L1)
+            (ca2 l2 : list term) (e2 : ca2 ++ l2 = L2)
+    : ConversionResult (args_spec Γ θ1 θ2 l1 (eta_virtuals (eta_run θ1))
+                                         l2 (eta_virtuals (eta_run θ2))) by struct l1 :=
+    _isconv_args' leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux args1 (u1 :: l1) e1 ca2 (u2 :: l2) e2
+    with inspect (no_Eta_arg θ1 && no_Eta_arg θ2) := {         (* T3 *)
+    | @exist false _ := no (EtaStackRefusal (Γ ,,, stack_context θ1) u1 (Γ ,,, stack_context θ2) u2) ;
+    | @exist true g3
+      with aux Reduction u1 (App_r (mkApps t1 args1) :: appstack l1 θ1)
+                         u2 (App_r (mkApps t2 ca2) :: appstack l2 θ2)
+                         _ _ _ _ _ Conv _ _ _ _ _ I I I := {
+      | Success H1
+        with _isconv_args' leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux
+                           (args1 ++ [u1]) l1 _ (ca2 ++ [u2]) l2 _ := {
+        | Success H2 := yes ;
+        | Error e :=
+          no (
+            StackTailError
+              leq
+              (Γ ,,, stack_context θ1) t1 args1 u1 l1
+              (Γ ,,, stack_context θ2) (mkApps t2 ca2) u2 l2 e
+          )
+        } ;
       | Error e :=
         no (
-          StackTailError
+          StackHeadError
             leq
-            (Γ ,,, stack_context π1) t1 args1 u1 l1
-            (Γ ,,, stack_context π2) t2 u2 l2 e
+            (Γ ,,, stack_context θ1) t1 args1 u1 l1
+            (Γ ,,, stack_context θ2) (mkApps t2 ca2) u2 l2 e
         )
-      } ;
-    | Error e :=
-      no (
-        StackHeadError
-          leq
-          (Γ ,,, stack_context π1) t1 args1 u1 l1
-          (Γ ,,, stack_context π2) t2 u2 l2 e
-      )
+      }
     } ;
 
-    _isconv_args' leq Γ t1 args1 [] π1 h1 hπ1 t2 [] π2 h2 hπ2 hx aux := yes ;
+    _isconv_args' leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux args1 [] e1 ca2 l2 e2
+    with _isconv_args_vl leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux 0 ca2 l2 e2 := {
+    | Success H := yes ;
+    | Error e := no e
+    } ;
 
-    _isconv_args' leq Γ t1 args1 l1 π1 h1 hπ1 t2 l2 π2 h2 hπ2 hx aux :=
-      no (
-        StackMismatch
-          (Γ ,,, stack_context π1) t1 args1 l1
-          (Γ ,,, stack_context π2) t2 l2
-      ).
+    _isconv_args' leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux args1 l1 e1 ca2 [] e2
+    with _isconv_args_vr leq Γ t1 L1 θ1 t2 L2 θ2 f1 f2 h1 h2 hθ1 hθ2 hx hwf1 hwf2 aux args1 l1 e1 0 := {
+    | Success H := yes ;
+    | Error e := no e
+    }.
   Next Obligation.
     split. 1: reflexivity.
     rewrite !stack_position_cons.
@@ -4679,16 +4239,19 @@ Equations (noeqns) isconv_array_values_aux
   Qed.
 
   Equations(noeqns) _isconv_args (leq : conv_pb) (Γ : context)
-           (t1 : term) (π1 : stack) (h1 : wtp Γ t1 π1)
-           (t2 : term) (π2 : stack) (h2 : wtp Γ t2 π2)
+           (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
+           (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
            (hx : conv_stack_ctx Γ π1 π2)
-           (aux : Aux Args Γ t1 π1 t2 π2 h2)
-    : ConversionResult (forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ws_cumul_pb_terms Σ (Γ,,, stack_context π1)
-                         (decompose_stack π1).1
-                         (decompose_stack π2).1∥) :=
-    _isconv_args leq Γ t1 π1 h1 t2 π2 h2 hx aux with inspect (decompose_stack π1) := {
+           (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π1) ∥)
+           (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π2) ∥)
+           (aux : Aux Args Γ t1 π1 t2 π2 f1 f2 h2)
+    : ConversionResult (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+                          ∥ ws_cumul_pbE_terms Σ (Γ ,,, stack_context_eta π1)
+                              (decompose_stack_eta π1).1 (decompose_stack_eta π2).1 ∥) :=
+    _isconv_args leq Γ t1 π1 f1 h1 t2 π2 f2 h2 hx hwf1 hwf2 aux with inspect (decompose_stack π1) := {
     | @exist (l1, θ1) eq1 with inspect (decompose_stack π2) := {
-      | @exist (l2, θ2) eq2 with _isconv_args' leq Γ t1 [] l1 θ1 _ _ t2 l2 θ2 _ _ _ _ := {
+      | @exist (l2, θ2) eq2
+        with _isconv_args' leq Γ t1 l1 θ1 t2 l2 θ2 _ _ _ _ _ _ _ _ _ _ [] l1 eq_refl [] l2 eq_refl := {
         | Success h := yes ;
         | Error e := no e
         }
@@ -4733,20 +4296,18 @@ Equations (noeqns) isconv_array_values_aux
   Obligation Tactic :=
     Tactics.program_simplify; CoreTactics.equations_simpl; try Tactics.program_solve_wf.
 
+  (* Site 6 of the 11 reduce_stack sites: [args := []]. *)
   Equations unfold_one_case (Γ : context) (ci : case_info)
             (p : predicate term) (c : term) (brs : list (branch term))
-            (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ (tCase ci p c brs)) : option term :=
+            (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (tCase ci p c brs)) : option term :=
     unfold_one_case Γ ci p c brs h
-    with inspect (reduce_stack RedFlags.default _ X Γ c [] _) := {
-    | @exist (cred, ρ) eq with cc_viewc cred := {
-      | ccview_construct ind' n ui with inspect (decompose_stack ρ) := {
-        | @exist (args, ξ) eq' with inspect (nth_error brs n) := {
-          | exist (Some br) eqbr := Some (iota_red ci.(ci_npar) p args br) ;
-          | exist None eqbr := False_rect _ _ }
-        } ;
+    with inspect (reduce_args_E RedFlags.default X_type X Γ c [] _) := {
+    | @exist (cred, args) eq with cc_viewc cred := {
+      | ccview_construct ind' n ui with inspect (nth_error brs n) := {
+        | exist (Some br) eqbr := Some (iota_red ci.(ci_npar) p args br) ;
+        | exist None eqbr := False_rect _ _ } ;
       | ccview_cofix mfix idx with inspect (unfold_cofix mfix idx) := {
-        | @exist (Some (narg, fn)) eq2 with inspect (decompose_stack ρ) := {
-          | @exist (args, ξ) eq' := Some (tCase ci p (mkApps fn args) brs) } ;
+        | @exist (Some (narg, fn)) eq2 := Some (tCase ci p (mkApps fn args) brs) ;
         | @exist None eq2 := False_rect _ _
         } ;
       | ccview_other cred _ := None
@@ -4823,49 +4384,21 @@ Equations (noeqns) isconv_array_values_aux
       + eapply red_case_c, r.
   Qed.
 
-  Lemma unfold_one_case_None Σ (wfΣ : abstract_env_ext_rel X Σ) Γ ci p c brs h :
-    None = unfold_one_case Γ ci p c brs h ->
-    ∥∑ c', red Σ Γ c c' × whne RedFlags.default Σ Γ c'∥.
-  Proof using Type.
-    funelim (unfold_one_case Γ ci p c brs h); intros [=].
-    - clear H.
-      simpl_reduce_stack Σ wfΣ.
-      destruct (h _ wfΣ) as (?&typ); auto.
-      destruct (hΣ _ wfΣ), w.
-      constructor; exists (mkApps cred (decompose_stack ρ).1).
-      split; [exact r|].
-      specialize (isr eq_refl) as (noapp&_).
-      eapply PCUICSR.subject_reduction in typ.
-      2: eauto.
-      2: eapply red_case_c, r.
-      eapply whnf_case_arg_whne; eauto.
-      now destruct cred.
-    - match type of H3 with
-      | _ = False_rect _ ?f => destruct f
-      end.
-    - match type of H2 with
-      | _ = False_rect _ ?f => destruct f
-      end.
-  Qed.
-
+  (* Site 7 of the 11 reduce_stack sites: [args := []]. *)
   Equations unfold_one_proj (Γ : context) (p : projection) (c : term)
-            (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ (tProj p c)) : option term :=
+            (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (tProj p c)) : option term :=
 
     unfold_one_proj Γ p c h with p := {
-    | mkProjection i pars narg with inspect (reduce_stack RedFlags.default _ X Γ c [] _) := {
-      | @exist (cred, ρ) eq with cc0_viewc cred := {
-        | cc0view_construct ind' ui with inspect (decompose_stack ρ) := {
-          | @exist (args, ξ) eq' with inspect (nth_error args (pars + narg)) := {
-            | @exist (Some arg) eq2 := Some arg ;
-            | @exist None eq2 := False_rect _ _
-            }
+    | mkProjection i pars narg with inspect (reduce_args_E RedFlags.default X_type X Γ c [] _) := {
+      | @exist (cred, args) eq with cc0_viewc cred := {
+        | cc0view_construct ind' ui with inspect (nth_error args (pars + narg)) := {
+          | @exist (Some arg) eq2 := Some arg ;
+          | @exist None eq2 := False_rect _ _
           } ;
-        | cc0view_cofix mfix idx with inspect (decompose_stack ρ) := {
-          | @exist (args, ξ) eq' with inspect (unfold_cofix mfix idx) := {
-            | @exist (Some (rarg, fn)) eq2 :=
-              Some (tProj p (mkApps fn args)) ;
-            | @exist None eq2 := False_rect _ _
-            }
+        | cc0view_cofix mfix idx with inspect (unfold_cofix mfix idx) := {
+          | @exist (Some (rarg, fn)) eq2 :=
+            Some (tProj p (mkApps fn args)) ;
+          | @exist None eq2 := False_rect _ _
           } ;
         | cc0view_other cred _ := None
         }
@@ -4940,56 +4473,43 @@ Equations (noeqns) isconv_array_values_aux
       end.
   Qed.
 
-  Lemma unfold_one_proj_None Σ (wfΣ : abstract_env_ext_rel X Σ) Γ p c h :
-    None = unfold_one_proj Γ p c h ->
-    ∥∑ c', red Σ Γ c c' × whne RedFlags.default Σ Γ c'∥.
-  Proof using Type.
-    funelim (unfold_one_proj Γ p c h); intros [=].
-    - clear H.
-      simpl_reduce_stack Σ wfΣ.
-      destruct (hΣ _ wfΣ), w.
-      destruct (h _ wfΣ) as (?&typ); auto.
-      constructor; exists (mkApps cred (decompose_stack ρ).1).
-      split; [exact r|].
-      specialize (isr eq_refl) as (noapp&_).
-      eapply PCUICSR.subject_reduction in typ.
-      2: eauto.
-      2: eapply red_proj_c, r.
-      eapply whnf_proj_arg_whne ; eauto.
-      now destruct cred.
-    - match type of H3 with
-      | _ = False_rect _ ?f => destruct f
-      end.
-    - match type of H3 with
-      | _ = False_rect _ ?f => destruct f
-      end.
-  Qed.
-
+  (* T2 (rev 14 B4): each tFix/tCase/tProj/tConst arm runs only on a stack without Eta_arg and
+     answers [None] otherwise (the tFix arm through unfold_one_fix's T4). Dead on reachable
+     states by [virt_ok_not_head]; never a refusal, so no η acceptance is lost in the fallback. *)
   Equations reducible_head (Γ : context) (t : term) (π : stack)
             (h : wtp Γ t π)
     : option (term × stack) :=
 
     reducible_head Γ (tFix mfix idx) π h := unfold_one_fix Γ mfix idx π h ;
 
-    reducible_head Γ (tCase ci p c brs) π h
-    with inspect (unfold_one_case (Γ ,,, stack_context π) ci p c brs _) := {
-    | @exist (Some t) eq :=Some (t, π) ;
-    | @exist None _ := None
+    reducible_head Γ (tCase ci p c brs) π h with inspect (no_Eta_arg π) := {
+    | @exist false _ := None ;
+    | @exist true hna
+      with inspect (unfold_one_case (Γ ,,, stack_context π) ci p c brs _) := {
+      | @exist (Some t) eq := Some (t, π) ;
+      | @exist None _ := None
+      }
     } ;
 
-    reducible_head Γ (tProj p c) π h
-    with inspect (unfold_one_proj (Γ ,,, stack_context π) p c _) := {
-    | @exist (Some t) eq := Some (t, π) ;
-    | @exist None _ := None
+    reducible_head Γ (tProj p c) π h with inspect (no_Eta_arg π) := {
+    | @exist false _ := None ;
+    | @exist true hna
+      with inspect (unfold_one_proj (Γ ,,, stack_context π) p c _) := {
+      | @exist (Some t) eq := Some (t, π) ;
+      | @exist None _ := None
+      }
     } ;
 
-    reducible_head Γ (tConst c u) π h
-    with inspect (abstract_env_lookup X c) := {
-    | @exist (Some (ConstantDecl {| cst_body := Some body |})) eq :=
-      Some (subst_instance u body, π) ;
-    (* bodiless or not found: a registered operation may take a machine step
-       (design §7.3, last paragraph) *)
-    | @exist _ _ := unfold_one_prim Γ c u π h
+    reducible_head Γ (tConst c u) π h with inspect (no_Eta_arg π) := {
+    | @exist false _ := None ;
+    | @exist true hna
+      with inspect (abstract_env_lookup X c) := {
+      | @exist (Some (ConstantDecl {| cst_body := Some body |})) eq :=
+        Some (subst_instance u body, π) ;
+      (* bodiless or not found: a registered operation may take a machine step
+         (design §7.3, last paragraph) *)
+      | @exist _ _ := unfold_one_prim Γ c u π hna h
+      }
     } ;
 
     reducible_head Γ _ π h := None.
@@ -5040,49 +4560,6 @@ Equations (noeqns) isconv_array_values_aux
       assumption.
   Qed.
 
-  Lemma reducible_head_red_zippx :
-    forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ,
-      Some (fn, ξ) = reducible_head Γ t π h ->
-      ∥ red (fst Σ) Γ (zippx t π) (zippx fn ξ) ∥.
-  Proof using Type.
-    intros Σ wfΣ Γ t π h fn ξ e.
-    revert e.
-    funelim (reducible_head Γ t π h).
-    all: intro ee ; try noconf ee.
-    all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ |- _ =>
-      destruct (unfold_one_prim_shape _ _ _ _ _ _ _ ee) as (args & ρ & l & [ed eξ hr _]);
-      destruct (hr _ wfΣ) as [r]; constructor;
-      pose proof (decompose_stack_twice _ _ _ ed) as hρ;
-      unfold zippx; rewrite ed; subst; rewrite decompose_stack_appstack; rewrite hρ; cbn;
-      rewrite app_nil_r;
-      eapply red_it_mkLambda_or_LetIn;
-      apply decompose_stack_eq in ed; subst; rewrite stack_context_appstack in r; exact r end ].
-    - eapply unfold_one_fix_red_zippx; eauto.
-    - constructor. unfold zippx.
-      case_eq (decompose_stack π). intros l s eq'.
-      eapply red_it_mkLambda_or_LetIn. eapply red_mkApps_f.
-      eapply trans_red.
-      + reflexivity.
-      + eapply red_delta.
-        * unfold declared_constant, declared_constant_gen.
-          erewrite abstract_env_lookup_correct;  eauto.
-        * reflexivity.
-    - eapply unfold_one_case_cored in eq as r; eauto. apply cored_red in r.
-      destruct r as [r].
-      constructor. unfold zippx.
-      case_eq (decompose_stack π). intros l s e'.
-      eapply red_it_mkLambda_or_LetIn. eapply red_mkApps_f.
-      apply decompose_stack_eq in e'. subst.
-      rewrite stack_context_appstack in r. assumption.
-    - eapply unfold_one_proj_cored in eq as r;eauto. apply cored_red in r.
-      destruct r as [r].
-      constructor. unfold zippx.
-      case_eq (decompose_stack π). intros l s e'.
-      eapply red_it_mkLambda_or_LetIn. eapply red_mkApps_f.
-      apply decompose_stack_eq in e'. subst.
-      rewrite stack_context_appstack in r. assumption.
-  Qed.
-
   Lemma reducible_head_cored :
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ,
       Some (fn, ξ) = reducible_head Γ t π h ->
@@ -5125,166 +4602,110 @@ Equations (noeqns) isconv_array_values_aux
     - reflexivity.
   Qed.
 
-  (* TODO move to PCUICNormal *)
-  Lemma whnf_mkApps_tPrim_inv :
-    forall (f : RedFlags.t) (Σ : global_env) (Γ : context) p (args : list term),
-      whnf f Σ Γ (mkApps (tPrim p) args) -> args = [].
-  Proof using Type.
-    intros * wh.
-    inversion wh; solve_discr.
-    clear -X0.
-    remember (mkApps (tPrim p) args) eqn:teq.
-    exfalso.
-    revert teq.
-    induction X0 in args |- *; intros; solve_discr.
-    destruct args as [|? ? _] using MRList.rev_ind; [easy|].
-    rewrite mkApps_app in teq.
-    cbn in teq. noconf teq.
-    eauto.
-  Qed.
+  (* The η view of the fallback: which side, if any, is a λ (plan I7 "When"). In the fallback
+     [prog_discr] holds, so at most one side is a λ. *)
+  Inductive eta_view : term -> term -> Type :=
+  | eta_view_left na A b t2 : eta_view (tLambda na A b) t2
+  | eta_view_right t1 na A b : isLambda t1 = false -> eta_view t1 (tLambda na A b)
+  | eta_view_other t1 t2 : isLambda t1 = false -> isLambda t2 = false -> eta_view t1 t2.
 
-  Lemma reducible_head_None Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h :
-    isApp t = false ->
-    whnf RedFlags.nodelta Σ (Γ,,, stack_context π) (mkApps t (decompose_stack π).1) ->
-    None = reducible_head Γ t π h ->
-    ∥∑ t' args',
-      whnf_red Σ (Γ,,, stack_context π) t t' ×
-      All2 (red Σ (Γ,,, stack_context π)) (decompose_stack π).1 args' ×
-      whnf RedFlags.default Σ (Γ,,, stack_context π) (mkApps t' args')∥.
-  Proof using Type.
-    funelim (reducible_head Γ t π h); intros notapp wh H0; try noconf H0.
-    - apply whnf_mkApps_inv in wh.
-      depelim wh; solve_discr.
-      depelim w; solve_discr; try discriminate.
-      constructor; eexists _, (decompose_stack π).1.
-      split; [now constructor|].
-      split; eauto with pcuic.
-      apply whnf_mkApps.
-      eauto with pcuic.
-    - apply whnf_mkApps_inv in wh; auto.
-      depelim wh; solve_discr.
-      constructor; eexists _, (decompose_stack π).1.
-      split; [constructor|].
-      split; eauto with pcuic.
-      apply whnf_mkApps.
-      constructor.
-    - apply whnf_mkApps_inv in wh; auto.
-      depelim wh; solve_discr.
-      constructor; eexists _, (decompose_stack π).1.
-      split; [constructor; eauto with pcuic|].
-      split; eauto with pcuic.
-      apply whnf_mkApps.
-      depelim w; solve_discr; eauto with pcuic.
-    - apply whnf_mkApps_tSort_inv in wh as ->.
-      constructor; eexists _, [].
-      eauto using whnf_red with pcuic.
-    - apply whnf_mkApps_tProd_inv in wh as ->.
-      constructor; eexists _, [].
-      eauto using whnf_red with pcuic.
-    - depelim wh; solve_discr.
-      + apply whne_mkApps_inv in w as [[|(?&?&?&?&?&?&?&?)]|(?&?&?&?&?&?&?&?&?&?)]; auto; try discriminate.
-        depelim w; solve_discr.
-        discriminate.
-      + rewrite H1.
-        constructor; eexists _, []; eauto using whnf_red with pcuic.
-    - apply whnf_mkApps_inv in wh; auto.
-      depelim wh; solve_discr.
-      depelim w; solve_discr.
-      discriminate.
-    - discriminate.
-    - constructor; eexists _, (decompose_stack π).1; eauto using whnf_red with pcuic.
-    - constructor; eexists _, (decompose_stack π).1; eauto using whnf_red with pcuic.
-    - eapply unfold_one_fix_None in H0 as [(?&?&?)]; eauto.
-      constructor; eexists _, x.
-      split; [constructor; eauto with pcuic|].
-      eauto with pcuic.
-    - constructor; eexists _, (decompose_stack π).1.
-      split; [constructor; eauto with pcuic|].
-      eauto with pcuic.
-    - apply whnf_mkApps_tPrim_inv in wh as ->.
-      constructor; eexists (tPrim prim), [].
-      split.
-      * constructor. destruct prim as [? []]; constructor; auto.
-        eapply All2_same. intros; reflexivity.
-      * split; [constructor|]. eapply whnf_prim.
-    (* a bodiless constant on which no registered operation can move: a
-       weak-head normal form under default flags (unfold_one_prim_None) *)
-    - pose proof (unfold_one_prim_None _ _ _ _ _ H0 _ wfΣ) as [wh0].
-      rewrite zipp_as_mkApps in wh0.
-      constructor; eexists _, (decompose_stack π).1.
-      clear H. erewrite <- abstract_env_lookup_correct' in e; eauto.
-      split; [econstructor|]; eauto.
-      split; [eauto with pcuic|].
-      exact wh0.
-    - clear H0. zip fold in h. try clear Heqcall.
-      destruct (hΣ _ wfΣ).
-      eapply welltyped_context in h; eauto.
-      destruct h as (?&typ); auto.
-      apply inversion_Const in typ as (?&?&?&?); auto.
-      unshelve eapply declared_constant_to_gen in d; eauto.
-      clear H. erewrite <- abstract_env_lookup_correct' in e; eauto.
-      congruence.
-    - clear H0. zip fold in h. try clear Heqcall.
-      destruct (hΣ _ wfΣ).
-      eapply welltyped_context in h; eauto.
-      destruct h as (?&typ); auto.
-      apply inversion_Const in typ as (?&?&?&?); auto.
-      unshelve eapply declared_constant_to_gen in d; eauto.
-      clear H. erewrite <- abstract_env_lookup_correct' in e; eauto.
-      congruence.
-    - clear H.
-      eapply unfold_one_case_None in e as [(c'&r&whcase)]; eauto.
-      constructor; exists (tCase ci p c' brs), (decompose_stack π).1.
-      split.
-      + destruct p. constructor; eauto with pcuic.
-      + split; [eauto with pcuic|].
-        apply whnf_mkApps.
-        auto.
-    - clear H.
-      eapply unfold_one_proj_None in e as [(c'&r&whproj)]; eauto.
-      constructor; exists (tProj p c'), (decompose_stack π).1.
-      split.
-      + constructor; eauto with pcuic.
-      + split; [eauto with pcuic|].
-        apply whnf_mkApps.
-        auto.
-  Qed.
+  Equations eta_viewc (t1 t2 : term) : eta_view t1 t2 :=
+    eta_viewc (tLambda na A b) t2 := eta_view_left na A b t2 ;
+    eta_viewc t1 (tLambda na A b) := eta_view_right t1 na A b _ ;
+    eta_viewc t1 t2 := eta_view_other t1 t2 _ _.
 
   (* TODO Factorise *)
   Equations(noeqns) _isconv_fallback (Γ : context) (leq : conv_pb)
-            (t1 : term) (π1 : stack) (h1 : wtp Γ t1 π1)
-            (t2 : term) (π2 : stack) (h2 : wtp Γ t2 π2)
+            (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
+            (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
             (ir1 : isred_full Γ t1 π1) (ir2 : isred_full Γ t2 π2)
             (hdiscr : prog_discr t1 t2)
             (hx : conv_stack_ctx Γ π1 π2)
-            (aux : Aux Fallback Γ t1 π1 t2 π2 h2)
+            (hv1 : virt_ok t1 π1 = true) (hv2 : virt_ok t2 π2 = true)
+            (hwf1 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π1) ∥)
+            (hwf2 : forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π2) ∥)
+            (aux : Aux Fallback Γ t1 π1 t2 π2 f1 f2 h2)
     : ConversionResult (conv_term leq Γ t1 π1 t2 π2) :=
-    _isconv_fallback Γ leq t1 π1 h1 t2 π2 h2 ir1 ir2 hdiscr hx aux
+    _isconv_fallback Γ leq t1 π1 f1 h1 t2 π2 f2 h2 ir1 ir2 hdiscr hx hv1 hv2 hwf1 hwf2 aux
     with inspect (reducible_head Γ t1 π1 h1) := {
     | exist (Some (rt1, ρ1)) eq1 with inspect (decompose_stack ρ1) := {
       | exist (l1, θ1) eq2
-        with inspect (reduce_stack RedFlags.nodelta _ X (Γ ,,, stack_context ρ1) rt1 (appstack l1 []) _) := {
-        | exist (rt1', θ1') eq3 :=
-          isconv_prog leq rt1' (θ1' ++ θ1) t2 π2 aux
+        (* site 8 of the 11 reduce_stack sites *)
+        with inspect (reduce_args_E RedFlags.nodelta X_type X (Γ ,,, stack_context ρ1) rt1 l1 _) := {
+        | exist (rt1', l1') eq3 with inspect (rebuilt_ok rt1' l1' θ1) := {
+          | exist true g2 := isconv_prog leq rt1' (appstack l1' θ1) t2 π2 aux ;
+          | exist false _ := no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
+          }
         }
       } ;
     | exist None nored1 with inspect (reducible_head Γ t2 π2 h2) := {
       | exist (Some (rt2, ρ2)) eq1 with inspect (decompose_stack ρ2) := {
         | exist (l2, θ2) eq2
-          with inspect (reduce_stack RedFlags.nodelta _ X (Γ ,,, stack_context ρ2) rt2 (appstack l2 []) _) := {
-          | exist (rt2', θ2') eq3 :=
-            isconv_prog leq t1 π1 rt2' (θ2' ++ θ2) aux
+          (* site 9 of the 11 reduce_stack sites *)
+          with inspect (reduce_args_E RedFlags.nodelta X_type X (Γ ,,, stack_context ρ2) rt2 l2 _) := {
+          | exist (rt2', l2') eq3 with inspect (rebuilt_ok rt2' l2' θ2) := {
+            | exist true g2 := isconv_prog leq t1 π1 rt2' (appstack l2' θ2) aux ;
+            | exist false _ := no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
+            }
           }
         } ;
-      | exist None nored2 with inspect (cmpb_term_napp leq #|(decompose_stack π1).1| t1 t2) := {
-        | exist true eq1 := isconv_args leq t1 π1 t2 π2 aux;
-        | exist false noteq :=
-          no (
-              HeadMismatch
-                leq
-                (Γ ,,, stack_context π1) t1
-                (Γ ,,, stack_context π2) t2
-            )
+      (* I7 "Where": both sides answered [None]; the η step comes in place of the path to
+         cmpb_term_napp/HeadMismatch. *)
+      | exist None nored2 with eta_viewc t1 t2 := {
+        (* λ on side 1 (rev 14 NB1): side 1 descends by Lambda_bd, side 2 gets the frame
+           Eta_app na (eta_rename π1 0 A) after its spine; the comparison is at Conv (S1),
+           entering at Reduction (rev 10); G3 guards the Lambda_bd push. *)
+        | eta_view_left na A b t2
+          with inspect (no_Eta_arg π1) := {
+          | @exist false _ := no (EtaStackRefusal (Γ ,,, focus_context π1) (tLambda na A b)
+                                                  (Γ ,,, focus_context π2) t2) ;
+          | @exist true g3 with inspect (decompose_stack π2) := {
+            | @exist (args2, ρ2) eq2
+              with isconv_red_raw Conv b (Lambda_bd na A :: π1)
+                     t2 (appstack args2 (Eta_app na (eta_rename π1 0 A) :: ρ2)) aux := {
+              | Success h := yes ;
+              | Error e := no e
+              }
+            }
+          } ;
+        (* λ on side 2: the same with the sides exchanged. *)
+        | eta_view_right t1 na A b nl1
+          with inspect (no_Eta_arg π2) := {
+          | @exist false _ := no (EtaStackRefusal (Γ ,,, focus_context π1) t1
+                                                  (Γ ,,, focus_context π2) (tLambda na A b)) ;
+          | @exist true g3 with inspect (decompose_stack π1) := {
+            | @exist (args1, ρ1) eq1
+              with isconv_red_raw Conv t1 (appstack args1 (Eta_app na (eta_rename π2 0 A) :: ρ1))
+                     b (Lambda_bd na A :: π2) aux := {
+              | Success h := yes ;
+              | Error e := no e
+              }
+            }
+          } ;
+        (* No λ: base's head comparison on the η views (heads read through eta_rename, napp
+           counts the virtual arguments, plan I7's site list), then K1. *)
+        | eta_view_other t1 t2 nl1 nl2
+          with inspect (cmpb_term_napp leq #|(decompose_stack_eta π1).1|
+                          (eta_rename π1 0 t1) (eta_rename π2 0 t2)) := {
+          | exist true eq1 := isconv_args leq t1 π1 t2 π2 aux;
+          | exist false noteq
+            with inspect (must_expand_check (abstract_env_lookup X) eqb_term
+                            abstract_env_compare_global_instance
+                            t1 (decompose_stack_eta π1).1 t2 (decompose_stack_eta π2).1) := {
+            (* K1 (plan row K1, EtaK1-patch.md): the kernel's MustExpand for under-applied
+               tInd/tConstruct heads with unequal instances (conversion.ml V9.2.0 :186-232,
+               :270-286, :634-638, :546-547): heads and remaining binder types checked here,
+               arguments by the machine, exactly as in the cmpb_term_napp success arm above. *)
+            | exist true k1 := isconv_args leq t1 π1 t2 π2 aux;
+            | exist false _ :=
+              no (
+                  HeadMismatch
+                    leq
+                    (Γ ,,, stack_context_eta π1) t1
+                    (Γ ,,, stack_context_eta π2) t2
+                )
+            }
+          }
         }
       }
     }.
@@ -5508,109 +4929,121 @@ Equations (noeqns) isconv_array_values_aux
   Qed.
 
   Equations _isconv (s : state) (Γ : context)
-            (t1 : term) (π1 : stack) (h1 : wtp Γ t1 π1)
-            (t2 : term) (π2 : stack) (h2 : wtp Γ t2 π2)
-            (aux : Aux s Γ t1 π1 t2 π2 h2)
+            (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
+            (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
+            (aux : Aux s Γ t1 π1 t2 π2 f1 f2 h2)
   : Ret s Γ t1 π1 t2 π2 :=
-    _isconv Reduction Γ t1 π1 h1 t2 π2 h2 aux :=
-      λ { | leq | hx | _ | _ | _ := _isconv_red Γ leq t1 π1 h1 t2 π2 h2 hx aux } ;
+    _isconv Reduction Γ t1 π1 f1 h1 t2 π2 f2 h2 aux :=
+      λ { | leq | hx | hv1 | hv2 | hwf1 | hwf2 | _ | _ | _ :=
+            _isconv_red Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2 aux } ;
 
-    _isconv Term Γ t1 π1 h1 t2 π2 h2 aux :=
-      λ { | leq | hx | r1 | r2 | _ := _isconv_prog Γ leq t1 π1 h1 t2 π2 h2 hx r1 r2 aux } ;
+    _isconv Term Γ t1 π1 f1 h1 t2 π2 f2 h2 aux :=
+      λ { | leq | hx | hv1 | hv2 | hwf1 | hwf2 | r1 | r2 | _ :=
+            _isconv_prog Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2 r1 r2 aux } ;
 
-    _isconv Args Γ t1 π1 h1 t2 π2 h2 aux :=
-      λ { | leq | hx | _ | _ | _ := _isconv_args leq Γ t1 π1 h1 t2 π2 h2 hx aux } ;
+    _isconv Args Γ t1 π1 f1 h1 t2 π2 f2 h2 aux :=
+      λ { | leq | hx | _ | _ | hwf1 | hwf2 | _ | _ | _ :=
+            _isconv_args leq Γ t1 π1 f1 h1 t2 π2 f2 h2 hx hwf1 hwf2 aux } ;
 
-    _isconv Fallback Γ t1 π1 h1 t2 π2 h2 aux :=
-      λ { | leq | hx | r1 | r2 | hd := _isconv_fallback Γ leq t1 π1 h1 t2 π2 h2 r1 r2 hd hx aux }.
+    _isconv Fallback Γ t1 π1 f1 h1 t2 π2 f2 h2 aux :=
+      λ { | leq | hx | hv1 | hv2 | hwf1 | hwf2 | r1 | r2 | hd :=
+            _isconv_fallback Γ leq t1 π1 f1 h1 t2 π2 f2 h2 r1 r2 hd hx hv1 hv2 hwf1 hwf2 aux }.
 
   Lemma welltyped_R_zipc Σ (wfΣ : abstract_env_ext_rel X Σ) Γ :
-    forall x y : pack Γ, welltyped Σ Γ (zipc (tm1 x) (stk1 x)) -> R Γ y x -> welltyped Σ Γ (zipc (tm1 y) (stk1 y)).
-  Proof using Type.
+    forall x y : pack Γ, welltypedE Σ Γ (zipc (tm1 x) (stk1 x)) -> R Γ y x -> welltypedE Σ Γ (zipc (tm1 y) (stk1 y)).
+  Proof using reduce_factsE.
     intros x y H HR.
-    pose proof (heΣ := heΣ _ wfΣ).
-    pose proof (hΣ := hΣ _ wfΣ). cbn.
-    sq.
+    pose proof (heΣ := heΣ _ wfΣ). sq.
     destruct x, y; cbn in *.
     red in HR. cbn in HR. red in HR. cbn in HR.
     depind HR.
-    - cbn in *. specialize_Σ wfΣ.
-      eapply cored'_postpone in H as [u' [cor eq]].
-      eapply cored_welltyped in cor; tea.
-      now destruct eq as [<-].
+    - cbn in *.
+      eapply cored'_postpone in H as [u' [cor eq]]; [|exact wfΣ].
+      destruct eq as [<-].
+      eapply (wt_red (wt := welltypedE) (wfP := wf_extE)); [exact heΣ|exact H0|].
+      now eapply cored_red.
     - simpl in *. destruct e. now rewrite e.
   Qed.
 
   Equations(noeqns) isconv_full (s : state) (Γ : context)
-            (t1 : term) (π1 : stack) (h1 : wtp Γ t1 π1)
-            (t2 : term) (π2 : stack) (h2 : wtp Γ t2 π2)
+            (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
+            (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
     : Ret s Γ t1 π1 t2 π2 :=
 
-    isconv_full s Γ t1 π1 h1 t2 π2 h2 hx :=
+    isconv_full s Γ t1 π1 f1 h1 t2 π2 f2 h2 hx :=
       Fix_F (R := R Γ)
-            (fun '(mkpack s' t1' π1' t2' π2' h2') =>
+            (fun '(mkpack s' t1' π1' t2' π2' f1' f2' h2') =>
               wtp Γ t1' π1' ->
               wtp Γ t2' π2' ->
               Ret s' Γ t1' π1' t2' π2'
             )
             (fun pp f => _)
-            (x := mkpack Γ s t1 π1 t2 π2 _)
+            (x := mkpack Γ s t1 π1 t2 π2 f1 f2 _)
             _ _ _ _.
   Next Obligation.
     unshelve eapply _isconv. all: try assumption.
-    intros s' t1' π1' t2' π2' h1' h2' hx' hR.
-    eapply (f (mkpack Γ s' t1' π1' t2' π2' h2')); tea.
+    intros s' t1' π1' t2' π2' f1' f2' h1' h2' hx' hR.
+    eapply (f (mkpack Γ s' t1' π1' t2' π2' f1' f2' h2')); tea.
     destruct pp. eapply R_irrelevance; tea; cbn. reflexivity.
   Defined.
   Next Obligation.
   match goal with | |- Acc _ ?X => set (u := X) end.
   revert h1.
-  change ((forall Σ, abstract_env_ext_rel X Σ -> welltyped Σ Γ (zipc (tm1 u) (stk1 u))) -> Acc (R Γ) u).
+  change ((forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ (zipc (tm1 u) (stk1 u))) -> Acc (R Γ) u).
   generalize u.
   refine (Acc_intro_generator
             (R:=R Γ)
-            (P:=fun u => forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ (zipc (tm1 u) (stk1 u)))
+            (P:=fun u => forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (zipc (tm1 u) (stk1 u)))
             (fun x y Px Hy => _) 1000 _); intros.
   - simpl in *. eapply welltyped_R_zipc; eauto.
-  - destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    destruct (hΣ _ wfΣ) as [hΣ]. eapply R_Acc; eassumption.
+  - eapply R_Acc; eassumption.
   Defined.
 
   Inductive ConversionResultSummary :=
   | ConvSuccess : ConversionResultSummary
   | ConvError : ConversionError -> ConversionResultSummary.
 
-  Definition isconv Γ leq t1 π1 h1 t2 π2 h2 hx :=
-    match isconv_full Reduction Γ t1 π1 h1 t2 π2 h2 leq hx I I I with
+  Definition isconv Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2 :=
+    match isconv_full Reduction Γ t1 π1 f1 h1 t2 π2 f2 h2 leq hx hv1 hv2 hwf1 hwf2 I I I with
     | Success _ => ConvSuccess
     | Error e => ConvError e
     end.
 
+  (* I6: [isconv_sound] keeps its statement, over E (η views, ws_cumul_pbE). *)
   Theorem isconv_sound :
-    forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ leq t1 π1 h1 t2 π2 h2 hx,
-      isconv Γ leq t1 π1 h1 t2 π2 h2 hx = ConvSuccess ->
-      conv_cum leq Σ (Γ ,,, stack_context π1) (zipp t1 π1) (zipp t2 π2).
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2,
+      isconv Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2 = ConvSuccess ->
+      conv_cumE leq Σ (Γ ,,, stack_context_eta π1) (zipp_eta t1 π1) (zipp_eta t2 π2).
   Proof using Type.
     unfold isconv.
-    intros Σ wfΣ Γ leq t1 π1 h1 t2 π2 h2 hx.
+    intros Σ wfΣ Γ leq t1 π1 f1 h1 t2 π2 f2 h2 hx hv1 hv2 hwf1 hwf2.
     destruct isconv_full as [].
     - auto.
     - discriminate.
   Qed.
 
-  Program Definition isconv_term Γ leq t1 (h1 : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ t1) t2 (h2 : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ t2) :=
-    isconv Γ leq t1 [] h1 t2 [] h2 _.
+  Program Definition isconv_term Γ leq t1
+    (h1 : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ t1) t2
+    (h2 : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ t2) :=
+    isconv Γ leq t1 [] eq_refl h1 t2 [] eq_refl h2 _ eq_refl eq_refl _ _.
 
   Next Obligation.
-    destruct (h1 _ H), (hΣ _ H) as [wΣ].
-    sq. eapply ws_cumul_ctx_pb_refl.
-    fvs.
+    destruct (h1 _ H) as [T ht], (abstract_env_ext_sq_wf _ _ _ H) as [wΣ].
+    sq. eapply ws_cumul_ctx_pbE_refl.
+    cbn. eapply (@wf_local_closed_contextE _ Σ Γ wΣ).
+    now eapply typingE_wf_local.
+  Qed.
+  Next Obligation.
+    destruct (h1 _ H) as [T ht]. sq. cbn. now eapply typingE_wf_local.
+  Qed.
+  Next Obligation.
+    destruct (h2 _ H) as [T ht]. sq. cbn. now eapply typingE_wf_local.
   Qed.
 
   Theorem isconv_term_sound :
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ leq t1 h1 t2 h2,
       isconv_term Γ leq t1 h1 t2 h2 = ConvSuccess ->
-      conv_cum leq Σ Γ t1 t2.
+      conv_cumE leq Σ Γ t1 t2.
   Proof using Type.
     intros Σ wfΣ Γ leq t1 h1 t2 h2.
     unfold isconv_term. intro h.
