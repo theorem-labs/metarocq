@@ -1472,3 +1472,244 @@ Section BetaHead.
   Proof. intros h. exact (fst (pe_beta_head_and_lambda _ _ h) Γ na A' b' a' [] eq_refl). Qed.
 
 End BetaHead.
+
+(** ** [eta1* = pe]
+
+  [eta1_pe] and [pe_to_eta] give [eta1 ⊆ pe ⊆ eta1*]; [pe_eta1_closed] closes [pe]
+  under one more [eta1] step at its target, so [eta_to_pe] gives [eta1* ⊆ pe]. *)
+
+Lemma All2_OnOne2_compose {A} (Q S Q' : A -> A -> Type) l l' l'' :
+  All2 Q l l' -> OnOne2 S l' l'' ->
+  (forall x y z, Q x y -> S y z -> Q' x z) -> (forall x y, Q x y -> Q' x y) -> All2 Q' l l''.
+Proof.
+  intros ha ho hc hi. induction ho as [hd hd' tl hs|hd tl tl' ho IH] in l, ha |- *.
+  - depelim ha. constructor; [eapply hc; eassumption|]. eapply All2_impl; [eassumption|exact hi].
+  - depelim ha. constructor; [now apply hi|]. now apply IH.
+Qed.
+
+Lemma eta1_tPrim_inv pv v :
+  eta1 (tPrim pv) v ->
+  ∑ arr, (pv = (primArray; primArrayModel arr)) ×
+    ((∑ value, (v = tPrim (primArray; primArrayModel (set_array_value arr value)))
+                 × OnOne2 eta1 arr.(array_value) value)
+     + (∑ d, (v = tPrim (primArray; primArrayModel (set_array_default arr d)))
+                 × eta1 arr.(array_default) d)
+     + (∑ ty, (v = tPrim (primArray; primArrayModel (set_array_type arr ty)))
+                 × eta1 arr.(array_type) ty)).
+Proof.
+  intro H. remember (tPrim pv) as t eqn:Heq.
+  destruct H; try discriminate Heq.
+  all: injection Heq as e; subst; eexists; split; [reflexivity|].
+  - left; left. eexists; split; [reflexivity|assumption].
+  - left; right. eexists; split; [reflexivity|assumption].
+  - right. eexists; split; [reflexivity|assumption].
+Qed.
+
+Lemma eta1_pe t u : eta1 t u -> pe t u.
+Proof.
+  induction 1 using eta1_ind_all.
+  - (* eta_red *) apply pe_eta, pe_refl.
+  - apply pe_Lambda; [assumption|apply pe_refl].
+  - apply pe_Lambda; [apply pe_refl|assumption].
+  - apply pe_LetIn; [assumption|apply pe_refl|apply pe_refl].
+  - apply pe_LetIn; [apply pe_refl|assumption|apply pe_refl].
+  - apply pe_LetIn; [apply pe_refl|apply pe_refl|assumption].
+  - (* case param *)
+    apply pe_Case; try reflexivity; try apply pe_refl.
+    + eapply C3R.OnOne2_All2_refl;
+        [eassumption | intros ?; apply pe_refl | intros x y [? ?]; assumption].
+    + apply All2_same. intros; split; [reflexivity|apply pe_refl].
+  - (* case return *)
+    apply pe_Case; try reflexivity; try apply pe_refl.
+    + apply All2_same. intros; apply pe_refl.
+    + assumption.
+    + apply All2_same. intros; split; [reflexivity|apply pe_refl].
+  - (* case discr *)
+    apply pe_Case; try reflexivity; try apply pe_refl.
+    + apply All2_same. intros; apply pe_refl.
+    + assumption.
+    + apply All2_same. intros; split; [reflexivity|apply pe_refl].
+  - (* case brs *)
+    apply pe_Case; try reflexivity; try apply pe_refl.
+    + apply All2_same. intros; apply pe_refl.
+    + eapply C3R.OnOne2_All2_refl;
+        [ eassumption
+        | intros ?; split; [reflexivity|apply pe_refl]
+        | intros x y [[? Hp] Hc]; split; [exact Hc|exact Hp] ].
+  - apply pe_Proj; assumption.
+  - apply pe_App; [assumption|apply pe_refl].
+  - apply pe_App; [apply pe_refl|assumption].
+  - apply pe_Prod; [assumption|apply pe_refl].
+  - apply pe_Prod; [apply pe_refl|assumption].
+  - apply pe_Evar.
+    eapply C3R.OnOne2_All2_refl;
+      [eassumption | intros ?; apply pe_refl | intros x y [? ?]; assumption].
+  - apply pe_Fix.
+    eapply C3R.OnOne2_All2_refl;
+      [ eassumption | intros ?; repeat split; try apply pe_refl; reflexivity | ].
+    intros x y [[He Hp] Heq]. injection Heq as Hdn Hdb Hrr.
+    split; [exact Hp|split; [rewrite Hdb; apply pe_refl|split; [exact Hdn|exact Hrr]]].
+  - apply pe_Fix.
+    eapply C3R.OnOne2_All2_refl;
+      [ eassumption | intros ?; repeat split; try apply pe_refl; reflexivity | ].
+    intros x y [[He Hp] Heq]. injection Heq as Hdn Hdt Hrr.
+    split; [rewrite Hdt; apply pe_refl|split; [exact Hp|split; [exact Hdn|exact Hrr]]].
+  - apply pe_CoFix.
+    eapply C3R.OnOne2_All2_refl;
+      [ eassumption | intros ?; repeat split; try apply pe_refl; reflexivity | ].
+    intros x y [[He Hp] Heq]. injection Heq as Hdn Hdb Hrr.
+    split; [exact Hp|split; [rewrite Hdb; apply pe_refl|split; [exact Hdn|exact Hrr]]].
+  - apply pe_CoFix.
+    eapply C3R.OnOne2_All2_refl;
+      [ eassumption | intros ?; repeat split; try apply pe_refl; reflexivity | ].
+    intros x y [[He Hp] Heq]. injection Heq as Hdn Hdt Hrr.
+    split; [rewrite Hdt; apply pe_refl|split; [exact Hp|split; [exact Hdn|exact Hrr]]].
+  - apply pe_Prim. constructor; try reflexivity; try apply pe_refl.
+    eapply C3R.OnOne2_All2_refl;
+      [eassumption | intros ?; apply pe_refl | intros x y [? ?]; assumption].
+  - apply pe_Prim. constructor.
+    + reflexivity.
+    + assumption.
+    + apply pe_refl.
+    + apply All2_same; intros; apply pe_refl.
+  - apply pe_Prim. constructor.
+    + reflexivity.
+    + apply pe_refl.
+    + assumption.
+    + apply All2_same; intros; apply pe_refl.
+Qed.
+
+Lemma pe_to_eta t u : pe t u -> eta t u.
+Proof.
+  induction 1 using pe_ind_all.
+  - (* η rule: the IH below the λ, then contract *)
+    eapply rt_trans; [apply C3R.eta_absr; eassumption|apply rt_step; apply eta_red].
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply rt_refl.
+  - apply C3R.eta_tEvar. eapply All2_impl; [eassumption|]. now intros x y [_ ?].
+  - eapply rt_trans; [apply C3R.eta_absl; eassumption|apply C3R.eta_absr; eassumption].
+  - eapply rt_trans; [apply C3R.eta_appl; eassumption|apply C3R.eta_appr; eassumption].
+  - eapply rt_trans; [apply C3R.eta_prodl; eassumption|apply C3R.eta_prodr; eassumption].
+  - eapply rt_trans; [apply C3R.eta_letd; eassumption|].
+    eapply rt_trans; [apply C3R.eta_lett; eassumption|apply C3R.eta_letb; eassumption].
+  - apply C3R.eta_tCase; auto.
+    + eapply All2_impl; [eassumption|]. now intros x y [_ ?].
+    + eapply All2_impl; [eassumption|]. now intros x y [? [_ ?]].
+  - apply C3R.eta_proj; assumption.
+  - apply C3R.eta_tFix. eapply All2_impl; [eassumption|].
+    now intros x y [[_ ?] [[_ ?] [? ?]]].
+  - apply C3R.eta_tCoFix. eapply All2_impl; [eassumption|].
+    now intros x y [[_ ?] [[_ ?] [? ?]]].
+  - match goal with H : onPrims _ _ _ _ |- _ =>
+      destruct H as [i|fl|st|arr arr' Hlvl Hdef Hty Hval] end;
+      try apply rt_refl.
+    apply C3R.eta_tPrim_arr; cbn.
+    + now apply Universe.make'_inj.
+    + destruct Hdef as [_ ?]; assumption.
+    + destruct Hty as [_ ?]; assumption.
+    + eapply All2_impl; [exact Hval|]. now intros x y [_ ?].
+Qed.
+
+Lemma All2_Tconj_fst {A} (R P : A -> A -> Type) l l' : All2 (Trel_conj R P) l l' -> All2 R l l'.
+Proof. intros h. eapply All2_impl; [exact h|]. intros x y [r _]. exact r. Qed.
+
+Lemma All2_Tconj_step {A} (R S : A -> A -> Type) l l' l'' :
+  All2 (Trel_conj R (fun x y => forall z, S y z -> R x z)) l l' -> OnOne2 S l' l'' -> All2 R l l''.
+Proof.
+  intros ha ho. eapply All2_OnOne2_compose; [exact ha|exact ho| |].
+  - intros x y z [_ h] e. exact (h _ e).
+  - intros x y [r _]. exact r.
+Qed.
+
+Definition prim_arr_of (p : prim_val term) : option (array_model term) :=
+  match prim_val_model p with primArrayModel a => Some a | _ => None end.
+
+(** [pe] is closed under one more [eta1] step at its target. *)
+Lemma pe_eta1_closed t u : pe t u -> forall v, eta1 u v -> pe t v.
+Proof.
+  revert t u. apply (pe_ind_all (fun t u => forall v, eta1 u v -> pe t v)).
+  - (* η rule: the step goes under the η-redex body *)
+    intros na A b M' hb IH v he. apply pe_eta. apply IH. apply app_eta_l.
+    exact (eta1_lift 1 _ _ he 0).
+  - intros n v he. depelim he.
+  - intros i v he. depelim he.
+  - intros s v he. depelim he.
+  - intros c uu v he. depelim he.
+  - intros ind uu v he. depelim he.
+  - intros ind n uu v he. depelim he.
+  - intros ev l l' al v he. depelim he. apply pe_Evar. eapply All2_Tconj_step; eassumption.
+  - intros na A A' M M' hA IHA hM IHM v he. depelim he.
+    + (* the η-redex is the λ itself: absorbed by the η rule *)
+      apply pe_eta. exact hM.
+    + apply pe_Lambda; [now apply IHA|exact hM].
+    + apply pe_Lambda; [exact hA|now apply IHM].
+  - intros f f' x x' hf IHf hx IHx v he. depelim he.
+    + apply pe_App; [now apply IHf|exact hx].
+    + apply pe_App; [exact hf|now apply IHx].
+  - intros na a a' b b' ha IHa hb IHb v he. depelim he.
+    + apply pe_Prod; [now apply IHa|exact hb].
+    + apply pe_Prod; [exact ha|now apply IHb].
+  - intros na b b' ty ty' x x' hb IHb hty IHty hx IHx v he. depelim he.
+    + apply pe_LetIn; [now apply IHb|exact hty|exact hx].
+    + apply pe_LetIn; [exact hb|now apply IHty|exact hx].
+    + apply pe_LetIn; [exact hb|exact hty|now apply IHx].
+  - intros ci p p' c c' brs brs' apar eu ectx pret IHret pc IHc abrs v he.
+    have hbrs : All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs brs'.
+    { eapply All2_impl; [exact abrs|]. intros x y [hc [q _]]. split; assumption. }
+    depelim he.
+    + apply pe_Case; cbn; [eapply All2_Tconj_step; eassumption|exact eu|exact ectx|exact pret|exact pc|exact hbrs].
+    + apply pe_Case; cbn; [exact (All2_Tconj_fst _ _ _ _ apar)|exact eu|exact ectx|now apply IHret|exact pc|exact hbrs].
+    + apply pe_Case; cbn; [exact (All2_Tconj_fst _ _ _ _ apar)|exact eu|exact ectx|exact pret|now apply IHc|exact hbrs].
+    + apply pe_Case; cbn; [exact (All2_Tconj_fst _ _ _ _ apar)|exact eu|exact ectx|exact pret|exact pc|].
+      eapply All2_OnOne2_compose; [exact abrs|eassumption| |].
+      * intros x y z [hc [_ h]] [e hc']. split; [etransitivity; [exact hc|exact hc']|exact (h _ e)].
+      * intros x y [hc [q _]]. split; assumption.
+  - intros pr c c' pc IHc v he. depelim he. apply pe_Proj. now apply IHc.
+  - intros mfix mfix' idx am v he. depelim he.
+    + apply pe_Fix. eapply All2_OnOne2_compose; [exact am|eassumption| |].
+      * intros x y z [[ht hPt] [[hb hPb] [hn hr]]] [e heq]. injection heq as e1 e2 e3.
+        split; [exact (hPt _ e)|]. split; [rewrite -e2; exact hb|]. split; congruence.
+      * intros x y [[ht _] [[hb _] [hn hr]]]. exact (ht, (hb, (hn, hr))).
+    + apply pe_Fix. eapply All2_OnOne2_compose; [exact am|eassumption| |].
+      * intros x y z [[ht hPt] [[hb hPb] [hn hr]]] [e heq]. injection heq as e1 e2 e3.
+        split; [rewrite -e2; exact ht|]. split; [exact (hPb _ e)|]. split; congruence.
+      * intros x y [[ht _] [[hb _] [hn hr]]]. exact (ht, (hb, (hn, hr))).
+  - intros mfix mfix' idx am v he. depelim he.
+    + apply pe_CoFix. eapply All2_OnOne2_compose; [exact am|eassumption| |].
+      * intros x y z [[ht hPt] [[hb hPb] [hn hr]]] [e heq]. injection heq as e1 e2 e3.
+        split; [exact (hPt _ e)|]. split; [rewrite -e2; exact hb|]. split; congruence.
+      * intros x y [[ht _] [[hb _] [hn hr]]]. exact (ht, (hb, (hn, hr))).
+    + apply pe_CoFix. eapply All2_OnOne2_compose; [exact am|eassumption| |].
+      * intros x y z [[ht hPt] [[hb hPb] [hn hr]]] [e heq]. injection heq as e1 e2 e3.
+        split; [rewrite -e2; exact ht|]. split; [exact (hPb _ e)|]. split; congruence.
+      * intros x y [[ht _] [[hb _] [hn hr]]]. exact (ht, (hb, (hn, hr))).
+  - intros p p' op v he.
+    destruct op as [i|fl|st|a a' hl hd hty hval].
+    1-3: destruct (eta1_tPrim_inv _ _ he) as (arr & e & _); discriminate e.
+    destruct (eta1_tPrim_inv _ _ he) as (arr & e & hc).
+    apply (f_equal prim_arr_of) in e. cbn in e. injection e as <-.
+    destruct hd as [pd cd]; destruct hty as [pty cty].
+    destruct hc as [[(value & -> & ho)|(d & -> & hd)]|(ty & -> & ht)];
+      apply pe_Prim; constructor; cbn; try assumption.
+    + eapply All2_Tconj_step; eassumption.
+    + now apply cd.
+    + exact (All2_Tconj_fst _ _ _ _ hval).
+    + now apply cty.
+    + exact (All2_Tconj_fst _ _ _ _ hval).
+Qed.
+
+Lemma eta_pe_step x y : eta x y -> forall t, pe t x -> pe t y.
+Proof.
+  intros h. induction h as [x y r|x|x y z _ IH1 _ IH2]; intros t hp.
+  - exact (pe_eta1_closed _ _ hp _ r).
+  - exact hp.
+  - apply IH2, IH1, hp.
+Qed.
+
+(** **[eta1* = pe]: CLOSED.** *)
+Theorem eta_iff_pe t u : (eta t u -> pe t u) × (pe t u -> eta t u).
+Proof. split; [intros h; exact (eta_pe_step _ _ h t (pe_refl t))|exact (pe_to_eta t u)]. Qed.
