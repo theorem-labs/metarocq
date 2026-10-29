@@ -35,24 +35,28 @@ From Stdlib Require Import ssreflect ssrbool.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
-(* Base registers [isType_ws_cumul_pb_refl] and [ws_cumul_pb_refl] globally in [pcuic]
-   ([PCUICWellScopedCumulativity]), [isType_is_open_term] and [isTypeRel_is_open_term]
-   globally in [fvs] ([PCUICContextConversion]), and the [wf_local] facts of [typing]
-   globally in [pcuic] and [wf] ([PCUICTyping]). Their E twins [isType_ws_cumul_pbE_refl]
-   ([PCUICWsCumulEtaCtxTyp]), [ws_cumul_pbE_refl] ([PCUICWellScopedCumulativityEta]),
-   [isType_is_open_termE] and [isTypeRel_is_open_termE] ([PCUICClosedTypEta]),
-   [typingE_wf_local] and [lift_typingE_wf_local] ([PCUICTypingEtaInd]) and
-   [wf_localE_app_l] ([PCUICTypingEta]) carry no hint, so the proofs of this file see them
-   through these local registrations. *)
-#[local] Hint Immediate isType_ws_cumul_pbE_refl ws_cumul_pbE_refl : pcuic.
-#[local] Hint Resolve isType_is_open_termE isTypeRel_is_open_termE : fvs.
+(* The E twins of the lemmas below carry no global hint, while base registers each lemma
+   globally; the proofs of this file see them through these local registrations. *)
+(* replays base's global hint isType_ws_cumul_pb_refl (PCUICWellScopedCumulativity.v:289); removed when the E file registers it globally *)
+#[local] Hint Immediate isType_ws_cumul_pbE_refl : pcuic.
+(* replays base's global hint ws_cumul_pb_refl (PCUICWellScopedCumulativity.v:353); removed when the E file registers it globally *)
+#[local] Hint Immediate ws_cumul_pbE_refl : pcuic.
+(* replays base's global hint isType_is_open_term (PCUICContextConversion.v:1022); removed when the E file registers it globally *)
+#[local] Hint Resolve isType_is_open_termE : fvs.
+(* replays base's global hint isTypeRel_is_open_term (PCUICContextConversion.v:1022); removed when the E file registers it globally *)
+#[local] Hint Resolve isTypeRel_is_open_termE : fvs.
+(* replays base's global hint Extern 4 (wf_local _ ?Γ) (PCUICTyping.v:632); removed when the E file registers it globally *)
 #[local] Hint Extern 4 (wf_localE _ ?Γ) =>
   match goal with
   | [ H : typingE _ _ _ _ |- _ ] => exact (typingE_wf_local H)
   | [ H : lift_typing0 (typingE _ _) _ |- _ ] => exact (lift_typingE_wf_local H)
   | [ H : PCUICEnvTyping.lift_typing (typingE _ _) _ |- _ ] => exact (lift_typingE_wf_local H)
   end : pcuic.
-#[local] Hint Resolve typingE_wf_local lift_typingE_wf_local : wf.
+(* replays base's global hint typing_wf_local (PCUICTyping.v:641); removed when the E file registers it globally *)
+#[local] Hint Resolve typingE_wf_local : wf.
+(* replays base's global hint lift_typing_wf_local (PCUICTyping.v:644); removed when the E file registers it globally *)
+#[local] Hint Resolve lift_typingE_wf_local : wf.
+(* replays base's global hint wf_local_app_l (PCUICTyping.v:613); removed when the E file registers it globally *)
 #[local] Hint Immediate wf_localE_app_l : wf.
 
 Ltac splits := repeat split.
@@ -2025,7 +2029,10 @@ Section WfEnv.
     depelim p; simpl; auto. lia.
   Qed.
 
-  Lemma ws_cumul_ctx_pb_rel_context_assumptionsE {pb} {Γ} {Δ Δ'} :
+  (* The binder types are written: base's are inferred from base's [ws_cumul_ctx_pb_rel]
+     ([list context_decl]), while [ws_cumul_ctx_pbE_rel] would infer [context], δ-equal but
+     printed differently. The same holds for the three lemmas marked below. *)
+  Lemma ws_cumul_ctx_pb_rel_context_assumptionsE {pb} {Γ : list context_decl} {Δ Δ' : list context_decl} :
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
     context_assumptions Δ = context_assumptions Δ'.
   Proof using Type.
@@ -2242,7 +2249,8 @@ Section WfEnv.
     assumption.
   Qed.
 
-  Lemma ws_cumul_ctx_pb_rel_lengthE {pb Γ Δ Δ'} :
+  (* Binder types written as in [ws_cumul_ctx_pb_rel_context_assumptionsE]. *)
+  Lemma ws_cumul_ctx_pb_rel_lengthE {pb} {Γ Δ Δ' : list context_decl} :
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
     #|Δ| = #|Δ'|.
   Proof using Type. intros []. apply (length_of a). Qed.
@@ -2277,7 +2285,8 @@ Section WfEnv.
       eapply weakening_ws_cumul_pbE => //; eauto with fvs.
   Qed.
 
-  Lemma ctx_inst_cumulE {pb Γ i Δ Δ'} :
+  (* Binder types written as in [ws_cumul_ctx_pb_rel_context_assumptionsE]. *)
+  Lemma ctx_inst_cumulE {pb} {Γ : list context_decl} {i} {Δ Δ' : list context_decl} :
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
     ctx_instE Σ Γ i (List.rev Δ) ->
     wf_local_relE Σ Γ Δ ->
@@ -2389,7 +2398,8 @@ Section WfEnv.
     - apply (snd ctx_inst_smash_accE). now rewrite List.rev_involutive.
   Qed.
 
-  Lemma ws_cumul_ctx_pb_rel_transE {pb Γ Δ Δ' Δ''} :
+  (* Binder types written as in [ws_cumul_ctx_pb_rel_context_assumptionsE]. *)
+  Lemma ws_cumul_ctx_pb_rel_transE {pb} {Γ Δ Δ' Δ'' : list context_decl} :
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ' Δ'' ->
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ''.
