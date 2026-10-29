@@ -154,7 +154,8 @@ Inductive cumulSpecE0 {cf : checker_flags} (Σ : global_env_ext) Γ (pb : conv_p
     FORECAST-TREE-ONLY CHANGE (commit 1e5bec98).  This file's own base, [frac/eta] at
     56b92b56, predates the [ci_cofix_nondep] field of [case_info], so the premise exists
     only on a tree that carries BET-339.  The real landing of this change belongs to the
-    cutover F0, not here.
+    cutover F0, not here: it is reconciled when F0 lands this premise on [frac/eta] over
+    BET-339's base rule, with [cumulSpec0_incl_E] (base ⊆ E) rechecked there.
 
     Without the premise the E relation would be strictly WIDER than base conversion in
     exactly the direction BET-339 closed: [cumulSpec0_incl_E] would still compile while
