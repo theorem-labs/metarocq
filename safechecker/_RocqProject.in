@@ -40,3 +40,6 @@ theories/PCUICSafeCheckerEta.v
 # PCUICTypingEtaHyps.v (040d7b98), so its identity checks against those former fields cannot compile here.
 # EtaIntegrate9: the proved fields of ReduceTypedFacts/ConvTypedFacts at welltypedE (moved from PCUICTypingEtaHypsProved)
 theories/PCUICEtaTypedFactsProved.v
+# EtaK7: the composition's E hypotheses without the five repeats (builders from EtaFacts, the 6-field core,
+# welltypedE_context; EtaHypProve's hyp_dup_* lemmas)
+theories/PCUICEtaFactsCompose.v
