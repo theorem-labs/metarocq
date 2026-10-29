@@ -12,6 +12,7 @@
       - [zipp_eta_appstack_snd]
       - [rigid_head]                         (definition: tLambda, tProd, tSort, tPrim)
       - [eta_rename_isLambda], [eta_rename_rigid_head], [eta_rename_isApp]
+      - [eta_rename_lift_closed]             (EtaK1's K1 arm, EtaK1-patch.md §4)
    2. whnf and the virtual tail (untyped, [RedFlags.nodelta])
       - [eta_head_ok]                        (definition: the runtime check of G2b)
       - [mkApps_eq_notApp], [rigid_head_mkApps], [whne_nodelta_not_rigid],
@@ -20,8 +21,9 @@
       - [whnf_zipp_eta_rigid]
    3. Typed facts over an abstract well-typedness predicate
       - [ConvTypedFacts wt wfP]              (class: the NAMED HYPOTHESIS of this file;
-                                              fields [ctf_context], [ctf_case_brs_length],
-                                              both plan row T6 for [welltypedE])
+                                              fields [ctf_context], [ctf_case_brs_length]
+                                              (plan row T6 for [welltypedE]) and
+                                              [ctf_wf_universes] (a T-row typingE fact))
       - [conv_typed_facts_base]              (its instance at base [welltyped] / [wf_ext];
                                               it does NOT discharge the [welltypedE] instance)
       - [wt_zipc_zipp], [wt_zipc_stack_context]   (derived, generic in wt/wfP)
@@ -36,7 +38,7 @@ From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICLiftSubst PCUICTyping
-     PCUICNormal PCUICInversion PCUICTypingEta.
+     PCUICNormal PCUICInversion PCUICWfUniverses PCUICTypingEta.
 (* LAST: the η stack shadows base PCUICPosition's for the unqualified names. *)
 From MetaRocq.PCUIC Require Import PCUICPositionEta.
 
@@ -97,6 +99,18 @@ Proof. rewrite eta_rename_rename. destruct t; reflexivity. Qed.
 
 Lemma eta_rename_isApp π d t : isApp (eta_rename π d t) = isApp t.
 Proof. rewrite eta_rename_rename. destruct t; reflexivity. Qed.
+
+(* A term that every lift fixes (a closed term) is fixed by every [eta_rename]. *)
+Lemma eta_rename_lift_closed π d t :
+  (forall n k, lift n k t = t) -> eta_rename π d t = t.
+Proof.
+  intros hl. induction π as [|se π IH] in d |- *; [reflexivity|].
+  destruct (is_eta_frame se) eqn:he.
+  - destruct se; try discriminate he.
+    + rewrite eta_rename_Eta_app hl. apply IH.
+    + reflexivity.
+  - rewrite (eta_rename_real _ _ _ _ he). apply IH.
+Qed.
 
 (* ===================================================================== *)
 (* 2. whnf and the virtual tail (untyped; RedFlags.nodelta)              *)
@@ -224,23 +238,29 @@ Qed.
 (* ===================================================================== *)
 
 (* The η stack version of base [welltyped_context] and the branch count of a well-typed
-   [tCase]: plan row T6 for the E instance. *)
+   [tCase] (plan row T6 for the E instance), and the universes of a typed term (a T-row
+   fact; the checker paths may not take a base [wf Σ] premise, so the E [welltyped_wf]
+   is this field at [welltypedE]). *)
 Class ConvTypedFacts {cf : checker_flags} (wt : global_env_ext -> context -> term -> Prop) (wfP : global_env_ext -> Type) := {
   ctf_context : forall Σ Γ t π, wfP Σ -> no_Eta_arg π -> wt Σ Γ (zipc t π) -> wt Σ (Γ ,,, stack_context π) t;   (* T6 *)
   ctf_case_brs_length : forall Σ Γ ci p c brs, wfP Σ -> wt Σ Γ (tCase ci p c brs) ->
-      exists mib oib, declared_inductive Σ ci mib oib /\ #|brs| = #|ind_ctors oib|  (* T6 *) }.
+      exists mib oib, declared_inductive Σ ci mib oib /\ #|brs| = #|ind_ctors oib|;  (* T6 *)
+  ctf_wf_universes : forall Σ Γ t, wfP Σ -> wt Σ Γ t -> wf_universes Σ t;   (* T-row: universes of an E-typed term *) }.
 
 (* The base instance shows that the hypotheses [ConvTypedFacts] are consistent and that the
    lemmas over them are about something real. It does NOT discharge the instantiation at
    [welltypedE]/[wf_extE]: that instance needs the typingE facts of plan rows T1 (subject
    reduction over typingE) and T6, which remain hypotheses until those rows land.
-   Not a known-false form: neither field reads a conversion witness ([conv_witnessE]) or a
+   Not a known-false form: no field reads a conversion witness ([conv_witnessE]) or a
    fixpoint/cofixpoint head shape, so the closed-only witness refutation (a [dtype] that is
    η-convertible to [Π (x : tInd I u). B] but keeps a λ in every reduct) does not apply.
    At [welltypedE] the fields are the typingE forms of the base proofs below:
    [ctf_case_brs_length] inverts [typeE_Case], whose [case_branch_typing] is an [All2i] over
    [ind_ctors]; [ctf_context] is subterm typing, which base proves by inversion, validity
-   and context conversion, whose typingE forms are the T1/T6 facts named above. *)
+   and context conversion, whose typingE forms are the T1/T6 facts named above;
+   [ctf_wf_universes] is base [typing_wf_universes] ([PCUICWfUniverses.wf_types], an
+   induction on the derivation), whose [type_Cumul] case uses only the induction hypotheses
+   of the two typing premises (the preamble's [auto] closes it), never the conversion. *)
 #[export] Instance conv_typed_facts_base {cf} : ConvTypedFacts welltyped wf_ext.
 Proof.
   constructor.
@@ -250,6 +270,9 @@ Proof.
     apply (inversion_Case Σ (wf_ext_wf Σ wfΣ)) in typ as (mdecl & idecl & decli & indices & [] & _).
     exists mdecl, idecl. split; [exact decli|].
     apply All2i_length in brs_ty. lia.
+  - intros Σ Γ t wfΣ [T typ].
+    pose proof (typing_wf_universes (wf_ext_wf Σ wfΣ) typ) as h.
+    apply andb_prop in h as [h _]. exact h.
 Qed.
 
 Lemma wt_zipc_zipp {cf wt wfP} {CF : ConvTypedFacts wt wfP} Σ Γ t π : wfP Σ -> no_Eta_arg π ->
