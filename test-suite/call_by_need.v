@@ -328,4 +328,19 @@ Section PrimOps.
       (tApp (tApp (tConst po_land_kn []) (t_int 6%uint63)) (t_int 3%uint63)) (t_int 2%uint63)
     = true.
   Proof. vm_compute. reflexivity. Qed.
+
+  (** Arguments left on the stack after the operation: [eqb 3 3 5] is [true 5]. The rule
+    reduces the first [arity] arguments and applies the result to the rest. These inputs are
+    ill typed; they test only how the machine handles the rest of the stack. *)
+  Definition t_false : term := tConstruct po_bool_ind 1 [].
+  Definition t_eqb_over : term := tApp (t_eqb (t_int 3%uint63) (t_int 3%uint63)) (t_int 5%uint63).
+
+  Lemma prim_keeps_the_rest_of_the_stack :
+    cbn_conv _ po_bool_X Conv [] t_eqb_over (tApp t_true (t_int 5%uint63)) = true.
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** The same result with the rest is not [false 5]: two different constructors, no rule. *)
+  Lemma prim_rest_against_other_constructor :
+    cbn_conv_answer _ po_bool_X Conv [] t_eqb_over (tApp t_false (t_int 5%uint63)) = CbnNoRule.
+  Proof. vm_compute. reflexivity. Qed.
 End PrimOps.
