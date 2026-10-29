@@ -2558,3 +2558,134 @@ Qed.
     in a let body unfolds a [pe]-related body ([pe_lift]); case branches use
     [pe_inst_case_context], fixpoint bodies the [fix_context] analogue. *)
 
+(** ** The parallel fixpoint root, by well-founded induction on [size']
+
+  [Good Σ Γ t]: every reduct of [t] is [eta_safe]. For a typed [t] it is the same
+  two halves as [hnl]: [typed_eta_safe] (typing ⇒ invariant, no SR) and E subject
+  reduction (forecast row T1, preservation; not used here).
+
+  Recursion structure of [pe_fix_root_n] (induction on a bound [n] with
+  [size' t <= n]): the ONLY recursive call is on [B], the BODY of a λ that [t]
+  reduces to by head β steps ([pe_spine_or_lam]), against the lifted fixpoint redex
+  with one more argument [tRel 0]. Its decrease is proved at the call:
+  [size' B < S (size' B) = size' (λ A. B) <= size' t] ([hszB]). It never recurses into
+  a λ domain, a spine argument, or any other root lemma. *)
+
+Definition Good (Σ : global_env) (Γ : context) (t : term) : Type :=
+  forall t', red Σ Γ t t' -> eta_safe Σ t'.
+
+Lemma nth_split {A} (l : list A) n a : nth_error l n = Some a -> ∑ pre post, (l = pre ++ a :: post) × #|pre| = n.
+Proof.
+  induction l as [|x l IH] in n |- *; destruct n; cbn; intros h; try discriminate.
+  - injection h as ->. exists [], l. split; reflexivity.
+  - destruct (IH _ h) as (pre & post & -> & e). exists (x :: pre), post. split; [reflexivity|cbn; now rewrite e].
+Qed.
+
+Lemma isConstruct_app_inv a : isConstruct_app a = true -> ∑ ind k uu bs, a = mkApps (tConstruct ind k uu) bs.
+Proof.
+  unfold isConstruct_app. destruct (decompose_app a) as [hd bs] eqn:ea. cbn. intros h.
+  destruct hd; try discriminate h. apply decompose_app_inv in ea. subst a. now do 4 eexists.
+Qed.
+
+Lemma All2_replace_mid {A B} (R : A -> B -> Type) pre0 x post0 pre y post x' :
+  #|pre0| = #|pre| -> All2 R (pre0 ++ x :: post0) (pre ++ y :: post) -> R x' y ->
+  All2 R (pre0 ++ x' :: post0) (pre ++ y :: post).
+Proof.
+  induction pre0 as [|z pre0 IH] in pre |- *; destruct pre as [|w pre]; cbn; intros hl ha hr; try discriminate.
+  - depelim ha. constructor; assumption.
+  - depelim ha. constructor; [assumption|]. apply IH; [lia|assumption|assumption].
+Qed.
+
+Lemma size'_pos t : 0 < size' t.
+Proof. destruct t; cbn; lia. Qed.
+
+Lemma lift_fix_eta_target mfix idx args :
+  tApp (lift0 1 (mkApps (tFix mfix idx) args)) (tRel 0)
+  = mkApps (tFix (map (map_def (lift 1 0) (lift 1 (#|mfix| + 0))) mfix) idx) (map (lift0 1) args ++ [tRel 0]).
+Proof. rewrite lift_mkApps mkApps_app. reflexivity. Qed.
+
+Lemma lift_mkApps_eta_target f args :
+  tApp (lift0 1 (mkApps f args)) (tRel 0) = mkApps (lift0 1 f) (map (lift0 1) args ++ [tRel 0]).
+Proof. rewrite lift_mkApps mkApps_app. reflexivity. Qed.
+
+Lemma is_constructor_lift_snoc narg args :
+  is_constructor narg args = true -> is_constructor narg (map (lift0 1) args ++ [tRel 0]) = true.
+Proof.
+  rewrite /is_constructor. destruct (nth_error args narg) as [a|] eqn:ha; [|discriminate]. intros hca.
+  have hlt := nth_error_Some_length ha.
+  rewrite (nth_error_app_lt (map (lift0 1) args) [tRel 0] narg (ltac:(rewrite length_map; exact hlt))).
+  rewrite nth_error_map ha /=.
+  now rewrite C3R.isConstruct_app_lift.
+Qed.
+
+Section FixRoot.
+  Context (Σ : global_env).
+
+  Lemma pe_fix_root_n n : forall Γ t mfix idx args narg fn,
+    size' t <= n -> Good Σ Γ t -> pe t (mkApps (tFix mfix idx) args) ->
+    unfold_fix mfix idx = Some (narg, fn) -> is_constructor narg args = true ->
+    ∑ w, trans_clos (red1 Σ Γ) t w × pe w (mkApps fn args).
+  Proof.
+    induction n as [|n IH]; intros Γ t mfix idx args narg fn hsz hgood hpe hunf hc.
+    { exfalso. have := size'_pos t. lia. }
+    destruct (pe_spine_or_lam_top Σ Γ t _ (tFix mfix idx) args hpe eq_refl eq_refl) as [hs|hl].
+    - (* the source reduces to a fixpoint spine: unfold it *)
+      destruct hs as (h0 & args0 & hred & hnlh & hph & hargs).
+      depelim hph; [cbn in hnlh; discriminate hnlh|].
+      match goal with H : All2 _ ?m mfix |- _ =>
+        destruct (pe_unfold_fix_back m mfix idx narg fn H hunf) as (fn0 & hu0 & hfn); rename m into mfix0 end.
+      move: hc. rewrite /is_constructor. destruct (nth_error args narg) as [ra|] eqn:ha; [|discriminate].
+      intros hca.
+      destruct (All2_nth_error_Some_r _ ra hargs ha) as (a0 & ha0 & hpa).
+      destruct (nth_split args narg ra ha) as (pre & post & -> & hlen).
+      destruct (nth_split args0 narg a0 ha0) as (pre0 & post0 & -> & hlen0).
+      destruct (isConstruct_app_inv _ hca) as (ind & k & uu & bs & ->).
+      (* the [rarg]-th argument: no reduct of it is a λ (from [Good] on the spine) *)
+      have hnl : forall a', red Σ Γ a0 a' -> notLam a'.
+      { intros a' hra.
+        have hred2 : red Σ Γ t (mkApps (tFix mfix0 idx) (pre0 ++ a' :: post0)).
+        { eapply rt_trans; [exact hred|]. apply red_mkApps; [apply rt_refl|].
+          apply All2_app; [apply All2_refl; intros; apply rt_refl|].
+          constructor; [exact hra|apply All2_refl; intros; apply rt_refl]. }
+        have hsp := eta_safe_spine _ _ _ (app_cons_not_nil pre0 post0 a') (hgood _ hred2).
+        apply (spine_safe_fix _ _ _ _ _ _ _ hu0 ltac:(rewrite -hlen0; apply nth_error_at_pre) hsp). }
+      destruct (pe_rigid_spine Σ Γ a0 hnl _ (tConstruct ind k uu) bs hpa eq_refl eq_refl)
+        as (h1 & bs0 & hred1 & hnlh1 & hph1 & hbs).
+      depelim hph1; [cbn in hnlh1; discriminate hnlh1|].
+      exists (mkApps fn0 (pre0 ++ mkApps (tConstruct ind k uu) bs0 :: post0)). split.
+      + eapply rt_trans_clos.
+        * eapply rt_trans; [exact hred|]. apply red_mkApps; [apply rt_refl|].
+          apply All2_app; [apply All2_refl; intros; apply rt_refl|].
+          constructor; [exact hred1|apply All2_refl; intros; apply rt_refl].
+        * apply t_step. eapply red_fix; [exact hu0|].
+          rewrite /is_constructor -hlen0 nth_error_at_pre /isConstruct_app decompose_app_mkApps //.
+      + apply pe_mkApps; [exact hfn|].
+        eapply (All2_replace_mid _ pre0 a0 post0); [congruence|exact hargs|].
+        apply pe_mkApps; [apply pe_Construct|exact hbs].
+    - (* the source reduces to a λ: recurse on its BODY, with [size'] decreasing *)
+      destruct hl as (na & A & B & hred & hszl & hpB).
+      have hszB : size' B <= n by (cbn in hszl; lia).
+      rewrite lift_fix_eta_target in hpB.
+      have hgoodB : Good Σ (Γ ,, vass na A) B.
+      { intros B' hB.
+        have hr : red Σ Γ t (tLambda na A B') by (eapply rt_trans; [exact hred|]; apply red_abs; [apply rt_refl|exact hB]).
+        have hs := hgood _ hr. cbn in hs. move/andP: hs => [_ hs]. exact hs. }
+      destruct (IH (Γ ,, vass na A) B _ idx _ narg (lift0 1 fn) hszB hgoodB hpB
+                  (C3R.lift_unfold_fix 1 0 mfix idx narg fn hunf) (is_constructor_lift_snoc _ _ hc))
+        as (w' & hw' & hpw').
+      exists (tLambda na A w'). split.
+      + eapply rt_trans_clos; [exact hred|].
+        eapply (trans_clos_map _ _ (fun y => tLambda na A y)); [|exact hw'].
+        intros y z r. now apply abs_red_r.
+      + apply pe_eta. rewrite lift_mkApps_eta_target. exact hpw'.
+  Qed.
+
+  (** **The parallel fixpoint root: CLOSED, under [Good].** *)
+  Theorem pe_fix_root Γ t mfix idx args narg fn :
+    Good Σ Γ t -> pe t (mkApps (tFix mfix idx) args) ->
+    unfold_fix mfix idx = Some (narg, fn) -> is_constructor narg args = true ->
+    ∑ w, trans_clos (red1 Σ Γ) t w × pe w (mkApps fn args).
+  Proof. exact (pe_fix_root_n (size' t) Γ t mfix idx args narg fn (le_n _)). Qed.
+
+End FixRoot.
+
