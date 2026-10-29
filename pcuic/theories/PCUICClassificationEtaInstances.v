@@ -18,9 +18,10 @@
     [cli_T := Π _ : Prop. z] in the context [z := Prop : Type] ([cli_Γz]): [cli_T] is not an
     arity (its codomain is the variable [z]) and reaches the arity [Prop → Prop] only by
     unfolding [z]. i20 ([invert_cumul_arity_rE_inst]) runs T8 [Prod_r] on [cli_T] and T8
-    [Sort_r] on the codomain [z]; i21 ([invert_cumul_arity_lE_inst]) runs this file's
-    [T8_Prod_l_plug] and [T8_Sort_l_plug] (the [_l] forms derived from the proved [_r] ones)
-    the same way; x2, x3 and [isArity_typing_spineE] run i21/i20 on it.
+    [Sort_r] on the codomain [z]; i21 ([invert_cumul_arity_lE_inst]) runs
+    [PCUICPrincipalityEta.T8_Prod_l_plug] and this file's [T8_Sort_l_plug] (the [_l] forms
+    derived from the proved [_r] ones) the same way; x2, x3 and [isArity_typing_spineE] run
+    i21/i20 on it.
   - The (co)fixpoint witness lemmas run on declared types on which the check FAILS:
     [bdf_fxty 0] (domain the β-redex [(λ B. I B) A], [bdf_check_fix_dtypeβ]) and [bdf_RFβ]
     (the β-redex [(λ B. R B) (∀P. P)], [bdf_check_cofix_dtypeβ]); the typed-reduct route
@@ -40,8 +41,9 @@
     [invert_fix_indE], [wh_neutral_empty_genE], [wh_neutral_emptyE].
   - Refutations ([invert_cumul_arity_lE_untyped_false], [invert_cumul_arity_rE_untyped_false]):
     theorems, not hypotheses; no instance applies.
-  - Helpers run by the instances above: [T8_Sort_l_plug], [T8_Prod_l_plug],
-    [chain_ws_cumul_pbE_Conv] (inside i21's instance), [arity_spine_len] and
+  - Helpers run by the instances above: [T8_Sort_l_plug], [PCUICPrincipalityEta.T8_Prod_l_plug]
+    and [PCUICPrincipalityEta.chain_ws_cumul_pbE_Conv] (inside i21's instance; their own
+    instances are in [PCUICPrincipalityEtaInstances]), [arity_spine_len] and
     [arity_spine_len_subst] (inside i20's and i21's; [arity_spine_len_subst_inst] too). *)
 
 From Stdlib Require Import ssreflect ssrbool.

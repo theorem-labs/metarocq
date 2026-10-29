@@ -2,8 +2,8 @@
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDUniqueEta] (row T6)
 
-  **The forecast classes are section variables.** Every lemma of [BDUniqueEta] except its two
-  file-local reduction devices uses soundness, validity or completeness, so it takes the classes
+  **The forecast classes are section variables.** Every lemma of [BDUniqueEta] uses soundness,
+  validity or completeness, so it takes the classes
   of [BDToPCUICEta] and [BDFromPCUICEta] as premises. No instance of a class exists before its
   copy lands, so the instances below are applied in section [BDUniqueClassInstances], whose
   [Context] holds the five classes, as [BDToPCUICEtaInstances] does. Every derivation they need
@@ -28,9 +28,10 @@
   - [infering_checkingE] is applied to the check [x ◃ G F] of [checkingE_eta_inst], whose
     [JoinE] premise is one η step.
   IMPOSSIBLE to make non-reflexive, by the statement: [infering_sort_sortE] and
-  [isTypeRel_uniqueE] conclude an equality of sorts or relevances, and [bdu_invert_red_sort]
-  concludes that the reduct of a sort is the sort; their instances run through a let-reduction
-  ([bu_y_sort]) or a real derivation. *)
+  [isTypeRel_uniqueE] conclude an equality of sorts or relevances; their instances run through a
+  let-reduction ([bu_y_sort]) or a real derivation. The two reduction facts the proofs use,
+  [PCUICPrincipalityEta.closed_red_confluence_cb] and [invert_red_sort_cb], have their instances
+  in [PCUICPrincipalityEtaInstances]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -160,23 +161,6 @@ Proof.
   apply rt_step. exact (red_rel si_Σ bu_Γd 1 si_P eq_refl).
 Qed.
 
-(** ** The two reduction devices (no class) *)
-
-Lemma bu_red_beta : si_Σ ;;; [] ⊢ bu_idF ⇝ iv_False.
-Proof. split; [reflexivity|reflexivity|]. apply rt_step. unfold bu_idF, iv_id. apply red_beta. Qed.
-
-Lemma bu_red_refl : si_Σ ;;; [] ⊢ bu_idF ⇝ bu_idF.
-Proof. split; [reflexivity|reflexivity|]. apply rt_refl. Qed.
-
-Definition bdu_closed_red_confluence_inst :
-  ∑ v', si_Σ ;;; [] ⊢ iv_False ⇝ v' × si_Σ ;;; [] ⊢ bu_idF ⇝ v' :=
-  BDUniqueEta.bdu_closed_red_confluence bu_red_beta bu_red_refl.
-
-(** IMPOSSIBLE to make non-reflexive (see the header). *)
-Definition bdu_invert_red_sort_inst : si_P = tSort sProp :=
-  BDUniqueEta.bdu_invert_red_sort (Σ := si_Σ) (Γ := []) (u := sProp)
-    ltac:(split; [reflexivity|reflexivity|apply rt_refl]).
-
 (** ** The lemmas, applied in a section that holds the classes *)
 
 Section BDUniqueClassInstances.
@@ -232,7 +216,7 @@ Section BDUniqueClassInstances.
     infering_ind_inferingE (Σ := si_Σ) si_wfE localenv_nil bu_disc_ind2 bu_disc_infer.
 
   Definition principal_typeE_inst :=
-    principal_typeE (Σ := si_Σ) si_wfE (iv_app_typed si_Σ [] localenv_nil).
+    BDUniqueEta.principal_typeE (Σ := si_Σ) si_wfE (iv_app_typed si_Σ [] localenv_nil).
 
   Definition isTypeRel_uniqueE_inst : Relevant = Relevant :=
     isTypeRel_uniqueE (Σ := si_Σ) si_wfE (Γ := []) (T := iv_PP)

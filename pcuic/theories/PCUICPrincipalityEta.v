@@ -20,7 +20,12 @@
   typing premise; it is copied ([typing_leq_termE], [typing_eq_termE]).
 
   Forecast classes (imported, never redefined): [ValForecastCopy16], [SRForecastCopy16],
-  [SRForecastCopy18], [BDFromForecastCopy18]. Instances: [PCUICPrincipalityEtaInstances]. *)
+  [SRForecastCopy18], [BDFromForecastCopy18]. Instances: [PCUICPrincipalityEtaInstances].
+
+  One home for shared helpers: [closed_red_confluence_cb] and [invert_red_sort_cb] are used by
+  [Bidirectional/BDUniqueEta], [chain_ws_cumul_pbE_Conv] and [T8_Prod_l_plug] by
+  [PCUICClassificationEta]; both require this file without importing it and write the names
+  qualified. *)
 
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.

@@ -31,11 +31,10 @@
 
   - Reduction facts that base proves under [wf Σ] are used under [ClosedBodies Σ] (from [wfE Σ] by
     [wfE_ClosedBodies]): [invert_red_prod_cb], [invert_red_mkApps_tInd_cb], [red_red_ctx_inv'_cb],
-    [closed_red_red_subst0_cb], and the two file-local devices [bdu_closed_red_confluence]
-    (from [red_confluence_cb]) and [bdu_invert_red_sort] (no premise). [PCUICPrincipalityEta]
-    (EtaMetaLane, not landed) declares the same two facts as [closed_red_confluence_cb] and
-    [invert_red_sort_cb]; when both are on one tree, these devices are replaced by those after a
-    both-way ascription.
+    [closed_red_red_subst0_cb], and [PCUICPrincipalityEta.closed_red_confluence_cb] (from
+    [red_confluence_cb]) and [PCUICPrincipalityEta.invert_red_sort_cb] (no premise), written
+    qualified ([PCUICPrincipalityEta] is required, not imported: its [principal_typeE] is the twin
+    of the other base [principal_type], see "Same names" below).
   - App: base substitutes the argument with the typed [closed_red_subst] and a typed [subslet];
     here [closed_red_untyped_substitution_cb] with the scoping of the argument (from
     [checking_typingE]).
@@ -55,8 +54,9 @@
 
   Base has two [principal_type] ([PCUICPrincipality.principal_type] and
   [BDUnique.principal_type], different statements); the twin of the second is
-  [BDUniqueEta.principal_typeE] (here). Wherever it and the twin of the first are in scope, write
-  them qualified (cross-lane-commitments.md C6). *)
+  [BDUniqueEta.principal_typeE] (here), the twin of the first [PCUICPrincipalityEta.principal_typeE].
+  This file requires [PCUICPrincipalityEta], so both are in its context and in that of every file
+  that loads it: every reference to either is written qualified (cross-lane-commitments.md C6). *)
 
 From Stdlib Require Import Bool List Arith Lia.
 From MetaRocq.Utils Require Import utils monad_utils.
@@ -74,6 +74,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
   PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICContextConversionEta
   PCUICWsCumulEtaCtx PCUICContextConversionTypEta PCUICAritiesEta PCUICSpineEta
   PCUICValidityEta PCUICSREta BDTypingEta BDToPCUICEta BDFromPCUICEta.
+From MetaRocq.PCUIC Require PCUICPrincipalityEta.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -81,32 +82,6 @@ From Equations.Type Require Import Relation Relation_Properties.
 From Equations.Prop Require Import DepElim.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
-
-(** ** Reduction devices of this file, under [ClosedBodies] (see the header) *)
-
-(** Base [closed_red_confluence] ([PCUICContextConversion.v:528]) under [ClosedBodies Σ]. *)
-Local Lemma bdu_closed_red_confluence {cf} {Σ : global_env_ext} {cbΣ : ClosedBodies Σ} {Γ} {t u v} :
-  Σ ;;; Γ ⊢ t ⇝ u -> Σ ;;; Γ ⊢ t ⇝ v ->
-  ∑ v', Σ ;;; Γ ⊢ u ⇝ v' × Σ ;;; Γ ⊢ v ⇝ v'.
-Proof.
-  intros [clΓ clT r] [clΓ' clT' r'].
-  destruct (red_confluence_cb (Γ := exist Γ clΓ) (t := exist t clT) r r') as [v' [redl redr]].
-  cbn in *.
-  have hu : is_open_term Γ u by exact (red_is_open_term_cb _ _ r clΓ clT).
-  have hv : is_open_term Γ v by exact (red_is_open_term_cb _ _ r' clΓ clT).
-  exists v'; repeat split; eauto with fvs.
-Qed.
-
-(** Base [invert_red_sort] ([PCUICConversion.v:1119]); a sort does not reduce, with no premise. *)
-Local Lemma bdu_invert_red_sort {cf} {Σ : global_env_ext} {Γ u v} :
-  Σ ;;; Γ ⊢ (tSort u) ⇝ v -> v = tSort u.
-Proof.
-  intros [_ _ H]. remember (tSort u) as x eqn:ex.
-  induction H in ex |- *.
-  - subst. depind r; solve_discr.
-  - now subst.
-  - specialize (IHclos_refl_trans1 ex). subst y. now apply IHclos_refl_trans2.
-Qed.
 
 Section BDUniqueEta.
 
@@ -348,21 +323,21 @@ Proof.
     eapply X0 in X4 as [T'' []]; subst ; tea.
     eapply into_closed_red in X1 ; fvs.
     eapply into_closed_red in X5 ; fvs.
-    eapply bdu_closed_red_confluence in X5 as [? [? ru']]; tea.
-    eapply bdu_invert_red_sort in ru' ; subst.
-    eapply bdu_closed_red_confluence in X1 as [? [ru' ru]].
+    eapply PCUICPrincipalityEta.closed_red_confluence_cb in X5 as [? [? ru']]; tea.
+    eapply PCUICPrincipalityEta.invert_red_sort_cb in ru' ; subst.
+    eapply PCUICPrincipalityEta.closed_red_confluence_cb in X1 as [? [ru' ru]].
     2: now etransitivity.
-    eapply bdu_invert_red_sort in ru ; subst.
-    eapply bdu_invert_red_sort in ru'.
+    eapply PCUICPrincipalityEta.invert_red_sort_cb in ru ; subst.
+    eapply PCUICPrincipalityEta.invert_red_sort_cb in ru'.
     now congruence.
 
   - inversion X3 ; subst.
     eapply X0 in X4 as [T'' []]; subst ; tea.
     eapply into_closed_red in X1 ; fvs.
     eapply into_closed_red in X5 ; fvs.
-    eapply bdu_closed_red_confluence in X5 as [? [? rA']]; tea.
+    eapply PCUICPrincipalityEta.closed_red_confluence_cb in X5 as [? [? rA']]; tea.
     eapply invert_red_prod_cb in rA' as (?&B0&[]); subst.
-    eapply bdu_closed_red_confluence in X1 as [? [rA' rA]].
+    eapply PCUICPrincipalityEta.closed_red_confluence_cb in X1 as [? [rA' rA]].
     2: now etransitivity.
     eapply invert_red_prod_cb in rA as (?&?&[]); subst.
     eapply invert_red_prod_cb in rA' as (A''&B''&[]) ; subst.
@@ -380,9 +355,9 @@ Proof.
     eapply X0 in X4 as [T'' []]; subst ; tea.
     eapply into_closed_red in X1 ; fvs.
     eapply into_closed_red in X5 ; fvs.
-    eapply bdu_closed_red_confluence in X5 as [? [? rind']]; tea.
+    eapply PCUICPrincipalityEta.closed_red_confluence_cb in X5 as [? [? rind']]; tea.
     eapply invert_red_mkApps_tInd_cb in rind' as [? []]; subst.
-    eapply bdu_closed_red_confluence in X1 as [? [rind' rind]].
+    eapply PCUICPrincipalityEta.closed_red_confluence_cb in X1 as [? [rind' rind]].
     2: now etransitivity.
     eapply invert_red_mkApps_tInd_cb in rind as [? []]; subst.
     eapply invert_red_mkApps_tInd_cb in rind' as [args'' [e ]]; subst.
@@ -451,8 +426,8 @@ Proof.
   2: fvs.
   2: now eapply type_is_open_termE, infering_typingE.
   eapply bidirectional_uniqueE in i as [T'' []]; tea.
-  eapply bdu_closed_red_confluence in r as [? [? ru]]; tea.
-  eapply bdu_invert_red_sort in ru ; subst.
+  eapply PCUICPrincipalityEta.closed_red_confluence_cb in r as [? [? ru]]; tea.
+  eapply PCUICPrincipalityEta.invert_red_sort_cb in ru ; subst.
   now etransitivity.
 Qed.
 
@@ -510,7 +485,7 @@ Proof.
   2: fvs.
   2: now eapply type_is_open_termE, infering_typingE.
   eapply bidirectional_uniqueE in i as [? []]; tea.
-  eapply bdu_closed_red_confluence in r as [? [? rA']]; tea.
+  eapply PCUICPrincipalityEta.closed_red_confluence_cb in r as [? [? rA']]; tea.
   eapply invert_red_prod_cb in rA' as (A'&B'&[]); subst.
   exists A', B' ; split ; tea.
   now etransitivity.
@@ -560,7 +535,7 @@ Proof.
   2: fvs.
   2: now eapply type_is_open_termE, infering_typingE.
   eapply bidirectional_uniqueE in i as [? []]; tea.
-  eapply bdu_closed_red_confluence in r as [? [? rind]]; tea.
+  eapply PCUICPrincipalityEta.closed_red_confluence_cb in r as [? [? rind]]; tea.
   eapply invert_red_mkApps_tInd_cb in rind as [args' []]; subst.
   exists args' ; split ; tea.
   now etransitivity.

@@ -40,8 +40,8 @@
     ([invert_cumul_arity_lE_untyped_false], [invert_cumul_arity_rE_untyped_false] below: the
     untypable witness [λx:Prop. (tSort Prop) x], η-related to the arity [tSort Prop] and
     red-normal); the witness refutes only the untyped forms. With the premise, each is proved
-    from typed T8 ([T8_Sort_l_plug], [T8_Prod_l_plug] here, from the proved [_r] forms;
-    [BDFromPCUICEta.T8_Sort_r_plug], [T8_Prod_r_plug]). Consumers: [isArity_typing_spineE]
+    from typed T8 ([T8_Sort_l_plug] here and [PCUICPrincipalityEta.T8_Prod_l_plug], from the
+    proved [_r] forms; [BDFromPCUICEta.T8_Sort_r_plug], [T8_Prod_r_plug]). Consumers: [isArity_typing_spineE]
     (supplies it from the spine's [isTypeE] fields). The other consumers are erasure copies
     (X6, off the F2 path), named in [t8-consumers.md] §3.3 and §4.
   - [mfix_on_ind_spine_witness] (base [:132], generic over a [ShapeCheck] check) is copied
@@ -62,10 +62,12 @@
   - [arity_spine_len], [arity_spine_len_subst]: the measure of the induction in the proofs of
     i20 and i21 (base inducts on the algorithmic cumulativity derivation, which [ws_cumul_pbE]
     does not have).
-  - [chain_ws_cumul_pbE_Conv], [T8_Sort_l_plug], [T8_Prod_l_plug]: the left T8 forms, derived
-    from the proved right forms as in [lanes/eta/meta/inventory-sweep.md] ([T8_*_l_of_r]; that
-    file does not land). Each type is the pinned [PCUICEtaT8Probe.T8_*_l_statement], checked by
-    the [_fit] definitions.
+  - [T8_Sort_l_plug]: the left T8 form at a sort, derived from the proved right form as in
+    [lanes/eta/meta/inventory-sweep.md] ([T8_*_l_of_r]; that file does not land), with
+    [PCUICPrincipalityEta.chain_ws_cumul_pbE_Conv]. Its type is the pinned
+    [PCUICEtaT8Probe.T8_Sort_l_statement], checked by [T8_Sort_l_plug_fit]. The product form and
+    the chain lemma are [PCUICPrincipalityEta]'s ([T8_Prod_l_plug], [chain_ws_cumul_pbE_Conv]),
+    required, not imported, and written qualified.
 
   ** Proof routes that differ from base (statements do not)
 
@@ -112,7 +114,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
   PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
   PCUICWsCumulEtaInstancesGlobal PCUICValidityEta PCUICSREta.
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
-From MetaRocq.PCUIC Require PCUICGenerationEta PCUICEtaT8Probe BDFromPCUICEta.
+From MetaRocq.PCUIC Require PCUICGenerationEta PCUICEtaT8Probe BDFromPCUICEta PCUICPrincipalityEta.
 
 Local Existing Instance config.extraction_checker_flags.
 
@@ -229,17 +231,6 @@ Proof.
   induction t in k |- *; cbn; intros h; try discriminate h; try reflexivity; f_equal; auto.
 Qed.
 
-(** A chain from [canon T] to [H] is an E conversion of [T] and [H]. *)
-Lemma chain_ws_cumul_pbE_Conv {cf : checker_flags} {Σ : global_env_ext} {cb : ClosedBodies Σ} Γ T H :
-  is_closed_context Γ -> is_open_term Γ T ->
-  clos_refl_trans (union (R_c Σ Γ) eta1) (canon T) H -> ws_cumul_pbE Conv Σ Γ T H.
-Proof.
-  intros hΓ hT hch.
-  have hcan : canon H = H := chain_canonical (Σ := Σ) Γ (canon T) H (canon_idem T) hch.
-  constructor; [exact hΓ|exact hT|exact (chain_open (Σ := Σ) (wfΣ := cb) Γ T H hΓ hT hch)|].
-  exists H, H. split; [exact hch|split; [rewrite hcan; apply rt_refl|apply compare_term_eta_refl]].
-Qed.
-
 Section ClassificationEta.
 
 (* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two
@@ -249,11 +240,12 @@ Section ClassificationEta.
 Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
   {C16 : ClassifForecastCopy16}.
 
-(** ** Typed T8, left forms
+(** ** Typed T8, left form at a sort
 
   [_l] from [_r]: the [_l] inversion's chain shows [T] E-convertible to a head form, so [_r] at
-  [Conv] gives the reduct, and the head-against-head inversion compares the heads. The type of
-  each is the pinned [PCUICEtaT8Probe.T8_*_l_statement] ([_fit] below). *)
+  [Conv] gives the reduct, and the head-against-head inversion compares the heads. The type is
+  the pinned [PCUICEtaT8Probe.T8_Sort_l_statement] ([_fit] below). The product form is
+  [PCUICPrincipalityEta.T8_Prod_l_plug]. *)
 Lemma T8_Sort_l_plug :
   forall (cf : checker_flags) (Σ : global_env_ext),
   forall Γ pb T s s',
@@ -264,7 +256,7 @@ Proof using V16 F16 F18.
   intros cf Σ Γ pb T s s' wfΣ hT hc.
   have cb : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
   destruct (ws_cumul_pbE_Sort_l_inv (Σ := Σ) pb hc) as (s1 & hch & _).
-  have hconv := chain_ws_cumul_pbE_Conv (cb := cb) Γ T _ (wsE_ctx hc) (wsE_right hc) hch.
+  have hconv := PCUICPrincipalityEta.chain_ws_cumul_pbE_Conv (cb := cb) Γ T _ (wsE_ctx hc) (wsE_right hc) hch.
   destruct (BDFromPCUICEta.T8_Sort_r_plug cf Σ Γ Conv T s1 s' wfΣ hT hconv) as (s2 & hred & _).
   exists s2. split; [exact hred|].
   have h2 : ws_cumul_pbE pb Σ Γ (tSort s) (tSort s2) :=
@@ -272,34 +264,8 @@ Proof using V16 F16 F18.
   exact (ws_cumul_pbE_Sort_inv (Σ := Σ) pb h2).
 Qed.
 
-Lemma T8_Prod_l_plug :
-  forall (cf : checker_flags) (Σ : global_env_ext),
-  forall Γ pb T na dom codom s',
-    wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
-    ws_cumul_pbE pb Σ Γ (tProd na dom codom) T ->
-    ∑ na' dom' codom',
-      [× Σ ;;; Γ ⊢ T ⇝ tProd na' dom' codom', eq_binder_annot na na',
-         ws_cumul_pbE Conv Σ Γ dom dom' &
-         ws_cumul_pbE pb Σ (Γ ,, vass na dom) codom codom'].
-Proof using V16 F16 F18.
-  intros cf Σ Γ pb T na dom codom s' wfΣ hT hc.
-  have cb : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
-  destruct (ws_cumul_pbE_Prod_l_inv (Σ := Σ) hc) as (na1 & dom1 & codom1 & [hch _ hdom _]).
-  have hconv := chain_ws_cumul_pbE_Conv (cb := cb) Γ T _ (wsE_ctx hc) (wsE_right hc) hch.
-  destruct (BDFromPCUICEta.T8_Prod_r_plug cf Σ Γ Conv T na1 dom1 codom1 s' wfΣ hT hconv)
-    as (na2 & dom2 & codom2 & [hred _ _ _]).
-  have h2 : ws_cumul_pbE pb Σ Γ (tProd na dom codom) (tProd na2 dom2 codom2) :=
-    ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cb) _ _ _ hc (red_ws_cumul_pbE (wfΣ := cb) hred).
-  destruct (ws_cumul_pbE_Prod_Prod_inv (Σ := Σ) h2) as [hna hd hcd].
-  exists na2, dom2, codom2. split; [exact hred|exact hna|exact hd|].
-  eapply ws_cumul_pbE_bodies; [|exact (closed_snoc_vass Γ na dom (wsE_ctx hc) (wsE_left hdom))|exact hcd].
-  apply upto_domain_r_bodies_vass, upto_domain_r_bodies_refl.
-Qed.
-
 Definition T8_Sort_l_plug_fit (cf : checker_flags) (Σ : global_env_ext) :
   @PCUICEtaT8Probe.T8_Sort_l_statement cf Σ := T8_Sort_l_plug cf Σ.
-Definition T8_Prod_l_plug_fit (cf : checker_flags) (Σ : global_env_ext) :
-  @PCUICEtaT8Probe.T8_Prod_l_statement cf Σ := T8_Prod_l_plug cf Σ.
 
 (** ** The arity corollaries i20 and i21 ([PCUICConversion.v:1231], [:1249]), Class A' *)
 
@@ -371,7 +337,7 @@ Section ArityCorollariesE.
       exists (tSort s''); split; [now sq|reflexivity].
     - (* a product: T8 [Prod_l], then the codomain *)
       have isT' := isT. destruct isT' as (_ & sT & tyT & _).
-      destruct (T8_Prod_l_plug _ Σ Γ Cumul T na A B sT wfΣ tyT h)
+      destruct (PCUICPrincipalityEta.T8_Prod_l_plug _ Σ Γ Cumul T na A B sT wfΣ tyT h)
         as (na' & A' & B' & [r ena hA hB]).
       assert (isP : isTypeE Σ Γ (tProd na' A' B')) by exact (isType_redE isT (clrel_rel r)).
       destruct (fst (isType_tProdE (wfΣ := wfΣ)) isP) as [isA' isB'].
