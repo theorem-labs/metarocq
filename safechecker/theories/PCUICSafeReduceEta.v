@@ -286,6 +286,83 @@ Proof.
     sq. exact (whnf_red_inv Γ t t' wfΣ hwh r).
 Qed.
 
+(** *** The GENUINE part of the interface at [welltypedE]
+
+    [ReduceTypedFactsE] holds the nine fields of [ReduceTypedFacts] that are still
+    hypotheses at [wt := welltypedE], [wfP := wf_extE]: each field [rtf_<f>E] is the field
+    [rtf_<f>] above with [wt] replaced by [welltypedE] and [wfP] by [wf_extE], nothing
+    else changed (the plan row each one waits on is in the comment above it). The other six
+    fields ([rtf_rel], [rtf_const], [rtf_cofix], [rtf_app_sort], [rtf_app_prod],
+    [rtf_app_prim]) are proved at that instantiation ([PCUICEtaTypedFactsProved]).
+    [PCUICSafeReduceEtaBridge.reduce_typed_facts_E] builds [ReduceTypedFacts welltypedE
+    wf_extE] from an instance of this class and those six lemmas; the kernel checking that
+    construction is the check that each field here is the field above at [welltypedE].
+    It is the E sections' named hypothesis ([PCUICSafeReduceEtaBridge.reduce_factsE]).
+    A [Prop], so extraction erases it. Satisfying instance: [reduce_typed_facts_base]
+    proves the same nine statements at base [welltyped]/[wf_ext]; it shows them consistent
+    and does NOT discharge them at [welltypedE] (rows T1, T6, W-c); concrete E instances of
+    three of them are in [PCUICSafeReduceEtaBridge] ([rtf_wt_red_inst], [rtf_context_inst],
+    [rtf_whnf_red_inv_inst]). *)
+Class ReduceTypedFactsE {cf : checker_flags} : Prop := {
+  (* subject reduction along [red] (T1) *)
+  rtf_wt_redE : WtRed welltypedE wf_extE;
+  (* inversion of the typing through every frame of a stack (T6) *)
+  rtf_contextE : forall Σ Γ (t : term × stack), wf_extE Σ ->
+    welltypedE Σ Γ (zip t) -> welltypedE Σ (Γ ,,, stack_context (snd t)) (fst t);
+  (* a case on a constructor (T6; base [invert_Case_Construct]) *)
+  rtf_case_constructE : forall Σ Γ ci p ind' i u brs args, wf_extE Σ ->
+    welltypedE Σ Γ (tCase ci p (mkApps (tConstruct ind' i u) args) brs) ->
+    ci.(ci_ind) = ind' /\
+    exists br, nth_error brs i = Some br /\
+      (#|args| = ci.(ci_npar) + context_assumptions br.(bcontext))%nat;
+  (* a projection of a constructor (T6; base [invert_Proj_Construct]) *)
+  rtf_proj_constructE : forall Σ Γ p i' c u l, wf_extE Σ ->
+    welltypedE Σ Γ (tProj p (mkApps (tConstruct i' c u) l)) ->
+    p.(proj_ind) = i' /\ c = 0 /\ (p.(proj_npars) + p.(proj_arg) < #|l|)%nat;
+  (* a registered operation is not applied beyond its arity (T6, prim-ops); argument as for
+     [rtf_prim_overapplied] above *)
+  rtf_prim_overappliedE : forall Σ Γ c u op args, wf_extE Σ ->
+    prim_op_of Σ c = Some op -> (arity op < #|args|)%nat ->
+    welltypedE Σ Γ (mkApps (tConst c u) args) -> False;
+  (* the recursive argument of a fixpoint, the discriminee of a case and of a
+     projection, in weak-head normal form and not a constructor, are neutral (T6,
+     classification; base [whnf_fix_arg_whne], [whnf_case_arg_whne],
+     [whnf_proj_arg_whne]) *)
+  rtf_fix_arg_whneE : forall flags Σ Γ mfix idx body t before args aftr, wf_extE Σ ->
+    unfold_fix mfix idx = Some (#|before|, body) ->
+    match t with
+    | tConstruct _ _ _ => False
+    | tApp _ _ => False
+    | _ => True
+    end ->
+    whnf flags Σ Γ (mkApps t args) ->
+    welltypedE Σ Γ (mkApps (tFix mfix idx) (before ++ mkApps t args :: aftr)) ->
+    ∥ whne flags Σ Γ (mkApps t args) ∥;
+  rtf_case_arg_whneE : forall flags Σ Γ hd args ci p brs, wf_extE Σ ->
+    match hd with
+    | tApp _ _
+    | tConstruct _ _ _
+    | tCoFix _ _ => False
+    | _ => True
+    end ->
+    whnf flags Σ Γ (mkApps hd args) ->
+    welltypedE Σ Γ (tCase ci p (mkApps hd args) brs) ->
+    ∥ whne flags Σ Γ (mkApps hd args) ∥;
+  rtf_proj_arg_whneE : forall flags Σ Γ hd args p, wf_extE Σ ->
+    match hd with
+    | tApp _ _
+    | tCoFix _ _ => False
+    | tConstruct _ c _ => c <> 0
+    | _ => True
+    end ->
+    whnf flags Σ Γ (mkApps hd args) ->
+    welltypedE Σ Γ (tProj p (mkApps hd args)) ->
+    ∥ whne flags Σ Γ (mkApps hd args) ∥;
+  (* untyped: a reduct of a weak-head normal form keeps its head (row W-c) *)
+  rtf_whnf_red_invE : forall Σ Γ t t', wf_extE Σ ->
+    whnf RedFlags.default Σ Γ t -> Σ ;;; Γ ⊢ t ⇝ t' -> ∥ whnf_red Σ Γ t t' ∥
+}.
+
 (** ** Consequences of the interface, under the names the machine's proofs use *)
 
 Section WtLemmas.

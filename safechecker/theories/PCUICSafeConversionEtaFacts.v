@@ -26,6 +26,9 @@
                                               [ctf_wf_universes] (a T-row typingE fact))
       - [conv_typed_facts_base]              (its instance at base [welltyped] / [wf_ext];
                                               it does NOT discharge the [welltypedE] instance)
+      - [ConvTypedFactsE]                    (class: its GENUINE field [ctf_contextE], the field
+                                              [ctf_context] at [welltypedE]/[wf_extE]; the other
+                                              two are proved there, PCUICEtaTypedFactsProved)
       - [wt_zipc_zipp], [wt_zipc_stack_context]   (derived, generic in wt/wfP)
    4. Facts at [welltypedE] that need no hypothesis
       - [welltypedE_tRel_vass]
@@ -38,6 +41,7 @@
 
    Named hypotheses and their instances:
       [ConvTypedFacts wt wfP]  --  instance [conv_typed_facts_base : ConvTypedFacts welltyped wf_ext]
+      [ConvTypedFactsE]        --  the same base instance, for its one field at base
    The η-context facts [wf_localE_push_real], [wf_localE_eta_step], [eta_rename_typing] are
    EtaPosK4's (PCUICPositionEtaTyping, section EtaTypingE), not restated here.
    Section [EtaStackRed]'s only [Context] is the environment Σ (not a hypothesis). There is
@@ -284,6 +288,19 @@ Proof.
     pose proof (typing_wf_universes (wf_ext_wf Σ wfΣ) typ) as h.
     apply andb_prop in h as [h _]. exact h.
 Qed.
+
+(* The GENUINE part of [ConvTypedFacts] at [wt := welltypedE], [wfP := wf_extE]: its field
+   [ctf_contextE] is [ctf_context] above with [wt] replaced by [welltypedE] and [wfP] by
+   [wf_extE], nothing else changed. The two other fields are proved at that instantiation
+   ([PCUICEtaTypedFactsProved.ctf_case_brs_length_proved], [ctf_wf_universes_proved]);
+   [PCUICSafeConversionEta.conv_typed_facts_E] builds [ConvTypedFacts welltypedE wf_extE] from
+   an instance of this class and those two lemmas (the kernel checking that construction checks
+   [ctf_contextE] against [ctf_context] at [welltypedE]). It is the named hypothesis
+   [conv_factsE] of [PCUICSafeConversionEta]'s section [Conversion]. Explicitly [: Prop].
+   Satisfying instance: [conv_typed_facts_base] proves the same statement at base [welltyped] /
+   [wf_ext]; it shows it consistent and does NOT discharge it at [welltypedE] (rows T1/T6). *)
+Class ConvTypedFactsE {cf : checker_flags} : Prop := {
+  ctf_contextE : forall Σ Γ t π, wf_extE Σ -> no_Eta_arg π -> welltypedE Σ Γ (zipc t π) -> welltypedE Σ (Γ ,,, stack_context π) t;   (* T6 *) }.
 
 Lemma wt_zipc_zipp {cf wt wfP} {CF : ConvTypedFacts wt wfP} Σ Γ t π : wfP Σ -> no_Eta_arg π ->
   wt Σ Γ (zipc t π) -> wt Σ (Γ ,,, stack_context π) (zipp t π).
