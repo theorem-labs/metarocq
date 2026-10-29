@@ -24,3 +24,7 @@ theories/PCUICMustExpandEta.v
 theories/PCUICErrorsEta.v
 theories/PCUICSafeConversionEta.v
 theories/PCUICSafeConversionEtaFacts.v
+# The reduction machine over an abstract typing (B3 (a)), and its E bridge (EtaReduce)
+theories/PCUICWfReductionEta.v
+theories/PCUICSafeReduceEta.v
+theories/PCUICSafeReduceEtaBridge.v
