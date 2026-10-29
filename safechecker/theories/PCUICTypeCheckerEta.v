@@ -26,7 +26,7 @@ From MetaRocq.SafeChecker Require PCUICSafeConversion.
 
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd PCUICSNEta
      PCUICWellScopedCumulativityEta PCUICClosedTypEta PCUICContextConversionEta PCUICWsCumulEtaCtx
-     PCUICConversionEtaCongr.
+     PCUICConversionEtaCongr PCUICEtaI5 PCUICClosedBodies.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICErrorsEta PCUICWfEnvEta
   PCUICWfReductionEta PCUICSafeReduceEta PCUICSafeReduceEtaBridge
@@ -478,6 +478,10 @@ Lemma red_terms_open_right {cf : checker_flags} {Σ : global_env_ext} {cb : Clos
   {l l' : list term} : red_terms Σ Γ l l' -> All (is_open_term Γ) l'.
 Proof. induction 1; constructor; auto. eapply closed_red_open_right_cb; eassumption. Qed.
 
+Lemma red_terms_open_left {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {l l' : list term} :
+  red_terms Σ Γ l l' -> All (is_open_term Γ) l.
+Proof. induction 1; constructor; auto. eapply clrel_src; eassumption. Qed.
+
 Section Typecheck.
   Context {cf : checker_flags} {nor : normalizing_flags}.
 
@@ -506,8 +510,10 @@ Section Typecheck.
   Local Definition hΣ Σ (wfΣ : abstract_env_ext_rel X Σ) :
     ∥ wfE Σ ∥ := abstract_env_ext_sq_wf _ _ _ wfΣ.
 
+  (* E: also opens the η facts ([open_eta_facts]); [specialize_Σ] runs after the obligation's binders are
+     introduced, so the opening never captures the recursive function of an Equations definition. *)
   Ltac specialize_Σ wfΣ :=
-    repeat match goal with | h : _ |- _ => specialize (h _ wfΣ) end.
+    repeat match goal with | h : _ |- _ => specialize (h _ wfΣ) end; open_eta_facts.
 
   Local Notation ret := Checked_c (only parsing).
   Local Notation raise := (fun e => TypeError_c e _) (only parsing).
@@ -538,6 +544,8 @@ Section Typecheck.
   Opaque reduce_stack_full.
 
   Notation hnf := (hnf (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
+  Local Notation hnf_sound := (hnf_sound (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
+  Local Notation hnf_complete := (hnf_complete (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
 
   Definition conv_pb_relb_gen_proper {T} pb equ equ' eqlu eqlu' :
   (forall u u', equ u u' = equ' u u') ->
@@ -676,6 +684,7 @@ Section Typecheck.
       | inright _ => TypeError_c (NotAnArity T)
       end.
     Next Obligation.
+      open_eta_facts.
       intros; subst.
       cbn in *.
       eapply validity_wf; eauto.
@@ -1185,13 +1194,20 @@ Section Typecheck.
       convts <- check_ws_cumul_pb_terms Γ ts ts' _ _ ;;
       ret _ ;
     check_ws_cumul_pb_terms Γ _ _ _ _ := raise (Msg "While checking conversion of terms: lists do not have the same length").
+    (* E: the [[] []] case is an obligation here ([ws_cumul_pbE_terms] is a Definition, base's
+       [ws_cumul_pb_terms] a notation the obligation tactic solves). *)
     Next Obligation.
-      destruct (abstract_env_ext_exists X) as [[Σ wfΣ]]; specialize_Σ wfΣ.
-      sq; now depelim wts.
+      intros. sq. unfold ws_cumul_pbE_terms. constructor.
     Qed.
     Next Obligation.
       destruct (abstract_env_ext_exists X) as [[Σ wfΣ]]; specialize_Σ wfΣ.
-      sq; now depelim wts'.
+      sq; unfold ws_cumul_pbE_terms in *;
+      match goal with h : All2 _ _ _ |- _ => now depelim h end.
+    Qed.
+    Next Obligation.
+      destruct (abstract_env_ext_exists X) as [[Σ wfΣ]]; specialize_Σ wfΣ.
+      sq; unfold ws_cumul_pbE_terms in *;
+      match goal with h : All2 _ _ _ |- _ => now depelim h end.
     Qed.
     Next Obligation.
       specialize_Σ wfΣ; sq; now depelim wts.
@@ -1206,11 +1222,11 @@ Section Typecheck.
       specialize_Σ wfΣ; sq; now depelim wts'.
     Qed.
     Next Obligation.
-      specialize_Σ wfΣ; sq. constructor; auto.
+      specialize_Σ wfΣ; sq. unfold ws_cumul_pbE_terms in *. constructor; auto.
     Qed.
     Next Obligation.
       apply absurd. intros; specialize_Σ wfΣ; sq.
-      now depelim H.
+      unfold ws_cumul_pbE_terms in *. now depelim H.
     Qed.
     (* base's failure obligation of [convert] is deleted: [convert] refuses (G7) *)
 
@@ -1647,7 +1663,8 @@ Section Typecheck.
   #[local] Instance wf_clos_trans_redp_subterm :
     WellFounded (clos_trans _ redp_subterm_relE).
   Proof.
-    apply wf_clos_trans. eapply (wf_redp_subterm_rel (wt := welltypedE) (wfP := wf_extE)); eauto.
+    apply wf_clos_trans.
+    exact (wf_redp_subterm_rel (wt := welltypedE) (wfP := wf_extE) X_type X (normalization_in := normalization_in)).
   Defined.
 
   (** *** The codomain walk *)
@@ -1676,13 +1693,16 @@ Section Typecheck.
       ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
     isProd (codomain_whnf Δ C hC) || isInd (decompose_app (codomain_whnf Δ C hC)).1.
   Proof.
+    open_eta_facts.
     intros hi. rewrite /codomain_whnf.
     destruct (isProd C || isInd (decompose_app C).1) eqn:hsyn; [exact hsyn|].
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (hΣ _ wfΣ) as [wfΣ'].
     destruct (hi _ wfΣ) as [[u [l [ctx hred]]]].
-    destruct (hnf_sound (h := hC) Σ wfΣ) as [hr].
-    destruct (hnf_complete (h := hC) Σ wfΣ) as [wh].
+    destruct (PCUICSafeReduceEta.hnf_sound (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)
+                (normalization_in := normalization_in) (h := hC) Σ wfΣ) as [hr].
+    destruct (PCUICSafeReduceEta.hnf_complete (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)
+                (normalization_in := normalization_in) (h := hC) Σ wfΣ) as [wh].
     destruct (closed_red_confluence hr hred) as [v [rv1 rv2]].
     destruct (red_it_mkProd_or_LetIn_mkApps_Ind rv2) as [ctx' [l' ->]].
     exact (whnf_red_codomain_ind wh rv1).
@@ -1706,6 +1726,7 @@ Section Typecheck.
     tProd na A B = codomain_whnf Δ C hC ->
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ (Δ ,, vass na A) B.
   Proof.
+    open_eta_facts.
     intros eqT Σ wfΣ.
     pose proof (hΣ _ wfΣ) as [wfΣ'].
     destruct (hC _ wfΣ) as [T hT].
@@ -1722,6 +1743,7 @@ Section Typecheck.
           forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ' t)
       (Δ ; C ; hC).
   Proof.
+    open_eta_facts.
     intros eqT.
     assert (hprod : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ (tProd na A B)).
     { intros Σ wfΣ. pose proof (hΣ _ wfΣ) as [wfΣ'].
@@ -1768,6 +1790,7 @@ Section Typecheck.
     (∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) -> False.
   Proof.
+    open_eta_facts.
     intros eqT absurd [i hi].
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (hΣ _ wfΣ) as [wfΣ'].
@@ -1835,7 +1858,7 @@ Section Typecheck.
     (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ t)
     : typing_result_comp (∑ i u l, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
         ∥ Σ ;;; Δ ⊢ t ⇝ mkApps (tInd i u) l ∥) :=
-    match reduce_to_ind (X_type := X_type) Δ t h with
+    match reduce_to_ind Δ t h with
     | Checked_comp r => Checked_comp r
     | TypeError_comp _ na => TypeError_comp err na
     end.
@@ -1868,6 +1891,7 @@ Section Typecheck.
       welltypedE Σ (Γ ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx))
         (decl_type c).
   Proof.
+    open_eta_facts.
     intros eqctx eqnth Σ wfΣ.
     pose proof (hΣ _ wfΣ) as [wfΣ'].
     destruct (wf_type _ wfΣ) as [isty].
@@ -1884,6 +1908,7 @@ Section Typecheck.
     forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       ∥ mfix_body_on check_one_fix (PCUICReduction.red Σ Γ) (inductive_mind i) d ∥.
   Proof.
+    open_eta_facts.
     intros eqctx eqnth hr Σ wfΣ.
     pose proof (hΣ _ wfΣ) as [wfΣ'].
     destruct (wf_type _ wfΣ) as [isty].
@@ -1904,6 +1929,7 @@ Section Typecheck.
     (∑ mind, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       ∥ mfix_body_on check_one_fix (PCUICReduction.red Σ Γ) mind d ∥) -> False.
   Proof.
+    open_eta_facts.
     intros eqctx eqnth absurd [mind hm].
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (hΣ _ wfΣ) as [wfΣ'].
@@ -2027,6 +2053,7 @@ Section Typecheck.
     forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       mfix_body_on check (PCUICReduction.red Σ Γ) m' d -> m = m'.
   Proof.
+    open_eta_facts.
     intros wf_types hm Σ wfΣ hm'.
     pose proof (hΣ _ wfΣ) as [wfΣ'].
     pose proof (@eta_U _ EtaF) as [hU].
@@ -2350,30 +2377,31 @@ Section Typecheck.
         check_values <- make_All (fun x => bdcheck infer Γ wfΓ x a.(array_type) _) a.(array_value) ;;
         ret _.
     Proof.
+      open_eta_facts.
       all:intros.
       all:try pose proof (abstract_env_ext_wf _ wfΣ) as [wfΣ'].
       all:try specialize (wfΓ _ wfΣ).
       1-3:do 2 constructor.
       - eauto.
       - sq. erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
-        eapply has_sort_isType; eapply type_Sort; eauto.
+        eapply has_sort_isType; eapply typeE_Sort; eauto.
         now move/@wf_universe_reflect: i.
       - specialize (check_type _ wfΣ) as [].
         sq; eapply checking_typing in X0; eauto. now eapply has_sort_isType.
         erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
-        eapply has_sort_isType; eapply type_Sort; eauto.
+        eapply has_sort_isType; eapply typeE_Sort; eauto.
         now move/@wf_universe_reflect: i.
       - specialize (check_type _ wfΣ) as [].
         sq; eapply checking_typing in X0; eauto. now eapply has_sort_isType.
         erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
-        eapply has_sort_isType; eapply type_Sort; eauto.
+        eapply has_sort_isType; eapply typeE_Sort; eauto.
         now move/@wf_universe_reflect: i.
       - specialize (check_type _ wfΣ) as [].
         specialize (check_default _ wfΣ) as [].
         assert (∥ Σ;;; Γ |-E array_type a : tSort (sType (Universe.make' (array_level a))) ∥) as [].
         { sq. eapply checking_typing in X0; eauto.
           erewrite <- abstract_env_ext_wf_universeb_correct in i; tea.
-          eapply has_sort_isType; eapply type_Sort; eauto. now move/@wf_universe_reflect: i. }
+          eapply has_sort_isType; eapply typeE_Sort; eauto. now move/@wf_universe_reflect: i. }
         assert (∥ All (fun x : term => Σ;;; Γ |-E x ◃ array_type a) (array_value a) ∥).
         { induction check_values.
           - repeat constructor.
@@ -2783,11 +2811,19 @@ Section Typecheck.
     all: eauto.
     2: now eapply closed_red_red.
     inversion X7 ; subst.
-    econstructor ; tea.
-    transitivity A ; tea.
-    etransitivity.
-    2: now eapply red_ws_cumul_pb_inv.
-    now eapply red_ws_cumul_pb.
+    (* CANONICAL SWITCH, consumer site (found by the compile, missed by the name sweep: base used
+       [transitivity] on [cumulAlgo] directly): the argument's check [u ◃ A] carries a [JoinE] premise;
+       scoped back by [JoinE_ws_cumul_pbE]: the context closed by [HΓ], the argument's inferred type open by
+       its typing ([infering_typing], [type_is_open_term]), the domain [A] open by the assertion above. *)
+    eapply checkE_Cumul_ws; [eassumption|].
+    pose proof (wfE_ClosedBodies Σ.1 (wfΣ := wf_extE_wfE Σ heΣ)) as cbΣ.
+    transitivity A.
+    + eapply JoinE_ws_cumul_pbE; [ | | eassumption | eassumption].
+      * exact (wf_local_closed_contextE HΓ).
+      * eapply type_is_open_term; eapply infering_typing; eauto.
+    + etransitivity.
+      2: now eapply red_ws_cumul_pb_inv.
+      now eapply red_ws_cumul_pb.
   Qed.
   (* base's failure obligation of [reduce_to_prod] ([infering_prod_infering]) is deleted: refusal above *)
   Next Obligation.
@@ -3277,8 +3313,8 @@ Section Typecheck.
     match goal with hj : All2 (JoinE _ _ Conv) _ _ |- _ =>
       apply (All2_JoinE_ws_cumul_pbE_terms (Σ := Σ) (Γ := Γ)); [ | | | exact hj] end.
     - exact (wf_local_closed_contextE HΓ).
-    - match goal with hr : red_terms _ _ _ ?a |- All _ (firstn _ ?a) =>
-        eapply red_terms_open_right, All2_firstn, hr end.
+    - match goal with hr : red_terms _ _ ?a _ |- All _ (firstn _ ?a) =>
+        eapply red_terms_open_left, All2_firstn, hr end.
     - exact (ctx_inst_open_terms Γ (pparams p) _ wt_params).
   Qed.
 
@@ -3466,7 +3502,7 @@ Section Typecheck.
     move: oni (eq_sym HH).
     intros. rewrite eq in oni.
     destruct ind_ctors as [|? []] eqn:hctors => //.
-    eapply infer_Proj with (pdecl := pdecl).
+    eapply inferE_Proj with (pdecl := pdecl).
     - split. split. eassumption. cbn. rewrite hctors. reflexivity.
       split. symmetry; eassumption. cbn in *.
       now apply Nat.eqb_eq.
@@ -3477,9 +3513,9 @@ Section Typecheck.
       2: now apply infering_typing.
       eapply validity in X2; eauto.
       destruct (ssrbool.elimT (eqb_specT p.(proj_ind) I)); auto.
-      unshelve eapply (PCUICInductives.isType_mkApps_Ind_inv _ decl _) in X2 as [parsubst [argsubst [sp sp' cu]]]; eauto.
-      pose proof (Hl := PCUICContextSubst.context_subst_length2 (PCUICSpine.inst_ctx_subst sp)).
-      pose proof (Hr := PCUICContextSubst.context_subst_length2 (PCUICSpine.inst_ctx_subst sp')).
+      unshelve eapply (isType_mkApps_Ind_inv _ decl _) in X2 as [parsubst [argsubst [sp sp' cu]]]; eauto.
+      pose proof (Hl := PCUICContextSubst.context_subst_length2 (inst_ctx_substE sp)).
+      pose proof (Hr := PCUICContextSubst.context_subst_length2 (inst_ctx_substE sp')).
       autorewrite with len in Hl, Hr.
       destruct (on_declared_inductive decl) eqn:ond.
       rewrite -o.(onNpars) -Hl.

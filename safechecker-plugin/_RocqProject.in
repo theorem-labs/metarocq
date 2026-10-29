@@ -2,5 +2,8 @@
 
 
 theories/SafeTemplateChecker.v
+# EtaK7: the η copy of SafeTemplateChecker (K7) and the conv_oracle instance from EtaConv's conversion (K6)
+theories/SafeTemplateCheckerEta.v
+theories/SafeTemplateCheckerEtaConv.v
 
 theories/Extraction.v

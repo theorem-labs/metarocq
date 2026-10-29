@@ -16,6 +16,11 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
 From MetaRocq.PCUIC Require Import PCUICWsCumulEtaCtx.
 From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution PCUICSafeLemmata.
 From Stdlib Require Import Program.Equality.
+(* for the section "PROVED rows" (EtaHypProve's proofs) *)
+From MetaRocq.PCUIC Require Import PCUICTactics PCUICRenameDef PCUICEtaA6Ind PCUICEtaA6More PCUICGlobalEnvEta
+     PCUICWeakeningTypEta PCUICRenameTypEta PCUICInstDefEta PCUICInstTypEta PCUICCasesWfTypEta PCUICGuardClosureEta
+     PCUICInversionEta PCUICSREtaConv.
+From MetaRocq.PCUIC Require PCUICSR PCUICInduction PCUICPositionEta PCUICInstConv PCUICContexts PCUICWeakeningConv.
 From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
 
 (** * ETAK (EtaK7): the η typing facts the η checker needs, as NAMED hypotheses
@@ -27,7 +32,8 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
 
   Each fact is the base lemma with [typing] → [typingE], [wf]/[wf_ext] → [wfE]/[wf_extE],
   [wf_local] → [wf_localE], [isType] → [isTypeE], [welltyped] → [welltypedE], the bidirectional judgments →
-  their E copies ([PCUICTypingEtaDefs]), and the well-scoped cumulativity → [ws_cumul_pbE]. It keeps the
+  the canonical E judgments of EtaMetaLane's [BDTypingEta] (re-exported by [PCUICTypingEtaDefs]), and the
+  well-scoped cumulativity → [ws_cumul_pbE]. It keeps the
   base lemma's NAME, so the copies' proof scripts read as base's; this file is imported LAST.
 
   - Facts no row has proved yet are fields of one class per plan row ([T0_facts], [T1_facts], [T2a_facts],
@@ -37,27 +43,33 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
     [EtaFacts] is proved.
   - Facts that follow from what base already proves over E ([PCUICClosedTypEta], [PCUICTypingEtaInd],
     [PCUICEtaA6], [PCUICWsCumulEtaSubst], [PCUICWellScopedCumulativityEta], [PCUICEtaI5]) or from the class
-    fields are PROVED below the classes, under the base name ("Derived", "Derived, second part").
-  - Bundle size: 91 named hypotheses (class fields). Audits hyp-audit-A.md and hyp-audit-B.md
+    fields are PROVED below the classes, under the base name ("Derived", "Derived, second part", "PROVED
+    rows", "Derived lemmas that use former fields").
+  - Bundle size: 44 named hypotheses (class fields). Audits hyp-audit-A.md and hyp-audit-B.md
     (lanes/eta/etak/) turned 9 former fields into PROVED lemmas, which are NO LONGER hypotheses (bundle
     101 -> 92): [type_Cumul_alt] (T1), [isType_Sort_inv] (T2a), [inversion_Const], [inversion_LetIn],
     [inversion_Prod], [inversion_Rel], [inversion_Sort] (T6), [type_ws_cumul_pb] and
     [mfix_body_on_red_unique] (T0; these two are STATEMENT CHANGEs, marked where they occur). Then
     [ws_cumul_ctx_pb_rel_app] (class A, the last field of A) became a PROVED lemma from
     [PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_rel_app] ([frac/eta] @ [d8120081]); class A is gone (bundle 92 -> 91).
-  - Instances. EVERY one of the 91 fields has a concrete satisfying instance, in the final section
+    Then 47 more former fields became PROVED lemmas of the same name and statement (EtaHypProve's proofs,
+    section "PROVED rows"; bundle 91 -> 44): T0 37, U 8, T1 [isType_prim_arg_types], T6BD [wf_rel_weak].
+  - Instances. EVERY one of the 44 fields has a concrete satisfying instance, in the final section
     "Instances" of this file (one lemma [<field>_inst] per field, proved without any class field; written
-    by EtaK7Inst). Per class, fields = instances: T0_facts 49, U_facts 9, T1_facts 5, T2a_facts 2,
-    T6_facts 1, T6BD_facts 10, T6BDu_facts 9, T6BDc_facts 6. Each instance carries a tag
-    [(* non-degenerate *)] or [(* degenerate: <why> *)]; 16 are non-degenerate, among them all six of
-    T6BDc (the list is at the top of the section "Instances"); 75 are degenerate (empty context or list,
-    a Prop-sort subject, or equal compared objects). The 16 non-degenerate instances show satisfiability
-    on ordinary typed terms; none exercises an eta pair; the eta-case truth of these hypotheses is
-    established by T6, not by the instance. The environment is [si_Σ] of
-    [PCUICCumulativitySpecEtaClosureInstances], or, for the two primitive-operation fields of T1,
-    [Σ_po] of [PCUICEtaPrimOpInstance] (convention of [PCUICEtaFracInstances]). An instance shows only
-    that the field's premises can hold at a real environment, and does NOT discharge the field at
-    [typingE]: subject reduction over [typingE] (row T1), validity (T2a), the inversions and the
+    by EtaK7Inst). Per class, fields = instances: T0_facts 12, U_facts 1, T1_facts 4, T2a_facts 2,
+    T6_facts 1, T6BD_facts 9, T6BDu_facts 9, T6BDc_facts 6. Each instance carries a tag
+    [(* non-degenerate *)] or [(* degenerate: NOT BUILT — <why> *)]; 37 are non-degenerate (three of them
+    type through an η step: [validity], [checking_typing], [infering_checking], via [cumul_eta_l]), 0 are
+    IMPOSSIBLE and 7 are NOT BUILT ([inductive_cumulative_indices], [isTypeRel_cstr_type],
+    [isType_mkApps_Ind_inv], [typing_spine_ind_type_inv], [wf_case_branch_type], [wf_case_predicate_context],
+    [wf_case_branches_types']: each needs a new inductive declaration, an indexed family or one with a redex
+    in its arity; list and reasons at the top of the section "Instances"). Non-degenerate instances show
+    satisfiability on ordinary typed terms; outside the three η rows none exercises an eta pair;
+    the eta-case truth of these hypotheses is established by T6, not by the instance. The
+    environment is [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances], or, for the primitive-operation
+    field of T1, [Σ_po] of [PCUICEtaPrimOpInstance] (convention of [PCUICEtaFracInstances]). An instance
+    shows only that the field's premises can hold at a real environment, and does NOT discharge the field
+    at [typingE]: subject reduction over [typingE] (row T1), validity (T2a), the inversions and the
     bidirectional facts (T6, whose completeness part T6BDc is as strong as typed T8) and the
     infrastructure copies (T0) remain hypotheses until their rows land.
 
@@ -68,132 +80,40 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 (** ** T0 (E copies of the typing infrastructure: Substitution, Typing/*, Spine, Inductives, Contexts, WfUniverses, FixWitness, Arities, InductiveInversion) *)
 Class T0_facts {cf : checker_flags} := {
-  All_mfix_wf :
-    forall (Σ : global_env × universes_decl) (Γ : context) (mfix : list (def term)), wfE Σ.1 -> wf_localE Σ Γ -> All (fun d : def term => isTypeRelE Σ Γ (dtype d) (binder_relevance (dname d))) mfix -> wf_localE Σ (Γ,,, fix_context mfix) ;
-  arity_typing_spine :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : sort} {inst : list term} {s' : sort}, typing_spineE Σ Γ (it_mkProd_or_LetIn Γ' (tSort s)) inst (tSort s') -> [× #|inst| = context_assumptions Γ', leq_sort Σ s s' & ∑ instsubst : list term, spine_substE Σ Γ inst instsubst Γ'] ;
   closed_context_cumulativity :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ.1} (Γ : context) {pb : conv_pb} {t : term} {T : term} {Γ' : context}, Σ;;; Γ |-E t : T -> wf_localE Σ Γ' -> ws_cumul_ctx_pbE pb Σ Γ' Γ -> Σ;;; Γ' |-E t : T ;
-  ctx_inst_open_terms :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : context) (args : list term) (Δ : context), ctx_instE Σ Γ args Δ -> All (fun t : term => on_free_vars (shiftnP #|Γ| xpred0) t) args ;
-  ctx_inst_smash :
-    forall {Σ : global_env_ext} {Γ : context} {i : list term} {Δ : list context_decl}, ctx_instE Σ Γ i (List.rev Δ) <~> ctx_instE Σ Γ i (List.rev (smash_context [] Δ)) ;
-  ctx_inst_spine_subst :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Δ : list context_decl} {args : list term}, wf_localE Σ (Γ,,, Δ) -> forall (ci : ctx_instE Σ Γ args (List.rev Δ)), spine_substE Σ Γ args (ctx_inst_subE ci) Δ ;
-  ind_arity_relevant :
-    forall (Σ : global_env_ext) (mdecl : mutual_inductive_body) (idecl : one_inductive_body), wfE Σ.1 -> let ind_type := it_mkProd_or_LetIn (ind_params mdecl) (it_mkProd_or_LetIn (ind_indices idecl) (tSort (ind_sort idecl))) in isTypeE Σ [] ind_type -> isTypeRelE Σ [] ind_type rel_of_Type ;
   inductive_cumulative_indices :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {ind : inductive} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {u : Instance.t} {u' : Instance.t} {napp : nat}, declared_inductive Σ ind mdecl idecl -> consistent_instance_ext Σ (ind_universes mdecl) u -> consistent_instance_ext Σ (ind_universes mdecl) u' -> PCUICEquality.cmp_ind_universes Σ ind napp u u' -> forall (Γ : context) (pars : list term) (pars' : list term) (parsubst : list term) (parsubst' : list term), spine_substE Σ Γ pars parsubst (ind_params mdecl)@[u] -> spine_substE Σ Γ pars' parsubst' (ind_params mdecl)@[u'] -> ws_cumul_pbE_terms Σ Γ pars pars' -> let indctx := (ind_indices idecl)@[u] in let indctx' := (ind_indices idecl)@[u'] in let pindctx := subst_context parsubst 0 indctx in let pindctx' := subst_context parsubst' 0 indctx' in ws_cumul_ctx_pbE_rel Cumul Σ Γ (smash_context [] pindctx) (smash_context [] pindctx') ;
-  inversion_it_mkProd_or_LetIn :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Δ : context} {t : term} {s : sort}, Σ;;; Γ |-E it_mkProd_or_LetIn Δ t : tSort s -> Σ;;; Γ,,, Δ |-E t : tSort s ;
   invert_type_mkApps_ind :
     forall (Σ : global_env_ext) (Γ : context) (ind : inductive) (u : Instance.t) (args : list term) (T : term) (mdecl : mutual_inductive_body) (idecl : one_inductive_body), wfE Σ.1 -> declared_inductive Σ.1 ind mdecl idecl -> Σ;;; Γ |-E mkApps (tInd ind u) args : T -> typing_spineE Σ Γ (ind_type idecl)@[u] args T × consistent_instance_ext Σ (ind_universes mdecl) u ;
   isTypeRel_cstr_type :
     forall (Σ : global_env_ext) (mdecl : mutual_inductive_body) (idecl : one_inductive_body) (cdecl : constructor_body) (n : nat), wfE Σ.1 -> nth_error (ind_bodies mdecl) n = Some idecl -> cstr_type cdecl = it_mkProd_or_LetIn (ind_params mdecl,,, cstr_args cdecl) (mkApps (tRel (#|ind_params mdecl,,, cstr_args cdecl| + (#|ind_bodies mdecl| - S n))) (to_extended_list_k (ind_params mdecl) #|cstr_args cdecl| ++ cstr_indices cdecl)) -> isTypeE Σ [] (ind_type idecl) -> PCUICReduction.red Σ.1 [] (ind_type idecl) (it_mkProd_or_LetIn (ind_params mdecl) (it_mkProd_or_LetIn (ind_indices idecl) (tSort (ind_sort idecl)))) -> isTypeE Σ [] (it_mkProd_or_LetIn (ind_params mdecl) (it_mkProd_or_LetIn (ind_indices idecl) (tSort (ind_sort idecl)))) -> isSortRel (ind_sort idecl) (ind_relevance idecl) -> ctx_instE Σ (arities_context (ind_bodies mdecl),,, ind_params mdecl,,, cstr_args cdecl) (cstr_indices cdecl) (List.rev (lift_context #|cstr_args cdecl| 0 (ind_indices idecl))) -> isTypeE Σ (arities_context (ind_bodies mdecl)) (cstr_type cdecl) -> isTypeRelE Σ (arities_context (ind_bodies mdecl)) (cstr_type cdecl) (ind_relevance idecl) ;
-  isTypeRel_lift :
-    forall {Σ : global_env_ext} {n : nat} {Γ : list context_decl} {ty : term} {r : relevance} (isdecl : n <= #|Γ|), wfE Σ -> wf_localE Σ Γ -> isTypeRelE Σ (skipn n Γ) ty r -> isTypeRelE Σ Γ (lift0 n ty) r ;
-  isType_lift :
-    forall {Σ : global_env_ext} {n : nat} {Γ : list context_decl} {ty : term} (isdecl : n <= #|Γ|), wfE Σ -> wf_localE Σ Γ -> isTypeE Σ (skipn n Γ) ty -> isTypeE Σ Γ (lift0 n ty) ;
-  isType_apply :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term} {t : term}, isTypeE Σ Γ (tProd na A B) -> Σ;;; Γ |-E t : A -> isTypeE Σ Γ (B {0 := t}) ;
-  isType_it_mkProd_or_LetIn_wf_local :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Δ : context} {T : term}, isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) -> wf_localE Σ (Γ,,, Δ) ;
   isType_mkApps_Ind :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body} (decli : declared_inductive Σ ind mdecl idecl) {Γ : context} {puinst : Instance.t} {args : list term} {inst : list term}, consistent_instance_ext Σ (ind_universes mdecl) puinst -> spine_substE Σ Γ args inst (ind_params mdecl,,, ind_indices idecl)@[puinst] -> Σ;;; Γ |-E mkApps (tInd ind puinst) args : tSort (ind_sort idecl)@[puinst] ;
   isType_mkApps_Ind_inv :
     forall {Σ : global_env_ext} {Γ : context} {ind : inductive} {u : Instance.t} {args : list term} (wfΣ : wfE Σ.1) {mdecl : mutual_inductive_body} {idecl : one_inductive_body} (declm : declared_inductive Σ.1 ind mdecl idecl), wf_localE Σ Γ -> isTypeE Σ Γ (mkApps (tInd ind u) args) -> ∑ parsubst argsubst : list term, let parctx := (ind_params mdecl)@[u] in let argctx := subst_context parsubst 0 (ind_indices idecl)@[u] in [× spine_substE Σ Γ (firstn (ind_npars mdecl) args) parsubst parctx, spine_substE Σ Γ (skipn (ind_npars mdecl) args) argsubst argctx, #|firstn (ind_npars mdecl) args| = ind_npars mdecl, #|skipn (ind_npars mdecl) args| = context_assumptions (ind_indices idecl) & consistent_instance_ext Σ (ind_universes mdecl) u] ;
-  isType_rec_arg_welltyped :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {ctx : context} {concl : term} {n : nat} {c : context_decl}, isTypeE Σ Γ T -> decompose_prod_assum [] T = (ctx, concl) -> nth_error (List.rev (smash_context [] ctx)) n = Some c -> welltypedE Σ (Γ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx)) (decl_type c) ;
-  isType_tProd :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, isTypeE Σ Γ (tProd na A B) <~> isTypeRelE Σ Γ A (binder_relevance na) × isTypeE Σ (Γ,, vass na A) B ;
-  isType_wf_universes :
-    forall {Σ : global_env × universes_decl} {Γ : context} {T : term}, wfE Σ.1 -> isTypeE Σ Γ T -> wf_universes Σ T ;
   on_minductive_wf_params :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {ind : kername} {mdecl : mutual_inductive_body} {u : Instance.t}, declared_minductive Σ.1 ind mdecl -> consistent_instance_ext Σ (ind_universes mdecl) u -> wf_localE Σ (ind_params mdecl)@[u] ;
   on_minductive_wf_params_indices_inst :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body} (decli : declared_inductive Σ ind mdecl idecl) (u : Instance.t), consistent_instance_ext Σ (ind_universes mdecl) u -> wf_localE Σ (ind_params mdecl,,, ind_indices idecl)@[u] ;
-  sorts_local_ctx_wf_local :
-    forall (Σ : global_env_ext) (Γ : context) (Δ : context) (s : list sort), wf_localE Σ Γ -> sorts_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_localE Σ (Γ,,, Δ) ;
-  type_local_ctx_wf_local :
-    forall (Σ : global_env_ext) (Γ : context) (Δ : context) (s : sort), wf_localE Σ Γ -> type_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_localE Σ (Γ,,, Δ) ;
-  spine_subst_app :
-    forall {Σ : global_env_ext} {Γ : list context_decl} {Δ : context} {Δ' : list context_decl} {inst : list term} {inst' : list term} {insts : list term}, #|inst| = context_assumptions Δ -> wf_localE Σ (Γ,,, Δ,,, Δ') -> spine_substE Σ Γ inst (skipn #|Δ'| insts) Δ -> spine_substE Σ Γ inst' (firstn #|Δ'| insts) (subst_context (skipn #|Δ'| insts) 0 Δ') -> spine_substE Σ Γ (inst ++ inst') insts (Δ,,, Δ') ;
-  spine_subst_ctx_inst :
-    forall {Σ : global_env_ext} {Γ : context} {Δ : context} {args : list term} {s : list term}, spine_substE Σ Γ args s Δ -> ctx_instE Σ Γ args (List.rev Δ) ;
-  spine_subst_cumul :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Δ : list context_decl} {args : list term} {Γ : context} {Γ' : context}, PCUICLiftSubst.assumption_context Γ -> PCUICLiftSubst.assumption_context Γ' -> wf_localE Σ (Δ,,, Γ) -> wf_localE Σ (Δ,,, Γ') -> ws_cumul_ctx_pbE_rel Cumul Σ Δ Γ Γ' -> spine_substE Σ Δ args (List.rev args) Γ -> spine_substE Σ Δ args (List.rev args) Γ' ;
-  spine_subst_smash :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {inst : list term} {s : list term} {Δ : context}, spine_substE Σ Γ inst s Δ -> spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ) ;
-  spine_subst_inst_subst :
-    forall {Σ : global_env_ext} {Γ : context} {inst : list term} {s : list term} {Δ : context} {Δ' : context}, spine_substE Σ Γ inst s Δ -> subst_context s 0 Δ' = subst_context (List.rev inst) 0 (expand_lets_ctx Δ Δ') ;
-  substitution :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl} {t : term} {T : term}, subsletE Σ Γ s Γ' -> Σ;;; Γ,,, Γ',,, Δ |-E t : T -> Σ;;; Γ,,, subst_context s 0 Δ |-E subst s #|Δ| t : subst s #|Δ| T ;
-  substitution_wf_local :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl}, subsletE Σ Γ s Γ' -> wf_localE Σ (Γ,,, Γ',,, Δ) -> wf_localE Σ (Γ,,, subst_context s 0 Δ) ;
-  typing_expand_lets :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (Δ : list context_decl) (t : term) (T : term), Σ;;; Γ,,, Δ |-E t : T -> Σ;;; Γ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T ;
   typing_spine_ind_type_inv :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body} (decli : declared_inductive Σ ind mdecl idecl) (Γ : context) (u : Instance.t) (args : list term) (T : term), wf_localE Σ Γ -> consistent_instance_ext Σ (ind_universes mdecl) u -> typing_spineE Σ Γ (ind_type idecl)@[u] args T -> typing_spineE Σ Γ (it_mkProd_or_LetIn (ind_params mdecl,,, ind_indices idecl) (tSort (ind_sort idecl)))@[u] args T ;
-  typing_spine_strengthen :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {args : list term} {U : term}, typing_spineE Σ Γ T args U -> forall T' : term, isTypeE Σ Γ T' -> Σ ;;; Γ ⊢E T' ≤ T -> typing_spineE Σ Γ T' args U ;
-  typing_wf_sort :
-    forall {Σ : global_env_ext} {Γ : context} {t : term} {s : sort}, wfE Σ -> Σ;;; Γ |-E t : tSort s -> wf_sort Σ s ;
-  typing_wf_universes :
-    forall {Σ : global_env_ext} {Γ : context} {t : term} {T : term}, wfE Σ -> Σ;;; Γ |-E t : T -> wf_universes Σ t && wf_universes Σ T ;
-  weaken_ctx :
-    forall {Σ : global_env × universes_decl} {Γ : context} {t : term} {T : term} (Δ : context), wfE Σ.1 -> wf_localE Σ Δ -> Σ;;; Γ |-E t : T -> Σ;;; Δ,,, Γ |-E t : T ;
-  weaken_wf_local :
-    forall {Σ : global_env × universes_decl} {Δ : context} (Γ : context), wfE Σ.1 -> wf_localE Σ Γ -> wf_localE Σ Δ -> wf_localE Σ (Γ,,, Δ) ;
-  weakening_wf_local :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Γ' : list context_decl} {Γ'' : list context_decl}, wf_localE Σ (Γ,,, Γ') -> wf_localE Σ (Γ,,, Γ'') -> wf_localE Σ (Γ,,, Γ'',,, lift_context #|Γ''| 0 Γ') ;
-  welltyped_prod_codomain :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, welltypedE Σ Γ (tProd na A B) -> welltypedE Σ (Γ,, vass na A) B ;
   wf_case_branch_type :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info} {p : predicate term} (ps : sort) (args : list term), declared_inductive Σ ci mdecl idecl -> isTypeE Σ Γ (mkApps (tInd ci (puinst p)) (pparams p ++ args)) -> wf_predicate mdecl idecl p -> let predctx := case_predicate_context ci mdecl idecl p in Σ;;; Γ,,, predctx |-E preturn p : tSort ps -> let ptm := it_mkLambda_or_LetIn predctx (preturn p) in All2 PCUICEquality.eq_decl_upto_names (pcontext p) (ind_predicate_context ci mdecl idecl) -> forall (i : nat) (cdecl : constructor_body) (br : branch term), declared_constructor Σ (ci, i) mdecl idecl cdecl -> wf_branch cdecl br -> let cstr_br_ctx := case_branch_context_nopars ci mdecl (puinst p) cdecl in let brctx' := map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in let brctxty := case_branch_type ci mdecl idecl p br ptm i cdecl in [× wf_branch cdecl br, wf_localE Σ (Γ,,, (ind_params mdecl)@[puinst p],,, cstr_br_ctx), wf_localE Σ (Γ,,, (ind_params mdecl)@[puinst p],,, brctx'), wf_localE Σ (Γ,,, brctxty.1) & Σ;;; Γ,,, brctxty.1 |-E brctxty.2 : tSort ps] ;
   wf_case_predicate_context :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info} {p : predicate term} {args : list term}, declared_inductive Σ ci mdecl idecl -> isTypeE Σ Γ (mkApps (tInd ci (puinst p)) (pparams p ++ args)) -> wf_predicate mdecl idecl p -> let predctx := case_predicate_context ci mdecl idecl p in wf_localE Σ (Γ,,, predctx) ;
-  wf_local_expand_lets :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Δ : list context_decl} {Γ' : list context_decl}, wf_localE Σ (Γ,,, Δ,,, Γ') -> wf_localE Σ (Γ,,, smash_context [] Δ,,, expand_lets_ctx Δ Γ') ;
-  wf_local_smash_context :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context}, wf_localE Σ Γ -> wf_localE Σ (smash_context [] Γ) ;
-  wf_local_smash_end :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : list context_decl), wf_localE Σ (Γ,,, Δ) -> wf_localE Σ (Γ,,, smash_context [] Δ) ;
-  isType_weaken :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term}, wf_localE Σ Γ -> isTypeE Σ [] T -> isTypeE Σ Γ T ;
-  isType_it_mkProd_or_LetIn :
-    forall {Σ : global_env_ext} {Γ Δ : list context_decl} {T : term}, wfE Σ.1 -> isTypeE Σ (Γ,,, Δ) T -> isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) ;
-  type_local_ctx_wf :
-    forall {Σ : global_env_ext} {Γ Δ : context} {s : sort}, wfE Σ.1 -> type_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_sort Σ s ;
   wf_case_branches_types' :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info} {p : predicate term} (ps : sort) (args : list term) (brs : list (branch term)), declared_inductive Σ ci mdecl idecl -> isTypeE Σ Γ (mkApps (tInd ci (puinst p)) (pparams p ++ args)) -> wf_predicate mdecl idecl p -> let predctx := case_predicate_context ci mdecl idecl p in Σ;;; Γ,,, predctx |-E preturn p : tSort ps -> let ptm := it_mkLambda_or_LetIn predctx (preturn p) in wf_branches idecl brs -> All2 PCUICEquality.eq_decl_upto_names (pcontext p) (ind_predicate_context ci mdecl idecl) -> All2i (fun (i : nat) (cdecl : constructor_body) (br : branch term) => let cstr_br_ctx := case_branch_context_nopars ci mdecl (puinst p) cdecl in let brctx' := map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in let brctxty := case_branch_type ci mdecl idecl p br ptm i cdecl in [× wf_branch cdecl br, wf_localE Σ (Γ,,, (ind_params mdecl)@[puinst p],,, cstr_br_ctx), wf_localE Σ (Γ,,, (ind_params mdecl)@[puinst p],,, brctx'), wf_localE Σ (Γ,,, brctxty.1) & Σ;;; Γ,,, brctxty.1 |-E brctxty.2 : tSort ps]) 0 (ind_ctors idecl) brs
 }.
 
 (** ** U (untyped facts whose base statement takes [wf Σ] only for closed bodies or universes; reduction is unchanged in E, so these are plumbing over [wfE_ClosedBodies], not research) *)
 Class U_facts {cf : checker_flags} := {
-  LSet_in_global_bounded :
-    forall {Σ : global_env} {l : LevelSet.elt} (k : nat), wfE Σ -> LevelSet.In l (global_levels Σ) -> closedu_level k l ;
-  closed_red_from_empty :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {M : term} {N : term}, on_free_vars_ctx xpred0 Γ -> closed M -> PCUICReduction.red Σ [] M N -> Σ ;;; Γ ⊢ M ⇝ N ;
-  red_expand_let :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {na : aname} {b : term} {ty : term} {t : term}, wf_localE Σ (Γ,,, [vdef na b ty]) -> on_free_vars (shiftnP #|Γ,,, [vdef na b ty]| (fun _ : nat => false)) t -> Σ ;;; Γ,, vdef na b ty ⊢ t ⇝ lift0 1 (t {0 := b}) ;
-  red_it_mkProd_or_LetIn_smash :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (ctx : context) (t : term) (u : term) (n : nat) (c : context_decl), Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx t ⇝ u -> nth_error (List.rev (smash_context [] ctx)) n = Some c -> ∑ (ctx' : context) (t' : term) (d : context_decl), [× decompose_prod_assum [] u = (ctx', t'), nth_error (List.rev (smash_context [] ctx')) n = Some d & Σ ;;; Γ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx) ⊢ decl_type c ⇝ decl_type d] ;
-  red_mkApps_smash_witness :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {C : term} {ctx : context} {i : inductive} {u : Instance.t} {l : list term}, Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) -> ∑ l' : list term, Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn (smash_context [] ctx) (mkApps (tInd i u) l') ;
-  red_rec_arg_check_one_fix :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (d : def term) (ctx : context) (concl : term) (c : context_decl) (ind : inductive) (u : Instance.t) (args : list term), on_free_vars (shiftnP #|Γ| xpred0) (dtype d) -> decompose_prod_assum [] (dtype d) = (ctx, concl) -> nth_error (List.rev (smash_context [] ctx)) (rarg d) = Some c -> Σ ;;; Γ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx) ⊢ decl_type c ⇝ mkApps (tInd ind u) args -> has_rec_arg d × (∑ ty : term, Σ ;;; Γ ⊢ dtype d ⇝ ty × check_one_fix (def_with_type d ty) = Some (inductive_mind ind)) ;
-  wf_universes_inst :
-    forall {Σ : global_env_ext} (univs : universes_decl) (t : term) (u : list LevelSet.elt), wfE Σ -> on_udecl_prop Σ.1 univs -> wf_instance Σ u -> wf_universes (Σ.1, univs) t -> wf_universes Σ t@[u] ;
-  closed_red_confluence :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {t : term} {u : term} {v : term}, Σ ;;; Γ ⊢ t ⇝ u -> Σ ;;; Γ ⊢ t ⇝ v -> ∑ v' : term, Σ ;;; Γ ⊢ u ⇝ v' × Σ ;;; Γ ⊢ v ⇝ v' ;
   whnf_red_inv :
     forall {Σ : global_env_ext} (Γ : context) (t t' : term), wfE Σ -> whnf RedFlags.default Σ Γ t -> Σ ;;; Γ ⊢ t ⇝ t' -> whnf_red Σ Γ t t'
 }.
 
 (** ** T1 (subject reduction over [typingE], PCUICSR) *)
 Class T1_facts {cf : checker_flags} := {
-  isType_prim_arg_types :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {tags : list prim_tag} {res : term} {T : term}, wf_localE Σ Γ -> (forall t : prim_tag, In t tags -> t <> primArray) -> All (prim_op_tag_declared Σ) tags -> PCUICPrimOpType.prim_arg_types (retroknowledge Σ.1) tags res = Some T -> isTypeE Σ Γ res -> isTypeE Σ Γ T ;
   isType_prim_shape_type :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {s : PrimitiveOps.prim_shape} {res : term}, wf_localE Σ Γ -> PCUICPrimOpType.prim_shape_type (retroknowledge Σ.1) s = Some res -> on_prim_op_result Σ s -> isTypeE Σ Γ res ;
   isType_red :
@@ -237,9 +157,7 @@ Class T6BD_facts {cf : checker_flags} := {
   lift_sorting_lift_typing :
     forall (Σ : global_env_ext) (Γ : context) (j : judgment) (wfΣ : wfE Σ), wf_localE Σ Γ -> lift_sorting (checkingE Σ Γ) (infering_sortE Σ Γ) j -> lift_typing typingE Σ Γ j ;
   wf_local_bd_rel_typing :
-    forall (Σ : global_env_ext) (Γ : context) (Γ' : context) (wfΣ : wfE Σ), wf_localE Σ Γ -> wf_local_bd_relE Σ Γ Γ' -> wf_local_relE Σ Γ Γ' ;
-  wf_rel_weak :
-    forall (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context), wf_localE Σ Γ -> forall (Γ' : context), wf_localE Σ Γ' -> wf_local_relE Σ Γ Γ'
+    forall (Σ : global_env_ext) (Γ : context) (Γ' : context) (wfΣ : wfE Σ), wf_localE Σ Γ -> wf_local_bd_relE Σ Γ Γ' -> wf_local_relE Σ Γ Γ'
 }.
 
 (** ** T6, bidirectional uniqueness (BDUnique over E): inferred types are unique up to [red] *)
@@ -361,13 +279,6 @@ Section Derived.
     typing_spineE Σ Γ T args T' -> wf_localE Σ Γ.
   Proof. intros h. exact (isType_wf_local (typing_spine_isType_dom h)). Qed.
 
-  Lemma spine_subst_wt_terms {hT0 : T0_facts} {Σ : global_env_ext} {Γ : context} {inst s : list term} {Δ : context} :
-    spine_substE Σ Γ inst s Δ -> All (fun t : term => ∑ T : term, Σ ;;; Γ |-E t : T) inst.
-  Proof.
-    move/spine_subst_ctx_inst.
-    induction 1; try constructor; auto.
-    now exists t.
-  Qed.
 
   Lemma wt_closed_red_refl {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t T : term} :
     Σ ;;; Γ |-E t : T -> Σ ;;; Γ ⊢ t ⇝ t.
@@ -554,6 +465,19 @@ Ltac unpack_eta_facts :=
   | _ => idtac
   end.
 Ltac sq := unpack_eta_facts; MRSquash.sq.
+(** Open the facts without touching the goal: project them, and unsquash only them when the goal is a Prop
+    (in a Type goal they stay squashed and nothing else changes). For proofs that use a fact before any
+    [sq]. *)
+Ltac open_eta_facts :=
+  unpack_eta_facts;
+  repeat match goal with
+  | H : ∥ ?C ∥ |- _ =>
+      lazymatch C with
+      | @T0_facts _ => idtac | @U_facts _ => idtac | @T1_facts _ => idtac | @T2a_facts _ => idtac
+      | @T6_facts _ => idtac | @T6BD_facts _ => idtac | @T6BDu_facts _ => idtac | @T6BDc_facts _ => idtac
+      end;
+      case H; clear H; intro H
+  end.
 
 (** ** Derived, second part: facts that are proved here from the classes or from facts above *)
 
@@ -576,76 +500,6 @@ Derive Signature for typingE.
 
 Section DerivedTwo.
   Context {cf : checker_flags}.
-
-  (** [PCUICFixWitness.check_one_fix_closed_red] over [wfE], from the U field
-      [red_it_mkProd_or_LetIn_smash] and the derived [invert_red_mkApps_tInd]. *)
-  Lemma check_one_fix_closed_redE {hU : U_facts} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ d ty v mind} :
-    Σ ;;; Γ ⊢ ty ⇝ v ->
-    check_one_fix (def_with_type d ty) = Some mind ->
-    check_one_fix (def_with_type d v) = Some mind.
-  Proof.
-    intros r hc.
-    destruct (check_one_fix_inv _ _ _ hc)
-      as (ctx & concl & argd & k & u & args & decomp & hnth & dapp).
-    have eqty := PCUICSubstitution.decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp; cbn in eqty.
-    rewrite eqty in r.
-    destruct (red_it_mkProd_or_LetIn_smash _ _ _ _ _ _ r hnth)
-      as [ctx' [t' [d' [decomp' hnth' r']]]].
-    rewrite /check_one_fix /def_with_type /= decomp' hnth'.
-    rewrite dapp in r'.
-    eapply invert_red_mkApps_tInd in r' as [args' [-> _ _]].
-    now rewrite decompose_app_mkApps.
-  Qed.
-
-  (** [PCUICFixWitness.check_one_cofix_closed_red] over [wfE]. *)
-  Lemma check_one_cofix_closed_redE {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ d ty v mind} :
-    Σ ;;; Γ ⊢ ty ⇝ v ->
-    check_one_cofix (def_with_type d ty) = Some mind ->
-    check_one_cofix (def_with_type d v) = Some mind.
-  Proof.
-    intros r hc.
-    destruct (check_one_cofix_inv _ _ _ hc) as [ctx [k [u [args ->]]]].
-    destruct (red_it_mkProd_or_LetIn_mkApps_Ind r) as [ctx' [args' ->]].
-    exact (check_one_cofix_it_mkProd (i := {| inductive_mind := mind; inductive_ind := k |})).
-  Qed.
-
-  #[global] Instance check_one_fix_shapeE {hU : U_facts} : ShapeCheckE check_one_fix :=
-    {| shapeE_check_dbody := fun d bo => shape_check_dbody (check := check_one_fix) d bo;
-       shapeE_check_eq_term_upto := @shape_check_eq_term_upto check_one_fix _;
-       shapeE_check_closed_red := @check_one_fix_closed_redE hU |}.
-
-  #[global] Instance check_one_cofix_shapeE : ShapeCheckE check_one_cofix :=
-    {| shapeE_check_dbody := fun d bo => shape_check_dbody (check := check_one_cofix) d bo;
-       shapeE_check_eq_term_upto := @shape_check_eq_term_upto check_one_cofix _;
-       shapeE_check_closed_red := @check_one_cofix_closed_redE |}.
-
-  (** The copies take the U facts squashed in [EtaFacts]; a Prop instance can still be built from them. *)
-  #[global] Instance check_one_fix_shapeE_of {EF : EtaFacts} : ShapeCheckE check_one_fix :=
-    match eta_U with sq hU => @check_one_fix_shapeE hU end.
-
-  (** [PCUICFixWitness.mfix_body_on_red_unique] over E (see STATEMENT CHANGE above [ShapeCheckE]). *)
-  Lemma mfix_body_on_red_unique {hU : U_facts} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {check : def term -> option kername} {shape : ShapeCheckE check} {Γ : context} {d : def term}
-    {m1 m2 : kername} :
-    on_def_type (lift_typing1 (typingE Σ)) Γ d ->
-    mfix_body_on check (PCUICReduction.red Σ Γ) m1 d ->
-    mfix_body_on check (PCUICReduction.red Σ Γ) m2 d ->
-    m1 = m2.
-  Proof.
-    intros ond [ty1 [hc1 r1]] [ty2 [hc2 r2]].
-    have isty : isTypeE Σ Γ (dtype d) by now eapply isTypeRel_isType.
-    have clΓ : is_closed_context Γ.
-    { eapply wf_local_closed_contextE. now eapply isType_wf_local. }
-    have op : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
-    have c1 : Σ ;;; Γ ⊢ dtype d ⇝ ty1 by now eapply into_closed_red.
-    have c2 : Σ ;;; Γ ⊢ dtype d ⇝ ty2 by now eapply into_closed_red.
-    destruct (closed_red_confluence c1 c2) as [v [rv1 rv2]].
-    have e1 : check (def_with_type d v) = Some m1.
-    { exact (shapeE_check_closed_red (check := check) (wfΣ := wfΣ) rv1 hc1). }
-    have e2 : check (def_with_type d v) = Some m2.
-    { exact (shapeE_check_closed_red (check := check) (wfΣ := wfΣ) rv2 hc2). }
-    rewrite e1 in e2. now injection e2.
-  Qed.
 
   (** STATEMENT CHANGE (EtaK7, 2026-10-29, found by EtaHypAuditA): base [type_ws_cumul_pb] has no [wf]
       premise (its proof uses none, [PCUICArities.v:228]); over E the only route from [ws_cumul_pbE] to the
@@ -772,6 +626,1902 @@ Section DerivedTwo.
   Qed.
 End DerivedTwo.
 
+(** ** PROVED rows (integration of EtaHypProve's [PCUICTypingEtaHypsProved.v] @ [29c23129], K7 sections)
+
+  47 former class fields ([T0_facts] 37, [U_facts] 8, [T1_facts] 1, [T6BD_facts] 1) are proved here. Their proofs
+  are EtaHypProve's, copied unchanged (comments included) from its K7 sections; its [_fits] identity checks are
+  replaced by the lemmas at the end of this block, which restate each former field verbatim under its name
+  (the build checks that [<field>_proved] proves that text). Not copied: its REDUCE, EtaConv, EtaPosK4 and
+  "Duplicate GENUINE" sections (other owners) and [ctf_wf_universes_proved] (EtaConv's row). Their imports are at the top of
+  this file (as in EtaHypProve's file, this file's own names come after them and so take precedence). *)
+
+
+(** ** K7 ([PCUICTypingEtaHyps]): the exact twins of [Typing/PCUICWeakeningTypEta] *)
+
+Lemma All_mfix_wf_proved {cf : checker_flags} :
+    forall (Σ : global_env × universes_decl) (Γ : context) (mfix : list (def term)), wfE Σ.1 -> wf_localE Σ Γ -> All (fun d : def term => isTypeRelE Σ Γ (dtype d) (binder_relevance (dname d))) mfix -> wf_localE Σ (Γ,,, fix_context mfix).
+Proof. intros Σ Γ mfix. exact (All_mfix_wfE Σ Γ mfix). Qed.
+
+Lemma isTypeRel_lift_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {n : nat} {Γ : list context_decl} {ty : term} {r : relevance} (isdecl : n <= #|Γ|), wfE Σ -> wf_localE Σ Γ -> isTypeRelE Σ (skipn n Γ) ty r -> isTypeRelE Σ Γ (lift0 n ty) r.
+Proof. intros Σ n Γ ty r isdecl. exact (isTypeRel_liftE isdecl). Qed.
+
+Lemma isType_lift_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {n : nat} {Γ : list context_decl} {ty : term} (isdecl : n <= #|Γ|), wfE Σ -> wf_localE Σ Γ -> isTypeE Σ (skipn n Γ) ty -> isTypeE Σ Γ (lift0 n ty).
+Proof. intros Σ n Γ ty isdecl. exact (isType_liftE isdecl). Qed.
+
+Lemma weaken_ctx_proved {cf : checker_flags} :
+    forall {Σ : global_env × universes_decl} {Γ : context} {t : term} {T : term} (Δ : context), wfE Σ.1 -> wf_localE Σ Δ -> Σ;;; Γ |-E t : T -> Σ;;; Δ,,, Γ |-E t : T.
+Proof. intros Σ Γ t T Δ. exact (weaken_ctxE Δ). Qed.
+
+Lemma weaken_wf_local_proved {cf : checker_flags} :
+    forall {Σ : global_env × universes_decl} {Δ : context} (Γ : context), wfE Σ.1 -> wf_localE Σ Γ -> wf_localE Σ Δ -> wf_localE Σ (Γ,,, Δ).
+Proof. intros Σ Δ Γ. exact (weaken_wf_localE Γ). Qed.
+
+Lemma weakening_wf_local_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Γ' : list context_decl} {Γ'' : list context_decl}, wf_localE Σ (Γ,,, Γ') -> wf_localE Σ (Γ,,, Γ'') -> wf_localE Σ (Γ,,, Γ'',,, lift_context #|Γ''| 0 Γ').
+Proof. intros Σ wfΣ Γ Γ' Γ''. exact (weakening_wf_localE (wfΣ := wfΣ)). Qed.
+
+Lemma isType_weaken_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term}, wf_localE Σ Γ -> isTypeE Σ [] T -> isTypeE Σ Γ T.
+Proof.
+  intros Σ wfΣ Γ T wfΓ h. exact (lift_typing_weaken_ctxE Σ [] Γ _ wfΣ wfΓ h).
+Qed.
+
+Lemma wf_rel_weak_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context), wf_localE Σ Γ -> forall (Γ' : context), wf_localE Σ Γ' -> wf_local_relE Σ Γ Γ'.
+Proof.
+  intros Σ wfΣ Γ wfΓ Γ' wfΓ'.
+  induction wfΓ' as [|Δ na t wfΔ IH h|Δ na b t wfΔ IH h].
+  - exact All_local_rel_nil.
+  - apply All_local_rel_abs; [exact IH|].
+    exact (lift_typing_weaken_ctxE Σ Δ Γ _ wfΣ wfΓ h).
+  - apply All_local_rel_def; [exact IH|].
+    exact (lift_typing_weaken_ctxE Σ Δ Γ _ wfΣ wfΓ h).
+Qed.
+
+(** ** K7: inversions of products *)
+
+Lemma isType_tProd_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, isTypeE Σ Γ (tProd na A B) <~> isTypeRelE Σ Γ A (binder_relevance na) × isTypeE Σ (Γ,, vass na A) B.
+Proof.
+  intros Σ wfΣ Γ na A B. split; intro HH.
+  - destruct HH as (_ & s & H & _).
+    destruct (inversion_Prod Σ wfΣ H) as [s1 [s2 [HA [HB _]]]].
+    apply lift_sorting_forget_univ in HA.
+    split; [exact HA|exact (has_sort_isTypeE _ HB)].
+  - destruct HH as [HA HB].
+    pose proof (lift_sorting_extract HA).
+    destruct HB as (_ & sB & HB & _).
+    eapply has_sort_isTypeE.
+    eapply typeE_Prod; eassumption.
+Qed.
+
+Lemma welltyped_prod_codomain_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, welltypedE Σ Γ (tProd na A B) -> welltypedE Σ (Γ,, vass na A) B.
+Proof.
+  intros Σ wfΣ Γ na A B [T hT].
+  destruct (inversion_Prod Σ wfΣ hT) as (s1 & s2 & _ & hB & _).
+  econstructor. exact hB.
+Qed.
+
+(** [PCUICArities.it_mkProd_or_LetIn_wf_local] over [typingE]. *)
+Lemma hyp_it_mkProd_or_LetIn_wf_local {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ T U} :
+  Σ ;;; Γ |-E it_mkProd_or_LetIn Δ T : U -> wf_localE Σ (Γ ,,, Δ).
+Proof.
+  move: Γ T U. induction Δ as [|d Δ IHΔ] using rev_ind => Γ T U.
+  - cbn. intros h. exact (typingE_wf_local h).
+  - rewrite it_mkProd_or_LetIn_app. destruct d as [na [b|] ty]; cbn; move=> H.
+    + destruct (inversion_LetIn Σ wfΣ H) as (A & _ & HT & _).
+      apply IHΔ in HT. rewrite /app_context -app_assoc. exact HT.
+    + destruct (inversion_Prod Σ wfΣ H) as (s1 & s2 & _ & HT & _).
+      apply IHΔ in HT. rewrite /app_context -app_assoc. exact HT.
+Qed.
+
+Lemma isType_it_mkProd_or_LetIn_wf_local_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Δ : context} {T : term}, isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) -> wf_localE Σ (Γ,,, Δ).
+Proof.
+  intros Σ wfΣ Γ Δ T (_ & s & Hs & _). exact (hyp_it_mkProd_or_LetIn_wf_local (wfΣ := wfΣ) Hs).
+Qed.
+
+(** ** K7: structural spine and context facts (T0 rows 4, 5, 23, 24, 25, 26, 29) and T1 [isType_prim_arg_types]
+    (helpers [stc_*]) *)
+
+(** [PCUICSpine.ctx_inst_subst_length] at [typingE]. *)
+Lemma stc_ctx_inst_subE_length {cf : checker_flags} {Σ : global_env_ext} {Γ} {Δ : context} {args}
+  (c : ctx_instE Σ Γ args Δ) :
+  #|ctx_inst_subE c| = #|Δ|.
+Proof.
+  induction c; simpl; auto; try lia;
+  rewrite length_app IHc subst_telescope_length /=; lia.
+Qed.
+
+(** [PCUICSpine.ctx_inst_sub_spec] at [typingE]. *)
+Lemma stc_ctx_inst_subE_spec {cf : checker_flags} {Σ : global_env_ext} {Γ Δ args}
+  (c : ctx_instE Σ Γ args Δ) :
+  make_context_subst Δ args [] = Some (ctx_inst_subE c).
+Proof.
+  induction c; simpl; auto.
+  now apply (make_context_subst_tele [] [i]) in IHc.
+  apply (make_context_subst_tele [] [b]) in IHc.
+  now rewrite subst_empty.
+Qed.
+
+(** [PCUICSpine.ctx_inst_app] at [typingE]. *)
+Lemma stc_ctx_instE_app {cf : checker_flags} {Σ : global_env_ext} {Γ} {Δ : context} {Δ' args args'}
+  (dom : ctx_instE Σ Γ args Δ) :
+  ctx_instE Σ Γ args' (subst_telescope (ctx_inst_subE dom) 0 Δ') ->
+  ctx_instE Σ Γ (args ++ args') (Δ ++ Δ').
+Proof.
+  induction dom in args', Δ' |- *; simpl.
+  - now rewrite subst_telescope_empty.
+  - rewrite subst_app_telescope /= stc_ctx_inst_subE_length /= subst_telescope_length Nat.add_0_r /=.
+    move/IHdom => IH.
+    constructor => //.
+    now rewrite subst_telescope_app Nat.add_0_r.
+  - rewrite subst_app_telescope /= stc_ctx_inst_subE_length /= subst_telescope_length Nat.add_0_r /=.
+    move/IHdom => IH.
+    constructor => //.
+    now rewrite subst_telescope_app Nat.add_0_r.
+Qed.
+
+(** Row 26. Port of [PCUICSpine.spine_subst_ctx_inst] (syntactic in the typing judgment). *)
+Lemma spine_subst_ctx_inst_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {Γ : context} {Δ : context} {args : list term} {s : list term}, spine_substE Σ Γ args s Δ -> ctx_instE Σ Γ args (List.rev Δ).
+Proof.
+  intros Σ Γ Δ args s [wfd _ cs subsl].
+  induction subsl in args, cs |- *.
+  - DepElim.depelim cs. constructor.
+  - DepElim.depelim cs.
+    specialize (IHsubsl _ cs).
+    unshelve eapply stc_ctx_instE_app; tea. cbn.
+    rewrite /map_decl /=. repeat constructor.
+    pose proof (stc_ctx_inst_subE_spec IHsubsl) as msub.
+    eapply make_context_subst_spec in msub.
+    rewrite List.rev_involutive in msub.
+    now pose proof (context_subst_fun cs msub); subst s.
+  - DepElim.depelim cs.
+    specialize (IHsubsl _ cs). cbn.
+    rewrite -(app_nil_r args).
+    unshelve eapply stc_ctx_instE_app; tea. cbn.
+    rewrite /map_decl /=. repeat constructor.
+Qed.
+
+
+(** Row 29. Only the [context_subst] component of the spine is used (as in [PCUICSR.spine_subst_inst_subst]). *)
+Lemma spine_subst_inst_subst_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {Γ : context} {inst : list term} {s : list term} {Δ : context} {Δ' : context}, spine_substE Σ Γ inst s Δ -> subst_context s 0 Δ' = subst_context (List.rev inst) 0 (expand_lets_ctx Δ Δ').
+Proof.
+  intros Σ Γ inst s Δ Δ' sp.
+  have cs := inst_ctx_substE sp.
+  have hl := context_subst_length2 cs.
+  rewrite (context_subst_subst_extended_subst _ _ _ cs).
+  rewrite /expand_lets_ctx /expand_lets_k_ctx /=.
+  rewrite PCUICSR.subst_context_subst_context.
+  rewrite extended_subst_length Nat.add_0_l.
+  rewrite PCUICInductives.subst_context_lift_context_cancel //.
+  now rewrite List.length_rev hl.
+Qed.
+
+
+(** Row 4. Port of [PCUICSpine.ctx_inst_open_terms] with [subject_is_open_termE]. *)
+Lemma ctx_inst_open_terms_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : context) (args : list term) (Δ : context), ctx_instE Σ Γ args Δ -> All (fun t : term => on_free_vars (shiftnP #|Γ| xpred0) t) args.
+Proof.
+  intros Σ wfΣ Γ args Δ c.
+  induction c.
+  - constructor.
+  - constructor; [|exact IHc].
+    match goal with H : typingE _ _ _ _ |- _ => exact (subject_is_open_termE (wfΣ := wfΣ) H) end.
+  - exact IHc.
+Qed.
+
+
+(** [PCUICSpine.ctx_inst_smash_acc] at [typingE] (its proof is [Proof using Type]: no typing fact used). *)
+Lemma stc_ctx_instE_smash_acc {cf : checker_flags} {Σ : global_env_ext} {Γ i Δ} :
+  ctx_instE Σ Γ i Δ <~>
+  ctx_instE Σ Γ i (List.rev (smash_context [] (List.rev Δ))).
+Proof.
+  split.
+  - induction 1.
+    + constructor.
+    + simpl.
+      rewrite smash_context_app_ass. len.
+      rewrite List.rev_app_distr /=.
+      constructor. auto.
+      rewrite subst_telescope_subst_context.
+      rewrite -smash_context_subst /=; len.
+      now rewrite subst_context_rev_subst_telescope.
+    + simpl. rewrite smash_context_app_def.
+      now rewrite subst_context_rev_subst_telescope.
+  - induction Δ using PCUICInduction.ctx_length_ind in i |- *; simpl; auto.
+    destruct d as [na [b|] ty] => /=.
+    * rewrite smash_context_app_def /=.
+      rewrite subst_context_rev_subst_telescope.
+      intros ctxi. constructor.
+      apply X => //. now rewrite subst_telescope_length //.
+    * rewrite smash_context_app_ass List.rev_app_distr /=.
+      intros ctxi; DepElim.depelim ctxi.
+      constructor => //.
+      apply X. rewrite subst_telescope_length //.
+      rewrite subst_telescope_subst_context in ctxi.
+      rewrite -(smash_context_subst []) in ctxi.
+      now rewrite subst_context_rev_subst_telescope in ctxi.
+Qed.
+
+(** Row 5. Port of [PCUICSpine.ctx_inst_smash]. *)
+Lemma ctx_inst_smash_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {Γ : context} {i : list term} {Δ : list context_decl}, ctx_instE Σ Γ i (List.rev Δ) <~> ctx_instE Σ Γ i (List.rev (smash_context [] Δ)).
+Proof.
+  intros Σ Γ i Δ. split; intros X.
+  - apply (fst stc_ctx_instE_smash_acc) in X. now rewrite List.rev_involutive in X.
+  - apply (snd stc_ctx_instE_smash_acc). now rewrite List.rev_involutive.
+Qed.
+
+
+(** Row 23. Port of [PCUICContexts.sorts_local_ctx_wf_local]. *)
+Lemma sorts_local_ctx_wf_local_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (Δ : context) (s : list sort), wf_localE Σ Γ -> sorts_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_localE Σ (Γ,,, Δ).
+Proof.
+  intros Σ Γ Δ. induction Δ as [|[na [b|] ty] Δ IH]; intros s wfΓ wfctx.
+  - exact wfΓ.
+  - cbn in wfctx. destruct wfctx as [h1 h2].
+    constructor; [exact (IH _ wfΓ h1)|exact h2].
+  - destruct s as [|u s]; cbn in wfctx; [destruct wfctx|].
+    destruct wfctx as [h1 h2].
+    constructor; [exact (IH _ wfΓ h1)|].
+    exact (lift_sorting_forget_univ h2).
+Qed.
+
+
+(** Row 24. Port of [PCUICContexts.type_local_ctx_wf_local]. *)
+Lemma type_local_ctx_wf_local_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (Δ : context) (s : sort), wf_localE Σ Γ -> type_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_localE Σ (Γ,,, Δ).
+Proof.
+  intros Σ Γ Δ s wfΓ. induction Δ as [|[na [b|] ty] Δ IH]; intros wfctx.
+  - exact wfΓ.
+  - cbn in wfctx. destruct wfctx as [h1 h2].
+    constructor; [exact (IH h1)|exact h2].
+  - cbn in wfctx. destruct wfctx as [h1 h2].
+    constructor; [exact (IH h1)|].
+    exact (lift_sorting_forget_univ h2).
+Qed.
+
+
+(** [PCUICSpine.subslet_app] at [typingE]. *)
+Lemma stc_subsletE_app {cf : checker_flags} (Σ : global_env_ext) Γ s s' Δ Δ' :
+  subsletE Σ Γ s (subst_context s' 0 Δ) ->
+  subsletE Σ Γ s' Δ' ->
+  subsletE Σ Γ (s ++ s') (Δ' ,,, Δ).
+Proof.
+  induction Δ in s, s', Δ' |- *; simpl; auto; move=> sub'.
+  - DepElim.depelim sub'. auto.
+  - rewrite subst_context_snoc in sub' => sub''.
+    move:(subslet_length sub') => /=.
+    rewrite /snoc /= subst_context_length /= => Hlen.
+    destruct a as [na [b|] ty].
+    * DepElim.depelim sub'; simpl in t0, Hlen.
+      rewrite -subst_app_simpl' /=. lia.
+      constructor. eauto.
+      now rewrite - !subst_app_simpl' in t0; try lia.
+    * rewrite /subst_decl /map_decl /snoc /= in sub'.
+      DepElim.depelim sub'; simpl in Hlen.
+      rewrite - !subst_app_simpl' in t0; try lia.
+      simpl; constructor; eauto.
+Qed.
+
+(** Row 25. Port of [PCUICSpine.spine_subst_app]. *)
+Lemma spine_subst_app_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {Γ : list context_decl} {Δ : context} {Δ' : list context_decl} {inst : list term} {inst' : list term} {insts : list term}, #|inst| = context_assumptions Δ -> wf_localE Σ (Γ,,, Δ,,, Δ') -> spine_substE Σ Γ inst (skipn #|Δ'| insts) Δ -> spine_substE Σ Γ inst' (firstn #|Δ'| insts) (subst_context (skipn #|Δ'| insts) 0 Δ') -> spine_substE Σ Γ (inst ++ inst') insts (Δ,,, Δ').
+Proof.
+  intros Σ Γ Δ Δ' inst inst' insts len wf [wfdom wfcodom cs subst] [wfdom' wfcodom' cs' subst'].
+  split; auto.
+  now rewrite app_context_assoc.
+  eapply context_subst_app_inv; split; auto.
+  rewrite skipn_all_app_eq; try lia. auto.
+  rewrite (firstn_app_left) ?Nat.add_0_r // firstn_0 // app_nil_r //.
+  rewrite -(firstn_skipn #|Δ'| insts).
+  eapply stc_subsletE_app; auto.
+Qed.
+
+
+(** T1 [isType_prim_arg_types]. Port of [PCUICSR.isType_prim_arg_types] (same premises): [typeE_Const] for
+    the domain, [isType_liftE] for the codomain, [typeE_Prod] inlined for [isType_tProd]. *)
+Lemma isType_prim_arg_types_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {tags : list prim_tag} {res : term} {T : term}, wf_localE Σ Γ -> (forall t : prim_tag, In t tags -> t <> primArray) -> All (prim_op_tag_declared Σ) tags -> PCUICPrimOpType.prim_arg_types (retroknowledge Σ.1) tags res = Some T -> isTypeE Σ Γ res -> isTypeE Σ Γ T.
+Proof.
+  intros Σ wfΣ Γ tags res T wfΓ.
+  induction tags as [|t tags ih] in T |- *; cbn; intros hna hall h hres.
+  - noconf h. exact hres.
+  - depelim hall.
+    destruct (PCUICPrimOpType.prim_tag_type _ t) as [a|] eqn:ht => //.
+    destruct (PCUICPrimOpType.prim_arg_types _ tags res) as [rest|] eqn:hr => //.
+    cbn in h. noconf h.
+    destruct p as (kn & d & [hpc hd hinv]).
+    unfold PCUICPrimOpType.prim_tag_type in ht.
+    destruct (EnvironmentTyping.retro_type_constant _ t) as [kn'|] eqn:hrt => //.
+    cbn in ht. noconf ht.
+    assert (ept : primitive_constant Σ t = EnvironmentTyping.retro_type_constant (retroknowledge Σ) t)
+      by (destruct t; reflexivity).
+    rewrite ept hrt in hpc. noconf hpc.
+    assert (hnat : t <> primArray) by (apply hna; now left).
+    assert (hrest : isTypeE Σ Γ rest).
+    { eapply (ih rest); tea; try reflexivity. intros t' ht'. apply hna. now right. }
+    (* the domain: a type constant, of sort [Set], relevant *)
+    assert (hdom : isTypeRelE Σ Γ (tConst kn' []) Relevant).
+    { destruct t; try congruence; cbn in hinv.
+      all: destruct hinv as [hty hbod huniv]; split; [constructor|];
+        exists (Sort.type0@[[]]); repeat split.
+      all: try reflexivity.
+      all: change (tSort ?s@[[]]) with (tSort s)@[[]];
+        rewrite <- hty; refine (typeE_Const _ _ _ [] _ wfΓ hd _); rewrite huniv //. }
+    have hcod : isTypeE Σ (Γ ,, vass (mkBindAnn nAnon Relevant) (tConst kn' [])) (lift0 1 rest).
+    { eapply (isType_liftE (n := 1) (Γ := Γ ,, vass (mkBindAnn nAnon Relevant) (tConst kn' []))); cbn; tea.
+      + lia.
+      + constructor; tea. }
+    unfold tImpl.
+    pose proof (lift_sorting_extract hdom) as hA.
+    destruct hcod as (_ & sB & HB & _).
+    eapply has_sort_isTypeE.
+    eapply typeE_Prod; eassumption.
+Qed.
+
+
+(** ** The universe facts of [typingE] (helpers [univ_*])
+
+  Rows: [wf_universes_inst], [LSet_in_global_bounded] (U_facts); [type_local_ctx_wf],
+  [typing_wf_universes], [typing_wf_sort], [isType_wf_universes] (T0_facts); [ctf_wf_universes]
+  (ConvTypedFacts of EtaConv @ c7cbbe73, at [welltypedE]/[wf_extE]).
+
+  Transport. Base proves the universe lemmas under a premise [wf Σ] that their proofs read only
+  through [on_global_univs Σ.(universes)]. [univ_strip Σ] keeps the universes and the
+  retroknowledge of [Σ] and drops the declarations: [wfE Σ] gives base [wf (univ_strip Σ)]
+  (no declaration is left to type, [univ_wf_strip]), and every universe notion ([global_levels],
+  [global_ext_levels], [wf_universes], [wf_instance], [wf_ctx_universes], [on_udecl_prop]) reads
+  only [Σ.(universes)], so it is CONVERTIBLE between [Σ] and [univ_strip Σ]. The base lemma
+  applied at [univ_strip Σ] therefore type-checks at [Σ]. *)
+
+Definition univ_strip (Σ : global_env) : global_env :=
+  {| universes := Σ.(universes); declarations := []; retroknowledge := Σ.(retroknowledge) |}.
+
+Lemma univ_wf_strip {cf : checker_flags} {Σ : global_env} : wfE Σ -> wf (univ_strip Σ).
+Proof.
+  intros [onu [onr _]]. split; [exact onu|]. split; [exact onr|]. cbn. constructor.
+Qed.
+
+Lemma univ_extends_strip {Σ Σ' : global_env} : extends Σ Σ' -> extends (univ_strip Σ) (univ_strip Σ').
+Proof.
+  intros [hu _ hr]. split; [exact hu| |exact hr].
+  intros c. exists []. reflexivity.
+Qed.
+
+(** U_facts [wf_universes_inst] (audit hyp-audit-C.md line 182: syntactic): base
+    [PCUICWfUniverses.wf_universes_inst] at [univ_strip Σ.1]. *)
+Lemma wf_universes_inst_proved {cf : checker_flags} :
+  forall {Σ : global_env_ext} (univs : universes_decl) (t : term) (u : list LevelSet.elt), wfE Σ -> on_udecl_prop Σ.1 univs -> wf_instance Σ u -> wf_universes (Σ.1, univs) t -> wf_universes Σ t@[u].
+Proof.
+  intros Σ univs t u wfΣ ond wfu wft.
+  exact (@PCUICWfUniverses.wf_universes_inst cf (univ_strip Σ.1, Σ.2) univs t u (univ_wf_strip wfΣ) ond wfu wft).
+Qed.
+
+(** U_facts [LSet_in_global_bounded] (line 182: [not_var_global_levels] reads only
+    [on_global_univs]): base [PCUICInductiveInversion.LSet_in_global_bounded] at [univ_strip Σ]. *)
+Lemma LSet_in_global_bounded_proved {cf : checker_flags} :
+  forall {Σ : global_env} {l : LevelSet.elt} (k : nat), wfE Σ -> LevelSet.In l (global_levels Σ) -> closedu_level k l.
+Proof.
+  intros Σ l k wfΣ hin.
+  exact (@PCUICInductiveInversion.LSet_in_global_bounded cf (univ_strip Σ) l k (univ_wf_strip wfΣ) hin).
+Qed.
+
+(** T0 row 48 [type_local_ctx_wf] (structural): base [PCUICInductives.type_local_ctx_wf]'s proof;
+    the empty context case of [type_local_ctx] is [wf_sort Σ s] itself. *)
+Lemma type_local_ctx_wf_proved {cf : checker_flags} :
+  forall {Σ : global_env_ext} {Γ Δ : context} {s : sort}, wfE Σ.1 -> type_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_sort Σ s.
+Proof.
+  intros Σ Γ Δ s wfΣ.
+  induction Δ as [|[na [b|] ty] Δ]; simpl; intuition auto.
+Qed.
+
+(** Helpers for T0 row 36 [typing_wf_universes]: the port of base [PCUICWfUniverses.wf_types]
+    over [typingE_ind_env]. *)
+
+Ltac univ_to_prop :=
+  repeat match goal with
+  | [ H: is_true (?x && ?y) |- _ ] =>
+   let x := fresh in let y := fresh in move/andP: H; move=> [x y]; rewrite ?x ?y; simpl
+  end.
+
+Ltac univ_to_wfu :=
+  repeat match goal with
+  | [ H: is_true (wf_universeb _ ?x) |- _ ] => apply (ssrbool.elimT (@wf_universe_reflect _ x)) in H
+  | [ |- is_true (wf_universeb _ ?x) ] => apply (ssrbool.introT (@wf_universe_reflect _ x))
+  | [ H: is_true (Sort.on_sort (wf_universeb _) _ ?x) |- _ ] => apply (ssrbool.elimT (@wf_sort_reflect _ x)) in H
+  | [ |- is_true (Sort.on_sort (wf_universeb _) _ ?x) ] => apply (ssrbool.introT (@wf_sort_reflect _ x))
+  | [ H: is_true (wf_sortb _ ?x) |- _ ] => apply (ssrbool.elimT (@wf_sort_reflect _ x)) in H
+  | [ |- is_true (wf_sortb _ ?x) ] => apply (ssrbool.introT (@wf_sort_reflect _ x))
+  end.
+
+Ltac univ_specIH :=
+  repeat match goal with
+  | [ H : on_udecl _ _, H' : on_udecl _ _ -> _ |- _ ] => specialize (H' H)
+  end.
+
+Lemma univ_weaken_wf_universes {cf : checker_flags} {Σ Σ' : global_env} φ t :
+  wfE Σ -> wfE Σ' -> extends Σ Σ' -> wf_universes (Σ, φ) t -> wf_universes (Σ', φ) t.
+Proof.
+  intros wfΣ wfΣ' ext.
+  exact (@PCUICWfUniverses.weaken_wf_universes cf (univ_strip Σ, φ) (univ_strip Σ') t
+    (univ_wf_strip wfΣ) (univ_wf_strip wfΣ') (univ_extends_strip ext)).
+Qed.
+
+(** E copy of base [PCUICWfUniverses.wf_universes_weaken] (same proof). *)
+Lemma univ_wf_universes_weakenE {cf : checker_flags} :
+  weaken_env_prop cumulSpecE0 (lift_typing typingE)
+    (fun Σ _ j => option_default (wf_universes Σ) (j_term j) true && wf_universes Σ (j_typ j) && option_default (wf_sortb Σ) (j_univ j) true).
+Proof.
+  intros Σ Σ' φ wfΣ wfΣ' Hext _ j Hj.
+  pose proof (fun t => @univ_weaken_wf_universes cf Σ Σ' φ t wfΣ wfΣ' Hext) as H.
+  rtoProp; repeat split; auto.
+  1: destruct j_term => //; cbn in *; auto.
+  1: destruct j_univ => //; cbn in *; now apply (H (tSort _)).
+Qed.
+
+Lemma univ_wf_ctx_universes_closed {cf : checker_flags} {Σ : global_env} {wfΣ : wfE Σ} {univs ctx} :
+  on_udecl_prop Σ univs ->
+  wf_ctx_universes (Σ, univs) ctx ->
+  test_context (closedu #|polymorphic_instance univs|) ctx.
+Proof.
+  exact (@PCUICWfUniverses.wf_ctx_universes_closed cf (univ_strip Σ) (univ_wf_strip wfΣ) univs ctx).
+Qed.
+
+(** Base [PCUICWfUniverses.closed_ind_predicate_context] without its unused premises
+    ([wf Σ], [declared_inductive]); same proof. *)
+Lemma univ_closed_ind_predicate_context {ind mdecl idecl} :
+  test_context (closedu #|polymorphic_instance (ind_universes mdecl)|) (ind_params mdecl) ->
+  test_context (closedu #|polymorphic_instance (ind_universes mdecl)|) (ind_indices idecl) ->
+  test_context (closedu #|abstract_instance (ind_universes mdecl)|) (ind_predicate_context ind mdecl idecl).
+Proof.
+  rewrite /ind_predicate_context; cbn.
+  rewrite closedu_mkApps /=.
+  rewrite closedu_abstract_instance /= => clpars clinds.
+  apply/andP; split.
+  * apply closedu_expand_lets_ctx. now rewrite clpars clinds.
+  * apply closedu_to_extended_list_k.
+    rewrite test_context_app.
+    rewrite (closedu_smash_context _ _ clpars).
+    apply closedu_expand_lets_ctx => //.
+    now rewrite clpars.
+Qed.
+
+(** Base [PCUICWfUniverses.closedu_inds] without its unused premise [wf Σ]; same proof. *)
+Lemma univ_closedu_inds {ind mdecl} :
+  forallb (closedu #|abstract_instance (ind_universes mdecl)|)
+    (inds ind (abstract_instance (ind_universes mdecl)) (ind_bodies mdecl)).
+Proof.
+  rewrite /inds.
+  induction #|ind_bodies mdecl|; cbn; auto.
+  rewrite IHn andb_true_r.
+  eapply closedu_abstract_instance.
+Qed.
+
+(** The port of base [wf_types]. Inside a module so that the local hypothesis-naming hook
+    (the E twin of base's, [PCUICWeakeningEnvTypEta.my_rename_hypE]) ends with the module
+    (checked, build u5: after [End univ_WfTypesE], [rename_all_hyps] leaves a [wfE] and a
+    [typingE] hypothesis unrenamed, so the parts concatenated after this one are unaffected). The
+    script is base's with: [typing_ind_env] → [typingE_ind_env], [declared_*_inv] →
+    [declared_*_invE], [wf_universes_weaken] → [univ_wf_universes_weakenE], [wf_universes_inst] →
+    [wf_universes_inst_proved], [wf_ctx_universes_closed] / [closed_ind_predicate_context] /
+    [closedu_inds] → the [univ_] helpers above. The [typeE_Cumul] case is closed by the preamble's
+    [auto] from the two induction hypotheses; the conversion premise is not read. *)
+Module univ_WfTypesE.
+
+#[local] Ltac rename_hyp h ht ::= my_rename_hypE h ht.
+
+Theorem univ_wf_typesE {cf : checker_flags} :
+  env_propE (fun Σ Γ t T => wf_universes Σ t && wf_universes Σ T)
+    (fun Σ _ j => lift_wfbu_term (wf_universes Σ) (wf_sortb Σ) j)
+    (fun Σ Γ => wf_ctx_universes Σ Γ).
+Proof.
+    apply typingE_ind_env; unfold lift_wfbu_term; intros; rename_all_hyps; cbn; rewrite -!/(wf_universes _ _) ;
+    univ_specIH; univ_to_prop;
+    cbn; auto.
+
+    - eapply MRReflect.introT. 1: apply lift_wfu_wfbu_term.
+      apply lift_typing_subjtyp with (1 := X) => //= t T [] _ /andP[] //.
+
+    - apply All_local_env_cst, All_forallb in X0.
+      apply forallb_impl with (2 := X0) => [] [na bo ty] _ //= /andP[] //=.
+
+    - rewrite wf_universes_lift.
+      eapply forallb_nth_error with (n := n) in H0. rewrite heq_nth_error /= in H0.
+      now move/andP: H0.
+
+    - apply/andP; split; univ_to_wfu; cbn ; eauto with pcuic.
+
+    - cbn in *; univ_to_wfu ; eauto with pcuic.
+    - rewrite wf_universes_subst. constructor. univ_to_wfu; auto. constructor.
+      now move/andP: H1 => [].
+
+    - apply/andP; split.
+      { rewrite wf_universeb_instance_forall.
+        apply/wf_instanceP.
+        eapply consistent_instance_ext_wf; eauto. }
+      pose proof (declared_constant_invE _ _ _ _ univ_wf_universes_weakenE wf X H0) as [[_ X0]%andb_and _]%andb_and.
+      unshelve eapply declared_constant_to_gen in H0; eauto.
+      epose proof (weaken_lookup_on_global_env' Σ.1 _ _ wf H0).
+      eapply wf_universes_inst_proved. 2:eauto. all:eauto.
+      now eapply consistent_instance_ext_wf.
+
+    - apply/andP; split.
+      { rewrite wf_universeb_instance_forall.
+        apply/wf_instanceP.
+        eapply consistent_instance_ext_wf; eauto. }
+      pose proof (declared_inductive_invE univ_wf_universes_weakenE wf X isdecl).
+      move/onArity : X0 => /andP[] /andP[] /= _ Hind _.
+      unshelve eapply declared_inductive_to_gen in isdecl; eauto.
+      eapply wf_universes_inst_proved; eauto.
+      exact (weaken_lookup_on_global_env' Σ.1 _ _ wf (proj1 isdecl)).
+      now eapply consistent_instance_ext_wf.
+
+    - apply/andP; split.
+      { rewrite wf_universeb_instance_forall.
+        apply/wf_instanceP.
+        eapply consistent_instance_ext_wf; eauto. }
+      pose proof (declared_constructor_invE univ_wf_universes_weakenE wf X isdecl) as [sc [nthe onc]].
+      unfold type_of_constructor.
+      rewrite wf_universes_subst.
+      { apply wf_universes_inds.
+        now eapply consistent_instance_ext_wf. }
+      move/on_ctype : onc => /andP[] /andP[] /= _ onc _.
+      clear nthe. unshelve eapply declared_constructor_to_gen in isdecl; eauto.
+      eapply wf_universes_inst_proved; eauto.
+      exact (weaken_lookup_on_global_env' Σ.1 _ _ wf (proj1 (proj1 isdecl))).
+      now eapply consistent_instance_ext_wf.
+
+    - rewrite wf_universes_mkApps in H6.
+      move/andP: H6 => /= [] wfu; rewrite forallb_app.
+      move/andP=> [] wfpars wfinds.
+      cbn in wfu.
+      rewrite wfu /= wfpars wf_universes_mkApps /=
+        forallb_app wfinds /= H0 /= !andb_true_r.
+      pose proof (declared_inductive_invE univ_wf_universes_weakenE wf X isdecl).
+      move:(onArityRed X3) => /andP[] /andP[] /= _ hty _.
+      rewrite !wf_universes_it_mkProd_or_LetIn in hty.
+      move/and3P: hty => [] wfp wfindis wfisort.
+      have ond : on_udecl_prop Σ (ind_universes mdecl).
+      { eapply (weaken_lookup_on_global_env' _ _ (InductiveDecl mdecl)); eauto.
+      unshelve eapply declared_inductive_to_gen in isdecl; eauto.
+      }
+      eapply univ_wf_ctx_universes_closed in wfp => //.
+      eapply univ_wf_ctx_universes_closed in wfindis => //.
+      rewrite (consistent_instance_length H2).
+      erewrite closedu_compare_decls; tea.
+      rewrite univ_closed_ind_predicate_context // /=.
+      unfold test_branch.
+      apply/andP; split.
+      * have wfbrctx : All (fun cdecl =>
+          test_context (closedu #|polymorphic_instance (ind_universes mdecl)|) (cstr_args cdecl))
+          (ind_ctors idecl).
+        { pose proof (onConstructors := onConstructors X3).
+          clear -wf ond onConstructors.
+          red in onConstructors. solve_all. destruct X.
+          move : on_ctype => /andP[] /andP[] /= _ wfty _.
+          rewrite cstr_eq in wfty.
+          rewrite !wf_universes_it_mkProd_or_LetIn in wfty.
+          move/and3P: wfty => [] _ clargs _.
+          apply univ_wf_ctx_universes_closed in clargs => //. }
+        solve_all.
+        erewrite closedu_compare_decls; [|tea].
+        rewrite /cstr_branch_context.
+        eapply closedu_expand_lets_ctx.
+        rewrite wfp. eapply closedu_subst_context.
+        rewrite a.
+        now rewrite univ_closedu_inds.
+      * rewrite wf_universes_it_mkLambda_or_LetIn H7 andb_true_r.
+        move: H4.
+        rewrite /wf_ctx_universes forallb_app => /andP[hctx _].
+        apply (MRReflect.introT onctxP).
+        solve_all. unfold ondecl, wf_decl_universes, on_decl_universes in *.
+        move/andP:H3 => [Hb Ht] //; split; tas.
+        now destruct decl_body.
+
+    - rewrite /subst1. rewrite wf_universes_subst.
+      constructor => //. eapply All_rev.
+      rewrite wf_universes_mkApps in H2.
+      move/andP: H2 => [].
+      now intros _ hargs%forallb_All.
+      pose proof (declared_projection_invE univ_wf_universes_weakenE wf X isdecl).
+      destruct (declared_inductive_invE); simpl in *.
+      destruct ind_ctors as [|cs []] => //.
+      destruct ind_cunivs as [|cunivs []] => //;
+      destruct X0 as [[[? ?] ?] ?] => //.
+      red in o0.
+      destruct nth_error eqn:heq => //.
+      destruct o0  as [_ ->].
+      rewrite wf_universes_mkApps {1}/wf_universes /= -!/(wf_universes _ _)
+        wf_universeb_instance_forall in H2.
+      move/andP: H2 => [/wf_instanceP wfu wfargs].
+      unshelve eapply declared_projection_to_gen in isdecl; eauto.
+      eapply (wf_universes_inst_proved (ind_universes mdecl)); eauto.
+      exact (weaken_lookup_on_global_env' Σ.1 _ _ wf (proj1 (proj1 (proj1 isdecl)))).
+      rewrite wf_universes_subst.
+      eapply wf_universes_inds; eauto.
+      eapply wf_abstract_instance.
+      rewrite wf_universes_subst. apply wf_projs.
+      rewrite wf_universes_lift.
+      rewrite smash_context_app smash_context_acc in heq.
+      autorewrite with len in heq. rewrite nth_error_app_lt in heq.
+      autorewrite with len. lia.
+      rewrite PCUICSubstitution.nth_error_subst_context in heq.
+      autorewrite with len in heq. simpl in heq.
+      epose proof (nth_error_lift_context_eq _ (smash_context [] (ind_params mdecl)) _ _).
+      autorewrite with len in H0. simpl in H0. rewrite -> H0 in heq. clear H0.
+      autorewrite with len in heq.
+      simpl in heq.
+      destruct nth_error eqn:hnth; simpl in * => //.
+      noconf heq. simpl.
+      rewrite wf_universes_subst.
+      apply wf_extended_subst.
+      move:onArityRed => /andP[] /andP[] /= _ Hs _.
+      rewrite !wf_universes_it_mkProd_or_LetIn in Hs.
+      now move/andP: Hs => /andP /andP [].
+      rewrite wf_universes_lift.
+      eapply PCUICWfUniverses.wf_universes_local_ctx_smash in s.
+      eapply wf_universes_local_ctx_nth_error in s; eauto.
+
+    - clear X X1. unfold on_def_type, on_def_body in *; cbn in *.
+      apply/andP; split; auto.
+      solve_all.
+      eapply nth_error_all in X0 as (? & _)%andb_and; eauto.
+
+    - clear X X1. unfold on_def_type, on_def_body in *; cbn in *.
+      apply/andP; split; auto.
+      solve_all.
+      eapply nth_error_all in X0 as (? & _)%andb_and; eauto.
+
+    - apply/andP; split; eauto.
+      destruct X0; cbn => //.
+      rtoProp; intuition eauto. solve_all.
+      destruct X0; cbn => //.
+      simp prim_type. cbn. rtoProp; intuition.
+Qed.
+
+End univ_WfTypesE.
+
+(** T0 row 36 [typing_wf_universes]: base [PCUICWfUniverses.typing_wf_universes] over the port. *)
+Lemma typing_wf_universes_proved {cf : checker_flags} :
+  forall {Σ : global_env_ext} {Γ : context} {t : term} {T : term}, wfE Σ -> Σ;;; Γ |-E t : T -> wf_universes Σ t && wf_universes Σ T.
+Proof.
+  intros Σ Γ t T wfΣ Hty.
+  exact (env_propE_typing univ_WfTypesE.univ_wf_typesE _ wfΣ _ _ _ Hty).
+Qed.
+
+(** T0 row 35 [typing_wf_sort]: from row 36, base's proof. *)
+Lemma typing_wf_sort_proved {cf : checker_flags} :
+  forall {Σ : global_env_ext} {Γ : context} {t : term} {s : sort}, wfE Σ -> Σ;;; Γ |-E t : tSort s -> wf_sort Σ s.
+Proof.
+  intros Σ Γ t s wfΣ Hty.
+  apply typing_wf_universes_proved in Hty as [_ wfs]%andb_and; auto.
+  cbn in wfs. now univ_to_wfu.
+Qed.
+
+(** T0 row 20 [isType_wf_universes]: from row 36, base's proof. *)
+Lemma isType_wf_universes_proved {cf : checker_flags} :
+  forall {Σ : global_env × universes_decl} {Γ : context} {T : term}, wfE Σ.1 -> isTypeE Σ Γ T -> wf_universes Σ T.
+Proof.
+  intros Σ Γ T wfΣ (_ & s & Hs & _).
+  now eapply typing_wf_universes_proved in Hs as [HT _]%andb_and.
+Qed.
+
+(** [ConvTypedFacts.ctf_wf_universes] of EtaConv's [PCUICSafeConversionEtaFacts.v] @ [c7cbbe73] (class not
+    in this branch), at [wt := welltypedE], [wfP := wf_extE]: row 36, as the base instance
+    [conv_typed_facts_base] does with base [typing_wf_universes]. *)
+
+(** ** K7 T0 [isType_it_mkProd_or_LetIn] (row 47): base [PCUICInductiveInversion.isType_it_mkProd_or_LetIn]'s
+    proof; the let case types [tLetIn] at [tSort s] through [typing_wf_sort_proved] (row 35) and the zeta
+    step [red1_cumulSpec], included into [cumulSpecE] by [cumulSpec0_incl_E]. *)
+Lemma isType_it_mkProd_or_LetIn_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {Γ Δ : list context_decl} {T : term}, wfE Σ.1 -> isTypeE Σ (Γ,,, Δ) T -> isTypeE Σ Γ (it_mkProd_or_LetIn Δ T).
+Proof.
+  intros Σ Γ Δ T wfΣ. revert T.
+  induction Δ as [|[na [b|] ty] Δ IHΔ].
+  - now simpl.
+  - intros T Hty.
+    rewrite /= /mkProd_or_LetIn /=.
+    eapply IHΔ.
+    apply lift_sorting_it_impl_gen with Hty => // Hs.
+    have wf : wf_localE Σ ((Γ ,,, Δ) ,, vdef na b ty) := typingE_wf_local Hs.
+    apply All_local_env_tip in wf as [wf hd].
+    eapply type_Cumul'.
+    + eapply typeE_LetIn; [exact hd|exact Hs].
+    + eapply isType_Sort; [exact (typing_wf_sort_proved (Σ := Σ) wfΣ Hs)|exact wf].
+    + apply cumulSpec0_incl_E. eapply convSpec_cumulSpec, red1_cumulSpec. repeat constructor.
+  - intros T (_ & s & Hs & _).
+    apply IHΔ.
+    have wf : wf_localE Σ ((Γ ,,, Δ) ,, vass na ty) := typingE_wf_local Hs.
+    apply All_local_env_tip in wf as [_ hd].
+    pose proof (lift_sorting_extract hd).
+    eapply has_sort_isTypeE with (s := Sort.sort_of_product _ s).
+    eapply typeE_Prod; eassumption.
+Qed.
+
+(** ** K7 reduction facts and telescope inversions: U rows [closed_red_confluence], [closed_red_from_empty],
+    [red_expand_let], [red_it_mkProd_or_LetIn_smash], [red_mkApps_smash_witness],
+    [red_rec_arg_check_one_fix]; T0 rows [inversion_it_mkProd_or_LetIn], [ind_arity_relevant].
+    Reduction is unchanged in E: the base proofs go through over [ClosedBodies Σ], which [wfE Σ] gives
+    ([wfE_ClosedBodies]); three U rows are inhabited directly by lemmas landed in [PCUICSREtaConv]
+    ([frac/eta] @ [da1eb84b]). Helpers carry the prefix [rdx_]. *)
+
+(** [closed_red_confluence] (U): base [PCUICContextConversion.closed_red_confluence] over
+    [red_confluence_cb] ([PCUICConfluence.v:4070]). *)
+Lemma closed_red_confluence_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {t : term} {u : term} {v : term}, Σ ;;; Γ ⊢ t ⇝ u -> Σ ;;; Γ ⊢ t ⇝ v -> ∑ v' : term, Σ ;;; Γ ⊢ u ⇝ v' × Σ ;;; Γ ⊢ v ⇝ v'.
+Proof.
+  intros Σ wfΣ Γ t u v [clΓ clT r] [clΓ' clT' r'].
+  pose proof (wfE_ClosedBodies Σ) as cbΣ.
+  have clu : is_open_term Γ u := red_is_open_term_cb (cf := cf) (wfΣ := cbΣ) t u r clΓ clT.
+  have clv : is_open_term Γ v := red_is_open_term_cb (cf := cf) (wfΣ := cbΣ) t v r' clΓ clT.
+  destruct (PCUICConfluence.red_confluence_cb (Γ := exist Γ clΓ) (t := exist t clT) r r') as [v' [redl redr]].
+  exists v'. split.
+  - exact (into_closed_red redl clΓ clu).
+  - exact (into_closed_red redr clΓ clv).
+Qed.
+
+(** [closed_red_from_empty] (U): inhabited by the landed [closed_red_from_empty_cb]
+    ([pcuic/theories/PCUICSREtaConv.v:524], [frac/eta] @ [da1eb84b]), at [wfE_ClosedBodies Σ]. *)
+Lemma closed_red_from_empty_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {M : term} {N : term}, on_free_vars_ctx xpred0 Γ -> closed M -> PCUICReduction.red Σ [] M N -> Σ ;;; Γ ⊢ M ⇝ N.
+Proof.
+  intros Σ wfΣ Γ M N.
+  exact (@closed_red_from_empty_cb cf Σ (wfE_ClosedBodies Σ) Γ M N).
+Qed.
+
+(** [red_expand_let] (U): inhabited by the landed [red_expand_letE] ([PCUICSREtaConv.v:512]). *)
+Lemma red_expand_let_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {na : aname} {b : term} {ty : term} {t : term}, wf_localE Σ (Γ,,, [vdef na b ty]) -> on_free_vars (shiftnP #|Γ,,, [vdef na b ty]| (fun _ : nat => false)) t -> Σ ;;; Γ,, vdef na b ty ⊢ t ⇝ lift0 1 (t {0 := b}).
+Proof.
+  intros Σ wfΣ Γ na b ty t.
+  exact (@red_expand_letE cf Σ wfΣ Γ na b ty t).
+Qed.
+
+(** [red_it_mkProd_or_LetIn_smash] (U): inhabited by the landed [red_it_mkProd_or_LetIn_smash_cb]
+    ([PCUICSREtaConv.v:540]), at [wfE_ClosedBodies Σ]. *)
+Lemma red_it_mkProd_or_LetIn_smash_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (ctx : context) (t : term) (u : term) (n : nat) (c : context_decl), Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx t ⇝ u -> nth_error (List.rev (smash_context [] ctx)) n = Some c -> ∑ (ctx' : context) (t' : term) (d : context_decl), [× decompose_prod_assum [] u = (ctx', t'), nth_error (List.rev (smash_context [] ctx')) n = Some d & Σ ;;; Γ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx) ⊢ decl_type c ⇝ decl_type d].
+Proof.
+  intros Σ wfΣ.
+  exact (@red_it_mkProd_or_LetIn_smash_cb cf Σ (wfE_ClosedBodies Σ)).
+Qed.
+
+(** The base proof scripts below come from [PCUICInductives.v] and [PCUICFixWitness.v]; they run with
+    the settings and imports of [PCUICInductives.v] (all modules already loaded), kept local by the
+    section. *)
+Section RdxBaseScripts.
+Import PCUICTactics PCUICInduction PCUICContexts PCUICSubstitution.
+Local Set SimplIsCbn.
+Local Arguments subst_context !s _ !Γ.
+Local Arguments it_mkProd_or_LetIn !l _.
+
+(** Base [PCUICInductives.red_it_mkProd_or_LetIn_to_smash] (:2268): its [wf] premise is unused, so the
+    same script proves it with no environment premise. *)
+Lemma rdx_red_it_mkProd_or_LetIn_to_smash {Σ : global_env_ext} Γ Δ T :
+  is_closed_context Γ ->
+  is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
+  Σ ;;; Γ ⊢ it_mkProd_or_LetIn Δ T ⇝ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T).
+Proof.
+  intros clΓ clt.
+  eapply into_closed_red => //.
+  clear clΓ clt.
+  induction Δ in Γ, T |- * using ctx_length_rev_ind; simpl; auto.
+  - rewrite expand_lets_nil. reflexivity.
+  - rewrite PCUICContexts.smash_context_app_expand /=.
+    destruct d as [na [b|] ty].
+    * rewrite expand_lets_vdef {1}it_mkProd_or_LetIn_app /= subst_context_nil app_context_nil_l.
+      rewrite PCUICContexts.expand_lets_smash_context /= PCUICContexts.expand_lets_k_ctx_nil.
+      rewrite /expand_lets_ctx /expand_lets_k_ctx /= subst_empty lift0_id lift0_context.
+      rewrite /mkProd_or_LetIn /=.
+      etransitivity.
+      + eapply red1_red, red_zeta.
+      + rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r.
+        now eapply X; len.
+    * rewrite expand_lets_vass it_mkProd_or_LetIn_app /=.
+      rewrite it_mkProd_or_LetIn_app /=.
+      eapply red_prod. reflexivity.
+      rewrite PCUICContexts.expand_lets_smash_context /= PCUICContexts.expand_lets_k_ctx_nil.
+      rewrite expand_lets_ctx_assumption_context. repeat constructor.
+      now eapply X.
+Qed.
+
+(** [red_mkApps_smash_witness] (U): the script of base [PCUICFixWitness.red_mkApps_smash_witness]. *)
+Lemma red_mkApps_smash_witness_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {C : term} {ctx : context} {i : inductive} {u : Instance.t} {l : list term}, Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) -> ∑ l' : list term, Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn (smash_context [] ctx) (mkApps (tInd i u) l').
+Proof.
+  intros Σ wfΣ Γ C ctx i u l r.
+  pose proof (wfE_ClosedBodies Σ) as cbΣ.
+  have clΓ := clrel_ctx r.
+  have opr : is_open_term Γ (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l))
+    := closed_red_open_right_cb (cf := cf) r.
+  have h : Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ⇝
+           it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx (mkApps (tInd i u) l)).
+  { now eapply rdx_red_it_mkProd_or_LetIn_to_smash. }
+  rewrite expand_lets_mkApps in h.
+  rewrite /expand_lets /expand_lets_k /= in h.
+  eexists.
+  transitivity (it_mkProd_or_LetIn ctx (mkApps (tInd i u) l)); [exact r|exact h].
+Qed.
+
+(** Base [PCUICInductives.closed_red_it_mkProd_or_LetIn_assum_nth] (:2246): its [wf] premise is unused. *)
+Lemma rdx_closed_red_it_mkProd_or_LetIn_assum_nth {Σ : global_env_ext} Γ sctx T n c A' :
+  assumption_context sctx ->
+  is_open_term Γ (it_mkProd_or_LetIn sctx T) ->
+  nth_error (List.rev sctx) n = Some c ->
+  Σ ;;; Γ ,,, skipn (#|sctx| - n) sctx ⊢ decl_type c ⇝ A' ->
+  ∑ sctx',
+    [× assumption_context sctx',
+       #|sctx'| = #|sctx|,
+       nth_error (List.rev sctx') n = Some (vass (decl_name c) A'),
+       (forall i, i <> n -> nth_error (List.rev sctx') i = nth_error (List.rev sctx) i) &
+       Σ ;;; Γ ⊢ it_mkProd_or_LetIn sctx T ⇝ it_mkProd_or_LetIn sctx' T].
+Proof.
+  intros ass op hnth hred.
+  have clΓ : is_closed_context Γ.
+  { move: (clrel_ctx hred). rewrite on_free_vars_ctx_app => /andP[] //. }
+  destruct (PCUICInductives.red_it_mkProd_or_LetIn_assum_nth (Σ := Σ) Γ sctx T n c A' ass hnth (clrel_rel hred))
+    as [sctx' [ass' hlen hnth' hother r]].
+  exists sctx'; split; try assumption.
+  now apply into_closed_red.
+Qed.
+
+(** [red_rec_arg_check_one_fix] (U): the script of base [PCUICInductives.red_rec_arg_check_one_fix]
+    over the two helpers above. *)
+Lemma red_rec_arg_check_one_fix_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (d : def term) (ctx : context) (concl : term) (c : context_decl) (ind : inductive) (u : Instance.t) (args : list term), on_free_vars (shiftnP #|Γ| xpred0) (dtype d) -> decompose_prod_assum [] (dtype d) = (ctx, concl) -> nth_error (List.rev (smash_context [] ctx)) (rarg d) = Some c -> Σ ;;; Γ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx) ⊢ decl_type c ⇝ mkApps (tInd ind u) args -> has_rec_arg d × (∑ ty : term, Σ ;;; Γ ⊢ dtype d ⇝ ty × check_one_fix (def_with_type d ty) = Some (inductive_mind ind)).
+Proof.
+  intros Σ wfΣ Γ d ctx concl c ind u args op decomp hnth hred.
+  pose proof (wfE_ClosedBodies Σ) as cbΣ.
+  have clΓ : is_closed_context Γ.
+  { move: (clrel_ctx hred). rewrite on_free_vars_ctx_app => /andP[] //. }
+  have eqty := PCUICSubstitution.decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
+  cbn in eqty.
+  have r1 : Σ ;;; Γ ⊢ dtype d ⇝ it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx concl).
+  { rewrite eqty. apply rdx_red_it_mkProd_or_LetIn_to_smash => //. now rewrite -eqty. }
+  have ass : assumption_context (smash_context [] ctx).
+  { apply PCUICContexts.smash_context_assumption_context; constructor. }
+  destruct (rdx_closed_red_it_mkProd_or_LetIn_assum_nth Γ _ _ _ _ _ ass (closed_red_open_right_cb (cf := cf) r1) hnth hred)
+    as [sctx' [ass' hlen hnth' _ r2]].
+  split.
+  - have hlt := nth_error_Some_length hnth. rewrite List.length_rev smash_context_length /= in hlt.
+    rewrite /has_rec_arg decomp /=. now apply Nat.ltb_lt.
+  - exists (it_mkProd_or_LetIn sctx' (expand_lets ctx concl)). split.
+    + now transitivity (it_mkProd_or_LetIn (smash_context [] ctx) (expand_lets ctx concl)).
+    + eapply PCUICInductives.check_one_fix_it_mkProd_or_LetIn_assum; [exact ass'|exact hnth'|reflexivity].
+Qed.
+
+End RdxBaseScripts.
+
+
+(** ** T0 rows [ind_arity_relevant] and [inversion_it_mkProd_or_LetIn] *)
+
+(** A sort comparison as a [ws_cumul_pbE] between the two sorts. *)
+Lemma rdx_sort_le {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {a b : sort} :
+  is_closed_context Γ -> leq_sort Σ a b -> Σ ;;; Γ ⊢E tSort a ≤ tSort b.
+Proof.
+  intros clΓ h.
+  apply into_ws_cumul_pbE_spec; [|exact clΓ|reflexivity|reflexivity].
+  apply eq_term_upto_univ_cumulSpec. constructor. exact h.
+Qed.
+
+(** The let-in step of row 9's route (hyp-audit-C §3.5 row 9): [ws_cumul_pbE_LetIn_l_inv]
+    ([PCUICEtaA6.v:361]), [red_expand_letE], [weakening_ws_cumul_pbE] ([PCUICWsCumulEtaSubst.v:189]). *)
+Lemma rdx_letin_le_sort {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname}
+  {b B A : term} {s : sort} :
+  wf_localE Σ (Γ ,, vdef na b B) -> is_open_term (Γ ,, vdef na b B) A ->
+  Σ ;;; Γ ⊢E tLetIn na b B A ≤ tSort s -> Σ ;;; Γ ,, vdef na b B ⊢E A ≤ tSort s.
+Proof.
+  intros wfΓ opA c.
+  have c1 : Σ ;;; Γ ⊢E A {0 := b} ≤ tSort s by exact (ws_cumul_pbE_LetIn_l_inv c).
+  have clΓ : is_closed_context (Γ ,,, [vdef na b B]) by exact (wf_local_closed_contextE wfΓ).
+  have w : Σ ;;; Γ ,, vdef na b B ⊢E lift0 1 (A {0 := b}) ≤ tSort s
+    by exact (weakening_ws_cumul_pbE (Γ := Γ) (Γ' := []) (Γ'' := [vdef na b B]) c1 clΓ).
+  have r : Σ ;;; Γ ,, vdef na b B ⊢ A ⇝ lift0 1 (A {0 := b}) by exact (@red_expand_letE cf Σ wfΣ Γ na b B A wfΓ opA).
+  exact (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _ (red_ws_cumul_pb (pb := Cumul) r) w).
+Qed.
+
+(** Inversion of a typed telescope that stops before the final cumulativity: the body has a type
+    below the telescope's sort. Unlike [inversion_it_mkProd_or_LetIn], it needs no [wf_sort] of that
+    sort, because it never retypes the body at it. *)
+Lemma rdx_inversion_it_mkProd_or_LetIn_le {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+  (Δ : context) : forall (Γ : context) (T X : term) (s : sort),
+  Σ ;;; Γ |-E it_mkProd_or_LetIn Δ T : X -> Σ ;;; Γ ⊢E X ≤ tSort s ->
+  ∑ X' : term, Σ ;;; Γ ,,, Δ |-E T : X' × Σ ;;; Γ ,,, Δ ⊢E X' ≤ tSort s.
+Proof.
+  induction Δ as [|d Δ IH]; intros Γ T X s h c.
+  - exists X. split; assumption.
+  - destruct (IH Γ (mkProd_or_LetIn d T) X s h c) as [X1 [h1 c1]].
+    destruct d as [na [b|] ty]; cbn [mkProd_or_LetIn decl_body decl_name decl_type] in h1.
+    + destruct (inversion_LetIn Σ wfΣ h1) as [A [_ [hA cA]]].
+      exists A. split; [exact hA|].
+      apply rdx_letin_le_sort.
+      * exact (typingE_wf_local hA).
+      * exact (type_is_open_termE hA).
+      * exact (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _ cA c1).
+    + destruct (inversion_Prod Σ wfΣ h1) as [s1 [s2 [_ [hB cB]]]].
+      exists (tSort s2). split; [exact hB|].
+      have clΓ : is_closed_context (Γ ,,, Δ ,, vass na ty) by exact (wf_local_closed_contextE (typingE_wf_local hB)).
+      have hle : leq_sort Σ (Sort.sort_of_product s1 s2) s
+        by exact (ws_cumul_pbE_Sort_inv Cumul (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _ cB c1)).
+      exact (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _
+               (rdx_sort_le clΓ (leq_sort_product _ s1 s2)) (rdx_sort_le clΓ hle)).
+Qed.
+
+(** [ind_arity_relevant] (T0, row 7): base [PCUICInductiveInversion.ind_arity_relevant] with
+    [rdx_inversion_it_mkProd_or_LetIn_le] in place of [inversion_it_mkProd_or_LetIn], then K7
+    [inversion_Sort], [ws_cumul_pbE_Sort_inv] ([PCUICEtaA6.v:176]), [leq_relevance], [relevance_super]. *)
+Lemma ind_arity_relevant_proved {cf : checker_flags} : forall (Σ : global_env_ext) (mdecl : mutual_inductive_body) (idecl : one_inductive_body), wfE Σ.1 -> let ind_type := it_mkProd_or_LetIn (ind_params mdecl) (it_mkProd_or_LetIn (ind_indices idecl) (tSort (ind_sort idecl))) in isTypeE Σ [] ind_type -> isTypeRelE Σ [] ind_type rel_of_Type.
+Proof.
+  intros Σ mdecl idecl wfΣ ind_type (_ & s & Hs & _ & _).
+  repeat (eexists; tea). cbn in Hs |- *.
+  rewrite /ind_type in Hs.
+  rewrite -it_mkProd_or_LetIn_app in Hs.
+  destruct (rdx_inversion_it_mkProd_or_LetIn_le (wfΣ := wfΣ) _ _ _ _ s Hs (typing_ws_cumul_pbE (le := Cumul) Hs))
+    as [X [hX cX]].
+  destruct (inversion_Sort Σ wfΣ hX) as [_ [_ cS]].
+  have hle : leq_sort Σ (Sort.super (ind_sort idecl)) s
+    by exact (ws_cumul_pbE_Sort_inv Cumul (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul _ _ _ _ cS cX)).
+  eapply leq_relevance; tea.
+  eapply relevance_super.
+Qed.
+
+(** [inversion_it_mkProd_or_LetIn] (T0, row 9): base [PCUICSpine.inversion_it_mkProd_or_LetIn] reaches
+    the body's sort through [type_it_mkProd_or_LetIn_inv]; here [rdx_inversion_it_mkProd_or_LetIn_le]
+    gives a type of the body below [tSort s], and K7 [type_ws_cumul_pb] retypes it at [tSort s], whose
+    well-formedness is [typing_wf_sort_proved] (row 35, above). *)
+Lemma inversion_it_mkProd_or_LetIn_proved {cf : checker_flags} : forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Δ : context} {t : term} {s : sort}, Σ;;; Γ |-E it_mkProd_or_LetIn Δ t : tSort s -> Σ;;; Γ,,, Δ |-E t : tSort s.
+Proof.
+  intros Σ wfΣ Γ Δ t s h.
+  destruct (rdx_inversion_it_mkProd_or_LetIn_le Δ Γ t (tSort s) s h (typing_ws_cumul_pbE (le := Cumul) h))
+    as [X [hX cX]].
+  apply (type_ws_cumul_pb (pb := Cumul) X hX); [|exact cX].
+  apply isType_Sort; [exact (typing_wf_sort_proved wfΣ h)|exact (typingE_wf_local hX)].
+Qed.
+
+(** ** K7 substitution and spine facts: T0 rows 30, 31, 14, 34, 27, 2, 6 (helpers [sbs_*]) *)
+
+(** [PCUICSubstitution.subslet_untyped_subslet] over [subsletE]. *)
+Lemma sbs_subsletE_untyped {cf : checker_flags} {Σ : global_env_ext} {Γ s Δ} :
+  subsletE Σ Γ s Δ -> PCUICSubstitution.untyped_subslet Γ s Δ.
+Proof. induction 1; constructor; auto. Qed.
+
+(** [PCUICSubstitution.subslet_nth_error] over [subsletE]. *)
+Lemma sbs_subsletE_nth_error {cf : checker_flags} {Σ Γ s Δ decl n} :
+  subsletE Σ Γ s Δ ->
+  nth_error Δ n = Some decl ->
+  ∑ t, nth_error s n = Some t ×
+  let ty := subst0 (skipn (S n) s) (decl_type decl) in
+  Σ ;;; Γ |-E t : ty ×
+  match decl_body decl return Type with
+  | Some t' =>
+    let b := subst0 (skipn (S n) s) t' in
+    (t = b)
+  | None => unit
+  end.
+Proof.
+  intros h; induction h as [|Δ s na t T h IH ht|Δ s na t T h IH ht] in n |- *.
+  - intros hn. rewrite nth_error_nil in hn. discriminate.
+  - destruct n as [|n]; cbn.
+    + intros [= <-]. exists t. split; [reflexivity|]. cbn. split; [exact ht|exact tt].
+    + intros hn. exact (IH n hn).
+  - destruct n as [|n]; cbn.
+    + intros [= <-]. exists (subst0 s t). split; [reflexivity|]. cbn. split; [exact ht|reflexivity].
+    + intros hn. exact (IH n hn).
+Qed.
+
+(** The terms of a [subsletE] are open in its context. *)
+Lemma sbs_subsletE_open {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ s Δ} :
+  subsletE Σ Γ s Δ -> forallb (is_open_term Γ) s.
+Proof.
+  intros h; induction h as [|Δ s na t T h IH ht|Δ s na t T h IH ht]; cbn [forallb].
+  - reflexivity.
+  - rewrite IH andb_true_r. exact (subject_is_open_termE ht).
+  - rewrite IH andb_true_r. exact (subject_is_open_termE ht).
+Qed.
+
+Section SbsSigma.
+  Local Open Scope sigma_scope.
+  Local Set Keyed Unification.
+
+  (** [PCUICSubstitution.subslet_well_subst] over [subsletE] / [well_substE]; base's proof. *)
+  Lemma sbs_subslet_well_substE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ} :
+    subsletE Σ Γ s Γ' ->
+    wf_localE Σ (Γ ,,, subst_context s 0 Δ) ->
+    well_substE Σ (Γ ,,, Γ' ,,, Δ) (⇑^#|Δ| (s ⋅n ids)) (Γ ,,, subst_context s 0 Δ).
+  Proof.
+    intros hs hsΔ. split.
+    2: exact (PCUICSubstitution.subslet_usubst (sbs_subsletE_untyped hs)).
+    intros x decl hx. rewrite PCUICInstConv.lift0_inst inst_assoc. revert hx.
+    case: nth_error_app_context => //.
+    { intros d hnth hn [= ->].
+      rewrite {1}Upn_eq subst_consn_lt; len => //. rewrite /subst_fn.
+      rewrite idsn_lt //.
+      eapply meta_convE.
+      - econstructor; auto.
+        rewrite nth_error_app_lt; len => //.
+        now rewrite PCUICSubstitution.nth_error_subst_context hnth.
+      - rewrite /subst_decl. simpl.
+        sigma. rewrite -shiftk_shift -subst_compose_assoc -shiftk_shift.
+        rewrite subst_shift_comm.
+        rewrite -subst_fn_subst_consn. lia_f_equal. }
+    { intros n hnth; len; intros hd [= ->].
+      pose proof (subslet_length hs) as H.
+      move: hnth; case: nth_error_app_context => //.
+      * intros n hnth hx [= ->].
+        rewrite {1}Upn_eq subst_consn_ge; len => //; try lia.
+        rewrite subst_consn_compose.
+        rewrite subst_consn_lt; len; try lia.
+        unfold subst_fn. rewrite nth_error_map.
+        destruct (sbs_subsletE_nth_error hs hnth) as [t [hnths [hty hb]]].
+        rewrite hnths /=. sigma in hty.
+        eapply meta_convE in hty.
+        2:now rewrite skipn_subst ?Upn_0; try lia.
+        eapply (shift_typingE (Δ := subst_context s 0 Δ)) in hty.
+        2:tas.
+        2:now len.
+        rewrite inst_assoc in hty.
+        rewrite Upn_eq.
+        eapply meta_convE; eauto.
+        eapply inst_ext.
+        rewrite (shift_subst_consn_ge (S x)); len; try lia.
+        rewrite subst_compose_assoc.
+        now replace (S x - #|Δ|) with (S (x - #|Δ|)) by lia.
+      * intros n hnth hn [= ->].
+        eapply meta_conv_allE.
+        2:reflexivity.
+        2:{ rewrite Upn_subst_consn_ge; try lia. rewrite compose_ids_l.
+            instantiate (1 := tRel (x - #|s|)).
+            rewrite /shiftk. lia_f_equal. }
+        2:{ econstructor; eauto. }
+        eapply meta_convE.
+        { econstructor; tas.
+          rewrite nth_error_app_context_ge; len; try lia.
+          rewrite H. erewrite <- hnth. lia_f_equal. }
+        rewrite PCUICInstConv.lift0_inst.
+        rewrite Upn_eq.
+        rewrite shift_subst_consn_ge; len; try lia.
+        rewrite subst_consn_compose shift_subst_consn_ge; len; try lia.
+        rewrite H. rewrite shiftk_compose. lia_f_equal.
+    }
+  Qed.
+End SbsSigma.
+
+(** *** Row 31: [substitution_wf_local] (base [PCUICSubstitution.All_local_env_inst], over [type_instE]) *)
+Lemma substitution_wf_local_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl}, subsletE Σ Γ s Γ' -> wf_localE Σ (Γ,,, Γ',,, Δ) -> wf_localE Σ (Γ,,, subst_context s 0 Δ).
+Proof.
+  intros Σ wfΣ Γ Γ' s Δ hs wf.
+  pose proof (env_propE_wf_local type_instE Σ wfΣ _ wf) as X. cbv beta in X.
+  eapply All_local_env_app_inv in X as [_ XΔ].
+  have wfΓ : wf_localE Σ Γ.
+  { apply wf_localE_app_l in wf. exact (wf_localE_app_l _ _ _ wf). }
+  rewrite PCUICInstConv.subst_context_inst_context.
+  eapply (wf_local_app_instE _ (Γ ,,, Γ')); [exact XΔ| |exact wfΓ].
+  pose proof (sbs_subslet_well_substE (Δ := []) hs) as hw.
+  rewrite subst_context_nil in hw. exact (hw wfΓ).
+Qed.
+
+(** *** Row 30: [substitution] (base [PCUICSubstitution.substitution_prop]: [type_inst] + [subslet_well_subst]) *)
+Lemma substitution_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl} {t : term} {T : term}, subsletE Σ Γ s Γ' -> Σ;;; Γ,,, Γ',,, Δ |-E t : T -> Σ;;; Γ,,, subst_context s 0 Δ |-E subst s #|Δ| t : subst s #|Δ| T.
+Proof.
+  intros Σ wfΣ Γ Γ' s Δ t T hs ht.
+  pose proof (substitution_wf_local_proved (wfΣ := wfΣ) hs (typingE_wf_local ht)) as wfΔ.
+  rewrite !subst_inst.
+  exact (typing_instE Σ _ t T _ _ wfΔ (sbs_subslet_well_substE hs wfΔ) ht).
+Qed.
+
+(** [PCUICSubstitution.isType_subst] over E. *)
+Lemma sbs_isType_subst {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ s T} :
+  subsletE Σ Γ s Δ -> isTypeE Σ (Γ ,,, Δ) T -> isTypeE Σ Γ (subst0 s T).
+Proof.
+  intros hs (_ & u & hu & _).
+  apply (has_sort_isTypeE u).
+  exact (substitution_proved (Δ := []) hs hu).
+Qed.
+
+(** *** Row 14: [isType_apply] ([PCUICArities.isType_apply]: [isType_tProd] + [isType_subst]) *)
+Lemma isType_apply_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term} {t : term}, isTypeE Σ Γ (tProd na A B) -> Σ;;; Γ |-E t : A -> isTypeE Σ Γ (B {0 := t}).
+Proof.
+  intros Σ wfΣ Γ na A B t (_ & s & hs & _) ht.
+  destruct (inversion_Prod Σ wfΣ hs) as (s1 & s2 & _ & hB & _).
+  apply (has_sort_isTypeE s2).
+  exact (substitution_proved (Γ' := [vass na A]) (Δ := []) (subslet_ass_tip ht) hB).
+Qed.
+
+(** *** Row 34: [typing_spine_strengthen] (the head cumulativity composes: [ws_cumul_pbE_trans]) *)
+Lemma typing_spine_strengthen_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {args : list term} {U : term}, typing_spineE Σ Γ T args U -> forall T' : term, isTypeE Σ Γ T' -> Σ ;;; Γ ⊢E T' ≤ T -> typing_spineE Σ Γ T' args U.
+Proof.
+  intros Σ wfΣ Γ T args U sp.
+  destruct sp as [ty ty' isty isty' c'|ty hd tl na A B B' isty isP c' hhd sp]; intros T' isT' c.
+  - exact (type_spine_nilE Σ Γ T' ty' isT' isty'
+      (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ c c')).
+  - exact (type_spine_consE Σ Γ T' hd tl na A B B' isT' isP
+      (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ c c') hhd sp).
+Qed.
+
+(** *** Row 27: [spine_subst_cumul] ([PCUICSpine.subslet_cumul] + [spine_subst_cumul]) *)
+Lemma sbs_subsletE_vass_inv {cf : checker_flags} {Σ Γ args Δ na T} :
+  subsletE Σ Γ args (Δ ,, vass na T) ->
+  ∑ t s, (args = t :: s) × subsletE Σ Γ s Δ × (Σ ;;; Γ |-E t : subst0 s T).
+Proof.
+  intros h. DepElim.depelim h. eexists _, _. split; [reflexivity|split; eassumption].
+Qed.
+
+Lemma sbs_context_subst_cumul {cf : checker_flags} {Σ : global_env_ext} {pb Δ Γ Γ' args s} :
+  PCUICLiftSubst.assumption_context Γ -> PCUICLiftSubst.assumption_context Γ' ->
+  ws_cumul_ctx_pbE_rel pb Σ Δ Γ Γ' ->
+  context_subst Γ args s -> context_subst Γ' args s.
+Proof.
+  intros ass ass' [_ hA].
+  induction hA as [|d d' Γ0 Γ0' hA IH p] in args, s, ass, ass' |- *; intros ctxs.
+  - exact ctxs.
+  - destruct d as [na [b|] T]; [exfalso; inversion ass|].
+    destruct d' as [na' [b'|] T']; [exfalso; inversion ass'|].
+    have ass0 : PCUICLiftSubst.assumption_context Γ0 by inversion ass.
+    have ass0' : PCUICLiftSubst.assumption_context Γ0' by inversion ass'.
+    DepElim.depelim ctxs. constructor. eapply IH; eassumption.
+Qed.
+
+Lemma sbs_subsletE_cumul {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {pb Δ args Γ Γ'} :
+  PCUICLiftSubst.assumption_context Γ -> PCUICLiftSubst.assumption_context Γ' ->
+  wf_localE Σ (Δ ,,, Γ) -> wf_localE Σ (Δ ,,, Γ') ->
+  ws_cumul_ctx_pbE_rel pb Σ Δ Γ Γ' ->
+  subsletE Σ Δ args Γ -> subsletE Σ Δ args Γ'.
+Proof.
+  intros ass ass' wf wf' [cl hA].
+  induction hA as [|d d' Γ0 Γ0' hA IH p] in args, ass, ass', wf, wf' |- *; intros subsl.
+  - exact subsl.
+  - destruct d as [na [b|] T]; [exfalso; inversion ass|].
+    destruct d' as [na' [b'|] T']; [exfalso; inversion ass'|].
+    have ass0 : PCUICLiftSubst.assumption_context Γ0 by inversion ass.
+    have ass0' : PCUICLiftSubst.assumption_context Γ0' by inversion ass'.
+    destruct (sbs_subsletE_vass_inv subsl) as (t & s & -> & subsl' & ht).
+    destruct (All_local_env_tip wf) as [wf0 _].
+    destruct (All_local_env_tip wf') as [wf0' hT'].
+    have subsl'' : subsletE Σ Δ s Γ0'.
+    { eapply IH; eassumption. }
+    constructor; [exact subsl''|].
+    DepElim.depelim p.
+    apply (type_ws_cumul_pb (pb := pb) (subst0 s T) ht).
+    + destruct hT' as (_ & u & hu & _).
+      apply (has_sort_isTypeE u).
+      exact (substitution_proved (Δ := []) subsl'' hu).
+    + refine (untyped_substitution_ws_cumul_pbE (Γ'' := []) (M := T) (N := T')
+        (sbs_subsletE_untyped subsl') (sbs_subsletE_open subsl') _).
+      eassumption.
+Qed.
+
+Lemma spine_subst_cumul_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Δ : list context_decl} {args : list term} {Γ : context} {Γ' : context}, PCUICLiftSubst.assumption_context Γ -> PCUICLiftSubst.assumption_context Γ' -> wf_localE Σ (Δ,,, Γ) -> wf_localE Σ (Δ,,, Γ') -> ws_cumul_ctx_pbE_rel Cumul Σ Δ Γ Γ' -> spine_substE Σ Δ args (List.rev args) Γ -> spine_substE Σ Δ args (List.rev args) Γ'.
+Proof.
+  intros Σ wfΣ Δ args Γ Γ' ass ass' wf wf' a2 [wfΔ _ ctxs subsl].
+  split.
+  - exact wfΔ.
+  - exact wf'.
+  - exact (sbs_context_subst_cumul ass ass' a2 ctxs).
+  - exact (sbs_subsletE_cumul ass ass' wf wf' a2 subsl).
+Qed.
+
+(** *** Row 6: [ctx_inst_spine_subst] ([PCUICSpine.ctx_inst_spine_subst]) *)
+
+(** [PCUICSubstitution.subslet_def_tip] over [subsletE]. *)
+Lemma sbs_subslet_def_tip {cf : checker_flags} {Σ : global_env_ext} {Γ na t T} :
+  Σ ;;; Γ |-E t : T -> subsletE Σ Γ [t] [vdef na t T].
+Proof.
+  intros h. rewrite -{1}(subst_empty 0 t).
+  apply cons_let_defE; [constructor|]. now rewrite !subst_empty.
+Qed.
+
+(** The substitution of a [ctx_instE] over a reversed context is a [subsletE]
+    (the [subslet] half of [PCUICSpine.ctx_inst_spine_subst], by induction on the instance). *)
+Lemma sbs_ctx_inst_subslet {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ args Δt}
+  (ci : ctx_instE Σ Γ args Δt) :
+  wf_localE Σ (Γ ,,, List.rev Δt) -> subsletE Σ Γ (ctx_inst_subE ci) (List.rev Δt).
+Proof.
+  induction ci as [|na t i inst Δt hi ci IH|na b t inst Δt ci IH]; intros wf;
+    cbn [ctx_inst_subE List.rev] in *.
+  - constructor.
+  - have e : List.rev (subst_telescope [i] 0 Δt) = subst_context [i] 0 (List.rev Δt).
+    { rewrite -{1}(List.rev_involutive Δt) subst_telescope_subst_context. apply List.rev_involutive. }
+    have hs : subsletE Σ Γ [i] [vass na t] := subslet_ass_tip hi.
+    have wf' : wf_localE Σ (Γ ,,, [vass na t] ,,, List.rev Δt) by rewrite -app_context_assoc.
+    rewrite e in IH.
+    exact (stc_subsletE_app _ _ _ _ _ _ (IH (substitution_wf_local_proved (wfΣ := wfΣ) hs wf')) hs).
+  - have wfd : wf_localE Σ (Γ ,,, [vdef na b t] ,,, List.rev Δt) by rewrite -app_context_assoc.
+    destruct (All_local_env_tip (wf_localE_app_l _ _ _ wfd)) as [_ hd0].
+    have hb : Σ ;;; Γ |-E b : t by destruct hd0 as (hb & _).
+    have hs : subsletE Σ Γ [b] [vdef na b t] := sbs_subslet_def_tip hb.
+    have e : List.rev (subst_telescope [b] 0 Δt) = subst_context [b] 0 (List.rev Δt).
+    { rewrite -{1}(List.rev_involutive Δt) subst_telescope_subst_context. apply List.rev_involutive. }
+    rewrite e in IH.
+    exact (stc_subsletE_app _ _ _ _ _ _ (IH (substitution_wf_local_proved (wfΣ := wfΣ) hs wfd)) hs).
+Qed.
+
+Lemma ctx_inst_spine_subst_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Δ : list context_decl} {args : list term}, wf_localE Σ (Γ,,, Δ) -> forall (ci : ctx_instE Σ Γ args (List.rev Δ)), spine_substE Σ Γ args (ctx_inst_subE ci) Δ.
+Proof.
+  intros Σ wfΣ Γ Δ args wf ci.
+  pose proof (make_context_subst_spec _ _ _ (stc_ctx_inst_subE_spec ci)) as msub.
+  rewrite List.rev_involutive in msub.
+  pose proof (sbs_ctx_inst_subslet (wfΣ := wfΣ) ci) as hs.
+  rewrite List.rev_involutive in hs.
+  split.
+  - exact (wf_localE_app_l _ _ _ wf).
+  - exact wf.
+  - exact msub.
+  - exact (hs wf).
+Qed.
+
+(** *** Row 2: [arity_typing_spine] ([PCUICSpine.arity_typing_spine]) *)
+
+(** [PCUICArities.isType_tLetIn_red] over E: substitution (row 30), [ws_cumul_pbE_LetIn_l_inv],
+    [type_ws_cumul_pb], and [typing_wf_sort_proved] (row 35) for the target sort; no
+    [ws_cumul_pb_Sort_r_inv]. *)
+Lemma sbs_isType_tLetIn_red {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ na t A B} :
+  isTypeE Σ Γ (tLetIn na t A B) -> isTypeE Σ Γ (B {0 := t}).
+Proof.
+  intros (_ & s & H & _).
+  pose proof (typing_wf_sort_proved (Σ := Σ) wfΣ H) as ws.
+  destruct (inversion_LetIn Σ wfΣ H) as (A' & hb & HB & c).
+  assert (ht : Σ ;;; Γ |-E t : A) by (destruct hb as (ht & _); exact ht).
+  assert (HB' : Σ ;;; Γ |-E B {0 := t} : A' {0 := t}).
+  { exact (substitution_proved (wfΣ := wfΣ) (Γ' := [vdef na t A]) (Δ := []) (sbs_subslet_def_tip ht) HB). }
+  apply (has_sort_isTypeE s).
+  exact (type_ws_cumul_pb (pb := Cumul) (A' {0 := t}) HB' (isType_Sort ws (typingE_wf_local HB'))
+    (ws_cumul_pbE_LetIn_l_inv c)).
+Qed.
+
+(** [PCUICArities.typing_spine_letin_inv] over E. *)
+Lemma sbs_typing_spine_letin_inv {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ na b B T args S} :
+  typing_spineE Σ Γ (tLetIn na b B T) args S -> typing_spineE Σ Γ (T {0 := b}) args S.
+Proof.
+  intros Hsp. remember (tLetIn na b B T) as L eqn:eL. revert eL.
+  destruct Hsp as [ty ty' isty isty' c|ty hd tl na' A B0 B' isty isP c hhd sp]; intros ->.
+  - exact (type_spine_nilE Σ Γ _ ty' (sbs_isType_tLetIn_red isty) isty' (ws_cumul_pbE_LetIn_l_inv c)).
+  - exact (type_spine_consE Σ Γ _ hd tl na' A B0 B' (sbs_isType_tLetIn_red isty) isP
+      (ws_cumul_pbE_LetIn_l_inv c) hhd sp).
+Qed.
+
+Lemma sbs_context_subst_def_tip na b ty : context_subst [vdef na b ty] [] [b].
+Proof. rewrite -{2}(subst_empty 0 b). exact (context_subst_def [] [] [] na b ty context_subst_nil). Qed.
+
+Lemma sbs_context_subst_ass_tip na ty a : context_subst [vass na ty] [a] [a].
+Proof. exact (context_subst_ass [] [] [] na ty a context_subst_nil). Qed.
+
+Lemma arity_typing_spine_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : sort} {inst : list term} {s' : sort}, typing_spineE Σ Γ (it_mkProd_or_LetIn Γ' (tSort s)) inst (tSort s') -> [× #|inst| = context_assumptions Γ', leq_sort Σ s s' & ∑ instsubst : list term, spine_substE Σ Γ inst instsubst Γ'].
+Proof.
+  intros Σ wfΣ Γ Γ' s inst s' Hsp. revert s inst s' Hsp.
+  induction Γ' as [|d l IH] using PCUICInduction.ctx_length_rev_ind; intros s inst s' Hsp.
+  - have Hsp0 : typing_spineE Σ Γ (tSort s) inst (tSort s') := Hsp.
+    clear Hsp.
+    remember (tSort s) as S0 eqn:eS. remember (tSort s') as S1 eqn:eS'. revert eS eS'.
+    destruct Hsp0 as [ty ty' isty isty' c|ty hd tl na A B B' isty isP c hhd sp]; intros -> ->.
+    + split; [reflexivity|exact (ws_cumul_pb_Sort_inv Cumul c)|].
+      exists []. split; [exact (isType_wf_local isty)|exact (isType_wf_local isty)|constructor|constructor].
+    + exfalso. exact (ws_cumul_pb_Sort_Prod_inv Cumul c).
+  - pose proof (isType_it_mkProd_or_LetIn_wf_local_proved (wfΣ := wfΣ) (typing_spine_isType_dom Hsp)) as wfΓ'.
+    have wfd : wf_localE Σ (Γ ,,, [d] ,,, l) by rewrite -app_context_assoc.
+    destruct (All_local_env_tip (wf_localE_app_l _ _ _ wfd)) as [_ hd0].
+    rewrite it_mkProd_or_LetIn_app in Hsp.
+    destruct d as [na [b|] ty].
+    + have hb : Σ ;;; Γ |-E b : ty by destruct hd0 as (hb & _).
+      have Hsp1 : typing_spineE Σ Γ (tLetIn na b ty (it_mkProd_or_LetIn l (tSort s))) inst (tSort s') := Hsp.
+      pose proof (sbs_typing_spine_letin_inv (wfΣ := wfΣ) Hsp1) as Hsp2.
+      rewrite /subst1 subst_it_mkProd_or_LetIn in Hsp2.
+      have Hsp3 : typing_spineE Σ Γ (it_mkProd_or_LetIn (subst_context [b] 0 l) (tSort s)) inst (tSort s') := Hsp2.
+      destruct (IH (subst_context [b] 0 l) ltac:(rewrite subst_context_length; lia) _ _ _ Hsp3)
+        as [instlen leq [instsubst [wfdom _ cs subi]]].
+      rewrite context_assumptions_subst in instlen.
+      have hl : #|instsubst| = #|l| by rewrite -(context_subst_length cs) subst_context_length.
+      split.
+      * rewrite context_assumptions_app /=. lia.
+      * exact leq.
+      * exists (instsubst ++ [b]). split.
+        -- exact wfdom.
+        -- exact wfΓ'.
+        -- apply context_subst_app_inv.
+           rewrite -hl skipn_all_app firstn_app_left //.
+           split; [exact cs|exact (sbs_context_subst_def_tip na b ty)].
+        -- exact (stc_subsletE_app _ _ _ _ _ _ subi (sbs_subslet_def_tip hb)).
+    + have Hsp1 : typing_spineE Σ Γ (tProd na ty (it_mkProd_or_LetIn l (tSort s))) inst (tSort s') := Hsp.
+      clear Hsp.
+      remember (tProd na ty (it_mkProd_or_LetIn l (tSort s))) as P0 eqn:eP.
+      remember (tSort s') as S1 eqn:eS'. revert eP eS'.
+      destruct Hsp1 as [ty0 ty' isty isty' c|ty0 hd tl na0 A B B' isty isP c hhd sp]; intros -> ->.
+      * exfalso. exact (ws_cumul_pb_Prod_Sort_inv Cumul c).
+      * destruct (ws_cumul_pb_Prod_Prod_inv c) as [eqna conva cumulB].
+        assert (isty0 : isTypeE Σ Γ ty).
+        { destruct isty as (_ & u & hu & _).
+          destruct (inversion_Prod Σ wfΣ hu) as (s1 & s2 & hA & _ & _).
+          destruct hA as (_ & u1 & hu1 & _). exact (has_sort_isTypeE u1 hu1). }
+        assert (hdty : Σ ;;; Γ |-E hd : ty).
+        { exact (type_ws_cumul_pb (pb := Conv) A hhd isty0 (ws_cumul_pbE_sym_pb conva)). }
+        assert (cumulB' : Σ ;;; Γ ⊢E (it_mkProd_or_LetIn l (tSort s)) {0 := hd} ≤ B {0 := hd}).
+        { exact (substitution0_ws_cumul_pbE (subject_is_open_termE hdty) cumulB). }
+        pose proof (typing_spine_strengthen_proved (wfΣ := wfΣ) sp _
+          (isType_apply_proved (wfΣ := wfΣ) isty hdty) cumulB') as sp1.
+        rewrite /subst1 subst_it_mkProd_or_LetIn in sp1.
+        have sp2 : typing_spineE Σ Γ (it_mkProd_or_LetIn (subst_context [hd] 0 l) (tSort s)) tl (tSort s') := sp1.
+        destruct (IH (subst_context [hd] 0 l) ltac:(rewrite subst_context_length; lia) _ _ _ sp2)
+          as [instlen leq [instsubst [wfdom _ cs subi]]].
+        rewrite context_assumptions_subst in instlen.
+        have hl : #|instsubst| = #|l| by rewrite -(context_subst_length cs) subst_context_length.
+        split.
+        -- rewrite context_assumptions_app /=. lia.
+        -- exact leq.
+        -- exists (instsubst ++ [hd]). split.
+           ++ exact wfdom.
+           ++ exact wfΓ'.
+           ++ apply context_subst_app_inv.
+              rewrite -hl skipn_all_app firstn_app_left //.
+              split; [exact cs|exact (sbs_context_subst_ass_tip na ty hd)].
+           ++ exact (stc_subsletE_app _ _ _ _ _ _ subi (subslet_ass_tip hdty)).
+Qed.
+
+(** ** K7 smash and expand_lets facts: T0 rows 44, 45, 32, 43, 28, 18 (helpers [smh_*])
+
+  Ports of base [PCUICContexts] ([wf_local_rel_smash_context_gen], [wf_local_smash_end],
+  [wf_local_smash_context], [subslet_lift], [subslet_extended_subst], [typing_expand_lets]),
+  [PCUICInductives.wf_local_expand_lets], [PCUICSpine.spine_subst_smash] and
+  [PCUICFixWitness] ([wf_local_nth_error_welltyped], [isType_rec_arg_welltyped]) over [typingE].
+  The only non-structural step of these ports is substitution (row 30, [substitution_proved]). *)
+
+(** [PCUICContexts.wf_local_rel_smash_context_gen] over [typingE]. *)
+Lemma smh_wf_local_rel_smash_context_gen {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ Δ'} :
+  wf_localE Σ (Δ' ,,, Γ) ->
+  wf_local_relE Σ (Δ' ,,, Γ) Δ ->
+  wf_local_relE Σ Δ' (smash_context Δ Γ).
+Proof.
+  rewrite /wf_local_relE.
+  induction Γ as [|a Γ IHΓ] in Δ |- *; simpl; auto.
+  intros wfΓ wfΔ.
+  destruct (All_local_env_tip wfΓ) as [wfΓ' ha].
+  destruct a as [na [b|] t]; simpl.
+  - apply IHΓ; auto.
+    apply All_local_env_fold, All_local_env_impl with (1 := wfΔ).
+    intros Γ' j X.
+    apply lift_typing_f_impl with (1 := X) => // ?? HT.
+    rewrite Nat.add_0_r.
+    have sub : subsletE Σ (Δ' ,,, Γ) [b] [vdef na b t].
+    { rewrite -{1}(subst_empty 0 b). constructor; [constructor|].
+      rewrite !subst_empty. eapply unlift_TermTyp; exact ha. }
+    exact (@substitution_proved cf Σ wfΣ _ _ _ _ _ _ sub HT).
+  - apply IHΓ; auto. eapply All_local_env_app; auto.
+    + constructor; [constructor|exact ha].
+    + eapply All_local_env_impl; eauto. simpl; intros.
+      now rewrite app_context_assoc.
+Qed.
+
+(** [PCUICContexts.wf_local_smash_end] over [typingE]. *)
+Lemma smh_wf_local_smash_end {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : list context_decl) :
+  wf_localE Σ (Γ ,,, Δ) -> wf_localE Σ (Γ ,,, smash_context [] Δ).
+Proof.
+  intros wf.
+  apply All_local_env_app.
+  - exact (fst (All_local_env_app_inv wf)).
+  - eapply (smh_wf_local_rel_smash_context_gen (wfΣ := wfΣ)); [exact wf|constructor].
+Qed.
+
+(** [smash_context] of a context ending in an assumption (syntactic). *)
+Lemma smh_smash_context_acc_vass Δ na T :
+  smash_context [mkdecl na None T] Δ =
+  smash_context [] Δ ,, vass na (subst (extended_subst Δ 0) 0 (lift (context_assumptions Δ) #|Δ| T)).
+Proof. rewrite smash_context_acc. reflexivity. Qed.
+
+Lemma smh_smash_context_vass Δ na T :
+  smash_context [] (Δ ,, vass na T) =
+  smash_context [] Δ ,, vass na (subst (extended_subst Δ 0) 0 (lift (context_assumptions Δ) #|Δ| T)).
+Proof. exact (smh_smash_context_acc_vass Δ na T). Qed.
+
+(** [PCUICContexts.subslet_lift] over [typingE] (no substitution: [weakeningE]). *)
+Lemma smh_subslet_lift {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+  (Γ Δ : context) s Δ' :
+  wf_localE Σ (Γ ,,, Δ) ->
+  subsletE Σ Γ s Δ' ->
+  subsletE Σ (Γ ,,, Δ) (map (lift0 #|Δ|) s) (lift_context #|Δ| 0 Δ').
+Proof.
+  move=> wfl sub.
+  induction sub as [|Δ0 s0 na t T sub IH ht|Δ0 s0 na t T sub IH ht];
+    rewrite ?lift_context_snoc /=.
+  - constructor.
+  - rewrite -(subslet_length sub). constructor; [exact IH|].
+    rewrite -distr_lift_subst. apply weakeningE; eauto.
+  - rewrite -(subslet_length sub).
+    rewrite distr_lift_subst. constructor; [exact IH|].
+    rewrite - !distr_lift_subst. apply weakeningE; eauto.
+Qed.
+
+(** [PCUICContexts.subslet_extended_subst] over [typingE]. *)
+Lemma smh_subslet_extended_subst {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ :
+  wf_localE Σ (Γ ,,, Δ) ->
+  subsletE Σ (Γ ,,, smash_context [] Δ)
+    (extended_subst Δ 0)
+    (lift_context (context_assumptions Δ) 0 Δ).
+Proof.
+  move=> wfΔ.
+  have wfΓ := fst (All_local_env_app_inv wfΔ).
+  have wfΔ' := snd (All_local_env_app_inv wfΔ).
+  clear wfΔ.
+  induction Δ as [|[na [d|] ty] Δ IHΔ] in wfΔ' |- *; simpl; try constructor.
+  * destruct (All_local_rel_tip wfΔ') as [wfΔt l0].
+    have wfΓΔ : wf_localE Σ (Γ ,,, Δ) := All_local_env_app wfΓ wfΔt.
+    specialize (IHΔ wfΔt).
+    rewrite lift_context_snoc /lift_decl /= /map_decl /=.
+    len.
+    constructor => //.
+    have l : Σ ;;; Γ ,,, Δ |-E d : ty by eapply unlift_TermTyp; exact l0.
+    have wfs := smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wfΓΔ.
+    have l' := weakening_typingE (wfΣ := wfΣ) (Γ' := Δ) (Γ'' := smash_context [] Δ) wfs l.
+    len in l'.
+    exact (@substitution_proved cf Σ wfΣ _ _ _ [] _ _ IHΔ l').
+  * rewrite (smh_smash_context_acc_vass Δ na ty).
+    destruct (All_local_rel_tip wfΔ') as [wfΔt l].
+    have wfΓΔ : wf_localE Σ (Γ ,,, Δ) := All_local_env_app wfΓ wfΔt.
+    specialize (IHΔ wfΔt).
+    rewrite lift_context_snoc /lift_decl /= /map_decl /=.
+    have wfs := smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wfΓΔ.
+    assert (wf_localE Σ (Γ ,,, smash_context [] Δ ,, vass na
+        (subst0 (extended_subst Δ 0) (lift (context_assumptions Δ) #|Δ| ty)))) as wfs'.
+    { constructor; [exact wfs|].
+      eapply lift_typing_f_impl with (f := fun t => _ (_ t)) (1 := l) => // ?? Hs.
+      have Hs' := weakening_typingE (wfΣ := wfΣ) (Γ' := Δ) (Γ'' := smash_context [] Δ) wfs Hs.
+      len in Hs'.
+      exact (@substitution_proved cf Σ wfΣ _ _ _ [] _ _ IHΔ Hs'). }
+    constructor.
+    - rewrite (lift_extended_subst _ 1).
+      rewrite -(PCUICWeakeningConv.lift_context_lift_context 1 _).
+      exact (smh_subslet_lift _ [_] _ _ wfs' IHΔ).
+    - eapply meta_convE.
+      + econstructor; [exact wfs'|reflexivity].
+      + simpl. rewrite (lift_extended_subst _ 1).
+        rewrite distr_lift_subst. f_equal. len.
+        now rewrite simpl_lift; try lia.
+Qed.
+
+(** [PCUICContexts.typing_expand_lets] over [typingE]. *)
+Lemma smh_typing_expand_lets {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ t T :
+  Σ ;;; Γ ,,, Δ |-E t : T ->
+  Σ ;;; Γ ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T.
+Proof.
+  intros Ht.
+  rewrite /expand_lets /expand_lets_k.
+  have wf := typingE_wf_local Ht.
+  have wfs := smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wf.
+  have Ht' := weakening_typingE (wfΣ := wfΣ) (Γ' := Δ) (Γ'' := smash_context [] Δ) wfs Ht.
+  len in Ht'.
+  exact (@substitution_proved cf Σ wfΣ _ _ _ [] _ _ (smh_subslet_extended_subst (wfΣ := wfΣ) Γ Δ wf) Ht').
+Qed.
+
+(** [PCUICInductives.wf_local_expand_lets] over [typingE]. *)
+Lemma smh_wf_local_expand_lets {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ Γ'} :
+  wf_localE Σ (Γ ,,, Δ ,,, Γ') ->
+  wf_localE Σ (Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ').
+Proof.
+  intros hwf.
+  rewrite /expand_lets_ctx /expand_lets_k_ctx.
+  have wfΓΔ := fst (All_local_env_app_inv hwf).
+  rewrite -app_context_assoc in hwf.
+  have wfs := smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wfΓΔ.
+  have hwf' := weakening_wf_localE (wfΣ := wfΣ) (Γ'' := smash_context [] Δ) hwf wfs.
+  len in hwf'.
+  rewrite lift_context_app app_context_assoc Nat.add_0_r in hwf'.
+  exact (substitution_wf_local_proved (wfΣ := wfΣ) (smh_subslet_extended_subst (wfΣ := wfΣ) Γ Δ wfΓΔ) hwf').
+Qed.
+
+(** The [context_subst] half of [PCUICSpine.spine_subst_smash] (syntactic). *)
+Lemma smh_context_subst_smash {Δ inst s} :
+  context_subst Δ inst s -> context_subst (smash_context [] Δ) inst (List.rev inst).
+Proof.
+  induction 1 as [|Γ' args s' na' t' a' cs IH|Γ' args s' na' b' t' cs IH].
+  - constructor.
+  - rewrite (smh_smash_context_vass Γ' na' t') List.rev_app_distr /=.
+    constructor. exact IH.
+  - simpl. exact IH.
+Qed.
+
+(** The [subslet] half of [PCUICSpine.spine_subst_smash] over [typingE] (no substitution). *)
+Lemma smh_subslet_smash {cf : checker_flags} {Σ : global_env_ext} {Γ Δ inst s} :
+  subsletE Σ Γ s Δ -> context_subst Δ inst s -> subsletE Σ Γ (List.rev inst) (smash_context [] Δ).
+Proof.
+  intros sub.
+  induction sub as [|Δ0 s0 na t T sub IH ht|Δ0 s0 na t T sub IH ht] in inst |- *; intros cs.
+  - DepElim.depelim cs. constructor.
+  - DepElim.depelim cs.
+    rewrite (smh_smash_context_vass Δ0 na T) List.rev_app_distr /=.
+    constructor; [now apply IH|].
+    eapply meta_convE; [exact ht|].
+    rewrite distr_subst extended_subst_length Nat.add_0_r simpl_subst_k.
+    + rewrite List.length_rev. symmetry. now eapply context_subst_length2.
+    + f_equal. now eapply context_subst_subst_extended_subst.
+  - DepElim.depelim cs. simpl. now apply IH.
+Qed.
+
+(** [PCUICSpine.spine_subst_smash] over [typingE]. *)
+Lemma smh_spine_subst_smash {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ inst s Δ} :
+  spine_substE Σ Γ inst s Δ ->
+  spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ).
+Proof.
+  intros [wfΓ wfΓΔ cs sub].
+  split.
+  - exact wfΓ.
+  - exact (smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wfΓΔ).
+  - exact (smh_context_subst_smash cs).
+  - exact (smh_subslet_smash sub cs).
+Qed.
+
+(** [PCUICFixWitness.wf_local_nth_error_welltyped] over [typingE] (structural). *)
+Lemma smh_wf_local_nth_error_welltyped {cf : checker_flags} {Σ : global_env_ext} {Γ n c} :
+  wf_localE Σ Γ ->
+  nth_error Γ n = Some c ->
+  welltypedE Σ (skipn (S n) Γ) (decl_type c).
+Proof.
+  induction Γ as [|a Γ ih] in n |- *; intros wf hnth.
+  - now rewrite nth_error_nil in hnth.
+  - destruct (All_local_env_tip wf) as [wfΓ ha].
+    destruct n; cbn in hnth.
+    + case: hnth => <-. rewrite skipn_S skipn_0.
+      destruct a as [na [b|] ty]; cbn in ha |- *.
+      * apply lift_sorting_forget_body in ha.
+        now eapply isTypeRelE_welltypedE.
+      * now eapply isTypeRelE_welltypedE.
+    + rewrite skipn_S. now eapply ih.
+Qed.
+
+(** [PCUICFixWitness.isType_rec_arg_welltyped] over [typingE]. *)
+Lemma smh_isType_rec_arg_welltyped {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T ctx concl n c} :
+  isTypeE Σ Γ T ->
+  decompose_prod_assum [] T = (ctx, concl) ->
+  nth_error (List.rev (smash_context [] ctx)) n = Some c ->
+  welltypedE Σ (Γ ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx)) (decl_type c).
+Proof.
+  intros isty decomp hnth.
+  have eqty := PCUICSubstitution.decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
+  cbn in eqty. rewrite eqty in isty.
+  apply (isType_it_mkProd_or_LetIn_wf_local_proved (wfΣ := wfΣ)) in isty.
+  apply (smh_wf_local_smash_end (wfΣ := wfΣ)) in isty.
+  have hlt : n < #|smash_context [] ctx|.
+  { have h := nth_error_Some_length hnth. now rewrite List.length_rev in h. }
+  rewrite (nth_error_rev_inv _ _ hlt) in hnth.
+  have hnth' : nth_error (Γ ,,, smash_context [] ctx) (#|smash_context [] ctx| - S n) = Some c.
+  { rewrite /app_context nth_error_app_lt //. lia. }
+  have w := smh_wf_local_nth_error_welltyped isty hnth'.
+  rewrite /app_context in w |- *.
+  have e : S (#|smash_context [] ctx| - S n) = #|smash_context [] ctx| - n by lia.
+  rewrite e skipn_app in w.
+  replace (#|smash_context [] ctx| - n - #|smash_context [] ctx|) with 0 in w by lia.
+  now rewrite skipn_0 in w.
+Qed.
+
+(** *** The rows *)
+
+(** Row 45: [wf_local_smash_end] ([PCUICContexts.wf_local_smash_end]). *)
+Lemma wf_local_smash_end_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : list context_decl), wf_localE Σ (Γ,,, Δ) -> wf_localE Σ (Γ,,, smash_context [] Δ).
+Proof. intros Σ wfΣ Γ Δ. exact (smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ). Qed.
+
+(** Row 44: [wf_local_smash_context] ([PCUICContexts.wf_local_smash_context]: row 45 at [Γ := []]). *)
+Lemma wf_local_smash_context_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context}, wf_localE Σ Γ -> wf_localE Σ (smash_context [] Γ).
+Proof.
+  intros Σ wfΣ Γ wfΓ.
+  have h := smh_wf_local_smash_end (wfΣ := wfΣ) [] Γ.
+  rewrite !app_context_nil_l in h. exact (h wfΓ).
+Qed.
+
+(** Row 32: [typing_expand_lets] ([PCUICContexts.typing_expand_lets]). *)
+Lemma typing_expand_lets_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (Δ : list context_decl) (t : term) (T : term), Σ;;; Γ,,, Δ |-E t : T -> Σ;;; Γ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T.
+Proof. intros Σ wfΣ Γ Δ t T. exact (smh_typing_expand_lets (wfΣ := wfΣ) Γ Δ t T). Qed.
+
+(** Row 43: [wf_local_expand_lets] ([PCUICInductives.wf_local_expand_lets]). *)
+Lemma wf_local_expand_lets_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Δ : list context_decl} {Γ' : list context_decl}, wf_localE Σ (Γ,,, Δ,,, Γ') -> wf_localE Σ (Γ,,, smash_context [] Δ,,, expand_lets_ctx Δ Γ').
+Proof. intros Σ wfΣ Γ Δ Γ'. exact (smh_wf_local_expand_lets (wfΣ := wfΣ)). Qed.
+
+(** Row 28: [spine_subst_smash] ([PCUICSpine.spine_subst_smash]). *)
+Lemma spine_subst_smash_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {inst : list term} {s : list term} {Δ : context}, spine_substE Σ Γ inst s Δ -> spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ).
+Proof. intros Σ wfΣ Γ inst s Δ. exact (smh_spine_subst_smash (wfΣ := wfΣ)). Qed.
+
+(** Row 18: [isType_rec_arg_welltyped] ([PCUICFixWitness.isType_rec_arg_welltyped]). *)
+Lemma isType_rec_arg_welltyped_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {ctx : context} {concl : term} {n : nat} {c : context_decl}, isTypeE Σ Γ T -> decompose_prod_assum [] T = (ctx, concl) -> nth_error (List.rev (smash_context [] ctx)) n = Some c -> welltypedE Σ (Γ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx)) (decl_type c).
+Proof.
+  intros Σ wfΣ Γ T ctx concl n c.
+  exact (smh_isType_rec_arg_welltyped (wfΣ := wfΣ)).
+Qed.
+
+
+(** *** The former fields, under their names *)
+Section ProvedFields.
+  Context {cf : checker_flags}.
+
+  Lemma All_mfix_wf :
+    forall (Σ : global_env × universes_decl) (Γ : context) (mfix : list (def term)), wfE Σ.1 -> wf_localE Σ Γ -> All (fun d : def term => isTypeRelE Σ Γ (dtype d) (binder_relevance (dname d))) mfix -> wf_localE Σ (Γ,,, fix_context mfix).
+  Proof. exact (@All_mfix_wf_proved cf). Qed.
+
+  Lemma arity_typing_spine :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : sort} {inst : list term} {s' : sort}, typing_spineE Σ Γ (it_mkProd_or_LetIn Γ' (tSort s)) inst (tSort s') -> [× #|inst| = context_assumptions Γ', leq_sort Σ s s' & ∑ instsubst : list term, spine_substE Σ Γ inst instsubst Γ'].
+  Proof. exact (@arity_typing_spine_proved cf). Qed.
+
+  Lemma ctx_inst_open_terms :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : context) (args : list term) (Δ : context), ctx_instE Σ Γ args Δ -> All (fun t : term => on_free_vars (shiftnP #|Γ| xpred0) t) args.
+  Proof. exact (@ctx_inst_open_terms_proved cf). Qed.
+
+  Lemma ctx_inst_smash :
+    forall {Σ : global_env_ext} {Γ : context} {i : list term} {Δ : list context_decl}, ctx_instE Σ Γ i (List.rev Δ) <~> ctx_instE Σ Γ i (List.rev (smash_context [] Δ)).
+  Proof. exact (@ctx_inst_smash_proved cf). Qed.
+
+  Lemma ctx_inst_spine_subst :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Δ : list context_decl} {args : list term}, wf_localE Σ (Γ,,, Δ) -> forall (ci : ctx_instE Σ Γ args (List.rev Δ)), spine_substE Σ Γ args (ctx_inst_subE ci) Δ.
+  Proof. exact (@ctx_inst_spine_subst_proved cf). Qed.
+
+  Lemma ind_arity_relevant :
+    forall (Σ : global_env_ext) (mdecl : mutual_inductive_body) (idecl : one_inductive_body), wfE Σ.1 -> let ind_type := it_mkProd_or_LetIn (ind_params mdecl) (it_mkProd_or_LetIn (ind_indices idecl) (tSort (ind_sort idecl))) in isTypeE Σ [] ind_type -> isTypeRelE Σ [] ind_type rel_of_Type.
+  Proof. exact (@ind_arity_relevant_proved cf). Qed.
+
+  Lemma inversion_it_mkProd_or_LetIn :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Δ : context} {t : term} {s : sort}, Σ;;; Γ |-E it_mkProd_or_LetIn Δ t : tSort s -> Σ;;; Γ,,, Δ |-E t : tSort s.
+  Proof. exact (@inversion_it_mkProd_or_LetIn_proved cf). Qed.
+
+  Lemma isTypeRel_lift :
+    forall {Σ : global_env_ext} {n : nat} {Γ : list context_decl} {ty : term} {r : relevance} (isdecl : n <= #|Γ|), wfE Σ -> wf_localE Σ Γ -> isTypeRelE Σ (skipn n Γ) ty r -> isTypeRelE Σ Γ (lift0 n ty) r.
+  Proof. exact (@isTypeRel_lift_proved cf). Qed.
+
+  Lemma isType_lift :
+    forall {Σ : global_env_ext} {n : nat} {Γ : list context_decl} {ty : term} (isdecl : n <= #|Γ|), wfE Σ -> wf_localE Σ Γ -> isTypeE Σ (skipn n Γ) ty -> isTypeE Σ Γ (lift0 n ty).
+  Proof. exact (@isType_lift_proved cf). Qed.
+
+  Lemma isType_apply :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term} {t : term}, isTypeE Σ Γ (tProd na A B) -> Σ;;; Γ |-E t : A -> isTypeE Σ Γ (B {0 := t}).
+  Proof. exact (@isType_apply_proved cf). Qed.
+
+  Lemma isType_it_mkProd_or_LetIn_wf_local :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Δ : context} {T : term}, isTypeE Σ Γ (it_mkProd_or_LetIn Δ T) -> wf_localE Σ (Γ,,, Δ).
+  Proof. exact (@isType_it_mkProd_or_LetIn_wf_local_proved cf). Qed.
+
+  Lemma isType_rec_arg_welltyped :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {ctx : context} {concl : term} {n : nat} {c : context_decl}, isTypeE Σ Γ T -> decompose_prod_assum [] T = (ctx, concl) -> nth_error (List.rev (smash_context [] ctx)) n = Some c -> welltypedE Σ (Γ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx)) (decl_type c).
+  Proof. exact (@isType_rec_arg_welltyped_proved cf). Qed.
+
+  Lemma isType_tProd :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, isTypeE Σ Γ (tProd na A B) <~> isTypeRelE Σ Γ A (binder_relevance na) × isTypeE Σ (Γ,, vass na A) B.
+  Proof. exact (@isType_tProd_proved cf). Qed.
+
+  Lemma isType_wf_universes :
+    forall {Σ : global_env × universes_decl} {Γ : context} {T : term}, wfE Σ.1 -> isTypeE Σ Γ T -> wf_universes Σ T.
+  Proof. exact (@isType_wf_universes_proved cf). Qed.
+
+  Lemma sorts_local_ctx_wf_local :
+    forall (Σ : global_env_ext) (Γ : context) (Δ : context) (s : list sort), wf_localE Σ Γ -> sorts_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_localE Σ (Γ,,, Δ).
+  Proof. exact (@sorts_local_ctx_wf_local_proved cf). Qed.
+
+  Lemma type_local_ctx_wf_local :
+    forall (Σ : global_env_ext) (Γ : context) (Δ : context) (s : sort), wf_localE Σ Γ -> type_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_localE Σ (Γ,,, Δ).
+  Proof. exact (@type_local_ctx_wf_local_proved cf). Qed.
+
+  Lemma spine_subst_app :
+    forall {Σ : global_env_ext} {Γ : list context_decl} {Δ : context} {Δ' : list context_decl} {inst : list term} {inst' : list term} {insts : list term}, #|inst| = context_assumptions Δ -> wf_localE Σ (Γ,,, Δ,,, Δ') -> spine_substE Σ Γ inst (skipn #|Δ'| insts) Δ -> spine_substE Σ Γ inst' (firstn #|Δ'| insts) (subst_context (skipn #|Δ'| insts) 0 Δ') -> spine_substE Σ Γ (inst ++ inst') insts (Δ,,, Δ').
+  Proof. exact (@spine_subst_app_proved cf). Qed.
+
+  Lemma spine_subst_ctx_inst :
+    forall {Σ : global_env_ext} {Γ : context} {Δ : context} {args : list term} {s : list term}, spine_substE Σ Γ args s Δ -> ctx_instE Σ Γ args (List.rev Δ).
+  Proof. exact (@spine_subst_ctx_inst_proved cf). Qed.
+
+  Lemma spine_subst_cumul :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Δ : list context_decl} {args : list term} {Γ : context} {Γ' : context}, PCUICLiftSubst.assumption_context Γ -> PCUICLiftSubst.assumption_context Γ' -> wf_localE Σ (Δ,,, Γ) -> wf_localE Σ (Δ,,, Γ') -> ws_cumul_ctx_pbE_rel Cumul Σ Δ Γ Γ' -> spine_substE Σ Δ args (List.rev args) Γ -> spine_substE Σ Δ args (List.rev args) Γ'.
+  Proof. exact (@spine_subst_cumul_proved cf). Qed.
+
+  Lemma spine_subst_smash :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {inst : list term} {s : list term} {Δ : context}, spine_substE Σ Γ inst s Δ -> spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ).
+  Proof. exact (@spine_subst_smash_proved cf). Qed.
+
+  Lemma spine_subst_inst_subst :
+    forall {Σ : global_env_ext} {Γ : context} {inst : list term} {s : list term} {Δ : context} {Δ' : context}, spine_substE Σ Γ inst s Δ -> subst_context s 0 Δ' = subst_context (List.rev inst) 0 (expand_lets_ctx Δ Δ').
+  Proof. exact (@spine_subst_inst_subst_proved cf). Qed.
+
+  Lemma substitution :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl} {t : term} {T : term}, subsletE Σ Γ s Γ' -> Σ;;; Γ,,, Γ',,, Δ |-E t : T -> Σ;;; Γ,,, subst_context s 0 Δ |-E subst s #|Δ| t : subst s #|Δ| T.
+  Proof. exact (@substitution_proved cf). Qed.
+
+  Lemma substitution_wf_local :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl}, subsletE Σ Γ s Γ' -> wf_localE Σ (Γ,,, Γ',,, Δ) -> wf_localE Σ (Γ,,, subst_context s 0 Δ).
+  Proof. exact (@substitution_wf_local_proved cf). Qed.
+
+  Lemma typing_expand_lets :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (Δ : list context_decl) (t : term) (T : term), Σ;;; Γ,,, Δ |-E t : T -> Σ;;; Γ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T.
+  Proof. exact (@typing_expand_lets_proved cf). Qed.
+
+  Lemma typing_spine_strengthen :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {args : list term} {U : term}, typing_spineE Σ Γ T args U -> forall T' : term, isTypeE Σ Γ T' -> Σ ;;; Γ ⊢E T' ≤ T -> typing_spineE Σ Γ T' args U.
+  Proof. exact (@typing_spine_strengthen_proved cf). Qed.
+
+  Lemma typing_wf_sort :
+    forall {Σ : global_env_ext} {Γ : context} {t : term} {s : sort}, wfE Σ -> Σ;;; Γ |-E t : tSort s -> wf_sort Σ s.
+  Proof. exact (@typing_wf_sort_proved cf). Qed.
+
+  Lemma typing_wf_universes :
+    forall {Σ : global_env_ext} {Γ : context} {t : term} {T : term}, wfE Σ -> Σ;;; Γ |-E t : T -> wf_universes Σ t && wf_universes Σ T.
+  Proof. exact (@typing_wf_universes_proved cf). Qed.
+
+  Lemma weaken_ctx :
+    forall {Σ : global_env × universes_decl} {Γ : context} {t : term} {T : term} (Δ : context), wfE Σ.1 -> wf_localE Σ Δ -> Σ;;; Γ |-E t : T -> Σ;;; Δ,,, Γ |-E t : T.
+  Proof. exact (@weaken_ctx_proved cf). Qed.
+
+  Lemma weaken_wf_local :
+    forall {Σ : global_env × universes_decl} {Δ : context} (Γ : context), wfE Σ.1 -> wf_localE Σ Γ -> wf_localE Σ Δ -> wf_localE Σ (Γ,,, Δ).
+  Proof. exact (@weaken_wf_local_proved cf). Qed.
+
+  Lemma weakening_wf_local :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Γ' : list context_decl} {Γ'' : list context_decl}, wf_localE Σ (Γ,,, Γ') -> wf_localE Σ (Γ,,, Γ'') -> wf_localE Σ (Γ,,, Γ'',,, lift_context #|Γ''| 0 Γ').
+  Proof. exact (@weakening_wf_local_proved cf). Qed.
+
+  Lemma welltyped_prod_codomain :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, welltypedE Σ Γ (tProd na A B) -> welltypedE Σ (Γ,, vass na A) B.
+  Proof. exact (@welltyped_prod_codomain_proved cf). Qed.
+
+  Lemma wf_local_expand_lets :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Δ : list context_decl} {Γ' : list context_decl}, wf_localE Σ (Γ,,, Δ,,, Γ') -> wf_localE Σ (Γ,,, smash_context [] Δ,,, expand_lets_ctx Δ Γ').
+  Proof. exact (@wf_local_expand_lets_proved cf). Qed.
+
+  Lemma wf_local_smash_context :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context}, wf_localE Σ Γ -> wf_localE Σ (smash_context [] Γ).
+  Proof. exact (@wf_local_smash_context_proved cf). Qed.
+
+  Lemma wf_local_smash_end :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : list context_decl), wf_localE Σ (Γ,,, Δ) -> wf_localE Σ (Γ,,, smash_context [] Δ).
+  Proof. exact (@wf_local_smash_end_proved cf). Qed.
+
+  Lemma isType_weaken :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term}, wf_localE Σ Γ -> isTypeE Σ [] T -> isTypeE Σ Γ T.
+  Proof. exact (@isType_weaken_proved cf). Qed.
+
+  Lemma isType_it_mkProd_or_LetIn :
+    forall {Σ : global_env_ext} {Γ Δ : list context_decl} {T : term}, wfE Σ.1 -> isTypeE Σ (Γ,,, Δ) T -> isTypeE Σ Γ (it_mkProd_or_LetIn Δ T).
+  Proof. exact (@isType_it_mkProd_or_LetIn_proved cf). Qed.
+
+  Lemma type_local_ctx_wf :
+    forall {Σ : global_env_ext} {Γ Δ : context} {s : sort}, wfE Σ.1 -> type_local_ctx (lift_typing typingE) Σ Γ Δ s -> wf_sort Σ s.
+  Proof. exact (@type_local_ctx_wf_proved cf). Qed.
+
+  Lemma LSet_in_global_bounded :
+    forall {Σ : global_env} {l : LevelSet.elt} (k : nat), wfE Σ -> LevelSet.In l (global_levels Σ) -> closedu_level k l.
+  Proof. exact (@LSet_in_global_bounded_proved cf). Qed.
+
+  Lemma closed_red_from_empty :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {M : term} {N : term}, on_free_vars_ctx xpred0 Γ -> closed M -> PCUICReduction.red Σ [] M N -> Σ ;;; Γ ⊢ M ⇝ N.
+  Proof. exact (@closed_red_from_empty_proved cf). Qed.
+
+  Lemma red_expand_let :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {na : aname} {b : term} {ty : term} {t : term}, wf_localE Σ (Γ,,, [vdef na b ty]) -> on_free_vars (shiftnP #|Γ,,, [vdef na b ty]| (fun _ : nat => false)) t -> Σ ;;; Γ,, vdef na b ty ⊢ t ⇝ lift0 1 (t {0 := b}).
+  Proof. exact (@red_expand_let_proved cf). Qed.
+
+  Lemma red_it_mkProd_or_LetIn_smash :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (ctx : context) (t : term) (u : term) (n : nat) (c : context_decl), Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx t ⇝ u -> nth_error (List.rev (smash_context [] ctx)) n = Some c -> ∑ (ctx' : context) (t' : term) (d : context_decl), [× decompose_prod_assum [] u = (ctx', t'), nth_error (List.rev (smash_context [] ctx')) n = Some d & Σ ;;; Γ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx) ⊢ decl_type c ⇝ decl_type d].
+  Proof. exact (@red_it_mkProd_or_LetIn_smash_proved cf). Qed.
+
+  Lemma red_mkApps_smash_witness :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {C : term} {ctx : context} {i : inductive} {u : Instance.t} {l : list term}, Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) -> ∑ l' : list term, Σ ;;; Γ ⊢ C ⇝ it_mkProd_or_LetIn (smash_context [] ctx) (mkApps (tInd i u) l').
+  Proof. exact (@red_mkApps_smash_witness_proved cf). Qed.
+
+  Lemma red_rec_arg_check_one_fix :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (d : def term) (ctx : context) (concl : term) (c : context_decl) (ind : inductive) (u : Instance.t) (args : list term), on_free_vars (shiftnP #|Γ| xpred0) (dtype d) -> decompose_prod_assum [] (dtype d) = (ctx, concl) -> nth_error (List.rev (smash_context [] ctx)) (rarg d) = Some c -> Σ ;;; Γ,,, skipn (#|smash_context [] ctx| - rarg d) (smash_context [] ctx) ⊢ decl_type c ⇝ mkApps (tInd ind u) args -> has_rec_arg d × (∑ ty : term, Σ ;;; Γ ⊢ dtype d ⇝ ty × check_one_fix (def_with_type d ty) = Some (inductive_mind ind)).
+  Proof. exact (@red_rec_arg_check_one_fix_proved cf). Qed.
+
+  Lemma wf_universes_inst :
+    forall {Σ : global_env_ext} (univs : universes_decl) (t : term) (u : list LevelSet.elt), wfE Σ -> on_udecl_prop Σ.1 univs -> wf_instance Σ u -> wf_universes (Σ.1, univs) t -> wf_universes Σ t@[u].
+  Proof. exact (@wf_universes_inst_proved cf). Qed.
+
+  Lemma closed_red_confluence :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {t : term} {u : term} {v : term}, Σ ;;; Γ ⊢ t ⇝ u -> Σ ;;; Γ ⊢ t ⇝ v -> ∑ v' : term, Σ ;;; Γ ⊢ u ⇝ v' × Σ ;;; Γ ⊢ v ⇝ v'.
+  Proof. exact (@closed_red_confluence_proved cf). Qed.
+
+  Lemma isType_prim_arg_types :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {tags : list prim_tag} {res : term} {T : term}, wf_localE Σ Γ -> (forall t : prim_tag, In t tags -> t <> primArray) -> All (prim_op_tag_declared Σ) tags -> PCUICPrimOpType.prim_arg_types (retroknowledge Σ.1) tags res = Some T -> isTypeE Σ Γ res -> isTypeE Σ Γ T.
+  Proof. exact (@isType_prim_arg_types_proved cf). Qed.
+
+  Lemma wf_rel_weak :
+    forall (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context), wf_localE Σ Γ -> forall (Γ' : context), wf_localE Σ Γ' -> wf_local_relE Σ Γ Γ'.
+  Proof. exact (@wf_rel_weak_proved cf). Qed.
+End ProvedFields.
+
+(** ** Derived lemmas that use former fields (moved here from "Derived" and "Derived, second part") *)
+Section DerivedThree.
+  Context {cf : checker_flags}.
+
+  Lemma spine_subst_wt_terms {hT0 : T0_facts} {Σ : global_env_ext} {Γ : context} {inst s : list term} {Δ : context} :
+    spine_substE Σ Γ inst s Δ -> All (fun t : term => ∑ T : term, Σ ;;; Γ |-E t : T) inst.
+  Proof.
+    move/spine_subst_ctx_inst.
+    induction 1; try constructor; auto.
+    now exists t.
+  Qed.
+
+  (** [PCUICFixWitness.check_one_fix_closed_red] over [wfE], from the U field
+      [red_it_mkProd_or_LetIn_smash] and the derived [invert_red_mkApps_tInd]. *)
+  Lemma check_one_fix_closed_redE {hU : U_facts} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ d ty v mind} :
+    Σ ;;; Γ ⊢ ty ⇝ v ->
+    check_one_fix (def_with_type d ty) = Some mind ->
+    check_one_fix (def_with_type d v) = Some mind.
+  Proof.
+    intros r hc.
+    destruct (check_one_fix_inv _ _ _ hc)
+      as (ctx & concl & argd & k & u & args & decomp & hnth & dapp).
+    have eqty := PCUICSubstitution.decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp; cbn in eqty.
+    rewrite eqty in r.
+    destruct (red_it_mkProd_or_LetIn_smash _ _ _ _ _ _ r hnth)
+      as [ctx' [t' [d' [decomp' hnth' r']]]].
+    rewrite /check_one_fix /def_with_type /= decomp' hnth'.
+    rewrite dapp in r'.
+    eapply invert_red_mkApps_tInd in r' as [args' [-> _ _]].
+    now rewrite decompose_app_mkApps.
+  Qed.
+
+  (** [PCUICFixWitness.check_one_cofix_closed_red] over [wfE]. *)
+  Lemma check_one_cofix_closed_redE {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ d ty v mind} :
+    Σ ;;; Γ ⊢ ty ⇝ v ->
+    check_one_cofix (def_with_type d ty) = Some mind ->
+    check_one_cofix (def_with_type d v) = Some mind.
+  Proof.
+    intros r hc.
+    destruct (check_one_cofix_inv _ _ _ hc) as [ctx [k [u [args ->]]]].
+    destruct (red_it_mkProd_or_LetIn_mkApps_Ind r) as [ctx' [args' ->]].
+    exact (check_one_cofix_it_mkProd (i := {| inductive_mind := mind; inductive_ind := k |})).
+  Qed.
+
+  #[global] Instance check_one_fix_shapeE {hU : U_facts} : ShapeCheckE check_one_fix :=
+    {| shapeE_check_dbody := fun d bo => shape_check_dbody (check := check_one_fix) d bo;
+       shapeE_check_eq_term_upto := @shape_check_eq_term_upto check_one_fix _;
+       shapeE_check_closed_red := @check_one_fix_closed_redE hU |}.
+
+  #[global] Instance check_one_cofix_shapeE : ShapeCheckE check_one_cofix :=
+    {| shapeE_check_dbody := fun d bo => shape_check_dbody (check := check_one_cofix) d bo;
+       shapeE_check_eq_term_upto := @shape_check_eq_term_upto check_one_cofix _;
+       shapeE_check_closed_red := @check_one_cofix_closed_redE |}.
+
+  (** The copies take the U facts squashed in [EtaFacts]; a Prop instance can still be built from them. *)
+  #[global] Instance check_one_fix_shapeE_of {EF : EtaFacts} : ShapeCheckE check_one_fix :=
+    match eta_U with sq hU => @check_one_fix_shapeE hU end.
+
+  (** [PCUICFixWitness.mfix_body_on_red_unique] over E (see STATEMENT CHANGE above [ShapeCheckE]). *)
+  Lemma mfix_body_on_red_unique {hU : U_facts} {Σ : global_env_ext} {wfΣ : wfE Σ}
+    {check : def term -> option kername} {shape : ShapeCheckE check} {Γ : context} {d : def term}
+    {m1 m2 : kername} :
+    on_def_type (lift_typing1 (typingE Σ)) Γ d ->
+    mfix_body_on check (PCUICReduction.red Σ Γ) m1 d ->
+    mfix_body_on check (PCUICReduction.red Σ Γ) m2 d ->
+    m1 = m2.
+  Proof.
+    intros ond [ty1 [hc1 r1]] [ty2 [hc2 r2]].
+    have isty : isTypeE Σ Γ (dtype d) by now eapply isTypeRel_isType.
+    have clΓ : is_closed_context Γ.
+    { eapply wf_local_closed_contextE. now eapply isType_wf_local. }
+    have op : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
+    have c1 : Σ ;;; Γ ⊢ dtype d ⇝ ty1 by now eapply into_closed_red.
+    have c2 : Σ ;;; Γ ⊢ dtype d ⇝ ty2 by now eapply into_closed_red.
+    destruct (closed_red_confluence c1 c2) as [v [rv1 rv2]].
+    have e1 : check (def_with_type d v) = Some m1.
+    { exact (shapeE_check_closed_red (check := check) (wfΣ := wfΣ) rv1 hc1). }
+    have e2 : check (def_with_type d v) = Some m2.
+    { exact (shapeE_check_closed_red (check := check) (wfΣ := wfΣ) rv2 hc2). }
+    rewrite e1 in e2. now injection e2.
+  Qed.
+
+End DerivedThree.
+
+
 (** ** Instances: satisfying instances of the fields of the hypothesis classes above
 
   BET-64 EtaCheckerLane, 2026-10-29. One lemma [<field>_inst] per field of each hypothesis class above
@@ -791,21 +2541,27 @@ End DerivedTwo.
   name (qualified) applied at that point and lifted to E; the equivalences, the bidirectional conclusions
   and the reflexive reductions of [T6BDu_facts] are built directly. No proof uses a field of a class.
 
-  Each instance has a tag on the line above it: [(* non-degenerate *)], or [(* degenerate: <why> *)] when
-  its point has an empty context or list where the field quantifies over one, a subject that is the sort
-  Prop, or two compared objects that are equal (T = U, a reflexive reduction or comparison). Non-degenerate
-  (16): the six [T6BDc_facts] instances (in the context [A : Prop], on [I A] and [c A]), [All_mfix_wf],
-  [arity_typing_spine], [closed_context_cumulativity] (a β-redex in the context), [ind_arity_relevant],
-  [on_minductive_wf_params], [on_minductive_wf_params_indices_inst], [weaken_wf_local],
-  [closed_red_from_empty], [infering_ind_typing] and [wf_rel_weak]. The other 75 are degenerate: each still
-  meets every premise of its field, at a weaker point.
+  Each instance has a tag on the line above it: [(* non-degenerate *)], or, when its point has an empty
+  context or list where the field quantifies over one, a subject that is the sort Prop, or two compared
+  objects that are equal (T = U, a reflexive reduction or comparison), [(* degenerate: IMPOSSIBLE — … *)]
+  (no non-degenerate instance exists, by the head or shape and the rule set, or by a premise with no
+  other inhabitant) or [(* degenerate: NOT BUILT — … *)] (one exists and is not built here). Counts:
+  37 non-degenerate; 0 IMPOSSIBLE; 7 NOT BUILT ([inductive_cumulative_indices], [isTypeRel_cstr_type],
+  [isType_mkApps_Ind_inv], [wf_case_branch_type], [wf_case_predicate_context] and
+  [wf_case_branches_types'] need an indexed inductive family; [typing_spine_ind_type_inv] needs an
+  inductive whose user arity reduces non-trivially to the built one, which [on_ind_body]'s [ind_arity_red]
+  allows). Three instances are typed through an η step:
+  [validity], [checking_typing] and [infering_checking] use the variable [y : k g] of
+  [PCUICInversionEtaInstances], typed at [k (λ x : Prop. g x)] by [cumul_eta_l]; their conclusions are
+  built in E directly, since base typing has no η and the base lemma cannot reach that point. (The
+  instances of the 47 fields proved in the section "PROVED rows" are removed: a proved lemma needs none.)
 
   (1) Such an instance shows that the hypothesis is consistent and about something real. (2) It does NOT
   discharge the hypothesis at [typingE]: each field remains a hypothesis until its plan row lands (T0, T1,
   T2a, T6; T6BDc also needs T8; U is untyped plumbing over [wfE_ClosedBodies]). *)
 
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEtaClosureInstances PCUICEtaFracInstances
-     PCUICEtaPrimOpInstance.
+     PCUICEtaPrimOpInstance PCUICInversionEtaInstances.
 From MetaRocq.PCUIC Require PCUICValidity PCUICSR PCUICArities PCUICContexts PCUICSubstitution
      PCUICWeakeningTyp PCUICContextConversion PCUICClassification PCUICClosedTyp.
 
@@ -1165,6 +2921,183 @@ Proof. right; left; reflexivity. Qed.
 Lemma ti_po_int_tag : prim_op_tag_declared Σ_po primInt.
 Proof. exists po_int_kn, po_int_body; split; [reflexivity|exact ti_po_int_declared|split; reflexivity]. Qed.
 
+(** *** Helpers of the upgraded instances
+
+  In [ti_ΓP = [A : Prop]]: the spine of [I A] and the substitution of [A] for the parameter of [I]; the
+  β-redex [(λ X : Prop. X) A] ([ti_idA]) and its reduct [A]; [I A] at [Type] by cumulativity; the context
+  [x : I ((λ X : Prop. X) A)] ([ti_ΓX]); [f : Π _ : (λ X : Prop. X) A. (λ X : Prop. X) A] ([ti_Γf]) and
+  [a : A] after it ([ti_Γfa]); the telescope [(X : Prop) (Y := X)] with a let-in ([ti_Δlet]). In [Σ_po]:
+  the context [x : int] ([ti_Γint]). *)
+
+Lemma ti_tspine_IA : PCUICArities.typing_spine si_Σ ti_ΓP (ind_type si_idecl)@[[]] [tRel 0] (tSort sProp).
+Proof.
+  exact (fst (PCUICInductives.invert_type_mkApps_ind si_Σ ti_ΓP si_ind [] [tRel 0] (tSort sProp) si_mdecl si_idecl
+                si_wf si_declared_inductive ti_IA_ty)).
+Qed.
+
+Lemma ti_spine_A : PCUICSpine.spine_subst si_Σ ti_ΓP [tRel 0] [tRel 0] ti_ΓP.
+Proof.
+  split.
+  - exact ti_wf_ΓP.
+  - exact (ti_wf_P ti_ΓP ti_wf_ΓP).
+  - exact (context_subst_ass [] [] [] si_na si_P (tRel 0) context_subst_nil).
+  - exact (PCUICSubstitution.cons_let_ass si_Σ ti_ΓP [] [] si_na (tRel 0) si_P
+             (PCUICSubstitution.emptyslet si_Σ ti_ΓP) ti_A_ty).
+Qed.
+
+Definition ti_idP : term := tLambda si_na si_P (tRel 0).
+Definition ti_idA : term := tApp ti_idP (tRel 0).
+
+Lemma ti_idP_ty Γ : wf_local si_Σ Γ -> si_Σ ;;; Γ |- ti_idP : tProd si_na si_P si_P.
+Proof.
+  intros h.
+  exact (type_Lambda _ _ si_na si_P (tRel 0) si_P (ti_vass _ si_na si_P _ (ti_P_ty Γ h) eq_refl)
+           (type_Rel _ _ 0 (vass si_na si_P) (ti_wf_P Γ h) eq_refl)).
+Qed.
+
+(** [(λ X : Prop. X) a : Prop] for every proposition [a]. *)
+Lemma ti_idapp_ty Γ a : wf_local si_Σ Γ -> si_Σ ;;; Γ |- a : si_P -> si_Σ ;;; Γ |- tApp ti_idP a : si_P.
+Proof.
+  intros h ha. exact (type_App _ _ ti_idP si_na si_P si_P _ a (ti_arity_ty Γ h) (ti_idP_ty Γ h) ha).
+Qed.
+
+Lemma ti_idA_ty : si_Σ ;;; ti_ΓP |- ti_idA : si_P.
+Proof. exact (ti_idapp_ty ti_ΓP (tRel 0) ti_wf_ΓP ti_A_ty). Qed.
+
+Lemma ti_red_idA : si_Σ ;;; ti_ΓP ⊢ ti_idA ⇝ tRel 0.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_ΓP si_na si_P (tRel 0) (tRel 0)). Qed.
+
+(** [I A : Type], by the cumulativity [Prop ≤ Type]. *)
+Lemma ti_IA_ty1 : si_Σ ;;; ti_ΓP |- ti_IA : tSort (Sort.super sProp).
+Proof.
+  refine (type_Cumul _ _ ti_IA (tSort sProp) (tSort (Sort.super sProp)) _ ti_IA_ty (ti_P1_ty ti_ΓP ti_wf_ΓP) _).
+  apply cumul_Sort. first [exact eq_refl|exact I|cbn; trivial].
+Qed.
+
+(** [x : I ((λ X : Prop. X) A)] over [ti_ΓP]. *)
+Definition ti_ΓX : context := ti_ΓP ,, vass si_na (tApp (tInd si_ind []) ti_idA).
+
+Lemma ti_wf_ΓX : wf_local si_Σ ti_ΓX.
+Proof.
+  exact (ti_wf_cons ti_ΓP si_na (tApp (tInd si_ind []) ti_idA) sProp ti_wf_ΓP
+           (ti_Iapp_ty ti_ΓP ti_idA ti_wf_ΓP ti_idA_ty) eq_refl).
+Qed.
+
+Lemma ti_red_idA1 : si_Σ ;;; ti_ΓX ⊢ tApp ti_idP (tRel 1) ⇝ tRel 1.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_ΓX si_na si_P (tRel 0) (tRel 1)). Qed.
+
+Lemma ti_red_IidA1 : si_Σ ;;; ti_ΓX ⊢ tApp (tInd si_ind []) (tApp ti_idP (tRel 1)) ⇝ tApp (tInd si_ind []) (tRel 1).
+Proof.
+  split; [reflexivity|reflexivity|]. apply rt_step. apply app_red_r.
+  exact (red_beta si_Σ ti_ΓX si_na si_P (tRel 0) (tRel 1)).
+Qed.
+
+(** [f : Π _ : (λ X : Prop. X) A. (λ X : Prop. X) A] over [ti_ΓP], then [a : A]; [ti_Tf] is the type of [f]
+    in [ti_Γf]. *)
+Definition ti_pidA : term := tProd si_na ti_idA (tApp ti_idP (tRel 1)).
+Definition ti_Γf : context := ti_ΓP ,, vass si_na ti_pidA.
+Definition ti_Γfa : context := ti_Γf ,, vass si_na (tRel 1).
+Definition ti_Tf : term := tProd si_na (tApp ti_idP (tRel 1)) (tApp ti_idP (tRel 2)).
+
+Lemma ti_pidA_ty : si_Σ ;;; ti_ΓP |- ti_pidA : tSort (Sort.sort_of_product sProp sProp).
+Proof.
+  have h1 : wf_local si_Σ (ti_ΓP ,, vass si_na ti_idA) :=
+    ti_wf_cons ti_ΓP si_na ti_idA sProp ti_wf_ΓP ti_idA_ty eq_refl.
+  exact (type_Prod _ _ si_na ti_idA (tApp ti_idP (tRel 1)) sProp sProp
+           (ti_vass_s ti_ΓP si_na ti_idA sProp ti_idA_ty eq_refl)
+           (ti_idapp_ty _ (tRel 1) h1 (type_Rel _ _ 1 (vass si_na si_P) h1 eq_refl))).
+Qed.
+
+Lemma ti_wf_Γf : wf_local si_Σ ti_Γf.
+Proof. exact (ti_wf_cons ti_ΓP si_na ti_pidA (Sort.sort_of_product sProp sProp) ti_wf_ΓP ti_pidA_ty eq_refl). Qed.
+
+Lemma ti_wf_Γfa : wf_local si_Σ ti_Γfa.
+Proof.
+  exact (ti_wf_cons ti_Γf si_na (tRel 1) sProp ti_wf_Γf (type_Rel _ _ 1 (vass si_na si_P) ti_wf_Γf eq_refl) eq_refl).
+Qed.
+
+Lemma ti_red_A1f : si_Σ ;;; ti_Γf ⊢ tApp ti_idP (tRel 1) ⇝ tRel 1.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_Γf si_na si_P (tRel 0) (tRel 1)). Qed.
+
+Lemma ti_red_B1f : si_Σ ;;; ti_Γf ,, vass si_na (tApp ti_idP (tRel 1)) ⊢ tApp ti_idP (tRel 2) ⇝ tRel 2.
+Proof.
+  split; [reflexivity|reflexivity|]. apply rt_step.
+  exact (red_beta si_Σ (ti_Γf ,, vass si_na (tApp ti_idP (tRel 1))) si_na si_P (tRel 0) (tRel 2)).
+Qed.
+
+Lemma ti_red_Tf : si_Σ ;;; ti_Γf ⊢ ti_Tf ⇝ tProd si_na (tRel 1) (tRel 2).
+Proof.
+  split; [reflexivity|reflexivity|].
+  eapply rt_trans; [apply rt_step; apply prod_red_l; exact (red_beta si_Σ ti_Γf si_na si_P (tRel 0) (tRel 1))|].
+  apply rt_step. apply prod_red_r.
+  exact (red_beta si_Σ (ti_Γf ,, vass si_na (tRel 1)) si_na si_P (tRel 0) (tRel 2)).
+Qed.
+
+Lemma ti_red_A2fa : si_Σ ;;; ti_Γfa ⊢ tApp ti_idP (tRel 2) ⇝ tRel 2.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_Γfa si_na si_P (tRel 0) (tRel 2)). Qed.
+
+Lemma ti_red_Tfa :
+  si_Σ ;;; ti_Γfa ⊢ tProd si_na (tApp ti_idP (tRel 2)) (tApp ti_idP (tRel 3)) ⇝ tProd si_na (tRel 2) (tRel 3).
+Proof.
+  split; [reflexivity|reflexivity|].
+  eapply rt_trans; [apply rt_step; apply prod_red_l; exact (red_beta si_Σ ti_Γfa si_na si_P (tRel 0) (tRel 2))|].
+  apply rt_step. apply prod_red_r.
+  exact (red_beta si_Σ (ti_Γfa ,, vass si_na (tRel 2)) si_na si_P (tRel 0) (tRel 3)).
+Qed.
+
+(** The telescope [(X : Prop) (Y : Prop := X)], as a context ([Y] first). *)
+Definition ti_Δlet : context := [vdef si_na (tRel 0) si_P; vass si_na si_P].
+
+Lemma ti_wf_Δlet : wf_local si_Σ (ti_ΓP ,,, ti_Δlet).
+Proof.
+  have h1 := ti_wf_P ti_ΓP ti_wf_ΓP.
+  change (wf_local si_Σ ((ti_ΓP ,, vass si_na si_P) ,, vdef si_na (tRel 0) si_P)).
+  apply localenv_cons_def; [exact h1|].
+  split; [exact (type_Rel _ _ 0 (vass si_na si_P) h1 eq_refl)|].
+  exists (Sort.super sProp). split; [exact (ti_P_ty _ h1)|split; [exact I|reflexivity]].
+Qed.
+
+Lemma ti_wf_letA : wf_local si_Σ (ti_ΓP ,, vdef si_na (tRel 0) si_P).
+Proof.
+  apply localenv_cons_def; [exact ti_wf_ΓP|].
+  split; [exact ti_A_ty|].
+  exists (Sort.super sProp). split; [exact (ti_P_ty _ ti_wf_ΓP)|split; [exact I|reflexivity]].
+Qed.
+
+(** [let Y : Prop := A in Prop ⇝ Prop] (ζ). *)
+Lemma ti_red_TL : si_Σ ;;; ti_ΓP ⊢ tLetIn si_na (tRel 0) si_P si_P ⇝ tSort sProp.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_zeta si_Σ ti_ΓP si_na (tRel 0) si_P si_P). Qed.
+
+(** The spine of [Π X : Prop. let Y : Prop := X in Prop] applied to [A]. *)
+Lemma ti_tspine_let :
+  PCUICArities.typing_spine si_Σ ti_ΓP (it_mkProd_or_LetIn ti_Δlet (tSort sProp)) [tRel 0] (tSort sProp).
+Proof.
+  have hT : isType si_Σ ti_ΓP (it_mkProd_or_LetIn ti_Δlet (tSort sProp)).
+  { apply (PCUICInductiveInversion.isType_it_mkProd_or_LetIn (Σ := si_Σ) (Γ := ti_ΓP) (Δ := ti_Δlet) si_wf).
+    exact (has_sort_isType _ (ti_P_ty _ ti_wf_Δlet)). }
+  have hL : isType si_Σ ti_ΓP (tLetIn si_na (tRel 0) si_P (tSort sProp)).
+  { apply (PCUICInductiveInversion.isType_it_mkProd_or_LetIn (Σ := si_Σ) (Γ := ti_ΓP)
+             (Δ := [vdef si_na (tRel 0) si_P]) (T := tSort sProp) si_wf).
+    exact (has_sort_isType _ (ti_P_ty _ ti_wf_letA)). }
+  refine (PCUICArities.type_spine_cons (na := si_na) (A := si_P) (B := tLetIn si_na (tRel 0) si_P (tSort sProp))
+            hT hT (ti_ws_refl ti_ΓP (tProd si_na si_P (tLetIn si_na (tRel 0) si_P (tSort sProp))) eq_refl eq_refl)
+            ti_A_ty _).
+  econstructor.
+  - exact hL.
+  - exact (has_sort_isType _ (ti_P_ty ti_ΓP ti_wf_ΓP)).
+  - exact (PCUICWellScopedCumulativity.red_ws_cumul_pb (Σ := si_Σ) (wfΣ := si_wf) ti_red_TL).
+Qed.
+
+(** [x : int] in [Σ_po]. *)
+Definition ti_Γint : context := [vass si_na (tConst po_int_kn [])].
+
+Lemma ti_wf_Γint : wf_local Σ_po ti_Γint.
+Proof.
+  apply localenv_cons_abs; [constructor|].
+  split; [exact tt|]. exists Sort.type0.
+  split; [exact (po_int_typed Σ_po [] ltac:(constructor) ti_po_int_declared)|split; [exact I|reflexivity]].
+Qed.
+
 (** ** Instances of [T0_facts]
 
   Each lemma [<field>_inst] below states the premises and the conclusion of the field [<field>] of
@@ -1173,34 +3106,6 @@ Proof. exists po_int_kn, po_int_body; split; [reflexivity|exact ti_po_int_declar
   lemma of the same name. (1) This instance shows that the hypothesis is consistent and about something
   real. (2) It does NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan
   row T0 (the E copies of the typing infrastructure) lands. *)
-
-(* non-degenerate *)
-Lemma All_mfix_wf_inst :
-  [× wfE si_Σ.1, wf_localE si_Σ ti_ΓP,
-     All (fun d : def term => isTypeRelE si_Σ ti_ΓP (dtype d) (binder_relevance (dname d))) [ti_dA] &
-     wf_localE si_Σ (ti_ΓP ,,, fix_context [ti_dA])].
-Proof.
-  have hd : All (fun d : def term => isTypeRel si_Σ ti_ΓP (dtype d) (binder_relevance (dname d))) [ti_dA].
-  { constructor; [exact ti_dA_ty|constructor]. }
-  have hdE : All (fun d : def term => isTypeRelE si_Σ ti_ΓP (dtype d) (binder_relevance (dname d))) [ti_dA].
-  { constructor; [exact (siIR ti_dA_ty)|constructor]. }
-  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact hdE|].
-  exact (siW (PCUICWeakeningTyp.All_mfix_wf si_Σ ti_ΓP [ti_dA] si_wf ti_wf_ΓP hd)).
-Qed.
-
-(* non-degenerate *)
-Lemma arity_typing_spine_inst :
-  typing_spineE si_Σ ti_ΓP (it_mkProd_or_LetIn ti_ΓP (tSort sProp)) [tRel 0] (tSort sProp) ×
-  [× #|[tRel 0]| = context_assumptions ti_ΓP, leq_sort si_Σ sProp sProp &
-     ∑ instsubst : list term, spine_substE si_Σ ti_ΓP [tRel 0] instsubst ti_ΓP].
-Proof.
-  have hs : PCUICArities.typing_spine si_Σ ti_ΓP (it_mkProd_or_LetIn ti_ΓP (tSort sProp)) [tRel 0] (tSort sProp) :=
-    fst (PCUICInductives.invert_type_mkApps_ind si_Σ ti_ΓP si_ind [] [tRel 0] (tSort sProp) si_mdecl si_idecl
-           si_wf si_declared_inductive ti_IA_ty).
-  split; [exact (siTS hs)|].
-  destruct (PCUICSpine.arity_typing_spine (Σ := si_Σ) (wfΣ := si_wf) hs) as [h1 h2 [s h3]].
-  split; [exact h1|exact h2|exists s; exact (siS h3)].
-Qed.
 
 (* non-degenerate *)
 Lemma closed_context_cumulativity_inst :
@@ -1220,50 +3125,7 @@ Proof.
                 (pb := Cumul) (Γ' := ti_ΓF) ht ti_wf_ΓF hctx)).
 Qed.
 
-(* degenerate: Γ = [] (the argument list [∀ A : Prop. A] and the telescope [A : Prop] are not empty) *)
-Lemma ctx_inst_open_terms_inst :
-  ctx_instE si_Σ [] [ti_F] (List.rev ti_ΓP) ×
-  All (fun t : term => on_free_vars (shiftnP #|([] : context)| xpred0) t) [ti_F].
-Proof.
-  have h := PCUICSpine.spine_subst_ctx_inst ti_spine_F.
-  split; [exact (siCI h)|].
-  exact (PCUICSpine.ctx_inst_open_terms (Σ := si_Σ) (wfΣ := si_wf) [] [ti_F] _ h).
-Qed.
-
-(* degenerate: Γ = [], and Δ = [A : Prop] has no let-in, so smash_context is the identity *)
-Lemma ctx_inst_smash_inst :
-  [× ctx_instE si_Σ [] [ti_F] (List.rev ti_ΓP),
-     ctx_instE si_Σ [] [ti_F] (List.rev (smash_context [] ti_ΓP)) &
-     ctx_instE si_Σ [] [ti_F] (List.rev ti_ΓP) <~> ctx_instE si_Σ [] [ti_F] (List.rev (smash_context [] ti_ΓP))].
-Proof.
-  have h := PCUICSpine.spine_subst_ctx_inst ti_spine_F.
-  have h' := fst (PCUICSpine.ctx_inst_smash (Σ := si_Σ)) h.
-  split; [exact (siCI h)|exact (siCI h')|split; intros _; [exact (siCI h')|exact (siCI h)]].
-Qed.
-
-(* degenerate: Γ = [] *)
-Lemma ctx_inst_spine_subst_inst :
-  [× wf_localE si_Σ ([] ,,, ti_ΓP), ctx_instE si_Σ [] [ti_F] (List.rev ti_ΓP) &
-     spine_substE si_Σ [] [ti_F] (ctx_inst_subE ti_ciE) ti_ΓP].
-Proof.
-  have hs := PCUICSpine.ctx_inst_spine_subst (Σ := si_Σ) (wfΣ := si_wf) (Γ := []) (Δ := ti_ΓP) ti_wf_ΓP ti_ciB.
-  (* [ctx_inst_sub ti_ciB] and [ctx_inst_subE ti_ciE] both compute to [[ti_F]] *)
-  split; [exact (siW ti_wf_ΓP)|exact ti_ciE|exact (siS hs)].
-Qed.
-
-(* non-degenerate *)
-Lemma ind_arity_relevant_inst :
-  let ind_type := it_mkProd_or_LetIn (ind_params si_mdecl)
-                    (it_mkProd_or_LetIn (ind_indices si_idecl) (tSort (ind_sort si_idecl))) in
-  [× wfE si_Σ.1, isTypeE si_Σ [] ind_type & isTypeRelE si_Σ [] ind_type rel_of_Type].
-Proof.
-  intros ind_type.
-  have h : isType si_Σ [] ind_type := has_sort_isType _ (ti_arity_ty [] ti_wf_nil).
-  split; [exact si_wfE|exact (siI h)|].
-  exact (siIR (PCUICInductiveInversion.ind_arity_relevant si_Σ si_mdecl si_idecl si_wf h)).
-Qed.
-
-(* degenerate: Γ = [], u = u', pars = pars', and I has no indices, so the conclusion compares two empty contexts *)
+(* degenerate: NOT BUILT — I has no indices, so the conclusion compares two empty index contexts (also Γ = [], u = u', pars = pars'); a real point needs an indexed family, and u ≠ u' a cumulative universe-polymorphic one; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma inductive_cumulative_indices_inst :
   [× declared_inductive si_Σ si_ind si_mdecl si_idecl,
      consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
@@ -1291,32 +3153,20 @@ Proof.
   cbv zeta in hb |- *. destruct hb as [hc _]. split; [exact hc|cbn; constructor].
 Qed.
 
-(* degenerate: Γ = [], and the subject t is Prop *)
-Lemma inversion_it_mkProd_or_LetIn_inst :
-  si_Σ ;;; [] |-E it_mkProd_or_LetIn ti_ΓP si_P :
-    tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) ×
-  si_Σ ;;; [] ,,, ti_ΓP |-E si_P : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)).
-Proof.
-  have h : si_Σ ;;; [] |- it_mkProd_or_LetIn ti_ΓP si_P :
-             tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) := ti_arity_ty [] ti_wf_nil.
-  split; [exact (siT h)|].
-  exact (siT (PCUICSpine.inversion_it_mkProd_or_LetIn (Σ := si_Σ) (wfΣ := si_wf) h)).
-Qed.
-
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma invert_type_mkApps_ind_inst :
   [× wfE si_Σ.1, declared_inductive si_Σ.1 si_ind si_mdecl si_idecl,
-     si_Σ ;;; [] |-E mkApps (tInd si_ind []) [ti_F] : tSort sProp &
-     typing_spineE si_Σ [] (ind_type si_idecl)@[[]] [ti_F] (tSort sProp) ×
+     si_Σ ;;; ti_ΓP |-E mkApps (tInd si_ind []) [tRel 0] : tSort sProp &
+     typing_spineE si_Σ ti_ΓP (ind_type si_idecl)@[[]] [tRel 0] (tSort sProp) ×
      consistent_instance_ext si_Σ (ind_universes si_mdecl) []].
 Proof.
-  have h : si_Σ ;;; [] |- mkApps (tInd si_ind []) [ti_F] : tSort sProp := ti_IF_ty [] ti_wf_nil.
-  destruct (PCUICInductives.invert_type_mkApps_ind si_Σ [] si_ind [] [ti_F] (tSort sProp) si_mdecl si_idecl
+  have h : si_Σ ;;; ti_ΓP |- mkApps (tInd si_ind []) [tRel 0] : tSort sProp := ti_IA_ty.
+  destruct (PCUICInductives.invert_type_mkApps_ind si_Σ ti_ΓP si_ind [] [tRel 0] (tSort sProp) si_mdecl si_idecl
               si_wf si_declared_inductive h) as [hs hc].
   split; [exact si_wfE|exact si_declared_inductive|exact (siT h)|split; [exact (siTS hs)|exact hc]].
 Qed.
 
-(* degenerate: c has no arguments and I has no indices, so the ctx_inst premise is over empty lists *)
+(* degenerate: NOT BUILT — c has no arguments and I has no indices, so the ctx_inst premise is over empty lists, and the user arity of I is already the built arity (the red premise is reflexive); a real point needs an indexed family; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma isTypeRel_cstr_type_inst :
   [× wfE si_Σ.1,
      nth_error (ind_bodies si_mdecl) 0 = Some si_idecl,
@@ -1352,116 +3202,40 @@ Proof.
                  eq_refl eq_refl hT hr hT' eq_refl hci hC)).
 Qed.
 
-(* degenerate: ty = Prop, and skipn 1 Γ = [] *)
-Lemma isTypeRel_lift_inst :
-  [× 1 <= #|ti_ΓP|, wfE si_Σ, wf_localE si_Σ ti_ΓP, isTypeRelE si_Σ (skipn 1 ti_ΓP) si_P Relevant &
-     isTypeRelE si_Σ ti_ΓP (lift0 1 si_P) Relevant].
-Proof.
-  have hr : isTypeRel si_Σ (skipn 1 ti_ΓP) si_P Relevant :=
-    has_sort_isTypeRel (Sort.super sProp) Relevant eq_refl (ti_P_ty [] ti_wf_nil).
-  split; [exact (le_n 1)|exact si_wfE|exact (siW ti_wf_ΓP)|exact (siIR hr)|].
-  exact (siIR (PCUICWeakeningTyp.isTypeRel_lift (Σ := si_Σ) (n := 1) (Γ := ti_ΓP) (le_n 1) si_wf ti_wf_ΓP hr)).
-Qed.
-
-(* degenerate: ty = Prop, and skipn 1 Γ = [] *)
-Lemma isType_lift_inst :
-  [× 1 <= #|ti_ΓP|, wfE si_Σ, wf_localE si_Σ ti_ΓP, isTypeE si_Σ (skipn 1 ti_ΓP) si_P &
-     isTypeE si_Σ ti_ΓP (lift0 1 si_P)].
-Proof.
-  have hr : isType si_Σ (skipn 1 ti_ΓP) si_P := has_sort_isType _ (ti_P_ty [] ti_wf_nil).
-  split; [exact (le_n 1)|exact si_wfE|exact (siW ti_wf_ΓP)|exact (siI hr)|].
-  exact (siI (PCUICWeakeningTyp.isType_lift (Σ := si_Σ) (n := 1) (Γ := ti_ΓP) (le_n 1) si_wf ti_wf_ΓP hr)).
-Qed.
-
-(* degenerate: Γ = [], and B = Prop does not depend on the argument *)
-Lemma isType_apply_inst :
-  [× isTypeE si_Σ [] (tProd si_na si_P si_P), si_Σ ;;; [] |-E ti_F : si_P &
-     isTypeE si_Σ [] (si_P {0 := ti_F})].
-Proof.
-  have hP : isType si_Σ [] (tProd si_na si_P si_P) := has_sort_isType _ (ti_arity_ty [] ti_wf_nil).
-  have hF : si_Σ ;;; [] |- ti_F : si_P := ti_F_ty [] ti_wf_nil.
-  split; [exact (siI hP)|exact (siT hF)|].
-  exact (siI (PCUICArities.isType_apply (Σ := si_Σ) (wfΣ := si_wf) hP hF)).
-Qed.
-
-(* degenerate: Γ = [], and T = Prop *)
-Lemma isType_it_mkProd_or_LetIn_wf_local_inst :
-  isTypeE si_Σ [] (it_mkProd_or_LetIn ti_ΓP si_P) × wf_localE si_Σ ([] ,,, ti_ΓP).
-Proof.
-  have h : isType si_Σ [] (it_mkProd_or_LetIn ti_ΓP si_P) := has_sort_isType _ (ti_arity_ty [] ti_wf_nil).
-  split; [exact (siI h)|].
-  exact (siW (PCUICArities.isType_it_mkProd_or_LetIn_wf_local (Σ := si_Σ) (wfΣ := si_wf) h)).
-Qed.
-
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma isType_mkApps_Ind_inst :
   [× declared_inductive si_Σ si_ind si_mdecl si_idecl,
      consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
-     spine_substE si_Σ [] [ti_F] [ti_F] (ind_params si_mdecl ,,, ind_indices si_idecl)@[[]] &
-     si_Σ ;;; [] |-E mkApps (tInd si_ind []) [ti_F] : tSort (ind_sort si_idecl)@[[]]].
+     spine_substE si_Σ ti_ΓP [tRel 0] [tRel 0] (ind_params si_mdecl ,,, ind_indices si_idecl)@[[]] &
+     si_Σ ;;; ti_ΓP |-E mkApps (tInd si_ind []) [tRel 0] : tSort (ind_sort si_idecl)@[[]]].
 Proof.
-  pose proof (ti_spine_F :
-    PCUICSpine.spine_subst si_Σ [] [ti_F] [ti_F] (ind_params si_mdecl ,,, ind_indices si_idecl)@[[]]) as hs.
+  pose proof (ti_spine_A :
+    PCUICSpine.spine_subst si_Σ ti_ΓP [tRel 0] [tRel 0] (ind_params si_mdecl ,,, ind_indices si_idecl)@[[]]) as hs.
   split; [exact si_declared_inductive|exact ti_cons|exact (siS hs)|].
-  exact (siT (PCUICInductives.isType_mkApps_Ind (Σ := si_Σ) (wfΣ := si_wf) si_declared_inductive (Γ := [])
+  exact (siT (PCUICInductives.isType_mkApps_Ind (Σ := si_Σ) (wfΣ := si_wf) si_declared_inductive (Γ := ti_ΓP)
                 ti_cons hs)).
 Qed.
 
-(* degenerate: Γ = [] *)
+(* degenerate: NOT BUILT — I has no indices, so the index half of the split (skipn ind_npars args, argsubst) is empty; a real point needs an indexed family (Γ = [A : Prop] and the parameter A are real); COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma isType_mkApps_Ind_inv_inst :
-  [× wfE si_Σ.1, declared_inductive si_Σ.1 si_ind si_mdecl si_idecl, wf_localE si_Σ [],
-     isTypeE si_Σ [] (mkApps (tInd si_ind []) [ti_F]) &
+  [× wfE si_Σ.1, declared_inductive si_Σ.1 si_ind si_mdecl si_idecl, wf_localE si_Σ ti_ΓP,
+     isTypeE si_Σ ti_ΓP (mkApps (tInd si_ind []) [tRel 0]) &
      ∑ parsubst argsubst : list term,
        let parctx := (ind_params si_mdecl)@[[]] in
        let argctx := subst_context parsubst 0 (ind_indices si_idecl)@[[]] in
-       [× spine_substE si_Σ [] (firstn (ind_npars si_mdecl) [ti_F]) parsubst parctx,
-          spine_substE si_Σ [] (skipn (ind_npars si_mdecl) [ti_F]) argsubst argctx,
-          #|firstn (ind_npars si_mdecl) [ti_F]| = ind_npars si_mdecl,
-          #|skipn (ind_npars si_mdecl) [ti_F]| = context_assumptions (ind_indices si_idecl) &
+       [× spine_substE si_Σ ti_ΓP (firstn (ind_npars si_mdecl) [tRel 0]) parsubst parctx,
+          spine_substE si_Σ ti_ΓP (skipn (ind_npars si_mdecl) [tRel 0]) argsubst argctx,
+          #|firstn (ind_npars si_mdecl) [tRel 0]| = ind_npars si_mdecl,
+          #|skipn (ind_npars si_mdecl) [tRel 0]| = context_assumptions (ind_indices si_idecl) &
           consistent_instance_ext si_Σ (ind_universes si_mdecl) []]].
 Proof.
-  have hI : isType si_Σ [] (mkApps (tInd si_ind []) [ti_F]) := has_sort_isType _ (ti_IF_ty [] ti_wf_nil).
-  destruct (PCUICInductives.isType_mkApps_Ind_inv (Σ := si_Σ) (Γ := []) si_wf si_declared_inductive ti_wf_nil hI)
+  have hI : isType si_Σ ti_ΓP (mkApps (tInd si_ind []) [tRel 0]) := has_sort_isType _ ti_IA_ty.
+  destruct (PCUICInductives.isType_mkApps_Ind_inv (Σ := si_Σ) (Γ := ti_ΓP) si_wf si_declared_inductive ti_wf_ΓP hI)
     as [ps [as' h]].
   cbv zeta in h. destruct h as [h1 h2 h3 h4 h5].
-  split; [exact si_wfE|exact si_declared_inductive|constructor|exact (siI hI)|].
+  split; [exact si_wfE|exact si_declared_inductive|exact (siW ti_wf_ΓP)|exact (siI hI)|].
   exists ps, as'. cbv zeta.
   split; [exact (siS h1)|exact (siS h2)|exact h3|exact h4|exact h5].
-Qed.
-
-(* degenerate: Γ = [], and the type of the argument is Prop *)
-Lemma isType_rec_arg_welltyped_inst :
-  [× isTypeE si_Σ [] si_arity, decompose_prod_assum [] si_arity = (ti_ΓP, tSort sProp),
-     nth_error (List.rev (smash_context [] ti_ΓP)) 0 = Some (vass si_na si_P) &
-     welltypedE si_Σ ([] ,,, skipn (#|smash_context [] ti_ΓP| - 0) (smash_context [] ti_ΓP))
-       (decl_type (vass si_na si_P))].
-Proof.
-  have h : isType si_Σ [] si_arity := has_sort_isType _ (ti_arity_ty [] ti_wf_nil).
-  split; [exact (siI h)|reflexivity|reflexivity|].
-  exact (siWT (PCUICFixWitness.isType_rec_arg_welltyped (Σ := si_Σ) (wfΣ := si_wf) (ctx := ti_ΓP)
-                 (concl := tSort sProp) (n := 0) (c := vass si_na si_P) h eq_refl eq_refl)).
-Qed.
-
-(* degenerate: Γ = [], and A = B = Prop *)
-Lemma isType_tProd_inst :
-  [× isTypeE si_Σ [] (tProd si_na si_P si_P),
-     isTypeRelE si_Σ [] si_P (binder_relevance si_na) × isTypeE si_Σ ([] ,, vass si_na si_P) si_P &
-     (isTypeE si_Σ [] (tProd si_na si_P si_P) <~>
-      isTypeRelE si_Σ [] si_P (binder_relevance si_na) × isTypeE si_Σ ([] ,, vass si_na si_P) si_P)].
-Proof.
-  have hP : isType si_Σ [] (tProd si_na si_P si_P) := has_sort_isType _ (ti_arity_ty [] ti_wf_nil).
-  destruct (fst (PCUICArities.isType_tProd (Σ := si_Σ) (wfΣ := si_wf)) hP) as [h1 h2].
-  have l := siI hP.
-  have r := (siIR h1, siI h2).
-  split; [exact l|exact r|split; intros _; [exact r|exact l]].
-Qed.
-
-(* degenerate: Γ = [], and T = Prop *)
-Lemma isType_wf_universes_inst :
-  [× wfE si_Σ.1, isTypeE si_Σ [] si_P & wf_universes si_Σ si_P].
-Proof.
-  have h : isType si_Σ [] si_P := has_sort_isType _ (ti_P_ty [] ti_wf_nil).
-  split; [exact si_wfE|exact (siI h)|exact (PCUICWfUniverses.isType_wf_universes (Σ := si_Σ) si_wf h)].
 Qed.
 
 (* non-degenerate *)
@@ -1483,207 +3257,22 @@ Proof.
                 si_declared_inductive [] ti_cons)).
 Qed.
 
-(* degenerate: Γ = [] *)
-Lemma sorts_local_ctx_wf_local_inst :
-  [× wf_localE si_Σ [], sorts_local_ctx (lift_typing typingE) si_Σ [] ti_ΓP [Sort.super sProp] &
-     wf_localE si_Σ ([] ,,, ti_ΓP)].
-Proof.
-  have hj : lift_typing typing si_Σ [] (j_vass_s si_na si_P (Sort.super sProp)) :=
-    ti_vass_s [] si_na si_P _ (ti_P_ty [] ti_wf_nil) eq_refl.
-  have hb : sorts_local_ctx (lift_typing typing) si_Σ [] ti_ΓP [Sort.super sProp] := (tt, hj).
-  split; [constructor|exact (tt, siL hj)|].
-  exact (siW (PCUICContexts.sorts_local_ctx_wf_local si_Σ [] ti_ΓP [Sort.super sProp] ti_wf_nil hb)).
-Qed.
-
-
-(* degenerate: Γ = [] *)
-Lemma type_local_ctx_wf_local_inst :
-  [× wf_localE si_Σ [], type_local_ctx (lift_typing typingE) si_Σ [] ti_ΓF sProp &
-     wf_localE si_Σ ([] ,,, ti_ΓF)].
-Proof.
-  have hj : lift_typing typing si_Σ [] (j_vass_s si_na ti_F sProp) :=
-    ti_vass_s [] si_na ti_F sProp (ti_F_ty [] ti_wf_nil) eq_refl.
-  have hb : type_local_ctx (lift_typing typing) si_Σ [] ti_ΓF sProp := (ti_wfs, hj).
-  split; [constructor|exact (ti_wfs, siL hj)|].
-  exact (siW (PCUICContexts.type_local_ctx_wf_local si_Σ [] ti_ΓF sProp ti_wf_nil hb)).
-Qed.
-
-(* degenerate: Γ = [], Δ' = [] and inst' = [] *)
-Lemma spine_subst_app_inst :
-  [× #|[ti_F]| = context_assumptions ti_ΓP,
-     wf_localE si_Σ ([] ,,, ti_ΓP ,,, []),
-     spine_substE si_Σ [] [ti_F] (skipn #|([] : context)| [ti_F]) ti_ΓP,
-     spine_substE si_Σ [] [] (firstn #|([] : context)| [ti_F]) (subst_context (skipn #|([] : context)| [ti_F]) 0 []) &
-     spine_substE si_Σ [] ([ti_F] ++ []) [ti_F] (ti_ΓP ,,, [])].
-Proof.
-  have hw : wf_local si_Σ ([] ,,, ti_ΓP ,,, []) := ti_wf_ΓP.
-  have hs : PCUICSpine.spine_subst si_Σ [] [ti_F] (skipn #|([] : context)| [ti_F]) ti_ΓP := ti_spine_F.
-  have hs' : PCUICSpine.spine_subst si_Σ [] [] (firstn #|([] : context)| [ti_F])
-               (subst_context (skipn #|([] : context)| [ti_F]) 0 []) := ti_spine_nil.
-  split; [reflexivity|exact (siW hw)|exact (siS hs)|exact (siS hs')|].
-  exact (siS (PCUICSpine.spine_subst_app (Σ := si_Σ) (Γ := []) (Δ := ti_ΓP) (Δ' := []) (inst := [ti_F]) (inst' := [])
-                (insts := [ti_F]) eq_refl hw hs hs')).
-Qed.
-
-(* degenerate: Γ = [] *)
-Lemma spine_subst_ctx_inst_inst :
-  spine_substE si_Σ [] [ti_F] [ti_F] ti_ΓP × ctx_instE si_Σ [] [ti_F] (List.rev ti_ΓP).
-Proof. split; [exact (siS ti_spine_F)|exact (siCI (PCUICSpine.spine_subst_ctx_inst ti_spine_F))]. Qed.
-
-(* degenerate: Δ = [], and Γ = Γ' (the context comparison is reflexive) *)
-Lemma spine_subst_cumul_inst :
-  [× PCUICLiftSubst.assumption_context ti_ΓP, PCUICLiftSubst.assumption_context ti_ΓP,
-     wf_localE si_Σ ([] ,,, ti_ΓP), wf_localE si_Σ ([] ,,, ti_ΓP),
-     ws_cumul_ctx_pbE_rel Cumul si_Σ [] ti_ΓP ti_ΓP,
-     spine_substE si_Σ [] [ti_F] (List.rev [ti_F]) ti_ΓP &
-     spine_substE si_Σ [] [ti_F] (List.rev [ti_F]) ti_ΓP].
-Proof.
-  have ha : PCUICLiftSubst.assumption_context ti_ΓP by repeat constructor.
-  have hcb : PCUICConversion.ws_cumul_ctx_pb_rel Cumul si_Σ [] ti_ΓP ti_ΓP.
-  { split; [reflexivity|]. constructor; [constructor|].
-    constructor; [reflexivity|exact (ti_ws_refl ([] ,,, []) si_P eq_refl eq_refl)]. }
-  have hcE : ws_cumul_ctx_pbE_rel Cumul si_Σ [] ti_ΓP ti_ΓP.
-  { split; [reflexivity|]. constructor; [constructor|].
-    constructor; [reflexivity|exact (fi_ws Cumul ([] ,,, []) si_P eq_refl eq_refl)]. }
-  have hs : PCUICSpine.spine_subst si_Σ [] [ti_F] (List.rev [ti_F]) ti_ΓP := ti_spine_F.
-  split; [exact ha|exact ha|exact (siW ti_wf_ΓP)|exact (siW ti_wf_ΓP)|exact hcE|exact (siS hs)|].
-  exact (siS (PCUICSpine.spine_subst_cumul (Σ := si_Σ) (wfΣ := si_wf) (Δ := []) (Γ := ti_ΓP) (Γ' := ti_ΓP)
-                ha ha ti_wf_ΓP ti_wf_ΓP hcb hs)).
-Qed.
-
-(* degenerate: Γ = [], and Δ has no let-in, so smash_context is the identity *)
-Lemma spine_subst_smash_inst :
-  spine_substE si_Σ [] [ti_F] [ti_F] ti_ΓP ×
-  spine_substE si_Σ [] [ti_F] (List.rev [ti_F]) (smash_context [] ti_ΓP).
-Proof.
-  split; [exact (siS ti_spine_F)|].
-  exact (siS (PCUICSpine.spine_subst_smash (Σ := si_Σ) (wfΣ := si_wf) ti_spine_F)).
-Qed.
-
-(* degenerate: Γ = [], and Δ has no let-in *)
-Lemma spine_subst_inst_subst_inst :
-  spine_substE si_Σ [] [ti_F] [ti_F] ti_ΓP ×
-  subst_context [ti_F] 0 [vass si_na (tRel 0)] =
-    subst_context (List.rev [ti_F]) 0 (expand_lets_ctx ti_ΓP [vass si_na (tRel 0)]).
-Proof.
-  split; [exact (siS ti_spine_F)|].
-  exact (PCUICSR.spine_subst_inst_subst (Δ' := [vass si_na (tRel 0)]) ti_spine_F).
-Qed.
 
 Lemma ti_Rel0_ty : si_Σ ;;; [] ,,, ti_ΓP ,,, [] |- tRel 0 : si_P.
 Proof. exact (type_Rel _ _ 0 (vass si_na si_P) ti_wf_ΓP eq_refl). Qed.
 
-(* degenerate: Γ = [] and Δ = [] *)
-Lemma substitution_inst :
-  [× subsletE si_Σ [] [ti_F] ti_ΓP, si_Σ ;;; [] ,,, ti_ΓP ,,, [] |-E tRel 0 : si_P &
-     si_Σ ;;; [] ,,, subst_context [ti_F] 0 [] |-E subst [ti_F] #|([] : context)| (tRel 0) :
-       subst [ti_F] #|([] : context)| si_P].
-Proof.
-  split; [exact (ti_subslet si_Σ si_wf ti_subslet_F)|exact (siT ti_Rel0_ty)|].
-  exact (siT (PCUICSubstitution.substitution (Σ := si_Σ) (wfΣ := si_wf) (Γ := []) (Γ' := ti_ΓP) (s := [ti_F])
-                (Δ := []) ti_subslet_F ti_Rel0_ty)).
-Qed.
-
-(* degenerate: Γ = [] *)
-Lemma substitution_wf_local_inst :
-  [× subsletE si_Σ [] [ti_F] ti_ΓP, wf_localE si_Σ ([] ,,, ti_ΓP ,,, [vass si_na (tRel 0)]) &
-     wf_localE si_Σ ([] ,,, subst_context [ti_F] 0 [vass si_na (tRel 0)])].
-Proof.
-  have hw : wf_local si_Σ ([] ,,, ti_ΓP ,,, [vass si_na (tRel 0)]) :=
-    ti_wf_cons ti_ΓP si_na (tRel 0) sProp ti_wf_ΓP (type_Rel _ _ 0 (vass si_na si_P) ti_wf_ΓP eq_refl) eq_refl.
-  split; [exact (ti_subslet si_Σ si_wf ti_subslet_F)|exact (siW hw)|].
-  exact (siW (PCUICSubstitution.substitution_wf_local (Σ := si_Σ) (wfΣ := si_wf) (Γ := []) (Γ' := ti_ΓP)
-                (s := [ti_F]) (Δ := [vass si_na (tRel 0)]) ti_subslet_F hw)).
-Qed.
-
-(* degenerate: Γ = [], Δ has no let-in (expand_lets is the identity), and T = Prop *)
-Lemma typing_expand_lets_inst :
-  si_Σ ;;; [] ,,, ti_ΓP |-E tRel 0 : si_P ×
-  si_Σ ;;; [] ,,, smash_context [] ti_ΓP |-E expand_lets ti_ΓP (tRel 0) : expand_lets ti_ΓP si_P.
-Proof.
-  have h : si_Σ ;;; [] ,,, ti_ΓP |- tRel 0 : si_P := ti_Rel0_ty.
-  split; [exact (siT h)|].
-  exact (siT (PCUICContexts.typing_expand_lets (Σ := si_Σ) (wfΣ := si_wf) [] ti_ΓP (tRel 0) si_P h)).
-Qed.
-
-(* degenerate: Γ = [], and ind_type of I already is the it_mkProd_or_LetIn form *)
+(* degenerate: NOT BUILT — the user arity of I is already the built arity, so the premise's and the conclusion's spines are over the same type; on_ind_body's ind_arity_red only asks the user arity to REDUCE to the built one, so an inductive declared with a redex in its arity gives a real point (Γ = [A : Prop] and the argument A are real); COST: a new inductive declared with a redex in its user arity, in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing and its ind_arity_red reduction, constructor typing, positivity, universe constraints), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma typing_spine_ind_type_inv_inst :
-  [× declared_inductive si_Σ si_ind si_mdecl si_idecl, wf_localE si_Σ [],
+  [× declared_inductive si_Σ si_ind si_mdecl si_idecl, wf_localE si_Σ ti_ΓP,
      consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
-     typing_spineE si_Σ [] (ind_type si_idecl)@[[]] [ti_F] (tSort sProp) &
-     typing_spineE si_Σ []
+     typing_spineE si_Σ ti_ΓP (ind_type si_idecl)@[[]] [tRel 0] (tSort sProp) &
+     typing_spineE si_Σ ti_ΓP
        (it_mkProd_or_LetIn (ind_params si_mdecl ,,, ind_indices si_idecl) (tSort (ind_sort si_idecl)))@[[]]
-       [ti_F] (tSort sProp)].
+       [tRel 0] (tSort sProp)].
 Proof.
-  split; [exact si_declared_inductive|constructor|exact ti_cons|exact (siTS ti_tspine_IF)|].
+  split; [exact si_declared_inductive|exact (siW ti_wf_ΓP)|exact ti_cons|exact (siTS ti_tspine_IA)|].
   exact (siTS (PCUICInductives.typing_spine_ind_type_inv (Σ := si_Σ) (wfΣ := si_wf) si_declared_inductive
-                 [] [] [ti_F] (tSort sProp) ti_wf_nil ti_cons ti_tspine_IF)).
-Qed.
-
-(* degenerate: T' = T, and Γ = [] *)
-Lemma typing_spine_strengthen_inst :
-  [× typing_spineE si_Σ [] si_arity [ti_F] (tSort sProp), isTypeE si_Σ [] si_arity,
-     si_Σ ;;; [] ⊢E si_arity ≤ si_arity & typing_spineE si_Σ [] si_arity [ti_F] (tSort sProp)].
-Proof.
-  have hs : PCUICArities.typing_spine si_Σ [] si_arity [ti_F] (tSort sProp) := ti_tspine_IF.
-  have hT : isType si_Σ [] si_arity := has_sort_isType _ (ti_arity_ty [] ti_wf_nil).
-  have hc : si_Σ ;;; [] ⊢ si_arity ≤ si_arity := ti_ws_refl [] si_arity eq_refl eq_refl.
-  split; [exact (siTS hs)|exact (siI hT)|exact (siC hc)|].
-  exact (siTS (PCUICSpine.typing_spine_strengthen (Σ := si_Σ) (wfΣ := si_wf) hs si_arity hT hc)).
-Qed.
-
-(* degenerate: Γ = [], and the subject t is Prop *)
-Lemma typing_wf_sort_inst :
-  [× wfE si_Σ, si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp) & wf_sort si_Σ (Sort.super sProp)].
-Proof.
-  have h := ti_P_ty [] ti_wf_nil.
-  split; [exact si_wfE|exact (siT h)|exact (PCUICWfUniverses.typing_wf_sort (Σ := si_Σ) si_wf h)].
-Qed.
-
-(* degenerate: Γ = [], and the subject t is Prop *)
-Lemma typing_wf_universes_inst :
-  [× wfE si_Σ, si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp) &
-     wf_universes si_Σ si_P && wf_universes si_Σ (tSort (Sort.super sProp))].
-Proof.
-  have h := ti_P_ty [] ti_wf_nil.
-  split; [exact si_wfE|exact (siT h)|exact (PCUICWfUniverses.typing_wf_universes (Σ := si_Σ) si_wf h)].
-Qed.
-
-(* degenerate: Γ = [], and the subject t is Prop *)
-Lemma weaken_ctx_inst :
-  [× wfE si_Σ.1, wf_localE si_Σ ti_ΓP, si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp) &
-     si_Σ ;;; ti_ΓP ,,, [] |-E si_P : tSort (Sort.super sProp)].
-Proof.
-  have h := ti_P_ty [] ti_wf_nil.
-  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact (siT h)|].
-  exact (siT (PCUICWeakeningTyp.weaken_ctx (Σ := si_Σ) ti_ΓP si_wf ti_wf_ΓP h)).
-Qed.
-
-(* non-degenerate *)
-Lemma weaken_wf_local_inst :
-  [× wfE si_Σ.1, wf_localE si_Σ ti_ΓP, wf_localE si_Σ ti_ΓI & wf_localE si_Σ (ti_ΓP ,,, ti_ΓI)].
-Proof.
-  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact (siW ti_wf_ΓI)|].
-  exact (siW (PCUICWeakeningTyp.weaken_wf_local (Σ := si_Σ) (Δ := ti_ΓI) ti_ΓP si_wf ti_wf_ΓP ti_wf_ΓI)).
-Qed.
-
-(* degenerate: Γ = [] *)
-Lemma weakening_wf_local_inst :
-  [× wf_localE si_Σ ([] ,,, ti_ΓI), wf_localE si_Σ ([] ,,, ti_ΓP) &
-     wf_localE si_Σ ([] ,,, ti_ΓP ,,, lift_context #|ti_ΓP| 0 ti_ΓI)].
-Proof.
-  split; [exact (siW ti_wf_ΓI)|exact (siW ti_wf_ΓP)|].
-  exact (siW (PCUICWeakeningTyp.weakening_wf_local (Σ := si_Σ) (wfΣ := si_wf) (Γ := []) (Γ' := ti_ΓI)
-                (Γ'' := ti_ΓP) ti_wf_ΓI ti_wf_ΓP)).
-Qed.
-
-(* degenerate: Γ = [], A = Prop and B = Prop *)
-Lemma welltyped_prod_codomain_inst :
-  welltypedE si_Σ [] (tProd si_na si_P (tSort sProp)) × welltypedE si_Σ ([] ,, vass si_na si_P) (tSort sProp).
-Proof.
-  have h : welltyped si_Σ [] (tProd si_na si_P (tSort sProp)) := iswelltyped (ti_arity_ty [] ti_wf_nil).
-  split; [exact (siWT h)|].
-  exact (siWT (PCUICFixWitness.welltyped_prod_codomain (Σ := si_Σ) (wfΣ := si_wf) h)).
+                 ti_ΓP [] [tRel 0] (tSort sProp) ti_wf_ΓP ti_cons ti_tspine_IA)).
 Qed.
 
 (** A case on [I ti_F]: the predicate [fun (_ : I ti_F) => Prop] and the branch of [c]. *)
@@ -1719,7 +3308,7 @@ Lemma ti_ret_ty :
   si_Σ ;;; [] ,,, case_predicate_context ti_ci si_mdecl si_idecl ti_p |- preturn ti_p : tSort (Sort.super sProp).
 Proof. exact (ti_P_ty _ ti_wf_predctx). Qed.
 
-(* degenerate: Γ = [], args = [] (I has no indices), c has no arguments, and the return type is Prop *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma wf_case_branch_type_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -1748,7 +3337,7 @@ Proof.
   cbv zeta. split; [exact b1|exact (siW b2)|exact (siW b3)|exact (siW b4)|exact (siT b5)].
 Qed.
 
-(* degenerate: Γ = [] and args = [] *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, and Γ = []; a real point needs an indexed family; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma wf_case_predicate_context_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -1759,64 +3348,7 @@ Proof.
   cbv zeta. exact (siW ti_wf_predctx).
 Qed.
 
-(* degenerate: Γ = [], and Δ has no let-in *)
-Lemma wf_local_expand_lets_inst :
-  wf_localE si_Σ ([] ,,, ti_ΓP ,,, ti_ΓI) ×
-  wf_localE si_Σ ([] ,,, smash_context [] ti_ΓP ,,, expand_lets_ctx ti_ΓP ti_ΓI).
-Proof.
-  have hw : wf_local si_Σ ([] ,,, ti_ΓP ,,, ti_ΓI) := ti_wf_I ti_ΓP ti_wf_ΓP.
-  split; [exact (siW hw)|].
-  exact (siW (PCUICInductives.wf_local_expand_lets (Σ := si_Σ) (wfΣ := si_wf) (Γ := []) (Δ := ti_ΓP)
-                (Γ' := ti_ΓI) hw)).
-Qed.
-
-(* degenerate: the context has no let-in, so smash_context is the identity *)
-Lemma wf_local_smash_context_inst :
-  wf_localE si_Σ (ti_ΓP ,,, ti_ΓI) × wf_localE si_Σ (smash_context [] (ti_ΓP ,,, ti_ΓI)).
-Proof.
-  have hw : wf_local si_Σ (ti_ΓP ,,, ti_ΓI) := ti_wf_I ti_ΓP ti_wf_ΓP.
-  split; [exact (siW hw)|exact (siW (PCUICContexts.wf_local_smash_context (Σ := si_Σ) (wfΣ := si_wf) hw))].
-Qed.
-
-(* degenerate: Δ has no let-in, so smash_context is the identity *)
-Lemma wf_local_smash_end_inst :
-  wf_localE si_Σ (ti_ΓP ,,, ti_ΓI) × wf_localE si_Σ (ti_ΓP ,,, smash_context [] ti_ΓI).
-Proof.
-  have hw : wf_local si_Σ (ti_ΓP ,,, ti_ΓI) := ti_wf_I ti_ΓP ti_wf_ΓP.
-  split; [exact (siW hw)|].
-  exact (siW (PCUICContexts.wf_local_smash_end (Σ := si_Σ) (wfΣ := si_wf) ti_ΓP ti_ΓI hw)).
-Qed.
-
-(* degenerate: T = Prop *)
-Lemma isType_weaken_inst :
-  [× wf_localE si_Σ ti_ΓP, isTypeE si_Σ [] si_P & isTypeE si_Σ ti_ΓP si_P].
-Proof.
-  have h : isType si_Σ [] si_P := has_sort_isType _ (ti_P_ty [] ti_wf_nil).
-  split; [exact (siW ti_wf_ΓP)|exact (siI h)|].
-  exact (siI (PCUICArities.isType_weaken (Σ := si_Σ) (wfΣ := si_wf) ti_wf_ΓP h)).
-Qed.
-
-(* degenerate: Γ = [], and T = Prop *)
-Lemma isType_it_mkProd_or_LetIn_inst :
-  [× wfE si_Σ.1, isTypeE si_Σ ([] ,,, ti_ΓP) si_P & isTypeE si_Σ [] (it_mkProd_or_LetIn ti_ΓP si_P)].
-Proof.
-  have h : isType si_Σ ([] ,,, ti_ΓP) si_P := has_sort_isType _ (ti_P_ty _ ti_wf_ΓP).
-  split; [exact si_wfE|exact (siI h)|].
-  exact (siI (PCUICInductiveInversion.isType_it_mkProd_or_LetIn (Σ := si_Σ) (Γ := []) (Δ := ti_ΓP) si_wf h)).
-Qed.
-
-(* degenerate: Γ = [] *)
-Lemma type_local_ctx_wf_inst :
-  [× wfE si_Σ.1, type_local_ctx (lift_typing typingE) si_Σ [] ti_ΓF sProp & wf_sort si_Σ sProp].
-Proof.
-  have hj : lift_typing typing si_Σ [] (j_vass_s si_na ti_F sProp) :=
-    ti_vass_s [] si_na ti_F sProp (ti_F_ty [] ti_wf_nil) eq_refl.
-  have hb : type_local_ctx (lift_typing typing) si_Σ [] ti_ΓF sProp := (ti_wfs, hj).
-  split; [exact si_wfE|exact (ti_wfs, siL hj)|].
-  exact (PCUICInductives.type_local_ctx_wf (Σ := si_Σ) si_wf hb).
-Qed.
-
-(* degenerate: Γ = [], args = [] (I has no indices), c has no arguments, and the return type is Prop *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma wf_case_branches_types'_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -1854,118 +3386,21 @@ Qed.
   its proof over [wfE_ClosedBodies] lands (untyped plumbing: reduction is the same in E, [wf] serves only
   closed bodies and universes). *)
 
-(* degenerate: si_env declares no universe level, so l = Set, which is closed for every k *)
-Lemma LSet_in_global_bounded_inst :
-  [× wfE si_env, LevelSet.In Level.lzero (global_levels si_env) & closedu_level 0 Level.lzero].
-Proof.
-  have hin : LevelSet.In Level.lzero (global_levels si_env).
-  { apply LevelSet.union_spec. right. apply LevelSet.singleton_spec. reflexivity. }
-  split; [exact si_wfE|exact hin|].
-  exact (PCUICInductiveInversion.LSet_in_global_bounded (Σ := si_env) 0 si_wf hin).
-Qed.
-
-(* non-degenerate *)
-Lemma closed_red_from_empty_inst :
-  [× on_free_vars_ctx xpred0 ti_ΓP, closed fi_beta, PCUICReduction.red si_Σ [] fi_beta fi_P &
-     si_Σ ;;; ti_ΓP ⊢ fi_beta ⇝ fi_P].
-Proof.
-  split; [reflexivity|reflexivity|exact fi_red_beta|].
-  exact (PCUICInductives.closed_red_from_empty (Σ := si_Σ) (wfΣ := si_wf) (Γ := ti_ΓP) (M := fi_beta) (N := fi_P)
-           eq_refl eq_refl fi_red_beta).
-Qed.
-
-(* degenerate: Γ = [], and t is the let-bound variable itself *)
-Lemma red_expand_let_inst :
-  [× wf_localE si_Σ ([] ,,, [vdef si_na ti_F si_P]),
-     on_free_vars (shiftnP #|[] ,,, [vdef si_na ti_F si_P]| (fun _ : nat => false)) (tRel 0) &
-     si_Σ ;;; [] ,, vdef si_na ti_F si_P ⊢ tRel 0 ⇝ lift0 1 ((tRel 0) {0 := ti_F})].
-Proof.
-  have hw : wf_local si_Σ ([] ,,, [vdef si_na ti_F si_P]) := ti_wf_def.
-  split; [exact (siW hw)|reflexivity|].
-  exact (PCUICSpine.red_expand_let (Σ := si_Σ) (wfΣ := si_wf) (Γ := []) (t := tRel 0) hw eq_refl).
-Qed.
-
-(* degenerate: Γ = [], the reduction is reflexive, and ctx has no let-in *)
-Lemma red_it_mkProd_or_LetIn_smash_inst :
-  [× si_Σ ;;; [] ⊢ it_mkProd_or_LetIn ti_ΓP si_P ⇝ si_arity,
-     nth_error (List.rev (smash_context [] ti_ΓP)) 0 = Some (vass si_na si_P) &
-     ∑ (ctx' : context) (t' : term) (d : context_decl),
-       [× decompose_prod_assum [] si_arity = (ctx', t'),
-          nth_error (List.rev (smash_context [] ctx')) 0 = Some d &
-          si_Σ ;;; [] ,,, skipn (#|smash_context [] ti_ΓP| - 0) (smash_context [] ti_ΓP) ⊢
-            decl_type (vass si_na si_P) ⇝ decl_type d]].
-Proof.
-  have hr : si_Σ ;;; [] ⊢ it_mkProd_or_LetIn ti_ΓP si_P ⇝ si_arity := ti_cr_refl [] si_arity eq_refl eq_refl.
-  split; [exact hr|reflexivity|].
-  exact (PCUICInductives.red_it_mkProd_or_LetIn_smash (Σ := si_Σ) (wfΣ := si_wf) [] ti_ΓP si_P si_arity 0
-           (vass si_na si_P) hr eq_refl).
-Qed.
-
 (** [let x : Prop := ti_F in I x], whose telescope has a let-in. *)
 Definition ti_CLet : term := tLetIn si_na ti_F si_P (tApp (tInd si_ind []) (tRel 0)).
 
-(* degenerate: Γ = [], and the reduction C ⇝ C is reflexive *)
-Lemma red_mkApps_smash_witness_inst :
-  si_Σ ;;; [] ⊢ ti_CLet ⇝ it_mkProd_or_LetIn [vdef si_na ti_F si_P] (mkApps (tInd si_ind []) [tRel 0]) ×
-  ∑ l' : list term,
-    si_Σ ;;; [] ⊢ ti_CLet ⇝ it_mkProd_or_LetIn (smash_context [] [vdef si_na ti_F si_P]) (mkApps (tInd si_ind []) l').
-Proof.
-  have hr : si_Σ ;;; [] ⊢ ti_CLet ⇝
-              it_mkProd_or_LetIn [vdef si_na ti_F si_P] (mkApps (tInd si_ind []) [tRel 0]) :=
-    ti_cr_refl [] ti_CLet eq_refl eq_refl.
-  split; [exact hr|].
-  exact (PCUICFixWitness.red_mkApps_smash_witness (Σ := si_Σ) (wfΣ := si_wf) hr).
-Qed.
-
-(* degenerate: Γ = [], and the reduction of the argument type is reflexive *)
-Lemma red_rec_arg_check_one_fix_inst :
-  [× on_free_vars (shiftnP #|([] : context)| xpred0) (dtype ti_d),
-     decompose_prod_assum [] (dtype ti_d) = (ti_ΓI, si_P),
-     nth_error (List.rev (smash_context [] ti_ΓI)) (rarg ti_d) = Some (vass si_na ti_IF),
-     si_Σ ;;; [] ,,, skipn (#|smash_context [] ti_ΓI| - rarg ti_d) (smash_context [] ti_ΓI) ⊢
-       decl_type (vass si_na ti_IF) ⇝ mkApps (tInd si_ind []) [ti_F] &
-     has_rec_arg ti_d ×
-     (∑ ty : term, si_Σ ;;; [] ⊢ dtype ti_d ⇝ ty × check_one_fix (def_with_type ti_d ty) = Some (inductive_mind si_ind))].
-Proof.
-  have hr : si_Σ ;;; [] ,,, skipn (#|smash_context [] ti_ΓI| - rarg ti_d) (smash_context [] ti_ΓI) ⊢
-              decl_type (vass si_na ti_IF) ⇝ mkApps (tInd si_ind []) [ti_F] :=
-    ti_cr_refl [] ti_IF eq_refl eq_refl.
-  split; [reflexivity|reflexivity|reflexivity|exact hr|].
-  exact (PCUICInductives.red_rec_arg_check_one_fix (Σ := si_Σ) (wfΣ := si_wf) [] ti_d ti_ΓI si_P
-           (vass si_na ti_IF) si_ind [] [ti_F] eq_refl eq_refl eq_refl hr).
-Qed.
-
-(* degenerate: univs = Monomorphic_ctx, u = [], and t = Prop *)
-Lemma wf_universes_inst_inst :
-  [× wfE si_Σ, on_udecl_prop si_Σ.1 Monomorphic_ctx, wf_instance si_Σ [],
-     wf_universes (si_Σ.1, Monomorphic_ctx) si_P & wf_universes si_Σ si_P@[[]]].
-Proof.
-  have hu : on_udecl_prop si_Σ.1 Monomorphic_ctx.
-  { intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx. }
-  have hi : wf_instance si_Σ [] by constructor.
-  have hw : wf_universes (si_Σ.1, Monomorphic_ctx) si_P by reflexivity.
-  split; [exact si_wfE|exact hu|exact hi|exact hw|].
-  exact (PCUICWfUniverses.wf_universes_inst (Σ := si_Σ) Monomorphic_ctx si_P [] si_wf hu hi hw).
-Qed.
-
-(* degenerate: Γ = [], and one of the two reductions is reflexive *)
-Lemma closed_red_confluence_inst :
-  [× si_Σ ;;; [] ⊢ fi_beta ⇝ fi_P, si_Σ ;;; [] ⊢ fi_beta ⇝ fi_beta &
-     ∑ v' : term, si_Σ ;;; [] ⊢ fi_P ⇝ v' × si_Σ ;;; [] ⊢ fi_beta ⇝ v'].
-Proof.
-  have hv : si_Σ ;;; [] ⊢ fi_beta ⇝ fi_beta := ti_cr_refl [] fi_beta eq_refl eq_refl.
-  split; [exact fi_closed_red_beta|exact hv|].
-  exact (PCUICContextConversion.closed_red_confluence (Σ := si_Σ) (wfΣ := si_wf) fi_closed_red_beta hv).
-Qed.
-
-(* degenerate: Γ = [], and t = t' = Prop *)
+(* non-degenerate *)
 Lemma whnf_red_inv_inst :
-  [× wfE si_Σ, whnf RedFlags.default si_Σ [] si_P, si_Σ ;;; [] ⊢ si_P ⇝ si_P & whnf_red si_Σ [] si_P si_P].
+  [× wfE si_Σ, whnf RedFlags.default si_Σ ti_ΓP (tProd si_na ti_idA si_P),
+     si_Σ ;;; ti_ΓP ⊢ tProd si_na ti_idA si_P ⇝ tProd si_na (tRel 0) si_P &
+     whnf_red si_Σ ti_ΓP (tProd si_na ti_idA si_P) (tProd si_na (tRel 0) si_P)].
 Proof.
-  have hn : whnf RedFlags.default si_Σ [] si_P by apply whnf_sort.
-  have hr : si_Σ ;;; [] ⊢ si_P ⇝ si_P := ti_cr_refl [] si_P eq_refl eq_refl.
+  have hn : whnf RedFlags.default si_Σ ti_ΓP (tProd si_na ti_idA si_P) by apply whnf_prod.
+  have hr : si_Σ ;;; ti_ΓP ⊢ tProd si_na ti_idA si_P ⇝ tProd si_na (tRel 0) si_P.
+  { split; [reflexivity|reflexivity|]. apply rt_step. apply prod_red_l.
+    exact (red_beta si_Σ ti_ΓP si_na si_P (tRel 0) (tRel 0)). }
   split; [exact si_wfE|exact hn|exact hr|].
-  exact (PCUICNormal.whnf_red_inv (Σ := si_Σ) [] si_P si_P si_wf hn hr).
+  exact (PCUICNormal.whnf_red_inv (Σ := si_Σ) ti_ΓP _ _ si_wf hn hr).
 Qed.
 
 (** ** Instances of [T1_facts]
@@ -1978,70 +3413,49 @@ Qed.
   does NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan row T1 (subject
   reduction over [typingE]) lands. *)
 
-(* degenerate: Γ = [] (the tags [int] and the type int → int are real) *)
-Lemma isType_prim_arg_types_inst :
-  [× wf_localE Σ_po [], (forall t : prim_tag, In t [primInt] -> t <> primArray),
-     All (prim_op_tag_declared Σ_po) [primInt],
-     PCUICPrimOpType.prim_arg_types (retroknowledge Σ_po.1) [primInt] (tConst po_int_kn []) =
-       Some (tImpl (tConst po_int_kn []) (tConst po_int_kn [])),
-     isTypeE Σ_po [] (tConst po_int_kn []) &
-     isTypeE Σ_po [] (tImpl (tConst po_int_kn []) (tConst po_int_kn []))].
-Proof.
-  have hna : forall t : prim_tag, In t [primInt] -> t <> primArray by (intros t [<-|[]]; discriminate).
-  have hall : All (prim_op_tag_declared Σ_po) [primInt] := All_cons ti_po_int_tag All_nil.
-  have hres : isType Σ_po [] (tConst po_int_kn []) :=
-    has_sort_isType _ (po_int_typed Σ_po [] ltac:(constructor) ti_po_int_declared).
-  split; [constructor|exact hna|exact hall|reflexivity|exact (ti_isType Σ_po ti_po_wf hres)|].
-  exact (ti_isType Σ_po ti_po_wf (PCUICSR.isType_prim_arg_types (Σ := Σ_po) (wfΣ := ti_po_wf) (Γ := [])
-           ltac:(constructor) hna hall eq_refl hres)).
-Qed.
-
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma isType_prim_shape_type_inst :
-  [× wf_localE Σ_po [],
+  [× wf_localE Σ_po ti_Γint,
      PCUICPrimOpType.prim_shape_type (retroknowledge Σ_po.1) SInt = Some (tConst po_int_kn []),
-     on_prim_op_result Σ_po SInt & isTypeE Σ_po [] (tConst po_int_kn [])].
+     on_prim_op_result Σ_po SInt & isTypeE Σ_po ti_Γint (tConst po_int_kn [])].
 Proof.
   have hres : on_prim_op_result Σ_po SInt := ti_po_int_tag.
-  split; [constructor|reflexivity|exact hres|].
-  exact (ti_isType Σ_po ti_po_wf (PCUICSR.isType_prim_shape_type (Σ := Σ_po) (wfΣ := ti_po_wf) (Γ := [])
-           (s := SInt) (res := tConst po_int_kn []) ltac:(constructor) eq_refl hres)).
+  split; [exact (ti_wfl Σ_po ti_po_wf ti_wf_Γint)|reflexivity|exact hres|].
+  exact (ti_isType Σ_po ti_po_wf (PCUICSR.isType_prim_shape_type (Σ := Σ_po) (wfΣ := ti_po_wf) (Γ := ti_Γint)
+           (s := SInt) (res := tConst po_int_kn []) ti_wf_Γint eq_refl hres)).
 Qed.
 
-(* degenerate: T = U = Prop (reflexive reduction), and Γ = [] *)
+(* non-degenerate *)
 Lemma isType_red_inst :
-  [× isTypeE si_Σ [] si_P, PCUICReduction.red si_Σ [] si_P si_P & isTypeE si_Σ [] si_P].
+  [× isTypeE si_Σ ti_ΓP ti_idA, PCUICReduction.red si_Σ ti_ΓP ti_idA (tRel 0) & isTypeE si_Σ ti_ΓP (tRel 0)].
 Proof.
-  have h : isType si_Σ [] si_P := has_sort_isType _ (ti_P_ty [] ti_wf_nil).
-  have hr : PCUICReduction.red si_Σ [] si_P si_P by apply rt_refl.
+  have h : isType si_Σ ti_ΓP ti_idA := has_sort_isType sProp ti_idA_ty.
+  have hr : PCUICReduction.red si_Σ ti_ΓP ti_idA (tRel 0) := clrel_rel ti_red_idA.
   split; [exact (siI h)|exact hr|].
   exact (siI (PCUICSR.isType_red (Σ := si_Σ) (wfΣ := si_wf) h hr)).
 Qed.
 
-(** [let x : Prop := ti_F in x] reduces (ζ) to [ti_F]. *)
-Lemma ti_red_zeta : PCUICReduction.red si_Σ [] (tLetIn si_na ti_F si_P (tRel 0)) ti_F.
-Proof. apply rt_step. exact (red_zeta _ _ si_na ti_F si_P (tRel 0)). Qed.
-
-(* degenerate: Γ = [] (the ζ-reduction of let x := ∀ A : Prop. A in x is real) *)
+(* non-degenerate *)
 Lemma subject_reduction_inst :
-  [× wfE si_Σ, si_Σ ;;; [] |-E tLetIn si_na ti_F si_P (tRel 0) : tLetIn si_na ti_F si_P si_P,
-     PCUICReduction.red si_Σ [] (tLetIn si_na ti_F si_P (tRel 0)) ti_F &
-     si_Σ ;;; [] |-E ti_F : tLetIn si_na ti_F si_P si_P].
+  [× wfE si_Σ, si_Σ ;;; ti_ΓP |-E ti_idA : si_P, PCUICReduction.red si_Σ ti_ΓP ti_idA (tRel 0) &
+     si_Σ ;;; ti_ΓP |-E tRel 0 : si_P].
 Proof.
-  split; [exact si_wfE|exact (siT ti_LetIn_ty)|exact ti_red_zeta|].
-  exact (siT (PCUICSR.subject_reduction si_Σ [] _ _ _ si_wf ti_LetIn_ty ti_red_zeta)).
+  have hr : PCUICReduction.red si_Σ ti_ΓP ti_idA (tRel 0) := clrel_rel ti_red_idA.
+  split; [exact si_wfE|exact (siT ti_idA_ty)|exact hr|].
+  exact (siT (PCUICSR.subject_reduction si_Σ ti_ΓP _ _ _ si_wf ti_idA_ty hr)).
 Qed.
 
-(* degenerate: Γ = [] (the ζ-reduction of the type is real) *)
+(** [x : (λ X : Prop. X) ti_F ⊢ x : ti_F], the type reduced by β. *)
+Lemma ti_red_bF_ΓbF : si_Σ ;;; ti_ΓbF ⊢ ti_bF ⇝ ti_F.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. exact (red_beta si_Σ ti_ΓbF si_na si_P (tRel 0) ti_F). Qed.
+
+(* non-degenerate *)
 Lemma type_reduction_closed_inst :
-  [× si_Σ ;;; [] |-E tLetIn si_na ti_F si_P (tRel 0) : tLetIn si_na ti_F si_P si_P,
-     si_Σ ;;; [] ⊢ tLetIn si_na ti_F si_P si_P ⇝ si_P &
-     si_Σ ;;; [] |-E tLetIn si_na ti_F si_P (tRel 0) : si_P].
+  [× si_Σ ;;; ti_ΓbF |-E tRel 0 : ti_bF, si_Σ ;;; ti_ΓbF ⊢ ti_bF ⇝ ti_F & si_Σ ;;; ti_ΓbF |-E tRel 0 : ti_F].
 Proof.
-  have hr : si_Σ ;;; [] ⊢ tLetIn si_na ti_F si_P si_P ⇝ si_P.
-  { split; [reflexivity|reflexivity|]. apply rt_step. exact (red_zeta _ _ si_na ti_F si_P si_P). }
-  split; [exact (siT ti_LetIn_ty)|exact hr|].
-  exact (siT (PCUICSR.type_reduction_closed (Σ := si_Σ) (wfΣ := si_wf) ti_LetIn_ty hr)).
+  have ht : si_Σ ;;; ti_ΓbF |- tRel 0 : ti_bF := type_Rel _ _ 0 (vass si_na ti_bF) ti_wf_ΓbF eq_refl.
+  split; [exact (siT ht)|exact ti_red_bF_ΓbF|].
+  exact (siT (PCUICSR.type_reduction_closed (Σ := si_Σ) (wfΣ := si_wf) ht ti_red_bF_ΓbF)).
 Qed.
 
 (** ** Instances of [T2a_facts]
@@ -2053,24 +3467,24 @@ Qed.
   NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan row T2a (validity
   over [typingE]) lands. *)
 
-(* degenerate: Γ = [] (the application I (∀ A : Prop. A) is real) *)
+(* non-degenerate *)
 Lemma inversion_mkApps_inst :
-  si_Σ ;;; [] |-E mkApps (tInd si_ind []) [ti_F] : tSort sProp ×
-  ∑ A : term, si_Σ ;;; [] |-E tInd si_ind [] : A × typing_spineE si_Σ [] A [ti_F] (tSort sProp).
+  si_Σ ;;; ti_ΓP |-E mkApps (tConstruct si_ind 0 []) [tRel 0] : ti_IA ×
+  ∑ A : term, si_Σ ;;; ti_ΓP |-E tConstruct si_ind 0 [] : A × typing_spineE si_Σ ti_ΓP A [tRel 0] ti_IA.
 Proof.
-  have h : si_Σ ;;; [] |- mkApps (tInd si_ind []) [ti_F] : tSort sProp := ti_IF_ty [] ti_wf_nil.
+  have h : si_Σ ;;; ti_ΓP |- mkApps (tConstruct si_ind 0 []) [tRel 0] : ti_IA := ti_cA_ty.
   split; [exact (siT h)|].
   destruct (PCUICValidity.inversion_mkApps (Σ := si_Σ) (wfΣ := si_wf) h) as [A [h1 h2]].
   exists A. split; [exact (siT h1)|exact (siTS h2)].
 Qed.
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(** [validity] at the η-typed variable of [PCUICInversionEtaInstances]: [y : k g ⊢ y : k (λ x : Prop. g x)]
+    ([iv_rel_typed], a derivation that ends in [typeE_Cumul] with [cumul_eta_l]); its type is a type
+    ([iv_keta_typed]). *)
+(* non-degenerate *)
 Lemma validity_inst :
-  si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp) × isTypeE si_Σ [] (tSort (Sort.super sProp)).
-Proof.
-  have h := ti_P_ty [] ti_wf_nil.
-  split; [exact (siT h)|exact (siI (PCUICValidity.validity (Σ := si_Σ) (wfΣ := si_wf) h))].
-Qed.
+  si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta × isTypeE si_Σ iv_Γk iv_keta.
+Proof. split; [exact iv_rel_typed|exact (has_sort_isTypeE sProp iv_keta_typed)]. Qed.
 
 (** ** Instances of [T6_facts]
 
@@ -2081,17 +3495,15 @@ Qed.
   consistent and about something real. (2) It does NOT discharge the hypothesis at [typingE]: the field
   remains a hypothesis until plan row T6 (inversion and classification over [typingE]) lands. *)
 
-(* degenerate: Γ = [], and Δ has no let-in, so smash_context and expand_lets are the identity *)
+(* non-degenerate *)
 Lemma typing_spine_smash_inst :
-  [× wfE si_Σ.1, typing_spineE si_Σ [] (it_mkProd_or_LetIn ti_ΓP (tSort sProp)) [ti_F] (tSort sProp) &
-     typing_spineE si_Σ [] (it_mkProd_or_LetIn (smash_context [] ti_ΓP) (expand_lets ti_ΓP (tSort sProp)))
-       [ti_F] (tSort sProp)].
+  [× wfE si_Σ.1, typing_spineE si_Σ ti_ΓP (it_mkProd_or_LetIn ti_Δlet (tSort sProp)) [tRel 0] (tSort sProp) &
+     typing_spineE si_Σ ti_ΓP (it_mkProd_or_LetIn (smash_context [] ti_Δlet) (expand_lets ti_Δlet (tSort sProp)))
+       [tRel 0] (tSort sProp)].
 Proof.
-  have hs : PCUICArities.typing_spine si_Σ [] (it_mkProd_or_LetIn ti_ΓP (tSort sProp)) [ti_F] (tSort sProp) :=
-    ti_tspine_IF.
-  split; [exact si_wfE|exact (siTS hs)|].
-  exact (siTS (PCUICSafeLemmata.typing_spine_smash (Σ := si_Σ) si_wf [] ti_ΓP (tSort sProp) [ti_F]
-                 (tSort sProp) hs)).
+  split; [exact si_wfE|exact (siTS ti_tspine_let)|].
+  exact (siTS (PCUICSafeLemmata.typing_spine_smash (Σ := si_Σ) si_wf ti_ΓP ti_Δlet (tSort sProp) [tRel 0]
+                 (tSort sProp) ti_tspine_let)).
 Qed.
 
 (** *** Bidirectional derivations over E in [si_Σ], built with the constructors of [BDTypingEta]; the
@@ -2104,27 +3516,6 @@ Proof. apply inferE_Sort. exact ti_wfs. Qed.
 Lemma ti_bdsP Γ : si_Σ ;;; Γ |-E si_P ▹□ Sort.super sProp.
 Proof. eapply inferE_sort_Sort; [exact (ti_bdP Γ)|apply rt_refl]. Qed.
 
-Lemma ti_bdcP : si_Σ ;;; [] |-E si_P ◃ tSort (Sort.super sProp).
-Proof. eapply checkE_Cumul; [exact (ti_bdP [])|exact (JoinE_refl si_Σ [] Cumul (tSort (Sort.super sProp)))]. Qed.
-
-Lemma ti_lsP Γ : lift_sorting (checkingE si_Σ Γ) (infering_sortE si_Σ Γ) (j_vass si_na si_P).
-Proof. split; [exact tt|]. exists (Sort.super sProp). split; [exact (ti_bdsP Γ)|split; [exact I|reflexivity]]. Qed.
-
-Lemma ti_bdF : si_Σ ;;; [] |-E ti_F ▹ tSort (Sort.sort_of_product (Sort.super sProp) sProp).
-Proof.
-  apply inferE_Prod.
-  - split; [exact tt|]. exists (Sort.super sProp). split; [exact (ti_bdsP [])|split; reflexivity].
-  - eapply inferE_sort_Sort.
-    + econstructor. reflexivity.
-    + apply rt_refl.
-Qed.
-
-Lemma ti_bdcF : si_Σ ;;; [] |-E ti_F ◃ si_P.
-Proof. eapply checkE_Cumul; [exact ti_bdF|exact (JoinE_refl si_Σ [] Cumul si_P)]. Qed.
-
-Lemma ti_bdsF : si_Σ ;;; [] |-E ti_F ▹□ sProp.
-Proof. eapply inferE_sort_Sort; [exact ti_bdF|apply rt_refl]. Qed.
-
 Lemma ti_bdInd Γ : si_Σ ;;; Γ |-E tInd si_ind [] ▹ (ind_type si_idecl)@[[]].
 Proof. econstructor; [exact si_declared_inductive|exact ti_cons]. Qed.
 
@@ -2136,12 +3527,6 @@ Proof. econstructor. reflexivity. Qed.
 
 Lemma ti_bdiRel : si_Σ ;;; ti_ΓI |-E tRel 0 ▹{si_ind} ([], [ti_F]).
 Proof. eapply inferE_ind_Ind; [exact ti_bdRel|apply rt_refl]. Qed.
-
-Lemma ti_bdctx : wf_local_bd_relE si_Σ [] ti_ΓP.
-Proof. constructor; [constructor|]. exact (ti_lsP _). Qed.
-
-Lemma ti_relctx : wf_local_relE si_Σ [] ti_ΓP.
-Proof. constructor; [constructor|]. exact (siL (ti_vass [] si_na si_P _ (ti_P_ty [] ti_wf_nil) eq_refl)). Qed.
 
 (** In [ti_ΓP = [A : Prop]]: [A], [I A] and [c A]. *)
 Lemma ti_bdA : si_Σ ;;; ti_ΓP |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na si_P)).
@@ -2181,6 +3566,175 @@ Qed.
 Lemma ti_bdccA : si_Σ ;;; ti_ΓP |-E ti_cA ◃ ti_IA.
 Proof. eapply checkE_Cumul; [exact ti_bdcAi|exact (JoinE_refl si_Σ ti_ΓP Cumul ti_IA)]. Qed.
 
+(** In [ti_ΓP]: the derivations the T6BD and T6BDc instances share. *)
+Lemma ti_ci2C : PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_IA; ti_cA] ti_Δ2.
+Proof.
+  econstructor; [exact ti_bdcIA|].
+  change (PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_cA] [vass si_na ti_IA]).
+  econstructor; [exact ti_bdccA|]. cbn. constructor.
+Qed.
+
+Lemma ti_ltJ : lift_typing typing si_Σ ti_ΓP (Judge (Some ti_cA) ti_IA None (Some Relevant)).
+Proof. split; [exact ti_cA_ty|]. exists sProp. split; [exact ti_IA_ty|split; [exact I|reflexivity]]. Qed.
+
+Lemma ti_lsJ :
+  lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (Judge (Some ti_cA) ti_IA None (Some Relevant)).
+Proof. split; [exact ti_bdccA|]. exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]]. Qed.
+
+Lemma ti_relIA : wf_local_relE si_Σ ti_ΓP ti_ΓIA.
+Proof. constructor; [constructor|]. exact (siL (ti_vass ti_ΓP si_na ti_IA sProp ti_IA_ty eq_refl)). Qed.
+
+Lemma ti_bdrelIA : wf_local_bd_relE si_Σ ti_ΓP ti_ΓIA.
+Proof.
+  constructor; [constructor|]. split; [exact tt|].
+  exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]].
+Qed.
+
+(** The η-typed variable of [PCUICInversionEtaInstances]: in [iv_Γk = [y : k g; k : (Prop → Prop) → Prop;
+    g : Prop → Prop]], [y] infers [k g] and checks against [k (λ x : Prop. g x)] through the η join
+    [iv_join_eta] (one [cumul_eta_l] step). *)
+Lemma ti_bdy : si_Σ ;;; iv_Γk |-E tRel 0 ▹ iv_kg.
+Proof.
+  have h : si_Σ ;;; iv_Γk |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na (tApp (tRel 0) (tRel 1)))).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdcy : si_Σ ;;; iv_Γk |-E tRel 0 ◃ iv_keta.
+Proof. eapply checkE_Cumul; [exact ti_bdy|exact iv_join_eta]. Qed.
+
+(** In [ti_ΓX]: [x] infers [I ((λ X. X) A)], an applied [I] as it is and, after β, [I A]. *)
+Lemma ti_bdX : si_Σ ;;; ti_ΓX |-E tRel 0 ▹ tApp (tInd si_ind []) (tApp ti_idP (tRel 1)).
+Proof.
+  have h : si_Σ ;;; ti_ΓX |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na (tApp (tInd si_ind []) ti_idA))).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdiX1 : si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tApp ti_idP (tRel 1)]).
+Proof. eapply inferE_ind_Ind; [exact ti_bdX|apply rt_refl]. Qed.
+
+Lemma ti_bdiX2 : si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tRel 1]).
+Proof. eapply inferE_ind_Ind; [exact ti_bdX|exact (clrel_rel ti_red_IidA1)]. Qed.
+
+(** In [ti_Γf]: [f] infers [ti_Tf], a product as it is ([ti_bdpf1]) and after two β-steps ([ti_bdpf2]). *)
+Lemma ti_bdf : si_Σ ;;; ti_Γf |-E tRel 0 ▹ ti_Tf.
+Proof.
+  have h : si_Σ ;;; ti_Γf |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na ti_pidA)).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdpf1 : si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tApp ti_idP (tRel 1), tApp ti_idP (tRel 2)).
+Proof. eapply inferE_prod_Prod; [exact ti_bdf|apply rt_refl]. Qed.
+
+Lemma ti_bdpf2 : si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tRel 1, tRel 2).
+Proof. eapply inferE_prod_Prod; [exact ti_bdf|exact (clrel_rel ti_red_Tf)]. Qed.
+
+(** In [ti_Γfa]: [f a] infers [(λ X. X) A] through [ti_bdpfa1] and [A] through [ti_bdpfa2]. *)
+Lemma ti_bdfa : si_Σ ;;; ti_Γfa |-E tRel 1 ▹ tProd si_na (tApp ti_idP (tRel 2)) (tApp ti_idP (tRel 3)).
+Proof.
+  have h : si_Σ ;;; ti_Γfa |-E tRel 1 ▹ lift0 (S 1) (decl_type (vass si_na ti_pidA)).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdpfa1 : si_Σ ;;; ti_Γfa |-E tRel 1 ▹Π (si_na, tApp ti_idP (tRel 2), tApp ti_idP (tRel 3)).
+Proof. eapply inferE_prod_Prod; [exact ti_bdfa|apply rt_refl]. Qed.
+
+Lemma ti_bdpfa2 : si_Σ ;;; ti_Γfa |-E tRel 1 ▹Π (si_na, tRel 2, tRel 3).
+Proof. eapply inferE_prod_Prod; [exact ti_bdfa|exact (clrel_rel ti_red_Tfa)]. Qed.
+
+Lemma ti_bda : si_Σ ;;; ti_Γfa |-E tRel 0 ▹ tRel 2.
+Proof.
+  have h : si_Σ ;;; ti_Γfa |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na (tRel 1))).
+  { econstructor. reflexivity. }
+  exact h.
+Qed.
+
+Lemma ti_bdfa1 : si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ tApp ti_idP (tRel 2).
+Proof.
+  change (si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ ((tApp ti_idP (tRel 3)) {0 := tRel 0})).
+  eapply inferE_App; [exact ti_bdpfa1|].
+  eapply checkE_Cumul; [exact ti_bda|].
+  exact (JoinE_red_r si_Σ ti_Γfa Cumul (tRel 2) (tApp ti_idP (tRel 2)) (clrel_rel ti_red_A2fa)).
+Qed.
+
+Lemma ti_bdfa2 : si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ tRel 2.
+Proof.
+  change (si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ ((tRel 3) {0 := tRel 0})).
+  eapply inferE_App; [exact ti_bdpfa2|].
+  eapply checkE_Cumul; [exact ti_bda|exact (JoinE_refl si_Σ ti_Γfa Cumul (tRel 2))].
+Qed.
+
+(** In [ti_ΓP]: [let x : Prop := A in x] infers [let x : Prop := A in Prop], which reduces (ζ) to [Prop]. *)
+Definition ti_tL : term := tLetIn si_na (tRel 0) si_P (tRel 0).
+
+Lemma ti_bdL : si_Σ ;;; ti_ΓP |-E ti_tL ▹ tLetIn si_na (tRel 0) si_P si_P.
+Proof.
+  have hb : si_Σ ;;; ti_ΓP ,, vdef si_na (tRel 0) si_P |-E tRel 0 ▹ lift0 (S 0) (decl_type (vdef si_na (tRel 0) si_P)).
+  { econstructor. reflexivity. }
+  have hj : lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (j_vdef si_na (tRel 0) si_P).
+  { split; [exact ti_bdcA|]. exists (Sort.super sProp).
+    split; [exact (ti_bdsP ti_ΓP)|split; [exact I|reflexivity]]. }
+  eapply inferE_LetIn; [exact hj|exact hb].
+Qed.
+
+Lemma ti_bdsL : si_Σ ;;; ti_ΓP |-E ti_tL ▹□ sProp.
+Proof. eapply inferE_sort_Sort; [exact ti_bdL|exact (clrel_rel ti_red_TL)]. Qed.
+
+(** In [ti_ΓP]: [λ X : Prop. X] infers [Π X : Prop. Prop], and [(λ X : Prop. X) A] checks against [Prop]. *)
+Lemma ti_bdidP : si_Σ ;;; ti_ΓP |-E ti_idP ▹ tProd si_na si_P si_P.
+Proof.
+  have hb : si_Σ ;;; ti_ΓP ,, vass si_na si_P |-E tRel 0 ▹ si_P.
+  { have h : si_Σ ;;; ti_ΓP ,, vass si_na si_P |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na si_P)).
+    { econstructor. reflexivity. }
+    exact h. }
+  eapply inferE_Lambda; [|exact hb].
+  split; [exact tt|]. exists (Sort.super sProp). split; [exact (ti_bdsP ti_ΓP)|split; [exact I|reflexivity]].
+Qed.
+
+Lemma ti_bdidA : si_Σ ;;; ti_ΓP |-E ti_idA ▹ si_P.
+Proof.
+  change (si_Σ ;;; ti_ΓP |-E tApp ti_idP (tRel 0) ▹ (si_P {0 := tRel 0})).
+  eapply inferE_App; [|exact ti_bdcA].
+  eapply inferE_prod_Prod; [exact ti_bdidP|apply rt_refl].
+Qed.
+
+Lemma ti_bdcidA : si_Σ ;;; ti_ΓP |-E ti_idA ◃ si_P.
+Proof. eapply checkE_Cumul; [exact ti_bdidA|exact (JoinE_refl si_Σ ti_ΓP Cumul si_P)]. Qed.
+
+(** [let x : Prop := (λ X : Prop. X) A in x] infers [let x : Prop := (λ X : Prop. X) A in Prop], which reaches
+    [Prop] by ζ at once ([ti_red_TL2a]) or by β in the let value and then ζ ([ti_red_TL2b]). *)
+Definition ti_tL2 : term := tLetIn si_na ti_idA si_P (tRel 0).
+Definition ti_TL2 : term := tLetIn si_na ti_idA si_P si_P.
+
+Lemma ti_bdL2 : si_Σ ;;; ti_ΓP |-E ti_tL2 ▹ ti_TL2.
+Proof.
+  have hb : si_Σ ;;; ti_ΓP ,, vdef si_na ti_idA si_P |-E tRel 0 ▹ lift0 (S 0) (decl_type (vdef si_na ti_idA si_P)).
+  { econstructor. reflexivity. }
+  have hj : lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (j_vdef si_na ti_idA si_P).
+  { split; [exact ti_bdcidA|]. exists (Sort.super sProp).
+    split; [exact (ti_bdsP ti_ΓP)|split; [exact I|reflexivity]]. }
+  eapply inferE_LetIn; [exact hj|exact hb].
+Qed.
+
+Lemma ti_red_TL2a : PCUICReduction.red si_Σ ti_ΓP ti_TL2 (tSort sProp).
+Proof. apply rt_step. exact (red_zeta si_Σ ti_ΓP si_na ti_idA si_P si_P). Qed.
+
+Lemma ti_red_TL2b : PCUICReduction.red si_Σ ti_ΓP ti_TL2 (tSort sProp).
+Proof.
+  eapply rt_trans.
+  - apply rt_step. apply letin_red_def. exact (red_beta si_Σ ti_ΓP si_na si_P (tRel 0) (tRel 0)).
+  - apply rt_step. exact (red_zeta si_Σ ti_ΓP si_na (tRel 0) si_P si_P).
+Qed.
+
+Lemma ti_bdsL2a : si_Σ ;;; ti_ΓP |-E ti_tL2 ▹□ sProp.
+Proof. eapply inferE_sort_Sort; [exact ti_bdL2|exact ti_red_TL2a]. Qed.
+
+Lemma ti_bdsL2b : si_Σ ;;; ti_ΓP |-E ti_tL2 ▹□ sProp.
+Proof. eapply inferE_sort_Sort; [exact ti_bdL2|exact ti_red_TL2b]. Qed.
+
 (** ** Instances of [T6BD_facts]
 
   Each lemma [<field>_inst] states the premises and the conclusion of the field [<field>] of [T6BD_facts]
@@ -2190,25 +3744,27 @@ Proof. eapply checkE_Cumul; [exact ti_bdcAi|exact (JoinE_refl si_Σ ti_ΓP Cumul
   real. (2) It does NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan
   row T6 (bidirectional soundness over E) lands. *)
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(** [checking_typing] at the η-typed variable [y : k g] of [PCUICInversionEtaInstances]: [y] checks against
+    [k (λ x : Prop. g x)] through the η join, and the conclusion is [iv_rel_typed], whose derivation ends in
+    [typeE_Cumul] with [cumul_eta_l]. *)
+(* non-degenerate *)
 Lemma checking_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], isTypeE si_Σ [] (tSort (Sort.super sProp)),
-     si_Σ ;;; [] |-E si_P ◃ tSort (Sort.super sProp) & si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp)].
+  [× wfE si_Σ, wf_localE si_Σ iv_Γk, isTypeE si_Σ iv_Γk iv_keta, si_Σ ;;; iv_Γk |-E tRel 0 ◃ iv_keta &
+     si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta].
 Proof.
-  split; [exact si_wfE|constructor|exact (siI (has_sort_isType _ (ti_P1_ty [] ti_wf_nil)))|exact ti_bdcP|].
-  exact (siT (ti_P_ty [] ti_wf_nil)).
+  split; [exact si_wfE|exact iv_wf_Γk|exact (has_sort_isTypeE sProp iv_keta_typed)|exact ti_bdcy|exact iv_rel_typed].
 Qed.
 
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma ctx_inst_bd_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ ([] ,,, ti_ΓP),
-     PCUICTyping.ctx_inst (checkingE si_Σ) [] [ti_F] (List.rev ti_ΓP) &
-     ctx_instE si_Σ [] [ti_F] (List.rev ti_ΓP)].
+  [× wfE si_Σ, wf_localE si_Σ (ti_ΓP ,,, List.rev ti_Δ2),
+     PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_IA; ti_cA] (List.rev (List.rev ti_Δ2)) &
+     ctx_instE si_Σ ti_ΓP [ti_IA; ti_cA] (List.rev (List.rev ti_Δ2))].
 Proof.
-  have hc : PCUICTyping.ctx_inst (checkingE si_Σ) [] [ti_F] (List.rev ti_ΓP).
-  { cbn. econstructor; [exact ti_bdcF|cbn; constructor]. }
-  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact hc|].
-  exact (siCI (PCUICSpine.spine_subst_ctx_inst ti_spine_F)).
+  have h1 := ti_wf_P ti_ΓP ti_wf_ΓP.
+  have hw : wf_local si_Σ (ti_ΓP ,,, List.rev ti_Δ2) :=
+    ti_wf_cons _ si_na (tRel 0) sProp h1 (type_Rel _ _ 0 (vass si_na si_P) h1 eq_refl) eq_refl.
+  split; [exact si_wfE|exact (siW hw)|exact ti_ci2C|exact (siCI ti_ci2B)].
 Qed.
 
 (* non-degenerate *)
@@ -2220,55 +3776,44 @@ Proof.
   exact (siT (type_Rel _ _ 0 (vass si_na ti_IF) ti_wf_ΓI eq_refl)).
 Qed.
 
-(* degenerate: Γ = [] *)
+(* non-degenerate *)
 Lemma infering_prod_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E tInd si_ind [] ▹Π (si_na, si_P, tSort sProp) &
-     si_Σ ;;; [] |-E tInd si_ind [] : tProd si_na si_P (tSort sProp)].
-Proof. split; [exact si_wfE|constructor|exact (ti_bdpInd [])|exact (siT (ti_Ind_ty [] ti_wf_nil))]. Qed.
-
-(* degenerate: Γ = [], and the subject t is Prop *)
-Lemma infering_sort_isTypeRel_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp &
-     isTypeRelE si_Σ [] si_P (relevance_of_sort (Sort.super sProp))].
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E tConstruct si_ind 0 [] ▹Π (si_na, si_P, ti_IA) &
+     si_Σ ;;; ti_ΓP |-E tConstruct si_ind 0 [] : tProd si_na si_P ti_IA].
 Proof.
-  split; [exact si_wfE|constructor|exact (ti_bdsP [])|].
-  exact (siIR (has_sort_isTypeRel (Sort.super sProp) _ eq_refl (ti_P_ty [] ti_wf_nil))).
+  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact (ti_bdpC ti_ΓP)|exact (siT (ti_Construct_ty ti_ΓP ti_wf_ΓP))].
 Qed.
-
-(* degenerate: Γ = [], and the subject t is Prop *)
-Lemma infering_sort_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp &
-     si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp)].
-Proof. split; [exact si_wfE|constructor|exact (ti_bdsP [])|exact (siT (ti_P_ty [] ti_wf_nil))]. Qed.
-
-(* degenerate: Γ = [], and the subject t is Prop *)
-Lemma infering_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp) &
-     si_Σ ;;; [] |-E si_P : tSort (Sort.super sProp)].
-Proof. split; [exact si_wfE|constructor|exact (ti_bdP [])|exact (siT (ti_P_ty [] ti_wf_nil))]. Qed.
-
-(* degenerate: Γ = [], and the subject is Prop *)
-Lemma lift_sorting_lift_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], lift_sorting (checkingE si_Σ []) (infering_sortE si_Σ []) (j_vass si_na si_P) &
-     lift_typing typingE si_Σ [] (j_vass si_na si_P)].
-Proof.
-  split; [exact si_wfE|constructor|exact (ti_lsP [])|].
-  exact (siL (ti_vass [] si_na si_P _ (ti_P_ty [] ti_wf_nil) eq_refl)).
-Qed.
-
-(* degenerate: Γ = [] *)
-Lemma wf_local_bd_rel_typing_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], wf_local_bd_relE si_Σ [] ti_ΓP & wf_local_relE si_Σ [] ti_ΓP].
-Proof. split; [exact si_wfE|constructor|exact ti_bdctx|exact ti_relctx]. Qed.
 
 (* non-degenerate *)
-Lemma wf_rel_weak_inst :
-  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, wf_localE si_Σ ti_ΓI & wf_local_relE si_Σ ti_ΓP ti_ΓI].
+Lemma infering_sort_isTypeRel_inst :
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_IA ▹□ sProp &
+     isTypeRelE si_Σ ti_ΓP ti_IA (relevance_of_sort (sProp : sort))].
 Proof.
-  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact (siW ti_wf_ΓI)|].
-  constructor; [constructor|].
-  exact (siL (ti_vass ti_ΓP si_na ti_IF sProp (ti_IF_ty ti_ΓP ti_wf_ΓP) eq_refl)).
+  split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdsIA|].
+  exact (siIR (has_sort_isTypeRel sProp _ eq_refl ti_IA_ty)).
 Qed.
+
+(* non-degenerate *)
+Lemma infering_sort_typing_inst :
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_IA ▹□ sProp & si_Σ ;;; ti_ΓP |-E ti_IA : tSort sProp].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdsIA|exact (siT ti_IA_ty)]. Qed.
+
+(* non-degenerate *)
+Lemma infering_typing_inst :
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_cA ▹ ti_IA & si_Σ ;;; ti_ΓP |-E ti_cA : ti_IA].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdcAi|exact (siT ti_cA_ty)]. Qed.
+
+(* non-degenerate *)
+Lemma lift_sorting_lift_typing_inst :
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP,
+     lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (Judge (Some ti_cA) ti_IA None (Some Relevant)) &
+     lift_typing typingE si_Σ ti_ΓP (Judge (Some ti_cA) ti_IA None (Some Relevant))].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_lsJ|exact (siL ti_ltJ)]. Qed.
+
+(* non-degenerate *)
+Lemma wf_local_bd_rel_typing_inst :
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, wf_local_bd_relE si_Σ ti_ΓP ti_ΓIA & wf_local_relE si_Σ ti_ΓP ti_ΓIA].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdrelIA|exact ti_relIA]. Qed.
 
 (** ** Instances of [T6BDu_facts]
 
@@ -2279,100 +3824,100 @@ Qed.
   and about something real. (2) It does NOT discharge the hypothesis at [typingE]: the field remains a
   hypothesis until plan row T6 (bidirectional uniqueness over E) lands. *)
 
-(* degenerate: Γ = [], the subject t is Prop, and T = T' *)
+(** [infering_checking] at the η-typed variable [y : k g]: [y] infers [k g] and checks against
+    [k (λ x : Prop. g x)]; the conclusion is the η comparison [into_ws_cumulE_inst]. *)
+(* non-degenerate *)
 Lemma infering_checking_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], on_free_vars (shiftnP #|([] : context)| xpred0) (tSort (Sort.super sProp)),
-     si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp), si_Σ ;;; [] |-E si_P ◃ tSort (Sort.super sProp) &
-     si_Σ ;;; [] ⊢E tSort (Sort.super sProp) ≤ tSort (Sort.super sProp)].
-Proof.
-  split; [exact si_wfE|constructor|reflexivity|exact (ti_bdP [])|exact ti_bdcP|].
-  exact (fi_ws Cumul [] (tSort (Sort.super sProp)) eq_refl eq_refl).
-Qed.
+  [× wfE si_Σ, wf_localE si_Σ iv_Γk, on_free_vars (shiftnP #|iv_Γk| xpred0) iv_keta,
+     si_Σ ;;; iv_Γk |-E tRel 0 ▹ iv_kg, si_Σ ;;; iv_Γk |-E tRel 0 ◃ iv_keta &
+     si_Σ ;;; iv_Γk ⊢E iv_kg ≤ iv_keta].
+Proof. split; [exact si_wfE|exact iv_wf_Γk|reflexivity|exact ti_bdy|exact ti_bdcy|exact into_ws_cumulE_inst]. Qed.
 
-(* degenerate: the two inferences are the same derivation (ind = ind', args = args'), and the reductions are reflexive *)
+(* non-degenerate *)
 Lemma infering_ind_ind_inst :
-  [× wfE si_Σ, wf_localE si_Σ ti_ΓI, si_Σ ;;; ti_ΓI |-E tRel 0 ▹{si_ind} ([], [ti_F]),
-     si_Σ ;;; ti_ΓI |-E tRel 0 ▹{si_ind} ([], [ti_F]) &
-     ∑ args'' : list term, [× si_ind = si_ind, ([] : Instance.t) = [], red_terms si_Σ ti_ΓI [ti_F] args'' &
-                               red_terms si_Σ ti_ΓI [ti_F] args'']].
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓX, si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tApp ti_idP (tRel 1)]),
+     si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tRel 1]) &
+     ∑ args'' : list term, [× si_ind = si_ind, ([] : Instance.t) = [],
+                              red_terms si_Σ ti_ΓX [tApp ti_idP (tRel 1)] args'' & red_terms si_Σ ti_ΓX [tRel 1] args'']].
 Proof.
-  have hr : red_terms si_Σ ti_ΓI [ti_F] [ti_F] := All2_cons (ti_cr_refl ti_ΓI ti_F eq_refl eq_refl) All2_nil.
-  split; [exact si_wfE|exact (siW ti_wf_ΓI)|exact ti_bdiRel|exact ti_bdiRel|].
-  exists [ti_F]. split; [reflexivity|reflexivity|exact hr|exact hr].
+  split; [exact si_wfE|exact (siW ti_wf_ΓX)|exact ti_bdiX1|exact ti_bdiX2|].
+  exists [tRel 1].
+  split; [reflexivity|reflexivity|exact (All2_cons ti_red_idA1 All2_nil)
+         |exact (All2_cons (ti_cr_refl ti_ΓX (tRel 1) eq_refl eq_refl) All2_nil)].
 Qed.
 
-(* degenerate: the reductions are reflexive *)
+(* non-degenerate *)
 Lemma infering_ind_infering_inst :
-  [× wfE si_Σ, wf_localE si_Σ ti_ΓI, si_Σ ;;; ti_ΓI |-E tRel 0 ▹{si_ind} ([], [ti_F]),
-     si_Σ ;;; ti_ΓI |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_na ti_IF)) &
-     ∑ args' : list term, si_Σ ;;; ti_ΓI ⊢ lift0 (S 0) (decl_type (vass si_na ti_IF)) ⇝ mkApps (tInd si_ind []) args' ×
-       red_terms si_Σ ti_ΓI [ti_F] args'].
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓX, si_Σ ;;; ti_ΓX |-E tRel 0 ▹{si_ind} ([], [tApp ti_idP (tRel 1)]),
+     si_Σ ;;; ti_ΓX |-E tRel 0 ▹ tApp (tInd si_ind []) (tApp ti_idP (tRel 1)) &
+     ∑ args' : list term,
+       si_Σ ;;; ti_ΓX ⊢ tApp (tInd si_ind []) (tApp ti_idP (tRel 1)) ⇝ mkApps (tInd si_ind []) args' ×
+       red_terms si_Σ ti_ΓX [tApp ti_idP (tRel 1)] args'].
 Proof.
-  have hr : red_terms si_Σ ti_ΓI [ti_F] [ti_F] := All2_cons (ti_cr_refl ti_ΓI ti_F eq_refl eq_refl) All2_nil.
-  split; [exact si_wfE|exact (siW ti_wf_ΓI)|exact ti_bdiRel|exact ti_bdRel|].
-  exists [ti_F]. split; [exact (ti_cr_refl ti_ΓI ti_IF eq_refl eq_refl)|exact hr].
+  split; [exact si_wfE|exact (siW ti_wf_ΓX)|exact ti_bdiX1|exact ti_bdX|].
+  exists [tRel 1]. split; [exact ti_red_IidA1|exact (All2_cons ti_red_idA1 All2_nil)].
 Qed.
 
-(* degenerate: Γ = [], and the reductions are reflexive *)
+(* non-degenerate *)
 Lemma infering_prod_infering_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E tInd si_ind [] ▹Π (si_na, si_P, tSort sProp),
-     si_Σ ;;; [] |-E tInd si_ind [] ▹ (ind_type si_idecl)@[[]] &
-     ∑ A' B' : term, [× si_Σ ;;; [] ⊢ (ind_type si_idecl)@[[]] ⇝ tProd si_na A' B', si_Σ ;;; [] ⊢ si_P ⇝ A' &
-                        si_Σ ;;; [] ,, vass si_na si_P ⊢ tSort sProp ⇝ B']].
+  [× wfE si_Σ, wf_localE si_Σ ti_Γf,
+     si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tApp ti_idP (tRel 1), tApp ti_idP (tRel 2)),
+     si_Σ ;;; ti_Γf |-E tRel 0 ▹ ti_Tf &
+     ∑ A' B' : term, [× si_Σ ;;; ti_Γf ⊢ ti_Tf ⇝ tProd si_na A' B', si_Σ ;;; ti_Γf ⊢ tApp ti_idP (tRel 1) ⇝ A' &
+                        si_Σ ;;; ti_Γf ,, vass si_na (tApp ti_idP (tRel 1)) ⊢ tApp ti_idP (tRel 2) ⇝ B']].
 Proof.
-  split; [exact si_wfE|constructor|exact (ti_bdpInd [])|exact (ti_bdInd [])|].
-  exists si_P, (tSort sProp).
-  split; [exact (ti_cr_refl [] si_arity eq_refl eq_refl)|exact (ti_cr_refl [] si_P eq_refl eq_refl)
-         |exact (ti_cr_refl ti_ΓP (tSort sProp) eq_refl eq_refl)].
+  split; [exact si_wfE|exact (siW ti_wf_Γf)|exact ti_bdpf1|exact ti_bdf|].
+  exists (tRel 1), (tRel 2). split; [exact ti_red_Tf|exact ti_red_A1f|exact ti_red_B1f].
 Qed.
 
-(* degenerate: Γ = [], the two inferences are the same derivation, and the reductions are reflexive *)
+(* non-degenerate *)
 Lemma infering_prod_prod_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E tInd si_ind [] ▹Π (si_na, si_P, tSort sProp),
-     si_Σ ;;; [] |-E tInd si_ind [] ▹Π (si_na, si_P, tSort sProp) &
-     ∑ A'' B'' : term, [× si_na = si_na, si_Σ ;;; [] ⊢ si_P ⇝ A'', si_Σ ;;; [] ⊢ si_P ⇝ A'',
-                          si_Σ ;;; [] ,, vass si_na si_P ⊢ tSort sProp ⇝ B'' &
-                          si_Σ ;;; [] ,, vass si_na si_P ⊢ tSort sProp ⇝ B'']].
+  [× wfE si_Σ, wf_localE si_Σ ti_Γf,
+     si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tApp ti_idP (tRel 1), tApp ti_idP (tRel 2)),
+     si_Σ ;;; ti_Γf |-E tRel 0 ▹Π (si_na, tRel 1, tRel 2) &
+     ∑ A'' B'' : term, [× si_na = si_na, si_Σ ;;; ti_Γf ⊢ tApp ti_idP (tRel 1) ⇝ A'', si_Σ ;;; ti_Γf ⊢ tRel 1 ⇝ A'',
+                          si_Σ ;;; ti_Γf ,, vass si_na (tApp ti_idP (tRel 1)) ⊢ tApp ti_idP (tRel 2) ⇝ B'' &
+                          si_Σ ;;; ti_Γf ,, vass si_na (tRel 1) ⊢ tRel 2 ⇝ B'']].
 Proof.
-  have hA := ti_cr_refl [] si_P eq_refl eq_refl.
-  have hB := ti_cr_refl ti_ΓP (tSort sProp) eq_refl eq_refl.
-  split; [exact si_wfE|constructor|exact (ti_bdpInd [])|exact (ti_bdpInd [])|].
-  exists si_P, (tSort sProp). split; [reflexivity|exact hA|exact hA|exact hB|exact hB].
+  split; [exact si_wfE|exact (siW ti_wf_Γf)|exact ti_bdpf1|exact ti_bdpf2|].
+  exists (tRel 1), (tRel 2).
+  split; [reflexivity|exact ti_red_A1f|exact (ti_cr_refl ti_Γf (tRel 1) eq_refl eq_refl)|exact ti_red_B1f
+         |exact (ti_cr_refl (ti_Γf ,, vass si_na (tRel 1)) (tRel 2) eq_refl eq_refl)].
 Qed.
 
-(* degenerate: Γ = [], and the subject t is Prop *)
+(* non-degenerate *)
 Lemma infering_sort_infering_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp,
-     si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp) &
-     si_Σ ;;; [] ⊢ tSort (Sort.super sProp) ⇝ tSort (Sort.super sProp)].
-Proof.
-  split; [exact si_wfE|constructor|exact (ti_bdsP [])|exact (ti_bdP [])|].
-  exact (ti_cr_refl [] (tSort (Sort.super sProp)) eq_refl eq_refl).
-Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_tL ▹□ sProp,
+     si_Σ ;;; ti_ΓP |-E ti_tL ▹ tLetIn si_na (tRel 0) si_P si_P &
+     si_Σ ;;; ti_ΓP ⊢ tLetIn si_na (tRel 0) si_P si_P ⇝ tSort sProp].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdsL|exact ti_bdL|exact ti_red_TL]. Qed.
 
-(* degenerate: Γ = [], the subject t is Prop, and u = u' *)
+(** Two [▹□] derivations of one term: the same inference, then two different reductions of its type to
+    [Prop] (ζ at once; β in the let value, then ζ). *)
+(* non-degenerate *)
 Lemma infering_sort_sort_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp,
-     si_Σ ;;; [] |-E si_P ▹□ Sort.super sProp & Sort.super sProp = Sort.super sProp].
-Proof. split; [exact si_wfE|constructor|exact (ti_bdsP [])|exact (ti_bdsP [])|reflexivity]. Qed.
+  [× wfE si_Σ, wf_localE si_Σ ti_ΓP, si_Σ ;;; ti_ΓP |-E ti_tL2 ▹□ sProp, si_Σ ;;; ti_ΓP |-E ti_tL2 ▹□ sProp &
+     (sProp : sort) = sProp].
+Proof. split; [exact si_wfE|exact (siW ti_wf_ΓP)|exact ti_bdsL2a|exact ti_bdsL2b|reflexivity]. Qed.
 
-(* degenerate: Γ = [], the subject t is Prop, and T = T' *)
+(* non-degenerate *)
 Lemma infering_unique_inst :
-  [× wfE si_Σ, wf_localE si_Σ [], si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp),
-     si_Σ ;;; [] |-E si_P ▹ tSort (Sort.super sProp) &
-     ∑ T'' : term, si_Σ ;;; [] ⊢ tSort (Sort.super sProp) ⇝ T'' × si_Σ ;;; [] ⊢ tSort (Sort.super sProp) ⇝ T''].
+  [× wfE si_Σ, wf_localE si_Σ ti_Γfa, si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ tApp ti_idP (tRel 2),
+     si_Σ ;;; ti_Γfa |-E tApp (tRel 1) (tRel 0) ▹ tRel 2 &
+     ∑ T'' : term, si_Σ ;;; ti_Γfa ⊢ tApp ti_idP (tRel 2) ⇝ T'' × si_Σ ;;; ti_Γfa ⊢ tRel 2 ⇝ T''].
 Proof.
-  have h := ti_cr_refl [] (tSort (Sort.super sProp)) eq_refl eq_refl.
-  split; [exact si_wfE|constructor|exact (ti_bdP [])|exact (ti_bdP [])|].
-  exists (tSort (Sort.super sProp)). split; [exact h|exact h].
+  split; [exact si_wfE|exact (siW ti_wf_Γfa)|exact ti_bdfa1|exact ti_bdfa2|].
+  exists (tRel 2). split; [exact ti_red_A2fa|exact (ti_cr_refl ti_Γfa (tRel 2) eq_refl eq_refl)].
 Qed.
 
-(* degenerate: Γ = [], T = Prop, and rel = rel' *)
+(** The two witnesses type [I A] at two different sorts: [Prop], and [Type] by cumulativity. *)
+(* non-degenerate *)
 Lemma isTypeRel_unique_inst :
-  [× wfE si_Σ, isTypeRelE si_Σ [] si_P Relevant, isTypeRelE si_Σ [] si_P Relevant & Relevant = Relevant].
+  [× wfE si_Σ, isTypeRelE si_Σ ti_ΓP ti_IA Relevant, isTypeRelE si_Σ ti_ΓP ti_IA Relevant & Relevant = Relevant].
 Proof.
-  have h := siIR (has_sort_isTypeRel (Sort.super sProp) Relevant eq_refl (ti_P_ty [] ti_wf_nil)).
-  split; [exact si_wfE|exact h|exact h|reflexivity].
+  split; [exact si_wfE| | |reflexivity].
+  - exact (siIR (has_sort_isTypeRel sProp Relevant eq_refl ti_IA_ty)).
+  - exact (siIR (has_sort_isTypeRel (Sort.super sProp) Relevant eq_refl ti_IA_ty1)).
 Qed.
 
 (** ** Instances of [T6BDc_facts]
@@ -2391,24 +3936,13 @@ Qed.
 Lemma ctx_inst_typing_bd_inst :
   [× wfE si_Σ, ctx_instE si_Σ ti_ΓP [ti_IA; ti_cA] ti_Δ2 &
      PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_IA; ti_cA] ti_Δ2].
-Proof.
-  have hc : PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_IA; ti_cA] ti_Δ2.
-  { econstructor; [exact ti_bdcIA|].
-    change (PCUICTyping.ctx_inst (checkingE si_Σ) ti_ΓP [ti_cA] [vass si_na ti_IA]).
-    econstructor; [exact ti_bdccA|]. cbn. constructor. }
-  split; [exact si_wfE|exact (siCI ti_ci2B)|exact hc].
-Qed.
+Proof. split; [exact si_wfE|exact (siCI ti_ci2B)|exact ti_ci2C]. Qed.
 
 (* non-degenerate *)
 Lemma lift_typing_lift_sorting_inst :
   [× wfE si_Σ, lift_typing typingE si_Σ ti_ΓP (Judge (Some ti_cA) ti_IA None (Some Relevant)) &
      lift_sorting (checkingE si_Σ ti_ΓP) (infering_sortE si_Σ ti_ΓP) (Judge (Some ti_cA) ti_IA None (Some Relevant))].
-Proof.
-  have hb : lift_typing typing si_Σ ti_ΓP (Judge (Some ti_cA) ti_IA None (Some Relevant)).
-  { split; [exact ti_cA_ty|]. exists sProp. split; [exact ti_IA_ty|split; [exact I|reflexivity]]. }
-  split; [exact si_wfE|exact (siL hb)|].
-  split; [exact ti_bdccA|]. exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]].
-Qed.
+Proof. split; [exact si_wfE|exact (siL ti_ltJ)|exact ti_lsJ]. Qed.
 
 (* non-degenerate *)
 Lemma typing_checking_inst :
@@ -2435,12 +3969,7 @@ Qed.
 (* non-degenerate *)
 Lemma wf_local_rel_wf_local_bd_inst :
   [× wfE si_Σ, wf_local_relE si_Σ ti_ΓP ti_ΓIA & wf_local_bd_relE si_Σ ti_ΓP ti_ΓIA].
-Proof.
-  split; [exact si_wfE| |].
-  - constructor; [constructor|]. exact (siL (ti_vass ti_ΓP si_na ti_IA sProp ti_IA_ty eq_refl)).
-  - constructor; [constructor|]. split; [exact tt|].
-    exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]].
-Qed.
+Proof. split; [exact si_wfE|exact ti_relIA|exact ti_bdrelIA]. Qed.
 
 (** ** Base names of the [PCUICTyping] helpers, over E
 

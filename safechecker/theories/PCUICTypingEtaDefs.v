@@ -89,8 +89,8 @@ Proof. repeat (eexists; tea). Defined.
 (** ** Bidirectional typing over E: CANONICAL, imported
 
   Stream lead's ruling (2026-10-29, ~09:45Z): the bidirectional judgments are EtaMetaLane's [BDTypingEta]
-  ([pcuic/theories/Bidirectional/BDTypingEta.v], [fork/wip/eta-meta-bdtyping-2026-10-29] @ [b0523fbf]; to be
-  re-pointed to the landed hash). This file no longer defines them. [BDTypingEta]'s [checkE_Cumul] and the
+  ([pcuic/theories/Bidirectional/BDTypingEta.v], landed on [frac/eta] as [da1eb84b], text identical to
+  [b0523fbf] which this branch merged). This file no longer defines them. [BDTypingEta]'s [checkE_Cumul] and the
   case rule's parameters compare with [JoinE] (base's unscoped [cumulAlgo]/[convAlgo] twin); the checker
   builds them from its [ws_cumul_pbE] results with [checkE_Cumul_ws] / [All2_ws_cumul_pbE_JoinE], and a
   consumer that needs the scoped relation back uses [JoinE_ws_cumul_pbE]. [BDTypingEta] derives no

@@ -4,9 +4,9 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.Template Require Import AstUtils.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICProgram
-     PCUICTypingEta PCUICSNEta.
+     PCUICTypingEta PCUICSN PCUICSNEta.
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICWfEnvImplEta
-  PCUICSafeReduceEta PCUICSafeConversionEta
+  PCUICSafeReduceEta
   PCUICTypingEtaDefs PCUICTypeCheckerEta PCUICSafeCheckerEta PCUICTypingEtaHyps.
 
 Import MonadNotation.
@@ -18,46 +18,28 @@ From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC.
   BET-64 EtaCheckerLane, worker EtaK7, 2026-10-29; base [frac/eta] @ [0cb773a4]; text of base
   [safechecker-plugin/theories/SafeTemplateChecker.v] over the η checker [PCUICSafeCheckerEta].
 
-  The η conversion enters here: [eta_conv_oracle] builds the [conv_oracle] the η checker takes from
-  EtaConv's [PCUICSafeConversionEta.isconv_term] and [isconv_term_sound] (K6 statements; G7: a failure
-  carries no proof). The remaining premises are Props, so the extracted entry point
-  [infer_and_print_template_program] has base's signature:
-  - the normalization premises over [wf_extE]/[NormalizationInE] (row O1, as base takes [NormalizationIn]);
+  Premises of the entry points, beyond base's:
+  - [CO : conv_oracle], the η conversion. It is instantiated with EtaConv's [isconv_term] /
+    [isconv_term_sound] (CONTRACTS.md CONV 11:35Z) in the separate file [SafeTemplateCheckerEtaConv]
+    ([eta_conv_oracle]), so a change of that contract is a one-site fix;
   - EtaReduce's [reduce_factsE : ReduceTypedFacts welltypedE wf_extE] and the η typing facts
-    [EtaF : EtaFacts] ([PCUICTypingEtaHyps]), the named hypotheses of rows T0/T1/T2a/T6/A/U;
-  - EtaConv's own section premises, passed through unchanged. *)
+    [EtaF : EtaFacts] ([PCUICTypingEtaHyps]); both are Props, erased by extraction;
+  - the normalization premises, over [wf_extE]/[NormalizationInE] (base takes [NormalizationIn]).
+
+  Exported for the plugin's OCaml glue, same names and types as base ([SafeTemplateChecker]):
+  [trans_program], [infer_template_program], [infer_and_print_template_program], so at the cutover (F0)
+  the glue can point at this module and the extracted closure contains no base [SafeTemplateChecker]. *)
 
 Definition trans_program (p : Ast.Env.program) : program :=
   let Σ' := trans_global_env p.1 in
   (Σ', trans Σ' p.2).
-
-Section EtaOracle.
-  Context {cf : checker_flags} {nor : normalizing_flags}.
-  Context {reduce_factsE : ReduceTypedFacts welltypedE wf_extE}.
-
-  (** K6 at the checker: [None] when EtaConv's conversion succeeds; its soundness is
-      [isconv_term_sound]. *)
-  Program Definition eta_conv_oracle : conv_oracle :=
-    {| oracle_conv X_type X normalization_in Γ pb t ht u hu :=
-         match @isconv_term cf nor X_type X normalization_in Γ pb t ht u hu with
-         | ConvSuccess => None
-         | ConvError e => Some e
-         end |}.
-  Next Obligation.
-    intros X_type X normalization_in Γ pb t ht u hu e Σ wfΣ.
-    destruct isconv_term eqn:hc; [|discriminate].
-    exact (isconv_term_sound _ _ Σ wfΣ Γ pb t ht u hu hc).
-  Qed.
-End EtaOracle.
-
-#[global] Existing Instance eta_conv_oracle.
 
 Definition EnvCheck_wf_env_ext {cf:checker_flags} {guard : abstract_guard_impl} := EnvCheck wf_env_ext.
 
 Local Instance Monad_EnvCheck_wf_env_ext {cf:checker_flags} {guard : abstract_guard_impl} : Monad EnvCheck_wf_env_ext := _.
 
 Program Definition infer_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
-  {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
+  {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p : Ast.Env.program) φ
   {normalization_in
     : forall (g : global_decl) (Hdecls' : nat) (X : X_env_type optimized_abstract_env_impl),
@@ -86,7 +68,7 @@ Next Obligation.
 Qed.
 
 Program Definition infer_and_print_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
-  {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
+  {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p : Ast.Env.program) φ
   {normalization_in
     : forall (g : global_decl) (Hdecls' : nat) (X : X_env_type optimized_abstract_env_impl),
