@@ -90,13 +90,13 @@ Inductive typing_spineE {cf} Σ (Γ : context) : term -> list term -> term -> Ty
 | type_spine_nilE ty ty' :
     isTypeE Σ Γ ty ->
     isTypeE Σ Γ ty' ->
-    ws_cumul_pbE Cumul Σ Γ ty ty' ->
+    Σ ;;; Γ ⊢E ty ≤ ty' ->
     typing_spineE Σ Γ ty [] ty'
 
 | type_spine_consE ty hd tl na A B B' :
     isTypeE Σ Γ ty ->
     isTypeE Σ Γ (tProd na A B) ->
-    ws_cumul_pbE Cumul Σ Γ ty (tProd na A B) ->
+    Σ ;;; Γ ⊢E ty ≤ tProd na A B ->
     Σ ;;; Γ |-E hd : A ->
     typing_spineE Σ Γ (subst10 hd B) tl B' ->
     typing_spineE Σ Γ ty (hd :: tl) B'.
