@@ -18,6 +18,9 @@ theories/PCUICSafeRetyping.v
 theories/PCUICRetypingEnvIrrelevance.v
 # The termination measure over the stack with the eta frames, and its descent lemmas
 theories/PCUICSafeConversionEtaK4.v
+# ETAK EtaConv (K3 integrator): the E errors (EtaStackRefusal) and the η conversion checker
+theories/PCUICErrorsEta.v
+theories/PCUICSafeConversionEta.v
 # EtaK7: definitional E copies (isTypeE, bidirectional E judgments, subsletE, spine_substE, typing_spineE)
 theories/PCUICTypingEtaDefs.v
 # EtaK7: the E typing facts the E checker needs (named hypotheses per plan row, with instances)
