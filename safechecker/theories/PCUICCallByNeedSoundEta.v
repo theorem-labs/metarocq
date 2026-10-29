@@ -36,12 +36,13 @@ Class CbnConvSoundE {cf : checker_flags} : Prop :=
 
   The statement of [cbn_conv_soundE] at base [welltyped], over a base environment and base
   [cbn_conv] (the same machine), proved from [PCUICCallByNeedSoundHookProof.convert_cbn_sound] and
-  the inclusion [ws_cumul_pb_incl_E] (plan I0).  (1) This base instance shows that the hypothesis is
-  consistent and about something real: the machine's [true] is a conversion, hence an E conversion.
+  the inclusion [ws_cumul_pb_incl_E] (plan I0).  (1) This base instance shows that the hypothesis's
+  shape is consistent and about something real: the machine's [true] is a conversion, hence an E conversion.
   (2) It does NOT discharge the instantiation at [welltypedE] over a [PCUICWfEnvEta] environment: the
   machine's soundness proof reads back through base typing (subject reduction, closedness of typed
   terms), so over [typingE] it needs subject reduction over [typingE] (plan row T1) and the other
   named E facts; [cbn_conv_soundE] remains a hypothesis until [convert_cbn_soundE] lands. *)
+(* instance: SHAPE-ONLY — over BASE cbn_conv and base environment, not the E copy PCUICCallByNeedEta.cbn_conv; it shows the hypothesis shape is consistent, it is NOT an instance of cbn_conv_soundE itself. *)
 Lemma convert_cbn_sound_base_instance {cf : checker_flags}
     (X_type : PCUICWfEnv.abstract_env_impl) (X : X_type.π2.π1) (le : conv_pb) (Γ : context) (t u : term) :
   (forall Σ, PCUICWfEnv.abstract_env_ext_rel X Σ -> welltyped Σ Γ t) ->
