@@ -203,6 +203,7 @@ Qed.
     [eta1_ws_cumul_pbE].
   - [I] has no index, so [skipn (ind_npars si_mdecl) args = []] and the conclusion is the
     parameter instance read at the full context [ind_params ,,, ind_indices]. *)
+(* NOT BUILT — needs an indexed family: I has no index, so the conclusion's index part is empty; an indexed instance needs a new indexed inductive declaration. Named gap; revisiting it is FRAC's call. *)
 Lemma ctx_inst_app_weakE_inst :
   let Γ := bd_ΓFG in
   let params := [bd_GF] in
