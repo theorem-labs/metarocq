@@ -145,3 +145,42 @@ Proof.
   intros h. unfold head_arity_gen.
   now rewrite (declared_constructor_lookup_gen (id := (i, k)) h).
 Qed.
+
+(** ** The term-level reverse glue: base comparison ⇒ U1'
+
+  The reverse direction holds for the whole term comparison, not only for the instance
+  comparison ([cumul_ind_finst], [cumul_construct_finst]). This part comes after the declarations
+  above, with the two Requires its proof needs (term induction, dependent elimination), so that
+  their source positions stay as they were. *)
+
+From MetaRocq.PCUIC Require Import PCUICInduction.
+From Equations.Prop Require Import DepElim.
+
+(** Base [eq_term_upto_univ_napp] at [(pb, napp)] implies U1' ([eq_term_upto_univ_eta_napp]) at
+    the same [(pb, napp)], for any universe and sort comparisons. The two relations differ only
+    at [eq_Ind]/[eq_Construct], where [cumul_ind_finst]/[cumul_construct_finst] carry base's
+    instance comparison over; every other constructor is base's. The proof is base's
+    [eq_term_upto_univ_impl] with those two cases replaced. *)
+Lemma eq_term_upto_univ_napp_finst (Σ : global_env) cu cs pb napp t u :
+  eq_term_upto_univ_napp Σ cu cs pb napp t u ->
+  eq_term_upto_univ_eta_napp Σ cu cs pb napp t u.
+Proof.
+  induction t in pb, napp, u |- * using term_forall_list_ind;
+    try (inversion 1; subst; constructor; eauto; fail).
+  - inversion 1; subst; constructor.
+    eapply All2_impl'; tea.
+    eapply All_impl; eauto.
+  - inversion 1; subst; constructor. now apply cumul_ind_finst.
+  - inversion 1; subst; constructor. now apply cumul_construct_finst.
+  - inversion 1; subst; constructor; unfold eq_predicate, eq_branches, eq_branch in *; eauto; solve_all.
+  - inversion 1; subst; constructor.
+    eapply All2_impl'; tea.
+    eapply All_impl; eauto.
+    cbn. intros x [? ?] y (?&?&?&?). repeat split; eauto.
+  - inversion 1; subst; constructor.
+    eapply All2_impl'; tea.
+    eapply All_impl; eauto.
+    cbn. intros x [? ?] y (?&?&?&?). repeat split; eauto.
+  - intros h; depelim h. depelim o; constructor; cbn in X; constructor; intuition eauto.
+    solve_all.
+Qed.

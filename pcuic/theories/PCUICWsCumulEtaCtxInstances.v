@@ -190,7 +190,7 @@ Qed.
     both ends. *)
 Lemma ci_WS_Rel0_eta_d2 : WS Conv ci_Γd2 (tRel 0) fi_eta.
 Proof.
-  apply (WS_trans (Σ := si_Σ) (wfΣ := si_cb) (u := fi_P)); [exact (ci_Rel0_d2 Conv)|].
+  apply (PCUICWsCumulEtaCtx.WS_trans (Σ := si_Σ) (wfΣ := si_cb) (u := fi_P)); [exact (ci_Rel0_d2 Conv)|].
   exact (weaken_ws_cumul_pbE (Γ := []) ci_Γd2 eq_refl (ci_WS_eta_r Conv)).
 Qed.
 Lemma ci_WS_eta_d2 : WS Conv ci_Γd2 fi_eta fi_P.
@@ -230,7 +230,7 @@ Qed.
 
 (** A β-redex, then an η-redex, through [Prop]. *)
 Lemma WS_trans_inst : WS Conv [] fi_beta fi_eta.
-Proof. exact (WS_trans (Σ := si_Σ) (wfΣ := si_cb) (fi_WS_beta Conv) (ci_WS_eta_r Conv)). Qed.
+Proof. exact (PCUICWsCumulEtaCtx.WS_trans (Σ := si_Σ) (wfΣ := si_cb) (fi_WS_beta Conv) (ci_WS_eta_r Conv)). Qed.
 Lemma ws_cumul_pbE_subst1_conv_inst : WS Conv [] ((tRel 0) {0 := fi_beta}) ((tRel 0) {0 := fi_P}).
 Proof. apply (ws_cumul_pbE_subst1_conv (Γ := []) (c := tRel 0)); [reflexivity|exact (fi_WS_beta Conv)]. Qed.
 Lemma ws_cumul_pbE_subst0_conv_inst : WS Conv [] (subst0 [fi_beta] (tRel 0)) (subst0 [fi_P] (tRel 0)).

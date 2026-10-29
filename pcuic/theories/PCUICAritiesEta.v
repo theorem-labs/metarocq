@@ -101,10 +101,10 @@ Inductive typing_spineE {cf} Σ (Γ : context) : term -> list term -> term -> Ty
     typing_spineE Σ Γ (subst10 hd B) tl B' ->
     typing_spineE Σ Γ ty (hd :: tl) B'.
 
-Derive Signature NoConfusion for typing_spineE.
+Derive Signature NoConfusion for PCUICAritiesEta.typing_spineE.
 
 Lemma typing_spine_isType_codomE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T args U} :
-  typing_spineE Σ Γ T args U -> isTypeE Σ Γ U.
+  PCUICAritiesEta.typing_spineE Σ Γ T args U -> isTypeE Σ Γ U.
 Proof.
   induction 1; auto.
 Qed.
@@ -343,8 +343,8 @@ Section WfEnv.
   Hint Resolve isType_wf_localE : pcuic.
 
   Lemma typing_spine_letin_invE {Γ na b B T args S} :
-    typing_spineE Σ Γ (tLetIn na b B T) args S ->
-    typing_spineE Σ Γ (T {0 := b}) args S.
+    PCUICAritiesEta.typing_spineE Σ Γ (tLetIn na b B T) args S ->
+    PCUICAritiesEta.typing_spineE Σ Γ (T {0 := b}) args S.
   Proof using wfΣ.
     intros Hsp.
     depelim Hsp.
@@ -367,8 +367,8 @@ Section WfEnv.
 
   Lemma typing_spine_letinE {Γ na b B T args S} :
     isTypeE Σ Γ (tLetIn na b B T) ->
-    typing_spineE Σ Γ (T {0 := b}) args S ->
-    typing_spineE Σ Γ (tLetIn na b B T) args S.
+    PCUICAritiesEta.typing_spineE Σ Γ (T {0 := b}) args S ->
+    PCUICAritiesEta.typing_spineE Σ Γ (tLetIn na b B T) args S.
   Proof using wfΣ.
     intros Hty Hsp.
     depelim Hsp.
@@ -379,10 +379,10 @@ Section WfEnv.
   Qed.
 
   Lemma typing_spine_weaken_conclE {Γ T args S S'} :
-    typing_spineE Σ Γ T args S ->
+    PCUICAritiesEta.typing_spineE Σ Γ T args S ->
     ws_cumul_pbE Cumul Σ Γ S S' ->
     isTypeE Σ Γ S' ->
-    typing_spineE Σ Γ T args S'.
+    PCUICAritiesEta.typing_spineE Σ Γ T args S'.
   Proof using wfΣ.
     intros Hsp. induction Hsp in S' |- *; intros cum isT.
     - constructor; auto. etransitivity; eassumption.
@@ -390,25 +390,25 @@ Section WfEnv.
   Qed.
 
   Lemma typing_spine_prodE {Γ na b B T args S} :
-    typing_spineE Σ Γ (T {0 := b}) args S ->
+    PCUICAritiesEta.typing_spineE Σ Γ (T {0 := b}) args S ->
     isTypeE Σ Γ (tProd na B T) ->
     Σ ;;; Γ |-E b : B ->
-    typing_spineE Σ Γ (tProd na B T) (b :: args) S.
+    PCUICAritiesEta.typing_spineE Σ Γ (tProd na B T) (b :: args) S.
   Proof using wfΣ.
     intros Hsp Hprod Hb.
-    eapply type_spine_consE; [exact Hprod|exact Hprod| |exact Hb|exact Hsp].
+    eapply PCUICAritiesEta.type_spine_consE; [exact Hprod|exact Hprod| |exact Hb|exact Hsp].
     apply isType_ws_cumul_pbE_refl; exact Hprod.
   Qed.
 
   Lemma typing_spine_WAT_conclE {Γ T args S} :
-    typing_spineE Σ Γ T args S ->
+    PCUICAritiesEta.typing_spineE Σ Γ T args S ->
     isTypeE Σ Γ S.
   Proof using Type.
     induction 1; auto.
   Qed.
 
   Lemma typing_spine_isType_domE {Γ T args S} :
-    typing_spineE Σ Γ T args S ->
+    PCUICAritiesEta.typing_spineE Σ Γ T args S ->
     isTypeE Σ Γ T.
   Proof using Type.
     induction 1; auto.
