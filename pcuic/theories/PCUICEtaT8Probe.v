@@ -1,6 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * T8 (typed postponement): pinned statements, route, and one-step η-postponement
+(** * T8 (typed postponement): pinned statements, route, and the root cases of
+    one-step η-postponement
 
   ** What T8 claims
   A well-typed type that is E-convertible to a head form (sort, product, applied
@@ -10,18 +11,23 @@
   projects, while it is β-stuck).
 
   ** Route
-  1. A6 already gives, untyped, that the canonical form [canon T] reaches the head by
+  1. A6 gives, untyped, that the canonical form [canon T] reaches the head by
      [(R_c ∪ eta1)*] ([ws_cumul_pbE_Sort_r_inv], [ws_cumul_pbE_Prod_r_inv],
      [ws_cumul_pbE_Ind_r_inv]).
   2. Postpone η in that chain: [(R_c ∪ eta1)* ⊆ R_c* · eta1*] on the canonical forms of
-     the reducts of a typed [T]. The relation η is postponed over is base [red1] on
-     the actual term (lemma [eta_postpone1] below); the [R_c] form follows from it by
-     [red1_R_c] and [eta1_star_canon], because [canon] keeps every λ, every scrutinee
-     position and every fixpoint [rarg].
+     the reducts of a typed [T]. η is postponed over base [red1] on the actual term;
+     the [R_c] form follows by [red1_R_c] and [eta1_star_canon], because [canon] keeps
+     every λ, every scrutinee position and every fixpoint [rarg]. The one-step
+     commutation is [eta1 t u → red1 Σ Γ u v → ∑ w, red1⁺ t w × eta1* w v]. This
+     file proves it when the [red1] step is a rule applied at the root of [u]
+     ([pp_beta] ... [pp_prim]), and for η at the root of [t] ([pp_root]) or at the
+     head of an application spine ([pp_head_eta]), under any [red1] step. It does
+     not prove the congruence cases (η and the [red1] step in different
+     subterms), which need the [red1] context transport for η-related let bodies
+     and case/fixpoint contexts.
   3. Lift [R_c*] from [canon T] back to [red] on [T] (backward simulation of [red1]
-     through [canon]: a reduction of [canon T] is the canonical image of a reduction
-     of [T], because [canon_dom] is a normal sort and every redex of [canon T] is the
-     image of a redex of [T]).
+     through [canon]: [canon_dom] is a normal sort and every redex of [canon T] is
+     the image of a redex of [T]).
   4. The end of the η* tail is the head form; its source [canon T'] is not a λ,
      because [T'] (a reduct of [T]) is typed by subject reduction at a sort, and a
      λ has a product type ([ws_cumul_pbE_Prod_Sort_inv], [invert_cumul_prod_indE]).
@@ -36,26 +42,26 @@
   Every other created redex (β with an η-expanded head, a spine whose head is an
   η-redex) is reached from [t] by extra β steps, so needs nothing.
 
-  Typing gives the invariant (a λ has a product type, the four positions an
-  inductive, primitive or, for a fixpoint, its [rarg] type, which [wf_fixpointE]
-  makes inductive). The invariant is NOT preserved by β or by fixpoint unfolding as
-  a syntactic property: [(λx. tCase x _) (λy. M y)] β-reduces to a λ scrutinee, and
-  unfolding a fixpoint turns a recursive call [f (λy. C y)] into a fixpoint spine with
-  a λ [rarg]. Both reducts come from ill-typed terms, so the invariant survives
-  [red] on typed terms through E subject reduction (the forecast row T1), and only
+  That typing gives the invariant is not proved here: a λ has a product type, and
+  the four positions have an inductive or primitive type (for a fixpoint, its
+  [rarg] type, which [wf_fixpointE] makes convertible to an inductive). The
+  invariant is NOT preserved by β or by fixpoint unfolding as a syntactic
+  property: [(λx. tCase x _) (λy. M y)] β-reduces to a λ scrutinee, and unfolding a
+  fixpoint turns a recursive call [f (λy. C y)] into a fixpoint spine with a λ
+  [rarg]. Both reducts come from ill-typed terms, so the invariant survives [red]
+  on typed terms through E subject reduction (the forecast row T1), and only
   there. It is also not preserved by η: η at a spine head [(λx. F x) a] merges the
   spine into a fixpoint spine.
 
-  ** Why the one-step lemma does not iterate by itself
-  [eta_postpone1] commutes one η step past one [red1] step. Iterating it over
-  [eta1* · red1] needs the invariant on η-reducts of a typed term, which subject
-  reduction does not give (η-reducts need not be typed: [λx:A. f x] with [f : Π x:A'. B]
-  and [A ≤ A'], [A ≠ A'], is typed at [Π x:A. B]; [f] is not, and in [g (λx:A. f x)]
-  with [g : (Π x:A. B) → C] the η-reduct [g f] is ill-typed). The iteration needs the
-  same lemma for a development-style parallel η ([pe], with the η rule
-  [pe b ((lift0 1 M') (tRel 0)) → pe (λ. b) M'], which is closed under
-  post-composition with [eta1], so [eta1* = pe]); its β-head case recurses on the
-  [pe] derivation of the η-expanded head, which is structurally smaller. *)
+  ** Why the one-step commutation does not iterate by itself
+  Iterating it over [eta1* · red1] needs the invariant on η-reducts of a typed
+  term, which subject reduction does not give (η-reducts need not be typed:
+  [λx:A. f x] with [f : Π x:A'. B] and [A ≤ A'], [A ≠ A'], is typed at [Π x:A. B], and
+  in [g (λx:A. f x)] with [g : (Π x:A. B) → C] the η-reduct [g f] is ill-typed). The
+  iteration needs the same commutation for a development-style parallel η ([pe],
+  with the η rule [pe b ((lift0 1 M') (tRel 0)) → pe (λ. b) M'], which is closed
+  under post-composition with [eta1], so [eta1* = pe]); its β-head case recurses on
+  the [pe] derivation of the η-expanded head, which is structurally smaller. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
