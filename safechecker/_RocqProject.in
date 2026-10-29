@@ -21,3 +21,4 @@ theories/PCUICSafeConversionEtaK4.v
 # ETAK EtaConv (K3 integrator): the E errors (EtaStackRefusal) and the η conversion checker
 theories/PCUICErrorsEta.v
 theories/PCUICSafeConversionEta.v
+theories/PCUICSafeConversionEtaFacts.v
