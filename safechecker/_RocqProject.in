@@ -31,3 +31,5 @@ theories/PCUICTypingEtaDefs.v
 theories/PCUICTypingEtaHyps.v
 # EtaK7: the η type checker (K7)
 theories/PCUICTypeCheckerEta.v
+# EtaHypProve: the PROVABLE-NOW named hypotheses of the E bundles, proved as <field>_proved
+theories/PCUICTypingEtaHypsProved.v
