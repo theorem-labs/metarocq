@@ -1,20 +1,26 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * Satisfying instances of the hypotheses of the under-applied lemmas
+(** * Satisfying instances of the hypotheses of the lemmas of [PCUICCumulativitySpecEtaClosure]
 
-  Each under-applied lemma of [PCUICCumulativitySpecEtaClosure] is applied here to
-  a concrete instance with every premise proved, so the premises are shown to be
-  jointly satisfiable:
+  Each instance below applies a lemma of [PCUICCumulativitySpecEtaClosure] to a
+  concrete case with every premise proved, so the premises are shown to be jointly
+  satisfiable:
 
-  - [cumulSpecE_ind_underapplied_gen_inst], [cumulSpecE_ind_underapplied_inst];
-  - [cumulSpecE_construct_underapplied_gen_inst], [cumulSpecE_construct_underapplied_inst].
+  - the under-applied lemmas: [cumulSpecE_ind_underapplied_gen_inst],
+    [cumulSpecE_ind_underapplied_inst], [cumulSpecE_construct_underapplied_gen_inst],
+    [cumulSpecE_construct_underapplied_inst];
+  - the closure lemmas for instantiation, universe substitution, configuration
+    weakening and the nameless translation: [cumulSpecE_instP_inst],
+    [cumulSpecE_subst_instance_inst], [weakening_config_cumulSpecE0_inst],
+    [nl_cumulSpecE_inst].
 
   The environment [si_env] declares one inductive with one parameter and one
   constructor, [Inductive I (A : Prop) : Prop := c : I A]; [si_wf] proves it
   well-formed, [si_wfE] well-formed for the η typing, and [si_cb] gives
-  [ClosedBodies si_env]. The instances use [Γ := []], [args = args' = []] and the
-  empty universe instance on both sides; the arity is 1 for both heads, so both
-  are under-applied. *)
+  [ClosedBodies si_env]. The under-applied instances use [Γ := []],
+  [args = args' = []] and the empty universe instance on both sides; the arity is 1
+  for both heads, so both are under-applied. The closure instances relate an
+  η-contraction ([cumulSpecE_eta_contract]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -254,8 +260,8 @@ Qed.
   carry a premise that is neither well-formedness nor scoping: a closed substitution,
   the validity of the instantiated constraints, and an implication between checker
   configurations. Each is applied here with every premise proved. The related pair is
-  an η-contraction ([cumulSpecE_eta_contract]), so each instance also exercises the
-  [cumul_eta_l] case that these lemmas add to their base twins.
+  an η-contraction ([cumulSpecE_eta_contract]), so the premises are shown jointly
+  satisfiable at an η-contraction.
   [nl_cumulSpecE] has no premise beyond the relation itself, so its instance is the
   lemma applied to the same pair. *)
 
@@ -276,7 +282,7 @@ Proof.
     + destruct x; discriminate.
 Qed.
 
-(** The η-contraction used by the three instances: [λ _ : P. (u ↑) 0] contracts to [u]. *)
+(** The η-contraction used by the four instances: [λ _ : P. (u ↑) 0] contracts to [u]. *)
 Definition sp_eta (u : term) : term := tLambda si_na si_P (tApp (lift0 1 u) (tRel 0)).
 
 (** [si_Σ] has no universe constraints, so instantiating at the empty instance keeps

@@ -1238,9 +1238,10 @@ Proof. apply weakening_config_cumulSpecE0 with (pb := Cumul). Qed.
   [conv_pb].
 
   The proof is a direct induction on [cumulSpecE0] ([cumulSpecE0_rect]), the
-  induction of [cumulSpecE_renameP] with [nl] in place of [rename f]. Base's
-  [nl_cumulSpec] goes through the algorithmic relation and confluence instead; this
-  proof uses neither, and needs no premise at all.
+  induction of [cumulSpecE_renameP] with [nl] in place of [rename f]. There is no
+  base twin: the text of a base [nl_cumulSpec] in [Typing/PCUICNamelessTyp.v] lies
+  inside a comment, so it is not a lemma. That text went through the algorithmic
+  relation and confluence; this proof uses neither, and needs no premise at all.
   - The reduction cases are those of [nl_red1]: [nl] commutes with [subst], [lift],
     [subst_instance], [mkApps], [iota_red] ([nl_iota_red]), [unfold_fix] and
     [unfold_cofix] ([nl_unfold_fix], [nl_unfold_cofix]) and [is_constructor]
@@ -1253,7 +1254,12 @@ Proof. apply weakening_config_cumulSpecE0 with (pb := Cumul). Qed.
   - [cumulE_Trans]: its scoping premises transport along [nl]
     ([nl_is_closed_context], [nl_is_open_term]).
   - [cumul_eta_l]: [nl] commutes with [lift] ([nl_lift]) and fixes [tRel 0], and the
-    eta rule does not compare binder annotations. *)
+    eta rule does not compare binder annotations.
+
+  Apart from its satisfying instance, nothing in the development uses
+  [nl_cumulSpecE], [nl_convSpecE], [nl_cumulSpecE_Cumul] or the helper lemmas below,
+  and no user is planned: base has no live nameless typing ([typing_nlg] lies in the
+  same comment), so no copy of it consumes this closure. *)
 
 (** Ground terms (the literal arguments and the reduct of [cumulE_prim_op]) carry no binder. *)
 Lemma nl_prim_ground t : prim_ground t -> nl t = t.
