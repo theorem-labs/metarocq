@@ -1270,11 +1270,11 @@ Proof.
       destruct (decompose_app t) as [u ?].
       destruct u. all: try discriminate.
       reflexivity.
-  - rewrite !nl_mkApps. simpl. eapply red_cofix_case with (narg := narg).
+  - rewrite !nl_mkApps. simpl. eapply red_cofix_case with (narg := narg); [assumption|].
     unfold unfold_cofix in *. rewrite nth_error_map.
     destruct (nth_error mfix idx). 2: discriminate.
     cbn.
-    inversion H. subst. rewrite nl_subst.
+    inversion H0. subst. rewrite nl_subst.
     repeat f_equal. clear.
     unfold cofix_subst. rewrite length_map.
     induction #|mfix|.

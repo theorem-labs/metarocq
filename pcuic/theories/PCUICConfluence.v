@@ -982,12 +982,12 @@ Proof.
   - dependent destruction e.
     apply eq_term_upto_univ_mkApps_l_inv in e0 as [? [? [[h1 h2] h3]]]. subst.
     dependent destruction h1.
-    unfold unfold_cofix in H.
-    destruct (nth_error mfix idx) eqn:hnth; noconf H.
+    unfold unfold_cofix in H0.
+    destruct (nth_error mfix idx) eqn:hnth; noconf H0.
     eapply All2_nth_error_Some in e0 as hh ; tea.
     destruct hh as [d' [e' (? & ? & erarg & eann)]].
     eexists. split.
-    + eapply red_cofix_case.
+    + eapply red_cofix_case; [assumption|].
       unfold unfold_cofix. rewrite e'. reflexivity.
     + constructor. all: eauto.
       eapply eq_term_upto_univ_mkApps. all: eauto.

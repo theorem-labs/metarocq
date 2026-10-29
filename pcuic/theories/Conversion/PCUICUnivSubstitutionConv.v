@@ -1425,14 +1425,14 @@ Proof.
       eapply isConstruct_app_subst_instance.
   - cbn. rewrite !subst_instance_mkApps.
     unfold unfold_cofix in *. destruct (nth_error mfix idx) eqn:E.
-    + inversion H.
-      econstructor. fold subst_instance_constr.
+    + inversion H0.
+      econstructor; [assumption|]. fold subst_instance_constr.
       unfold unfold_cofix.
       rewrite nth_error_map E. cbn.
       rewrite subst_instance_subst.
       now rewrite cofix_subst_instance_subst.
     + cbn.
-      inversion H.
+      inversion H0.
   - cbn. unfold unfold_cofix in *.
     destruct nth_error eqn:E; inversion H.
     rewrite !subst_instance_mkApps.
@@ -1588,7 +1588,7 @@ Proof.
     |mfix idx narg fn args c t cargs hu hn w IH hc
     |mfix idx narg fn args hu hn|mfix idx args hu
     |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
-    |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+    |ci p c brs args mfix idx cargs narg fn h l hnd w1 IH1 hu w2 IH2
     |ci p c brs args t cargs w IH hc hcf
     |p c args u' cargs a h l w1 IH1 ha w2 IH2
     |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
@@ -1642,6 +1642,7 @@ Proof.
         (List.map (map_branch (subst_instance u) id) brs)) in IH2.
     rewrite subst_instance_mkApps in IH2.
     eapply whd_case_cofix.
+    + exact hnd.
     + exact IH1.
     + exact (unfold_cofix_subst_instance u _ _ _ _ hu).
     + exact IH2.

@@ -138,7 +138,7 @@ Section TemplateWhdRed.
       |mfix idx narg fn args c t cargs hunf hnth wa IHa hnc
       |mfix idx narg fn args hunf hnth|mfix idx args hunf
       |ci p c brs args n ui cargs mdecl idecl cdecl br h l wa IHa hbr hdecl hlen wb IHb
-      |ci p c brs args mfix idx cargs narg fn h l wa IHa hunf wb IHb
+      |ci p c brs args mfix idx cargs narg fn h l hnd wa IHa hunf wb IHb
       |ci p c brs args t cargs wa IHa hnc hncf
       |p c args u cargs a h l wa IHa hnth wb IHb
       |p c args mfix idx cargs narg fn h l wa IHa hunf wb IHb
@@ -207,7 +207,7 @@ Section TemplateWhdRed.
       { eapply (red_congr_hd (fun x => tCase ci p x brs));
           [intros ?; reflexivity| |exact IHa].
         intros x y r. now apply case_red_discr. }
-      apply red_hd_step; [reflexivity|]. eapply red_cofix_case; exact hunf.
+      apply red_hd_step; [reflexivity|]. eapply red_cofix_case; [exact hnd|exact hunf].
     (* stuck case: the reduced discriminant is kept *)
     - eapply (red_congr_hd (fun x => tCase ci p x brs));
         [intros ?; reflexivity| |exact IHa].

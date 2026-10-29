@@ -2195,11 +2195,14 @@ Lemma erase_correct_strong' (wfl := EWcbvEval.default_wcbv_flags) X_type (X : X_
   erase X_type Xext [] t wt = t' ->
   erase_global_deps X_type (term_global_deps t') X decls normalization_in prf = Σ' ->
   red Σ [] t v ->
+  (* an evaluation of [t] exists; the standardization lemma needs it to rule out a term
+     that weak-head reduces to a stuck match on a cofixpoint. Every caller supplies it. *)
+  (∑ v0, PCUICWcbvEval.eval Σ t v0) ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
   forall wt', let ev := erase X_type Xext [] v wt' in ∥ Σ'.1 ⊢ t' ⇓ ev ∥
   /\ firstorder_evalue Σ'.1 ev.
 Proof.
-  intros wt Σ Hrel Hax Hty Hfo <- <- Hred Hirred wt'.
+  intros wt Σ Hrel Hax Hty Hfo <- <- Hred heval Hirred wt'.
   destruct (firstorder_lookup_inv Hfo) as [mind Hdecl].
   destruct (abstract_env_exists X) as [[Σg Hg]].
   pose proof (abstract_make_wf_env_ext_correct _ _ _ _ _ Hg Hrel). subst Σ.
@@ -2288,11 +2291,12 @@ Lemma erase_correct_strong (wfl := EWcbvEval.default_wcbv_flags) X_type (X : X_t
   let Σ' := erase_global_deps X_type (term_global_deps t') X decls normalization_in prf in
   @firstorder_ind Σ (firstorder_env Σ) i ->
   red Σ [] t v ->
+  (∑ v0, PCUICWcbvEval.eval Σ t v0) ->
   ¬ { v' & Σ ;;; [] |- v ⇝ v'} ->
   exists wt', let et' := erase X_type Xext [] v wt' in
   ∥ Σ'.1 ⊢ t' ⇓ erase X_type Xext [] v wt' ∥ /\ firstorder_evalue Σ'.1 et'.
 Proof.
-  intros wt Σ Hrel Hax Hty Hdecl Hfo Hsub Hred Hirred.
+  intros wt Σ Hrel Hax Hty Hdecl Hfo Hsub Hred heval Hirred.
   unshelve eexists.
   - abstract (intros Σ_ H_; pose proof (ErasureFunction.heΣ _ _ _ H_); sq;
     pose proof (abstract_env_ext_irr _ H_ Hrel); subst; eapply red_welltyped; eauto; econstructor; eauto).
@@ -2330,6 +2334,7 @@ Definition erase_correct_firstorder (wfl := EWcbvEval.default_wcbv_flags)
               (fun _ _ _ _ _ _ _ =>  normalization_in _ _) (unique_decls univs wfext wfΣ) in
   @firstorder_ind Σ (firstorder_env Σ) i ->
   red Σ [] t v ->
+  (∑ v0, PCUICWcbvEval.eval Σ t v0) ->
   ¬ { v' & Σ ;;; [] |- v ⇝ v'} ->
   exists wt', let et' := erase X_type Xext [] v wt' in ∥ Σ'.1 ⊢ t' ⇓ et' ∥ /\
     firstorder_evalue Σ'.1 et'.

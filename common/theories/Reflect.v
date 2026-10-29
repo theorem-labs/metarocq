@@ -155,17 +155,20 @@ Qed.
 
 Definition eqb_case_info
   (ci ci' : BasicAst.case_info) :=
-  let (ci_ind, ci_npar, ci_relevance) := ci in
-  let (ci_ind', ci_npar', ci_relevance') := ci' in
-  eqb ci_ind ci_ind' && eqb ci_npar ci_npar' && eqb ci_relevance ci_relevance'.
+  let (ci_ind, ci_npar, ci_relevance, ci_nondep) := ci in
+  let (ci_ind', ci_npar', ci_relevance', ci_nondep') := ci' in
+  eqb ci_ind ci_ind' && eqb ci_npar ci_npar' && eqb ci_relevance ci_relevance' &&
+  eqb ci_nondep ci_nondep'.
 
 #[global, program] Instance reflect_case_info : ReflectEq case_info :=
   {| eqb := eqb_case_info |}.
 Next Obligation.
-  intros. destruct x as [ci_ind ci_npar ci_relevance], y as [ci_ind' ci_npar' ci_relevance']. cbn -[eqb].
+  intros. destruct x as [ci_ind ci_npar ci_relevance ci_nondep],
+    y as [ci_ind' ci_npar' ci_relevance' ci_nondep']. cbn -[eqb].
   destruct (eqb_spec ci_ind ci_ind'); subst;
   destruct (eqb_spec ci_npar ci_npar'); subst;
-    destruct (eqb_spec ci_relevance ci_relevance'); subst; constructor; congruence.
+  destruct (eqb_spec ci_relevance ci_relevance'); subst;
+  destruct (eqb_spec ci_nondep ci_nondep'); subst; constructor; congruence.
 Qed.
 
 Derive NoConfusion NoConfusionHom for sig.

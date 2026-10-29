@@ -668,11 +668,18 @@ Proof.
              epose proof (fix_app_is_constructor (args:=argsv ++ [av]) X).
              rewrite /unfold_fix e0 in X0.
              specialize (X0 eq_refl). simpl in X0.
-             rewrite nth_error_snoc in X0. auto. apply X0.
-             eapply value_axiom_free, eval_to_value; eauto.
-             eapply value_whnf; eauto.
-             eapply eval_closed; eauto. now eapply subject_closed in t0.
-             eapply eval_to_value; eauto. }
+             rewrite nth_error_snoc in X0. auto.
+             forward X0 by (eapply value_axiom_free, eval_to_value; eauto).
+             forward X0.
+             { eapply value_whnf; eauto.
+               eapply eval_closed; eauto. now eapply subject_closed in t0.
+               eapply eval_to_value; eauto. }
+             (* the recursive argument [av] is a value, so it is not a stuck match on a
+                cofixpoint; that disjunct is impossible here. *)
+             destruct X0 as [X0 | Hstuck].
+             - exact X0.
+             - exfalso. eapply value_not_stuck_cofix_case.
+               eapply eval_to_value; exact H0. exact Hstuck. }
 
            { constructor.
              - eapply erases_deps_eval in ev_stuck; [|now eauto].
@@ -821,7 +828,7 @@ Proof.
     assert (hredcasecof :
       PCUICReduction.red Σ [] (tCase ip p (mkApps (tCoFix mfix idx) args) brs)
         (tCase ip p (mkApps fn args) brs)).
-    { constructor; eapply PCUICReduction.red_cofix_case.
+    { constructor; eapply PCUICReduction.red_cofix_case; [assumption|].
         move: e. rewrite closed_unfold_cofix_cunfold_eq; eauto. }
     assert (htcasefn : Σ ;;; [] |- tCase ip p (mkApps fn args) brs : T).
     { eapply subject_reduction; eauto. }

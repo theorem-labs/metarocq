@@ -764,7 +764,7 @@ Section WfRed.
       now eapply All2_nth_error_Some_r in X3 as [cb [? []]]; tea.
     - eapply unfold_fix_wf in H; eauto. eapply wf_mkApps; auto.
     - econstructor; eauto. apply wf_mkApps_napp in X2 as [Hcof Hargs]; auto.
-      eapply unfold_cofix_wf in H; eauto.
+      eapply unfold_cofix_wf in H0; eauto.
       apply wf_mkApps; intuition auto.
     - constructor; auto. apply wf_mkApps_napp in X as [Hcof Hargs]; auto.
       eapply unfold_cofix_wf in H; eauto.

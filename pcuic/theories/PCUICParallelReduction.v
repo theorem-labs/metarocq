@@ -302,8 +302,10 @@ Section ParallelReduction.
     All2 (pred1 Γ Γ') args0 args1 ->
     pred1 Γ Γ' (mkApps (tFix mfix0 idx) args0) (mkApps fn args1)
 
-  (** CoFix-case unfolding *)
+  (** CoFix-case unfolding, only under a case whose return type does not depend on the
+      scrutinee ([ci_cofix_nondep]) *)
   | pred_cofix_case ci p0 p1 mfix0 mfix1 idx args0 args1 narg fn brs0 brs1 :
+    ci.(ci_cofix_nondep) ->
     pred1_ctx Γ Γ' ->
     pred1_ctx_over Γ Γ' (fix_context mfix0) (fix_context mfix1) ->
     All2_prop2_eq Γ Γ' (Γ ,,, fix_context mfix0) (Γ' ,,, fix_context mfix1)
@@ -519,6 +521,7 @@ Section ParallelReduction.
           P Γ Γ' (mkApps (tFix mfix0 idx) args0) (mkApps fn args1)) ->
 
       (forall (Γ Γ' : context) ci p0 p1 mfix0 mfix1 idx args0 args1 narg fn brs0 brs1,
+          forall (Hnondep : ci.(ci_cofix_nondep)),
           pred1_ctx Γ Γ' ->
           Pctx Γ Γ' ->
           pred1_ctx_over Γ Γ' (fix_context mfix0) (fix_context mfix1) ->
@@ -2242,7 +2245,9 @@ Section ParallelSubstitution.
       assert (All2_fold (on_decls (on_decls_over (pred1 Σ) Δ Δ')) (inst_context σ (fix_context mfix0))
                              (inst_context τ (fix_context mfix1))).
       { exact (X2 P Q _ _ _ _ onfix0 onfixi0 Hrel). }
-      econstructor. eapply pred1_subst_pred1_ctx; eauto.
+      econstructor.
+      1: exact Hnondep.
+      eapply pred1_subst_pred1_ctx; eauto.
       instantiate (1 := (map (map_def (inst τ) (inst (⇑^#|mfix1| τ))) mfix1)).
       rewrite !inst_fix_context; auto.
       rewrite !inst_fix_context; auto.

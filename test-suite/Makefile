@@ -9,6 +9,7 @@ bugs: Makefile.rocq
 	bash check_fail_messages.sh template_partial.v
 	bash check_fail_messages.sh prim_ops.v
 	bash check_assumptions.sh prim_ops_instance.v
+	bash check_fail_messages.sh coind_case.v
 
 Makefile.rocq: Makefile _RocqProject
 	rocq makefile -f _RocqProject -o Makefile.rocq

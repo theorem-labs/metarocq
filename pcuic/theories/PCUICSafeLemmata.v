@@ -1130,3 +1130,553 @@ Proof.
 Qed.
 
 #[global] Hint Resolve isType_welltyped : pcuic.
+
+From MetaRocq.PCUIC Require Import PCUICTyping PCUICAst PCUICAstUtils PCUICTactics
+  PCUICWeakeningConv PCUICWeakeningTyp PCUICSubstitution PCUICGeneration PCUICArities
+  PCUICWcbvEval PCUICSR PCUICInversion PCUICViews
+  PCUICUnivSubstitutionConv PCUICUnivSubstitutionTyp
+  PCUICSigmaCalculus PCUICContextConversion
+  PCUICUnivSubst PCUICWeakeningEnvConv PCUICWeakeningEnvTyp
+  PCUICCumulativity PCUICConfluence
+  PCUICInduction PCUICLiftSubst PCUICContexts PCUICSpine
+  PCUICConversion PCUICValidity PCUICInductives PCUICFixWitness
+  PCUICInductiveInversion PCUICNormal
+  PCUICParallelReductionConfluence
+  PCUICClosed PCUICClosedTyp
+  PCUICReduction PCUICCSubst PCUICOnFreeVars PCUICWellScopedCumulativity.
+
+Local Set Default Goal Selector "1".
+Local Unset Equations With UIP.
+Local Unset Keyed Unification.
+
+Lemma isArity_subst:
+  forall x2 : term, forall s n, isArity x2 -> isArity (subst s n x2).
+Proof.
+  induction x2; cbn in *; try tauto; intros; eauto.
+Qed.
+
+Lemma isArity_typing_spine {cf:checker_flags} {Σ : global_env_ext} {Γ L T T'} {wfΣ : wf Σ} :
+  wf_local Σ Γ ->
+  typing_spine Σ Γ T' L T ->
+  Is_conv_to_Arity Σ Γ T' ->
+  Is_conv_to_Arity Σ Γ T.
+Proof.
+  intros wfΓ sp isc.
+  depind sp.
+  - destruct isc as (? & ? & ?). sq.
+    eapply red_ws_cumul_pb_inv in H.
+    eapply (ws_cumul_pb_trans _ _ _ H) in w; tea.
+    eapply PCUICConversion.invert_cumul_arity_l in w; eauto.
+  - eapply IHsp.
+    destruct isc as (? & ? & ?). sq.
+    eapply red_ws_cumul_pb_inv in H.
+    eapply (ws_cumul_pb_trans _ _ _ H) in w; tea.
+    eapply invert_cumul_arity_l in w; eauto.
+    destruct w as (? & H1 & H2). sq.
+    eapply invert_red_prod in H1 as (? & ? & []); eauto; subst.
+    exists (x2 {0 := hd}). split; sq.
+    eapply (closed_red_untyped_substitution0 (Δ := [_])); eauto. econstructor. econstructor.
+    cbn; fvs.
+    now eapply isArity_subst.
+Qed.
+
+Section Arities.
+  Context {cf:checker_flags} {Σ : global_env_ext}.
+  Context {wfΣ : wf Σ}.
+
+  Lemma invert_cumul_arity_l_gen (Γ : context) (C T : term) :
+    Is_conv_to_Arity Σ Γ C -> Σ ;;; Γ ⊢ C ≤ T -> Is_conv_to_Arity Σ Γ T.
+  Proof.
+    intros [ar [red isA]]. sq.
+    intros cum.
+    have: Σ ;;; Γ ⊢ ar ≤ T.
+    { eapply ws_cumul_pb_red_l_inv; tea. exact red. }
+    now eapply invert_cumul_arity_l.
+  Qed.
+
+  Lemma invert_cumul_arity_r_gen (Γ : context) (C T : term) :
+    Is_conv_to_Arity Σ Γ C -> Σ;;; Γ ⊢ T ≤ C -> Is_conv_to_Arity Σ Γ T.
+  Proof.
+    intros [ar [red isA]]. sq.
+    intros cum.
+    have: Σ ;;; Γ ⊢ T ≤ ar.
+    { eapply ws_cumul_pb_red_r_inv; tea. exact red. }
+    now eapply invert_cumul_arity_r.
+  Qed.
+
+  Lemma isArity_ind ind i args : isArity (mkApps (tInd ind i) args) -> False.
+  Proof. destruct args using rev_case; rewrite ?mkApps_app; auto. Qed.
+
+  Lemma Is_conv_to_Arity_ind Γ ind i args : Is_conv_to_Arity Σ Γ (mkApps (tInd ind i) args) -> False.
+  Proof.
+    intros [ar [red eq]]. sq.
+    eapply invert_red_mkApps_tInd in red as (? & []); auto. subst ar.
+    now eapply isArity_ind in eq.
+  Qed.
+
+  Lemma typing_spine_arity_mkApps_Ind Γ T l i u args :
+    wf_local Σ Γ ->
+    PCUICArities.typing_spine Σ Γ T l (mkApps (tInd i u) args) ->
+    Is_conv_to_Arity Σ Γ T -> False.
+  Proof.
+    intros wf sp isc.
+    eapply (isArity_typing_spine wf sp) in isc.
+    now eapply Is_conv_to_Arity_ind.
+  Qed.
+
+End Arities.
+
+Section Spines.
+  Context {cf : checker_flags}.
+  Context {Σ : global_env_ext}.
+  Context (wfΣ : wf Σ.1).
+
+  (** The start of the spine lemmas: the spine also applies the reduct of the
+      declared type that the check accepts. *)
+  Lemma mfix_on_ind_spine_witness {check} `{ShapeCheck check} {ok} Γ mfix idx decl args ty :
+    mfix_on_ind check (conv_witness Σ Γ) ok mfix ->
+    nth_error mfix idx = Some decl ->
+    isType Σ Γ (dtype decl) ->
+    typing_spine Σ Γ (dtype decl) args ty ->
+    ∑ mind tw,
+      [× Σ ;;; Γ ⊢ dtype decl ⇝ tw, check (def_with_type decl tw) = Some mind, ok mind,
+         isType Σ Γ tw & typing_spine Σ Γ tw args ty].
+  Proof.
+    move=> hm nthe isty sp.
+    have clΓ : is_closed_context Γ.
+    { eapply wf_local_closed_context. now eapply isType_wf_local. }
+    have opd : is_open_term Γ (dtype decl) by eapply isType_is_open_term.
+    eapply mfix_on_ind_inv in nthe as [mind [tw [r cfix ck]]]; tea.
+    have istw : isType Σ Γ tw by eapply isType_red; [exact isty|exact (clrel_rel r)].
+    exists mind, tw; split => //.
+    eapply typing_spine_strengthen; [exact sp|exact istw|now eapply red_ws_cumul_pb_inv].
+  Qed.
+
+
+  Lemma cumul_it_mkProd_or_LetIn_smash Γ Δ T :
+    is_closed_context Γ ->
+    is_open_term Γ (it_mkProd_or_LetIn Δ T) ->
+    Σ ;;; Γ ⊢ it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T) = it_mkProd_or_LetIn Δ T.
+  Proof.
+    intros clΓ clp. symmetry. eapply red_ws_cumul_pb.
+    now apply red_it_mkProd_or_LetIn_to_smash.
+  Qed.
+
+  Lemma typing_spine_smash Γ Δ T args T' :
+    typing_spine Σ Γ (it_mkProd_or_LetIn Δ T) args T' ->
+    typing_spine Σ Γ (it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T)) args T'.
+  Proof.
+    intros sp.
+    have ty := (typing_spine_isType_dom sp).
+    have r := (red_it_mkProd_or_LetIn_to_smash (wfΣ := wfΣ) Γ Δ T).
+    specialize (r (wf_local_closed_context (isType_wf_local ty)) (isType_is_open_term ty)).
+    eapply typing_spine_strengthen; tea.
+    eapply isType_red; tea. eapply r.
+    eapply ws_cumul_pb_eq_le; symmetry.
+    now eapply red_ws_cumul_pb.
+  Qed.
+
+Lemma assumption_context_assumptions {Γ} :
+  assumption_context Γ ->
+  context_assumptions Γ = #|Γ|.
+Proof.
+  induction 1; cbn; auto. congruence.
+Qed.
+
+
+  Lemma typing_spine_nth_error Γ Δ T args T' n arg decl :
+    assumption_context Δ ->
+    wf_local Σ (Γ ,,, Δ) ->
+    typing_spine Σ Γ (it_mkProd_or_LetIn Δ T) args T' ->
+    nth_error args n = Some arg ->
+    nth_error (List.rev Δ) n = Some decl ->
+    Σ ;;; Γ |- arg : subst (List.rev (firstn n args)) 0 decl.(decl_type).
+  Proof.
+    intros ass wf sp hnth hdecl.
+    eapply typing_spine_nth_error in sp; tea.
+    2:{ eapply nth_error_Some_length in hdecl. len in hdecl.
+        move: (context_assumptions_bound Δ).
+        pose proof (assumption_context_assumptions ass). lia. }
+    destruct sp as [decl' [hdecl' harg]].
+    pose proof (nth_error_Some_length hdecl).
+    rewrite (smash_assumption_context _ ass) in hdecl'.
+    rewrite nth_error_rev // List.rev_involutive in hdecl.
+    len in hdecl. rewrite (assumption_context_assumptions ass) in hdecl'.
+    rewrite hdecl in hdecl'. noconf hdecl'. exact harg.
+  Qed.
+
+  Lemma typing_spine_all_inv Γ Δ T args T' :
+    typing_spine Σ Γ (it_mkProd_or_LetIn Δ T) args T' ->
+    #|args| = context_assumptions Δ ->
+    (Σ ;;; Γ ⊢ subst (List.rev args) 0 (expand_lets Δ T) ≤ T') * (isType Σ Γ T').
+  Proof.
+    induction Δ in args, T |- * using ctx_length_rev_ind.
+    - simpl. destruct args => // sp _ /=; rewrite subst_empty expand_lets_nil.
+      now depelim sp.
+    - rewrite it_mkProd_or_LetIn_app /=; destruct d as [na [b|] ty].
+      * rewrite /mkProd_or_LetIn /=. simpl => /= sp.
+        eapply typing_spine_letin_inv in sp; eauto.
+        len => hargs.
+        rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r in sp.
+        specialize (X (subst_context [b] 0 Γ0) ltac:(now len) _ _ sp).
+        forward X by now len.
+        now rewrite expand_lets_vdef.
+      * rewrite /mkProd_or_LetIn /=. simpl => /= sp.
+        simpl; len => hargs. simpl in hargs.
+        rewrite Nat.add_1_r in hargs. destruct args => //.
+        depelim sp. noconf hargs.
+        eapply ws_cumul_pb_Prod_Prod_inv in w as [eqna dom codom].
+        rewrite expand_lets_vass. simpl.
+        eapply (substitution0_ws_cumul_pb (t:=t)) in codom; eauto.
+        eapply typing_spine_strengthen in sp. 3:tea.
+        rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r in sp.
+        specialize (X (subst_context [t] 0 Γ0) ltac:(len; reflexivity) (subst [t] #|Γ0| T) _ sp).
+        forward X by now len.
+        rewrite subst_app_simpl /=; len; rewrite H.
+        now rewrite -(expand_lets_subst_comm _ _ _).
+        eapply isType_apply in i; tea.
+        eapply (type_ws_cumul_pb (pb:=Conv)); tea. 2:now symmetry.
+        eapply isTypeRel_isType.
+        now eapply isType_tProd in i as [].
+  Qed.
+
+  Lemma typing_spine_more_inv Γ Δ ind u args args' T' :
+    typing_spine Σ Γ (it_mkProd_or_LetIn Δ (mkApps (tInd ind u) args)) args' T' ->
+    #|args'| > context_assumptions Δ -> False.
+  Proof.
+    induction Δ in args, args' |- * using ctx_length_rev_ind.
+    - simpl. destruct args' using rev_case => /= // sp hargs // /=; try lia.
+      depelim sp. eapply (f_equal (@length _)) in H; simpl in H; len in H; simpl in H.
+      now eapply invert_cumul_ind_prod in w.
+    - rewrite it_mkProd_or_LetIn_app /=; destruct d as [na [b|] ty].
+      * rewrite /mkProd_or_LetIn /=. simpl => /= sp.
+        eapply typing_spine_letin_inv in sp; eauto.
+        len => hargs.
+        rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r subst_mkApps /= in sp.
+        apply (H (subst_context [b] 0 Γ0) ltac:(now len) _ _ sp). now len.
+      * rewrite /mkProd_or_LetIn /=. simpl => /= sp.
+        simpl; len => /= hargs.
+        rewrite Nat.add_1_r in hargs. destruct args'; simpl in * => //. lia.
+        depelim sp.
+        eapply ws_cumul_pb_Prod_Prod_inv in w as [eqna dom codom]; pcuic.
+        eapply (substitution0_ws_cumul_pb (t:=t)) in codom; eauto.
+        eapply typing_spine_strengthen in sp. 3:tea.
+        rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r subst_mkApps /= in sp.
+        apply (H (subst_context [t] 0 Γ0) ltac:(len; reflexivity) _ _ sp).
+        now len.
+        eapply isType_apply in i; tea.
+        eapply (type_ws_cumul_pb (pb:=Conv)); tea. 2:now symmetry.
+        eapply isTypeRel_isType.
+        now eapply isType_tProd in i as [].
+  Qed.
+
+  Lemma firstn_subst_context (Γ : context) n k s :
+    assumption_context Γ ->
+    firstn (#|Γ| - n) (subst_context s k Γ) =
+    subst_context s (k + n) (firstn (#|Γ| - n) Γ).
+  Proof.
+    induction Γ in n, k |-  * using ctx_length_rev_ind; simpl; auto.
+    destruct d as [na [b|] ty]; simpl; len; simpl; auto;
+    rewrite subst_context_app /=.
+    intros ass. eapply assumption_context_app in ass as [_ ass]. depelim ass.
+    intros ass. eapply assumption_context_app in ass as [ass _].
+    destruct n.
+    rewrite Nat.sub_0_r.
+    rewrite !firstn_all2;
+     rewrite ?length_app ?app_context_length ?subst_context_length ?Nat.add_0_r /=; simpl; try lia.
+    now rewrite subst_context_app.
+    replace (#|Γ| + 1 - S n) with (#|Γ| - n) by lia.
+    rewrite /app_context !firstn_app ?subst_context_length /= Nat.sub_0_r.
+    replace (#|Γ| - n - #|Γ|) with 0 by lia. simpl.
+    rewrite Nat.add_succ_r !app_nil_r. apply H; now try lia.
+  Qed.
+
+  Lemma typing_spine_nth_error_None Γ Δ T args T' :
+    assumption_context Δ ->
+    wf_local Σ (Γ ,,, Δ) ->
+    typing_spine Σ Γ (it_mkProd_or_LetIn Δ T) args T' ->
+    nth_error args #|Δ| = None ->
+    Σ ;;; Γ ⊢ (subst0 (List.rev args) (it_mkProd_or_LetIn (firstn (#|Δ| - #|args|) Δ) T)) ≤ T'.
+  Proof.
+    induction Δ in args, T |- * using ctx_length_rev_ind.
+    { intros. eapply nth_error_None in H0. simpl in H0 |- *. destruct args => //; simpl in H0; try lia.
+      rewrite subst_empty. simpl in X0. now depelim X0. }
+    destruct d as [na [b|] ty]; intros ass; eapply assumption_context_app in ass as [assΓ ass].
+    * exfalso; depelim ass.
+    * simpl. rewrite !it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= //.
+      intros wf sp.
+      pose proof (All_local_env_app_inv wf) as [_ wfty].
+      eapply All_local_env_app_inv in wfty as [wfty _]. depelim wfty.
+      intros Hargs. eapply nth_error_None in Hargs.
+      len in Hargs. len; simpl.
+      depelim sp.
+      + eapply ws_cumul_pb_Prod_l_inv in w as [na' [dom [codom [eqna eqd eqc]]]].
+        simpl. rewrite subst_empty. simpl; len.
+        simpl. rewrite Nat.sub_0_r firstn_app_2. simpl.
+        rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /=.
+        etransitivity.
+        2:{ eapply ws_cumul_pb_eq_le. symmetry. now eapply red_ws_cumul_pb. }
+        eapply ws_cumul_pb_Prod; eauto.
+      + eapply ws_cumul_pb_Prod_Prod_inv in w as [eqna dom codom].
+        assert (Σ ;;; Γ |- hd : ty).
+        { eapply type_ws_cumul_pb; pcuic. eapply ws_cumul_pb_eq_le. now symmetry. }
+        eapply (substitution0_ws_cumul_pb (t:=hd)) in codom; eauto.
+        eapply typing_spine_strengthen in sp. 3:eauto.
+        rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r in sp.
+        simpl. replace (#|Γ0| + 1 - S #|tl|) with (#|Γ0| - #|tl|) by lia.
+        rewrite firstn_app. rewrite (firstn_0 _ (_ - _ - _)); try lia; rewrite app_nil_r.
+        move: Hargs; simpl; rewrite Nat.add_1_r => hlen.
+        specialize (X (subst_context [hd] 0 Γ0) ltac:(len; reflexivity) (subst [hd] #|Γ0| T) tl).
+        forward X by now eapply assumption_context_fold.
+        forward X.
+        { eapply substitution_wf_local; eauto. constructor. constructor. now rewrite subst_empty.
+          now rewrite app_context_assoc in wf. }
+        specialize (X sp).
+        forward X. len. apply nth_error_None. lia.
+        rewrite subst_app_simpl.
+        simpl. rewrite subst_it_mkProd_or_LetIn.
+        simpl. len.
+        len in X.
+        rewrite firstn_length_le. lia.
+        replace (#|Γ0| - #|tl| + #|tl|)%nat with #|Γ0| by lia.
+        rewrite firstn_subst_context in X => //.
+        eapply isType_apply; tea.
+  Qed.
+
+  Lemma assumption_context_firstn n Γ :
+    assumption_context Γ ->
+    assumption_context (firstn n Γ).
+  Proof.
+    induction n in Γ |- *; simpl; try constructor; auto.
+    intros. destruct Γ; simpl; try constructor.
+    depelim H. constructor. auto.
+  Qed.
+
+  Lemma typing_spine_nth_error_None_prod Γ Δ T args T' n decl :
+    assumption_context Δ ->
+    wf_local Σ (Γ ,,, Δ) ->
+    typing_spine Σ Γ (it_mkProd_or_LetIn Δ T) args T' ->
+    nth_error args n = None ->
+    nth_error (List.rev Δ) n = Some decl ->
+    ∑ na dom codom, Σ ;;; Γ ⊢ tProd na dom codom ≤ T'.
+  Proof.
+    intros ass wf sp nth nth'.
+    eapply typing_spine_nth_error_None in sp; eauto;
+    eapply nth_error_None in nth;
+    eapply nth_error_Some_length in nth'; len in nth'.
+    rewrite subst_it_mkProd_or_LetIn in sp.
+    2:{ eapply nth_error_None. lia. }
+    set (ctx := subst_context (List.rev args) 0 (firstn (#|Δ| - #|args|) Δ)) in *.
+    assert (#|ctx| > 0).
+    { rewrite /ctx; len. rewrite firstn_length_le; lia. }
+    assert (assumption_context ctx).
+    { rewrite /ctx. apply assumption_context_fold. now apply assumption_context_firstn. }
+    destruct ctx using rev_case; simpl in *. lia.
+    rewrite it_mkProd_or_LetIn_app in sp.
+    move/assumption_context_app: H0 => [ass' assx].
+    destruct x as [na [b|] ty]. exfalso. depelim assx.
+    rewrite /mkProd_or_LetIn in sp.
+    eexists _, _, _; eauto. eapply sp.
+  Qed.
+
+  Lemma wf_fixpoint_spine Γ mfix idx decl args ty :
+    wf_fixpoint Σ Γ mfix ->
+    nth_error mfix idx = Some decl ->
+    isType Σ Γ (dtype decl) ->
+    typing_spine Σ Γ (dtype decl) args ty ->
+    match nth_error args decl.(rarg) with
+    | Some arg =>
+      ∑ ind u indargs,
+      (Σ ;;; Γ |- arg : mkApps (tInd ind u) indargs) *
+      check_recursivity_kind (lookup_env Σ) (inductive_mind ind) Finite
+    | None => ∑ na dom codom, Σ ;;; Γ ⊢ tProd na dom codom ≤ ty
+    end.
+  Proof.
+    move=> [_ [_ hm]] nthe isty sp.
+    destruct (mfix_on_ind_spine_witness _ _ _ _ _ _ hm nthe isty sp)
+      as [mind' [tw [r cfix ck istw sp']]].
+    clear sp isty. rename sp' into sp.
+    destruct decl as [dna dty dbod rarg]; cbn in *.
+    rewrite /check_one_fix /def_with_type /= in cfix.
+    case E: (decompose_prod_assum [] tw) => [Γ' concl].
+    rewrite E in cfix.
+    eapply decompose_prod_assum_it_mkProd_or_LetIn in E.
+    simpl in E. subst tw.
+    destruct (nth_error _ rarg) eqn:Hnth => //.
+    pose proof (nth_error_Some_length Hnth).
+    len in H. simpl in H.
+    eapply typing_spine_smash in sp.
+    destruct (nth_error args rarg) eqn:hargs.
+    - eapply typing_spine_nth_error in sp; eauto; cycle 1.
+      * eapply smash_context_assumption_context; constructor.
+      * eapply wf_local_smash_end; eauto.
+        destruct istw as (_ & s & Hs & _).
+        eapply inversion_it_mkProd_or_LetIn in Hs; eauto.
+        now eapply typing_wf_local.
+      * destruct (decompose_app (decl_type c)) as [hd tl] eqn:da.
+        destruct (destInd hd) as [[i u]|] eqn:di => //.
+        destruct i as [mind i]. noconf cfix.
+        eapply decompose_app_inv in da. rewrite da in sp.
+        rewrite subst_mkApps in sp.
+        destruct hd => //; noconf di. simpl in sp.
+        eexists _, ui, _; intuition eauto.
+    - eapply typing_spine_nth_error_None_prod in sp; eauto.
+      * eapply smash_context_assumption_context; constructor.
+      * eapply wf_local_smash_end; eauto.
+        destruct istw as (_ & s & Hs & _).
+        eapply inversion_it_mkProd_or_LetIn in Hs; eauto.
+        now eapply typing_wf_local.
+  Qed.
+
+  (** The declared type reduces to a telescope over an applied coinductive of the
+      block. *)
+  Lemma wf_cofixpoint_spine Γ mfix idx decl args ty :
+    wf_cofixpoint Σ Γ mfix ->
+    nth_error mfix idx = Some decl ->
+    isType Σ Γ (dtype decl) ->
+    typing_spine Σ Γ (dtype decl) args ty ->
+    ∑ Γ' T, (Σ ;;; Γ ⊢ dtype decl ⇝ it_mkProd_or_LetIn Γ' T) *
+    ∑ ind u indargs, (T = mkApps (tInd ind u) indargs) *
+    check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite *
+    if #|args| <? context_assumptions Γ' then
+      (Σ ;;; Γ ⊢ subst0 (List.rev args)
+      (it_mkProd_or_LetIn (firstn (context_assumptions Γ' - #|args|) (smash_context [] Γ'))
+        (expand_lets Γ' T)) ≤ ty)
+    else
+      (#|args| = context_assumptions Γ') *
+      (Σ ;;; Γ ⊢ subst (List.rev args) 0 (expand_lets Γ' T) ≤ ty).
+  Proof.
+    move=> hm nthe isty sp.
+    destruct (mfix_on_ind_spine_witness _ _ _ _ _ _ hm nthe isty sp)
+      as [mind' [tw [r cfix ck istw sp']]].
+    clear sp isty. rename sp' into sp. cbn in ck.
+    rewrite /check_one_cofix /def_with_type /= in cfix.
+    case E: (decompose_prod_assum [] tw) => [Γ' concl].
+    rewrite E in cfix.
+    eapply decompose_prod_assum_it_mkProd_or_LetIn in E.
+    simpl in E. subst tw. exists Γ', concl. split; auto.
+    destruct (decompose_app concl) as [hd tl] eqn:da.
+    destruct (destInd hd) as [[mind i]|] eqn:di => //.
+    destruct mind => //. destruct hd => //.
+    noconf di. noconf cfix.
+    eapply decompose_app_inv in da.
+    eexists _, _, _; intuition eauto.
+    destruct (Nat.ltb #|args| (context_assumptions Γ')) eqn:lt; [
+      eapply Nat.ltb_lt in lt|eapply Nat.ltb_nlt in lt; destruct (Nat.eqb #|args| (context_assumptions Γ')) eqn:eq;
+      [eapply Nat.eqb_eq in eq|eapply Nat.eqb_neq in eq]].
+    - eapply typing_spine_smash in sp.
+      destruct (nth_error args #|args|) eqn:hargs.
+      { rewrite (proj2 (nth_error_None _ _)) // in hargs. }
+      destruct (nth_error (List.rev (smash_context [] Γ')) #|args|) as [decl'|] eqn:hnth.
+      eapply typing_spine_nth_error_None in sp; eauto.
+      * len in sp.
+      * eapply smash_context_assumption_context; constructor.
+      * eapply wf_local_smash_end; eauto.
+        destruct istw as (_ & s & Hs & _).
+        eapply inversion_it_mkProd_or_LetIn in Hs; eauto.
+        now eapply typing_wf_local.
+      * len; simpl. eapply nth_error_None in hargs => //.
+        eapply nth_error_None. lia.
+      * eapply nth_error_None in hnth => //. len in hnth.
+    - eapply typing_spine_all_inv in sp => //.
+      subst concl.
+      rewrite expand_lets_mkApps subst_mkApps /= in sp.
+      destruct sp. split; auto.
+      now rewrite expand_lets_mkApps subst_mkApps /=.
+    - subst concl; eapply typing_spine_more_inv in sp; try lia.
+  Qed.
+
+End Spines.
+
+Section CoFixCoind.
+  Context {cf:checker_flags} {Σ : global_env_ext}.
+  Context {wfΣ : wf Σ}.
+
+  Lemma check_recursivity_kind_inj {mind rk rk'} :
+    check_recursivity_kind (lookup_env Σ) mind rk ->
+    check_recursivity_kind (lookup_env Σ) mind rk' -> rk = rk'.
+  Proof.
+    rewrite /check_recursivity_kind.
+    case: lookup_env => //; case => // m.
+    elim: ReflectEq.eqb_spec;
+    elim: ReflectEq.eqb_spec; congruence.
+  Qed.
+
+  Lemma wt_closed_red_refl {Γ t T} : Σ ;;; Γ |- t : T -> Σ ;;; Γ ⊢ t ⇝ t.
+  Proof.
+    intros Hs.
+    eapply closed_red_refl.
+    now eapply typing_wf_local, wf_local_closed_context in Hs.
+    now eapply subject_is_open_term.
+  Qed.
+
+  Lemma invert_ind_ind Γ ind u args ind' u' args' :
+    Σ;;; Γ |- mkApps (tInd ind u) args : mkApps (tInd ind' u') args' -> False.
+  Proof.
+    intros typ.
+    eapply inversion_mkApps in typ as (?&?&?); auto.
+    eapply inversion_Ind in t as (?&?&wfΓ&decl&cu&?); auto.
+    eapply PCUICSpine.typing_spine_strengthen in t0; eauto.
+    eapply (typing_spine_ind_type_inv decl) in t0; tea.
+    rewrite it_mkProd_or_LetIn_app !subst_instance_it_mkProd_or_LetIn in t0.
+    eapply typing_spine_arity_mkApps_Ind in t0; eauto.
+    eapply typing_spine_isType_dom in t0 as (_ & s & Hs & _).
+    eexists; split; [sq|]. now eapply wt_closed_red_refl.
+    now do 2 eapply isArity_it_mkProd_or_LetIn.
+    now eapply isTypeRel_isType, (declared_inductive_valid_type decl).
+  Qed.
+
+  Lemma invert_fix_ind Γ mfix i args ind u args' :
+    match unfold_fix mfix i with
+    | Some (rarg, _) => nth_error args rarg = None
+    | _ => True
+    end ->
+    Σ;;; Γ |- mkApps (tFix mfix i) args : mkApps (tInd ind u) args' -> False.
+  Proof.
+    intros no_arg typ.
+    eapply inversion_mkApps in typ as (?&?&?); eauto.
+    eapply inversion_Fix in t as (? & ? & ? & ? & ? & ? & ?); auto.
+    eapply nth_error_all in a; eauto. apply isTypeRel_isType in a.
+    eapply PCUICSpine.typing_spine_strengthen in t0; eauto.
+    unfold unfold_fix in no_arg.
+    rewrite e in no_arg.
+    eapply (wf_fixpoint_spine wfΣ) in t0; eauto.
+    rewrite no_arg in t0. destruct t0 as [na [dom [codom cum]]].
+    eapply ws_cumul_pb_Prod_l_inv in cum as (? & ? & ? & []).
+    eapply invert_red_mkApps_tInd in c as [? [eq _]]; auto.
+    solve_discr.
+  Qed.
+
+  Lemma typing_cofix_coind {Γ mfix idx args ind u indargs} :
+    Σ ;;; Γ |- mkApps (tCoFix mfix idx) args : mkApps (tInd ind u) indargs ->
+    check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
+  Proof.
+    intros tyarg.
+    eapply inversion_mkApps in tyarg as [A [Hcof sp]]; auto.
+    eapply inversion_CoFix in Hcof as (? & ? & ? & ? & ? & ? & ?); auto.
+    eapply nth_error_all in a; eauto.
+    simpl in a.
+    apply isTypeRel_isType in a.
+    eapply typing_spine_strengthen in sp; eauto.
+    eapply wf_cofixpoint_spine in sp as (Γ' & concl & _ & ?); eauto.
+    move: s => [ind' [u' [indargs' [[ceq ccum] ck]]]].
+    subst concl.  move: ck.
+    elim: Nat.ltb_spec => Hargs.
+    - rewrite subst_it_mkProd_or_LetIn; len.
+      set (ctx := subst_context _ _ _).
+      assert(assumption_context ctx).
+      eapply assumption_context_fold, assumption_context_firstn, smash_context_assumption_context; constructor.
+      assert (#|ctx| > 0).
+      { rewrite /ctx; len; rewrite firstn_length_le. len; lia. lia. }
+      destruct ctx as [|ctx [na [b|] ty]] using rev_case. simpl in H0; lia.
+      exfalso; move/assumption_context_app: H => [ass assd]; depelim assd.
+      move/assumption_context_app: H => [ass assd]; depelim assd.
+      rewrite it_mkProd_or_LetIn_app /mkProd_or_LetIn /= => cum.
+      now eapply invert_cumul_prod_ind in cum.
+    - move=> [hargs ccum'].
+      rewrite expand_lets_mkApps subst_mkApps /= in ccum'.
+      eapply invert_cumul_ind_ind in ccum' as ((hind & r) & _).
+      len in r. eapply ReflectEq.eqb_eq in hind. now subst ind'.
+  Qed.
+
+End CoFixCoind.

@@ -3057,9 +3057,10 @@ Qed.
     all: rewrite -> wf_universeb_instance_forall in *; now eapply wf_instance_iff.
   Qed.
 
-  (** The discriminee of a stuck case is neutral.  The case's own typing
-      (change log 16(d)) types the discriminee at an inductive, which dismisses
-      the two non-neutral primitive shapes of row F's
+  (** A stuck case is neutral: either its discriminee is neutral, or it is a case
+      whose [ci_cofix_nondep] is unset on a cofixpoint ([whne_case_cofix_dep]).  The
+      case's own typing (change log 16(d)) types the discriminee at an inductive,
+      which dismisses the two non-neutral primitive shapes of row F's
       [whnf_whne_nodelta_upgrade]: an unsaturated operation has a product type,
       and a rigid one is stuck on its blocking argument ([prim_rigid_arg_whne]). *)
   Lemma reduced_case_discriminee_whne Σ (wfΣ : abstract_env_ext_rel X Σ) Γ π ci p c brs h :
@@ -3068,7 +3069,7 @@ Qed.
                 _ X (Γ,,, stack_context π) c h) c = true ->
     isred_full Γ (tCase ci p c brs) π ->
     welltyped Σ Γ (zipc (tCase ci p c brs) π) ->
-    ∥whne RedFlags.default Σ (Γ,,, stack_context π) c∥.
+    ∥whne RedFlags.default Σ (Γ,,, stack_context π) (tCase ci p c brs)∥.
   Proof using Type.
     intros eq ir ht. pose proof (heΣ _ wfΣ) as [[]].
     pose proof (hΣ _ wfΣ).
@@ -3081,14 +3082,14 @@ Qed.
       apply whne_mkApps_inv in w as [[w|(?&?&?&?&?&?&?&?)]|(?&?&?&?&?&?&?&?&?&?)]; [|easy|easy|easy].
       depelim w; cbn in *; try easy; solve_discr.
       eapply whnf_whne_nodelta_upgrade in eq; [|exact w].
-      destruct eq as [hne|hnn]; [now constructor|].
+      destruct eq as [hne|hnn]; [now constructor; apply whne_case|].
       pose proof (hΣ _ wfΣ) as [wΣ'].
       (* ht is already about Σ *)
       change (welltyped Σ Γ (zip (tCase ci p c brs, π))) in ht.
       eapply welltyped_context in ht; [|exact wΣ'].
       cbn in ht. destruct ht as [T hT].
       apply inversion_Case in hT as (?&?&isdecl&?&[]&?); auto.
-      constructor.
+      constructor. apply whne_case.
       destruct hnn as [c0 u0 decl op args hl hb hop hlt|c0 u0 decl op ls a rest hl hb hop hlen hwa hnl].
       * exfalso.
         destruct (PCUICSR.prim_app_typing_inv (wfΣ := wΣ') hop scrut_ty (Nat.lt_le_incl _ _ hlt))
@@ -5544,10 +5545,15 @@ Equations (noeqns) isconv_array_values_aux
           | exist (Some br) eqbr := Some (iota_red ci.(ci_npar) p args br) ;
           | exist None eqbr := False_rect _ _ }
         } ;
-      | ccview_cofix mfix idx with inspect (unfold_cofix mfix idx) := {
-        | @exist (Some (narg, fn)) eq2 with inspect (decompose_stack ρ) := {
-          | @exist (args, ξ) eq' := Some (tCase ci p (mkApps fn args) brs) } ;
-        | @exist None eq2 := False_rect _ _
+      | ccview_cofix mfix idx with inspect ci.(ci_cofix_nondep) := {
+        | @exist true eqnd with inspect (unfold_cofix mfix idx) := {
+          | @exist (Some (narg, fn)) eq2 with inspect (decompose_stack ρ) := {
+            | @exist (args, ξ) eq' := Some (tCase ci p (mkApps fn args) brs) } ;
+          | @exist None eq2 := False_rect _ _
+          } ;
+        (* A cofixpoint does not unfold under a case whose return type may depend
+           on the scrutinee. *)
+        | @exist false eqnd := None
         } ;
       | ccview_other cred _ := None
       }
@@ -5611,7 +5617,7 @@ Equations (noeqns) isconv_array_values_aux
         apply PCUICInductiveInversion.invert_Case_Construct in typ as (?&?&?&?); auto.
         rewrite H0 in eqbr; noconf eqbr. eauto.
       + eapply red_case_c, r.
-    - clear H H0 H1.
+    - clear H H0 H1 H2.
       simpl_reduce_stack Σ wfΣ.
       assert (r' : red Σ Γ (tCase ci p c brs)
                      (tCase ci p (mkApps (tCoFix mfix idx) (decompose_stack ρ).1) brs))
@@ -5619,13 +5625,19 @@ Equations (noeqns) isconv_array_values_aux
       destruct (hΣ _ wfΣ) as [hΣ].
       pose proof (red_welltyped _ hΣ (h _ wfΣ) r') as h'.
       eapply cored_red_cored.
-      + constructor. eapply red_cofix_case. eauto.
+      + constructor. eapply red_cofix_case; [exact (eq_sym eqnd)|eauto].
       + eapply red_case_c, r.
   Qed.
 
+  (** The discriminant of a case the machine does not unfold reduces either to a neutral
+      term, or to a cofixpoint applied to arguments under a case whose return type may
+      depend on the scrutinee. *)
   Lemma unfold_one_case_None Σ (wfΣ : abstract_env_ext_rel X Σ) Γ ci p c brs h :
     None = unfold_one_case Γ ci p c brs h ->
-    ∥∑ c', red Σ Γ c c' × whne RedFlags.default Σ Γ c'∥.
+    ∥∑ c', red Σ Γ c c' ×
+      (whne RedFlags.default Σ Γ c' +
+       (∑ mfix idx args, (c' = mkApps (tCoFix mfix idx) args) ×
+                         ci.(ci_cofix_nondep) = false))∥.
   Proof using Type.
     funelim (unfold_one_case Γ ci p c brs h); intros [=].
     - clear H.
@@ -5634,18 +5646,21 @@ Equations (noeqns) isconv_array_values_aux
       destruct (hΣ _ wfΣ), w.
       constructor; exists (mkApps cred (decompose_stack ρ).1).
       split; [exact r|].
+      left.
       specialize (isr eq_refl) as (noapp&_).
       eapply PCUICSR.subject_reduction in typ.
       2: eauto.
       2: eapply red_case_c, r.
       eapply whnf_case_arg_whne; eauto.
       now destruct cred.
-    - match type of H3 with
-      | _ = False_rect _ ?f => destruct f
-      end.
-    - match type of H2 with
-      | _ = False_rect _ ?f => destruct f
-      end.
+    - match goal with H : _ = False_rect _ ?f |- _ => destruct f end.
+    - repeat match goal with H : {| pr1 := _ |} = {| pr1 := _ |} |- _ => clear H end.
+      simpl_reduce_stack Σ wfΣ.
+      constructor; exists (mkApps (tCoFix mfix idx) (decompose_stack ρ).1).
+      split; [exact r|].
+      right. exists mfix, idx, (decompose_stack ρ).1.
+      split; [reflexivity|exact (eq_sym eqnd)].
+    - match goal with H : _ = False_rect _ ?f |- _ => destruct f end.
   Qed.
 
   Equations unfold_one_proj (Γ : context) (p : projection) (c : term)
@@ -6039,7 +6054,9 @@ Equations (noeqns) isconv_array_values_aux
       + destruct p. constructor; eauto with pcuic.
       + split; [eauto with pcuic|].
         apply whnf_mkApps.
-        auto.
+        destruct whcase as [whcase|(mfix&idx&args&->&hnd)].
+        * auto.
+        * now apply whne_case_cofix_dep.
     - clear H.
       eapply unfold_one_proj_None in e as [(c'&r&whproj)]; eauto.
       constructor; exists (tProj p c'), (decompose_stack π).1.

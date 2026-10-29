@@ -40,12 +40,12 @@ Proof.
   intros []. destruct X as [T' []].
   destruct s.
   * destruct (common_typing _ _ t0 t2) as (? & e & ? & ?).
-    eapply PCUICClassification.invert_cumul_arity_l_gen in e. destruct e as [s [[hr] ha]].
+    eapply PCUICSafeLemmata.invert_cumul_arity_l_gen in e. destruct e as [s [[hr] ha]].
     eapply (proj2 (nf_red _ _ _ _)) in n. 2:eapply hr. subst. contradiction.
-    eapply PCUICClassification.invert_cumul_arity_r_gen. 2:exact w.
+    eapply PCUICSafeLemmata.invert_cumul_arity_r_gen. 2:exact w.
     exists T'. split; auto. sq.
     eapply PCUICValidity.validity in t2 as (_ & s & Hs & _).
-    eapply PCUICClassification.wt_closed_red_refl; eauto.
+    eapply PCUICSafeLemmata.wt_closed_red_refl; eauto.
   * destruct (principal_type _ _ t0) as [princ hprinc].
     destruct s as [u' [hs isp]].
     pose proof (hprinc _ t2) as [].

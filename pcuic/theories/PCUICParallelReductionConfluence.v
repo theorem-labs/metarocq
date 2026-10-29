@@ -820,11 +820,13 @@ Section Rho.
       let brs' := map_brs_wf rho Γ p' brs _ in
       let mfixctx := fold_fix_context_wf mfix (fun Γ x Hx => rho Γ x) Γ [] in
       let mfix' := map_fix_rho (t:=tCase ci p x brs) rho Γ mfixctx mfix _ in
-        match nth_error mfix' idx with
-        | Some d =>
-          tCase ci p' (mkApps (subst0 (cofix_subst mfix') (dbody d)) args') brs'
-        | None => tCase ci p' (rho Γ x) brs'
-        end;
+        if ci.(ci_cofix_nondep) then
+          match nth_error mfix' idx with
+          | Some d =>
+            tCase ci p' (mkApps (subst0 (cofix_subst mfix') (dbody d)) args') brs'
+          | None => tCase ci p' (rho Γ x) brs'
+          end
+        else tCase ci p' (rho Γ x) brs';
     | construct_cofix_other _ nconscof =>
       let p' := rho_predicate_wf rho Γ p _ in
       let x' := rho Γ x in
@@ -1151,13 +1153,15 @@ Section Rho.
         end
       else tCase ci p' (rho Γ x) (map (rho_br Γ p') brs)
     | tCoFix mfix idx =>
-      match nth_error mfix idx with
-      | Some d =>
-        let fn := (subst0 (map (rho Γ) (cofix_subst mfix))) (rho (Γ ,,, fold_fix_context rho Γ [] mfix) (dbody d)) in
-        tCase ci (rho_predicate Γ p) (mkApps fn (map (rho Γ) args))
-           (map (rho_br Γ p') brs)
-      | None => tCase ci p' (rho Γ x) (map (rho_br Γ p') brs)
-      end
+      if ci.(ci_cofix_nondep) then
+        match nth_error mfix idx with
+        | Some d =>
+          let fn := (subst0 (map (rho Γ) (cofix_subst mfix))) (rho (Γ ,,, fold_fix_context rho Γ [] mfix) (dbody d)) in
+          tCase ci (rho_predicate Γ p) (mkApps fn (map (rho Γ) args))
+             (map (rho_br Γ p') brs)
+        | None => tCase ci p' (rho Γ x) (map (rho_br Γ p') brs)
+        end
+      else tCase ci p' (rho Γ x) (map (rho_br Γ p') brs)
     | _ => tCase ci p' (rho Γ x) (map (rho_br Γ p') brs)
     end.
   Proof using Type.
@@ -1170,7 +1174,9 @@ Section Rho.
     destruct inspect as [[br|] eqnth]; cbv zeta; simp rho; rewrite eqnth //; cbv zeta; simp rho => //.
     simpl; now simp rho.
     cbv zeta.
-    simpl. autorewrite with rho. rewrite /map_fix nth_error_map.
+    simpl. autorewrite with rho.
+    destruct (ci_cofix_nondep ci) => /=; [|reflexivity].
+    rewrite /map_fix nth_error_map.
     destruct nth_error => /=. f_equal.
     f_equal. rewrite (map_cofix_subst rho (fun x y => rho (x ,,, y))) //.
     intros. autorewrite with rho. simpl. now autorewrite with rho.
@@ -2055,6 +2061,17 @@ Section Rho.
         autorewrite with len in H.
         rewrite /map_fix !map_map_compose in H.
 
+        match goal with |- context [ci_cofix_nondep ?c] =>
+          destruct (ci_cofix_nondep c) eqn:hnd end.
+        2:{ (* the flag is unset: both sides keep the case *)
+          simpl. rewrite map_map_compose. f_equal; auto.
+          { erewrite -> rho_rename_pred; tea => //. }
+          { simp rho. rewrite !rename_mkApps /= !map_map_compose !compose_map_def /=.
+            simp rho. f_equal. f_equal.
+            rewrite /map_fix map_map_compose. rewrite -H.
+            autorewrite with len. reflexivity.
+            now rewrite -Heq !map_map_compose. }
+          now rewrite !map_map_compose in H0. }
         case efix: (nth_error mfix idx) => [d|] /= //.
         + rewrite rename_mkApps !map_map_compose compose_map_def.
           f_equal. erewrite -> rho_rename_pred; tea => //.
@@ -3784,6 +3801,7 @@ Section Rho.
     - (* Case-CoFix reduction *)
       rewrite rho_app_case.
       rewrite decompose_app_mkApps; auto.
+      rewrite Hnondep.
       unfold unfold_cofix in heq_unfold_cofix |- *.
       destruct nth_error eqn:Heq; noconf heq_unfold_cofix. simpl.
       eapply All2_prop2_eq_split in X3. intuition.
@@ -4190,7 +4208,7 @@ Section Rho.
         rewrite /rho_fix_context - (fold_fix_context_rho_ctx_cb xpredT) // in a1.
 
         eapply on_contexts_app_inv in pred_pred_ctx as []. 2:eapply (All2_fold_length predΓ'0).
-        destruct nth_error eqn:Heq. simpl.
+        destruct (ci_cofix_nondep ci) eqn:hnd; [destruct nth_error eqn:Heq|]; simpl.
         * (* CoFix unfolding *)
           pose proof Heq.
           eapply All2_nth_error_Some in Heq; eauto. destruct Heq; intuition auto.
@@ -4236,6 +4254,25 @@ Section Rho.
           --- eapply All2_mix; pcuic.
               eapply All2_prod_inv in a1 as [].
               rewrite /rho_fix_context -(fold_fix_context_rho_ctx_cb xpredT) //. solve_all.
+              eapply All2_impl; [ eassumption | ]; pcuic.
+          --- pcuic.
+
+        * (* the flag is unset: the cofixpoint does not unfold under this case *)
+          eapply pred_case; simpl; eauto; solve_all.
+          eapply All2_map_right_inv in hbrs. solve_all.
+          eapply pred1_pred1_ctx in a4. eapply on_contexts_app_inv in a4 as [] => //.
+          now apply (All2_fold_length predΓ'0).
+          eapply pred_mkApps. constructor. pcuic.
+          --- rewrite /rho_fix_context -(fold_fix_context_rho_ctx xpredT) //. solve_all.
+              rewrite (fix_context_map_fix xpredT) //. solve_all.
+              eapply All2_fold_fold_context_right.
+              eapply All2_fold_impl; tea. solve_all.
+              eapply All_decls_map_right.
+              eapply All_decls_impl; tea. solve_all.
+
+          --- eapply All2_mix; pcuic.
+              eapply All2_prod_inv in a1 as [].
+              rewrite /rho_fix_context -(fold_fix_context_rho_ctx xpredT) //. solve_all.
               eapply All2_impl; [ eassumption | ]; pcuic.
           --- pcuic.
 

@@ -548,8 +548,10 @@ Section Alpha.
       { eapply ctx_inst_impl with (1 := HIHctxi). intros ? ? [? r]. pattern Γ, t, T in r. exact r. }
       destruct X1 as [eqpars [eqinst [eqctx eqret]]].
       assert (iscof' : (isCoFinite (ind_finite mdecl) ==>
-        on_free_vars (strengthenP 0 1 xpredT) (preturn p')) = true).
-      { apply/implyP => hcof. move/implyP: iscof => /(_ hcof) h.
+        (ind.(ci_cofix_nondep) ==>
+         on_free_vars (strengthenP 0 1 xpredT) (preturn p'))) = true).
+      { apply/implyP => hcof. apply/implyP => hnd.
+        move/implyP: iscof => /(_ hcof) /implyP /(_ hnd) h.
         eapply PCUICConfluence.eq_term_upto_univ_napp_on_free_vars; tea. }
       assert (wf_predicate mdecl idecl p').
       { destruct wfp. split; auto.

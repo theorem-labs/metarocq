@@ -280,10 +280,12 @@ Section Check.
             end
           else None
         | Some (tCoFix mfix idx, cargs) =>
-          match unfold_cofix mfix idx with
-          | Some (narg, fn) => whd_fuel fuel Γ (tCase ci p (mkApps fn cargs) brs) args
-          | None => None
-          end
+          if ci.(ci_cofix_nondep) then
+            match unfold_cofix mfix idx with
+            | Some (narg, fn) => whd_fuel fuel Γ (tCase ci p (mkApps fn cargs) brs) args
+            | None => None
+            end
+          else Some (tCase ci p (mkApps (tCoFix mfix idx) cargs) brs, args)
         | Some (t', cargs) => Some (tCase ci p (mkApps t' cargs) brs, args)
         | None => None
         end
@@ -569,8 +571,11 @@ Section Check.
         apply Nat.eqb_eq in hlen.
         eapply whd_iota; [exact hc|exact hbr|exact hlen|now apply IH].
       + (* a cofixpoint *)
-        destruct (unfold_cofix mfix idx) as [[narg fn]|] eqn:hu; [|discriminate].
-        eapply whd_case_cofix; [exact hc|exact hu|now apply IH].
+        destruct (ci_cofix_nondep ci) eqn:hnd.
+        * destruct (unfold_cofix mfix idx) as [[narg fn]|] eqn:hu; [|discriminate].
+          eapply whd_case_cofix; [exact hnd|exact hc|exact hu|now apply IH].
+        * injection e as <- <-.
+          eapply whd_case_stuck; [exact hc|reflexivity|rewrite hnd; reflexivity].
     - (* tProj *)
       destruct (whd_fuel fuel Γ c []) as [[t' cargs]|] eqn:hc; [|discriminate].
       apply IH in hc.

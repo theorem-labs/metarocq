@@ -375,8 +375,8 @@ struct
     let block = List.rev defs in
     Coq_tCoFix (block, b)
 
-  let mkCase (ind, npar, r) (univs, pars, pctx, pret) c brs =
-    let info = { ci_ind = ind; ci_npar = npar; ci_relevance = r } in
+  let mkCase (ind, npar, r, nondep) (univs, pars, pctx, pret) c brs =
+    let info = { ci_ind = ind; ci_npar = npar; ci_relevance = r; ci_cofix_nondep = nondep } in
     let pred = { pparams = Array.to_list pars;
                  puinst = univs;
                  pcontext = List.rev (Array.to_list pctx);

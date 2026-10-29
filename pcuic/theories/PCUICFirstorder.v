@@ -658,7 +658,7 @@ Proof using Type.
       unshelve eapply declared_constructor_to_gen; eauto.
     + exfalso. eapply invert_fix_ind with (args := []) in Hty as [].
       destruct unfold_fix as [ [] | ]; auto. eapply nth_error_nil.
-    + exfalso. eapply (typing_cofix_coind (args := [])) in Hty. red in Hty.
+    + exfalso. eapply (PCUICSafeLemmata.typing_cofix_coind (args := [])) in Hty. red in Hty.
       red in Hfo. unfold firstorder_ind in Hfo.
       destruct lookup_env eqn:E; try congruence.
       destruct g; try congruence.
@@ -704,7 +704,7 @@ Proof using Type.
        destruct (nth_error mfix idx); auto.
        inversion E; subst; clear E.
        eapply nth_error_None. lia.
-    + exfalso. eapply (typing_cofix_coind (args := args')) in Hty.
+    + exfalso. eapply (PCUICSafeLemmata.typing_cofix_coind (args := args')) in Hty.
       red in Hfo. unfold firstorder_ind in Hfo.
       destruct lookup_env eqn:E; try congruence.
       destruct g; try congruence.

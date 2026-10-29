@@ -151,7 +151,7 @@ Proof.
       + eapply inst_unfold_fix. eassumption.
       + eapply is_constructor_inst. assumption.
     - simpl. rewrite !inst_mkApps. simpl.
-      eapply cumul_cofix_case.
+      eapply cumul_cofix_case; [assumption|].
       eapply inst_unfold_cofix. eassumption.
     - simpl. rewrite 2!inst_mkApps. simpl.
       eapply cumul_cofix_proj.
@@ -467,8 +467,10 @@ Proof.
       IHpret IHpredctx isallowed Her.
     intros IHctxi Hc IHc iscof ptm wfbrs Hbrs Δ f HΔ Hf.
     assert (iscof' : (isCoFinite (ind_finite mdecl) ==>
-      on_free_vars (strengthenP 0 1 xpredT) (preturn (inst_predicate f p))) = true).
-    { apply/implyP => hcof. move/implyP: iscof => /(_ hcof) h.
+      (ci.(ci_cofix_nondep) ==>
+       on_free_vars (strengthenP 0 1 xpredT) (preturn (inst_predicate f p)))) = true).
+    { apply/implyP => hcof. apply/implyP => hnd.
+      move/implyP: iscof => /(_ hcof) /implyP /(_ hnd) h.
       rewrite -inst_predicate_preturn.
       eapply (on_free_vars_nondep_inst _ (shiftnP #|Γ| xpred0)); [| | |exact h].
       - rewrite (wf_predicate_length_pcontext wfp). lia.

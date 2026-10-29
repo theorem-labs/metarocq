@@ -208,6 +208,7 @@ Proof.
     (PCUICAst.PCUICEnvironment.declarations Σ) norm' prf prf6 X eq_refl axf ht fo).
   pose proof wf as [].
   forward H by unshelve (eapply PCUICClassification.wcbveval_red; tea).
+  forward H by (exists v; exact ev).
   forward H. {
     intros [? hr].
     eapply PCUICNormalization.firstorder_value_irred; tea. cbn.
@@ -375,6 +376,7 @@ Section PCUICProof.
     epose proof (@erase_correct_strong optimized_abstract_env_impl g Σ.2 prf0 t v i u args _ _ hprefix prf1 prf2 Σ eq_refl ax ht fo).
     pose proof (proj1 pr) as [[]].
     forward H. eapply PCUICClassification.wcbveval_red; tea.
+    forward H by (eexists; tea).
     assert (PCUICFirstorder.firstorder_value Σ [] v).
     { eapply PCUICFirstorder.firstorder_value_spec; tea. apply w. constructor.
       eapply PCUICClassification.subject_reduction_eval; tea.
@@ -689,10 +691,10 @@ Section PCUICInv.
       destruct H0. destruct H0. now eapply nth_error_Some_length in H3.
       rewrite -it_mkProd_or_LetIn_app.
       rewrite -onNpars in l, H1.
-      move/PCUICClassification.typing_spine_smash.
+      move/PCUICSafeLemmata.typing_spine_smash.
       rewrite expand_lets_mkApps.
       have lenargs : #|args| = context_assumptions (ind_params mind') + context_assumptions (cstr_args cdecl') by lia.
-      move/(PCUICClassification.typing_spine_all_inv _).
+      move/(PCUICSafeLemmata.typing_spine_all_inv _).
       intros h; forward h. rewrite context_assumptions_smash_context /= context_assumptions_app.
       rewrite /args' /pars. now len.
       rewrite expand_lets_mkApps PCUICLiftSubst.subst_mkApps /= in h.
@@ -749,7 +751,7 @@ Section ErasureFunction.
     exists ar, ∥ typing_spine Σ Γ T args ar ∥ /\ isArity ar.
   Proof.
     intros wfΓ sp isa.
-    unshelve epose proof (PCUICClassification.isArity_typing_spine _ sp); eauto.
+    unshelve epose proof (PCUICSafeLemmata.isArity_typing_spine _ sp); eauto.
     forward H.
     { exists T. split; eauto. sq.
       pose proof (typing_spine_isType_dom sp).
@@ -842,10 +844,15 @@ Section ErasureFunction.
       now rewrite /isFunction /isFixApp !head_mkApps //= orb_true_r.
   Qed.
 
+  (* A closed well-typed function either evaluates to a value or reduces to a term on
+     which the machine is stuck: a match on a cofixpoint whose return type depends on the
+     scrutinee, in evaluation position ([reduces_to_wcbv_stuck]). The second disjunct is
+     not excluded here, and real programs reach it. *)
   Lemma pcuic_function_value (wfl := default_wcbv_flags)
     {guard_impl : abstract_guard_impl}
     (cf:=config.extraction_checker_flags) {Σ : global_env_ext} {f na A B}
-    (wfΣ : wf_ext Σ) (axfree : axiom_free Σ) (wf : Σ ;;; [] |- f : PCUICAst.tProd na A B) : { v & PCUICWcbvEval.eval Σ f v }.
+    (wfΣ : wf_ext Σ) (axfree : axiom_free Σ) (wf : Σ ;;; [] |- f : PCUICAst.tProd na A B) :
+    { v & PCUICWcbvEval.eval Σ f v } + PCUICClassification.reduces_to_wcbv_stuck Σ f.
   Proof.
     eapply (PCUICNormalization.wcbv_normalization wfΣ axfree wf). Unshelve.
     exact PCUICSN.extraction_normalizing.
@@ -858,12 +865,12 @@ Section ErasureFunction.
     (wf : ∥ Σ ;;; [] |- f : PCUICAst.tProd na A B ∥) pr :
     axiom_free Σ ->
     ∥ nisErasable Σ [] f ∥ ->
+    (∑ v0, PCUICWcbvEval.eval Σ f v0) ->
     let (Σ', f') := transform erase_transform (Σ, f) pr in
     eval Σ' f' v' -> isFunction v' = true.
   Proof.
-    intros axfree nise.
+    intros axfree nise [v hv].
     destruct pr as [[]]. destruct wf.
-    epose proof (pcuic_function_value w.1 axfree X) as [v hv].
     eapply erase_function; tea. now sq.
   Qed.
 
@@ -1846,9 +1853,19 @@ Section PCUICErase.
     axiom_free Σ ->
     ∥ nisErasable Σ [] f ∥ ->
     let tr := transform verified_erasure_pipeline (Σ, f) pr in
-    eval (wfl := extraction_wcbv_flags) tr.1 tr.2 v' -> isFunction v' = true.
+    (eval (wfl := extraction_wcbv_flags) tr.1 tr.2 v' -> isFunction v' = true)
+    \/ ∥ PCUICClassification.reduces_to_wcbv_stuck Σ f ∥.
   Proof.
     intros axfree nise.
+    (* decide the source function up front: either it evaluates, or it is the stuck form,
+       which is the right disjunct and the case ruled out at the empty type. *)
+    pose proof pr as prcopy. destruct prcopy as [[[wfextΣ _]] _].
+    destruct wf as [wftyp].
+    destruct (pcuic_function_value (Σ:=Σ) wfextΣ axfree wftyp) as [[vorig evorig] | hstuck]; cycle 1.
+    { right. sq. exact hstuck. }
+    left.
+    assert (wf : ∥ Σ ;;; [] |- f : PCUICAst.tProd na A B ∥) by (sq; exact wftyp).
+    assert (clf : PCUICAst.closedn 0 f) by (now eapply PCUICClosedTyp.subject_closed in wftyp).
     unfold verified_erasure_pipeline.
     rewrite -!transform_compose_assoc.
     pose proof (expand_lets_function Σ (fun p : global_env_ext_map =>
@@ -1856,19 +1873,24 @@ Section PCUICErase.
     (wf_ext p -> PCUICWeakeningEnvSN.normalizationInAdjustUniversesIn p)) f na A B wf pr).
     destruct_compose. intros pre.
     set (trexp := transform (pcuic_expand_lets_transform _) _ _) in *.
+    assert (evexp : PCUICWcbvEval.eval trexp.1 trexp.2 (PCUICExpandLets.trans vorig)).
+    { subst trexp; cbn [transform pcuic_expand_lets_transform fst snd].
+      unshelve eapply (PCUICExpandLetsCorrectness.trans_wcbveval (cf := extraction_checker_flags) (Σ := Σ)).
+      all: try exact clf; try exact evorig; try exact (wf_ext_wf _ wfextΣ);
+           try (now apply PCUICExpandLetsCorrectness.trans_wf, (wf_ext_wf _ wfextΣ)). }
     eapply (PCUICExpandLetsCorrectness.trans_axiom_free Σ) in axfree.
     have nise' : ∥ nisErasable trexp.1 [] trexp.2 ∥.
     destruct pr as [[[]] ?], nise. sq; now eapply nisErasable_lets.
     change (trans_global_env _) with (global_env_ext_map_global_env_ext trexp.1).1 in axfree.
-    clearbody trexp. clear nise pr wf Σ f. destruct trexp as [Σ f].
+    clearbody trexp. clear nise pr wf wftyp clf evorig wfextΣ Σ f. destruct trexp as [Σ f].
     pose proof pre as pre'; destruct pre' as [[[wf _]] _].
-    pose proof (map_squash (pcuic_function_value wf axfree) H) as [[v ev]].
+    pose proof (existT (fun v => PCUICWcbvEval.eval Σ f v) (PCUICExpandLets.trans vorig) evexp) as [v ev].
     epose proof (Transform.preservation erase_transform).
     specialize (H0 _ v pre (sq ev)).
     revert H0.
     destruct_compose. intros pre' htr.
     destruct htr as [v'' [ev' _]].
-    epose proof (erase_function_to_function _ f v'' _ _ _ H pre axfree nise').
+    epose proof (erase_function_to_function _ f v'' _ _ _ H pre axfree nise' (existT _ (PCUICExpandLets.trans vorig) evexp)).
     set (tre := transform erase_transform _ _) in *. clearbody tre.
     cbn -[transform obseq].
     intros ev2. red in ev'. destruct ev'.
@@ -1900,9 +1922,17 @@ Section PCUICErase.
     axiom_free Σ ->
     ∥ nisErasable Σ [] f ∥ ->
     let tr := transform verified_erasure_pipeline (Σ, f) pr in
-    exists v, ∥ eval (wfl := extraction_wcbv_flags) tr.1 tr.2 v ∥ /\ isFunction v = true.
+    (exists v, ∥ eval (wfl := extraction_wcbv_flags) tr.1 tr.2 v ∥ /\ isFunction v = true)
+    \/ ∥ PCUICClassification.reduces_to_wcbv_stuck Σ f ∥.
   Proof.
     intros axfree nise.
+    pose proof pr as prcopy. destruct prcopy as [[[wfextΣ _]] _].
+    destruct wf as [wftyp].
+    destruct (pcuic_function_value (Σ:=Σ) wfextΣ axfree wftyp) as [[vorig evorig] | hstuck]; cycle 1.
+    { right. sq. exact hstuck. }
+    left.
+    assert (wf : ∥ Σ ;;; [] |- f : PCUICAst.tProd na A B ∥) by (sq; exact wftyp).
+    assert (clf : PCUICAst.closedn 0 f) by (now eapply PCUICClosedTyp.subject_closed in wftyp).
     unfold verified_erasure_pipeline.
     rewrite -!transform_compose_assoc.
     pose proof (expand_lets_function Σ (fun p : global_env_ext_map =>
@@ -1910,19 +1940,24 @@ Section PCUICErase.
     (wf_ext p -> PCUICWeakeningEnvSN.normalizationInAdjustUniversesIn p)) f na A B wf pr).
     destruct_compose. intros pre.
     set (trexp := transform (pcuic_expand_lets_transform _) _ _) in *.
+    assert (evexp : PCUICWcbvEval.eval trexp.1 trexp.2 (PCUICExpandLets.trans vorig)).
+    { subst trexp; cbn [transform pcuic_expand_lets_transform fst snd].
+      unshelve eapply (PCUICExpandLetsCorrectness.trans_wcbveval (cf := extraction_checker_flags) (Σ := Σ)).
+      all: try exact clf; try exact evorig; try exact (wf_ext_wf _ wfextΣ);
+           try (now apply PCUICExpandLetsCorrectness.trans_wf, (wf_ext_wf _ wfextΣ)). }
     eapply (PCUICExpandLetsCorrectness.trans_axiom_free Σ) in axfree.
     have nise' : ∥ nisErasable trexp.1 [] trexp.2 ∥.
     destruct pr as [[[]] ?], nise. sq; now eapply nisErasable_lets.
     change (trans_global_env _) with (global_env_ext_map_global_env_ext trexp.1).1 in axfree.
-    clearbody trexp. clear nise pr wf Σ f. destruct trexp as [Σ f].
+    clearbody trexp. clear nise pr wf wftyp clf evorig wfextΣ Σ f. destruct trexp as [Σ f].
     pose proof pre as pre'; destruct pre' as [[[wf _]] _].
-    pose proof (map_squash (pcuic_function_value wf axfree) H) as [[v ev]].
+    pose proof (existT (fun v => PCUICWcbvEval.eval Σ f v) (PCUICExpandLets.trans vorig) evexp) as [v ev].
     epose proof (Transform.preservation erase_transform).
     specialize (H0 _ v pre (sq ev)).
     revert H0.
     destruct_compose. intros pre' htr.
     destruct htr as [v'' [ev' _]].
-    epose proof (erase_function_to_function _ f v'' _ _ _ H pre axfree nise').
+    epose proof (erase_function_to_function _ f v'' _ _ _ H pre axfree nise' (existT _ (PCUICExpandLets.trans vorig) evexp)).
     set (tre := transform erase_transform _ _) in *. clearbody tre.
     cbn -[transform obseq].
     red in ev'. destruct ev'.

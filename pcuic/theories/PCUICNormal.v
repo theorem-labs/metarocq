@@ -126,6 +126,12 @@ Section Normal.
       RedFlags.iota flags = false ->
       whne Γ (tCase i p c brs)
 
+  (* A cofixpoint does not unfold under a case whose return type may depend on the
+     scrutinee ([ci_cofix_nondep] unset), so such a case is stuck. *)
+  | whne_case_cofix_dep i p mfix idx args brs :
+      i.(ci_cofix_nondep) = false ->
+      whne Γ (tCase i p (mkApps (tCoFix mfix idx) args) brs)
+
   | whne_proj p c :
       whne Γ c ->
       whne Γ (tProj p c)
@@ -622,6 +628,25 @@ Qed.
 #[global]
 Hint Resolve whnf_fixapp' : core.
 
+(** A case on a scrutinee that is a cofixpoint applied to arguments is stuck when the
+    [ci_cofix_nondep] flag of the case is unset. This decides that shape. *)
+Definition stuck_cofix_case_dec (ci : case_info) (c : term) :
+  (∑ mfix idx args, (c = mkApps (tCoFix mfix idx) args) × ci.(ci_cofix_nondep) = false)
+  + (forall mfix idx args, c = mkApps (tCoFix mfix idx) args -> ci.(ci_cofix_nondep) = false -> False).
+Proof.
+  destruct ci.(ci_cofix_nondep) eqn:Edep.
+  { right. congruence. }
+  destruct (decompose_app c) as [hd cargs] eqn:Eda.
+  pose proof (decompose_app_notApp _ _ _ Eda) as notapp.
+  apply decompose_app_inv in Eda as ->.
+  destruct hd.
+  all: try solve [ discriminate notapp
+                 | right; intros ? ? ? eq _;
+                   apply mkApps_eq_inj in eq as [heq _]; [discriminate heq| |];
+                   now rewrite ?notapp ].
+  left. exists mfix, idx, cargs. split; reflexivity.
+Defined.
+
 (** A default weak-head normal form that is neutral under [nodelta] is neutral
     under [default], unless it is one of §6's two non-neutral primitive shapes
     ([primapp_nonneutral]).  The disjunct is needed: [nodelta] makes every
@@ -937,14 +962,20 @@ Proof with eauto using sq with pcuic; try congruence.
       exact (snd (whnf_whne_const_app_dec flags Σ Γ k ui [] All_nil)) end.
   - left. constructor. eapply whnf_indapp with (v := []).
   - left. constructor. eapply whnf_cstrapp with (v := []).
-  - destruct (RedFlags.iota flags) eqn:Eq...
+  - destruct (stuck_cofix_case_dec ind t) as [(mfix&idx&cargs&->&Edep)|Hno].
+    { left. constructor. constructor. now apply whne_case_cofix_dep. }
+    destruct (RedFlags.iota flags) eqn:Eq...
     destruct (IHt Γ) as [_ []].
     + left. destruct s...
     + right. intros [w]. depelim w. depelim w. all:help...
-  - destruct (RedFlags.iota flags) eqn:Eq...
+      all: try (now eapply Hno).
+  - destruct (stuck_cofix_case_dec ind t) as [(mfix&idx&cargs&->&Edep)|Hno].
+    { left. constructor. now apply whne_case_cofix_dep. }
+    destruct (RedFlags.iota flags) eqn:Eq...
     destruct (IHt Γ) as [_ []].
     + left. destruct s...
     + right. intros [w]. depelim w. all:help...
+      all: try (now eapply Hno).
   - destruct (RedFlags.iota flags) eqn:Eq...
     destruct (IHt Γ) as [_ []].
     + left. destruct s0...
@@ -1326,6 +1357,10 @@ Lemma whne_red1_ind {cf:checker_flags} {wfΣ : wf Σ}
           RedFlags.iota flags = false ->
           red1 Σ Γ (tCase i p c brs) t' ->
           P (tCase i p c brs) t')
+      (Hcase_cofix_dep : forall t' i p mfix idx args brs,
+          i.(ci_cofix_nondep) = false ->
+          red1 Σ Γ (tCase i p (mkApps (tCoFix mfix idx) args) brs) t' ->
+          P (tCase i p (mkApps (tCoFix mfix idx) args) brs) t')
       (Hproj : forall p c c',
           whne flags Σ Γ c ->
           red1 Σ Γ c c' ->
@@ -1455,6 +1490,7 @@ Proof using Type.
         try reflexivity; try discriminate.
       all: depelim w; help.
   - eauto.
+  - eapply Hcase_cofix_dep; eauto.
   - depelim r; eauto. all: try solve [help].
     + try solve_discr.
       all: eapply whne_mkApps_inv in wh as [[w|(? & ? & ? & ? & e3 & _)]|(? & ? & ? & ? & e3 & _)];
@@ -1501,6 +1537,19 @@ Proof.
     + eapply whne_fixapp; eauto.
     + eapply whne_fixapp; eauto.
       now inv e0.
+  - match goal with
+    | h : red1 _ _ (tCase _ _ (mkApps (tCoFix _ _) _) _) _ |- _ => depelim h
+    end.
+    + solve_discr.
+    + solve_discr.
+    + congruence.
+    + now apply whne_case_cofix_dep.
+    + now apply whne_case_cofix_dep.
+    + match goal with
+      | h : red1 _ _ (mkApps (tCoFix _ _) _) _ |- _ =>
+        eapply red1_mkApps_tCoFix_inv in h as [[(?&->&?)|(?&->&?)]|(?&->&?)]
+      end; now apply whne_case_cofix_dep.
+    + now apply whne_case_cofix_dep.
   - (* Hprimapp_stuck: a stuck primitive application steps inside an argument *)
     clear r wh.
     rename c into c0, u into u0, decl into decl0, op into op0,
@@ -1869,6 +1918,9 @@ Proof.
   - destruct p. econstructor; simpl; eauto.
     * eapply All2_same; auto.
     * eapply All2_same; intuition auto.
+  - destruct p. econstructor; simpl; eauto.
+    * eapply All2_same; auto.
+    * eapply All2_same; intuition auto.
 Qed.
 
 Lemma whnf_red_refl Σ Γ t :
@@ -2191,6 +2243,25 @@ Proof.
     * eapply OnOne2_All2; eauto.
       cbn. intros ? ? [? <-].
       intuition eauto; try reflexivity.
+  - match goal with
+    | h : red1 _ _ (tCase _ _ (mkApps (tCoFix _ _) _) _) _ |- _ => depelim h
+    end.
+    + solve_discr.
+    + solve_discr.
+    + congruence.
+    + constructor; auto.
+      * eapply OnOne2_All2; eauto.
+      * eapply All2_same; intuition auto.
+    + econstructor; auto. apply All2_same; auto.
+      eapply All2_same; intuition auto.
+    + destruct p; econstructor; eauto; simpl.
+      * eapply All2_same; auto.
+      * eapply All2_same; intuition auto.
+    + destruct p; econstructor; eauto; simpl.
+      * eapply All2_same; reflexivity.
+      * eapply OnOne2_All2; eauto.
+        cbn. intros ? ? [? <-].
+        intuition eauto; try reflexivity.
   - (* Hprimapp_stuck: the step is inside an argument; the head stays *)
     rename c into c0, u into u0, decl into decl0, op into op0,
            ls into ls0, a into a0, rest into rest0.
@@ -2370,6 +2441,12 @@ Proof.
     + destruct args using MRList.rev_ind;
         [now rewrite nth_error_nil in e0
         |rewrite mkApps_app in x; discriminate x].
+  - match goal with
+    | [ H : eq_term_upto_univ_napp _ _ _ _ _ (mkApps (tCoFix _ _) _) _ |- _ ] =>
+      apply eq_term_upto_univ_napp_mkApps_l_inv in H as (?&?&(eqhd&?)&->)
+    end.
+    depelim eqhd.
+    now apply whne_case_cofix_dep.
   - (* whne_primapp_stuck: the literal prefix and the blocking argument persist *)
     apply eq_term_upto_univ_napp_mkApps_l_inv in eq as (hd'&args'&(eq_hd&eq_args)&->).
     depelim eq_hd.

@@ -2048,7 +2048,7 @@ Proof.
     eapply wt_inv in wt. cbn in wt.
     destruct wt as [wtpars [idecl [cdecl []]]].
     eapply wt_mkApps_inv in w2 as [].
-    apply (trans_unfold_cofix (shiftnP #|Γ| xpred0)) in H; eauto with wf.
+    apply (trans_unfold_cofix (shiftnP #|Γ| xpred0)) in H0; eauto with wf.
     eapply red1_red, red_cofix_case; eauto.
     now eapply wt_on_free_vars in w2.
 
@@ -2330,7 +2330,7 @@ Proof.
       |mfix idx narg fn args c t cargs hu hn w IH hc
       |mfix idx narg fn args hu hn|mfix idx args hu
       |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
-      |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |ci p c brs args mfix idx cargs narg fn h l hnd w1 IH1 hu w2 IH2
       |ci p c brs args t cargs w IH hc hcf
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
@@ -2443,6 +2443,7 @@ Proof.
     specialize (IH2 wt'). cbn [trans] in IH2. rewrite (trans_mkApps fn cargs) in IH2.
     eapply whd_case_cofix with (mfix := map (map_def trans trans) mfix) (cargs := map trans cargs)
       (narg := narg) (fn := trans fn).
+    + exact hnd.
     + exact (IH1 wtc).
     + exact (trans_unfold_cofix _ _ _ _ _ oncf hu).
     + exact IH2.
@@ -2634,7 +2635,7 @@ Proof.
       |mfix idx narg fn args c t cargs hu hn w IH hc
       |mfix idx narg fn args hu hn|mfix idx args hu
       |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
-      |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |ci p c brs args mfix idx cargs narg fn h l hnd w1 IH1 hu w2 IH2
       |ci p c brs args t cargs w IH hc hcf
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
@@ -2773,7 +2774,7 @@ Proof.
       |mfix idx narg fn args c t cargs hu hn w IH hc
       |mfix idx narg fn args hu hn|mfix idx args hu
       |ci p c brs args n ui cargs br h l w1 IH1 hbr hlen w2 IH2
-      |ci p c brs args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
+      |ci p c brs args mfix idx cargs narg fn h l hnd w1 IH1 hu w2 IH2
       |ci p c brs args t cargs w IH hc hcf
       |p c args u cargs a h l w1 IH1 ha w2 IH2
       |p c args mfix idx cargs narg fn h l w1 IH1 hu w2 IH2
@@ -2871,6 +2872,7 @@ Proof.
     specialize (IH2 hta'). cbn [trans] in IH2. rewrite (trans_mkApps fn cargs) in IH2.
     eapply whd_case_cofix with (mfix := map (map_def trans trans) mfix) (cargs := map trans cargs)
       (narg := narg) (fn := trans fn).
+    + exact hnd.
     + exact (IH1 onc).
     + exact (trans_unfold_cofix _ _ _ _ _ oncf hu).
     + exact IH2.
@@ -4491,8 +4493,9 @@ Proof.
           eapply wf_local_closed_context in wfctx.
           now move: wfctx; rewrite on_free_vars_ctx_app /= => /andP[].
           exact X. }
-    + match goal with h : (isCoFinite _ ==> on_free_vars _ _) = true |- _ => move: h end.
-      cbn. case: (isCoFinite _) => //=. apply trans_on_free_vars.
+    + match goal with h : (isCoFinite _ ==> (_ ==> on_free_vars _ _)) = true |- _ => move: h end.
+      cbn. case: (isCoFinite _) => //=. case: (ci_cofix_nondep ci) => //=.
+      apply trans_on_free_vars.
     + red. eapply Forall2_map_right, Forall2_map.
       eapply Forall2_All2 in H5.
       eapply All2i_All2_mix_left in X8; tea.
@@ -6796,7 +6799,7 @@ Proof.
     cbn in IHev2. rewrite trans_mkApps /= in IHev1.
     eapply (trans_unfold_cofix xpred0) in e; tea.
     2:now eapply (@closedn_on_free_vars xpred0 0).
-    eapply eval_cofix_case. 2:eauto.
+    eapply eval_cofix_case. 1:assumption. 2:eauto.
     rewrite -closed_unfold_cofix_cunfold_eq; tea.
     now eapply closedn_trans in clfix.
     rewrite trans_mkApps in IHev2 => //.
