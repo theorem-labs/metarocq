@@ -25,6 +25,9 @@
      not prove the congruence cases (η and the [red1] step in different
      subterms), which need the [red1] context transport for η-related let bodies
      and case/fixpoint contexts.
+     Statement change: [pp_prim] no longer has the premise [prim_op_of Σ c = Some op]
+     (dropped when the primitive clause of [eta_safe] became "no applied primitive
+     value"); the lemma without it is stronger, and its callers lose nothing.
   3. Lift [R_c*] from [canon T] back to [red] on [T] (backward simulation of [red1]
      through [canon]: [canon_dom] is a normal sort and every redex of [canon T] is
      the image of a redex of [T]).
@@ -790,24 +793,24 @@ Section TypedSafe.
   Qed.
 
   (** The one statement used here that the tree does not give: the [rarg]-th argument of
-      a typed applied fixpoint has a sort-typed type that is E-convertible to an applied
-      inductive. Its proof needs the E typing spine: the spine's domains are
-      E-convertible to the products of a type that [wf_fixpointE] relates to a telescope
-      whose [rarg]-th assumption is an applied inductive.
+      a typed applied fixpoint has a type that is E-convertible to an applied inductive.
+      Its proof needs the E typing spine: the spine's domains are E-convertible to the
+      products of a type that [wf_fixpointE] relates to a telescope whose [rarg]-th
+      assumption is an applied inductive.
 
       It is not the known-false neighbour ("[welltypedE T] and [T] E-convertible to an
-      inductive head give a reduction to that head", refuted by [λx:A. I x]): its
-      premise is a typing of the whole applied fixpoint, not a [welltypedE]-only
-      premise on an inductive-head term, and its conclusion is the E-conversion of a
-      domain [A] typed at a sort, which [λx:A. I x] (a product-typed λ) can never be.
-      Satisfying instance: [fix_rarg_inductive_instance] below. *)
+      inductive head give a REDUCTION of [T] to that head", refuted by [λx:A. I x]):
+      its premise is a typing of the whole applied fixpoint, not a [welltypedE]-only
+      premise on an inductive-head term, and its conclusion is only an E-CONVERSION of
+      the argument's type with an applied inductive, which the η-expansion [λx:A. I x]
+      would satisfy too; it claims no reduction. Satisfying instance:
+      [fix_rarg_inductive_instance] below. *)
   Definition fix_rarg_inductive_statement : Type :=
     forall Γ mfix idx args narg fn a T,
       Σ ;;; Γ |-E mkApps (tFix mfix idx) args : T ->
       unfold_fix mfix idx = Some (narg, fn) ->
       nth_error args narg = Some a ->
-      ∑ A s ind u l, [× Σ ;;; Γ |-E a : A, Σ ;;; Γ |-E A : tSort s &
-                        ws_cumul_pbE Cumul Σ Γ A (mkApps (tInd ind u) l)].
+      ∑ A ind u l, (Σ ;;; Γ |-E a : A) × ws_cumul_pbE Cumul Σ Γ A (mkApps (tInd ind u) l).
 
   (* FORECAST-ONLY: provable from the E copies of PCUICArities.typing_spine / PCUICSpine (copies 14/15) *)
   Context (fix_rarg_inductive : fix_rarg_inductive_statement).
@@ -820,7 +823,7 @@ Section TypedSafe.
     destruct (unfold_fix mfix idx) as [[narg fn]|] eqn:hu; cbv beta iota; [|reflexivity].
     destruct (nth_error args narg) as [a|] eqn:hn; cbv beta iota; [|reflexivity].
     apply decompose_app_inv in ed. subst t.
-    destruct (fix_rarg_inductive _ _ _ _ _ _ _ _ ht hu hn) as (A & s & ind & u & l & [ha _ hA]).
+    destruct (fix_rarg_inductive _ _ _ _ _ _ _ _ ht hu hn) as (A & ind & u & l & ha & hA).
     destruct a; try reflexivity.
     exfalso. exact (typed_lambda_not_ind _ _ _ _ _ _ _ _ ha hA).
   Qed.
@@ -1029,7 +1032,7 @@ Qed.
 (** A satisfying instance of [fix_rarg_inductive_statement] (the hypothesis of
     [typed_eta_safe]): in [si_Σ], [fix f (x : I (∀P:Prop. P)) : I (∀P:Prop. P) := x]
     applied to [c (∀P:Prop. P)]; the [rarg]-th argument [c (∀P:Prop. P)] has the
-    sort-typed type [I (∀P:Prop. P)], an applied inductive. *)
+    type [I (∀P:Prop. P)], an applied inductive. *)
 Definition t8_ca : term := tApp (tConstruct si_ind 0 []) iv_False.
 
 Lemma t8_ca_typed : si_Σ ;;; [] |-E t8_ca : iv_IF.
@@ -1050,12 +1053,11 @@ Lemma fix_rarg_inductive_instance :
      si_Σ ;;; [] |-E mkApps (tFix iv_mfix 0) [t8_ca] : iv_IF,
      unfold_fix iv_mfix 0 = Some (0, tLambda si_na iv_IF (tRel 0)),
      nth_error [t8_ca] 0 = Some t8_ca &
-     ∑ A s ind u l, [× si_Σ ;;; [] |-E t8_ca : A, si_Σ ;;; [] |-E A : tSort s &
-                       ws_cumul_pbE Cumul si_Σ [] A (mkApps (tInd ind u) l)]].
+     ∑ A ind u l, (si_Σ ;;; [] |-E t8_ca : A) × ws_cumul_pbE Cumul si_Σ [] A (mkApps (tInd ind u) l)].
 Proof.
   split; [exact si_wfE|exact t8_fixapp_typed|reflexivity|reflexivity|].
-  exists iv_IF, sProp, si_ind, [], [iv_False].
-  split; [exact t8_ca_typed|exact (iv_IF_typed [] localenv_nil)|apply ws_cumul_pbE_refl; reflexivity].
+  exists iv_IF, si_ind, [], [iv_False].
+  split; [exact t8_ca_typed|apply ws_cumul_pbE_refl; reflexivity].
 Qed.
 
 End Instances.
