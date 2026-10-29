@@ -51,10 +51,12 @@
   helper that one of these instances runs ([conv_lift_judgmentE], [conv_lift_judgment_univE],
   [ws_cumul_ctx_pbE_vass], [is_closed_projection_contextE],
   [untyped_subslet_projection_contextE], the syntactic helpers). Degenerate points: the Fix
-  row ([iv_fix_typed]) has a witness equal to its declared type (the non-degenerate fixpoint
-  witness is [wf_fixpointE_wf_fixpoint_red_inst], whose declaration [bd_mfix] has no typed
-  body: NOT BUILT as a typed fixpoint); the Ind and Construct rows compare a type with
-  itself.
+  row [typing_inferingE_Fix_inst] ([iv_fix_typed]) has a witness equal to its declared type;
+  the non-degenerate Fix row is [typing_inferingE_Fix_beta_inst] (the typed fixpoint
+  [bdf_fix_typed], whose recursive argument's domain is the β-redex [(λ B. I B) A], so
+  [check_one_fix] fails on the declared type, [bdf_check_fix_dtypeβ], and completeness's Fix
+  case reduces it to [I A] through the witness lemma); the Ind and Construct rows compare a
+  type with itself.
 
   **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
   their E copies: the same set, and the forecast classes are arguments ([About]), not axioms. *)
@@ -247,6 +249,93 @@ Proof.
              (bdf_RFβ_typed bdf_Γcf bdf_wf_Γcf) eq_refl).
 Qed.
 
+(** A typed fixpoint in [si_Σ] whose recursive argument's domain is a β-redex, in
+    [bd_Γ1 = [A : Prop]]: [fix f (x : (λ B : Prop. I B) A) : I A := x]. [check_one_fix]
+    fails on the declared type ([bdf_check_fix_dtypeβ]); the witness is the reduct
+    [Π (x : I A). I A] ([bdf_wf_fix]). [bdf_Dk k] is [(λ B. I B) (tRel k)]. *)
+Definition bdf_Dk (k : nat) : term := tApp (tLambda si_na si_P (tApp (tInd si_ind []) (tRel 0))) (tRel k).
+Definition bdf_fxty (k : nat) : term := tProd si_na (bdf_Dk k) (tApp (tInd si_ind []) (tRel (S k))).
+Definition bdf_fix_dβ : def term :=
+  {| dname := si_na; dtype := bdf_fxty 0; dbody := tLambda si_na (bdf_Dk 1) (tRel 0); rarg := 0 |}.
+Definition bdf_fmfix : mfixpoint term := [bdf_fix_dβ].
+Definition bdf_Γff : context := [vass si_na (bdf_fxty 0); vass si_na si_P].
+
+Lemma bdf_check_fix_dtypeβ : check_one_fix bdf_fix_dβ = None.
+Proof. reflexivity. Qed.
+
+Lemma bdf_dom_typed (Γ : context) k : wf_localE si_Σ Γ -> nth_error Γ k = Some (vass si_na si_P) ->
+  si_Σ ;;; Γ |-E bdf_Dk k : tSort sProp.
+Proof.
+  intros h hk.
+  refine (typeE_App _ _ (tLambda si_na si_P (tApp (tInd si_ind []) (tRel 0))) si_na si_P (tSort sProp) _
+            (tRel k) (bd_arity_typedE _ h) _ (typeE_Rel _ _ k (vass si_na si_P) h hk)).
+  apply typeE_Lambda.
+  - exact (iv_vass si_Σ Γ si_na si_P _ (iv_P_typed si_Σ Γ h) eq_refl).
+  - exact (bd_Ix0_typedE _ h).
+Qed.
+
+Lemma bdf_fxty_typed (Γ : context) k : wf_localE si_Σ Γ -> nth_error Γ k = Some (vass si_na si_P) ->
+  si_Σ ;;; Γ |-E bdf_fxty k : tSort (Sort.sort_of_product sProp sProp).
+Proof.
+  intros h hk.
+  pose proof (bdf_dom_typed Γ k h hk) as hD.
+  pose proof (iv_wf_vass si_Σ Γ si_na (bdf_Dk k) sProp h hD eq_refl) as hx.
+  unfold bdf_fxty. apply typeE_Prod.
+  - exact (iv_vass_s si_Σ Γ si_na (bdf_Dk k) sProp hD eq_refl).
+  - exact (iv_IX_typed _ (tRel (S k)) hx (typeE_Rel _ _ (S k) (vass si_na si_P) hx hk)).
+Qed.
+
+Lemma bdf_wf_Γff : wf_localE si_Σ bdf_Γff.
+Proof.
+  exact (iv_wf_vass si_Σ bd_Γ1 si_na (bdf_fxty 0) _ bd_wfE_Γ1
+           (bdf_fxty_typed bd_Γ1 0 bd_wfE_Γ1 eq_refl) eq_refl).
+Qed.
+
+Lemma bdf_fix_body_typed : si_Σ ;;; bdf_Γff |-E tLambda si_na (bdf_Dk 1) (tRel 0) : lift0 1 (bdf_fxty 0).
+Proof.
+  pose proof (bdf_dom_typed bdf_Γff 1 bdf_wf_Γff eq_refl) as hD.
+  pose proof (iv_wf_vass si_Σ bdf_Γff si_na (bdf_Dk 1) sProp bdf_wf_Γff hD eq_refl) as hx.
+  eapply (typeE_Cumul _ _ _ (tProd si_na (bdf_Dk 1) (bdf_Dk 2)) _ (Sort.sort_of_product sProp sProp)).
+  - apply typeE_Lambda.
+    + exact (iv_vass si_Σ bdf_Γff si_na (bdf_Dk 1) sProp hD eq_refl).
+    + exact (typeE_Rel _ _ 0 (vass si_na (bdf_Dk 1)) hx eq_refl).
+  - exact (bdf_fxty_typed bdf_Γff 1 bdf_wf_Γff eq_refl).
+  - apply (ws_cumul_pbE_forget_spec (pb := Cumul)).
+    apply (red_ws_cumul_pbE (Σ := si_Σ)).
+    apply (closed_red_of (Σ := si_Σ) (Γ := bdf_Γff) (t := tProd si_na (bdf_Dk 1) (bdf_Dk 2)) eq_refl eq_refl).
+    apply rt_step. change (lift0 1 (bdf_fxty 0)) with (tProd si_na (bdf_Dk 1) (tApp (tInd si_ind []) (tRel 2))).
+    apply prod_red_r. exact (red_beta _ _ si_na si_P (tApp (tInd si_ind []) (tRel 0)) (tRel 2)).
+Qed.
+
+Lemma bdf_fix_guard : fix_guard si_Σ bd_Γ1 bdf_fmfix.
+Proof.
+  change (guard_cl Fix si_Σ bd_Γ1 bdf_fmfix). apply gc_check.
+  split; [vm_compute; reflexivity|]. exists 30. vm_compute. reflexivity.
+Qed.
+
+Lemma bdf_wf_fix : wf_fixpointE si_Σ bd_Γ1 bdf_fmfix.
+Proof.
+  split; [reflexivity|]. split; [reflexivity|].
+  exists si_kn. split; [discriminate|]. split; [|reflexivity].
+  constructor; [|constructor].
+  exists (tProd si_na (tApp (tInd si_ind []) (tRel 0)) (tApp (tInd si_ind []) (tRel 1))).
+  split; [reflexivity|]. split; [reflexivity|].
+  apply (ws_cumul_pbE_forget_spec (pb := Conv)).
+  apply (red_ws_cumul_pbE (Σ := si_Σ)).
+  apply (closed_red_of (Σ := si_Σ) (Γ := bd_Γ1) (t := bdf_fxty 0) eq_refl eq_refl).
+  apply rt_step. apply prod_red_l. exact (red_beta _ _ si_na si_P (tApp (tInd si_ind []) (tRel 0)) (tRel 0)).
+Qed.
+
+Lemma bdf_fix_typed : si_Σ ;;; bd_Γ1 |-E tFix bdf_fmfix 0 : bdf_fxty 0.
+Proof.
+  refine (typeE_Fix _ _ bdf_fmfix 0 bdf_fix_dβ bd_wfE_Γ1 bdf_fix_guard eq_refl _ _ bdf_wf_fix).
+  - constructor; [|constructor].
+    exact (iv_vass si_Σ bd_Γ1 si_na (bdf_fxty 0) _ (bdf_fxty_typed bd_Γ1 0 bd_wfE_Γ1 eq_refl) eq_refl).
+  - constructor; [|constructor].
+    exact (iv_vdef si_Σ bdf_Γff si_na _ (lift0 1 (bdf_fxty 0)) _ bdf_fix_body_typed
+             (bdf_fxty_typed bdf_Γff 1 bdf_wf_Γff eq_refl) eq_refl).
+Qed.
+
 Section BDFromPCUICEtaInstances.
 
 (* FORECAST-ONLY: the thirteen classes of [BDFromPCUICEta]; delete each when its row lands. *)
@@ -374,6 +463,16 @@ Definition typing_inferingE_Ind_inst := typing_inferingE (Σ := si_Σ) (wfΣ := 
 Definition typing_inferingE_Construct_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) (iv_cstr_typed [] localenv_nil).
 Definition typing_inferingE_Case_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) iv_match_typed.
 Definition typing_inferingE_Fix_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) iv_fix_typed.
+(** Fix, non-degenerate: the declared type fails [check_one_fix]; completeness's Fix case runs
+    [wf_fixpointE_wf_fixpoint_red] on it. *)
+Definition typing_inferingE_Fix_beta_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_fix_typed.
+
+Lemma wf_fixpointE_wf_fixpoint_red_typed_inst : wf_fixpoint_red si_Σ bd_Γ1 bdf_fmfix.
+Proof.
+  exact (wf_fixpointE_wf_fixpoint_red (Σ := si_Σ) (wfΣ := si_wfE) (mfix := bdf_fmfix) bd_wfE_Γ1
+           (@All_cons _ _ bdf_fix_dβ _ (has_sort_isTypeE _ (bdf_fxty_typed bd_Γ1 0 bd_wfE_Γ1 eq_refl)) All_nil)
+           bdf_wf_fix).
+Qed.
 Definition typing_inferingE_Const_inst := typing_inferingE (Σ := Σ_po) (wfΣ := iv_po_wfE) iv_land_typed.
 Definition typing_inferingE_Prim_inst := typing_inferingE (Σ := Σ_po) (wfΣ := iv_po_wfE) iv_prim_typed.
 Definition typing_inferingE_Proj_inst := typing_inferingE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_proj_typed.
@@ -475,4 +574,5 @@ Print Assumptions wf_fixpointE_wf_fixpoint_red_inst.
 Print Assumptions typing_inferingE_CoFix_inst.
 Print Assumptions typing_inferingE_Proj_inst.
 Print Assumptions wf_cofixpointE_wf_cofixpoint_red_inst.
+Print Assumptions typing_inferingE_Fix_beta_inst.
 About typing_inferingE.
