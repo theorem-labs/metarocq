@@ -207,6 +207,9 @@ theories/PCUICInversionEta.v
 # The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
 theories/PCUICSREtaConv.v
 theories/PCUICSREtaConvInstances.v
+# Context conversion and context cumulativity of typingE, and their satisfying instances
+theories/Typing/PCUICContextConversionTypEta.v
+theories/PCUICTypingEtaCopy9Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
