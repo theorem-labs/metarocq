@@ -245,4 +245,6 @@ theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
+# Shared model environment for satisfying instances: a universe-polymorphic cumulative indexed inductive with a redex arity (ETAK)
+theories/PCUICEtaIdxEnv.v
 # theories/All.v
