@@ -2,7 +2,7 @@
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICOnFreeVars PCUICEquality
-     PCUICPosition PCUICTypingEta PCUICSNEta PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
+     PCUICPosition PCUICSN PCUICTypingEta PCUICSNEta PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
      PCUICContextConversionEta PCUICPositionEta.
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICSafeReduceEta
   PCUICSafeConversionEtaFacts PCUICSafeConversionEta PCUICTypeCheckerEta.
@@ -36,18 +36,29 @@ Section EtaOracle.
 
   (** [None] when EtaConv's conversion succeeds (soundness: [isconv_term_sound]); [Some e] carries its
       error and no proof (G7). *)
-  Program Definition eta_conv_oracle : conv_oracle :=
-    {| oracle_conv X_type X normalization_in Γ pb t ht u hu :=
-         match isconv_term X_type X (normalization_in := normalization_in)
-                 closed_context_conversionE welltypedE_context Γ pb t ht u hu with
-         | ConvSuccess => None
-         | ConvError e => Some e
-         end |}.
-  Next Obligation.
-    intros X_type X normalization_in Γ pb t ht u hu hc Σ wfΣ.
+  Definition eta_oracle_conv (X_type : abstract_env_impl) (X : X_type.π2.π1)
+    {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}
+    (Γ : context) (pb : conv_pb)
+    (t : term) (ht : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t)
+    (u : term) (hu : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ u) : option ConversionError :=
+    match isconv_term X_type X (normalization_in := normalization_in)
+            closed_context_conversionE welltypedE_context Γ pb t ht u hu with
+    | ConvSuccess => None
+    | ConvError e => Some e
+    end.
+
+  Lemma eta_oracle_conv_sound (X_type : abstract_env_impl) (X : X_type.π2.π1)
+    {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ} Γ pb t ht u hu :
+    eta_oracle_conv X_type X (normalization_in := normalization_in) Γ pb t ht u hu = None ->
+    forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ ws_cumul_pbE pb Σ Γ t u ∥.
+  Proof.
+    intros hc Σ wfΣ. unfold eta_oracle_conv in hc.
     destruct (isconv_term X_type X (normalization_in := normalization_in)
                 closed_context_conversionE welltypedE_context Γ pb t ht u hu) eqn:hconv; [|discriminate].
     exact (isconv_term_sound X_type X (normalization_in := normalization_in)
              closed_context_conversionE welltypedE_context Σ wfΣ Γ pb t ht u hu hconv).
   Qed.
+
+  Definition eta_conv_oracle : conv_oracle :=
+    {| oracle_conv := @eta_oracle_conv; oracle_conv_sound := @eta_oracle_conv_sound |}.
 End EtaOracle.
