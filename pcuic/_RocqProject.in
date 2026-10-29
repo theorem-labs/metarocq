@@ -141,6 +141,8 @@ theories/PCUICTypingEta.v
 theories/PCUICTypingEtaInd.v
 theories/Typing/PCUICWeakeningEnvTypEta.v
 theories/Typing/PCUICClosedTypEta.v
+# The universe facts of a well-formed environment for any conversion relation, and wf_extE -> wfE
+theories/PCUICGlobalEnvEta.v
 # Typing infrastructure over typingE: configuration weakening, renaming, weakening, case
 # well-formedness, instantiation, the guard closure, and their satisfying instances
 theories/Typing/PCUICWeakeningConfigTypEta.v
@@ -221,4 +223,6 @@ theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
+# K3a: the semantic and typed lemmas about the eta views of PCUICPositionEta
+theories/PCUICPositionEtaTyping.v
 # theories/All.v
