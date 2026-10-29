@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (** * Satisfying instances of the hypotheses of [PCUICGenerationEta],
-    [Typing/PCUICUnivSubstitutionTypEta] and [PCUICWfUniversesEta]
+    [Typing/PCUICUnivSubstitutionTypEta], [PCUICWfUniversesEta],
+    [PCUICSubstitutionEta], [PCUICContextsEta] and [PCUICAritiesEta]
 
   Each lemma of these files that has a premise is applied here to a concrete
   instance with every premise proved. The environments:
@@ -11,10 +12,16 @@
     [l0], [l1] and the constraint [l0 = l1] (satisfiable, [ci_Σu_satisfies]);
   - [up_env] (below): one universe-polymorphic axiom [T@{l0} : Type@{l0}];
   - [um_env] (below): one global level [u] and the global constraint [Set ≤ u];
-  - [e0_env]: the empty environment, which [up_env] extends.
-  Universe instances map the bound levels to [Set], so each instantiation
-  changes the term ([Type@{l0}] becomes [Type@{Set}]). The typing spine
-  instance compares [I A] with [(λ_:Prop. I _) A], an η-expansion of the head. *)
+  - [e0_env]: the empty environment, which [up_env] extends;
+  - [rf_Σ] of [PCUICWsCumulEtaCtx] (the empty environment), with the contexts
+    [F : Prop → Prop] and [G : (Prop → Prop) → Prop, F : Prop → Prop], in which
+    [G (λy:Prop. F y)] and [G F] are related by one η step.
+  Universe instances map the bound levels to [Set], so the instantiation changes
+  the term ([Type@{l0}] becomes [Type@{Set}]), except in the instances marked
+  WEAK: those on the monomorphic inductive [I], on the universe-free block
+  [cp_block], and the weakening instances at a bound level. The typing spine
+  instances compare [I A] with [(λ_:Prop. I _) A], an η-expansion of the head, and
+  [G (λy:Prop. F y)] with [G F]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -25,14 +32,20 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICTypingEta PCUICTypingEtaInd PCUICClosedTypEta PCUICWeakeningEnvTypEta
      PCUICCumulativitySpecEtaClosureInstances PCUICEtaFracInstances PCUICWsCumulEtaCtxInstances
      PCUICTypingEtaCopies1Instances
-     PCUICTypingEtaNotions PCUICGenerationEta PCUICUnivSubstitutionTypEta PCUICWfUniversesEta.
+     PCUICTypingEtaNotions PCUICGenerationEta PCUICUnivSubstitutionTypEta PCUICWfUniversesEta
+     PCUICReduction PCUICSigmaCalculus PCUICSubstitution PCUICContexts PCUICArities PCUICEtaDefs
+     PCUICWellScopedCumulativityEta PCUICContextConversionEta PCUICEtaA6 PCUICEtaJoinSpec
+     PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICInstDefEta PCUICInstTypEta PCUICEtaC1b
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICEtaI5.
+From MetaRocq.PCUIC Require PCUICInstDef.
+From Equations.Prop Require Import DepElim.
 
 #[local] Existing Instance default_checker_flags.
 
 (** ** The environments *)
 
 (** A universe-polymorphic axiom [T@{l0} : Type@{l0}]. *)
-Definition up_kn : kername := (MPfile ["E3C2"], "T").
+Definition up_kn : kername := (MPfile ["UPInst"], "T").
 Definition up_s0 : sort := sType (Universe.make' (Level.lvar 0)).
 Definition up_univs : universes_decl := Polymorphic_ctx ([nAnon], ConstraintSet.empty).
 Definition up_cb : constant_body :=
@@ -270,17 +283,17 @@ Qed.
 (** The constructor [c : Π A : Prop. I A] applied to [∀P:Prop. P], at the type
     [(λ_:Prop. I _) (∀P:Prop. P)]. *)
 Lemma typing_spineE_inst :
-  typing_spineE si_Σ [] (tProd si_na si_P (cp_Ix 0)) [g_A] g_T.
+  PCUICGenerationEta.typing_spineE si_Σ [] (tProd si_na si_P (cp_Ix 0)) [g_A] g_T.
 Proof.
-  eapply type_spine_consE.
+  eapply PCUICGenerationEta.type_spine_consE.
   - exact g_cstr_isType.
   - apply cumulE_Refl.
   - exact (ci_False_typed [] localenv_nil).
-  - apply type_spine_nilE; [exact g_T_isType|exact g_cumul].
+  - apply PCUICGenerationEta.type_spine_nilE; [exact g_T_isType|exact g_cumul].
 Qed.
 
 Lemma type_mkAppsE_inst : si_Σ ;;; [] |-E mkApps (tConstruct si_ind 0 []) [g_A] : g_T.
-Proof. exact (type_mkAppsE si_Σ [] _ [g_A] g_T _ (cp_cstr_typed [] localenv_nil) typing_spineE_inst). Qed.
+Proof. exact (PCUICGenerationEta.type_mkAppsE si_Σ [] _ [g_A] g_T _ (cp_cstr_typed [] localenv_nil) typing_spineE_inst). Qed.
 
 (** Abstracting [x : Prop] and the definition [y := x : Prop] over [y]. *)
 Definition g_Δ : context := [vdef si_na (tRel 0) si_P; vass si_na si_P].
@@ -367,6 +380,8 @@ Definition wf_universe_subst_instanceE_inst :=
 Definition wf_sort_subst_instanceE_inst :=
   wf_sort_subst_instanceE up_Σp Monomorphic_ctx [Level.lzero] up_s0 up_wfE up_wf_sort_p up_cu.
 
+(* WEAK: proves satisfiability only; [I], [cp_mp] and [cp_br] mention no
+   universe, so the instance [[Set]] maps both sides to themselves. *)
 Definition subst_instance_case_branch_typeE_inst :=
   @subst_instance_case_branch_typeE _ si_env si_wfE [Level.lzero] cp_ci si_mdecl si_idecl cp_mp
     (case_predicate_context si_ind si_mdecl si_idecl cp_mp) cp_br 0 si_cdecl.
@@ -374,8 +389,12 @@ Definition subst_instance_case_branch_typeE_inst :=
 Lemma si_declared_minductive : declared_minductive si_env si_kn si_mdecl.
 Proof. left; reflexivity. Qed.
 
+(* WEAK: proves satisfiability only; the inductive [I] is monomorphic, so its
+   universe context is empty and [wf_ext_wkE] holds with nothing to check. *)
 Definition declared_inductive_wf_ext_wkE_inst :=
   declared_inductive_wf_ext_wkE si_env si_mdecl si_kn si_wfE si_declared_minductive.
+(* WEAK: proves satisfiability only; the inductive [I] is monomorphic, so its
+   universe context is empty and [wf_global_extE] holds with nothing to check. *)
 Definition declared_inductive_wf_global_extE_inst :=
   declared_inductive_wf_global_extE si_env si_mdecl si_kn si_wfE si_declared_minductive.
 
@@ -395,8 +414,9 @@ Definition consistent_instance_ext_subst_abs_indsE_inst :=
 
 Definition subst_abstract_instance_idE_inst :=
   env_propE_typing subst_abstract_instance_idE up_Σp up_wfE up_Γ _ _ up_x_typed up_wk.
+(** [Type@{l0}] is fixed by the abstract instance [[l0]] of its universe context. *)
 Definition typed_subst_abstract_instanceE_inst :=
-  typed_subst_abstract_instanceE up_Σp up_Γ (tRel 0) _ up_wk up_x_typed.
+  typed_subst_abstract_instanceE up_Σp [] (tSort up_s0) _ up_wk up_s0_typed.
 
 (** ** [Typing/PCUICUnivSubstitutionTypEta]: the copied lemmas *)
 
@@ -439,6 +459,8 @@ Definition subst_instance_ws_cumul_ctx_pbE_rel_inst :=
   PCUICUnivSubstitutionTypEta.subst_instance_ws_cumul_ctx_pbE_rel ci_Σu [Level.lzero; Level.lzero]
     Monomorphic_ctx ci_valid ci_cumul_ctx.
 
+(* WEAK: proves satisfiability only; the block [cp_block] mentions no universe,
+   so instantiating it changes only the environment, not the block. *)
 Definition subst_instance_mfix_on_indE_inst :=
   subst_instance_mfix_on_indE ci_Σu [] [Level.lzero; Level.lzero] Monomorphic_ctx check_one_cofix
     (fun _ => true) cp_block (subst_instance_check_one_cofix _) ci_valid (cp_block_on_ind ci_Σu).
@@ -488,8 +510,12 @@ Definition isTypeRel_subst_instance_idE_inst :=
 Definition isType_subst_instance_idE_inst :=
   isType_subst_instance_idE up_Σp [] (tSort up_s0) up_wk up_isTypeRel_s0.
 
+(* WEAK: proves satisfiability only; [I] is monomorphic, its abstract instance is
+   empty, so the identity it states is trivial on [ind_sort]. *)
 Definition subst_instance_ind_sort_idE_inst :=
   subst_instance_ind_sort_idE si_env si_mdecl si_ind si_idecl si_wfE si_declared_inductive.
+(* WEAK: proves satisfiability only; [I] is monomorphic, its abstract instance is
+   empty, so the identity it states is trivial on [ind_type]. *)
 Definition subst_instance_ind_type_idE_inst :=
   subst_instance_ind_type_idE si_env si_mdecl si_ind si_idecl si_wfE si_declared_inductive.
 
@@ -538,6 +564,10 @@ Proof. apply LevelSet.mem_spec. reflexivity. Qed.
 Lemma e0_wf_instance_l0 : wf_instance up_Σ0 [Level.lvar 0].
 Proof. constructor; [exact e0_wf_level_l0|constructor]. Qed.
 
+(* WEAK (the four [weaken_wf_*E_inst] and the two [wf_universes_weaken*E_inst]):
+   proves satisfiability only; the weakening is at the bound level [l0], which the
+   extension [e0_env] ⊂ [up_env] does not touch, so the conclusion holds in
+   [(up_env, up_univs)] without the weakening. *)
 Definition weaken_wf_universeE_inst :=
   weaken_wf_universeE up_Σ0 up_env _ up_wfE e0_up_extends e0_wf_universe_l0.
 Definition weaken_wf_levelE_inst :=
@@ -550,6 +580,12 @@ Proof. reflexivity. Qed.
 
 Definition weaken_wf_universesE_inst :=
   @weaken_wf_universesE _ up_Σ0 up_env _ e0_wfE up_wfE e0_up_extends e0_wf_universes_s0.
+Definition wf_universes_weakenE_inst :=
+  wf_universes_weakenE e0_env up_env up_univs e0_wfE up_wfE e0_up_extends [] (j_vass si_na (tSort up_s0))
+    eq_refl.
+Definition wf_universes_weaken_fullE_inst :=
+  wf_universes_weaken_fullE up_Σ0 up_env e0_wfE up_wfE e0_up_extends [] (tSort up_s0) (tSort (Sort.super up_s0))
+    eq_refl.
 
 Definition up_wf_level_l0 : wf_level up_Σp (Level.lvar 0) := up_l0_in.
 
@@ -576,9 +612,13 @@ Proof. reflexivity. Qed.
 Lemma si_closedu_indices : test_context (closedu #|polymorphic_instance (ind_universes si_mdecl)|) (ind_indices si_idecl).
 Proof. reflexivity. Qed.
 
+(* WEAK: proves satisfiability only; [I] is monomorphic, so the bound
+   [#|abstract_instance| = 0] is reached by a context with no universe at all. *)
 Definition closed_ind_predicate_contextE_inst :=
   @closed_ind_predicate_contextE _ si_env si_ind si_mdecl si_idecl si_wfE si_declared_inductive
     si_closedu_params si_closedu_indices.
+(* WEAK: proves satisfiability only; [I] is monomorphic, so [inds] carries the
+   empty instance and is universe-closed trivially. *)
 Definition closedu_indsE_inst := @closedu_indsE _ si_env si_kn si_mdecl si_wfE.
 
 (** The judgement [x : Type@{l0} ⊢ x : Type@{l0}] has well-formed universes. *)
@@ -586,3 +626,244 @@ Definition wf_typesE_inst := env_propE_typing wf_typesE up_Σp up_wfE up_Γ _ _ 
 Definition typing_wf_universesE_inst := @typing_wf_universesE _ up_Σp up_Γ _ _ up_wfE up_x_typed.
 Definition typing_wf_sortE_inst := @typing_wf_sortE _ up_Σp [] _ _ up_wfE up_s0_typed.
 Definition isType_wf_universesE_inst := @isType_wf_universesE _ up_Σp [] _ up_wfE up_isTypeRel_s0.
+
+(** ** [PCUICSubstitutionEta]
+
+  In [si_Σ]: the substitution [x := ∀P:Prop. P] for [x : Prop] ([c2_sub]), its
+  let form ([c2_subd]) and the context [x : Prop, y : x] ([c2_Γxy]), whose last
+  type mentions the substituted variable. The cumulativity instances are in the
+  empty environment [rf_Σ] of [PCUICWsCumulEtaCtx]: [G (λy:Prop. F y)] against
+  [G F] in [G : (Prop → Prop) → Prop, F : Prop → Prop], a real η step, under the
+  substitution [F := λz:Prop. z]. *)
+
+Definition c2_x : context := [vass si_na fi_P].
+Lemma c2_False0 : si_Σ ;;; [] |-E ci_False : fi_P.
+Proof. exact (ci_False_typed [] localenv_nil). Qed.
+
+Lemma c2_subs : subsE si_Σ [] [ci_False] c2_x.
+Proof. econstructor; [constructor|exact c2_False0]. Qed.
+Lemma c2_sub : subsletE si_Σ [] [ci_False] c2_x.
+Proof. exact (subslet_ass_tipE c2_False0). Qed.
+Lemma c2_subd : subsletE si_Σ [] [ci_False] [vdef si_na ci_False fi_P].
+Proof. exact (subslet_def_tipE c2_False0). Qed.
+
+Definition c2_Γxy : context := [vass si_na (tRel 0); vass si_na fi_P].
+Lemma c2_wf_Γxy : wf_localE si_Σ c2_Γxy.
+Proof. apply localenv_cons_abs; [exact ci_wf_Γ1|exact (ci_vass_Prop fi_Γ1 (tRel 0) ci_x_typed)]. Qed.
+Lemma c2_y_typed : si_Σ ;;; c2_Γxy |-E tRel 0 : lift0 1 (tRel 0).
+Proof. exact (typeE_Rel _ _ 0 (vass si_na (tRel 0)) c2_wf_Γxy eq_refl). Qed.
+Lemma c2_wf_xF : wf_localE si_Σ [vass si_na ci_False].
+Proof. apply localenv_cons_abs; [constructor|exact (ci_vass_Prop [] ci_False c2_False0)]. Qed.
+Lemma c2_wf_d : wf_localE si_Σ [vdef si_na ci_False fi_P].
+Proof.
+  apply localenv_cons_def; [constructor|].
+  split; [exact c2_False0|]. exists (Sort.super sProp). split; [exact (ci_typeE_P [] localenv_nil)|].
+  split; reflexivity.
+Qed.
+
+Definition subs_lengthE_inst := subs_lengthE c2_subs.
+Lemma subslet_defE_inst : subsletE si_Σ [] [ci_False; ci_False] [vdef si_na (tRel 0) fi_P; vass si_na fi_P].
+Proof. exact (subslet_defE (na := si_na) (t := tRel 0) (T := fi_P) c2_sub c2_False0 eq_refl). Qed.
+Definition subslet_ass_tipE_inst := c2_sub.
+Definition subslet_def_tipE_inst := c2_subd.
+Definition subslet_nth_errorE_inst := @subslet_nth_errorE _ si_Σ [] _ _ _ 0 subslet_defE_inst eq_refl.
+Definition subslet_lengthE_inst := subslet_lengthE subslet_defE_inst.
+Definition subst_lengthE_inst := subst_lengthE si_Σ [] [ci_False] c2_x c2_subs.
+
+Lemma c2_subs_x : subsE si_Σ c2_x [tRel 0] c2_x.
+Proof. econstructor; [constructor|exact ci_x_typed]. Qed.
+Lemma c2_sub_x : subsletE si_Σ c2_x [tRel 0] c2_x.
+Proof. exact (subslet_ass_tipE ci_x_typed). Qed.
+Definition subs_nth_error_geE_inst :=
+  subs_nth_error_geE si_Σ c2_x c2_x [] 1 [tRel 0] c2_subs_x (le_n 1).
+Definition subs_nth_error_ltE_inst :=
+  subs_nth_error_ltE si_Σ c2_x c2_x [vass si_na (tRel 0)] 0 [tRel 0] c2_subs_x (le_n 1).
+Definition subslet_nth_error_ltE_inst :=
+  subslet_nth_error_ltE si_Σ c2_x c2_x [vass si_na (tRel 0)] 0 [tRel 0] c2_sub_x (le_n 1).
+Definition typed_substE_inst :=
+  typed_substE si_Σ [] ci_False fi_P [tRel 5] 0 si_wfE (le_n 0) c2_False0.
+Definition subst_wf_localE_inst := subst_wf_localE si_Σ c2_Γxy [tRel 7] 2 si_wfE c2_wf_Γxy.
+Lemma up_declared_constant : declared_constant up_env up_kn up_cb.
+Proof. left; reflexivity. Qed.
+Definition subst_declared_constantE_inst :=
+  subst_declared_constantE up_Σm up_kn up_cb [tRel 0] 0 [Level.lzero] up_wfE up_declared_constant.
+
+Lemma si_declared_minductive' : declared_minductive si_env si_kn si_mdecl.
+Proof. left; reflexivity. Qed.
+Definition wf_arities_context'E_inst :=
+  @wf_arities_context'E _ si_Σ si_wfE si_kn si_mdecl (on_declared_minductiveE si_wfE si_declared_minductive').
+Definition wf_arities_contextE_inst :=
+  @wf_arities_contextE _ si_env si_wfE si_kn si_mdecl si_declared_minductive'.
+
+(** The constructor [c] of [I] is typed in the arities context, so its type is
+    closed there and, once [I] is substituted, closed. *)
+Lemma on_constructor_closed_aritiesE_inst :
+  closedn #|arities_context (ind_bodies si_mdecl)| si_cdecl.(cstr_type).
+Proof.
+  destruct (on_declared_constructorE (wfΣ := si_wfE) si_declared_constructor) as [[_ _] [cs [_ hc]]].
+  exact (on_constructor_closed_aritiesE (Σ := si_env) (wfΣ := si_wfE) (mind := si_ind) hc).
+Qed.
+Lemma on_constructor_closedE_inst :
+  closed (subst0 (inds (inductive_mind si_ind) [] (ind_bodies si_mdecl)) (subst_instance [] si_cdecl.(cstr_type))).
+Proof.
+  destruct (on_declared_constructorE (wfΣ := si_wfE) si_declared_constructor) as [[_ _] [cs [_ hc]]].
+  exact (on_constructor_closedE (Σ := si_env) (wfΣ := si_wfE) (mind := si_ind) (u := []) hc).
+Qed.
+
+Definition subslet_untyped_subsletE_inst := subslet_untyped_subsletE si_Σ [] [ci_False] c2_x c2_sub.
+Definition subs_nth_errorE_inst :=
+  subs_nth_errorE si_Σ [] [ci_False] c2_x (vass si_na fi_P) 0 ci_False c2_subs eq_refl eq_refl.
+Definition subs_usubstE_inst := subs_usubstE si_Σ [] c2_x [vass si_na (tRel 0)] [ci_False] c2_subs.
+
+(** The η pair at [Cumul] and [Conv], well typed. *)
+Lemma c2_wc_spec pb (Γ : context) : rf_Σ ;;; Γ ⊢ wc_T ≤sE[pb] wc_U.
+Proof.
+  apply convSpecE_cumulSpecE.
+  unfold wc_T, wc_U. apply cumulE_App; [apply cumulE_Refl|].
+  unfold wc_eta_F. apply cumul_eta_l. apply cumulE_Refl.
+Qed.
+Lemma c2_wc_ws pb : ws_cumul_pbE pb rf_Σ wc_Γ wc_T wc_U.
+Proof.
+  apply (into_ws_cumul_pbE_spec (wfΣ := @wfE_ClosedBodies _ rf_Σ wc_wfE) (c2_wc_spec pb wc_Γ)).
+  - exact (wf_local_closed_contextE (Σ := rf_Σ) (wfΣ := wc_wfE) wc_wf_Γ).
+  - exact (subject_is_open_termE (Σ := rf_Σ) (wfΣ := wc_wfE) wc_T_typed).
+  - exact (subject_is_open_termE (Σ := rf_Σ) (wfΣ := wc_wfE) wc_U_typed).
+Qed.
+Lemma c2_wc_wt pb : wt_cumul_pbE pb rf_Σ wc_Γ wc_T wc_U.
+Proof.
+  constructor; [exact (wc_isType _ wc_T_typed)|exact (wc_isType _ wc_U_typed)|].
+  exact (wsE_join (c2_wc_ws pb)).
+Qed.
+
+Definition wt_cumul_cumE_inst : JoinE rf_Σ wc_Γ Cumul wc_T wc_U := wt_cumul_cumE (c2_wc_wt Cumul).
+Definition wt_conv_convE_inst : JoinE rf_Σ wc_Γ Conv wc_T wc_U := wt_conv_convE (c2_wc_wt Conv).
+
+Lemma c2_red_id_x : red1 si_Σ fi_Γ1 (tApp ci_id (tRel 0)) (tRel 0).
+Proof. unfold ci_id. apply red_beta. Qed.
+Lemma c2_red1P : red1P (shiftnP 1 xpred0) si_Σ fi_Γ1 (tApp ci_id (tRel 0)) (tRel 0).
+Proof. split; [reflexivity|split; [reflexivity|exact c2_red_id_x]]. Qed.
+Definition red1P_on_free_vars_rightE_inst :=
+  @red1P_on_free_vars_rightE _ _ si_Σ si_wfE _ _ _ c2_red1P.
+Definition isType_wf_localE_inst := isType_wf_localE (ci_on_typeE_Prop fi_Γ1 (tRel 0) ci_x_typed).
+Definition subsletE_open_terms_inst := @subsletE_open_terms _ si_Σ si_wfE _ _ _ subslet_defE_inst.
+Definition isType_closedPTE_inst :=
+  @isType_closedPTE _ si_Σ si_wfE fi_Γ1 (tRel 0) (ci_on_typeE_Prop fi_Γ1 (tRel 0) ci_x_typed).
+
+Lemma c2_open_app : is_open_term ([] ,,, c2_x ,,, []) (tApp ci_id (tRel 0)).
+Proof. reflexivity. Qed.
+Lemma c2_ctx_x : on_ctx_free_vars (shiftnP #|[] ,,, c2_x ,,, []| xpred0) ([] ,,, c2_x ,,, []).
+Proof. reflexivity. Qed.
+Definition substitution_red1E_inst :=
+  @substitution_red1E _ si_Σ si_wfE [] c2_x [] [ci_False] _ _ c2_subs localenv_nil c2_open_app c2_red_id_x.
+Definition substitution_let_redE_inst :=
+  @substitution_let_redE _ si_Σ si_wfE [] c2_x [] [ci_False] _ _ c2_sub c2_open_app c2_red_id_x.
+Definition substitution_untyped_let_redE_inst :=
+  @substitution_untyped_let_redE _ si_Σ si_wfE [] c2_x [] [ci_False] _ _ subslet_untyped_subsletE_inst
+    c2_open_app c2_red_id_x.
+Lemma c2_red_id_x' : red si_Σ fi_Γ1 (tApp ci_id (tRel 0)) (tRel 0).
+Proof. apply red1_red. exact c2_red_id_x. Qed.
+Definition substitution_untyped_redE_inst :=
+  @substitution_untyped_redE _ si_Σ si_wfE [] c2_x [] [ci_False] _ _ subslet_untyped_subsletE_inst
+    c2_open_app c2_ctx_x c2_red_id_x'.
+Definition substitution_redE_inst :=
+  @substitution_redE _ si_Σ si_wfE [] c2_x [] [ci_False] _ _ c2_sub localenv_nil
+    c2_open_app c2_ctx_x c2_red_id_x'.
+Lemma c2_red_beta_False : red si_Σ [] (tApp ci_id ci_False) ci_False.
+Proof. apply red1_red. unfold ci_id. apply red_beta. Qed.
+Lemma c2_untyped_beta : untyped_subslet [] [tApp ci_id ci_False] c2_x.
+Proof. constructor. constructor. Qed.
+(** [x] under the substitution [x := (λy:Prop. y) (∀P:Prop. P)], reduced in the
+    substitution to [x := ∀P:Prop. P]. *)
+Definition red_redE_inst :=
+  @red_redE _ si_Σ si_wfE (shiftnP 1 xpred0) [] c2_x [] [tApp ci_id ci_False] [ci_False] (tRel 0)
+    eq_refl eq_refl (All2_cons c2_red_beta_False All2_nil) ltac:(constructor; [reflexivity|constructor]) c2_untyped_beta.
+Definition untyped_substitution_redE_inst :=
+  @untyped_substitution_redE _ si_Σ si_wfE [] c2_x [] [ci_False] _ _ subslet_untyped_subsletE_inst
+    c2_ctx_x c2_open_app c2_red_id_x'.
+
+(** [F := λz:Prop. z] substituted in the η pair. *)
+Definition c2_id : term := tLambda c1b_na (tSort sProp) (tRel 0).
+Lemma c2_id_typed : rf_Σ ;;; [] |-E c2_id : rf_F.
+Proof.
+  unfold c2_id. apply typeE_Lambda; [exact (rf_P_vass [] localenv_nil)|].
+  exact (typeE_Rel _ _ 0 (vass c1b_na (tSort sProp)) (localenv_cons_abs localenv_nil (rf_P_vass [] localenv_nil)) eq_refl).
+Qed.
+Lemma c2_sub_id : subsletE rf_Σ [] [c2_id] [vass c1b_na rf_F].
+Proof. exact (subslet_ass_tipE c2_id_typed). Qed.
+Lemma c2_wc_ctx : on_ctx_free_vars (shiftnP #|[] ,,, [vass c1b_na rf_F] ,,, [vass c1b_na wc_G_ty]| xpred0)
+  ([] ,,, [vass c1b_na rf_F] ,,, [vass c1b_na wc_G_ty]).
+Proof. reflexivity. Qed.
+Definition substitution_untyped_cumulE_inst :=
+  @substitution_untyped_cumulE _ rf_Σ wc_wfE [] [vass c1b_na rf_F] [vass c1b_na wc_G_ty] [c2_id] wc_T wc_U
+    (subslet_untyped_subsletE _ _ _ _ c2_sub_id) eq_refl eq_refl c2_wc_ctx (wsE_join (c2_wc_ws Cumul)).
+Definition substitution_cumul0E_inst :=
+  @substitution_cumul0E _ rf_Σ wc_wfE rf_Γ c1b_na wc_G_ty wc_T wc_U (tRel 0)
+    eq_refl eq_refl eq_refl (wsE_join (c2_wc_ws Cumul)).
+(** The let [G := λh:Prop → Prop. ∀P:Prop. P] substituted in the η pair. *)
+Definition c2_G : term := tLambda c1b_na rf_F (tProd c1b_na (tSort sProp) (tRel 0)).
+Lemma c2_wc_let : JoinE rf_Σ (rf_Γ ,, vdef c1b_na c2_G wc_G_ty) Cumul wc_T wc_U.
+Proof.
+  exact (wsE_join (into_ws_cumul_pbE_spec (wfΣ := @wfE_ClosedBodies _ rf_Σ wc_wfE)
+    (Γ := rf_Γ ,, vdef c1b_na c2_G wc_G_ty) (c2_wc_spec Cumul _) eq_refl eq_refl eq_refl)).
+Qed.
+Definition substitution_cumul_letE_inst :=
+  @substitution_cumul_letE _ rf_Σ wc_wfE rf_Γ c1b_na c2_G wc_G_ty wc_T wc_U eq_refl eq_refl eq_refl c2_wc_let.
+
+(** [usubst_well_substE] on [x := ∀P:Prop. P]. *)
+Definition c2_σ : nat -> term := fun n => match n with 0 => ci_False | S k => tRel k end.
+Lemma c2_usubst : PCUICInstDef.usubst c2_x c2_σ [].
+Proof. intros [|x] d h b hb; [cbn in h; noconf h; discriminate hb|destruct x; discriminate h]. Qed.
+Lemma c2_usubst_typed : forall x decl, nth_error c2_x x = Some decl ->
+  si_Σ ;;; [] |-E c2_σ x : inst (subst_compose (shiftk (S x)) c2_σ) (decl.(decl_type)).
+Proof. intros [|x] d h; [cbn in h; noconf h; exact c2_False0|destruct x; discriminate h]. Qed.
+Definition usubst_well_substE_inst := @usubst_well_substE _ si_Σ c2_x c2_σ [] c2_usubst c2_usubst_typed.
+
+Definition subslet_well_substE_inst :=
+  @subslet_well_substE _ si_Σ si_wfE [] c2_x [ci_False] [vass si_na (tRel 0)] c2_sub c2_wf_xF.
+
+Definition c2_inst_ctx := (type_instE si_Σ si_wfE c2_Γxy _ _ c2_y_typed).2.1.
+Definition All_local_env_instE_inst :=
+  @All_local_env_instE _ si_Σ si_wfE [] c2_x [vass si_na (tRel 0)] [ci_False] c2_inst_ctx localenv_nil c2_sub.
+
+Definition substitution_propE_inst :=
+  env_propE_typing substitution_propE si_Σ si_wfE c2_Γxy _ _ c2_y_typed [] c2_x [vass si_na (tRel 0)]
+    [ci_False] c2_sub eq_refl c2_wf_xF.
+Definition substitutionE_inst :=
+  @substitutionE _ si_Σ si_wfE [] c2_x [ci_False] [vass si_na (tRel 0)] _ _ c2_sub c2_y_typed.
+Definition c2_jx := ci_vass_Prop fi_Γ1 (tRel 0) ci_x_typed.
+Definition lift_typing_substitutionE_inst :=
+  @lift_typing_substitutionE _ si_Σ si_wfE [] c2_x [ci_False] [] _ c2_sub c2_jx.
+Definition lift_typing_substE_inst := @lift_typing_substE _ si_Σ si_wfE [] c2_x [ci_False] _ c2_sub c2_jx.
+Definition c2_isT_x := ci_on_typeE_Prop fi_Γ1 (tRel 0) ci_x_typed.
+Definition isType_substitutionE_inst :=
+  @isType_substitutionE _ si_Σ si_wfE [] c2_x [ci_False] [] _ c2_sub c2_isT_x.
+Definition isType_substE_inst := @isType_substE _ si_Σ si_wfE [] c2_x [ci_False] _ c2_sub c2_isT_x.
+Definition isTypeRel_substitutionE_inst :=
+  @isTypeRel_substitutionE _ si_Σ si_wfE [] c2_x [ci_False] [] _ _ c2_sub c2_jx.
+Definition isTypeRel_substE_inst := @isTypeRel_substE _ si_Σ si_wfE [] c2_x [ci_False] _ _ c2_sub c2_jx.
+Definition substitution_wf_localE_inst :=
+  @substitution_wf_localE _ si_Σ si_wfE [] c2_x [ci_False] [vass si_na (tRel 0)] c2_sub c2_wf_Γxy.
+Definition substitution0E_inst :=
+  @substitution0E _ si_Σ si_wfE [] si_na ci_False fi_P _ _ (ci_app_typed fi_Γ1 (tRel 0) ci_wf_Γ1 ci_x_typed)
+    c2_False0.
+Lemma c2_d_typed : si_Σ ;;; [vdef si_na ci_False fi_P] |-E tRel 0 : lift0 1 fi_P.
+Proof. exact (typeE_Rel _ _ 0 (vdef si_na ci_False fi_P) c2_wf_d eq_refl). Qed.
+Definition substitution_letE_inst := @substitution_letE _ si_Σ si_wfE [] si_na ci_False fi_P _ _ c2_d_typed.
+
+(** The η pair under [F := λz:Prop. z]: [G (λy:Prop. (λz:Prop. z) y)] against
+    [G (λz:Prop. z)], related at both [pb]. *)
+Definition substitution_wt_cumul_pbE_inst :=
+  @substitution_wt_cumul_pbE _ rf_Σ wc_wfE Conv [] [vass c1b_na rf_F] [vass c1b_na wc_G_ty] [c2_id] wc_T wc_U
+    c2_sub_id (c2_wc_wt Conv).
+Definition substitution_cumulE_inst :=
+  @substitution_cumulE _ rf_Σ wc_wfE [] [vass c1b_na rf_F] [vass c1b_na wc_G_ty] [c2_id] wc_T wc_U
+    c2_sub_id (c2_wc_wt Cumul).
+Definition substitution_convE_inst :=
+  @substitution_convE _ rf_Σ wc_wfE [] [vass c1b_na rf_F] [vass c1b_na wc_G_ty] [c2_id] wc_T wc_U
+    c2_sub_id (c2_wc_wt Conv).
+
+(** Global environment typing carried to the predicate "the context is well formed". *)
+Definition on_wf_global_env_implE_inst :
+  on_global_env cumulSpecE0 (fun Σ Γ _ => wf_localE Σ Γ) si_env :=
+  @on_wf_global_env_implE _ si_env si_wfE (lift_typing typingE) (fun Σ Γ _ => wf_localE Σ Γ)
+    (fun Σ Γ j _ _ _ h => lift_typingE_wf_local h) si_wfE.
