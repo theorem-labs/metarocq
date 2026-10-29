@@ -2873,3 +2873,263 @@ Section PrimRoot.
 
 End PrimRoot.
 
+(** ** Assembly of the parallel one-step postponement: infrastructure
+
+  The assembled statement ([pe_postpone]) relates a source [t] in [Γ] to a target [u]
+  in [Γ'] with [pe_ctx Γ Γ'] (let bodies related by [pe]); its premises are
+  [Good Σ Γ t] (source side; same two halves as before) and
+  [on_free_vars xpredT u] (target side, for weakening the target step under a λ). *)
+
+Lemma ofvT_shift k t : on_free_vars (shiftnP k xpredT) t = on_free_vars xpredT t.
+Proof. apply on_free_vars_ext. apply shiftnP_xpredT. Qed.
+
+Lemma ofvT_lift0 t : on_free_vars xpredT t -> on_free_vars xpredT (lift0 1 t).
+Proof.
+  intros h. rewrite -(ofvT_shift 1). apply (on_free_vars_lift_impl xpredT 1 0). now rewrite ofvT_shift.
+Qed.
+
+Lemma pe_decl_refl d : pe_decl d d.
+Proof. unfold pe_decl. destruct (decl_body d); [apply pe_refl|exact tt]. Qed.
+
+Lemma pe_ctx_refl Γ : pe_ctx Γ Γ.
+Proof. apply All2_same, pe_decl_refl. Qed.
+
+Lemma pe_ctx_vass Γ Γ' na A na' A' : pe_ctx Γ Γ' -> pe_ctx (Γ ,, vass na A) (Γ' ,, vass na' A').
+Proof. intros h. constructor; [exact tt|exact h]. Qed.
+
+Lemma pe_ctx_vdef Γ Γ' na b t na' b' t' :
+  pe_ctx Γ Γ' -> pe b b' -> pe_ctx (Γ ,, vdef na b t) (Γ' ,, vdef na' b' t').
+Proof. intros h hb. constructor; [exact hb|exact h]. Qed.
+
+Lemma pe_ctx_app Γ Γ' Δ Δ' : pe_ctx Γ Γ' -> pe_ctx Δ Δ' -> pe_ctx (Γ ,,, Δ) (Γ' ,,, Δ').
+Proof. intros h h'. unfold app_context. now apply All2_app. Qed.
+
+Lemma pe_ctx_mapi_vass (f g : nat -> def term -> term) m m' k :
+  #|m| = #|m'| ->
+  All2 pe_decl (mapi_rec (fun i d => vass (dname d) (f i d)) m k)
+               (mapi_rec (fun i d => vass (dname d) (g i d)) m' k).
+Proof.
+  induction m as [|d m IH] in m', k |- *; destruct m' as [|d' m']; cbn; intros hl; try discriminate.
+  - constructor.
+  - constructor; [exact tt|]. apply IH. lia.
+Qed.
+
+Lemma pe_ctx_fix_context m m' : #|m| = #|m'| -> pe_ctx (fix_context m) (fix_context m').
+Proof. intros hl. unfold fix_context, mapi. apply All2_rev. now apply pe_ctx_mapi_vass. Qed.
+
+Lemma pe_ctx_nth Γ Γ' n b' : pe_ctx Γ Γ' -> option_map decl_body (nth_error Γ' n) = Some (Some b') ->
+  ∑ b, (option_map decl_body (nth_error Γ n) = Some (Some b)) × pe b b'.
+Proof.
+  intros h. induction h as [|d d' Γ Γ' hd h IH] in n |- *; destruct n; cbn; intros e; try discriminate.
+  - unfold pe_decl in hd. destruct (decl_body d') as [b0|]; [|discriminate].
+    injection e as ->. destruct (decl_body d) as [b|]; [|destruct hd]. exists b. split; [reflexivity|exact hd].
+  - exact (IH n e).
+Qed.
+
+Lemma set_pparams_twice p l l' : set_pparams (set_pparams p l) l' = set_pparams p l'.
+Proof. now destruct p. Qed.
+
+Lemma set_array_value_twice a l l' : set_array_value (set_array_value a l) l' = set_array_value a l'.
+Proof. now destruct a. Qed.
+
+(** One position of a list reduces under a congruence [C]: [Good] of the list term
+    gives [Good] of each element. *)
+Lemma Good_list_terms Σ Γ (C : list term -> term) l :
+  (forall l l0, All2 (red Σ Γ) l l0 -> red Σ Γ (C l) (C l0)) ->
+  (forall l0, eta_safe Σ (C l0) -> forallb (eta_safe Σ) l0) ->
+  Good Σ Γ (C l) -> All (Good Σ Γ) l.
+Proof.
+  induction l as [|a l IH] in C |- *; intros hC hE hg; constructor.
+  - intros a' hr.
+    have hr' : red Σ Γ (C (a :: l)) (C (a' :: l))
+      by (apply hC; constructor; [exact hr|apply All2_refl; intros; apply rt_refl]).
+    have := hE _ (hg _ hr'). cbn. move/andP => [h _]. exact h.
+  - apply (IH (fun l0 => C (a :: l0))).
+    + intros l1 l2 h. apply hC. constructor; [apply rt_refl|exact h].
+    + intros l0 h. have := hE _ h. cbn. move/andP => [_ h']. exact h'.
+    + exact hg.
+Qed.
+
+Section GoodTransport.
+  Context (Σ : global_env) (Γ : context).
+
+  Ltac good_proj hg hr := let hs := fresh in have hs := hg _ hr; cbn in hs; rtoProp; assumption.
+
+  Lemma Good_app_l f x : Good Σ Γ (tApp f x) -> Good Σ Γ f.
+  Proof.
+    intros hg f' hr. have hr' : red Σ Γ (tApp f x) (tApp f' x) by (apply red_app; [exact hr|apply rt_refl]).
+    good_proj hg hr'.
+  Qed.
+
+  Lemma Good_app_r f x : Good Σ Γ (tApp f x) -> Good Σ Γ x.
+  Proof.
+    intros hg x' hr. have hr' : red Σ Γ (tApp f x) (tApp f x') by (apply red_app; [apply rt_refl|exact hr]).
+    good_proj hg hr'.
+  Qed.
+
+  Lemma Good_lam_dom na A M : Good Σ Γ (tLambda na A M) -> Good Σ Γ A.
+  Proof.
+    intros hg A' hr. have hr' : red Σ Γ (tLambda na A M) (tLambda na A' M) by (apply red_abs; [exact hr|apply rt_refl]).
+    good_proj hg hr'.
+  Qed.
+
+  Lemma Good_prod_dom na A B : Good Σ Γ (tProd na A B) -> Good Σ Γ A.
+  Proof.
+    intros hg A' hr. have hr' : red Σ Γ (tProd na A B) (tProd na A' B) by (apply red_prod; [exact hr|apply rt_refl]).
+    good_proj hg hr'.
+  Qed.
+
+  Lemma Good_prod_cod na A B : Good Σ Γ (tProd na A B) -> Good Σ (Γ ,, vass na A) B.
+  Proof.
+    intros hg B' hr. have hr' : red Σ Γ (tProd na A B) (tProd na A B') by (apply red_prod; [apply rt_refl|exact hr]).
+    good_proj hg hr'.
+  Qed.
+
+  Lemma Good_letin_def na b ty x : Good Σ Γ (tLetIn na b ty x) -> Good Σ Γ b.
+  Proof.
+    intros hg b' hr.
+    have hr' : red Σ Γ (tLetIn na b ty x) (tLetIn na b' ty x) by (apply red_letin; [exact hr|apply rt_refl|apply rt_refl]).
+    good_proj hg hr'.
+  Qed.
+
+  Lemma Good_letin_ty na b ty x : Good Σ Γ (tLetIn na b ty x) -> Good Σ Γ ty.
+  Proof.
+    intros hg t' hr.
+    have hr' : red Σ Γ (tLetIn na b ty x) (tLetIn na b t' x) by (apply red_letin; [apply rt_refl|exact hr|apply rt_refl]).
+    good_proj hg hr'.
+  Qed.
+
+  Lemma Good_letin_body na b ty x : Good Σ Γ (tLetIn na b ty x) -> Good Σ (Γ ,, vdef na b ty) x.
+  Proof.
+    intros hg x' hr.
+    have hr' : red Σ Γ (tLetIn na b ty x) (tLetIn na b ty x') by (apply red_letin; [apply rt_refl|apply rt_refl|exact hr]).
+    good_proj hg hr'.
+  Qed.
+
+  Lemma Good_proj pr c : Good Σ Γ (tProj pr c) -> Good Σ Γ c.
+  Proof. intros hg c' hr. have hr' := red_proj_c pr _ _ hr. good_proj hg hr'. Qed.
+
+  Lemma Good_proj_hnl pr c : Good Σ Γ (tProj pr c) -> forall c', red Σ Γ c c' -> notLam c'.
+  Proof. intros hg c' hr. exact (eta_safe_proj_arg _ _ _ (hg _ (red_proj_c pr _ _ hr))). Qed.
+
+  Lemma Good_case_discr ci p c brs : Good Σ Γ (tCase ci p c brs) -> Good Σ Γ c.
+  Proof. intros hg c' hr. have hr' := red_case_c ci p c brs c' hr. good_proj hg hr'. Qed.
+
+  Lemma Good_case_hnl ci p c brs : Good Σ Γ (tCase ci p c brs) -> forall c', red Σ Γ c c' -> notLam c'.
+  Proof. intros hg c' hr. exact (eta_safe_case_scrut _ _ _ _ _ (hg _ (red_case_c ci p c brs c' hr))). Qed.
+
+  Lemma Good_case_ret ci p c brs :
+    Good Σ Γ (tCase ci p c brs) -> Good Σ (Γ ,,, inst_case_predicate_context p) (preturn p).
+  Proof. intros hg r hr. have hr' := red_case_p ci p c brs r hr. good_proj hg hr'. Qed.
+
+  Lemma Good_case_params ci p c brs : Good Σ Γ (tCase ci p c brs) -> All (Good Σ Γ) (pparams p).
+  Proof.
+    intros hg. apply (Good_list_terms Σ Γ (fun l => tCase ci (set_pparams p l) c brs)).
+    - intros l l0 h. rewrite -(set_pparams_twice p l l0). now apply red_case_pars.
+    - intros l0 h. cbn in h. rtoProp. assumption.
+    - now rewrite C3R.set_pparams_id.
+  Qed.
+
+  Lemma Good_evar ev l : Good Σ Γ (tEvar ev l) -> All (Good Σ Γ) l.
+  Proof.
+    intros hg. apply (Good_list_terms Σ Γ (tEvar ev)); [|intros l0 h; exact h|exact hg].
+    intros l1 l2 h. now apply red_evar.
+  Qed.
+
+  Lemma Good_case_brs ci p c brs :
+    Good Σ Γ (tCase ci p c brs) -> All (fun br => Good Σ (Γ ,,, inst_case_branch_context p br) (bbody br)) brs.
+  Proof.
+    intros hg.
+    enough (H : forall pre, Good Σ Γ (tCase ci p c (pre ++ brs)) ->
+                 All (fun br => Good Σ (Γ ,,, inst_case_branch_context p br) (bbody br)) brs)
+      by exact (H [] hg).
+    clear hg. induction brs as [|br brs IH]; intros pre hg'; constructor.
+    - intros b' hr.
+      have hr' : red Σ Γ (tCase ci p c (pre ++ br :: brs))
+                   (tCase ci p c (pre ++ {| bcontext := bcontext br; bbody := b' |} :: brs)).
+      { apply red_case_one_brs. apply OnOne2_app. constructor. split; [exact hr|reflexivity]. }
+      have hs := hg' _ hr'. cbn in hs. rtoProp.
+      match goal with H : is_true (forallb _ (pre ++ _)) |- _ => rewrite forallb_app /= in H end.
+      rtoProp. assumption.
+    - apply (IH (pre ++ [br])). rewrite -app_assoc. exact hg'.
+  Qed.
+
+  Lemma Good_fix_gen (isfix : bool) mfix idx :
+    let T := if isfix then tFix else tCoFix in
+    Good Σ Γ (T mfix idx) ->
+    All (fun d => Good Σ Γ (dtype d) × Good Σ (Γ ,,, fix_context mfix) (dbody d)) mfix.
+  Proof.
+    intros T hg.
+    enough (H : forall pre rest, mfix = pre ++ rest ->
+                 All (fun d => Good Σ Γ (dtype d) × Good Σ (Γ ,,, fix_context mfix) (dbody d)) rest)
+      by exact (H [] mfix eq_refl).
+    intros pre rest. induction rest as [|d rest IH] in pre |- *; intros e; constructor.
+    - split.
+      + intros ty' hr.
+        set d' := {| dname := dname d; dtype := ty'; dbody := dbody d; rarg := rarg d |}.
+        have hr' : red Σ Γ (T mfix idx) (T (pre ++ d' :: rest) idx).
+        { rewrite {1}e. destruct isfix; [apply red_fix_ty|apply red_cofix_ty];
+          (apply All2_app;
+           [ apply All2_refl; intros; split; [apply rt_refl|reflexivity]
+           | constructor; [split; [exact hr|reflexivity]
+                          |apply All2_refl; intros; split; [apply rt_refl|reflexivity]]]). }
+        have hs := hg _ hr'. destruct isfix; cbn in hs; rewrite forallb_app /= in hs; rtoProp; assumption.
+      + intros b' hr.
+        set d' := {| dname := dname d; dtype := dtype d; dbody := b'; rarg := rarg d |}.
+        have hr' : red Σ Γ (T mfix idx) (T (pre ++ d' :: rest) idx).
+        { destruct isfix; [apply red_fix_body|apply red_cofix_body]; rewrite {2}e;
+          (apply All2_app;
+           [ apply All2_refl; intros; split; [apply rt_refl|reflexivity]
+           | constructor; [split; [exact hr|reflexivity]
+                          |apply All2_refl; intros; split; [apply rt_refl|reflexivity]]]). }
+        have hs := hg _ hr'. destruct isfix; cbn in hs; rewrite forallb_app /= in hs; rtoProp; assumption.
+    - apply (IH (pre ++ [d])). rewrite e -app_assoc. reflexivity.
+  Qed.
+
+  Lemma Good_prim_arr a :
+    Good Σ Γ (tPrim (primArray; primArrayModel a)) ->
+    Good Σ Γ (array_default a) × Good Σ Γ (array_type a) × All (Good Σ Γ) (array_value a).
+  Proof.
+    intros hg. split; [|split].
+    - intros d' hr. have hr' := red_primArray_default a d' hr. good_proj hg hr'.
+    - intros t' hr. have hr' := red_primArray_type a t' hr. good_proj hg hr'.
+    - apply (Good_list_terms Σ Γ (fun l => tPrim (primArray; primArrayModel (set_array_value a l)))).
+      + intros l l0 h. rewrite -(set_array_value_twice a l l0). now apply red_primArray_value.
+      + intros l0 h. cbn in h. rtoProp. assumption.
+      + now rewrite C3R.set_array_value_id.
+  Qed.
+
+End GoodTransport.
+
+Lemma All2_cons_inv' {A B} (R : A -> B -> Type) x l y l' : All2 R (x :: l) (y :: l') -> R x y × All2 R l l'.
+Proof. intros h. now depelim h. Qed.
+
+Lemma All_cons_inv' {A} (P : A -> Type) x l : All P (x :: l) -> P x × All P l.
+Proof. intros h. now depelim h. Qed.
+
+(** A list in which one position steps by [R] on the target side: postpone that one
+    step through [pe] (with per-element hypotheses [G] on sources and [T] on targets). *)
+Lemma OnOne2_postpone {A} (Pe R S : A -> A -> Type) (G T : A -> Type) l l' l'' :
+  All2 (fun x y => Pe x y × (G x -> T y -> forall z, R y z -> ∑ w, trans_clos S x w × Pe w z)) l l' ->
+  All G l -> All T l' -> OnOne2 R l' l'' ->
+  ∑ l0, OnOne2 (trans_clos S) l l0 × All2 Pe l0 l''.
+Proof.
+  intros ha hG hT ho. induction ho as [y z tl hr|y tl tl' ho IH] in l, ha, hG, hT |- *;
+    (destruct l as [|x l]; [depelim ha|]);
+    destruct (All2_cons_inv' _ _ _ _ _ ha) as [[hp ih] ha'];
+    destruct (All_cons_inv' _ _ _ hG) as [gx hG'];
+    destruct (All_cons_inv' _ _ _ hT) as [ty hT'].
+  - destruct (ih gx ty _ hr) as (w & hw & hpw).
+    exists (w :: l). split; [now constructor|].
+    constructor; [exact hpw|]. eapply All2_impl; [exact ha'|]. intros x0 y0 [h _]. exact h.
+  - destruct (IH _ ha' hG' hT') as (l0 & ho0 & hp0).
+    exists (x :: l0). split; [now constructor|]. now constructor.
+Qed.
+
+Lemma OnOne2_tc {A} (R : A -> A -> Type) l l0 : OnOne2 (trans_clos R) l l0 -> trans_clos (OnOne2 R) l l0.
+Proof.
+  induction 1 as [x y tl h|x tl tl' h IH].
+  - eapply (trans_clos_map _ _ (fun z => z :: tl)); [|exact h]. intros a b r. now constructor.
+  - eapply (trans_clos_map _ _ (fun z => x :: z)); [|exact IH]. intros a b r. now constructor.
+Qed.
+
