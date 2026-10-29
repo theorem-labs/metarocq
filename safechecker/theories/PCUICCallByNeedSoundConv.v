@@ -1561,9 +1561,24 @@ Section SkMachine.
           destruct (cbn_delta X_type X kn ui st) as [[r s1]|w] eqn:ed; [|discriminate he].
           destruct r as [c'|].
           -- exact (IHw _ _ _ _ _ _ _ _ he).
-          -- cbn_dcall he em sp rs1 s2.
-             pose proof (cbn_mat_all_skel _ _ _ _ _ _ _ em) as h1.
-             injection he as <- <- <-. exact h1.
+          -- cbv beta iota in he.
+             destruct (cbn_prim_step_of X_type X kn stk s1) as [|t rest|i x].
+             ++ cbn_dcall he em sp rs1 s2.
+                pose proof (cbn_mat_all_skel _ _ _ _ _ _ _ em) as h1.
+                injection he as <- <- <-. exact h1.
+             ++ destruct (cbn_new_entry X_type X t [] s1) as [c2 s2].
+                exact (IHw _ _ _ _ _ _ _ _ he).
+             ++ cbn_dcall he ea a1 rs1 s2.
+                destruct rs1 as [|[| | | |k1| |] rs1]; try discriminate he.
+                pose proof (cbn_materialize_skel _ _ _ _ _ _ ea) as h1.
+                cbn_dcall he ef vf rsf sf.
+                destruct rsf as [|[| | | |k2| |] rsf]; try discriminate he.
+                pose proof (IHf _ _ _ _ _ _ ef) as h2.
+                destruct (cbn_value_is_lit vf).
+                ** pose proof (IHw _ _ _ _ _ _ _ _ he) as h3. cbn_sk_fin.
+                ** cbn_dcall he em sp rs3 s3.
+                   pose proof (cbn_mat_all_skel _ _ _ _ _ _ _ em) as h3.
+                   injection he as <- <- <-. cbn_sk_fin.
         * (* tInd *)
           cbn_dcall he em sp rs1 s1.
           pose proof (cbn_mat_all_skel _ _ _ _ _ _ _ em) as h1.
