@@ -295,13 +295,21 @@ Section PrimOps.
     cbn_conv _ po_bool_X Conv t_reflΓ t_refl_t t_refl_u = true.
   Proof. vm_compute. reflexivity. Qed.
 
-  (** The arguments are evaluated first: [eqb ((fun x => x) 3) 3] against [true]. The beta
-    redex is put in a cell, forced to the literal [3], and the operation fires. *)
-  Lemma prim_forces_its_arguments :
+  (** An argument that is not already a literal is not forced: [eqb ((fun x => x) 3) 3]
+    against [true]. The beta redex is left unevaluated, so the constant is neutral and the
+    fast path gives no rule; [convert] then decides the conversion on the slow path. *)
+  Lemma prim_does_not_force_its_arguments :
+    cbn_conv_answer _ po_bool_X Conv []
+      (t_eqb (tApp (tLambda t_na (tConst po_int_kn []) (tRel 0)) (t_int 3%uint63))
+         (t_int 3%uint63))
+      t_true = CbnNoRule.
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma prim_does_not_force_its_arguments_false :
     cbn_conv _ po_bool_X Conv []
       (t_eqb (tApp (tLambda t_na (tConst po_int_kn []) (tRel 0)) (t_int 3%uint63))
          (t_int 3%uint63))
-      t_true = true.
+      t_true = false.
   Proof. vm_compute. reflexivity. Qed.
 
   (** The result is the operation's: [eqb 3 4] is [false], so it is not [true]. The machine

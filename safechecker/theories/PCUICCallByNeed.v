@@ -54,11 +54,12 @@ Import CanonicalTries.
   - Delta: constant bodies are looked up once per [cbn_conv] call and memoised by kername;
     one code entry per (constant, syntactic instance).
   - Primitive operations: a bodiless constant that the environment registers as an operation,
-    applied to at least its arity of arguments, evaluates those arguments one at a time (each
-    put in the heap, forced, and the constant evaluated again) until each is a literal; the
-    operation's result ([prim_op_denote], read back as [PCUICPrimitiveRed.readback] does) is
-    then a new code entry, evaluated against the rest of the stack, as [red_prim_op] reduces.
-    An argument that is not a literal once evaluated leaves a neutral constant.
+    applied to at least its arity of arguments, each of which is already a literal (an
+    inline literal code, or a cell whose value is one), fires: the operation's result
+    ([prim_op_denote], read back as [PCUICPrimitiveRed.readback] does) is then a new code
+    entry, evaluated against the rest of the stack, as [red_prim_op] reduces. An argument that
+    is not already a literal is NOT evaluated: the constant is left neutral, as without the
+    rule, so the machine keeps no forced argument cells for an operation that cannot fire.
 
   The soundness theorem of [cbn_conv] is
   [PCUICCallByNeedSoundHookProof.convert_cbn_sound]. *)
@@ -1876,7 +1877,8 @@ Definition cbn_value_is_lit (v : cbn_value) : bool :=
 
 (** What the primitive-operation rule does with a bodiless constant applied to a stack: no
   rule (a neutral constant); the operation's reduct, applied to the rest of the stack; or
-  argument [i], the slot [x], is evaluated first. *)
+  argument [i], the slot [x], is evaluated first. [cbn_prim_step_of] never chooses the last
+  one, so its branch in [cbn_whnf] is not reached. *)
 Inductive cbn_prim_step :=
 | CbnPStuck
 | CbnPFire (t : term) (rest : list cbn_slot)
@@ -2039,8 +2041,9 @@ Section CallByNeed.
     end.
 
   (** The rule for the bodiless constant [kn] applied to [stk]: it fires when [kn] is a
-    registered operation, the stack holds its arity of arguments, each of them a literal,
-    and the operation computes a result on them. *)
+    registered operation, the stack holds its arity of arguments, each of them already a
+    literal, and the operation computes a result on them. Otherwise there is no rule: an
+    argument that is not yet a literal is not forced. *)
   Definition cbn_prim_step_of (kn : kername) (stk : list cbn_slot) (s : cbn_state)
     : cbn_prim_step :=
     match abstract_prim_op_of X kn with
@@ -2057,7 +2060,7 @@ Section CallByNeed.
             end
           | None => CbnPStuck
           end
-        | inr (i, x) => CbnPForce i x
+        | inr _ => CbnPStuck
         end
       else CbnPStuck
     end.

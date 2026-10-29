@@ -991,8 +991,7 @@ Section Eval.
     destruct (cbn_slot_lits (firstn (arity p) stk) s) as [ls|[j y]] eqn:el.
     - destruct (prim_op_denote p ls) as [r|]; [|intros h; discriminate h].
       destruct (cbn_readback X_type X (po_shape (info p)) r); intros h; discriminate h.
-    - intros h. injection h as <- <-.
-      exact (cbn_nth_error_firstn_some _ _ _ _ (cbn_slot_lits_inr s _ _ _ el)).
+    - intros h; discriminate h.
   Qed.
 
   (** ** The state operations against the ghost map *)
