@@ -29,7 +29,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICClosedTypEta PCUICInstDefEta PCUICGuardClosureEta PCUICWeakeningConfigTypEta
      PCUICRenameTypEta PCUICWeakeningTypEta PCUICCasesWfTypEta PCUICInstTypEta.
 From MetaRocq.PCUIC Require PCUICGuardCheckerRegress PCUICEtaA6Instances.
-From MetaRocq.PCUIC Require Import PCUICClosed.
+From MetaRocq.PCUIC Require Import PCUICClosed PCUICArityRed.
 
 Local Open Scope sigma_scope.
 
@@ -832,3 +832,164 @@ Definition inst_case_branch_context_genE_inst :=
 Definition inst_case_branch_typeE_inst :=
   inst_case_branch_typeE (Σ := si_Σ) (wfΣ := si_wfE) cp_pσ cp_ci 0 si_mdecl si_idecl cp_mp cp_br si_cdecl
     si_declared_constructor cp_wf_mp cp_wf_br.
+
+(** ** A record with a projection
+
+  [Record R (A : P) : P := mkR { r : A }], declared alone in [rr_env] and proved well
+  formed ([rr_wf], so [wfE] by [wf_incl_E]). Its projection [r] has the type [A] in the
+  context of the record and its parameter ([tRel 1]). It gives the instances of the
+  projection lemmas: [declared_projection_closedE], [declared_projection_closed_typeE]
+  and [type_Proj_wf_casesE]. *)
+
+Definition rr_kn : kername := (MPfile ["SInst"], "R").
+Definition rr_ind : inductive := {| inductive_mind := rr_kn; inductive_ind := 0 |}.
+Definition rr_rna : aname := mkBindAnn (nNamed "r") Relevant.
+
+Definition rr_cdecl : constructor_body :=
+  {| cstr_name := "mkR"; cstr_args := [vass rr_rna (tRel 0)]; cstr_indices := [];
+     cstr_type := tProd si_na si_P (tProd rr_rna (tRel 0) (tApp (tRel 2) (tRel 1)));
+     cstr_arity := 1 |}.
+
+Definition rr_pdecl : projection_body :=
+  {| proj_name := "r"; proj_relevance := Relevant; proj_type := tRel 1 |}.
+
+Definition rr_idecl : one_inductive_body :=
+  {| ind_name := "R"; ind_indices := []; ind_sort := sProp; ind_type := si_arity;
+     ind_kelim := IntoAny; ind_ctors := [rr_cdecl]; ind_projs := [rr_pdecl];
+     ind_relevance := Relevant |}.
+
+Definition rr_mdecl : mutual_inductive_body :=
+  {| ind_finite := Finite; ind_npars := 1; ind_params := si_params; ind_bodies := [rr_idecl];
+     ind_universes := Monomorphic_ctx; ind_variance := None |}.
+
+Definition rr_env : global_env :=
+  {| universes := ContextSet.empty; declarations := [(rr_kn, InductiveDecl rr_mdecl)];
+     retroknowledge := Retroknowledge.empty |}.
+
+Definition rr_Γi : context := arities_context [rr_idecl].
+
+Lemma rr_wf_Γi : wf_local si_Σ0 rr_Γi.
+Proof.
+  apply localenv_cons_abs; [constructor|].
+  exact (si_vass _ (mkBindAnn (nNamed (ind_name rr_idecl)) rel_of_Type) _ _ (si_arity_typed [] si_wf_nil) eq_refl).
+Qed.
+
+(** The constructor type [Π A : P. Π r : A. R A], in the arities context. *)
+Lemma rr_ctype_typed :
+  si_Σ0 ;;; rr_Γi |- cstr_type rr_cdecl :
+    tSort (Sort.sort_of_product (Sort.super sProp) (Sort.sort_of_product sProp sProp)).
+Proof.
+  have w1 := si_wf_P rr_Γi rr_wf_Γi.
+  have hA : si_Σ0 ;;; rr_Γi ,, vass si_na si_P |- tRel 0 : tSort sProp :=
+    type_Rel _ _ 0 (vass si_na si_P) w1 eq_refl.
+  assert (w2 : wf_local si_Σ0 (rr_Γi ,, vass si_na si_P ,, vass rr_rna (tRel 0))).
+  { apply localenv_cons_abs; [exact w1|exact (si_vass _ rr_rna _ _ hA eq_refl)]. }
+  apply type_Prod.
+  - exact (si_vass_s _ si_na _ _ (si_P_typed rr_Γi rr_wf_Γi) eq_refl).
+  - apply type_Prod.
+    + exact (si_vass_s _ rr_rna _ _ hA eq_refl).
+    + refine (type_App _ _ (tRel 2) si_na si_P (tSort sProp)
+                (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) (tRel 1) _ _ _).
+      * exact (si_arity_typed _ w2).
+      * exact (type_Rel _ _ 2 (vass (mkBindAnn (nNamed (ind_name rr_idecl)) rel_of_Type) si_arity) w2 eq_refl).
+      * exact (type_Rel _ _ 1 (vass si_na si_P) w2 eq_refl).
+Qed.
+
+Lemma rr_on_constructor :
+  on_constructor cumulSpec0 (lift_typing typing) si_Σ0 rr_mdecl 0 rr_idecl [] rr_cdecl [sProp].
+Proof.
+  have w1 := si_wf_P rr_Γi rr_wf_Γi.
+  have hA : si_Σ0 ;;; rr_Γi ,, vass si_na si_P |- tRel 0 : tSort sProp :=
+    type_Rel _ _ 0 (vass si_na si_P) w1 eq_refl.
+  unshelve econstructor.
+  - reflexivity.
+  - reflexivity.
+  - exact (si_vass _ (mkBindAnn nAnon Relevant) _ _ rr_ctype_typed eq_refl).
+  - split; [exact tt|]. exact (si_vass_s _ rr_rna _ _ hA eq_refl).
+  - constructor.
+  - cbn. eapply pos_ass.
+    + apply pos_arg_closed. reflexivity.
+    + eapply pos_ass.
+      * apply pos_arg_closed. reflexivity.
+      * exact (pos_concl _ _ _ [vass rr_rna (tRel 0); vass si_na si_P] [tRel 1]
+                 (All_cons (x := tRel 1) (eq_refl : is_true (closedn 2 (tRel 1))) All_nil)).
+  - intros v e. discriminate e.
+  - destruct lets_in_constructor_types; [exact I|reflexivity].
+Qed.
+
+Lemma rr_on_ind_body :
+  on_ind_body cumulSpec0 (lift_typing typing) si_Σ0 rr_kn rr_mdecl 0 rr_idecl.
+Proof.
+  unshelve econstructor.
+  - exact [[sProp]].
+  - exists (tSort sProp). split; [reflexivity|].
+    apply arity_red_sort. apply whd_stop. reflexivity.
+  - exact (si_vass _ (mkBindAnn nAnon rel_of_Type) _ _ (si_arity_typed [] si_wf_nil) eq_refl).
+  - exact (si_vass _ (mkBindAnn nAnon rel_of_Type) _ _ (si_arity_typed [] si_wf_nil) eq_refl).
+  - constructor; [exact rr_on_constructor|constructor].
+  - cbn. constructor; try reflexivity.
+    constructor; [|constructor].
+    cbn. constructor; cbv zeta; reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - exact I.
+Qed.
+
+Lemma rr_on_inductive : on_inductive cumulSpec0 (lift_typing typing) si_Σ0 rr_kn rr_mdecl.
+Proof.
+  constructor.
+  - constructor; [exact rr_on_ind_body|constructor].
+  - exact (si_wf_P [] si_wf_nil).
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma rr_wf : wf rr_env.
+Proof.
+  split.
+  - split; [|split].
+    + intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+    + intros x Hx.
+      change (LevelSet.In x (LevelSet.union (ContextSet.levels ContextSet.empty)
+                                            (LevelSet.singleton Level.lzero))) in Hx.
+      apply LevelSet.union_spec in Hx as [Hx|Hx].
+      * exfalso. eapply LevelSet.empty_spec. exact Hx.
+      * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
+    + exists si_val. intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+  - split.
+    { constructor; cbn; [constructor|intros c []|repeat split; intros c h; discriminate h
+                        |intros i h; discriminate h]. }
+    apply globenv_decl; [constructor|].
+    constructor.
+    + constructor.
+    + exact si_on_udecl.
+    + exact rr_on_inductive.
+    + cbn. intros i h; discriminate h.
+Qed.
+
+Definition rr_wfE : wfE rr_env := wf_incl_E rr_wf.
+
+Definition rr_proj : projection := {| proj_ind := rr_ind; proj_npars := 1; proj_arg := 0 |}.
+
+Lemma rr_declared_inductive : declared_inductive rr_env rr_ind rr_mdecl rr_idecl.
+Proof. split; [left; reflexivity|reflexivity]. Qed.
+
+Lemma rr_declared_constructor : declared_constructor rr_env (rr_ind, 0) rr_mdecl rr_idecl rr_cdecl.
+Proof. split; [exact rr_declared_inductive|reflexivity]. Qed.
+
+Lemma rr_declared_projection : declared_projection rr_env rr_proj rr_mdecl rr_idecl rr_cdecl rr_pdecl.
+Proof. split; [exact rr_declared_constructor|split; reflexivity]. Qed.
+
+Lemma declared_projection_closedE_inst : closedn (S (ind_npars rr_mdecl)) rr_pdecl.(proj_type).
+Proof. exact (@declared_projection_closedE _ rr_env rr_wfE _ _ _ _ _ rr_declared_projection). Qed.
+
+Lemma declared_projection_closed_typeE_inst : closedn (S (ind_npars rr_mdecl)) rr_pdecl.(proj_type).
+Proof.
+  exact (declared_projection_closed_typeE (Σ := (rr_env, Monomorphic_ctx)) (wfΣ := rr_wfE)
+           rr_declared_projection).
+Qed.
+
+Lemma type_Proj_wf_casesE_inst : wf_proj_node rr_env rr_proj.
+Proof.
+  exact (type_Proj_wf_casesE (Σ := (rr_env, Monomorphic_ctx)) (wfΣ := rr_wfE) rr_declared_projection).
+Qed.
