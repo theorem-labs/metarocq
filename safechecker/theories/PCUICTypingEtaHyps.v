@@ -786,7 +786,8 @@ End DerivedTwo.
   The premise [wfE Σ] (named binder or arrow) holds by [si_wfE] or [ti_po_wfE]. Every typed premise is a
   base derivation lifted to E with [typing_incl_E] (and its consequences [ti_*] below: local environments,
   [isType], spines, substitutions, cumulativity through [ws_cumul_pb_incl_E]); the bidirectional E premises
-  are built with the constructors of [PCUICTypingEtaDefs]. The conclusion is the base lemma of the same
+  are built with the constructors of the canonical judgments of [BDTypingEta] (re-exported by
+  [PCUICTypingEtaDefs]). The conclusion is the base lemma of the same
   name (qualified) applied at that point and lifted to E; the equivalences, the bidirectional conclusions
   and the reflexive reductions of [T6BDu_facts] are built directly. No proof uses a field of a class.
 
@@ -2093,7 +2094,9 @@ Proof.
                  (tSort sProp) hs)).
 Qed.
 
-(** *** Bidirectional derivations over E in [si_Σ], built with the E constructors *)
+(** *** Bidirectional derivations over E in [si_Σ], built with the constructors of [BDTypingEta]; the
+    comparison premise of [checkE_Cumul] is the join [JoinE Σ Γ Cumul], given here by [JoinE_refl] up to
+    conversion. *)
 
 Lemma ti_bdP Γ : si_Σ ;;; Γ |-E si_P ▹ tSort (Sort.super sProp).
 Proof. apply inferE_Sort. exact ti_wfs. Qed.
@@ -2102,7 +2105,7 @@ Lemma ti_bdsP Γ : si_Σ ;;; Γ |-E si_P ▹□ Sort.super sProp.
 Proof. eapply inferE_sort_Sort; [exact (ti_bdP Γ)|apply rt_refl]. Qed.
 
 Lemma ti_bdcP : si_Σ ;;; [] |-E si_P ◃ tSort (Sort.super sProp).
-Proof. eapply checkE_Cumul; [exact (ti_bdP [])|exact (fi_ws Cumul [] (tSort (Sort.super sProp)) eq_refl eq_refl)]. Qed.
+Proof. eapply checkE_Cumul; [exact (ti_bdP [])|exact (JoinE_refl si_Σ [] Cumul (tSort (Sort.super sProp)))]. Qed.
 
 Lemma ti_lsP Γ : lift_sorting (checkingE si_Σ Γ) (infering_sortE si_Σ Γ) (j_vass si_na si_P).
 Proof. split; [exact tt|]. exists (Sort.super sProp). split; [exact (ti_bdsP Γ)|split; [exact I|reflexivity]]. Qed.
@@ -2117,7 +2120,7 @@ Proof.
 Qed.
 
 Lemma ti_bdcF : si_Σ ;;; [] |-E ti_F ◃ si_P.
-Proof. eapply checkE_Cumul; [exact ti_bdF|exact (fi_ws Cumul [] si_P eq_refl eq_refl)]. Qed.
+Proof. eapply checkE_Cumul; [exact ti_bdF|exact (JoinE_refl si_Σ [] Cumul si_P)]. Qed.
 
 Lemma ti_bdsF : si_Σ ;;; [] |-E ti_F ▹□ sProp.
 Proof. eapply inferE_sort_Sort; [exact ti_bdF|apply rt_refl]. Qed.
@@ -2145,7 +2148,7 @@ Lemma ti_bdA : si_Σ ;;; ti_ΓP |-E tRel 0 ▹ lift0 (S 0) (decl_type (vass si_n
 Proof. econstructor. reflexivity. Qed.
 
 Lemma ti_bdcA : si_Σ ;;; ti_ΓP |-E tRel 0 ◃ si_P.
-Proof. eapply checkE_Cumul; [exact ti_bdA|exact (fi_ws Cumul ti_ΓP si_P eq_refl eq_refl)]. Qed.
+Proof. eapply checkE_Cumul; [exact ti_bdA|exact (JoinE_refl si_Σ ti_ΓP Cumul si_P)]. Qed.
 
 Lemma ti_bdIA : si_Σ ;;; ti_ΓP |-E ti_IA ▹ tSort sProp.
 Proof.
@@ -2157,7 +2160,7 @@ Lemma ti_bdsIA : si_Σ ;;; ti_ΓP |-E ti_IA ▹□ sProp.
 Proof. eapply inferE_sort_Sort; [exact ti_bdIA|apply rt_refl]. Qed.
 
 Lemma ti_bdcIA : si_Σ ;;; ti_ΓP |-E ti_IA ◃ si_P.
-Proof. eapply checkE_Cumul; [exact ti_bdIA|exact (fi_ws Cumul ti_ΓP si_P eq_refl eq_refl)]. Qed.
+Proof. eapply checkE_Cumul; [exact ti_bdIA|exact (JoinE_refl si_Σ ti_ΓP Cumul si_P)]. Qed.
 
 Lemma ti_bdC Γ : si_Σ ;;; Γ |-E tConstruct si_ind 0 [] ▹ ti_cty.
 Proof.
@@ -2176,13 +2179,13 @@ Proof.
 Qed.
 
 Lemma ti_bdccA : si_Σ ;;; ti_ΓP |-E ti_cA ◃ ti_IA.
-Proof. eapply checkE_Cumul; [exact ti_bdcAi|exact (fi_ws Cumul ti_ΓP ti_IA eq_refl eq_refl)]. Qed.
+Proof. eapply checkE_Cumul; [exact ti_bdcAi|exact (JoinE_refl si_Σ ti_ΓP Cumul ti_IA)]. Qed.
 
 (** ** Instances of [T6BD_facts]
 
   Each lemma [<field>_inst] states the premises and the conclusion of the field [<field>] of [T6BD_facts]
   at concrete arguments in [si_Σ] (the premise [wfE] holds there by [si_wfE]); the bidirectional premises
-  are built with the constructors of [PCUICTypingEtaDefs], and the conclusion from base derivations lifted
+  are built with the constructors of [BDTypingEta], and the conclusion from base derivations lifted
   with [typing_incl_E]. (1) This instance shows that the hypothesis is consistent and about something
   real. (2) It does NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan
   row T6 (bidirectional soundness over E) lands. *)
@@ -2271,7 +2274,7 @@ Qed.
 
   Each lemma [<field>_inst] states the premises and the conclusion of the field [<field>] of [T6BDu_facts]
   at concrete arguments in [si_Σ] (the premise [wfE] holds there by [si_wfE]); the bidirectional premises
-  are built with the constructors of [PCUICTypingEtaDefs], and the conclusion (reductions to a common
+  are built with the constructors of [BDTypingEta], and the conclusion (reductions to a common
   reduct, which are base [closed_red]) directly. (1) This instance shows that the hypothesis is consistent
   and about something real. (2) It does NOT discharge the hypothesis at [typingE]: the field remains a
   hypothesis until plan row T6 (bidirectional uniqueness over E) lands. *)
@@ -2379,7 +2382,7 @@ Qed.
   [ti_ΓP = [A : Prop]] and on the terms [I A] and [c A]: applications whose head has a Π type, so that each
   inferred type goes through an [infering_prodE] step (the type of the head reduces to a [tProd]). The
   typing premises are base derivations lifted with [typing_incl_E], and the bidirectional conclusions are
-  built with the constructors of [PCUICTypingEtaDefs]. (1) This instance shows that the hypothesis is
+  built with the constructors of [BDTypingEta]. (1) This instance shows that the hypothesis is
   consistent and about something real. (2) It does NOT discharge the hypothesis at [typingE]: the field
   remains a hypothesis until plan row T6 (bidirectional completeness over E) lands, and its E proof also
   needs T8 (a well-typed type E-convertible to a Π, a sort or an inductive reduces to one). *)
