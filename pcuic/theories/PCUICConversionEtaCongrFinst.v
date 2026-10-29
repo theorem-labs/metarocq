@@ -15,12 +15,14 @@
   ([All2_JoinE_ex]), and the final comparison [eq_term_upto_univ_eta_napp] relates the
   heads by [eqη_Ind] at [napp = #|l|], which is the premise.
 
-  **The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed environment
-  ([wf_ClosedBodies]); the scoping premise by any closed context; the arguments by
-  reflexivity. The instance below ([ws_cumul_pbE_Ind_finst_inst]) relates an
-  UNDER-applied inductive [I@{u} (A : Prop) : Prop] with variance [Irrelevant] at two
-  different bound levels, in an environment proved [wf] ([if_wf]). There base's
-  comparison at [napp = 0] is [AllEqual] and fails ([if_cumul_Ind_univ_fails]). *)
+  The section variable [wfΣ] is not used, so the lemma takes no [ClosedBodies]
+  premise. **The hypotheses are satisfiable:** the scoping premise by any closed
+  context, the argument premise by reflexivity. The instance below
+  ([ws_cumul_pbE_Ind_finst_inst]) relates an UNDER-applied inductive
+  [I@{u} (A : Prop) : Prop] with variance [Irrelevant] at two different bound levels, in
+  an environment proved [wf] ([if_wf]; [if_wfE] and [if_cb] give [wfE] and
+  [ClosedBodies] from it). There base's comparison at [napp = 0] is [AllEqual] and
+  fails ([if_cumul_Ind_univ_fails]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -187,7 +189,6 @@ Qed.
 
 Definition if_wfE : wfE if_env := wf_incl_E if_wf.
 Definition if_cb : ClosedBodies if_env := @wf_ClosedBodies _ if_env if_wf.
-#[local] Existing Instance if_cb.
 
 (** Two bound levels, unrelated: [I@{l0}] and [I@{l1}] are compared at [napp = 0]. *)
 Definition if_Σ : global_env_ext := (if_env, Polymorphic_ctx ([nAnon; nAnon], ConstraintSet.empty)).
