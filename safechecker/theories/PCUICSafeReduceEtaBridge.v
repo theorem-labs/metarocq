@@ -1156,3 +1156,23 @@ Section FracInstancesE.
   Qed.
 
 End FracInstancesE.
+
+(** ** The same concrete instances, for the fields of the small class [ReduceTypedFactsE]
+
+    EtaK7 (2026-10-29, merge of [c66d5e4e] into the K7 line, lane lead): EtaIntegrate9 restructured the E
+    hypothesis into the small Prop class [ReduceTypedFactsE] (fields [rtf_<f>E]), whose fields are the
+    statements of [ReduceTypedFacts welltypedE wf_extE]'s fields [rtf_<f>], so each concrete instance above
+    (a point where the field's premises hold, with its conclusion proved there) is also an instance of the
+    small field of the same name. [rtf_prim_overappliedE] has none by design (its premise is unsatisfiable;
+    argument at [PCUICSafeReduceEta.ReduceTypedFacts]). *)
+Section FracInstancesSmallE.
+  #[local] Existing Instance default_checker_flags.
+  Definition rtf_wt_redE_inst := rtf_wt_red_inst.
+  Definition rtf_contextE_inst := rtf_context_inst.
+  Definition rtf_case_constructE_inst := rtf_case_construct_inst.
+  Definition rtf_proj_constructE_inst := rtf_proj_construct_inst.
+  Definition rtf_fix_arg_whneE_inst := rtf_fix_arg_whne_inst.
+  Definition rtf_case_arg_whneE_inst := rtf_case_arg_whne_inst.
+  Definition rtf_proj_arg_whneE_inst := rtf_proj_arg_whne_inst.
+  Definition rtf_whnf_red_invE_inst := rtf_whnf_red_inv_inst.
+End FracInstancesSmallE.
