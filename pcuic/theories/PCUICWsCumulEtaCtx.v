@@ -188,6 +188,10 @@ Section NoPremise.
 
 End NoPremise.
 
+(** The E twins of base's registrations [PCUICWellScopedCumulativity.v:146] and [:523]. *)
+#[global] Hint Resolve ws_cumul_pbE_is_closed_context ws_cumul_pbE_is_open_term_left ws_cumul_pbE_is_open_term_right : fvs.
+#[global] Hint Resolve ws_cumul_ctx_pbE_closed_left : fvs.
+
 (** The unscoped context relations over [JoinE]. Base's twins are stated over
     [cumulAlgo_gen]; like them, these need no premise. *)
 
@@ -381,6 +385,15 @@ Section ContextCumulativity.
   Qed.
 
 End ContextCumulativity.
+
+(** Base's instance [ws_cumul_decls_trans] ([PCUICWellScopedCumulativity.v:466]) in its
+    class form over [ws_cumul_declsE]. Base's instance name is taken by the lemma
+    [ws_cumul_declsE_trans], so the instance is a new constant whose body is that
+    lemma. Base's [wf Σ] is [ClosedBodies Σ] here, as for [ws_cumul_declsE_trans]. *)
+#[global]
+Instance ws_cumul_declsE_Transitive {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
+  {Γ : context} : Transitive (ws_cumul_declsE pb Σ Γ).
+Proof. exact (fun _ _ _ => ws_cumul_declsE_trans). Qed.
 
 (** ** Substitution of convertible terms *)
 
