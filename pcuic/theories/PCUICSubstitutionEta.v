@@ -303,6 +303,7 @@ Lemma subslet_untyped_subsletE {cf:checker_flags} Σ Γ s Γ' : subsletE Σ Γ s
 Proof.
   induction 1; constructor; auto.
 Qed.
+Coercion subslet_untyped_subsletE : subsletE >-> untyped_subslet.
 
 Lemma subs_nth_errorE {cf:checker_flags} Σ Γ s Δ decl n t :
   subsE Σ Γ s Δ ->

@@ -29,6 +29,8 @@ Definition isTypeE `{checker_flags} (Σ : global_env_ext) (Γ : context) (t : te
 Definition isTypeRelE_isTypeE `{checker_flags} (Σ : global_env_ext) (Γ : context) (t : term) (r : relevance) :
   isTypeRelE Σ Γ t r -> isTypeE Σ Γ t.
 Proof. apply lift_sorting_forget_rel. Defined.
+#[export] Hint Resolve isTypeRelE_isTypeE : pcuic.
+
 Coercion isTypeRelE_isTypeE : isTypeRelE >-> isTypeE.
 
 Definition wf_local_relE `{checker_flags} Σ := All_local_rel (lift_typing1 (typingE Σ)).
@@ -43,13 +45,17 @@ Definition isWfArityE {cf : checker_flags} Σ (Γ : context) T :=
 
 Definition isTypeE_welltypedE {cf Σ} {Γ T} : isTypeE Σ Γ T -> welltypedE Σ Γ T.
 Proof. intros [_ [s []]]. now econstructor. Qed.
+Global Hint Resolve isTypeE_welltypedE : pcuic.
 
 Definition isTypeRelE_welltypedE {cf Σ} {Γ T r} : isTypeRelE Σ Γ T r -> welltypedE Σ Γ T.
 Proof. intros [_ [s []]]. now econstructor. Qed.
+Global Hint Resolve isTypeRelE_welltypedE : pcuic.
 
 Definition has_sort_isTypeE {cf Σ} {Γ T} s : Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T.
 Proof. repeat (eexists; tea). Defined.
+Global Hint Resolve has_sort_isTypeE : pcuic.
 
 Definition has_sort_isTypeRelE {cf Σ} {Γ T} s r :
   isSortRel s r -> Σ ;;; Γ |-E T : tSort s -> isTypeRelE Σ Γ T r.
 Proof. repeat (eexists; tea). Defined.
+Global Hint Resolve has_sort_isTypeRelE : pcuic.
