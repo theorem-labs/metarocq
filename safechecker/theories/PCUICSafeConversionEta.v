@@ -4430,9 +4430,14 @@ Equations (noeqns) isconv_array_values_aux
       | ccview_construct ind' n ui with inspect (nth_error brs n) := {
         | exist (Some br) eqbr := Some (iota_red ci.(ci_npar) p args br) ;
         | exist None eqbr := False_rect _ _ } ;
-      | ccview_cofix mfix idx with inspect (unfold_cofix mfix idx) := {
-        | @exist (Some (narg, fn)) eq2 := Some (tCase ci p (mkApps fn args) brs) ;
-        | @exist None eq2 := False_rect _ _
+      | ccview_cofix mfix idx with inspect ci.(ci_cofix_nondep) := {
+        | @exist true eqnd with inspect (unfold_cofix mfix idx) := {
+          | @exist (Some (narg, fn)) eq2 := Some (tCase ci p (mkApps fn args) brs) ;
+          | @exist None eq2 := False_rect _ _
+          } ;
+        (* A cofixpoint does not unfold under a case whose return type may depend
+           on the scrutinee (BET-339; re-synced from integ-all7's PCUICSafeConversion). *)
+        | @exist false eqnd := None
         } ;
       | ccview_other cred _ := None
       }
@@ -4469,7 +4474,7 @@ Equations (noeqns) isconv_array_values_aux
       + exact r'.
     - etakD_args_red_at Σ wfΣ.
       eapply cored_red_cored.
-      + constructor. eapply red_cofix_case. eauto.
+      + constructor. eapply red_cofix_case; [exact (eq_sym eqnd)|eauto].
       + eapply red_case_c. exact (clrel_rel rr).
   Qed.
 

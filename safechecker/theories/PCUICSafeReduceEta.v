@@ -34,7 +34,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICUtils PCUICReduction PCUICValidity PCUICSafeLemmata
      PCUICConfluence PCUICConversion
      PCUICOnFreeVars PCUICWellScopedCumulativity
-     PCUICClassification PCUICArityRed PCUICPrimitiveRed PCUICPrimCanonical
+     PCUICArityRed PCUICPrimitiveRed PCUICPrimCanonical
      PCUICClosedBodies PCUICClosedTyp PCUICTypingEta.
 
 (* The base machine, for the base instance only; not imported. *)
@@ -888,10 +888,16 @@ Corollary R_Acc_aux :
             | ccview_construct ind' c' inst' with inspect (nth_error brs c') := {
               | exist (Some br) eqbr := rec reduce (iota_red ci.(ci_npar) p args br) π ;
               | exist None bot := False_rect _ _ } ;
-            | ccview_cofix mfix idx with inspect (unfold_cofix mfix idx) := {
-              | @exist (Some (narg, fn)) eq' :=
-                rec reduce (tCase ci p (mkApps fn args) brs) π ;
-              | @exist None bot := False_rect _ _
+            | ccview_cofix mfix idx with inspect ci.(ci_cofix_nondep) := {
+              | @exist true eqnd with inspect (unfold_cofix mfix idx) := {
+                | @exist (Some (narg, fn)) eq' :=
+                  rec reduce (tCase ci p (mkApps fn args) brs) π ;
+                | @exist None bot := False_rect _ _
+                } ;
+              (* A cofixpoint does not unfold under a case whose return type may
+                 depend on the scrutinee: the case is a weak-head normal form
+                 (BET-339; re-synced from integ-all7's PCUICSafeReduce). *)
+              | @exist false eqnd := give (tCase ci p (mkApps (tCoFix mfix idx) args) brs) π
               } ;
             | ccview_other t ht := give (tCase ci p (mkApps t args) brs) π
             }
@@ -1366,7 +1372,7 @@ Corollary R_Acc_aux :
     - zip fold in r'; exact r'.
     - constructor.
       eapply red1_context.
-      eapply red_cofix_case; eauto.
+      eapply red_cofix_case; [exact (eq_sym eqnd)|eauto].
   Qed.
   Next Obligation.
     clear eq. destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
@@ -1388,6 +1394,29 @@ Corollary R_Acc_aux :
     match type of bot with context [nth_error ?m ?i] => destruct (nth_error m i) end;
       congruence.
   Qed.
+  Next Obligation.
+    clear eq reduce h.
+    destruct (hΣ _ wfΣ) as [hΣ]. destruct (prf Σ wfΣ)  as [r [p0 p1]].
+    destruct r.
+    - inversion H. subst.
+      clear H.
+      cbn in prf'. inversion prf'. subst. reflexivity.
+    - unfold Pr in p0. cbn in p0.
+      rewrite <- prf' in p0. cbn in p0. subst.
+      dependent destruction H.
+      + cbn in H. symmetry in prf'.
+        pose proof (decompose_stack_eq _ _ _ prf'). subst.
+        rewrite zipc_appstack in H. cbn in H.
+        right. econstructor. assumption.
+      + cbn in H0. inversion H0. subst. clear H0.
+        symmetry in prf'.
+        pose proof (decompose_stack_eq _ _ _ prf'). subst.
+        rewrite zipc_appstack in H2. cbn in H2.
+        apply zipc_inj in H2. inversion H2. subst.
+        reflexivity.
+  Qed.
+  (* The [false] branch of [ccview_cofix] (BET-339): the same proof as the
+     [ccview_other] obligation above, as in integ-all7's PCUICSafeReduce. *)
   Next Obligation.
     clear eq reduce h.
     destruct (hΣ _ wfΣ) as [hΣ]. destruct (prf Σ wfΣ)  as [r [p0 p1]].
@@ -2186,6 +2215,10 @@ Corollary R_Acc_aux :
       intros [t' π''] Ha eq''. cbn.
       rewrite eq'' in haux. cbn in haux.
       assumption.
+    - unfold zipp. case_eq (decompose_stack π). intros.
+      constructor.
+      apply whnf_mkApps.
+      apply whne_case_cofix_dep. exact (eq_sym eqnd).
     - match goal with
       | |- context [ reduce ?x ?y ?z ] =>
         case_eq (reduce x y z) ;
@@ -2641,13 +2674,24 @@ Corollary R_Acc_aux :
             constructor; eapply whd_proj; [eassumption|symmetry; eassumption|eassumption]
         end
       (* cofixpoints and stuck discriminants *)
-      | constructor; eapply whd_case_cofix; [eassumption|symmetry; eassumption|eassumption]
+      | match goal with
+        | e : true = ci_cofix_nondep _ |- _ =>
+            constructor; eapply whd_case_cofix;
+              [exact (eq_sym e)|eassumption|symmetry; eassumption|eassumption]
+        end
       | constructor; eapply whd_proj_cofix; [eassumption|symmetry; eassumption|eassumption]
+      (* a cofixpoint under a case whose return type may depend on the scrutinee *)
+      | match goal with
+        | e : false = ci_cofix_nondep _ |- _ =>
+            constructor; eapply whd_case_stuck;
+              [eassumption|reflexivity|rewrite <- e; reflexivity]
+        end
       | match goal with
         | ht : discr_construct_cofix _ |- _ =>
             let h1 := fresh "h1" in let h2 := fresh "h2" in
             destruct (discr_construct_cofix_whd _ ht) as [h1 h2];
-            constructor; eapply whd_case_stuck; eassumption
+            constructor; eapply whd_case_stuck;
+              [eassumption|eassumption|rewrite h2; reflexivity]
         end
       | match goal with
         | ht : discr_construct0_cofix _ |- _ =>
