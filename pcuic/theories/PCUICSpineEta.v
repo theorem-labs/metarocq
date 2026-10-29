@@ -56,9 +56,10 @@ From Stdlib Require Import ssreflect ssrbool.
   Proof routes that differ from base (statements are twins): [type_it_mkProd_or_LetIn_invE]
   inverts the let-in by [ws_cumul_pbE_LetIn_l_inv] and then expands the let ([red_expand_letE])
   and weakens, with no comparison of reducts; [wf_arity_spine_typing_spineE] builds its ζ step
-  by [red_ws_cumul_pbE]; [arity_spine_it_mkProd_or_LetIn_SortE] and [ctx_inst_eq_contextE]
-  include [compare_term] in the spec ([eq_term_upto_univ_cumulSpecE],
-  [into_ws_cumul_pbE_spec]); [all_rels_substE] weakens the reduction under [ClosedBodies]
+  by [red_ws_cumul_pbE]; [arity_spine_it_mkProd_or_LetIn_SortE] compares the two sorts by
+  [ws_cumul_pbE_Sort]; [ctx_inst_eq_contextE] includes [compare_term] in the spec
+  ([eq_term_upto_univ_cumulSpecE], [into_ws_cumul_pbE_spec]); [all_rels_substE] weakens the
+  reduction under [ClosedBodies]
   ([weakening_red_cb]); [ws_cumul_pb_terms_ws_cumul_ctxE] uses [ws_cumul_pbE_ws_cumul_ctx_pb].
 
   Not copied: [red_expand_let] (its E twin [red_expand_letE] is [PCUICSREtaConv]'s), the
@@ -917,8 +918,7 @@ Qed.*)
     eauto. constructor.
     eapply isType_SortE; eauto.
     eapply sp. simpl.
-    eapply into_ws_cumul_pbE_spec => //; eauto with pcuic fvs.
-    apply eq_term_upto_univ_cumulSpecE. now constructor.
+    apply ws_cumul_pbE_Sort; [eauto with pcuic fvs|exact le].
   Qed.
 
   Lemma ctx_inst_subst_lengthE {Γ} {Δ : context} {args} (c : ctx_instE Σ Γ args Δ) :
