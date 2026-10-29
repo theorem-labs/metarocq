@@ -75,9 +75,27 @@ Proof.
   apply cumulE_App; [apply cumulSpecE_eta_contract|apply cumulE_Refl].
 Qed.
 
+(** The same shape over the context [cp_Γ1], with the type [I x] of the context's variable
+    [x : Prop], so renaming and instantiation change the block. *)
+Definition cp_dtype1 : term := tApp (sp_eta (tInd si_ind [])) (tRel 0).
+Definition cp_witness1 : term := tApp (tInd si_ind []) (tRel 0).
+Definition cp_block1 : mfixpoint term :=
+  [{| dname := si_na; dtype := cp_dtype1; dbody := tRel 0; rarg := 0 |}].
+
+Lemma cp_block1_on_ind {cf : checker_flags} Σ :
+  mfix_on_ind check_one_cofix (conv_witnessE Σ cp_Γ1) (fun _ => true) cp_block1.
+Proof.
+  exists si_kn. split; [discriminate|]. split; [|reflexivity].
+  constructor; [|constructor].
+  exists cp_witness1. split; [reflexivity|]. split; [reflexivity|].
+  apply cumulE_App; [apply cumulSpecE_eta_contract|apply cumulE_Refl].
+Qed.
+
 (** ** Configuration weakening ([Typing/PCUICWeakeningConfigTypEta]) *)
 
-Lemma cp_config_refl : config.impl default_checker_flags default_checker_flags.
+(** A pair of configurations that are not equal: the default flags, and the same flags
+    without universe checking. *)
+Lemma cp_config_tit : config.impl default_checker_flags type_in_type.
 Proof. reflexivity. Qed.
 
 Lemma weakening_configE_inst :
@@ -103,9 +121,9 @@ Proof.
               @weakening_configE extraction_checker_flags default_checker_flags _ _ _ _ sp_config_impl H0)).
 Qed.
 
-Lemma weakening_config_wfE_inst : @wfE default_checker_flags si_env.
+Lemma weakening_config_wfE_inst : @wfE type_in_type si_env.
 Proof.
-  exact (@weakening_config_wfE default_checker_flags default_checker_flags si_env cp_config_refl si_wfE).
+  exact (@weakening_config_wfE default_checker_flags type_in_type si_env cp_config_tit si_wfE).
 Qed.
 
 Lemma weakening_config_mfix_on_indE_inst :
@@ -195,17 +213,18 @@ Proof.
            cp_rel0_typed).
 Qed.
 
+(** Renaming [cp_Γ1] into [cp_Γ2] shifts the variable of [cp_block1]'s type. *)
 Lemma rename_mfix_on_indE_inst :
-  mfix_on_ind check_one_cofix (conv_witnessE si_Σ cp_Γ1) (fun _ => true)
-    (map (map_def (rename (rshiftk 1)) (rename (shiftn #|cp_block| (rshiftk 1)))) cp_block).
+  mfix_on_ind check_one_cofix (conv_witnessE si_Σ cp_Γ2) (fun _ => true)
+    (map (map_def (rename (rshiftk 1)) (rename (shiftn #|cp_block1| (rshiftk 1)))) cp_block1).
 Proof.
-  eapply (@rename_mfix_on_indE _ si_Σ si_cb xpred0 [] cp_Γ1 (rshiftk 1)).
-  - exact (rename_check_one_cofix (rshiftk 1) cp_block).
-  - exact (urenaming_lift0 _ [] [vass si_na si_P]).
+  eapply (@rename_mfix_on_indE _ si_Σ si_cb xpred0 cp_Γ1 cp_Γ2 (rshiftk 1)).
+  - exact (rename_check_one_cofix (rshiftk 1) cp_block1).
+  - exact (urenaming_lift0 _ cp_Γ1 [vass si_na si_P]).
   - reflexivity.
   - reflexivity.
   - constructor; [reflexivity|constructor].
-  - exact (cp_block_on_ind si_Σ).
+  - exact (cp_block1_on_ind si_Σ).
 Qed.
 
 (** The predicate of a [match] on [I P] returning [P]. *)
@@ -274,16 +293,20 @@ Proof.
   - exact (cp_well_substE si_Σ).
 Qed.
 
+(** Instantiating [cp_Γ1]'s variable by [Prop] closes [cp_block1]'s type. *)
 Lemma inst_mfix_on_indE_inst :
-  mfix_on_ind check_one_cofix (conv_witnessE si_Σ cp_Γ1) (fun _ => true)
-    (map (map_def (inst (↑^1)) (inst (up #|cp_block| (↑^1)))) cp_block).
+  mfix_on_ind check_one_cofix (conv_witnessE si_Σ []) (fun _ => true)
+    (map (map_def (inst cp_σ) (inst (up #|cp_block1| cp_σ))) cp_block1).
 Proof.
-  eapply (@inst_mfix_on_indE _ si_Σ si_cb [] cp_Γ1 (↑^1)).
-  - exact (inst_check_one_cofix (↑^1) cp_block).
-  - split; [reflexivity|split]; intros x decl hx; destruct x; discriminate.
+  eapply (@inst_mfix_on_indE _ si_Σ si_cb cp_Γ1 [] cp_σ).
+  - exact (inst_check_one_cofix cp_σ cp_block1).
+  - split; [reflexivity|split].
+    + intros x decl hx. destruct x as [|x]; [reflexivity|destruct x; discriminate].
+    + intros x decl hx. destruct x as [|x]; [|destruct x; discriminate].
+      injection hx as <-. intros b hb. discriminate hb.
   - reflexivity.
   - constructor; [reflexivity|constructor].
-  - exact (cp_block_on_ind si_Σ).
+  - exact (cp_block1_on_ind si_Σ).
 Qed.
 
 (** ** Closedness of declarations ([Typing/PCUICClosedTypEta]) *)
