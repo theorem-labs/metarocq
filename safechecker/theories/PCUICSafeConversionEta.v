@@ -2557,8 +2557,10 @@ Equations (noeqns) isconv_array_values_aux
      Slice C of K3 (EtaSliceC). Untyped facts on the η stack and the η views, and the E steps
      the obligations of [_isconv_prog] take: openness and closedness from [welltypedE] and the
      η context's [wf_localE], a structural reduction read through the η view, the
-     discriminant reduction [reduce_termE], and whnf after [reduce_args_E]. They use only the
-     section's hypotheses ([ConvTypedFacts], [ReduceTypedFacts] through [red_wt]); no new
+     discriminant reduction [reduce_termE], and whnf after [reduce_args_E]. The helpers and
+     the obligations use only the section's hypotheses: [ConvTypedFacts] ([ctf_context],
+     [ctf_wf_universes]), [ReduceTypedFacts] (through [red_wt]) and EtaPosK4's
+     [typingE_rename_P]/[welltypedE_context] (through [wf_localE_push_real]); no new
      hypothesis. *)
 
   (* A real frame strictly deepens the position. *)
@@ -3047,7 +3049,13 @@ Equations (noeqns) isconv_array_values_aux
     } }.
 
   (* The obligations of [_isconv_prog] (slice C). The T1 equation [hg] gives [no_Eta_arg] on
-     both stacks in every view but [prog_view_other]. *)
+     both stacks in every view but [prog_view_other]; it is read with
+     [andb_prop _ _ (eq_sym hg)], never rewritten. The obligations that are arguments of an
+     [inspect]ed call ([reduce_termE]'s and [reduce_args_E]'s welltypedness) take [no_Eta_arg]
+     from [virt_ok_not_head] on [hv1]/[hv2] instead: an obligation's constant keeps the
+     variables its proof uses, so a use of [hg] there makes the inspected equations depend on
+     [hg], and [etak_hint] (whose [etak_pre] rewrites [hg]) then stops closing the later
+     invariant obligations, which shifts every following [Next Obligation]. *)
 
   (* tApp *)
   Next Obligation.
@@ -3237,7 +3245,7 @@ Equations (noeqns) isconv_array_values_aux
     apply ws_cumul_pbE_mkApps; [|exact hargs].
     rewrite !eta_rename_tCase.
     eapply ws_cumul_pbE_Case; [exact ho1|exact ho2|exact hpars|exact hu|exact hctx|exact hret|exact hc|].
-    exact (All2_map hbrs).
+    apply (All2_map (f := eta_rename_br π1) (g := eta_rename_br π2)). exact hbrs.
   Qed.
   Next Obligation.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
