@@ -2019,6 +2019,15 @@ Proof. split; [intros h; exact (eta_pe_step _ _ h t (pe_refl t))|exact (pe_to_et
   substitution [s] that the β steps build ([subst_cons_beta]); [head_unbound] says
   the target's spine head is not one of the substituted variables. *)
 
+(* WIDENING NOTE (2026-10-29): tInd was added to rigid for the T8_Ind_r tail. Negative uses of
+   rigid exist: rigid_contra (used in pe_spine_or_lam) and the tRel-head case, which close goals
+   by `discriminate hrig`. Because rigid is a computable bool, discriminate succeeds only if
+   `rigid hd` REDUCES to false, so a negative use at a head that is now rigid FAILS TO COMPILE. A
+   green build therefore proves that no negative use excludes tInd. Control: the pe_Ind case,
+   closed by rigid_contra before the change, had to be PROVED after it (pe_spine_or_lam's
+   inductive case). A green build counts as evidence for a widened predicate ONLY when every
+   exclusion is carried by such a computing tactic; it does not count when an exclusion is
+   carried by a generic tactic or by a Prop-valued hypothesis. *)
 Definition rigid (h : term) : bool :=
   match h with
   | tConstruct _ _ _ | tFix _ _ | tCoFix _ _ | tConst _ _ | tPrim _ | tInd _ _ => true
