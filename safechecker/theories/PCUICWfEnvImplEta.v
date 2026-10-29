@@ -73,14 +73,19 @@ Definition real_guard_impl : abstract_guard_impl :=
 (** The universe graphs are stored fields, computed once when an environment is built.
     As let-fields they were recomputed at every access in the extracted checker, so every
     universe comparison rebuilt the whole graph. Each graph is stored with an index of its
-    vertices, so that universe comparisons compare no level names inside Bellman-Ford. *)
+    vertices, so that universe comparisons compare no level names inside Bellman-Ford, and
+    with a table of distances over that index ([wGraph.pf_table]), whose rows are
+    [wGraph.pf_distances] of the index, so that a comparison from a source with a row runs
+    no Bellman-Ford at all. *)
 Record reference_impl_ext {cf:checker_flags} {guard : abstract_guard_impl} := {
       reference_impl_env_ext :> global_env_ext;
       reference_impl_ext_wf :> ∥ wf_extE reference_impl_env_ext ∥;
       reference_impl_ext_graph : universes_graph;
       reference_impl_ext_graph_wf : is_graph_of_uctx reference_impl_ext_graph (global_ext_uctx reference_impl_env_ext);
       reference_impl_ext_index : wGraph.index;
-      reference_impl_ext_index_wf : wGraph.is_index_of reference_impl_ext_graph reference_impl_ext_index
+      reference_impl_ext_index_wf : wGraph.is_index_of reference_impl_ext_graph reference_impl_ext_index;
+      reference_impl_ext_table : wGraph.pf_table;
+      reference_impl_ext_table_ok : wGraph.pf_table_ok reference_impl_ext_table reference_impl_ext_index
   }.
 
 Record reference_impl {cf:checker_flags} := {
@@ -89,7 +94,9 @@ Record reference_impl {cf:checker_flags} := {
       reference_impl_graph : universes_graph;
       reference_impl_graph_wf : is_graph_of_uctx reference_impl_graph (global_uctx reference_impl_env);
       reference_impl_index : wGraph.index;
-      reference_impl_index_wf : wGraph.is_index_of reference_impl_graph reference_impl_index
+      reference_impl_index_wf : wGraph.is_index_of reference_impl_graph reference_impl_index;
+      reference_impl_table : wGraph.pf_table;
+      reference_impl_table_ok : wGraph.pf_table_ok reference_impl_table reference_impl_index
   }.
 
 Lemma graph_index_of_wf {cf:checker_flags} (Σ : global_env) (wfΣ : ∥ wfE Σ ∥) G :
@@ -118,14 +125,22 @@ Proof.
   now eapply wf_global_uctx_invariants.
 Qed.
 
+(** The only place the table is built: with the index of the global universes, once per
+    global environment. Adding a declaration ([abstract_env_add_decl]) or removing one
+    ([reference_pop]) keeps the universes, so it copies the graph, the index and the table. *)
 Definition build_reference_impl {cf:checker_flags} (Σ : global_env) (wfΣ : ∥ wfE Σ ∥) : reference_impl :=
   let G := graph_of_wf wfΣ in
+  let ix := wGraph.index_of G.π1 in
   {| reference_impl_env := Σ; reference_impl_wf := wfΣ;
      reference_impl_graph := G.π1;
      reference_impl_graph_wf := G.π2;
-     reference_impl_index := wGraph.index_of G.π1;
-     reference_impl_index_wf := graph_index_of_wf Σ wfΣ G.π1 G.π2 |}.
+     reference_impl_index := ix;
+     reference_impl_index_wf := graph_index_of_wf Σ wfΣ G.π1 G.π2;
+     reference_impl_table := wGraph.pf_build_table ix;
+     reference_impl_table_ok := wGraph.pf_build_table_ok ix |}.
 
+(** An extended environment built from scratch gets the empty table, so that no caller of
+    this builder pays one Bellman-Ford per vertex at each call. *)
 Definition build_reference_impl_ext {cf:checker_flags} {guard : abstract_guard_impl}
   (Σ : global_env_ext) (wfΣ : ∥ wf_extE Σ ∥) : reference_impl_ext :=
   let G := graph_of_wf_ext wfΣ in
@@ -133,28 +148,57 @@ Definition build_reference_impl_ext {cf:checker_flags} {guard : abstract_guard_i
      reference_impl_ext_graph := G.π1;
      reference_impl_ext_graph_wf := G.π2;
      reference_impl_ext_index := wGraph.index_of G.π1;
-     reference_impl_ext_index_wf := graph_index_of_wf_ext Σ wfΣ G.π1 G.π2 |}.
+     reference_impl_ext_index_wf := graph_index_of_wf_ext Σ wfΣ G.π1 G.π2;
+     reference_impl_ext_table := wGraph.pf_table_empty;
+     reference_impl_ext_table_ok := wGraph.pf_table_empty_ok _ |}.
 
-(** The graph of [(X, udecl)] and its index, from the stored graph and index of [X] and the
-    universes of [udecl]: adding a declaration's few universes neither rebuilds the global
-    graph nor renumbers it. *)
+Lemma reference_impl_table_ok_nil {cf:checker_flags} (gctx : VSet.t × GoodConstraintSet.t)
+  (X : reference_impl) :
+  LevelSet.is_empty gctx.1 && GoodConstraintSet.is_empty gctx.2 ->
+  wGraph.pf_table_ok (reference_impl_table X) (add_uctx_ix gctx (reference_impl_index X)).
+Proof.
+  move=> /andP [H1 H2]. rewrite (add_uctx_ix_nil gctx _ H1 H2).
+  exact (reference_impl_table_ok X).
+Qed.
+
+(** The table for the index [add_uctx_ix gctx (reference_impl_index X)]. When [gctx] has no
+    level and no constraint, as for every monomorphic declaration, that index is the index
+    of [X] ([add_uctx_ix_nil]), and the table of [X] is copied, not rebuilt. Otherwise the
+    table is empty, and each query computes its distances as before: the indices extended
+    with a declaration's own universes carry under 0.5% of the queries measured. *)
+Definition ext_table {cf:checker_flags} (gctx : VSet.t × GoodConstraintSet.t) (X : reference_impl) :
+  ∑ tab, wGraph.pf_table_ok tab (add_uctx_ix gctx (reference_impl_index X)) :=
+  match LevelSet.is_empty gctx.1 && GoodConstraintSet.is_empty gctx.2 as b
+    return LevelSet.is_empty gctx.1 && GoodConstraintSet.is_empty gctx.2 = b ->
+      ∑ tab, wGraph.pf_table_ok tab (add_uctx_ix gctx (reference_impl_index X)) with
+  | true => fun H => (reference_impl_table X; reference_impl_table_ok_nil gctx X H)
+  | false => fun _ => (wGraph.pf_table_empty; wGraph.pf_table_empty_ok _)
+  end eq_refl.
+
+(** The graph of [(X, udecl)], its index and a table for the index, from the stored graph,
+    index and table of [X] and the universes of [udecl]: adding a declaration's few
+    universes neither rebuilds the global graph nor renumbers it. *)
 Definition ext_graph_of_udecl {cf:checker_flags} (X : reference_impl) (udecl : universes_decl)
   (wfΣ : ∥ wf_extE (reference_impl_env X, udecl) ∥) :
-  ∑ G, ∑ ix, is_graph_of_uctx G (global_ext_uctx (reference_impl_env X, udecl)) /\
-             wGraph.is_index_of G ix :=
+  ∑ G, ∑ ix, ∑ tab, (is_graph_of_uctx G (global_ext_uctx (reference_impl_env X, udecl)) /\
+                     wGraph.is_index_of G ix) /\ wGraph.pf_table_ok tab ix :=
   match gc_of_uctx (uctx_of_udecl udecl) as o
     return gc_of_uctx (uctx_of_udecl udecl) = o ->
-      ∑ G, ∑ ix, is_graph_of_uctx G (global_ext_uctx (reference_impl_env X, udecl)) /\
-                 wGraph.is_index_of G ix with
+      ∑ G, ∑ ix, ∑ tab, (is_graph_of_uctx G (global_ext_uctx (reference_impl_env X, udecl)) /\
+                         wGraph.is_index_of G ix) /\ wGraph.pf_table_ok tab ix with
   | Some gctx => fun H =>
+    let tab := ext_table gctx X in
     (add_uctx gctx (reference_impl_graph X);
       (add_uctx_ix gctx (reference_impl_index X);
-        conj (is_graph_of_uctx_add H (reference_impl_graph_wf X))
-             (add_uctx_ix_correct gctx _ _ (reference_impl_graph_invariants X)
-                (reference_impl_index_wf X))))
+        (tab.π1;
+          conj (conj (is_graph_of_uctx_add H (reference_impl_graph_wf X))
+                     (add_uctx_ix_correct gctx _ _ (reference_impl_graph_invariants X)
+                        (reference_impl_index_wf X)))
+               tab.π2)))
   | None => fun _ =>
     let G := graph_of_wf_ext wfΣ in
-    (G.π1; (wGraph.index_of G.π1; conj G.π2 (graph_index_of_wf_ext _ wfΣ G.π1 G.π2)))
+    (G.π1; (wGraph.index_of G.π1; (wGraph.pf_table_empty;
+      conj (conj G.π2 (graph_index_of_wf_ext _ wfΣ G.π1 G.π2)) (wGraph.pf_table_empty_ok _))))
   end eq_refl.
 
 Definition make_reference_impl_ext {cf:checker_flags} {guard : abstract_guard_impl}
@@ -162,11 +206,14 @@ Definition make_reference_impl_ext {cf:checker_flags} {guard : abstract_guard_im
   : reference_impl_ext :=
   let r := ext_graph_of_udecl X udecl wfΣ in
   let r2 := r.π2 in
+  let r3 := r2.π2 in
   {| reference_impl_env_ext := (reference_impl_env X, udecl); reference_impl_ext_wf := wfΣ;
      reference_impl_ext_graph := r.π1;
-     reference_impl_ext_graph_wf := proj1 r2.π2;
+     reference_impl_ext_graph_wf := proj1 (proj1 r3.π2);
      reference_impl_ext_index := r2.π1;
-     reference_impl_ext_index_wf := proj2 r2.π2 |}.
+     reference_impl_ext_index_wf := proj2 (proj1 r3.π2);
+     reference_impl_ext_table := r3.π1;
+     reference_impl_ext_table_ok := proj2 r3.π2 |}.
 
 Program Definition reference_pop {cf:checker_flags} (Σ : reference_impl) : reference_impl :=
 match Σ.(declarations) with
@@ -176,7 +223,9 @@ match Σ.(declarations) with
       reference_impl_graph := Σ.(reference_impl_graph);
       reference_impl_graph_wf := Σ.(reference_impl_graph_wf);
       reference_impl_index := Σ.(reference_impl_index);
-      reference_impl_index_wf := Σ.(reference_impl_index_wf) |}
+      reference_impl_index_wf := Σ.(reference_impl_index_wf);
+      reference_impl_table := Σ.(reference_impl_table);
+      reference_impl_table_ok := Σ.(reference_impl_table_ok) |}
 end.
 Next Obligation.
 destruct Σ.(reference_impl_wf). sq.
@@ -193,7 +242,8 @@ Program Global Instance canonical_abstract_env_struct {cf:checker_flags} {guard 
   abstract_env_struct reference_impl reference_impl_ext :=
   {|
   abstract_env_lookup := fun Σ => lookup_env (reference_impl_env_ext Σ) ;
-  abstract_env_leqb_level_n := fun Σ => leqb_level_n_ix (reference_impl_ext_index Σ) ;
+  abstract_env_leqb_level_n := fun Σ =>
+    leqb_level_n_ix_tab (reference_impl_ext_table Σ) (reference_impl_ext_index Σ) ;
   abstract_env_level_mem := fun Σ l => LevelSet.mem l (global_ext_levels (reference_impl_env_ext Σ));
   abstract_env_guard := fun Σ fix_cofix => guard_impl fix_cofix (reference_impl_env_ext Σ);
   abstract_env_ext_rel := fun X Σ => Σ = reference_impl_env_ext X;
@@ -206,7 +256,9 @@ Program Global Instance canonical_abstract_env_struct {cf:checker_flags} {guard 
        reference_impl_graph := X.(reference_impl_graph);
        reference_impl_graph_wf := X.(reference_impl_graph_wf);
        reference_impl_index := X.(reference_impl_index);
-       reference_impl_index_wf := X.(reference_impl_index_wf) |};
+       reference_impl_index_wf := X.(reference_impl_index_wf);
+       reference_impl_table := X.(reference_impl_table);
+       reference_impl_table_ok := X.(reference_impl_table_ok) |};
   abstract_env_is_consistent X uctx :=
    let G := reference_impl_graph X in
    let ix := reference_impl_index X in
@@ -233,6 +285,38 @@ Next Obligation.
   pose proof (reference_impl_wf X). destruct (Hglobal _ eq_refl); sq.
   now econstructor.
 Qed.
+
+(** Where the table read by [abstract_env_leqb_level_n] comes from. The checker builds its
+    environment once with [abstract_env_init], from the global universes: the table is
+    built there ([build_reference_impl]) and nowhere else. Each declaration added keeps the
+    index and copies the table, and the environment a monomorphic declaration is checked in
+    has the same index and the same table. *)
+Lemma canonical_init_table {cf:checker_flags} {guard : abstract_guard_impl} cs retro H :
+  let X : reference_impl := abstract_env_init cs retro H in
+  reference_impl_table X = wGraph.pf_build_table (reference_impl_index X).
+Proof. reflexivity. Qed.
+
+Lemma canonical_add_decl_table {cf:checker_flags} {guard : abstract_guard_impl}
+  (X : reference_impl) kn d H :
+  let X' : reference_impl := abstract_env_add_decl X kn d H in
+  reference_impl_index X' = reference_impl_index X /\
+  reference_impl_table X' = reference_impl_table X.
+Proof. split; reflexivity. Qed.
+
+Lemma canonical_add_udecl_mono_table {cf:checker_flags} {guard : abstract_guard_impl}
+  (X : reference_impl) H :
+  let X' : reference_impl_ext := abstract_env_add_udecl X Monomorphic_ctx H in
+  reference_impl_ext_index X' = reference_impl_index X /\
+  reference_impl_ext_table X' = reference_impl_table X.
+Proof. split; reflexivity. Qed.
+
+(** The query reads the table stored with the index it is given, whose rows are distances
+    of that index ([reference_impl_ext_table_ok]), so it answers as the untabled query on
+    that index. *)
+Lemma canonical_leqb_level_n_eq {cf:checker_flags} {guard : abstract_guard_impl}
+  (X : reference_impl_ext) n l l' :
+  abstract_env_leqb_level_n X n l l' = leqb_level_n_ix (reference_impl_ext_index X) n l l'.
+Proof. exact (leqb_level_n_ix_tab_eq _ _ (reference_impl_ext_table_ok X) n l l'). Qed.
 
 (* We pack up all the information required on the global environment and graph in a
 single record. *)
@@ -357,6 +441,34 @@ Next Obligation.
 Qed.
 Next Obligation. apply wf_env_map_repr. Qed.
 
+(** The same chain for the environment the checker plugin uses, which wraps the canonical
+    one: its table is built by [abstract_env_init] and nowhere else, copied by each
+    declaration added and by the extension to a monomorphic declaration, and its query is the
+    untabled query on the index it reads. *)
+Lemma optimized_init_table {cf:checker_flags} {guard : abstract_guard_impl} cs retro H :
+  let X : wf_env := abstract_env_init cs retro H in
+  reference_impl_table X = wGraph.pf_build_table (reference_impl_index X).
+Proof. reflexivity. Qed.
+
+Lemma optimized_add_decl_table {cf:checker_flags} {guard : abstract_guard_impl}
+  (X : wf_env) kn d H :
+  let X' : wf_env := abstract_env_add_decl X kn d H in
+  reference_impl_index X' = reference_impl_index X /\
+  reference_impl_table X' = reference_impl_table X.
+Proof. split; reflexivity. Qed.
+
+Lemma optimized_add_udecl_mono_table {cf:checker_flags} {guard : abstract_guard_impl}
+  (X : wf_env) H :
+  let X' : wf_env_ext := abstract_env_add_udecl X Monomorphic_ctx H in
+  reference_impl_ext_index X' = reference_impl_index X /\
+  reference_impl_ext_table X' = reference_impl_table X.
+Proof. split; reflexivity. Qed.
+
+Lemma optimized_leqb_level_n_eq {cf:checker_flags} {guard : abstract_guard_impl}
+  (X : wf_env_ext) n l l' :
+  abstract_env_leqb_level_n X n l l' = leqb_level_n_ix (reference_impl_ext_index X) n l l'.
+Proof. exact (canonical_leqb_level_n_eq X n l l'). Qed.
+
 Section WfEnv.
   Context {cf : checker_flags} {guard : abstract_guard_impl}.
 
@@ -462,6 +574,7 @@ Next Obligation.
   assert (HIx : wGraph.invariants (reference_impl_ext_graph X)).
   { eapply global_uctx_graph_invariants; [exact (reference_impl_ext_graph_wf X)|].
     now eapply wf_ext_global_uctx_invariants. }
+  rewrite (leqb_level_n_ix_tab_eq _ _ (reference_impl_ext_table_ok X)).
   unfold leqb_level_n_ix.
   rewrite (wGraph.leqb_vertices_ix_correct _ _ _ _ _ (reference_impl_ext_index_wf X)).
   eapply leqb_level_n_spec; eauto.
