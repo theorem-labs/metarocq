@@ -24,7 +24,9 @@
      [zipp_appstack_bridge], [reduce_stack_vass], [reduce_args_E_vass], and (07:35Z, statement
      change) [stack_position_appstack_bridge args args'] = an iff between the two positionR
      orders on [appstack args' []]/[appstack args []]; the named E-facts hypothesis is the class
-     instance [reduce_factsE : ReduceTypedFacts welltypedE wf_extE] (a Prop);
+     instance [reduce_factsE : ReduceTypedFactsE] (a Prop: the nine GENUINE fields of
+     [ReduceTypedFacts] at [welltypedE]); the machine's [ReduceTypedFacts welltypedE wf_extE] is
+     the bridge's instance [reduce_typed_facts_E], built from it and six proved fields;
      [reduce_env_facts_E : ReduceEnvFacts welltypedE wf_extE] is PROVED in the bridge. The
      other E use of the machine is [reduce_termE] below = [PCUICSafeReduceEta.reduce_term
      (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in)]. The
@@ -77,6 +79,8 @@ From MetaRocq.SafeChecker Require Import PCUICErrorsEta.
 (* The E view algebra and the typed-facts class ConvTypedFacts (EtaConv's helper file), and
    K1's MustExpand (EtaK1). *)
 From MetaRocq.SafeChecker Require Import PCUICSafeConversionEtaFacts PCUICMustExpandEta.
+(* The proved fields of [ConvTypedFacts] at [welltypedE] (qualified names; nothing imported). *)
+From MetaRocq.SafeChecker Require PCUICEtaTypedFactsProved.
 (* LAST (ENV contract). *)
 From MetaRocq.SafeChecker Require Import PCUICWfEnvEta.
 
@@ -107,6 +111,20 @@ Proof.
   eapply All2_same; unfold on_Trel; split; reflexivity.
 Qed.
 
+(* [ConvTypedFacts welltypedE wf_extE] from its GENUINE field ([PCUICSafeConversionEtaFacts.
+   ConvTypedFactsE], the named hypothesis [conv_factsE] of section [Conversion]) and the two fields
+   proved in [PCUICEtaTypedFactsProved]. The kernel checks [ctf_contextE] against [ctf_context] at
+   [welltypedE]/[wf_extE]. An instance, so the section finds [ConvTypedFacts welltypedE wf_extE]
+   from its hypothesis; [Qed]: opaque, as the section variable it replaces. *)
+#[export] Instance conv_typed_facts_E {cf : checker_flags} {G : ConvTypedFactsE} :
+  ConvTypedFacts welltypedE wf_extE.
+Proof.
+  constructor.
+  - exact ctf_contextE.
+  - exact PCUICEtaTypedFactsProved.ctf_case_brs_length_proved.
+  - exact PCUICEtaTypedFactsProved.ctf_wf_universes_proved.
+Qed.
+
 (** * Conversion for PCUIC without fuel
 
   Following PCUICSafeReduce, we derive a fuel-free implementation of
@@ -125,23 +143,27 @@ Section Conversion.
   (* ENV contract: the normalization premise over welltypedE. *)
   Context {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}.
 
-  (* REDUCE contract: the named E-facts hypothesis of the reduction machine (EtaReduce's class;
-     its fields are T1/T6 facts; its base instance [reduce_typed_facts_base] is restated as
-     [reduce_factsE_base_inst] after the section). *)
-  Context {reduce_factsE : ReduceTypedFacts welltypedE wf_extE}.
+  (* REDUCE contract: the named E-facts hypothesis of the reduction machine, the nine GENUINE
+     fields of EtaReduce's class at welltypedE ([ReduceTypedFactsE]; T1/T6/W-c facts); the
+     machine's [ReduceTypedFacts welltypedE wf_extE] is the bridge's instance
+     [reduce_typed_facts_E], built from it and six proved fields. Base instance of the same
+     statements: [reduce_typed_facts_base], restated as [reduce_factsE_base_inst] after the
+     section. *)
+  Context {reduce_factsE : ReduceTypedFactsE}.
 
-  (* The named typed facts of the conversion itself (plan rows T6 and T-row, fields
-     [ctf_context], [ctf_case_brs_length], [ctf_wf_universes]); base instance
-     [conv_typed_facts_base] in PCUICSafeConversionEtaFacts, restated as [conv_factsE_base_inst]
-     after the section. *)
-  Context {conv_factsE : ConvTypedFacts welltypedE wf_extE}.
+  (* The named typed facts of the conversion itself: the GENUINE field [ctf_contextE] (plan row
+     T6) of [ConvTypedFactsE]; [ConvTypedFacts welltypedE wf_extE] is [conv_typed_facts_E] above,
+     whose fields [ctf_case_brs_length] and [ctf_wf_universes] are proved. Base instance of the
+     same statement: [conv_typed_facts_base] in PCUICSafeConversionEtaFacts, restated as
+     [conv_factsE_base_inst] after the section. *)
+  Context {conv_factsE : ConvTypedFactsE}.
 
-  (* EtaPosK4's section EtaTypingE (PCUICPositionEtaTyping) takes three named hypotheses;
+  (* EtaPosK4's section EtaTypingE (PCUICPositionEtaTyping) takes two named hypotheses;
      its lemmas [wf_localE_push_real] (hwf after a real binder push), [wf_localE_eta_step]
      (hwf after the η step) and [eta_rename_typing] are REUSED here, not restated.
-     - [typingE_rename_P] is PROVED: [typing_rename_PE] (Typing/PCUICRenameTypEta, frac/eta),
-       as in EtaHypProve's [typingE_rename_P_proved] (fork/wip/etak-hypprove-2026-10-29 @
-       29c23129); it is a definition here, not a hypothesis.
+     - [typingE_rename_P] is PROVED there (a lemma of PCUICPositionEtaTyping, from
+       [typing_rename_PE] of Typing/PCUICRenameTypEta), so [wf_localE_push_real] and
+       [eta_rename_typing] no longer take it.
      - [closed_context_conversionE] is a named hypothesis in SQUASHED form (stream lead's
        approval, 11:50Z: a Type-valued section parameter would survive extraction as an argument
        of [isconv_term]); every use destructs it inside a Prop goal. Satisfying instance: the
@@ -151,10 +173,6 @@ Section Conversion.
        T0 (context conversion over typingE).
      - [welltypedE_context] concludes a Prop ([welltypedE]); unchanged. Its instance is
        EtaPosK4's [welltyped_context_inst] (base, with the same two sentences; rows T6/T2a). *)
-  Definition typingE_rename_P : forall P (Σ : global_env_ext) Γ Δ f t A, wfE Σ.1 ->
-    wf_localE Σ Δ × urenaming (shiftnP #|Γ| P) Γ Δ f ->
-    Σ ;;; Γ |-E t : A -> Σ ;;; Δ |-E rename f t : rename f A :=
-    fun P Σ Γ Δ f t A wfΣ hr h => typing_rename_PE (wfΣ := wfΣ) hr h.
   Context (closed_context_conversionE : ∥ forall (Σ : global_env_ext), wfE Σ.1 -> forall Γ t T Γ',
     Σ ;;; Γ |-E t : T -> wf_localE Σ Γ' -> ws_cumul_ctx_pbE Conv Σ Γ Γ' -> Σ ;;; Γ' |-E t : T ∥).
   Context (welltypedE_context : forall (Σ : global_env_ext), wfE Σ.1 -> forall Γ t,
@@ -1926,14 +1944,14 @@ Section Conversion.
     B_rel wfR.
     have [hna _] := andb_prop _ _ hg.
     destruct (heΣ _ wfR) as [hwfe]. destruct (hwf _ wfR) as [hw].
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ br
+    exact (wf_localE_push_real welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ br
              (Case_branch ci p c (brs1, branch_hole_body m, brs2)) π eq_refl hna (h _ wfR) hw).
   Qed.
   Next Obligation.
     B_rel wfR.
     have [_ hna'] := andb_prop _ _ hg.
     destruct (heΣ _ wfR) as [hwfe]. destruct (hwf' _ wfR) as [hw].
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ br'
+    exact (wf_localE_push_real welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ br'
              (Case_branch ci p' c' (brs1', branch_hole_body m', brs2')) π' eq_refl hna' (h' _ wfR) hw).
   Qed.
   Next Obligation.
@@ -2309,7 +2327,7 @@ Section Conversion.
       by destruct fk; reflexivity.
     have hz : welltypedE Σ Γ (zipc bo (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx :: π))
       by destruct fk; exact (h _ wfR).
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ bo
+    exact (wf_localE_push_real welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ bo
              (mFix_mfix fk (mfix1, def_hole_body na ty ra, mfix2) idx) π hse hna hz hw).
   Qed.
   Next Obligation.
@@ -2321,7 +2339,7 @@ Section Conversion.
       by destruct fk; reflexivity.
     have hz : welltypedE Σ Γ (zipc bo (mFix_mfix fk (mfix1', def_hole_body na ty ra, mfix2') idx :: π'))
       by destruct fk; exact (h' _ wfR).
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ bo
+    exact (wf_localE_push_real welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ bo
              (mFix_mfix fk (mfix1', def_hole_body na ty ra, mfix2') idx) π' hse hna' hz hw).
   Qed.
   Next Obligation.
@@ -2636,7 +2654,7 @@ Section Conversion.
     have [hna _] := andb_prop _ _ hg.
     destruct (heΣ _ wfR) as [hwfe]. destruct (hwf1 _ wfR) as [hw].
     destruct p1 as [pp pu pc pr].
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ pr
+    exact (wf_localE_push_real welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ pr
              (Case_pred ci2 (pred_hole_return pp pu pc) c1 brs1) π1 eq_refl hna (h1 _ wfR) hw).
   Qed.
   Next Obligation.
@@ -2644,7 +2662,7 @@ Section Conversion.
     have [_ hna'] := andb_prop _ _ hg.
     destruct (heΣ _ wfR) as [hwfe]. destruct (hwf2 _ wfR) as [hw].
     destruct p2 as [pp pu pc pr].
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ pr
+    exact (wf_localE_push_real welltypedE_context Σ (wfΣ := wf_extE_wfE _ hwfe) Γ pr
              (Case_pred ci2 (pred_hole_return pp pu pc) c2 brs2) π2 eq_refl hna' (h2 _ wfR) hw).
   Qed.
   Next Obligation.
@@ -2762,8 +2780,8 @@ Equations (noeqns) isconv_array_values_aux
      discriminant reduction [reduce_termE], and whnf after [reduce_args_E]. The helpers and
      the obligations use only the section's hypotheses: [ConvTypedFacts] ([ctf_context],
      [ctf_wf_universes]), [ReduceTypedFacts] (through [red_wt]) and EtaPosK4's
-     [typingE_rename_P]/[welltypedE_context] (through [wf_localE_push_real]); no new
-     hypothesis. *)
+     [welltypedE_context] (through [wf_localE_push_real], which uses the proved
+     [typingE_rename_P]); no new hypothesis. *)
 
   (* A real frame strictly deepens the position. *)
   Lemma sliceC_positionR_cons se π : is_eta_frame se = false ->
@@ -3340,14 +3358,14 @@ Equations (noeqns) isconv_array_values_aux
     rename H into wfΣ.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hwf1 Σ wfΣ) as [hl].
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ Γ t1 (Lambda_bd na A1) π1
+    exact (wf_localE_push_real welltypedE_context Σ Γ t1 (Lambda_bd na A1) π1
              eq_refl hna1 (h1 Σ wfΣ) hl).
   Qed.
   Next Obligation.
     rename H into wfΣ.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hwf2 Σ wfΣ) as [hl].
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ Γ t2 (Lambda_bd na' A2) π2
+    exact (wf_localE_push_real welltypedE_context Σ Γ t2 (Lambda_bd na' A2) π2
              eq_refl hna2 (h2 Σ wfΣ) hl).
   Qed.
   Next Obligation.
@@ -3381,14 +3399,14 @@ Equations (noeqns) isconv_array_values_aux
     rename H into wfΣ.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hwf1 Σ wfΣ) as [hl].
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ Γ B1 (Prod_r na A1) π1
+    exact (wf_localE_push_real welltypedE_context Σ Γ B1 (Prod_r na A1) π1
              eq_refl hna1 (h1 Σ wfΣ) hl).
   Qed.
   Next Obligation.
     rename H into wfΣ.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hwf2 Σ wfΣ) as [hl].
-    exact (wf_localE_push_real typingE_rename_P welltypedE_context Σ Γ B2 (Prod_r na' A2) π2
+    exact (wf_localE_push_real welltypedE_context Σ Γ B2 (Prod_r na' A2) π2
              eq_refl hna2 (h2 Σ wfΣ) hl).
   Qed.
   Next Obligation.
@@ -4837,7 +4855,7 @@ Equations (noeqns) isconv_array_values_aux
     - pose proof (ctf_context (wt := welltypedE) (wfP := wf_extE) Σ Γ t π hΣe hna (ht Σ wfΣ)) as [T hT].
       apply (ctf_wf_universes (wt := welltypedE) (wfP := wf_extE) Σ (Γ ,,, stack_context_eta π) _ hΣe).
       exists (eta_rename π 0 T).
-      exact (@eta_rename_typing _ typingE_rename_P Σ (wf_extE_wfE _ hΣe) Γ π t T hna w hT).
+      exact (@eta_rename_typing _ Σ (wf_extE_wfE _ hΣe) Γ π t T hna w hT).
     - destruct (virt_ok_virtual t π hv hna) as (k & u & a & σ & [-> _ _ _]).
       rewrite eta_rename_rename. reflexivity.
   Qed.
@@ -5100,10 +5118,10 @@ Equations (noeqns) isconv_array_values_aux
     etakD_pre; pose proof (decompose_stack_eq _ _ _ (eq_sym eq2)) as e2'; subst π2; apply virt_ok_eta_step; exact hv2.
   Qed.
   Next Obligation.
-    etakD_pre; etakD_wf; destruct (heΣ _ ltac:(eassumption)) as [hΣe]; destruct hwf1 as [hwf1]; exact (@wf_localE_push_real _ typingE_rename_P welltypedE_context _ (wf_extE_wfE _ hΣe) Γ b (Lambda_bd na A) π1 eq_refl ltac:(first [exact g3 | exact (eq_sym g3)]) h1 hwf1).
+    etakD_pre; etakD_wf; destruct (heΣ _ ltac:(eassumption)) as [hΣe]; destruct hwf1 as [hwf1]; exact (@wf_localE_push_real _ welltypedE_context _ (wf_extE_wfE _ hΣe) Γ b (Lambda_bd na A) π1 eq_refl ltac:(first [exact g3 | exact (eq_sym g3)]) h1 hwf1).
   Qed.
   Next Obligation.
-    etakD_pre; pose proof (decompose_stack_eq _ _ _ (eq_sym eq2)) as e2'; subst π2; etakD_wf; pose proof closed_context_conversionE as [ccE]; destruct (heΣ _ ltac:(eassumption)) as [hΣe]; destruct hwf1 as [hwf1]; destruct hwf2 as [hwf2]; destruct hx as [hx]; rewrite stack_context_eta_appstack in hwf2 hx; destruct (@wf_localE_push_real _ typingE_rename_P welltypedE_context _ (wf_extE_wfE _ hΣe) Γ b (Lambda_bd na A) π1 eq_refl ltac:(first [exact g3 | exact (eq_sym g3)]) h1 hwf1) as [hwl]; constructor; exact (@wf_localE_eta_step _ ccE _ (wf_extE_wfE _ hΣe) Γ na A π1 args2 ρ2 hwl hx hwf2).
+    etakD_pre; pose proof (decompose_stack_eq _ _ _ (eq_sym eq2)) as e2'; subst π2; etakD_wf; pose proof closed_context_conversionE as [ccE]; destruct (heΣ _ ltac:(eassumption)) as [hΣe]; destruct hwf1 as [hwf1]; destruct hwf2 as [hwf2]; destruct hx as [hx]; rewrite stack_context_eta_appstack in hwf2 hx; destruct (@wf_localE_push_real _ welltypedE_context _ (wf_extE_wfE _ hΣe) Γ b (Lambda_bd na A) π1 eq_refl ltac:(first [exact g3 | exact (eq_sym g3)]) h1 hwf1) as [hwl]; constructor; exact (@wf_localE_eta_step _ ccE _ (wf_extE_wfE _ hΣe) Γ na A π1 args2 ρ2 hwl hx hwf2).
   Qed.
   Next Obligation.
     etakD_pre; eapply eta_step_sound_left; eassumption.
@@ -5124,10 +5142,10 @@ Equations (noeqns) isconv_array_values_aux
     etakD_pre; pose proof (decompose_stack_eq _ _ _ (eq_sym eq1)) as e1'; subst π1; apply virt_ok_eta_step; exact hv1.
   Qed.
   Next Obligation.
-    etakD_pre; pose proof (decompose_stack_eq _ _ _ (eq_sym eq1)) as e1'; subst π1; pose proof closed_context_conversionE as [ccE]; match goal with w : abstract_env_ext_rel X ?Σ |- _ => destruct (heΣ _ w) as [hΣe]; destruct (hΣ _ w) as [cb]; destruct (hwf1 _ w) as [w1]; destruct (hwf2 _ w) as [w2]; destruct (hx _ w) as [x]; rewrite stack_context_eta_appstack in w1 x; destruct (@wf_localE_push_real _ typingE_rename_P welltypedE_context _ (wf_extE_wfE _ hΣe) Γ b (Lambda_bd na A) π2 eq_refl ltac:(first [exact g3 | exact (eq_sym g3)]) (h2 _ w) w2) as [hwl]; constructor; exact (@wf_localE_eta_step _ ccE _ (wf_extE_wfE _ hΣe) Γ na A π2 args1 ρ1 hwl (ws_cumul_ctx_pbE_sym x) w1) end.
+    etakD_pre; pose proof (decompose_stack_eq _ _ _ (eq_sym eq1)) as e1'; subst π1; pose proof closed_context_conversionE as [ccE]; match goal with w : abstract_env_ext_rel X ?Σ |- _ => destruct (heΣ _ w) as [hΣe]; destruct (hΣ _ w) as [cb]; destruct (hwf1 _ w) as [w1]; destruct (hwf2 _ w) as [w2]; destruct (hx _ w) as [x]; rewrite stack_context_eta_appstack in w1 x; destruct (@wf_localE_push_real _ welltypedE_context _ (wf_extE_wfE _ hΣe) Γ b (Lambda_bd na A) π2 eq_refl ltac:(first [exact g3 | exact (eq_sym g3)]) (h2 _ w) w2) as [hwl]; constructor; exact (@wf_localE_eta_step _ ccE _ (wf_extE_wfE _ hΣe) Γ na A π2 args1 ρ1 hwl (ws_cumul_ctx_pbE_sym x) w1) end.
   Qed.
   Next Obligation.
-    etakD_pre; match goal with w : abstract_env_ext_rel X ?Σ |- _ => destruct (heΣ _ w) as [hΣe]; destruct (hwf2 _ w) as [w2]; exact (@wf_localE_push_real _ typingE_rename_P welltypedE_context _ (wf_extE_wfE _ hΣe) Γ b (Lambda_bd na A) π2 eq_refl ltac:(first [exact g3 | exact (eq_sym g3)]) (h2 _ w) w2) end.
+    etakD_pre; match goal with w : abstract_env_ext_rel X ?Σ |- _ => destruct (heΣ _ w) as [hΣe]; destruct (hwf2 _ w) as [w2]; exact (@wf_localE_push_real _ welltypedE_context _ (wf_extE_wfE _ hΣe) Γ b (Lambda_bd na A) π2 eq_refl ltac:(first [exact g3 | exact (eq_sym g3)]) (h2 _ w) w2) end.
   Qed.
   Next Obligation.
     etakD_pre; eapply eta_step_sound_right; eassumption.
@@ -5295,8 +5313,10 @@ End Conversion.
    [closed_context_conversionE] has [closed_context_conversionE_base_inst] above). Each one
    (1) shows the hypothesis is consistent, so the theorems above are about something real, and
    (2) does NOT discharge the [welltypedE]/[typingE] instantiation, which waits for the rows named
-   at each hypothesis (reduce_factsE: T1/T6; conv_factsE: T6 and the universes T-row;
-   closed_context_conversionE: T0; welltypedE_context: T6/T2a). *)
+   at each hypothesis (reduce_factsE: T1/T6/W-c; conv_factsE: T6; closed_context_conversionE: T0;
+   welltypedE_context: T6/T2a). [reduce_factsE] and [conv_factsE] hold the GENUINE fields of the
+   two classes at [welltypedE] ([ReduceTypedFactsE], [ConvTypedFactsE]); the base instances of the
+   full classes below prove the same statements at [welltyped]/[wf_ext]. *)
 Lemma reduce_factsE_base_inst {cf : checker_flags} : ReduceTypedFacts welltyped wf_ext.
 Proof. exact reduce_typed_facts_base. Qed.
 

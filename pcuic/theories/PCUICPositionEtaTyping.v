@@ -19,9 +19,9 @@
   The three typed lemmas that need E metatheory not yet on [frac/eta] are proved once,
   generically, in section [EtaTypingGen], over an abstract typing relation and the
   base-shaped facts they use. Section [EtaTypingE] instantiates it at [typingE]; the facts
-  provable now ([typingE_wf_local], the [welltypedE] constructor) are discharged there, and
-  the others are its named [Context] hypotheses:
-  - [typingE_rename_P] (row T0, the E copy of [PCUICRenameTyp.typing_rename_P]);
+  provable now ([typingE_wf_local], the [welltypedE] constructor, and [typingE_rename_P], the
+  E copy of [PCUICRenameTyp.typing_rename_P], from [PCUICRenameTypEta.typing_rename_PE]) are
+  discharged there, and the others are its named [Context] hypotheses:
   - [closed_context_conversionE] (row T0, the E copy of
     [PCUICContextConversionTyp.closed_context_conversion]);
   - [welltypedE_context] (rows T6 + T2a + T0: the E copy of
@@ -40,6 +40,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICSi
      PCUICWellScopedCumulativity PCUICTypingEta PCUICTypingEtaInd
      PCUICWellScopedCumulativityEta PCUICContextConversionEta PCUICClosedBodies.
 From MetaRocq.PCUIC Require PCUICEtaC1b PCUICRenameTyp PCUICContextConversionTyp PCUICClosedTyp.
+(* [typing_rename_PE], which proves [typingE_rename_P] (section EtaTypingE); qualified, nothing imported. *)
+From MetaRocq.PCUIC Require PCUICRenameTypEta.
 
 (* LAST, so that the η stack shadows any base stack name. *)
 From MetaRocq.PCUIC Require Import PCUICPositionEta.
@@ -639,14 +641,17 @@ Proof. intros [T h]. constructor. exists T. exact h. Qed.
 Section EtaTypingE.
   Context {cf : checker_flags}.
 
-  (* NAMED HYPOTHESIS, row T0: the E copy of base [PCUICRenameTyp.typing_rename_P].
-     Satisfying instance (base typing, section EtaTypingBase): [typing_rename_P_inst].
-     Not a known-false form: a typed statement (a typingE derivation in, a renaming with a
-     well-formed target out); no conversion witness of a dtype/head shape, no closed-only
-     premise; renaming stability of cumulSpecE0 is plan row S3. *)
-  Context (typingE_rename_P : forall P (Σ : global_env_ext) Γ Δ f t A, wfE Σ.1 ->
+  (* PROVED (was a named hypothesis, row T0; EtaIntegrate9, 2026-10-29): the E copy of base
+     [PCUICRenameTyp.typing_rename_P], same statement as the hypothesis it replaces. It is the
+     exact twin [PCUICRenameTypEta.typing_rename_PE], whose [renamingE (shiftnP #|Γ| P) Σ Γ Δ f]
+     unfolds to [wf_localE Σ Δ × urenaming (shiftnP #|Γ| P) Γ Δ f] (EtaHypProve's
+     [typingE_rename_P_proved], PCUICTypingEtaHypsProved). *)
+  Lemma typingE_rename_P : forall P (Σ : global_env_ext) Γ Δ f t A, wfE Σ.1 ->
     wf_localE Σ Δ × urenaming (shiftnP #|Γ| P) Γ Δ f ->
-    Σ ;;; Γ |-E t : A -> Σ ;;; Δ |-E rename f t : rename f A).
+    Σ ;;; Γ |-E t : A -> Σ ;;; Δ |-E rename f t : rename f A.
+  Proof.
+    intros P Σ Γ Δ f t A wfΣ hr h. exact (PCUICRenameTypEta.typing_rename_PE (wfΣ := wfΣ) hr h).
+  Qed.
   (* NAMED HYPOTHESIS, row T0: the E copy of base
      [PCUICContextConversionTyp.closed_context_conversion].
      Satisfying instance (base typing): [closed_context_conversion_inst].
@@ -672,7 +677,7 @@ Section EtaTypingE.
     is_eta_frame se = false -> no_Eta_arg π ->
     welltypedE Σ Γ (zipc t (se :: π)) -> wf_localE Σ (Γ ,,, stack_context_eta π) ->
     ∥ wf_localE Σ (Γ ,,, stack_context_eta (se :: π)) ∥.
-  Proof using typingE_rename_P welltypedE_context.
+  Proof using welltypedE_context.
     exact (wf_local_push_real_gen typingE welltypedE (fun Σ => wfE Σ.1)
              (fun Σ Γ t T h => typingE_wf_local h) welltypedE_inv typingE_rename_P
              welltypedE_context Σ wfΣ Γ t se π).
@@ -696,7 +701,7 @@ Section EtaTypingE.
     wf_localE Σ (Γ ,,, stack_context_eta π) ->
     Σ ;;; Γ ,,, stack_context π |-E t : T ->
     Σ ;;; Γ ,,, stack_context_eta π |-E eta_rename π 0 t : eta_rename π 0 T.
-  Proof using typingE_rename_P.
+  Proof using Type.
     exact (eta_rename_typing_gen typingE (fun Σ => wfE Σ.1) typingE_rename_P Σ wfΣ Γ π t T).
   Qed.
 End EtaTypingE.
@@ -709,9 +714,9 @@ End EtaTypingE.
 (*     jointly consistent and that its three lemmas are about something    *)
 (*     real: each is applied below with every premise proved.              *)
 (* (2) It does NOT discharge the instantiation at typingE ([EtaTypingE]):  *)
-(*     [typingE_rename_P] and [closed_context_conversionE] (row T0) and    *)
-(*     [welltypedE_context] (rows T6, T2a, T0) remain hypotheses until      *)
-(*     their rows land.                                                    *)
+(*     [closed_context_conversionE] (row T0) and [welltypedE_context]      *)
+(*     (rows T6, T2a, T0) remain hypotheses until their rows land; the     *)
+(*     third, [typingE_rename_P], is proved there.                         *)
 (* ===================================================================== *)
 
 Section EtaTypingBase.

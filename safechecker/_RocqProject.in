@@ -36,3 +36,5 @@ theories/PCUICTypingEtaHyps.v
 theories/PCUICTypeCheckerEta.v
 # EtaHypProve: the PROVABLE-NOW named hypotheses of the E bundles, proved as <field>_proved
 theories/PCUICTypingEtaHypsProved.v
+# EtaIntegrate9: the proved fields of ReduceTypedFacts/ConvTypedFacts at welltypedE (moved from PCUICTypingEtaHypsProved)
+theories/PCUICEtaTypedFactsProved.v
