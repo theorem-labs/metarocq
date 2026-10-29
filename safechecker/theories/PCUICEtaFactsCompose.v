@@ -2,14 +2,17 @@
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config PrimitiveOps.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICNormal PCUICReduction PCUICPosition
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICNormal PCUICReduction
      PCUICWellScopedCumulativity PCUICTypingEta PCUICGlobalEnvEta PCUICClosedTypEta PCUICWellScopedCumulativityEta
      PCUICContextConversionEta.
 From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta PCUICSafeConversionEtaFacts
   PCUICTypingEtaDefs PCUICTypingEtaHyps.
 From MetaRocq.SafeChecker Require PCUICSafeReduceEtaBridge.
-(* Last: [zip], [stack_context], [no_Eta_arg] below are the η stack's (the text of EtaPosK4's hypothesis);
-   the base stack of [ReduceTypedFactsE] is written [PCUICPosition.*]. *)
+(* Same-name rule (C6, lanes/eta/cross-lane-commitments.md): base [PCUICPosition] is only Required here, never
+   Imported, so the η stack's names below are the only unqualified ones: [zip], [stack_context], [no_Eta_arg] are
+   the η stack's (the text of EtaPosK4's hypothesis); the base stack of [ReduceTypedFactsE] is written
+   [PCUICPosition.*]. *)
+From MetaRocq.PCUIC Require PCUICPosition.
 From MetaRocq.PCUIC Require Import PCUICPositionEta.
 
 (** * ETAK (EtaK7): the E hypotheses at the composition, without the five repeats

@@ -9,6 +9,17 @@
    base's [Prim_app] frame, with its clauses in [fill_hole], [closedn_stack_entry] and
    [stack_entry_choice]. The typed lemmas about the η views are in
    [PCUICPositionEtaTyping]; the termination measure is in [PCUICSafeConversionEtaK4]. *)
+(* SAME NAMES (lane lead, from the stream lead's same-name measurement, 17:23Z). This file restates
+   Syntax/PCUICPosition.v's datatypes and lemmas under the SAME names (134 own-name collisions: 131 with
+   PCUICPosition, 2 with PCUICGuardResult, 1 with N.pos/Z.pos; 17 are definitions/inductives whose base object has
+   the same type, e.g. stack, stack_entry, position, choice). It must NOT be imported next to PCUICPosition without
+   a decision recorded in lanes/eta/cross-lane-commitments.md (same-name rule, C6).
+   Importers on the K7 line when this paragraph was written (EtaK7, 2026-10-29, measured from the Require/Import
+   lines of every tracked .v file):
+   - Import, next to an Import of PCUICPosition: PCUICSafeConversionEtaK4, PCUICSafeConversionEta;
+   - Import, without PCUICPosition: PCUICPositionEtaTyping, PCUICSafeConversionEtaFacts, PCUICEtaFactsCompose;
+   - Require only, qualified uses: PCUICSafeReduceEtaBridge, PCUICTypingEtaHyps, PCUICEtaTypedFactsProved,
+     PCUICTypingEtaHypsProved (not registered on this line). *)
 From Stdlib Require Import RelationClasses ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
