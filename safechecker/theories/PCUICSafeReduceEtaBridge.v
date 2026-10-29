@@ -878,4 +878,238 @@ Section FracInstancesE.
     - discriminate.
   Qed.
 
+  (** *** Projections out of a one-field record
+
+      No environment on [frac/eta] declares a record with projections, so [rec_Σ]
+      declares [Record R (A : Prop) : Prop := mk { r : A }] (one parameter, one field,
+      primitive projection [r], singleton elimination). The proof of [rec_wf] follows
+      [si_wf], with the field's sort, positivity and projection added. *)
+
+  Definition rec_kn : kername := (MPfile ["SInst"], "R").
+  Definition rec_ind : inductive := {| inductive_mind := rec_kn; inductive_ind := 0 |}.
+  Definition rec_r_na : aname := mkBindAnn (nNamed "r") Relevant.
+  Definition rec_cdecl : constructor_body :=
+    {| cstr_name := "mk"; cstr_args := [vass rec_r_na (tRel 0)]; cstr_indices := [];
+       cstr_type := tProd SI.si_na SI.si_P (tProd rec_r_na (tRel 0) (tApp (tRel 2) (tRel 1)));
+       cstr_arity := 1 |}.
+  Definition rec_pdecl : projection_body :=
+    {| proj_name := "r"; proj_relevance := Relevant; proj_type := tRel 1 |}.
+  Definition rec_idecl : one_inductive_body :=
+    {| ind_name := "I"; ind_indices := []; ind_sort := sProp; ind_type := SI.si_arity;
+       ind_kelim := IntoAny; ind_ctors := [rec_cdecl]; ind_projs := [rec_pdecl];
+       ind_relevance := Relevant |}.
+  Definition rec_mdecl : mutual_inductive_body :=
+    {| ind_finite := BiFinite; ind_npars := 1; ind_params := SI.si_params;
+       ind_bodies := [rec_idecl]; ind_universes := Monomorphic_ctx; ind_variance := None |}.
+  Definition rec_env : global_env :=
+    {| universes := ContextSet.empty; declarations := [(rec_kn, InductiveDecl rec_mdecl)];
+       retroknowledge := Retroknowledge.empty |}.
+  Definition rec_Σ : global_env_ext := (rec_env, Monomorphic_ctx).
+  Definition rec_proj : projection := {| proj_ind := rec_ind; proj_npars := 1; proj_arg := 0 |}.
+
+  (** The constructor type [Π A : Prop. Π r : A. R A], in the arities context. *)
+  Lemma rec_ctype_typed : SI.si_Σ0 ;;; SI.si_Γi |- cstr_type rec_cdecl : tSort sProp.
+  Proof.
+    pose proof (SI.si_wf_P SI.si_Γi SI.si_wf_Γi) as w2.
+    assert (w3 : wf_local SI.si_Σ0 (SI.si_Γi ,, vass SI.si_na SI.si_P ,, vass rec_r_na (tRel 0)))
+      by (apply (si_wf_cons _ _ _ sProp w2 (type_Rel _ _ 0 (vass SI.si_na SI.si_P) w2 eq_refl));
+          reflexivity).
+    exact (type_Prod _ _ SI.si_na SI.si_P _ (Sort.super sProp) sProp
+      (si_vass_s_gen _ SI.si_na _ (Sort.super sProp) (SI.si_P_typed _ SI.si_wf_Γi) eq_refl)
+      (type_Prod _ _ rec_r_na (tRel 0) _ sProp sProp
+        (si_vass_s_gen _ rec_r_na _ sProp (type_Rel _ _ 0 (vass SI.si_na SI.si_P) w2 eq_refl) eq_refl)
+        (type_App _ _ (tRel 2) SI.si_na SI.si_P (tSort sProp)
+          (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) (tRel 1)
+          (si_arity_typed _ w3)
+          (type_Rel _ _ 2 (vass (mkBindAnn (nNamed "I") rel_of_Type) SI.si_arity) w3 eq_refl)
+          (type_Rel _ _ 1 (vass SI.si_na SI.si_P) w3 eq_refl)))).
+  Qed.
+
+  Lemma rec_on_constructor :
+    on_constructor cumulSpec0 (lift_typing typing) SI.si_Σ0 rec_mdecl 0 rec_idecl []
+      rec_cdecl [sProp].
+  Proof.
+    unshelve econstructor.
+    - reflexivity.
+    - reflexivity.
+    - exact (si_vass_gen _ (mkBindAnn nAnon Relevant) _ sProp rec_ctype_typed eq_refl).
+    - split; [exact tt|].
+      exact (si_vass_s_gen _ rec_r_na _ sProp
+        (type_Rel _ _ 0 (vass SI.si_na SI.si_P) (SI.si_wf_P SI.si_Γi SI.si_wf_Γi) eq_refl) eq_refl).
+    - constructor.
+    - cbn. eapply pos_ass.
+      + apply pos_arg_closed. reflexivity.
+      + eapply pos_ass.
+        * apply pos_arg_closed. reflexivity.
+        * exact (pos_concl _ _ _ [vass rec_r_na (tRel 0); vass SI.si_na SI.si_P] [tRel 1]
+            (All_cons (x := tRel 1) (eq_refl : is_true (closedn 2 (tRel 1))) All_nil)).
+    - intros v e. discriminate e.
+    - destruct lets_in_constructor_types; [exact I|reflexivity].
+  Qed.
+
+  Lemma rec_on_ind_body :
+    on_ind_body cumulSpec0 (lift_typing typing) SI.si_Σ0 rec_kn rec_mdecl 0 rec_idecl.
+  Proof.
+    unshelve econstructor.
+    - exact [[sProp]].
+    - exists (tSort sProp). split; [reflexivity|].
+      apply arity_red_sort. apply whd_stop. reflexivity.
+    - exact (SI.si_vass _ (mkBindAnn nAnon rel_of_Type) _ _
+        (SI.si_arity_typed [] SI.si_wf_nil) eq_refl).
+    - exact (SI.si_vass _ (mkBindAnn nAnon rel_of_Type) _ _
+        (SI.si_arity_typed [] SI.si_wf_nil) eq_refl).
+    - constructor; [exact rec_on_constructor|constructor].
+    - cbn. econstructor; [reflexivity|reflexivity|reflexivity|reflexivity|].
+      constructor; [|constructor]. cbn. constructor; reflexivity.
+    - reflexivity.
+    - reflexivity.
+    - exact I.
+  Qed.
+
+  Lemma rec_on_inductive : on_inductive cumulSpec0 (lift_typing typing) SI.si_Σ0 rec_kn rec_mdecl.
+  Proof.
+    constructor.
+    - constructor; [exact rec_on_ind_body|constructor].
+    - exact (SI.si_wf_P [] SI.si_wf_nil).
+    - reflexivity.
+    - reflexivity.
+  Qed.
+
+  Lemma rec_wf : wf rec_env.
+  Proof.
+    split.
+    - split; [|split].
+      + intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+      + intros x Hx.
+        change (LevelSet.In x (LevelSet.union (ContextSet.levels ContextSet.empty)
+                                              (LevelSet.singleton Level.lzero))) in Hx.
+        apply LevelSet.union_spec in Hx as [Hx|Hx].
+        * exfalso. eapply LevelSet.empty_spec. exact Hx.
+        * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
+      + exists SI.si_val. intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+    - split.
+      { constructor; cbn; [constructor|intros c []|repeat split; intros c h; discriminate h
+                          |intros i h; discriminate h]. }
+      apply globenv_decl; [constructor|].
+      constructor.
+      + constructor.
+      + exact SI.si_on_udecl.
+      + exact rec_on_inductive.
+      + cbn. intros i h; discriminate h.
+  Qed.
+
+  Lemma rec_wf_ext : wf_ext rec_Σ.
+  Proof. split; [exact rec_wf|exact SI.si_on_udecl]. Qed.
+
+  Lemma rec_wf_extE : wf_extE rec_Σ.
+  Proof. exact (wf_ext_incl_E rec_wf_ext). Qed.
+
+  Lemma rec_declared_inductive : declared_inductive rec_Σ rec_ind rec_mdecl rec_idecl.
+  Proof. split; [left; reflexivity|reflexivity]. Qed.
+
+  Lemma rec_declared_constructor :
+    declared_constructor rec_Σ (rec_ind, 0) rec_mdecl rec_idecl rec_cdecl.
+  Proof. split; [exact rec_declared_inductive|reflexivity]. Qed.
+
+  Lemma rec_declared_projection :
+    declared_projection rec_Σ rec_proj rec_mdecl rec_idecl rec_cdecl rec_pdecl.
+  Proof. split; [exact rec_declared_constructor|split; reflexivity]. Qed.
+
+  Definition rec_I : term := tApp (tInd rec_ind []) fx_P.
+  Definition rec_ctor_ty : term :=
+    tProd SI.si_na (tSort sProp) (tProd rec_r_na (tRel 0) (tApp (tInd rec_ind []) (tRel 1))).
+
+  Lemma rec_I_typed Γ : wf_local rec_Σ Γ -> rec_Σ ;;; Γ |- rec_I : tSort sProp.
+  Proof.
+    intros h.
+    exact (type_App _ _ (tInd rec_ind []) SI.si_na (tSort sProp) (tSort sProp) _ fx_P
+      (si_arity_typed Γ h)
+      (type_Ind _ _ rec_ind [] rec_mdecl rec_idecl h rec_declared_inductive eq_refl)
+      (fx_P_typed Γ h)).
+  Qed.
+
+  Lemma rec_ctor_ty_typed Γ : wf_local rec_Σ Γ -> rec_Σ ;;; Γ |- rec_ctor_ty : tSort sProp.
+  Proof.
+    intros h.
+    assert (h1 : wf_local rec_Σ (Γ ,, vass SI.si_na (tSort sProp)))
+      by (apply (si_wf_cons _ _ _ (Sort.super sProp) h (si_Prop_typed _ h)); reflexivity).
+    assert (h2 : wf_local rec_Σ (Γ ,, vass SI.si_na (tSort sProp) ,, vass rec_r_na (tRel 0)))
+      by (apply (si_wf_cons _ _ _ sProp h1
+            (type_Rel _ _ 0 (vass SI.si_na (tSort sProp)) h1 eq_refl)); reflexivity).
+    exact (type_Prod _ _ SI.si_na (tSort sProp) _ (Sort.super sProp) sProp
+      (si_vass_s_gen _ SI.si_na _ (Sort.super sProp) (si_Prop_typed _ h) eq_refl)
+      (type_Prod _ _ rec_r_na (tRel 0) _ sProp sProp
+        (si_vass_s_gen _ rec_r_na _ sProp
+          (type_Rel _ _ 0 (vass SI.si_na (tSort sProp)) h1 eq_refl) eq_refl)
+        (type_App _ _ (tInd rec_ind []) SI.si_na (tSort sProp) (tSort sProp) _ (tRel 1)
+          (si_arity_typed _ h2)
+          (type_Ind _ _ rec_ind [] rec_mdecl rec_idecl h2 rec_declared_inductive eq_refl)
+          (type_Rel _ _ 1 (vass SI.si_na (tSort sProp)) h2 eq_refl)))).
+  Qed.
+
+  (** [mk P t : R P] for [t : P]. *)
+  Lemma rec_mk_typed Γ t : wf_local rec_Σ Γ -> rec_Σ ;;; Γ |- t : fx_P ->
+    rec_Σ ;;; Γ |- mkApps (tConstruct rec_ind 0 []) [fx_P; t] : rec_I.
+  Proof.
+    intros h ht. cbn [mkApps].
+    assert (h1 : wf_local rec_Σ (Γ ,, vass rec_r_na fx_P))
+      by (apply (si_wf_cons _ _ _ sProp h (fx_P_typed _ h)); reflexivity).
+    assert (hP : rec_Σ ;;; Γ |- tProd rec_r_na fx_P rec_I : tSort sProp)
+      by exact (type_Prod _ _ rec_r_na fx_P rec_I sProp sProp
+        (si_vass_s_gen _ rec_r_na _ sProp (fx_P_typed _ h) eq_refl) (rec_I_typed _ h1)).
+    refine (type_App _ _ _ rec_r_na fx_P rec_I sProp t hP _ ht).
+    exact (type_App _ _ (tConstruct rec_ind 0 []) SI.si_na (tSort sProp)
+      (tProd rec_r_na (tRel 0) (tApp (tInd rec_ind []) (tRel 1))) sProp fx_P
+      (rec_ctor_ty_typed _ h)
+      (type_Construct _ _ rec_ind 0 [] rec_mdecl rec_idecl rec_cdecl h
+        rec_declared_constructor eq_refl)
+      (fx_P_typed _ h)).
+  Qed.
+
+  (** [c.(r) : P] for [c : R P]. *)
+  Lemma rec_proj_typed Γ c : rec_Σ ;;; Γ |- c : rec_I -> rec_Σ ;;; Γ |- tProj rec_proj c : fx_P.
+  Proof.
+    intros hc.
+    exact (type_Proj _ _ rec_proj c [] rec_mdecl rec_idecl rec_cdecl rec_pdecl [fx_P]
+      rec_declared_projection hc eq_refl).
+  Qed.
+
+  Definition rec_x_na : aname := mkBindAnn (nNamed "x") Relevant.
+
+  (** [rtf_proj_construct] (T6): [(mk P x).(r)] in [x : P]. *)
+  Lemma rtf_proj_construct_inst :
+    wf_extE rec_Σ ×
+    welltypedE rec_Σ [vass rec_x_na fx_P]
+      (tProj rec_proj (mkApps (tConstruct rec_ind 0 []) [fx_P; tRel 0])) ×
+    (rec_proj.(proj_ind) = rec_ind /\ 0 = 0 /\
+     (rec_proj.(proj_npars) + rec_proj.(proj_arg) < #|[fx_P; tRel 0]|)%nat).
+  Proof.
+    assert (h0 : wf_local rec_Σ []) by constructor.
+    assert (h1 : wf_local rec_Σ [vass rec_x_na fx_P])
+      by (apply (si_wf_cons [] _ _ sProp h0 (fx_P_typed _ h0)); reflexivity).
+    split; [exact rec_wf_extE|]. split.
+    - econstructor. apply (typing_incl_E (Σ := rec_Σ) rec_wf).
+      apply rec_proj_typed. apply rec_mk_typed; [exact h1|].
+      exact (type_Rel _ _ 0 (vass rec_x_na fx_P) h1 eq_refl).
+    - split; [reflexivity|split; [reflexivity|cbn; repeat constructor]].
+  Qed.
+
+  (** [rtf_proj_arg_whne] (T6): [x.(r)] in [x : R P]; the projected term is a
+      weak-head normal variable, so it is neutral. *)
+  Lemma rtf_proj_arg_whne_inst :
+    wf_extE rec_Σ ×
+    whnf RedFlags.default rec_Σ [vass rec_x_na rec_I] (mkApps (tRel 0) []) ×
+    welltypedE rec_Σ [vass rec_x_na rec_I] (tProj rec_proj (mkApps (tRel 0) [])) ×
+    ∥ whne RedFlags.default rec_Σ [vass rec_x_na rec_I] (mkApps (tRel 0) []) ∥.
+  Proof.
+    assert (h0 : wf_local rec_Σ []) by constructor.
+    assert (h1 : wf_local rec_Σ [vass rec_x_na rec_I])
+      by (apply (si_wf_cons [] _ _ sProp h0 (rec_I_typed _ h0)); reflexivity).
+    split; [exact rec_wf_extE|]. split; [apply whnf_ne; apply whne_rel; reflexivity|]. split.
+    - econstructor. apply (typing_incl_E (Σ := rec_Σ) rec_wf).
+      apply rec_proj_typed.
+      exact (type_Rel _ _ 0 (vass rec_x_na rec_I) h1 eq_refl).
+    - constructor. apply whne_rel. reflexivity.
+  Qed.
+
 End FracInstancesE.
