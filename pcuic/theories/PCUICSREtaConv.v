@@ -6,7 +6,8 @@
   This file states their E twins and proves them from the landed E layer. Each lemma restates its
   base twin with the relation changed and nothing else: [ws_cumul_pb] → [ws_cumul_pbE],
   [ws_cumul_ctx_pb] → [ws_cumul_ctx_pbE], [ws_cumul_ctx_pb_rel] → [ws_cumul_ctx_pbE_rel],
-  [typing] → [typingE], [isType] → [on_type (lift_typing typingE)], the algorithmic
+  [typing] → [typingE], [isType] → [isTypeE] ([PCUICTypingEtaNotions]; δ-equal to the
+  [on_type (lift_typing typingE)] this file spelled before that file landed), the algorithmic
   [cumulAlgo_gen] ([Σ ;;; Γ |- T <= U] / [= U]) → [JoinE Σ Γ pb T U] (stream lead's ruling,
   2026-10-29 09:26Z: the canonical I5 join of [PCUICEtaI5], the one [ws_cumul_pbE] is defined over;
   it is the only [JoinE] in scope here), [conv_witness] →
@@ -56,11 +57,13 @@
   | weakening_ws_cumul_ctx_pb (PCUICSR:1119)                 | (b)      | weakening_ws_cumul_ctx_pbE |
   | ws_cumul_pb_terms_refl (PCUICSR:1210)                    | landed   | WT_refl @ PCUICConversionEtaCongr.v:88 |
   | closed_red1_ws_cumul_pb (PCUICSR:1239)                   | (b)      | closed_red1_ws_cumul_pbE |
-  | substitution_ws_cumul_pb_subst_conv (PCUICSR:1360, the   | (c)      | copy 10 (PCUICSubstitution: subsletE, subslet_untyped_subsletE) and copy 16 (PCUICInductives: wf_subsletE). Its core is landed: substitution_ws_cumul_pbE_subst_conv @ PCUICWsCumulEtaCtx.v:523 (untyped_subslet form); the SR-local lemma only turns subslet into untyped_subslet |
+  | substitution_ws_cumul_pb_subst_conv (PCUICSR:1360, the   | (c)      | copy 16 (PCUICInductives: wf_subsletE); copy 10 (subsletE, subslet_untyped_subsletE) has landed. Its core is landed: substitution_ws_cumul_pbE_subst_conv @ PCUICWsCumulEtaCtx.v:523 (untyped_subslet form); the SR-local lemma only turns subslet into untyped_subslet |
   |   SR-local version)                                      |          |                           |
+  | substitution_ws_cumul_pb (PCUICConversion:3104), at the  | landed   | substitution_ws_cumul_pbE_typed @ PCUICSpineEta.v:242 (copy 15, canonical; the twin this file had, substitution_ws_cumul_pbE_subslet, was deleted for it after a both-way compiled check). It cannot live beside the A7 twin substitution_ws_cumul_pbE (PCUICWsCumulEtaSubst), which takes base subslet, because PCUICSubstitutionEta, which defines subsletE, imports PCUICWsCumulEtaSubst; the A7 twin is only weaker, never unsound |
+  |   E typed substitution subsletE                          |          |                           |
   | type_Cumul_alt (PCUICSR:1456)                            | (b)      | type_Cumul_altE: the JoinE form, which is both the base twin (by the ruling) and the checker's T1_facts field |
   | case_nondep_predicate_conv (PCUICSR:1550)                | (d)      | belongs to the T1 copy itself: it needs four SR-local syntactic lemmas (case_predicate_context_vass, mk_ctx_subst_snoc_ass, subst0_cons_nondep, on_free_vars_it_mkLambda_or_LetIn), which this file cannot import; its conversion steps are landed (red_betas_typedE @ PCUICWsCumulEtaCtxTyp.v:187, red_ws_cumul_pbE) |
-  | typing_spine_prim_arg_types (PCUICSR:1591),              | (c)      | copy 14 (PCUICArities: typing_spineE) |
+  | typing_spine_prim_arg_types (PCUICSR:1591),              | (c)      | copy 14 (PCUICArities: typing_spineE), now landed; the twins typing_spine_prim_arg_typesE and typing_spine_prim_argsE are in PCUICSREta |
   |   typing_spine_prim_args (PCUICSR:1870)                  |          |                           |
   | red_has_rec_arg (PCUICSR:36)                             | (b)      | red_has_rec_arg_cb (reduction; ClosedBodies), from red_it_mkProd_or_LetIn_smash_cb below |
   | upto_names_conv_context (PCUICAlpha:383)                 | item 4   | algorithmic ([conv_context cumulAlgo_gen] from [≡Γ]); see the second table |
@@ -127,7 +130,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICCumulativitySpec PCUICCumulativitySpecEta
      PCUICWellScopedCumulativity PCUICSubstitution PCUICContextSubst PCUICConfluence PCUICContextReduction
      PCUICParallelReduction PCUICConversion PCUICContextConversion PCUICCasesContexts PCUICContexts
-     PCUICTypingEta PCUICTypingEtaInd PCUICClosedTypEta PCUICEtaI5
+     PCUICTypingEta PCUICTypingEtaInd PCUICTypingEtaNotions PCUICClosedTypEta PCUICEtaI5
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
      PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICClosedBodies.
 From MetaRocq.PCUIC Require PCUICClosedTyp PCUICWeakeningConv.
@@ -463,11 +466,12 @@ Section Typed.
       [Σ ;;; Γ |- T <= T'] ([cumulAlgo]); by the stream lead's ruling (2026-10-29 09:26Z) its E
       counterpart is the canonical I5 join [JoinE Σ Γ Cumul T T'] ([PCUICEtaI5]), the relation
       [ws_cumul_pbE] is defined over. This is also the form of the field [type_Cumul_alt] of
-      [T1_facts] in the checker's [PCUICTypingEtaHyps.v] ([isTypeE] unfolds to
-      [on_type (lift_typing typingE)]). The scoping comes from the typings: [T] from
-      [type_is_open_termE], [T'] from its sort. *)
+      [T1_facts] in the checker's [PCUICTypingEtaHyps.v]. Its [isTypeE] premise is δ-equal to the
+      [on_type (lift_typing typingE)] it was spelled with before [PCUICTypingEtaNotions] landed
+      (plan item M2(c)). The scoping comes from the typings: [T] from [type_is_open_termE], [T']
+      from its sort. *)
   Lemma type_Cumul_altE (Γ : context) (t T T' : term) :
-    Σ ;;; Γ |-E t : T -> on_type (lift_typing typingE) Σ Γ T' ->
+    Σ ;;; Γ |-E t : T -> isTypeE Σ Γ T' ->
     JoinE Σ Γ Cumul T T' -> Σ ;;; Γ |-E t : T'.
   Proof.
     intros Ht (_ & s & Hs & _) cum.
