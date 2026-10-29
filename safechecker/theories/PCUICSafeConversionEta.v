@@ -469,6 +469,32 @@ Section Conversion.
   Definition rebuilt_ok (t' : term) (args' : list term) (ρ : stack) : bool :=
     wf_stack (appstack args' ρ) && eta_head_ok t' ρ.
 
+  (* The invariant battery for the threaded invariants (wf_stack, virt_ok, no_Eta_arg under
+     the T1/T3 guards and the G2 check, list bookkeeping). On the goal dump dump14 it closes
+     62 of the 359 obligations the base obligation tactic leaves (lanes/eta/etak/EtaConv.md). *)
+  Ltac etak_pre := intros; unfold rebuilt_ok, eta_head_ok in *;
+    repeat match goal with
+    | H : true = _ |- _ => symmetry in H
+    | H : (_ && _) = true |- _ => apply andb_prop in H as [? ?]
+    | H : is_true (_ && _) |- _ => apply andb_prop in H as [? ?]
+    end.
+  Ltac etak_hint := first
+    [ solve [ etak_pre; cbn [no_Eta_arg wf_stack is_eta_frame is_Eta_arg negb andb orb] in *;
+              first [ assumption | reflexivity | discriminate | congruence ] ]
+    | solve [ etak_pre; unfold virt_ok; rewrite ?no_Eta_arg_appstack;
+              cbn [no_Eta_arg is_Eta_arg negb andb orb];
+              repeat match goal with H : no_Eta_arg _ = true |- _ => rewrite H end; reflexivity ]
+    | solve [ etak_pre; first [ apply wf_stack_no_Eta_arg | eapply virt_ok_reduce
+                              | eapply virt_ok_eta_step | eapply wf_stack_eta_step ]; eauto 3 ]
+    | solve [ etak_pre; subst; rewrite <- ?app_assoc; reflexivity ]
+    | solve [ etak_pre; rewrite ?stack_context_eta_appstack ?stack_context_eta_Eta_arg_appstack in *;
+              eauto 3 ]
+    | solve [ intros; cbn in *; eauto 3 ] ].
+  Ltac etak_base_obl := Tactics.program_simplify; CoreTactics.equations_simpl;
+    try Tactics.program_solve_wf.
+  Ltac etak_obl := first [ solve [etak_base_obl] | solve [etak_hint] | etak_base_obl ].
+  Obligation Tactic := etak_obl.
+
   (* rev 13 B3/F-9: reduction runs on the decomposed spine only, through reduce_args_E, in the
      focus's own context (the η context on an Eta_arg side). *)
   Equations(noeqns) _isconv_red (Γ : context) (leq : conv_pb)
@@ -3957,8 +3983,7 @@ Equations (noeqns) isconv_array_values_aux
     rewrite <- eq1, <- eq2.
     auto.
   Qed.
-  Obligation Tactic :=
-    Tactics.program_simplify; CoreTactics.equations_simpl; try Tactics.program_solve_wf.
+  Obligation Tactic := etak_obl.
 
   (* Site 6 of the 11 reduce_stack sites: [args := []]. *)
   Equations unfold_one_case (Γ : context) (ci : case_info)
