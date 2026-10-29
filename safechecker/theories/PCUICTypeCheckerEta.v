@@ -269,11 +269,16 @@ Lemma substitution_wf_local_rel `{checker_flags} {hT0 : T0_facts} {Σ} {wfΣ : w
       wf_local_relE Σ Γ (subst_context s 0 Δ).
     Proof.
       intros Hs Ht.
+      (* [Equations.Prop.DepElim.depelim] is written out below on purpose. In this file a plain [depelim]
+         is Stdlib Program's, because [Program] is imported after [Equations]; Program's version
+         discharges the [existT] equations with [simplification_existT2], which uses the axiom
+         [Eqdep.Eq_rect_eq.eq_rect_eq] (UIP). Equations' version needs no axiom here. Do not shorten it
+         back to [depelim]: that silently puts the axiom back into every checker that uses this lemma. *)
       induction Δ as [|[? [] ?] Δ] in Γ', Hs, Ht |- * .
       - constructor.
       - cbn.
         rewrite subst_context_snoc.
-        rewrite app_context_cons in Ht ; depelim Ht.
+        rewrite app_context_cons in Ht ; Equations.Prop.DepElim.depelim Ht.
         constructor ; cbn.
         + eapply IHΔ ; tea.
         + rewrite Nat.add_0_r.
@@ -282,7 +287,7 @@ Lemma substitution_wf_local_rel `{checker_flags} {hT0 : T0_facts} {Σ} {wfΣ : w
           now eapply substitution.
       - cbn.
         rewrite subst_context_snoc.
-        rewrite app_context_cons in Ht ; depelim Ht.
+        rewrite app_context_cons in Ht ; Equations.Prop.DepElim.depelim Ht.
         constructor ; cbn.
         + eapply IHΔ ; tea.
         + rewrite Nat.add_0_r.
