@@ -15,9 +15,11 @@
   derivations of [PCUICInversionEtaInstances]:
   - a lemma that needs no forecast class is APPLIED to concrete premises, each proved;
   - a lemma that needs a forecast class ([validity_envE], [validityE], [inversion_mkAppsE],
-    [type_App'E], [type_mkApps_arityE], [isType_applyE], [declared_projection_typeE]) cannot be
-    applied without an instance of that class, so its instance states the premises AND the
-    conclusion at concrete arguments, each proved without the lemma and without any class.
+    [type_App'E], [type_mkApps_arityE], [declared_projection_typeE]) cannot be applied without
+    an instance of that class, so its instance states the premises AND the conclusion at
+    concrete arguments, each proved without the lemma and without any class.
+  The copy lemmas of copies 10, 12 and 14 that [PCUICValidityEta] proved before those copies
+  landed are gone from it; their instances are in [PCUICTypingEtaCopies2Instances].
   The derivation of [validityE_inst] ends in an η step: in the context
   [g : Prop → Prop, k : (Prop → Prop) → Prop, y : k g] the variable [y] is typed at
   [k (λx:Prop. g x)] ([iv_rel_typed]). [type_ws_cumul_pbE_inst] uses the same η pair. *)
@@ -29,7 +31,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICCases PCUICEquality PCUICArities PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd
      PCUICTypingEtaNotions PCUICClosedTypEta PCUICClosedBodies PCUICEtaI5 PCUICWellScopedCumulativityEta
      PCUICWfUniversesEta PCUICWsCumulEtaCtxTyp
-     PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances PCUICValidityEta.
+     PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICValidityEta.
 
 Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at level 50, Γ, t, u at next level,
   format "Σ  ;;;  Γ  ⊢E  t  ≤  u") : type_scope.
@@ -38,8 +41,7 @@ Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at 
 
 Section ContractFit.
 
-  Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
-    {V16 : ValForecastCopy16}.
+  Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}.
 
   (** The checker's [T2a_facts] (its section variable [{cf : checker_flags}] made a [Context]). *)
   Section Checker.
@@ -119,44 +121,12 @@ Definition wf_local_validityE_inst :=
 
 (** ** The copy lemmas proved in [PCUICValidityEta], applied *)
 
-Definition isType_wf_localE_inst : wf_localE si_Σ iv_Γk := isType_wf_localE iv_keta_isType.
-
 (** The η pair: [y : k g] and [k g ≤ k (λx:Prop. g x)] give [y : k (λx:Prop. g x)]. *)
 Definition type_ws_cumul_pbE_inst : si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta :=
   type_ws_cumul_pbE (Σ := si_Σ) (pb := Cumul) iv_kg iv_y_typed iv_keta_isType into_ws_cumulE_inst.
 
-Lemma isType_tProdE_inst :
-  (isTypeRelE si_Σ [] si_P si_na.(binder_relevance) × isTypeE si_Σ ([],, vass si_na si_P) si_P) ×
-  isTypeE si_Σ [] (tProd si_na si_P si_P).
-Proof.
-  have h := fst (isType_tProdE (Σ := si_Σ) (wfΣ := si_wfE)) iv_PP_isType.
-  split; [exact h|].
-  exact (snd (isType_tProdE (Σ := si_Σ) (wfΣ := si_wfE)) h).
-Qed.
-
-(** [Π x : Prop. x : Prop], through the [vass] branch of [type_mkProd_or_LetInE]. *)
-Definition type_it_mkProd_or_LetIn_sortsE_vass_inst :
-  si_Σ ;;; [] |-E it_mkProd_or_LetIn [vass si_na si_P] (tRel 0) : tSort (sort_of_products [Sort.super sProp] sProp) :=
-  type_it_mkProd_or_LetIn_sortsE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Γ' := [vass si_na si_P])
-    (us := [Sort.super sProp]) (t := tRel 0) (s := sProp)
-    (tt, iv_vass_s si_Σ [] si_na si_P (Sort.super sProp) (iv_P_typed si_Σ [] localenv_nil) eq_refl)
-    (typeE_Rel _ _ 0 (vass si_na si_P) (iv_wf_P si_Σ [] localenv_nil) eq_refl).
-
-(** [let z : Prop := ∀P:Prop. P in z : Prop], through the [vdef] branch of [type_mkProd_or_LetInE]. *)
-Definition type_it_mkProd_or_LetIn_sortsE_vdef_inst :
-  si_Σ ;;; [] |-E it_mkProd_or_LetIn [vdef si_na iv_False si_P] (tRel 0) : tSort (sort_of_products [] sProp) :=
-  type_it_mkProd_or_LetIn_sortsE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Γ' := [vdef si_na iv_False si_P])
-    (us := []) (t := tRel 0) (s := sProp)
-    (tt, iv_vdef_False si_Σ [] localenv_nil)
-    (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) (iv_wf_vdef si_Σ [] localenv_nil) eq_refl).
-
 Definition typing_spine_reflE_inst : typing_spineE si_Σ iv_Γk iv_keta [] iv_keta :=
   typing_spine_reflE (Σ := si_Σ) (wfΣ := si_wfE) iv_keta_isType.
-
-Definition instantiate_minductiveE_inst :
-  si_Σ ;;; subst_instance [] [] |-E subst_instance [] (tInd si_ind []) : subst_instance [] si_arity :=
-  instantiate_minductiveE si_Σ si_kn si_mdecl [] [] (tInd si_ind []) si_arity si_wfE
-    (proj1 si_declared_inductive) eq_refl (iv_ind_typed [] localenv_nil).
 
 (** ** Lemmas with a forecast premise: premises and conclusion at concrete arguments *)
 
@@ -222,14 +192,6 @@ Proof.
   - exact (arity_spine_assE _ _ iv_False [] si_na si_P (tSort sProp) (tSort sProp)
              (iv_False_typed si_Σ [] localenv_nil) (arity_spine_nilE _ _ (tSort sProp))).
   - exact (iv_IX_typed [] iv_False localenv_nil (iv_False_typed si_Σ [] localenv_nil)).
-Qed.
-
-Lemma isType_applyE_inst :
-  [× isTypeE si_Σ [] (tProd si_na si_P si_P), si_Σ ;;; [] |-E iv_False : si_P &
-     isTypeE si_Σ [] (si_P {0 := iv_False})].
-Proof.
-  split; [exact iv_PP_isType|exact (iv_False_typed si_Σ [] localenv_nil)|].
-  exact (iv_P_isType [] localenv_nil).
 Qed.
 
 (** [declared_projection_typeE] at the projection [f] of [R]: its type [A] is a type in the

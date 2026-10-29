@@ -27,14 +27,18 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICCumulativitySpe
      PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind PCUICEtaA6More PCUICEtaJoinSpec PCUICEtaFInstGlue
      PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
      PCUICInversionEta PCUICSREtaConv.
+(* The landed T0 copies 10, 12 and 14 (frac/eta 59eb717d): the canonical [subsletE]
+   ([PCUICSubstitutionEta]) and [typing_spineE] ([PCUICAritiesEta], the twin of
+   [PCUICArities.typing_spine]), and their lemmas. Imported before [PCUICValidityEta], so a name
+   that file also declares resolves to its declaration. *)
+From MetaRocq.PCUIC Require Import PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta.
 (* Copy 9 (gated at d46f9387, merged into this branch): [context_conversionE] and
    [closed_context_conversionE], with the statements the forecast block had. *)
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
 (* T2a (a2a2adfc, merged into this branch): [validityE], [inversion_mkAppsE], the shared forecast
-   definitions ([subsletE], [typing_spineE], [ctx_inst_subE], [spine_substE], [has_sort_isTypeE],
-   [isWfArityE]), the lemmas it proves for copies 10/12/14/15/16 ([isType_wf_localE],
-   [type_ws_cumul_pbE], [isType_tProdE], ...) and its forecast classes [ValForecastCopy10/14/15/16],
-   which are premises of section [SREta] below. *)
+   definitions of copy 15 ([ctx_inst_subE], [spine_substE]), the lemmas it proves for copies 15 and
+   16 and its forecast classes [ValForecastCopy15/16], which are premises of section [SREta]
+   below. *)
 From MetaRocq.PCUIC Require Import PCUICValidityEta.
 From MetaRocq.PCUIC.Typing Require PCUICUnivSubstitutionTypEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta.
@@ -68,21 +72,18 @@ Arguments Sort.sort_of_product : simpl nomatch.
    [declared_constructor_valid_tyE], [type_tCoFix_invE], [type_tFix_invE],
    [wf_cofixpoint_typing_spineE]). The note's [<base>E_statement] Definitions are never referenced
    by name (that would make every argument explicit): their text is copied into class fields, whose
-   projections keep the braces. Copies 10, 12 and 14 have no note text: base twins, base's status. *)
+   projections keep the braces. Copies 10, 12 and 14 (no note text: base twins, base's status) have
+   landed (frac/eta 59eb717d): their classes were deleted after a compiled-form identity check of
+   each field against the landed lemma, and the copies are imported. *)
 Local Set Warnings "-unexpected-implicit-declaration".
 
 (** *** Definitions
 
-  [subsletE], [typing_spineE], [ctx_inst_subE], [spine_substE] (with its fields), [has_sort_isTypeE]
-  and [isWfArityE] come from T2a's [PCUICValidityEta] (imported above; same text as this block had),
-  so that ONE [typing_spineE] is in scope. [validityE] and [inversion_mkAppsE] are T2a's proved
-  lemmas. The definitions below are those [PCUICValidityEta] does not have. *)
-
-(* FORECAST-ONLY (with copy 10's [subsletE] and copy 14's [typing_spineE], which T2a's forecast block
-   defines): base derives them for [subslet] and [PCUICArities.typing_spine]; SR's [depelim]s need
-   them. Delete when those copies land. *)
-Derive Signature for subsletE.
-Derive Signature for typing_spineE.
+  [subsletE] and [typing_spineE] are the landed canonical ones (copies 10 and 14, imported above,
+  with their [Derive Signature]); [has_sort_isTypeE], [has_sort_isTypeRelE] and [isWfArityE] are
+  [PCUICTypingEtaNotions]'s; [ctx_inst_subE] and [spine_substE] (with its fields) come from T2a's
+  [PCUICValidityEta], so that ONE of each is in scope. [validityE] and [inversion_mkAppsE] are
+  T2a's proved lemmas. The definitions below are the forecast ones no landed file has yet. *)
 
 (* FORECAST-ONLY: proved by copy 16 (PCUICInductivesEta.v, twin of PCUICInductives.v:623 wf_subslet);
    delete when it lands. Text: PCUICSREtaCopyStatements.v, verbatim. *)
@@ -95,105 +96,6 @@ Record wf_subsletE {cf} Σ Γ s Δ :=
    PCUICSREtaCopyStatements.v, verbatim. *)
 Notation decl_ws_cumul_pbE Σ Γ :=
   (All_decls_alpha_pb Conv (fun pb (x0 y0 : term) => ws_cumul_pbE pb Σ Γ x0 y0)).
-
-(* FORECAST-ONLY: canonical home PCUICTypingEtaNotions.v (cross-lane-commitments.md C2, EtaCheckerLane's
-   map); delete when it lands. Text: safechecker/theories/PCUICTypingEtaDefs.v @ 26749b27:78-80,
-   verbatim. The E form of [PCUICTyping.has_sort_isTypeRel]. *)
-Definition has_sort_isTypeRelE {cf Σ} {Γ T} s r :
-  isSortRel s r -> Σ ;;; Γ |-E T : tSort s -> isTypeRelE Σ Γ T r.
-Proof. repeat (eexists; tea). Defined.
-
-(** *** Copy 10 ([PCUICSubstitutionEta.v]): twins of base [PCUICSubstitution]. The statement note
-    gives names only; each statement is base's (file:line) with the relations renamed.
-    [isType_substitutionE], [substitutionE] and [substitution0E] are fields of T2a's
-    [ValForecastCopy10] (same text); T2a proves [isType_wf_localE]. *)
-
-(* FORECAST-ONLY: proved by copy 10 (PCUICSubstitutionEta.v); delete when it lands. *)
-Class SRForecastCopy10 := {
-  (* PCUICSubstitution.v:66 subslet_ass_tip *)
-  subslet_ass_tipE :
-    forall {cf} {Σ : global_env_ext} {Γ na t T},
-    Σ ;;; Γ |-E t : T ->
-    subsletE Σ Γ [t] [vass na T] ;
-  (* PCUICSubstitution.v:57 subslet_def *)
-  subslet_defE :
-    forall {cf} {Σ : global_env_ext} {Γ Δ s na t T t'},
-    subsletE Σ Γ s Δ ->
-    Σ ;;; Γ |-E subst0 s t : subst0 s T ->
-    t' = subst0 s t ->
-    subsletE Σ Γ (t' :: s) (Δ ,, vdef na t T) ;
-  (* PCUICSubstitution.v:108 subslet_length *)
-  subslet_lengthE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {Γ s Δ},
-    subsletE Σ Γ s Δ -> #|s| = #|Δ| ;
-  (* PCUICSubstitution.v:829 subslet_untyped_subslet *)
-  subslet_untyped_subsletE :
-    forall {cf:checker_flags} (Σ : global_env_ext) Γ s Γ',
-    subsletE Σ Γ s Γ' -> untyped_subslet Γ s Γ' ;
-  (* PCUICSubstitution.v:1876 substitution_let *)
-  substitution_letE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ n u U t T},
-    Σ ;;; Γ ,, vdef n u U |-E t : T ->
-    Σ ;;; Γ |-E t {0 := u} : T {0 := u} ;
-  (* PCUICSubstitution.v:1856 substitution_wf_local *)
-  substitution_wf_localE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ},
-    subsletE Σ Γ s Γ' ->
-    wf_localE Σ (Γ ,,, Γ' ,,, Δ) ->
-    wf_localE Σ (Γ ,,, subst_context s 0 Δ) ;
-  (* PCUICSubstitution.v:576 wf_arities_context *)
-  wf_arities_contextE :
-    forall {cf:checker_flags} {Σ : global_env} {wfΣ : wfE Σ} {mind mdecl},
-    declared_minductive Σ mind mdecl ->
-    wf_localE (Σ, ind_universes mdecl) (arities_context mdecl.(ind_bodies))
-}.
-
-(** *** Copy 12 ([PCUICContextsEta.v]): twins of base [PCUICContexts]; names only in the note. *)
-
-(* FORECAST-ONLY: proved by copy 12 (PCUICContextsEta.v); delete when it lands. *)
-Class SRForecastCopy12 := {
-  (* PCUICContexts.v:133 sorts_local_ctx_wf_local *)
-  sorts_local_ctx_wf_localE :
-    forall {cf:checker_flags} (Σ : global_env_ext) Γ Δ s,
-    wf_localE Σ Γ ->
-    sorts_local_ctx (lift_typing typingE) Σ Γ Δ s ->
-    wf_localE Σ (Γ ,,, Δ) ;
-  (* PCUICContexts.v:591 subslet_lift *)
-  subslet_liftE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : context) s Δ',
-    wf_localE Σ (Γ ,,, Δ) ->
-    subsletE Σ Γ s Δ' ->
-    subsletE Σ (Γ ,,, Δ) (map (lift0 #|Δ|) s) (lift_context #|Δ| 0 Δ') ;
-  (* PCUICContexts.v:682 typing_expand_lets *)
-  typing_expand_letsE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ t T,
-    Σ ;;; Γ ,,, Δ |-E t : T ->
-    Σ ;;; Γ ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T ;
-  (* PCUICContexts.v:370 wf_local_smash_end (section WfEnv: {cf} {Σ} {wfΣ : wf Σ}) *)
-  wf_local_smash_endE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ,
-    wf_localE Σ (Γ ,,, Δ) -> wf_localE Σ (Γ ,,, smash_context [] Δ)
-}.
-
-(** *** Copy 14 ([PCUICAritiesEta.v]): twins of base [PCUICArities] (section [WfEnv]:
-    [{cf} {Σ : global_env_ext} {wfΣ : wf Σ}]); names only in the note. [subslet_indsE] is a field
-    of T2a's [ValForecastCopy14]; T2a proves [type_ws_cumul_pbE] and [isType_tProdE] (same text). *)
-
-(* FORECAST-ONLY: proved by copy 14 (PCUICAritiesEta.v); delete when it lands. *)
-Class SRForecastCopy14 := {
-  (* PCUICArities.v:633 on_minductive_wf_params *)
-  on_minductive_wf_paramsE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {ind mdecl} {u},
-    declared_minductive Σ.1 ind mdecl ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    wf_localE Σ (subst_instance u (ind_params mdecl)) ;
-  (* PCUICArities.v:126 ws_cumul_ctx_pb_app *)
-  ws_cumul_ctx_pb_appE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {le Γ Γ' Δ Δ'},
-    #|Δ| = #|Δ'| ->
-    ws_cumul_ctx_pbE le Σ (Γ ,,, Δ) (Γ' ,,, Δ') <~>
-    ws_cumul_ctx_pbE le Σ Γ Γ' × ws_cumul_ctx_pbE_rel le Σ Γ Δ Δ'
-}.
 
 (** *** Copy 15 ([PCUICSpineEta.v]): the statement note's statements, verbatim
     ([PCUICSREtaCopyStatements.v] @ [c232bd3d], [<base>E_statement] → field [<base>E]).
@@ -588,12 +490,10 @@ Local Set Warnings "unexpected-implicit-declaration".
 
 Section SREta.
 
-(* FORECAST-ONLY: one premise per class: T2a's four ([PCUICValidityEta], which its lemmas take too)
-   and this block's six; delete each when its copy lands. *)
-Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
-  {V16 : ValForecastCopy16} {F10 : SRForecastCopy10}
-  {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
+(* FORECAST-ONLY: one premise per class: T2a's two ([PCUICValidityEta], which its lemmas take too)
+   and this block's three; delete each when its copy lands. *)
+Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
+  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
 
 (* FORECAST-ONLY: the [pcuic] hints that the copies re-register for their E lemmas (note @ 0583b56e:
    copy 16 [isType_introE]; copy 15 the coercion fields of [spine_substE]; copy 18
@@ -605,14 +505,6 @@ Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCo
 (** The E counterparts of base's [typing]-specific [pcuic] hints that SR's [pcuic]/[pcuics]
     searches use ([PCUICTyping.has_sort_isType], [typing_wf_local]). *)
 #[local] Hint Resolve has_sort_isTypeE typingE_wf_local : pcuic.
-
-(* FORECAST-ONLY: base declares [Coercion subslet_untyped_subslet : subslet >-> untyped_subslet]
-   ([PCUICSubstitution.v:833]) and SR relies on it; copy 10 is expected to declare its twin for
-   [subslet_untyped_subsletE]. A class projection cannot be a coercion, so here a section-local
-   wrapper is. Delete both lines with copy 10's row. *)
-Local Definition subsletE_untyped_coe {cf} Σ Γ s Γ' (h : subsletE Σ Γ s Γ') : untyped_subslet Γ s Γ' :=
-  subslet_untyped_subsletE Σ Γ s Γ' h.
-Local Coercion subsletE_untyped_coe : subsletE >-> untyped_subslet.
 
 (** Symmetry of the E context and term-list relations, which base's [symmetry] calls find as
     instances for [ws_cumul_ctx_pb] and [ws_cumul_pb_terms]; the E facts are landed lemmas
@@ -1183,30 +1075,10 @@ Qed.
 
   [PCUICWsCumulEtaSubst.substitution_ws_cumul_pbE] (the twin of base
   [PCUICConversion.substitution_ws_cumul_pb]) takes base's [subslet], from before [subsletE]
-  existed. SR substitutes [subsletE]s; these three lemmas give the same conclusions from
-  [subsletE] (through [subslet_untyped_subsletE] and the scoping that [typingE] gives) and from
-  the landed [_cb] reduction facts. *)
-
-(** The terms of a [subsletE] are scoped (base [PCUICConversion.subslet_open]). *)
-Lemma subsletE_open_terms {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ s Δ} :
-  subsletE Σ Γ s Δ -> forallb (is_open_term Γ) s.
-Proof.
-  induction 1; cbn; rewrite ?IHX ?andb_true_r //.
-  - now eapply subject_is_open_termE in t0.
-  - now eapply subject_is_open_termE in t0.
-Qed.
-
-(** Base [PCUICConversion.substitution_ws_cumul_pb] ([:3104]) at [subsletE]. *)
-Lemma substitution_ws_cumul_pbE_subslet {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {pb Γ Γ' Γ'' s M N} :
-  subsletE Σ Γ s Γ' ->
-  Σ ;;; Γ ,,, Γ' ,,, Γ'' ⊢E M ≤[pb] N ->
-  Σ ;;; Γ ,,, subst_context s 0 Γ'' ⊢E subst s #|Γ''| M ≤[pb] subst s #|Γ''| N.
-Proof.
-  intros hs h.
-  eapply untyped_substitution_ws_cumul_pbE; [| |exact h].
-  - exact (subslet_untyped_subsletE _ _ _ _ hs).
-  - exact (subsletE_open_terms hs).
-Qed.
+  existed. Its [subsletE] form, [substitution_ws_cumul_pbE_subslet], is in [PCUICSREtaConv], and
+  the scoping of a [subsletE] is copy 10's [subsletE_open_terms]; both were local here before
+  copy 10 landed. The lemma below gives the same kind of conclusion from the landed [_cb]
+  reduction facts. *)
 
 (** Base [PCUICConversion.closed_red_red_subst0] ([:477]) under [ClosedBodies Σ] in place of
     [wf Σ]: the landed [closed_red_red_subst_cb] at an empty context. *)

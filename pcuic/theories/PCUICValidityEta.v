@@ -29,20 +29,24 @@
   ([safechecker/theories/PCUICTypingEtaHyps.v], branch [wip/etak-k7-2026-10-29]):
   [PCUICValidityEtaInstances] type-checks both lemmas against both texts.
 
-  **The forecast block.** Validity uses lemmas of the T0 copies 10, 14, 15 and 16 that are not
-  on this branch. Each is a field of a class of the block below, with the name and the
-  statement the copy commits to: the text of [PCUICSREta.v]'s forecast classes where that file
-  has the lemma, else the exact base twin. The classes are premises ([Context]) of the lemmas
-  that use them, never axioms; [Print Assumptions] shows them as arguments. The block also
-  holds the E twins of the copy-file definitions the statements mention ([subsletE],
-  [typing_spineE], [ctx_inst_subE], [spine_substE]: the text of [PCUICSREta.v];
-  [arity_spineE], [wf_arity_spineE]: base twins).
+  **The forecast block.** Validity uses lemmas of the T0 copies 15 and 16 that are not on this
+  branch. Each is a field of a class of the block below, with the name and the statement the
+  copy commits to: the text of [PCUICSREta.v]'s forecast classes where that file has the lemma,
+  else the exact base twin. The classes are premises ([Context]) of the lemmas that use them,
+  never axioms; [Print Assumptions] shows them as arguments. The block also holds the E twins of
+  the copy-15 definitions the statements mention ([ctx_inst_subE], [spine_substE]: the text of
+  [PCUICSREta.v]; [arity_spineE], [wf_arity_spineE]: base twins). Copies 10, 12 and 14 have
+  landed (frac/eta 59eb717d): their classes, the definitions [subsletE] and [typing_spineE] and
+  the copy lemmas proved here were deleted after a compiled-form identity check, and the landed
+  ones are imported ([PCUICSubstitutionEta], [PCUICContextsEta], [PCUICAritiesEta]);
+  [has_sort_isTypeE] and [isWfArityE] are [PCUICTypingEtaNotions]'s.
 
-  **Local proofs of copy lemmas.** Ten lemmas of copies 10, 12, 14, 15 and 16 that validity
-  uses follow from landed facts (and, for two of them, from fields of the block) in a few
-  lines; they are PROVED in the section "Copy lemmas proved here", under the name and the
-  statement the copy commits to, so they are not forecasts. When the copy lands, delete them
-  and import it.
+  **Local proofs of copy lemmas.** The lemmas of copies 15 and 16 that validity uses and that
+  follow from landed facts (and, for one of them, from a field of the block) in a few lines are
+  PROVED in the section "Copy lemmas proved here", under the name and the statement the copy
+  commits to, so they are not forecasts. When the copy lands, delete them and import it. That
+  section also keeps [type_ws_cumul_pbE] (copy 14), whose landed twin differs in a binder name
+  (see its comment).
 
   **The hypotheses are satisfiable:** [wfE Σ] by any well-formed environment ([wf_incl_E]),
   each typing premise by a concrete derivation; [PCUICValidityEtaInstances] gives an instance
@@ -64,9 +68,10 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICTypingEtaNotions PCUICClosedBodies PCUICClosedTypEta PCUICWeakeningEnvTypEta
      PCUICWeakeningTypEta PCUICUnivSubstitutionTypEta PCUICWfUniversesEta
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICWsCumulEtaSubst PCUICEtaJoinSpec
-     PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICInversionEta.
+     PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICInversionEta
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta.
 (* Not imported: its [typing_spineE] is the twin of [PCUICGeneration.typing_spine], not of the
-   [PCUICArities] one defined below. *)
+   [PCUICArities] one ([PCUICAritiesEta.typing_spineE], the canonical one, imported above). *)
 From MetaRocq.PCUIC Require PCUICGenerationEta.
 
 From Equations Require Import Equations.
@@ -76,17 +81,6 @@ From Stdlib Require Import ssreflect ssrbool.
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 Arguments Nat.sub : simpl never.
-
-(** [PCUICTyping.v:456] [has_sort_isType]. *)
-Definition has_sort_isTypeE {cf Σ} {Γ T} s
-  : Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T.
-Proof.
-  repeat (eexists; tea).
-Defined.
-
-(** [PCUICTyping.v:470] [isWfArity]. *)
-Definition isWfArityE {cf:checker_flags} Σ (Γ : context) T :=
-  (isTypeE Σ Γ T × { ctx & { s & (destArity [] T = Some (ctx, s)) } }).
 
 (** ** FORECAST BLOCK
 
@@ -106,34 +100,6 @@ Definition isWfArityE {cf:checker_flags} Σ (Γ : context) T :=
 Local Set Warnings "-unexpected-implicit-declaration".
 
 (** *** Definitions *)
-
-(* FORECAST-ONLY: proved by copy 10 (PCUICSubstitutionEta.v, twin of PCUICSubstitution.v:45
-   subslet); delete when it lands. Text: PCUICSREta.v, verbatim. *)
-Inductive subsletE {cf:checker_flags} Σ (Γ : context) : list term -> context -> Type :=
-| emptysletE : subsletE Σ Γ [] []
-| cons_let_assE Δ s na t T : subsletE Σ Γ s Δ ->
-    Σ ;;; Γ |-E t : subst0 s T ->
-    subsletE Σ Γ (t :: s) (Δ ,, vass na T)
-| cons_let_defE Δ s na t T :
-    subsletE Σ Γ s Δ ->
-    Σ ;;; Γ |-E subst0 s t : subst0 s T ->
-    subsletE Σ Γ (subst0 s t :: s) (Δ ,, vdef na t T).
-
-(* FORECAST-ONLY: proved by copy 14 (PCUICAritiesEta.v, twin of PCUICArities.v:44
-   typing_spine); delete when it lands. Text: PCUICSREta.v, verbatim. *)
-Inductive typing_spineE {cf} Σ (Γ : context) : term -> list term -> term -> Type :=
-| type_spine_nilE ty ty' :
-    isTypeE Σ Γ ty ->
-    isTypeE Σ Γ ty' ->
-    ws_cumul_pbE Cumul Σ Γ ty ty' ->
-    typing_spineE Σ Γ ty [] ty'
-| type_spine_consE ty hd tl na A B B' :
-    isTypeE Σ Γ ty ->
-    isTypeE Σ Γ (tProd na A B) ->
-    ws_cumul_pbE Cumul Σ Γ ty (tProd na A B) ->
-    Σ ;;; Γ |-E hd : A ->
-    typing_spineE Σ Γ (subst10 hd B) tl B' ->
-    typing_spineE Σ Γ ty (hd :: tl) B'.
 
 (* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v, twin of PCUICSpine.v:903 ctx_inst_sub);
    delete when it lands. Text: PCUICSREta.v, verbatim. *)
@@ -179,44 +145,6 @@ Derive Signature for arity_spineE.
 Record wf_arity_spineE {cf:checker_flags} Σ Γ T args T' :=
 { wf_arity_spine_wfE : isTypeE Σ Γ T;
   wf_arity_spine_spineE : arity_spineE Σ Γ T args T' }.
-
-(** *** Copy 10 ([PCUICSubstitutionEta.v]) *)
-
-(* FORECAST-ONLY: proved by copy 10 (PCUICSubstitutionEta.v); delete when it lands.
-   Text of each field: PCUICSREta.v, class SRForecastCopy10, verbatim. *)
-Class ValForecastCopy10 := {
-  (* PCUICSubstitution.v:1824 isType_substitution *)
-  isType_substitutionE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ T},
-    subsletE Σ Γ s Γ' ->
-    isTypeE Σ (Γ ,,, Γ' ,,, Δ) T ->
-    isTypeE Σ (Γ ,,, subst_context s 0 Δ) (subst s #|Δ| T) ;
-  (* PCUICSubstitution.v:1795 substitution *)
-  substitutionE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ t T},
-    subsletE Σ Γ s Γ' ->
-    Σ ;;; Γ ,,, Γ' ,,, Δ |-E t : T ->
-    Σ ;;; Γ ,,, subst_context s 0 Δ |-E subst s #|Δ| t : subst s #|Δ| T ;
-  (* PCUICSubstitution.v:1865 substitution0 *)
-  substitution0E :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ n u U t T},
-    Σ ;;; Γ ,, vass n U |-E t : T -> Σ ;;; Γ |-E u : U ->
-    Σ ;;; Γ |-E t {0 := u} : T {0 := u}
-}.
-
-(** *** Copy 14 ([PCUICAritiesEta.v]) *)
-
-(* FORECAST-ONLY: proved by copy 14 (PCUICAritiesEta.v); delete when it lands.
-   Text: PCUICSREta.v, class SRForecastCopy14, verbatim. *)
-Class ValForecastCopy14 := {
-  (* PCUICArities.v:527 subslet_inds *)
-  subslet_indsE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {ind u mdecl idecl},
-    declared_inductive Σ.1 ind mdecl idecl ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    subsletE Σ [] (inds (inductive_mind ind) u (ind_bodies mdecl))
-      (subst_instance u (arities_context (ind_bodies mdecl)))
-}.
 
 (** *** Copy 15 ([PCUICSpineEta.v]) *)
 
@@ -370,22 +298,23 @@ Local Set Warnings "unexpected-implicit-declaration".
 Section ValidityEta.
 
 (* FORECAST-ONLY: one premise per class of the block above; delete each when its copy lands. *)
-Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
-  {V16 : ValForecastCopy16}.
+Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}.
 
 (** ** Copy lemmas proved here
 
   Each has the name and the statement its copy commits to (the text of [PCUICSREta.v] where
   that file has the lemma, else the base twin), and a proof from landed facts. Delete each when
-  its copy lands. *)
-
-(** Copy 10, [PCUICSubstitution.v:1306] [isType_wf_local]; text of [PCUICSREta.v]. *)
-Lemma isType_wf_localE {cf:checker_flags} {Σ : global_env_ext} {Γ T} :
-  isTypeE Σ Γ T -> wf_localE Σ Γ.
-Proof. intros h. exact (lift_typingE_wf_local h). Qed.
+  its copy lands. The ones of copies 10, 12 and 14 were deleted when those copies landed, except
+  [type_ws_cumul_pbE]. *)
 
 (** Copy 14, [PCUICArities.v:228] [type_ws_cumul_pb]; text of [PCUICSREta.v] (NOT TWIN,
-    ADDED [ClosedBodies]: closedbodies-register row 2). *)
+    ADDED [ClosedBodies]: closedbodies-register row 2). KEPT at the switch to frac/eta 59eb717d:
+    the landed [PCUICAritiesEta.type_ws_cumul_pbE] ([PCUICAritiesEta.v:240]) has the same type
+    (checked by ascription both ways) and the same implicit status, but names its [ClosedBodies]
+    binder [cbΣ] where this text, the statement note's, has [wfΣ]. Under the delete-and-import
+    rule a binder-name difference is a statement difference: it goes to the stream lead, it is
+    not adapted here. Every file that imports both imports this one after [PCUICAritiesEta], so
+    this one is the one in scope there. *)
 Lemma type_ws_cumul_pbE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {pb Γ t} T {U} :
   Σ ;;; Γ |-E t : T ->
   isTypeE Σ Γ U ->
@@ -399,72 +328,6 @@ Proof.
   - exact (ws_cumul_pbE_forget_spec c).
 Qed.
 
-(** Copy 14, [PCUICArities.v:213] [isType_tProd]; text of [PCUICSREta.v]. *)
-Lemma isType_tProdE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ} {na A B} :
-  isTypeE Σ Γ (tProd na A B) <~>
-  (isTypeRelE Σ Γ A na.(binder_relevance) × isTypeE Σ (Γ,, vass na A) B).
-Proof.
-  split; intro HH.
-  - destruct HH as (_ & s & H & _).
-    destruct (inversion_ProdE Σ wfΣ H) as [s1 [s2 [HA [HB _]]]].
-    apply lift_sorting_forget_univ in HA.
-    split; [exact HA|exact (has_sort_isTypeE _ HB)].
-  - destruct HH as [HA HB].
-    pose proof (lift_sorting_extract HA).
-    destruct HB as (_ & sB & HB & _).
-    eapply has_sort_isTypeE.
-    eapply typeE_Prod; eassumption.
-Defined.
-
-(** Copy 14, [PCUICArities.v:288] [isType_apply]; base twin. *)
-Lemma isType_applyE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ na A B t} :
-  isTypeE Σ Γ (tProd na A B) ->
-  Σ ;;; Γ |-E t : A ->
-  isTypeE Σ Γ (B {0 := t}).
-Proof.
-  intros hP ht.
-  destruct (fst (isType_tProdE (wfΣ := wfΣ)) hP) as [hA hB].
-  have sub : subsletE Σ Γ [t] [vass na A].
-  { constructor; [constructor|]. now rewrite subst_empty. }
-  exact (isType_substitutionE (Δ := []) sub hB).
-Qed.
-
-(** Copy 14, [PCUICArities.v:373] [type_mkProd_or_LetIn]; base twin. *)
-Lemma type_mkProd_or_LetInE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ} d {u t s} :
-  lift_typing typingE Σ Γ (j_decl_s d (Some u)) ->
-  Σ ;;; Γ ,, d |-E t : tSort s ->
-  match decl_body d return Type with
-  | Some b => Σ ;;; Γ |-E mkProd_or_LetIn d t : tSort s
-  | None => Σ ;;; Γ |-E mkProd_or_LetIn d t : tSort (Sort.sort_of_product u s)
-  end.
-Proof.
-  destruct d as [na [b|] dty] => [Hd Ht|Hd Ht]; rewrite /mkProd_or_LetIn /=.
-  - eapply typeE_Cumul.
-    + eapply typeE_LetIn; [exact (lift_sorting_forget_univ Hd)|exact Ht].
-    + eapply typeE_Sort; [exact (lift_typingE_wf_local Hd)|exact (typing_wf_sortE wfΣ Ht)].
-    + eapply convSpecE_cumulSpecE, red1_cumulSpecE. constructor.
-  - eapply typeE_Prod; [exact Hd|exact Ht].
-Qed.
-
-(** Copy 14, [PCUICArities.v:439] [type_it_mkProd_or_LetIn_sorts]; base twin. *)
-Lemma type_it_mkProd_or_LetIn_sortsE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-  {Γ Γ' us t s} :
-  sorts_local_ctx (lift_typing typingE) Σ Γ Γ' us ->
-  Σ ;;; Γ ,,, Γ' |-E t : tSort s ->
-  Σ ;;; Γ |-E it_mkProd_or_LetIn Γ' t : tSort (sort_of_products us s).
-Proof.
-  revert Γ us s t.
-  induction Γ' as [|[na [b|] ty] Γ' IH]; simpl; move=> Γ us s t equ Ht.
-  - destruct us => //.
-  - destruct equ as [equ hd].
-    eapply IH; [exact equ|].
-    exact (type_mkProd_or_LetInE (vdef na b ty) (lift_sorting_extract hd) Ht).
-  - destruct us as [|u us] => //. destruct equ as [equ hd].
-    simpl.
-    eapply IH; [exact equ|].
-    exact (type_mkProd_or_LetInE (vass na ty) hd Ht).
-Qed.
-
 (** Copy 15, [PCUICSpine.v:341] [typing_spine_refl]; base twin. *)
 Lemma typing_spine_reflE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T} :
   isTypeE Σ Γ T ->
@@ -472,20 +335,6 @@ Lemma typing_spine_reflE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T} :
 Proof.
   intros isty. constructor; [exact isty|exact isty|].
   exact (isType_ws_cumul_pbE_refl (pb := Cumul) Γ T isty).
-Qed.
-
-(** Copy 12, [PCUICContexts.v:145] [instantiate_minductive]; base twin. *)
-Lemma instantiate_minductiveE {cf:checker_flags} Σ ind mdecl u Γ t T :
-  wfE Σ.1 ->
-  declared_minductive Σ.1 ind mdecl ->
-  consistent_instance_ext Σ (ind_universes mdecl) u ->
-  (Σ.1, ind_universes mdecl) ;;; Γ |-E t : T ->
-  Σ ;;; subst_instance u Γ |-E subst_instance u t : subst_instance u T.
-Proof.
-  intros wfΣ isdecl Hu Ht.
-  unshelve eapply declared_minductive_to_gen in isdecl; eauto.
-  red in isdecl.
-  exact (typing_subst_instance_declE Σ Γ t T ind (InductiveDecl mdecl) u wfΣ isdecl Ht Hu).
 Qed.
 
 (** Copy 16, [PCUICInductives.v:1558] [declared_projection_type]; base twin, from the field

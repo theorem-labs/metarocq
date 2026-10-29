@@ -39,8 +39,8 @@
   ** Proof routes that differ from base (statements do not)
 
   - Case, the parameters' context: base gets [wf_local Σ (ind_params mdecl)@[u]] from
-    [on_minductive_wf_params_indices] and [wf_local_subst_instance_decl]; here it is the field
-    [on_minductive_wf_paramsE] of [SRForecastCopy14] (the twin of [PCUICArities.v:633]).
+    [on_minductive_wf_params_indices] and [wf_local_subst_instance_decl]; here it is copy 14's
+    [on_minductive_wf_paramsE] ([PCUICAritiesEta.v:665], the twin of [PCUICArities.v:633]).
   - Case, the type of the scrutinee's target: base types
     [mkApps (tInd ci (puinst p)) (pparams p ++ indices)] with [type_mkApps_arity],
     [declared_inductive_type_ws_cumul], [on_inductive_inst] and
@@ -53,9 +53,10 @@
   ** The forecast block
 
   The lemmas take the forecast classes of T2a and T1 as section [Context]s:
-  [ValForecastCopy10/14/15/16] ([PCUICValidityEta]) and [SRForecastCopy10/12/14/15/16/18]
-  ([PCUICSREta]); they are imported, never redefined. ONE copy lemma that soundness needs
-  is in none of them: base [ctx_inst_app_weak] ([PCUICInductiveInversion.v:3794], copy 18).
+  [ValForecastCopy15/16] ([PCUICValidityEta]) and [SRForecastCopy15/16/18] ([PCUICSREta]); they
+  are imported, never redefined (copies 10, 12 and 14 have landed and are imported). ONE copy
+  lemma that soundness needs is in none of them: base [ctx_inst_app_weak]
+  ([PCUICInductiveInversion.v:3794], copy 18).
   It is the one field of the class [BDForecastCopy18] below, with the base twin's statement.
   [Print Assumptions] in [BDToPCUICEtaInstances] shows every class as an argument.
 
@@ -75,7 +76,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLi
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd
      PCUICTypingEtaNotions PCUICClosedBodies PCUICClosedTypEta PCUICWeakeningTypEta
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
-     PCUICInversionEta PCUICValidityEta PCUICSREta BDTypingEta.
+     PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta
+     PCUICValidityEta PCUICSREta BDTypingEta.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -118,12 +120,10 @@ Local Set Warnings "unexpected-implicit-declaration".
 
 Section BDToPCUICEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's four ([PCUICValidityEta]), T1's six
+(* FORECAST-ONLY: one premise per class: T2a's two ([PCUICValidityEta]), T1's three
    ([PCUICSREta]), and this file's one; delete each when its copy lands. *)
-Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
-  {V16 : ValForecastCopy16} {F10 : SRForecastCopy10}
-  {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
+  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
 (** Base [wf_local_rel_subst1] ([BDToPCUIC.v:33]). *)
 Lemma wf_local_rel_subst1E `{checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Δ Γ na b t Γ' :

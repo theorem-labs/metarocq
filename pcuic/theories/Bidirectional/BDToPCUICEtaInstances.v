@@ -3,13 +3,14 @@
 (** * Satisfying instances of the lemmas of [Bidirectional/BDToPCUICEta] (row T6)
 
   **The forecast classes are section variables.** Every lemma of [BDToPCUICEta] that uses a
-  forecast fact takes the forecast classes as premises: T2a's [ValForecastCopy10/14/15/16]
-  ([PCUICValidityEta]), T1's [SRForecastCopy10/12/14/15/16/18] ([PCUICSREta]) and
-  [BDForecastCopy18] ([BDToPCUICEta]). No instance of a class exists before its copy lands, so
-  the instances below live in section [BDToPCUICEtaInstances], whose [Context] holds the eleven
-  classes, and APPLY the lemmas there. Everything else each instance needs (the environment, its
-  [wfE], every typing and bidirectional derivation) is proved here, in
-  [PCUICInversionEtaInstances] or in [BDTypingEtaInstances], with no class.
+  forecast fact takes the forecast classes as premises: T2a's [ValForecastCopy15/16]
+  ([PCUICValidityEta]), T1's [SRForecastCopy15/16/18] ([PCUICSREta]) and [BDForecastCopy18]
+  ([BDToPCUICEta]); copies 10, 12 and 14 have landed and their classes are gone. No instance of
+  a class exists before its copy lands, so the instances below live in section
+  [BDToPCUICEtaInstances], whose [Context] holds the six classes, and APPLY the lemmas there.
+  Everything else each instance needs (the environment, its [wfE], every typing and
+  bidirectional derivation) is proved here, in [PCUICInversionEtaInstances] or in
+  [BDTypingEtaInstances], with no class.
 
   **The environment** is [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]):
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]. The local contexts are those of
@@ -47,7 +48,8 @@ From MetaRocq.Common Require Import config BasicAst Universes Kernames Environme
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
      PCUICReduction PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICClosedBodies PCUICTypingEta
      PCUICTypingEtaNotions PCUICCumulativitySpecEtaClosureInstances PCUICEtaDefs PCUICEtaI5
-     PCUICWellScopedCumulativityEta PCUICInversionEtaInstances PCUICValidityEta PCUICSREta
+     PCUICWellScopedCumulativityEta PCUICInversionEtaInstances
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICValidityEta PCUICSREta
      BDTyping BDTypingEta BDTypingEtaInstances BDToPCUICEta.
 From MetaRocq.PCUIC Require BDToPCUIC.
 From Equations.Type Require Import Relation.
@@ -184,11 +186,9 @@ Qed.
 
 Section BDToPCUICEtaInstances.
 
-(* FORECAST-ONLY: the eleven classes of [BDToPCUICEta]; delete each when its copy lands. *)
-Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
-  {V16 : ValForecastCopy16} {F10 : SRForecastCopy10}
-  {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
+(* FORECAST-ONLY: the six classes of [BDToPCUICEta]; delete each when its copy lands. *)
+Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
+  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}.
 
 (** ** The prelude lemmas *)
 

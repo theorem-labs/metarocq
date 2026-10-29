@@ -87,9 +87,9 @@
 
   ** The forecast block
 
-  The lemmas take the forecast classes of [BDToPCUICEta] (T2a's [ValForecastCopy10/14/15/16],
-  T1's [SRForecastCopy10/12/14/15/16/18], [BDForecastCopy18]) as section [Context]s; they are
-  imported, never redefined. This file adds two classes:
+  The lemmas take the forecast classes of [BDToPCUICEta] (T2a's [ValForecastCopy15/16], T1's
+  [SRForecastCopy15/16/18], [BDForecastCopy18]) as section [Context]s; they are imported, never
+  redefined (copies 10, 12 and 14 have landed and are imported). This file adds two classes:
   - [T8Forecast]: the three T8 forms the proofs use, with the text of the pinned statements
     ([PCUICEtaT8Probe.v]); [T8Forecast_*_fit] type-checks each field against its pinned
     [Definition];
@@ -118,7 +118,8 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICWeakeningTypEta PCUICEtaFInst PCUICEtaFInstGlue
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
      PCUICEtaA6 PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
-     PCUICInversionEta PCUICValidityEta PCUICSREtaConv PCUICSREta BDTypingEta BDToPCUICEta.
+     PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta
+     PCUICValidityEta PCUICSREtaConv PCUICSREta BDTypingEta BDToPCUICEta.
 From MetaRocq.PCUIC Require BDFromPCUIC PCUICEtaT8Probe.
 
 From Stdlib Require Import ssreflect.
@@ -254,13 +255,11 @@ Qed.
 
 Section BDFromPCUICEta.
 
-(* FORECAST-ONLY: one premise per class: T2a's four ([PCUICValidityEta]), T1's six
+(* FORECAST-ONLY: one premise per class: T2a's two ([PCUICValidityEta]), T1's three
    ([PCUICSREta]), [BDToPCUICEta]'s one, and this file's two; delete each when its copy
    lands. *)
-Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
-  {V16 : ValForecastCopy16} {F10 : SRForecastCopy10}
-  {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
+Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
+  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
   {T8 : T8Forecast} {BF18 : BDFromForecastCopy18}.
 
 Lemma isTypeE_mkApps_Ind_head_arity {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}

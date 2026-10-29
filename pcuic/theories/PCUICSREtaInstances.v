@@ -3,12 +3,14 @@
 (** * Satisfying instances of the lemmas of [PCUICSREta] (row T1)
 
   **The forecast classes are section variables.** Every lemma of [PCUICSREta] that uses a forecast
-  fact takes the forecast classes as premises: T2a's [ValForecastCopy10/14/15/16]
-  ([PCUICValidityEta]) and [SRForecastCopy10/12/14/15/16/18] ([PCUICSREta]). No instance of a class
-  exists before its copy lands, so the instances below live in section [SRInstances], whose
-  [Context] holds the ten classes, and APPLY the lemmas there. Everything else each instance needs
-  (the environment, its [wfE], every typing derivation, every reduction step) is proved here or in
-  [PCUICInversionEtaInstances], with no class.
+  fact takes the forecast classes as premises: T2a's [ValForecastCopy15/16] ([PCUICValidityEta])
+  and [SRForecastCopy15/16/18] ([PCUICSREta]); copies 10, 12 and 14 have landed and their classes
+  are gone. No instance of a class exists before its copy lands, so the instances below live in
+  section [SRInstances], whose [Context] holds the five classes, and APPLY the lemmas there.
+  Everything else each instance needs (the environment, its [wfE], every typing derivation, every
+  reduction step) is proved here or in [PCUICInversionEtaInstances], with no class. The instances
+  of [subsletE_open_terms] and [substitution_ws_cumul_pbE_subslet], which left this file, are in
+  [PCUICTypingEtaCopies2Instances] and [PCUICSREtaConvInstances].
 
   **The environments** ([PCUICCumulativitySpecEtaClosureInstances], [PCUICEtaPrimOpInstance],
   [PCUICInversionEtaInstances]):
@@ -36,7 +38,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICClosedTypEta PCUICClosedBodies PCUICEtaI5 PCUICWellScopedCumulativityEta
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICWeakeningTypEta
      PCUICCumulativitySpecEtaClosureInstances PCUICEtaPrimOpInstance
-     PCUICInversionEta PCUICInversionEtaInstances PCUICValidityEta PCUICSREta.
+     PCUICInversionEta PCUICInversionEtaInstances
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICValidityEta PCUICSREta.
 From MetaRocq.PCUIC Require PCUICSR.
 
 #[local] Existing Instance default_checker_flags.
@@ -245,10 +248,8 @@ Proof. exists po_int_kn, po_int_body. split; [reflexivity|exact iv_po_declared_i
 Section SRInstances.
 
   (** The forecast classes: section variables (see the header). *)
-  Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
-    {V16 : ValForecastCopy16} {F10 : SRForecastCopy10}
-    {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
-    {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
+  Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
+    {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
 
   (** *** [sr_red1E] and its corollaries *)
 
@@ -448,15 +449,7 @@ Section SRInstances.
     spine_subst_inst_subst_kE (k := 1) (Δ' := [vass si_na (tRel 1)]) sri_spine.
   Definition spine_subst_inst_subst_term_kE_inst := spine_subst_inst_subst_term_kE (k := 1) (Δ' := tRel 1) sri_spine.
   Definition spine_subst_wt_termsE_inst := spine_subst_wt_termsE sri_spine.
-  Definition subsletE_open_terms_inst := subsletE_open_terms (Σ := si_Σ) (wfΣ := si_wfE) sri_subslet.
   Definition wf_subslet_skipnE_inst := wf_subslet_skipnE (n := 1) sri_wf_subslet.
-
-  Lemma substitution_ws_cumul_pbE_subslet_inst : si_Σ ;;; [] ⊢E iv_False ≤ iv_False.
-  Proof.
-    have hr := isType_ws_cumul_pbE_refl (Σ := si_Σ) (wfΣ := si_wfE) (pb := Cumul) [vass si_na si_P] (tRel 0)
-                 sri_rel_isType.
-    exact (substitution_ws_cumul_pbE_subslet (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Γ'' := []) sri_subslet hr).
-  Qed.
 
   Lemma substitution_ws_cumul_pb_subst_convE_inst : si_Σ ;;; [] ⊢E iv_False ≤ iv_False.
   Proof.

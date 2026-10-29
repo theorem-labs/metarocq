@@ -3,11 +3,11 @@
 (** * Satisfying instances of the lemmas of [Bidirectional/BDFromPCUICEta] (row T6)
 
   **The forecast classes are section variables.** Every lemma of [BDFromPCUICEta] takes the
-  forecast classes as premises: the eleven of [BDToPCUICEta] (T2a's
-  [ValForecastCopy10/14/15/16], T1's [SRForecastCopy10/12/14/15/16/18], [BDForecastCopy18]),
-  [T8Forecast] (the pinned T8 statements) and [BDFromForecastCopy18]. No instance of a class
-  exists before its row lands, so the instances below live in section
-  [BDFromPCUICEtaInstances], whose [Context] holds the thirteen classes, and APPLY the lemmas
+  forecast classes as premises: the six of [BDToPCUICEta] (T2a's [ValForecastCopy15/16], T1's
+  [SRForecastCopy15/16/18], [BDForecastCopy18]; copies 10, 12 and 14 have landed and their
+  classes are gone), [T8Forecast] (the pinned T8 statements) and [BDFromForecastCopy18]. No
+  instance of a class exists before its row lands, so the instances below live in section
+  [BDFromPCUICEtaInstances], whose [Context] holds the eight classes, and APPLY the lemmas
   there. Everything else each instance needs (the environment, its [wfE], every typing
   derivation) is built here or in the landed instance files ([PCUICInversionEtaInstances],
   [BDTypingEtaInstances], [BDToPCUICEtaInstances]), with no class.
@@ -69,7 +69,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICTypingEtaInd PCUICTypingEtaNotions PCUICCumulativitySpecEtaClosureInstances PCUICEtaDefs
      PCUICEtaI5 PCUICWellScopedCumulativity PCUICWellScopedCumulativityEta PCUICEtaA6 PCUICEquality
      PCUICConversionEtaCongr PCUICEtaFInst PCUICGuardClosure PCUICClosedTypEta
-     PCUICEtaPrimOpInstance PCUICInversionEtaInstances PCUICValidityEta PCUICSREta
+     PCUICEtaPrimOpInstance PCUICInversionEtaInstances
+     PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICValidityEta PCUICSREta
      BDTyping BDTypingEta BDTypingEtaInstances BDToPCUICEta BDToPCUICEtaInstances BDFromPCUICEta.
 From MetaRocq.PCUIC Require BDFromPCUIC PCUICFixWitness.
 From Equations.Type Require Import Relation.
@@ -338,11 +339,9 @@ Qed.
 
 Section BDFromPCUICEtaInstances.
 
-(* FORECAST-ONLY: the thirteen classes of [BDFromPCUICEta]; delete each when its row lands. *)
-Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
-  {V16 : ValForecastCopy16} {F10 : SRForecastCopy10}
-  {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
-  {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
+(* FORECAST-ONLY: the eight classes of [BDFromPCUICEta]; delete each when its row lands. *)
+Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
+  {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
   {T8 : T8Forecast} {BF18 : BDFromForecastCopy18}.
 
 (** ** Through an η conversion *)
