@@ -122,6 +122,9 @@ theories/Bidirectional/BDToPCUIC.v
 theories/Bidirectional/BDFromPCUIC.v
 theories/Bidirectional/BDUnique.v
 theories/Bidirectional/BDStrengthening.v
+# Bidirectional typing over the eta relations (T6): the judgments, their induction principle, instances
+theories/Bidirectional/BDTypingEta.v
+theories/Bidirectional/BDTypingEtaInstances.v
 
 theories/PCUICWeakeningEnv.v
 theories/PCUICWeakeningConfig.v
