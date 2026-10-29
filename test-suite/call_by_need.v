@@ -14,7 +14,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICTyping PCUICWellScopedCumulativ
 From MetaRocq.SafeChecker Require Import PCUICWfEnv PCUICWfEnvImpl PCUICCallByNeed
   PCUICCallByNeedSoundHookProof.
 From MetaRocq.TestSuite Require Import prim_ops_instance.
-From Corelib Require Import PrimInt63.
+From Corelib Require Import PrimInt63 PrimString.
 
 Definition t_na : aname := {| binder_name := nAnon; binder_relevance := Relevant |}.
 Definition t_nat : inductive :=
@@ -260,7 +260,8 @@ End WellTyped.
   The environments of [prim_ops_instance], each with its proof of [wf_ext]: [Σ_po_bool]
   registers [eqb : int -> int -> bool] as [Int63eq] (a boolean result, read back through the
   registered [bool]), [Σ_po] registers [land : int -> int -> int] as [Int63land] (an integer
-  result). The abstract environments are the canonical ones built from them. In a reflection
+  result) and [Σ_po_str] registers [length : string -> int] as [Stringlength] (a string
+  argument). The abstract environments are the canonical ones built from them. In a reflection
   proof the kernel compares [P true] with [P (decide ...)], where the decision reduces to
   [true] only by primitive operations; [t_refl_u] below has that shape. *)
 
@@ -342,5 +343,24 @@ Section PrimOps.
   (** The same result with the rest is not [false 5]: two different constructors, no rule. *)
   Lemma prim_rest_against_other_constructor :
     cbn_conv_answer _ po_bool_X Conv [] t_eqb_over (tApp t_false (t_int 5%uint63)) = CbnNoRule.
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** A string operation: [length "abc"] is the integer literal [3]. The argument is a
+    [primString] literal, the result an integer read back as [tPrim]. *)
+  Definition po_str_X : (@canonical_abstract_env_impl default_checker_flags guard).π2.π1 :=
+    @build_reference_impl_ext default_checker_flags guard Σ_po_str Σ_po_str_wf.
+
+  Definition t_str (s : PrimString.string) : term := tPrim (prim_string s).
+  Definition t_length (a : term) : term := tApp (tConst po_length_kn []) a.
+
+  Lemma prim_string_result :
+    cbn_conv _ po_str_X Conv [] (t_length (t_str "abc"%pstring)) (t_int 3%uint63) = true.
+  Proof. vm_compute. reflexivity. Qed.
+
+  (** An argument that is not a literal: with [s : string] in the context, [length s] is a
+    neutral constant, which is not the literal [3]. *)
+  Lemma prim_string_stuck_on_variable :
+    cbn_conv_answer _ po_str_X Conv [vass t_na (tConst po_str_kn [])]
+      (t_length (tRel 0)) (t_int 3%uint63) = CbnNoRule.
   Proof. vm_compute. reflexivity. Qed.
 End PrimOps.

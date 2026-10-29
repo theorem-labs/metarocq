@@ -18,6 +18,13 @@
     this instance covers the clauses for boolean results ([on_prim_bool_decl],
     [retro_bool], and the boolean readback, which reads [retro_bool]).
 
+    [Σ_po_str] declares [string : Set], [int : Set] and the operation
+    [length : string -> int]; it registers [length] as [Stringlength], [string] as
+    the string type and [int] as the integer type.  [Stringlength]'s argument tag
+    is [primString]: this instance covers the clauses that read an argument tag
+    other than [primInt] ([prim_op_tag_declared] at [primString], and
+    [retro_string]).
+
     The proofs are direct: no checker run, no normalization assumption. *)
 
 From MetaRocq.Utils Require Import utils.
@@ -347,7 +354,129 @@ Proof.
         split; [now right; left|reflexivity].
 Qed.
 
+(** ** The string instance
+
+    [Σ_po_str] declares the string type constant [string : Set], the integer type
+    constant [int : Set] and the operation [length : string -> int], and registers
+    [length] as [Stringlength], [string] as the string type and [int] as the
+    integer type.  [Stringlength] consumes a [primString] argument: this instance
+    covers the clauses that read an argument tag other than [primInt]
+    ([prim_op_tag_declared] at [primString], and [retro_string]). *)
+
+Definition po_str_kn : kername := (MPfile po_dp, "string").
+Definition po_length_kn : kername := (MPfile po_dp, "length").
+
+Definition po_str_body : constant_body :=
+  {| cst_type := tSort Sort.type0; cst_body := None;
+     cst_universes := Monomorphic_ctx; cst_relevance := Relevant |}.
+
+Definition po_length_ty : term := tImpl (tConst po_str_kn []) (tConst po_int_kn []).
+
+Definition po_length_body : constant_body :=
+  {| cst_type := po_length_ty; cst_body := None;
+     cst_universes := Monomorphic_ctx; cst_relevance := Relevant |}.
+
+Definition po_str_retro : Retroknowledge.t :=
+  {| Retroknowledge.retro_int63 := Some po_int_kn;
+     Retroknowledge.retro_float64 := None;
+     Retroknowledge.retro_string := Some po_str_kn;
+     Retroknowledge.retro_array := None;
+     Retroknowledge.retro_ops := [(po_length_kn, Stringlength)];
+     Retroknowledge.retro_bool := None |}.
+
+(** The prefix [length] is checked against: [int] and [string]. *)
+Definition Σ_po_str_pre : global_env :=
+  {| universes := po_univs;
+     declarations := [(po_str_kn, ConstantDecl po_str_body);
+                      (po_int_kn, ConstantDecl po_int_body)];
+     retroknowledge := po_str_retro |}.
+
+Definition Σ_po_str0 : global_env :=
+  {| universes := po_univs;
+     declarations := [(po_length_kn, ConstantDecl po_length_body);
+                      (po_str_kn, ConstantDecl po_str_body);
+                      (po_int_kn, ConstantDecl po_int_body)];
+     retroknowledge := po_str_retro |}.
+
+Definition Σ_po_str : global_env_ext := (Σ_po_str0, Monomorphic_ctx).
+
+(** [Σ_po_str] registers an operation on strings. *)
+Lemma Σ_po_str_registers : prim_op_of Σ_po_str0 po_length_kn = Some Stringlength.
+Proof. reflexivity. Qed.
+
+Lemma po_str_retro_wf : Retroknowledge.wf_retro po_str_retro.
+Proof.
+  constructor; cbn.
+  - constructor; [intros []|constructor].
+  - intros c [<-|[]] h; cbn in h.
+    repeat destruct h as [h|h]; try discriminate; try contradiction.
+  - unfold Retroknowledge.types_distinct, Retroknowledge.disjoint_opt; cbn;
+      repeat split; intros c H1 H2; try discriminate;
+      injection H1 as <-; discriminate.
+  - intros i [=].
+Qed.
+
+(** [string] has type [Set] in any environment that declares it. *)
+Lemma po_str_typed (Σ : global_env_ext) Γ :
+  wf_local Σ Γ -> declared_constant Σ po_str_kn po_str_body ->
+  Σ ;;; Γ |- tConst po_str_kn [] : tSort Sort.type0.
+Proof.
+  intros wfΓ hd.
+  change (tSort Sort.type0) with (po_str_body.(cst_type)@[[]]).
+  eapply type_Const; tea. cbn. reflexivity.
+Qed.
+
+Lemma po_length_type_typed :
+  (Σ_po_str_pre, Monomorphic_ctx) ;;; [] |- po_length_ty
+    : tSort (Sort.sort_of_product Sort.type0 Sort.type0).
+Proof.
+  have hdi : declared_constant Σ_po_str_pre po_int_kn po_int_body by now right; left.
+  have hds : declared_constant Σ_po_str_pre po_str_kn po_str_body by now left.
+  have hdom : forall Γ, wf_local (Σ_po_str_pre, Monomorphic_ctx) Γ ->
+      lift_typing typing (Σ_po_str_pre, Monomorphic_ctx) Γ
+        (j_vass_s (mkBindAnn nAnon rel_of_Type) (tConst po_str_kn []) Sort.type0).
+  { intros Γ wfΓ. split; [exact tt|]. exists Sort.type0. repeat split.
+    now apply po_str_typed. }
+  unfold po_length_ty, tImpl.
+  apply type_Prod; [apply hdom; constructor|].
+  apply po_int_typed; [|exact hdi].
+  constructor; [constructor|]. eapply lift_sorting_forget_univ, hdom. constructor.
+Qed.
+
+Lemma Σ_po_str_wf : ∥ wf_ext Σ_po_str ∥.
+Proof.
+  constructor. split; [|exact po_udecl_ok].
+  split; [exact po_univs_ok|]. split; [exact po_str_retro_wf|].
+  cbn. constructor; [constructor; [constructor; [constructor|]|]|].
+  - (* int *)
+    econstructor.
+    + constructor.
+    + exact po_udecl_ok.
+    + cbn. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split. apply po_int_type.
+    + cbn. intros op hop. discriminate hop.
+  - (* string *)
+    econstructor.
+    + constructor; [intros [=]|constructor].
+    + exact po_udecl_ok.
+    + cbn. split; [exact tt|]. exists (Sort.super Sort.type0). repeat split. apply po_int_type.
+    + cbn. intros op hop. discriminate hop.
+  - (* length *)
+    econstructor.
+    + constructor; [intros [=]|constructor; [intros [=]|constructor]].
+    + exact po_udecl_ok.
+    + cbn. split; [exact tt|].
+      exists (Sort.sort_of_product Sort.type0 Sort.type0).
+      repeat split. exact po_length_type_typed.
+    + cbn. intros op hop. injection hop as <-.
+      constructor; cbn; try reflexivity.
+      * exists po_length_ty. split; [reflexivity|]. apply cumul_Refl.
+      * constructor; [|constructor].
+        exists po_str_kn, po_str_body; split; [reflexivity|now left|split; reflexivity].
+      * exists po_int_kn, po_int_body; split; [reflexivity|now right; left|split; reflexivity].
+Qed.
+
 (** The instances rest on nothing beyond the primitive libraries: no axiom of
     their own, no admitted lemma. *)
 Print Assumptions Σ_po_wf.
 Print Assumptions Σ_po_bool_wf.
+Print Assumptions Σ_po_str_wf.
