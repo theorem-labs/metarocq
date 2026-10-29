@@ -183,7 +183,7 @@ Fixpoint eta_safe (Σ : global_env) (t : term) : bool :=
   match t with
   | tEvar _ l => forallb (eta_safe Σ) l
   | tProd _ A B => eta_safe Σ A && eta_safe Σ B
-  | tLambda _ A b => eta_safe Σ A && eta_safe Σ b
+  | tLambda _ _ b => eta_safe Σ b
   | tLetIn _ b B c => eta_safe Σ b && eta_safe Σ B && eta_safe Σ c
   | tApp f a => notPrimHead f && spine_safe Σ t && eta_safe Σ f && eta_safe Σ a
   | tCase _ p c brs =>
@@ -195,6 +195,50 @@ Fixpoint eta_safe (Σ : global_env) (t : term) : bool :=
   | tPrim p => test_prim (eta_safe Σ) p
   | _ => true
   end.
+
+(** WHAT THIS INVARIANT STILL EXCLUDES (after change 3, the λ clause):
+    - a λ as the scrutinee of a [tCase] ([notLam c] in the [tCase] clause);
+    - a λ as the argument of a [tProj] ([notLam c] in the [tProj] clause);
+    - a λ as the [rarg]-th argument of an applied fixpoint ([spine_safe]);
+    - an applied primitive value ([notPrimHead] on every application head).
+    In EVERY subterm except a λ DOMAIN, which change 3 no longer reads.
+
+    ATTEMPTS TO BREAK change 3, all 2026-10-29, "not found by these attempts":
+    (a) reachability of the four positions from a λ domain:
+        - δ unfolding INTO a domain: the unfolded body stays in the domain; no rule
+          reads a domain, so it never reaches an elimination position;
+        - δ unfolding OUT of a domain: a δ step rewrites a [tConst] occurrence in
+          place; it cannot move material out of the domain it sits in;
+        - case predicate contexts ([pcontext]) and [preturn]: [preturn] IS read by
+          this invariant; [pcontext] declarations are not λ domains, and ι uses the
+          BRANCH context, not the predicate context;
+        - branch contexts ([bcontext]): [iota_red] does inject their LET BODIES into
+          the branch body through [expand_lets], so context material does reach term
+          positions — but a let body is a [decl_body], NOT a λ domain, so this is
+          orthogonal to change 3 (it is a pre-existing blind spot of [eta_safe],
+          harmless here because [Good] comes from typing, never from preservation);
+        - fixpoint and cofixpoint declared types ([dtype]): [unfold_fix] substitutes
+          the [tFix] terms, not the [dtype]s; a recursive call in a scrutinee
+          position becomes a [tFix], which is not a λ. [dtype] is read by this
+          invariant anyway.
+    (b) a ROOT'S OWN SIDE CONDITION becoming (or ceasing to be) satisfied by the
+        erasure, with the shape unchanged — the shape of the η refutation:
+        - substitution INTO a domain ([(λy. λz:y. b) a ↦ λz:a. b]): a domain can
+          indeed receive material from outside, but no side condition of any root
+          ([nth_error brs], [context_assumptions], [nth_error args], [unfold_fix],
+          [is_constructor], [prim_op_of], the literal spine) reads a λ domain, so
+          none of them changes;
+        - lifting: maps a domain to a domain, changes no shape and no side condition;
+        - substitution OUT of a domain: no rule substitutes a domain for a variable;
+          domain and body are distinct fields and no rule swaps them. β, the only
+          rule that consumes a λ, DISCARDS the domain;
+        - [is_constructor] / [isConstruct_app]: these read spine arguments, which come
+          from applications, let bodies and [fix_subst], never from a domain.
+    FOUND, and the reason (A) and (B) are coupled: with change 3 alone, the λ-DOMAIN
+    congruence case of [pe_postpone_gen] would recurse into a domain and apply the
+    roots there, where this invariant is now silent. (B) removes that case: on a
+    canonical source the domain is [canon_dom], a sort, which has no [red1] step. So
+    change 3 must not be made without (B). *)
 
 Lemma eta_safe_case_scrut Σ ci p c brs : eta_safe Σ (tCase ci p c brs) -> notLam c.
 Proof. cbn. intros h. rtoProp. assumption. Qed.
@@ -226,7 +270,7 @@ Qed.
 
 (** The η-expansion of a literal is never [eta_safe]. *)
 Lemma eta_safe_lit_eta Σ na A l : eta_safe Σ (eta_redex na A (term_of_lit l)) = false.
-Proof. destruct l; cbn; now rewrite andb_false_r. Qed.
+Proof. destruct l; reflexivity. Qed.
 
 Lemma forallb_app_cons_mid {A} (f : A -> bool) pre a post : forallb f (pre ++ a :: post) -> f a.
 Proof. rewrite forallb_app. move/andP => [_ /= /andP [h _]]. exact h. Qed.
@@ -843,9 +887,9 @@ Section TypedSafe.
     - (* tProd *) invE inversion_ProdE ht hi. destruct hi as (s1 & s2 & hA & hB & _).
       destruct hA as (_ & s & hA & _). hnf in hA.
       apply/andP; split; apply_ih.
-    - (* tLambda *) invE inversion_LambdaE ht hi. destruct hi as (B & hA & hb & _).
-      destruct hA as (_ & s & hA & _). hnf in hA.
-      apply/andP; split; apply_ih.
+    - (* tLambda: the DOMAIN is no longer inspected (change 3) *)
+      invE inversion_LambdaE ht hi. destruct hi as (B & hA & hb & _).
+      apply_ih.
     - (* tLetIn *) invE inversion_LetInE ht hi. destruct hi as (A & hbB & hc & _).
       destruct hbB as (hb & s & hB & _). hnf in hb. hnf in hB.
       rtoProp; repeat split; apply_ih.
@@ -2715,7 +2759,7 @@ Section FixRoot.
       have hgoodB : Good Σ (Γ ,, vass na A) B.
       { intros B' hB.
         have hr : red Σ Γ t (tLambda na A B') by (eapply rt_trans; [exact hred|]; apply red_abs; [apply rt_refl|exact hB]).
-        have hs := hgood _ hr. cbn in hs. move/andP: hs => [_ hs]. exact hs. }
+        have hs := hgood _ hr. cbn in hs. exact hs. }
       destruct (IH (Γ ,, vass na A) B _ idx _ narg (lift0 1 fn) hszB hgoodB hpB
                   (C3R.lift_unfold_fix 1 0 mfix idx narg fn hunf) (is_constructor_lift_snoc _ _ hc))
         as (w' & hw' & hpw').
@@ -2755,7 +2799,7 @@ Section PrimRoot.
   Proof.
     intros hg B' hB.
     have hr : red Σ Γ (tLambda na A B) (tLambda na A B') by (apply red_abs; [apply rt_refl|exact hB]).
-    have hs := hg _ hr. cbn in hs. move/andP: hs => [_ hs]. exact hs.
+    have hs := hg _ hr. cbn in hs. exact hs.
   Qed.
 
   Lemma Good_arg Γ h pre a post : Good Σ Γ (mkApps h (pre ++ a :: post)) -> Good Σ Γ a.
@@ -2980,11 +3024,9 @@ Section GoodTransport.
     good_proj hg hr'.
   Qed.
 
-  Lemma Good_lam_dom na A M : Good Σ Γ (tLambda na A M) -> Good Σ Γ A.
-  Proof.
-    intros hg A' hr. have hr' : red Σ Γ (tLambda na A M) (tLambda na A' M) by (apply red_abs; [exact hr|apply rt_refl]).
-    good_proj hg hr'.
-  Qed.
+  (** [Good_lam_dom] is GONE with change 3: [eta_safe] no longer reads λ domains, so
+      [Good] of a λ says nothing about its domain. The λ-domain congruence case of
+      [pe_postpone_gen] is discharged by the canonicity premise (B) instead. *)
 
   Lemma Good_prod_dom na A B : Good Σ Γ (tProd na A B) -> Good Σ Γ A.
   Proof.
@@ -3237,14 +3279,184 @@ End RecordSteps.
   reflexive step needs a reflexive source step. Nothing here needs a strict
   decrease: the [size'] measure is confined to the fixpoint and primitive roots. *)
 
+(** ** Canonicity of subterms (premise (B) of [pe_postpone]) *)
+
+Lemma canon_map_inv l : map canon l = l -> All (fun x => canon x = x) l.
+Proof.
+  induction l as [|a l IH]; cbn; intros e; [constructor|].
+  injection e as e1 e2. constructor; [exact e1|exact (IH e2)].
+Qed.
+
+Lemma canon_branches_inv brs :
+  map (canon_branch canon) brs = brs -> All (fun br => canon (bbody br) = bbody br) brs.
+Proof.
+  induction brs as [|br brs IH]; cbn; intros e; [constructor|].
+  injection e as e1 e2. constructor; [|exact (IH e2)].
+  exact (f_equal bbody e1).
+Qed.
+
+Lemma canon_defs_inv (mfix : mfixpoint term) :
+  map (canon_def canon) mfix = mfix ->
+  All (fun d => canon (dtype d) = dtype d × canon (dbody d) = dbody d) mfix.
+Proof.
+  induction mfix as [|d mfix IH]; cbn; intros e; [constructor|].
+  injection e as e1 e2. constructor; [|exact (IH e2)].
+  split; [exact (f_equal dtype e1)|exact (f_equal dbody e1)].
+Qed.
+
+Lemma canon_Lam_inv' na A b : canon (tLambda na A b) = tLambda na A b -> A = canon_dom × canon b = b.
+Proof. cbn. intros e. injection e as _ e1 e2. split; [now symmetry|exact e2]. Qed.
+
+Lemma canon_App_inv' f a : canon (tApp f a) = tApp f a -> canon f = f × canon a = a.
+Proof. cbn. intros e. injection e as e1 e2. split; assumption. Qed.
+
+Lemma canon_Prod_inv' na A B : canon (tProd na A B) = tProd na A B -> canon A = A × canon B = B.
+Proof. cbn. intros e. injection e as _ e1 e2. split; assumption. Qed.
+
+Lemma canon_LetIn_inv' na b ty x :
+  canon (tLetIn na b ty x) = tLetIn na b ty x -> [× canon b = b, canon ty = ty & canon x = x].
+Proof. cbn. intros e. injection e as _ e1 e2 e3. split; assumption. Qed.
+
+Lemma canon_Proj_inv' pr c : canon (tProj pr c) = tProj pr c -> canon c = c.
+Proof. cbn. intros e. now injection e as e. Qed.
+
+Lemma canon_Case_inv' ci p c brs :
+  canon (tCase ci p c brs) = tCase ci p c brs ->
+  [× All (fun x => canon x = x) p.(pparams), canon p.(preturn) = p.(preturn), canon c = c &
+     All (fun br => canon (bbody br) = bbody br) brs].
+Proof.
+  cbn. intros e. injection e as e1 e2 e3.
+  destruct p as [pars u pctx pret]; injection e1 as f1 _ f4; cbn.
+  split; [now apply canon_map_inv|exact f4|exact e2|now apply canon_branches_inv].
+Qed.
+
+Lemma canon_Fix_inv' mfix idx :
+  canon (tFix mfix idx) = tFix mfix idx ->
+  All (fun d => canon (dtype d) = dtype d × canon (dbody d) = dbody d) mfix.
+Proof. cbn. intros e. injection e as e1. now apply canon_defs_inv. Qed.
+
+Lemma canon_CoFix_inv' mfix idx :
+  canon (tCoFix mfix idx) = tCoFix mfix idx ->
+  All (fun d => canon (dtype d) = dtype d × canon (dbody d) = dbody d) mfix.
+Proof. cbn. intros e. injection e as e1. now apply canon_defs_inv. Qed.
+
+Lemma canon_Evar_inv' ev l : canon (tEvar ev l) = tEvar ev l -> All (fun x => canon x = x) l.
+Proof. cbn. intros e. injection e as e. now apply canon_map_inv. Qed.
+
+Lemma canon_PrimArr_inv' a :
+  canon (tPrim (primArray; primArrayModel a)) = tPrim (primArray; primArrayModel a) ->
+  [× canon a.(array_type) = a.(array_type), canon a.(array_default) = a.(array_default) &
+     All (fun x => canon x = x) a.(array_value)].
+Proof.
+  cbn. intros e. injection e as e.
+  split; [exact (f_equal array_type e)|exact (f_equal array_default e)|].
+  apply canon_map_inv. exact (f_equal array_value e).
+Qed.
+
+(** A [pe]-target of a sort is that sort: only [pe_Sort] applies. *)
+Lemma pe_Sort_inv s u : pe (tSort s) u -> u = tSort s.
+Proof. intros h. remember (tSort s) as x eqn:E. revert E. destruct h; intros E; now try discriminate E. Qed.
+
 Section Assembly.
   Context {cf : checker_flags} {Σ : global_env} (cb : ClosedBodies Σ).
 
+  (** (B): the source is CANONICAL, bundled with [Good]. Canonicity replaces the
+      λ-domain projection that change 3 removed: a canonical λ has domain
+      [canon_dom], a sort, which has no [red1] step. *)
+  Definition GoodC (Γ : context) (t : term) : Type := Good Σ Γ t × (canon t = t).
+
+  Lemma GoodC_lam_body Γ na A M : GoodC Γ (tLambda na A M) -> GoodC (Γ ,, vass na A) M.
+  Proof. intros [hg hc]. split; [exact (Good_lam_body _ _ _ _ hg)|exact (snd (canon_Lam_inv' _ _ _ hc))]. Qed.
+
+  Lemma GoodC_lam_dom Γ na A M : GoodC Γ (tLambda na A M) -> A = canon_dom.
+  Proof. intros [_ hc]. exact (fst (canon_Lam_inv' _ _ _ hc)). Qed.
+
+  Lemma GoodC_app_l Γ f x : GoodC Γ (tApp f x) -> GoodC Γ f.
+  Proof. intros [hg hc]. split; [exact (Good_app_l _ _ _ _ hg)|exact (fst (canon_App_inv' _ _ hc))]. Qed.
+
+  Lemma GoodC_app_r Γ f x : GoodC Γ (tApp f x) -> GoodC Γ x.
+  Proof. intros [hg hc]. split; [exact (Good_app_r _ _ _ _ hg)|exact (snd (canon_App_inv' _ _ hc))]. Qed.
+
+  Lemma GoodC_prod_dom Γ na A B : GoodC Γ (tProd na A B) -> GoodC Γ A.
+  Proof. intros [hg hc]. split; [exact (Good_prod_dom _ _ _ _ _ hg)|exact (fst (canon_Prod_inv' _ _ _ hc))]. Qed.
+
+  Lemma GoodC_prod_cod Γ na A B : GoodC Γ (tProd na A B) -> GoodC (Γ ,, vass na A) B.
+  Proof. intros [hg hc]. split; [exact (Good_prod_cod _ _ _ _ _ hg)|exact (snd (canon_Prod_inv' _ _ _ hc))]. Qed.
+
+  Lemma GoodC_letin_def Γ na b ty x : GoodC Γ (tLetIn na b ty x) -> GoodC Γ b.
+  Proof. intros [hg hc]. destruct (canon_LetIn_inv' _ _ _ _ hc) as [h1 _ _].
+    split; [exact (Good_letin_def _ _ _ _ _ _ hg)|exact h1]. Qed.
+
+  Lemma GoodC_letin_ty Γ na b ty x : GoodC Γ (tLetIn na b ty x) -> GoodC Γ ty.
+  Proof. intros [hg hc]. destruct (canon_LetIn_inv' _ _ _ _ hc) as [_ h2 _].
+    split; [exact (Good_letin_ty _ _ _ _ _ _ hg)|exact h2]. Qed.
+
+  Lemma GoodC_letin_body Γ na b ty x : GoodC Γ (tLetIn na b ty x) -> GoodC (Γ ,, vdef na b ty) x.
+  Proof. intros [hg hc]. destruct (canon_LetIn_inv' _ _ _ _ hc) as [_ _ h3].
+    split; [exact (Good_letin_body _ _ _ _ _ _ hg)|exact h3]. Qed.
+
+  Lemma GoodC_proj Γ pr c : GoodC Γ (tProj pr c) -> GoodC Γ c.
+  Proof. intros [hg hc]. split; [exact (Good_proj _ _ _ _ hg)|exact (canon_Proj_inv' _ _ hc)]. Qed.
+
+  Lemma GoodC_case_discr Γ ci p c brs : GoodC Γ (tCase ci p c brs) -> GoodC Γ c.
+  Proof. intros [hg hc]. destruct (canon_Case_inv' _ _ _ _ hc) as [_ _ h3 _].
+    split; [exact (Good_case_discr _ _ _ _ _ _ hg)|exact h3]. Qed.
+
+  Lemma GoodC_case_ret Γ ci p c brs :
+    GoodC Γ (tCase ci p c brs) -> GoodC (Γ ,,, inst_case_predicate_context p) (preturn p).
+  Proof. intros [hg hc]. destruct (canon_Case_inv' _ _ _ _ hc) as [_ h2 _ _].
+    split; [exact (Good_case_ret _ _ _ _ _ _ hg)|exact h2]. Qed.
+
+  Lemma GoodC_case_params Γ ci p c brs : GoodC Γ (tCase ci p c brs) -> All (GoodC Γ) (pparams p).
+  Proof.
+    intros [hg hc]. destruct (canon_Case_inv' _ _ _ _ hc) as [h1 _ _ _].
+    eapply All_impl; [exact (All_mix (Good_case_params _ _ _ _ _ _ hg) h1)|].
+    intros x [a b]. exact (a, b).
+  Qed.
+
+  Lemma GoodC_case_brs Γ ci p c brs :
+    GoodC Γ (tCase ci p c brs) ->
+    All (fun br => GoodC (Γ ,,, inst_case_branch_context p br) (bbody br)) brs.
+  Proof.
+    intros [hg hc]. destruct (canon_Case_inv' _ _ _ _ hc) as [_ _ _ h4].
+    eapply All_impl; [exact (All_mix (Good_case_brs _ _ _ _ _ _ hg) h4)|].
+    intros x [a b]. exact (a, b).
+  Qed.
+
+  Lemma GoodC_evar Γ ev l : GoodC Γ (tEvar ev l) -> All (GoodC Γ) l.
+  Proof.
+    intros [hg hc]. eapply All_impl; [exact (All_mix (Good_evar _ _ _ _ hg) (canon_Evar_inv' _ _ hc))|].
+    intros x [a b]. exact (a, b).
+  Qed.
+
+  Lemma GoodC_fix_gen (isfix : bool) Γ mfix idx :
+    let T := if isfix then tFix else tCoFix in
+    GoodC Γ (T mfix idx) ->
+    All (fun d => GoodC Γ (dtype d) × GoodC (Γ ,,, fix_context mfix) (dbody d)) mfix.
+  Proof.
+    intros T [hg hc].
+    have hcs : All (fun d => canon (dtype d) = dtype d × canon (dbody d) = dbody d) mfix
+      by (destruct isfix; [exact (canon_Fix_inv' _ _ hc)|exact (canon_CoFix_inv' _ _ hc)]).
+    eapply All_impl; [exact (All_mix (Good_fix_gen _ _ isfix mfix idx hg) hcs)|].
+    intros d [[g1 g2] [c1 c2]]. exact ((g1, c1), (g2, c2)).
+  Qed.
+
+  Lemma GoodC_prim_arr Γ a :
+    GoodC Γ (tPrim (primArray; primArrayModel a)) ->
+    GoodC Γ a.(array_default) × GoodC Γ a.(array_type) × All (GoodC Γ) a.(array_value).
+  Proof.
+    intros [hg hc]. destruct (canon_PrimArr_inv' _ hc) as [c1 c2 c3].
+    destruct (Good_prim_arr _ _ a hg) as (gd & gt & gv).
+    split; [exact (gd, c2)|]. split; [exact (gt, c1)|].
+    eapply All_impl; [exact (All_mix gv c3)|]. intros x [p q]. exact (p, q).
+  Qed.
+
   Definition PPg (t u : term) : Type :=
     forall Γ Γ' v, pe_ctx Γ Γ' ->
-    (* PREMISE Good, NOT unconditional: (i) typed_eta_safe, proved here with no SR;
-       (ii) preservation of typing along red, E subject reduction, forecast T1. *)
-    Good Σ Γ t ->
+    (* PREMISES, NOT unconditional: Good — (i) typed_eta_safe, proved here with no SR;
+       (ii) preservation of typing along red, E subject reduction, forecast T1 — and
+       (B) [canon t = t], the canonical source, bundled as [GoodC]. *)
+    GoodC Γ t ->
     on_free_vars xpredT u -> red1 Σ Γ' u v ->
     ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
 
@@ -3260,7 +3472,7 @@ Section Assembly.
         by (apply app_red_l; exact (red1_lift1 cb Γ' na A _ _ hofv hr)).
       have hofv' : on_free_vars xpredT (tApp (lift0 1 M') (tRel 0)) by (cbn; now rewrite (ofvT_lift0 _ hofv)).
       destruct (IH (Γ ,, vass na A) (Γ' ,, vass na A) _ (pe_ctx_vass _ _ _ _ _ _ hctx)
-                  (Good_lam_body _ _ _ _ hg) hofv' hr') as (w' & hw' & hpw').
+                  (GoodC_lam_body _ _ _ _ hg) hofv' hr') as (w' & hw' & hpw').
       exists (tLambda na A w'). split.
       + eapply (trans_clos_map _ _ (fun y => tLambda na A y)); [|exact hw']. intros y z r. now apply abs_red_r.
       + now apply pe_eta.
@@ -3277,9 +3489,9 @@ Section Assembly.
     - (* evar *)
       intros ev l l' al Γ Γ' v hctx hg hofv hr. destruct (C3R.red1_tEvar_inv hr) as (l1 & -> & ho).
       have hT : All (fun y => is_true (on_free_vars xpredT y)) l' by (cbn in hofv; now apply forallb_All).
-      destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (Good Σ Γ) (fun y => is_true (on_free_vars xpredT y))
+      destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (GoodC Γ) (fun y => is_true (on_free_vars xpredT y))
                   l l' l1 (All2_impl al (fun x y '(hp, ih) => (hp, fun gx ty z hz => ih Γ Γ' z hctx gx ty hz)))
-                  (Good_evar Σ Γ ev l hg) hT ho) as (l0 & ho0 & hp0).
+                  (GoodC_evar Γ ev l hg) hT ho) as (l0 & ho0 & hp0).
       exists (tEvar ev l0). split.
       + eapply (trans_clos_map _ _ (tEvar ev)); [|exact (OnOne2_tc _ _ _ ho0)]. intros a b r. now apply evar_red.
       + now apply pe_Evar.
@@ -3287,11 +3499,13 @@ Section Assembly.
       intros na A A' M M' hA IHA hM IHM Γ Γ' v hctx hg hofv hr.
       cbn in hofv. move/andP: hofv => [hoA hoM]. rewrite ofvT_shift in hoM.
       destruct (C3R.red1_tLambda_inv hr) as [(A'' & -> & hrA)|(M'' & -> & hrM)].
-      + destruct (IHA Γ Γ' A'' hctx (Good_lam_dom Σ Γ _ _ _ hg) hoA hrA) as (w & hw & hpw).
-        exists (tLambda na w M). split; [|now apply pe_Lambda].
-        eapply (trans_clos_map _ _ (fun y => tLambda na y M)); [|exact hw]. intros y z r. now apply abs_red_l.
+      + (* a step in the DOMAIN: impossible on a canonical source (B). The domain is
+           [canon_dom], a sort; [pe] maps a sort to itself, so the target domain is a
+           sort, which has no [red1] step. *)
+        exfalso. rewrite (GoodC_lam_dom Γ na A M hg) in hA.
+        rewrite (pe_Sort_inv _ _ hA) in hrA. exact (C3R.red1_tSort_absurd hrA).
       + destruct (IHM (Γ ,, vass na A) (Γ' ,, vass na A') M'' (pe_ctx_vass _ _ _ _ _ _ hctx)
-                    (Good_lam_body _ _ _ _ hg) hoM hrM) as (w & hw & hpw).
+                    (GoodC_lam_body _ _ _ _ hg) hoM hrM) as (w & hw & hpw).
         exists (tLambda na A w). split; [|now apply pe_Lambda].
         eapply (trans_clos_map _ _ (fun y => tLambda na A y)); [|exact hw]. intros y z r. now apply abs_red_r.
     - (* application: β, fixpoint and primitive roots, or a congruence *)
@@ -3302,27 +3516,27 @@ Section Assembly.
         |(c & decl & uu & op & ls & r & E & hop & hd & hb & hden & hrb)].
       + exact (pe_postpone_beta Σ Γ (tApp f x) na A' b' x' (pe_App _ _ _ _ hf hx)).
       + have hpe : pe (tApp f x) (mkApps (tFix mfix idx) args) by (rewrite E; now apply pe_App).
-        exact (pe_fix_root Σ Γ (tApp f x) mfix idx args narg fn hg hpe hu hc).
+        exact (pe_fix_root Σ Γ (tApp f x) mfix idx args narg fn (fst hg) hpe hu hc).
       + cbn in hofv. move/andP: hofv => [hof hox].
-        destruct (IHf Γ Γ' f'' hctx (Good_app_l Σ Γ _ _ hg) hof hrf) as (w & hw & hpw).
+        destruct (IHf Γ Γ' f'' hctx (GoodC_app_l Γ _ _ hg) hof hrf) as (w & hw & hpw).
         exists (tApp w x). split; [|now apply pe_App].
         eapply (trans_clos_map _ _ (fun y => tApp y x)); [|exact hw]. intros y z r0. now apply app_red_l.
       + cbn in hofv. move/andP: hofv => [hof hox].
-        destruct (IHx Γ Γ' x'' hctx (Good_app_r Σ Γ _ _ hg) hox hrx) as (w & hw & hpw).
+        destruct (IHx Γ Γ' x'' hctx (GoodC_app_r Γ _ _ hg) hox hrx) as (w & hw & hpw).
         exists (tApp f w). split; [|now apply pe_App].
         eapply (trans_clos_map _ _ (fun y => tApp f y)); [|exact hw]. intros y z r0. now apply app_red_r.
       + have hpe : pe (tApp f x) (mkApps (tConst c uu) (map term_of_lit ls)) by (rewrite E; now apply pe_App).
         have hstep : red1 Σ Γ (mkApps (tConst c uu) (map term_of_lit ls)) v by (eapply red_prim_op; eassumption).
-        exact (pe_prim_root cb Γ (tApp f x) c uu ls v hg hpe hstep).
+        exact (pe_prim_root cb Γ (tApp f x) c uu ls v (fst hg) hpe hstep).
     - (* product *)
       intros na a a' b b' ha IHa hb IHb Γ Γ' v hctx hg hofv hr.
       cbn in hofv. move/andP: hofv => [hoa hob]. rewrite ofvT_shift in hob.
       destruct (C3R.red1_tProd_inv hr) as [(a'' & -> & hra)|(b'' & -> & hrb)].
-      + destruct (IHa Γ Γ' a'' hctx (Good_prod_dom Σ Γ _ _ _ hg) hoa hra) as (w & hw & hpw).
+      + destruct (IHa Γ Γ' a'' hctx (GoodC_prod_dom Γ _ _ _ hg) hoa hra) as (w & hw & hpw).
         exists (tProd na w b). split; [|now apply pe_Prod].
         eapply (trans_clos_map _ _ (fun y => tProd na y b)); [|exact hw]. intros y z r. now apply prod_red_l.
       + destruct (IHb (Γ ,, vass na a) (Γ' ,, vass na a') b'' (pe_ctx_vass _ _ _ _ _ _ hctx)
-                    (Good_prod_cod Σ Γ _ _ _ hg) hob hrb) as (w & hw & hpw).
+                    (GoodC_prod_cod Γ _ _ _ hg) hob hrb) as (w & hw & hpw).
         exists (tProd na a w). split; [|now apply pe_Prod].
         eapply (trans_clos_map _ _ (fun y => tProd na a y)); [|exact hw]. intros y z r. now apply prod_red_r.
     - (* let: ζ, or a congruence *)
@@ -3331,14 +3545,14 @@ Section Assembly.
       destruct (C3R.red1_tLetIn_inv hr) as [[[->|(b'' & -> & hrb)]|(ty'' & -> & hrty)]|(x'' & -> & hrx)].
       + exists (x {0 := b}). split; [apply t_step; apply red_zeta|].
         exact (pe_subst _ _ hx [b] [b'] 0 (All2_cons hb All2_nil)).
-      + destruct (IHb Γ Γ' b'' hctx (Good_letin_def Σ Γ _ _ _ _ hg) hob hrb) as (w & hw & hpw).
+      + destruct (IHb Γ Γ' b'' hctx (GoodC_letin_def Γ _ _ _ _ hg) hob hrb) as (w & hw & hpw).
         exists (tLetIn na w ty x). split; [|now apply pe_LetIn].
         eapply (trans_clos_map _ _ (fun y => tLetIn na y ty x)); [|exact hw]. intros y z r. now apply letin_red_def.
-      + destruct (IHty Γ Γ' ty'' hctx (Good_letin_ty Σ Γ _ _ _ _ hg) hoty hrty) as (w & hw & hpw).
+      + destruct (IHty Γ Γ' ty'' hctx (GoodC_letin_ty Γ _ _ _ _ hg) hoty hrty) as (w & hw & hpw).
         exists (tLetIn na b w x). split; [|now apply pe_LetIn].
         eapply (trans_clos_map _ _ (fun y => tLetIn na b y x)); [|exact hw]. intros y z r. now apply letin_red_ty.
       + destruct (IHx (Γ ,, vdef na b ty) (Γ' ,, vdef na b' ty') x'' (pe_ctx_vdef _ _ _ _ _ _ _ _ hctx hb)
-                    (Good_letin_body Σ Γ _ _ _ _ hg) hox hrx) as (w & hw & hpw).
+                    (GoodC_letin_body Γ _ _ _ _ hg) hox hrx) as (w & hw & hpw).
         exists (tLetIn na b ty w). split; [|now apply pe_LetIn].
         eapply (trans_clos_map _ _ (fun y => tLetIn na b ty y)); [|exact hw]. intros y z r. now apply letin_red_body.
     - (* case: ι and cofix roots, or a congruence *)
@@ -3346,7 +3560,7 @@ Section Assembly.
       have apar0 : All2 pe (pparams p) (pparams p') := All2_impl apar (fun x y h => fst h).
       have abrs0 : All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs brs'
         := All2_impl abrs (fun x y h => (fst h, fst (snd h))).
-      have hnl := Good_case_hnl Σ Γ ci p c brs hg.
+      have hnl := Good_case_hnl Σ Γ ci p c brs (fst hg).
       cbn in hofv. move/and5P: hofv => [hopar horet _ hoc hobrs].
       destruct (C3R.red1_tCase_inv hr) as
         [[[[[(k & uu & args & br & -> & hnth & hlen & ->)|(mfix & idx & args & narg & fn & -> & hu & ->)]
@@ -3355,9 +3569,9 @@ Section Assembly.
       + exact (pe_cofix_case_root Σ Γ ci p c brs p' mfix idx args narg fn brs' hnl apar0 eu ectx pret pc abrs0 hu).
       + (* a parameter *)
         have hT : All (fun y => is_true (on_free_vars xpredT y)) (pparams p') by now apply forallb_All.
-        destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (Good Σ Γ) (fun y => is_true (on_free_vars xpredT y))
+        destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (GoodC Γ) (fun y => is_true (on_free_vars xpredT y))
                     _ _ par1 (All2_impl apar (fun x y '(hp, ih) => (hp, fun gx ty z hz => ih Γ Γ' z hctx gx ty hz)))
-                    (Good_case_params Σ Γ ci p c brs hg) hT hop) as (l0 & ho0 & hp0).
+                    (GoodC_case_params Γ ci p c brs hg) hT hop) as (l0 & ho0 & hp0).
         exists (tCase ci (set_pparams p l0) c brs). split.
         * rewrite -{1}(C3R.set_pparams_id p).
           eapply (trans_clos_map _ _ (fun l => tCase ci (set_pparams p l) c brs)); [|exact (OnOne2_tc _ _ _ ho0)].
@@ -3368,14 +3582,14 @@ Section Assembly.
         have hctx' : pe_ctx (Γ ,,, inst_case_predicate_context p) (Γ' ,,, inst_case_predicate_context p').
         { apply pe_ctx_app; [exact hctx|]. unfold inst_case_predicate_context. rewrite -eu -ectx.
           now apply pe_inst_case_context. }
-        destruct (IHret _ _ r hctx' (Good_case_ret Σ Γ ci p c brs hg) horet hrr) as (w & hw & hpw).
+        destruct (IHret _ _ r hctx' (GoodC_case_ret Γ ci p c brs hg) horet hrr) as (w & hw & hpw).
         exists (tCase ci (set_preturn p w) c brs). split.
         * rewrite -{1}(C3R.set_preturn_id p).
           eapply (trans_clos_map _ _ (fun y => tCase ci (set_preturn p y) c brs)); [|exact hw].
           intros a b0 r0. rewrite -(set_preturn_twice p a b0). now apply case_red_return.
         * apply pe_Case; cbn; [exact apar0|exact eu|exact ectx|exact hpw|exact pc|exact abrs0].
       + (* the scrutinee *)
-        destruct (IHc Γ Γ' c1 hctx (Good_case_discr Σ Γ ci p c brs hg) hoc hrc) as (w & hw & hpw).
+        destruct (IHc Γ Γ' c1 hctx (GoodC_case_discr Γ ci p c brs hg) hoc hrc) as (w & hw & hpw).
         exists (tCase ci p w brs). split; [|apply pe_Case; [exact apar0|exact eu|exact ectx|exact pret|exact hpw|exact abrs0]].
         eapply (trans_clos_map _ _ (fun y => tCase ci p y brs)); [|exact hw]. intros y z r0. now apply case_red_discr.
       + (* a branch *)
@@ -3385,7 +3599,7 @@ Section Assembly.
         destruct (OnOne2_postpone (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y))
                     (fun br br' => on_Trel_eq (red1 Σ (Γ' ,,, inst_case_branch_context p' br)) bbody bcontext br br')
                     (fun br br' => on_Trel_eq (red1 Σ (Γ ,,, inst_case_branch_context p br)) bbody bcontext br br')
-                    (fun br => Good Σ (Γ ,,, inst_case_branch_context p br) (bbody br))
+                    (fun br => GoodC (Γ ,,, inst_case_branch_context p br) (bbody br))
                     (fun br => is_true (on_free_vars xpredT (bbody br))) brs brs' brs1) as (brs0 & ho0 & hp0).
         { eapply All2_impl; [exact abrs|]. intros x y [hc [hp ih]]. split; [split; [exact hc|exact hp]|].
           intros gx ty z [hz hcz].
@@ -3395,7 +3609,7 @@ Section Assembly.
           destruct (ih _ _ _ hctxb gx ty hz) as (w & hw & hpw).
           exists {| bcontext := bcontext x; bbody := w |}. split; [exact (tc_branch_body Σ Γ p x w hw)|].
           split; [cbn; congruence|exact hpw]. }
-        { exact (Good_case_brs Σ Γ ci p c brs hg). }
+        { exact (GoodC_case_brs Γ ci p c brs hg). }
         { exact hT. }
         { exact hob. }
         exists (tCase ci p c brs0). split.
@@ -3404,24 +3618,24 @@ Section Assembly.
         * apply pe_Case; [exact apar0|exact eu|exact ectx|exact pret|exact pc|exact hp0].
     - (* projection: projection and cofix-proj roots, or a congruence *)
       intros pr c c' pc IHc Γ Γ' v hctx hg hofv hr.
-      have hnl := Good_proj_hnl Σ Γ pr c hg.
+      have hnl := Good_proj_hnl Σ Γ pr c (fst hg).
       destruct (C3R.red1_tProj_inv hr) as
         [[(mfix & idx & args & narg & fn & -> & hu & ->)|(args & uu & arg & -> & hnth & ->)]|(c1 & -> & hrc)].
       + exact (pe_cofix_proj_root Σ Γ pr c mfix idx args narg fn hnl pc hu).
       + exact (pe_proj_root Σ Γ pr c uu args arg hnl pc hnth).
-      + cbn in hofv. destruct (IHc Γ Γ' c1 hctx (Good_proj Σ Γ _ _ hg) hofv hrc) as (w & hw & hpw).
+      + cbn in hofv. destruct (IHc Γ Γ' c1 hctx (GoodC_proj Γ _ _ hg) hofv hrc) as (w & hw & hpw).
         exists (tProj pr w). split; [|now apply pe_Proj].
         eapply (trans_clos_map _ _ (fun y => tProj pr y)); [|exact hw]. intros y z r. now apply proj_red.
     - (* fixpoint: a type or a body steps *)
       intros mfix mfix' idx am Γ Γ' v hctx hg hofv hr.
       have am0 : All2 pe_defrel mfix mfix'.
       { eapply All2_impl; [exact am|]. intros x y [[h1 _] [[h2 _] [h3 h4]]]. exact (h1, (h2, (h3, h4))). }
-      have hG := Good_fix_gen Σ Γ true mfix idx hg.
+      have hG := GoodC_fix_gen true Γ mfix idx hg.
       cbn in hofv. apply forallb_All in hofv.
       destruct (C3R.red1_tFix_inv hr) as [(m1 & -> & ho)|(m1 & -> & ho)].
       + destruct (OnOne2_postpone pe_defrel (on_Trel_eq (red1 Σ Γ') dtype (fun x => (dname x, dbody x, rarg x)))
                     (on_Trel_eq (red1 Σ Γ) dtype (fun x => (dname x, dbody x, rarg x)))
-                    (fun d => Good Σ Γ (dtype d)) (fun d => is_true (on_free_vars xpredT (dtype d)))
+                    (fun d => GoodC Γ (dtype d)) (fun d => is_true (on_free_vars xpredT (dtype d)))
                     mfix mfix' m1) as (m0 & ho0 & hp0).
         { eapply All2_impl; [exact am|]. intros x y [[h1 ih] [[h2 _] [h3 h4]]].
           split; [exact (h1, (h2, (h3, h4)))|]. intros gx ty z [hz e]. injection e as e1 e2 e3.
@@ -3440,7 +3654,7 @@ Section Assembly.
         destruct (OnOne2_postpone pe_defrel
                     (on_Trel_eq (red1 Σ (Γ' ,,, fix_context mfix')) dbody (fun x => (dname x, dtype x, rarg x)))
                     (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix)) dbody (fun x => (dname x, dtype x, rarg x)))
-                    (fun d => Good Σ (Γ ,,, fix_context mfix) (dbody d)) (fun d => is_true (on_free_vars xpredT (dbody d)))
+                    (fun d => GoodC (Γ ,,, fix_context mfix) (dbody d)) (fun d => is_true (on_free_vars xpredT (dbody d)))
                     mfix mfix' m1) as (m0 & ho0 & hp0).
         { eapply All2_impl; [exact am|]. intros x y [[h1 _] [[h2 ih] [h3 h4]]].
           split; [exact (h1, (h2, (h3, h4)))|]. intros gx ty z [hz e]. injection e as e1 e2 e3.
@@ -3455,12 +3669,12 @@ Section Assembly.
         eapply OnOne2_impl; [exact ho0|]. intros d d0 h. exact (tc_def_body_inv Σ _ d d0 h).
     - (* cofixpoint: a type or a body steps *)
       intros mfix mfix' idx am Γ Γ' v hctx hg hofv hr.
-      have hG := Good_fix_gen Σ Γ false mfix idx hg.
+      have hG := GoodC_fix_gen false Γ mfix idx hg.
       cbn in hofv. apply forallb_All in hofv.
       destruct (C3R.red1_tCoFix_inv hr) as [(m1 & -> & ho)|(m1 & -> & ho)].
       + destruct (OnOne2_postpone pe_defrel (on_Trel_eq (red1 Σ Γ') dtype (fun x => (dname x, dbody x, rarg x)))
                     (on_Trel_eq (red1 Σ Γ) dtype (fun x => (dname x, dbody x, rarg x)))
-                    (fun d => Good Σ Γ (dtype d)) (fun d => is_true (on_free_vars xpredT (dtype d)))
+                    (fun d => GoodC Γ (dtype d)) (fun d => is_true (on_free_vars xpredT (dtype d)))
                     mfix mfix' m1) as (m0 & ho0 & hp0).
         { eapply All2_impl; [exact am|]. intros x y [[h1 ih] [[h2 _] [h3 h4]]].
           split; [exact (h1, (h2, (h3, h4)))|]. intros gx ty z [hz e]. injection e as e1 e2 e3.
@@ -3478,7 +3692,7 @@ Section Assembly.
         destruct (OnOne2_postpone pe_defrel
                     (on_Trel_eq (red1 Σ (Γ' ,,, fix_context mfix')) dbody (fun x => (dname x, dtype x, rarg x)))
                     (on_Trel_eq (red1 Σ (Γ ,,, fix_context mfix)) dbody (fun x => (dname x, dtype x, rarg x)))
-                    (fun d => Good Σ (Γ ,,, fix_context mfix) (dbody d)) (fun d => is_true (on_free_vars xpredT (dbody d)))
+                    (fun d => GoodC (Γ ,,, fix_context mfix) (dbody d)) (fun d => is_true (on_free_vars xpredT (dbody d)))
                     mfix mfix' m1) as (m0 & ho0 & hp0).
         { eapply All2_impl; [exact am|]. intros x y [[h1 _] [[h2 ih] [h3 h4]]].
           split; [exact (h1, (h2, (h3, h4)))|]. intros gx ty z [hz e]. injection e as e1 e2 e3.
@@ -3497,10 +3711,10 @@ Section Assembly.
       1-3: destruct (C3R.red1_tPrim_inv hr) as (arr & e & _); discriminate e.
       destruct (C3R.red1_tPrim_inv hr) as (arr & e & hc).
       apply (f_equal prim_arr_of) in e. cbn in e. injection e as <-.
-      destruct (Good_prim_arr Σ Γ a hg) as (gd & gt & gv).
+      destruct (GoodC_prim_arr Γ a hg) as (gd & gt & gv).
       cbn in hofv. rtoProp.
       destruct hc as [[(value & -> & ho)|(d & -> & hrd)]|(ty & -> & hrt)].
-      + destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (Good Σ Γ) (fun y => is_true (on_free_vars xpredT y))
+      + destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (GoodC Γ) (fun y => is_true (on_free_vars xpredT y))
                     _ _ value (All2_impl hval (fun x y '(hp, ih) => (hp, fun gx ty z hz => ih Γ Γ' z hctx gx ty hz)))
                     gv ltac:(now apply forallb_All) ho) as (l0 & ho0 & hp0).
         exists (tPrim (primArray; primArrayModel (set_array_value a l0))). split.
@@ -3525,15 +3739,43 @@ Section Assembly.
 
   (** **The parallel one-step postponement: CLOSED**, under the VISIBLE premises
       [Good Σ Γ t] (two halves: [typed_eta_safe], proved with no SR; preservation by
-      E subject reduction, forecast T1) and [on_free_vars xpredT u] (target scoping). *)
+      E subject reduction, forecast T1), (B) [canon t = t] (the canonical source) and
+      [on_free_vars xpredT u] (target scoping). *)
   Theorem pe_postpone Γ t u v :
-    Good Σ Γ t -> on_free_vars xpredT u -> pe t u -> red1 Σ Γ u v ->
+    Good Σ Γ t -> canon t = t -> on_free_vars xpredT u -> pe t u -> red1 Σ Γ u v ->
     ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
-  Proof. intros hg ho h hr. exact (pe_postpone_gen t u h Γ Γ v (pe_ctx_refl Γ) hg ho hr). Qed.
+  Proof. intros hg hcan ho h hr. exact (pe_postpone_gen t u h Γ Γ v (pe_ctx_refl Γ) (hg, hcan) ho hr). Qed.
 
-  Corollary pe_postpone_statement_holds : pe_postpone_statement Σ (Good Σ).
-  Proof. intros Γ t u v. exact (pe_postpone Γ t u v). Qed.
+  Corollary pe_postpone_statement_holds :
+    pe_postpone_statement Σ (fun Γ t => Good Σ Γ t × canon t = t).
+  Proof. intros Γ t u v [hg hcan]. exact (pe_postpone Γ t u v hg hcan). Qed.
 
+
+  (** ** (iii) EVERY consumer of [pe_postpone] / [pe_postpone_gen], and how (B) is
+      discharged at each (the whole file; [grep] for the two names)
+
+      1. [pe_postpone] itself (the only consumer of [pe_postpone_gen]): DISCHARGED by
+         passing its own visible premise, bundled as [(hg, hcan)].
+      2. [pe_postpone_statement_holds]: DISCHARGED; the pinned statement is now
+         instantiated at the predicate [fun Γ t => Good Σ Γ t × canon t = t], so the
+         premise is part of the predicate the statement quantifies over.
+      3. [pe_postpone_src] (the source-side scoping variant): DISCHARGED by passing
+         its own visible premise.
+      4. [pe_red_postpone], the iteration: CANNOT DISCHARGE IT. This is the finding.
+         It applies the postponement to [red]-REDUCTS of the source, and a
+         [red]-reduct of a canonical term need not be canonical: [red_delta]
+         substitutes a global constant body and [red_rel] a context let body, neither
+         of which is canonical in general. (β, ζ, ι, fixpoint and cofixpoint steps DO
+         preserve canonicity, because substituting canonical terms into a canonical
+         term is canonical, and no rule but δ and [red_rel] imports outside material.)
+         The premise therefore stays VISIBLE and undischarged, as [hcanred].
+      5. The planned assembly (not written): DISCHARGED by construction. It walks the
+         A6 chain, whose [R_c] steps re-canonicalise ([R_c Σ Γ x y] gives
+         [y = canon v0]), and it applies the postponement at [canon T'] for the
+         current reduct [T'], where [canon_idem] gives [canon (canon T') = canon T'].
+         So the assembly never needs [pe_red_postpone].
+      6. No other consumer exists in this file, and the file is not imported by any
+         other. *)
   (** **Transfer of scoping along [pe]: CLOSED.** A short corollary of [pe_to_eta]
       ([pe ⊆ eta1*]) and the landed [eta1_on_free_vars] (PCUICEtaScope.v), by
       induction on the closure. So the target premise [on_free_vars xpredT u] of
@@ -3548,9 +3790,11 @@ Section Assembly.
   Qed.
 
   Corollary pe_postpone_src Γ t u v :
-    Good Σ Γ t -> on_free_vars xpredT t -> pe t u -> red1 Σ Γ u v ->
+    Good Σ Γ t -> canon t = t -> on_free_vars xpredT t -> pe t u -> red1 Σ Γ u v ->
     ∑ w, trans_clos (red1 Σ Γ) t w × pe w v.
-  Proof. intros hg ho h hr. exact (pe_postpone Γ t u v hg (pe_on_free_vars _ _ _ h ho) h hr). Qed.
+  Proof.
+    intros hg hcan ho h hr. exact (pe_postpone Γ t u v hg hcan (pe_on_free_vars _ _ _ h ho) h hr).
+  Qed.
 
   (** The ZERO-step pullback, as its own named case: when the target takes no step,
       the source takes none either and the [pe] relation is unchanged. This is the
@@ -3559,18 +3803,27 @@ Section Assembly.
   Lemma pe_postpone_zero Γ t u : pe t u -> ∑ w, red Σ Γ t w × pe w u.
   Proof. intros hp. exists t. split; [apply rt_refl|exact hp]. Qed.
 
-  (** **(4) The iteration: [pe] followed by [red] is [red] followed by [pe]: CLOSED**,
-      under the VISIBLE premises [Good Σ Γ t] (carried along the source reduction by
-      [Good_red]), [on_free_vars xpredT u] (carried along the target reduction by
-      [red_on_free_vars_cb]) and [on_ctx_free_vars xpredT Γ] (needed for the latter).
+  (** **(4) The iteration, and the FINDING that (B) breaks it as it stood.**
+
+      With (B) the source must be CANONICAL at every step, and the iteration feeds
+      the postponement a [red]-REDUCT of the source. A [red]-reduct of a canonical
+      term need NOT be canonical: [red_delta] substitutes a global constant body and
+      [red_rel] a context let body, and neither is canonical in general (β, ζ, ι,
+      fixpoint and cofixpoint steps do preserve canonicity, since substitution of
+      canonical terms into a canonical term is canonical). So the premise cannot be
+      discharged along the iteration, and it appears here as the extra VISIBLE
+      premise [hcanred]: canonicity along the source reduction. It is NOT discharged
+      in general; the assembly avoids the iteration entirely, because an [R_c] step
+      re-canonicalises its target ([R_c Σ Γ x y] gives [y = canon v0], and
+      [canon_idem]), so each step of the A6 chain starts from a canonical source.
 
       INDUCTION PRINCIPLE: structural on the [clos_refl_trans] derivation of the
       target reduction, generalised over the source [t] and its premises. Three
       cases: [rt_step] calls [pe_postpone] (source side [red1⁺], weakened to [red]
       by [clos_t_rt]); [rt_refl] is the zero-step pullback [pe_postpone_zero];
-      [rt_trans] composes, re-establishing [Good] on the new source by [Good_red]
-      and the target scoping by [red_on_free_vars_cb]. No step needs a strict
-      decrease: the derivation shrinks structurally.
+      [rt_trans] composes, re-establishing [Good] by [Good_red], canonicity by
+      [hcanred] and the target scoping by [red_on_free_vars_cb]. No step needs a
+      strict decrease: the derivation shrinks structurally.
 
       Proved by this new induction, not by instantiating a landed mirror.
       [HR_strong_commutation_modulo] (PCUICEtaHRCommutationA1.v) cannot be
@@ -3583,17 +3836,22 @@ Section Assembly.
       does not fit this backward postponement either. *)
   Theorem pe_red_postpone Γ t u v :
     on_ctx_free_vars xpredT Γ ->
+    (* NOT DISCHARGED in general: see the finding above. *)
+    (forall t', red Σ Γ t t' -> canon t' = t') ->
     Good Σ Γ t -> on_free_vars xpredT u -> pe t u -> red Σ Γ u v ->
     ∑ w, red Σ Γ t w × pe w v.
   Proof.
-    intros hctx hg ho hp hr. induction hr as [u v r|u|u u1 v h1 IH1 h2 IH2] in t, hg, ho, hp |- *.
-    - destruct (pe_postpone Γ t u v hg ho hp r) as (w & hw & hpw).
+    intros hctx hcanred hg ho hp hr.
+    induction hr as [u v r|u|u u1 v h1 IH1 h2 IH2] in t, hcanred, hg, ho, hp |- *.
+    - destruct (pe_postpone Γ t u v hg (hcanred t (rt_refl _ _)) ho hp r) as (w & hw & hpw).
       exists w. split; [now apply clos_t_rt|exact hpw].
     - exact (pe_postpone_zero Γ t u hp).
-    - destruct (IH1 t hg ho hp) as (w1 & hw1 & hp1).
+    - destruct (IH1 t hcanred hg ho hp) as (w1 & hw1 & hp1).
       have ho1 : on_free_vars xpredT u1
         := @PCUICClosedTyp.red_on_free_vars_cb cf xpredT (Σ, Monomorphic_ctx) Γ u u1 cb h1 ho hctx.
-      destruct (IH2 w1 (Good_red _ _ _ hg hw1) ho1 hp1) as (w & hw & hpw).
+      have hcanred1 : forall t', red Σ Γ w1 t' -> canon t' = t'
+        by (intros t' ht'; apply hcanred; eapply rt_trans; eassumption).
+      destruct (IH2 w1 hcanred1 (Good_red _ _ _ hg hw1) ho1 hp1) as (w & hw & hpw).
       exists w. split; [eapply rt_trans; eassumption|exact hpw].
   Qed.
 
@@ -3765,10 +4023,25 @@ End LambdaBlockTyping.
   - Still excludes: the same four positions; the primitive clause now excludes EVERY
     applied primitive value, not only an argument of a registered operation.
 
-  Both changes moved only the primitive clause. The λ clause has never changed: it
-  still inspects the DOMAIN ([tLambda _ A b => eta_safe Σ A && eta_safe Σ b]), which
-  is what makes [Good] fail to transfer from [T] to [canon T]. Any further change to
-  [eta_safe] is reported before it is made.
+  CORRECTION: changes 1 and 2 touched ONLY the primitive clause. Change 3 below is
+  the FIRST change to the λ clause.
+
+  Change 3: the λ clause stopped reading the DOMAIN
+  ([tLambda _ A b => eta_safe Σ A && eta_safe Σ b] became [tLambda _ _ b => eta_safe Σ b]).
+  - DROPPED: the domain conjunct, so the invariant is weaker and no longer reads λ
+    domains; [Good_lam_dom] is gone with it (it is no longer provable).
+  - Bought: [eta_safe] became insensitive to λ domains and binder names, hence to
+    [canon], which is what lets [Good] transfer from [T] to [canon T] through
+    [R_c_backsim]; and [pp_prim]'s [eta_safe_lit_eta] got shorter.
+  - Still excludes: the same four positions in every subterm EXCEPT a λ domain — a λ
+    as a [tCase] scrutinee, as a [tProj] argument, as the [rarg]-th argument of an
+    applied fixpoint, and an applied primitive value.
+  - COUPLED with (B): see the attempts beside the definition of [eta_safe]. Change 3
+    alone would leave the λ-domain congruence case of [pe_postpone_gen] applying the
+    roots inside a domain, where the invariant is now silent. (B) [canon t = t]
+    removes that case.
+
+  Any further change to [eta_safe] is reported before it is made.
 
   Induction principle for the mixed-chain sketch: NOT APPLICABLE. The sketch was to
   induct on the CANONICAL chain's length, fixed before lifting (never on the lifted
