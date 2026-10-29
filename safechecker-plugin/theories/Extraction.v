@@ -85,9 +85,8 @@ Definition infer_and_print_template_program_with_guard {cf} {nor}
     (CO := SafeTemplateCheckerEtaConv.eta_conv_oracle (reduce_factsE := reduce_factsE)
              (conv_factsE := conv_factsE) closed_context_conversionE welltypedE_context).
 
-(* FORECAST (fc/etak-forecast1, EtaForecast): base's extra root [PCUICSafeChecker.typecheck_program] is
-   dropped (f0-plan.md entry-closure acceptance: the extracted modules contain no base checker module); its E
-   counterpart [PCUICSafeCheckerEta.typecheck_program] stays a root. Nothing in the glue calls the base one. *)
+(* FORECAST: no base checker root (f0-plan: the whole extracted set contains no base checker module); the
+   E environment checker is a root instead *)
 Separate Extraction Wf.Fix_sub MakeOrderTac
          PCUICSafeCheckerEta.typecheck_program SafeTemplateCheckerEta.trans_program_unshared
          infer_and_print_template_program_with_guard

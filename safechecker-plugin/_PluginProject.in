@@ -69,26 +69,16 @@ src/pCUICOnFreeVars.mli
 src/pCUICOnFreeVars.ml
 
 # From SafeChecker
+# FORECAST tree only (EtaK7): the base checker modules (PCUICWfEnv, PCUICSafeReduce, PCUICSafeConversion,
+# PCUICCallByNeed, PCUICTypeChecker, PCUICSafeChecker) are no longer extracted (no base checker root), so not linked.
 src/pCUICErrors.mli
 src/pCUICErrors.ml
 src/pCUICEqualityDec.mli
 src/pCUICEqualityDec.ml
-src/pCUICWfEnv.mli
-src/pCUICWfEnv.ml
 # FORECAST tree only (EtaK7): base PCUICWfEnvImpl is no longer extracted (the entry point uses
 # PCUICWfEnvImplEta) and nothing else references it, so it is not linked.
-src/pCUICSafeReduce.mli
-src/pCUICSafeReduce.ml
-src/pCUICSafeConversion.mli
-src/pCUICSafeConversion.ml
-src/pCUICCallByNeed.mli
-src/pCUICCallByNeed.ml
-src/pCUICTypeChecker.mli
-src/pCUICTypeChecker.ml
 src/pCUICPositivityCheck.mli
 src/pCUICPositivityCheck.ml
-src/pCUICSafeChecker.mli
-src/pCUICSafeChecker.ml
 # FORECAST tree only (EtaK7): base SafeTemplateChecker is no longer extracted (the glue calls
 # SafeTemplateCheckerEta.trans_program / trans_program_unshared), so it is not linked.
 # FORECAST tree only (EtaK7): the E checker modules the extraction now produces
