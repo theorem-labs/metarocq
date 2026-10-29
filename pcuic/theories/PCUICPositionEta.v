@@ -1626,6 +1626,10 @@ Proof. intro h. exact h. Qed.
 Lemma wf_stack_Eta_app na A ρ : wf_stack ρ -> wf_stack (Eta_app na A :: ρ).
 Proof. intro h. exact h. Qed.
 
+(* rev 14 (NB2) *)
+Lemma wf_stack_Eta_arg_nil u π : wf_stack (Eta_arg u [] :: π) = wf_stack π.
+Proof. reflexivity. Qed.
+
 (* the η step: on the virtual side the spine is empty; on a real side ρ has no Eta_arg *)
 Lemma wf_stack_eta_step args na A ρ :
   (args = [] /\ wf_stack ρ) \/ no_Eta_arg ρ -> wf_stack (appstack args (Eta_app na A :: ρ)).
