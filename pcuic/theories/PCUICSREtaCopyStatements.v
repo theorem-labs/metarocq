@@ -22,8 +22,11 @@ From Stdlib Require Import ssreflect ssrbool Utf8.
 From Equations Require Import Equations.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
-(* The braces in the statements record base's implicit status for the copies to keep; Rocq
-   ignores implicit binders inside a term and would warn once per binder. *)
+(* Braces record base's implicit status only where [About] prints a binder; a base implicit
+   [{wfΣ : wf Σ}] that [About] prints as an arrow is written here as an explicit [wfE Σ ->].
+   The meaning is the same: inside a [Definition] body Rocq ignores implicit status (and would
+   warn once per binder, hence the line below). The copies take implicit status from the
+   base source, not from this file. *)
 Local Set Warnings "-unexpected-implicit-declaration".
 
 (** * E statements of the copy lemmas that base [PCUICSR] uses (T0 copies 15-18)
@@ -34,6 +37,10 @@ Local Set Warnings "-unexpected-implicit-declaration".
   prove under the name [<base>E]. Source: [pcuic/theories/PCUICSR.v] at [d8120081]; the base
   statements were printed by [About] in that tree (lanes/eta/sr-statement-note.md has the
   table, the use lines and the verdicts).
+
+  Use: forecast hypotheses or section variables only, NEVER [Admitted]. The landing E SR has
+  ZERO hypotheses left from this set: each is discharged by the copy's [<base>E]. Any change
+  to a statement goes to EtaMetaLane the same minute.
 
   Twin rule: [typing] → [typingE] ([;;; |-] → [;;; |-E]), [wf_local] → [wf_localE], [wf] →
   [wfE], [wf_global_ext] → [wf_global_extE], [isType] → [isTypeE], [wf_local_rel] →
@@ -62,7 +69,14 @@ Local Set Warnings "-unexpected-implicit-declaration".
   stand-ins for [subsletE] and [typing_spineE]) typecheck against [d8120081] plus the files
   that [wip/eta-e3-copies2-2026-10-29] @ [89d243a8] (which contains [07e404be]) changes. *)
 
-(** ** E twins of the copy-file definitions that the statements mention *)
+(** ** E twins of the copy-file definitions that the statements mention
+
+  FORECAST COPIES: [ctx_inst_subE], [decl_ws_cumul_pbE], [spine_substE] and [wf_subsletE] below
+  are stand-ins for the definitions that copy 15 ([PCUICSpineEta]: [ctx_inst_subE],
+  [spine_substE]), copy 16 ([PCUICInductivesEta]: [wf_subsletE]) and copy 18
+  ([PCUICInductiveInversionEta]: [decl_ws_cumul_pbE]) will own, with this exact text. Two
+  [Record spine_substE] declarations are two different types, so at landing this file (or the
+  E SR) must import the copies' definitions and delete these. *)
 
 (** Copy 15, [PCUICSpine.v:903] [ctx_inst_sub] (its argument is over [PCUICSpine]'s
     notation [ctx_inst Σ := ctx_inst (typing Σ)]). [ctx_instE] itself, the twin of the
@@ -278,6 +292,13 @@ Definition ws_cumul_pb_expand_lets_ws_cumul_ctxE_statement : Type :=
   ws_cumul_pbE le' Σ (Γ ,,, smash_context [] Δ) (expand_lets Δ T) (expand_lets Δ' T').
 
 (** ** Copy 16: [PCUICInductives] *)
+
+(** TWIN. Not named in [PCUICSR]'s text: base declares [#[global] Hint Resolve isType_intro :
+    pcuic] ([PCUICInductives.v:288-289]) and SR's [pcuic]/[pcuics] tactics search that
+    database, so copy 16 must re-register [isType_introE] in [pcuic]. *)
+Definition isType_introE_statement : Type :=
+  forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {T : term} {s : sort},
+  Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T.
 
 Definition declared_projection_type_and_eqE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {mdecl : mutual_inductive_body}
