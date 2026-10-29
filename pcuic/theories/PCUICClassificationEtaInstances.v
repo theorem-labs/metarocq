@@ -239,7 +239,7 @@ Lemma cli_cF_value : value si_Σ sri_cF.
 Proof.
   change sri_cF with (mkApps (tConstruct si_ind 0 []) [iv_False]).
   eapply value_app_nonnil; [|discriminate|constructor; [|constructor]].
-  - eapply value_head_cstr; [|cbn; lia].
+  - eapply value_head_cstr with (mdecl := si_mdecl) (idecl := si_idecl) (cdecl := si_cdecl); [|cbn; lia].
     exact (declared_constructor_to_gen (wfΣ := si_wf) si_declared_constructor).
   - apply value_atomic, atomic_atom. reflexivity.
 Qed.
@@ -248,16 +248,16 @@ Lemma cli_cF_eval : eval si_Σ sri_cF sri_cF.
 Proof.
   change sri_cF with (tApp (tConstruct si_ind 0 []) iv_False) at 1.
   change sri_cF with (mkApps (tConstruct si_ind 0 []) ([] ++ [iv_False])).
-  eapply eval_construct; [| |cbn; lia|apply eval_atom; reflexivity].
+  eapply eval_construct with (mdecl := si_mdecl) (idecl := si_idecl) (cdecl := si_cdecl);
+    [| |cbn; lia|apply eval_atom; reflexivity].
   - exact (declared_constructor_to_gen (wfΣ := si_wf) si_declared_constructor).
   - apply eval_atom; reflexivity.
 Qed.
 
 Lemma cli_axiom_free : axiom_free si_Σ.
 Proof.
-  intros c decl h. exfalso.
-  unshelve eapply declared_constant_to_gen in h; [exact si_wf|].
-  red in h. cbn in h. destruct (ReflectEq.eqb c si_kn) in h; discriminate h.
+  intros c decl h. exfalso. red in h. cbn in h.
+  destruct h as [h|h]; [discriminate h|exact h].
 Qed.
 
 Lemma cli_notCoInductive : notCoInductive si_Σ si_ind.
@@ -341,15 +341,18 @@ Definition typing_spine_nth_error_None_prodE_inst :=
 (** ** Classification and evaluation *)
 
 Definition check_recursivity_kind_injE_inst : Finite = Finite :=
-  check_recursivity_kind_injE (Σ := si_Σ) (wfΣ := si_wfE) (mind := si_kn) eq_refl eq_refl.
+  check_recursivity_kind_injE (Σ := si_Σ) (wfΣ := si_wfE) (mind := si_kn) (rk := Finite) (rk' := Finite)
+    eq_refl eq_refl.
 
 Definition wt_closed_red_reflE_inst := wt_closed_red_reflE (Σ := si_Σ) (wfΣ := si_wfE) bdf_x_ind_typed.
 
 Definition value_whnfE_inst := value_whnfE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF eq_refl cli_cF_value.
 
-Definition eval_whneE_inst := eval_whneE (Σ := si_Σ) (wfΣ := si_wfE) _ _ eq_refl cli_eval.
+Definition eval_whneE_inst :=
+  eval_whneE (Σ := si_Σ) (wfΣ := si_wfE) (tApp iv_id iv_False) iv_False eq_refl cli_eval.
 
-Definition eval_closed_cb_inst : closed iv_False := eval_closed_cb si_Σ _ _ eq_refl cli_eval.
+Definition eval_closed_cb_inst : closed iv_False :=
+  eval_closed_cb si_Σ (tApp iv_id iv_False) iv_False eq_refl cli_eval.
 
 Definition whnf_classification'E_inst :=
   whnf_classification'E (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] eq_refl
@@ -377,9 +380,11 @@ Definition subject_reduction_evalE_inst : si_Σ ;;; [] |-E iv_False : si_P :=
   subject_reduction_evalE (Σ := si_Σ) (wfΣ := si_wfE) (iv_app_typed si_Σ [] localenv_nil) cli_eval.
 
 Definition value_classificationE_inst :=
-  value_classificationE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF_typed cli_cF_value.
+  value_classificationE (Σ := si_Σ) (wfΣ := si_wfE) (i := si_ind) (u := []) (args := [iv_False])
+    sri_cF_typed cli_cF_value.
 
 Definition eval_classificationE_inst :=
-  eval_classificationE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF_typed sri_cF cli_cF_eval.
+  eval_classificationE (Σ := si_Σ) (wfΣ := si_wfE) (i := si_ind) (u := []) (args := [iv_False])
+    sri_cF_typed sri_cF cli_cF_eval.
 
 End ClassificationEtaInstances.

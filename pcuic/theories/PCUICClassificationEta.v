@@ -474,7 +474,11 @@ Section SpinesE.
   Context (wfΣ : wfE Σ.1).
 
   (** Base [mfix_on_ind_spine_witness] ([:132]) at [check_one_fix]. The reduct comes from
-      the typed-reduct route ([BDFromPCUICEta.mfix_body_on_conv_redE_fix]). *)
+      the typed-reduct route ([BDFromPCUICEta.mfix_body_on_conv_redE_fix]).
+      NOT TWIN (specialised): base's statement is generic over a [ShapeCheck] check; here one
+      lemma per check, the two checks of its consumers. Generic form: truth open, no route
+      ([ShapeCheck]'s reduction field speaks of base [wf] and base reduction only), no
+      refutation built. *)
   Lemma mfix_on_ind_spine_witnessE_fix {ok} Γ mfix idx decl args ty :
     mfix_on_ind check_one_fix (conv_witnessE Σ Γ) ok mfix ->
     nth_error mfix idx = Some decl ->
@@ -497,7 +501,9 @@ Section SpinesE.
     now eapply red_ws_cumul_pbE_inv.
   Qed.
 
-  (** Base [mfix_on_ind_spine_witness] ([:132]) at [check_one_cofix]. *)
+  (** Base [mfix_on_ind_spine_witness] ([:132]) at [check_one_cofix]. NOT TWIN (specialised),
+      as [mfix_on_ind_spine_witnessE_fix]: generic form: truth open, no route, no refutation
+      built. *)
   Lemma mfix_on_ind_spine_witnessE_cofix {ok} Γ mfix idx decl args ty :
     mfix_on_ind check_one_cofix (conv_witnessE Σ Γ) ok mfix ->
     nth_error mfix idx = Some decl ->

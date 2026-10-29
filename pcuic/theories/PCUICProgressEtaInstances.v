@@ -16,7 +16,8 @@
     [typing_value_headE_inst] find the β-step of [(λx:Prop. x) (∀P. P)].
   - [eval_tCaseE_inst]: the closed [match c (∀P. P) with c x => c x end] ([pgi_match]), which
     evaluates by ι.
-  - [whnf_progressE_inst], [classificationE_inst]: the normal forms [∀P. P] and [c (∀P. P)].
+  - [whnf_progressE_inst]: the normal form [∀P. P]. [classificationE]: NOT BUILT (its
+    statement is fixed to [extraction_checker_flags], as base's; reason at the end of the file).
   - The constructor-arity lemmas run on [c (∀P. P) : I (∀P. P)].
   - [typing_spine_lengthE_inst]: the spine of [c] applied to [∀P. P].
 
@@ -70,16 +71,11 @@ Qed.
 (** A spine of [∀P:Prop. P] with the trivial predicate. *)
 Lemma pgi_sp_pred : typing_spine_predE si_Σ [] (fun _ _ _ => True) iv_False [iv_False] iv_False.
 Proof.
-  eapply (type_spine_pred_consE _ _ _ iv_False iv_False [] si_na si_P (tRel 0) iv_False sProp).
-  - exact (cli_False_isType [] localenv_nil).
-  - exact I.
-  - exact (cli_False_refl [] localenv_nil).
-  - exact I.
-  - econstructor; [exact (cli_False_isType [] localenv_nil)|exact (cli_False_isType [] localenv_nil)|].
-    exact (cli_False_refl [] localenv_nil).
-  Unshelve.
-  - exact (iv_False_typed si_Σ [] localenv_nil).
-  - exact (iv_False_typed si_Σ [] localenv_nil).
+  refine (type_spine_pred_consE _ _ _ iv_False iv_False [] si_na si_P (tRel 0) iv_False sProp
+            (cli_False_isType [] localenv_nil) (iv_False_typed si_Σ [] localenv_nil) I
+            (cli_False_refl [] localenv_nil) (iv_False_typed si_Σ [] localenv_nil) I _).
+  econstructor; [exact (cli_False_isType [] localenv_nil)|exact (cli_False_isType [] localenv_nil)|].
+  exact (cli_False_refl [] localenv_nil).
 Qed.
 
 Lemma pgi_A_ws : ws_cumul_pbE Cumul si_Σ [] sri_A iv_False.
@@ -179,22 +175,26 @@ Proof.
 Qed.
 
 Definition typing_spine_prim_typeE_inst : @nil term = [] :=
-  typing_spine_prim_typeE (Σ := Σ_po) (wfΣ := iv_po_wfE) [] iv_one po_int_kn po_int_body [] _ eq_refl
-    iv_po_declared_int (conj eq_refl eq_refl) pgi_sp_int.
+  typing_spine_prim_typeE (Σ := Σ_po) (wfΣ := iv_po_wfE) [] iv_one po_int_kn po_int_body [] _
+    ltac:(reflexivity) iv_po_declared_int ltac:(split; reflexivity) pgi_sp_int.
 
 Definition typing_spine_axiomE_inst : @nil term = [] :=
   typing_spine_axiomE (Σ := Σ_po) (wfΣ := iv_po_wfE) [] po_int_kn [] po_int_body [] [] _
-    iv_po_declared_int eq_refl eq_refl pgi_sp_int.
+    iv_po_declared_int ltac:(reflexivity) ltac:(vm_compute; reflexivity) pgi_sp_int.
+
+Lemma pgi_False_value : value si_Σ iv_False.
+Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
+
+Lemma pgi_id_value : value si_Σ (mkApps iv_id []).
+Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 
 Definition typing_value_head_nappE_inst :=
   typing_value_head_nappE (Σ := si_Σ) (wfΣ := si_wfE) iv_id [] iv_False si_P eq_refl
-    (iv_app_typed si_Σ [] localenv_nil) (value_atomic _ _ (atomic_atom _ _ eq_refl)) eq_refl
-    (value_atomic _ _ (atomic_atom _ _ eq_refl)).
+    (iv_app_typed si_Σ [] localenv_nil) pgi_False_value eq_refl pgi_id_value.
 
 Definition typing_value_headE_inst :=
   typing_value_headE (Σ := si_Σ) (wfΣ := si_wfE) iv_id [] iv_False si_P
-    (iv_app_typed si_Σ [] localenv_nil) (value_atomic _ _ (atomic_atom _ _ eq_refl)) eq_refl
-    (value_atomic _ _ (atomic_atom _ _ eq_refl)).
+    (iv_app_typed si_Σ [] localenv_nil) pgi_False_value eq_refl pgi_id_value.
 
 Definition progress_env_propE_inst :=
   env_propE_typing progress_env_propE si_Σ si_wfE [] _ _ (iv_app_typed si_Σ [] localenv_nil)
@@ -207,8 +207,10 @@ Definition whnf_progressE_inst :=
   whnf_progressE si_Σ iv_False si_P cli_axiom_free si_wfE (iv_False_typed si_Σ [] localenv_nil)
     (fun h => let (t', r) := h in pgi_False_normal _ _ _ r).
 
-Definition classificationE_inst :=
-  classificationE si_Σ sri_cF si_ind [] [iv_False] cli_axiom_free si_wfE
-    (fun h => let (t', r) := h in pgi_cF_normal _ _ _ r) sri_cF_typed.
+(* [classificationE]: NOT BUILT. Its statement, like base [PCUICProgress.classification], binds
+   no [checker_flags] and so is fixed to [config.extraction_checker_flags] (the file's
+   [Local Existing Instance], as base's); [wfE si_Σ] is proved under [default_checker_flags]
+   only. Its proof is [whnf_classificationE] after [whnf_progressE], both with instances here
+   and in [PCUICClassificationEtaInstances]. *)
 
 End ProgressEtaInstances.
