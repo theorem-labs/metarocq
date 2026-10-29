@@ -57,7 +57,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICClosed PCUICClosedTyp PCUICConvCumInversion
      PCUICCumulativitySpecEta PCUICTypingEta PCUICSNEta PCUICClosedBodies
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICContextConversionEta
-     PCUICEtaK6EtaStep.
+     PCUICEtaK6EtaStep PCUICPositionEtaTyping.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfReductionEta PCUICSafeReduceEta
      PCUICSafeReduceEtaBridge PCUICSafeConversionEtaK4.
 (* LAST among the stack providers, so the η stack shadows the base one. *)
@@ -113,6 +113,23 @@ Section Conversion.
      [ctf_context], [ctf_case_brs_length], [ctf_wf_universes]); base instance
      [conv_typed_facts_base] in PCUICSafeConversionEtaFacts, restated at the end of this file. *)
   Context {conv_factsE : ConvTypedFacts welltypedE wf_extE}.
+
+  (* The three named hypotheses of EtaPosK4's section EtaTypingE (PCUICPositionEtaTyping),
+     verbatim, so that its lemmas [wf_localE_push_real] (hwf after a real binder push),
+     [wf_localE_eta_step] (hwf after the η step) and [eta_rename_typing] apply here; they are
+     REUSED, not restated. Each one's satisfying instance is EtaPosK4's base instance in the
+     same pcuic file, section EtaTypingBase ([typing_rename_P_inst],
+     [closed_context_conversion_inst], [welltyped_context_inst]): (1) it shows the hypothesis is
+     consistent and the lemmas are about something real; (2) it does NOT discharge the typingE
+     instantiation, which waits for rows T0 (renaming, context conversion) and T6/T2a (inversion
+     through a stack). [welltypedE_context] is [ctf_context] at [wfE] instead of [wf_extE]. *)
+  Context (typingE_rename_P : forall P (Σ : global_env_ext) Γ Δ f t A, wfE Σ.1 ->
+    wf_localE Σ Δ × urenaming (shiftnP #|Γ| P) Γ Δ f ->
+    Σ ;;; Γ |-E t : A -> Σ ;;; Δ |-E rename f t : rename f A).
+  Context (closed_context_conversionE : forall (Σ : global_env_ext), wfE Σ.1 -> forall Γ t T Γ',
+    Σ ;;; Γ |-E t : T -> wf_localE Σ Γ' -> ws_cumul_ctx_pbE Conv Σ Γ Γ' -> Σ ;;; Γ' |-E t : T).
+  Context (welltypedE_context : forall (Σ : global_env_ext), wfE Σ.1 -> forall Γ t,
+    no_Eta_arg (snd t) -> welltypedE Σ Γ (zip t) -> welltypedE Σ (Γ ,,, stack_context (snd t)) (fst t)).
 
   Local Definition heΣ Σ (wfΣ : abstract_env_ext_rel X Σ) :
     ∥ wf_extE Σ ∥ :=  abstract_env_ext_wf _ wfΣ.

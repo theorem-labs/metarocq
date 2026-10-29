@@ -30,15 +30,23 @@
    4. Facts at [welltypedE] that need no hypothesis
       - [welltypedE_tRel_vass]
       - [whnf_tRel_vass]
+   5. Reduction under the η stack (section [EtaStackRed]; base: PCUICReduction.red1_context,
+      red_context_zip, PCUICSafeLemmata.cored_context)
+      - [red1_context_eta]                   (premise [no_Eta_arg π])
+      - [red_context_zip_eta]                (every stack: Eta_arg drops the focus)
+      - [cored_context_eta]                  (premise [no_Eta_arg π])
 
    Named hypotheses and their instances:
       [ConvTypedFacts wt wfP]  --  instance [conv_typed_facts_base : ConvTypedFacts welltyped wf_ext]
-   There is no [Context] variable, no [Admitted], no [Axiom]. *)
+   The η-context facts [wf_localE_push_real], [wf_localE_eta_step], [eta_rename_typing] are
+   EtaPosK4's (PCUICPositionEtaTyping, section EtaTypingE), not restated here.
+   Section [EtaStackRed]'s only [Context] is the environment Σ (not a hypothesis). There is
+   no [Admitted], no [Axiom]. *)
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICLiftSubst PCUICTyping
-     PCUICNormal PCUICInversion PCUICWfUniverses PCUICTypingEta.
+     PCUICNormal PCUICInversion PCUICWfUniverses PCUICTypingEta PCUICEquality PCUICReduction PCUICSafeLemmata.
 (* LAST: the η stack shadows base PCUICPosition's for the unqualified names. *)
 From MetaRocq.PCUIC Require Import PCUICPositionEta.
 
@@ -308,3 +316,86 @@ Lemma whnf_tRel_vass {cf} fl Σ Γ n decl : nth_error Γ n = Some decl -> decl_b
 Proof.
   intros hn hb. apply whnf_ne. apply whne_rel. rewrite hn. cbn. rewrite hb. reflexivity.
 Qed.
+
+(* ===================================================================== *)
+(* 5. Reduction under the η stack: the E counterparts of                 *)
+(*    PCUICReduction.red1_context / red_context_zip and                  *)
+(*    PCUICSafeLemmata.cored_context (base stack). Every frame but       *)
+(*    Eta_arg passes a one-step reduct of the focus to the whole term     *)
+(*    (Eta_app is transparent); Eta_arg drops the focus, so the [red]    *)
+(*    version holds for every stack and the [red1]/[cored] versions need *)
+(*    [no_Eta_arg].                                                      *)
+(* ===================================================================== *)
+
+Section EtaStackRed.
+  Context {cf : checker_flags} (Σ : global_env_ext).
+
+  Lemma red1_context_eta Γ t u π : no_Eta_arg π ->
+    red1 Σ (Γ ,,, stack_context π) t u -> red1 Σ Γ (zipc t π) (zipc u π).
+  Proof.
+    revert t u. induction π as [|a π IHπ]; intros u v hna h; [exact h|].
+    cbn [no_Eta_arg] in hna. apply andb_prop in hna as [ha hna].
+    simpl in *.
+    destruct a; cbn [is_Eta_arg negb] in ha; try discriminate ha.
+    all: apply IHπ; [exact hna|]; simpl; pcuic.
+    - destruct mfix as ((?&[])&?); cbn in *;
+        [apply fix_red_ty|apply fix_red_body].
+      all: apply OnOne2_app; constructor; cbn; auto.
+      intuition auto.
+      rewrite fix_context_fix_context_alt map_app.
+      unfold def_sig at 2.
+      cbn.
+      rewrite -app_context_assoc; auto.
+    - destruct mfix as ((?&[])&?); cbn in *;
+        [apply cofix_red_ty|apply cofix_red_body].
+      all: apply OnOne2_app; constructor; cbn; auto.
+      intuition auto.
+      rewrite fix_context_fix_context_alt map_app.
+      unfold def_sig at 2.
+      cbn.
+      rewrite -app_context_assoc; auto.
+    - destruct p; cbn in *.
+      + apply case_red_param; cbn.
+        apply OnOne2_app.
+        constructor; auto.
+      + apply case_red_return; cbn.
+        rewrite -app_assoc in h; auto.
+    - destruct brs as ((?&[])&?); cbn in *.
+      + apply case_red_brs.
+        apply OnOne2_app.
+        constructor; cbn.
+        rewrite -app_assoc in h; auto.
+    - now apply array_red_type; cbn in *.
+    - now apply array_red_def; cbn in *.
+    - apply array_red_val; cbn in *.
+      eapply OnOne2_app. now constructor.
+  Qed.
+
+  Lemma red_context_zip_eta Γ t u π :
+    red Σ (Γ ,,, stack_context π) t u -> red Σ Γ (zipc t π) (zipc u π).
+  Proof.
+    revert t u. induction π as [|a π IHπ]; intros u v h; [exact h|].
+    cbn [zipc].
+    destruct (is_Eta_arg a) eqn:ha.
+    - destruct a; try discriminate ha. cbn [fill_hole]. reflexivity.
+    - apply IHπ.
+      have e : Γ ,,, stack_context (a :: π) = (Γ ,,, stack_context π) ,,, stack_context [a].
+      { rewrite /app_context /stack_context /=. now rewrite app_nil_r app_assoc. }
+      have h1 : forall x y, red1 Σ (Γ ,,, stack_context (a :: π)) x y ->
+          red1 Σ (Γ ,,, stack_context π) (fill_hole x a) (fill_hole y a).
+      { intros x y r. rewrite e in r.
+        exact (red1_context_eta (Γ ,,, stack_context π) x y [a]
+                 (ltac:(cbn; rewrite ha; reflexivity)) r). }
+      rst_induction h; eauto using h1.
+  Qed.
+
+  Lemma cored_context_eta Γ t u π : no_Eta_arg π ->
+    cored Σ (Γ ,,, stack_context π) t u -> cored Σ Γ (zipc t π) (zipc u π).
+  Proof.
+    intros hna h. induction h.
+    - constructor. now apply red1_context_eta.
+    - eapply cored_trans.
+      + exact IHh.
+      + now apply red1_context_eta.
+  Qed.
+End EtaStackRed.
