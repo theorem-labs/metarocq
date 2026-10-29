@@ -40,8 +40,8 @@
   Base has two [wf_local_alpha]: [PCUICSpine.wf_local_alpha] (over [eq_context_upto_names]) and
   [PCUICAlpha.wf_local_alpha] (over [≡Γ]). Their twins are [PCUICSpineEta.wf_local_alphaE]
   (copy 15) and [PCUICAlphaEta.wf_local_alphaE] (here); wherever both are in scope, write them
-  qualified (cross-lane-commitments.md C6). [isType_is_open_termE] and [weaken_wf_localE] each
-  have two declaration sites on the tree; they are written qualified here.
+  qualified (cross-lane-commitments.md C6). [isType_is_open_termE] (copy 18b will add a second
+  declaration site) and [weaken_wf_localE] are written qualified here.
 
   ** Proof routes that differ from base (statements do not)
 

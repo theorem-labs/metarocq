@@ -287,8 +287,8 @@ Section Validity.
         eapply eq_term_set_binder_name; [|reflexivity].
         now eapply wf_pre_case_predicate_context_gen.
       + exact (wf_local_closed_contextE wfΓ).
-      + exact (isType_is_open_termE typred).
-      + exact (isType_is_open_termE tycp).
+      + exact (PCUICClosedTypEta.isType_is_open_termE typred).
+      + exact (PCUICClosedTypEta.isType_is_open_termE tycp).
 
     - (* Proj *)
       intros Σ wfΣ Γ wfΓ p c u mdecl idecl cdecl pdecl isdecl args _ _ Hc IHc heq_length.

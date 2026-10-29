@@ -177,18 +177,6 @@ Class SRForecastCopy18 := {
     forallb (is_open_term Γ) l ->
     forallb (is_open_term Γ) l' ->
     ws_cumul_pbE_terms Σ Γ l l' ;
-  (* The twin of base [PCUICInductiveInversion.isType_is_open_term] (PCUICInductiveInversion.v:4039,
-     [Arguments {cf Σ wfΣ} Γ T _]), which copy 18 will twin. Checked in compiled form at the switch
-     to frac/eta d49d1c19: the same type as the landed
-     [Typing/PCUICClosedTypEta.isType_is_open_termE] (both-way ascription), but that one is the twin
-     of base [Typing/PCUICClosedTyp.isType_is_open_term], with [Γ T] IMPLICIT
-     ([Arguments {cf Σ wfΣ Γ T} _]); so it is kept. This field shadows that name here, as the
-     copy-18 lemma will. *)
-  isType_is_open_termE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall (Γ : context) (T : term),
-    isTypeE Σ Γ T ->
-    is_open_term Γ T ;
   on_constructor_inst_wf_argsE :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
       {ind : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
@@ -300,11 +288,13 @@ Section SREta.
 (* FORECAST-ONLY: the one class of the block above; delete it when copy 18b lands. *)
 Context {F18 : SRForecastCopy18}.
 
-(* FORECAST-ONLY: the [pcuic] hint that copy 18b re-registers for its E lemma (note @ 0583b56e:
-   [isType_is_open_termE]); delete with its row. Copy 15's (the coercion fields of [spine_substE])
-   and copy 16's ([isType_introE]) are registered globally by [PCUICSpineEta] and
-   [PCUICInductivesEta]. *)
-#[local] Hint Resolve isType_is_open_termE : pcuic.
+(* The [pcuic] hint for the E lemma [isType_is_open_termE], which base's SR finds through the
+   [pcuic] database: its one E home is the landed [PCUICClosedTypEta.isType_is_open_termE]
+   (Typing/PCUICClosedTypEta.v:623); the field [SRForecastCopy18.isType_is_open_termE] that stood
+   for it was deleted after a both-way check of its type (agreed with ArityLane; the landed lemma
+   has [Γ T] implicit on purpose). Copy 15's (the coercion fields of [spine_substE]) and copy 16's
+   ([isType_introE]) hints are registered globally by [PCUICSpineEta] and [PCUICInductivesEta]. *)
+#[local] Hint Resolve PCUICClosedTypEta.isType_is_open_termE : pcuic.
 
 (** The E counterparts of base's [typing]-specific [pcuic] hints that SR's [pcuic]/[pcuics]
     searches use ([PCUICTyping.has_sort_isType], [typing_wf_local]). *)
@@ -1936,7 +1926,7 @@ Proof.
       match goal with hw : wf_predicate _ _ _ |- _ => pose proof (wf_predicate_length_pars hw) end.
       pose proof (declared_minductive_ind_nparsE isdecl). lia. }
     have hidx : forallb (is_open_term Γ) indices.
-    { have isty' := isty. eapply PCUICSREta.isType_is_open_termE in isty'.
+    { have isty' := isty. eapply PCUICClosedTypEta.isType_is_open_termE in isty'.
       move: isty'. rewrite on_free_vars_mkApps forallb_app. now move=> /andP[] _ /andP[]. }
     eapply type_ws_cumul_pbE. eapply typeE_Case; eauto. 1: econstructor; eauto.
     1:econstructor; eauto.
@@ -2230,7 +2220,7 @@ Proof.
       now apply ws_cumul_ctx_pbE_refl_pb, wf_local_closed_contextE.
     * eapply ws_cumul_pbE_eq_le, ws_cumul_pbE_mkApps; tea.
       2:{ eapply WT_refl => //.
-          eapply PCUICSREta.isType_is_open_termE in X0.
+          eapply PCUICClosedTypEta.isType_is_open_termE in X0.
           rewrite on_free_vars_mkApps in X0.
           now move/andP: X0=> []. }
       eapply ws_cumul_pbE_it_mkLambda_or_LetIn; tea.
@@ -2260,12 +2250,12 @@ Proof.
         apply All2_tip. eapply (ws_cumul_pbE_forget_spec (pb:=Conv)).
         symmetry. now eapply closed_red1_ws_cumul_pbE.
       + now apply wf_local_closed_contextE.
-      + eapply PCUICSREta.isType_is_open_termE in X0.
+      + eapply PCUICClosedTypEta.isType_is_open_termE in X0.
         rewrite on_free_vars_mkApps in X0.
         move/andP: X0=> []. generalize (closed_red_open_right_cb (closed_red1_red Hu)).
         rewrite !forallb_app /= => clc' clptm /and3P[] -> /=.
         now rewrite clc'.
-      + eapply PCUICSREta.isType_is_open_termE in X0. rewrite on_free_vars_mkApps in X0.
+      + eapply PCUICClosedTypEta.isType_is_open_termE in X0. rewrite on_free_vars_mkApps in X0.
         now move/andP: X0 => [].
 
   - (* Case congruence on branches *)
@@ -2402,7 +2392,7 @@ Proof.
         assert (context_assumptions (cstr_args cdecl) -
             (context_assumptions (cstr_args cdecl) - p.(proj_arg)) = p.(proj_arg)) by lia.
         rewrite H.
-        move/PCUICSREta.isType_is_open_termE. len.
+        move/PCUICClosedTypEta.isType_is_open_termE. len.
         rewrite !length_skipn; len. rewrite H //.
         rewrite subst_instance_subst // /indsubst.
         rewrite subst_instance_inds.
@@ -2670,7 +2660,7 @@ Proof.
       rewrite !subst_instance_app_ctx -app_context_assoc.
       intro foo. pose (fun x y z => isType_subst_aritiesE isdecl cu (foo x y z)).
       move:i. clear foo.
-      intro foo. pose (fun x y z => PCUICSREta.isType_is_open_termE _ _ (foo x y z)).
+      intro foo. pose (fun x y z => PCUICClosedTypEta.isType_is_open_termE (foo x y z)).
       move:i. clear foo. len.
       rewrite length_skipn; len.
       assert (context_assumptions (cstr_args cdecl) -
@@ -2697,10 +2687,10 @@ Proof.
       now apply closed_red1_red.
     * rewrite on_free_vars_ctx_app andb_true_r on_free_vars_ctx_app H /=.
       cbn. rewrite shiftnP_add /=.
-      move/validityE/PCUICSREta.isType_is_open_termE: typec => -> //.
+      move/validityE/PCUICClosedTypEta.isType_is_open_termE: typec => -> //.
     * rewrite on_free_vars_ctx_app andb_true_r on_free_vars_ctx_app H /=.
       cbn. rewrite shiftnP_add /=.
-      move/validityE/PCUICSREta.isType_is_open_termE: typec => -> //.
+      move/validityE/PCUICClosedTypEta.isType_is_open_termE: typec => -> //.
     * have := (declared_projection_type_and_eqE wf isdecl).
       move=> [[hctors isTy] Hdecl].
       move/validityE/(isType_mkApps_Ind_proj_invE _ isdecl): typec => [sppars hpars hargs cu].
@@ -2711,7 +2701,7 @@ Proof.
       rewrite [_@[u]](subst_instance_app_ctx _ _ [_]).
       rewrite app_context_assoc subst_instance_smash.
       move/(isType_substitutionE sppars) => /=. len.
-      move/PCUICSREta.isType_is_open_termE => /=. now cbn.
+      move/PCUICClosedTypEta.isType_is_open_termE => /=. now cbn.
 Qed.
 
 (** *** Premise 14: fixpoints; the impossible step ([:3328-3331]), a type step ([:3333-3419],

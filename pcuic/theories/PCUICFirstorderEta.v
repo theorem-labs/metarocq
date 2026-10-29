@@ -42,7 +42,7 @@
   ** The forecast block
 
   Section premise: T1's [SRForecastCopy18] ([Construct_Ind_ind_eqE],
-  [declared_constructor_valid_tyE], [isType_is_open_termE]; it enters through [invert_ind_indE],
+  [declared_constructor_valid_tyE]; it enters through [invert_ind_indE],
   [invert_fix_indE] and [typing_cofix_coindE]), imported, never redefined. Copy 16 has landed
   (frac/eta 0fb43f10): T2a's, T1's, [PCUICClassificationEta]'s and this file's copy-16 classes
   ([FirstorderForecastCopy16]: [declared_inductive_type_ws_cumulE]) were deleted after a
