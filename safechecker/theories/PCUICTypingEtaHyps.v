@@ -1739,7 +1739,7 @@ Proof.
   destruct sp as [ty ty' isty isty' c'|ty hd tl na A B B' isty isP c' hhd sp]; intros T' isT' c.
   - exact (type_spine_nilE Σ Γ T' ty' isT' isty'
       (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ c c')).
-  - exact (type_spine_consE Σ Γ T' hd tl na A B B' isT' isP
+  - exact (@type_spine_consE _ Σ Γ T' hd tl na A B B' isT' isP
       (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ c c') hhd sp).
 Qed.
 
@@ -1882,7 +1882,7 @@ Proof.
   intros Hsp. remember (tLetIn na b B T) as L eqn:eL. revert eL.
   destruct Hsp as [ty ty' isty isty' c|ty hd tl na' A B0 B' isty isP c hhd sp]; intros ->.
   - exact (type_spine_nilE Σ Γ _ ty' (sbs_isType_tLetIn_red isty) isty' (ws_cumul_pbE_LetIn_l_inv c)).
-  - exact (type_spine_consE Σ Γ _ hd tl na' A B0 B' (sbs_isType_tLetIn_red isty) isP
+  - exact (@type_spine_consE _ Σ Γ _ hd tl na' A B0 B' (sbs_isType_tLetIn_red isty) isP
       (ws_cumul_pbE_LetIn_l_inv c) hhd sp).
 Qed.
 
