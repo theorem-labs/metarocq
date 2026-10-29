@@ -510,8 +510,10 @@ Section Typecheck.
   Local Definition hΣ Σ (wfΣ : abstract_env_ext_rel X Σ) :
     ∥ wfE Σ ∥ := abstract_env_ext_sq_wf _ _ _ wfΣ.
 
+  (* E: also opens the η facts ([open_eta_facts]); [specialize_Σ] runs after the obligation's binders are
+     introduced, so the opening never captures the recursive function of an Equations definition. *)
   Ltac specialize_Σ wfΣ :=
-    repeat match goal with | h : _ |- _ => specialize (h _ wfΣ) end.
+    repeat match goal with | h : _ |- _ => specialize (h _ wfΣ) end; open_eta_facts.
 
   Local Notation ret := Checked_c (only parsing).
   Local Notation raise := (fun e => TypeError_c e _) (only parsing).
@@ -580,7 +582,6 @@ Section Typecheck.
             Refused_c (NotCumulSmaller false X Γ t u t' u' e)
       }}.
   Next Obligation.
-    open_eta_facts.
     unfold eqb_term_upto_univ_napp in He. pose proof (heΣ _ wfΣ) as [heΣ].
     specialize_Σ wfΣ.
     destruct ht as [? ht], hu as [? hu].
@@ -625,7 +626,6 @@ Section Typecheck.
         s <-? refuse_of_comp (reduce_to_sort Γ tx.π1 _) ;;
         ret (s.π1;_).
     Next Obligation.
-      open_eta_facts.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
       eapply validity_wf ; eauto.
       sq.
@@ -654,7 +654,6 @@ Section Typecheck.
         _ <-? convert Cumul Γ A'.π1 A _ _ ;;
         ret _.
     Next Obligation.
-      open_eta_facts.
     pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
     eapply validity_wf; auto.
     sq. now eapply infering_typing.
@@ -730,26 +729,22 @@ Section Typecheck.
       now eapply isType_Sort.
     Qed.
     Next Obligation.
-      open_eta_facts.
       exists s. split; auto. intros.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
       eapply checking_typing; tea.
       now eapply isType_Sort.
     Defined.
     Next Obligation.
-      open_eta_facts.
       eapply absurd. intros.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
       now eapply typing_checking.
     Qed.
     Next Obligation.
-      open_eta_facts.
       exists s0. split; auto. intros.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
       now eapply infering_sort_typing.
     Defined.
     Next Obligation.
-      open_eta_facts.
       destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
       apply absurd.
@@ -761,13 +756,11 @@ Section Typecheck.
       now eapply has_sort_isType.
     Qed.
     Next Obligation.
-      open_eta_facts.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
       eapply checking_typing; tea.
       now eapply has_sort_isType.
     Qed.
     Next Obligation.
-      open_eta_facts.
       eapply absurd. intros.
       pose (hΣ _ wfΣ).
       specialize_Σ wfΣ. sq.
@@ -785,7 +778,6 @@ Section Typecheck.
       now apply H0.
     Qed.
     Next Obligation.
-      open_eta_facts.
       destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
       eapply absurd. intros.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
@@ -1055,7 +1047,6 @@ Section Typecheck.
         all: repeat (eexists; eauto).
       Qed.
       Next Obligation.
-        open_eta_facts.
         pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
         eapply inv_wf_local in wfΔ as [wfΔ wfd].
         eapply inv_wf_local in wfΔ' as [wfΔ' wfd'].
@@ -1163,7 +1154,6 @@ Section Typecheck.
       now depelim wt.
     Qed.
     Next Obligation.
-      open_eta_facts.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
       rewrite -subst_context_rev_subst_telescope.
       eapply substitution_wf_local_rel ; tea.
@@ -1179,7 +1169,6 @@ Section Typecheck.
       sq. depelim HΔ. now apply assumption_context_subst_telescope.
     Qed.
     Next Obligation.
-      open_eta_facts.
       pose (hΣ _ wfΣ). specialize_Σ wfΣ. sq.
       constructor ; tea.
       apply checking_typing ; auto.
@@ -1192,7 +1181,6 @@ Section Typecheck.
       now depelim H.
     Qed.
     Next Obligation.
-      open_eta_facts.
       apply absurd. intros; pose (hΣ _ wfΣ); specialize_Σ wfΣ. sq.
       apply typing_checking.
       now depelim H.
@@ -1484,7 +1472,6 @@ Section Typecheck.
       now destruct i as [? []].
     Qed.
     Next Obligation.
-      open_eta_facts.
       eapply branch_helper in i; tea.
       pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ; sq.
       destruct i as [? []].
@@ -1593,7 +1580,6 @@ Section Typecheck.
       ret _.
 
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ; sq.
     apply isType_lift ; eauto.
     - len.
@@ -1606,7 +1592,6 @@ Section Typecheck.
     now depelim wf_types.
   Qed.
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ; sq.
     constructor ; tea.
     depelim wf_types.
@@ -1625,7 +1610,6 @@ Section Typecheck.
     now depelim H.
   Qed.
   Next Obligation.
-    open_eta_facts.
     apply absurd. intros. pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ; sq.
     depelim H.
     apply lift_typing_lift_sorting in o; eauto.
@@ -2691,7 +2675,6 @@ Section Typecheck.
   Qed.
   (* tProd *)
   Next Obligation.
-    open_eta_facts.
     (* intros Γ HΓ t na A B Heq_t [s ?];  *)
     pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ.
     sq; econstructor ; tea.
@@ -2711,7 +2694,6 @@ Section Typecheck.
     Unshelve. all: eauto.
   Qed.
   Next Obligation.
-    open_eta_facts.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose (hΣ _ wfΣ). specialize_Σ wfΣ; sq.
     inversion X1; subst. apply absurd.
@@ -2734,7 +2716,6 @@ Section Typecheck.
     sq; econstructor; tea.
   Qed.
   Next Obligation.
-    open_eta_facts.
     (* intros Γ HΓ t0 na A t Heq_t [s ?] [B ?]; *)
       cbn; pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ.
       sq; econstructor; tas.
@@ -2747,7 +2728,6 @@ Section Typecheck.
     Unshelve. all: eauto.
   Qed.
   Next Obligation.
-    open_eta_facts.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (heΣ _ wfΣ) as [heΣ].
     specialize_Σ wfΣ; sq. inversion X1; subst. apply absurd.
@@ -2761,7 +2741,6 @@ Section Typecheck.
     now eapply isTypeRel_isType.
   Qed.
   Next Obligation.
-    open_eta_facts.
     (* intros Γ HΓ t n b b_ty b' Heq_t [? ?] H0; *)
     pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ ; sq.
     econstructor ; tea.
@@ -2771,7 +2750,6 @@ Section Typecheck.
     apply checking_typing ; eauto.
   Qed.
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn; specialize_Σ wfΣ; sq; econstructor; tas.
     eapply lift_typing_lift_sorting in s as [_ s]; auto.
@@ -2790,7 +2768,6 @@ Section Typecheck.
     intros. sq. unshelve erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
   Qed.
   Next Obligation.
-    open_eta_facts.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (heΣ _ wfΣ) as [heΣ].
     specialize_Σ wfΣ; sq. inversion X1; subst. apply absurd.
@@ -2800,7 +2777,6 @@ Section Typecheck.
   Qed.
   (* tApp *)
   Next Obligation.
-    open_eta_facts.
     cbn in *. pose proof (heΣ _ wfΣ) as [heΣ].
     specialize_Σ wfΣ ; sq.
     eapply validity_wf ; eauto.
@@ -2808,7 +2784,6 @@ Section Typecheck.
     now apply infering_typing.
   Qed.
   Next Obligation.
-    open_eta_facts.
     cbn in *. pose proof (heΣ _ wfΣ) as [heΣ].
     specialize_Σ wfΣ ; sq.
     eapply infering_typing, type_reduction_closed, validity in X3.
@@ -2823,7 +2798,6 @@ Section Typecheck.
     now apply closed_red_red.
   Qed.
   Next Obligation.
-    open_eta_facts.
     cbn in *. apply absurd; intros.
     pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ ; sq.
     inversion X1 ; subst.
@@ -2970,7 +2944,6 @@ Section Typecheck.
 
   (* tCase *)
   Next Obligation.
-    open_eta_facts.
     cbn in *. pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ ; sq.
     eapply infering_typing, validity in X0 as (_ & ? & ? & _); eauto.
     eexists; eauto using validity_wf.
@@ -2982,7 +2955,6 @@ Section Typecheck.
     eapply (weaken_lookup_on_global_env' _ _ _ (heΣ : wfE _) (proj1 X1)).
   Qed.
   Next Obligation.
-    open_eta_facts.
     rewrite List.rev_involutive.
     cbn in *. pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ ; sq.
     eapply wf_rel_weak ; eauto.
@@ -2995,7 +2967,6 @@ Section Typecheck.
     apply assumption_context_subst_instance, smash_context_assumption_context; constructor.
   Qed.
   Next Obligation.
-    open_eta_facts.
     cbn in *. pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ ; sq.
     apply eqb_eq in i. subst I.
     apply eqb_eq in i0.
@@ -3013,7 +2984,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     (*TODO: factor*)
     cbn in *. pose proof (heΣ _ wfΣ) as [heΣ]. specialize_Σ wfΣ ; sq.
     apply eqb_eq in i. subst I.
@@ -3079,7 +3049,6 @@ Section Typecheck.
 
   Obligation Tactic := idtac.
   Next Obligation.
-    open_eta_facts.
     intros. simpl in *. clearbody isty.
     destruct cty as [A cty]. cbn in *.
     subst ind' u args mdecl idecl isdecl.
@@ -3100,7 +3069,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
@@ -3108,7 +3076,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros. simpl in *.
     clearbody isty wfp.
     destruct ps as [u' pty] ; cbn.
@@ -3149,7 +3116,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros; clearbody isty wfp. cbn.
     destruct cty as [A cty].
     subst ind' u args mdecl idecl isdecl.
@@ -3208,7 +3174,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros; clearbody isty wfp.
     destruct cty as [A cty].
     subst ind' u args mdecl idecl isdecl.
@@ -3233,7 +3198,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros; clearbody isty wfp.
     destruct cty as [A cty].
     subst ind' u args mdecl idecl isdecl.
@@ -3258,7 +3222,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros; clearbody isty wfp.
     destruct cty as [A cty].
     subst ind' u args mdecl idecl isdecl.
@@ -3318,7 +3281,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros.
     destruct cty as [A cty].
     subst ind' u args mdecl idecl isdecl.
@@ -3357,7 +3319,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros.
     destruct cty as [A cty].
     subst ind' u args mdecl idecl isdecl.
@@ -3379,7 +3340,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros.
     destruct cty as [A cty].
     subst ind' u args mdecl idecl isdecl.
@@ -3488,7 +3448,6 @@ Section Typecheck.
   Qed.
 
   Next Obligation.
-    open_eta_facts.
     intros.
     destruct cty as [A cty].
     subst ind' u args.
@@ -3528,14 +3487,12 @@ Section Typecheck.
 
   (* tProj *)
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
     eapply validity_wf ; eauto. sq.
     now eapply infering_typing.
   Qed.
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
     pose proof (on_declared_inductive decl) as [onmib oni].
@@ -3556,9 +3513,9 @@ Section Typecheck.
       2: now apply infering_typing.
       eapply validity in X2; eauto.
       destruct (ssrbool.elimT (eqb_specT p.(proj_ind) I)); auto.
-      unshelve eapply (PCUICInductives.isType_mkApps_Ind_inv _ decl _) in X2 as [parsubst [argsubst [sp sp' cu]]]; eauto.
-      pose proof (Hl := PCUICContextSubst.context_subst_length2 (PCUICSpine.inst_ctx_subst sp)).
-      pose proof (Hr := PCUICContextSubst.context_subst_length2 (PCUICSpine.inst_ctx_subst sp')).
+      unshelve eapply (isType_mkApps_Ind_inv _ decl _) in X2 as [parsubst [argsubst [sp sp' cu]]]; eauto.
+      pose proof (Hl := PCUICContextSubst.context_subst_length2 (inst_ctx_substE sp)).
+      pose proof (Hr := PCUICContextSubst.context_subst_length2 (inst_ctx_substE sp')).
       autorewrite with len in Hl, Hr.
       destruct (on_declared_inductive decl) eqn:ond.
       rewrite -o.(onNpars) -Hl.
@@ -3586,7 +3543,6 @@ Section Typecheck.
     now eapply Nat.eqb_eq.
   Qed.
   Next Obligation.
-    open_eta_facts.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
@@ -3640,12 +3596,10 @@ Section Typecheck.
 
   (* tFix *)
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
     now eapply All_mfix_wf. Qed.
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
     unfold abstract_env_fixguard in guarded.
@@ -3665,7 +3619,6 @@ Section Typecheck.
     sq. now inversion X1.
   Qed.
   Next Obligation.
-    open_eta_facts.
     apply absurd; intros.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
@@ -3675,7 +3628,6 @@ Section Typecheck.
     eapply All_mfix_wf; eauto.
   Qed.
   Next Obligation.
-    open_eta_facts.
     apply absurd; intros.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
@@ -3692,12 +3644,10 @@ Section Typecheck.
 
   (* tCoFix *)
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
     now eapply All_mfix_wf. Qed.
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
     unfold abstract_env_cofixguard in guarded.
@@ -3717,7 +3667,6 @@ Section Typecheck.
     sq. now inversion X1.
   Qed.
   Next Obligation.
-    open_eta_facts.
     apply absurd; intros.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
@@ -3727,7 +3676,6 @@ Section Typecheck.
     eapply All_mfix_wf; eauto.
   Qed.
   Next Obligation.
-    open_eta_facts.
     apply absurd; intros.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
@@ -3809,20 +3757,17 @@ Section Typecheck.
       bdcheck infer Γ HΓ t A _ ;;
       ret _.
   Next Obligation.
-    open_eta_facts.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
     now apply checking_typing.
   Qed.
   Next Obligation.
-    open_eta_facts.
     apply absurd; intros.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
     now apply typing_checking.
   Qed.
   Next Obligation.
-    open_eta_facts.
     apply absurd; intros.
     pose proof (heΣ _ wfΣ) as [heΣ].
     cbn in *. specialize_Σ wfΣ ; sq.
