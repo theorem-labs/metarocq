@@ -423,7 +423,7 @@ Lemma mfix_on_ind_conv_redE_fix_inst :
     (fun mind => check_recursivity_kind (lookup_env si_Σ) mind Finite) bd_mfix.
 Proof.
   exact (mfix_on_ind_conv_redE_fix (Σ := si_Σ) (wfΣ := si_wfE) (mfix := bd_mfix) bd_wfE_Γ1
-           (@All_cons _ _ bd_fix_d _ bd_fix_dtype_isTypeE All_nil) mfix_on_ind_red_convE_inst).
+           (@All_cons _ _ bd_fix_d _ bd_fix_dtype_isTypeE All_nil) bd_mfix_on_ind_red_convE_inst).
 Qed.
 
 Lemma wf_fixpointE_wf_fixpoint_red_inst : wf_fixpoint_red si_Σ bd_Γ1 bd_mfix.
