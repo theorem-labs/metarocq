@@ -283,10 +283,12 @@ Qed.
   rule relating two terms with different head constructors. [c9_not_compare_term] proves
   exactly that, for every comparison direction, every [pb], every [napp], every
   environment and every universe comparison, and [c9_not_compare_ctx] carries it to the
-  context pair [c9_ΓB]/[c9_ΓA] that the rest of this file uses. So no instance of
-  [eq_context_cumul_SpecE] or [eq_context_cumul_Spec_relE] can be built on an η step:
-  [c9_ΓP]/[c9_ΓT] is not a weaker choice among several, it is the only kind of pair those
-  two lemmas admit. What the refutation does NOT say: nothing about the η-closure
+  context pair [c9_ΓB]/[c9_ΓA] that the rest of this file uses. So this file's η-pair
+  ([λy:Prop. I y] against [I]) cannot instantiate [eq_context_cumul_SpecE] or
+  [eq_context_cumul_Spec_relE]; any instance of those two lemmas uses a pair that
+  [compare_term] relates, such as [c9_ΓP]/[c9_ΓT]. The proofs fix [default_checker_flags],
+  and [c9_not_compare_ctx] is stated at this file's environment. What the refutation does
+  NOT say: nothing about the η-closure
   relations ([cumulSpecE0], [ws_cumul_pbE]), which do relate the pair; this is a property
   of [compare_term] alone.
 

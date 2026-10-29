@@ -418,10 +418,10 @@ Proof. left; reflexivity. Qed.
   the monomorphic declaration this file uses: the data and the well-formedness of [I]
   ([si_cdecl] to [si_wf] of [PCUICCumulativitySpecEtaClosureInstances]) are about 155
   lines, which a polymorphic declaration repeats over a polymorphic [global_env_ext]; on
-  top of that come the polymorphic [on_udecl] (the [up_on_udecl] pattern of this file, 14
-  lines, where the monomorphic one is [si_on_udecl]) and the [on_variance] obligation,
-  which [ind_variance := None] over a monomorphic context discharges by [reflexivity] and
-  a polymorphic context does not. The η content of this file does not depend on it: the
+  top of that comes the polymorphic [on_udecl] (the [up_on_udecl] pattern of this file, 14
+  lines, where the monomorphic one is [si_on_udecl]). The [on_variance] obligation adds
+  nothing: with [ind_variance := None] it is [unit] over a polymorphic context too, and
+  [tt] discharges it. The η content of this file does not depend on it: the
   η steps are in the terms, not in the universes. *)
 (* NOT BUILT (polymorphic inductive): proves satisfiability only; the inductive [I] is
    monomorphic, so its universe context is empty and [wf_ext_wkE] holds with nothing to
