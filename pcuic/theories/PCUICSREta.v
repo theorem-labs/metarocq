@@ -27,6 +27,9 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICCumulativitySpe
      PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind PCUICEtaA6More PCUICEtaJoinSpec PCUICEtaFInstGlue
      PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
      PCUICInversionEta PCUICSREtaConv.
+(* Copy 9 (gated at d46f9387, merged into this branch): [context_conversionE] and
+   [closed_context_conversionE], with the statements the forecast block had. *)
+From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
 From MetaRocq.PCUIC.Typing Require PCUICUnivSubstitutionTypEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta.
 
@@ -155,28 +158,6 @@ Class SRForecastT2a := {
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ f u T},
     Σ ;;; Γ |-E mkApps f u : T ->
     ∑ A, Σ ;;; Γ |-E f : A × typing_spineE Σ Γ A u T
-}.
-
-(** *** Copy 9 ([Typing/PCUICContextConversionTypEta.v]): the statements of
-    [wip/eta-e3-copy9-2026-10-29] @ [d46f9387], which are the twins of base. *)
-
-(* FORECAST-ONLY: proved by copy 9 (Typing/PCUICContextConversionTypEta.v); delete when it lands. *)
-Class SRForecastCopy9 := {
-  (* twin of Typing/PCUICContextConversionTyp.v:400 closed_context_conversion *)
-  closed_context_conversionE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} Γ {t T Γ'},
-    Σ ;;; Γ |-E t : T ->
-    wf_localE Σ Γ' ->
-    ws_cumul_ctx_pbE Conv Σ Γ Γ' ->
-    Σ ;;; Γ' |-E t : T ;
-  (* twin of Typing/PCUICContextConversionTyp.v:387 context_conversion; base [cumulAlgo_gen] →
-     [JoinE] *)
-  context_conversionE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} Γ {t T Γ'},
-    Σ ;;; Γ |-E t : T ->
-    wf_localE Σ Γ' ->
-    conv_context (@JoinE cf) Σ Γ Γ' ->
-    Σ ;;; Γ' |-E t : T
 }.
 
 (** *** Copy 10 ([PCUICSubstitutionEta.v]): twins of base [PCUICSubstitution]. The statement note
@@ -776,7 +757,7 @@ Local Set Warnings "unexpected-implicit-declaration".
 Section SREta.
 
 (* FORECAST-ONLY: one premise per row of the block above; delete each line when its row lands. *)
-Context {FT2a : SRForecastT2a} {F9 : SRForecastCopy9} {F10 : SRForecastCopy10}
+Context {FT2a : SRForecastT2a} {F10 : SRForecastCopy10}
   {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
   {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
 
@@ -1911,6 +1892,347 @@ Proof. sr_intro. sr_pre. Qed.
 
 Lemma sr_red1E_Construct {cf : checker_flags} : ltac:(sr_case_type cf 10).
 Proof. sr_intro. sr_pre. Qed.
+
+(** *** Premise 8: applications; β ([:2078-2088]), fixpoint unfolding ([:2090-2102]), the
+    argument step ([:2104-2116]) and a registered operation applied ([:2118-2125]). *)
+Lemma sr_red1E_App {cf : checker_flags} : ltac:(sr_case_type cf 7).
+Proof.
+  sr_intro. sr_pre.
+  - (* β. [cumul_Prod_invE]: the domains are [Conv]-related even over η (audit §7 C1). *)
+    eapply substitution0E; eauto.
+    pose proof typet as typet'.
+    eapply inversion_LambdaE in typet' as (B' & Ht & Hb & HU) =>//.
+    apply cumul_Prod_invE in HU as [eqann eqA leqB] => //.
+    pose proof (validityE typet) as i.
+    eapply isType_tProdE in i as [Hdom Hcodom]; auto.
+    eapply type_ws_cumul_pbE; eauto.
+    destruct Hcodom as (_ & scodom & Hcodom & _).
+    unshelve eapply (closed_context_conversionE _ Hb); pcuic.
+    constructor. now apply ws_cumul_ctx_pbE_refl, wf_local_closed_contextE. constructor; auto.
+
+  - (* Fixpoint unfolding *)
+    assert (args <> []) by (destruct args; simpl in *; congruence).
+    symmetry in H3. apply tApp_mkApps_inj in H3 as [-> Hu]; auto.
+    rewrite mkApps_nonempty; auto.
+    epose (last_nonempty_eq H4). rewrite <- Hu in e. rewrite <- e.
+    clear e.
+    specialize (inversion_mkAppsE typet) as [T' [appty spty]].
+    have vT' := (validityE appty).
+    eapply type_tFix_invE in appty as [T [arg [fn' [[[Hnth wffix] Hty]]]]]; auto.
+    rewrite H in Hnth. noconf Hnth.
+    eapply typeE_App; eauto.
+    eapply type_mkAppsE; [|tea].
+    eapply type_ws_cumul_pbE; eauto.
+
+  - (* Application congruence for argument; base's [red_cumul_inv] is [JoinE_red_r] *)
+    intuition auto.
+    eapply type_Cumul_altE; [eapply typeE_App| |]; eauto with wf.
+    eapply validityE.
+    eapply typeE_App; eauto. eapply JoinE_red_r.
+    eapply (red_red_cb (Γ := Γ) (Δ := [vass na A]) (Γ' := []) (s := [u]) (s' := [N2])); eauto.
+    erewrite -> on_free_vars_ctx_on_ctx_free_vars.
+    eapply on_free_vars_ctx_snoc_ass; tea.
+    eapply type_closedE in typeu. now eapply closedn_on_free_vars.
+    eapply type_closedE in typet. cbn in typet; repeat inv_on_free_vars.
+    cbn. now eapply closedn_on_free_vars. constructor. apply: red1_red Hu. constructor.
+    all:repeat constructor. cbn.
+    rewrite -(shiftnP_add 1) addnP_shiftnP. repeat inv_on_free_vars => //.
+
+  - (* red_prim_op on an application: an operation applied to literals *)
+    match goal with
+    | [ H : ?tm = mkApps (tConst _ _) (map term_of_lit _) |- _ ;;; _ |-E _ : ?T ] =>
+        assert (ht : Σ ;;; Γ |-E tm : T) by (eapply typeE_App; eauto); rewrite H in ht
+    | [ H : mkApps (tConst _ _) (map term_of_lit _) = ?tm |- _ ;;; _ |-E _ : ?T ] =>
+        assert (ht : Σ ;;; Γ |-E tm : T) by (eapply typeE_App; eauto); rewrite <- H in ht
+    end.
+    eapply sr_prim_opE; tea.
+Qed.
+
+(** *** Premise 14: fixpoints; the impossible step ([:3328-3331]), a type step ([:3333-3419],
+    with the witness transported by [mfix_on_ind_red1_typeE]) and a body step ([:3420-3476]).
+    Base's algorithmic context conversion [conv_context cumulAlgo_gen] is
+    [conv_context (@JoinE cf)], built from [conv_decls_fix_contextE] with [ws_cumul_pbE_forget]. *)
+Lemma sr_red1E_Fix {cf : checker_flags} : ltac:(sr_case_type cf 13).
+Proof.
+  sr_intro. sr_pre.
+  - (* Fix congruence *)
+    match goal with H : mkApps (tFix _ _) _ = _ |- _ =>
+      apply mkApps_Fix_spec in H; simpl in H; subst args end.
+    simpl. destruct narg; discriminate.
+
+  - (* Fix congruence: type reduction *)
+    match goal with H : wf_fixpointE _ _ _ |- _ => rename H into wffix end.
+    match goal with H : OnOne2 _ mfix mfix1 |- _ => rename H into X4 end.
+    match goal with H : is_true (forallb (test_def _ _) mfix) |- _ => rename H into H2 end.
+    assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
+    assert(convctx : conv_context (@JoinE cf) Σ (Γ ,,, fix_context mfix) (Γ ,,, fix_context mfix1)).
+    { clear -wf wfΓ X X4 H2 fixl F18.
+      eapply All2_fold_app => //.
+      reflexivity.
+      eapply All2_fold_impl.
+      eapply (conv_decls_fix_contextE wf (Γ := Γ)) => //.
+      move: H2.
+      assert (clΓ := wf_local_closed_contextE wfΓ).
+      clear fixl. move: #|mfix|. induction X4; constructor.
+      * destruct p as [[r p] e]. noconf e. split.
+        now apply closed_red1_ws_cumul_pbE. rewrite H. reflexivity.
+      * cbn in H2. move/andP: H2 => [_ Htl].
+        eapply forallb_All in Htl. eapply All_All2; tea.
+        move=> [dname dty dbod] /= h. rewrite /test_def /=;
+        move/andP=> [hty _]. split; try reflexivity.
+        eapply ws_cumul_pbE_refl => //.
+      * move/andP: H2 => [/andP [Hty _] _].
+        split; try reflexivity. apply ws_cumul_pbE_refl => //.
+      * eapply IHX4. simpl in H2; now move/andP: H2 => [].
+      * cbn. intros ???? []; constructor; eauto; now apply ws_cumul_pbE_forget. }
+    assert (All (on_def_type (lift_typing typingE Σ) Γ) mfix1).
+    { apply (OnOne2_All_All X4 X1).
+      * intros d HT.
+        apply lift_typing_impl with (1 := HT); now intros ?? [Hty _].
+      * intros d d' [[red _] eq] HT'.
+        destruct d as [na ty bo ra], d' as [na' ty' bo' ra']; cbn in *; noconf eq.
+        rewrite /on_def_type /=.
+        apply lift_sorting_it_impl_gen with HT' => //; now intros [_ IH]. }
+    assert (wf_localE Σ (Γ ,,, fix_context mfix1)).
+    { apply All_mfix_wfE; auto. }
+    destruct (OnOne2_nth_error _ _ _ decl _ X4 heq_nth_error) as [decl' [eqnth disj]].
+    eapply type_Cumul_altE.
+    econstructor; eauto.
+    * eapply (fix_guard_red1 _ _ _ _ 0);
+        [ apply wfE_wf_cases_env
+        | eapply wf_local_wf_cases_ctxE; tea
+        | | eauto ].
+      constructor; eauto.
+      eapply OnOne2_impl; tea; cbn; intuition auto.
+      apply a2. apply a2.
+    * eapply (OnOne2_All_mix_left X1) in X4.
+      apply (OnOne2_All_All X4 X3).
+      + intros d Hj.
+        unfold on_def_body. rewrite -fixl.
+        eapply lift_typing_impl with (1 := Hj) => ?? [] HT IHT.
+        eapply context_conversionE; eauto.
+      + move=> [na ty b rarg] [na' ty' b' rarg'] [[[red Hred] eq] HT] HB.
+        rewrite /= in red, Hred, eq, HB, HT.
+        noconf eq.
+        destruct HB as ((Hb & IHb) & s & (Ht & IHt) & e & er); cbn in *.
+        eassert (Σ ;;; Γ ,,, _ |-E lift0 _ ty' : tSort s).
+        2: repeat (eexists; cbn). 4: eassumption.
+        2,3: eapply context_conversionE; eauto.
+        all: rewrite -fixl.
+        { eapply IHt. eapply (weakening_closed_red1_cb (Γ' := [])); eauto. now eapply wf_local_closed_contextE. }
+        eapply type_Cumul_altE. eapply Hb.
+        eapply has_sort_isTypeE. rewrite fixl. eassumption.
+        apply JoinE_red_l, red1_red.
+        eapply (weakening_red1_cb _ []); [exact _| |eapply red].
+        pose proof (Hs := HT.2.π2.1.1).
+        eapply subject_closedE in Hs.
+        eapply (closedn_on_free_vars (P:=xpredT)) in Hs.
+        now eapply on_free_vars_any_xpredT.
+
+    * destruct wffix as [isl [hr hm]].
+      have o : OnOne2 (fun x y : def term => Σ ;;; Γ ⊢ dtype x ⇝ dtype y
+          × (dname x, dbody x, rarg x) = (dname y, dbody y, rarg y)) mfix mfix1.
+      { eapply OnOne2_impl; tea; cbn; intros x y [[r _] e];
+          split; [now eapply closed_red1_red|exact e]. }
+      split; [|split].
+      + eapply (forallb_OnOne2 o); [|exact isl].
+        intros x y [_ e]; cbn. now case: e => _ -> _.
+      + eapply (forallb_OnOne2 o); [|exact hr].
+        intros [na ty bo ra] [na' ty' bo' ra'] [r e]; cbn in r, e.
+        case: e => <- <- <-.
+        exact (red_has_rec_arg_cb (d := {| dname := na; dtype := ty; dbody := bo; rarg := ra |}) r).
+      + exact (mfix_on_ind_red1_typeE Γ mfix mfix1 o hm).
+    * eapply isTypeRelE_isTypeE. eapply All_nth_error in X0; eauto.
+    * destruct disj as [<-|[[red Hred] eq]].
+      + apply JoinE_refl.
+      + apply JoinE_red_r, red1_red, red.
+
+  - (* Fix congruence in body *)
+    match goal with H : wf_fixpointE _ _ _ |- _ => rename H into wffix end.
+    match goal with H : OnOne2 _ mfix mfix1 |- _ => rename H into X4 end.
+    assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
+    assert(convctx : fix_context mfix = fix_context mfix1).
+    { clear -wf X4.
+      change fix_context with (fix_context_gen 0).
+      generalize 0. induction X4.
+      destruct p as [_ eq]. noconf eq. simpl in H; noconf H.
+      simpl. intros. now rewrite H H0.
+      simpl. intros n'; f_equal. apply IHX4. }
+    assert (All (on_def_type (lift_typing typingE Σ) Γ) mfix1).
+    { apply (OnOne2_All_All X4 X1).
+      * intros d HT.
+        apply lift_typing_impl with (1 := HT); now intros ?? [Hty _].
+      * intros d d' [[red _] eq] HT'.
+        destruct d as [na ty bo ra], d' as [na' ty' bo' ra']; cbn in *; noconf eq.
+        unfold on_def_type in HT' |- *; cbn in *.
+        apply lift_typing_impl with (1 := HT'); now intros ?? []. }
+    assert (wf_localE Σ (Γ ,,, fix_context mfix1)).
+    { apply All_mfix_wfE; auto. }
+    destruct (OnOne2_nth_error _ _ _ decl _ X4 heq_nth_error) as [decl' [eqnth disj]].
+    eapply type_Cumul_altE.
+    econstructor; eauto.
+    * eapply (fix_guard_red1 _ _ _ _ 0);
+        [ apply wfE_wf_cases_env
+        | eapply wf_local_wf_cases_ctxE; tea
+        | | eauto ].
+      apply fix_red_body; eauto.
+      eapply OnOne2_impl; tea; cbn; intuition auto.
+      apply a2. apply a2.
+    * eapply (OnOne2_All_mix_left X1) in X4.
+       apply (OnOne2_All_All X4 X3).
+      + intros d Hj.
+        rewrite -convctx.
+        eapply lift_typing_impl with (1 := Hj) => ?? [] HT //.
+      + move=> [na ty b rarg] [na' ty' b' rarg'] /= [[[red IH] eq] HT] HB.
+        noconf eq.
+        rewrite -convctx.
+        apply lift_sorting_it_impl_gen with HB => //= [] [Ht IHt] //. eauto.
+    * destruct wffix as [isl [hr hm]].
+      have o : OnOne2 (fun x y : def term =>
+          closed_red1 Σ (Γ ,,, fix_context mfix) (dbody x) (dbody y)
+          × (dname x, dtype x, rarg x) = (dname y, dtype y, rarg y)) mfix mfix1.
+      { eapply OnOne2_impl; tea; cbn; intros x y [[r _] e]; split; [exact r|exact e]. }
+      split; [|split].
+      + eapply (forallb_OnOne2 o); [|exact isl].
+        intros x y [r _] h; cbn in h |- *.
+        exact (isLambda_red1 _ _ _ _ h (clrel_rel r)).
+      + eapply (forallb_OnOne2 o); [|exact hr].
+        intros [na ty bo ra] [na' ty' bo' ra'] [_ e] h; cbn in e.
+        case: e => <- <- <-. exact h.
+      + exact (mfix_on_ind_red1_body _ mfix mfix1 o hm).
+    * eapply isTypeRelE_isTypeE. eapply All_nth_error in X0; eauto.
+    * destruct disj as [<-|[_ eq]]; [apply JoinE_refl|].
+      destruct decl as [na ty bo ra], decl' as [na' ty' bo' ra']; cbn in *; noconf eq.
+      apply JoinE_refl.
+Qed.
+
+(** *** Premise 15: cofixpoints; a type step ([:3478-3553]) and a body step ([:3555-3600]) *)
+Lemma sr_red1E_CoFix {cf : checker_flags} : ltac:(sr_case_type cf 14).
+Proof.
+  sr_intro. sr_pre.
+  - (* CoFix congruence: type reduction *)
+    match goal with H : wf_cofixpointE _ _ _ |- _ => rename H into wffix end.
+    match goal with H : OnOne2 _ mfix mfix1 |- _ => rename H into X4 end.
+    match goal with H : is_true (forallb (test_def _ _) mfix) |- _ => rename H into H2 end.
+    assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
+    assert(convctx : conv_context (@JoinE cf) Σ (Γ ,,, fix_context mfix) (Γ ,,, fix_context mfix1)).
+    { clear -wf wfΓ X X4 H2 fixl F18.
+      eapply All2_fold_app => //; trea.
+      eapply All2_fold_impl.
+      eapply (conv_decls_fix_contextE wf (Γ := Γ)) => //.
+      move: H2.
+      assert (clΓ := wf_local_closed_contextE wfΓ).
+      clear fixl. move: #|mfix|. induction X4; constructor.
+      * destruct p as [[r p] e]. noconf e. split.
+        now apply closed_red1_ws_cumul_pbE. rewrite H. reflexivity.
+      * cbn in H2. move/andP: H2 => [_ Htl].
+        eapply forallb_All in Htl. eapply All_All2; tea.
+        move=> [dname dty dbod] /= h. rewrite /test_def /=;
+        move/andP=> [hty _]. split; try reflexivity.
+        eapply ws_cumul_pbE_refl => //.
+      * move/andP: H2 => [/andP [Hty _] _].
+        split; try reflexivity. apply ws_cumul_pbE_refl => //.
+      * eapply IHX4. simpl in H2; now move/andP: H2 => [].
+      * cbn. intros ???? []; constructor; eauto; now apply ws_cumul_pbE_forget. }
+    assert (All (on_def_type (lift_typing typingE Σ) Γ) mfix1).
+      { apply (OnOne2_All_All X4 X1).
+      * intros d HT.
+        apply lift_typing_impl with (1 := HT); now intros ?? [Hty _].
+      * intros d d' [[red _] eq] HT'.
+        destruct d as [na ty bo ra], d' as [na' ty' bo' ra']; cbn in *; noconf eq.
+        rewrite /on_def_type /=.
+        apply lift_sorting_it_impl_gen with HT' => //. now intros [_ IH]. }
+    assert (wf_localE Σ (Γ ,,, fix_context mfix1)).
+    { apply All_mfix_wfE; auto. }
+    destruct (OnOne2_nth_error _ _ _ decl _ X4 heq_nth_error) as [decl' [eqnth disj]].
+    eapply type_Cumul_altE.
+    econstructor; eauto.
+    * eapply (cofix_guard_red1 _ _ _ _ 0);
+        [ apply wfE_wf_cases_env
+        | eapply wf_local_wf_cases_ctxE; tea
+        | | eauto ].
+      constructor; eauto.
+      eapply OnOne2_impl; tea; cbn; intuition auto.
+      apply a2. apply a2.
+    * eapply (OnOne2_All_mix_left X1) in X4.
+      apply (OnOne2_All_All X4 X3).
+      + intros d Hj.
+        unfold on_def_body. rewrite -fixl.
+        eapply lift_typing_impl with (1 := Hj) => ?? [] HT IHT.
+        eapply context_conversionE; eauto.
+      + move=> [na ty b rarg] [na' ty' b' rarg'] [[[red Hred] eq] HT] HB.
+        rewrite /= in red, Hred, eq, HB, HT.
+        noconf eq.
+        destruct HB as ((Hb & IHb) & s & (Ht & IHt) & e & er); cbn in *.
+        eassert (Σ ;;; Γ ,,, _ |-E lift0 _ ty' : tSort s).
+        2: repeat (eexists; cbn). 4: eassumption.
+        2,3: eapply context_conversionE; eauto.
+        all: rewrite -fixl.
+        { eapply IHt. eapply (weakening_closed_red1_cb (Γ' := [])); eauto. now eapply wf_local_closed_contextE. }
+        eapply type_Cumul_altE. eapply Hb.
+        eapply has_sort_isTypeE. rewrite fixl. eassumption.
+        apply JoinE_red_l, red1_red.
+        eapply (weakening_red1_cb _ []); [exact _| |eapply red].
+        pose proof (Hs := HT.2.π2.1.1).
+        eapply subject_closedE in Hs.
+        eapply (closedn_on_free_vars (P:=xpredT)) in Hs.
+        now eapply on_free_vars_any_xpredT.
+
+    * eapply mfix_on_ind_red1_typeE; [|exact wffix].
+      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e];
+        split; [now eapply closed_red1_red|exact e].
+    * eapply isTypeRelE_isTypeE. eapply All_nth_error in X0; eauto.
+    * destruct disj as [<-|[[red Hred] eq]].
+      + apply JoinE_refl.
+      + apply JoinE_red_r, red1_red, red.
+
+  - (* CoFix congruence in body *)
+    match goal with H : wf_cofixpointE _ _ _ |- _ => rename H into wffix end.
+    match goal with H : OnOne2 _ mfix mfix1 |- _ => rename H into X4 end.
+    assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
+    assert(convctx : fix_context mfix = fix_context mfix1).
+    { clear -wf X4.
+      change fix_context with (fix_context_gen 0).
+      generalize 0. induction X4.
+      destruct p as [_ eq]. noconf eq. simpl in H; noconf H.
+      simpl. intros. now rewrite H H0.
+      simpl. intros n'; f_equal. apply IHX4. }
+    assert (All (on_def_type (lift_typing typingE Σ) Γ) mfix1).
+    { apply (OnOne2_All_All X4 X1).
+      * intros d HT.
+        apply lift_typing_impl with (1 := HT); now intros ?? [Hty _].
+      * intros d d' [[red _] eq] HT'.
+        destruct d as [na ty bo ra], d' as [na' ty' bo' ra']; cbn in *; noconf eq.
+        unfold on_def_type in HT' |- *; cbn in *.
+        apply lift_typing_impl with (1 := HT'); now intros ?? []. }
+    assert (wf_localE Σ (Γ ,,, fix_context mfix1)).
+    { apply All_mfix_wfE; auto. }
+    destruct (OnOne2_nth_error _ _ _ decl _ X4 heq_nth_error) as [decl' [eqnth disj]].
+    eapply type_Cumul_altE.
+    econstructor; eauto.
+    * eapply (cofix_guard_red1 _ _ _ _ 0);
+        [ apply wfE_wf_cases_env
+        | eapply wf_local_wf_cases_ctxE; tea
+        | | eauto ].
+      apply cofix_red_body; eauto.
+      eapply OnOne2_impl; tea; cbn; intuition auto.
+      apply a2. apply a2.
+    * eapply (OnOne2_All_mix_left X1) in X4.
+       apply (OnOne2_All_All X4 X3).
+       + intros d Hj.
+        rewrite -convctx.
+        eapply lift_typing_impl with (1 := Hj) => ?? [] HT //.
+      + move=> [na ty b rarg] [na' ty' b' rarg'] /= [[[red IH] eq] HT] HB.
+        noconf eq.
+        rewrite -convctx.
+        apply lift_sorting_it_impl_gen with HB => //= [] [Ht IHt] //. eauto.
+    * eapply (mfix_on_ind_red1_body (closed_red1 Σ (Γ ,,, fix_context mfix))); [|exact wffix].
+      eapply OnOne2_impl; tea; cbn; intros x y [[r _] e]; split; [exact r|exact e].
+    * eapply isTypeRelE_isTypeE. eapply All_nth_error in X0; eauto.
+    * destruct disj as [<-|[_ eq]]; [apply JoinE_refl|].
+      destruct decl as [na ty bo ra], decl' as [na' ty' bo' ra']; cbn in *; noconf eq.
+      apply JoinE_refl.
+Qed.
 
 (** *** Premise 16: primitive values; the three array steps ([:3602-3627]) *)
 Lemma sr_red1E_Prim {cf : checker_flags} : ltac:(sr_case_type cf 15).
