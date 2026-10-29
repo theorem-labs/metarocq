@@ -58,6 +58,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICCumulativitySpecEta PCUICTypingEta PCUICSNEta PCUICClosedBodies
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICContextConversionEta
      PCUICEtaK6EtaStep PCUICSigmaCalculus PCUICRenameDef PCUICPositionEtaTyping.
+(* Loaded, not imported (no shadowing): the E twins of base PCUICConversion's context lemmas,
+   used qualified by slice B's [inst_case_ws_cumul_ctx_pbE]. *)
+From MetaRocq.PCUIC Require PCUICWsCumulEtaCtx.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfReductionEta PCUICSafeReduceEta
      PCUICSafeReduceEtaBridge PCUICSafeConversionEtaK4.
 (* LAST among the stack providers, so the η stack shadows the base one. *)
@@ -1497,19 +1500,33 @@ Section Conversion.
 
   (* ---- Slice B helpers (EtaSliceB). ---- *)
 
-  (* NAMED HYPOTHESIS (slice B, recorded with the K3 integrator EtaConv): the E copy of base
-     [PCUICConvCumInversion.inst_case_ws_cumul_ctx_pb], untyped. Base proves it through
-     [substitution_ws_cumul_ctx_pb_subst_conv] (substitution of convertible substitutions),
-     which has no E copy yet; the obligations [conv_stack_ctx] of the Case_branch and the
-     Case_pred (return) frames need it. Not a known-false form: it has no typing premise and
-     states no conversion witness of a fixpoint type or of an inductive head (CONTRACTS standing
-     rules 1-2); it says that E conversion, a congruence closed under weakening (A5, A7),
-     is closed under substituting convertible parameters and comparable universe instances into
-     a context closed over the parameters, which base proves for [ws_cumul_pb]. Concrete
-     satisfying instance: [B_inst_case_ws_cumul_ctx_pbE_inst] just below (every premise and the
-     conclusion proved at [pk_Σ]). *)
-  Context (inst_case_ws_cumul_ctx_pbE : forall (Σ : global_env_ext), ClosedBodies Σ ->
-    forall (Γ Γ' : context) (pars pars' : list term) (puinst puinst' : Instance.t) (ctx ctx' : context),
+  (* An assumption context of closed sorts, of any length: the substitution target of the
+     parameters in [inst_case_ws_cumul_ctx_pbE] (base uses the smashed parameters of a declared
+     inductive; any assumption context of the right length does, and needs no typing). *)
+  Lemma B_sort_ctx (Γ : context) n :
+    let Δ := repeat (vass (mkBindAnn nAnon Relevant) (tSort sProp)) n in
+    [× assumption_context Δ, context_assumptions Δ = n, #|Δ| = n &
+       is_closed_context Γ -> is_closed_context (Γ ,,, Δ)].
+  Proof using Type.
+    cbn zeta. induction n as [|n [ha hc hl hcl]]; cbn [repeat context_assumptions List.length].
+    - split; [constructor|reflexivity|reflexivity|now intros].
+    - split.
+      + constructor. exact ha.
+      + now rewrite hc.
+      + now rewrite hl.
+      + intros h. specialize (hcl h).
+        change (is_closed_context ((Γ ,,, repeat (vass (mkBindAnn nAnon Relevant) (tSort sProp)) n) ,,
+                  vass (mkBindAnn nAnon Relevant) (tSort sProp))).
+        now rewrite on_free_vars_ctx_snoc hcl.
+  Qed.
+
+  (* The E copy of base [PCUICConvCumInversion.inst_case_ws_cumul_ctx_pb], untyped and under
+     [ClosedBodies Σ] (base: [wf Σ]); the two prefixes may differ ([Γ] vs [Γ'], related by
+     [ws_cumul_ctx_pbE]), and no declared inductive is needed. The proof follows base
+     (PCUICConvCumInversion.v:93-149) with the E twins of [PCUICWsCumulEtaCtx]. The obligations
+     [conv_stack_ctx] of the Case_branch and the Case_pred (return) frames use it. *)
+  Lemma inst_case_ws_cumul_ctx_pbE (Σ : global_env_ext) (cb : ClosedBodies Σ)
+    (Γ Γ' : context) (pars pars' : list term) (puinst puinst' : Instance.t) (ctx ctx' : context) :
     on_free_vars_ctx (closedP #|pars| xpredT) ctx ->
     on_free_vars_ctx (closedP #|pars'| xpredT) ctx' ->
     ws_cumul_ctx_pbE Conv Σ Γ Γ' ->
@@ -1517,24 +1534,56 @@ Section Conversion.
     cmp_universe_instance (compare_universe Σ Conv) puinst puinst' ->
     eq_context_upto_names ctx ctx' ->
     ws_cumul_ctx_pbE Conv Σ (Γ ,,, inst_case_context pars puinst ctx)
-      (Γ' ,,, inst_case_context pars' puinst' ctx')).
-
-  (* The instance: one parameter [Prop], a predicate context mentioning it, empty prefixes. *)
-  Lemma B_inst_case_ws_cumul_ctx_pbE_inst :
-    let Σ := PCUICPositionEtaTyping.pk_Σ in
-    let pars := [PCUICPositionEtaTyping.pk_P] in
-    let ctx := [vass PCUICPositionEtaTyping.pk_na (tRel 0)] in
-    ClosedBodies Σ × on_free_vars_ctx (closedP #|pars| xpredT) ctx ×
-    ws_cumul_ctx_pbE Conv Σ [] [] × ws_cumul_pbE_terms Σ [] pars pars ×
-    cmp_universe_instance (compare_universe Σ Conv) [] [] × eq_context_upto_names ctx ctx ×
-    ws_cumul_ctx_pbE Conv Σ ([] ,,, inst_case_context pars [] ctx) ([] ,,, inst_case_context pars [] ctx).
+      (Γ' ,,, inst_case_context pars' puinst' ctx').
   Proof using Type.
-    cbn zeta.
-    pose proof (@PCUICPositionEtaTyping.pk_cb cf) as cb.
-    split; [exact cb|]. split; [reflexivity|]. split; [constructor|].
-    split; [constructor; [|constructor]; eapply ws_cumul_pbE_refl; reflexivity|].
-    split; [constructor|]. split; [reflexivity|].
-    eapply ws_cumul_ctx_pbE_refl; reflexivity.
+    intros onp onp' hc eqpars equ eqctx.
+    have hl : #|pars| = #|pars'| := All2_length eqpars.
+    rewrite -hl in onp'.
+    have clΓ : is_closed_context Γ := ws_cumul_ctx_pbE_closed_left _ _ _ _ hc.
+    destruct (B_sort_ctx Γ #|pars|) as [ass lenass lenΔ clΔ].
+    set (Δp := repeat (vass (mkBindAnn nAnon Relevant) (tSort sProp)) #|pars|) in *.
+    have clΓΔ := clΔ clΓ.
+    (* the instantiated contexts are closed over [Γ ,,, Δp] *)
+    have clctx : forall c, on_free_vars_ctx (closedP #|pars| xpredT) c -> is_closed_context (Γ ,,, Δp ,,, c).
+    { intros c hcl. rewrite on_free_vars_ctx_app clΓΔ andb_true_l.
+      eapply on_free_vars_ctx_impl; [|exact hcl]. intros i.
+      rewrite /closedP /shiftnP. case: (Nat.ltb_spec i #|pars|) => // hlt _.
+      apply/orP; left. apply/Nat.ltb_lt. rewrite app_context_length lenΔ. lia. }
+    have clctxu : forall u c, on_free_vars_ctx (closedP #|pars| xpredT) c ->
+        is_closed_context (Γ ,,, Δp ,,, subst_instance u c).
+    { intros u c hcl. rewrite on_free_vars_ctx_app on_free_vars_ctx_subst_instance -on_free_vars_ctx_app.
+      exact (clctx c hcl). }
+    (* move the right instance from [Γ] to [Γ'] *)
+    have clR : is_closed_context (Γ ,,, inst_case_context pars' puinst' ctx').
+    { apply PCUICConversion.on_free_vars_ctx_inst_case_context_xpred0;
+        [exact (WT_open_right eqpars)|rewrite -hl; exact onp'|exact clΓ]. }
+    eapply (@CRelationClasses.transitivity _ (ws_cumul_ctx_pbE Conv Σ)
+              (PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_trans (Σ := Σ) (wfΣ := cb) Conv) _
+              (Γ ,,, inst_case_context pars' puinst' ctx')).
+    2:{ exact (PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_app_same clR hc). }
+    apply (fst PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_rel_app).
+    rewrite /inst_case_context.
+    eapply (PCUICWsCumulEtaCtx.substitution_ws_cumul_ctx_pbE_subst_conv (Σ := Σ) (wfΣ := cb)
+              (Γ := Γ) (Γ'' := []) (Γ' := Δp) (Γ'0 := Δp) (pb := Conv)
+              (s := List.rev pars) (s' := List.rev pars')
+              (Δ := subst_instance puinst ctx) (Δ' := subst_instance puinst' ctx')).
+    - apply (snd PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_rel_app).
+      eapply (@CRelationClasses.transitivity _ (ws_cumul_ctx_pbE Conv Σ)
+                (PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_trans (Σ := Σ) (wfΣ := cb) Conv) _
+                ((Γ ,,, Δp) ,,, subst_instance puinst ctx')).
+      + apply (PCUICWsCumulEtaCtx.into_ws_cumul_ctx_pbE (Σ := Σ)).
+        * exact (clctxu puinst ctx onp).
+        * exact (clctxu puinst ctx' onp').
+        * apply (PCUICWsCumulEtaCtx.eq_context_upto_names_conv_contextE Σ).
+          rewrite /app_context. apply All2_app; [|reflexivity].
+          apply PCUICConfluence.eq_context_upto_names_univ_subst_preserved. exact eqctx.
+      + apply (fst PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_rel_app).
+        exact (PCUICWsCumulEtaCtx.subst_instance_ws_cumul_ctx_pbE_rel (Σ := Σ) (wfΣ := cb)
+                 (clctx ctx' onp') equ).
+    - now apply All2_rev.
+    - apply (untyped_subslet_ass ass). now rewrite List.length_rev lenass.
+    - apply (untyped_subslet_ass ass). now rewrite List.length_rev lenass hl.
+    - exact clΓΔ.
   Qed.
 
   Ltac B_rel wfR := match goal with H : abstract_env_ext_rel X _ |- _ => pose proof H as wfR end.
