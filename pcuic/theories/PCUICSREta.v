@@ -32,6 +32,10 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICCumulativitySpe
    [PCUICArities.typing_spine]), and their lemmas. Imported before [PCUICValidityEta], so a name
    that file also declares resolves to its declaration. *)
 From MetaRocq.PCUIC Require Import PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta.
+(* C9 (cross-lane-commitments.md): E3's global symmetry and transitivity instances for
+   [ws_cumul_ctx_pbE Conv] and the term lists ([conv_context_symE], [ws_cumul_pbE_terms_sym],
+   [ws_cumul_pbE_terms_trans]), which replace the three [#[local]] instances this file had. *)
+From MetaRocq.PCUIC Require Import PCUICWsCumulEtaInstancesGlobal.
 (* Copy 9 (gated at d46f9387, merged into this branch): [context_conversionE] and
    [closed_context_conversionE], with the statements the forecast block had. *)
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
@@ -506,26 +510,10 @@ Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
     searches use ([PCUICTyping.has_sort_isType], [typing_wf_local]). *)
 #[local] Hint Resolve has_sort_isTypeE typingE_wf_local : pcuic.
 
-(** Symmetry of the E context and term-list relations, which base's [symmetry] calls find as
-    instances for [ws_cumul_ctx_pb] and [ws_cumul_pb_terms]; the E facts are landed lemmas
-    ([PCUICContextConversionEta.ws_cumul_ctx_pbE_sym], [ws_cumul_pbE_sym]). *)
-#[local] Instance ws_cumul_ctx_pbE_Symmetric {cf} {Σ : global_env_ext} {cbΣ : ClosedBodies Σ} :
-  CRelationClasses.Symmetric (ws_cumul_ctx_pbE Conv Σ).
-Proof. intros x y h. exact (ws_cumul_ctx_pbE_sym h). Qed.
-
-#[local] Instance ws_cumul_pbE_terms_Symmetric {cf} {Σ : global_env_ext} {cbΣ : ClosedBodies Σ} {Γ} :
-  CRelationClasses.Symmetric (ws_cumul_pbE_terms Σ Γ).
-Proof.
-  intros x y h. unfold ws_cumul_pbE_terms in *.
-  induction h; constructor; auto. now symmetry.
-Qed.
-
-#[local] Instance ws_cumul_pbE_terms_Transitive {cf} {Σ : global_env_ext} {cbΣ : ClosedBodies Σ} {Γ} :
-  CRelationClasses.Transitive (All2 (ws_cumul_pbE Conv Σ Γ)).
-Proof.
-  intros x y z h1. induction h1 in z |- *; intros h2; depelim h2; constructor; auto.
-  now transitivity y.
-Qed.
+(* Symmetry and transitivity of the E context and term-list relations, which base's [symmetry] and
+   [transitivity] calls find as instances for [ws_cumul_ctx_pb] and [ws_cumul_pb_terms], are E3's
+   global instances ([PCUICWsCumulEtaInstancesGlobal], imported above; C9). They replaced this
+   file's three [#[local]] instances, whose compiled forms they equal (names included). *)
 
 (** ** Helpers of [PCUICSR.v] before [sr_red1]
 
