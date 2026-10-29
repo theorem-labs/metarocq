@@ -12,7 +12,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd PCUICEtaI5 PCUICWellScopedCumulativityEta
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaSubst PCUICEtaA6
      PCUICClosedTypEta PCUICWeakeningEnvTypEta.
-From MetaRocq.PCUIC Require PCUICInductives.
+From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution.
+From Stdlib Require Import Program.Equality.
 From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
 
 (** * ETAK (EtaK7): the η typing facts the η checker needs, as NAMED hypotheses
@@ -29,11 +30,14 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
 
   - Facts no row has proved yet are fields of one class per plan row ([T0_facts], [T1_facts], [T2a_facts],
     [T6_facts], [T6BD_facts], [T6BDu_facts], [T6BDc_facts], [A_facts], and [U_facts] for untyped plumbing).
-    A copy takes them as SQUASHED section premises ([Context (hT0 : ∥ T0_facts ∥)] …): Prop, so extraction
-    erases them. When a row lands, its class gets an instance and the premise goes.
+    The copies take them through ONE implicit Prop premise [{EtaF : EtaFacts}] (the squashes of the nine
+    classes, end of this file), so extraction erases them. When a row lands, its class gets an instance and
+    its field of [EtaFacts] is proved.
   - Facts that follow from what base already proves over E ([PCUICClosedTypEta], [PCUICTypingEtaInd],
-    [PCUICEtaA6], [PCUICWsCumulEtaSubst], [PCUICWellScopedCumulativityEta]) or from the class fields are
-    PROVED below the classes, under the base name ("Derived").
+    [PCUICEtaA6], [PCUICWsCumulEtaSubst], [PCUICWellScopedCumulativityEta], [PCUICEtaI5]) or from the class
+    fields are PROVED below the classes, under the base name ("Derived", "Derived, second part"). Audits
+    hyp-audit-A.md and hyp-audit-B.md (lanes/eta/etak/) moved 9 former fields here (STATEMENT CHANGEs are
+    marked where they occur).
   - Instances. No field has a concrete satisfying instance yet; the vacuity pass is NOT passed. (The
     commit that lands the instances will state exactly which fields have one.) An instance will be a
     point of the field on the environment [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances]
@@ -89,8 +93,6 @@ Class T0_facts {cf : checker_flags} := {
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {na : aname} {A : term} {B : term}, isTypeE Σ Γ (tProd na A B) <~> isTypeRelE Σ Γ A (binder_relevance na) × isTypeE Σ (Γ,, vass na A) B ;
   isType_wf_universes :
     forall {Σ : global_env × universes_decl} {Γ : context} {T : term}, wfE Σ.1 -> isTypeE Σ Γ T -> wf_universes Σ T ;
-  mfix_body_on_red_unique :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {check : def term -> option kername} {shape : ShapeCheck check} {Γ : context} {d : def term} {m1 : kername} {m2 : kername}, on_def_type (lift_typing1 (typingE Σ)) Γ d -> mfix_body_on check (PCUICReduction.red Σ Γ) m1 d -> mfix_body_on check (PCUICReduction.red Σ Γ) m2 d -> m1 = m2 ;
   on_minductive_wf_params :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {ind : kername} {mdecl : mutual_inductive_body} {u : Instance.t}, declared_minductive Σ.1 ind mdecl -> consistent_instance_ext Σ (ind_universes mdecl) u -> wf_localE Σ (ind_params mdecl)@[u] ;
   on_minductive_wf_params_indices_inst :
@@ -113,8 +115,6 @@ Class T0_facts {cf : checker_flags} := {
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl} {t : term} {T : term}, subsletE Σ Γ s Γ' -> Σ;;; Γ,,, Γ',,, Δ |-E t : T -> Σ;;; Γ,,, subst_context s 0 Δ |-E subst s #|Δ| t : subst s #|Δ| T ;
   substitution_wf_local :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {Γ' : context} {s : list term} {Δ : list context_decl}, subsletE Σ Γ s Γ' -> wf_localE Σ (Γ,,, Γ',,, Δ) -> wf_localE Σ (Γ,,, subst_context s 0 Δ) ;
-  type_ws_cumul_pb :
-    forall {Σ : global_env_ext} {pb : conv_pb} {Γ : context} {t : term} (T : term) {U : term}, Σ;;; Γ |-E t : T -> isTypeE Σ Γ U -> Σ ;;; Γ ⊢E T ≤[pb] U -> Σ;;; Γ |-E t : U ;
   typing_expand_lets :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (Δ : list context_decl) (t : term) (T : term), Σ;;; Γ,,, Δ |-E t : T -> Σ;;; Γ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T ;
   typing_spine_ind_type_inv :
@@ -185,8 +185,6 @@ Class T1_facts {cf : checker_flags} := {
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {U : term}, isTypeE Σ Γ T -> PCUICReduction.red Σ Γ T U -> isTypeE Σ Γ U ;
   subject_reduction :
     forall (Σ : global_env_ext) (Γ : context) (t : term) (u : term) (T : term), wfE Σ -> Σ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ;;; Γ |-E u : T ;
-  type_Cumul_alt :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : context) (t : term) (T : term) (T' : term), Σ;;; Γ |-E t : T -> isTypeE Σ Γ T' -> JoinE Σ Γ Cumul T T' -> Σ;;; Γ |-E t : T' ;
   type_reduction_closed :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {A : term} {B : term}, Σ;;; Γ |-E t : A -> Σ ;;; Γ ⊢ A ⇝ B -> Σ;;; Γ |-E t : B
 }.
@@ -195,24 +193,12 @@ Class T1_facts {cf : checker_flags} := {
 Class T2a_facts {cf : checker_flags} := {
   inversion_mkApps :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ : context} {f : term} {u : list term} {T : term}, Σ;;; Γ |-E mkApps f u : T -> ∑ A : term, Σ;;; Γ |-E f : A × typing_spineE Σ Γ A u T ;
-  isType_Sort_inv :
-    forall {Σ : global_env_ext} {Γ : context} {s : sort}, wfE Σ -> isTypeE Σ Γ (tSort s) -> wf_sort Σ s ;
   validity :
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {T : term}, Σ;;; Γ |-E t : T -> isTypeE Σ Γ T
 }.
 
 (** ** T6 (inversion and classification over [typingE], PCUICInversion, PCUICClassification) *)
 Class T6_facts {cf : checker_flags} := {
-  inversion_Const :
-    forall (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {c : kername} {u : Instance.t} {T : term}, Σ;;; Γ |-E tConst c u : T -> ∑ decl : constant_body, wf_localE Σ Γ × declared_constant Σ c decl × consistent_instance_ext Σ (cst_universes decl) u × Σ ;;; Γ ⊢E (cst_type decl)@[u] ≤ T ;
-  inversion_LetIn :
-    forall (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {na : aname} {b : term} {B : term} {t : term} {T : term}, Σ;;; Γ |-E tLetIn na b B t : T -> ∑ A : term, lift_typing typingE Σ Γ (j_vdef na b B) × Σ;;; Γ,, vdef na b B |-E t : A × Σ ;;; Γ ⊢E tLetIn na b B A ≤ T ;
-  inversion_Prod :
-    forall (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {na : aname} {A : term} {B : term} {T : term}, Σ;;; Γ |-E tProd na A B : T -> ∑ s1 s2 : sort, lift_typing typingE Σ Γ (j_vass_s na A s1) × Σ;;; Γ,, vass na A |-E B : tSort s2 × Σ ;;; Γ ⊢E tSort (Sort.sort_of_product s1 s2) ≤ T ;
-  inversion_Rel :
-    forall (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {n : nat} {T : term}, Σ;;; Γ |-E tRel n : T -> ∑ decl : context_decl, wf_localE Σ Γ × nth_error Γ n = Some decl × Σ ;;; Γ ⊢E lift0 (S n) (decl_type decl) ≤ T ;
-  inversion_Sort :
-    forall (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {s : sort} {T : term}, Σ;;; Γ |-E tSort s : T -> wf_localE Σ Γ × wf_sort Σ s × Σ ;;; Γ ⊢E tSort (Sort.super s) ≤ T ;
   typing_spine_smash :
     forall {Σ : global_env_ext} (wfΣ : wfE Σ.1) (Γ : context) (Δ : context) (T : term) (args : list term) (T' : term), typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args T' -> typing_spineE Σ Γ (it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T)) args T'
 }.
@@ -281,12 +267,6 @@ Class T6BDc_facts {cf : checker_flags} := {
     forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {u : sort}, Σ;;; Γ |-E t : tSort u -> ∑ u' : sort, Σ;;; Γ |-E t ▹□ u' × leq_sort Σ u' u ;
   wf_local_rel_wf_local_bd :
     forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : list context_decl} {Γ' : context}, wf_local_relE Σ Γ Γ' -> wf_local_bd_relE Σ Γ Γ'
-}.
-
-(** ** A (typed context conversion over [ws_cumul_pbE]) *)
-Class A_facts {cf : checker_flags} := {
-  ws_cumul_ctx_pb_rel_app :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {pb : conv_pb} {Γ : list context_decl} {Δ : list context_decl} {Δ' : list context_decl}, ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' <~> ws_cumul_ctx_pbE pb Σ (Γ,,, Δ) (Γ,,, Δ')
 }.
 
 (** ** Derived: proved from base's E lemmas or from the class fields, under the base names *)
@@ -519,6 +499,14 @@ End Derived.
   the copies has the same signature whatever facts its obligations use, and extraction erases it. Each
   field is the squash of one row's class; when a row lands, its field is proved by [sq] of the row's
   instance. *)
+(** ** A (typed context conversion over [ws_cumul_pbE]). EtaHypAuditB found it provable now; its proof needs
+    reflexivity of [ws_cumul_ctx_pbE] at any [pb] (base E has it at [Conv] only, [PCUICContextConversionEta.v:125]);
+    until that lemma exists it stays a field. *)
+Class A_facts {cf : checker_flags} := {
+  ws_cumul_ctx_pb_rel_app :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {pb : conv_pb} {Γ : list context_decl} {Δ : list context_decl} {Δ' : list context_decl}, ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' <~> ws_cumul_ctx_pbE pb Σ (Γ,,, Δ) (Γ,,, Δ')
+}.
+
 Class EtaFacts {cf : checker_flags} : Prop := {
   eta_T0 : ∥ T0_facts ∥ ;
   eta_U : ∥ U_facts ∥ ;
@@ -534,3 +522,221 @@ Class EtaFacts {cf : checker_flags} : Prop := {
     instances) for the base proof scripts. *)
 Ltac unpack_eta_facts := repeat match goal with | EF : EtaFacts |- _ => destruct EF end.
 Ltac sq := unpack_eta_facts; MRSquash.sq.
+
+(** ** Derived, second part: facts that are proved here from the classes or from facts above *)
+
+(** The E copy of base [ShapeCheck] ([PCUICFixWitness.v:131-140]): its reduction law takes [wfE] (base's
+    takes [wf], which [wfE] does not give). STATEMENT CHANGE (EtaK7, 2026-10-29, found by EtaHypAuditA):
+    [mfix_body_on_red_unique] is stated over [ShapeCheckE] and is now PROVED below (it was a T0 field
+    over base [ShapeCheck], whose law the E environment cannot meet). *)
+Class ShapeCheckE {cf : checker_flags} (check : def term -> option kername) : Prop := {
+  shapeE_check_dbody d bo :
+    check {| dname := d.(dname); dtype := d.(dtype); dbody := bo; rarg := d.(rarg) |} = check d;
+  shapeE_check_eq_term_upto {Σ cmp_universe cmp_sort} d t u :
+    eq_term_upto_univ Σ cmp_universe cmp_sort Conv t u ->
+    check (def_with_type d t) = check (def_with_type d u);
+  shapeE_check_closed_red {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ d ty v mind} :
+    Σ ;;; Γ ⊢ ty ⇝ v ->
+    check (def_with_type d ty) = Some mind ->
+    check (def_with_type d v) = Some mind }.
+
+Derive Signature for typingE.
+
+Section DerivedTwo.
+  Context {cf : checker_flags}.
+
+  (** [PCUICFixWitness.check_one_fix_closed_red] over [wfE], from the U field
+      [red_it_mkProd_or_LetIn_smash] and the derived [invert_red_mkApps_tInd]. *)
+  Lemma check_one_fix_closed_redE {hU : U_facts} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ d ty v mind} :
+    Σ ;;; Γ ⊢ ty ⇝ v ->
+    check_one_fix (def_with_type d ty) = Some mind ->
+    check_one_fix (def_with_type d v) = Some mind.
+  Proof.
+    intros r hc.
+    destruct (check_one_fix_inv _ _ _ hc)
+      as (ctx & concl & argd & k & u & args & decomp & hnth & dapp).
+    have eqty := PCUICSubstitution.decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp; cbn in eqty.
+    rewrite eqty in r.
+    destruct (red_it_mkProd_or_LetIn_smash _ _ _ _ _ _ r hnth)
+      as [ctx' [t' [d' [decomp' hnth' r']]]].
+    rewrite /check_one_fix /def_with_type /= decomp' hnth'.
+    rewrite dapp in r'.
+    eapply invert_red_mkApps_tInd in r' as [args' [-> _ _]].
+    now rewrite decompose_app_mkApps.
+  Qed.
+
+  (** [PCUICFixWitness.check_one_cofix_closed_red] over [wfE]. *)
+  Lemma check_one_cofix_closed_redE {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ d ty v mind} :
+    Σ ;;; Γ ⊢ ty ⇝ v ->
+    check_one_cofix (def_with_type d ty) = Some mind ->
+    check_one_cofix (def_with_type d v) = Some mind.
+  Proof.
+    intros r hc.
+    destruct (check_one_cofix_inv _ _ _ hc) as [ctx [k [u [args ->]]]].
+    destruct (red_it_mkProd_or_LetIn_mkApps_Ind r) as [ctx' [args' ->]].
+    exact (check_one_cofix_it_mkProd (i := {| inductive_mind := mind; inductive_ind := k |})).
+  Qed.
+
+  #[global] Instance check_one_fix_shapeE {hU : U_facts} : ShapeCheckE check_one_fix :=
+    {| shapeE_check_dbody := fun d bo => shape_check_dbody (check := check_one_fix) d bo;
+       shapeE_check_eq_term_upto := @shape_check_eq_term_upto check_one_fix _;
+       shapeE_check_closed_red := @check_one_fix_closed_redE hU |}.
+
+  #[global] Instance check_one_cofix_shapeE : ShapeCheckE check_one_cofix :=
+    {| shapeE_check_dbody := fun d bo => shape_check_dbody (check := check_one_cofix) d bo;
+       shapeE_check_eq_term_upto := @shape_check_eq_term_upto check_one_cofix _;
+       shapeE_check_closed_red := @check_one_cofix_closed_redE |}.
+
+  (** The copies take the U facts squashed in [EtaFacts]; a Prop instance can still be built from them. *)
+  #[global] Instance check_one_fix_shapeE_of {EF : EtaFacts} : ShapeCheckE check_one_fix :=
+    match eta_U with sq hU => @check_one_fix_shapeE hU end.
+
+  (** [PCUICFixWitness.mfix_body_on_red_unique] over E (see STATEMENT CHANGE above [ShapeCheckE]). *)
+  Lemma mfix_body_on_red_unique {hU : U_facts} {Σ : global_env_ext} {wfΣ : wfE Σ}
+    {check : def term -> option kername} {shape : ShapeCheckE check} {Γ : context} {d : def term}
+    {m1 m2 : kername} :
+    on_def_type (lift_typing1 (typingE Σ)) Γ d ->
+    mfix_body_on check (PCUICReduction.red Σ Γ) m1 d ->
+    mfix_body_on check (PCUICReduction.red Σ Γ) m2 d ->
+    m1 = m2.
+  Proof.
+    intros ond [ty1 [hc1 r1]] [ty2 [hc2 r2]].
+    have isty : isTypeE Σ Γ (dtype d) by now eapply isTypeRel_isType.
+    have clΓ : is_closed_context Γ.
+    { eapply wf_local_closed_contextE. now eapply isType_wf_local. }
+    have op : is_open_term Γ (dtype d) by now eapply isType_is_open_term.
+    have c1 : Σ ;;; Γ ⊢ dtype d ⇝ ty1 by now eapply into_closed_red.
+    have c2 : Σ ;;; Γ ⊢ dtype d ⇝ ty2 by now eapply into_closed_red.
+    destruct (closed_red_confluence c1 c2) as [v [rv1 rv2]].
+    have e1 : check (def_with_type d v) = Some m1.
+    { exact (shapeE_check_closed_red (check := check) (wfΣ := wfΣ) rv1 hc1). }
+    have e2 : check (def_with_type d v) = Some m2.
+    { exact (shapeE_check_closed_red (check := check) (wfΣ := wfΣ) rv2 hc2). }
+    rewrite e1 in e2. now injection e2.
+  Qed.
+
+  (** STATEMENT CHANGE (EtaK7, 2026-10-29, found by EtaHypAuditA): base [type_ws_cumul_pb] has no [wf]
+      premise (its proof uses none, [PCUICArities.v:228]); over E the only route from [ws_cumul_pbE] to the
+      specification [cumulSpecE0] ([I5_join_to_spec]) needs [ClosedBodies], so the E form takes
+      [{wfΣ : wfE Σ}]. With it the fact is PROVED here (it was a T0 hypothesis). Every use has [wfE]. *)
+  Lemma type_ws_cumul_pb {Σ : global_env_ext} {wfΣ : wfE Σ} {pb : conv_pb} {Γ : context} {t : term} (T : term)
+    {U : term} :
+    Σ ;;; Γ |-E t : T -> isTypeE Σ Γ U -> Σ ;;; Γ ⊢E T ≤[pb] U -> Σ ;;; Γ |-E t : U.
+  Proof.
+    intros ht hU c.
+    have c' : Σ ;;; Γ ⊢E T ≤ U.
+    { destruct pb; [exact (ws_cumul_eq_pbE c)|exact c]. }
+    exact (type_Cumul' T ht hU (cumulAlgo_cumulSpec Γ T U c')).
+  Qed.
+
+  (** *** Eight former fields, PROVABLE NOW (EtaHypAuditB, hyp-audit-B.md §3.1-3.3, §3.7) *)
+
+  Lemma typing_ws_cumul_pbE {Σ : global_env_ext} {wfΣ : wfE Σ} {le : conv_pb} {Γ : context} {t T : term} :
+    Σ ;;; Γ |-E t : T -> Σ ;;; Γ ⊢E T ≤[le] T.
+  Proof.
+    intros ht. apply ws_cumul_pbE_refl.
+    - exact (wf_local_closed_contextE (typingE_wf_local ht)).
+    - exact (type_is_open_termE ht).
+  Qed.
+
+  Lemma cumul_stepE {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t A B X : term} {s : sort} :
+    Σ ;;; Γ |-E t : A -> Σ ;;; Γ |-E B : tSort s -> cumulSpecE Σ Γ A B ->
+    Σ ;;; Γ ⊢E X ≤ A -> Σ ;;; Γ ⊢E X ≤ B.
+  Proof.
+    intros ht hB c hX.
+    refine (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ hX _).
+    apply (into_ws_cumul_pbE_spec (wfΣ := wfE_ClosedBodies Σ)); [exact c| | |].
+    - exact (wf_local_closed_contextE (typingE_wf_local ht)).
+    - exact (type_is_open_termE ht).
+    - exact (subject_is_open_termE hB).
+  Qed.
+
+  Lemma inversion_Rel (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {n : nat} {T : term} :
+    Σ ;;; Γ |-E tRel n : T ->
+    ∑ decl : context_decl, wf_localE Σ Γ × nth_error Γ n = Some decl × Σ ;;; Γ ⊢E lift0 (S n) (decl_type decl) ≤ T.
+  Proof.
+    intros h. remember (tRel n) as t0 eqn:heqt. revert n heqt.
+    induction h; intros n' heqt; try discriminate heqt.
+    - injection heqt; intros; subst. exists decl. split; [assumption|split; [assumption|]].
+      eapply typing_ws_cumul_pbE. econstructor; eassumption.
+    - match goal with IH : forall n0, _ = tRel n0 -> _ |- _ =>
+        destruct (IH _ heqt) as [decl [wfl [hn cc]]] end.
+      exists decl. split; [assumption|split; [assumption|]].
+      refine (cumul_stepE _ _ _ cc); eassumption.
+  Qed.
+
+  Lemma inversion_Sort (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {s : sort} {T : term} :
+    Σ ;;; Γ |-E tSort s : T -> wf_localE Σ Γ × wf_sort Σ s × Σ ;;; Γ ⊢E tSort (Sort.super s) ≤ T.
+  Proof.
+    intros h. remember (tSort s) as t0 eqn:heqt. revert s heqt.
+    induction h; intros s' heqt; try discriminate heqt.
+    - injection heqt; intros; subst. split; [assumption|split; [assumption|]].
+      eapply typing_ws_cumul_pbE. econstructor; eassumption.
+    - match goal with IH : forall s0, _ = tSort s0 -> _ |- _ =>
+        destruct (IH _ heqt) as [wfl [ws cc]] end.
+      split; [assumption|split; [assumption|]].
+      refine (cumul_stepE _ _ _ cc); eassumption.
+  Qed.
+
+  Lemma inversion_Prod (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {na : aname} {A B T : term} :
+    Σ ;;; Γ |-E tProd na A B : T ->
+    ∑ s1 s2 : sort, lift_typing typingE Σ Γ (j_vass_s na A s1) × Σ ;;; Γ ,, vass na A |-E B : tSort s2 ×
+      Σ ;;; Γ ⊢E tSort (Sort.sort_of_product s1 s2) ≤ T.
+  Proof.
+    intros h. remember (tProd na A B) as t0 eqn:heqt. revert na A B heqt.
+    induction h; intros na' A' B' heqt; try discriminate heqt.
+    - injection heqt; intros; subst. exists s1, s2. split; [assumption|split; [assumption|]].
+      eapply typing_ws_cumul_pbE. econstructor; eassumption.
+    - match goal with IH : forall na0 A0 B0, _ = tProd na0 A0 B0 -> _ |- _ =>
+        destruct (IH _ _ _ heqt) as [s1 [s2 [hA [hB cc]]]] end.
+      exists s1, s2. split; [assumption|split; [assumption|]].
+      refine (cumul_stepE _ _ _ cc); eassumption.
+  Qed.
+
+  Lemma inversion_LetIn (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {na : aname} {b B t T : term} :
+    Σ ;;; Γ |-E tLetIn na b B t : T ->
+    ∑ A : term, lift_typing typingE Σ Γ (j_vdef na b B) × Σ ;;; Γ ,, vdef na b B |-E t : A ×
+      Σ ;;; Γ ⊢E tLetIn na b B A ≤ T.
+  Proof.
+    intros h. remember (tLetIn na b B t) as t0 eqn:heqt. revert na b B t heqt.
+    induction h; intros na' b' B' t' heqt; try discriminate heqt.
+    - injection heqt; intros; subst. exists A. split; [assumption|split; [assumption|]].
+      eapply typing_ws_cumul_pbE. econstructor; eassumption.
+    - match goal with IH : forall na0 b0 B0 t1, _ = tLetIn na0 b0 B0 t1 -> _ |- _ =>
+        destruct (IH _ _ _ _ heqt) as [A' [hb [ht cc]]] end.
+      exists A'. split; [assumption|split; [assumption|]].
+      refine (cumul_stepE _ _ _ cc); eassumption.
+  Qed.
+
+  Lemma inversion_Const (Σ : global_env_ext) (wfΣ : wfE Σ) {Γ : context} {c : kername} {u : Instance.t} {T : term} :
+    Σ ;;; Γ |-E tConst c u : T ->
+    ∑ decl : constant_body, wf_localE Σ Γ × declared_constant Σ c decl ×
+      consistent_instance_ext Σ (cst_universes decl) u × Σ ;;; Γ ⊢E (cst_type decl)@[u] ≤ T.
+  Proof.
+    intros h. remember (tConst c u) as t0 eqn:heqt. revert c u heqt.
+    induction h; intros c' u' heqt; try discriminate heqt.
+    - injection heqt; intros; subst. exists decl. split; [assumption|split; [assumption|split; [assumption|]]].
+      eapply typing_ws_cumul_pbE. econstructor; eassumption.
+    - match goal with IH : forall c0 u0, _ = tConst c0 u0 -> _ |- _ =>
+        destruct (IH _ _ heqt) as [decl [wfl [hd [hu cc]]]] end.
+      exists decl. split; [assumption|split; [assumption|split; [assumption|]]].
+      refine (cumul_stepE _ _ _ cc); eassumption.
+  Qed.
+
+  Lemma isType_Sort_inv {Σ : global_env_ext} {Γ : context} {s : sort} :
+    wfE Σ -> isTypeE Σ Γ (tSort s) -> wf_sort Σ s.
+  Proof.
+    intros wfΣ (_ & s' & hs & _). exact (fst (snd (inversion_Sort Σ wfΣ hs))).
+  Qed.
+
+  Lemma type_Cumul_alt {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : context) (t T T' : term) :
+    Σ ;;; Γ |-E t : T -> isTypeE Σ Γ T' -> JoinE Σ Γ Cumul T T' -> Σ ;;; Γ |-E t : T'.
+  Proof.
+    intros ht (_ & s & hT' & _) j.
+    refine (typeE_Cumul _ _ _ _ _ _ ht hT' _).
+    exact (I5_join_to_spec Σ (wfE_ClosedBodies Σ) Γ Cumul T T'
+             (wf_local_closed_contextE (typingE_wf_local ht)) (type_is_open_termE ht)
+             (subject_is_open_termE hT') j).
+  Qed.
+End DerivedTwo.
+
