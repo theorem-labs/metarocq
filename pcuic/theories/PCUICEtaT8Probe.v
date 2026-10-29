@@ -310,7 +310,7 @@ Proof. rewrite forallb_app. move/andP => [_ /= /andP [h _]]. exact h. Qed.
 
 (** ** One-step postponement: the conclusion *)
 
-Definition PP (Σ : global_env) Γ t v := ∑ w, trans_clos (red1 Σ Γ) t w × eta w v.
+Definition PP (Σ : global_env) Γ t v := ∑ w, trans_clos (red1 Σ Γ) t w × PCUICEtaDefs.eta w v.
 
 (** ** Generic pieces *)
 
@@ -439,7 +439,7 @@ Qed.
 Lemma OnOne2_eta1_peta l l' : OnOne2 eta1 l l' -> All2 C3R.peta l l'.
 Proof. intros h. eapply C3R.OnOne2_All2_refl; [exact h|exact C3R.peta_refl|exact C3R.eta1_peta]. Qed.
 
-Lemma OnOne2_eta1_eta l l' : OnOne2 eta1 l l' -> All2 eta l l'.
+Lemma OnOne2_eta1_eta l l' : OnOne2 eta1 l l' -> All2 PCUICEtaDefs.eta l l'.
 Proof.
   intros h. eapply C3R.OnOne2_All2_refl; [exact h|intros x; apply rt_refl|intros x y e; now apply rt_step].
 Qed.
@@ -754,7 +754,7 @@ Section Roots.
         apply decompose_app_inv in ea. subst a.
         destruct (eta1_construct_tgt Σ Γ _ _ _ _ _ ha0) as [[hl|hca0]|hr].
         * exfalso.
-          have hsp := eta_safe_spine _ _ _ (app_cons_not_nil pre post a0) hs.
+          have hsp := eta_safe_spine _ _ _ (PCUICEtaT8Probe.app_cons_not_nil pre post a0) hs.
           have hn := spine_safe_fix _ _ _ _ _ _ _ hu (nth_error_at_pre pre post a0) hsp.
           unfold notLam in hn. rewrite hl in hn. discriminate hn.
         * eexists. split.
@@ -1058,43 +1058,48 @@ Section TypedSafe.
 
     (a) Base's route to the corresponding fact (the [rarg]-th argument of a typed applied fixpoint
     has an applied inductive type, used e.g. at [PCUICClassification.v:713]), with (b) each link's
-    E form and (c) its status:
+    E form and (c) its status. Each link is labelled BUILT (its status rests on a compiled lemma,
+    refutation or check) or ARGUED (it rests on reading a proof):
     - [PCUICValidity.inversion_mkApps] ([PCUICValidity.v:381]) types the head and a spine; its E
       form [PCUICValidityEta.inversion_mkAppsE] is neither refuted nor T8-shaped, but it rests on
-      validity (row T2a, forecast class [ValForecastCopy16]), which [fri_spine] avoids.
+      validity (row T2a, forecast class [ValForecastCopy16]), which [fri_spine] avoids. BUILT (the
+      E form is compiled; the class is an argument of its compiled statement).
     - [PCUICClassification.wf_fixpoint_spine] ([PCUICClassification.v:390]) reads the
-      [rarg]-th assumption off the spine; it has no E form of its own, only its links below.
+      [rarg]-th assumption off the spine. Its E form [PCUICClassificationEta.wf_fixpoint_spineE]
+      now exists (integration branch), through [mfix_on_ind_spine_witnessE_fix] and
+      [BDFromPCUICEta.mfix_body_on_conv_redE_fix]; it cannot be used here, because
+      [PCUICClassificationEta] requires this file. BUILT (import order).
     - [PCUICClassification.mfix_on_ind_spine_witness] ([PCUICClassification.v:132]) moves the
       spine onto a REDUCT of the declared type that passes [check_one_fix]; its E form (typed
       declared type, conversion witness, reduct passing the check) is T8-SHAPED: it is
       [BDFromPCUICEta.red_fix_witnessE] ([BDFromPCUICEta.v:400]), proved with [T8_Prod_r] and
       [T8_Ind_r] (through [T8_*_r_plug], [BDFromPCUICEta.v:427, 436]), so using it here would be
-      circular, since [T8_*_r] use [fix_rarg_inductive] through [typed_eta_safe].
+      circular, since [T8_*_r] use [fix_rarg_inductive] through [typed_eta_safe]. BUILT.
     - [PCUICFixWitness.mfix_on_ind_inv] ([PCUICFixWitness.v:229]) gets that reduct from the
       [idx]-th body's conversion witness ([PCUICFixWitness.v:238]); its closed-only E form is
       REFUTED at the one-body block [fwe_fix_d] ([PCUICFixWitnessEtaCounter.v:150]), where its
       conclusion is the reduction witness that [mfix_body_on_conv_closed_redE_fix_false]
-      ([PCUICFixWitnessEtaCounter.v:250]) refutes [INFERENCE: this reduction to the body form is
-      not compiled].
+      ([PCUICFixWitnessEtaCounter.v:250]) refutes. ARGUED: this reduction to the body form is
+      not compiled.
     - [PCUICFixWitness.mfix_body_on_conv_closed_red] ([PCUICFixWitness.v:192]) turns a
       conversion witness into a reduction witness by confluence; its closed-only E form is
       REFUTED by [mfix_body_on_conv_closed_redE_fix_false] ([PCUICFixWitnessEtaCounter.v:250])
       and [mfix_body_on_conv_closed_redE_false] (:286), and its typed E form is the T8-shaped
-      lemma of the third link.
+      lemma of the third link. BUILT (both refutations are compiled).
     - [PCUICSR.isType_red] ([PCUICSR.v:3969]) types the reduct; its E form
       [PCUICSREta.isType_redE] ([PCUICSREta.v:3437]) needs E subject reduction, which is
       [T8Assembly]'s hypothesis [subject_reduction] (row T1): not T8-shaped, not refuted, but
-      T8's own premise.
+      T8's own premise. BUILT (the E form is compiled).
     - [PCUICSpine.typing_spine_strengthen] ([PCUICSpine.v:325]) and
       [PCUICSpine.typing_spine_nth_error] ([PCUICSpine.v:2060]) finish the walk; their E forms
       [PCUICSpineEta.typing_spine_strengthenE] (:252) and [typing_spine_nth_errorE] (:1716) are
-      proved (copy 15), neither refuted nor T8-shaped.
+      proved (copy 15), neither refuted nor T8-shaped. BUILT.
 
     The route used instead (section [FixRargInductive], header above it) keeps the CONVERSION
     witness and walks it with untyped facts ([inversion_AppE], [inversion_FixE],
     [ws_cumul_pbE_Prod_Prod_inv], [ws_cumul_pbE_LetIn_l_inv], [substitution0_ws_cumul_pbE]).
 
-    MECHANICAL CHECK ([lanes/eta/meta/fri-dependency-closure.txt]): the kernel dependency closure
+    MECHANICAL CHECK, BUILT ([lanes/eta/meta/fri-dependency-closure.txt]): the kernel dependency closure
     ([Print All Dependencies], which walks opaque proofs and sees tactic-, hint- and
     instance-made uses) of [fix_rarg_inductive] and of every constant of [FixRargInductive] has
     6319 constants; it contains no [T8_*] constant, no other [T8Assembly] constant, neither
@@ -1745,7 +1750,7 @@ Section BetaHead.
         destruct (IHf2 Γ na A' b' eq_refl) as (nb & B & b0 & hr & hp).
         exists (b0 {0 := x}). split.
         * eapply rt_trans_clos.
-          -- eapply (rt_map _ _ (fun y => tApp y x)); [|exact hr]. intros y z r. now apply app_red_l.
+          -- eapply (PCUICEtaT8Probe.rt_map _ _ (fun y => tApp y x)); [|exact hr]. intros y z r. now apply app_red_l.
           -- apply t_step. apply red_beta.
         * exact (pe_subst _ _ hp [x] [a'] 0 (All2_cons hx All2_nil)).
       + rewrite mkApps_app in E. cbn in E. injection E as -> ->.
@@ -1869,7 +1874,7 @@ Proof.
     + apply All2_same; intros; apply pe_refl.
 Qed.
 
-Lemma pe_to_eta t u : pe t u -> eta t u.
+Lemma pe_to_eta t u : pe t u -> PCUICEtaDefs.eta t u.
 Proof.
   induction 1 using pe_ind_all.
   - (* η rule: the IH below the λ, then contract *)
@@ -1992,7 +1997,7 @@ Proof.
     + exact (All2_Tconj_fst _ _ _ _ hval).
 Qed.
 
-Lemma eta_pe_step x y : eta x y -> forall t, pe t x -> pe t y.
+Lemma eta_pe_step x y : PCUICEtaDefs.eta x y -> forall t, pe t x -> pe t y.
 Proof.
   intros h. induction h as [x y r|x|x y z _ IH1 _ IH2]; intros t hp.
   - exact (pe_eta1_closed _ _ hp _ r).
@@ -2001,7 +2006,7 @@ Proof.
 Qed.
 
 (** **[eta1* = pe]: CLOSED.** *)
-Theorem eta_iff_pe t u : (eta t u -> pe t u) × (pe t u -> eta t u).
+Theorem eta_iff_pe t u : (PCUICEtaDefs.eta t u -> pe t u) × (pe t u -> PCUICEtaDefs.eta t u).
 Proof. split; [intros h; exact (eta_pe_step _ _ h t (pe_refl t))|exact (pe_to_eta t u)]. Qed.
 
 (** ** The parallel root cases: a [pe]-source of a rigid spine
@@ -3000,8 +3005,8 @@ Section FixRoot.
       move: hc. rewrite /is_constructor. destruct (nth_error args narg) as [ra|] eqn:ha; [|discriminate].
       intros hca.
       destruct (All2_nth_error_Some_r _ ra hargs ha) as (a0 & ha0 & hpa).
-      destruct (nth_split args narg ra ha) as (pre & post & -> & hlen).
-      destruct (nth_split args0 narg a0 ha0) as (pre0 & post0 & -> & hlen0).
+      destruct (PCUICEtaT8Probe.nth_split args narg ra ha) as (pre & post & -> & hlen).
+      destruct (PCUICEtaT8Probe.nth_split args0 narg a0 ha0) as (pre0 & post0 & -> & hlen0).
       destruct (isConstruct_app_inv _ hca) as (ind & k & uu & bs & ->).
       (* the [rarg]-th argument: no reduct of it is a λ (from [Good] on the spine) *)
       have hnl : forall a', red Σ Γ a0 a' -> notLam a'.
@@ -3010,7 +3015,7 @@ Section FixRoot.
         { eapply rt_trans; [exact hred|]. apply red_mkApps; [apply rt_refl|].
           apply All2_app; [apply All2_refl; intros; apply rt_refl|].
           constructor; [exact hra|apply All2_refl; intros; apply rt_refl]. }
-        have hsp := eta_safe_spine _ _ _ (app_cons_not_nil pre0 post0 a') (hgood _ hred2).
+        have hsp := eta_safe_spine _ _ _ (PCUICEtaT8Probe.app_cons_not_nil pre0 post0 a') (hgood _ hred2).
         apply (spine_safe_fix _ _ _ _ _ _ _ hu0 ltac:(rewrite -hlen0; apply nth_error_at_pre) hsp). }
       destruct (pe_rigid_spine Σ Γ a0 hnl _ (tConstruct ind k uu) bs hpa eq_refl eq_refl)
         as (h1 & bs0 & hred1 & hnlh1 & hph1 & hbs).

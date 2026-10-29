@@ -574,7 +574,7 @@ Proof.
   apply typing_ind_env_app_sizeE; eauto.
 Qed.
 
-Local Hint Constructors value wcbv_red1 : wcbv.
+Local Hint Constructors PCUICWcbvEval.value PCUICWcbvEval.wcbv_red1 : wcbv.
 
 Import PCUICGlobalEnv.
 
@@ -685,10 +685,10 @@ Qed.
 Lemma typing_value_head_nappE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} fn args hd T :
   negb (isApp fn) ->
   Σ ;;; [] |-E mkApps fn (args ++ [hd]) : T ->
-  value Σ hd -> closed hd ->
-  value Σ (mkApps fn args) ->
+  PCUICWcbvEval.value Σ hd -> closed hd ->
+  PCUICWcbvEval.value Σ (mkApps fn args) ->
   (∑ t' : term, Σ ⊢ mkApps fn (args ++ [hd]) ⇝ᵥ t') +
-  value Σ (mkApps fn (args ++ [hd])).
+  PCUICWcbvEval.value Σ (mkApps fn (args ++ [hd])).
 Proof.
   intros napp ht vhd clhd vapp.
   pose proof ht as ht'.
@@ -746,10 +746,10 @@ Qed.
 (** Base [typing_value_head] ([:663]). *)
 Lemma typing_value_headE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} fn args hd T :
   Σ ;;; [] |-E mkApps fn (args ++ [hd]) : T ->
-  value Σ hd -> closed hd ->
-  value Σ (mkApps fn args) ->
+  PCUICWcbvEval.value Σ hd -> closed hd ->
+  PCUICWcbvEval.value Σ (mkApps fn args) ->
   (∑ t' : term, Σ ⊢ mkApps fn (args ++ [hd]) ⇝ᵥ t') +
-  value Σ (mkApps fn (args ++ [hd])).
+  PCUICWcbvEval.value Σ (mkApps fn (args ++ [hd])).
 Proof.
   destruct (decompose_app fn) eqn:da.
   pose proof (decompose_app_notApp _ _ _ da).
@@ -761,8 +761,8 @@ Qed.
 
 (** Base [progress_env_prop] ([:704]). *)
 Lemma progress_env_propE `{cf : checker_flags}:
-  env_propE (fun Σ Γ t T => axiom_free Σ -> Γ = [] -> Σ ;;; Γ |-E t : T -> {t' & Σ ⊢ t ⇝ᵥ t'} + (value Σ t))
-           (fun Σ Γ j => axiom_free Σ -> Γ = [] -> lift_typing0 (fun t T => Σ ;;; Γ |-E t : T -> {t' & Σ ⊢ t ⇝ᵥ t'} + (value Σ t)) j)
+  env_propE (fun Σ Γ t T => axiom_free Σ -> Γ = [] -> Σ ;;; Γ |-E t : T -> {t' & Σ ⊢ t ⇝ᵥ t'} + (PCUICWcbvEval.value Σ t))
+           (fun Σ Γ j => axiom_free Σ -> Γ = [] -> lift_typing0 (fun t T => Σ ;;; Γ |-E t : T -> {t' & Σ ⊢ t ⇝ᵥ t'} + (PCUICWcbvEval.value Σ t)) j)
            (fun _ _ => True).
 Proof with eauto with wcbv; try congruence.
   eapply typing_ind_envE...
@@ -783,7 +783,7 @@ Proof with eauto with wcbv; try congruence.
       intros _ Happ.
       destruct (IHt Hax eq_refl Ht) as [[t' IH] | IH]; eauto with wcbv.
       assert (Ht' : Σ ;;; [] |-E t : tProd na A B) by (econstructor; eauto; now eapply ws_cumul_pbE_forget_spec in w).
-      destruct p0 as [_ [[t' Hstep] | Hval]]; eauto using wcbv_red1.
+      destruct p0 as [_ [[t' Hstep] | Hval]]; eauto using PCUICWcbvEval.wcbv_red1.
       intros htapp.
       pose proof (typing_value_headE t [] hd _ htapp Hval).
       forward X. now eapply subject_closedE in H0. cbn in X.
@@ -862,7 +862,7 @@ Proof with eauto with wcbv; try congruence.
       clear hty.
       solve_all. clear -hvalue0 Hargs v.
       set (a := {| array_level := _ |}).
-      assert (All (fun x : term => ((∑ t' : term, Σ ⊢ x ⇝ᵥ t') + value Σ x))%type array_value).
+      assert (All (fun x : term => ((∑ t' : term, Σ ⊢ x ⇝ᵥ t') + PCUICWcbvEval.value Σ x))%type array_value).
       { solve_all. } clear hvalue0 Hargs.
       eapply All_or_disj in X as [].
       * destruct s as [n [v' [? []]]]. destruct s as [t' ht'].
@@ -876,7 +876,7 @@ Lemma progressE `{cf : checker_flags}:
   forall (Σ:global_env_ext) t T,
     axiom_free Σ -> wfE Σ ->
     Σ ;;; [] |-E t : T ->
-    {t' & Σ ⊢ t ⇝ᵥ t'} + (value Σ t).
+    {t' & Σ ⊢ t ⇝ᵥ t'} + (PCUICWcbvEval.value Σ t).
 Proof.
   intros.
   edestruct progress_env_propE as [_ [_ [[t' Ht'] | Hval]]]; eauto.

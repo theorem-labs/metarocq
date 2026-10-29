@@ -95,7 +95,7 @@ Lemma pgi_sp_cstr :
   PCUICAritiesEta.typing_spineE si_Σ []
     (it_mkProd_or_LetIn [vass si_na si_P] (mkApps (tInd si_ind []) [tRel 0])) [iv_False] iv_IF.
 Proof.
-  eapply (@type_spine_consE _ _ _ _ iv_False [] si_na si_P (tApp (tInd si_ind []) (tRel 0)) iv_IF).
+  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ _ iv_False [] si_na si_P (tApp (tInd si_ind []) (tRel 0)) iv_IF).
   - exact pgi_cstr_isType.
   - exact pgi_cstr_isType.
   - exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] _ pgi_cstr_isType).

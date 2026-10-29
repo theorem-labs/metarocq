@@ -135,7 +135,7 @@ Qed.
 
 Lemma cli_sp_one : PCUICAritiesEta.typing_spineE si_Σ [] iv_False [iv_False] iv_False.
 Proof.
-  eapply (@type_spine_consE _ _ _ iv_False iv_False [] si_na si_P (tRel 0) iv_False).
+  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ iv_False iv_False [] si_na si_P (tRel 0) iv_False).
   - exact (cli_False_isType [] localenv_nil).
   - exact (cli_False_isType [] localenv_nil).
   - exact (cli_False_refl [] localenv_nil).
@@ -199,7 +199,7 @@ Qed.
 Lemma cli_fix_sp_cA :
   PCUICAritiesEta.typing_spineE si_Σ bd_Γ1 (bdf_fxty 0) [cli_cA] (tApp (tInd si_ind []) (tRel 0)).
 Proof.
-  eapply (@type_spine_consE _ _ _ (bdf_fxty 0) cli_cA [] si_na (bdf_Dk 0)
+  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ (bdf_fxty 0) cli_cA [] si_na (bdf_Dk 0)
             (tApp (tInd si_ind []) (tRel 1)) (tApp (tInd si_ind []) (tRel 0))).
   - exact cli_fxty_isType.
   - exact cli_fxty_isType.
@@ -287,7 +287,7 @@ Definition invert_cumul_arity_r_genE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T
 
 Definition isArity_typing_spineE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T :=
   isArity_typing_spineE (Σ := si_Σ) (wfΣ := si_wfE) cli_wf_Γz
-    (type_spine_nilE _ _ iv_PP cli_T cli_PP_isType cli_T_isType cli_ws_l) cli_PP_conv.
+    (PCUICAritiesEta.type_spine_nilE _ _ iv_PP cli_T cli_PP_isType cli_T_isType cli_ws_l) cli_PP_conv.
 
 Definition arity_spine_len_subst_inst : arity_spine_len (subst [iv_False] 0 iv_PP) = arity_spine_len iv_PP :=
   arity_spine_len_subst [iv_False] 0 iv_PP eq_refl.

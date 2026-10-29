@@ -462,7 +462,7 @@ Section SRInstances.
   (** *** Helpers of [sr_red1E]: contexts and types *)
 
   Definition isType_weakenE_inst :=
-    isType_weakenE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (iv_wf_vdef si_Σ [] localenv_nil) sri_A_isType.
+    PCUICSREta.isType_weakenE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (iv_wf_vdef si_Σ [] localenv_nil) sri_A_isType.
 
   (** Expanding the let [z := ∀P:Prop. P]. *)
   Definition isType_expand_letsE_inst :=

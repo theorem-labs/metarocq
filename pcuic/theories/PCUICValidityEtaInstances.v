@@ -48,7 +48,7 @@ Section ContractFit.
     Context {cf : checker_flags}.
 
     Definition T2a_inversion_mkApps_fit :
-      forall {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ : context} {f : term} {u : list term} {T : term}, Σ;;; Γ |-E mkApps f u : T -> ∑ A : term, Σ;;; Γ |-E f : A × typing_spineE Σ Γ A u T
+      forall {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ : context} {f : term} {u : list term} {T : term}, Σ;;; Γ |-E mkApps f u : T -> ∑ A : term, Σ;;; Γ |-E f : A × PCUICAritiesEta.typing_spineE Σ Γ A u T
       := fun Σ wfΣ Γ f u T h => inversion_mkAppsE (wfΣ := wfΣ) h.
 
     Definition T2a_validity_fit :
@@ -65,7 +65,7 @@ Section ContractFit.
   Definition SR_T2a_inversion_mkAppsE_fit :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ f u T},
     Σ ;;; Γ |-E mkApps f u : T ->
-    ∑ A, Σ ;;; Γ |-E f : A × typing_spineE Σ Γ A u T
+    ∑ A, Σ ;;; Γ |-E f : A × PCUICAritiesEta.typing_spineE Σ Γ A u T
     := fun cf Σ wfΣ Γ f u T h => inversion_mkAppsE (wfΣ := wfΣ) h.
 
 End ContractFit.
@@ -156,13 +156,13 @@ Definition iv_P_refl : si_Σ ;;; [] ⊢E si_P ≤ si_P :=
 (** [inversion_mkAppsE] at [(λx:Prop. x) (∀P:Prop. P) : Prop]. *)
 Lemma inversion_mkAppsE_inst :
   (si_Σ ;;; [] |-E mkApps iv_id [iv_False] : si_P) ×
-  ∑ A, si_Σ ;;; [] |-E iv_id : A × typing_spineE si_Σ [] A [iv_False] si_P.
+  ∑ A, si_Σ ;;; [] |-E iv_id : A × PCUICAritiesEta.typing_spineE si_Σ [] A [iv_False] si_P.
 Proof.
   split; [exact (iv_app_typed si_Σ [] localenv_nil)|].
   exists iv_PP. split; [exact (iv_id_typed si_Σ [] localenv_nil)|].
-  eapply (@type_spine_consE _ _ _ iv_PP iv_False [] si_na si_P si_P si_P iv_PP_isType iv_PP_isType iv_PP_refl
+  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ iv_PP iv_False [] si_na si_P si_P si_P iv_PP_isType iv_PP_isType iv_PP_refl
             (iv_False_typed si_Σ [] localenv_nil)).
-  exact (type_spine_nilE _ _ _ _ (iv_P_isType [] localenv_nil) (iv_P_isType [] localenv_nil) iv_P_refl).
+  exact (PCUICAritiesEta.type_spine_nilE _ _ _ _ (iv_P_isType [] localenv_nil) (iv_P_isType [] localenv_nil) iv_P_refl).
 Qed.
 
 Lemma type_App'E_inst :

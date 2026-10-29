@@ -399,7 +399,7 @@ Section Validity.
         (List.rev (subst_instance (puinst p) (ind_params mdecl ,,, ind_indices idecl))).
       { eapply ctx_inst_impl with (1 := ctxi). now intros t T [Hty _]. }
       have wfΓΔ : wf_localE Σ (Γ ,,, subst_instance (puinst p) (ind_params mdecl ,,, ind_indices idecl)).
-      { apply weaken_wf_localE; [exact wfΣ|exact wfΓ|].
+      { apply PCUICWeakeningTypEta.weaken_wf_localE; [exact wfΣ|exact wfΓ|].
         exact (on_minductive_wf_params_indices_instE (wfΣ := wfΣ) isdecl _ cu). }
       pose proof (spine_subst_smashE (wfΣ := wfΣ) (ctx_inst_spine_substE (wfΣ := wfΣ) wfΓΔ ctxi')) as sp.
       rewrite subst_instance_app_ctx in sp.
@@ -417,7 +417,7 @@ Section Validity.
       pose proof (isType_case_predicateE (wfΣ := wfΣ) (puinst p) (pparams p) ps wfΓ isdecl cu wfps sppars)
         as tycp.
       rewrite /ptm. eapply (has_sort_isTypeE ps).
-      refine (type_mkAppsE (PCUICGenerationEta.type_it_mkLambda_or_LetInE _ _ _ _ _ pret) _).
+      refine (PCUICSpineEta.type_mkAppsE (PCUICGenerationEta.type_it_mkLambda_or_LetInE _ _ _ _ _ pret) _).
       refine (typing_spine_strengthenE (wfΣ := wfΣ) (wf_arity_spine_typing_spineE
         {| wf_arity_spine_wfE := tycp;
            wf_arity_spine_spineE := arity_spine_case_predicateE wfΓ isdecl cu wfps sppars spidx Hc |})
@@ -512,7 +512,7 @@ Qed.
    every type in the derivation is well-typed. *)
 Lemma inversion_mkAppsE {cf} {Σ} {wfΣ :  wfE Σ.1} {Γ f u T} :
   Σ ;;; Γ |-E mkApps f u : T ->
-  ∑ A, Σ ;;; Γ |-E f : A × typing_spineE Σ Γ A u T.
+  ∑ A, Σ ;;; Γ |-E f : A × PCUICAritiesEta.typing_spineE Σ Γ A u T.
 Proof.
   induction u in f, T |- *.
   { simpl. intros h. exists T. split; [exact h|].
@@ -524,16 +524,16 @@ Proof.
     destruct (inversion_AppE Σ wfΣ Hf) as [na' [A' [B' [Hf' [Ha HA''']]]]].
     exists (tProd na' A' B'). split; [exact Hf'|].
     pose proof (validityE Hf') as hP.
-    eapply type_spine_consE; [exact hP|exact hP| |exact Ha|].
+    eapply PCUICAritiesEta.type_spine_consE; [exact hP|exact hP| |exact Ha|].
     + exact (isType_ws_cumul_pbE_refl (pb := Cumul) Γ _ hP).
-    + eapply type_spine_nilE; [|exact hT|exact HA'''].
+    + eapply PCUICAritiesEta.type_spine_nilE; [|exact hT|exact HA'''].
       exact (isType_applyE hP Ha).
   - specialize (IHu (tApp f a) T).
     specialize (IHu Hf) as [T' [H' H'']].
     destruct (inversion_AppE Σ wfΣ H') as [na' [A' [B' [Hf' [Ha HA''']]]]].
     exists (tProd na' A' B'). split; [exact Hf'|].
     pose proof (validityE Hf') as hP.
-    eapply type_spine_consE; [exact hP|exact hP| |exact Ha|].
+    eapply PCUICAritiesEta.type_spine_consE; [exact hP|exact hP| |exact Ha|].
     + exact (isType_ws_cumul_pbE_refl (pb := Cumul) Γ _ hP).
     + exact (typing_spine_strengthenE (wfΣ := wfΣ) H'' _ (isType_applyE hP Ha) HA''').
 Qed.
@@ -557,7 +557,7 @@ Lemma type_mkApps_arityE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ t u tty 
 Proof.
   intros Ht Hty.
   pose proof (validityE Ht).
-  eapply type_mkAppsE; tea.
+  eapply PCUICSpineEta.type_mkAppsE; tea.
   eapply wf_arity_spine_typing_spineE.
   constructor; tas.
 Qed.

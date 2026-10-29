@@ -214,7 +214,7 @@ Section Alpha.
       proofs use; registered here locally in the same way. *)
   #[local] Hint Resolve is_closed_context_app_left : fvs.
   #[local] Hint Resolve is_closed_context_app_right : fvs.
-  #[local] Hint Constructors All_fold : core.
+  #[local] Hint Constructors All_Forall.All_fold : core.
 
   (** Base [eq_context_upto_conv_context_rel] ([PCUICAlpha.v:174]). *)
   Lemma eq_context_upto_conv_context_relE {Σ : global_env_ext} {wfΣ : wfE Σ} {le} (Γ Δ Δ' : context) :

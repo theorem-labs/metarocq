@@ -366,7 +366,7 @@ Class SRForecastCopy18 := {
     wf_cofixpointE Σ Γ mfix ->
     nth_error mfix idx = Some d ->
     isTypeE Σ Γ (dtype d) ->
-    typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
+    PCUICAritiesEta.typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
     check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite
 }.
 
@@ -692,7 +692,7 @@ Proof.
   pose proof (on_declared_constructorE H) as [[onmind oib] [cs [hnth onc]]].
   move/on_cargs/sorts_local_ctx_wf_localE: onc => H'.
   apply H'.
-  apply weaken_wf_localE; tea.
+  apply PCUICWeakeningTypEta.weaken_wf_localE; tea.
   eapply (wf_arities_contextE H).
   now apply onParams in onmind.
 Qed.
@@ -1004,7 +1004,7 @@ Lemma typing_spine_prim_arg_typesE {cf:checker_flags} {Σ : global_env_ext} {wf�
   PCUICPrimOpType.prim_arg_types r tags res = Some ty ->
   Σ ;;; Γ ⊢E ty ≤ ty' ->
   #|ls| = #|tags| ->
-  typing_spineE Σ Γ ty' (map term_of_lit ls) T ->
+  PCUICAritiesEta.typing_spineE Σ Γ ty' (map term_of_lit ls) T ->
   Σ ;;; Γ ⊢E res ≤ T.
 Proof.
   induction tags as [|t tags ih] in ls, ty, ty' |- *; intros hty hle hlen hsp.
@@ -1229,7 +1229,7 @@ Lemma typing_spine_prim_argsE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : w
   PCUICPrimOpType.prim_arg_types r tags res = Some ty ->
   Σ ;;; Γ ⊢E ty ≤ ty' ->
   #|args| <= #|tags| ->
-  typing_spineE Σ Γ ty' args T ->
+  PCUICAritiesEta.typing_spineE Σ Γ ty' args T ->
   (forall i a t, nth_error args i = Some a -> nth_error tags i = Some t ->
      ∑ A ty_a, [× PCUICPrimOpType.prim_tag_type r t = Some ty_a,
                  Σ ;;; Γ |-E a : A & Σ ;;; Γ ⊢E A = ty_a]) ×
@@ -1565,7 +1565,7 @@ Proof.
     eapply type_tFix_invE in appty as [T [arg [fn' [[[Hnth wffix] Hty]]]]]; auto.
     rewrite H in Hnth. noconf Hnth.
     eapply typeE_App; eauto.
-    eapply type_mkAppsE; [|tea].
+    eapply PCUICSpineEta.type_mkAppsE; [|tea].
     eapply type_ws_cumul_pbE; eauto.
 
   - (* Application congruence for argument; base's [red_cumul_inv] is [JoinE_red_r] *)
@@ -1998,7 +1998,7 @@ Proof.
     eapply typing_spine_strengthenE in tsp; [|exact vbody|exact Hcum].
     have typec' : Σ ;;; Γ |-E mkApps (subst0 (cofix_subst mfix) (dbody d)) args :
       mkApps (tInd ci (puinst p)) (pparams p ++ indices).
-    { eapply type_mkAppsE; tea. }
+    { eapply PCUICSpineEta.type_mkAppsE; tea. }
     have hck := tsp.
     eapply wf_cofixpoint_typing_spineE in hck; tea.
     unfold check_recursivity_kind in hck.
@@ -2013,7 +2013,7 @@ Proof.
       match goal with hw : wf_predicate _ _ _ |- _ => pose proof (wf_predicate_length_pars hw) end.
       pose proof (declared_minductive_ind_nparsE isdecl). lia. }
     have hidx : forallb (is_open_term Γ) indices.
-    { have isty' := isty. eapply isType_is_open_termE in isty'.
+    { have isty' := isty. eapply PCUICSREta.isType_is_open_termE in isty'.
       move: isty'. rewrite on_free_vars_mkApps forallb_app. now move=> /andP[] _ /andP[]. }
     eapply type_ws_cumul_pbE. eapply typeE_Case; eauto. 1: econstructor; eauto.
     1:econstructor; eauto.
@@ -2307,7 +2307,7 @@ Proof.
       now apply ws_cumul_ctx_pbE_refl_pb, wf_local_closed_contextE.
     * eapply ws_cumul_pbE_eq_le, ws_cumul_pbE_mkApps; tea.
       2:{ eapply WT_refl => //.
-          eapply isType_is_open_termE in X0.
+          eapply PCUICSREta.isType_is_open_termE in X0.
           rewrite on_free_vars_mkApps in X0.
           now move/andP: X0=> []. }
       eapply ws_cumul_pbE_it_mkLambda_or_LetIn; tea.
@@ -2337,12 +2337,12 @@ Proof.
         apply All2_tip. eapply (ws_cumul_pbE_forget_spec (pb:=Conv)).
         symmetry. now eapply closed_red1_ws_cumul_pbE.
       + now apply wf_local_closed_contextE.
-      + eapply isType_is_open_termE in X0.
+      + eapply PCUICSREta.isType_is_open_termE in X0.
         rewrite on_free_vars_mkApps in X0.
         move/andP: X0=> []. generalize (closed_red_open_right_cb (closed_red1_red Hu)).
         rewrite !forallb_app /= => clc' clptm /and3P[] -> /=.
         now rewrite clc'.
-      + eapply isType_is_open_termE in X0. rewrite on_free_vars_mkApps in X0.
+      + eapply PCUICSREta.isType_is_open_termE in X0. rewrite on_free_vars_mkApps in X0.
         now move/andP: X0 => [].
 
   - (* Case congruence on branches *)
@@ -2398,7 +2398,7 @@ Proof.
     { pose proof (subslet_lengthE sppars) as hl. move: hl; now len. }
     eapply type_Cumul_altE; [econstructor|..]; eauto.
     + eapply typing_spine_strengthenE in tsp. 3:tea.
-      eapply type_mkAppsE. eauto. eauto.
+      eapply PCUICSpineEta.type_mkAppsE. eauto. eauto.
       now eapply validityE in Hbody.
     + now eapply validityE in typecofix.
     + apply JoinE_red_r.
@@ -2467,6 +2467,8 @@ Proof.
         rewrite closed_k_ctx_subst //.
         eapply (declared_inductive_closed_params_instE isdecl).
         move/isType_subst_extended_substE.
+        (* This file's [isType_weakenE] (section [SREta], :501): inside its section Rocq gives it
+           no qualified name; the short name resolves to it, not to [PCUICAritiesEta]'s. *)
         move/(isType_weakenE wfΓ); rewrite app_context_assoc.
         move/(isType_substitutionE sppars).
         rewrite -skipn_subst_instance - !skipn_subst_context.
@@ -2477,7 +2479,7 @@ Proof.
         assert (context_assumptions (cstr_args cdecl) -
             (context_assumptions (cstr_args cdecl) - p.(proj_arg)) = p.(proj_arg)) by lia.
         rewrite H.
-        move/isType_is_open_termE. len.
+        move/PCUICSREta.isType_is_open_termE. len.
         rewrite !length_skipn; len. rewrite H //.
         rewrite subst_instance_subst // /indsubst.
         rewrite subst_instance_inds.
@@ -2745,7 +2747,7 @@ Proof.
       rewrite !subst_instance_app_ctx -app_context_assoc.
       intro foo. pose (fun x y z => isType_subst_aritiesE isdecl cu (foo x y z)).
       move:i. clear foo.
-      intro foo. pose (fun x y z => isType_is_open_termE _ _ (foo x y z)).
+      intro foo. pose (fun x y z => PCUICSREta.isType_is_open_termE _ _ (foo x y z)).
       move:i. clear foo. len.
       rewrite length_skipn; len.
       assert (context_assumptions (cstr_args cdecl) -
@@ -2772,21 +2774,21 @@ Proof.
       now apply closed_red1_red.
     * rewrite on_free_vars_ctx_app andb_true_r on_free_vars_ctx_app H /=.
       cbn. rewrite shiftnP_add /=.
-      move/validityE/isType_is_open_termE: typec => -> //.
+      move/validityE/PCUICSREta.isType_is_open_termE: typec => -> //.
     * rewrite on_free_vars_ctx_app andb_true_r on_free_vars_ctx_app H /=.
       cbn. rewrite shiftnP_add /=.
-      move/validityE/isType_is_open_termE: typec => -> //.
+      move/validityE/PCUICSREta.isType_is_open_termE: typec => -> //.
     * have := (declared_projection_type_and_eqE wf isdecl).
       move=> [[hctors isTy] Hdecl].
       move/validityE/(isType_mkApps_Ind_proj_invE _ isdecl): typec => [sppars hpars hargs cu].
       move/(PCUICUnivSubstitutionTypEta.isType_subst_instance_declE _ _ _ _ (InductiveDecl mdecl) u _ _) : isTy.
       unshelve epose proof (isdecl' := declared_projection_to_gen isdecl); eauto.
       move/(_ _ isdecl'.p1.p1.p1 cu).
-      move/(isType_weakenE wfΓ).
+      move/(isType_weakenE wfΓ). (* this file's, see above *)
       rewrite [_@[u]](subst_instance_app_ctx _ _ [_]).
       rewrite app_context_assoc subst_instance_smash.
       move/(isType_substitutionE sppars) => /=. len.
-      move/isType_is_open_termE => /=. now cbn.
+      move/PCUICSREta.isType_is_open_termE => /=. now cbn.
 Qed.
 
 (** *** Premise 14: fixpoints; the impossible step ([:3328-3331]), a type step ([:3333-3419],
@@ -3507,7 +3509,7 @@ Definition T1_type_reduction_closed_fit {cf : checker_flags} :
   := @type_reduction_closedE cf.
 
 Definition T2a_inversion_mkApps_fit {cf : checker_flags} :
-  forall {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ : context} {f : term} {u : list term} {T : term}, Σ;;; Γ |-E mkApps f u : T -> ∑ A : term, Σ;;; Γ |-E f : A × typing_spineE Σ Γ A u T
+  forall {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ : context} {f : term} {u : list term} {T : term}, Σ;;; Γ |-E mkApps f u : T -> ∑ A : term, Σ;;; Γ |-E f : A × PCUICAritiesEta.typing_spineE Σ Γ A u T
   := fun Σ wfΣ Γ f u T h => inversion_mkAppsE h.
 
 Definition T2a_validity_fit {cf : checker_flags} :

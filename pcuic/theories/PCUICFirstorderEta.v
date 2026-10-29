@@ -547,6 +547,9 @@ Proof using V16 F16 F18 C16 FO16.
       * rewrite it_mkProd_or_LetIn_app in w. cbn in w.
         eapply ws_cumul_pbE_LetIn_l_inv in w.
         rewrite /subst1 PCUICUnivSubst.subst_instance_it_mkProd_or_LetIn PCUICLiftSubst.subst_it_mkProd_or_LetIn in w.
+        (* This file's [invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (above, in section [cf]):
+           inside its section Rocq gives it no qualified name; the short name resolves to it,
+           not to [PCUICEtaA6More]'s (a different statement: any [pb], [ClosedBodies]). *)
         now eapply invert_cumul_it_mkProd_or_LetIn_Sort_IndE in w.
       * rewrite it_mkProd_or_LetIn_app in w. cbn in w.
         now eapply invert_cumul_prod_indE in w.
