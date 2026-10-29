@@ -93,7 +93,13 @@ Definition isWfArityE {cf:checker_flags} Σ (Γ : context) T :=
   Every class field below is a FORECAST: an E copy that is not on this branch will prove it,
   under exactly this name and with exactly this statement. Landing a copy is: delete its class
   here (and its definitions), delete its [Context] line in section [ValidityEta], import the
-  copy. No proof below the block changes. Nothing here is an axiom. *)
+  copy. No proof below the block changes. Nothing here is an axiom.
+
+  Satisfiability: a field with the text of [PCUICSREta.v] carries that file's source (the
+  statement note's verdicts, lanes/eta/sr-statement-note.md); each field with base-twin text
+  carries, beside it, the argument that it is not a known-false form. Every field is a typing
+  fact under [wfE] (or [ClosedBodies], [type_mkAppsE]); none has only a [welltypedE] premise
+  about an inductive head, none is a closed-only fixpoint witness hypothesis. *)
 
 (* The braces in the statements record the implicit status of the source; Rocq honours them
    on the class projections. *)
@@ -249,12 +255,16 @@ Class ValForecastCopy15 := {
     isTypeE Σ Γ T' ->
     ws_cumul_pbE Cumul Σ Γ T' T ->
     typing_spineE Σ Γ T' args U ;
-  (* PCUICSpine.v:415 wf_arity_spine_typing_spine; base twin *)
+  (* PCUICSpine.v:415 wf_arity_spine_typing_spine; base twin. Not a known-false form: under
+     [wfE], typing premises only. Argued TRUE in t1-case-audit.md §6.1 (Case row); its one raw
+     site, [isType_tLetIn_red] (PCUICArities.v:251), has the route [ws_cumul_pbE_LetIn_l_inv]
+     (PCUICEtaA6.v:361) of §2.2. *)
   wf_arity_spine_typing_spineE :
     forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T args T'},
     wf_arity_spineE Σ Γ T args T' ->
     typing_spineE Σ Γ T args T' ;
-  (* PCUICSpine.v:782 spine_subst_smash_app_inv; base twin *)
+  (* PCUICSpine.v:782 spine_subst_smash_app_inv; base twin. Not a known-false form: under
+     [wfE], [spine_substE] premises only, no conversion inversion (t1-case-audit.md §2.2, T15). *)
   spine_subst_smash_app_invE :
     forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ Δ' δ δ'},
     #|δ| = context_assumptions Δ ->
@@ -316,7 +326,10 @@ Class ValForecastCopy16 := {
     forall u : Instance.t,
     consistent_instance_ext Σ (ind_universes mdecl) u ->
     wf_localE Σ ((ind_params mdecl ,,, ind_indices idecl)@[u]) ;
-  (* PCUICInductives.v:2697 isType_case_predicate; base twin *)
+  (* PCUICInductives.v:2697 isType_case_predicate; base twin. Not a known-false form: under
+     [wfE], typing premises only. Argued TRUE in t1-case-audit.md §6.1 (Case row) and §6.2: its
+     raw site [type_it_mkProd_or_LetIn_inv] (PCUICSpine.v:1719) is routed through
+     [ws_cumul_pbE_LetIn_l_inv]. *)
   isType_case_predicateE :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ} {ci : case_info}
       {mdecl idecl} u params ps,
@@ -329,7 +342,9 @@ Class ValForecastCopy16 := {
       (it_mkProd_or_LetIn
         (pre_case_predicate_context_gen ci mdecl idecl params u)
         (tSort ps)) ;
-  (* PCUICInductives.v:2803 arity_spine_case_predicate; base twin *)
+  (* PCUICInductives.v:2803 arity_spine_case_predicate; base twin. Not a known-false form: under
+     [wfE]; the premise on [c] is a typing derivation, not [welltypedE]. Argued TRUE in
+     t1-case-audit.md §6.1 (Case row). *)
   arity_spine_case_predicateE :
     forall {cf: checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ} {ci : case_info}
       {mdecl idecl} {u params indices ps} {c},
