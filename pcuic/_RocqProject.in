@@ -254,6 +254,8 @@ theories/Bidirectional/BDFromPCUICEtaInstances.v
 theories/PCUICClassificationEta.v
 # Progress over typingE (row T6, the E copy of PCUICProgress), and its satisfying instances
 theories/PCUICProgressEta.v
+# Canonicity over typingE (row T6, the E copy of PCUICCanonicity), and its satisfying instances
+theories/PCUICCanonicityEta.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
 # T8 step 3: R_c* on canon T read back as base red on T (backward simulation through canon)
