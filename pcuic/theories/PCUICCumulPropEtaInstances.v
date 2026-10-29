@@ -21,12 +21,13 @@
   The flags: [cpr_flags] ([prop_sub_type = false]) where a lemma takes base's section variable
   [Hcf]; otherwise any flags.
 
-  The two imported E lemmas are compared with the base-substituted statement in compiled form:
-  [cpE_import_conv_sort_inv] and [cpE_import_LetIn_l_inv_alt] inhabit the base-substituted type
+  The two imported E lemmas are compared with the base-substituted statement in compiled form
   ([conv_sort_inv], [ws_cumul_pb_LetIn_l_inv_alt] with [wf] → [wfE], [wf_local] → [wf_localE],
-  [⊢] → [⊢E]) by the landed lemmas. The converse ascription does not hold: the landed types
-  take fewer premises (no environment premise for [conv_sort_invE]; [ClosedBodies] and no
-  [wf_localE] for the LetIn lemma). *)
+  [⊢] → [⊢E]): the types are NOT identical, since ascription fails in both directions (the
+  [Fail Check]s below); the landed lemmas inhabit the base-substituted types
+  ([cpE_import_conv_sort_inv], [cpE_import_LetIn_l_inv_alt]), as they take fewer premises
+  (no environment premise for [conv_sort_invE]; [ClosedBodies] and no [wf_localE] for the
+  LetIn lemma). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -56,6 +57,12 @@ Definition cpE_import_LetIn_l_inv_alt :
     Σ ;;; Γ ⊢E tLetIn na d ty b = C ->
     Σ ;;; Γ ,, vdef na d ty ⊢E b = lift0 1 C
   := fun cf Σ Γ C na d ty b wfΣ _ h => ws_cumul_pbE_LetIn_l_inv_alt (wfΣ := wfE_ClosedBodies Σ.1) h.
+
+(** Both-way ascription fails: the landed types are not the base-substituted ones. *)
+Fail Check (@conv_sort_invE : ltac:(let T := type of @cpE_import_conv_sort_inv in exact T)).
+Fail Check (cpE_import_conv_sort_inv : ltac:(let T := type of @conv_sort_invE in exact T)).
+Fail Check (@ws_cumul_pbE_LetIn_l_inv_alt : ltac:(let T := type of @cpE_import_LetIn_l_inv_alt in exact T)).
+Fail Check (cpE_import_LetIn_l_inv_alt : ltac:(let T := type of @ws_cumul_pbE_LetIn_l_inv_alt in exact T)).
 
 (** ** The environments and the steps *)
 
@@ -111,9 +118,21 @@ Section Generic.
   Definition cumul_prop_cum_pb_rE_inst : rf_Σ ;;; rf_Γ |-E rf_t ~~ rf_t :=
     cumul_prop_cum_pb_rE (wfΣ := cpi_wf_extE) cumul_prop_symE_inst (cpi_eta Cumul).
 
+  Lemma cpi_Prop_red_refl : rf_Σ ;;; [] ⊢ tSort sProp ⇝ tSort sProp.
+  Proof. split; [reflexivity|reflexivity|]. apply rt_refl. Qed.
+
+  Lemma cpi_Prop_eq : eq_term_prop rf_Σ 0 (tSort sProp) (tSort sProp).
+  Proof. constructor. reflexivity. Qed.
+
+  Lemma cpi_beta_reducts : ∑ nf nf', [× rf_Σ ;;; [] ⊢ cpi_beta ⇝ nf, rf_Σ ;;; [] ⊢ tSort sProp ⇝ nf'
+                                        & eq_term_prop rf_Σ 0 nf nf'].
+  Proof.
+    exists (tSort sProp), (tSort sProp).
+    split; [exact (cpi_beta_red [] eq_refl)|exact cpi_Prop_red_refl|exact cpi_Prop_eq].
+  Qed.
+
   Definition into_cumul_propE_red_inst : rf_Σ ;;; [] |-E cpi_beta ~~ tSort sProp :=
-    into_cumul_propE_red (tSort sProp; tSort sProp; (cpi_beta_red [] eq_refl,
-      closed_red_refl (Γ := []) eq_refl eq_refl, ltac:(reflexivity))).
+    into_cumul_propE_red cpi_beta_reducts.
 
   Definition red_cumul_propE_inst : rf_Σ ;;; [] |-E cpi_beta ~~ tSort sProp :=
     red_cumul_propE (wfΣ := cpi_wfE) _ _ (cpi_beta_red [] eq_refl).
@@ -130,9 +149,12 @@ Section Generic.
   Definition cumul_prop_sortE_inst : eq_univ_prop Sort.type0 (Sort.super Sort.type0) :=
     cumul_prop_sortE (wfΣ := cpi_wfE) cpi_type01.
 
+  (** IMPOSSIBLE otherwise than at [SProp] on both sides (header). *)
+  Lemma cpi_SProp_cp : rf_Σ ;;; [] |-E tSort sSProp ~~ tSort sSProp.
+  Proof. apply cpE_of_eq_term_prop; [reflexivity|reflexivity|reflexivity|]. constructor. reflexivity. Qed.
+
   Definition cumul_sprop_propsE_inst : Sort.is_sprop sSProp :=
-    cumul_sprop_propsE (wfΣ := cpi_wfE) (u := sSProp) eq_refl
-      (cpE_of_eq_term_prop eq_refl eq_refl eq_refl ltac:(reflexivity)).
+    cumul_sprop_propsE (wfΣ := cpi_wfE) (u := sSProp) eq_refl cpi_SProp_cp.
 
   Lemma cpi_beta_cumul_Prop : ws_cumul_pbE Cumul rf_Σ [] cpi_beta (tSort sProp).
   Proof. exact (red_ws_cumul_pbE (wfΣ := cpi_cb) (cpi_beta_red [] eq_refl)). Qed.
@@ -165,7 +187,7 @@ Section Generic.
   Lemma cpi_eta_ext d : is_closed_context (rf_Γ ,, d) ->
     ws_cumul_pbE Conv rf_Σ (rf_Γ ,, d) cpi_lam (tRel 1).
   Proof.
-    intros hΓ. apply (eta1_ws_cumul_pbE (wfΣ := cpi_cb)); [exact hΓ|reflexivity|].
+    intros hΓ. apply (eta1_ws_cumul_pbE (Σ := rf_Σ)); [exact hΓ|reflexivity|].
     exact (eta_red cpi_na (tRel 1) (tSort sProp)).
   Qed.
 
@@ -173,7 +195,7 @@ Section Generic.
   Definition cpi_ctx_vdef : context := rf_Γ ,, vdef cpi_na (tSort sProp) (tSort (Sort.super sProp)).
 
   Definition cpi_codom_cp : rf_Σ ;;; cpi_ctx_vass |-E cpi_lam ~~ tRel 1 :=
-    cumul_pb_cumul_propE _ _ Conv _ _ (cpi_eta_ext _ eq_refl).
+    cumul_pb_cumul_propE _ _ Conv _ _ (cpi_eta_ext (vass cpi_na (tSort sProp)) eq_refl).
 
   Definition cumul_prop_tProdE_inst :
     rf_Σ ;;; rf_Γ |-E tProd cpi_na (tSort sProp) cpi_lam ~~ tProd cpi_na (tSort sProp) (tRel 1) :=
@@ -186,37 +208,27 @@ Section Generic.
     rf_Σ ;;; rf_Γ |-E tLetIn cpi_na (tSort sProp) (tSort (Sort.super sProp)) cpi_lam
                     ~~ tLetIn cpi_na (tSort sProp) (tSort (Sort.super sProp)) (tRel 1) :=
     cumul_prop_tLetInE rf_Σ (wfΣ := cpi_wf_extE) eq_refl ltac:(reflexivity) ltac:(reflexivity)
-      (cumul_pb_cumul_propE _ _ Conv _ _ (cpi_eta_ext _ eq_refl)).
+      (cumul_pb_cumul_propE _ _ Conv _ _ (cpi_eta_ext (vdef cpi_na (tSort sProp) (tSort (Sort.super sProp))) eq_refl)).
 
   (** ** Substitution and contexts *)
 
   (** The identity on [Prop], of type [Prop → Prop] ([rf_F]). *)
   Definition cpi_id : term := tLambda c1b_na (tSort sProp) (tRel 0).
 
-  Lemma cpi_id_typed : rf_Σ ;;; [] |-E cpi_id : rf_F.
-  Proof.
-    have w : wf_localE rf_Σ ([] ,, vass c1b_na (tSort sProp)) := localenv_cons_abs localenv_nil (rf_P_vass [] localenv_nil).
-    unfold cpi_id, rf_F. apply typeE_Lambda; [exact (rf_P_vass [] localenv_nil)|].
-    exact (typeE_Rel _ _ 0 (vass c1b_na (tSort sProp)) w eq_refl).
-  Qed.
-
   (** [λx:Prop. id x ~~ id]. *)
   Definition substitution_untyped_cumul_propE_inst :=
     @substitution_untyped_cumul_propE cf rf_Σ [] rf_Γ [] [cpi_id] rf_t (tRel 0) cpi_wfE
       eq_refl ltac:(repeat constructor) cpi_eta_cp.
 
-  Lemma cpi_subslet : subsletE rf_Σ [] [cpi_id] rf_Γ.
-  Proof. constructor; [constructor|exact cpi_id_typed]. Qed.
-
-  Definition substitution_cumul_propE_inst :=
-    @substitution_cumul_propE cf rf_Σ [] rf_Γ [] [cpi_id] rf_t (tRel 0) cpi_wfE cpi_subslet cpi_eta_cp.
+  Lemma cpi_type01_eq : eq_term_prop rf_Σ.1 0 (tSort Sort.type0) (tSort (Sort.super Sort.type0)).
+  Proof. constructor. reflexivity. Qed.
 
   (** [Type₀] and [Type₁] substituted for one variable. *)
   Definition substitution_untyped_cumul_prop_equivE_inst :=
     @substitution_untyped_cumul_prop_equivE cf rf_Σ [] [vass cpi_na (tSort (Sort.super (Sort.super Sort.type0)))] []
       [tSort Sort.type0] [tSort (Sort.super Sort.type0)] (tRel 0) cpi_wfE
       eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl
-      (All2_cons (ltac:(constructor; reflexivity)) All2_nil).
+      (All2_cons cpi_type01_eq All2_nil).
 
   Definition substitution_red_terms_conv_propE_inst :=
     @substitution_red_terms_conv_propE cf rf_Σ [] [vass cpi_na (tSort (Sort.super sProp))] []
@@ -237,7 +249,7 @@ Section Generic.
   Lemma cpi_eta_beta_ctx : rf_Σ ;;; cpi_ctx_beta |-E rf_t ~~ tRel 0.
   Proof.
     apply (cumul_pb_cumul_propE _ _ Conv).
-    apply (eta1_ws_cumul_pbE (wfΣ := cpi_cb)); [reflexivity|reflexivity|].
+    apply (eta1_ws_cumul_pbE (Σ := rf_Σ)); [reflexivity|reflexivity|].
     exact (eta_red c1b_na (tRel 0) (tSort sProp)).
   Qed.
 
@@ -254,15 +266,39 @@ Section Generic.
 
 End Generic.
 
+(** ** The typed substitution, at the default flags of the [rf_] witnesses ([PCUICWsCumulEtaCtx]) *)
+
+Section DefaultFlags.
+
+  #[local] Existing Instance default_checker_flags.
+
+  Lemma cpi_id_typed : rf_Σ ;;; [] |-E cpi_id : rf_F.
+  Proof.
+    have w : wf_localE rf_Σ ([] ,, vass c1b_na (tSort sProp)) := localenv_cons_abs localenv_nil (rf_P_vass [] localenv_nil).
+    unfold cpi_id, rf_F. apply typeE_Lambda; [exact (rf_P_vass [] localenv_nil)|].
+    exact (typeE_Rel _ _ 0 (vass c1b_na (tSort sProp)) w eq_refl).
+  Qed.
+
+  Lemma cpi_subslet : subsletE rf_Σ [] [cpi_id] rf_Γ.
+  Proof. apply cons_let_assE; [constructor|exact cpi_id_typed]. Qed.
+
+  Definition substitution_cumul_propE_inst :=
+    @substitution_cumul_propE default_checker_flags rf_Σ [] rf_Γ [] [cpi_id] rf_t (tRel 0) cpi_wfE cpi_subslet cpi_eta_cp.
+
+End DefaultFlags.
+
 (** ** The lemmas that take base's [Hcf : prop_sub_type = false] *)
 
 Section NoPropSub.
 
   #[local] Existing Instance cpr_flags.
 
+  (** IMPOSSIBLE otherwise than at [Prop] on both sides (header). *)
+  Lemma cpi_Prop_cp : rf_Σ ;;; [] |-E tSort sProp ~~ tSort sProp.
+  Proof. apply cpE_of_eq_term_prop; [reflexivity|reflexivity|reflexivity|]. constructor. reflexivity. Qed.
+
   Definition cumul_prop_propsE_inst : Sort.is_prop sProp :=
-    @cumul_prop_propsE cpr_flags eq_refl rf_Σ [] sProp sProp cpi_wfE eq_refl
-      (cpE_of_eq_term_prop eq_refl eq_refl eq_refl ltac:(reflexivity)).
+    @cumul_prop_propsE cpr_flags eq_refl rf_Σ [] sProp sProp cpi_wfE eq_refl cpi_Prop_cp.
 
   Definition is_propositional_bottomE_inst : Sort.is_propositional sProp :=
     @is_propositional_bottomE cpr_flags eq_refl rf_Σ [] cpi_beta sProp sProp cpi_wf_extE
@@ -325,7 +361,7 @@ Section Inductives.
   Proof.
     apply (cumul_prop_transE _ _ _ (mkApps (tInd iu_ind [iu_a]) [iu_Set]) _ cpi_iu_wfE).
     - apply (red_cumul_propE (wfΣ := cpi_iu_wfE)).
-      split; [reflexivity|reflexivity|]. apply red1_red. cbn. apply app_red_r. constructor.
+      split; [reflexivity|reflexivity|]. apply red1_red. cbn. apply PCUICReduction.app_red_r. constructor.
     - apply cpE_of_eq_term_prop; [reflexivity|reflexivity|reflexivity|exact cpi_iu_eq].
   Qed.
 

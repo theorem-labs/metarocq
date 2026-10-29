@@ -2,8 +2,6 @@
 
 (** * The E copy of [PCUICCumulProp] (row T6): [cumul_prop] over the η relation
 
-  HEADER (the full register is at the end of this comment).
-
   Base [PCUICCumulProp] defines [cumul_prop] ([Σ ;;; Γ |- t ~~ u]), the closure of [red1]
   and [eq_term_prop] (conversion up to universe levels within a sort family), and proves
   that two well-typed terms related by [compare_term] have [cumul_prop]-related types
@@ -61,9 +59,9 @@
     (:71; [PCUICEtaA6More.v:175]). Both are STRONGER than the base-substituted form:
     [conv_sort_invE] has no environment premise (base: [wf Σ]); the LetIn lemma takes
     [ClosedBodies Σ] for [wf Σ] and drops base's [wf_local] premise. Compiled-form
-    comparison: [PCUICCumulPropEtaInstances] ([cpE_import_conv_sort_inv],
-    [cpE_import_LetIn_l_inv_alt]): each landed lemma inhabits the base-substituted
-    type; the converse ascription does not hold (the landed type has fewer premises).
+    comparison ([PCUICCumulPropEtaInstances]): the two types are NOT identical: ascription
+    fails in both directions (the [Fail Check]s there); each landed lemma inhabits the
+    base-substituted type ([cpE_import_conv_sort_inv], [cpE_import_LetIn_l_inv_alt]).
   - Imported from base, syntactic (no typing, no conversion, no E relation): [is_prop_superE]
     (:155, a BASE name), [is_sprop_superE], [is_prop_prod], [is_sprop_prod], [eq_univ_prop],
     [eq_term_prop], [eq_term_prop_impl], [subrelation_compare_sort_eq_prop] (global
@@ -102,6 +100,18 @@
   section premise: the Proj case reads the consistency of the two instances from
   [isType_mkApps_Ind_invE] and [validityE] as base does from [isType_mkApps_Ind_inv] and
   [validity] (copy 16 not landed).
+
+  ** Locality: [cumul_prop_transitiveE] and [cumul_prop_sym'E] are [Global] instances
+  because their base twins are ([PCUICCumulProp.v:464], [:959]); their classes mention
+  [cumul_propE]. The helper instance [cpE_wf_extE_wfE] is local.
+
+  ** Axioms: six twins assume [functional_extensionality_dep] where their base twins do not:
+  [substitution_untyped_cumul_propE], [substitution_cumul_propE],
+  [substitution1_untyped_cumul_propE], [cumul_prop_tProdE], [cumul_prop_tLetInE],
+  [cumul_prop_mkAppsE]. Path: these go through transitivity ([cumul_propE_of_sandwich] or
+  [cpE_trans] → [JoinPropE_trans] → [canon_beta_eta_confluence], [PCUICEtaCanonC4]), and
+  base [cumul_prop_trans] assumes the same axiom; [cumul_prop_tLetInE] also uses
+  [ws_cumul_pbE_LetIn_bo_pb]. Every other E lemma assumes a subset of its base twin's axioms.
 
   ** Routes that differ from base (availability; statements unchanged)
   - Construct case: the closedness of the arities context comes from the landed
@@ -1197,7 +1207,7 @@ Proof using V16 Hcf cf.
        [on_free_vars_ctx_subst_instance], as in base. *)
     have clars : is_closed_context (arities_context (ind_bodies mdecl)).
     { exact (wf_local_closed_contextE (Σ := (Σ.1, ind_universes mdecl)) (wfΣ := wfΣ)
-               (wf_arities_contextE (wfΣ := wfΣ) (proj1 (proj1 isdeclE)))). }
+               (wf_arities_contextE (wfΣ := wfΣ) (MRProd.proj1 (MRProd.proj1 isdeclE)))). }
     (* Base [declared_constructor_closed_gen_type]'s proof ([Typing/PCUICClosedTyp.v:638]), over
        the landed [declared_inductive_closed_constructorsE]. *)
     have clty : is_open_term (Γ,,, arities_context (ind_bodies mdecl)) (cstr_type cdecl').
@@ -1210,7 +1220,7 @@ Proof using V16 Hcf cf.
     etransitivity.
     eapply (@substitution_untyped_cumul_prop_equivE _ Γ (subst_instance u (arities_context mdecl.(ind_bodies))) []); auto.
     * simpl.
-      apply is_closed_context_weaken. fvs.
+      apply PCUICCumulProp.is_closed_context_weaken. fvs.
       now rewrite on_free_vars_ctx_subst_instance.
     * eapply on_free_vars_terms_inds.
     * eapply on_free_vars_terms_inds.
@@ -1227,7 +1237,7 @@ Proof using V16 Hcf cf.
       eapply on_free_vars_terms_inds.
       eapply untyped_subslet_inds; tea. simpl.
       eapply cumul_prop_subst_instanceE => //; eauto.
-      eapply is_closed_context_weaken; fvs.
+      eapply PCUICCumulProp.is_closed_context_weaken; fvs.
       len in clty; len.
 
   - eapply inversion_CaseE in X9 as (mdecl' & idecl' & isdecl' & indices' & data & cum); auto.
@@ -1295,8 +1305,8 @@ Proof using V16 Hcf cf.
     transitivity (subst0 (c0 :: List.rev args') (subst_instance u pdecl'.(proj_type))).
     eapply (substitution_untyped_cumul_prop_cumulE (Γ := Γ) (Δ := projection_context p.(proj_ind) mdecl' idecl' u)
               (Δ' := projection_context p.(proj_ind) mdecl' idecl' u')).
-    * exact (is_closed_context_weaken clΓ clp).
-    * exact (is_closed_context_weaken clΓ clp').
+    * exact (PCUICCumulProp.is_closed_context_weaken clΓ clp).
+    * exact (PCUICCumulProp.is_closed_context_weaken clΓ clp').
     * exact (hprojty u).
     * exact (BDFromPCUICEta.untyped_subslet_projection_contextE (wfΣ := wfΣ) u isdecl H).
     * exact (BDFromPCUICEta.untyped_subslet_projection_contextE (wfΣ := wfΣ) u' isdecl hlen').
@@ -1309,7 +1319,7 @@ Proof using V16 Hcf cf.
       { exact (andb_true_intro (conj hc0 hargs')). }
       { exact (BDFromPCUICEta.untyped_subslet_projection_contextE (wfΣ := wfΣ) u' isdecl hlen'). }
       eapply cumul_prop_subst_instanceE.
-      { exact (is_closed_context_weaken clΓ clp'). }
+      { exact (PCUICCumulProp.is_closed_context_weaken clΓ clp'). }
       { have h := hprojty u'. rewrite on_free_vars_subst_instance in h. exact h. }
       all: eassumption.
 

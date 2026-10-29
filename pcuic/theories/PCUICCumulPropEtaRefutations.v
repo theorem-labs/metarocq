@@ -47,11 +47,11 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
 
 (** ** [λx:Prop. f x] and [f] *)
 
-Lemma rf_cumul_propE : rf_Σ ;;; rf_Γ |-E rf_t ~~ tRel 0.
+Lemma rf_cumul_propE : @cumul_propE default_checker_flags rf_Σ rf_Γ rf_t (tRel 0).
 Proof. exact (cumul_pb_cumul_propE rf_Σ rf_Γ Conv rf_t (tRel 0) rf_premise). Qed.
 
 (** The two terms have no common reduct related by [eq_term_prop]. *)
-Lemma rf_no_eq_term_prop_reducts (Σ : global_env_ext) nf nf' :
+Lemma rf_no_eq_term_prop_reducts {cf : checker_flags} (Σ : global_env_ext) nf nf' :
   Σ ;;; rf_Γ ⊢ rf_t ⇝ nf -> Σ ;;; rf_Γ ⊢ tRel 0 ⇝ nf' -> eq_term_prop Σ 0 nf nf' -> False.
 Proof.
   intros r r' e.
@@ -69,7 +69,7 @@ Theorem cumul_pb_cumul_prop_baseE_false :
 Proof.
   intros H.
   have h := H default_checker_flags rf_Σ rf_Γ Conv rf_t (tRel 0) rf_premise.
-  apply (cumul_prop_alt (wfΣ := @wf_empty_global_env default_checker_flags)) in h
+  apply (cumul_prop_alt (Σ := rf_Σ) (wfΣ := @wf_empty_global_env default_checker_flags)) in h
     as (nf & nf' & [r r' e]).
   exact (rf_no_eq_term_prop_reducts rf_Σ nf nf' r r' e).
 Qed.
@@ -242,34 +242,35 @@ Section TLTWitness.
 
   (** Both types are [red1]-normal, in any environment. *)
   Lemma tw_Rel_normal (Σ : global_env) n v :
-    n < 3 -> red1 Σ tw_Γ (tRel n) v -> False.
+    n < 3 -> PCUICReduction.red1 Σ tw_Γ (tRel n) v -> False.
   Proof.
     intros hn H. inv_red H.
     match goal with e : option_map decl_body _ = _ |- _ =>
       destruct n as [|[|[|n]]]; cbn in e; try discriminate e; lia end.
   Qed.
 
-  Lemma tw_GF_normal (Σ : global_env) v : red1 Σ tw_Γ tw_GF v -> False.
+  Lemma tw_GF_normal (Σ : global_env) v : PCUICReduction.red1 Σ tw_Γ tw_GF v -> False.
   Proof.
     unfold tw_GF. intros H. inv_red H.
     all: eapply tw_Rel_normal; [|eassumption]; lia.
   Qed.
 
   Lemma tw_etaF_body_normal (Σ : global_env) v :
-    red1 Σ (tw_Γ ,, vass tw_na tw_P) (tApp (tRel 2) (tRel 0)) v -> False.
+    PCUICReduction.red1 Σ (tw_Γ ,, vass tw_na tw_P) (tApp (tRel 2) (tRel 0)) v -> False.
   Proof.
     intros H. inv_red H.
-    - match goal with h : red1 _ _ (tRel 2) _ |- _ => inv_red h end.
+    - match goal with h : PCUICReduction.red1 _ _ (tRel 2) _ |- _ => inv_red h end.
       match goal with e : option_map decl_body _ = _ |- _ => cbn in e; discriminate e end.
     - eapply red_normal_Rel0; eassumption.
   Qed.
 
-  Lemma tw_Geta_normal (Σ : global_env) v : red1 Σ tw_Γ tw_Geta v -> False.
+  Lemma tw_Geta_normal (Σ : global_env) v : PCUICReduction.red1 Σ tw_Γ tw_Geta v -> False.
   Proof.
     unfold tw_Geta. intros H. inv_red H.
     - eapply tw_Rel_normal; [|eassumption]; lia.
-    - revert H. unfold tw_etaF. revert x.
-      apply red_normal_lam; [intros w; apply red_normal_Sort|intros w; apply tw_etaF_body_normal].
+    - match goal with h : PCUICReduction.red1 _ _ _ ?y |- _ =>
+        exact (red_normal_lam Σ tw_Γ tw_na tw_P (tApp (tRel 2) (tRel 0))
+                 (fun w => red_normal_Sort _ _ _ w) (fun w => tw_etaF_body_normal Σ w) y h) end.
   Qed.
 
 End TLTWitness.
@@ -289,13 +290,16 @@ Theorem typing_leq_term_prop_baseE_false :
 Proof.
   intros H.
   have wfE0 : @wfE cpr_flags tw_Σ := wf_incl_E (@wf_empty_global_env cpr_flags).
+  have hc : @compare_term_napp cpr_flags tw_Σ tw_Σ Conv 0 (tRel 0) (tRel 0) by constructor.
   have h := H cpr_flags eq_refl tw_Σ tw_Γ (tRel 0) (tRel 0) tw_Geta tw_GF wfE0 tw_x_Geta
-              cpr_on_udecl_empty tw_x_GF Conv 0 (eq_term_upto_univ_refl _ _ _ _ _ _ _ _ _ (tRel 0)).
-  apply (cumul_prop_alt (wfΣ := @wf_empty_global_env cpr_flags)) in h as (nf & nf' & [r r' e]).
+              cpr_on_udecl_empty tw_x_GF Conv 0 hc.
+  apply (cumul_prop_alt (Σ := tw_Σ) (wfΣ := @wf_empty_global_env cpr_flags)) in h as (nf & nf' & [r r' e]).
   have e1 := rt_from_normal _ _ _ (tw_Geta_normal tw_Σ) (clrel_rel r).
   have e2 := rt_from_normal _ _ _ (tw_GF_normal tw_Σ) (clrel_rel r').
   subst nf nf'. depelim e.
   match goal with h : eq_term_upto_univ_napp _ _ _ _ _ tw_etaF (tRel 1) |- _ => depelim h end.
+  (* base [cumul_prop_alt]'s section binds [checker_flags] a second time *)
+  exact cpr_flags.
 Qed.
 
 (** ** [cumul_ind_confluence], refuted over [ws_cumul_pbE] *)
