@@ -68,6 +68,11 @@ Local Set Warnings "-unexpected-implicit-declaration".
   [PCUICSpine.type_mkApps] has not: [ws_cumul_pbE] → [cumulSpecE] ([ws_cumul_pbE_forget_spec])
   needs it. [wfE] supplies it through [wfE_ClosedBodies] ([Typing/PCUICClosedTypEta.v]).
 
+  Same-name rule: a reference to a name that is ambiguous in this file's import context
+  ([Locate] lists two or more distinct objects) is written qualified, to the object it
+  resolves to ([PCUICEnvironment.context_decl], [ListDef.map], [Datatypes.S],
+  [Universes.sort], [PCUICAritiesEta.typing_spineE], ...).
+
   The check: this file typechecks against the tree it is merged into, and each statement
   whose E twin is built is compared with that twin in compiled form (binder names, implicit
   status, and an ascription each way); no block is commented. *)
@@ -140,7 +145,8 @@ Record wf_subsletE {cf} Σ Γ s Δ :=
 
 Definition ctx_inst_cumulE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {pb : conv_pb} {Γ : list context_decl} {i : list term} {Δ Δ' : list context_decl},
+    {pb : conv_pb} {Γ : list PCUICEnvironment.context_decl} {i : list term}
+    {Δ Δ' : list PCUICEnvironment.context_decl},
   ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
   ctx_instE Σ Γ i (List.rev Δ) ->
   wf_local_relE Σ Γ Δ ->
@@ -153,7 +159,7 @@ Definition ctx_inst_instE_statement : Type :=
   PCUICUnivSubstitutionTypEta.wf_global_extE Σ.1 ext ->
   ctx_instE (Σ.1, ext) Γ i Δ ->
   consistent_instance_ext Σ ext u ->
-  ctx_instE Σ Γ@[u] (map (subst_instance u) i) Δ@[u].
+  ctx_instE Σ Γ@[u] (ListDef.map (subst_instance u) i) Δ@[u].
 
 Definition ctx_inst_open_termsE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
@@ -163,7 +169,7 @@ Definition ctx_inst_open_termsE_statement : Type :=
 
 Definition ctx_inst_spine_substE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {Γ Δ : list context_decl} {args : list term},
+    {Γ Δ : list PCUICEnvironment.context_decl} {args : list term},
   wf_localE Σ (Γ ,,, Δ) ->
   forall ci : ctx_instE Σ Γ args (List.rev Δ),
   spine_substE Σ Γ args (ctx_inst_subE ci) Δ.
@@ -173,12 +179,12 @@ Definition inversion_mkApps_directE_statement : Type :=
     {Γ : context} {f : term} {u : list term} {T : term},
   isTypeE Σ Γ T ->
   Σ ;;; Γ |-E mkApps f u : T ->
-  ∑ (A : term) (s' : sort),
-    (Σ ;;; Γ |-E f : A) × (Σ ;;; Γ |-E A : tSort s') × typing_spineE Σ Γ A u T.
+  ∑ (A : term) (s' : Universes.sort),
+    (Σ ;;; Γ |-E f : A) × (Σ ;;; Γ |-E A : tSort s') × PCUICAritiesEta.typing_spineE Σ Γ A u T.
 
 Definition spine_subst_appE_statement : Type :=
-  forall {cf : checker_flags} {Σ : global_env_ext} {Γ : list context_decl} {Δ : context}
-    {Δ' : list context_decl} {inst inst' insts : list term},
+  forall {cf : checker_flags} {Σ : global_env_ext} {Γ : list PCUICEnvironment.context_decl} {Δ : context}
+    {Δ' : list PCUICEnvironment.context_decl} {inst inst' insts : list term},
   #|inst| = context_assumptions Δ ->
   wf_localE Σ (Γ ,,, Δ ,,, Δ') ->
   spine_substE Σ Γ inst (skipn #|Δ'| insts) Δ ->
@@ -187,7 +193,7 @@ Definition spine_subst_appE_statement : Type :=
 
 Definition spine_subst_app_invE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {Γ Δ : context} {Δ' : list context_decl} {inst inst' insts : list term},
+    {Γ Δ : context} {Δ' : list PCUICEnvironment.context_decl} {inst inst' insts : list term},
   #|inst| = context_assumptions Δ ->
   spine_substE Σ Γ (inst ++ inst') insts (Δ ,,, Δ') ->
   spine_substE Σ Γ inst (skipn #|Δ'| insts) Δ ×
@@ -200,7 +206,7 @@ Definition spine_subst_ctx_instE_statement : Type :=
 
 Definition spine_subst_cumulE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {Δ : list context_decl} {args : list term} {Γ Γ' : context},
+    {Δ : list PCUICEnvironment.context_decl} {args : list term} {Γ Γ' : context},
   assumption_context Γ -> assumption_context Γ' ->
   wf_localE Σ (Δ ,,, Γ) ->
   wf_localE Σ (Δ ,,, Γ') ->
@@ -223,7 +229,7 @@ Definition spine_subst_smashE_statement : Type :=
 Definition spine_subst_subst_to_extended_list_kE_statement : Prop :=
   forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {args s : list term} {Δ : context},
   spine_substE Σ Γ args s Δ ->
-  map (subst0 s) (to_extended_list_k Δ 0) = args.
+  ListDef.map (subst0 s) (to_extended_list_k Δ 0) = args.
 
 Definition subslet_skipnE_statement : Type :=
   forall {cf : checker_flags} (Σ : global_env_ext) (Γ : context) (s : list term) (Δ : context) (n : nat),
@@ -239,39 +245,39 @@ Definition type_mkAppsE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
     {Γ : context} {t : term} {u : list term} {T t_ty : term},
   Σ ;;; Γ |-E t : t_ty ->
-  typing_spineE Σ Γ t_ty u T ->
+  PCUICAritiesEta.typing_spineE Σ Γ t_ty u T ->
   Σ ;;; Γ |-E mkApps t u : T.
 
 Definition typing_spine_invE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {Γ Δ : context} {T : term} {args args' : list term} {T' : term},
   #|args| = context_assumptions Δ ->
-  typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
+  PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
   ∑ args_sub : list term,
-    spine_substE Σ Γ args args_sub Δ × typing_spineE Σ Γ (subst0 args_sub T) args' T'.
+    spine_substE Σ Γ args args_sub Δ × PCUICAritiesEta.typing_spineE Σ Γ (subst0 args_sub T) args' T'.
 
 Definition typing_spine_nth_errorE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {Γ Δ : context} {T : term} {args : list term} {n : nat} {arg concl : term},
-  typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args concl ->
+  PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args concl ->
   nth_error args n = Some arg ->
   n < context_assumptions Δ ->
-  ∑ decl : context_decl,
-    (nth_error (smash_context [] Δ) (context_assumptions Δ - S n) = Some decl) ×
+  ∑ decl : PCUICEnvironment.context_decl,
+    (nth_error (smash_context [] Δ) (context_assumptions Δ - Datatypes.S n) = Some decl) ×
     (Σ ;;; Γ |-E arg : subst0 (List.rev (firstn n args)) (decl_type decl)).
 
 Definition typing_spine_strengthenE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {Γ : context} {T : term} {args : list term} {U : term},
-  typing_spineE Σ Γ T args U ->
+  PCUICAritiesEta.typing_spineE Σ Γ T args U ->
   forall T' : term,
   isTypeE Σ Γ T' ->
   ws_cumul_pbE Cumul Σ Γ T' T ->
-  typing_spineE Σ Γ T' args U.
+  PCUICAritiesEta.typing_spineE Σ Γ T' args U.
 
 Definition wf_local_alphaE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    (Γ Γ' : list context_decl),
+    (Γ Γ' : list PCUICEnvironment.context_decl),
   eq_context_upto_names Γ Γ' ->
   wf_localE Σ Γ ->
   wf_localE Σ Γ'.
@@ -283,7 +289,7 @@ Definition ws_cumul_ctx_pb_eq_leE_statement : Type :=
 
 Definition ws_cumul_ctx_pb_rel_smashE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {pb : conv_pb} {Γ Δ Δ' : list context_decl},
+    {pb : conv_pb} {Γ Δ Δ' : list PCUICEnvironment.context_decl},
   wf_localE Σ (Γ ,,, Δ) ->
   wf_localE Σ (Γ ,,, Δ') ->
   ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
@@ -291,14 +297,14 @@ Definition ws_cumul_ctx_pb_rel_smashE_statement : Type :=
 
 Definition ws_cumul_ctx_pb_rel_transE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {pb : conv_pb} {Γ Δ Δ' Δ'' : list context_decl},
+    {pb : conv_pb} {Γ Δ Δ' Δ'' : list PCUICEnvironment.context_decl},
   ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
   ws_cumul_ctx_pbE_rel pb Σ Γ Δ' Δ'' ->
   ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ''.
 
 Definition ws_cumul_pb_expand_lets_ws_cumul_ctxE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {pb le' : conv_pb} {Γ Δ Δ' : list context_decl} {T T' : term},
+    {pb le' : conv_pb} {Γ Δ Δ' : list PCUICEnvironment.context_decl} {T T' : term},
   wf_localE Σ (Γ ,,, Δ) ->
   wf_localE Σ (Γ ,,, Δ') ->
   ws_cumul_pbE le' Σ (Γ ,,, Δ) T T' ->
@@ -310,12 +316,12 @@ Definition wf_arity_spine_typing_spineE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {Γ : context} {T : term} {args : list term} {T' : term},
   wf_arity_spineE Σ Γ T args T' ->
-  typing_spineE Σ Γ T args T'.
+  PCUICAritiesEta.typing_spineE Σ Γ T args T'.
 
 (** Not used by [PCUICSR]; for the E copy of [PCUICValidity] ([PCUICSpine.v:782]). *)
 Definition spine_subst_smash_app_invE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {Γ Δ : context} {Δ' : list context_decl} {δ δ' : list term},
+    {Γ Δ : context} {Δ' : list PCUICEnvironment.context_decl} {δ δ' : list term},
   #|δ| = context_assumptions Δ ->
   spine_substE Σ Γ (δ ++ δ') (List.rev (δ ++ δ')) (smash_context [] (Δ ,,, Δ')) ->
   spine_substE Σ Γ δ (List.rev δ) (smash_context [] Δ) ×
@@ -328,7 +334,7 @@ Definition spine_subst_smash_app_invE_statement : Type :=
     pcuic] ([PCUICInductives.v:288-289]) and SR's [pcuic]/[pcuics] tactics search that
     database, so the E copy must re-register [isType_introE] in [pcuic]. *)
 Definition isType_introE_statement : Type :=
-  forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {T : term} {s : sort},
+  forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {T : term} {s : Universes.sort},
   Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T.
 
 Definition declared_projection_type_and_eqE_statement : Type :=
@@ -341,9 +347,9 @@ Definition declared_projection_type_and_eqE_statement : Type :=
      (vass {| binder_name := nNamed (ind_name idecl); binder_relevance := ind_relevance idecl |}
         (mkApps (tInd (proj_ind p) u) (to_extended_list (smash_context [] (ind_params mdecl)))) ::
       smash_context [] (ind_params mdecl)) (proj_type pdecl)) ×
-  (∑ decl : context_decl,
+  (∑ decl : PCUICEnvironment.context_decl,
     [× nth_error (smash_context [] (cstr_args cdecl))
-         (context_assumptions (cstr_args cdecl) - S (proj_arg p)) = Some decl,
+         (context_assumptions (cstr_args cdecl) - Datatypes.S (proj_arg p)) = Some decl,
        isTypeE (Σ.1, ind_universes mdecl)
          (arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,,
           skipn (context_assumptions (cstr_args cdecl) - proj_arg p) (smash_context [] (cstr_args cdecl)))
@@ -390,7 +396,7 @@ Definition isType_mkApps_Ind_invE_statement : Type :=
 Definition map_subst_let_expand_to_extended_listE_statement : Prop :=
   forall {cf : checker_flags} {Σ : global_env_ext} {s : list term} {Γ Δ : context},
   spine_substE Σ Γ s (List.rev s) (smash_context [] Δ) ->
-  map (subst_let_expand (List.rev s) Δ) (to_extended_list Δ) = s.
+  ListDef.map (subst_let_expand (List.rev s) Δ) (to_extended_list Δ) = s.
 
 Definition on_minductive_wf_params_indices_instE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
@@ -401,24 +407,25 @@ Definition on_minductive_wf_params_indices_instE_statement : Type :=
 
 Definition red_it_mkProd_or_LetIn_smashE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    (Γ : list context_decl) (ctx : context) (t u : term) (n : nat) (c : context_decl),
+    (Γ : list PCUICEnvironment.context_decl) (ctx : context) (t u : term) (n : nat)
+    (c : PCUICEnvironment.context_decl),
   Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx t ⇝ u ->
   nth_error (List.rev (smash_context [] ctx)) n = Some c ->
-  ∑ (ctx' : context) (t' : term) (d : context_decl),
+  ∑ (ctx' : context) (t' : term) (d : PCUICEnvironment.context_decl),
     [× decompose_prod_assum [] u = (ctx', t'),
        nth_error (List.rev (smash_context [] ctx')) n = Some d &
        Σ ;;; Γ ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx) ⊢ decl_type c ⇝ decl_type d].
 
 Definition typing_expand_lets_genE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {Γ Δ Γ' : list context_decl} {t T : term},
+    {Γ Δ Γ' : list PCUICEnvironment.context_decl} {t T : term},
   Σ ;;; Γ ,,, Δ ,,, Γ' |-E t : T ->
   Σ ;;; Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ' |-E
     expand_lets_k Δ #|Γ'| t : expand_lets_k Δ #|Γ'| T.
 
 Definition wf_local_expand_letsE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {Γ Δ Γ' : list context_decl},
+    {Γ Δ Γ' : list PCUICEnvironment.context_decl},
   wf_localE Σ (Γ ,,, Δ ,,, Γ') ->
   wf_localE Σ (Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ').
 
@@ -428,7 +435,7 @@ Definition wf_local_expand_letsE_statement : Type :=
 Definition isType_case_predicateE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {ci : case_info}
     {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-    (u : Instance.t) (params : list term) (ps : sort),
+    (u : Instance.t) (params : list term) (ps : Universes.sort),
   wf_localE Σ Γ ->
   declared_inductive Σ ci mdecl idecl ->
   consistent_instance_ext Σ (ind_universes mdecl) u ->
@@ -443,7 +450,7 @@ Definition isType_case_predicateE_statement : Type :=
 Definition arity_spine_case_predicateE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {ci : case_info}
     {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-    {u : Instance.t} {params indices : list term} {ps : sort} {c : term},
+    {u : Instance.t} {params indices : list term} {ps : Universes.sort} {c : term},
   wf_localE Σ Γ ->
   declared_inductive Σ ci mdecl idecl ->
   consistent_instance_ext Σ (ind_universes mdecl) u ->
@@ -501,11 +508,11 @@ Definition Construct_Ind_ind_eqE_statement : Type :=
        spine_substE Σ Γ (firstn (ind_npars mdecl) args') parsubst' parctx',
        spine_substE Σ Γ (skipn (ind_npars mdecl) args) argsubst argctx,
        spine_substE Σ Γ (skipn (ind_npars mdecl) args') argsubst' argctx' &
-       ∑ s : list sort,
-         sorts_local_ctx (lift_typing typingE) Σ Γ argctx2 s ×
+       ∑ s : list Universes.sort,
+         sorts_local_ctx (PCUICTyping.lift_typing typingE) Σ Γ argctx2 s ×
          ws_cumul_pbE_terms Σ Γ (firstn (ind_npars mdecl) args) (firstn (ind_npars mdecl) args') ×
          ws_cumul_pbE_terms Σ Γ
-           (map (subst0 (argsubst ++ parsubst) ∘
+           (ListDef.map (subst0 (argsubst ++ parsubst) ∘
                  subst (inds (inductive_mind i) u (ind_bodies mdecl)) (#|cstr_args cdecl| + #|ind_params mdecl|) ∘
                  subst_instance u) (cstr_indices cdecl))
            (skipn (ind_npars mdecl) args')]).
@@ -540,10 +547,10 @@ Definition constructor_cumulative_indicesE_statement : Type :=
   let pargctx' := subst_context parsubst' 0 argctx' in
   ws_cumul_ctx_pbE_rel Cumul Σ Γ (smash_context [] pargctx) (smash_context [] pargctx') ×
   ws_cumul_pbE_terms Σ (Γ ,,, smash_context [] pargctx)
-    (map (subst parsubst (context_assumptions (cstr_args cdecl)))
-       (map (expand_lets argctx) (map (subst_instance u) (cstr_indices cdecl))))
-    (map (subst parsubst' (context_assumptions (cstr_args cdecl)))
-       (map (expand_lets argctx') (map (subst_instance u') (cstr_indices cdecl)))).
+    (ListDef.map (subst parsubst (context_assumptions (cstr_args cdecl)))
+       (ListDef.map (expand_lets argctx) (ListDef.map (subst_instance u) (cstr_indices cdecl))))
+    (ListDef.map (subst parsubst' (context_assumptions (cstr_args cdecl)))
+       (ListDef.map (expand_lets argctx') (ListDef.map (subst_instance u') (cstr_indices cdecl)))).
 
 Definition conv_decls_fix_contextE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
@@ -565,7 +572,7 @@ Definition declared_constructor_valid_tyE_statement : Type :=
 
 Definition into_ws_cumul_pb_termsE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-    {Γ : list context_decl} {l l' : list term},
+    {Γ : list PCUICEnvironment.context_decl} {l l' : list term},
   All2 (convSpecE Σ Γ) l l' ->
   is_closed_context Γ ->
   forallb (is_open_term Γ) l ->
@@ -589,8 +596,8 @@ Definition on_constructor_instE_statement : Type :=
   wf_localE Σ ((arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,, cstr_args cdecl)@[u]) ×
   (∑ inst : list term,
     spine_substE Σ ((arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,, cstr_args cdecl)@[u])
-      (map (subst_instance u) (to_extended_list_k (ind_params mdecl) #|cstr_args cdecl|) ++
-       map (subst_instance u) (cstr_indices cdecl))
+      (ListDef.map (subst_instance u) (to_extended_list_k (ind_params mdecl) #|cstr_args cdecl|) ++
+       ListDef.map (subst_instance u) (cstr_indices cdecl))
       inst ((ind_params mdecl)@[u] ,,, (ind_indices idecl)@[u])).
 
 Definition on_constructor_inst_wf_argsE_statement : Type :=
@@ -608,7 +615,7 @@ Definition positive_cstr_closed_indicesE_statement : Type :=
     {cdecl : constructor_body},
   declared_constructor Σ.1 i mdecl idecl cdecl ->
   All (fun t : term => closedn (context_assumptions (cstr_args cdecl) + #|ind_params mdecl|) t)
-    (map (expand_lets (cstr_args cdecl)) (cstr_indices cdecl)).
+    (ListDef.map (expand_lets (cstr_args cdecl)) (cstr_indices cdecl)).
 
 Definition pre_case_branch_context_eqE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
@@ -660,7 +667,8 @@ Definition type_tFix_invE_statement : Type :=
 Definition wf_case_branches_types'E_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info}
-    {p : predicate term} (ps : sort) (args : list term) (brs : list (branch term)),
+    {p : PCUICAst.predicate term} (ps : Universes.sort) (args : list term)
+    (brs : list (branch term)),
   declared_inductive Σ ci mdecl idecl ->
   isTypeE Σ Γ (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ args)) ->
   wf_predicate mdecl idecl p ->
@@ -671,7 +679,7 @@ Definition wf_case_branches_types'E_statement : Type :=
   eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ->
   All2i (fun (i : nat) (cdecl : constructor_body) (br : branch term) =>
     let cstr_br_ctx := case_branch_context_nopars ci mdecl p.(puinst) cdecl in
-    let brctx' := map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in
+    let brctx' := MRList.map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in
     let brctxty := case_branch_type ci.(ci_ind) mdecl idecl p br ptm i cdecl in
     [× wf_branch cdecl br,
        wf_localE Σ (Γ ,,, (ind_params mdecl)@[puinst p] ,,, cstr_br_ctx),
@@ -683,7 +691,7 @@ Definition wf_case_branches_types'E_statement : Type :=
 Definition wf_case_predicate_contextE_statement : Type :=
   forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
     {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info}
-    {p : predicate term} {args : list term},
+    {p : PCUICAst.predicate term} {args : list term},
   declared_inductive Σ ci.(ci_ind) mdecl idecl ->
   isTypeE Σ Γ (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ args)) ->
   wf_predicate mdecl idecl p ->
@@ -699,7 +707,7 @@ Definition wf_cofixpoint_typing_spineE_statement : Prop :=
   wf_cofixpointE Σ Γ mfix ->
   nth_error mfix idx = Some d ->
   isTypeE Σ Γ (dtype d) ->
-  typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
+  PCUICAritiesEta.typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
   check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
 
 (** Not used by [PCUICSR]; for the E copy of [Bidirectional/BDToPCUIC]
