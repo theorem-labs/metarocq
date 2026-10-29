@@ -75,8 +75,8 @@ src/pCUICEqualityDec.mli
 src/pCUICEqualityDec.ml
 src/pCUICWfEnv.mli
 src/pCUICWfEnv.ml
-src/pCUICWfEnvImpl.mli
-src/pCUICWfEnvImpl.ml
+# FORECAST tree only (EtaK7): base PCUICWfEnvImpl is no longer extracted (the entry point uses
+# PCUICWfEnvImplEta) and nothing else references it, so it is not linked.
 src/pCUICSafeReduce.mli
 src/pCUICSafeReduce.ml
 src/pCUICSafeConversion.mli
@@ -91,6 +91,39 @@ src/pCUICSafeChecker.mli
 src/pCUICSafeChecker.ml
 src/safeTemplateChecker.mli
 src/safeTemplateChecker.ml
+# FORECAST tree only (EtaK7): the E checker modules the extraction now produces
+src/pCUICWfEnvEta.mli
+src/pCUICWfEnvEta.ml
+src/pCUICCallByNeedEta.mli
+src/pCUICCallByNeedEta.ml
+src/pCUICErrorsEta.mli
+src/pCUICErrorsEta.ml
+src/pCUICEtaFInst.mli
+src/pCUICEtaFInst.ml
+src/pCUICMustExpandEta.mli
+src/pCUICMustExpandEta.ml
+src/pCUICPositionEta.mli
+src/pCUICPositionEta.ml
+src/pCUICSafeReduceEta.mli
+src/pCUICSafeReduceEta.ml
+src/pCUICTypeCheckerEta.mli
+src/pCUICTypeCheckerEta.ml
+src/pCUICSafeCheckerEta.mli
+src/pCUICSafeCheckerEta.ml
+src/pCUICSafeConversionEtaFacts.mli
+src/pCUICSafeConversionEtaFacts.ml
+src/pCUICSafeConversionEtaK4.mli
+src/pCUICSafeConversionEtaK4.ml
+src/pCUICSafeReduceEtaBridge.mli
+src/pCUICSafeReduceEtaBridge.ml
+src/pCUICSafeConversionEta.mli
+src/pCUICSafeConversionEta.ml
+src/pCUICWfEnvImplEta.mli
+src/pCUICWfEnvImplEta.ml
+src/safeTemplateCheckerEta.mli
+src/safeTemplateCheckerEta.ml
+src/safeTemplateCheckerEtaConv.mli
+src/safeTemplateCheckerEtaConv.ml
 src/extraction.mli
 src/extraction.ml
 

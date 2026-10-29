@@ -40,7 +40,6 @@ PCUICUnivSubst
 PCUICErrors
 PCUICEqualityDec
 PCUICWfEnv
-PCUICWfEnvImpl
 PCUICSafeReduce
 PCUICSafeConversion
 PCUICCallByNeed
@@ -48,6 +47,22 @@ PCUICTypeChecker
 PCUICPositivityCheck
 PCUICSafeChecker
 SafeTemplateChecker
+PCUICWfEnvEta
+PCUICCallByNeedEta
+PCUICErrorsEta
+PCUICEtaFInst
+PCUICMustExpandEta
+PCUICPositionEta
+PCUICSafeReduceEta
+PCUICTypeCheckerEta
+PCUICSafeCheckerEta
+PCUICSafeConversionEtaFacts
+PCUICSafeConversionEtaK4
+PCUICSafeReduceEtaBridge
+PCUICSafeConversionEta
+PCUICWfEnvImplEta
+SafeTemplateCheckerEta
+SafeTemplateCheckerEtaConv
 Extraction
 
 G_metarocq_safechecker

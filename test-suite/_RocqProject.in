@@ -77,4 +77,5 @@ arity_delta_spec.v
 prim_ops.v
 prim_ops_spec.v
 prim_ops_instance.v
-
+# FORECAST tree only (EtaK7): F1 tests of the E checker at SafeCheck level
+eta_f1.v
