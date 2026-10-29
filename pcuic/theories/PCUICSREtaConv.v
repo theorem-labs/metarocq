@@ -64,7 +64,7 @@
   |   E typed substitution subsletE                          |          |                           |
   | type_Cumul_alt (PCUICSR:1456)                            | (b)      | type_Cumul_altE: the JoinE form, which is both the base twin (by the ruling) and the checker's T1_facts field |
   | case_nondep_predicate_conv (PCUICSR:1550)                | (d)      | belongs to the T1 copy itself: it needs four SR-local syntactic lemmas (case_predicate_context_vass, mk_ctx_subst_snoc_ass, subst0_cons_nondep, on_free_vars_it_mkLambda_or_LetIn), which this file cannot import; its conversion steps are landed (red_betas_typedE @ PCUICWsCumulEtaCtxTyp.v:187, red_ws_cumul_pbE) |
-  | typing_spine_prim_arg_types (PCUICSR:1591),              | (c)      | copy 14 (PCUICArities: typing_spineE) |
+  | typing_spine_prim_arg_types (PCUICSR:1591),              | (c)      | copy 14 (PCUICArities: typing_spineE), now landed; the twins typing_spine_prim_arg_typesE and typing_spine_prim_argsE are in PCUICSREta |
   |   typing_spine_prim_args (PCUICSR:1870)                  |          |                           |
   | red_has_rec_arg (PCUICSR:36)                             | (b)      | red_has_rec_arg_cb (reduction; ClosedBodies), from red_it_mkProd_or_LetIn_smash_cb below |
   | upto_names_conv_context (PCUICAlpha:383)                 | item 4   | algorithmic ([conv_context cumulAlgo_gen] from [≡Γ]); see the second table |
