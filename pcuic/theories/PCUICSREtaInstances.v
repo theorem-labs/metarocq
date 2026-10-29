@@ -15,7 +15,8 @@
   - [si_Σ]: [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE];
   - [Σ_po]: [int : Set], [land : int -> int -> int] registered as [Int63land], the primitive
     integers on [int], with [iv_po_wfE];
-  - [iv_Σ]: [CoInductive R (A : Prop) : Prop := mkR { f : A }], with [iv_wfE].
+  - [iv_Σ]: [CoInductive R (A : Prop) : Prop := mkR { f : A }], with [iv_wfE];
+  - [sri_c_Σ] (here): [Definition c : Prop := ∀P:Prop. P], with [sri_c_wf]/[sri_c_wfE].
 
   **Coverage of the 17 premise lemmas of [sr_red1E].** Each [sr_red1E_<rule>] is APPLIED to
   concrete arguments in [sr_red1E_<rule>_inst]: a concrete derivation with that head, and every
@@ -29,22 +30,23 @@
   | [sr_red1E_Pj] | [sr_red1E_Pj_inst] | [z := (λx:Prop. x) (∀P:Prop. P) : Prop]; its term steps (β) |
   | [sr_red1E_ctx] | [sr_red1E_ctx_inst] | context [z : (λx. x) (∀P. P)] steps to [z : ∀P. P]; [All_local_env_over] on a transparent [wf_localE] |
   | [sr_red1E_Rel] | [sr_red1E_Rel_inst] | δ of the let-bound [z := ∀P:Prop. P] |
-  | [sr_red1E_Sort] | [sr_red1E_Sort_inst] | vacuous: [Prop] has no reduct |
+  | [sr_red1E_Sort] | [sr_red1E_Sort_inst] | normal form, no reduct exists: [red1] has no rule for [tSort] |
   | [sr_red1E_Prod] | [sr_red1E_Prod_inst] | the domain [(λx. x) (∀P. P)] steps |
   | [sr_red1E_Lambda] | [sr_red1E_Lambda_inst] | the domain of [λz:(λx. x) (∀P. P). z] steps |
   | [sr_red1E_LetIn] | [sr_red1E_LetIn_inst] | ζ on [let z : Prop := ∀P. P in z] |
   | [sr_red1E_App] | [sr_red1E_App_inst] | β on [(λx:Prop. x) (∀P:Prop. P)] |
-  | [sr_red1E_Const] | [sr_red1E_Const_inst] | vacuous: [land] has no body and arity 2 |
-  | [sr_red1E_Ind] | [sr_red1E_Ind_inst] | vacuous: [tInd] has no reduct |
-  | [sr_red1E_Construct] | [sr_red1E_Construct_inst] | vacuous: [tConstruct] has no reduct |
+  | [sr_red1E_Const] | [sr_red1E_Const_inst] | δ of [c := ∀P:Prop. P] in [sri_c_Σ] (a defined constant; [wf] proved: [sri_c_wf]) |
+  | [sr_red1E_Ind] | [sr_red1E_Ind_inst] | normal form, no reduct exists: [red1] has no rule for [tInd] |
+  | [sr_red1E_Construct] | [sr_red1E_Construct_inst] | normal form, no reduct exists: [red1] has no rule for [tConstruct] |
   | [sr_red1E_Case] | [sr_red1E_Case_inst] | ι on [match c x with c => c x end] |
   | [sr_red1E_Proj] | [sr_red1E_Proj_inst] | [f (mkR (∀P. P) z)] steps to [z] |
-  | [sr_red1E_Fix] | [sr_red1E_Fix_inst] | vacuous: no redex in the fixpoint's types or bodies |
-  | [sr_red1E_CoFix] | [sr_red1E_CoFix_inst] | vacuous: no redex in the cofixpoint's types or bodies |
-  | [sr_red1E_Prim] | [sr_red1E_Prim_inst] | vacuous: the literal [1] has no reduct |
+  | [sr_red1E_Fix] | [sr_red1E_Fix_inst] | body step [λx. (λy. y) x ⇝ λx. x] of [fix f (x : I (∀P. P)) := …] ([fix_red_body]) |
+  | [sr_red1E_CoFix] | [sr_red1E_CoFix_inst] | body step [mkR (∀P. P) ((λy. y) z) ⇝ mkR (∀P. P) z] ([cofix_red_body]) |
+  | [sr_red1E_Prim] | [sr_red1E_Prim_inst] | normal form, no reduct exists: an integer literal; [red1]'s only [tPrim] rules are array congruences |
   | [sr_red1E_Cumul] | [sr_red1E_Cumul_inst] | conversion by η ([k g ≤ k (λx. g x)], [cumul_eta_l]), then β |
 
-  None of the 17 is left uncovered; 10 take a real step, 7 are vacuous.
+  None of the 17 is left uncovered. 13 take a real step. The other 4 (Sort, Ind, Construct, Prim)
+  are normal forms by construction: no reduct exists, so the conclusion can only be vacuous.
 
   **Non-degeneracy.** Each subject-reduction instance takes a real reduction step of a term with a
   real typing derivation. The steps: β ([sr_red1E_beta_inst]), ζ ([subject_reduction1E_zeta_inst]),
@@ -318,6 +320,153 @@ Proof.
               (iv_vass_s iv_Σ iv_Γc iv_fna iv_False sProp hF eq_refl) (iv_RF_typed _ wF))
            (iv_mkRF_typed iv_Γc iv_wf_Γc)
            (typeE_Rel _ _ 0 (vass si_na iv_False) iv_wf_Γc eq_refl)).
+Qed.
+
+(** *** An environment with a defined constant: [Definition c : Prop := ∀P:Prop. P], for δ *)
+
+Definition sri_c_kn : kername := (MPfile ["SRInst"], "c").
+Definition sri_c_decl : constant_body :=
+  {| cst_type := si_P; cst_body := Some iv_False; cst_universes := Monomorphic_ctx;
+     cst_relevance := Relevant |}.
+Definition sri_c_env : global_env :=
+  {| universes := ContextSet.empty; declarations := [(sri_c_kn, ConstantDecl sri_c_decl)];
+     retroknowledge := Retroknowledge.empty |}.
+Definition sri_c_Σ : global_env_ext := (sri_c_env, Monomorphic_ctx).
+
+(** The body, in the empty environment the declaration is checked in (base typing). *)
+Lemma sri_c_body_typed : si_Σ0 ;;; [] |- iv_False : si_P.
+Proof.
+  exact (type_Prod _ _ si_na si_P (tRel 0) (Sort.super sProp) sProp
+           (si_vass_s [] si_na si_P _ (si_P_typed [] si_wf_nil) eq_refl)
+           (type_Rel _ _ 0 (vass si_na si_P) (si_wf_P [] si_wf_nil) eq_refl)).
+Qed.
+
+(** [si_wf]'s proof, with the constant for the declaration. *)
+Lemma sri_c_wf : wf sri_c_env.
+Proof.
+  split.
+  - split; [|split].
+    + intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+    + intros x Hx.
+      change (LevelSet.In x (LevelSet.union (ContextSet.levels ContextSet.empty)
+                                            (LevelSet.singleton Level.lzero))) in Hx.
+      apply LevelSet.union_spec in Hx as [Hx|Hx].
+      * exfalso. eapply LevelSet.empty_spec. exact Hx.
+      * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
+    + exists si_val. intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+  - split.
+    { constructor; cbn; [constructor|intros c []|repeat split; intros c h; discriminate h
+                        |intros i h; discriminate h]. }
+    apply globenv_decl; [constructor|].
+    constructor.
+    + constructor.
+    + exact si_on_udecl.
+    + cbn. split; [exact sri_c_body_typed|]. exists (Sort.super sProp). repeat split.
+      exact (si_P_typed [] si_wf_nil).
+    + cbn. intros op h; discriminate h.
+Qed.
+
+Definition sri_c_wfE : wfE sri_c_env := wf_incl_E sri_c_wf.
+
+Lemma sri_c_declared : declared_constant sri_c_Σ sri_c_kn sri_c_decl.
+Proof. now left. Qed.
+
+(** *** A fixpoint with a β-redex in its body: [fix f (x : I (∀P. P)) := (λy. y) x] *)
+
+Definition sri_idIF : term := tLambda si_na iv_IF (tRel 0).
+Definition sri_fbody : term := tLambda si_na iv_IF (tApp sri_idIF (tRel 0)).
+Definition sri_mfix : mfixpoint term :=
+  [{| dname := si_na; dtype := iv_fix_ty; dbody := sri_fbody; rarg := 0 |}].
+
+Lemma sri_idIF_typed (Γ : context) (h : wf_localE si_Σ Γ) : si_Σ ;;; Γ |-E sri_idIF : iv_fix_ty.
+Proof.
+  exact (typeE_Lambda _ _ si_na iv_IF (tRel 0) iv_IF (iv_vass si_Σ Γ si_na iv_IF sProp (iv_IF_typed Γ h) eq_refl)
+           (typeE_Rel _ _ 0 (vass si_na iv_IF) (iv_wf_IF Γ h) eq_refl)).
+Qed.
+
+Lemma sri_fbody_typed : si_Σ ;;; iv_Γf |-E sri_fbody : lift0 1 iv_fix_ty.
+Proof.
+  have wx := iv_wf_IF iv_Γf iv_wf_Γf.
+  have happ : si_Σ ;;; iv_Γf ,, vass si_na iv_IF |-E tApp sri_idIF (tRel 0) : iv_IF.
+  { exact (typeE_App _ _ sri_idIF si_na iv_IF iv_IF _ (tRel 0) (iv_fix_ty_typed _ wx) (sri_idIF_typed _ wx)
+             (typeE_Rel _ _ 0 (vass si_na iv_IF) wx eq_refl)). }
+  exact (typeE_Lambda _ _ si_na iv_IF (tApp sri_idIF (tRel 0)) iv_IF
+           (iv_vass si_Σ iv_Γf si_na iv_IF sProp (iv_IF_typed iv_Γf iv_wf_Γf) eq_refl) happ).
+Qed.
+
+Lemma sri_fix_guard : fix_guard si_Σ [] sri_mfix.
+Proof.
+  change (guard_cl Fix si_Σ [] sri_mfix). apply gc_check.
+  split; [vm_compute; reflexivity|]. exists 30. vm_compute. reflexivity.
+Qed.
+
+Lemma sri_wf_fix : wf_fixpointE si_Σ [] sri_mfix.
+Proof.
+  split; [reflexivity|]. split; [reflexivity|].
+  exists si_kn. split; [discriminate|]. split; [|reflexivity].
+  constructor; [|constructor].
+  exists iv_fix_ty. split; [reflexivity|]. split; [reflexivity|apply cumulE_Refl].
+Qed.
+
+(** The body step [λx. (λy. y) x ⇝ λx. x], as a step of the fixpoint: its reduct is [iv_mfix]. *)
+Lemma sri_fix_body_cr1 : closed_red1 si_Σ [] (tFix sri_mfix 0) (tFix iv_mfix 0).
+Proof.
+  split; [reflexivity|reflexivity|].
+  apply fix_red_body. constructor. split; [|reflexivity]. cbn.
+  apply abs_red_r. exact (red_beta _ _ si_na iv_IF (tRel 0) (tRel 0)).
+Qed.
+
+(** *** A cofixpoint with a β-redex in its body: [cofix f := mkR (∀P. P) ((λy. y) z)] *)
+
+Definition sri_idF : term := tLambda si_na iv_False (tRel 0).
+Definition sri_cbody : term := tApp (tApp (tConstruct iv_ind 0 []) iv_False) (tApp sri_idF (tRel 1)).
+Definition sri_cmfix : mfixpoint term :=
+  [{| dname := si_na; dtype := iv_RF; dbody := sri_cbody; rarg := 0 |}].
+
+Lemma sri_idF_typed (Γ : context) (h : wf_localE iv_Σ Γ) : iv_Σ ;;; Γ |-E sri_idF : tProd si_na iv_False iv_False.
+Proof.
+  have hF := iv_False_typed iv_Σ Γ h.
+  exact (typeE_Lambda _ _ si_na iv_False (tRel 0) iv_False (iv_vass iv_Σ Γ si_na iv_False sProp hF eq_refl)
+           (typeE_Rel _ _ 0 (vass si_na iv_False) (iv_wf_vass iv_Σ Γ si_na iv_False sProp h hF eq_refl) eq_refl)).
+Qed.
+
+Lemma sri_cbody_typed : iv_Σ ;;; iv_Γcf |-E sri_cbody : lift0 1 iv_RF.
+Proof.
+  have hF := iv_False_typed iv_Σ iv_Γcf iv_wf_Γcf.
+  have wF := iv_wf_vass iv_Σ iv_Γcf si_na iv_False sProp iv_wf_Γcf hF eq_refl.
+  have harg : iv_Σ ;;; iv_Γcf |-E tApp sri_idF (tRel 1) : iv_False.
+  { exact (typeE_App _ _ sri_idF si_na iv_False iv_False (Sort.sort_of_product sProp sProp) (tRel 1)
+             (typeE_Prod _ _ si_na iv_False iv_False sProp sProp
+                (iv_vass_s iv_Σ iv_Γcf si_na iv_False sProp hF eq_refl) (iv_False_typed iv_Σ _ wF))
+             (sri_idF_typed iv_Γcf iv_wf_Γcf)
+             (typeE_Rel _ _ 1 (vass si_na iv_False) iv_wf_Γcf eq_refl)). }
+  have wF' := iv_wf_vass iv_Σ iv_Γcf iv_fna iv_False sProp iv_wf_Γcf hF eq_refl.
+  exact (typeE_App _ _ (tApp (tConstruct iv_ind 0 []) iv_False) iv_fna iv_False iv_RF
+           (Sort.sort_of_product sProp sProp) (tApp sri_idF (tRel 1))
+           (typeE_Prod _ _ iv_fna iv_False iv_RF sProp sProp
+              (iv_vass_s iv_Σ iv_Γcf iv_fna iv_False sProp hF eq_refl) (iv_RF_typed _ wF'))
+           (iv_mkRF_typed iv_Γcf iv_wf_Γcf) harg).
+Qed.
+
+Lemma sri_cofix_guard : cofix_guard iv_Σ iv_Γc sri_cmfix.
+Proof.
+  change (guard_cl CoFix iv_Σ iv_Γc sri_cmfix). apply gc_check.
+  split; [vm_compute; reflexivity|]. exists 30. vm_compute. reflexivity.
+Qed.
+
+Lemma sri_wf_cofix : wf_cofixpointE iv_Σ iv_Γc sri_cmfix.
+Proof.
+  exists iv_kn. split; [discriminate|]. split; [|reflexivity].
+  constructor; [|constructor].
+  exists iv_RF. split; [reflexivity|]. split; [reflexivity|apply cumulE_Refl].
+Qed.
+
+(** The body step [mkR (∀P. P) ((λy. y) z) ⇝ mkR (∀P. P) z]: the reduct is [iv_cmfix]. *)
+Lemma sri_cofix_body_cr1 : closed_red1 iv_Σ iv_Γc (tCoFix sri_cmfix 0) (tCoFix iv_cmfix 0).
+Proof.
+  split; [reflexivity|reflexivity|].
+  apply cofix_red_body. constructor. split; [|reflexivity]. cbn.
+  apply app_red_r. exact (red_beta _ _ si_na iv_False (tRel 0) (tRel 1)).
 Qed.
 
 Section SRInstances.
@@ -743,7 +892,7 @@ Section SRInstances.
     split; [reflexivity|reflexivity|exact (red_rel si_Σ [vdef si_na iv_False si_P] 0 iv_False eq_refl)].
   Qed.
 
-  (** Premise 4, sorts: [Prop] has no reduct; the lemma is applied, its conclusion is vacuous. *)
+  (** Premise 4, sorts: [Prop] is a normal form, no reduct exists; the conclusion is vacuous. *)
   Lemma sr_red1E_Sort_inst :
     forall u, closed_red1 si_Σ [] (tSort sProp) u -> si_Σ ;;; [] |-E u : tSort (Sort.super sProp).
   Proof.
@@ -794,16 +943,17 @@ Section SRInstances.
              _ (sri_cr1 [] eq_refl)).
   Qed.
 
-  (** Premise 9, constants: [land] in [Σ_po] has no body and arity 2; the conclusion is vacuous. *)
-  Lemma sr_red1E_Const_inst :
-    forall u, closed_red1 Σ_po [] (tConst po_land_kn []) u ->
-      Σ_po ;;; [] |-E u : subst_instance [] (cst_type po_land_body).
+  (** Premise 9, constants: δ of [c := ∀P:Prop. P] in [sri_c_Σ]. *)
+  Lemma sr_red1E_Const_inst : sri_c_Σ ;;; [] |-E subst_instance [] iv_False : subst_instance [] (cst_type sri_c_decl).
   Proof.
-    exact (sr_red1E_Const Σ_po iv_po_wfE [] localenv_nil po_land_kn [] po_land_body
-             (sri_glob iv_po_wfE iv_land_typed) (sri_PΓ iv_po_wfE iv_land_typed) Σ_po_declared_land eq_refl).
+    pose (ht := typeE_Const sri_c_Σ [] sri_c_kn [] sri_c_decl localenv_nil sri_c_declared eq_refl).
+    refine (sr_red1E_Const sri_c_Σ sri_c_wfE [] localenv_nil sri_c_kn [] sri_c_decl
+              (sri_glob sri_c_wfE ht) (sri_PΓ sri_c_wfE ht) sri_c_declared eq_refl _ _).
+    split; [reflexivity|reflexivity|exact (red_delta _ _ sri_c_kn sri_c_decl iv_False sri_c_declared [] eq_refl)].
   Qed.
 
-  (** Premises 10 and 11, inductives and constructors: no reduct; the conclusions are vacuous. *)
+  (** Premises 10 and 11, inductives and constructors: normal forms, no reduct exists ([red1] has
+      no rule for [tInd] or [tConstruct]); the conclusions are vacuous. *)
   Lemma sr_red1E_Ind_inst :
     forall u, closed_red1 si_Σ [] (tInd si_ind []) u -> si_Σ ;;; [] |-E u : subst_instance [] (ind_type si_idecl).
   Proof.
@@ -848,39 +998,36 @@ Section SRInstances.
     split; [reflexivity|reflexivity|exact (red_proj iv_Σ iv_Γc iv_proj [iv_False; tRel 0] [] (tRel 0) eq_refl)].
   Qed.
 
-  (** Premise 14, fixpoints: [fix f (x : I (∀P:Prop. P)) := x] has no redex in its types or bodies;
-      the conclusion is vacuous. *)
-  Lemma sr_red1E_Fix_inst :
-    forall u, closed_red1 si_Σ [] (tFix iv_mfix 0) u -> si_Σ ;;; [] |-E u : iv_fix_ty.
+  (** Premise 14, fixpoints: the body step of [fix f (x : I (∀P. P)) := (λy. y) x]. *)
+  Lemma sr_red1E_Fix_inst : si_Σ ;;; [] |-E tFix iv_mfix 0 : iv_fix_ty.
   Proof.
     pose (lt := iv_vass si_Σ [] si_na iv_fix_ty _ (iv_fix_ty_typed [] localenv_nil) eq_refl).
-    pose (lb := iv_vdef si_Σ iv_Γf si_na _ (lift0 1 iv_fix_ty) _ iv_fix_body_typed
+    pose (lb := iv_vdef si_Σ iv_Γf si_na sri_fbody (lift0 1 iv_fix_ty) _ sri_fbody_typed
                   (iv_fix_ty_typed iv_Γf iv_wf_Γf) eq_refl).
-    refine (sr_red1E_Fix si_Σ si_wfE [] localenv_nil iv_mfix 0 _ iv_fix_guard eq_refl
-              (sri_PΓ si_wfE iv_fix_body_typed) _ _ _ _ iv_wf_fix).
+    refine (sr_red1E_Fix si_Σ si_wfE [] localenv_nil sri_mfix 0 _ sri_fix_guard eq_refl
+              (sri_PΓ si_wfE sri_fbody_typed) _ _ _ _ sri_wf_fix _ sri_fix_body_cr1).
     - constructor; [exact lt|constructor].
     - constructor; [exact (sri_Pj si_wfE lt)|constructor].
     - constructor; [exact lb|constructor].
     - constructor; [exact (sri_Pj si_wfE lb)|constructor].
   Qed.
 
-  (** Premise 15, cofixpoints: the cofixpoint of [PCUICInversionEtaInstances] has no redex in its
-      types or bodies; the conclusion is vacuous. *)
-  Lemma sr_red1E_CoFix_inst :
-    forall u, closed_red1 iv_Σ iv_Γc (tCoFix iv_cmfix 0) u -> iv_Σ ;;; iv_Γc |-E u : iv_RF.
+  (** Premise 15, cofixpoints: the body step of [cofix f := mkR (∀P. P) ((λy. y) z)]. *)
+  Lemma sr_red1E_CoFix_inst : iv_Σ ;;; iv_Γc |-E tCoFix iv_cmfix 0 : iv_RF.
   Proof.
     pose (lt := iv_vass iv_Σ iv_Γc si_na iv_RF sProp (iv_RF_typed iv_Γc iv_wf_Γc) eq_refl).
-    pose (lb := iv_vdef iv_Σ iv_Γcf si_na iv_cofix_body (lift0 1 iv_RF) sProp iv_cofix_body_typed
+    pose (lb := iv_vdef iv_Σ iv_Γcf si_na sri_cbody (lift0 1 iv_RF) sProp sri_cbody_typed
                   (iv_RF_typed iv_Γcf iv_wf_Γcf) eq_refl).
-    refine (sr_red1E_CoFix iv_Σ iv_wfE iv_Γc iv_wf_Γc iv_cmfix 0 _ iv_cofix_guard eq_refl
-              (sri_PΓ iv_wfE iv_cofix_body_typed) _ _ _ _ iv_wf_cofix).
+    refine (sr_red1E_CoFix iv_Σ iv_wfE iv_Γc iv_wf_Γc sri_cmfix 0 _ sri_cofix_guard eq_refl
+              (sri_PΓ iv_wfE sri_cbody_typed) _ _ _ _ sri_wf_cofix _ sri_cofix_body_cr1).
     - constructor; [exact lt|constructor].
     - constructor; [exact (sri_Pj iv_wfE lt)|constructor].
     - constructor; [exact lb|constructor].
     - constructor; [exact (sri_Pj iv_wfE lb)|constructor].
   Qed.
 
-  (** Premise 16, primitive values: the literal [1] has no reduct; the conclusion is vacuous. *)
+  (** Premise 16, primitive values: the integer literal [1] is a normal form, no reduct exists
+      ([red1]'s only [tPrim] rules are the array congruences); the conclusion is vacuous. *)
   Lemma sr_red1E_Prim_inst :
     forall u, closed_red1 Σ_po [] (tPrim iv_one) u -> Σ_po ;;; [] |-E u : prim_type iv_one po_int_kn.
   Proof.
