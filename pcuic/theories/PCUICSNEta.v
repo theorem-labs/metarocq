@@ -2,9 +2,10 @@
 (** * The normalization premise over [typingE]
 
   [NormalizationInE] and [NormalizationE] are the copies of [NormalizationIn] and
-  [Normalization] ([PCUICSN.v]) with [welltyped] replaced by [welltypedE]
-  ([PCUICTypingEta.v]). They are what the η checker takes as its normalization
-  premise, where the base checker takes [NormalizationIn].
+  [Normalization] ([PCUICSN.v]) with [welltyped] replaced by [welltypedE] and, in
+  [NormalizationE], [wf_ext] replaced by [wf_extE] ([PCUICTypingEta.v]). They are
+  meant as the normalization premise of a checker for the η relation, in the place
+  where the base checker takes [NormalizationIn].
 
   **Nothing in this development proves [NormalizationInE], and nothing proves
   [NormalizationE].** They are assumptions, exactly as base [NormalizationIn] and
@@ -17,8 +18,8 @@
   [NormalizationIn] either. A reader must treat a theorem with this premise as
   conditional on it.
 
-  **How it relates to base's.** [NormalizationInE] is the STRONGER assumption, and
-  the only implication proved here runs from it to base's:
+  **How they relate to base's.** The only implications proved here run from these
+  classes to base's:
 
   - [NormalizationInE_NormalizationIn] : for [Σ] with [wf Σ],
     [NormalizationInE Σ -> NormalizationIn Σ].
@@ -29,12 +30,20 @@
 
   Both hold because [welltyped Σ Γ t -> welltypedE Σ Γ t] under [wf Σ]
   ([typing_incl_E], [PCUICTypingEta.v]): a term typable in the base system is typable
-  in the η system, so quantifying over the η-typable terms quantifies over more
-  terms. The reverse implication is NOT proved and is not expected to hold: a term
-  typable only up to η is in [welltypedE] and not in [welltyped], so
-  [NormalizationIn Σ] says nothing about it. Both conclusions are about the SAME
-  reduction [cored Σ Γ] (base reduction); the two classes differ only in which terms
-  they are asserted of. *)
+  in the η system. The reverse implications are not proved here and do not follow
+  from [typing_incl_E]; they would need an argument that the η-typable terms
+  normalize whenever the base-typable ones do.
+
+  Both conclusions are about the SAME reduction [cored Σ Γ] (base reduction). The two
+  pairs differ in different ways:
+  - [NormalizationInE Σ] and [NormalizationIn Σ] are both stated for one [Σ] with no
+    premise on it, and differ only in which terms they are asserted of: the
+    [welltypedE] terms against the [welltyped] ones.
+  - [NormalizationE] and [Normalization] differ in that and also in which
+    environments they cover: every [wf_extE] environment against every [wf_ext] one.
+  So [NormalizationE] asserts normalization of at least the terms [Normalization]
+  covers, in at least the environments it covers. Both inclusions are proved
+  ([typing_incl_E], [wf_ext_incl_E], [PCUICTypingEta.v]); neither is proved strict. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICReduction
