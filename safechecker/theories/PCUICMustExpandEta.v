@@ -81,13 +81,17 @@
   [PCUICSafeConversion.v:3026]), [wf_universes] of the two heads, a closed context, and
   the arguments' [ws_cumul_pbE_terms]. All of them are met at once by the concrete
   instance at the end of this file: [k1_Σ] declares R3aProbe's
-  [Cumulative Inductive I1@{*u} (A : Set) : Set] and the [t5_inst] family
-  [Cumulative Inductive I@{*u} (A : Type@{u}) : Prop]; [k1_ClosedBodies];
-  [k1_cmp_inst_sound]; [k1_check_I1] / [k1_check_c1] (the check accepts [I1@{u}] vs
-  [I1@{v}] and [c1@{u}] vs [c1@{v}] at zero arguments with [u ≠ v]); and
-  [must_expand_check_sound_inst] / [must_expand_check_sound_c1_inst], the soundness
-  lemma applied to them. No E metatheory is assumed in this file: S4's lemmas and A1
-  are proved. *)
+  [Cumulative Inductive I1@{*u} (A : Set) : Set], the [t5_inst] family
+  [Cumulative Inductive I@{*u} (A : Type@{u}) : Prop], the probe's
+  [T@{*u} (A : Set) (x : A) : Set] and a let-parameter [L@{*u} (A : Set) (C := A) (y : C)];
+  [k1_ClosedBodies]; [k1_cmp_inst_sound]; [k1_check_I1] / [k1_check_c1] /
+  [k1_check_napp1] / [k1_check_let] (the check accepts [I1@{u}]/[I1@{v}] and [c1@{u}]/[c1@{v}]
+  at zero arguments, [T@{u} a]/[T@{v} a] and [L@{u} a]/[L@{v} a] at one, with [u ≠ v]);
+  and [must_expand_check_sound_inst] / [must_expand_check_sound_c1_inst] /
+  [must_expand_check_sound_napp1_inst], the soundness lemma applied to them. The refusals
+  [k1_refuses_t5_inner] (binder types [Type@{u}]/[Type@{v}]) and [k1_refuses_conv_arg]
+  (convertible, not syntactically equal arguments: risk 6) are computed too. No E
+  metatheory is assumed in this file: S4's lemmas and A1 are proved. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -388,9 +392,49 @@ Definition k1_mdecl2 : mutual_inductive_body :=
      ind_universes := Polymorphic_ctx ([nNamed "u"], ConstraintSet.empty);
      ind_variance := Some [Variance.Irrelevant] |}.
 
+(** [T@{*u} (A : Set) (x : A) : Set]: the second binder's type reads the first argument
+    (the probe's [k1_napp1_k] / [k1_conv_arg_k]). PCUIC contexts list the innermost
+    binder first. *)
+Definition k1_kn3 : kername := (MPfile ["K1Inst"], "T").
+Definition k1_ind3 : inductive := {| inductive_mind := k1_kn3; inductive_ind := 0 |}.
+Definition k1_nx : aname := mkBindAnn (nNamed "x") Relevant.
+
+Definition k1_mdecl3 : mutual_inductive_body :=
+  {| ind_finite := Finite; ind_npars := 2; ind_params := [vass k1_nx (tRel 0); vass k1_na k1_set];
+     ind_bodies := [{| ind_name := "T"; ind_indices := []; ind_sort := Sort.type0;
+                       ind_type := tProd k1_na k1_set (tProd k1_nx (tRel 0) k1_set);
+                       ind_kelim := IntoAny;
+                       ind_ctors := [{| cstr_name := "ct"; cstr_args := []; cstr_indices := [];
+                                        cstr_type := tProd k1_na k1_set (tProd k1_nx (tRel 0)
+                                                       (mkApps (tRel 2) [tRel 1; tRel 0]));
+                                        cstr_arity := 0 |}];
+                       ind_projs := []; ind_relevance := Relevant |}];
+     ind_universes := Polymorphic_ctx ([nNamed "u"], ConstraintSet.empty);
+     ind_variance := Some [Variance.Irrelevant] |}.
+
+(** [L@{*u} (A : Set) (C := A) (y : C) : Set]: a let-bound parameter feeding a later
+    binder type (plan §8k's required clause: K1 compares over the smashed context, so the
+    binder [y] is compared at [A]'s instantiation, not at the raw let variable). *)
+Definition k1_kn4 : kername := (MPfile ["K1Inst"], "L").
+Definition k1_ind4 : inductive := {| inductive_mind := k1_kn4; inductive_ind := 0 |}.
+Definition k1_nc : aname := mkBindAnn (nNamed "C") Relevant.
+Definition k1_ny : aname := mkBindAnn (nNamed "y") Relevant.
+
+Definition k1_mdecl4 : mutual_inductive_body :=
+  {| ind_finite := Finite; ind_npars := 2;
+     ind_params := [vass k1_ny (tRel 0); vdef k1_nc (tRel 0) k1_set; vass k1_na k1_set];
+     ind_bodies := [{| ind_name := "L"; ind_indices := []; ind_sort := Sort.type0;
+                       ind_type := tProd k1_na k1_set (tLetIn k1_nc (tRel 0) k1_set
+                                     (tProd k1_ny (tRel 0) k1_set));
+                       ind_kelim := IntoAny; ind_ctors := []; ind_projs := [];
+                       ind_relevance := Relevant |}];
+     ind_universes := Polymorphic_ctx ([nNamed "u"], ConstraintSet.empty);
+     ind_variance := Some [Variance.Irrelevant] |}.
+
 Definition k1_env : global_env :=
   {| universes := ContextSet.empty;
-     declarations := [(k1_kn2, InductiveDecl k1_mdecl2); (k1_kn, InductiveDecl k1_mdecl)];
+     declarations := [(k1_kn4, InductiveDecl k1_mdecl4); (k1_kn3, InductiveDecl k1_mdecl3);
+                      (k1_kn2, InductiveDecl k1_mdecl2); (k1_kn, InductiveDecl k1_mdecl)];
      retroknowledge := Retroknowledge.empty |}.
 
 Definition k1_Σ : global_env_ext :=
@@ -403,11 +447,12 @@ Lemma k1_ClosedBodies : ClosedBodies k1_env.
 Proof.
   apply Build_ClosedBodies.
   - move=> cst decl body. rewrite /declared_constant /=.
-    move=> [h|[h|[]]]; discriminate h.
-  - cbn. constructor.
-    + move=> [h|[]]. discriminate h.
-    + constructor; [intros []|constructor].
+    intros h. repeat (destruct h as [h|h]; [discriminate h|]). destruct h.
+  - cbn.
+    repeat (constructor; [intros h; cbn in h; repeat (destruct h as [h|h]; [discriminate h|]); destruct h|]).
+    constructor.
 Qed.
+#[local] Existing Instance k1_ClosedBodies.
 
 Definition k1_cmpu : conv_pb -> Universe.t -> Universe.t -> bool := fun _ x y => eqb x y.
 Definition k1_cmps : conv_pb -> sort -> sort -> bool := fun _ x y => eqb x y.
@@ -487,4 +532,52 @@ Proof.
     [exact (must_expand_view_ind k1_ind2 k1_u k1_v)|cbn; lia| |reflexivity|constructor].
   exact (k1_cmp_inst_sound _ _ _ _ (k1_wf_instance _ (or_introl eq_refl))
            (k1_wf_instance _ (or_intror eq_refl)) k1_t5_inner_instances).
+Qed.
+
+(** ** Present arguments and let-bound parameters
+
+    [k1_a] stands for the probe's [nat]: K1 reads the arguments only syntactically, so any
+    closed term serves. *)
+Definition k1_a : term := tConst (MPfile ["K1Inst"], "nat") [].
+
+(** [T@{u} a] vs [T@{v} a] ([k1_napp1_k], kernel ACCEPT): the remaining binder [x : A]
+    is read at [a] on both sides. *)
+Lemma k1_check_napp1 :
+  must_expand_check (lookup_env k1_env) k1_eqb_tm k1_cmp_inst
+    (tInd k1_ind3 k1_u) [k1_a] (tInd k1_ind3 k1_v) [k1_a].
+Proof. vm_compute. reflexivity. Qed.
+
+(** [T@{u} ((fun X => X) a)] vs [T@{v} a] ([k1_conv_arg_k], kernel ACCEPT): the arguments
+    are convertible but not syntactically equal, and clause (1) compares them inside the
+    remaining binder type syntactically, so K1 refuses. This is the measured instance of
+    plan §6 risk rank 6 (K1 stricter than the kernel). *)
+Definition k1_beta_a : term := tApp (tLambda k1_na k1_set (tRel 0)) k1_a.
+
+Lemma k1_refuses_conv_arg :
+  must_expand_check (lookup_env k1_env) k1_eqb_tm k1_cmp_inst
+    (tInd k1_ind3 k1_u) [k1_beta_a] (tInd k1_ind3 k1_v) [k1_a] = false.
+Proof. vm_compute. reflexivity. Qed.
+
+(** The let-bound parameter [C := A] is ζ-substituted: after the argument [a], the
+    remaining binder [y : C] is read at [a] (plan §8k's required clause). *)
+Lemma k1_remaining_let :
+  must_expand_remaining (ind_params k1_mdecl4) [k1_a] = [k1_a].
+Proof. vm_compute. reflexivity. Qed.
+
+Lemma k1_check_let :
+  must_expand_check (lookup_env k1_env) k1_eqb_tm k1_cmp_inst
+    (tInd k1_ind4 k1_u) [k1_a] (tInd k1_ind4 k1_v) [k1_a].
+Proof. vm_compute. reflexivity. Qed.
+
+(** [must_expand_check_sound] with a non-empty argument list. *)
+Lemma must_expand_check_sound_napp1_inst :
+  ws_cumul_pbE Cumul k1_Σ [] (mkApps (tInd k1_ind3 k1_u) [k1_a]) (mkApps (tInd k1_ind3 k1_v) [k1_a]).
+Proof.
+  refine (must_expand_check_sound k1_Σ (cb := k1_ClosedBodies) (lookup_env k1_env) k1_eqb_tm
+            k1_cmp_inst Cumul [] (tInd k1_ind3 k1_u) [k1_a] (tInd k1_ind3 k1_v) [k1_a]
+            k1_cmp_inst_sound k1_check_napp1 _ _ eq_refl _).
+  - by vm_compute.
+  - by vm_compute.
+  - constructor; [|constructor].
+    exact (ws_cumul_pbE_refl (Σ := k1_Σ) (pb := Conv) (Γ := []) (t := k1_a) eq_refl eq_refl).
 Qed.
