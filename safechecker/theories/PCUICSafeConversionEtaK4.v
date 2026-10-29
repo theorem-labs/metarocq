@@ -12,7 +12,8 @@
      (1)  the η branch with the λ on side 1          -> R_positionR
      (1') the η branch with the λ on side 2          -> R_positionR2
      (2)  the virtual-argument descent of an η-aware _isconv_args', entering at
-          Reduction as in base, frame on either side -> R_positionR2 / R_stateR
+          Reduction as in base: frame on side 1 -> R_positionR2,
+          frame on side 2 -> R_positionR, state step -> R_stateR
      (3)  the same-constant argument call (prog_view_Const -> isconv_args_raw in
           base)                                       -> R_stateR
 

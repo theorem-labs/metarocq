@@ -8,9 +8,10 @@
   step in the specification ([K6_eta_step]), and A3/A6 need it in the canonical
   join ([K6_eta_step_join]).
 
-    [K6_eta_step]      : JoinE r Σ (Γ ,, vass na A) Conv t ((↑u) (tRel 0)) ->
+    [K6_eta_step]      : closed Γ -> open (λ na:A. t) -> open u ->
+                         JoinE r Σ (Γ ,, vass na A) Conv t ((↑u) (tRel 0)) ->
                          Σ ;;; Γ ⊢ λ na:A. t ≤sE[pb] u
-    [K6_eta_step_join] : the same premise -> JoinE r Σ Γ pb (λ na:A. t) u
+    [K6_eta_step_join] : the same premises -> JoinE r Σ Γ pb (λ na:A. t) u
 
   [K6_eta_step]: A4 ([I5_join_to_spec]) turns the join into the specification
   premise of [cumul_eta_l]. [K6_eta_step_join] is [I5_eta_l_case_holds]

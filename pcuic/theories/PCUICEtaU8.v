@@ -21,8 +21,8 @@
      needs [lift n (S k) B = lift0 1 t -> B = lift0 1 t'] (upstream
      [lift_lift_inv0], from [PCUICBasicStrengthening], which is not in this tree).
      Here it is derived algebraically from base [distr_lift_subst_rec],
-     [simpl_subst_k] and [permute_lift] ([eta_lift_lift_inv]); [lift_inj] likewise
-     from [simpl_subst_k]. No new term induction.
+     [simpl_subst_k] and [permute_lift] ([eta_lift_lift_inv]); [u8_lift_inj]
+     likewise from [simpl_subst_k]. No new term induction.
    - [tCase]: the 2020 single predicate congruence is two in 9.2
      ([case_eta_param] on a list, [case_eta_return]); branches are records with
      [bcontext], so the branch join relation is [on_Trel_eq eta bbody bcontext]. *)

@@ -6,8 +6,7 @@
    - [upto_domain] is reflexive, symmetric and transitive, and so is its
      declarationwise lift [upto_domain_decl] (binder annotations ignored);
    - [eta1] and [eta] are closed under [lift] and [subst] ([eta1_lift],
-     [eta1_subst_step], [eta_subst]), with the congruence closures they need;
-   - [lift_unfold_fix], used by the η case of C3. *)
+     [eta1_subst_step], [eta_subst]), with the congruence closures they need. *)
 
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config Primitive Environment.
@@ -783,20 +782,4 @@ Qed.
 
 #[global] Instance eta_Reflexive : CRelationClasses.Reflexive eta.
 Proof. intro t. apply rt_refl. Qed.
-
-(** Lifting commutes with [unfold_fix] (used by the η case of C3,
-    [PCUICEtaC3BR]). *)
-
-Lemma lift_unfold_fix n k mfix idx :
-  unfold_fix (map (map_def (lift n k) (lift n (#|mfix| + k))) mfix) idx
-  = option_map (on_snd (lift n k)) (unfold_fix mfix idx).
-Proof.
-  unfold unfold_fix.
-  rewrite nth_error_map. destruct (nth_error mfix idx); cbnr.
-  f_equal. unfold on_snd; cbn. f_equal.
-  rewrite distr_lift_subst. rewrite fix_subst_length. f_equal.
-  unfold fix_subst. rewrite !length_map.
-  generalize #|mfix| at 2 3. induction n0; auto. simpl.
-  f_equal. apply IHn0.
-Qed.
 

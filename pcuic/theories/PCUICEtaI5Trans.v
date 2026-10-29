@@ -2,7 +2,7 @@
 
 (** * A3: the join relation [JoinE] is transitive
 
-    [I5_join_trans] : is_open_term Γ u ->
+    [I5_join_trans] : is_closed_context Γ -> is_open_term Γ u ->
                       JoinE r Σ Γ pb t u -> JoinE r Σ Γ pb u w -> JoinE r Σ Γ pb t w
 
   ** Route
