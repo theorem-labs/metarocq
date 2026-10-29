@@ -17,7 +17,12 @@
   - [up_env] of [PCUICTypingEtaCopies2Instances] (a universe-polymorphic axiom
     [T@{l0} : Type@{l0}]) for the two universe-instantiation lemmas, at the instance [Set],
     which changes [Type@{l0}] into [Type@{Set}].
-  The instances marked WEAK show satisfiability only; the reason is next to each. *)
+  - the context [rf_Γ := [f : Prop → Prop]] of [PCUICWsCumulEtaCtx], in which [λx:Prop. f x]
+    and [f] are related by one η step ([rf_premise]), for the instance-rewriting lemmas
+    [OnOne2_ctx_instE], [All2_ctx_instE] and [ctx_inst_eq_contextE].
+  No instance is marked WEAK: the two lemmas whose conclusion is an equality of substitutions
+  ([spine_subst_inj_substE], [ctx_inst_sub_eqE]) are applied to derivations whose
+  substitutions are not convertible, as checked by [Fail] next to each. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -214,9 +219,16 @@ Definition ctx_inst_instE_inst :=
   ctx_inst_instE up_Σm up_univs [Level.lzero] up_Γ [tRel 0] k_up_Δ up_global_ext k_up_ci up_cu.
 
 Definition spine_subst_eqE_inst := spine_subst_eqE k_sp_T eq_refl.
-(* WEAK: proves satisfiability only; the two spines are the same, as the lemma's conclusion
-   forces two spines of one instance to have one substitution. *)
-Definition spine_subst_inj_substE_inst := spine_subst_inj_substE k_sp_T k_sp_T.
+(** [spine_subst_inj_substE]: its conclusion is Leibniz equality, so any two closed spines of
+    one instance have equal substitutions; the witness equates two terms that are not
+    convertible. One spine comes from an OPAQUE [ctx_inst] derivation through
+    [ctx_inst_spine_substE] (substitution [ctx_inst_subE r_ci]), the other is [k_sp_T]
+    (substitution [[tRel 0]]); [r_ci_not_refl] checks that [eq_refl] does not prove it. *)
+Lemma r_ci : ctx_instE rf_Σ k_Γ [tRel 0] (List.rev k_Δ).
+Proof. exact k_ci. Qed.
+Definition spine_subst_inj_substE_inst : ctx_inst_subE r_ci = [tRel 0] :=
+  spine_subst_inj_substE (ctx_inst_spine_substE (wfΣ := wc_wfE) k_wf_ΓΔ r_ci) k_sp_T.
+Fail Definition r_ci_not_refl : ctx_inst_subE r_ci = [tRel 0] := eq_refl.
 
 (** The η step under [x : G F], substituted by [x := a]. *)
 Lemma k_η_Δ' pb : ws_cumul_pbE pb rf_Σ (k_Γ ,,, k_Δ' ,,, []) (lift0 1 k_T) (lift0 1 k_U).
@@ -363,9 +375,20 @@ Lemma k_ci_y : ctx_instE rf_Σ k_Γ [tRel 0] (subst_telescope (ctx_inst_subE k_c
 Proof. cbn. constructor; [exact k_a_U|constructor]. Qed.
 Definition ctx_inst_appE_inst := ctx_inst_appE k_ci k_ci_y.
 Definition ctx_inst_app_invE_inst := ctx_inst_app_invE (Δ := k_Δ) ctx_inst_appE_inst.
-(* WEAK: proves satisfiability only; both derivations are [k_ci], so the two substitutions
-   are equal by construction. *)
-Definition ctx_inst_sub_eqE_inst := ctx_inst_sub_eqE k_ci k_ci eq_refl eq_refl.
+(** [ctx_inst_sub_eqE]: [ctx_inst_subE] depends only on the arguments, and the premises force
+    equal arguments; the witness equates the substitutions of two DIFFERENT opaque derivations
+    ([r_ci] types [a] at [k_T] by one η retyping; [r_ci2] adds a second cumulativity node),
+    over argument lists and telescopes that are equal but not syntactically the same.
+    [r_ci2_not_refl] checks that [eq_refl] does not prove it. *)
+Lemma r_ci2 : ctx_instE rf_Σ k_Γ (List.rev [tRel 0]) k_Δ.
+Proof.
+  constructor; [|constructor].
+  exact (type_ws_cumul_pbE (pb := Cumul) k_T k_a_T k_isT_T
+           (ws_cumul_pbE_refl k_closed (subject_is_open_termE (Σ := rf_Σ) (wfΣ := wc_wfE) k_T_typed))).
+Qed.
+Definition ctx_inst_sub_eqE_inst : ctx_inst_subE r_ci = ctx_inst_subE r_ci2 :=
+  ctx_inst_sub_eqE r_ci r_ci2 eq_refl eq_refl.
+Fail Definition r_ci2_not_refl : ctx_inst_subE r_ci = ctx_inst_subE r_ci2 := eq_refl.
 Definition ctx_inst_app_subE_inst := ctx_inst_app_subE (Δ := k_Δ) ctx_inst_appE_inst.
 
 (** A [ctx_inst] of the let [z := a : G F]: it takes no argument. *)
@@ -518,53 +541,146 @@ Definition ctx_inst_smashE_inst := fst (@ctx_inst_smashE _ rf_Σ k_Γ [tRel 0] k
 Definition ws_cumul_ctx_pb_rel_transE_inst :=
   @ws_cumul_ctx_pb_rel_transE _ rf_Σ wc_wfE Cumul k_Γ k_Δ k_Δ' k_Δ (k_rel Cumul) (k_rel_sym Cumul).
 
-(** The premise of [OnOne2_ctx_instE] and [All2_ctx_instE] at the relation [P := eq]: equal
-    substitutions give equal, well-scoped contexts. *)
-Definition k_P : global_env_ext -> context -> term -> term -> Type := fun _ _ t u => t = u.
-Lemma k_HP_gen pb (Γ Δ' Δ : context) (s s' : list term) :
-  wf_localE rf_Σ (Γ ,,, Δ' ,,, Δ) -> subsletE rf_Σ Γ (List.rev s) Δ' -> s = s' ->
-  ws_cumul_ctx_pbE pb rf_Σ (Γ ,,, subst_context (List.rev s) 0 Δ) (Γ ,,, subst_context (List.rev s') 0 Δ).
+(** [OnOne2_ctx_instE] and [All2_ctx_instE]: the relation [r_P] relates exactly the η pair
+    [λx:Prop. f x] ↦ [f] in [f : Prop → Prop] ([rf_Γ], [rf_t], [rf_premise] of
+    [PCUICWsCumulEtaCtx]); the instance is rewritten from [[λx. f x]] to [[f]]. The premise
+    quantified over every context and substitution is proved in general, by
+    [substitution_ws_cumul_ctx_pbE]. *)
+Definition r_P : global_env_ext -> context -> term -> term -> Type :=
+  fun _ Γ t u => ((Γ = rf_Γ) * (t = rf_t) * (u = tRel 0))%type.
+Definition r_Δ : context := [vass c1b_na rf_F].
+
+Lemma r_wf : wf_localE rf_Σ (rf_Γ ,,, List.rev r_Δ).
 Proof.
-  intros wf sub <-. apply ws_cumul_ctx_pbE_refl_pb.
-  eapply (wf_local_closed_contextE (Σ := rf_Σ) (wfΣ := wc_wfE)).
-  exact (@substitution_wf_localE _ rf_Σ wc_wfE _ _ _ _ sub wf).
+  apply localenv_cons_abs; [exact rf_wf_Γ|].
+  split; [exact tt|]. exists (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)).
+  split; [exact (rf_F_typed rf_Γ rf_wf_Γ)|]. split; [exact I|reflexivity].
 Qed.
-Lemma k_OnOne2_eq {A} (l l' : list A) : OnOne2 (fun t u => t = u) l l' -> l = l'.
-Proof. induction 1; subst; reflexivity. Qed.
-Lemma k_All2_eq {A} (l l' : list A) : All2 (fun t u => t = u) l l' -> l = l'.
-Proof. induction 1; subst; reflexivity. Qed.
-Lemma k_ci_P : PCUICTyping.ctx_inst (fun (Γ : context) (t T : term) => forall u, k_P rf_Σ Γ t u -> rf_Σ ;;; Γ |-E u : T)
-  k_Γ [tRel 0] k_Δ.
-Proof. constructor; [intros u <-; exact k_a_T|constructor]. Qed.
-Lemma k_wf_rev : wf_localE rf_Σ (k_Γ ,,, List.rev k_Δ).
-Proof. exact k_wf_ΓΔ. Qed.
-(* WEAK (this and [All2_ctx_instE_inst]): proves satisfiability only; at [P := eq] the
-   rewritten instance is the given one, and the conversion premise is used only at equal
-   substitutions. *)
-Definition OnOne2_ctx_instE_inst :=
-  @OnOne2_ctx_instE _ rf_Σ wc_wfE Cumul k_P k_Γ [tRel 0] [tRel 0] k_Δ
-    (fun Γ Δ' Δ s s' wf sub _ o => k_HP_gen Cumul Γ Δ' Δ s s' wf sub (k_OnOne2_eq s s' o))
-    k_wf_rev k_ci_P k_ci ltac:(constructor; reflexivity).
-Definition All2_ctx_instE_inst :=
-  @All2_ctx_instE _ rf_Σ wc_wfE Cumul k_P k_Γ [tRel 0] [tRel 0] k_Δ
-    (fun Γ Δ' Δ s s' wf sub _ o => k_HP_gen Cumul Γ Δ' Δ s s' wf sub (k_All2_eq s s' o))
-    k_wf_rev k_ci_P k_ci (All2_cons eq_refl All2_nil).
+
+Lemma r_ci_t : ctx_instE rf_Σ rf_Γ [rf_t] r_Δ.
+Proof. constructor; [exact rf_t_typed|constructor]. Qed.
+
+Lemma r_ci_P : PCUICTyping.ctx_inst
+  (fun (Γ : context) (t T : term) => forall u : term, r_P rf_Σ Γ t u -> rf_Σ ;;; Γ |-E u : T)
+  rf_Γ [rf_t] r_Δ.
+Proof.
+  constructor; [|constructor].
+  intros u h. cbv [r_P] in h. destruct h as [[_ _] ->]. exact rf_f_typed.
+Qed.
+
+Lemma r_refl_tl {Γ} (tl : list term) : is_closed_context Γ -> forallb (is_open_term Γ) tl ->
+  All2 (ws_cumul_pbE Conv rf_Σ Γ) tl tl.
+Proof.
+  intros cl. induction tl as [|t tl IH]; [constructor|].
+  move=> /= /andP [ht htl]. constructor; [exact (ws_cumul_pbE_refl cl ht)|exact (IH htl)].
+Qed.
+
+Lemma r_conv_of_P {Γ t u} : r_P rf_Σ Γ t u -> ws_cumul_pbE Conv rf_Σ Γ t u.
+Proof. cbv [r_P]. intros [[-> ->] ->]. exact rf_premise. Qed.
+
+Lemma r_All2_of_OnOne2 {Γ s s'} : is_closed_context Γ -> forallb (is_open_term Γ) s ->
+  OnOne2 (r_P rf_Σ Γ) s s' -> All2 (ws_cumul_pbE Conv rf_Σ Γ) s s'.
+Proof.
+  intros cl op o. induction o.
+  - constructor; [exact (r_conv_of_P p)|]. move: op => /= /andP [_ op]. exact (r_refl_tl tl cl op).
+  - move: op => /= /andP [hh op]. constructor; [exact (ws_cumul_pbE_refl cl hh)|exact (IHo op)].
+Qed.
+
+Lemma r_All2_of_All2 {Γ s s'} : All2 (r_P rf_Σ Γ) s s' -> All2 (ws_cumul_pbE Conv rf_Σ Γ) s s'.
+Proof. intros a. induction a; constructor; [exact (r_conv_of_P r)|exact IHa]. Qed.
+
+Lemma r_H1_gen (Γ Δ' Δ : context) (s s' : list term) :
+  wf_localE rf_Σ (Γ ,,, Δ' ,,, Δ) ->
+  subsletE rf_Σ Γ (List.rev s) Δ' -> subsletE rf_Σ Γ (List.rev s') Δ' ->
+  All2 (ws_cumul_pbE Conv rf_Σ Γ) s s' ->
+  ws_cumul_ctx_pbE Conv rf_Σ (Γ ,,, subst_context (List.rev s) 0 Δ) (Γ ,,, subst_context (List.rev s') 0 Δ).
+Proof.
+  intros wf sub sub' a.
+  have cl : is_closed_context (Γ ,,, Δ' ,,, Δ) := wf_local_closed_contextE (Σ := rf_Σ) (wfΣ := wc_wfE) wf.
+  apply (substitution_ws_cumul_ctx_pbE (Δ := Δ') (Δ' := Δ'));
+    [exact (subslet_untyped_subsletE _ _ _ _ sub)|exact (subslet_untyped_subsletE _ _ _ _ sub')
+    |exact (All2_rev _ _ _ _ _ a)|exact cl|exact cl].
+Qed.
+
+Lemma r_open {Γ Δ' s} : wf_localE rf_Σ Γ -> subsletE rf_Σ Γ (List.rev s) Δ' -> forallb (is_open_term Γ) s.
+Proof. intros _ sub. have h := subsletE_open_terms (wfΣ := wc_wfE) sub. by rewrite forallb_rev in h. Qed.
+
+Definition OnOne2_ctx_instE_inst : ctx_instE rf_Σ rf_Γ [tRel 0] r_Δ :=
+  @OnOne2_ctx_instE _ rf_Σ wc_wfE Conv r_P rf_Γ [rf_t] [tRel 0] r_Δ
+    (fun Γ Δ' Δ s s' wf sub sub' o =>
+       let wfΓ := wf_localE_app_l _ _ _ (wf_localE_app_l _ _ _ wf) in
+       r_H1_gen Γ Δ' Δ s s' wf sub sub'
+         (r_All2_of_OnOne2 (wf_local_closed_contextE (Σ := rf_Σ) (wfΣ := wc_wfE) wfΓ)
+                           (r_open wfΓ sub) o))
+    r_wf r_ci_P r_ci_t (OnOne2_hd _ _ _ _ ((eq_refl, eq_refl), eq_refl)).
+
+Definition All2_ctx_instE_inst : ctx_instE rf_Σ rf_Γ [tRel 0] r_Δ :=
+  @All2_ctx_instE _ rf_Σ wc_wfE Conv r_P rf_Γ [rf_t] [tRel 0] r_Δ
+    (fun Γ Δ' Δ s s' wf sub sub' a => r_H1_gen Γ Δ' Δ s s' wf sub sub' (r_All2_of_All2 a))
+    r_wf r_ci_P r_ci_t (All2_cons ((eq_refl, eq_refl), eq_refl) All2_nil).
 
 Definition ctx_inst_open_termsE_inst := @ctx_inst_open_termsE _ rf_Σ wc_wfE k_Γ _ _ k_ci.
 Definition subslet_open_termsE_inst := @subslet_open_termsE _ rf_Σ wc_wfE k_Γ _ _ k_sub_T.
 
-(** A variable has no other α-variant than itself. *)
-Lemma k_upto_Rel0 v : upto_names' (tRel 0) v -> v = tRel 0.
-Proof. intros h. now depelim h. Qed.
-Lemma k_ci_names : PCUICTyping.ctx_inst
-  (fun (Γ : context) (u A : term) => forall v, upto_names' u v -> rf_Σ ;;; Γ |-E v : A) k_Γ [tRel 0] k_Δ.
-Proof. constructor; [intros v h; rewrite (k_upto_Rel0 v h); exact k_a_T|constructor]. Qed.
-Lemma k_upto_refl : All2 upto_names' [tRel 0] [tRel 0].
+(** [ctx_inst_eq_contextE]: the instance [λx:Prop. f x] (anonymous binder) is replaced by its
+    α-variant [λy:Prop. f y] (binder named [y]); the premise over EVERY α-variant is proved by
+    inverting [upto_names']. *)
+Definition r_ny : aname := mkBindAnn (nNamed "y") Relevant.
+Definition rf_t' : term := tLambda r_ny (tSort sProp) (tApp (tRel 1) (tRel 0)).
+
+Lemma r_lam_typed0 (n : name) :
+  rf_Σ ;;; rf_Γ |-E tLambda (mkBindAnn n Relevant) (tSort sProp) (tApp (tRel 1) (tRel 0))
+    : tProd (mkBindAnn n Relevant) (tSort sProp) (tSort sProp).
+Proof.
+  have hv : lift_typing typingE rf_Σ rf_Γ (j_vass (mkBindAnn n Relevant) (tSort sProp)).
+  { split; [exact tt|]. exists (Sort.super sProp).
+    split; [exact (rf_P_typed rf_Γ rf_wf_Γ)|]. split; [exact I|reflexivity]. }
+  have hΓ1 : wf_localE rf_Σ (rf_Γ ,, vass (mkBindAnn n Relevant) (tSort sProp)).
+  { apply localenv_cons_abs; [exact rf_wf_Γ|exact hv]. }
+  apply typeE_Lambda; [exact hv|].
+  apply (typeE_App _ _ (tRel 1) c1b_na (tSort sProp) (tSort sProp)
+           (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) (tRel 0)).
+  - exact (rf_F_typed _ hΓ1).
+  - exact (typeE_Rel _ _ 1 (vass c1b_na rf_F) hΓ1 eq_refl).
+  - exact (typeE_Rel _ _ 0 (vass (mkBindAnn n Relevant) (tSort sProp)) hΓ1 eq_refl).
+Qed.
+
+(** The α-variant's principal type [Π y:Prop. Prop] differs from [rf_F] by the binder name only;
+    it is retyped at [rf_F] through [ws_cumul_pbE_Prod]. *)
+Lemma r_lam_typed (n : name) :
+  rf_Σ ;;; rf_Γ |-E tLambda (mkBindAnn n Relevant) (tSort sProp) (tApp (tRel 1) (tRel 0)) : rf_F.
+Proof.
+  have cl : is_closed_context rf_Γ := wf_local_closed_contextE (Σ := rf_Σ) (wfΣ := wc_wfE) rf_wf_Γ.
+  have hv : wf_localE rf_Σ (rf_Γ ,, vass (mkBindAnn n Relevant) (tSort sProp)).
+  { apply localenv_cons_abs; [exact rf_wf_Γ|]. split; [exact tt|]. exists (Sort.super sProp).
+    split; [exact (rf_P_typed rf_Γ rf_wf_Γ)|]. split; [exact I|reflexivity]. }
+  refine (type_ws_cumul_pbE (pb := Cumul) _ (r_lam_typed0 n) (has_sort_isTypeE _ (rf_F_typed rf_Γ rf_wf_Γ)) _).
+  unfold rf_F. apply ws_cumul_pbE_Prod; [reflexivity| |].
+  - apply ws_cumul_pbE_refl; [exact cl|reflexivity].
+  - apply ws_cumul_pbE_refl; [exact (wf_local_closed_contextE (Σ := rf_Σ) (wfΣ := wc_wfE) hv)|reflexivity].
+Qed.
+
+Lemma r_alpha_inv v : upto_names' rf_t v -> rf_Σ ;;; rf_Γ |-E v : rf_F.
+Proof.
+  unfold rf_t. intros h. depelim h.
+  repeat match goal with H : eq_term_upto_univ_napp _ _ _ _ _ _ _ |- _ => depelim H end.
+  repeat match goal with H : _ = _ |- _ => progress cbn in H end.
+  subst.
+  match goal with |- _ ;;; _ |-E tLambda ?na _ _ : _ => destruct na as [n r] end.
+  match goal with H : eq_binder_annot _ _ |- _ => unfold eq_binder_annot in H; cbn in H; subst r end.
+  apply r_lam_typed.
+Qed.
+
+Lemma r_ci_alpha : PCUICTyping.ctx_inst
+  (fun (Γ : context) (u A : term) => forall v : term, upto_names' u v -> rf_Σ ;;; Γ |-E v : A)
+  rf_Γ [rf_t] r_Δ.
+Proof. constructor; [exact r_alpha_inv|constructor]. Qed.
+
+Lemma r_upto : All2 upto_names' [rf_t] [rf_t'].
 Proof. repeat constructor. Qed.
-(* WEAK: proves satisfiability only; the instance is a variable, whose only α-variant is
-   itself. *)
-Definition ctx_inst_eq_contextE_inst :=
-  @ctx_inst_eq_contextE _ rf_Σ wc_wfE k_Γ k_Δ [tRel 0] [tRel 0] k_wf_rev k_ci_names k_ci k_upto_refl.
+
+Definition ctx_inst_eq_contextE_inst : ctx_instE rf_Σ rf_Γ [rf_t'] r_Δ :=
+  @ctx_inst_eq_contextE _ rf_Σ wc_wfE rf_Γ r_Δ [rf_t] [rf_t'] r_wf r_ci_alpha r_ci_t r_upto.
 
 (** [x := a, y := a] for [x : G (λy:Prop. F y), y : G F], one variable at a time. *)
 Lemma k_jy : lift_typing typingE rf_Σ (k_Γ ,,, k_Δ) (j_vass c1b_na (lift0 1 k_U)).

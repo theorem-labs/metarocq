@@ -69,30 +69,6 @@ From Stdlib Require Import ssreflect ssrbool.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
-(* The E twins of the lemmas below carry no global hint, while base registers each lemma
-   globally; the proofs of this file see them through these local registrations. *)
-(* replays base's global hint isType_ws_cumul_pb_refl (PCUICWellScopedCumulativity.v:289); removed when the E file registers it globally *)
-#[local] Hint Immediate isType_ws_cumul_pbE_refl : pcuic.
-(* replays base's global hint ws_cumul_pb_refl (PCUICWellScopedCumulativity.v:353); removed when the E file registers it globally *)
-#[local] Hint Immediate ws_cumul_pbE_refl : pcuic.
-(* replays base's global hint isType_is_open_term (PCUICContextConversion.v:1022); removed when the E file registers it globally *)
-#[local] Hint Resolve isType_is_open_termE : fvs.
-(* replays base's global hint isTypeRel_is_open_term (PCUICContextConversion.v:1022); removed when the E file registers it globally *)
-#[local] Hint Resolve isTypeRel_is_open_termE : fvs.
-(* replays base's global hint Extern 4 (wf_local _ ?Γ) (PCUICTyping.v:632); removed when the E file registers it globally *)
-#[local] Hint Extern 4 (wf_localE _ ?Γ) =>
-  match goal with
-  | [ H : typingE _ _ _ _ |- _ ] => exact (typingE_wf_local H)
-  | [ H : lift_typing0 (typingE _ _) _ |- _ ] => exact (lift_typingE_wf_local H)
-  | [ H : PCUICEnvTyping.lift_typing (typingE _ _) _ |- _ ] => exact (lift_typingE_wf_local H)
-  end : pcuic.
-(* replays base's global hint typing_wf_local (PCUICTyping.v:641); removed when the E file registers it globally *)
-#[local] Hint Resolve typingE_wf_local : wf.
-(* replays base's global hint lift_typing_wf_local (PCUICTyping.v:644); removed when the E file registers it globally *)
-#[local] Hint Resolve lift_typingE_wf_local : wf.
-(* replays base's global hint wf_local_app_l (PCUICTyping.v:613); removed when the E file registers it globally *)
-#[local] Hint Immediate wf_localE_app_l : wf.
-
 Ltac splits := repeat split.
 
 Notation spnilE isty isty' w := (type_spine_nilE _ isty isty' w).
