@@ -720,3 +720,22 @@ Definition ctx_inst_app_weakE_statement : Type :=
     (mkApps (tInd ind v) (params ++ skipn (ind_npars mdecl) args)) ->
   ctx_instE Σ Γ (params ++ skipn (ind_npars mdecl) args)
     (List.rev (subst_instance v (ind_params mdecl ,,, ind_indices idecl))).
+
+(** C1 addition for EtaMetaLane's T6 (the E copy of [Bidirectional/BDFromPCUIC]):
+    [PCUICInductiveInversion.v:3616]. Its base proof inverts only its own universe premise
+    ([cmp_global_instance_ind_inv]), builds cumulativity in the constructing direction
+    ([into_ws_cumul_pb], [cumul_ctx_relSpec_Algo]) and reads the declaration's variance clause
+    ([on_ctype_variance]); the presumed-false class enters only through
+    [positive_cstr_closed_args], whose closure holds the risk-5 rows of copy 18 (see the
+    note). *)
+Definition projection_cumulative_indicesE_statement : Type :=
+  forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+    {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {cdecl : constructor_body}
+    {p : projection} {pdecl : projection_body} {u u' : Instance.t},
+  declared_projection Σ p mdecl idecl cdecl pdecl ->
+  on_udecl_prop Σ (ind_universes mdecl) ->
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  consistent_instance_ext Σ (ind_universes mdecl) u' ->
+  cmp_ind_universes Σ p.(proj_ind) (ind_npars mdecl) u u' ->
+  ws_cumul_pbE Cumul Σ (projection_context p.(proj_ind) mdecl idecl u)
+    (subst_instance u pdecl.(proj_type)) (subst_instance u' pdecl.(proj_type)).
