@@ -1555,6 +1555,298 @@ Qed.
 Definition arity_typing_spine_fits {cf : checker_flags} (H : @T0_facts cf) :
   ltac:(let T := type of (@arity_typing_spine cf H) in exact T) := @arity_typing_spine_proved cf.
 
+(** ** K7 smash and expand_lets facts: T0 rows 44, 45, 32, 43, 28, 18 (helpers [smh_*])
+
+  Ports of base [PCUICContexts] ([wf_local_rel_smash_context_gen], [wf_local_smash_end],
+  [wf_local_smash_context], [subslet_lift], [subslet_extended_subst], [typing_expand_lets]),
+  [PCUICInductives.wf_local_expand_lets], [PCUICSpine.spine_subst_smash] and
+  [PCUICFixWitness] ([wf_local_nth_error_welltyped], [isType_rec_arg_welltyped]) over [typingE].
+  The only non-structural step of these ports is substitution (row 30, [substitution_proved]). *)
+
+(** [PCUICContexts.wf_local_rel_smash_context_gen] over [typingE]. *)
+Lemma smh_wf_local_rel_smash_context_gen {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ Δ'} :
+  wf_localE Σ (Δ' ,,, Γ) ->
+  wf_local_relE Σ (Δ' ,,, Γ) Δ ->
+  wf_local_relE Σ Δ' (smash_context Δ Γ).
+Proof.
+  rewrite /wf_local_relE.
+  induction Γ as [|a Γ IHΓ] in Δ |- *; simpl; auto.
+  intros wfΓ wfΔ.
+  destruct (All_local_env_tip wfΓ) as [wfΓ' ha].
+  destruct a as [na [b|] t]; simpl.
+  - apply IHΓ; auto.
+    apply All_local_env_fold, All_local_env_impl with (1 := wfΔ).
+    intros Γ' j X.
+    apply lift_typing_f_impl with (1 := X) => // ?? HT.
+    rewrite Nat.add_0_r.
+    have sub : subsletE Σ (Δ' ,,, Γ) [b] [vdef na b t].
+    { rewrite -{1}(subst_empty 0 b). constructor; [constructor|].
+      rewrite !subst_empty. eapply unlift_TermTyp; exact ha. }
+    exact (@substitution_proved cf Σ wfΣ _ _ _ _ _ _ sub HT).
+  - apply IHΓ; auto. eapply All_local_env_app; auto.
+    + constructor; [constructor|exact ha].
+    + eapply All_local_env_impl; eauto. simpl; intros.
+      now rewrite app_context_assoc.
+Qed.
+
+(** [PCUICContexts.wf_local_smash_end] over [typingE]. *)
+Lemma smh_wf_local_smash_end {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : list context_decl) :
+  wf_localE Σ (Γ ,,, Δ) -> wf_localE Σ (Γ ,,, smash_context [] Δ).
+Proof.
+  intros wf.
+  apply All_local_env_app.
+  - exact (fst (All_local_env_app_inv wf)).
+  - eapply (smh_wf_local_rel_smash_context_gen (wfΣ := wfΣ)); [exact wf|constructor].
+Qed.
+
+(** [smash_context] of a context ending in an assumption (syntactic). *)
+Lemma smh_smash_context_acc_vass Δ na T :
+  smash_context [mkdecl na None T] Δ =
+  smash_context [] Δ ,, vass na (subst (extended_subst Δ 0) 0 (lift (context_assumptions Δ) #|Δ| T)).
+Proof. rewrite smash_context_acc. reflexivity. Qed.
+
+Lemma smh_smash_context_vass Δ na T :
+  smash_context [] (Δ ,, vass na T) =
+  smash_context [] Δ ,, vass na (subst (extended_subst Δ 0) 0 (lift (context_assumptions Δ) #|Δ| T)).
+Proof. exact (smh_smash_context_acc_vass Δ na T). Qed.
+
+(** [PCUICContexts.subslet_lift] over [typingE] (no substitution: [weakeningE]). *)
+Lemma smh_subslet_lift {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+  (Γ Δ : context) s Δ' :
+  wf_localE Σ (Γ ,,, Δ) ->
+  subsletE Σ Γ s Δ' ->
+  subsletE Σ (Γ ,,, Δ) (map (lift0 #|Δ|) s) (lift_context #|Δ| 0 Δ').
+Proof.
+  move=> wfl sub.
+  induction sub as [|Δ0 s0 na t T sub IH ht|Δ0 s0 na t T sub IH ht];
+    rewrite ?lift_context_snoc /=.
+  - constructor.
+  - rewrite -(subslet_length sub). constructor; [exact IH|].
+    rewrite -distr_lift_subst. apply weakeningE; eauto.
+  - rewrite -(subslet_length sub).
+    rewrite distr_lift_subst. constructor; [exact IH|].
+    rewrite - !distr_lift_subst. apply weakeningE; eauto.
+Qed.
+
+(** [PCUICContexts.subslet_extended_subst] over [typingE]. *)
+Lemma smh_subslet_extended_subst {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ :
+  wf_localE Σ (Γ ,,, Δ) ->
+  subsletE Σ (Γ ,,, smash_context [] Δ)
+    (extended_subst Δ 0)
+    (lift_context (context_assumptions Δ) 0 Δ).
+Proof.
+  move=> wfΔ.
+  have wfΓ := fst (All_local_env_app_inv wfΔ).
+  have wfΔ' := snd (All_local_env_app_inv wfΔ).
+  clear wfΔ.
+  induction Δ as [|[na [d|] ty] Δ IHΔ] in wfΔ' |- *; simpl; try constructor.
+  * destruct (All_local_rel_tip wfΔ') as [wfΔt l0].
+    have wfΓΔ : wf_localE Σ (Γ ,,, Δ) := All_local_env_app wfΓ wfΔt.
+    specialize (IHΔ wfΔt).
+    rewrite lift_context_snoc /lift_decl /= /map_decl /=.
+    len.
+    constructor => //.
+    have l : Σ ;;; Γ ,,, Δ |-E d : ty by eapply unlift_TermTyp; exact l0.
+    have wfs := smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wfΓΔ.
+    have l' := weakening_typingE (wfΣ := wfΣ) (Γ' := Δ) (Γ'' := smash_context [] Δ) wfs l.
+    len in l'.
+    exact (@substitution_proved cf Σ wfΣ _ _ _ [] _ _ IHΔ l').
+  * rewrite (smh_smash_context_acc_vass Δ na ty).
+    destruct (All_local_rel_tip wfΔ') as [wfΔt l].
+    have wfΓΔ : wf_localE Σ (Γ ,,, Δ) := All_local_env_app wfΓ wfΔt.
+    specialize (IHΔ wfΔt).
+    rewrite lift_context_snoc /lift_decl /= /map_decl /=.
+    have wfs := smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wfΓΔ.
+    assert (wf_localE Σ (Γ ,,, smash_context [] Δ ,, vass na
+        (subst0 (extended_subst Δ 0) (lift (context_assumptions Δ) #|Δ| ty)))) as wfs'.
+    { constructor; [exact wfs|].
+      eapply lift_typing_f_impl with (f := fun t => _ (_ t)) (1 := l) => // ?? Hs.
+      have Hs' := weakening_typingE (wfΣ := wfΣ) (Γ' := Δ) (Γ'' := smash_context [] Δ) wfs Hs.
+      len in Hs'.
+      exact (@substitution_proved cf Σ wfΣ _ _ _ [] _ _ IHΔ Hs'). }
+    constructor.
+    - rewrite (lift_extended_subst _ 1).
+      rewrite -(PCUICWeakeningConv.lift_context_lift_context 1 _).
+      exact (smh_subslet_lift _ [_] _ _ wfs' IHΔ).
+    - eapply meta_convE.
+      + econstructor; [exact wfs'|reflexivity].
+      + simpl. rewrite (lift_extended_subst _ 1).
+        rewrite distr_lift_subst. f_equal. len.
+        now rewrite simpl_lift; try lia.
+Qed.
+
+(** [PCUICContexts.typing_expand_lets] over [typingE]. *)
+Lemma smh_typing_expand_lets {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ t T :
+  Σ ;;; Γ ,,, Δ |-E t : T ->
+  Σ ;;; Γ ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T.
+Proof.
+  intros Ht.
+  rewrite /expand_lets /expand_lets_k.
+  have wf := typingE_wf_local Ht.
+  have wfs := smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wf.
+  have Ht' := weakening_typingE (wfΣ := wfΣ) (Γ' := Δ) (Γ'' := smash_context [] Δ) wfs Ht.
+  len in Ht'.
+  exact (@substitution_proved cf Σ wfΣ _ _ _ [] _ _ (smh_subslet_extended_subst (wfΣ := wfΣ) Γ Δ wf) Ht').
+Qed.
+
+(** [PCUICInductives.wf_local_expand_lets] over [typingE]. *)
+Lemma smh_wf_local_expand_lets {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ Γ'} :
+  wf_localE Σ (Γ ,,, Δ ,,, Γ') ->
+  wf_localE Σ (Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ').
+Proof.
+  intros hwf.
+  rewrite /expand_lets_ctx /expand_lets_k_ctx.
+  have wfΓΔ := fst (All_local_env_app_inv hwf).
+  rewrite -app_context_assoc in hwf.
+  have wfs := smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wfΓΔ.
+  have hwf' := weakening_wf_localE (wfΣ := wfΣ) (Γ'' := smash_context [] Δ) hwf wfs.
+  len in hwf'.
+  rewrite lift_context_app app_context_assoc Nat.add_0_r in hwf'.
+  exact (substitution_wf_local_proved (wfΣ := wfΣ) (smh_subslet_extended_subst (wfΣ := wfΣ) Γ Δ wfΓΔ) hwf').
+Qed.
+
+(** The [context_subst] half of [PCUICSpine.spine_subst_smash] (syntactic). *)
+Lemma smh_context_subst_smash {Δ inst s} :
+  context_subst Δ inst s -> context_subst (smash_context [] Δ) inst (List.rev inst).
+Proof.
+  induction 1 as [|Γ' args s' na' t' a' cs IH|Γ' args s' na' b' t' cs IH].
+  - constructor.
+  - rewrite (smh_smash_context_vass Γ' na' t') List.rev_app_distr /=.
+    constructor. exact IH.
+  - simpl. exact IH.
+Qed.
+
+(** The [subslet] half of [PCUICSpine.spine_subst_smash] over [typingE] (no substitution). *)
+Lemma smh_subslet_smash {cf : checker_flags} {Σ : global_env_ext} {Γ Δ inst s} :
+  subsletE Σ Γ s Δ -> context_subst Δ inst s -> subsletE Σ Γ (List.rev inst) (smash_context [] Δ).
+Proof.
+  intros sub.
+  induction sub as [|Δ0 s0 na t T sub IH ht|Δ0 s0 na t T sub IH ht] in inst |- *; intros cs.
+  - DepElim.depelim cs. constructor.
+  - DepElim.depelim cs.
+    rewrite (smh_smash_context_vass Δ0 na T) List.rev_app_distr /=.
+    constructor; [now apply IH|].
+    eapply meta_convE; [exact ht|].
+    rewrite distr_subst extended_subst_length Nat.add_0_r simpl_subst_k.
+    + rewrite List.length_rev. symmetry. now eapply context_subst_length2.
+    + f_equal. now eapply context_subst_subst_extended_subst.
+  - DepElim.depelim cs. simpl. now apply IH.
+Qed.
+
+(** [PCUICSpine.spine_subst_smash] over [typingE]. *)
+Lemma smh_spine_subst_smash {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ inst s Δ} :
+  spine_substE Σ Γ inst s Δ ->
+  spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ).
+Proof.
+  intros [wfΓ wfΓΔ cs sub].
+  split.
+  - exact wfΓ.
+  - exact (smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ wfΓΔ).
+  - exact (smh_context_subst_smash cs).
+  - exact (smh_subslet_smash sub cs).
+Qed.
+
+(** [PCUICFixWitness.wf_local_nth_error_welltyped] over [typingE] (structural). *)
+Lemma smh_wf_local_nth_error_welltyped {cf : checker_flags} {Σ : global_env_ext} {Γ n c} :
+  wf_localE Σ Γ ->
+  nth_error Γ n = Some c ->
+  welltypedE Σ (skipn (S n) Γ) (decl_type c).
+Proof.
+  induction Γ as [|a Γ ih] in n |- *; intros wf hnth.
+  - now rewrite nth_error_nil in hnth.
+  - destruct (All_local_env_tip wf) as [wfΓ ha].
+    destruct n; cbn in hnth.
+    + case: hnth => <-. rewrite skipn_S skipn_0.
+      destruct a as [na [b|] ty]; cbn in ha |- *.
+      * apply lift_sorting_forget_body in ha.
+        now eapply isTypeRelE_welltypedE.
+      * now eapply isTypeRelE_welltypedE.
+    + rewrite skipn_S. now eapply ih.
+Qed.
+
+(** [PCUICFixWitness.isType_rec_arg_welltyped] over [typingE]. *)
+Lemma smh_isType_rec_arg_welltyped {cf : checker_flags}
+  {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T ctx concl n c} :
+  isTypeE Σ Γ T ->
+  decompose_prod_assum [] T = (ctx, concl) ->
+  nth_error (List.rev (smash_context [] ctx)) n = Some c ->
+  welltypedE Σ (Γ ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx)) (decl_type c).
+Proof.
+  intros isty decomp hnth.
+  have eqty := PCUICSubstitution.decompose_prod_assum_it_mkProd_or_LetIn _ _ _ _ decomp.
+  cbn in eqty. rewrite eqty in isty.
+  apply (isType_it_mkProd_or_LetIn_wf_local_proved (wfΣ := wfΣ)) in isty.
+  apply (smh_wf_local_smash_end (wfΣ := wfΣ)) in isty.
+  have hlt : n < #|smash_context [] ctx|.
+  { have h := nth_error_Some_length hnth. now rewrite List.length_rev in h. }
+  rewrite (nth_error_rev_inv _ _ hlt) in hnth.
+  have hnth' : nth_error (Γ ,,, smash_context [] ctx) (#|smash_context [] ctx| - S n) = Some c.
+  { rewrite /app_context nth_error_app_lt //. lia. }
+  have w := smh_wf_local_nth_error_welltyped isty hnth'.
+  rewrite /app_context in w |- *.
+  have e : S (#|smash_context [] ctx| - S n) = #|smash_context [] ctx| - n by lia.
+  rewrite e skipn_app in w.
+  replace (#|smash_context [] ctx| - n - #|smash_context [] ctx|) with 0 in w by lia.
+  now rewrite skipn_0 in w.
+Qed.
+
+(** *** The rows *)
+
+(** Row 45: [wf_local_smash_end] ([PCUICContexts.wf_local_smash_end]). *)
+Lemma wf_local_smash_end_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ Δ : list context_decl), wf_localE Σ (Γ,,, Δ) -> wf_localE Σ (Γ,,, smash_context [] Δ).
+Proof. intros Σ wfΣ Γ Δ. exact (smh_wf_local_smash_end (wfΣ := wfΣ) Γ Δ). Qed.
+Definition wf_local_smash_end_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@wf_local_smash_end cf H) in exact T) := @wf_local_smash_end_proved cf.
+
+(** Row 44: [wf_local_smash_context] ([PCUICContexts.wf_local_smash_context]: row 45 at [Γ := []]). *)
+Lemma wf_local_smash_context_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context}, wf_localE Σ Γ -> wf_localE Σ (smash_context [] Γ).
+Proof.
+  intros Σ wfΣ Γ wfΓ.
+  have h := smh_wf_local_smash_end (wfΣ := wfΣ) [] Γ.
+  rewrite !app_context_nil_l in h. exact (h wfΓ).
+Qed.
+Definition wf_local_smash_context_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@wf_local_smash_context cf H) in exact T) := @wf_local_smash_context_proved cf.
+
+(** Row 32: [typing_expand_lets] ([PCUICContexts.typing_expand_lets]). *)
+Lemma typing_expand_lets_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} (Γ : list context_decl) (Δ : list context_decl) (t : term) (T : term), Σ;;; Γ,,, Δ |-E t : T -> Σ;;; Γ,,, smash_context [] Δ |-E expand_lets Δ t : expand_lets Δ T.
+Proof. intros Σ wfΣ Γ Δ t T. exact (smh_typing_expand_lets (wfΣ := wfΣ) Γ Δ t T). Qed.
+Definition typing_expand_lets_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@typing_expand_lets cf H) in exact T) := @typing_expand_lets_proved cf.
+
+(** Row 43: [wf_local_expand_lets] ([PCUICInductives.wf_local_expand_lets]). *)
+Lemma wf_local_expand_lets_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : list context_decl} {Δ : list context_decl} {Γ' : list context_decl}, wf_localE Σ (Γ,,, Δ,,, Γ') -> wf_localE Σ (Γ,,, smash_context [] Δ,,, expand_lets_ctx Δ Γ').
+Proof. intros Σ wfΣ Γ Δ Γ'. exact (smh_wf_local_expand_lets (wfΣ := wfΣ)). Qed.
+Definition wf_local_expand_lets_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@wf_local_expand_lets cf H) in exact T) := @wf_local_expand_lets_proved cf.
+
+(** Row 28: [spine_subst_smash] ([PCUICSpine.spine_subst_smash]). *)
+Lemma spine_subst_smash_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {inst : list term} {s : list term} {Δ : context}, spine_substE Σ Γ inst s Δ -> spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ).
+Proof. intros Σ wfΣ Γ inst s Δ. exact (smh_spine_subst_smash (wfΣ := wfΣ)). Qed.
+Definition spine_subst_smash_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@spine_subst_smash cf H) in exact T) := @spine_subst_smash_proved cf.
+
+(** Row 18: [isType_rec_arg_welltyped] ([PCUICFixWitness.isType_rec_arg_welltyped]). *)
+Lemma isType_rec_arg_welltyped_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {ctx : context} {concl : term} {n : nat} {c : context_decl}, isTypeE Σ Γ T -> decompose_prod_assum [] T = (ctx, concl) -> nth_error (List.rev (smash_context [] ctx)) n = Some c -> welltypedE Σ (Γ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx)) (decl_type c).
+Proof.
+  intros Σ wfΣ Γ T ctx concl n c.
+  exact (smh_isType_rec_arg_welltyped (wfΣ := wfΣ)).
+Qed.
+Definition isType_rec_arg_welltyped_fits {cf : checker_flags} (H : @T0_facts cf) :
+  ltac:(let T := type of (@isType_rec_arg_welltyped cf H) in exact T) := @isType_rec_arg_welltyped_proved cf.
+
 (** ** Duplicate GENUINE hypotheses (audit C §4.2): each derivation below obtains one GENUINE hypothesis
     from ONE GENUINE hypothesis of another file, by glue only (instantiation, [wf_extE_wfE], a squash,
     the proved symmetry [ws_cumul_ctx_pbE_sym], the embedding of base stacks into η stacks). These are
@@ -1773,6 +2065,12 @@ Print Assumptions typing_spine_strengthen_proved.
 Print Assumptions spine_subst_cumul_proved.
 Print Assumptions ctx_inst_spine_subst_proved.
 Print Assumptions arity_typing_spine_proved.
+Print Assumptions wf_local_smash_end_proved.
+Print Assumptions wf_local_smash_context_proved.
+Print Assumptions typing_expand_lets_proved.
+Print Assumptions wf_local_expand_lets_proved.
+Print Assumptions spine_subst_smash_proved.
+Print Assumptions isType_rec_arg_welltyped_proved.
 
 (** Base comparison: the base twins carry the same axioms. ([depelim] here is Equations' [DepElim.depelim]:
     the import block loads [Program.Equality] after Equations, whose [depelim] would add [eq_rect_eq].) *)
