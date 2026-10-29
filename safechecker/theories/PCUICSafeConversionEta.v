@@ -42,6 +42,12 @@
      ∥ ws_cumul_ctx_pbE Conv Σ (Γ ,,, stack_context_eta π1) (Γ ,,, stack_context_eta π2) ∥].
      Base's [R_aux_irrelevance], [R_irrelevance], [R_cored], [R_aux_cored2], [R_cored2] over the
      K4 pack are in K4 since 767d50c6 (CONTRACTS K4 entry 07:47Z).
+   HINT PARITY (registrations that differ from base PCUICSafeConversion.v):
+   - conv_cum_trans -> E twin conv_cumE_trans (ClosedBodies), registered as base does
+     (top-level plain [Instance]).
+   - eqt_refl (base: [Local Instance] in the section, for the local measure) -> none here,
+     because this file defines no [eqt]: the measure, [eqt] and its [Local Instance eqt_refl]
+     are in PCUICSafeConversionEtaK4, which declares them as base does.
    ============================================================================================= *)
 From Stdlib Require Import ProofIrrelevance ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -81,6 +87,17 @@ Local Set Keyed Unification.
 Set Default Goal Selector "!".
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
+
+(* The E counterpart of base [conv_cum], and of base's [conv_cum_trans] instance, registered
+   as base registers it (top level, plain [Instance]). Base needs [wf Σ]; the E environment
+   gives [ClosedBodies Σ] ([abstract_env_ext_closed_bodies]), all A3's transitivity needs. *)
+Definition conv_cumE {cf : checker_flags} leq Σ Γ t u := ∥ ws_cumul_pbE leq Σ Γ t u ∥.
+
+Instance conv_cumE_trans {cf leq} {Σ : global_env_ext} {Γ} :
+  ClosedBodies Σ -> RelationClasses.Transitive (@conv_cumE cf leq Σ Γ).
+Proof.
+  intros cb x y z [h1] [h2]. constructor. etransitivity; eassumption.
+Qed.
 
 #[global]
 Instance red_brs_refl Σ p Γ: CRelationClasses.Reflexive (@red_brs Σ p Γ).
@@ -237,15 +254,7 @@ Section Conversion.
   Notation conv_stack_ctx Γ π1 π2 :=
     (PCUICSafeConversionEtaK4.conv_stack_ctx_eta X Γ π1 π2) (only parsing).
 
-  (* The E counterpart of base [conv_cum]. *)
-  Definition conv_cumE leq Σ Γ t u := ∥ ws_cumul_pbE leq Σ Γ t u ∥.
-
-  (* Base [conv_cum_trans] took [wf Σ]; the E environment gives [ClosedBodies Σ]
-     ([abstract_env_ext_closed_bodies]), which is all A3's transitivity needs. *)
-  Lemma conv_cumE_trans {leq Σ Γ} : ClosedBodies Σ -> RelationClasses.Transitive (conv_cumE leq Σ Γ).
-  Proof using Type.
-    intros cb x y z [h1] [h2]. constructor. etransitivity; eassumption.
-  Qed.
+  (* [conv_cumE] and its transitivity instance [conv_cumE_trans] are at the top of the file. *)
 
   (* I7 S13: [conv_term] reads the η views, in the η context of side 1. *)
   Notation conv_term leq Γ t π t' π' :=
@@ -4055,38 +4064,38 @@ Equations (noeqns) isconv_array_values_aux
   (* ---- Slice D helpers (EtaConv): views of the frames the argument machinery pushes, the
      virtual tail, and the invariant tactics of slice D's obligations. ---- *)
   Lemma zipp_eta_App_r u x π : zipp_eta u (App_r x :: π) = eta_rename π 0 u.
-  Proof using Type. reflexivity. Qed.
+  Proof using All. reflexivity. Qed.
 
   Lemma stack_context_eta_App_r x π : stack_context_eta (App_r x :: π) = stack_context_eta π.
-  Proof using Type. reflexivity. Qed.
+  Proof using All. reflexivity. Qed.
 
   Lemma zipp_eta_Eta_arg_nil t u π : zipp_eta t (Eta_arg u [] :: π) = t.
-  Proof using Type. reflexivity. Qed.
+  Proof using All. reflexivity. Qed.
 
   Lemma zipc_App_r_mkApps t args u l θ :
     zipc u (App_r (mkApps t args) :: appstack l θ) = zipc t (appstack (args ++ u :: l) θ).
-  Proof using Type. cbn [zipc fill_hole]. rewrite !zipc_appstack mkApps_app. reflexivity. Qed.
+  Proof using All. cbn [zipc fill_hole]. rewrite !zipc_appstack mkApps_app. reflexivity. Qed.
 
   Lemma zipc_tApp_mkApps t args u l θ :
     zipc (tApp (mkApps t args) u) (appstack l θ) = zipc t (appstack (args ++ u :: l) θ).
-  Proof using Type. rewrite !zipc_appstack mkApps_app. reflexivity. Qed.
+  Proof using All. rewrite !zipc_appstack mkApps_app. reflexivity. Qed.
 
   Lemma decompose_stack_nostack θ : isStackApp θ = false -> decompose_stack θ = ([], θ).
-  Proof using Type. destruct θ as [|[] θ]; cbn; first [reflexivity | discriminate]. Qed.
+  Proof using All. destruct θ as [|[] θ]; cbn; first [reflexivity | discriminate]. Qed.
 
   Lemma nth_error_skipn_cons {A} (l : list A) j x :
     nth_error l j = Some x -> skipn j l = x :: skipn (S j) l.
-  Proof using Type.
+  Proof using All.
     induction l as [|a l IH] in j |- *; destruct j as [|j]; cbn; intros h; try discriminate h.
     - now injection h as ->.
     - now apply IH.
   Qed.
 
   Lemma eta_virtuals_cons m : eta_virtuals (S m) = tRel m :: eta_virtuals m.
-  Proof using Type. unfold eta_virtuals. rewrite seq_S rev_app_distr. reflexivity. Qed.
+  Proof using All. unfold eta_virtuals. rewrite seq_S rev_app_distr. reflexivity. Qed.
 
   Lemma skipn_eta_virtuals j m : skipn j (eta_virtuals m) = eta_virtuals (m - j).
-  Proof using Type.
+  Proof using All.
     induction j as [|j IH] in m |- *; [now rewrite Nat.sub_0_r|].
     destruct m as [|m]; [reflexivity|].
     rewrite eta_virtuals_cons. exact (IH m).
@@ -4094,11 +4103,11 @@ Equations (noeqns) isconv_array_values_aux
 
   Lemma skipn_eta_virtuals_focus j m : j < m ->
     skipn j (eta_virtuals m) = virtual_focus m j :: skipn (S j) (eta_virtuals m).
-  Proof using Type. intros h. apply nth_error_skipn_cons, virtual_focus_nth, h. Qed.
+  Proof using All. intros h. apply nth_error_skipn_cons, virtual_focus_nth, h. Qed.
 
   Lemma eta_virtuals_open Γ π m : m <= eta_run π ->
     forallb (is_open_term (Γ ,,, stack_context_eta π)) (eta_virtuals m).
-  Proof using Type.
+  Proof using All.
     induction m as [|m IH]; [reflexivity|]. intros hm.
     rewrite eta_virtuals_cons. cbn [forallb]. rewrite (IH ltac:(lia)) andb_true_r.
     destruct (stack_context_eta_run_vass π m ltac:(lia)) as [decl [hn _]].
@@ -4108,32 +4117,32 @@ Equations (noeqns) isconv_array_values_aux
 
   Lemma zip_appstack_nil_base t args :
     PCUICPosition.zip (t, PCUICPosition.appstack args []) = mkApps t args.
-  Proof using Type.
+  Proof using All.
     unfold PCUICPosition.zip. cbn [fst snd]. rewrite PCUICPosition.zipc_appstack. reflexivity.
   Qed.
 
   Lemma decompose_stack_noStackApp_eta π l ρ : decompose_stack π = (l, ρ) -> isStackApp ρ = false.
-  Proof using Type.
+  Proof using All.
     induction π as [|[] π IH] in l, ρ |- *; cbn; intros e; try (now inversion e).
     destruct (decompose_stack π) as [l' ρ'] eqn:e'. inversion e; subst. now apply (IH l').
   Qed.
 
   Lemma stack_context_eta_decompose π : stack_context_eta π = stack_context_eta (decompose_stack π).2.
-  Proof using Type.
+  Proof using All.
     destruct (decompose_stack π) as [l ρ] eqn:e. cbn [snd].
     rewrite (decompose_stack_eq _ _ _ e). apply stack_context_eta_appstack.
   Qed.
 
   Lemma ws_cumul_ctx_pbE_length pb Σ Δ Δ' : ws_cumul_ctx_pbE pb Σ Δ Δ' -> #|Δ| = #|Δ'|.
-  Proof using Type. induction 1; cbn; congruence. Qed.
+  Proof using All. induction 1; cbn; congruence. Qed.
 
   Lemma zipp_eta_Lambda_bd b na A π : zipp_eta b (Lambda_bd na A :: π) = eta_rename π 1 b.
-  Proof using Type. reflexivity. Qed.
+  Proof using All. reflexivity. Qed.
 
   Lemma eta_lambda_open Γ na A b π :
     is_open_term (Γ ,,, stack_context_eta π) (zipp_eta (tLambda na A b) π) ->
     is_open_term (Γ ,,, stack_context_eta π) (eta_rename π 0 A).
-  Proof using Type.
+  Proof using All.
     unfold zipp_eta. rewrite on_free_vars_mkApps. move/andP => [h _].
     rewrite eta_rename_tLambda in h. cbn [on_free_vars] in h. now move/andP: h => [? _].
   Qed.
@@ -4142,7 +4151,7 @@ Equations (noeqns) isconv_array_values_aux
   Lemma zipp_eta_lambda_whnf Γ na A b π :
     isred_full Γ (tLambda na A b) π ->
     zipp_eta (tLambda na A b) π = tLambda na (eta_rename π 0 A) (eta_rename π 1 b).
-  Proof using Type.
+  Proof using All.
     intros [_ ir]. destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     destruct (ir Σ wfΣ) as [ir'].
     destruct (whnf_zipp_eta_rigid _ _ _ _ ir' eq_refl) as [hargs hrun].
@@ -4156,7 +4165,7 @@ Equations (noeqns) isconv_array_values_aux
     welltypedE Σ Γ (zipc fn (appstack l θ)) ->
     red Σ (Γ ,,, stack_context θ) (mkApps fn l) (mkApps fn' l') ->
     welltypedE Σ Γ (zipc fn' (appstack l' θ)).
-  Proof using reduce_factsE.
+  Proof using All.
     intros hw r. destruct (heΣ _ wfΣ) as [hΣe]. rewrite zipc_appstack in hw. rewrite zipc_appstack.
     eapply (wt_red (wt := welltypedE) (wfP := wf_extE)); [exact hΣe|exact hw|].
     now apply red_context_zip_eta.
@@ -4168,7 +4177,7 @@ Equations (noeqns) isconv_array_values_aux
     (forall Σ, abstract_env_ext_rel X Σ ->
        ∥ whnf RedFlags.nodelta Σ (Γ ,,, stack_context θ) (mkApps t' l') ∥) ->
     isred_full Γ t' (appstack l' θ).
-  Proof using Type.
+  Proof using All.
     intros hna hθ hok hap hw. split; [exact hap|]. intros Σ wfΣ. destruct (hw Σ wfΣ) as [w].
     have e := zipp_eta_appstack_snd t' l' θ.
     rewrite (decompose_stack_nostack θ hθ) in e. cbn [snd] in e.
@@ -4542,7 +4551,7 @@ Equations (noeqns) isconv_array_values_aux
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ ci p c brs h t,
       Some t = unfold_one_case Γ ci p c brs h ->
       cored Σ Γ t (tCase ci p c brs).
-  Proof using reduce_factsE.
+  Proof using All.
     intros Σ wfΣ Γ ci p c brs h t e.
     revert e.
     funelim (unfold_one_case Γ ci p c brs h).
@@ -4598,7 +4607,7 @@ Equations (noeqns) isconv_array_values_aux
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ p c h t,
       Some t = unfold_one_proj Γ p c h ->
       cored Σ Γ t (tProj p c).
-  Proof using reduce_factsE.
+  Proof using All.
     intros Σ wfΣ Γ p c h t e.
     revert e.
     funelim (unfold_one_proj Γ p c h).
@@ -4686,20 +4695,16 @@ Equations (noeqns) isconv_array_values_aux
     | e : Some _ = unfold_one_proj _ _ _ _ |- _ => pose proof (unfold_one_proj_cored _ wfΣ _ _ _ _ _ e) as rc
     | e : unfold_one_proj _ _ _ _ = Some _ |- _ => pose proof (unfold_one_proj_cored _ wfΣ _ _ _ _ _ (eq_sym e)) as rc
     end.
-  Ltac etakD_delta wfΣ :=
-    match type of wfΣ with abstract_env_ext_rel _ ?Σ =>
-    match goal with
-    | e : Some (ConstantDecl ?d) = abstract_env_lookup X ?c |- _ =>
-      let hl := fresh "hl" in
-      assert (hl : declared_constant Σ c d)
-        by exact (eq_trans (abstract_env_lookup_correct' X c wfΣ) (eq_sym e));
-      eapply red_delta; [ exact hl | reflexivity ] end end.
+  Ltac etakD_delta_red wfΣ := match goal with
+    | e : Some (ConstantDecl _) = abstract_env_lookup X _ |- _ => exact (A_const_red _ wfΣ _ _ _ _ _ e eq_refl) end.
+  Ltac etakD_delta_cored wfΣ := match goal with
+    | e : Some (ConstantDecl _) = abstract_env_lookup X _ |- _ => exact (A_const_cored _ wfΣ _ _ _ _ _ e eq_refl) end.
 
   Lemma reducible_head_red_zipp :
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ,
       Some (fn, ξ) = reducible_head Γ t π h ->
       ∥ red (fst Σ) (Γ ,,, stack_context π) (zipp t π) (zipp fn ξ) ∥.
-  Proof using reduce_factsE.
+  Proof using All.
     intros Σ wfΣ Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
@@ -4708,7 +4713,7 @@ Equations (noeqns) isconv_array_values_aux
                        exact (fst (snd (unfold_one_prim_facts _ _ _ _ _ _ _ _ ee)) _ wfΣ) end ].
     all: try solve [ eapply unfold_one_fix_red_zipp; eauto ].
     all: try solve [ constructor; unfold zipp; destruct (decompose_stack π) as [l ρ];
-                     apply red_mkApps_f; apply red1_red; etakD_delta wfΣ ].
+                     apply red_mkApps_f; etakD_delta_red wfΣ ].
     all: try solve [ etakD_case_proj_cored wfΣ; apply cored_red in rc; destruct rc as [rc];
                      constructor; unfold zipp; destruct (decompose_stack π) as [l ρ];
                      apply red_mkApps_f; exact rc ].
@@ -4718,7 +4723,7 @@ Equations (noeqns) isconv_array_values_aux
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ,
       Some (fn, ξ) = reducible_head Γ t π h ->
       cored Σ Γ (zipc fn ξ) (zipc t π).
-  Proof using reduce_factsE.
+  Proof using All.
     intros Σ wfΣ Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
@@ -4726,7 +4731,7 @@ Equations (noeqns) isconv_array_values_aux
     all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ _ |- _ =>
                        exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ _ ee))) _ wfΣ) end ].
     all: try solve [ eapply unfold_one_fix_cored; eauto ].
-    all: try solve [ eapply cored_context_eta; [ etakD_hna | constructor; etakD_delta wfΣ ] ].
+    all: try solve [ eapply cored_context_eta; [ etakD_hna | etakD_delta_cored wfΣ ] ].
     all: try solve [ eapply cored_context_eta; [ etakD_hna | etakD_case_proj_cored wfΣ; exact rc ] ].
   Qed.
 
@@ -4734,11 +4739,11 @@ Equations (noeqns) isconv_array_values_aux
     forall Γ t π h fn ξ,
       Some (fn, ξ) = reducible_head Γ t π h ->
       snd (decompose_stack π) = snd (decompose_stack ξ).
-  Proof using Type.
+  Proof using All.
     intros Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
-    all: intro ee ; try (injection ee; intros; subst).
+    all: intro ee ; try discriminate ee ; try (injection ee; intros; subst).
     all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ _ |- _ =>
       destruct (unfold_one_prim_shape _ _ _ _ _ _ _ _ ee) as (args & ρ & l & [ed eξ _ _]);
       rewrite ed; subst; rewrite decompose_stack_appstack;
@@ -4750,11 +4755,11 @@ Equations (noeqns) isconv_array_values_aux
   (* rev 14 B4: a Some answer of reducible_head means its guard held. *)
   Lemma unfold_one_fix_Some_guard Γ mfix idx π h r :
     Some r = unfold_one_fix Γ mfix idx π h -> no_Eta_arg π = true.
-  Proof using Type. funelim (unfold_one_fix Γ mfix idx π h); intros ee; congruence. Qed.
+  Proof using All. funelim (unfold_one_fix Γ mfix idx π h); intros ee; congruence. Qed.
 
   Lemma reducible_head_Some_guard Γ t π h r :
     Some r = reducible_head Γ t π h -> no_Eta_arg π = true.
-  Proof using Type.
+  Proof using All.
     funelim (reducible_head Γ t π h); intros ee; try congruence.
     all: eapply unfold_one_fix_Some_guard; eassumption.
   Qed.
@@ -4762,7 +4767,7 @@ Equations (noeqns) isconv_array_values_aux
   Lemma reducible_head_stack Γ t π h fn ξ l θ :
     Some (fn, ξ) = reducible_head Γ t π h -> (l, θ) = decompose_stack ξ ->
     [× ξ = appstack l θ, (decompose_stack π).2 = θ, no_Eta_arg θ = true & isStackApp θ = false].
-  Proof using Type.
+  Proof using All.
     intros e ed.
     have eξ := decompose_stack_eq _ _ _ (eq_sym ed).
     have hd := reducible_head_decompose _ _ _ _ _ _ e. rewrite -ed in hd. cbn [snd] in hd.
@@ -4775,7 +4780,7 @@ Equations (noeqns) isconv_array_values_aux
 
   Lemma reducible_head_wt Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ :
     Some (fn, ξ) = reducible_head Γ t π h -> welltypedE Σ Γ (zipc fn ξ).
-  Proof using reduce_factsE.
+  Proof using All.
     intros e. destruct (heΣ _ wfΣ) as [hΣe].
     pose proof (reducible_head_cored _ wfΣ _ _ _ _ _ _ e) as hc. apply cored_red in hc as [r].
     exact (wt_red (wt := welltypedE) (wfP := wf_extE) Σ Γ _ _ hΣe (h _ wfΣ) r).
@@ -4785,7 +4790,7 @@ Equations (noeqns) isconv_array_values_aux
     Some (fn, ξ) = reducible_head Γ t π h -> (l, θ) = decompose_stack ξ ->
     red Σ (Γ ,,, stack_context ξ) (mkApps fn l) (mkApps fn' l') ->
     ∥ red Σ (Γ ,,, stack_context π) (zipp t π) (mkApps fn' l') ∥.
-  Proof using reduce_factsE.
+  Proof using All.
     intros e ed r.
     destruct (reducible_head_stack _ _ _ _ _ _ _ _ e ed) as [eξ hd hna hst].
     destruct (reducible_head_red_zipp _ wfΣ _ _ _ _ _ _ e) as [rz].
@@ -4804,7 +4809,7 @@ Equations (noeqns) isconv_array_values_aux
     ∥ wf_localE Σ (Γ ,,, stack_context_eta π) ∥ ->
     red Σ (Γ ,,, stack_context π) (zipp t π) (mkApps t' l') ->
     ∥ Σ ;;; Γ ,,, stack_context_eta π ⊢ zipp_eta t π ⇝ zipp_eta t' (appstack l' θ) ∥.
-  Proof using reduce_factsE conv_factsE.
+  Proof using All.
     intros hd hna ht [w] hr.
     destruct (heΣ _ wfΣ) as [hΣe]. destruct (hΣ _ wfΣ) as [cb].
     unfold zipp in hr.
@@ -4820,7 +4825,7 @@ Equations (noeqns) isconv_array_values_aux
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π) ∥) ->
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ red Σ (Γ ,,, stack_context π) (zipp t π) (mkApps t' l') ∥) ->
     conv_term leq Γ t' (appstack l' θ) t2 π2 -> conv_term leq Γ t π t2 π2.
-  Proof using reduce_factsE conv_factsE.
+  Proof using All.
     intros hd hna ht hwf hr hc Σ wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
     destruct (hr Σ wfΣ) as [r]. destruct (hc Σ wfΣ) as [c].
@@ -4837,7 +4842,7 @@ Equations (noeqns) isconv_array_values_aux
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π) ∥) ->
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ red Σ (Γ ,,, stack_context π) (zipp t π) (mkApps t' l') ∥) ->
     conv_term leq Γ t1 π1 t' (appstack l' θ) -> conv_term leq Γ t1 π1 t π.
-  Proof using reduce_factsE conv_factsE.
+  Proof using All.
     intros hd hna ht hx hwf hr hc Σ wfΣ.
     destruct (hΣ _ wfΣ) as [cb].
     destruct (hr Σ wfΣ) as [r]. destruct (hc Σ wfΣ) as [c]. destruct (hx Σ wfΣ) as [x].
@@ -4846,7 +4851,7 @@ Equations (noeqns) isconv_array_values_aux
   Qed.
 
   (* The η step, side 1 a λ: the recursive Reduction-state result (a TERM fact) under the λ's
-     binder, into the conclusion by K6 ([K6_eta_step], plan row K6). *)
+     binder, into the conclusion by K6 ([K6_eta_step_join], the join form of [K6_eta_step], plan row K6). *)
   Lemma eta_step_sound_left leq Γ na A b π1 t2 π2 args2 ρ2 :
     (args2, ρ2) = decompose_stack π2 ->
     isred_full Γ (tLambda na A b) π1 ->
@@ -4857,7 +4862,7 @@ Equations (noeqns) isconv_array_values_aux
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π2) ∥) ->
     conv_term Conv Γ b (Lambda_bd na A :: π1) t2 (appstack args2 (Eta_app na (eta_rename π1 0 A) :: ρ2)) ->
     conv_term leq Γ (tLambda na A b) π1 t2 π2.
-  Proof using reduce_factsE.
+  Proof using All.
     intros e2 ir ht1 hv1 ht2 hv2 hx hwf1 hwf2 hc Σ wfΣ.
     destruct (heΣ _ wfΣ) as [hΣe]. destruct (hΣ _ wfΣ) as [cb].
     destruct (hc Σ wfΣ) as [c]. destruct (hx Σ wfΣ) as [x].
@@ -4879,8 +4884,9 @@ Equations (noeqns) isconv_array_values_aux
     { rewrite (ws_cumul_ctx_pbE_length _ _ _ _ x).
       eapply zipp_eta_open; [exact hv2| |exact (wf_local_closed_contextE (wfΣ := wf_extE_wfE _ hΣe) w2)].
       exact (ref_open_term (wt := welltypedE) (wfP := wf_extE) _ _ _ hΣe (ht2 _ wfΣ)). }
-    exact (K6_eta_step Σ cb (Γ ,,, stack_context_eta π1) leq na (eta_rename π1 0 A)
-             (eta_rename π1 1 b) (zipp_eta t2 π2) hcl1 hl hu (wsE_join c)).
+    exact {| wsE_ctx := hcl1; wsE_left := hl; wsE_right := hu;
+             wsE_join := K6_eta_step_join Σ cb (Γ ,,, stack_context_eta π1) leq na (eta_rename π1 0 A)
+                           (eta_rename π1 1 b) (zipp_eta t2 π2) hcl1 hl hu (wsE_join c) |}.
   Qed.
 
   (* The η step, side 2 a λ (symmetric; ws_cumul_pbE_eta_r is K6 through symmetry). *)
@@ -4891,7 +4897,7 @@ Equations (noeqns) isconv_array_values_aux
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π1) ∥) ->
     conv_term Conv Γ t1 (appstack args1 (Eta_app na (eta_rename π2 0 A) :: ρ1)) b (Lambda_bd na A :: π2) ->
     conv_term leq Γ t1 π1 (tLambda na A b) π2.
-  Proof using reduce_factsE.
+  Proof using All.
     intros e1 ir ht1 hv1 hwf1 hc Σ wfΣ.
     destruct (heΣ _ wfΣ) as [hΣe]. destruct (hΣ _ wfΣ) as [cb].
     destruct (hc Σ wfΣ) as [c]. destruct (hwf1 Σ wfΣ) as [w1].
@@ -4915,7 +4921,7 @@ Equations (noeqns) isconv_array_values_aux
     wtp Γ t π -> virt_ok t π = true ->
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ wf_localE Σ (Γ ,,, stack_context_eta π) ∥) ->
     wf_universes Σ (eta_rename π 0 t).
-  Proof using reduce_factsE conv_factsE typingE_rename_P.
+  Proof using All.
     intros ht hv hwf. destruct (heΣ _ wfΣ) as [hΣe]. destruct (hwf Σ wfΣ) as [w].
     destruct (no_Eta_arg π) eqn:hna.
     - have h1 := ctf_context Σ Γ t π hΣe hna (ht Σ wfΣ). destruct h1 as [T hT].
@@ -4953,7 +4959,7 @@ Equations (noeqns) isconv_array_values_aux
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ ws_cumul_pbE_terms Σ (Γ ,,, stack_context_eta π1)
         (decompose_stack_eta π1).1 (decompose_stack_eta π2).1 ∥) ->
     conv_term leq Γ t1 π1 t2 π2.
-  Proof using reduce_factsE conv_factsE typingE_rename_P cmpb_heads_ws.
+  Proof using All.
     intros ht1 ht2 hv1 hv2 hx hwf1 hwf2 hc ha Σ wfΣ.
     destruct (heΣ _ wfΣ) as [hΣe]. destruct (ha Σ wfΣ) as [a]. destruct (hx Σ wfΣ) as [x].
     destruct (hwf1 Σ wfΣ) as [w1]. destruct (hwf2 Σ wfΣ) as [w2].
@@ -4980,9 +4986,10 @@ Equations (noeqns) isconv_array_values_aux
     (forall Σ, abstract_env_ext_rel X Σ -> ∥ ws_cumul_pbE_terms Σ (Γ ,,, stack_context_eta π1)
         (decompose_stack_eta π1).1 (decompose_stack_eta π2).1 ∥) ->
     conv_term leq Γ t1 π1 t2 π2.
-  Proof using reduce_factsE conv_factsE typingE_rename_P.
+  Proof using All.
     intros ht1 ht2 hv1 hv2 hwf1 hwf2 hk ha Σ wfΣ.
-    destruct (heΣ _ wfΣ) as [hΣe]. destruct (ha Σ wfΣ) as [a]. destruct (hwf1 Σ wfΣ) as [w1].
+    destruct (heΣ _ wfΣ) as [hΣe]. destruct (hΣ _ wfΣ) as [cb].
+    destruct (ha Σ wfΣ) as [a]. destruct (hwf1 Σ wfΣ) as [w1].
     constructor. unfold zipp_eta.
     eapply (must_expand_check_sound Σ (abstract_env_lookup X) eqb_term abstract_env_compare_global_instance leq).
     - intros gr n u u' hu hu' hcmp. exact (proj2 (compare_global_instance_correct wfΣ Conv gr n u u' hu hu') hcmp).
