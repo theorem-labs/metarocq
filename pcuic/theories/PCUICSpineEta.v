@@ -683,7 +683,7 @@ Qed.*)
     split; auto.
     eapply PCUICWeakeningTypEta.weaken_wf_localE => //.
     rewrite -app_context_assoc. eapply PCUICWeakeningTypEta.weaken_wf_localE => //.
-    eapply PCUICSpineEta.weaken_subsletE; eauto.
+    eapply WfEnv.weaken_subsletE; eauto.
   Qed.
 
   Lemma spine_subst_app_invE {Γ Δ Δ' inst inst' insts} :
