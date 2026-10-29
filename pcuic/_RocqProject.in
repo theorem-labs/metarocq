@@ -223,6 +223,8 @@ theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
+# FORECAST-ONLY (fc/etak-forecast1, FO4): a non-degenerate instance in the region the BET-339 side condition admits
+theories/PCUICEtaFO4Instances.v
 # K3a: the semantic and typed lemmas about the eta views of PCUICPositionEta
 theories/PCUICPositionEtaTyping.v
 # theories/All.v
