@@ -72,19 +72,6 @@ Local Set SimplIsCbn.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
-(* The E twins of the lemmas below carry no global hint, while base registers each lemma
-   globally; the proofs of this file see them through these local registrations (the two that
-   the proofs need, found by removing each of copy 15's eight replays and building). *)
-(* replays base's global hint isTypeRel_is_open_term (PCUICContextConversion.v:1022); removed when the E file registers it globally *)
-#[local] Hint Resolve isTypeRel_is_open_termE : fvs.
-(* replays base's global hint Extern 4 (wf_local _ ?Γ) (PCUICTyping.v:632); removed when the E file registers it globally *)
-#[local] Hint Extern 4 (wf_localE _ ?Γ) =>
-  match goal with
-  | [ H : typingE _ _ _ _ |- _ ] => exact (typingE_wf_local H)
-  | [ H : lift_typing0 (typingE _ _) _ |- _ ] => exact (lift_typingE_wf_local H)
-  | [ H : PCUICEnvTyping.lift_typing (typingE _ _) _ |- _ ] => exact (lift_typingE_wf_local H)
-  end : pcuic.
-
 (** The twin of [PCUICCumulativity.conv_ctx_refl] (the instance that base's [Hint Resolve
     conv_ctx_refl : pcuic] resolves to): reflexivity of context conversion over [JoinE]. *)
 Lemma conv_ctx_reflE {cf : checker_flags} (Σ : global_env_ext) :
