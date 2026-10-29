@@ -34,7 +34,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICUn
      PCUICWsCumulEtaSubst PCUICEtaA6 PCUICEtaA6Ind.
 From MetaRocq.PCUIC.Typing Require PCUICContextConversionTypEta PCUICUnivSubstitutionTypEta
      PCUICWeakeningTypEta PCUICWeakeningEnvTypEta PCUICInstTypEta PCUICRenameTypEta.
-From MetaRocq.PCUIC Require Import PCUICInstDef PCUICInstConv PCUICInstDefEta PCUICTypingEtaInd.
+From MetaRocq.PCUIC Require Import PCUICInstDef PCUICInstConv PCUICInstDefEta PCUICTypingEtaInd
+     PCUICInversionEta.
 From MetaRocq.PCUIC Require PCUICClosedTypEta BDToPCUICEta BDFromPCUICEta PCUICEtaT8Probe PCUICEtaT8BackSim.
 From MetaRocq.PCUIC Require Import PCUICValidityEta PCUICSREta.
 From Equations Require Import Equations.
@@ -758,6 +759,53 @@ Definition typing_expand_lets_genE_fit (F : SRForecastCopy16) :=
   (@typing_expand_lets_genE_landed
      : ltac:(let t := type of (@typing_expand_lets_genE F) in exact t)).
 
+(** [on_minductive_wf_params_indices_instE] (copy 16 of T2a, PCUICValidityEta.v:320), base
+    [on_minductive_wf_params_indices_inst] (PCUICInductives.v:295) through
+    [on_minductive_wf_params_indices] (:247) and [it_mkProd_or_LetIn_wf_local]
+    (PCUICArities.v:645). Landed: [on_declared_inductiveE] (field [onArityRed]),
+    [inversion_LetInE] / [inversion_ProdE] (PCUICInversionEta.v:198, :165, no forecast),
+    [wf_local_instantiateE]. DISCHARGED. *)
+Lemma it_mkProd_or_LetIn_wf_localE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Δ T U} :
+  Σ ;;; Γ |-E it_mkProd_or_LetIn Δ T : U -> wf_localE Σ (Γ ,,, Δ).
+Proof.
+  revert Γ T U. induction Δ as [|x Δ IH] using rev_ind; intros Γ T U.
+  - intros h. exact (typingE_wf_local h).
+  - rewrite it_mkProd_or_LetIn_app /=. intros h.
+    have e : Γ ,,, (Δ ++ [x]) = (Γ ,, x) ,,, Δ by rewrite /app_context -app_assoc.
+    rewrite e.
+    destruct x as [na [b|] ty]; cbn in h.
+    + first [ destruct (inversion_LetInE Σ wfΣ h) as (A & _ & hc & _)
+            | destruct (inversion_LetInE Σ h) as (A & _ & hc & _) ].
+      exact (IH _ _ _ hc).
+    + first [ destruct (inversion_ProdE Σ wfΣ h) as (s1 & s2 & _ & hB & _)
+            | destruct (inversion_ProdE Σ h) as (s1 & s2 & _ & hB & _) ].
+      exact (IH _ _ _ hB).
+Qed.
+
+Lemma on_minductive_wf_params_indices_instE_landed :
+  forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+    {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body}
+    (decli : declared_inductive Σ ind mdecl idecl) (u : Instance.t),
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  wf_localE Σ ((ind_params mdecl ,,, ind_indices idecl)@[u]).
+Proof.
+  intros cf Σ wfΣ mdecl ind idecl decli u cu.
+  have wfpi : wf_localE (Σ.1, ind_universes mdecl) (ind_params mdecl ,,, ind_indices idecl).
+  { destruct (PCUICWeakeningEnvTypEta.on_declared_inductiveE (wfΣ := wfΣ) decli) as [_ oib].
+    pose proof (onArityRed oib) as ona.
+    rewrite -it_mkProd_or_LetIn_app in ona.
+    destruct ona as (_ & s & Hs & _).
+    eapply (it_mkProd_or_LetIn_wf_localE (Σ := (Σ.1, ind_universes mdecl)) (wfΣ := wfΣ)) in Hs.
+    now rewrite app_context_nil_l in Hs. }
+  have H := proj1 decli.
+  unshelve epose proof (declared_minductive_to_gen H); eauto with pcuic.
+  eapply (PCUICUnivSubstitutionTypEta.wf_local_instantiateE (decl := InductiveDecl mdecl)); eauto.
+Qed.
+
+Definition on_minductive_wf_params_indices_instE_fit (F : ValForecastCopy16) :=
+  (@on_minductive_wf_params_indices_instE_landed
+     : ltac:(let t := type of (@on_minductive_wf_params_indices_instE F) in exact t)).
+
 (** ** Whole classes with every field discharged: instances from landed theorems only *)
 
 Definition SRForecastCopy10_landed : SRForecastCopy10 :=
@@ -1163,6 +1211,36 @@ Proof.
   exists w. split; [exact hw|exact (PCUICEtaT8Probe.pe_to_eta _ _ hp)].
 Qed.
 
+(** ** T8: the η-at-the-root case of the parallel postponement (REDUCED to the statement on the
+    body)
+
+  Open part of [PCUICEtaT8Probe] (status block, :2584-2586): "the generic η-at-the-root case
+  ([pe_eta] source, any [red1] step): [pp_root] with the IH on the body". The case follows from
+  landed pieces exactly as [pp_root] (PCUICEtaT8Probe.v:265) does, given
+  [pe_postpone_statement] for the body [b] (the induction hypothesis of the [pe_eta] case, in
+  the extended context): [red1_lift1] (:260) lifts the step under the binder, [Good_lam_body]
+  (:2741) gives the invariant on the body, [abs_red_r] and [pe_eta] (:1076) rebuild the λ. The
+  premise [on_free_vars xpredT M'] is [pp_root]'s. So this case adds no new obligation: what
+  remains of [pe_postpone_statement] is the congruence cases. *)
+Lemma pe_postpone_eta_root {cf : checker_flags} {Σ : global_env} (cb : ClosedBodies Σ) Γ na A b M' v :
+  (forall Γ' u w, PCUICEtaT8Probe.Good Σ Γ' b -> PCUICEtaT8Probe.pe b u -> red1 Σ Γ' u w ->
+     ∑ z, trans_clos (red1 Σ Γ') b z × PCUICEtaT8Probe.pe z w) ->
+  on_free_vars xpredT M' ->
+  PCUICEtaT8Probe.Good Σ Γ (tLambda na A b) ->
+  PCUICEtaT8Probe.pe b (tApp (lift0 1 M') (tRel 0)) ->
+  red1 Σ Γ M' v ->
+  ∑ w, trans_clos (red1 Σ Γ) (tLambda na A b) w × PCUICEtaT8Probe.pe w v.
+Proof.
+  intros IH ho hg hp hr.
+  have hr' : red1 Σ (Γ ,, vass na A) (tApp (lift0 1 M') (tRel 0)) (tApp (lift0 1 v) (tRel 0)).
+  { apply app_red_l. exact (PCUICEtaT8Probe.red1_lift1 cb Γ na A M' v ho hr). }
+  destruct (IH (Γ ,, vass na A) _ _ (PCUICEtaT8Probe.Good_lam_body (Σ := Σ) Γ na A b hg) hp hr')
+    as (w & hw & hpw).
+  exists (tLambda na A w). split.
+  - clear -hw. induction hw; [apply t_step; now apply abs_red_r|eapply t_trans; eassumption].
+  - exact (PCUICEtaT8Probe.pe_eta na A w v hpw).
+Qed.
+
 (** ** T8: the [_l] statements from the [_r] statements (REDUCED)
 
   [ws_cumul_pbE Conv] is symmetric, but [ws_cumul_pbE Cumul] is not, so [_l] is not [_r]
@@ -1234,3 +1312,32 @@ Proof.
   destruct (ws_cumul_pbE_Ind_inv (Σ := Σ) h2) as [_ hu _ hl].
   exists ui2, l2. split; [exact hred|exact hu|exact hl].
 Qed.
+
+(** ** Assumptions
+
+  Every DISCHARGED lemma together, then each class instance, then the REDUCED lemmas: the build
+  log prints their [Print Assumptions]. A REDUCED lemma's open statement is an argument, so it
+  is not listed. *)
+Definition inventory_sweep_discharged :=
+  (@isType_is_open_termE_landed, @cmp_global_instance_ind_invE_landed,
+   @into_ws_cumul_pb_termsE_landed, @pre_case_branch_context_eqE_landed,
+   @positive_cstr_closed_indicesE_landed, @conv_decls_fix_contextE_landed,
+   @ctx_inst_instE_landed, @ctx_inst_open_termsE_landed, @spine_subst_inj_substE_landed,
+   @subslet_skipnE_landed, @wf_local_alphaE_landed, @ws_cumul_ctx_pb_eq_leE_landed,
+   @ws_cumul_ctx_pb_rel_transE_landed,
+   @isType_introE_landed, @instantiate_indsE_landed, @map_subst_let_expand_to_extended_listE_landed,
+   @wf_local_expand_letsE_landed, @typing_expand_lets_genE_landed,
+   @spine_subst_subst_to_extended_list_kE_landed, @type_mkAppsE_landed,
+   @on_minductive_wf_params_indices_instE_landed).
+Print Assumptions inventory_sweep_discharged.
+Print Assumptions SRForecastCopy10_landed.
+Print Assumptions SRForecastCopy12_landed.
+Print Assumptions SRForecastCopy14_landed.
+Print Assumptions ValForecastCopy10_landed.
+Print Assumptions ValForecastCopy14_landed.
+
+Definition inventory_sweep_reduced :=
+  (@declared_constructor_valid_tyE_reduced, @inversion_mkApps_directE_reduced,
+   @pe_postpone_red, @eta_red_postpone_Good, @pe_postpone_eta_root,
+   @T8_Sort_l_of_r, @T8_Prod_l_of_r, @T8_Ind_l_of_r).
+Print Assumptions inventory_sweep_reduced.
