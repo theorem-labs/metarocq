@@ -59,3 +59,6 @@ theories/PCUICEtaTypedFactsProved.v
 # soundness over welltypedE as a named hypothesis with its base instance
 theories/PCUICCallByNeedEta.v
 theories/PCUICCallByNeedSoundEta.v
+# EtaK7: the composition's E hypotheses without the five repeats (builders from EtaFacts, the 6-field core,
+# welltypedE_context; EtaHypProve's hyp_dup_* lemmas)
+theories/PCUICEtaFactsCompose.v
