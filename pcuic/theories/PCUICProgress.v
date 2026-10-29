@@ -928,8 +928,8 @@ Proof.
            ++ now eapply stuck_cofix_case_whne.
       * right. rewrite -![tApp _ _](mkApps_app _ _ [_]). eapply whnf_cofixapp.
       * exfalso. eapply inversion_Prim in hf as [prim_ty [cdecl [? hpc ? ? ? hp]]]; eauto.
-        (* the guard of the axiom inversions (prim-ops row N): [prim_ty] is the
-           registered primitive TYPE constant, kept out of the operation table *)
+        (* the guard of the axiom inversions: [prim_ty] is the registered primitive
+           TYPE constant, kept out of the operation table ([prim_op_of_primitive_constant]) *)
         assert (hnop : prim_op_of Σ prim_ty = None).
         { pose proof wfΣ as [_ [wfr _]]. eapply prim_op_of_primitive_constant; tea. }
         now eapply invert_cumul_prim_type_prod in hp.
