@@ -231,8 +231,11 @@ Lemma substitution_wf_local_rel `{checker_flags} {Σ} {wfΣ : wf Σ} {Γ Γ' s �
          file that writes it out. In this file a plain [depelim] is Stdlib Program's, because [Program]
          is imported after [Equations]; Program's version discharges the [JMeq] and [existT] equations
          with [simplification_heq] / [simplification_existT2], which use the axiom
-         [Eqdep.Eq_rect_eq.eq_rect_eq] (UIP). Equations' version needs no axiom here. The full path does
-         not depend on the import order ([Equations.Type.DepElim] has a [depelim] too). At the start of
+         [Eqdep.Eq_rect_eq.eq_rect_eq] (UIP). Equations' version needs no axiom here. The full path
+         guards against a FUTURE import, not a present ambiguity: no MetaRocq file loads
+         [Equations.Type.DepElim] today (PCUICNormal.v's Require of it is commented out), but it also
+         defines a [depelim], so a short [DepElim.depelim] would become order-dependent the day
+         someone loads it. At the start of
          a sentence it is in parentheses: a sentence that starts with [Equations.] parses as the
          [Equations] command. Do not shorten it back to [depelim]: that silently puts the axiom back
          into every checker that uses these proofs. A plain [depelim] stays only where Print
