@@ -65,12 +65,12 @@ From Equations.Prop Require Import DepElim.
 
 Lemma c17_vass {Σ : global_env_ext} (na : aname) (Γ : context) T s :
   Σ ;;; Γ |-E T : tSort s -> isSortRel s na.(binder_relevance) ->
-  lift_typing typingE Σ Γ (j_vass na T).
+  PCUICTyping.lift_typing typingE Σ Γ (j_vass na T).
 Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
 
 Lemma c17_vass_s {Σ : global_env_ext} (na : aname) (Γ : context) T s :
   Σ ;;; Γ |-E T : tSort s -> isSortRel s na.(binder_relevance) ->
-  lift_typing typingE Σ Γ (j_vass_s na T s).
+  PCUICTyping.lift_typing typingE Σ Γ (j_vass_s na T s).
 Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [reflexivity|exact r]. Qed.
 
 (** ** The η step, in the empty environment [rf_Σ] *)
@@ -79,7 +79,7 @@ Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [refl
 Definition c17_Γh : context := k_Γ ,, vass c1b_na k_PT.
 
 Lemma c17_wf_Γh : wf_localE rf_Σ c17_Γh.
-Proof. apply localenv_cons_abs; [exact k_wf_Γ|exact (c17_vass c1b_na k_Γ k_PT _ k_PT_typed eq_refl)]. Qed.
+Proof. apply localenv_cons_abs; [exact k_wf_Γ|exact (c17_vass c1b_na k_Γ k_PT _ k_PT_typed Logic.eq_refl)]. Qed.
 
 (** [h a] in [c17_Γh]. *)
 Definition c17_hy : term := tApp (tRel 0) (tRel 1).
@@ -91,7 +91,7 @@ Lemma c17_PT_h : rf_Σ ;;; c17_Γh |-E lift0 1 k_PT : tSort (Sort.sort_of_produc
 Proof. exact (weakeningE rf_Σ k_Γ [vass c1b_na k_PT] k_PT _ wc_wfE c17_wf_Γh k_PT_typed). Qed.
 
 Lemma c17_h_typed : rf_Σ ;;; c17_Γh |-E tRel 0 : lift0 1 k_PT.
-Proof. exact (typeE_Rel _ _ 0 (vass c1b_na k_PT) c17_wf_Γh eq_refl). Qed.
+Proof. exact (typeE_Rel _ _ 0 (vass c1b_na k_PT) c17_wf_Γh Logic.eq_refl). Qed.
 
 (** The η step is inside this derivation (through [k_a_T]). *)
 Lemma c17_hy_typed : rf_Σ ;;; c17_Γh |-E c17_hy : tSort sProp.
@@ -103,7 +103,7 @@ Qed.
 Definition c17_Γb : context := c17_Γh ,, vass c1b_na c17_hy.
 
 Lemma c17_wf_Γb : wf_localE rf_Σ c17_Γb.
-Proof. apply localenv_cons_abs; [exact c17_wf_Γh|exact (c17_vass c1b_na c17_Γh c17_hy _ c17_hy_typed eq_refl)]. Qed.
+Proof. apply localenv_cons_abs; [exact c17_wf_Γh|exact (c17_vass c1b_na c17_Γh c17_hy _ c17_hy_typed Logic.eq_refl)]. Qed.
 
 (** The closed proposition [c17_P'], typed through the η step. *)
 Definition c17_P4 : term := tProd c1b_na k_PT c17_hy.
@@ -114,25 +114,25 @@ Definition c17_P' : term := tProd c1b_na rf_F c17_P2.
 Lemma c17_P4_typed : rf_Σ ;;; k_Γ |-E c17_P4 : tSort sProp.
 Proof.
   exact (typeE_Prod _ _ c1b_na k_PT c17_hy (Sort.sort_of_product sProp (Sort.super sProp)) sProp
-           (c17_vass_s c1b_na k_Γ k_PT _ k_PT_typed eq_refl) c17_hy_typed).
+           (c17_vass_s c1b_na k_Γ k_PT _ k_PT_typed Logic.eq_refl) c17_hy_typed).
 Qed.
 
 Lemma c17_P3_typed : rf_Σ ;;; wc_Γ |-E c17_P3 : tSort sProp.
 Proof.
   exact (typeE_Prod _ _ c1b_na wc_U c17_P4 sProp sProp
-           (c17_vass_s c1b_na wc_Γ wc_U sProp wc_U_typed eq_refl) c17_P4_typed).
+           (c17_vass_s c1b_na wc_Γ wc_U sProp wc_U_typed Logic.eq_refl) c17_P4_typed).
 Qed.
 
 Lemma c17_P2_typed : rf_Σ ;;; rf_Γ |-E c17_P2 : tSort sProp.
 Proof.
   exact (typeE_Prod _ _ c1b_na wc_G_ty c17_P3 _ sProp
-           (c17_vass_s c1b_na rf_Γ wc_G_ty _ (wc_G_ty_typed rf_Γ rf_wf_Γ) eq_refl) c17_P3_typed).
+           (c17_vass_s c1b_na rf_Γ wc_G_ty _ (wc_G_ty_typed rf_Γ rf_wf_Γ) Logic.eq_refl) c17_P3_typed).
 Qed.
 
 Lemma c17_P'_typed : rf_Σ ;;; [] |-E c17_P' : tSort sProp.
 Proof.
   exact (typeE_Prod _ _ c1b_na rf_F c17_P2 _ sProp
-           (c17_vass_s c1b_na [] rf_F _ (rf_F_typed [] localenv_nil) eq_refl) c17_P2_typed).
+           (c17_vass_s c1b_na [] rf_F _ (rf_F_typed [] localenv_nil) Logic.eq_refl) c17_P2_typed).
 Qed.
 
 (** ** The environment [c17_env]: [si_env] and the axiom [c17_ax : c17_P'] *)
@@ -146,7 +146,7 @@ Definition c17_env : global_env :=
      retroknowledge := Retroknowledge.empty |}.
 Definition c17_Σ : global_env_ext := (c17_env, Monomorphic_ctx).
 
-Lemma c17_ext_si : extends rf_Σ.1 si_env.
+Lemma c17_ext_si : PCUICEnvironment.extends rf_Σ.1 si_env.
 Proof.
   eapply extends_strictly_on_decls_extends.
   split => //=. eapply incl_cs_refl. 2:eapply Retroknowledge.extends_refl.
@@ -156,7 +156,7 @@ Qed.
 Lemma c17_P'_typed_si : si_Σ ;;; [] |-E c17_P' : tSort sProp.
 Proof. exact (env_propE_typing weakening_envE rf_Σ wc_wfE [] _ _ c17_P'_typed si_env wc_wfE si_wfE c17_ext_si). Qed.
 
-Lemma c17_on_constant : on_constant_decl (lift_typing typingE) si_Σ c17_cb.
+Lemma c17_on_constant : on_constant_decl (PCUICTyping.lift_typing typingE) si_Σ c17_cb.
 Proof. split; [exact tt|]. exists sProp. split; [exact c17_P'_typed_si|]. split; [exact I|reflexivity]. Qed.
 
 (** [wfE c17_env]: its constant is typed through the η step. *)
@@ -174,7 +174,7 @@ Qed.
 Definition c17_cbs : ClosedBodies c17_env := @wfE_ClosedBodies _ c17_env c17_wfE.
 #[local] Existing Instance c17_cbs.
 
-Lemma c17_ext : extends rf_Σ.1 c17_env.
+Lemma c17_ext : PCUICEnvironment.extends rf_Σ.1 c17_env.
 Proof.
   eapply extends_strictly_on_decls_extends.
   split => //=. eapply incl_cs_refl. 2:eapply Retroknowledge.extends_refl.
@@ -193,18 +193,18 @@ Lemma c17_declared_inductive : declared_inductive c17_Σ si_ind si_mdecl si_idec
 Proof. split; [right; left; reflexivity|reflexivity]. Qed.
 
 Lemma c17_I_typed (Γ : context) : wf_localE c17_Σ Γ -> c17_Σ ;;; Γ |-E tInd si_ind [] : si_arity.
-Proof. intros h. exact (typeE_Ind _ _ si_ind [] si_mdecl si_idecl h c17_declared_inductive eq_refl). Qed.
+Proof. intros h. exact (typeE_Ind _ _ si_ind [] si_mdecl si_idecl h c17_declared_inductive Logic.eq_refl). Qed.
 
 Lemma c17_P_typed (Γ : context) : wf_localE c17_Σ Γ -> c17_Σ ;;; Γ |-E si_P : tSort (Sort.super sProp).
 Proof. intros h. apply typeE_Sort; [exact h|cbn; trivial]. Qed.
 
 Lemma c17_wf_P (Γ : context) : wf_localE c17_Σ Γ -> wf_localE c17_Σ (Γ ,, vass si_na si_P).
-Proof. intros h. apply localenv_cons_abs; [exact h|exact (c17_vass si_na Γ si_P _ (c17_P_typed Γ h) eq_refl)]. Qed.
+Proof. intros h. apply localenv_cons_abs; [exact h|exact (c17_vass si_na Γ si_P _ (c17_P_typed Γ h) Logic.eq_refl)]. Qed.
 
 Lemma c17_arity_typed (Γ : context) : wf_localE c17_Σ Γ ->
   c17_Σ ;;; Γ |-E si_arity : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)).
 Proof.
-  intros h. apply typeE_Prod; [exact (c17_vass_s si_na Γ si_P _ (c17_P_typed Γ h) eq_refl)|].
+  intros h. apply typeE_Prod; [exact (c17_vass_s si_na Γ si_P _ (c17_P_typed Γ h) Logic.eq_refl)|].
   exact (c17_P_typed _ (c17_wf_P Γ h)).
 Qed.
 
@@ -215,15 +215,15 @@ Definition c17_lamC : term := tLambda si_na si_P (tRel 0).
 Lemma c17_lamI_typed (Γ : context) : wf_localE c17_Σ Γ -> c17_Σ ;;; Γ |-E c17_lamI : si_arity.
 Proof.
   intros h. have h1 := c17_wf_P Γ h.
-  apply typeE_Lambda; [exact (c17_vass si_na Γ si_P _ (c17_P_typed Γ h) eq_refl)|].
+  apply typeE_Lambda; [exact (c17_vass si_na Γ si_P _ (c17_P_typed Γ h) Logic.eq_refl)|].
   exact (typeE_App _ _ (tInd si_ind []) si_na si_P (tSort sProp) _ (tRel 0) (c17_arity_typed _ h1)
-           (c17_I_typed _ h1) (typeE_Rel _ _ 0 (vass si_na si_P) h1 eq_refl)).
+           (c17_I_typed _ h1) (typeE_Rel _ _ 0 (vass si_na si_P) h1 Logic.eq_refl)).
 Qed.
 
 Lemma c17_lamC_typed (Γ : context) : wf_localE c17_Σ Γ -> c17_Σ ;;; Γ |-E c17_lamC : si_arity.
 Proof.
-  intros h. apply typeE_Lambda; [exact (c17_vass si_na Γ si_P _ (c17_P_typed Γ h) eq_refl)|].
-  exact (typeE_Rel _ _ 0 (vass si_na si_P) (c17_wf_P Γ h) eq_refl).
+  intros h. apply typeE_Lambda; [exact (c17_vass si_na Γ si_P _ (c17_P_typed Γ h) Logic.eq_refl)|].
+  exact (typeE_Rel _ _ 0 (vass si_na si_P) (c17_wf_P Γ h) Logic.eq_refl).
 Qed.
 
 Lemma c17_app_typed (Γ : context) f A : wf_localE c17_Σ Γ ->
@@ -253,7 +253,7 @@ Lemma c17_D_typed : c17_Σ ;;; c17_Γb |-E c17_D : tSort sProp.
 Proof. exact (c17_app_typed _ _ _ c17_wf_Γb_x (c17_lamI_typed _ c17_wf_Γb_x) c17_hb_typed). Qed.
 
 Lemma c17_wf_Γbx : wf_localE c17_Σ (c17_Γb ,, vass c1b_na c17_D).
-Proof. apply localenv_cons_abs; [exact c17_wf_Γb_x|exact (c17_vass c1b_na c17_Γb c17_D _ c17_D_typed eq_refl)]. Qed.
+Proof. apply localenv_cons_abs; [exact c17_wf_Γb_x|exact (c17_vass c1b_na c17_Γb c17_D _ c17_D_typed Logic.eq_refl)]. Qed.
 
 Lemma c17_C_typed : c17_Σ ;;; c17_Γb ,, vass c1b_na c17_D |-E c17_C : tSort sProp.
 Proof.
@@ -263,7 +263,7 @@ Qed.
 
 Lemma c17_dty_typed : c17_Σ ;;; c17_Γb |-E c17_dty : tSort (Sort.sort_of_product sProp sProp).
 Proof.
-  exact (typeE_Prod _ _ c1b_na c17_D c17_C sProp sProp (c17_vass_s c1b_na c17_Γb c17_D _ c17_D_typed eq_refl)
+  exact (typeE_Prod _ _ c1b_na c17_D c17_C sProp sProp (c17_vass_s c1b_na c17_Γb c17_D _ c17_D_typed Logic.eq_refl)
            c17_C_typed).
 Qed.
 
@@ -314,7 +314,7 @@ Proof.
   intros h. remember (tLambda na A b) as t eqn:e. induction h in na, A, b, e |- *; subst.
   - eapply c17_red1_lambda_head; eassumption.
   - do 2 eexists; reflexivity.
-  - destruct (IHh1 _ _ _ eq_refl) as (A' & b' & ->). exact (IHh2 _ _ _ eq_refl).
+  - destruct (IHh1 _ _ _ Logic.eq_refl) as (A' & b' & ->). exact (IHh2 _ _ _ Logic.eq_refl).
 Qed.
 
 (** An η-contraction [λx:A. f x ⇝ f] is never a [red] derivation when [f] is not a λ. *)
@@ -347,12 +347,12 @@ Qed.
 
 Definition check_one_fix_closed_redE_inst :
   check_one_fix (def_with_type c17_fd c17_fv) = Some si_kn :=
-  @check_one_fix_closed_redE _ c17_Σ c17_wfE [] c17_fd c17_fty c17_fv si_kn c17_fty_red eq_refl.
+  @check_one_fix_closed_redE _ c17_Σ c17_wfE [] c17_fd c17_fty c17_fv si_kn c17_fty_red Logic.eq_refl.
 
 Definition shape_check_closed_redE_fix_inst :
   check_one_fix (def_with_type c17_fd c17_fv) = Some si_kn :=
   @shape_check_closed_redE check_one_fix check_one_fix_shapeE _ c17_Σ c17_wfE [] c17_fd c17_fty c17_fv si_kn
-    c17_fty_red eq_refl.
+    c17_fty_red Logic.eq_refl.
 
 (** [check_one_cofix_closed_redE]: the argument of the conclusion [I ((λC:Prop. C) x)] is β-reduced. *)
 Definition c17_cty : term := tProd c1b_na si_P (tApp (tInd si_ind []) (tApp c17_lamC (tRel 0))).
@@ -366,13 +366,13 @@ Proof.
 Qed.
 
 Definition check_one_cofix_closed_redE_inst :
-  check_one_cofix (def_with_type c17_cd c17_cv) = Some si_kn :=
-  @check_one_cofix_closed_redE _ c17_Σ c17_wfE [] c17_cd c17_cty c17_cv si_kn c17_cty_red eq_refl.
+  PCUICTyping.check_one_cofix (def_with_type c17_cd c17_cv) = Some si_kn :=
+  @check_one_cofix_closed_redE _ c17_Σ c17_wfE [] c17_cd c17_cty c17_cv si_kn c17_cty_red Logic.eq_refl.
 
 Definition shape_check_closed_redE_cofix_inst :
-  check_one_cofix (def_with_type c17_cd c17_cv) = Some si_kn :=
-  @shape_check_closed_redE check_one_cofix check_one_cofix_shapeE _ c17_Σ c17_wfE [] c17_cd c17_cty c17_cv si_kn
-    c17_cty_red eq_refl.
+  PCUICTyping.check_one_cofix (def_with_type c17_cd c17_cv) = Some si_kn :=
+  @shape_check_closed_redE PCUICTyping.check_one_cofix check_one_cofix_shapeE _ c17_Σ c17_wfE [] c17_cd c17_cty
+    c17_cv si_kn c17_cty_red Logic.eq_refl.
 
 (** [shape_check_eq_term_uptoE] (WEAK, IMPOSSIBLE): two types that differ in a binder name. *)
 Definition c17_na' : aname := mkBindAnn (nNamed "x") Relevant.
@@ -401,7 +401,7 @@ Proof.
   constructor; [exact (c17_ty1; (c17_check_ty1, c17_red1))|constructor].
 Qed.
 
-Lemma c17_all_isT : All (fun d => on_type (lift_typing typingE) c17_Σ c17_Γb (dtype d)) [c17_d].
+Lemma c17_all_isT : All (fun d => on_type (PCUICTyping.lift_typing typingE) c17_Σ c17_Γb (dtype d)) [c17_d].
 Proof. constructor; [exact c17_isT_dty|constructor]. Qed.
 
 Definition mfix_on_ind_red_convE_inst :
@@ -410,8 +410,8 @@ Definition mfix_on_ind_red_convE_inst :
     c17_all_isT c17_mfix_red.
 
 (** [mfix_body_on_red_uniqueE]: two different reducts of [c17_dty] give the same block. *)
-Lemma c17_ond : on_def_type (lift_typing1 (typingE c17_Σ)) c17_Γb c17_d.
-Proof. exact (c17_vass c1b_na c17_Γb c17_dty _ c17_dty_typed eq_refl). Qed.
+Lemma c17_ond : on_def_type (PCUICTyping.lift_typing1 (typingE c17_Σ)) c17_Γb c17_d.
+Proof. exact (c17_vass c1b_na c17_Γb c17_dty _ c17_dty_typed Logic.eq_refl). Qed.
 
 Definition mfix_body_on_red_uniqueE_inst : si_kn = si_kn :=
   @mfix_body_on_red_uniqueE _ c17_Σ c17_wfE check_one_fix check_one_fix_shapeE c17_Γb c17_d si_kn si_kn c17_ond
@@ -419,7 +419,7 @@ Definition mfix_body_on_red_uniqueE_inst : si_kn = si_kn :=
 
 (** [wf_local_nth_error_welltypedE]: the entry [b : h a] of [c17_Γb], typed through η. *)
 Definition wf_local_nth_error_welltypedE_inst : welltypedE c17_Σ (skipn 1 c17_Γb) c17_hy :=
-  @wf_local_nth_error_welltypedE _ c17_Σ c17_Γb 0 (vass c1b_na c17_hy) c17_wf_Γb_x eq_refl.
+  @wf_local_nth_error_welltypedE _ c17_Σ c17_Γb 0 (vass c1b_na c17_hy) c17_wf_Γb_x Logic.eq_refl.
 
 (** [isType_rec_arg_welltypedE]: [Π b : h a. Prop] in [c17_Γh]; its argument type is [h a]. *)
 Definition c17_Thb : term := tProd c1b_na c17_hy (tSort sProp).
@@ -427,19 +427,19 @@ Definition c17_Thb : term := tProd c1b_na c17_hy (tSort sProp).
 Lemma c17_isT_Thb : isTypeE c17_Σ c17_Γh c17_Thb.
 Proof.
   apply (has_sort_isTypeE (Sort.sort_of_product sProp (Sort.super sProp))).
-  apply typeE_Prod; [exact (c17_vass_s c1b_na c17_Γh c17_hy _ c17_hy_typed_x eq_refl)|].
+  apply typeE_Prod; [exact (c17_vass_s c1b_na c17_Γh c17_hy _ c17_hy_typed_x Logic.eq_refl)|].
   apply typeE_Sort; [exact (c17_wloc c17_wf_Γb)|cbn; trivial].
 Qed.
 
 Definition isType_rec_arg_welltypedE_inst :=
   @isType_rec_arg_welltypedE _ c17_Σ c17_wfE c17_Γh c17_Thb [vass c1b_na c17_hy] (tSort sProp) 0
-    (vass c1b_na c17_hy) c17_isT_Thb eq_refl eq_refl.
+    (vass c1b_na c17_hy) c17_isT_Thb Logic.eq_refl Logic.eq_refl.
 
 (** [welltyped_prod_codomainE]: [Π z : Prop. h a] in [c17_Γh]; its codomain is typed through η. *)
 Lemma c17_wt_prod : welltypedE c17_Σ c17_Γh (tProd si_na si_P (lift0 1 c17_hy)).
 Proof.
   pose proof (c17_wf_P c17_Γh c17_wf_Γh_x) as w.
-  econstructor. apply typeE_Prod; [exact (c17_vass_s si_na c17_Γh si_P _ (c17_P_typed _ c17_wf_Γh_x) eq_refl)|].
+  econstructor. apply typeE_Prod; [exact (c17_vass_s si_na c17_Γh si_P _ (c17_P_typed _ c17_wf_Γh_x) Logic.eq_refl)|].
   exact (weakeningE c17_Σ c17_Γh [vass si_na si_P] c17_hy (tSort sProp) c17_wfE w c17_hy_typed_x).
 Qed.
 

@@ -108,8 +108,8 @@ Section FixWitness.
 
   Lemma check_one_cofix_closed_redE {Γ d ty v mind} :
     Σ ;;; Γ ⊢ ty ⇝ v ->
-    check_one_cofix (def_with_type d ty) = Some mind ->
-    check_one_cofix (def_with_type d v) = Some mind.
+    PCUICTyping.check_one_cofix (def_with_type d ty) = Some mind ->
+    PCUICTyping.check_one_cofix (def_with_type d v) = Some mind.
   Proof using wfΣ.
     intros r hc.
     destruct (check_one_cofix_inv _ _ _ hc) as [ctx [k [u [args ->]]]].
@@ -123,8 +123,8 @@ End FixWitness.
   @Build_ShapeCheckE check_one_fix (fun d bo => ltac:(destruct d; reflexivity))
     (@check_one_fix_eq_term_upto) (@check_one_fix_closed_redE).
 
-#[export] Instance check_one_cofix_shapeE : ShapeCheckE check_one_cofix :=
-  @Build_ShapeCheckE check_one_cofix (fun d bo => ltac:(destruct d; reflexivity))
+#[export] Instance check_one_cofix_shapeE : ShapeCheckE PCUICTyping.check_one_cofix :=
+  @Build_ShapeCheckE PCUICTyping.check_one_cofix (fun d bo => ltac:(destruct d; reflexivity))
     (@check_one_cofix_eq_term_upto) (@check_one_cofix_closed_redE).
 
 (** ** From a reduction witness back to the conversion witness *)
@@ -150,7 +150,7 @@ End FixWitnessRedConv.
 
 Lemma mfix_on_ind_red_convE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
   {check ok Γ mfix} :
-  wf_localE Σ Γ -> All (fun d => on_type (lift_typing typingE) Σ Γ (dtype d)) mfix ->
+  wf_localE Σ Γ -> All (fun d => on_type (PCUICTyping.lift_typing typingE) Σ Γ (dtype d)) mfix ->
   mfix_on_ind check (red Σ Γ) ok mfix ->
   mfix_on_ind check (conv_witnessE Σ Γ) ok mfix.
 Proof.
@@ -168,7 +168,7 @@ Section MfixWitness.
   (** ** Two reducts of one declared type give the same block *)
 
   Lemma mfix_body_on_red_uniqueE {Γ d m1 m2} :
-    on_def_type (lift_typing1 (typingE Σ)) Γ d ->
+    on_def_type (PCUICTyping.lift_typing1 (typingE Σ)) Γ d ->
     mfix_body_on check (red Σ Γ) m1 d ->
     mfix_body_on check (red Σ Γ) m2 d ->
     m1 = m2.
@@ -200,17 +200,17 @@ End MfixWitness.
 Lemma wf_local_nth_error_welltypedE {cf : checker_flags} {Σ : global_env_ext} {Γ n c} :
   wf_localE Σ Γ ->
   nth_error Γ n = Some c ->
-  welltypedE Σ (skipn (S n) Γ) (decl_type c).
+  welltypedE Σ (skipn (Datatypes.S n) Γ) (decl_type c).
 Proof.
   induction Γ as [|a Γ ih] in n |- *; intros wf hnth.
-  - now rewrite nth_error_nil in hnth.
+  - now rewrite MRList.nth_error_nil in hnth.
   - depelim wf.
     + destruct n; cbn in hnth.
-      * noconf hnth. rewrite skipn_S skipn_0.
+      * noconf hnth. rewrite skipn_S MRList.skipn_0.
         now eapply isTypeRelE_welltypedE.
       * rewrite skipn_S. now eapply ih.
     + destruct n; cbn in hnth.
-      * noconf hnth. rewrite skipn_S skipn_0.
+      * noconf hnth. rewrite skipn_S MRList.skipn_0.
         apply lift_sorting_forget_body in l.
         now eapply isTypeRelE_welltypedE.
       * rewrite skipn_S. now eapply ih.
@@ -233,14 +233,14 @@ Proof.
   have hlt : n < #|smash_context [] ctx|.
   { have h := nth_error_Some_length hnth. now rewrite List.length_rev in h. }
   rewrite (nth_error_rev_inv _ _ hlt) in hnth.
-  have hnth' : nth_error (Γ ,,, smash_context [] ctx) (#|smash_context [] ctx| - S n) = Some c.
+  have hnth' : nth_error (Γ ,,, smash_context [] ctx) (#|smash_context [] ctx| - Datatypes.S n) = Some c.
   { rewrite /app_context nth_error_app_lt //. lia. }
   have w := wf_local_nth_error_welltypedE isty hnth'.
   rewrite /app_context in w |- *.
-  have e : S (#|smash_context [] ctx| - S n) = #|smash_context [] ctx| - n by lia.
+  have e : Datatypes.S (#|smash_context [] ctx| - Datatypes.S n) = #|smash_context [] ctx| - n by lia.
   rewrite e skipn_app in w.
   replace (#|smash_context [] ctx| - n - #|smash_context [] ctx|) with 0 in w by lia.
-  now rewrite skipn_0 in w.
+  now rewrite MRList.skipn_0 in w.
 Qed.
 
 Lemma welltyped_prod_codomainE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ na A B} :
