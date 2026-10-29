@@ -3989,7 +3989,7 @@ Section BaseNames.
   Definition isTypeRel_welltyped {Σ : global_env_ext} {Γ : context} {T : term} {r : relevance} :
     isTypeRelE Σ Γ T r -> welltypedE Σ Γ T := isTypeRelE_welltypedE.
   Definition iswelltyped {Σ : global_env_ext} {Γ : context} {t A : term} :
-    Σ ;;; Γ |-E t : A -> welltypedE Σ Γ t := iswelltypedE Σ Γ t A.
+    Σ ;;; Γ |-E t : A -> welltypedE Σ Γ t := @iswelltypedE _ Σ Γ t A.
 End BaseNames.
 
 (** The [fvs] hints base registers for its scoping lemmas ([wf_local_closed_context], [type_is_open_term],
