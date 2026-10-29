@@ -1794,7 +1794,8 @@ Proof. split; [intros h; exact (eta_pe_step _ _ h t (pe_refl t))|exact (pe_to_et
 
   The ι, projection, fixpoint and cofixpoint root cases of the parallel
   postponement need: a [pe]-source [c0] of a spine with a rigid head (constructor,
-  fixpoint, cofixpoint, constant) reduces to a spine with a [pe]-related head and
+  fixpoint, cofixpoint, constant, primitive, and — for the [T8_Ind_r] tail —
+  inductive) reduces to a spine with a [pe]-related head and
   [pe]-related arguments. η-expanded heads, nested at any depth, are removed by β
   steps; a λ can appear only as a REDUCT of [c0], which the hypothesis [hnl]
   excludes (it holds of a typed scrutinee, a projection argument or a [rarg]-th
@@ -1805,7 +1806,10 @@ Proof. split; [intros h; exact (eta_pe_step _ _ h t (pe_refl t))|exact (pe_to_et
   the target's spine head is not one of the substituted variables. *)
 
 Definition rigid (h : term) : bool :=
-  match h with tConstruct _ _ _ | tFix _ _ | tCoFix _ _ | tConst _ _ | tPrim _ => true | _ => false end.
+  match h with
+  | tConstruct _ _ _ | tFix _ _ | tCoFix _ _ | tConst _ _ | tPrim _ | tInd _ _ => true
+  | _ => false
+  end.
 
 Lemma rigid_notApp h : rigid h -> ~~ isApp h.
 Proof. destruct h; cbn; auto. Qed.
@@ -2329,7 +2333,11 @@ Section RigidInv.
       destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
       left. exists (tConst c uu), rest.
       split; [exact hred|split; [reflexivity|split; [apply pe_Const|exact hr]]].
-    - intros; rigid_contra.
+    - (* inductive (added to [rigid] for the [T8_Ind_r] tail) *)
+      intros ind uu s s' rest rest' hs hr hu hred hsz hd args hrig E.
+      destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
+      left. exists (tInd ind uu), rest.
+      split; [exact hred|split; [reflexivity|split; [apply pe_Ind|exact hr]]].
     - (* constructor *)
       intros ind k uu s s' rest rest' hs hr hu hred hsz hd args hrig E.
       destruct (mkApps_eq_inj E eq_refl (rigid_notApp _ hrig)) as [E1 E2]. subst hd args.
@@ -4045,6 +4053,258 @@ End Iteration.
 
 End IterationNeedsCanonicalReducts.
 
+(** ** The T8 assembly: [T8_Sort_r], [T8_Prod_r], [T8_Ind_r]
+
+  Route (review EtaSafeAReview, 2026-10-29). A6 gives a chain [(R_c ∪ eta1)*] from
+  [canon T] to a head form. Walk it, keeping a REAL reduct [T'] of [T] with
+  [pe (canon T') c] for the current chain term [c]:
+  - an [R_c] step [c ↦ canon v0] (with [red1 c v0]) is ONE [pe_postpone_src] call at
+    the canonical source [canon T'] ([canon_idem] gives (B)): [red1⁺ (canon T') w]
+    and [pe w v0]. [red_canon_backsim] (BackSim) maps [red (canon T') w] back to
+    [red T' T''] with [canon T'' = canon w], and [pe_canon] gives
+    [pe (canon T'') (canon v0)]: the source is re-canonicalised;
+  - an [eta1] step is absorbed by [pe_eta1_closed], with the same [T'];
+  - ZERO steps (named case): [T'] itself.
+  [Good (canon T')] at each step comes from TYPING: [T'] is typed at the sort by E
+  subject reduction (FORECAST T1), so [typed_eta_safe] gives [eta_safe] of every
+  reduct of [T'], and [Good_canon] moves [Good] to [canon T'].
+  The tail reads the head form off [pe (canon T'') head]. A λ at the top is excluded
+  because [T''] is typed at a sort ([typed_sort_notLam]). For an applied inductive,
+  λ-headed spine positions (η-expanded partial applications of [tInd]) are removed
+  by β steps: [pe_rigid_spine], with [tInd] now in [rigid], under [hnl] (every
+  reduct of [canon T''] is a [canon] of a typed reduct of [T], so not a λ).
+  The components come from [ws_of_canon_pe] (a [JoinE] witness built from
+  [canon X = canon X'] and [pe X' Y]) composed with A6's component conversions.
+
+  INDUCTION PRINCIPLES: [T8_chain_walk] by induction on the CANONICAL chain, as a
+  [clos_refl_trans_1n] derivation (that is, on its length), fixed before any
+  lifting; the lifted side ([T'], [T'']) is never inducted on, and no step needs a
+  strict decrease. [ws_terms_of_canon_pe] by induction on A6's [All2] derivation.
+  [rt_eta1_union] by induction on the [clos_refl_trans] derivation. The spine
+  inversion inside [pe_rigid_spine] is the existing [size']-bounded one; nothing new
+  inducts on [size'].
+
+  HYPOTHESES of this section, both FORECAST-ONLY: [fri] (the hypothesis
+  [fix_rarg_inductive] of [typed_eta_safe], restated because that section is
+  closed) and [subject_reduction] (row T1, exactly the contract's form). Validity
+  (row T2a) is not used. *)
+
+Lemma rt_eta1_union {R : term -> term -> Type} a b :
+  clos_refl_trans eta1 a b -> clos_refl_trans (union R eta1) a b.
+Proof.
+  induction 1 as [x y h|x|x y z _ IH1 _ IH2];
+    [apply rt_step; right; exact h|apply rt_refl|eapply rt_trans; eassumption].
+Qed.
+
+Lemma t8_All_cons_inv {A} {P : A -> Type} x l : All P (x :: l) -> P x × All P l.
+Proof. intros h. depelim h. split; assumption. Qed.
+
+Lemma t8_All2_cons_inv {A B} {R : A -> B -> Type} x l y l' :
+  All2 R (x :: l) (y :: l') -> R x y × All2 R l l'.
+Proof. intros h. depelim h. split; assumption. Qed.
+
+(** A [pe]-source of a sort is that sort or a λ. *)
+Lemma pe_into_Sort t s : pe t (tSort s) -> (t = tSort s) + (∑ na A b, t = tLambda na A b).
+Proof.
+  intros h. remember (tSort s) as x eqn:E. destruct h; try discriminate E.
+  all: first [left; reflexivity | right; do 3 eexists; reflexivity].
+Qed.
+
+(** A [pe]-source of a product is a product with [pe]-related components, or a λ. *)
+Lemma pe_into_Prod t na A B : pe t (tProd na A B) ->
+  (∑ A0 B0, (t = tProd na A0 B0) × pe A0 A × pe B0 B) + (∑ na' A' b, t = tLambda na' A' b).
+Proof.
+  intros h. remember (tProd na A B) as x eqn:E. destruct h; try discriminate E.
+  - right. do 3 eexists. reflexivity.
+  - left. injection E as e1 e2 e3. subst. eexists _, _. split; [reflexivity|split; assumption].
+Qed.
+
+Section T8Assembly.
+  Context {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ).
+  (* FORECAST-ONLY: provable from the E copies of PCUICArities.typing_spine / PCUICSpine (copies 14/15) *)
+  Context (fri : @fix_rarg_inductive_statement cf Σ).
+  (* FORECAST-ONLY: rows T1/T2a *)
+  Context (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
+    Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T).
+
+  Let cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
+
+  Lemma T8_reduct_typed Γ T s T' :
+    Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T' -> Σ ;;; Γ |-E T' : tSort s.
+  Proof. intros h r. exact (subject_reduction Σ Γ T T' (tSort s) wfΣ h r). Qed.
+
+  (** A term typed at a sort is not a λ: a λ has a product type. *)
+  Lemma typed_sort_notLam Γ t s : Σ ;;; Γ |-E t : tSort s -> notLam t.
+  Proof.
+    intros h. destruct t; try reflexivity. exfalso.
+    destruct (inversion_LambdaE Σ wfΣ h) as (B & _ & _ & hc).
+    exact (ws_cumul_pbE_Prod_Sort_inv (Σ := Σ) Cumul hc).
+  Qed.
+
+  (** [Good] at the canonical source: (i) [typed_eta_safe] (proved, no SR) on each
+      reduct, (ii) preservation of typing by E SR (FORECAST T1), then [Good_canon]. *)
+  Lemma T8_reduct_Good Γ T s T' :
+    Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T' -> Good Σ Γ (canon T').
+  Proof.
+    intros h r. apply Good_canon. intros T'' r'.
+    apply (typed_eta_safe wfΣ fri Γ T'' (tSort s)).
+    apply (T8_reduct_typed Γ T s T'' h). eapply rt_trans; eassumption.
+  Qed.
+
+  (** [hnl] at the canonical source: every reduct of [canon T'] is [canon] of a typed
+      reduct of [T] ([red_canon_backsim]), hence not a λ. Same two halves. *)
+  Lemma T8_reduct_canon_hnl Γ T s T' :
+    Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T' -> forall c', red Σ Γ (canon T') c' -> notLam c'.
+  Proof.
+    intros h r c' rc. destruct (red_canon_backsim Σ Γ T' c' rc) as (T'' & r' & e).
+    rewrite -notLam_canon -e notLam_canon.
+    apply (typed_sort_notLam Γ T'' s). apply (T8_reduct_typed Γ T s T'' h).
+    eapply rt_trans; eassumption.
+  Qed.
+
+  Lemma T8_reduct_open Γ T T' :
+    is_closed_context Γ -> is_open_term Γ T -> red Σ Γ T T' -> is_open_term Γ T'.
+  Proof.
+    intros hΓ hT r.
+    have cr : Σ ;;; Γ ⊢ T ⇝ T' := ltac:(constructor; assumption).
+    exact (closed_red_open_right_cb (wfΣ := cbΣ) cr).
+  Qed.
+
+  Lemma T8_reduct_ofv Γ T T' :
+    is_closed_context Γ -> is_open_term Γ T -> red Σ Γ T T' -> on_free_vars xpredT (canon T').
+  Proof.
+    intros hΓ hT r. apply canon_on_free_vars.
+    eapply on_free_vars_impl; [|exact (T8_reduct_open Γ T T' hΓ hT r)]. intros i _. reflexivity.
+  Qed.
+
+  (** The chain walk. Induction on the CANONICAL chain's length (fixed before
+      lifting); the zero-step case is named. *)
+  Lemma T8_chain_walk Γ T s c h :
+    Σ ;;; Γ |-E T : tSort s -> is_closed_context Γ -> is_open_term Γ T ->
+    clos_refl_trans (union (R_c Σ Γ) eta1) c h ->
+    forall T', red Σ Γ T T' -> pe (canon T') c ->
+    ∑ T'', red Σ Γ T T'' × pe (canon T'') h.
+  Proof.
+    intros hT hΓ hTo hc. apply clos_rt_rt1n_iff in hc.
+    induction hc as [c|c c1 h0 hstep _ IH]; intros T' r hp.
+    - (* ZERO steps (named case): the reduct reached so far *)
+      exists T'. split; [exact r|exact hp].
+    - destruct hstep as [hR|he].
+      + (* an [R_c] step: ONE [pe_postpone_src] call at the canonical source *)
+        destruct hR as (v0 & r1 & ->).
+        destruct (pe_postpone_src cbΣ Γ (canon T') c v0
+                    (T8_reduct_Good Γ T s T' hT r) (canon_idem T')
+                    (T8_reduct_ofv Γ T T' hΓ hTo r) hp r1) as (w & hw & hpw).
+        have hrw : red Σ Γ (canon T') w by apply clos_t_rt.
+        destruct (red_canon_backsim Σ Γ T' w hrw) as (T'' & r' & e).
+        apply (IH T''); [eapply rt_trans; [exact r|exact r']|].
+        rewrite e. exact (pe_canon _ _ hpw).
+      + (* an [eta1] step: absorbed by [pe_eta1_closed] *)
+        exact (IH T' r (pe_eta1_closed _ _ hp _ he)).
+  Qed.
+
+  (** A component conversion from [canon X = canon X'] and [pe X' Y]: the [JoinE]
+      witness is [canon Y] on both sides. *)
+  Lemma ws_of_canon_pe Γ pb X X' Y :
+    is_closed_context Γ -> is_open_term Γ X -> is_open_term Γ Y ->
+    canon X = canon X' -> pe X' Y -> ws_cumul_pbE pb Σ Γ X Y.
+  Proof.
+    intros hΓ hX hY e hp. constructor; [exact hΓ|exact hX|exact hY|].
+    exists (canon Y), (canon Y). repeat split; [|apply rt_refl|apply PCUICEtaI5A2.RF_refl].
+    rewrite e. apply rt_eta1_union. exact (pe_to_eta _ _ (pe_canon _ _ hp)).
+  Qed.
+
+  Lemma ws_terms_of_canon_pe Γ l2 l1 l0 l :
+    is_closed_context Γ -> All (is_open_term Γ) l2 ->
+    map canon l2 = map canon l1 -> All2 pe l1 l0 -> ws_cumul_pbE_terms Σ Γ l0 l ->
+    ws_cumul_pbE_terms Σ Γ l2 l.
+  Proof.
+    intros hΓ ho e hp hw. unfold ws_cumul_pbE_terms in *.
+    induction hw as [|y z l0' l' hyz _ IH] in l2, l1, ho, e, hp |- *.
+    - destruct l1 as [|x1 l1]; [|depelim hp].
+      destruct l2 as [|x2 l2]; [constructor|discriminate e].
+    - destruct l1 as [|x1 l1]; [depelim hp|].
+      destruct (t8_All2_cons_inv _ _ _ _ hp) as [hx hp'].
+      destruct l2 as [|x2 l2]; [discriminate e|].
+      cbn in e. injection e as e1 e2.
+      destruct (t8_All_cons_inv _ _ ho) as [ho1 ho'].
+      constructor.
+      + exact (ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cbΣ) _ _ _
+                 (ws_of_canon_pe Γ Conv x2 x1 y hΓ ho1 (wsE_left hyz) e1 hx) hyz).
+      + exact (IH l2 l1 ho' e2 hp').
+  Qed.
+
+  (** The λ alternative at the top: [T1] is typed at a sort. *)
+  Lemma T8_top_notLam Γ T s T1 na A b :
+    Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T1 -> canon T1 = tLambda na A b -> False.
+  Proof.
+    intros hT r e. have hnl := typed_sort_notLam Γ T1 s (T8_reduct_typed Γ T s T1 hT r).
+    rewrite -notLam_canon e in hnl. cbn in hnl. discriminate hnl.
+  Qed.
+
+  Theorem T8_Sort_r : T8_Sort_r_statement Σ.
+  Proof.
+    intros Γ pb T s s0 _ hT hc.
+    have hΓ := wsE_ctx hc. have hTo := wsE_left hc.
+    destruct (ws_cumul_pbE_Sort_r_inv (Σ := Σ) pb hc) as (s1 & hch & hcmp).
+    destruct (T8_chain_walk Γ T s0 _ _ hT hΓ hTo hch T (rt_refl _ _) (pe_refl _)) as (T1 & r1 & hp).
+    destruct (pe_into_Sort _ _ hp) as [e|(na & A & b & e)].
+    - exists s1. split; [|exact hcmp].
+      rewrite -(canon_Sort_inv T1 s1 e). constructor; assumption.
+    - exfalso. exact (T8_top_notLam Γ T s0 T1 na A b hT r1 e).
+  Qed.
+
+  Theorem T8_Prod_r : T8_Prod_r_statement Σ.
+  Proof.
+    intros Γ pb T na dom codom s0 _ hT hc.
+    have hΓ := wsE_ctx hc. have hTo := wsE_left hc.
+    destruct (ws_cumul_pbE_Prod_r_inv (Σ := Σ) (wfΣ := cbΣ) hc)
+      as (na1 & dom1 & codom1 & [hch hna hdom hcod]).
+    destruct (T8_chain_walk Γ T s0 _ _ hT hΓ hTo hch T (rt_refl _ _) (pe_refl _)) as (T1 & r1 & hp).
+    destruct (pe_into_Prod _ _ _ _ hp) as [(A & B & e & hpA & hpB)|(na' & A' & b & e)].
+    2: { exfalso. exact (T8_top_notLam Γ T s0 T1 na' A' b hT r1 e). }
+    destruct (canon_Prod_inv T1 na1 A B e) as (na0 & A0 & B0 & [-> ena eA eB]).
+    have cr : Σ ;;; Γ ⊢ T ⇝ tProd na0 A0 B0 := ltac:(constructor; assumption).
+    destruct (open_Prod_inv Γ na0 A0 B0 (closed_red_open_right_cb (wfΣ := cbΣ) cr)) as [hoA hoB].
+    have eA' : canon A0 = canon A by rewrite -eA canon_idem.
+    have eB' : canon B0 = canon B by rewrite -eB canon_idem.
+    exists na0, A0, B0. split.
+    - exact cr.
+    - (* [canon_na] keeps the relevance *)
+      unfold eq_binder_annot in *. rewrite -ena in hna. cbn in hna. now symmetry.
+    - exact (ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cbΣ) _ _ _
+               (ws_of_canon_pe Γ Conv A0 A dom1 hΓ hoA (wsE_left hdom) eA' hpA) hdom).
+    - exact (ws_cumul_pbE_trans (Σ := Σ) (wfΣ := cbΣ) _ _ _
+               (ws_of_canon_pe (Γ ,, vass na dom) pb B0 B codom1 (wsE_ctx hcod) hoB (wsE_left hcod) eB' hpB)
+               hcod).
+  Qed.
+
+  Theorem T8_Ind_r : T8_Ind_r_statement Σ.
+  Proof.
+    intros Γ pb T ind ui l s0 _ hT hc.
+    have hΓ := wsE_ctx hc. have hTo := wsE_left hc.
+    destruct (ws_cumul_pbE_Ind_r_inv (Σ := Σ) (wfΣ := cbΣ) hc) as (ui' & l0 & [hch hu hl]).
+    destruct (T8_chain_walk Γ T s0 _ _ hT hΓ hTo hch T (rt_refl _ _) (pe_refl _)) as (T1 & r1 & hp).
+    (* the tail: β steps remove η-expanded heads; [hnl] excludes the λ alternative *)
+    destruct (pe_rigid_spine Σ Γ (canon T1) (T8_reduct_canon_hnl Γ T s0 T1 hT r1) _
+                (tInd ind ui') l0 hp eq_refl eq_refl) as (h0 & l1 & r2 & hnlh & hph & hpl).
+    depelim hph; [cbn in hnlh; discriminate hnlh|].
+    destruct (red_canon_backsim Σ Γ T1 _ r2) as (T2 & r3 & e).
+    rewrite PCUICEtaI5A2.canon_mkApps in e. cbn [canon] in e.
+    destruct (canon_mkApps_Ind_inv T2 ind ui' (map canon l1) e) as (l2 & -> & el).
+    have cr : Σ ;;; Γ ⊢ T ⇝ mkApps (tInd ind ui') l2.
+    { constructor; [exact hΓ|exact hTo|eapply rt_trans; eassumption]. }
+    have ho2 : All (is_open_term Γ) l2.
+    { have h := closed_red_open_right_cb (wfΣ := cbΣ) cr.
+      rewrite on_free_vars_mkApps in h. move/andP: h => [_ h]. now apply forallb_All. }
+    exists ui', l2. split.
+    - exact cr.
+    - exact hu.
+    - exact (ws_terms_of_canon_pe Γ l2 l1 l0 l hΓ ho2 el hpl hl).
+  Qed.
+
+End T8Assembly.
+
 (** ** The η half of the backward simulation is FALSE (building refutation)
 
   The "convert first, postpone second" route needs the mirror of [R_c_back1] for η:
@@ -4192,6 +4452,115 @@ Section LambdaBlockTyping.
   Qed.
 
 End LambdaBlockTyping.
+
+(** ** Refutation attempt on [eta_safe_canon] (stream-lead item (1), 2026-10-29 15:36Z)
+
+  ORDER, recorded as it happened: this item arrived at 15:36Z, after
+  [eta_safe_canon], [Good_canon] and [pe_canon] were already proved (commit
+  3f784a26, built 15:24:39Z). So the attempt below runs against a lemma that is
+  already compiled, and it can only confirm it or expose a mis-statement.
+
+  OUTCOME: NOT REFUTED. Every position where [canon] changes a term was checked;
+  [eta_safe] reads none of them differently. The instances below are kept as the
+  lemma's non-degenerate instances: in each one [canon] really changes the term,
+  and both sides are computed. References are QUALIFIED, so the theorems are
+  pinned to the intended definitions ([PCUICEtaCanon.canon] and this file's
+  [eta_safe]).
+  - [lb_t], the witness of [eta1_canon_backsim_false]: [canon] erases its domains and
+    names; both sides [true].
+  - [bd_t := λ _:(tProj p (λ_:I-arity. #0)). Prop], a λ whose DOMAIN holds a λ in a bad
+    position (a projection argument). The NEW [eta_safe] gives [true] on both sides.
+    The OLD invariant ([eta_safe_old], a verbatim copy of the clause at 64f42254, with
+    the domain conjunct) gives [false] on [bd_t] and [true] on [canon bd_t], so the
+    OLD form of the lemma is FALSE: [eta_safe_old_canon_false]. This witness is NOT
+    typable (a projection of a λ), so it refutes the old form on untyped terms only;
+    on typed terms both forms give [true] ([typed_eta_safe]).
+  - every other place where [canon] changes a term, each with a bad λ planted at that
+    place:
+    * binder names ([canon_na] erases the name, keeps the relevance): [eta_safe]
+      never reads a name; exercised by the named binder [bd_na] in every instance;
+    * Prod domains: [canon] KEEPS them (recursing); [eta_safe] reads them, so both
+      sides are [false] ([bd_prod]);
+    * let types: kept (recursing) and read: both [false] ([bd_let]);
+    * fixpoint and cofixpoint [dtype]s: kept (recursing) and read: both [false]
+      ([bd_fix], [bd_cofix]);
+    * case [pcontext] / [bcontext]: [canon] renames the declarations and keeps their
+      bodies and types unchanged; [eta_safe] reads neither: both [true] ([bd_case],
+      whose two contexts each hold a let declaration with the bad λ as its type). *)
+
+(** The OLD invariant, verbatim from commit 64f42254 (only the name differs). *)
+Fixpoint eta_safe_old (Σ : global_env) (t : term) : bool :=
+  match t with
+  | tEvar _ l => forallb (eta_safe_old Σ) l
+  | tProd _ A B => eta_safe_old Σ A && eta_safe_old Σ B
+  | tLambda _ A b => eta_safe_old Σ A && eta_safe_old Σ b
+  | tLetIn _ b B c => eta_safe_old Σ b && eta_safe_old Σ B && eta_safe_old Σ c
+  | tApp f a => notPrimHead f && spine_safe Σ t && eta_safe_old Σ f && eta_safe_old Σ a
+  | tCase _ p c brs =>
+      notLam c && eta_safe_old Σ c && forallb (eta_safe_old Σ) p.(pparams) && eta_safe_old Σ p.(preturn)
+      && forallb (fun br => eta_safe_old Σ br.(bbody)) brs
+  | tProj _ c => notLam c && eta_safe_old Σ c
+  | tFix mfix _ => forallb (fun d => eta_safe_old Σ d.(dtype) && eta_safe_old Σ d.(dbody)) mfix
+  | tCoFix mfix _ => forallb (fun d => eta_safe_old Σ d.(dtype) && eta_safe_old Σ d.(dbody)) mfix
+  | tPrim p => test_prim (eta_safe_old Σ) p
+  | _ => true
+  end.
+
+Definition bd_na : aname := mkBindAnn (nNamed "x"%bs) Relevant.
+(** A λ whose domain is not [canon_dom], so [canon] changes it too. *)
+Definition bd_lam : term := tLambda bd_na si_arity (tRel 0).
+(** The bad position: a λ as the argument of a projection. *)
+Definition bd_bad : term := tProj (mkProjection si_ind 0 0) bd_lam.
+Definition bd_t : term := tLambda bd_na bd_bad si_P.
+Definition bd_prod : term := tProd bd_na bd_bad si_P.
+Definition bd_let : term := tLetIn bd_na si_P bd_bad si_P.
+Definition bd_fix : term := tFix [mkdef term bd_na bd_bad si_P 0] 0.
+Definition bd_cofix : term := tCoFix [mkdef term bd_na bd_bad si_P 0] 0.
+Definition bd_ctx : context := [vdef bd_na si_P bd_bad].
+Definition bd_case : term :=
+  tCase {| ci_ind := si_ind; ci_npar := 0; ci_relevance := Relevant |}
+    {| pparams := []; puinst := []; pcontext := bd_ctx; preturn := si_P |}
+    (tRel 0) [{| bcontext := bd_ctx; bbody := si_P |}].
+
+(** The instance shape: [canon] changes [x], [eta_safe] agrees on both sides, with
+    the value [b]. Qualified references pin the definitions. *)
+Definition eta_safe_canon_instance (Σ : global_env) (x : term) (b : bool) : Type :=
+  [× PCUICEtaCanon.canon x <> x,
+     MetaRocq.PCUIC.PCUICEtaT8Probe.eta_safe Σ (PCUICEtaCanon.canon x) =
+       MetaRocq.PCUIC.PCUICEtaT8Probe.eta_safe Σ x &
+     MetaRocq.PCUIC.PCUICEtaT8Probe.eta_safe Σ x = b].
+
+Ltac eta_safe_canon_inst :=
+  split; [intros e; vm_compute in e; discriminate e|vm_compute; reflexivity|vm_compute; reflexivity].
+
+Theorem eta_safe_canon_inst_lb Σ : eta_safe_canon_instance Σ lb_t true.
+Proof. eta_safe_canon_inst. Qed.
+Theorem eta_safe_canon_inst_bd_t Σ : eta_safe_canon_instance Σ bd_t true.
+Proof. eta_safe_canon_inst. Qed.
+Theorem eta_safe_canon_inst_bd_prod Σ : eta_safe_canon_instance Σ bd_prod false.
+Proof. eta_safe_canon_inst. Qed.
+Theorem eta_safe_canon_inst_bd_let Σ : eta_safe_canon_instance Σ bd_let false.
+Proof. eta_safe_canon_inst. Qed.
+Theorem eta_safe_canon_inst_bd_fix Σ : eta_safe_canon_instance Σ bd_fix false.
+Proof. eta_safe_canon_inst. Qed.
+Theorem eta_safe_canon_inst_bd_cofix Σ : eta_safe_canon_instance Σ bd_cofix false.
+Proof. eta_safe_canon_inst. Qed.
+Theorem eta_safe_canon_inst_bd_case Σ : eta_safe_canon_instance Σ bd_case true.
+Proof. eta_safe_canon_inst. Qed.
+
+(** The OLD form of the lemma is FALSE at [bd_t] (untyped witness: see above). *)
+Theorem eta_safe_old_canon_false :
+  (forall Σ t, eta_safe_old Σ (PCUICEtaCanon.canon t) = eta_safe_old Σ t) -> False.
+Proof.
+  intros h. have e := h si_Σ.1 bd_t. vm_compute in e. discriminate e.
+Qed.
+
+(** And the instances are instances of the PROVED lemma, at the same definitions. *)
+Corollary eta_safe_canon_at_witnesses Σ :
+  All (fun x => MetaRocq.PCUIC.PCUICEtaT8Probe.eta_safe Σ (PCUICEtaCanon.canon x) =
+                MetaRocq.PCUIC.PCUICEtaT8Probe.eta_safe Σ x)
+      [lb_t; bd_t; bd_prod; bd_let; bd_fix; bd_cofix; bd_case].
+Proof. repeat constructor; apply eta_safe_canon. Qed.
 
 (** ** History of the [eta_safe] invariant (every change so far)
 
