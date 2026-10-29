@@ -428,4 +428,148 @@ Section FracInstancesE.
     - constructor. exact (whnf_red_tSort _ _ _).
   Qed.
 
+  (** *** A fixpoint on [I P], [P := ∀ X : Prop, X], applied to a variable *)
+
+  Definition fx_P : term := tProd SI.si_na (tSort sProp) (tRel 0).
+  Definition fx_I : term := tApp (tInd SI.si_ind []) fx_P.
+  Definition fx_ty : term := tProd SI.si_na fx_I fx_I.
+  Definition fx_body : term := tLambda SI.si_na fx_I (tRel 0).
+  Definition fx_def : def term :=
+    {| dname := SI.si_na; dtype := fx_ty; dbody := fx_body; rarg := 0 |}.
+  Definition fx_mfix : mfixpoint term := [fx_def].
+  Definition fx_Γ : context := [vass SI.si_na fx_I].
+
+  Lemma si_vass_gen Γ (na : aname) A s : SI.si_Σ ;;; Γ |- A : tSort s ->
+    isSortRel s na.(binder_relevance) -> lift_typing typing SI.si_Σ Γ (j_vass na A).
+  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
+
+  Lemma si_vass_s_gen Γ (na : aname) A s : SI.si_Σ ;;; Γ |- A : tSort s ->
+    isSortRel s na.(binder_relevance) -> lift_typing typing SI.si_Σ Γ (j_vass_s na A s).
+  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [reflexivity|exact r]. Qed.
+
+  Lemma si_typrel Γ T s rel : SI.si_Σ ;;; Γ |- T : tSort s -> isSortRel s rel ->
+    lift_typing typing SI.si_Σ Γ (TypRel T rel).
+  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
+
+  Lemma si_termtyp Γ t T s rel : SI.si_Σ ;;; Γ |- t : T -> SI.si_Σ ;;; Γ |- T : tSort s ->
+    isSortRel s rel -> lift_typing typing SI.si_Σ Γ (TermTypRel t T rel).
+  Proof. intros ht h r. split; [exact ht|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
+
+  Lemma si_wf_cons Γ (na : aname) A s : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- A : tSort s ->
+    isSortRel s na.(binder_relevance) -> wf_local SI.si_Σ (Γ ,, vass na A).
+  Proof. intros hΓ h r. apply localenv_cons_abs; [exact hΓ|exact (si_vass_gen Γ na A s h r)]. Qed.
+
+  Lemma si_Prop_typed Γ : wf_local SI.si_Σ Γ ->
+    SI.si_Σ ;;; Γ |- tSort sProp : tSort (Sort.super sProp).
+  Proof. intros h. apply type_Sort; [exact h|cbn; trivial]. Qed.
+
+  Lemma fx_P_typed Γ : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- fx_P : tSort sProp.
+  Proof.
+    intros h.
+    assert (h' : wf_local SI.si_Σ (Γ ,, vass SI.si_na (tSort sProp)))
+      by (apply (si_wf_cons _ _ _ (Sort.super sProp) h (si_Prop_typed _ h)); reflexivity).
+    exact (type_Prod _ _ SI.si_na (tSort sProp) (tRel 0) (Sort.super sProp) sProp
+      (si_vass_s_gen _ SI.si_na _ _ (si_Prop_typed _ h) eq_refl)
+      (type_Rel _ _ 0 (vass SI.si_na (tSort sProp)) h' eq_refl)).
+  Qed.
+
+  Lemma si_arity_typed Γ : wf_local SI.si_Σ Γ ->
+    SI.si_Σ ;;; Γ |- tProd SI.si_na (tSort sProp) (tSort sProp)
+      : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)).
+  Proof.
+    intros h.
+    assert (h' : wf_local SI.si_Σ (Γ ,, vass SI.si_na (tSort sProp)))
+      by (apply (si_wf_cons _ _ _ (Sort.super sProp) h (si_Prop_typed _ h)); reflexivity).
+    exact (type_Prod _ _ SI.si_na (tSort sProp) (tSort sProp) (Sort.super sProp) (Sort.super sProp)
+      (si_vass_s_gen _ SI.si_na _ _ (si_Prop_typed _ h) eq_refl) (si_Prop_typed _ h')).
+  Qed.
+
+  Lemma fx_I_typed Γ : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- fx_I : tSort sProp.
+  Proof.
+    intros h.
+    exact (type_App _ _ (tInd SI.si_ind []) SI.si_na (tSort sProp) (tSort sProp) _ fx_P
+      (si_arity_typed Γ h)
+      (type_Ind _ _ SI.si_ind [] SI.si_mdecl SI.si_idecl h SI.si_declared_inductive eq_refl)
+      (fx_P_typed Γ h)).
+  Qed.
+
+  Lemma fx_ty_typed Γ : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- fx_ty : tSort sProp.
+  Proof.
+    intros h.
+    assert (h' : wf_local SI.si_Σ (Γ ,, vass SI.si_na fx_I))
+      by (apply (si_wf_cons _ _ _ sProp h (fx_I_typed _ h)); reflexivity).
+    exact (type_Prod _ _ SI.si_na fx_I fx_I sProp sProp
+      (si_vass_s_gen _ SI.si_na _ _ (fx_I_typed _ h) eq_refl) (fx_I_typed _ h')).
+  Qed.
+
+  Lemma fx_wf_Γ : wf_local SI.si_Σ fx_Γ.
+  Proof.
+    assert (h0 : wf_local SI.si_Σ []) by constructor.
+    apply (si_wf_cons [] _ _ sProp h0 (fx_I_typed _ h0)); reflexivity.
+  Qed.
+
+  Lemma fx_body_typed : SI.si_Σ ;;; fx_Γ ,, vass SI.si_na fx_ty |- fx_body : fx_ty.
+  Proof.
+    assert (h1 : wf_local SI.si_Σ (fx_Γ ,, vass SI.si_na fx_ty))
+      by (apply (si_wf_cons _ _ _ sProp fx_wf_Γ (fx_ty_typed _ fx_wf_Γ)); reflexivity).
+    assert (h2 : wf_local SI.si_Σ (fx_Γ ,, vass SI.si_na fx_ty ,, vass SI.si_na fx_I))
+      by (apply (si_wf_cons _ _ _ sProp h1 (fx_I_typed _ h1)); reflexivity).
+    exact (type_Lambda _ _ SI.si_na fx_I (tRel 0) fx_I
+      (si_vass_gen _ SI.si_na _ sProp (fx_I_typed _ h1) eq_refl)
+      (type_Rel _ _ 0 (vass SI.si_na fx_I) h2 eq_refl)).
+  Qed.
+
+  Lemma fx_guard : fix_guard SI.si_Σ fx_Γ fx_mfix.
+  Proof.
+    unfold fix_guard. cbn. apply gc_check. split; [vm_compute; reflexivity|].
+    exists 100. vm_compute. reflexivity.
+  Qed.
+
+  Lemma fx_wf_fixpoint : wf_fixpoint SI.si_Σ fx_Γ fx_mfix.
+  Proof.
+    split; [reflexivity|]. split; [reflexivity|].
+    exists SI.si_kn. split; [discriminate|]. split.
+    - constructor; [|constructor].
+      exists fx_ty. split; [reflexivity|]. split; [reflexivity|apply cumul_Refl].
+    - vm_compute. reflexivity.
+  Qed.
+
+  Lemma fx_fix_typed : SI.si_Σ ;;; fx_Γ |- tFix fx_mfix 0 : fx_ty.
+  Proof.
+    eapply (type_Fix _ _ fx_mfix 0 fx_def).
+    - exact fx_wf_Γ.
+    - exact fx_guard.
+    - reflexivity.
+    - constructor; [|constructor].
+      exact (si_typrel _ _ sProp Relevant (fx_ty_typed _ fx_wf_Γ) eq_refl).
+    - constructor; [|constructor].
+      assert (h1 : wf_local SI.si_Σ (fx_Γ ,, vass SI.si_na fx_ty))
+        by (apply (si_wf_cons _ _ _ sProp fx_wf_Γ (fx_ty_typed _ fx_wf_Γ)); reflexivity).
+      exact (si_termtyp (fx_Γ ,, vass SI.si_na fx_ty) fx_body fx_ty sProp Relevant
+        fx_body_typed (fx_ty_typed _ h1) eq_refl).
+    - exact fx_wf_fixpoint.
+  Qed.
+
+  Lemma fx_app_typed : SI.si_Σ ;;; fx_Γ |- tApp (tFix fx_mfix 0) (tRel 0) : fx_I.
+  Proof.
+    exact (type_App _ _ (tFix fx_mfix 0) SI.si_na fx_I fx_I sProp (tRel 0)
+      (fx_ty_typed _ fx_wf_Γ) fx_fix_typed (type_Rel _ _ 0 (vass SI.si_na fx_I) fx_wf_Γ eq_refl)).
+  Qed.
+
+  (** [rtf_fix_arg_whne] (T6): [(fix f (x : I P) := x) x] in [x : I P]; the recursive
+      argument [x] is a weak-head normal variable, so it is neutral. *)
+  Lemma rtf_fix_arg_whne_inst :
+    wf_extE SI.si_Σ ×
+    unfold_fix fx_mfix 0 = Some (#|@nil term|, subst0 (fix_subst fx_mfix) fx_body) ×
+    whnf RedFlags.default SI.si_Σ fx_Γ (mkApps (tRel 0) []) ×
+    welltypedE SI.si_Σ fx_Γ (mkApps (tFix fx_mfix 0) ([] ++ mkApps (tRel 0) [] :: [])) ×
+    ∥ whne RedFlags.default SI.si_Σ fx_Γ (mkApps (tRel 0) []) ∥.
+  Proof.
+    split; [exact si_wf_extE|]. split; [reflexivity|]. split.
+    { apply whnf_ne. apply whne_rel. reflexivity. }
+    split.
+    - econstructor. exact (typing_incl_E (Σ := SI.si_Σ) SI.si_wf fx_app_typed).
+    - constructor. apply whne_rel. reflexivity.
+  Qed.
+
 End FracInstancesE.
