@@ -15,7 +15,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICUtil
      PCUICSigmaCalculus PCUICPrimitiveRed PCUICOnFreeVars.
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta
      PCUICWellScopedCumulativityEta PCUICContextConversionEta PCUICWsCumulEtaCtx
-     PCUICConversionEtaCongr PCUICTypingEtaNotions.
+     PCUICConversionEtaCongr PCUICTypingEtaNotions PCUICClosedBodies.
 From MetaRocq.PCUIC.Typing Require PCUICUnivSubstitutionTypEta.
 
 From Stdlib Require Import ssreflect ssrbool Utf8.
@@ -52,9 +52,11 @@ Local Set Warnings "-unexpected-implicit-declaration".
   [typing_spineE] (copy 14, the twin of [PCUICArities.typing_spine], NOT of
   [PCUICGeneration.typing_spine] whose twin [PCUICGenerationEta.typing_spineE] exists).
 
-  Statement flagged NOT TWIN, PROVISIONAL pending the stream lead's ruling:
-  [type_mkAppsE_statement] carries [wfE Σ], which base [PCUICSpine.type_mkApps] has not:
-  [ws_cumul_pbE] → [cumulSpecE] ([ws_cumul_pbE_forget_spec]) needs [ClosedBodies Σ].
+  Statement labelled NOT TWIN (ADDED ClosedBodies), as the stream lead's class ruling of
+  2026-10-29 09:30Z allows (lanes/eta/closedbodies-register.md, row 1):
+  [type_mkAppsE_statement] adds exactly [ClosedBodies Σ], which base [PCUICSpine.type_mkApps]
+  has not: [ws_cumul_pbE] → [cumulSpecE] ([ws_cumul_pbE_forget_spec]) needs it. [wfE] supplies
+  it through [wfE_ClosedBodies] ([Typing/PCUICClosedTypEta.v:575]).
 
   The checks: this file and its forecast variant (the [NEEDS] blocks uncommented, with
   stand-ins for [subsletE] and [typing_spineE]) typecheck against [d8120081] plus the files
@@ -196,11 +198,12 @@ Definition subslet_skipnE_statement : Type :=
 END-NEEDS *)
 
 (* BEGIN-NEEDS typing_spineE (copy 14).
-(** NOT TWIN (stop b), PROVISIONAL pending the stream lead's ruling: the premise [wfE Σ] is
-    not in base [PCUICSpine.type_mkApps]; [typeE_Cumul] needs [cumulSpecE], and
-    [ws_cumul_pbE_forget_spec] gives it only under [ClosedBodies Σ]. *)
+(** NOT TWIN (ADDED ClosedBodies), closedbodies-register row 1: the premise [ClosedBodies Σ]
+    is not in base [PCUICSpine.type_mkApps]; [typeE_Cumul] needs [cumulSpecE], and
+    [ws_cumul_pbE_forget_spec] gives it only under [ClosedBodies Σ]. Its SR consumers
+    ([PCUICSR.v:2101, 2545, 2937], all in [sr_red1]) hold [wfΣ : wf Σ.1] through [env_prop]. *)
 Definition type_mkAppsE_statement : Type :=
-  forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+  forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ},
   forall {Γ : context} {t : term} {u : list term} {T t_ty : term},
   Σ ;;; Γ |-E t : t_ty ->
   typing_spineE Σ Γ t_ty u T ->
