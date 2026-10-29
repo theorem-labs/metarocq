@@ -251,7 +251,7 @@ Lemma fo_F_infer (Γ : context) : iv_Σ ;;; Γ |-E iv_False ▹ tSort (Sort.sort
 Proof.
   unfold iv_False. apply inferE_Prod.
   - split; [exact tt|]. exists (Sort.super sProp). split; [exact (fo_P_sort Γ)|]. split; [reflexivity|reflexivity].
-  - econstructor; [exact (inferE_Rel _ _ 0 (vass si_na si_P) eq_refl)|apply refl_red].
+  - econstructor; [exact (inferE_Rel _ (Γ ,, vass si_na si_P) 0 (vass si_na si_P) eq_refl)|apply refl_red].
 Qed.
 
 Lemma fo_F_check (Γ : context) : iv_Σ ;;; Γ |-E iv_False ◃ si_P.
@@ -274,8 +274,8 @@ Lemma fo_pret_sort : iv_Σ ;;; fo_Γz |-E tApp (tRel 3) (tRel 0) ▹□ sProp.
 Proof.
   econstructor; [|apply refl_red].
   refine (inferE_App _ _ (tRel 3) si_na iv_RF si_P (tRel 0) _ _).
-  - econstructor; [exact (inferE_Rel _ _ 3 (vass si_na fo_PT) eq_refl)|apply refl_red].
-  - econstructor; [exact (inferE_Rel _ _ 0 (vass fo_zna iv_RF) eq_refl)|apply fo_J_refl].
+  - econstructor; [exact (inferE_Rel _ fo_Γz 3 (vass si_na fo_PT) eq_refl)|apply refl_red].
+  - econstructor; [exact (inferE_Rel _ fo_Γz 0 (vass fo_zna iv_RF) eq_refl)|apply fo_J_refl].
 Qed.
 
 Lemma fo_mkRa_infer : iv_Σ ;;; fo_Γb |-E fo_mkRF (tRel 0) ▹ iv_RF.
@@ -286,14 +286,14 @@ Proof.
               iv_False _ (fo_F_check _)).
     econstructor; [|apply refl_red].
     exact (inferE_Construct _ _ iv_ind 0 [] iv_mdecl iv_idecl iv_cdecl iv_declared_constructor eq_refl).
-  - econstructor; [exact (inferE_Rel _ _ 0 (vass iv_fna iv_False) eq_refl)|apply fo_J_refl].
+  - econstructor; [exact (inferE_Rel _ fo_Γb 0 (vass iv_fna iv_False) eq_refl)|apply fo_J_refl].
 Qed.
 
 Lemma fo_body_check : iv_Σ ;;; fo_Γb |-E tApp (tRel 2) (fo_mkRF (tRel 0)) ◃ fo_bty.
 Proof.
   econstructor.
   - refine (inferE_App _ _ (tRel 2) si_na iv_RF (tApp (tRel 4) (tRel 0)) (fo_mkRF (tRel 0)) _ _).
-    + econstructor; [exact (inferE_Rel _ _ 2 (vass si_na fo_HT) eq_refl)|apply refl_red].
+    + econstructor; [exact (inferE_Rel _ fo_Γb 2 (vass si_na fo_HT) eq_refl)|apply refl_red].
     + econstructor; [exact fo_mkRa_infer|apply fo_J_refl].
   - apply JoinE_red_r. apply red1_red.
     exact (red_beta _ _ fo_zna iv_RF (tApp (tRel 4) (tRel 0)) (fo_mkRF (tRel 0))).
@@ -303,7 +303,7 @@ Lemma fo_case_infer : iv_Σ ;;; fo_Γ |-E fo_case ▹ tApp fo_ptm (tRel 0).
 Proof.
   refine (inferE_Case _ _ fo_ci fo_p (tRel 0) [fo_br] [iv_False] [] sProp iv_mdecl iv_idecl
             _ iv_declared_inductive _ eq_refl _ fo_wf_p eq_refl _ _ eq_refl _ eq_refl _ _ _ _).
-  - econstructor; [exact (inferE_Rel _ _ 0 (vass si_na iv_RF) eq_refl)|apply refl_red].
+  - econstructor; [exact (inferE_Rel _ fo_Γ 0 (vass si_na iv_RF) eq_refl)|apply refl_red].
   - exact fo_pret_sort.
   - exact (alpha_eq_reflexive _).
   - change (All_local_rel (lift_sorting1 (checkingE iv_Σ) (infering_sortE iv_Σ)) fo_Γ [vass fo_zna iv_RF]).
