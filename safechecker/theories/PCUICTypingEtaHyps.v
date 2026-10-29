@@ -34,14 +34,13 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
   - Facts that follow from what base already proves over E ([PCUICClosedTypEta], [PCUICTypingEtaInd],
     [PCUICEtaA6], [PCUICWsCumulEtaSubst], [PCUICWellScopedCumulativityEta]) or from the class fields are
     PROVED below the classes, under the base name ("Derived").
-  - Every field has a concrete satisfying instance at the end of this file ("Instances"), on the
-    environment [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances] (convention of
-    [PCUICEtaFracInstances]): its premises hold there, by base derivations lifted with [typing_incl_E],
-    and its conclusion is proved there from the base lemma. Such an instance shows that the hypothesis is
-    consistent and about something real. It does NOT discharge the hypothesis at [typingE]: subject
-    reduction over [typingE] (row T1), validity (T2a), the inversions and the bidirectional facts (T6,
-    whose completeness part also needs T8) and the infrastructure copies (T0) remain hypotheses until
-    their rows land.
+  - Instances. No field has a concrete satisfying instance yet; the vacuity pass is NOT passed. (The
+    commit that lands the instances will state exactly which fields have one.) An instance will be a
+    point of the field on the environment [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances]
+    (convention of [PCUICEtaFracInstances]); it shows only that the field's premises can hold at a real
+    environment, and does NOT discharge the field at [typingE]: subject reduction over [typingE] (row T1),
+    validity (T2a), the inversions and the bidirectional facts (T6, whose completeness part T6BDc is as
+    strong as typed T8) and the infrastructure copies (T0) remain hypotheses until their rows land.
 
   Not stated here, on purpose: base [ws_cumul_pb_Sort_r_inv] (used only by [PCUICSafeRetyping]): its E form
   ([T ≤E tSort s] → [T ⇝ tSort s']) is FALSE untyped (plan §3, A6 F rows); its typed form is T8. *)
@@ -264,7 +263,11 @@ Class T6BDu_facts {cf : checker_flags} := {
     forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} {T : term} {rel : relevance} {rel' : relevance}, isTypeRelE Σ Γ T rel -> isTypeRelE Σ Γ T rel' -> rel = rel'
 }.
 
-(** ** T6, bidirectional completeness (BDFromPCUIC over E). Its E proof needs T8 (a well-typed type E-convertible to a Π/Sort/Ind reduces to one) *)
+(** ** T6, bidirectional completeness (BDFromPCUIC over E). Its E proof needs T8 (a well-typed type E-convertible to a Π/Sort/Ind reduces to one).
+    Together these six fields are as strong as typed T8 (plan risk rank 3): any forecast resting on this
+    bundle assumes something as strong as T8; taking Refused_c removed T8 from the failure paths only.
+    (Why, EtaHypAuditB hyp-audit-B.md §3.6: [typing_infering] implies typed T8-Prod and
+    [typing_infering_sort] implies typed T8-Sort.) *)
 Class T6BDc_facts {cf : checker_flags} := {
   ctx_inst_typing_bd :
     forall (Σ : global_env_ext) (Γ : context) (l : list term) (Δ : context) (wfΣ : wfE Σ), ctx_instE Σ Γ l Δ -> PCUICTyping.ctx_inst (checkingE Σ) Γ l Δ ;
