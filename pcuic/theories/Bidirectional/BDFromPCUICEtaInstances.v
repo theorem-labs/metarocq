@@ -5,11 +5,11 @@
   **The forecast classes are section variables.** Every lemma of [BDFromPCUICEta] takes the
   forecast classes as premises: the four of [BDToPCUICEta] (T2a's [ValForecastCopy16], T1's
   [SRForecastCopy16/18], [BDForecastCopy18]; copies 10, 12, 14 and 15 have landed and their
-  classes are gone), [BDFromForecastB1] (row B1's [fix_rarg_inductive], the one hypothesis of
-  the proved T8 forms [PCUICEtaT8Probe.T8_*_r] that no landed lemma gives; T8's other
-  hypothesis is [PCUICSREta.subject_reductionE]) and [BDFromForecastCopy18]. No instance of a
-  class exists before its row lands, so the instances below live in section
-  [BDFromPCUICEtaInstances], whose [Context] holds the eight classes, and APPLY the lemmas
+  classes are gone) and [BDFromForecastCopy18]. T8 enters through the proved two-hypothesis
+  forms [PCUICEtaT8Probe.T8_*_r_two], whose one hypothesis is [PCUICSREta.subject_reductionE]
+  (row B1's [fix_rarg_inductive] is proved there). No instance of a class exists before its row
+  lands, so the instances below live in section [BDFromPCUICEtaInstances], whose [Context]
+  holds the five classes, and APPLY the lemmas
   there. Everything else each instance needs (the environment, its [wfE], every typing
   derivation) is built here or in the landed instance files ([PCUICInversionEtaInstances],
   [BDTypingEtaInstances], [BDToPCUICEtaInstances]), with no class.
@@ -344,10 +344,10 @@ Qed.
 
 Section BDFromPCUICEtaInstances.
 
-(* FORECAST-ONLY: the six classes of [BDFromPCUICEta]; delete each when its row lands. *)
+(* FORECAST-ONLY: the five classes of [BDFromPCUICEta]; delete each when its row lands. *)
 Context {V16 : ValForecastCopy16}
   {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-  {FB1 : BDFromForecastB1} {BF18 : BDFromForecastCopy18}.
+  {BF18 : BDFromForecastCopy18}.
 
 (** ** Through an η conversion *)
 

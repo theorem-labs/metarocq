@@ -1054,6 +1054,56 @@ Section TypedSafe.
   Lemma fix_rarg_inductive : fix_rarg_inductive_statement.
   Proof. exact (@fix_rarg_inductive_gen cf Σ wfΣ). Qed.
 
+  (** CIRCULARITY RECORD for [fix_rarg_inductive] (stream lead, 2026-10-29)
+
+    (a) Base's route to the corresponding fact (the [rarg]-th argument of a typed applied fixpoint
+    has an applied inductive type, used e.g. at [PCUICClassification.v:713]), with (b) each link's
+    E form and (c) its status:
+    - [PCUICValidity.inversion_mkApps] ([PCUICValidity.v:381]) types the head and a spine; its E
+      form [PCUICValidityEta.inversion_mkAppsE] is neither refuted nor T8-shaped, but it rests on
+      validity (row T2a, forecast class [ValForecastCopy16]), which [fri_spine] avoids.
+    - [PCUICClassification.wf_fixpoint_spine] ([PCUICClassification.v:390]) reads the
+      [rarg]-th assumption off the spine; it has no E form of its own, only its links below.
+    - [PCUICClassification.mfix_on_ind_spine_witness] ([PCUICClassification.v:132]) moves the
+      spine onto a REDUCT of the declared type that passes [check_one_fix]; its E form (typed
+      declared type, conversion witness, reduct passing the check) is T8-SHAPED: it is
+      [BDFromPCUICEta.red_fix_witnessE] ([BDFromPCUICEta.v:400]), proved with [T8_Prod_r] and
+      [T8_Ind_r] (through [T8_*_r_plug], [BDFromPCUICEta.v:427, 436]), so using it here would be
+      circular, since [T8_*_r] use [fix_rarg_inductive] through [typed_eta_safe].
+    - [PCUICFixWitness.mfix_on_ind_inv] ([PCUICFixWitness.v:229]) gets that reduct from the
+      [idx]-th body's conversion witness ([PCUICFixWitness.v:238]); its closed-only E form is
+      REFUTED at the one-body block [fwe_fix_d] ([PCUICFixWitnessEtaCounter.v:150]), where its
+      conclusion is the reduction witness that [mfix_body_on_conv_closed_redE_fix_false]
+      ([PCUICFixWitnessEtaCounter.v:250]) refutes [INFERENCE: this reduction to the body form is
+      not compiled].
+    - [PCUICFixWitness.mfix_body_on_conv_closed_red] ([PCUICFixWitness.v:192]) turns a
+      conversion witness into a reduction witness by confluence; its closed-only E form is
+      REFUTED by [mfix_body_on_conv_closed_redE_fix_false] ([PCUICFixWitnessEtaCounter.v:250])
+      and [mfix_body_on_conv_closed_redE_false] (:286), and its typed E form is the T8-shaped
+      lemma of the third link.
+    - [PCUICSR.isType_red] ([PCUICSR.v:3969]) types the reduct; its E form
+      [PCUICSREta.isType_redE] ([PCUICSREta.v:3437]) needs E subject reduction, which is
+      [T8Assembly]'s hypothesis [subject_reduction] (row T1): not T8-shaped, not refuted, but
+      T8's own premise.
+    - [PCUICSpine.typing_spine_strengthen] ([PCUICSpine.v:325]) and
+      [PCUICSpine.typing_spine_nth_error] ([PCUICSpine.v:2060]) finish the walk; their E forms
+      [PCUICSpineEta.typing_spine_strengthenE] (:252) and [typing_spine_nth_errorE] (:1716) are
+      proved (copy 15), neither refuted nor T8-shaped.
+
+    The route used instead (section [FixRargInductive], header above it) keeps the CONVERSION
+    witness and walks it with untyped facts ([inversion_AppE], [inversion_FixE],
+    [ws_cumul_pbE_Prod_Prod_inv], [ws_cumul_pbE_LetIn_l_inv], [substitution0_ws_cumul_pbE]).
+
+    MECHANICAL CHECK ([lanes/eta/meta/fri-dependency-closure.txt]): the kernel dependency closure
+    ([Print All Dependencies], which walks opaque proofs and sees tactic-, hint- and
+    instance-made uses) of [fix_rarg_inductive] and of every constant of [FixRargInductive] has
+    6319 constants; it contains no [T8_*] constant, no other [T8Assembly] constant, neither
+    [typed_eta_safe] nor [typed_spine_safe], no constant of [PCUICFixWitnessEtaCounter],
+    [PCUICSREta], [PCUICValidityEta], [PCUICSpineEta], [BDTypingEta], [BDToPCUICEta] or
+    [BDFromPCUICEta], and none of base [PCUICFixWitness] or [PCUICClassification]; a positive
+    control (the closure of [T8_Sort_r_two]) contains [T8_Sort_r], [T8_chain_walk] and
+    [typed_eta_safe]. *)
+
   Lemma typed_spine_safe Γ t T : Σ ;;; Γ |-E t : T -> spine_safe Σ t.
   Proof.
     intros ht. unfold spine_safe.
@@ -4474,6 +4524,37 @@ Section T8Assembly.
   Qed.
 
 End T8Assembly.
+
+(** ** The two-hypothesis forms ([t8-assembly-review.md] N1)
+
+  Each is the pinned statement taking ONLY [subject_reduction] (row T1, the contract's form):
+  the section premise [wfΣ] of [T8Assembly] is redundant, because the pinned statement has its
+  own [wfE Σ] premise, which supplies it ([fix_rarg_inductive] is proved, so [T8Assembly] has no
+  other hypothesis). The closed type of each is
+  [forall {cf} {Σ}, SR -> T8_*_r_statement Σ]. *)
+Theorem T8_Sort_r_two {cf : checker_flags} {Σ : global_env_ext}
+  (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
+    Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T) :
+  T8_Sort_r_statement Σ.
+Proof. intros Γ pb T s s' hwf. exact (@T8_Sort_r cf Σ hwf subject_reduction Γ pb T s s' hwf). Qed.
+
+Theorem T8_Prod_r_two {cf : checker_flags} {Σ : global_env_ext}
+  (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
+    Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T) :
+  T8_Prod_r_statement Σ.
+Proof.
+  intros Γ pb T na dom codom s' hwf.
+  exact (@T8_Prod_r cf Σ hwf subject_reduction Γ pb T na dom codom s' hwf).
+Qed.
+
+Theorem T8_Ind_r_two {cf : checker_flags} {Σ : global_env_ext}
+  (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
+    Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T) :
+  T8_Ind_r_statement Σ.
+Proof.
+  intros Γ pb T ind ui l s' hwf.
+  exact (@T8_Ind_r cf Σ hwf subject_reduction Γ pb T ind ui l s' hwf).
+Qed.
 
 (** ** The η half of the backward simulation is FALSE (building refutation)
 

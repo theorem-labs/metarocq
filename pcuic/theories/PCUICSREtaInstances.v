@@ -9,8 +9,9 @@
   live in section [SRInstances], whose [Context] holds the three classes, and APPLY the lemmas there.
   Everything else each instance needs (the environment, its [wfE], every typing derivation, every
   reduction step) is proved here or in [PCUICInversionEtaInstances], with no class. The instances
-  of [subsletE_open_terms] and [substitution_ws_cumul_pbE_subslet], which left this file, are in
-  [PCUICTypingEtaCopies2Instances] and [PCUICSREtaConvInstances].
+  of [subsletE_open_terms] and of the [subsletE] substitution lemma, which left this file, are in
+  [PCUICTypingEtaCopies2Instances] and [PCUICTypingEtaCopy15Instances]
+  ([substitution_ws_cumul_pbE_typed_inst]).
 
   **The environments** ([PCUICCumulativitySpecEtaClosureInstances], [PCUICEtaPrimOpInstance],
   [PCUICInversionEtaInstances]):

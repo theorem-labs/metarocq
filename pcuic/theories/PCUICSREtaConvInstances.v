@@ -18,9 +18,7 @@
   which has no relation in it. [ws_cumul_ctx_pbE_cons_inv] is an inversion helper; its instance
   is the context pair of [sc_ctx_conv]. The reduction lemmas are applied to a β-step in a domain
   ([red_it_mkProd_or_LetIn_smash_cb], [red_has_rec_arg_cb], [closed_red_from_empty_cb]) and to the
-  unfolding of a let-bound variable ([red_expand_let_cb], [red_expand_letE]).
-  [substitution_ws_cumul_pbE_subslet] substitutes [ci_False] for [x : Prop] in the β-pair
-  [(λy:Prop. y) x ≤ x]. *)
+  unfolding of a let-bound variable ([red_expand_let_cb], [red_expand_letE]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -35,7 +33,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICCases PCUICLiftSu
      PCUICContextConversionEta PCUICTypingEta PCUICTypingEtaInd PCUICClosedTypEta
      PCUICCumulativitySpecEtaClosureInstances PCUICEtaFracInstances
      PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICWsCumulEtaCtxInstances PCUICClosedBodies
-     PCUICSREtaConv PCUICSubstitutionEta.
+     PCUICSREtaConv.
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
@@ -225,23 +223,6 @@ Lemma type_Cumul_altE_inst : si_Σ ;;; sc_Γh |-E tRel 0 : tRel 1.
 Proof.
   exact (type_Cumul_altE (Σ := si_Σ) (wfΣ := si_wfE) sc_Γh (tRel 0) (tApp ci_id (tRel 1)) (tRel 1)
            sc_h_typed (ci_on_typeE_Prop _ _ sc_x_typed) (JoinE_red_l si_Σ sc_Γh Cumul _ _ sc_red_h)).
-Qed.
-
-(** The typed substitution [x := ∀P:Prop. P] and the β-pair [(λy:Prop. y) x ≤ x] under [x : Prop];
-    substituting gives the β-pair [(λy:Prop. y) (∀P:Prop. P) ≤ ∀P:Prop. P]. *)
-Lemma sc_subslet_False : subsletE si_Σ [] [ci_False] fi_Γ1.
-Proof. constructor; [constructor|]. rewrite subst_empty. exact (ci_False_typed [] localenv_nil). Qed.
-
-Lemma sc_WS_id_x : WS Cumul ([] ,,, fi_Γ1 ,,, []) (tApp ci_id (tRel 0)) (tRel 0).
-Proof.
-  apply red_ws_cumul_pbE. split; [reflexivity|reflexivity|].
-  apply rt_step. unfold ci_id. apply red_beta.
-Qed.
-
-Lemma substitution_ws_cumul_pbE_subslet_inst : WS Cumul [] (tApp ci_id ci_False) ci_False.
-Proof.
-  exact (substitution_ws_cumul_pbE_subslet (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Γ'' := [])
-           sc_subslet_False sc_WS_id_x).
 Qed.
 
 (** ** Environment and reduction facts *)

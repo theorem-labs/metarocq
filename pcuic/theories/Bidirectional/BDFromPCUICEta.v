@@ -89,13 +89,7 @@
 
   The lemmas take the forecast classes of [BDToPCUICEta] (T2a's [ValForecastCopy16], T1's
   [SRForecastCopy16/18], [BDForecastCopy18]) as section [Context]s; they are imported, never
-  redefined (copies 10, 12, 14 and 15 have landed and are imported). This file adds two classes:
-  - [BDFromForecastB1]: the one hypothesis of the proved T8 forms that no landed lemma gives,
-    [fix_rarg_inductive] (row B1), with the text of [PCUICEtaT8Probe.fix_rarg_inductive_statement];
-    [BDFromForecastB1_fit] type-checks the field against that [Definition]. T8's other
-    hypothesis, E subject reduction, is [PCUICSREta.subject_reductionE], whose own premises are
-    the three classes of section [SREta] (T2a's [ValForecastCopy16], T1's [SRForecastCopy16/18]),
-    already premises here;
+  redefined (copies 10, 12, 14 and 15 have landed and are imported). This file adds one class:
   - [BDFromForecastCopy18]: ONE copy-18 lemma that the Proj case needs and no class has, base
     [projection_cumulative_indices] ([PCUICInductiveInversion.v:3616]), with the base twin's
     statement.
@@ -133,30 +127,11 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 (** ** FORECAST BLOCK *)
 
-(* The one hypothesis of the proved T8 forms ([PCUICEtaT8Probe.T8_Sort_r], [T8_Prod_r], [T8_Ind_r],
-   section [T8Assembly]) that no landed lemma gives. Text of the field: [forall (cf : checker_flags)
-   (Σ : global_env_ext) (wfΣ : wfE Σ),] (the [Context] of section [TypedSafe] of
-   [PCUICEtaT8Probe.v], where the statement is defined, and of section [T8Assembly], where [fri]
-   is assumed) followed by the body of [PCUICEtaT8Probe.fix_rarg_inductive_statement]
-   ([PCUICEtaT8Probe.v:885-890]), verbatim. No binder is implicit, so no implicit status can be
-   lost. [BDFromForecastB1_fit] below type-checks the field against the [Definition]. (The
-   reverse direction is not kept as a declaration: it would take the [Definition] by name as a
-   hypothesis type.) *)
-(* FORECAST-ONLY: proved by row B1 (fix_rarg_inductive, PCUICEtaT8Probe / copy 14-15); delete when it lands *)
-Class BDFromForecastB1 := {
-  fix_rarg_inductiveE_fc :
-    forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ),
-    forall Γ mfix idx args narg fn a T,
-      Σ ;;; Γ |-E mkApps (tFix mfix idx) args : T ->
-      unfold_fix mfix idx = Some (narg, fn) ->
-      nth_error args narg = Some a ->
-      ∑ A ind u l, (Σ ;;; Γ |-E a : A) × ws_cumul_pbE Cumul Σ Γ A (mkApps (tInd ind u) l)
-}.
-
-(** The field is the pinned statement. *)
-Definition BDFromForecastB1_fit {FB1 : BDFromForecastB1} (cf : checker_flags) (Σ : global_env_ext)
-  (wfΣ : wfE Σ) : @PCUICEtaT8Probe.fix_rarg_inductive_statement cf Σ :=
-  fix_rarg_inductiveE_fc cf Σ wfΣ.
+(* Row B1's [fix_rarg_inductive] is PROVED ([PCUICEtaT8Probe.fix_rarg_inductive], section
+   [FixRargInductive]), and T8 is used through the two-hypothesis forms [PCUICEtaT8Probe.T8_*_r_two],
+   so this file has no B1 forecast. The class [BDFromForecastB1] it had was deleted after a
+   compiled check: its field has the type of [PCUICEtaT8Probe.fix_rarg_inductive] (both-way
+   ascription), with [cf] and [Σ] explicit where the proved lemma has them implicit. *)
 
 (* The braces in the statement record the implicit status of the base twin; they are at the
    head of the field's type, where Rocq keeps them on the projection. *)
@@ -240,20 +215,20 @@ Qed.
 Section BDFromPCUICEta.
 
 (* FORECAST-ONLY: one premise per class: T2a's one ([PCUICValidityEta]), T1's two
-   ([PCUICSREta]), [BDToPCUICEta]'s one, and this file's two (row B1's [fix_rarg_inductive],
-   copy 18's [projection_cumulative_indices]); delete each when its row lands. *)
+   ([PCUICSREta]), [BDToPCUICEta]'s one, and this file's one (copy 18's
+   [projection_cumulative_indices]); delete each when its row lands. *)
 Context {V16 : ValForecastCopy16}
   {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-  {FB1 : BDFromForecastB1} {BF18 : BDFromForecastCopy18}.
+  {BF18 : BDFromForecastCopy18}.
 
 (** ** Typed T8, proved (row B1)
 
-  The three T8 forms the proofs use. Each is the proved theorem [PCUICEtaT8Probe.T8_*_r]
-  (section [T8Assembly]) with its two hypotheses discharged: [subject_reduction] by
+  The three T8 forms the proofs use. Each is the proved two-hypothesis theorem
+  [PCUICEtaT8Probe.T8_*_r_two] with its one hypothesis, [subject_reduction], discharged by
   [PCUICSREta.subject_reductionE] (the same compiled type: [T1_subject_reduction_fit], the
-  checker contract's text), and [fri] by the forecast field [fix_rarg_inductiveE_fc]. The
-  section premise [wfΣ] of [T8Assembly] and the [wfE Σ] of [fri] are both the statement's own
-  [wfE Σ] premise ([t8-assembly-review.md] N1). The type of each is the body of the pinned
+  checker contract's text). Its [wfE Σ] is the statement's own premise ([t8-assembly-review.md]
+  N1), and [fix_rarg_inductive] is proved inside [PCUICEtaT8Probe]. The type of each is the
+  body of the pinned
   [Definition] of [PCUICEtaT8Probe.v] (section [Statements]) under [forall (cf : checker_flags)
   (Σ : global_env_ext),], verbatim: [T8_Sort_r_plug] is [T8_Sort_r_statement] (:121-125),
   [T8_Prod_r_plug] is [T8_Prod_r_statement] (:133-140), [T8_Ind_r_plug] is
@@ -265,9 +240,7 @@ Definition T8_Sort_r_plug :
       wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
       ws_cumul_pbE pb Σ Γ T (tSort s) ->
       ∑ s'', Σ ;;; Γ ⊢ T ⇝ tSort s'' × compare_sort Σ pb s'' s :=
-  fun cf Σ Γ pb T s s' wfΣ =>
-    @PCUICEtaT8Probe.T8_Sort_r cf Σ wfΣ (fix_rarg_inductiveE_fc cf Σ wfΣ)
-      (PCUICSREta.subject_reductionE (cf := cf)) Γ pb T s s' wfΣ.
+  fun cf Σ => @PCUICEtaT8Probe.T8_Sort_r_two cf Σ (PCUICSREta.subject_reductionE (cf := cf)).
 
 Definition T8_Prod_r_plug :
     forall (cf : checker_flags) (Σ : global_env_ext),
@@ -278,9 +251,7 @@ Definition T8_Prod_r_plug :
         [× Σ ;;; Γ ⊢ T ⇝ tProd na' dom' codom', eq_binder_annot na' na,
            ws_cumul_pbE Conv Σ Γ dom' dom &
            ws_cumul_pbE pb Σ (Γ ,, vass na dom) codom' codom] :=
-  fun cf Σ Γ pb T na dom codom s' wfΣ =>
-    @PCUICEtaT8Probe.T8_Prod_r cf Σ wfΣ (fix_rarg_inductiveE_fc cf Σ wfΣ)
-      (PCUICSREta.subject_reductionE (cf := cf)) Γ pb T na dom codom s' wfΣ.
+  fun cf Σ => @PCUICEtaT8Probe.T8_Prod_r_two cf Σ (PCUICSREta.subject_reductionE (cf := cf)).
 
 Definition T8_Ind_r_plug :
     forall (cf : checker_flags) (Σ : global_env_ext),
@@ -291,9 +262,7 @@ Definition T8_Ind_r_plug :
         [× Σ ;;; Γ ⊢ T ⇝ mkApps (tInd ind ui') l',
            cmp_global_instance_finst Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui' ui &
            ws_cumul_pbE_terms Σ Γ l' l] :=
-  fun cf Σ Γ pb T ind ui l s' wfΣ =>
-    @PCUICEtaT8Probe.T8_Ind_r cf Σ wfΣ (fix_rarg_inductiveE_fc cf Σ wfΣ)
-      (PCUICSREta.subject_reductionE (cf := cf)) Γ pb T ind ui l s' wfΣ.
+  fun cf Σ => @PCUICEtaT8Probe.T8_Ind_r_two cf Σ (PCUICSREta.subject_reductionE (cf := cf)).
 
 (** Each type is its pinned statement: the type at [cf] and [Σ] is the [Definition] of
     [PCUICEtaT8Probe.v] at [cf] and [Σ]. *)

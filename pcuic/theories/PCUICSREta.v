@@ -943,10 +943,10 @@ Qed.
 
   [PCUICWsCumulEtaSubst.substitution_ws_cumul_pbE] (the twin of base
   [PCUICConversion.substitution_ws_cumul_pb]) takes base's [subslet], from before [subsletE]
-  existed. Its [subsletE] form, [substitution_ws_cumul_pbE_subslet], is in [PCUICSREtaConv], and
-  the scoping of a [subsletE] is copy 10's [subsletE_open_terms]; both were local here before
-  copy 10 landed. The lemma below gives the same kind of conclusion from the landed [_cb]
-  reduction facts. *)
+  existed. Its [subsletE] form is copy 15's [PCUICSpineEta.substitution_ws_cumul_pbE_typed]
+  ([PCUICSpineEta.v:242]), used below written qualified, and the scoping of a [subsletE] is copy
+  10's [subsletE_open_terms]; both were local here before copies 10 and 15 landed. The lemma
+  below gives the same kind of conclusion from the landed [_cb] reduction facts. *)
 
 (** Base [PCUICConversion.closed_red_red_subst0] ([:477]) under [ClosedBodies Σ] in place of
     [wf Σ]: the landed [closed_red_red_subst_cb] at an empty context. *)
@@ -1736,7 +1736,7 @@ Proof.
     set cbtyg := (case_branch_type_gen _ _ _ _ _ _ _ _ _).
     transitivity (subst0 (List.rev (skipn (ind_npars mdecl) args)) (expand_lets prebrctx cbtyg.2)).
     { eapply ws_cumul_pbE_eq_le.
-      eapply (substitution_ws_cumul_pbE_subslet (Γ'' := [])). eapply spbrctx.
+      eapply (PCUICSpineEta.substitution_ws_cumul_pbE_typed (Γ'' := [])). eapply spbrctx.
       symmetry. apply (ws_cumul_pb_expand_lets_ws_cumul_ctxE (pb:=Cumul)); tea.
       eapply wt_cumul_pb_reflE.
       rewrite case_branch_type_fst in cbty.
@@ -2651,7 +2651,7 @@ Proof.
     destruct cum as [[cr mapd] cumdecls].
     destruct decl'' as [na [b|] ty]; simpl in mapd; try discriminate.
     depelim cumdecls. cbn in *. rename eqt into cum.
-    eapply (substitution_ws_cumul_pbE_subslet (Γ' := skipn idx (smash_context [] pargctxu1)) (Γ'' := [])
+    eapply (PCUICSpineEta.substitution_ws_cumul_pbE_typed (Γ' := skipn idx (smash_context [] pargctxu1)) (Γ'' := [])
       (s := skipn idx (List.rev (skipn (ind_npars mdecl) args0)))) in cum.
     2:{ eapply spine_subst_smashE in idxsubst0; eauto.
         eapply subslet_skipnE, idxsubst0. }
@@ -2670,7 +2670,7 @@ Proof.
     assert (wf_localE Σ (Γ ,,, subst_instance u (ind_params mdecl))).
     { eapply PCUICWeakeningTypEta.weaken_wf_localE; eauto. eapply on_minductive_wf_paramsE => //. pcuic.
       apply declc. }
-    eapply (substitution_ws_cumul_pbE_subslet (Γ'' := [])); eauto. eapply iparsubst0.
+    eapply (PCUICSpineEta.substitution_ws_cumul_pbE_typed (Γ'' := [])); eauto. eapply iparsubst0.
     simpl.
     rewrite (distr_subst_rec _ _ _ #|ind_params mdecl| 0); len => /=.
     rewrite /indsubst1 subst_instance_inds.

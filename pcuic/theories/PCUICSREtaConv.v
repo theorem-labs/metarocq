@@ -16,8 +16,7 @@
   premise is not used, the twin has no premise.
 
   This file stays LOW in the import order: the E copies of [PCUICSpine] and [PCUICInductives]
-  (copies 15/16) import it, so it imports neither base [PCUICSR] nor any of those copies. It imports
-  the landed copy 10 ([PCUICSubstitutionEta]) for [subsletE]. Where base
+  (copies 15/16) import it, so it imports neither base [PCUICSR] nor any of those copies. Where base
   [conv_ctx_set_binder_name] uses the SR-local syntactic lemma [is_closed_context_set_binder_name],
   the twin here transports closedness with [eq_context_upto_names_on_free_vars] ([PCUICConfluence])
   instead. [subst_instance_ws_cumul_ctx_pbE_rel] (two different lemmas carry this name: P3's in
@@ -60,7 +59,7 @@
   | closed_red1_ws_cumul_pb (PCUICSR:1239)                   | (b)      | closed_red1_ws_cumul_pbE |
   | substitution_ws_cumul_pb_subst_conv (PCUICSR:1360, the   | (c)      | copy 16 (PCUICInductives: wf_subsletE); copy 10 (subsletE, subslet_untyped_subsletE) has landed. Its core is landed: substitution_ws_cumul_pbE_subst_conv @ PCUICWsCumulEtaCtx.v:523 (untyped_subslet form); the SR-local lemma only turns subslet into untyped_subslet |
   |   SR-local version)                                      |          |                           |
-  | substitution_ws_cumul_pb (PCUICConversion:3104), at the  | (b)      | substitution_ws_cumul_pbE_subslet (wfE), moved here from PCUICSREta; the landed A7 twin substitution_ws_cumul_pbE (PCUICWsCumulEtaSubst) takes base subslet (see the comment at the lemma) |
+  | substitution_ws_cumul_pb (PCUICConversion:3104), at the  | landed   | substitution_ws_cumul_pbE_typed @ PCUICSpineEta.v:242 (copy 15, canonical; the twin this file had, substitution_ws_cumul_pbE_subslet, was deleted for it after a both-way compiled check). It cannot live beside the A7 twin substitution_ws_cumul_pbE (PCUICWsCumulEtaSubst), which takes base subslet, because PCUICSubstitutionEta, which defines subsletE, imports PCUICWsCumulEtaSubst; the A7 twin is only weaker, never unsound |
   |   E typed substitution subsletE                          |          |                           |
   | type_Cumul_alt (PCUICSR:1456)                            | (b)      | type_Cumul_altE: the JoinE form, which is both the base twin (by the ruling) and the checker's T1_facts field |
   | case_nondep_predicate_conv (PCUICSR:1550)                | (d)      | belongs to the T1 copy itself: it needs four SR-local syntactic lemmas (case_predicate_context_vass, mk_ctx_subst_snoc_ass, subst0_cons_nondep, on_free_vars_it_mkLambda_or_LetIn), which this file cannot import; its conversion steps are landed (red_betas_typedE @ PCUICWsCumulEtaCtxTyp.v:187, red_ws_cumul_pbE) |
@@ -133,8 +132,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICParallelReduction PCUICConversion PCUICContextConversion PCUICCasesContexts PCUICContexts
      PCUICTypingEta PCUICTypingEtaInd PCUICTypingEtaNotions PCUICClosedTypEta PCUICEtaI5
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
-     PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICClosedBodies
-     PCUICSubstitutionEta.
+     PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICClosedBodies.
 From MetaRocq.PCUIC Require PCUICClosedTyp PCUICWeakeningConv.
 
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
@@ -485,27 +483,6 @@ Section Typed.
   Qed.
 
 End Typed.
-
-(** ** Conversion at the E typed substitution [subsletE] *)
-
-(** Base [PCUICConversion.substitution_ws_cumul_pb] ([:3104]) at [subsletE]. The landed A7 twin,
-    [PCUICWsCumulEtaSubst.substitution_ws_cumul_pbE], takes base's [subslet] (and the scoping of the
-    substituted terms) because [subsletE] did not exist when A7 landed; it is only weaker, never
-    unsound. This is its form at [subsletE]: [subslet_untyped_subsletE] gives the untyped
-    substitution and [subsletE_open_terms] the scoping (both copy 10), then A7's
-    [untyped_substitution_ws_cumul_pbE]. It is not beside the A7 lemma because
-    [PCUICWsCumulEtaSubst] sits below [PCUICSubstitutionEta] in the import order (copy 10 imports
-    it), and copy 10 defines [subsletE]. Moved here from [PCUICSREta]. *)
-Lemma substitution_ws_cumul_pbE_subslet {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {pb Γ Γ' Γ'' s M N} :
-  subsletE Σ Γ s Γ' ->
-  Σ ;;; Γ ,,, Γ' ,,, Γ'' ⊢E M ≤[pb] N ->
-  Σ ;;; Γ ,,, subst_context s 0 Γ'' ⊢E subst s #|Γ''| M ≤[pb] subst s #|Γ''| N.
-Proof.
-  intros hs h.
-  eapply untyped_substitution_ws_cumul_pbE; [| |exact h].
-  - exact (subslet_untyped_subsletE _ _ _ _ hs).
-  - exact (subsletE_open_terms hs).
-Qed.
 
 (** ** Environment and reduction facts with a base [wf Σ] premise (T1 case audit §2, §12) *)
 
