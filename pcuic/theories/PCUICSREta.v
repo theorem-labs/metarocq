@@ -30,6 +30,12 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICCumulativitySpe
 (* Copy 9 (gated at d46f9387, merged into this branch): [context_conversionE] and
    [closed_context_conversionE], with the statements the forecast block had. *)
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
+(* T2a (a2a2adfc, merged into this branch): [validityE], [inversion_mkAppsE], the shared forecast
+   definitions ([subsletE], [typing_spineE], [ctx_inst_subE], [spine_substE], [has_sort_isTypeE],
+   [isWfArityE]), the lemmas it proves for copies 10/12/14/15/16 ([isType_wf_localE],
+   [type_ws_cumul_pbE], [isType_tProdE], ...) and its forecast classes [ValForecastCopy10/14/15/16],
+   which are premises of section [SREta] below. *)
+From MetaRocq.PCUIC Require Import PCUICValidityEta.
 From MetaRocq.PCUIC.Typing Require PCUICUnivSubstitutionTypEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta.
 
@@ -70,60 +76,18 @@ Local Notation " Σ ;;; Γ ⊢E t = u " := (ws_cumul_pbE Conv Σ Γ t u) (at lev
    projections. *)
 Local Set Warnings "-unexpected-implicit-declaration".
 
-(** *** Definitions *)
+(** *** Definitions
 
-(* FORECAST-ONLY: proved by copy 10 (PCUICSubstitutionEta.v, twin of PCUICSubstitution.v:45 subslet);
-   delete when it lands. Text: the statement note's forecast stand-in, verbatim. *)
-Inductive subsletE {cf:checker_flags} Σ (Γ : context) : list term -> context -> Type :=
-| emptysletE : subsletE Σ Γ [] []
-| cons_let_assE Δ s na t T : subsletE Σ Γ s Δ ->
-    Σ ;;; Γ |-E t : subst0 s T ->
-    subsletE Σ Γ (t :: s) (Δ ,, vass na T)
-| cons_let_defE Δ s na t T :
-    subsletE Σ Γ s Δ ->
-    Σ ;;; Γ |-E subst0 s t : subst0 s T ->
-    subsletE Σ Γ (subst0 s t :: s) (Δ ,, vdef na t T).
-(* FORECAST-ONLY (with [subsletE]): base derives it for [subslet]; the checker forecast's [subsletE]
-   has it too. *)
+  [subsletE], [typing_spineE], [ctx_inst_subE], [spine_substE] (with its fields), [has_sort_isTypeE]
+  and [isWfArityE] come from T2a's [PCUICValidityEta] (imported above; same text as this block had),
+  so that ONE [typing_spineE] is in scope. [validityE] and [inversion_mkAppsE] are T2a's proved
+  lemmas. The definitions below are those [PCUICValidityEta] does not have. *)
+
+(* FORECAST-ONLY (with copy 10's [subsletE] and copy 14's [typing_spineE], which T2a's forecast block
+   defines): base derives them for [subslet] and [PCUICArities.typing_spine]; SR's [depelim]s need
+   them. Delete when those copies land. *)
 Derive Signature for subsletE.
-
-(* FORECAST-ONLY: proved by copy 14 (PCUICAritiesEta.v, twin of PCUICArities.v:44 typing_spine, the
-   ARITIES one); delete when it lands. Text: the statement note's forecast stand-in, verbatim. *)
-Inductive typing_spineE {cf} Σ (Γ : context) : term -> list term -> term -> Type :=
-| type_spine_nilE ty ty' :
-    isTypeE Σ Γ ty ->
-    isTypeE Σ Γ ty' ->
-    ws_cumul_pbE Cumul Σ Γ ty ty' ->
-    typing_spineE Σ Γ ty [] ty'
-| type_spine_consE ty hd tl na A B B' :
-    isTypeE Σ Γ ty ->
-    isTypeE Σ Γ (tProd na A B) ->
-    ws_cumul_pbE Cumul Σ Γ ty (tProd na A B) ->
-    Σ ;;; Γ |-E hd : A ->
-    typing_spineE Σ Γ (subst10 hd B) tl B' ->
-    typing_spineE Σ Γ ty (hd :: tl) B'.
-(* FORECAST-ONLY (with [typing_spineE]): base derives it for [PCUICArities.typing_spine]. *)
 Derive Signature for typing_spineE.
-
-(* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v, twin of PCUICSpine.v:903 ctx_inst_sub); delete
-   when it lands. Text: PCUICSREtaCopyStatements.v, verbatim. *)
-Fixpoint ctx_inst_subE {cf : checker_flags} {Σ : global_env_ext} {Γ Δ args}
-  (c : ctx_instE Σ Γ args Δ) {struct c} : list term :=
-  match c return _ with
-  | PCUICTyping.ctx_inst_nil => []
-  | PCUICTyping.ctx_inst_ass na t i inst Δ P c => ctx_inst_subE c ++ [i]
-  | PCUICTyping.ctx_inst_def na b t inst Δ c => ctx_inst_subE c ++ [b]
-  end.
-
-(* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v, twin of PCUICSpine.v:226 spine_subst); delete
-   when it lands. Text: PCUICSREtaCopyStatements.v, verbatim. *)
-Record spine_substE {cf : checker_flags} Σ Γ inst s (Δ : context) := mkSpineSubstE {
-  spine_dom_wfE : wf_localE Σ Γ;
-  spine_codom_wfE : wf_localE Σ (Γ ,,, Δ);
-  inst_ctx_substE :> context_subst Δ inst s;
-  inst_subsletE :> subsletE Σ Γ s Δ }.
-Arguments inst_ctx_substE {cf Σ Γ inst s Δ}.
-Arguments inst_subsletE {cf Σ Γ inst s Δ}.
 
 (* FORECAST-ONLY: proved by copy 16 (PCUICInductivesEta.v, twin of PCUICInductives.v:623 wf_subslet);
    delete when it lands. Text: PCUICSREtaCopyStatements.v, verbatim. *)
@@ -138,53 +102,19 @@ Notation decl_ws_cumul_pbE Σ Γ :=
   (All_decls_alpha_pb Conv (fun pb (x0 y0 : term) => ws_cumul_pbE pb Σ Γ x0 y0)).
 
 (* FORECAST-ONLY: canonical home PCUICTypingEtaNotions.v (cross-lane-commitments.md C2, EtaCheckerLane's
-   map); delete when it lands. Text: safechecker/theories/PCUICTypingEtaDefs.v @ 26749b27:75-80,
-   verbatim. The E forms of [PCUICTyping.has_sort_isType]/[has_sort_isTypeRel]. *)
-Definition has_sort_isTypeE {cf Σ} {Γ T} s : Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T.
-Proof. repeat (eexists; tea). Defined.
-
+   map); delete when it lands. Text: safechecker/theories/PCUICTypingEtaDefs.v @ 26749b27:78-80,
+   verbatim. The E form of [PCUICTyping.has_sort_isTypeRel]. *)
 Definition has_sort_isTypeRelE {cf Σ} {Γ T} s r :
   isSortRel s r -> Σ ;;; Γ |-E T : tSort s -> isTypeRelE Σ Γ T r.
 Proof. repeat (eexists; tea). Defined.
 
-(* FORECAST-ONLY: defined by T2a (PCUICValidityEta.v @ a2a2adfc:88, twin of PCUICTyping.v:470
-   isWfArity); delete when that file is imported. Text: that file's, verbatim. *)
-Definition isWfArityE {cf:checker_flags} Σ (Γ : context) T :=
-  (isTypeE Σ Γ T × { ctx & { s & (destArity [] T = Some (ctx, s)) } }).
-
-(** *** T2a: the twins of the [PCUICValidity] lemmas that [PCUICSR] uses
-
-  No statement note covers T2a. Each field is the exact twin of its base lemma (relation renamed,
-  nothing else); together they are the T2a writer's contract. *)
-
-(* FORECAST-ONLY: proved by T2a (PCUICValidityEta.v); delete when it lands. *)
-Class SRForecastT2a := {
-  (* twin of PCUICValidity.v:356 validity *)
-  validityE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ t T},
-    Σ ;;; Γ |-E t : T -> isTypeE Σ Γ T ;
-  (* twin of PCUICValidity.v:381 inversion_mkApps (typing_spine = the PCUICArities one) *)
-  inversion_mkAppsE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ f u T},
-    Σ ;;; Γ |-E mkApps f u : T ->
-    ∑ A, Σ ;;; Γ |-E f : A × typing_spineE Σ Γ A u T
-}.
-
 (** *** Copy 10 ([PCUICSubstitutionEta.v]): twins of base [PCUICSubstitution]. The statement note
-    gives names only; each statement is base's (file:line) with the relations renamed. *)
+    gives names only; each statement is base's (file:line) with the relations renamed.
+    [isType_substitutionE], [substitutionE] and [substitution0E] are fields of T2a's
+    [ValForecastCopy10] (same text); T2a proves [isType_wf_localE]. *)
 
 (* FORECAST-ONLY: proved by copy 10 (PCUICSubstitutionEta.v); delete when it lands. *)
 Class SRForecastCopy10 := {
-  (* PCUICSubstitution.v:1824 isType_substitution *)
-  isType_substitutionE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ T},
-    subsletE Σ Γ s Γ' ->
-    isTypeE Σ (Γ ,,, Γ' ,,, Δ) T ->
-    isTypeE Σ (Γ ,,, subst_context s 0 Δ) (subst s #|Δ| T) ;
-  (* PCUICSubstitution.v:1306 isType_wf_local *)
-  isType_wf_localE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {Γ T},
-    isTypeE Σ Γ T -> wf_localE Σ Γ ;
   (* PCUICSubstitution.v:66 subslet_ass_tip *)
   subslet_ass_tipE :
     forall {cf} {Σ : global_env_ext} {Γ na t T},
@@ -205,17 +135,6 @@ Class SRForecastCopy10 := {
   subslet_untyped_subsletE :
     forall {cf:checker_flags} (Σ : global_env_ext) Γ s Γ',
     subsletE Σ Γ s Γ' -> untyped_subslet Γ s Γ' ;
-  (* PCUICSubstitution.v:1795 substitution *)
-  substitutionE :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ Γ' s Δ t T},
-    subsletE Σ Γ s Γ' ->
-    Σ ;;; Γ ,,, Γ' ,,, Δ |-E t : T ->
-    Σ ;;; Γ ,,, subst_context s 0 Δ |-E subst s #|Δ| t : subst s #|Δ| T ;
-  (* PCUICSubstitution.v:1865 substitution0 *)
-  substitution0E :
-    forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ n u U t T},
-    Σ ;;; Γ ,, vass n U |-E t : T -> Σ ;;; Γ |-E u : U ->
-    Σ ;;; Γ |-E t {0 := u} : T {0 := u} ;
   (* PCUICSubstitution.v:1876 substitution_let *)
   substitution_letE :
     forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ n u U t T},
@@ -262,37 +181,17 @@ Class SRForecastCopy12 := {
 }.
 
 (** *** Copy 14 ([PCUICAritiesEta.v]): twins of base [PCUICArities] (section [WfEnv]:
-    [{cf} {Σ : global_env_ext} {wfΣ : wf Σ}]); names only in the note. *)
+    [{cf} {Σ : global_env_ext} {wfΣ : wf Σ}]); names only in the note. [subslet_indsE] is a field
+    of T2a's [ValForecastCopy14]; T2a proves [type_ws_cumul_pbE] and [isType_tProdE] (same text). *)
 
 (* FORECAST-ONLY: proved by copy 14 (PCUICAritiesEta.v); delete when it lands. *)
 Class SRForecastCopy14 := {
-  (* PCUICArities.v:228 type_ws_cumul_pb. NOT TWIN (ADDED ClosedBodies): closedbodies-register row
-     2; base has no environment premise ([Proof using Type]). Same place as in the note's
-     [type_mkAppsE]. *)
-  type_ws_cumul_pbE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {pb Γ t} T {U},
-    Σ ;;; Γ |-E t : T ->
-    isTypeE Σ Γ U ->
-    ws_cumul_pbE pb Σ Γ T U ->
-    Σ ;;; Γ |-E t : U ;
-  (* PCUICArities.v:213 isType_tProd *)
-  isType_tProdE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ} {na A B},
-    isTypeE Σ Γ (tProd na A B) <~>
-    (isTypeRelE Σ Γ A na.(binder_relevance) × isTypeE Σ (Γ,, vass na A) B) ;
   (* PCUICArities.v:633 on_minductive_wf_params *)
   on_minductive_wf_paramsE :
     forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {ind mdecl} {u},
     declared_minductive Σ.1 ind mdecl ->
     consistent_instance_ext Σ (ind_universes mdecl) u ->
     wf_localE Σ (subst_instance u (ind_params mdecl)) ;
-  (* PCUICArities.v:527 subslet_inds *)
-  subslet_indsE :
-    forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {ind u mdecl idecl},
-    declared_inductive Σ.1 ind mdecl idecl ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    subsletE Σ [] (inds (inductive_mind ind) u (ind_bodies mdecl))
-      (subst_instance u (arities_context (ind_bodies mdecl))) ;
   (* PCUICArities.v:126 ws_cumul_ctx_pb_app *)
   ws_cumul_ctx_pb_appE :
     forall {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {le Γ Γ' Δ Δ'},
@@ -302,7 +201,10 @@ Class SRForecastCopy14 := {
 }.
 
 (** *** Copy 15 ([PCUICSpineEta.v]): the statement note's statements, verbatim
-    ([PCUICSREtaCopyStatements.v] @ [c232bd3d], [<base>E_statement] → field [<base>E]). *)
+    ([PCUICSREtaCopyStatements.v] @ [c232bd3d], [<base>E_statement] → field [<base>E]).
+    [ctx_inst_spine_substE], [spine_subst_smashE], [spine_subst_subst_to_extended_list_kE],
+    [type_mkAppsE] and [typing_spine_strengthenE] are fields of T2a's [ValForecastCopy15] (the
+    note's text, environment premise explicit). *)
 
 (* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v); delete when it lands. *)
 Class SRForecastCopy15 := {
@@ -326,12 +228,6 @@ Class SRForecastCopy15 := {
     forall (Γ : context) (args : list term) (Δ : context),
     ctx_instE Σ Γ args Δ ->
     All (fun t : term => is_open_term Γ t) args ;
-  ctx_inst_spine_substE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ Δ : list context_decl} {args : list term},
-    wf_localE Σ (Γ ,,, Δ) ->
-    forall ci : ctx_instE Σ Γ args (List.rev Δ),
-    spine_substE Σ Γ args (ctx_inst_subE ci) Δ ;
   inversion_mkApps_directE :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ : context} {f : term} {u : list term} {T : term},
@@ -372,26 +268,10 @@ Class SRForecastCopy15 := {
     spine_substE Σ Γ inst s Δ ->
     spine_substE Σ Γ inst s' Δ ->
     s = s' ;
-  spine_subst_smashE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ : context} {inst s : list term} {Δ : context},
-    spine_substE Σ Γ inst s Δ ->
-    spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ) ;
-  spine_subst_subst_to_extended_list_kE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {args s : list term} {Δ : context},
-    spine_substE Σ Γ args s Δ ->
-    map (subst0 s) (to_extended_list_k Δ 0) = args ;
   subslet_skipnE :
     forall {cf : checker_flags} (Σ : global_env_ext) (Γ : context) (s : list term) (Δ : context) (n : nat),
     subsletE Σ Γ s Δ ->
     subsletE Σ Γ (skipn n s) (skipn n Δ) ;
-  (* NOT TWIN (ADDED ClosedBodies), closedbodies-register row 1, as in the note. *)
-  type_mkAppsE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ},
-    forall {Γ : context} {t : term} {u : list term} {T t_ty : term},
-    Σ ;;; Γ |-E t : t_ty ->
-    typing_spineE Σ Γ t_ty u T ->
-    Σ ;;; Γ |-E mkApps t u : T ;
   typing_spine_invE :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ Δ : context} {T : term} {args args' : list term} {T' : term},
@@ -408,14 +288,6 @@ Class SRForecastCopy15 := {
     ∑ decl : context_decl,
       (nth_error (smash_context [] Δ) (context_assumptions Δ - S n) = Some decl) ×
       (Σ ;;; Γ |-E arg : subst0 (List.rev (firstn n args)) (decl_type decl)) ;
-  typing_spine_strengthenE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ : context} {T : term} {args : list term} {U : term},
-    typing_spineE Σ Γ T args U ->
-    forall T' : term,
-    isTypeE Σ Γ T' ->
-    ws_cumul_pbE Cumul Σ Γ T' T ->
-    typing_spineE Σ Γ T' args U ;
   wf_local_alphaE :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall Γ Γ' : list context_decl,
@@ -449,7 +321,10 @@ Class SRForecastCopy15 := {
     ws_cumul_pbE le' Σ (Γ ,,, smash_context [] Δ) (expand_lets Δ T) (expand_lets Δ' T')
 }.
 
-(** *** Copy 16 ([PCUICInductivesEta.v]): the statement note's statements, verbatim. *)
+(** *** Copy 16 ([PCUICInductivesEta.v]): the statement note's statements, verbatim.
+    [declared_projection_type_and_eqE], [isType_mkApps_Ind_invE] and
+    [on_minductive_wf_params_indices_instE] are fields of T2a's [ValForecastCopy16] (the note's
+    text, environment premise explicit). *)
 
 (* FORECAST-ONLY: proved by copy 16 (PCUICInductivesEta.v); delete when it lands. *)
 Class SRForecastCopy16 := {
@@ -458,29 +333,6 @@ Class SRForecastCopy16 := {
   isType_introE :
     forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {T : term} {s : sort},
     Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T ;
-  declared_projection_type_and_eqE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {mdecl : mutual_inductive_body}
-      {idecl : one_inductive_body} {p : projection} {cdecl : constructor_body} {pdecl : projection_body},
-    wfE Σ.1 ->
-    declared_projection Σ p mdecl idecl cdecl pdecl ->
-    let u := abstract_instance (ind_universes mdecl) in
-    (ind_ctors idecl = [cdecl] ×
-     isTypeE (Σ.1, ind_universes mdecl)
-       (vass {| binder_name := nNamed (ind_name idecl); binder_relevance := ind_relevance idecl |}
-          (mkApps (tInd (proj_ind p) u) (to_extended_list (smash_context [] (ind_params mdecl)))) ::
-        smash_context [] (ind_params mdecl)) (proj_type pdecl)) ×
-    (∑ decl : context_decl,
-      [× nth_error (smash_context [] (cstr_args cdecl))
-           (context_assumptions (cstr_args cdecl) - S (proj_arg p)) = Some decl,
-         isTypeE (Σ.1, ind_universes mdecl)
-           (arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,,
-            skipn (context_assumptions (cstr_args cdecl) - proj_arg p) (smash_context [] (cstr_args cdecl)))
-           (decl_type decl),
-         wf_localE (Σ.1, ind_universes mdecl)
-           (arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,, smash_context [] (cstr_args cdecl)),
-         projection_type mdecl (proj_ind p) (proj_arg p) (decl_type decl) = proj_type pdecl &
-         projection_type mdecl (proj_ind p) (proj_arg p) (decl_type decl) =
-         projection_type' mdecl (proj_ind p) (proj_arg p) (decl_type decl)]) ;
   instantiate_indsE :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1},
     forall {u : Instance.t} {mind : kername} {mdecl : mutual_inductive_body},
@@ -496,33 +348,10 @@ Class SRForecastCopy16 := {
     consistent_instance_ext Σ (ind_universes mdecl) puinst ->
     spine_substE Σ Γ args inst (ind_params mdecl ,,, ind_indices idecl)@[puinst] ->
     Σ ;;; Γ |-E mkApps (tInd ind puinst) args : tSort (ind_sort idecl)@[puinst] ;
-  isType_mkApps_Ind_invE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {ind : inductive} {u : Instance.t}
-      {args : list term},
-    wfE Σ.1 ->
-    forall {mdecl : mutual_inductive_body} {idecl : one_inductive_body},
-    declared_inductive Σ.1 ind mdecl idecl ->
-    wf_localE Σ Γ ->
-    isTypeE Σ Γ (mkApps (tInd ind u) args) ->
-    ∑ parsubst argsubst : list term,
-      let parctx := (ind_params mdecl)@[u] in
-      let argctx := subst_context parsubst 0 (ind_indices idecl)@[u] in
-      [× spine_substE Σ Γ (firstn (ind_npars mdecl) args) parsubst parctx,
-         spine_substE Σ Γ (skipn (ind_npars mdecl) args) argsubst argctx,
-         #|firstn (ind_npars mdecl) args| = ind_npars mdecl,
-         #|skipn (ind_npars mdecl) args| = context_assumptions (ind_indices idecl) &
-         consistent_instance_ext Σ (ind_universes mdecl) u] ;
   map_subst_let_expand_to_extended_listE :
     forall {cf : checker_flags} {Σ : global_env_ext} {s : list term} {Γ Δ : context},
     spine_substE Σ Γ s (List.rev s) (smash_context [] Δ) ->
     map (subst_let_expand (List.rev s) Δ) (to_extended_list Δ) = s ;
-  on_minductive_wf_params_indices_instE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body},
-    declared_inductive Σ ind mdecl idecl ->
-    forall u : Instance.t,
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    wf_localE Σ ((ind_params mdecl ,,, ind_indices idecl)@[u]) ;
   red_it_mkProd_or_LetIn_smashE :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall (Γ : list context_decl) (ctx : context) (t u : term) (n : nat) (c : context_decl),
@@ -766,8 +595,10 @@ Local Set Warnings "unexpected-implicit-declaration".
 
 Section SREta.
 
-(* FORECAST-ONLY: one premise per row of the block above; delete each line when its row lands. *)
-Context {FT2a : SRForecastT2a} {F10 : SRForecastCopy10}
+(* FORECAST-ONLY: one premise per class: T2a's four ([PCUICValidityEta], which its lemmas take too)
+   and this block's six; delete each when its copy lands. *)
+Context {V10 : ValForecastCopy10} {V14 : ValForecastCopy14} {V15 : ValForecastCopy15}
+  {V16 : ValForecastCopy16} {F10 : SRForecastCopy10}
   {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
   {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
 
@@ -1334,7 +1165,7 @@ Proof.
   split => //.
   rewrite -heq in sp.
   rewrite firstn_all in sp.
-  now apply: spine_subst_smashE.
+  now apply: (spine_subst_smashE wfΣ).
 Qed.
 
 (** Base [lift_judgment_SR] ([:1465]). *)
@@ -2054,7 +1885,7 @@ Proof.
     pose proof typec as typec'.
     eapply inversion_mkAppsE in typec as [A [tyc tyargs]]; auto.
     eapply (inversion_ConstructE Σ wf) in tyc as [mdecl' [idecl' [cdecl [wfl [declc [Hu tyc]]]]]].
-    eapply typing_spine_strengthenE in tyargs; tea.
+    eapply (typing_spine_strengthenE wf) in tyargs; tea.
     have openargs : forallb (is_open_term Γ) args.
     { repeat inv_on_free_vars; auto. }
     clear tyc.
@@ -2136,7 +1967,7 @@ Proof.
     { eapply conv_context_smash_endE; tea. now symmetry. }
     assert (spbrctx : spine_substE Σ Γ (skipn (ind_npars mdecl) args) (List.rev (skipn (ind_npars mdecl) args))
       (smash_context [] prebrctx)).
-    { pose proof (spine_subst_smashE idxsubst0).
+    { pose proof (spine_subst_smashE wf idxsubst0).
       eapply spine_subst_cumulE in X0. eapply X0. all:tea.
       1-2:apply smash_context_assumption_context; pcuic.
       eapply X0.
@@ -2146,8 +1977,8 @@ Proof.
       rewrite (firstn_app_left).
       now rewrite (wf_predicate_length_pars H0).
       intros iparsubst0.
-      clear X5 IHctxi. unshelve epose proof (ctx_inst_spine_substE _ Hctxi).
-      eapply PCUICWeakeningTypEta.weaken_wf_localE; tea. exact (on_minductive_wf_params_indices_instE isdecl _ cu').
+      clear X5 IHctxi. unshelve epose proof (ctx_inst_spine_substE wf _ Hctxi).
+      eapply PCUICWeakeningTypEta.weaken_wf_localE; tea. exact (on_minductive_wf_params_indices_instE wf isdecl _ cu').
       rewrite (spine_subst_inst_substE iparsubst0).
       intros cum.
       eapply ws_cumul_ctx_pb_rel_transE; tea.
@@ -2242,8 +2073,8 @@ Proof.
       move: convidx.
       intros cv convidx.
       eapply (ws_cumul_pbE_terms_subst (Δ := [])) in cv.
-      3:{ exact (spine_subst_smashE idxsubst0). }
-      3:{ exact (spine_subst_smashE idxsubst0). }
+      3:{ exact (spine_subst_smashE wf idxsubst0). }
+      3:{ exact (spine_subst_smashE wf idxsubst0). }
       all:tea. 2:{ eapply wf_local_closed_contextE. eapply wf_local_smash_endE; tea. eapply idxsubst0. }
       2:{ eapply All2_rev => //. }
       rewrite subst_context_nil /= in cv. simpl in cv.
@@ -2431,7 +2262,7 @@ Proof.
     unfold unfold_cofix in H.
     rewrite Hnth in H. noconf H.
     pose proof (validityE Hbody) as vbody.
-    eapply typing_spine_strengthenE in tsp; [|exact vbody|exact Hcum].
+    eapply (typing_spine_strengthenE wf) in tsp; [|exact vbody|exact Hcum].
     have typec' : Σ ;;; Γ |-E mkApps (subst0 (cofix_subst mfix) (dbody d)) args :
       mkApps (tInd ci (puinst p)) (pparams p ++ indices).
     { eapply type_mkAppsE; tea. }
@@ -2475,7 +2306,7 @@ Proof.
     have wfparinds : wf_localE Σ
       (Γ,,, subst_instance (puinst p) (ind_params mdecl,,, ind_indices idecl)).
     { eapply PCUICWeakeningTypEta.weaken_wf_localE; tea.
-      eapply (on_minductive_wf_params_indices_instE isdecl _ H1). }
+      eapply (on_minductive_wf_params_indices_instE wf isdecl _ H1). }
     have ctxi' : ctx_instE Σ Γ (params' ++ indices)
         (List.rev
            (subst_instance p.(puinst) (ind_params mdecl,,, ind_indices idecl))).
@@ -2483,8 +2314,8 @@ Proof.
       eapply OnOne2_app_r in X3.
       unshelve eapply (ctx_inst_merge'E _ _ _ _ _ X6 X5); tea. }
     pose proof X5 as X5'.
-    unshelve epose proof (ctx_inst_spine_substE _ X5); tea.
-    eapply spine_subst_smashE in X4; tea.
+    unshelve epose proof (ctx_inst_spine_substE wf _ X5); tea.
+    eapply (spine_subst_smashE wf) in X4; tea.
     eapply ctx_inst_length in X5. len in X5.
     rewrite context_assumptions_rev in X5. len in X5.
     pose proof (wf_predicate_length_pars H0). simpl in H.
@@ -2498,9 +2329,9 @@ Proof.
     rewrite firstn_app firstn_all Nat.sub_diag /= app_nil_r in spargs.
     rewrite subst_instance_app List.rev_app_distr in X6.
     have lenpars' := (OnOne2_length X3).
-    unshelve epose proof (ctx_inst_spine_substE _ ctxi');tea.
+    unshelve epose proof (ctx_inst_spine_substE wf _ ctxi');tea.
     pose proof (spine_codom_wfE _ _ _ _ _ X4);tea.
-    pose proof (spine_subst_smashE X4); tea. all:tea.
+    pose proof (spine_subst_smashE wf X4); tea. all:tea.
     rewrite subst_instance_app smash_context_app_expand in X9.
     eapply spine_subst_app_invE in X9 as [sppars' spargs']; tea.
     2:len. len in sppars'. len in spargs'.
@@ -2833,7 +2664,7 @@ Proof.
     have lenargs : #|args| = context_assumptions (ind_params mdecl).
     { pose proof (subslet_lengthE sppars) as hl. move: hl; now len. }
     eapply type_Cumul_altE; [econstructor|..]; eauto.
-    + eapply typing_spine_strengthenE in tsp. 3:tea.
+    + eapply (typing_spine_strengthenE wf) in tsp. 3:tea.
       eapply type_mkAppsE. eauto. eauto.
       now eapply validityE in Hbody.
     + now eapply validityE in typecofix.
@@ -2952,7 +2783,7 @@ Proof.
     eapply nth_error_alli in on_projs; eauto.
     2:eapply isdecl. simpl in on_projs.
     epose proof (declared_constructor_valid_tyE _ _ _ _ _ 0 cdecl _ wf wfΓ declc Hu) as Hty.
-    eapply typing_spine_strengthenE in tyargs; tea.
+    eapply (typing_spine_strengthenE wf) in tyargs; tea.
     rewrite -(firstn_skipn (ind_npars mdecl) args0) in tyargs, H |- *.
     assert(#|firstn (ind_npars mdecl) args0| = ind_npars mdecl).
     rewrite firstn_length_le. lia. lia.
@@ -2995,13 +2826,13 @@ Proof.
       eapply (substitutionE (Γ' := subst_instance u (smash_context [] (ind_params mdecl)))
         (Δ := [vass _ _]) (T := tSort _)); eauto.
       rewrite firstn_all2 in iparsubst0. lia.
-      eapply spine_subst_smashE in iparsubst0; auto.
+      eapply (spine_subst_smashE wf) in iparsubst0; auto.
       rewrite subst_instance_smash.
       eapply iparsubst0. exact Hs. simpl.
       rewrite subst_instance_mkApps subst_mkApps /=.
       rewrite [subst_instance_instance _ _](subst_instance_id_mdecl Σ) // subst_instance_to_extended_list.
       rewrite firstn_all2 in iparsubst0. lia.
-      eapply spine_subst_smashE in iparsubst0; auto.
+      eapply (spine_subst_smashE wf) in iparsubst0; auto.
       rewrite subst_instance_smash /=.
       rewrite /to_extended_list (spine_subst_subst_to_extended_list_kE iparsubst0).
       assumption. }
@@ -3089,7 +2920,7 @@ Proof.
     depelim cumdecls. cbn in *. rename eqt into cum.
     eapply (substitution_ws_cumul_pbE_subslet (Γ' := skipn idx (smash_context [] pargctxu1)) (Γ'' := [])
       (s := skipn idx (List.rev (skipn (ind_npars mdecl) args0)))) in cum.
-    2:{ eapply spine_subst_smashE in idxsubst0; eauto.
+    2:{ eapply (spine_subst_smashE wf) in idxsubst0; eauto.
         eapply subslet_skipnE, idxsubst0. }
     assert (skipn idx (List.rev (skipn (ind_npars mdecl) args0)) = (List.rev (firstn parg (skipn (ind_npars mdecl) args0)))) as eq.
     { rewrite /idx skipn_rev. lia_f_equal. rewrite length_skipn; lia. }
@@ -3135,7 +2966,7 @@ Proof.
     eapply (substitution_ws_cumul_pb_subst_convE (Γ := _ ,,, _) (Δ := [])); auto.
     { rewrite -(subst_instance_length u).
       eapply subslet_liftE; eauto. rewrite -eq.
-      eapply spine_subst_smashE in idxsubst0; eauto.
+      eapply (spine_subst_smashE wf) in idxsubst0; eauto.
       eapply subslet_skipnE. eapply idxsubst0. }
     { specialize (projsubsl (Γ ,,, subst_instance u (ind_params mdecl))).
       rewrite -projs_inst_lift.
@@ -3919,8 +3750,8 @@ Qed.
   The fields of [T1_facts] and [T2a_facts] of the checker's [safechecker/theories/
   PCUICTypingEtaHyps.v] ([wip/etak-k7-2026-10-29] @ [0bbee83d]), verbatim, each inhabited by its
   lemma here. The [T1] fits are this file's theorems (under the forecast block); the [T2a] fits
-  are the forecast fields themselves: they show that the T2a contract written above is the
-  checker's. *)
+  are T2a's proved [validityE] and [inversion_mkAppsE] ([PCUICValidityEta]), as this file uses
+  them. *)
 
 Definition T1_isType_prim_arg_types_fit {cf : checker_flags} :
   forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {tags : list prim_tag} {res : term} {T : term}, wf_localE Σ Γ -> (forall t : prim_tag, In t tags -> t <> primArray) -> All (prim_op_tag_declared Σ) tags -> PCUICPrimOpType.prim_arg_types (retroknowledge Σ.1) tags res = Some T -> isTypeE Σ Γ res -> isTypeE Σ Γ T
