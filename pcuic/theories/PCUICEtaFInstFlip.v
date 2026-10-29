@@ -31,11 +31,11 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICIn
 
 (** ** Instance level *)
 
-Lemma finst_inst_flip r Σ cu cu' pb pb' gr napp u u' :
+Lemma finst_inst_flip Σ cu cu' pb pb' gr napp u u' :
   RelationClasses.subrelation (cu Conv) (flip (cu' Conv)) ->
   RelationClasses.subrelation (cu pb) (flip (cu' pb')) ->
-  cmp_global_instance_finst r Σ cu pb gr napp u u' ->
-  cmp_global_instance_finst r Σ cu' pb' gr napp u' u.
+  cmp_global_instance_finst Σ cu pb gr napp u u' ->
+  cmp_global_instance_finst Σ cu' pb' gr napp u' u.
 Proof.
   intros conv_sym pb_sym.
   unfold cmp_global_instance_finst, cmp_global_instance_eta, finst_mode, cmp_opt_variance.
@@ -52,13 +52,13 @@ Qed.
 
 (** ** Term level *)
 
-Lemma finst_flip r Σ cu cu' cs cs' pb pb' napp u v :
+Lemma finst_flip Σ cu cu' cs cs' pb pb' napp u v :
   RelationClasses.subrelation (cu Conv) (flip (cu' Conv)) ->
   RelationClasses.subrelation (cu pb) (flip (cu' pb')) ->
   RelationClasses.subrelation (cs Conv) (flip (cs' Conv)) ->
   RelationClasses.subrelation (cs pb) (flip (cs' pb')) ->
-  eq_term_upto_univ_eta_napp r Σ cu cs pb napp u v ->
-  eq_term_upto_univ_eta_napp r Σ cu' cs' pb' napp v u.
+  eq_term_upto_univ_eta_napp Σ cu cs pb napp u v ->
+  eq_term_upto_univ_eta_napp Σ cu' cs' pb' napp v u.
 Proof.
   intros univ_sub_conv univ_sub_pb sort_sub_conv sort_sub_pb.
   induction u in napp, pb, pb', univ_sub_pb, sort_sub_pb, v |- * using term_forall_list_ind;
@@ -103,7 +103,7 @@ Proof.
 Qed.
 
 Section RightC1c.
-  Context (r : finst_construct_rule) (Σ' : global_env)
+  Context (Σ' : global_env)
           (cu : conv_pb -> Universe.t -> Universe.t -> Prop)
           (cs : conv_pb -> sort -> sort -> Prop)
           (pre_u : RelationClasses.PreOrder (cu Conv))
@@ -118,22 +118,22 @@ Section RightC1c.
   Theorem red1_finst_r (Σ : global_env) Γ pb napp u u' v' :
     RelationClasses.subrelation (cu Conv) (cu pb) ->
     RelationClasses.subrelation (cs Conv) (cs pb) ->
-    eq_term_upto_univ_eta_napp r Σ' cu cs pb napp u u' ->
+    eq_term_upto_univ_eta_napp Σ' cu cs pb napp u u' ->
     red1 Σ Γ u' v' ->
-    ∑ v, red1 Σ Γ u v × eq_term_upto_univ_eta_napp r Σ' cu cs pb napp v v'.
+    ∑ v, red1 Σ Γ u v × eq_term_upto_univ_eta_napp Σ' cu cs pb napp v v'.
   Proof.
     intros hsu hss e h.
     (* flip, take left-C1c for the flipped relation, flip back *)
-    have ef : eq_term_upto_univ_eta_napp r Σ' fcu fcs pb napp u' u
-      := finst_flip r Σ' cu fcu cs fcs pb pb napp u u'
+    have ef : eq_term_upto_univ_eta_napp Σ' fcu fcs pb napp u' u
+      := finst_flip Σ' cu fcu cs fcs pb pb napp u u'
            (fun x y h => h) (fun x y h => h) (fun x y h => h) (fun x y h => h) e.
-    destruct (red1_finst_l r Σ' fcu fcs
+    destruct (red1_finst_l Σ' fcu fcs
                 (RelationClasses.flip_PreOrder _) (RelationClasses.flip_PreOrder _)
                 (substu_flip _ _ su_u) (substu_flip _ _ su_s)
                 Σ Γ u' v' h pb napp u
                 (fun x y h => hsu y x h) (fun x y h => hss y x h) ef) as (v & hv & ev).
     exists v. split; [exact hv|].
-    exact (finst_flip r Σ' fcu cu fcs cs pb pb napp v' v
+    exact (finst_flip Σ' fcu cu fcs cs pb pb napp v' v
              (fun x y h => h) (fun x y h => h) (fun x y h => h) (fun x y h => h) ev).
   Qed.
 

@@ -37,20 +37,20 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst
      PCUICEtaA6 PCUICEtaA6More PCUICClosedBodies.
 
-Definition ws_cumul_declsE {cf : checker_flags} (r : finst_construct_rule) (pb : conv_pb)
+Definition ws_cumul_declsE {cf : checker_flags} (pb : conv_pb)
   (Σ : global_env_ext) (Γ : context) (d d' : context_decl) :=
-  All_decls_alpha_pb pb (fun pb => ws_cumul_pbE r pb Σ Γ) d d'.
+  All_decls_alpha_pb pb (fun pb => ws_cumul_pbE pb Σ Γ) d d'.
 
-Definition ws_cumul_ctx_pbE {cf : checker_flags} (r : finst_construct_rule) (pb : conv_pb)
+Definition ws_cumul_ctx_pbE {cf : checker_flags} (pb : conv_pb)
   (Σ : global_env_ext) (Γ Γ' : context) :=
-  All2_fold (fun Γ Γ' => ws_cumul_declsE r pb Σ Γ) Γ Γ'.
+  All2_fold (fun Γ Γ' => ws_cumul_declsE pb Σ Γ) Γ Γ'.
 
 Section A8.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
 
-  Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
-  Local Notation CTX Γ Γ' := (ws_cumul_ctx_pbE r Conv Σ Γ Γ').
+  Local Notation WS pb Γ := (ws_cumul_pbE pb Σ Γ).
+  Local Notation CTX Γ Γ' := (ws_cumul_ctx_pbE Conv Σ Γ Γ').
 
   Lemma WS8_trans {pb Γ t u v} : WS pb Γ t u -> WS pb Γ u v -> WS pb Γ t v.
   Proof. exact (fun h1 h2 => ws_cumul_pbE_trans (Σ := Σ) (wfΣ := wfΣ) _ _ _ h1 h2). Qed.
@@ -80,12 +80,12 @@ Section A8.
       := red_rel_all (Σ := Σ) (Γ := Γ ,, vdef na b A) (i := 0) (body := b) (t := X) eq_refl.
     have hrY : red Σ (Γ ,, vdef na b A) Y (lift 1 0 (Y {0 := b}))
       := red_rel_all (Σ := Σ) (Γ := Γ ,, vdef na b A) (i := 0) (body := b) (t := Y) eq_refl.
-    have h1 := red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := pb)
+    have h1 := red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := pb)
                  (closed_red_of hΓ1 (open_snoc Γ _ X hX) hrX).
-    have h4 := red_ws_cumul_pbE_inv (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := pb)
+    have h4 := red_ws_cumul_pbE_inv (Σ := Σ) (wfΣ := wfΣ) (pb := pb)
                  (closed_red_of hΓ1 (open_snoc Γ _ Y hY) hrY).
     have h2 := ws_cumul_pbE_LetIn_inv (wfΣ := wfΣ) h.
-    have h3 := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := pb) (Γ := Γ) (Γ' := [])
+    have h3 := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := pb) (Γ := Γ) (Γ' := [])
                  (Γ'' := [vdef na b A]) h2 hΓ1.
     exact (WS8_trans h1 (WS8_trans h3 h4)).
   Qed.
@@ -152,7 +152,7 @@ Section A8.
     induction 1 as [|d d' Γ Γ' h IH hd]; constructor; [exact IH|].
     unfold ws_cumul_declsE. destruct hd; constructor.
     all: try reflexivity.
-    all: eapply (red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r)); eassumption.
+    all: eapply (red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ)); eassumption.
   Qed.
 
   (** x5, x6. *)
@@ -171,7 +171,7 @@ Section A8.
     intros hc h1 h2 h.
     have h2' : WS Conv Γ t2 t2' :=
       ws_cumul_pbE_ws_cumul_ctx (ws_cumul_ctx_pbE_sym hc)
-        (red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := Conv) h2).
+        (red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := Conv) h2).
     eapply WS8_trans; [|exact (ws_cumul_eq_pbE h2')].
     exact (ws_cumul_pbE_red_l_inv (wfΣ := wfΣ) _ h (clrel_rel h1)).
   Qed.

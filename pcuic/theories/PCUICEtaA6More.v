@@ -84,13 +84,13 @@ Qed.
 
 Section A6More.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
 
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
   Local Notation chain Γ := (clos_refl_trans (RE Γ)).
   Local Notation BE Γ := (clos_refl_trans (be_step Σ Γ)).
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
-  Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
+  Local Notation WS pb Γ := (ws_cumul_pbE pb Σ Γ).
 
   (** x15. *)
   Lemma conv_sort_invE Γ s s' : WS Conv Γ (tSort s) (tSort s') -> eq_sort (global_ext_constraints Σ) s s'.
@@ -123,18 +123,18 @@ Section A6More.
       apply eq_binder_annot_sym.
       exact (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na') hna2).
     - constructor; [exact hΓ|exact hA|exact hA'|].
-      apply (BE_JoinE Σ r Γ Conv A A' A1 A2).
+      apply (BE_JoinE Σ Γ Conv A A' A1 A2).
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
       + eapply rt_trans; [apply BE_to_canon|exact hA2].
-      + exact (RF_canon Σ r _ _ _ _ e2).
+      + exact (RF_canon Σ _ _ _ _ e2).
     - constructor; [exact (closed_snoc_vass Γ na A hΓ hA)|exact hB| |].
       + apply open_snoc. exact (open_snoc_inv Γ _ _ hB').
-      + apply (BE_JoinE Σ r (Γ ,, vass na A) pb B B' B1 B2).
+      + apply (BE_JoinE Σ (Γ ,, vass na A) pb B B' B1 B2).
         * eapply rt_trans; [apply BE_to_canon|].
           exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na _ A) hB1).
         * eapply rt_trans; [apply BE_to_canon|].
           exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na _ A) hB2).
-        * exact (RF_canon Σ r _ _ _ _ e3).
+        * exact (RF_canon Σ _ _ _ _ e3).
   Qed.
 
   (** x16, at every [pb]. *)
@@ -181,10 +181,10 @@ Section A6More.
     have hΓ1 : is_closed_context (Γ ,, vdef na d ty) := closed_snoc_vdef Γ na d ty hΓ hd hty.
     have hr : red Σ (Γ ,, vdef na d ty) b (lift 1 0 (b {0 := d}))
       := red_rel_all (Σ := Σ) (Γ := Γ ,, vdef na d ty) (i := 0) (body := d) (t := b) eq_refl.
-    have h1 := red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := Conv)
+    have h1 := red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := Conv)
                  (closed_red_of hΓ1 (open_snoc Γ _ b hb) hr).
     have h2 := ws_cumul_pbE_LetIn_l_inv (wfΣ := wfΣ) h.
-    have h3 := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := Conv) (Γ := Γ) (Γ' := [])
+    have h3 := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := Conv) (Γ := Γ) (Γ' := [])
                  (Γ'' := [vdef na d ty]) h2 hΓ1.
     exact (WS_trans (wfΣ := wfΣ) h1 h3).
   Qed.

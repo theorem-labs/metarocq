@@ -7,9 +7,9 @@
   ([PCUICEtaK6EtaStep]) whose premises are more than [ClosedBodies] and scoping is
   applied here to a concrete instance, with every premise proved. The environment
   is [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances]
-  ([Inductive I (A : Prop) : Prop := c : I A]; [si_cb]), the rule is
-  [FInstFollowKernel], and the terms are closed: [fi_P := tSort sProp], a β-redex,
-  an η-redex, a case on [I], an empty fixpoint, an empty array. *)
+  ([Inductive I (A : Prop) : Prop := c : I A]; [si_cb]), and the terms are
+  closed: [fi_P := tSort sProp], a β-redex, an η-redex, a case on [I], an empty
+  fixpoint, an empty array. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -26,9 +26,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
 
 #[local] Existing Instance default_checker_flags.
 
-Local Notation r := FInstFollowKernel.
-Local Notation WS pb Γ := (ws_cumul_pbE r pb si_Σ Γ).
-Local Notation J Γ pb := (JoinE r si_Σ Γ pb).
+Local Notation WS pb Γ := (ws_cumul_pbE pb si_Σ Γ).
+Local Notation J Γ pb := (JoinE si_Σ Γ pb).
 
 Definition fi_P : term := tSort sProp.
 Definition fi_Γ1 : context := [vass si_na fi_P].
@@ -50,16 +49,16 @@ Lemma fi_eta1 : eta1 fi_eta fi_P.
 Proof. exact (eta_red si_na fi_P fi_P). Qed.
 
 Lemma fi_J_beta pb : J [] pb fi_beta fi_P.
-Proof. exact (JoinE_red_l si_Σ r [] pb _ _ fi_red_beta). Qed.
+Proof. exact (JoinE_red_l si_Σ [] pb _ _ fi_red_beta). Qed.
 Lemma fi_J_beta_r pb : J [] pb fi_P fi_beta.
-Proof. exact (JoinE_red_r si_Σ r [] pb _ _ fi_red_beta). Qed.
+Proof. exact (JoinE_red_r si_Σ [] pb _ _ fi_red_beta). Qed.
 Lemma fi_WS_beta pb : WS pb [] fi_beta fi_P.
 Proof. constructor; [reflexivity|reflexivity|reflexivity|exact (fi_J_beta pb)]. Qed.
 Lemma fi_WS_beta_r pb : WS pb [] fi_P fi_beta.
 Proof. constructor; [reflexivity|reflexivity|reflexivity|exact (fi_J_beta_r pb)]. Qed.
 Lemma fi_spec_refl pb : si_Σ ;;; [] ⊢ fi_P ≤sE[pb] fi_P.
 Proof.
-  exact (I5_join_to_spec si_Σ si_cb r [] pb fi_P fi_P eq_refl eq_refl eq_refl (JoinE_refl si_Σ r [] pb fi_P)).
+  exact (I5_join_to_spec si_Σ si_cb [] pb fi_P fi_P eq_refl eq_refl eq_refl (JoinE_refl si_Σ [] pb fi_P)).
 Qed.
 
 (** Closes every premise the instances below leave: [ClosedBodies] and [wf], the β-
@@ -68,12 +67,12 @@ Ltac fi_solve :=
   repeat match goal with
   | |- wf _ => exact si_wf
   | |- ClosedBodies _ => exact si_cb
-  | |- ws_cumul_pbE _ _ _ _ fi_beta fi_P => exact (fi_WS_beta _)
-  | |- ws_cumul_pbE _ _ _ _ fi_P fi_beta => exact (fi_WS_beta_r _)
-  | |- ws_cumul_pbE _ _ _ _ ?t ?t => apply fi_ws; reflexivity
-  | |- JoinE _ _ _ _ fi_beta fi_P => exact (fi_J_beta _)
-  | |- JoinE _ _ _ _ fi_P fi_beta => exact (fi_J_beta_r _)
-  | |- JoinE _ _ _ _ ?t ?t => apply JoinE_refl
+  | |- ws_cumul_pbE _ _ _ fi_beta fi_P => exact (fi_WS_beta _)
+  | |- ws_cumul_pbE _ _ _ fi_P fi_beta => exact (fi_WS_beta_r _)
+  | |- ws_cumul_pbE _ _ _ ?t ?t => apply fi_ws; reflexivity
+  | |- JoinE _ _ _ fi_beta fi_P => exact (fi_J_beta _)
+  | |- JoinE _ _ _ fi_P fi_beta => exact (fi_J_beta_r _)
+  | |- JoinE _ _ _ ?t ?t => apply JoinE_refl
   | |- red _ _ fi_beta fi_P => exact fi_red_beta
   | |- _ ;;; _ ⊢ fi_beta ⇝ fi_P => exact fi_closed_red_beta
   | |- eta1 fi_eta fi_P => exact fi_eta1
@@ -89,13 +88,13 @@ Ltac fi_solve :=
 (** ** A1 *)
 
 Lemma JoinE_red_l_inst : J [] Conv fi_beta fi_P.
-Proof. exact (JoinE_red_l si_Σ r [] Conv _ _ fi_red_beta). Qed.
+Proof. exact (JoinE_red_l si_Σ [] Conv _ _ fi_red_beta). Qed.
 Lemma JoinE_red_r_inst : J [] Conv fi_P fi_beta.
-Proof. exact (JoinE_red_r si_Σ r [] Conv _ _ fi_red_beta). Qed.
+Proof. exact (JoinE_red_r si_Σ [] Conv _ _ fi_red_beta). Qed.
 Lemma JoinE_eta1_l_inst : J [] Conv fi_eta fi_P.
-Proof. exact (JoinE_eta1_l si_Σ r [] Conv _ _ fi_eta1). Qed.
+Proof. exact (JoinE_eta1_l si_Σ [] Conv _ _ fi_eta1). Qed.
 Lemma JoinE_eta1_r_inst : J [] Conv fi_P fi_eta.
-Proof. exact (JoinE_eta1_r si_Σ r [] Conv _ _ fi_eta1). Qed.
+Proof. exact (JoinE_eta1_r si_Σ [] Conv _ _ fi_eta1). Qed.
 
 Lemma ws_cumul_pbE_forget_inst : J [] Cumul fi_P fi_P.
 Proof. unshelve eapply ws_cumul_pbE_forget; fi_solve. Qed.
@@ -139,7 +138,7 @@ Proof. unshelve eapply eta1_ws_cumul_pbE_inv; fi_solve. Qed.
 
 (** ** A5 *)
 
-Lemma fi_WT : ws_cumul_pbE_terms r si_Σ [] [fi_P] [fi_P].
+Lemma fi_WT : ws_cumul_pbE_terms si_Σ [] [fi_P] [fi_P].
 Proof. constructor; [fi_ws|constructor]. Qed.
 
 Lemma ws_cumul_pbE_Sort_inst : WS Conv [] (tSort sProp) (tSort sProp).
@@ -226,23 +225,23 @@ Proof. unshelve eapply ws_cumul_pbE_it_mkProd_or_LetIn_codom; fi_solve. Qed.
 
 (** ** A7 *)
 
-Lemma finst_inst_inst σ : eq_term_upto_univ_eta_napp r si_Σ.1 (compare_universe si_Σ) (compare_sort si_Σ) Conv 0
+Lemma finst_inst_inst σ : eq_term_upto_univ_eta_napp si_Σ.1 (compare_universe si_Σ) (compare_sort si_Σ) Conv 0
   fi_beta.[σ] fi_beta.[σ].
 Proof. apply finst_inst. apply compare_term_eta_refl. Qed.
-Lemma finst_subst_inst : eq_term_upto_univ_eta_napp r si_Σ.1 (compare_universe si_Σ) (compare_sort si_Σ) Conv 0
+Lemma finst_subst_inst : eq_term_upto_univ_eta_napp si_Σ.1 (compare_universe si_Σ) (compare_sort si_Σ) Conv 0
   (subst [fi_P] 0 (tRel 0)) (subst [fi_P] 0 (tRel 0)).
 Proof. apply finst_subst. apply compare_term_eta_refl. Qed.
-Lemma finst_lift_inst : eq_term_upto_univ_eta_napp r si_Σ.1 (compare_universe si_Σ) (compare_sort si_Σ) Conv 0
+Lemma finst_lift_inst : eq_term_upto_univ_eta_napp si_Σ.1 (compare_universe si_Σ) (compare_sort si_Σ) Conv 0
   (lift 1 0 (tRel 0)) (lift 1 0 (tRel 0)).
 Proof. apply finst_lift. apply compare_term_eta_refl. Qed.
 
 Lemma JoinE_map_inst : J [] Conv fi_beta fi_P.
 Proof.
-  eapply (JoinE_map si_Σ si_Σ si_cb r [] [] (fun x => x)); try reflexivity.
+  eapply (JoinE_map si_Σ si_Σ si_cb [] [] (fun x => x)); try reflexivity.
   - intros x y _ h. apply rt_step. exact h.
   - intros x y h. exact h.
   - intros x y e. exact e.
-  - intros x y e. exact (RF_canon si_Σ r _ _ _ _ e).
+  - intros x y e. exact (RF_canon si_Σ _ _ _ _ e).
   - exact JoinE_red_l_inst.
 Qed.
 
@@ -281,10 +280,10 @@ Proof.
 Qed.
 
 Lemma finst_subst_instance_inst :
-  eq_term_upto_univ_eta_napp r si_Σ.1 (compare_universe ConstraintSet.empty) (compare_sort ConstraintSet.empty) Conv 0
+  eq_term_upto_univ_eta_napp si_Σ.1 (compare_universe ConstraintSet.empty) (compare_sort ConstraintSet.empty) Conv 0
     (subst_instance [] fi_beta) (subst_instance [] fi_beta).
 Proof.
-  apply (finst_subst_instance r si_Σ.1 ConstraintSet.empty ConstraintSet.empty [] fi_valid_empty).
+  apply (finst_subst_instance si_Σ.1 ConstraintSet.empty ConstraintSet.empty [] fi_valid_empty).
   apply compare_term_eta_refl.
 Qed.
 
@@ -299,7 +298,7 @@ Proof.
 Qed.
 
 Lemma subst_instance_ws_cumul_pbE_inst :
-  ws_cumul_pbE r Cumul (si_Σ.1, Monomorphic_ctx) (subst_instance [] []) (subst_instance [] fi_P) (subst_instance [] fi_P).
+  ws_cumul_pbE Cumul (si_Σ.1, Monomorphic_ctx) (subst_instance [] []) (subst_instance [] fi_P) (subst_instance [] fi_P).
 Proof.
   apply (subst_instance_ws_cumul_pbE (Σ := si_Σ) (wfΣ := si_cb) Monomorphic_ctx []).
   - exact fi_valid_si.
@@ -312,12 +311,12 @@ Definition fi_t : term := tApp (lift0 1 fi_P) (tRel 0).
 
 Lemma K6_eta_step_inst : si_Σ ;;; [] ⊢ tLambda si_na fi_P fi_t ≤sE[Cumul] fi_P.
 Proof.
-  eapply (K6_eta_step si_Σ si_cb r [] Cumul si_na fi_P fi_t fi_P); try reflexivity.
+  eapply (K6_eta_step si_Σ si_cb [] Cumul si_na fi_P fi_t fi_P); try reflexivity.
   apply JoinE_refl.
 Qed.
 
 Lemma K6_eta_step_join_inst : J [] Cumul (tLambda si_na fi_P fi_t) fi_P.
 Proof.
-  eapply (K6_eta_step_join si_Σ si_cb r [] Cumul si_na fi_P fi_t fi_P); try reflexivity.
+  eapply (K6_eta_step_join si_Σ si_cb [] Cumul si_na fi_P fi_t fi_P); try reflexivity.
   apply JoinE_refl.
 Qed.

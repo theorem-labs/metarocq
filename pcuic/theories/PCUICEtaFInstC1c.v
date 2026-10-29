@@ -55,11 +55,11 @@ Proof. induction args in f |- *; cbn; [reflexivity|]. now rewrite IHargs. Qed.
 
 Section C1c.
 
-  Context (r : finst_construct_rule) (Σ' : global_env)
+  Context (Σ' : global_env)
           (cu : conv_pb -> Universe.t -> Universe.t -> Prop)
           (cs : conv_pb -> sort -> sort -> Prop).
 
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ' cu cs pb n).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ' cu cs pb n).
 
   (** **Term-level [(Conv, n) → (pb, m)] monotonicity.** Recursive positions other
       than [App]-left and [Prod]-codomain are at [(Conv, 0)] and stay there. *)
@@ -94,7 +94,7 @@ Section C1c.
     RF Conv napp u u' -> red1 Σ Γ u v -> ∑ v', red1 Σ Γ u' v' × RF Conv napp v v'.
   Proof.
     intros e h. apply finst_Conv_to_base in e.
-    destruct (@red1_eq_term_upto_univ_l Σ (eta_env r Σ') cu cs Conv napp Γ u v u'
+    destruct (@red1_eq_term_upto_univ_l Σ (eta_env Σ') cu cs Conv napp Γ u v u'
                 pre_u pre_u pre_s pre_s (fun x y h => h) (fun x y h => h) su_u su_s su_s e h)
       as (v' & hr & ev).
     exists v'. split; [exact hr|]. now apply finst_Conv_of_base.
@@ -120,7 +120,7 @@ End C1c.
 
 Section C1cMain.
 
-  Context (r : finst_construct_rule) (Σ' : global_env)
+  Context (Σ' : global_env)
           (cu : conv_pb -> Universe.t -> Universe.t -> Prop)
           (cs : conv_pb -> sort -> sort -> Prop)
           (pre_u : RelationClasses.PreOrder (cu Conv))
@@ -128,7 +128,7 @@ Section C1cMain.
           (su_u : SubstUnivPreserving (cu Conv) (cu Conv))
           (su_s : SubstUnivPreserving (cu Conv) (cs Conv)).
 
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ' cu cs pb n).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ' cu cs pb n).
 
   Theorem red1_finst_l (Σ : global_env) Γ u v :
     red1 Σ Γ u v ->
@@ -141,7 +141,7 @@ Section C1cMain.
     induction h using red1_ind_all; intros h0 pb napp u' hsu hss e.
     (* Every case whose source has a pure spine: the generic route. The purity goal
        holds the evar [?u] until [e]/[h0] fix it, so it is discharged LAST. *)
-    all: try solve [ eapply (red1_finst_pure r Σ' cu cs pre_u pre_s su_u su_s pb hsu hss Σ);
+    all: try solve [ eapply (red1_finst_pure Σ' cu cs pre_u pre_s su_u su_s pb hsu hss Σ);
                      [ idtac | exact e | exact h0 ];
                      rewrite ?finst_pure_mkApps; reflexivity ].
     (* The four spine congruences remain, in red1_ind_all's order. Hypotheses are
@@ -151,23 +151,23 @@ Section C1cMain.
       (* [depelim] may rename the non-uniform [napp]; match only on the shared ?A. *)
       match goal with
       | IH : red1 _ _ ?A ?B -> _, hA : red1 _ _ ?A ?B,
-        hl : eq_term_upto_univ_eta_napp _ _ _ _ _ _ ?A _ |- _ =>
+        hl : eq_term_upto_univ_eta_napp _ _ _ _ _ ?A _ |- _ =>
           edestruct (IH hA _ _ _ ltac:(eassumption) ltac:(eassumption) hl) as (v1 & hv1 & ev1)
       end.
       eexists. split; [apply app_red_l; exact hv1|constructor; [exact ev1|assumption]].
     - (* app_red_r: a Conv position *)
       depelim e.
       match goal with
-      | hA : red1 _ _ ?A ?B, hr : eq_term_upto_univ_eta_napp _ _ _ _ Conv 0 ?A ?A' |- _ =>
-          destruct (red1_finst_Conv r Σ' cu cs pre_u pre_s su_u su_s Σ _ 0 A B A' hr hA)
+      | hA : red1 _ _ ?A ?B, hr : eq_term_upto_univ_eta_napp _ _ _ Conv 0 ?A ?A' |- _ =>
+          destruct (red1_finst_Conv Σ' cu cs pre_u pre_s su_u su_s Σ _ 0 A B A' hr hA)
             as (v2 & hv2 & ev2)
       end.
       eexists. split; [apply app_red_r; exact hv2|constructor; [assumption|exact ev2]].
     - (* prod_red_l: the domain is a Conv position *)
       depelim e.
       match goal with
-      | hA : red1 _ _ ?A ?B, ha : eq_term_upto_univ_eta_napp _ _ _ _ Conv 0 ?A ?A' |- _ =>
-          destruct (red1_finst_Conv r Σ' cu cs pre_u pre_s su_u su_s Σ _ 0 A B A' ha hA)
+      | hA : red1 _ _ ?A ?B, ha : eq_term_upto_univ_eta_napp _ _ _ Conv 0 ?A ?A' |- _ =>
+          destruct (red1_finst_Conv Σ' cu cs pre_u pre_s su_u su_s Σ _ 0 A B A' ha hA)
             as (v1 & hv1 & ev1)
       end.
       eexists. split; [apply prod_red_l; exact hv1|constructor; [assumption|exact ev1|assumption]].
@@ -175,7 +175,7 @@ Section C1cMain.
       depelim e.
       match goal with
       | IH : red1 _ _ ?A ?B -> _, hA : red1 _ _ ?A ?B,
-        hb : eq_term_upto_univ_eta_napp _ _ _ _ _ _ ?A _ |- _ =>
+        hb : eq_term_upto_univ_eta_napp _ _ _ _ _ ?A _ |- _ =>
           edestruct (IH hA _ _ _ ltac:(eassumption) ltac:(eassumption) hb) as (v2 & hv2 & ev2)
       end.
       (* The red1 slot first: it fixes the reduct evar before [constructor] runs. *)

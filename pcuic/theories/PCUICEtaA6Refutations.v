@@ -54,7 +54,7 @@ Section Witnesses.
   Qed.
 
   Lemma aw_D_premise :
-    ws_cumul_pbE FInstFollowKernel Cumul aw_Σ [] (tLambda c1b_na aw_A aw_b1) (tLambda c1b_na aw_A aw_b2).
+    ws_cumul_pbE Cumul aw_Σ [] (tLambda c1b_na aw_A aw_b1) (tLambda c1b_na aw_A aw_b2).
   Proof.
     constructor; try reflexivity.
     exists (tSort sProp), (tSort Sort.type0). split; [|split].
@@ -104,7 +104,7 @@ Section Witnesses.
       + eapply eta_normal_Rel; eassumption.
   Qed.
 
-  Lemma aw_F_premise : ws_cumul_pbE FInstFollowKernel Conv aw_Σ [] aw_P aw_T.
+  Lemma aw_F_premise : ws_cumul_pbE Conv aw_Σ [] aw_P aw_T.
   Proof.
     constructor; try reflexivity.
     exists aw_P, aw_P. split; [|split].
@@ -117,13 +117,13 @@ End Witnesses.
 
 (** **Form 1, refuted** (λ against λ, the bodies at [Conv]). *)
 Theorem A6_D_conv_body_false :
-  (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule)
+  (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wf Σ)
           pb Γ na1 na2 A1 A2 b1 b2,
-     ws_cumul_pbE r pb Σ Γ (tLambda na1 A1 b1) (tLambda na2 A2 b2) ->
-     ws_cumul_pbE r Conv Σ (Γ ,, vass na1 A1) b1 b2) -> False.
+     ws_cumul_pbE pb Σ Γ (tLambda na1 A1 b1) (tLambda na2 A2 b2) ->
+     ws_cumul_pbE Conv Σ (Γ ,, vass na1 A1) b1 b2) -> False.
 Proof.
   intros H.
-  destruct (H default_checker_flags aw_Σ (@wf_empty_global_env default_checker_flags) FInstFollowKernel
+  destruct (H default_checker_flags aw_Σ (@wf_empty_global_env default_checker_flags)
               Cumul [] c1b_na c1b_na aw_A aw_A aw_b1 aw_b2 aw_D_premise) as [_ _ _ (v & v' & hv & hv' & e)].
   cbn in hv, hv'.
   apply (rt_from_normal _ _ _ (aw_body_normal _ _)) in hv.
@@ -134,14 +134,14 @@ Qed.
 (** **Form 2, refuted** (one side a product, the other side's raw term reaching a
     [tProd] by [red ∪ eta1]). *)
 Theorem A6_F_raw_false :
-  (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wf Σ) (r : finst_construct_rule)
+  (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wf Σ)
           pb Γ na dom codom T,
-     ws_cumul_pbE r pb Σ Γ (tProd na dom codom) T ->
+     ws_cumul_pbE pb Σ Γ (tProd na dom codom) T ->
      ∑ na' dom' codom', clos_refl_trans (fun x y => (red1 Σ Γ x y + eta1 x y)%type) T (tProd na' dom' codom'))
   -> False.
 Proof.
   intros H.
-  destruct (H default_checker_flags aw_Σ (@wf_empty_global_env default_checker_flags) FInstFollowKernel
+  destruct (H default_checker_flags aw_Σ (@wf_empty_global_env default_checker_flags)
               Conv [] _ _ _ aw_T aw_F_premise) as (na' & dom' & codom' & h).
   apply rt_from_normal in h.
   - unfold aw_T in h. discriminate h.

@@ -7,7 +7,7 @@
     side's canonical form reaches the spine;
   - both sides inductive spines ([ws_cumul_pbE_Ind_inv]): the instances are
     compared by F-inst,
-    [cmp_global_instance_finst r Σ (compare_universe Σ) pb (IndRef ind) #|l|],
+    [cmp_global_instance_finst Σ (compare_universe Σ) pb (IndRef ind) #|l|],
     i.e. at the variance of [max #|l| arity] with the [finst_mode] disjunction;
     base's [cumul_Ind_univ] at [#|l|] is false for under-applied heads;
   - axiom spines ([ws_cumul_pbE_Axiom_l_inv], [_r_inv]);
@@ -91,13 +91,13 @@ Proof. intros h. inv_eta h. Qed.
 
 Section A6Ind.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
 
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
   Local Notation chain Γ := (clos_refl_trans (RE Γ)).
   Local Notation BE Γ := (clos_refl_trans (be_step Σ Γ)).
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
-  Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
+  Local Notation WS pb Γ := (ws_cumul_pbE pb Σ Γ).
 
   (** ** List plumbing *)
 
@@ -142,7 +142,7 @@ Section A6Ind.
     - depelim h1. depelim h2. move: hl hl' => /= /andP [ha hl] /andP [ha' hl'].
       constructor; [|eapply IH; eassumption].
       constructor; [exact hΓ|exact ha|exact ha'|].
-      apply (BE_JoinE Σ r Γ Conv _ _ a1 a1'); [eassumption|eassumption|exact (RF_canon Σ r _ _ _ _ ea)].
+      apply (BE_JoinE Σ Γ Conv _ _ a1 a1'); [eassumption|eassumption|exact (RF_canon Σ _ _ _ _ ea)].
   Qed.
 
   Lemma forallb_open_mkApps (Γ : context) h l : is_open_term Γ (mkApps h l) -> forallb (is_open_term Γ) l.
@@ -214,7 +214,7 @@ Section A6Ind.
 
   Lemma finst_mkApps_Ind_l pb n ind u l v : RF pb n (mkApps (tInd ind u) l) v ->
     ∑ u' l', [× v = mkApps (tInd ind u') l',
-      cmp_global_instance_finst r Σ.1 (compare_universe Σ) pb (IndRef ind) (#|l| + n) u u'
+      cmp_global_instance_finst Σ.1 (compare_universe Σ) pb (IndRef ind) (#|l| + n) u u'
       & All2 (RF Conv 0) l l'].
   Proof.
     revert n v. induction l as [|a l IH] using rev_ind; intros n v e.
@@ -230,7 +230,7 @@ Section A6Ind.
 
   Lemma finst_mkApps_Ind_r pb n ind u l v : RF pb n v (mkApps (tInd ind u) l) ->
     ∑ u' l', [× v = mkApps (tInd ind u') l',
-      cmp_global_instance_finst r Σ.1 (compare_universe Σ) pb (IndRef ind) (#|l| + n) u' u
+      cmp_global_instance_finst Σ.1 (compare_universe Σ) pb (IndRef ind) (#|l| + n) u' u
       & All2 (RF Conv 0) l' l].
   Proof.
     revert n v. induction l as [|a l IH] using rev_ind; intros n v e.
@@ -275,7 +275,7 @@ Section A6Ind.
   Lemma ws_cumul_pbE_Ind_l_inv {pb Γ ind ui l T} :
     WS pb Γ (mkApps (tInd ind ui) l) T ->
     ∑ ui' l', [× chain Γ (canon T) (mkApps (tInd ind ui') l'),
-      cmp_global_instance_finst r Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui ui'
+      cmp_global_instance_finst Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui ui'
       & All2 (WS Conv Γ) l l'].
   Proof.
     intros [hΓ hl hr (v & v' & hv & hv' & e)].
@@ -294,8 +294,8 @@ Section A6Ind.
   Lemma ws_cumul_pbE_Ind_r_inv {pb Γ ind ui l T} :
     WS pb Γ T (mkApps (tInd ind ui) l) ->
     ∑ ui' l', [× chain Γ (canon T) (mkApps (tInd ind ui') l'),
-      cmp_global_instance_finst r Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui' ui
-      & ws_cumul_pbE_terms r Σ Γ l' l].
+      cmp_global_instance_finst Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui' ui
+      & ws_cumul_pbE_terms Σ Γ l' l].
   Proof.
     intros [hΓ hl hr (v & v' & hv & hv' & e)].
     rewrite canon_mkApps in hv'. cbn [canon] in hv'.
@@ -312,8 +312,8 @@ Section A6Ind.
 
   Lemma ws_cumul_pbE_Ind_inv {pb Γ ind ind' ui ui' l l'} :
     WS pb Γ (mkApps (tInd ind ui) l) (mkApps (tInd ind' ui') l') ->
-    [× ind = ind', cmp_global_instance_finst r Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui ui',
-       is_closed_context Γ & ws_cumul_pbE_terms r Σ Γ l l'].
+    [× ind = ind', cmp_global_instance_finst Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui ui',
+       is_closed_context Γ & ws_cumul_pbE_terms Σ Γ l l'].
   Proof.
     intros [hΓ hl hr (v & v' & hv & hv' & e)].
     rewrite canon_mkApps in hv. rewrite canon_mkApps in hv'. cbn [canon] in hv, hv'.
@@ -335,8 +335,8 @@ Section A6Ind.
   (** i44, base's [Cumul] form with [eqb]. *)
   Lemma invert_cumul_ind_indE {Γ ind ind' u u' args args'} :
     WS Cumul Γ (mkApps (tInd ind u) args) (mkApps (tInd ind' u') args') ->
-    (eqb ind ind' * cmp_global_instance_finst r Σ.1 (compare_universe Σ) Cumul (IndRef ind) #|args| u u'
-     * ws_cumul_pbE_terms r Σ Γ args args').
+    (eqb ind ind' * cmp_global_instance_finst Σ.1 (compare_universe Σ) Cumul (IndRef ind) #|args| u u'
+     * ws_cumul_pbE_terms Σ Γ args args').
   Proof.
     intros h. destruct (ws_cumul_pbE_Ind_inv h) as [-> hu _ ha].
     split; [split; [apply eqb_refl|exact hu]|exact ha].

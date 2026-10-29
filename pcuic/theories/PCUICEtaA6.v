@@ -49,13 +49,13 @@ Proof. unfold eq_binder_annot. congruence. Qed.
 
 Section A6.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
 
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
   Local Notation chain Γ := (clos_refl_trans (RE Γ)).
   Local Notation BE Γ := (clos_refl_trans (be_step Σ Γ)).
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
-  Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
+  Local Notation WS pb Γ := (ws_cumul_pbE pb Σ Γ).
 
   Lemma WS_trans {pb Γ t u v} : WS pb Γ t u -> WS pb Γ u v -> WS pb Γ t v.
   Proof. exact (fun h1 h2 => ws_cumul_pbE_trans (Σ := Σ) (wfΣ := wfΣ) _ _ _ h1 h2). Qed.
@@ -228,17 +228,17 @@ Section A6.
     - exact hv'.
     - exact (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na) (eq_binder_annot_trans _ _ _ hna1 hna2)).
     - constructor; [exact hΓ|exact hdom|exact hA2|].
-      apply (BE_JoinE Σ r Γ Conv dom A2 A1 A2).
+      apply (BE_JoinE Σ Γ Conv dom A2 A1 A2).
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
       + apply rt_refl.
-      + exact (RF_canon Σ r _ _ _ _ eA).
+      + exact (RF_canon Σ _ _ _ _ eA).
     - constructor; [exact (closed_snoc_vass Γ na dom hΓ hdom)|exact hcodom| |].
       + apply open_snoc. exact (open_snoc_inv Γ _ _ hB2).
-      + apply (BE_JoinE Σ r (Γ ,, vass na dom) pb codom B2 B1 B2).
+      + apply (BE_JoinE Σ (Γ ,, vass na dom) pb codom B2 B1 B2).
         * eapply rt_trans; [apply BE_to_canon|].
           exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na _ dom) hB1).
         * apply rt_refl.
-        * exact (RF_canon Σ r _ _ _ _ eB).
+        * exact (RF_canon Σ _ _ _ _ eB).
   Qed.
 
   Lemma ws_cumul_pbE_Prod_r_inv {pb Γ na dom codom T} : WS pb Γ T (tProd na dom codom) ->
@@ -257,17 +257,17 @@ Section A6.
       exact (eq_binder_annot_trans _ _ _ hna2 (eq_binder_annot_sym _ _
                (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na) hna1))).
     - constructor; [exact hΓ|exact hA2|exact hdom|].
-      apply (BE_JoinE Σ r Γ Conv A2 dom A2 A1).
+      apply (BE_JoinE Σ Γ Conv A2 dom A2 A1).
       + apply rt_refl.
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
-      + exact (RF_canon Σ r _ _ _ _ eA).
+      + exact (RF_canon Σ _ _ _ _ eA).
     - constructor; [exact (closed_snoc_vass Γ na dom hΓ hdom)| |exact hcodom|].
       + apply open_snoc. exact (open_snoc_inv Γ _ _ hB2).
-      + apply (BE_JoinE Σ r (Γ ,, vass na dom) pb B2 codom B2 B1).
+      + apply (BE_JoinE Σ (Γ ,, vass na dom) pb B2 codom B2 B1).
         * apply rt_refl.
         * eapply rt_trans; [apply BE_to_canon|].
           exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na _ dom) hB1).
-        * exact (RF_canon Σ r _ _ _ _ eB).
+        * exact (RF_canon Σ _ _ _ _ eB).
   Qed.
 
   Lemma ws_cumul_pbE_Prod_Prod_inv {pb Γ na na' dom dom' codom codom'} :
@@ -288,18 +288,18 @@ Section A6.
       apply eq_binder_annot_sym.
       exact (eq_binder_annot_trans _ _ _ (eq_binder_annot_canon_na na') hna2).
     - constructor; [exact hΓ|exact hdom|exact hdom'|].
-      apply (BE_JoinE Σ r Γ Conv dom dom' A1 A2).
+      apply (BE_JoinE Σ Γ Conv dom dom' A1 A2).
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
       + eapply rt_trans; [apply BE_to_canon|exact hA2].
-      + exact (RF_canon Σ r _ _ _ _ e2).
+      + exact (RF_canon Σ _ _ _ _ e2).
     - constructor; [exact (closed_snoc_vass Γ na' dom' hΓ hdom')| |exact hcodom'|].
       + apply open_snoc. exact (open_snoc_inv Γ _ _ hcodom).
-      + apply (BE_JoinE Σ r (Γ ,, vass na' dom') pb codom codom' B1 B2).
+      + apply (BE_JoinE Σ (Γ ,, vass na' dom') pb codom codom' B1 B2).
         * eapply rt_trans; [apply BE_to_canon|].
           exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na' _ dom') hB1).
         * eapply rt_trans; [apply BE_to_canon|].
           exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na' _ dom') hB2).
-        * exact (RF_canon Σ r _ _ _ _ e3).
+        * exact (RF_canon Σ _ _ _ _ e3).
   Qed.
 
   Lemma cumul_Prod_invE {Γ na na' A B A' B'} :
@@ -329,13 +329,13 @@ Section A6.
   Lemma ws_cumul_pbE_red_r_inv {Γ T} U {U'} {pb} : WS pb Γ T U -> red Σ Γ U U' -> WS pb Γ T U'.
   Proof.
     intros h hr. apply (WS_trans h).
-    exact (red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r) (closed_red_of (wsE_ctx h) (wsE_right h) hr)).
+    exact (red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (closed_red_of (wsE_ctx h) (wsE_right h) hr)).
   Qed.
 
   Lemma ws_cumul_pbE_red_l_inv {Γ} T {T' U} {pb} : WS pb Γ T U -> red Σ Γ T T' -> WS pb Γ T' U.
   Proof.
     intros h hr. refine (WS_trans _ h).
-    exact (red_ws_cumul_pbE_inv (Σ := Σ) (wfΣ := wfΣ) (r := r) (closed_red_of (wsE_ctx h) (wsE_left h) hr)).
+    exact (red_ws_cumul_pbE_inv (Σ := Σ) (wfΣ := wfΣ) (closed_red_of (wsE_ctx h) (wsE_left h) hr)).
   Qed.
 
   Lemma conv_cum_red_invE pb Γ t1 t2 t1' t2' :
@@ -347,7 +347,7 @@ Section A6.
 
   Lemma ws_cumul_pbE_terms_red_inv {Γ ts ts' tsr tsr'} :
     All2 (closed_red Σ Γ) ts tsr -> All2 (closed_red Σ Γ) ts' tsr' ->
-    ws_cumul_pbE_terms r Σ Γ ts ts' -> ws_cumul_pbE_terms r Σ Γ tsr tsr'.
+    ws_cumul_pbE_terms Σ Γ ts ts' -> ws_cumul_pbE_terms Σ Γ tsr tsr'.
   Proof.
     intros h1. induction h1 as [|x x' l lr hx _ IH] in ts', tsr' |- *; intros h2 h;
       unfold ws_cumul_pbE_terms in *.
@@ -396,7 +396,7 @@ Section A6.
     move: (wsE_right h). cbn [on_free_vars]. move/andP => [hA2 hb2].
     have hΓ1 : is_closed_context (Γ ,, vass na1 A1) := closed_snoc_vass Γ na1 A1 hΓ hA1.
     (* weaken both λs by the binder, apply both to the bound variable, β back *)
-    have hw := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := pb) (Γ := Γ) (Γ' := [])
+    have hw := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := pb) (Γ := Γ) (Γ' := [])
                  (Γ'' := [vass na1 A1]) h hΓ1.
     have happ : WS pb (Γ ,, vass na1 A1)
                   (tApp (lift0 1 (tLambda na1 A1 b1)) (tRel 0)) (tApp (lift0 1 (tLambda na2 A2 b2)) (tRel 0)).
@@ -406,8 +406,8 @@ Section A6.
     { intros na A b ho. split; [exact hΓ1|exact ho|]. apply rt_step. cbn [lift].
       have H := red_beta Σ (Γ ,, vass na1 A1) na (lift 1 0 A) (lift 1 1 b) (tRel 0).
       rewrite PCUICEtaC3BR.C3R.subst_rel0_lift_id0 in H. exact H. }
-    have h1 := red_ws_cumul_pbE_inv (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := pb) (hbeta na1 A1 b1 (wsE_left happ)).
-    have h2 := red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (r := r) (pb := pb) (hbeta na2 A2 b2 (wsE_right happ)).
+    have h1 := red_ws_cumul_pbE_inv (Σ := Σ) (wfΣ := wfΣ) (pb := pb) (hbeta na1 A1 b1 (wsE_left happ)).
+    have h2 := red_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := pb) (hbeta na2 A2 b2 (wsE_right happ)).
     exact (WS_trans h1 (WS_trans happ h2)).
   Qed.
 

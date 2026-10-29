@@ -3,7 +3,7 @@
 (** * A3: the join relation [JoinE] is transitive
 
     [I5_join_trans] : is_open_term Γ u ->
-                      JoinE r Σ Γ pb t u -> JoinE r Σ Γ pb u w -> JoinE r Σ Γ pb t w
+                      JoinE Σ Γ pb t u -> JoinE Σ Γ pb u w -> JoinE Σ Γ pb t w
 
   ** Route
 
@@ -44,12 +44,12 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICIn
 
 Section Canon.
 
-  Context (r : finst_construct_rule) (Σ' : global_env)
+  Context (Σ' : global_env)
           (cu : conv_pb -> Universe.t -> Universe.t -> Prop)
           (cs : conv_pb -> sort -> sort -> Prop)
           (hcs : RelationClasses.Reflexive (cs Conv)).
 
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ' cu cs pb n).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ' cu cs pb n).
 
   (** [canon] replaces every λ domain by [canon_dom] on BOTH sides (compared by
       reflexivity of [cs Conv]), erases binder names (relevance kept, so
@@ -118,11 +118,11 @@ End Canon.
 
 Section A3.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ).
 
   Local Notation cu := (compare_universe Σ).
   Local Notation cs := (compare_sort Σ).
-  Local Notation RF pb := (eq_term_upto_univ_eta_napp r Σ.1 cu cs pb 0).
+  Local Notation RF pb := (eq_term_upto_univ_eta_napp Σ.1 cu cs pb 0).
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
 
   (** The premises of the C1c lemmas, met by the real comparison. *)
@@ -162,11 +162,11 @@ Section A3.
     is_open_term Γ a -> RE Γ a b -> RF pb a a' -> ∑ b', RE Γ a' b' × RF pb b b'.
   Proof.
     intros ha [[b0 [hr ->]]|he] e.
-    - destruct (red1_finst_l r Σ.1 cu cs a3_pre_u a3_pre_s a3_su_u a3_su_s Σ Γ a b0 hr
+    - destruct (red1_finst_l Σ.1 cu cs a3_pre_u a3_pre_s a3_su_u a3_su_s Σ Γ a b0 hr
                   pb 0 a' (a3_sub_u pb) (a3_sub_s pb) e) as (b0' & hr' & e').
       exists (canon b0'). split; [left; exists b0'; split; [exact hr'|reflexivity]|].
-      exact (finst_canon r Σ.1 cu cs a3_refl_s pb 0 b0 b0' e').
-    - destruct (eta1_finst_l r Σ.1 cu cs a b he _ pb 0 a' (a3_sub_u pb) (a3_sub_s pb) ha e)
+      exact (finst_canon Σ.1 cu cs a3_refl_s pb 0 b0 b0' e').
+    - destruct (eta1_finst_l Σ.1 cu cs a b he _ pb 0 a' (a3_sub_u pb) (a3_sub_s pb) ha e)
         as (b' & he' & e').
       exists b'. split; [right; exact he'|exact e'].
   Qed.
@@ -177,18 +177,18 @@ Section A3.
     is_open_term Γ a' -> RF pb a a' -> RE Γ a' b' -> ∑ b, RE Γ a b × RF pb b b'.
   Proof.
     intros ha' e [[b0' [hr ->]]|he].
-    - destruct (red1_finst_r r Σ.1 cu cs a3_pre_u a3_pre_s a3_su_u a3_su_s Σ Γ pb 0 a a' b0'
+    - destruct (red1_finst_r Σ.1 cu cs a3_pre_u a3_pre_s a3_su_u a3_su_s Σ Γ pb 0 a a' b0'
                   (a3_sub_u pb) (a3_sub_s pb) e hr) as (b0 & hr0 & e0).
       exists (canon b0). split; [left; exists b0; split; [exact hr0|reflexivity]|].
-      exact (finst_canon r Σ.1 cu cs a3_refl_s pb 0 b0 b0' e0).
-    - have ef := finst_flip r Σ.1 cu (fun pb => flip (cu pb)) cs (fun pb => flip (cs pb))
+      exact (finst_canon Σ.1 cu cs a3_refl_s pb 0 b0 b0' e0).
+    - have ef := finst_flip Σ.1 cu (fun pb => flip (cu pb)) cs (fun pb => flip (cs pb))
                    pb pb 0 a a' (fun x y h => h) (fun x y h => h) (fun x y h => h)
                    (fun x y h => h) e.
-      destruct (eta1_finst_l r Σ.1 (fun pb => flip (cu pb)) (fun pb => flip (cs pb)) a' b' he
+      destruct (eta1_finst_l Σ.1 (fun pb => flip (cu pb)) (fun pb => flip (cs pb)) a' b' he
                   _ pb 0 a (fun x y h => a3_sub_u pb y x h) (fun x y h => a3_sub_s pb y x h)
                   ha' ef) as (b & hb & eb).
       exists b. split; [right; exact hb|].
-      exact (finst_flip r Σ.1 (fun pb => flip (cu pb)) cu (fun pb => flip (cs pb)) cs
+      exact (finst_flip Σ.1 (fun pb => flip (cu pb)) cu (fun pb => flip (cs pb)) cs
                pb pb 0 b' b (fun x y h => h) (fun x y h => h) (fun x y h => h)
                (fun x y h => h) eb).
   Qed.
@@ -224,7 +224,7 @@ Section A3.
   (** **A3.** *)
   Theorem I5_join_trans Γ pb t u w :
     is_closed_context Γ -> is_open_term Γ u ->
-    JoinE r Σ Γ pb t u -> JoinE r Σ Γ pb u w -> JoinE r Σ Γ pb t w.
+    JoinE Σ Γ pb t u -> JoinE Σ Γ pb u w -> JoinE Σ Γ pb t w.
   Proof.
     intros hΓ hu (v & v' & hv & hv' & e1) (x & x' & hx & hx' & e2).
     have hcu : is_open_term Γ (canon u) := canon_is_open_term Γ u hu.
@@ -235,7 +235,7 @@ Section A3.
     exists z, z'. repeat split.
     - eapply rt_trans; [exact hv|exact hz].
     - eapply rt_trans; [exact hx'|exact hz'].
-    - exact (compare_term_eta_trans r Σ.1 _ pb 0 _ _ _ ez ez').
+    - exact (compare_term_eta_trans Σ.1 _ pb 0 _ _ _ ez ez').
   Qed.
 
 End A3.

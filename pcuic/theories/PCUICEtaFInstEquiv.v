@@ -17,7 +17,7 @@
   at every [pb] for every [φ]: base's own instances
   ([compare_term_refl]/[_sym]/[_trans] discharge the same lists).
 
-  Parametric in the constructor rule [r]. No confluence file. *)
+  No confluence file. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import Program.Equality.
@@ -31,31 +31,30 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICIn
 
 (** The corrected instance-level lemmas, as instances (premises at [Conv] and
     [pb], exactly base's). *)
-#[local] Instance finst_inst_refl r Σ cu pb gr napp :
+#[local] Instance finst_inst_refl Σ cu pb gr napp :
   RelationClasses.Reflexive (cu Conv) -> RelationClasses.Reflexive (cu pb) ->
-  RelationClasses.Reflexive (cmp_global_instance_finst r Σ cu pb gr napp)
-  := cmp_global_instance_eta_refl r Σ cu pb gr napp.
+  RelationClasses.Reflexive (cmp_global_instance_finst Σ cu pb gr napp)
+  := cmp_global_instance_eta_refl Σ cu pb gr napp.
 
-#[local] Instance finst_inst_sym r Σ cu pb gr napp :
+#[local] Instance finst_inst_sym Σ cu pb gr napp :
   RelationClasses.Symmetric (cu Conv) -> RelationClasses.Symmetric (cu pb) ->
-  RelationClasses.Symmetric (cmp_global_instance_finst r Σ cu pb gr napp)
-  := cmp_global_instance_eta_sym r Σ cu pb gr napp.
+  RelationClasses.Symmetric (cmp_global_instance_finst Σ cu pb gr napp)
+  := cmp_global_instance_eta_sym Σ cu pb gr napp.
 
-#[local] Instance finst_inst_trans r Σ cu pb gr napp :
+#[local] Instance finst_inst_trans Σ cu pb gr napp :
   RelationClasses.subrelation (cu Conv) (cu pb) ->
   RelationClasses.Transitive (cu Conv) -> RelationClasses.Transitive (cu pb) ->
-  RelationClasses.Transitive (cmp_global_instance_finst r Σ cu pb gr napp)
-  := cmp_global_instance_eta_trans r Σ cu pb gr napp.
+  RelationClasses.Transitive (cmp_global_instance_finst Σ cu pb gr napp)
+  := cmp_global_instance_eta_trans Σ cu pb gr napp.
 
 Section FInstEquiv.
-  Context (r : finst_construct_rule).
 
   Polymorphic Lemma eq_term_upto_univ_eta_refl Σ cmp_universe cmp_sort pb napp :
     RelationClasses.Reflexive (cmp_universe Conv) ->
     RelationClasses.Reflexive (cmp_universe pb) ->
     RelationClasses.Reflexive (cmp_sort Conv) ->
     RelationClasses.Reflexive (cmp_sort pb) ->
-    Reflexive (eq_term_upto_univ_eta_napp r Σ cmp_universe cmp_sort pb napp).
+    Reflexive (eq_term_upto_univ_eta_napp Σ cmp_universe cmp_sort pb napp).
   Proof.
     intros refl_univ refl_univ' refl_sort refl_sort' t.
     induction t in napp, pb, refl_univ', refl_sort' |- * using term_forall_list_ind.
@@ -80,7 +79,7 @@ Section FInstEquiv.
     RelationClasses.Symmetric (cmp_universe pb) ->
     RelationClasses.Symmetric (cmp_sort Conv) ->
     RelationClasses.Symmetric (cmp_sort pb) ->
-    Symmetric (eq_term_upto_univ_eta_napp r Σ cmp_universe cmp_sort pb napp).
+    Symmetric (eq_term_upto_univ_eta_napp Σ cmp_universe cmp_sort pb napp).
   Proof.
     intros sym_univ sym_univ' sym_sort sym_sort' u v e.
     pose proof (@RelationClasses.symmetry _ (@eq_binder_annot name name) _).
@@ -113,7 +112,7 @@ Section FInstEquiv.
     RelationClasses.Transitive (cmp_universe pb) ->
     RelationClasses.Transitive (cmp_sort Conv) ->
     RelationClasses.Transitive (cmp_sort pb) ->
-    Transitive (eq_term_upto_univ_eta_napp r Σ cmp_universe cmp_sort pb napp).
+    Transitive (eq_term_upto_univ_eta_napp Σ cmp_universe cmp_sort pb napp).
   Proof.
     intros sub_univ trans_univ trans_univ' trans_sort trans_sort' u v w e1 e2.
     pose proof (@RelationClasses.transitivity _ (@eq_binder_annot name name) _).
@@ -159,14 +158,14 @@ Section FInstEquiv.
 End FInstEquiv.
 
 (** **Hypotheses satisfiable:** the real comparison meets all three. *)
-Lemma compare_term_eta_trans {cf : checker_flags} r Σ φ pb napp :
-  Transitive (eq_term_upto_univ_eta_napp r Σ (compare_universe φ) (compare_sort φ) pb napp).
+Lemma compare_term_eta_trans {cf : checker_flags} Σ φ pb napp :
+  Transitive (eq_term_upto_univ_eta_napp Σ (compare_universe φ) (compare_sort φ) pb napp).
 Proof. apply eq_term_upto_univ_eta_trans; tc. Qed.
 
-Lemma compare_term_eta_refl {cf : checker_flags} r Σ φ pb napp :
-  Reflexive (eq_term_upto_univ_eta_napp r Σ (compare_universe φ) (compare_sort φ) pb napp).
+Lemma compare_term_eta_refl {cf : checker_flags} Σ φ pb napp :
+  Reflexive (eq_term_upto_univ_eta_napp Σ (compare_universe φ) (compare_sort φ) pb napp).
 Proof. apply eq_term_upto_univ_eta_refl; tc. Qed.
 
-Lemma compare_term_eta_sym {cf : checker_flags} r Σ φ napp :
-  Symmetric (eq_term_upto_univ_eta_napp r Σ (compare_universe φ) (compare_sort φ) Conv napp).
+Lemma compare_term_eta_sym {cf : checker_flags} Σ φ napp :
+  Symmetric (eq_term_upto_univ_eta_napp Σ (compare_universe φ) (compare_sort φ) Conv napp).
 Proof. apply eq_term_upto_univ_eta_sym; tc. Qed.

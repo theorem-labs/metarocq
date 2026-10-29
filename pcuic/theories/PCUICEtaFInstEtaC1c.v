@@ -77,11 +77,11 @@ Qed.
 
 Section EtaC1c.
 
-  Context (r : finst_construct_rule) (Σ' : global_env)
+  Context (Σ' : global_env)
           (cu : conv_pb -> Universe.t -> Universe.t -> Prop)
           (cs : conv_pb -> sort -> sort -> Prop).
 
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ' cu cs pb n).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ' cu cs pb n).
 
   (** Free variables are preserved, at [Conv] (transported). *)
   Lemma finst_on_free_vars {cf : checker_flags} P n t u :
@@ -108,13 +108,13 @@ Section EtaC1c.
     exists (unlift 1 0 X'). split; [symmetry; exact (unlift_lift_eq P X' hX)|].
     have e' := finst_rename _ _ _ (unlift_renaming 1 0) e.
     rewrite -/(unlift 1 0 (lift0 1 m)) lift_unlift_term in e'.
-    exact (finst_term_Conv_pb r Σ' cu cs _ _ _ _ e' eq_refl pb napp hsu hss).
+    exact (finst_term_Conv_pb Σ' cu cs _ _ _ _ e' eq_refl pb napp hsu hss).
   Qed.
 
   (** The comparison hypothesis whose LEFT term is [t]: picked by TYPE, because
       [depelim]'s premise names are not stable. *)
   Local Ltac rfh t :=
-    match goal with h : eq_term_upto_univ_eta_napp _ _ _ _ _ _ t _ |- _ => exact h end.
+    match goal with h : eq_term_upto_univ_eta_napp _ _ _ _ _ t _ |- _ => exact h end.
 
   (** The (co)fixpoint step and comparison relations, as notations so that
       [fix_eta_ty]/[fix_eta_body] unify with them syntactically. *)
@@ -144,15 +144,15 @@ Section EtaC1c.
     - (* eta_red: the root *)
       intros na t A P pb napp a' hsu hss ha e.
       depelim e.
-      match goal with hb : eq_term_upto_univ_eta_napp _ _ _ _ Conv 0 (tApp (lift0 1 t) (tRel 0)) _ |- _ =>
+      match goal with hb : eq_term_upto_univ_eta_napp _ _ _ Conv 0 (tApp (lift0 1 t) (tRel 0)) _ |- _ =>
         depelim hb end.
-      match goal with h0 : eq_term_upto_univ_eta_napp _ _ _ _ Conv 0 (tRel 0) _ |- _ =>
+      match goal with h0 : eq_term_upto_univ_eta_napp _ _ _ Conv 0 (tRel 0) _ |- _ =>
         depelim h0 end.
       cbn [on_free_vars] in ha. move/andP: ha => [_ hb]. move/andP: hb => [hl _].
       (* [shiftnP1_lift] is pointwise ([=1]); the predicate is unapplied, so use
          [on_free_vars_ext] rather than an ssreflect rewrite. *)
       rewrite on_free_vars_lift01 (on_free_vars_ext _ _ _ (shiftnP1_lift P)) in hl.
-      match goal with h1 : eq_term_upto_univ_eta_napp _ _ _ _ Conv 1 (lift0 1 t) ?X' |- _ =>
+      match goal with h1 : eq_term_upto_univ_eta_napp _ _ _ Conv 1 (lift0 1 t) ?X' |- _ =>
         destruct (finst_eta_root P pb napp t X' hsu hss hl h1) as (m' & -> & em) end.
       exists m'. split; [apply eta_red|exact em].
     - (* abs_eta_l *)

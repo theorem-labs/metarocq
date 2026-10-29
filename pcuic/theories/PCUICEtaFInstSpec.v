@@ -27,8 +27,7 @@
   [on_free_vars_ctx_inst_case_context_weak] and
   [on_free_vars_ctx_fix_context_weak].
 
-  The constructor rule is read only through the glue, which is proved for both
-  values of [r].
+  The constructor rule is read only through the glue.
 
   **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
   ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); scoping by any scoped pair,
@@ -50,10 +49,10 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICIn
 
 Section FInstSpec.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ.1) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ.1).
 
   Local Notation RF pb n :=
-    (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
+    (eq_term_upto_univ_eta_napp Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
 
   Lemma cumul_mkAppsE Γ pb M N args args' :
     Σ ;;; Γ ⊢ M ≤sE[pb] N ->
@@ -89,7 +88,7 @@ Section FInstSpec.
   Proof.
     intros X hΓ hl hl' h. induction h in X, hl, hl' |- *; constructor; depelim X;
       cbn in hl, hl'; move/andP: hl => [h1 hl]; move/andP: hl' => [h1' hl'].
-    - exact (finst_nil _ Γ Conv _ f hΓ h1 h1' r0).
+    - exact (finst_nil _ Γ Conv _ f hΓ h1 h1' r).
     - exact (IHh X hl hl').
   Qed.
 
@@ -109,7 +108,7 @@ Section FInstSpec.
     intros X hΓ hp hl hl' h. unfold eq_branches in h.
     induction h in X, hl, hl' |- *; constructor; depelim X;
       cbn in hl, hl'; move/andP: hl => [/andP [hc hb] hl]; move/andP: hl' => [/andP [_ hb'] hl'].
-    - destruct p0 as [_ IH]. destruct r0 as [hctx hbody]. split; [exact hctx|].
+    - destruct p0 as [_ IH]. destruct r as [hctx hbody]. split; [exact hctx|].
       apply (finst_nil _ _ Conv _ IH).
       + exact (on_free_vars_ctx_inst_case_context_weak xpred0 Γ (pparams p) (puinst p)
                  (bcontext x) hp hc hΓ).
@@ -136,7 +135,7 @@ Section FInstSpec.
     intros X hΓ hΞ hn hl hl' h. unfold eq_mfixpoint in h.
     induction h in X, hl, hl' |- *; constructor; depelim X;
       cbn in hl, hl'; move/andP: hl => [/andP [hty hbo] hl]; move/andP: hl' => [/andP [hty' hbo'] hl'].
-    - destruct p as [IHty IHbo]. destruct r0 as (ety & ebo & er & en).
+    - destruct p as [IHty IHbo]. destruct r as (ety & ebo & er & en).
       refine (_, (_, (er, en))).
       + exact (finst_nil _ Γ Conv _ IHty hΓ hty hty' ety).
       + apply (finst_nil _ _ Conv _ IHbo hΞ).
@@ -149,7 +148,7 @@ Section FInstSpec.
   (** The comparison hypothesis whose LEFT term is [t]. Picked by type, because
       [depelim] gives premises names that are not stable. *)
   Ltac rfh t :=
-    match goal with h : eq_term_upto_univ_eta_napp _ _ _ _ _ _ t _ |- _ => exact h end.
+    match goal with h : eq_term_upto_univ_eta_napp _ _ _ _ _ t _ |- _ => exact h end.
 
   Theorem finst_cumulSpecE M : finst_spec_P M.
   Proof.
@@ -198,7 +197,7 @@ Section FInstSpec.
       + rfh M3.
     - (* tApp: push the argument onto the spine, as base does *)
       cbn in hM, hN. move/andP: hM => [hM1 hM2]. move/andP: hN => [hN1 hN2].
-      match goal with h2 : eq_term_upto_univ_eta_napp _ _ _ _ _ _ M2 ?u2 |- _ =>
+      match goal with h2 : eq_term_upto_univ_eta_napp _ _ _ _ _ M2 ?u2 |- _ =>
         apply (IHM1 Γ pb _ (M2 :: args) (u2 :: args')) end.
       + exact hΓ.
       + cbn. rewrite on_free_vars_mkApps /= hM1 hM2 hargs //.
@@ -208,23 +207,23 @@ Section FInstSpec.
     - (* tConst *) apply cumul_mkAppsE; [now apply cumulE_Const|exact Hargs].
     - (* tInd: the F-inst head, split by mode *)
       have hlen : #|args| = #|args'| := All2_length Hargs.
-      match goal with c : cmp_global_instance_finst _ _ _ _ _ _ _ _ |- _ => rename c into hc end.
+      match goal with c : cmp_global_instance_finst _ _ _ _ _ _ _ |- _ => rename c into hc end.
       destruct (le_lt_dec (head_arity Σ.1 (IndRef i)) #|args|) as [hle|hlt].
-      + apply cumulE_Ind; [exact (finst_ind_glue_full r Σ.1 _ pb i #|args| u u' hle hc)|exact Hargs].
+      + apply cumulE_Ind; [exact (finst_ind_glue_full Σ.1 _ pb i #|args| u u' hle hc)|exact Hargs].
       + apply convSpecE_cumulSpecE.
         apply (cumulSpecE_ind_underapplied_gen Σ i u u' (head_arity Σ.1 (IndRef i)) wfΣ
-                 (finst_ind_glue_under r Σ.1 _ pb i #|args| u u' hlt hc)
+                 (finst_ind_glue_under Σ.1 _ pb i #|args| u u' hlt hc)
                  (head_arity Σ.1 (IndRef i) - #|args|) Γ args args' hlen);
           [lia|exact hΓ|exact hargs|exact hargs'|exact Hargs].
     - (* tConstruct: the F-inst head, split by mode *)
       have hlen : #|args| = #|args'| := All2_length Hargs.
-      match goal with c : cmp_global_instance_finst _ _ _ _ _ _ _ _ |- _ => rename c into hc end.
+      match goal with c : cmp_global_instance_finst _ _ _ _ _ _ _ |- _ => rename c into hc end.
       destruct (le_lt_dec (head_arity Σ.1 (ConstructRef i n)) #|args|) as [hle|hlt].
       + apply cumulE_Construct;
-          [exact (finst_construct_glue_full r Σ.1 _ pb i n #|args| u u' hle hc)|exact Hargs].
+          [exact (finst_construct_glue_full Σ.1 _ pb i n #|args| u u' hle hc)|exact Hargs].
       + apply convSpecE_cumulSpecE.
         apply (cumulSpecE_construct_underapplied_gen Σ i n u u' (head_arity Σ.1 (ConstructRef i n)) wfΣ
-                 (finst_construct_glue_under r Σ.1 _ pb i n #|args| u u' hlt hc)
+                 (finst_construct_glue_under Σ.1 _ pb i n #|args| u u' hlt hc)
                  (head_arity Σ.1 (ConstructRef i n) - #|args|) Γ args args' hlen);
           [lia|exact hΓ|exact hargs|exact hargs'|exact Hargs].
     - (* tCase *)

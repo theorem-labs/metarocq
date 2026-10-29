@@ -35,9 +35,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICEtaFInst PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICEtaI5EtaL
      PCUICWellScopedCumulativityEta PCUICClosedBodies.
 
-Definition ws_cumul_pbE_terms {cf : checker_flags} (r : finst_construct_rule) (Σ : global_env_ext)
+Definition ws_cumul_pbE_terms {cf : checker_flags} (Σ : global_env_ext)
   (Γ : context) : list term -> list term -> Type :=
-  All2 (ws_cumul_pbE r Conv Σ Γ).
+  All2 (ws_cumul_pbE Conv Σ Γ).
 
 (** ** Scoping helpers *)
 
@@ -70,20 +70,20 @@ Qed.
 
 Section A5.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
 
-  Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
-  Local Notation WT Γ := (ws_cumul_pbE_terms r Σ Γ).
-  Local Notation J Γ pb := (JoinE r Σ Γ pb).
+  Local Notation WS pb Γ := (ws_cumul_pbE pb Σ Γ).
+  Local Notation WT Γ := (ws_cumul_pbE_terms Σ Γ).
+  Local Notation J Γ pb := (JoinE Σ Γ pb).
 
   Lemma WT_join {Γ l l'} : WT Γ l l' -> All2 (J Γ Conv) l l'.
   Proof. intros h. eapply All2_impl; [exact h|]. intros x y hx. exact (wsE_join hx). Qed.
 
   Lemma WT_open_left {Γ l l'} : WT Γ l l' -> forallb (is_open_term Γ) l.
-  Proof. induction 1; cbn; [reflexivity|]. now rewrite (wsE_left r0) IHX. Qed.
+  Proof. induction 1; cbn; [reflexivity|]. now rewrite (wsE_left r) IHX. Qed.
 
   Lemma WT_open_right {Γ l l'} : WT Γ l l' -> forallb (is_open_term Γ) l'.
-  Proof. induction 1; cbn; [reflexivity|]. now rewrite (wsE_right r0) IHX. Qed.
+  Proof. induction 1; cbn; [reflexivity|]. now rewrite (wsE_right r) IHX. Qed.
 
   Lemma WT_refl {Γ l} : is_closed_context Γ -> forallb (is_open_term Γ) l -> WT Γ l l.
   Proof.
@@ -209,7 +209,7 @@ Section A5.
     have hl : is_open_term Γ (tLambda na A t).
     { cbn [on_free_vars]. now rewrite hA (open_snoc_inv Γ _ t ht). }
     constructor; [exact hΓ|exact hl|exact hu|].
-    exact (I5_eta_l_case_holds Σ wfΣ r Γ pb na A t u hΓ hl hu j).
+    exact (I5_eta_l_case_holds Σ wfΣ Γ pb na A t u hΓ hl hu j).
   Qed.
 
   Lemma ws_cumul_pbE_eta_r {pb Γ na A t u} :
@@ -232,7 +232,7 @@ Section A5.
     have hr : is_open_term Γ (tLetIn na' t' A' u').
     { cbn [on_free_vars]. now rewrite ht' hA' (open_snoc_inv Γ _ u' hu'). }
     constructor; [exact hΓ|exact hl|exact hr|].
-    exact (JoinE_LetIn Σ wfΣ r Γ pb na na' t t' A A' u u' hΓ hl hr hna jt jA ju).
+    exact (JoinE_LetIn Σ wfΣ Γ pb na na' t t' A A' u u' hΓ hl hr hna jt jA ju).
   Qed.
 
   Lemma ws_cumul_pbE_LetIn_bo {pb Γ na t A u u'} :
@@ -310,7 +310,7 @@ Section A5.
   Proof.
     intros hl hr hpars hu hctx hret hc hbrs. have hΓ := wsE_ctx hc.
     constructor; [exact hΓ|exact hl|exact hr|].
-    apply (JoinE_Case Σ wfΣ r); try assumption.
+    apply (JoinE_Case Σ wfΣ); try assumption.
     - exact (WT_join hpars).
     - exact (wsE_join hret).
     - exact (wsE_join hc).
@@ -332,7 +332,7 @@ Section A5.
     { move: hl. cbn [on_free_vars]. move/and5P => [h1 h2 h3 _ h5]. apply/and5P; split; try assumption.
       exact (wsE_right hc). }
     constructor; [exact hΓ|exact hl|exact hr|].
-    apply (JoinE_Case Σ wfΣ r); try assumption.
+    apply (JoinE_Case Σ wfΣ); try assumption.
     - apply All2_refl. intros x. apply JoinE_refl.
     - reflexivity.
     - reflexivity.
@@ -348,7 +348,7 @@ Section A5.
     WS pb Γ (tCase ci p c brs) (tCase ci p c brs').
   Proof.
     intros hΓ hl hr hbrs. constructor; [exact hΓ|exact hl|exact hr|].
-    apply (JoinE_Case Σ wfΣ r); try assumption.
+    apply (JoinE_Case Σ wfΣ); try assumption.
     - apply All2_refl. intros x. apply JoinE_refl.
     - reflexivity.
     - reflexivity.
@@ -366,7 +366,7 @@ Section A5.
     WS pb Γ (tCase ci p c brs) (tCase ci p' c brs).
   Proof.
     intros hΓ hl hr hpars hu hctx hret. constructor; [exact hΓ|exact hl|exact hr|].
-    apply (JoinE_Case Σ wfΣ r); try assumption.
+    apply (JoinE_Case Σ wfΣ); try assumption.
     - apply JoinE_refl.
     - apply JoinE_Case_refl_brs.
   Qed.

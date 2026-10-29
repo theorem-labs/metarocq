@@ -1,17 +1,20 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * A2 (spec ⇒ join), and I5 at [FInstFollowKernel] given the [cumul_eta_l] case
+(** * A2 (spec ⇒ join), and I5 given the [cumul_eta_l] case
 
-    [I5_spec_to_join] : I5_eta_l_case r Σ -> closed Γ -> open t -> open u ->
-                        Σ ;;; Γ ⊢ t ≤sE[pb] u -> JoinE r Σ Γ pb t u
+    [I5_spec_to_join] : I5_eta_l_case Σ -> closed Γ -> open t -> open u ->
+                        Σ ;;; Γ ⊢ t ≤sE[pb] u -> JoinE Σ Γ pb t u
     [I5_obligation8_FollowKernel] :
-      I5_eta_l_case FInstFollowKernel Σ -> I5_statement FInstFollowKernel Σ
+      I5_eta_l_case Σ -> I5_statement Σ
+
+  (The [FollowKernel] suffix records that a constructor of a non-cumulative
+  inductive is compared as the kernel compares it; that is now the only rule.)
 
   Induction on [cumulSpecE0] ([cumulSpecE0_rect]), every rule a lemma below: the
   ten reduction rules (the nine of base and [cumulE_prim_op]) by one [red1] step;
   [cumulE_Trans] by A3 ([I5_join_trans]); [cumulE_Sym] by U1' symmetry at [Conv]
   and [(Conv,0) ⊆ (pb,0)]; the congruences by [BE] chains; the constructor spine by
-  [cumul_construct_finst], true at both constructor rules; [cumul_eta_l] by the
+  [cumul_construct_finst]; [cumul_eta_l] by the
   premise [I5_eta_l_case], proved as [I5_eta_l_case_holds] ([PCUICEtaI5EtaL]).
 
   **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
@@ -106,21 +109,21 @@ Proof. induction l as [|a l IH] in f |- *; cbn; [reflexivity|]. now rewrite IH. 
 
 (** F-inst comparisons are monotone in [napp]: the variance does not read
     [napp], and the mode only moves from [Conv] to [pb]. *)
-Lemma finst_inst_napp_mono r Σ cu pb gr n m u u' :
+Lemma finst_inst_napp_mono Σ cu pb gr n m u u' :
   RelationClasses.subrelation (cu Conv) (cu pb) -> n <= m ->
-  cmp_global_instance_eta r Σ cu pb gr n u u' -> cmp_global_instance_eta r Σ cu pb gr m u u'.
+  cmp_global_instance_eta Σ cu pb gr n u u' -> cmp_global_instance_eta Σ cu pb gr m u u'.
 Proof.
   intros sub hle. unfold cmp_global_instance_eta.
-  rewrite (global_variance_eta_napp_irrelevant r (lookup_env Σ) gr n m).
+  rewrite (global_variance_eta_napp_irrelevant (lookup_env Σ) gr n m).
   unfold finst_mode. destruct (Nat.leb_spec (head_arity Σ gr) n) as [h|h].
   - rewrite (proj2 (Nat.leb_le _ _) (Nat.le_trans _ _ _ h hle)). intros x; exact x.
   - apply (cmp_opt_variance_Conv_sub cu). destruct (_ <=? m); [exact sub|intros x y e; exact e].
 Qed.
 
-Lemma finst_napp_mono r Σ cu cs pb n m t u :
+Lemma finst_napp_mono Σ cu cs pb n m t u :
   RelationClasses.subrelation (cu Conv) (cu pb) ->
-  eq_term_upto_univ_eta_napp r Σ cu cs pb n t u -> n <= m ->
-  eq_term_upto_univ_eta_napp r Σ cu cs pb m t u.
+  eq_term_upto_univ_eta_napp Σ cu cs pb n t u -> n <= m ->
+  eq_term_upto_univ_eta_napp Σ cu cs pb m t u.
 Proof.
   intros sub e. revert sub. induction e in m |- *; intros sub hle.
   all: try solve [constructor; assumption].
@@ -163,13 +166,13 @@ Qed.
 
 Section A2.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ).
 
   Local Notation cu := (compare_universe Σ).
   Local Notation cs := (compare_sort Σ).
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ.1 cu cs pb n).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ.1 cu cs pb n).
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
-  Local Notation J Γ pb := (JoinE r Σ Γ pb).
+  Local Notation J Γ pb := (JoinE Σ Γ pb).
 
   Definition be_step Γ (x y : term) : Type := ((red1 Σ Γ x y + eta1 x y) + (canon x = canon y))%type.
   Local Notation BE Γ := (clos_refl_trans (be_step Γ)).
@@ -216,7 +219,7 @@ Section A2.
 
   (** A comparison at the end of a join, moved onto the canonical forms. *)
   Lemma RF_canon pb n x y : RF pb n x y -> RF pb n (canon x) (canon y).
-  Proof. exact (finst_canon r Σ.1 cu cs (a3_refl_s Σ) pb n x y). Qed.
+  Proof. exact (finst_canon Σ.1 cu cs (a3_refl_s Σ) pb n x y). Qed.
 
   Lemma RF_refl pb n x : RF pb n x x.
   Proof. apply compare_term_eta_refl. Qed.
@@ -438,7 +441,7 @@ Section A2.
       as (brs1 & h1 & h2 & hs).
     { eapply All_impl; [exact (forallb_All _ _ hbl)|]. intros br h. exact (proj1 (andP h)). }
     { eapply All_impl; [exact (forallb_All _ _ hbr)|]. intros br h. exact (proj2 (andP h)). }
-    apply (I5_join_trans Σ wfΣ r Γ pb _ (tCase ci (mk_predicate pars u ctx ret') c brs1) _ hΓ).
+    apply (I5_join_trans Σ wfΣ Γ pb _ (tCase ci (mk_predicate pars u ctx ret') c brs1) _ hΓ).
     - cbn [on_free_vars pparams pcontext preturn puinst].
       apply/and5P; split; [exact hpl| |exact hcl|exact hcc|exact (All_forallb _ _ hs)].
       rewrite (All2_length hctx). exact hrr.
@@ -477,7 +480,7 @@ Section A2.
   Lemma JoinE_sym Γ pb t u : J Γ Conv u t -> J Γ pb t u.
   Proof.
     intros (v & v' & hv & hv' & e). exists v', v. repeat split; [exact hv'|exact hv|].
-    exact (finst_term_Conv_pb r Σ.1 cu cs Conv 0 v' v (compare_term_eta_sym r Σ.1 Σ 0 v v' e) eq_refl
+    exact (finst_term_Conv_pb Σ.1 cu cs Conv 0 v' v (compare_term_eta_sym Σ.1 Σ 0 v v' e) eq_refl
              pb 0 (a3_sub_u Σ pb) (a3_sub_s Σ pb)).
   Qed.
 
@@ -521,7 +524,7 @@ Section A2.
         * intros a b s; exact (app_eta_r a b vt' s).
         * intros a b e; cbn [canon]; now rewrite e.
     - cbn [canon]. constructor.
-      + apply (finst_napp_mono r Σ.1 cu cs pb 0 1); [exact (a3_sub_u Σ pb)|exact (RF_canon _ _ _ _ et)|lia].
+      + apply (finst_napp_mono Σ.1 cu cs pb 0 1); [exact (a3_sub_u Σ pb)|exact (RF_canon _ _ _ _ et)|lia].
       + exact (RF_canon _ _ _ _ eu).
   Qed.
 
@@ -627,7 +630,7 @@ Section A2.
     J Γ pb (tLetIn na t ty u) (tLetIn na' t' ty' u').
   Proof.
     intros hΓ hl hr hna ht hty hu.
-    apply (I5_join_trans Σ wfΣ r Γ pb _ (tLetIn na t ty u') _ hΓ).
+    apply (I5_join_trans Σ wfΣ Γ pb _ (tLetIn na t ty u') _ hΓ).
     - move: hl hr. cbn [on_free_vars]. move/and3P => [h1 h2 _]. move/and3P => [_ _ h3].
       apply/and3P; split; assumption.
     - exact (JoinE_LetIn_body Γ pb na t ty u u' hu).
@@ -689,7 +692,7 @@ Section A2.
     - exact (BE_mkApps_args Γ _ _ _ hly).
     - rewrite !canon_mkApps. cbn [canon]. apply RF_mkApps; [|apply All2_map; exact hxy].
       rewrite Nat.add_0_l length_map. constructor.
-      rewrite -(All2_length hlx). exact (cumul_ind_finst r Σ.1 cu pb i #|args| u u' hu).
+      rewrite -(All2_length hlx). exact (cumul_ind_finst Σ.1 cu pb i #|args| u u' hu).
   Qed.
 
   Lemma JoinE_Construct Γ pb i k u u' args args' :
@@ -702,7 +705,7 @@ Section A2.
     - exact (BE_mkApps_args Γ _ _ _ hly).
     - rewrite !canon_mkApps. cbn [canon]. apply RF_mkApps; [|apply All2_map; exact hxy].
       rewrite Nat.add_0_l length_map. constructor.
-      rewrite -(All2_length hlx). exact (cumul_construct_finst r Σ.1 cu pb i k #|args| u u' hu).
+      rewrite -(All2_length hlx). exact (cumul_construct_finst Σ.1 cu pb i k #|args| u u' hu).
   Qed.
 
   Lemma JoinE_Prim Γ pb p p' : onPrims (J Γ Conv) (eq_universe Σ) p p' -> J Γ pb (tPrim p) (tPrim p').
@@ -984,7 +987,7 @@ Section A2.
 
   (** **A2: spec ⇒ join**, for every rule, with [cumul_eta_l] as the named
       premise [I5_eta_l_case]. *)
-  Theorem I5_spec_to_join (heta : I5_eta_l_case r Σ) Γ pb t u :
+  Theorem I5_spec_to_join (heta : I5_eta_l_case Σ) Γ pb t u :
     is_closed_context Γ -> is_open_term Γ t -> is_open_term Γ u ->
     Σ ;;; Γ ⊢ t ≤sE[pb] u -> J Γ pb t u.
   Proof.
@@ -1006,7 +1009,7 @@ Section A2.
       exact (red_prim_op _ _ c decl u op ls r0 v hop hd hb hden hback).
     - (* proj *) intros Γ pb p args u arg ha _ _ _. apply JoinE_red1. exact (red_proj _ _ p args u arg ha).
     - (* Trans: A3 *) intros Γ pb t u v hΓ0 hu0 _ IH1 _ IH2 hΓ ht hv.
-      exact (I5_join_trans Σ wfΣ r Γ pb t u v hΓ0 hu0 (IH1 hΓ ht hu0) (IH2 hΓ hu0 hv)).
+      exact (I5_join_trans Σ wfΣ Γ pb t u v hΓ0 hu0 (IH1 hΓ ht hu0) (IH2 hΓ hu0 hv)).
     - (* Sym *) intros Γ pb t u _ IH hΓ ht hu. apply JoinE_sym. exact (IH hΓ hu ht).
     - (* Refl *) intros Γ pb t _ _ _. now apply JoinE_canon_eq.
     - (* Evar *) intros Γ pb ev l l' H IH hΓ hl hr. apply JoinE_Evar. exact (All2_dep_J Γ hΓ l l' H IH hl hr).
@@ -1072,21 +1075,19 @@ Section A2.
 
 End A2.
 
-(** ** I5 at [FInstFollowKernel], given the [cumul_eta_l] case
+(** ** I5, given the [cumul_eta_l] case
 
-  The statement at the kernel's constructor rule, for every [cumulSpecE0] rule,
-  with [cumul_eta_l] the named premise [I5_eta_l_case]. A2 above, A4
-  ([I5_join_to_spec]) and A3 ([I5_join_trans], used inside A2) are parametric in
-  [r]; this is their instance at [FInstFollowKernel]. [I5_FollowKernel]
-  ([PCUICEtaI5EtaL]) discharges the premise.
+  The statement for every [cumulSpecE0] rule, with [cumul_eta_l] the named
+  premise [I5_eta_l_case]. [I5_FollowKernel] ([PCUICEtaI5EtaL]) discharges the
+  premise.
 
   **The hypotheses are satisfiable:** [ClosedBodies Σ], which every well-formed environment satisfies
   ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); [I5_eta_l_case] by
   [I5_eta_l_case_holds]. *)
 Theorem I5_obligation8_FollowKernel {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) :
-  I5_eta_l_case FInstFollowKernel Σ -> I5_statement FInstFollowKernel Σ.
+  I5_eta_l_case Σ -> I5_statement Σ.
 Proof.
   intros heta Γ pb t u hΓ ht hu. split.
-  - exact (I5_spec_to_join Σ wfΣ FInstFollowKernel heta Γ pb t u hΓ ht hu).
-  - exact (I5_join_to_spec Σ wfΣ FInstFollowKernel Γ pb t u hΓ ht hu).
+  - exact (I5_spec_to_join Σ wfΣ heta Γ pb t u hΓ ht hu).
+  - exact (I5_join_to_spec Σ wfΣ Γ pb t u hΓ ht hu).
 Qed.

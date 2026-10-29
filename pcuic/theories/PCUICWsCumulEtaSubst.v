@@ -41,9 +41,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction PCUICLi
 
 Section Inst.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext).
 
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
 
   Lemma finst_inst pb n t u σ : RF pb n t u -> RF pb n t.[σ] u.[σ].
   Proof.
@@ -90,9 +90,9 @@ End Inst.
 Section Map.
 
   (** Source environment [Σ], target [Σ'] (they differ only for universe instances). *)
-  Context {cf : checker_flags} (Σ Σ' : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ Σ' : global_env_ext) (wfΣ : ClosedBodies Σ).
 
-  Local Notation RF Σ pb n := (eq_term_upto_univ_eta_napp r Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
+  Local Notation RF Σ pb n := (eq_term_upto_univ_eta_napp Σ.1 (compare_universe Σ) (compare_sort Σ) pb n).
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
   Local Notation BE' Γ := (clos_refl_trans (be_step Σ' Γ)).
 
@@ -118,10 +118,10 @@ Section Map.
     (forall x y, eta1 x y -> eta1 (f x) (f y)) ->
     (forall x y, canon x = canon y -> canon (f x) = canon (f y)) ->
     (forall x y, RF Σ pb 0 x y -> RF Σ' pb 0 (canon (f x)) (canon (f y))) ->
-    JoinE r Σ Γ pb t u -> JoinE r Σ' Γ' pb (f t) (f u).
+    JoinE Σ Γ pb t u -> JoinE Σ' Γ' pb (f t) (f u).
   Proof.
     intros hΓ ht hu hr he hc hrf (v & v' & hv & hv' & e).
-    apply (BE_JoinE Σ' r Γ' pb (f t) (f u) (f v) (f v')).
+    apply (BE_JoinE Σ' Γ' pb (f t) (f u) (f v) (f v')).
     - eapply rt_trans; [apply rt_step; right; apply hc; symmetry; apply canon_idem|].
       exact (RE_map_BE Γ Γ' f hΓ hr he hc _ _ (canon_is_open_term Γ t ht) hv).
     - eapply rt_trans; [apply rt_step; right; apply hc; symmetry; apply canon_idem|].
@@ -135,9 +135,9 @@ End Map.
 
 Section A7.
 
-  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {r : finst_construct_rule}.
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
 
-  Local Notation WS pb Γ := (ws_cumul_pbE r pb Σ Γ).
+  Local Notation WS pb Γ := (ws_cumul_pbE pb Σ Γ).
 
   Lemma untyped_substitution_ws_cumul_pbE {pb Γ Δ Γ'' s M N} :
     untyped_subslet Γ s Δ -> forallb (is_open_term Γ) s ->
@@ -150,14 +150,14 @@ Section A7.
     - eapply is_closed_subst_context; tea.
     - eapply is_open_term_subst; tea.
     - eapply is_open_term_subst; tea.
-    - eapply (JoinE_map Σ Σ wfΣ r (Γ ,,, Δ ,,, Γ'') _ (subst s #|Γ''|)); try eassumption.
+    - eapply (JoinE_map Σ Σ wfΣ (Γ ,,, Δ ,,, Γ'') _ (subst s #|Γ''|)); try eassumption.
       + intros x y hx h.
         have hcr : Σ ;;; Γ ,,, Δ ,,, Γ'' ⊢ x ⇝ y.
         { split; [exact hΓ|exact hx|apply red1_red; exact h]. }
         exact (clrel_rel (untyped_closed_red_subst_cb hs hs' hcr)).
       + intros x y h. exact (eta1_subst_step s x y h _).
       + intros x y e. rewrite !canon_subst. now rewrite e.
-      + intros x y e. rewrite !canon_subst. apply finst_subst. exact (RF_canon Σ r _ _ _ _ e).
+      + intros x y e. rewrite !canon_subst. apply finst_subst. exact (RF_canon Σ _ _ _ _ e).
   Qed.
 
   Lemma substitution_ws_cumul_pbE {pb Γ Δ Γ'' s M N} :
@@ -194,14 +194,14 @@ Section A7.
     - eapply is_closed_context_lift; tea.
     - eapply is_open_term_lift; tea.
     - eapply is_open_term_lift; tea.
-    - eapply (JoinE_map Σ Σ wfΣ r (Γ ,,, Γ') _ (lift #|Γ''| #|Γ'|)); try eassumption.
+    - eapply (JoinE_map Σ Σ wfΣ (Γ ,,, Γ') _ (lift #|Γ''| #|Γ'|)); try eassumption.
       + intros x y hx h.
         have hcr : Σ ;;; Γ ,,, Γ' ⊢ x ⇝ y.
         { split; [exact hΓ|exact hx|apply red1_red; exact h]. }
         exact (clrel_rel (weakening_closed_red_cb hcr hΓ'')).
       + intros x y h. exact (eta1_lift _ x y h _).
       + intros x y e. rewrite !canon_lift. now rewrite e.
-      + intros x y e. rewrite !canon_lift. apply finst_lift. exact (RF_canon Σ r _ _ _ _ e).
+      + intros x y e. rewrite !canon_lift. apply finst_lift. exact (RF_canon Σ _ _ _ _ e).
   Qed.
 
   (** ** A5's tracked gap: the let-body at [pb] *)
@@ -312,12 +312,12 @@ Qed.
 
 (** The F-inst instance comparison under a universe instance (base
     [precompose_subst_instance_global], one direction, at F-inst's mode). *)
-Lemma precompose_subst_instance_finst r Σ cmp_universe pb gr napp u i i' :
-  cmp_global_instance_eta r Σ (fun pb => precompose (cmp_universe pb) (subst_instance_universe u)) pb gr napp i i' ->
-  cmp_global_instance_eta r Σ cmp_universe pb gr napp (subst_instance u i) (subst_instance u i').
+Lemma precompose_subst_instance_finst Σ cmp_universe pb gr napp u i i' :
+  cmp_global_instance_eta Σ (fun pb => precompose (cmp_universe pb) (subst_instance_universe u)) pb gr napp i i' ->
+  cmp_global_instance_eta Σ cmp_universe pb gr napp (subst_instance u i) (subst_instance u i').
 Proof.
   unfold cmp_global_instance_eta, cmp_opt_variance.
-  destruct (global_variance_eta r Σ gr napp) as [| |v].
+  destruct (global_variance_eta Σ gr napp) as [| |v].
   - apply precompose_subst_instance__2.
   - unfold subst_instance. cbn. now rewrite !length_map.
   - intros [H|H]; [left|right].
@@ -331,9 +331,9 @@ Qed.
 
 Section UnivInst.
 
-  Context {cf : checker_flags} (r : finst_construct_rule) (Σ : global_env) (φ φ' : ConstraintSet.t)
+  Context {cf : checker_flags} (Σ : global_env) (φ φ' : ConstraintSet.t)
           (i : Instance.t) (HH : valid_constraints φ' (subst_instance_cstrs i φ)).
-  Local Notation RF φ pb n := (eq_term_upto_univ_eta_napp r Σ (compare_universe φ) (compare_sort φ) pb n).
+  Local Notation RF φ pb n := (eq_term_upto_univ_eta_napp Σ (compare_universe φ) (compare_sort φ) pb n).
 
   Lemma univinst_hu pb : RelationClasses.subrelation (compare_universe φ pb)
                            (precompose (compare_universe φ' pb) (subst_instance i)).
@@ -364,8 +364,8 @@ Section UnivInst.
   Qed.
 
   Lemma finst_subst_instance pb n t u :
-    eq_term_upto_univ_eta_napp r Σ (compare_universe φ) (compare_sort φ) pb n t u ->
-    eq_term_upto_univ_eta_napp r Σ (compare_universe φ') (compare_sort φ') pb n
+    eq_term_upto_univ_eta_napp Σ (compare_universe φ) (compare_sort φ) pb n t u ->
+    eq_term_upto_univ_eta_napp Σ (compare_universe φ') (compare_sort φ') pb n
       (subst_instance i t) (subst_instance i u).
   Proof.
     have hu := univinst_hu. have hs := univinst_hs.
@@ -404,11 +404,10 @@ Section UnivInst.
 
 End UnivInst.
 
-Lemma subst_instance_ws_cumul_pbE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
-  {r : finst_construct_rule} univs u {pb Γ A B} :
+Lemma subst_instance_ws_cumul_pbE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} univs u {pb Γ A B} :
   valid_constraints (global_ext_constraints (Σ.1, univs)) (subst_instance_cstrs u Σ) ->
-  ws_cumul_pbE r pb Σ Γ A B ->
-  ws_cumul_pbE r pb (Σ.1, univs) (subst_instance u Γ) (subst_instance u A) (subst_instance u B).
+  ws_cumul_pbE pb Σ Γ A B ->
+  ws_cumul_pbE pb (Σ.1, univs) (subst_instance u Γ) (subst_instance u A) (subst_instance u B).
 Proof.
   intros HH [hΓ hA hB j].
   have hl : #|subst_instance u Γ| = #|Γ| by apply subst_instance_length.
@@ -416,11 +415,11 @@ Proof.
   - rewrite on_free_vars_ctx_subst_instance. exact hΓ.
   - rewrite hl on_free_vars_subst_instance. exact hA.
   - rewrite hl on_free_vars_subst_instance. exact hB.
-  - eapply (JoinE_map Σ (Σ.1, univs) wfΣ r Γ (subst_instance u Γ) (subst_instance u)); try eassumption.
+  - eapply (JoinE_map Σ (Σ.1, univs) wfΣ Γ (subst_instance u Γ) (subst_instance u)); try eassumption.
     + intros x y hx h. apply rt_step. exact (red1_subst_instance Σ.1 Γ u x y h).
     + intros x y h. exact (eta1_subst_instance u x y h).
     + intros x y e. rewrite !canon_subst_instance. now rewrite e.
     + intros x y e. rewrite !canon_subst_instance.
-      eapply (finst_subst_instance r Σ.1 Σ (global_ext_constraints (Σ.1, univs)) u HH).
-      exact (RF_canon Σ r _ _ _ _ e).
+      eapply (finst_subst_instance Σ.1 Σ (global_ext_constraints (Σ.1, univs)) u HH).
+      exact (RF_canon Σ _ _ _ _ e).
 Qed.

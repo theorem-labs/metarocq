@@ -2,8 +2,8 @@
 
 (** * The [cumul_eta_l] case of A2, and I5 in full
 
-    [I5_eta_l_case_holds] : I5_eta_l_case r Σ                   (for every rule [r])
-    [I5_FollowKernel]     : I5_statement FInstFollowKernel Σ
+    [I5_eta_l_case_holds] : I5_eta_l_case Σ
+    [I5_FollowKernel]     : I5_statement Σ
 
   The case: from a join of [t] and [(↑u) (tRel 0)] in [Γ ,, vass na A], a join of
   [λ na:A. t] and [u] in [Γ].
@@ -59,13 +59,13 @@ Proof. intros h. eapply on_free_vars_impl; [|exact h]. done. Qed.
 
 Section EtaL.
 
-  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) (r : finst_construct_rule).
+  Context {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ).
 
   Local Notation cu := (compare_universe Σ).
   Local Notation cs := (compare_sort Σ).
-  Local Notation RF pb n := (eq_term_upto_univ_eta_napp r Σ.1 cu cs pb n).
+  Local Notation RF pb n := (eq_term_upto_univ_eta_napp Σ.1 cu cs pb n).
   Local Notation RE Γ := (union (R_c Σ Γ) eta1).
-  Local Notation J Γ pb := (JoinE r Σ Γ pb).
+  Local Notation J Γ pb := (JoinE Σ Γ pb).
   Local Notation BE Γ := (clos_refl_trans (be_step Σ Γ)).
 
   Lemma RE_canonical Γ x y : canon x = x -> RE Γ x y -> canon y = y.
@@ -137,7 +137,7 @@ Section EtaL.
   Qed.
 
   (** ** The [cumul_eta_l] case *)
-  Theorem I5_eta_l_case_holds : I5_eta_l_case r Σ.
+  Theorem I5_eta_l_case_holds : I5_eta_l_case Σ.
   Proof.
     intros Γ pb na A t u hΓ hl hu hj.
     move: (hl). cbn [on_free_vars]. move/andP => [hA ht].
@@ -158,23 +158,23 @@ Section EtaL.
     - (* (A): the left side is an η-redex at the end *)
       depelim e.
       match goal with
-      | e1 : eq_term_upto_univ_eta_napp _ _ _ _ Conv 1 ?v1 (lift0 1 x'),
-        e2 : eq_term_upto_univ_eta_napp _ _ _ _ Conv 0 ?v2 (tRel 0) |- _ =>
+      | e1 : eq_term_upto_univ_eta_napp _ _ _ Conv 1 ?v1 (lift0 1 x'),
+        e2 : eq_term_upto_univ_eta_napp _ _ _ Conv 0 ?v2 (tRel 0) |- _ =>
           rename e1 into ef; rename e2 into ea
       end.
       depelim ea.
       have hx'o : is_open_term Γ x' := star_open Σ wfΣ Γ _ _ hΓ hcu hx'.
-      destruct (finst_eta_root r Σ.1 cu cs _ Conv 0 x' _ (fun _ _ h => h) (fun _ _ h => h) hx'o
-                  (compare_term_eta_sym r Σ.1 Σ 1 _ _ ef)) as (m' & -> & em).
-      apply (BE_JoinE Σ r Γ pb _ _ m' x').
+      destruct (finst_eta_root Σ.1 cu cs _ Conv 0 x' _ (fun _ _ h => h) (fun _ _ h => h) hx'o
+                  (compare_term_eta_sym Σ.1 Σ 1 _ _ ef)) as (m' & -> & em).
+      apply (BE_JoinE Σ Γ pb _ _ m' x').
       + eapply rt_trans; [exact (hleft _ hbv)|].
         apply rt_step; left; right. exact (eta_red na m' A).
       + exact (hright _ hx').
-      + apply (RF_canon Σ r).
-        exact (finst_term_Conv_pb r Σ.1 cu cs Conv 0 m' x' (compare_term_eta_sym r Σ.1 Σ 0 _ _ em) eq_refl
+      + apply (RF_canon Σ).
+        exact (finst_term_Conv_pb Σ.1 cu cs Conv 0 m' x' (compare_term_eta_sym Σ.1 Σ 0 _ _ em) eq_refl
                  pb 0 (a3_sub_u Σ pb) (a3_sub_s Σ pb)).
     - (* (B): both sides end in a canonical λ *)
-      apply (BE_JoinE Σ r Γ pb _ _ (tLambda na A v) (tLambda canon_la canon_dom v')).
+      apply (BE_JoinE Σ Γ pb _ _ (tLambda na A v) (tLambda canon_la canon_dom v')).
       + exact (hleft _ hbv).
       + eapply rt_trans; [exact (hright _ hb)|].
         apply (BE_map Σ (Γ ,, vass canon_la canon_dom) Γ (tLambda canon_la canon_dom)).
@@ -182,7 +182,7 @@ Section EtaL.
         * intros a c s. exact (abs_eta_r canon_la a c canon_dom s).
         * intros a c ec. cbn [canon]. now rewrite ec.
         * exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ na canon_la A canon_dom) (RE_BE Σ _ _ _ hbw)).
-      + cbn [canon]. constructor; [apply eq_binder_annot_refl'|apply (RF_refl Σ r)|exact (RF_canon Σ r _ _ _ _ e)].
+      + cbn [canon]. constructor; [apply eq_binder_annot_refl'|apply (RF_refl Σ)|exact (RF_canon Σ _ _ _ _ e)].
   Qed.
 
 End EtaL.
@@ -193,5 +193,5 @@ End EtaL.
   ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); the statement's own
   scoping premises by any scoped pair. *)
 Theorem I5_FollowKernel {cf : checker_flags} (Σ : global_env_ext) (wfΣ : ClosedBodies Σ) :
-  I5_statement FInstFollowKernel Σ.
-Proof. exact (I5_obligation8_FollowKernel Σ wfΣ (I5_eta_l_case_holds Σ wfΣ FInstFollowKernel)). Qed.
+  I5_statement Σ.
+Proof. exact (I5_obligation8_FollowKernel Σ wfΣ (I5_eta_l_case_holds Σ wfΣ)). Qed.

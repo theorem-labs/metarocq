@@ -11,11 +11,9 @@
     variance is base at [Conv] and the full arity, i.e. [cumul_*_univ Σ Conv _ n],
     read by [cumulSpecE_*_underapplied] ([PCUICCumulativitySpecEtaClosure]).
 
-  The constructor halves [finst_construct_glue_full] and
-  [finst_construct_glue_under] are parametric in [r] and proved for both values:
-  under [FInstFollowKernel] a non-cumulative constructor compares with
-  [AllEqual], which implies every variance. The [IndRef] halves never read the
-  constructor rule. *)
+  A non-cumulative constructor compares with [AllEqual] at its full arity, which
+  implies every variance, so the constructor halves
+  [finst_construct_glue_full] and [finst_construct_glue_under] hold for it too. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -34,61 +32,58 @@ Proof.
   destruct (Nat.leb_spec (head_arity Σ gr) napp); [lia|reflexivity].
 Qed.
 
-(** ** Inductive heads: the rule never reads [IndRef] *)
+(** ** Inductive heads *)
 
-Lemma global_variance_eta_ind r lookup i napp :
-  global_variance_eta_gen r lookup (IndRef i) napp
+Lemma global_variance_eta_ind lookup i napp :
+  global_variance_eta_gen lookup (IndRef i) napp
   = global_variance_gen lookup (IndRef i) (max napp (head_arity_gen lookup (IndRef i))).
-Proof. unfold global_variance_eta_gen. now destruct r. Qed.
+Proof. reflexivity. Qed.
 
-Lemma finst_ind_glue_full r (Σ : global_env) cu pb i napp u u' :
+Lemma finst_ind_glue_full (Σ : global_env) cu pb i napp u u' :
   head_arity Σ (IndRef i) <= napp ->
-  cmp_global_instance_eta r Σ cu pb (IndRef i) napp u u' ->
+  cmp_global_instance_eta Σ cu pb (IndRef i) napp u u' ->
   cmp_global_instance Σ cu pb (IndRef i) napp u u'.
 Proof.
   intros hle h. unfold cmp_global_instance_eta in h.
   rewrite finst_mode_full // global_variance_eta_ind Nat.max_l // in h.
 Qed.
 
-Lemma finst_ind_glue_under r (Σ : global_env) cu pb i napp u u' :
+Lemma finst_ind_glue_under (Σ : global_env) cu pb i napp u u' :
   napp < head_arity Σ (IndRef i) ->
-  cmp_global_instance_eta r Σ cu pb (IndRef i) napp u u' ->
+  cmp_global_instance_eta Σ cu pb (IndRef i) napp u u' ->
   cmp_global_instance Σ cu Conv (IndRef i) (head_arity Σ (IndRef i)) u u'.
 Proof.
   intros hlt h. unfold cmp_global_instance_eta in h.
   rewrite finst_mode_under // global_variance_eta_ind Nat.max_r in h; [lia|exact h].
 Qed.
 
-(** ** Constructor heads — SITE K1, parametric in [r], both values *)
+(** ** Constructor heads — SITE K1 *)
 
-Lemma global_variance_eta_construct_cases r lookup i k napp v :
-  global_variance_eta_gen r lookup (ConstructRef i k) napp = v ->
+Lemma global_variance_eta_construct_cases lookup i k napp v :
+  global_variance_eta_gen lookup (ConstructRef i k) napp = v ->
   (v = global_variance_gen lookup (ConstructRef i k)
          (max napp (head_arity_gen lookup (ConstructRef i k)))) + (v = AllEqual).
-Proof.
-  unfold global_variance_eta_gen. intros <-.
-  destruct (match r with FInstFollowSpec => false | _ => _ end); [now right|now left].
-Qed.
+Proof. unfold global_variance_eta_gen. intros <-. now left. Qed.
 
-Lemma finst_construct_glue_full r (Σ : global_env) cu pb i k napp u u' :
+Lemma finst_construct_glue_full (Σ : global_env) cu pb i k napp u u' :
   head_arity Σ (ConstructRef i k) <= napp ->
-  cmp_global_instance_eta r Σ cu pb (ConstructRef i k) napp u u' ->
+  cmp_global_instance_eta Σ cu pb (ConstructRef i k) napp u u' ->
   cmp_global_instance Σ cu pb (ConstructRef i k) napp u u'.
 Proof.
   intros hle h. unfold cmp_global_instance_eta in h. rewrite finst_mode_full // in h.
-  destruct (global_variance_eta_construct_cases r (lookup_env Σ) i k napp _ eq_refl) as [e|e];
+  destruct (global_variance_eta_construct_cases (lookup_env Σ) i k napp _ eq_refl) as [e|e];
     rewrite e in h.
   - rewrite Nat.max_l // in h.
   - exact (cmp_instance_opt_variance cu pb _ u u' h).
 Qed.
 
-Lemma finst_construct_glue_under r (Σ : global_env) cu pb i k napp u u' :
+Lemma finst_construct_glue_under (Σ : global_env) cu pb i k napp u u' :
   napp < head_arity Σ (ConstructRef i k) ->
-  cmp_global_instance_eta r Σ cu pb (ConstructRef i k) napp u u' ->
+  cmp_global_instance_eta Σ cu pb (ConstructRef i k) napp u u' ->
   cmp_global_instance Σ cu Conv (ConstructRef i k) (head_arity Σ (ConstructRef i k)) u u'.
 Proof.
   intros hlt h. unfold cmp_global_instance_eta in h. rewrite finst_mode_under // in h.
-  destruct (global_variance_eta_construct_cases r (lookup_env Σ) i k napp _ eq_refl) as [e|e];
+  destruct (global_variance_eta_construct_cases (lookup_env Σ) i k napp _ eq_refl) as [e|e];
     rewrite e in h.
   - rewrite Nat.max_r in h; [lia|exact h].
   - exact (cmp_instance_opt_variance cu Conv _ u u' h).
@@ -103,9 +98,9 @@ Qed.
   equality, which implies F-inst's [Conv]-mode comparison at any variance.
 
   The constructor half is the A2 constructor case. Before repair (a) it was
-  FALSE at [FInstFollowKernel] (base gave [AllIrrelevant] to a fully applied
-  non-cumulative constructor, F-inst [AllEqual]). After (a) it holds at BOTH
-  rules, through [global_variance_eta_base]; A2 uses it at [FInstFollowKernel]. *)
+  FALSE for a non-cumulative constructor (base gave [AllIrrelevant] to a fully
+  applied one, F-inst [AllEqual]). After (a) it holds, through
+  [global_variance_eta_base]. *)
 
 Lemma cmp_global_instance_ind_under (Σ : global_env) cu pb i napp u u' :
   napp < head_arity Σ (IndRef i) ->
@@ -129,9 +124,9 @@ Proof.
   intros h; exact h.
 Qed.
 
-Lemma cumul_ind_finst r (Σ : global_env) cu pb i napp u u' :
+Lemma cumul_ind_finst (Σ : global_env) cu pb i napp u u' :
   cmp_global_instance Σ cu pb (IndRef i) napp u u' ->
-  cmp_global_instance_eta r Σ cu pb (IndRef i) napp u u'.
+  cmp_global_instance_eta Σ cu pb (IndRef i) napp u u'.
 Proof.
   intros h. unfold cmp_global_instance_eta. rewrite global_variance_eta_base.
   destruct (Nat.le_gt_cases (head_arity Σ (IndRef i)) napp) as [hle|hlt].
@@ -142,9 +137,9 @@ Proof.
 Qed.
 
 (** **SITE K3.** *)
-Lemma cumul_construct_finst r (Σ : global_env) cu pb i k napp u u' :
+Lemma cumul_construct_finst (Σ : global_env) cu pb i k napp u u' :
   cmp_global_instance Σ cu pb (ConstructRef i k) napp u u' ->
-  cmp_global_instance_eta r Σ cu pb (ConstructRef i k) napp u u'.
+  cmp_global_instance_eta Σ cu pb (ConstructRef i k) napp u u'.
 Proof.
   intros h. unfold cmp_global_instance_eta. rewrite global_variance_eta_base.
   destruct (Nat.le_gt_cases (head_arity Σ (ConstructRef i k)) napp) as [hle|hlt].

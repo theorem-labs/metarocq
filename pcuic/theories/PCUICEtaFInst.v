@@ -37,14 +37,11 @@
 
   ** The constructor rule
 
-  The comparison is parametric in [r : finst_construct_rule]. [FInstFollowKernel]
-  compares a constructor of a non-cumulative inductive by instance equality, as
-  the kernel does; [FInstFollowSpec] uses base [global_variance_gen] as it is.
-  Base [global_variance_gen] itself compares a fully applied constructor of a
-  non-cumulative inductive by instance equality, so both values give the same
-  variance ([global_variance_eta_rule_irrelevant]): the parameter [r] no longer
-  changes the relation. The η specification is characterised by the joins at
-  [FInstFollowKernel] ([I5_FollowKernel]). *)
+  A constructor of a non-cumulative inductive is compared by instance equality,
+  as the kernel does. No extra branch is needed for it: compared at its full
+  arity, base [global_variance_gen] already returns [AllEqual] there
+  ([finst_noncumulative_constructor_AllEqual]). The η specification is
+  characterised by the joins of this comparison ([I5_FollowKernel]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import RelationClasses.
@@ -55,20 +52,6 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive
      PCUICInduction PCUICEquality.
 
 Local Open Scope type_scope.
-
-(** ** The constructor rule *)
-
-Variant finst_construct_rule :=
-  | FInstFollowSpec
-  (** [ConstructRef] as base [global_variance_gen] does it. *)
-  | FInstFollowKernel.
-  (** The kernel's rule: instance EQUALITY when the inductive is not cumulative
-      ([ind_variance = None]). *)
-
-(** The two values of [r] give the same variance: base [global_variance_gen]
-    compares a fully applied constructor of a non-cumulative inductive by instance
-    equality, which is what [FInstFollowKernel]'s extra branch returns
-    ([global_variance_eta_base], [global_variance_eta_rule_irrelevant]). *)
 
 (** ** Full arity of a head
 
@@ -95,8 +78,8 @@ Definition head_arity_gen lookup (gr : global_reference) : nat :=
 
 Notation head_arity Σ := (head_arity_gen (lookup_env Σ)).
 
-(** Is the head a constructor of a NON-cumulative inductive? That is the only
-    thing [FInstFollowKernel] needs beyond the spec rule. *)
+(** Is the head a constructor of a NON-cumulative inductive? Below its full
+    arity that is the head whose variance is not base's [AllEqual] fallback. *)
 Definition noncumulative_constructor_gen lookup (gr : global_reference) : bool :=
   match gr with
   | ConstructRef ind k =>
@@ -110,26 +93,20 @@ Definition noncumulative_constructor_gen lookup (gr : global_reference) : bool :
   | _ => false
   end.
 
-(** The variance lookup F-inst uses: the base one at the head's FULL arity,
-    except that under [FInstFollowKernel] a non-cumulative constructor keeps
-    instance equality. *)
-Definition global_variance_eta_gen (r : finst_construct_rule) lookup gr napp :=
-  if match r with
-     | FInstFollowSpec => false
-     | FInstFollowKernel => noncumulative_constructor_gen lookup gr
-     end
-  then AllEqual
-  else global_variance_gen lookup gr (max napp (head_arity_gen lookup gr)).
+(** The variance lookup F-inst uses: the base one at the head's FULL arity. A
+    constructor of a non-cumulative inductive needs no case of its own: at the
+    full arity base returns [AllEqual] for it
+    ([finst_noncumulative_constructor_AllEqual]), which is the kernel's rule. *)
+Definition global_variance_eta_gen lookup gr napp :=
+  global_variance_gen lookup gr (max napp (head_arity_gen lookup gr)).
 
-Notation global_variance_eta r Σ := (global_variance_eta_gen r (lookup_env Σ)).
+Notation global_variance_eta Σ := (global_variance_eta_gen (lookup_env Σ)).
 
-(** **The napp drop disappears.** This holds for BOTH rules, so it does not wait
-    on the measurement. It is the whole content of the R3(a) repair. *)
-Lemma global_variance_eta_napp_irrelevant r lookup gr napp napp' :
-  global_variance_eta_gen r lookup gr napp = global_variance_eta_gen r lookup gr napp'.
+(** **The napp drop disappears.** It is the whole content of the R3(a) repair. *)
+Lemma global_variance_eta_napp_irrelevant lookup gr napp napp' :
+  global_variance_eta_gen lookup gr napp = global_variance_eta_gen lookup gr napp'.
 Proof.
   unfold global_variance_eta_gen.
-  destruct (match r with FInstFollowSpec => false | _ => _ end); [reflexivity|].
   unfold global_variance_gen, head_arity_gen.
   destruct gr as [id|kn|ind|ind k]; cbn; try reflexivity.
   - destruct (lookup_inductive_gen lookup ind) as [[mdecl idecl]|]; [|reflexivity].
@@ -139,25 +116,11 @@ Proof.
     now rewrite !(proj2 (Nat.leb_le _ _) (Nat.le_max_r _ _)).
 Qed.
 
-(** **The two rules coincide.** Base [global_variance_gen] gives [AllEqual] to a
-    fully applied constructor of a non-cumulative inductive, which is what
-    [FInstFollowKernel]'s extra branch returns. So for both values of [r],
-    [global_variance_eta_gen] is base's variance at the full arity. *)
-Lemma global_variance_eta_base r lookup gr napp :
-  global_variance_eta_gen r lookup gr napp
+(** The lookup is base's variance at the full arity, by definition. *)
+Lemma global_variance_eta_base lookup gr napp :
+  global_variance_eta_gen lookup gr napp
   = global_variance_gen lookup gr (max napp (head_arity_gen lookup gr)).
-Proof.
-  unfold global_variance_eta_gen. destruct r; [reflexivity|].
-  destruct gr as [id|kn|ind|ind k]; try reflexivity.
-  unfold noncumulative_constructor_gen, global_variance_gen, head_arity_gen.
-  destruct (lookup_constructor_gen lookup ind k) as [[[mdecl idecl] cdecl]|]; [|reflexivity].
-  destruct (ind_variance mdecl); [reflexivity|].
-  now destruct (_ <=? _).
-Qed.
-
-Lemma global_variance_eta_rule_irrelevant r r' lookup gr napp :
-  global_variance_eta_gen r lookup gr napp = global_variance_eta_gen r' lookup gr napp.
-Proof. now rewrite !global_variance_eta_base. Qed.
+Proof. reflexivity. Qed.
 
 (** ** The F-inst instance comparison
 
@@ -172,8 +135,8 @@ Proof. now rewrite !global_variance_eta_base. Qed.
 Definition finst_mode (Σ : global_env) (gr : global_reference) (pb : conv_pb) (napp : nat) :=
   if head_arity Σ gr <=? napp then pb else Conv.
 
-Definition cmp_global_instance_eta r Σ cmp_universe pb gr napp :=
-  cmp_opt_variance cmp_universe (finst_mode Σ gr pb napp) (global_variance_eta r Σ gr napp).
+Definition cmp_global_instance_eta Σ cmp_universe pb gr napp :=
+  cmp_opt_variance cmp_universe (finst_mode Σ gr pb napp) (global_variance_eta Σ gr napp).
 
 (** ** The instance comparison is an equivalence
 
@@ -181,21 +144,20 @@ Definition cmp_global_instance_eta r Σ cmp_universe pb gr napp :=
   v]. The proof is base's [cmp_global_instance_trans] with
   [cmp_opt_variance_or_impl]: base never inspects where the variance or the mode
   came from. With the mode [pb] or [Conv], every hypothesis base needs is
-  required at both, and is discharged at the actual mode by [finst_mode_cases].
-  All of it holds for both values of [r]. *)
+  required at both, and is discharged at the actual mode by [finst_mode_cases]. *)
 
 Lemma finst_mode_cases (P : conv_pb -> Type) Σ gr pb napp :
   P Conv -> P pb -> P (finst_mode Σ gr pb napp).
 Proof. intros hC hp. unfold finst_mode. now destruct (_ <=? _). Qed.
 
 Section FInstInstance.
-  Context (r : finst_construct_rule) (Σ : global_env)
+  Context (Σ : global_env)
           (cmp_universe : conv_pb -> Universe.t -> Universe.t -> Prop).
 
   Lemma cmp_global_instance_eta_refl pb gr napp :
     RelationClasses.Reflexive (cmp_universe Conv) ->
     RelationClasses.Reflexive (cmp_universe pb) ->
-    RelationClasses.Reflexive (cmp_global_instance_eta r Σ cmp_universe pb gr napp).
+    RelationClasses.Reflexive (cmp_global_instance_eta Σ cmp_universe pb gr napp).
   Proof.
     intros univ_refl _.
     unfold cmp_global_instance_eta.
@@ -207,7 +169,7 @@ Section FInstInstance.
   Lemma cmp_global_instance_eta_sym pb gr napp :
     RelationClasses.Symmetric (cmp_universe Conv) ->
     RelationClasses.Symmetric (cmp_universe pb) ->
-    RelationClasses.Symmetric (cmp_global_instance_eta r Σ cmp_universe pb gr napp).
+    RelationClasses.Symmetric (cmp_global_instance_eta Σ cmp_universe pb gr napp).
   Proof.
     intros univ_sym univ_sym'.
     have hm : RelationClasses.Symmetric (cmp_universe (finst_mode Σ gr pb napp))
@@ -224,7 +186,7 @@ Section FInstInstance.
     RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pb) ->
     RelationClasses.Transitive (cmp_universe Conv) ->
     RelationClasses.Transitive (cmp_universe pb) ->
-    RelationClasses.Transitive (cmp_global_instance_eta r Σ cmp_universe pb gr napp).
+    RelationClasses.Transitive (cmp_global_instance_eta Σ cmp_universe pb gr napp).
   Proof.
     intros univ_sub univ_trans univ_trans'.
     have hsub : RelationClasses.subrelation (cmp_universe Conv) (cmp_universe (finst_mode Σ gr pb napp))
@@ -243,7 +205,7 @@ Section FInstInstance.
       [PCUICEquality.v:102-109]). *)
   Lemma cmp_global_instance_eta_weaken pb gr napp u u' :
     cmp_universe_instance (cmp_universe Conv) u u' ->
-    cmp_global_instance_eta r Σ cmp_universe pb gr napp u u'.
+    cmp_global_instance_eta Σ cmp_universe pb gr napp u u'.
   Proof.
     intros h. unfold cmp_global_instance_eta.
     now apply (cmp_instance_opt_variance cmp_universe _ _ u u').
@@ -268,12 +230,12 @@ Section FInstInstance.
       implies the [pb]-mode or [Conv]-mode one at [m]. *)
   Lemma finst_Conv_pb pb gr n m u u' :
     RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pb) ->
-    cmp_global_instance_eta r Σ cmp_universe Conv gr n u u' ->
-    cmp_global_instance_eta r Σ cmp_universe pb gr m u u'.
+    cmp_global_instance_eta Σ cmp_universe Conv gr n u u' ->
+    cmp_global_instance_eta Σ cmp_universe pb gr m u u'.
   Proof.
     intros sub. unfold cmp_global_instance_eta.
     have -> : finst_mode Σ gr Conv n = Conv by unfold finst_mode; now destruct (_ <=? _).
-    rewrite (global_variance_eta_napp_irrelevant r (lookup_env Σ) gr n m).
+    rewrite (global_variance_eta_napp_irrelevant (lookup_env Σ) gr n m).
     apply cmp_opt_variance_Conv_sub.
     exact (finst_mode_cases (fun pm => RelationClasses.subrelation (cmp_universe Conv) (cmp_universe pm))
              _ _ _ _ (fun x y h => h) sub).
@@ -284,21 +246,18 @@ End FInstInstance.
 (** **The [Box@{+u}] witness holds.** A cumulative inductive with no parameters
     and no indices (arity 0), one [Covariant] universe, compared at [Cumul] with
     [napp 0] and no arguments: [u ≤ v] suffices. Stated for any such declared
-    inductive, at both constructor rules. *)
-Lemma finst_cumulative_box_witness r (Σ : global_env) cmp_universe i mdecl idecl u v :
+    inductive. *)
+Lemma finst_cumulative_box_witness (Σ : global_env) cmp_universe i mdecl idecl u v :
   declared_inductive_gen (lookup_env Σ) i mdecl idecl ->
   ind_params mdecl = [] -> ind_indices idecl = [] ->
   ind_variance mdecl = Some [Variance.Covariant] ->
   on_rel (cmp_universe Cumul) Universe.make' u v ->
-  cmp_global_instance_eta r Σ cmp_universe Cumul (IndRef i) 0 [u] [v].
+  cmp_global_instance_eta Σ cmp_universe Cumul (IndRef i) 0 [u] [v].
 Proof.
   intros hd hp hi hv huv.
   have hl := declared_inductive_lookup_gen hd.
   unfold cmp_global_instance_eta, finst_mode, global_variance_eta_gen, head_arity_gen.
   rewrite hl hp hi; cbn.
-  have -> : (match r with FInstFollowSpec => false
-             | FInstFollowKernel => noncumulative_constructor_gen (lookup_env Σ) (IndRef i) end) = false
-    by now destruct r.
   unfold global_variance_gen. rewrite hl hp hi hv; cbn.
   right. constructor; [exact huv|constructor].
 Qed.
@@ -310,8 +269,8 @@ Qed.
     transitive by [compare_universe_trans]; and
     [eq_universe φ ⊆ compare_universe φ pb] is [compare_universe_subrel]. This
     corollary is that statement. *)
-Lemma cmp_global_instance_eta_trans_compare {cf : checker_flags} r Σ φ pb gr napp :
-  RelationClasses.Transitive (cmp_global_instance_eta r Σ (compare_universe φ) pb gr napp).
+Lemma cmp_global_instance_eta_trans_compare {cf : checker_flags} Σ φ pb gr napp :
+  RelationClasses.Transitive (cmp_global_instance_eta Σ (compare_universe φ) pb gr napp).
 Proof.
   apply cmp_global_instance_eta_trans.
   - exact (compare_universe_subrel φ pb).
@@ -324,18 +283,12 @@ Qed.
   A copy of base [eq_term_upto_univ_napp] with exactly two constructors changed,
   [eq_Ind] and [eq_Construct], the only two that read [napp]. Every other
   constructor is base's. The copy is needed because [napp] is threaded through
-  the inductive, so the variance lookup cannot be swapped from outside. It is
-  parameterised by [r], which does not change the relation
-  ([global_variance_eta_rule_irrelevant]). *)
+  the inductive, so the variance lookup cannot be swapped from outside. *)
 
-Definition cmp_global_instance_finst r Σ cmp_universe pb gr napp :=
-  cmp_global_instance_eta r Σ cmp_universe pb gr napp.
+Definition cmp_global_instance_finst Σ cmp_universe pb gr napp :=
+  cmp_global_instance_eta Σ cmp_universe pb gr napp.
 
-(** [r] is a SECTION variable, not an inductive parameter: the recursive
-    notation below cannot infer it from a [_]. Discharging the section gives it
-    back as the first argument of every definition here. *)
 Section FInstRelation.
-Context (r : finst_construct_rule).
 
 Reserved Notation " Σ ⊢ t <==η[ pb , napp ] u" (at level 50, t, u at next level,
   format "Σ  ⊢  t  <==η[ pb , napp ]  u").
@@ -371,11 +324,11 @@ Inductive eq_term_upto_univ_eta_napp Σ
    [pb] at or above the arity and [Conv] below it ([finst_mode]). These two
    constructors are the only change from base. *)
 | eqη_Ind : forall i u u',
-    cmp_global_instance_finst r Σ cmp_universe pb (IndRef i) napp u u' ->
+    cmp_global_instance_finst Σ cmp_universe pb (IndRef i) napp u u' ->
     Σ ⊢ tInd i u <==η[ pb , napp ] tInd i u'
 
 | eqη_Construct : forall i k u u',
-    cmp_global_instance_finst r Σ cmp_universe pb (ConstructRef i k) napp u u' ->
+    cmp_global_instance_finst Σ cmp_universe pb (ConstructRef i k) napp u u' ->
     Σ ⊢ tConstruct i k u <==η[ pb , napp ] tConstruct i k u'
 
 | eqη_Lambda : forall na na' ty ty' t t',
@@ -434,14 +387,21 @@ Derive Signature for eq_term_upto_univ_eta_napp.
 
 (** ** Constructors of non-cumulative inductives
 
-  For a constructor of a non-cumulative inductive, F-inst at [FInstFollowKernel]
-  demands instance equality, as the kernel and base [global_variance_gen] do. *)
+  For a constructor of a non-cumulative inductive, F-inst demands instance
+  equality, as the kernel and base [global_variance_gen] do. The full-arity
+  lookup lands in base's [None] branch of [ind_variance], which is [AllEqual]. *)
 
 Lemma finst_noncumulative_constructor_AllEqual lookup gr napp :
   noncumulative_constructor_gen lookup gr = true ->
-  global_variance_eta_gen FInstFollowKernel lookup gr napp = AllEqual.
+  global_variance_eta_gen lookup gr napp = AllEqual.
 Proof.
-  intros h. unfold global_variance_eta_gen. now rewrite h.
+  intros h. unfold noncumulative_constructor_gen in h.
+  destruct gr as [id|kn|ind|ind k]; try discriminate.
+  unfold global_variance_eta_gen, global_variance_gen, head_arity_gen.
+  destruct (lookup_constructor_gen lookup ind k) as [[[mdecl idecl] cdecl]|];
+    [|discriminate].
+  destruct (ind_variance mdecl); [discriminate|].
+  now destruct (_ <=? _).
 Qed.
 
 (** The same fact at the comparison: a non-cumulative constructor head is
@@ -449,7 +409,7 @@ Qed.
     does. *)
 Lemma finst_noncumulative_constructor_instance_eq Σ cmp_universe pb ind k napp u u' :
   noncumulative_constructor_gen (lookup_env Σ) (ConstructRef ind k) = true ->
-  cmp_global_instance_finst FInstFollowKernel Σ cmp_universe pb (ConstructRef ind k) napp u u' ->
+  cmp_global_instance_finst Σ cmp_universe pb (ConstructRef ind k) napp u u' ->
   cmp_universe_instance (cmp_universe Conv) u u'.
 Proof.
   intros hnc h.
