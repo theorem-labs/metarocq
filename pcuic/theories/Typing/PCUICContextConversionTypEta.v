@@ -26,12 +26,15 @@
   [cumul_context_Algo_SpecE] assumes [ClosedBodies Σ]; base's [cumul_context_Algo_Spec]
   assumes nothing. Base's [cumulAlgo_cumulSpec] needs no premise, but its E counterpart
   [ws_cumul_pbE_forget_spec] is the join-to-specification direction [I5_join_to_spec],
-  which needs closed constant bodies. Its only use here holds [wfE Σ], which gives
-  [ClosedBodies Σ] ([wfE_ClosedBodies]).
+  which needs closed constant bodies. Its two uses here, the fix and cofix cases of
+  [context_cumulativity_propE], both hold [wfE Σ], which gives [ClosedBodies Σ]
+  ([wfE_ClosedBodies]).
 
   **The hypotheses are satisfiable:** [wfE Σ] and [ClosedBodies Σ] by any well-formed
-  environment ([wf_incl_E], [wfE_ClosedBodies]); the context premises by two well-formed
-  contexts that differ by an η-step. Instances: [PCUICTypingEtaCopy9Instances]. *)
+  environment ([wf_incl_E], [wfE_ClosedBodies]); the context-cumulativity and
+  context-conversion premises by two well-formed contexts that differ by an η-step; the
+  [compare_context] premises by two contexts whose types [compare_term] relates.
+  Instances: [PCUICTypingEtaCopy9Instances]. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICOnOne PCUICAstUtils

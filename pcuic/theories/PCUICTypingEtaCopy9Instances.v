@@ -13,12 +13,16 @@
 
   both well formed ([c9_wf_ΓA], [c9_wf_ΓB]). They differ by one η-step in the type of
   [w]: [λy:Prop. I y] contracts to [I] ([c9_eta]). Both types are normal, so no
-  β-reduction relates them. Every context premise below relates [c9_ΓB] and [c9_ΓA], in
-  the cumulative direction by the η-contraction ([c9_cumul_BA]) or as a conversion
-  ([c9_conv_AB]). The typing instances move [w], typed at [h I] in [c9_ΓA], to [c9_ΓB],
-  where its declared type is [h (λy. I y)], so the conclusion needs the η-conversion. The
-  [match] of [cp_match_typed] ([PCUICTypingEtaCopies1Instances]), weakened into [c9_ΓA],
-  moves to [c9_ΓB] the same way ([context_cumulativityE_match_inst]).
+  β-reduction relates them. Every context-cumulativity and context-conversion premise
+  below relates [c9_ΓB] and [c9_ΓA], in the cumulative direction by the η-contraction
+  ([c9_cumul_BA]) or as a conversion ([c9_conv_AB]). The two [compare_context] premises
+  ([eq_context_cumul_SpecE_inst], [eq_context_cumul_Spec_relE_inst]) relate instead
+  [c9_ΓP = [x : Prop]] and [c9_ΓT = [x : Type₁]]: [compare_term] has no η-step, and it
+  relates [Prop] and [Type₁] at [Cumul]. The typing instances move [w], typed at [h I]
+  in [c9_ΓA], to [c9_ΓB], where its declared type is [h (λy. I y)], so the conclusion
+  needs the η-conversion. The [match] of [cp_match_typed]
+  ([PCUICTypingEtaCopies1Instances]), weakened into [c9_ΓA], moves to [c9_ΓB] the same
+  way ([context_cumulativityE_match_inst]).
 
   [All2_conv_over_reflE] and [All2_cumul_over_reflE] have no premise, so no instance. No
   instance reaches the [tFix]/[tCoFix] cases of [context_cumulativity_propE], because no
