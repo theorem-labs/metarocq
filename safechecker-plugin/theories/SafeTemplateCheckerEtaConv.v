@@ -48,6 +48,6 @@ Section EtaOracle.
     destruct (isconv_term X_type X (normalization_in := normalization_in)
                 closed_context_conversionE welltypedE_context Γ pb t ht u hu) eqn:hconv; [|discriminate].
     exact (isconv_term_sound X_type X (normalization_in := normalization_in)
-             closed_context_conversionE welltypedE_context Γ pb t ht u hu hconv Σ wfΣ).
+             closed_context_conversionE welltypedE_context Σ wfΣ Γ pb t ht u hu hconv).
   Qed.
 End EtaOracle.

@@ -3125,7 +3125,7 @@ Proof.
                 (pb := Cumul) (Γ' := ti_ΓF) ht ti_wf_ΓF hctx)).
 Qed.
 
-(* degenerate: NOT BUILT — I has no indices, so the conclusion compares two empty index contexts (also Γ = [], u = u', pars = pars'); a real point needs an indexed family, and u ≠ u' a cumulative universe-polymorphic one *)
+(* degenerate: NOT BUILT — I has no indices, so the conclusion compares two empty index contexts (also Γ = [], u = u', pars = pars'); a real point needs an indexed family, and u ≠ u' a cumulative universe-polymorphic one; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma inductive_cumulative_indices_inst :
   [× declared_inductive si_Σ si_ind si_mdecl si_idecl,
      consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
@@ -3166,7 +3166,7 @@ Proof.
   split; [exact si_wfE|exact si_declared_inductive|exact (siT h)|split; [exact (siTS hs)|exact hc]].
 Qed.
 
-(* degenerate: NOT BUILT — c has no arguments and I has no indices, so the ctx_inst premise is over empty lists, and the user arity of I is already the built arity (the red premise is reflexive); a real point needs an indexed family *)
+(* degenerate: NOT BUILT — c has no arguments and I has no indices, so the ctx_inst premise is over empty lists, and the user arity of I is already the built arity (the red premise is reflexive); a real point needs an indexed family; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma isTypeRel_cstr_type_inst :
   [× wfE si_Σ.1,
      nth_error (ind_bodies si_mdecl) 0 = Some si_idecl,
@@ -3216,7 +3216,7 @@ Proof.
                 ti_cons hs)).
 Qed.
 
-(* degenerate: NOT BUILT — I has no indices, so the index half of the split (skipn ind_npars args, argsubst) is empty; a real point needs an indexed family (Γ = [A : Prop] and the parameter A are real) *)
+(* degenerate: NOT BUILT — I has no indices, so the index half of the split (skipn ind_npars args, argsubst) is empty; a real point needs an indexed family (Γ = [A : Prop] and the parameter A are real); COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma isType_mkApps_Ind_inv_inst :
   [× wfE si_Σ.1, declared_inductive si_Σ.1 si_ind si_mdecl si_idecl, wf_localE si_Σ ti_ΓP,
      isTypeE si_Σ ti_ΓP (mkApps (tInd si_ind []) [tRel 0]) &
@@ -3261,7 +3261,7 @@ Qed.
 Lemma ti_Rel0_ty : si_Σ ;;; [] ,,, ti_ΓP ,,, [] |- tRel 0 : si_P.
 Proof. exact (type_Rel _ _ 0 (vass si_na si_P) ti_wf_ΓP eq_refl). Qed.
 
-(* degenerate: NOT BUILT — the user arity of I is already the built arity, so the premise's and the conclusion's spines are over the same type; on_ind_body's ind_arity_red only asks the user arity to REDUCE to the built one, so an inductive declared with a redex in its arity gives a real point (Γ = [A : Prop] and the argument A are real) *)
+(* degenerate: NOT BUILT — the user arity of I is already the built arity, so the premise's and the conclusion's spines are over the same type; on_ind_body's ind_arity_red only asks the user arity to REDUCE to the built one, so an inductive declared with a redex in its arity gives a real point (Γ = [A : Prop] and the argument A are real); COST: a new inductive declared with a redex in its user arity, in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing and its ind_arity_red reduction, constructor typing, positivity, universe constraints), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma typing_spine_ind_type_inv_inst :
   [× declared_inductive si_Σ si_ind si_mdecl si_idecl, wf_localE si_Σ ti_ΓP,
      consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
@@ -3308,7 +3308,7 @@ Lemma ti_ret_ty :
   si_Σ ;;; [] ,,, case_predicate_context ti_ci si_mdecl si_idecl ti_p |- preturn ti_p : tSort (Sort.super sProp).
 Proof. exact (ti_P_ty _ ti_wf_predctx). Qed.
 
-(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma wf_case_branch_type_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -3337,7 +3337,7 @@ Proof.
   cbv zeta. split; [exact b1|exact (siW b2)|exact (siW b3)|exact (siW b4)|exact (siT b5)].
 Qed.
 
-(* degenerate: NOT BUILT — args = [] because I has no indices, and Γ = []; a real point needs an indexed family *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, and Γ = []; a real point needs an indexed family; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma wf_case_predicate_context_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -3348,7 +3348,7 @@ Proof.
   cbv zeta. exact (siW ti_wf_predctx).
 Qed.
 
-(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
 Lemma wf_case_branches_types'_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),

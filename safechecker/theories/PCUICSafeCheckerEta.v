@@ -367,6 +367,7 @@ Section CheckEnv.
   (** The η conversion, EtaReduce's hypothesis and the η typing facts (see [PCUICTypeCheckerEta]). *)
   Context {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}.
 
+
   Definition X_env_ext_type := X_impl.π2.π1.
 
   Definition X_env_type := X_impl.π1.
@@ -1040,6 +1041,9 @@ Section CheckEnv.
     intros H. apply ctx_inst_smash in H. now rewrite List.rev_involutive in H.
   Qed.
 
+  (* base's [pcuic] hints over E, for the base proof scripts' [pcuic] calls (heads distinct from base's) *)
+  #[local] Hint Resolve isTypeRelE_isTypeE isType_wf_local typing_wf_local : pcuic.
+
   (* base [PCUICSpine.v:32-35]'s pattern notations, over [typing_spineE] (FORECAST-ONLY with [typing_spineE]) *)
   Local Notation spnil isty isty' w := (@type_spine_nilE _ _ _ _ _ isty isty' w).
   Local Notation spcons isty isty' w tyhd sp := (@type_spine_consE _ _ _ _ _ _ _ _ _ _ isty isty' w tyhd sp).
@@ -1402,7 +1406,7 @@ Section CheckEnv.
       (fun (cstr :constructor_body) (cs0 : constructor_univs) =>
       check_constructor_spec Σ (S n) mdecl idecl cstr cs0) cstrs cs ∥) ->
     forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ All (fun cs => wt_indices Σ mdecl idecl.(ind_indices) cs) cstrs ∥.
-  Proof using Type.
+  Proof using EtaF.
     intros. pose proof (abstract_env_ext_wf _ H0) as wfE; specialize_Σ H0. MRSquash.sq.
     solve_all. simpl.
     destruct X as [[[isTy eq] sorts] eq']. simpl in *.
@@ -1481,7 +1485,7 @@ Section CheckEnv.
       context_assumptions (ind_params mdecl) = ind_npars mdecl ->
       (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_variance Σ (ind_universes mdecl) (ind_variance mdecl) ∥) ->
       forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_inductive cumulSpecE0 (lift_typing typingE) Σ ind mdecl ∥.
-  Proof using Type.
+  Proof using EtaF.
     intros H H0 H1 H2 ? wfE. specialize_Σ wfE. MRSquash.sq. econstructor; try eassumption.
   Qed.
 
@@ -1910,7 +1914,7 @@ End monad_Alli_nth_forall.
     wf_cs_sorts X_ext cs ->
     (forall Σ, abstract_env_ext_rel X_ext Σ -> wf_sort Σ ind_sort) ->
     forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ reflect (check_constructors_smaller Σ cs ind_sort) (checkb_constructors_smaller X_ext cs ind_sort) ∥.
-  Proof using Type.
+  Proof using EtaF.
     unfold check_constructors_smaller, checkb_constructors_smaller.
     intros wfcs wfind ? ?. specialize_Σ H.
     MRSquash.sq.
@@ -2121,12 +2125,12 @@ End monad_Alli_nth_forall.
 
   Lemma arity_whnf_direct X_ext {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X_ext -> NormalizationInE Σ}
     Γ t wt :
-    whd_arity_head (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) [] = true ->
+    whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) [] = true ->
     forall Σ, abstract_env_ext_rel X_ext Σ ->
-      ∥ arity_head_red Σ.1 Γ t (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) ∥.
+      ∥ arity_head_red Σ.1 Γ t (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) ∥.
   Proof using Type.
     intros eqh Σ wfΣ.
-    destruct (reduce_term_whd_rel RedFlags.allnolet X_impl X_ext
+    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext
       eq_refl eq_refl eq_refl eq_refl Γ t wt Σ wfΣ) as (hd & l & e & [w]).
     destruct (mkApps_arity_head_inv (eq_sym e) eqh) as [-> ->].
     constructor. apply arity_head_red_direct. exact w.
@@ -2135,18 +2139,18 @@ End monad_Alli_nth_forall.
   Lemma arity_whnf_fallback X_ext {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X_ext -> NormalizationInE Σ}
     Γ t wt
     (wtr : forall Σ, abstract_env_ext_rel X_ext Σ ->
-      welltypedE Σ Γ (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt)) :
-    whd_arity_head (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) [] = false ->
-    whd_arity_head (reduce_term RedFlags.default X_impl X_ext Γ
-      (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) wtr) [] = true ->
+      welltypedE Σ Γ (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt)) :
+    whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) [] = false ->
+    whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ
+      (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) wtr) [] = true ->
     forall Σ, abstract_env_ext_rel X_ext Σ ->
-      ∥ arity_head_red Σ.1 Γ t (reduce_term RedFlags.default X_impl X_ext Γ
-          (reduce_term RedFlags.allnolet X_impl X_ext Γ t wt) wtr) ∥.
+      ∥ arity_head_red Σ.1 Γ t (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ
+          (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) wtr) ∥.
   Proof using Type.
     intros eqh eqh' Σ wfΣ.
-    destruct (reduce_term_whd_rel RedFlags.allnolet X_impl X_ext
+    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext
       eq_refl eq_refl eq_refl eq_refl Γ t wt Σ wfΣ) as (hd & l & e & [w]).
-    destruct (reduce_term_whd_rel RedFlags.default X_impl X_ext
+    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext
       eq_refl eq_refl eq_refl eq_refl Γ _ wtr Σ wfΣ) as (hd' & l' & e' & [w']).
     destruct (mkApps_arity_head_inv (eq_sym e') eqh') as [-> ->].
     constructor. eapply arity_head_red_fallback with (h := hd) (l := l).
@@ -2167,22 +2171,22 @@ End monad_Alli_nth_forall.
     (T : term) (Γ : context) (t : term)
     (wt : forall Σ, abstract_env_ext_rel X_ext Σ -> welltypedE Σ Γ t)
     : typing_result (arity_whnf_result X_ext Γ t) :=
-    let r := reduce_term RedFlags.allnolet X_impl X_ext Γ t wt in
-    let wtr := reduce_term_welltyped RedFlags.allnolet X_impl X_ext Γ t wt in
-    match whd_arity_head r [] as b
-      return whd_arity_head r [] = b -> typing_result (arity_whnf_result X_ext Γ t) with
-    | true => fun eqh =>
-      ret ((r; conj wtr (arity_whnf_direct X_ext Γ t wt eqh)) : arity_whnf_result X_ext Γ t)
-    | false => fun eqh =>
-      let r' := reduce_term RedFlags.default X_impl X_ext Γ r wtr in
-      match whd_arity_head r' [] as b'
-        return whd_arity_head r' [] = b' -> typing_result (arity_whnf_result X_ext Γ t) with
-      | true => fun eqh' =>
-        ret ((r'; conj (reduce_term_welltyped RedFlags.default X_impl X_ext Γ r wtr)
-                   (arity_whnf_fallback X_ext Γ t wt wtr eqh eqh')) : arity_whnf_result X_ext Γ t)
-      | false => fun _ => raise (NotAnArity T)
-      end eq_refl
-    end eq_refl.
+    (* E: base's [let r := …] bindings are inlined and its dependent [match … as b return … = b -> …] is an
+       [inspect]: with the let-bound reduct, elaboration did not finish here (out/probe-scfull3.log,
+       probe-scfull5.log); the computed term is the same. *)
+    match inspect (whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) []) with
+    | exist true eqh =>
+      ret (((reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt); conj (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (arity_whnf_direct (normalization_in := normalization_in) X_ext Γ t wt (eq_sym eqh)))
+           : arity_whnf_result X_ext Γ t)
+    | exist false eqh =>
+      match inspect (whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt)) []) with
+      | exist true eqh' =>
+        ret (((reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt)); conj (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt))
+                   (arity_whnf_fallback (normalization_in := normalization_in) X_ext Γ t wt (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (eq_sym eqh) (eq_sym eqh')))
+             : arity_whnf_result X_ext Γ t)
+      | exist false _ => raise (NotAnArity T)
+      end
+    end.
 
   Lemma wt_arity_prod_body {X_ext Γ na A B} :
     (forall Σ, abstract_env_ext_rel X_ext Σ -> welltypedE Σ Γ (tProd na A B)) ->
@@ -2325,7 +2329,8 @@ End monad_Alli_nth_forall.
       ∥ arity_red Σ.1 mdecl.(ind_params) U idecl.(ind_indices) idecl.(ind_sort) ∥)
     (check : relevance_of_sort (ind_sort idecl) == ind_relevance idecl) :
     forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_ind_type Σ mdecl idecl ∥.
-  Proof using Type.
+  Proof using EtaF.
+    open_eta_facts.
     intros Σ wfΣ.
     destruct (abstract_env_ext_sq_wf _ _ _ wfΣ) as [wΣ].
     destruct (isty Σ wfΣ) as [hty], (ar Σ wfΣ) as [ar'].
@@ -2633,7 +2638,8 @@ End monad_Alli_nth_forall.
     ∥ All (prim_op_tag_declared Σ) (po_args (info op)) ∥ ->
     ∥ on_prim_op_result Σ (po_shape (info op)) ∥ ->
     welltypedE Σ [] T.
-  Proof using Type.
+  Proof using EtaF.
+    open_eta_facts.
     intros hT [hargs] [hres].
     pose proof (abstract_env_ext_wf _ wfΣ) as [wfΣ'].
     rewrite (abstract_prim_op_type_spec _ _ wfΣ) in hT.
