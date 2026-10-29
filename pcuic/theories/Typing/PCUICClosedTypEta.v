@@ -6,8 +6,14 @@
   [wfE], [wf_localE] and [cumulSpecE0]; every lemma takes the suffix [E], and the
   proofs are base's. It gives the instance [wfE_ClosedBodies]: an environment
   checked with the η conversion satisfies [ClosedBodies] ([PCUICClosedBodies]),
-  the premise of the reduction metatheory. The reduction lemmas of the base file
-  (from [red1_on_free_vars] on) do not mention typing and are not copied. *)
+  the premise of the reduction metatheory. The last section copies twelve more lemmas
+  of the base file: [isTypeRel_closed], [isType_closed], [isTypeRel_is_open_term],
+  [isType_is_open_term], [declared_inductive_closed_type],
+  [declared_inductive_closed_params], [declared_inductive_closed_constructors],
+  [declared_constructor_closed_type], [declared_constructor_closed_args],
+  [declared_constructor_closed_indices], [closed_cstr_branch_context] and
+  [declared_projection_closed_type]. The reduction lemmas of the base file (from
+  [red1_on_free_vars] on) do not mention typing and are not copied. *)
 From Stdlib Require Import Morphisms.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
@@ -578,4 +584,140 @@ Proof.
   apply Build_ClosedBodies.
   - intros cst decl body h e. exact (declared_constant_closed_bodyE Σ cst decl body wfΣ h e).
   - destruct wfΣ as (_ & _ & o). exact (NoDup_on_global_decls _ _ _ _ _ o).
+Qed.
+
+(** ** Closedness of types and of inductive declarations
+
+  The copies of [isTypeRel_closed], [isType_closed], [isTypeRel_is_open_term],
+  [isType_is_open_term], [declared_inductive_closed_type],
+  [declared_inductive_closed_params], [declared_inductive_closed_constructors],
+  [declared_constructor_closed_type], [declared_constructor_closed_args],
+  [declared_constructor_closed_indices], [closed_cstr_branch_context] and
+  [declared_projection_closed_type]. [wf] becomes [wfE], and [isTypeRel]/[isType]
+  become their [typingE] forms [on_type_rel (lift_typing typingE)] and
+  [on_type (lift_typing typingE)]. The statements are base's with those changes; the
+  proofs of the three inductive-declaration lemmas go through [declared_minductive_closedE]
+  and [declared_inductive_closedE] instead of base's routes. *)
+
+Lemma isTypeRel_closedE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ T r} :
+  on_type_rel (lift_typing typingE) Σ Γ T r -> closedn #|Γ| T.
+Proof. move/lift_typing_closedE => [] //. Qed.
+
+Lemma isType_closedE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ T} :
+  on_type (lift_typing typingE) Σ Γ T -> closedn #|Γ| T.
+Proof. move/lift_typing_closedE => [] //. Qed.
+
+#[global] Hint Extern 4 (closedn #|?Γ| ?A = true) =>
+  match goal with
+  | [ H : on_type (lift_typing typingE) _ Γ A |- _ ] => exact (isType_closedE H)
+  | [ H : on_type_rel (lift_typing typingE) _ Γ A _ |- _ ] => exact (isTypeRel_closedE H)
+  end : fvs.
+
+Lemma isTypeRel_is_open_termE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ T r} :
+  on_type_rel (lift_typing typingE) Σ Γ T r ->
+  is_open_term Γ T.
+Proof.
+  move/isTypeRel_closedE. now rewrite is_open_term_closedE.
+Qed.
+
+Lemma isType_is_open_termE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ T} :
+  on_type (lift_typing typingE) Σ Γ T ->
+  is_open_term Γ T.
+Proof.
+  move/isType_closedE. now rewrite is_open_term_closedE.
+Qed.
+
+Lemma declared_inductive_closed_typeE {cf:checker_flags} :
+  forall Σ mdecl ind idecl,
+    wfE Σ ->
+    declared_inductive Σ ind mdecl idecl ->
+    closed idecl.(ind_type).
+Proof.
+  intros Σ mdecl ind idecl hΣ h.
+  move: (@declared_inductive_closedE cf Σ hΣ _ _ _ h).
+  move/andP => [] /andP [] /andP [] hty _ _ _. exact hty.
+Qed.
+
+Lemma declared_inductive_closed_paramsE {cf:checker_flags} {Σ mdecl ind idecl} {wfΣ : wfE Σ} :
+  declared_inductive Σ ind mdecl idecl ->
+  closed_ctx mdecl.(ind_params).
+Proof.
+  intros h.
+  pose proof (declared_minductive_closedE (proj1 h)) as hcl.
+  move/andP: hcl => [] hpars _.
+  exact hpars.
+Qed.
+
+Lemma declared_inductive_closed_constructorsE {cf:checker_flags} {Σ ind mdecl idecl} {wfΣ : wfE Σ} :
+  declared_inductive Σ ind mdecl idecl ->
+  All (closed_constructor_body mdecl) idecl.(ind_ctors).
+Proof.
+  intros h.
+  pose proof (declared_inductive_closedE h) as hcl.
+  move/andP: hcl => [] /andP [] /andP [] _ _ hc _.
+  now eapply forallb_All in hc.
+Qed.
+
+Lemma declared_constructor_closed_typeE {cf:checker_flags}
+  {Σ mdecl idecl c cdecl u} {wfΣ : wfE Σ} :
+  declared_constructor Σ c mdecl idecl cdecl ->
+  closed (type_of_constructor mdecl cdecl c u).
+Proof.
+  intros h.
+  unfold declared_constructor in h.
+  destruct c as [i ci]. simpl in h. destruct h as [hidecl hcdecl].
+  eapply declared_inductive_closed_constructorsE in hidecl as h.
+  unfold type_of_constructor. simpl.
+  eapply All_nth_error in h. 2: eassumption.
+  move/andP: h => [/andP [hargs hindices]] hty.
+  eapply closedn_subst0.
+  - eapply closed_inds.
+  - simpl. rewrite inds_length.
+    rewrite closedn_subst_instance. assumption.
+Qed.
+
+Lemma declared_constructor_closed_argsE {cf:checker_flags}
+  {Σ mdecl idecl c cdecl} {wfΣ : wfE Σ} :
+  declared_constructor Σ c mdecl idecl cdecl ->
+  closedn_ctx (#|ind_bodies mdecl| + #|ind_params mdecl|) cdecl.(cstr_args).
+Proof.
+  intros h.
+  unfold declared_constructor in h.
+  destruct c as [i ci]. simpl in h. destruct h as [hidecl hcdecl].
+  eapply declared_inductive_closed_constructorsE in hidecl as h.
+  eapply All_nth_error in h. 2: eassumption.
+  move/andP: h => [/andP [hargs hindices]] hty.
+  apply hargs.
+Qed.
+
+Lemma declared_constructor_closed_indicesE {cf:checker_flags}
+  {Σ mdecl idecl c cdecl} {wfΣ : wfE Σ} :
+  declared_constructor Σ c mdecl idecl cdecl ->
+  forallb (closedn (#|ind_bodies mdecl| + #|ind_params mdecl| + #|cstr_args cdecl|)) cdecl.(cstr_indices).
+Proof.
+  intros h.
+  unfold declared_constructor in h.
+  destruct c as [i ci]. simpl in h. destruct h as [hidecl hcdecl].
+  eapply declared_inductive_closed_constructorsE in hidecl as h.
+  eapply All_nth_error in h. 2: eassumption.
+  now move/andP: h => [/andP [hargs hindices]] hty.
+Qed.
+
+Lemma closed_cstr_branch_contextE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {ind i mdecl idecl cdecl} :
+  declared_constructor Σ (ind, i) mdecl idecl cdecl ->
+  closedn_ctx (context_assumptions mdecl.(ind_params)) (cstr_branch_context ind mdecl cdecl).
+Proof.
+  intros decli.
+  eapply closed_cstr_branch_context_genE.
+  - eapply declared_minductive_closedE. eapply decli.
+  - eapply declared_constructor_closedE; tea.
+Qed.
+
+Lemma declared_projection_closed_typeE {cf:checker_flags}
+  {Σ mdecl idecl p cdecl pdecl} {wfΣ : wfE Σ} :
+  declared_projection Σ p mdecl idecl cdecl pdecl ->
+  closedn (S (ind_npars mdecl)) pdecl.(proj_type).
+Proof.
+  intros decl.
+  now eapply declared_projection_closedE in decl.
 Qed.

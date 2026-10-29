@@ -122,6 +122,9 @@ theories/Bidirectional/BDToPCUIC.v
 theories/Bidirectional/BDFromPCUIC.v
 theories/Bidirectional/BDUnique.v
 theories/Bidirectional/BDStrengthening.v
+# Bidirectional typing over the eta relations (T6): the judgments, their induction principle, instances
+theories/Bidirectional/BDTypingEta.v
+theories/Bidirectional/BDTypingEtaInstances.v
 
 theories/PCUICWeakeningEnv.v
 theories/PCUICWeakeningConfig.v
@@ -138,6 +141,16 @@ theories/PCUICTypingEta.v
 theories/PCUICTypingEtaInd.v
 theories/Typing/PCUICWeakeningEnvTypEta.v
 theories/Typing/PCUICClosedTypEta.v
+# Typing infrastructure over typingE: configuration weakening, renaming, weakening, case
+# well-formedness, instantiation, the guard closure, and their satisfying instances
+theories/Typing/PCUICWeakeningConfigTypEta.v
+theories/Syntax/PCUICInstDefEta.v
+theories/PCUICGuardClosureEta.v
+theories/Typing/PCUICRenameTypEta.v
+theories/Typing/PCUICWeakeningTypEta.v
+theories/Typing/PCUICCasesWfTypEta.v
+theories/Typing/PCUICInstTypEta.v
+theories/PCUICTypingEtaCopies1Instances.v
 # The normalization premise over typingE (an assumption, as base NormalizationIn is)
 theories/PCUICSNEta.v
 # The stack with the eta frames, and its positions
@@ -180,16 +193,32 @@ theories/PCUICEtaK6EtaStep.v
 # Well-scoped eta-conversion (ws_cumul_pbE): congruences, substitution, inversions, context conversion
 theories/PCUICWellScopedCumulativityEta.v
 theories/PCUICConversionEtaCongr.v
+theories/PCUICConversionEtaCongrFinst.v
 theories/PCUICWsCumulEtaSubst.v
 theories/PCUICEtaA6.v
 theories/PCUICEtaA6Ind.v
 theories/PCUICEtaA6More.v
 theories/PCUICContextConversionEta.v
+# Context-relative facts for ws_cumul_pbE and ws_cumul_ctx_pbE, and their satisfying instances
+theories/PCUICWsCumulEtaCtx.v
+theories/PCUICWsCumulEtaCtxTyp.v
+theories/PCUICWsCumulEtaCtxInstances.v
+# Inversion of typingE (E copy of PCUICInversion)
+theories/PCUICInversionEta.v
+# The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
+theories/PCUICSREtaConv.v
+theories/PCUICSREtaConvInstances.v
+# Context conversion and context cumulativity of typingE, and their satisfying instances
+theories/Typing/PCUICContextConversionTypEta.v
+theories/PCUICTypingEtaCopy9Instances.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
+theories/PCUICEtaIndInvRefutations.v
 theories/PCUICEtaC1b.v
+theories/PCUICFixWitnessEtaCounter.v
 # Satisfying instances of the hypotheses of the lemmas above
 theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
+theories/PCUICInversionEtaInstances.v
 # theories/All.v
