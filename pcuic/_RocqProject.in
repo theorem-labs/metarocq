@@ -206,4 +206,6 @@ theories/PCUICEtaC1b.v
 theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
+# Typed postponement (T8): pinned statements and one-step eta postponement
+theories/PCUICEtaT8Probe.v
 # theories/All.v
