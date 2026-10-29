@@ -23,7 +23,8 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICPosition
      PCUICNormal PCUICReduction PCUICSafeLemmata PCUICWellScopedCumulativity
-     PCUICConversion PCUICClosedBodies PCUICTypingEta PCUICSN PCUICSNEta PCUICClosedTypEta.
+     PCUICConversion PCUICClosedBodies PCUICTypingEta PCUICSN PCUICSNEta PCUICClosedTypEta
+     PCUICEquality PCUICCumulativitySpec.
 From MetaRocq.PCUIC Require PCUICPositionEta.
 From MetaRocq.PCUIC Require PCUICCumulativitySpecEtaClosureInstances PCUICEtaA6Instances.
 From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta PCUICWfEnvEta.
@@ -569,6 +570,131 @@ Section FracInstancesE.
     { apply whnf_ne. apply whne_rel. reflexivity. }
     split.
     - econstructor. exact (typing_incl_E (Σ := SI.si_Σ) SI.si_wf fx_app_typed).
+    - constructor. apply whne_rel. reflexivity.
+  Qed.
+
+  (** *** A case on [I P] returning [I P], with the one branch [c P] *)
+
+  Definition cs_ctor_ty : term :=
+    tProd SI.si_na (tSort sProp) (tApp (tInd SI.si_ind []) (tRel 0)).
+  Definition cs_c : term := tApp (tConstruct SI.si_ind 0 []) fx_P.
+  Definition cs_ci : case_info := {| ci_ind := SI.si_ind; ci_npar := 1; ci_relevance := Relevant |}.
+  Definition cs_p : predicate term :=
+    {| pparams := [fx_P]; puinst := [];
+       pcontext := ind_predicate_context SI.si_ind SI.si_mdecl SI.si_idecl; preturn := fx_I |}.
+  Definition cs_br : branch term := {| bcontext := []; bbody := cs_c |}.
+  Definition cs_brs : list (branch term) := [cs_br].
+  Definition cs_ptm : term :=
+    it_mkLambda_or_LetIn (case_predicate_context SI.si_ind SI.si_mdecl SI.si_idecl cs_p) fx_I.
+
+  Lemma cs_eqctx_refl ctx : eq_context_upto_names ctx ctx.
+  Proof.
+    induction ctx as [|d ctx IH]; cbn; constructor; [|exact IH].
+    destruct d as [na [b|] ty]; [apply compare_vdef|apply compare_vass]; reflexivity.
+  Qed.
+
+  Lemma cs_ctor_ty_typed Γ : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- cs_ctor_ty : tSort sProp.
+  Proof.
+    intros h.
+    assert (h' : wf_local SI.si_Σ (Γ ,, vass SI.si_na (tSort sProp)))
+      by (apply (si_wf_cons _ _ _ (Sort.super sProp) h (si_Prop_typed _ h)); reflexivity).
+    exact (type_Prod _ _ SI.si_na (tSort sProp) (tApp (tInd SI.si_ind []) (tRel 0))
+      (Sort.super sProp) sProp
+      (si_vass_s_gen _ SI.si_na _ _ (si_Prop_typed _ h) eq_refl)
+      (type_App _ _ (tInd SI.si_ind []) SI.si_na (tSort sProp) (tSort sProp) _ (tRel 0)
+        (si_arity_typed _ h')
+        (type_Ind _ _ SI.si_ind [] SI.si_mdecl SI.si_idecl h' SI.si_declared_inductive eq_refl)
+        (type_Rel _ _ 0 (vass SI.si_na (tSort sProp)) h' eq_refl))).
+  Qed.
+
+  Lemma cs_c_typed Γ : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- cs_c : fx_I.
+  Proof.
+    intros h.
+    exact (type_App _ _ (tConstruct SI.si_ind 0 []) SI.si_na (tSort sProp)
+      (tApp (tInd SI.si_ind []) (tRel 0)) sProp fx_P
+      (cs_ctor_ty_typed _ h)
+      (type_Construct _ _ SI.si_ind 0 [] SI.si_mdecl SI.si_idecl SI.si_cdecl h
+        SI.si_declared_constructor eq_refl)
+      (fx_P_typed _ h)).
+  Qed.
+
+  Lemma cs_brty_typed Γ : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- tApp cs_ptm cs_c : tSort sProp.
+  Proof.
+    intros h. unfold cs_ptm. cbn.
+    assert (h' : wf_local SI.si_Σ (Γ ,, vass SI.si_na fx_I))
+      by (apply (si_wf_cons _ _ _ sProp h (fx_I_typed _ h)); reflexivity).
+    eapply type_App with (B := tSort sProp); cycle 1.
+    - eapply type_Lambda.
+      + apply si_vass_gen with (s := sProp); [apply fx_I_typed; exact h|reflexivity].
+      + apply fx_I_typed. apply si_wf_cons with (s := sProp);
+          [exact h|apply fx_I_typed; exact h|reflexivity].
+    - apply cs_c_typed. exact h.
+    - eapply type_Prod.
+      + apply si_vass_s_gen with (s := sProp); [apply fx_I_typed; exact h|reflexivity].
+      + apply si_Prop_typed. apply si_wf_cons with (s := sProp);
+          [exact h|apply fx_I_typed; exact h|reflexivity].
+  Qed.
+
+  Lemma cs_case_typed Γ c : wf_local SI.si_Σ Γ -> SI.si_Σ ;;; Γ |- c : fx_I ->
+    SI.si_Σ ;;; Γ |- tCase cs_ci cs_p c cs_brs : mkApps cs_ptm ([] ++ [c]).
+  Proof.
+    intros h hc.
+    assert (hpc : wf_local SI.si_Σ
+      (Γ ,,, case_predicate_context SI.si_ind SI.si_mdecl SI.si_idecl cs_p)).
+    { cbn. apply si_wf_cons with (s := sProp); [exact h|apply fx_I_typed; exact h|reflexivity]. }
+    eapply (type_Case _ _ cs_ci cs_p c cs_brs [] sProp SI.si_mdecl SI.si_idecl).
+    - exact SI.si_declared_inductive.
+    - apply fx_I_typed. exact hpc.
+    - exact hc.
+    - constructor.
+      + reflexivity.
+      + split; [reflexivity|]. cbn. repeat constructor.
+      + reflexivity.
+      + exact hpc.
+      + apply cs_eqctx_refl.
+      + cbn. trivial.
+      + reflexivity.
+      + cbn. constructor; [apply fx_P_typed; exact h|constructor].
+      + reflexivity.
+    - constructor.
+      + cbn. repeat constructor.
+      + constructor; [|constructor].
+        split; [cbn; constructor|].
+        split; [cbn; exact h|].
+        split.
+        * cbn. eapply type_Cumul.
+          -- apply cs_c_typed. exact h.
+          -- apply cs_brty_typed. exact h.
+          -- apply cumul_Sym. apply cumul_beta.
+        * cbn. apply cs_brty_typed. exact h.
+  Qed.
+
+  (** [rtf_case_construct] (T6): the case on [c P]. *)
+  Lemma rtf_case_construct_inst :
+    wf_extE SI.si_Σ ×
+    welltypedE SI.si_Σ [] (tCase cs_ci cs_p (mkApps (tConstruct SI.si_ind 0 []) [fx_P]) cs_brs) ×
+    (cs_ci.(ci_ind) = SI.si_ind /\ exists br, nth_error cs_brs 0 = Some br /\
+      (#|[fx_P]| = cs_ci.(ci_npar) + context_assumptions br.(bcontext))%nat).
+  Proof.
+    assert (h0 : wf_local SI.si_Σ []) by constructor.
+    split; [exact si_wf_extE|]. split.
+    - econstructor. apply (typing_incl_E (Σ := SI.si_Σ) SI.si_wf).
+      exact (cs_case_typed [] cs_c h0 (cs_c_typed [] h0)).
+    - split; [reflexivity|]. exists cs_br. split; reflexivity.
+  Qed.
+
+  (** [rtf_case_arg_whne] (T6): the case on the variable [x : I P]; the discriminee is
+      a weak-head normal variable, so it is neutral. *)
+  Lemma rtf_case_arg_whne_inst :
+    wf_extE SI.si_Σ ×
+    whnf RedFlags.default SI.si_Σ fx_Γ (mkApps (tRel 0) []) ×
+    welltypedE SI.si_Σ fx_Γ (tCase cs_ci cs_p (mkApps (tRel 0) []) cs_brs) ×
+    ∥ whne RedFlags.default SI.si_Σ fx_Γ (mkApps (tRel 0) []) ∥.
+  Proof.
+    split; [exact si_wf_extE|]. split; [apply whnf_ne; apply whne_rel; reflexivity|]. split.
+    - econstructor. apply (typing_incl_E (Σ := SI.si_Σ) SI.si_wf).
+      exact (cs_case_typed fx_Γ (tRel 0) fx_wf_Γ
+        (type_Rel _ _ 0 (vass SI.si_na fx_I) fx_wf_Γ eq_refl)).
     - constructor. apply whne_rel. reflexivity.
   Qed.
 
