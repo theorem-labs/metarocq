@@ -8,7 +8,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICSigmaCalculus PCUICEquality PCUICReduction PCUICOnFreeVars PCUICClosed PCUICTyping PCUICCumulativity
      PCUICCumulativitySpec PCUICWellScopedCumulativity PCUICContextSubst PCUICCases PCUICNormal PCUICPosition
      PCUICConversion PCUICFixWitness PCUICWfUniverses PCUICClosedBodies PCUICSpine PCUICWeakeningEnv
-     PCUICInductiveInversion
+     PCUICInductiveInversion PCUICContextConversionTyp
      PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd PCUICEtaI5 PCUICWellScopedCumulativityEta
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaSubst PCUICEtaA6
      PCUICClosedTypEta PCUICWeakeningEnvTypEta.
@@ -430,6 +430,46 @@ Section Derived.
     red_terms Σ Γ u u' -> ws_cumul_pbE_terms Σ Γ u u'.
   Proof. intros h. eapply All2_impl; [exact h|]. intros x y r. exact (red_ws_cumul_pbE r). Qed.
 
+  (** The transitivity and symmetry of [ws_cumul_pbE_terms] (base gets them from [All2] over [ws_cumul_pb]). *)
+  #[global] Instance ws_cumul_pbE_terms_trans {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} :
+    CRelationClasses.Transitive (ws_cumul_pbE_terms Σ Γ).
+  Proof.
+    intros x y z h1 h2. unfold ws_cumul_pbE_terms in *.
+    exact (All2_trans _ (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Conv Γ) x y z h1 h2).
+  Qed.
+
+  #[global] Instance ws_cumul_pbE_terms_sym {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} :
+    CRelationClasses.Symmetric (ws_cumul_pbE_terms Σ Γ).
+  Proof.
+    intros x y h. unfold ws_cumul_pbE_terms in *.
+    eapply All2_sym, All2_impl; [exact h|]. intros a b ab.
+    exact (ws_cumul_pbE_sym_pb ab).
+  Qed.
+
+  (** The specification side, for the [on_global_env cumulSpecE0 …] the environment checker builds. *)
+  Lemma red_cumul {Σ : global_env_ext} {Γ : context} {t u : term} : red Σ Γ t u -> JoinE Σ Γ Cumul t u.
+  Proof. exact (JoinE_red_l Σ Γ Cumul t u). Qed.
+
+  Lemma type_Cumul' {Σ : global_env_ext} {Γ : context} {t : term} (T : term) {T' : term} :
+    Σ ;;; Γ |-E t : T -> isTypeE Σ Γ T' -> cumulSpecE Σ Γ T T' -> Σ ;;; Γ |-E t : T'.
+  Proof. intros ht (_ & s & hs & _) c. exact (typeE_Cumul _ _ _ _ _ _ ht hs c). Qed.
+
+  Lemma eq_term_upto_univ_cumulSpec (Σ : global_env_ext) (Γ : context) {pb : conv_pb} (M N : term) :
+    compare_term Σ Σ pb M N -> cumulSpecE0 Σ Γ pb M N.
+  Proof. intros h. apply cumulSpec0_incl_E. exact (PCUICConversion.eq_term_upto_univ_cumulSpec Σ Γ M N h). Qed.
+
+  Lemma cumulAlgo_cumulSpec {Σ : global_env_ext} {wfΣ : wfE Σ} {pb : conv_pb} (Γ : context) (M N : term) :
+    Σ ;;; Γ ⊢E M ≤[pb] N -> cumulSpecE0 Σ Γ pb M N.
+  Proof. intros h. exact (ws_cumul_pbE_forget_spec (wfΣ := wfE_ClosedBodies Σ) h). Qed.
+
+  Lemma eq_context_cumul_Spec_rel (Σ : global_env_ext) (Ξ0 : list context_decl) (Γ Δ : context) :
+    PCUICEquality.compare_context Σ Σ Cumul Γ Δ -> cumul_ctx_rel cumulSpecE0 Σ Ξ0 Γ Δ.
+  Proof.
+    intros h. pose proof (PCUICContextConversionTyp.eq_context_cumul_Spec_rel Σ Ξ0 Γ Δ h) as h'.
+    eapply All2_fold_impl; [exact h'|]. intros ? ? ? ? c.
+    destruct c; constructor; auto; now apply cumulSpec0_incl_E.
+  Qed.
+
   (** From the T2a fields. *)
   Lemma validity_wf {hT2a : T2a_facts} (Σ : global_env_ext) (hΣ : wfE Σ) {Γ : context} {t T : term} :
     ∥ Σ ;;; Γ |-E t : T ∥ -> welltypedE Σ Γ T.
@@ -439,3 +479,25 @@ Section Derived.
   Proof. intros [h]. exact (isTypeE_welltypedE h). Qed.
 
 End Derived.
+
+(** ** The premise the copies take
+
+  One implicit Prop premise [{EF : EtaFacts}], found by typeclass resolution, so that every function of
+  the copies has the same signature whatever facts its obligations use, and extraction erases it. Each
+  field is the squash of one row's class; when a row lands, its field is proved by [sq] of the row's
+  instance. *)
+Class EtaFacts {cf : checker_flags} : Prop := {
+  eta_T0 : ∥ T0_facts ∥ ;
+  eta_U : ∥ U_facts ∥ ;
+  eta_T1 : ∥ T1_facts ∥ ;
+  eta_T2a : ∥ T2a_facts ∥ ;
+  eta_T6 : ∥ T6_facts ∥ ;
+  eta_T6BD : ∥ T6BD_facts ∥ ;
+  eta_T6BDu : ∥ T6BDu_facts ∥ ;
+  eta_T6BDc : ∥ T6BDc_facts ∥ ;
+  eta_A : ∥ A_facts ∥ }.
+
+(** [sq] of the copies: first open the premise, so that the rows' classes are in the context (as
+    instances) for the base proof scripts. *)
+Ltac unpack_eta_facts := repeat match goal with | EF : EtaFacts |- _ => destruct EF end.
+Ltac sq := unpack_eta_facts; MRSquash.sq.
