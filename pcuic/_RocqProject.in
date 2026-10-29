@@ -256,6 +256,9 @@ theories/PCUICAlphaEtaInstances.v
 # Uniqueness of inferred types over the eta relations (row T6, the E copy of BDUnique), and its satisfying instances
 theories/Bidirectional/BDUniqueEta.v
 theories/Bidirectional/BDUniqueEtaInstances.v
+# Strengthening of bidirectional typing over the eta relations (row T6, the E copy of BDStrengthening), and its satisfying instances
+theories/Bidirectional/BDStrengtheningEta.v
+theories/Bidirectional/BDStrengtheningEtaInstances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
 # T8 step 3: R_c* on canon T read back as base red on T (backward simulation through canon)
