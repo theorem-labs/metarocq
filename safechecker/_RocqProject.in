@@ -18,9 +18,12 @@ theories/PCUICSafeRetyping.v
 theories/PCUICRetypingEnvIrrelevance.v
 # The termination measure over the stack with the eta frames, and its descent lemmas
 theories/PCUICSafeConversionEtaK4.v
+# K1: the kernel's MustExpand for under-applied inductive/constructor heads (pure test + soundness)
+theories/PCUICMustExpandEta.v
 # ETAK EtaConv (K3 integrator): the E errors (EtaStackRefusal) and the η conversion checker
 theories/PCUICErrorsEta.v
 theories/PCUICSafeConversionEta.v
+theories/PCUICSafeConversionEtaFacts.v
 # The reduction machine over an abstract typing (B3 (a)), and its E bridge (EtaReduce)
 theories/PCUICWfReductionEta.v
 theories/PCUICSafeReduceEta.v

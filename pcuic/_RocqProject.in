@@ -218,4 +218,6 @@ theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
+# K3a: the semantic and typed lemmas about the eta views of PCUICPositionEta
+theories/PCUICPositionEtaTyping.v
 # theories/All.v
