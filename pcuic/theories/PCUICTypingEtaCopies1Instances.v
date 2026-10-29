@@ -15,7 +15,9 @@
   [match] in [si_env] ([cp_match_typed]), so the case-analysis cases of the renaming and
   instantiation proofs and the case well-formedness lemmas are reached on a real
   [tCase]. Where a premise is a conversion or a context cumulativity, the instance
-  relates an η-contraction ([cumulSpecE_eta_contract]) or a β-step. *)
+  relates an η-contraction ([cumulSpecE_eta_contract]) or a β-step. The [tFix] and
+  [tCoFix] cases of the renaming and instantiation proofs carry no instance; their
+  satisfiability is a matter for the typed metatheory of fixpoints. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
