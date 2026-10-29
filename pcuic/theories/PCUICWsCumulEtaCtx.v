@@ -418,8 +418,8 @@ Section SubstConv.
     { split; [exact hΓ| |apply red1_red; apply red_beta]. rewrite /= hc (wsE_left h). reflexivity. }
     have r2 : Σ ;;; Γ ⊢ tApp (tLambda (mkBindAnn nAnon Relevant) (tSort sProp) c) t' ⇝ c {0 := t'}.
     { split; [exact hΓ| |apply red1_red; apply red_beta]. rewrite /= hc (wsE_right h). reflexivity. }
-    eapply WS_trans; [exact (red_ws_cumul_pbE_inv r1)|].
-    eapply WS_trans; [exact (ws_cumul_pbE_App_r hf h)|].
+    eapply PCUICWsCumulEtaCtx.WS_trans; [exact (red_ws_cumul_pbE_inv r1)|].
+    eapply PCUICWsCumulEtaCtx.WS_trans; [exact (ws_cumul_pbE_App_r hf h)|].
     exact (red_ws_cumul_pbE r2).
   Qed.
 
@@ -452,7 +452,7 @@ Section SubstConv.
         - rewrite (on_free_vars_ext _ _ c (shiftnP_add 1 #|s| _)). exact hc. }
       have e3 : subst0 (a' :: s) c = subst0 s (subst [lift0 #|s| a'] 0 c) by rewrite subst0_cons_lift.
       have e4 : subst0 (a' :: s') c = subst0 s' (subst [lift0 #|s| a'] 0 c) by rewrite hlen subst0_cons_lift.
-      rewrite (subst0_cons s a c). eapply WS_trans; [exact (ws_cumul_pbE_subst1_conv hsc ha)|].
+      rewrite (subst0_cons s a c). eapply PCUICWsCumulEtaCtx.WS_trans; [exact (ws_cumul_pbE_subst1_conv hsc ha)|].
       rewrite -(subst0_cons s a' c) e3 e4.
       exact (IH _ hc2).
   Qed.
@@ -481,7 +481,7 @@ Section SubstConv.
     have h4 : WS Conv Γ (Y {0 := b'}) (Y {0 := b}) := ws_cumul_pbE_subst1_conv hY (ws_cumul_pbE_sym _ _ hb).
     have h4' := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := Conv) (Γ := Γ) (Γ' := [])
                  (Γ'' := [vdef na b A]) h4 hΓ1.
-    exact (WS_trans h1 (WS_trans h3 (WS_trans (ws_cumul_eq_pbE h4') h5))).
+    exact (PCUICWsCumulEtaCtx.WS_trans h1 (PCUICWsCumulEtaCtx.WS_trans h3 (PCUICWsCumulEtaCtx.WS_trans (ws_cumul_eq_pbE h4') h5))).
   Qed.
 
   (** Under a context: abstract it, convert by [ws_cumul_pbE_subst0_conv], and peel
@@ -544,7 +544,7 @@ Section SubstConv.
     move=> subss subss' eqsub cl eqty.
     have clctx := wsE_ctx eqty.
     have clU := wsE_right eqty.
-    eapply WS_trans.
+    eapply PCUICWsCumulEtaCtx.WS_trans.
     - eapply untyped_substitution_ws_cumul_pbE; tea. exact (WT_open_left eqsub).
     - eapply ws_cumul_eq_pbE.
       eapply (untyped_substitution_ws_cumul_pbE_subst_conv (Δ := Γ0) (Δ' := Γ1)); tea.
