@@ -52,13 +52,6 @@ Ltac rename_hyp h ht ::= my_rename_hyp h ht.
 Arguments Nat.sub : simpl nomatch.
 Arguments Sort.sort_of_product : simpl nomatch.
 
-Local Notation " Σ ;;; Γ ⊢E t ≤[ pb ] u " := (ws_cumul_pbE pb Σ Γ t u) (at level 50, Γ, t, u at next level,
-  format "Σ  ;;;  Γ  ⊢E  t  ≤[ pb ]  u") : type_scope.
-Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at level 50, Γ, t, u at next level,
-  format "Σ  ;;;  Γ  ⊢E  t  ≤  u") : type_scope.
-Local Notation " Σ ;;; Γ ⊢E t = u " := (ws_cumul_pbE Conv Σ Γ t u) (at level 50, Γ, t, u at next level,
-  format "Σ  ;;;  Γ  ⊢E  t  =  u") : type_scope.
-
 (** ** FORECAST BLOCK
 
   Every fact below is a FORECAST: an E copy that is not on this branch will prove it, under exactly

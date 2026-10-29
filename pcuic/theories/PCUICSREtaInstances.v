@@ -39,11 +39,6 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICInversionEta PCUICInversionEtaInstances PCUICValidityEta PCUICSREta.
 From MetaRocq.PCUIC Require PCUICSR.
 
-Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at level 50, Γ, t, u at next level,
-  format "Σ  ;;;  Γ  ⊢E  t  ≤  u") : type_scope.
-Local Notation " Σ ;;; Γ ⊢E t = u " := (ws_cumul_pbE Conv Σ Γ t u) (at level 50, Γ, t, u at next level,
-  format "Σ  ;;;  Γ  ⊢E  t  =  u") : type_scope.
-
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
 
