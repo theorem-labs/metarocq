@@ -44,9 +44,7 @@
   **Local proofs of copy lemmas.** The lemmas of copies 15 and 16 that validity uses and that
   follow from landed facts (and, for one of them, from a field of the block) in a few lines are
   PROVED in the section "Copy lemmas proved here", under the name and the statement the copy
-  commits to, so they are not forecasts. When the copy lands, delete them and import it. That
-  section also keeps [type_ws_cumul_pbE] (copy 14), whose landed twin differs in a binder name
-  (see its comment).
+  commits to, so they are not forecasts. When the copy lands, delete them and import it.
 
   **The hypotheses are satisfiable:** [wfE Σ] by any well-formed environment ([wf_incl_E]),
   each typing premise by a concrete derivation; [PCUICValidityEtaInstances] gives an instance
@@ -304,29 +302,7 @@ Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}.
 
   Each has the name and the statement its copy commits to (the text of [PCUICSREta.v] where
   that file has the lemma, else the base twin), and a proof from landed facts. Delete each when
-  its copy lands. The ones of copies 10, 12 and 14 were deleted when those copies landed, except
-  [type_ws_cumul_pbE]. *)
-
-(** Copy 14, [PCUICArities.v:228] [type_ws_cumul_pb]; text of [PCUICSREta.v] (NOT TWIN,
-    ADDED [ClosedBodies]: closedbodies-register row 2). KEPT at the switch to frac/eta 59eb717d:
-    the landed [PCUICAritiesEta.type_ws_cumul_pbE] ([PCUICAritiesEta.v:240]) has the same type
-    (checked by ascription both ways) and the same implicit status, but names its [ClosedBodies]
-    binder [cbΣ] where this text, the statement note's, has [wfΣ]. Under the delete-and-import
-    rule a binder-name difference is a statement difference: it goes to the stream lead, it is
-    not adapted here. Every file that imports both imports this one after [PCUICAritiesEta], so
-    this one is the one in scope there. *)
-Lemma type_ws_cumul_pbE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ} {pb Γ t} T {U} :
-  Σ ;;; Γ |-E t : T ->
-  isTypeE Σ Γ U ->
-  ws_cumul_pbE pb Σ Γ T U ->
-  Σ ;;; Γ |-E t : U.
-Proof.
-  intros ht hU c.
-  eapply typeE_Cumul; [exact ht|exact hU.2.π2.1|].
-  destruct pb.
-  - exact (ws_cumul_pbE_forget_spec (ws_cumul_pbE_eq_le c)).
-  - exact (ws_cumul_pbE_forget_spec c).
-Qed.
+  its copy lands. The ones of copies 10, 12 and 14 were deleted when those copies landed. *)
 
 (** Copy 15, [PCUICSpine.v:341] [typing_spine_refl]; base twin. *)
 Lemma typing_spine_reflE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ T} :

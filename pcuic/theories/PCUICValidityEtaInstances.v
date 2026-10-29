@@ -22,7 +22,7 @@
   landed are gone from it; their instances are in [PCUICTypingEtaCopies2Instances].
   The derivation of [validityE_inst] ends in an η step: in the context
   [g : Prop → Prop, k : (Prop → Prop) → Prop, y : k g] the variable [y] is typed at
-  [k (λx:Prop. g x)] ([iv_rel_typed]). [type_ws_cumul_pbE_inst] uses the same η pair. *)
+  [k (λx:Prop. g x)] ([iv_rel_typed]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -120,10 +120,6 @@ Definition wf_local_validityE_inst :=
     iv_wf_Γk.
 
 (** ** The copy lemmas proved in [PCUICValidityEta], applied *)
-
-(** The η pair: [y : k g] and [k g ≤ k (λx:Prop. g x)] give [y : k (λx:Prop. g x)]. *)
-Definition type_ws_cumul_pbE_inst : si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta :=
-  type_ws_cumul_pbE (Σ := si_Σ) (pb := Cumul) iv_kg iv_y_typed iv_keta_isType into_ws_cumulE_inst.
 
 Definition typing_spine_reflE_inst : typing_spineE si_Σ iv_Γk iv_keta [] iv_keta :=
   typing_spine_reflE (Σ := si_Σ) (wfΣ := si_wfE) iv_keta_isType.

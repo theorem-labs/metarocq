@@ -29,8 +29,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICCumulativitySpe
      PCUICInversionEta PCUICSREtaConv.
 (* The landed T0 copies 10, 12 and 14 (frac/eta 59eb717d): the canonical [subsletE]
    ([PCUICSubstitutionEta]) and [typing_spineE] ([PCUICAritiesEta], the twin of
-   [PCUICArities.typing_spine]), and their lemmas. Imported before [PCUICValidityEta], so a name
-   that file also declares resolves to its declaration. *)
+   [PCUICArities.typing_spine]), and their lemmas. *)
 From MetaRocq.PCUIC Require Import PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta.
 (* C9 (cross-lane-commitments.md): E3's global symmetry and transitivity instances for
    [ws_cumul_ctx_pbE Conv] and the term lists ([conv_context_symE], [ws_cumul_pbE_terms_sym],
