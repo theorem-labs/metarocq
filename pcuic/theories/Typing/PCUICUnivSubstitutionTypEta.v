@@ -577,8 +577,6 @@ Section SubstIdentityConvE.
 
 End SubstIdentityConvE.
 
-#[global] Hint Resolve declared_inductive_wf_ext_wkE declared_inductive_wf_global_extE : pcuic.
-
 (** ** The copy of [Typing/PCUICUnivSubstitutionTyp] *)
 
 Section SubstIdentity.

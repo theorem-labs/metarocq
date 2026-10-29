@@ -16,9 +16,11 @@ From Equations Require Import Equations.
     [typing_spine] ([type_spine_nil], [type_spine_cons]) of [PCUICGeneration],
     over [cumulSpecE]. Base [PCUICArities] defines a second, different
     [typing_spine] (with [isType] of both types and [ws_cumul_pb]); its twin,
-    [PCUICAritiesEta.typing_spineE], is the one the later copies use. This file
-    is never exported, and no file imports it together with [PCUICAritiesEta]
-    unqualified;
+    [PCUICAritiesEta.typing_spineE], is the one the later copies use. The
+    section does not hide these names: after [End GenerationE] they are global.
+    This file is never exported. A file that has to import it must qualify every
+    use of [typing_spineE], [type_spine_nilE], [type_spine_consE] and
+    [type_mkAppsE] in it;
   - [type_mkAppsE] is base [type_mkApps];
   - [type_it_mkLambda_or_LetInE] is base [type_it_mkLambda_or_LetIn].
   No base declaration is left out. *)

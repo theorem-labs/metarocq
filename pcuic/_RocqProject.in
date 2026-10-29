@@ -203,20 +203,26 @@ theories/PCUICContextConversionEta.v
 theories/PCUICWsCumulEtaCtx.v
 theories/PCUICWsCumulEtaCtxTyp.v
 theories/PCUICWsCumulEtaCtxInstances.v
-# Context conversion and context cumulativity of typingE, and their satisfying instances
-theories/Typing/PCUICContextConversionTypEta.v
-theories/PCUICTypingEtaCopy9Instances.v
 # E copies over typingE: typing notions, typing spines, universe instances, contexts, universes, substitution, arities
 theories/PCUICTypingEtaNotions.v
 theories/PCUICGenerationEta.v
 theories/Typing/PCUICUnivSubstitutionTypEta.v
 theories/PCUICWfUniversesEta.v
+theories/PCUICSubstitutionEta.v
+theories/PCUICContextsEta.v
+theories/PCUICAritiesEta.v
 theories/PCUICTypingEtaCopies2Instances.v
+# Global symmetry and transitivity instances for ws_cumul_ctx_pbE and ws_cumul_pbE_terms, and their uses
+theories/PCUICWsCumulEtaInstancesGlobal.v
+theories/PCUICWsCumulEtaInstancesGlobalInstances.v
 # Inversion of typingE (E copy of PCUICInversion)
 theories/PCUICInversionEta.v
 # The conversion layer of subject reduction over typingE (row T1), and its satisfying instances
 theories/PCUICSREtaConv.v
 theories/PCUICSREtaConvInstances.v
+# Context conversion and context cumulativity of typingE, and their satisfying instances
+theories/Typing/PCUICContextConversionTypEta.v
+theories/PCUICTypingEtaCopy9Instances.v
 # Validity over typingE (row T2a, the E copy of PCUICValidity)
 theories/PCUICValidityEta.v
 # Subject reduction over typingE (row T1, the E copy of PCUICSR), and its satisfying instances
@@ -241,4 +247,6 @@ theories/PCUICEtaT8Probe.v
 # Bidirectional completeness over typingE (row T6, the E copy of BDFromPCUIC; T8 forecast), and its satisfying instances
 theories/Bidirectional/BDFromPCUICEta.v
 theories/Bidirectional/BDFromPCUICEtaInstances.v
+# The comparisons wfE makes are between scoped pairs, and their satisfying instances
+theories/PCUICWfEScope.v
 # theories/All.v
