@@ -29,3 +29,5 @@ theories/PCUICSafeReduceEtaBridge.v
 theories/PCUICTypingEtaDefs.v
 # EtaK7: the E typing facts the E checker needs (named hypotheses per plan row, with instances)
 theories/PCUICTypingEtaHyps.v
+# EtaK7: the η type checker (K7)
+theories/PCUICTypeCheckerEta.v

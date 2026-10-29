@@ -12,6 +12,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPrimitive PCUICLi
      PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd PCUICEtaI5 PCUICWellScopedCumulativityEta
      PCUICConversionEtaCongr PCUICContextConversionEta PCUICWsCumulEtaSubst PCUICEtaA6
      PCUICClosedTypEta PCUICWeakeningEnvTypEta.
+(** [ws_cumul_ctx_pbE_rel] and [ws_cumul_ctx_pbE_rel_app] are canonical in [PCUICWsCumulEtaCtx] (P3, ArityLane). *)
+From MetaRocq.PCUIC Require Import PCUICWsCumulEtaCtx.
 From MetaRocq.PCUIC Require PCUICInductives PCUICSubstitution.
 From Stdlib Require Import Program.Equality.
 From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
@@ -29,25 +31,29 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
   base lemma's NAME, so the copies' proof scripts read as base's; this file is imported LAST.
 
   - Facts no row has proved yet are fields of one class per plan row ([T0_facts], [T1_facts], [T2a_facts],
-    [T6_facts], [T6BD_facts], [T6BDu_facts], [T6BDc_facts], [A_facts], and [U_facts] for untyped plumbing).
-    The copies take them through ONE implicit Prop premise [{EtaF : EtaFacts}] (the squashes of the nine
-    classes, end of this file), so extraction erases them. When a row lands, its class gets an instance and
-    its field of [EtaFacts] is proved.
+    [T6_facts], [T6BD_facts], [T6BDu_facts], [T6BDc_facts], and [U_facts] for untyped plumbing). The copies
+    take them through ONE implicit Prop premise [{EtaF : EtaFacts}] (the squashes of the eight classes, end
+    of this file), so extraction erases them. When a row lands, its class gets an instance and its field of
+    [EtaFacts] is proved.
   - Facts that follow from what base already proves over E ([PCUICClosedTypEta], [PCUICTypingEtaInd],
     [PCUICEtaA6], [PCUICWsCumulEtaSubst], [PCUICWellScopedCumulativityEta], [PCUICEtaI5]) or from the class
     fields are PROVED below the classes, under the base name ("Derived", "Derived, second part").
-  - Bundle size: 92 named hypotheses (class fields). Audits hyp-audit-A.md and hyp-audit-B.md
+  - Bundle size: 91 named hypotheses (class fields). Audits hyp-audit-A.md and hyp-audit-B.md
     (lanes/eta/etak/) turned 9 former fields into PROVED lemmas, which are NO LONGER hypotheses (bundle
     101 -> 92): [type_Cumul_alt] (T1), [isType_Sort_inv] (T2a), [inversion_Const], [inversion_LetIn],
     [inversion_Prod], [inversion_Rel], [inversion_Sort] (T6), [type_ws_cumul_pb] and
-    [mfix_body_on_red_unique] (T0; these two are STATEMENT CHANGEs, marked where they occur).
-  - Instances. EVERY one of the 92 fields has a concrete satisfying instance, in the final section
+    [mfix_body_on_red_unique] (T0; these two are STATEMENT CHANGEs, marked where they occur). Then
+    [ws_cumul_ctx_pb_rel_app] (class A, the last field of A) became a PROVED lemma from
+    [PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_rel_app] ([frac/eta] @ [d8120081]); class A is gone (bundle 92 -> 91).
+  - Instances. EVERY one of the 91 fields has a concrete satisfying instance, in the final section
     "Instances" of this file (one lemma [<field>_inst] per field, proved without any class field; written
     by EtaK7Inst). Per class, fields = instances: T0_facts 49, U_facts 9, T1_facts 5, T2a_facts 2,
-    T6_facts 1, T6BD_facts 10, T6BDu_facts 9, T6BDc_facts 6, A_facts 1. Each instance carries a tag
+    T6_facts 1, T6BD_facts 10, T6BDu_facts 9, T6BDc_facts 6. Each instance carries a tag
     [(* non-degenerate *)] or [(* degenerate: <why> *)]; 16 are non-degenerate, among them all six of
-    T6BDc (the list is at the top of the section "Instances"); 76 are degenerate (empty context or list,
-    a Prop-sort subject, or equal compared objects). The environment is [si_Σ] of
+    T6BDc (the list is at the top of the section "Instances"); 75 are degenerate (empty context or list,
+    a Prop-sort subject, or equal compared objects). The 16 non-degenerate instances show satisfiability
+    on ordinary typed terms; none exercises an eta pair; the eta-case truth of these hypotheses is
+    established by T6, not by the instance. The environment is [si_Σ] of
     [PCUICCumulativitySpecEtaClosureInstances], or, for the two primitive-operation fields of T1,
     [Σ_po] of [PCUICEtaPrimOpInstance] (convention of [PCUICEtaFracInstances]). An instance shows only
     that the field's premises can hold at a real environment, and does NOT discharge the field at
@@ -262,7 +268,13 @@ Class T6BDu_facts {cf : checker_flags} := {
     Together these six fields are as strong as typed T8 (plan risk rank 3): any forecast resting on this
     bundle assumes something as strong as T8; taking Refused_c removed T8 from the failure paths only.
     (Why, EtaHypAuditB hyp-audit-B.md §3.6: [typing_infering] implies typed T8-Prod and
-    [typing_infering_sort] implies typed T8-Sort.) *)
+    [typing_infering_sort] implies typed T8-Sort.)
+    Uses (EtaK7, 2026-10-29): [PCUICTypeCheckerEta] uses these fields at 16 sites, 6 on error paths
+    ([eapply absurd]) and 10 on SUCCESS paths (lambda/let binder types, case predicate and branch contexts and
+    parameters, fix/cofix types and bodies, [branch_helper]), so they stay in the bundle for F2-early; the
+    error paths are not turned into refusals (lane lead's decision). [PCUICSafeCheckerEta]: no use.
+    PCUICSafeRetyping's 7 T6BDc uses: UNCLASSIFIED, erasure-only, off the F2-early path; to be classified
+    when the fully-proved chain includes erasure. *)
 Class T6BDc_facts {cf : checker_flags} := {
   ctx_inst_typing_bd :
     forall (Σ : global_env_ext) (Γ : context) (l : list term) (Δ : context) (wfΣ : wfE Σ), ctx_instE Σ Γ l Δ -> PCUICTyping.ctx_inst (checkingE Σ) Γ l Δ ;
@@ -508,13 +520,13 @@ End Derived.
   the copies has the same signature whatever facts its obligations use, and extraction erases it. Each
   field is the squash of one row's class; when a row lands, its field is proved by [sq] of the row's
   instance. *)
-(** ** A (typed context conversion over [ws_cumul_pbE]). EtaHypAuditB found it provable now; its proof needs
-    reflexivity of [ws_cumul_ctx_pbE] at any [pb] (base E has it at [Conv] only, [PCUICContextConversionEta.v:125]);
-    until that lemma exists it stays a field. *)
-Class A_facts {cf : checker_flags} := {
-  ws_cumul_ctx_pb_rel_app :
-    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {pb : conv_pb} {Γ : list context_decl} {Δ : list context_decl} {Δ' : list context_decl}, ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' <~> ws_cumul_ctx_pbE pb Σ (Γ,,, Δ) (Γ,,, Δ')
-}.
+(** [ws_cumul_ctx_pb_rel_app] over E: formerly the only field of class A (the A rows); PROVED here from
+    [PCUICWsCumulEtaCtx.ws_cumul_ctx_pbE_rel_app] (P3, ArityLane, [frac/eta] @ [d8120081]), which needs no
+    [wf] premise. The statement is the former field's, unchanged ([wfΣ] is unused). *)
+Lemma ws_cumul_ctx_pb_rel_app {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {pb : conv_pb}
+  {Γ Δ Δ' : list context_decl} :
+  ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' <~> ws_cumul_ctx_pbE pb Σ (Γ,,, Δ) (Γ,,, Δ').
+Proof. exact ws_cumul_ctx_pbE_rel_app. Qed.
 
 Class EtaFacts {cf : checker_flags} : Prop := {
   eta_T0 : ∥ T0_facts ∥ ;
@@ -524,12 +536,23 @@ Class EtaFacts {cf : checker_flags} : Prop := {
   eta_T6 : ∥ T6_facts ∥ ;
   eta_T6BD : ∥ T6BD_facts ∥ ;
   eta_T6BDu : ∥ T6BDu_facts ∥ ;
-  eta_T6BDc : ∥ T6BDc_facts ∥ ;
-  eta_A : ∥ A_facts ∥ }.
+  eta_T6BDc : ∥ T6BDc_facts ∥ }.
 
 (** [sq] of the copies: first open the premise, so that the rows' classes are in the context (as
-    instances) for the base proof scripts. *)
-Ltac unpack_eta_facts := repeat match goal with | EF : EtaFacts |- _ => destruct EF end.
+    instances) for the base proof scripts. It projects the fields once (a section variable [EtaF] cannot be
+    destructed away, so a [repeat destruct] would loop) and does nothing if they are already there. *)
+Ltac unpack_eta_facts :=
+  lazymatch goal with
+  | _ : T0_facts |- _ => idtac
+  | _ : ∥ T0_facts ∥ |- _ => idtac
+  | EF : EtaFacts |- _ =>
+      (* fixed, unusual names, so that the base proof scripts' generated names (H, H0, X1, ...) are unchanged *)
+      pose proof (@eta_T0 _ EF) as etaf_T0; pose proof (@eta_U _ EF) as etaf_U;
+      pose proof (@eta_T1 _ EF) as etaf_T1; pose proof (@eta_T2a _ EF) as etaf_T2a;
+      pose proof (@eta_T6 _ EF) as etaf_T6; pose proof (@eta_T6BD _ EF) as etaf_T6BD;
+      pose proof (@eta_T6BDu _ EF) as etaf_T6BDu; pose proof (@eta_T6BDc _ EF) as etaf_T6BDc
+  | _ => idtac
+  end.
 Ltac sq := unpack_eta_facts; MRSquash.sq.
 
 (** ** Derived, second part: facts that are proved here from the classes or from facts above *)
@@ -752,8 +775,8 @@ End DerivedTwo.
 (** ** Instances: satisfying instances of the fields of the hypothesis classes above
 
   BET-64 EtaCheckerLane, 2026-10-29. One lemma [<field>_inst] per field of each hypothesis class above
-  ([T0_facts], [U_facts], [T1_facts], [T2a_facts], [T6_facts], [T6BD_facts], [T6BDu_facts], [T6BDc_facts]
-  and, while it is a class, [A_facts]), in the class order.
+  ([T0_facts], [U_facts], [T1_facts], [T2a_facts], [T6_facts], [T6BD_facts], [T6BDu_facts], [T6BDc_facts]),
+  in the class order.
   Convention of [PCUICEtaFracInstances]: the environment is [si_Σ] of
   [PCUICCumulativitySpecEtaClosureInstances] ([Inductive I (A : Prop) : Prop := c : I A]), or, where the
   field needs a registered primitive type, [Σ_po] of [PCUICEtaPrimOpInstance] (registers [int]); the terms
@@ -773,7 +796,7 @@ End DerivedTwo.
   (16): the six [T6BDc_facts] instances (in the context [A : Prop], on [I A] and [c A]), [All_mfix_wf],
   [arity_typing_spine], [closed_context_cumulativity] (a β-redex in the context), [ind_arity_relevant],
   [on_minductive_wf_params], [on_minductive_wf_params_indices_inst], [weaken_wf_local],
-  [closed_red_from_empty], [infering_ind_typing] and [wf_rel_weak]. The other 76 are degenerate: each still
+  [closed_red_from_empty], [infering_ind_typing] and [wf_rel_weak]. The other 75 are degenerate: each still
   meets every premise of its field, at a weaker point.
 
   (1) Such an instance shows that the hypothesis is consistent and about something real. (2) It does NOT
@@ -2416,24 +2439,28 @@ Proof.
     exists sProp. split; [exact ti_bdsIA|split; [exact I|reflexivity]].
 Qed.
 
-(** ** Instances of [A_facts]
+(** ** Base names of the [PCUICTyping] helpers, over E
 
-  The lemma [ws_cumul_ctx_pb_rel_app_inst] states both sides of the field [ws_cumul_ctx_pb_rel_app] of
-  [A_facts] and their equivalence at concrete arguments in [si_Σ] (the premise [wfE] holds there by
-  [si_wfE]), each side built from [ws_cumul_pbE_refl]. (1) This instance shows that the hypothesis is
-  consistent and about something real. (2) It does NOT discharge the hypothesis at [ws_cumul_pbE]: the
-  field remains a hypothesis until its row (typed context conversion over [ws_cumul_pbE]) lands. *)
+  [PCUICTyping.v:442-470] ([has_sort_isType], [has_sort_isTypeRel], [isType_welltyped], [isTypeRel_welltyped])
+  and base's constructor [iswelltyped], here over E, so the copies' proof scripts read as base's (definitional;
+  [PCUICTypingEtaDefs] has the E-named forms). At the END of the file, so the section "Instances" above, which
+  works with base derivations, still sees the base names. *)
+Section BaseNames.
+  Context {cf : checker_flags}.
 
-(* degenerate: Γ = [], and Δ = Δ' (the comparison is reflexive) *)
-Lemma ws_cumul_ctx_pb_rel_app_inst :
-  [× ws_cumul_ctx_pbE_rel Cumul si_Σ [] ti_ΓP ti_ΓP,
-     ws_cumul_ctx_pbE Cumul si_Σ ([] ,,, ti_ΓP) ([] ,,, ti_ΓP) &
-     ws_cumul_ctx_pbE_rel Cumul si_Σ [] ti_ΓP ti_ΓP <~> ws_cumul_ctx_pbE Cumul si_Σ ([] ,,, ti_ΓP) ([] ,,, ti_ΓP)].
-Proof.
-  have hl : ws_cumul_ctx_pbE_rel Cumul si_Σ [] ti_ΓP ti_ΓP.
-  { split; [reflexivity|]. constructor; [constructor|].
-    constructor; [reflexivity|exact (fi_ws Cumul ([] ,,, []) si_P eq_refl eq_refl)]. }
-  have hr : ws_cumul_ctx_pbE Cumul si_Σ ([] ,,, ti_ΓP) ([] ,,, ti_ΓP).
-  { constructor; [constructor|]. constructor; [reflexivity|exact (fi_ws Cumul [] si_P eq_refl eq_refl)]. }
-  split; [exact hl|exact hr|split; intros _; [exact hr|exact hl]].
-Qed.
+  Definition has_sort_isType {Σ : global_env_ext} {Γ : context} {T : term} (s : sort) :
+    Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T := has_sort_isTypeE s.
+  Definition has_sort_isTypeRel {Σ : global_env_ext} {Γ : context} {T : term} (s : sort) (r : relevance) :
+    isSortRel s r -> Σ ;;; Γ |-E T : tSort s -> isTypeRelE Σ Γ T r := has_sort_isTypeRelE s r.
+  Definition isType_welltyped {Σ : global_env_ext} {Γ : context} {T : term} :
+    isTypeE Σ Γ T -> welltypedE Σ Γ T := isTypeE_welltypedE.
+  Definition isTypeRel_welltyped {Σ : global_env_ext} {Γ : context} {T : term} {r : relevance} :
+    isTypeRelE Σ Γ T r -> welltypedE Σ Γ T := isTypeRelE_welltypedE.
+  Definition iswelltyped {Σ : global_env_ext} {Γ : context} {t A : term} :
+    Σ ;;; Γ |-E t : A -> welltypedE Σ Γ t := iswelltypedE Σ Γ t A.
+End BaseNames.
+
+(** The [fvs] hints base registers for its scoping lemmas ([wf_local_closed_context], [type_is_open_term],
+    [subject_is_open_term], [isType_is_open_term]), over E (the Derived lemmas above). *)
+#[global] Hint Resolve wf_local_closed_context type_is_open_term subject_is_open_term isType_is_open_term : fvs.
+
