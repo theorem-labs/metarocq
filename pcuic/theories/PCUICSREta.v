@@ -129,6 +129,16 @@ Record wf_subsletE {cf} Σ Γ s Δ :=
 Notation decl_ws_cumul_pbE Σ Γ :=
   (All_decls_alpha_pb Conv (fun pb (x0 y0 : term) => ws_cumul_pbE pb Σ Γ x0 y0)).
 
+(* FORECAST-ONLY: canonical home PCUICTypingEtaNotions.v (cross-lane-commitments.md C2, EtaCheckerLane's
+   map); delete when it lands. Text: safechecker/theories/PCUICTypingEtaDefs.v @ 26749b27:75-80,
+   verbatim. The E forms of [PCUICTyping.has_sort_isType]/[has_sort_isTypeRel]. *)
+Definition has_sort_isTypeE {cf Σ} {Γ T} s : Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T.
+Proof. repeat (eexists; tea). Defined.
+
+Definition has_sort_isTypeRelE {cf Σ} {Γ T} s r :
+  isSortRel s r -> Σ ;;; Γ |-E T : tSort s -> isTypeRelE Σ Γ T r.
+Proof. repeat (eexists; tea). Defined.
+
 (** *** T2a: the twins of the [PCUICValidity] lemmas that [PCUICSR] uses
 
   No statement note covers T2a. Each field is the exact twin of its base lemma (relation renamed,
@@ -452,6 +462,11 @@ Class SRForecastCopy15 := {
 
 (* FORECAST-ONLY: proved by copy 16 (PCUICInductivesEta.v); delete when it lands. *)
 Class SRForecastCopy16 := {
+  (* note @ 0583b56e: twin of PCUICInductives.v:284; base SR uses it only through the [pcuic]
+     hint database, so it is registered as a local [pcuic] hint in section [SREta]. *)
+  isType_introE :
+    forall {cf : checker_flags} {Σ : global_env_ext} {Γ : context} {T : term} {s : sort},
+    Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T ;
   declared_projection_type_and_eqE :
     forall {cf : checker_flags} {Σ : global_env_ext} {mdecl : mutual_inductive_body}
       {idecl : one_inductive_body} {p : projection} {cdecl : constructor_body} {pdecl : projection_body},
@@ -765,6 +780,17 @@ Context {FT2a : SRForecastT2a} {F9 : SRForecastCopy9} {F10 : SRForecastCopy10}
   {F12 : SRForecastCopy12} {F14 : SRForecastCopy14} {F15 : SRForecastCopy15}
   {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}.
 
+(* FORECAST-ONLY: the [pcuic] hints that the copies re-register for their E lemmas (note @ 0583b56e:
+   copy 16 [isType_introE]; copy 15 the coercion fields of [spine_substE]; copy 18
+   [isType_is_open_termE]); delete with their rows. *)
+#[local] Hint Resolve isType_introE : pcuic.
+#[local] Hint Resolve inst_ctx_substE inst_subsletE : pcuic.
+#[local] Hint Resolve isType_is_open_termE : pcuic.
+
+(** The E counterparts of base's [typing]-specific [pcuic] hints that SR's [pcuic]/[pcuics]
+    searches use ([PCUICTyping.has_sort_isType], [typing_wf_local]). *)
+#[local] Hint Resolve has_sort_isTypeE typingE_wf_local : pcuic.
+
 (** ** Helpers of [PCUICSR.v] before [sr_red1]
 
   Lines are base lines of [PCUICSR.v] at [d8120081]. Purely syntactic helpers are base's (this file
@@ -776,20 +802,6 @@ Context {FT2a : SRForecastT2a} {F9 : SRForecastCopy9} {F10 : SRForecastCopy10}
   [ws_cumul_pb_terms_eq_trans], [eq_ws_cumul_pb_terms_trans], [wt_terms_ws_cumul_pb],
   [weakening_ws_cumul_ctx_pb], [closed_red1_ws_cumul_pb] and [type_Cumul_alt] are in
   [PCUICSREtaConv]; [ws_cumul_pb_terms_refl]'s is the landed [WT_refl]. *)
-
-(** The E forms of [PCUICTyping.has_sort_isType]/[has_sort_isTypeRel] (definitional; base's are
-    stated at [typing]). *)
-Definition has_sort_isTypeE {cf Σ} {Γ T} s
-  : Σ ;;; Γ |-E T : tSort s -> isTypeE Σ Γ T.
-Proof.
-  repeat (eexists; tea).
-Defined.
-
-Definition has_sort_isTypeRelE {cf Σ} {Γ T} s r
-  : isSortRel s r -> Σ ;;; Γ |-E T : tSort s -> isTypeRelE Σ Γ T r.
-Proof.
-  repeat (eexists; tea).
-Defined.
 
 (** Base [declared_projection_declared_constructor] ([:123]). *)
 Lemma declared_projection_declared_constructorE {cf}
@@ -1653,6 +1665,291 @@ Proof.
   - eapply isType_prim_tag_constantE; tea.
     eapply po_args_not_array, nth_error_In; tea.
   - now eapply ws_cumul_pbE_eq_le.
+Qed.
+
+(** ** [sr_red1E]: subject reduction for one closed reduction step
+
+  Base [sr_red1] ([:1942-3632]) is one [typing_ind_env] induction whose 17 premises are proved
+  in one script. Here each premise of [typingE_ind_env] at base's three predicates is its own
+  lemma [sr_red1E_<rule>], whose statement is that premise, computed by [sr_case_type]; each
+  proof starts as base's does ([intros Σ wfΣ Γ wfΓ; unfold SR_red1; intros **; rename_all_hyps;
+  auto], then base's [2-15] preprocessing, [sr_pre]) and continues with base's bullets for that
+  rule, in base's order. [sr_red1E] then applies [typingE_ind_env] to them. *)
+
+(** Hypothesis names for [typingE]/[wfE], as base [PCUICTyping.my_rename_hyp] gives for
+    [typing]/[wf] ([Typing/PCUICWeakeningEnvTypEta.my_rename_hypE] is local to its file): the
+    copied proofs refer to them. *)
+Ltac my_rename_hypSR h th :=
+  match th with
+  | (wfE ?E) => fresh "wf" E
+  | (wfE (fst_ctx ?E)) => fresh "wf" E
+  | (wfE _) => fresh "wf"
+  | (typingE _ _ ?t _) => fresh "type" t
+  | (@cumulSpecE _ _ _ ?t _) => fresh "cumul" t
+  | (@convSpecE _ _ ?t _) => fresh "conv" t
+  | (All_local_env (lift_sorting (@typingE _) _ _) ?G) => fresh "wf" G
+  | (All_local_env (lift_sorting (@typingE _) _) _) => fresh "wf"
+  | context [typingE _ _ (_ ?t) _] => fresh "IH" t
+  | _ => my_rename_hyp h th
+  end.
+
+Ltac rename_hyp h ht ::= my_rename_hypSR h ht.
+
+(** The [n]-th premise of a chain of non-dependent arrows. *)
+Ltac sr_nth_prem T n :=
+  lazymatch n with
+  | O => lazymatch T with ?A -> _ => constr:(A) end
+  | S ?m => lazymatch T with _ -> ?B => sr_nth_prem B m end
+  end.
+
+(** The [n]-th premise of [typingE_ind_env] at base's predicates of [sr_red1], β-normal. *)
+Ltac sr_case_type cf n :=
+  let T := type of (@typingE_ind_env cf (@SR_red1E cf)
+      (fun Σ Γ j =>
+        lift_typing0 (fun t T => Σ ;;; Γ |-E t : T × forall u, Σ ;;; Γ ⊢ t ⇝1 u -> Σ ;;; Γ |-E u : T) j)
+      (fun Σ Γ => wf_localE Σ Γ ×
+        (forall Γ' Δ' Δ,
+          Γ = Γ' ,,, Δ' ->
+          OnOne2_local_env (fun Δ : context => on_one_decl (closed_red1 Σ (Γ',,, Δ))) Δ' Δ ->
+          wf_local_relE Σ Γ' Δ))) in
+  let T := eval cbv beta in T in
+  let A := sr_nth_prem T n in
+  exact A.
+
+(** Base's preprocessing of the cases [2-15] (one reduction step inverted, the impossible and
+    the congruence-by-constructor steps closed), then of the primitive-operation steps whose
+    subject is not an application of a constant. *)
+Ltac sr_pre_on Hu :=
+  match goal with
+    | [H : (_ ;;; _ |- _ <=s _) |- _ ] => idtac
+    | _ =>
+      invert_closed_red Hu;
+      try solve [invert_mkApps_fix_eq];
+      try solve [econstructor; eauto];
+      try solve [
+        match goal with
+        | h : _ = mkApps _ ?args |- _ =>
+          let e := fresh "e" in
+          apply (f_equal nApp) in h as e ; simpl in e ;
+          rewrite nApp_mkApps in e ; simpl in e ;
+          destruct args ; discriminate
+        end
+      ]
+  end;
+  try solve [ match goal with
+    | [ H : _ = mkApps (tConst _ _) (map term_of_lit ?ls) |- _ ] =>
+        destruct ls using MRList.rev_ind;
+        [ cbn in H; discriminate H | rewrite map_app mkApps_app in H; cbn in H; discriminate H ]
+    | [ H : mkApps (tConst _ _) (map term_of_lit ?ls) = _ |- _ ] =>
+        destruct ls using MRList.rev_ind;
+        [ cbn in H; discriminate H | rewrite map_app mkApps_app in H; cbn in H; discriminate H ]
+    end ].
+
+Ltac sr_pre := match goal with [ Hu : closed_red1 _ _ _ _ |- _ ] => sr_pre_on Hu end.
+
+Ltac sr_intro := intros Σ wfΣ Γ wfΓ; unfold SR_red1E; intros **; rename_all_hyps; auto.
+
+(** *** Premise 1: the judgement predicate *)
+Lemma sr_red1E_Pj {cf : checker_flags} : ltac:(sr_case_type cf 0).
+Proof. sr_intro. Qed.
+
+(** *** Premise 2: contexts ([:1981-2004]) *)
+Lemma sr_red1E_ctx {cf : checker_flags} : ltac:(sr_case_type cf 1).
+Proof.
+  sr_intro.
+  split; auto. intros Γ' Δ' Δ ->. clear X0.
+  induction 1.
+  * depelim X. apply All_local_rel_abs.
+    now eapply All_local_env_app_inv.
+    eapply lift_judgment_SRE with (2 := p).
+    eapply lift_sorting_it_impl_gen with (tu := tu) => //.
+  * depelim X. apply All_local_rel_def.
+    now eapply All_local_env_app_inv.
+    eapply lift_judgment_SRE with (2 := p); tea.
+    eapply lift_sorting_it_impl_gen with tu => //=.
+  * assert (wf_localE Σ (Γ' ,,, Γ'0) × lift_typing typingE Σ (Γ' ,,, Γ) (j_decl d) × is_closed_context (Γ' ,,, Γ)) as (wfΓ' & ond & clΓ').
+    { depelim X; specialize (IHX0 _ X); clear X; pose proof (wf_local_closed_contextE all).
+      all: split; [|now split].
+      all: eapply All_local_env_app_inv in all as [wfΓ _]; eapply All_local_env_app in wfΓ; tea. }
+    clear wfΓ X IHX0.
+    apply All_local_rel_snoc.
+    1: now apply All_local_env_app_inv in wfΓ'.
+    apply lift_typing_impl with (1 := ond) => // ?? Hty.
+    eapply closed_context_conversionE; tea.
+    eapply red_one_decl_ws_cumul_ctx_pbE => //.
+    eapply OnOne2_local_env_impl; tea.
+    intros ???. eapply on_one_decl_impl => ???; firstorder.
+Qed.
+
+(** *** Premise 3: variables; δ for a let-bound variable ([:2006-2015]) *)
+Lemma sr_red1E_Rel {cf : checker_flags} : ltac:(sr_case_type cf 2).
+Proof.
+  sr_intro. sr_pre.
+  rewrite heq_nth_error in H. destruct decl as [na b ty]; noconf H.
+  simpl.
+  eapply All_local_env_nth_error in wfΓ as X0; tea.
+  apply unlift_TermTyp in X0.
+  cbn in *.
+  rewrite <- (firstn_skipn (S n) Γ).
+  eapply weakening_lengthE; auto.
+  { rewrite firstn_length_le; auto. apply nth_error_Some_length in heq_nth_error. auto with arith. }
+  now unfold app_context; rewrite firstn_skipn.
+Qed.
+
+(** *** Premise 4: sorts (no reduct) *)
+Lemma sr_red1E_Sort {cf : checker_flags} : ltac:(sr_case_type cf 3).
+Proof. sr_intro. sr_pre. Qed.
+
+(** *** Premise 5: products; the domain step ([:2017-2027]) *)
+Lemma sr_red1E_Prod {cf : checker_flags} : ltac:(sr_case_type cf 4).
+Proof.
+  sr_intro. sr_pre.
+  assert (X1' : lift_typing typingE Σ Γ (j_vass_s na N1 s1)).
+  1: now unshelve eapply lift_judgment_SRE with (1 := X1) => //.
+  constructor; eauto.
+  unshelve eapply (closed_context_conversionE _ typeb).
+  1: constructor; tas.
+  1: now eapply lift_sorting_forget_univ.
+  constructor.
+  now eapply ws_cumul_ctx_pbE_refl, wf_local_closed_contextE.
+  constructor; auto. eapply red_ws_cumul_pbE.
+  now eapply closed_red1_red.
+Qed.
+
+(** *** Premise 6: λ-abstractions; the domain step ([:2029-2039]). Base's algorithmic
+    [cumul_red_r] on [cumul_refl'] is [JoinE_red_r]. *)
+Lemma sr_red1E_Lambda {cf : checker_flags} : ltac:(sr_case_type cf 5).
+Proof.
+  sr_intro. sr_pre.
+  assert (X1' : lift_typing typingE Σ Γ (j_vass na M')).
+  1: now unshelve eapply lift_judgment_SRE with (1 := X1) => //.
+  eapply type_Cumul_altE. eapply typeE_Lambda; eauto.
+  unshelve eapply (closed_context_conversionE _ typeb). pcuic.
+  constructor. now eapply ws_cumul_ctx_pbE_refl, wf_local_closed_contextE.
+  constructor; auto. eapply red_ws_cumul_pbE. now eapply closed_red1_red.
+  assert (Σ ;;; Γ |-E tLambda na t b : tProd na t bty). econstructor; pcuics.
+  now eapply validityE in X2.
+  apply JoinE_red_r, red1_red. constructor. apply Hu.
+Qed.
+
+(** *** Premise 7: let-ins; ζ ([:2041-2049]), the value step ([:2051-2062]) and the type step
+    ([:2064-2076]). *)
+Lemma sr_red1E_LetIn {cf : checker_flags} : ltac:(sr_case_type cf 6).
+Proof.
+  sr_intro. sr_pre.
+  - (* LetIn body *)
+    eapply type_Cumul_altE.
+    apply (substitution_letE (Γ := Γ) (n := na) (u := b) (U := b_ty) (t := b') (T := b'_ty) typeb').
+    specialize (typingE_wf_local typeb') as wfd.
+    assert (Σ ;;; Γ |-E tLetIn na b b_ty b' : tLetIn na b b_ty b'_ty).
+    econstructor; eauto.
+    eapply (validityE X2).
+    apply JoinE_red_r, red1_red. constructor.
+
+  - (* LetIn value *)
+    assert (X1' : lift_typing typingE Σ Γ (j_vdef na r b_ty)).
+    { unshelve eapply lift_judgment_SRE with (1 := X1); tea. split => //. right; now split. }
+    eapply type_Cumul_altE.
+    econstructor; eauto.
+    unshelve eapply (closed_context_conversionE _ typeb'). pcuic.
+    constructor. eapply ws_cumul_ctx_pbE_refl; eauto. constructor; auto.
+    now eapply red_ws_cumul_pbE, closed_red1_red. apply ws_cumul_pbE_refl; eauto. now repeat inv_on_free_vars.
+    assert (Σ ;;; Γ |-E tLetIn na b b_ty b' : tLetIn na b b_ty b'_ty). econstructor; eauto.
+    eapply (validityE X2).
+    apply JoinE_red_r, red1_red. constructor. apply Hu.
+
+  - (* LetIn type annotation *)
+    assert (X1' : lift_typing typingE Σ Γ (j_vdef na b r)).
+    { unshelve eapply lift_judgment_SRE with (1 := X1); tea. split => //. left; now split. }
+    eapply type_Cumul_altE.
+    econstructor; eauto.
+    unshelve eapply (closed_context_conversionE _ typeb'). pcuic.
+    constructor; auto. eapply ws_cumul_ctx_pbE_refl; eauto. constructor; auto.
+    eapply ws_cumul_pbE_refl; eauto; repeat inv_on_free_vars =>//.
+    apply: red_ws_cumul_pbE Hu.
+    assert (Σ ;;; Γ |-E tLetIn na b b_ty b' : tLetIn na b b_ty b'_ty). econstructor; eauto.
+    eapply (validityE X2).
+    apply JoinE_red_r, red1_red. constructor. apply Hu.
+Qed.
+
+(** *** Premise 9: constants; δ ([:2127-2143]) and a registered operation of arity zero
+    ([:2145-2152]). *)
+Lemma sr_red1E_Const {cf : checker_flags} : ltac:(sr_case_type cf 8).
+Proof.
+  sr_intro. sr_pre.
+  - (* Constant unfolding *)
+    unshelve epose proof (H' := declared_constant_to_gen H); eauto.
+    unshelve epose proof (H0' := declared_constant_to_gen H0); eauto.
+    unshelve epose proof (declared_constant_inj decl decl0 _ _); tea; subst decl.
+    destruct decl0 as [ty body' univs]; simpl in *; subst body'.
+    eapply on_declared_constantE in H as (Hb & s & Ht & _); tas; cbn in Hb, Ht.
+    rewrite <- (app_context_nil_l Γ).
+    apply subject_closedE in Hb as clb; tas.
+    apply type_closedE in Hb as clty; tas.
+    replace (subst_instance u body)
+      with (lift0 #|Γ| (subst_instance u body)).
+    replace (subst_instance u ty)
+      with (lift0 #|Γ| (subst_instance u ty)).
+    2-3: rewrite -subst_instance_lift lift_closed; cbnr; tas.
+    eapply weakeningE; tea.
+    now rewrite app_context_nil_l.
+    eapply (PCUICUnivSubstitutionTypEta.typing_subst_instance_declE _ []); tea.
+
+  - (* red_prim_op on a constant: an operation of arity zero *)
+    match goal with
+    | [ H : ?tm = mkApps (tConst _ _) (map term_of_lit _) |- _ ;;; _ |-E _ : ?T ] =>
+        assert (ht : Σ ;;; Γ |-E tm : T) by (eapply typeE_Const; eauto); rewrite H in ht
+    | [ H : mkApps (tConst _ _) (map term_of_lit _) = ?tm |- _ ;;; _ |-E _ : ?T ] =>
+        assert (ht : Σ ;;; Γ |-E tm : T) by (eapply typeE_Const; eauto); rewrite <- H in ht
+    end.
+    eapply sr_prim_opE; tea.
+Qed.
+
+(** *** Premises 10-11: inductives and constructors (no reduct) *)
+Lemma sr_red1E_Ind {cf : checker_flags} : ltac:(sr_case_type cf 9).
+Proof. sr_intro. sr_pre. Qed.
+
+Lemma sr_red1E_Construct {cf : checker_flags} : ltac:(sr_case_type cf 10).
+Proof. sr_intro. sr_pre. Qed.
+
+(** *** Premise 16: primitive values; the three array steps ([:3602-3627]) *)
+Lemma sr_red1E_Prim {cf : checker_flags} : ltac:(sr_case_type cf 15).
+Proof.
+  sr_intro. sr_pre.
+  - eapply OnOne2_prod_inv in X2 as [X2 _].
+    destruct X. depelim X0. depelim X1.
+    Transparent prim_type.
+    eapply (typeE_Prim _ _ (primArray; primArrayModel (set_array_value arr value))); tea.
+    constructor; cbn; eauto.
+    solve_all.
+    eapply OnOne2_All_All; tea; cbn; intuition eauto.
+
+  - destruct X. depelim X0. depelim X1.
+    Transparent prim_type.
+    eapply (typeE_Prim _ _ (primArray; primArrayModel (set_array_default arr def))); tea.
+    constructor; cbn; eauto.
+
+  - pose proof (typeE_Prim _ _ _ _ _ wfΓ heq_primitive_constant H0 H1 X0). eapply validityE in X3.
+    destruct X. depelim X0. depelim X1.
+    eapply (type_ws_cumul_pbE (pb:=Conv)); tea.
+    eapply (typeE_Prim _ _ (primArray; primArrayModel (set_array_type arr ty))); tea.
+    constructor; cbn; eauto.
+    * eapply type_ws_cumul_pbE; tea. eapply has_sort_isTypeE; eauto.
+      now eapply (red_ws_cumul_pbE (pb:=Conv)), closed_red1_red.
+    * solve_all.
+      eapply type_ws_cumul_pbE; tea. eapply has_sort_isTypeE; eauto.
+      now eapply (red_ws_cumul_pbE (pb:=Conv)), closed_red1_red.
+    * simp prim_type. eapply ws_cumul_pbE_App.
+      eapply ws_cumul_pbE_refl; fvs. cbn.
+      now symmetry; eapply red_ws_cumul_pbE, closed_red1_red.
+Qed.
+
+(** *** Premise 17: the conversion rule ([:3629-3631]) *)
+Lemma sr_red1E_Cumul {cf : checker_flags} : ltac:(sr_case_type cf 16).
+Proof.
+  sr_intro.
+  specialize (forall_u _ Hu).
+  eapply typeE_Cumul; tea.
 Qed.
 
 End SREta.
