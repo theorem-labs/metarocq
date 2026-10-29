@@ -61,7 +61,12 @@ Local Notation " Σ ;;; Γ ⊢E t = u " := (ws_cumul_pbE Conv Σ Γ t u) (at lev
   import the copy. No proof below the block changes. Nothing here is an axiom: the classes are
   premises of every lemma that uses them, and [Print Assumptions] shows them as such. *)
 
-(* The braces in the statements record base's implicit status; Rocq honours them on the class
+(* Implicit status. Each field is the note's proposition (sr-statement-note.md @ 0583b56e) with the
+   implicit status of base's SOURCE, which is the status the copies keep (the note: "the copies take
+   implicit status from the base source"). Where base's source binds [{wfΣ : wf Σ}] (a section
+   [Context] or the lemma header) and [About] printed it as an arrow, the note writes [wfE Σ ->] and
+   the field writes [{wfΣ : wfE Σ}]: the same type, and a call site written for base (no [wf]
+   argument) is then also right for the landed copy. Rocq honours the braces on the class
    projections. *)
 Local Set Warnings "-unexpected-implicit-declaration".
 
@@ -297,7 +302,7 @@ Class SRForecastCopy14 := {
 (* FORECAST-ONLY: proved by copy 15 (PCUICSpineEta.v); delete when it lands. *)
 Class SRForecastCopy15 := {
   ctx_inst_cumulE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {pb : conv_pb} {Γ : list context_decl} {i : list term} {Δ Δ' : list context_decl},
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
     ctx_instE Σ Γ i (List.rev Δ) ->
@@ -312,18 +317,18 @@ Class SRForecastCopy15 := {
     consistent_instance_ext Σ ext u ->
     ctx_instE Σ Γ@[u] (map (subst_instance u) i) Δ@[u] ;
   ctx_inst_open_termsE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall (Γ : context) (args : list term) (Δ : context),
     ctx_instE Σ Γ args Δ ->
     All (fun t : term => is_open_term Γ t) args ;
   ctx_inst_spine_substE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ Δ : list context_decl} {args : list term},
     wf_localE Σ (Γ ,,, Δ) ->
     forall ci : ctx_instE Σ Γ args (List.rev Δ),
     spine_substE Σ Γ args (ctx_inst_subE ci) Δ ;
   inversion_mkApps_directE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ : context} {f : term} {u : list term} {T : term},
     isTypeE Σ Γ T ->
     Σ ;;; Γ |-E mkApps f u : T ->
@@ -338,7 +343,7 @@ Class SRForecastCopy15 := {
     spine_substE Σ Γ inst' (firstn #|Δ'| insts) (subst_context (skipn #|Δ'| insts) 0 Δ') ->
     spine_substE Σ Γ (inst ++ inst') insts (Δ ,,, Δ') ;
   spine_subst_app_invE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ Δ : context} {Δ' : list context_decl} {inst inst' insts : list term},
     #|inst| = context_assumptions Δ ->
     spine_substE Σ Γ (inst ++ inst') insts (Δ ,,, Δ') ->
@@ -349,7 +354,7 @@ Class SRForecastCopy15 := {
     spine_substE Σ Γ args s Δ ->
     ctx_instE Σ Γ args (List.rev Δ) ;
   spine_subst_cumulE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Δ : list context_decl} {args : list term} {Γ Γ' : context},
     assumption_context Γ -> assumption_context Γ' ->
     wf_localE Σ (Δ ,,, Γ) ->
@@ -363,7 +368,7 @@ Class SRForecastCopy15 := {
     spine_substE Σ Γ inst s' Δ ->
     s = s' ;
   spine_subst_smashE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ : context} {inst s : list term} {Δ : context},
     spine_substE Σ Γ inst s Δ ->
     spine_substE Σ Γ inst (List.rev inst) (smash_context [] Δ) ;
@@ -383,14 +388,14 @@ Class SRForecastCopy15 := {
     typing_spineE Σ Γ t_ty u T ->
     Σ ;;; Γ |-E mkApps t u : T ;
   typing_spine_invE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ Δ : context} {T : term} {args args' : list term} {T' : term},
     #|args| = context_assumptions Δ ->
     typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T' ->
     ∑ args_sub : list term,
       spine_substE Σ Γ args args_sub Δ × typing_spineE Σ Γ (subst0 args_sub T) args' T' ;
   typing_spine_nth_errorE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ Δ : context} {T : term} {args : list term} {n : nat} {arg concl : term},
     typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args concl ->
     nth_error args n = Some arg ->
@@ -399,7 +404,7 @@ Class SRForecastCopy15 := {
       (nth_error (smash_context [] Δ) (context_assumptions Δ - S n) = Some decl) ×
       (Σ ;;; Γ |-E arg : subst0 (List.rev (firstn n args)) (decl_type decl)) ;
   typing_spine_strengthenE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ : context} {T : term} {args : list term} {U : term},
     typing_spineE Σ Γ T args U ->
     forall T' : term,
@@ -407,7 +412,7 @@ Class SRForecastCopy15 := {
     ws_cumul_pbE Cumul Σ Γ T' T ->
     typing_spineE Σ Γ T' args U ;
   wf_local_alphaE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall Γ Γ' : list context_decl,
     eq_context_upto_names Γ Γ' ->
     wf_localE Σ Γ ->
@@ -417,20 +422,20 @@ Class SRForecastCopy15 := {
     ws_cumul_ctx_pbE Conv Σ Γ Δ ->
     ws_cumul_ctx_pbE pb Σ Γ Δ ;
   ws_cumul_ctx_pb_rel_smashE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {pb : conv_pb} {Γ Δ Δ' : list context_decl},
     wf_localE Σ (Γ ,,, Δ) ->
     wf_localE Σ (Γ ,,, Δ') ->
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
     ws_cumul_ctx_pbE_rel pb Σ Γ (smash_context [] Δ) (smash_context [] Δ') ;
   ws_cumul_ctx_pb_rel_transE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {pb : conv_pb} {Γ Δ Δ' Δ'' : list context_decl},
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ' ->
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ' Δ'' ->
     ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ'' ;
   ws_cumul_pb_expand_lets_ws_cumul_ctxE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {pb le' : conv_pb} {Γ Δ Δ' : list context_decl} {T T' : term},
     wf_localE Σ (Γ ,,, Δ) ->
     wf_localE Σ (Γ ,,, Δ') ->
@@ -472,14 +477,14 @@ Class SRForecastCopy16 := {
          projection_type mdecl (proj_ind p) (proj_arg p) (decl_type decl) =
          projection_type' mdecl (proj_ind p) (proj_arg p) (decl_type decl)]) ;
   instantiate_indsE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ.1 ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1},
     forall {u : Instance.t} {mind : kername} {mdecl : mutual_inductive_body},
     declared_minductive Σ.1 mind mdecl ->
     consistent_instance_ext Σ (ind_universes mdecl) u ->
     (inds mind (abstract_instance (ind_universes mdecl)) (ind_bodies mdecl))@[u] =
     inds mind u (ind_bodies mdecl) ;
   isType_mkApps_IndE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body},
     declared_inductive Σ ind mdecl idecl ->
     forall {Γ : context} {puinst : Instance.t} {args inst : list term},
@@ -507,14 +512,14 @@ Class SRForecastCopy16 := {
     spine_substE Σ Γ s (List.rev s) (smash_context [] Δ) ->
     map (subst_let_expand (List.rev s) Δ) (to_extended_list Δ) = s ;
   on_minductive_wf_params_indices_instE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {mdecl : mutual_inductive_body} {ind : inductive} {idecl : one_inductive_body},
     declared_inductive Σ ind mdecl idecl ->
     forall u : Instance.t,
     consistent_instance_ext Σ (ind_universes mdecl) u ->
     wf_localE Σ ((ind_params mdecl ,,, ind_indices idecl)@[u]) ;
   red_it_mkProd_or_LetIn_smashE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall (Γ : list context_decl) (ctx : context) (t u : term) (n : nat) (c : context_decl),
     Σ ;;; Γ ⊢ it_mkProd_or_LetIn ctx t ⇝ u ->
     nth_error (List.rev (smash_context [] ctx)) n = Some c ->
@@ -523,13 +528,13 @@ Class SRForecastCopy16 := {
          nth_error (List.rev (smash_context [] ctx')) n = Some d &
          Σ ;;; Γ ,,, skipn (#|smash_context [] ctx| - n) (smash_context [] ctx) ⊢ decl_type c ⇝ decl_type d] ;
   typing_expand_lets_genE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ Δ Γ' : list context_decl} {t T : term},
     Σ ;;; Γ ,,, Δ ,,, Γ' |-E t : T ->
     Σ ;;; Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ' |-E
       expand_lets_k Δ #|Γ'| t : expand_lets_k Δ #|Γ'| T ;
   wf_local_expand_letsE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ Δ Γ' : list context_decl},
     wf_localE Σ (Γ ,,, Δ ,,, Γ') ->
     wf_localE Σ (Γ ,,, smash_context [] Δ ,,, expand_lets_ctx Δ Γ')
@@ -571,7 +576,7 @@ Class SRForecastCopy18 := {
                    subst_instance u) (cstr_indices cdecl))
              (skipn (ind_npars mdecl) args')]) ;
   cmp_global_instance_ind_invE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall (cmp_universe : conv_pb -> Relation_Definitions.relation Universe.t) (pb : conv_pb)
       (ind : inductive) (mdecl : mutual_inductive_body) (idecl : one_inductive_body) (napp : nat)
       (u u' : Instance.t),
@@ -582,7 +587,7 @@ Class SRForecastCopy18 := {
       (∑ l : list Variance.t, ind_variance mdecl = Some l × cmp_universe_instance_variance cmp_universe pb l u u')) +
      cmp_universe_instance (cmp_universe Conv) u u')%type ;
   constructor_cumulative_indicesE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {c : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
       {cdecl : constructor_body} {u u' : Instance.t} {napp : nat},
     declared_constructor Σ c mdecl idecl cdecl ->
@@ -604,7 +609,7 @@ Class SRForecastCopy18 := {
       (map (subst parsubst' (context_assumptions (cstr_args cdecl)))
          (map (expand_lets argctx') (map (subst_instance u') (cstr_indices cdecl)))) ;
   conv_decls_fix_contextE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ : context} {mfix mfix1 : list (def term)},
     wf_localE Σ Γ ->
     All2 (fun d d' : def term =>
@@ -620,7 +625,7 @@ Class SRForecastCopy18 := {
     consistent_instance_ext Σ (ind_universes mdecl) u ->
     isTypeE Σ Γ (type_of_constructor mdecl cdecl (i, n) u) ;
   into_ws_cumul_pb_termsE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ : list context_decl} {l l' : list term},
     All2 (convSpecE Σ Γ) l l' ->
     is_closed_context Γ ->
@@ -630,12 +635,12 @@ Class SRForecastCopy18 := {
   (* Same proposition as [Typing/PCUICClosedTypEta.isType_is_open_termE] (implicit [Γ T]); this
      field shadows that name here, as the copy-18 lemma will. *)
   isType_is_open_termE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall (Γ : context) (T : term),
     isTypeE Σ Γ T ->
     is_open_term Γ T ;
   on_constructor_instE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {ind : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
       {cdecl : constructor_body},
     declared_constructor Σ ind mdecl idecl cdecl ->
@@ -648,7 +653,7 @@ Class SRForecastCopy18 := {
          map (subst_instance u) (cstr_indices cdecl))
         inst ((ind_params mdecl)@[u] ,,, (ind_indices idecl)@[u])) ;
   on_constructor_inst_wf_argsE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {ind : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
       {cdecl : constructor_body},
     declared_constructor Σ ind mdecl idecl cdecl ->
@@ -657,14 +662,14 @@ Class SRForecastCopy18 := {
     wf_localE Σ ((ind_params mdecl)@[u] ,,,
       subst_context (ind_subst mdecl ind.1 u) #|ind_params mdecl| (cstr_args cdecl)@[u]) ;
   positive_cstr_closed_indicesE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {i : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
       {cdecl : constructor_body},
     declared_constructor Σ.1 i mdecl idecl cdecl ->
     All (fun t : term => closedn (context_assumptions (cstr_args cdecl) + #|ind_params mdecl|) t)
       (map (expand_lets (cstr_args cdecl)) (cstr_indices cdecl)) ;
   pre_case_branch_context_eqE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {ind : inductive} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
       {params : list term} {puinst : Instance.t} {bctx : list aname} {cdecl : constructor_body},
     declared_inductive Σ ind mdecl idecl ->
@@ -674,7 +679,7 @@ Class SRForecastCopy18 := {
       (pre_case_branch_context ind mdecl params puinst cdecl)
       (case_branch_context_gen ind mdecl params puinst bctx cdecl) ;
   subslet_projsE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {i : inductive} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {args : list term},
     declared_inductive Σ.1 i mdecl idecl ->
     match ind_ctors idecl return Type with
@@ -707,7 +712,7 @@ Class SRForecastCopy18 := {
       ((unfold_fix mfix idx = Some (rarg, f) × wf_fixpointE Σ Γ mfix) × (Σ ;;; Γ |-E f : T')) ×
       ws_cumul_pbE Cumul Σ Γ T' T ;
   wf_case_branches_types'E :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info}
       {p : predicate term} (ps : sort) (args : list term) (brs : list (branch term)),
     declared_inductive Σ ci mdecl idecl ->
@@ -729,7 +734,7 @@ Class SRForecastCopy18 := {
          Σ ;;; Γ ,,, brctxty.1 |-E brctxty.2 : tSort ps])
       0 (ind_ctors idecl) brs ;
   wf_case_predicate_contextE :
-    forall {cf : checker_flags} {Σ : global_env_ext}, wfE Σ ->
+    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
     forall {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info}
       {p : predicate term} {args : list term},
     declared_inductive Σ ci.(ci_ind) mdecl idecl ->
@@ -902,7 +907,7 @@ Proof.
   rewrite -(cstr_args_length onc).
   case: leb_spec_Set; try lia.
   move=> _. destruct (ind_variance mdecl) eqn:hv => /=; [lia|].
-  eapply cmp_global_instance_ind_invE in Hu; [|exact wfΣ|tc|apply declc.p1].
+  eapply cmp_global_instance_ind_invE in Hu; [|tc|apply declc.p1].
   destruct Hu as [(_ & l & indv & _) | Hu]; [congruence|exact Hu].
 Qed.
 
@@ -937,7 +942,7 @@ Lemma on_constructor_wf_argsE {cf} {Σ} {wfΣ : wfE Σ} {ind c mdecl idecl cdecl
     (subst_context (ind_subst mdecl ind u)) #|ind_params mdecl| (subst_instance u (cstr_args cdecl))).
 Proof.
   intros decl cu.
-  pose proof (on_constructor_instE wfΣ decl _ cu) as [wf _].
+  pose proof (on_constructor_instE decl _ cu) as [wf _].
   rewrite !subst_instance_app_ctx in wf.
   rewrite -app_context_assoc -(app_context_nil_l (_ ,,, _)) app_context_assoc in wf.
   eapply substitution_wf_localE in wf; tea.
@@ -987,7 +992,7 @@ Proof.
     rewrite -(List.rev_involutive Δ).
     rewrite subst_telescope_subst_context.
     simpl in wf. rewrite - !/(app_context _ _) app_context_assoc in wf.
-    eapply ctx_inst_cumulE; [exact wfΣ| |..].
+    eapply ctx_inst_cumulE.
     2:{ instantiate (1:=subst_context [i] 0 (List.rev Δ)).
         rewrite -subst_telescope_subst_context List.rev_involutive. exact ctxi. }
     apply (snd ws_cumul_ctx_pbE_rel_app).
@@ -1088,7 +1093,7 @@ Proof.
   pose proof (onc.(on_cindices)).
   eapply ctx_inst_impl in X. 2: intros ??; apply unlift_TermTyp.
   eapply ctx_inst_instE in X; tea.
-  eapply ctx_inst_open_termsE in X; [|exact wfΣ].
+  eapply ctx_inst_open_termsE in X.
   eapply All_map, All_impl; tea.
   cbn; intros x clx.
   rewrite -[_ ,,, _]app_context_nil_l -[_ ,,, cstr_args cdecl]app_context_assoc app_context_assoc in clx.
@@ -1250,7 +1255,7 @@ Lemma isType_expand_letsE  {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ T} :
 Proof.
   intros (_ & s & Hs & _). eapply has_sort_isTypeE. revert Hs.
   rewrite -[_ ,,, _]app_context_nil_l app_context_assoc.
-  move/(typing_expand_lets_genE wfΣ); rewrite app_context_nil_l => hs.
+  move/typing_expand_lets_genE; rewrite app_context_nil_l => hs.
   apply hs.
 Qed.
 
@@ -1264,7 +1269,7 @@ Proof.
   have wfctx := typingE_wf_local Hs.
   generalize Hs.
   rewrite -[_ ,,, _]app_context_nil_l app_context_assoc.
-  move/(typing_expand_lets_genE wfΣ); rewrite app_context_nil_l => hs.
+  move/typing_expand_lets_genE; rewrite app_context_nil_l => hs.
   rewrite /expand_lets_ctx /expand_lets_k_ctx in hs.
   rewrite closed_ctx_lift /= in hs.
   move/(closed_wf_localE wfΣ): wfctx. rewrite closedn_ctx_app => /andP[] //.
@@ -1295,7 +1300,7 @@ Proof.
   split => //.
   rewrite -heq in sp.
   rewrite firstn_all in sp.
-  now apply: (spine_subst_smashE wfΣ).
+  now apply: spine_subst_smashE.
 Qed.
 
 (** Base [lift_judgment_SR] ([:1465]). *)
@@ -1970,7 +1975,7 @@ Proof.
       eapply All2_fold_app => //.
       reflexivity.
       eapply All2_fold_impl.
-      eapply (conv_decls_fix_contextE wf (Γ := Γ)) => //.
+      eapply (conv_decls_fix_contextE (Γ := Γ)) => //.
       move: H2.
       assert (clΓ := wf_local_closed_contextE wfΓ).
       clear fixl. move: #|mfix|. induction X4; constructor.
@@ -2119,7 +2124,7 @@ Proof.
     { clear -wf wfΓ X X4 H2 fixl F18.
       eapply All2_fold_app => //; trea.
       eapply All2_fold_impl.
-      eapply (conv_decls_fix_contextE wf (Γ := Γ)) => //.
+      eapply (conv_decls_fix_contextE (Γ := Γ)) => //.
       move: H2.
       assert (clΓ := wf_local_closed_contextE wfΓ).
       clear fixl. move: #|mfix|. induction X4; constructor.
