@@ -19,11 +19,12 @@
   - the bridges to the checker's forecast form, [checkE_Cumul_ws_inst],
     [All2_ws_cumul_pbE_JoinE_inst], [JoinE_ws_cumul_pbE_inst], on that η pair;
   - the (co)fixpoint witness bridges, [wf_fixpoint_red_wf_fixpointE_inst],
-    [wf_cofixpoint_red_wf_cofixpointE_inst], [mfix_on_ind_red_convE_inst], at a
-    declared type whose witness is a β-reduct, not the type itself: [(λ B : Prop. I B) A]
-    reduces to [I A]. The cofixpoint uses [bd_coenv], [si_env] with the block
-    declared [CoFinite]; [bd_cocb] gives its [ClosedBodies]. The typed form gets its
-    [wfE si_env] from [si_wfE] and types the declared type over [typingE]
+    [wf_cofixpoint_red_wf_cofixpointE_inst], and [bd_mfix_on_ind_red_convE_inst] (copy 17's
+    [PCUICFixWitnessEta.mfix_on_ind_red_convE], the typed form [BDTypingEta] stated until
+    cross-lane commitment C4), at a declared type whose witness is a β-reduct, not the type
+    itself: [(λ B : Prop. I B) A] reduces to [I A]. The cofixpoint uses [bd_coenv], [si_env]
+    with the block declared [CoFinite]; [bd_cocb] gives its [ClosedBodies]. The typed form
+    gets its [wfE si_env] from [si_wfE] and types the declared type over [typingE]
     ([bd_fix_dtype_isTypeE]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -32,7 +33,7 @@ From MetaRocq.Common Require Import config BasicAst Universes Kernames Environme
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
      PCUICReduction PCUICCumulativitySpec PCUICCumulativitySpecEta PCUICClosedBodies PCUICTypingEta
      PCUICCumulativitySpecEtaClosureInstances PCUICEtaDefs PCUICEtaI5 PCUICWellScopedCumulativity
-     PCUICWellScopedCumulativityEta BDTyping BDTypingEta.
+     PCUICWellScopedCumulativityEta BDTyping BDTypingEta PCUICFixWitnessEta.
 From Equations.Type Require Import Relation.
 
 #[local] Existing Instance default_checker_flags.
@@ -361,7 +362,9 @@ Proof.
     exact (localenv_cons_abs bd_wfE_Γ1 hdom).
 Qed.
 
-Lemma mfix_on_ind_red_convE_inst :
+(** [bd_] keeps this name apart from copy 17's own [mfix_on_ind_red_convE_inst]
+    ([PCUICTypingEtaCopy17Instances], at [c17_d]). *)
+Lemma bd_mfix_on_ind_red_convE_inst :
   mfix_on_ind check_one_fix (conv_witnessE si_Σ bd_Γ1)
     (fun mind => check_recursivity_kind (lookup_env si_Σ) mind Finite) bd_mfix.
 Proof.
