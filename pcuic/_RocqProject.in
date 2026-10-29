@@ -233,4 +233,6 @@ theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
 theories/PCUICValidityEtaInstances.v
 theories/PCUICSREtaInstances.v
+# Bidirectional soundness over typingE (row T6, the E copy of BDToPCUIC), and its satisfying instances
+theories/Bidirectional/BDToPCUICEta.v
 # theories/All.v
