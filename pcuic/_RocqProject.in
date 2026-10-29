@@ -238,4 +238,6 @@ theories/Bidirectional/BDToPCUICEta.v
 theories/Bidirectional/BDToPCUICEtaInstances.v
 # Typed postponement (T8): pinned statements and the root cases of one-step eta postponement
 theories/PCUICEtaT8Probe.v
+# Bidirectional completeness over typingE (row T6, the E copy of BDFromPCUIC; T8 forecast), and its satisfying instances
+theories/Bidirectional/BDFromPCUICEta.v
 # theories/All.v
