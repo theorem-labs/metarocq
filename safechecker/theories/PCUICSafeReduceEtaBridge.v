@@ -622,7 +622,10 @@ Section FracInstancesE.
   Definition cs_ctor_ty : term :=
     tProd SI.si_na (tSort sProp) (tApp (tInd SI.si_ind []) (tRel 0)).
   Definition cs_c : term := tApp (tConstruct SI.si_ind 0 []) fx_P.
-  Definition cs_ci : case_info := {| ci_ind := SI.si_ind; ci_npar := 1; ci_relevance := Relevant |}.
+  (* FORECAST tree only (EtaK7): this base (integ-all7, BET-339) adds the field [ci_cofix_nondep] to
+     [case_info]; [true] as base's [PCUICCasesHelper]; irrelevant here, the case is on an inductive. *)
+  Definition cs_ci : case_info :=
+    {| ci_ind := SI.si_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
   Definition cs_p : predicate term :=
     {| pparams := [fx_P]; puinst := [];
        pcontext := ind_predicate_context SI.si_ind SI.si_mdecl SI.si_idecl; preturn := fx_I |}.
