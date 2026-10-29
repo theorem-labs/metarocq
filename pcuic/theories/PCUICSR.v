@@ -437,7 +437,7 @@ Proof.
   eapply pre_case_branch_context_eq; eauto.
 Qed.
 
-Lemma conv_refl' {cf} {Σ} {wfΣ : wf Σ} {Γ x y} :
+Lemma conv_refl' {cf} {Σ} {Γ x y} :
   x = y ->
   Σ ;;; Γ |- x = y.
 Proof. now intros ->. Qed.
@@ -1107,31 +1107,31 @@ Proof.
   now apply subject_closed in X; apply closedn_on_free_vars.
 Qed.
 
-Lemma ws_cumul_pb_meta_refl {cf} {Σ} {wfΣ : wf Σ} {Γ T U} :
+Lemma ws_cumul_pb_meta_refl {cf} {Σ} {Γ T U} :
   is_closed_context Γ -> closedn #|Γ| T -> T = U -> Σ ;;; Γ ⊢ T = U.
 Proof.
   intros clΓ cl ->. apply ws_cumul_pb_refl => //. now apply closedn_on_free_vars.
 Qed.
 
-Lemma ws_cumul_pb_eq_trans {cf} {Σ} {wfΣ : wf Σ} {Γ T U V} :
+Lemma ws_cumul_pb_eq_trans {cf} {Σ} {Γ T U V} :
   Σ ;;; Γ ⊢ T = U -> U = V -> Σ ;;; Γ ⊢ T = V.
 Proof.
   now intros tr ->.
 Qed.
 
-Lemma eq_ws_cumul_pb_trans {cf} {Σ} {wfΣ : wf Σ} {Γ T U V} :
+Lemma eq_ws_cumul_pb_trans {cf} {Σ} {Γ T U V} :
   T = U -> Σ ;;; Γ ⊢ U = V -> Σ ;;; Γ ⊢ T = V.
 Proof.
   now intros -> tr.
 Qed.
 
-Lemma ws_cumul_pb_terms_eq_trans {cf} {Σ} {wfΣ : wf Σ} {Γ T U V} :
+Lemma ws_cumul_pb_terms_eq_trans {cf} {Σ} {Γ T U V} :
   ws_cumul_pb_terms Σ Γ T U -> U = V -> ws_cumul_pb_terms Σ Γ T V.
 Proof.
   now intros tr ->.
 Qed.
 
-Lemma eq_ws_cumul_pb_terms_trans {cf} {Σ} {wfΣ : wf Σ} {Γ T U V} :
+Lemma eq_ws_cumul_pb_terms_trans {cf} {Σ} {Γ T U V} :
   T = U -> ws_cumul_pb_terms Σ Γ U V -> ws_cumul_pb_terms Σ Γ T V.
 Proof.
   now intros -> tr.

@@ -1834,7 +1834,7 @@ Proof.
   intuition auto.
 Qed.
 
-Lemma consistent_instance_valid {cf} {Σ} {wfΣ : wf Σ} {inst cstrs u} :
+Lemma consistent_instance_valid {cf} {Σ} {inst cstrs u} :
   consistent_instance_ext Σ (Polymorphic_ctx (inst, cstrs)) u ->
   check_univs ->
   forall v, satisfies v (global_ext_constraints Σ) -> satisfies v (subst_instance_cstrs u cstrs).
