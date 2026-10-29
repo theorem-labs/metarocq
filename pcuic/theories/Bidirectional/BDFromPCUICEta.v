@@ -180,11 +180,18 @@ Definition T8Forecast_ind_r_fit {T8 : T8Forecast} (cf : checker_flags) (Σ : glo
    Text: the base twin, PCUICInductiveInversion.v:3616 [projection_cumulative_indices], with
    [wf] → [wfE] and the cumulativity [Σ ;;; _ ⊢ _ ≤ _] → [Σ ;;; _ ⊢E _ ≤ _]; nothing else.
    Used once, in the Proj case of [bidirectional_from_pcuicE] (base [BDFromPCUIC.v:339]).
-   Not a known-false form: no conversion premise, under [wfE]. Its base proof either finds the
-   two instances equal up to [eq_term_upto_univ] (base ⊆ E, [ws_cumul_pb_incl_E]) or reads the
-   variance clause [on_ctype_variance] of the declaration, which [wfE] states with E
-   cumulativity ([cumulSpecE0]); its conclusion is that E cumulativity, through the E copies
-   of [cumul_ctx_relSpec_Algo] and [ws_cumul_pb_inst_variance] (copy 18, not on this branch). *)
+   No class has it: the checker's bundle has only the inductive analogue
+   [inductive_cumulative_indices] (its [T0_facts]). Not a known-false form: no conversion
+   premise, under [wfE]; for a projection's inductive (no indices) [ind_npars] is the full
+   arity, so [cmp_ind_universes] reads the declared variance. Its base proof
+   (PCUICInductiveInversion.v:3625-3765) either finds the two instances equal up to
+   [eq_term_upto_univ] (base ⊆ E, [ws_cumul_pb_incl_E]) or reads the variance clause
+   [on_ctype_variance] of the declaration, which [wfE] states with E cumulativity
+   ([cumulSpecE0]), and turns it into the conclusion with [cumul_ctx_relSpec_Algo],
+   [All2_fold_inst], [positive_cstr_closed_args], [weakening_ws_cumul_pb] and
+   [untyped_substitution_ws_cumul_pb]; the E copies of the first three are copy-18 rows not on
+   this branch (the last two are landed: [weakening_ws_cumul_pbE],
+   [untyped_substitution_ws_cumul_pbE]). *)
 Class BDFromForecastCopy18 := {
   projection_cumulative_indicesE :
     forall {cf} {Σ : global_env_ext} {wfΣ : wfE Σ},
