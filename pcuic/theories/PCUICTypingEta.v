@@ -148,12 +148,18 @@ and "'wf_localE' Σ Γ " := (All_local_env (lift_typing1 (typingE Σ)) Γ).
 (** ** E well-formedness classes. *)
 Definition wfE `{checker_flags} := on_global_env cumulSpecE0 (lift_typing typingE).
 Existing Class wfE.
+#[global]
+Hint Mode wfE + + : typeclass_intances.
 
 Definition wf_extE `{checker_flags} := on_global_env_ext cumulSpecE0 (lift_typing typingE).
 Existing Class wf_extE.
+#[global]
+Hint Mode wf_extE + + : typeclass_intances.
 
 Inductive welltypedE {cf} Σ Γ t : Prop :=
 | iswelltypedE A : Σ ;;; Γ |-E t : A -> welltypedE Σ Γ t.
+
+Arguments iswelltypedE {cf Σ Γ t A} h.
 
 (** ** Inclusion of the base relations into the E ones. *)
 
@@ -188,6 +194,8 @@ Qed.
 Lemma wf_localE_app_l {cf : checker_flags} Σ Γ Γ' :
   wf_localE Σ (Γ ,,, Γ') -> wf_localE Σ Γ.
 Proof. intro h. now apply All_local_env_app_inv in h as []. Qed.
+#[global]
+Hint Immediate wf_localE_app_l : wf.
 
 Lemma typing_incl_E_env `{checker_flags} :
   env_prop (fun Σ Γ t T => typingE Σ Γ t T)
