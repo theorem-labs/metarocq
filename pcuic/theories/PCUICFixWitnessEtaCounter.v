@@ -155,7 +155,12 @@ Definition fwe_cofix_ty : term := fwe_I.
 Definition fwe_cofix_d : def term :=
   {| dname := fwe_na; dtype := fwe_lam; dbody := tRel 0; rarg := 0 |}.
 
-(** ** What the checks see *)
+(** ** What the checks see
+
+  The mechanism of the counterexample: the witness type passes the syntactic check
+  ([fwe_check_fix_ty], [fwe_check_cofix_ty]) and the η-convertible declared type
+  fails it ([fwe_check_fix_dtype], [fwe_check_cofix_dtype]), because its λ hides the
+  [tInd] head from [decompose_app]. *)
 
 Lemma fwe_check_fix_ty : check_one_fix (def_with_type fwe_fix_d fwe_fix_ty) = Some fwe_kn.
 Proof. reflexivity. Qed.
