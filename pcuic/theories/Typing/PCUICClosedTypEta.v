@@ -6,10 +6,13 @@
   [wfE], [wf_localE] and [cumulSpecE0]; every lemma takes the suffix [E], and the
   proofs are base's. It gives the instance [wfE_ClosedBodies]: an environment
   checked with the η conversion satisfies [ClosedBodies] ([PCUICClosedBodies]),
-  the premise of the reduction metatheory. The last section copies the closedness
-  of types ([isType_closed] and its variants) and of inductive, constructor and
-  projection declarations ([declared_inductive_closed_type] to
-  [declared_projection_closed_type]). The reduction lemmas of the base file (from
+  the premise of the reduction metatheory. The last section copies twelve more lemmas
+  of the base file: [isTypeRel_closed], [isType_closed], [isTypeRel_is_open_term],
+  [isType_is_open_term], [declared_inductive_closed_type],
+  [declared_inductive_closed_params], [declared_inductive_closed_constructors],
+  [declared_constructor_closed_type], [declared_constructor_closed_args],
+  [declared_constructor_closed_indices], [closed_cstr_branch_context] and
+  [declared_projection_closed_type]. The reduction lemmas of the base file (from
   [red1_on_free_vars] on) do not mention typing and are not copied. *)
 From Stdlib Require Import Morphisms.
 From MetaRocq.Utils Require Import utils.
@@ -592,9 +595,9 @@ Qed.
   [declared_constructor_closed_indices], [closed_cstr_branch_context] and
   [declared_projection_closed_type]. [wf] becomes [wfE], and [isTypeRel]/[isType]
   become their [typingE] forms [on_type_rel (lift_typing typingE)] and
-  [on_type (lift_typing typingE)]. The statements are base's with those changes;
-  the proofs of the declaration lemmas go through [declared_minductive_closedE] and
-  [declared_inductive_closedE] instead of base's routes. *)
+  [on_type (lift_typing typingE)]. The statements are base's with those changes; the
+  proofs of the three inductive-declaration lemmas go through [declared_minductive_closedE]
+  and [declared_inductive_closedE] instead of base's routes. *)
 
 Lemma isTypeRel_closedE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ.1} {Γ T r} :
   on_type_rel (lift_typing typingE) Σ Γ T r -> closedn #|Γ| T.

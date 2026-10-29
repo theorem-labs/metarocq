@@ -7,9 +7,12 @@
   [Syntax/PCUICInstDefEta]). Each lemma that mentions typing or the well-formedness of
   the environment takes the suffix [E] and states its base twin with the relations
   renamed. It also copies the lemmas of [Conversion/PCUICInstConv] that read typing or
-  [wf]: [inst_case_predicate_contextE], [closedn_ctx_cstr_branch_contextE],
-  [inst_case_branch_context_genE], [inst_case_branch_typeE] and the [well_subst] lemmas
-  [well_subst_extE] to [wf_local_app_instE].
+  [wf] and that this file uses: [inst_case_predicate_contextE],
+  [closedn_ctx_cstr_branch_contextE], [inst_case_branch_context_genE],
+  [inst_case_branch_typeE], [well_subst_extE], [well_subst_UpE], [well_subst_Up'E],
+  [well_subst_appE], [well_subst_app_upE] and [wf_local_app_instE]. The other lemmas of
+  that file that read typing or [wf] ([typed_inst], [inst_wf_local], [red1_inst],
+  [inst_conv], [inst_cumul], [inst_conv_decls], [inst_cumul_decls]) are not copied.
 
   - The conversion rule and the guard's conversion witnesses go through
     [cumulSpecE_instP] and [convSpecE_instP] ([PCUICCumulativitySpecEtaClosure]), whose
