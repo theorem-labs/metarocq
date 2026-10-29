@@ -199,6 +199,9 @@ theories/PCUICContextConversionEta.v
 theories/PCUICWsCumulEtaCtx.v
 theories/PCUICWsCumulEtaCtxTyp.v
 theories/PCUICWsCumulEtaCtxInstances.v
+# Context conversion and context cumulativity of typingE, and their satisfying instances
+theories/Typing/PCUICContextConversionTypEta.v
+theories/PCUICTypingEtaCopy9Instances.v
 # E copies over typingE: typing notions, typing spines, universe instances, contexts, universes, substitution, arities
 theories/PCUICTypingEtaNotions.v
 theories/PCUICGenerationEta.v
