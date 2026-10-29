@@ -211,6 +211,7 @@ theories/PCUICSREtaConvInstances.v
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
 theories/PCUICEtaC1b.v
+theories/PCUICFixWitnessEtaCounter.v
 # Satisfying instances of the hypotheses of the lemmas above
 theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
