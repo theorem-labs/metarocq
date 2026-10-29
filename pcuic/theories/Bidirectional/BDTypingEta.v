@@ -176,7 +176,11 @@ Inductive inferingE `{checker_flags} (Σ : global_env_ext) (Γ : context) : term
   isSortRel ps ci.(ci_relevance) ->
   ctx_inst (checkingE Σ) Γ (pparams p)
       (List.rev mdecl.(ind_params)@[p.(puinst)]) ->
-  implb (isCoFinite mdecl.(ind_finite)) (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn)) = true ->
+  (* FORECAST-ONLY (fc/etak-forecast1): base BDTyping's BET-339 side condition, mirrored;
+     reconciled when F0 lands BET-339 on frac/eta. *)
+  implb (isCoFinite mdecl.(ind_finite))
+    (implb ci.(ci_cofix_nondep)
+       (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn))) = true ->
   cmp_ind_universes Σ ci #|args| u (puinst p) ->
   All2 (JoinE Σ Γ Conv) (firstn (ci_npar ci) args) (pparams p) ->
   (* case_branch_typing *)
@@ -587,7 +591,9 @@ Section BidirectionalInductionE.
           (List.rev mdecl.(ind_params)@[p.(puinst)]) ->
       ctx_inst Pcheck Γ p.(pparams)
           (List.rev (subst_instance p.(puinst) mdecl.(ind_params))) ->
-      implb (isCoFinite mdecl.(ind_finite)) (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn)) = true ->
+      implb (isCoFinite mdecl.(ind_finite))
+        (implb ci.(ci_cofix_nondep)
+           (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn))) = true ->
       cmp_ind_universes Σ ci #|args| u (puinst p) ->
       All2 (JoinE Σ Γ Conv) (firstn (ci_npar ci) args) (pparams p) ->
       (* case_branch_typing *)

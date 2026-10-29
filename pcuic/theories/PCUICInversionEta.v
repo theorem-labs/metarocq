@@ -281,8 +281,11 @@ Section InversionE.
                             (List.rev (subst_instance p.(puinst)
                                                       (ind_params mdecl ,,, ind_indices idecl : context))))
        (scrut_ty : Σ ;;; Γ |-E c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices))
+       (* FORECAST-ONLY (fc/etak-forecast1): base PCUICInversion's BET-339 side condition,
+          mirrored; reconciled when F0 lands BET-339 on frac/eta. *)
        (nondep_cofinite : (isCoFinite mdecl.(ind_finite) ==>
-                           on_free_vars (strengthenP 0 1 xpredT) p.(preturn)) = true)
+                           (ci.(ci_cofix_nondep) ==>
+                            on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) = true)
        (ptm := it_mkLambda_or_LetIn predctx p.(preturn))
        (wf_brs : wf_branches idecl brs)
        (brs_ty :
