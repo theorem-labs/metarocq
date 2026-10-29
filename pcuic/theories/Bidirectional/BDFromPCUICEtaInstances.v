@@ -5,8 +5,10 @@
   **The forecast classes are section variables.** Every lemma of [BDFromPCUICEta] takes the
   forecast classes as premises: the six of [BDToPCUICEta] (T2a's [ValForecastCopy15/16], T1's
   [SRForecastCopy15/16/18], [BDForecastCopy18]; copies 10, 12 and 14 have landed and their
-  classes are gone), [T8Forecast] (the pinned T8 statements) and [BDFromForecastCopy18]. No
-  instance of a class exists before its row lands, so the instances below live in section
+  classes are gone), [BDFromForecastB1] (row B1's [fix_rarg_inductive], the one hypothesis of
+  the proved T8 forms [PCUICEtaT8Probe.T8_*_r] that no landed lemma gives; T8's other
+  hypothesis is [PCUICSREta.subject_reductionE]) and [BDFromForecastCopy18]. No instance of a
+  class exists before its row lands, so the instances below live in section
   [BDFromPCUICEtaInstances], whose [Context] holds the eight classes, and APPLY the lemmas
   there. Everything else each instance needs (the environment, its [wfE], every typing
   derivation) is built here or in the landed instance files ([PCUICInversionEtaInstances],
@@ -24,7 +26,9 @@
     [bidirectional_from_pcuicE_inst] and the fits [T6BDc_typing_infering_fit_inst],
     [T6BDc_typing_checking_fit_inst] run completeness's Cumul case on it: the inferred type
     [lift0 1 (G (λ y. F y))] is related to [G F] by that η step;
-  - through a T8 site, each with an inferred type that is NOT the head form:
+  - through a T8 site, each with an inferred type that is NOT the head form, so each runs the
+    proved T8 theorem ([T8_Sort_r_plug], [T8_Prod_r_plug], [T8_Ind_r_plug]: row B1's
+    [PCUICEtaT8Probe.T8_*_r]) on a real reduction:
     [Sort_r]: [typing_infering_sortE_let_inst] (and [T6BDc_typing_infering_sort_fit_inst]) on
     [let z : Prop := ∀P. P in z : Prop], whose inferred type is the let-in
     [let z := ∀P. P in Prop], reduced to [Prop] by zeta; [Prod_r]:
@@ -48,7 +52,8 @@
     context lemmas on contexts with a let ([bdf_Γz]) or three declarations.
 
   **Rows not inhabited.** None: every lemma of [BDFromPCUICEta] has an instance here, or is a
-  helper that one of these instances runs ([conv_lift_judgmentE], [conv_lift_judgment_univE],
+  helper that one of these instances runs ([T8_Sort_r_plug], [T8_Prod_r_plug],
+  [T8_Ind_r_plug], [conv_lift_judgmentE], [conv_lift_judgment_univE],
   [ws_cumul_ctx_pbE_vass], [is_closed_projection_contextE],
   [untyped_subslet_projection_contextE], the syntactic helpers). Degenerate points: the Fix
   row [typing_inferingE_Fix_inst] ([iv_fix_typed]) has a witness equal to its declared type;
@@ -342,7 +347,7 @@ Section BDFromPCUICEtaInstances.
 (* FORECAST-ONLY: the eight classes of [BDFromPCUICEta]; delete each when its row lands. *)
 Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
   {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-  {T8 : T8Forecast} {BF18 : BDFromForecastCopy18}.
+  {FB1 : BDFromForecastB1} {BF18 : BDFromForecastCopy18}.
 
 (** ** Through an η conversion *)
 
@@ -566,7 +571,7 @@ Print Assumptions mfix_on_ind_conv_redE_cofix.
 Print Assumptions wf_fixpointE_wf_fixpoint_red.
 Print Assumptions wf_cofixpointE_wf_cofixpoint_red.
 Print Assumptions T6BDc_typing_infering_fit.
-Print Assumptions T8Forecast_ind_r_fit.
+Print Assumptions T8_Ind_r_plug_fit.
 Print Assumptions typing_inferingE_eta_inst.
 Print Assumptions typing_infer_indE_beta_inst.
 Print Assumptions wf_fixpointE_wf_fixpoint_red_inst.

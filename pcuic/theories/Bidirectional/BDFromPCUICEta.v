@@ -24,8 +24,8 @@
   Base [conv_infer_sort]/[_prod]/[_ind] ([BDFromPCUIC.v:55-93]) invert [T' ≤ tSort s] (resp.
   [tProd], [mkApps (tInd ..)]) into a REDUCT of [T'] by [ws_cumul_pb_Sort_r_inv] (resp.
   [_Prod_r_inv], [_Ind_r_inv]): base confluence. Over η the raw inversion is false
-  ([A6_F_raw_false]); its typed form is T8. Here each helper takes T8 from the class
-  [T8Forecast] below (the pinned statements' text, [PCUICEtaT8Probe.v]), and discharges the
+  ([A6_F_raw_false]); its typed form is T8. Here each helper takes T8 from the proved theorems
+  of row B1 ([PCUICEtaT8Probe.T8_*_r], through [T8_*_r_plug] below), and discharges the
   premise [Σ ;;; Γ |-E T' : tSort s'] as [lanes/eta/meta/t8-consumers.md] §2 says: the
   helper's typing premise [tyt] (unused in base) gives [wf_localE Σ Γ] ([typingE_wf_local]),
   soundness gives [t :E T'] ([infering_typingE], [BDToPCUICEta]), validity gives [isTypeE T']
@@ -90,9 +90,12 @@
   The lemmas take the forecast classes of [BDToPCUICEta] (T2a's [ValForecastCopy15/16], T1's
   [SRForecastCopy15/16/18], [BDForecastCopy18]) as section [Context]s; they are imported, never
   redefined (copies 10, 12 and 14 have landed and are imported). This file adds two classes:
-  - [T8Forecast]: the three T8 forms the proofs use, with the text of the pinned statements
-    ([PCUICEtaT8Probe.v]); [T8Forecast_*_fit] type-checks each field against its pinned
-    [Definition];
+  - [BDFromForecastB1]: the one hypothesis of the proved T8 forms that no landed lemma gives,
+    [fix_rarg_inductive] (row B1), with the text of [PCUICEtaT8Probe.fix_rarg_inductive_statement];
+    [BDFromForecastB1_fit] and [BDFromForecastB1_of] type-check it against that [Definition]
+    both ways. T8's other hypothesis, E subject reduction, is [PCUICSREta.subject_reductionE],
+    whose own premises are the five classes of section [SREta] (T2a's [ValForecastCopy15/16],
+    T1's [SRForecastCopy15/16/18]), already premises here;
   - [BDFromForecastCopy18]: ONE copy-18 lemma that the Proj case needs and no class has, base
     [projection_cumulative_indices] ([PCUICInductiveInversion.v:3616]), with the base twin's
     statement.
@@ -130,49 +133,33 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 (** ** FORECAST BLOCK *)
 
-(* FORECAST-ONLY: proved by row B1 (PCUICEtaT8Probe.v, typed T8); delete when it lands.
-   Text of each field: [forall (cf : checker_flags) (Σ : global_env_ext),] followed by the body
-   of the pinned [Definition] of [PCUICEtaT8Probe.v] (section [Statements], whose [Context
-   {cf : checker_flags}] is the binder [cf]), verbatim: [t8_sort_r] is [T8_Sort_r_statement]
-   (:111-115), [t8_prod_r] is [T8_Prod_r_statement] (:123-130), [t8_ind_r] is
-   [T8_Ind_r_statement] (:141-148). No binder is implicit, so no implicit status can be lost.
-   [T8Forecast_*_fit] below type-checks each field against its [Definition]. The [_l] forms
-   ([T8_Sort_l_statement], [T8_Prod_l_statement], [T8_Ind_l_statement]) are not used. *)
-Class T8Forecast := {
-  t8_sort_r :
-    forall (cf : checker_flags) (Σ : global_env_ext),
-    forall Γ pb T s s',
-      wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
-      ws_cumul_pbE pb Σ Γ T (tSort s) ->
-      ∑ s'', Σ ;;; Γ ⊢ T ⇝ tSort s'' × compare_sort Σ pb s'' s ;
-  t8_prod_r :
-    forall (cf : checker_flags) (Σ : global_env_ext),
-    forall Γ pb T na dom codom s',
-      wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
-      ws_cumul_pbE pb Σ Γ T (tProd na dom codom) ->
-      ∑ na' dom' codom',
-        [× Σ ;;; Γ ⊢ T ⇝ tProd na' dom' codom', eq_binder_annot na' na,
-           ws_cumul_pbE Conv Σ Γ dom' dom &
-           ws_cumul_pbE pb Σ (Γ ,, vass na dom) codom' codom] ;
-  t8_ind_r :
-    forall (cf : checker_flags) (Σ : global_env_ext),
-    forall Γ pb T ind ui l s',
-      wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
-      ws_cumul_pbE pb Σ Γ T (mkApps (tInd ind ui) l) ->
-      ∑ ui' l',
-        [× Σ ;;; Γ ⊢ T ⇝ mkApps (tInd ind ui') l',
-           cmp_global_instance_finst Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui' ui &
-           ws_cumul_pbE_terms Σ Γ l' l]
+(* The one hypothesis of the proved T8 forms ([PCUICEtaT8Probe.T8_Sort_r], [T8_Prod_r], [T8_Ind_r],
+   section [T8Assembly]) that no landed lemma gives. Text of the field: [forall (cf : checker_flags)
+   (Σ : global_env_ext) (wfΣ : wfE Σ),] (the [Context] of section [TypedSafe] of
+   [PCUICEtaT8Probe.v], where the statement is defined, and of section [T8Assembly], where [fri]
+   is assumed) followed by the body of [PCUICEtaT8Probe.fix_rarg_inductive_statement]
+   ([PCUICEtaT8Probe.v:885-890]), verbatim. No binder is implicit, so no implicit status can be
+   lost. [BDFromForecastB1_fit] below type-checks the field against the [Definition], and
+   [BDFromForecastB1_of] the [Definition] against the field. *)
+(* FORECAST-ONLY: proved by row B1 (fix_rarg_inductive, PCUICEtaT8Probe / copy 14-15); delete when it lands *)
+Class BDFromForecastB1 := {
+  fix_rarg_inductiveE_fc :
+    forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ),
+    forall Γ mfix idx args narg fn a T,
+      Σ ;;; Γ |-E mkApps (tFix mfix idx) args : T ->
+      unfold_fix mfix idx = Some (narg, fn) ->
+      nth_error args narg = Some a ->
+      ∑ A ind u l, (Σ ;;; Γ |-E a : A) × ws_cumul_pbE Cumul Σ Γ A (mkApps (tInd ind u) l)
 }.
 
-(** Each field is its pinned statement: the type of the field at [cf] and [Σ] is the
-    [Definition] of [PCUICEtaT8Probe.v] at [cf] and [Σ]. *)
-Definition T8Forecast_sort_r_fit {T8 : T8Forecast} (cf : checker_flags) (Σ : global_env_ext) :
-  PCUICEtaT8Probe.T8_Sort_r_statement Σ := t8_sort_r cf Σ.
-Definition T8Forecast_prod_r_fit {T8 : T8Forecast} (cf : checker_flags) (Σ : global_env_ext) :
-  PCUICEtaT8Probe.T8_Prod_r_statement Σ := t8_prod_r cf Σ.
-Definition T8Forecast_ind_r_fit {T8 : T8Forecast} (cf : checker_flags) (Σ : global_env_ext) :
-  PCUICEtaT8Probe.T8_Ind_r_statement Σ := t8_ind_r cf Σ.
+(** The field is the pinned statement, both ways. *)
+Definition BDFromForecastB1_fit {FB1 : BDFromForecastB1} (cf : checker_flags) (Σ : global_env_ext)
+  (wfΣ : wfE Σ) : @PCUICEtaT8Probe.fix_rarg_inductive_statement cf Σ :=
+  fix_rarg_inductiveE_fc cf Σ wfΣ.
+Definition BDFromForecastB1_of
+  (h : forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ),
+       @PCUICEtaT8Probe.fix_rarg_inductive_statement cf Σ) : BDFromForecastB1 :=
+  {| fix_rarg_inductiveE_fc := h |}.
 
 (* The braces in the statement record the implicit status of the base twin; they are at the
    head of the field's type, where Rocq keeps them on the projection. *)
@@ -256,11 +243,69 @@ Qed.
 Section BDFromPCUICEta.
 
 (* FORECAST-ONLY: one premise per class: T2a's two ([PCUICValidityEta]), T1's three
-   ([PCUICSREta]), [BDToPCUICEta]'s one, and this file's two; delete each when its copy
-   lands. *)
+   ([PCUICSREta]), [BDToPCUICEta]'s one, and this file's two (row B1's [fix_rarg_inductive],
+   copy 18's [projection_cumulative_indices]); delete each when its row lands. *)
 Context {V15 : ValForecastCopy15} {V16 : ValForecastCopy16}
   {F15 : SRForecastCopy15} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18} {B18 : BDForecastCopy18}
-  {T8 : T8Forecast} {BF18 : BDFromForecastCopy18}.
+  {FB1 : BDFromForecastB1} {BF18 : BDFromForecastCopy18}.
+
+(** ** Typed T8, proved (row B1)
+
+  The three T8 forms the proofs use. Each is the proved theorem [PCUICEtaT8Probe.T8_*_r]
+  (section [T8Assembly]) with its two hypotheses discharged: [subject_reduction] by
+  [PCUICSREta.subject_reductionE] (the same compiled type: [T1_subject_reduction_fit], the
+  checker contract's text), and [fri] by the forecast field [fix_rarg_inductiveE_fc]. The
+  section premise [wfΣ] of [T8Assembly] and the [wfE Σ] of [fri] are both the statement's own
+  [wfE Σ] premise ([t8-assembly-review.md] N1). The type of each is the body of the pinned
+  [Definition] of [PCUICEtaT8Probe.v] (section [Statements]) under [forall (cf : checker_flags)
+  (Σ : global_env_ext),], verbatim: [T8_Sort_r_plug] is [T8_Sort_r_statement] (:121-125),
+  [T8_Prod_r_plug] is [T8_Prod_r_statement] (:133-140), [T8_Ind_r_plug] is
+  [T8_Ind_r_statement] (:151-158). [T8_*_r_plug_fit] type-checks each against its
+  [Definition]. The [_l] forms are not used. *)
+Definition T8_Sort_r_plug :
+    forall (cf : checker_flags) (Σ : global_env_ext),
+    forall Γ pb T s s',
+      wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
+      ws_cumul_pbE pb Σ Γ T (tSort s) ->
+      ∑ s'', Σ ;;; Γ ⊢ T ⇝ tSort s'' × compare_sort Σ pb s'' s :=
+  fun cf Σ Γ pb T s s' wfΣ =>
+    @PCUICEtaT8Probe.T8_Sort_r cf Σ wfΣ (fix_rarg_inductiveE_fc cf Σ wfΣ)
+      (PCUICSREta.subject_reductionE (cf := cf)) Γ pb T s s' wfΣ.
+
+Definition T8_Prod_r_plug :
+    forall (cf : checker_flags) (Σ : global_env_ext),
+    forall Γ pb T na dom codom s',
+      wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
+      ws_cumul_pbE pb Σ Γ T (tProd na dom codom) ->
+      ∑ na' dom' codom',
+        [× Σ ;;; Γ ⊢ T ⇝ tProd na' dom' codom', eq_binder_annot na' na,
+           ws_cumul_pbE Conv Σ Γ dom' dom &
+           ws_cumul_pbE pb Σ (Γ ,, vass na dom) codom' codom] :=
+  fun cf Σ Γ pb T na dom codom s' wfΣ =>
+    @PCUICEtaT8Probe.T8_Prod_r cf Σ wfΣ (fix_rarg_inductiveE_fc cf Σ wfΣ)
+      (PCUICSREta.subject_reductionE (cf := cf)) Γ pb T na dom codom s' wfΣ.
+
+Definition T8_Ind_r_plug :
+    forall (cf : checker_flags) (Σ : global_env_ext),
+    forall Γ pb T ind ui l s',
+      wfE Σ -> Σ ;;; Γ |-E T : tSort s' ->
+      ws_cumul_pbE pb Σ Γ T (mkApps (tInd ind ui) l) ->
+      ∑ ui' l',
+        [× Σ ;;; Γ ⊢ T ⇝ mkApps (tInd ind ui') l',
+           cmp_global_instance_finst Σ.1 (compare_universe Σ) pb (IndRef ind) #|l| ui' ui &
+           ws_cumul_pbE_terms Σ Γ l' l] :=
+  fun cf Σ Γ pb T ind ui l s' wfΣ =>
+    @PCUICEtaT8Probe.T8_Ind_r cf Σ wfΣ (fix_rarg_inductiveE_fc cf Σ wfΣ)
+      (PCUICSREta.subject_reductionE (cf := cf)) Γ pb T ind ui l s' wfΣ.
+
+(** Each type is its pinned statement: the type at [cf] and [Σ] is the [Definition] of
+    [PCUICEtaT8Probe.v] at [cf] and [Σ]. *)
+Definition T8_Sort_r_plug_fit (cf : checker_flags) (Σ : global_env_ext) :
+  @PCUICEtaT8Probe.T8_Sort_r_statement cf Σ := T8_Sort_r_plug cf Σ.
+Definition T8_Prod_r_plug_fit (cf : checker_flags) (Σ : global_env_ext) :
+  @PCUICEtaT8Probe.T8_Prod_r_statement cf Σ := T8_Prod_r_plug cf Σ.
+Definition T8_Ind_r_plug_fit (cf : checker_flags) (Σ : global_env_ext) :
+  @PCUICEtaT8Probe.T8_Ind_r_statement cf Σ := T8_Ind_r_plug cf Σ.
 
 Lemma isTypeE_mkApps_Ind_head_arity {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
   {Γ ind u args} :
@@ -300,7 +345,7 @@ Proof.
   intros tyt (T'&inf&Cumt).
   have wfΓ := typingE_wf_local tyt.
   destruct (validityE (infering_typingE Σ Γ t T' wfΣ wfΓ inf)) as (_ & s1 & tyT' & _).
-  destruct (t8_sort_r _ Σ Γ Cumul T' s s1 wfΣ tyT' Cumt) as (s'' & r & le).
+  destruct (T8_Sort_r_plug _ Σ Γ Cumul T' s s1 wfΣ tyT' Cumt) as (s'' & r & le).
   exists s''. split; [|exact le].
   econstructor ; tea.
   now apply closed_red_red.
@@ -316,7 +361,7 @@ Proof.
   intros tyt (T'&inf&Cumt).
   have wfΓ := typingE_wf_local tyt.
   destruct (validityE (infering_typingE Σ Γ t T' wfΣ wfΓ inf)) as (_ & s1 & tyT' & _).
-  destruct (t8_prod_r _ Σ Γ Cumul T' na A B s1 wfΣ tyT' Cumt) as (na' & A' & B' & [r ena hA hB]).
+  destruct (T8_Prod_r_plug _ Σ Γ Cumul T' na A B s1 wfΣ tyT' Cumt) as (na' & A' & B' & [r ena hA hB]).
   exists na', A', B'. split; tea.
   2: now apply eq_binder_annot_sym.
   econstructor ; tea.
@@ -336,7 +381,7 @@ Proof.
   have wfΓ := typingE_wf_local tyt.
   destruct (validityE (infering_typingE Σ Γ t T' wfΣ wfΓ inf)) as (_ & s1 & tyT' & _).
   pose proof (isTypeE_mkApps_Ind_head_arity wfΓ (validityE tyt)) as harity.
-  destruct (t8_ind_r _ Σ Γ Cumul T' ind ui args s1 wfΣ tyT' Cumt) as (ui' & args' & [r hcmp hargs]).
+  destruct (T8_Ind_r_plug _ Σ Γ Cumul T' ind ui args s1 wfΣ tyT' Cumt) as (ui' & args' & [r hcmp hargs]).
   exists ui', args'. split; tea.
   - econstructor ; tea.
     now apply closed_red_red.
@@ -413,7 +458,7 @@ Section FixWitnessE.
     - (* an assumption: T8 [Prod_r] at [Conv] *)
       have hT1 : ws_cumul_pbE Conv Σ Γ T (tProd na A (it_mkProd_or_LetIn ctx0 concl)) := hT.
       destruct isT as (_ & s & tyT & _).
-      destruct (t8_prod_r _ Σ Γ Conv T na A (it_mkProd_or_LetIn ctx0 concl) s wfΣ tyT hT1)
+      destruct (T8_Prod_r_plug _ Σ Γ Conv T na A (it_mkProd_or_LetIn ctx0 concl) s wfΣ tyT hT1)
         as (na' & A' & B' & [r ena hA hB]).
       assert (isP : isTypeE Σ Γ (tProd na' A' B')) by exact (isType_redE (has_sort_isTypeE _ tyT) (clrel_rel r)).
       destruct (fst (isType_tProdE (wfΣ := wfΣ)) isP) as [isA' isB'].
@@ -422,7 +467,7 @@ Section FixWitnessE.
       + (* the recursive argument: T8 [Ind_r] at [Conv] on the typed domain *)
         noconf hnth. cbn in hargd. subst A.
         destruct isA' as (_ & sA & tyA' & _).
-        destruct (t8_ind_r _ Σ Γ Conv A' ind u args sA wfΣ tyA' hA) as (u' & l' & [rA _ _]).
+        destruct (T8_Ind_r_plug _ Σ Γ Conv A' ind u args sA wfΣ tyA' hA) as (u' & l' & [rA _ _]).
         exists [], na', u', l', B'. split; [|constructor|reflexivity].
         eapply red_trans; [exact (clrel_rel r)|].
         apply red_prod_l. exact (clrel_rel rA).
@@ -450,7 +495,7 @@ Section FixWitnessE.
     induction ctx as [|d ctx0 IH] using ctx_length_rev_ind.
     { intros Γ T ind u args isT hT. cbn in hT.
       destruct isT as (_ & s & tyT & _).
-      destruct (t8_ind_r _ Σ Γ Conv T ind u args s wfΣ tyT hT) as (u' & l' & [r _ _]).
+      destruct (T8_Ind_r_plug _ Σ Γ Conv T ind u args s wfΣ tyT hT) as (u' & l' & [r _ _]).
       exists [], u', l'. exact (clrel_rel r). }
     intros Γ T ind u args isT hT.
     pose proof (wfE_ClosedBodies Σ (wfΣ := wfΣ)) as cbΣ.
@@ -465,7 +510,7 @@ Section FixWitnessE.
       now rewrite subst_context_length.
     - have hT1 : ws_cumul_pbE Conv Σ Γ T (tProd na A (it_mkProd_or_LetIn ctx0 (mkApps (tInd ind u) args))) := hT.
       destruct isT as (_ & s & tyT & _).
-      destruct (t8_prod_r _ Σ Γ Conv T na A (it_mkProd_or_LetIn ctx0 (mkApps (tInd ind u) args)) s wfΣ tyT hT1)
+      destruct (T8_Prod_r_plug _ Σ Γ Conv T na A (it_mkProd_or_LetIn ctx0 (mkApps (tInd ind u) args)) s wfΣ tyT hT1)
         as (na' & A' & B' & [r ena hA hB]).
       assert (isP : isTypeE Σ Γ (tProd na' A' B')) by exact (isType_redE (has_sort_isTypeE _ tyT) (clrel_rel r)).
       destruct (fst (isType_tProdE (wfΣ := wfΣ)) isP) as [isA' isB'].
