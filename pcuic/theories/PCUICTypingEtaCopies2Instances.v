@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * Satisfying instances of the hypotheses of [PCUICGenerationEta],
-    [Typing/PCUICUnivSubstitutionTypEta], [PCUICWfUniversesEta],
+(** * Satisfying instances of the hypotheses of [PCUICTypingEtaNotions],
+    [PCUICGenerationEta], [Typing/PCUICUnivSubstitutionTypEta], [PCUICWfUniversesEta],
     [PCUICSubstitutionEta], [PCUICContextsEta] and [PCUICAritiesEta]
 
   Each lemma of these files that has a premise is applied here to a concrete
@@ -1080,3 +1080,14 @@ Definition it_mkProd_or_LetIn_wf_localE_let_inst :=
 Definition isType_it_mkProd_or_LetIn_wf_localE_inst :=
   @isType_it_mkProd_or_LetIn_wf_localE _ si_Σ si_wfE [] c2_x (tRel 0) c2_isT_False.
 Definition isType_weakenE_inst := @isType_weakenE _ si_Σ si_wfE fi_Γ1 ci_False ci_wf_Γ1 c2_isT_False.
+
+(** ** [PCUICTypingEtaNotions]
+
+  [Type@{l0}] in [up_Σp] (a relevant type of [Type@{l0+1}]) and [I (∀P:Prop. P)] in
+  [si_Σ] (a type of [Prop]). *)
+
+Definition isTypeRelE_isTypeE_inst := isTypeRelE_isTypeE _ _ _ _ up_isTypeRel_s0.
+Definition isTypeE_welltypedE_inst := isTypeE_welltypedE c2_isT_I_A.
+Definition isTypeRelE_welltypedE_inst := isTypeRelE_welltypedE up_isTypeRel_s0.
+Definition has_sort_isTypeE_inst := has_sort_isTypeE _ c2_I_A_typed.
+Definition has_sort_isTypeRelE_inst := has_sort_isTypeRelE (Sort.super up_s0) Relevant eq_refl up_s0_typed.
