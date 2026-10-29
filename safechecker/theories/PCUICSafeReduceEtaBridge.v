@@ -23,8 +23,9 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICPosition
      PCUICNormal PCUICReduction PCUICSafeLemmata PCUICWellScopedCumulativity
-     PCUICConversion PCUICClosedBodies PCUICTypingEta PCUICSNEta PCUICClosedTypEta.
+     PCUICConversion PCUICClosedBodies PCUICTypingEta PCUICSN PCUICSNEta PCUICClosedTypEta.
 From MetaRocq.PCUIC Require PCUICPositionEta.
+From MetaRocq.PCUIC Require PCUICCumulativitySpecEtaClosureInstances PCUICEtaA6Instances.
 From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta PCUICWfEnvEta.
 
 (** ** The boundary invariant: every stack crossing the boundary is [App_l]-only *)
@@ -126,30 +127,6 @@ Proof.
   unfold PCUICPosition.zipp, PCUICPositionEta.zipp.
   rewrite PCUICPosition.decompose_stack_appstack, PCUICPositionEta.decompose_stack_appstack.
   cbn. rewrite !app_nil_r. reflexivity.
-Qed.
-
-(** The two cases of the machine's order [R] ([PCUICSafeReduceEta.R]), without the
-    dependent pair: a strict reduction of the zipped term, or the same term and a
-    deeper position. *)
-Lemma dlexprod_posR_cases {A} {B : A -> Type} (leA : A -> A -> Prop)
-  (f : forall x, B x -> PCUICPosition.position) (p q : sigT B) :
-  dlexprod leA (fun x (a b : B x) => PCUICPosition.positionR (f x a) (f x b)) p q ->
-  leA (projT1 p) (projT1 q) \/
-  (projT1 p = projT1 q /\ PCUICPosition.positionR (f _ (projT2 p)) (f _ (projT2 q))).
-Proof.
-  intros h. destruct h as [x x' y y' h|x y y' h].
-  - left. exact h.
-  - right. split; [reflexivity|exact h].
-Qed.
-
-Lemma R_cases {cf : checker_flags} Σ Γ u v : R Σ Γ u v ->
-  cored Σ Γ (zip u) (zip v) \/
-  (zip u = zip v /\
-   PCUICPosition.positionR (PCUICPosition.stack_position (snd u))
-                           (PCUICPosition.stack_position (snd v))).
-Proof.
-  unfold R, R_aux. intros h.
-  exact (dlexprod_posR_cases (cored Σ Γ) (fun t (p : pos t) => proj1_sig p) _ _ h).
 Qed.
 
 (** ** The E environment facts, proved *)
@@ -356,3 +333,99 @@ Section BridgeE.
   Qed.
 
 End BridgeE.
+
+(** ** Concrete satisfying instances of the fields of [reduce_factsE] at E
+
+    FRAC convention ([PCUICEtaFracInstances]): each field specialised to a concrete
+    environment and concrete closed terms, every premise proved (the [welltypedE] ones
+    by [typing_incl_E] of a base derivation, [wf_extE] by [wf_ext_incl_E], closed
+    bodies by [wfE_ClosedBodies]) and the field's conclusion proved there directly,
+    without the field. Environments: [si_Σ] ([Inductive I (A : Prop) : Prop := c : I A],
+    [PCUICCumulativitySpecEtaClosureInstances]) and, for the constant field, the
+    one-axiom [sa_Σ] ([PCUICEtaA6Instances]). Each lemma states [premises /\ conclusion].
+    The four fields concluding [False] ([rtf_app_sort], [rtf_app_prod], [rtf_app_prim],
+    [rtf_prim_overapplied]) have no such instance by design (their premise is
+    unsatisfiable); see their argument in [PCUICSafeReduceEta.ReduceTypedFacts]. *)
+Module SI := MetaRocq.PCUIC.PCUICCumulativitySpecEtaClosureInstances.
+Module SA := MetaRocq.PCUIC.PCUICEtaA6Instances.
+
+Section FracInstancesE.
+  #[local] Existing Instance default_checker_flags.
+
+  Lemma si_wf_ext : wf_ext SI.si_Σ.
+  Proof. split; [exact SI.si_wf|exact SI.si_on_udecl]. Qed.
+
+  Lemma si_wf_extE : wf_extE SI.si_Σ.
+  Proof. exact (wf_ext_incl_E si_wf_ext). Qed.
+
+  Lemma si_cbE : ClosedBodies SI.si_Σ.
+  Proof. exact (@wfE_ClosedBodies _ SI.si_Σ (fst si_wf_extE)). Qed.
+
+  Lemma si_P_typed : SI.si_Σ ;;; [] |- SI.si_P : tSort (Sort.super sProp).
+  Proof. apply type_Sort; [constructor|cbn; trivial]. Qed.
+
+  Lemma si_P_wtE : welltypedE SI.si_Σ [] SI.si_P.
+  Proof. econstructor. exact (typing_incl_E (Σ := SI.si_Σ) SI.si_wf si_P_typed). Qed.
+
+  Definition si_Γ1 : context := [vass SI.si_na SI.si_P].
+
+  Lemma si_wf_Γ1 : wf_local SI.si_Σ si_Γ1.
+  Proof.
+    apply localenv_cons_abs; [constructor|].
+    split; [exact tt|]. exists (Sort.super sProp).
+    split; [exact si_P_typed|]. split; [exact I|reflexivity].
+  Qed.
+
+  (** [rtf_wt_red] (T1): [Prop : Type] reduces to itself. *)
+  Lemma rtf_wt_red_inst :
+    wf_extE SI.si_Σ × welltypedE SI.si_Σ [] SI.si_P × red SI.si_Σ [] SI.si_P SI.si_P ×
+    welltypedE SI.si_Σ [] SI.si_P.
+  Proof.
+    split; [exact si_wf_extE|]. split; [exact si_P_wtE|]. split; [reflexivity|exact si_P_wtE].
+  Qed.
+
+  (** [rtf_context] (T6), on the empty stack. *)
+  Lemma rtf_context_inst :
+    wf_extE SI.si_Σ × welltypedE SI.si_Σ [] (zip (SI.si_P, @nil stack_entry)) ×
+    welltypedE SI.si_Σ ([] ,,, stack_context (snd (SI.si_P, @nil stack_entry)))
+      (fst (SI.si_P, @nil stack_entry)).
+  Proof.
+    split; [exact si_wf_extE|]. split; exact si_P_wtE.
+  Qed.
+
+  (** [rtf_rel] (T6): a variable of [x : Prop]. *)
+  Lemma rtf_rel_inst :
+    wf_extE SI.si_Σ × welltypedE SI.si_Σ si_Γ1 (tRel 0) × nth_error si_Γ1 0 <> None.
+  Proof.
+    split; [exact si_wf_extE|]. split.
+    - econstructor. apply (typing_incl_E (Σ := SI.si_Σ) SI.si_wf).
+      eapply type_Rel; [exact si_wf_Γ1|reflexivity].
+    - discriminate.
+  Qed.
+
+  Lemma sa_wf_ext : wf_ext SA.sa_Σ.
+  Proof. split; [exact SA.sa_wf|exact SI.si_on_udecl]. Qed.
+
+  (** [rtf_const] (T6): the axiom [A : Prop] of [sa_Σ]. *)
+  Lemma rtf_const_inst :
+    wf_extE SA.sa_Σ × welltypedE SA.sa_Σ [] (tConst SA.sa_kn []) ×
+    exists decl, declared_constant SA.sa_Σ SA.sa_kn decl.
+  Proof.
+    split; [exact (wf_ext_incl_E sa_wf_ext)|]. split.
+    - econstructor. apply (typing_incl_E (Σ := SA.sa_Σ) SA.sa_wf).
+      eapply type_Const; [constructor|exact SA.sa_declared|reflexivity].
+    - exists SA.sa_cb. exact SA.sa_declared.
+  Qed.
+
+  (** [rtf_whnf_red_inv] (untyped, W-c): [Prop] is in weak-head normal form and its
+      only reduct is itself. *)
+  Lemma rtf_whnf_red_inv_inst :
+    wf_extE SI.si_Σ × whnf RedFlags.default SI.si_Σ [] SI.si_P ×
+    ∥ SI.si_Σ ;;; [] ⊢ SI.si_P ⇝ SI.si_P ∥ × ∥ whnf_red SI.si_Σ [] SI.si_P SI.si_P ∥.
+  Proof.
+    split; [exact si_wf_extE|]. split; [exact (whnf_sort _ _ _ _)|]. split.
+    - constructor. apply into_closed_red; [reflexivity|reflexivity|reflexivity].
+    - constructor. exact (whnf_red_tSort _ _ _).
+  Qed.
+
+End FracInstancesE.

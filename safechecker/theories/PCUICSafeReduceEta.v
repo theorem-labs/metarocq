@@ -124,7 +124,6 @@ Class ReduceEnvFacts {cf : checker_flags}
     lookup_env Σ c = Some (ConstantDecl cb) -> prim_op_of Σ c = Some op ->
     prim_op_denote op ls = Some r -> exists v, readback Σ (po_shape (info op)) r = Some v
 }.
-#[export] Hint Mode ReduceEnvFacts - + - : typeclass_instances.
 
 (** Facts PROVED at base ([reduce_typed_facts_base] below); at E they are the named
     hypothesis [reduce_factsE] of [PCUICSafeReduceEtaBridge]. The plan row each one
@@ -155,11 +154,26 @@ Class ReduceTypedFacts {cf : checker_flags}
   (* inversion of a cofixpoint (T6) *)
   rtf_cofix : forall Σ Γ mfix idx, wfP Σ -> wt Σ Γ (tCoFix mfix idx) ->
     nth_error mfix idx <> None;
-  (* a sort, a product, a primitive value is not applied (T6, classification) *)
+  (* a sort, a product, a primitive value is not applied (T6, classification).
+     These four fields conclude [False], so their premise is unsatisfiable by design and
+     no concrete instance with a proved premise exists (lane lead's decision,
+     2026-10-29). Satisfying instance: [reduce_typed_facts_base] at base [welltyped].
+     Not a known-false form: each is a TYPED negative classification (its premise is
+     [wt] of the applied term), not a head shape inferred from untyped E-convertibility,
+     so it is not the closed-only [conv_witnessE] form that ArityLane's η-expanded-domain
+     witness refutes. Over [typingE] the applied head would need a product type up to
+     [cumulSpecE]; the E cumulativity does not relate sorts or products to each other
+     ([ws_cumul_pbE_Sort_Prod_inv], [ws_cumul_pbE_Prod_Sort_inv], [ws_cumul_pbE_Sort_l_inv],
+     [ws_cumul_pbE_Prod_l_inv], [PCUICEtaA6.v:176-316]), and η only adds or removes λs, so
+     it relates neither a sort nor a primitive type to a product. *)
   rtf_app_sort : forall Σ Γ s a, wfP Σ -> wt Σ Γ (tApp (tSort s) a) -> False;
   rtf_app_prod : forall Σ Γ na A B a, wfP Σ -> wt Σ Γ (tApp (tProd na A B) a) -> False;
   rtf_app_prim : forall Σ Γ p a, wfP Σ -> wt Σ Γ (tApp (tPrim p) a) -> False;
-  (* a registered operation is not applied beyond its arity (T6, prim-ops) *)
+  (* a registered operation is not applied beyond its arity (T6, prim-ops). Concludes
+     [False]; instance and not-known-false argument as for the three fields above: a
+     typed negative classification (the saturated application has the operation's
+     result type, an inductive or the int type constant, never a product); the E
+     cumulativity relates neither to a product ([PCUICEtaA6.v:176-316]). *)
   rtf_prim_overapplied : forall Σ Γ c u op args, wfP Σ ->
     prim_op_of Σ c = Some op -> (arity op < #|args|)%nat ->
     wt Σ Γ (mkApps (tConst c u) args) -> False;
@@ -203,7 +217,6 @@ Class ReduceTypedFacts {cf : checker_flags}
   rtf_whnf_red_inv : forall Σ Γ t t', wfP Σ ->
     whnf RedFlags.default Σ Γ t -> Σ ;;; Γ ⊢ t ⇝ t' -> ∥ whnf_red Σ Γ t t' ∥
 }.
-#[export] Hint Mode ReduceTypedFacts - + - : typeclass_instances.
 
 (** *** The base instances
 
@@ -217,7 +230,9 @@ Class ReduceTypedFacts {cf : checker_flags}
     classification facts over [typingE] (rows T0/T6) and the [ClosedBodies] port of
     [whnf_red_inv] (row W-c) remain hypotheses ([PCUICSafeReduceEtaBridge.reduce_factsE])
     until those rows land. *)
-#[export] Instance reduce_env_facts_base {cf : checker_flags} : ReduceEnvFacts welltyped wf_ext.
+(* Lemmas, not global instances: inside the abstract sections the only instance is the
+   section's own, so instance search always picks it. *)
+Lemma reduce_env_facts_base {cf : checker_flags} : ReduceEnvFacts welltyped wf_ext.
 Proof.
   constructor.
   - intros Σ [wfΣ _]. sq. exact (@wf_ClosedBodies _ Σ wfΣ).
@@ -227,7 +242,7 @@ Proof.
     destruct (prim_op_readback_on_global_env wfΣ hl hop hden) as [v hv]. now exists v.
 Qed.
 
-#[export] Instance reduce_typed_facts_base {cf : checker_flags} : ReduceTypedFacts welltyped wf_ext.
+Lemma reduce_typed_facts_base {cf : checker_flags} : ReduceTypedFacts welltyped wf_ext.
 Proof.
   constructor.
   - exact wt_red_base.
@@ -423,6 +438,47 @@ Section Measure.
   Qed.
 
 End Measure.
+
+(** The two cases of [R], without the dependent pair: a strict reduction of the
+    zipped term, or the same term and a deeper position. *)
+Lemma dlexprod_posR_cases {A} {B : A -> Type} (leA : A -> A -> Prop)
+  (f : forall x, B x -> position) (p q : sigT B) :
+  dlexprod leA (fun x (a b : B x) => positionR (f x a) (f x b)) p q ->
+  leA (projT1 p) (projT1 q) \/
+  (projT1 p = projT1 q /\ positionR (f _ (projT2 p)) (f _ (projT2 q))).
+Proof.
+  intros h. destruct h as [x x' y y' h|x y y' h].
+  - left. exact h.
+  - right. split; [reflexivity|exact h].
+Qed.
+
+Lemma R_cases Σ Γ u v : R Σ Γ u v ->
+  cored Σ Γ (zip u) (zip v) \/
+  (zip u = zip v /\ positionR (stack_position (snd u)) (stack_position (snd v))).
+Proof.
+  unfold R, R_aux. intros h.
+  exact (dlexprod_posR_cases (cored Σ Γ) (fun t (p : pos t) => proj1_sig p) _ _ h).
+Qed.
+
+(** A zipped term equal to a variable has the empty stack. *)
+Lemma zipc_tRel_inv u ρ n : zipc u ρ = tRel n -> ρ = [] /\ u = tRel n.
+Proof.
+  induction ρ as [|se ρ ih] in u |- *; cbn; intros e.
+  - split; [reflexivity|exact e].
+  - destruct (ih _ e) as [-> e']. destruct se; cbn in e'; discriminate.
+Qed.
+
+(** A variable bound by an assumption has no [red1] step. *)
+Lemma cored_Rel_assum (Σ : global_env) Γ n decl v :
+  nth_error Γ n = Some decl -> decl_body decl = None -> cored Σ Γ v (tRel n) -> False.
+Proof.
+  intros hn hb hc. remember (tRel n) as u eqn:eu.
+  induction hc as [u v r|u v w hc ih r] in eu |- *.
+  - subst u. depelim r; try solve_discr.
+    match goal with H : option_map _ _ = _ |- _ =>
+      rewrite hn in H; cbn in H; rewrite hb in H; discriminate H end.
+  - exact (ih eu).
+Qed.
 
 (* Added by Julien Forest on 13/11/20 in Rocq stdlib, adapted to subset case by M. Sozeau *)
 Section Acc_sidecond_generator.
@@ -937,7 +993,7 @@ Corollary R_Acc_aux :
     rewrite (abstract_readback_correct Σ wfΣ) in eqv.
     rewrite (abstract_prim_op_of_correct X c Σ wfΣ) in eqop.
     pose proof (abstract_env_lookup_correct' X c wfΣ) as hl. rewrite <- eq in hl.
-    destruct (ref_prim_readback Σ _ _ _ _ _ wΣ hl (eq_sym eqop) (eq_sym eqd)) as [v hv].
+    destruct (ref_prim_readback (wt := wt) Σ _ _ _ _ _ wΣ hl (eq_sym eqop) (eq_sym eqd)) as [v hv].
     rewrite hv in eqv. discriminate eqv.
   Qed.
   (* The [Prim_app] frame: the argument under evaluation is in the same term, to
@@ -1595,26 +1651,6 @@ Corollary R_Acc_aux :
     rewrite 2!stack_context_appstack. reflexivity.
   Qed.
 
-  (** A variable bound by an assumption is in normal form: the machine returns it with
-      the empty stack (plan I7 rev 13 [reduce_stack_vass], for any [wt]). The machine's
-      [tRel] arm gives [give (tRel c) π] when the declaration has no body. *)
-  Lemma reduce_stack_Rel_assum Γ n decl h :
-    nth_error Γ n = Some decl -> decl_body decl = None ->
-    reduce_stack Γ (tRel n) [] h = (tRel n, []).
-  Proof using Type.
-    intros hn hb.
-    refine (reduce_stack_prop Γ (tRel n) [] h
-      (fun x y => x = (tRel n, []) -> y = (tRel n, [])) _ eq_refl).
-    clear h. intros t π h aux _.
-    apply_funelim (_reduce_stack Γ t π h aux); clear -hn hb.
-    all: intros.
-    all: try match goal with
-      | e0 : (tRel _, _) = (tRel _, []) |- _ => injection e0 as -> ->
-      end.
-    all: cbn in *.
-    all: first [ congruence | reflexivity ].
-  Qed.
-
   Definition isred (t : term * stack) :=
     isApp (fst t) = false /\
     (isLambda (fst t) -> isStackApp (snd t) = false).
@@ -1710,6 +1746,24 @@ Corollary R_Acc_aux :
     specialize (ih _ _ hR).
     set (r := reduce_stack_full _ _ _ _) in *.
     eapply (ih _ (proj2_sig r)). clearbody r. now destruct r.
+  Qed.
+
+  (** A variable bound by an assumption is in normal form: the machine returns it with
+      the empty stack (plan I7 rev 13 [reduce_stack_vass], for any [wt]). From
+      [reduce_stack_Req]: a variable without a body has no [red1] step, and a zipped
+      term equal to a variable has the empty stack. *)
+  Lemma reduce_stack_Rel_assum Γ n decl h :
+    nth_error Γ n = Some decl -> decl_body decl = None ->
+    reduce_stack Γ (tRel n) [] h = (tRel n, []).
+  Proof using Type.
+    intros hn hb.
+    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
+    pose proof (reduce_stack_Req Σ wfΣ Γ (tRel n) [] h) as hr. revert hr.
+    destruct (reduce_stack Γ (tRel n) [] h) as [u ρ]. intros hr.
+    destruct hr as [heq | hR]; [exact heq|].
+    exfalso. apply R_cases in hR as [hc | [hz hp]].
+    - cbn in hc. exact (cored_Rel_assum Σ Γ n decl _ hn hb hc).
+    - cbn in hz. destruct (zipc_tRel_inv u ρ n hz) as [-> ->]. cbn in hp. inversion hp.
   Qed.
 
   Lemma decompose_stack_at_appstack_None l s n :
@@ -1872,7 +1926,7 @@ Corollary R_Acc_aux :
               symmetry in hπ; apply decompose_stack_eq in hπ; subst π;
               cbn in hwt'; rewrite zipc_appstack in hwt'; zip fold in hwt';
               apply wt_context in hwt'; [|exact wΣ]; cbn in hwt';
-              eapply (rtf_prim_overapplied _ _ _ _ _ _ wΣ
+              eapply (rtf_prim_overapplied (wt := wt) _ _ _ _ _ _ wΣ
                         (eq_trans (eq_sym (abstract_prim_op_of_correct X _ _ wfΣ)) (eq_sym hop)));
               [|exact hwt'];
               apply (f_equal (@length _)) in hsk; rewrite length_skipn in hsk; cbn in hsk; lia
@@ -2061,7 +2115,7 @@ Corollary R_Acc_aux :
       | hw : whnf ?fl ?S ?G (mkApps ?u ?l) |- _ =>
         assert (hwne : ∥ whne fl S G (mkApps u l) ∥)
       end.
-      { eapply rtf_fix_arg_whne; eauto.
+      { eapply (rtf_fix_arg_whne (wt := wt)); eauto.
         * unfold unfold_fix. now rewrite e.
         * now destruct t. }
       destruct hwne as [hwne].
@@ -2117,7 +2171,7 @@ Corollary R_Acc_aux :
       | hw : whnf ?fl ?S ?G (mkApps ?u ?l) |- _ =>
         assert (hwne : ∥ whne fl S G (mkApps u l) ∥)
       end.
-      { eapply rtf_case_arg_whne; eauto.
+      { eapply (rtf_case_arg_whne (wt := wt)); eauto.
         destruct H as (noapp&_).
         now destruct t. }
       destruct hwne as [hwne].
@@ -2183,7 +2237,7 @@ Corollary R_Acc_aux :
       | hw : whnf ?fl ?S ?G (mkApps ?u ?l) |- _ =>
         assert (hwne : ∥ whne fl S G (mkApps u l) ∥)
       end.
-      { eapply rtf_proj_arg_whne; eauto.
+      { eapply (rtf_proj_arg_whne (wt := wt)); eauto.
         destruct H as (noapp&_).
         now destruct t. }
       destruct hwne as [hwne].
@@ -2677,12 +2731,12 @@ Section ReduceFns.
       now rewrite eq.
     * destruct (abstract_env_ext_exists X) as [[Σ wfΣ]]. specialize (X1 _ wfΣ).
       pose proof (hΣ := hΣ' _ wfΣ). sq.
-      destruct (ref_cb Σ hΣ) as [cbΣ].
+      destruct (ref_cb (wt := wt) Σ hΣ) as [cbΣ].
       edestruct (@hnf_complete Γ t h) as [wh]; eauto.
       edestruct (@hnf_sound Γ t h) as [r']; eauto.
       eapply closed_red_confluence_cb in X1 as (?&r1&r2); eauto.
       apply invert_red_sort_gen in r2 as ->.
-      eapply rtf_whnf_red_inv in r1; eauto. destruct r1 as [r1].
+      eapply (rtf_whnf_red_inv (wt := wt)) in r1; eauto. destruct r1 as [r1].
       depelim r1.
       rewrite H in r.
       now cbn in r.
@@ -2730,10 +2784,10 @@ Section ReduceFns.
       edestruct (@hnf_complete Γ t h) as [wh]; eauto.
       edestruct (@hnf_sound Γ t h) as [r']; eauto.
       destruct (hΣ' _ wfΣ) as [hΣ].
-      destruct (ref_cb Σ hΣ) as [cbΣ].
+      destruct (ref_cb (wt := wt) Σ hΣ) as [cbΣ].
       eapply closed_red_confluence_cb in X3 as (?&r1&r2); eauto.
       apply invert_red_prod_cb in r2 as (?&?&[-> ? ?]); auto.
-      eapply rtf_whnf_red_inv in r1; eauto. destruct r1 as [r1].
+      eapply (rtf_whnf_red_inv (wt := wt)) in r1; eauto. destruct r1 as [r1].
       depelim r1.
       now rewrite H in n0.
   Qed.
@@ -2777,7 +2831,6 @@ Section ReduceFns.
       { etransitivity. 2: symmetry; eapply mkApps_decompose_app.
         now rewrite <- eq_decomp. }
       rewrite Xeq. pose proof (hΣ := hΣ' _ wfΣ); sq.
-      rewrite <- Xeq in hw.
       eapply into_closed_red; [reflexivity| |].
       + exact (ref_closed_context Σ Γ _ hΣ hw).
       + exact (ref_open_term Σ Γ _ hΣ hw).
@@ -2799,7 +2852,7 @@ Section ReduceFns.
     - destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
       specialize (X3 _ wfΣ).
       pose proof (hΣ := hΣ' _ wfΣ). sq.
-      destruct (ref_cb Σ hΣ) as [cbΣ].
+      destruct (ref_cb (wt := wt) Σ hΣ) as [cbΣ].
       pose proof (ref_closed_context Σ Γ t hΣ (h Σ wfΣ)) as clΓ.
       pose proof (ref_open_term Σ Γ t hΣ (h Σ wfΣ)) as clt.
       pose proof (reduce_stack_whnf RedFlags.default _ X Γ t [] h _  wfΣ) as wh.
@@ -2822,7 +2875,7 @@ Section ReduceFns.
       rewrite zipc_appstack in r2.
       cbn in *.
       rewrite app_nil_r in wh.
-      eapply rtf_whnf_red_inv in r2; eauto. destruct r2 as [r2].
+      eapply (rtf_whnf_red_inv (wt := wt)) in r2; eauto. destruct r2 as [r2].
       apply invert_red_mkApps_tInd_cb in r1 as (?&[-> _ ?]); auto.
       apply whnf_red_mkApps_inv in r2 as (?&?); auto.
       depelim w.
