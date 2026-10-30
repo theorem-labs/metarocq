@@ -24,7 +24,13 @@
   Every instance that does not reach the whole of a lemma carries a mark. IMPOSSIBLE names a
   part that cannot hold an η step by the head and the rule set (the [red] and [whd_rel]
   premises: η relates terms only through [cumul_eta_l] of [cumulSpecE0] or through [JoinE],
-  and [red1] has no η rule). NOT BUILT names a part that this file's environments do not
+  and [red1] has no η rule). An IMPOSSIBLE mark covers ONLY the part it names; where the lemma
+  also carries [{wfE Σ}], that part is NOT BUILT, never IMPOSSIBLE, because [wfE Σ] is
+  [on_global_env cumulSpecE0 (lift_typing typingE)] and so holds the typing derivation of every
+  declaration of [Σ], which CAN carry an η step. [if_Σ] and [iv_Σ] are typed without one; the
+  cost of that part, wherever it is named below, is a declaration whose type or body is typed
+  through an η step, in a new environment, with its [wfE] proof.
+  NOT BUILT names a part that this file's environments do not
   reach, with the missing witness and its cost. Three costs recurred: a universe-polymorphic
   record WITH A PROJECTION (a new inductive, a new environment and its [wfE] proof), a
   universe-polymorphic inductive WITH A CONSTRUCTOR whose argument holds an under-applied
@@ -609,9 +615,10 @@ Proof. apply red1_red. apply red_beta. Qed.
 Lemma c18_if_rel_red (Ξ : context) : red if_Σ Ξ c18_if_rel_redex (tRel 0).
 Proof. apply red1_red. apply red_beta. Qed.
 
-(* IMPOSSIBLE (the η step): the relation premise and the conclusion are [red], and [red1] has no
-   η rule. The universe part is built: [u] and [v] are the two instances of [I], and the reduct
-   is the arity variable, which [ind_subst] replaces by [I@{l1}]. *)
+(* IMPOSSIBLE (the η step in the relation premise): the relation premise and the conclusion are
+   [red], and [red1] has no η rule. The universe part is built: [u] and [v] are the two
+   instances of [I], and the reduct is the arity variable, which [ind_subst] replaces by
+   [I@{l1}]. NOT BUILT (the [wfE Σ] part), with the cost stated in the header. *)
 Definition red_subst_indsE_inst :=
   red_subst_indsE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl) (Γ := []) (Δ := [])
     (a := c18_if_rel_redex) (b := tRel 0) (u := [Level.lvar 0]) (v := [Level.lvar 1])
@@ -619,7 +626,8 @@ Definition red_subst_indsE_inst :=
 
 (* IMPOSSIBLE (the reduction premise): as [red_subst_indsE_inst]. The conversion premise and the
    conclusion are the F-inst pair: the arity variable at the two instances, which [ind_subst]
-   replaces by [I@{l0}] and [I@{l1}] below the arity. *)
+   replaces by [I@{l0}] and [I@{l1}] below the arity.
+   NOT BUILT (the [wfE Σ] part), with the cost stated in the header. *)
 Definition positive_inds_conv_red_stepE_inst :=
   positive_inds_conv_red_stepE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl)
     (Γ := []) (Δ := []) (t := c18_if_rel_redex) (t' := tRel 0)
@@ -632,7 +640,8 @@ Lemma c18_if_whd : whd_rel true if_Σ.1 (arities_context (ind_bodies if_mdecl) ,
 Proof. apply whd_stop. reflexivity. Qed.
 
 (* IMPOSSIBLE (the [whd_rel] premise): it is a reduction, and [red1] has no η rule. The
-   conversion premise and the conclusion are the F-inst pair, under one product. *)
+   conversion premise and the conclusion are the F-inst pair, under one product.
+   NOT BUILT (the [wfE Σ] part), with the cost stated in the header. *)
 Lemma positive_inds_conv_ass_redE_inst :
   ws_cumul_pbE Conv if_Σ []
     (subst (ind_subst if_mdecl if_ind [Level.lvar 0]) 0 (tProd if_na (tSort sProp) (tRel 1))@[[Level.lvar 1]])
@@ -681,7 +690,8 @@ Proof.
 Qed.
 
 (* IMPOSSIBLE (the reduction premise): as [red_subst_indsE_inst]. Both conversion premises are
-   the F-inst pair, on the redex and on its reduct. *)
+   the F-inst pair, on the redex and on its reduct.
+   NOT BUILT (the [wfE Σ] part), with the cost stated in the header. *)
 Definition positive_cstr_arg_subst_red_stepE_inst :=
   positive_cstr_arg_subst_red_stepE (Σ := if_Σ) (wfΣ := if_wfE) (ind := if_ind) (mdecl := if_mdecl)
     (Γ := []) (t := c18_if_redex) (t' := tInd if_ind [Level.lvar 0]) (pb := Cumul)
