@@ -1,5 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+
 (** * Satisfying instance of [PCUICConsistencyEta.pcuic_consistentE] (row T9)
 
   **The environment** [cs_Σ] declares base's [False_mib] ([Inductive False : Prop :=], no

@@ -1,5 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+
 (** * Satisfying instances of the lemmas of [PCUICProgressEta] (row T6)
 
   **No forecast class.** The class of [PCUICClassificationEta] and [ProgForecastCopy18] were
@@ -8,15 +12,17 @@
   [PCUICEtaPrimOpInstance]).
 
   **Non-degeneracy.**
-  - [typing_spine_pred_strengthenE_inst] strengthens a spine of [∀P. P] to the β-redex
-    [(λx:Prop. x) (∀P. P)] ([sri_A]).
+  - [typing_spine_pred_strengthenE_inst] moves a spine of [∀X:Prop. Type₀] (head step
+    [Type₀ ≤ Type₁]) to [Prop → Prop] ([Prop ≤ Type₀]); the returned head step [Prop ≤ Type₁]
+    relates two products that no premise relates.
   - [inversion_mkAppsE_inst] (the sized inversion) runs on the β-redex [(λx:Prop. x) (∀P. P)],
     whose spine [[∀P. P]] is not empty.
-  - [progressE_inst] (through [progress_env_propE] and the induction principle
-    [typing_ind_envE], [typing_ind_env_app_sizeE]), [progress_env_propE_inst],
-    [typing_value_head_nappE_inst] and [typing_value_headE_inst] run on
-    [(λx:Prop. x) (∀P. P)], which is not a value and takes a WCBV step to [∀P. P]
-    ([pgi_beta_redex_nondeg]): the value disjunct of the sum each returns is empty.
+  - [progressE_inst] (through [progress_env_propE] and the induction principle [typing_ind_envE],
+    [typing_ind_env_app_sizeE]), [progress_env_propE_inst], [typing_value_head_nappE_inst] and
+    [typing_value_headE_inst] run on [(λx:Prop. x → x) (∀P. P)] ([sri_xx_redex]), whose redex body
+    uses its variable inside a product: it is not a value, and its WCBV step goes to
+    [(∀P. P) → ∀P. P], neither the argument nor the redex ([progressE_inst_nondeg]): the value
+    disjunct of the sum each returns is empty.
   - [eval_tCaseE_inst]: the closed [match (let y := ∀P. P in c y) with c x => c x end]
     ([pgi_match_let]): its scrutinee is a let-in, not a constructor application
     ([eval_tCaseE_inst_nondeg]), so the reduction the lemma returns, to a match on a constructor
@@ -31,9 +37,11 @@
     principles with predicates that are not [unit] (the subject, the judgment and the context are
     scoped), every case proved in general (section [ClosednInduction]).
 
-  **Rows degenerate by the statement** ([typing_spine_sortE], [typing_spine_axiomE],
-  [typing_spine_prim_typeE]): tagged IMPOSSIBLE at each instance. Each instance is tagged for the
-  instance gate (its non-degeneracy lemma, or the reason) in the comment directly above it.
+  **Rows degenerate by the statement**, tagged IMPOSSIBLE at each instance: [typing_spine_sortE],
+  [typing_spine_axiomE], [typing_spine_prim_typeE] (the conclusion is forced), and
+  [declared_constructor_ind_declE] (its proof reads the conclusion off its own premise). Each
+  instance is tagged for the instance gate (its non-degeneracy lemma, or the reason) in the
+  comment directly above it.
 
   **Helpers run by the instances above:** [typing_ind_envE], [typing_ind_env_app_sizeE] (also by
   [progressE_inst]), [declared_constructor_ind_declE] (also its own instance). *)
@@ -682,20 +690,61 @@ Proof.
   - eapply pgi_False_normal; eassumption.
 Qed.
 
-(** A spine of [∀P:Prop. P] with the trivial predicate. *)
-Lemma pgi_sp_pred : typing_spine_predE si_Σ [] (fun _ _ _ => True) iv_False [iv_False] iv_False.
+(** [∀X:Prop. Type₀] and [∀X:Prop. Type₁]: the product [Prop → Prop] ([iv_PP]) at two larger
+    codomain sorts. *)
+Definition pgi_PT0 : term := tProd si_na si_P (tSort Sort.type0).
+Definition pgi_PT1 : term := tProd si_na si_P (tSort Sort.type1).
+
+Lemma pgi_T0_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E tSort Sort.type0 : tSort (Sort.super Sort.type0).
+Proof. intros h. exact (typeE_Sort _ _ Sort.type0 h (PCUICWfUniverses.wf_sort_type0 _)). Qed.
+
+Lemma pgi_T1_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E tSort Sort.type1 : tSort (Sort.super Sort.type1).
+Proof. intros h. exact (typeE_Sort _ _ Sort.type1 h (PCUICWfUniverses.wf_sort_type1 _)). Qed.
+
+Lemma pgi_T1_isType : isTypeE si_Σ [] (tSort Sort.type1).
+Proof. exact (has_sort_isTypeE _ (pgi_T1_typed [] localenv_nil)). Qed.
+
+Lemma pgi_PT0_typed :
+  si_Σ ;;; [] |-E pgi_PT0 : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super Sort.type0)).
 Proof.
-  refine (type_spine_pred_consE _ _ _ iv_False iv_False [] si_na si_P (tRel 0) iv_False sProp
-            (cli_False_isType [] localenv_nil) (iv_False_typed si_Σ [] localenv_nil) I
-            (cli_False_refl [] localenv_nil) (iv_False_typed si_Σ [] localenv_nil) I _).
-  econstructor; [exact (cli_False_isType [] localenv_nil)|exact (cli_False_isType [] localenv_nil)|].
-  exact (cli_False_refl [] localenv_nil).
+  unfold pgi_PT0. apply typeE_Prod.
+  - exact (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+  - exact (pgi_T0_typed _ (iv_wf_P si_Σ [] localenv_nil)).
 Qed.
 
-Lemma pgi_A_ws : ws_cumul_pbE Cumul si_Σ [] sri_A iv_False.
+Lemma pgi_PT1_typed :
+  si_Σ ;;; [] |-E pgi_PT1 : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super Sort.type1)).
 Proof.
-  apply (red_ws_cumul_pbE (Σ := si_Σ)).
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := sri_A) eq_refl eq_refl (red1_red _ _ _ _ (sri_beta []))).
+  unfold pgi_PT1. apply typeE_Prod.
+  - exact (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+  - exact (pgi_T1_typed _ (iv_wf_P si_Σ [] localenv_nil)).
+Qed.
+
+(** [Prop → Prop ≤ ∀X:Prop. Type₀]: [Prop ≤ Type₀] in the codomain ([prop_sub_type]). *)
+Lemma pgi_PP_PT0 : ws_cumul_pbE Cumul si_Σ [] iv_PP pgi_PT0.
+Proof.
+  unfold iv_PP, pgi_PT0. apply ws_cumul_pbE_Prod_r.
+  apply ws_cumul_pbE_Sort; [reflexivity|exact eq_refl].
+Qed.
+
+(** [∀X:Prop. Type₀ ≤ ∀X:Prop. Type₁]: [Type₀ ≤ Type₁] in the codomain. *)
+Lemma pgi_PT0_PT1 : ws_cumul_pbE Cumul si_Σ [] pgi_PT0 pgi_PT1.
+Proof.
+  unfold pgi_PT0, pgi_PT1. apply ws_cumul_pbE_Prod_r.
+  apply ws_cumul_pbE_Sort; [reflexivity|].
+  hnf. intros v _.
+  first [cbn; lia | vm_compute; intros hh; discriminate hh | vm_compute; congruence].
+Qed.
+
+(** A spine of [∀X:Prop. Type₀] applied to [∀P:Prop. P], with the trivial predicate; its head step
+    is [∀X:Prop. Type₀ ≤ ∀X:Prop. Type₁] ([pgi_PT0_PT1]). *)
+Lemma pgi_sp_T0 : typing_spine_predE si_Σ [] (fun _ _ _ => True) pgi_PT0 [iv_False] (tSort Sort.type1).
+Proof.
+  refine (type_spine_pred_consE _ _ _ pgi_PT0 iv_False [] si_na si_P (tSort Sort.type1) (tSort Sort.type1) _
+            (has_sort_isTypeE _ pgi_PT0_typed) pgi_PT1_typed I pgi_PT0_PT1
+            (iv_False_typed si_Σ [] localenv_nil) I _).
+  econstructor; [exact pgi_T1_isType|exact pgi_T1_isType|].
+  exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] _ pgi_T1_isType).
 Qed.
 
 (** The spine of [c] applied to [∀P:Prop. P]. *)
@@ -823,25 +872,28 @@ Definition eval_tCaseE_inst :=
   eval_tCaseE (Σ := si_Σ) _ _ (pgi_disc_let {0 := iv_False}) _ _ _ si_wfE pgi_match_let_typed
     pgi_match_let_eval.
 
-(** The type the spine is moved to, [(λx:Prop. x) (∀P. P)] ([sri_A]), is not [∀P. P]. *)
-Lemma typing_spine_pred_strengthenE_inst_nondeg : sri_A <> iv_False.
-Proof. discriminate. Qed.
+(** The three products [Prop → Prop] ([iv_PP]), [∀X:Prop. Type₀] and [∀X:Prop. Type₁] are pairwise
+    distinct, and so are their codomain sorts. The premise [pgi_PP_PT0] steps from the first to the
+    second ([Prop ≤ Type₀]), the input spine's head step [pgi_PT0_PT1] from the second to the third
+    ([Type₀ ≤ Type₁]). No term involved is a β-redex. *)
+Lemma typing_spine_pred_strengthenE_inst_nondeg :
+  [× iv_PP <> pgi_PT0, pgi_PT0 <> pgi_PT1, iv_PP <> pgi_PT1,
+     sProp <> Sort.type0, Sort.type0 <> Sort.type1 & sProp <> Sort.type1].
+Proof. split; intros h; vm_compute in h; discriminate h. Qed.
 
 (** INSTANCE NONDEGEN PCUICProgressEtaInstances.typing_spine_pred_strengthenE_inst_nondeg *)
 Definition typing_spine_pred_strengthenE_inst :=
-  typing_spine_pred_strengthenE (Σ := si_Σ) (wfΣ := si_wfE) pgi_sp_pred (cli_False_isType [] localenv_nil)
-    sri_A sri_A_isType pgi_A_ws.
+  typing_spine_pred_strengthenE (Σ := si_Σ) (wfΣ := si_wfE) pgi_sp_T0 (has_sort_isTypeE _ pgi_PT0_typed)
+    iv_PP (has_sort_isTypeE _ (iv_PP_typed si_Σ [] localenv_nil)) pgi_PP_PT0.
 
 Lemma pgi_False_value : value si_Σ iv_False.
 Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 
-Lemma pgi_id_value : value si_Σ (mkApps iv_id []).
+Lemma pgi_xx_lam_value : value si_Σ (mkApps sri_xx_lam []).
 Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 
 (** [(λx:Prop. x) (∀P. P)]: its head [iv_id] is an abstraction and its spine [[∀P. P]] is not
-    empty; it is not a value; it takes a WCBV step to [∀P. P]. So the value disjunct of the sum
-    that [progressE], [progress_env_propE], [typing_value_head_nappE] and [typing_value_headE]
-    return on it is empty. *)
+    empty; it is not a value; it takes a WCBV step to [∀P. P]. *)
 Lemma pgi_beta_redex_nondeg :
   [× isLambda iv_id, [iv_False] <> [],
      (PCUICWcbvEval.value si_Σ (tApp iv_id iv_False) -> False)
@@ -872,13 +924,8 @@ Proof. split; [exact (le_n 1)|reflexivity]. Qed.
 Definition typing_spine_lengthE_inst : #|[iv_False]| <= context_assumptions [vass si_na si_P] :=
   typing_spine_lengthE (Σ := si_Σ) (wfΣ := si_wfE) [] [vass si_na si_P] si_ind [] [tRel 0] [iv_False] iv_IF pgi_sp_cstr.
 
-(** [I] is the last (only) body of its block: the bound [inductive_ind ind < #|ind_bodies|] is
-    reached. *)
-Lemma declared_constructor_ind_declE_inst_nondeg :
-  S (inductive_ind si_ind) = #|ind_bodies si_mdecl|.
-Proof. reflexivity. Qed.
-
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.declared_constructor_ind_declE_inst_nondeg *)
+(** [declared_constructor_ind_declE] on the declared constructor [c] of [I] ([si_declared_constructor]).
+    INSTANCE IMPOSSIBLE: the target's proof is one destruct of its declared_constructor premise and nth_error_Some_length on the nth_error inside it, so in every environment the bound inductive_ind ind < #|ind_bodies mdecl| of every instance is read off that instance's own premise *)
 Definition declared_constructor_ind_declE_inst :=
   declared_constructor_ind_declE (Σ := si_Σ) (wfΣ := si_wfE) (ind := si_ind) (mdecl := si_mdecl)
     si_declared_constructor.
@@ -924,24 +971,48 @@ Definition typing_spine_axiomE_inst : @nil term = [] :=
   typing_spine_axiomE (Σ := Σ_po) (wfΣ := iv_po_wfE) [] po_int_kn [] po_int_body [] [] _
     iv_po_declared_int ltac:(reflexivity) ltac:(vm_compute; reflexivity) pgi_sp_int.
 
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
+(** [(λx:Prop. x → x) (∀P. P)] ([sri_xx_redex], the application of [sri_xx_lam] to [∀P. P]): the
+    body of its head uses the variable inside a product. It is not a value, and it takes a WCBV step
+    to [(∀P. P) → ∀P. P] ([sri_xx_reduct]), which is neither the argument [∀P. P] nor the redex. So
+    the value disjunct of the sum that [progressE], [progress_env_propE], [typing_value_head_nappE]
+    and [typing_value_headE] return on it is empty, and the step they return does not give back a
+    piece of the input. *)
+Lemma progressE_inst_nondeg :
+  [× sri_x_to_x <> tRel 0, mkApps sri_xx_lam ([] ++ [iv_False]) = sri_xx_redex,
+     (PCUICWcbvEval.value si_Σ sri_xx_redex -> False),
+     si_Σ ⊢ sri_xx_redex ⇝ᵥ sri_xx_reduct, sri_xx_reduct <> iv_False
+   & sri_xx_reduct <> sri_xx_redex].
+Proof.
+  split.
+  - intros h; vm_compute in h; discriminate h.
+  - reflexivity.
+  - intros hv.
+    destruct (PCUICWcbvEval.value_mkApps_inv si_Σ sri_xx_lam [iv_False] eq_refl hv) as [[e _]|[_ hh _]].
+    + discriminate e.
+    + have h := PCUICWcbvEval.value_head_spec si_Σ _ _ hh. try unfold sri_xx_lam in h. cbn in h. discriminate h.
+  - exact (PCUICWcbvEval.wcbv_red_beta _ si_na si_P sri_x_to_x iv_False pgi_False_value).
+  - intros h; vm_compute in h; discriminate h.
+  - intros h; vm_compute in h; discriminate h.
+Qed.
+
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.progressE_inst_nondeg *)
 Definition typing_value_head_nappE_inst :=
-  typing_value_head_nappE (Σ := si_Σ) (wfΣ := si_wfE) iv_id [] iv_False si_P eq_refl
-    (iv_app_typed si_Σ [] localenv_nil) pgi_False_value eq_refl pgi_id_value.
+  typing_value_head_nappE (Σ := si_Σ) (wfΣ := si_wfE) sri_xx_lam [] iv_False si_P eq_refl
+    (sri_xx_redex_typed [] localenv_nil) pgi_False_value eq_refl pgi_xx_lam_value.
 
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.progressE_inst_nondeg *)
 Definition typing_value_headE_inst :=
-  typing_value_headE (Σ := si_Σ) (wfΣ := si_wfE) iv_id [] iv_False si_P
-    (iv_app_typed si_Σ [] localenv_nil) pgi_False_value eq_refl pgi_id_value.
+  typing_value_headE (Σ := si_Σ) (wfΣ := si_wfE) sri_xx_lam [] iv_False si_P
+    (sri_xx_redex_typed [] localenv_nil) pgi_False_value eq_refl pgi_xx_lam_value.
 
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.progressE_inst_nondeg *)
 Definition progress_env_propE_inst :=
-  env_propE_typing progress_env_propE si_Σ si_wfE [] (tApp iv_id iv_False) si_P
-    (iv_app_typed si_Σ [] localenv_nil) cli_axiom_free eq_refl (iv_app_typed si_Σ [] localenv_nil).
+  env_propE_typing progress_env_propE si_Σ si_wfE [] sri_xx_redex si_P
+    (sri_xx_redex_typed [] localenv_nil) cli_axiom_free eq_refl (sri_xx_redex_typed [] localenv_nil).
 
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.progressE_inst_nondeg *)
 Definition progressE_inst :=
-  progressE si_Σ (tApp iv_id iv_False) si_P cli_axiom_free si_wfE (iv_app_typed si_Σ [] localenv_nil).
+  progressE si_Σ sri_xx_redex si_P cli_axiom_free si_wfE (sri_xx_redex_typed [] localenv_nil).
 
 (** The input of [whnf_progressE_inst], [c (∀P. P)], is an application: its head [c] is not the
     term itself. *)
