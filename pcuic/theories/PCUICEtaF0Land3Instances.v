@@ -428,6 +428,41 @@ Definition progressE_stuck_inst :=
 Definition red1_progressE_inst :=
   red1_progressE (Σ := iv_Σ) (wfΣ := iv_wfE) g_axiom_free g_t g_RA g_t_typed_RA.
 
+(** The pre-BET-339 forms of the restated rows are FALSE on integ-all8: [g_t] refutes them.
+    These are why [PCUICClassificationEta] and [PCUICProgressEta] restate them as base does. *)
+Lemma wh_neutral_emptyE_old_false :
+  (forall (Σ : global_env_ext) (wfΣ : wfE Σ) t ty,
+     axiom_free_value Σ [] t -> whne RedFlags.default Σ [] t -> Σ ;;; [] |-E t : ty -> False) -> False.
+Proof. intros h. exact (h iv_Σ iv_wfE g_t g_RA g_afv g_whne g_t_typed_RA). Qed.
+
+Lemma whnf_classification'E_old_false :
+  (forall (Σ : global_env_ext) (wfΣ : wfE Σ) t i u args,
+     axiom_free_value Σ [] t -> whnf RedFlags.default Σ [] t ->
+     Σ ;;; [] |-E t : mkApps (tInd i u) args -> construct_cofix_discr (head t)) -> False.
+Proof.
+  intros h. have e := h iv_Σ iv_wfE g_t iv_ind [] [g_A] g_afv g_whnf g_t_typed_RA.
+  rewrite g_head_not_discr in e. discriminate e.
+Qed.
+
+(** [g_t] takes no weak call-by-value step: the flag blocks [wcbv_red_cofix_case], the
+    scrutinee is not a constructor application, and a cofixpoint takes no step. *)
+Lemma g_no_wcbv_step t' : iv_Σ ⊢ g_t ⇝ᵥ t' -> False.
+Proof.
+  unfold g_t, g_cofix. intros st. inversion st; subst.
+  all: try solve [solve_discr].
+  all: try solve [match goal with h : _ ⊢ tCoFix _ _ ⇝ᵥ _ |- _ => inversion h end].
+  all: try solve [match goal with h : is_true (ci_cofix_nondep _) |- _ => cbn in h; discriminate h end].
+Qed.
+
+Lemma progressE_old_false :
+  (forall (Σ : global_env_ext) t T, axiom_free Σ -> wfE Σ -> Σ ;;; [] |-E t : T ->
+     {t' & Σ ⊢ t ⇝ᵥ t'} + PCUICWcbvEval.value Σ t) -> False.
+Proof.
+  intros h. destruct (h iv_Σ g_t g_RA g_axiom_free iv_wfE g_t_typed_RA) as [[t' st]|hv].
+  - exact (g_no_wcbv_step t' st).
+  - exact (g_no_eval g_t (value_final _ _ hv)).
+Qed.
+
 (** ** 3. The T8 probe on a type-level case of the region *)
 
 Definition t8_ici : case_info :=
