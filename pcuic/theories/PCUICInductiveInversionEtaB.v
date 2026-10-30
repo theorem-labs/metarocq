@@ -59,6 +59,17 @@ From Stdlib Require Import ssreflect ssrbool.
   [PCUICFixWitnessEtaCounter.wf_cofixpoint_allE_false]); [isLambda_red1] and
   [case_branch_context_nopars], which mention none of the relations and are used from base.
 
+  NOT COPIED, waiting on a dependency: [subslet_projs]. Its hypothesis types an ARBITRARY
+  term at [mkApps (tInd i u) args] and the proof needs [#|args| = ind_npars mdecl] and the
+  parameter [spine_subst], which follow only from [isType] of that type; base reads it off
+  [PCUICValidity.validity], whose E form is not among the landed files, and the subject has
+  no shape, so no subject-directed induction replaces it.
+
+  NEW NAMES (no base twin): [isTypeE_typingE_tApp_ctor], [isTypeE_typingE_tConstruct_ctor]
+  and [isTypeE_typingE_mkApps_tConstruct_ctor], the constructor-application case of validity
+  over [typingE], proved from the premises the typing rules carry. The suffix [_ctor] keeps
+  them apart from a general E validity.
+
   DELIBERATE SHADOWING (C6 'New names'). This file declares [isType_it_mkProd_or_LetInE], a
   name that two imported modules already carry ([PCUICAritiesEta], the twin of
   [PCUICArities.isType_it_mkProd_or_LetIn], and [PCUICInductivesEta], the twin of
@@ -419,17 +430,35 @@ Proof.
   revert Γ'. refine (ctx_length_rev_ind _ _ _); simpl.
   - intros args args' ind i ind' i' inst wat Hsp.
     depelim Hsp.
-    eapply ws_cumul_pbE_Ind_l_inv in w as [i'' [args'' [? ?]]]; auto.
-    eapply invert_red_mkApps_tInd in c as [? [eq ?]]; auto. solve_discr.
-    exists nil.
-    split; pcuic. clear i0.
-    relativize (map (subst0 []) args).
-    2:rewrite subst_empty_eq map_id //. clear i1.
-    revert args' a0. clear -wfΣ wfΓ a.
-    induction a; intros args' H; depelim H; constructor.
-    transitivity y; auto. symmetry.
-    now eapply red_conv. now eauto.
-    now eapply invert_cumul_ind_prodE in w.
+    2:{ now eapply invert_cumul_ind_prodE in w. }
+    (* base reads the left-hand inversion as a REDUCTION of the right-hand side
+       ([ws_cumul_pb_Ind_l_inv] then [invert_red_mkApps_tInd]); over η that clause is a
+       chain from [canon], so the two-sided [ws_cumul_pbE_Ind_inv] is used instead: it
+       gives the head equality, the F-inst instance clause and the argument conversions
+       in one step *)
+    eapply ws_cumul_pbE_Ind_inv in w as [eqind hfinst hclΓ hargs].
+    subst ind'.
+    (* the F-inst clause is base's [cmp_ind_universes] at FULL arity
+       ([finst_ind_glue_full]), and [isTypeE] of the application makes [args] the arity *)
+    have hle : head_arity Σ.1 (IndRef ind) <= #|args|.
+    { destruct (wt_ind_app_varianceE wat) as [[mdecl idecl] [hlook _]].
+      unfold lookup_inductive in hlook.
+      have declg := lookup_inductive_declared_gen hlook.
+      have decli := declared_inductive_from_gen declg.
+      destruct (isType_mkApps_Ind_invE wfΣ decli wfΓ wat)
+        as (parsubst & argsubst & [_ _ hpar hind _]).
+      have hlen : #|args| = #|firstn (ind_npars mdecl) args| + #|skipn (ind_npars mdecl) args|
+        by rewrite -length_app firstn_skipn.
+      rewrite (head_arity_ind _ _ _ _ declg) context_assumptions_app
+        -(declared_minductive_ind_nparsE (proj1 decli)) hlen hpar hind. lia. }
+    exists [].
+    split.
+    + reflexivity.
+    + reflexivity.
+    + reflexivity.
+    + eapply finst_ind_glue_full; [exact hle|exact hfinst].
+    + relativize (map (subst0 []) args); [exact hargs|rewrite subst_empty_eq map_id //].
+    + constructor.
   - intros d Γ' IH args args' ind i ind' i' inst wat Hsp.
     rewrite it_mkProd_or_LetIn_app in Hsp.
     destruct d as [na [b|] ty]; simpl in *; rewrite /mkProd_or_LetIn /= in Hsp.
@@ -475,7 +504,12 @@ Proof.
       pose proof (typing_spine_WAT_conclE Hsp).
       depelim Hsp; [now eapply invert_cumul_prod_indE in w|].
       eapply ws_cumul_pbE_Prod_Prod_inv in w as [eqna conva cumulB].
-      eapply (substitution_ws_cumul_pbE (Γ' := [_]) (Γ'' := []) (s := [hd])) in cumulB; auto.
+      (* base's [substitution_ws_cumul_pb] over a [subslet]; the landed
+         [substitution_ws_cumul_pbE] still takes base's [subslet], so the step goes through
+         [untyped_substitution_ws_cumul_pbE] with the openness the typing gives *)
+      eapply (untyped_substitution_ws_cumul_pbE (Γ'' := []) (s := [hd])
+                (subslet_untyped_subsletE _ _ _ _ (subslet_ass_tipE t))
+                (subsletE_open_terms (subslet_ass_tipE t))) in cumulB.
       rewrite /subst1 subst_it_mkProd_or_LetIn /= in cumulB.
       specialize (IH (subst_context [hd] 0 Γ')).
       forward IH by rewrite subst_context_length; lia.
@@ -491,18 +525,20 @@ Proof.
         eapply subslet_ass_tipE. eapply type_ws_cumul_pbE; tea. now symmetry. }
       rewrite subst_mkApps Nat.add_0_r in cumulB. simpl in *.
       rewrite context_assumptions_subst in IH.
-      eapply typing_spine_strengthenE in Hsp.
-      3:eapply cumulB. all:eauto.
+      eapply typing_spine_strengthenE in Hsp; [|exact isTypes|exact cumulB].
       intuition auto.
       destruct X1 as [isub [Hisub Htl Hind Hu Hargs Hs]].
       exists (isub ++ [hd]). rewrite List.rev_app_distr.
       len in Hu.
-      split; auto. 2:lia.
+      split.
       * apply make_context_subst_spec_inv.
         apply make_context_subst_spec in Hisub.
         rewrite List.rev_app_distr !List.rev_involutive in Hisub |- *.
         eapply (context_subst_subst [{| decl_name := na; decl_body := None; decl_type := ty |}] [hd] [hd] Γ'); auto.
         eapply (context_subst_ass _ [] []). constructor.
+      * lia.
+      * exact Hind.
+      * exact Hu.
       * assert (map (subst0 isub ∘ subst [hd] #|Γ'|) args = map (subst0 (isub ++ [hd])) args) as <-.
       { eapply map_ext => x. simpl.
         assert(#|Γ'| = #|isub|).
@@ -518,7 +554,9 @@ Proof.
         eapply isType_tProdE in wat as [Hty _]; auto.
         apply isTypeRelE_isTypeE in Hty.
         eapply type_ws_cumul_pbE; eauto. now eapply ws_cumul_pbE_eq_le.
-      * pcuic.
+  (* the only goal left is the binder name of the one-assumption substitution, which the
+     statement does not constrain; base closes it with [pcuic] *)
+  Unshelve. all: exact na0.
 Qed.
 
 Lemma wf_cofixpoint_typing_spineE {cf:checker_flags} (Σ : global_env_ext) Γ ind u mfix idx d args args' :
@@ -546,6 +584,55 @@ Proof.
   have heq : {| inductive_mind := mind; inductive_ind := i |} = ind.
   { eapply (typing_spine_it_mkProd_Ind_invE sp); [exact hcum|reflexivity]. }
   now subst ind.
+Qed.
+
+(** ** Validity for a constructor application
+
+  Base reads [isType Σ Γ T] off [Σ ;;; Γ |- t : T] with [PCUICValidity.validity], which has
+  no E form among the landed files. For a term whose head is a CONSTRUCTOR the fact needs no
+  induction over the other rules: [typeE_Cumul] carries [Σ ;;; Γ |-E B : tSort s] and
+  [typeE_App] carries [Σ ;;; Γ |-E tProd na A B : tSort s], so an induction on the derivation
+  of a fixed subject shape closes both cases from the rule's own premises, and every other
+  rule is ruled out by the subject. These three are the constructor-application case of
+  validity, and nothing else; the suffix [_ctor] keeps the names apart from the general E
+  validity. *)
+
+Lemma isTypeE_typingE_tApp_ctor {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ f a T} :
+  Σ ;;; Γ |-E tApp f a : T -> isTypeE Σ Γ T.
+Proof.
+  intros h. dependent induction h.
+  - (* [typeE_App]: the rule's own [tProd na A B : tSort s] and [u : A] *)
+    match goal with
+    | hp : _ ;;; _ |-E tProd _ ?A _ : tSort _, hu : _ ;;; _ |-E _ : ?A |- _ =>
+      eapply (isType_substE (subslet_ass_tipE hu));
+      eapply inversion_ProdE in hp as (? & ? & ? & hB & _); tea;
+      exact (has_sort_isTypeE _ hB)
+    end.
+  - (* [typeE_Cumul]: the rule's own [B : tSort s] *)
+    match goal with
+    | hs : _ ;;; _ |-E ?B : tSort _ |- isTypeE _ _ ?B => exact (has_sort_isTypeE _ hs)
+    end.
+Qed.
+
+Lemma isTypeE_typingE_tConstruct_ctor {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
+  {Γ ind n u T} :
+  Σ ;;; Γ |-E tConstruct ind n u : T -> isTypeE Σ Γ T.
+Proof.
+  intros h. dependent induction h.
+  - (* [typeE_Construct]: the constructor's own type is a type *)
+    eapply isTypeRelE_isTypeE. eapply isType_of_constructorE; eassumption.
+  - match goal with
+    | hs : _ ;;; _ |-E ?B : tSort _ |- isTypeE _ _ ?B => exact (has_sort_isTypeE _ hs)
+    end.
+Qed.
+
+Lemma isTypeE_typingE_mkApps_tConstruct_ctor {cf:checker_flags} {Σ : global_env_ext}
+  {wfΣ : wfE Σ} {Γ ind n u args T} :
+  Σ ;;; Γ |-E mkApps (tConstruct ind n u) args : T -> isTypeE Σ Γ T.
+Proof.
+  induction args using rev_ind.
+  - exact isTypeE_typingE_tConstruct_ctor.
+  - rewrite mkApps_app /=. exact isTypeE_typingE_tApp_ctor.
 Qed.
 
 Lemma Construct_Ind_ind_eqE {cf:checker_flags} {Σ} (wfΣ : wfE Σ.1):
@@ -588,9 +675,10 @@ Lemma Construct_Ind_ind_eqE {cf:checker_flags} {Σ} (wfΣ : wfE Σ.1):
 Proof.
   intros Γ n i args u i' args' u' mdecl idecl cdecl h declc.
   destruct (on_declared_constructorE declc) as [[onmind onind] [? [_ onc]]].
-  pose proof (validity h) as vi'.
+  (* base's [PCUICValidity.validity]; the subject is a constructor application *)
+  pose proof (isTypeE_typingE_mkApps_tConstruct_ctor h) as vi'.
   eapply inversion_mkApps_directE in h; auto.
-  destruct h as [T [hC hs]].
+  destruct h as [T [s' [hC [_ hs]]]].
   apply inversion_ConstructE in hC
     as [mdecl' [idecl' [cdecl' [hΓ [isdecl [const htc]]]]]]; auto.
   assert (vty:=declared_constructor_valid_tyE _ _ _ _ _ _ _ _ wfΣ hΓ isdecl const).
@@ -1023,66 +1111,11 @@ Proof.
   now eapply All_local_env_app_inv in wf.
 Qed.
 
-Lemma subslet_projsE {cf:checker_flags} {Σ} {wfΣ : wfE Σ} {i mdecl idecl args} :
-  declared_inductive Σ.1 i mdecl idecl ->
-  match ind_ctors idecl return Type with
-  | [cs] =>
-    on_projections mdecl (inductive_mind i) (inductive_ind i)
-     idecl (ind_indices idecl) cs ->
-     forall Γ t u,
-     let indsubst := inds (inductive_mind i) u (ind_bodies mdecl) in
-     Σ;;; Γ |-E t : mkApps (tInd i u) args ->
-     wf_subsletE Σ Γ
-      (projs_inst i (ind_npars mdecl) (context_assumptions (cstr_args cs)) t)
-      (subst_context (List.rev args) 0
-        (subst_context (extended_subst (ind_params mdecl)@[u] 0) 0
-          (smash_context []
-            (subst_context (inds (inductive_mind i) u (ind_bodies mdecl))
-              #|ind_params mdecl| (subst_instance u (cstr_args cs))))))
-  | _ => True
-  end.
-Proof.
-  intros Hdecl.
-  destruct ind_ctors as [|cs []] eqn:Heq; trivial.
-  intros onp. simpl. intros Γ t u.
-  rewrite (smash_context_subst []).
-  assert (#|PCUICEnvironment.ind_projs idecl| >=
-  PCUICEnvironment.context_assumptions (cstr_args cs)).
-  { destruct onp. lia. }
-  intros Ht.
-  epose proof (declared_projections_subsletE _ Hdecl cs Heq onp _ (Nat.le_refl _)).
-  have v := !!(validity Ht). eapply isType_mkApps_Ind_invE in v as [? [? []]]; tea; pcuic.
-  unshelve epose proof (Hdecl' := declared_inductive_to_gen Hdecl); eauto.
-  eapply (instantiate_wf_subsletE (decl:=InductiveDecl mdecl)) in X; tea. 2:apply Hdecl'.
-  move: X. rewrite Nat.sub_diag skipn_0.
-  rewrite subst_instance_subst_context subst_instance_lift_context.
-  rewrite subst_context_lift_context_comm //.
-  rewrite (projection_context_gen_inst Hdecl) //.
-  rewrite /projection_context.
-  eapply spine_subst_smashE in s.
-  intros Hs.
-  have wfΓ : wf_localE Σ Γ by (eapply typingE_wf_local; eauto).
-  eapply weaken_wf_subsletE in Hs;tea.
-  eapply (substitution_subsletE (Γ' := [_])) in Hs; tea.
-  2:eapply s.
-  move: Hs. cbn.
-  rewrite subst_context_snoc /= /subst_decl /= /map_decl /= subst_mkApps /=.
-  rewrite (spine_subst_subst_to_extended_list_kE s).
-  move: (on_projections_indices onp) => heq. rewrite heq in e0.
-  cbn in e0.
-  assert (#|args| = ind_npars mdecl).
-  rewrite -(firstn_skipn (ind_npars mdecl) args) length_app e0 e //.
-  rewrite firstn_all2 //. lia.
-  move/(substitution_subsletE (Γ := Γ) (Δ := [_]) (Γ' := []) (subslet_ass_tipE Ht)).
-  cbn.
-  rewrite [(projs _ _ _)@[u]]projs_subst_instance projs_subst_above // subst_projs_inst.
-  rewrite subst_instance_subst_context.
-  rewrite instantiate_indsE //. exact Hdecl.
-  rewrite subst_context_lift_context_comm //.
-  rewrite subst_context_lift_context_cancel //.
-  rewrite subst_instance_extended_subst //.
-  rewrite subst_instance_smash //.
-Qed.
+(** [subslet_projs] is NOT copied here. Its hypothesis types an ARBITRARY term at
+    [mkApps (tInd i u) args], and the proof needs [#|args| = ind_npars mdecl] and the
+    parameter [spine_subst]; both follow only from [isType] of that type, which base takes
+    from [PCUICValidity.validity]. The subject has no shape, so no subject-directed
+    induction replaces it: the twin waits on validity over [typingE]. *)
 
 Lemma positive_cstr_closed_indicesE {cf} {Σ} {wfΣ : wfE Σ} :
   forall {i mdecl idecl cdecl},
@@ -1123,29 +1156,25 @@ Proof.
   intros subs subs' eqs clT clU.
   intros cum.
   (* the E substitution lemma takes an [untyped_subslet] and the openness of [s]; base's
-     [substitution_ws_cumul_pb] takes the [subslet] directly *)
-  have hopen : forallb (is_open_term Γ) s.
-  { first [ now eapply subslet_open in subs
-          | apply/forallb_All; exact (subslet_open_termsE _ _ _ subs)
-          | solve_all; exact (subslet_open_termsE _ _ _ subs) ]. }
+     [substitution_ws_cumul_pb] takes the [subslet] directly, and reads the openness off it
+     with [subslet_open] *)
+  have hopen : forallb (is_open_term Γ) s := subsletE_open_terms (wfΣ := wfΣ) subs.
   pose proof (untyped_substitution_ws_cumul_pbE (s:=s) (subslet_untyped_subsletE _ _ _ _ subs) hopen cum).
   transitivity (subst s #|Δ| U) => //.
   clear X.
   rewrite !subst_closedn //.
   eapply ws_cumul_pbE_refl.
-  eapply is_closed_subst_context. eauto with fvs.
-  exact hopen.
-  now rewrite (subslet_lengthE subs).
+  { eapply (is_closed_subst_context Γ Γ0 s Δ); [eauto with fvs|exact hopen|now rewrite (subslet_lengthE subs)]. }
   relativize U.
   instantiate (1 := subst s #|Δ| U).
-  eapply is_open_term_subst; eauto with fvs.
-  exact hopen.
-  now rewrite (subslet_lengthE subs).
+  { eapply (is_open_term_subst (Γ := Γ) (Δ := Γ0) (Γ' := Δ) (s := s) (b := U));
+      [eauto with fvs|exact hopen|now rewrite (subslet_lengthE subs)|eauto with fvs]. }
   rewrite !subst_closedn //.
 Qed.
 
 Lemma into_ws_cumul_ctx_pb_relE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ Δ'}
-  (c : cumul_ctx_rel cumulAlgo_gen Σ Γ Δ Δ') :
+  (* M4: base's algorithmic [cumulAlgo_gen] is [JoinE] on the E side *)
+  (c : cumul_ctx_rel (@JoinE cf) Σ Γ Δ Δ') :
   is_closed_context (Γ ,,, Δ) ->
   is_closed_context (Γ ,,, Δ') ->
   ws_cumul_ctx_pbE_rel Cumul Σ Γ Δ Δ'.
@@ -1282,7 +1311,7 @@ Proof.
   { apply spine_codom_wfE in spu; eauto with fvs. }
   have clΓparsu' : is_closed_context (Γ ,,, (ind_params mdecl)@[u']).
   { apply spine_codom_wfE in spu'; eauto with fvs. }
-  eapply cmp_global_instance_ind_inv in Ru as [(comp & l & indv & Ru) | Ru]; eauto; tc.
+  eapply cmp_global_instance_ind_invE in Ru as [(comp & l & indv & Ru) | Ru]; eauto; tc.
   3: apply declc.p1.
   { pose proof (onc.(on_ctype_variance)) as respv.
     specialize (respv _ indv).
@@ -1307,7 +1336,7 @@ Proof.
       rewrite -app_context_assoc -(smash_context_app_expand []).
       eapply wf_local_smash_endE.
       rewrite - !subst_instance_app_ctx app_context_assoc //. }
-    apply cumul_ctx_relSpec_Algo in args; auto.
+    apply cumul_ctx_relSpec_AlgoE in args; auto.
     2:{ move/wf_local_closed_contextE: X.
         rewrite - !(subst_instance_smash _ _ []).
         rewrite - !subst_instance_app_ctx !is_closed_subst_inst //.
@@ -1318,12 +1347,12 @@ Proof.
         rewrite !on_free_vars_ctx_app is_closed_subst_inst !on_free_vars_ctx_app.
         rewrite expand_lets_smash_context /= //. len. }
     split.
-    { eapply All2_fold_inst in args. 7:eauto. all:eauto.
+    { eapply All2_fold_instE in args. 7:eauto. all:eauto.
       rewrite !expand_lets_smash_context in args.
       autorewrite with pcuic in args.
       rewrite !subst_instance_smash /= in args.
       rewrite subst_instance_app_ctx in args.
-      eapply positive_cstr_closed_args in args; eauto.
+      eapply positive_cstr_closed_argsE in args; eauto.
       2:{ rewrite indv. now simpl. }
       rewrite - !smash_context_subst !subst_context_nil in args.
       eapply (weaken_ws_cumul_ctx_pbE_rel (Γ := Γ)) in args => //.
@@ -1423,7 +1452,7 @@ Proof.
       (* rename a into clx; rename b into cxy.
       rewrite -app_context_assoc. eapply weaken_ws_cumul_pb; eauto.
       rewrite subst_instance_app_ctx in cxy. *)
-      eapply ws_cumul_pb_inst_variance in cxy. 7:eauto. all:eauto.
+      eapply ws_cumul_pb_inst_varianceE in cxy. 7:eauto. all:eauto.
       (* rewrite !app_context_nil_l in X3. eapply X3 in cxy; clear X3; cycle 1. *)
       rewrite subst_instance_app_ctx in cxy.
       epose proof (subst_conv_closedE (Γ := [])) as X3.
@@ -1487,7 +1516,7 @@ Proof.
       eapply (substitution_ws_cumul_ctx_pbE_subst_conv (Γ := Γ)).
       3:{ eapply subslet_untyped_subsletE, (weaken_subsletE (Γ' := [])); eauto. eapply subslet_indsE; eauto.
           eapply declc.p1. }
-      3:{ eapply subslet_untyped_subsletE, PCUICArities.weaken_subslet; eauto; eapply subslet_indsE; eauto.
+      3:{ eapply subslet_untyped_subsletE, (weaken_subsletE (Γ' := [])); eauto. eapply subslet_indsE; eauto.
           eapply declc.p1. }
       3:{ simpl.
         rewrite !subst_instance_app_ctx in wfargs.
@@ -2481,7 +2510,9 @@ Proof.
     { eapply type_mkAppsE.
       { econstructor; tea. }
       eapply wf_arity_spine_typing_spineE; tea.
-      split. { eapply validity. econstructor; eauto. }
+      (* base's [validity] on the constructor's typing; [isType_of_constructorE] gives the
+         same [isType] from the declaration *)
+      split. { eapply isTypeRelE_isTypeE. eapply isType_of_constructorE; eauto. }
       replace (type_of_constructor mdecl cdecl (ci.(ci_ind), n) (puinst p))
         with (lift0 #|cstr_args cdecl| (type_of_constructor mdecl cdecl (ci.(ci_ind), n) (puinst p))).
       2:{ rewrite lift_closed //. eapply (declared_constructor_closed_typeE nth). }
@@ -2713,18 +2744,21 @@ Proof.
   pose proof (ss := ctx_inst_spine_substE wfΓ instl).
   pose proof (eqsubst := mk_ctx_subst_spec'E instl).
   rewrite eqsubst.
-  apply: cumulAlgo_cumulSpec.
-  apply: PCUICWellScopedCumulativity.wt_cumul_pb_ws_cumul_pb.
+  (* the specification is reached by [ws_cumul_pbE_forget_spec], where base uses
+     [cumulAlgo_cumulSpec] *)
+  apply: ws_cumul_pbE_forget_spec.
+  apply: wt_cumul_pbE_ws_cumul_pbE.
   constructor.
   + have?: Σ ;;; Γ |-E it_mkLambda_or_LetIn Δ t : it_mkProd_or_LetIn Δ (tSort ps)
-    by apply: PCUICGeneration.type_it_mkLambda_or_LetIn; eassumption.
-    apply has_sort_isTypeE with (s := ps); apply: PCUICSpine.type_mkApps; first eassumption.
+    by apply: PCUICGenerationEta.type_it_mkLambda_or_LetInE; eassumption.
+    apply has_sort_isTypeE with (s := ps); apply: type_mkAppsE; first eassumption.
     apply: typing_spine_it_mkProd_or_LetIn_closeE=> //=; first eassumption.
     apply: PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE.
-    exact: validity tWty.
+    (* base's [validity] on a SORT typing: [isType_SortE] of the sort it gives *)
+    exact: (isType_SortE (PCUICWfUniversesEta.typing_wf_sortE wfΣ tWty) wfΓ).
   + apply:isType_substE; last (apply has_sort_isTypeE with (s := ps); eassumption).
     exact: inst_subsletE ss.
-  + apply: PCUICCumulativity.red_conv.
+  + apply: JoinE_red_l.
     rewrite -eqsubst. apply: red_betas_typedE; last eassumption.
     rewrite (ctx_inst_length instl) context_assumptions_rev //.
 Qed.
@@ -2772,22 +2806,27 @@ Proof.
   have clT : closed idecl.(ind_type) by apply (isType_closedE istyT).
   repeat (eexists; tea). cbn in Hs |- *.
   eapply inversion_it_mkProd_or_LetInE in Hs.
-  eapply PCUICValidity.inversion_mkApps in Hs as [tyapp [Happ Hsp]].
+  (* base's [PCUICValidity.inversion_mkApps]; here the application is typed at a SORT, so
+     [inversion_mkApps_directE] applies with [isType_SortE] *)
+  have isS := isType_SortE (PCUICWfUniversesEta.typing_wf_sortE wfΣ Hs) (typingE_wf_local Hs).
+  eapply (inversion_mkApps_directE isS) in Hs as [tyapp [styapp [Happ [_ Hsp]]]].
   apply inversion_RelE in Happ as (decl & wfΓ & hnth & cum); tas.
-  eapply PCUICWeakeningTyp.All_local_env_nth_error_weaken in wfΓ as Hty; tea.
+  eapply All_local_env_nth_error_weakenE in wfΓ as Hty; tea.
   rewrite nth_error_app_ge in hnth. lia.
   replace (#|ind_params mdecl,,, cstr_args cdecl| + (#|ind_bodies mdecl| - S n) - #|ind_params mdecl,,, cstr_args cdecl|) with (#|ind_bodies mdecl| - S n) in hnth by lia.
   pose proof (nth_error_Some_length H) as hlen. rewrite nth_error_rev // in H.
   eapply nth_error_arities_context in H. rewrite hnth in H.
-  eapply PCUICSpine.typing_spine_strengthen in Hsp; tea. noconf H. clear cum hnth.
+  (* base's [tea] picks the cumulativity; here the [isTypeE] of the sort would be taken
+     first, so the cumulativity is named *)
+  eapply typing_spine_strengthenE in Hsp; [| |exact cum]. noconf H. clear cum hnth.
   cbn in Hsp.
   (* [ind_type] reduces to the arity built from the parameters and the indices. *)
   rewrite lift_closed // in Hsp.
   have hred := closed_red_from_emptyE (wf_local_closed_contextE wfΓ) clT r.
-  eapply PCUICSpine.typing_spine_strengthen in Hsp.
+  eapply typing_spine_strengthenE in Hsp.
   2:{ now eapply isType_weakenE. }
   2:{ now eapply red_ws_cumul_pbE_inv. }
   rewrite -it_mkProd_or_LetIn_app /= in Hsp.
-  eapply PCUICSpine.arity_typing_spine in Hsp as [_ leqs _]. now eapply leq_relevance; tea.
+  eapply arity_typing_spineE in Hsp as [_ leqs _]. now eapply leq_relevance; tea.
   noconf H. cbn in Hty |- *. now apply isTypeRelE_isTypeE in Hty.
 Qed.
