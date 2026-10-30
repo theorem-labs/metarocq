@@ -24,13 +24,15 @@ From MetaRocq.PCUIC Require Import BDTyping BDToPCUIC BDFromPCUIC BDUnique.
    importing any name. *)
 From MetaRocq.SafeChecker Require PCUICSafeConversion.
 
-From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd PCUICSNEta
+From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd
      PCUICWellScopedCumulativityEta PCUICClosedTypEta PCUICContextConversionEta PCUICWsCumulEtaCtx
      PCUICConversionEtaCongr PCUICEtaI5 PCUICClosedBodies.
 
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICErrorsEta PCUICWfEnvEta
   PCUICWfReductionEta PCUICSafeReduceEta PCUICSafeReduceEtaBridge
   PCUICTypingEtaDefs PCUICTypingEtaHyps.
+(* The fuel of the codomain walk ([check_codomain_ind_fuel]); names used qualified. *)
+From MetaRocq.SafeChecker Require PCUICFuelEta.
 (* The call-by-need fast path (BET-298) over the η environment: [PCUICCallByNeedEta] is the copy of integ-all8's
    (1a92b56c) machine; [PCUICCallByNeedSoundEta] holds the proved instance [cbn_conv_soundE_proved] that accepts
    its [true]. *)
@@ -509,8 +511,6 @@ Section Typecheck.
   Context (X_type : abstract_env_impl).
 
   Context (X : X_type.π2.π1).
-
-  Context {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}.
 
   (** The η conversion (a parameter, see [conv_oracle]); a class, so callers pass it implicitly. *)
   Context {CO : conv_oracle}.
@@ -1709,13 +1709,6 @@ Section Typecheck.
 
   Local Notation redp_subterm_relE := (redp_subterm_rel (cf := cf) (wt := welltypedE) X_type X).
 
-  #[local] Instance wf_clos_trans_redp_subterm :
-    WellFounded (clos_trans _ redp_subterm_relE).
-  Proof.
-    apply wf_clos_trans.
-    exact (wf_redp_subterm_rel (wt := welltypedE) (wfP := wf_extE) X_type X (normalization_in := normalization_in)).
-  Defined.
-
   (** *** The codomain walk *)
 
   (** One step of the walk: [C] itself when it is syntactically a product or an
@@ -1876,22 +1869,23 @@ Section Typecheck.
     - rewrite hind in nind. exact (diff_false_true nind).
   Qed.
 
-  (** Rocq's kernel finds the (co)inductive type a cofixpoint produces by weak-head
-      reducing its type and going under every product ([codomain_is_coind]). *)
-  (* Deriving the unfolding equation of this well-founded definition exhausts memory. *)
+  (** The result of the walk from [C] in [Δ]: the inductive block [C] reduces to a telescope over. *)
+  Local Notation codomain_ind_result Δ C :=
+    (∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
+        ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) (only parsing).
+
+  (** One step of the walk; [rec] walks on under the product step. *)
   #[derive(equations=no, eliminator=no)]
-  Equations? check_codomain_ind (Δ : context) (C : term)
+  Equations codomain_step (Δ : context) (C : term)
     (hC : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ C)
-    : typing_result_comp (∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
-        ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥)
-    by wf ((Δ ; C ; hC) : ∑ (Γ' : context) (t : term),
-             forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ' t)
-          (clos_trans _ redp_subterm_relE) :=
-    check_codomain_ind Δ C hC with inspect (codomain_whnf Δ C hC) := {
+    (rec : forall Δ' C' (hC' : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ' C'),
+        typing_result_comp (codomain_ind_result Δ' C'))
+    : typing_result_comp (codomain_ind_result Δ C) :=
+    codomain_step Δ C hC rec with inspect (codomain_whnf Δ C hC) := {
       | exist None _ := NotEnoughFuel_comp "check_codomain_ind" ;
       | exist (Some T) eqT with view_prodc T := {
         | view_prod_prod na A B :=
-          match check_codomain_ind (Δ ,, vass na A) B (codomain_welltyped_step eqT) with
+          match rec (Δ ,, vass na A) B (codomain_welltyped_step eqT) with
           | TypeError_comp e absurd => TypeError_comp e (codomain_ind_prod_absurd eqT absurd)
           | NotEnoughFuel_comp s => NotEnoughFuel_comp s
           | Checked_comp r => ret (r.π1 ; codomain_ind_prod eqT r.π2)
@@ -1903,9 +1897,25 @@ Section Typecheck.
               TypeError_comp
                 (Msg "Ill-formed cofixpoint: not producing values in a mutually coinductive family")
                 (codomain_ind_refute eqT nprod eqd nind) } } } }.
-  Proof.
-    eapply codomain_step_lt; eassumption.
-  Qed.
+
+  (** Rocq's kernel finds the (co)inductive type a cofixpoint produces by weak-head
+      reducing its type and going under every product ([codomain_is_coind]). The walk recurses
+      structurally on a fuel ([PCUICFuelEta]); an empty fuel answers [NotEnoughFuel_comp] (a refusal
+      for lack of fuel). Each step goes under a product of a reduct of [C]; the decrease of the old
+      well-founded order is still proved ([codomain_step_lt]), and no longer needed. *)
+  Fixpoint check_codomain_ind_fuel (fu : PCUICFuelEta.fuel) (Δ : context) (C : term)
+    (hC : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ C) {struct fu}
+    : typing_result_comp (codomain_ind_result Δ C) :=
+    match fu with
+    | PCUICFuelEta.FuelO => NotEnoughFuel_comp "check_codomain_ind"
+    | PCUICFuelEta.FuelS k => codomain_step Δ C hC (fun Δ' C' hC' => check_codomain_ind_fuel (k tt) Δ' C' hC')
+    end.
+
+  (** Every walk starts from the default fuel (2^62 units). *)
+  Definition check_codomain_ind (Δ : context) (C : term)
+    (hC : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ C)
+    : typing_result_comp (codomain_ind_result Δ C) :=
+    check_codomain_ind_fuel PCUICFuelEta.default_fuel Δ C hC.
 
   Section check_wf_mfix.
   Context (Γ : context).

@@ -24,7 +24,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICPosition
      PCUICNormal PCUICReduction PCUICSafeLemmata PCUICWellScopedCumulativity
-     PCUICConversion PCUICClosedBodies PCUICTypingEta PCUICSN PCUICSNEta PCUICClosedTypEta
+     PCUICConversion PCUICClosedBodies PCUICTypingEta PCUICSN PCUICClosedTypEta
      PCUICEquality PCUICCumulativitySpec PCUICArityRed.
 From MetaRocq.PCUIC Require PCUICPositionEta.
 From MetaRocq.PCUIC Require PCUICCumulativitySpecEtaClosureInstances PCUICEtaA6Instances.

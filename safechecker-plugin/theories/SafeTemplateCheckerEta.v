@@ -4,7 +4,7 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.Template Require Import AstUtils.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICProgram
-     PCUICTypingEta PCUICSN PCUICSNEta.
+     PCUICTypingEta PCUICSN.
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICWfEnvImplEta
   PCUICSafeReduceEta
   PCUICTypingEtaDefs PCUICTypeCheckerEta PCUICSafeCheckerEta PCUICTypingEtaHyps.
@@ -24,7 +24,8 @@ From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC TemplateToPCUICShared
     ([eta_conv_oracle]), so a change of that contract is a one-site fix;
   - EtaReduce's [reduce_factsE : ReduceTypedFacts welltypedE wf_extE] and the η typing facts
     [EtaF : EtaFacts] ([PCUICTypingEtaHyps]); both are Props, erased by extraction;
-  - the normalization premises, over [wf_extE]/[NormalizationInE] (base takes [NormalizationIn]).
+  - no normalization premise: the η checker's recursions terminate by fuel ([PCUICFuelEta], BET-64 FUEL;
+    base takes [NormalizationIn]); an empty fuel is printed as a refusal for lack of fuel ([print_env_error]).
 
   Exported for the plugin's OCaml glue, same names and types as base ([SafeTemplateChecker]):
   [trans_program], [infer_template_program], [infer_and_print_template_program], so at the cutover (F0)
@@ -66,23 +67,6 @@ Local Instance Monad_EnvCheck_wf_env_ext {cf:checker_flags} {guard : abstract_gu
 Program Definition infer_translated_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
   {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p' : program) φ
-  {normalization_in
-    : forall (g : global_decl) (Hdecls' : nat) (X : X_env_type optimized_abstract_env_impl),
-      (forall Σ0 : global_env,
-          Σ0 ∼ X ->
-          Σ0 =
-            {|
-              universes := p'.1;
-              declarations := skipn Hdecls' (declarations p'.1);
-              retroknowledge := retroknowledge p'.1
-            |}) ->
-      forall X' : X_env_ext_type optimized_abstract_env_impl,
-        check_wf_env_ext_prop optimized_abstract_env_impl X X' (universes_decl_of_decl g) ->
-        forall Σ0 : global_env_ext, wf_extE Σ0 -> Σ0 ∼_ext X' -> NormalizationInE Σ0}
-  {normalization_in'
-    : forall x : X_env_ext_type optimized_abstract_env_impl,
-      (p'.1, φ) ∼_ext x ->
-      forall Σ : global_env_ext, wf_extE Σ -> Σ ∼_ext x -> NormalizationInE Σ}
   : EnvCheck_wf_env_ext (∑ A, { X : wf_env_ext |
     ∥ (p'.1, φ) = X.(wf_env_ext_reference).(reference_impl_env_ext) × wf_extE (p'.1, φ) ×
       (p'.1, φ) ;;; [] |-E p'.2 : A ∥ }) :=
@@ -95,28 +79,10 @@ Qed.
 Program Definition infer_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
   {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p : Ast.Env.program) φ
-  {normalization_in
-    : forall (g : global_decl) (Hdecls' : nat) (X : X_env_type optimized_abstract_env_impl),
-      (forall Σ0 : global_env,
-          Σ0 ∼ X ->
-          Σ0 =
-            {|
-              universes := (trans_program p).1;
-              declarations := skipn Hdecls' (declarations (trans_program p).1);
-              retroknowledge := retroknowledge (trans_program p).1
-            |}) ->
-      forall X' : X_env_ext_type optimized_abstract_env_impl,
-        check_wf_env_ext_prop optimized_abstract_env_impl X X' (universes_decl_of_decl g) ->
-        forall Σ0 : global_env_ext, wf_extE Σ0 -> Σ0 ∼_ext X' -> NormalizationInE Σ0}
-  {normalization_in'
-    : forall x : X_env_ext_type optimized_abstract_env_impl,
-      ((trans_program p).1, φ) ∼_ext x ->
-      forall Σ : global_env_ext, wf_extE Σ -> Σ ∼_ext x -> NormalizationInE Σ}
   : EnvCheck_wf_env_ext (let p' := trans_program p in ∑ A, { X : wf_env_ext |
     ∥ (p'.1, φ) = X.(wf_env_ext_reference).(reference_impl_env_ext) × wf_extE (p'.1, φ) ×
       (p'.1, φ) ;;; [] |-E p'.2 : A ∥ }) :=
-  infer_translated_program (cf := cf) (nor := nor) (normalization_in := normalization_in)
-    (normalization_in' := normalization_in') (trans_program p) φ.
+  infer_translated_program (cf := cf) (nor := nor) (trans_program p) φ.
 
 (** The plugin's message for an environment error. An empty fuel ([PCUICFuelEta]) is printed as a
     refusal for lack of fuel, never as a type error. *)
@@ -132,26 +98,9 @@ Definition print_env_error (Σ : global_env_ext) (e : env_error) : string :=
 Program Definition infer_and_print_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
   {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p : Ast.Env.program) φ
-  {normalization_in
-    : forall (g : global_decl) (Hdecls' : nat) (X : X_env_type optimized_abstract_env_impl),
-      (forall Σ0 : global_env,
-          Σ0 ∼ X ->
-          Σ0 =
-            {|
-              universes := (trans_program p).1;
-              declarations := skipn Hdecls' (declarations (trans_program p).1);
-              retroknowledge := retroknowledge (trans_program p).1
-            |}) ->
-      forall X' : X_env_ext_type optimized_abstract_env_impl,
-        check_wf_env_ext_prop optimized_abstract_env_impl X X' (universes_decl_of_decl g) ->
-        forall Σ0 : global_env_ext, wf_extE Σ0 -> Σ0 ∼_ext X' -> NormalizationInE Σ0}
-  {normalization_in'
-    : forall x : X_env_ext_type optimized_abstract_env_impl,
-      ((trans_program p).1, φ) ∼_ext x ->
-      forall Σ : global_env_ext, wf_extE Σ -> Σ ∼_ext x -> NormalizationInE Σ}  : string + string :=
+  : string + string :=
   let p' := trans_program p in
-  match infer_translated_program (cf := cf) (nor := nor) (normalization_in := normalization_in)
-          (normalization_in' := normalization_in') p' φ return string + string with
+  match infer_translated_program (cf := cf) (nor := nor) p' φ return string + string with
   | CorrectDecl t =>
     (* Print the term of the program already translated and checked. *)
     inl ("Environment is well-formed and " ^ string_of_term p'.2 ^

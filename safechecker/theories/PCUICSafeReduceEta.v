@@ -560,25 +560,6 @@ Proof.
   - exact (ih eu).
 Qed.
 
-(* Added by Julien Forest on 13/11/20 in Rocq stdlib, adapted to subset case by M. Sozeau *)
-Section Acc_sidecond_generator.
-  Context {A : Type} {R : A -> A -> Prop} {P : A -> Prop}.
-  Variable Pimpl : forall x y, P x -> R y x -> P y.
-  (* *Lazily* add 2^n - 1 Acc_intro on top of wf.
-     Needed for fast reductions using Function and Program Fixpoint
-     and probably using Fix and Fix_F_2
-   *)
-  Fixpoint Acc_intro_generator n (acc : forall t, P t -> Acc R t) : forall t, P t -> Acc R t :=
-    match n with
-        | O => acc
-        | S n => fun x Px =>
-                   Acc_intro x (fun y Hy => Acc_intro_generator n (Acc_intro_generator n acc) y (Pimpl _ _ Px Hy))
-    end.
-End Acc_sidecond_generator.
-(** We leave it opaque for now, as some simplification tactics
-  might otherwise unfold the large Acc proof. Don't forget to make it transparent
-  when computing. *)
-Opaque Acc_intro_generator.
 
 Section Reduce.
 
