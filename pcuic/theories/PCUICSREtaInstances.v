@@ -318,6 +318,9 @@ Proof.
            (typeE_Rel _ _ 0 (vass si_na sri_A) sri_wf_Γz eq_refl)).
 Qed.
 
+(** [x → x] in [x : Prop]: the variable [x] occurs in the domain and under the binder. *)
+Definition sri_x_to_x : term := tProd si_na (tRel 0) (tRel 1).
+
 (** The arities context of [I] and [X : Prop → Prop ⊢ X (∀P:Prop. P) : Prop]. *)
 Definition sri_Γa : context := (arities_context (ind_bodies si_mdecl))@[[]].
 
@@ -1053,10 +1056,22 @@ Section SRInstances.
       (idecl := PCUICEtaIdxEnv.ji_idecl) (k := 0) (cdecl := PCUICEtaIdxEnv.ji_cdecl) (br := sri_jbr)
       (p := PCUICEtaIdxEnv.ji_p) sri_jbr_wf eq_refl eq_refl sri_jidA_cr1.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_inst_nondeg *)
-  Lemma closed_red_red_subst0_cb_inst : closed_red si_Σ [] (subst0 [sri_A] (tRel 0)) (subst0 [iv_False] (tRel 0)).
+  (** [x → x] with [(λx:Prop. x) (∀P:Prop. P)] for [x] is not [(λx:Prop. x) (∀P:Prop. P)], [x → x]
+      with [∀P:Prop. P] for [x] is not [∀P:Prop. P], and the two substituted terms differ. *)
+  Lemma closed_red_red_subst0_cb_inst_nondeg :
+    subst0 [sri_A] sri_x_to_x <> subst0 [iv_False] sri_x_to_x /\
+    subst0 [sri_A] sri_x_to_x <> sri_A /\ subst0 [iv_False] sri_x_to_x <> iv_False.
+  Proof. split; [|split]; intros h; vm_compute in h; discriminate h. Qed.
+
+  (** The substitutions [[(λx:Prop. x) (∀P:Prop. P)]] and [[∀P:Prop. P]], related by the closed
+      reduction [red1_red (sri_beta [])], substituted for [x] into [sri_x_to_x] ([x → x] in
+      [x : Prop]).
+      INSTANCE NONDEGEN PCUICSREtaInstances.closed_red_red_subst0_cb_inst_nondeg *)
+  Lemma closed_red_red_subst0_cb_inst :
+    closed_red si_Σ [] (subst0 [sri_A] sri_x_to_x) (subst0 [iv_False] sri_x_to_x).
   Proof.
-    apply (closed_red_red_subst0_cb (Σ := si_Σ) (Δ := [vass si_na si_P]) (s := [sri_A]) (s' := [iv_False]));
+    apply (closed_red_red_subst0_cb (Σ := si_Σ) (Γ := []) (Δ := [vass si_na si_P]) (s := [sri_A])
+             (s' := [iv_False]) (b := sri_x_to_x));
       [reflexivity| |repeat constructor|reflexivity].
     constructor; [|constructor].
     split; [reflexivity|reflexivity|exact (red1_red _ _ _ _ (sri_beta []))].

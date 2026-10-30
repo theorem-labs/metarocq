@@ -404,26 +404,47 @@ Section Generic.
     context_conversion_cumul_propE (wfΣ := cpi_wf_extE) (Γ := cpi_ctx_beta) (Δ := rf_Γ) (M := rf_t)
       (N := tRel 0) cpi_eta_beta_ctx cpi_ctx_conv.
 
-  (** The substituted terms differ and are one η step apart ([eta1]). The two declarations differ:
-      the type [(λX:Prop. X) (Prop → Prop)] of the second reduces to the type [Prop → Prop] of the
-      first in one [red1] step. *)
+  (** The body the two substitutions act on: [∀y:Prop. g y], in [f : Prop → Prop] extended by a
+      declaration of [g] (two of them below). The variable [g] sits under a binder, at the head of
+      an application. *)
+  Definition cpi_subst_body : term := tProd cpi_na (tSort sProp) (tApp (tRel 1) (tRel 0)).
+
+  (** The terms substituted for [g], [λx:Prop. f x] and [f], differ and are one η step apart
+      ([eta1]). The two declarations of [g] differ: the type [(λX:Prop. X) (Prop → Prop)] of the
+      second reduces to the type [Prop → Prop] of the first in one [red1] step. The results of the
+      substitutions into [∀y:Prop. g y], [∀y:Prop. (λx:Prop. f x) y] and [∀y:Prop. f y], differ
+      from both substituted terms and from each other, and are one η step apart ([eta1]). *)
   Lemma cpi_subst_cumul_nondeg :
-    [× rf_t <> tRel 0, eta1 rf_t (tRel 0), [vass c1b_na rf_F] <> [vass c1b_na cpi_Fbeta]
-     & red1 rf_Σ rf_Γ cpi_Fbeta rf_F].
+    [× rf_t <> tRel 0, eta1 rf_t (tRel 0), [vass c1b_na rf_F] <> [vass c1b_na cpi_Fbeta],
+       red1 rf_Σ rf_Γ cpi_Fbeta rf_F,
+       subst0 [rf_t] cpi_subst_body <> rf_t, subst0 [rf_t] cpi_subst_body <> tRel 0,
+       subst0 [tRel 0] cpi_subst_body <> rf_t, subst0 [tRel 0] cpi_subst_body <> tRel 0,
+       subst0 [rf_t] cpi_subst_body <> subst0 [tRel 0] cpi_subst_body
+     & eta1 (subst0 [rf_t] cpi_subst_body) (subst0 [tRel 0] cpi_subst_body)].
   Proof.
     split.
     - intros h; vm_compute in h; discriminate h.
     - exact (eta_red c1b_na (tRel 0) (tSort sProp)).
     - intros h; vm_compute in h; discriminate h.
     - constructor.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - vm_compute. apply prod_eta_r. apply app_eta_l.
+      exact (eta_red c1b_na (tRel 1) (tSort sProp)).
   Qed.
 
-  (** [λx:Prop. f x] and [f] substituted for one variable, checked against two declarations whose
-      types differ by β (the substitutions are [untyped_subslet]).
+  (** [λx:Prop. f x] and [f] substituted for [g] in [∀y:Prop. g y] ([cpi_subst_body]), checked
+      against two declarations of [g] whose types differ by β (the substitutions are
+      [untyped_subslet]). The two results, [∀y:Prop. (λx:Prop. f x) y] and [∀y:Prop. f y], differ
+      from both substituted terms and from each other ([cpi_subst_cumul_nondeg]).
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_subst_cumul_nondeg *)
-  Definition substitution_untyped_cumul_prop_cumulE_inst :=
+  Definition substitution_untyped_cumul_prop_cumulE_inst :
+    rf_Σ ;;; rf_Γ |-E subst0 [rf_t] cpi_subst_body ~~ subst0 [tRel 0] cpi_subst_body :=
     @substitution_untyped_cumul_prop_cumulE cf rf_Σ rf_Γ [vass c1b_na rf_F] [vass c1b_na cpi_Fbeta]
-      [rf_t] [tRel 0] (tRel 0) cpi_wf_extE eq_refl eq_refl eq_refl
+      [rf_t] [tRel 0] cpi_subst_body cpi_wf_extE eq_refl eq_refl eq_refl
       ltac:(repeat constructor) ltac:(repeat constructor) (All2_cons cpi_eta_cp All2_nil).
 
   (** [id] substituted for [f] in the η pair.
