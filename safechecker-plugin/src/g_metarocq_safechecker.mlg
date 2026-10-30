@@ -25,6 +25,22 @@ let safecheck_env env evm poly =
     Environ.push_context_set ~strict:true (us, ucst) @@
     Environ.push_qualities ~rigid:true (qs, qcst) env
 
+(* SafeCheck's only call of the quoter.  Every command of this plugin that
+   quotes a program goes through it, and it has no [bypass] parameter, so no
+   caller can choose the opacity mode.
+
+   [~bypass:true] makes the quoter read the body of every opaque constant the
+   term depends on, and fail with the quoter's error ("Cannot access opaque
+   delayed proof") when it cannot read one.  With [~bypass:false] the quoter
+   drops every opaque body and quotes the constant as an axiom: SafeCheck then
+   checks the statement and never the proof, and accepts a constant whose proof
+   it was not given.  That is a wrong accept.
+
+   [check_bypass_pin.sh] (run by the [plugin] target of this directory's
+   Makefile) fails the build if [quote_term_rec] is called anywhere else in
+   src/, or with anything other than [~bypass:true].  The test-suite's
+   [check_opaque_unreadable.sh] checks the behaviour: SafeCheck on a constant
+   whose opaque body is unreadable aborts with the quoter's error. *)
 let quote_safecheck_program ~opaque_access env evm term =
   Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true ~opaque_access ~with_universes:true env evm term
 
@@ -263,6 +279,31 @@ let test_safecheck_rejects_source ~opaque_access env evm poly reason subject c =
   expect_safecheck_rejection "The quoted source declaration" reason subject
     (safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c))
 
+(* SafeCheck must stop, without a verdict, on a term that depends on an opaque
+   constant whose body the quoter cannot read: it cannot check a proof it was
+   not given (test-suite/opaque_unreadable.v, run by
+   check_opaque_unreadable.sh).  The test runs [safecheck_program], the
+   function [MetaRocq SafeCheck] runs, and passes only if it raises an error
+   whose message contains [reason].  A verdict, acceptance or rejection, fails
+   the test, and so does an error with another message. *)
+let test_safecheck_aborts ~opaque_access env evm poly reason c =
+  match safecheck_program ~opaque_access env evm poly (EConstr.to_constr evm c) with
+  | Coq_inl s ->
+    CErrors.user_err
+      (str "SafeCheck accepted the term instead of aborting: " ++ pr_string s)
+  | Coq_inr s ->
+    CErrors.user_err
+      (str "SafeCheck rejected the term instead of aborting: " ++ pr_string s)
+  | exception e when CErrors.noncritical e ->
+    let message = Pp.string_of_ppcmds (CErrors.print e) in
+    if string_contains ~where:message ~what:reason then
+      Feedback.msg_info (str "SafeCheck aborted as expected: " ++ str message)
+    else
+      CErrors.user_err
+        (str "SafeCheck aborted, but not for the expected reason."
+         ++ fnl () ++ str "expected a message containing: " ++ str reason
+         ++ fnl () ++ str "got: " ++ str message)
+
 (* A polymorphic declaration whose body is
    [fun (X : Type@{max(Set+1, u)}) => (X : Type@{u})], with a real kernel
    [Cast] and with [u] its own bound universe.  Nothing constrains a bound
@@ -479,10 +520,7 @@ let test_memo_reset_on_entry () =
 let test_safecheck_rejection ~opaque_access env evm c =
   with_trans_memo_reset @@ fun () ->
   let term = EConstr.to_constr evm c in
-  let prog =
-    Ast_quoter.quote_term_rec ~translate_template:true ~bypass:true
-      ~opaque_access ~with_universes:true env evm term
-  in
+  let prog = quote_safecheck_program ~opaque_access env evm term in
   let bad_term =
     Ast_quoter.mkSort
       (Ast_quoter.quote_sort
@@ -586,6 +624,15 @@ VERNAC COMMAND EXTEND MetaRocqTestSafeCheckRejectsSource CLASSIFIED AS QUERY STA
     let evm = Evd.from_env env in
     let c, _ = Constrintern.interp_constr env evm c in
     test_safecheck_rejects_source env evm poly reason subject c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestSafeCheckAborts CLASSIFIED AS QUERY STATE opaque_access
+| #[ poly = polymorphic ] [ "MetaRocq" "Test" "SafeCheck" "Aborts" string(reason) constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_safecheck_aborts env evm poly reason c
   }
 END
 

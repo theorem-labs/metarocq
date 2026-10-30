@@ -21,6 +21,9 @@ theory: Makefile.safecheckerplugin
 	./clean_extraction.sh
 
 plugin: theory Makefile.plugin
+# Fail before compiling if SafeCheck's quotation is not pinned to ~bypass:true
+# (see quote_safecheck_program in src/g_metarocq_safechecker.mlg).
+	bash check_bypass_pin.sh src
 # Force building the ML code before the .v's requiring them.
 	$(MAKE) -f Makefile.plugin
 
