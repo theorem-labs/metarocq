@@ -1122,18 +1122,24 @@ Lemma subst_conv_closedE {le} {cf} {Σ} {wfΣ : wfE Σ} {Γ Γ0 Γ1 Δ : context
 Proof.
   intros subs subs' eqs clT clU.
   intros cum.
-  pose proof (substitution_ws_cumul_pbE (s:=s) subs cum).
+  (* the E substitution lemma takes an [untyped_subslet] and the openness of [s]; base's
+     [substitution_ws_cumul_pb] takes the [subslet] directly *)
+  have hopen : forallb (is_open_term Γ) s.
+  { first [ now eapply subslet_open in subs
+          | apply/forallb_All; exact (subslet_open_termsE _ _ _ subs)
+          | solve_all; exact (subslet_open_termsE _ _ _ subs) ]. }
+  pose proof (untyped_substitution_ws_cumul_pbE (s:=s) (subslet_untyped_subsletE _ _ _ _ subs) hopen cum).
   transitivity (subst s #|Δ| U) => //.
   clear X.
   rewrite !subst_closedn //.
   eapply ws_cumul_pbE_refl.
   eapply is_closed_subst_context. eauto with fvs.
-  now eapply subslet_open in subs.
+  exact hopen.
   now rewrite (subslet_lengthE subs).
   relativize U.
   instantiate (1 := subst s #|Δ| U).
   eapply is_open_term_subst; eauto with fvs.
-  now eapply subslet_open in subs.
+  exact hopen.
   now rewrite (subslet_lengthE subs).
   rewrite !subst_closedn //.
 Qed.
