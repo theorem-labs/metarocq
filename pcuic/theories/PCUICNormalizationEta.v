@@ -11,28 +11,18 @@
   [t0-plan.md] §2, D1).
 
   Map, base → E: [wh_normalization] → [wh_normalizationE]; [SN_to_WN] → [SN_to_WNE];
-  [wcbv_normalization] → [wcbv_normalizationE]; [ws_wcbv_standardization] →
-  [ws_wcbv_standardizationE]; [wcbv_standardization] → [wcbv_standardizationE].
+  [wcbv_normalization] → [wcbv_normalizationE]; [firstorder_value_irred] →
+  [firstorder_value_irredE] (over [PCUICFirstorderEta.firstorder_valueE]);
+  [ws_wcbv_standardization] → [ws_wcbv_standardizationE]; [ws_wcbv_standardization_fst] →
+  [ws_wcbv_standardization_fstE]; [wcbv_standardization] → [wcbv_standardizationE];
+  [wcbv_standardization_fst] → [wcbv_standardization_fstE].
 
-  Imported from base, not copied (no typing and no conversion in the statement):
-  [firstorder_value_irred] ([:64], over the base-typing-indexed inductive
-  [PCUICFirstorder.firstorder_value]), [ws_empty] ([:79]) and [irred_equal] ([:86], base
-  reduction only).
-
-  Not copied, with the reason recorded (t0-plan §6 row 20 is "typing only"):
-  [ws_wcbv_standardization_fst] ([:115]) and [wcbv_standardization_fst] ([:155]). Both
-  conclude [eval Σ t v] from [Σ ;;; [] |- t : mkApps (tInd i u) args] and the irreducibility
-  of [v]; both proofs go through [PCUICFirstorder.firstorder_value_spec], and
-  [firstorder_value] is an inductive INDEXED BY BASE TYPING ([PCUICFirstorder.v:109], whose
-  single constructor carries [Σ ;;; Γ |- mkApps (tConstruct i n ui) args : mkApps (tInd i u)
-  pandi]). An E twin of either lemma therefore needs an E copy of [firstorder_value],
-  [firstorder_value_inds], [firstorder_spine], [firstorder_args] and [firstorder_value_spec],
-  which is an E copy of [PCUICFirstorder], a file that is not a row of the T0 plan. The two
-  lemmas have no consumer on the checker path: in the whole tree they are used only by
-  erasure ([erasure/theories/ErasureFunctionProperties.v:2206] uses
-  [wcbv_standardization_fst]; [erasure-plugin/theories/ErasureCorrectness.v:213,383] use
-  [firstorder_value_irred]), and erasure is outside this development's end theorem (the T8
-  consumers note).
+  Imported from base, not copied (they mention no relation and base's compiled forms take no
+  environment premise): [ws_empty] ([:79]) and [irred_equal] ([:86], base reduction only).
+  [firstorder_value_irred] ([:64]) IS copied, because its statement mentions
+  [PCUICFirstorder.firstorder_value], an inductive indexed by base typing
+  ([PCUICFirstorder.v:109], whose constructor carries [Σ ;;; Γ |- mkApps (tConstruct i n ui)
+  args : mkApps (tInd i u) pandi]); its twin is over [firstorder_valueE].
 
   ** Proof routes that differ from base (statements do not)
 
@@ -48,11 +38,12 @@
 
   ** The forecast block
 
-  This file declares no class. Its section takes the five forecast classes of the files it
-  uses — T2a's [ValForecastCopy16] ([PCUICValidityEta]), T1's [SRForecastCopy16] and
-  [SRForecastCopy18] ([PCUICSREta]), [ClassifForecastCopy16] ([PCUICClassificationEta]) and
-  [ProgForecastCopy18] ([PCUICProgressEta]) — as section premises, so that each disappears
-  from these statements when its copy lands and the class is deleted.
+  This file declares no class. Its section takes the two forecast classes that the files it
+  uses still have — T1's [SRForecastCopy18] ([PCUICSREta], through [PCUICClassificationEta],
+  [PCUICProgressEta] and [PCUICFirstorderEta]) and [ProgForecastCopy18] ([PCUICProgressEta])
+  — as section premises, so that each disappears from these statements when its copy lands
+  and the class is deleted. Copy 16 has landed, so [ValForecastCopy16], [SRForecastCopy16] and
+  [ClassifForecastCopy16] no longer exist.
 
   [PCUICCanonicityEta.v] carries [wh_normalizationE] as the single field of its forecast class
   [CanonForecastCopy20]; the lemma proved here is that field's statement, and the two
@@ -77,18 +68,18 @@ From MetaRocq.PCUIC Require Import PCUICTyping PCUICEquality PCUICAst PCUICAstUt
   PCUICWcbvEval PCUICClassification PCUICProgress PCUICSN PCUICNormalization.
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd
   PCUICTypingEtaNotions PCUICClosedBodies PCUICClosedTypEta PCUICWellScopedCumulativityEta
-  PCUICSNEta PCUICValidityEta PCUICSREta PCUICClassificationEta PCUICProgressEta.
+  PCUICSNEta PCUICValidityEta PCUICSREta PCUICClassificationEta PCUICProgressEta
+  PCUICFirstorderEta.
 
 From Equations Require Import Equations.
 
-From MetaRocq.PCUIC Require Import PCUICSN.
+From MetaRocq.PCUIC Require Import PCUICSN PCUICFirstorder.
 
 Section NormalizationEta.
 
 (* FORECAST-ONLY: one premise per class of the files this one uses; delete each when its copy
    lands. *)
-Context {V16 : ValForecastCopy16} {F16 : SRForecastCopy16} {F18 : SRForecastCopy18}
-  {C16 : ClassifForecastCopy16} {P18 : ProgForecastCopy18}.
+Context {F18 : SRForecastCopy18} {P18 : ProgForecastCopy18}.
 
 (** Base [wh_normalization] ([:24]). The statement is the field [wh_normalizationE] of
     [PCUICCanonicityEta.CanonForecastCopy20]. *)
@@ -132,6 +123,22 @@ Proof.
   eapply SN_to_WNE; eauto.
 Qed.
 
+(** Base [firstorder_value_irred] ([:64]). *)
+Lemma firstorder_value_irredE {cf:checker_flags} Σ t t' :
+  firstorder_valueE Σ [] t ->
+  PCUICReduction.red1 Σ [] t t' -> False.
+Proof.
+  intros H.
+  revert t'. pattern t. revert t H.
+  eapply firstorder_value_indsE.
+  intros i n ui u args pandi Hty Hargs IH Hprop t' Hred.
+  eapply red1_mkApps_tConstruct_inv in Hred as (x & -> & Hone).
+  solve_all.
+  clear - IH Hone. induction IH as [ | ? ? []] in x, Hone |- *.
+  - invs Hone.
+  - invs Hone; eauto.
+Qed.
+
 (** Base [ws_wcbv_standardization] ([:99]). *)
 Lemma ws_wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {T} {t v : ws_term (fun _ => false)} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : T ->
@@ -149,6 +156,28 @@ Proof.
   exists v'; split; eauto.
 Qed.
 
+(** Base [ws_wcbv_standardization_fst] ([:115]). *)
+Lemma ws_wcbv_standardization_fstE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {i u args mind} {t v : ws_term (fun _ => false)} : wfE Σ -> axiom_free Σ ->
+  Σ ;;; [] |-E t : mkApps (tInd i u) args ->
+  lookup_env Σ (i.(inductive_mind)) = Some (InductiveDecl mind) ->
+  @firstorder_ind Σ (firstorder_env Σ) i ->
+  closed_red Σ [] t v ->
+  ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
+  eval Σ t v.
+Proof.
+  intros Hwf Hax Hty Hdecl Hfo Hred Hirred.
+  destruct (ws_wcbv_standardizationE Hwf Hax Hty Hred Hirred) as [v' [H H']].
+  assert (firstorder_valueE Σ [] v'). {
+    eapply firstorder_value_specE; eauto. exact localenv_nil.
+    eapply subject_reduction_evalE; eauto.
+    eapply eval_to_value. eauto.
+  }
+  enough (v' = v) as -> by eauto.
+  eapply irred_equal. eauto.
+  intros. eapply firstorder_value_irredE; eauto.
+  Unshelve.
+Qed.
+
 (** Base [wcbv_standardization] ([:136]). *)
 Lemma wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {T t v : term} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : T ->
@@ -158,6 +187,28 @@ Lemma wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {norm
 Proof.
   intros Hwf Hax Hty Hred Hirred.
   unshelve eapply @ws_wcbv_standardizationE with (T := T) (t := (exist t _)) (v := (exist v _)).
+  all: sq; eauto; cbn.
+  1-2: shelve.
+  econstructor; eauto.
+  eapply subject_is_open_termE. eauto.
+  Unshelve.
+  all: rewrite -closed_on_free_vars_none.
+  - now eapply subject_closedE in Hty.
+  - eapply @subject_closedE with (Γ := []); eauto.
+    eapply subject_reductionE; eauto.
+Qed.
+
+(** Base [wcbv_standardization_fst] ([:155]). *)
+Lemma wcbv_standardization_fstE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {i u args mind} {t v : term} : wfE Σ -> axiom_free Σ ->
+  Σ ;;; [] |-E t : mkApps (tInd i u) args ->
+  lookup_env Σ (i.(inductive_mind)) = Some (InductiveDecl mind) ->
+  @firstorder_ind Σ (firstorder_env Σ) i ->
+  red Σ [] t v ->
+  ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
+  eval Σ t v.
+Proof.
+  intros Hwf Hax Hty Hdecl Hfo Hred Hirred.
+  unshelve eapply @ws_wcbv_standardization_fstE with (t := (exist t _)) (v := (exist v _)).
   all: sq; eauto; cbn.
   1-2: shelve.
   econstructor; eauto.

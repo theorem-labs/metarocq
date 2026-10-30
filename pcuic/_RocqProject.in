@@ -291,6 +291,9 @@ theories/PCUICConsistencyEtaInstances.v
 # First-order values over typingE (row T6, the E copy of PCUICFirstorder), and its satisfying instances
 theories/PCUICFirstorderEta.v
 theories/PCUICFirstorderEtaInstances.v
+# Weak-head and weak call-by-value normalization over typingE (T0 copy 20, the E copy of PCUICNormalization), and its satisfying instances
+theories/PCUICNormalizationEta.v
+theories/PCUICTypingEtaCopy20Instances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
 # T8 step 3: R_c* on canon T read back as base red on T (backward simulation through canon)
