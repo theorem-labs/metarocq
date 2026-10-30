@@ -86,8 +86,8 @@ Arguments weakening0E {_ _} _ {_ _ _ _} _.
 Lemma weakening_type_local_ctxE {cf:checker_flags} Σ Γ Δ Δ' ctxs :
   wfE Σ.1 ->
   wf_localE Σ (Γ ,,, Δ) ->
-  type_local_ctx (lift_typing typingE) Σ Γ Δ' ctxs ->
-  type_local_ctx (lift_typing typingE) Σ (Γ ,,, Δ) (lift_context #|Δ| 0 Δ') ctxs.
+  type_local_ctx (PCUICTyping.lift_typing typingE) Σ Γ Δ' ctxs ->
+  type_local_ctx (PCUICTyping.lift_typing typingE) Σ (Γ ,,, Δ) (lift_context #|Δ| 0 Δ') ctxs.
 Proof.
   induction Δ'; simpl; auto.
   destruct a as [na [b|] ty]; simpl; intuition auto.
@@ -128,7 +128,7 @@ Section WithCheckerFlagsE.
     (isdecl : n <= #|Γ|):
     wfE Σ -> wf_localE Σ (Γ ,,, lift_context n 0 Δ) ->
     isTypeE Σ (skipn n Γ ,,, Δ) ty ->
-    isTypeE Σ (Γ,,, lift_context n 0 Δ) (lift n #|Δ| ty).
+    isTypeE Σ (Γ,,, lift_context n 0 Δ) (PCUICAst.lift n #|Δ| ty).
   Proof using cf.
     intros wfΣ wfΓ wfty. rewrite <- (firstn_skipn n Γ) in wfΓ |- *.
     assert (n = #|firstn n Γ|).
@@ -170,9 +170,9 @@ Section CaseDefinitionsE.
     rewrite PCUICContexts.to_extended_list_k_app.
     rewrite map_app; f_equal.
     - rewrite expand_lets_ctx_length Nat.add_0_r.
-      rewrite -{2}[#|_|]Nat.add_0_r PCUICLiftSubst.lift_to_extended_list_k map_map.
-      erewrite map_ext; last (move=> ?; rewrite subst_lift_subst; reflexivity).
-      rewrite -map_map; f_equal.
+      rewrite -{2}[#|_|]Nat.add_0_r PCUICLiftSubst.lift_to_extended_list_k List.map_map.
+      erewrite MRList.map_ext; last (move=> ?; rewrite subst_lift_subst; reflexivity).
+      rewrite -List.map_map; f_equal.
       rewrite -(PCUICLiftSubst.map_subst_instance_to_extended_list_k puinst) subst_instance_smash.
       apply: spine_subst_subst_to_extended_list_kE; eassumption.
     - rewrite -PCUICSubstitution.to_extended_list_k_map_subst ?expand_lets_ctx_length //.
@@ -240,7 +240,7 @@ Section CaseBranchTypeBetaE.
     set cstr_ctx := (pre_case_branch_context_gen _ _ _ _ _).
     set Δ := (lift_context _ _ _).
     move=> wfΣ clret clpred clcstr clpar pareq indxseq declind declctor.
-    pose proof (declmind := proj1 declind).
+    pose proof (declmind := MRProd.proj1 declind).
     have eqcstrctx : #|cstr_args cb| = #|cstr_ctx| by rewrite /cstr_ctx /pre_case_branch_context_gen; len; lia.
     apply: (conv_betasE Σ (@wfE_ClosedBodies _ Σ.1 wfΣ)).
     - have -> : #|Γ ,,, cstr_ctx ,,, Δ| = #|Γ ,,, predctx| + #|cstr_args cb|
@@ -345,7 +345,7 @@ Section RandomLemmasE.
     have Γwf : wf_localE Σ Γ by apply: (typingE_wf_local discrtypok.2.π2.1).
     have wfΣ1 := (fst wfΣ : wfE Σ.1).
     move: (inddecl)=> /(@on_declared_inductiveE _ Σ.1 _ _ _ wfΣ1) [on_ind on_body].
-    have wfΣwk := declared_inductive_wf_ext_wkE _ _ _ wfΣ1 (proj1 inddecl).
+    have wfΣwk := declared_inductive_wf_ext_wkE _ _ _ wfΣ1 (MRProd.proj1 inddecl).
 
     move: (discrtypok)=> /(isType_mkApps_Ind_invE wfΣ1 inddecl Γwf).
     rewrite firstn_app_left // skipn_all_app_eq //.
@@ -364,7 +364,7 @@ Section RandomLemmasE.
     }
     apply: spine_subst_appE.
     * rewrite pparamslen context_assumptions_subst_instance.
-      apply: declared_minductive_ind_nparsE; exact: proj1 inddecl.
+      apply: declared_minductive_ind_nparsE; exact: MRProd.proj1 inddecl.
     * rewrite -app_context_assoc-subst_instance_app_ctx; apply: PCUICWeakeningTypEta.weaken_wf_localE=> //.
       set (Δ := _ ,,, _). destruct Σ as [Σ1 Σ2].
       refine (PCUICUnivSubstitutionTypEta.typing_subst_instance_wf_localE Σ1 Σ2 Δ puinst (ind_universes mib) _ _ _)=> //.
@@ -424,7 +424,7 @@ Lemma type_Case_helperE
   (rettyp : term)
   (brs : list term)
   (indices : list term)
-  (ps : sort) (Σ : global_env_ext) Γ :
+  (ps : Universes.sort) (Σ : global_env_ext) Γ :
   wf_extE Σ ->
 
   declared_inductive Σ ind mib oib ->
@@ -493,7 +493,7 @@ Proof.
   - apply: ptyp.
   - rewrite -/ci -/predctx. constructor=> //=; first reflexivity.
     apply: (spine_subst_ctx_instE ssparamsindxs).
-  - have wfbrs : wf_branches oib (map2 (make_br ind mib) (ind_ctors oib) brs).
+  - have wfbrs : wf_branches oib (MRList.map2 (make_br ind mib) (ind_ctors oib) brs).
     {
       rewrite /wf_branches.
       elim: (ind_ctors oib) {brstyp}brs brslen=> [|decl ctors ih] //= [|br brs] //=.
@@ -540,7 +540,7 @@ Lemma type_Case_subst_helperE
   (rettyp : term)
   (brs : list term)
   (indices : list term)
-  (ps : sort) (Σ : global_env_ext) Γ :
+  (ps : Universes.sort) (Σ : global_env_ext) Γ :
   wf_extE Σ ->
 
   declared_inductive Σ ind mib oib ->
@@ -566,7 +566,7 @@ Lemma type_Case_subst_helperE
   All2i
     (fun (i : nat) (cdecl : constructor_body) (brt : term) =>
       let br := make_br ind mib cdecl brt in
-      let brctx := case_branch_context ind mib p br cdecl in
+      let brctx := PCUICCasesHelper.case_branch_context ind mib p br cdecl in
       let brty := case_branch_type_subst ind mib p predctx rettyp i cdecl in
       wf_localE Σ (Γ,,, brctx) ->
       typingE Σ (Γ,,, brctx) brty (tSort ps) ->
@@ -642,24 +642,24 @@ Proof.
       rewrite /brctx case_branch_context_unfold in wf wfty |- *.
       have hlen : #|instantiate_cstr_indices ind mib pparams puinst x
                     ++ [mkApps (tConstruct ind i puinst)
-                          (map (lift0 #|cstr_args x|) pparams ++ to_extended_list (cstr_args x))]|
+                          (ListDef.map (lift0 #|cstr_args x|) pparams ++ to_extended_list (cstr_args x))]|
                   = context_assumptions (lift_context #|cstr_args x| 0 predctx)
       by rewrite /instantiate_cstr_indices; len.
       have hΔ : #|cstr_args x| = #|pre_case_branch_context_gen ind mib x pparams puinst|
       by rewrite /pre_case_branch_context_gen; len.
       have wrettyp : Σ ;;; (Γ ,,, pre_case_branch_context_gen ind mib x pparams puinst)
                        ,,, lift_context #|cstr_args x| 0 predctx
-                     |-E lift #|cstr_args x| #|predctx| rettyp : tSort ps.
+                     |-E PCUICAst.lift #|cstr_args x| #|predctx| rettyp : tSort ps.
       { have hh := @weakening_typingE _ Σ wfΣ1 Γ predctx
                      (pre_case_branch_context_gen ind mib x pparams puinst) rettyp (tSort ps)
                      wf (predWty predctxwf).
         rewrite -hΔ in hh. exact hh. }
       have wfty' : Σ ;;; Γ ,,, pre_case_branch_context_gen ind mib x pparams puinst
         |-E mkApps (it_mkLambda_or_LetIn (lift_context #|cstr_args x| 0 predctx)
-                      (lift #|cstr_args x| #|predctx| rettyp))
+                      (PCUICAst.lift #|cstr_args x| #|predctx| rettyp))
               (instantiate_cstr_indices ind mib pparams puinst x
                ++ [mkApps (tConstruct ind i puinst)
-                     (map (lift0 #|cstr_args x|) pparams ++ to_extended_list (cstr_args x))])
+                     (ListDef.map (lift0 #|cstr_args x|) pparams ++ to_extended_list (cstr_args x))])
             : tSort ps := wfty.
       exact (type_betasE (U := tSort ps) hlen wrettyp wfty').
     + apply: cumulE_Sym.
@@ -700,7 +700,7 @@ Lemma type_Case_simple_subst_helperE
   (rettyp : term)
   (brs : list term)
   (indices : list term)
-  (ps : sort) (Σ : global_env_ext) Γ :
+  (ps : Universes.sort) (Σ : global_env_ext) Γ :
   wf_extE Σ ->
 
   declared_inductive Σ ind mib oib ->
@@ -709,7 +709,7 @@ Lemma type_Case_simple_subst_helperE
 
   Σ;;; Γ |-E discr : mkApps (tInd ind puinst) (pparams ++ indices) ->
 
-  let rettyp' := lift0 (S #|ind_indices oib|) rettyp in
+  let rettyp' := lift0 (Datatypes.S #|ind_indices oib|) rettyp in
 
   let p := make_case_pred ind mib oib pparams puinst rettyp' in
   let predctx := case_predicate_context ind mib oib p in
@@ -726,7 +726,7 @@ Lemma type_Case_simple_subst_helperE
   All2i
     (fun (i : nat) (cdecl : constructor_body) (brt : term) =>
       let br := make_br ind mib cdecl brt in
-      let brctx := case_branch_context ind mib p br cdecl in
+      let brctx := PCUICCasesHelper.case_branch_context ind mib p br cdecl in
       let brty := lift0 #|brctx| rettyp in
       wf_localE Σ (Γ,,, brctx) ->
       typingE Σ (Γ,,, brctx) brty (tSort ps) ->
@@ -763,10 +763,10 @@ Proof.
   move=> [parsubst [indxsubst]].
   move=> [sspparams ssindices _ indiceslen puinstok].
 
-  have predctxlen : S #|ind_indices oib| = #|predctx|
+  have predctxlen : Datatypes.S #|ind_indices oib| = #|predctx|
   by rewrite /predctx PCUICCasesContexts.inst_case_predicate_context_eq; first reflexivity; len.
 
-  have ? : context_assumptions predctx = S #|indices|
+  have ? : context_assumptions predctx = Datatypes.S #|indices|
   by rewrite /predctx PCUICCasesContexts.inst_case_predicate_context_eq; try reflexivity; len.
 
   set subst_rettyp' := subst0 (mk_ctx_subst predctx (indices ++ [discr])) rettyp'.
@@ -779,12 +779,12 @@ Proof.
                 on_free_vars (strengthenP 0 1 xpredT) rettyp') = true.
   { apply/implyP => _. rewrite /rettyp'. apply: on_free_vars_lift0.
     eapply on_free_vars_impl; last exact: (subject_is_open_termE predWty).
-    move=> i _. change (strengthenP 0 1 xpredT (S #|ind_indices oib| + i)).
+    move=> i _. change (strengthenP 0 1 xpredT (Datatypes.S #|ind_indices oib| + i)).
     rewrite strengthenP01. apply/negP => /Nat.eqb_eq. lia. }
 
   apply: type_Case_subst_helperE=> //; try eassumption.
   - rewrite -/predctx=> ? /=.
-    have -> : tSort ps = lift0 (S #|ind_indices oib|) (tSort ps) by reflexivity.
+    have -> : tSort ps = lift0 (Datatypes.S #|ind_indices oib|) (tSort ps) by reflexivity.
     apply: weakening_genE=> //.
   - pose proof (declctors := declared_ind_declared_constructors inddecl).
     apply: (All2i_impl (All2i_Alli_mix_left declctors brsok)) => i x t [declctor h] br brctx brty wfctx wfty.
