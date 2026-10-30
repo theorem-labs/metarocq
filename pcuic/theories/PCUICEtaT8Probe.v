@@ -1088,7 +1088,7 @@ Section TypedSafe.
       and [mfix_body_on_conv_closed_redE_false] (:286), and its typed E form is the T8-shaped
       lemma of the third link. BUILT (both refutations are compiled).
     - [PCUICSR.isType_red] ([PCUICSR.v:3969]) types the reduct; its E form
-      [PCUICSREta.isType_redE] ([PCUICSREta.v:3437]) needs E subject reduction, which is
+      [PCUICSREta.isType_redE] ([PCUICSREta.v:3139]) needs E subject reduction, which is
       [PCUICSREta.subject_reductionE] (row T1, used directly by [T8Assembly]): not T8-shaped,
       not refuted, but T8's own premise. BUILT (the E form is compiled).
     - [PCUICSpine.typing_spine_strengthen] ([PCUICSpine.v:325]) and
