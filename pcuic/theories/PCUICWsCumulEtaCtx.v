@@ -959,3 +959,36 @@ Corollary ws_cumul_pbE_alt_closed_false :
      ∑ v v', [× closed_red Σ Γ t v, closed_red Σ Γ u v' &
        compare_term Σ (global_ext_constraints Σ) pb v v']) -> False.
 Proof. exact ws_cumul_pbE_red_false. Qed.
+
+(** ** Scoping and symmetry of a declaration comparison
+
+  Base's [ws_cumul_decls_wf_decl_left], [_right] and [ws_cumul_decls_sym]
+  ([PCUICWellScopedCumulativity]) over [ws_cumul_declsE], registered where base
+  registers them. Base takes [wf Σ]; here the section premise is [ClosedBodies Σ],
+  and no proof reads it, so each compiled statement carries none. *)
+
+Section DeclScopingE.
+
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
+
+  Lemma ws_cumul_declsE_wf_decl_left {pb Γ d d'} :
+    ws_cumul_declsE pb Σ Γ d d' -> ws_decl Γ d.
+  Proof using Type.
+    intros []; cbn; eauto with fvs.
+  Qed.
+
+  Lemma ws_cumul_declsE_wf_decl_right {pb Γ d d'} :
+    ws_cumul_declsE pb Σ Γ d d' -> ws_decl Γ d'.
+  Proof using Type.
+    intros []; cbn; eauto with fvs.
+  Qed.
+
+  #[global] Instance ws_cumul_declsE_sym Γ : Symmetric (ws_cumul_declsE Conv Σ Γ).
+  Proof using Type.
+    move=> x y [na na' T T' eqan cv|na na' b b' T T' eqna eqb eqT];
+    constructor; now symmetry.
+  Qed.
+
+End DeclScopingE.
+
+#[global] Hint Immediate ws_cumul_declsE_wf_decl_left ws_cumul_declsE_wf_decl_right : fvs.

@@ -217,3 +217,7 @@ End A1.
 (** The E twins of base's registrations [PCUICWellScopedCumulativity.v:353] and [:400]. *)
 #[global] Hint Immediate ws_cumul_pbE_refl : pcuic.
 #[global] Hint Resolve red_ws_cumul_pbE red_ws_cumul_pbE_inv : pcuic.
+
+(** Base registers the two [pb] instances of its forgetful map on [pcuic]
+    ([PCUICWellScopedCumulativity]); here one [pb]-general lemma carries both. *)
+#[global] Hint Resolve ws_cumul_pbE_forget : pcuic.
