@@ -12,9 +12,10 @@
   [iv_Γk]); [al_keta] is [iv_keta] with the binder of [λ_:Prop. g _] named [x]; [al_mfix] is the
   fixpoint [iv_mfix] with its name and both binders named [x]; [al_id] and [al_PP] are [λ_:Prop. _]
   and [Prop → Prop] with the binder named [x]; [al_mp] is the [match] predicate [iv_mp] whose
-  context (the one binder of [ind_predicate_context]) is named [x]. Each differs syntactically
-  from its original ([al_Γk_differs], [al_keta_differs], [al_mfix_differs], [al_PP_differs],
-  [al_id_PP_differ], [al_mp_differs]).
+  context (the one binder of [ind_predicate_context]) is named [x]; [[x : Π x : Prop. Prop]] is
+  [[_ : Prop → Prop]] with both names [x]. Each differs syntactically from its original
+  ([al_Γk_differs], [al_keta_differs], [al_mfix_differs], [al_PP_differs], [al_id_PP_differ],
+  [al_mp_differs], [al_ΓPP_differs]).
 
   **Every lemma** is applied to these, every premise proved here. [typing_alpha_propE] and its
   corollaries (which use [validityE] of T2a and a copy-18b lemma) are applied in section
@@ -29,6 +30,9 @@
   [k (λ_:Prop. g _)] is not [y]'s declared type [k g] and η-contracts to it in one step.
   [type_Cumul'E_inst] retypes [y : k g] at [k (λ_:Prop. g _)]; [al_kg_keta_differ] states that
   the two types differ and that the second η-contracts to the first in one step.
+  [eq_context_upto_conv_context_relE_inst] and [upto_names_conv_contextE_inst] relate
+  [[_ : Prop → Prop]] and [[x : Π x : Prop. Prop]], whose declared types are themselves different
+  α-variants ([al_ΓPP_differs]).
   [inst_case_predicate_context_eqE_inst] relates the two different constructions
   [case_predicate_context] and [inst_case_predicate_context] of the predicate [al_mp], whose
   context is an α-variant of [ind_predicate_context] (the lemma's premise), not the context
@@ -119,6 +123,17 @@ Proof. constructor; [constructor|]. constructor; [exact eq_refl|reflexivity|refl
 Lemma al_PP_alpha : iv_PP ≡α al_PP.
 Proof. constructor; [exact eq_refl|reflexivity|reflexivity]. Qed.
 
+(** The one-declaration contexts [[_ : Prop → Prop]] and [[x : Π x : Prop. Prop]]: the names and the
+    declared types differ, the types being α-variants. *)
+Lemma al_ΓPP_alpha : [vass si_na iv_PP] ≡Γ [vass al_xna al_PP].
+Proof.
+  constructor; [reflexivity|]. constructor; [exact eq_refl|].
+  constructor; [exact eq_refl|reflexivity|reflexivity].
+Qed.
+
+Lemma al_ΓPP_differs : [vass si_na iv_PP] <> [vass al_xna al_PP] /\ iv_PP <> al_PP.
+Proof. split; discriminate. Qed.
+
 Lemma al_mfix_alpha : eq_mfixpoint upto_names' iv_mfix al_mfix.
 Proof.
   constructor; [|constructor]. cbn.
@@ -181,9 +196,13 @@ Proof.
   constructor; [reflexivity|constructor].
 Qed.
 
-(** INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs *)
-Definition eq_context_upto_conv_context_relE_inst : ws_cumul_ctx_pbE_rel Conv si_Σ [] iv_Γk al_Γk :=
-  eq_context_upto_conv_context_relE (Σ := si_Σ) (wfΣ := si_wfE) [] iv_Γk al_Γk eq_refl eq_refl al_Γk_alpha.
+(** [[_ : Prop → Prop]] against [[x : Π x : Prop. Prop]]: the declared types are different
+    α-variants ([al_ΓPP_differs]).
+    INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_ΓPP_differs *)
+Definition eq_context_upto_conv_context_relE_inst :
+  ws_cumul_ctx_pbE_rel Conv si_Σ [] [vass si_na iv_PP] [vass al_xna al_PP] :=
+  eq_context_upto_conv_context_relE (Σ := si_Σ) (wfΣ := si_wfE) [] [vass si_na iv_PP] [vass al_xna al_PP]
+    eq_refl eq_refl al_ΓPP_alpha.
 
 (** The predicate context [x : I A] of [al_mp] against the context [I : I A] of the inductive.
     INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_mp_differs *)
@@ -205,9 +224,10 @@ Definition al_wf_Γk : wf_localE si_Σ al_Γk := wf_local_eq_context_upto_namesE
 Definition eq_context_conversionE_inst : si_Σ ;;; al_Γk |-E tRel 0 : iv_keta :=
   eq_context_conversionE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := iv_Γk) (Δ := al_Γk) iv_rel_typed al_Γk_alpha al_wf_Γk.
 
-(** INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs *)
-Definition upto_names_conv_contextE_inst : conv_context (@JoinE _) si_Σ iv_Γk al_Γk :=
-  upto_names_conv_contextE si_Σ iv_Γk al_Γk al_Γk_alpha.
+(** The same two contexts, joined declaration by declaration ([al_ΓPP_differs]).
+    INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_ΓPP_differs *)
+Definition upto_names_conv_contextE_inst : conv_context (@JoinE _) si_Σ [vass si_na iv_PP] [vass al_xna al_PP] :=
+  upto_names_conv_contextE si_Σ [vass si_na iv_PP] [vass al_xna al_PP] al_ΓPP_alpha.
 
 Definition al_keta_isType : isTypeE si_Σ iv_Γk iv_keta := has_sort_isTypeE _ iv_keta_typed.
 
