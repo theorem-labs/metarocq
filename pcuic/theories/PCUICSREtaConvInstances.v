@@ -24,9 +24,9 @@
   that shape; their instances run on two contexts with a let above an assumption
   ([sc_Γm_reln_nondeg]). The fixpoint-witness rows ([mfix_body_on_red_typeE],
   [mfix_on_ind_red1_typeE]) run on [check_one_fix] and a declared type on which it finds no block,
-  reduced to [sc_ty] ([sc_red_A]); the witness [sc_tw] of the premise is a one-step reduct of that
-  type ([sc_closed_red1_tw]), and neither of [sc_ty], [sc_tw] reduces to the other
-  ([sc_fix_peak_nondeg]).
+  reduced to [sc_ty] ([sc_red_A]); the witness [sc_tw] of the premise ([sc_body_on]) is a
+  one-step reduct of that type ([sc_closed_red1_tw]), and neither of [sc_ty], [sc_tw] reduces to
+  the other ([sc_fix_peak_nondeg]).
   [declared_inductive_closed_params_instE] has no relation in it; its instance has a non-empty
   parameter context. [ws_cumul_ctx_pbE_cons_inv] inverts one constructor of [All2_fold], so its
   instance is tagged IMPOSSIBLE; it runs on the mixed pair of [sc_ctx_m], whose tails and heads
@@ -254,8 +254,8 @@ Qed.
 
 (** The reduct [sc_ty] ([sc_red_A]) of the declared type [sc_A] gets a witness that
     [check_one_fix] accepts. [check_one_fix] finds no block on [sc_ty]; the witness [sc_tw] of the
-    premise is a one-step reduct of [sc_A] ([sc_closed_red1_tw]); neither of [sc_ty], [sc_tw]
-    reduces to the other ([sc_fix_peak_nondeg]).
+    premise ([sc_body_on]) is a one-step reduct of [sc_A] ([sc_closed_red1_tw]); neither of
+    [sc_ty], [sc_tw] reduces to the other ([sc_fix_peak_nondeg]).
     INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_fix_peak_nondeg *)
 Lemma mfix_body_on_red_typeE_inst :
   mfix_body_on check_one_fix (conv_witnessE si_Σ []) si_kn (def_with_type sc_d sc_ty).
@@ -263,7 +263,7 @@ Proof. exact (mfix_body_on_red_typeE (d := sc_d) sc_red_A sc_body_on). Qed.
 
 (** A block of two bodies, with the recursivity check of [wf_fixpointE]: the type of the second
     body takes the reduction [sc_red_A], the first is unchanged; [sc_ty] and the witness [sc_tw] of
-    the premise are as in [mfix_body_on_red_typeE_inst] ([sc_fix_peak_nondeg]).
+    the premise ([sc_body_on]) are as in [mfix_body_on_red_typeE_inst] ([sc_fix_peak_nondeg]).
     INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_fix_peak_nondeg *)
 Lemma mfix_on_ind_red1_typeE_inst :
   mfix_on_ind check_one_fix (conv_witnessE si_Σ [])
