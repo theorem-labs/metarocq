@@ -56,10 +56,15 @@
      (each under base's normalization premise for [iv_Σ], which no one proves). Details in the
      section.
 
+  5. The two induction principles BET-339 restated ([typing_ind_envE],
+     [typing_ind_env_app_sizeE]), each run with predicates whose [tCase] hypothesis consumes the
+     restated premise: a typed case on [R] with a predicate on the scrutinee has its flag unset.
+     Details in the section.
+
   Tags: the instance grammar of [lanes/eta/meta/instance-gate.md] (one [INSTANCE NONDEGEN],
   [INSTANCE IMPOSSIBLE:] or [INSTANCE NOT-BUILT:] line directly above each instance, with
   [TARGET] lines). Declarations that are neither instances nor NONDEGEN lemmas:
-  WITNESSES: f3_* g_* t8_* l45_* wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false
+  WITNESSES: f3_* g_* t8_* l45_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false
 
   Forecast evidence for the cutover F0 (it rests on the ship branch's
   [PCUICEtaFO4Instances], which is itself forecast-only). *)
@@ -79,6 +84,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
 From MetaRocq.PCUIC Require PCUICWfUniverses.
 From MetaRocq.PCUIC Require PCUICSNEta PCUICConsistency PCUICCanonicityEta PCUICConsistencyEta
      PCUICConsistencyEtaInstances PCUICEtaA6.
+From MetaRocq.PCUIC Require Import PCUICTypingEtaInd.
 
 #[local] Existing Instance default_checker_flags.
 #[local] Instance f3_iv_cb : ClosedBodies iv_env := @wfE_ClosedBodies _ iv_env iv_wfE.
@@ -1139,6 +1145,139 @@ Proof.
   exact (g_no_eval v' ev).
 Qed.
 
+(** ** 5. The restated induction principles [typing_ind_envE] and [typing_ind_env_app_sizeE]
+
+  BET-339 restates one premise of each principle: its [tCase] hypothesis receives
+  [isCoFinite ==> (ci_cofix_nondep ==> on_free_vars (strengthenP 0 1 xpredT) preturn)]. The
+  instances run each principle with predicates that CONSUME that premise:
+  - [pgf_P Σ Γ t T]: if [t] is a case on [R] in [iv_Σ] whose return predicate mentions the
+    scrutinee, its flag is unset. Only the [tCase] hypothesis has work to do
+    ([pgf_case_root]): the inductive is [R] ([CoFinite]) and the predicate is dependent, so the
+    restated premise forces the flag to [false]. Every other hypothesis concludes because its
+    subject is not a case ([pgf_not_case]), is an application of one ([pgf_app]: the head's own
+    hypothesis), or is retyped ([tCumul]).
+  - [pgf_Pj Σ Γ j]: [pgf_P] on the judgment's term (if any) and type; [pgf_PΓ Σ Γ]: [pgf_Pj] on
+    every declaration of [Γ] (the context hypothesis passes it straight on).
+  Each instance is the principle's whole conclusion [env_propE pgf_P pgf_Pj pgf_PΓ], at
+  [default_checker_flags]: every term typed under [typingE], in every environment, satisfies
+  [pgf_P]. It is not provable without an induction over typing derivations.
+  Non-degeneracy ([pgf_nondeg]): each of the three predicates is false on some input (the case
+  [pgf_bad], which is [f3_t0] with its flag SET); on the typed term [f3_t0] of section 1 (the region
+  BET-339 admits: the old premise is false there) every premise of [pgf_P] holds, so the
+  conclusion at [f3_t0] is the restated premise's own consequence, not a vacuous implication.
+  Consequence ([pgf_bad_untypable], from the instance): [pgf_bad] has no type in [fo_Γ]. *)
+
+Definition pgf_P : global_env_ext -> context -> term -> term -> Type :=
+  fun Σ _ t _ => forall ci p c brs, t = tCase ci p c brs -> Σ = iv_Σ -> ci.(ci_ind) = iv_ind ->
+    on_free_vars (strengthenP 0 1 xpredT) p.(preturn) = false -> ci.(ci_cofix_nondep) = false.
+
+Definition pgf_Pj : global_env_ext -> context -> judgment -> Type :=
+  fun Σ Γ j => (option_default (fun tm => pgf_P Σ Γ tm (j_typ j)) (j_term j) unit ×
+                pgf_P Σ Γ (j_typ j) (j_typ j))%type.
+
+Definition pgf_PΓ : global_env_ext -> context -> Type :=
+  fun Σ Γ => All_local_env (pgf_Pj Σ) Γ.
+
+Lemma pgf_not_case Σ Γ t T :
+  (forall ci p c brs, t = tCase ci p c brs -> False) -> pgf_P Σ Γ t T.
+Proof. intros h ci p c brs e. exfalso. exact (h ci p c brs e). Qed.
+
+Lemma pgf_app Σ Γ t L T B : pgf_P Σ Γ t T -> pgf_P Σ Γ (mkApps t L) B.
+Proof.
+  intros pt ci p c brs e. destruct L using rev_case.
+  - exact (pt ci p c brs e).
+  - rewrite mkApps_app in e. cbn in e. discriminate e.
+Qed.
+
+(** The [tCase] hypothesis: the restated premise forces the flag. *)
+Lemma pgf_case_root (Σ : global_env_ext) Γ ci p c brs T mdecl idecl :
+  declared_inductive Σ.1 ci.(ci_ind) mdecl idecl ->
+  implb (isCoFinite mdecl.(ind_finite))
+    (implb ci.(ci_cofix_nondep) (on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) = true ->
+  pgf_P Σ Γ (tCase ci p c brs) T.
+Proof.
+  intros isd hc ci' p' c' brs' e -> eind hfv.
+  injection e as <- <- <- <-.
+  (* [iv_env] declares [R] only: the membership names [iv_mdecl]. *)
+  destruct isd as [hm _]. unfold declared_minductive in hm. cbn in hm.
+  destruct hm as [hm|[]]. injection hm; intros; subst.
+  rewrite hfv in hc.
+  destruct (ci_cofix_nondep ci) eqn:hf; [|reflexivity].
+  try rewrite hf in hc. vm_compute in hc. discriminate hc.
+Qed.
+
+Ltac pgf_case :=
+  first
+  [ (* the judgment hypothesis *)
+    let Htm := fresh "Htm" in let Hty := fresh "Hty" in
+    intros ? ? ? j (Htm & ? & (_ & Hty) & _); split;
+    [ revert Htm; case: (j_term j) => [tm|] /= Htm; [exact (snd Htm)|exact tt]
+    | exact Hty ]
+  | (* the context hypothesis *)
+    intros; match goal with h : All_local_env (pgf_Pj _) _ |- pgf_PΓ _ _ => exact h end
+  | (* the case hypothesis *)
+    intros; eapply pgf_case_root; eassumption
+  | (* the application hypothesis (both principles) *)
+    intros; match goal with
+    | pt : pgf_P ?Σ ?Γ ?t _ |- pgf_P ?Σ ?Γ (mkApps ?t ?L) ?B => exact (pgf_app Σ Γ t L _ B pt)
+    end
+  | (* subjects that are not a case *)
+    intros; apply pgf_not_case; intros ? ? ? ? e; discriminate e
+  | (* the cumulativity hypothesis: same subject, another type *)
+    intros; match goal with h : pgf_P ?Σ ?Γ ?t _ |- pgf_P ?Σ ?Γ ?t _ => exact h end ].
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.pgf_nondeg
+   TARGET PCUICProgressEta.typing_ind_envE
+   Predicates that consume the restated [tCase] premise; every case proved in general. *)
+Lemma typing_ind_envE_inst : env_propE pgf_P pgf_Pj pgf_PΓ.
+Proof. apply typing_ind_envE; pgf_case. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.pgf_nondeg
+   TARGET PCUICProgressEta.typing_ind_env_app_sizeE
+   The same predicates; the application hypothesis also receives the sized induction
+   hypothesis, which [pgf_app] does not need. *)
+Lemma typing_ind_env_app_sizeE_inst : env_propE pgf_P pgf_Pj pgf_PΓ.
+Proof. apply typing_ind_env_app_sizeE; pgf_case. Qed.
+
+(** [f3_t0] with its flag SET: a case on [R] whose predicate [P z] mentions the scrutinee. *)
+Definition pgf_ci_set : case_info :=
+  {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
+Definition pgf_bad : term := tCase pgf_ci_set fo_p f3_scrut [fo_br].
+
+Lemma pgf_fo_p_dep : on_free_vars (strengthenP 0 1 xpredT) (preturn fo_p) = false.
+Proof. reflexivity. Qed.
+
+Lemma pgf_bad_false Γ T : pgf_P iv_Σ Γ pgf_bad T -> False.
+Proof.
+  intros h. specialize (h pgf_ci_set fo_p f3_scrut [fo_br] eq_refl eq_refl eq_refl pgf_fo_p_dep).
+  discriminate h.
+Qed.
+
+(** Each of the three predicates is false on some input, and on the typed [f3_t0] (old premise
+    false, new premise true) every premise of [pgf_P] holds. *)
+Lemma pgf_nondeg :
+  ((pgf_P iv_Σ fo_Γ pgf_bad f3_T -> False) ×
+   (pgf_Pj iv_Σ fo_Γ (j_vass si_na pgf_bad) -> False) ×
+   (pgf_PΓ iv_Σ (fo_Γ ,, vass si_na pgf_bad) -> False) ×
+   (iv_Σ ;;; fo_Γ |-E f3_t0 : f3_T) ×
+   (f3_t0 = tCase fo_ci fo_p f3_scrut [fo_br]) × (fo_ci.(ci_ind) = iv_ind) ×
+   (on_free_vars (strengthenP 0 1 xpredT) (preturn fo_p) = false) ×
+   ((isCoFinite (ind_finite iv_mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) (preturn fo_p))
+      = false))%type.
+Proof.
+  refine (pgf_bad_false fo_Γ f3_T, (_, (_, (f3_t0_typed, (eq_refl, (eq_refl, (pgf_fo_p_dep, f3_old_premise_fails))))))).
+  - intros [_ h]. exact (pgf_bad_false fo_Γ _ h).
+  - intros h. unfold pgf_PΓ in h. inversion h; subst.
+    match goal with hj : pgf_Pj _ _ _ |- _ => exact (pgf_bad_false fo_Γ _ (snd hj)) end.
+Qed.
+
+(** The instance's consequence: BET-339's rule rejects [pgf_bad] (flag set, predicate on the
+    scrutinee, inductive [R] coinductive). *)
+Lemma pgf_bad_untypable T : iv_Σ ;;; fo_Γ |-E pgf_bad : T -> False.
+Proof.
+  intros h. exact (pgf_bad_false fo_Γ T (snd (snd (typing_ind_envE_inst iv_Σ iv_wfE fo_Γ pgf_bad T h)))).
+Qed.
+
 (** ** Print Assumptions, per instance *)
 
 Print Assumptions f3_sr.
@@ -1157,3 +1296,7 @@ Print Assumptions no_closed_stuck_cofix_case_at_Σ_FalseE_inst.
 Print Assumptions wcbv_normalizationE_old_false.
 Print Assumptions SN_to_WNE_old_false.
 Print Assumptions ws_wcbv_standardizationE_old_false.
+Print Assumptions typing_ind_envE_inst.
+Print Assumptions typing_ind_env_app_sizeE_inst.
+Print Assumptions pgf_nondeg.
+Print Assumptions pgf_bad_untypable.
