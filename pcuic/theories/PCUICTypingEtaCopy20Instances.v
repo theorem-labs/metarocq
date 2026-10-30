@@ -68,11 +68,12 @@ Lemma c20_Ind_normal (S : global_env) Γ i u v :
 Proof. intros H. inv_red H. Qed.
 
 Lemma c20_Rel_normal (S : global_env) (Γ : context) n v :
-  option_map decl_body (nth_error Γ n) = Some None ->
+  Corelib.Init.Datatypes.option_map decl_body (nth_error Γ n) = Some None ->
   MetaRocq.PCUIC.PCUICReduction.red1 S Γ (tRel n) v -> False.
 Proof.
   intros hn H. inv_red H.
-  match goal with e : option_map decl_body _ = _ |- _ => rewrite hn in e; discriminate e end.
+  match goal with e : Corelib.Init.Datatypes.option_map decl_body _ = _ |- _ =>
+    rewrite hn in e; discriminate e end.
 Qed.
 
 (** A [red1]-normal term is accessible for [cored]. *)
