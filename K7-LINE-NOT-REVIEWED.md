@@ -39,13 +39,20 @@ of `ff20a493` (`lanes/eta/etak/gate-land6fix-ff20a493.md`).
 A push to this line runs `lanes/eta/bin/etak-k7-merge-check.sh` (pre-push hook of the metarocq
 repo): the line takes other lanes' work only from `frac/eta`.
 
-DELETION RULE (lead 2026-10-30 17:45Z; the same condition LAND6 lands on): delete this file in the K7
-merge of a LAND6 head that has landed on `frac/eta`, ONLY if (1) that head's FOCUSED review (every
-changed instance, plus a seeded sample of n = 60 unchanged instances) names each of the 45 rows above
-CLOSED (rebuilt) or TRUE (IMPOSSIBLE retag), (2) the sample gate passes, and (3) the landed head's tag
-convention says NONDEGEN is a reader judgment with the miss rate in `reader-catch-rate.tsv`, so the
-finite strength of the tags travels with the tags, on `frac/eta` and `frac/ship` too. The merge body
-carries the 45-row table and states that the 45 are what review found, and that the sample bounds the
-residual rate (about ≤5% for 0 misses in 60), not at zero. If (1) or (2) fails, amend this file to
-the rows that remain; if only (3) fails, keep this file in reduced form (no rows, only the miss-rate
-pointer).
+DELETION RULE (lead 2026-10-30 17:45Z; condition (2) restated 19:05Z): delete this file in the K7 merge
+of a LAND6 head that has landed on `frac/eta`, ONLY if:
+(1) THE GATE: that head's FOCUSED review (every changed instance, plus a seeded sample of n = 60
+    unchanged instances) names each of the 45 rows above CLOSED (rebuilt) or TRUE (IMPOSSIBLE retag).
+    Any row it does not close is NAMED in an amended marker, never dropped. As of `11092806`,
+    `PCUICValidityEtaInstances.isType_Sort_invE_inst` is NOT CLOSED: every typing of `tSort s` stores
+    `wf_sort` in its base `typeE_Sort` and the lemma returns that field, so the row must become IMPOSSIBLE.
+(2) A RECORDING DUTY, not a pass mark: the final focused review's sample result (misses of 60, the
+    residual, its 95% upper bound, and the seed) is (i) written INLINE in the NONDEGEN header of all 17
+    instance files, (ii) recorded in the ledger `dispatch://BET-64/artifact/eta-reader-catch-rate-tsv`,
+    and (iii) quoted in the K7 merge body. The three copies must be character-identical (checked before
+    the merge); if they ever disagree, the header is authoritative, because it travels with the code.
+(3) the landed head's NONDEGEN header says the tag is a reader judgment.
+The merge body carries the 45-row table and states that the 45 are what review found, and that the
+sample bounds the residual rate, not at zero. If (1) fails, amend this file to the rows that remain;
+if only (2) or (3) fails, keep this file in reduced form (no rows, only the sample result and the
+reader-judgment statement) until it holds.
