@@ -726,7 +726,53 @@ Lemma weakening_env_cumulSpecE Σ Σ' φ Γ M N :
   cumulSpecE (Σ', φ) Γ M N.
 Proof using P Pcmp. apply weakening_env_cumulSpecE0 with (pb := Cumul). Qed.
 
+(** Base's declaration- and context-level environment weakening
+    ([Conversion/PCUICWeakeningEnvConv]), over [cumulSpecE0]. The two context forms
+    carry base's [extends] hints, so a proof over the E relation finds them where a
+    base proof finds base's. *)
+
+Lemma weakening_env_conv_declsE {Σ φ Σ' Γ Γ'} :
+  wf Σ' -> extends Σ Σ' ->
+  CRelationClasses.subrelation (conv_decls cumulSpecE0 (Σ, φ) Γ Γ') (conv_decls cumulSpecE0 (Σ', φ) Γ Γ').
+Proof using P Pcmp.
+  intros wfΣ' ext d d' Hd; depelim Hd; constructor; tas;
+    eapply weakening_env_convSpecE; tea.
+Qed.
+
+Lemma weakening_env_cumul_declsE {Σ φ Σ' Γ Γ'} :
+  wf Σ' -> extends Σ Σ' ->
+  CRelationClasses.subrelation (cumul_decls cumulSpecE0 (Σ, φ) Γ Γ') (cumul_decls cumulSpecE0 (Σ', φ) Γ Γ').
+Proof using P Pcmp.
+  intros wfΣ' ext d d' Hd; depelim Hd; constructor; tas;
+    (eapply weakening_env_convSpecE || eapply weakening_env_cumulSpecE); tea.
+Qed.
+
+Lemma weakening_env_conv_ctxE {Σ Σ' φ Γ Δ} :
+  wf Σ' ->
+  extends Σ Σ' ->
+  conv_context cumulSpecE0 (Σ, φ) Γ Δ ->
+  conv_context cumulSpecE0 (Σ', φ) Γ Δ.
+Proof using P Pcmp.
+  intros wfΣ' ext.
+  intros; eapply All2_fold_impl; tea => Γ0 Γ'' d d'.
+  now eapply weakening_env_conv_declsE.
+Qed.
+
+Lemma weakening_env_cumul_ctxE {Σ Σ' φ Γ Δ} :
+  wf Σ' ->
+  extends Σ Σ' ->
+  cumul_context cumulSpecE0 (Σ, φ) Γ Δ ->
+  cumul_context cumulSpecE0 (Σ', φ) Γ Δ.
+Proof using P Pcmp.
+  intros wfΣ' ext.
+  intros; eapply All2_fold_impl; tea => Γ0 Γ'' d d'.
+  now eapply weakening_env_cumul_declsE.
+Qed.
+
 End ExtendsWfE.
+
+#[global] Hint Resolve weakening_env_conv_ctxE : extends.
+#[global] Hint Resolve weakening_env_cumul_ctxE : extends.
 
 (** * Instantiation, universe substitution and configuration weakening of [cumulSpecE0]
 
