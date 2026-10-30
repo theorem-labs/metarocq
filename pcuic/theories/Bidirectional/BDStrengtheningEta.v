@@ -57,13 +57,13 @@
     [BDStrengthening.v:1110]). Base's [cumulAlgo_cumulSpec]/[ws_cumul_pb_red_r_inv] on the
     reduct is [red_ws_cumul_pbE] then [ws_cumul_pbE_forget_spec].
 
-  ** The forecast block
+  ** No forecast class
 
   [on_free_vars_typeE], [typing_renaming_cond_PE], [strengtheningE] and [strengthening_typeE] use
-  soundness, completeness, validity and subject reduction, so they take the forecast class of
-  [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b) as a section [Context]; it is imported,
-  never redefined. The scoping and renaming lemmas use none. This file adds no class. [Print
-  Assumptions] in [BDStrengtheningEtaInstances] shows the class as an argument. *)
+  soundness, completeness, validity and subject reduction, so they took the forecast class of
+  [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b) as a section [Context] until copy 18b landed
+  (frac/eta 3e6b422d); it was deleted after a compiled-form identity check of each field. The
+  scoping and renaming lemmas never used one. This file adds no class. *)
 
 From Stdlib Require Import Bool List Arith Lia.
 From Stdlib Require String.
@@ -927,9 +927,6 @@ Qed.
 End BDRenaming.
 
 Section BDStrengtheningEta.
-
-(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b); delete it when its row lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** Base [on_free_vars_type] ([BDStrengthening.v:523]). *)
 Lemma on_free_vars_typeE `{checker_flags} P Σ (wfΣ : wfE Σ.1) Γ t T :

@@ -13,11 +13,10 @@
   and [Prop → Prop] with the binder named [x]. Each differs syntactically from its original
   ([al_Γk_differs], [al_keta_differs], [al_mfix_differs]).
 
-  **Lemmas without a forecast class** are applied to these, every premise proved here.
-  **Lemmas with a forecast class** ([typing_alpha_propE] and its corollaries, which use
-  [validityE] of T2a and the copy-18 field of T1) are applied in section [AlphaClassInstances],
-  whose [Context] holds T1's class, as [BDToPCUICEtaInstances] does: no instance of a class
-  exists before its copy lands. Everything else they need is proved without a class.
+  **Every lemma** is applied to these, every premise proved here. [typing_alpha_propE] and its
+  corollaries (which use [validityE] of T2a and a copy-18b lemma) are applied in section
+  [AlphaClassInstances], whose [Context] held T1's forecast class until copy 18b landed
+  (frac/eta 3e6b422d); the class is deleted and no lemma takes one.
 
   **Non-degeneracy.** Every instance relates two syntactically different terms, contexts or
   fixpoints, except [cmp_global_instance_empty_eq_inst]: that lemma concludes [u = u'] from a
@@ -84,7 +83,7 @@ Proof.
   split; reflexivity.
 Qed.
 
-(** ** Lemmas without a forecast class, applied *)
+(** ** The other lemmas, applied *)
 
 (** IMPOSSIBLE to make non-reflexive: the conclusion is [u = u'] (see the header). *)
 Definition cmp_global_instance_empty_eq_inst : ([] : Instance.t) = [] :=
@@ -185,11 +184,9 @@ Proof.
   exists [vass si_na si_P], sProp. reflexivity.
 Qed.
 
-(** ** Lemmas with a forecast class, applied in a section that holds the classes *)
+(** ** The main theorem's family (it took T1's forecast class until copy 18b landed) *)
 
 Section AlphaClassInstances.
-
-  Context {F18 : SRForecastCopy18}.
 
   (** The η derivation, through the main theorem's typing component, into the renamed context. *)
   Definition typing_alpha_propE_inst : si_Σ ;;; al_Γk |-E tRel 0 : iv_keta :=

@@ -1,15 +1,12 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * Satisfying instances of the lemmas of [PCUICNormalizationEta] (T0 copy 20), and the
-      compiled-form check against the forecast field of [PCUICCanonicityEta]
+(** * Satisfying instances of the lemmas of [PCUICNormalizationEta] (T0 copy 20)
 
-  **Section variables.** The two forecast classes the copy's section takes (T1's
-  [SRForecastCopy18] and [ProgForecastCopy18]) and the normalization hypothesis
-  [NormalizationInE]. [NormalizationInE] ([PCUICSNEta]) is base's [NormalizationIn] over
-  [welltypedE]: a premise unprovable by design (it is strong normalization), inherited from
-  base, where every one of these lemmas takes [NormalizationIn Σ]. It is not a forecast and is
-  never discharged; it is the one hypothesis of this file with no satisfying instance, as in
-  [PCUICCanonicityEtaInstances].
+  **Section variables.** The normalization hypothesis [NormalizationInE] only.
+  [NormalizationInE] ([PCUICSNEta]) is base's [NormalizationIn] over [welltypedE]: a premise
+  unprovable by design (it is strong normalization), inherited from base, where every one of
+  these lemmas takes [NormalizationIn Σ]. It is not a forecast and is never discharged; it is
+  the one hypothesis of this file with no satisfying instance.
 
   **Non-degeneracy.**
   - The five lemmas with no first-order premise run on the β-redex
@@ -33,15 +30,9 @@
   ([c20_fo_let_red]), and [fo_sz] is [red1]-normal, which here is NOT proved by inversion but
   obtained from [firstorder_value_irredE] on [fo_sz_value] — the instance of that lemma.
 
-  **Compiled-form identity with the forecast field.** [PCUICCanonicityEta] carries base
-  [wh_normalization] as the single field [wh_normalizationE] of its forecast class
-  [CanonForecastCopy20]. [c20_lemma_has_field_type] and [c20_field_has_lemma_type] ascribe each
-  of the two against the other's exact type, so the type checker decides the identity in both
-  directions (the rule for a delete-and-import: identical types accept each other both ways).
-  The lemma is applied to the two forecast classes first, which is the only difference between
-  the two compiled types: the copy's section premises, which disappear when those classes are
-  deleted. The name [wh_normalizationE] denotes two objects while this file is in scope (the
-  field and the copy's lemma), so every reference to either is written qualified. *)
+  The copy's [wh_normalizationE] is the statement of the single field [wh_normalizationE] of
+  [PCUICCanonicityEta]'s forecast class [CanonForecastCopy20], which that file discharges with
+  it. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -55,7 +46,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICEtaC1b PCUICAritiesEta
      PCUICSNEta PCUICValidityEta PCUICSREta PCUICClassificationEta
      PCUICClassificationEtaInstances PCUICProgressEta PCUICProgressEtaInstances
-     PCUICFirstorderEta PCUICFirstorderEtaInstances PCUICCanonicityEta PCUICNormalizationEta.
+     PCUICFirstorderEta PCUICFirstorderEtaInstances PCUICNormalizationEta.
 From Equations.Type Require Import Relation.
 
 #[local] Existing Instance default_checker_flags.
@@ -187,9 +178,6 @@ Qed.
 
 Section NormalizationEtaInstances.
 
-(* FORECAST-ONLY: the two classes the copy's section takes; delete each when its copy lands. *)
-Context {F18 : SRForecastCopy18} {P18 : ProgForecastCopy18}.
-
 (* Base's normalization premise, one per environment these instances use (by design, never
    discharged: it is strong normalization, as base's [NormalizationIn] is). *)
 Context {nor : normalizing_flags} {nin_si : NormalizationInE si_Σ}
@@ -240,20 +228,5 @@ Definition wcbv_standardization_fstE_inst : MetaRocq.PCUIC.PCUICWcbvEval.eval fo
   wcbv_standardization_fstE (Σ := fo_Σ) (i := fo_ind) (u := []) (args := []) (mind := fo_mdecl)
     (t := c20_fo_let) (v := fo_sz) fo_wfE c20_fo_axiom_free c20_fo_let_typed c20_fo_lookup
     fo_firstorder c20_fo_let_red c20_fo_sz_irred.
-
-(** ** The compiled-form check against [CanonForecastCopy20] *)
-
-Context {N20 : CanonForecastCopy20}.
-
-(** The copy's lemma, at the two forecast classes, has EXACTLY the type of the forecast
-    field. *)
-Definition c20_lemma_has_field_type :
-  ltac:(let T := type of (@PCUICCanonicityEta.wh_normalizationE N20) in exact T) :=
-  @PCUICNormalizationEta.wh_normalizationE F18 P18.
-
-(** And the forecast field has EXACTLY the type of the copy's lemma at those classes. *)
-Definition c20_field_has_lemma_type :
-  ltac:(let T := type of (@PCUICNormalizationEta.wh_normalizationE F18 P18) in exact T) :=
-  @PCUICCanonicityEta.wh_normalizationE N20.
 
 End NormalizationEtaInstances.

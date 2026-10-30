@@ -16,9 +16,17 @@
   principle [bidir_ind_envE] with its machinery [env_prop_bdE], [typing_sumE],
   [typing_sumE_size], [Ptyping_sumE] ([BDTyping.v:248-743]). Names put [E] after the
   relation name, as [PCUICTypingEtaInd] does ([typingE_size], [tybranchesE]); the
-  constructor names are the forecast's ([inferE_Rel], ..., [checkE_Cumul]). As in base,
-  [tybranchesE]/[branchesE_size] shadow the [typingE] ones of [PCUICTypingEtaInd] in a
-  file that imports both, as base [BDTyping] shadows [PCUICTyping]'s.
+  constructor names are the forecast's ([inferE_Rel], ..., [checkE_Cumul]).
+
+  ** Declared shadowing: [tybranchesE] and [branchesE_size]
+
+  As base [BDTyping]'s [tybranches]/[branches_size] shadow [PCUICTyping]'s, this file's
+  [tybranchesE]/[branchesE_size] (branches checked by [checkingE], contexts by
+  [wf_local_bd_relE]) shadow [PCUICTypingEtaInd]'s (branches typed by [typingE] at a sort
+  argument [ps]) in a file that imports both. Same names, different statements, so neither
+  is deleted (same-name rule: different statement, declare the shadowing and qualify). This
+  file writes its own uses qualified, [BDTypingEta.tybranchesE] and
+  [BDTypingEta.branchesE_size]; a file that imports both writes the one it means qualified.
 
   ** Design point A: the conversion premises are [JoinE] (ruled 2026-10-29 09:26Z)
 
@@ -314,7 +322,7 @@ Definition branchesE_size {cf} {Σ Γ ci mdecl idecl p ptm brs}
    (checking_size : forall Σ Γ t T, Σ ;;; Γ |-E t ◃ T  -> size)
    (infering_size : forall Σ Γ t s, Σ ;;; Γ |-E t ▹□ s -> size)
   {n ctors}
-  (a : tybranchesE Σ Γ ci mdecl idecl p ptm n ctors brs) : size :=
+  (a : BDTypingEta.tybranchesE Σ Γ ci mdecl idecl p ptm n ctors brs) : size :=
 
   (all2i_size _ (fun i cdecl br p =>
     (Nat.max
@@ -348,7 +356,7 @@ Proof.
     | H1 : size |- _  => exact (S H1)
     | |- _ => exact 1
     end.
-    - exact (S (Nat.max a0 (Nat.max i (Nat.max i0 (Nat.max (ctx_inst_size _ (checkingE_size _) c1) (branchesE_size (checkingE_size _) (infering_sortE_size _) a2)))))).
+    - exact (S (Nat.max a0 (Nat.max i (Nat.max i0 (Nat.max (ctx_inst_size _ (checkingE_size _) c1) (BDTypingEta.branchesE_size (checkingE_size _) (infering_sortE_size _) a2)))))).
     - exact (S (Nat.max
         (all_size _ (fun x p => on_def_type_sorting_size (infering_sortE_size _ Σ) _ _ p) a)
         (all_size (on_def_body _ _ _) (fun x p => on_def_body_sorting_size (checkingE_size _ _) (infering_sortE_size _ Σ) _ _ _ p) a0))).

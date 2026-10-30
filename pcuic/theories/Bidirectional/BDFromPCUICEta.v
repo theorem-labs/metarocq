@@ -85,14 +85,14 @@
     instances' consistency comes from [isType_mkApps_Ind_invE] (copy 16) in place of
     base [invert_type_mkApps_ind].
 
-  ** The forecast block
+  ** No forecast class
 
-  The lemmas take the forecast class of [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b) as a
-  section [Context]; it is imported, never redefined. Copies 10, 12, 14, 15, 16 and 18a have
-  landed and are imported; this file's [BDFromForecastCopy18] (copy 18a's
+  The lemmas took the forecast class of [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b) as a
+  section [Context] until copy 18b landed (frac/eta 3e6b422d); it was deleted after a
+  compiled-form identity check of each field. Copies 10, 12, 14, 15, 16 and 18a landed earlier
+  and are imported; this file's [BDFromForecastCopy18] (copy 18a's
   [projection_cumulative_indicesE], [PCUICInductiveInversionEta]) and [BDToPCUICEta]'s
-  [BDForecastCopy18] were deleted after a compiled-form identity check. [Print Assumptions] in
-  [BDFromPCUICEtaInstances] shows the class as an argument.
+  [BDForecastCopy18] were deleted the same way. No lemma takes a class.
 
   ** The checker's facts
 
@@ -180,9 +180,6 @@ Qed.
 (** ** The lemmas *)
 
 Section BDFromPCUICEta.
-
-(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b); delete it when its row lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** ** Typed T8, proved (row B1)
 

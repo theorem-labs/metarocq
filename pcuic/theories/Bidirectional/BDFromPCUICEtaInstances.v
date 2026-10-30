@@ -2,16 +2,15 @@
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDFromPCUICEta] (row T6)
 
-  **The forecast class is a section variable.** Every lemma of [BDFromPCUICEta] takes T1's
-  [SRForecastCopy18] (copy 18b) as a premise; copies 10, 12, 14, 15, 16 and 18a have landed and
-  their classes are gone. T8 enters through the proved two-hypothesis forms
+  **No forecast class.** The lemmas of [BDFromPCUICEta] took T1's [SRForecastCopy18] (copy 18b)
+  as a premise until copy 18b landed (frac/eta 3e6b422d); the class is deleted, and copies 10,
+  12, 14, 15, 16 and 18a landed earlier. T8 enters through the proved two-hypothesis forms
   [PCUICEtaT8Probe.T8_*_r_two], whose one hypothesis is [PCUICSREta.subject_reductionE] (row B1's
-  [fix_rarg_inductive] is proved there). No instance of a class exists before its row lands, so
-  the instances below live in section [BDFromPCUICEtaInstances], whose [Context] holds the
-  class, and APPLY the lemmas
-  there. Everything else each instance needs (the environment, its [wfE], every typing
-  derivation) is built here or in the landed instance files ([PCUICInversionEtaInstances],
-  [BDTypingEtaInstances], [BDToPCUICEtaInstances]), with no class.
+  [fix_rarg_inductive] is proved there). The instances below, in section
+  [BDFromPCUICEtaInstances] (which held the class), apply the lemmas. Everything each instance
+  needs (the environment, its [wfE], every typing derivation) is built here or in the landed
+  instance files ([PCUICInversionEtaInstances], [BDTypingEtaInstances],
+  [BDToPCUICEtaInstances]).
 
   **The environment** is [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]):
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]; [Σ_po]
@@ -47,14 +46,19 @@
     on it);
   - completeness per typing rule: [typing_inferingE_<rule>_inst] for Rel, Sort, Prod, Lambda,
     LetIn, App, Const, Ind, Construct, Case (a [match] whose branch type is a β-redex), Proj
-    (through the forecast [projection_cumulative_indicesE]), Fix, CoFix and Prim, plus the
+    (through copy 18a's [projection_cumulative_indicesE]), Fix, CoFix and Prim, plus the
     context lemmas on contexts with a let ([bdf_Γz]) or three declarations.
 
   **Rows not inhabited.** None: every lemma of [BDFromPCUICEta] has an instance here, or is a
   helper that one of these instances runs ([T8_Sort_r_plug], [T8_Prod_r_plug],
   [T8_Ind_r_plug], [conv_lift_judgmentE], [conv_lift_judgment_univE],
   [ws_cumul_ctx_pbE_vass], [is_closed_projection_contextE],
-  [untyped_subslet_projection_contextE], the syntactic helpers). Degenerate points: the Fix
+  [untyped_subslet_projection_contextE], the syntactic helpers; [conv_infer_prodE]: helper,
+  exercised by [typing_infer_prodE_let_inst], through [typing_infer_prodE], on the inferred type
+  [z] that unfolds to [∀P:Prop. P]; [conv_infer_indE]: helper, exercised by
+  [typing_infer_indE_beta_inst], through [typing_infer_indE], on the inferred type
+  [(λ B. I B) A] that reduces to [I A] by β; completeness also calls the first in its
+  application case and the second in its [match] and projection cases). Degenerate points: the Fix
   row [typing_inferingE_Fix_inst] ([iv_fix_typed]) has a witness equal to its declared type;
   the non-degenerate Fix row is [typing_inferingE_Fix_beta_inst] (the typed fixpoint
   [bdf_fix_typed], whose recursive argument's domain is the β-redex [(λ B. I B) A], so
@@ -63,7 +67,7 @@
   type with itself.
 
   **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
-  their E copies: the same set, and the forecast classes are arguments ([About]), not axioms. *)
+  their E copies: the same set, and no forecast class is an argument ([About]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -342,9 +346,6 @@ Proof.
 Qed.
 
 Section BDFromPCUICEtaInstances.
-
-(* FORECAST-ONLY: the class of [BDFromPCUICEta]; delete it when its row lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** ** Through an η conversion *)
 

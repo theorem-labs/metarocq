@@ -10,9 +10,9 @@
   extension lemmas. The declaration lemmas are stated for any checking environment [Σ0], so
   [fo_env2]'s second declaration reuses them.
 
-  **The forecast classes are section variables** for the lemmas that take them (the main
-  theorem, [firstorder_argsE] and [instantiated_typing_spine_firstorder_spineE]), as in
-  [PCUICClassificationEtaInstances].
+  **No forecast class.** The main theorem, [firstorder_argsE] and
+  [instantiated_typing_spine_firstorder_spineE] took T1's [SRForecastCopy18] until copy 18b
+  landed (frac/eta 3e6b422d); the class is deleted, as in [PCUICClassificationEtaInstances].
 
   **Non-degeneracy.**
   - [firstorder_value_specE_inst]: the value [s z] (an application with an argument) of type
@@ -351,7 +351,7 @@ Proof.
     apply rt_step. apply red_zeta.
 Qed.
 
-(** ** The lemmas that take no class *)
+(** ** The lemmas that never took a class *)
 
 Definition firstorder_value_indsE_inst :
   exists i n ui args, fo_sz = mkApps (tConstruct i n ui) args :=
@@ -402,12 +402,9 @@ Definition firstorder_mutind_extE_inst :
 Definition firstorder_value_alphaE_inst : fo_sz = fo_sz :=
   firstorder_value_alphaE fo_Σ fo_sz fo_sz (upto_names_ref fo_sz) fo_sz_value.
 
-(** ** The lemmas, applied in a section that holds the classes *)
+(** ** The lemmas that took T1's forecast class until copy 18b landed *)
 
 Section FirstorderEtaInstances.
-
-(* FORECAST-ONLY: the classes of [PCUICFirstorderEta]; delete each when its copy lands. *)
-Context {F18 : SRForecastCopy18}.
 
 Definition instantiated_typing_spine_firstorder_spineE_inst :
   firstorder_spineE fo_Σ [] (tProd fo_na fo_N fo_N) [tConstruct fo_ind 0 []] fo_N :=

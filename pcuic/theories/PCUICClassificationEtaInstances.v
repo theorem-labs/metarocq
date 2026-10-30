@@ -2,12 +2,11 @@
 
 (** * Satisfying instances of the lemmas of [PCUICClassificationEta] (row T6)
 
-  **The forecast class is a section variable.** The lemmas of [PCUICClassificationEta] that
-  need it take T1's [SRForecastCopy18] (copy 18b) as a premise (copy 16 has landed and its
-  classes are gone). No instance of a class exists before its copy lands, so the instances below
-  live in section [ClassificationEtaInstances], whose [Context] holds the class, and APPLY the
-  lemmas there. Every derivation each instance needs is
-  built here or taken from the landed instance files, with no class.
+  **No forecast class.** The lemmas of [PCUICClassificationEta] took T1's [SRForecastCopy18]
+  (copy 18b) as a premise until copy 18b landed (frac/eta 3e6b422d); the class is deleted, so the
+  instances below, in section [ClassificationEtaInstances] (which held it), apply the lemmas with
+  no class. Every derivation each instance needs is built here or taken from the landed instance
+  files.
 
   **The environments** are [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]:
   [Inductive I (A : Prop) : Prop := c : I A]) and [iv_Σ] ([PCUICInversionEtaInstances]: the
@@ -44,7 +43,13 @@
   - Helpers run by the instances above: [T8_Sort_l_plug], [PCUICPrincipalityEta.T8_Prod_l_plug]
     and [PCUICPrincipalityEta.chain_ws_cumul_pbE_Conv] (inside i21's instance; their own
     instances are in [PCUICPrincipalityEtaInstances]), [arity_spine_len] and
-    [arity_spine_len_subst] (inside i20's and i21's; [arity_spine_len_subst_inst] too). *)
+    [arity_spine_len_subst] (inside i20's and i21's; [arity_spine_len_subst_inst] too).
+
+  **A row whose instance is degenerate by the statement.** [check_recursivity_kind_injE]:
+  IMPOSSIBLE to make non-reflexive. The conclusion is the equality [rk = rk'], and in every
+  environment [Σ] (the section premise [wfE Σ] included) both premises check the field
+  [ind_finite] of the same declaration [mind] of [lookup_env Σ], so [rk] and [rk'] are both that
+  field. The instance is at [Finite], the [ind_finite] of [I] in [si_Σ]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -267,9 +272,6 @@ Proof. intros h. vm_compute in h. discriminate h. Qed.
 
 Section ClassificationEtaInstances.
 
-(* FORECAST-ONLY: the class of [PCUICClassificationEta]; delete it when its copy lands. *)
-Context {F18 : SRForecastCopy18}.
-
 (** ** The arity corollaries, Class A' *)
 
 Definition invert_cumul_arity_rE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T :=
@@ -341,6 +343,8 @@ Definition typing_spine_nth_error_None_prodE_inst :=
 
 (** ** Classification and evaluation *)
 
+(** IMPOSSIBLE to make non-reflexive, by the statement: the conclusion is [rk = rk'] (see the
+    header). *)
 Definition check_recursivity_kind_injE_inst : Finite = Finite :=
   check_recursivity_kind_injE (Σ := si_Σ) (wfΣ := si_wfE) (mind := si_kn) (rk := Finite) (rk' := Finite)
     eq_refl eq_refl.

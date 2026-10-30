@@ -6,11 +6,11 @@
   ** What T8 claims
   A well-typed type that is E-convertible to a head form (sort, product, applied
   inductive) reduces to that head form by base [red] alone. The pinned forms are
-  the [Definition]s [T8_*_statement] below. STATUS (2026-10-29): the three [_r] forms
-  are PROVED ([T8_Sort_r], [T8_Prod_r], [T8_Ind_r], section [T8Assembly]) under one
-  FORECAST-ONLY hypothesis, E subject reduction (row T1); [fix_rarg_inductive] is
-  proved (section [FixRargInductive]). The [_l] forms are not assembled. Without
-  typing the claim is false ([A6_F_raw_false]; and [tProj p (λx. C ps X x)]
+  the [Definition]s [T8_*_statement] below. STATUS: the three [_r] forms are PROVED
+  ([T8_Sort_r], [T8_Prod_r], [T8_Ind_r], section [T8Assembly]) with no hypothesis: their
+  T1 premise, E subject reduction, is discharged by [PCUICSREta.subject_reductionE];
+  [fix_rarg_inductive] is proved (section [FixRargInductive]). The [_l] forms are not
+  assembled. Without typing the claim is false ([A6_F_raw_false]; and [tProj p (λx. C ps X x)]
   η-reduces then projects, while it is β-stuck).
 
   ** Route (as assembled)
@@ -57,7 +57,7 @@
   property: [(λx. tCase x _) (λy. M y)] β-reduces to a λ scrutinee, and unfolding a
   fixpoint turns a recursive call [f (λy. C y)] into a fixpoint spine with a λ
   [rarg]. Both reducts come from ill-typed terms, so the invariant survives [red]
-  on typed terms through E subject reduction (the forecast row T1), and only
+  on typed terms through E subject reduction (row T1, [PCUICSREta.subject_reductionE]), and only
   there. It is also not preserved by η: η at a spine head [(λx. F x) a] merges the
   spine into a fixpoint spine.
 
@@ -90,9 +90,9 @@ From MetaRocq.PCUIC Require PCUICSize PCUICClosedTyp PCUICEtaScope.
 From MetaRocq.PCUIC Require Import PCUICEtaCanon PCUICEtaI5EtaL PCUICEtaC1b.
 From MetaRocq.PCUIC Require Import PCUICEtaCanonRed PCUICEtaT8BackSim.
 From MetaRocq.PCUIC Require PCUICEtaI5A2.
-(* Loaded already through the imports above; required here for the qualified names in
-   section [FixRargInductive]. *)
-From MetaRocq.PCUIC Require PCUICClosed PCUICContexts PCUICSubstitution PCUICWsCumulEtaSubst.
+(* Required for qualified names: section [FixRargInductive]'s (loaded already through the imports
+   above) and section [T8Assembly]'s [PCUICSREta.subject_reductionE] (PCUICSREta does not need this file). *)
+From MetaRocq.PCUIC Require PCUICClosed PCUICContexts PCUICSubstitution PCUICWsCumulEtaSubst PCUICSREta.
 
 Import ListNotations.
 
@@ -264,7 +264,7 @@ Fixpoint eta_safe (Σ : global_env) (t : term) : bool :=
     FORMAL BACKSTOP for the postponement: [pe_postpone_gen] below is PROVED under
     change 3 and (B), every root and every side condition included, so no mechanism
     of (a) or (b) can break the postponement itself. For the assembly, [Good] at each
-    reduct [T'] comes from TYPING ([typed_eta_safe], with SR, forecast T1), never from
+    reduct [T'] comes from TYPING ([typed_eta_safe], with SR, row T1), never from
     syntactic preservation of [Good] along [red], so a redex carried in a domain that
     later surfaces is covered by [Good] of the later term.
     FOUND, and the reason (A) and (B) are coupled: with change 3 alone, the λ-DOMAIN
@@ -503,6 +503,7 @@ Qed.
 Lemma nth_error_at_pre {A} (pre post : list A) a : nth_error (pre ++ a :: post) #|pre| = Some a.
 Proof. rewrite (nth_error_app_ge pre (a :: post) #|pre| (le_n _)) Nat.sub_diag. reflexivity. Qed.
 
+(** Shadows [Stdlib.Lists.List.app_cons_not_nil] (another statement: [[] <> x ++ a :: y]); written qualified. *)
 Lemma app_cons_not_nil {A} (pre post : list A) a : pre ++ a :: post <> [].
 Proof. intros e. apply app_eq_nil in e as [_ e]. discriminate e. Qed.
 
@@ -1087,9 +1088,9 @@ Section TypedSafe.
       and [mfix_body_on_conv_closed_redE_false] (:286), and its typed E form is the T8-shaped
       lemma of the third link. BUILT (both refutations are compiled).
     - [PCUICSR.isType_red] ([PCUICSR.v:3969]) types the reduct; its E form
-      [PCUICSREta.isType_redE] ([PCUICSREta.v:3437]) needs E subject reduction, which is
-      [T8Assembly]'s hypothesis [subject_reduction] (row T1): not T8-shaped, not refuted, but
-      T8's own premise. BUILT (the E form is compiled).
+      [PCUICSREta.isType_redE] ([PCUICSREta.v:3139]) needs E subject reduction, which is
+      [PCUICSREta.subject_reductionE] (row T1, used directly by [T8Assembly]): not T8-shaped,
+      not refuted, but T8's own premise. BUILT (the E form is compiled).
     - [PCUICSpine.typing_spine_strengthen] ([PCUICSpine.v:325]) and
       [PCUICSpine.typing_spine_nth_error] ([PCUICSpine.v:2060]) finish the walk; their E forms
       [PCUICSpineEta.typing_spine_strengthenE] (:252) and [typing_spine_nth_errorE] (:1716) are
@@ -1664,6 +1665,7 @@ Proof.
   intros hf x y h. induction h; [apply t_step; now apply hf|eapply t_trans; eassumption].
 Qed.
 
+(** Shadows [PCUICRecArgs.rt_map] (another object: the map on [rtree]s); written qualified. *)
 Lemma rt_map {A B} (R : A -> A -> Type) (S : B -> B -> Type) (f : A -> B) :
   (forall x y, R x y -> S (f x) (f y)) -> forall x y, clos_refl_trans R x y -> clos_refl_trans S (f x) (f y).
 Proof.
@@ -2706,8 +2708,8 @@ Qed.
     has no λ in scrutinee or projection-argument position. This half needs no
     subject reduction.
   - (ii) PRESERVATION: every reduct of the typed source is still typed. That is E
-    subject reduction, forecast row T1. It is neither proved nor used in this
-    file. Only with (ii) does (i) apply to each reduct of [c0] and give [hnl].
+    subject reduction, row T1 ([PCUICSREta.subject_reductionE], used only in section
+    [T8Assembly]). Only with (ii) does (i) apply to each reduct of [c0] and give [hnl].
 
   Measured time per root group (wall clock, from commit times; build cycles of about
   1 min each included):
@@ -2766,7 +2768,7 @@ Qed.
     η-at-the-root case, as in [pp_root]. *)
 Lemma pe_iota_root Σ Γ ci p0 c0 brs0 p c uu args brs br :
   (* PREMISE hnl, NOT unconditional: (i) typed_eta_safe, typing ⇒ invariant, proved here
-     with no SR; (ii) preservation of typing along red, E subject reduction, forecast T1,
+     with no SR; (ii) preservation of typing along red, E subject reduction, row T1,
      not proved here. *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) ->
@@ -2790,7 +2792,7 @@ Qed.
 (** **The parallel projection root case: CLOSED, under [hnl]** (same shape as
     [pe_iota_root]). *)
 Lemma pe_proj_root Σ Γ pr c0 uu args arg :
-  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (forecast T1). *)
+  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (row T1). *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   pe c0 (mkApps (tConstruct pr.(proj_ind) 0 uu) args) ->
   nth_error args (pr.(proj_npars) + pr.(proj_arg)) = Some arg ->
@@ -2861,7 +2863,7 @@ Qed.
     [pe_iota_root]; the scrutinee's cofixpoint is unfolded through
     [pe_unfold_cofix_back]). *)
 Lemma pe_cofix_case_root Σ Γ ip p0 c0 brs0 p mfix idx args narg fn brs :
-  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (forecast T1). *)
+  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (row T1). *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   All2 pe p0.(pparams) p.(pparams) -> p0.(puinst) = p.(puinst) -> p0.(pcontext) = p.(pcontext) ->
   pe p0.(preturn) p.(preturn) ->
@@ -2884,7 +2886,7 @@ Qed.
 
 (** **The parallel cofix-proj root case: CLOSED, under [hnl].** *)
 Lemma pe_cofix_proj_root Σ Γ pr c0 mfix idx args narg fn :
-  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (forecast T1). *)
+  (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (row T1). *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
   pe c0 (mkApps (tCoFix mfix idx) args) ->
   unfold_cofix mfix idx = Some (narg, fn) ->
@@ -2927,7 +2929,7 @@ Qed.
 
   [Good Σ Γ t]: every reduct of [t] is [eta_safe]. For a typed [t] it is the same
   two halves as [hnl]: [typed_eta_safe] (typing ⇒ invariant, no SR) and E subject
-  reduction (forecast row T1, preservation; not used here).
+  reduction (row T1, preservation; not used here).
 
   Recursion structure of [pe_fix_root_n] (induction on a bound [n] with
   [size' t <= n]): the ONLY recursive call is on [B], the BODY of a λ that [t]
@@ -2939,6 +2941,7 @@ Qed.
 Definition Good (Σ : global_env) (Γ : context) (t : term) : Type :=
   forall t', red Σ Γ t t' -> eta_safe Σ t'.
 
+(** Shadows [Stdlib.Lists.List.nth_split] (another statement: [nth] with a default, [n < length l]); written qualified. *)
 Lemma nth_split {A} (l : list A) n a : nth_error l n = Some a -> ∑ pre post, (l = pre ++ a :: post) × #|pre| = n.
 Proof.
   induction l as [|x l IH] in n |- *; destruct n; cbn; intros h; try discriminate.
@@ -2988,7 +2991,7 @@ Section FixRoot.
 
   Lemma pe_fix_root_n n : forall Γ t mfix idx args narg fn,
     (* PREMISE Good, NOT unconditional: (i) typed_eta_safe, typing ⇒ invariant, proved here
-       with no SR; (ii) preservation of typing along red, E subject reduction, forecast T1,
+       with no SR; (ii) preservation of typing along red, E subject reduction, row T1,
        not proved here. *)
     size' t <= n -> Good Σ Γ t -> pe t (mkApps (tFix mfix idx) args) ->
     unfold_fix mfix idx = Some (narg, fn) -> is_constructor narg args = true ->
@@ -3161,7 +3164,7 @@ Section PrimRoot.
 
   Lemma pe_prim_root_n n : forall Γ t c uu ls extra v,
     (* PREMISE Good, NOT unconditional: (i) typed_eta_safe, typing ⇒ invariant, proved here
-       with no SR; (ii) preservation of typing along red, E subject reduction, forecast T1,
+       with no SR; (ii) preservation of typing along red, E subject reduction, row T1,
        not proved here. *)
     size' t <= n -> Good Σ Γ t ->
     pe t (mkApps (mkApps (tConst c uu) (map term_of_lit ls)) extra) ->
@@ -3854,7 +3857,7 @@ Section Assembly.
   Definition PPg (t u : term) : Type :=
     forall Γ Γ' v, pe_ctx Γ Γ' ->
     (* PREMISES, NOT unconditional: Good — (i) typed_eta_safe, proved here with no SR;
-       (ii) preservation of typing along red, E subject reduction, forecast T1 — and
+       (ii) preservation of typing along red, E subject reduction, row T1 — and
        (B) [canon t = t], the canonical source, bundled as [GoodC]. *)
     GoodC Γ t ->
     on_free_vars xpredT u -> red1 Σ Γ' u v ->
@@ -4139,7 +4142,7 @@ Section Assembly.
 
   (** **The parallel one-step postponement: CLOSED**, under the VISIBLE premises
       [Good Σ Γ t] (two halves: [typed_eta_safe], proved with no SR; preservation by
-      E subject reduction, forecast T1), (B) [canon t = t] (the canonical source) and
+      E subject reduction, row T1), (B) [canon t = t] (the canonical source) and
       [on_free_vars xpredT u] (target scoping). *)
   Theorem pe_postpone Γ t u v :
     Good Σ Γ t -> canon t = t -> on_free_vars xpredT u -> pe t u -> red1 Σ Γ u v ->
@@ -4303,8 +4306,8 @@ End IterationNeedsCanonicalReducts.
   - an [eta1] step is absorbed by [pe_eta1_closed], with the same [T'];
   - ZERO steps (named case): [T'] itself.
   [Good (canon T')] at each step comes from TYPING: [T'] is typed at the sort by E
-  subject reduction (FORECAST T1), so [typed_eta_safe] gives [eta_safe] of every
-  reduct of [T'], and [Good_canon] moves [Good] to [canon T'].
+  subject reduction ([PCUICSREta.subject_reductionE], row T1), so [typed_eta_safe] gives
+  [eta_safe] of every reduct of [T'], and [Good_canon] moves [Good] to [canon T'].
   The tail reads the head form off [pe (canon T'') head]. A λ at the top is excluded
   because [T''] is typed at a sort ([typed_sort_notLam]). For an applied inductive,
   λ-headed spine positions (η-expanded partial applications of [tInd]) are removed
@@ -4321,9 +4324,10 @@ End IterationNeedsCanonicalReducts.
   inversion inside [pe_rigid_spine] is the existing [size']-bounded one; nothing new
   inducts on [size'].
 
-  HYPOTHESIS of this section, FORECAST-ONLY: [subject_reduction] (row T1, exactly the
-  contract's form). [fix_rarg_inductive] of [typed_eta_safe] is proved (section
-  [FixRargInductive]). Validity (row T2a) is not used. *)
+  This section has no hypothesis besides its data and [wfE Σ]: the T1 premise, E subject
+  reduction, is discharged by [PCUICSREta.subject_reductionE] (exactly the contract's form).
+  [fix_rarg_inductive] of [typed_eta_safe] is proved (section [FixRargInductive]). Validity
+  (row T2a) is not used. *)
 
 Lemma rt_eta1_union {R : term -> term -> Type} a b :
   clos_refl_trans eta1 a b -> clos_refl_trans (union R eta1) a b.
@@ -4357,15 +4361,14 @@ Qed.
 
 Section T8Assembly.
   Context {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ).
-  (* FORECAST-ONLY: row T1 *)
-  Context (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
-    Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T).
+  (* The T1 premise, E subject reduction, is [PCUICSREta.subject_reductionE], used directly
+     ([T8_reduct_typed]); until row T1 landed it was a section hypothesis here. *)
 
   Let cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
 
   Lemma T8_reduct_typed Γ T s T' :
     Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T' -> Σ ;;; Γ |-E T' : tSort s.
-  Proof. intros h r. exact (subject_reduction Σ Γ T T' (tSort s) wfΣ h r). Qed.
+  Proof. intros h r. exact (PCUICSREta.subject_reductionE Σ Γ T T' (tSort s) wfΣ h r). Qed.
 
   (** A term typed at a sort is not a λ: a λ has a product type. *)
   Lemma typed_sort_notLam Γ t s : Σ ;;; Γ |-E t : tSort s -> notLam t.
@@ -4376,7 +4379,8 @@ Section T8Assembly.
   Qed.
 
   (** [Good] at the canonical source: (i) [typed_eta_safe] (proved, no SR) on each
-      reduct, (ii) preservation of typing by E SR (FORECAST T1), then [Good_canon]. *)
+      reduct, (ii) preservation of typing by E SR ([PCUICSREta.subject_reductionE]), then
+      [Good_canon]. *)
   Lemma T8_reduct_Good Γ T s T' :
     Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T' -> Good Σ Γ (canon T').
   Proof.
@@ -4543,14 +4547,16 @@ End T8Assembly.
 
   Each is the pinned statement taking ONLY [subject_reduction] (row T1, the contract's form):
   the section premise [wfΣ] of [T8Assembly] is redundant, because the pinned statement has its
-  own [wfE Σ] premise, which supplies it ([fix_rarg_inductive] is proved, so [T8Assembly] has no
-  other hypothesis). The closed type of each is
-  [forall {cf} {Σ}, SR -> T8_*_r_statement Σ]. *)
+  own [wfE Σ] premise, which supplies it. The closed type of each is
+  [forall {cf} {Σ}, SR -> T8_*_r_statement Σ]. The proofs no longer use the [subject_reduction]
+  argument: [T8Assembly] uses [PCUICSREta.subject_reductionE] directly, so [T8_*_r] have no
+  SR argument. The statements stay as they are for their consumers ([BDFromPCUICEta.T8_*_r_plug],
+  [BDStrengtheningEta]), which pass [PCUICSREta.subject_reductionE]. *)
 Theorem T8_Sort_r_two {cf : checker_flags} {Σ : global_env_ext}
   (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
     Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T) :
   T8_Sort_r_statement Σ.
-Proof. intros Γ pb T s s' hwf. exact (@T8_Sort_r cf Σ hwf subject_reduction Γ pb T s s' hwf). Qed.
+Proof. intros Γ pb T s s' hwf. exact (@T8_Sort_r cf Σ hwf Γ pb T s s' hwf). Qed.
 
 Theorem T8_Prod_r_two {cf : checker_flags} {Σ : global_env_ext}
   (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
@@ -4558,7 +4564,7 @@ Theorem T8_Prod_r_two {cf : checker_flags} {Σ : global_env_ext}
   T8_Prod_r_statement Σ.
 Proof.
   intros Γ pb T na dom codom s' hwf.
-  exact (@T8_Prod_r cf Σ hwf subject_reduction Γ pb T na dom codom s' hwf).
+  exact (@T8_Prod_r cf Σ hwf Γ pb T na dom codom s' hwf).
 Qed.
 
 Theorem T8_Ind_r_two {cf : checker_flags} {Σ : global_env_ext}
@@ -4567,7 +4573,7 @@ Theorem T8_Ind_r_two {cf : checker_flags} {Σ : global_env_ext}
   T8_Ind_r_statement Σ.
 Proof.
   intros Γ pb T ind ui l s' hwf.
-  exact (@T8_Ind_r cf Σ hwf subject_reduction Γ pb T ind ui l s' hwf).
+  exact (@T8_Ind_r cf Σ hwf Γ pb T ind ui l s' hwf).
 Qed.
 
 (** ** The η half of the backward simulation is FALSE (building refutation)
@@ -4930,4 +4936,5 @@ Proof. repeat constructor; apply eta_safe_canon. Qed.
   canonical chain's length, which postpones η BEFORE the read-back through [canon]
   and so never needs the false η lifting.
   Note (2026-10-29): the two theorems that the 13:46Z/13:55Z reports described — pe_postpone without the canonicity premise, and pe_red_postpone unrestricted, both at 64f42254 under the old eta_safe — are NO LONGER IN THIS FILE; look at commit 64f42254 for them.
-  Note (2026-10-29): [fix_rarg_inductive] is now proved (section [FixRargInductive]), so the [_r] theorems of section [T8Assembly] have one FORECAST-ONLY hypothesis, [subject_reduction] (row T1). *)
+  Note (2026-10-29): [fix_rarg_inductive] is now proved (section [FixRargInductive]), so the [_r] theorems of section [T8Assembly] have one FORECAST-ONLY hypothesis, [subject_reduction] (row T1).
+  Note (2026-10-30), correcting the two statements above that the [_r] theorems are proved under FORECAST-ONLY hypotheses ("under the two FORECAST-ONLY hypotheses named there" and the 2026-10-29 note just above): they have NONE now. Row T1 landed, section [T8Assembly] binds only [wfΣ : wfE Σ], and [T8_reduct_typed] uses [PCUICSREta.subject_reductionE] directly, so [T8_Sort_r], [T8_Prod_r] and [T8_Ind_r] have the type [forall {cf} {Σ}, wfE Σ.1 -> T8_*_r_statement Σ]; the hypothesis delta b5e4d018 → 96191b19 has no FORECAST-ONLY row. *)

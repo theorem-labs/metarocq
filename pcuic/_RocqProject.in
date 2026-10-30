@@ -233,11 +233,17 @@ theories/PCUICTypingEtaCopy16Instances.v
 # Inversion facts on inductive types over typingE (E copy of part of PCUICInductiveInversion), and its satisfying instances
 theories/PCUICInductiveInversionEta.v
 theories/PCUICTypingEtaCopy18aInstances.v
+# The rest of that copy: the case predicate and case branch facts, and its satisfying instances
+theories/PCUICInductiveInversionEtaB.v
+theories/PCUICTypingEtaCopy18bInstances.v
 # (Co)fixpoint witnesses over typingE (E copy of PCUICFixWitness), and its satisfying instances
 theories/PCUICFixWitnessEta.v
 theories/PCUICTypingEtaCopy17Instances.v
 # Validity over typingE (row T2a, the E copy of PCUICValidity)
 theories/PCUICValidityEta.v
+# Case-construction helpers over typingE (E copy of PCUICCasesHelper), and its satisfying instances
+theories/PCUICCasesHelperEta.v
+theories/PCUICTypingEtaCopy21Instances.v
 # Subject reduction over typingE (row T1, the E copy of PCUICSR), and its satisfying instances
 theories/PCUICSREta.v
 # Refutations of the eta statements that are false
@@ -282,12 +288,6 @@ theories/PCUICClassificationEtaInstances.v
 # Progress over typingE (row T6, the E copy of PCUICProgress), and its satisfying instances
 theories/PCUICProgressEta.v
 theories/PCUICProgressEtaInstances.v
-# Canonicity over typingE (row T6, the E copy of PCUICCanonicity), and its satisfying instances
-theories/PCUICCanonicityEta.v
-theories/PCUICCanonicityEtaInstances.v
-# Consistency over typingE (row T9, the E copy of PCUICConsistency), and its satisfying instance
-theories/PCUICConsistencyEta.v
-theories/PCUICConsistencyEtaInstances.v
 # First-order values over typingE (row T6, the E copy of PCUICFirstorder), and its satisfying instances
 theories/PCUICFirstorderEta.v
 theories/PCUICFirstorderEtaInstances.v

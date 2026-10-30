@@ -2,8 +2,8 @@
 
 (** * Satisfying instances of the lemmas of [PCUICProgressEta] (row T6)
 
-  **The forecast classes are section variables**, as in [PCUICClassificationEtaInstances]: the
-  class of [PCUICClassificationEta] and [ProgForecastCopy18]. The environments are
+  **No forecast class.** The class of [PCUICClassificationEta] and [ProgForecastCopy18] were
+  section variables here until copy 18b landed (frac/eta 3e6b422d); both are deleted. The environments are
   [si_Σ] ([Inductive I (A : Prop) : Prop := c : I A]) and [Σ_po] (the primitive integers,
   [PCUICEtaPrimOpInstance]).
 
@@ -133,10 +133,6 @@ Qed.
 #[local] Instance pgi_po_cb : ClosedBodies Σ_po0 := @wfE_ClosedBodies _ Σ_po0 iv_po_wfE.
 
 Section ProgressEtaInstances.
-
-(* FORECAST-ONLY: the class of [PCUICClassificationEta] and [ProgForecastCopy18]; delete
-   each when its copy lands. *)
-Context {F18 : SRForecastCopy18} {P18 : ProgForecastCopy18}.
 
 Definition eval_tCaseE_inst := eval_tCaseE (Σ := si_Σ) _ _ _ _ _ _ si_wfE pgi_match_typed pgi_match_eval.
 

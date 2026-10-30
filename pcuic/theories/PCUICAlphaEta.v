@@ -62,13 +62,14 @@
     [into_ws_cumul_pbE_spec] with the scoping of the typings, and [ws_cumul_pbE_ws_cumul_ctx]
     (whose context relation is oriented [Γ] to [Δ], so no [symmetry]).
 
-  ** The forecast block
+  ** No forecast class
 
-  The lemmas take T1's forecast class [SRForecastCopy18] ([PCUICSREta]; its field
-  [wf_case_branches_types'E]) as a section [Context]; it is imported, never redefined. The
-  copy-16 facts ([validityE]'s, [on_minductive_wf_params_indices_instE], [isType_mkApps_IndE])
-  come from the landed [PCUICInductivesEta] (frac/eta 0fb43f10). This file adds no class.
-  [Print Assumptions] in [PCUICAlphaEtaInstances] shows the class as an argument.
+  T1's forecast class [SRForecastCopy18] ([PCUICSREta]; its field [wf_case_branches_types'E])
+  was a section [Context] until copy 18b landed (frac/eta 3e6b422d); it was deleted after a
+  compiled-form identity check of each field, and the lemma is
+  [PCUICInductiveInversionEtaB.wf_case_branches_types'E], written qualified. The copy-16 facts
+  ([validityE]'s, [on_minductive_wf_params_indices_instE], [isType_mkApps_IndE]) come from the
+  landed [PCUICInductivesEta] (frac/eta 0fb43f10). This file adds no class.
 
   **The hypotheses are satisfiable:** [wfE Σ] by any well-formed environment ([wf_incl_E]),
   each typing premise by a concrete derivation; [PCUICAlphaEtaInstances] gives an instance of
@@ -90,6 +91,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
      PCUICContextConversionTypEta PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta
      PCUICAritiesEta PCUICSpineEta PCUICInductivesEta PCUICValidityEta PCUICSREta.
+From MetaRocq.PCUIC Require PCUICInductiveInversionEtaB.
 
 From Equations Require Import Equations.
 
@@ -177,9 +179,6 @@ Proof.
 Qed.
 
 Section AlphaEta.
-
-(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b); delete it when its copy lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** The E counterparts of base's [typing]-specific [pcuic] hints ([PCUICTyping.has_sort_isType],
     [typing_wf_local]), as in [PCUICSREta]. *)
@@ -567,7 +566,7 @@ Section Alpha.
           intros. now eapply upto_names_impl_eq_term.
         * eapply All2i_All2_mix_left in Hbrs; tea.
           2:now eapply Forall2_All2 in wfbrs.
-          epose proof (wf_case_branches_types'E (p:=p') ps args brs' isdecl) as a.
+          epose proof (PCUICInductiveInversionEtaB.wf_case_branches_types'E (p:=p') ps args brs' isdecl) as a.
           forward a.
           { eapply has_sort_isTypeE; eapply isType_mkApps_IndE; tea.
             unshelve eapply (ctx_inst_spine_substE _ ctxinst').

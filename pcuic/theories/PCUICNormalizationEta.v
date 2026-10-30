@@ -36,18 +36,15 @@
   - [wcbv_red1_red1], [wcbv_red1_eval], [value_final], [closed_red_confluence] and
     [irred_equal] are base's: their statements are untyped.
 
-  ** The forecast block
+  ** No forecast hypothesis
 
-  This file declares no class. Its section takes the two forecast classes that the files it
-  uses still have — T1's [SRForecastCopy18] ([PCUICSREta], through [PCUICClassificationEta],
-  [PCUICProgressEta] and [PCUICFirstorderEta]) and [ProgForecastCopy18] ([PCUICProgressEta])
-  — as section premises, so that each disappears from these statements when its copy lands
-  and the class is deleted. Copy 16 has landed, so [ValForecastCopy16], [SRForecastCopy16] and
-  [ClassifForecastCopy16] no longer exist.
+  This file declares no class and takes none: every file it uses ([PCUICSREta],
+  [PCUICClassificationEta], [PCUICProgressEta], [PCUICFirstorderEta]) states its lemmas with no
+  forecast premise, so these statements have none either.
 
   [PCUICCanonicityEta.v] carries [wh_normalizationE] as the single field of its forecast class
-  [CanonForecastCopy20]; the lemma proved here is that field's statement, and the two
-  ascriptions that check it both ways are in [PCUICTypingEtaCopy20Instances.v]. *)
+  [CanonForecastCopy20]; the lemma proved here is that field's statement, so that file's class
+  and section premise are discharged by it. *)
 
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
@@ -139,10 +136,6 @@ Proof.
     + now cbn in i.
 Qed.
 Section NormalizationEta.
-
-(* FORECAST-ONLY: one premise per class of the files this one uses; delete each when its copy
-   lands. *)
-Context {F18 : SRForecastCopy18} {P18 : ProgForecastCopy18}.
 
 (** Base [wh_normalization] ([:24]). The statement is the field [wh_normalizationE] of
     [PCUICCanonicityEta.CanonForecastCopy20]. *)

@@ -2,13 +2,11 @@
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDUniqueEta] (row T6)
 
-  **The forecast classes are section variables.** Every lemma of [BDUniqueEta] uses soundness,
-  validity or completeness, so it takes the classes of [BDToPCUICEta] as premises. No
-  instance of a class exists before its copy lands, so the instances below are applied in
-  section [BDUniqueClassInstances], whose [Context] holds the two classes, as
-  [BDToPCUICEtaInstances] does. Every derivation they need
-  is built here, in [PCUICInversionEtaInstances], [BDTypingEtaInstances] or
-  [BDToPCUICEtaInstances], with no class.
+  **No forecast class.** Every lemma of [BDUniqueEta] uses soundness, validity or
+  completeness, so it took the class of [BDToPCUICEta] as a premise until copy 18b landed
+  (frac/eta 3e6b422d); the class is deleted. The instances below are applied in section
+  [BDUniqueClassInstances] (which held it). Every derivation they need is built here, in
+  [PCUICInversionEtaInstances], [BDTypingEtaInstances] or [BDToPCUICEtaInstances].
 
   **The environment** is [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]:
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]).
@@ -161,11 +159,9 @@ Proof.
   apply rt_step. exact (red_rel si_Σ bu_Γd 1 si_P eq_refl).
 Qed.
 
-(** ** The lemmas, applied in a section that holds the classes *)
+(** ** The lemmas, applied (they took a forecast class until copy 18b landed) *)
 
 Section BDUniqueClassInstances.
-
-  Context {F18 : SRForecastCopy18}.
 
   (** The main theorem's inference component, on the two types of [f (∀P.P)]. *)
   Definition bidirectional_uniqueE_inst :
