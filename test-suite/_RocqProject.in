@@ -83,3 +83,6 @@ etak_forecast_pa.v
 
 # FORECAST tree only (EtaK7): F1 tests of the E checker at SafeCheck level
 eta_f1.v
+
+# BET-64 FUEL (EtaFuel): the out-of-fuel outcome of the E checker and its printed message
+eta_fuel.v

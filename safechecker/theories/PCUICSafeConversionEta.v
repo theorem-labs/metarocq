@@ -14,12 +14,13 @@
    - ENV (EtaWfEnv, entry 06:55Z, fork/wip/etak-wfenv-2026-10-29 @ b86b8cc5): PCUICWfEnvEta is
      base PCUICWfEnv with the same names; [abstract_env_ext_wf X : abstract_env_ext_rel X Σ ->
      ∥ wf_extE Σ ∥], [abstract_env_ext_sq_wf : ∥ wfE Σ ∥], [abstract_env_ext_closed_bodies :
-     ∥ ClosedBodies Σ ∥]; imported LAST. Section premise
-     [normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ].
-   - REDUCE (EtaReduce, entries 06:58Z and 07:35Z): the bridge PCUICSafeReduceEtaBridge over
-     PCUICSafeReduceEta (base PCUICPosition.stack, welltypedE): [reduce_args_E flags X_type X Γ t
-     args h] with [h : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ (PCUICPosition.zip
-     (t, PCUICPosition.appstack args []))]; facts [reduce_args_E_sound/_whnf/_isred/_Req/_spec],
+     ∥ ClosedBodies Σ ∥]; imported LAST. No normalisation premise (BET-64 FUEL): the
+     conversion ([isconv_full_fuel]) and the machine terminate by fuel ([PCUICFuelEta]).
+  - REDUCE (EtaReduce, entries 06:58Z and 07:35Z; BET-64 FUEL): the bridge PCUICSafeReduceEtaBridge
+     over PCUICSafeReduceEta (base PCUICPosition.stack, welltypedE): [reduce_args_E flags X_type X
+     Γ t args h : option (term × list term)] ([None]: the machine's fuel ran out) with [h : forall
+     Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ (PCUICPosition.zip (t, PCUICPosition.appstack
+     args []))]; facts [reduce_args_E_sound/_whnf/_isred/_Req/_spec] on an answer [Some (t', args')],
      [reduce_stack_app_only], [app_only_zip], [stack_context_appstack_bridge],
      [zipp_appstack_bridge], [reduce_stack_vass], [reduce_args_E_vass], and (07:35Z, statement
      change) [stack_position_appstack_bridge args args'] = an iff between the two positionR
@@ -29,15 +30,16 @@
      the bridge's instance [reduce_typed_facts_E], built from it and six proved fields;
      [reduce_env_facts_E : ReduceEnvFacts welltypedE wf_extE] is PROVED in the bridge. The
      other E use of the machine is [reduce_termE] below = [PCUICSafeReduceEta.reduce_term
-     (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in)]. The
-     conversion calls reduction ONLY through these (plan rev 14 "B3 conditions").
+     (wt := welltypedE) (wfP := wf_extE)] (an [option term]). The conversion calls reduction
+     ONLY through these (plan rev 14 "B3 conditions"); an empty fuel of the machine answers
+     [ConvNotEnoughFuel].
    - POSITION (EtaPosK4, entries 06:48Z and 07:39Z, @ 240372c9): plan I7 rev 12-15 Coq text
      verbatim ([wf_stack], [eta_run], [drop_eta_run], [eta_virtuals], [eta_rename],
      [decompose_stack_eta], [zipp_eta], [stack_entry_context_eta se below], [stack_context_eta],
      [virtual_focus], [focus_context], [is_nil], [virt_ok], [eta_ren], [reducible_head_shape]);
      typed lemmas in PCUICPositionEtaTyping.
    - K4 (EtaPosK4, PCUICSafeConversionEtaK4 @ 240372c9): [pack] with the [wf_stack] fields
-     [swf1]/[swf2], [R_aux], [R], [R_Acc] (premise [normalization_in] as above), [R_positionR],
+     [swf1]/[swf2], [R_aux], [R], [R_positionR],
      [R_positionR2], [R_stateR], the descents [K4_eta_branch_lambda_left/_right],
      [K4_virtual_descent_frame_left/_right], [K4_same_constant_args_call], and
      [conv_stack_ctx_eta X Γ π1 π2 := forall Σ, abstract_env_ext_rel X Σ ->
@@ -63,7 +65,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICWeakeningEnvConv PCUICWeakeningEnvTyp
      PCUICWeakeningConv PCUICWeakeningTyp
      PCUICClosed PCUICClosedTyp PCUICConvCumInversion
-     PCUICCumulativitySpecEta PCUICTypingEta PCUICSNEta PCUICClosedBodies
+     PCUICCumulativitySpecEta PCUICTypingEta PCUICClosedBodies
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICContextConversionEta
      PCUICEtaK6EtaStep PCUICSigmaCalculus PCUICRenameDef PCUICPositionEtaTyping PCUICClosedTypEta
      PCUICRenameTypEta PCUICTypingEtaInd.
@@ -71,7 +73,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
    used qualified by slice B's [inst_case_ws_cumul_ctx_pbE]. *)
 From MetaRocq.PCUIC Require PCUICWsCumulEtaCtx.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfReductionEta PCUICSafeReduceEta
-     PCUICSafeReduceEtaBridge PCUICSafeConversionEtaK4.
+     PCUICSafeReduceEtaBridge PCUICSafeConversionEtaK4 PCUICFuelEta.
 (* INVARIANT (C6, lanes/eta/cross-lane-commitments.md): every unqualified reference in this
    file to a name shared with Syntax.PCUICPosition resolves to the PCUICPositionEta object
    (measured at 18d63896: 765 references, all to PCUICPositionEta); the 20 base uses are
@@ -131,10 +133,13 @@ Proof.
   - exact PCUICEtaTypedFactsProved.ctf_wf_universes_proved.
 Qed.
 
-(** * Conversion for PCUIC without fuel
+(** * Conversion for PCUIC with η, terminating by fuel
 
-  Following PCUICSafeReduce, we derive a fuel-free implementation of
-  conversion (and cumulativity) checking for PCUIC.
+  Following PCUICSafeReduce, the step function [_isconv] makes every recursive call on an
+  [R]-smaller state (the [R] premise of [Aux]). The recursion itself, [isconv_full_fuel],
+  is structural on a [fuel] ([PCUICFuelEta], BET-64 FUEL); an empty fuel is the refusal
+  [ConvNotEnoughFuel], and every entry ([isconv_full]) starts from [default_fuel]
+  (2^62 units). No normalisation premise is needed.
 
  *)
 
@@ -145,9 +150,6 @@ Section Conversion.
   Context (X_type : abstract_env_impl).
 
   Context (X : X_type.π2.π1).
-
-  (* ENV contract: the normalization premise over welltypedE. *)
-  Context {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}.
 
   (* REDUCE contract: the named E-facts hypothesis of the reduction machine, the nine GENUINE
      fields of EtaReduce's class at welltypedE ([ReduceTypedFactsE]; T1/T6/W-c facts); the
@@ -192,11 +194,18 @@ Section Conversion.
 
   (* REDUCE contract (CONTRACTS.md 07:35Z item 5): the abstract machine's [reduce_term] at
      [wt := welltypedE], [wfP := wf_extE]; used at the two discriminant sites of the Case and
-     Proj views (sites 4/5 of the 11), whose results are only compared by [eqb_term]. *)
+     Proj views (sites 4/5 of the 11), whose results are only compared by [eqb_term]. [None]
+     when the fuel of the machine ran out ([PCUICFuelEta]). *)
   Definition reduce_termE (flags : RedFlags.t) (Γ : context) (t : term)
-    (h : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t) : term :=
-    PCUICSafeReduceEta.reduce_term (wt := welltypedE) (wfP := wf_extE)
-      (normalization_in := normalization_in) flags X_type X Γ t h.
+    (h : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t) : option term :=
+    PCUICSafeReduceEta.reduce_term (wt := welltypedE) (wfP := wf_extE) flags X_type X Γ t h.
+  (* PERMANENT GUARD (BET-64 FUEL). A conversion of [reduce_termE …] against the machine's
+     [reduce_term …] must unfold [reduce_termE] first. Unfolding [reduce_term] first reaches the
+     fuel recursion on [default_fuel] ([PCUICFuelEta]): the kernel or the unifier then compares the
+     machine's fuel continuations step by step, and the build grows to 44-50 GB (measured: FuelConv's
+     dev builds c4/c5, 2026-10-30). The guard changes only the unfolding order of this file's
+     conversion checks, not any term, statement or extracted code. *)
+  #[local] Strategy expand [reduce_termE].
 
   Set Equations Transparent.
   Set Equations With UIP.
@@ -238,13 +247,6 @@ Section Conversion.
   Notation pwt u := (exist (P := fun t => forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ _ t)
                                  _ (fun Σ wfΣ => wth u Σ wfΣ)) (only parsing).
   Notation pps2 u := (stack_pos_wf (tm2 u) (stk2 u) (swf2 u)) (only parsing).
-
-  Lemma R_Acc Γ u :
-    (forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (zipc (tm1 u) (stk1 u))) ->
-    Acc (R Γ) u.
-  Proof using normalization_in.
-    exact (@PCUICSafeConversionEtaK4.R_Acc _ _ X_type X normalization_in Γ u).
-  Qed.
 
   Notation eq_term Σ t u := (eq_term Σ Σ t u).
 
@@ -312,18 +314,18 @@ Section Conversion.
       ∥ whnf RedFlags.nodelta Σ (Γ ,,, stack_context_eta π) (zipp_eta t π) ∥.
 
   (* E: reduction is called only through [reduce_args_E] (REDUCE contract); its four facts
-     (used by slice C's fixpoint-unfolding obligations). *)
+     (used by slice C's fixpoint-unfolding obligations), on an answer of the machine. *)
   Ltac reduce_args_facts Σ wfΣ :=
     repeat
       match goal with
-      | [H: (?a, ?b) = reduce_args_E ?f ?XT ?X ?Γ ?t ?args ?h |- _] =>
+      | [H: Some (?a, ?b) = reduce_args_E ?f ?XT ?X ?Γ ?t ?args ?h |- _] =>
         let rid := fresh "r" in
         let whid := fresh "w" in
         let isr := fresh "isr" in
-        pose proof (reduce_args_E_sound f XT X Σ wfΣ Γ t args h) as [rid];
-        pose proof (reduce_args_E_whnf f XT X Σ wfΣ Γ t args h) as [whid];
-        pose proof (reduce_args_E_isred f XT X Γ t args h) as isr;
-        rewrite <- H in rid, whid, isr; cbn in rid, whid, isr;
+        pose proof (reduce_args_E_sound f XT X Σ wfΣ Γ t args h a b H) as [rid];
+        pose proof (reduce_args_E_whnf f XT X Σ wfΣ Γ t args h a b H) as [whid];
+        pose proof (reduce_args_E_isred f XT X Γ t args h a b H) as isr;
+        cbn in rid, whid, isr;
         clear H
       end.
 
@@ -504,7 +506,7 @@ Section Conversion.
      focus, a variable without body of the focus context, which reduce_args_E returns as is. *)
   Lemma A_side_cases flags Γ t π args ρ t' args' hr :
     virt_ok t π = true -> (args, ρ) = decompose_stack π ->
-    (t', args') = reduce_args_E flags X_type X (Γ ,,, focus_context π) t args hr ->
+    Some (t', args') = reduce_args_E flags X_type X (Γ ,,, focus_context π) t args hr ->
     no_Eta_arg π = true \/ (no_Eta_arg π = false /\ t' = t /\ args' = [] /\ args = [] /\ ρ = π).
   Proof.
     intros hv e eq.
@@ -513,8 +515,8 @@ Section Conversion.
     rewrite <- e in hargs. cbn in hargs. subst args.
     assert (hnth' : nth_error (Γ ,,, focus_context π) k = Some decl).
     { unfold app_context. rewrite (nth_error_app_lt _ _ _ (nth_error_Some_length hnth)). exact hnth. }
-    rewrite (reduce_args_E_vass flags X_type X _ k decl hr hnth' hbody) in eq.
-    injection eq as -> ->.
+    pose proof (reduce_args_E_vass flags X_type X _ k decl hr _ hnth' hbody eq) as ev.
+    injection ev as -> ->.
     pose proof (decompose_stack_eq _ _ _ (eq_sym e)) as eπ.
     split; [reflexivity|]. split; [reflexivity|]. split; [reflexivity|]. split; [reflexivity|].
     rewrite eπ. reflexivity.
@@ -541,14 +543,13 @@ Section Conversion.
   (* The new state is well typed (T1 through [wt_red]). *)
   Lemma A_side_wt Σ (wfΣ : abstract_env_ext_rel X Σ) flags Γ t π args ρ t' args' hr :
     virt_ok t π = true -> (args, ρ) = decompose_stack π ->
-    (t', args') = reduce_args_E flags X_type X (Γ ,,, focus_context π) t args hr ->
+    Some (t', args') = reduce_args_E flags X_type X (Γ ,,, focus_context π) t args hr ->
     welltypedE Σ Γ (zipc t π) -> welltypedE Σ Γ (zipc t' (appstack args' ρ)).
   Proof.
     intros hv e eq h.
     destruct (A_side_cases flags Γ t π args ρ t' args' hr hv e eq) as [hna | (_ & -> & -> & _ & ->)].
     2: exact h.
-    pose proof (reduce_args_E_sound flags X_type X Σ wfΣ _ t args hr) as [r].
-    rewrite <- eq in r. cbn [fst snd] in r.
+    pose proof (reduce_args_E_sound flags X_type X Σ wfΣ _ t args hr _ _ eq) as [r].
     rewrite (A_focus_context_real π hna) in r.
     pose proof (decompose_stack_eq _ _ _ (eq_sym e)) as eπ. subst π.
     rewrite stack_context_appstack in r.
@@ -565,7 +566,7 @@ Section Conversion.
 
   Lemma A_side_step flags Γ t π args ρ t' args' hr :
     virt_ok t π = true -> (args, ρ) = decompose_stack π ->
-    (t', args') = reduce_args_E flags X_type X (Γ ,,, focus_context π) t args hr ->
+    Some (t', args') = reduce_args_E flags X_type X (Γ ,,, focus_context π) t args hr ->
     A_step Γ t π t' (appstack args' ρ).
   Proof.
     intros hv e eq.
@@ -573,16 +574,16 @@ Section Conversion.
     2: { left. split; reflexivity. }
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (decompose_stack_eq _ _ _ (eq_sym e)) as eπ.
-    destruct (reduce_args_E_Req flags X_type X Σ wfΣ _ t args hr) as [h | [h | [h1 h2]]].
-    - rewrite <- eq in h. injection h as -> ->.
+    destruct (reduce_args_E_Req flags X_type X Σ wfΣ _ t args hr _ _ eq) as [h | [h | [h1 h2]]].
+    - injection h as -> ->.
       left. split; [symmetry; exact eπ|reflexivity].
-    - rewrite <- eq in h. cbn [fst snd] in h.
+    - cbn [fst snd] in h.
       rewrite (A_focus_context_real π hna) in h.
       right; left. intros Σ' wfΣ'.
       pose proof (abstract_env_ext_irr X wfΣ wfΣ') as eΣ. subst Σ'.
       subst π. rewrite stack_context_appstack in h. rewrite no_Eta_arg_appstack in hna.
       rewrite !zipc_appstack. exact (cored_context_eta Σ Γ _ _ ρ hna h).
-    - rewrite <- eq in h1, h2. cbn [fst snd] in h1, h2.
+    - cbn [fst snd] in h1, h2.
       right; right. subst π. split.
       + rewrite !zipc_appstack. rewrite h1. reflexivity.
       + rewrite !stack_position_appstack. rewrite !stack_position_appstack in h2.
@@ -607,7 +608,7 @@ Section Conversion.
 
   Lemma A_side_virt_ok flags Γ t π args ρ t' args' hr :
     virt_ok t π = true -> (args, ρ) = decompose_stack π ->
-    (t', args') = reduce_args_E flags X_type X (Γ ,,, focus_context π) t args hr ->
+    Some (t', args') = reduce_args_E flags X_type X (Γ ,,, focus_context π) t args hr ->
     virt_ok t' (appstack args' ρ) = true.
   Proof.
     intros hv e eq.
@@ -644,18 +645,16 @@ Section Conversion.
   (* The Term state's [isred_full] (whnf of the η view) after reduction, under G2b. *)
   Lemma A_side_isred Γ t π args ρ t' args' hr :
     virt_ok t π = true -> (args, ρ) = decompose_stack π ->
-    (t', args') = reduce_args_E RedFlags.nodelta X_type X (Γ ,,, focus_context π) t args hr ->
+    Some (t', args') = reduce_args_E RedFlags.nodelta X_type X (Γ ,,, focus_context π) t args hr ->
     eta_head_ok t' ρ = true ->
     isred_full Γ t' (appstack args' ρ).
   Proof.
     intros hv e eq hok. unfold isred_full.
     destruct (no_Eta_arg π) eqn:hna.
-    - pose proof (reduce_args_E_isred RedFlags.nodelta X_type X _ t args hr eq_refl) as [hia _].
-      rewrite <- eq in hia. cbn [fst] in hia.
+    - pose proof (reduce_args_E_isred RedFlags.nodelta X_type X _ t args hr _ _ eq eq_refl) as [hia _].
       split; [exact hia|].
       intros Σ wfΣ.
-      pose proof (reduce_args_E_whnf RedFlags.nodelta X_type X Σ wfΣ _ t args hr) as [w].
-      rewrite <- eq in w. cbn [fst snd] in w.
+      pose proof (reduce_args_E_whnf RedFlags.nodelta X_type X Σ wfΣ _ t args hr _ _ eq) as [w].
       rewrite (A_focus_context_real π hna) in w.
       pose proof (decompose_stack_twice _ _ _ (eq_sym e)) as hρ.
       pose proof (decompose_stack_eq _ _ _ (eq_sym e)) as eπ. subst π.
@@ -720,15 +719,14 @@ Section Conversion.
 
   Lemma A_side_red Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π args ρ t' args' hr :
     virt_ok t π = true -> (args, ρ) = decompose_stack π ->
-    (t', args') = reduce_args_E RedFlags.nodelta X_type X (Γ ,,, focus_context π) t args hr ->
+    Some (t', args') = reduce_args_E RedFlags.nodelta X_type X (Γ ,,, focus_context π) t args hr ->
     welltypedE Σ Γ (zipc t π) -> is_closed_context (Γ ,,, stack_context_eta π) ->
     ∥ Σ ;;; Γ ,,, stack_context_eta π ⊢ zipp_eta t π ⇝ zipp_eta t' (appstack args' ρ) ∥.
   Proof.
     intros hv e eq h hcl.
     destruct (heΣ _ wfΣ) as [hwf]. destruct (hΣ _ wfΣ) as [cb].
     destruct (A_side_cases RedFlags.nodelta Γ t π args ρ t' args' hr hv e eq) as [hna | (_ & -> & -> & _ & ->)].
-    - pose proof (reduce_args_E_sound RedFlags.nodelta X_type X Σ wfΣ _ t args hr) as [r].
-      rewrite <- eq in r. cbn [fst snd] in r.
+    - pose proof (reduce_args_E_sound RedFlags.nodelta X_type X Σ wfΣ _ t args hr _ _ eq) as [r].
       rewrite (A_focus_context_real π hna) in r.
       constructor.
       exact (A_red_eta_real Σ hwf cb Γ t π args ρ t' args' hna (eq_sym e) h hcl (clrel_rel r)).
@@ -790,19 +788,19 @@ Section Conversion.
           first [ exact (A_focus_wt _ w _ _ _ _ _ hv1 e1 (h1 _ w) (hwf1 _ w))
                 | exact (A_focus_wt _ w _ _ _ _ _ hv2 e2 (h2 _ w) (hwf2 _ w)) ] end
     | |- welltypedE _ _ _ =>
-        match goal with w : abstract_env_ext_rel X _, q : (_, _) = reduce_args_E _ _ _ _ _ _ _ |- _ =>
+        match goal with w : abstract_env_ext_rel X _, q : Some (_, _) = reduce_args_E _ _ _ _ _ _ _ |- _ =>
           first [ exact (A_side_wt _ w _ _ _ _ _ _ _ _ _ hv1 e1 q (h1 _ w))
                 | exact (A_side_wt _ w _ _ _ _ _ _ _ _ _ hv2 e2 q (h2 _ w)) ] end
     | |- R _ _ _ =>
-        match goal with q1 : (_, _) = reduce_args_E _ _ _ _ _ _ _,
-                        q2 : (_, _) = reduce_args_E _ _ _ _ _ _ _ |- _ =>
+        match goal with q1 : Some (_, _) = reduce_args_E _ _ _ _ _ _ _,
+                        q2 : Some (_, _) = reduce_args_E _ _ _ _ _ _ _ |- _ =>
           apply A_R_red; [constructor | exact (A_side_step _ _ _ _ _ _ _ _ _ hv1 e1 q1)
                          | exact (A_side_step _ _ _ _ _ _ _ _ _ hv2 e2 q2)] end
     | |- squash (ws_cumul_ctx_pbE _ _ _ _) =>
         match goal with w : abstract_env_ext_rel X _ |- _ =>
           rewrite (A_sce_appstack _ _ _ _ e1) (A_sce_appstack _ _ _ _ e2); exact (hx _ w) end
     | |- virt_ok _ _ = true =>
-        match goal with q : (_, _) = reduce_args_E _ _ _ _ _ _ _ |- _ =>
+        match goal with q : Some (_, _) = reduce_args_E _ _ _ _ _ _ _ |- _ =>
           first [ exact (A_side_virt_ok _ _ _ _ _ _ _ _ _ hv1 e1 q)
                 | exact (A_side_virt_ok _ _ _ _ _ _ _ _ _ hv2 e2 q) ] end
     | |- squash (wf_localE _ _) =>
@@ -810,14 +808,14 @@ Section Conversion.
           first [ rewrite (A_sce_appstack _ _ _ _ e1); exact (hwf1 _ w)
                 | rewrite (A_sce_appstack _ _ _ _ e2); exact (hwf2 _ w) ] end
     | |- isred_full _ _ _ =>
-        match goal with q : (_, _) = reduce_args_E _ _ _ _ _ _ _,
+        match goal with q : Some (_, _) = reduce_args_E _ _ _ _ _ _ _,
                         g : true = rebuilt_ok _ _ _ && rebuilt_ok _ _ _ |- _ =>
           first [ exact (A_side_isred _ _ _ _ _ _ _ _ hv1 e1 q (proj1 (A_g2 _ _ _ _ _ _ g)))
                 | exact (A_side_isred _ _ _ _ _ _ _ _ hv2 e2 q (proj2 (A_g2 _ _ _ _ _ _ g))) ] end
     | |- conv_cumE _ _ _ _ _ =>
         match goal with
-        | w : abstract_env_ext_rel X _, q1 : (_, _) = reduce_args_E _ _ _ _ _ _ _,
-          q2 : (_, _) = reduce_args_E _ _ _ _ _ _ _,
+        | w : abstract_env_ext_rel X _, q1 : Some (_, _) = reduce_args_E _ _ _ _ _ _ _,
+          q2 : Some (_, _) = reduce_args_E _ _ _ _ _ _ _,
           hc : forall S, abstract_env_ext_rel X S -> conv_cumE _ S _ _ _ |- _ =>
           let cb := fresh "cb" in let hx' := fresh "hx'" in let hh := fresh "hh" in
           let hcl1 := fresh "hcl1" in let hcl2 := fresh "hcl2" in
@@ -835,7 +833,8 @@ Section Conversion.
     end.
 
   (* rev 13 B3/F-9: reduction runs on the decomposed spine only, through reduce_args_E, in the
-     focus's own context (the η context on an Eta_arg side). *)
+     focus's own context (the η context on an Eta_arg side). An empty fuel of the machine on
+     either side is a refusal for lack of fuel ([ConvNotEnoughFuel]). *)
   Equations(noeqns) _isconv_red (Γ : context) (leq : conv_pb)
             (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
             (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
@@ -852,17 +851,19 @@ Section Conversion.
       | @exist (args2, ρ2) e2
         with inspect (reduce_args_E RedFlags.nodelta X_type X
                                     (Γ ,,, focus_context π1) t1 args1 _) := {
-        | @exist (t1', args1') eq1
+        | @exist (Some (t1', args1')) eq1
           with inspect (reduce_args_E RedFlags.nodelta X_type X
                                       (Γ ,,, focus_context π2) t2 args2 _) := {
-          | @exist (t2', args2') eq2
+          | @exist (Some (t2', args2')) eq2
             with inspect (rebuilt_ok t1' args1' ρ1 && rebuilt_ok t2' args2' ρ2) := {
             | @exist true g2 =>
               isconv_prog leq t1' (appstack args1' ρ1) t2' (appstack args2' ρ2) aux ;
             | @exist false _ =>
               no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
-            }
-          }
+            } ;
+          | @exist None _ := no (ConvNotEnoughFuel "isconv_red 2")
+          } ;
+        | @exist None _ := no (ConvNotEnoughFuel "isconv_red 1")
         }
       }
     }.
@@ -880,29 +881,44 @@ Section Conversion.
   Next Obligation. A_red_solve hv1 hv2 e1 e2 h1 h2 hwf1 hwf2 hx. Qed.
   Next Obligation. A_red_solve hv1 hv2 e1 e2 h1 h2 hwf1 hwf2 hx. Qed.
 
+  (** The answer of a one-step helper ([unfold_one_fix], [unfold_one_prim], [unfold_one_case],
+      [unfold_one_proj], [reducible_head]): a step ([StepSome]), no step ([StepNone]), or the
+      fuel of the reduction machine ran out inside the helper ([StepNoFuel], [PCUICFuelEta]).
+      "No step" and "out of fuel" are distinct: every caller answers [ConvNotEnoughFuel] on
+      [StepNoFuel]. The spec lemmas of the helpers are stated on [StepSome]. *)
+  Inductive step_answer (A : Type) :=
+  | StepSome (a : A)
+  | StepNone
+  | StepNoFuel.
+  Arguments StepSome {A} a.
+  Arguments StepNone {A}.
+  Arguments StepNoFuel {A}.
+  Derive NoConfusion NoConfusionHom for step_answer.
+
   Opaque reduce_args_E.
   (* T4 (rev 14 B4): the push [appstack l (App_l … :: θ)] needs a stack without Eta_arg; on
-     false the answer is [None] (dead on reachable states: [virt_ok_not_head]). Site 3 of the
-     11 reduce_stack sites: [args := []]. *)
+     false the answer is [StepNone] (dead on reachable states: [virt_ok_not_head]). Site 3 of
+     the 11 reduce_stack sites: [args := []]. *)
   Equations unfold_one_fix (Γ : context) (mfix : mfixpoint term)
             (idx : nat) (π : stack) (h : wtp Γ (tFix mfix idx) π)
-    : option (term * stack) :=
+    : step_answer (term * stack) :=
 
     unfold_one_fix Γ mfix idx π h with inspect (no_Eta_arg π) := {
-    | @exist false _ := None ;
+    | @exist false _ := StepNone ;
     | @exist true hna with inspect (unfold_fix mfix idx) := {
       | @exist (Some (arg, fn)) eq1 with inspect (decompose_stack_at π arg) := {
         | @exist (Some (l, c, θ)) eq2 with inspect (reduce_args_E RedFlags.default X_type X
                                                      (Γ ,,, stack_context θ) c [] _) := {
-          | @exist (cred, args') eq3 with construct_viewc cred := {
+          | @exist (Some (cred, args')) eq3 with construct_viewc cred := {
             | view_construct ind n ui :=
-              Some (fn, appstack l (App_l (mkApps (tConstruct ind n ui) args') :: θ)) ;
-            | view_other cred h' := None
-            }
+              StepSome (fn, appstack l (App_l (mkApps (tConstruct ind n ui) args') :: θ)) ;
+            | view_other cred h' := StepNone
+            } ;
+          | @exist None _ := StepNoFuel
           } ;
-        | _ := None
+        | _ := StepNone
         } ;
-      | _ := None
+      | _ := StepNone
       }
     }.
   Next Obligation.
@@ -920,7 +936,7 @@ Section Conversion.
 
   Lemma unfold_one_fix_red_zipp :
     forall Γ mfix idx π h fn ξ,
-      Some (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
+      StepSome (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
       forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ red (fst Σ) (Γ ,,, stack_context π) (zipp (tFix mfix idx) π) (zipp fn ξ) ∥.
   Proof.
     intros Γ mfix idx π h fn ξ eq Σ wfΣ.
@@ -930,10 +946,10 @@ Section Conversion.
     pose proof (decompose_stack_at_length _ _ _ _ _ (eq_sym eq2)) as hl.
     pose proof (decompose_stack_at_eq _ _ _ _ _ (eq_sym eq2)) as eπ. subst.
     match type of eq3 with
-    | _ = reduce_args_E ?flags ?XT ?X ?Γ ?t ?args ?hh =>
-      pose proof (reduce_args_E_sound flags XT X Σ wfΣ Γ t args hh) as [r1]
+    | Some (_, _) = reduce_args_E ?flags ?XT ?X ?Γ ?t ?args ?hh =>
+      pose proof (reduce_args_E_sound flags XT X Σ wfΣ Γ t args hh _ _ eq3) as [r1]
     end.
-    rewrite <- eq3 in r1. cbn [fst snd mkApps] in r1.
+    cbn [fst snd mkApps] in r1.
     unfold zipp. rewrite !decompose_stack_appstack.
     cbn [decompose_stack fst snd].
     destruct (decompose_stack θ) as [l' s'] eqn:e'. cbn [fst snd].
@@ -947,7 +963,7 @@ Section Conversion.
 
   Lemma unfold_one_fix_red :
     forall Γ mfix idx π h fn ξ,
-      Some (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
+      StepSome (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
       forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ red (fst Σ) Γ (zipc (tFix mfix idx) π) (zipc fn ξ) ∥.
   Proof.
     intros Γ mfix idx π h fn ξ eq Σ wfΣ.
@@ -957,10 +973,10 @@ Section Conversion.
     pose proof (decompose_stack_at_length _ _ _ _ _ (eq_sym eq2)) as hl.
     pose proof (decompose_stack_at_eq _ _ _ _ _ (eq_sym eq2)) as eπ. subst.
     match type of eq3 with
-    | _ = reduce_args_E ?flags ?XT ?X ?Γ ?t ?args ?hh =>
-      pose proof (reduce_args_E_sound flags XT X Σ wfΣ Γ t args hh) as [r1]
+    | Some (_, _) = reduce_args_E ?flags ?XT ?X ?Γ ?t ?args ?hh =>
+      pose proof (reduce_args_E_sound flags XT X Σ wfΣ Γ t args hh _ _ eq3) as [r1]
     end.
-    rewrite <- eq3 in r1. cbn [fst snd mkApps] in r1.
+    cbn [fst snd mkApps] in r1.
     rewrite !zipc_appstack. cbn [zipc fill_hole].
     constructor. apply red_context_zip_eta.
     eapply trans_red.
@@ -970,7 +986,7 @@ Section Conversion.
 
   Lemma unfold_one_fix_cored :
     forall Γ mfix idx π h fn ξ,
-      Some (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
+      StepSome (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
       forall Σ (wfΣ : abstract_env_ext_rel X Σ), cored (fst Σ) Γ (zipc fn ξ) (zipc (tFix mfix idx) π).
   Proof.
     intros Γ mfix idx π h fn ξ eq Σ wfΣ.
@@ -980,10 +996,10 @@ Section Conversion.
     pose proof (decompose_stack_at_length _ _ _ _ _ (eq_sym eq2)) as hl.
     pose proof (decompose_stack_at_eq _ _ _ _ _ (eq_sym eq2)) as eπ. subst.
     match type of eq3 with
-    | _ = reduce_args_E ?flags ?XT ?X ?Γ ?t ?args ?hh =>
-      pose proof (reduce_args_E_sound flags XT X Σ wfΣ Γ t args hh) as [r1]
+    | Some (_, _) = reduce_args_E ?flags ?XT ?X ?Γ ?t ?args ?hh =>
+      pose proof (reduce_args_E_sound flags XT X Σ wfΣ Γ t args hh _ _ eq3) as [r1]
     end.
-    rewrite <- eq3 in r1. cbn [fst snd mkApps] in r1.
+    cbn [fst snd mkApps] in r1.
     rewrite !zipc_appstack. cbn [zipc fill_hole].
     pose proof hna as hna'. rewrite no_Eta_arg_appstack in hna'.
     apply cored_context_eta; [exact (eq_sym hna')|].
@@ -994,7 +1010,7 @@ Section Conversion.
 
   Lemma unfold_one_fix_decompose :
     forall Γ mfix idx π h fn ξ,
-      Some (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
+      StepSome (fn, ξ) = unfold_one_fix Γ mfix idx π h ->
       snd (decompose_stack π) = snd (decompose_stack ξ).
   Proof using Type.
     intros Γ mfix idx π h fn ξ eq.
@@ -1009,23 +1025,24 @@ Section Conversion.
 
   (** A full weak-head run of the default-flag machine ([reduce_stack]) on a
       constant-headed state, in [zipp] form (design §7.3, steps 1 and 2).
-      [None] when it makes no progress, that is when the application is already
+      [StepNone] when it makes no progress, that is when the application is already
       a weak-head normal form under default flags: an axiom, or an unsaturated,
-      inert, stuck or rigid operation. *)
+      inert, stuck or rigid operation; [StepNoFuel] when the machine ran out of fuel. *)
   Opaque reduce_args_E.
   (* Site 11 of the 11 reduce_stack sites: [args := (decompose_stack π).1]. Called only from
      the Const view of [_isconv_prog], under T1, which supplies [hna]. *)
   Equations unfold_one_prim (Γ : context) (c : kername) (u : Instance.t) (π : stack)
             (hna : no_Eta_arg π = true)
-            (h : wtp Γ (tConst c u) π) : option (term * stack) :=
+            (h : wtp Γ (tConst c u) π) : step_answer (term * stack) :=
     unfold_one_prim Γ c u π hna h with inspect (decompose_stack π) := {
     | @exist (args, ρ) eqd
       with inspect (reduce_args_E RedFlags.default X_type X (Γ ,,, stack_context π)
                      (tConst c u) args _) := {
-      | @exist (t', args') eqr with inspect (eqb (mkApps t' args') (mkApps (tConst c u) args)) := {
-        | @exist true _ := None ;
-        | @exist false _ := Some (t', appstack args' ρ)
-        }
+      | @exist (Some (t', args')) eqr with inspect (eqb (mkApps t' args') (mkApps (tConst c u) args)) := {
+        | @exist true _ := StepNone ;
+        | @exist false _ := StepSome (t', appstack args' ρ)
+        } ;
+      | @exist None _ := StepNoFuel
       }
     }.
   Next Obligation.
@@ -1038,15 +1055,15 @@ Section Conversion.
       application and is a weak-head normal form (reduce_args_E's facts). *)
   Ltac prim_step_facts Σ wfΣ eqr :=
     match type of eqr with
-    | _ = reduce_args_E ?f ?XT ?X ?Γ ?t ?args ?hh =>
+    | Some (_, _) = reduce_args_E ?f ?XT ?X ?Γ ?t ?args ?hh =>
       let r := fresh "r" in let wh := fresh "wh" in
-      pose proof (reduce_args_E_sound f XT X Σ wfΣ Γ t args hh) as [r];
-      pose proof (reduce_args_E_whnf f XT X Σ wfΣ Γ t args hh) as [wh];
-      rewrite <- eqr in r, wh; cbn in r, wh
+      pose proof (reduce_args_E_sound f XT X Σ wfΣ Γ t args hh _ _ eqr) as [r];
+      pose proof (reduce_args_E_whnf f XT X Σ wfΣ Γ t args hh _ _ eqr) as [wh];
+      cbn in r, wh
     end.
 
   Lemma unfold_one_prim_shape Γ c u π hna h t' ξ :
-    Some (t', ξ) = unfold_one_prim Γ c u π hna h ->
+    StepSome (t', ξ) = unfold_one_prim Γ c u π hna h ->
     ∑ args ρ l,
       [× decompose_stack π = (args, ρ), ξ = appstack l ρ,
          (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
@@ -1066,7 +1083,7 @@ Section Conversion.
   (** What a successful step gives a re-entry: the stack keeps its context, the
       application reduces in [zipp] and in [zipc] form, and the step is strict. *)
   Lemma unfold_one_prim_facts Γ c u π hna h t' ξ :
-    Some (t', ξ) = unfold_one_prim Γ c u π hna h ->
+    StepSome (t', ξ) = unfold_one_prim Γ c u π hna h ->
     (stack_context ξ = stack_context π) ×
     (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
        ∥ red Σ (Γ ,,, stack_context π) (zipp (tConst c u) π) (zipp t' ξ) ∥) ×
@@ -1096,7 +1113,7 @@ Section Conversion.
 
   (* Slice A helpers on a step of [unfold_one_prim] (EtaSliceA). *)
   Lemma A_prim_noeta Γ c u π hna h t' ξ :
-    Some (t', ξ) = unfold_one_prim Γ c u π hna h -> no_Eta_arg ξ = true.
+    StepSome (t', ξ) = unfold_one_prim Γ c u π hna h -> no_Eta_arg ξ = true.
   Proof.
     intros e. pose proof hna as hna'.
     destruct (unfold_one_prim_shape _ _ _ _ _ _ _ _ e) as (args & ρ & l & [ed -> _ _]).
@@ -1105,14 +1122,14 @@ Section Conversion.
   Qed.
 
   Lemma A_prim_sce Γ c u π hna h t' ξ :
-    Some (t', ξ) = unfold_one_prim Γ c u π hna h -> stack_context_eta ξ = stack_context_eta π.
+    StepSome (t', ξ) = unfold_one_prim Γ c u π hna h -> stack_context_eta ξ = stack_context_eta π.
   Proof.
     intros e. destruct (unfold_one_prim_shape _ _ _ _ _ _ _ _ e) as (args & ρ & l & [ed -> _ _]).
     apply decompose_stack_eq in ed. rewrite ed !stack_context_eta_appstack. reflexivity.
   Qed.
 
   Lemma A_prim_red Σ (wfΣ : abstract_env_ext_rel X Σ) Γ c u π hna h t' ξ :
-    Some (t', ξ) = unfold_one_prim Γ c u π hna h -> is_closed_context (Γ ,,, stack_context_eta π) ->
+    StepSome (t', ξ) = unfold_one_prim Γ c u π hna h -> is_closed_context (Γ ,,, stack_context_eta π) ->
     ∥ Σ ;;; Γ ,,, stack_context_eta π ⊢ zipp_eta (tConst c u) π ⇝ zipp_eta t' ξ ∥.
   Proof.
     intros e hcl. destruct (unfold_one_prim_shape _ _ _ _ _ _ _ _ e) as (args & ρ & l & [ed -> hr _]).
@@ -1126,37 +1143,37 @@ Section Conversion.
   Ltac A_prims_solve hx hg hwf1 hwf2 :=
     lazymatch goal with
     | |- is_true (wf_stack _) =>
-        match goal with e : Some _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
+        match goal with e : StepSome _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
           apply wf_stack_no_Eta_arg; exact (A_prim_noeta _ _ _ _ _ _ _ _ e) end
     | |- no_Eta_arg _ = true => first [ exact (proj2 (andb_prop _ _ hg)) | exact (proj1 (andb_prop _ _ hg)) ]
     | |- virt_ok _ _ = true =>
         unfold virt_ok;
         first [ rewrite (proj1 (andb_prop _ _ hg)); reflexivity
               | rewrite (proj2 (andb_prop _ _ hg)); reflexivity
-              | match goal with e : Some _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
+              | match goal with e : StepSome _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
                   rewrite (A_prim_noeta _ _ _ _ _ _ _ _ e); reflexivity end ]
     | |- welltypedE _ _ _ =>
-        match goal with w : abstract_env_ext_rel X _, e : Some _ = unfold_one_prim _ _ _ _ _ ?hh |- _ =>
+        match goal with w : abstract_env_ext_rel X _, e : StepSome _ = unfold_one_prim _ _ _ _ _ ?hh |- _ =>
           let hrc := fresh "hrc" in let r := fresh "r" in let hwf := fresh "hwf" in
           destruct (unfold_one_prim_facts _ _ _ _ _ _ _ _ e) as (_ & _ & hrc & _);
           destruct (hrc _ w) as [r]; destruct (heΣ _ w) as [hwf];
           exact (wt_red _ _ _ _ hwf (hh _ w) r) end
     | |- R _ _ _ =>
-        match goal with e : Some _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
+        match goal with e : StepSome _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
           let ΣA := fresh "ΣA" in let wA := fresh "wfΣA" in
           first [ apply R_cored; intros ΣA wA;
                   exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ _ e))) ΣA wA)
                 | apply R_cored2; [constructor; reflexivity | reflexivity |
                     intros ΣA wA; exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ _ e))) ΣA wA)] ] end
     | |- squash (ws_cumul_ctx_pbE _ _ _ _) =>
-        match goal with w : abstract_env_ext_rel X _, e : Some _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
+        match goal with w : abstract_env_ext_rel X _, e : StepSome _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
           rewrite (A_prim_sce _ _ _ _ _ _ _ _ e); exact (hx _ w) end
     | |- squash (wf_localE _ _) =>
-        match goal with w : abstract_env_ext_rel X _, e : Some _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
+        match goal with w : abstract_env_ext_rel X _, e : StepSome _ = unfold_one_prim _ _ _ _ _ _ |- _ =>
           rewrite (A_prim_sce _ _ _ _ _ _ _ _ e); first [exact (hwf1 _ w) | exact (hwf2 _ w)] end
     | |- conv_cumE _ _ _ _ _ =>
         match goal with
-        | w : abstract_env_ext_rel X _, e : Some _ = unfold_one_prim _ _ _ _ _ _,
+        | w : abstract_env_ext_rel X _, e : StepSome _ = unfold_one_prim _ _ _ _ _ _,
           hc : forall S, abstract_env_ext_rel X S -> conv_cumE _ S _ _ _ |- _ =>
           let cb := fresh "cb" in let hx' := fresh "hx'" in let hh := fresh "hh" in
           let r := fresh "r" in
@@ -1312,10 +1329,12 @@ Section Conversion.
     : ConversionResult (conv_term leq Γ (tConst c u) π1 (tConst c' u') π2) :=
     unfold_prims Γ leq c u π1 f1 h1 c' u' π2 f2 h2 ne hx hg hwf1 hwf2 aux
     with inspect (unfold_one_prim Γ c u π1 _ h1) := {
-    | @exist (Some (t1', π1')) eqp1 := isconv_red leq t1' π1' (tConst c' u') π2 aux ;
-    | @exist None eqp1 with inspect (unfold_one_prim Γ c' u' π2 _ h2) := {
-      | @exist (Some (t2', π2')) eqp2 := isconv_red leq (tConst c u) π1 t2' π2' aux ;
-      | @exist None eqp2 := no (NotFoundConstants c c')
+    | @exist (StepSome (t1', π1')) eqp1 := isconv_red leq t1' π1' (tConst c' u') π2 aux ;
+    | @exist StepNoFuel _ := no (ConvNotEnoughFuel "unfold_prims 1") ;
+    | @exist StepNone eqp1 with inspect (unfold_one_prim Γ c' u' π2 _ h2) := {
+      | @exist (StepSome (t2', π2')) eqp2 := isconv_red leq (tConst c u) π1 t2' π2' aux ;
+      | @exist StepNoFuel _ := no (ConvNotEnoughFuel "unfold_prims 2") ;
+      | @exist StepNone eqp2 := no (NotFoundConstants c c')
       }
     }.
   (* the left side took a step (wf_stack, typed, smaller, same η context, virt_ok, hwf, spec),
@@ -1355,10 +1374,12 @@ Section Conversion.
     : ConversionResult (conv_term leq Γ (tConst c u) π1 (tConst c' u') π2) :=
     unfold_prims_args Γ leq c u π1 f1 h1 c' u' π2 f2 h2 hx hg hwf1 hwf2 aux
     with inspect (unfold_one_prim Γ c u π1 _ h1) := {
-    | @exist (Some (t1', π1')) eqp1 := isconv_red leq t1' π1' (tConst c' u') π2 aux ;
-    | @exist None eqp1 with inspect (unfold_one_prim Γ c' u' π2 _ h2) := {
-      | @exist (Some (t2', π2')) eqp2 := isconv_red leq (tConst c u) π1 t2' π2' aux ;
-      | @exist None eqp2 := no (NotFoundConstant c)
+    | @exist (StepSome (t1', π1')) eqp1 := isconv_red leq t1' π1' (tConst c' u') π2 aux ;
+    | @exist StepNoFuel _ := no (ConvNotEnoughFuel "unfold_prims_args 1") ;
+    | @exist StepNone eqp1 with inspect (unfold_one_prim Γ c' u' π2 _ h2) := {
+      | @exist (StepSome (t2', π2')) eqp2 := isconv_red leq (tConst c u) π1 t2' π2' aux ;
+      | @exist StepNoFuel _ := no (ConvNotEnoughFuel "unfold_prims_args 2") ;
+      | @exist StepNone eqp2 := no (NotFoundConstant c)
       }
     }.
   Next Obligation. A_prims_solve hx hg hwf1 hwf2. Qed.
@@ -2958,12 +2979,12 @@ Equations (noeqns) isconv_array_values_aux
     rewrite -zipp_eta_decompose in r'. now constructor.
   Qed.
 
-  (* The discriminant reduction of the Case and Proj views. *)
-  Lemma sliceC_reduce_termE_red Σ (wfΣ : abstract_env_ext_rel X Σ) f Γ t h :
-    ∥ red Σ Γ t (reduce_termE f Γ t h) ∥.
+  (* The discriminant reduction of the Case and Proj views, on an answer of the machine. *)
+  Lemma sliceC_reduce_termE_red Σ (wfΣ : abstract_env_ext_rel X Σ) f Γ t h t' :
+    Some t' = reduce_termE f Γ t h -> ∥ red Σ Γ t t' ∥.
   Proof.
-    destruct (PCUICSafeReduceEta.reduce_term_sound (wt := welltypedE) (wfP := wf_extE)
-                (normalization_in := normalization_in) f X_type X Γ t h Σ wfΣ) as [r].
+    intros e. unfold reduce_termE in e.
+    destruct (PCUICSafeReduceEta.reduce_term_sound _ _ _ _ _ _ _ wfΣ _ (eq_sym e)) as [r].
     exact (sq (clrel_rel r)).
   Qed.
 
@@ -2975,17 +2996,38 @@ Equations (noeqns) isconv_array_values_aux
     exact (snd (cmpb_term_correct Σ wfΣ Conv 0 t t hu hu) ltac:(reflexivity)).
   Qed.
 
-  Lemma sliceC_reduce_termE_cored Σ (wfΣ : abstract_env_ext_rel X Σ) f Γ t h :
-    eqb_term (reduce_termE f Γ t h) t = false ->
-    cored Σ Γ (reduce_termE f Γ t h) t.
+  Lemma sliceC_reduce_termE_cored Σ (wfΣ : abstract_env_ext_rel X Σ) f Γ t h t' :
+    Some t' = reduce_termE f Γ t h ->
+    eqb_term t' t = false ->
+    cored Σ Γ t' t.
   Proof.
-    intros hneq.
-    destruct (sliceC_reduce_termE_red Σ wfΣ f Γ t h) as [r].
-    apply (red_neq_cored Σ Γ t (reduce_termE f Γ t h) r).
-    intros e. rewrite -e in hneq.
+    intros e hneq.
+    destruct (sliceC_reduce_termE_red Σ wfΣ f Γ t h t' e) as [r].
+    apply (red_neq_cored Σ Γ t t' r).
+    intros e'. rewrite -e' in hneq.
     pose proof (sliceC_eqb_term_refl Σ wfΣ Γ t (h Σ wfΣ)) as hrefl.
     rewrite hneq in hrefl. discriminate hrefl.
   Qed.
+
+  (* The answer [cr] of an inspected [reduce_termE] call of the Case and Proj views, found by
+     its equation (either orientation): [sliceC_rt_red_in Σ wfΣ T] gives the reduction [r] to
+     the answer that occurs in [T] ([sliceC_rt_red]: in the goal); [sliceC_rt_cored] gives,
+     from [false = eqb_term cr _], the strict reduction [hc] to [cr]. *)
+  Ltac sliceC_rt_red_in Σ wfΣ T :=
+    first [ match goal with e : Some ?cr = reduce_termE ?f ?Γ' ?t ?hh |- _ =>
+              match T with context [cr] =>
+                destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh cr e) as [r] end end
+          | match goal with e : reduce_termE ?f ?Γ' ?t ?hh = Some ?cr |- _ =>
+              match T with context [cr] =>
+                destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh cr (eq_sym e)) as [r] end end ].
+  Ltac sliceC_rt_red Σ wfΣ := match goal with |- ?G => sliceC_rt_red_in Σ wfΣ G end.
+  Ltac sliceC_rt_cored Σ wfΣ :=
+    match goal with hneq : false = eqb_term ?cr _ |- _ =>
+      first [ match goal with e : Some cr = reduce_termE ?f ?Γ' ?t ?hh |- _ =>
+                pose proof (sliceC_reduce_termE_cored Σ wfΣ f Γ' t hh cr e (eq_sym hneq)) as hc end
+            | match goal with e : reduce_termE ?f ?Γ' ?t ?hh = Some cr |- _ =>
+                pose proof (sliceC_reduce_termE_cored Σ wfΣ f Γ' t hh cr (eq_sym e) (eq_sym hneq)) as hc end ]
+    end.
 
   (* whnf of the η view after [reduce_args_E] (G2b: [eta_head_ok]). *)
   Lemma sliceC_whnf_reduced (Σ : global_env_ext) Γ π fn' args' :
@@ -3021,7 +3063,13 @@ Equations (noeqns) isconv_array_values_aux
       first [discriminate e | assumption].
   Qed.
 
+  (* PERMANENT GUARD (BET-64 FUEL): [reduce_termE], like [reduce_args_E], is opaque to the
+     elaboration and the obligations of the definitions below (made transparent again at the end of
+     the section). Without it, a conversion check unfolds it down to the machine's fuel recursion on
+     [default_fuel] and walks the fuel step by step: the build grows to 44-50 GB (FuelConv's dev
+     builds c4/c5). [Opaque] changes only what tactics and the elaborator unfold, not any term. *)
   Opaque reduce_args_E.
+  Opaque reduce_termE.
   Equations(noeqns) _isconv_prog (Γ : context) (leq : conv_pb)
             (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
             (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
@@ -3108,9 +3156,11 @@ Equations (noeqns) isconv_array_values_aux
 
     | prog_view_Case ci p c brs ci' p' c' brs'
       with inspect (reduce_termE RedFlags.default (Γ ,,, stack_context π1) c _) := {
-      | @exist cred eq1 with inspect (eqb_term cred c) := {
+      | @exist None _ := no (ConvNotEnoughFuel "isconv_prog Case 1") ;
+      | @exist (Some cred) eq1 with inspect (eqb_term cred c) := {
         | @exist true eq2 with inspect (reduce_termE RedFlags.default (Γ ,,, stack_context π2) c' _) := {
-          | @exist cred' eq3 with inspect (eqb_term cred' c') := {
+          | @exist None _ := no (ConvNotEnoughFuel "isconv_prog Case 2") ;
+          | @exist (Some cred') eq3 with inspect (eqb_term cred' c') := {
             | @exist true eq4 with inspect (eqb ci ci') := {
               | @exist true eq5
                   with isconv_predicate Γ ci p c brs π1 f1 _ ci' p' c' brs' π2 f2 _ hx (eq_sym hg) hwf1 hwf2 _ aux := {
@@ -3151,9 +3201,11 @@ Equations (noeqns) isconv_array_values_aux
       } ;
 
     | prog_view_Proj p c p' c' with inspect (reduce_termE RedFlags.default (Γ ,,, stack_context π1) c _) := {
-      | @exist cred eq1 with inspect (eqb_term cred c) := {
+      | @exist None _ := no (ConvNotEnoughFuel "isconv_prog Proj 1") ;
+      | @exist (Some cred) eq1 with inspect (eqb_term cred c) := {
         | @exist true eq3 with inspect (reduce_termE RedFlags.default (Γ ,,, stack_context π2) c' _) := {
-          | @exist cred' eq2 with inspect (eqb_term cred' c') := {
+          | @exist None _ := no (ConvNotEnoughFuel "isconv_prog Proj 2") ;
+          | @exist (Some cred') eq2 with inspect (eqb_term cred' c') := {
             | @exist true eq4 with inspect (eqb p p') := {
               | @exist true eq5 with isconv_red_raw Conv c (Proj p :: π1) c' (Proj p' :: π2) aux := {
                 | Success convdiscr := isconv_args leq (tProj p c) π1 (tProj p' c') π2 aux ;
@@ -3182,29 +3234,33 @@ Equations (noeqns) isconv_array_values_aux
     } ;
     | prog_view_Fix mfix idx mfix' idx'
       with inspect (unfold_one_fix Γ mfix idx π1 _) := {
-      | @exist (Some (fn, θ)) eq1 with inspect (decompose_stack θ) := {
+      | @exist (StepSome (fn, θ)) eq1 with inspect (decompose_stack θ) := {
         | @exist (l', θ') eq2
           with inspect (reduce_args_E RedFlags.nodelta X_type X (Γ ,,, stack_context θ') fn l' _) := {
-          | @exist (fn', args') eq3 with inspect (rebuilt_ok fn' args' θ') := {
+          | @exist None _ := no (ConvNotEnoughFuel "isconv_prog Fix 1") ;
+          | @exist (Some (fn', args')) eq3 with inspect (rebuilt_ok fn' args' θ') := {
             | @exist true g3 := isconv_prog leq fn' (appstack args' θ') (tFix mfix' idx') π2 aux ;
             | @exist false _ := no (EtaStackRefusal (Γ ,,, stack_context π1) (tFix mfix idx)
                                                     (Γ ,,, stack_context π2) (tFix mfix' idx'))
             }
           }
         } ;
-      | @exist None eee with inspect (unfold_one_fix Γ mfix' idx' π2 _) := {
-        | @exist (Some (fn, θ)) eq1
+      | @exist StepNoFuel _ := no (ConvNotEnoughFuel "unfold_one_fix 1") ;
+      | @exist StepNone eee with inspect (unfold_one_fix Γ mfix' idx' π2 _) := {
+        | @exist (StepSome (fn, θ)) eq1
           with inspect (decompose_stack θ) := {
           | @exist (l', θ') eq2
             with inspect (reduce_args_E RedFlags.nodelta X_type X (Γ ,,, stack_context θ') fn l' _) := {
-            | @exist (fn', args') eq3 with inspect (rebuilt_ok fn' args' θ') := {
+            | @exist None _ := no (ConvNotEnoughFuel "isconv_prog Fix 2") ;
+            | @exist (Some (fn', args')) eq3 with inspect (rebuilt_ok fn' args' θ') := {
               | @exist true g3 := isconv_prog leq (tFix mfix idx) π1 fn' (appstack args' θ') aux ;
               | @exist false _ := no (EtaStackRefusal (Γ ,,, stack_context π1) (tFix mfix idx)
                                                       (Γ ,,, stack_context π2) (tFix mfix' idx'))
               }
             }
           } ;
-        | @exist None eq1 with inspect (eqb idx idx') := {
+        | @exist StepNoFuel _ := no (ConvNotEnoughFuel "unfold_one_fix 2") ;
+        | @exist StepNone eq1 with inspect (eqb idx idx') := {
           | @exist true eq4 with isws_cumul_pb_Fix IndFix Γ mfix idx π1 f1 _ mfix' idx' π2 f2 _ hx (eq_sym hg) hwf1 hwf2 _ aux := {
             | Success convfix with isconv_args_raw leq (tFix mfix idx) π1 (tFix mfix' idx') π2 aux := {
               | Success convargs := yes ;
@@ -3476,9 +3532,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
-    match goal with
-    | |- context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
-    end.
+    sliceC_rt_red Σ wfΣ.
     exact (PCUICSafeReduceEta.red_wt (wt := welltypedE) Σ hwf (h2 Σ wfΣ)
              (red_context_zip_eta Σ Γ _ _ (Case_discr ci' p' brs' :: π2) r)).
   Qed.
@@ -3486,10 +3540,7 @@ Equations (noeqns) isconv_array_values_aux
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored2; [constructor; reflexivity|reflexivity|].
     intros Σ wfΣ.
-    match type of eq4 with
-    | false = eqb_term (reduce_termE ?f ?Γ' ?t ?hh) _ =>
-        pose proof (sliceC_reduce_termE_cored Σ wfΣ f Γ' t hh (eq_sym eq4)) as hc
-    end.
+    sliceC_rt_cored Σ wfΣ.
     exact (cored_context_eta Σ Γ _ _ (Case_discr ci' p' brs' :: π2) hna2 hc).
   Qed.
   Next Obligation.
@@ -3497,9 +3548,7 @@ Equations (noeqns) isconv_array_values_aux
     destruct (hΣ _ wfΣ) as [cb].
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h Σ wfΣ) as [h'], (hx Σ wfΣ) as [hx'].
-    match type of h' with
-    | context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
-    end.
+    let T := type of h' in sliceC_rt_red_in Σ wfΣ T.
     destruct (sliceC_closed_red_zipp Σ wfΣ Γ (tCase ci' p' c' brs') _ π2 hna2 (h2 Σ wfΣ)
                 (sliceC_closed_ctx Σ wfΣ Γ π2 hwf2) (red_case_c ci' p' c' brs' _ r)) as [r2].
     constructor. eapply WS8_trans; [exact h'|].
@@ -3509,19 +3558,14 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
-    match goal with
-    | |- context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
-    end.
+    sliceC_rt_red Σ wfΣ.
     exact (PCUICSafeReduceEta.red_wt (wt := welltypedE) Σ hwf (h1 Σ wfΣ)
              (red_context_zip_eta Σ Γ _ _ (Case_discr ci p brs :: π1) r)).
   Qed.
   Next Obligation.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored. intros Σ wfΣ.
-    match type of eq3 with
-    | false = eqb_term (reduce_termE ?f ?Γ' ?t ?hh) _ =>
-        pose proof (sliceC_reduce_termE_cored Σ wfΣ f Γ' t hh (eq_sym eq3)) as hc
-    end.
+    sliceC_rt_cored Σ wfΣ.
     exact (cored_context_eta Σ Γ _ _ (Case_discr ci p brs :: π1) hna1 hc).
   Qed.
   Next Obligation.
@@ -3529,9 +3573,7 @@ Equations (noeqns) isconv_array_values_aux
     destruct (hΣ _ wfΣ) as [cb].
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h Σ wfΣ) as [h'].
-    match type of h' with
-    | context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
-    end.
+    let T := type of h' in sliceC_rt_red_in Σ wfΣ T.
     destruct (sliceC_closed_red_zipp Σ wfΣ Γ (tCase ci p c brs) _ π1 hna1 (h1 Σ wfΣ)
                 (sliceC_closed_ctx Σ wfΣ Γ π1 hwf1) (red_case_c ci p c brs _ r)) as [r1].
     constructor. eapply WS8_trans; [exact (red_ws_cumul_pbE r1)|exact h'].
@@ -3570,9 +3612,7 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
-    match goal with
-    | |- context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
-    end.
+    sliceC_rt_red Σ wfΣ.
     exact (PCUICSafeReduceEta.red_wt (wt := welltypedE) Σ hwf (h2 Σ wfΣ)
              (red_context_zip_eta Σ Γ _ _ (Proj p' :: π2) r)).
   Qed.
@@ -3580,10 +3620,7 @@ Equations (noeqns) isconv_array_values_aux
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored2; [constructor; reflexivity|reflexivity|].
     intros Σ wfΣ.
-    match type of eq4 with
-    | false = eqb_term (reduce_termE ?f ?Γ' ?t ?hh) _ =>
-        pose proof (sliceC_reduce_termE_cored Σ wfΣ f Γ' t hh (eq_sym eq4)) as hc
-    end.
+    sliceC_rt_cored Σ wfΣ.
     exact (cored_context_eta Σ Γ _ _ (Proj p' :: π2) hna2 hc).
   Qed.
   Next Obligation.
@@ -3591,9 +3628,7 @@ Equations (noeqns) isconv_array_values_aux
     destruct (hΣ _ wfΣ) as [cb].
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h Σ wfΣ) as [h'], (hx Σ wfΣ) as [hx'].
-    match type of h' with
-    | context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
-    end.
+    let T := type of h' in sliceC_rt_red_in Σ wfΣ T.
     destruct (sliceC_closed_red_zipp Σ wfΣ Γ (tProj p' c') _ π2 hna2 (h2 Σ wfΣ)
                 (sliceC_closed_ctx Σ wfΣ Γ π2 hwf2) (red_proj_c p' c' _ r)) as [r2].
     constructor. eapply WS8_trans; [exact h'|].
@@ -3603,19 +3638,14 @@ Equations (noeqns) isconv_array_values_aux
   Next Obligation.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (heΣ _ wfΣ) as [hwf].
-    match goal with
-    | |- context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
-    end.
+    sliceC_rt_red Σ wfΣ.
     exact (PCUICSafeReduceEta.red_wt (wt := welltypedE) Σ hwf (h1 Σ wfΣ)
              (red_context_zip_eta Σ Γ _ _ (Proj p :: π1) r)).
   Qed.
   Next Obligation.
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     eapply R_cored. intros Σ wfΣ.
-    match type of eq3 with
-    | false = eqb_term (reduce_termE ?f ?Γ' ?t ?hh) _ =>
-        pose proof (sliceC_reduce_termE_cored Σ wfΣ f Γ' t hh (eq_sym eq3)) as hc
-    end.
+    sliceC_rt_cored Σ wfΣ.
     exact (cored_context_eta Σ Γ _ _ (Proj p :: π1) hna1 hc).
   Qed.
   Next Obligation.
@@ -3623,9 +3653,7 @@ Equations (noeqns) isconv_array_values_aux
     destruct (hΣ _ wfΣ) as [cb].
     destruct (andb_prop _ _ (eq_sym hg)) as [hna1 hna2].
     destruct (h Σ wfΣ) as [h'].
-    match type of h' with
-    | context [reduce_termE ?f ?Γ' ?t ?hh] => destruct (sliceC_reduce_termE_red Σ wfΣ f Γ' t hh) as [r]
-    end.
+    let T := type of h' in sliceC_rt_red_in Σ wfΣ T.
     destruct (sliceC_closed_red_zipp Σ wfΣ Γ (tProj p c) _ π1 hna1 (h1 Σ wfΣ)
                 (sliceC_closed_ctx Σ wfΣ Γ π1 hwf1) (red_proj_c p c _ r)) as [r1].
     constructor. eapply WS8_trans; [exact (red_ws_cumul_pbE r1)|exact h'].
@@ -3713,10 +3741,10 @@ Equations (noeqns) isconv_array_values_aux
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
     pose proof (eq_sym g3) as g3'. unfold rebuilt_ok in g3'. apply andb_prop in g3' as [_ hok].
     match type of eq3 with
-    | (_, _) = reduce_args_E ?f ?XT ?XX ?Γ' ?t ?args ?hh =>
-        pose proof (reduce_args_E_isred f XT XX Γ' t args hh eq_refl) as [ha _]
+    | Some (_, _) = reduce_args_E ?f ?XT ?XX ?Γ' ?t ?args ?hh =>
+        pose proof (reduce_args_E_isred f XT XX Γ' t args hh _ _ eq3 eq_refl) as [ha _]
     end.
-    rewrite <- eq3 in ha. cbn [fst] in ha.
+    cbn [fst] in ha.
     split; [exact ha|].
     intros Σ wfΣ. reduce_args_facts Σ wfΣ.
     constructor.
@@ -3811,10 +3839,10 @@ Equations (noeqns) isconv_array_values_aux
     rewrite <- eq2 in d1. cbn [snd] in d1. subst θ'.
     pose proof (eq_sym g3) as g3'. unfold rebuilt_ok in g3'. apply andb_prop in g3' as [_ hok].
     match type of eq3 with
-    | (_, _) = reduce_args_E ?f ?XT ?XX ?Γ' ?t ?args ?hh =>
-        pose proof (reduce_args_E_isred f XT XX Γ' t args hh eq_refl) as [ha _]
+    | Some (_, _) = reduce_args_E ?f ?XT ?XX ?Γ' ?t ?args ?hh =>
+        pose proof (reduce_args_E_isred f XT XX Γ' t args hh _ _ eq3 eq_refl) as [ha _]
     end.
-    rewrite <- eq3 in ha. cbn [fst] in ha.
+    cbn [fst] in ha.
     split; [exact ha|].
     intros Σ wfΣ. reduce_args_facts Σ wfΣ.
     constructor.
@@ -4132,20 +4160,20 @@ Equations (noeqns) isconv_array_values_aux
     rewrite ?stack_context_eta_App_r ?stack_context_eta_Eta_arg_appstack ?stack_context_eta_appstack in *.
 
   Ltac etakD_args_red_at Σ w := match goal with
-    | e : (?a, ?b) = reduce_args_E ?f ?XT ?X' ?Γ' ?t ?args ?hh |- _ =>
-      let rr := fresh "rr" in pose proof (reduce_args_E_sound f XT X' Σ w Γ' t args hh) as [rr];
-      rewrite <- e in rr; cbn [fst snd] in rr
+    | e : Some (?a, ?b) = reduce_args_E ?f ?XT ?X' ?Γ' ?t ?args ?hh |- _ =>
+      let rr := fresh "rr" in pose proof (reduce_args_E_sound f XT X' Σ w Γ' t args hh a b e) as [rr];
+      cbn [fst snd] in rr
     end.
   Ltac etakD_args_red := match goal with w : abstract_env_ext_rel X ?Σ |- _ => etakD_args_red_at Σ w end.
   Ltac etakD_args_whnf := match goal with
-    | e : (?a, ?b) = reduce_args_E ?f ?XT ?X' ?Γ' ?t ?args ?hh, w : abstract_env_ext_rel X ?Σ |- _ =>
-      let ww := fresh "ww" in pose proof (reduce_args_E_whnf f XT X' Σ w Γ' t args hh) as [ww];
-      rewrite <- e in ww; cbn [fst snd] in ww
+    | e : Some (?a, ?b) = reduce_args_E ?f ?XT ?X' ?Γ' ?t ?args ?hh, w : abstract_env_ext_rel X ?Σ |- _ =>
+      let ww := fresh "ww" in pose proof (reduce_args_E_whnf f XT X' Σ w Γ' t args hh a b e) as [ww];
+      cbn [fst snd] in ww
     end.
   Ltac etakD_args_isr := match goal with
-    | e : (?a, ?b) = reduce_args_E ?f ?XT ?X' ?Γ' ?t ?args ?hh |- _ =>
-      let ii := fresh "ii" in pose proof (reduce_args_E_isred f XT X' Γ' t args hh) as ii;
-      rewrite <- e in ii; cbn [fst snd] in ii
+    | e : Some (?a, ?b) = reduce_args_E ?f ?XT ?X' ?Γ' ?t ?args ?hh |- _ =>
+      let ii := fresh "ii" in pose proof (reduce_args_E_isred f XT X' Γ' t args hh a b e) as ii;
+      cbn [fst snd] in ii
     end.
   Ltac etakD_sce :=
     rewrite ?stack_context_eta_Eta_arg_appstack ?stack_context_eta_App_r ?stack_context_eta_appstack.
@@ -4444,27 +4472,28 @@ Equations (noeqns) isconv_array_values_aux
     etakD_pre; rewrite (decompose_stack_eta_eq _ _ _ (eq_sym eq1)) (decompose_stack_eta_eq _ _ _ (eq_sym eq2)) (decompose_stack_eq _ _ _ (eq_sym eq1)) stack_context_eta_appstack; cbn [fst]; eauto.
   Qed.
 
-  (* Site 6 of the 11 reduce_stack sites: [args := []]. *)
+  (* Site 6 of the 11 reduce_stack sites: [args := []]. [StepNoFuel]: the machine ran out of fuel. *)
   Equations unfold_one_case (Γ : context) (ci : case_info)
             (p : predicate term) (c : term) (brs : list (branch term))
-            (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (tCase ci p c brs)) : option term :=
+            (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (tCase ci p c brs)) : step_answer term :=
     unfold_one_case Γ ci p c brs h
     with inspect (reduce_args_E RedFlags.default X_type X Γ c [] _) := {
-    | @exist (cred, args) eq with cc_viewc cred := {
+    | @exist (Some (cred, args)) eq with cc_viewc cred := {
       | ccview_construct ind' n ui with inspect (nth_error brs n) := {
-        | exist (Some br) eqbr := Some (iota_red ci.(ci_npar) p args br) ;
+        | exist (Some br) eqbr := StepSome (iota_red ci.(ci_npar) p args br) ;
         | exist None eqbr := False_rect _ _ } ;
       | ccview_cofix mfix idx with inspect ci.(ci_cofix_nondep) := {
         | @exist true eqnd with inspect (unfold_cofix mfix idx) := {
-          | @exist (Some (narg, fn)) eq2 := Some (tCase ci p (mkApps fn args) brs) ;
+          | @exist (Some (narg, fn)) eq2 := StepSome (tCase ci p (mkApps fn args) brs) ;
           | @exist None eq2 := False_rect _ _
           } ;
         (* A cofixpoint does not unfold under a case whose return type may depend
            on the scrutinee (BET-339; re-synced from integ-all7's PCUICSafeConversion). *)
-        | @exist false eqnd := None
+        | @exist false eqnd := StepNone
         } ;
-      | ccview_other cred _ := None
-      }
+      | ccview_other cred _ := StepNone
+      } ;
+    | @exist None _ := StepNoFuel
     }.
   Next Obligation.
     etakD_pre; etakD_wf; destruct (heΣ _ ltac:(eassumption)) as [hΣe]; exact (ctf_context _ Γ c [Case_discr ci p brs] hΣe eq_refl h).
@@ -4478,7 +4507,7 @@ Equations (noeqns) isconv_array_values_aux
 
   Lemma unfold_one_case_cored :
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ ci p c brs h t,
-      Some t = unfold_one_case Γ ci p c brs h ->
+      StepSome t = unfold_one_case Γ ci p c brs h ->
       cored Σ Γ t (tCase ci p c brs).
   Proof using All.
     intros Σ wfΣ Γ ci p c brs h t e.
@@ -4502,24 +4531,25 @@ Equations (noeqns) isconv_array_values_aux
       + eapply red_case_c. exact (clrel_rel rr).
   Qed.
 
-  (* Site 7 of the 11 reduce_stack sites: [args := []]. *)
+  (* Site 7 of the 11 reduce_stack sites: [args := []]. [StepNoFuel]: the machine ran out of fuel. *)
   Equations unfold_one_proj (Γ : context) (p : projection) (c : term)
-            (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (tProj p c)) : option term :=
+            (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (tProj p c)) : step_answer term :=
 
     unfold_one_proj Γ p c h with p := {
     | mkProjection i pars narg with inspect (reduce_args_E RedFlags.default X_type X Γ c [] _) := {
-      | @exist (cred, args) eq with cc0_viewc cred := {
+      | @exist (Some (cred, args)) eq with cc0_viewc cred := {
         | cc0view_construct ind' ui with inspect (nth_error args (pars + narg)) := {
-          | @exist (Some arg) eq2 := Some arg ;
+          | @exist (Some arg) eq2 := StepSome arg ;
           | @exist None eq2 := False_rect _ _
           } ;
         | cc0view_cofix mfix idx with inspect (unfold_cofix mfix idx) := {
           | @exist (Some (rarg, fn)) eq2 :=
-            Some (tProj p (mkApps fn args)) ;
+            StepSome (tProj p (mkApps fn args)) ;
           | @exist None eq2 := False_rect _ _
           } ;
-        | cc0view_other cred _ := None
-        }
+        | cc0view_other cred _ := StepNone
+        } ;
+      | @exist None _ := StepNoFuel
       }
     }.
   Next Obligation.
@@ -4534,7 +4564,7 @@ Equations (noeqns) isconv_array_values_aux
 
   Lemma unfold_one_proj_cored :
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ p c h t,
-      Some t = unfold_one_proj Γ p c h ->
+      StepSome t = unfold_one_proj Γ p c h ->
       cored Σ Γ t (tProj p c).
   Proof using All.
     intros Σ wfΣ Γ p c h t e.
@@ -4564,45 +4594,48 @@ Equations (noeqns) isconv_array_values_aux
   Qed.
 
   (* T2 (rev 14 B4): each tFix/tCase/tProj/tConst arm runs only on a stack without Eta_arg and
-     answers [None] otherwise (the tFix arm through unfold_one_fix's T4). Dead on reachable
-     states by [virt_ok_not_head]; never a refusal, so no η acceptance is lost in the fallback. *)
+     answers [StepNone] otherwise (the tFix arm through unfold_one_fix's T4). Dead on reachable
+     states by [virt_ok_not_head]; never a refusal, so no η acceptance is lost in the fallback.
+     [StepNoFuel]: the machine ran out of fuel inside the helper of the arm. *)
   Equations reducible_head (Γ : context) (t : term) (π : stack)
             (h : wtp Γ t π)
-    : option (term × stack) :=
+    : step_answer (term × stack) :=
 
     reducible_head Γ (tFix mfix idx) π h := unfold_one_fix Γ mfix idx π h ;
 
     reducible_head Γ (tCase ci p c brs) π h with inspect (no_Eta_arg π) := {
-    | @exist false _ := None ;
+    | @exist false _ := StepNone ;
     | @exist true hna
       with inspect (unfold_one_case (Γ ,,, stack_context π) ci p c brs _) := {
-      | @exist (Some t) eq := Some (t, π) ;
-      | @exist None _ := None
+      | @exist (StepSome t) eq := StepSome (t, π) ;
+      | @exist StepNone _ := StepNone ;
+      | @exist StepNoFuel _ := StepNoFuel
       }
     } ;
 
     reducible_head Γ (tProj p c) π h with inspect (no_Eta_arg π) := {
-    | @exist false _ := None ;
+    | @exist false _ := StepNone ;
     | @exist true hna
       with inspect (unfold_one_proj (Γ ,,, stack_context π) p c _) := {
-      | @exist (Some t) eq := Some (t, π) ;
-      | @exist None _ := None
+      | @exist (StepSome t) eq := StepSome (t, π) ;
+      | @exist StepNone _ := StepNone ;
+      | @exist StepNoFuel _ := StepNoFuel
       }
     } ;
 
     reducible_head Γ (tConst c u) π h with inspect (no_Eta_arg π) := {
-    | @exist false _ := None ;
+    | @exist false _ := StepNone ;
     | @exist true hna
       with inspect (abstract_env_lookup X c) := {
       | @exist (Some (ConstantDecl {| cst_body := Some body |})) eq :=
-        Some (subst_instance u body, π) ;
+        StepSome (subst_instance u body, π) ;
       (* bodiless or not found: a registered operation may take a machine step
          (design §7.3, last paragraph) *)
       | @exist _ _ := unfold_one_prim Γ c u π (eq_sym hna) h
       }
     } ;
 
-    reducible_head Γ _ π h := None.
+    reducible_head Γ _ π h := StepNone.
   Next Obligation.
     etakD_pre; etakD_wf; destruct (heΣ _ ltac:(eassumption)) as [hΣe]; exact (ctf_context _ _ _ _ hΣe hna h).
   Qed.
@@ -4619,10 +4652,10 @@ Equations (noeqns) isconv_array_values_aux
     | e : no_Eta_arg _ = true |- _ => exact e
     | e : true = no_Eta_arg _ |- _ => exact (eq_sym e) end.
   Ltac etakD_case_proj_cored wfΣ := match goal with
-    | e : Some _ = unfold_one_case _ _ _ _ _ _ |- _ => pose proof (unfold_one_case_cored _ wfΣ _ _ _ _ _ _ _ e) as rc
-    | e : unfold_one_case _ _ _ _ _ _ = Some _ |- _ => pose proof (unfold_one_case_cored _ wfΣ _ _ _ _ _ _ _ (eq_sym e)) as rc
-    | e : Some _ = unfold_one_proj _ _ _ _ |- _ => pose proof (unfold_one_proj_cored _ wfΣ _ _ _ _ _ e) as rc
-    | e : unfold_one_proj _ _ _ _ = Some _ |- _ => pose proof (unfold_one_proj_cored _ wfΣ _ _ _ _ _ (eq_sym e)) as rc
+    | e : StepSome _ = unfold_one_case _ _ _ _ _ _ |- _ => pose proof (unfold_one_case_cored _ wfΣ _ _ _ _ _ _ _ e) as rc
+    | e : unfold_one_case _ _ _ _ _ _ = StepSome _ |- _ => pose proof (unfold_one_case_cored _ wfΣ _ _ _ _ _ _ _ (eq_sym e)) as rc
+    | e : StepSome _ = unfold_one_proj _ _ _ _ |- _ => pose proof (unfold_one_proj_cored _ wfΣ _ _ _ _ _ e) as rc
+    | e : unfold_one_proj _ _ _ _ = StepSome _ |- _ => pose proof (unfold_one_proj_cored _ wfΣ _ _ _ _ _ (eq_sym e)) as rc
     end.
   Ltac etakD_delta_red wfΣ := match goal with
     | e : Some (ConstantDecl _) = abstract_env_lookup X _ |- _ => exact (A_const_red _ wfΣ _ _ _ _ _ e eq_refl) end.
@@ -4631,14 +4664,14 @@ Equations (noeqns) isconv_array_values_aux
 
   Lemma reducible_head_red_zipp :
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ,
-      Some (fn, ξ) = reducible_head Γ t π h ->
+      StepSome (fn, ξ) = reducible_head Γ t π h ->
       ∥ red (fst Σ) (Γ ,,, stack_context π) (zipp t π) (zipp fn ξ) ∥.
   Proof using All.
     intros Σ wfΣ Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
     all: intro ee ; try noconf ee.
-    all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ _ |- _ =>
+    all: try solve [ match goal with ee : StepSome (_, _) = unfold_one_prim _ _ _ _ _ _ |- _ =>
                        exact (fst (snd (unfold_one_prim_facts _ _ _ _ _ _ _ _ ee)) _ wfΣ) end ].
     all: try solve [ eapply unfold_one_fix_red_zipp; eauto ].
     all: try solve [ constructor; unfold zipp; destruct (decompose_stack π) as [l ρ];
@@ -4650,14 +4683,14 @@ Equations (noeqns) isconv_array_values_aux
 
   Lemma reducible_head_cored :
     forall Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ,
-      Some (fn, ξ) = reducible_head Γ t π h ->
+      StepSome (fn, ξ) = reducible_head Γ t π h ->
       cored Σ Γ (zipc fn ξ) (zipc t π).
   Proof using All.
     intros Σ wfΣ Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
     all: intro ee ; try noconf ee.
-    all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ _ |- _ =>
+    all: try solve [ match goal with ee : StepSome (_, _) = unfold_one_prim _ _ _ _ _ _ |- _ =>
                        exact (snd (snd (snd (unfold_one_prim_facts _ _ _ _ _ _ _ _ ee))) _ wfΣ) end ].
     all: try solve [ eapply unfold_one_fix_cored; eauto ].
     all: try solve [ eapply cored_context_eta; [ etakD_hna | etakD_delta_cored wfΣ ] ].
@@ -4666,14 +4699,14 @@ Equations (noeqns) isconv_array_values_aux
 
   Lemma reducible_head_decompose :
     forall Γ t π h fn ξ,
-      Some (fn, ξ) = reducible_head Γ t π h ->
+      StepSome (fn, ξ) = reducible_head Γ t π h ->
       snd (decompose_stack π) = snd (decompose_stack ξ).
   Proof using All.
     intros Γ t π h fn ξ e.
     revert e.
     funelim (reducible_head Γ t π h).
     all: intro ee ; try discriminate ee ; try (injection ee; intros; subst).
-    all: try solve [ match goal with ee : Some (_, _) = unfold_one_prim _ _ _ _ _ _ |- _ =>
+    all: try solve [ match goal with ee : StepSome (_, _) = unfold_one_prim _ _ _ _ _ _ |- _ =>
       destruct (unfold_one_prim_shape _ _ _ _ _ _ _ _ ee) as (args & ρ & l & [ed eξ _ _]);
       rewrite ed; subst; rewrite decompose_stack_appstack;
       rewrite (decompose_stack_twice _ _ _ ed); reflexivity end ].
@@ -4681,20 +4714,20 @@ Equations (noeqns) isconv_array_values_aux
     all: try reflexivity.
   Qed.
 
-  (* rev 14 B4: a Some answer of reducible_head means its guard held. *)
+  (* rev 14 B4: a StepSome answer of reducible_head means its guard held. *)
   Lemma unfold_one_fix_Some_guard Γ mfix idx π h r :
-    Some r = unfold_one_fix Γ mfix idx π h -> no_Eta_arg π = true.
+    StepSome r = unfold_one_fix Γ mfix idx π h -> no_Eta_arg π = true.
   Proof using All. funelim (unfold_one_fix Γ mfix idx π h); intros ee; congruence. Qed.
 
   Lemma reducible_head_Some_guard Γ t π h r :
-    Some r = reducible_head Γ t π h -> no_Eta_arg π = true.
+    StepSome r = reducible_head Γ t π h -> no_Eta_arg π = true.
   Proof using All.
     funelim (reducible_head Γ t π h); intros ee; try congruence.
     all: eapply unfold_one_fix_Some_guard; eassumption.
   Qed.
 
   Lemma reducible_head_stack Γ t π h fn ξ l θ :
-    Some (fn, ξ) = reducible_head Γ t π h -> (l, θ) = decompose_stack ξ ->
+    StepSome (fn, ξ) = reducible_head Γ t π h -> (l, θ) = decompose_stack ξ ->
     [× ξ = appstack l θ, (decompose_stack π).2 = θ, no_Eta_arg θ = true & isStackApp θ = false].
   Proof using All.
     intros e ed.
@@ -4708,7 +4741,7 @@ Equations (noeqns) isconv_array_values_aux
   Qed.
 
   Lemma reducible_head_wt Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ :
-    Some (fn, ξ) = reducible_head Γ t π h -> welltypedE Σ Γ (zipc fn ξ).
+    StepSome (fn, ξ) = reducible_head Γ t π h -> welltypedE Σ Γ (zipc fn ξ).
   Proof using All.
     intros e. destruct (heΣ _ wfΣ) as [hΣe].
     pose proof (reducible_head_cored _ wfΣ _ _ _ _ _ _ e) as hc. apply cored_red in hc as [r].
@@ -4716,7 +4749,7 @@ Equations (noeqns) isconv_array_values_aux
   Qed.
 
   Lemma reducible_head_red_spine Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h fn ξ l θ fn' l' :
-    Some (fn, ξ) = reducible_head Γ t π h -> (l, θ) = decompose_stack ξ ->
+    StepSome (fn, ξ) = reducible_head Γ t π h -> (l, θ) = decompose_stack ξ ->
     red Σ (Γ ,,, stack_context ξ) (mkApps fn l) (mkApps fn' l') ->
     ∥ red Σ (Γ ,,, stack_context π) (zipp t π) (mkApps fn' l') ∥.
   Proof using All.
@@ -4983,30 +5016,34 @@ Equations (noeqns) isconv_array_values_aux
     : ConversionResult (conv_term leq Γ t1 π1 t2 π2) :=
     _isconv_fallback Γ leq t1 π1 f1 h1 t2 π2 f2 h2 ir1 ir2 hdiscr hx hv1 hv2 hwf1 hwf2 aux
     with inspect (reducible_head Γ t1 π1 h1) := {
-    | exist (Some (rt1, ρ1)) eq1 with inspect (decompose_stack ρ1) := {
+    | exist (StepSome (rt1, ρ1)) eq1 with inspect (decompose_stack ρ1) := {
       | exist (l1, θ1) eq2
         (* site 8 of the 11 reduce_stack sites *)
         with inspect (reduce_args_E RedFlags.nodelta X_type X (Γ ,,, stack_context ρ1) rt1 l1 _) := {
-        | exist (rt1', l1') eq3 with inspect (rebuilt_ok rt1' l1' θ1) := {
+        | exist (Some (rt1', l1')) eq3 with inspect (rebuilt_ok rt1' l1' θ1) := {
           | exist true g2 := isconv_prog leq rt1' (appstack l1' θ1) t2 π2 aux ;
           | exist false _ := no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
-          }
+          } ;
+        | exist None _ := no (ConvNotEnoughFuel "isconv_fallback 1")
         }
       } ;
-    | exist None nored1 with inspect (reducible_head Γ t2 π2 h2) := {
-      | exist (Some (rt2, ρ2)) eq1 with inspect (decompose_stack ρ2) := {
+    | exist StepNoFuel _ := no (ConvNotEnoughFuel "reducible_head 1") ;
+    | exist StepNone nored1 with inspect (reducible_head Γ t2 π2 h2) := {
+      | exist (StepSome (rt2, ρ2)) eq1 with inspect (decompose_stack ρ2) := {
         | exist (l2, θ2) eq2
           (* site 9 of the 11 reduce_stack sites *)
           with inspect (reduce_args_E RedFlags.nodelta X_type X (Γ ,,, stack_context ρ2) rt2 l2 _) := {
-          | exist (rt2', l2') eq3 with inspect (rebuilt_ok rt2' l2' θ2) := {
+          | exist (Some (rt2', l2')) eq3 with inspect (rebuilt_ok rt2' l2' θ2) := {
             | exist true g2 := isconv_prog leq t1 π1 rt2' (appstack l2' θ2) aux ;
             | exist false _ := no (EtaStackRefusal (Γ ,,, focus_context π1) t1 (Γ ,,, focus_context π2) t2)
-            }
+            } ;
+          | exist None _ := no (ConvNotEnoughFuel "isconv_fallback 2")
           }
         } ;
-      (* I7 "Where": both sides answered [None]; the η step comes in place of the path to
+      | exist StepNoFuel _ := no (ConvNotEnoughFuel "reducible_head 2") ;
+      (* I7 "Where": both sides answered [StepNone]; the η step comes in place of the path to
          cmpb_term_napp/HeadMismatch. *)
-      | exist None nored2 with eta_viewc t1 t2 := {
+      | exist StepNone nored2 with eta_viewc t1 t2 := {
         (* λ on side 1 (rev 14 NB1): side 1 descends by Lambda_bd, side 2 gets the frame
            Eta_app na (eta_rename π1 0 A) after its spine; the comparison is at Conv (S1),
            entering at Reduction (rev 10); G3 guards the Lambda_bd push. *)
@@ -5195,56 +5232,43 @@ Equations (noeqns) isconv_array_values_aux
       λ { | leq | hx | hv1 | hv2 | hwf1 | hwf2 | r1 | r2 | hd :=
             _isconv_fallback Γ leq t1 π1 f1 h1 t2 π2 f2 h2 r1 r2 hd hx hv1 hv2 hwf1 hwf2 aux }.
 
-  Lemma welltyped_R_zipc Σ (wfΣ : abstract_env_ext_rel X Σ) Γ :
-    forall x y : pack Γ, welltypedE Σ Γ (zipc (tm1 x) (stk1 x)) -> R Γ y x -> welltypedE Σ Γ (zipc (tm1 y) (stk1 y)).
-  Proof using reduce_factsE.
-    intros x y H HR.
-    destruct (heΣ _ wfΣ) as [hΣe].
-    destruct x, y; cbn in *.
-    red in HR. cbn in HR. red in HR. cbn in HR.
-    depind HR.
-    - cbn in *.
-      eapply cored'_postpone in H as [u' [cor eq]]; [|exact wfΣ].
-      destruct eq as [<-].
-      apply cored_red in cor as [r].
-      eapply (wt_red (wt := welltypedE) (wfP := wf_extE)); [exact hΣe|exact H0|exact r].
-    - simpl in *. destruct e. now rewrite e.
-  Qed.
+  (** The answer of [isconv_full_fuel] when its fuel is spent ([PCUICFuelEta]): the refusal
+      [ConvNotEnoughFuel "isconv_full"]. It takes all the arguments of [Ret] first and only
+      then splits on [s] (the arity must be the same for every [s], see [Ret]). *)
+  Definition Ret_out_of_fuel s Γ t π t' π' : Ret s Γ t π t' π' :=
+    fun leq _ _ _ _ _ _ _ _ =>
+      match s as s0 return
+        match s0 with
+        | Reduction | Term | Fallback => ConversionResult (conv_term leq Γ t π t' π')
+        | Args => ConversionResult (forall Σ, abstract_env_ext_rel X Σ ->
+                    ∥ ws_cumul_pbE_terms Σ (Γ ,,, stack_context_eta π)
+                        (decompose_stack_eta π).1 (decompose_stack_eta π').1 ∥)
+        end
+      with
+      | Reduction | Term | Fallback | Args => Error (ConvNotEnoughFuel "isconv_full")
+      end.
 
-  Equations(noeqns) isconv_full (s : state) (Γ : context)
-            (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
-            (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
+  (** The conversion: the step function [_isconv] iterated, one unit of fuel per step. Every
+      recursive call is on an [R]-smaller state (the [R] premise of [Aux], discharged by the
+      obligations of the step function); termination is structural on the fuel. *)
+  Fixpoint isconv_full_fuel (fu : fuel) (s : state) (Γ : context)
+           (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
+           (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2) {struct fu}
     : Ret s Γ t1 π1 t2 π2 :=
+    match fu with
+    | FuelO => Ret_out_of_fuel s Γ t1 π1 t2 π2
+    | FuelS k =>
+      _isconv s Γ t1 π1 f1 h1 t2 π2 f2 h2
+        (fun s' t1' π1' t2' π2' f1' f2' h1' h2' _ _ =>
+           isconv_full_fuel (k tt) s' Γ t1' π1' f1' h1' t2' π2' f2' h2')
+    end.
 
-    isconv_full s Γ t1 π1 f1 h1 t2 π2 f2 h2 hx :=
-      Fix_F (R := R Γ)
-            (fun '(PCUICSafeConversionEtaK4.mkpack s' t1' π1' t2' π2' f1' f2' h2') =>
-              wtp Γ t1' π1' ->
-              wtp Γ t2' π2' ->
-              Ret s' Γ t1' π1' t2' π2'
-            )
-            (fun pp f => _)
-            (x := mkpack Γ s t1 π1 t2 π2 f1 f2 _)
-            _ _ _ _.
-  Next Obligation.
-    destruct pp as [s0 t0 π0 t0' π0' g1 g2 hh]. cbn beta iota zeta in *.
-    unshelve eapply (_isconv s0 Γ t0 π0 g1 _ t0' π0' g2 hh).
-    all: try assumption.
-    intros s' t1' π1' t2' π2' f1' f2' h1' h2' hx' hR.
-    exact (f (mkpack Γ s' t1' π1' t2' π2' f1' f2' h2') hR h1' h2').
-  Defined.
-  Next Obligation.
-  match goal with | |- Acc _ ?X => set (u := X) end.
-  revert h1.
-  change ((forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ (zipc (tm1 u) (stk1 u))) -> Acc (R Γ) u).
-  generalize u.
-  refine (Acc_intro_generator
-            (R:=R Γ)
-            (P:=fun u => forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (zipc (tm1 u) (stk1 u)))
-            (fun x y Px Hy => _) 1000 _); intros.
-  - simpl in *. eapply welltyped_R_zipc; eauto.
-  - eapply R_Acc; eassumption.
-  Defined.
+  (** Every entry starts from the default fuel (2^62 units). *)
+  Definition isconv_full (s : state) (Γ : context)
+             (t1 : term) (π1 : stack) (f1 : wf_stack π1) (h1 : wtp Γ t1 π1)
+             (t2 : term) (π2 : stack) (f2 : wf_stack π2) (h2 : wtp Γ t2 π2)
+    : Ret s Γ t1 π1 t2 π2 :=
+    isconv_full_fuel default_fuel s Γ t1 π1 f1 h1 t2 π2 f2 h2.
 
   Inductive ConversionResultSummary :=
   | ConvSuccess : ConversionResultSummary
@@ -5316,6 +5340,7 @@ Equations (noeqns) isconv_array_values_aux
   Proof using Type. exact (sq closed_context_conversion_inst). Qed.
 
   Transparent reduce_args_E.
+  Transparent reduce_termE.
 
 End Conversion.
 

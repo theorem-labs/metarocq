@@ -4,13 +4,15 @@
   BET-315 eta lane, plan I7 rev 13/14 B3 (a): the E copy of [PCUICWfReduction.v]
   (trunk [0729d50e], equal to [frac/eta] [0cb773a4]). It keeps base [PCUICPosition].
 
-  The two orders [hnf_subterm_rel] and [redp_subterm_rel] are stated over an abstract
-  well-typedness predicate [wt] and an abstract environment predicate [wfP]. Their
-  well-foundedness uses exactly two typed facts, the same two base uses:
+  The order [redp_subterm_rel] is stated over an abstract well-typedness predicate [wt]
+  and an abstract environment predicate [wfP]. Its well-foundedness uses exactly two
+  typed facts, the same two base uses:
   - normalization: [NormalizationInWt wt Σ], [Acc (cored Σ Γ) t] for every [wt]-typed
     [t] (base [NormalizationIn]; [NormalizationInE] when [wt := welltypedE], by
     conversion);
   - subject reduction along [red]: [WtRed wt wfP] (base [red_welltyped]).
+  The reduction machine ([PCUICSafeReduceEta]) terminates by fuel ([PCUICFuelEta]) and
+  uses no well-founded order of this file (BET-64 FUEL).
 
   [AbstractEnvWf X_type X wfP] says the environments of [X] satisfy [wfP]. Its instance
   [abstract_env_wfP_E] (at [wfP := wf_extE], from [abstract_env_ext_wf] of
@@ -76,11 +78,6 @@ Class AbstractEnvWf {cf : checker_flags} (X_type : abstract_env_impl) (X : X_typ
 Proof.
   intros Σ Γ u v [wfΣ _] [A h] r. exists A.
   eapply subject_reduction; eauto.
-Qed.
-
-Lemma Acc_no_loop X (R : X -> X -> Prop) t : Acc R t -> R t t -> False.
-Proof.
-  induction 1. intros. eapply H0; eauto.
 Qed.
 
 (* Show that taking head normal forms and then the subterm relation is well-founded *)
@@ -173,13 +170,13 @@ Proof.
     + now transitivity y.
 Qed.
 
-(** Well-founded relation allowing to define functions using weak-head reduction
-on ([wt]-typed) terms and going under binders. *)
+(** Weak-head reduction and the subterm relation on ([wt]-typed) terms: the facts the
+    order [redp_subterm_rel] below uses. *)
 Section fix_sigma.
   Context {cf : checker_flags} {no : normalizing_flags}.
   Context {wt : global_env_ext -> context -> term -> Prop} {wfP : global_env_ext -> Type}.
   Context {WR : WtRed wt wfP}.
-  Context {Σ : global_env_ext} {normalization : NormalizationInWt wt Σ} {HΣ : ∥ wfP Σ ∥}.
+  Context {Σ : global_env_ext} {HΣ : ∥ wfP Σ ∥}.
 
   Lemma term_subterm_red1 {Γ s s' t} {ts : term_subterm s t} :
     red1 Σ (Γ ,,, term_subterm_context ts) s s' ->
@@ -225,65 +222,6 @@ Section fix_sigma.
       now rewrite Hts'' Hts.
   Qed.
 
-  Definition hnf_subterm_rel : Relation_Definitions.relation (∑ Γ t, wt Σ Γ t) :=
-    fun '(Γ2; t2; H) '(Γ1; t1; H2) =>
-    ∥∑ t', red (fst Σ) Γ1 t1 t' × ∑ ts : term_subterm t2 t', Γ2 = (Γ1 ,,, term_subterm_context ts) ∥.
-
-  Ltac sq' := try (destruct HΣ as [wfΣ]);
-    repeat match goal with
-    | H : ∥ _ ∥ |- _ => destruct H; try clear H
-    end; try eapply sq.
-
-  Definition wf_hnf_subterm_rel : WellFounded hnf_subterm_rel.
-  Proof.
-    intros (Γ & s & H). sq'.
-    induction (normalization_in_wt Γ s H) as [s _ IH].
-    induction (term_subterm_wf s) as [s _ IH_sub] in Γ, H, IH |- *.
-    econstructor.
-    intros (Γ' & t2 & ?) [(t' & r & ts & eqctx)].
-    eapply Relation_Properties.clos_rt_rtn1 in r. inversion r.
-    + subst. eapply IH_sub; auto.
-      intros.
-      inversion H0.
-      * subst.
-        destruct (term_subterm_red1 X0) as [t'' [[redt' [tst' Htst']]]].
-        eapply IH. econstructor. eauto. red.
-        sq. exists t''. split; eauto. exists tst'. now rewrite Htst'.
-        Unshelve.
-        eapply wt_red; [exact wfΣ| |eapply red1_red; exact redt']; eassumption.
-      * subst. eapply cored_redp in H2 as [].
-        pose proof (term_subterm_redp X1) as [t'' [[redt' [tst' Htst']]]].
-        rewrite -Htst' in X0.
-        destruct (term_subterm_red1 X0) as [t''' [[redt'' [tst'' Htst'']]]].
-        eapply IH.
-        eapply cored_redp. sq. transitivity t''; eauto.
-        constructor; eauto.
-        split.
-        exists t'''. split; auto. exists tst''.
-        now rewrite Htst'' Htst'.
-        Unshelve.
-        eapply wt_red; [exact wfΣ| |etransitivity;
-          [exact (redp_red _ _ _ _ redt')|eapply red1_red; exact redt'']]; eassumption.
-      + subst. eapply IH.
-      * eapply red_neq_cored.
-        eapply Relation_Properties.clos_rtn1_rt. exact r.
-        intros ?. subst.
-        eapply Relation_Properties.clos_rtn1_rt in X1.
-        eapply cored_red_trans in X0; [| exact X1 ].
-        eapply Acc_no_loop in X0. eauto.
-        eapply @normalization; eauto.
-      * split. exists t'. split; eauto.
-    Unshelve.
-    - eapply wt_red; [exact wfΣ| |exact (Relation_Properties.clos_rtn1_rt _ _ _ r)];
-        eassumption.
-  Defined.
-
-  Global Instance wf_hnf_subterm : WellFounded hnf_subterm_rel.
-  Proof.
-    refine (Wf.Acc_intro_generator 1000 _).
-    exact wf_hnf_subterm_rel.
-  Defined.
-  Opaque wf_hnf_subterm.
   Opaque Acc_intro_generator.
   Opaque Wf.Acc_intro_generator.
   Ltac sq := try (destruct HΣ as [wfΣ]; clear HΣ);

@@ -86,6 +86,8 @@ src/pCUICWfEnvEta.mli
 src/pCUICWfEnvEta.ml
 src/pCUICCallByNeedEta.mli
 src/pCUICCallByNeedEta.ml
+src/pCUICFuelEta.mli
+src/pCUICFuelEta.ml
 src/pCUICErrorsEta.mli
 src/pCUICErrorsEta.ml
 src/pCUICEtaFInst.mli

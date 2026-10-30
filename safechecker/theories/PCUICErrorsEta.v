@@ -1,11 +1,16 @@
 (* Distributed under the terms of the MIT license. *)
 (* BET-64 ETAK (EtaConv), plan.md I7 rev 13 B4: the E copy of PCUICErrors.v, used by the
    η checker (PCUICSafeConversionEta and the files above it). It is base PCUICErrors.v
-   with the SAME names, plus ONE constructor of ConversionError:
-     EtaStackRefusal Γ1 t1 Γ2 t2
+   with the SAME names, plus:
+     EtaStackRefusal Γ1 t1 Γ2 t2   (ConversionError)
    the deliberate refusal point of the η conversion (a runtime guard on a side's stack
-   found an Eta_arg frame where the branch needs none; rev 14 B4 T0-T4/G2-G4). Base
-   PCUICErrors.v is untouched (I0). A file that imports both must import this one LAST. *)
+   found an Eta_arg frame where the branch needs none; rev 14 B4 T0-T4/G2-G4), and the
+   three out-of-fuel outcomes of the fuel-bounded recursions (BET-64 FUEL, [PCUICFuelEta]):
+     ConvNotEnoughFuel site        (ConversionError: the conversion or a reduction inside it)
+     NotEnoughFuel site            (type_error: printed as a refusal for lack of fuel)
+     NotEnoughFuel_comp site       (typing_result_comp: a result with no completeness proof)
+   [site] names the recursion that ran out. Base PCUICErrors.v is untouched (I0). A file that
+   imports both must import this one LAST. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config uGraph.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICPretty.
@@ -147,7 +152,10 @@ Inductive ConversionError :=
 
 | EtaStackRefusal
     (Γ1 : context) (t1 : term)
-    (Γ2 : context) (t2 : term).
+    (Γ2 : context) (t2 : term)
+
+(** The fuel of a recursion of the conversion ran out ([PCUICFuelEta]); [site] names it. *)
+| ConvNotEnoughFuel (site : string).
 
 Inductive type_error :=
 | UnboundRel (n : nat)
@@ -167,7 +175,9 @@ Inductive type_error :=
 | NotAnArity (t : term)
 | IllFormedFix (m : mfixpoint term) (i : nat)
 | UnsatisfiedConstraints (c : ConstraintSet.t)
-| Msg (s : string).
+| Msg (s : string)
+(** The fuel of a recursion of the checker ran out ([PCUICFuelEta]): a refusal, not a type error. *)
+| NotEnoughFuel (site : string).
 Derive NoConfusion for type_error.
 
 Definition print_level := string_of_level.
@@ -375,6 +385,25 @@ Fixpoint string_of_conv_error Σ (e : ConversionError) : string :=
       print_term Σ Γ1 t1 ^
       nl ^ "and" ^ nl ^ print_term Σ Γ2 t2 ^
       nl ^ "because a stack guard failed (EtaStackRefusal)."
+  | ConvNotEnoughFuel site =>
+      "The eta-conversion checker ran out of fuel in " ^ site ^
+      " (a refusal for lack of fuel, not a conversion failure)."
+  end.
+
+(** The site of an out-of-fuel outcome inside a conversion error. The conversion wraps the
+    error of a sub-comparison in the constructor of the comparison that called it, so an empty
+    fuel can sit under other constructors; the checker reports it as a refusal for lack of fuel. *)
+Fixpoint conv_error_fuel (e : ConversionError) : option string :=
+  match e with
+  | ConvNotEnoughFuel site => Some site
+  | LambdaNotConvertibleTypes _ _ _ _ _ _ _ _ e
+  | ProdNotConvertibleDomains _ _ _ _ _ _ _ _ e
+  | ArrayNotConvertibleValues _ _ _ _ e
+  | ArrayNotConvertibleDefault _ _ _ _ e
+  | ArrayNotConvertibleTypes _ _ _ _ e
+  | StackHeadError _ _ _ _ _ _ _ _ _ _ e
+  | StackTailError _ _ _ _ _ _ _ _ _ _ e => conv_error_fuel e
+  | _ => None
   end.
 
 Definition string_of_type_error Σ (e : type_error) : string :=
@@ -406,6 +435,8 @@ Definition string_of_type_error Σ (e : type_error) : string :=
   | IllFormedFix m i => "Ill-formed recursive definition"
   | UnsatisfiedConstraints c => "Unsatisfied constraints"
   | Msg s => "Msg: " ^ s
+  | NotEnoughFuel site =>
+      "Refused: the checker ran out of fuel in " ^ site ^ " (a refusal for lack of fuel, not a type error)"
   end.
 
 Inductive typing_result (A : Type) :=
@@ -415,15 +446,19 @@ Global Arguments Checked {A} a.
 Global Arguments TypeError {A} t.
 Inductive typing_result_comp (A : Type) :=
 | Checked_comp (a : A)
-| TypeError_comp (t : type_error) (a : A -> False).
+| TypeError_comp (t : type_error) (a : A -> False)
+(** The fuel of a recursion ran out ([PCUICFuelEta]): no answer, and no completeness proof. *)
+| NotEnoughFuel_comp (site : string).
 Global Arguments Checked_comp {A} a.
 Global Arguments TypeError_comp {A} t a.
+Global Arguments NotEnoughFuel_comp {A} site.
 
 Coercion typing_error_forget {A : Type} (t : typing_result_comp A) :
   typing_result A :=
   match t with
     | Checked_comp a => Checked a
     | TypeError_comp e a => TypeError e
+    | NotEnoughFuel_comp site => TypeError (NotEnoughFuel site)
   end.
 
 #[global]
@@ -452,6 +487,9 @@ Inductive env_error :=
 
 Definition string_of_env_error Σ (e : env_error) :=
   match e with
+  | IllFormedDecl decl_name (NotEnoughFuel site) =>
+      "Refused on " ^ decl_name ^ ": the checker ran out of fuel in " ^ site ^
+      " (a refusal for lack of fuel, not a type error)"
   | IllFormedDecl decl_name typ_error =>
       "Type error on " ^ decl_name ^ " " ^ string_of_type_error Σ typ_error
   | AlreadyDeclared decl_name =>

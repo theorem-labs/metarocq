@@ -2125,35 +2125,33 @@ End monad_Alli_nth_forall.
     destruct h; cbn in e; discriminate.
   Qed.
 
-  Lemma arity_whnf_direct X_ext {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X_ext -> NormalizationInE Σ}
-    Γ t wt :
-    whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) [] = true ->
+  Lemma arity_whnf_direct X_ext Γ t wt r :
+    reduce_term (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet X_impl X_ext Γ t wt = Some r ->
+    whd_arity_head r [] = true ->
     forall Σ, abstract_env_ext_rel X_ext Σ ->
-      ∥ arity_head_red Σ.1 Γ t (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) ∥.
+      ∥ arity_head_red Σ.1 Γ t r ∥.
   Proof using Type.
-    intros eqh Σ wfΣ.
-    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext
-      eq_refl eq_refl eq_refl eq_refl Γ t wt Σ wfΣ) as (hd & l & e & [w]).
+    intros er eqh Σ wfΣ.
+    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet X_impl X_ext
+      eq_refl eq_refl eq_refl eq_refl Γ t wt Σ wfΣ r er) as (hd & l & e & [w]).
     destruct (mkApps_arity_head_inv (eq_sym e) eqh) as [-> ->].
     constructor. apply arity_head_red_direct. exact w.
   Qed.
 
-  Lemma arity_whnf_fallback X_ext {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X_ext -> NormalizationInE Σ}
-    Γ t wt
-    (wtr : forall Σ, abstract_env_ext_rel X_ext Σ ->
-      welltypedE Σ Γ (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt)) :
-    whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) [] = false ->
-    whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ
-      (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) wtr) [] = true ->
+  Lemma arity_whnf_fallback X_ext Γ t wt r1
+    (wtr : forall Σ, abstract_env_ext_rel X_ext Σ -> welltypedE Σ Γ r1) r2 :
+    reduce_term (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet X_impl X_ext Γ t wt = Some r1 ->
+    whd_arity_head r1 [] = false ->
+    reduce_term (wt := welltypedE) (wfP := wf_extE) RedFlags.default X_impl X_ext Γ r1 wtr = Some r2 ->
+    whd_arity_head r2 [] = true ->
     forall Σ, abstract_env_ext_rel X_ext Σ ->
-      ∥ arity_head_red Σ.1 Γ t (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ
-          (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) wtr) ∥.
+      ∥ arity_head_red Σ.1 Γ t r2 ∥.
   Proof using Type.
-    intros eqh eqh' Σ wfΣ.
-    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext
-      eq_refl eq_refl eq_refl eq_refl Γ t wt Σ wfΣ) as (hd & l & e & [w]).
-    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext
-      eq_refl eq_refl eq_refl eq_refl Γ _ wtr Σ wfΣ) as (hd' & l' & e' & [w']).
+    intros e1 eqh e2 eqh' Σ wfΣ.
+    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet X_impl X_ext
+      eq_refl eq_refl eq_refl eq_refl Γ t wt Σ wfΣ r1 e1) as (hd & l & e & [w]).
+    destruct (reduce_term_whd_rel (wt := welltypedE) (wfP := wf_extE) RedFlags.default X_impl X_ext
+      eq_refl eq_refl eq_refl eq_refl Γ _ wtr Σ wfΣ r2 e2) as (hd' & l' & e' & [w']).
     destruct (mkApps_arity_head_inv (eq_sym e') eqh') as [-> ->].
     constructor. eapply arity_head_red_fallback with (h := hd) (l := l).
     - exact w.
@@ -2168,30 +2166,48 @@ End monad_Alli_nth_forall.
     ∑ r, (forall Σ, abstract_env_ext_rel X_ext Σ -> welltypedE Σ Γ r) /\
          (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ arity_head_red Σ.1 Γ t r ∥).
 
-  (** One level of the decomposition; [T] is the declared type, for the error. *)
-  Definition arity_whnf X_ext {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X_ext -> NormalizationInE Σ}
+  (** One level of the decomposition; [T] is the declared type, for the error. An empty fuel of
+      the reduction machine ([PCUICFuelEta]) is a refusal for lack of fuel. *)
+  Definition arity_whnf X_ext
     (T : term) (Γ : context) (t : term)
     (wt : forall Σ, abstract_env_ext_rel X_ext Σ -> welltypedE Σ Γ t)
     : typing_result (arity_whnf_result X_ext Γ t) :=
-    (* E: base's [let r := …] bindings are inlined and its dependent [match … as b return … = b -> …] is an
-       [inspect]: with the let-bound reduct, elaboration did not finish here (out/probe-scfull3.log,
-       probe-scfull5.log). The TERM differs from base's (the [inspect] wrapper, the reducts inlined); the
-       COMPUTATION is the same (same scrutinees, same three outcomes; checked by reading [Print arity_whnf]
-       against base's source, out/about-b23-after.log; base's form does not elaborate here); soundness is
-       unaffected because the theorems are about this term. Empirical check of the same-computation claim:
-       forecast run prediction P3 (the 50 baseline-accepted stay accepted); if P3 fails on any of the 50, look
-       here first. *)
-    match inspect (whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) []) with
-    | exist true eqh =>
-      ret (((reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt); conj (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (arity_whnf_direct (normalization_in := normalization_in) X_ext Γ t wt (eq_sym eqh)))
-           : arity_whnf_result X_ext Γ t)
-    | exist false eqh =>
-      match inspect (whd_arity_head (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt)) []) with
-      | exist true eqh' =>
-        ret (((reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt)); conj (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.default X_impl X_ext Γ (reduce_term (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt))
-                   (arity_whnf_fallback (normalization_in := normalization_in) X_ext Γ t wt (reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) (normalization_in := normalization_in) RedFlags.allnolet X_impl X_ext Γ t wt) (eq_sym eqh) (eq_sym eqh')))
+    (* E: base's [let r := …] bindings are [inspect]s of the two reducts, which are options (fuel). The
+       TERM differs from base's (the [inspect] wrappers, the fuel outcome); the COMPUTATION is the same
+       on every reduct the machine returns (same scrutinees, same outcomes); soundness is unaffected
+       because the theorems are about this term. Empirical check of the same-computation claim: the
+       all-76 comparison with and without fuel (the 50 baseline-accepted stay accepted). *)
+    match inspect (reduce_term (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet X_impl X_ext Γ t wt) with
+    | exist None _ => raise (NotEnoughFuel "arity_whnf")
+    | exist (Some r1) e1 =>
+      match inspect (whd_arity_head r1 []) with
+      | exist true eqh =>
+        ret ((r1; conj
+                (fun Σ wfΣ => reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet
+                   X_impl X_ext Γ t wt Σ wfΣ r1 (eq_sym e1))
+                (arity_whnf_direct X_ext Γ t wt r1 (eq_sym e1) (eq_sym eqh)))
              : arity_whnf_result X_ext Γ t)
-      | exist false _ => raise (NotAnArity T)
+      | exist false eqh =>
+        match inspect (reduce_term (wt := welltypedE) (wfP := wf_extE) RedFlags.default X_impl X_ext Γ r1
+                         (fun Σ wfΣ => reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet
+                            X_impl X_ext Γ t wt Σ wfΣ r1 (eq_sym e1))) with
+        | exist None _ => raise (NotEnoughFuel "arity_whnf")
+        | exist (Some r2) e2 =>
+          match inspect (whd_arity_head r2 []) with
+          | exist true eqh' =>
+            ret ((r2; conj
+                    (fun Σ wfΣ => reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) RedFlags.default
+                       X_impl X_ext Γ r1
+                       (fun Σ wfΣ => reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet
+                          X_impl X_ext Γ t wt Σ wfΣ r1 (eq_sym e1)) Σ wfΣ r2 (eq_sym e2))
+                    (arity_whnf_fallback X_ext Γ t wt r1
+                       (fun Σ wfΣ => reduce_term_welltyped (wt := welltypedE) (wfP := wf_extE) RedFlags.allnolet
+                          X_impl X_ext Γ t wt Σ wfΣ r1 (eq_sym e1)) r2
+                       (eq_sym e1) (eq_sym eqh) (eq_sym e2) (eq_sym eqh')))
+                 : arity_whnf_result X_ext Γ t)
+          | exist false _ => raise (NotAnArity T)
+          end
+        end
       end
     end.
 

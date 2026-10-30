@@ -118,6 +118,17 @@ Program Definition infer_template_program {cf : checker_flags} {nor : normalizin
   infer_translated_program (cf := cf) (nor := nor) (normalization_in := normalization_in)
     (normalization_in' := normalization_in') (trans_program p) φ.
 
+(** The plugin's message for an environment error. An empty fuel ([PCUICFuelEta]) is printed as a
+    refusal for lack of fuel, never as a type error. *)
+Definition print_env_error (Σ : global_env_ext) (e : env_error) : string :=
+  match e with
+  | AlreadyDeclared id => "Already declared: " ^ id
+  | IllFormedDecl id (NotEnoughFuel s) =>
+    "Refused: the checker ran out of fuel in " ^ s ^
+    " (a refusal for lack of fuel, not a type error), while checking " ^ id
+  | IllFormedDecl id e => "Type error: " ^ string_of_type_error Σ e ^ ", while checking " ^ id
+  end.
+
 Program Definition infer_and_print_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
   {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p : Ast.Env.program) φ
@@ -145,8 +156,5 @@ Program Definition infer_and_print_template_program {cf : checker_flags} {nor : 
     (* Print the term of the program already translated and checked. *)
     inl ("Environment is well-formed and " ^ string_of_term p'.2 ^
          " has type: " ^ string_of_term t.π1)
-  | EnvError Σ (AlreadyDeclared id) =>
-    inr ("Already declared: " ^ id)
-  | EnvError Σ (IllFormedDecl id e) =>
-    inr ("Type error: " ^ string_of_type_error Σ e ^ ", while checking " ^ id)
+  | EnvError Σ e => inr (print_env_error Σ e)
   end.

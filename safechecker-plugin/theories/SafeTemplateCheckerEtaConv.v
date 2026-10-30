@@ -40,13 +40,13 @@ Section EtaOracle.
   Context {EtaF : EtaFacts} {reduce_coreE : ReduceTypedFactsCoreE} {wt_contextE : WelltypedEContextE}.
 
   (** [None] when EtaConv's conversion succeeds (soundness: [isconv_term_sound]); [Some e] carries its
-      error and no proof (G7). *)
+      error and no proof (G7). The conversion terminates by fuel ([PCUICFuelEta]): an empty fuel is the error
+      [ConvNotEnoughFuel], which the checker reports as a refusal for lack of fuel. *)
   Definition eta_oracle_conv (X_type : abstract_env_impl) (X : X_type.π2.π1)
-    {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}
     (Γ : context) (pb : conv_pb)
     (t : term) (ht : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t)
     (u : term) (hu : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ u) : option ConversionError :=
-    match isconv_term X_type X (normalization_in := normalization_in) (reduce_factsE := reduce_typed_facts_E_of_core)
+    match isconv_term X_type X (reduce_factsE := reduce_typed_facts_E_of_core)
             (conv_factsE := conv_typed_facts_E_of_ctx) closed_context_conversionE_of_facts welltypedE_context Γ pb t ht u hu with
     | ConvSuccess => None
     | ConvError e => Some e
@@ -58,15 +58,14 @@ Section EtaOracle.
      that imports this one; it is not soundness-relevant (the kernel still unfolds when it must). *)
   Local Strategy opaque [isconv_term].
 
-  Lemma eta_oracle_conv_sound (X_type : abstract_env_impl) (X : X_type.π2.π1)
-    {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ} Γ pb t ht u hu :
-    eta_oracle_conv X_type X (normalization_in := normalization_in) Γ pb t ht u hu = None ->
+  Lemma eta_oracle_conv_sound (X_type : abstract_env_impl) (X : X_type.π2.π1) Γ pb t ht u hu :
+    eta_oracle_conv X_type X Γ pb t ht u hu = None ->
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ ws_cumul_pbE pb Σ Γ t u ∥.
   Proof.
     intros hc Σ wfΣ. unfold eta_oracle_conv in hc.
-    destruct (isconv_term X_type X (normalization_in := normalization_in) (reduce_factsE := reduce_typed_facts_E_of_core)
+    destruct (isconv_term X_type X (reduce_factsE := reduce_typed_facts_E_of_core)
              (conv_factsE := conv_typed_facts_E_of_ctx) closed_context_conversionE_of_facts welltypedE_context Γ pb t ht u hu) eqn:hconv; [|discriminate].
-    exact (isconv_term_sound X_type X (normalization_in := normalization_in) (reduce_factsE := reduce_typed_facts_E_of_core)
+    exact (isconv_term_sound X_type X (reduce_factsE := reduce_typed_facts_E_of_core)
              (conv_factsE := conv_typed_facts_E_of_ctx) closed_context_conversionE_of_facts welltypedE_context Σ wfΣ Γ pb t ht u hu hconv).
   Qed.
 

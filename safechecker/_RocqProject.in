@@ -37,6 +37,9 @@ theories/PCUICSafeConversionEtaK4.v
 theories/PCUICMustExpandEta.v
 # ETAK EtaConv (K3 integrator): the E errors (EtaStackRefusal) and the η conversion checker
 theories/PCUICErrorsEta.v
+# BET-64 FUEL (option B): the fuel of the η checker's three recursions (reduction machine, conversion, codomain
+# walk), which replaces the normalization premise
+theories/PCUICFuelEta.v
 theories/PCUICSafeConversionEta.v
 theories/PCUICSafeConversionEtaFacts.v
 # The reduction machine over an abstract typing (B3 (a)), and its E bridge (EtaReduce)

@@ -200,140 +200,145 @@ Section BridgeE.
   Context {reduce_factsE : ReduceTypedFactsE}.
 
   Context (flags : RedFlags.t) (X_type : abstract_env_impl) (X : X_type.π2.π1).
-  Context {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}.
 
-  (** [NormalizationInE Σ] and [NormalizationInWt welltypedE Σ] are the same
-      proposition (both unfold to [forall Γ t, welltypedE Σ Γ t -> Acc (cored Σ Γ) t]). *)
-  Local Definition normalization_in_wt :
-    forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInWt welltypedE Σ := normalization_in.
-
-  (** [PCUICSafeReduceEta.reduce_stack] at [welltypedE]. *)
+  (** [PCUICSafeReduceEta.reduce_stack] at [welltypedE]; [None] when the fuel of the machine
+      ran out ([PCUICFuelEta]). *)
   Definition reduce_stack_E (Γ : context) (t : term) (π : PCUICPosition.stack)
     (h : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ (PCUICPosition.zip (t, π)))
-    : term × PCUICPosition.stack :=
+    : option (term × PCUICPosition.stack) :=
     reduce_stack (wt := welltypedE) (wfP := wf_extE) (EF := reduce_env_facts_E)
       (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
-      (normalization_in := normalization_in_wt) flags X_type X Γ t π h.
+      flags X_type X Γ t π h.
 
-  (** The facts of [PCUICSafeReduceEta] at [welltypedE], stated over [reduce_stack_E]. *)
-  Lemma reduce_stack_E_decompose Γ t π h :
-    snd (PCUICPosition.decompose_stack (snd (reduce_stack_E Γ t π h))) =
+  (** The facts of [PCUICSafeReduceEta] at [welltypedE], stated over the answers of
+      [reduce_stack_E]. *)
+  Lemma reduce_stack_E_decompose Γ t π h r :
+    reduce_stack_E Γ t π h = Some r ->
+    snd (PCUICPosition.decompose_stack (snd r)) =
     snd (PCUICPosition.decompose_stack π).
   Proof using Type.
     exact (reduce_stack_decompose (wt := welltypedE) (wfP := wf_extE)
       (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
-      (normalization_in := normalization_in_wt) flags X_type X Γ t π h).
+      flags X_type X Γ t π h r).
   Qed.
 
-  Lemma reduce_stack_E_sound Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h :
-    ∥ Σ ;;; Γ ⊢ PCUICPosition.zip (t, π) ⇝ PCUICPosition.zip (reduce_stack_E Γ t π h) ∥.
+  Lemma reduce_stack_E_sound Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h r :
+    reduce_stack_E Γ t π h = Some r ->
+    ∥ Σ ;;; Γ ⊢ PCUICPosition.zip (t, π) ⇝ PCUICPosition.zip r ∥.
   Proof using Type.
     exact (reduce_stack_sound (wt := welltypedE) (wfP := wf_extE)
       (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
-      (normalization_in := normalization_in_wt) flags X_type X Σ wfΣ Γ t π h).
+      flags X_type X Σ wfΣ Γ t π h r).
   Qed.
 
-  Lemma reduce_stack_E_whnf Γ t π h Σ (wfΣ : abstract_env_ext_rel X Σ) :
-    let '(u, ρ) := reduce_stack_E Γ t π h in
+  Lemma reduce_stack_E_whnf Γ t π h Σ (wfΣ : abstract_env_ext_rel X Σ) r :
+    reduce_stack_E Γ t π h = Some r ->
+    let '(u, ρ) := r in
     ∥ whnf flags Σ (Γ ,,, PCUICPosition.stack_context ρ) (PCUICPosition.zipp u ρ) ∥.
   Proof using Type.
     exact (reduce_stack_whnf (wt := welltypedE) (wfP := wf_extE)
       (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
-      (normalization_in := normalization_in_wt) flags X_type X Γ t π h Σ wfΣ).
+      flags X_type X Γ t π h Σ wfΣ r).
   Qed.
 
-  Lemma reduce_stack_E_isred Γ t π h :
-    RedFlags.beta flags -> isred (reduce_stack_E Γ t π h).
+  Lemma reduce_stack_E_isred Γ t π h r :
+    RedFlags.beta flags -> reduce_stack_E Γ t π h = Some r -> isred r.
   Proof using Type.
     exact (reduce_stack_isred (wt := welltypedE) (wfP := wf_extE)
       (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
-      (normalization_in := normalization_in_wt) flags X_type X Γ t π h).
+      flags X_type X Γ t π h r).
   Qed.
 
-  Lemma reduce_stack_E_Req Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h :
-    Req Σ Γ (reduce_stack_E Γ t π h) (t, π).
+  Lemma reduce_stack_E_Req Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t π h r :
+    reduce_stack_E Γ t π h = Some r ->
+    Req Σ Γ r (t, π).
   Proof using Type.
     exact (reduce_stack_Req (wt := welltypedE) (wfP := wf_extE)
       (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
-      (normalization_in := normalization_in_wt) flags X_type X Σ wfΣ Γ t π h).
+      flags X_type X Σ wfΣ Γ t π h r).
   Qed.
 
-  Lemma reduce_stack_app_only Γ t args h :
-    app_only (snd (reduce_stack_E Γ t (PCUICPosition.appstack args []) h)).
+  Lemma reduce_stack_app_only Γ t args h r :
+    reduce_stack_E Γ t (PCUICPosition.appstack args []) h = Some r ->
+    app_only (snd r).
   Proof using Type.
-    unfold app_only. rewrite reduce_stack_E_decompose.
+    intros e. unfold app_only. rewrite (reduce_stack_E_decompose _ _ _ _ _ e).
     rewrite PCUICPosition.decompose_stack_appstack. reflexivity.
   Qed.
 
+  (** The machine on an [App_l]-only stack, read as a head and its arguments; [None] when the
+      fuel of the machine ran out. *)
   Definition reduce_args_E (Γ : context) (t : term) (args : list term)
     (h : forall Σ, abstract_env_ext_rel X Σ ->
            welltypedE Σ Γ (PCUICPosition.zip (t, PCUICPosition.appstack args [])))
-    : term × list term :=
-    let '(t', π') := reduce_stack_E Γ t (PCUICPosition.appstack args []) h in
-    (t', fst (PCUICPosition.decompose_stack π')).
+    : option (term × list term) :=
+    match reduce_stack_E Γ t (PCUICPosition.appstack args []) h with
+    | Some (t', π') => Some (t', fst (PCUICPosition.decompose_stack π'))
+    | None => None
+    end.
 
   (** The machine's output on an [App_l]-only input, through [reduce_args_E]. *)
-  Lemma reduce_args_E_spec Γ t args h :
-    reduce_stack_E Γ t (PCUICPosition.appstack args []) h =
-    (fst (reduce_args_E Γ t args h), PCUICPosition.appstack (snd (reduce_args_E Γ t args h)) []).
+  Lemma reduce_args_E_spec Γ t args h t' args' :
+    Some (t', args') = reduce_args_E Γ t args h ->
+    reduce_stack_E Γ t (PCUICPosition.appstack args []) h = Some (t', PCUICPosition.appstack args' []).
   Proof using Type.
-    pose proof (reduce_stack_app_only Γ t args h) as ho. revert ho.
     unfold reduce_args_E.
-    destruct (reduce_stack_E Γ t (PCUICPosition.appstack args []) h) as [t' π'].
+    destruct (reduce_stack_E Γ t (PCUICPosition.appstack args []) h) as [[t0 π']|] eqn:er;
+      [|discriminate].
+    intros e. injection e as -> ->.
+    pose proof (reduce_stack_app_only Γ t args h _ er) as ho. revert ho.
     unfold app_only. cbn [fst snd]. intros ho.
     destruct (PCUICPosition.decompose_stack π') as [l ρ] eqn:ed. cbn [fst snd] in ho |- *.
     subst ρ. apply PCUICPosition.decompose_stack_eq in ed. now subst π'.
   Qed.
 
-  Lemma reduce_args_E_sound Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t args h :
-    ∥ Σ ;;; Γ ⊢ mkApps t args ⇝ mkApps (fst (reduce_args_E Γ t args h)) (snd (reduce_args_E Γ t args h)) ∥.
+  Lemma reduce_args_E_sound Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t args h t' args' :
+    Some (t', args') = reduce_args_E Γ t args h ->
+    ∥ Σ ;;; Γ ⊢ mkApps t args ⇝ mkApps t' args' ∥.
   Proof using Type.
-    pose proof (reduce_stack_E_sound Σ wfΣ Γ t _ h) as s.
-    rewrite reduce_args_E_spec in s.
-    set (ra := reduce_args_E Γ t args h) in *. clearbody ra. destruct ra as [t' args'].
-    unfold PCUICPosition.zip in s. cbn [fst snd] in s |- *.
+    intros e.
+    pose proof (reduce_stack_E_sound Σ wfΣ Γ t _ h _ (reduce_args_E_spec Γ t args h t' args' e)) as s.
+    unfold PCUICPosition.zip in s. cbn [fst snd] in s.
     rewrite !PCUICPosition.zipc_appstack in s. exact s.
   Qed.
 
-  Lemma reduce_args_E_whnf Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t args h :
-    ∥ whnf flags Σ Γ (mkApps (fst (reduce_args_E Γ t args h)) (snd (reduce_args_E Γ t args h))) ∥.
+  Lemma reduce_args_E_whnf Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t args h t' args' :
+    Some (t', args') = reduce_args_E Γ t args h ->
+    ∥ whnf flags Σ Γ (mkApps t' args') ∥.
   Proof using Type.
-    pose proof (reduce_stack_E_whnf Γ t _ h Σ wfΣ) as w.
-    rewrite reduce_args_E_spec in w.
-    set (ra := reduce_args_E Γ t args h) in *. clearbody ra. destruct ra as [t' args'].
-    cbn [fst snd] in w |- *.
+    intros e.
+    pose proof (reduce_stack_E_whnf Γ t _ h Σ wfΣ _ (reduce_args_E_spec Γ t args h t' args' e)) as w.
+    cbn [fst snd] in w.
     rewrite PCUICPosition.stack_context_appstack in w.
     unfold PCUICPosition.zipp in w.
     rewrite PCUICPosition.decompose_stack_appstack in w. cbn [fst snd app] in w.
     rewrite app_nil_r in w. exact w.
   Qed.
 
-  Lemma reduce_args_E_isred Γ t args h : RedFlags.beta flags ->
-    isApp (fst (reduce_args_E Γ t args h)) = false /\
-    (isLambda (fst (reduce_args_E Γ t args h)) -> snd (reduce_args_E Γ t args h) = []).
+  Lemma reduce_args_E_isred Γ t args h t' args' :
+    Some (t', args') = reduce_args_E Γ t args h ->
+    RedFlags.beta flags ->
+    isApp t' = false /\ (isLambda t' -> args' = []).
   Proof using Type.
-    intros hb.
-    pose proof (reduce_stack_E_isred Γ t _ h hb) as hi.
-    rewrite reduce_args_E_spec in hi.
-    set (ra := reduce_args_E Γ t args h) in *. clearbody ra. destruct ra as [t' args'].
+    intros e hb.
+    pose proof (reduce_stack_E_isred Γ t _ h _ hb (reduce_args_E_spec Γ t args h t' args' e)) as hi.
     destruct hi as [hna hl]. cbn [fst snd] in hna, hl |- *.
     split; [exact hna|].
     intros hlam. specialize (hl hlam).
     destruct args'; [reflexivity|discriminate hl].
   Qed.
 
-  Lemma reduce_args_E_Req Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t args h :
-    reduce_args_E Γ t args h = (t, args) \/
-    cored Σ Γ (mkApps (fst (reduce_args_E Γ t args h)) (snd (reduce_args_E Γ t args h))) (mkApps t args) \/
-    (mkApps (fst (reduce_args_E Γ t args h)) (snd (reduce_args_E Γ t args h)) = mkApps t args /\
+  Lemma reduce_args_E_Req Σ (wfΣ : abstract_env_ext_rel X Σ) Γ t args h t' args' :
+    Some (t', args') = reduce_args_E Γ t args h ->
+    (t', args') = (t, args) \/
+    cored Σ Γ (mkApps t' args') (mkApps t args) \/
+    (mkApps t' args' = mkApps t args /\
      PCUICPositionEta.positionR
-       (PCUICPositionEta.stack_position (PCUICPositionEta.appstack (snd (reduce_args_E Γ t args h)) []))
+       (PCUICPositionEta.stack_position (PCUICPositionEta.appstack args' []))
        (PCUICPositionEta.stack_position (PCUICPositionEta.appstack args []))).
   Proof using Type.
-    pose proof (reduce_stack_E_Req Σ wfΣ Γ t _ h) as hr.
-    rewrite reduce_args_E_spec in hr.
-    set (ra := reduce_args_E Γ t args h) in *. clearbody ra. destruct ra as [t' args'].
-    cbn [fst snd] in hr |- *.
+    intros e.
+    pose proof (reduce_stack_E_Req Σ wfΣ Γ t _ h _ (reduce_args_E_spec Γ t args h t' args' e)) as hr.
     destruct hr as [heq | hR].
     - left. injection heq as -> heq.
       apply (f_equal (fun π => fst (PCUICPosition.decompose_stack π))) in heq.
@@ -348,23 +353,26 @@ Section BridgeE.
         * cbn [snd] in hp. apply stack_position_appstack_bridge. exact hp.
   Qed.
 
-  Lemma reduce_stack_vass Γ n decl h :
+  Lemma reduce_stack_vass Γ n decl h r :
     nth_error Γ n = Some decl -> decl_body decl = None ->
-    reduce_stack_E Γ (tRel n) [] h = (tRel n, []).
+    reduce_stack_E Γ (tRel n) [] h = Some r -> r = (tRel n, []).
   Proof using Type.
     intros hn hb. unfold reduce_stack_E.
     exact (reduce_stack_Rel_assum (wt := welltypedE) (wfP := wf_extE)
       (EF := reduce_env_facts_E) (TF := @reduce_typed_facts_E cf reduce_factsE) (hX := abstract_env_wfP_E X_type X)
-      (normalization_in := normalization_in_wt) flags X_type X Γ n decl h hn hb).
+      flags X_type X Γ n decl h r hn hb).
   Qed.
 
-  Lemma reduce_args_E_vass Γ n decl h :
+  Lemma reduce_args_E_vass Γ n decl h r :
     nth_error Γ n = Some decl -> decl_body decl = None ->
-    reduce_args_E Γ (tRel n) [] h = (tRel n, []).
+    Some r = reduce_args_E Γ (tRel n) [] h -> r = (tRel n, []).
   Proof using Type.
-    intros hn hb. unfold reduce_args_E.
-    change (PCUICPosition.appstack [] []) with (@nil PCUICPosition.stack_entry).
-    rewrite (reduce_stack_vass Γ n decl h hn hb). reflexivity.
+    intros hn hb. destruct r as [t' args']. intros e.
+    pose proof (reduce_args_E_spec Γ (tRel n) [] h t' args' e) as es.
+    change (PCUICPosition.appstack [] []) with (@nil PCUICPosition.stack_entry) in es.
+    pose proof (reduce_stack_vass Γ n decl h _ hn hb es) as ev.
+    injection ev as -> ev.
+    destruct args'; [reflexivity|discriminate ev].
   Qed.
 
 End BridgeE.

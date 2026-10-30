@@ -352,21 +352,24 @@ Global Arguments Checked_c {A} a.
 Global Arguments TypeError_c {A} t a.
 Global Arguments Refused_c {A} t.
 
-(** Results of the complete procedures ([reduce_to_*]) are checker results. *)
+(** Results of the complete procedures ([reduce_to_*]) are checker results. An empty fuel
+    ([NotEnoughFuel_comp], [PCUICFuelEta]) is a refusal for lack of fuel. *)
 Definition check_of_comp {A} (t : typing_result_comp A) : check_result A :=
   match t with
   | Checked_comp a => Checked_c a
   | TypeError_comp e a => TypeError_c e a
+  | NotEnoughFuel_comp s => Refused_c (NotEnoughFuel s)
   end.
 
 (** The results of [reduce_to_*] as refusals: plan row T8 taken as [Refused_c] (stream lead 2026-10-29,
     FRAC-approved). Their [TypeError_comp] proves only that the type does not REDUCE to a Sort/Π/Ind; the
     η checker does not turn that into a proof that the term is ill-typed. Each use site carries the
-    required comment. *)
+    required comment. An empty fuel is a refusal for lack of fuel. *)
 Definition refuse_of_comp {A} (t : typing_result_comp A) : check_result A :=
   match t with
   | Checked_comp a => Checked_c a
   | TypeError_comp e _ => Refused_c e
+  | NotEnoughFuel_comp s => Refused_c (NotEnoughFuel s)
   end.
 
 Coercion check_result_forget {A : Type} (t : check_result A) : typing_result A :=
@@ -386,19 +389,19 @@ Definition refuse_or {A} (b : bool) (e : type_error) (k : is_true b -> check_res
 
   [oracle_conv] answers [None] when it accepts; [oracle_conv_sound] is the E statement of base
   [isconv_term_sound] ([PCUICSafeConversion.v:6583]) with [ws_cumul_pbE] in place of [conv_cum]. A [Some e]
-  answer carries no proof (G7). [SafeTemplateCheckerEta] builds the oracle from EtaConv's
-  [PCUICSafeConversionEta.isconv_term] and [isconv_term_sound] (K6). *)
+  answer carries no proof (G7); an error that carries [ConvNotEnoughFuel] ([conv_error_fuel]) is the
+  conversion's empty fuel ([PCUICFuelEta]) and is reported as a refusal for lack of fuel ([convert]).
+  [SafeTemplateCheckerEta] builds the oracle from EtaConv's [PCUICSafeConversionEta.isconv_term] and
+  [isconv_term_sound] (K6). *)
 Record conv_oracle {cf : checker_flags} {nor : normalizing_flags} := {
   oracle_conv : forall (X_type : abstract_env_impl) (X : X_type.π2.π1)
-    {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}
     (Γ : context) (pb : conv_pb)
     (t : term) (ht : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t)
     (u : term) (hu : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ u),
     option ConversionError;
   oracle_conv_sound : forall (X_type : abstract_env_impl) (X : X_type.π2.π1)
-    {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}
     Γ pb t ht u hu,
-    oracle_conv X_type X (normalization_in := normalization_in) Γ pb t ht u hu = None ->
+    oracle_conv X_type X Γ pb t ht u hu = None ->
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ Σ ;;; Γ ⊢E t ≤[pb] u ∥ }.
 Arguments conv_oracle {cf nor}.
 Existing Class conv_oracle.
@@ -518,9 +521,9 @@ Section Typecheck.
   (** The η typing facts ([PCUICTypingEtaHyps]): one implicit Prop premise; [sq] opens it. *)
   Context {EtaF : EtaFacts}.
 
-  Local Notation reduce_to_sort := (reduce_to_sort (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
-  Local Notation reduce_to_prod := (reduce_to_prod (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
-  Local Notation reduce_to_ind := (reduce_to_ind (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
+  Local Notation reduce_to_sort := (reduce_to_sort (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)).
+  Local Notation reduce_to_prod := (reduce_to_prod (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)).
+  Local Notation reduce_to_ind := (reduce_to_ind (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)).
 
   Local Definition heΣ Σ (wfΣ : abstract_env_ext_rel X Σ) :
     ∥ wf_extE Σ ∥ :=  abstract_env_ext_wf _ wfΣ.
@@ -561,9 +564,9 @@ Section Typecheck.
   (* We get stack overflow on Qed after Equations definitions when this is transparent *)
   Opaque reduce_stack_full.
 
-  Notation hnf := (hnf (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
-  Local Notation hnf_sound := (hnf_sound (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
-  Local Notation hnf_complete := (hnf_complete (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
+  Notation hnf := (hnf (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)).
+  Local Notation hnf_sound := (hnf_sound (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)).
+  Local Notation hnf_complete := (hnf_complete (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)).
 
   Definition conv_pb_relb_gen_proper {T} pb equ equ' eqlu eqlu' :
   (forall u u', equ u u' = equ' u u') ->
@@ -603,9 +606,16 @@ Section Typecheck.
             inspect (oracle_conv CO X_type X Γ le t ht u hu) := {
             | @exist None Hc := ret _ ;
             | @exist (Some e) Hc :=
-              let t' := hnf Γ t ht in
-              let u' := hnf Γ u hu in
-              Refused_c (NotCumulSmaller false X Γ t u t' u' e)
+              match conv_error_fuel e with
+              (* The conversion ran out of fuel ([PCUICFuelEta]), possibly inside a sub-comparison: a
+                 refusal for lack of fuel. *)
+              | Some s => Refused_c (NotEnoughFuel s)
+              | None =>
+                (* The weak-head normal forms are only printed; an empty fuel prints the term itself. *)
+                let t' := match hnf Γ t ht with Some t' => t' | None => t end in
+                let u' := match hnf Γ u hu with Some u' => u' | None => u end in
+                Refused_c (NotCumulSmaller false X Γ t u t' u' e)
+              end
       }}}.
   Next Obligation.
     unfold eqb_term_upto_univ_napp in He. pose proof (heΣ _ wfΣ) as [heΣ].
@@ -1665,13 +1675,15 @@ Section Typecheck.
 
   (* These checks are complete procedures: a negative answer proves that no
      derivation exists. They stay in [typing_result_comp], with the monad
-     notations of that type, and [infer] lifts them with [check_of_comp]. *)
+     notations of that type, and [infer] lifts them with [check_of_comp]. An empty
+     fuel ([NotEnoughFuel_comp]) is passed on, without a proof. *)
   Local Notation ret := Checked_comp (only parsing).
   Local Notation raise := (fun e => TypeError_comp e _) (only parsing).
 
   Local Notation "x <- c1 ;; c2" := (
     match c1 with
       | TypeError_comp e absurd => raise e
+      | NotEnoughFuel_comp s => NotEnoughFuel_comp s
       | Checked_comp x => c2
     end)
     (at level 100, c1 at next level, right associativity).
@@ -1707,39 +1719,45 @@ Section Typecheck.
   (** *** The codomain walk *)
 
   (** One step of the walk: [C] itself when it is syntactically a product or an
-      applied inductive type, its weak-head normal form otherwise. *)
+      applied inductive type, its weak-head normal form otherwise; [None] when the fuel of
+      the reduction machine ran out. *)
   Definition codomain_whnf (Δ : context) (C : term)
-    (hC : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ C) : term :=
-    if isProd C || isInd (decompose_app C).1 then C else hnf Δ C hC.
+    (hC : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ C) : option term :=
+    if isProd C || isInd (decompose_app C).1 then Some C else hnf Δ C hC.
 
-  Lemma codomain_whnf_red {Δ C hC} Σ (wfΣ : abstract_env_ext_rel X Σ) :
-    ∥ Σ ;;; Δ ⊢ C ⇝ codomain_whnf Δ C hC ∥.
+  Lemma codomain_whnf_red {Δ C hC} Σ (wfΣ : abstract_env_ext_rel X Σ) T :
+    codomain_whnf Δ C hC = Some T ->
+    ∥ Σ ;;; Δ ⊢ C ⇝ T ∥.
   Proof.
     rewrite /codomain_whnf.
     destruct (isProd C || isInd (decompose_app C).1).
-    - destruct (hC _ wfΣ) as [T hT].
+    - intros e; injection e as <-.
+      destruct (hC _ wfΣ) as [T hT].
       pose proof (hΣ _ wfΣ) as [wfΣ'].
       sq. now eapply wt_closed_red_refl.
-    - exact (hnf_sound Σ wfΣ).
+    - intros e. exact (hnf_sound Σ wfΣ T e).
   Qed.
 
   (** If [C] reduces to a telescope over an applied inductive type, the step of the
       walk is a product or an applied inductive type. *)
-  Lemma codomain_whnf_shape {Δ C hC i} :
+  Lemma codomain_whnf_shape {Δ C hC i T} :
+    codomain_whnf Δ C hC = Some T ->
     (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
-    isProd (codomain_whnf Δ C hC) || isInd (decompose_app (codomain_whnf Δ C hC)).1.
+    isProd T || isInd (decompose_app T).1.
   Proof.
     open_eta_facts.
-    intros hi. rewrite /codomain_whnf.
-    destruct (isProd C || isInd (decompose_app C).1) eqn:hsyn; [exact hsyn|].
+    intros eT hi. revert eT. rewrite /codomain_whnf.
+    destruct (isProd C || isInd (decompose_app C).1) eqn:hsyn.
+    { intros e; injection e as <-. exact hsyn. }
+    intros eT.
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (hΣ _ wfΣ) as [wfΣ'].
     destruct (hi _ wfΣ) as [[u [l [ctx hred]]]].
     destruct (PCUICSafeReduceEta.hnf_sound (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)
-                (normalization_in := normalization_in) (h := hC) Σ wfΣ) as [hr].
+                (h := hC) Σ wfΣ T eT) as [hr].
     destruct (PCUICSafeReduceEta.hnf_complete (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)
-                (normalization_in := normalization_in) (h := hC) Σ wfΣ) as [wh].
+                (h := hC) Σ wfΣ T eT) as [wh].
     destruct (closed_red_confluence hr hred) as [v [rv1 rv2]].
     destruct (red_it_mkProd_or_LetIn_mkApps_Ind rv2) as [ctx' [l' ->]].
     exact (whnf_red_codomain_ind wh rv1).
@@ -1747,12 +1765,12 @@ Section Typecheck.
 
   (** The step is an applied inductive type: the walk stops. *)
   Lemma codomain_ind_ret {Δ C hC T i u l} :
-    T = codomain_whnf Δ C hC -> (tInd i u, l) = decompose_app T ->
+    Some T = codomain_whnf Δ C hC -> (tInd i u, l) = decompose_app T ->
     forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       ∥ ∑ u' l' ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u') l') ∥.
   Proof.
     intros eqT eqd Σ wfΣ.
-    destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [r]. rewrite -eqT in r.
+    destruct (codomain_whnf_red (hC := hC) Σ wfΣ T (eq_sym eqT)) as [r].
     assert (e : mkApps (tInd i u) l = T).
     { etransitivity. 2: symmetry; eapply mkApps_decompose_app. now rewrite -eqd. }
     sq; exists u, l, []. rewrite e. exact r.
@@ -1760,21 +1778,21 @@ Section Typecheck.
 
   (** The step is a product: the walk goes under it. *)
   Lemma codomain_welltyped_step {Δ C hC na A B} :
-    tProd na A B = codomain_whnf Δ C hC ->
+    Some (tProd na A B) = codomain_whnf Δ C hC ->
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ (Δ ,, vass na A) B.
   Proof.
     open_eta_facts.
     intros eqT Σ wfΣ.
     pose proof (hΣ _ wfΣ) as [wfΣ'].
     destruct (hC _ wfΣ) as [T hT].
-    destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [r]. rewrite -eqT in r.
+    destruct (codomain_whnf_red (hC := hC) Σ wfΣ _ (eq_sym eqT)) as [r].
     eapply (welltyped_prod_codomain (wfΣ := wfΣ')).
     eexists; eapply subject_reduction; [exact wfΣ'|exact hT|exact (clrel_rel r)].
   Qed.
 
   (** The measure of the walk decreases from [C] to the codomain of its product step. *)
   Lemma codomain_step_lt {Δ C hC na A B} hB :
-    tProd na A B = codomain_whnf Δ C hC ->
+    Some (tProd na A B) = codomain_whnf Δ C hC ->
     clos_trans _ redp_subterm_relE
       ((Δ ,, vass na A ; B ; hB) : ∑ (Γ' : context) (t : term),
           forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ' t)
@@ -1785,7 +1803,7 @@ Section Typecheck.
     assert (hprod : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Δ (tProd na A B)).
     { intros Σ wfΣ. pose proof (hΣ _ wfΣ) as [wfΣ'].
       destruct (hC _ wfΣ) as [T hT].
-      destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [hpr]. rewrite -eqT in hpr.
+      destruct (codomain_whnf_red (hC := hC) Σ wfΣ _ (eq_sym eqT)) as [hpr].
       eexists; eapply subject_reduction; [exact wfΣ'|exact hT|exact (clrel_rel hpr)]. }
     destruct (eqb_spec C (tProd na A B)) as [eqC|neqC].
     - subst C. apply t_step; intros Σ wfΣ; cbn; sq; right.
@@ -1794,7 +1812,7 @@ Section Typecheck.
       + apply t_step; intros Σ wfΣ; cbn; sq; right.
         unshelve eexists; [repeat constructor|reflexivity].
       + apply t_step; intros Σ wfΣ; cbn.
-        destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [hpr]. rewrite -eqT in hpr.
+        destruct (codomain_whnf_red (hC := hC) Σ wfΣ _ (eq_sym eqT)) as [hpr].
         assert (hco : cored Σ Δ (tProd na A B) C)
           by (eapply red_neq_cored; [exact (clrel_rel hpr)|exact neqC]).
         apply cored_redp in hco as [hco].
@@ -1802,7 +1820,7 @@ Section Typecheck.
   Qed.
 
   Lemma codomain_ind_prod {Δ C hC na A B i} :
-    tProd na A B = codomain_whnf Δ C hC ->
+    Some (tProd na A B) = codomain_whnf Δ C hC ->
     (forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       ∥ ∑ u l ctx, Σ ;;; (Δ ,, vass na A) ⊢ B ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
     forall Σ (wfΣ : abstract_env_ext_rel X Σ),
@@ -1811,7 +1829,7 @@ Section Typecheck.
     intros eqT hB Σ wfΣ.
     pose proof (hΣ _ wfΣ) as [wfΣ'].
     destruct (hB _ wfΣ) as [[u [l [ctx hred]]]].
-    destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [hpr]. rewrite -eqT in hpr.
+    destruct (codomain_whnf_red (hC := hC) Σ wfΣ _ (eq_sym eqT)) as [hpr].
     sq; exists u, l, (ctx ++ [vass na A]).
     eapply into_closed_red; [|exact (clrel_ctx hpr)|exact (clrel_src hpr)].
     transitivity (tProd na A B); [exact (clrel_rel hpr)|].
@@ -1820,7 +1838,7 @@ Section Typecheck.
   Qed.
 
   Lemma codomain_ind_prod_absurd {Δ C hC na A B} :
-    tProd na A B = codomain_whnf Δ C hC ->
+    Some (tProd na A B) = codomain_whnf Δ C hC ->
     ((∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       ∥ ∑ u l ctx, Σ ;;; (Δ ,, vass na A) ⊢ B ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) ->
       False) ->
@@ -1831,7 +1849,7 @@ Section Typecheck.
     intros eqT absurd [i hi].
     destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
     pose proof (hΣ _ wfΣ) as [wfΣ'].
-    destruct (codomain_whnf_red (hC := hC) Σ wfΣ) as [hpr]. rewrite -eqT in hpr.
+    destruct (codomain_whnf_red (hC := hC) Σ wfΣ _ (eq_sym eqT)) as [hpr].
     destruct (hi _ wfΣ) as [[u [l [ctx hred]]]].
     destruct (closed_red_confluence hred hpr) as [v [rv1 rv2]].
     destruct (red_it_mkProd_or_LetIn_mkApps_Ind rv1) as [ctx3 [l3 ->]].
@@ -1845,14 +1863,14 @@ Section Typecheck.
   (** The step is neither a product nor an applied inductive type: no reduct of [C]
       is a telescope over an applied inductive type. *)
   Lemma codomain_ind_refute {Δ C hC T hd l} :
-    T = codomain_whnf Δ C hC -> ~ isProd T -> (hd, l) = decompose_app T ->
+    Some T = codomain_whnf Δ C hC -> ~ isProd T -> (hd, l) = decompose_app T ->
     negb (isInd hd) ->
     (∑ i, forall Σ (wfΣ : abstract_env_ext_rel X Σ),
       ∥ ∑ u l ctx, Σ ;;; Δ ⊢ C ⇝ it_mkProd_or_LetIn ctx (mkApps (tInd i u) l) ∥) -> False.
   Proof.
     intros eqT nprod eqd nind [i hi].
-    have shape := codomain_whnf_shape (hC := hC) hi.
-    rewrite -eqT -eqd /= in shape.
+    have shape := codomain_whnf_shape (hC := hC) (eq_sym eqT) hi.
+    rewrite -eqd /= in shape.
     move/orP: shape => [hp|hind].
     - exact (nprod hp).
     - rewrite hind in nind. exact (diff_false_true nind).
@@ -1870,10 +1888,12 @@ Section Typecheck.
              forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ' t)
           (clos_trans _ redp_subterm_relE) :=
     check_codomain_ind Δ C hC with inspect (codomain_whnf Δ C hC) := {
-      | exist T eqT with view_prodc T := {
+      | exist None _ := NotEnoughFuel_comp "check_codomain_ind" ;
+      | exist (Some T) eqT with view_prodc T := {
         | view_prod_prod na A B :=
           match check_codomain_ind (Δ ,, vass na A) B (codomain_welltyped_step eqT) with
           | TypeError_comp e absurd => TypeError_comp e (codomain_ind_prod_absurd eqT absurd)
+          | NotEnoughFuel_comp s => NotEnoughFuel_comp s
           | Checked_comp r => ret (r.π1 ; codomain_ind_prod eqT r.π2)
           end ;
         | view_prod_other T nprod with inspect (decompose_app T) := {
@@ -1898,6 +1918,7 @@ Section Typecheck.
     match reduce_to_ind Δ t h with
     | Checked_comp r => Checked_comp r
     | TypeError_comp _ na => TypeError_comp err na
+    | NotEnoughFuel_comp s => NotEnoughFuel_comp s
     end.
 
   Lemma wf_types_head {d mfix} :
@@ -2012,6 +2033,7 @@ Section Typecheck.
                   (decl_type c) (fix_rec_arg_welltyped wf_type eqctx eqnth) with
           | TypeError_comp e absurd =>
             TypeError_comp e (fix_body_on_absurd wf_type eqctx eqnth absurd)
+          | NotEnoughFuel_comp s => NotEnoughFuel_comp s
           | Checked_comp r =>
             ret (inductive_mind r.π1 ; fix_body_on_ret wf_type eqctx eqnth r.π2.π2.π2)
           end } }.
@@ -2067,6 +2089,7 @@ Section Typecheck.
         ∥ mfix_body_on check_one_cofix (PCUICReduction.red Σ Γ) mind d ∥) :=
     match check_codomain_ind Γ (dtype d) (abstract_isType_welltyped wf_type) with
     | TypeError_comp e absurd => TypeError_comp e (cofix_body_on_absurd wf_type absurd)
+    | NotEnoughFuel_comp s => NotEnoughFuel_comp s
     | Checked_comp r => ret (inductive_mind r.π1 ; cofix_body_on_ret r.π2)
     end.
 
@@ -2162,13 +2185,16 @@ Section Typecheck.
     check_mfix_inds mind (d :: mfix) wf_types (All_cons pd pres) :=
       match check_body d (wf_types_head wf_types) pd with
       | TypeError_comp e absurd => TypeError_comp e (mfix_inds_head_absurd absurd)
+      | NotEnoughFuel_comp s => NotEnoughFuel_comp s
       | Checked_comp m =>
         match check_eq_true (eqb m.π1 mind) err with
         | TypeError_comp e absurd =>
           TypeError_comp e (mfix_inds_mismatch_absurd wf_types m.π2 absurd)
+        | NotEnoughFuel_comp s => NotEnoughFuel_comp s
         | Checked_comp eqind =>
           match check_mfix_inds mind mfix (wf_types_tail wf_types) pres with
           | TypeError_comp e absurd => TypeError_comp e (mfix_inds_tail_absurd absurd)
+          | NotEnoughFuel_comp s => NotEnoughFuel_comp s
           | Checked_comp rest => ret (mfix_inds_ret m.π2 eqind rest)
           end
         end
@@ -2262,13 +2288,16 @@ Section Typecheck.
     check_wf_mfix (d :: mfix) wf_types (All_cons pd pres) :=
       match check_body d (wf_types_head wf_types) pd with
       | TypeError_comp e absurd => TypeError_comp e (wf_mfix_head_absurd absurd)
+      | NotEnoughFuel_comp s => NotEnoughFuel_comp s
       | Checked_comp m =>
         match check_mfix_inds m.π1 mfix (wf_types_tail wf_types) pres with
         | TypeError_comp e absurd => TypeError_comp e (wf_mfix_tail_absurd wf_types m.π2 absurd)
+        | NotEnoughFuel_comp s => NotEnoughFuel_comp s
         | Checked_comp rest =>
           match check_eq_true (check_recursivity_kind (abstract_env_lookup X) m.π1 kind) err with
           | TypeError_comp e absurd =>
             TypeError_comp e (wf_mfix_kind_absurd wf_types m.π2 absurd)
+          | NotEnoughFuel_comp s => NotEnoughFuel_comp s
           | Checked_comp wfkind => ret (wf_mfix_ret m.π2 rest wfkind)
           end
         end
@@ -2326,15 +2355,18 @@ Section Typecheck.
       match check_eq_true (forallb (isLambda ∘ dbody) mfix)
               (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") with
       | TypeError_comp e absurd => TypeError_comp e (wf_fixpoint_lambda_absurd absurd)
+      | NotEnoughFuel_comp s => NotEnoughFuel_comp s
       | Checked_comp wflam =>
         match check_eq_true (forallb has_rec_arg mfix)
                 (Msg "Ill-formed fixpoint: not defined on a mutually inductive family") with
         | TypeError_comp e absurd => TypeError_comp e (wf_fixpoint_rec_arg_absurd absurd)
+        | NotEnoughFuel_comp s => NotEnoughFuel_comp s
         | Checked_comp wfrec =>
           match check_wf_mfix check_one_fix (fun d => is_true (has_rec_arg d))
                   (Msg "Ill-formed fixpoint: not defined on a mutually inductive family")
                   Finite check_fix_body_on mfix wf_types (forallb_All _ _ wfrec) with
           | TypeError_comp e absurd => TypeError_comp e (wf_fixpoint_ind_absurd absurd)
+          | NotEnoughFuel_comp s => NotEnoughFuel_comp s
           | Checked_comp wfind => ret (wf_fixpoint_ret wflam wfrec wfind)
           end
         end
@@ -2515,14 +2547,17 @@ Section Typecheck.
     let dep := pred (mkApps (tInd eq_ind []) [tInd stream []; tRel 0; tRel 0]) in
     match check_nondep_cofinite (ci true) mdecl dep with
     | TypeError_comp e _ => e = Msg "Dependent case on coinductive"
+    | NotEnoughFuel_comp _ => False
     | Checked_comp _ => False
     end /\
     match check_nondep_cofinite (ci false) mdecl dep with
     | TypeError_comp _ _ => False
+    | NotEnoughFuel_comp _ => False
     | Checked_comp _ => True
     end /\
     match check_nondep_cofinite (ci true) mdecl (pred (tRel 1)) with
     | TypeError_comp _ _ => False
+    | NotEnoughFuel_comp _ => False
     | Checked_comp _ => True
     end.
   Proof using Type.

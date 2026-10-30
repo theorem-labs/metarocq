@@ -42,6 +42,7 @@ PCUICEqualityDec
 PCUICPositivityCheck
 PCUICWfEnvEta
 PCUICCallByNeedEta
+PCUICFuelEta
 PCUICErrorsEta
 PCUICEtaFInst
 PCUICMustExpandEta

@@ -1,16 +1,15 @@
 (* Distributed under the terms of the MIT license. *)
-(* K4: the termination measure of the η conversion checker, over the stack of
-   [PCUICPositionEta], its well-foundedness, and the descent lemmas the checker's
-   obligations use (plan.md §2 I7 revisions 12-15).
+(* K4: the measure of the η conversion checker, over the stack of [PCUICPositionEta],
+   and the descent lemmas the checker's obligations use (plan.md §2 I7 revisions 12-15).
 
    The measure is base's lexicographic [R_aux] (safechecker/theories/
    PCUICSafeConversion.v) on
      (side-1 term, side-1 position, side-2 term, side-2 position, state)
    over the η stack, with the E well-typedness [welltypedE] in [wtp]/[wterm]/[wcored]
    (rev 14, B3 conditions) and base's three descent lemmas [R_positionR],
-   [R_positionR2] and [R_stateR] restated for it. [R_aux_Acc]/[R_Acc] are proved over
-   [NormalizationInE] ([PCUICSNEta]), through [normalization_uptoE], the E copy of
-   [PCUICSN.normalization_upto]. They discharge the descents:
+   [R_positionR2] and [R_stateR] restated for it. The checker's recursion terminates by
+   fuel ([PCUICFuelEta], [PCUICSafeConversionEta.isconv_full_fuel]); its recursive calls
+   are still typed by an [R]-descent (the [R] premise of [Aux]), which these discharge:
 
      (1)  the η branch with the λ on side 1            -> R_positionR
      (1') the η branch with the λ on side 2            -> R_positionR2
@@ -34,10 +33,9 @@
    here because they read [abstract_env_ext_rel]; their Σ-level content is
    [PCUICPositionEtaTyping.ws_cumul_ctx_pbE_eta_step].
 
-   Section hypothesis: [normalization_in] (the E normalization premise of every E
-   section, ENV contract). It has no satisfying instance, and none is possible: it is
-   strong normalization of PCUIC with η, an assumption exactly as base [NormalizationIn]
-   is for the base checker (see the header of [PCUICSNEta]). *)
+   No section hypothesis on normalisation (BET-64 FUEL): termination is by fuel, so the
+   well-foundedness of [R] (base's accessibility lemmas, which need strong normalisation) is
+   not stated here. *)
 From Stdlib Require Import ProofIrrelevance ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config uGraph.
@@ -45,7 +43,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils
      PCUICReflect PCUICLiftSubst PCUICUnivSubst PCUICTyping PCUICGlobalEnv
      PCUICCumulativity PCUICEquality PCUICOnFreeVars
      PCUICSafeLemmata PCUICNormal PCUICInversion PCUICReduction PCUICPosition
-     PCUICSN PCUICUtils PCUICTypingEta PCUICSNEta PCUICContextConversionEta
+     PCUICSN PCUICUtils PCUICTypingEta PCUICContextConversionEta
      PCUICPositionEtaTyping.
 From MetaRocq.SafeChecker Require Import PCUICErrors.
 (* the abstract environment over wfE/wf_extE (ENV contract), after anything that could
@@ -74,22 +72,6 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
    import above; re-declare it locally so the copied order code parses as in base. *)
 Local Notation "` x" := (proj1_sig x) (at level 10, format "` x").
 
-(* The E copy of [PCUICSN.normalization_upto] (PCUICSN.v:156-166). *)
-Lemma normalization_uptoE {cf} {no : normalizing_flags} (Σ : global_env_ext)
-  {normalization : NormalizationInE Σ} Γ u :
-  welltypedE Σ Γ u -> Acc (cored' Σ Γ) u.
-Proof.
-  intros h. eapply Acc_cored_cored'.
-  - exact (normalization Γ u h).
-  - constructor. reflexivity.
-Qed.
-
-(* base [PCUICSafeReduce.Acc_equiv] (PCUICSafeReduce.v:412-418); that file loads base
-   PCUICWfEnv, so it is restated here. *)
-Lemma Acc_equivE A (R R' : A -> A -> Prop) (Heq : forall a a', R a a' <-> R' a a') a :
-  Acc R a -> Acc R' a.
-Proof. induction 1 as [a _ IH]. constructor. intros y hy. apply IH. now apply Heq. Qed.
-
 Section ConversionEtaK4.
 
   Context {cf : checker_flags} {nor : normalizing_flags}.
@@ -97,11 +79,6 @@ Section ConversionEtaK4.
   Context (X_type : abstract_env_impl).
 
   Context (X : X_type.π2.π1).
-
-  Context {normalization_in : forall Σ, wf_extE Σ -> Σ ∼_ext X -> NormalizationInE Σ}.
-
-  Local Definition heΣ Σ (wfΣ : abstract_env_ext_rel X Σ) :
-    ∥ wf_extE Σ ∥ := abstract_env_ext_wf _ wfΣ.
 
   Set Equations Transparent.
   Set Equations With UIP.
@@ -120,36 +97,6 @@ Section ConversionEtaK4.
   | stateR_Args_Fallback : stateR Args Fallback.
 
   Derive Signature for stateR.
-
-  Lemma stateR_Acc :
-    forall s, Acc stateR s.
-  Proof using Type.
-    assert (Acc stateR Args) as hArgs.
-    { constructor. intros s h.
-      dependent induction h.
-      all: discriminate.
-    }
-    assert (Acc stateR Fallback) as hFall.
-    { constructor. intros s h.
-      dependent induction h.
-      all: try discriminate.
-      apply hArgs.
-    }
-    assert (Acc stateR Term) as hTerm.
-    { constructor. intros s h.
-      dependent induction h.
-      all: try discriminate.
-      - apply hArgs.
-      - apply hFall.
-    }
-    assert (Acc stateR Reduction) as hRed.
-    { constructor. intros s h.
-      dependent induction h.
-      all: try discriminate.
-      apply hTerm.
-    }
-    intro s. destruct s ; eauto.
-  Qed.
 
   Notation wtp Γ t π :=
     (forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (zipc t π)) (only parsing).
@@ -182,20 +129,6 @@ Section ConversionEtaK4.
 
   Definition wcored Γ (u v : wterm Γ) :=
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), cored' Σ Γ (` u) (` v).
-
-  Lemma wcored_wf :
-    forall Γ, well_founded (wcored Γ).
-  Proof using normalization_in.
-    intros Γ [u hu].
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]];
-    pose proof (heΣ _ wfΣ) as [heΣ].
-    pose proof (hu _ wfΣ) as h.
-    apply (normalization_uptoE Σ (normalization := normalization_in Σ heΣ wfΣ)) in h.
-    dependent induction h.
-    constructor. intros [y hy] r.
-    unfold wcored in r. cbn in r.
-    eapply H0. eapply r; eauto.
-  Qed.
 
   Definition eqt u v := ∥ u = v :> term ∥.
 
@@ -255,105 +188,6 @@ Section ConversionEtaK4.
 
   Derive Signature for Subterm.lexprod.
 
-  (* base [R_aux_Acc] (PCUICSafeConversion.v:203-298), over welltypedE and
-     NormalizationInE *)
-  Lemma R_aux_Acc :
-    forall Γ t p w q s,
-      (forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t) ->
-      Acc (R_aux Γ) (t ; (p, (w ; (q, s)))).
-  Proof using normalization_in.
-    intros Γ t p w q s ht.
-    destruct (abstract_env_ext_exists X) as [[Σ wfΣ]].
-    rewrite R_aux_equation_1.
-    unshelve eapply dlexmod_Acc.
-    - intros x y [e]; eauto.  constructor. now symmetry.
-    - intros x y z [e1] [e2]; eauto. constructor. now etransitivity; tea.
-    - intro u. eapply Subterm.wf_lexprod.
-      + intro. eapply posR_Acc.
-      + intros [w' q'].
-        unshelve eapply dlexmod_Acc.
-        * intros x y [e]; eauto. constructor. now symmetry.
-        * intros x y z [e1] [e2]; eauto. constructor.
-          now etransitivity; tea.
-        * intros [t' h']. eapply Subterm.wf_lexprod.
-          -- intro. eapply posR_Acc.
-          -- intro. eapply stateR_Acc.
-        * eintros x x' y [e] [y' [x'' [r [[e1] [e2]]]]]; eauto.
-          eexists _,_. erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
-          intuition eauto using sq.
-          constructor. etransitivity; tea.
-        * intros x.
-          exists (@eqt_refl _).
-          unfold weqt, eqt.
-          intros [[q'' h] ?].
-          unfold R_aux_obligations_obligation_2.
-          simpl. f_equal. f_equal.
-          eapply uip.
-        * cbn. intros x x' [[q'' h] ?] e.
-          destruct e as [e'].
-          unfold R_aux_obligations_obligation_2.
-          simpl. f_equal. f_equal.
-          eapply uip.
-        * intros x y z e1 e2 [[q'' h] ?].
-          unfold R_aux_obligations_obligation_2.
-          simpl. f_equal. f_equal.
-          eapply uip.
-        * intros [t1 ht1] [t2 ht2] e [[q1 hq1] s1] [[q2 hq2] s2] h.
-          destruct e as [e'].
-          simpl in *.
-          dependent destruction h.
-          -- left. unfold posR in *. simpl in *. assumption.
-          -- match goal with
-             | |- context [ exist q1 ?hq1 ] =>
-               assert (ee : hq1 = hq2) by eapply uip
-             end.
-            rewrite ee. right. clear ee. assumption.
-        * eapply wcored_wf.
-    - eintros x x' y [e] [y' [x'' [r [[e1] [e2]]]]]; eauto.
-      intros. erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
-      eexists _,_. intuition eauto using sq.
-      constructor. etransitivity; eauto.
-    - intros x. exists (@eqt_refl _). intros [[q' h] [? [? ?]]].
-      unfold R_aux_obligations_obligation_1.
-      simpl. f_equal. f_equal.
-      eapply uip.
-    - intros x x' [[q' h] [? [? ?]]] e.
-      destruct e as [e']; eauto.
-      unfold R_aux_obligations_obligation_1.
-      simpl. f_equal. f_equal.
-      eapply uip.
-    - intros x y z e1 e2 [[q' h] [? [? ?]]].
-      unfold R_aux_obligations_obligation_1.
-      simpl. f_equal. f_equal.
-      eapply uip.
-    - intros x x' e
-             [[p1 hp1] [[u hu] [[q1 hq1] s1]]]
-             [[p2 hp2] [[v hv] [[q2 hq2] s2]]] hl.
-      destruct e as [e']; eauto.
-      simpl in *.
-      dependent destruction hl.
-      + left. unfold posR in *.
-        simpl in *.
-        assumption.
-      + match goal with
-        | |- context [ exist p1 ?hp1 ] =>
-          assert (ee : hp1 = hp2) by eapply uip
-        end.
-        rewrite ee. right. clear ee.
-        dependent destruction H.
-        * left. assumption.
-        * unshelve econstructor 2. 1: assumption.
-          dependent destruction H.
-          -- left. unfold posR in *.
-             simpl in *. assumption.
-          -- right. assumption.
-    - pose proof (heΣ _ wfΣ) as [hwf].
-      eapply Acc_equivE; try eapply (normalization_uptoE Σ (normalization := normalization_in Σ hwf wfΣ)); eauto.
-      split; eauto; intros.
-      erewrite (abstract_env_ext_irr _ _ wfΣ); eauto.
-    Unshelve. all: eauto.
-  Qed.
-
   Notation pzt u := (zipc (tm1 u) (stk1 u)) (only parsing).
   Notation pps1 u := (stack_pos_wf (tm1 u) (stk1 u) (swf1 u)) (only parsing).
   Notation pwt u := (exist (P := fun t => forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ _ t)
@@ -365,17 +199,6 @@ Section ConversionEtaK4.
 
   Definition R Γ (u v : pack Γ) :=
     R_aux Γ (obpack u) (obpack v).
-
-  (* base [R_Acc] (PCUICSafeConversion.v:312-320), over welltypedE *)
-  Lemma R_Acc :
-    forall Γ u,
-      (forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ (zipc (tm1 u) (stk1 u))) ->
-      Acc (R Γ) u.
-  Proof using normalization_in.
-    intros Γ u h.
-    eapply Acc_fun with (f := fun x => obpack x).
-    apply R_aux_Acc. assumption.
-  Qed.
 
   (* base [R_aux_irrelevance] (PCUICSafeConversion.v:324-347) *)
   Lemma R_aux_irrelevance Γ x y z :
