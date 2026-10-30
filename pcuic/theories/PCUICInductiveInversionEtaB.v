@@ -28,7 +28,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICEtaI5 PCUICInversionEta PCUICSREtaConv PCUICSpineEta PCUICInductivesEta
      PCUICValidityEta
      PCUICWsCumulEtaInstancesGlobal PCUICInductiveInversionEta.
-From MetaRocq.PCUIC Require PCUICWfUniversesEta PCUICEtaI5A2 PCUICGenerationEta.
+From MetaRocq.PCUIC Require PCUICWfUniversesEta PCUICEtaI5A2 PCUICGenerationEta PCUICEtaC1b.
 
 From Equations.Type Require Import Relation_Properties.
 From Equations.Prop Require Import DepElim.
@@ -55,10 +55,22 @@ From Stdlib Require Import ssreflect ssrbool.
     whose E form is not among the landed definitions; the three arguments are base's three
     goals, with the sort typing in place of base's [isType] of the sort.
 
-  NOT COPIED (t0-plan §6, risk 5): [ws_cumul_pb_terms_confl] and [wf_cofixpoint_all], whose E
-  forms are FALSE (refuted in Coq: [ws_cumul_pbE_red_false] / [ws_cumul_pbE_alt_closed_false] and
-  [PCUICFixWitnessEtaCounter.wf_cofixpoint_allE_false]); [isLambda_red1] and
-  [case_branch_context_nopars], which mention none of the relations and are used from base.
+  NOT COPIED (t0-plan §6, risk 5):
+  - [ws_cumul_pb_terms_confl]: its E form is FALSE. The registered [ws_cumul_pbE_red_false] and
+    [ws_cumul_pbE_alt_closed_false] quantify over EVERY [pb], which the terms form does not
+    give, so they do not refute it as stated. The refutation of the E form itself is
+    [ws_cumul_pb_terms_conflE_false] at the end of this file, BY INSTANTIATION at the P3
+    witness of [PCUICWsCumulEtaCtx] ([rf_t] against [tRel 0] in [rf_Γ], both [red1]-normal).
+    That witness is typed in a well-formed context ([rf_witness_typed]), so the typed form is
+    refuted too. Its only T0 consumer, [ws_cumul_pb_mkApps_eq], was rerouted by copy 18a.
+  - [wf_cofixpoint_all]: its E form is FALSE, refuted by
+    [PCUICFixWitnessEtaCounter.wf_cofixpoint_allE_false]. LIMIT of that refutation: ONLY the
+    form WITHOUT a typing premise is refuted, because the witness's declared type is not a type
+    ([fwe_cofix_dtype_not_typeE]); the TYPED form remains OPEN. Base has no consumer of the
+    lemma, so the declaration is dropped under the T8 rule whatever the typed form turns out
+    to be.
+  - [isLambda_red1] and [case_branch_context_nopars], which mention none of the relations and
+    are used from base.
 
   [subslet_projsE] is proved through [PCUICValidityEta.validityE] (row T2a): its hypothesis
   types an ARBITRARY term at [mkApps (tInd i u) args], and the proof needs
@@ -81,6 +93,18 @@ From Stdlib Require Import ssreflect ssrbool.
   that class, [isType_is_open_termE], is NOT declared here: the landed
   [Typing/PCUICClosedTypEta.isType_is_open_termE] has the identical compiled type, so this file
   only adds base's [pcuic] registration of it.
+
+  Two further names of this file shadow a DIFFERENT statement of the same name in its import
+  closure, each mirroring base:
+  - [arity_spine_eqE], also carried by [PCUICSpineEta] (the twin of [PCUICSpine.arity_spine_eq],
+    whose premise is [isTypeE Σ Γ T'], where this file's premise is [T = T']). Base has the
+    same two objects ([PCUICSpine.arity_spine_eq] and
+    [PCUICInductiveInversion.arity_spine_eq]), so the shadowing is base's.
+  - [ws_cumul_ctx_pb_rel_context_assumptionsE], also carried by [PCUICSpineEta] (the twin of
+    [PCUICSpine.ws_cumul_ctx_pb_rel_context_assumptions], stated at a section [Σ] and a general
+    [pb], where base's [PCUICInductiveInversion.ws_cumul_ctx_pb_rel_context_assumptions] is
+    stated at an arbitrary relation argument and [Conv]). Base has the same two objects.
+  Every reference to either name, here and in the instance file, is written qualified.
 
   Names that are ambiguous in this file's context are written qualified:
   [PCUICGenerationEta.type_it_mkLambda_or_LetInE] (its file is required, never imported, so
@@ -589,14 +613,16 @@ Qed.
 
 (** ** Validity for a constructor application
 
-  Base reads [isType Σ Γ T] off [Σ ;;; Γ |- t : T] with [PCUICValidity.validity], which has
-  no E form among the landed files. For a term whose head is a CONSTRUCTOR the fact needs no
+  Base reads [isType Σ Γ T] off [Σ ;;; Γ |- t : T] with [PCUICValidity.validity]. The landed
+  [PCUICValidityEta.validityE] (imported above, and used at [subslet_projsE]) is its E form,
+  and each of the three lemmas below IS [validityE] restricted to a fixed subject shape. They
+  are kept beside it because for a subject whose head is a CONSTRUCTOR the fact needs no
   induction over the other rules: [typeE_Cumul] carries [Σ ;;; Γ |-E B : tSort s] and
   [typeE_App] carries [Σ ;;; Γ |-E tProd na A B : tSort s], so an induction on the derivation
   of a fixed subject shape closes both cases from the rule's own premises, and every other
-  rule is ruled out by the subject. These three are the constructor-application case of
-  validity, and nothing else; the suffix [_ctor] keeps the names apart from the general E
-  validity. *)
+  rule is ruled out by the subject; the proofs therefore reach no declaration of
+  [PCUICValidityEta]. These three are the constructor-application case of validity, and
+  nothing else; the suffix [_ctor] keeps the names apart from the general E validity. *)
 
 Lemma isTypeE_typingE_tApp_ctor {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ f a T} :
   Σ ;;; Γ |-E tApp f a : T -> isTypeE Σ Γ T.
@@ -911,6 +937,18 @@ Proof.
   intros wfΓ a.
   apply (conv_decls_fix_context_genE _ _  _ _ wfΣ a [] []).
   eapply ws_cumul_ctx_pbE_refl. eauto with fvs.
+Qed.
+
+(** Base states this at an arbitrary relation argument [P] and at [Conv]; the landed
+    [PCUICSpineEta.ws_cumul_ctx_pb_rel_context_assumptionsE] is the same fact at the section's
+    [Σ] and a general [pb], so this twin is that lemma at [pb := Conv]. The name shadows it,
+    as base's shadows [PCUICSpine]'s (declared in the header). *)
+Lemma ws_cumul_ctx_pb_rel_context_assumptionsE {cf:checker_flags} (P : global_env_ext)
+  (Γ Δ Δ' : list context_decl) :
+  ws_cumul_ctx_pbE_rel Conv P Γ Δ Δ' ->
+  context_assumptions Δ = context_assumptions Δ'.
+Proof.
+  exact (@PCUICSpineEta.ws_cumul_ctx_pb_rel_context_assumptionsE cf P Conv Γ Δ Δ').
 Qed.
 
 Lemma invert_Case_ConstructE {cf:checker_flags} Σ (hΣ : ∥ wfE Σ.1 ∥)
@@ -2892,4 +2930,37 @@ Proof.
   rewrite -it_mkProd_or_LetIn_app /= in Hsp.
   eapply arity_typing_spineE in Hsp as [_ leqs _]. now eapply leq_relevance; tea.
   noconf H. cbn in Hty |- *. now apply isTypeRelE_isTypeE in Hty.
+Qed.
+
+(** ** The E form of [ws_cumul_pb_terms_confl] is refuted here
+
+  [ws_cumul_pb_terms_conflE_form] is the copy rule's E form of
+  [PCUICInductiveInversion.ws_cumul_pb_terms_confl] ([wf] -> [wfE],
+  [ws_cumul_pb_terms] -> [ws_cumul_pbE_terms]; the reduction and the syntactic comparison are
+  unchanged). The registered [ws_cumul_pbE_red_false] and [ws_cumul_pbE_alt_closed_false]
+  quantify over EVERY [pb], which this form does not give, so neither refutes it as stated.
+  This refutation instantiates the form at the P3 witness of [PCUICWsCumulEtaCtx]: [rf_t]
+  ([λx:Prop. f x]) and [tRel 0] ([f]) are related by one η step ([rf_premise]) and both are
+  [red1]-normal in [rf_Γ], so the only reducts are themselves, and no constructor of
+  [eq_term_upto_univ] relates a λ with a variable. The witness is typed in a well-formed
+  context ([rf_witness_typed]), so the typed form is refuted too.
+  [PCUICEtaC1b] is required without Import (for [rt_from_normal]), so it reaches no proof
+  above; it declares no global hint, instance or [Arguments]. *)
+
+Definition ws_cumul_pb_terms_conflE_form : Type :=
+  forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context) (u u' : list term),
+    ws_cumul_pbE_terms Σ Γ u u' ->
+    ∑ nf nf', (red_terms Σ Γ u nf * red_terms Σ Γ u' nf') * (All2 (eq_term Σ Σ) nf nf').
+
+Theorem ws_cumul_pb_terms_conflE_false : ws_cumul_pb_terms_conflE_form -> False.
+Proof.
+  intros H.
+  destruct rf_witness_typed as [_ wfEΣ _ _ _].
+  destruct (H default_checker_flags rf_Σ wfEΣ rf_Γ [rf_t] [tRel 0]
+              (All2_cons rf_premise All2_nil)) as (nf & nf' & [[rl rr] e]).
+  depelim rl. depelim rl. depelim rr. depelim rr.
+  have e1 := PCUICEtaC1b.rt_from_normal _ _ _ (rf_t_normal rf_Σ) (clrel_rel c).
+  have e2 := PCUICEtaC1b.rt_from_normal _ _ _ (rf_f_normal rf_Σ) (clrel_rel c0).
+  subst. depelim e.
+  match goal with h : eq_term _ _ rf_t (tRel 0) |- _ => unfold rf_t in h; depelim h end.
 Qed.
