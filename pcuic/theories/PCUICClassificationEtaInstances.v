@@ -48,8 +48,8 @@
     [typing_spine_smashE_inst] runs on the empty spine of [cli_dep_let] at
     itself: smashing drops the let and substitutes [z := I (∀P. P)] into [Π y : z. z], giving
     [Π y : I (∀P. P). I (∀P. P)], neither the substituted term, nor the body, nor [cli_dep_let]
-    ([cli_smash_dep_nondeg]). [cumul_it_mkProd_or_LetIn_smashE_inst] runs on the let-in
-    [let z := ∀P. P in z], which smashing changes ([cli_let_smash_differs]).
+    ([cli_smash_dep_nondeg]). [cumul_it_mkProd_or_LetIn_smashE_inst] relates the same smashed type
+    [Π y : I (∀P. P). I (∀P. P)] to [cli_dep_let] ([cli_smash_dep_nondeg]).
   - [arity_spine_len_subst_inst] substitutes [∀P. P] for the free variable [x] of the arity
     [let z := x : Prop in Π _ : x. Prop] ([cli_open_arity]), which changes the term
     ([cli_open_arity_subst_differs]); [x] occurs in the let body and in the product domain.
@@ -490,12 +490,6 @@ Qed.
 Lemma cli_dep_let_not_prod : forall na dom codom, cli_dep_let <> tProd na dom codom.
 Proof. intros na dom codom h. unfold cli_dep_let in h. discriminate h. Qed.
 
-(** Smashing the let-in [let z := ∀P:Prop. P in z] changes the type. *)
-Lemma cli_let_smash_differs :
-  it_mkProd_or_LetIn (smash_context [] [vdef si_na iv_False si_P]) (expand_lets [vdef si_na iv_False si_P] (tRel 0)) <>
-  it_mkProd_or_LetIn [vdef si_na iv_False si_P] (tRel 0).
-Proof. vm_compute. discriminate. Qed.
-
 (** The empty spine of [cli_dep_let] at itself (reflexive: it holds no ζ step). *)
 Lemma cli_dep_let_sp_nil : PCUICAritiesEta.typing_spineE si_Σ [] cli_dep_let [] cli_dep_let.
 Proof.
@@ -749,9 +743,14 @@ Definition typing_cofix_coindE_inst :
 
 (** ** Spines and smashing *)
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_let_smash_differs *)
+(** [let z := I (∀P. P) in Π y : z. z] ([cli_dep_let]) against its smashed form: smashing drops the
+    let and substitutes [z := I (∀P. P)] into both positions of [Π y : z. z], giving
+    [Π y : I (∀P. P). I (∀P. P)], neither the substituted term, nor the body, nor [cli_dep_let]
+    ([cli_smash_dep_nondeg]).
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_smash_dep_nondeg *)
 Definition cumul_it_mkProd_or_LetIn_smashE_inst :=
-  cumul_it_mkProd_or_LetIn_smashE (Σ := si_Σ) si_wfE [] [vdef si_na iv_False si_P] (tRel 0) eq_refl eq_refl.
+  cumul_it_mkProd_or_LetIn_smashE (Σ := si_Σ) si_wfE [] [vdef si_na iv_IF si_P] (tProd si_na (tRel 0) (tRel 1))
+    eq_refl eq_refl.
 
 (** The empty spine of [let z := I (∀P. P) in Π y : z. z] ([cli_dep_let]) at itself, smashed: the
     smashed type is [Π y : I (∀P. P). I (∀P. P)], the substitution of [I (∀P. P)] into both

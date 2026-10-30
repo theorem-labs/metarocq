@@ -18,11 +18,13 @@
   [conv_context_rel_relnE] and [conv_context_rel_to_extended_listE] run on two contexts with a
   let above an assumption, whose [reln] output is not empty ([sc_Γm_reln_nondeg]).
   [declared_inductive_closed_params_instE] has no relation in it; its instance has a non-empty
-  parameter context. [ws_cumul_ctx_pbE_cons_inv] is an inversion helper; its instance is the
-  context pair of [sc_ctx_conv]. The reduction lemmas are applied to the reduction of
-  [Π x:(λy:Prop. y) Prop. Prop] to [Π x:Prop. Prop] ([red_it_mkProd_or_LetIn_smash_cb],
-  [red_has_rec_arg_cb]), to that of [(λy:Prop. y) Prop] to [Prop] ([closed_red_from_empty_cb]),
-  and to the unfolding of a let-bound variable ([red_expand_let_cb], [red_expand_letE]).
+  parameter context. [ws_cumul_ctx_pbE_cons_inv] inverts one constructor of [All2_fold], so its
+  instance is tagged IMPOSSIBLE; it runs on the mixed pair of [sc_ctx_m], whose tails and heads
+  differ. The reduction lemmas are applied to the reduction of [Π x:(λy:Prop. y) Prop. Prop] to
+  [Π x:Prop. Prop] ([red_it_mkProd_or_LetIn_smash_cb], [red_has_rec_arg_cb]), to that of
+  [(λy:Prop. y) Prop] to [Prop] ([closed_red_from_empty_cb]), and to the unfolding of the
+  let-bound [z] in [z → z], where [z] is not the whole term ([red_expand_let_cb],
+  [red_expand_letE]; [sc_let_unfolds]).
 
   WITNESSES: sc_*
   (the concrete contexts, definitions and derivations [sc_*] that the instances use; the NONDEGEN
@@ -64,12 +66,6 @@ Proof. discriminate. Qed.
 Definition sc_Γd1 : context := [vdef si_na fi_eta fi_P].
 Definition sc_Γd2 : context := [vdef si_na fi_P fi_P].
 
-Lemma sc_ctx_conv : ws_cumul_ctx_pbE Conv si_Σ ([] ,,, sc_Γd1) ([] ,,, sc_Γd2).
-Proof.
-  constructor; [constructor|]. constructor; [reflexivity|exact (ci_WS_eta Conv)|].
-  apply ws_cumul_pbE_refl; reflexivity.
-Qed.
-
 Lemma sc_rel_d : ws_cumul_ctx_pbE_rel Conv si_Σ [] sc_Γd1 sc_Γd2.
 Proof.
   split; [reflexivity|]. constructor; [constructor|].
@@ -84,6 +80,17 @@ Definition sc_Γm2 : context := [vdef si_na fi_P fi_P; vass si_na fi_P].
 Lemma sc_rel_m : ws_cumul_ctx_pbE_rel Conv si_Σ [] sc_Γm1 sc_Γm2.
 Proof.
   split; [reflexivity|]. constructor.
+  - constructor; [constructor|]. constructor; [reflexivity|exact (fi_WS_beta Conv)].
+  - constructor; [reflexivity| |].
+    + apply eta1_ws_cumul_pbE; [reflexivity|reflexivity|exact fi_eta1].
+    + apply ws_cumul_pbE_refl; reflexivity.
+Qed.
+
+(** The same mixed pair, related as contexts: the tails [x : (λy:Prop. y) Prop] and [x : Prop] by
+    [fi_WS_beta], the heads' bodies [λx:Prop. Prop x] and [Prop] by [fi_eta1]. *)
+Lemma sc_ctx_m : ws_cumul_ctx_pbE Conv si_Σ sc_Γm1 sc_Γm2.
+Proof.
+  constructor.
   - constructor; [constructor|]. constructor; [reflexivity|exact (fi_WS_beta Conv)].
   - constructor; [reflexivity| |].
     + apply eta1_ws_cumul_pbE; [reflexivity|reflexivity|exact fi_eta1].
@@ -108,15 +115,14 @@ Qed.
 
 (** ** Items 1-2 *)
 
-(** The two head declarations differ in their body: [λx:Prop. Prop x] against [Prop]. *)
-Lemma ws_cumul_ctx_pbE_cons_inv_inst_nondeg : vdef si_na fi_eta fi_P <> vdef si_na fi_P fi_P.
-Proof. discriminate. Qed.
-
-(** INSTANCE NONDEGEN PCUICSREtaConvInstances.ws_cumul_ctx_pbE_cons_inv_inst_nondeg *)
+(** The inversion of [sc_ctx_m]: the conclusion relates the tails [x : (λy:Prop. y) Prop] and
+    [x : Prop], and the heads [z := λx:Prop. Prop x : Prop] and [z := Prop : Prop] in the first tail.
+    INSTANCE IMPOSSIBLE: [ws_cumul_ctx_pbE_cons_inv] inverts the one [All2_fold] constructor that relates two non-empty contexts (its proof is [depelim] then [assumption]), so in every instance and environment its conclusion is the two premises of that constructor, a piece of its own premise. *)
 Lemma ws_cumul_ctx_pbE_cons_inv_inst :
-  ws_cumul_ctx_pbE Conv si_Σ [] [] × ws_cumul_declsE Conv si_Σ [] (vdef si_na fi_eta fi_P) (vdef si_na fi_P fi_P).
+  ws_cumul_ctx_pbE Conv si_Σ [vass si_na fi_beta] [vass si_na fi_P] ×
+  ws_cumul_declsE Conv si_Σ [vass si_na fi_beta] (vdef si_na fi_eta fi_P) (vdef si_na fi_P fi_P).
 Proof.
-  exact (ws_cumul_ctx_pbE_cons_inv (d := vdef si_na fi_eta fi_P) (d' := vdef si_na fi_P fi_P) sc_ctx_conv).
+  exact (ws_cumul_ctx_pbE_cons_inv (d := vdef si_na fi_eta fi_P) (d' := vdef si_na fi_P fi_P) sc_ctx_m).
 Qed.
 
 (** The contexts [x : (λy:Prop. y) Prop] and [x : Prop] differ, and the bodies [λz:Prop. Prop z]
@@ -386,7 +392,7 @@ Proof.
            (u := [Level.lzero]) si_declared_inductive).
 Qed.
 
-(** The let [z := ∀P:Prop. P : Prop]: the variable [z] unfolds to its body. *)
+(** The let [z := ∀P:Prop. P : Prop]. *)
 Lemma sc_wf_let : wf_localE si_Σ ([] ,,, [vdef si_na ci_False fi_P]).
 Proof.
   apply localenv_cons_def; [constructor|].
@@ -394,25 +400,33 @@ Proof.
   exists (Sort.super sProp). split; [exact (ci_typeE_P [] localenv_nil)|]. split; [exact I|reflexivity].
 Qed.
 
-(** [lift0 1 (subst1 ci_False 0 (tRel 0))], which is the let-body [∀P:Prop. P] lifted, is not
-    [z] ([tRel 0]). *)
-Lemma sc_let_unfolds : lift0 1 (subst1 ci_False 0 (tRel 0)) <> tRel 0.
-Proof. discriminate. Qed.
+(** [z → z] ([sc_x_to_x]) is not a bare variable: [z] occurs in the domain and under the binder.
+    Unfolding [z] gives [(∀P:Prop. P) → ∀P:Prop. P], which is neither [z → z] nor the body
+    [∀P:Prop. P]. *)
+Lemma sc_let_unfolds :
+  [/\ (forall k, sc_x_to_x <> tRel k),
+      lift0 1 (subst1 ci_False 0 sc_x_to_x) = tProd si_na ci_False ci_False,
+      tProd si_na ci_False ci_False <> sc_x_to_x &
+      tProd si_na ci_False ci_False <> ci_False].
+Proof. split; [intros k; discriminate|reflexivity|discriminate|discriminate]. Qed.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_let_unfolds *)
+(** The unfolding of the let-bound [z] in [z → z], under [z := ∀P:Prop. P : Prop]
+    ([sc_let_unfolds]).
+    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_let_unfolds *)
 Lemma red_expand_let_cb_inst :
-  si_Σ ;;; [] ,, vdef si_na ci_False fi_P ⊢ tRel 0 ⇝ lift0 1 (subst1 ci_False 0 (tRel 0)).
+  si_Σ ;;; [] ,, vdef si_na ci_False fi_P ⊢ sc_x_to_x ⇝ lift0 1 (subst1 ci_False 0 sc_x_to_x).
 Proof.
-  exact (red_expand_let_cb (Σ := si_Σ) (Γ := []) (na := si_na) (b := ci_False) (ty := fi_P) (t := tRel 0)
+  exact (red_expand_let_cb (Σ := si_Σ) (Γ := []) (na := si_na) (b := ci_False) (ty := fi_P) (t := sc_x_to_x)
            eq_refl eq_refl).
 Qed.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_let_unfolds *)
+(** The same unfolding, from the [wf_localE] of the let ([sc_wf_let]; [sc_let_unfolds]).
+    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_let_unfolds *)
 Lemma red_expand_letE_inst :
-  si_Σ ;;; [] ,, vdef si_na ci_False fi_P ⊢ tRel 0 ⇝ lift0 1 (subst1 ci_False 0 (tRel 0)).
+  si_Σ ;;; [] ,, vdef si_na ci_False fi_P ⊢ sc_x_to_x ⇝ lift0 1 (subst1 ci_False 0 sc_x_to_x).
 Proof.
   exact (red_expand_letE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (na := si_na) (b := ci_False) (ty := fi_P)
-           (t := tRel 0) sc_wf_let eq_refl).
+           (t := sc_x_to_x) sc_wf_let eq_refl).
 Qed.
 
 (** The target context [x : Prop] is not the empty context the reduction starts in, and the two
