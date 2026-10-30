@@ -16,7 +16,15 @@
   are records ([bbody]/[bcontext], compared with [eq_context_upto_names] exactly as
   base [eq_predicate]/[eq_branch]); and primitive arrays appear ([array_eta_*]
   congruences for [eta1], an [onPrims] case for [upto_domain], mirroring base
-  [red1]'s [array_red_*] and base [eq_Prim]). [eta1] is context-free, as upstream. *)
+  [red1]'s [array_red_*] and base [eq_Prim]). [eta1] is context-free, as upstream.
+
+  One own name SHADOWS a different object of the same name in this file's import closure:
+  [eta], the reflexive-transitive closure of [eta1], against [Stdlib.Vectors.Vector.eta] and
+  [Stdlib.Vectors.VectorSpec.eta], which [MetaRocq.Utils.utils] brings in. The three are
+  TYPE-DISTINCT: no ascription relates [eta] with either, in either direction, so no tactic,
+  hint or instance resolution can put one where another is meant without the build failing.
+  References to [eta] are therefore left unqualified, as the [Vector] names are unreachable
+  at every one of them. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.

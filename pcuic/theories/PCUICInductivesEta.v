@@ -58,12 +58,17 @@ From Equations Require Import Equations.
   conversion premise of [typeE_Cumul] by [into_ws_cumul_pbE_spec]; [subslet_extended_substE]
   uses [meta_convE].
 
-  Two names of this file are also E names of other files, as in base: [subslet_extended_substE]
-  (here the twin of [PCUICInductives.subslet_extended_subst]; [PCUICContextsEta]'s is the twin of
-  [PCUICContexts.subslet_extended_subst]) and [isType_it_mkProd_or_LetInE] (here the twin of
-  [PCUICInductives.isType_it_mkProd_or_LetIn]; [PCUICAritiesEta]'s is the twin of
-  [PCUICArities.isType_it_mkProd_or_LetIn]). Where both files are in scope, refer to them
-  qualified.
+  Two names of this file SHADOW a DIFFERENT statement of the same name in its import closure,
+  as in base: [subslet_extended_substE]
+  (here the twin of [PCUICInductives.subslet_extended_subst], over [smash_context [] Δ] alone;
+  [PCUICContextsEta]'s is the twin of [PCUICContexts.subslet_extended_subst], over
+  [Γ ,,, smash_context [] Δ]) and [isType_it_mkProd_or_LetInE] (here the twin of
+  [PCUICInductives.isType_it_mkProd_or_LetIn], which reads a [type_local_ctx] and a
+  [wf_sort]; [PCUICAritiesEta]'s is the twin of
+  [PCUICArities.isType_it_mkProd_or_LetIn], which reads a [sorts_local_ctx] and an [isTypeE];
+  a third object of that name is [PCUICInductiveInversionEtaB]'s, declared in that file's
+  header, as base has three). No ascription relates any two of them. Where both files are in
+  scope, refer to them qualified.
 
   Not copied: the declarations that mention none of the relations (used from base, which this
   file imports), among them [nth_errror_arities_context], whose section premise [wf] its base
