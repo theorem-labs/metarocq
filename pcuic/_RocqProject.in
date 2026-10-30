@@ -235,11 +235,19 @@ theories/PCUICTypingEtaCopy16Instances.v
 # Inversion facts on inductive types over typingE (E copy of part of PCUICInductiveInversion), and its satisfying instances
 theories/PCUICInductiveInversionEta.v
 theories/PCUICTypingEtaCopy18aInstances.v
+# The rest of that copy: the case predicate and case branch facts, and its satisfying instances
+theories/PCUICInductiveInversionEtaB.v
+theories/PCUICTypingEtaCopy18bInstances.v
 # (Co)fixpoint witnesses over typingE (E copy of PCUICFixWitness), and its satisfying instances
 theories/PCUICFixWitnessEta.v
 theories/PCUICTypingEtaCopy17Instances.v
 # Validity over typingE (row T2a, the E copy of PCUICValidity)
 theories/PCUICValidityEta.v
+# Case-construction helpers over typingE (E copy of PCUICCasesHelper), and its satisfying instances
+theories/PCUICCasesHelperEta.v
+theories/PCUICTypingEtaCopy21Instances.v
+# Subject reduction over typingE (row T1, the E copy of PCUICSR), and its satisfying instances
+theories/PCUICSREta.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
@@ -255,8 +263,44 @@ theories/PCUICEtaFO4Instances.v
 # K3a: the semantic and typed lemmas about the eta views of PCUICPositionEta
 theories/PCUICPositionEtaTyping.v
 theories/PCUICValidityEtaInstances.v
+theories/PCUICSREtaInstances.v
+# Bidirectional soundness over typingE (row T6, the E copy of BDToPCUIC), and its satisfying instances
+theories/Bidirectional/BDToPCUICEta.v
+theories/Bidirectional/BDToPCUICEtaInstances.v
+# Typed postponement (T8): pinned statements and the root cases of one-step eta postponement
+theories/PCUICEtaT8Probe.v
+# Bidirectional completeness over typingE (row T6, the E copy of BDFromPCUIC; T8 forecast), and its satisfying instances
+theories/Bidirectional/BDFromPCUICEta.v
+theories/Bidirectional/BDFromPCUICEtaInstances.v
+# Principality over typingE (row T2b, the E copy of PCUICPrincipality), and its satisfying instances
+theories/PCUICPrincipalityEta.v
+theories/PCUICPrincipalityEtaInstances.v
+# Typing under alpha-equivalence over typingE (row T6, the E copy of PCUICAlpha), and its satisfying instances
+theories/PCUICAlphaEta.v
+theories/PCUICAlphaEtaInstances.v
+# Uniqueness of inferred types over the eta relations (row T6, the E copy of BDUnique), and its satisfying instances
+theories/Bidirectional/BDUniqueEta.v
+theories/Bidirectional/BDUniqueEtaInstances.v
+# Strengthening of bidirectional typing over the eta relations (row T6, the E copy of BDStrengthening), and its satisfying instances
+theories/Bidirectional/BDStrengtheningEta.v
+theories/Bidirectional/BDStrengtheningEtaInstances.v
+# The E copy of PCUICCumulProp (row T6): cumul_propE, its refutations, and its satisfying instances
+theories/PCUICCumulPropEta.v
+theories/PCUICCumulPropEtaRefutations.v
+theories/PCUICCumulPropEtaInstances.v
+# Classification over typingE (row T6, the E copy of PCUICClassification), and its satisfying instances
+theories/PCUICClassificationEta.v
+theories/PCUICClassificationEtaInstances.v
+# Progress over typingE (row T6, the E copy of PCUICProgress), and its satisfying instances
+theories/PCUICProgressEta.v
+theories/PCUICProgressEtaInstances.v
+# First-order values over typingE (row T6, the E copy of PCUICFirstorder), and its satisfying instances
+theories/PCUICFirstorderEta.v
+theories/PCUICFirstorderEtaInstances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
+# T8 step 3: R_c* on canon T read back as base red on T (backward simulation through canon)
+theories/PCUICEtaT8BackSim.v
 # Shared model environment for satisfying instances: a universe-polymorphic cumulative indexed inductive with a redex arity (ETAK)
 theories/PCUICEtaIdxEnv.v
 # theories/All.v

@@ -35,8 +35,14 @@
   its [ind_sort] is [sProp], and it has no projection; both rows say so. A mark
   IMPOSSIBLE names a part that cannot contain an η step by the head and the rule set: the
   comparison of [type_local_ctx_cumE] is between two sorts ([Prop ≤ Type]), and the premises of
-  [red_it_mkProd_or_LetIn_to_smashE] are booleans. [conv_ctx_reflE] has no premise; it is
-  applied to [Γk]. *)
+  [red_it_mkProd_or_LetIn_to_smashE] are booleans. [conv_ctx_reflE] has no premise at all (and
+  no environment premise); it is applied to [Γk].
+  An IMPOSSIBLE mark covers ONLY the part it names. Where the lemma also carries [{wfE Σ}],
+  that part is NOT BUILT, never IMPOSSIBLE: [wfE Σ] is
+  [on_global_env cumulSpecE0 (lift_typing typingE)], so it holds the typing derivation of every
+  declaration of [Σ] and CAN carry an η step. [iv_Σ] is typed without one. Cost of that part,
+  wherever it is named below: a declaration whose type or body is typed through an η step, in a
+  new environment, with its [wfE] proof. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -462,7 +468,9 @@ Lemma c16_leq_Prop_Type : leq_sort (global_ext_constraints iv_Σ) sProp (Sort.su
 Proof. cbn; trivial. Qed.
 
 (* IMPOSSIBLE (the comparison): it is between two sorts ([Prop ≤ Type]), where no η step can
-   occur. The telescope [w : h y] of the [type_local_ctx] premise is typed through the η step. *)
+   occur. The telescope [w : h y] of the [type_local_ctx] premise is typed through the η step.
+   NOT BUILT (the [wfE Σ] part), with the cost stated in the header: [iv_wfE] types [iv_Σ]
+   without an η step. *)
 Definition type_local_ctx_cumE_inst :=
   @type_local_ctx_cumE _ iv_Σ c16_Γh c16_Δhy sProp (Sort.super sProp) iv_wfE c16_wf_sort_Type c16_leq_Prop_Type
     c16_tlc_hy.
@@ -567,9 +575,10 @@ Definition closed_red_it_mkProd_or_LetIn_assum_nthE_inst :=
     (vass si_na c16_bkg) iv_kg ltac:(repeat constructor) Logic.eq_refl Logic.eq_refl c16_cred_bkg.
 
 (** [let z := y : k (λx:Prop. g x) in Prop] reduces to its smashed form (a ζ-step). *)
-(* IMPOSSIBLE (η): the premises are the booleans [is_closed_context] and [is_open_term], so no
-   η derivation can be part of them (the [is_open_term] proof here goes through the typing of
-   the let-in, whose body is typed through η). *)
+(* IMPOSSIBLE (η in the named premises): they are the booleans [is_closed_context] and
+   [is_open_term], so no η derivation can be part of them (the [is_open_term] proof here goes
+   through the typing of the let-in, whose body is typed through η).
+   NOT BUILT (the [wfE Σ] part), with the cost stated in the header. *)
 Definition red_it_mkProd_or_LetIn_to_smashE_inst :=
   @red_it_mkProd_or_LetIn_to_smashE _ iv_Σ iv_wfE iv_Γk c16_Δz (tSort sProp) c16_closed_Γk
     (subject_is_open_termE (Σ := iv_Σ) (wfΣ := iv_wfE) c16_Pz_typed).
