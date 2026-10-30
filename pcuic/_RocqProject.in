@@ -236,6 +236,8 @@ theories/PCUICTypingEtaCopy18aInstances.v
 # (Co)fixpoint witnesses over typingE (E copy of PCUICFixWitness), and its satisfying instances
 theories/PCUICFixWitnessEta.v
 theories/PCUICTypingEtaCopy17Instances.v
+# Validity over typingE (row T2a, the E copy of PCUICValidity)
+theories/PCUICValidityEta.v
 # Refutations of the eta statements that are false
 theories/PCUICEtaA6Refutations.v
 theories/PCUICEtaIndInvRefutations.v
@@ -246,6 +248,7 @@ theories/PCUICEtaFracInstances.v
 theories/PCUICEtaA6Instances.v
 theories/PCUICEtaPrimOpInstance.v
 theories/PCUICInversionEtaInstances.v
+theories/PCUICValidityEtaInstances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances
 theories/PCUICWfEScope.v
 # Shared model environment for satisfying instances: a universe-polymorphic cumulative indexed inductive with a redex arity (ETAK)
