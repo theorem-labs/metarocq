@@ -48,7 +48,8 @@
     [ctx_inst_implE_inst] instantiate the parameter of [I] ([si_declared_inductive]) with the
     list [[G F]], which is not empty ([bdi_args_nonempty]); the context lemmas run on contexts
     that are not empty ([bd_ctxs_nonempty]): with three declarations
-    ([wf_local_bd_typingE_inst]), or across a real weakening ([wf_rel_weakE_inst]);
+    ([wf_local_bd_typingE_inst]), or as the target of a weakening ([wf_rel_weakE_inst], which
+    weakens the one closed assumption [x : Prop], well formed in [[]] ([iv_wf_P]), to [bd_ΓFG]);
     [bd_wf_localE_inst] and [bd_wf_local_relE_inst], tagged IMPOSSIBLE, run on contexts with a
     let ([bdi_ctxs_nonempty]); [wf_local_rel_subst1E_inst] substitutes [∀P:Prop. P]
     for the let-bound [z] in [x : z → z], where [z] is not the whole type; the result
@@ -497,7 +498,8 @@ Proof.
            bdi_wfGP wf_local_bd_relE_inst).
 Qed.
 
-(** The parameter of [I] instantiated with [G F] ([bdi_args_nonempty]).
+(** The parameter telescope [[vass si_na si_P]] of [I] ([si_declared_inductive]) instantiated with
+    the list [[bd_GF]], which is not empty ([bdi_args_nonempty]).
     INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_args_nonempty *)
 Lemma ctx_inst_bd_typingE_inst :
   PCUICTyping.ctx_inst (typingE si_Σ) bd_ΓFG [bd_GF] (List.rev [vass si_na si_P]).
