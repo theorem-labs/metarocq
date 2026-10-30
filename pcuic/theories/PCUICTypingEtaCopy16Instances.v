@@ -29,10 +29,10 @@
   [arity_spine_case_predicateE].
   A mark NOT BUILT names a part of an instance that a cheap witness does not reach, the missing
   witness and its cost. [R] is monomorphic, so its only universe instance is [[]] and
-  [subst_instance []] is the identity: a nonempty instance needs a universe-polymorphic
-  inductive (a new inductive, a new environment and its [wfE] proof). Every instance at [[]] of
-  a lemma with a [consistent_instance_ext] premise is marked NOT BUILT for that part; the
-  instances so marked without an η step have only declarations and that premise. A mark
+  [subst_instance []] is the identity, and its declared type IS its built arity, so the
+  reduction rows have no step. Both are supplied at the polymorphic [J] of [PCUICEtaIdxEnv],
+  in the last section, one per row, each named in the note below. Two rows it does not reach:
+  its [ind_sort] is [sProp], and it has no projection; both rows say so. A mark
   IMPOSSIBLE names a part that cannot contain an η step by the head and the rule set: the
   comparison of [type_local_ctx_cumE] is between two sorts ([Prop ≤ Type]), and the premises of
   [red_it_mkProd_or_LetIn_to_smashE] are booleans. [conv_ctx_reflE] has no premise; it is
@@ -50,7 +50,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances
      PCUICSpineEta PCUICInductivesEta.
-From Equations.Prop Require Import DepElim.
+From MetaRocq.PCUIC Require PCUICEtaIdxEnv. From Equations.Prop Require Import DepElim.
 
 #[local] Existing Instance default_checker_flags.
 
@@ -285,13 +285,13 @@ Qed.
 (** [conv_ctx_reflE] has no premise; applied to [Γk]. *)
 Definition conv_ctx_reflE_inst := conv_ctx_reflE iv_Σ iv_Γk.
 
-(* NOT BUILT (the universe part): the premises are a declaration and [consistent_instance_ext];
-   [R] is monomorphic, so the only instance is [[]] and [subst_instance []] is the identity. A
-   nonempty instance needs a universe-polymorphic inductive (a new inductive, a new environment
-   and its [wfE] proof). *)
+(* The universe part is built at [J] ([wf_arities_context_instE_jinst]): the premises are a
+   declaration and [consistent_instance_ext], and here [R] is monomorphic, so the only
+   instance is [[]] and [subst_instance []] is the identity, while [J] has one bound level
+   that the instance [[a]] replaces in its arities context. *)
 Definition wf_arities_context_instE_inst :=
   @wf_arities_context_instE _ iv_Σ iv_wfE iv_kn iv_mdecl [] (MRProd.proj1 iv_declared_inductive) c16_cu.
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([instantiate_indsE_jinst]). *)
 Definition instantiate_indsE_inst :=
   @instantiate_indsE _ iv_Σ iv_wfE [] iv_kn iv_mdecl (MRProd.proj1 iv_declared_inductive) c16_cu.
 
@@ -299,10 +299,10 @@ Definition declared_inductive_arity_isTypeRelE_inst :=
   @declared_inductive_arity_isTypeRelE _ iv_env iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
 Definition on_minductive_wf_params_indicesE_inst :=
   @on_minductive_wf_params_indicesE _ iv_env iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
-(* NOT BUILT (the reduction step): the declared type of [R] is its arity, so the reduction has
-   no step. A step needs an inductive whose declared arity is a redex, since the declaration asks
-   only that its declared arity reduce to the built one (a new inductive, a new environment and
-   its [wfE] proof). *)
+(* The reduction step is built at [J] ([declared_inductive_typeE_jinst]): the declared type
+   of [R] is its arity, so here the reduction has no step, while [J]'s user arity ends in
+   the β-redex [(λ Z. Z) Prop] and reaches the built arity in one step, which
+   [j16_arity_not_built] records. *)
 Definition declared_inductive_typeE_inst :=
   @declared_inductive_typeE _ iv_env iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
 
@@ -315,31 +315,31 @@ Definition closed_red_from_emptyE_inst :=
 (** [h y : Prop], typed through the η step. *)
 Definition isType_introE_inst := @isType_introE _ iv_Σ c16_Γh c16_hy sProp c16_hy_typed.
 
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([on_minductive_wf_params_indices_instE_jinst]). *)
 Definition on_minductive_wf_params_indices_instE_inst :=
   @on_minductive_wf_params_indices_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive [] c16_cu.
 
 (** The six lemmas below and [wf_ind_predicateE] take the context [Γz], whose let-in body is
     typed through the η step. *)
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([on_inductive_instE_jinst]). *)
 Definition on_inductive_instE_inst :=
   @on_inductive_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz c16_cu.
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([declared_inductive_valid_typeE_jinst]). *)
 Definition declared_inductive_valid_typeE_inst :=
   @declared_inductive_valid_typeE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz c16_cu.
-(* NOT BUILT (the reduction step and the universe part): as [declared_inductive_typeE_inst]
-   (an inductive whose declared arity is a redex) and as [wf_arities_context_instE_inst] (a
-   universe-polymorphic inductive). *)
+(* Both the reduction step and the universe part are built at [J]
+   ([declared_inductive_type_closed_redE_jinst]): [J]'s declared arity is a redex, and its
+   instance [[a]] moves the type. *)
 Definition declared_inductive_type_closed_redE_inst :=
   @declared_inductive_type_closed_redE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz.
-(* NOT BUILT (the reduction step and the universe part): as
-   [declared_inductive_type_closed_redE_inst] (here the conversion is reflexive). *)
+(* Both parts are built at [J] ([declared_inductive_type_ws_cumulE_jinst]); here the
+   conversion is reflexive. *)
 Definition declared_inductive_type_ws_cumulE_inst :=
   @declared_inductive_type_ws_cumulE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz.
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([isType_ind_arity_instE_jinst]). *)
 Definition isType_ind_arity_instE_inst :=
   @isType_ind_arity_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz c16_cu.
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([type_Ind_arity_formE_jinst]). *)
 Definition type_Ind_arity_formE_inst :=
   @type_Ind_arity_formE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γz [] c16_wf_Γz c16_cu.
 
@@ -356,11 +356,11 @@ Proof.
     exact (isType_ws_cumul_pbE_refl (Σ := iv_Σ) (wfΣ := iv_wfE) _ _ c16_isT_Prop).
 Qed.
 
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([typing_spine_ind_typeE_jinst]). *)
 Definition typing_spine_ind_typeE_inst :=
   @typing_spine_ind_typeE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γh [] [c16_hy] (tSort sProp)
     c16_wf_Γh c16_cu c16_sp_arity.
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([typing_spine_ind_type_invE_jinst]). *)
 Definition typing_spine_ind_type_invE_inst :=
   @typing_spine_ind_type_invE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γh [] [c16_hy] (tSort sProp)
     c16_wf_Γh c16_cu c16_sp_arity.
@@ -369,7 +369,7 @@ Definition oiE_inst := @PCUICInductivesEta.oiE _ iv_Σ iv_wfE iv_mdecl iv_ind iv
 Definition oibE_inst := @PCUICInductivesEta.oibE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
 Definition on_inductive_sortE_inst :=
   @on_inductive_sortE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive.
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* NOT BUILT (an inductive whose [ind_sort] mentions a bound level): [J]'s is [sProp]. *)
 Definition on_inductive_sort_instE_inst :=
   @on_inductive_sort_instE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive [] c16_cu.
 
@@ -382,7 +382,7 @@ Definition c16_sp_hy : spine_substE iv_Σ c16_Γh [c16_hy] [c16_hy] si_params :=
   {| spine_dom_wfE := c16_wf_Γh; spine_codom_wfE := c16_wf_Γhpar; inst_ctx_substE := c16_cs_hy;
      inst_subsletE := subslet_ass_tipE c16_hy_typed |}.
 
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([isType_mkApps_IndE_jinst]). *)
 Definition isType_mkApps_IndE_inst :=
   @isType_mkApps_IndE _ iv_Σ iv_wfE iv_mdecl iv_ind iv_idecl iv_declared_inductive c16_Γh [] [c16_hy] [c16_hy]
     c16_cu c16_sp_hy.
@@ -512,7 +512,7 @@ Qed.
 Definition typing_spine_to_extended_listE_inst :=
   typing_spine_to_extended_listE iv_Σ c16_ΔP' [] sProp iv_wfE c16_isT_ΔP'.
 
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* NOT BUILT (a polymorphic inductive WITH A PROJECTION): [ind_projs] of [J] is []. *)
 Definition wf_projection_contextE_inst :=
   @wf_projection_contextE _ iv_Σ iv_mdecl iv_idecl iv_proj iv_cdecl iv_pdecl [] iv_wfE iv_declared_projection c16_cu.
 
@@ -622,11 +622,11 @@ Definition spine_subst_expand_letsE_inst :=
 Definition c16_ci : case_info := {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant |}.
 
 (* The context is [Γz], whose let-in body is typed through the η step; the predicate context is
-   that of [R]. NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+   that of [R]. The universe part is built at [J] ([wf_ind_predicateE_jinst]). *)
 Definition wf_ind_predicateE_inst :=
   @wf_ind_predicateE _ iv_Σ iv_wfE c16_Γz c16_ci iv_mdecl iv_idecl [] c16_wf_Γz iv_declared_inductive c16_cu.
-(* The parameter [h y] is typed through the η step. NOT BUILT (the universe part): as
-   [wf_arities_context_instE_inst]. *)
+(* The parameter [h y] is typed through the η step. The universe part is built at [J]
+   ([isType_case_predicateE_jinst]). *)
 Definition isType_case_predicateE_inst :=
   @isType_case_predicateE _ iv_Σ iv_wfE c16_Γh c16_ci iv_mdecl iv_idecl [] [c16_hy] sProp
     c16_wf_Γh iv_declared_inductive c16_cu c16_wf_sort_Prop c16_sp_hy.
@@ -645,10 +645,258 @@ Definition c16_sp_nil : spine_substE iv_Σ c16_Γr [] [] [] :=
      inst_subsletE := emptysletE iv_Σ c16_Γr |}.
 
 (** The scrutinee [r : R (k (λx:Prop. g x))] is typed through the η step. *)
-(* NOT BUILT (the universe part): as [wf_arities_context_instE_inst]. *)
+(* The universe part is built at [J] ([arity_spine_case_predicateE_jinst]). *)
 Definition arity_spine_case_predicateE_inst :=
   @arity_spine_case_predicateE _ iv_Σ iv_wfE c16_Γr c16_ci iv_mdecl iv_idecl [] [c16_keta1] [] sProp (tRel 0)
     c16_wf_Γr iv_declared_inductive c16_cu c16_wf_sort_Prop c16_sp_par1 c16_sp_nil c16_r_eta.
 
 Definition inductive_ind_ind_bodies_lengthE_inst :=
   inductive_ind_ind_bodies_lengthE iv_Σ iv_ind iv_mdecl iv_idecl iv_wfE iv_declared_inductive.
+
+(** ** Universe witnesses at the polymorphic inductive [J]
+
+  [PCUICEtaIdxEnv] declares
+  [Polymorphic Cumulative Inductive J@{i} (A : Prop) : forall (X : Type@{i}), (fun Z => Z) Prop],
+  with one bound level [i], one index [X : Type@{i}] that mentions it, the covariant
+  variance, the instances [[Set]] and [[a]], and a user arity carrying a β-redex, so that
+  its declared type does NOT equal its built arity. It is required and not imported: it
+  declares no notation and registers no hint or instance, and every name of it is written
+  qualified here.
+
+  Each row below is the instance, at [J], of a lemma whose row above is applied to the
+  monomorphic [R]. The two rows [J] does not reach are named with the reason: [J]'s
+  [ind_sort] is [sProp], which no instance moves, and [J] has no projection. *)
+
+Lemma j16_wf_nilE : wf_localE PCUICEtaIdxEnv.ji_Σ [].
+Proof. exact localenv_nil. Qed.
+
+Lemma j16_wf_ΓE : wf_localE PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_Γ.
+Proof.
+  exact (wf_local_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf PCUICEtaIdxEnv.ji_wf_Γ).
+Qed.
+
+(** The declared type of [J] moves under [[a]], and so does its index telescope: the row
+    above this section cannot show either at [R]. *)
+Lemma j16_ind_type_moves :
+  eqb (subst_instance PCUICEtaIdxEnv.ji_u1 (ind_type PCUICEtaIdxEnv.ji_idecl))
+      (ind_type PCUICEtaIdxEnv.ji_idecl) = false.
+Proof. reflexivity. Qed.
+Lemma j16_indices_move :
+  eqb (subst_instance PCUICEtaIdxEnv.ji_u1 (ind_indices PCUICEtaIdxEnv.ji_idecl))
+      (subst_instance PCUICEtaIdxEnv.ji_u0 (ind_indices PCUICEtaIdxEnv.ji_idecl)) = false.
+Proof. reflexivity. Qed.
+
+Definition wf_arities_context_instE_jinst :=
+  @wf_arities_context_instE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_kn
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_u1 PCUICEtaIdxEnv.ji_declared_minductive
+    PCUICEtaIdxEnv.ji_cons1.
+Definition instantiate_indsE_jinst :=
+  @instantiate_indsE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_u1
+    PCUICEtaIdxEnv.ji_kn PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_declared_minductive
+    PCUICEtaIdxEnv.ji_cons1.
+Definition on_minductive_wf_params_indices_instE_jinst :=
+  @on_minductive_wf_params_indices_instE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl
+    PCUICEtaIdxEnv.ji_declared_inductive PCUICEtaIdxEnv.ji_u1 PCUICEtaIdxEnv.ji_cons1.
+Definition on_inductive_instE_jinst :=
+  @on_inductive_instE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_declared_inductive
+    [] PCUICEtaIdxEnv.ji_u1 j16_wf_nilE PCUICEtaIdxEnv.ji_cons1.
+Definition declared_inductive_valid_typeE_jinst :=
+  @declared_inductive_valid_typeE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl
+    PCUICEtaIdxEnv.ji_declared_inductive [] PCUICEtaIdxEnv.ji_u1 j16_wf_nilE
+    PCUICEtaIdxEnv.ji_cons1.
+
+(** The reduction step: [J]'s declared type is [Π (A : Prop) (X : Type@{i}). (λ Z. Z) Prop]
+    and its built arity is [Π (A : Prop) (X : Type@{i}). Prop], so the reduction of this row
+    and of the two below it is one β step, not reflexivity. *)
+Lemma j16_arity_not_built :
+  eqb (ind_type PCUICEtaIdxEnv.ji_idecl)
+      (it_mkProd_or_LetIn (ind_params PCUICEtaIdxEnv.ji_mdecl ,,,
+                           ind_indices PCUICEtaIdxEnv.ji_idecl)
+         (tSort (ind_sort PCUICEtaIdxEnv.ji_idecl))) = false.
+Proof. reflexivity. Qed.
+Definition declared_inductive_typeE_jinst :=
+  @declared_inductive_typeE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_declared_inductive.
+Definition declared_inductive_type_closed_redE_jinst :=
+  @declared_inductive_type_closed_redE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl
+    PCUICEtaIdxEnv.ji_declared_inductive [] PCUICEtaIdxEnv.ji_u1 j16_wf_nilE.
+Definition declared_inductive_type_ws_cumulE_jinst :=
+  @declared_inductive_type_ws_cumulE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl
+    PCUICEtaIdxEnv.ji_declared_inductive [] PCUICEtaIdxEnv.ji_u1 j16_wf_nilE.
+Definition isType_ind_arity_instE_jinst :=
+  @isType_ind_arity_instE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_declared_inductive
+    [] PCUICEtaIdxEnv.ji_u1 j16_wf_nilE PCUICEtaIdxEnv.ji_cons1.
+Definition type_Ind_arity_formE_jinst :=
+  @type_Ind_arity_formE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_declared_inductive
+    [] PCUICEtaIdxEnv.ji_u1 j16_wf_nilE PCUICEtaIdxEnv.ji_cons1.
+
+(** The two spine rows, at the empty spine over the instantiated arities. *)
+Lemma j16_sp_built :
+  PCUICAritiesEta.typing_spineE PCUICEtaIdxEnv.ji_Σ []
+    (subst_instance PCUICEtaIdxEnv.ji_u1
+       (it_mkProd_or_LetIn (ind_params PCUICEtaIdxEnv.ji_mdecl ,,,
+                            ind_indices PCUICEtaIdxEnv.ji_idecl)
+          (tSort (ind_sort PCUICEtaIdxEnv.ji_idecl))))
+    []
+    (subst_instance PCUICEtaIdxEnv.ji_u1
+       (it_mkProd_or_LetIn (ind_params PCUICEtaIdxEnv.ji_mdecl ,,,
+                            ind_indices PCUICEtaIdxEnv.ji_idecl)
+          (tSort (ind_sort PCUICEtaIdxEnv.ji_idecl)))).
+Proof.
+  apply PCUICAritiesEta.type_spine_nilE;
+    [exact isType_ind_arity_instE_jinst|exact isType_ind_arity_instE_jinst|].
+  exact (isType_ws_cumul_pbE_refl (Σ := PCUICEtaIdxEnv.ji_Σ) (wfΣ := PCUICEtaIdxEnv.ji_wfE)
+           _ _ isType_ind_arity_instE_jinst).
+Qed.
+Lemma j16_isT_arity_u1 :
+  isTypeE PCUICEtaIdxEnv.ji_Σ []
+    (subst_instance PCUICEtaIdxEnv.ji_u1 (ind_type PCUICEtaIdxEnv.ji_idecl)).
+Proof. exact (isTypeRelE_isTypeE _ _ _ _ declared_inductive_valid_typeE_jinst). Qed.
+Lemma j16_sp_decl :
+  PCUICAritiesEta.typing_spineE PCUICEtaIdxEnv.ji_Σ []
+    (subst_instance PCUICEtaIdxEnv.ji_u1 (ind_type PCUICEtaIdxEnv.ji_idecl)) []
+    (subst_instance PCUICEtaIdxEnv.ji_u1 (ind_type PCUICEtaIdxEnv.ji_idecl)).
+Proof.
+  apply PCUICAritiesEta.type_spine_nilE; [exact j16_isT_arity_u1|exact j16_isT_arity_u1|].
+  exact (isType_ws_cumul_pbE_refl (Σ := PCUICEtaIdxEnv.ji_Σ) (wfΣ := PCUICEtaIdxEnv.ji_wfE)
+           _ _ j16_isT_arity_u1).
+Qed.
+Definition typing_spine_ind_typeE_jinst :=
+  @typing_spine_ind_typeE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_declared_inductive
+    [] PCUICEtaIdxEnv.ji_u1 []
+    (subst_instance PCUICEtaIdxEnv.ji_u1
+       (it_mkProd_or_LetIn (ind_params PCUICEtaIdxEnv.ji_mdecl ,,,
+                            ind_indices PCUICEtaIdxEnv.ji_idecl)
+          (tSort (ind_sort PCUICEtaIdxEnv.ji_idecl))))
+    j16_wf_nilE PCUICEtaIdxEnv.ji_cons1 j16_sp_built.
+Definition typing_spine_ind_type_invE_jinst :=
+  @typing_spine_ind_type_invE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_declared_inductive
+    [] PCUICEtaIdxEnv.ji_u1 []
+    (subst_instance PCUICEtaIdxEnv.ji_u1 (ind_type PCUICEtaIdxEnv.ji_idecl))
+    j16_wf_nilE PCUICEtaIdxEnv.ji_cons1 j16_sp_decl.
+
+(** [J A X] at the instance [[Set]]: the telescope of [J@{Set}] is [ji_Γ], and the
+    substitution of the bound level by [Set] is not the identity. *)
+Lemma j16_A_typedE : PCUICEtaIdxEnv.ji_Σ ;;; PCUICEtaIdxEnv.ji_Γ |-E tRel 1 : si_P.
+Proof.
+  exact (typing_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf PCUICEtaIdxEnv.ji_A_ty).
+Qed.
+Lemma j16_X_typedE :
+  PCUICEtaIdxEnv.ji_Σ ;;; PCUICEtaIdxEnv.ji_Γ |-E tRel 0 : PCUICEtaIdxEnv.ji_TSet.
+Proof.
+  exact (typing_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf PCUICEtaIdxEnv.ji_X_ty).
+Qed.
+Lemma j16_sp_JAX :
+  spine_substE PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_Γ PCUICEtaIdxEnv.ji_pargs [tRel 0; tRel 1]
+    (subst_instance PCUICEtaIdxEnv.ji_u0
+       (ind_params PCUICEtaIdxEnv.ji_mdecl ,,, ind_indices PCUICEtaIdxEnv.ji_idecl)).
+Proof.
+  split.
+  - exact j16_wf_ΓE.
+  - exact (wf_local_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf
+             PCUICEtaIdxEnv.ji_wf_ΓΓ).
+  - exact (context_subst_ass _ _ _ PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_TSet (tRel 0)
+             (context_subst_ass [] [] [] si_na si_P (tRel 1) context_subst_nil)).
+  - exact (cons_let_assE PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_Γ _ _ PCUICEtaIdxEnv.ji_naX
+             (tRel 0) PCUICEtaIdxEnv.ji_TSet (subslet_ass_tipE j16_A_typedE) j16_X_typedE).
+Qed.
+Definition isType_mkApps_IndE_jinst :=
+  @isType_mkApps_IndE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_declared_inductive
+    PCUICEtaIdxEnv.ji_Γ PCUICEtaIdxEnv.ji_u0 PCUICEtaIdxEnv.ji_pargs [tRel 0; tRel 1]
+    PCUICEtaIdxEnv.ji_cons0 j16_sp_JAX.
+
+(** The case rows. The predicate context of [J] holds the index [X : Type@{i}], so it moves
+    with the instance. *)
+Lemma j16_wf_sort_Prop : wf_sort PCUICEtaIdxEnv.ji_Σ sProp.
+Proof. exact I. Qed.
+Definition wf_ind_predicateE_jinst :=
+  @wf_ind_predicateE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE [] PCUICEtaIdxEnv.ji_ci
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_u1 j16_wf_nilE
+    PCUICEtaIdxEnv.ji_declared_inductive PCUICEtaIdxEnv.ji_cons1.
+
+(** The scrutinee variable, in [Γc := [c : J A X; X : Type@{Set}; A : Prop]]. *)
+Definition j16_nac : aname := mkBindAnn (nNamed "c") Relevant.
+Definition j16_Γc : context := vass j16_nac PCUICEtaIdxEnv.ji_JAX :: PCUICEtaIdxEnv.ji_Γ.
+Lemma j16_wf_Γc : wf_local PCUICEtaIdxEnv.ji_Σ j16_Γc.
+Proof.
+  exact (PCUICEtaIdxEnv.ji_wf_cons PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_Γ j16_nac
+           PCUICEtaIdxEnv.ji_JAX sProp PCUICEtaIdxEnv.ji_wf_Γ PCUICEtaIdxEnv.ji_JAX_ty eq_refl).
+Qed.
+Lemma j16_wf_ΓcE : wf_localE PCUICEtaIdxEnv.ji_Σ j16_Γc.
+Proof.
+  exact (wf_local_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf j16_wf_Γc).
+Qed.
+Lemma j16_wf_ΓcA : wf_localE PCUICEtaIdxEnv.ji_Σ (j16_Γc ,,, [vass si_na si_P]).
+Proof.
+  exact (wf_local_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf
+           (PCUICEtaIdxEnv.ji_wf_A PCUICEtaIdxEnv.ji_Σ j16_Γc j16_wf_Γc)).
+Qed.
+Lemma j16_wf_ΓcX :
+  wf_localE PCUICEtaIdxEnv.ji_Σ (j16_Γc ,,, [vass PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_TSet]).
+Proof.
+  exact (wf_local_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf
+           (PCUICEtaIdxEnv.ji_wf_ΓX j16_Γc j16_wf_Γc)).
+Qed.
+Lemma j16_A2_typedE : PCUICEtaIdxEnv.ji_Σ ;;; j16_Γc |-E tRel 2 : si_P.
+Proof.
+  exact (typing_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf
+           (type_Rel _ _ 2 (vass si_na si_P) j16_wf_Γc eq_refl)).
+Qed.
+Lemma j16_X1_typedE :
+  PCUICEtaIdxEnv.ji_Σ ;;; j16_Γc |-E tRel 1 : PCUICEtaIdxEnv.ji_TSet.
+Proof.
+  exact (typing_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf
+           (type_Rel _ _ 1 (vass PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_TSet) j16_wf_Γc eq_refl)).
+Qed.
+Lemma j16_c_typedE :
+  PCUICEtaIdxEnv.ji_Σ ;;; j16_Γc |-E tRel 0
+    : mkApps (tInd PCUICEtaIdxEnv.ji_ci PCUICEtaIdxEnv.ji_u0) ([tRel 2] ++ [tRel 1]).
+Proof.
+  exact (typing_incl_E (Σ := PCUICEtaIdxEnv.ji_Σ) PCUICEtaIdxEnv.ji_wf
+           (type_Rel _ _ 0 (vass j16_nac PCUICEtaIdxEnv.ji_JAX) j16_wf_Γc eq_refl)).
+Qed.
+Lemma j16_sp_par (u : Instance.t) :
+  spine_substE PCUICEtaIdxEnv.ji_Σ j16_Γc [tRel 2] (List.rev [tRel 2])
+    (smash_context [] (subst_instance u (ind_params PCUICEtaIdxEnv.ji_mdecl))).
+Proof.
+  split.
+  - exact j16_wf_ΓcE.
+  - exact j16_wf_ΓcA.
+  - exact (context_subst_ass [] [] [] si_na si_P (tRel 2) context_subst_nil).
+  - exact (subslet_ass_tipE j16_A2_typedE).
+Qed.
+Lemma j16_sp_ind :
+  spine_substE PCUICEtaIdxEnv.ji_Σ j16_Γc [tRel 1] (List.rev [tRel 1])
+    (PCUICContexts.subst_context_let_expand (List.rev [tRel 2])
+       (subst_instance PCUICEtaIdxEnv.ji_u0 (ind_params PCUICEtaIdxEnv.ji_mdecl))
+       (smash_context [] (subst_instance PCUICEtaIdxEnv.ji_u0
+                            (ind_indices PCUICEtaIdxEnv.ji_idecl)))).
+Proof.
+  split.
+  - exact j16_wf_ΓcE.
+  - exact j16_wf_ΓcX.
+  - exact (context_subst_ass [] [] [] PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_TSet (tRel 1)
+             context_subst_nil).
+  - exact (subslet_ass_tipE j16_X1_typedE).
+Qed.
+Definition isType_case_predicateE_jinst :=
+  @isType_case_predicateE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE j16_Γc PCUICEtaIdxEnv.ji_ci
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_u1 [tRel 2] sProp
+    j16_wf_ΓcE PCUICEtaIdxEnv.ji_declared_inductive PCUICEtaIdxEnv.ji_cons1 j16_wf_sort_Prop
+    (j16_sp_par PCUICEtaIdxEnv.ji_u1).
+Definition arity_spine_case_predicateE_jinst :=
+  @arity_spine_case_predicateE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE j16_Γc
+    PCUICEtaIdxEnv.ji_ci PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_u0
+    [tRel 2] [tRel 1] sProp (tRel 0)
+    j16_wf_ΓcE PCUICEtaIdxEnv.ji_declared_inductive PCUICEtaIdxEnv.ji_cons0 j16_wf_sort_Prop
+    (j16_sp_par PCUICEtaIdxEnv.ji_u0) j16_sp_ind j16_c_typedE.
