@@ -49,9 +49,9 @@
   [PCUICClassificationEta], [PCUICProgressEta], [PCUICFirstorderEta]) states its lemmas with no
   forecast premise, so these statements have none either.
 
-  The single field [wh_normalizationE] of the forecast class [CanonForecastCopy20] of the E
-  copy of [PCUICCanonicity] is this file's [wh_normalizationE]: the two types accept each
-  other, so that class is discharged by this lemma when that copy lands. *)
+  [PCUICCanonicityEta] uses this file's [wh_normalizationE] for [pcuic_canonicityE]. The lemma
+  stood for the single field [wh_normalizationE] of a forecast class that has since been
+  deleted. *)
 
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
@@ -141,8 +141,8 @@ Proof.
     + now cbn in i.
 Qed.
 
-(** Base [wh_normalization] ([:24]). This is the statement of the field [wh_normalizationE] of
-    the forecast class [CanonForecastCopy20] of the E copy of [PCUICCanonicity]. *)
+(** Base [wh_normalization] ([:24]). [PCUICCanonicityEta] uses this lemma for
+    [pcuic_canonicityE]; it stood for the field of a forecast class that has since been deleted. *)
 Lemma wh_normalizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {t} : wfE Σ -> axiom_free Σ ->
 {A & Σ ;;; [] |-E t : A}  -> { v & whnf RedFlags.default Σ [] v * red Σ [] t v}.
 Proof.

@@ -4,34 +4,43 @@
 
   Each theorem takes a form that is FALSE over η as a hypothesis and derives [False]. They are
   kept on purpose, never removed as dead code: they are the counterexamples behind the choices
-  of [PCUICCumulPropEta]. Every witness is typable over [typingE] in an environment proved
-  [wf] and [wfE] (and [wf_ext]/[wf_extE] where the refuted form asks for it), except where
-  said otherwise.
+  of [PCUICCumulPropEta]. Every witness is typed over [typingE] IN THIS FILE, in an environment
+  proved [wf] and [wfE] (and [wf_ext]/[wf_extE] where the refuted form asks for it), so a change
+  of an imported file cannot leave a refutation with an untyped witness unnoticed. The docstring
+  of each theorem names the lemma of this file that types its witness. Two witnesses take their
+  terms (not their typings) from an imported file; one environment, [iu_Σ], takes its
+  well-formedness from an imported lemma (last item).
 
   - **The η rule of [cumul_propE] is necessary** (base [cumul_prop] kept as the target):
     - [cumul_pb_cumul_prop_baseE_false]: base [cumul_pb_cumul_prop] ([PCUICCumulProp.v:238])
-      over [ws_cumul_pbE]. Witness ([PCUICWsCumulEtaCtx], [rf_witness_typed]): in the context
-      [f : Prop → Prop], [λx:Prop. f x] and [f], related by one η step, both of type
+      over [ws_cumul_pbE]. Witness (the terms [rf_Σ], [rf_Γ], [rf_t], [rf_F] of
+      [PCUICWsCumulEtaCtx]; typed here by [cpr_rf_witness_typed]): in the empty environment and
+      the context [f : Prop → Prop], [λx:Prop. f x] and [f], related by one η step, both of type
       [Prop → Prop], both [red1]-normal; [eq_term_prop] never relates a λ and a variable.
     - [typing_leq_term_prop_baseE_false]: base [typing_leq_term_prop] ([:1243]) over [typingE]
       and [wfE], with base [cumul_prop] as conclusion, under [prop_sub_type = false] as base's
-      section asks. Witness ([tw_witness_typed]): in the context
+      section asks. Witness (typed here by [tw_witness_typed]): in the context
       [G : (Prop → Prop) → Prop, F : Prop → Prop, x : G F], the variable [x] has type [G F]
       ([typeE_Rel]) and type [G (λy:Prop. F y)] ([typeE_Cumul], one η step); [t = t' = x] are
       related by [compare_term]; the two types are [red1]-normal and not [eq_term_prop]-related.
   - **Reduct comparisons are false over η** (the [cumul_propE] forms of base's
     reduct-and-compare statements):
     - [cumul_prop_altE_false]: the left-to-right half of base [cumul_prop_alt] ([:248]) for
-      [cumul_propE]. Witness: the pair of [cumul_pb_cumul_prop_baseE_false].
+      [cumul_propE]. Witness: the pair of [cumul_pb_cumul_prop_baseE_false]
+      ([cpr_rf_witness_typed]).
     - [cumul_prop_argsE_false]: base [cumul_prop_args] ([:639]) for [cumul_propE], at the
-      singleton lists of the same pair.
+      singleton lists of the same pair ([cpr_rf_witness_typed]; [wf_ext] by [cpr_wf_ext_empty]).
   - **[cumul_ind_confluence]** ([:45]), over [ws_cumul_pbE] with its raw reduct
     [A ⇝ mkApps (tInd ind v') l'']: [cumul_ind_confluenceE_false] (the untyped E form) and
-    [cumul_ind_confluenceE_typed_false] (the same with [A] well typed). Witness
-    ([PCUICEtaIndInvRefutations]): [A := λx:Set. I@{a} x], typed at [Set → Set], related to
-    [I@{a}] by one η step, [red1]-normal, never a spine. [A] is not typed at a SORT, so the
-    form with [isTypeE Σ Γ A] is not refuted here; [cumul_ind_confluence] is DROPPED
-    ([PCUICCumulPropEta] header). *)
+    [cumul_ind_confluenceE_typed_false] (the same with [A] well typed). Witness (the terms
+    [iu_Σ], [ir_T] of [PCUICEtaIndInvRefutations]; typed here by [cpr_ir_witness_typed]):
+    [A := λx:Set. I@{a} x], typed at [Set → Set], related to [I@{a}] by one η step,
+    [red1]-normal, never a spine. The well-formedness of [iu_Σ] is
+    [PCUICEtaIndInvRefutations.iu_wf] ([PCUICEtaIndInvRefutations.v:234]), not proved again
+    here: it checks the declaration of the polymorphic cumulative [I@{i}] against the levels
+    [{a, b}] (about 110 lines: [iu_on_inductive], [iu_on_udecl], the universe conjuncts). [A]
+    is not typed at a SORT, so the form with [isTypeE Σ Γ A] is not refuted here;
+    [cumul_ind_confluence] is DROPPED ([PCUICCumulPropEta] header). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -45,7 +54,71 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaCtx
      PCUICEtaIndInvRefutations PCUICCumulPropEta.
 
-(** ** [λx:Prop. f x] and [f] *)
+(** ** [λx:Prop. f x] and [f]
+
+  The terms are [PCUICWsCumulEtaCtx]'s ([rf_Σ], [rf_Γ], [rf_t], [rf_F]). They are typed here,
+  over [typingE], in the empty environment, at any [checker_flags]: [f : Prop → Prop] is a
+  well-formed context, and [λx:Prop. f x] and [f] both have type [Prop → Prop] in it
+  ([cpr_rf_witness_typed]). [PCUICWsCumulEtaCtx.rf_witness_typed], the typing in the imported
+  file, is not used. *)
+
+Section RFWitness.
+
+  Context {cf : checker_flags}.
+
+  Lemma cpr_rf_P_typed (Γ : context) : wf_localE rf_Σ Γ -> rf_Σ ;;; Γ |-E tSort sProp : tSort (Sort.super sProp).
+  Proof. intros h. apply typeE_Sort; [exact h|cbn; trivial]. Qed.
+
+  Lemma cpr_rf_P_vass (Γ : context) : wf_localE rf_Σ Γ -> lift_typing typingE rf_Σ Γ (j_vass c1b_na (tSort sProp)).
+  Proof.
+    intros h. split; [exact tt|]. exists (Sort.super sProp).
+    split; [exact (cpr_rf_P_typed Γ h)|]. split; [exact I|reflexivity].
+  Qed.
+
+  Lemma cpr_rf_F_typed (Γ : context) : wf_localE rf_Σ Γ ->
+    rf_Σ ;;; Γ |-E rf_F : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)).
+  Proof.
+    intros h. unfold rf_F. apply typeE_Prod.
+    - split; [exact tt|]. exists (Sort.super sProp).
+      split; [exact (cpr_rf_P_typed Γ h)|]. split; reflexivity.
+    - apply cpr_rf_P_typed. apply localenv_cons_abs; [exact h|exact (cpr_rf_P_vass Γ h)].
+  Qed.
+
+  Lemma cpr_rf_wf_Γ : wf_localE rf_Σ rf_Γ.
+  Proof.
+    apply localenv_cons_abs; [constructor|].
+    split; [exact tt|]. exists (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)).
+    split; [exact (cpr_rf_F_typed [] localenv_nil)|]. split; [exact I|reflexivity].
+  Qed.
+
+  (** [f : Prop → Prop]. *)
+  Lemma cpr_rf_f_typed : rf_Σ ;;; rf_Γ |-E tRel 0 : rf_F.
+  Proof. exact (typeE_Rel _ _ 0 (vass c1b_na rf_F) cpr_rf_wf_Γ eq_refl). Qed.
+
+  (** [λx:Prop. f x : Prop → Prop]. *)
+  Lemma cpr_rf_t_typed : rf_Σ ;;; rf_Γ |-E rf_t : rf_F.
+  Proof.
+    have hΓ1 : wf_localE rf_Σ (rf_Γ ,, vass c1b_na (tSort sProp)).
+    { apply localenv_cons_abs; [exact cpr_rf_wf_Γ|exact (cpr_rf_P_vass rf_Γ cpr_rf_wf_Γ)]. }
+    unfold rf_t, rf_F. apply typeE_Lambda; [exact (cpr_rf_P_vass rf_Γ cpr_rf_wf_Γ)|].
+    apply (typeE_App _ _ (tRel 1) c1b_na (tSort sProp) (tSort sProp)
+             (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) (tRel 0)).
+    - exact (cpr_rf_F_typed _ hΓ1).
+    - exact (typeE_Rel _ _ 1 (vass c1b_na rf_F) hΓ1 eq_refl).
+    - exact (typeE_Rel _ _ 0 (vass c1b_na (tSort sProp)) hΓ1 eq_refl).
+  Qed.
+
+  (** The environment meets the refuted forms' premises [wf] and [wfE]; the witness pair is
+      typed in a well-formed context. *)
+  Lemma cpr_rf_witness_typed :
+    [× wf rf_Σ, wfE rf_Σ, wf_localE rf_Σ rf_Γ,
+       rf_Σ ;;; rf_Γ |-E rf_t : rf_F & rf_Σ ;;; rf_Γ |-E tRel 0 : rf_F].
+  Proof.
+    split; [exact (@wf_empty_global_env cf)|exact (wf_incl_E (@wf_empty_global_env cf))
+           |exact cpr_rf_wf_Γ|exact cpr_rf_t_typed|exact cpr_rf_f_typed].
+  Qed.
+
+End RFWitness.
 
 Lemma rf_cumul_propE : @cumul_propE default_checker_flags rf_Σ rf_Γ rf_t (tRel 0).
 Proof. exact (cumul_pb_cumul_propE rf_Σ rf_Γ Conv rf_t (tRel 0) rf_premise). Qed.
@@ -62,7 +135,7 @@ Qed.
 
 (** **Refuted:** base [cumul_pb_cumul_prop] ([PCUICCumulProp.v:238]) over [ws_cumul_pbE], with
     base [cumul_prop] kept as the conclusion. Base has no environment premise; neither has
-    this form. *)
+    this form. Witness typing: this file, [cpr_rf_witness_typed]. *)
 Theorem cumul_pb_cumul_prop_baseE_false :
   (forall (cf : checker_flags) (Σ : global_env_ext) (Γ : context) (pb : conv_pb) (A B : term),
      ws_cumul_pbE pb Σ Γ A B -> cumul_prop Σ Γ A B) -> False.
@@ -76,7 +149,7 @@ Qed.
 
 (** **Refuted:** the left-to-right half of base [cumul_prop_alt] ([PCUICCumulProp.v:248]) for
     [cumul_propE] (base: [{wfΣ : wf Σ}]; here [wfE Σ]). Its right-to-left half is
-    [into_cumul_propE_red]. *)
+    [into_cumul_propE_red]. Witness typing: this file, [cpr_rf_witness_typed]. *)
 Theorem cumul_prop_altE_false :
   (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context) (T U : term),
      Σ ;;; Γ |-E T ~~ U ->
@@ -106,7 +179,8 @@ Lemma cpr_wf_ext_empty {cf : checker_flags} : wf_ext (empty_global_env, Monomorp
 Proof. split; [exact (@wf_empty_global_env cf)|exact cpr_on_udecl_empty]. Qed.
 
 (** **Refuted:** base [cumul_prop_args] ([PCUICCumulProp.v:639]) for [cumul_propE] (base:
-    [{wfΣ : wf_ext Σ}]; here [wf_extE Σ]). *)
+    [{wfΣ : wf_ext Σ}]; here [wf_extE Σ]). Witness typing: this file, [cpr_rf_witness_typed];
+    [wf_ext] of the empty environment: this file, [cpr_wf_ext_empty]. *)
 Theorem cumul_prop_argsE_false :
   (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wf_extE Σ) (Γ : context) (args args' : list term),
      All2 (cumul_propE Σ Γ) args args' ->
@@ -281,7 +355,8 @@ Definition cpr_flags : checker_flags :=
      lets_in_constructor_types := true |}.
 
 (** **Refuted:** base [typing_leq_term_prop] ([PCUICCumulProp.v:1243]) over [typingE] and
-    [wfE], with base [cumul_prop] kept as the conclusion. *)
+    [wfE], with base [cumul_prop] kept as the conclusion. Witness typing: this file,
+    [tw_witness_typed] ([tw_x_GF], [tw_x_Geta]). *)
 Theorem typing_leq_term_prop_baseE_false :
   (forall (cf : checker_flags), prop_sub_type = false ->
    forall (Σ : global_env_ext) (Γ : context) (t t' T T' : term),
@@ -302,7 +377,83 @@ Proof.
   exact cpr_flags.
 Qed.
 
-(** ** [cumul_ind_confluence], refuted over [ws_cumul_pbE] *)
+(** ** [cumul_ind_confluence], refuted over [ws_cumul_pbE]
+
+  The witness [λx:Set. I@{a} x] ([PCUICEtaIndInvRefutations.ir_T], in
+  [PCUICEtaIndInvRefutations.iu_Σ], at [default_checker_flags] as there) is typed here, over
+  [typingE], at [Set → Set], from the declaration of [I] ([cpr_iu_declared]) and the instance
+  [[a]] ([cpr_iu_consistent]), both proved here ([cpr_ir_witness_typed]).
+  [PCUICEtaIndInvRefutations.ir_T_typedE] is not used. The well-formedness of [iu_Σ] is
+  [PCUICEtaIndInvRefutations.iu_wf] ([PCUICEtaIndInvRefutations.v:234]); see the header. *)
+
+Section IRWitness.
+
+  #[local] Existing Instance default_checker_flags.
+
+  Lemma cpr_iu_declared : declared_inductive iu_Σ iu_ind iu_mdecl iu_idecl.
+  Proof. split; [left; reflexivity|reflexivity]. Qed.
+
+  Lemma cpr_iu_consistent : consistent_instance_ext iu_Σ iu_udecl [iu_a].
+  Proof.
+    split; [|split; [reflexivity|]].
+    - vm_compute; reflexivity.
+    - intros v _ c hc. exfalso. eapply ConstraintSet.empty_spec. exact hc.
+  Qed.
+
+  Lemma cpr_iu_arity_closedu : closedu 0 iu_arity.
+  Proof. vm_compute. reflexivity. Qed.
+
+  Lemma cpr_iu_Set_typed (Γ : context) :
+    wf_localE iu_Σ Γ -> iu_Σ ;;; Γ |-E iu_Set : tSort (Sort.super Sort.type0).
+  Proof. intros h. apply typeE_Sort; [exact h|apply PCUICWfUniverses.wf_sort_type0]. Qed.
+
+  Lemma cpr_iu_vass (Γ : context) : wf_localE iu_Σ Γ -> lift_typing typingE iu_Σ Γ (j_vass iu_na iu_Set).
+  Proof.
+    intros h. split; [exact tt|]. exists (Sort.super Sort.type0).
+    split; [exact (cpr_iu_Set_typed Γ h)|]. split; [exact I|reflexivity].
+  Qed.
+
+  Lemma cpr_iu_wf_x : wf_localE iu_Σ ([] ,, vass iu_na iu_Set).
+  Proof. apply localenv_cons_abs; [constructor|exact (cpr_iu_vass [] localenv_nil)]. Qed.
+
+  (** [Set → Set] is a type. *)
+  Lemma cpr_iu_arity_typed (Γ : context) : wf_localE iu_Σ Γ ->
+    iu_Σ ;;; Γ |-E iu_arity : tSort (Sort.sort_of_product (Sort.super Sort.type0) (Sort.super Sort.type0)).
+  Proof.
+    intros h. unfold iu_arity. apply typeE_Prod.
+    - split; [exact tt|]. exists (Sort.super Sort.type0).
+      split; [exact (cpr_iu_Set_typed Γ h)|]. split; reflexivity.
+    - apply cpr_iu_Set_typed. apply localenv_cons_abs; [exact h|exact (cpr_iu_vass Γ h)].
+  Qed.
+
+  (** [I@{a} : Set → Set], by [typeE_Ind]. *)
+  Lemma cpr_iu_Ind_typed (Γ : context) : wf_localE iu_Σ Γ -> iu_Σ ;;; Γ |-E tInd iu_ind [iu_a] : iu_arity.
+  Proof.
+    intros hΓ.
+    have h := typeE_Ind _ _ iu_ind [iu_a] iu_mdecl iu_idecl hΓ cpr_iu_declared cpr_iu_consistent.
+    rewrite (PCUICUnivSubst.closedu_subst_instance [iu_a] (ind_type iu_idecl) cpr_iu_arity_closedu) in h.
+    exact h.
+  Qed.
+
+  (** [λx:Set. I@{a} x : Set → Set]. *)
+  Lemma cpr_ir_T_typed : iu_Σ ;;; [] |-E ir_T : iu_arity.
+  Proof.
+    have hΓ := cpr_iu_wf_x.
+    unfold ir_T, iu_arity. apply typeE_Lambda; [exact (cpr_iu_vass [] localenv_nil)|].
+    refine (typeE_App _ _ (tInd iu_ind [iu_a]) iu_na iu_Set iu_Set
+              (Sort.sort_of_product (Sort.super Sort.type0) (Sort.super Sort.type0)) (tRel 0) _ _ _).
+    - exact (cpr_iu_arity_typed _ hΓ).
+    - exact (cpr_iu_Ind_typed _ hΓ).
+    - exact (typeE_Rel _ _ 0 (vass iu_na iu_Set) hΓ eq_refl).
+  Qed.
+
+  (** The environment meets the refuted forms' premise [wfE] (from [iu_wf], see the header),
+      and the witness is typed in the empty context. *)
+  Lemma cpr_ir_witness_typed :
+    [× wfE iu_Σ, wf_localE iu_Σ [] & iu_Σ ;;; [] |-E ir_T : iu_arity].
+  Proof. split; [exact (wf_incl_E iu_wf)|constructor|exact cpr_ir_T_typed]. Qed.
+
+End IRWitness.
 
 Lemma ir_not_spine (Σ : global_env) ind u l : red Σ [] ir_T (mkApps (tInd ind u) l) -> False.
 Proof.
@@ -311,7 +462,8 @@ Proof.
 Qed.
 
 (** **Refuted:** base [cumul_ind_confluence] ([PCUICCumulProp.v:45]) over [ws_cumul_pbE] and
-    [wfE] (base: [{wfΣ : wf Σ}], untyped). *)
+    [wfE] (base: [{wfΣ : wf Σ}], untyped). Witness typing: this file, [cpr_ir_witness_typed]
+    ([cpr_ir_T_typed]); [wf iu_Σ]: [PCUICEtaIndInvRefutations.iu_wf]. *)
 Theorem cumul_ind_confluenceE_false :
   (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context) (A : term)
      (ind : inductive) (u v : Instance.t) (l l' : list term),
@@ -331,7 +483,9 @@ Proof.
 Qed.
 
 (** **Refuted:** the same with [A] well typed (any type). The witness [λx:Set. I@{a} x] has type
-    [Set → Set], not a sort: the form with [isTypeE Σ Γ A] is NOT refuted. *)
+    [Set → Set], not a sort: the form with [isTypeE Σ Γ A] is NOT refuted. Witness typing: this
+    file, [cpr_ir_T_typed] (the typed premise below); [wf iu_Σ]:
+    [PCUICEtaIndInvRefutations.iu_wf]. *)
 Theorem cumul_ind_confluenceE_typed_false :
   (forall (cf : checker_flags) (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context) (A T : term)
      (ind : inductive) (u v : Instance.t) (l l' : list term),
@@ -347,6 +501,6 @@ Theorem cumul_ind_confluenceE_typed_false :
 Proof.
   intros H.
   destruct (H default_checker_flags iu_Σ (wf_incl_E iu_wf) [] ir_T iu_arity iu_ind [iu_a] [iu_a] [] []
-              ir_T_typedE (ir_premise_r Cumul) (ir_premise_r Cumul)) as (v' & l'' & [r _ _ _ _]).
+              cpr_ir_T_typed (ir_premise_r Cumul) (ir_premise_r Cumul)) as (v' & l'' & [r _ _ _ _]).
   exact (ir_not_spine iu_Σ _ _ _ (clrel_rel r)).
 Qed.
