@@ -43,3 +43,12 @@ theories/PCUICEtaTypedFactsProved.v
 # EtaK7: the composition's E hypotheses without the five repeats (builders from EtaFacts, the 6-field core,
 # welltypedE_context; EtaHypProve's hyp_dup_* lemmas)
 theories/PCUICEtaFactsCompose.v
+# EtaTranscribe6: the root class fields that are proved now (eta51-sizing.md rows; record
+# lanes/eta/etak/discharge-transcriptions.md). The E twins of PCUICNormal.whnf_red_inv (row 13),
+# PCUICSafeReduce.prim_app_overapplied_ill_typed (row 47) and PCUICPositionEta.welltyped_context (row 51),
+# then the [_proved] field lemmas, their two-way identity checks and the instances of the classes proved
+# whole. No existing file imports these.
+theories/PCUICEtaWhnfRedInv.v
+theories/PCUICEtaPrimOverapplied.v
+theories/PCUICEtaWelltypedContext.v
+theories/PCUICTypingEtaDischarge.v
