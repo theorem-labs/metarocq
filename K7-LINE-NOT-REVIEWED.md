@@ -1,15 +1,17 @@
 # WARNING: this line carries an UNREVIEWED, BLOCKED LAND6 candidate
 
-Branch: `wip/etak-k7-2026-10-29` (the ETAK K7 line). Marked 2026-10-30 by EtaCheckerLane (ETAK).
+Branch: `wip/etak-k7-2026-10-29` (the ETAK K7 line). Marked 2026-10-30 by EtaCheckerLane (ETAK);
+AMENDED 2026-10-30 ~17:50Z after Land6Review's final review of the fixed head `ff20a493`.
 
 Merge `5af3e8e8` (ETAK gate 9) brought in EtaMetaLane's LAND6 **candidate** `984ba326`
-(`wip/eta-meta-degen-2026-10-30`). It was NOT landed on `frac/eta`, and its second re-review
-(`lanes/eta/meta/land6-review.md`, "Second re-review 2026-10-30 (14:45Z)", verdict BLOCK) found
-**18 instances whose NONDEGEN tags are false**. Until a fixed, reviewed LAND6 head lands on
-`frac/eta` and is merged over this line, do NOT call any LAND6 instance on this line reviewed,
-and do NOT take LAND6 from this line into `frac/ship` or any other ship branch.
+(`wip/eta-meta-degen-2026-10-30`). It was NOT landed on `frac/eta`. Two reviews in
+`lanes/eta/meta/land6-review.md` found **45 instances on this line whose NONDEGEN tags are false**:
+the 18 of the second re-review (14:45Z, C1-C3) and 27 more found by the final review (17:40Z, B1-B2),
+which were unchanged from `984ba326` to `ff20a493` and so are on this line too. Until a fixed, reviewed
+LAND6 head lands on `frac/eta` and is merged over this line, do NOT call any LAND6 instance on this
+line reviewed, and do NOT take LAND6 from this line into `frac/ship` or any other ship branch.
 
-The 18 instances (section C1-C3 of that review):
+## Second re-review (14:45Z), 18 rows (all closed at `ff20a493` per the 17:45Z row-by-row verdict; still OPEN on this line)
 
 | group | instances |
 | --- | --- |
@@ -17,13 +19,24 @@ The 18 instances (section C1-C3 of that review):
 | C2, reflexive by the witness (2) | `PCUICAlphaEtaInstances.eq_context_upto_conv_context_relE_inst`, `upto_names_conv_contextE_inst` |
 | C3, degenerate by statement, must be IMPOSSIBLE (9) | `PCUICCumulPropEtaInstances.is_sprop_bottomE_inst`, `is_propositional_bottomE_inst`, `is_prop_bottomE_inst`; `BDTypingEtaInstances.inferingE_size_pos_inst`, `infering_sortE_size_pos_inst`, `infering_prodE_size_pos_inst`, `infering_induE_size_pos_inst`, `checkingE_size_pos_inst`; `PCUICSREtaConvInstances.eq_context_alpha_convE_inst` |
 
+## Final review (17:40Z), 27 rows (OPEN on this line AND at `ff20a493`)
+
+| group | instances |
+| --- | --- |
+| B1, degenerate: the lemma's work is the identity on the witness and the conclusion is a piece of an input (13) | SR identity-β family: `PCUICSREtaInstances.sr_red1E_beta_inst`, `subject_reductionE_inst`, `subject_reduction1_closedE_inst`, `subject_reduction_closedE_inst`, `isType_red1E_inst`, `isType_redE_inst`, `wf_local_red1E_inst`, `wf_local_redE_inst`, `lift_judgment_SRE_inst`; `PCUICClassificationEtaInstances.subject_reduction_evalE_inst`; `PCUICValidityEtaInstances.isType_Sort_invE_inst`; `PCUICCumulPropEtaInstances.cumul_prop_cumul_pb_lE_inst`, `cumul_prop_prod_invE_inst` |
+| B2, target statement-trivial, must be IMPOSSIBLE (14) | `BDTypingEtaInstances.JoinE_ws_cumul_pbE_inst`, `checkE_Cumul_ws_inst`, `All2_ws_cumul_pbE_JoinE_inst`; `BDFromPCUICEtaInstances.conv_checkE_eta_inst`, `conv_lift_judgmentE_inst`, `conv_lift_judgment_univE_inst`, `ws_cumul_ctx_pbE_vass_inst`; `BDToPCUICEtaInstances.wf_local_local_relE_inst`; `PCUICCumulPropEtaInstances.cumul_prop_is_openE_inst`; `PCUICAlphaEtaInstances.type_Cumul'E_inst`; `PCUICValidityEtaInstances.type_ctx_wf_univE_inst`; `PCUICPrincipalityEtaInstances.isWfArity_sortE_inst`; `PCUICProgressEtaInstances.declared_constructor_ind_declE_inst`; `PCUICSREtaInstances.isType_prim_tag_constantE_inst` |
+
 Soundness impact: none on the checker. These files are outside the checker's import closure,
 except `PCUICInversionEtaInstances` (no Hint, no Instance). Root binders and Print Assumptions
-are unchanged against `7ad8cee0` (`lanes/eta/etak/gate-land6-984ba326.md`).
+are unchanged against `7ad8cee0` (`lanes/eta/etak/gate-land6-984ba326.md`) and at the trial merge
+of `ff20a493` (`lanes/eta/etak/gate-land6fix-ff20a493.md`).
 
-`frac/ship` does not contain `984ba326`. Ship merge 2 is built without the K7 line.
+`frac/ship` does not contain `984ba326`.
 
-From now on a push to this line runs `lanes/eta/bin/etak-k7-merge-check.sh` (pre-push hook of the
-metarocq repo): the line takes other lanes' work only from `frac/eta`.
+A push to this line runs `lanes/eta/bin/etak-k7-merge-check.sh` (pre-push hook of the metarocq
+repo): the line takes other lanes' work only from `frac/eta`.
 
-Delete this file in the merge that brings in the fixed LAND6 head from `frac/eta`.
+DELETION RULE (lead 2026-10-30 17:42Z): delete this file in the K7 merge of a LAND6 head that has
+landed on `frac/eta`, ONLY if that head's passing review names EVERY row above CLOSED (rebuilt rows)
+or TRUE (IMPOSSIBLE retags), with the row table in the merge body. Any row not closed stays here,
+in an amended marker.
