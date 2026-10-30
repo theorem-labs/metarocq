@@ -85,11 +85,11 @@ From MetaRocq.PCUIC Require PCUICPrincipalityEta.
     reads [wf] only through [declared_constant_to_gen], [declared_constructor_to_gen] and
     [declared_minductive_ind_npars], all three stated for an arbitrary [on_global_env], so the
     same script runs with [wfE]. The statement is base's with [wf] → [wfE]. *)
-Lemma wcbv_red1_evalE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} t t' v :
+Lemma wcbv_red1_evalE {cf : checker_flags} {Σ : global_env_ext} t t' v : wfE Σ ->
   closed t ->
   Σ ⊢ t ⇝ᵥ t' -> eval Σ t' v -> eval Σ t v.
 Proof.
-  intros Hty Hred Heval.
+  intros wfΣ Hty Hred Heval.
   induction Hred in Heval, v, Hty |- *; eauto with wcbv.
   - inversion Heval; subst; clear Heval. all:cbn in Hty; solve_all. 1-3,6:now econstructor; eauto with wcbv.
     eapply eval_construct; tea. eauto. eapply eval_app_cong; eauto with wcbv.
@@ -171,7 +171,7 @@ Lemma SN_to_WNE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:No
   - eapply wcbv_red1_red1 in Ht' as Hred. 2:{ change 0 with (#|@nil context_decl|). eapply subject_closedE. eauto. }
     edestruct IH as [v Hv]. econstructor. eauto.
     eapply subject_reductionE; eauto.
-    exists v. sq. eapply (wcbv_red1_evalE (wfΣ := Hwf)); eauto.
+    exists v. sq. eapply (wcbv_red1_evalE t t' v Hwf); eauto.
     exact (@subject_closedE _ _ _ [] _ _ HA).
   - exists t. sq. eapply value_final; eauto.
 Qed.
