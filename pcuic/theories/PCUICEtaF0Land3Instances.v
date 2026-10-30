@@ -1206,7 +1206,9 @@ Proof.
   try rewrite hf in hc. vm_compute in hc. discriminate hc.
 Qed.
 
-Ltac pgf_case :=
+(** One hypothesis of either principle. The lemmas are arguments, so each instance's own proof
+    names the steps it runs ([pgf_case_root] is the one that consumes the restated premise). *)
+Ltac pgf_case root app notcase :=
   first
   [ (* the judgment hypothesis *)
     let Htm := fresh "Htm" in let Hty := fresh "Hty" in
@@ -1216,13 +1218,13 @@ Ltac pgf_case :=
   | (* the context hypothesis *)
     intros; match goal with h : All_local_env (pgf_Pj _) _ |- pgf_PΓ _ _ => exact h end
   | (* the case hypothesis *)
-    intros; eapply pgf_case_root; eassumption
+    intros; eapply root; eassumption
   | (* the application hypothesis (both principles) *)
     intros; match goal with
-    | pt : pgf_P ?Σ ?Γ ?t _ |- pgf_P ?Σ ?Γ (mkApps ?t ?L) ?B => exact (pgf_app Σ Γ t L _ B pt)
+    | pt : pgf_P ?Σ ?Γ ?t _ |- pgf_P ?Σ ?Γ (mkApps ?t ?L) ?B => exact (app Σ Γ t L _ B pt)
     end
   | (* subjects that are not a case *)
-    intros; apply pgf_not_case; intros ? ? ? ? e; discriminate e
+    intros; apply notcase; intros ? ? ? ? e; discriminate e
   | (* the cumulativity hypothesis: same subject, another type *)
     intros; match goal with h : pgf_P ?Σ ?Γ ?t _ |- pgf_P ?Σ ?Γ ?t _ => exact h end ].
 
@@ -1230,14 +1232,18 @@ Ltac pgf_case :=
    TARGET PCUICProgressEta.typing_ind_envE
    Predicates that consume the restated [tCase] premise; every case proved in general. *)
 Lemma typing_ind_envE_inst : env_propE pgf_P pgf_Pj pgf_PΓ.
-Proof. apply typing_ind_envE; pgf_case. Qed.
+Proof.
+  apply (@typing_ind_envE _ pgf_P pgf_Pj pgf_PΓ); pgf_case pgf_case_root pgf_app pgf_not_case.
+Qed.
 
 (* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.pgf_nondeg
    TARGET PCUICProgressEta.typing_ind_env_app_sizeE
    The same predicates; the application hypothesis also receives the sized induction
    hypothesis, which [pgf_app] does not need. *)
 Lemma typing_ind_env_app_sizeE_inst : env_propE pgf_P pgf_Pj pgf_PΓ.
-Proof. apply typing_ind_env_app_sizeE; pgf_case. Qed.
+Proof.
+  apply (@typing_ind_env_app_sizeE _ pgf_P pgf_Pj pgf_PΓ); pgf_case pgf_case_root pgf_app pgf_not_case.
+Qed.
 
 (** [f3_t0] with its flag SET: a case on [R] whose predicate [P z] mentions the scrutinee. *)
 Definition pgf_ci_set : case_info :=
