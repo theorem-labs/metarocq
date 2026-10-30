@@ -72,12 +72,16 @@
     ([check_recursivity_kind_injE]: [rk = rk']; [wt_closed_red_reflE]: [Σ ;;; Γ ⊢ t ⇝ t], whose
     closedness side conditions compute on any concrete context and term and are not a
     non-degeneracy) have instances tagged IMPOSSIBLE, with the reason in the tag.
+    [wh_neutral_empty_genE] and [wh_neutral_emptyE] are no longer in that row: on integ-all8
+    (BET-339) they conclude [stuck_cofix_case t]; their instances are in
+    [PCUICEtaF0Land3Instances] (reason at the place their instances stood).
 
   - BET-339 (F0 forecast): the disjunct [stuck_cofix_case] that [whnf_classification'E],
     [whnf_classificationE], [ind_whnf_classification'E], [ind_whnf_classificationE] and
     [fix_app_is_constructorE] gained is reached by [PCUICEtaF0Land3Instances]
     ([g_whnf_classification_stuck], on a closed case blocked on a cofixpoint); the instances
-    here land in the constructor disjunct.
+    here land in the constructor disjunct: their subject [c (∀P. P)] is no blocked case
+    ([PCUICEtaF0Land3Instances.l6_cF_not_stuck]).
 
   **Rows without an instance.**
   - Refutations ([invert_cumul_arity_lE_untyped_false], [invert_cumul_arity_rE_untyped_false]):
@@ -875,15 +879,14 @@ Definition invert_fix_indE_inst :
   si_Σ ;;; [] |-E mkApps (tFix iv_mfix 0) [] : mkApps (tInd si_ind []) [iv_False] -> False :=
   invert_fix_indE (Σ := si_Σ) [] iv_mfix 0 [] si_ind [] [iv_False] eq_refl.
 
-(** INSTANCE IMPOSSIBLE: the conclusion is False: an axiom-free weak-head neutral term is not typable in the empty context; here the neutral application x (∀P. P) of a variable, the typing premise left as a hypothesis. *)
-Definition wh_neutral_empty_genE_inst : forall ty, si_Σ ;;; [] |-E tApp (tVar "x") iv_False : ty -> False :=
-  fun ty h => wh_neutral_empty_genE (Σ := si_Σ) [] [] (tApp (tVar "x") iv_False) ty eq_refl
-    (whne_app _ _ _ _ _ (whne_var _ _ _ "x")) h eq_refl.
-
-(** INSTANCE IMPOSSIBLE: the conclusion is False: an axiom-free weak-head neutral term is not typable in the empty context; here the fixpoint tFix iv_mfix 0 stuck on the variable x at its recursive argument, the typing premise left as a hypothesis. *)
-Definition wh_neutral_emptyE_inst : forall ty, si_Σ ;;; [] |-E mkApps (tFix iv_mfix 0) [tVar "x"] : ty -> False :=
-  fun ty h => wh_neutral_emptyE (Σ := si_Σ) (mkApps (tFix iv_mfix 0) [tVar "x"]) ty eq_refl
-    (whne_fixapp _ _ _ iv_mfix 0 [tVar "x"] _ (tVar "x") eq_refl eq_refl (whne_var _ _ _ "x")) h.
+(* [wh_neutral_empty_genE] and [wh_neutral_emptyE]: no instance in this file since BET-339 (F0).
+   On integ-all8 they conclude [stuck_cofix_case t], not [False]. Their premises hold together on
+   a closed case blocked on a cofixpoint, so the former IMPOSSIBLE tag (on an open term typed in
+   the empty context) no longer describes the lemma, and that open-term premise has no
+   derivation. A non-degenerate instance needs a closed typed blocked case, hence a coinductive
+   block, which [si_Σ] does not have ([PCUICEtaF0Land3Instances.l6_si_no_stuck]). The instances
+   are [PCUICEtaF0Land3Instances.wh_neutral_empty_genE_inst] and
+   [PCUICEtaF0Land3Instances.wh_neutral_emptyE_inst], in [iv_Σ] (coinductive [R]). *)
 
 (** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cF_head_differs *)
 Definition value_whnfE_inst := value_whnfE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF eq_refl cli_cF_value.
@@ -923,8 +926,8 @@ Definition ind_whnf_classificationE_inst :=
 
 (** The fixpoint applied to [c (∀P. P)]: its recursive argument is present
     ([cli_fix_rarg_present]), so the conclusion is the branch for a present argument (an
-    axiom-free normal value there is a constructor application), not the product of the absent
-    case.
+    axiom-free normal value there is a constructor application or, since BET-339, a case blocked
+    on a cofixpoint), not the product of the absent case.
     INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_fix_rarg_present *)
 Definition fix_app_is_constructorE_inst :=
   fix_app_is_constructorE (Σ := si_Σ) (wfΣ := si_wfE) (mfix := iv_mfix) (idx := 0) (args := [sri_cF])

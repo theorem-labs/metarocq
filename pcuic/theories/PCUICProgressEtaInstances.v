@@ -32,7 +32,8 @@
     [extraction_checker_flags], the flags its statement is fixed to (as base's), in [si_Σ] proved
     [wfE] at those flags (section [ClassificationFlags]).
   - BET-339 (F0 forecast): [progressE] and [progress_env_propE] gained the disjunct
-    [wcbv_stuck]; the instances here land in the step disjunct, and [PCUICEtaF0Land3Instances]
+    [wcbv_stuck]; the instances here land in the step disjunct ([sri_xx_redex] is no
+    [wcbv_stuck] term: [PCUICEtaF0Land3Instances.l6_xx_redex_not_stuck]), and [PCUICEtaF0Land3Instances]
     runs [progressE] on a closed case blocked on a cofixpoint ([progressE_stuck_inst]). The new
     copy [red1_progressE] (base's new [red1_progress]) has its instance there
     ([red1_progressE_inst]).
@@ -464,27 +465,18 @@ Section ClosednInduction.
       pgi_cl_P Σ Γ (tConstruct ind i u) (type_of_constructor mdecl cdecl (ind, i) u).
   Proof. intros; exact (@eq_refl bool true). Qed.
 
-  Lemma pgi_cl_case :
-    forall (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context) (wfΓ : wf_localE Σ Γ),
-    forall (ci : case_info) p c brs indices ps mdecl idecl
+  (** The scoping argument itself, from exactly the hypotheses it reads. *)
+  Lemma pgi_cl_case_scoped :
+    forall (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context)
+      (ci : case_info) p c brs indices ps mdecl idecl
       (isdecl : declared_inductive Σ.1 ci.(ci_ind) mdecl idecl),
-      on_global_env cumulSpecE0 pgi_cl_Pj Σ.1 ->
-      pgi_cl_PΓ Σ Γ ->
-      mdecl.(ind_npars) = ci.(ci_npar) ->
       eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ->
       let predctx := case_predicate_context ci.(ci_ind) mdecl idecl p in
       wf_predicate mdecl idecl p ->
-      consistent_instance_ext Σ (ind_universes mdecl) p.(puinst) ->
-      forall pret : Σ ;;; Γ ,,, predctx |-E p.(preturn) : tSort ps,
       pgi_cl_P Σ (Γ ,,, predctx) p.(preturn) (tSort ps) ->
-      wf_localE Σ (Γ ,,, predctx) ->
-      pgi_cl_PΓ Σ (Γ ,,, predctx) ->
-      is_allowed_elimination Σ idecl.(ind_kelim) ps ->
       PCUICTyping.ctx_inst (Prop_conj typingE pgi_cl_P Σ) Γ (p.(pparams) ++ indices)
         (List.rev (subst_instance p.(puinst) (mdecl.(ind_params) ,,, idecl.(ind_indices) : context))) ->
-      Σ ;;; Γ |-E c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
       pgi_cl_P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
-      implb (isCoFinite mdecl.(ind_finite)) (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn)) = true ->
       let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
       wf_branches idecl brs ->
       All2i (fun i cdecl br =>
@@ -495,8 +487,8 @@ Section ClosednInduction.
           (Prop_conj typingE pgi_cl_P) Σ (Γ ,,, brctxty.1) brctxty.2 (tSort ps))) 0 idecl.(ind_ctors) brs ->
       pgi_cl_P Σ Γ (tCase ci p c brs) (mkApps ptm (indices ++ [c])).
   Proof.
-    intros Σ wfΣ Γ wfΓ ci p c brs indices ps mdecl idecl isdecl _ _ _ heqctx predctx hwfp _ _ hret
-      _ _ _ hpars _ hc _ ptm hwfbrs hbrs.
+    intros Σ wfΣ Γ ci p c brs indices ps mdecl idecl isdecl heqctx predctx hwfp hret hpars hc ptm
+      hwfbrs hbrs.
     pose proof (declared_minductive_closedE (wfΣ := wfΣ) (proj1 isdecl)) as hcl.
     pose proof (declared_minductive_ind_nparsE (wfΣ := wfΣ) (proj1 isdecl)) as hnp.
     pose proof (declared_inductive_closed_constructorsE (wfΣ := wfΣ) isdecl) as hctors.
@@ -536,6 +528,92 @@ Section ClosednInduction.
                                  (bbody br)) := hbody.
         rewrite app_context_length case_branch_type_fst (case_branch_context_length hwb) in hbody'.
         exact hbody'.
+  Qed.
+
+  (** The [tCase] case WITHOUT the coinductive side condition: the scoping of [tCase ci p c brs]
+      follows from the other hypotheses (the return clause is scoped by [hret] under
+      [Γ ,,, predctx], the scrutinee by [hc], the parameters by the [ctx_inst] premise, the
+      branches by the [All2i] premise). The side condition says only that [preturn] does not
+      mention the scrutinee's binder (variable 0 of [predctx]), which is a strengthening fact,
+      not a scoping fact; [pgi_cl_case] below takes it, as the principle passes it, and does not
+      use it. *)
+  Lemma pgi_cl_case_core :
+    forall (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context) (wfΓ : wf_localE Σ Γ),
+    forall (ci : case_info) p c brs indices ps mdecl idecl
+      (isdecl : declared_inductive Σ.1 ci.(ci_ind) mdecl idecl),
+      on_global_env cumulSpecE0 pgi_cl_Pj Σ.1 ->
+      pgi_cl_PΓ Σ Γ ->
+      mdecl.(ind_npars) = ci.(ci_npar) ->
+      eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ->
+      let predctx := case_predicate_context ci.(ci_ind) mdecl idecl p in
+      wf_predicate mdecl idecl p ->
+      consistent_instance_ext Σ (ind_universes mdecl) p.(puinst) ->
+      forall pret : Σ ;;; Γ ,,, predctx |-E p.(preturn) : tSort ps,
+      pgi_cl_P Σ (Γ ,,, predctx) p.(preturn) (tSort ps) ->
+      wf_localE Σ (Γ ,,, predctx) ->
+      pgi_cl_PΓ Σ (Γ ,,, predctx) ->
+      is_allowed_elimination Σ idecl.(ind_kelim) ps ->
+      PCUICTyping.ctx_inst (Prop_conj typingE pgi_cl_P Σ) Γ (p.(pparams) ++ indices)
+        (List.rev (subst_instance p.(puinst) (mdecl.(ind_params) ,,, idecl.(ind_indices) : context))) ->
+      Σ ;;; Γ |-E c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
+      pgi_cl_P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
+      let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
+      wf_branches idecl brs ->
+      All2i (fun i cdecl br =>
+        (eq_context_upto_names br.(bcontext) (cstr_branch_context ci mdecl cdecl)) ×
+        let brctxty := case_branch_type ci.(ci_ind) mdecl idecl p br ptm i cdecl in
+        (pgi_cl_PΓ Σ (Γ ,,, brctxty.1) ×
+          (Prop_conj typingE pgi_cl_P Σ (Γ ,,, brctxty.1) br.(bbody) brctxty.2) ×
+          (Prop_conj typingE pgi_cl_P) Σ (Γ ,,, brctxty.1) brctxty.2 (tSort ps))) 0 idecl.(ind_ctors) brs ->
+      pgi_cl_P Σ Γ (tCase ci p c brs) (mkApps ptm (indices ++ [c])).
+  Proof.
+    intros Σ wfΣ Γ wfΓ ci p c brs indices ps mdecl idecl isdecl _ _ _ heqctx predctx hwfp _ _ hret
+      _ _ _ hpars _ hc ptm hwfbrs hbrs.
+    exact (pgi_cl_case_scoped Σ wfΣ Γ ci p c brs indices ps mdecl idecl isdecl heqctx hwfp hret
+             hpars hc hwfbrs hbrs).
+  Qed.
+
+  (** The case as the principle states it: the restated side condition
+      [isCoFinite ==> (ci_cofix_nondep ==> on_free_vars (strengthenP 0 1 xpredT) preturn)]
+      ([PCUICProgressEta.v:301-303]) is received and not used; the conclusion is
+      [pgi_cl_case_core]'s. *)
+  Lemma pgi_cl_case :
+    forall (Σ : global_env_ext) (wfΣ : wfE Σ) (Γ : context) (wfΓ : wf_localE Σ Γ),
+    forall (ci : case_info) p c brs indices ps mdecl idecl
+      (isdecl : declared_inductive Σ.1 ci.(ci_ind) mdecl idecl),
+      on_global_env cumulSpecE0 pgi_cl_Pj Σ.1 ->
+      pgi_cl_PΓ Σ Γ ->
+      mdecl.(ind_npars) = ci.(ci_npar) ->
+      eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ->
+      let predctx := case_predicate_context ci.(ci_ind) mdecl idecl p in
+      wf_predicate mdecl idecl p ->
+      consistent_instance_ext Σ (ind_universes mdecl) p.(puinst) ->
+      forall pret : Σ ;;; Γ ,,, predctx |-E p.(preturn) : tSort ps,
+      pgi_cl_P Σ (Γ ,,, predctx) p.(preturn) (tSort ps) ->
+      wf_localE Σ (Γ ,,, predctx) ->
+      pgi_cl_PΓ Σ (Γ ,,, predctx) ->
+      is_allowed_elimination Σ idecl.(ind_kelim) ps ->
+      PCUICTyping.ctx_inst (Prop_conj typingE pgi_cl_P Σ) Γ (p.(pparams) ++ indices)
+        (List.rev (subst_instance p.(puinst) (mdecl.(ind_params) ,,, idecl.(ind_indices) : context))) ->
+      Σ ;;; Γ |-E c : mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices) ->
+      pgi_cl_P Σ Γ c (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ indices)) ->
+      implb (isCoFinite mdecl.(ind_finite))
+        (implb ci.(ci_cofix_nondep)
+           (on_free_vars (strengthenP 0 1 ssrbool.xpredT) p.(preturn))) = true ->
+      let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
+      wf_branches idecl brs ->
+      All2i (fun i cdecl br =>
+        (eq_context_upto_names br.(bcontext) (cstr_branch_context ci mdecl cdecl)) ×
+        let brctxty := case_branch_type ci.(ci_ind) mdecl idecl p br ptm i cdecl in
+        (pgi_cl_PΓ Σ (Γ ,,, brctxty.1) ×
+          (Prop_conj typingE pgi_cl_P Σ (Γ ,,, brctxty.1) br.(bbody) brctxty.2) ×
+          (Prop_conj typingE pgi_cl_P) Σ (Γ ,,, brctxty.1) brctxty.2 (tSort ps))) 0 idecl.(ind_ctors) brs ->
+      pgi_cl_P Σ Γ (tCase ci p c brs) (mkApps ptm (indices ++ [c])).
+  Proof.
+    intros Σ wfΣ Γ wfΓ ci p c brs indices ps mdecl idecl isdecl h1 h2 h3 h4 predctx h5 h6 pret h7
+      h8 h9 h10 h11 h12 h13 _ ptm h14 h15.
+    exact (pgi_cl_case_core Σ wfΣ Γ wfΓ ci p c brs indices ps mdecl idecl isdecl h1 h2 h3 h4 h5 h6
+             pret h7 h8 h9 h10 h11 h12 h13 h14 h15).
   Qed.
 
   Lemma pgi_cl_proj :
@@ -1046,8 +1124,10 @@ Proof. split; [discriminate|vm_compute; reflexivity|vm_compute; reflexivity]. Qe
     the constructor application [c (∀P. P)], [red1]-normal ([pgi_cF_normal]), typed at
     [I (∀P. P)] over [typingE] ([pgx_cF_typedE]) in [si_Σ], which is proved [wfE] at those flags
     ([pgx_wfE], section [ClassificationFlags]). Its conclusion [construct_cofix_discr (head t)]
-    is about the head: [construct_cofix_discr] is false on [c (∀P. P)] itself and true on its
-    head [c] ([classificationE_inst_nondeg]).
+    [+ stuck_cofix_case t] (the second disjunct since BET-339) is about the head:
+    [construct_cofix_discr] is false on [c (∀P. P)] itself and true on its head [c]
+    ([classificationE_inst_nondeg]); [c (∀P. P)] is no blocked case
+    ([PCUICEtaF0Land3Instances.l6_cF_not_stuck]), so the instance lands in the first disjunct.
     INSTANCE NONDEGEN PCUICProgressEtaInstances.classificationE_inst_nondeg *)
 Definition classificationE_inst :=
   classificationE si_Σ sri_cF si_ind [] [iv_False] cli_axiom_free pgx_wfE

@@ -19,8 +19,10 @@
   ([cli_axiom_free]) and [wfE si_Σ] proved. Neither [t] (its head is an abstraction) nor its
   argument [∀P:Prop. P] (a product) is a canonical form; the β step builds [c (∀P:Prop. P)], the
   body [c x], which uses [x], with the argument for [x]. The lemma returns a [t'] convertible to
-  [t] whose head is a constructor or a cofixpoint; [pcuic_canonicityE_inst_moves] proves that this
-  [t'] is neither [t] nor the argument. The normalization that the lemma rests on is the section
+  [t] whose head is a constructor or a cofixpoint or, since BET-339 (F0, integ-all8), which is a
+  case blocked on a cofixpoint ([stuck_cofix_case]); [pcuic_canonicityE_inst_moves] proves that
+  this [t'] is neither [t] nor the argument, neither of which is such a blocked case. The
+  normalization that the lemma rests on is the section
   variable above. *)
 
 From MetaRocq.Utils Require Import utils.
@@ -59,7 +61,23 @@ Lemma pcuic_canonicityE_inst_moves :
 Proof.
   do 6 (split; [reflexivity|]).
   destruct pcuic_canonicityE_inst as [t' [[ty conv] hd]]; cbn [projT1]; clear ty conv.
-  split; intros ->; vm_compute in hd; discriminate hd.
+  (* BET-339: [t'] may also be a case blocked on a cofixpoint ([stuck_cofix_case t']). Neither
+     [t] (an application of an abstraction) nor the argument (a product) is one: no constructor
+     of [stuck_cofix_case] concludes on an abstraction or a product. *)
+  split; intros ->; destruct hd as [hd|st]; try (vm_compute in hd; discriminate hd).
+  - change (stuck_cofix_case (mkApps (tLambda si_na si_P (tApp (tConstruct si_ind 0 []) (tRel 0)))
+                                     [iv_False])) in st.
+    apply (stuck_cofix_case_mkApps_inv (tLambda si_na si_P (tApp (tConstruct si_ind 0 []) (tRel 0)))
+             [iv_False] eq_refl) in st as [st|(? & ? & ? & ? & e & _)];
+      [|discriminate e].
+    remember (tLambda si_na si_P (tApp (tConstruct si_ind 0 []) (tRel 0))) as t0 eqn:e0.
+    destruct st; try discriminate e0.
+    destruct args using rev_case; [cbn in e0; discriminate e0|].
+    rewrite mkApps_app in e0. cbn in e0. discriminate e0.
+  - unfold iv_False in st. remember (tProd _ _ _) as t0 eqn:e0.
+    destruct st; try discriminate e0.
+    destruct args using rev_case; [cbn in e0; discriminate e0|].
+    rewrite mkApps_app in e0. cbn in e0. discriminate e0.
 Qed.
 
 End CanonicityEtaInstances.

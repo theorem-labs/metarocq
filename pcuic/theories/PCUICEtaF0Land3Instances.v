@@ -61,10 +61,16 @@
      restated premise: a typed case on [R] with a predicate on the scrutinee has its flag unset.
      Details in the section.
 
+  6. LAND6 under BET-339 (branch [wip/eta-meta-f0-land6-2026-10-30]): [l6_si_no_stuck] (no typed
+     blocked case in [si_Σ], so [wh_neutral_empty(_gen)E] have no instance in
+     [PCUICClassificationEtaInstances]), [l6_cF_not_stuck] and [l6_xx_redex_not_stuck] (the
+     LAND6 instances on [c (∀P. P)] and [(λx:Prop. x → x) (∀P. P)] land in the old disjunct of
+     the restated sums). In section 4.
+
   Tags: the instance grammar of [lanes/eta/meta/instance-gate.md] (one [INSTANCE NONDEGEN],
   [INSTANCE IMPOSSIBLE:] or [INSTANCE NOT-BUILT:] line directly above each instance, with
   [TARGET] lines). Declarations that are neither instances nor NONDEGEN lemmas:
-  WITNESSES: f3_* g_* t8_* l45_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false
+  WITNESSES: f3_* g_* t8_* l45_* l6_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false
 
   Forecast evidence for the cutover F0 (it rests on the ship branch's
   [PCUICEtaFO4Instances], which is itself forecast-only). *)
@@ -83,7 +89,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICSREta PCUICEtaT8Probe.
 From MetaRocq.PCUIC Require PCUICWfUniverses.
 From MetaRocq.PCUIC Require PCUICSNEta PCUICConsistency PCUICCanonicityEta PCUICConsistencyEta
-     PCUICConsistencyEtaInstances PCUICEtaA6.
+     PCUICConsistencyEtaInstances PCUICEtaA6 PCUICSREtaInstances PCUICClassificationEtaInstances.
 From MetaRocq.PCUIC Require Import PCUICTypingEtaInd.
 
 #[local] Existing Instance default_checker_flags.
@@ -1089,6 +1095,33 @@ Definition no_closed_stuck_cofix_case_at_Σ_FalseE_inst :
 Lemma no_closed_stuck_cofix_case_at_Σ_FalseE_inst_nondeg :
   (stuck_cofix_case g_t × (construct_cofix_discr (head g_t) = false))%type.
 Proof. exact (g_stuck, g_head_not_discr). Qed.
+
+(** No term of [si_Σ] (the inductive [I] only) is a typed case blocked on a cofixpoint: a blocked
+    case needs a coinductive block. So [wh_neutral_empty_genE] / [wh_neutral_emptyE] have no
+    non-degenerate instance in [si_Σ], and [PCUICClassificationEtaInstances] carries none since
+    BET-339; their instances are the ones above, in [iv_Σ]. *)
+Lemma l6_si_no_stuck Γ t T : stuck_cofix_case t -> si_Σ ;;; Γ |-E t : T -> False.
+Proof.
+  intros st h. destruct (PCUICConsistencyEta.typing_stuck_cofix_case_cofiniteE st h) as [mind hk].
+  revert hk. unfold check_recursivity_kind, lookup_env, si_Σ, si_env; cbn.
+  repeat match goal with |- context [if ?c then _ else _] => destruct c end; cbn; intros e; discriminate e.
+Qed.
+
+(** Evidence for the BET-339 lines of [PCUICClassificationEtaInstances] and
+    [PCUICProgressEtaInstances] (LAND6): their instances on [c (∀P. P)] land in the
+    constructor-head disjunct, since [c (∀P. P)] is no case blocked on a cofixpoint (a blocked term
+    has no constructor head); their progress instances on [(λx:Prop. x → x) (∀P. P)] land in the
+    step disjunct, since that term evaluates, so it is no [wcbv_stuck] term. *)
+Lemma l6_cF_not_stuck : stuck_cofix_case PCUICSREtaInstances.sri_cF -> False.
+Proof.
+  intros st. pose proof (stuck_cofix_case_head _ st) as e. vm_compute in e. discriminate e.
+Qed.
+
+Lemma l6_xx_redex_not_stuck : wcbv_stuck si_Σ PCUICSREtaInstances.sri_xx_redex -> False.
+Proof.
+  intros st.
+  exact (wcbv_stuck_no_eval st _ PCUICClassificationEtaInstances.cli_eval_xx).
+Qed.
 
 (* INSTANCE NOT-BUILT: [pcuic_consistentE] in an environment WITH a coinductive block (where the
    premise [no_closed_stuck_cofix_case_atE] is not proved by
