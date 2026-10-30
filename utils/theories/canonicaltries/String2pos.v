@@ -27,6 +27,15 @@ Definition ascii_cons_pos (c: ascii) (n: positive) : positive :=
       bool_cons_pos b7 n)))))))
   end.
 
+(* This REPLACES A COMPUTATION: the OCaml must return
+   [bool_cons_pos b0 (... (bool_cons_pos b7 n))] for [c = Ascii b0 ... b7], with b_i bit i
+   of [Char.code c] and b0 the least significant.  [Print Assumptions] cannot show it.
+   This module is in [safechecker-plugin/src/metarocq_safechecker_plugin.mlpack], so the
+   directive is kept out of the shipped checker only by REACHABILITY: [ascii_cons_pos] is
+   not reached from the roots of the safechecker's [Separate Extraction], and in the built
+   1a92b56c tree [safechecker-plugin/src/string2pos.ml] holds the [positive] datatype and
+   nothing else.  A new extraction root can change that without touching this line.  See
+   test-suite/extraction_directives.allowed. *)
 Extract Constant ascii_cons_pos =>
   "(fun c n ->
       let c = Char.code c in

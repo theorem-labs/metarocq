@@ -43,6 +43,19 @@ Extraction Inline PCUICPrimitive.prim_val_reflect_eq.
     (LemmaPin_3: 1,452.99 s and 9.99 GiB without, 1,459.54 s and 11.00 GiB
     with, one concurrent pair, same box, 2 CPUs and 24 GiB each). *)
 
+(** On the claim those two directives carried, that they were "the first
+    safechecker extraction directives that replace a computation inside the
+    checker": that is true only with a qualifier the claim did not state.
+    [utils/theories/canonicaltries/String2pos.v] has replaced the computation
+    of [ascii_cons_pos] by OCaml bit arithmetic for far longer, and its module
+    IS in [src/metarocq_safechecker_plugin.mlpack].  It is not in the shipped
+    checker only because that constant is not REACHABLE from the roots of the
+    [Separate Extraction] below: in the built 1a92b56c tree,
+    [src/string2pos.ml] holds the [positive] datatype and nothing else.
+    Reachability, not the absence of a directive, is what kept it out, and
+    reachability changes when a root changes.  [check_extraction_directives.sh]
+    therefore lists every directive in the tree, reachable or not. *)
+
 Set Extraction Output Directory "src".
 (** The extracted checker runs the real, executable guard check
     [PCUICWfEnvImpl.real_guard_impl] ([check_guard_gen]). *)
