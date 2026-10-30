@@ -26,6 +26,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICIndu
      PCUICWsCumulEtaSubst PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICEtaA6 PCUICEtaA6Ind
      PCUICEtaA6More PCUICEtaMkAppsTRel
      PCUICEtaI5 PCUICInversionEta PCUICSREtaConv PCUICSpineEta PCUICInductivesEta
+     PCUICValidityEta
      PCUICWsCumulEtaInstancesGlobal PCUICInductiveInversionEta.
 From MetaRocq.PCUIC Require PCUICWfUniversesEta PCUICEtaI5A2 PCUICGenerationEta.
 
@@ -59,11 +60,11 @@ From Stdlib Require Import ssreflect ssrbool.
   [PCUICFixWitnessEtaCounter.wf_cofixpoint_allE_false]); [isLambda_red1] and
   [case_branch_context_nopars], which mention none of the relations and are used from base.
 
-  NOT COPIED, waiting on a dependency: [subslet_projs]. Its hypothesis types an ARBITRARY
-  term at [mkApps (tInd i u) args] and the proof needs [#|args| = ind_npars mdecl] and the
-  parameter [spine_subst], which follow only from [isType] of that type; base reads it off
-  [PCUICValidity.validity], whose E form is not among the landed files, and the subject has
-  no shape, so no subject-directed induction replaces it.
+  [subslet_projsE] is proved through [PCUICValidityEta.validityE] (row T2a): its hypothesis
+  types an ARBITRARY term at [mkApps (tInd i u) args], and the proof needs
+  [#|args| = ind_npars mdecl] and the parameter [spine_subst], which follow only from the
+  [isType] of that type. No subject-directed induction replaces it, because the subject has
+  no shape.
 
   NEW NAMES (no base twin): [isTypeE_typingE_tApp_ctor], [isTypeE_typingE_tConstruct_ctor]
   and [isTypeE_typingE_mkApps_tConstruct_ctor], the constructor-application case of validity
@@ -1114,11 +1115,68 @@ Proof.
   now eapply All_local_env_app_inv in wf.
 Qed.
 
-(** [subslet_projs] is NOT copied here. Its hypothesis types an ARBITRARY term at
-    [mkApps (tInd i u) args], and the proof needs [#|args| = ind_npars mdecl] and the
-    parameter [spine_subst]; both follow only from [isType] of that type, which base takes
-    from [PCUICValidity.validity]. The subject has no shape, so no subject-directed
-    induction replaces it: the twin waits on validity over [typingE]. *)
+Lemma subslet_projsE {cf:checker_flags} {Σ} {wfΣ : wfE Σ} {i mdecl idecl args} :
+  declared_inductive Σ.1 i mdecl idecl ->
+  match ind_ctors idecl return Type with
+  | [cs] =>
+    on_projections mdecl (inductive_mind i) (inductive_ind i)
+     idecl (ind_indices idecl) cs ->
+     forall Γ t u,
+     let indsubst := inds (inductive_mind i) u (ind_bodies mdecl) in
+     Σ;;; Γ |-E t : mkApps (tInd i u) args ->
+     wf_subsletE Σ Γ
+      (projs_inst i (ind_npars mdecl) (context_assumptions (cstr_args cs)) t)
+      (subst_context (List.rev args) 0
+        (subst_context (extended_subst (ind_params mdecl)@[u] 0) 0
+          (smash_context []
+            (subst_context (inds (inductive_mind i) u (ind_bodies mdecl))
+              #|ind_params mdecl| (subst_instance u (cstr_args cs))))))
+  | _ => True
+  end.
+Proof.
+  intros Hdecl.
+  destruct ind_ctors as [|cs []] eqn:Heq; trivial.
+  intros onp. simpl. intros Γ t u.
+  rewrite (smash_context_subst []).
+  assert (#|PCUICEnvironment.ind_projs idecl| >=
+  PCUICEnvironment.context_assumptions (cstr_args cs)).
+  { destruct onp. lia. }
+  intros Ht.
+  epose proof (declared_projections_subsletE _ Hdecl cs Heq onp _ (Nat.le_refl _)).
+  (* the subject of [Ht] is an arbitrary term, so the [isType] of its type comes from
+     validity over [typingE] *)
+  have v := !!(validityE Ht). eapply isType_mkApps_Ind_invE in v as [? [? []]]; tea; pcuic.
+  unshelve epose proof (Hdecl' := declared_inductive_to_gen Hdecl); eauto.
+  eapply (instantiate_wf_subsletE (decl:=InductiveDecl mdecl)) in X; tea. 2:apply Hdecl'.
+  move: X. rewrite Nat.sub_diag skipn_0.
+  rewrite subst_instance_subst_context subst_instance_lift_context.
+  rewrite subst_context_lift_context_comm //.
+  rewrite (projection_context_gen_inst Hdecl) //.
+  rewrite /projection_context.
+  eapply spine_subst_smashE in s.
+  intros Hs.
+  have wfΓ : wf_localE Σ Γ by (eapply typingE_wf_local; eauto).
+  eapply weaken_wf_subsletE in Hs;tea.
+  eapply (substitution_subsletE (Γ' := [_])) in Hs; tea.
+  2:eapply s.
+  move: Hs. cbn.
+  rewrite subst_context_snoc /= /subst_decl /= /map_decl /= subst_mkApps /=.
+  rewrite (spine_subst_subst_to_extended_list_kE s).
+  move: (on_projections_indices onp) => heq. rewrite heq in e0.
+  cbn in e0.
+  assert (#|args| = ind_npars mdecl).
+  rewrite -(firstn_skipn (ind_npars mdecl) args) length_app e0 e //.
+  rewrite firstn_all2 //. lia.
+  move/(substitution_subsletE (Γ := Γ) (Δ := [_]) (Γ' := []) (subslet_ass_tipE Ht)).
+  cbn.
+  rewrite [(projs _ _ _)@[u]]projs_subst_instance projs_subst_above // subst_projs_inst.
+  rewrite subst_instance_subst_context.
+  rewrite instantiate_indsE //. exact Hdecl.
+  rewrite subst_context_lift_context_comm //.
+  rewrite subst_context_lift_context_cancel //.
+  rewrite subst_instance_extended_subst //.
+  rewrite subst_instance_smash //.
+Qed.
 
 Lemma positive_cstr_closed_indicesE {cf} {Σ} {wfΣ : wfE Σ} :
   forall {i mdecl idecl cdecl},
