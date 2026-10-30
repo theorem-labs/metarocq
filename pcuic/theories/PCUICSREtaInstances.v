@@ -321,6 +321,38 @@ Qed.
 (** [x → x] in [x : Prop]: the variable [x] occurs in the domain and under the binder. *)
 Definition sri_x_to_x : term := tProd si_na (tRel 0) (tRel 1).
 
+(** [z := ∀P:Prop. P : Prop, w : z → z] ([sri_x_to_x] at [x := z]): the let's variable [z]
+    occurs in the domain and under the binder of [w]'s type. *)
+Lemma sri_wf_let_x_to_x : wf_localE si_Σ ([] ,, vdef si_na iv_False si_P ,, vass si_na sri_x_to_x).
+Proof.
+  have wd := iv_wf_vdef si_Σ [] localenv_nil.
+  have hz : si_Σ ;;; [] ,, vdef si_na iv_False si_P |-E tRel 0 : tSort sProp.
+  { exact (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) wd eq_refl). }
+  have wz := iv_wf_vass si_Σ _ si_na (tRel 0) sProp wd hz eq_refl.
+  have hT : si_Σ ;;; [] ,, vdef si_na iv_False si_P |-E sri_x_to_x : tSort (Sort.sort_of_product sProp sProp).
+  { exact (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp (iv_vass_s si_Σ _ si_na (tRel 0) sProp hz eq_refl)
+             (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) wz eq_refl)). }
+  exact (iv_wf_vass si_Σ _ si_na _ _ wd hT eq_refl).
+Qed.
+
+(** [z → z] in [z := ∀P:Prop. P : Prop, w : z]: [z] is [tRel 1] in the domain and [tRel 2] under
+    the binder. *)
+Definition sri_z_to_z : term := tProd si_na (tRel 1) (tRel 2).
+
+Lemma sri_z_to_z_isType : isTypeE si_Σ ([vdef si_na iv_False si_P] ,,, [vass si_na (tRel 0)]) sri_z_to_z.
+Proof.
+  have wd := iv_wf_vdef si_Σ [] localenv_nil.
+  have hz : si_Σ ;;; [] ,, vdef si_na iv_False si_P |-E tRel 0 : tSort sProp.
+  { exact (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) wd eq_refl). }
+  have ww := iv_wf_vass si_Σ _ si_na (tRel 0) sProp wd hz eq_refl.
+  have hz1 : si_Σ ;;; [] ,, vdef si_na iv_False si_P ,, vass si_na (tRel 0) |-E tRel 1 : tSort sProp.
+  { exact (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) ww eq_refl). }
+  have wz := iv_wf_vass si_Σ _ si_na (tRel 1) sProp ww hz1 eq_refl.
+  apply (has_sort_isTypeE (Sort.sort_of_product sProp sProp)).
+  exact (typeE_Prod _ _ si_na (tRel 1) (tRel 2) sProp sProp (iv_vass_s si_Σ _ si_na (tRel 1) sProp hz1 eq_refl)
+           (typeE_Rel _ _ 2 (vdef si_na iv_False si_P) wz eq_refl)).
+Qed.
+
 (** The arities context of [I] and [X : Prop → Prop ⊢ X (∀P:Prop. P) : Prop]. *)
 Definition sri_Γa : context := (arities_context (ind_bodies si_mdecl))@[[]].
 
@@ -676,18 +708,20 @@ Section SRInstances.
              sri_wf_Γz).
   Qed.
 
-  (** The substitution of the let's body moves [w : z]. *)
-  Lemma wf_local_subst1E_inst_nondeg : subst_context [iv_False] 0 [vass si_na (tRel 0)] <> [vass si_na (tRel 0)].
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** Substituting the let's value [∀P:Prop. P] for [z] in [w : z → z] moves [w]'s type, and the
+      resulting declaration is not [w : ∀P:Prop. P] (the type is not the substituted term). *)
+  Lemma wf_local_subst1E_inst_nondeg :
+    subst_context [iv_False] 0 [vass si_na sri_x_to_x] <> [vass si_na sri_x_to_x] /\
+    subst_context [iv_False] 0 [vass si_na sri_x_to_x] <> [vass si_na iv_False].
+  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
 
-  (** [let z : Prop := ∀P:Prop. P, w : z] gives [w : ∀P:Prop. P].
+  (** [let z : Prop := ∀P:Prop. P, w : z → z] ([sri_wf_let_x_to_x]) gives
+      [w : (∀P:Prop. P) → ∀P:Prop. P].
       INSTANCE NONDEGEN PCUICSREtaInstances.wf_local_subst1E_inst_nondeg *)
-  Lemma wf_local_subst1E_inst : wf_localE si_Σ ([] ,,, subst_context [iv_False] 0 [vass si_na (tRel 0)]).
+  Lemma wf_local_subst1E_inst : wf_localE si_Σ ([] ,,, subst_context [iv_False] 0 [vass si_na sri_x_to_x]).
   Proof.
-    apply (wf_local_subst1E (Σ := si_Σ) (wfΣ := si_wfE) [] si_na iv_False si_P [vass si_na (tRel 0)]).
-    have wd := iv_wf_vdef si_Σ [] localenv_nil.
-    exact (iv_wf_vass si_Σ ([] ,, vdef si_na iv_False si_P) si_na (tRel 0) sProp wd
-             (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) wd eq_refl) eq_refl).
+    exact (wf_local_subst1E (Σ := si_Σ) (wfΣ := si_wfE) [] si_na iv_False si_P [vass si_na sri_x_to_x]
+             sri_wf_let_x_to_x).
   Qed.
 
   (** The declaration [y : k g] has an open type ([k g] is [tApp (tRel 0) (tRel 1)]), so the lift
@@ -717,8 +751,8 @@ Section SRInstances.
     (lift_typing typingE si_Σ [] (j_vdef si_na iv_False si_P) ×
      isTypeE si_Σ ([] ,, vdef si_na iv_False si_P) (tRel 0)).
   Proof.
-    (* [pose proof], not ssreflect's [have :=], which would abstract the forecast-class holes
-       instead of resolving them from the section's [Context]. *)
+    (* [pose proof], not ssreflect's [have :=], which would abstract the section's typeclass
+       arguments instead of resolving them from the section's [Context]. *)
     pose proof (snd (isType_tLetInE (Σ := si_Σ) (HΣ' := si_wfE) (t := iv_False))
                   (iv_vdef_False si_Σ [] localenv_nil, sri_vdef_rel_isType)) as h.
     exact (h, fst (isType_tLetInE (Σ := si_Σ) (HΣ' := si_wfE)) h).
@@ -919,24 +953,35 @@ Section SRInstances.
     PCUICSREta.isType_weakenE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Δ := [vdef si_na iv_False si_P])
       (iv_wf_vdef si_Σ [] localenv_nil) sri_A_isType.
 
-  (** Expanding the let moves [z] to its value. *)
-  Lemma isType_expand_letsE_inst_nondeg : expand_lets_k [vdef si_na iv_False si_P] 0 (tRel 0) <> tRel 0.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** Expanding the let [z := ∀P:Prop. P] below [w : z] moves [z → z] ([sri_z_to_z]), and the result
+      is not the let's value [∀P:Prop. P]; it also moves [w : z]. *)
+  Lemma isType_expand_letsE_inst_nondeg :
+    expand_lets_k [vdef si_na iv_False si_P] #|[vass si_na (tRel 0)]| sri_z_to_z <> sri_z_to_z /\
+    expand_lets_k [vdef si_na iv_False si_P] #|[vass si_na (tRel 0)]| sri_z_to_z <> iv_False /\
+    expand_lets_ctx [vdef si_na iv_False si_P] [vass si_na (tRel 0)] <> [vass si_na (tRel 0)].
+  Proof. split; [|split]; intros h; vm_compute in h; discriminate h. Qed.
 
-  (** Expanding the let [z := ∀P:Prop. P].
+  (** Expanding the let [z := ∀P:Prop. P] in [z → z] ([sri_z_to_z_isType]), below [w : z].
       INSTANCE NONDEGEN PCUICSREtaInstances.isType_expand_letsE_inst_nondeg *)
   Definition isType_expand_letsE_inst :=
-    isType_expand_letsE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := [vdef si_na iv_False si_P]) (Δ := []) sri_vdef_rel_isType.
+    isType_expand_letsE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := [vdef si_na iv_False si_P]) (Δ := [vass si_na (tRel 0)])
+      (T := sri_z_to_z) sri_z_to_z_isType.
 
-  (** The extended substitution of the let moves [z] to its value. *)
+  (** The extended substitution of the let [z := ∀P:Prop. P], at depth one below [w : z], moves
+      [z → z] ([sri_z_to_z]), and the result is not the let's value [∀P:Prop. P]; it also moves
+      [w : z]. *)
   Lemma isType_subst_extended_substE_inst_nondeg :
-    subst (extended_subst [vdef si_na iv_False si_P] 0) 0 (tRel 0) <> tRel 0.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+    subst (extended_subst [vdef si_na iv_False si_P] 0) #|[vass si_na (tRel 0)]| sri_z_to_z <> sri_z_to_z /\
+    subst (extended_subst [vdef si_na iv_False si_P] 0) #|[vass si_na (tRel 0)]| sri_z_to_z <> iv_False /\
+    subst_context (extended_subst [vdef si_na iv_False si_P] 0) 0 [vass si_na (tRel 0)] <> [vass si_na (tRel 0)].
+  Proof. split; [|split]; intros h; vm_compute in h; discriminate h. Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.isType_subst_extended_substE_inst_nondeg *)
+  (** The extended substitution of the let [z := ∀P:Prop. P] in [z → z] ([sri_z_to_z_isType]),
+      below [w : z].
+      INSTANCE NONDEGEN PCUICSREtaInstances.isType_subst_extended_substE_inst_nondeg *)
   Definition isType_subst_extended_substE_inst :=
-    isType_subst_extended_substE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := [vdef si_na iv_False si_P]) (Δ := [])
-      sri_vdef_rel_isType.
+    isType_subst_extended_substE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := [vdef si_na iv_False si_P])
+      (Δ := [vass si_na (tRel 0)]) (T := sri_z_to_z) sri_z_to_z_isType.
 
   (** The substitution of the inductive for the arity variable moves [X (∀P:Prop. P)]. *)
   Lemma isType_subst_aritiesE_inst_nondeg :

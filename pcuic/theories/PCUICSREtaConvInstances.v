@@ -133,16 +133,27 @@ Proof.
   apply eta1_ws_cumul_pbE; [reflexivity|reflexivity|exact fi_eta1].
 Qed.
 
-(** Substituting [fi_beta] and substituting [fi_P] give two different contexts. *)
-Lemma substitution_ws_cumul_ctx_pbE_red_subst_inst_nondeg :
-  subst_context [fi_beta] 0 [vass si_na (tRel 0)] <> subst_context [fi_P] 0 [vass si_na (tRel 0)].
-Proof. discriminate. Qed.
+(** [x → x] over [x : Prop]: the variable [x] occurs in the domain and under the binder. *)
+Definition sc_x_to_x : term := tProd si_na (tRel 0) (tRel 1).
 
-(** Substituting [(λy:Prop. y) Prop] and [Prop] into [x : Rel 0].
+(** The type [x → x] is not a bare variable; substituting [(λy:Prop. y) Prop] for [x] gives
+    [(λy:Prop. y) Prop → (λy:Prop. y) Prop], and substituting [Prop] gives [Prop → Prop]; each
+    result is not the term substituted, and the two results differ. *)
+Lemma substitution_ws_cumul_ctx_pbE_red_subst_inst_nondeg :
+  [/\ (forall k, sc_x_to_x <> tRel k),
+      subst_context [fi_beta] 0 [vass si_na sc_x_to_x] = [vass si_na (tProd si_na fi_beta fi_beta)],
+      subst_context [fi_P] 0 [vass si_na sc_x_to_x] = [vass si_na (tProd si_na fi_P fi_P)],
+      tProd si_na fi_beta fi_beta <> fi_beta /\ tProd si_na fi_P fi_P <> fi_P &
+      tProd si_na fi_beta fi_beta <> tProd si_na fi_P fi_P].
+Proof. split; [intros k; discriminate|reflexivity|reflexivity|split; discriminate|discriminate]. Qed.
+
+(** Substituting [(λy:Prop. y) Prop] and [Prop], related by [fi_closed_red_beta], for [x] in
+    [x' : x → x] ([sc_x_to_x]); the results are given by
+    [substitution_ws_cumul_ctx_pbE_red_subst_inst_nondeg].
     INSTANCE NONDEGEN PCUICSREtaConvInstances.substitution_ws_cumul_ctx_pbE_red_subst_inst_nondeg *)
 Lemma substitution_ws_cumul_ctx_pbE_red_subst_inst :
-  ws_cumul_ctx_pbE Conv si_Σ ([] ,,, subst_context [fi_beta] 0 [vass si_na (tRel 0)])
-    ([] ,,, subst_context [fi_P] 0 [vass si_na (tRel 0)]).
+  ws_cumul_ctx_pbE Conv si_Σ ([] ,,, subst_context [fi_beta] 0 [vass si_na sc_x_to_x])
+    ([] ,,, subst_context [fi_P] 0 [vass si_na sc_x_to_x]).
 Proof.
   apply (substitution_ws_cumul_ctx_pbE_red_subst (Γ := []) (Δ := [vass si_na fi_P])
            (s := [fi_beta]) (s' := [fi_P])).

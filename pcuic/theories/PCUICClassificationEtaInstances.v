@@ -31,17 +31,21 @@
   - [typing_cofix_coindE_inst]: a cofixpoint whose declared type is the β-redex [bdf_RFβ],
     typed at [R (∀P. P)], which is not that declared type and is its one-step β-reduct
     ([cli_cofix_dtype_nondeg]).
-  - [typing_spine_all_invE_inst] runs on [∀P:Prop. P] applied to [∀P:Prop. P], at the type
-    [let z := ∀P. P in z], which differs from the substituted codomain [∀P. P]
-    ([cli_spine_all_inv_differs]).
-    The three [nth_error] spine lemmas run on the dependent type [Π x : Prop. Π y : x. x]
-    ([cli_dep_ty]): [typing_spine_nth_errorE_inst] reads the type of the second argument
-    [c (∀P. P)], whose declared type [x] the first argument [I (∀P. P)] replaces
-    ([cli_dep_nth_subst_differs]); the two [None] lemmas run on the partial spine
-    [cli_dep_ty (I (∀P. P))], which ends at the let-in [let z := I (∀P. P) in Π y : z. z]
-    ([cli_dep_let]), not a product ([cli_dep_none_differs], [cli_dep_let_not_prod]). The smash
-    lemmas run on the let-in [let z := ∀P. P in z], which smashing changes
-    ([cli_let_smash_differs]).
+  - [typing_spine_all_invE_inst] runs on the empty spine of [let z := ∀P:Prop. P in z → z]
+    ([cli_let_arrow]) at itself: the substitution [z := ∀P. P] into [z → z] gives
+    [(∀P. P) → (∀P. P)], which is neither the substituted [∀P. P], nor the body, nor the compared
+    let-in ([cli_all_inv_let_nondeg]).
+    [typing_spine_nth_errorE_inst] reads the type of the second argument [c (∀P. P)] of
+    [Π x : Prop. Π y : I x. I x] ([cli_depI_ty]) applied to [∀P. P]: its declared type [I x] with
+    [x := ∀P. P] is [I (∀P. P)], neither the substituted [∀P. P] nor [I x]
+    ([cli_depI_nth_subst_nondeg]). The two [None] spine lemmas run on the dependent type
+    [Π x : Prop. Π y : x. x] ([cli_dep_ty]) applied to [I (∀P. P)] only, which ends at the let-in
+    [let z := I (∀P. P) in Π y : z. z] ([cli_dep_let]), not a product ([cli_dep_none_differs],
+    [cli_dep_let_not_prod]). [typing_spine_smashE_inst] runs on the empty spine of [cli_dep_let] at
+    itself: smashing drops the let and substitutes [z := I (∀P. P)] into [Π y : z. z], giving
+    [Π y : I (∀P. P). I (∀P. P)], neither the substituted term, nor the body, nor [cli_dep_let]
+    ([cli_smash_dep_nondeg]). [cumul_it_mkProd_or_LetIn_smashE_inst] runs on the let-in
+    [let z := ∀P. P in z], which smashing changes ([cli_let_smash_differs]).
   - [arity_spine_len_subst_inst] substitutes [∀P. P] for the free variable [x] of the arity
     [let z := x : Prop in Π _ : x. Prop] ([cli_open_arity]), which changes the term
     ([cli_open_arity_subst_differs]); [x] occurs in the let body and in the product domain.
@@ -144,71 +148,63 @@ Proof.
   exact (closed_red_refl (Σ := si_Σ) cli_Γz iv_PP eq_refl eq_refl).
 Qed.
 
-(** The spine of [∀P:Prop. P] applied to [∀P:Prop. P]. *)
+(** [∀P:Prop. P] is a type, and is below itself. *)
 Lemma cli_False_isType (Γ : context) : wf_localE si_Σ Γ -> isTypeE si_Σ Γ iv_False.
 Proof. intros h. exact (has_sort_isTypeE _ (iv_False_typed si_Σ Γ h)). Qed.
 
 Lemma cli_False_refl (Γ : context) : wf_localE si_Σ Γ -> ws_cumul_pbE Cumul si_Σ Γ iv_False iv_False.
 Proof. intros h. exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) Γ iv_False (cli_False_isType Γ h)). Qed.
 
-Lemma cli_sp_nil : PCUICAritiesEta.typing_spineE si_Σ [] iv_False [] iv_False.
+(** [let z := ∀P:Prop. P : Prop in z → z]: the let-bound [z] occurs in the domain and the codomain
+    of the body. *)
+Definition cli_let_arrow : term := tLetIn si_na iv_False si_P (tProd si_na (tRel 0) (tRel 1)).
+
+Lemma cli_zF_typed : si_Σ ;;; [vdef si_na iv_False si_P] |-E tRel 0 : si_P.
+Proof. exact (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) (iv_wf_vdef si_Σ [] localenv_nil) eq_refl). Qed.
+
+Lemma cli_wf_zFy : wf_localE si_Σ [vass si_na (tRel 0); vdef si_na iv_False si_P].
+Proof. exact (iv_wf_vass si_Σ _ si_na (tRel 0) sProp (iv_wf_vdef si_Σ [] localenv_nil) cli_zF_typed eq_refl). Qed.
+
+Lemma cli_let_arrow_typed : si_Σ ;;; [] |-E cli_let_arrow : tSort sProp.
 Proof.
-  econstructor; [exact (cli_False_isType [] localenv_nil)|exact (cli_False_isType [] localenv_nil)|].
-  exact (cli_False_refl [] localenv_nil).
+  eapply (typeE_Cumul _ _ cli_let_arrow (tLetIn si_na iv_False si_P si_P) si_P (Sort.super sProp)).
+  - apply typeE_LetIn.
+    + exact (iv_vdef si_Σ [] si_na iv_False si_P _ (iv_False_typed si_Σ [] localenv_nil)
+               (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+    + exact (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp
+               (iv_vass_s si_Σ _ si_na (tRel 0) sProp cli_zF_typed eq_refl)
+               (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) cli_wf_zFy eq_refl)).
+  - exact (iv_P_typed si_Σ [] localenv_nil).
+  - apply (ws_cumul_pbE_forget_spec (pb := Cumul)).
+    apply (red_ws_cumul_pbE (Σ := si_Σ)).
+    exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := tLetIn si_na iv_False si_P si_P) eq_refl eq_refl
+             (red1_red _ _ _ _ (red_zeta _ _ si_na iv_False si_P si_P))).
 Qed.
 
-Lemma cli_sp_one : PCUICAritiesEta.typing_spineE si_Σ [] iv_False [iv_False] iv_False.
+Lemma cli_let_arrow_isType : isTypeE si_Σ [] cli_let_arrow.
+Proof. exact (has_sort_isTypeE _ cli_let_arrow_typed). Qed.
+
+(** The empty spine of [cli_let_arrow] at itself (reflexive: it holds no ζ step). *)
+Lemma cli_let_arrow_sp_nil : PCUICAritiesEta.typing_spineE si_Σ [] cli_let_arrow [] cli_let_arrow.
 Proof.
-  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ iv_False iv_False [] si_na si_P (tRel 0) iv_False).
-  - exact (cli_False_isType [] localenv_nil).
-  - exact (cli_False_isType [] localenv_nil).
-  - exact (cli_False_refl [] localenv_nil).
-  - exact (iv_False_typed si_Σ [] localenv_nil).
-  - exact cli_sp_nil.
+  econstructor; [exact cli_let_arrow_isType|exact cli_let_arrow_isType|].
+  exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] cli_let_arrow cli_let_arrow_isType).
 Qed.
 
-Lemma cli_wf_ΓΔ : wf_localE si_Σ ([] ,,, [vass si_na si_P]).
-Proof. exact (iv_wf_P si_Σ [] localenv_nil). Qed.
-
-(** The spine of the let-in [let z := ∀P:Prop. P in z] (no argument), at [∀P:Prop. P]. *)
-Lemma cli_let_ws : ws_cumul_pbE Cumul si_Σ [] bdf_let iv_False.
+(** [typing_spine_all_invE] on [cli_let_arrow] ([Δ = [z := ∀P. P : Prop]], [T = z → z], no
+    argument): the substitution [z := ∀P. P] into [z → z] gives [(∀P. P) → (∀P. P)], which is not
+    the substituted [∀P. P], not the body [z → z], and not the compared type [cli_let_arrow]. *)
+Lemma cli_all_inv_let_nondeg :
+  #|@nil term| = context_assumptions [vdef si_na iv_False si_P] /\
+  subst (List.rev (@nil term)) 0 (expand_lets [vdef si_na iv_False si_P] (tProd si_na (tRel 0) (tRel 1))) =
+    tProd si_na iv_False iv_False /\
+  tProd si_na iv_False iv_False <> iv_False /\
+  tProd si_na iv_False iv_False <> tProd si_na (tRel 0) (tRel 1) /\
+  tProd si_na iv_False iv_False <> cli_let_arrow.
 Proof.
-  apply (red_ws_cumul_pbE (Σ := si_Σ)).
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := bdf_let) eq_refl eq_refl
-           (red1_red _ _ _ _ (red_zeta _ _ si_na iv_False si_P (tRel 0)))).
+  split; [reflexivity|]. split; [vm_compute; reflexivity|].
+  split; [|split]; intros h; vm_compute in h; discriminate h.
 Qed.
-
-Lemma cli_sp_let : PCUICAritiesEta.typing_spineE si_Σ [] (it_mkProd_or_LetIn [vdef si_na iv_False si_P] (tRel 0)) [] iv_False.
-Proof.
-  econstructor; [exact (has_sort_isTypeE _ bdf_let_sort_typed)|exact (cli_False_isType [] localenv_nil)|].
-  exact cli_let_ws.
-Qed.
-
-(** The same spine of [∀P:Prop. P] applied to [∀P:Prop. P], ending at the let-in
-    [let z := ∀P:Prop. P in z] by one ζ step backwards: the type that [typing_spine_all_invE]
-    compares with the substituted codomain [∀P:Prop. P] is a different term. *)
-Lemma cli_let_ws_inv : ws_cumul_pbE Cumul si_Σ [] iv_False bdf_let.
-Proof.
-  apply (red_ws_cumul_pbE_inv (Σ := si_Σ)).
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := bdf_let) eq_refl eq_refl
-           (red1_red _ _ _ _ (red_zeta _ _ si_na iv_False si_P (tRel 0)))).
-Qed.
-
-Lemma cli_sp_one_let : PCUICAritiesEta.typing_spineE si_Σ [] iv_False [iv_False] bdf_let.
-Proof.
-  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ iv_False iv_False [] si_na si_P (tRel 0) bdf_let).
-  - exact (cli_False_isType [] localenv_nil).
-  - exact (cli_False_isType [] localenv_nil).
-  - exact (cli_False_refl [] localenv_nil).
-  - exact (iv_False_typed si_Σ [] localenv_nil).
-  - econstructor; [exact (cli_False_isType [] localenv_nil)|exact (has_sort_isTypeE _ bdf_let_sort_typed)|].
-    exact cli_let_ws_inv.
-Qed.
-
-Lemma cli_spine_all_inv_differs :
-  expand_lets [vass si_na si_P] (tRel 0) <> subst (List.rev [iv_False]) 0 (expand_lets [vass si_na si_P] (tRel 0)) /\
-  subst (List.rev [iv_False]) 0 (expand_lets [vass si_na si_P] (tRel 0)) <> bdf_let.
-Proof. split; vm_compute; discriminate. Qed.
 
 (** The dependent type [Π x : Prop. Π y : x. x] ([it_mkProd_or_LetIn cli_dep_Δ (tRel 1)]): the
     declared type of its second argument is the first argument. *)
@@ -242,15 +238,45 @@ Proof. exact (has_sort_isTypeE _ (iv_IF_typed [] localenv_nil)). Qed.
 Lemma cli_fixty_isType : isTypeE si_Σ [] iv_fix_ty.
 Proof. exact (has_sort_isTypeE _ (iv_fix_ty_typed [] localenv_nil)). Qed.
 
-(** [cli_dep_ty] applied to [I (∀P. P)] and [c (∀P. P) : I (∀P. P)]. *)
-Lemma cli_dep_sp_two : PCUICAritiesEta.typing_spineE si_Σ [] cli_dep_ty [iv_IF; sri_cF] iv_IF.
+(** [Π x : Prop. Π y : I x. I x] ([it_mkProd_or_LetIn cli_depI_Δ (iv_Ix 1)]): the declared type
+    [I x] of its second argument mentions the first. *)
+Definition cli_depI_Δ : context := [vass si_na (iv_Ix 0); vass si_na si_P].
+Definition cli_depI_ty : term := tProd si_na si_P (tProd si_na (iv_Ix 0) (iv_Ix 1)).
+
+Lemma cli_Ix_typed : si_Σ ;;; [vass si_na si_P] |-E iv_Ix 0 : si_P.
+Proof. exact (iv_IX_typed [vass si_na si_P] (tRel 0) (iv_wf_P si_Σ [] localenv_nil) cli_dep_x_typed). Qed.
+
+Lemma cli_wf_depI : wf_localE si_Σ cli_depI_Δ.
 Proof.
-  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ cli_dep_ty iv_IF [sri_cF] si_na si_P
-            (tProd si_na (tRel 0) (tRel 1)) iv_IF).
-  - exact cli_dep_isType.
-  - exact cli_dep_isType.
-  - exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] cli_dep_ty cli_dep_isType).
-  - exact (iv_IF_typed [] localenv_nil).
+  exact (iv_wf_vass si_Σ [vass si_na si_P] si_na (iv_Ix 0) sProp (iv_wf_P si_Σ [] localenv_nil) cli_Ix_typed
+           eq_refl).
+Qed.
+
+Lemma cli_depI_ass : assumption_context cli_depI_Δ.
+Proof. repeat constructor. Qed.
+
+Lemma cli_depI_ty_typed : si_Σ ;;; [] |-E cli_depI_ty : si_P.
+Proof.
+  exact (typeE_Prod _ _ si_na si_P (tProd si_na (iv_Ix 0) (iv_Ix 1)) (Sort.super sProp) sProp
+           (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl)
+           (typeE_Prod _ _ si_na (iv_Ix 0) (iv_Ix 1) sProp sProp
+              (iv_vass_s si_Σ [vass si_na si_P] si_na (iv_Ix 0) sProp cli_Ix_typed eq_refl)
+              (iv_IX_typed cli_depI_Δ (tRel 1) cli_wf_depI
+                 (typeE_Rel _ _ 1 (vass si_na si_P) cli_wf_depI eq_refl)))).
+Qed.
+
+Lemma cli_depI_isType : isTypeE si_Σ [] cli_depI_ty.
+Proof. exact (has_sort_isTypeE _ cli_depI_ty_typed). Qed.
+
+(** [cli_depI_ty] applied to [∀P. P] and [c (∀P. P) : I (∀P. P)]. *)
+Lemma cli_depI_sp_two : PCUICAritiesEta.typing_spineE si_Σ [] cli_depI_ty [iv_False; sri_cF] iv_IF.
+Proof.
+  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ cli_depI_ty iv_False [sri_cF] si_na si_P
+            (tProd si_na (iv_Ix 0) (iv_Ix 1)) iv_IF).
+  - exact cli_depI_isType.
+  - exact cli_depI_isType.
+  - exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] cli_depI_ty cli_depI_isType).
+  - exact (iv_False_typed si_Σ [] localenv_nil).
   - eapply (@PCUICAritiesEta.type_spine_consE _ _ _ iv_fix_ty sri_cF [] si_na iv_IF iv_IF iv_IF).
     + exact cli_fixty_isType.
     + exact cli_fixty_isType.
@@ -260,8 +286,17 @@ Proof.
       exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] iv_IF cli_IF_isType).
 Qed.
 
-Lemma cli_dep_nth_subst_differs : subst (List.rev (firstn 1 [iv_IF; sri_cF])) 0 (tRel 0) <> tRel 0.
-Proof. vm_compute. discriminate. Qed.
+(** [typing_spine_nth_errorE] at the second argument [c (∀P. P)] of [cli_depI_ty]: its declared
+    type [I x], with [x := ∀P. P] substituted, is [I (∀P. P)], which is not the substituted
+    [∀P. P] and not the declared type [I x]. *)
+Lemma cli_depI_nth_subst_nondeg :
+  nth_error (List.rev cli_depI_Δ) 1 = Some (vass si_na (iv_Ix 0)) /\
+  subst (List.rev (firstn 1 [iv_False; sri_cF])) 0 (iv_Ix 0) = iv_IF /\
+  iv_IF <> iv_False /\ iv_IF <> iv_Ix 0.
+Proof.
+  split; [reflexivity|]. split; [vm_compute; reflexivity|].
+  split; intros h; vm_compute in h; discriminate h.
+Qed.
 
 (** [let z := I (∀P. P) : Prop in Π y : z. z]: it ζ-reduces to [Π y : I (∀P. P). I (∀P. P)]
     ([iv_fix_ty]), and is not a product. *)
@@ -331,6 +366,27 @@ Lemma cli_let_smash_differs :
   it_mkProd_or_LetIn (smash_context [] [vdef si_na iv_False si_P]) (expand_lets [vdef si_na iv_False si_P] (tRel 0)) <>
   it_mkProd_or_LetIn [vdef si_na iv_False si_P] (tRel 0).
 Proof. vm_compute. discriminate. Qed.
+
+(** The empty spine of [cli_dep_let] at itself (reflexive: it holds no ζ step). *)
+Lemma cli_dep_let_sp_nil : PCUICAritiesEta.typing_spineE si_Σ [] cli_dep_let [] cli_dep_let.
+Proof.
+  econstructor; [exact cli_dep_let_isType|exact cli_dep_let_isType|].
+  exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] cli_dep_let cli_dep_let_isType).
+Qed.
+
+(** [typing_spine_smashE] on [cli_dep_let] ([Δ = [z := I (∀P. P) : Prop]], [T = Π y : z. z]):
+    smashing drops the let, and the substitution [z := I (∀P. P)] into [Π y : z. z] gives
+    [iv_fix_ty = Π y : I (∀P. P). I (∀P. P)], which is not the substituted [I (∀P. P)], not the
+    body, and not the spine's result type [cli_dep_let]. *)
+Lemma cli_smash_dep_nondeg :
+  it_mkProd_or_LetIn [vdef si_na iv_IF si_P] (tProd si_na (tRel 0) (tRel 1)) = cli_dep_let /\
+  smash_context [] [vdef si_na iv_IF si_P] = [] /\
+  expand_lets [vdef si_na iv_IF si_P] (tProd si_na (tRel 0) (tRel 1)) = iv_fix_ty /\
+  iv_fix_ty <> iv_IF /\ iv_fix_ty <> tProd si_na (tRel 0) (tRel 1) /\ iv_fix_ty <> cli_dep_let.
+Proof.
+  split; [reflexivity|]. split; [reflexivity|]. split; [vm_compute; reflexivity|].
+  split; [|split]; intros h; vm_compute in h; discriminate h.
+Qed.
 
 (** The fixpoint [bdf_fmfix] applied to [c A], typed at its β-redex domain [(λ B. I B) A]. *)
 Definition cli_cA : term := tApp (tConstruct si_ind 0 []) (tRel 0).
@@ -568,21 +624,32 @@ Definition typing_cofix_coindE_inst :
 Definition cumul_it_mkProd_or_LetIn_smashE_inst :=
   cumul_it_mkProd_or_LetIn_smashE (Σ := si_Σ) si_wfE [] [vdef si_na iv_False si_P] (tRel 0) eq_refl eq_refl.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_let_smash_differs *)
+(** The empty spine of [let z := I (∀P. P) in Π y : z. z] ([cli_dep_let]) at itself, smashed: the
+    smashed type is [Π y : I (∀P. P). I (∀P. P)], the substitution of [I (∀P. P)] into both
+    positions of [Π y : z. z], neither the substituted term, nor the body, nor [cli_dep_let]
+    ([cli_smash_dep_nondeg]).
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_smash_dep_nondeg *)
 Definition typing_spine_smashE_inst :=
-  typing_spine_smashE (Σ := si_Σ) si_wfE [] [vdef si_na iv_False si_P] (tRel 0) [] iv_False cli_sp_let.
+  typing_spine_smashE (Σ := si_Σ) si_wfE [] [vdef si_na iv_IF si_P] (tProd si_na (tRel 0) (tRel 1)) []
+    cli_dep_let cli_dep_let_sp_nil.
 
-(** The second argument [c (∀P. P)] of [Π x : Prop. Π y : x. x], at its declared type [x]
-    instantiated by the first argument [I (∀P. P)].
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_dep_nth_subst_differs
+(** The second argument [c (∀P. P)] of [Π x : Prop. Π y : I x. I x] ([cli_depI_ty]) applied to
+    [∀P. P], at its declared type [I x] instantiated by the first argument: [I (∀P. P)], neither
+    the substituted [∀P. P] nor [I x] ([cli_depI_nth_subst_nondeg]).
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_depI_nth_subst_nondeg
     TARGET PCUICClassificationEta.typing_spine_nth_errorE *)
 Definition typing_spine_nth_errorE_inst :=
-  PCUICClassificationEta.typing_spine_nth_errorE (Σ := si_Σ) si_wfE [] cli_dep_Δ (tRel 1)
-    [iv_IF; sri_cF] iv_IF 1 sri_cF (vass si_na (tRel 0)) cli_dep_ass cli_wf_dep cli_dep_sp_two eq_refl eq_refl.
+  PCUICClassificationEta.typing_spine_nth_errorE (Σ := si_Σ) si_wfE [] cli_depI_Δ (iv_Ix 1)
+    [iv_False; sri_cF] iv_IF 1 sri_cF (vass si_na (iv_Ix 0)) cli_depI_ass cli_wf_depI cli_depI_sp_two
+    eq_refl eq_refl.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_spine_all_inv_differs *)
+(** The empty spine of [let z := ∀P. P in z → z] ([cli_let_arrow]) at itself: the substituted
+    codomain [(∀P. P) → (∀P. P)] is neither the substituted [∀P. P], nor the body [z → z], nor the
+    compared [cli_let_arrow] ([cli_all_inv_let_nondeg]).
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_all_inv_let_nondeg *)
 Definition typing_spine_all_invE_inst :=
-  typing_spine_all_invE (Σ := si_Σ) si_wfE [] [vass si_na si_P] (tRel 0) [iv_False] bdf_let cli_sp_one_let eq_refl.
+  typing_spine_all_invE (Σ := si_Σ) si_wfE [] [vdef si_na iv_False si_P] (tProd si_na (tRel 0) (tRel 1)) []
+    cli_let_arrow cli_let_arrow_sp_nil eq_refl.
 
 (** The partial spine [Π x : Prop. Π y : x. x] applied to [I (∀P. P)] only, at [cli_dep_let].
     INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_dep_none_differs *)

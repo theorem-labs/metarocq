@@ -24,9 +24,11 @@
   - [firstorder_value_indsE_inst]: the induction principle on the value [s z], built directly
     ([fo_sz_value]), with the predicate "is closed": the step it is given uses the induction
     hypothesis on the constructor's arguments ([fo_closed_step]), and [s z] has an argument.
-  - [firstorder_spine_letE_inst]: the type [let X := N : Type1 in X], whose body is the bound
-    variable; the spine is the empty one at [N]; the let-type is not [N] and ζ-reduces to it in
-    one step ([fo_letN_nondeg]).
+  - [firstorder_spine_letE_inst]: the first-order spine of [Π _ : N. N] on [[z]]
+    ([instantiated_typing_spine_firstorder_spineE_inst]) moved to the type
+    [let X := N : Type1 in X → X]; the substitution [X := N] into the body [X → X] gives
+    [N → N], neither the substituted [N] nor the body, and the let-type ζ-reduces to it in one
+    step ([fo_letNN_nondeg]).
   - [isType_context_conversionE_inst]: the type [X], a variable, in the contexts
     [X : let _ := N : Type1 in Type1] and [X : Type1], which differ; the first declared type
     ζ-reduces to the second in one step ([fo_ctx_nondeg]).
@@ -357,32 +359,47 @@ Proof.
   cbn in hx |- *. rewrite hx. exact IH.
 Qed.
 
-(** [let X := N : Type1 in X] is the type [N]. *)
-Definition fo_letN : term := tLetIn fo_na fo_N fo_T (tRel 0).
+(** [let X := N : Type1 in X → X]: the let-bound [X] occurs in the domain and the codomain of the
+    body. *)
+Definition fo_letNN : term := tLetIn fo_na fo_N fo_T (tProd fo_na (tRel 0) (tRel 1)).
 
-Lemma fo_letN_typed (Γ : context) : wf_localE fo_Σ Γ -> fo_Σ ;;; Γ |-E fo_letN : fo_T.
+Lemma fo_letNN_typed : fo_Σ ;;; [] |-E fo_letNN : tSort (Sort.sort_of_product Sort.type1 Sort.type1).
 Proof.
-  intros h.
-  have hT := fo_T_typedE Γ h.
-  have hdef : lift_typing typingE fo_Σ Γ (j_vdef fo_na fo_N fo_T) :=
-    iv_vdef fo_Σ Γ fo_na fo_N fo_T _ (fo_N_typed Γ h) hT eq_refl.
-  have hΓ' : wf_localE fo_Σ (Γ ,, vdef fo_na fo_N fo_T) by (apply localenv_cons_def; [exact h|exact hdef]).
-  have hlet : fo_Σ ;;; Γ |-E fo_letN : tLetIn fo_na fo_N fo_T fo_T :=
-    typeE_LetIn _ _ fo_na fo_N fo_T (tRel 0) fo_T hdef
-      (typeE_Rel _ _ 0 (vdef fo_na fo_N fo_T) hΓ' eq_refl).
-  have hcl : is_closed_context Γ := wf_local_closed_contextE (Σ := fo_Σ) (wfΣ := fo_wfE) h.
+  have hdef : lift_typing typingE fo_Σ [] (j_vdef fo_na fo_N fo_T) :=
+    iv_vdef fo_Σ [] fo_na fo_N fo_T _ (fo_N_typed [] localenv_nil) (fo_T_typedE [] localenv_nil) eq_refl.
+  have hΓ' : wf_localE fo_Σ ([] ,, vdef fo_na fo_N fo_T) by (apply localenv_cons_def; [constructor|exact hdef]).
+  have hX : fo_Σ ;;; [] ,, vdef fo_na fo_N fo_T |-E tRel 0 : tSort Sort.type1 :=
+    typeE_Rel _ _ 0 (vdef fo_na fo_N fo_T) hΓ' eq_refl.
+  have hΓ'' := iv_wf_vass fo_Σ _ fo_na (tRel 0) Sort.type1 hΓ' hX eq_refl.
+  have hlet : fo_Σ ;;; [] |-E fo_letNN
+      : tLetIn fo_na fo_N fo_T (tSort (Sort.sort_of_product Sort.type1 Sort.type1)) :=
+    typeE_LetIn _ _ fo_na fo_N fo_T (tProd fo_na (tRel 0) (tRel 1)) _ hdef
+      (typeE_Prod _ _ fo_na (tRel 0) (tRel 1) Sort.type1 Sort.type1
+         (iv_vass_s fo_Σ _ fo_na (tRel 0) Sort.type1 hX eq_refl)
+         (typeE_Rel _ _ 1 (vdef fo_na fo_N fo_T) hΓ'' eq_refl)).
   eapply (type_ws_cumul_pbE (Σ := fo_Σ) (cbΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE)) (pb := Cumul) _ hlet).
-  - exact (has_sort_isTypeE _ hT).
+  - apply has_sort_isTypeE with (s := Sort.super (Sort.sort_of_product Sort.type1 Sort.type1)).
+    apply typeE_Sort; [constructor|].
+    apply/(PCUICWfUniverses.wf_sort_reflect fo_Σ). reflexivity.
   - eapply (red_ws_cumul_pbE (Σ := fo_Σ) (wfΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE))).
-    constructor; [exact hcl|exact (type_is_open_termE (Σ := fo_Σ) (wfΣ := fo_wfE) hlet)|].
+    constructor; [reflexivity|exact (type_is_open_termE (Σ := fo_Σ) (wfΣ := fo_wfE) hlet)|].
     apply rt_step. apply red_zeta.
 Qed.
 
-(** [let X := N : Type1 in X] is not [N], and ζ-reduces to it in one step. *)
-Lemma fo_letN_nondeg : fo_letN <> fo_N /\ ∥ red1 fo_Σ [] fo_letN fo_N ∥.
+(** [firstorder_spine_letE] on [fo_letNN] with the argument [z]: the substitution [X := N] into the
+    body [X → X] gives [N → N], which is not the substituted [N] and not the body; the let-type is
+    not [N → N] and ζ-reduces to it in one step; the argument list is not empty. *)
+Lemma fo_letNN_nondeg :
+  (tProd fo_na (tRel 0) (tRel 1)) {0 := fo_N} = tProd fo_na fo_N fo_N /\
+  tProd fo_na fo_N fo_N <> fo_N /\ tProd fo_na fo_N fo_N <> tProd fo_na (tRel 0) (tRel 1) /\
+  fo_letNN <> tProd fo_na fo_N fo_N /\ ∥ red1 fo_Σ [] fo_letNN (tProd fo_na fo_N fo_N) ∥ /\
+  [tConstruct fo_ind 0 []] <> [].
 Proof.
+  split; [vm_compute; reflexivity|].
   split; [intros h; vm_compute in h; discriminate h|].
-  constructor. exact (red_zeta _ _ fo_na fo_N fo_T (tRel 0)).
+  split; [intros h; vm_compute in h; discriminate h|].
+  split; [intros h; vm_compute in h; discriminate h|].
+  split; [constructor; exact (red_zeta _ _ fo_na fo_N fo_T (tProd fo_na (tRel 0) (tRel 1)))|discriminate].
 Qed.
 
 (** [let _ := N : Type1 in Type1] is the sort [Type1] behind a let. *)
@@ -462,14 +479,6 @@ Definition typing_spine_arity_spineE_inst :
   PCUICSpineEta.arity_spineE fo_Σ [] (tProd fo_na fo_N fo_N) [tConstruct fo_ind 0 []] fo_N :=
   typing_spine_arity_spineE (Σ := fo_Σ) (wfΣ := fo_wfE) [] [vass fo_na fo_N] _ _ fo_ind [] [] fo_s_spine.
 
-(** The empty spine at [N], moved to the let-type [let X := N : Type1 in X].
-    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_letN_nondeg *)
-Definition firstorder_spine_letE_inst : firstorder_spineE fo_Σ [] fo_letN [] fo_N :=
-  firstorder_spine_letE (Σ := fo_Σ) (wfΣ := fo_wfE) (na := fo_na) (a := fo_N) (A := fo_T) (B := tRel 0)
-    (firstorder_spine_nilE fo_Σ [] fo_N fo_N (fo_N_isType [] localenv_nil) (fo_N_isType [] localenv_nil)
-       (fo_N_refl Cumul))
-    (has_sort_isTypeE _ (fo_letN_typed [] localenv_nil)).
-
 Lemma fo_ctxT_conv : ws_cumul_ctx_pbE Conv fo_Σ [vass fo_na fo_letT] [vass fo_na fo_T].
 Proof.
   constructor; [constructor|]. unfold ws_cumul_declsE. constructor; [reflexivity|].
@@ -539,6 +548,15 @@ Definition instantiated_typing_spine_firstorder_spineE_inst :
        (fun x => instantiated_mkApps (Σ := fo_Σ) [] fo_ind [] []))
     typing_spine_arity_spineE_inst
     (has_sort_isTypeE _ (fo_NN_typed [] localenv_nil)).
+
+(** The first-order spine of [Π _ : N. N] on [[z]] ([instantiated_typing_spine_firstorder_spineE_inst]),
+    moved to the let-type [let X := N : Type1 in X → X]; the substitution [X := N] into [X → X]
+    gives [N → N], neither the substituted [N] nor the body ([fo_letNN_nondeg]).
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_letNN_nondeg *)
+Definition firstorder_spine_letE_inst : firstorder_spineE fo_Σ [] fo_letNN [tConstruct fo_ind 0 []] fo_N :=
+  firstorder_spine_letE (Σ := fo_Σ) (wfΣ := fo_wfE) (na := fo_na) (a := fo_N) (A := fo_T)
+    (B := tProd fo_na (tRel 0) (tRel 1)) instantiated_typing_spine_firstorder_spineE_inst
+    (has_sort_isTypeE _ fo_letNN_typed).
 
 (** The spine of [s]'s type on [[z]].
     INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_s_spine_nondeg *)

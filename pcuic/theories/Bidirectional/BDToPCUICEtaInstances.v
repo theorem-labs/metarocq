@@ -41,9 +41,9 @@
     empty ([bdi_args_nonempty]); the context lemmas run on contexts that are not empty
     ([bdi_ctxs_nonempty], [bd_ctxs_nonempty]): with a let ([bd_wf_localE_inst],
     [bd_wf_local_relE_inst]), with three declarations ([wf_local_bd_typingE_inst]), or across a
-    real weakening ([wf_rel_weakE_inst]); [wf_local_rel_subst1E_inst] substitutes the
-    let-bound variable that the declaration above it mentions, so the substitution changes it
-    ([wf_local_rel_subst1E_inst_nondeg]).
+    real weakening ([wf_rel_weakE_inst]); [wf_local_rel_subst1E_inst] substitutes [∀P:Prop. P]
+    for the let-bound [z] in [x : z → z], where [z] is not the whole type; the result
+    [(∀P:Prop. P) → ∀P:Prop. P] is not the substituted term ([wf_local_rel_subst1E_inst_nondeg]).
 
   **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
   their E copies: the same set, and no forecast class is an argument ([About]). *)
@@ -194,6 +194,24 @@ Proof.
            (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) w eq_refl) eq_refl).
 Qed.
 
+(** [z → z] over [z := ∀P:Prop. P : Prop]: the let-bound [z] occurs in the domain and under the
+    binder. *)
+Definition bdi_z_to_z : term := tProd si_na (tRel 0) (tRel 1).
+
+(** [x : z → z] in [z := ∀P:Prop. P : Prop]. *)
+Lemma bdi_wf_z_to_z : wf_localE si_Σ [vass si_na bdi_z_to_z; vdef si_na iv_False si_P].
+Proof.
+  have w := iv_wf_vdef si_Σ [] localenv_nil.
+  have hz : si_Σ ;;; [vdef si_na iv_False si_P] |-E tRel 0 : tSort sProp :=
+    typeE_Rel _ _ 0 (vdef si_na iv_False si_P) w eq_refl.
+  have w2 := iv_wf_vass si_Σ [vdef si_na iv_False si_P] si_na (tRel 0) sProp w hz eq_refl.
+  have hz2 : si_Σ ;;; [vass si_na (tRel 0); vdef si_na iv_False si_P] |-E tRel 1 : tSort sProp :=
+    typeE_Rel _ _ 1 (vdef si_na iv_False si_P) w2 eq_refl.
+  exact (iv_wf_vass si_Σ [vdef si_na iv_False si_P] si_na bdi_z_to_z (Sort.sort_of_product sProp sProp) w
+           (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp
+              (iv_vass_s si_Σ _ si_na (tRel 0) sProp hz eq_refl) hz2) eq_refl).
+Qed.
+
 (** [y : d, d := Prop : Type] ([bd_Γδ]), [x : (λ B : Prop. I B) A, A : Prop] ([bd_Γβ]) and
     [x : Π _ : (λ B : Prop. I B) A. Prop, A : Prop] ([bd_Γβπ]) are well formed. *)
 Lemma bdi_wf_Γδ : wf_localE si_Σ bd_Γδ.
@@ -226,11 +244,15 @@ Proof.
     exact (localenv_cons_abs bd_wfE_Γ1 hdom).
 Qed.
 
-(** The substitution of [wf_local_rel_subst1E_inst] changes the declaration: [x : z] becomes
-    [x : ∀P:Prop. P]. *)
+(** The substituted type [z → z] is not a bare variable; substituting [∀P:Prop. P] for [z] gives
+    [x : (∀P:Prop. P) → ∀P:Prop. P], whose type is not the substituted term [∀P:Prop. P] and is
+    not [z → z]. *)
 Lemma wf_local_rel_subst1E_inst_nondeg :
-  subst_context [iv_False] 0 [vass si_na (tRel 0)] <> [vass si_na (tRel 0)].
-Proof. intros h. vm_compute in h. discriminate h. Qed.
+  [/\ (forall k, bdi_z_to_z <> tRel k),
+      subst_context [iv_False] 0 [vass si_na bdi_z_to_z] = [vass si_na (tProd si_na iv_False iv_False)],
+      tProd si_na iv_False iv_False <> iv_False &
+      tProd si_na iv_False iv_False <> bdi_z_to_z].
+Proof. split; [intros k; discriminate|reflexivity|discriminate|discriminate]. Qed.
 
 (** The contexts of the let instances are not empty. *)
 Lemma bdi_ctxs_nonempty : bdi_Γd <> [] /\ [vdef si_na (tRel 0) si_P] <> [].
@@ -325,13 +347,14 @@ Section BDToPCUICEtaInstances.
 
 (** ** The prelude lemmas *)
 
-(** [x : z, z := ∀P:Prop. P] ⇒ [x : ∀P:Prop. P].
+(** [x : z → z, z := ∀P:Prop. P] ⇒ [x : (∀P:Prop. P) → ∀P:Prop. P]
+    ([wf_local_rel_subst1E_inst_nondeg]).
     INSTANCE NONDEGEN BDToPCUICEtaInstances.wf_local_rel_subst1E_inst_nondeg *)
-Lemma wf_local_rel_subst1E_inst : wf_local_relE si_Σ [] [vass si_na iv_False].
+Lemma wf_local_rel_subst1E_inst : wf_local_relE si_Σ [] [vass si_na (tProd si_na iv_False iv_False)].
 Proof.
-  exact (wf_local_rel_subst1E (Σ := si_Σ) (wfΣ := si_wfE) [] [] si_na iv_False si_P [vass si_na (tRel 0)]
-           (wf_local_local_relE si_Σ [] ([] ,,, [] ,, vdef si_na iv_False si_P ,,, [vass si_na (tRel 0)])
-              bdi_wf_subst1_prem)).
+  exact (wf_local_rel_subst1E (Σ := si_Σ) (wfΣ := si_wfE) [] [] si_na iv_False si_P [vass si_na bdi_z_to_z]
+           (wf_local_local_relE si_Σ [] ([] ,,, [] ,, vdef si_na iv_False si_P ,,, [vass si_na bdi_z_to_z])
+              bdi_wf_z_to_z)).
 Qed.
 
 (** A weakening from [[]] to [bd_ΓFG], which is not empty.

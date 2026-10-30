@@ -223,7 +223,7 @@ Lemma bs_case_moves :
   [/\ bd_X <> bd_GF,
       rename (rshiftk 1) BDTypingEtaInstances.bd_case <> BDTypingEtaInstances.bd_case &
       map (rename (rshiftk 1)) [bd_GF] <> [bd_GF]].
-Proof. split; [unfold bd_X, bd_GF, bd_lam; discriminate|discriminate|discriminate]. Qed.
+Proof. split; [unfold bd_X, bd_GF, BDTypingEtaInstances.bd_lam; discriminate|discriminate|discriminate]. Qed.
 
 (** The [match] [bd_case], weakened.
     INSTANCE NONDEGEN BDStrengtheningEtaInstances.bs_case_moves *)

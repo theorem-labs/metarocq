@@ -42,7 +42,7 @@
   that type is not [I (∀P:Prop. P)] ([vi_mkApps_spine_nondeg]). Each instance carries its tag
   (instance-gate grammar).
 
-  WITNESSES: T2a_* SR_T2a_* iv_P_isType up_s0_typed_e0 up_s0_isType_e0
+  WITNESSES: T2a_* SR_T2a_* vi_IF_isType0 up_s0_typed_e0 up_s0_isType_e0
   ([T2a_*], [SR_T2a_*]: the contract fits above, generic in [Σ], not instances; the others: typing
   pieces the instances use) *)
 
@@ -96,9 +96,6 @@ End ContractFit.
 #[local] Existing Instance si_cb.
 
 (** ** The universe and environment lemmas *)
-
-Definition iv_P_isType (Γ : context) (h : wf_localE si_Σ Γ) : isTypeE si_Σ Γ si_P :=
-  has_sort_isTypeE _ (iv_P_typed si_Σ Γ h).
 
 (** [isType_weaken_fullE], [isType_extendsE]: [up_env] extends the empty [e0_env] by the declaration
     of [T] ([PCUICTypingEtaCopies2Instances.e0_up_extends]). The premise types [Type@{l0}], at the
@@ -182,13 +179,20 @@ Qed.
 
 (** ** Contexts and judgments *)
 
-(** The context [iv_Γk] the closed type is weakened into is not empty. *)
-Lemma isType_weakeningE_inst_nondeg : iv_Γk <> [].
-Proof. discriminate. Qed.
+(** [I (∀P:Prop. P)] is a type in the empty context ([iv_IF_typed]: an application of [I]). *)
+Lemma vi_IF_isType0 : isTypeE si_Σ [] iv_IF.
+Proof. exact (has_sort_isTypeE sProp (iv_IF_typed [] localenv_nil)). Qed.
 
-(* INSTANCE NONDEGEN PCUICValidityEtaInstances.isType_weakeningE_inst_nondeg *)
-Definition isType_weakeningE_inst : isTypeE si_Σ iv_Γk si_P :=
-  isType_weakeningE (Σ := si_Σ) (Γ := iv_Γk) si_wfE iv_wf_Γk (iv_P_isType [] localenv_nil).
+(** The context [iv_Γk] the closed type is weakened into is not empty, and the weakened type
+    [I (∀P:Prop. P)] is not a sort. *)
+Lemma isType_weakeningE_inst_nondeg : iv_Γk <> [] /\ (forall s, iv_IF <> tSort s).
+Proof. split; [discriminate|intros s; discriminate]. Qed.
+
+(** [isType_weakeningE] at [I (∀P:Prop. P)], from its typing in [[]] ([vi_IF_isType0]), weakened
+    into [iv_Γk]; [iv_Γk] is not empty and [I (∀P:Prop. P)] is not a sort.
+    INSTANCE NONDEGEN PCUICValidityEtaInstances.isType_weakeningE_inst_nondeg *)
+Definition isType_weakeningE_inst : isTypeE si_Σ iv_Γk iv_IF :=
+  isType_weakeningE (Σ := si_Σ) (Γ := iv_Γk) (T := iv_IF) si_wfE iv_wf_Γk vi_IF_isType0.
 
 (** The context [x : Prop] is not empty: for the empty context the premise is the conclusion. *)
 Lemma type_ctx_wf_univE_inst_nondeg : [vass si_na si_P] <> [].

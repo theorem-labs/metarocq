@@ -3,13 +3,17 @@
 (** * Satisfying instances of the lemmas of [PCUICCumulPropEta] (row T6)
 
   Each lemma family of [PCUICCumulPropEta] with a premise is applied here to concrete premises,
-  each proved. NON-DEGENERATE: every instance with a relational premise exercises a non-trivial
-  step: an η step ([λx:Prop. f x] and [f] in the context [f : Prop → Prop], [cpi_eta]), a β step
-  ([cpi_beta], [cpi_redex]), two universe levels of one family, two upper sorts, or two universe
-  instances. The chains (transitivity and the two [cumul_pb] lemmas) pass through three pairwise
-  distinct terms: [λx:Prop. f x], [f] and the β-redex [(λg. g) f] ([cpi_redex]). The rows that
-  are degenerate by their statement (forced to [Prop]/[SProp] on both sides) are tagged
-  IMPOSSIBLE at each instance, with the property of the statement that forces them.
+  each proved. NON-DEGENERATE: every instance tagged NONDEGEN rests on a non-trivial premise: an
+  η step ([λx:Prop. f x] and [f] in the context [f : Prop → Prop], [cpi_eta]; [G (λy:Prop. F y)]
+  and [G F] for the two [typing_leq_term_prop] rows), a β step ([cpi_beta], [cpi_redex]), two
+  universe levels of one family, two upper sorts, or two universe instances. The substitution
+  rows substitute into a term in which the variable is not the whole term ([λx:Prop. f x], or
+  [∀y:Prop. g y], [cpi_subst_body]); their NONDEGEN lemmas state that the results differ from the
+  substituted terms. The chains (transitivity and the two [cumul_pb] lemmas) pass through three
+  pairwise distinct terms: [λx:Prop. f x], [f] and the β-redex [(λg. g) f] ([cpi_redex]). The
+  rows that are degenerate by their statement are tagged IMPOSSIBLE at each instance, with the
+  property of the statement that forces them: forced to [Prop]/[SProp] on both sides, or
+  compared by the constant relation [fun _ _ => True] (the two [cmp_True_*] rows).
 
   **[typing_leq_term_propE] and [typing_leq_term_prop_genE] are applied**, with no class (the
   forecast class [ValForecastCopy16] they took was deleted when copy 16 landed, frac/eta
@@ -349,22 +353,73 @@ Section Generic.
     @substitution_untyped_cumul_propE cf rf_Σ [] rf_Γ [] [cpi_id] rf_t (tRel 0) cpi_wfE
       eq_refl ltac:(repeat constructor) cpi_eta_cp.
 
+  (** The body the substitution rows act on: [∀y:Prop. g y], where [g] is the substituted
+      variable ([tRel 0] outside the binder). [g] sits under a binder, at the head of an
+      application. *)
+  Definition cpi_subst_body : term := tProd cpi_na (tSort sProp) (tApp (tRel 1) (tRel 0)).
+
   Lemma cpi_type01_eq : eq_term_prop rf_Σ.1 0 (tSort Sort.type0) (tSort (Sort.super Sort.type0)).
   Proof. constructor. reflexivity. Qed.
 
-  (** [Type₀] and [Type₁] substituted for one variable.
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_type01_nondeg *)
-  Definition substitution_untyped_cumul_prop_equivE_inst :=
+  (** [Type₀] and [Type₁] differ. Substituted for [g] in [∀y:Prop. g y], they give
+      [∀y:Prop. Type₀ y] and [∀y:Prop. Type₁ y], which differ from both sorts and from each
+      other. *)
+  Lemma cpi_type01_subst_nondeg :
+    [× Sort.type0 <> Sort.super Sort.type0,
+       subst0 [tSort Sort.type0] cpi_subst_body <> tSort Sort.type0,
+       subst0 [tSort Sort.type0] cpi_subst_body <> tSort (Sort.super Sort.type0),
+       subst0 [tSort (Sort.super Sort.type0)] cpi_subst_body <> tSort Sort.type0,
+       subst0 [tSort (Sort.super Sort.type0)] cpi_subst_body <> tSort (Sort.super Sort.type0)
+     & subst0 [tSort Sort.type0] cpi_subst_body <> subst0 [tSort (Sort.super Sort.type0)] cpi_subst_body].
+  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+
+  (** [Type₀] and [Type₁], related by [eq_term_prop] ([cpi_type01_eq]), substituted for [g] in
+      [∀y:Prop. g y] ([cpi_subst_body]; the lemma asks for scoping, not typing). The results
+      [∀y:Prop. Type₀ y] and [∀y:Prop. Type₁ y] differ from both sorts and from each other
+      ([cpi_type01_subst_nondeg]).
+      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_type01_subst_nondeg *)
+  Definition substitution_untyped_cumul_prop_equivE_inst :
+    rf_Σ ;;; [] |-E subst0 [tSort Sort.type0] cpi_subst_body
+                  ~~ subst0 [tSort (Sort.super Sort.type0)] cpi_subst_body :=
     @substitution_untyped_cumul_prop_equivE cf rf_Σ [] [vass cpi_na (tSort (Sort.super (Sort.super Sort.type0)))] []
-      [tSort Sort.type0] [tSort (Sort.super Sort.type0)] (tRel 0) cpi_wfE
+      [tSort Sort.type0] [tSort (Sort.super Sort.type0)] cpi_subst_body cpi_wfE
       eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl
       (All2_cons cpi_type01_eq All2_nil).
 
-  (** [(λx:Type. x) Prop] and its reduct [Prop] substituted for one variable.
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_beta_nondeg *)
-  Definition substitution_red_terms_conv_propE_inst :=
+  (** The β-redex [(λx:Type. x) Prop] and its reduct [Prop]: they differ, and the first reduces to
+      the second in one [red1] step. Substituted for [g] in [∀y:Prop. g y], they give
+      [∀y:Prop. (λx:Type. x) Prop y] and [∀y:Prop. Prop y], which differ from both substituted terms
+      and from each other; the first reduces to the second in one [red1] step (the β step at the
+      head of the application, under the binder). *)
+  Lemma cpi_beta_subst_nondeg :
+    [× cpi_beta <> tSort sProp, red1 rf_Σ [] cpi_beta (tSort sProp),
+       subst0 [cpi_beta] cpi_subst_body <> cpi_beta,
+       subst0 [cpi_beta] cpi_subst_body <> tSort sProp,
+       subst0 [tSort sProp] cpi_subst_body <> cpi_beta,
+       subst0 [tSort sProp] cpi_subst_body <> tSort sProp,
+       subst0 [cpi_beta] cpi_subst_body <> subst0 [tSort sProp] cpi_subst_body
+     & red1 rf_Σ [] (subst0 [cpi_beta] cpi_subst_body) (subst0 [tSort sProp] cpi_subst_body)].
+  Proof.
+    split.
+    - exact (fst cpi_beta_nondeg).
+    - exact (snd cpi_beta_nondeg).
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - vm_compute. apply PCUICReduction.prod_red_r. apply PCUICReduction.app_red_l. constructor.
+  Qed.
+
+  (** [(λx:Type. x) Prop] and its reduct [Prop] ([cpi_beta_red]), substituted for [g] in
+      [∀y:Prop. g y] ([cpi_subst_body]; the lemma asks for scoping and the reduction, not typing).
+      The results differ from both substituted terms and from each other, and are one [red1] step
+      apart ([cpi_beta_subst_nondeg]).
+      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_beta_subst_nondeg *)
+  Definition substitution_red_terms_conv_propE_inst :
+    rf_Σ ;;; [] |-E subst0 [cpi_beta] cpi_subst_body ~~ subst0 [tSort sProp] cpi_subst_body :=
     @substitution_red_terms_conv_propE cf rf_Σ [] [vass cpi_na (tSort (Sort.super sProp))] []
-      [cpi_beta] [tSort sProp] (tRel 0) cpi_wf_extE eq_refl eq_refl ltac:(repeat constructor)
+      [cpi_beta] [tSort sProp] cpi_subst_body cpi_wf_extE eq_refl eq_refl ltac:(repeat constructor)
       (All2_cons (cpi_beta_red [] eq_refl) All2_nil).
 
   (** A context changed by β, a relation by η. *)
@@ -403,11 +458,6 @@ Section Generic.
   Definition context_conversion_cumul_propE_inst : rf_Σ ;;; rf_Γ |-E rf_t ~~ tRel 0 :=
     context_conversion_cumul_propE (wfΣ := cpi_wf_extE) (Γ := cpi_ctx_beta) (Δ := rf_Γ) (M := rf_t)
       (N := tRel 0) cpi_eta_beta_ctx cpi_ctx_conv.
-
-  (** The body the two substitutions act on: [∀y:Prop. g y], in [f : Prop → Prop] extended by a
-      declaration of [g] (two of them below). The variable [g] sits under a binder, at the head of
-      an application. *)
-  Definition cpi_subst_body : term := tProd cpi_na (tSort sProp) (tApp (tRel 1) (tRel 0)).
 
   (** The terms substituted for [g], [λx:Prop. f x] and [f], differ and are one η step apart
       ([eta1]). The two declarations of [g] differ: the type [(λX:Prop. X) (Prop → Prop)] of the
@@ -657,13 +707,13 @@ Section Inductives.
       (args := [cpi_iu_beta]) (args' := [iu_Set]) cpi_iu_spine.
 
   (** The instances [a] and [b], substituted into [i].
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_iu_levels_nondeg *)
+      INSTANCE IMPOSSIBLE: the compared relation is fun _ _ => True, so the conclusion holds of every pair of instances the premises admit (both sides are subst_instance of the same i, of length #|i|), in every environment *)
   Definition cmp_True_subst_instanceE_inst :=
     cmp_True_subst_instanceE iu_Σ iu_udecl [iu_a] [iu_b] [Level.lvar 0] cpi_iu_wfE
       (iu_consistent iu_a (or_introl eq_refl)) (iu_consistent iu_b (or_intror eq_refl)).
 
   (** The instances [a] and [b].
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_iu_levels_nondeg *)
+      INSTANCE IMPOSSIBLE: the compared relation is fun _ _ => True, so the conclusion holds of every pair of instances the premises admit (the consistent_instance_ext premises force equal length), in every environment *)
   Definition cmp_True_instanceE_inst :=
     cmp_True_instanceE iu_Σ iu_udecl [iu_a] [iu_b] cpi_iu_wfE
       (iu_consistent iu_a (or_introl eq_refl)) (iu_consistent iu_b (or_intror eq_refl)).
