@@ -34,7 +34,7 @@ From Equations Require Import Equations.
   base statement with only the relations renamed: [typing] → [typingE], [wf_local] →
   [wf_localE], [wf] → [wfE], [wf_ext] → [wf_extE], [isType] → [isTypeE], [spine_subst] →
   [spine_substE], [lift_typing typing] → [lift_typing typingE], and base's specification
-  conversion [Σ ;;; Γ |- t =s u] → [Σ ;;; Γ ⊢ t ≤sE[Conv] u] ([convSpecE]). Reduction ([red]),
+  conversion [Σ ;;; Γ |- t =s u] ([convSpec]) → [convSpecE Σ Γ t u]. Reduction ([red]),
   closedness, scoping and every syntactic notion are unchanged. Implicit status, binder names
   and positions are base's, and so are the section structure and the [Proof using] annotations.
 
@@ -231,10 +231,9 @@ Section CaseBranchTypeBetaE.
     #|cstr_indices cb| + 1 = context_assumptions predctx ->
     declared_inductive Σ ind mib oib ->
     declared_constructor Σ (ind,i) mib oib cb ->
-    Σ ;;; Γ ,,, cstr_ctx ⊢
-      case_branch_type_only_gen ind mib params puinst (it_mkLambda_or_LetIn predctx rettyp) i cb
-      ≤sE[Conv]
-      case_branch_type_subst_gen ind mib params puinst predctx rettyp i cb.
+    convSpecE Σ (Γ ,,, cstr_ctx)
+      (case_branch_type_only_gen ind mib params puinst (it_mkLambda_or_LetIn predctx rettyp) i cb)
+      (case_branch_type_subst_gen ind mib params puinst predctx rettyp i cb).
   Proof using cf.
     rewrite /case_branch_type_only_gen /case_branch_type_subst_gen.
     rewrite PCUICLiftSubst.lift_it_mkLambda_or_LetIn Nat.add_0_r.
