@@ -21,7 +21,7 @@
   - [iv_Σ] ([PCUICInversionEtaInstances]) with copy 18a's telescope [c18_tel], whose last entry
     is typed only through the η step, for the weakening lemmas.
 
-  No instance is WEAK: every one of the fourteen carries a real η step in a premise. *)
+  No instance is WEAK: every one of the fifteen carries a real η step in a premise. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
