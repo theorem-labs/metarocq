@@ -557,7 +557,7 @@ Lemma inversion_ConstE_inst :
 Proof. exact (inversion_ConstE Σ_po iv_po_wfE iv_land_typed). Qed.
 
 (** The literal [1] of the primitive integers. *)
-Definition iv_one : prim_val := prim_int 1%uint63.
+Definition iv_one : PCUICAst.prim_val := prim_int 1%uint63.
 
 Lemma iv_prim_typed : Σ_po ;;; [] |-E tPrim iv_one : prim_type iv_one po_int_kn.
 Proof.
