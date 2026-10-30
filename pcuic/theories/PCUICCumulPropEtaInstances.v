@@ -11,13 +11,24 @@
     instantiate otherwise than at [Prop]/[SProp] on both sides (a property of the statement: the
     premises [Sort.is_prop u]/[Sort.is_sprop u] force the sort, and a [cumul_propE] between two
     sorts is their comparison); the instances are at [Prop] and [SProp].
-  - [typing_leq_term_prop_genE], [typing_leq_term_propE]: they took the forecast class
-    [ValForecastCopy16] until copy 16 landed (frac/eta 0fb43f10), so, as in
-    [PCUICValidityEtaInstances], the instance [typing_leq_term_propE_inst] states the premises
-    AND the conclusion at concrete arguments, each proved without the lemma and without any
-    class. The pair is the η one:
-    the variable [x] typed at [G F] and at [G (λy:Prop. F y)]
-    ([PCUICCumulPropEtaRefutations], [tw_witness_typed]).
+
+  **[typing_leq_term_propE] and [typing_leq_term_prop_genE] are applied**, with no class (the
+  forecast class [ValForecastCopy16] they took was deleted when copy 16 landed, frac/eta
+  0fb43f10): [typing_leq_term_propE_inst] applies the first and [typing_leq_term_prop_genE_inst]
+  the second (through [env_propE_typing]) to the η pair: the variable [x] typed at
+  [G (λy:Prop. F y)] ([tw_x_Geta]) and at [G F] ([tw_x_GF]) ([PCUICCumulPropEtaRefutations],
+  [tw_witness_typed]); the conclusion relates the two types, which are one η step apart.
+  Both lemmas are in the section of [PCUICCumulPropEta] that carries base's section variable
+  [Hcf : prop_sub_type = false]. Its reach:
+  - [Hcf] is a binder in exactly base's position: [typing_leq_term_propE] takes [{cf} Hcf Σ …],
+    as [PCUICCumulProp.typing_leq_term_prop] does; the two instances pass it at [cpr_flags]
+    ([prop_sub_type = false], by [eq_refl]);
+  - no checker root reaches the section: [git grep PCUICCumulProp] finds 0 files in
+    [safechecker/] and [safechecker-plugin/] on each of the 33 fork [etak*] branches and on the
+    landing head 96191b19 (2026-10-30);
+  - the roots of the land3 gate (land3e, commit 96191b19, [roots_land3e.txt]) read 36/36/36/34
+    axioms, the same bytes after the header as frac/eta's record ([roots_e3c21m3.txt], frac/eta
+    b5e4d018).
 
   The flags: [cpr_flags] ([prop_sub_type = false]) where a lemma takes base's section variable
   [Hcf]; otherwise any flags.
@@ -43,6 +54,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICSubstitutionEta PCUICEtaA6More PCUICWsCumulEtaCtx PCUICEtaIndInvRefutations
      PCUICCumulPropEta PCUICCumulPropEtaRefutations.
 From MetaRocq.PCUIC.Typing Require Import PCUICClosedTypEta.
+From MetaRocq.PCUIC Require PCUICTypingEtaInd.
 
 (** ** The two imported E lemmas against the base-substituted statements *)
 
@@ -315,22 +327,23 @@ Section NoPropSub.
     @cumul_prop_mkAppsE cpr_flags eq_refl rf_Σ rf_Γ (tRel 0) [rf_t] (tRel 0) [tRel 0] cpi_wf_extE
       eq_refl eq_refl eq_refl ltac:(reflexivity) (All2_cons cpi_eta_cp All2_nil).
 
-  (** The η-typed variable ([tw_witness_typed]): the premises of [typing_leq_term_propE] and its
-      conclusion, the conclusion proved without the lemma. *)
-  Lemma typing_leq_term_propE_inst :
-    [× wfE tw_Σ.1, tw_Σ ;;; tw_Γ |-E tRel 0 : tw_Geta, on_udecl tw_Σ.1 tw_Σ.2,
-       tw_Σ ;;; tw_Γ |-E tRel 0 : tw_GF, compare_term_napp tw_Σ tw_Σ Conv 0 (tRel 0) (tRel 0) &
-       tw_Σ ;;; tw_Γ |-E tw_Geta ~~ tw_GF].
+  (** [typing_leq_term_propE], applied to the η-typed variable ([tw_witness_typed]): [x] at
+      [G (λy:Prop. F y)] and at [G F], compared with itself; the conclusion relates the two types. *)
+  Lemma typing_leq_term_propE_inst : tw_Σ ;;; tw_Γ |-E tw_Geta ~~ tw_GF.
   Proof.
     have wfE0 : wfE tw_Σ.1 := wf_incl_E (@wf_empty_global_env cpr_flags).
-    have cb := wfE_ClosedBodies tw_Σ.1 (wfΣ := wfE0).
-    split; [exact wfE0|exact tw_x_Geta|exact cpr_on_udecl_empty|exact tw_x_GF|reflexivity|].
-    apply (cumul_prop_symE _ _ _ _ wfE0).
-    apply (cumul_pb_cumul_propE _ _ Cumul).
-    apply (into_ws_cumul_pbE_spec tw_spec).
-    - exact (typing_closed_contextE (wfΣ := wfE0) tw_x_GF).
-    - exact (type_is_open_termE (wfΣ := wfE0) tw_x_GF).
-    - exact (subject_is_open_termE (wfΣ := wfE0) tw_Geta_typed).
+    apply (@typing_leq_term_propE cpr_flags eq_refl tw_Σ tw_Γ (tRel 0) (tRel 0) tw_Geta tw_GF wfE0
+             tw_x_Geta cpr_on_udecl_empty tw_x_GF Conv 0).
+    reflexivity.
+  Qed.
+
+  (** [typing_leq_term_prop_genE], applied through [env_propE_typing] to the same pair. *)
+  Lemma typing_leq_term_prop_genE_inst : tw_Σ ;;; tw_Γ |-E tw_Geta ~~ tw_GF.
+  Proof.
+    have wfE0 : wfE tw_Σ.1 := wf_incl_E (@wf_empty_global_env cpr_flags).
+    apply (@PCUICTypingEtaInd.env_propE_typing cpr_flags _ _ _ (@typing_leq_term_prop_genE cpr_flags eq_refl)
+             tw_Σ wfE0 tw_Γ (tRel 0) tw_Geta tw_x_Geta (tRel 0) tw_GF cpr_on_udecl_empty tw_x_GF Conv 0).
+    reflexivity.
   Qed.
 
 End NoPropSub.

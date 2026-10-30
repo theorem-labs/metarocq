@@ -43,7 +43,13 @@
   - Helpers run by the instances above: [T8_Sort_l_plug], [PCUICPrincipalityEta.T8_Prod_l_plug]
     and [PCUICPrincipalityEta.chain_ws_cumul_pbE_Conv] (inside i21's instance; their own
     instances are in [PCUICPrincipalityEtaInstances]), [arity_spine_len] and
-    [arity_spine_len_subst] (inside i20's and i21's; [arity_spine_len_subst_inst] too). *)
+    [arity_spine_len_subst] (inside i20's and i21's; [arity_spine_len_subst_inst] too).
+
+  **A row whose instance is degenerate by the statement.** [check_recursivity_kind_injE]:
+  IMPOSSIBLE to make non-reflexive. The conclusion is the equality [rk = rk'], and in every
+  environment [Σ] (the section premise [wfE Σ] included) both premises check the field
+  [ind_finite] of the same declaration [mind] of [lookup_env Σ], so [rk] and [rk'] are both that
+  field. The instance is at [Finite], the [ind_finite] of [I] in [si_Σ]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -337,6 +343,8 @@ Definition typing_spine_nth_error_None_prodE_inst :=
 
 (** ** Classification and evaluation *)
 
+(** IMPOSSIBLE to make non-reflexive, by the statement: the conclusion is [rk = rk'] (see the
+    header). *)
 Definition check_recursivity_kind_injE_inst : Finite = Finite :=
   check_recursivity_kind_injE (Σ := si_Σ) (wfΣ := si_wfE) (mind := si_kn) (rk := Finite) (rk' := Finite)
     eq_refl eq_refl.

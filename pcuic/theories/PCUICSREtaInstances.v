@@ -28,7 +28,32 @@
   in the domain of an arity ([isWfArity_red1E_inst]). [subject_reduction1E_eta_inst] reduces a term
   whose typing derivation goes through an η step: in [g : Prop → Prop, k : (Prop → Prop) → Prop,
   y : k g], the redex [(λz:Prop. y) (∀P:Prop. P)] is typed at [k (λx:Prop. g x)] because [y] is
-  ([iv_rel_typed], a [typeE_Cumul] whose conversion is [cumul_eta_l]). *)
+  ([iv_rel_typed], a [typeE_Cumul] whose conversion is [cumul_eta_l]).
+
+  The helpers of [sr_red1E] that relate two objects relate two different ones:
+  [substitution_ws_cumul_pb_subst_convE_inst] substitutes the two lists [[(λx:Prop. x) (∀P:Prop. P)]]
+  and [[∀P:Prop. P]] (one β step apart) into [(λy:Prop. y) x] and [x] (one β step apart);
+  [conv_context_smash_endE_inst] smashes [w : z, z := (λx:Prop. x) (∀P:Prop. P)] and
+  [w : z, z := ∀P:Prop. P] (one β step apart, in the body of the let, which the smash substitutes
+  into [w]); [cmp_global_instance_cstr_irrelevantE_inst] compares the two different universe
+  instances [[Set]] and [[a]] of the polymorphic cumulative [J@{i}] of [PCUICEtaIdxEnv];
+  [ctx_inst_merge'E_inst] steps the argument [(λx:Prop. x) (∀P:Prop. P)] of a telescope.
+
+  **IMPOSSIBLE to make non-degenerate, by the statement** (each instance states its reason):
+  [declared_projection_declared_constructorE] (the conclusion is the equality of the declarations
+  that two lookups of the same names return), [PCUICSREta.conv_refl'E] (its only premise is
+  [x = y]) and [conv_context_reflE] (a [Reflexive] instance, with no premise).
+
+  **Helpers without an instance of their own**, each run on a real step by an instance here:
+  - [ctx_inst_mergeE]: helper, exercised by [ctx_inst_merge'E_inst] ([ctx_inst_merge'E] is its one
+    caller; inside [sr_red1E], [sr_red1E_Case] calls [ctx_inst_merge'E] for a step in the
+    parameters of a [match]);
+  - [lift_judgment_SRE]: helper, exercised by [isWfArity_red1E_inst]: the step in the domain of
+    [Π z : (λx:Prop. x) (∀P:Prop. P). Prop] runs [isType_red1E], then [subject_reduction1E], then
+    [sr_red1E_Prod], which calls it (it is also called by [sr_red1E_ctx], [sr_red1E_Lambda] and
+    [sr_red1E_LetIn]);
+  - [typing_spine_prim_argsE]: helper, exercised by [prim_app_typing_invE_inst]:
+    [prim_app_typing_invE] calls it on the spine [1 3] of [land 1 3] in [Σ_po]. *)
 
 From Stdlib Require Import ssreflect ssrbool PrimInt63.
 From MetaRocq.Utils Require Import utils.
@@ -43,7 +68,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICInversionEta PCUICInversionEtaInstances
      PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICInductivesEta
      PCUICValidityEta PCUICSREta.
-From MetaRocq.PCUIC Require PCUICSR.
+From MetaRocq.PCUIC Require PCUICSR PCUICEtaIdxEnv.
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
@@ -140,14 +165,6 @@ Proof.
            (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) (iv_wf_vdef si_Σ [] localenv_nil) eq_refl)).
 Qed.
 
-Lemma sri_rel_isType : isTypeE si_Σ [vass si_na si_P] (tRel 0).
-Proof.
-  exact (has_sort_isTypeE sProp (typeE_Rel _ _ 0 (vass si_na si_P) (iv_wf_P si_Σ [] localenv_nil) eq_refl)).
-Qed.
-
-Lemma sri_False_isType : isTypeE si_Σ [] iv_False.
-Proof. exact (has_sort_isTypeE sProp (iv_False_typed si_Σ [] localenv_nil)). Qed.
-
 (** A substitution and a spine: [(∀P:Prop. P)] for [x : Prop]. *)
 Lemma sri_subslet : subsletE si_Σ [] [iv_False] [vass si_na si_P].
 Proof. constructor; [constructor|exact (iv_False_typed si_Σ [] localenv_nil)]. Qed.
@@ -164,10 +181,46 @@ Proof.
   - exact sri_subslet.
 Qed.
 
-Lemma sri_terms_refl : ws_cumul_pbE_terms si_Σ [] [iv_False] [iv_False].
+(** The other side of [sri_subslet]: the β-redex [(λx:Prop. x) (∀P:Prop. P)] for [x : Prop]. *)
+Lemma sri_subslet_A : subsletE si_Σ [] [sri_A] [vass si_na si_P].
+Proof. constructor; [constructor|exact (iv_app_typed si_Σ [] localenv_nil)]. Qed.
+
+(** [(λx:Prop. x) (∀P:Prop. P) = ∀P:Prop. P], by the β step [sri_beta], in any closed context. *)
+Lemma sri_ws_beta pb (Γ : context) (cl : is_closed_context Γ) : ws_cumul_pbE pb si_Σ Γ sri_A iv_False.
+Proof. apply red_ws_cumul_pbE. split; [exact cl|reflexivity|exact (red1_red _ _ _ _ (sri_beta Γ))]. Qed.
+
+Lemma sri_terms_beta : ws_cumul_pbE_terms si_Σ [] [sri_A] [iv_False].
+Proof. constructor; [exact (sri_ws_beta Conv [] eq_refl)|constructor]. Qed.
+
+(** [x : Prop ⊢ (λy:Prop. y) x ≤ x], by β. *)
+Definition sri_id_x : term := tApp iv_id (tRel 0).
+
+Lemma sri_ws_id_x : ws_cumul_pbE Cumul si_Σ [vass si_na si_P] sri_id_x (tRel 0).
 Proof.
-  constructor; [|constructor].
-  exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) (wfΣ := si_wfE) (pb := Conv) [] iv_False sri_False_isType).
+  apply red_ws_cumul_pbE. split; [reflexivity|reflexivity|].
+  exact (red1_red _ _ _ _ (red_beta si_Σ [vass si_na si_P] si_na si_P (tRel 0) (tRel 0))).
+Qed.
+
+(** [w : z, z := b : Prop] (the let is the outer declaration), at the β-redex
+    [b := (λx:Prop. x) (∀P:Prop. P)] and at its reduct [b := ∀P:Prop. P]. *)
+Definition sri_Δlet (b : term) : context := [vass si_na (tRel 0); vdef si_na b si_P].
+
+Lemma sri_wf_Δlet (b : term) : si_Σ ;;; [] |-E b : si_P -> wf_localE si_Σ (sri_Δlet b).
+Proof.
+  intros hb.
+  have wd : wf_localE si_Σ ([] ,, vdef si_na b si_P).
+  { apply localenv_cons_def; [exact localenv_nil|].
+    exact (iv_vdef si_Σ [] si_na b si_P _ hb (iv_P_typed si_Σ [] localenv_nil) eq_refl). }
+  exact (iv_wf_vass si_Σ ([] ,, vdef si_na b si_P) si_na (tRel 0) sProp wd
+           (typeE_Rel _ _ 0 (vdef si_na b si_P) wd eq_refl) eq_refl).
+Qed.
+
+(** The two lets are one β step apart in the body; [w : z] is the same on both sides. *)
+Lemma sri_ctx_let_beta : ws_cumul_ctx_pbE Conv si_Σ (sri_Δlet sri_A) (sri_Δlet iv_False).
+Proof.
+  constructor; [constructor; [constructor|]|].
+  - constructor; [reflexivity|exact (sri_ws_beta Conv [] eq_refl)|apply ws_cumul_pbE_refl; reflexivity].
+  - constructor; [reflexivity|apply ws_cumul_pbE_refl; reflexivity].
 Qed.
 
 (** The closed step [(λx:Prop. x) (∀P:Prop. P) ⇝1 ∀P:Prop. P], in any closed context. *)
@@ -382,6 +435,12 @@ Section SRInstances.
 
   (** *** Helpers of [sr_red1E]: projections, constructors, branches *)
 
+  (** IMPOSSIBLE to make non-degenerate, by the statement: the conclusion is the equality
+      [mdecl = mdecl' /\ idecl = idecl' /\ cdecl = cdecl'] of the results of two lookups, and in
+      EVERY environment [Σ] (whatever its [wfE Σ]) the two premises look up the same names: the
+      inductive [p.(proj_ind)] and its constructor [0]. Lookups are functional, so every instance
+      has the same declarations on the two sides. This one is at the projection of the record [R]
+      of [iv_Σ]. *)
   Lemma declared_projection_declared_constructorE_inst :
     iv_mdecl = iv_mdecl /\ iv_idecl = iv_idecl /\ iv_cdecl = iv_cdecl.
   Proof.
@@ -406,13 +465,21 @@ Section SRInstances.
   Definition on_constructor_closed_indices_instE_inst :=
     on_constructor_closed_indices_instE (Σ := si_Σ) (wfΣ := si_wfE) (u := []) si_declared_constructor eq_refl.
 
+  (** At the polymorphic cumulative [J@{i}] of [PCUICEtaIdxEnv] (its constructor [jc], the
+      covariant variance), with two different universe instances [[Set]] and [[a]]
+      ([sri_ju_differ]): the premise is [Set ≤ a] at the full arity of [J] ([ji_cmp]), and the
+      conclusion relates the two instances at [Conv] for [jc] fully applied. *)
+  Lemma sri_ju_differ : PCUICEtaIdxEnv.ji_u0 <> PCUICEtaIdxEnv.ji_u1.
+  Proof. discriminate. Qed.
+
   Lemma cmp_global_instance_cstr_irrelevantE_inst :
-    cmp_global_instance si_Σ.1 (compare_universe si_Σ) Conv (ConstructRef si_ind 0)
-      (ind_npars si_mdecl + context_assumptions (cstr_args si_cdecl)) [] [].
+    cmp_global_instance PCUICEtaIdxEnv.ji_Σ.1 (compare_universe PCUICEtaIdxEnv.ji_Σ) Conv
+      (ConstructRef PCUICEtaIdxEnv.ji_ind 0)
+      (ind_npars PCUICEtaIdxEnv.ji_mdecl + context_assumptions (cstr_args PCUICEtaIdxEnv.ji_cdecl))
+      PCUICEtaIdxEnv.ji_u0 PCUICEtaIdxEnv.ji_u1.
   Proof.
-    apply (cmp_global_instance_cstr_irrelevantE (Σ := si_Σ) (wfΣ := si_wfE) si_declared_constructor).
-    first [exact (si_cumul_Ind_univ Cumul _) | apply cmp_global_instance_refl; tc
-          | (red; apply cmp_global_instance_refl; tc)].
+    exact (cmp_global_instance_cstr_irrelevantE (Σ := PCUICEtaIdxEnv.ji_Σ) (wfΣ := PCUICEtaIdxEnv.ji_wfE)
+             PCUICEtaIdxEnv.ji_declared_constructor PCUICEtaIdxEnv.ji_cmp).
   Qed.
 
   (** The branch of the [match] of [PCUICInversionEtaInstances]. *)
@@ -432,9 +499,15 @@ Section SRInstances.
     constructor.
   Qed.
 
+  (** IMPOSSIBLE to make non-reflexive, by the statement: its only premise is [x = y]; [Σ] and
+      [Γ] carry no premise at all, so every instance, in every environment and context, compares
+      a term with itself. *)
   Definition conv_refl'E_inst : JoinE si_Σ [] Conv iv_False iv_False :=
     PCUICSREta.conv_refl'E (Σ := si_Σ) (Γ := []) eq_refl.
 
+  (** IMPOSSIBLE to make non-reflexive, by the statement: it is a [Reflexive] instance with no
+      premise ([Σ] is any environment, with no [wf] premise), so every instance relates a context
+      to itself. *)
   Definition conv_context_reflE_inst := conv_context_reflE si_Σ sri_Γz.
 
   (** *** Helpers of [sr_red1E]: spines and substitutions *)
@@ -447,12 +520,14 @@ Section SRInstances.
   Definition spine_subst_wt_termsE_inst := spine_subst_wt_termsE sri_spine.
   Definition wf_subslet_skipnE_inst := wf_subslet_skipnE (n := 1) sri_wf_subslet.
 
-  Lemma substitution_ws_cumul_pb_subst_convE_inst : si_Σ ;;; [] ⊢E iv_False ≤ iv_False.
+  (** [s = [(λx:Prop. x) (∀P:Prop. P)]] and [s' = [∀P:Prop. P]], one β step apart
+      ([sri_terms_beta]); [T = (λy:Prop. y) x] and [U = x], one β step apart in [x : Prop]
+      ([sri_ws_id_x]). The conclusion relates [(λy:Prop. y) ((λx:Prop. x) (∀P:Prop. P))] and
+      [∀P:Prop. P]. *)
+  Lemma substitution_ws_cumul_pb_subst_convE_inst : si_Σ ;;; [] ⊢E tApp iv_id sri_A ≤ iv_False.
   Proof.
-    have hr := isType_ws_cumul_pbE_refl (Σ := si_Σ) (wfΣ := si_wfE) (pb := Cumul) [vass si_na si_P] (tRel 0)
-                 sri_rel_isType.
     exact (substitution_ws_cumul_pb_subst_convE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Δ := [])
-             sri_subslet sri_wf_subslet sri_terms_refl hr).
+             sri_subslet_A sri_wf_subslet sri_terms_beta sri_ws_id_x).
   Qed.
 
   (** *** Helpers of [sr_red1E]: contexts and types *)
@@ -473,14 +548,28 @@ Section SRInstances.
     isType_subst_aritiesE (Σ := si_Σ) (wfΣ := si_wfE) (u := []) (Γ := []) si_declared_inductive eq_refl
       sri_Ia_isType.
 
-  Lemma conv_context_smash_endE_inst :
-    ws_cumul_ctx_pbE Conv si_Σ ([] ,,, smash_context [] [vdef si_na iv_False si_P])
-      ([] ,,, smash_context [] [vdef si_na iv_False si_P]).
+  (** [Δ = sri_Δlet ((λx:Prop. x) (∀P:Prop. P))] and [Δ' = sri_Δlet (∀P:Prop. P)], one β step
+      apart ([sri_ctx_let_beta]). The smash substitutes the body of the let into [w]: the
+      conclusion relates [w : (λx:Prop. x) (∀P:Prop. P)] and [w : ∀P:Prop. P]. *)
+  Lemma conv_context_smash_endE_inst : ws_cumul_ctx_pbE Conv si_Σ [vass si_na sri_A] [vass si_na iv_False].
   Proof.
-    have wd := iv_wf_vdef si_Σ [] localenv_nil.
-    apply (conv_context_smash_endE (Σ := si_Σ) (wfΣ := si_wfE) [] [vdef si_na iv_False si_P]
-             [vdef si_na iv_False si_P] wd wd).
-    exact (ws_cumul_ctx_pbE_refl (Σ := si_Σ) _ (wf_local_closed_contextE (Σ := si_Σ) (wfΣ := si_wfE) wd)).
+    exact (conv_context_smash_endE (Σ := si_Σ) (wfΣ := si_wfE) [] (sri_Δlet sri_A) (sri_Δlet iv_False)
+             (sri_wf_Δlet sri_A (iv_app_typed si_Σ [] localenv_nil))
+             (sri_wf_Δlet iv_False (iv_False_typed si_Σ [] localenv_nil)) sri_ctx_let_beta).
+  Qed.
+
+  (** The telescope [x : Prop] instantiated by [(λx:Prop. x) (∀P:Prop. P)], which steps to
+      [∀P:Prop. P] ([sri_cr1]); the reduction premise is [subject_reduction1E]. This runs
+      [ctx_inst_mergeE] on that step. *)
+  Lemma ctx_inst_merge'E_inst : ctx_instE si_Σ [] [iv_False] (List.rev [vass si_na si_P]).
+  Proof.
+    have ha := iv_app_typed si_Σ [] localenv_nil.
+    apply (ctx_inst_merge'E (Σ := si_Σ) (wfΣ := si_wfE) [] [sri_A] [iv_False] [vass si_na si_P]).
+    - exact (iv_wf_P si_Σ [] localenv_nil).
+    - constructor; [|constructor].
+      intros u r. exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) ha (closed_red1_red1 r)).
+    - constructor; [exact ha|constructor].
+    - constructor. exact (sri_cr1 [] eq_refl).
   Qed.
 
   (** *** Helpers of [sr_red1E]: closed reductions *)
