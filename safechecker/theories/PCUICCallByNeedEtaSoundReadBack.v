@@ -1,6 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 (** ETA-COPY (wip/etak-cbne-2026-10-30) of integ-all8's [PCUICCallByNeedSoundReadBack] (1a92b56c) over the η environment
     ([PCUICWfEnvEta], [PCUICCallByNeedEta]): see [PCUICCallByNeedEtaSoundHookProof] for what differs. *)
+(** The η imports bring in [PCUICEtaStrengthening], which declares the same names as [BDStrengthening]: those references are written fully qualified. *)
 From Stdlib Require Import BinPos BinNat Lia.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require CanonicalTries.
@@ -103,7 +104,8 @@ Qed.
 
 Lemma cbn_unlift_lift0 n x : rename (unlift_renaming n 0) (lift0 n x) = x.
 Proof.
-  rewrite lift_rename, rename_compose, (rename_ext _ ren_id (lift_unlift n 0)).
+  rewrite lift_rename, rename_compose,
+    (rename_ext _ ren_id (MetaRocq.PCUIC.Bidirectional.BDStrengthening.lift_unlift n 0)).
   apply rename_ren_id.
 Qed.
 

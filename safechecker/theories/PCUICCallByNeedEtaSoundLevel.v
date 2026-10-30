@@ -1,6 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 (** ETA-COPY (wip/etak-cbne-2026-10-30) of integ-all8's [PCUICCallByNeedSoundLevel] (1a92b56c) over the η environment
     ([PCUICWfEnvEta], [PCUICCallByNeedEta]): see [PCUICCallByNeedEtaSoundHookProof] for what differs. *)
+(** The η imports bring in [PCUICEtaStrengthening] and [PCUICClosedTyp], which declare the same names as [BDStrengthening] and [PCUICRenameConv]: those references are written fully qualified. *)
 From Stdlib Require Import BinPos BinNat Lia.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require CanonicalTries.
@@ -233,17 +234,19 @@ Proof.
   pose (P := strengthenP 0 #|J| cbn_xpredT).
   pose (f := unlift_renaming #|J| 0).
   assert (hctx : on_ctx_free_vars P (Ξ ,,, J)).
-  { exact (on_ctx_free_vars_strengthenP Ξ J [] hΞ eq_refl). }
+  { exact (MetaRocq.PCUIC.Bidirectional.BDStrengthening.on_ctx_free_vars_strengthenP Ξ J [] hΞ eq_refl). }
   assert (hsrc : on_free_vars P (lift0 #|J| t)).
   { unfold P. rewrite on_free_vars_lift. exact ht. }
   assert (hren : urenaming P (Ξ ,,, J) Ξ f).
-  { exact (urenaming_strengthen cbn_xpredT Ξ J []). }
+  { exact (MetaRocq.PCUIC.Bidirectional.BDStrengthening.urenaming_strengthen cbn_xpredT Ξ J []). }
   pose proof (red_rename_cb P Σ (Ξ ,,, J) Ξ (lift0 #|J| t) u f (wfE_ClosedBodies Σ) hren hctx hsrc hr)
     as hr'.
-  pose proof (red_on_free_vars_cb (wfΣ := wfE_ClosedBodies Σ) hctx hsrc hr) as hu.
+  pose proof (MetaRocq.PCUIC.Conversion.PCUICRenameConv.red_on_free_vars_cb (wfΣ := wfE_ClosedBodies Σ)
+                hctx hsrc hr) as hu.
   assert (hlu : rename f (lift0 #|J| t) = t).
   { rewrite lift_rename, rename_compose.
-    rewrite (rename_ext _ ren_id (lift_unlift #|J| 0)). apply rename_ren_id. }
+    rewrite (rename_ext _ ren_id (MetaRocq.PCUIC.Bidirectional.BDStrengthening.lift_unlift #|J| 0)).
+    apply rename_ren_id. }
   exists (rename f u). split.
   - rewrite lift_rename, rename_compose.
     rewrite (rename_ext_cond P (lift_renaming #|J| 0 ∘ f) ren_id u);
