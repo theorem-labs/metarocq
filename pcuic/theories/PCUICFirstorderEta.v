@@ -224,8 +224,6 @@ Proof using Type.
     all:tea.
 Qed.
 
-Section FirstorderForecastE.
-
 (** Base [instantiated_typing_spine_firstorder_spine] ([:314]). *)
 Lemma instantiated_typing_spine_firstorder_spineE {Σ : global_env_ext} {wfΣ : wfE Σ} Γ T args T' :
   instantiated (Σ := Σ) Γ T ->
@@ -585,8 +583,6 @@ Proof using.
       rewrite /check_recursivity_kind E in Hty.
       now eapply (negb_False _ Hfo).
 Qed.
-
-End FirstorderForecastE.
 
 (** Base [firstorder_value_alpha] ([:716]). *)
 Lemma firstorder_value_alphaE Σ t t' :
