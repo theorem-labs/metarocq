@@ -39,6 +39,8 @@
   [canon_on_free_vars] and [eta1_on_free_vars]. This is [JoinE_renameP]; [conv_renamePE] and
   [cumul_renamePE] are it at [Conv] and [Cumul], with base's premises, [ClosedBodies Σ.1] (an
   implicit instance, from [wfE] by [wfE_ClosedBodies]) in place of base's [wf Σ.1] (Class B).
+  Their binders [P Σ Γ Δ f A B] are implicit where base's are explicit, so that [eapply]
+  fills the instance; the reason and the measured failure of base's form are beside each lemma.
 
   ** Proof routes that differ from base (statements do not)
 
@@ -207,7 +209,16 @@ Section JoinERename.
 End JoinERename.
 
 (** Base [conv_renameP] ([PCUICRenameConv.v:1118]): [Σ ;;; Γ |- A = B] → [JoinE Σ Γ Conv A B],
-    [wf Σ.1] → the instance [ClosedBodies Σ.1] (Class B). *)
+    [wf Σ.1] → the instance [ClosedBodies Σ.1] (Class B).
+    IMPLICIT STATUS DIFFERS FROM BASE: base's [P Σ Γ Δ f A B] are explicit; here they are
+    implicit. Reason: the instance binder [cbΣ] takes the place of base's explicit premise
+    [wf Σ.1]. With base's explicit binders before it, [eapply conv_renamePE] does not fill [cbΣ]
+    by typeclass search: it leaves the goal [ClosedBodies Σ.1] open, and the call in the
+    [tCase] case of [bidirectional_renamingE] below ([now eapply conv_renamePE]) fails with
+    "No applicable tactic" (follow-up build [fu], 2026-10-30; a probe with the same binder shape
+    printed the open goal [ClosedBodies Σ.1]). With the binders implicit, [cbΣ] is inserted when
+    the name is elaborated and found from [wfE] ([wfE_ClosedBodies]). The statement is otherwise
+    base's. *)
 Lemma conv_renamePE {cf} {P Σ Γ Δ f A B} {cbΣ : ClosedBodies Σ.1} :
   urenaming P Γ Δ f ->
   on_free_vars P A ->
@@ -218,7 +229,12 @@ Lemma conv_renamePE {cf} {P Σ Γ Δ f A B} {cbΣ : ClosedBodies Σ.1} :
 Proof. intros hf hA hB hΓ h. exact (JoinE_renameP P Γ Δ f Conv A B hf hΓ hA hB h). Qed.
 
 (** Base [cumul_renameP] ([PCUICRenameConv.v:1141]): [Σ ;;; Γ |- A <= B] → [JoinE Σ Γ Cumul A B],
-    [wf Σ.1] → the instance [ClosedBodies Σ.1] (Class B). *)
+    [wf Σ.1] → the instance [ClosedBodies Σ.1] (Class B).
+    IMPLICIT STATUS DIFFERS FROM BASE: base's [P Σ Γ Δ f A B] are explicit; here they are
+    implicit, as in [conv_renamePE] and for its reason: [cbΣ] replaces base's explicit [wf Σ.1],
+    and its one caller in this file, the last case of [bidirectional_renamingE] below
+    ([eapply cumul_renamePE; tea]), relies on [eapply] filling [cbΣ] by typeclass search. The
+    statement is otherwise base's. *)
 Lemma cumul_renamePE {cf} {P Σ Γ Δ f A B} {cbΣ : ClosedBodies Σ.1} :
   urenaming P Γ Δ f ->
   on_free_vars P A ->

@@ -294,9 +294,18 @@ theories/PCUICClassificationEtaInstances.v
 # Progress over typingE (row T6, the E copy of PCUICProgress), and its satisfying instances
 theories/PCUICProgressEta.v
 theories/PCUICProgressEtaInstances.v
+# Canonicity over typingE (row T6, the E copy of PCUICCanonicity), and its satisfying instances
+theories/PCUICCanonicityEta.v
+theories/PCUICCanonicityEtaInstances.v
+# Consistency over typingE (row T9, the E copy of PCUICConsistency), and its satisfying instance
+theories/PCUICConsistencyEta.v
+theories/PCUICConsistencyEtaInstances.v
 # First-order values over typingE (row T6, the E copy of PCUICFirstorder), and its satisfying instances
 theories/PCUICFirstorderEta.v
 theories/PCUICFirstorderEtaInstances.v
+# Weak-head and weak call-by-value normalization over typingE (T0 copy 20, the E copy of PCUICNormalization), and its satisfying instances
+theories/PCUICNormalizationEta.v
+theories/PCUICTypingEtaCopy20Instances.v
 # F0 forecast of LAND3 (BET-339): SR, the changed classification/progress rows and T8 on cases of the region BET-339 admits
 theories/PCUICEtaF0Land3Instances.v
 # The comparisons wfE makes are between scoped pairs, and their satisfying instances

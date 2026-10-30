@@ -50,12 +50,30 @@
      ([t8_T_conv]). [t8_Ind_r_inst] applies the proved [T8_Ind_r] to it.
      Non-degeneracy: [t8_old_premise_fails], [t8_flag_unset]; [t8_T] is a case, not a head form.
 
+  4. LAND4/5 under BET-339 (branch [wip/eta-meta-f0-land45-2026-10-30]): canonicity on the
+     closed blocked case [g_t], the E twins of base's consistency helpers that BET-339 adds, and
+     refutations of the pre-BET-339 forms of copy 20's [SN_to_WNE] and [wcbv_normalizationE]
+     (each under base's normalization premise for [iv_Σ], which no one proves). Details in the
+     section.
+
+  5. The two induction principles BET-339 restated ([typing_ind_envE],
+     [typing_ind_env_app_sizeE]), each run with predicates whose [tCase] hypothesis consumes the
+     restated premise: a typed case on [R] with a predicate on the scrutinee has its flag unset.
+     Details in the section.
+
+  Tags: the instance grammar of [lanes/eta/meta/instance-gate.md] (one [INSTANCE NONDEGEN],
+  [INSTANCE IMPOSSIBLE:] or [INSTANCE NOT-BUILT:] line directly above each instance, with
+  [TARGET] lines). Declarations that are neither instances nor NONDEGEN lemmas:
+  WITNESSES: f3_* g_* t8_* l45_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false
+
   Forecast evidence for the cutover F0 (it rests on the ship branch's
   [PCUICEtaFO4Instances], which is itself forecast-only). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config BasicAst Universes Kernames Environment EnvironmentTyping.
+From MetaRocq.PCUIC Require Import PCUICSafeLemmata PCUICSN PCUICConfluence PCUICWellScopedCumulativity
+     PCUICEtaC1b.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars PCUICTyping
      PCUICCases PCUICEquality PCUICReduction PCUICViews PCUICCumulativitySpec PCUICCumulativitySpecEta
      PCUICTypingEta PCUICClosedBodies PCUICClosedTyp PCUICClosedTypEta PCUICEtaI5 PCUICWellScopedCumulativityEta
@@ -64,6 +82,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICNormal PCUICWcbvEval PCUICClassification PCUICClassificationEta PCUICProgressEta
      PCUICSREta PCUICEtaT8Probe.
 From MetaRocq.PCUIC Require PCUICWfUniverses.
+From MetaRocq.PCUIC Require PCUICSNEta PCUICConsistency PCUICCanonicityEta PCUICConsistencyEta
+     PCUICConsistencyEtaInstances PCUICEtaA6.
+From MetaRocq.PCUIC Require Import PCUICTypingEtaInd.
 
 #[local] Existing Instance default_checker_flags.
 #[local] Instance f3_iv_cb : ClosedBodies iv_env := @wfE_ClosedBodies _ iv_env iv_wfE.
@@ -165,7 +186,10 @@ Qed.
 Lemma f3_step : red1 iv_Σ fo_Γ f3_t0 f3_t1.
 Proof. apply case_red_discr. exact (red_beta _ _ si_na iv_RF (tRel 0) f3_cofix). Qed.
 
-(** The landed T1 theorem on the step. *)
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.f3_sr_nondeg
+   TARGET PCUICSREta.subject_reductionE
+   The landed T1 theorem on a β step inside a flag-unset case on a cofixpoint whose return
+   predicate mentions the scrutinee. *)
 Theorem f3_sr : iv_Σ ;;; fo_Γ |-E f3_t1 : f3_T.
 Proof.
   apply (PCUICSREta.subject_reductionE iv_Σ fo_Γ f3_t0 f3_t1 f3_T iv_wfE f3_t0_typed).
@@ -401,17 +425,129 @@ Qed.
 Lemma g_head_not_discr : construct_cofix_discr (head g_t) = false.
 Proof. exact (stuck_cofix_case_head g_t g_stuck). Qed.
 
-(** [wh_neutral_empty_genE] and [wh_neutral_emptyE]: IMPOSSIBLE before BET-339 (they concluded
-    [False]); now non-degenerate. *)
+(** *** [g_t] is [red1]-normal, in [iv_Σ] and the empty context: no step at its root (the flag
+    blocks [red_cofix_case], the scrutinee is no constructor application) and none inside its
+    parameter, return predicate, scrutinee or branch. *)
+
+Lemma l45_OnOne2_single {A} (P : A -> A -> Type) x l' : OnOne2 P [x] l' -> ∑ y, P x y.
+Proof.
+  intros h. inversion h; subst.
+  - eexists; eassumption.
+  - match goal with H : OnOne2 _ [] _ |- _ => inversion H end.
+Qed.
+
+Lemma l45_mkApps_construct_cofix i n u args m k :
+  mkApps (tConstruct i n u) args = tCoFix m k -> False.
+Proof.
+  destruct args using rev_case; cbn; [discriminate|].
+  rewrite mkApps_app; cbn; discriminate.
+Qed.
+
+Lemma l45_Ind_normal (S : global_env) Γ i u v : red1 S Γ (tInd i u) v -> False.
+Proof. intros H. inv_red H. Qed.
+
+Lemma l45_Construct_normal (S : global_env) Γ i n u v : red1 S Γ (tConstruct i n u) v -> False.
+Proof. intros H. inv_red H. Qed.
+
+Lemma l45_Rel0_normal (S : global_env) Γ v :
+  option_map decl_body (nth_error Γ 0) = Some None -> red1 S Γ (tRel 0) v -> False.
+Proof.
+  intros hn H. inv_red H.
+  match goal with e : option_map decl_body _ = _ |- _ => rewrite hn in e; discriminate e end.
+Qed.
+
+Lemma l45_False_normal (S : global_env) Γ v : red1 S Γ iv_False v -> False.
+Proof.
+  unfold iv_False. intros H. inv_red H.
+  - eapply red_normal_Sort; eassumption.
+  - eapply red_normal_Rel0; eassumption.
+Qed.
+
+Lemma l45_RF_normal (S : global_env) Γ v : red1 S Γ iv_RF v -> False.
+Proof.
+  unfold iv_RF, iv_R. intros H. inv_red H.
+  - eapply l45_Ind_normal; eassumption.
+  - eapply l45_False_normal; eassumption.
+Qed.
+
+Lemma l45_A_normal (S : global_env) Γ v : red1 S Γ g_A v -> False.
+Proof. unfold g_A. intros H. inv_red H; eapply l45_RF_normal; eassumption. Qed.
+
+Lemma l45_RA_normal (S : global_env) Γ v : red1 S Γ g_RA v -> False.
+Proof.
+  unfold g_RA, iv_R. intros H. inv_red H.
+  - eapply l45_Ind_normal; eassumption.
+  - eapply l45_A_normal; eassumption.
+Qed.
+
+Lemma l45_idRF_normal (S : global_env) Γ v : red1 S Γ f3_idRF v -> False.
+Proof.
+  unfold f3_idRF. revert v. apply red_normal_lam.
+  - intros w. apply l45_RF_normal.
+  - intros w. apply red_normal_Rel0.
+Qed.
+
+Lemma l45_mkRA_normal (S : global_env) Γ a :
+  (forall v, red1 S Γ a v -> False) -> forall v, red1 S Γ (g_mkRA a) v -> False.
+Proof.
+  intros ha v. unfold g_mkRA. intros H. inv_red H.
+  - match goal with h : red1 _ _ (tApp _ _) _ |- _ => inv_red h end.
+    + eapply l45_Construct_normal; eassumption.
+    + eapply l45_A_normal; eassumption.
+  - eapply ha; eassumption.
+Qed.
+
+Lemma l45_cofix_normal (S : global_env) Γ v : red1 S Γ g_cofix v -> False.
+Proof.
+  unfold g_cofix. intros H. inv_red H.
+  - match goal with h : OnOne2 _ _ _ |- _ =>
+      unfold g_cmfix in h; apply l45_OnOne2_single in h as [y [hy _]] end.
+    eapply l45_RA_normal; exact hy.
+  - match goal with h : OnOne2 _ _ _ |- _ =>
+      unfold g_cmfix in h; apply l45_OnOne2_single in h as [y [hy _]] end.
+    eapply (l45_mkRA_normal _ _ f3_idRF (l45_idRF_normal _ _)); exact hy.
+Qed.
+
+Lemma l45_g_t_normal v : red1 iv_Σ [] g_t v -> False.
+Proof.
+  unfold g_t, g_cofix. intros H. inv_red H.
+  all: first
+    [ match goal with e : mkApps (tConstruct _ _ _) _ = tCoFix _ _ |- _ =>
+        exact (l45_mkApps_construct_cofix _ _ _ _ _ _ e) end
+    | match goal with h : is_true (ci_cofix_nondep _) |- _ => cbn in h; discriminate h end
+    | match goal with h : OnOne2 (fun t u => red1 _ _ t u) _ _ |- _ =>
+        cbn in h; apply l45_OnOne2_single in h as [y hy]; eapply l45_A_normal; exact hy end
+    | match goal with h : red1 _ _ (preturn _) _ |- _ => eapply l45_RA_normal; exact h end
+    | match goal with h : red1 _ _ (tCoFix _ _) _ |- _ => eapply l45_cofix_normal; exact h end
+    | match goal with h : OnOne2 _ _ _ |- _ =>
+        apply l45_OnOne2_single in h as [y [hy _]];
+        eapply (l45_mkRA_normal _ _ (tRel 0)); [|exact hy];
+        intros w; apply l45_Rel0_normal; reflexivity end ].
+Qed.
+
+Lemma l45_g_t_closed : on_free_vars (fun _ => false) g_t.
+Proof. reflexivity. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.wh_neutral_empty_genE_inst_nondeg
+   TARGET PCUICClassificationEta.wh_neutral_empty_genE
+   IMPOSSIBLE before BET-339 (the conclusion was [False]); now it concludes
+   [stuck_cofix_case t], and [g_t] is a closed typed blocked case. *)
 Definition wh_neutral_empty_genE_inst : stuck_cofix_case g_t :=
   wh_neutral_empty_genE (Σ := iv_Σ) (wfΣ := iv_wfE) [] [] g_t g_RA g_afv g_whne g_t_typed_RA eq_refl.
 
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.wh_neutral_emptyE_inst_nondeg
+   TARGET PCUICClassificationEta.wh_neutral_emptyE *)
 Definition wh_neutral_emptyE_inst : stuck_cofix_case g_t :=
   wh_neutral_emptyE (Σ := iv_Σ) (wfΣ := iv_wfE) g_t g_RA g_afv g_whne g_t_typed_RA.
 
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.whnf_classification'E_stuck_inst_nondeg
+   TARGET PCUICClassificationEta.whnf_classification'E
+   The constructor/cofixpoint disjunct is false at [g_t]; the instance lands in the new one. *)
 Definition whnf_classification'E_stuck_inst :=
   whnf_classification'E (Σ := iv_Σ) (wfΣ := iv_wfE) g_t iv_ind [] [g_A] g_afv g_whnf g_t_typed_RA.
 
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.whnf_classificationE_stuck_inst_nondeg
+   TARGET PCUICClassificationEta.whnf_classificationE *)
 Definition whnf_classificationE_stuck_inst :=
   whnf_classificationE (Σ := iv_Σ) (wfΣ := iv_wfE) g_t iv_ind [] [g_A] g_axiom_free g_whnf g_t_typed_RA.
 
@@ -422,9 +558,14 @@ Proof.
   exfalso. rewrite g_head_not_discr in h. discriminate h.
 Qed.
 
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.progressE_stuck_inst_nondeg
+   TARGET PCUICProgressEta.progressE
+   [g_t] takes no step and has no value; the instance lands in the disjunct [wcbv_stuck]. *)
 Definition progressE_stuck_inst :=
   progressE iv_Σ g_t g_RA g_axiom_free iv_wfE g_t_typed_RA.
 
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.red1_progressE_inst_nondeg
+   TARGET PCUICProgressEta.red1_progressE *)
 Definition red1_progressE_inst :=
   red1_progressE (Σ := iv_Σ) (wfΣ := iv_wfE) g_axiom_free g_t g_RA g_t_typed_RA.
 
@@ -732,7 +873,10 @@ Proof.
            eq_refl eq_refl).
 Qed.
 
-(** The proved T8 theorem on [t8_T]. *)
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.t8_Ind_r_inst_nondeg
+   TARGET PCUICEtaT8Probe.T8_Ind_r
+   The proved T8 theorem on [t8_T], a case of the region (flag unset, predicate on the
+   scrutinee) that reaches [R F] only by ι. *)
 Definition t8_Ind_r_inst :=
   PCUICEtaT8Probe.T8_Ind_r (Σ := iv_Σ) iv_wfE iv_Γr Cumul t8_T iv_ind [] [iv_False] sProp iv_wfE
     t8_T_sort t8_T_conv.
@@ -750,6 +894,396 @@ Lemma t8_new_premise_holds :
    (t8_oci.(ci_cofix_nondep) ==> on_free_vars (strengthenP 0 1 xpredT) (preturn t8_op))) = true.
 Proof. reflexivity. Qed.
 
+(** ** NONDEGEN lemmas of the instances of sections 1-3
+
+  Each names the witness the instance passes and states why the run is in the region BET-339
+  admits: a flag-unset case, a blocked shape, an empty old disjunct. *)
+
+Lemma f3_sr_nondeg :
+  (red1 iv_Σ fo_Γ f3_t0 f3_t1 × stuck_cofix_case f3_t1 × (fo_ci.(ci_cofix_nondep) = false) ×
+   ((isCoFinite (ind_finite iv_mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) (preturn fo_p))
+      = false))%type.
+Proof. exact (f3_step, (f3_t1_stuck, (eq_refl, eq_refl))). Qed.
+
+Lemma wh_neutral_empty_genE_inst_nondeg :
+  (stuck_cofix_case g_t × (construct_cofix_discr (head g_t) = false) ×
+   (g_ci.(ci_cofix_nondep) = false))%type.
+Proof. exact (g_stuck, (g_head_not_discr, eq_refl)). Qed.
+
+Lemma wh_neutral_emptyE_inst_nondeg :
+  (stuck_cofix_case g_t × (construct_cofix_discr (head g_t) = false) ×
+   (g_ci.(ci_cofix_nondep) = false))%type.
+Proof. exact (g_stuck, (g_head_not_discr, eq_refl)). Qed.
+
+Lemma whnf_classification'E_stuck_inst_nondeg :
+  (stuck_cofix_case g_t × (construct_cofix_discr (head g_t) = false) ×
+   (g_ci.(ci_cofix_nondep) = false))%type.
+Proof. exact (g_stuck, (g_head_not_discr, eq_refl)). Qed.
+
+Lemma whnf_classificationE_stuck_inst_nondeg :
+  (stuck_cofix_case g_t × (construct_cofix_discr (head g_t) = false) ×
+   (g_ci.(ci_cofix_nondep) = false))%type.
+Proof. exact (g_stuck, (g_head_not_discr, eq_refl)). Qed.
+
+Lemma progressE_stuck_inst_nondeg :
+  (wcbv_stuck iv_Σ g_t × (forall t', iv_Σ ⊢ g_t ⇝ᵥ t' -> False) ×
+   (forall v, eval iv_Σ g_t v -> False))%type.
+Proof. exact (g_wcbv_stuck, (g_no_wcbv_step, g_no_eval)). Qed.
+
+Lemma red1_progressE_inst_nondeg :
+  (whne RedFlags.default iv_Σ [] g_t × (g_ci.(ci_cofix_nondep) = false))%type.
+Proof. exact (g_whne, eq_refl). Qed.
+
+Lemma t8_Ind_r_inst_nondeg :
+  ((t8_oci.(ci_cofix_nondep) = false) ×
+   ((isCoFinite (ind_finite iv_mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) (preturn t8_op))
+      = false) ×
+   (t8_T = tCase t8_oci t8_op t8_scrut [t8_obr]))%type.
+Proof. exact (eq_refl, (eq_refl, eq_refl)). Qed.
+
+(** ** 4. LAND4/5 under BET-339
+
+  *Canonicity.* [pcuic_canonicityE] (restated as base integ-all8: [+ stuck_cofix_case t']) on
+  the closed blocked case [g_t : R A] of section 2, under base's normalization premise for [iv_Σ]
+  (a section variable, never discharged, as in [PCUICCanonicityEtaInstances]). [g_t]'s own head
+  is neither a constructor nor a cofixpoint, it is blocked, and it has no value
+  ([pcuic_canonicityE_stuck_inst_nondeg]).
+
+  Refutation of the pre-BET-339 [pcuic_canonicityE]: NOT BUILT. Obstacle, exactly: from the old
+  conclusion at [g_t] one gets a [t'] whose head is a constructor or a cofixpoint with
+  [convSpecE iv_Σ [] g_t t']; a contradiction needs a lemma that no E conversion relates a closed
+  blocked case with such a term (the T8 probe's header records this only as an argument, "the
+  chains from it keep the elimination"), and base's normalization premise for [iv_Σ] as a
+  hypothesis. Neither is proved.
+
+  *Consistency.* The instance of [pcuic_consistentE] stays in [PCUICConsistencyEtaInstances]
+  ([cs_Σ], no coinductive block, where the new premise is proved by
+  [no_closed_stuck_cofix_case_at_no_cofiniteE]: [cs_no_stuck]). The E twins of base's new helpers
+  run here on the region's terms. *)
+
+Section CanonicityStuck.
+
+(* Base's normalization premise (by design, never discharged). *)
+Context {nor : normalizing_flags} {nin_iv : PCUICSNEta.NormalizationInE iv_Σ}.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.pcuic_canonicityE_stuck_inst_nondeg
+   TARGET PCUICCanonicityEta.pcuic_canonicityE
+   Canonicity on a closed term of a coinductive type that is a case blocked on a cofixpoint. *)
+Definition pcuic_canonicityE_stuck_inst :=
+  PCUICCanonicityEta.pcuic_canonicityE iv_Σ g_t iv_ind [] [g_A] g_axiom_free iv_wfE g_t_typed_RA.
+
+End CanonicityStuck.
+
+(** [g_t] is blocked, its head is neither a constructor nor a cofixpoint, it has no value, and
+    it is [red1]-normal ([l45_g_t_normal]): the weak-head normal form the lemma's proof computes is
+    [g_t] itself, which only the disjunct BET-339 added covers. *)
+Lemma pcuic_canonicityE_stuck_inst_nondeg :
+  (stuck_cofix_case g_t × (construct_cofix_discr (head g_t) = false) ×
+   (forall v, eval iv_Σ g_t v -> False) × (forall v, red1 iv_Σ [] g_t v -> False))%type.
+Proof. exact (g_stuck, (g_head_not_discr, (g_no_eval, l45_g_t_normal))). Qed.
+
+(** The application [(λ y : R F. y) f3_cofix] is a real β-redex whose result is the cofixpoint. *)
+Lemma l45_scrut_red : red1 iv_Σ fo_Γ f3_scrut f3_cofix.
+Proof. exact (red_beta _ _ si_na iv_RF (tRel 0) f3_cofix). Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_tApp_invE_inst_nondeg
+   TARGET PCUICConsistencyEta.typing_tApp_invE *)
+Definition typing_tApp_invE_inst :=
+  PCUICConsistencyEta.typing_tApp_invE (Σ := iv_Σ) (Γ := fo_Γ) (f := f3_idRF) (a := f3_cofix)
+    f3_scrut_typed.
+
+Lemma typing_tApp_invE_inst_nondeg : red1 iv_Σ fo_Γ (tApp f3_idRF f3_cofix) f3_cofix.
+Proof. exact l45_scrut_red. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_tCase_scrutE_inst_nondeg
+   TARGET PCUICConsistencyEta.typing_tCase_scrutE
+   The scrutinee is a cofixpoint under a flag-unset case: the blocked shape. *)
+Definition typing_tCase_scrutE_inst :=
+  PCUICConsistencyEta.typing_tCase_scrutE (Σ := iv_Σ) (Γ := []) (ci := g_ci) (p := g_p)
+    (c := g_cofix) (brs := [g_br]) g_t_typed.
+
+Lemma typing_tCase_scrutE_inst_nondeg : stuck_cofix_case (tCase g_ci g_p g_cofix [g_br]).
+Proof. exact g_stuck. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_tProj_argE_inst_nondeg
+   TARGET PCUICConsistencyEta.typing_tProj_argE
+   A projection of the coinductive record [R]. *)
+Definition typing_tProj_argE_inst :=
+  PCUICConsistencyEta.typing_tProj_argE (Σ := iv_Σ) (Γ := iv_Γr) (pr := iv_proj) (c := tRel 0)
+    iv_proj_typed.
+
+Lemma typing_tProj_argE_inst_nondeg :
+  check_recursivity_kind (lookup_env iv_Σ) (inductive_mind iv_proj.(proj_ind)) CoFinite.
+Proof. reflexivity. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_tCoFix_cofiniteE_inst_nondeg
+   TARGET PCUICConsistencyEta.typing_tCoFix_cofiniteE
+   The cofixpoint of [g_t]; its declared type is the coinductive [R A]. *)
+Definition typing_tCoFix_cofiniteE_inst :=
+  PCUICConsistencyEta.typing_tCoFix_cofiniteE (Σ := iv_Σ) (Γ := []) (mfix := g_cmfix) (idx := 0)
+    g_cofix_typed.
+
+Lemma typing_tCoFix_cofiniteE_inst_nondeg :
+  ((option_map dtype (nth_error g_cmfix 0) = Some (mkApps (tInd iv_ind []) [g_A])) ×
+   check_recursivity_kind (lookup_env iv_Σ) iv_kn CoFinite)%type.
+Proof. split; reflexivity. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_mkApps_argE_inst_nondeg
+   TARGET PCUICConsistencyEta.typing_mkApps_argE *)
+Definition typing_mkApps_argE_inst :=
+  PCUICConsistencyEta.typing_mkApps_argE (Σ := iv_Σ) (Γ := fo_Γ) (f := f3_idRF) (args := [f3_cofix])
+    (n := 0) (arg := f3_cofix) f3_scrut_typed eq_refl.
+
+Lemma typing_mkApps_argE_inst_nondeg : red1 iv_Σ fo_Γ (mkApps f3_idRF [f3_cofix]) f3_cofix.
+Proof. exact l45_scrut_red. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_mkApps_headE_inst_nondeg
+   TARGET PCUICConsistencyEta.typing_mkApps_headE *)
+Definition typing_mkApps_headE_inst :=
+  PCUICConsistencyEta.typing_mkApps_headE (Σ := iv_Σ) (Γ := fo_Γ) (f := f3_idRF) (args := [f3_cofix])
+    f3_scrut_typed.
+
+Lemma typing_mkApps_headE_inst_nondeg : red1 iv_Σ fo_Γ (mkApps f3_idRF [f3_cofix]) f3_cofix.
+Proof. exact l45_scrut_red. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_stuck_cofix_case_cofiniteE_inst_nondeg
+   TARGET PCUICConsistencyEta.typing_stuck_cofix_case_cofiniteE
+   A closed typed blocked case: the shape the new consistency premise excludes at [False]. *)
+Definition typing_stuck_cofix_case_cofiniteE_inst :=
+  PCUICConsistencyEta.typing_stuck_cofix_case_cofiniteE (Σ := iv_Σ) (Γ := []) (t := g_t) (T := g_RA)
+    g_stuck g_t_typed_RA.
+
+Lemma typing_stuck_cofix_case_cofiniteE_inst_nondeg :
+  (stuck_cofix_case g_t × (g_ci.(ci_cofix_nondep) = false))%type.
+Proof. exact (g_stuck, eq_refl). Qed.
+
+(** [cs_Σ] has no coinductive block. *)
+Lemma l45_cs_no_cofinite :
+  forall mind, check_recursivity_kind (lookup_env PCUICConsistencyEtaInstances.cs_Σ) mind CoFinite
+    = false.
+Proof.
+  intros mind. unfold check_recursivity_kind, lookup_env, PCUICConsistencyEtaInstances.cs_Σ,
+    PCUICConsistencyEtaInstances.cs_env; cbn.
+  repeat match goal with |- context [if ?c then _ else _] => destruct c end; reflexivity.
+Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.no_closed_stuck_cofix_case_at_no_cofiniteE_inst_nondeg
+   TARGET PCUICConsistencyEta.no_closed_stuck_cofix_case_at_no_cofiniteE
+   [cs_Σ] declares an inductive (base's [False], [BiFinite]), not a coinductive. *)
+Definition no_closed_stuck_cofix_case_at_no_cofiniteE_inst :=
+  PCUICConsistencyEta.no_closed_stuck_cofix_case_at_no_cofiniteE PCUICConsistencyEtaInstances.cs_Σ
+    PCUICConsistencyEtaInstances.cs_ind l45_cs_no_cofinite.
+
+Lemma no_closed_stuck_cofix_case_at_no_cofiniteE_inst_nondeg :
+  check_recursivity_kind (lookup_env PCUICConsistencyEtaInstances.cs_Σ)
+    PCUICConsistencyEtaInstances.cs_kn BiFinite.
+Proof. reflexivity. Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.no_closed_stuck_cofix_case_at_Σ_FalseE_inst_nondeg
+   TARGET PCUICConsistencyEta.no_closed_stuck_cofix_case_at_Σ_FalseE
+   Applied to the closed blocked case [g_t]. *)
+Definition no_closed_stuck_cofix_case_at_Σ_FalseE_inst :
+  PCUICConsistency.Σ_False ;;; [] |-E g_t : tInd (mkInd PCUICConsistency.False_kn 0) [] -> False :=
+  PCUICConsistencyEta.no_closed_stuck_cofix_case_at_Σ_FalseE g_t g_stuck.
+
+Lemma no_closed_stuck_cofix_case_at_Σ_FalseE_inst_nondeg :
+  (stuck_cofix_case g_t × (construct_cofix_discr (head g_t) = false))%type.
+Proof. exact (g_stuck, g_head_not_discr). Qed.
+
+(* INSTANCE NOT-BUILT: [pcuic_consistentE] in an environment WITH a coinductive block (where the
+   premise [no_closed_stuck_cofix_case_atE] is not proved by
+   [no_closed_stuck_cofix_case_at_no_cofiniteE]). Obstacle, exactly: no environment of the lane's
+   instance files declares both base's [False_mib] and a coinductive; a new two-declaration
+   environment needs its own [wf] proof, whose second declaration's [on_inductive] obligations are
+   checked in the non-empty environment holding the first (the [iv_]/[cs_] typing lemmas are
+   proved in the empty one), i.e. the environment weakening of those lemmas.
+   TARGET PCUICConsistencyEta.pcuic_consistentE *)
+
+(** The pre-BET-339 forms of copy 20's [SN_to_WNE] and [wcbv_normalizationE] (ArityLane's
+    statements before the forecast commit) are FALSE in [iv_Σ] under base's normalization premise
+    for [iv_Σ]: [g_t] is closed, typed and accessible, and has no value. *)
+Lemma wcbv_normalizationE_old_false {nor : normalizing_flags} :
+  (forall (Σ : global_env_ext) (nin : PCUICSNEta.NormalizationInE Σ) A t,
+     wfE Σ -> axiom_free Σ -> Σ ;;; [] |-E t : A -> { v & eval Σ t v }) ->
+  PCUICSNEta.NormalizationInE iv_Σ -> False.
+Proof.
+  intros h nin. destruct (h iv_Σ nin g_RA g_t iv_wfE g_axiom_free g_t_typed_RA) as [v ev].
+  exact (g_no_eval v ev).
+Qed.
+
+Lemma SN_to_WNE_old_false {nor : normalizing_flags} :
+  (forall (Σ : global_env_ext) (nin : PCUICSNEta.NormalizationInE Σ) A t,
+     wfE Σ -> axiom_free Σ -> Acc (cored Σ []) t -> Σ ;;; [] |-E t : A -> { v & eval Σ t v }) ->
+  PCUICSNEta.NormalizationInE iv_Σ -> False.
+Proof.
+  intros h nin.
+  have hacc : Acc (cored iv_Σ []) g_t.
+  { eapply PCUICSNEta.normalization_inE. econstructor. exact g_t_typed_RA. }
+  destruct (h iv_Σ nin g_RA g_t iv_wfE g_axiom_free hacc g_t_typed_RA) as [v ev].
+  exact (g_no_eval v ev).
+Qed.
+
+(** The pre-BET-339 [ws_wcbv_standardizationE] (no value premise) is FALSE in [iv_Σ] under
+    base's normalization premise for [iv_Σ]: [g_t] head-reduces to itself, is irreducible
+    ([l45_g_t_normal]), and has no value. *)
+Lemma ws_wcbv_standardizationE_old_false {nor : normalizing_flags} :
+  (forall (Σ : global_env_ext) (nin : PCUICSNEta.NormalizationInE Σ) T
+          (t v : ws_term (fun _ => false)),
+     wfE Σ -> axiom_free Σ -> Σ ;;; [] |-E t : T -> closed_red Σ [] t v ->
+     ((∑ t', red1 Σ [] v t') -> False) ->
+     { v' & eval Σ t v' * closed_red Σ [] v' v }) ->
+  PCUICSNEta.NormalizationInE iv_Σ -> False.
+Proof.
+  intros h nin.
+  pose (w := @exist term (on_free_vars (fun _ => false)) g_t l45_g_t_closed : ws_term (fun _ => false)).
+  have hred : closed_red iv_Σ [] w w.
+  { exact (PCUICEtaA6.closed_red_of (Σ := iv_Σ) (Γ := []) (t := g_t) eq_refl eq_refl
+             (Equations.Type.Relation.rt_refl _ _)). }
+  have hirr : (∑ t', red1 iv_Σ [] w t') -> False.
+  { intros [t' ht']. exact (l45_g_t_normal t' ht'). }
+  destruct (h iv_Σ nin g_RA w w iv_wfE g_axiom_free g_t_typed_RA hred hirr) as [v' [ev _]].
+  exact (g_no_eval v' ev).
+Qed.
+
+(** ** 5. The restated induction principles [typing_ind_envE] and [typing_ind_env_app_sizeE]
+
+  BET-339 restates one premise of each principle: its [tCase] hypothesis receives
+  [isCoFinite ==> (ci_cofix_nondep ==> on_free_vars (strengthenP 0 1 xpredT) preturn)]. The
+  instances run each principle with predicates that CONSUME that premise:
+  - [pgf_P Σ Γ t T]: if [t] is a case on [R] in [iv_Σ] whose return predicate mentions the
+    scrutinee, its flag is unset. Only the [tCase] hypothesis has work to do
+    ([pgf_case_root]): the inductive is [R] ([CoFinite]) and the predicate is dependent, so the
+    restated premise forces the flag to [false]. Every other hypothesis concludes because its
+    subject is not a case ([pgf_not_case]), is an application of one ([pgf_app]: the head's own
+    hypothesis), or is retyped ([tCumul]).
+  - [pgf_Pj Σ Γ j]: [pgf_P] on the judgment's term (if any) and type; [pgf_PΓ Σ Γ]: [pgf_Pj] on
+    every declaration of [Γ] (the context hypothesis passes it straight on).
+  Each instance is the principle's whole conclusion [env_propE pgf_P pgf_Pj pgf_PΓ], at
+  [default_checker_flags]: every term typed under [typingE], in every environment, satisfies
+  [pgf_P]. It is not provable without an induction over typing derivations.
+  Non-degeneracy ([pgf_nondeg]): each of the three predicates is false on some input (the case
+  [pgf_bad], which is [f3_t0] with its flag SET); on the typed term [f3_t0] of section 1 (the region
+  BET-339 admits: the old premise is false there) every premise of [pgf_P] holds, so the
+  conclusion at [f3_t0] is the restated premise's own consequence, not a vacuous implication.
+  Consequence ([pgf_bad_untypable], from the instance): [pgf_bad] has no type in [fo_Γ]. *)
+
+Definition pgf_P : global_env_ext -> context -> term -> term -> Type :=
+  fun Σ _ t _ => forall ci p c brs, t = tCase ci p c brs -> Σ = iv_Σ -> ci.(ci_ind) = iv_ind ->
+    on_free_vars (strengthenP 0 1 xpredT) p.(preturn) = false -> ci.(ci_cofix_nondep) = false.
+
+Definition pgf_Pj : global_env_ext -> context -> judgment -> Type :=
+  fun Σ Γ j => (option_default (fun tm => pgf_P Σ Γ tm (j_typ j)) (j_term j) unit ×
+                pgf_P Σ Γ (j_typ j) (j_typ j))%type.
+
+Definition pgf_PΓ : global_env_ext -> context -> Type :=
+  fun Σ Γ => All_local_env (pgf_Pj Σ) Γ.
+
+Lemma pgf_not_case Σ Γ t T :
+  (forall ci p c brs, t = tCase ci p c brs -> False) -> pgf_P Σ Γ t T.
+Proof. intros h ci p c brs e. exfalso. exact (h ci p c brs e). Qed.
+
+Lemma pgf_app Σ Γ t L T B : pgf_P Σ Γ t T -> pgf_P Σ Γ (mkApps t L) B.
+Proof.
+  intros pt ci p c brs e. destruct L using rev_case.
+  - exact (pt ci p c brs e).
+  - rewrite mkApps_app in e. cbn in e. discriminate e.
+Qed.
+
+(** The [tCase] hypothesis: the restated premise forces the flag. *)
+Lemma pgf_case_root (Σ : global_env_ext) Γ ci p c brs T mdecl idecl :
+  declared_inductive Σ.1 ci.(ci_ind) mdecl idecl ->
+  implb (isCoFinite mdecl.(ind_finite))
+    (implb ci.(ci_cofix_nondep) (on_free_vars (strengthenP 0 1 xpredT) p.(preturn))) = true ->
+  pgf_P Σ Γ (tCase ci p c brs) T.
+Proof.
+  intros isd hc ci' p' c' brs' e -> eind hfv.
+  injection e as <- <- <- <-.
+  (* [iv_env] declares [R] only: the membership names [iv_mdecl]. *)
+  destruct isd as [hm _]. unfold declared_minductive in hm. cbn in hm.
+  destruct hm as [hm|[]]. injection hm; intros; subst.
+  rewrite hfv in hc.
+  destruct (ci_cofix_nondep ci) eqn:hf; [|reflexivity].
+  try rewrite hf in hc. vm_compute in hc. discriminate hc.
+Qed.
+
+(** One hypothesis of either principle. The lemmas are arguments, so each instance's own proof
+    names the steps it runs ([pgf_case_root] is the one that consumes the restated premise). *)
+Ltac pgf_case root app notcase :=
+  first
+  [ (* the judgment hypothesis *)
+    let Htm := fresh "Htm" in let Hty := fresh "Hty" in
+    intros ? ? ? j (Htm & ? & (_ & Hty) & _); split;
+    [ revert Htm; case: (j_term j) => [tm|] /= Htm; [exact (snd Htm)|exact tt]
+    | exact Hty ]
+  | (* the context hypothesis *)
+    intros; match goal with h : All_local_env (pgf_Pj _) _ |- pgf_PΓ _ _ => exact h end
+  | (* the case hypothesis *)
+    intros; eapply root; eassumption
+  | (* the application hypothesis (both principles) *)
+    intros; match goal with
+    | pt : pgf_P ?Σ ?Γ ?t _ |- pgf_P ?Σ ?Γ (mkApps ?t ?L) ?B => exact (app Σ Γ t L _ B pt)
+    end
+  | (* subjects that are not a case *)
+    intros; apply notcase; intros ? ? ? ? e; discriminate e
+  | (* the cumulativity hypothesis: same subject, another type *)
+    intros; match goal with h : pgf_P ?Σ ?Γ ?t _ |- pgf_P ?Σ ?Γ ?t _ => exact h end ].
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.pgf_nondeg
+   TARGET PCUICProgressEta.typing_ind_envE
+   Predicates that consume the restated [tCase] premise; every case proved in general. *)
+Lemma typing_ind_envE_inst : env_propE pgf_P pgf_Pj pgf_PΓ.
+Proof.
+  apply (@typing_ind_envE _ pgf_P pgf_Pj pgf_PΓ); pgf_case pgf_case_root pgf_app pgf_not_case.
+Qed.
+
+(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.pgf_nondeg
+   TARGET PCUICProgressEta.typing_ind_env_app_sizeE
+   The same predicates; the application hypothesis also receives the sized induction
+   hypothesis, which [pgf_app] does not need. *)
+Lemma typing_ind_env_app_sizeE_inst : env_propE pgf_P pgf_Pj pgf_PΓ.
+Proof.
+  apply (@typing_ind_env_app_sizeE _ pgf_P pgf_Pj pgf_PΓ); pgf_case pgf_case_root pgf_app pgf_not_case.
+Qed.
+
+(** [f3_t0] with its flag SET: a case on [R] whose predicate [P z] mentions the scrutinee. *)
+Definition pgf_ci_set : case_info :=
+  {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
+Definition pgf_bad : term := tCase pgf_ci_set fo_p f3_scrut [fo_br].
+
+Lemma pgf_fo_p_dep : on_free_vars (strengthenP 0 1 xpredT) (preturn fo_p) = false.
+Proof. reflexivity. Qed.
+
+Lemma pgf_bad_false Γ T : pgf_P iv_Σ Γ pgf_bad T -> False.
+Proof.
+  intros h. specialize (h pgf_ci_set fo_p f3_scrut [fo_br] eq_refl eq_refl eq_refl pgf_fo_p_dep).
+  discriminate h.
+Qed.
+
+(** Each of the three predicates is false on some input, and on the typed [f3_t0] (old premise
+    false, new premise true) every premise of [pgf_P] holds. *)
+Lemma pgf_nondeg :
+  ((pgf_P iv_Σ fo_Γ pgf_bad f3_T -> False) ×
+   (pgf_Pj iv_Σ fo_Γ (j_vass si_na pgf_bad) -> False) ×
+   (pgf_PΓ iv_Σ (fo_Γ ,, vass si_na pgf_bad) -> False) ×
+   (iv_Σ ;;; fo_Γ |-E f3_t0 : f3_T) ×
+   (f3_t0 = tCase fo_ci fo_p f3_scrut [fo_br]) × (fo_ci.(ci_ind) = iv_ind) ×
+   (on_free_vars (strengthenP 0 1 xpredT) (preturn fo_p) = false) ×
+   ((isCoFinite (ind_finite iv_mdecl) ==> on_free_vars (strengthenP 0 1 xpredT) (preturn fo_p))
+      = false))%type.
+Proof.
+  refine (pgf_bad_false fo_Γ f3_T, (_, (_, (f3_t0_typed, (eq_refl, (eq_refl, (pgf_fo_p_dep, f3_old_premise_fails))))))).
+  - intros [_ h]. exact (pgf_bad_false fo_Γ _ h).
+  - intros h. unfold pgf_PΓ in h. inversion h; subst.
+    match goal with hj : pgf_Pj _ _ _ |- _ => exact (pgf_bad_false fo_Γ _ (snd hj)) end.
+Qed.
+
+(** The instance's consequence: BET-339's rule rejects [pgf_bad] (flag set, predicate on the
+    scrutinee, inductive [R] coinductive). *)
+Lemma pgf_bad_untypable T : iv_Σ ;;; fo_Γ |-E pgf_bad : T -> False.
+Proof.
+  intros h. exact (pgf_bad_false fo_Γ T (snd (snd (typing_ind_envE_inst iv_Σ iv_wfE fo_Γ pgf_bad T h)))).
+Qed.
+
 (** ** Print Assumptions, per instance *)
 
 Print Assumptions f3_sr.
@@ -762,3 +1296,13 @@ Print Assumptions progressE_stuck_inst.
 Print Assumptions red1_progressE_inst.
 Print Assumptions g_no_eval.
 Print Assumptions t8_Ind_r_inst.
+Print Assumptions pcuic_canonicityE_stuck_inst.
+Print Assumptions typing_stuck_cofix_case_cofiniteE_inst.
+Print Assumptions no_closed_stuck_cofix_case_at_Σ_FalseE_inst.
+Print Assumptions wcbv_normalizationE_old_false.
+Print Assumptions SN_to_WNE_old_false.
+Print Assumptions ws_wcbv_standardizationE_old_false.
+Print Assumptions typing_ind_envE_inst.
+Print Assumptions typing_ind_env_app_sizeE_inst.
+Print Assumptions pgf_nondeg.
+Print Assumptions pgf_bad_untypable.

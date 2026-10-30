@@ -19,9 +19,14 @@
   (frac/eta 3e6b422d); the class is deleted and no lemma takes one.
 
   **Non-degeneracy.** Every instance relates two syntactically different terms, contexts or
-  fixpoints, except [cmp_global_instance_empty_eq_inst]: that lemma concludes [u = u'] from a
-  comparison that is equality, so an instance with [u ≠ u'] is IMPOSSIBLE (a property of the
-  statement). [eq_context_conversionE_inst] and [typing_alpha_propE_inst] move the η derivation
+  fixpoints, except [cmp_global_instance_empty_eq_inst]. That lemma concludes [u = u'], so an
+  instance with [u ≠ u'] is IMPOSSIBLE, whatever its premise: in its fixed environment
+  [empty_global_env] every [lookup_env] is [None], so [global_variance_gen] is [AllEqual] at every
+  reference [gr] and every [napp], and the premise is [cmp_universe_instance (fun _ => eq)], the
+  pointwise equality of the two instances (a property of the statement, its one premise and its
+  environment). The instance runs at the two-level instance [[a; Set]] ([al_univ_inst]), so the
+  premise is proved level by level (not by the empty comparison) and the lemma's proof inverts it
+  at each level. [eq_context_conversionE_inst] and [typing_alpha_propE_inst] move the η derivation
   [iv_rel_typed] into the renamed context. [inst_case_predicate_context_eqE_inst] relates the two
   different constructions [case_predicate_context] and [inst_case_predicate_context] of the
   [match] predicate [iv_mp]. *)
@@ -85,9 +90,16 @@ Qed.
 
 (** ** The other lemmas, applied *)
 
-(** IMPOSSIBLE to make non-reflexive: the conclusion is [u = u'] (see the header). *)
-Definition cmp_global_instance_empty_eq_inst : ([] : Instance.t) = [] :=
-  cmp_global_instance_empty_eq Conv (IndRef si_ind) 0 [] [] ltac:(cbn; constructor).
+(** IMPOSSIBLE to make non-reflexive: the conclusion is [u = u'] (see the header). Run at the
+    two-level instance [[a; Set]], an inductive reference applied to one argument. *)
+Definition al_univ_inst : Instance.t := [Level.level "a"; Level.lzero].
+
+Lemma al_univ_inst_cmp :
+  cmp_global_instance empty_global_env (fun _ => eq) Conv (IndRef si_ind) 1 al_univ_inst al_univ_inst.
+Proof. unfold al_univ_inst. cbn. repeat constructor. Qed.
+
+Definition cmp_global_instance_empty_eq_inst : al_univ_inst = al_univ_inst :=
+  cmp_global_instance_empty_eq Conv (IndRef si_ind) 1 al_univ_inst al_univ_inst al_univ_inst_cmp.
 
 Definition eq_term_upto_names_upto_domain_r_inst : upto_domain_r iv_keta al_keta :=
   eq_term_upto_names_upto_domain_r Conv 0 iv_keta al_keta al_keta_alpha.
