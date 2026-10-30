@@ -314,7 +314,7 @@ Definition branchesE_size {cf} {Σ Γ ci mdecl idecl p ptm brs}
    (checking_size : forall Σ Γ t T, Σ ;;; Γ |-E t ◃ T  -> size)
    (infering_size : forall Σ Γ t s, Σ ;;; Γ |-E t ▹□ s -> size)
   {n ctors}
-  (a : tybranchesE Σ Γ ci mdecl idecl p ptm n ctors brs) : size :=
+  (a : BDTypingEta.tybranchesE Σ Γ ci mdecl idecl p ptm n ctors brs) : size :=
 
   (all2i_size _ (fun i cdecl br p =>
     (Nat.max
@@ -348,7 +348,7 @@ Proof.
     | H1 : size |- _  => exact (S H1)
     | |- _ => exact 1
     end.
-    - exact (S (Nat.max a0 (Nat.max i (Nat.max i0 (Nat.max (ctx_inst_size _ (checkingE_size _) c1) (branchesE_size (checkingE_size _) (infering_sortE_size _) a2)))))).
+    - exact (S (Nat.max a0 (Nat.max i (Nat.max i0 (Nat.max (ctx_inst_size _ (checkingE_size _) c1) (BDTypingEta.branchesE_size (checkingE_size _) (infering_sortE_size _) a2)))))).
     - exact (S (Nat.max
         (all_size _ (fun x p => on_def_type_sorting_size (infering_sortE_size _ Σ) _ _ p) a)
         (all_size (on_def_body _ _ _) (fun x p => on_def_body_sorting_size (checkingE_size _ _) (infering_sortE_size _ Σ) _ _ _ p) a0))).

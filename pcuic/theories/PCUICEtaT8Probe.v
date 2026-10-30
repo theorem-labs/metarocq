@@ -6,11 +6,11 @@
   ** What T8 claims
   A well-typed type that is E-convertible to a head form (sort, product, applied
   inductive) reduces to that head form by base [red] alone. The pinned forms are
-  the [Definition]s [T8_*_statement] below. STATUS (2026-10-29): the three [_r] forms
-  are PROVED ([T8_Sort_r], [T8_Prod_r], [T8_Ind_r], section [T8Assembly]) under one
-  FORECAST-ONLY hypothesis, E subject reduction (row T1); [fix_rarg_inductive] is
-  proved (section [FixRargInductive]). The [_l] forms are not assembled. Without
-  typing the claim is false ([A6_F_raw_false]; and [tProj p (λx. C ps X x)]
+  the [Definition]s [T8_*_statement] below. STATUS: the three [_r] forms are PROVED
+  ([T8_Sort_r], [T8_Prod_r], [T8_Ind_r], section [T8Assembly]) with no hypothesis: their
+  T1 premise, E subject reduction, is discharged by [PCUICSREta.subject_reductionE];
+  [fix_rarg_inductive] is proved (section [FixRargInductive]). The [_l] forms are not
+  assembled. Without typing the claim is false ([A6_F_raw_false]; and [tProj p (λx. C ps X x)]
   η-reduces then projects, while it is β-stuck).
 
   ** Route (as assembled)
@@ -93,6 +93,9 @@ From MetaRocq.PCUIC Require PCUICEtaI5A2.
 (* Loaded already through the imports above; required here for the qualified names in
    section [FixRargInductive]. *)
 From MetaRocq.PCUIC Require PCUICClosed PCUICContexts PCUICSubstitution PCUICWsCumulEtaSubst.
+(* Row T1, E subject reduction, used by section [T8Assembly] (qualified). [PCUICSREta] does not
+   depend on this file. *)
+From MetaRocq.PCUIC Require PCUICSREta.
 
 Import ListNotations.
 
@@ -1088,8 +1091,8 @@ Section TypedSafe.
       lemma of the third link. BUILT (both refutations are compiled).
     - [PCUICSR.isType_red] ([PCUICSR.v:3969]) types the reduct; its E form
       [PCUICSREta.isType_redE] ([PCUICSREta.v:3437]) needs E subject reduction, which is
-      [T8Assembly]'s hypothesis [subject_reduction] (row T1): not T8-shaped, not refuted, but
-      T8's own premise. BUILT (the E form is compiled).
+      [PCUICSREta.subject_reductionE] (row T1, used directly by [T8Assembly]): not T8-shaped,
+      not refuted, but T8's own premise. BUILT (the E form is compiled).
     - [PCUICSpine.typing_spine_strengthen] ([PCUICSpine.v:325]) and
       [PCUICSpine.typing_spine_nth_error] ([PCUICSpine.v:2060]) finish the walk; their E forms
       [PCUICSpineEta.typing_spine_strengthenE] (:252) and [typing_spine_nth_errorE] (:1716) are
@@ -4303,8 +4306,8 @@ End IterationNeedsCanonicalReducts.
   - an [eta1] step is absorbed by [pe_eta1_closed], with the same [T'];
   - ZERO steps (named case): [T'] itself.
   [Good (canon T')] at each step comes from TYPING: [T'] is typed at the sort by E
-  subject reduction (FORECAST T1), so [typed_eta_safe] gives [eta_safe] of every
-  reduct of [T'], and [Good_canon] moves [Good] to [canon T'].
+  subject reduction ([PCUICSREta.subject_reductionE], row T1), so [typed_eta_safe] gives
+  [eta_safe] of every reduct of [T'], and [Good_canon] moves [Good] to [canon T'].
   The tail reads the head form off [pe (canon T'') head]. A λ at the top is excluded
   because [T''] is typed at a sort ([typed_sort_notLam]). For an applied inductive,
   λ-headed spine positions (η-expanded partial applications of [tInd]) are removed
@@ -4321,9 +4324,10 @@ End IterationNeedsCanonicalReducts.
   inversion inside [pe_rigid_spine] is the existing [size']-bounded one; nothing new
   inducts on [size'].
 
-  HYPOTHESIS of this section, FORECAST-ONLY: [subject_reduction] (row T1, exactly the
-  contract's form). [fix_rarg_inductive] of [typed_eta_safe] is proved (section
-  [FixRargInductive]). Validity (row T2a) is not used. *)
+  This section has no hypothesis besides its data and [wfE Σ]: the T1 premise, E subject
+  reduction, is discharged by [PCUICSREta.subject_reductionE] (exactly the contract's form).
+  [fix_rarg_inductive] of [typed_eta_safe] is proved (section [FixRargInductive]). Validity
+  (row T2a) is not used. *)
 
 Lemma rt_eta1_union {R : term -> term -> Type} a b :
   clos_refl_trans eta1 a b -> clos_refl_trans (union R eta1) a b.
@@ -4357,15 +4361,14 @@ Qed.
 
 Section T8Assembly.
   Context {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ).
-  (* FORECAST-ONLY: row T1 *)
-  Context (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
-    Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T).
+  (* The T1 premise, E subject reduction, is [PCUICSREta.subject_reductionE], used directly
+     ([T8_reduct_typed]); until row T1 landed it was a section hypothesis here. *)
 
   Let cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
 
   Lemma T8_reduct_typed Γ T s T' :
     Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T' -> Σ ;;; Γ |-E T' : tSort s.
-  Proof. intros h r. exact (subject_reduction Σ Γ T T' (tSort s) wfΣ h r). Qed.
+  Proof. intros h r. exact (PCUICSREta.subject_reductionE Σ Γ T T' (tSort s) wfΣ h r). Qed.
 
   (** A term typed at a sort is not a λ: a λ has a product type. *)
   Lemma typed_sort_notLam Γ t s : Σ ;;; Γ |-E t : tSort s -> notLam t.
@@ -4376,7 +4379,8 @@ Section T8Assembly.
   Qed.
 
   (** [Good] at the canonical source: (i) [typed_eta_safe] (proved, no SR) on each
-      reduct, (ii) preservation of typing by E SR (FORECAST T1), then [Good_canon]. *)
+      reduct, (ii) preservation of typing by E SR ([PCUICSREta.subject_reductionE]), then
+      [Good_canon]. *)
   Lemma T8_reduct_Good Γ T s T' :
     Σ ;;; Γ |-E T : tSort s -> red Σ Γ T T' -> Good Σ Γ (canon T').
   Proof.
@@ -4543,14 +4547,16 @@ End T8Assembly.
 
   Each is the pinned statement taking ONLY [subject_reduction] (row T1, the contract's form):
   the section premise [wfΣ] of [T8Assembly] is redundant, because the pinned statement has its
-  own [wfE Σ] premise, which supplies it ([fix_rarg_inductive] is proved, so [T8Assembly] has no
-  other hypothesis). The closed type of each is
-  [forall {cf} {Σ}, SR -> T8_*_r_statement Σ]. *)
+  own [wfE Σ] premise, which supplies it. The closed type of each is
+  [forall {cf} {Σ}, SR -> T8_*_r_statement Σ]. The proofs no longer use the [subject_reduction]
+  argument: [T8Assembly] uses [PCUICSREta.subject_reductionE] directly, so [T8_*_r] have no
+  SR argument. The statements stay as they are for their consumers ([BDFromPCUICEta.T8_*_r_plug],
+  [BDStrengtheningEta]), which pass [PCUICSREta.subject_reductionE]. *)
 Theorem T8_Sort_r_two {cf : checker_flags} {Σ : global_env_ext}
   (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
     Σ ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ ;;; Γ |-E u : T) :
   T8_Sort_r_statement Σ.
-Proof. intros Γ pb T s s' hwf. exact (@T8_Sort_r cf Σ hwf subject_reduction Γ pb T s s' hwf). Qed.
+Proof. intros Γ pb T s s' hwf. exact (@T8_Sort_r cf Σ hwf Γ pb T s s' hwf). Qed.
 
 Theorem T8_Prod_r_two {cf : checker_flags} {Σ : global_env_ext}
   (subject_reduction : forall (Σ : global_env_ext) Γ t u T, wfE Σ ->
@@ -4558,7 +4564,7 @@ Theorem T8_Prod_r_two {cf : checker_flags} {Σ : global_env_ext}
   T8_Prod_r_statement Σ.
 Proof.
   intros Γ pb T na dom codom s' hwf.
-  exact (@T8_Prod_r cf Σ hwf subject_reduction Γ pb T na dom codom s' hwf).
+  exact (@T8_Prod_r cf Σ hwf Γ pb T na dom codom s' hwf).
 Qed.
 
 Theorem T8_Ind_r_two {cf : checker_flags} {Σ : global_env_ext}
@@ -4567,7 +4573,7 @@ Theorem T8_Ind_r_two {cf : checker_flags} {Σ : global_env_ext}
   T8_Ind_r_statement Σ.
 Proof.
   intros Γ pb T ind ui l s' hwf.
-  exact (@T8_Ind_r cf Σ hwf subject_reduction Γ pb T ind ui l s' hwf).
+  exact (@T8_Ind_r cf Σ hwf Γ pb T ind ui l s' hwf).
 Qed.
 
 (** ** The η half of the backward simulation is FALSE (building refutation)
