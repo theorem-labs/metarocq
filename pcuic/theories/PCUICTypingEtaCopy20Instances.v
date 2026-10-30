@@ -214,6 +214,18 @@ Proof.
            c20_eta_idt).
 Qed.
 
+(** The value premise that base integ-all8 adds to the standardization lemmas
+    ([PCUICNormalization.v:115]): [c20_eta_t] evaluates to [∀P:Prop. P] by one β step whose
+    function and argument are λs (atoms). *)
+Lemma c20_eta_t_eval : MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t iv_False.
+Proof.
+  unfold c20_eta_t.
+  eapply MetaRocq.PCUIC.PCUICWcbvEval.eval_beta.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+  - cbn. apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+Qed.
+
 (** ** The subject's reduction behaviour: one reduct, and accessibility *)
 
 Lemma c20_PP_normal (S : global_env) Γ v :
@@ -453,6 +465,17 @@ Qed.
 Lemma c20_fo_t_red : red fo_Σ [] c20_fo_t fo_sz.
 Proof. exact (red1_red _ _ _ _ c20_fo_t_red1). Qed.
 
+(** The value premise base integ-all8 adds to the standardization lemmas: [c20_fo_t] evaluates
+    to [s z] by one β step whose function and argument are λs (atoms); [s z] is a value. *)
+Lemma c20_fo_t_eval : MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_t fo_sz.
+Proof.
+  unfold c20_fo_t.
+  eapply MetaRocq.PCUIC.PCUICWcbvEval.eval_beta.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+  - cbn. exact (MetaRocq.PCUIC.PCUICWcbvEval.value_final _ _ fo_sz_wcbv_value).
+Qed.
+
 Lemma c20_fo_axiom_free : axiom_free fo_Σ.
 Proof.
   intros c decl h. exfalso. red in h. cbn in h.
@@ -653,12 +676,14 @@ Definition wh_normalizationE_inst :
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.SN_to_WNE_inst_nondeg
    The accessibility premise is [c20_eta_acc], a proof, not the normalization hypothesis. *)
-Definition SN_to_WNE_inst : { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v} :=
+Definition SN_to_WNE_inst :
+  { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v} + reduces_to_wcbv_stuck si_Σ c20_eta_t :=
   SN_to_WNE (Σ := si_Σ) (A := si_P) (t := c20_eta_t) si_wfE cli_axiom_free c20_eta_acc
     c20_eta_t_typed.
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_normalizationE_inst_nondeg *)
-Definition wcbv_normalizationE_inst : { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v} :=
+Definition wcbv_normalizationE_inst :
+  { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v} + reduces_to_wcbv_stuck si_Σ c20_eta_t :=
   wcbv_normalizationE (Σ := si_Σ) (A := si_P) (t := c20_eta_t) si_wfE cli_axiom_free
     c20_eta_t_typed.
 
@@ -666,26 +691,26 @@ Definition wcbv_normalizationE_inst : { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si
 Definition ws_wcbv_standardizationE_inst :
   {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
   ws_wcbv_standardizationE (Σ := si_Σ) (T := si_P) (t := c20_ws_eta_t) (v := c20_wsF)
-    si_wfE cli_axiom_free c20_eta_t_typed c20_closed_red_eta_t c20_False_irred.
+    si_wfE cli_axiom_free c20_eta_t_typed (iv_False; c20_eta_t_eval) c20_closed_red_eta_t c20_False_irred.
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_standardizationE_inst_nondeg *)
 Definition wcbv_standardizationE_inst :
   {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
   wcbv_standardizationE (Σ := si_Σ) (T := si_P) (t := c20_eta_t) (v := iv_False)
-    si_wfE cli_axiom_free c20_eta_t_typed c20_eta_t_red1 c20_False_irred.
+    si_wfE cli_axiom_free c20_eta_t_typed (iv_False; c20_eta_t_eval) c20_eta_t_red1 c20_False_irred.
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.ws_wcbv_standardization_fstE_inst_nondeg *)
 Definition ws_wcbv_standardization_fstE_inst :
   MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_t fo_sz :=
   ws_wcbv_standardization_fstE (Σ := fo_Σ) (i := fo_ind) (u := []) (args := []) (mind := fo_mdecl)
     (t := c20_ws_fo_t) (v := c20_ws_fo_sz) fo_wfE c20_fo_axiom_free c20_fo_t_typed
-    c20_fo_lookup fo_firstorder c20_closed_red_fo c20_fo_sz_irred.
+    (fo_sz; c20_fo_t_eval) c20_fo_lookup fo_firstorder c20_closed_red_fo c20_fo_sz_irred.
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_standardization_fstE_inst_nondeg *)
 Definition wcbv_standardization_fstE_inst :
   MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_t fo_sz :=
   wcbv_standardization_fstE (Σ := fo_Σ) (i := fo_ind) (u := []) (args := []) (mind := fo_mdecl)
-    (t := c20_fo_t) (v := fo_sz) fo_wfE c20_fo_axiom_free c20_fo_t_typed c20_fo_lookup
-    fo_firstorder c20_fo_t_red c20_fo_sz_irred.
+    (t := c20_fo_t) (v := fo_sz) fo_wfE c20_fo_axiom_free c20_fo_t_typed (fo_sz; c20_fo_t_eval)
+    c20_fo_lookup fo_firstorder c20_fo_t_red c20_fo_sz_irred.
 
 End NormalizationEtaInstances.
