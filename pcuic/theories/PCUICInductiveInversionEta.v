@@ -1577,3 +1577,8 @@ Proof.
   rewrite subst_instance_app_ctx List.rev_app_distr.
   now eapply (ctx_inst_appE cparams).
 Qed.
+
+(** Base registers its [isType_is_open_term] on [pcuic] in this file
+    ([PCUICInductiveInversion.v:4044]); the twin is registered here, in the twin file, so
+    that the set of files the hint reaches is the same on both sides. *)
+#[global] Hint Immediate isType_is_open_termE : pcuic.

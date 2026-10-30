@@ -25,12 +25,12 @@
   part that cannot hold an η step by the head and the rule set (the [red] and [whd_rel]
   premises: η relates terms only through [cumul_eta_l] of [cumulSpecE0] or through [JoinE],
   and [red1] has no η rule). NOT BUILT names a part that this file's environments do not
-  reach, with the missing witness and its cost. Three costs recur: a universe-polymorphic
+  reach, with the missing witness and its cost. Three costs recurred: a universe-polymorphic
   record WITH A PROJECTION (a new inductive, a new environment and its [wfE] proof), a
   universe-polymorphic inductive WITH A CONSTRUCTOR whose argument holds an under-applied
   occurrence (the same cost), and an under-applied occurrence of the block's own arity
   variable, which [positive_cstr_arg] admits only at full arity ([pos_arg_concl] asks
-  [#|l| = ind_realargs]). *)
+  [#|l| = ind_realargs]). The last section supplies the CONSTRUCTOR half at [J]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -45,7 +45,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICWsCumulEtaCtx PCUICEtaMkAppsTRel PCUICEtaJoinSpec PCUICEtaC1b
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances
      PCUICSpineEta PCUICInductivesEta PCUICInductiveInversionEta.
-From Equations.Prop Require Import DepElim.
+From MetaRocq.PCUIC Require PCUICEtaIdxEnv. From Equations.Prop Require Import DepElim.
 
 #[local] Existing Instance default_checker_flags.
 
@@ -366,10 +366,10 @@ Definition on_constructor_wf_argsE_inst :=
 Definition on_constructor_substE_inst :=
   on_constructor_substE (Σ := iv_env) (wfΣ := iv_wfE) iv_declared_constructor.
 
-(* NOT BUILT (the universe part): the premises are a declaration and [consistent_instance_ext];
-   [R] is monomorphic, so the only instance is [[]] and [subst_instance []] is the identity. A
-   nonempty instance needs a universe-polymorphic inductive WITH A CONSTRUCTOR (a new inductive,
-   a new environment and its [wfE] proof): [I] of [if_Σ] has none. *)
+(* The universe part is built at [J] ([on_constructor_instE_jinst]): the premises are a
+   declaration and [consistent_instance_ext], and here [R] is monomorphic, so the only
+   instance is [[]] and [subst_instance []] is the identity, while [J] has a constructor
+   whose argument context moves with the instance. *)
 Definition on_constructor_instE_inst :=
   on_constructor_instE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor [] c18_cu.
 
@@ -399,9 +399,9 @@ Definition inductive_cumulative_indicesE_inst :=
    [I]'s arity is related by [ws_cumul_pbE_Ind_finst] ([ws_cumul_pbE_Ind_finst_inst]) and
    refuted by base's clause ([if_cumul_Ind_univ_fails]). It is not reached here because [R] is
    monomorphic (both instances are [], so the conclusion compares the projection's type with
-   itself) and because [I] has no projection: the witness needs a universe-polymorphic record
-   WITH A PROJECTION whose type holds an under-applied occurrence of a variance-irrelevant
-   inductive — a new inductive, a new environment and its [wfE] proof. *)
+   itself) and because neither [I] nor [J] has a projection ([ind_projs] of [J] is []): the
+   witness needs a universe-polymorphic record WITH A PROJECTION whose type holds an
+   under-applied occurrence of a variance-irrelevant inductive. *)
 Definition projection_cumulative_indicesE_inst :=
   projection_cumulative_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_projection c18_onudecl c18_cu c18_cu
     (c18_cmp_ind (ind_npars iv_mdecl)).
@@ -414,11 +414,11 @@ Lemma c18_rel_refl (Σ : global_env_ext) (Γ Δ : context) :
   is_closed_context (Γ ,,, Δ) -> ws_cumul_ctx_pbE_rel Cumul Σ Γ Δ Δ.
 Proof. intros h. apply ws_cumul_ctx_pbE_rel_app. now apply ws_cumul_ctx_pbE_refl_pb. Qed.
 
-(* NOT BUILT (the η step and the universe part): the premise compares the constructor's
-   argument context at the two instances, and [R] is monomorphic, so both are []. The witness
-   needs a universe-polymorphic inductive WITH A CONSTRUCTOR one of whose arguments holds an
-   under-applied occurrence of a variance-irrelevant inductive (a new inductive, a new
-   environment and its [wfE] proof): [I] of [if_Σ] has no constructor. *)
+(* NOT BUILT (the η step). The universe part is built at [J]
+   ([positive_cstr_closed_argsE_jinst]): the premise compares the constructor's argument
+   context at the two instances, and here [R] is monomorphic, so both are [], while [J]'s
+   [jc] has the argument [X : Type@{i}]: [Type@{Set}] at one instance, [Type@{a}] at the
+   other. The η half needs an under-applied variance-irrelevant occurrence in it. *)
 Definition positive_cstr_closed_argsE_inst :=
   positive_cstr_closed_argsE (Σ := iv_Σ) (wfΣ := iv_wfE) (u := []) (u' := []) iv_declared_constructor c18_cu c18_ru
     ltac:(apply c18_rel_refl; reflexivity).
@@ -431,9 +431,9 @@ Qed.
 
 (** The telescope [c18_tel] over the arities and the smashed parameters: its last entry
     [w : h y] is typed through the η step, so the [wf_localE] premise holds an η step.
-    NOT BUILT (the universe part): [R] is monomorphic, so [u = u' = []] and the context
-    comparison is reflexive; a nonempty instance needs a universe-polymorphic inductive with
-    a constructor (a new inductive, a new environment and its [wfE] proof). *)
+    The universe part is built at [J] ([positive_cstr_closed_args_subst_aritiesE_jinst]):
+    here [R] is monomorphic, so [u = u' = []] and the context comparison is reflexive,
+    while at [J] the telescope is [X : Type@{Set}] against [X : Type@{a}]. *)
 Lemma c18_wf_ar_pars_tel :
   wf_localE iv_Σ (subst_instance [] (ind_arities iv_mdecl ,,, smash_context [] (ind_params iv_mdecl) ,,, c18_tel)).
 Proof. exact (c18_tel_wf _ c18_wf_ar_pars). Qed.
@@ -703,3 +703,115 @@ Definition positive_cstr_arg_substE_inst :=
     (u := [Level.lvar 0]) (u' := [Level.lvar 1]) c18_if_declared c18_if_cu0 c18_if_optvar
     c18_if_cl_ar up_premise (pos_arg_closed _ _ _ _ (tInd if_ind [Level.lvar 0]) Logic.eq_refl)
     ltac:(constructor).
+
+(** ** Universe witnesses at the polymorphic inductive [J]
+
+  [PCUICEtaIdxEnv] declares
+  [Polymorphic Cumulative Inductive J@{i} (A : Prop) : forall (X : Type@{i}), (fun Z => Z) Prop]
+  with the covariant variance and the constructor [jc], whose only argument is the index
+  [X : Type@{i}]. That argument is what [I] of [if_Σ] lacks: at the two instances [[Set]]
+  and [[a]] the constructor's argument context is [X : Type@{Set}] against [X : Type@{a}],
+  two DIFFERENT contexts related by [Set ≤ a], so the context comparison of the two rows
+  below is not reflexivity. The file is required and not imported, and every name of it is
+  written qualified.
+
+  [J] does not serve [projection_cumulative_indicesE_inst]: [ind_projs J = []], and that row
+  compares a projection's type at two instances. *)
+
+Definition j18_Ta : term := tSort (sType (Universe.make' PCUICEtaIdxEnv.ji_a)).
+Definition j18_Γ0 : context :=
+  subst_instance PCUICEtaIdxEnv.ji_u0 (ind_arities PCUICEtaIdxEnv.ji_mdecl) ,,,
+  subst_instance PCUICEtaIdxEnv.ji_u0 (smash_context [] (ind_params PCUICEtaIdxEnv.ji_mdecl)).
+
+Lemma j18_cb : ClosedBodies PCUICEtaIdxEnv.ji_Σ.
+Proof. exact (@wfE_ClosedBodies _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE). Qed.
+
+(** The two instances differ: [Type@{Set}] is not [Type@{a}]. *)
+Lemma j18_args_move :
+  eqb (subst_instance PCUICEtaIdxEnv.ji_u0 (cstr_args PCUICEtaIdxEnv.ji_cdecl))
+      (subst_instance PCUICEtaIdxEnv.ji_u1 (cstr_args PCUICEtaIdxEnv.ji_cdecl)) = false.
+Proof. reflexivity. Qed.
+
+Lemma j18_leq_Set_a (Γ : context) :
+  cumulSpecE0 PCUICEtaIdxEnv.ji_Σ Γ Cumul PCUICEtaIdxEnv.ji_TSet j18_Ta.
+Proof.
+  apply cumulE_Sort.
+  change (leq0_universe_n 0 (global_ext_constraints PCUICEtaIdxEnv.ji_Σ)
+            (Universe.make' Level.lzero) (Universe.make' PCUICEtaIdxEnv.ji_a)).
+  intros v _. rewrite !Universe.val_make'. cbn. lia.
+Qed.
+
+Lemma j18_cmp_var :
+  cmp_opt_variance (compare_universe PCUICEtaIdxEnv.ji_Σ) Cumul
+    (match ind_variance PCUICEtaIdxEnv.ji_mdecl with
+     | Some var => Variance var | None => AllEqual end)
+    PCUICEtaIdxEnv.ji_u0 PCUICEtaIdxEnv.ji_u1.
+Proof.
+  cbn. right. constructor; [|constructor].
+  change (leq0_universe_n 0 (global_ext_constraints PCUICEtaIdxEnv.ji_Σ)
+            (Universe.make' Level.lzero) (Universe.make' PCUICEtaIdxEnv.ji_a)).
+  intros v _. rewrite !Universe.val_make'. cbn. lia.
+Qed.
+
+Lemma j18_ws_sort :
+  ws_cumul_pbE Cumul PCUICEtaIdxEnv.ji_Σ j18_Γ0 PCUICEtaIdxEnv.ji_TSet j18_Ta.
+Proof.
+  apply (into_ws_cumul_pbE_spec (Σ := PCUICEtaIdxEnv.ji_Σ) (wfΣ := j18_cb) (j18_leq_Set_a j18_Γ0));
+    [reflexivity|reflexivity|reflexivity].
+Qed.
+
+(** The constructor's argument context at the two instances: [X : Type@{Set}] below
+    [X : Type@{a}], not a reflexive comparison. *)
+Lemma j18_tel_cumul :
+  ws_cumul_ctx_pbE_rel Cumul PCUICEtaIdxEnv.ji_Σ j18_Γ0
+    [vass PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_TSet] [vass PCUICEtaIdxEnv.ji_naX j18_Ta].
+Proof.
+  apply ws_cumul_ctx_pbE_rel_app. constructor.
+  - apply ws_cumul_ctx_pbE_refl_pb. reflexivity.
+  - constructor; [reflexivity|exact j18_ws_sort].
+Qed.
+
+Definition on_constructor_instE_jinst :=
+  on_constructor_instE (Σ := PCUICEtaIdxEnv.ji_Σ) (wfΣ := PCUICEtaIdxEnv.ji_wfE)
+    PCUICEtaIdxEnv.ji_declared_constructor PCUICEtaIdxEnv.ji_u0 PCUICEtaIdxEnv.ji_cons0.
+
+Lemma j18_wf_ar_pars_tel :
+  wf_localE PCUICEtaIdxEnv.ji_Σ
+    (subst_instance PCUICEtaIdxEnv.ji_u0
+       (ind_arities PCUICEtaIdxEnv.ji_mdecl ,,,
+        smash_context [] (ind_params PCUICEtaIdxEnv.ji_mdecl) ,,,
+        cstr_args PCUICEtaIdxEnv.ji_cdecl)).
+Proof. exact (fst on_constructor_instE_jinst). Qed.
+
+Lemma j18_pos_tel :
+  All_local_env (fun Γ j => positive_cstr_arg PCUICEtaIdxEnv.ji_Σ.1 PCUICEtaIdxEnv.ji_mdecl []
+    ([] ,,, (smash_context [] (ind_params PCUICEtaIdxEnv.ji_mdecl) ,,, Γ)) (j_typ j))
+    (cstr_args PCUICEtaIdxEnv.ji_cdecl).
+Proof.
+  repeat (apply localenv_cons_abs; [|cbn; apply pos_arg_closed; reflexivity]). exact localenv_nil.
+Qed.
+
+Definition positive_cstr_closed_argsE_jinst :=
+  @positive_cstr_closed_argsE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_u0
+    PCUICEtaIdxEnv.ji_u1 (PCUICEtaIdxEnv.ji_ind, 0) PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_cdecl PCUICEtaIdxEnv.ji_declared_constructor
+    PCUICEtaIdxEnv.ji_cons0 j18_cmp_var j18_tel_cumul.
+
+Lemma positive_cstr_closed_args_subst_aritiesE_jinst :
+  ws_cumul_ctx_pbE_rel Cumul PCUICEtaIdxEnv.ji_Σ
+    (subst_instance PCUICEtaIdxEnv.ji_u0 (smash_context [] (ind_params PCUICEtaIdxEnv.ji_mdecl)))
+    (subst_context (ind_subst PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_u0)
+       (context_assumptions (ind_params PCUICEtaIdxEnv.ji_mdecl))
+       (subst_instance PCUICEtaIdxEnv.ji_u0 (cstr_args PCUICEtaIdxEnv.ji_cdecl)))
+    (subst_context (ind_subst PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_u1)
+       (context_assumptions (ind_params PCUICEtaIdxEnv.ji_mdecl))
+       (subst_instance PCUICEtaIdxEnv.ji_u1 (cstr_args PCUICEtaIdxEnv.ji_cdecl))).
+Proof.
+  destruct (on_declared_constructorE (wfΣ := PCUICEtaIdxEnv.ji_wfE)
+              PCUICEtaIdxEnv.ji_declared_constructor) as [_ [cs [_ onc]]].
+  exact (positive_cstr_closed_args_subst_aritiesE (Σ := PCUICEtaIdxEnv.ji_Σ)
+           (wfΣ := PCUICEtaIdxEnv.ji_wfE) (u := PCUICEtaIdxEnv.ji_u0) (u' := PCUICEtaIdxEnv.ji_u1)
+           (Γ := cstr_args PCUICEtaIdxEnv.ji_cdecl) PCUICEtaIdxEnv.ji_declared_inductive
+           PCUICEtaIdxEnv.ji_cons0 onc j18_cmp_var Logic.eq_refl j18_wf_ar_pars_tel
+           j18_pos_tel ltac:(repeat constructor) j18_tel_cumul).
+Qed.
