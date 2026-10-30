@@ -277,7 +277,8 @@ Proof.
   now simpl in wf; len in wf.
 Qed.
 
-(** Base instance [conv_context_refl] ([:450]), over [JoinE]. *)
+(** Base instance [conv_context_refl] ([:450]), over [JoinE]. Base's binder [{wfΣ : wf Σ}] is
+    dropped: the proof does not use it, so this statement, with no [wf] premise, is stronger. *)
 #[global]
 Instance conv_context_reflE {cf} Σ : CRelationClasses.Reflexive (All2_fold (conv_decls (@JoinE cf) Σ)).
 Proof.

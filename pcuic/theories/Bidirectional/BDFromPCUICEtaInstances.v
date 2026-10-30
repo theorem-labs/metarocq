@@ -53,7 +53,12 @@
   helper that one of these instances runs ([T8_Sort_r_plug], [T8_Prod_r_plug],
   [T8_Ind_r_plug], [conv_lift_judgmentE], [conv_lift_judgment_univE],
   [ws_cumul_ctx_pbE_vass], [is_closed_projection_contextE],
-  [untyped_subslet_projection_contextE], the syntactic helpers). Degenerate points: the Fix
+  [untyped_subslet_projection_contextE], the syntactic helpers; [conv_infer_prodE]: helper,
+  exercised by [typing_infer_prodE_let_inst], through [typing_infer_prodE], on the inferred type
+  [z] that unfolds to [∀P:Prop. P]; [conv_infer_indE]: helper, exercised by
+  [typing_infer_indE_beta_inst], through [typing_infer_indE], on the inferred type
+  [(λ B. I B) A] that reduces to [I A] by β; completeness also calls the first in its
+  application case and the second in its [match] and projection cases). Degenerate points: the Fix
   row [typing_inferingE_Fix_inst] ([iv_fix_typed]) has a witness equal to its declared type;
   the non-degenerate Fix row is [typing_inferingE_Fix_beta_inst] (the typed fixpoint
   [bdf_fix_typed], whose recursive argument's domain is the β-redex [(λ B. I B) A], so
