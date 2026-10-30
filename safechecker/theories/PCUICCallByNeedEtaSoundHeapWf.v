@@ -1,6 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 (** ETA-COPY (wip/etak-cbne-2026-10-30) of integ-all8's [PCUICCallByNeedSoundHeapWf] (1a92b56c) over the η environment
     ([PCUICWfEnvEta], [PCUICCallByNeedEta]): see [PCUICCallByNeedEtaSoundHookProof] for what differs. *)
+(** Declared shadow: this file declares [cbn_bh_scan_nil], and so does [PCUICCallByNeedEta] (a [Local Lemma], the same statement), as in base; the references to this file's lemma are written fully qualified (inside the open section HeapCons its full name carries the section). *)
 From Stdlib Require Import BinPos BinNat Lia.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require CanonicalTries.
@@ -95,7 +96,8 @@ Section HeapCons.
   Lemma cbn_bh_scan_zeros p zs acc cand : cbn_bh_zeros zs -> cbn_bh_scan p zs acc cand = None.
   Proof.
     intros hz. revert p acc cand.
-    induction hz as [|d zs hd hz ih]; intros p acc cand; [apply cbn_bh_scan_nil|].
+    induction hz as [|d zs hd hz ih]; intros p acc cand;
+      [apply MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.HeapCons.cbn_bh_scan_nil|].
     subst d. destruct p as [p|p|]; cbn.
     - apply ih.
     - apply ih.
@@ -106,7 +108,8 @@ Section HeapCons.
     cbn_bh_zeros zs -> cbn_bh_scan p (h ++ zs) acc cand = cbn_bh_scan p h acc cand.
   Proof.
     intros hz. revert p acc cand. induction h as [|d h ih]; intros p acc cand.
-    - cbn [app]. rewrite (cbn_bh_scan_zeros p zs acc cand hz). symmetry. apply cbn_bh_scan_nil.
+    - cbn [app]. rewrite (cbn_bh_scan_zeros p zs acc cand hz). symmetry.
+      apply MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.HeapCons.cbn_bh_scan_nil.
     - destruct p as [p|p|], d as [|t]; cbn [app cbn_bh_scan]; try apply ih;
         apply cbn_bh_top_app_zeros; exact hz.
   Qed.
@@ -151,7 +154,8 @@ Section HeapCons.
   Lemma cbn_bh_get_one a (t : cbn_btree A) : cbn_bh_get a [CbnDOne t] = None.
   Proof.
     destruct a as [p]. unfold cbn_bh_get, cbn_bh_find. cbn [cbn_ha_p].
-    destruct p as [p|p|]; cbn [cbn_bh_scan cbn_bh_top]; rewrite ?cbn_bh_scan_nil; reflexivity.
+    destruct p as [p|p|]; cbn [cbn_bh_scan cbn_bh_top];
+      rewrite ?MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.HeapCons.cbn_bh_scan_nil; reflexivity.
   Qed.
 
   (** A cell [cbn_bh_get] finds after [cbn_bh_cons] is the new cell or one it found before. *)
@@ -570,7 +574,7 @@ Section Machine.
       assert (hs1 : cbn_hwf Q s1).
       { apply (cbn_hwf_heap Q s s1); [|exact hs].
         change s1 with (snd (b, s1)). rewrite <- eo. exact (proj1 (cbn_once_body_shape body s)). }
-      destruct b.
+      destruct (b && negb (cbn_slots_has_inl vals)).
       + injection he as <- <- <-. split; assumption.
       + cbn_dcall he em a1 rs1 s2. injection he as <- <- <-.
         exact (cbn_materialize_wf _ _ _ _ _ _ em hs1 hrs).
