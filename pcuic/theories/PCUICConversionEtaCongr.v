@@ -39,6 +39,16 @@ Definition ws_cumul_pbE_terms {cf : checker_flags} (Σ : global_env_ext)
   (Γ : context) : list term -> list term -> Type :=
   All2 (ws_cumul_pbE Conv Σ Γ).
 
+(** Base registers this morphism on its notation [ws_cumul_pb_terms]
+    ([PCUICConversion]), so that [rewrite] can move an equality of the two lists
+    under the relation. The same instance, over the E relation. *)
+#[global]
+Instance ws_cumul_pbE_terms_Proper {cf:checker_flags} Σ Γ :
+  CMorphisms.Proper
+    (CMorphisms.respectful eq (CMorphisms.respectful eq CRelationClasses.arrow))
+    (ws_cumul_pbE_terms Σ Γ).
+Proof. intros x y -> x' y' -> f. exact f. Qed.
+
 (** ** Scoping helpers *)
 
 Lemma open_app_inv (Γ Δ : context) t :
@@ -456,3 +466,7 @@ Section A5.
   Qed.
 
 End A5.
+
+(** The openness of the two lists, registered on [fvs] where base registers
+    [ws_cumul_pb_terms_open_terms_left] and [_right] ([PCUICConversion]). *)
+#[global] Hint Resolve WT_open_left WT_open_right : fvs.

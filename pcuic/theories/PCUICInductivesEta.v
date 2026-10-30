@@ -84,6 +84,14 @@ Qed.
 #[global]
 Hint Resolve conv_ctx_reflE : pcuic.
 
+(** The twin of [PCUICCumulativity.cumul_ctx_refl], beside the conversion form above:
+    reflexivity of context cumulativity over [JoinE], a global instance as base's. *)
+#[global] Instance cumul_ctx_reflE {cf : checker_flags} (Σ : global_env_ext) :
+  CRelationClasses.Reflexive (All2_fold (cumul_pb_decls (@JoinE cf) Cumul Σ)).
+Proof.
+  intros Γ. eapply PCUICConfluence.All2_fold_refl. intros ? d; apply cumul_decls_reflE.
+Qed.
+
 Lemma wf_arities_context_instE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {mind mdecl u} :
   declared_minductive Σ mind mdecl ->
   consistent_instance_ext Σ (ind_universes mdecl) u ->
