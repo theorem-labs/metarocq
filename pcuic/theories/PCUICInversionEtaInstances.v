@@ -22,19 +22,17 @@
   - [iv_Σ], declared here: [CoInductive R (A : Prop) : Prop := mkR { f : A }], a coinductive record
     with one projection, well formed ([iv_wf]) and so well formed for the η typing ([iv_wfE]).
 
-  Every inversion instance runs on a derivation that ends in a conversion step, so the
-  cumulativity in the lemma's conclusion relates two different types and the inversion goes
-  through that step. The derivation for [inversion_RelE] ends in an η step: in the context
+  Each inversion instance runs on a derivation built here. For [inversion_RelE], in the context
   [g : Prop → Prop, k : (Prop → Prop) → Prop, y : k g], the variable [y] is typed at
-  [k (λx:Prop. g x)] by [typeE_Cumul], so the lemma's conclusion relates [k g] and
-  [k (λx:Prop. g x)] in [ws_cumul_pbE]. [into_ws_cumulE] is applied to the same pair. Every other
-  inversion instance types its term [t] at [(λX : s. X) T], the β-expansion of the type [T : s]
-  that the rule of the term former gives ([iv_retype]). The application of [inversion_AppE] is
-  [c (∀P:Prop. P)], whose codomain [I A] depends on the argument. The [match] of
-  [inversion_CaseE] also types its branch through a β-step; its derivation follows
-  [cp_match_typed] of [PCUICTypingEtaCopies1Instances] (branch [wip/eta-e3-copies1-2026-10-29],
-  not landed). Each instance carries its tag (instance-gate grammar); the NONDEGEN lemmas state
-  that the two related types differ.
+  [k (λx:Prop. g x)] ([iv_rel_typed]); the declared type of [y], lifted, is [k g], which is not
+  [k (λx:Prop. g x)] ([iv_y_decl_kg]), so the lemma's conclusion relates two different types.
+  [into_ws_cumulE] is applied to the same pair ([iv_kg_keta_differ]). Every other inversion
+  instance types its term [t] at [(λX : s. X) T], from [T : s] and [t : T] ([iv_retype]); its
+  NONDEGEN lemma states that [(λX : s. X) T] is not [T]. The application of [inversion_AppE] is
+  [c (∀P:Prop. P)], whose codomain [I A] the argument changes ([iv_cF_codomain_moves]). The
+  derivation of the [match] of [inversion_CaseE] follows [cp_match_typed] of
+  [PCUICTypingEtaCopies1Instances] (branch [wip/eta-e3-copies1-2026-10-29], not landed). Each
+  instance carries its tag (instance-gate grammar).
 
   WITNESSES: iv_* T6_* iv_ctx_inst
   ([iv_*]: the typing pieces, environments and derivations the instances use; [T6_*]: the
@@ -178,11 +176,12 @@ Section Generic.
 
 End Generic.
 
-(** ** Retyping at a β-expansion of the type
+(** ** Retyping at [(λX : s. X) T]
 
-  [iv_idS s] is [λX : s. X]. From [t : T] and [T : s], [iv_retype] types [t] at [(λX : s. X) T]:
-  the derivation ends in [typeE_Cumul] with the β-step [(λX : s. X) T ⇝ T], and the β-redex
-  substitutes [T] for the bound variable of its body. *)
+  [iv_idS s] is [λX : s. X]. From [t : T] and [T : s], [iv_retype] types [t] at [(λX : s. X) T];
+  its proof ends in [typeE_Cumul] with [cumulE_beta]. Which steps an inversion lemma takes on such
+  a derivation is not stated here; each NONDEGEN lemma below states only that [(λX : s. X) T] is
+  not [T]. *)
 
 Definition iv_idS (s : sort) : term := tLambda si_na (tSort s) (tRel 0).
 
@@ -294,8 +293,7 @@ Proof. exact (typeE_Cumul _ _ (tRel 0) iv_kg iv_keta sProp iv_y_typed iv_keta_ty
 Lemma iv_join_eta : JoinE si_Σ iv_Γk Cumul iv_kg iv_keta.
 Proof. exact (wsE_join (into_ws_cumul_pbE_spec (Σ := si_Σ) iv_spec_eta eq_refl eq_refl eq_refl)). Qed.
 
-(** The declared type [k g] of [y] and the type [k (λx:Prop. g x)] it is moved to differ: the
-    two sides of the η step. *)
+(** [k g] and [k (λx:Prop. g x)] differ. *)
 Lemma iv_kg_keta_differ : iv_kg <> iv_keta.
 Proof. discriminate. Qed.
 
@@ -317,8 +315,15 @@ Proof. exact (typing_closed_ctxE si_Σ si_wfE iv_Γk (tRel 0) iv_keta iv_rel_typ
 Lemma typing_ws_cumul_pbE_inst : si_Σ ;;; iv_Γk ⊢E iv_keta ≤ iv_keta.
 Proof. exact (typing_ws_cumul_pbE si_Σ si_wfE Cumul iv_Γk (tRel 0) iv_keta iv_rel_typed). Qed.
 
-(** The conclusion relates [k g], the declared type of [y], with [k (λx:Prop. g x)].
-    INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_kg_keta_differ *)
+(** The declared type of [y] in [iv_Γk], lifted over [y], is [k g], and [k g] is not
+    [k (λx:Prop. g x)]. *)
+Lemma iv_y_decl_kg :
+  (forall decl, nth_error iv_Γk 0 = Some decl -> lift0 1 (decl_type decl) = iv_kg) /\ iv_kg <> iv_keta.
+Proof. split; [intros decl h; injection h as <-; reflexivity|discriminate]. Qed.
+
+(** The conclusion relates the declared type of [y], lifted, which is [k g], with
+    [k (λx:Prop. g x)]; the two differ ([iv_y_decl_kg]).
+    INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_y_decl_kg *)
 Lemma inversion_RelE_inst :
   ∑ decl, wf_localE si_Σ iv_Γk × (nth_error iv_Γk 0 = Some decl) ×
     si_Σ ;;; iv_Γk ⊢E lift0 1 (decl_type decl) ≤ iv_keta.
@@ -343,7 +348,7 @@ Proof.
   exact (PCUICWfUniversesEta.typing_wf_sortE (Σ := si_Σ) si_wfE (iv_P_typed si_Σ [] localenv_nil)).
 Qed.
 
-(** The type [(λX : Type₂. X) Type₁] differs from the rule's type [Type₁]. *)
+(** The type [(λX : Type₂. X) Type₁] is not [Type₁]. *)
 Lemma iv_Type1_conv_differs :
   tApp (iv_idS (Sort.super (Sort.super sProp))) (tSort (Sort.super sProp)) <> tSort (Sort.super sProp).
 Proof. discriminate. Qed.
@@ -365,7 +370,7 @@ Proof.
            (iv_False_typed si_Σ [] localenv_nil)).
 Qed.
 
-(** The type [(λX : Type₁. X) Prop] differs from the rule's type [Prop]. *)
+(** The type [(λX : Type₁. X) Prop] is not [Prop]. *)
 Lemma iv_P_conv_differs : tApp (iv_idS (Sort.super sProp)) si_P <> si_P.
 Proof. discriminate. Qed.
 
@@ -387,7 +392,7 @@ Proof.
            (iv_id_typed si_Σ [] localenv_nil)).
 Qed.
 
-(** The type [(λX : s. X) (Prop → Prop)] differs from the rule's type [Prop → Prop]. *)
+(** The type [(λX : s. X) (Prop → Prop)] is not [Prop → Prop]. *)
 Lemma iv_PP_conv_differs : tApp (iv_idS iv_sPP) iv_PP <> iv_PP.
 Proof. discriminate. Qed.
 
@@ -408,7 +413,7 @@ Proof.
   exact (PCUICWfUniversesEta.typing_wf_sortE (Σ := si_Σ) si_wfE (iv_P_typed si_Σ [] localenv_nil)).
 Qed.
 
-(** The type [(λX : Type₁. X) (let z := … in Prop)] differs from the rule's type. *)
+(** The type [(λX : Type₁. X) (let z := … in Prop)] is not [let z := … in Prop]. *)
 Lemma iv_letP_conv_differs :
   tApp (iv_idS (Sort.super sProp)) (tLetIn si_na iv_False si_P si_P) <> tLetIn si_na iv_False si_P si_P.
 Proof. discriminate. Qed.
@@ -433,7 +438,7 @@ Proof.
   exact (PCUICWfUniversesEta.typing_wf_sortE (Σ := si_Σ) si_wfE (iv_PP_typed si_Σ [] localenv_nil)).
 Qed.
 
-(** The type [(λX : s. X) (let z := … in Prop → Prop)] differs from the rule's type. *)
+(** The type [(λX : s. X) (let z := … in Prop → Prop)] is not [let z := … in Prop → Prop]. *)
 Lemma iv_letPP_conv_differs :
   tApp (iv_idS iv_sPP) (tLetIn si_na iv_False si_P iv_PP) <> tLetIn si_na iv_False si_P iv_PP.
 Proof. discriminate. Qed.
@@ -642,7 +647,7 @@ Qed.
 Lemma iv_match_typed_conv : si_Σ ;;; iv_Γ1 |-E iv_match : tApp (iv_idS sProp) iv_match_ty.
 Proof. exact (iv_retype si_Σ si_wfE iv_Γ1 iv_match iv_match_ty sProp iv_bty_typed iv_match_typed). Qed.
 
-(** The type [(λX : Prop. X) T] differs from the type [T] of the [match] rule. *)
+(** The type [(λX : Prop. X) T] is not [T] ([iv_match_ty]). *)
 Lemma iv_match_conv_differs : tApp (iv_idS sProp) iv_match_ty <> iv_match_ty.
 Proof. discriminate. Qed.
 
@@ -749,8 +754,7 @@ Proof.
   exact (iv_retype si_Σ si_wfE [] iv_cF iv_IF sProp (iv_IF_typed [] localenv_nil) (iv_cF_typed [] localenv_nil)).
 Qed.
 
-(** The type [(λX : Prop. X) (I (∀P:Prop. P))] differs from the type [I (∀P:Prop. P)] of the
-    application rule. *)
+(** The type [(λX : Prop. X) (I (∀P:Prop. P))] is not [I (∀P:Prop. P)]. *)
 Lemma iv_IF_conv_differs : tApp (iv_idS sProp) iv_IF <> iv_IF.
 Proof. discriminate. Qed.
 
@@ -1158,7 +1162,7 @@ Proof.
            (iv_False_typed iv_Σ iv_Γr iv_wf_Γr) iv_proj_typed).
 Qed.
 
-(** The type [(λX : Prop. X) (∀P:Prop. P)] differs from the projection's type [∀P:Prop. P]. *)
+(** The type [(λX : Prop. X) (∀P:Prop. P)] is not [∀P:Prop. P]. *)
 Lemma iv_False_conv_differs : tApp (iv_idS sProp) iv_False <> iv_False.
 Proof. discriminate. Qed.
 

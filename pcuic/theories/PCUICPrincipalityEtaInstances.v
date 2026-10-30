@@ -4,17 +4,22 @@
 
   No forecast class: T1's [SRForecastCopy18], a section variable here until copy 18b landed
   (frac/eta 3e6b422d), is deleted.
-  Non-degeneracy: [common_typingE_eta_inst] (two types of one variable related by η);
-  T8 sites at types that are NOT head forms: [Sort_r] (a let-in, ζ), [Prod_r] and [Prod_l] (the
-  let-bound variable [z], δ; [Prod_l] on [λP. x P], the η-expansion of [x]), [Ind_r] (the
-  β-redex [(λB. R B) (∀P. P)], Proj case and [principal_type_indE_inst], whose two argument lists
-  differ; the let-in [let y := x in I y], Case case, the type of the let-in scrutinee of
-  [PCUICProgressEtaInstances.pgi_match_let_open], ζ); [closed_red_confluence_cb_inst] (two
-  different reducts); [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H]); [typing_leq_termE_inst]
-  ([Prop ≤ Set] in a codomain); [typing_eq_termE_inst] (two binder names). The rule-coverage
-  instances of [principal_typeE] run twelve different typing rules. Each instance is tagged for
-  the instance gate (its non-degeneracy lemma, or the reason its row is degenerate by the
-  statement) in the comment directly above it. *)
+  Non-degeneracy: each instance is tagged for the instance gate in the comment directly above it
+  (its non-degeneracy lemma, or the reason its row is degenerate by the statement).
+  [common_typingE_eta_inst] and [principal_typeE_eta_inst]: two types of one variable, its
+  declared type and the type it η-contracts to ([pr_eta_types_nondeg]). Inputs chosen for T8
+  sites, at types that are NOT head forms; each lemma states the type and its one step to a head
+  form, and no lemma here states which site a run of the proof reaches: [Sort_r] (a let-in type,
+  ζ), [Prod_r] and [Prod_l] (the let-bound variable [z], δ; [Prod_l] on [λP. x P], the
+  η-expansion of [x]), [Ind_r] (the β-redex [(λB. R B) (∀P. P)], Proj case and
+  [principal_type_indE_inst], whose two argument lists differ; the let-in type
+  [let y := x in I y] of the scrutinee of [PCUICProgressEtaInstances.pgi_match_let_open], Case
+  case, ζ); [closed_red_confluence_cb_inst] (two different one-step reducts);
+  [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step); [typing_leq_termE_inst] ([Prop ≤ Set]
+  in a codomain); [typing_eq_termE_inst] (two binder names). The rule-coverage instances apply
+  [principal_typeE] to terms of twelve different head formers and compare the returned principal
+  type with a β-wrapped type that differs from the type of the derivation it was built from
+  ([principal_typeE_rules_nondeg]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -64,10 +69,18 @@ Proof.
               (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) (tRel 0))))).
 Qed.
 
-(** The two one-step reducts of [pr_let_beta] (ζ, and β under the let) differ. *)
+(** [pr_let_beta] reduces in one step to each of two different terms: [(λx:Prop. x) (∀P:Prop. P)]
+    (ζ) and [let z := ∀P:Prop. P in z] (β under the let). *)
 Lemma closed_red_confluence_cb_inst_nondeg :
-  tApp iv_id iv_False <> tLetIn si_na iv_False si_P (tRel 0).
-Proof. discriminate. Qed.
+  tApp iv_id iv_False <> tLetIn si_na iv_False si_P (tRel 0) /\
+  ∥ red1 si_Σ [] pr_let_beta (tApp iv_id iv_False) ∥ /\
+  ∥ red1 si_Σ [] pr_let_beta (tLetIn si_na iv_False si_P (tRel 0)) ∥.
+Proof.
+  split; [discriminate|]. split; constructor.
+  - exact (PCUICReduction.red_zeta _ _ si_na iv_False si_P (tApp iv_id (tRel 0))).
+  - exact (PCUICReduction.letin_red_body _ _ si_na iv_False si_P _ _
+             (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) (tRel 0))).
+Qed.
 
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.closed_red_confluence_cb_inst_nondeg *)
 Lemma closed_red_confluence_cb_inst :
@@ -93,9 +106,15 @@ Proof.
   exact (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) (tRel 0)).
 Qed.
 
-(** [T ≠ H]: the chain from [canon T] to [H] makes a β step. *)
-Lemma chain_ws_cumul_pbE_Conv_inst_nondeg : tApp iv_id (tRel 0) <> tRel 0.
-Proof. discriminate. Qed.
+(** [T ≠ H]; [canon T] is [T] itself, the β-redex [(λx:Prop. x) A], which reduces to [H = A] in
+    one β step: the chain from [canon T] to [H] is not empty. *)
+Lemma chain_ws_cumul_pbE_Conv_inst_nondeg :
+  tApp iv_id (tRel 0) <> tRel 0 /\ canon (tApp iv_id (tRel 0)) = tApp iv_id (tRel 0) /\
+  ∥ red1 si_Σ bd_Γ1 (tApp iv_id (tRel 0)) (tRel 0) ∥.
+Proof.
+  split; [discriminate|]. split; [reflexivity|]. constructor.
+  exact (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) (tRel 0)).
+Qed.
 
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.chain_ws_cumul_pbE_Conv_inst_nondeg *)
 Lemma chain_ws_cumul_pbE_Conv_inst : ws_cumul_pbE Conv si_Σ bd_Γ1 (tApp iv_id (tRel 0)) (tRel 0).
@@ -117,7 +136,7 @@ Qed.
 Lemma pr_False_le_z : ws_cumul_pbE Cumul si_Σ bdf_Γz iv_False (tRel 1).
 Proof. exact (red_ws_cumul_pbE_inv (Σ := si_Σ) pr_z_red). Qed.
 
-(** [∀ (y : let z := ∀P. P in z). Prop]: the principal type of the domain is a let-in. *)
+(** [∀ (y : let z := ∀P. P in z). Prop]: its domain is a let-in. *)
 Definition pr_prod_let : term := tProd si_na bdf_let si_P.
 
 Lemma pr_wf_let : wf_localE si_Σ ([] ,, vass si_na bdf_let).
@@ -131,7 +150,7 @@ Proof.
   - exact (iv_P_typed si_Σ _ pr_wf_let).
 Qed.
 
-(** [x (∀P:Prop. P)] in [bdf_Γz]: the principal type of [x] is the variable [z]. *)
+(** [x (∀P:Prop. P)] in [bdf_Γz]: [x] is declared at the variable [z]. *)
 Lemma pr_app_z_typed : si_Σ ;;; bdf_Γz |-E tApp (tRel 0) iv_False : (tRel 0) {0 := iv_False}.
 Proof.
   exact (typeE_App _ _ (tRel 0) si_na si_P (tRel 0) sProp iv_False
@@ -172,8 +191,8 @@ Proof.
            (ws_cumul_pbE_forget_spec pr_False_le_z)).
 Qed.
 
-(** In iv_Σ, [r : (λB:Prop. R B) (∀P:Prop. P)]: [r] has the inductive types [R (∀P:Prop. P)] and
-    [R ((λx:Prop. x) (∀P:Prop. P))], and its principal type is the β-redex. *)
+(** In iv_Σ, [r : (λB:Prop. R B) (∀P:Prop. P)]: [r] is declared at the β-redex, and has the
+    inductive types [R (∀P:Prop. P)] and [R ((λx:Prop. x) (∀P:Prop. P))]. *)
 Definition pr_Γr : context := [vass si_na bdf_RFβ].
 
 Lemma pr_wf_Γr : wf_localE iv_Σ pr_Γr.
@@ -246,9 +265,8 @@ Proof. constructor; [reflexivity|constructor; reflexivity|constructor]. Qed.
 
 (** ** The lemmas of [PCUICPrincipalityEta], at concrete arguments *)
 
-(** [isWfArity_sortE] at [Set], in the non-empty context [iv_Γ1 = [A : Prop]]: [Set] is not
-    propositional, so the premise [wf_sort si_Σ Set] is the level check [lzero ∈ levels si_Σ]
-    (at [Prop] it is [True]). *)
+(** [isWfArity_sortE] at [Set], in the non-empty context [iv_Γ1 = [A : Prop]]; [Set] is not a
+    propositional sort. *)
 Lemma isWfArity_sortE_inst_nondeg : iv_Γ1 <> [] /\ Sort.is_propositional Sort.type0 = false.
 Proof. split; [discriminate|reflexivity]. Qed.
 
@@ -261,13 +279,25 @@ Qed.
 
 Section PrincipalityEtaInstances.
 
-(** The type [z] ([tRel 1] in [bdf_Γz]) at the T8 sites [Prod_l] and [Prod_r] is not a product:
-    it is let-bound to [∀P:Prop. P], so it reaches a product only by δ. *)
+(** The variable [z] ([tRel 1] in [bdf_Γz = [x : z; z := ∀P:Prop. P]]) is not a product; it is
+    let-bound to [∀P:Prop. P] and unfolds (δ) to it in one step; [x] ([tRel 0]) is declared at
+    [z] ([tRel 1] after the lift), and every type inferred for [x] is [z]. *)
 Lemma pr_z_delta_nondeg :
-  (forall na A B, tRel 1 <> tProd na A B) /\ nth_error bdf_Γz 1 = Some (vdef si_na iv_False si_P).
-Proof. split; [intros na A B; discriminate|reflexivity]. Qed.
+  (forall na A B, tRel 1 <> tProd na A B) /\ nth_error bdf_Γz 1 = Some (vdef si_na iv_False si_P) /\
+  ∥ red1 si_Σ bdf_Γz (tRel 1) iv_False ∥ /\
+  option_map (fun d => lift0 1 (decl_type d)) (nth_error bdf_Γz 0) = Some (tRel 1) /\
+  (forall T', si_Σ ;;; bdf_Γz |-E tRel 0 ▹ T' -> T' = tRel 1).
+Proof.
+  split; [intros na A B; discriminate|]. split; [reflexivity|].
+  split; [constructor; exact (PCUICReduction.red_rel _ bdf_Γz 1 iv_False Logic.eq_refl)|].
+  split; [reflexivity|].
+  intros T' h. inversion h; subst.
+  match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
+  reflexivity.
+Qed.
 
-(** [Prod_l] at the variable [z], which reduces to [∀P:Prop. P] by unfolding the let.
+(** [Prod_l] at the variable [z], which is not a product and unfolds (δ) to [∀P:Prop. P] in one
+    step ([pr_z_delta_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_z_delta_nondeg *)
 Lemma T8_Prod_l_plug_inst :
   ∑ na' dom' codom',
@@ -287,11 +317,15 @@ Proof.
            si_wfE pr_z_typed pr_False_le_z).
 Qed.
 
-(** The declared type of [x] in [bd_Γη], [G (λy:Prop. F y)] lifted, and its η-type [G F] differ. *)
-Lemma pr_eta_types_nondeg : lift0 1 bd_X <> tApp (tRel 2) (tRel 1).
-Proof. discriminate. Qed.
+(** In [bd_Γη], [x] is declared at [G (λy:Prop. F y)]; lifted, that type is not [G F] and
+    η-contracts to [G F] in one step. *)
+Lemma pr_eta_types_nondeg :
+  nth_error bd_Γη 0 = Some (vass si_na bd_X) /\ lift0 1 bd_X <> tApp (tRel 2) (tRel 1) /\
+  ∥ eta1 (lift0 1 bd_X) (tApp (tRel 2) (tRel 1)) ∥.
+Proof. split; [reflexivity|]. split; [discriminate|]. constructor. exact bd_eta_step. Qed.
 
-(** The two types of [x : G (λy:Prop. F y)] in [bd_Γη]: its declared type and [G F] (η).
+(** The two types of [x] in [bd_Γη]: its declared type [G (λy:Prop. F y)] (lifted) and [G F],
+    which differ, the first η-contracting to the second in one step ([pr_eta_types_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_eta_types_nondeg
     TARGET PCUICPrincipalityEta.common_typingE *)
 Lemma common_typingE_eta_inst :
@@ -301,8 +335,8 @@ Proof.
   exact (common_typingE si_Σ pr_si_wfext (typeE_Rel _ _ 0 (vass si_na bd_X) bdi_wfη Logic.eq_refl) bdf_eta_typed).
 Qed.
 
-(** The principal type of [x], from its declared typing [x : G (λy:Prop. F y)], is below its
-    η-type [G F].
+(** The principal type of [x], from its declared typing [x : G (λy:Prop. F y)], is below [G F],
+    to which the declared type η-contracts in one step ([pr_eta_types_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_eta_types_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_eta_inst :
@@ -313,14 +347,27 @@ Proof.
   exists C. exact (HC _ bdf_eta_typed).
 Qed.
 
-(** The domain of [pr_prod_let] is the let-in [bdf_let]; its type by the LetIn rule,
-    [let z := ∀P:Prop. P in Prop], is not a sort. *)
+(** The domain of [pr_prod_let] is the let-in [bdf_let]; every type inferred for [bdf_let] is
+    [let z := ∀P:Prop. P in Prop] (and [bdf_let] has that type), which is not a sort and
+    ζ-reduces to [Prop] in one step. *)
 Lemma principal_typeE_sort_r_inst_nondeg :
-  pr_prod_let = tProd si_na bdf_let si_P /\ (forall s, tLetIn si_na iv_False si_P si_P <> tSort s).
-Proof. split; [reflexivity|intros s; discriminate]. Qed.
+  pr_prod_let = tProd si_na bdf_let si_P /\ (forall s, tLetIn si_na iv_False si_P si_P <> tSort s) /\
+  ∥ si_Σ ;;; [] |-E bdf_let : tLetIn si_na iv_False si_P si_P ∥ /\
+  ∥ red1 si_Σ [] (tLetIn si_na iv_False si_P si_P) si_P ∥ /\
+  (forall T', si_Σ ;;; [] |-E bdf_let ▹ T' -> T' = tLetIn si_na iv_False si_P si_P).
+Proof.
+  split; [reflexivity|]. split; [intros s; discriminate|].
+  split; [constructor; exact (iv_let_typed si_Σ [] localenv_nil)|].
+  split; [constructor; exact (PCUICReduction.red_zeta _ _ si_na iv_False si_P si_P)|].
+  intros T' h. unfold bdf_let in h. inversion h; subst.
+  match goal with hb : _ ;;; _ |-E tRel 0 ▹ _ |- _ => inversion hb; subst end.
+  match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
+  reflexivity.
+Qed.
 
-(** T8 [Sort_r]: the principal type of the domain [let z := ∀P. P in z] is the let-in
-    [let z := ∀P. P in Prop], reduced to [Prop] by ζ.
+(** Chosen for T8 [Sort_r]: the product [pr_prod_let], whose domain [let z := ∀P. P in z] has the
+    inferred type [let z := ∀P. P in Prop] (every type inferred for it is that let-in), which is
+    not a sort and ζ-reduces to [Prop] in one step ([principal_typeE_sort_r_inst_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_sort_r_inst_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_sort_r_inst :
@@ -331,7 +378,9 @@ Proof.
   exists C. exact (HC _ pr_prod_let_typed).
 Qed.
 
-(** T8 [Prod_r]: the principal type of [x] is [z], reduced to [∀P:Prop. P] by unfolding.
+(** Chosen for T8 [Prod_r]: the application [x (∀P. P)], whose function [x] has the inferred type
+    [z] (every type inferred for [x] is [z]), which is not a product and unfolds (δ) in one step to
+    the product [∀P:Prop. P] ([pr_z_delta_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_z_delta_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_prod_r_inst :
@@ -341,7 +390,8 @@ Proof.
   exists C. exact (HC _ pr_app_z_typed).
 Qed.
 
-(** T8 [Prod_l]: [λP:Prop. x P] at the type [z], which reduces to a product by unfolding.
+(** Chosen for T8 [Prod_l]: [λP:Prop. x P] at the type [z], which is not a product and unfolds (δ)
+    in one step to the product [∀P:Prop. P] ([pr_z_delta_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_z_delta_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_prod_l_inst :
@@ -352,12 +402,18 @@ Proof.
 Qed.
 
 (** The declared type of [r] in [pr_Γr] is [bdf_RFβ], whose head is an abstraction: a β-redex,
-    not an applied inductive. *)
+    not an applied inductive; it β-reduces to [R (∀P. P)] in one step. *)
 Lemma principal_typeE_proj_inst_nondeg :
-  pr_Γr = [vass si_na bdf_RFβ] /\ isLambda (PCUICAstUtils.head bdf_RFβ).
-Proof. split; reflexivity. Qed.
+  pr_Γr = [vass si_na bdf_RFβ] /\ isLambda (PCUICAstUtils.head bdf_RFβ) /\
+  ∥ red1 iv_Σ pr_Γr bdf_RFβ iv_RF ∥.
+Proof.
+  split; [reflexivity|]. split; [reflexivity|]. constructor.
+  exact (PCUICReduction.red_beta _ _ si_na si_P (iv_R (tRel 0)) iv_False).
+Qed.
 
-(** T8 [Ind_r], Proj case: the principal type of [r] is the β-redex [(λB:Prop. R B) (∀P. P)].
+(** Chosen for T8 [Ind_r], Proj case: the projection [f r], where [r] is declared at the β-redex
+    [(λB:Prop. R B) (∀P. P)] ([bdf_RFβ]), whose head is an abstraction, not an inductive, and
+    which β-reduces to [R (∀P. P)] in one step ([principal_typeE_proj_inst_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_proj_inst_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_proj_inst :
@@ -367,21 +423,31 @@ Proof.
   exists C. exact (HC _ pr_proj_typed).
 Qed.
 
-(** The scrutinee of [pgi_match_let_open] is [let y := x in c y]; its type by the LetIn rule,
-    [let y := x in I y] ([pgi_disc_let_ty]), is not an applied inductive. *)
+(** The scrutinee of [pgi_match_let_open] is [let y := x in c y] ([pgi_disc_let]); it has the type
+    [let y := x in I y] ([pgi_disc_let_ty]), which is not an applied inductive and ζ-reduces to
+    [I x] in one step; every type inferred for the scrutinee is a let-in [let y := x in _]. *)
 Lemma principal_typeE_case_inst_nondeg :
   PCUICProgressEtaInstances.pgi_match_let_open =
     tCase iv_ci iv_mp PCUICProgressEtaInstances.pgi_disc_let [iv_br] /\
-  forall ind u args, PCUICProgressEtaInstances.pgi_disc_let_ty <> mkApps (tInd ind u) args.
+  (forall ind u args, PCUICProgressEtaInstances.pgi_disc_let_ty <> mkApps (tInd ind u) args) /\
+  ∥ si_Σ ;;; iv_Γ1 |-E PCUICProgressEtaInstances.pgi_disc_let : PCUICProgressEtaInstances.pgi_disc_let_ty ∥ /\
+  ∥ red1 si_Σ iv_Γ1 PCUICProgressEtaInstances.pgi_disc_let_ty (iv_Ix 0) ∥ /\
+  (forall T', si_Σ ;;; iv_Γ1 |-E PCUICProgressEtaInstances.pgi_disc_let ▹ T' ->
+     exists A, T' = tLetIn si_na (tRel 0) si_P A).
 Proof.
-  split; [reflexivity|].
-  intros ind u args. induction args as [|a args _] using rev_ind; [discriminate|].
-  rewrite mkApps_app. cbn. discriminate.
+  split; [reflexivity|]. split.
+  - intros ind u args. induction args as [|a args _] using rev_ind; [discriminate|].
+    rewrite mkApps_app. cbn. discriminate.
+  - split; [constructor; exact PCUICProgressEtaInstances.pgi_disc_let_letin_typed|].
+    split; [constructor; exact (PCUICReduction.red_zeta _ _ si_na (tRel 0) si_P (iv_Ix 0))|].
+    intros T' h. unfold PCUICProgressEtaInstances.pgi_disc_let in h. inversion h; subst.
+    eexists; reflexivity.
 Qed.
 
-(** T8 [Ind_r], Case case, on [PCUICProgressEtaInstances.pgi_match_let_open] ([iv_match] with
-    the scrutinee [let y := x in c y]): the principal type of the scrutinee is the let-in
-    [let y := x in I y], reduced to [I x] by ζ.
+(** Chosen for T8 [Ind_r], Case case: [PCUICProgressEtaInstances.pgi_match_let_open] ([iv_match]
+    with the scrutinee [let y := x in c y]); the scrutinee has the type [let y := x in I y], which
+    is not an applied inductive and ζ-reduces to [I x] in one step, and every type inferred for the
+    scrutinee is a let-in ([principal_typeE_case_inst_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_case_inst_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_case_inst :
@@ -394,8 +460,8 @@ Proof.
 Qed.
 
 (** The other typing rules, on the derivations of [PCUICInversionEtaInstances]. [pr_head_rule]
-    reads the rule of a typing derivation's last step off the head of its term, numbered as the
-    term formers. *)
+    numbers the head former of a term, in the order of the term constructors ([tVar] and [tEvar]
+    left out); apart from the conversion rule, each typing rule types terms of one head former. *)
 Definition pr_head_rule (t : term) : nat :=
   match t with
   | tRel _ => 0 | tSort _ => 1 | tProd _ _ _ => 2 | tLambda _ _ _ => 3 | tLetIn _ _ _ _ => 4
@@ -404,72 +470,182 @@ Definition pr_head_rule (t : term) : nat :=
   | _ => 14
   end.
 
-(** The twelve rule-coverage instances below run [principal_typeE] through twelve different
-    rules: [x] declared in [iv_Γ1] (Rel), a sort, a product, an abstraction, a let-in, an
-    application, an inductive, a constructor, a fixpoint, a cofixpoint, a constant, a
-    primitive. *)
+(** [x : Prop] in [iv_Γ1], [Prop → Prop] and [(λx:Prop. x) (∀P:Prop. P)], each retyped at a
+    β-wrapped type ([iv_retype]), for the rule-coverage instances below. *)
+Lemma pr_x_typed_conv : si_Σ ;;; iv_Γ1 |-E tRel 0 : tApp (iv_idS (Sort.super sProp)) si_P.
+Proof.
+  exact (iv_retype si_Σ si_wfE iv_Γ1 (tRel 0) si_P (Sort.super sProp) (iv_P_typed si_Σ iv_Γ1 iv_wf_Γ1)
+           iv_x_typed).
+Qed.
+
+Lemma pr_PP_typed_conv : si_Σ ;;; [] |-E iv_PP : tApp (iv_idS (Sort.super iv_sPP)) (tSort iv_sPP).
+Proof.
+  apply (iv_retype si_Σ si_wfE); [|exact (iv_PP_typed si_Σ [] localenv_nil)].
+  apply typeE_Sort; [constructor|].
+  exact (PCUICWfUniversesEta.typing_wf_sortE (Σ := si_Σ) si_wfE (iv_PP_typed si_Σ [] localenv_nil)).
+Qed.
+
+Lemma pr_app_typed_conv : si_Σ ;;; [] |-E tApp iv_id iv_False : tApp (iv_idS (Sort.super sProp)) si_P.
+Proof.
+  exact (iv_retype si_Σ si_wfE [] (tApp iv_id iv_False) si_P (Sort.super sProp)
+           (iv_P_typed si_Σ [] localenv_nil) (iv_app_typed si_Σ [] localenv_nil)).
+Qed.
+
+(** The twelve rule-coverage instances below apply [principal_typeE] to terms of twelve different
+    head formers ([pr_head_rule]): the variable [x], declared in [iv_Γ1], a sort, a product, an
+    abstraction, a let-in, an application, an inductive, a constructor, a fixpoint, a cofixpoint,
+    a constant, a primitive. Each builds the principal type [C] from a derivation at a type [T]
+    and compares [C] with a second type of the same term, the β-wrapped [(λX : s. X) T]; in each
+    pair below (in the order of the instances) the compared type is not [T]. *)
 Lemma principal_typeE_rules_nondeg :
   nth_error iv_Γ1 0 = Some (vass si_na si_P) /\
   map pr_head_rule
     [tRel 0; si_P; iv_PP; iv_id; tLetIn si_na iv_False si_P (tRel 0); tApp iv_id iv_False;
      tInd si_ind []; tConstruct si_ind 0 []; tFix iv_mfix 0; tCoFix iv_cmfix 0;
      tConst po_land_kn []; tPrim iv_one] =
-  [0; 1; 2; 3; 4; 5; 7; 8; 11; 12; 6; 13].
-Proof. split; reflexivity. Qed.
+  [0; 1; 2; 3; 4; 5; 7; 8; 11; 12; 6; 13] /\
+  Forall (fun p : term × term => fst p <> snd p)
+    [(tApp (iv_idS (Sort.super sProp)) si_P, si_P);
+     (tApp (iv_idS (Sort.super (Sort.super sProp))) (tSort (Sort.super sProp)), tSort (Sort.super sProp));
+     (tApp (iv_idS (Sort.super iv_sPP)) (tSort iv_sPP), tSort iv_sPP);
+     (tApp (iv_idS iv_sPP) iv_PP, iv_PP);
+     (tApp (iv_idS (Sort.super sProp)) (tLetIn si_na iv_False si_P si_P), tLetIn si_na iv_False si_P si_P);
+     (tApp (iv_idS (Sort.super sProp)) si_P, si_P);
+     (tApp (iv_idS iv_sPP) si_arity, si_arity);
+     (tApp (iv_idS (Sort.sort_of_product (Sort.super sProp) sProp))
+        (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))),
+      tProd si_na si_P (tApp (tInd si_ind []) (tRel 0)));
+     (tApp (iv_idS (Sort.sort_of_product sProp sProp)) iv_fix_ty, iv_fix_ty);
+     (tApp (iv_idS sProp) iv_RF, iv_RF);
+     (tApp (iv_idS (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0))) po_land_ty,
+      po_land_ty);
+     (tApp (iv_idS Sort.type0) (prim_type iv_one po_int_kn), prim_type iv_one po_int_kn)].
+Proof.
+  split; [reflexivity|]. split; [reflexivity|].
+  repeat constructor; intros h; cbn [fst snd] in h; discriminate h.
+Qed.
 
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Rel_inst := principal_typeE si_Σ pr_si_wfext (Γ := iv_Γ1) iv_x_typed.
+Lemma principal_typeE_Rel_inst :
+  ∑ C, si_Σ ;;; iv_Γ1 ⊢E C ≤ tApp (iv_idS (Sort.super sProp)) si_P × si_Σ ;;; iv_Γ1 |-E tRel 0 : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (Γ := iv_Γ1) iv_x_typed) as [C HC].
+  exists C. exact (HC _ pr_x_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Sort_inst :=
-  principal_typeE si_Σ pr_si_wfext (u := si_P) (iv_P_typed si_Σ [] localenv_nil).
+Lemma principal_typeE_Sort_inst :
+  ∑ C, si_Σ ;;; [] ⊢E C ≤ tApp (iv_idS (Sort.super (Sort.super sProp))) (tSort (Sort.super sProp)) ×
+       si_Σ ;;; [] |-E si_P : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (u := si_P) (iv_P_typed si_Σ [] localenv_nil)) as [C HC].
+  exists C. exact (HC _ iv_P_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Prod_inst :=
-  principal_typeE si_Σ pr_si_wfext (u := iv_PP) (iv_PP_typed si_Σ [] localenv_nil).
+Lemma principal_typeE_Prod_inst :
+  ∑ C, si_Σ ;;; [] ⊢E C ≤ tApp (iv_idS (Sort.super iv_sPP)) (tSort iv_sPP) × si_Σ ;;; [] |-E iv_PP : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (u := iv_PP) (iv_PP_typed si_Σ [] localenv_nil)) as [C HC].
+  exists C. exact (HC _ pr_PP_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Lambda_inst :=
-  principal_typeE si_Σ pr_si_wfext (u := iv_id) (iv_id_typed si_Σ [] localenv_nil).
+Lemma principal_typeE_Lambda_inst :
+  ∑ C, si_Σ ;;; [] ⊢E C ≤ tApp (iv_idS iv_sPP) iv_PP × si_Σ ;;; [] |-E iv_id : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (u := iv_id) (iv_id_typed si_Σ [] localenv_nil)) as [C HC].
+  exists C. exact (HC _ iv_id_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_LetIn_inst :=
-  principal_typeE si_Σ pr_si_wfext (u := tLetIn si_na iv_False si_P (tRel 0))
-    (iv_let_typed si_Σ [] localenv_nil).
+Lemma principal_typeE_LetIn_inst :
+  ∑ C, si_Σ ;;; [] ⊢E C ≤ tApp (iv_idS (Sort.super sProp)) (tLetIn si_na iv_False si_P si_P) ×
+       si_Σ ;;; [] |-E tLetIn si_na iv_False si_P (tRel 0) : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (u := tLetIn si_na iv_False si_P (tRel 0))
+              (iv_let_typed si_Σ [] localenv_nil)) as [C HC].
+  exists C. exact (HC _ iv_let_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_App_inst :=
-  principal_typeE si_Σ pr_si_wfext (u := tApp iv_id iv_False) (iv_app_typed si_Σ [] localenv_nil).
+Lemma principal_typeE_App_inst :
+  ∑ C, si_Σ ;;; [] ⊢E C ≤ tApp (iv_idS (Sort.super sProp)) si_P × si_Σ ;;; [] |-E tApp iv_id iv_False : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (u := tApp iv_id iv_False) (iv_app_typed si_Σ [] localenv_nil))
+    as [C HC].
+  exists C. exact (HC _ pr_app_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Ind_inst :=
-  principal_typeE si_Σ pr_si_wfext (u := tInd si_ind []) (iv_ind_typed [] localenv_nil).
+Lemma principal_typeE_Ind_inst :
+  ∑ C, si_Σ ;;; [] ⊢E C ≤ tApp (iv_idS iv_sPP) si_arity × si_Σ ;;; [] |-E tInd si_ind [] : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (u := tInd si_ind []) (iv_ind_typed [] localenv_nil)) as [C HC].
+  exists C. exact (HC _ iv_ind_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Construct_inst :=
-  principal_typeE si_Σ pr_si_wfext (u := tConstruct si_ind 0 []) (iv_cstr_typed [] localenv_nil).
+Lemma principal_typeE_Construct_inst :
+  ∑ C, si_Σ ;;; [] ⊢E C ≤ tApp (iv_idS (Sort.sort_of_product (Sort.super sProp) sProp))
+                             (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))) ×
+       si_Σ ;;; [] |-E tConstruct si_ind 0 [] : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (u := tConstruct si_ind 0 []) (iv_cstr_typed [] localenv_nil))
+    as [C HC].
+  exists C. exact (HC _ iv_cstr_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Fix_inst := principal_typeE si_Σ pr_si_wfext (u := tFix iv_mfix 0) iv_fix_typed.
+Lemma principal_typeE_Fix_inst :
+  ∑ C, si_Σ ;;; [] ⊢E C ≤ tApp (iv_idS (Sort.sort_of_product sProp sProp)) iv_fix_ty ×
+       si_Σ ;;; [] |-E tFix iv_mfix 0 : C.
+Proof.
+  destruct (principal_typeE si_Σ pr_si_wfext (u := tFix iv_mfix 0) iv_fix_typed) as [C HC].
+  exists C. exact (HC _ iv_fix_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_CoFix_inst :=
-  principal_typeE iv_Σ pr_iv_wfext (u := tCoFix iv_cmfix 0) iv_cofix_typed.
+Lemma principal_typeE_CoFix_inst :
+  ∑ C, iv_Σ ;;; iv_Γc ⊢E C ≤ tApp (iv_idS sProp) iv_RF × iv_Σ ;;; iv_Γc |-E tCoFix iv_cmfix 0 : C.
+Proof.
+  destruct (principal_typeE iv_Σ pr_iv_wfext (u := tCoFix iv_cmfix 0) iv_cofix_typed) as [C HC].
+  exists C. exact (HC _ iv_cofix_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Const_inst :=
-  principal_typeE Σ_po pr_po_wfext (u := tConst po_land_kn []) iv_land_typed.
+Lemma principal_typeE_Const_inst :
+  ∑ C, Σ_po ;;; [] ⊢E C ≤ tApp (iv_idS (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)))
+                            po_land_ty ×
+       Σ_po ;;; [] |-E tConst po_land_kn [] : C.
+Proof.
+  destruct (principal_typeE Σ_po pr_po_wfext (u := tConst po_land_kn []) iv_land_typed) as [C HC].
+  exists C. exact (HC _ iv_land_typed_conv).
+Qed.
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_rules_nondeg
     TARGET PCUICPrincipalityEta.principal_typeE *)
-Definition principal_typeE_Prim_inst := principal_typeE Σ_po pr_po_wfext (u := tPrim iv_one) iv_prim_typed.
+Lemma principal_typeE_Prim_inst :
+  ∑ C, Σ_po ;;; [] ⊢E C ≤ tApp (iv_idS Sort.type0) (prim_type iv_one po_int_kn) ×
+       Σ_po ;;; [] |-E tPrim iv_one : C.
+Proof.
+  destruct (principal_typeE Σ_po pr_po_wfext (u := tPrim iv_one) iv_prim_typed) as [C HC].
+  exists C. exact (HC _ iv_prim_typed_conv).
+Qed.
 
-(** The two argument lists of [r]'s inductive types differ. *)
-Lemma principal_type_indE_inst_nondeg : [iv_False] <> [pr_idF].
-Proof. discriminate. Qed.
+(** The two argument lists of [r]'s inductive types differ; [r] is declared at [bdf_RFβ], whose
+    head is an abstraction (a β-redex) and which β-reduces to [R (∀P. P)] in one step. *)
+Lemma principal_type_indE_inst_nondeg :
+  [iv_False] <> [pr_idF] /\ pr_Γr = [vass si_na bdf_RFβ] /\
+  isLambda (PCUICAstUtils.head bdf_RFβ) /\ ∥ red1 iv_Σ pr_Γr bdf_RFβ iv_RF ∥.
+Proof.
+  split; [discriminate|]. split; [reflexivity|]. split; [reflexivity|]. constructor.
+  exact (PCUICReduction.red_beta _ _ si_na si_P (iv_R (tRel 0)) iv_False).
+Qed.
 
-(** [r : R (∀P. P)] and [r : R ((λx:Prop. x) (∀P. P))]: the argument lists differ, and the
-    principal type of [r] (T8 [Ind_r], twice) is the β-redex.
+(** [r : R (∀P. P)] and [r : R ((λx:Prop. x) (∀P. P))]: the argument lists differ; [r] is
+    declared at the β-redex [(λB:Prop. R B) (∀P. P)], which β-reduces to [R (∀P. P)] in one step
+    (chosen for T8 [Ind_r], twice).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_type_indE_inst_nondeg *)
 Lemma principal_type_indE_inst :
   (∑ ui',
@@ -486,8 +662,9 @@ Qed.
 Lemma typing_leq_termE_inst_nondeg : iv_PP <> pr_PS.
 Proof. discriminate. Qed.
 
-(** [typing_leq_termE]: [∀_:Prop. Prop ≤ ∀_:Prop. Set] up to universes (the codomain at
-    [Cumul], [Prop ≤ Set]): the term [∀_:Prop. Prop] gets the type of [∀_:Prop. Set].
+(** [typing_leq_termE]: [∀_:Prop. Prop ≤ ∀_:Prop. Set] up to universes ([pr_PP_leq_PS]; the
+    codomain at [Cumul], [Prop ≤ Set]): the term [∀_:Prop. Prop] gets the type of [∀_:Prop. Set];
+    the two terms differ ([typing_leq_termE_inst_nondeg]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_leq_termE_inst_nondeg *)
 Lemma typing_leq_termE_inst : si_Σ ;;; [] |-E iv_PP : tSort pr_sPS.
 Proof.

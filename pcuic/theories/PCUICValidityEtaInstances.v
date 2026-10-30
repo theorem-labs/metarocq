@@ -24,20 +24,23 @@
   16's) keep the statement shape of their instance: the premises and the conclusion at concrete
   arguments, the conclusion now given by the lemma.
   The universe and environment lemmas are applied where they do work: [isType_weaken_fullE] and
-  [isType_extendsE] go from [e0_env] to [up_env], an extension that adds a declaration;
-  [isType_Sort_invE] concludes [wf_sort] at [Type@{l0}], which needs [l0] to be a level of the
-  environment ([up_s0_not_wf_mono]: it fails in [(up_env, Monomorphic_ctx)]);
-  [isWfArity_subst_instance_declE] instantiates the universe context of [T] at [l0 := Set], which
-  changes both the context and the arity.
+  [isType_extendsE] go from [e0_env] to [up_env], an extension
+  ([PCUICTypingEtaCopies2Instances.e0_up_extends]) whose declarations differ from those of
+  [e0_env] ([vi_up_adds_decl]); [isType_Sort_invE] concludes [wf_sort] at [Type@{l0}], which
+  needs [l0] to be a level of the environment ([up_s0_not_wf_mono]: it fails in
+  [(up_env, Monomorphic_ctx)]); [isWfArity_subst_instance_declE] instantiates the universe
+  context of [T] at [l0 := Set], which changes both the context and the arity
+  ([vi_up_inst_changes_ctx]).
   The copy lemmas of copies 10, 12, 14 and 16 that [PCUICValidityEta] proved before those copies
   landed are gone from it; their instances are in [PCUICTypingEtaCopies2Instances] and
   [PCUICTypingEtaCopy16Instances].
-  [validityE] and [validity_envE] run on [c (∀P:Prop. P) : I (∀P:Prop. P)]
-  ([PCUICInversionEtaInstances.iv_cF_typed]), an application rule whose codomain [I A] is
-  instantiated at the argument, so validity goes through the substitution; [type_App'E] builds
-  that judgment. [inversion_mkAppsE] runs on the same application typed at the β-expansion
-  [(λX : Prop. X) (I (∀P:Prop. P))] of its type, so the spine ends in a conversion step. Each
-  instance carries its tag (instance-gate grammar).
+  [validityE] and [validity_envE] run on [c (∀P:Prop. P) : (I A){0 := ∀P:Prop. P}]
+  ([PCUICInversionEtaInstances.iv_cF_typed]), whose type the substitution changes
+  ([PCUICInversionEtaInstances.iv_cF_codomain_moves]); [type_App'E] builds that judgment.
+  [inversion_mkAppsE] runs on the same application typed at [(λX : Prop. X) (I (∀P:Prop. P))]
+  ([PCUICInversionEtaInstances.iv_cF_typed_conv]): its spine [[∀P:Prop. P]] is not empty, and
+  that type is not [I (∀P:Prop. P)] ([vi_mkApps_spine_nondeg]). Each instance carries its tag
+  (instance-gate grammar).
 
   WITNESSES: T2a_* SR_T2a_* iv_P_isType up_s0_typed_e0 up_s0_isType_e0
   ([T2a_*], [SR_T2a_*]: the contract fits above, generic in [Σ], not instances; the others: typing
@@ -147,10 +150,13 @@ Definition isType_Sort_invE_inst :
     PCUICTypingEtaCopies2Instances.up_wfE
     (has_sort_isTypeE _ PCUICTypingEtaCopies2Instances.up_s0_typed).
 
-(** The instantiation [l0 := Set] changes the context [x : Type@{l0}]. *)
+(** The instantiation [l0 := Set] changes the context [x : Type@{l0}] and the arity
+    [Type@{l0}]. *)
 Lemma vi_up_inst_changes_ctx :
-  subst_instance [Level.lzero] PCUICTypingEtaCopies2Instances.up_Γ <> PCUICTypingEtaCopies2Instances.up_Γ.
-Proof. discriminate. Qed.
+  subst_instance [Level.lzero] PCUICTypingEtaCopies2Instances.up_Γ <> PCUICTypingEtaCopies2Instances.up_Γ /\
+  subst_instance [Level.lzero] (tSort PCUICTypingEtaCopies2Instances.up_s0)
+    <> tSort PCUICTypingEtaCopies2Instances.up_s0.
+Proof. split; discriminate. Qed.
 
 (** [isWfArity_subst_instance_declE] at the universe-polymorphic axiom [T] of [up_env]: the arity
     [Type@{l0}] in the context [x : Type@{l0}], instantiated at [l0 := Set]
@@ -232,9 +238,18 @@ Definition validity_envE_inst :
   (wf_localE si_Σ iv_Γ1 * isTypeE si_Σ iv_Γ1 ((iv_Ix 0) {0 := iv_False})) :=
   validity_envE si_Σ si_wfE iv_Γ1 iv_cF ((iv_Ix 0) {0 := iv_False}) (iv_cF_typed iv_Γ1 iv_wf_Γ1).
 
-(** [inversion_mkAppsE] at [c (∀P:Prop. P) : (λX : Prop. X) (I (∀P:Prop. P))]: the spine ends in
-    the conversion of [I (∀P:Prop. P)] to its β-expansion.
-    INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_IF_conv_differs *)
+(** The spine [[∀P:Prop. P]] is not empty: [c (∀P:Prop. P)] is not its head [c]; and the type
+    [(λX : Prop. X) (I (∀P:Prop. P))] is not [I (∀P:Prop. P)]. *)
+Lemma vi_mkApps_spine_nondeg :
+  [/\ [iv_False] <> [],
+      mkApps (tConstruct si_ind 0 []) [iv_False] <> tConstruct si_ind 0 [] &
+      tApp (iv_idS sProp) iv_IF <> iv_IF].
+Proof. split; discriminate. Qed.
+
+(** [inversion_mkAppsE] at [c (∀P:Prop. P) : (λX : Prop. X) (I (∀P:Prop. P))]: the spine
+    [[∀P:Prop. P]] is not empty, and the type is not [I (∀P:Prop. P)] ([vi_mkApps_spine_nondeg]).
+    INSTANCE NONDEGEN PCUICValidityEtaInstances.vi_mkApps_spine_nondeg
+    TARGET PCUICValidityEta.inversion_mkAppsE *)
 Definition inversion_mkAppsE_inst :
   (si_Σ ;;; [] |-E mkApps (tConstruct si_ind 0 []) [iv_False] : tApp (iv_idS sProp) iv_IF) ×
   ∑ A, si_Σ ;;; [] |-E tConstruct si_ind 0 [] : A ×

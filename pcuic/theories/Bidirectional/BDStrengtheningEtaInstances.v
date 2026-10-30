@@ -23,23 +23,23 @@
   - [eta1_rename_inst], [RE_renameP_inst], [JoinE_renameP_inst], [cumul_renamePE_inst],
     [conv_renamePE_inst]: the η step [G (λ y. F y) ⇝η G F] of [bd_eta_step] and its join,
     weakened: the two terms differ and the weakening moves each ([bs_eta_nondeg]).
-  - the scoping lemmas run on objects that are not closed, so the scoping is not vacuous:
-    the predicate context, the branch type and the inferred type of the [match] [bd_case],
-    whose parameter comparison is an η step ([bs_case_open]); the branch context [f : G F] of
-    a branch of the record [R] of [iv_Σ] ([bs_rbr], [bs_rbranch_open]; the constructor of [I]
-    has no argument, so a branch of [bd_case] has an empty context); the codomain [F y] of the
-    product inferred for [h : Π y : Prop. F y] ([bs_h_prod], [bs_hB_open]).
+  - the scoping lemmas run on objects that are not closed, so the scoping is not implied by
+    closedness: the predicate context and the branch type of the [match] [bd_case], the type
+    that [inferingE_Case_inst] infers for [bd_case], and [bd_case] itself ([bs_case_open]); the
+    branch context [f : G F] of a branch of the record [R] of [iv_Σ] ([bs_rbr],
+    [bs_rbranch_open]; the constructor of [I] has no argument, so a branch of [bd_case] has an
+    empty context); the codomain [F y] of the product inferred for [h : Π y : Prop. F y]
+    ([bs_h_prod], [bs_hB_open]).
   - [bidirectional_renamingE_inst] on the [match] [bd_case] and [rename_telescopeE_inst] on its
-    parameter instance, both moved by the weakening ([bs_case_moves]);
-    [rename_mfix_on_ind_redE_inst] on the fixpoint [bd_mfix], whose reduction witness is a
-    β-step, moved by the weakening ([bs_mfix_moves]).
-  - [typing_renaming_cond_PE_inst] and [on_free_vars_typeE_inst] on the η-typed [x : G F]
-    ([bs_eta_typed_nondeg]).
+    parameter instance, both moved by the weakening; the parameter [G F] of [bd_case] is not
+    [G (λ y. F y)] ([bs_case_moves]). [rename_mfix_on_ind_redE_inst] on the reduction witness of
+    the fixpoint [bd_mfix], whose declared type fails [check_one_fix] and which the weakening
+    moves ([bs_mfix_moves]).
+  - [typing_renaming_cond_PE_inst] and [on_free_vars_typeE_inst] on the typing [x : G F] in
+    [bd_Γη], at a type that no inference gives [x] there ([bs_eta_typed_nondeg]).
   - [strengtheningE_inst] and [strengthening_typeE_inst] remove the unused assumption [x : Prop]
-    from [y : d; d := Prop : Type] for [y]: the inferred type of [y] after the lifting is the
-    let-variable [d], not a sort, so [strengthening_typeE] reaches its T8 site
-    ([PCUICEtaT8Probe.T8_Sort_r_two]) with a type that reduces to a sort only by the δ-step of
-    the let ([bs_strengthening_nondeg]). *)
+    from [y : d; d := Prop : Type] for [y]: the term really is lifted, and no type inferred for
+    the lifted [y] is a sort ([bs_strengthening_nondeg]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -73,8 +73,8 @@ Definition bs_ur (Γ : context) : urenaming (shiftnP #|Γ| xpred0) Γ (Γ ,,, bs
 Definition bs_lhs : term := tApp (tRel 2) (eta_redex si_na si_P (tRel 1)).
 Definition bs_rhs : term := tApp (tRel 2) (tRel 1).
 
-(** The η-related [G (λ y. F y)] and [G F] differ, and the weakening by [x : Prop] moves each of
-    them (they mention [F] and [G]). *)
+(** [G (λ y. F y)] and [G F] differ, and the weakening by [x : Prop] moves each of them (both
+    mention [F] and [G]). *)
 Lemma bs_eta_nondeg :
   bs_lhs <> bs_rhs /\ rename (rshiftk 1) bs_lhs <> bs_lhs /\ rename (rshiftk 1) bs_rhs <> bs_rhs.
 Proof. repeat split; discriminate. Qed.
@@ -118,9 +118,10 @@ Definition conv_renamePE_inst :=
 
 (** ** Free variables of the [match] [bd_case] (no class) *)
 
-(** The predicate context [z : I (G F)], the branch type [(λ z : I (G F). Prop) (c (G F))] and
-    the inferred type [(λ z : I (G F). Prop) (c (G (λ y. F y)))] of [bd_case], and [bd_case]
-    itself, mention [F] and [G]: none is closed, so their scoping in [bd_ΓFG] is not vacuous. *)
+(** The predicate context [z : I (G F)], the branch type [(λ z : I (G F). Prop) (c (G F))], the
+    type [(λ z : I (G F). Prop) (c (G (λ y. F y)))] (the one [inferingE_Case_inst] infers for
+    [bd_case]) and [bd_case] itself mention [F] and [G]: none is closed, so their scoping in
+    [bd_ΓFG] is not implied by closedness. *)
 Lemma bs_case_open :
   [/\ closedn_ctx 0 (case_predicate_context si_ind si_mdecl si_idecl bd_case_p) = false,
       closedn 0 (case_branch_type bd_case_ci si_mdecl si_idecl bd_case_p bd_case_br
@@ -168,7 +169,8 @@ Definition on_free_vars_case_branch_typeE_inst :=
     si_declared_constructor bd_case_wf_pred (PCUICEtaCanon.eq_context_upto_names_refl' _)
     ltac:(constructor) eq_refl eq_refl.
 
-(** The type inferred for [bd_case] is scoped in [bd_ΓFG].
+(** The type that [inferingE_Case_inst] infers for [bd_case] is scoped in [bd_ΓFG]; it is not
+    closed ([bs_case_open]).
     INSTANCE NONDEGEN BDStrengtheningEtaInstances.bs_case_open *)
 Definition infering_on_free_varsE_inst : on_free_vars (shiftnP #|bd_ΓFG| xpred0) (tApp bd_case_ptm bd_case_disc) :=
   infering_on_free_varsE si_Σ si_wfE (shiftnP #|bd_ΓFG| xpred0) bd_ΓFG BDTypingEtaInstances.bd_case _ eq_refl eq_refl inferingE_Case_inst.
@@ -201,30 +203,29 @@ Definition infering_prod_on_free_varsE_inst :=
 
 (** ** Renaming (no class) *)
 
-(** [bd_mfix]: its declared type fails [check_one_fix] (its reduction witness is a β-step,
-    [bd_wf_fixpoint_red]), and the weakening moves it (its type mentions [A]). *)
+(** [bd_mfix]: [check_one_fix] fails on its declared type, and the weakening moves it (its type
+    mentions [A]). *)
 Lemma bs_mfix_moves :
   map check_one_fix bd_mfix = [None] /\
   map (map_def (rename (rshiftk 1)) (rename (shiftn #|bd_mfix| (rshiftk 1)))) bd_mfix <> bd_mfix.
 Proof. split; [reflexivity|discriminate]. Qed.
 
-(** The reduction witness of [bd_mfix] (a β-step on the declared type), weakened.
+(** The reduction witness of [bd_mfix] ([bd_wf_fixpoint_red]), weakened.
     INSTANCE NONDEGEN BDStrengtheningEtaInstances.bs_mfix_moves *)
 Definition rename_mfix_on_ind_redE_inst :=
   rename_mfix_on_ind_redE (Σ := si_Σ) (wfΣ := si_wfE) (shiftnP #|bd_Γ1| xpred0) bd_Γ1 (bd_Γ1 ,,, bs_x)
     (rshiftk 1) bd_mfix (bs_ur bd_Γ1) eq_refl ltac:(constructor; [reflexivity|constructor])
     (PCUICRenameTyp.rename_check_one_fix (rshiftk 1) bd_mfix) bd_wf_fixpoint_red.2.2.
 
-(** The [match] [bd_case]: its parameter [G F] is not the parameter [G (λ y. F y)] of its
-    scrutinee's type ([bd_case_pars_differ]: one η step), and the weakening moves [bd_case] and
-    its parameter list. *)
+(** The [match] [bd_case]: its parameter [G F] is not [G (λ y. F y)], and the weakening moves
+    [bd_case] and its parameter list. *)
 Lemma bs_case_moves :
   [/\ bd_X <> bd_GF,
       rename (rshiftk 1) BDTypingEtaInstances.bd_case <> BDTypingEtaInstances.bd_case &
       map (rename (rshiftk 1)) [bd_GF] <> [bd_GF]].
-Proof. split; [exact bd_case_pars_differ|discriminate|discriminate]. Qed.
+Proof. split; [unfold bd_X, bd_GF, bd_lam; discriminate|discriminate|discriminate]. Qed.
 
-(** The [match] [bd_case], with its η-related parameters, weakened.
+(** The [match] [bd_case], weakened.
     INSTANCE NONDEGEN BDStrengtheningEtaInstances.bs_case_moves *)
 Definition bidirectional_renamingE_inst :
   si_Σ ;;; bd_ΓFG ,,, bs_x |-E rename (rshiftk 1) BDTypingEtaInstances.bd_case ▹ rename (rshiftk 1) (tApp bd_case_ptm bd_case_disc) :=
@@ -247,14 +248,13 @@ Qed.
 
 Section BDStrengtheningClassInstances.
 
-  (** The η-typed [x : G F] in [bd_Γη]. *)
+  (** The typing [x : G F] in [bd_Γη]: soundness on the check [checkingE_eta_inst]. *)
   Definition bs_eta_typed : si_Σ ;;; bd_Γη |-E tRel 0 : tApp (tRel 2) (tRel 1) :=
     checking_typingE si_Σ bd_Γη (tRel 0) (tApp (tRel 2) (tRel 1)) si_wfE bdi_wfη
       bdi_GF_eta_isType checkingE_eta_inst.
 
-  (** The η-typed [x : G F]: every type inferred for [x] in [bd_Γη] is [G (λ y. F y)], not [G F]
-      (the typing passes through the η step); [G F] mentions [G], the last variable of [bd_Γη];
-      the weakening moves it. *)
+  (** [x : G F] in [bd_Γη]: no type inferred for [x] there is [G F]; [G F] mentions [G], the
+      last variable of [bd_Γη]; the weakening moves it. *)
   Lemma bs_eta_typed_nondeg :
     [/\ (forall T', si_Σ ;;; bd_Γη |-E tRel 0 ▹ T' -> T' <> tApp (tRel 2) (tRel 1)),
         on_free_vars (shiftnP (#|bd_Γη| - 1) xpred0) (tApp (tRel 2) (tRel 1)) = false &
@@ -278,7 +278,7 @@ Section BDStrengtheningClassInstances.
     typing_renaming_cond_PE (Σ := si_Σ) (wfΣ := si_wfE) (t := tRel 0) bs_renaming eq_refl eq_refl bs_eta_typed.
 
   (** [y : d; d := Prop : Type] with the unused [x : Prop] inserted: [y] is [tRel 1] there, of
-      type the let-variable [d] ([tRel 2]), which is [Prop] only by its δ-step. *)
+      declared type the let-variable [d] ([tRel 2]), whose body is [Prop]. *)
   Definition bs_Γdx : context := bu_Γd ,,, bs_x ,,, lift_context #|bs_x| 0 [].
 
   Lemma bs_wf_Γdx : wf_localE si_Σ bs_Γdx.
@@ -294,8 +294,8 @@ Section BDStrengtheningClassInstances.
   Qed.
 
   (** Strengthening removes [x : Prop] from [bu_Γd ,,, [x : Prop]]: the term really is lifted
-      ([tRel 0] becomes [tRel 1]), and every type inferred for the lifted [y] is the
-      let-variable [d] ([tRel 2]), not a sort, so the T8 site reduces it (δ). *)
+      ([tRel 0] becomes [tRel 1]), and no type inferred for the lifted [y] in [bs_Γdx] is a
+      sort. *)
   Lemma bs_strengthening_nondeg :
     lift #|bs_x| #|([] : context)| (tRel 0) <> tRel 0 /\
     (forall T', si_Σ ;;; bs_Γdx |-E tRel 1 ▹ T' -> forall s, T' <> tSort s).
@@ -310,7 +310,7 @@ Section BDStrengtheningClassInstances.
   Definition strengtheningE_inst :=
     strengtheningE (Σ := si_Σ) (wfΣ := si_wfE) bu_Γd bs_x [] (tRel 0) (tSort sProp) bs_y_lifted_typed.
 
-  (** The T8 site, reached with the let-variable [d] as the inferred type.
+  (** [strengthening_typeE] at the lifted [y], no type inferred for which is a sort.
       INSTANCE NONDEGEN BDStrengtheningEtaInstances.bs_strengthening_nondeg *)
   Definition strengthening_typeE_inst :
     ∑ s', si_Σ ;;; bu_Γd ,,, [] |-E tRel 0 : tSort s' × leq_sort si_Σ s' sProp :=

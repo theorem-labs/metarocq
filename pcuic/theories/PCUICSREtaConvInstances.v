@@ -10,16 +10,19 @@
   of [Prop], [ci_False := ∀P:Prop. P], two λ-terms [ci_lam], [ci_lam'] that differ only in a
   binder name.
 
-  Where a lemma relates two things, the instance relates two different things: a β-redex against
-  its reduct, an η-redex against its contraction, two contexts that differ in a let-body or in an
-  assumption type or in a binder name, two types that differ by a β-step. Each instance carries
-  its tag (the instance-gate grammar): a NONDEGEN lemma below states the difference, and the
+  Where a lemma relates two things, the instance relates two different things, and its NONDEGEN
+  lemma states the difference: [(λx:Prop. x) Prop] against [Prop], [λx:Prop. Prop x] against
+  [Prop], two contexts that differ in a let-body, in an assumption type or in a binder name, two
+  types [(λy:Prop. y) x] and [x]. Each instance carries its tag (the instance-gate grammar); the
   lemmas that are degenerate by their statement are tagged IMPOSSIBLE at their instance.
+  [conv_context_rel_relnE] and [conv_context_rel_to_extended_listE] run on two contexts with a
+  let above an assumption, whose [reln] output is not empty ([sc_Γm_reln_nondeg]).
   [declared_inductive_closed_params_instE] has no relation in it; its instance has a non-empty
   parameter context. [ws_cumul_ctx_pbE_cons_inv] is an inversion helper; its instance is the
-  context pair of [sc_ctx_conv]. The reduction lemmas are applied to a β-step in a domain
-  ([red_it_mkProd_or_LetIn_smash_cb], [red_has_rec_arg_cb], [closed_red_from_empty_cb]) and to the
-  unfolding of a let-bound variable ([red_expand_let_cb], [red_expand_letE]).
+  context pair of [sc_ctx_conv]. The reduction lemmas are applied to the reduction of
+  [Π x:(λy:Prop. y) Prop. Prop] to [Π x:Prop. Prop] ([red_it_mkProd_or_LetIn_smash_cb],
+  [red_has_rec_arg_cb]), to that of [(λy:Prop. y) Prop] to [Prop] ([closed_red_from_empty_cb]),
+  and to the unfolding of a let-bound variable ([red_expand_let_cb], [red_expand_letE]).
 
   WITNESSES: sc_*
   (the concrete contexts, definitions and derivations [sc_*] that the instances use; the NONDEGEN
@@ -47,23 +50,19 @@ Local Notation WS pb Γ := (ws_cumul_pbE pb si_Σ Γ).
 
 (** ** Concrete data *)
 
-(** One-assumption contexts whose types are the β-pair. *)
+(** One-assumption contexts with the types [(λy:Prop. y) Prop] and [Prop]. *)
 Definition sc_Γb : context := [vass si_na fi_beta].
 
 Lemma sc_ctx_beta : ws_cumul_ctx_pbE Conv si_Σ ([] ,,, sc_Γb) ([] ,,, fi_Γ1).
 Proof. constructor; [constructor|]. constructor; [reflexivity|exact (fi_WS_beta Conv)]. Qed.
 
-(** The β-pair of contexts differ: [x : (λy:Prop. y) Prop] against [x : Prop]. *)
+(** The contexts [x : (λy:Prop. y) Prop] and [x : Prop] differ. *)
 Lemma sc_Γb_differs : sc_Γb <> fi_Γ1.
 Proof. discriminate. Qed.
 
-(** One-let contexts whose bodies are the η-pair, at [Conv]. *)
+(** One-let contexts whose bodies are [λx:Prop. Prop x] and [Prop], at [Conv]. *)
 Definition sc_Γd1 : context := [vdef si_na fi_eta fi_P].
 Definition sc_Γd2 : context := [vdef si_na fi_P fi_P].
-
-(** The η-pair of contexts differ in the let-body. *)
-Lemma sc_Γd_differ : sc_Γd1 <> sc_Γd2.
-Proof. discriminate. Qed.
 
 Lemma sc_ctx_conv : ws_cumul_ctx_pbE Conv si_Σ ([] ,,, sc_Γd1) ([] ,,, sc_Γd2).
 Proof.
@@ -77,6 +76,29 @@ Proof.
   constructor; [reflexivity|exact (ci_WS_eta Conv)|]. apply ws_cumul_pbE_refl; reflexivity.
 Qed.
 
+(** Mixed contexts: the let [z := λx:Prop. Prop x : Prop] / [z := Prop : Prop] above the
+    assumption [x : (λy:Prop. y) Prop] / [x : Prop]. *)
+Definition sc_Γm1 : context := [vdef si_na fi_eta fi_P; vass si_na fi_beta].
+Definition sc_Γm2 : context := [vdef si_na fi_P fi_P; vass si_na fi_P].
+
+Lemma sc_rel_m : ws_cumul_ctx_pbE_rel Conv si_Σ [] sc_Γm1 sc_Γm2.
+Proof.
+  split; [reflexivity|]. constructor.
+  - constructor; [constructor|]. constructor; [reflexivity|exact (fi_WS_beta Conv)].
+  - constructor; [reflexivity| |].
+    + apply eta1_ws_cumul_pbE; [reflexivity|reflexivity|exact fi_eta1].
+    + apply ws_cumul_pbE_refl; reflexivity.
+Qed.
+
+(** What [reln] reads of [sc_Γm1]: it keeps the assumption and skips the let, whose index shift
+    the output shows ([tRel (n + 1)]), so the output is not empty; and the two related contexts
+    differ. *)
+Lemma sc_Γm_reln_nondeg :
+  [/\ (forall acc n, reln acc n sc_Γm1 = tRel (n + 1) :: acc),
+      to_extended_list sc_Γm1 = [tRel 1] &
+      sc_Γm1 <> sc_Γm2].
+Proof. split; [intros acc n; reflexivity|reflexivity|discriminate]. Qed.
+
 (** One step of context reduction: the type [fi_beta] reduces to [fi_P]. *)
 Lemma sc_one : OnOne2_local_env (fun Δ : context => on_one_decl (red1 si_Σ ([] ,,, Δ))) sc_Γb fi_Γ1.
 Proof.
@@ -86,7 +108,7 @@ Qed.
 
 (** ** Items 1-2 *)
 
-(** The two head declarations differ in their body (the η-pair). *)
+(** The two head declarations differ in their body: [λx:Prop. Prop x] against [Prop]. *)
 Lemma ws_cumul_ctx_pbE_cons_inv_inst_nondeg : vdef si_na fi_eta fi_P <> vdef si_na fi_P fi_P.
 Proof. discriminate. Qed.
 
@@ -97,7 +119,8 @@ Proof.
   exact (ws_cumul_ctx_pbE_cons_inv (d := vdef si_na fi_eta fi_P) (d' := vdef si_na fi_P fi_P) sc_ctx_conv).
 Qed.
 
-(** The contexts differ (β-pair) and the bodies differ (η-pair). *)
+(** The contexts [x : (λy:Prop. y) Prop] and [x : Prop] differ, and the bodies [λz:Prop. Prop z]
+    and [Prop] differ. *)
 Lemma ws_cumul_pbE_it_mkLambda_or_LetIn_inst_nondeg : sc_Γb <> fi_Γ1 /\ fi_eta <> fi_P.
 Proof. split; discriminate. Qed.
 
@@ -115,7 +138,7 @@ Lemma substitution_ws_cumul_ctx_pbE_red_subst_inst_nondeg :
   subst_context [fi_beta] 0 [vass si_na (tRel 0)] <> subst_context [fi_P] 0 [vass si_na (tRel 0)].
 Proof. discriminate. Qed.
 
-(** Substituting the β-pair into [x : Rel 0].
+(** Substituting [(λy:Prop. y) Prop] and [Prop] into [x : Rel 0].
     INSTANCE NONDEGEN PCUICSREtaConvInstances.substitution_ws_cumul_ctx_pbE_red_subst_inst_nondeg *)
 Lemma substitution_ws_cumul_ctx_pbE_red_subst_inst :
   ws_cumul_ctx_pbE Conv si_Σ ([] ,,, subst_context [fi_beta] 0 [vass si_na (tRel 0)])
@@ -148,7 +171,8 @@ Qed.
 Definition sc_check : def term -> option kername := fun _ => Some si_kn.
 Definition sc_d : def term := {| dname := si_na; dtype := fi_beta; dbody := fi_P; rarg := 0 |}.
 
-(** Retyping [sc_d] at the reduct [fi_P] of its type changes the definition. *)
+(** Retyping [sc_d], whose declared type is [(λy:Prop. y) Prop], at [Prop] changes the
+    definition. *)
 Lemma sc_d_retyped_differs : def_with_type sc_d fi_P <> sc_d.
 Proof. discriminate. Qed.
 
@@ -173,15 +197,16 @@ Proof.
     constructor; [exact sc_body_on|constructor].
 Qed.
 
-(** [reln] and [to_extended_list] read only the shape of a context, so both sides compute to the
-    same list; the two related contexts differ in their let-body ([sc_Γd_differ]).
-    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γd_differ *)
-Lemma conv_context_rel_relnE_inst : forall acc n, reln acc n sc_Γd1 = reln acc n sc_Γd2.
-Proof. exact (conv_context_rel_relnE [] sc_Γd1 sc_Γd2 sc_rel_d). Qed.
+(** [reln] on the mixed contexts related by [sc_rel_m]: the output is [tRel (n + 1) :: acc], not
+    empty, and the two contexts differ ([sc_Γm_reln_nondeg]).
+    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γm_reln_nondeg *)
+Lemma conv_context_rel_relnE_inst : forall acc n, reln acc n sc_Γm1 = reln acc n sc_Γm2.
+Proof. exact (conv_context_rel_relnE [] sc_Γm1 sc_Γm2 sc_rel_m). Qed.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γd_differ *)
-Lemma conv_context_rel_to_extended_listE_inst : to_extended_list sc_Γd1 = to_extended_list sc_Γd2.
-Proof. exact (conv_context_rel_to_extended_listE (Δ := sc_Γd1) (Δ' := sc_Γd2) sc_rel_d). Qed.
+(** [to_extended_list] on the same contexts: the output is [[tRel 1]] ([sc_Γm_reln_nondeg]).
+    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γm_reln_nondeg *)
+Lemma conv_context_rel_to_extended_listE_inst : to_extended_list sc_Γm1 = to_extended_list sc_Γm2.
+Proof. exact (conv_context_rel_to_extended_listE (Δ := sc_Γm1) (Δ' := sc_Γm2) sc_rel_m). Qed.
 
 (** The two contexts differ (in a binder name). *)
 Lemma eq_context_alpha_convE_inst_nondeg :
@@ -199,7 +224,7 @@ Qed.
 
 Definition sc_nas : list aname := [mkBindAnn (nNamed "x") Relevant].
 
-(** The renaming changes the context, and the two related contexts differ (η-pair). *)
+(** The renaming changes the context, and the two related contexts differ in the let-body. *)
 Lemma conv_ctx_set_binder_nameE_inst_nondeg :
   map2 set_binder_name sc_nas sc_Γd1 <> sc_Γd1 /\ sc_Γd1 <> sc_Γd2.
 Proof. split; discriminate. Qed.
@@ -267,13 +292,16 @@ Proof.
   apply ws_cumul_pbE_refl; reflexivity.
 Qed.
 
-(** The weakening moves the reference to [x] (the lift changes the context), and the two weakened
-    contexts differ (β-pair). *)
+(** The lift by [#|fi_Γ1|] changes [sc_Δo1] (its body refers to [x]); the two contexts
+    [z := (λy:Prop. y) x : Prop] and [z := x : Prop] differ, and so do their two lifts, which end
+    the two contexts the instance relates. *)
 Lemma weakening_ws_cumul_ctx_pbE_inst_nondeg :
-  lift_context #|fi_Γ1| 0 sc_Δo1 <> sc_Δo1 /\ sc_Δo1 <> sc_Δo2.
-Proof. split; discriminate. Qed.
+  lift_context #|fi_Γ1| 0 sc_Δo1 <> sc_Δo1 /\ sc_Δo1 <> sc_Δo2 /\
+  lift_context #|fi_Γ1| 0 sc_Δo1 <> lift_context #|fi_Γ1| 0 sc_Δo2.
+Proof. split; [discriminate|split; discriminate]. Qed.
 
-(** Weakening the open β-pair of let-bodies by [w : Prop], inserted between [x : Prop] and [z].
+(** Weakening the let-contexts [z := (λy:Prop. y) x : Prop] and [z := x : Prop] by [w : Prop],
+    inserted between [x : Prop] and [z].
     INSTANCE NONDEGEN PCUICSREtaConvInstances.weakening_ws_cumul_ctx_pbE_inst_nondeg *)
 Lemma weakening_ws_cumul_ctx_pbE_inst :
   ws_cumul_ctx_pbE Conv si_Σ (fi_Γ1 ,,, fi_Γ1 ,,, lift_context #|fi_Γ1| 0 sc_Δo1)
@@ -286,7 +314,7 @@ Qed.
 Lemma sc_closed_red1_beta : closed_red1 si_Σ [] fi_beta fi_P.
 Proof. split; [reflexivity|reflexivity|exact (red_beta si_Σ [] si_na fi_P (tRel 0) fi_P)]. Qed.
 
-(** The two related terms differ: a β-redex and its reduct. *)
+(** The two related terms differ: [(λy:Prop. y) Prop] and [Prop]. *)
 Lemma closed_red1_ws_cumul_pbE_inst_nondeg : fi_beta <> fi_P.
 Proof. discriminate. Qed.
 
@@ -325,7 +353,7 @@ Proof. exact (typeE_Rel _ _ 1 (vass si_na fi_P) sc_wf_Γh eq_refl). Qed.
 Lemma sc_red_h : red si_Σ sc_Γh (tApp ci_id (tRel 1)) (tRel 1).
 Proof. apply rt_step. unfold ci_id. apply red_beta. Qed.
 
-(** The type of [h] and the type it is moved to differ by a β-step. *)
+(** The type [(λy:Prop. y) x] of [h] and the type [x] it is moved to differ. *)
 Lemma type_Cumul_altE_inst_nondeg : tApp ci_id (tRel 1) <> tRel 1.
 Proof. discriminate. Qed.
 
@@ -360,7 +388,8 @@ Proof.
   exists (Sort.super sProp). split; [exact (ci_typeE_P [] localenv_nil)|]. split; [exact I|reflexivity].
 Qed.
 
-(** The unfolding of [z] is not [z]: the reduct is the body [∀P:Prop. P], lifted. *)
+(** [lift0 1 (subst1 ci_False 0 (tRel 0))], which is the let-body [∀P:Prop. P] lifted, is not
+    [z] ([tRel 0]). *)
 Lemma sc_let_unfolds : lift0 1 (subst1 ci_False 0 (tRel 0)) <> tRel 0.
 Proof. discriminate. Qed.
 
@@ -380,12 +409,12 @@ Proof.
            (t := tRel 0) sc_wf_let eq_refl).
 Qed.
 
-(** The target context [x : Prop] is not the empty context the reduction starts in, and the
-    reduction is a real step (a β-redex and its reduct). *)
+(** The target context [x : Prop] is not the empty context the reduction starts in, and the two
+    terms of the reduction, [(λy:Prop. y) Prop] and [Prop], differ. *)
 Lemma closed_red_from_empty_cb_inst_nondeg : fi_Γ1 <> [] /\ fi_beta <> fi_P.
 Proof. split; discriminate. Qed.
 
-(** The β-reduction [fi_beta ⇝ fi_P] in the empty context, moved into [x : Prop].
+(** The reduction [fi_beta ⇝ fi_P] in the empty context, moved into [x : Prop].
     INSTANCE NONDEGEN PCUICSREtaConvInstances.closed_red_from_empty_cb_inst_nondeg *)
 Lemma closed_red_from_empty_cb_inst : si_Σ ;;; fi_Γ1 ⊢ fi_beta ⇝ fi_P.
 Proof.
@@ -399,7 +428,8 @@ Proof.
   exact (red_beta si_Σ [] si_na fi_P (tRel 0) fi_P).
 Qed.
 
-(** The reduction of the product is a real step: the domain [(λy:Prop. y) Prop] becomes [Prop]. *)
+(** The two products [Π x:(λy:Prop. y) Prop. Prop] and [Π x:Prop. Prop] differ (in their
+    domain). *)
 Lemma red_it_mkProd_or_LetIn_smash_cb_inst_nondeg : it_mkProd_or_LetIn sc_Γb fi_P <> tProd si_na fi_P fi_P.
 Proof. discriminate. Qed.
 
@@ -418,12 +448,13 @@ Qed.
 Definition sc_dp : def term :=
   {| dname := si_na; dtype := it_mkProd_or_LetIn sc_Γb fi_P; dbody := fi_P; rarg := 0 |}.
 
-(** Retyping [sc_dp] at the reduct of its type changes the definition. *)
+(** Retyping [sc_dp] at [Π x:Prop. Prop] changes the definition. *)
 Lemma red_has_rec_arg_cb_inst_nondeg : def_with_type sc_dp (tProd si_na fi_P fi_P) <> sc_dp.
 Proof. discriminate. Qed.
 
 (** [has_rec_arg] is a boolean on the type of the definition, so it computes on every concrete
-    definition; the type here is changed by a β-step in its domain.
+    definition; the type here, [Π x:(λy:Prop. y) Prop. Prop], is replaced by [Π x:Prop. Prop],
+    which changes the definition.
     INSTANCE NONDEGEN PCUICSREtaConvInstances.red_has_rec_arg_cb_inst_nondeg *)
 Lemma red_has_rec_arg_cb_inst : has_rec_arg (def_with_type sc_dp (tProd si_na fi_P fi_P)).
 Proof. exact (red_has_rec_arg_cb (d := sc_dp) sc_red_prod eq_refl). Qed.

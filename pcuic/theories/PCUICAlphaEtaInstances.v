@@ -4,8 +4,9 @@
 
   **The environment** is [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]:
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]); the derivations are those of
-  [PCUICInversionEtaInstances], in particular the η-typed variable
-  [g : Prop → Prop, k : (Prop → Prop) → Prop, y : k g ⊢ y : k (λ_:Prop. g _)] ([iv_rel_typed]).
+  [PCUICInversionEtaInstances], in particular the typing
+  [g : Prop → Prop, k : (Prop → Prop) → Prop, y : k g ⊢ y : k (λ_:Prop. g _)] ([iv_rel_typed]),
+  at a type that is not [y]'s declared type [k g] and η-contracts to it ([al_Γk_eta_nondeg]).
 
   **The α-variants.** [al_Γk] is [iv_Γk] with the variable [y] named [x] (it is anonymous in
   [iv_Γk]); [al_keta] is [iv_keta] with the binder of [λ_:Prop. g _] named [x]; [al_mfix] is the
@@ -20,14 +21,18 @@
   [AlphaClassInstances], whose [Context] held T1's forecast class until copy 18b landed
   (frac/eta 3e6b422d); the class is deleted and no lemma takes one.
 
-  **Non-degeneracy.** Every instance relates two syntactically different terms, contexts,
-  fixpoints or predicate contexts, except [cmp_global_instance_empty_eq_inst]; the tag at each
-  instance names the lemma that states the difference, or the reason. [eq_context_conversionE_inst]
-  and [typing_alpha_propE_inst] move the η derivation [iv_rel_typed] into the renamed context.
-  [type_Cumul'E_inst] runs the η step [k g ≤ k (λ_:Prop. g _)] ([al_kg_keta_differ]).
+  **Non-degeneracy.** Every instance except [cmp_global_instance_empty_eq_inst] relates two
+  syntactically different terms, contexts or fixpoints (for [inst_case_predicate_context_eqE_inst],
+  the two contexts of its premise); the tag at each instance names the lemma that states the
+  difference, or the reason. [eq_context_conversionE_inst] and [typing_alpha_propE_inst] move the
+  typing [iv_rel_typed] into the renamed context; [al_Γk_eta_nondeg] states that its type
+  [k (λ_:Prop. g _)] is not [y]'s declared type [k g] and η-contracts to it in one step.
+  [type_Cumul'E_inst] retypes [y : k g] at [k (λ_:Prop. g _)]; [al_kg_keta_differ] states that
+  the two types differ and that the second η-contracts to the first in one step.
   [inst_case_predicate_context_eqE_inst] relates the two different constructions
   [case_predicate_context] and [inst_case_predicate_context] of the predicate [al_mp], whose
-  context is an α-variant of [ind_predicate_context], not the context itself. *)
+  context is an α-variant of [ind_predicate_context] (the lemma's premise), not the context
+  itself ([al_mp_differs]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -79,9 +84,28 @@ Proof. split; discriminate. Qed.
 Lemma al_Γk_keta_differ : iv_Γk <> al_Γk /\ iv_keta <> al_keta.
 Proof. split; discriminate. Qed.
 
-(** The η step [k g ≤ k (λ_:Prop. g _)] of [type_Cumul'E_inst] relates two different types. *)
-Lemma al_kg_keta_differ : iv_kg <> iv_keta.
-Proof. discriminate. Qed.
+(** The two types of [type_Cumul'E_inst], [k g] and [k (λ_:Prop. g _)], differ, and the second
+    η-contracts to the first in one step. *)
+Lemma al_kg_keta_differ : iv_kg <> iv_keta /\ ∥ PCUICEtaDefs.eta1 iv_keta iv_kg ∥.
+Proof.
+  split; [discriminate|]. constructor.
+  exact (PCUICEtaDefs.app_eta_r _ _ (tRel 1) (PCUICEtaDefs.eta_red si_na (tRel 2) si_P)).
+Qed.
+
+(** The typing [y : k (λ_:Prop. g _)] ([iv_rel_typed]) that [eq_context_conversionE_inst] and
+    [typing_alpha_propE_inst] move: [al_Γk] differs from [iv_Γk]; in both, [y] ([tRel 0]) is
+    declared at [k g] ([iv_kg] after the lift); the type [k (λ_:Prop. g _)] is not [k g] and
+    η-contracts to it in one step. *)
+Lemma al_Γk_eta_nondeg :
+  iv_Γk <> al_Γk /\
+  option_map (fun d => lift0 1 (decl_type d)) (nth_error iv_Γk 0) = Some iv_kg /\
+  option_map (fun d => lift0 1 (decl_type d)) (nth_error al_Γk 0) = Some iv_kg /\
+  iv_keta <> iv_kg /\ ∥ PCUICEtaDefs.eta1 iv_keta iv_kg ∥.
+Proof.
+  split; [discriminate|]. split; [reflexivity|]. split; [reflexivity|].
+  split; [discriminate|]. constructor.
+  exact (PCUICEtaDefs.app_eta_r _ _ (tRel 1) (PCUICEtaDefs.eta_red si_na (tRel 2) si_P)).
+Qed.
 
 Lemma al_Γk_alpha : iv_Γk ≡Γ al_Γk.
 Proof. constructor; [reflexivity|]. constructor; [exact eq_refl|reflexivity]. Qed.
@@ -174,8 +198,10 @@ Definition wf_local_eq_context_upto_namesE_inst : wf_localE si_Σ ([] ,,, al_Γk
 
 Definition al_wf_Γk : wf_localE si_Σ al_Γk := wf_local_eq_context_upto_namesE_inst.
 
-(** The η derivation [y : k (λ_:Prop. g _)] moved into the renamed context.
-    INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs *)
+(** The typing [y : k (λ_:Prop. g _)] ([iv_rel_typed]) moved into the renamed context [al_Γk]:
+    [y] is declared at [k g] in both contexts, and [k (λ_:Prop. g _)] is not [k g] and
+    η-contracts to it in one step ([al_Γk_eta_nondeg]).
+    INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_eta_nondeg *)
 Definition eq_context_conversionE_inst : si_Σ ;;; al_Γk |-E tRel 0 : iv_keta :=
   eq_context_conversionE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := iv_Γk) (Δ := al_Γk) iv_rel_typed al_Γk_alpha al_wf_Γk.
 
@@ -234,7 +260,8 @@ Proof.
   - exact al_PP_alpha.
 Qed.
 
-(** [y : k g] retyped at [k (λ_:Prop. g _)] by the η step [iv_spec_eta].
+(** [y : k g] retyped at [k (λ_:Prop. g _)] through the cumulativity premise [iv_spec_eta]; the two
+    types differ and the second η-contracts to the first in one step ([al_kg_keta_differ]).
     INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_kg_keta_differ *)
 Definition type_Cumul'E_inst : si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta :=
   PCUICAlphaEta.type_Cumul'E iv_kg iv_y_typed al_keta_isType iv_spec_eta.
@@ -249,8 +276,9 @@ Qed.
 
 Section AlphaClassInstances.
 
-  (** The η derivation, through the main theorem's typing component, into the renamed context.
-      INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs *)
+  (** The same typing as [eq_context_conversionE_inst], through the main theorem's typing
+      component, into the renamed context ([al_Γk_eta_nondeg]).
+      INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_eta_nondeg *)
   Definition typing_alpha_propE_inst : si_Σ ;;; al_Γk |-E tRel 0 : iv_keta :=
     (typing_alpha_propE si_Σ si_wfE iv_Γk (tRel 0) iv_keta iv_rel_typed).2.2 al_Γk (tRel 0)
       ltac:(reflexivity) al_Γk_alpha.
@@ -259,7 +287,8 @@ Section AlphaClassInstances.
   Definition typing_alphaE_inst : si_Σ ;;; iv_Γk |-E al_keta : si_P :=
     typing_alphaE (Σ := si_Σ) (wfΣ := si_wfE) (u := iv_keta) (v := al_keta) iv_keta_typed al_keta_alpha.
 
-  (** INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs *)
+  (** INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs
+      TARGET PCUICAlphaEta.wf_local_alphaE *)
   Definition wf_local_alphaE_inst : wf_localE si_Σ al_Γk :=
     PCUICAlphaEta.wf_local_alphaE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := iv_Γk) (Γ' := al_Γk) iv_wf_Γk al_Γk_alpha.
 

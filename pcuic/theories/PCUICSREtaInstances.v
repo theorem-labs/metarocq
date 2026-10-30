@@ -38,9 +38,9 @@
   and [[∀P:Prop. P]] (one β step apart) into [(λy:Prop. y) x] and [x] (one β step apart);
   [conv_context_smash_endE_inst] smashes [w : z, z := (λx:Prop. x) (∀P:Prop. P)] and
   [w : z, z := ∀P:Prop. P] (one β step apart, in the body of the let, which the smash substitutes
-  into [w]); [cmp_global_instance_cstr_irrelevantE_inst] compares the two different universe
-  instances [[Set]] and [[a]] of the polymorphic cumulative [J@{i}] of [PCUICEtaIdxEnv];
-  [ctx_inst_merge'E_inst] steps the argument [(λx:Prop. x) (∀P:Prop. P)] of a telescope. The
+  into [w]); [ctx_inst_merge'E_inst] steps the argument [(λx:Prop. x) (∀P:Prop. P)] of a telescope.
+  ([cmp_global_instance_cstr_irrelevantE_inst] is tagged IMPOSSIBLE: its conclusion relates two
+  universe instances only through its premise.) The
   lemmas about a constructor run on [jc] (an argument that the universe instance moves, an index
   that is not closed), those about a branch on a branch of [jc] whose binder name differs from
   [jc]'s, the four [spine_subst_inst_subst*E] on a spine with a let (so [s] is not [List.rev inst]
@@ -50,20 +50,28 @@
 
   **Tags.** Each instance carries its tag in the comment directly above it: NONDEGEN with the
   compiled lemma that states what makes it non-degenerate, or IMPOSSIBLE with the property of
-  the statement that makes every instance degenerate (four rows:
+  the statement that makes every instance degenerate (five rows:
   [declared_projection_declared_constructorE], [declared_projection_indicesE],
-  [PCUICSREta.conv_refl'E] and [conv_context_reflE]).
+  [cmp_global_instance_cstr_irrelevantE], [PCUICSREta.conv_refl'E] and [conv_context_reflE]).
 
-  **Helpers without an instance of their own**, each run on a real step by an instance here:
-  - [ctx_inst_mergeE]: helper, exercised by [ctx_inst_merge'E_inst] ([ctx_inst_merge'E] is its one
-    caller; inside [sr_red1E], [sr_red1E_Case] calls [ctx_inst_merge'E] for a step in the
-    parameters of a [match]);
-  - [lift_judgment_SRE]: helper, exercised by [isWfArity_red1E_inst]: the step in the domain of
-    [Π z : (λx:Prop. x) (∀P:Prop. P). Prop] runs [isType_red1E], then [subject_reduction1E], then
-    [sr_red1E_Prod], which calls it (it is also called by [sr_red1E_ctx], [sr_red1E_Lambda] and
-    [sr_red1E_LetIn]);
-  - [typing_spine_prim_argsE]: helper, exercised by [prim_app_typing_invE_inst]:
-    [prim_app_typing_invE] calls it on the spine [1 3] of [land 1 3] in [Σ_po]. *)
+  **Helpers with an instance of their own**, each also run inside another instance here:
+  - [ctx_inst_mergeE_inst]: the telescope [x : Prop, f : x → x], whose first argument
+    [(λx:Prop. x) (∀P:Prop. P)] steps, so the type of [f] moves with it.
+    [ctx_inst_merge'E_inst] runs [ctx_inst_mergeE] through [ctx_inst_merge'E], its one caller
+    (inside [sr_red1E], [sr_red1E_Case] calls [ctx_inst_merge'E] for a step in the parameters of
+    a [match]);
+  - [lift_judgment_SRE_inst]: the step of the declaration [z : (λx:Prop. x) (∀P:Prop. P)], the
+    one in the domain of [Π z : (λx:Prop. x) (∀P:Prop. P). Prop] that [isWfArity_red1E_inst]
+    takes through [isType_red1E], [subject_reduction1E] and [sr_red1E_Prod] (it is also called
+    by [sr_red1E_ctx], [sr_red1E_Lambda] and [sr_red1E_LetIn]);
+  - [typing_spine_prim_argsE_inst]: the spine [1] of the partial application [land 1] in
+    [Σ_po] (one argument of two, so neither part of the conclusion is vacuous).
+    [prim_app_typing_invE_inst] runs it through [prim_app_typing_invE] on the spine [1 3] of
+    [land 1 3];
+  - [typing_closed_red1E_inst] and [typing_closed_redE_inst]: the β step [sri_beta] of the typed
+    [(λx:Prop. x) (∀P:Prop. P)], in [[]] and in [z : (λx:Prop. x) (∀P:Prop. P)]
+    ([sr_red1E_beta_inst], [subject_reduction1_closedE_inst], [subject_reduction_closedE_inst]
+    and [type_reduction_closedE_inst] also run them). *)
 
 From Stdlib Require Import ssreflect ssrbool PrimInt63.
 From MetaRocq.Utils Require Import utils.
@@ -285,6 +293,31 @@ Qed.
 Lemma sri_cr1 (Γ : context) (cl : is_closed_context Γ) : closed_red1 si_Σ Γ sri_A iv_False.
 Proof. split; [exact cl|reflexivity|exact (sri_beta Γ)]. Qed.
 
+(** The telescope [x : Prop, f : x → x], in which the type of [f] depends on [x]. *)
+Definition sri_Δf : context := [vass si_na si_P; vass si_na (tProd si_na (tRel 0) (tRel 1))].
+
+Lemma sri_wf_Δf : wf_localE si_Σ (List.rev sri_Δf).
+Proof.
+  have w := iv_wf_P si_Σ [] localenv_nil.
+  have hx : si_Σ ;;; [vass si_na si_P] |-E tRel 0 : tSort sProp.
+  { exact (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl). }
+  have wx := iv_wf_vass si_Σ [vass si_na si_P] si_na (tRel 0) sProp w hx eq_refl.
+  have hT : si_Σ ;;; [vass si_na si_P] |-E tProd si_na (tRel 0) (tRel 1) : tSort (Sort.sort_of_product sProp sProp).
+  { exact (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp (iv_vass_s si_Σ _ si_na (tRel 0) sProp hx eq_refl)
+             (typeE_Rel _ _ 1 (vass si_na si_P) wx eq_refl)). }
+  exact (iv_wf_vass si_Σ [vass si_na si_P] si_na _ _ w hT eq_refl).
+Qed.
+
+(** [λz : (λx:Prop. x) (∀P:Prop. P). z], the identity on the β-redex. *)
+Definition sri_idA : term := tLambda si_na sri_A (tRel 0).
+
+Lemma sri_idA_typed : si_Σ ;;; [] |-E sri_idA : tProd si_na sri_A (lift0 1 sri_A).
+Proof.
+  exact (typeE_Lambda _ _ si_na sri_A (tRel 0) (lift0 1 sri_A)
+           (iv_vass si_Σ [] si_na sri_A sProp (iv_app_typed si_Σ [] localenv_nil) eq_refl)
+           (typeE_Rel _ _ 0 (vass si_na sri_A) sri_wf_Γz eq_refl)).
+Qed.
+
 (** The arities context of [I] and [X : Prop → Prop ⊢ X (∀P:Prop. P) : Prop]. *)
 Definition sri_Γa : context := (arities_context (ind_bodies si_mdecl))@[[]].
 
@@ -397,14 +430,23 @@ Proof.
            (lift 1 0 sri_int) s' (tPrim (prim_int 3%uint63)) himpl h1 (sri_prim_typed 3%uint63)).
 Qed.
 
+(** [land 1 : int → int], [land] applied to one of its two arguments. *)
+Lemma sri_land_1_typed :
+  Σ_po ;;; [] |-E mkApps (tConst po_land_kn []) (map term_of_lit [LInt 1%uint63]) : tImpl sri_int sri_int.
+Proof.
+  destruct sri_land_ty_typed as [s hl].
+  exact (typeE_App _ _ (tConst po_land_kn []) sri_iA sri_int (lift 1 0 (tImpl sri_int sri_int)) s
+           (tPrim (prim_int 1%uint63)) hl iv_land_typed (sri_prim_typed 1%uint63)).
+Qed.
+
 Lemma sri_po_on_result : on_prim_op_result Σ_po SInt.
 Proof. exists po_int_kn, po_int_body. split; [reflexivity|exact iv_po_declared_int|split; reflexivity]. Qed.
 
 Lemma sri_tag_declared : prim_op_tag_declared Σ_po primInt.
 Proof. exists po_int_kn, po_int_body. split; [reflexivity|exact iv_po_declared_int|split; reflexivity]. Qed.
 
-(** [int] is a registered primitive type with no body: what the primitive lemmas type comes from
-    the registration of [int63] in [Σ_po] and from [int]'s declared sort, not from unfolding. *)
+(** In [Σ_po], [int63] is registered as [po_int_kn] ([int]), so [prim_shape_type] of [Σ_po]'s
+    retroknowledge at [SInt] is [int]; and the constant body [po_int_body] has no body. *)
 Lemma sri_po_int_nondeg :
   Retroknowledge.retro_int63 (retroknowledge Σ_po.1) = Some po_int_kn /\ cst_body po_int_body = None.
 Proof. split; reflexivity. Qed.
@@ -543,6 +585,20 @@ Section SRInstances.
              (typing_closed_redE (Σ := si_Σ) (wfΣ := si_wfE) ht (red1_red _ _ _ _ (sri_beta [])))).
   Qed.
 
+  (** The β step [sri_beta] of the typed redex [(λx:Prop. x) (∀P:Prop. P)], in the empty context.
+      Its source and target differ ([sri_beta_nondeg]).
+      INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
+  Definition typing_closed_red1E_inst : closed_red1 si_Σ [] sri_A iv_False :=
+    typing_closed_red1E (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_A) (u := iv_False)
+      (iv_app_typed si_Σ [] localenv_nil) (sri_beta []).
+
+  (** The β step [sri_beta] as a reduction, in the context [z : (λx:Prop. x) (∀P:Prop. P)]. Its
+      source and target differ ([sri_beta_nondeg]).
+      INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
+  Definition typing_closed_redE_inst : closed_red si_Σ sri_Γz sri_A iv_False :=
+    typing_closed_redE (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_A) (u := iv_False)
+      (iv_app_typed si_Σ sri_Γz sri_wf_Γz) (red1_red _ _ _ _ (sri_beta sri_Γz)).
+
   (** *** Reduction of the type *)
 
   (** The type [(λx:Prop. x) (∀P:Prop. P)] steps to [∀P:Prop. P].
@@ -582,6 +638,20 @@ Section SRInstances.
   Proof.
     exact (isWfArity_redE (Σ := si_Σ) (wfΣ := si_wfE) sri_arity_wf
              (red1_red _ _ sri_arity (tProd si_na iv_False si_P) sri_arity_red)).
+  Qed.
+
+  (** The declaration [z : (λx:Prop. x) (∀P:Prop. P)] of sort [Prop] and its closed step
+      [sri_cr1] to [z : ∀P:Prop. P]. The declared types before and after the step differ
+      ([sri_beta_nondeg]).
+      INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
+  Lemma lift_judgment_SRE_inst : lift_typing typingE si_Σ [] (j_vass_s si_na iv_False sProp).
+  Proof.
+    have ha := iv_app_typed si_Σ [] localenv_nil.
+    apply (lift_judgment_SRE (Σ := si_Σ) (wfΣ := si_wfE) [] si_na si_na None None sri_A iv_False (Some sProp)).
+    - split; [exact tt|]. exists sProp. split; [|split; exact eq_refl].
+      split; [exact ha|].
+      intros u r. exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) ha (closed_red1_red1 r)).
+    - split; [reflexivity|exact (sri_cr1 [] eq_refl)].
   Qed.
 
   (** A β step in the declaration of the variable that the term is.
@@ -654,7 +724,7 @@ Section SRInstances.
   (** *** Helpers of [sr_red1E]: projections, constructors, branches *)
 
   (** At the projection of the record [R] of [iv_Σ].
-      INSTANCE IMPOSSIBLE: the conclusion mdecl = mdecl' /\ idecl = idecl' /\ cdecl = cdecl' compares the results of two lookups of the same names (the inductive p.(proj_ind) and its constructor 0); lookups are functional, so in every environment, whatever its wfE, the two sides are equal *)
+      INSTANCE IMPOSSIBLE: the conclusion mdecl = mdecl' /\ idecl = idecl' /\ cdecl = cdecl' compares the declarations that the two premises find for the same names (the inductive p.(proj_ind) and its constructor 0); declared_minductive is list membership, but under the wfE premise the environment's names are fresh, so the two finds agree (declared_inductive_to_gen, then declared_inductive_inj): in every well-formed environment the two sides are equal *)
   Lemma declared_projection_declared_constructorE_inst :
     iv_mdecl = iv_mdecl /\ iv_idecl = iv_idecl /\ iv_cdecl = iv_cdecl.
   Proof.
@@ -663,7 +733,7 @@ Section SRInstances.
   Qed.
 
   (** At the projection of the record [R] of [iv_Σ].
-      INSTANCE IMPOSSIBLE: the conclusion #|ind_indices idecl| = 0 is a numeral equation on the declaration that the premise looks up; every instance names a concrete declaration, so in every instance it computes to 0 = 0 and holds by reflexivity *)
+      INSTANCE IMPOSSIBLE: under the wfE premise the inductive of a declared projection satisfies on_projections (on_declared_projectionE), whose field on_projs_noidx is #|ind_indices| = 0; so in every well-formed environment the conclusion #|ind_indices idecl| = 0 restates that field, for every declared projection *)
   Lemma declared_projection_indicesE_inst : #|ind_indices iv_idecl| = 0.
   Proof. exact (declared_projection_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_projection). Qed.
 
@@ -686,7 +756,8 @@ Section SRInstances.
   Proof. split; intros h; vm_compute in h; discriminate h. Qed.
 
   (** At [jc] of [J@{Set}].
-      INSTANCE NONDEGEN PCUICSREtaInstances.on_constructor_wf_argsE_inst_nondeg *)
+      INSTANCE NONDEGEN PCUICSREtaInstances.on_constructor_wf_argsE_inst_nondeg
+      TARGET PCUICSREta.on_constructor_wf_argsE *)
   Definition on_constructor_wf_argsE_inst :=
     PCUICSREta.on_constructor_wf_argsE (Σ := PCUICEtaIdxEnv.ji_Σ) (wfΣ := PCUICEtaIdxEnv.ji_wfE)
       (cdecl := PCUICEtaIdxEnv.ji_cdecl) (u := PCUICEtaIdxEnv.ji_u0)
@@ -714,15 +785,9 @@ Section SRInstances.
       (cdecl := PCUICEtaIdxEnv.ji_cdecl) (u := PCUICEtaIdxEnv.ji_u0)
       PCUICEtaIdxEnv.ji_declared_constructor PCUICEtaIdxEnv.ji_cons0.
 
-  (** The two universe instances [[Set]] and [[a]] of [J] differ. *)
-  Lemma sri_ju_differ : PCUICEtaIdxEnv.ji_u0 <> PCUICEtaIdxEnv.ji_u1.
-  Proof. discriminate. Qed.
-
-  (** At the polymorphic cumulative [J@{i}] of [PCUICEtaIdxEnv] (its constructor [jc], the
-      covariant variance), with two different universe instances [[Set]] and [[a]]
-      ([sri_ju_differ]): the premise is [Set ≤ a] at the full arity of [J] ([ji_cmp]), and the
-      conclusion relates the two instances at [Conv] for [jc] fully applied.
-      INSTANCE NONDEGEN PCUICSREtaInstances.sri_ju_differ *)
+  (** At the constructor [jc] of [J@{i}] of [PCUICEtaIdxEnv], with the universe instances [[Set]]
+      ([ji_u0]) and [[a]] ([ji_u1]) and the premise [ji_cmp].
+      INSTANCE IMPOSSIBLE: the conclusion compares the universe instances of a fully applied constructor, which global_variance_gen (PCUICEquality) compares AllIrrelevant when ind_variance = Some _ and AllEqual when ind_variance = None; by cmp_opt_variance the conclusion is then #|u| = #|u'| (which u = u' satisfies too) or, for a non-cumulative inductive, the premise itself (also AllEqual), so no instance relates two universe instances beyond its premise *)
   Lemma cmp_global_instance_cstr_irrelevantE_inst :
     cmp_global_instance PCUICEtaIdxEnv.ji_Σ.1 (compare_universe PCUICEtaIdxEnv.ji_Σ) Conv
       (ConstructRef PCUICEtaIdxEnv.ji_ind 0)
@@ -765,7 +830,8 @@ Section SRInstances.
       (p := PCUICEtaIdxEnv.ji_p) (br := sri_jbr) (ind := PCUICEtaIdxEnv.ji_ind) (cdecl := PCUICEtaIdxEnv.ji_cdecl)
       PCUICEtaIdxEnv.ji_declared_minductive PCUICEtaIdxEnv.ji_cons0 sri_jbr_eq.
 
-  (** INSTANCE IMPOSSIBLE: the only premise is x = y, and Σ and Γ carry no premise at all, so every instance, in every environment and context, compares a term with itself *)
+  (** INSTANCE IMPOSSIBLE: the only premise is x = y, and Σ and Γ carry no premise at all, so every instance, in every environment and context, compares a term with itself
+      TARGET PCUICSREta.conv_refl'E *)
   Definition conv_refl'E_inst : JoinE si_Σ [] Conv iv_False iv_False :=
     PCUICSREta.conv_refl'E (Σ := si_Σ) (Γ := []) eq_refl.
 
@@ -844,7 +910,8 @@ Section SRInstances.
   Lemma isType_weakenE_inst_nondeg : [vdef si_na iv_False si_P] <> [].
   Proof. intros h; vm_compute in h; discriminate h. Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.isType_weakenE_inst_nondeg *)
+  (** INSTANCE NONDEGEN PCUICSREtaInstances.isType_weakenE_inst_nondeg
+      TARGET PCUICSREta.isType_weakenE *)
   Definition isType_weakenE_inst :=
     PCUICSREta.isType_weakenE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Δ := [vdef si_na iv_False si_P])
       (iv_wf_vdef si_Σ [] localenv_nil) sri_A_isType.
@@ -906,6 +973,31 @@ Section SRInstances.
     - constructor; [|constructor].
       intros u r. exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) ha (closed_red1_red1 r)).
     - constructor; [exact ha|constructor].
+    - constructor. exact (sri_cr1 [] eq_refl).
+  Qed.
+
+  (** The argument lists before and after the step differ, and so do the instantiated types of
+      the second entry [f] at the two first arguments (the type of [f] depends on [x]). *)
+  Lemma ctx_inst_mergeE_inst_nondeg :
+    [sri_A; sri_idA] <> [iv_False; sri_idA] /\
+    subst_telescope [sri_A] 0 (skipn 1 sri_Δf) <> subst_telescope [iv_False] 0 (skipn 1 sri_Δf).
+  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+
+  (** The telescope [x : Prop, f : x → x] ([sri_Δf]) instantiated by
+      [(λx:Prop. x) (∀P:Prop. P)] and [λz:(λx:Prop. x) (∀P:Prop. P). z] ([sri_idA]), with the
+      closed step [sri_cr1] of the first argument to [∀P:Prop. P] as the [OnOne2] premise and
+      [subject_reduction1E] as the reduction premise. The argument lists differ, and so do [f]'s
+      instantiated types ([ctx_inst_mergeE_inst_nondeg]).
+      INSTANCE NONDEGEN PCUICSREtaInstances.ctx_inst_mergeE_inst_nondeg *)
+  Lemma ctx_inst_mergeE_inst : ctx_instE si_Σ [] [iv_False; sri_idA] sri_Δf.
+  Proof.
+    have ha := iv_app_typed si_Σ [] localenv_nil.
+    apply (ctx_inst_mergeE (Σ := si_Σ) (wfΣ := si_wfE) [] [sri_A; sri_idA] [iv_False; sri_idA] sri_Δf).
+    - exact sri_wf_Δf.
+    - constructor; [|constructor; [|constructor]].
+      + intros u r. exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) ha (closed_red1_red1 r)).
+      + intros u r. exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) sri_idA_typed (closed_red1_red1 r)).
+    - constructor; [exact ha|constructor; [exact sri_idA_typed|constructor]].
     - constructor. exact (sri_cr1 [] eq_refl).
   Qed.
 
@@ -1009,7 +1101,8 @@ Section SRInstances.
              (r := RInt 1%uint63) sri_land_app_typed Σ_po_registers Σ_po_declared_land po_land_1_3 eq_refl).
   Qed.
 
-  (** The spine is not empty: both arguments are checked against [int]. *)
+  (** The spine [[1; 3]] is not empty, so the per-argument part of the lemma's conclusion is not
+      vacuous. *)
   Lemma prim_app_typing_invE_inst_nondeg : map term_of_lit [LInt 1%uint63; LInt 3%uint63] <> [].
   Proof. intros h; vm_compute in h; discriminate h. Qed.
 
@@ -1017,6 +1110,33 @@ Section SRInstances.
   Definition prim_app_typing_invE_inst :=
     prim_app_typing_invE (Σ := Σ_po) (wfΣ := iv_po_wfE) (args := map term_of_lit [LInt 1%uint63; LInt 3%uint63])
       Σ_po_registers sri_land_app_typed ltac:(cbn; lia).
+
+  (** The spine [[1]] is not empty, and it is shorter than the tags [[primInt; primInt]] of
+      [land]: the hypothesis of the second part of the lemma's conclusion holds. *)
+  Lemma typing_spine_prim_argsE_inst_nondeg :
+    map term_of_lit [LInt 1%uint63] <> [] /\ #|map term_of_lit [LInt 1%uint63]| < #|[primInt; primInt]|.
+  Proof. split; [intros h; vm_compute in h; discriminate h|cbn; lia]. Qed.
+
+  (** The spine [[1]] of the partial application [land 1 : int → int] ([sri_land_1_typed]), from
+      [inversion_mkAppsE] and [inversion_ConstE]. The spine is not empty and shorter than the
+      tags ([typing_spine_prim_argsE_inst_nondeg]).
+      INSTANCE NONDEGEN PCUICSREtaInstances.typing_spine_prim_argsE_inst_nondeg *)
+  Lemma typing_spine_prim_argsE_inst :
+    (forall i a t, nth_error (map term_of_lit [LInt 1%uint63]) i = Some a -> nth_error [primInt; primInt] i = Some t ->
+       ∑ A ty_a, [× PCUICPrimOpType.prim_tag_type po_retro t = Some ty_a,
+                   Σ_po ;;; [] |-E a : A & Σ_po ;;; [] ⊢E A = ty_a]) ×
+    (#|map term_of_lit [LInt 1%uint63]| < #|[primInt; primInt]| ->
+       ∑ na A B, Σ_po ;;; [] ⊢E tProd na A B ≤ tImpl sri_int sri_int).
+  Proof.
+    destruct (inversion_mkAppsE (Σ := Σ_po) (wfΣ := iv_po_wfE) sri_land_1_typed) as [A [hA sp]].
+    destruct (inversion_ConstE Σ_po iv_po_wfE hA) as (decl & _ & hd & _ & hle).
+    assert (ed : decl = po_land_body).
+    { destruct hd as [e|[e|[]]]; [injection e as ->; reflexivity|cbv in e; congruence]. }
+    subst decl.
+    exact (typing_spine_prim_argsE (Σ := Σ_po) (wfΣ := iv_po_wfE) (r := po_retro) (tags := [primInt; primInt])
+             (res := sri_int) (T := tImpl sri_int sri_int) (args := map term_of_lit [LInt 1%uint63]) po_land_ty A
+             eq_refl hle ltac:(cbn; lia) sp).
+  Qed.
 
   (** The type [A] that [land]'s declared type is compared with is a β-redex, not that type. *)
   Lemma prim_op_head_typeE_inst_nondeg : sri_land_ty_beta <> po_land_ty.

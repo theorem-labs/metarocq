@@ -13,10 +13,11 @@
   [t = mkApps (tFix iv_mfix 0) [c (∀P:Prop. P)] : I (∀P:Prop. P)] in [si_Σ]
   ([PCUICSREtaInstances.sri_fix_app_typed]), with [axiom_free si_Σ] ([cli_axiom_free]) and
   [wfE si_Σ] proved. [t] is not a canonical form: its head is a [tFix], neither a constructor nor
-  a cofixpoint, so the lemma must reduce it (one fixpoint unfolding and one β step,
-  [PCUICSREtaInstances.sri_fix_red]). [pcuic_canonicityE_inst_moves] proves that the [t'] the
-  lemma returns is not [t]. The normalization that the reduction rests on is the section variable
-  above. *)
+  a cofixpoint. The lemma returns a [t'] convertible to [t] whose head is a constructor or a
+  cofixpoint; [pcuic_canonicityE_inst_moves] proves that this [t'] is not [t]. (One fixpoint
+  unfolding reduces [t] to the β-redex [(λx. x) (c (∀P:Prop. P))],
+  [PCUICSREtaInstances.sri_fix_red].) The normalization that the lemma rests on is the section
+  variable above. *)
 
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.

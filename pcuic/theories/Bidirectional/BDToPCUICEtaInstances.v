@@ -16,37 +16,33 @@
   step, [bd_Γδ], [bd_Γβ] and [bd_Γβπ]. Their [wf_localE] is built here over [typingE], without
   the lemmas under test ([bdi_wfFG], [bdi_wfη], [bdi_wf_Γδ], [bdi_wf_Γβ], [bdi_wf_Γβπ]).
 
-  **Non-degeneracy.** Each instance applies a lemma to a derivation that is not empty and not
-  reflexive where the lemma's content is a comparison or a reduction. The comment above each
-  instance carries its tag of the instance degeneracy gate, with the lemma that states its
+  **Non-degeneracy.** Each instance applies its lemma to concrete derivations. The comment above
+  each instance carries its tag of the instance degeneracy gate, with the lemma that states its
   non-degeneracy; the declarations that are not instances are registered on the witness line
   after the imports.
-  - [checking_typingE_eta_inst]: the check [x ◃ G F] of [checkingE_eta_inst], whose [JoinE]
-    premise is one η step ([λ y. F y ⇝η F] under [G]); soundness turns it into a [typeE_Cumul]
-    whose [cumulSpecE] premise comes from that η join by [into_ws_cumul_pbE] and
-    [ws_cumul_pbE_forget_spec] (I5). The two types differ ([bd_eta_pair_differ]).
-  - [infering_typingE_Case_inst]: the [match] of [inferingE_Case_inst], whose parameter
-    comparison [All2 (JoinE si_Σ bd_ΓFG Conv) [G (λ y. F y)] [G F]] is an η step between
-    syntactically different terms ([bd_case_pars_differ]). Soundness goes through its Case
-    branch: the joins become [ws_cumul_pbE] ([into_ws_cumul_pbE]), [ws_cumul_pbE_Ind] relates
-    the scrutinee's type to the match's, copy 18a's [ctx_inst_app_weakE] extends the
-    parameters with the indices, and [typeE_Case] gets the scrutinee by a [typeE_Cumul].
-  - the [▹□], [▹Π] and [▹{}] instances run on the derivations of [BDTypingEtaInstances] whose
-    reduction to a sort, a product or an application of [I] is a real step: the δ-step of
-    [d := Prop] in [bd_Γδ] ([infering_sort_typingE_inst], [infering_sort_isTypeE_inst],
-    [infering_sort_isTypeRelE_inst], [einfering_sort_isTypeE_inst], [isTypebd_isTypeE_inst];
-    [bd_Γδ_not_sort]), and the β step of [(λ B : Prop. I B) A] in [bd_Γβπ] and [bd_Γβ]
-    ([infering_prod_typingE_inst], [infering_ind_typingE_inst]; [bd_Γβπ_not_prod],
-    [bd_Γβ_not_ind]). Their contexts are typed here ([bdi_wf_Γδ], [bdi_wf_Γβπ], [bdi_wf_Γβ]),
-    so soundness has to convert the declared type to the reduct.
+  - [checking_typingE_eta_inst]: soundness on the check [x ◃ G F] of [checkingE_eta_inst].
+    Every type inferred for [x] in [bd_Γη] is [G (λ y. F y)], which is not [G F] and
+    η-contracts to it in one step ([bdi_eta_pair]).
+  - [infering_typingE_Case_inst]: soundness on the [match] of [inferingE_Case_inst]. Its
+    parameter [G F] is joined with [G (λ y. F y)] ([bd_case_pars_join]); [G F] is the one-step
+    η-contraction of [G (λ y. F y)], and the two are not equal ([bdi_case_pars_eta]).
+  - the [▹□], [▹Π] and [▹{}] instances run on the derivations of [BDTypingEtaInstances] in
+    [bd_Γδ], [bd_Γβπ] and [bd_Γβ]. In each context, every type inferred for the variable is not
+    the form the judgment reaches, and it reduces to that form in one step: [d], the
+    let-variable of [d := Prop], reduces to [Prop] ([infering_sort_typingE_inst],
+    [infering_sort_isTypeE_inst], [infering_sort_isTypeRelE_inst],
+    [einfering_sort_isTypeE_inst], [isTypebd_isTypeE_inst]; [bdi_Γδ_delta]); the types with the
+    β-redex [(λ B : Prop. I B) A] reduce to [Π _ : I A. Prop] and to [I A]
+    ([infering_prod_typingE_inst], [infering_ind_typingE_inst]; [bdi_Γβπ_beta],
+    [bdi_Γβ_beta]). Their contexts are typed here ([bdi_wf_Γδ], [bdi_wf_Γβπ], [bdi_wf_Γβ]).
   - [lift_sorting_lift_typingE_inst] and [bidirectional_to_pcuicE_inst] carry a let-judgment
-    whose term [G F] is checked ([bdi_vdef_term]); [ctx_inst_bd_typingE_inst] and
-    [ctx_inst_implE_inst] instantiate the parameter of [I] with [G F] ([bdi_args_nonempty]);
-    the context lemmas run on contexts that are not empty ([bdi_ctxs_nonempty],
-    [bd_ctxs_nonempty]): with a let ([bd_wf_localE_inst], [bd_wf_local_relE_inst]), with
-    three declarations ([wf_local_bd_typingE_inst]), or across a real weakening
-    ([wf_rel_weakE_inst]); [wf_local_rel_subst1E_inst] substitutes the let-bound variable that
-    the declaration above it mentions, so the substitution changes it
+    [G F : Prop] that has a term ([bdi_vdef_term]); [ctx_inst_bd_typingE_inst] and
+    [ctx_inst_implE_inst] instantiate the parameter of [I] with the list [[G F]], which is not
+    empty ([bdi_args_nonempty]); the context lemmas run on contexts that are not empty
+    ([bdi_ctxs_nonempty], [bd_ctxs_nonempty]): with a let ([bd_wf_localE_inst],
+    [bd_wf_local_relE_inst]), with three declarations ([wf_local_bd_typingE_inst]), or across a
+    real weakening ([wf_rel_weakE_inst]); [wf_local_rel_subst1E_inst] substitutes the
+    let-bound variable that the declaration above it mentions, so the substitution changes it
     ([wf_local_rel_subst1E_inst_nondeg]).
 
   **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
@@ -244,9 +240,86 @@ Proof. unfold bdi_Γd. split; discriminate. Qed.
 Lemma bdi_args_nonempty : [bd_GF] <> [].
 Proof. discriminate. Qed.
 
-(** The let-judgment [G F : Prop] has a term, so its checking half runs. *)
+(** The let-judgment [G F : Prop] has a term: its [j_term] is not [None]. *)
 Lemma bdi_vdef_term : j_term (j_vdef si_na bd_GF si_P : judgment_ sort term) <> None.
 Proof. discriminate. Qed.
+
+(** [x]'s declaration in [bd_Γη] is [x : G (λ y. F y)]; every type inferred for [x] there is
+    that type lifted over [x]; that type is not [G F], and it η-contracts to [G F] in one
+    step. *)
+Lemma bdi_eta_pair :
+  [/\ nth_error bd_Γη 0 = Some (vass si_na bd_X),
+      (forall T', si_Σ ;;; bd_Γη |-E tRel 0 ▹ T' -> T' = lift0 1 bd_X),
+      lift0 1 bd_X <> tApp (tRel 2) (tRel 1) &
+      ∥ eta1 (lift0 1 bd_X) (tApp (tRel 2) (tRel 1)) ∥].
+Proof.
+  split; [reflexivity| |unfold bd_X, bd_lam; discriminate|exact (sq bd_eta_step)].
+  intros T' h. inversion h; subst.
+  match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
+  reflexivity.
+Qed.
+
+(** [G (λ y. F y)] η-contracts in one step to [G F], the parameter of [bd_case], and the two
+    are not equal. *)
+Lemma bdi_case_pars_eta : ∥ eta1 bd_X bd_GF ∥ /\ bd_X <> bd_GF.
+Proof. split; [exact (sq bd_case_eta_step)|unfold bd_X, bd_GF, bd_lam; discriminate]. Qed.
+
+(** In [bd_Γδ = [y : d; d := Prop : Type]]: the declared type of [y], lifted, is not a sort;
+    every type inferred for [y] is [d] ([tRel 1]); and [d], the let-variable of [d := Prop],
+    reduces to [Prop] in one step. *)
+Lemma bdi_Γδ_delta :
+  [/\ (forall d u, nth_error bd_Γδ 0 = Some d -> lift0 1 (decl_type d) <> tSort u),
+      (forall T', si_Σ ;;; bd_Γδ |-E tRel 0 ▹ T' -> T' = tRel 1) &
+      ∥ red1 si_Σ bd_Γδ (tRel 1) si_P ∥].
+Proof.
+  split.
+  - intros d u h. injection h as <-. discriminate.
+  - intros T' h. inversion h; subst.
+    match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
+    reflexivity.
+  - exact (sq (red_rel si_Σ bd_Γδ 1 si_P eq_refl)).
+Qed.
+
+(** In [bd_Γβπ = [x : Π _ : (λ B : Prop. I B) A. Prop; A : Prop]]: the declared type of [x],
+    lifted, is not [Π _ : I A. Prop]; every type inferred for [x] is that declared type,
+    lifted; and it reduces to [Π _ : I A. Prop] in one step (its domain
+    [(λ B : Prop. I B) A] becomes [I A]). *)
+Lemma bdi_Γβπ_beta :
+  [/\ (forall d, nth_error bd_Γβπ 0 = Some d ->
+        lift0 1 (decl_type d) <> tProd si_na (tApp (tInd si_ind []) (tRel 1)) si_P),
+      (forall T', si_Σ ;;; bd_Γβπ |-E tRel 0 ▹ T' -> T' = lift0 1 bd_fix_dtype) &
+      ∥ red1 si_Σ bd_Γβπ (lift0 1 bd_fix_dtype) (tProd si_na (tApp (tInd si_ind []) (tRel 1)) si_P) ∥].
+Proof.
+  split.
+  - intros d h. injection h as <-. discriminate.
+  - intros T' h. inversion h; subst.
+    match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
+    reflexivity.
+  - constructor.
+    change (red1 si_Σ bd_Γβπ
+              (tProd si_na (tApp (tLambda si_na si_P (tApp (tInd si_ind []) (tRel 0))) (tRel 1)) si_P)
+              (tProd si_na ((tApp (tInd si_ind []) (tRel 0)) {0 := tRel 1}) si_P)).
+    apply prod_red_l. apply red_beta.
+Qed.
+
+(** In [bd_Γβ = [x : (λ B : Prop. I B) A; A : Prop]]: the declared type of [x], lifted, is not
+    [I A]; every type inferred for [x] is that declared type, lifted; and it reduces to [I A] in
+    one step. *)
+Lemma bdi_Γβ_beta :
+  [/\ (forall d, nth_error bd_Γβ 0 = Some d -> lift0 1 (decl_type d) <> tApp (tInd si_ind []) (tRel 1)),
+      (forall T', si_Σ ;;; bd_Γβ |-E tRel 0 ▹ T' -> T' = lift0 1 bd_fix_dom) &
+      ∥ red1 si_Σ bd_Γβ (lift0 1 bd_fix_dom) (tApp (tInd si_ind []) (tRel 1)) ∥].
+Proof.
+  split.
+  - intros d h. injection h as <-. discriminate.
+  - intros T' h. inversion h; subst.
+    match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
+    reflexivity.
+  - constructor.
+    change (red1 si_Σ bd_Γβ (tApp (tLambda si_na si_P (tApp (tInd si_ind []) (tRel 0))) (tRel 1))
+              ((tApp (tInd si_ind []) (tRel 0)) {0 := tRel 1})).
+    apply red_beta.
+Qed.
 
 Section BDToPCUICEtaInstances.
 
@@ -294,8 +367,8 @@ Proof.
   - econstructor; [|constructor]. intros _ _. exact bdi_GF_typed.
 Qed.
 
-(** The judgment component of the main theorem, on the let-judgment [G F : Prop], whose term
-    is checked ([bdi_vdef_term]).
+(** The judgment component of the main theorem, on the let-judgment [G F : Prop], which has a
+    term ([bdi_vdef_term]).
     INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_vdef_term *)
 Lemma bidirectional_to_pcuicE_inst : lift_typing typingE si_Σ bd_ΓFG (j_vdef si_na bd_GF si_P).
 Proof.
@@ -304,16 +377,17 @@ Qed.
 
 (** ** The user-facing theorems *)
 
-(** The [match] whose parameter comparison is an η step between [G (λ y. F y)] and [G F]
-    ([bd_case_pars_differ]); the derivation is [inferingE_Case_inst]'s.
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_case_pars_differ
+(** The [match] [bd_case] of [inferingE_Case_inst]: its parameter [G F] is the one-step
+    η-contraction of [G (λ y. F y)], and the two are not equal ([bdi_case_pars_eta]).
+    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_case_pars_eta
     TARGET BDToPCUICEta.infering_typingE
     HELPER BDTypingEtaInstances.inferingE_Case_inst *)
 Lemma infering_typingE_Case_inst : si_Σ ;;; bd_ΓFG |-E bd_case : tApp bd_case_ptm bd_case_disc.
 Proof. exact (infering_typingE si_Σ bd_ΓFG bd_case _ si_wfE bdi_wfFG inferingE_Case_inst). Qed.
 
-(** The check by an η step: [x : G (λ y. F y) ⊢ x : G F] ([bd_eta_pair_differ]).
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_eta_pair_differ
+(** The check [x ◃ G F] in [bd_Γη] ([checkingE_eta_inst]): every type inferred for [x] there is
+    [G (λ y. F y)], which is not [G F] and η-contracts to it in one step ([bdi_eta_pair]).
+    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_eta_pair
     TARGET BDToPCUICEta.checking_typingE *)
 Lemma checking_typingE_eta_inst : si_Σ ;;; bd_Γη |-E tRel 0 : tApp (tRel 2) (tRel 1).
 Proof.
@@ -321,41 +395,45 @@ Proof.
            bdi_GF_eta_isType checkingE_eta_inst).
 Qed.
 
-(** [y ▹□ Prop] by the δ-step of [d := Prop] ([bd_Γδ_not_sort]).
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_Γδ_not_sort *)
+(** [y ▹□ Prop] in [bd_Γδ]: every type inferred for [y] is [d], which is not a sort and reduces
+    to [Prop] in one step ([bdi_Γδ_delta]).
+    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_Γδ_delta *)
 Lemma infering_sort_typingE_inst : si_Σ ;;; bd_Γδ |-E tRel 0 : tSort sProp.
 Proof. exact (infering_sort_typingE si_Σ bd_Γδ (tRel 0) sProp si_wfE bdi_wf_Γδ infering_sortE_inst). Qed.
 
-(** INSTANCE NONDEGEN BDTypingEtaInstances.bd_Γδ_not_sort *)
+(** INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_Γδ_delta *)
 Lemma infering_sort_isTypeE_inst : isTypeE si_Σ bd_Γδ (tRel 0).
 Proof. exact (infering_sort_isTypeE si_Σ bd_Γδ (tRel 0) sProp si_wfE bdi_wf_Γδ infering_sortE_inst). Qed.
 
 (** [relevance_of_sort sProp] is [Relevant].
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_Γδ_not_sort *)
+    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_Γδ_delta *)
 Lemma infering_sort_isTypeRelE_inst : isTypeRelE si_Σ bd_Γδ (tRel 0) Relevant.
 Proof. exact (infering_sort_isTypeRelE si_Σ bd_Γδ (tRel 0) sProp si_wfE bdi_wf_Γδ infering_sortE_inst). Qed.
 
-(** INSTANCE NONDEGEN BDTypingEtaInstances.bd_Γδ_not_sort *)
+(** INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_Γδ_delta *)
 Lemma einfering_sort_isTypeE_inst : isTypeE si_Σ bd_Γδ (tRel 0).
 Proof.
   exact (einfering_sort_isTypeE si_Σ bd_Γδ (tRel 0) si_wfE bdi_wf_Γδ (existT _ sProp infering_sortE_inst)).
 Qed.
 
-(** The assumption judgment [y : d], whose type [d] is sorted by the δ-step.
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_Γδ_not_sort *)
+(** The assumption judgment [_ : y] in [bd_Γδ], sorted by [y ▹□ Prop]: every type inferred for
+    [y] is [d], which is not a sort and reduces to [Prop] in one step ([bdi_Γδ_delta]).
+    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_Γδ_delta *)
 Lemma isTypebd_isTypeE_inst : isTypeE si_Σ bd_Γδ (tRel 0).
 Proof.
   exact (isTypebd_isTypeE si_Σ bd_Γδ (j_vass si_na (tRel 0)) si_wfE bdi_wf_Γδ
            (bd_vass bd_Γδ si_na (tRel 0) sProp infering_sortE_inst eq_refl)).
 Qed.
 
-(** The let-judgment [G F : Prop], whose term is checked ([bdi_vdef_term]).
+(** The let-judgment [G F : Prop], which has a term ([bdi_vdef_term]).
     INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_vdef_term *)
 Lemma lift_sorting_lift_typingE_inst : lift_typing typingE si_Σ bd_ΓFG (j_vdef si_na bd_GF si_P).
 Proof. exact (lift_sorting_lift_typingE si_Σ bd_ΓFG (j_vdef si_na bd_GF si_P) si_wfE bdi_wfFG bdi_vdef_bd). Qed.
 
-(** [x ▹Π (_ : I A, Prop)] by the β step in the domain ([bd_Γβπ_not_prod]).
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_Γβπ_not_prod *)
+(** [x ▹Π (_ : I A, Prop)] in [bd_Γβπ]: every type inferred for [x] is
+    [Π _ : (λ B : Prop. I B) A. Prop], which is not that product and reduces to it in one step
+    ([bdi_Γβπ_beta]).
+    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_Γβπ_beta *)
 Lemma infering_prod_typingE_inst :
   si_Σ ;;; bd_Γβπ |-E tRel 0 : tProd si_na (tApp (tInd si_ind []) (tRel 1)) si_P.
 Proof.
@@ -363,8 +441,9 @@ Proof.
            bdi_wf_Γβπ infering_prodE_inst).
 Qed.
 
-(** [x ▹{I} ([], [A])] by the β step ([bd_Γβ_not_ind]).
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_Γβ_not_ind *)
+(** [x ▹{I} ([], [A])] in [bd_Γβ]: every type inferred for [x] is [(λ B : Prop. I B) A], which is
+    not [I A] and reduces to it in one step ([bdi_Γβ_beta]).
+    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_Γβ_beta *)
 Lemma infering_ind_typingE_inst : si_Σ ;;; bd_Γβ |-E tRel 0 : mkApps (tInd si_ind []) [tRel 1].
 Proof.
   exact (infering_ind_typingE si_Σ bd_Γβ (tRel 0) si_ind [] [tRel 1] si_wfE bdi_wf_Γβ infering_induE_inst).

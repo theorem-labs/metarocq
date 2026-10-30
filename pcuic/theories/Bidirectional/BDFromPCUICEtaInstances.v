@@ -16,71 +16,63 @@
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]; [Σ_po]
   ([PCUICEtaPrimOpInstance]) for the constant and primitive rows.
 
-  **Non-degeneracy.** Each instance applies a lemma to a typing derivation that is not empty,
-  and where the lemma's content is a comparison, the compared objects differ. Each instance
-  carries a tag [INSTANCE NONDEGEN <lemma>] that names the compiled lemma stating this property
-  of its witnesses; the rows are tagged at each instance. The comparisons:
-  - through an η conversion: [bdf_eta_typed] is [x : G (λ y : Prop. F y) ⊢ x : G F], typed by
-    [typeE_Cumul] whose [cumulSpecE] premise is the η step [λ y. F y ⇝η F] under [G]
-    ([JoinE_ws_cumul_pbE_inst]). [typing_inferingE_eta_inst], [typing_checkingE_eta_inst],
+  **Non-degeneracy.** Each instance applies a lemma to a typing derivation that is not empty.
+  Each carries a tag [INSTANCE NONDEGEN <lemma>] naming the compiled lemma whose statement
+  gives its non-degeneracy; a tag's prose claims what that statement gives, and names the
+  derivation that states any other fact it uses. The rows:
+  - the η pair: [typing_inferingE_eta_inst], [typing_checkingE_eta_inst],
     [conv_checkE_eta_inst], [bidirectional_from_pcuicE_inst] and the fits
-    [T6BDc_typing_infering_fit_inst], [T6BDc_typing_checking_fit_inst] run completeness's
-    Cumul case on it: every type inferred for [x] is [lift0 1 (G (λ y. F y))], which is not
-    [G F] and is related to it by that η step ([bdf_eta_nondeg]);
-  - through a T8 site, each with an inferred type that is NOT the head form, so each runs the
-    proved T8 theorem ([T8_Sort_r_plug], [T8_Prod_r_plug], [T8_Ind_r_plug]: row B1's
-    [PCUICEtaT8Probe.T8_*_r]) on a real reduction:
-    [Sort_r]: [typing_infering_sortE_let_inst], [conv_infer_sortE_let_inst] and
-    [T6BDc_typing_infering_sort_fit_inst] on [let z : Prop := ∀P. P in z : Prop], whose
-    inferred type is the let-in [let z := ∀P. P in Prop], never a sort ([bdf_let_nondeg]),
-    reduced to [Prop] by zeta; [Prod_r]: [typing_infer_prodE_let_inst] on
-    [x : z, z := ∀P. P ⊢ x : ∀P:Prop. P], whose inferred type is the variable [z], not a
-    product ([bdf_z_nondeg]), reduced to the product by unfolding the let; [Ind_r]:
-    [typing_infer_indE_beta_inst] on [x : (λ B : Prop. I B) A, A : Prop ⊢ x : I A], whose
-    inferred type is the β-redex, not an application of an inductive type
-    ([bdf_beta_nondeg]); [isTypeE_mkApps_Ind_head_arity_inst] on the same [x], at the full
-    arity of [I] ([bdf_head_arity_nondeg]);
-  - the (co)fixpoint witness, at a declared type on which the check FAILS and a β-reduct on
-    which it passes: [wf_fixpointE_wf_fixpoint_red_inst], [mfix_on_ind_conv_redE_fix_inst],
-    [mfix_body_on_conv_redE_fix_inst], [red_fix_witnessE_inst] (the domain [(λ B. I B) A] of
-    [bd_fix_dtype], [bdf_fix_d_nondeg]); [mfix_body_on_conv_redE_cofix_inst],
-    [mfix_on_ind_conv_redE_cofix_inst], [red_cofix_witnessE_inst] (the type [(λ B. I B) A]
-    itself, [bdf_cofix_d_nondeg]); [typing_inferingE_Fix_beta_inst] and
-    [wf_fixpointE_wf_fixpoint_red_typed_inst] (the typed fixpoint [bdf_fix_typed], whose
-    recursive argument's domain is the β-redex [(λ B. I B) A], [bdf_fix_dβ_nondeg]);
-    [typing_inferingE_CoFix_inst] and [wf_cofixpointE_wf_cofixpoint_red_inst] (the typed
-    cofixpoint [bdf_cofix_typed] of [iv_Σ], a [CoFinite] record [R], whose declared type is
-    the β-redex [(λ B : Prop. R B) (∀P. P)], [bdf_cofix_dβ_nondeg]); completeness's Fix and
-    CoFix cases run the witness lemma on these two;
-  - completeness per typing rule, [typing_inferingE_<rule>_inst], each on a derivation with a
-    comparison between two different types: Rel, Lambda, LetIn and App through the δ-step of
-    [z] in [bdf_Γz] ([bdf_x_prod_typed], [bdf_lam_z_typed], [bdf_letlam_z_typed],
-    [bdf_app_z_typed]; [bdf_z_nondeg]); Prod on the domain [bdf_let] ([bdf_prod_let_typed];
-    [bdf_let_nondeg]); Case on a [match] whose branch type is a β-redex
-    ([bdf_case_br_nondeg]); Proj on [r : (λ B. R B) (∀P. P)] (through copy 18a's
-    [projection_cumulative_indicesE]), whose inferred type is that β-redex
-    ([bdf_proj_typed]; [bdf_rβ_nondeg]); Fix_beta and CoFix above. Completeness's Sort, Ind,
-    Construct, Const and Prim cases return the declared type itself in every derivation, and
-    its Fix case runs the witness lemma with the declared type as the witness when that type
-    passes [check_one_fix] ([iv_fix_typed]); these rows run on the derivation retyped at the
-    β-wrap [bdf_wrap s T = (λ X : s. X) T] of its type [T] ([typeE_Cumul]), so completeness's
-    Cumul case compares [T] with [bdf_wrap s T] ([bdf_wrap_nondeg]);
-  - the judgment and context lemmas, on judgments whose sort or check needs a reduction: the
-    let-judgment [z := bdf_let : Prop], [bdf_let] as a type, the contexts [[x : bdf_let]] and
-    [bd_ΓFG ,,, [x : bdf_let]] ([bdf_let_nondeg]), and the parameter instance [[x]] of
-    [x : z, z := ∀P. P ⊢ x : ∀P:Prop. P] ([bdf_ctx_inst_z]; [bdf_z_nondeg]).
+    [T6BDc_typing_infering_fit_inst], [T6BDc_typing_checking_fit_inst] run on [bdf_eta_typed]
+    ([x : G F] in [bd_Γη]); every type inferred for [x] in [bd_Γη] is not [G F], and one η
+    step relates it to [G F] ([bdf_eta_nondeg]);
+  - the T8 sites, at subjects none of whose inferred types is the head form:
+    [typing_infering_sortE_let_inst], [conv_infer_sortE_let_inst] and
+    [T6BDc_typing_infering_sort_fit_inst] on [bdf_let_sort_typed] ([bdf_let : Prop]), where
+    every type inferred for [bdf_let] is not a sort ([bdf_let_nondeg]);
+    [typing_infer_prodE_let_inst] and [conv_infer_prodE_inst] on [bdf_x_prod_typed]
+    ([x : ∀P:Prop. P] in [bdf_Γz]), where every type inferred for [x] is not a product
+    ([bdf_z_nondeg]); [typing_infer_indE_beta_inst] and [conv_infer_indE_inst] on
+    [bdf_x_ind_typed] ([x : I A] in [bdf_Γβ]), where every type inferred for [x] is not an
+    application of an inductive type ([bdf_beta_nondeg]); [isTypeE_mkApps_Ind_head_arity_inst]
+    on the same [x], where the head arity of [I] is the length of the argument list [[A]]
+    ([bdf_head_arity_nondeg]);
+  - the (co)fixpoint witness, at a declared type on which the check fails and which reduces to
+    a type on which it passes: [wf_fixpointE_wf_fixpoint_red_inst],
+    [mfix_on_ind_conv_redE_fix_inst], [mfix_body_on_conv_redE_fix_inst],
+    [red_fix_witnessE_inst] ([bdf_fix_d_nondeg]); [mfix_body_on_conv_redE_cofix_inst],
+    [mfix_on_ind_conv_redE_cofix_inst], [red_cofix_witnessE_inst] ([bdf_cofix_d_nondeg]);
+    [typing_inferingE_Fix_beta_inst] and [wf_fixpointE_wf_fixpoint_red_typed_inst] on the
+    typed fixpoint [bdf_fix_typed] ([bdf_fix_dβ_nondeg]); [typing_inferingE_CoFix_inst] and
+    [wf_cofixpointE_wf_cofixpoint_red_inst] on the typed cofixpoint [bdf_cofix_typed] of
+    [iv_Σ], a [CoFinite] record [R] ([bdf_cofix_dβ_nondeg]);
+  - completeness per typing rule, [typing_inferingE_<rule>_inst]: Rel, Lambda, LetIn and App
+    on [bdf_x_prod_typed], [bdf_lam_z_typed], [bdf_letlam_z_typed] and [bdf_app_z_typed], each
+    with the variable [x] of [bdf_Γz] in its subject ([bdf_z_nondeg]); Prod on
+    [bdf_prod_let_typed], whose domain is [bdf_let] ([bdf_let_nondeg]); Case on
+    [iv_match_typed], whose scrutinee and branch body are [c x]: every type inferred for
+    [c x] is [I x], which is not the β-redex [(λ z : I x. I x) (c x)], and one reduction step
+    takes that β-redex to [I x] ([bdf_case_br_nondeg]); Proj on [bdf_proj_typed]
+    ([bdf_rβ_nondeg]); Fix_beta and CoFix above. The Sort, Ind, Construct, Fix, Const and
+    Prim rows run on a derivation retyped at the β-wrap [bdf_wrap s T = (λ X : s. X) T] of a
+    type [T] ([bdf_sort_wrapped], [bdf_ind_wrapped], [bdf_cstr_wrapped], [bdf_fix_wrapped],
+    [bdf_const_wrapped], [bdf_prim_wrapped]); for each, every type inferred for the subject
+    is [T], which is not [bdf_wrap s T], and one reduction step takes [bdf_wrap s T] to [T]
+    ([bdf_sort_wrap_nondeg], [bdf_ind_wrap_nondeg], [bdf_cstr_wrap_nondeg],
+    [bdf_fix_wrap_nondeg], [bdf_const_wrap_nondeg], [bdf_prim_wrap_nondeg]);
+  - the judgment and context lemmas: the let-judgment [z := bdf_let : Prop] (also through
+    [conv_lift_judgmentE_inst]), [bdf_let] as a type (also the assumption [x : bdf_let] at
+    [Prop], through [conv_lift_judgment_univE_inst]) and the context [[x : bdf_let]]
+    ([bdf_let_nondeg]); [[x : bdf_let]] over [bd_ΓFG] ([bdf_let_FG_nondeg], the same fact in
+    [bd_ΓFG]); the parameter instance [[x]] of [bdf_ctx_inst_z] in [bdf_Γz]
+    ([bdf_z_nondeg]); [ws_cumul_ctx_pbE_vass_inst] moves [bd_ΓFG ,, x : G (λ y. F y)] to
+    [bd_ΓFG ,, x : G F], two different contexts whose declared types one η step relates
+    ([ws_cumul_ctx_pbE_vass_inst_nondeg]).
 
   **Rows not inhabited.** None: every lemma of [BDFromPCUICEta] has an instance here, or is a
-  helper that one of these instances runs ([T8_Sort_r_plug], [T8_Prod_r_plug],
-  [T8_Ind_r_plug], [conv_lift_judgmentE], [conv_lift_judgment_univE],
-  [ws_cumul_ctx_pbE_vass], [is_closed_projection_contextE],
-  [untyped_subslet_projection_contextE], the syntactic helpers; [conv_infer_prodE]: helper,
-  exercised by [typing_infer_prodE_let_inst], through [typing_infer_prodE], on the inferred type
-  [z] that unfolds to [∀P:Prop. P]; [conv_infer_indE]: helper, exercised by
-  [typing_infer_indE_beta_inst], through [typing_infer_indE], on the inferred type
-  [(λ B. I B) A] that reduces to [I A] by β; completeness also calls the first in its
-  application case ([typing_inferingE_App_inst], on [z]) and the second in its [match] and
-  projection cases ([typing_inferingE_Proj_inst], on [(λ B. R B) (∀P. P)]).
+  helper of one of them ([T8_Sort_r_plug], [T8_Prod_r_plug], [T8_Ind_r_plug],
+  [is_closed_projection_contextE], [untyped_subslet_projection_contextE], the syntactic
+  helpers). [conv_infer_prodE], [conv_infer_indE], [conv_lift_judgmentE],
+  [conv_lift_judgment_univE] and [ws_cumul_ctx_pbE_vass] have direct instances (above).
 
   **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
   their E copies: the same set, and no forecast class is an argument ([About]). *)
@@ -96,7 +88,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICEtaPrimOpInstance PCUICInversionEtaInstances
      PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICValidityEta PCUICSREta
      BDTyping BDTypingEta BDTypingEtaInstances BDToPCUICEta BDToPCUICEtaInstances BDFromPCUICEta.
-From MetaRocq.PCUIC Require BDFromPCUIC PCUICFixWitness PCUICWfUniversesEta.
+From MetaRocq.PCUIC Require BDFromPCUIC PCUICFixWitness PCUICWfUniversesEta PCUICGlobalEnv PCUICConversion
+     PCUICConfluence.
 From Equations.Type Require Import Relation.
 
 #[local] Existing Instance default_checker_flags.
@@ -452,6 +445,15 @@ Proof.
   rewrite e in h. exact (h _).
 Qed.
 
+(** One reduction step, the β step [red_beta], takes [bdf_wrap s T] to [T]. *)
+Lemma bdf_wrap_red1 (Σ : global_env) (Γ : context) (s : sort) (T : term) :
+  red1 Σ Γ (bdf_wrap s T) T.
+Proof.
+  have h := red_beta Σ Γ si_na (tSort s) (tRel 0) T.
+  have e : (tRel 0) {0 := T} = T by exact (lift0_p T).
+  rewrite e in h. exact h.
+Qed.
+
 (** [Prop : (λ X. X) Type@{1}]. *)
 Lemma bdf_sort_wrapped :
   si_Σ ;;; [] |-E si_P : bdf_wrap (Sort.super (Sort.super sProp)) (tSort (Sort.super sProp)).
@@ -584,9 +586,8 @@ Section BDFromPCUICEtaInstances.
 
 (** ** Through an η conversion *)
 
-(** The η step of [bdf_eta_typed]: every type inferred for [x] in [bd_Γη] is the lifted declared
-    type [G (λ y. F y)] ([inferE_Rel] is the only rule for a variable); it is not the checked type
-    [G F], and one η step relates them. *)
+(** Every type inferred for [x] in [bd_Γη] is not [G F], the type of [x] in [bdf_eta_typed],
+    and one η step relates it to [G F]. *)
 Lemma bdf_eta_nondeg :
   forall T', si_Σ ;;; bd_Γη |-E tRel 0 ▹ T' ->
     (T' <> tApp (tRel 2) (tRel 1)) × eta1 T' (tApp (tRel 2) (tRel 1)).
@@ -596,8 +597,9 @@ Proof.
   split; [discriminate|exact bd_eta_step].
 Qed.
 
-(** Completeness on [bdf_eta_typed]: its Cumul case compares the inferred [G (λ y. F y)] with
-    [G F].
+(** Completeness on [bdf_eta_typed] ([x : G F] in [bd_Γη]). Every type inferred for [x] is not
+    [G F] and one η step relates it to [G F] ([bdf_eta_nondeg]), so the cumulativity this
+    instance returns relates two different types.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_eta_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Lemma typing_inferingE_eta_inst :
@@ -614,8 +616,8 @@ Lemma bidirectional_from_pcuicE_inst :
   {T' & si_Σ ;;; bd_Γη |-E tRel 0 ▹ T' × si_Σ ;;; bd_Γη ⊢E T' ≤ tApp (tRel 2) (tRel 1)}.
 Proof. exact (env_propE_typing bidirectional_from_pcuicE si_Σ si_wfE _ _ _ bdf_eta_typed). Qed.
 
-(** [conv_checkE] on the pair of [typing_inferingE_eta_inst]: an inferred type related to [G F]
-    by the η step.
+(** [conv_checkE] on the pair of [typing_inferingE_eta_inst]: a type inferred for [x], which is
+    not [G F] and which one η step relates to [G F] ([bdf_eta_nondeg]).
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_eta_nondeg
     TARGET BDFromPCUICEta.conv_checkE *)
 Lemma conv_checkE_eta_inst : si_Σ ;;; bd_Γη |-E tRel 0 ◃ tApp (tRel 2) (tRel 1).
@@ -623,12 +625,18 @@ Proof. exact (conv_checkE si_Σ si_wfE _ _ _ typing_inferingE_eta_inst). Qed.
 
 (** ** Through the T8 sites, at inferred types that are not head forms *)
 
-(** [Sort_r]: every type inferred for [bdf_let] is a let-in ([inferE_LetIn]), never a sort, so
-    the sort inference reduces it (ζ, to [Prop]). *)
+(** Every type inferred for [bdf_let] in the empty context is not a sort. *)
 Lemma bdf_let_nondeg : forall T', si_Σ ;;; [] |-E bdf_let ▹ T' -> forall s, T' <> tSort s.
 Proof. intros T' h s. unfold bdf_let in h. inversion h; subst. discriminate. Qed.
 
-(** [Sort_r]: the inferred type [let z := ∀P. P in Prop] reduces to [Prop].
+(** The twin of [bdf_let_nondeg] in [bd_ΓFG]: every type inferred for [bdf_let] in [bd_ΓFG]
+    is not a sort. *)
+Lemma bdf_let_FG_nondeg : forall T', si_Σ ;;; bd_ΓFG |-E bdf_let ▹ T' -> forall s, T' <> tSort s.
+Proof. intros T' h s. unfold bdf_let in h. inversion h; subst. discriminate. Qed.
+
+(** [typing_infering_sortE] on [bdf_let_sort_typed] ([bdf_let : Prop]). Every type inferred
+    for [bdf_let] is not a sort ([bdf_let_nondeg]), so the [▹□] judgment this instance returns
+    reaches its sort by a reduction between two different terms.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg
     TARGET BDFromPCUICEta.typing_infering_sortE *)
 Lemma typing_infering_sortE_let_inst :
@@ -644,8 +652,8 @@ Proof.
            (typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_let_sort_typed)).
 Qed.
 
-(** [Prod_r]: every type inferred for [x] in [bdf_Γz] is the variable [z] (lifted: [tRel 1]), not
-    a product, so in particular not the declared type [∀P:Prop. P] of [x]. *)
+(** Every type inferred for [x] in [bdf_Γz] is not a product, so in particular not
+    [∀P:Prop. P], the type of [x] in [bdf_x_prod_typed]. *)
 Lemma bdf_z_nondeg :
   forall T', si_Σ ;;; bdf_Γz |-E tRel 0 ▹ T' -> forall na A B, T' <> tProd na A B.
 Proof.
@@ -654,8 +662,9 @@ Proof.
   discriminate.
 Qed.
 
-(** [Prod_r]: the inferred type [z] reduces to [∀P:Prop. P] by unfolding the let;
-    [typing_infer_prodE] runs [conv_infer_prodE] on it.
+(** [typing_infer_prodE] on [bdf_x_prod_typed] ([x : ∀P:Prop. P] in [bdf_Γz]). Every type
+    inferred for [x] is not a product ([bdf_z_nondeg]), so the [▹Π] judgment this instance
+    returns reaches its product by a reduction between two different terms.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_z_nondeg
     TARGET BDFromPCUICEta.typing_infer_prodE *)
 Lemma typing_infer_prodE_let_inst :
@@ -664,8 +673,21 @@ Lemma typing_infer_prodE_let_inst :
     si_Σ ;;; bdf_Γz ,, vass si_na si_P ⊢E B' ≤ tRel 0].
 Proof. exact (typing_infer_prodE (Σ := si_Σ) (wfΣ := si_wfE) bdf_x_prod_typed). Qed.
 
-(** [Ind_r]: every type inferred for [x] in [bdf_Γβ] is the β-redex [(λ B. I B) A] (lifted), not
-    an application of an inductive type: its head is a λ. *)
+(** [conv_infer_prodE] on [bdf_x_prod_typed] and the inference pair that [typing_inferingE]
+    gives for it. The pair's type is a type inferred for [x] in [bdf_Γz], so it is not a
+    product ([bdf_z_nondeg]): the cumulativity passed in relates a type that is not a product
+    to [∀P:Prop. P].
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_z_nondeg *)
+Lemma conv_infer_prodE_inst :
+  ∑ na' A' B', [× si_Σ ;;; bdf_Γz |-E tRel 0 ▹Π (na',A',B'),
+    eq_binder_annot si_na na', si_Σ ;;; bdf_Γz ⊢E A' = si_P &
+    si_Σ ;;; bdf_Γz ,, vass si_na si_P ⊢E B' ≤ tRel 0].
+Proof.
+  exact (conv_infer_prodE si_Σ si_wfE bdf_Γz (tRel 0) si_na si_P (tRel 0) bdf_x_prod_typed
+           (typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_x_prod_typed)).
+Qed.
+
+(** Every type inferred for [x] in [bdf_Γβ] is not an application of an inductive type. *)
 Lemma bdf_beta_nondeg :
   forall T', si_Σ ;;; bdf_Γβ |-E tRel 0 ▹ T' -> forall ind u args, T' <> mkApps (tInd ind u) args.
 Proof.
@@ -676,9 +698,10 @@ Proof.
   rewrite -e in hdec. vm_compute in hdec. discriminate hdec.
 Qed.
 
-(** [Ind_r]: the inferred type [(λ B. I B) A] reduces to [I A] by β; [typing_infer_indE] runs
-    [conv_infer_indE] on it; the universe clause is at the full arity of [I]
-    ([isTypeE_mkApps_Ind_head_arity]).
+(** [typing_infer_indE] on [bdf_x_ind_typed] ([x : I A] in [bdf_Γβ]). Every type inferred for
+    [x] is not an application of an inductive type ([bdf_beta_nondeg]), so the [▹{I}] judgment
+    this instance returns reaches an application of [I] by a reduction between two different
+    terms.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_beta_nondeg
     TARGET BDFromPCUICEta.typing_infer_indE *)
 Lemma typing_infer_indE_beta_inst :
@@ -687,12 +710,27 @@ Lemma typing_infer_indE_beta_inst :
       & ws_cumul_pbE_terms si_Σ bdf_Γβ args' [tRel 1]].
 Proof. exact (typing_infer_indE si_Σ si_wfE _ _ _ _ _ bdf_x_ind_typed). Qed.
 
+(** [conv_infer_indE] on [bdf_x_ind_typed] and the inference pair that [typing_inferingE]
+    gives for it. The pair's type is a type inferred for [x] in [bdf_Γβ], so it is not an
+    application of an inductive type ([bdf_beta_nondeg]): the cumulativity passed in relates
+    such a type to [I A].
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_beta_nondeg *)
+Lemma conv_infer_indE_inst :
+  ∑ ui' args', [× si_Σ ;;; bdf_Γβ |-E tRel 0 ▹{si_ind} (ui',args'),
+      cmp_ind_universes si_Σ si_ind #|[tRel 1]| ui' []
+      & ws_cumul_pbE_terms si_Σ bdf_Γβ args' [tRel 1]].
+Proof.
+  exact (conv_infer_indE si_Σ si_wfE bdf_Γβ (tRel 0) si_ind [] [tRel 1] bdf_x_ind_typed
+           (typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_x_ind_typed)).
+Qed.
+
 (** The bound is attained: the head arity of [I] (its parameter [A]) is the length of
     [[tRel 1]], so the instance is not the vacuous case of an inductive with no parameter. *)
 Lemma bdf_head_arity_nondeg : head_arity si_Σ.1 (IndRef si_ind) = #|[tRel 1]|.
 Proof. reflexivity. Qed.
 
-(** The premise is [validityE] of the β-typed [x : I A] ([bdf_x_ind_typed]).
+(** The premise is [validityE] of [bdf_x_ind_typed] ([x : I A] in [bdf_Γβ]). The head arity of
+    [I] is the length of [[tRel 1]] ([bdf_head_arity_nondeg]), so the bound is attained.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_head_arity_nondeg *)
 Lemma isTypeE_mkApps_Ind_head_arity_inst : head_arity si_Σ.1 (IndRef si_ind) <= #|[tRel 1]|.
 Proof.
@@ -703,7 +741,8 @@ Qed.
 (** ** The (co)fixpoint witness, at declared types on which the check fails *)
 
 (** [bd_fix_d]: [check_one_fix] fails at the declared type [bd_fix_dtype = Π x : (λ B. I B) A.
-    Prop] and passes at its β-reduct [bd_fix_ty = Π x : I A. Prop]. *)
+    Prop], passes at [bd_fix_ty = Π x : I A. Prop], and [bd_fix_dtype] reduces to
+    [bd_fix_ty]. *)
 Lemma bdf_fix_d_nondeg :
   [× map check_one_fix bd_mfix = [None],
      check_one_fix (def_with_type bd_fix_d bd_fix_ty) = Some si_kn &
@@ -744,8 +783,8 @@ Proof.
            (@All_cons _ _ bd_fix_d _ bd_fix_dtype_isTypeE All_nil) wf_fixpoint_red_wf_fixpointE_inst).
 Qed.
 
-(** [bdf_cofix_d]: [check_one_cofix] fails at the declared type [(λ B. I B) A] and passes at its
-    β-reduct [I A]. *)
+(** [bdf_cofix_d]: [check_one_cofix] fails at the declared type [(λ B. I B) A], passes at
+    [I A], and [(λ B. I B) A] reduces to [I A]. *)
 Lemma bdf_cofix_d_nondeg :
   [× check_one_cofix bdf_cofix_d = None,
      check_one_cofix (def_with_type bdf_cofix_d (mkApps (tInd si_ind []) [tRel 0])) = Some si_kn &
@@ -780,8 +819,7 @@ Qed.
 
 (** ** Completeness per typing rule *)
 
-(** A β-wrap is never the type it wraps ([T] is a proper subterm of [bdf_wrap s T]): the rows
-    below that run at a β-wrap compare two different types. *)
+(** A β-wrap is never the type it wraps ([T] is a proper subterm of [bdf_wrap s T]). *)
 Lemma bdf_wrap_nondeg : forall s T, bdf_wrap s T <> T.
 Proof.
   intros s T. induction T; try discriminate.
@@ -789,85 +827,203 @@ Proof.
   match goal with IH : tApp ?L ?v <> ?v, e : tApp ?L ?v = ?v |- _ => exact (IH e) end.
 Qed.
 
-(** Rel: [bdf_x_prod_typed] is a [typeE_Cumul] over the variable [x] of [bdf_Γz]; completeness
-    compares the inferred [z] with the declared [∀P:Prop. P] (δ).
+(** Rel: completeness on [bdf_x_prod_typed] ([x : ∀P:Prop. P] in [bdf_Γz]). Every type
+    inferred for [x] is not a product ([bdf_z_nondeg]), so not [∀P:Prop. P]: the cumulativity
+    this instance returns relates two different types.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_z_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Rel_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_x_prod_typed.
 
-(** Sort: [Prop] at the β-wrap of its type [Type@{1}] ([bdf_sort_wrapped]).
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_wrap_nondeg
+(** Every type inferred for [Prop] is [tSort (Sort.super sProp)], which is not
+    [bdf_wrap (Sort.super (Sort.super sProp)) (tSort (Sort.super sProp))]; one reduction step
+    takes that β-wrap to it. *)
+Lemma bdf_sort_wrap_nondeg :
+  forall T', si_Σ ;;; [] |-E si_P ▹ T' ->
+    [× T' = tSort (Sort.super sProp),
+       T' <> bdf_wrap (Sort.super (Sort.super sProp)) (tSort (Sort.super sProp)) &
+       red1 si_Σ [] (bdf_wrap (Sort.super (Sort.super sProp)) (tSort (Sort.super sProp))) T'].
+Proof.
+  intros T' h.
+  assert (e : T' = tSort (Sort.super sProp)).
+  { unfold si_P in h. inversion h; subst. reflexivity. }
+  subst T'. split; [reflexivity|exact (fun e => bdf_wrap_nondeg _ _ (eq_sym e))|apply bdf_wrap_red1].
+Qed.
+
+(** Sort: completeness on [bdf_sort_wrapped], [Prop] at [bdf_wrap _ T] with
+    [T = tSort (Sort.super sProp)]. Every type inferred for [Prop] is [T], which is not
+    [bdf_wrap _ T], and one reduction step takes [bdf_wrap _ T] to [T]
+    ([bdf_sort_wrap_nondeg]): the cumulativity this instance returns relates two different
+    types.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_sort_wrap_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Sort_inst :=
   typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE)
     (T := bdf_wrap (Sort.super (Sort.super sProp)) (tSort (Sort.super sProp))) bdf_sort_wrapped.
 
-(** Prod: [Π x : bdf_let. Prop] ([bdf_prod_let_typed]); the sort of its domain is inferred
-    through the ζ-step of the let-in [bdf_let] infers.
+(** Prod: completeness on [bdf_prod_let_typed] ([Π x : bdf_let. Prop]). Every type inferred
+    for its domain [bdf_let] is not a sort ([bdf_let_nondeg]).
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Prod_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_prod_let_typed.
 
-(** Lambda: [λ x : z. x] in [z := ∀P:Prop. P] ([bdf_lam_z_typed]); completeness compares the
-    inferred [Π x : z. z] with the declared [Π x : z. ∀P. P] (δ under the binder).
+(** Lambda: completeness on [bdf_lam_z_typed] ([λ x : z. x : Π x : z. ∀P:Prop. P] in
+    [z := ∀P:Prop. P]). Its body [x] lives in [bdf_Γz], where every type inferred for [x] is
+    not a product ([bdf_z_nondeg]), so not [∀P:Prop. P].
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_z_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Lambda_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_lam_z_typed.
 
-(** LetIn: [let z := ∀P:Prop. P in λ x : z. x] ([bdf_letlam_z_typed]), with the comparison of
-    the Lambda row under the let.
+(** LetIn: completeness on [bdf_letlam_z_typed] ([let z := ∀P:Prop. P in λ x : z. x]). The
+    inner variable [x] lives in [bdf_Γz], where every type inferred for [x] is not a product
+    ([bdf_z_nondeg]).
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_z_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_LetIn_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_letlam_z_typed.
 
-(** App: [x (∀P:Prop. P)] in [bdf_Γz] ([bdf_app_z_typed]); completeness's App case runs
-    [conv_infer_prodE] on the inferred [z], which reduces to the product by δ.
+(** App: completeness on [bdf_app_z_typed] ([x (∀P:Prop. P) : ∀P:Prop. P] in [bdf_Γz]). Every
+    type inferred for the function [x] is not a product ([bdf_z_nondeg]), so a [▹Π] judgment
+    on [x] in [bdf_Γz] reaches its product by a reduction between two different terms.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_z_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_App_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_app_z_typed.
 
-(** Ind: [I] at the β-wrap of its arity ([bdf_ind_wrapped]).
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_wrap_nondeg
+(** Every type inferred for [I] is [si_arity], which is not [bdf_wrap _ si_arity]; one
+    reduction step takes [bdf_wrap _ si_arity] to it. *)
+Lemma bdf_ind_wrap_nondeg :
+  forall T', si_Σ ;;; [] |-E tInd si_ind [] ▹ T' ->
+    [× T' = si_arity,
+       T' <> bdf_wrap (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) si_arity &
+       red1 si_Σ [] (bdf_wrap (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) si_arity) T'].
+Proof.
+  intros T' h.
+  assert (e : T' = si_arity).
+  { inversion h; subst.
+    match goal with hd : declared_inductive _ _ _ _ |- _ =>
+      destruct (PCUICGlobalEnv.declared_inductive_inj (declared_inductive_to_gen (wfΣ := si_wf) hd)
+                  (declared_inductive_to_gen (wfΣ := si_wf) si_declared_inductive)) as [e1 e2];
+      subst end.
+    reflexivity. }
+  subst T'. split; [reflexivity|exact (fun e => bdf_wrap_nondeg _ _ (eq_sym e))|apply bdf_wrap_red1].
+Qed.
+
+(** Ind: completeness on [bdf_ind_wrapped], [I] at [bdf_wrap _ si_arity]. Every type inferred
+    for [I] is [si_arity], which is not [bdf_wrap _ si_arity], and one reduction step takes
+    [bdf_wrap _ si_arity] to [si_arity] ([bdf_ind_wrap_nondeg]): the cumulativity this
+    instance returns relates two different types.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_ind_wrap_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Ind_inst :=
   typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE)
     (T := bdf_wrap (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) si_arity) bdf_ind_wrapped.
 
-(** Construct: [c] at the β-wrap of its type ([bdf_cstr_wrapped]).
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_wrap_nondeg
+(** Every type inferred for [c] is [Π A : Prop. I A], which is not its β-wrap
+    [bdf_wrap _ (Π A : Prop. I A)]; one reduction step takes that β-wrap to it. *)
+Lemma bdf_cstr_wrap_nondeg :
+  forall T', si_Σ ;;; [] |-E tConstruct si_ind 0 [] ▹ T' ->
+    [× T' = tProd si_na si_P (tApp (tInd si_ind []) (tRel 0)),
+       T' <> bdf_wrap (Sort.sort_of_product (Sort.super sProp) sProp)
+               (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))) &
+       red1 si_Σ [] (bdf_wrap (Sort.sort_of_product (Sort.super sProp) sProp)
+                       (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0)))) T'].
+Proof.
+  intros T' h.
+  assert (e : T' = tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))).
+  { inversion h; subst.
+    match goal with hd : declared_constructor _ _ _ _ _ |- _ =>
+      destruct (PCUICGlobalEnv.declared_constructor_inj (declared_constructor_to_gen (wfΣ := si_wf) hd)
+                  (declared_constructor_to_gen (wfΣ := si_wf) si_declared_constructor)) as (e1 & e2 & e3);
+      subst end.
+    reflexivity. }
+  subst T'. split; [reflexivity|exact (fun e => bdf_wrap_nondeg _ _ (eq_sym e))|apply bdf_wrap_red1].
+Qed.
+
+(** Construct: completeness on [bdf_cstr_wrapped], [c] at [bdf_wrap _ T] with
+    [T = Π A : Prop. I A]. Every type inferred for [c] is [T], which is not [bdf_wrap _ T], and
+    one reduction step takes [bdf_wrap _ T] to [T] ([bdf_cstr_wrap_nondeg]): the cumulativity
+    this instance returns relates two different types.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_cstr_wrap_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Construct_inst :=
   typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE)
     (T := bdf_wrap (Sort.sort_of_product (Sort.super sProp) sProp) (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))))
     bdf_cstr_wrapped.
 
-(** The [match] [iv_match] ([PCUICInversionEtaInstances]): its branch [c x] is typed at the
-    branch type [(λ z : I x. I x) (c x)], a β-redex that is not the type [I x] of [c x]
-    ([iv_disc_typed]); one β-step relates them ([iv_br_typed] is that [typeE_Cumul]). *)
+(** Every type inferred for [c x] ([iv_disc]) in [iv_Γ1] is [I x] ([iv_Ix 0]); the β-redex
+    [(λ z : I x. I x) (c x)] is not [I x], and one reduction step takes it to [I x]. *)
 Lemma bdf_case_br_nondeg :
-  (tApp (tLambda iv_zna (iv_Ix 0) (iv_Ix 1)) iv_disc <> iv_Ix 0) ×
-  red1 si_Σ iv_Γ1 (tApp (tLambda iv_zna (iv_Ix 0) (iv_Ix 1)) iv_disc) (iv_Ix 0).
-Proof. split; [discriminate|exact (red_beta _ _ iv_zna (iv_Ix 0) (iv_Ix 1) iv_disc)]. Qed.
+  [× tApp (tLambda iv_zna (iv_Ix 0) (iv_Ix 1)) iv_disc <> iv_Ix 0,
+     red1 si_Σ iv_Γ1 (tApp (tLambda iv_zna (iv_Ix 0) (iv_Ix 1)) iv_disc) (iv_Ix 0) &
+     forall T', si_Σ ;;; iv_Γ1 |-E iv_disc ▹ T' -> T' = iv_Ix 0].
+Proof.
+  split; [discriminate|exact (red_beta _ _ iv_zna (iv_Ix 0) (iv_Ix 1) iv_disc)|].
+  intros T' h. unfold iv_disc in h. inversion h; subst.
+  match goal with hp : @infering_prodE _ _ _ (tConstruct _ _ _) _ _ _ |- _ => inversion hp; subst end.
+  match goal with hc : @inferingE _ _ _ (tConstruct _ _ _) _ |- _ => inversion hc; subst end.
+  match goal with hd : declared_constructor _ _ _ _ _ |- _ =>
+    destruct (PCUICGlobalEnv.declared_constructor_inj (declared_constructor_to_gen (wfΣ := si_wf) hd)
+                (declared_constructor_to_gen (wfΣ := si_wf) si_declared_constructor)) as (e1 & e2 & e3);
+    subst end.
+  match goal with hr : red _ _ _ (tProd _ _ _) |- _ =>
+    destruct (PCUICConversion.invert_red_prod_cb (Σ := si_Σ) (cbΣ := si_cb)
+                (closed_red_of (Σ := si_Σ) (Γ := iv_Γ1)
+                   (t := tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))) eq_refl eq_refl hr))
+      as (dom' & codom' & [ep _ hcod])
+  end.
+  injection ep as e1 e2 e3. subst.
+  destruct (PCUICConversion.invert_red_mkApps_tInd_cb (Σ := si_Σ) (cbΣ := si_cb) (ind := si_ind) (u := [])
+              [tRel 0] _ hcod) as (args' & [ec _ ha]).
+  subst.
+  destruct args' as [|a [|a' rest]].
+  - inversion ha.
+  - assert (hra : closed_red si_Σ (iv_Γ1 ,, vass si_na si_P) (tRel 0) a) by (inversion ha; assumption).
+    destruct hra as [clΓ _ rr].
+    destruct (PCUICConfluence.red_mkApps_tRel_cb (Σ := si_Σ) (wfΣ := si_cb)
+                (Γ := exist (iv_Γ1 ,, vass si_na si_P) clΓ) (k := 0) (b := vass si_na si_P) (args := [])
+                eq_refl eq_refl eq_refl rr) as (args'' & ea & ha'').
+    destruct args''; [|inversion ha''].
+    subst. reflexivity.
+  - inversion ha. match goal with hn : All2 _ [] (_ :: _) |- _ => inversion hn end.
+Qed.
 
-(** Case: [iv_match]; completeness's Case case checks the branch with [conv_checkE], comparing
-    [I x] with the β-redex branch type.
+(** Case: completeness on [iv_match_typed] ([iv_match], whose scrutinee and branch body are both
+    [c x]). Every type inferred for [c x] is [I x], which is not [(λ z : I x. I x) (c x)], the
+    type at which [iv_br_typed] types [c x]; one reduction step takes the latter to [I x]
+    ([bdf_case_br_nondeg]).
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_case_br_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Case_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) iv_match_typed.
 
-(** Fix: [iv_fix] ([PCUICInversionEtaInstances]) passes [check_one_fix] at its declared type, so
-    completeness's Fix case runs the witness lemma with the declared type as the witness; the
-    instance runs at the β-wrap of that type ([bdf_fix_wrapped]), so its comparison is a β-step.
-    The witness lemma at a declared type on which the check fails is
-    [typing_inferingE_Fix_beta_inst].
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_wrap_nondeg
+(** Every type inferred for [tFix iv_mfix 0] is [iv_fix_ty], which is not
+    [bdf_wrap _ iv_fix_ty]; one reduction step takes [bdf_wrap _ iv_fix_ty] to it. *)
+Lemma bdf_fix_wrap_nondeg :
+  forall T', si_Σ ;;; [] |-E tFix iv_mfix 0 ▹ T' ->
+    [× T' = iv_fix_ty,
+       T' <> bdf_wrap (Sort.sort_of_product sProp sProp) iv_fix_ty &
+       red1 si_Σ [] (bdf_wrap (Sort.sort_of_product sProp sProp) iv_fix_ty) T'].
+Proof.
+  intros T' h.
+  assert (e : T' = iv_fix_ty).
+  { inversion h; subst.
+    match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
+    reflexivity. }
+  subst T'. split; [reflexivity|exact (fun e => bdf_wrap_nondeg _ _ (eq_sym e))|apply bdf_wrap_red1].
+Qed.
+
+(** Fix: completeness on [bdf_fix_wrapped], [tFix iv_mfix 0] ([PCUICInversionEtaInstances]) at
+    [bdf_wrap _ iv_fix_ty]. Every type inferred for [tFix iv_mfix 0] is [iv_fix_ty], which is
+    not [bdf_wrap _ iv_fix_ty], and one reduction step takes [bdf_wrap _ iv_fix_ty] to it
+    ([bdf_fix_wrap_nondeg]): the cumulativity this instance returns relates two different
+    types. A fixpoint whose declared type fails [check_one_fix] is the row
+    [typing_inferingE_Fix_beta_inst] ([bdf_fix_dβ_nondeg]).
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_fix_wrap_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Fix_inst :=
   typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE)
     (T := bdf_wrap (Sort.sort_of_product sProp sProp) iv_fix_ty) bdf_fix_wrapped.
 
 (** [bdf_fix_dβ] ([bdf_fmfix]): [check_one_fix] fails at the declared type
-    [bdf_fxty 0 = Π x : (λ B. I B) A. I A] and passes at its β-reduct [Π x : I A. I A]. *)
+    [bdf_fxty 0 = Π x : (λ B. I B) A. I A], passes at [Π x : I A. I A], and [bdf_fxty 0]
+    reduces to [Π x : I A. I A]. *)
 Lemma bdf_fix_dβ_nondeg :
   [× map check_one_fix bdf_fmfix = [None],
      check_one_fix (def_with_type bdf_fix_dβ
@@ -878,8 +1034,9 @@ Proof.
   apply rt_step. apply prod_red_l. exact (red_beta _ _ si_na si_P (tApp (tInd si_ind []) (tRel 0)) (tRel 0)).
 Qed.
 
-(** Fix, at a declared type that fails [check_one_fix]; completeness's Fix case runs
-    [wf_fixpointE_wf_fixpoint_red] on it.
+(** Fix_beta: completeness on [bdf_fix_typed] ([tFix bdf_fmfix 0] at its declared type
+    [bdf_fxty 0]). [check_one_fix] fails at that declared type, passes at [Π x : I A. I A],
+    and [bdf_fxty 0] reduces to [Π x : I A. I A] ([bdf_fix_dβ_nondeg]).
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_fix_dβ_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Fix_beta_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_fix_typed.
@@ -893,23 +1050,71 @@ Proof.
            bdf_wf_fix).
 Qed.
 
-(** Const: [land] at the β-wrap of its type [int → int → int] ([bdf_const_wrapped]).
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_wrap_nondeg
+(** Every type inferred for [land] ([tConst po_land_kn []]) in [Σ_po] is [po_land_ty], which is
+    not [bdf_wrap _ po_land_ty]; one reduction step takes [bdf_wrap _ po_land_ty] to it. *)
+Lemma bdf_const_wrap_nondeg :
+  forall T', Σ_po ;;; [] |-E tConst po_land_kn [] ▹ T' ->
+    [× T' = po_land_ty,
+       T' <> bdf_wrap (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0))
+               po_land_ty &
+       red1 Σ_po [] (bdf_wrap (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0))
+                       po_land_ty) T'].
+Proof.
+  intros T' h.
+  assert (e : T' = po_land_ty).
+  { inversion h; subst.
+    match goal with hd : declared_constant _ _ _ |- _ =>
+      pose proof (PCUICGlobalEnv.declared_constant_inj _ _
+                    (declared_constant_to_gen (wfΣ := fst iv_po_wf_ext) hd)
+                    (declared_constant_to_gen (wfΣ := fst iv_po_wf_ext) Σ_po_declared_land)) as e1;
+      subst end.
+    reflexivity. }
+  subst T'. split; [reflexivity|exact (fun e => bdf_wrap_nondeg _ _ (eq_sym e))|apply bdf_wrap_red1].
+Qed.
+
+(** Const: completeness on [bdf_const_wrapped], [land] at [bdf_wrap _ po_land_ty]
+    ([po_land_ty = int → int → int]). Every type inferred for [land] is [po_land_ty], which is
+    not [bdf_wrap _ po_land_ty], and one reduction step takes [bdf_wrap _ po_land_ty] to it
+    ([bdf_const_wrap_nondeg]): the cumulativity this instance returns relates two different
+    types.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_const_wrap_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Const_inst :=
   typing_inferingE (Σ := Σ_po) (wfΣ := iv_po_wfE)
     (T := bdf_wrap (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)) po_land_ty)
     bdf_const_wrapped.
 
-(** Prim: the literal [1] at the β-wrap of its type [int] ([bdf_prim_wrapped]).
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_wrap_nondeg
+(** Every type inferred for the literal [1] ([tPrim iv_one]) in [Σ_po] is
+    [prim_type iv_one po_int_kn], which is not [bdf_wrap _ (prim_type iv_one po_int_kn)]; one
+    reduction step takes that β-wrap to it. *)
+Lemma bdf_prim_wrap_nondeg :
+  forall T', Σ_po ;;; [] |-E tPrim iv_one ▹ T' ->
+    [× T' = prim_type iv_one po_int_kn,
+       T' <> bdf_wrap Sort.type0 (prim_type iv_one po_int_kn) &
+       red1 Σ_po [] (bdf_wrap Sort.type0 (prim_type iv_one po_int_kn)) T'].
+Proof.
+  intros T' h.
+  assert (e : T' = prim_type iv_one po_int_kn).
+  { inversion h; subst.
+    match goal with hp : primitive_constant _ _ = Some ?k |- _ =>
+      assert (hk : Some po_int_kn = Some k) by (rewrite -hp; reflexivity);
+      injection hk as hk; subst k end.
+    reflexivity. }
+  subst T'. split; [reflexivity|exact (fun e => bdf_wrap_nondeg _ _ (eq_sym e))|apply bdf_wrap_red1].
+Qed.
+
+(** Prim: completeness on [bdf_prim_wrapped], the literal [1] at [bdf_wrap _ T] with
+    [T = prim_type iv_one po_int_kn] ([int]). Every type inferred for [1] is [T], which is not
+    [bdf_wrap _ T], and one reduction step takes [bdf_wrap _ T] to [T]
+    ([bdf_prim_wrap_nondeg]): the cumulativity this instance returns relates two different
+    types.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_prim_wrap_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Prim_inst :=
   typing_inferingE (Σ := Σ_po) (wfΣ := iv_po_wfE)
     (T := bdf_wrap Sort.type0 (prim_type iv_one po_int_kn)) bdf_prim_wrapped.
 
-(** Proj: every type inferred for [r] in [bdf_Γrβ] is the β-redex [(λ B. R B) (∀P. P)], not an
-    application of an inductive type: its head is a λ. *)
+(** Every type inferred for [r] in [bdf_Γrβ] is not an application of an inductive type. *)
 Lemma bdf_rβ_nondeg :
   forall T', iv_Σ ;;; bdf_Γrβ |-E tRel 0 ▹ T' -> forall ind u args, T' <> mkApps (tInd ind u) args.
 Proof.
@@ -920,23 +1125,26 @@ Proof.
   rewrite -e in hdec. vm_compute in hdec. discriminate hdec.
 Qed.
 
-(** Proj: [r.(f)] with [r : (λ B. R B) (∀P. P)] ([bdf_proj_typed]); completeness's Proj case
-    runs [conv_infer_indE] on the inferred β-redex, then copy 18a's
-    [projection_cumulative_indicesE].
+(** Proj: completeness on [bdf_proj_typed] ([r.(f)] in [bdf_Γrβ], whose one declaration types
+    [r] at [(λ B. R B) (∀P. P)]). Every type inferred for [r] is not an application of an
+    inductive type ([bdf_rβ_nondeg]), so a [▹{R}] judgment on [r] in [bdf_Γrβ] reaches an
+    application of [R] by a reduction between two different terms.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_rβ_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Proj_inst := typing_inferingE (Σ := iv_Σ) (wfΣ := iv_wfE) bdf_proj_typed.
 
 (** [bdf_cofix_dβ] ([bdf_cmfix]): [check_one_cofix] fails at the declared type
-    [bdf_RFβ = (λ B. R B) (∀P. P)] and passes at its β-reduct [R (∀P. P)]. *)
+    [bdf_RFβ = (λ B. R B) (∀P. P)], passes at [iv_RF = R (∀P. P)], and [bdf_RFβ] reduces to
+    [iv_RF]. *)
 Lemma bdf_cofix_dβ_nondeg :
   [× map check_one_cofix bdf_cmfix = [None],
      check_one_cofix (def_with_type bdf_cofix_dβ iv_RF) = Some iv_kn &
      red iv_Σ iv_Γc bdf_RFβ iv_RF].
 Proof. split; [reflexivity|reflexivity|exact (bdf_RFβ_red iv_Γc)]. Qed.
 
-(** CoFix: the declared type is a β-redex; completeness's CoFix case runs
-    [wf_cofixpointE_wf_cofixpoint_red] on it.
+(** CoFix: completeness on [bdf_cofix_typed] ([tCoFix bdf_cmfix 0] at its declared type
+    [bdf_RFβ]). [check_one_cofix] fails at that declared type, passes at [iv_RF], and
+    [bdf_RFβ] reduces to [iv_RF] ([bdf_cofix_dβ_nondeg]).
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_cofix_dβ_nondeg
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_CoFix_inst := typing_inferingE (Σ := iv_Σ) (wfΣ := iv_wfE) bdf_cofix_typed.
@@ -951,14 +1159,17 @@ Qed.
 
 (** ** The judgment and context lemmas *)
 
-(** The let-judgment [z := bdf_let : Prop]: the check of its body [bdf_let] against [Prop]
-    compares the inferred let-in with [Prop] (ζ).
+(** The let-judgment [z := bdf_let : Prop] ([bdf_vdef_let_typed]). Every type inferred for its
+    body [bdf_let] is not a sort ([bdf_let_nondeg]), so not [Prop]: the check of the body
+    against [Prop] in this instance's conclusion compares two different types.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
 Lemma lift_typing_lift_sortingE_inst :
   lift_sorting (checkingE si_Σ []) (infering_sortE si_Σ []) (j_vdef si_na bdf_let si_P).
 Proof. exact (lift_typing_lift_sortingE (Σ := si_Σ) si_wfE bdf_vdef_let_typed). Qed.
 
-(** [bdf_let] as a type: its sort is inferred through the ζ-step of the let-in it infers.
+(** [bdf_let] as a type ([bdf_let_sort_typed]). Every type inferred for [bdf_let] is not a sort
+    ([bdf_let_nondeg]), so the [▹□] judgment this instance returns reaches its sort by a
+    reduction between two different terms.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
 Lemma isType_infering_sortE_inst : ∑ u', si_Σ ;;; [] |-E bdf_let ▹□ u'.
 Proof.
@@ -973,25 +1184,82 @@ Proof.
            (iv_vass si_Σ [] si_na bdf_let sProp bdf_let_sort_typed eq_refl)).
 Qed.
 
-(** The context [[x : bdf_let]]: the sort of its declaration is inferred through ζ.
+(** The context [[x : bdf_let]] ([bdf_wf_Γlet]). Every type inferred for its declared type
+    [bdf_let] in the empty context is not a sort ([bdf_let_nondeg]), so the [▹□] judgment on
+    that declaration reaches its sort by a reduction between two different terms.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
 Lemma wf_local_wf_local_bdE_inst : wf_local_bdE si_Σ bdf_Γlet.
 Proof. exact (wf_local_wf_local_bdE (Σ := si_Σ) si_wfE bdf_wf_Γlet). Qed.
 
-(** [[x : bdf_let]] over [bd_ΓFG].
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
+(** [[x : bdf_let]] over [bd_ΓFG] ([bdf_wf_ΓFGlet]). Every type inferred for [bdf_let] in
+    [bd_ΓFG] is not a sort ([bdf_let_FG_nondeg]), so the [▹□] judgment on that declaration
+    reaches its sort by a reduction between two different terms.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_FG_nondeg *)
 Lemma wf_local_rel_wf_local_bdE_inst : wf_local_bd_relE si_Σ bd_ΓFG [vass si_na bdf_let].
 Proof.
   exact (wf_local_rel_wf_local_bdE (Σ := si_Σ) si_wfE
            (wf_local_local_relE si_Σ bd_ΓFG [vass si_na bdf_let] bdf_wf_ΓFGlet)).
 Qed.
 
-(** The parameter instance [[x]] against [[_ : ∀P:Prop. P]] in [bdf_Γz] ([bdf_ctx_inst_z]): the
-    check of [x] compares the inferred [z] with [∀P. P] (δ).
+(** The parameter instance [[x]] against [[_ : ∀P:Prop. P]] in [bdf_Γz] ([bdf_ctx_inst_z]).
+    Every type inferred for [x] is not a product ([bdf_z_nondeg]), so not [∀P:Prop. P]: the
+    check of [x] against [∀P:Prop. P] in this instance's conclusion compares two different
+    types.
     INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_z_nondeg *)
 Lemma ctx_inst_typing_bdE_inst :
   PCUICTyping.ctx_inst (checkingE si_Σ) bdf_Γz [tRel 0] [vass si_na iv_False].
 Proof. exact (ctx_inst_typing_bdE si_Σ bdf_Γz [tRel 0] [vass si_na iv_False] si_wfE bdf_ctx_inst_z). Qed.
+
+(** [conv_lift_judgmentE] on the let-judgment [z := bdf_let : Prop]: the check of the body is
+    [typing_checkingE] of [bdf_let_sort_typed]; the sort of [Prop] is [typing_infering_sortE] of
+    [Prop : Type@{1}]. Every type inferred for [bdf_let] is not a sort ([bdf_let_nondeg]), so
+    not [Prop]: the check of the body passed in relates two different types.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
+Lemma conv_lift_judgmentE_inst :
+  lift_sorting (checkingE si_Σ []) (infering_sortE si_Σ []) (j_decl (mkdecl si_na (Some bdf_let) si_P)).
+Proof.
+  apply (conv_lift_judgmentE si_Σ [] si_na (Some bdf_let) si_P).
+  split; [exact (typing_checkingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_let_sort_typed)|].
+  exists (Sort.super sProp).
+  split; [exact (typing_infering_sortE (Σ := si_Σ) (wfΣ := si_wfE) (iv_P_typed si_Σ [] localenv_nil))|].
+  split; [exact I|exact eq_refl].
+Qed.
+
+(** [conv_lift_judgment_univE] on the assumption [x : bdf_let] at the sort [Prop]: the sort
+    judgment passed in is [typing_infering_sortE] of [bdf_let_sort_typed]. Every type inferred
+    for [bdf_let] is not a sort ([bdf_let_nondeg]), so that [▹□] judgment reaches its sort by a
+    reduction between two different terms.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
+Lemma conv_lift_judgment_univE_inst :
+  ∑ u', lift_sorting (checkingE si_Σ []) (infering_sortE si_Σ [])
+          (j_decl_s (mkdecl si_na None bdf_let) (Some u')) × leq_sort si_Σ u' sProp.
+Proof.
+  apply (conv_lift_judgment_univE si_Σ [] si_na None bdf_let sProp).
+  split; [exact tt|].
+  exists sProp.
+  split; [exact (typing_infering_sortE (Σ := si_Σ) (wfΣ := si_wfE) bdf_let_sort_typed)|].
+  split; [reflexivity|exact eq_refl].
+Qed.
+
+(** The context move on the η pair of [BDTypingEtaInstances]: [bd_ΓFG ,, x : G (λ y. F y)] and
+    [bd_ΓFG ,, x : G F] differ, and one η step relates their declared types. *)
+Lemma ws_cumul_ctx_pbE_vass_inst_nondeg :
+  (bd_ΓFG ,, vass si_na bd_X <> bd_ΓFG ,, vass si_na bd_GF) × eta1 bd_X bd_GF.
+Proof. split; [discriminate|exact bd_case_eta_step]. Qed.
+
+(** [ws_cumul_ctx_pbE_vass] on that pair: the declared types are converted by the η step
+    [bd_case_eta_step] ([eta1_ws_cumul_pbE]); the two contexts differ
+    ([ws_cumul_ctx_pbE_vass_inst_nondeg]). [ws_cumul_ctx_pbE] is qualified: its module
+    [PCUICContextConversionEta] is loaded through [BDFromPCUICEta], not imported here.
+    INSTANCE NONDEGEN BDFromPCUICEtaInstances.ws_cumul_ctx_pbE_vass_inst_nondeg *)
+Lemma ws_cumul_ctx_pbE_vass_inst :
+  PCUICContextConversionEta.ws_cumul_ctx_pbE Conv si_Σ (bd_ΓFG ,, vass si_na bd_X) (bd_ΓFG ,, vass si_na bd_GF).
+Proof.
+  exact (ws_cumul_ctx_pbE_vass (Σ := si_Σ) (Γ := bd_ΓFG) (na := si_na) (na' := si_na)
+           (A := bd_X) (A' := bd_GF) eq_refl eq_refl
+           (eta1_ws_cumul_pbE (Σ := si_Σ) (pb := Conv) (Γ := bd_ΓFG) (t := bd_X) (u := bd_GF)
+              eq_refl eq_refl bd_case_eta_step)).
+Qed.
 
 (** ** The checker's [T6BDc_facts], at concrete arguments *)
 
@@ -1021,7 +1289,7 @@ Proof.
   exact (T6BDc_ctx_inst_typing_bd_fit si_Σ bdf_Γz [tRel 0] [vass si_na iv_False] si_wfE bdf_ctx_inst_z).
 Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
+(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_FG_nondeg *)
 Lemma T6BDc_wf_local_rel_wf_local_bd_fit_inst : wf_local_bd_relE si_Σ bd_ΓFG [vass si_na bdf_let].
 Proof.
   exact (T6BDc_wf_local_rel_wf_local_bd_fit (Σ := si_Σ) si_wfE

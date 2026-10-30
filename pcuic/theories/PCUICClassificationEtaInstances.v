@@ -16,21 +16,24 @@
   a trivial case, or the reason it cannot be.
   - The arity corollaries (Class A' rows) and [isArity_typing_spineE] run on the type
     [cli_T := Π _ : Prop. z] in the context [z := Prop : Type] ([cli_Γz]): [cli_T] is not an
-    arity ([cli_T_not_arity]; its codomain is the variable [z]) and reaches the arity
-    [Prop → Prop] only by unfolding [z]. i20 ([invert_cumul_arity_rE_inst]) runs T8 [Prod_r] on
-    [cli_T] and T8 [Sort_r] on the codomain [z]; i21 ([invert_cumul_arity_lE_inst]) runs
-    [PCUICPrincipalityEta.T8_Prod_l_plug] and this file's [T8_Sort_l_plug] (the [_l] forms
-    derived from the proved [_r] ones) the same way; x2, x3 and [isArity_typing_spineE] run
-    i21/i20 on it.
+    arity ([cli_T_not_arity]; its codomain is the variable [z]), and unfolding [z] reduces it in
+    one step to the arity [Prop → Prop] ([cli_T_red]). i20 ([invert_cumul_arity_rE_inst]) and
+    i21 ([invert_cumul_arity_lE_inst]) take [cli_T] with a cumulativity to or from
+    [Prop → Prop] ([cli_ws_r], [cli_ws_l]); x2, x3 and [isArity_typing_spineE] take it the same
+    way. The input is chosen for the T8 sites of i20's proof ([Prod_r] on [cli_T], [Sort_r] on
+    [z]) and of i21's ([PCUICPrincipalityEta.T8_Prod_l_plug], [T8_Sort_l_plug], the [_l] forms
+    derived from the proved [_r] ones); no lemma here states which site a run reaches.
   - The (co)fixpoint witness lemmas run on declared types on which the check FAILS:
     [bdf_fxty 0] (domain the β-redex [(λ B. I B) A], [bdf_check_fix_dtypeβ]) and [bdf_RFβ]
     (the β-redex [(λ B. R B) (∀P. P)], [bdf_check_cofix_dtypeβ]); the typed-reduct route
     finds the reduct on which it passes. [wf_fixpoint_spineE_inst] applies the fixpoint to the
     argument [c A], typed at the β-redex domain, and reads back its type at the inductive.
   - [typing_cofix_coindE_inst]: a cofixpoint whose declared type is the β-redex [bdf_RFβ],
-    typed at [R (∀P. P)] by conversion.
+    typed at [R (∀P. P)], which is not that declared type and is its one-step β-reduct
+    ([cli_cofix_dtype_nondeg]).
   - [typing_spine_all_invE_inst] runs on [∀P:Prop. P] applied to [∀P:Prop. P], at the type
-    [let z := ∀P. P in z] (one ζ step from the substituted codomain, [cli_spine_all_inv_differs]).
+    [let z := ∀P. P in z], which differs from the substituted codomain [∀P. P]
+    ([cli_spine_all_inv_differs]).
     The three [nth_error] spine lemmas run on the dependent type [Π x : Prop. Π y : x. x]
     ([cli_dep_ty]): [typing_spine_nth_errorE_inst] reads the type of the second argument
     [c (∀P. P)], whose declared type [x] the first argument [I (∀P. P)] replaces
@@ -39,20 +42,22 @@
     ([cli_dep_let]), not a product ([cli_dep_none_differs], [cli_dep_let_not_prod]). The smash
     lemmas run on the let-in [let z := ∀P. P in z], which smashing changes
     ([cli_let_smash_differs]).
-  - [arity_spine_len_subst_inst] substitutes [∀P. P] for the free variable of the arity
-    [let z := x : Prop in Π _ : x. Prop] ([cli_open_arity]), which changes the let body and the
-    product domain ([cli_open_arity_subst_differs]).
-  - Evaluation: [cli_eval] is the β-step [(λx:Prop. x) (∀P. P) ⇓ ∀P. P] ([cli_eval_moves]);
-    [eval_classificationE_inst] evaluates the fixpoint application
+  - [arity_spine_len_subst_inst] substitutes [∀P. P] for the free variable [x] of the arity
+    [let z := x : Prop in Π _ : x. Prop] ([cli_open_arity]), which changes the term
+    ([cli_open_arity_subst_differs]); [x] occurs in the let body and in the product domain.
+  - Evaluation: [cli_eval] evaluates the β-redex [(λx:Prop. x) (∀P. P)] to [∀P. P], a different
+    term ([cli_eval_moves]); [eval_classificationE_inst] evaluates the fixpoint application
     [mkApps (tFix iv_mfix 0) [c (∀P. P)]], not a canonical form ([cli_fix_app_not_canonical]),
-    to [c (∀P. P)] ([cli_fix_eval]: one unfolding, one β step, [eval_construct]).
+    to [c (∀P. P)] ([cli_fix_eval], whose proof makes one unfolding, one β step and
+    [eval_construct]).
   - The whnf and value lemmas run on the application [c (∀P. P)], whose head is not the term
-    itself ([cli_cF_head_differs]); [fix_app_is_constructorE_inst] runs the branch of a present
-    recursive argument ([cli_fix_rarg_present]).
+    itself ([cli_cF_head_differs]); the conclusion of [fix_app_is_constructorE_inst] is its
+    branch for a present recursive argument ([cli_fix_rarg_present]).
   - The rows whose conclusion is [False] (the lemma states that its premises cannot hold
-    together; as in base) and the rows whose conclusion is reflexive by the statement
-    ([check_recursivity_kind_injE], [wt_closed_red_reflE]) have instances tagged IMPOSSIBLE, with
-    the reason in the tag.
+    together; as in base) and the rows whose conclusion relates a term to itself
+    ([check_recursivity_kind_injE]: [rk = rk']; [wt_closed_red_reflE]: [Σ ;;; Γ ⊢ t ⇝ t], whose
+    closedness side conditions compute on any concrete context and term and are not a
+    non-degeneracy) have instances tagged IMPOSSIBLE, with the reason in the tag.
 
   **Rows without an instance.**
   - Refutations ([invert_cumul_arity_lE_untyped_false], [invert_cumul_arity_rE_untyped_false]):
@@ -396,6 +401,18 @@ Proof.
     exact (closed_red_of (Σ := iv_Σ) (Γ := iv_Γc) (t := bdf_RFβ) eq_refl eq_refl (bdf_RFβ_red iv_Γc)).
 Qed.
 
+(** The cofixpoint [bdf_cofix_dβ] of [typing_cofix_coindE_inst]: [check_one_cofix] fails on it;
+    its declared type, the β-redex [bdf_RFβ], is not [R (∀P. P)] and β-reduces to it in one
+    step. *)
+Lemma cli_cofix_dtype_nondeg :
+  check_one_cofix bdf_cofix_dβ = None /\
+  dtype bdf_cofix_dβ <> mkApps (tInd iv_ind []) [iv_False] /\
+  ∥ red1 iv_Σ iv_Γc (dtype bdf_cofix_dβ) (mkApps (tInd iv_ind []) [iv_False]) ∥.
+Proof.
+  split; [exact bdf_check_cofix_dtypeβ|]. split; [intros h; vm_compute in h; discriminate h|].
+  constructor. exact (red_beta _ _ si_na si_P (iv_R (tRel 0)) iv_False).
+Qed.
+
 (** Evaluation: [(λx:Prop. x) (∀P:Prop. P) ⇓ ∀P:Prop. P]. *)
 Lemma cli_eval : eval si_Σ (tApp iv_id iv_False) iv_False.
 Proof.
@@ -501,9 +518,9 @@ Definition typing_spine_arity_mkApps_IndE_inst :
     cli_PP_conv.
 
 (** [let z := x : Prop in Π _ : x. Prop], with [x] free (de Bruijn index 0 outside the let):
-    an arity whose let body and product domain mention [x]. The substitution [x := ∀P. P]
-    changes the term ([cli_open_arity_subst_differs]); the lemma's induction runs its [tLetIn]
-    and [tProd] cases, at the lifted indices 0 and 1. *)
+    an arity whose let body and product domain mention [x] (index 0 in the let body, index 1
+    under the let, in the product domain). The substitution [x := ∀P. P] changes the term
+    ([cli_open_arity_subst_differs]). *)
 Definition cli_open_arity : term := tLetIn si_na (tRel 0) si_P (tProd si_na (tRel 1) (tSort sProp)).
 
 Lemma cli_open_arity_subst_differs : subst [iv_False] 0 cli_open_arity <> cli_open_arity.
@@ -537,9 +554,10 @@ Definition wf_cofixpoint_spineE_inst :=
   wf_cofixpoint_spineE (Σ := iv_Σ) iv_wfE iv_Γc bdf_cmfix 0 bdf_cofix_dβ [] bdf_RFβ
     bdf_wf_cofix eq_refl cli_RFβ_isType cli_cofix_sp_nil.
 
-(** The cofixpoint [[bdf_cofix_dβ]] ([bdf_cmfix]), typed at [R (∀P. P)] by conversion from its
-    declared type, the β-redex [bdf_RFβ] on which [check_one_cofix] fails.
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_check_cofix_dtypeβ *)
+(** The cofixpoint [[bdf_cofix_dβ]] ([bdf_cmfix]), typed at [R (∀P. P)]: [check_one_cofix] fails
+    on it, and its declared type, the β-redex [bdf_RFβ], is not [R (∀P. P)] and β-reduces to it
+    in one step ([cli_cofix_dtype_nondeg]).
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cofix_dtype_nondeg *)
 Definition typing_cofix_coindE_inst :
   check_recursivity_kind (lookup_env iv_Σ) (inductive_mind iv_ind) CoFinite :=
   typing_cofix_coindE (Σ := iv_Σ) (wfΣ := iv_wfE) (mfix := [bdf_cofix_dβ]) cli_cofix_typed_R.
@@ -556,7 +574,8 @@ Definition typing_spine_smashE_inst :=
 
 (** The second argument [c (∀P. P)] of [Π x : Prop. Π y : x. x], at its declared type [x]
     instantiated by the first argument [I (∀P. P)].
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_dep_nth_subst_differs *)
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_dep_nth_subst_differs
+    TARGET PCUICClassificationEta.typing_spine_nth_errorE *)
 Definition typing_spine_nth_errorE_inst :=
   PCUICClassificationEta.typing_spine_nth_errorE (Σ := si_Σ) si_wfE [] cli_dep_Δ (tRel 1)
     [iv_IF; sri_cF] iv_IF 1 sri_cF (vass si_na (tRel 0)) cli_dep_ass cli_wf_dep cli_dep_sp_two eq_refl eq_refl.
@@ -593,7 +612,7 @@ Definition check_recursivity_kind_injE_inst : Finite = Finite :=
     eq_refl eq_refl.
 
 (** The variable [x : (λ B. I B) A] in the context [bdf_Γβ].
-    INSTANCE IMPOSSIBLE: the conclusion is the reflexive closed reduction Σ ;;; Γ ⊢ t ⇝ t of the premise's one term t, for every premise and environment (the lemma's content is the closedness of Γ and t, here exercised in the non-empty context bdf_Γβ). *)
+    INSTANCE IMPOSSIBLE: the conclusion Σ ;;; Γ ⊢ t ⇝ t relates the premise's one term t to itself, for every premise and environment: its reduction is the reflexive one, and its other parts (Γ closed, t open in Γ) are side conditions that compute on any concrete context and term, so no instance relates two different terms. *)
 Definition wt_closed_red_reflE_inst := wt_closed_red_reflE (Σ := si_Σ) (wfΣ := si_wfE) bdf_x_ind_typed.
 
 (** INSTANCE IMPOSSIBLE: the conclusion is False: no derivation types a variable tVar; the typing premise left as a hypothesis. *)
@@ -655,8 +674,10 @@ Definition ind_whnf_classificationE_inst :=
   ind_whnf_classificationE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] cli_axiom_free
     cli_notCoInductive sri_cF_typed (whnf_cstrapp _ _ _ _ _ _ [iv_False]).
 
-(** The fixpoint applied to [c (∀P. P)] at its recursive argument: the branch that reads the
-    argument's type at the inductive.
+(** The fixpoint applied to [c (∀P. P)]: its recursive argument is present
+    ([cli_fix_rarg_present]), so the conclusion is the branch for a present argument (an
+    axiom-free normal value there is a constructor application), not the product of the absent
+    case.
     INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_fix_rarg_present *)
 Definition fix_app_is_constructorE_inst :=
   fix_app_is_constructorE (Σ := si_Σ) (wfΣ := si_wfE) (mfix := iv_mfix) (idx := 0) (args := [sri_cF])

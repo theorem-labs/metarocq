@@ -17,17 +17,19 @@
   **Non-degeneracy.** Each instance carries its tag: NONDEGEN with the lemma that states why it
   is more than a trivial case, or IMPOSSIBLE with the property of the statement.
   - [firstorder_value_specE_inst]: the value [s z] (an application with an argument,
-    [fo_sz_nondeg]) of type [N]; the theorem gives it as a first-order value, through
-    [firstorder_argsE] on the spine of [s]'s type. [firstorder_argsE_inst] and
-    [typing_spine_arity_spineE_inst] run on that spine ([fo_s_spine]: [Π _ : N. N] applied to
-    [z]); [instantiated_typing_spine_firstorder_spineE_inst] on its arity spine.
+    [fo_sz_nondeg]) of type [N]; the theorem gives it as a first-order value.
+    [firstorder_argsE_inst] and [typing_spine_arity_spineE_inst] run on the spine of [s]'s type
+    ([fo_s_spine]: [Π _ : N. N] applied to [z]); [instantiated_typing_spine_firstorder_spineE_inst]
+    on its arity spine.
   - [firstorder_value_indsE_inst]: the induction principle on the value [s z], built directly
-    ([fo_sz_value]), with the predicate "is closed": the step uses the induction hypothesis on
-    the arguments ([fo_closed_step]), here on [z].
+    ([fo_sz_value]), with the predicate "is closed": the step it is given uses the induction
+    hypothesis on the constructor's arguments ([fo_closed_step]), and [s z] has an argument.
   - [firstorder_spine_letE_inst]: the type [let X := N : Type1 in X], whose body is the bound
-    variable; the spine is the empty one at [N].
+    variable; the spine is the empty one at [N]; the let-type is not [N] and ζ-reduces to it in
+    one step ([fo_letN_nondeg]).
   - [isType_context_conversionE_inst]: the type [X], a variable, in the contexts
-    [X : let _ := N : Type1 in Type1] and [X : Type1], which differ by a zeta step.
+    [X : let _ := N : Type1 in Type1] and [X : Type1], which differ; the first declared type
+    ζ-reduces to the second in one step ([fo_ctx_nondeg]).
   - [plookup_env_extendsE_inst], [firstorder_mutind_extE_inst]: [fo_env] ⊂ [fo_env2], strict.
   - [firstorder_ind_propositionalE_inst]: [N] is first order, with a constructor that takes an
     argument ([s]), and not propositional.
@@ -376,9 +378,12 @@ Proof.
     apply rt_step. apply red_zeta.
 Qed.
 
-(** [let X := N : Type1 in X] is not [N]: one zeta step. *)
-Lemma fo_letN_nondeg : fo_letN <> fo_N.
-Proof. intros h; vm_compute in h; discriminate h. Qed.
+(** [let X := N : Type1 in X] is not [N], and ζ-reduces to it in one step. *)
+Lemma fo_letN_nondeg : fo_letN <> fo_N /\ ∥ red1 fo_Σ [] fo_letN fo_N ∥.
+Proof.
+  split; [intros h; vm_compute in h; discriminate h|].
+  constructor. exact (red_zeta _ _ fo_na fo_N fo_T (tRel 0)).
+Qed.
 
 (** [let _ := N : Type1 in Type1] is the sort [Type1] behind a let. *)
 Definition fo_letT : term := tLetIn fo_na fo_N fo_T fo_T.
@@ -423,22 +428,26 @@ Proof.
     apply rt_step. apply red_zeta.
 Qed.
 
-(** The two contexts of [X] differ (by a zeta step). *)
-Lemma fo_ctx_nondeg : [vass fo_na fo_letT] <> [vass fo_na fo_T].
-Proof. intros h; vm_compute in h; discriminate h. Qed.
+(** The two contexts of [X] differ, and the first declared type ζ-reduces to the second in one
+    step. *)
+Lemma fo_ctx_nondeg : [vass fo_na fo_letT] <> [vass fo_na fo_T] /\ ∥ red1 fo_Σ [] fo_letT fo_T ∥.
+Proof.
+  split; [intros h; vm_compute in h; discriminate h|].
+  constructor. exact (red_zeta _ _ fo_na fo_N fo_T fo_T).
+Qed.
 
 (** ** The lemmas that never took a class *)
 
-(** The induction principle on the value [s z], with the predicate "is closed": the step uses the
-    induction hypothesis on the arguments ([fo_closed_step]), here on [z].
+(** The induction principle on the value [s z], with the predicate "is closed": the step passed
+    to it uses the induction hypothesis on the constructor's arguments ([fo_closed_step]), and
+    [s z] has an argument ([fo_sz_nondeg]).
     INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_sz_nondeg *)
 Definition firstorder_value_indsE_inst : is_true (closedn 0 fo_sz) :=
   firstorder_value_indsE fo_Σ [] (fun t => is_true (closedn 0 t))
     (fun i n ui _ args _ _ _ hP _ => fo_closed_step i n ui args hP)
     fo_sz fo_sz_value.
 
-(** [N] has a constructor that takes an argument ([s : N → N]): the first-order check of the
-    premise examines a constructor argument. *)
+(** [N] has a constructor, [s : N → N], that takes an argument. *)
 Lemma fo_idecl_nondeg : In fo_cs (ind_ctors fo_idecl) /\ cstr_args fo_cs <> [].
 Proof. split; [cbn; right; left; reflexivity|intros h; vm_compute in h; discriminate h]. Qed.
 
@@ -480,9 +489,15 @@ Definition isType_context_conversionE_inst : isTypeE fo_Σ [vass fo_na fo_T] (tR
 Lemma fo_ext : strictly_extends_decls fo_env fo_env2.
 Proof. split; [reflexivity| |reflexivity]. exists [(fo_kn2, InductiveDecl fo_mdecl)]. reflexivity. Qed.
 
-(** The extension is strict, and its new name is not [N]'s: a lookup of [N] passes it. *)
-Lemma fo_ext_nondeg : declarations fo_Σ2.1 <> declarations fo_Σ.1 /\ fo_kn2 <> fo_kn.
-Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+(** The extension is strict: it puts the declaration [N2] in front of [fo_env]'s declarations,
+    under the name [fo_kn2], which is not [N]'s, so a lookup of [N] passes it. *)
+Lemma fo_ext_nondeg :
+  declarations fo_Σ2.1 <> declarations fo_Σ.1 /\ fo_kn2 <> fo_kn /\
+  declarations fo_Σ2.1 = (fo_kn2, InductiveDecl fo_mdecl) :: declarations fo_Σ.1.
+Proof.
+  split; [intros h; vm_compute in h; discriminate h|].
+  split; [intros h; vm_compute in h; discriminate h|reflexivity].
+Qed.
 
 (** The lookup of [N] in [fo_env], read in its strict extension [fo_env2].
     INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_ext_nondeg *)
@@ -503,7 +518,7 @@ Definition firstorder_value_alphaE_inst : fo_sz = fo_sz :=
 
 (** The inversion that the main theorem uses in place of a copy, at [fo_Σ]: the arity
     [Π _ : N. Type1] is never related to [N], at any [pb].
-    INSTANCE IMPOSSIBLE: the conclusion is False: an arity that ends in a sort is never related to an inductive type, so no premise of the lemma holds
+    INSTANCE IMPOSSIBLE: the conclusion is False: an arity that ends in a sort is never related to an inductive type, so the lemma's cumulativity premise (here at fo_Σ, for every pb) cannot hold; its other premise (ClosedBodies fo_Σ, from fo_wfE) holds and is discharged
     TARGET PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE *)
 Definition fo_invert_cumul_Sort_IndE_inst :
   forall pb, ws_cumul_pbE pb fo_Σ [] (it_mkProd_or_LetIn [vass fo_na fo_N] (tSort Sort.type1))

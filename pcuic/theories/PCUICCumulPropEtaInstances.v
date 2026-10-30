@@ -104,9 +104,12 @@ Section Generic.
   Definition cpi_eta_cp : rf_Σ ;;; rf_Γ |-E rf_t ~~ tRel 0 :=
     cumul_pb_cumul_propE rf_Σ rf_Γ Conv rf_t (tRel 0) (cpi_eta Conv).
 
-  (** The η pair: [λx:Prop. f x] is not [f]. *)
-  Lemma cpi_eta_nondeg : rf_t <> tRel 0.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** The η pair: [λx:Prop. f x] is not [f], and contracts to [f] in one η step ([eta1]). *)
+  Lemma cpi_eta_nondeg : (rf_t <> tRel 0) × eta1 rf_t (tRel 0).
+  Proof.
+    split; [intros h; vm_compute in h; discriminate h|].
+    exact (eta_red c1b_na (tRel 0) (tSort sProp)).
+  Qed.
 
   (** β: [(λx:Type. x) Prop ⇝ Prop]. *)
   Definition cpi_na : aname := mkBindAnn nAnon Relevant.
@@ -115,9 +118,10 @@ Section Generic.
   Lemma cpi_beta_red Γ : is_closed_context Γ -> rf_Σ ;;; Γ ⊢ cpi_beta ⇝ tSort sProp.
   Proof. intros hΓ. split; [exact hΓ|reflexivity|]. apply red1_red. constructor. Qed.
 
-  (** The β-redex is not the sort it reduces to. *)
-  Lemma cpi_beta_nondeg : cpi_beta <> tSort sProp.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** The β-redex [(λx:Type. x) Prop] is not the sort [Prop], and reduces to it in one [red1]
+      step. *)
+  Lemma cpi_beta_nondeg : (cpi_beta <> tSort sProp) × red1 rf_Σ [] cpi_beta (tSort sProp).
+  Proof. split; [intros h; vm_compute in h; discriminate h|constructor]. Qed.
 
   (** A third term, one β step from [f]: [(λg:Prop → Prop. g) f]. *)
   Definition cpi_redex : term := tApp (tLambda cpi_na rf_F (tRel 0)) (tRel 0).
@@ -131,9 +135,20 @@ Section Generic.
   Definition cpi_eta_redex_cp : rf_Σ ;;; rf_Γ |-E rf_t ~~ cpi_redex :=
     cpE_trans (wfΣ := cpi_cb) cpi_eta_cp cpi_redex_cp.
 
-  (** The chain [λx:Prop. f x], [f], [(λg. g) f]: three pairwise distinct terms. *)
-  Lemma cpi_chain_nondeg : rf_t <> tRel 0 /\ tRel 0 <> cpi_redex /\ rf_t <> cpi_redex.
-  Proof. split; [|split]; intros h; vm_compute in h; discriminate h. Qed.
+  (** The chain [λx:Prop. f x], [f], [(λg. g) f]: three pairwise distinct terms; the first
+      contracts to [f] in one η step ([eta1]), and the β-redex [(λg. g) f] reduces to [f] in one
+      [red1] step. *)
+  Lemma cpi_chain_nondeg :
+    [× rf_t <> tRel 0, tRel 0 <> cpi_redex, rf_t <> cpi_redex, eta1 rf_t (tRel 0)
+     & red1 rf_Σ rf_Γ cpi_redex (tRel 0)].
+  Proof.
+    split.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - exact (eta_red c1b_na (tRel 0) (tSort sProp)).
+    - constructor.
+  Qed.
 
   (** ** Basic structure *)
 
@@ -191,7 +206,8 @@ Section Generic.
     split; [exact (cpi_beta_red [] eq_refl)|exact cpi_Prop_red_refl|exact cpi_Prop_eq].
   Qed.
 
-  (** β: [(λx:Type. x) Prop ~~ Prop], from the common reduct [Prop].
+  (** β: [(λx:Type. x) Prop ~~ Prop], from reducts of the two sides related by [eq_term_prop]
+      ([cpi_beta_reducts]).
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_beta_nondeg *)
   Definition into_cumul_propE_red_inst : rf_Σ ;;; [] |-E cpi_beta ~~ tSort sProp :=
     into_cumul_propE_red (T := cpi_beta) (U := tSort sProp) cpi_beta_reducts.
@@ -241,9 +257,10 @@ Section Generic.
     split; [reflexivity|reflexivity|]. apply red1_red. constructor.
   Qed.
 
-  (** The β-redex is not the sort [SProp] it reduces to. *)
-  Lemma cpi_betaS_nondeg : cpi_betaS <> tSort sSProp.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** The β-redex [(λx:Type. x) SProp] is not the sort [SProp], and reduces to it in one [red1]
+      step. *)
+  Lemma cpi_betaS_nondeg : (cpi_betaS <> tSort sSProp) × red1 rf_Σ [] cpi_betaS (tSort sSProp).
+  Proof. split; [intros h; vm_compute in h; discriminate h|constructor]. Qed.
 
   (** [(λx:Type. x) SProp] below [SProp] twice. The statement forces [s' = s = SProp]; the
       content of the instance is the β step in [T].
@@ -273,9 +290,13 @@ Section Generic.
     exact (eta_red cpi_na (tRel 1) (tSort sProp)).
   Qed.
 
-  (** The η pair of the extended context: [λy:Prop. f y] is not [f]. *)
-  Lemma cpi_lam_nondeg : cpi_lam <> tRel 1.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** The η pair of the extended context: [λy:Prop. f y] is not [f], and contracts to [f] in one
+      η step ([eta1]). *)
+  Lemma cpi_lam_nondeg : (cpi_lam <> tRel 1) × eta1 cpi_lam (tRel 1).
+  Proof.
+    split; [intros h; vm_compute in h; discriminate h|].
+    exact (eta_red cpi_na (tRel 1) (tSort sProp)).
+  Qed.
 
   Definition cpi_ctx_vass : context := rf_Γ ,, vass cpi_na (tSort sProp).
   Definition cpi_ctx_vdef : context := rf_Γ ,, vdef cpi_na (tSort sProp) (tSort (Sort.super sProp)).
@@ -309,10 +330,18 @@ Section Generic.
   (** The identity on [Prop], of type [Prop → Prop] ([rf_F]). *)
   Definition cpi_id : term := tLambda c1b_na (tSort sProp) (tRel 0).
 
-  (** Substituting [id] for [f] changes [λx:Prop. f x], and the two sides stay distinct. *)
+  (** Substituting [id] for [f] changes [λx:Prop. f x], and the two sides stay distinct; the pair
+      is one η step apart ([eta1]) before the substitution and after it. *)
   Lemma cpi_id_subst_nondeg :
-    subst [cpi_id] 0 rf_t <> rf_t /\ subst [cpi_id] 0 rf_t <> subst [cpi_id] 0 (tRel 0).
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+    [× subst [cpi_id] 0 rf_t <> rf_t, subst [cpi_id] 0 rf_t <> subst [cpi_id] 0 (tRel 0),
+       eta1 rf_t (tRel 0) & eta1 (subst [cpi_id] 0 rf_t) (subst [cpi_id] 0 (tRel 0))].
+  Proof.
+    split.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - exact (eta_red c1b_na (tRel 0) (tSort sProp)).
+    - exact (eta_red c1b_na cpi_id (tSort sProp)).
+  Qed.
 
   (** [λx:Prop. id x ~~ id].
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_id_subst_nondeg *)
@@ -356,9 +385,18 @@ Section Generic.
     exact (eta_red c1b_na (tRel 0) (tSort sProp)).
   Qed.
 
-  (** The two contexts differ (by β), and so do the two terms (by η). *)
-  Lemma cpi_ctx_nondeg : cpi_ctx_beta <> rf_Γ /\ rf_t <> tRel 0.
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+  (** The two contexts differ: the type [(λX:Prop. X) (Prop → Prop)] of the first's declaration
+      reduces to the type [Prop → Prop] of the second's in one [red1] step. The two terms differ
+      and are one η step apart ([eta1]). *)
+  Lemma cpi_ctx_nondeg :
+    [× cpi_ctx_beta <> rf_Γ, red1 rf_Σ [] cpi_Fbeta rf_F, rf_t <> tRel 0 & eta1 rf_t (tRel 0)].
+  Proof.
+    split.
+    - intros h; vm_compute in h; discriminate h.
+    - constructor.
+    - intros h; vm_compute in h; discriminate h.
+    - exact (eta_red c1b_na (tRel 0) (tSort sProp)).
+  Qed.
 
   (** The η pair, moved from the β-context [f : (λX:Prop. X) (Prop → Prop)] to [f : Prop → Prop].
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_ctx_nondeg *)
@@ -366,12 +404,22 @@ Section Generic.
     context_conversion_cumul_propE (wfΣ := cpi_wf_extE) (Γ := cpi_ctx_beta) (Δ := rf_Γ) (M := rf_t)
       (N := tRel 0) cpi_eta_beta_ctx cpi_ctx_conv.
 
-  (** The substituted terms differ (by η), and so do the two declarations (by β). *)
-  Lemma cpi_subst_cumul_nondeg : rf_t <> tRel 0 /\ [vass c1b_na rf_F] <> [vass c1b_na cpi_Fbeta].
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+  (** The substituted terms differ and are one η step apart ([eta1]). The two declarations differ:
+      the type [(λX:Prop. X) (Prop → Prop)] of the second reduces to the type [Prop → Prop] of the
+      first in one [red1] step. *)
+  Lemma cpi_subst_cumul_nondeg :
+    [× rf_t <> tRel 0, eta1 rf_t (tRel 0), [vass c1b_na rf_F] <> [vass c1b_na cpi_Fbeta]
+     & red1 rf_Σ rf_Γ cpi_Fbeta rf_F].
+  Proof.
+    split.
+    - intros h; vm_compute in h; discriminate h.
+    - exact (eta_red c1b_na (tRel 0) (tSort sProp)).
+    - intros h; vm_compute in h; discriminate h.
+    - constructor.
+  Qed.
 
-  (** [λx:Prop. f x] and [f] substituted for one variable, typed in two declarations that differ
-      by β.
+  (** [λx:Prop. f x] and [f] substituted for one variable, checked against two declarations whose
+      types differ by β (the substitutions are [untyped_subslet]).
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_subst_cumul_nondeg *)
   Definition substitution_untyped_cumul_prop_cumulE_inst :=
     @substitution_untyped_cumul_prop_cumulE cf rf_Σ rf_Γ [vass c1b_na rf_F] [vass c1b_na cpi_Fbeta]
@@ -415,15 +463,27 @@ Section DefaultFlags.
     apply ws_cumul_pbE_Sort; [reflexivity|exact eq_refl].
   Qed.
 
-  (** The term is a β-redex, not a sort, and its two upper sorts differ. *)
-  Lemma cpi_confluence_nondeg : cpi_beta <> tSort sProp /\ sProp <> Sort.type0.
-  Proof. split; [exact cpi_beta_nondeg|discriminate]. Qed.
-
   (** [(λx:Type. x) Prop] below [Prop] and below [Type₀]: the common sort is [Prop].
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_confluence_nondeg *)
   Definition cumul_sort_confluenceE_inst :=
     cumul_sort_confluenceE (wfΣ := cpi_wfE) (A := cpi_beta) (u := sProp) (v := Sort.type0)
       cpi_beta_cumul_Prop cpi_beta_cumul_Type0.
+
+  (** The term is the β-redex [(λx:Type. x) Prop]: it is not [Prop], and reduces to it in one
+      [red1] step. Its two upper sorts [Prop] and [Type₀] differ. The sort the instance returns,
+      below both, is [Prop]. *)
+  Lemma cpi_confluence_nondeg :
+    [× cpi_beta <> tSort sProp, red1 rf_Σ [] cpi_beta (tSort sProp), sProp <> Sort.type0
+     & projT1 cumul_sort_confluenceE_inst = sProp].
+  Proof.
+    split.
+    - exact (fst cpi_beta_nondeg).
+    - exact (snd cpi_beta_nondeg).
+    - discriminate.
+    - destruct cumul_sort_confluenceE_inst as [v' hv']. cbn.
+      destruct hv' as [_ [hle _]].
+      destruct v' as [| |l]; [reflexivity|exfalso; exact hle|exfalso; exact hle].
+  Qed.
 
 End DefaultFlags.
 
@@ -437,8 +497,9 @@ Section NoPropSub.
   Proof. apply cpE_of_eq_term_prop; [reflexivity|reflexivity|reflexivity|]. constructor. reflexivity. Qed.
 
   (** [Prop ~~ Prop]. The premise [Sort.is_prop u] forces [u = Prop]; a [cumul_propE] between two
-      sorts gives their family comparison ([cumul_prop_sortE]), so [u' = Prop] too.
-      INSTANCE IMPOSSIBLE: every instance is at Prop on both sides (is_prop u forces u, the sort comparison forces u') *)
+      sorts gives their family comparison ([cumul_prop_sortE]), which relates [Prop] only to [Prop]
+      when [prop_sub_type = false] ([eq_univ_prop]), so [u' = Prop] too.
+      INSTANCE IMPOSSIBLE: under the section premise Hcf : prop_sub_type = false, every instance is at Prop on both sides (is_prop u forces u = Prop; with Hcf the family comparison eq_univ_prop relates Prop only to Prop, so u' = Prop) *)
   Definition cumul_prop_propsE_inst : Sort.is_prop sProp :=
     @cumul_prop_propsE cpr_flags eq_refl rf_Σ [] sProp sProp cpi_wfE eq_refl cpi_Prop_cp.
 
@@ -462,9 +523,13 @@ Section NoPropSub.
     @cumul_prop_mkAppsE cpr_flags eq_refl rf_Σ rf_Γ (tRel 0) [rf_t] (tRel 0) [tRel 0] cpi_wf_extE
       eq_refl eq_refl eq_refl ltac:(reflexivity) (All2_cons cpi_eta_cp All2_nil).
 
-  (** The two types of [x]: [G (λy:Prop. F y)] is not [G F]. *)
-  Lemma cpi_tw_nondeg : tw_Geta <> tw_GF.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** The two types of [x]: [G (λy:Prop. F y)] is not [G F], and contracts to it in one η step
+      inside the argument of [G] ([eta1]). *)
+  Lemma cpi_tw_nondeg : (tw_Geta <> tw_GF) × eta1 tw_Geta tw_GF.
+  Proof.
+    split; [intros h; vm_compute in h; discriminate h|].
+    unfold tw_Geta, tw_GF. apply app_eta_r. exact (eta_red tw_na (tRel 1) tw_P).
+  Qed.
 
   (** [typing_leq_term_propE], applied to the η-typed variable ([tw_witness_typed]): [x] at
       [G (λy:Prop. F y)] and at [G F], compared with itself; the conclusion relates the two types.
@@ -497,9 +562,11 @@ Section Inductives.
 
   Definition cpi_iu_wfE : wfE iu_Σ := wf_incl_E iu_wf.
 
-  (** The two universe levels differ. *)
-  Lemma cpi_iu_levels_nondeg : iu_a <> iu_b.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** The two universe levels differ, and so do the instances of [I@{i}] at [a] and at [b]. *)
+  Lemma cpi_iu_levels_nondeg :
+    iu_a <> iu_b /\
+    subst_instance [iu_a] (tInd iu_ind [Level.lvar 0]) <> subst_instance [iu_b] (tInd iu_ind [Level.lvar 0]).
+  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
 
   (** [I@{a} Set] and [I@{b} Set]: the instances differ at an [Irrelevant] universe. *)
   Lemma cpi_iu_eq : eq_term_prop iu_Σ 0 (mkApps (tInd iu_ind [iu_a]) [iu_Set]) (mkApps (tInd iu_ind [iu_b]) [iu_Set]).
@@ -528,6 +595,17 @@ Section Inductives.
     @eq_term_prop_mkApps_invE default_checker_flags iu_Σ iu_ind [iu_a] [iu_Set] iu_ind [iu_b]
       [tSort (Sort.super Sort.type0)] iu_wf_extE 0 cpi_iu_eq01.
 
+  (** [cpE_of_eq_term_prop] on [I@{a} Set] and [I@{b} Type₁], related by [eq_term_prop]
+      ([cpi_iu_eq01]): the two terms are not the same, since their universe instances differ and
+      their arguments differ ([cpi_iu_args_nondeg]).
+      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_iu_args_nondeg *)
+  Definition cpE_of_eq_term_prop_inst :
+    iu_Σ ;;; [] |-E mkApps (tInd iu_ind [iu_a]) [iu_Set]
+                   ~~ mkApps (tInd iu_ind [iu_b]) [tSort (Sort.super Sort.type0)] :=
+    cpE_of_eq_term_prop (Σ := iu_Σ) (Γ := []) (t := mkApps (tInd iu_ind [iu_a]) [iu_Set])
+      (u := mkApps (tInd iu_ind [iu_b]) [tSort (Sort.super Sort.type0)]) eq_refl eq_refl eq_refl
+      cpi_iu_eq01.
+
   (** [(λx:Type. x) Set]: a β step in an argument. *)
   Definition cpi_iu_beta : term := tApp (tLambda iu_na (tSort (Sort.super Sort.type0)) (tRel 0)) iu_Set.
 
@@ -540,9 +618,16 @@ Section Inductives.
     - apply cpE_of_eq_term_prop; [reflexivity|reflexivity|reflexivity|exact cpi_iu_eq].
   Qed.
 
-  (** The argument is a β-redex, not its reduct, and the universe instances differ. *)
-  Lemma cpi_iu_spine_nondeg : cpi_iu_beta <> iu_Set /\ iu_a <> iu_b.
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+  (** The argument is the β-redex [(λx:Type. x) Set]: it is not [Set], and reduces to it in one
+      [red1] step. The universe instances differ. *)
+  Lemma cpi_iu_spine_nondeg :
+    [× cpi_iu_beta <> iu_Set, red1 iu_Σ [] cpi_iu_beta iu_Set & iu_a <> iu_b].
+  Proof.
+    split.
+    - intros h; vm_compute in h; discriminate h.
+    - constructor.
+    - intros h; vm_compute in h; discriminate h.
+  Qed.
 
   (** The arguments of [I@{a} ((λx:Type. x) Set) ~~ I@{b} Set].
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_iu_spine_nondeg *)
