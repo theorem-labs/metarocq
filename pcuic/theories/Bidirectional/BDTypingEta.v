@@ -374,8 +374,11 @@ Qed.
 
 Section BidirectionalInductionE.
 
-  #[local] Notation wfl_size := (All_local_env_sorting_size (@checkingE_size _ _) (@infering_sortE_size _ _) _).
-  #[local] Notation wfl_size_rel := (All_local_rel_sorting_size (@checkingE_size _ _) (@infering_sortE_size _ _) _ _).
+  (* Named [wfl_sizeE]/[wfl_size_relE], not base's [wfl_size]/[wfl_size_rel]: they abbreviate the
+     sizes over the E judgments, and the same-name rule (cross-lane-commitments.md C6) forbids a
+     second object under a base name. *)
+  #[local] Notation wfl_sizeE := (All_local_env_sorting_size (@checkingE_size _ _) (@infering_sortE_size _ _) _).
+  #[local] Notation wfl_size_relE := (All_local_rel_sorting_size (@checkingE_size _ _) (@infering_sortE_size _ _) _ _).
 
   Context `{cf : checker_flags}.
   Context (Σ : global_env_ext).
@@ -417,8 +420,8 @@ Section BidirectionalInductionE.
   Definition typing_sumE_size (d : typing_sumE) :=
   match d with
     | judgment_consE _ _ d => (lift_sorting_size (@checkingE_size _ _ _) (@infering_sortE_size _ _ _) _ d)
-    | context_consE Γ wfΓ => wfl_size wfΓ
-    | context_rel_consE _ _ wfΓ' => wfl_size_rel wfΓ'
+    | context_consE Γ wfΓ => wfl_sizeE wfΓ
+    | context_rel_consE _ _ wfΓ' => wfl_size_relE wfΓ'
     | check_consE _ _ _ d => (checkingE_size d)
     | inf_consE _ _ _ d => (inferingE_size d)
     | sort_consE _ _ _ d => (infering_sortE_size d)
@@ -461,7 +464,7 @@ Section BidirectionalInductionE.
     | |- dlexprod _ _ _ _ =>
             constructor 2 ; cbn ; try lia
     | _ => assumption
-    | wfΓ' : wf_local_bd_relE _ _ _ |- _ => fold (wfl_size_rel wfΓ'); cbn -[Nat.max] ; lia
+    | wfΓ' : wf_local_bd_relE _ _ _ |- _ => fold (wfl_size_relE wfΓ'); cbn -[Nat.max] ; lia
     | _ => cbn -[Nat.max] ; lia
     | _ => idtac
     end.
@@ -668,7 +671,7 @@ Section BidirectionalInductionE.
     - eapply HΓ.
       2: { clear -IH wfΣ. induction wfΓ; cbn in *; simpl in *; constructor.
         1,3: apply IHwfΓ; intros; apply IH; lia.
-        all: assert (0 < wfl_size wfΓ) as Hpos by apply All_local_env_size_pos.
+        all: assert (0 < wfl_sizeE wfΓ) as Hpos by apply All_local_env_size_pos.
         all: eapply lift_sorting_size_impl with (csize := @checkingE_size _ _ _) (ssize := @infering_sortE_size _ _ _) (tu := t0).
         all: intros ?? Hty Hlt; unfold lift_sorting_size in Hlt; simpl in Hlt.
         all: applyIH. }
@@ -679,11 +682,11 @@ Section BidirectionalInductionE.
           intros ; apply IH.
           cbn in H |- *. lia.
         * destruct t0 as (? & s & Hty & ?); cbn in *.
-          assert (0 < wfl_size wfΓ) by apply All_local_env_size_pos.
+          assert (0 < wfl_sizeE wfΓ) by apply All_local_env_size_pos.
           red.
           applyIH.
       + destruct t0 as (Htm & s & Hty & _e); cbn in *.
-        assert (0 < wfl_size wfΓ) by apply All_local_env_size_pos.
+        assert (0 < wfl_sizeE wfΓ) by apply All_local_env_size_pos.
         constructor.
         * apply IHwfΓ.
           intros ; apply IH.
@@ -693,8 +696,8 @@ Section BidirectionalInductionE.
 
     - eapply HΓRel.
       2: { clear -IH wfΣ. induction wfΓ'; cbn in *; simpl in *; constructor; fold (wf_local_bd_relE Σ Γ Γ0) in wfΓ'.
-      1,3: apply IHwfΓ'; intros; apply IH; fold (wfl_size_rel wfΓ'); lia.
-      all: assert (0 < wfl_size_rel wfΓ') as Hpos by apply All_local_env_size_pos.
+      1,3: apply IHwfΓ'; intros; apply IH; fold (wfl_size_relE wfΓ'); lia.
+      all: assert (0 < wfl_size_relE wfΓ') as Hpos by apply All_local_env_size_pos.
       all: eapply lift_sorting_size_impl with (csize := @checkingE_size _ _ _) (ssize := @infering_sortE_size _ _ _) (tu := t0).
       all: intros ?? Hty Hlt; unfold lift_sorting_size in Hlt; simpl in Hlt.
       all: applyIH. }
@@ -704,18 +707,18 @@ Section BidirectionalInductionE.
         * apply IHwfΓ'.
           intros ; apply IH.
           cbn in H |- *.
-          fold (wfl_size_rel wfΓ').
+          fold (wfl_size_relE wfΓ').
           lia.
         * destruct t0 as (? & s & Hty & ?); cbn in *. red.
-          assert (0 < wfl_size_rel wfΓ') by apply All_local_env_size_pos.
+          assert (0 < wfl_size_relE wfΓ') by apply All_local_env_size_pos.
           applyIH.
       + destruct t0 as (Htm & s & Hty & _e); cbn in *.
-        assert (0 < wfl_size_rel wfΓ') by apply All_local_env_size_pos.
+        assert (0 < wfl_size_relE wfΓ') by apply All_local_env_size_pos.
         constructor.
         * apply IHwfΓ'.
           intros ; apply IH.
           cbn in H |- *.
-          fold (wfl_size_rel wfΓ').
+          fold (wfl_size_relE wfΓ').
           lia.
         * red. cbn. applyIH.
         * red. cbn. applyIH.
@@ -782,7 +785,7 @@ Section BidirectionalInductionE.
           all: try assumption.
           all: applyIH.
           cbn.
-          fold predctx ptm (wfl_size_rel a1).
+          fold predctx ptm (wfl_size_relE a1).
           lia.
         * apply IHa2.
           intros.
