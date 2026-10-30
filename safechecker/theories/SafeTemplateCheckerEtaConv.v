@@ -8,6 +8,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICOnFre
      PCUICContextConversionEta.
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICSafeReduceEta
   PCUICSafeConversionEtaFacts PCUICSafeConversionEta PCUICTypeCheckerEta PCUICTypingEtaHyps PCUICEtaFactsCompose.
+(* The proved instances of the classes (ETAK discharge); Required only and named qualified. *)
+From MetaRocq.SafeChecker Require PCUICTypingEtaDischarge.
 
 (** * ETAK (EtaK7): the η conversion as the checker's [conv_oracle] (K6 at the checker)
 
@@ -20,24 +22,37 @@ From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICSafeR
 
   Section parameters of [Conversion]: the Prop classes [ReduceTypedFactsE] and [ConvTypedFactsE] (implicit),
   the SQUASHED [closed_context_conversionE], and [welltypedE_context] (a Prop: it concludes [welltypedE]).
-  This section does NOT bind the first three: it supplies them from the checker's own hypotheses
-  ([PCUICEtaFactsCompose]; lane lead's dedup, 2026-10-29), so the composed checker assumes each of these
-  facts once: [ReduceTypedFactsE] by [reduce_typed_facts_E_of_core] from the six-field
-  [ReduceTypedFactsCoreE], [EtaFacts] (T1 [subject_reduction], U [whnf_red_inv]) and [WelltypedEContextE];
-  [ConvTypedFactsE] by [conv_typed_facts_E_of_ctx] from [WelltypedEContextE]; [closed_context_conversionE]
-  by [closed_context_conversionE_of_facts] from [EtaFacts]'s T0 [closed_context_cumulativity].
-  [welltypedE_context] is the field of [WelltypedEContextE] (EtaPosK4's statement). No parameter is
-  Type-valued, so extraction erases all of them: the extracted oracle takes only the environment and the terms.
-  The explicit arguments of [isconv_term] are passed in the order of the section's [Context] lines
-  (X_type, X, closed_context_conversionE, welltypedE_context, then Γ pb t1 h1 t2 h2); if EtaConv's built
-  [About isconv_term] lists another order, this is the one place to change. *)
+  This section binds none of them: each is passed explicitly at the [isconv_term] call, built ONLY from the
+  proved instances of [PCUICTypingEtaDischarge] (ETAK discharge, lanes/eta/etak/discharge-transcriptions.md):
+  [ReduceTypedFactsE] by [reduce_typed_facts_E_of_core] at [ReduceTypedFactsCoreE_discharged],
+  [EtaFacts_discharged] and [WelltypedEContextE_discharged]; [ConvTypedFactsE] by [conv_typed_facts_E_of_ctx]
+  at [WelltypedEContextE_discharged]; [closed_context_conversionE] by [closed_context_conversionE_squashed]
+  (the squash of [closed_context_conversionE_proved], [PCUICContextConversionTypEta.closed_context_conversionE]);
+  [welltypedE_context] by the field of [WelltypedEContextE_discharged]. Each instance takes only [cf], and
+  every premise about the environment is inside its fields' statements, so [eta_conv_oracle] below is a
+  closed term, polymorphic in [cf] and [nor]; the record [conv_oracle] itself quantifies over every
+  abstract environment implementation [X_type], every environment [X] and every [Σ] related to it.
+  No parameter is Type-valued, so extraction erases all of them: the extracted oracle takes only the
+  environment and the terms. The explicit arguments of [isconv_term] are passed in the order of the
+  section's [Context] lines (X_type, X, closed_context_conversionE, welltypedE_context, then Γ pb t1 h1 t2
+  h2).
+
+  The file is in [safechecker] (moved from [safechecker-plugin/theories] on the ship branch, module name
+  unchanged) because the root [PCUICSafeCheckerEta.typecheck_program] uses [eta_conv_oracle] as its
+  [conv_oracle] instance, and [safechecker] builds before the plugin. *)
 
 Section EtaOracle.
   Context {cf : checker_flags} {nor : normalizing_flags}.
-  (* The checker's [EtaFacts] (the same instance as the checker's at the composition), the six REDUCE facts
-     that nothing else states, and EtaPosK4's [welltypedE_context]; the conversion's four parameters are
-     built from these (header). *)
-  Context {EtaF : EtaFacts} {reduce_coreE : ReduceTypedFactsCoreE} {wt_contextE : WelltypedEContextE}.
+
+  (* The four parameters of the section [Conversion] of [PCUICSafeConversionEta], each built ONLY from the
+     proved instances (header); named once here, used at the three [isconv_term] sites below. *)
+  Local Notation rfE := (@reduce_typed_facts_E_of_core cf
+    (@PCUICTypingEtaDischarge.ReduceTypedFactsCoreE_discharged cf)
+    (@PCUICTypingEtaDischarge.EtaFacts_discharged cf)
+    (@PCUICTypingEtaDischarge.WelltypedEContextE_discharged cf)).
+  Local Notation cfE := (@conv_typed_facts_E_of_ctx cf (@PCUICTypingEtaDischarge.WelltypedEContextE_discharged cf)).
+  Local Notation cccE := (@PCUICTypingEtaDischarge.closed_context_conversionE_squashed cf).
+  Local Notation wtcE := (@welltypedE_context cf (@PCUICTypingEtaDischarge.WelltypedEContextE_discharged cf)).
 
   (** [None] when EtaConv's conversion succeeds (soundness: [isconv_term_sound]); [Some e] carries its
       error and no proof (G7). The conversion terminates by fuel ([PCUICFuelEta]): an empty fuel is the error
@@ -46,8 +61,7 @@ Section EtaOracle.
     (Γ : context) (pb : conv_pb)
     (t : term) (ht : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t)
     (u : term) (hu : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ u) : option ConversionError :=
-    match isconv_term X_type X (reduce_factsE := reduce_typed_facts_E_of_core)
-            (conv_factsE := conv_typed_facts_E_of_ctx) closed_context_conversionE_of_facts welltypedE_context Γ pb t ht u hu with
+    match isconv_term X_type X (reduce_factsE := rfE) (conv_factsE := cfE) cccE wtcE Γ pb t ht u hu with
     | ConvSuccess => None
     | ConvError e => Some e
     end.
@@ -63,12 +77,16 @@ Section EtaOracle.
     forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ ws_cumul_pbE pb Σ Γ t u ∥.
   Proof.
     intros hc Σ wfΣ. unfold eta_oracle_conv in hc.
-    destruct (isconv_term X_type X (reduce_factsE := reduce_typed_facts_E_of_core)
-             (conv_factsE := conv_typed_facts_E_of_ctx) closed_context_conversionE_of_facts welltypedE_context Γ pb t ht u hu) eqn:hconv; [|discriminate].
-    exact (isconv_term_sound X_type X (reduce_factsE := reduce_typed_facts_E_of_core)
-             (conv_factsE := conv_typed_facts_E_of_ctx) closed_context_conversionE_of_facts welltypedE_context Σ wfΣ Γ pb t ht u hu hconv).
+    destruct (isconv_term X_type X (reduce_factsE := rfE) (conv_factsE := cfE) cccE wtcE Γ pb t ht u hu)
+      eqn:hconv; [|discriminate].
+    exact (isconv_term_sound X_type X (reduce_factsE := rfE) (conv_factsE := cfE) cccE wtcE
+             Σ wfΣ Γ pb t ht u hu hconv).
   Qed.
 
+  (** The checker's conversion, CLOSED: its only binders are [cf] and [nor] (the section's), it is built
+      only from the proved instances above, and its type is the roots' [conv_oracle] signature
+      ([PCUICTypeCheckerEta.conv_oracle]), whose two fields quantify over every [X_type], [X], [Γ], [pb],
+      [t], [u] and every [Σ] with [abstract_env_ext_rel X Σ]. *)
   Definition eta_conv_oracle : conv_oracle :=
     {| oracle_conv := @eta_oracle_conv; oracle_conv_sound := @eta_oracle_conv_sound |}.
 End EtaOracle.

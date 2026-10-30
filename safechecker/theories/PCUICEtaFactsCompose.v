@@ -18,9 +18,9 @@ From MetaRocq.PCUIC Require Import PCUICPositionEta.
 (** * ETAK (EtaK7): the E hypotheses at the composition, without the five repeats
 
   BET-64 EtaCheckerLane, worker EtaK7, 2026-10-29. Five named hypotheses of the composed E checker repeat a
-  fact that another named hypothesis states (EtaHypProve's audit C §4.2; its lemmas [hyp_dup_*], Qed'd in
-  [PCUICTypingEtaHypsProved] @ [29c23129], are restated here, proofs unchanged except for the names of
-  this branch). This file supplies each repeat from the hypothesis it repeats, by builder instances whose
+  fact that another named hypothesis states (EtaHypProve's audit C §4.2; its lemmas [hyp_dup_*], Qed'd on
+  fork/wip/etak-hypprove-2026-10-29 @ [29c23129], live here, restated with proofs unchanged except for the
+  names of this branch). This file supplies each repeat from the hypothesis it repeats, by builder instances whose
   premises are bundle classes, so each fact is assumed once:
   - [WtRed welltypedE wf_extE] (subject reduction, row T1) from [EtaFacts]'s T1 [subject_reduction];
   - [rtf_whnf_red_invE] from [EtaFacts]'s U [whnf_red_inv];

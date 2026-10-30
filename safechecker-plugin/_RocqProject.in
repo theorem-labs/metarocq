@@ -2,8 +2,8 @@
 
 
 theories/SafeTemplateChecker.v
-# EtaK7: the η copy of SafeTemplateChecker (K7) and the conv_oracle instance from EtaConv's conversion (K6)
+# EtaK7: the η copy of SafeTemplateChecker (K7). The conv_oracle instance from EtaConv's conversion (K6),
+# SafeTemplateCheckerEtaConv.v, is in safechecker/theories (ETAK ship: typecheck_program uses it).
 theories/SafeTemplateCheckerEta.v
-theories/SafeTemplateCheckerEtaConv.v
 
 theories/Extraction.v

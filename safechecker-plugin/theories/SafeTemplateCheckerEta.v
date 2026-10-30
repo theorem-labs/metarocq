@@ -8,6 +8,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICProgr
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICWfEnvImplEta
   PCUICSafeReduceEta
   PCUICTypingEtaDefs PCUICTypeCheckerEta PCUICSafeCheckerEta PCUICTypingEtaHyps.
+(* ETAK ship: the proved instance of the η typing facts (opened by [sq] in [infer_translated_program]'s
+   obligation); Required only. *)
+From MetaRocq.SafeChecker Require PCUICTypingEtaDischarge.
 
 Import MonadNotation.
 
@@ -18,14 +21,14 @@ From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC TemplateToPCUICShared
   BET-64 EtaCheckerLane, worker EtaK7, 2026-10-29; base [frac/eta] @ [0cb773a4]; text of base
   [safechecker-plugin/theories/SafeTemplateChecker.v] over the η checker [PCUICSafeCheckerEta].
 
-  Premises of the entry points, beyond base's:
-  - [CO : conv_oracle], the η conversion. It is instantiated with EtaConv's [isconv_term] /
-    [isconv_term_sound] (CONTRACTS.md CONV 11:35Z) in the separate file [SafeTemplateCheckerEtaConv]
-    ([eta_conv_oracle]), so a change of that contract is a one-site fix;
-  - EtaReduce's [reduce_factsE : ReduceTypedFacts welltypedE wf_extE] and the η typing facts
-    [EtaF : EtaFacts] ([PCUICTypingEtaHyps]); both are Props, erased by extraction;
-  - no normalization premise: the η checker's recursions terminate by fuel ([PCUICFuelEta], BET-64 FUEL;
-    base takes [NormalizationIn]); an empty fuel is printed as a refusal for lack of fuel ([print_env_error]).
+  Premises of the entry points, beyond base's: none (ETAK ship). The η conversion is the closed
+  [SafeTemplateCheckerEtaConv.eta_conv_oracle] (EtaConv's [isconv_term] / [isconv_term_sound], CONTRACTS.md
+  CONV 11:35Z, from the proved instances; a change of that contract is a one-site fix there), and EtaReduce's
+  [ReduceTypedFacts welltypedE wf_extE] and the η typing facts [EtaFacts] are proved instances
+  ([PCUICTypingEtaDischarge]); [PCUICSafeCheckerEta.typecheck_program] takes all three as its section's
+  instances, so these entries bind none of them. No normalization premise: the η checker's recursions
+  terminate by fuel ([PCUICFuelEta], BET-64 FUEL; base takes [NormalizationIn]); an empty fuel is printed
+  as a refusal for lack of fuel ([print_env_error]).
 
   Exported for the plugin's OCaml glue, same names and types as base ([SafeTemplateChecker]):
   [trans_program], [infer_template_program], [infer_and_print_template_program], so at the cutover (F0)
@@ -60,12 +63,13 @@ Definition EnvCheck_wf_env_ext {cf:checker_flags} {guard : abstract_guard_impl} 
 
 Local Instance Monad_EnvCheck_wf_env_ext {cf:checker_flags} {guard : abstract_guard_impl} : Monad EnvCheck_wf_env_ext := _.
 
+#[local] Existing Instance PCUICTypingEtaDischarge.EtaFacts_discharged.
+
 (** Checking an already translated program [p'].  [infer_template_program]
     is this check on [trans_program p]; [infer_and_print_template_program]
     calls it directly, so the translation is computed once and the Template
     program has no use after it. *)
 Program Definition infer_translated_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
-  {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p' : program) φ
   : EnvCheck_wf_env_ext (∑ A, { X : wf_env_ext |
     ∥ (p'.1, φ) = X.(wf_env_ext_reference).(reference_impl_env_ext) × wf_extE (p'.1, φ) ×
@@ -77,7 +81,6 @@ Next Obligation.
 Qed.
 
 Program Definition infer_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
-  {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p : Ast.Env.program) φ
   : EnvCheck_wf_env_ext (let p' := trans_program p in ∑ A, { X : wf_env_ext |
     ∥ (p'.1, φ) = X.(wf_env_ext_reference).(reference_impl_env_ext) × wf_extE (p'.1, φ) ×
@@ -96,7 +99,6 @@ Definition print_env_error (Σ : global_env_ext) (e : env_error) : string :=
   end.
 
 Program Definition infer_and_print_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
-  {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
   (p : Ast.Env.program) φ
   : string + string :=
   let p' := trans_program p in

@@ -454,18 +454,22 @@ Class EtaFacts {cf : checker_flags} : Prop := {
 
 (** [sq] of the copies: first open the premise, so that the rows' classes are in the context (as
     instances) for the base proof scripts. It projects the fields once (a section variable [EtaF] cannot be
-    destructed away, so a [repeat destruct] would loop) and does nothing if they are already there. *)
+    destructed away, so a [repeat destruct] would loop) and does nothing if they are already there. With no
+    [EtaFacts] in the context it opens the [EtaFacts] instance that typeclass resolution finds (ETAK ship:
+    the checker sections declare the proved [PCUICTypingEtaDischarge.EtaFacts_discharged] their instance
+    instead of binding [EtaF]); with neither, it does nothing. *)
+Ltac pose_eta_facts EF :=
+  (* fixed, unusual names, so that the base proof scripts' generated names (H, H0, X1, ...) are unchanged *)
+  pose proof (@eta_T0 _ EF) as etaf_T0; pose proof (@eta_U _ EF) as etaf_U;
+  pose proof (@eta_T1 _ EF) as etaf_T1; pose proof (@eta_T2a _ EF) as etaf_T2a;
+  pose proof (@eta_T6 _ EF) as etaf_T6; pose proof (@eta_T6BD _ EF) as etaf_T6BD;
+  pose proof (@eta_T6BDu _ EF) as etaf_T6BDu; pose proof (@eta_T6BDc _ EF) as etaf_T6BDc.
 Ltac unpack_eta_facts :=
   lazymatch goal with
   | _ : T0_facts |- _ => idtac
   | _ : ∥ T0_facts ∥ |- _ => idtac
-  | EF : EtaFacts |- _ =>
-      (* fixed, unusual names, so that the base proof scripts' generated names (H, H0, X1, ...) are unchanged *)
-      pose proof (@eta_T0 _ EF) as etaf_T0; pose proof (@eta_U _ EF) as etaf_U;
-      pose proof (@eta_T1 _ EF) as etaf_T1; pose proof (@eta_T2a _ EF) as etaf_T2a;
-      pose proof (@eta_T6 _ EF) as etaf_T6; pose proof (@eta_T6BD _ EF) as etaf_T6BD;
-      pose proof (@eta_T6BDu _ EF) as etaf_T6BDu; pose proof (@eta_T6BDc _ EF) as etaf_T6BDc
-  | _ => idtac
+  | EF : EtaFacts |- _ => pose_eta_facts EF
+  | _ => first [ let EF := constr:(_ : EtaFacts) in pose_eta_facts EF | idtac ]
   end.
 Ltac sq := unpack_eta_facts; MRSquash.sq.
 (** Open the facts without touching the goal: project them, and unsquash only them when the goal is a Prop
@@ -629,7 +633,8 @@ Section DerivedTwo.
   Qed.
 End DerivedTwo.
 
-(** ** PROVED rows (integration of EtaHypProve's [PCUICTypingEtaHypsProved.v] @ [29c23129], K7 sections)
+(** ** PROVED rows (integration of EtaHypProve's K7 sections, fork/wip/etak-hypprove-2026-10-29 @ [29c23129];
+    its typed-facts rows are in [PCUICEtaTypedFactsProved], its [hyp_dup_*] lemmas in [PCUICEtaFactsCompose])
 
   47 former class fields ([T0_facts] 37, [U_facts] 8, [T1_facts] 1, [T6BD_facts] 1) are proved here. Their proofs
   are EtaHypProve's, copied unchanged (comments included) from its K7 sections; its [_fits] identity checks are

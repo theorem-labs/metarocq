@@ -28,6 +28,9 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICPositivityCheck PCUICErrorsEta PCUICWfEnvEta
   PCUICWfReductionEta PCUICSafeReduceEta PCUICSafeReduceEtaBridge
   PCUICTypingEtaDefs PCUICTypeCheckerEta PCUICTypingEtaHyps.
+(* ETAK ship: the proved instances of the η typing facts and of the reduction machine's facts (ETAK
+   discharge) and the closed η conversion; Required only, made the instances of [CheckEnv] below. *)
+From MetaRocq.SafeChecker Require PCUICTypingEtaDischarge SafeTemplateCheckerEtaConv.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -44,10 +47,12 @@ From Stdlib Require Import Morphisms.
   [PCUICSafeChecker.v] with the η substitutions. The checked environment is [wfE]/[wf_extE]: every
   declaration is checked with [typingE] and the η conversion ([on_global_env cumulSpecE0 (lift_typing
   typingE)]). Interfaces as recorded at the top of [PCUICTypeCheckerEta]: ENV ([PCUICWfEnvEta]), REDUCE
-  ([PCUICSafeReduceEta], hypothesis [reduce_factsE]), CONV (the [conv_oracle] class, instantiated in
-  [SafeTemplateCheckerEta]) and the η typing facts ([EtaFacts], [PCUICTypingEtaHyps]); all three are
-  implicit section premises of [CheckEnv]. Base's checks here return [typing_result] (no failure proofs),
-  so K7's refusal changes are all in [PCUICTypeCheckerEta]. *)
+  ([PCUICSafeReduceEta], [ReduceTypedFacts welltypedE wf_extE]), CONV (the [conv_oracle] class) and the η
+  typing facts ([EtaFacts], [PCUICTypingEtaHyps]). None is a premise of [CheckEnv]: the section takes the
+  closed oracle [SafeTemplateCheckerEtaConv.eta_conv_oracle] and the proved instances
+  [PCUICTypingEtaDischarge.reduce_typed_facts_discharged] and [PCUICTypingEtaDischarge.EtaFacts_discharged]
+  as its instances. Base's checks here return [typing_result] (no failure proofs), so K7's refusal changes
+  are all in [PCUICTypeCheckerEta]. *)
 
 Implicit Types (cf : checker_flags).
 
@@ -364,10 +369,17 @@ Section CheckEnv.
 
   Context (X_impl : abstract_env_impl).
 
-  (** The η conversion, EtaReduce's hypothesis and the η typing facts (see [PCUICTypeCheckerEta]). The
-      call-by-need fast path's soundness is no premise: [PCUICTypeCheckerEta.convert] uses the proved
-      instance [PCUICCallByNeedSoundEta.cbn_conv_soundE_proved]. *)
-  Context {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}.
+  (** The η conversion, the reduction machine's facts and the η typing facts (see [PCUICTypeCheckerEta]) are
+      no premises of this section (ETAK ship): they are the closed oracle
+      [SafeTemplateCheckerEtaConv.eta_conv_oracle] and the proved instances
+      [PCUICTypingEtaDischarge.reduce_typed_facts_discharged] and [PCUICTypingEtaDischarge.EtaFacts_discharged],
+      declared the section's instances here, so typeclass resolution finds them where it found the former
+      implicit section premises [CO], [reduce_factsE] and [EtaF]. The call-by-need fast path's soundness is no
+      premise either: [PCUICTypeCheckerEta.convert] uses the proved instance
+      [PCUICCallByNeedSoundEta.cbn_conv_soundE_proved]. *)
+  #[local] Existing Instance SafeTemplateCheckerEtaConv.eta_conv_oracle.
+  #[local] Existing Instance PCUICTypingEtaDischarge.reduce_typed_facts_discharged.
+  #[local] Existing Instance PCUICTypingEtaDischarge.EtaFacts_discharged.
 
 
   Definition X_env_ext_type := X_impl.π2.π1.
@@ -1408,7 +1420,7 @@ Section CheckEnv.
       (fun (cstr :constructor_body) (cs0 : constructor_univs) =>
       check_constructor_spec Σ (S n) mdecl idecl cstr cs0) cstrs cs ∥) ->
     forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ All (fun cs => wt_indices Σ mdecl idecl.(ind_indices) cs) cstrs ∥.
-  Proof using EtaF.
+  Proof using Type.
     intros. pose proof (abstract_env_ext_wf _ H0) as wfE; specialize_Σ H0. MRSquash.sq.
     solve_all. simpl.
     destruct X as [[[isTy eq] sorts] eq']. simpl in *.
@@ -1487,7 +1499,7 @@ Section CheckEnv.
       context_assumptions (ind_params mdecl) = ind_npars mdecl ->
       (forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_variance Σ (ind_universes mdecl) (ind_variance mdecl) ∥) ->
       forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ on_inductive cumulSpecE0 (lift_typing typingE) Σ ind mdecl ∥.
-  Proof using EtaF.
+  Proof using Type.
     intros H H0 H1 H2 ? wfE. specialize_Σ wfE. MRSquash.sq. econstructor; try eassumption.
   Qed.
 
@@ -1916,7 +1928,7 @@ End monad_Alli_nth_forall.
     wf_cs_sorts X_ext cs ->
     (forall Σ, abstract_env_ext_rel X_ext Σ -> wf_sort Σ ind_sort) ->
     forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ reflect (check_constructors_smaller Σ cs ind_sort) (checkb_constructors_smaller X_ext cs ind_sort) ∥.
-  Proof using EtaF.
+  Proof using Type.
     unfold check_constructors_smaller, checkb_constructors_smaller.
     intros wfcs wfind ? ?. specialize_Σ H.
     MRSquash.sq.
@@ -2352,7 +2364,7 @@ End monad_Alli_nth_forall.
       ∥ arity_red Σ.1 mdecl.(ind_params) U idecl.(ind_indices) idecl.(ind_sort) ∥)
     (check : relevance_of_sort (ind_sort idecl) == ind_relevance idecl) :
     forall Σ, abstract_env_ext_rel X_ext Σ -> ∥ wf_ind_type Σ mdecl idecl ∥.
-  Proof using EtaF.
+  Proof using Type.
     open_eta_facts.
     intros Σ wfΣ.
     destruct (abstract_env_ext_sq_wf _ _ _ wfΣ) as [wΣ].
@@ -2661,7 +2673,7 @@ End monad_Alli_nth_forall.
     ∥ All (prim_op_tag_declared Σ) (po_args (info op)) ∥ ->
     ∥ on_prim_op_result Σ (po_shape (info op)) ∥ ->
     welltypedE Σ [] T.
-  Proof using EtaF.
+  Proof using Type.
     open_eta_facts.
     intros hT [hargs] [hres].
     pose proof (abstract_env_ext_wf _ wfΣ) as [wfΣ'].

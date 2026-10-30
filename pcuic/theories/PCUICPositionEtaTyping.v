@@ -645,7 +645,7 @@ Section EtaTypingE.
      [PCUICRenameTyp.typing_rename_P], same statement as the hypothesis it replaces. It is the
      exact twin [PCUICRenameTypEta.typing_rename_PE], whose [renamingE (shiftnP #|Γ| P) Σ Γ Δ f]
      unfolds to [wf_localE Σ Δ × urenaming (shiftnP #|Γ| P) Γ Δ f] (EtaHypProve's
-     [typingE_rename_P_proved], PCUICTypingEtaHypsProved). *)
+     [typingE_rename_P_proved], fork/wip/etak-hypprove-2026-10-29 @ 29c23129). *)
   Lemma typingE_rename_P : forall P (Σ : global_env_ext) Γ Δ f t A, wfE Σ.1 ->
     wf_localE Σ Δ × urenaming (shiftnP #|Γ| P) Γ Δ f ->
     Σ ;;; Γ |-E t : A -> Σ ;;; Δ |-E rename f t : rename f A.

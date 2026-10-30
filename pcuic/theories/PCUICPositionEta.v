@@ -19,7 +19,7 @@
    - Import, next to an Import of PCUICPosition: PCUICSafeConversionEtaK4, PCUICSafeConversionEta;
    - Import, without PCUICPosition: PCUICPositionEtaTyping, PCUICSafeConversionEtaFacts, PCUICEtaFactsCompose;
    - Require only, qualified uses: PCUICSafeReduceEtaBridge, PCUICTypingEtaHyps, PCUICEtaTypedFactsProved,
-     PCUICTypingEtaHypsProved (not registered on this line). *)
+     PCUICTypingEtaHypsProved (not registered on this line; deleted on the ETAK ship branch). *)
 From Stdlib Require Import RelationClasses ssrbool.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.

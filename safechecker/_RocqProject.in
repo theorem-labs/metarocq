@@ -54,9 +54,9 @@ theories/PCUICTypingEtaHyps.v
 theories/PCUICTypeCheckerEta.v
 # EtaK7: the η environment checker (K7)
 theories/PCUICSafeCheckerEta.v
-# EtaHypProve: the PROVABLE-NOW named hypotheses of the E bundles, proved as <field>_proved
-theories/PCUICTypingEtaHypsProved.v
-# EtaIntegrate9: the proved fields of ReduceTypedFacts/ConvTypedFacts at welltypedE (moved from PCUICTypingEtaHypsProved)
+# EtaIntegrate9: the proved fields of ReduceTypedFacts/ConvTypedFacts at welltypedE (moved here from EtaHypProve's
+# PCUICTypingEtaHypsProved.v @ 29c23129, which the ship branch deletes: its K7 rows are in PCUICTypingEtaHyps.v,
+# its typed-facts rows here, and its field proofs in PCUICTypingEtaDischarge.v)
 theories/PCUICEtaTypedFactsProved.v
 # The call-by-need fast path over the eta environment (the copy of integ-all8 1a92b56c's machine), the eta copies
 # of its soundness proof (EtaCbnEPort: premises threaded as wfE / ClosedBodies / typingE, conclusion ws_cumul_pbE),
@@ -84,9 +84,14 @@ theories/PCUICEtaFactsCompose.v
 # PCUICSafeReduce.prim_app_overapplied_ill_typed (row 47), PCUICPositionEta.welltyped_context (row 51),
 # PCUICPrimCanonical.whnf_prim_type_canonical and the PCUICSafeReduce whne lemmas (rows 48-50), then the
 # [_proved] field lemmas, their two-way identity checks and the instances of the classes proved whole
-# (EtaFacts included). No existing file imports these.
+# (EtaFacts included). ETAK ship: PCUICTypeCheckerEta, PCUICSafeCheckerEta, SafeTemplateCheckerEtaConv and the
+# plugin's SafeTemplateCheckerEta Require PCUICTypingEtaDischarge for its instances.
 theories/PCUICEtaWhnfRedInv.v
 theories/PCUICEtaPrimOverapplied.v
 theories/PCUICEtaWelltypedContext.v
 theories/PCUICEtaWhneTyped.v
 theories/PCUICTypingEtaDischarge.v
+# ETAK ship: the η conversion as the checker's closed conv_oracle instance, built from the proved instances of
+# PCUICTypingEtaDischarge (moved from safechecker-plugin/theories, module name unchanged: the root
+# PCUICSafeCheckerEta.typecheck_program uses it)
+theories/SafeTemplateCheckerEtaConv.v

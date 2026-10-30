@@ -49,14 +49,14 @@ PCUICMustExpandEta
 PCUICPositionEta
 PCUICSafeReduceEta
 PCUICTypeCheckerEta
-PCUICSafeCheckerEta
 PCUICSafeConversionEtaFacts
 PCUICSafeConversionEtaK4
 PCUICSafeReduceEtaBridge
 PCUICSafeConversionEta
+SafeTemplateCheckerEtaConv
+PCUICSafeCheckerEta
 PCUICWfEnvImplEta
 SafeTemplateCheckerEta
-SafeTemplateCheckerEtaConv
 Extraction
 
 G_metarocq_safechecker

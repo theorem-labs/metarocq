@@ -7,12 +7,16 @@
     4. [PCUICWfEnvImplEta.canonical_abstract_env_prop].
     Then, blocks 5-14, the ten roots of EtaK7's record [/mnt/frac/work/etak/EtaK7/out/pa-roots-35307b14.log]
     (K7 at 35307b14), in its order, so that they compare one-to-one with that record.
-    The named hypotheses of the E checker are section premises (arguments), not axioms: they do not
-    appear here (Print Assumptions shows axioms). *)
+    Print Assumptions shows axioms only, never arguments. ETAK ship: blocks 1-3, [typecheck_program],
+    [infer_and_print_template_program] and [eta_conv_oracle] take no class premise (proved instances);
+    [PCUICTypeCheckerEta.infer] keeps the section parameter [CO : conv_oracle], which [typecheck_program]
+    instantiates with the closed oracle, and the conversion's lemmas keep their section parameters, which
+    [eta_conv_oracle] instantiates. [SafeTemplateCheckerEtaConv] is in [MetaRocq.SafeChecker] on the ship
+    branch (moved from [MetaRocq.SafeCheckerPlugin], module name unchanged). *)
 From MetaRocq.SafeChecker Require Import PCUICWfEnvImplEta PCUICSafeCheckerEta.
 From MetaRocq.SafeChecker Require PCUICTypeCheckerEta PCUICSafeConversionEta.
 From MetaRocq.SafeCheckerPlugin Require Import SafeTemplateCheckerEta Extraction.
-From MetaRocq.SafeCheckerPlugin Require SafeTemplateCheckerEtaConv.
+From MetaRocq.SafeChecker Require SafeTemplateCheckerEtaConv.
 
 Print Assumptions MetaRocq.SafeCheckerPlugin.Extraction.infer_and_print_template_program_with_guard.
 Print Assumptions MetaRocq.SafeCheckerPlugin.SafeTemplateCheckerEta.infer_template_program.
@@ -23,7 +27,7 @@ Print Assumptions MetaRocq.SafeChecker.PCUICWfEnvImplEta.canonical_abstract_env_
 Print Assumptions MetaRocq.SafeChecker.PCUICTypeCheckerEta.infer.
 Print Assumptions MetaRocq.SafeChecker.PCUICSafeCheckerEta.typecheck_program.
 Print Assumptions MetaRocq.SafeCheckerPlugin.SafeTemplateCheckerEta.infer_and_print_template_program.
-Print Assumptions MetaRocq.SafeCheckerPlugin.SafeTemplateCheckerEtaConv.eta_conv_oracle.
+Print Assumptions MetaRocq.SafeChecker.SafeTemplateCheckerEtaConv.eta_conv_oracle.
 Print Assumptions MetaRocq.SafeChecker.PCUICSafeConversionEta.isconv_term.
 Print Assumptions MetaRocq.SafeChecker.PCUICSafeConversionEta.isconv_term_sound.
 Print Assumptions MetaRocq.SafeChecker.PCUICSafeConversionEta.isconv.

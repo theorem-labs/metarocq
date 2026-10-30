@@ -37,6 +37,9 @@ From MetaRocq.SafeChecker Require PCUICFuelEta.
    (1a92b56c) machine; [PCUICCallByNeedSoundEta] holds the proved instance [cbn_conv_soundE_proved] that accepts
    its [true]. *)
 From MetaRocq.SafeChecker Require PCUICCallByNeedEta PCUICCallByNeedSoundEta.
+(* ETAK ship: the proved instances of the reduction machine's facts and of the η typing facts (ETAK discharge,
+   lanes/eta/etak/discharge-transcriptions.md); Required only, made the instances of [Typecheck] below. *)
+From MetaRocq.SafeChecker Require PCUICTypingEtaDischarge.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -55,19 +58,21 @@ Set Equations Transparent.
   Record of the interfaces this file codes against:
   - ENV: [PCUICWfEnvEta] (EtaWfEnv, CONTRACTS.md ENV 06:55Z): [abstract_env_ext_wf] gives [∥ wf_extE Σ ∥].
   - REDUCE: [PCUICSafeReduceEta] (EtaReduce, CONTRACTS.md REDUCE 06:58Z) at [wt := welltypedE],
-    [wfP := wf_extE], with EtaReduce's named hypothesis [reduce_factsE : ReduceTypedFacts welltypedE wf_extE].
-  - CONV (assumed contract, ACCEPTED by the lane lead 2026-10-29): the η conversion is a PARAMETER of the
-    checker, the record [conv_oracle] below: a function [oracle_conv] (answer [None] = accepted,
-    [Some e] = refused with the conversion error [e], from [PCUICErrorsEta]) and its soundness
+    [wfP := wf_extE]; its facts [ReduceTypedFacts welltypedE wf_extE] are the proved instance
+    [PCUICTypingEtaDischarge.reduce_typed_facts_discharged] (ETAK ship; formerly the hypothesis [reduce_factsE]).
+  - CONV (assumed contract, ACCEPTED by the lane lead 2026-10-29): the η conversion is a PARAMETER of this
+    file's section [Typecheck], the record [conv_oracle] below: a function [oracle_conv] (answer [None] =
+    accepted, [Some e] = refused with the conversion error [e], from [PCUICErrorsEta]) and its soundness
     [oracle_conv_sound], the E statement of [isconv_term_sound] (result [ws_cumul_pbE]). G7: a failure
-    carries no proof. [SafeTemplateCheckerEta] instantiates it with EtaConv's
-    [PCUICSafeConversionEta.isconv_term]/[isconv_term_sound] (the K6 statements); the Prop field is
-    erased by extraction, so the extracted checker takes only the function. This file and
-    [PCUICSafeCheckerEta] build without the conversion file. The five non-algorithmic helpers that base
+    carries no proof. [SafeTemplateCheckerEtaConv.eta_conv_oracle] is the closed instance from EtaConv's
+    [PCUICSafeConversionEta.isconv_term]/[isconv_term_sound] (the K6 statements); [PCUICSafeCheckerEta]'s
+    section [CheckEnv] takes it as its instance (ETAK ship), so no root binds the parameter. This file builds
+    without the conversion file. The five non-algorithmic helpers that base
     takes from [PCUICSafeConversion] ([abstract_env_compare_global_instance], [iff_reflect],
     [consistent_instance_ext_wf], [compare_global_instance_correct], [cmpb_term_correct]) are copied in
     section [ConvHelpers] below, over the η environment.
-  - The η typing facts: [PCUICTypingEtaHyps], one squashed section premise per plan row.
+  - The η typing facts: [PCUICTypingEtaHyps], one squashed field per plan row, all proved: the instance
+    [PCUICTypingEtaDischarge.EtaFacts_discharged] (ETAK ship; formerly the section premise [EtaF]).
 
   Changes to the checker's behaviour (K7):
   - [convert]: success from [oracle_conv_sound]; a conversion failure is [Refused_c (NotCumulSmaller …)]
@@ -515,11 +520,13 @@ Section Typecheck.
   (** The η conversion (a parameter, see [conv_oracle]); a class, so callers pass it implicitly. *)
   Context {CO : conv_oracle}.
 
-  (** EtaReduce's named hypothesis for the η reduction machine (CONTRACTS.md REDUCE 06:58Z). *)
-  Context {reduce_factsE : ReduceTypedFacts welltypedE wf_extE}.
-
-  (** The η typing facts ([PCUICTypingEtaHyps]): one implicit Prop premise; [sq] opens it. *)
-  Context {EtaF : EtaFacts}.
+  (** The reduction machine's facts and the η typing facts are no premises (ETAK ship): the proved instances
+      [PCUICTypingEtaDischarge.reduce_typed_facts_discharged] and [PCUICTypingEtaDischarge.EtaFacts_discharged]
+      are declared the section's instances here, so typeclass resolution finds them where it found the former
+      implicit section premises [reduce_factsE] and [EtaF]; [sq]/[open_eta_facts] open [EtaFacts] from the
+      instance ([PCUICTypingEtaHyps.unpack_eta_facts]). *)
+  #[local] Existing Instance PCUICTypingEtaDischarge.reduce_typed_facts_discharged.
+  #[local] Existing Instance PCUICTypingEtaDischarge.EtaFacts_discharged.
 
   Local Notation reduce_to_sort := (reduce_to_sort (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)).
   Local Notation reduce_to_prod := (reduce_to_prod (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X)).
@@ -995,7 +1002,7 @@ Section Typecheck.
       ws_cumul_ctx_pbE le Σ' Γ' Γ ->
       wf_localE Σ' Γ' ->
       welltypedE Σ' Γ' t.
-    Proof using EtaF.
+    Proof using Type.
       unpack_eta_facts; MRSquash.sq.
       intros [s Hs] cum wfΓ'; exists s; eapply closed_context_cumulativity; eauto.
     Qed.
@@ -1005,7 +1012,7 @@ Section Typecheck.
       ws_cumul_ctx_pbE le Σ' Γ' Γ ->
       wf_localE Σ' Γ' ->
       wt_decl Σ' Γ' d.
-    Proof using EtaF.
+    Proof using Type.
       destruct d as [na [b|] ty]; simpl; intuition pcuics.
       all: eapply context_cumulativity_welltyped ; pcuics.
     Qed.
@@ -1462,7 +1469,7 @@ Section Typecheck.
       forall Σ (wfΣ : abstract_env_ext_rel X Σ), ∥ wf_branch cdecl br ×
       let brctxty := case_branch_type ci.(ci_ind) mdecl idecl p br ptm n cdecl in
       wf_localE Σ (Γ,,, brctxty.1) × Σ;;; Γ,,, brctxty.1 |-E brctxty.2 ◃ tSort ps ∥.
-    Proof using hpctx hty isdecl wfp wfpret wfΓ EtaF.
+    Proof using hpctx hty isdecl wfp wfpret wfΓ.
       intros. pose proof (heΣ _ wfΣ) as [heΣ].
       have wfbr : wf_branch cdecl br.
       { sq.  specialize_Σ wfΣ. do 2 red.
@@ -2127,7 +2134,7 @@ Section Typecheck.
     open_eta_facts.
     intros wf_types hm Σ wfΣ hm'.
     pose proof (hΣ _ wfΣ) as [wfΣ'].
-    pose proof (@eta_U _ EtaF) as [hU].
+    pose proof (@eta_U _ _) as [hU].
     destruct (hm _ wfΣ) as [hd]. destruct (wf_types _ wfΣ) as [htys].
     depelim htys.
     eapply (mfix_body_on_red_unique (check := check) (wfΣ := wfΣ')); eassumption.

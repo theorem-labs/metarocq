@@ -22,18 +22,19 @@ From Stdlib Require Import Program.Equality.
 (** * ETAK: the proved rows of the typed facts of the E reduction machine and of the E conversion
 
   BET-64 EtaCheckerLane, worker EtaIntegrate9, 2026-10-29. EtaHypProve proved these eight hypotheses of
-  the E checker ([PCUICTypingEtaHypsProved], fork/wip/etak-hypprove-2026-10-29 @ 29c23129), each at
+  the E checker (in a file of fork/wip/etak-hypprove-2026-10-29 @ 29c23129 that this branch does not carry), each at
   [wt := welltypedE], [wfP := wf_extE]:
   - the fields [rtf_rel], [rtf_const], [rtf_cofix], [rtf_app_sort], [rtf_app_prod], [rtf_app_prim] of
     [PCUICSafeReduceEta.ReduceTypedFacts] (used by [PCUICSafeReduceEtaBridge.reduce_typed_facts_E]);
   - the fields [ctf_case_brs_length], [ctf_wf_universes] of [PCUICSafeConversionEtaFacts.ConvTypedFacts]
     (used by [PCUICSafeConversionEtaFacts.conv_typed_facts_E]).
   Their lemmas [<field>_proved], and the helpers that [ctf_wf_universes_proved] needs ([univ_*],
-  [wf_universes_inst_proved], [typing_wf_universes_proved]), MOVED here from [PCUICTypingEtaHypsProved]
+  [wf_universes_inst_proved], [typing_wf_universes_proved]), MOVED here from that file
   with the same names and statements. Reason: the E reduction bridge and the E conversion facts build
   their full classes from these lemmas, and this file loads only [pcuic] and [common], not the type
-  checker's hypothesis bundle [PCUICTypingEtaHyps] that [PCUICTypingEtaHypsProved] loads.
-  [PCUICTypingEtaHypsProved] imports this file and keeps the identity checks [<field>_fits].
+  checker's hypothesis bundle [PCUICTypingEtaHyps]. The registered files tie each lemma to its class field:
+  the instances [PCUICSafeReduceEtaBridge.reduce_typed_facts_E] and [PCUICSafeConversionEta.conv_typed_facts_E]
+  fill the fields with them, and [PCUICTypingEtaDischarge.reduce_typed_facts_discharged] is built on the first.
   Proof route changed for four lemmas, statement unchanged: [rtf_rel], [rtf_const], [rtf_app_sort] and
   [rtf_app_prod] use the landed E inversions of [PCUICInversionEta] ([inversion_RelE],
   [inversion_ConstE], [inversion_SortE], [inversion_ProdE], same conclusions as the K7 copies they
