@@ -2147,15 +2147,22 @@ Section CallByNeed.
       end
     end.
 
+  (** Whether a list of slots (an inline slot's captured env) holds an inline slot. *)
+  Definition cbn_slots_has_inl (l : list cbn_slot) : bool :=
+    existsb (fun x => match x with CbnSInl _ _ _ _ => true | CbnSAddr _ => false end) l.
+
   (** Bind a slot to the binder over the body [body]: an inline suspension stays inline if
-    the variable occurs at most once in [body], and is put in the heap otherwise. *)
+    the variable occurs at most once in [body] AND its captured env holds no inline slot, and
+    is put in the heap otherwise. The second condition bounds inline nesting: an inline slot
+    has no address, so the collector copies it once per reference, and a chain of inline slots
+    each capturing the previous one makes that copying grow with the chain's depth. *)
   Definition cbn_bind (x : cbn_slot) (body : cbn_code) (rs : list cbn_root) (s : cbn_state)
     : cbn_res (cbn_slot * list cbn_root * cbn_state) :=
     match x with
     | CbnSAddr _ => CbnCOk (x, rs, s)
-    | CbnSInl _ _ _ _ =>
+    | CbnSInl vals _ _ _ =>
       let (once, s) := cbn_once_body body s in
-      if once then CbnCOk (x, rs, s)
+      if once && negb (cbn_slots_has_inl vals) then CbnCOk (x, rs, s)
       else cbnlet (a, rs, s) := cbn_materialize x rs s in CbnCOk (CbnSAddr a, rs, s)
     end.
 

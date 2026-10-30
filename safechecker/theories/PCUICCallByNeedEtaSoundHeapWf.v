@@ -570,7 +570,7 @@ Section Machine.
       assert (hs1 : cbn_hwf Q s1).
       { apply (cbn_hwf_heap Q s s1); [|exact hs].
         change s1 with (snd (b, s1)). rewrite <- eo. exact (proj1 (cbn_once_body_shape body s)). }
-      destruct b.
+      destruct (b && negb (cbn_slots_has_inl vals)).
       + injection he as <- <- <-. split; assumption.
       + cbn_dcall he em a1 rs1 s2. injection he as <- <- <-.
         exact (cbn_materialize_wf _ _ _ _ _ _ em hs1 hrs).
