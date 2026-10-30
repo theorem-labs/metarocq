@@ -36,7 +36,8 @@ From Equations Require Import Equations.
   [wf_arities_context'E], [wf_arities_contextE], [on_constructor_closed_aritiesE],
   [on_constructor_closedE], [subslet_untyped_subsletE], [subs_nth_errorE],
   [subs_usubstE]; the definitions [wt_cumulE], [wt_convE], [wt_cumul_cumE],
-  [wt_conv_convE] and their notations; [red1P_on_free_vars_rightE],
+  [wt_conv_convE] and their notations, with the transitivity instances
+  [conv_transE] and [cumul_transE]; [red1P_on_free_vars_rightE],
   [isType_wf_localE], [isType_closedPTE], [substitution_red1E],
   [substitution_let_redE], [substitution_untyped_let_redE],
   [substitution_untyped_redE], [substitution_redE], [red_redE],
@@ -392,6 +393,19 @@ Coercion wt_cumul_cumE : wt_cumulE >-> JoinE.
 Definition wt_conv_convE {cf} {Σ Γ T U} : Σ ;;; Γ |-E T = U ✓ -> JoinE Σ Γ Conv T U.
 Proof. intros H; apply (wt_cumul_pbE_eq H). Defined.
 Coercion wt_conv_convE : wt_convE >-> JoinE.
+
+(** The E twins of base's two transitivity instances of the ✓ relations
+    ([PCUICWellScopedCumulativity.v:277] and [:280]), each base's instance with the
+    relation renamed; the proof is base's, through [wt_cumul_pbE_trans]. This file does
+    not Import [CRelationClasses], so the class is named qualified; it is the same
+    constant base's instances are stated on. *)
+#[global] Instance conv_transE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ :
+  CRelationClasses.Transitive (wt_convE Σ Γ).
+Proof. apply wt_cumul_pbE_trans. Qed.
+
+#[global] Instance cumul_transE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ :
+  CRelationClasses.Transitive (wt_cumulE Σ Γ).
+Proof. apply wt_cumul_pbE_trans. Qed.
 
 Definition red1P_on_free_vars_rightE {cf} {P Σ} {wfΣ : wfE Σ} {Γ t v} : red1P P Σ Γ t v -> on_free_vars P v.
 Proof.

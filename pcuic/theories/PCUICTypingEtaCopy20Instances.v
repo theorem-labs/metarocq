@@ -856,11 +856,11 @@ Qed.
    [mkApps (tConstruct i n ui) args] at [mkApps (tInd i u) pandi] with every argument again a
    first-order value. In [fo_Σ] every constructor argument has type [N], so no argument position
    can hold a function, and the only way to put [cumul_eta_l] into such a derivation is a detour
-   on a type convertible to itself, which carries no η content. A non-vacuous witness therefore
-   costs a NEW environment whose first-order values are typed through η while
-   [firstorder_ind] still holds of its inductive: a declaration literal, its [on_inductive]
-   obligations, a [wf] proof in the shape of [fo_wf], and the retyping of this instance on it.
-   Not built here. *)
+   between two types that are already related without it, which adds no η content to what is
+   proved. A non-vacuous witness therefore costs a NEW environment whose first-order values are
+   typed through η and whose inductive still satisfies [firstorder_ind], the premise these two
+   lemmas take: a declaration literal, its [on_inductive] obligations, a [wf] proof in the shape
+   of [fo_wf], and the retyping of this instance on it. Not built here. *)
 Definition firstorder_value_irredE_inst :
   forall t', MetaRocq.PCUIC.PCUICReduction.red1 fo_Σ [] fo_sz t' -> False :=
   fun t' H => firstorder_value_irredE fo_Σ fo_sz t' fo_sz_value H.

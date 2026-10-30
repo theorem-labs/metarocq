@@ -221,3 +221,12 @@ End A1.
 (** Base registers the two [pb] instances of its forgetful map on [pcuic]
     ([PCUICWellScopedCumulativity]); here one [pb]-general lemma carries both. *)
 #[global] Hint Resolve ws_cumul_pbE_forget : pcuic.
+
+(** Base registers the [wf Σ] form of the openness of the right-hand side of a closed
+    reduction, [closed_red_open_right] ([PCUICConversion.v:264]), and leaves its
+    [ClosedBodies] sibling [closed_red_open_right_cb]
+    ([PCUICWellScopedCumulativity.v:314]) on no database. An η proof holds [wfE Σ], not
+    [wf Σ], so the sibling is the form it can fire (its [ClosedBodies Σ] premise comes
+    from [wfE_ClosedBodies]); it carries base's registration here, as base's other
+    [_cb] siblings carry theirs ([red1_is_open_term_cb], [red_is_open_term_cb]). *)
+#[global] Hint Resolve closed_red_open_right_cb : fvs.

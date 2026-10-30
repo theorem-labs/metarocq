@@ -6,7 +6,15 @@
   and states its base twin with the relations renamed, and [isType]/[isTypeRel] become
   [on_type (lift_typing typingE)]/[on_type_rel (lift_typing typingE)]. Every proof
   goes through the renaming lemma [typing_rename_propE] ([Typing/PCUICRenameTypEta]),
-  as base's goes through [typing_rename_prop]. The proofs are base's. *)
+  as base's goes through [typing_rename_prop]. The proofs are base's.
+
+  One own name SHADOWS a DIFFERENT statement of the same name in this file's import closure,
+  as in base: [weaken_wf_localE], the twin of [PCUICWeakeningTyp.weaken_wf_local] (a context
+  [Δ] is appended below a well-formed [Γ] in ONE environment), is also carried by
+  [Typing/PCUICWeakeningEnvTypEta], whose twin of
+  [Typing/PCUICWeakeningEnvTyp.weaken_wf_local] moves ONE context along an environment
+  extension [extends Σ Σ']. No ascription relates them. Every reference to the name in a file
+  that has both objects in scope is written qualified. *)
 From Stdlib Require Import Morphisms.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.

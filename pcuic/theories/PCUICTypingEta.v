@@ -155,6 +155,23 @@ Definition wf_extE `{checker_flags} := on_global_env_ext cumulSpecE0 (lift_typin
 Existing Class wf_extE.
 #[global]
 Hint Mode wf_extE + + : typeclass_intances.
+Lemma wf_extE_wfE {cf:checker_flags} Σ : wf_extE Σ -> wfE Σ.
+Proof. intro H; apply H. Qed.
+#[global]
+Existing Instance wf_extE_wfE.
+Coercion wf_extE_wfE : wf_extE >-> wfE.
+#[global]
+Hint Resolve wf_extE_wfE : core.
+
+(** The E twin of base's [wf_ext_consistent] and its registration
+    ([PCUICTyping.v:602-606]), the sibling of [wf_ext_wf] on the same database.
+    [consistent] is a property of the global constraints, which the E side does not
+    restate, so only the premise changes. *)
+Lemma wf_extE_consistent {cf:checker_flags} Σ :
+  wf_extE Σ -> consistent Σ.
+Proof. intros [_ [_ [_ [? _]]]]; assumption. Qed.
+#[global]
+Hint Resolve wf_extE_consistent : core.
 
 Inductive welltypedE {cf} Σ Γ t : Prop :=
 | iswelltypedE A : Σ ;;; Γ |-E t : A -> welltypedE Σ Γ t.

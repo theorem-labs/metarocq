@@ -25,7 +25,24 @@
   returning [Type@{l0}] ([c2_mp_u]) and the instantiated block is at that level
   ([c2_block_u]), so instantiating changes both sides of each. The typing spine
   instances compare [I A] with [(λ_:Prop. I _) A], an η-expansion of the head, and
-  [G (λy:Prop. F y)] with [G F]. *)
+  [G (λy:Prop. F y)] with [G F].
+
+  One own name SHADOWS a DIFFERENT statement of the same name in this file's import closure:
+  [subst_instance_ws_cumul_ctx_pbE_rel_inst], also carried by [PCUICWsCumulEtaCtxInstances].
+  The two instantiate the two lemmas that carry the name
+  [subst_instance_ws_cumul_ctx_pbE_rel] (C6): this one instantiates
+  [Typing/PCUICUnivSubstitutionTypEta]'s (the twin of
+  [Typing/PCUICUnivSubstitutionTyp.subst_instance_ws_cumul_ctx_pb_rel], over a
+  [cumul_context]), the other instantiates [PCUICWsCumulEtaCtx]'s (the twin of
+  [PCUICConversion.subst_instance_ws_cumul_ctx_pb_rel]). No ascription relates them. Both are
+  kept: each is the measured witness of its own lemma. Every reference to the name in a file
+  that has both objects in scope is written qualified.
+
+  The lemmas of this file's rows are named qualified wherever two files of the tree carry the
+  name ([PCUICContextsEta.subst_type_local_ctxE],
+  [PCUICContextsEta.subst_sorts_local_ctxE], [PCUICContextsEta.subslet_extended_substE],
+  [PCUICAritiesEta.isType_it_mkProd_or_LetInE], [PCUICAritiesEta.weaken_subsletE]), so that
+  the row names the object it instantiates and not whichever import comes last. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -979,9 +996,9 @@ Definition sorts_local_ctx_instantiateE_inst :=
     si_declared_minductive' c2_slc eq_refl.
 (** [y : x] under [x := ∀P:Prop. P]. *)
 Definition subst_type_local_ctxE_inst :=
-  subst_type_local_ctxE si_Σ [] c2_x [vass si_na (tRel 0)] [ci_False] sProp si_wfE ci_wf_Γ1 c2_tlc c2_sub.
+  PCUICContextsEta.subst_type_local_ctxE si_Σ [] c2_x [vass si_na (tRel 0)] [ci_False] sProp si_wfE ci_wf_Γ1 c2_tlc c2_sub.
 Definition subst_sorts_local_ctxE_inst :=
-  subst_sorts_local_ctxE si_Σ [] c2_x [vass si_na (tRel 0)] [ci_False] [sProp] si_wfE ci_wf_Γ1 c2_slc c2_sub.
+  PCUICContextsEta.subst_sorts_local_ctxE si_Σ [] c2_x [vass si_na (tRel 0)] [ci_False] [sProp] si_wfE ci_wf_Γ1 c2_slc c2_sub.
 Definition weaken_type_local_ctxE_inst :=
   weaken_type_local_ctxE si_Σ fi_Γ1 [] c2_x (Sort.super sProp) si_wfE ci_wf_Γ1 c2_tlc_P.
 Definition weaken_sorts_local_ctxE_inst :=
@@ -998,7 +1015,8 @@ Definition wf_local_smash_contextE_inst := @wf_local_smash_contextE _ si_Σ si_w
 (** [x := x] lifted over [y : x]. *)
 Definition subslet_liftE_inst := @subslet_liftE _ si_Σ si_wfE fi_Γ1 [vass si_na (tRel 0)] [tRel 0] c2_x
   c2_wf_Γxy c2_sub_x.
-Definition subslet_extended_substE_inst := @subslet_extended_substE _ si_Σ si_wfE [] c2_Γlet c2_wf_Γlet.
+Definition subslet_extended_substE_inst :=
+  @PCUICContextsEta.subslet_extended_substE _ si_Σ si_wfE [] c2_Γlet c2_wf_Γlet.
 Definition typing_expand_letsE_inst :=
   @typing_expand_letsE _ si_Σ si_wfE [] [vdef si_na ci_False fi_P] (tRel 0) _ c2_d_typed.
 
@@ -1124,7 +1142,7 @@ Definition type_it_mkProd_or_LetInE_inst :=
 Definition type_it_mkProd_or_LetIn_sortsE_inst :=
   @type_it_mkProd_or_LetIn_sortsE _ si_Σ si_wfE [] c2_x [Sort.super sProp] (tRel 0) sProp c2_slc_P ci_x_typed.
 Definition isType_it_mkProd_or_LetInE_inst :=
-  @isType_it_mkProd_or_LetInE _ si_Σ si_wfE [] c2_x [Sort.super sProp] (tRel 0) c2_slc_P c2_isT_x.
+  @PCUICAritiesEta.isType_it_mkProd_or_LetInE _ si_Σ si_wfE [] c2_x [Sort.super sProp] (tRel 0) c2_slc_P c2_isT_x.
 Definition subslet_app_closedE_inst :=
   @subslet_app_closedE _ si_Σ [] [ci_False] [ci_False] c2_x c2_x c2_sub c2_sub eq_refl.
 Definition subslet_app_invE_inst :=
@@ -1134,7 +1152,8 @@ Definition subslet_app_invE_inst :=
    BUILT (an inductive one of whose PARAMETERS mentions a bound level): [J]'s one parameter
    is [A : Prop], which no instance moves. *)
 Definition subslet_indsE_inst := @subslet_indsE _ si_Σ si_wfE si_ind [] si_mdecl si_idecl si_declared_inductive eq_refl.
-Definition weaken_subsletE_inst := @weaken_subsletE _ si_Σ si_wfE [ci_False] c2_x fi_Γ1 ci_wf_Γ1 c2_sub.
+Definition weaken_subsletE_inst :=
+  @PCUICAritiesEta.weaken_subsletE _ si_Σ si_wfE [ci_False] c2_x fi_Γ1 ci_wf_Γ1 c2_sub.
 Definition isType_substitution_it_mkProd_or_LetInE_inst :=
   @isType_substitution_it_mkProd_or_LetInE _ si_Σ si_wfE [] c2_x (tRel 0) [ci_False] c2_sub c2_isT_False.
 Definition isType_substitution_it_mkProd_or_LetInE_let_inst :=

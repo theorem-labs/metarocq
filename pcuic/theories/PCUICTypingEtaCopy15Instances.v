@@ -22,7 +22,24 @@
     [OnOne2_ctx_instE], [All2_ctx_instE] and [ctx_inst_eq_contextE].
   No instance is marked WEAK: the two lemmas whose conclusion is an equality of substitutions
   ([spine_subst_inj_substE], [ctx_inst_sub_eqE]) are applied to derivations whose
-  substitutions are not convertible, as checked by [Fail] next to each. *)
+  substitutions are not convertible, as checked by [Fail] next to each.
+
+  Four own names SHADOW a name of [PCUICTypingEtaCopies2Instances], which this file imports.
+  Each pair instantiates the two different lemmas that carry the base name (C6): this file's
+  row instantiates [PCUICSpineEta]'s lemma, the other file's row instantiates
+  [PCUICContextsEta]'s, [PCUICAritiesEta]'s or [PCUICGenerationEta]'s.
+  - [type_mkAppsE_inst] and [weaken_subsletE_inst] have a DIFFERENT statement from the row
+    they shadow (no ascription relates them): this file's are at [rf_Σ] and at
+    [PCUICSpineEta]'s weakening by an arbitrary [Γ'], the other file's at [si_Σ] through
+    [PCUICGenerationEta.type_mkAppsE] and at [PCUICAritiesEta]'s weakening of the empty
+    context.
+  - [subst_type_local_ctxE_inst] and [subst_sorts_local_ctxE_inst] have the SAME compiled
+    statement as the rows they shadow (each ascription is accepted both ways): the two lemmas
+    agree on this data, since [PCUICSpineEta]'s inner context [Γ'] is instantiated to [[]].
+    Both are kept, because each is the satisfying instance of a DIFFERENT lemma, and deleting
+    either would leave its lemma with no instance; neither proof term is the other's.
+  Every reference to one of these four names in a file that has both objects in scope is
+  written qualified, and each row above names the lemma it instantiates qualified. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -427,7 +444,8 @@ Definition ctx_inst_sub_to_extended_list_kE_inst := ctx_inst_sub_to_extended_lis
 Definition spine_subst_subst_to_extended_list_kE_inst := spine_subst_subst_to_extended_list_kE k_sp_T.
 Definition spine_subst_subst_to_extended_list_k_genE_inst :=
   spine_subst_subst_to_extended_list_k_genE (Δ' := k_Δ') k_sp_T eq_refl.
-Definition arity_spine_eqE_inst := @arity_spine_eqE _ rf_Σ k_Γ k_U k_U k_isT_U eq_refl.
+Definition arity_spine_eqE_inst :=
+  @PCUICSpineEta.arity_spine_eqE _ rf_Σ k_Γ k_U k_U k_isT_U eq_refl.
 Definition typing_spine_wf_localE_inst := typing_spine_wf_localE k_spη.
 
 (** The η step under [w : G F] and under [z := a : G F], substituted by [a]. *)

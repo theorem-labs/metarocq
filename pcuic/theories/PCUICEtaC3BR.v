@@ -13,7 +13,15 @@
 
   Everything is wrapped in [Module C3R] ([peta], [commutes], ...). The
   [upto_domain_r] instances and [Derive Signature] come from [PCUICEtaCanon]. No
-  confluence file is Required. *)
+  confluence file is Required.
+
+  One own name SHADOWS a different object of the same name inside [Module C3R]:
+  [C3R.commutes Σ t u], the one-step commutation property of this file, against
+  [MetaRocq.Utils.MRRelations.commutes], a property of two abstract relations which
+  [MetaRocq.Utils.utils] brings in. The two are TYPE-DISTINCT: no ascription relates them, in
+  either direction, so no tactic, hint or instance resolution can put one where the other is
+  meant without the build failing. The references inside [C3R] are therefore left
+  unqualified; outside the module the name is written [C3R.commutes]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
