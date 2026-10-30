@@ -2,8 +2,10 @@
 
 (** * Satisfying instances of the hypotheses of [PCUICInductiveInversionEtaB]
 
-  Each of the 57 lemmas of [PCUICInductiveInversionEtaB] is applied here to a concrete
-  instance with every premise proved. The environments are the ones copy 18a uses:
+  Each of the 58 premise-carrying lemmas of [PCUICInductiveInversionEtaB] is applied here to a
+  concrete instance with every premise proved. The file's refutation
+  [ws_cumul_pb_terms_conflE_false] has no instance: it states that its premise is
+  unsatisfiable, so no instance of it exists. The environments are the ones copy 18a uses:
   - [rf_Σ] of [PCUICWsCumulEtaCtx] (the empty environment) with the context
     [wc_Γ := [G : (Prop → Prop) → Prop; F : Prop → Prop]], in which [wc_T := G (λy:Prop. F y)]
     and [wc_U := G F] are related by one η step and by no reduction or syntactic comparison.
@@ -17,14 +19,27 @@
     typed only through that η step, so that EVERY typing in [c18_tel] carries an η step in
     the [wf_localE] it holds. The cofixpoint, the projection and the constructor applications
     live there.
-  - [if_Σ] of [PCUICConversionEtaCongrFinst] and [J@{i}] of [PCUICEtaIdxEnv] for the universe
-    rows. [PCUICEtaIdxEnv] is required and never imported; every name of it is written
-    qualified.
+
+  [if_Σ] of [PCUICConversionEtaCongrFinst] and [J@{i}] of [PCUICEtaIdxEnv] are NOT USED by this
+  file: no instance here reaches a universe comparison, because every instance runs at the
+  monomorphic instance [u = []] of a monomorphic declaration. The rows that a polymorphic
+  environment would reach are tagged NOT BUILT (the universe part) below.
 
   Every instance that does not reach the whole of a lemma carries a mark. IMPOSSIBLE names a
   premise that cannot hold an η step, with the property of the head and the rule set that
-  refutes it. NOT BUILT names a premise that this file's environments do not reach, with the
-  missing witness and its cost. *)
+  refutes it; a premise is IMPOSSIBLE only when the refutation rests on the premise's own rule
+  set (a lookup, a universe statement, a Leibniz equality, an alpha equality on binder names).
+  NOT BUILT names a premise that this file's environments do not reach, with the missing
+  witness and its cost. Three costs recur:
+  - the [wfE Σ] part: [wfE Σ] is [on_global_env cumulSpecE0 (lift_typing typingE)], so it holds
+    the typing derivation of EVERY declaration of [Σ] and CAN carry an η step. The three
+    environments of this file ([rf_Σ], [si_Σ], [iv_Σ]) are typed without one. Cost: a
+    declaration whose type or body is typed through an η step, in a new environment, with its
+    [wfE] proof;
+  - the universe part: cost is a universe-polymorphic declaration, two instances of it, its
+    environment and its [wfE] proof;
+  - the substitution part: cost is a well-typed non-empty substitution whose terms are the two
+    sides of an η step, with its [subsletE]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -42,7 +57,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICSpineEta PCUICInductivesEta PCUICInductiveInversionEta
      PCUICTypingEtaCopy18aInstances
      PCUICInductiveInversionEtaB.
-From MetaRocq.PCUIC Require PCUICEtaIdxEnv.
+(* [PCUICEtaIdxEnv] is not required: no name of it is used here. *)
 From Equations.Prop Require Import DepElim.
 
 #[local] Existing Instance default_checker_flags.
@@ -132,7 +147,9 @@ Defined.
 
 (** ** The instances, in the order of the file *)
 
-(** The context is the η telescope: [wf_localE] holds the η step of [w : h y]. *)
+(* NOT BUILT (the universe part): the instance is at [u = []] of the monomorphic [R], so
+   [consistent_instance_ext] holds by [reflexivity] and no instance comparison is reached.
+   The context is the η telescope: the [wf_localE] premise holds the η step of [w : h y]. *)
 Definition isType_of_constructorE_inst :=
   isType_of_constructorE iv_Σ iv_mdecl iv_idecl iv_cdecl (iv_ind, 0) [] c18b_Γ
     iv_wfE c18b_wf iv_declared_constructor c18_cu.
@@ -141,6 +158,8 @@ Definition isType_of_constructorE_inst :=
 Definition conv_eq_ctxE_inst :=
   conv_eq_ctxE si_Σ iv_Γk iv_Γk iv_kg iv_keta c18b_join_conv Logic.eq_refl.
 
+(* NOT BUILT (the universe part), as [isType_of_constructorE_inst]: the instance is at
+   [u = []]. The context premise is the η telescope. *)
 Definition declared_constructor_valid_tyE_inst :=
   declared_constructor_valid_tyE iv_Σ c18b_Γ iv_mdecl iv_idecl iv_ind 0 iv_cdecl []
     iv_wfE c18b_wf iv_declared_constructor c18_cu.
@@ -270,17 +289,21 @@ Definition subslet_cofixE_inst :=
 Definition type_tCoFix_invE_inst :=
   type_tCoFix_invE iv_Σ c18b_Γc iv_cmfix 0 iv_RF iv_wfE c18b_cofix_typed.
 
-(* WEAK, IMPOSSIBLE (every premise). The lemma's premises are the section's
-   [declared_constructor], a lookup in the environment, and [consistent_instance_ext], a
-   proposition about universe levels and constraints. Neither mentions a term, a typing or a
-   term relation, so neither can hold an η step: [cumul_eta_l] is a constructor of
-   [cumulSpecE0], which relates TERMS, and no premise of this lemma is a relation between
-   terms. The conclusion is a [wf_localE] of the declaration's own contexts, which the
-   environment fixes. *)
+(* WEAK. IMPOSSIBLE (the two named premises): the section's [declared_constructor], a lookup in
+   the environment, and [consistent_instance_ext], a proposition about universe levels and
+   constraints. Neither mentions a term, a typing or a term relation, so neither can hold an η
+   step: [cumul_eta_l] is a constructor of [cumulSpecE0], which relates TERMS.
+   NOT BUILT (the [wfE Σ] part): the lemma also carries [{_ : wfE Σ}], which holds the typing
+   derivation of every declaration of [Σ] and CAN carry an η step; here the conclusion is read
+   off that premise's constructor-argument typing, so η content in the environment reaches the
+   conclusion. [iv_Σ] is typed without an η step. Cost: an environment with a declaration whose
+   type or body is typed through an η step, and its [wfE] proof.
+   NOT BUILT (the universe part): the instance is at [u = []] of the monomorphic [R]. *)
 Definition on_constructor_inst_wf_argsE_inst :=
   on_constructor_inst_wf_argsE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor [] c18_cu.
 
-(** The parameter spine is taken in the η telescope. *)
+(* NOT BUILT (the universe part): the instance is at [u = []] of the monomorphic [R].
+   The parameter spine is taken in the η telescope. *)
 Definition on_constructor_inst_pars_indicesE_inst :=
   on_constructor_inst_pars_indicesE (Σ := iv_Σ) iv_wfE iv_declared_constructor c18_cu
     (c18b_sp c18b_Γ iv_False c18b_wf c18b_False_typed).
@@ -354,10 +377,14 @@ Definition isTypeE_typingE_tConstruct_ctor_inst :=
 Definition isTypeE_typingE_mkApps_tConstruct_ctor_inst :=
   isTypeE_typingE_mkApps_tConstruct_ctor (Σ := iv_Σ) (wfΣ := iv_wfE) c18b_mkR_app_typed.
 
+(* NOT BUILT (the universe part): the compared instance is [u' := []], the only instance of the
+   monomorphic [R], so the universe comparison of the conclusion is [reflexivity]. The typing
+   premise is the constructor application whose argument is typed through the η step. *)
 Definition Construct_Ind_ind_eqE_inst :=
   Construct_Ind_ind_eqE (Σ := iv_Σ) iv_wfE (i' := iv_ind) (u' := []) (args' := [iv_keta])
     c18b_mkR_app_typed iv_declared_constructor.
 
+(* NOT BUILT (the universe part), as [Construct_Ind_ind_eqE_inst]: [u' := []]. *)
 Definition Construct_Ind_ind_eq'E_inst :=
   Construct_Ind_ind_eq'E (Σ := iv_Σ) iv_wfE (i' := iv_ind) (u' := []) (args' := [iv_keta])
     c18b_mkR_app_typed.
@@ -384,6 +411,20 @@ Definition conv_decls_fix_context_genE_inst :=
 
 Definition conv_decls_fix_contextE_inst :=
   conv_decls_fix_contextE (Σ := si_Σ) (wfΣ := si_wfE) iv_wf_Γk c18b_all2_dtype.
+
+(** The two declarations of the compared contexts differ by the η step
+    [G (λy:Prop. F y)] / [G F] alone, so the relation premise holds it. *)
+Lemma c18b_ctx_rel_conv :
+  ws_cumul_ctx_pbE_rel Conv rf_Σ wc_Γ [vass si_na wc_T] [vass si_na wc_U].
+Proof.
+  split; [reflexivity|].
+  constructor; [constructor|].
+  constructor; [reflexivity|]. exact (c18_wc_ws rf_Σ Conv).
+Qed.
+
+Definition ws_cumul_ctx_pb_rel_context_assumptionsE_inst :=
+  MetaRocq.PCUIC.PCUICInductiveInversionEtaB.ws_cumul_ctx_pb_rel_context_assumptionsE
+    rf_Σ wc_Γ [vass si_na wc_T] [vass si_na wc_U] c18b_ctx_rel_conv.
 
 (** ** A [match] on [I] whose discriminee is typed through the η step
 
@@ -573,9 +614,12 @@ Proof.
   split; [exact (iv_wf_P iv_Σ c18b_Γ c18b_wf)|exact c18b_subslet_False].
 Qed.
 
+(* NOT BUILT (the universe part): the instantiating instance is [u := []], so
+   [consistent_instance_ext] and the instantiation of the substitution are degenerate. *)
 Definition instantiate_subsletE_inst :=
   instantiate_subsletE (Σ := iv_Σ) (u := []) (wfΣ := iv_wfE) c18b_lookup c18b_subslet_False c18_cu.
 
+(* NOT BUILT (the universe part), as [instantiate_subsletE_inst]: [u := []]. *)
 Definition instantiate_wf_subsletE_inst :=
   instantiate_wf_subsletE (Σ := iv_Σ) (u := []) (wfΣ := iv_wfE) c18b_lookup
     c18b_wf_subslet_False c18_cu.
@@ -583,6 +627,9 @@ Definition instantiate_wf_subsletE_inst :=
 Lemma c18b_wf_subslet_nil : wf_subsletE iv_Σ (c18b_Γ ,,, [vass si_na si_P] ,,, []) [] [].
 Proof. split; [exact (iv_wf_P iv_Σ c18b_Γ c18b_wf)|constructor]. Qed.
 
+(* NOT BUILT (the substitution part): the second substitution is empty
+   ([c18b_wf_subslet_nil]), so no substituted term carries an η step. Cost: a well-typed
+   non-empty substitution whose terms are the two sides of an η step, with its [subsletE]. *)
 Definition substitution_subsletE_inst :=
   substitution_subsletE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ' := []) c18b_subslet_False
     c18b_wf_subslet_nil.
@@ -599,9 +646,12 @@ Definition subslet_projsE_inst :=
   subslet_projsE (Σ := iv_Σ) (wfΣ := iv_wfE) (args := [iv_keta]) iv_declared_inductive c18_onps
     iv_Γk (mkApps (tConstruct iv_ind 0 []) [iv_keta; tRel 0]) [] c18b_mkR_app_typed.
 
-(* WEAK, IMPOSSIBLE (every premise). The only premise is [declared_constructor], a lookup in
-   the environment; the conclusion is a closedness statement. No premise is a relation
-   between terms, and [cumul_eta_l] relates terms, so no η step can appear. *)
+(* WEAK. IMPOSSIBLE (the named premise): the only named premise is [declared_constructor], a
+   lookup in the environment; the conclusion is a closedness statement, and [cumul_eta_l]
+   relates terms, so that premise can hold no η step.
+   NOT BUILT (the [wfE Σ] part): the lemma also carries [{_ : wfE Σ}], which holds every
+   declaration's typing derivation and can carry an η step; [iv_Σ] is typed without one. Cost:
+   an environment with a declaration typed through an η step, and its [wfE] proof. *)
 Definition positive_cstr_closed_indicesE_inst :=
   positive_cstr_closed_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor.
 
@@ -612,7 +662,9 @@ Lemma c18b_wc_closed : is_closed_context wc_Γ. Proof. reflexivity. Qed.
 Lemma c18b_closed_T : closedn #|wc_Γ| wc_T. Proof. reflexivity. Qed.
 Lemma c18b_closed_U : closedn #|wc_Γ| wc_U. Proof. reflexivity. Qed.
 
-(** The conversion premise is the η step itself; the substitutions are empty. *)
+(* NOT BUILT (the substitution part): both substitutions are empty, so the substituted terms
+   carry no η step. Cost: a well-typed non-empty substitution whose terms are the two sides of
+   an η step, with its [subsletE]. The conversion premise IS the η step itself. *)
 Definition subst_conv_closedE_inst :=
   subst_conv_closedE (Σ := rf_Σ) (wfΣ := wc_wfE) (le := Cumul) (Γ := []) (Γ0 := []) (Γ1 := [])
     (Δ := wc_Γ) (s := []) (s' := []) (emptysletE _ _) (emptysletE _ _) Logic.eq_refl
@@ -637,12 +689,13 @@ Definition into_ws_cumul_pb_termsE_inst :=
   into_ws_cumul_pb_termsE (Σ := rf_Σ) (wfΣ := wc_wfE) c18b_all2_spec Logic.eq_refl
     Logic.eq_refl Logic.eq_refl.
 
-(* WEAK, IMPOSSIBLE (every premise), as [positive_cstr_closed_indicesE_inst]: the only
-   premise is the environment lookup [declared_constructor]. *)
+(* WEAK. IMPOSSIBLE (the named premise), as [positive_cstr_closed_indicesE_inst]: the only
+   named premise is the environment lookup [declared_constructor].
+   NOT BUILT (the [wfE Σ] part), with the same cost as there. *)
 Definition on_constructor_closed_indicesE_inst :=
   on_constructor_closed_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor.
 
-(* WEAK, IMPOSSIBLE (every premise), as above. *)
+(* WEAK. IMPOSSIBLE (the named premise) and NOT BUILT (the [wfE Σ] part), as above. *)
 Definition positive_cstr_closed_indices'E_inst :=
   positive_cstr_closed_indices'E (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor.
 
@@ -667,15 +720,20 @@ Definition ws_cumul_ctx_pb_wf_localE_inst :=
   ws_cumul_ctx_pb_wf_localE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_Γk iv_Γk c18b_Δ c18b_wf_app
     c18_wf_Γk c18b_ctx_refl_iv.
 
-(** The compared parameters are the two sides of the η step. *)
+(* NOT BUILT (the universe part): both compared instances are [[]] ([c18_cu] twice), so the
+   universe comparison [c18_cmp_ind 1] is the monomorphic one. The compared parameters are the
+   two sides of the η step. *)
 Definition constructor_cumulative_indicesE_inst :=
   constructor_cumulative_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) (napp := 1)
     iv_declared_constructor c18_cu c18_cu (c18_cmp_ind 1) iv_Γk [iv_keta] [iv_kg] [iv_keta]
     [iv_kg] (c18_sp iv_keta c18_keta_typed) (c18_sp iv_kg c18_kg_typed) c18_terms.
 
-(* WEAK, IMPOSSIBLE (every premise). The premises are [declared_inductive], a lookup, and
-   [consistent_instance_ext], a statement about universe levels; the conclusion is an
-   equality of contexts. No premise relates two terms. *)
+(* WEAK. IMPOSSIBLE (the named premises): [declared_inductive], a lookup, and
+   [consistent_instance_ext], a statement about universe levels; the conclusion is an equality
+   of contexts, and no named premise relates two terms.
+   NOT BUILT (the [wfE Σ] part): the lemma also carries [{_ : wfE Σ}], which can carry an η
+   step. Cost: an environment with a declaration typed through an η step, and its [wfE] proof.
+   NOT BUILT (the universe part): the instance is at [u = []]. *)
 Definition subst_inds_smash_paramsE_inst :=
   subst_inds_smash_paramsE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_inductive c18_cu.
 
@@ -709,9 +767,11 @@ Definition WfArity_build_case_predicate_typeE_inst :=
     (p := c18b_pF) (ps := sProp) iv_wfE iv_declared_inductive c18b_isT_RF c18b_wf_sort_P
     c18b_wf_pF.
 
-(* WEAK, IMPOSSIBLE (every premise). The only premise is [T = T'], Leibniz equality of
-   terms. An η step relates two DIFFERENT terms ([cumul_eta_l] rewrites [t] to
-   [λx. t x]), so a premise that forces the two sides to be the same term admits none. *)
+(* WEAK. IMPOSSIBLE (every premise). The only premise is [T = T'], Leibniz equality of terms,
+   and the lemma carries NO environment premise ([wfE] is not among its binders), so there is
+   no part that an η-typed environment could reach. An η step relates two DIFFERENT terms
+   ([cumul_eta_l] rewrites [t] to [λx. t x]), so a premise that forces the two sides to be the
+   same term admits none. *)
 Definition arity_spine_eqE_inst :=
   MetaRocq.PCUIC.PCUICInductiveInversionEtaB.arity_spine_eqE (Σ := iv_Σ) (Γ := c18b_Γ) (T := si_P) (T' := si_P) Logic.eq_refl.
 
@@ -751,6 +811,7 @@ Definition wf_case_predicate_contextE_inst :=
   wf_case_predicate_contextE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := c18b_Γ) (ci := c18b_ci)
     (p := c18b_pF) (args := []) iv_declared_inductive c18b_isT_RF c18b_wf_pF.
 
+(* NOT BUILT (the universe part): the instance is at [u = []] of the monomorphic [R]. *)
 Definition case_predicate_context_alphaE_inst :=
   case_predicate_context_alphaE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (p := c18b_pF)
     (Γ := c18b_Γ) iv_declared_inductive c18_cu
@@ -761,10 +822,12 @@ Lemma c18b_alpha_p :
   eq_context_upto_names (pcontext c18b_pF) (ind_predicate_context c18b_ci.(ci_ind) iv_mdecl iv_idecl).
 Proof. exact (alpha_eq_reflexive (pcontext c18b_pF)). Qed.
 
-(* WEAK, IMPOSSIBLE (every premise). The only premise is [eq_context_upto_names], the
-   syntactic alpha equality of two contexts: it compares the declarations up to binder
-   names only, so two declarations whose types differ by an η step do not satisfy it. No
-   premise of this lemma is a conversion. *)
+(* WEAK. IMPOSSIBLE (the named premise): [eq_context_upto_names], the syntactic alpha equality
+   of two contexts: it compares the declarations up to binder names only, so two declarations
+   whose types differ by an η step do not satisfy it.
+   NOT BUILT (the [wfE Σ] part): the lemma also carries [{_ : wfE Σ}], which holds every
+   declaration's typing derivation and can carry an η step; [iv_Σ] is typed without one. Cost:
+   an environment with a declaration typed through an η step, and its [wfE] proof. *)
 Definition inst_case_predicate_context_alpha_eqE_inst :=
   inst_case_predicate_context_alpha_eqE (Σ := iv_Σ) (wfΣ := iv_wfE) (mdecl := iv_mdecl)
     (idecl := iv_idecl) (ci := c18b_ci) (p := c18b_pF) c18b_alpha_p.
@@ -772,9 +835,13 @@ Definition inst_case_predicate_context_alpha_eqE_inst :=
 Lemma c18b_si_cu : consistent_instance_ext si_Σ (ind_universes si_mdecl) [].
 Proof. reflexivity. Qed.
 
-(* WEAK, IMPOSSIBLE (every premise). The premises are [declared_inductive] and
-   [consistent_instance_ext], a lookup and a universe statement, and [wf_branch_gen], an
-   [All2] on binder names. None of them relates two terms. *)
+(* WEAK. IMPOSSIBLE (the named premises): [declared_inductive] and [consistent_instance_ext], a
+   lookup and a universe statement, and [wf_branch_gen], an [All2] on binder names. None of
+   them relates two terms.
+   NOT BUILT (the [wfE Σ] part): the lemma also carries [{_ : wfE Σ}], which can carry an η
+   step; [si_Σ] is typed without one. Cost: an environment with a declaration typed through an
+   η step, and its [wfE] proof.
+   NOT BUILT (the universe part): the instance is at [puinst := []]. *)
 Definition pre_case_branch_context_eqE_inst :=
   pre_case_branch_context_eqE (Σ := si_Σ) (wfΣ := si_wfE) (ind := si_ind) (mdecl := si_mdecl)
     (idecl := si_idecl) (params := [si_P]) (puinst := []) (bctx := []) (cdecl := si_cdecl)
