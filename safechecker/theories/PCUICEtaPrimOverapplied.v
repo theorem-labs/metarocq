@@ -32,6 +32,8 @@ From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
 From MetaRocq.PCUIC Require Import PCUICValidityEta.
 From MetaRocq.PCUIC.Typing Require PCUICUnivSubstitutionTypEta.
 From MetaRocq.PCUIC Require PCUICGenerationEta.
+(* LAND3 (frac/eta 730e8c59): [prim_op_head_typeE], qualified. *)
+From MetaRocq.PCUIC Require PCUICSREta.
 
 From Stdlib Require Import ssreflect ssrbool Utf8.
 From Equations Require Import Equations.
@@ -61,73 +63,11 @@ Implicit Types (cf : checker_flags) (Σ : global_env_ext).
     ([PCUICEtaA6Ind.v:445]: an axiom application is not below a product), which states that
     conclusion directly; the E inversion [ws_cumul_pbE_Axiom_l_inv] concludes with a [chain] of
     canonical forms, not a closed reduction, so base's two steps do not transcribe one by one;
-  - [prim_op_head_type] ([PCUICSR.v:1702]) → [dsc_prim_op_head_typeE] below, a copy of EtaMetaLane's E
-    twin [PCUICSREta.prim_op_head_typeE] (integ1 @ 9d9eda50, [PCUICSREta.v:996-1049], proof unchanged),
-    which is not on this tree. Its proof uses no subject reduction and no forecast class (it is
-    environment plumbing). The prefix [dsc_] keeps it from colliding with [PCUICSREta.prim_op_head_typeE]
-    when that file lands; that landing makes this copy redundant (replace by import, after the
-    two-way compiled check).
+  - [prim_op_head_type] ([PCUICSR.v:1702]) → [PCUICSREta.prim_op_head_typeE] (LAND3, frac/eta
+    730e8c59). Until LAND3 this file held a copy of it, [dsc_prim_op_head_typeE] (integ1 @ 9d9eda50,
+    proof unchanged); the copy was deleted after a two-way compiled check against the landed lemma
+    (record: [lanes/eta/etak/discharge-transcriptions.md]).
   No hypothesis (no [Context], no class field). *)
-
-(** Copy of EtaMetaLane's [PCUICSREta.prim_op_head_typeE] (integ1 @ 9d9eda50, [PCUICSREta.v:992-1049]),
-    twin of base [prim_op_head_type] ([PCUICSR.v:1702]). Its comment, verbatim: Under [wfE] the
-    registering declaration's conversion is [cumulSpecE0]; it moves to [Σ], the instance and the context
-    by [weakening_env_convSpecE], [convSpecE_subst_instance] (P2), and enters [ws_cumul_pbE] by I5's
-    [into_ws_cumul_pbE_spec] in place of base [cumulSpec_cumulAlgo]. *)
-Lemma dsc_prim_op_head_typeE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ c u decl op A} :
-  wf_localE Σ Γ ->
-  declared_constant Σ c decl ->
-  consistent_instance_ext Σ (cst_universes decl) u ->
-  prim_op_of Σ c = Some op ->
-  Σ ;;; Γ ⊢E (cst_type decl)@[u] ≤ A ->
-  ∑ res Tp,
-    [× PCUICPrimOpType.prim_shape_type Σ.1.(retroknowledge) (po_shape (info op)) = Some res,
-       PCUICPrimOpType.prim_arg_types Σ.1.(retroknowledge) (po_args (info op)) res = Some Tp,
-       Σ ;;; Γ ⊢E Tp ≤ A,
-       on_prim_op_result Σ (po_shape (info op)) &
-       All (prim_op_tag_declared Σ) (po_args (info op))].
-Proof.
-  intros wfΓ hdecl cu hop hle.
-  unshelve epose proof (hg := declared_constant_to_gen hdecl); eauto.
-  destruct (lookup_on_global_env_prim_decl wfΣ hg) as (Σ' & [onΣ' ext hretro hpd]).
-  cbn in hpd. specialize (hpd op). forward hpd.
-  { unfold prim_op_of in *. cbn. rewrite hretro. exact hop. }
-  destruct hpd as [_ huniv [Tp [hTp hconv]] hargsinv hres].
-  rewrite hretro in hTp. unfold PCUICPrimOpType.prim_op_type in hTp.
-  destruct (PCUICPrimOpType.prim_shape_type _ (po_shape (info op))) as [res|] eqn:hsh => //.
-  exists res, Tp.
-  destruct (prim_shape_type_closed_inst _ _ _ u hsh) as [hclres hures].
-  destruct (prim_arg_types_closed_inst _ _ _ _ u hTp hclres hures) as [hclTp huTp].
-  assert (hext : extends Σ' Σ.1)
-    by (eapply extends_decls_extends, strictly_extends_decls_extends_decls; tea).
-  split; [reflexivity|exact hTp| | |].
-  - change (cumulSpecE0 (Σ', cst_universes decl) [] Conv (cst_type decl) Tp) in hconv.
-    eapply (weakening_env_convSpecE Σ' Σ.1 (cst_universes decl) []) in hconv; tea.
-    eapply (convSpecE_subst_instance (Σ.1, cst_universes decl) [] u _ _ Σ.2) in hconv.
-    2:{ eapply PCUICUnivSubstitutionTypEta.consistent_instance_valid_constraintsE; tea.
-        split; [exact wfΣ|]. now eapply (weaken_lookup_on_global_env' _ _ (ConstantDecl decl)). }
-    rewrite huTp in hconv. cbn in hconv.
-    assert (hcl : closed (cst_type decl)@[u]).
-    { rewrite closedn_subst_instance. eapply declared_constant_closed_typeE; tea. }
-    have hws : Σ ;;; [] ⊢E (cst_type decl)@[u] = Tp.
-    { apply into_ws_cumul_pbE_spec; [destruct Σ; exact hconv|reflexivity|..];
-        now eapply closedn_on_free_vars. }
-    eapply (weakening_ws_cumul_pbE (Γ := []) (Γ' := []) (Γ'' := Γ)) in hws.
-    2: rewrite app_context_nil_l; now eapply wf_local_closed_contextE.
-    cbn in hws. rewrite app_context_nil_l !lift_closed in hws; tas.
-    etransitivity; [|exact hle]. eapply ws_cumul_pbE_eq_le. now symmetry.
-  - destruct (po_shape (info op)); cbn in hres |- *.
-    + destruct hres as (kn & d & [hpc hd hinv]). exists kn, d. split; tas.
-      * cbn in hpc |- *. now rewrite -hretro.
-      * eapply weakening_env_declared_constant; tea.
-    + destruct hres as (i & mdecl & idecl & hpb & hdi). exists i, mdecl, idecl. split.
-      * exact (eq_trans (f_equal Retroknowledge.retro_bool (eq_sym hretro)) hpb).
-      * eapply weakening_env_declared_inductive; tea.
-  - eapply All_impl; [exact hargsinv|]. intros t (kn & d & [hpc hd hinv]).
-    exists kn, d. split; tas.
-    + unfold primitive_constant in hpc |- *. now rewrite -hretro.
-    + eapply weakening_env_declared_constant; tea.
-Qed.
 
 (** Base [typing_spine_prim_args_sat] ([PCUICSafeReduce.v:99]). *)
 Lemma typing_spine_prim_args_satE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ}
@@ -165,7 +105,7 @@ Proof.
   pose proof (validityE ht) as isT.
   eapply inversion_mkApps_directE in ht as (A0 & s & hc & _ & hsp); tea.
   eapply inversion_ConstE in hc as (decl & wfΓ & hdecl & cu & hle); tea.
-  destruct (dsc_prim_op_head_typeE wfΓ hdecl cu hop hle) as (res & Tp & [hsh hTp hTA hres _]).
+  destruct (PCUICSREta.prim_op_head_typeE wfΓ hdecl cu hop hle) as (res & Tp & [hsh hTp hTA hres _]).
   pose proof (typing_spine_prim_args_satE Tp A0 hTp hTA hlen hsp) as hcum.
   destruct (po_shape (info op)) eqn:hshape; cbn in hsh, hres.
   - (* SInt: the result is the int type constant, a bodiless non-operation *)

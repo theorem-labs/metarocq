@@ -31,6 +31,11 @@ From MetaRocq.PCUIC Require PCUICValidityEta PCUICInductivesEta PCUICInductiveIn
 From MetaRocq.PCUIC.Typing Require PCUICContextConversionTypEta.
 From MetaRocq.PCUIC Require PCUICPositionEtaTyping.
 From MetaRocq.SafeChecker Require PCUICEtaWhnfRedInv PCUICEtaPrimOverapplied PCUICEtaWelltypedContext.
+(* LAND3 (frac/eta 730e8c59): subject reduction, classification and the bidirectional copies; and the
+   rows 48-50 transcriptions over them. *)
+From MetaRocq.PCUIC Require PCUICSREta PCUICClassificationEta Bidirectional.BDToPCUICEta
+  Bidirectional.BDUniqueEta Bidirectional.BDFromPCUICEta.
+From MetaRocq.SafeChecker Require PCUICEtaWhneTyped PCUICSafeReduceEtaBridge.
 
 (** * ETAK discharge: the class fields of the η checker's root that are PROVED now
 
@@ -51,9 +56,15 @@ From MetaRocq.SafeChecker Require PCUICEtaWhnfRedInv PCUICEtaPrimOverapplied PCU
   - TRANSCRIPTION: row 13, [U_facts.whnf_red_inv] ([PCUICEtaWhnfRedInv]); row 47,
     [ReduceTypedFactsCoreE.rtfc_prim_overapplied] ([PCUICEtaPrimOverapplied]); row 51,
     [WelltypedEContextE.welltypedE_context] ([PCUICEtaWelltypedContext]).
-  - Classes proved whole: [T0_facts] (12 fields), [U_facts] (1), [T2a_facts] (2), [WelltypedEContextE] (1).
-    [ReduceTypedFactsCoreE] is not: its rows 48-50 ([rtfc_fix_arg_whne], [rtfc_case_arg_whne],
-    [rtfc_proj_arg_whne]) need E lemmas this tree does not have (the record names them).
+  - WIRING, rows proved by LAND3 (frac/eta 730e8c59): T1 rows 14-17 ([PCUICSREta]), T6 row 20
+    ([PCUICClassificationEta]), T6BD rows 21-29, T6BDu rows 30-38, T6BDc rows 39-44
+    ([Bidirectional/BDToPCUICEta], [BDUniqueEta], [BDFromPCUICEta]).
+  - TRANSCRIPTION over LAND3: rows 48-50, [ReduceTypedFactsCoreE.rtfc_{fix,case,proj}_arg_whne]
+    ([PCUICEtaWhneTyped], with the canonical forms at a primitive type it needs).
+  - Classes proved whole: all eight sub-classes of [EtaFacts] ([T0_facts] 12 fields, [U_facts] 1, [T1_facts] 4,
+    [T2a_facts] 2, [T6_facts] 1, [T6BD_facts] 9, [T6BDu_facts] 9, [T6BDc_facts] 6), [ReduceTypedFactsCoreE] 6
+    and [WelltypedEContextE] 1; hence [EtaFacts_discharged], and the closed
+    [ReduceTypedFacts welltypedE wf_extE] through the existing builders ([reduce_typed_facts_discharged]).
   - The two section hypotheses of EtaPosK4 ([PCUICPositionEtaTyping], section [EtaTypingE]) have no
     constant; the [_fits_EtaTypingE] definitions apply a lemma of that section to the [_proved] lemma.
   No root binder is removed here: no existing file imports this one, and no statement elsewhere changes.
@@ -196,6 +207,64 @@ Proof.
            hop hlt h).
 Qed.
 
+(** Row 48: [PCUICEtaWhneTyped.whnf_fix_arg_whneE], the E twin of [PCUICSafeReduce.whnf_fix_arg_whne]
+    (the base instance's proof of [rtf_fix_arg_whne], [PCUICSafeReduceEta.v:276-277]). *)
+Lemma rtfc_fix_arg_whne_proved {cf : checker_flags} : forall flags Σ Γ mfix idx body t before args aftr, wf_extE Σ ->
+    unfold_fix mfix idx = Some (#|before|, body) ->
+    match t with
+    | tConstruct _ _ _ => False
+    | tApp _ _ => False
+    | _ => True
+    end ->
+    whnf flags Σ Γ (mkApps t args) ->
+    welltypedE Σ Γ (mkApps (tFix mfix idx) (before ++ mkApps t args :: aftr)) ->
+    ∥ whne flags Σ Γ (mkApps t args) ∥.
+Proof.
+  intros flags Σ Γ mfix idx body t before args aftr [wfΣ _] hu hshape hwh [T h].
+  constructor. exact (PCUICEtaWhneTyped.whnf_fix_arg_whneE flags mfix idx body Σ Γ t before args aftr T
+                        wfΣ hu hshape hwh h).
+Qed.
+
+(** Row 49: [PCUICEtaWhneTyped.whnf_case_arg_whneE], the E twin of [PCUICSafeReduce.whnf_case_arg_whne]. *)
+Lemma rtfc_case_arg_whne_proved {cf : checker_flags} : forall flags Σ Γ hd args ci p brs, wf_extE Σ ->
+    match hd with
+    | tApp _ _
+    | tConstruct _ _ _
+    | tCoFix _ _ => False
+    | _ => True
+    end ->
+    whnf flags Σ Γ (mkApps hd args) ->
+    welltypedE Σ Γ (tCase ci p (mkApps hd args) brs) ->
+    ∥ whne flags Σ Γ (mkApps hd args) ∥.
+Proof.
+  intros flags Σ Γ hd args ci p brs [wfΣ _] hshape hwh [T h].
+  constructor. exact (PCUICEtaWhneTyped.whnf_case_arg_whneE flags Σ Γ hd args ci p brs T wfΣ hshape hwh h).
+Qed.
+
+(** Row 50: [PCUICEtaWhneTyped.whnf_proj_arg_whneE], the E twin of [PCUICSafeReduce.whnf_proj_arg_whne]. *)
+Lemma rtfc_proj_arg_whne_proved {cf : checker_flags} : forall flags Σ Γ hd args p, wf_extE Σ ->
+    match hd with
+    | tApp _ _
+    | tCoFix _ _ => False
+    | tConstruct _ c _ => c <> 0
+    | _ => True
+    end ->
+    whnf flags Σ Γ (mkApps hd args) ->
+    welltypedE Σ Γ (tProj p (mkApps hd args)) ->
+    ∥ whne flags Σ Γ (mkApps hd args) ∥.
+Proof.
+  intros flags Σ Γ hd args p [wfΣ _] hshape hwh [T h].
+  constructor. exact (PCUICEtaWhneTyped.whnf_proj_arg_whneE flags Σ Γ hd args p T wfΣ hshape hwh h).
+Qed.
+
+#[export] Instance ReduceTypedFactsCoreE_discharged {cf : checker_flags} : ReduceTypedFactsCoreE :=
+  {| PCUICEtaFactsCompose.rtfc_case_construct := @rtfc_case_construct_proved cf;
+     PCUICEtaFactsCompose.rtfc_proj_construct := @rtfc_proj_construct_proved cf;
+     PCUICEtaFactsCompose.rtfc_prim_overapplied := @rtfc_prim_overapplied_proved cf;
+     PCUICEtaFactsCompose.rtfc_fix_arg_whne := @rtfc_fix_arg_whne_proved cf;
+     PCUICEtaFactsCompose.rtfc_case_arg_whne := @rtfc_case_arg_whne_proved cf;
+     PCUICEtaFactsCompose.rtfc_proj_arg_whne := @rtfc_proj_arg_whne_proved cf |}.
+
 (** ** [WelltypedEContextE]: row 51, transcribed ([PCUICEtaWelltypedContext]), and the class *)
 
 (** Row 51: [PCUICEtaWelltypedContext.welltypedE_contextE], the E twin of
@@ -224,6 +293,221 @@ Definition closed_context_conversionE_squashed {cf : checker_flags} :
   ∥ forall (Σ : global_env_ext), wfE Σ.1 -> forall Γ t T Γ',
     Σ ;;; Γ |-E t : T -> wf_localE Σ Γ' -> ws_cumul_ctx_pbE Conv Σ Γ Γ' -> Σ ;;; Γ' |-E t : T ∥ :=
   sq (@closed_context_conversionE_proved cf).
+
+(** ** [T1_facts]: subject reduction over [typingE] (LAND3, [PCUICSREta]) *)
+
+(** Row 14: [PCUICSREta.isType_prim_shape_typeE]. *)
+Lemma isType_prim_shape_type_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {s : PrimitiveOps.prim_shape} {res : term}, wf_localE Σ Γ -> PCUICPrimOpType.prim_shape_type (retroknowledge Σ.1) s = Some res -> on_prim_op_result Σ s -> isTypeE Σ Γ res.
+Proof. exact (@PCUICSREta.isType_prim_shape_typeE cf). Qed.
+
+(** Row 15: [PCUICSREta.isType_redE]. *)
+Lemma isType_red_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {T : term} {U : term}, isTypeE Σ Γ T -> PCUICReduction.red Σ Γ T U -> isTypeE Σ Γ U.
+Proof. exact (@PCUICSREta.isType_redE cf). Qed.
+
+(** Row 16: [PCUICSREta.subject_reductionE]. *)
+Lemma subject_reduction_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (t : term) (u : term) (T : term), wfE Σ -> Σ;;; Γ |-E t : T -> PCUICReduction.red Σ Γ t u -> Σ;;; Γ |-E u : T.
+Proof. exact (@PCUICSREta.subject_reductionE cf). Qed.
+
+(** Row 17: [PCUICSREta.type_reduction_closedE]. *)
+Lemma type_reduction_closed_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {A : term} {B : term}, Σ;;; Γ |-E t : A -> Σ ;;; Γ ⊢ A ⇝ B -> Σ;;; Γ |-E t : B.
+Proof. exact (@PCUICSREta.type_reduction_closedE cf). Qed.
+
+#[export] Instance T1_facts_discharged {cf : checker_flags} : T1_facts :=
+  {| PCUICTypingEtaHyps.isType_prim_shape_type := @isType_prim_shape_type_proved cf;
+     PCUICTypingEtaHyps.isType_red := @isType_red_proved cf;
+     PCUICTypingEtaHyps.subject_reduction := @subject_reduction_proved cf;
+     PCUICTypingEtaHyps.type_reduction_closed := @type_reduction_closed_proved cf |}.
+
+(** ** [T6_facts]: classification over [typingE] (LAND3, [PCUICClassificationEta]) *)
+
+(** Row 20: [PCUICClassificationEta.typing_spine_smashE]. *)
+Lemma typing_spine_smash_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ.1) (Γ : context) (Δ : context) (T : term) (args : list term) (T' : term), typing_spineE Σ Γ (it_mkProd_or_LetIn Δ T) args T' -> typing_spineE Σ Γ (it_mkProd_or_LetIn (smash_context [] Δ) (expand_lets Δ T)) args T'.
+Proof. exact (@PCUICClassificationEta.typing_spine_smashE cf). Qed.
+
+#[export] Instance T6_facts_discharged {cf : checker_flags} : T6_facts :=
+  {| PCUICTypingEtaHyps.typing_spine_smash := @typing_spine_smash_proved cf |}.
+
+(** ** [T6BD_facts]: bidirectional soundness over E (LAND3, [Bidirectional/BDToPCUICEta]) *)
+
+(** Row 21: [BDToPCUICEta.checking_typingE]. *)
+Lemma checking_typing_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (t : term) (T : term) (wfΣ : wfE Σ), wf_localE Σ Γ -> isTypeE Σ Γ T -> Σ;;; Γ |-E t ◃ T -> Σ;;; Γ |-E t : T.
+Proof. exact (@BDToPCUICEta.checking_typingE cf). Qed.
+
+(** Row 22: [BDToPCUICEta.ctx_inst_bd_typingE]. *)
+Lemma ctx_inst_bd_typing_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : list context_decl) (l : list term) (Δ : list context_decl) (wfΣ : wfE Σ), wf_localE Σ (Γ,,, Δ) -> PCUICTyping.ctx_inst (checkingE Σ) Γ l (List.rev Δ) -> ctx_instE Σ Γ l (List.rev Δ).
+Proof. exact (@BDToPCUICEta.ctx_inst_bd_typingE cf). Qed.
+
+(** Row 23: [BDToPCUICEta.infering_ind_typingE]. *)
+Lemma infering_ind_typing_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (t : term) (ind : inductive) (u : Instance.t) (args : list term) (wfΣ : wfE Σ), wf_localE Σ Γ -> Σ;;; Γ |-E t ▹{ ind}(u, args) -> Σ;;; Γ |-E t : mkApps (tInd ind u) args.
+Proof. exact (@BDToPCUICEta.infering_ind_typingE cf). Qed.
+
+(** Row 24: [BDToPCUICEta.infering_prod_typingE]. *)
+Lemma infering_prod_typing_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (t : term) (na : aname) (A : term) (B : term) (wfΣ : wfE Σ), wf_localE Σ Γ -> Σ;;; Γ |-E t ▹Π (na, A, B) -> Σ;;; Γ |-E t : tProd na A B.
+Proof. exact (@BDToPCUICEta.infering_prod_typingE cf). Qed.
+
+(** Row 25: [BDToPCUICEta.infering_sort_isTypeRelE]. *)
+Lemma infering_sort_isTypeRel_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (t : term) (u : sort) (wfΣ : wfE Σ), wf_localE Σ Γ -> Σ;;; Γ |-E t ▹□ u -> isTypeRelE Σ Γ t (relevance_of_sort u).
+Proof. exact (@BDToPCUICEta.infering_sort_isTypeRelE cf). Qed.
+
+(** Row 26: [BDToPCUICEta.infering_sort_typingE]. *)
+Lemma infering_sort_typing_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (t : term) (u : sort) (wfΣ : wfE Σ), wf_localE Σ Γ -> Σ;;; Γ |-E t ▹□ u -> Σ;;; Γ |-E t : tSort u.
+Proof. exact (@BDToPCUICEta.infering_sort_typingE cf). Qed.
+
+(** Row 27: [BDToPCUICEta.infering_typingE]. *)
+Lemma infering_typing_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (t : term) (T : term) (wfΣ : wfE Σ), wf_localE Σ Γ -> Σ;;; Γ |-E t ▹ T -> Σ;;; Γ |-E t : T.
+Proof. exact (@BDToPCUICEta.infering_typingE cf). Qed.
+
+(** Row 28: [BDToPCUICEta.lift_sorting_lift_typingE]. *)
+Lemma lift_sorting_lift_typing_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (j : judgment) (wfΣ : wfE Σ), wf_localE Σ Γ -> lift_sorting (checkingE Σ Γ) (infering_sortE Σ Γ) j -> lift_typing typingE Σ Γ j.
+Proof. exact (@BDToPCUICEta.lift_sorting_lift_typingE cf). Qed.
+
+(** Row 29: [BDToPCUICEta.wf_local_bd_rel_typingE]. *)
+Lemma wf_local_bd_rel_typing_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (Γ' : context) (wfΣ : wfE Σ), wf_localE Σ Γ -> wf_local_bd_relE Σ Γ Γ' -> wf_local_relE Σ Γ Γ'.
+Proof. exact (@BDToPCUICEta.wf_local_bd_rel_typingE cf). Qed.
+
+#[export] Instance T6BD_facts_discharged {cf : checker_flags} : T6BD_facts :=
+  {| PCUICTypingEtaHyps.checking_typing := @checking_typing_proved cf;
+     PCUICTypingEtaHyps.ctx_inst_bd_typing := @ctx_inst_bd_typing_proved cf;
+     PCUICTypingEtaHyps.infering_ind_typing := @infering_ind_typing_proved cf;
+     PCUICTypingEtaHyps.infering_prod_typing := @infering_prod_typing_proved cf;
+     PCUICTypingEtaHyps.infering_sort_isTypeRel := @infering_sort_isTypeRel_proved cf;
+     PCUICTypingEtaHyps.infering_sort_typing := @infering_sort_typing_proved cf;
+     PCUICTypingEtaHyps.infering_typing := @infering_typing_proved cf;
+     PCUICTypingEtaHyps.lift_sorting_lift_typing := @lift_sorting_lift_typing_proved cf;
+     PCUICTypingEtaHyps.wf_local_bd_rel_typing := @wf_local_bd_rel_typing_proved cf |}.
+
+(** ** [T6BDu_facts]: bidirectional uniqueness over E (LAND3, [Bidirectional/BDUniqueEta]) *)
+
+(** Row 30: [BDUniqueEta.infering_checkingE]. *)
+Lemma infering_checking_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} (wfΓ : wf_localE Σ Γ) {t : term} {T : term} {T' : term}, on_free_vars (shiftnP #|Γ| xpred0) T' -> Σ;;; Γ |-E t ▹ T -> Σ;;; Γ |-E t ◃ T' -> Σ ;;; Γ ⊢E T ≤ T'.
+Proof. exact (@BDUniqueEta.infering_checkingE cf). Qed.
+
+(** Row 31: [BDUniqueEta.infering_ind_indE]. *)
+Lemma infering_ind_ind_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} (wfΓ : wf_localE Σ Γ) {t : term} {ind : inductive} {ind' : inductive} {u : Instance.t} {u' : Instance.t} {args : list term} {args' : list term}, Σ;;; Γ |-E t ▹{ ind}(u, args) -> Σ;;; Γ |-E t ▹{ ind'}(u', args') -> ∑ args'' : list term, [× ind = ind', u = u', red_terms Σ Γ args args'' & red_terms Σ Γ args' args''].
+Proof. exact (@BDUniqueEta.infering_ind_indE cf). Qed.
+
+(** Row 32: [BDUniqueEta.infering_ind_inferingE]. *)
+Lemma infering_ind_infering_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} (wfΓ : wf_localE Σ Γ) {t : term} {ind : inductive} {u : Instance.t} {args : list term} {T : term}, Σ;;; Γ |-E t ▹{ ind}(u, args) -> Σ;;; Γ |-E t ▹ T -> ∑ args' : list term, Σ ;;; Γ ⊢ T ⇝ mkApps (tInd ind u) args' × red_terms Σ Γ args args'.
+Proof. exact (@BDUniqueEta.infering_ind_inferingE cf). Qed.
+
+(** Row 33: [BDUniqueEta.infering_prod_inferingE]. *)
+Lemma infering_prod_infering_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} (wfΓ : wf_localE Σ Γ) {t : term} {na : aname} {A : term} {B : term} {T : term}, Σ;;; Γ |-E t ▹Π (na, A, B) -> Σ;;; Γ |-E t ▹ T -> ∑ A' B' : term, [× Σ ;;; Γ ⊢ T ⇝ tProd na A' B', Σ ;;; Γ ⊢ A ⇝ A' & Σ ;;; Γ,, vass na A ⊢ B ⇝ B'].
+Proof. exact (@BDUniqueEta.infering_prod_inferingE cf). Qed.
+
+(** Row 34: [BDUniqueEta.infering_prod_prodE]. *)
+Lemma infering_prod_prod_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} (wfΓ : wf_localE Σ Γ) {t : term} {na : aname} {na' : aname} {A : term} {A' : term} {B : term} {B' : term}, Σ;;; Γ |-E t ▹Π (na, A, B) -> Σ;;; Γ |-E t ▹Π (na', A', B') -> ∑ A'' B'' : term, [× na = na', Σ ;;; Γ ⊢ A ⇝ A'', Σ ;;; Γ ⊢ A' ⇝ A'', Σ ;;; Γ,, vass na A ⊢ B ⇝ B'' & Σ ;;; Γ,, vass na A' ⊢ B' ⇝ B''].
+Proof. exact (@BDUniqueEta.infering_prod_prodE cf). Qed.
+
+(** Row 35: [BDUniqueEta.infering_sort_inferingE]. *)
+Lemma infering_sort_infering_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} {wfΓ : wf_localE Σ Γ} {t : term} {u : sort} {T : term}, Σ;;; Γ |-E t ▹□ u -> Σ;;; Γ |-E t ▹ T -> Σ ;;; Γ ⊢ T ⇝ tSort u.
+Proof. exact (@BDUniqueEta.infering_sort_inferingE cf). Qed.
+
+(** Row 36: [BDUniqueEta.infering_sort_sortE]. *)
+Lemma infering_sort_sort_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} (wfΓ : wf_localE Σ Γ) {t : term} {u : sort} {u' : sort}, Σ;;; Γ |-E t ▹□ u -> Σ;;; Γ |-E t ▹□ u' -> u = u'.
+Proof. exact (@BDUniqueEta.infering_sort_sortE cf). Qed.
+
+(** Row 37: [BDUniqueEta.infering_uniqueE]. *)
+Lemma infering_unique_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} (wfΓ : wf_localE Σ Γ) {t : term} {T : term} {T' : term}, Σ;;; Γ |-E t ▹ T -> Σ;;; Γ |-E t ▹ T' -> ∑ T'' : term, Σ ;;; Γ ⊢ T ⇝ T'' × Σ ;;; Γ ⊢ T' ⇝ T''.
+Proof. exact (@BDUniqueEta.infering_uniqueE cf). Qed.
+
+(** Row 38: [BDUniqueEta.isTypeRel_uniqueE]. *)
+Lemma isTypeRel_unique_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} {T : term} {rel : relevance} {rel' : relevance}, isTypeRelE Σ Γ T rel -> isTypeRelE Σ Γ T rel' -> rel = rel'.
+Proof. exact (@BDUniqueEta.isTypeRel_uniqueE cf). Qed.
+
+#[export] Instance T6BDu_facts_discharged {cf : checker_flags} : T6BDu_facts :=
+  {| PCUICTypingEtaHyps.infering_checking := @infering_checking_proved cf;
+     PCUICTypingEtaHyps.infering_ind_ind := @infering_ind_ind_proved cf;
+     PCUICTypingEtaHyps.infering_ind_infering := @infering_ind_infering_proved cf;
+     PCUICTypingEtaHyps.infering_prod_infering := @infering_prod_infering_proved cf;
+     PCUICTypingEtaHyps.infering_prod_prod := @infering_prod_prod_proved cf;
+     PCUICTypingEtaHyps.infering_sort_infering := @infering_sort_infering_proved cf;
+     PCUICTypingEtaHyps.infering_sort_sort := @infering_sort_sort_proved cf;
+     PCUICTypingEtaHyps.infering_unique := @infering_unique_proved cf;
+     PCUICTypingEtaHyps.isTypeRel_unique := @isTypeRel_unique_proved cf |}.
+
+(** ** [T6BDc_facts]: bidirectional completeness over E (LAND3, [Bidirectional/BDFromPCUICEta]) *)
+
+(** Row 39: [BDFromPCUICEta.ctx_inst_typing_bdE]. *)
+Lemma ctx_inst_typing_bd_proved {cf : checker_flags} :
+    forall (Σ : global_env_ext) (Γ : context) (l : list term) (Δ : context) (wfΣ : wfE Σ), ctx_instE Σ Γ l Δ -> PCUICTyping.ctx_inst (checkingE Σ) Γ l Δ.
+Proof. exact (@BDFromPCUICEta.ctx_inst_typing_bdE cf). Qed.
+
+(** Row 40: [BDFromPCUICEta.lift_typing_lift_sortingE]. *)
+Lemma lift_typing_lift_sorting_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : context} {tm : option term} {ty : term} {rel : option relevance}, lift_typing typingE Σ Γ (Judge tm ty None rel) -> lift_sorting (checkingE Σ Γ) (infering_sortE Σ Γ) (Judge tm ty None rel).
+Proof. exact (@BDFromPCUICEta.lift_typing_lift_sortingE cf). Qed.
+
+(** Row 41: [BDFromPCUICEta.typing_checkingE]. *)
+Lemma typing_checking_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {T : term}, Σ;;; Γ |-E t : T -> Σ;;; Γ |-E t ◃ T.
+Proof. exact (@BDFromPCUICEta.typing_checkingE cf). Qed.
+
+(** Row 42: [BDFromPCUICEta.typing_inferingE]. *)
+Lemma typing_infering_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {T : term}, Σ;;; Γ |-E t : T -> ∑ T' : term, Σ;;; Γ |-E t ▹ T' × Σ ;;; Γ ⊢E T' ≤ T.
+Proof. exact (@BDFromPCUICEta.typing_inferingE cf). Qed.
+
+(** Row 43: [BDFromPCUICEta.typing_infering_sortE]. *)
+Lemma typing_infering_sort_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ : context} {t : term} {u : sort}, Σ;;; Γ |-E t : tSort u -> ∑ u' : sort, Σ;;; Γ |-E t ▹□ u' × leq_sort Σ u' u.
+Proof. exact (@BDFromPCUICEta.typing_infering_sortE cf). Qed.
+
+(** Row 44: [BDFromPCUICEta.wf_local_rel_wf_local_bdE]. *)
+Lemma wf_local_rel_wf_local_bd_proved {cf : checker_flags} :
+    forall {Σ : global_env_ext} (wfΣ : wfE Σ) {Γ : list context_decl} {Γ' : context}, wf_local_relE Σ Γ Γ' -> wf_local_bd_relE Σ Γ Γ'.
+Proof. exact (@BDFromPCUICEta.wf_local_rel_wf_local_bdE cf). Qed.
+
+#[export] Instance T6BDc_facts_discharged {cf : checker_flags} : T6BDc_facts :=
+  {| PCUICTypingEtaHyps.ctx_inst_typing_bd := @ctx_inst_typing_bd_proved cf;
+     PCUICTypingEtaHyps.lift_typing_lift_sorting := @lift_typing_lift_sorting_proved cf;
+     PCUICTypingEtaHyps.typing_checking := @typing_checking_proved cf;
+     PCUICTypingEtaHyps.typing_infering := @typing_infering_proved cf;
+     PCUICTypingEtaHyps.typing_infering_sort := @typing_infering_sort_proved cf;
+     PCUICTypingEtaHyps.wf_local_rel_wf_local_bd := @wf_local_rel_wf_local_bd_proved cf |}.
+
+(** ** The whole bundle [EtaFacts] (all eight sub-classes proved), and the closed [ReduceTypedFacts] *)
+
+#[export] Instance EtaFacts_discharged {cf : checker_flags} : EtaFacts :=
+  {| PCUICTypingEtaHyps.eta_T0 := sq (@T0_facts_discharged cf);
+     PCUICTypingEtaHyps.eta_U := sq (@U_facts_discharged cf);
+     PCUICTypingEtaHyps.eta_T1 := sq (@T1_facts_discharged cf);
+     PCUICTypingEtaHyps.eta_T2a := sq (@T2a_facts_discharged cf);
+     PCUICTypingEtaHyps.eta_T6 := sq (@T6_facts_discharged cf);
+     PCUICTypingEtaHyps.eta_T6BD := sq (@T6BD_facts_discharged cf);
+     PCUICTypingEtaHyps.eta_T6BDu := sq (@T6BDu_facts_discharged cf);
+     PCUICTypingEtaHyps.eta_T6BDc := sq (@T6BDc_facts_discharged cf) |}.
+
+(** The root binder [reduce_factsE : ReduceTypedFacts welltypedE wf_extE], closed, through the existing
+    builders [PCUICEtaFactsCompose.reduce_typed_facts_E_of_core] and
+    [PCUICSafeReduceEtaBridge.reduce_typed_facts_E] at the three proved instances. *)
+Definition reduce_typed_facts_discharged {cf : checker_flags} :
+  PCUICSafeReduceEta.ReduceTypedFacts welltypedE wf_extE :=
+  @PCUICSafeReduceEtaBridge.reduce_typed_facts_E cf
+    (@reduce_typed_facts_E_of_core cf (@ReduceTypedFactsCoreE_discharged cf) (@EtaFacts_discharged cf)
+       (@WelltypedEContextE_discharged cf)).
 
 (** ** Compiled identity, both ways: each [_proved] lemma at its field's projected type ([_fits]), and the
     field at the [_proved] lemma's type ([_fits_rev]). Plain Definitions with the class as a binder, not a
@@ -374,3 +658,229 @@ Definition welltypedE_context_fits_EtaTypingE {cf : checker_flags} :=
     ([Proof using closed_context_conversionE]), and accepts [closed_context_conversionE_proved] there. *)
 Definition closed_context_conversionE_fits_EtaTypingE {cf : checker_flags} :=
   @PCUICPositionEtaTyping.wf_localE_eta_step cf (@closed_context_conversionE_proved cf).
+
+(** The LAND3 rows (T1, T6, T6BD, T6BDu, T6BDc) and rows 48-50, the same way. *)
+
+Definition isType_prim_shape_type_fits {cf : checker_flags} (H1 : T1_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.isType_prim_shape_type cf H1) in exact T) :=
+  @isType_prim_shape_type_proved cf.
+Definition isType_prim_shape_type_fits_rev {cf : checker_flags} (H1 : T1_facts) :
+  ltac:(let T := type of (@isType_prim_shape_type_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.isType_prim_shape_type cf H1.
+
+Definition isType_red_fits {cf : checker_flags} (H1 : T1_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.isType_red cf H1) in exact T) :=
+  @isType_red_proved cf.
+Definition isType_red_fits_rev {cf : checker_flags} (H1 : T1_facts) :
+  ltac:(let T := type of (@isType_red_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.isType_red cf H1.
+
+Definition subject_reduction_fits {cf : checker_flags} (H1 : T1_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.subject_reduction cf H1) in exact T) :=
+  @subject_reduction_proved cf.
+Definition subject_reduction_fits_rev {cf : checker_flags} (H1 : T1_facts) :
+  ltac:(let T := type of (@subject_reduction_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.subject_reduction cf H1.
+
+Definition type_reduction_closed_fits {cf : checker_flags} (H1 : T1_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.type_reduction_closed cf H1) in exact T) :=
+  @type_reduction_closed_proved cf.
+Definition type_reduction_closed_fits_rev {cf : checker_flags} (H1 : T1_facts) :
+  ltac:(let T := type of (@type_reduction_closed_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.type_reduction_closed cf H1.
+
+Definition typing_spine_smash_fits {cf : checker_flags} (H6 : T6_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.typing_spine_smash cf H6) in exact T) :=
+  @typing_spine_smash_proved cf.
+Definition typing_spine_smash_fits_rev {cf : checker_flags} (H6 : T6_facts) :
+  ltac:(let T := type of (@typing_spine_smash_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.typing_spine_smash cf H6.
+
+Definition checking_typing_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.checking_typing cf HB) in exact T) :=
+  @checking_typing_proved cf.
+Definition checking_typing_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@checking_typing_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.checking_typing cf HB.
+
+Definition ctx_inst_bd_typing_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.ctx_inst_bd_typing cf HB) in exact T) :=
+  @ctx_inst_bd_typing_proved cf.
+Definition ctx_inst_bd_typing_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@ctx_inst_bd_typing_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.ctx_inst_bd_typing cf HB.
+
+Definition infering_ind_typing_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_ind_typing cf HB) in exact T) :=
+  @infering_ind_typing_proved cf.
+Definition infering_ind_typing_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@infering_ind_typing_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_ind_typing cf HB.
+
+Definition infering_prod_typing_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_prod_typing cf HB) in exact T) :=
+  @infering_prod_typing_proved cf.
+Definition infering_prod_typing_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@infering_prod_typing_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_prod_typing cf HB.
+
+Definition infering_sort_isTypeRel_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_sort_isTypeRel cf HB) in exact T) :=
+  @infering_sort_isTypeRel_proved cf.
+Definition infering_sort_isTypeRel_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@infering_sort_isTypeRel_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_sort_isTypeRel cf HB.
+
+Definition infering_sort_typing_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_sort_typing cf HB) in exact T) :=
+  @infering_sort_typing_proved cf.
+Definition infering_sort_typing_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@infering_sort_typing_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_sort_typing cf HB.
+
+Definition infering_typing_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_typing cf HB) in exact T) :=
+  @infering_typing_proved cf.
+Definition infering_typing_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@infering_typing_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_typing cf HB.
+
+Definition lift_sorting_lift_typing_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.lift_sorting_lift_typing cf HB) in exact T) :=
+  @lift_sorting_lift_typing_proved cf.
+Definition lift_sorting_lift_typing_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@lift_sorting_lift_typing_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.lift_sorting_lift_typing cf HB.
+
+Definition wf_local_bd_rel_typing_fits {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.wf_local_bd_rel_typing cf HB) in exact T) :=
+  @wf_local_bd_rel_typing_proved cf.
+Definition wf_local_bd_rel_typing_fits_rev {cf : checker_flags} (HB : T6BD_facts) :
+  ltac:(let T := type of (@wf_local_bd_rel_typing_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.wf_local_bd_rel_typing cf HB.
+
+Definition infering_checking_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_checking cf HU) in exact T) :=
+  @infering_checking_proved cf.
+Definition infering_checking_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@infering_checking_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_checking cf HU.
+
+Definition infering_ind_ind_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_ind_ind cf HU) in exact T) :=
+  @infering_ind_ind_proved cf.
+Definition infering_ind_ind_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@infering_ind_ind_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_ind_ind cf HU.
+
+Definition infering_ind_infering_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_ind_infering cf HU) in exact T) :=
+  @infering_ind_infering_proved cf.
+Definition infering_ind_infering_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@infering_ind_infering_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_ind_infering cf HU.
+
+Definition infering_prod_infering_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_prod_infering cf HU) in exact T) :=
+  @infering_prod_infering_proved cf.
+Definition infering_prod_infering_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@infering_prod_infering_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_prod_infering cf HU.
+
+Definition infering_prod_prod_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_prod_prod cf HU) in exact T) :=
+  @infering_prod_prod_proved cf.
+Definition infering_prod_prod_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@infering_prod_prod_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_prod_prod cf HU.
+
+Definition infering_sort_infering_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_sort_infering cf HU) in exact T) :=
+  @infering_sort_infering_proved cf.
+Definition infering_sort_infering_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@infering_sort_infering_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_sort_infering cf HU.
+
+Definition infering_sort_sort_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_sort_sort cf HU) in exact T) :=
+  @infering_sort_sort_proved cf.
+Definition infering_sort_sort_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@infering_sort_sort_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_sort_sort cf HU.
+
+Definition infering_unique_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.infering_unique cf HU) in exact T) :=
+  @infering_unique_proved cf.
+Definition infering_unique_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@infering_unique_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.infering_unique cf HU.
+
+Definition isTypeRel_unique_fits {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.isTypeRel_unique cf HU) in exact T) :=
+  @isTypeRel_unique_proved cf.
+Definition isTypeRel_unique_fits_rev {cf : checker_flags} (HU : T6BDu_facts) :
+  ltac:(let T := type of (@isTypeRel_unique_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.isTypeRel_unique cf HU.
+
+Definition ctx_inst_typing_bd_fits {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.ctx_inst_typing_bd cf HC) in exact T) :=
+  @ctx_inst_typing_bd_proved cf.
+Definition ctx_inst_typing_bd_fits_rev {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@ctx_inst_typing_bd_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.ctx_inst_typing_bd cf HC.
+
+Definition lift_typing_lift_sorting_fits {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.lift_typing_lift_sorting cf HC) in exact T) :=
+  @lift_typing_lift_sorting_proved cf.
+Definition lift_typing_lift_sorting_fits_rev {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@lift_typing_lift_sorting_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.lift_typing_lift_sorting cf HC.
+
+Definition typing_checking_fits {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.typing_checking cf HC) in exact T) :=
+  @typing_checking_proved cf.
+Definition typing_checking_fits_rev {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@typing_checking_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.typing_checking cf HC.
+
+Definition typing_infering_fits {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.typing_infering cf HC) in exact T) :=
+  @typing_infering_proved cf.
+Definition typing_infering_fits_rev {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@typing_infering_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.typing_infering cf HC.
+
+Definition typing_infering_sort_fits {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.typing_infering_sort cf HC) in exact T) :=
+  @typing_infering_sort_proved cf.
+Definition typing_infering_sort_fits_rev {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@typing_infering_sort_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.typing_infering_sort cf HC.
+
+Definition wf_local_rel_wf_local_bd_fits {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@PCUICTypingEtaHyps.wf_local_rel_wf_local_bd cf HC) in exact T) :=
+  @wf_local_rel_wf_local_bd_proved cf.
+Definition wf_local_rel_wf_local_bd_fits_rev {cf : checker_flags} (HC : T6BDc_facts) :
+  ltac:(let T := type of (@wf_local_rel_wf_local_bd_proved cf) in exact T) :=
+  @PCUICTypingEtaHyps.wf_local_rel_wf_local_bd cf HC.
+
+Definition rtfc_fix_arg_whne_fits {cf : checker_flags} (C : ReduceTypedFactsCoreE) :
+  ltac:(let T := type of (@rtfc_fix_arg_whne cf C) in exact T) :=
+  @rtfc_fix_arg_whne_proved cf.
+Definition rtfc_fix_arg_whne_fits_rev {cf : checker_flags} (C : ReduceTypedFactsCoreE) :
+  ltac:(let T := type of (@rtfc_fix_arg_whne_proved cf) in exact T) :=
+  @rtfc_fix_arg_whne cf C.
+
+Definition rtfc_case_arg_whne_fits {cf : checker_flags} (C : ReduceTypedFactsCoreE) :
+  ltac:(let T := type of (@rtfc_case_arg_whne cf C) in exact T) :=
+  @rtfc_case_arg_whne_proved cf.
+Definition rtfc_case_arg_whne_fits_rev {cf : checker_flags} (C : ReduceTypedFactsCoreE) :
+  ltac:(let T := type of (@rtfc_case_arg_whne_proved cf) in exact T) :=
+  @rtfc_case_arg_whne cf C.
+
+Definition rtfc_proj_arg_whne_fits {cf : checker_flags} (C : ReduceTypedFactsCoreE) :
+  ltac:(let T := type of (@rtfc_proj_arg_whne cf C) in exact T) :=
+  @rtfc_proj_arg_whne_proved cf.
+Definition rtfc_proj_arg_whne_fits_rev {cf : checker_flags} (C : ReduceTypedFactsCoreE) :
+  ltac:(let T := type of (@rtfc_proj_arg_whne_proved cf) in exact T) :=
+  @rtfc_proj_arg_whne cf C.
