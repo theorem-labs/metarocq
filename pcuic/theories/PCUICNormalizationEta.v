@@ -17,23 +17,38 @@
   [wcbv_standardization_fst] → [wcbv_standardization_fstE].
 
   Imported from base, not copied (they mention no relation and base's compiled forms take no
-  environment premise): [ws_empty] ([:79]) and [irred_equal] ([:86], base reduction only).
-  [firstorder_value_irred] ([:64]) IS copied, because its statement mentions
+  environment premise): [ws_empty] ([:84]), [irred_equal] ([:91], base reduction only) and
+  [eval_premise_instance] ([:106], an [eval] of a constructor, which illustrates the value
+  premise of the four standardization lemmas). [firstorder_value_irred] ([:69]) IS copied,
+  because its statement mentions
   [PCUICFirstorder.firstorder_value], an inductive indexed by base typing
   ([PCUICFirstorder.v:109], whose constructor carries [Σ ;;; Γ |- mkApps (tConstruct i n ui)
   args : mkApps (tInd i u) pandi]); its twin is over [firstorder_valueE].
 
-  ** Proof routes that differ from base (statements do not)
+  ** Statements that base itself changed
+
+  Three of base's statements carry what base's own text carries, with only the relation
+  renamed. Base makes the move because under its reduction a well-typed closed term may be a
+  case on a cofixpoint, which has no value.
+
+  - [SN_to_WNE] and [wcbv_normalizationE] conclude
+    [{ v & eval Σ t v} + reduces_to_wcbv_stuck Σ t] ([PCUICClassification], untyped), because
+    [progress_env_propE] reports a third outcome, [wcbv_stuck Σ t].
+  - [ws_wcbv_standardizationE] takes the value premise [(∑ v0, eval Σ t v0)] after its typing
+    premise, and so do its three consequences: the value no longer comes from
+    [wcbv_normalizationE], whose conclusion is now a sum.
+
+  ** Proof routes that differ from base (beyond the three statements above, which follow base)
 
   - [wh_normalizationE] and [wcbv_normalizationE]: base's [PCUICSN.normalization_in] on
     [welltyped] → [PCUICSNEta.normalization_inE] on [welltypedE]. Both conclude the SAME
     [Acc (cored Σ [])], so the induction that follows is base's.
-  - [progress_env_prop] → [PCUICProgressEta.progress_env_propE]; [subject_reduction] →
+  - [progress_env_prop] → [PCUICProgressEta.progress_env_propE]; [red1_progress] →
+    [PCUICProgressEta.red1_progressE]; [subject_reduction] →
     [PCUICSREta.subject_reductionE]; [subject_reduction_eval] →
     [PCUICClassificationEta.subject_reduction_evalE]; [subject_closed] →
     [PCUICClosedTypEta.subject_closedE]; [subject_is_open_term] →
-    [PCUICClosedTypEta.subject_is_open_termE]; [PCUICClassification.value_whnf] →
-    [PCUICClassificationEta.value_whnfE]; [PCUICClassification.wcbveval_red] →
+    [PCUICClosedTypEta.subject_is_open_termE]; [PCUICClassification.wcbveval_red] →
     [PCUICClassificationEta.wcbveval_redE]; [PCUICFirstorder.firstorder_value_spec] →
     [firstorder_value_specE]; [PCUICFirstorder.firstorder_value_inds] →
     [firstorder_value_indsE]; [PCUICContextConversion.closed_red_confluence] →
@@ -150,32 +165,37 @@ intros Hwf Hax [A HA].
 assert (welltypedE Σ [] t) as Hwt. { econstructor; eauto. }
 eapply PCUICSNEta.normalization_inE in Hwt as HSN; eauto. clear Hwt.
 induction HSN as [t H IH].
-edestruct progress_env_propE as [_ [_ [[t' Ht'] | Hval]]]; eauto.
-- eapply wcbv_red1_red1 in Ht' as Hred. 2:{ change 0 with (#|@Corelib.Init.Datatypes.nil MetaRocq.PCUIC.PCUICAst.PCUICEnvironment.context_decl|). eapply subject_closedE. eauto. }
-  edestruct IH as [v Hv]. econstructor. eauto.
-  eapply subject_reductionE; eauto.
-  exists v. sq. destruct Hv. split; eauto. eapply red_step; eauto.
-- exists t. sq. split; eauto. eapply value_whnfE; eauto.
-  eapply @subject_closedE with (Γ := []); eauto.
+destruct (@red1_progressE _ Σ Hwf Hax t A HA) as [[t' Ht'] | Hwnf].
+- edestruct IH as [v Hv].
+  { econstructor. eauto. }
+  { eapply subject_reductionE; eauto. }
+  exists v. destruct Hv. split; eauto. eapply red_step; eauto.
+- exists t. split; eauto.
 Defined.
 
 (** Base [SN_to_WN] ([:40]). *)
 Lemma SN_to_WNE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {A t} : wfE Σ -> axiom_free Σ ->
-  Acc (cored Σ []) t -> Σ ;;; [] |-E t : A -> { v & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v}.
+  Acc (cored Σ []) t -> Σ ;;; [] |-E t : A ->
+  { v & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v} + reduces_to_wcbv_stuck Σ t.
+Proof.
   intros Hwf Hax HSN HA.
   induction HSN as [t H IH].
-  edestruct progress_env_propE as [_ [_ [[t' Ht'] | Hval]]]; eauto.
+  edestruct progress_env_propE as [_ [_ [[[t' Ht'] | Hval] | Hstuck]]]; eauto.
   - eapply wcbv_red1_red1 in Ht' as Hred. 2:{ change 0 with (#|@Corelib.Init.Datatypes.nil MetaRocq.PCUIC.PCUICAst.PCUICEnvironment.context_decl|). eapply subject_closedE. eauto. }
-    edestruct IH as [v Hv]. econstructor. eauto.
-    eapply subject_reductionE; eauto.
-    exists v. sq. eapply (wcbv_red1_evalE t t' v Hwf); eauto.
-    exact (@subject_closedE _ _ _ [] _ _ HA).
-  - exists t. sq. eapply value_final; eauto.
+    edestruct IH as [[v Hv] | [w [hred hstuck]]].
+    { econstructor. eauto. }
+    { eapply subject_reductionE; eauto. }
+    + left. exists v. eapply (wcbv_red1_evalE t t' v Hwf); eauto.
+      exact (@subject_closedE _ _ _ [] _ _ HA).
+    + right. exists w. split; auto. eapply red_step; eauto.
+  - left. exists t. eapply value_final; eauto.
+  - right. exists t. split; eauto.
 Qed.
 
-(** Base [wcbv_normalization] ([:53]). *)
+(** Base [wcbv_normalization] ([:58]). *)
 Lemma wcbv_normalizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {A t} : wfE Σ -> axiom_free Σ ->
-  Σ ;;; [] |-E t : A -> { v & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v}.
+  Σ ;;; [] |-E t : A ->
+  { v & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v} + reduces_to_wcbv_stuck Σ t.
 Proof.
   intros Hwf Hax HA.
   assert (welltypedE Σ [] t) as Hwt. { econstructor; eauto. }
@@ -183,7 +203,7 @@ Proof.
   eapply SN_to_WNE; eauto.
 Qed.
 
-(** Base [firstorder_value_irred] ([:64]). *)
+(** Base [firstorder_value_irred] ([:69]). *)
 Lemma firstorder_value_irredE {cf:checker_flags} Σ t t' :
   firstorder_valueE Σ [] t ->
   PCUICReduction.red1 Σ [] t t' -> False.
@@ -199,15 +219,17 @@ Proof.
   - invs Hone; eauto.
 Qed.
 
-(** Base [ws_wcbv_standardization] ([:99]). *)
+(** Base [ws_wcbv_standardization] ([:112], base's comment [:110-111]). Base's value premise:
+    a well-typed closed term need not have a value, so the caller supplies one; the lemma turns
+    head reduction to an irreducible term into the machine's evaluation. *)
 Lemma ws_wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {T} {t v : ws_term (fun _ => false)} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : T ->
+  (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v0) ->
   closed_red Σ [] t v ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
   {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v' * (Σ ;;; [] ⊢ v' ⇝ v)}.
 Proof.
-  intros Hwf Hax Hty Hred Hirred.
-  destruct (@wcbv_normalizationE _ no Σ normalization T t) as (v' & Hv'); eauto.
+  intros Hwf Hax Hty [v' Hv'] Hred Hirred.
   assert (Σ;;; [] |- t ⇝* v') as Hred' by now eapply (wcbveval_redE _ T).
   eapply (PCUICPrincipalityEta.closed_red_confluence_cb
             (cbΣ := wfE_ClosedBodies Σ (wfΣ := Hwf))) in Hred as Hred_.
@@ -218,17 +240,18 @@ Proof.
   exists v'; split; eauto.
 Qed.
 
-(** Base [ws_wcbv_standardization_fst] ([:115]). *)
+(** Base [ws_wcbv_standardization_fst] ([:128]). *)
 Lemma ws_wcbv_standardization_fstE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {i u args mind} {t v : ws_term (fun _ => false)} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : mkApps (tInd i u) args ->
+  (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v0) ->
   lookup_env Σ (i.(inductive_mind)) = Some (InductiveDecl mind) ->
   @firstorder_ind Σ (firstorder_env Σ) i ->
   closed_red Σ [] t v ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
   MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v.
 Proof.
-  intros Hwf Hax Hty Hdecl Hfo Hred Hirred.
-  destruct (ws_wcbv_standardizationE Hwf Hax Hty Hred Hirred) as [v' [H H']].
+  intros Hwf Hax Hty hev Hdecl Hfo Hred Hirred.
+  destruct (ws_wcbv_standardizationE Hwf Hax Hty hev Hred Hirred) as [v' [H H']].
   assert (firstorder_valueE Σ [] v'). {
     eapply (firstorder_value_specE Σ v' i u args Hwf localenv_nil).
     - eapply subject_reduction_evalE; eauto.
@@ -241,14 +264,15 @@ Proof.
   Unshelve.
 Qed.
 
-(** Base [wcbv_standardization] ([:136]). *)
+(** Base [wcbv_standardization] ([:150]). *)
 Lemma wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {T t v : term} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : T ->
+  (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v0) ->
   Σ ;;; [] |- t ⇝ v ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
   {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v' * (Σ ;;; [] ⊢ v' ⇝ v)}.
 Proof.
-  intros Hwf Hax Hty Hred Hirred.
+  intros Hwf Hax Hty hev Hred Hirred.
   unshelve eapply @ws_wcbv_standardizationE with (T := T) (t := (exist t _)) (v := (exist v _)).
   all: sq; eauto; cbn.
   1-2: shelve.
@@ -261,16 +285,17 @@ Proof.
     eapply subject_reductionE; eauto.
 Qed.
 
-(** Base [wcbv_standardization_fst] ([:155]). *)
+(** Base [wcbv_standardization_fst] ([:170]). *)
 Lemma wcbv_standardization_fstE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {i u args mind} {t v : term} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : mkApps (tInd i u) args ->
+  (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v0) ->
   lookup_env Σ (i.(inductive_mind)) = Some (InductiveDecl mind) ->
   @firstorder_ind Σ (firstorder_env Σ) i ->
   red Σ [] t v ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
   MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v.
 Proof.
-  intros Hwf Hax Hty Hdecl Hfo Hred Hirred.
+  intros Hwf Hax Hty hev Hdecl Hfo Hred Hirred.
   unshelve eapply @ws_wcbv_standardization_fstE with (t := (exist t _)) (v := (exist v _)).
   all: sq; eauto; cbn.
   1-2: shelve.

@@ -9,13 +9,14 @@
   the one hypothesis of this file with no satisfying instance.
 
   **The η content, and how it is tagged.** Every instance below carries a tag comment of the
-  form [INSTANCE NONDEGEN <lemma>] or [INSTANCE NOT-BUILT: <reason>] directly above it. A
-  NONDEGEN tag names a compiled lemma, [<instance>_nondeg], whose statement holds the η step
-  the instance runs on: the two witness terms, that they are DIFFERENT terms, that they are
-  related by [convSpecE] (a relation whose only rule for this pair is [cumul_eta_l]), and the
-  typing the instance needs on both sides of that step.
+  form [INSTANCE NONDEGEN <lemma>], [INSTANCE IMPOSSIBLE: <reason>] or
+  [INSTANCE NOT-BUILT: <reason>] directly above it. A NONDEGEN tag names a compiled lemma,
+  [<instance>_nondeg], whose statement holds the η step the instance runs on: the two witness
+  terms, that they are DIFFERENT terms, that they are related by [convSpecE] (a relation whose
+  only rule for this pair is [cumul_eta_l]), and the typing the instance needs on both sides of
+  that step.
 
-  - Eight of the nine instances run on a subject whose typing passes through one η step.
+  - Six of the nine instances run on a subject whose typing passes through one η step.
     In [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]: the inductive [I (A : Prop) : Prop])
     the step is [I ≡ λA:Prop. I A], between the inductive's type former and its η expansion,
     which are related by no other rule: both are [red1]-normal and have different heads. The
@@ -25,11 +26,22 @@
     the variable [G]. The subject is a closed β-redex, neither a value nor [whnf], and its one
     reduct is [∀P:Prop. P], which is [red1]-normal; [SN_to_WNE_inst] takes a REAL accessibility
     proof ([c20_eta_acc]), not the normalization hypothesis.
-  - The two first-order standardization instances run on the same shape in [fo_Σ]
+  - The two standardization instances over [si_Σ] run on [c20_eta_p = ∀_ : c20_eta_t. Prop],
+    whose domain is that same η-typed redex. On the redex itself the machine's value and the
+    irreducible reduct of head reduction are one term, so base's value premise would already
+    carry the whole conclusion ([c20_eta_old_nonfst_degenerate]). [c20_eta_p] is a [tProd],
+    hence an atom and its own value, and its one [red1] step — inside the domain — reaches the
+    irreducible [c20_eta_pv]; the conclusion's [v' ⇝* c20_eta_pv] is then a step the premise
+    does not give.
+  - The two first-order standardization instances run on the same η shape in [fo_Σ]
     ([PCUICFirstorderEtaInstances]: the inductive [N] with [z] and [s]), where the η step is
     [s ≡ λx:N. s x] on the constructor [s : N → N] and the subject
     [c20_fo_t = (λ_ : T (λx:N. s x). s z) idt] is typed at [N], the first-order inductive the
-    two lemmas require; it reduces to the first-order value [s z], which is irreducible.
+    two lemmas require; it reduces to the first-order value [s z], which is irreducible. Both
+    are tagged IMPOSSIBLE: their conclusion is [eval Σ t v], which base's premise
+    [∑ v0, eval Σ t v0] already fixes, since evaluation is deterministic
+    ([c20_eval_premise_determines], [c20_fo_fst_degenerate]). No choice of subject changes
+    that, so the η content of these two stays recorded by the witness [c20_fo_eta_core].
   - [wcbv_red1_evalE_inst] has no typing premise: its only typed premise is [wfE Σ], so it runs
     in [PCUICTypingEtaCopy17Instances.c17_Σ], whose environment declares a constant whose type
     is typed only through an η step ([F ≡ λy:Prop. F y] under a variable [F]).
@@ -315,6 +327,83 @@ Proof.
            Corelib.Init.Logic.eq_refl c20_eta_red_t_False).
 Qed.
 
+(** The subject's value: one β step, whose function and argument are both λs, to [∀P:Prop. P],
+    which is an atom. This is the witness of base's value premise for [c20_eta_t]. *)
+Lemma c20_eta_t_eval : MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t iv_False.
+Proof.
+  unfold c20_eta_t.
+  eapply MetaRocq.PCUIC.PCUICWcbvEval.eval_beta.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+Qed.
+
+(** ** A subject whose value is NOT its irreducible reduct
+
+  [c20_eta_t] is a β-redex: the machine's value and the irreducible reduct of head reduction
+  are the same term, [∀P:Prop. P], so base's value premise already carries the whole conclusion
+  of the two standardization lemmas (this is [c20_eta_old_nonfst_degenerate] below). The two
+  instances therefore run on [c20_eta_p = ∀_ : c20_eta_t. Prop] instead. Its domain is the
+  η-typed redex, so its typing is the η derivation [c20_eta_t_typed]; it is a [tProd], hence an
+  atom and its own value; and its one [red1] step, inside the domain, reaches the irreducible
+  [c20_eta_pv]. The lemma's conclusion [v' ⇝* c20_eta_pv] is then a step the premise does not
+  carry. *)
+Definition c20_eta_p : term := tProd si_na c20_eta_t si_P.
+Definition c20_eta_pv : term := tProd si_na iv_False si_P.
+
+Lemma c20_eta_p_typed :
+  si_Σ ;;; [] |-E c20_eta_p : tSort (Sort.sort_of_product sProp (Sort.super sProp)).
+Proof.
+  unfold c20_eta_p.
+  have w : wf_localE si_Σ ([] ,, vass si_na c20_eta_t) :=
+    iv_wf_vass si_Σ [] si_na c20_eta_t sProp localenv_nil c20_eta_t_typed
+      Corelib.Init.Logic.eq_refl.
+  apply typeE_Prod.
+  - exact (iv_vass_s si_Σ [] si_na c20_eta_t sProp c20_eta_t_typed Corelib.Init.Logic.eq_refl).
+  - exact (iv_P_typed si_Σ _ w).
+Qed.
+
+Lemma c20_eta_p_ne : c20_eta_p <> c20_eta_pv.
+Proof.
+  unfold c20_eta_p, c20_eta_pv, c20_eta_t, iv_False. intros E. congruence.
+Qed.
+
+Lemma c20_eta_p_red1 : MetaRocq.PCUIC.PCUICReduction.red1 si_Σ [] c20_eta_p c20_eta_pv.
+Proof.
+  unfold c20_eta_p, c20_eta_pv. apply MetaRocq.PCUIC.PCUICReduction.prod_red_l.
+  exact c20_eta_t_red1.
+Qed.
+
+Lemma c20_eta_p_red : red si_Σ [] c20_eta_p c20_eta_pv.
+Proof. exact (red1_red _ _ _ _ c20_eta_p_red1). Qed.
+
+Lemma c20_eta_p_eval : MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_p c20_eta_p.
+Proof. apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity. Qed.
+
+Lemma c20_eta_pv_irred : ¬ { t' & si_Σ ;;; [] |- c20_eta_pv ⇝ t'}.
+Proof.
+  intros [t' H]. unfold c20_eta_pv in H. inv_red H.
+  - eapply pgi_False_normal; eassumption.
+  - eapply red_normal_Sort; eassumption.
+Qed.
+
+Lemma c20_eta_p_closed : on_free_vars (fun _ => false) c20_eta_p.
+Proof. reflexivity. Qed.
+
+Lemma c20_eta_pv_closed : on_free_vars (fun _ => false) c20_eta_pv.
+Proof. reflexivity. Qed.
+
+Definition c20_ws_eta_p : ws_term (fun _ => false) :=
+  @exist term (on_free_vars (fun _ => false)) c20_eta_p c20_eta_p_closed.
+Definition c20_ws_eta_pv : ws_term (fun _ => false) :=
+  @exist term (on_free_vars (fun _ => false)) c20_eta_pv c20_eta_pv_closed.
+
+Lemma c20_closed_red_eta_p : closed_red si_Σ [] c20_ws_eta_p c20_ws_eta_pv.
+Proof.
+  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := c20_eta_p) Corelib.Init.Logic.eq_refl
+           Corelib.Init.Logic.eq_refl c20_eta_p_red).
+Qed.
+
 (** ** The η witness in [fo_Σ]: the same shape on the constructor [s : N → N] *)
 
 Definition c20_fo_s : term := tConstruct fo_ind 1 [].
@@ -480,6 +569,49 @@ Proof.
            Corelib.Init.Logic.eq_refl c20_fo_t_red).
 Qed.
 
+(** The first-order subject's value: one β step to the first-order value [s z]. This is the
+    witness of base's value premise for [c20_fo_t]. *)
+Lemma c20_fo_t_eval : MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_t fo_sz.
+Proof.
+  unfold c20_fo_t.
+  eapply MetaRocq.PCUIC.PCUICWcbvEval.eval_beta.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+  - apply MetaRocq.PCUIC.PCUICWcbvEval.eval_atom. reflexivity.
+  - exact (MetaRocq.PCUIC.PCUICWcbvEval.value_final fo_Σ fo_sz fo_sz_wcbv_value).
+Qed.
+
+(** ** What base's value premise gives away
+
+  Base's new premise [∑ v0, eval Σ t v0] fixes the machine's value of the subject, because
+  evaluation is deterministic. For a lemma whose conclusion is that same evaluation — the two
+  [_fst] lemmas, whose conclusion is [eval Σ t v] — no choice of subject can leave the
+  conclusion any content the premise does not already carry. *)
+Lemma c20_eval_premise_determines (S : global_env) (t v : term)
+  (p : ∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval S t v0) :
+  MetaRocq.PCUIC.PCUICWcbvEval.eval S t v -> p.π1 = v.
+Proof.
+  intros h. destruct p as [v0 h0]. cbn.
+  eapply MetaRocq.PCUIC.PCUICWcbvEval.eval_deterministic; eassumption.
+Qed.
+
+(** The conclusion of the two [_fst] instances, from base's premise alone. *)
+Lemma c20_fo_fst_degenerate :
+  (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_t v0) ->
+  MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_t fo_sz.
+Proof. intros _. exact c20_fo_t_eval. Qed.
+
+(** The same for the non-[_fst] pair on the OLD subject [c20_eta_t], whose value and whose
+    irreducible reduct are the same term: this is why the two instances below moved to
+    [c20_eta_p]. *)
+Lemma c20_eta_old_nonfst_degenerate :
+  (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v0) ->
+  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v' * (si_Σ ;;; [] ⊢ v' ⇝ c20_wsF)}.
+Proof.
+  intros _. exists iv_False. split; [exact c20_eta_t_eval|].
+  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := iv_False) Corelib.Init.Logic.eq_refl
+           Corelib.Init.Logic.eq_refl (Equations.Type.Relation.rt_refl _ _)).
+Qed.
+
 (** ** The η content of each witness, as a compiled statement *)
 
 Lemma c20_eta_core :
@@ -559,32 +691,24 @@ Lemma ws_wcbv_standardizationE_inst_nondeg :
    (c20_eta_T c20_eta_I <> c20_eta_T c20_eta_Ieta) *
    cumulSpecE si_Σ [] (c20_eta_T c20_eta_I) (c20_eta_T c20_eta_Ieta) *
    (si_Σ ;;; [] |-E c20_eta_idt : c20_eta_T c20_eta_I) *
-   (si_Σ ;;; [] |-E c20_eta_t : si_P))%type.
-Proof. exact c20_eta_core. Qed.
+   (si_Σ ;;; [] |-E c20_eta_t : si_P) *
+   (c20_eta_p <> c20_eta_pv) *
+   MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_p c20_eta_p)%type.
+Proof.
+  split; [split; [exact c20_eta_core|exact c20_eta_p_ne]|exact c20_eta_p_eval].
+Qed.
 
 Lemma wcbv_standardizationE_inst_nondeg :
   ((c20_eta_I <> c20_eta_Ieta) * convSpecE si_Σ [] c20_eta_I c20_eta_Ieta *
    (c20_eta_T c20_eta_I <> c20_eta_T c20_eta_Ieta) *
    cumulSpecE si_Σ [] (c20_eta_T c20_eta_I) (c20_eta_T c20_eta_Ieta) *
    (si_Σ ;;; [] |-E c20_eta_idt : c20_eta_T c20_eta_I) *
-   (si_Σ ;;; [] |-E c20_eta_t : si_P))%type.
-Proof. exact c20_eta_core. Qed.
-
-Lemma ws_wcbv_standardization_fstE_inst_nondeg :
-  ((c20_fo_s <> c20_fo_seta) * convSpecE fo_Σ [] c20_fo_s c20_fo_seta *
-   (c20_fo_T c20_fo_s <> c20_fo_T c20_fo_seta) *
-   cumulSpecE fo_Σ [] (c20_fo_T c20_fo_s) (c20_fo_T c20_fo_seta) *
-   (fo_Σ ;;; [] |-E c20_fo_idt : c20_fo_T c20_fo_s) *
-   (fo_Σ ;;; [] |-E c20_fo_t : mkApps (tInd fo_ind []) []))%type.
-Proof. exact c20_fo_eta_core. Qed.
-
-Lemma wcbv_standardization_fstE_inst_nondeg :
-  ((c20_fo_s <> c20_fo_seta) * convSpecE fo_Σ [] c20_fo_s c20_fo_seta *
-   (c20_fo_T c20_fo_s <> c20_fo_T c20_fo_seta) *
-   cumulSpecE fo_Σ [] (c20_fo_T c20_fo_s) (c20_fo_T c20_fo_seta) *
-   (fo_Σ ;;; [] |-E c20_fo_idt : c20_fo_T c20_fo_s) *
-   (fo_Σ ;;; [] |-E c20_fo_t : mkApps (tInd fo_ind []) []))%type.
-Proof. exact c20_fo_eta_core. Qed.
+   (si_Σ ;;; [] |-E c20_eta_t : si_P) *
+   (c20_eta_p <> c20_eta_pv) *
+   MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_p c20_eta_p)%type.
+Proof.
+  split; [split; [exact c20_eta_core|exact c20_eta_p_ne]|exact c20_eta_p_eval].
+Qed.
 
 Lemma wcbv_red1_evalE_inst_nondeg :
   ((tLambda si_na si_P (tApp (tRel 1) (tRel 0)) <> tRel 0) *
@@ -604,9 +728,11 @@ Proof.
 Qed.
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_red1_evalE_inst_nondeg
-   The only typed premise of this lemma is [wfE Σ]. The environment
-   [PCUICTypingEtaCopy17Instances.c17_Σ] declares a constant whose type is typed only through
-   the η step of the lemma above, so that step is inside this instance's [wfE] premise. *)
+   The only typed premise of this lemma is [wfE Σ], so this instance runs in an environment
+   whose well-formedness proof is itself typed through an η step: [c17_wfE] types its constant's
+   type through [PCUICTypingEtaCopies2Instances.c2_wc_spec]. The lemma named above states the η
+   step of a variable against its expansion, which holds in any environment; it is the SHAPE of
+   that step, not the derivation [c17_wfE] carries. *)
 Definition wcbv_red1_evalE_inst :
   MetaRocq.PCUIC.PCUICWcbvEval.eval PCUICTypingEtaCopy17Instances.c17_Σ
     (tApp iv_id iv_False) iv_False :=
@@ -652,40 +778,63 @@ Definition wh_normalizationE_inst :
     (si_P; c20_eta_t_typed).
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.SN_to_WNE_inst_nondeg
-   The accessibility premise is [c20_eta_acc], a proof, not the normalization hypothesis. *)
-Definition SN_to_WNE_inst : { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v} :=
+   The accessibility premise is [c20_eta_acc], a proof, not the normalization hypothesis.
+   Base's conclusion is a sum: the subject has a value, so this instance lands in the LEFT
+   disjunct, and the stuck disjunct is not what it exhibits. *)
+Definition SN_to_WNE_inst :
+  { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v} +
+  reduces_to_wcbv_stuck si_Σ c20_eta_t :=
   SN_to_WNE (Σ := si_Σ) (A := si_P) (t := c20_eta_t) si_wfE cli_axiom_free c20_eta_acc
     c20_eta_t_typed.
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_normalizationE_inst_nondeg *)
-Definition wcbv_normalizationE_inst : { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v} :=
+Definition wcbv_normalizationE_inst :
+  { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v} +
+  reduces_to_wcbv_stuck si_Σ c20_eta_t :=
   wcbv_normalizationE (Σ := si_Σ) (A := si_P) (t := c20_eta_t) si_wfE cli_axiom_free
     c20_eta_t_typed.
 
-(* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.ws_wcbv_standardizationE_inst_nondeg *)
+(* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.ws_wcbv_standardizationE_inst_nondeg
+   The subject is [c20_eta_p], not the β-redex: its value is itself (a [tProd] is an atom) and
+   its irreducible reduct is [c20_eta_pv], a DIFFERENT term ([c20_eta_p_ne]), so the conclusion
+   carries the step [c20_eta_p ⇝* c20_eta_pv], which base's value premise does not. On the
+   β-redex the premise alone closes the goal: [c20_eta_old_nonfst_degenerate]. *)
 Definition ws_wcbv_standardizationE_inst :
-  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
-  ws_wcbv_standardizationE (Σ := si_Σ) (T := si_P) (t := c20_ws_eta_t) (v := c20_wsF)
-    si_wfE cli_axiom_free c20_eta_t_typed c20_closed_red_eta_t c20_False_irred.
+  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_p v' * (si_Σ ;;; [] ⊢ v' ⇝ c20_eta_pv)} :=
+  ws_wcbv_standardizationE (Σ := si_Σ) (T := tSort (Sort.sort_of_product sProp (Sort.super sProp)))
+    (t := c20_ws_eta_p) (v := c20_ws_eta_pv)
+    si_wfE cli_axiom_free c20_eta_p_typed (c20_eta_p; c20_eta_p_eval) c20_closed_red_eta_p
+    c20_eta_pv_irred.
 
-(* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_standardizationE_inst_nondeg *)
+(* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_standardizationE_inst_nondeg
+   The same subject, with base's one-step reduction premise. *)
 Definition wcbv_standardizationE_inst :
-  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_t v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
-  wcbv_standardizationE (Σ := si_Σ) (T := si_P) (t := c20_eta_t) (v := iv_False)
-    si_wfE cli_axiom_free c20_eta_t_typed c20_eta_t_red1 c20_False_irred.
+  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_p v' * (si_Σ ;;; [] ⊢ v' ⇝ c20_eta_pv)} :=
+  wcbv_standardizationE (Σ := si_Σ) (T := tSort (Sort.sort_of_product sProp (Sort.super sProp)))
+    (t := c20_eta_p) (v := c20_eta_pv)
+    si_wfE cli_axiom_free c20_eta_p_typed (c20_eta_p; c20_eta_p_eval) c20_eta_p_red1
+    c20_eta_pv_irred.
 
-(* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.ws_wcbv_standardization_fstE_inst_nondeg *)
+(* INSTANCE IMPOSSIBLE: no instance of this lemma can carry content its own premises do not.
+   Its conclusion is [eval Σ t v] for a closed [t] and a fixed [v], and base's premise
+   [∑ v0, eval Σ t v0] fixes that same evaluation, because evaluation is deterministic:
+   [c20_eval_premise_determines] proves that the premise's value component IS the conclusion's
+   value, for every environment, subject and value. The one-line proof of this instance's own
+   conclusion from its premise is [c20_fo_fst_degenerate]. The η content of the subject stays
+   recorded by [c20_fo_eta_core]: the subject is typed at [N] through [s ≡ λx:N. s x]. *)
 Definition ws_wcbv_standardization_fstE_inst :
   MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_t fo_sz :=
   ws_wcbv_standardization_fstE (Σ := fo_Σ) (i := fo_ind) (u := []) (args := []) (mind := fo_mdecl)
     (t := c20_ws_fo_t) (v := c20_ws_fo_sz) fo_wfE c20_fo_axiom_free c20_fo_t_typed
-    c20_fo_lookup fo_firstorder c20_closed_red_fo c20_fo_sz_irred.
+    (fo_sz; c20_fo_t_eval) c20_fo_lookup fo_firstorder c20_closed_red_fo c20_fo_sz_irred.
 
-(* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_standardization_fstE_inst_nondeg *)
+(* INSTANCE IMPOSSIBLE: the same reason as the lemma above, which this one is a consequence of;
+   the conclusion is the same [eval fo_Σ c20_fo_t fo_sz] that base's premise supplies
+   ([c20_eval_premise_determines], [c20_fo_fst_degenerate]). *)
 Definition wcbv_standardization_fstE_inst :
   MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_t fo_sz :=
   wcbv_standardization_fstE (Σ := fo_Σ) (i := fo_ind) (u := []) (args := []) (mind := fo_mdecl)
-    (t := c20_fo_t) (v := fo_sz) fo_wfE c20_fo_axiom_free c20_fo_t_typed c20_fo_lookup
-    fo_firstorder c20_fo_t_red c20_fo_sz_irred.
+    (t := c20_fo_t) (v := fo_sz) fo_wfE c20_fo_axiom_free c20_fo_t_typed (fo_sz; c20_fo_t_eval)
+    c20_fo_lookup fo_firstorder c20_fo_t_red c20_fo_sz_irred.
 
 End NormalizationEtaInstances.
