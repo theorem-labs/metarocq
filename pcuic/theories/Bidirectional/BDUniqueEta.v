@@ -42,12 +42,12 @@
     projection context with [wf_projection_context]; here [untyped_subslet_projection_contextE] and
     [is_closed_projection_contextE] ([BDFromPCUICEta], class-free), as [BDFromPCUICEta] does.
 
-  ** The forecast block
+  ** No forecast class
 
-  The lemmas take the forecast class of [BDToPCUICEta] (T1's [SRForecastCopy18], copy 18b) as a
-  section [Context], because they use soundness ([infering_typingE], ...), validity and
-  completeness ([typing_inferingE], ...); it is imported, never redefined. This file adds no
-  class. [Print Assumptions] in [BDUniqueEtaInstances] shows the class as an argument.
+  The lemmas use soundness ([infering_typingE], ...), validity and completeness
+  ([typing_inferingE], ...), so they took the forecast class of [BDToPCUICEta] (T1's
+  [SRForecastCopy18], copy 18b) as a section [Context] until copy 18b landed (frac/eta 3e6b422d);
+  it was deleted after a compiled-form identity check of each field. This file adds no class.
 
   ** Same names
 
@@ -83,9 +83,6 @@ From Equations.Prop Require Import DepElim.
 Implicit Types (cf : checker_flags) (Σ : global_env_ext).
 
 Section BDUniqueEta.
-
-(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b); delete it when its row lands. *)
-Context {F18 : SRForecastCopy18}.
 
 Section BDUnique.
 

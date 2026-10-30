@@ -19,8 +19,9 @@
   [ws_cumul_pbE_Axiom_l_inv] and [chain_ws_cumul_pbE_Conv] give the needed E conversion with no
   typing premise; it is copied ([typing_leq_termE], [typing_eq_termE]).
 
-  Forecast class (imported, never redefined): [SRForecastCopy18] (copy 18b). Copies 16 and 18a
-  have landed (frac/eta 0fb43f10). Instances: [PCUICPrincipalityEtaInstances].
+  No forecast class: T1's [SRForecastCopy18] was a section premise until copy 18b landed
+  (frac/eta 3e6b422d) and was deleted after a compiled-form identity check of each field. Copies
+  16 and 18a landed earlier (frac/eta 0fb43f10). Instances: [PCUICPrincipalityEtaInstances].
 
   One home for shared helpers: [closed_red_confluence_cb] and [invert_red_sort_cb] are used by
   [Bidirectional/BDUniqueEta], [chain_ws_cumul_pbE_Conv] and [T8_Prod_l_plug] by
@@ -121,10 +122,6 @@ Proof.
 Qed.
 
 Section PrincipalityEta.
-
-(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b), the one class of the lemmas used here,
-   imported, never redefined; delete it when its copy lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** [Prod_l], from the proved [Prod_r] ([T8_Prod_r_plug]) by [T8_Prod_l_of_r]. Its type is the
     body of the pinned [PCUICEtaT8Probe.T8_Prod_l_statement] (:144-151) under

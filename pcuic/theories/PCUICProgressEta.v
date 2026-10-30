@@ -38,10 +38,13 @@
   - [eval_tCaseE]: base [eval_closed] (premise [wf]) → [PCUICClassificationEta.eval_closed_cb]
     (premise [ClosedBodies]).
 
-  ** The forecast block
+  ** No forecast class
 
-  Section premises: the class of [PCUICClassificationEta] (T1's [SRForecastCopy18], copy 18b),
-  imported, and one new class, [ProgForecastCopy18]: two copy-18b lemmas no class has. *)
+  The class of [PCUICClassificationEta] (T1's [SRForecastCopy18]) and this file's
+  [ProgForecastCopy18] (two copy-18b lemmas no other class had) were section premises until copy
+  18b landed (frac/eta 3e6b422d). Both were deleted after a compiled-form identity check of each
+  field against [PCUICInductiveInversionEtaB] (both-way ascription; [About] under
+  [Set Printing All]: binder names and implicit status); the lemmas are written qualified. *)
 
 From Stdlib Require Import ssreflect.
 From Stdlib Require ssrbool.
@@ -68,44 +71,11 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
   PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICInversionEta PCUICSREtaConv
   PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
   PCUICWsCumulEtaInstancesGlobal PCUICValidityEta PCUICSREta PCUICClassificationEta.
-From MetaRocq.PCUIC Require PCUICGenerationEta.
+From MetaRocq.PCUIC Require PCUICGenerationEta PCUICInductiveInversionEtaB.
 
 From Equations Require Import Equations.
 
-(** ** FORECAST BLOCK *)
-
-Local Set Warnings "-unexpected-implicit-declaration".
-
-(* FORECAST-ONLY: proved by copy 18 (PCUICInductiveInversionEta.v); delete when it lands.
-   Each field is the base twin's statement with the relations renamed. *)
-Class ProgForecastCopy18 := {
-  (* PCUICInductiveInversion.v:941 invert_Case_Construct. *)
-  invert_Case_ConstructE :
-    forall {cf : checker_flags} (Σ : global_env_ext) (hΣ : ∥ wfE Σ.1 ∥)
-      {Γ : context} {ci : case_info} {ind' : inductive} {pred : predicate term} {i : nat}
-      {u : Instance.t} {brs : list (branch term)} {args : list term} {T : term},
-    Σ ;;; Γ |-E tCase ci pred (mkApps (tConstruct ind' i u) args) brs : T ->
-    ci.(ci_ind) = ind' /\
-    exists br,
-      nth_error brs i = Some br /\
-      (#|args| = ci.(ci_npar) + context_assumptions br.(bcontext))%nat ;
-  (* PCUICInductiveInversion.v:996 invert_Proj_Construct. *)
-  invert_Proj_ConstructE :
-    forall {cf : checker_flags} (Σ : global_env_ext) (hΣ : ∥ wfE Σ.1 ∥)
-      {Γ : context} {p : projection} {i' : inductive} {c : nat} {u : Instance.t}
-      {l : list term} {T : term},
-    Σ ;;; Γ |-E tProj p (mkApps (tConstruct i' c u) l) : T ->
-    p.(proj_ind) = i' /\ c = 0 /\ p.(proj_npars) + p.(proj_arg) < #|l|
-}.
-
-Local Set Warnings "unexpected-implicit-declaration".
-
-(** ** End of the FORECAST BLOCK *)
-
 Section EvalCaseE.
-
-(* FORECAST-ONLY: the classes of [PCUICClassificationEta]; delete each when its copy lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** Base [eval_tCase] ([PCUICProgress.v:23]). *)
 Lemma eval_tCaseE {cf : checker_flags} {Σ : global_env_ext}  ci p discr brs res T :
@@ -578,10 +548,6 @@ Import PCUICGlobalEnv.
 
 Section ProgressE.
 
-(* FORECAST-ONLY: the classes of [PCUICClassificationEta] and this file's one; delete each when
-   its copy lands. *)
-Context {F18 : SRForecastCopy18} {P18 : ProgForecastCopy18}.
-
 (** Base [typing_spine_length] ([:488]). *)
 Lemma typing_spine_lengthE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Γ Δ ind u args args' T' :
   PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Δ (mkApps (tInd ind u) args)) args' T' ->
@@ -608,7 +574,7 @@ Lemma typing_constructor_arity_exactE {cf : checker_flags} {Σ : global_env_ext}
   #|args| = cstr_arity mdecl cdecl.
 Proof.
   intros declc hc.
-  eapply Construct_Ind_ind_eqE in hc; tea.
+  eapply PCUICInductiveInversionEtaB.Construct_Ind_ind_eqE in hc; tea.
   intuition auto.
 Qed.
 
@@ -800,7 +766,7 @@ Proof with eauto with wcbv; try congruence.
     destruct (decompose_app c) as [h l].
     cbn - [decompose_app] in *.
     destruct h; inv IH.
-    + eapply invert_Case_ConstructE in H as H_; sq; eauto. destruct H_ as (Eq & H_); subst.
+    + eapply PCUICInductiveInversionEtaB.invert_Case_ConstructE in H as H_; sq; eauto. destruct H_ as (Eq & H_); subst.
       left.
       destruct (nth_error brs n) as [br | ] eqn:E.
       2:{ exfalso. destruct H_ as [? []]; congruence. }
@@ -837,7 +803,7 @@ Proof with eauto with wcbv; try congruence.
     destruct (decompose_app c) as [h l].
     cbn - [decompose_app] in *.
     destruct h; inv IH.
-    + eapply invert_Proj_ConstructE in H as H_; sq; eauto. destruct H_ as (<- & -> & Hl).
+    + eapply PCUICInductiveInversionEtaB.invert_Proj_ConstructE in H as H_; sq; eauto. destruct H_ as (<- & -> & Hl).
       left. eapply nth_error_Some' in Hl as [x Hx].
       eexists.
       eapply wcbv_red_proj; eauto.

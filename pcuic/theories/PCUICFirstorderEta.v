@@ -39,15 +39,15 @@
     of the substituted term; the landed [substitution0_ws_cumul_pbE] takes its scoping, from that
     typing ([subject_is_open_termE]).
 
-  ** The forecast block
+  ** No forecast class
 
-  Section premise: T1's [SRForecastCopy18] ([Construct_Ind_ind_eqE],
-  [declared_constructor_valid_tyE]; it enters through [invert_ind_indE],
-  [invert_fix_indE] and [typing_cofix_coindE]), imported, never redefined. Copy 16 has landed
-  (frac/eta 0fb43f10): T2a's, T1's, [PCUICClassificationEta]'s and this file's copy-16 classes
-  ([FirstorderForecastCopy16]: [declared_inductive_type_ws_cumulE]) were deleted after a
-  compiled-form identity check of each field, and [PCUICInductivesEta] is imported. [Print
-  Assumptions] in [PCUICFirstorderEtaInstances] shows the class as an argument. *)
+  T1's [SRForecastCopy18] ([Construct_Ind_ind_eqE], [declared_constructor_valid_tyE]; it entered
+  through [invert_ind_indE], [invert_fix_indE] and [typing_cofix_coindE]) was a section premise
+  until copy 18b landed (frac/eta 3e6b422d); it was deleted after a compiled-form identity check
+  of each field, and the two lemmas are [PCUICInductiveInversionEtaB]'s, written qualified. Copy
+  16 landed earlier (frac/eta 0fb43f10): T2a's, T1's, [PCUICClassificationEta]'s and this file's
+  copy-16 classes ([FirstorderForecastCopy16]: [declared_inductive_type_ws_cumulE]) were deleted
+  the same way, and [PCUICInductivesEta] is imported. No lemma takes a class. *)
 
 From Stdlib Require Import Program ssreflect ssrbool List.
 From MetaRocq.Utils Require Import utils MRRelations.
@@ -77,7 +77,7 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
   PCUICAritiesEta PCUICSpineEta PCUICWsCumulEtaInstancesGlobal PCUICInductivesEta PCUICValidityEta
   PCUICSREta PCUICClassificationEta.
 From MetaRocq.PCUIC.Typing Require Import PCUICContextConversionTypEta.
-From MetaRocq.PCUIC Require PCUICGenerationEta.
+From MetaRocq.PCUIC Require PCUICGenerationEta PCUICInductiveInversionEtaB.
 From Equations.Type Require Import Relation.
 
 Section cf.
@@ -225,10 +225,6 @@ Proof using Type.
 Qed.
 
 Section FirstorderForecastE.
-
-(* FORECAST-ONLY: T1's class ([PCUICSREta]); delete it when copy 18b lands. A lemma takes the
-   class only where its proof names it in [Proof using]. *)
-Context {F18 : SRForecastCopy18}.
 
 (** Base [instantiated_typing_spine_firstorder_spine] ([:314]). *)
 Lemma instantiated_typing_spine_firstorder_spineE {Σ : global_env_ext} {wfΣ : wfE Σ} Γ T args T' :
@@ -494,7 +490,7 @@ Lemma firstorder_value_specE (Σ:global_env_ext) t i u args :
   PCUICWcbvEval.value Σ t ->
   firstorder_ind Σ (firstorder_env Σ) i ->
   firstorder_valueE Σ [] t.
-Proof using F18.
+Proof using.
   intros Hwf Hwfl Hty Hvalue.
   revert i u args Hty.
 
@@ -526,7 +522,7 @@ Proof using F18.
     + eapply inversion_ConstructE in Hty as Hty'; eauto.
       destruct Hty' as (? & ? & ? & ? & ? & ? & ?).
       assert (ind = i) as ->. {
-         eapply Construct_Ind_ind_eqE with (args := []); eauto.
+         eapply PCUICInductiveInversionEtaB.Construct_Ind_ind_eqE with (args := []); eauto.
       }
       eapply firstorder_value_CE with (args := []); eauto.
       eapply firstorder_ind_propositionalE; eauto. sq. eauto.
@@ -555,7 +551,7 @@ Proof using F18.
       destruct Hcon as (?&typ_ctor& spine).
       apply inversion_ConstructE in typ_ctor as (?&?&?&?&?&?&?); auto.
       pose proof d as [[d' _] _]. red in d'. cbn in *. unfold PCUICEnvironment.fst_ctx in *.
-      eapply @Construct_Ind_ind_eqE with (mdecl := x0) in Hty as Hty'; eauto.
+      eapply @PCUICInductiveInversionEtaB.Construct_Ind_ind_eqE with (mdecl := x0) in Hty as Hty'; eauto.
       destruct Hty' as (([[[]]] & ?)  & ? & ? & ? & ? & _). subst.
       econstructor; eauto.
       2:{ eapply firstorder_ind_propositionalE; sq; eauto.
@@ -563,7 +559,7 @@ Proof using F18.
           eapply declared_constructor_inductive in d.
           apply declared_inductive_from_gen; eauto. }
       eapply typing_spine_strengthenE in spine. 3: eauto.
-      2: eapply declared_constructor_valid_tyE; eauto.
+      2: eapply PCUICInductiveInversionEtaB.declared_constructor_valid_tyE; eauto.
 
       eapply firstorder_argsE in spine; eauto.
       clear c0 c1 e0 w Hty H0 Hargs.

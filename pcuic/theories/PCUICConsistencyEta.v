@@ -10,8 +10,8 @@
   Proof route: base's, with [pcuic_canonicityE] ([PCUICCanonicityEta]),
   [PCUICValidityEta.inversion_mkAppsE] (written qualified, as base writes
   [PCUICValidity.inversion_mkApps]: [PCUICProgressEta] declares a second [inversion_mkAppsE]),
-  [inversion_ConstructE] ([PCUICInversionEta]), [Construct_Ind_ind_eqE] (a field of T1's
-  [SRForecastCopy18], copy 18) and [typing_cofix_coindE] ([PCUICClassificationEta]). Base
+  [inversion_ConstructE] ([PCUICInversionEta]), [Construct_Ind_ind_eqE] (copy 18b,
+  [PCUICInductiveInversionEtaB], written qualified) and [typing_cofix_coindE] ([PCUICClassificationEta]). Base
   destructs [on_declared_constructor d] (:59-62) and clears every component it produces at :64
   ([clear -Hdecl d wfΣ]); the E proof does not take it.
 
@@ -19,9 +19,9 @@
 
   - [NormalizationInE Σ] is base's [NormalizationIn Σ] premise over [welltypedE]: a PREMISE,
     as in base, not a forecast. Nothing proves it (strong normalization; [PCUICSNEta]'s header).
-  - Forecast classes (imported, never redefined): those of [PCUICCanonicityEta], i.e. T1's
-    [SRForecastCopy18] (copy 18b) and [PCUICCanonicityEta]'s [CanonForecastCopy20] (base
-    [wh_normalization], copy 20). This file adds no class.
+  - Forecast class (imported, never redefined): [PCUICCanonicityEta]'s [CanonForecastCopy20]
+    (base [wh_normalization], copy 20). T1's [SRForecastCopy18] was a second one until copy 18b
+    landed (frac/eta 3e6b422d) and was deleted. This file adds no class.
     Instances: [PCUICConsistencyEtaInstances]. *)
 
 From Stdlib Require Import ssreflect.
@@ -33,13 +33,14 @@ From MetaRocq.PCUIC Require Import PCUICTyping PCUICEquality PCUICAst PCUICAstUt
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaInd
   PCUICTypingEtaNotions PCUICWellScopedCumulativityEta PCUICSNEta PCUICInversionEta
   PCUICValidityEta PCUICSREta PCUICClassificationEta PCUICCanonicityEta.
+From MetaRocq.PCUIC Require PCUICInductiveInversionEtaB.
 
 From Equations Require Import Equations.
 
 Section ConsistencyEta.
 
-(* FORECAST-ONLY: the classes of [PCUICCanonicityEta]; delete each when its copy lands. *)
-Context {F18 : SRForecastCopy18} {N20 : CanonForecastCopy20}.
+(* FORECAST-ONLY: the class of [PCUICCanonicityEta]; delete it when copy 20 lands. *)
+Context {N20 : CanonForecastCopy20}.
 
 (** Base [pcuic_consistent] ([:40]). *)
 Theorem pcuic_consistentE {cf:checker_flags} {nor : normalizing_flags} Σ
@@ -60,7 +61,7 @@ Proof.
   - apply (PCUICValidityEta.inversion_mkAppsE (wfΣ := wfΣ')) in typ_false' as H.
     destruct H as (?&typ_ctor&_).
     apply inversion_ConstructE in typ_ctor as (?&?&?&?&?&?&?); auto.
-    eapply Construct_Ind_ind_eqE with (args' := []) in typ_false'; tea.
+    eapply PCUICInductiveInversionEtaB.Construct_Ind_ind_eqE with (args' := []) in typ_false'; tea.
     destruct typ_false' as (((((->&_)&_)&_)&_)&_).
     clear -Hdecl d wfΣ. destruct wfΣ.
     cbn in *.

@@ -2,7 +2,8 @@
 
 (** * Subject reduction over [typingE] (row T1): the E copy of [PCUICSR]
 
-  HEADER: see the end of this comment block for the forecast structure. *)
+  HEADER: every copy this file once forecast has landed and is imported; see the comment after
+  the imports. *)
 
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config PrimitiveOps.
@@ -28,12 +29,14 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICCumulativitySpe
      PCUICContextConversionEta PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp
      PCUICInversionEta PCUICSREtaConv.
 (* The landed T0 copies 10, 12, 14 (frac/eta 59eb717d), 15 (frac/eta d49d1c19), 16 and 18a (frac/eta
-   0fb43f10): the canonical [subsletE] ([PCUICSubstitutionEta]), [typing_spineE] ([PCUICAritiesEta],
-   the twin of [PCUICArities.typing_spine]), [spine_substE] and [ctx_inst_subE] ([PCUICSpineEta]),
-   [wf_subsletE] ([PCUICInductivesEta]), and their lemmas. Imported before [PCUICValidityEta] and
-   before this file's own declarations, so a name declared again below resolves to the later one. *)
+   0fb43f10) and 18b (frac/eta 3e6b422d): the canonical [subsletE] ([PCUICSubstitutionEta]),
+   [typing_spineE] ([PCUICAritiesEta], the twin of [PCUICArities.typing_spine]), [spine_substE] and
+   [ctx_inst_subE] ([PCUICSpineEta]), [wf_subsletE] ([PCUICInductivesEta]), the notation
+   [decl_ws_cumul_pbE] ([PCUICInductiveInversionEtaB]), and their lemmas. Imported before
+   [PCUICValidityEta] and before this file's own declarations, so a name declared again below
+   resolves to the later one. *)
 From MetaRocq.PCUIC Require Import PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
-     PCUICInductivesEta PCUICInductiveInversionEta.
+     PCUICInductivesEta PCUICInductiveInversionEta PCUICInductiveInversionEtaB.
 (* C9 (cross-lane-commitments.md): E3's global symmetry and transitivity instances for
    [ws_cumul_ctx_pbE Conv] and the term lists ([conv_context_symE], [ws_cumul_pbE_terms_sym],
    [ws_cumul_pbE_terms_trans]), which replace the three [#[local]] instances this file had. *)
@@ -59,234 +62,21 @@ Ltac rename_hyp h ht ::= my_rename_hyp h ht.
 Arguments Nat.sub : simpl nomatch.
 Arguments Sort.sort_of_product : simpl nomatch.
 
-(** ** FORECAST BLOCK
+(** ** The landed copies (no forecast left)
 
-  Every fact below is a FORECAST: an E copy that is not on this branch will prove it, under exactly
-  this name and with exactly this statement. Landing a row is: delete its part of this block (the
-  definitions and the class of that row, and the [Context] line of that class in section [SREta]),
-  import the copy. No proof below the block changes. Nothing here is an axiom: the classes are
-  premises of every lemma that uses them, and [Print Assumptions] shows them as such. *)
-
-(* Text and implicit status. The fields of copies 16 and 18 here and in T2a's class are the
-   statement note's text (PCUICSREtaCopyStatements.v @ 33a87a58), which writes each binder with
-   the implicit status, name and position of base's COMPILED lemma: [{wfΣ : wfE Σ}] where base has
-   [{wfΣ : wf Σ}], an explicit environment premise exactly where base has one
-   ([Construct_Ind_ind_eqE], [declared_projection_type_and_eqE], [isType_mkApps_Ind_invE],
-   [declared_constructor_valid_tyE], [type_tCoFix_invE], [type_tFix_invE],
-   [wf_cofixpoint_typing_spineE]). The note's [<base>E_statement] Definitions are never referenced
-   by name (that would make every argument explicit): their text is copied into class fields, whose
-   projections keep the braces. Copies 10, 12 and 14 (frac/eta 59eb717d), copy 15 (frac/eta
-   d49d1c19), copy 16 and copy 18a (frac/eta 0fb43f10) have landed: their classes and fields were
-   deleted after a compiled-form identity check of each field against the landed lemma, and the
-   copies are imported. What is left is copy 18b's. *)
-Local Set Warnings "-unexpected-implicit-declaration".
-
-(** *** Definitions
-
-  [subsletE], [typing_spineE], [spine_substE] (with its fields) and [ctx_inst_subE] are the landed
-  canonical ones (copies 10, 14 and 15, imported above, with their [Derive Signature]);
-  [has_sort_isTypeE], [has_sort_isTypeRelE] and [isWfArityE] are [PCUICTypingEtaNotions]'s.
-  [validityE] and [inversion_mkAppsE] are T2a's proved lemmas. The definitions below are the
-  forecast ones no landed file has yet. *)
-
-(* FORECAST-ONLY: proved by copy 18 (PCUICInductiveInversionEta.v, twin of the notation
-   PCUICInductiveInversion.v:856 decl_ws_cumul_pb); delete when it lands. Text:
-   PCUICSREtaCopyStatements.v, verbatim. *)
-Notation decl_ws_cumul_pbE Σ Γ :=
-  (All_decls_alpha_pb Conv (fun pb (x0 y0 : term) => ws_cumul_pbE pb Σ Γ x0 y0)).
-
-(** *** Copy 18b ([PCUICInductiveInversionEta.v]): the statement note's statements, verbatim. *)
-
-(* FORECAST-ONLY: proved by copy 18b (PCUICInductiveInversionEta.v); delete when it lands. Copy
-   18a's [cmp_global_instance_ind_invE] and [on_constructor_instE] were fields here until it landed. *)
-Class SRForecastCopy18 := {
-  Construct_Ind_ind_eqE :
-    forall {cf : checker_flags} {Σ : global_env_ext} (wfΣ : wfE Σ.1)
-      {Γ : context} {n : nat} {i : inductive} {args : list term} {u : Instance.t}
-      {i' : inductive} {args' : list term} {u' : Instance.t} {mdecl : mutual_inductive_body}
-      {idecl : one_inductive_body} {cdecl : constructor_body},
-    Σ ;;; Γ |-E mkApps (tConstruct i n u) args : mkApps (tInd i' u') args' ->
-    declared_constructor Σ.1 (i, n) mdecl idecl cdecl ->
-    ((((i = i' × cmp_ind_universes Σ i (context_assumptions (ind_params mdecl) + #|cstr_indices cdecl|) u u') ×
-       consistent_instance_ext Σ (ind_universes mdecl) u) ×
-      consistent_instance_ext Σ (ind_universes mdecl) u') ×
-     #|args| = ind_npars mdecl + context_assumptions (cstr_args cdecl)) ×
-    (∑ parsubst argsubst parsubst' argsubst' : list term,
-      let parctx := (ind_params mdecl)@[u] in
-      let parctx' := (ind_params mdecl)@[u'] in
-      let argctx := subst_context parsubst 0
-        (subst_context (inds (inductive_mind i) u (ind_bodies mdecl)) #|ind_params mdecl| (cstr_args cdecl)@[u]) in
-      let argctx2 := subst_context parsubst' 0
-        (subst_context (inds (inductive_mind i) u' (ind_bodies mdecl)) #|ind_params mdecl| (cstr_args cdecl)@[u']) in
-      let argctx' := subst_context parsubst' 0 (ind_indices idecl)@[u'] in
-      [× spine_substE Σ Γ (firstn (ind_npars mdecl) args) parsubst parctx,
-         spine_substE Σ Γ (firstn (ind_npars mdecl) args') parsubst' parctx',
-         spine_substE Σ Γ (skipn (ind_npars mdecl) args) argsubst argctx,
-         spine_substE Σ Γ (skipn (ind_npars mdecl) args') argsubst' argctx' &
-         ∑ s : list sort,
-           sorts_local_ctx (lift_typing typingE) Σ Γ argctx2 s ×
-           ws_cumul_pbE_terms Σ Γ (firstn (ind_npars mdecl) args) (firstn (ind_npars mdecl) args') ×
-           ws_cumul_pbE_terms Σ Γ
-             (map (subst0 (argsubst ++ parsubst) ∘
-                   subst (inds (inductive_mind i) u (ind_bodies mdecl)) (#|cstr_args cdecl| + #|ind_params mdecl|) ∘
-                   subst_instance u) (cstr_indices cdecl))
-             (skipn (ind_npars mdecl) args')]) ;
-  constructor_cumulative_indicesE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {c : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-      {cdecl : constructor_body} {u u' : Instance.t} {napp : nat},
-    declared_constructor Σ c mdecl idecl cdecl ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    consistent_instance_ext Σ (ind_universes mdecl) u' ->
-    cmp_ind_universes Σ c.1 napp u u' ->
-    forall (Γ : context) (pars pars' parsubst parsubst' : list term),
-    spine_substE Σ Γ pars parsubst (ind_params mdecl)@[u] ->
-    spine_substE Σ Γ pars' parsubst' (ind_params mdecl)@[u'] ->
-    ws_cumul_pbE_terms Σ Γ pars pars' ->
-    let argctx := subst_context (ind_subst mdecl c.1 u) #|ind_params mdecl| (cstr_args cdecl)@[u] in
-    let argctx' := subst_context (ind_subst mdecl c.1 u') #|ind_params mdecl| (cstr_args cdecl)@[u'] in
-    let pargctx := subst_context parsubst 0 argctx in
-    let pargctx' := subst_context parsubst' 0 argctx' in
-    ws_cumul_ctx_pbE_rel Cumul Σ Γ (smash_context [] pargctx) (smash_context [] pargctx') ×
-    ws_cumul_pbE_terms Σ (Γ ,,, smash_context [] pargctx)
-      (map (subst parsubst (context_assumptions (cstr_args cdecl)))
-         (map (expand_lets argctx) (map (subst_instance u) (cstr_indices cdecl))))
-      (map (subst parsubst' (context_assumptions (cstr_args cdecl)))
-         (map (expand_lets argctx') (map (subst_instance u') (cstr_indices cdecl)))) ;
-  conv_decls_fix_contextE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ : context} {mfix mfix1 : list (def term)},
-    wf_localE Σ Γ ->
-    All2 (fun d d' : def term =>
-            ws_cumul_pbE Conv Σ Γ (dtype d) (dtype d') × eq_binder_annot (dname d) (dname d'))
-      mfix mfix1 ->
-    All2_fold (fun Δ _ : context => decl_ws_cumul_pbE Σ (Γ ,,, Δ)) (fix_context mfix) (fix_context mfix1) ;
-  declared_constructor_valid_tyE :
-    forall {cf : checker_flags} (Σ : global_env_ext) (Γ : context) (mdecl : mutual_inductive_body)
-      (idecl : one_inductive_body) (i : inductive) (n : nat) (cdecl : constructor_body) (u : Instance.t),
-    wfE Σ.1 ->
-    wf_localE Σ Γ ->
-    declared_constructor Σ.1 (i, n) mdecl idecl cdecl ->
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    isTypeE Σ Γ (type_of_constructor mdecl cdecl (i, n) u) ;
-  into_ws_cumul_pb_termsE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ : list context_decl} {l l' : list term},
-    All2 (convSpecE Σ Γ) l l' ->
-    is_closed_context Γ ->
-    forallb (is_open_term Γ) l ->
-    forallb (is_open_term Γ) l' ->
-    ws_cumul_pbE_terms Σ Γ l l' ;
-  on_constructor_inst_wf_argsE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
-      {ind : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-      {cdecl : constructor_body}
-      (declc : declared_constructor Σ ind mdecl idecl cdecl) (u : Instance.t),
-    consistent_instance_ext Σ (ind_universes mdecl) u ->
-    wf_localE Σ ((ind_params mdecl)@[u] ,,,
-      subst_context (ind_subst mdecl ind.1 u) #|ind_params mdecl| (cstr_args cdecl)@[u]) ;
-  positive_cstr_closed_indicesE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {i : inductive × nat} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-      {cdecl : constructor_body},
-    declared_constructor Σ.1 i mdecl idecl cdecl ->
-    All (fun t : term => closedn (context_assumptions (cstr_args cdecl) + #|ind_params mdecl|) t)
-      (map (expand_lets (cstr_args cdecl)) (cstr_indices cdecl)) ;
-  pre_case_branch_context_eqE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {ind : inductive} {mdecl : mutual_inductive_body} {idecl : one_inductive_body}
-      {params : list term} {puinst : Instance.t} {bctx : list aname} {cdecl : constructor_body},
-    declared_inductive Σ ind mdecl idecl ->
-    consistent_instance_ext Σ (ind_universes mdecl) puinst ->
-    wf_branch_gen cdecl bctx ->
-    eq_context_upto_names
-      (pre_case_branch_context ind mdecl params puinst cdecl)
-      (case_branch_context_gen ind mdecl params puinst bctx cdecl) ;
-  subslet_projsE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {i : inductive} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {args : list term},
-    declared_inductive Σ.1 i mdecl idecl ->
-    match ind_ctors idecl return Type with
-    | [cs] =>
-      on_projections mdecl (inductive_mind i) (inductive_ind i) idecl (ind_indices idecl) cs ->
-      forall (Γ : context) (t : term) (u : Instance.t),
-      let indsubst := inds (inductive_mind i) u (ind_bodies mdecl) in
-      Σ ;;; Γ |-E t : mkApps (tInd i u) args ->
-      wf_subsletE Σ Γ (projs_inst i (ind_npars mdecl) (context_assumptions (cstr_args cs)) t)
-        (subst_context (List.rev args) 0
-          (subst_context (extended_subst (ind_params mdecl)@[u] 0) 0
-            (smash_context []
-              (subst_context (inds (inductive_mind i) u (ind_bodies mdecl))
-                #|ind_params mdecl| (cstr_args cs)@[u]))))
-    | _ => True
-    end ;
-  type_tCoFix_invE :
-    forall {cf : checker_flags} (Σ : global_env_ext) (Γ : context) (mfix : mfixpoint term) (idx : nat) (T : term),
-    wfE Σ ->
-    Σ ;;; Γ |-E tCoFix mfix idx : T ->
-    ∑ d : def term,
-      ((nth_error mfix idx = Some d × wf_cofixpointE Σ Γ mfix) ×
-       (Σ ;;; Γ |-E subst0 (cofix_subst mfix) (dbody d) : dtype d)) ×
-      ws_cumul_pbE Cumul Σ Γ (dtype d) T ;
-  type_tFix_invE :
-    forall {cf : checker_flags} (Σ : global_env_ext) (Γ : context) (mfix : mfixpoint term) (idx : nat) (T : term),
-    wfE Σ ->
-    Σ ;;; Γ |-E tFix mfix idx : T ->
-    ∑ (T' : term) (rarg : nat) (f : term),
-      ((unfold_fix mfix idx = Some (rarg, f) × wf_fixpointE Σ Γ mfix) × (Σ ;;; Γ |-E f : T')) ×
-      ws_cumul_pbE Cumul Σ Γ T' T ;
-  wf_case_branches_types'E :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info}
-      {p : predicate term} (ps : sort) (args : list term) (brs : list (branch term)),
-    declared_inductive Σ ci mdecl idecl ->
-    isTypeE Σ Γ (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ args)) ->
-    wf_predicate mdecl idecl p ->
-    let predctx := case_predicate_context ci mdecl idecl p in
-    Σ ;;; Γ ,,, predctx |-E p.(preturn) : tSort ps ->
-    let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
-    wf_branches idecl brs ->
-    eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ->
-    All2i (fun (i : nat) (cdecl : constructor_body) (br : branch term) =>
-      let cstr_br_ctx := case_branch_context_nopars ci mdecl p.(puinst) cdecl in
-      let brctx' := map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in
-      let brctxty := case_branch_type ci.(ci_ind) mdecl idecl p br ptm i cdecl in
-      [× wf_branch cdecl br,
-         wf_localE Σ (Γ ,,, (ind_params mdecl)@[puinst p] ,,, cstr_br_ctx),
-         wf_localE Σ (Γ ,,, (ind_params mdecl)@[puinst p] ,,, brctx'),
-         wf_localE Σ (Γ ,,, brctxty.1) &
-         Σ ;;; Γ ,,, brctxty.1 |-E brctxty.2 : tSort ps])
-      0 (ind_ctors idecl) brs ;
-  wf_case_predicate_contextE :
-    forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ},
-    forall {Γ : context} {mdecl : mutual_inductive_body} {idecl : one_inductive_body} {ci : case_info}
-      {p : predicate term} {args : list term},
-    declared_inductive Σ ci.(ci_ind) mdecl idecl ->
-    isTypeE Σ Γ (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ args)) ->
-    wf_predicate mdecl idecl p ->
-    let predctx := case_predicate_context ci mdecl idecl p in
-    wf_localE Σ (Γ ,,, predctx) ;
-  (* Route (A) of t0-plan §6 risk 5: twin statement, a proof without [mfix_on_ind_inv]. *)
-  wf_cofixpoint_typing_spineE :
-    forall {cf : checker_flags} (Σ : global_env_ext) (Γ : context) (ind : inductive) (u : Instance.t)
-      (mfix : mfixpoint term) (idx : nat) (d : def term) (args args' : list term),
-    wfE Σ.1 ->
-    wf_localE Σ Γ ->
-    wf_cofixpointE Σ Γ mfix ->
-    nth_error mfix idx = Some d ->
-    isTypeE Σ Γ (dtype d) ->
-    PCUICAritiesEta.typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
-    check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite
-}.
-
-Local Set Warnings "unexpected-implicit-declaration".
-
-(** ** End of the FORECAST BLOCK *)
+  This file once stated as FORECASTS the facts of E copies that were not on its branch, as fields
+  of section-premise classes. Every one of those copies has landed: copies 10, 12 and 14 (frac/eta
+  59eb717d), copy 15 (frac/eta d49d1c19), copies 16 and 18a (frac/eta 0fb43f10) and copy 18b
+  (frac/eta 3e6b422d, [PCUICInductiveInversionEtaB]: the fourteen fields of the class
+  [SRForecastCopy18] and the notation [decl_ws_cumul_pbE]). Each class and its fields were deleted
+  after a compiled-form identity check of each field against the landed lemma (both-way
+  ascription; [About] under [Set Printing All]: binder names and implicit status), and the copies
+  are imported above. [subsletE], [typing_spineE], [spine_substE] (with its fields) and
+  [ctx_inst_subE] are the landed canonical ones (copies 10, 14 and 15, with their
+  [Derive Signature]); [has_sort_isTypeE], [has_sort_isTypeRelE] and [isWfArityE] are
+  [PCUICTypingEtaNotions]'s; [validityE] and [inversion_mkAppsE] are T2a's proved lemmas. *)
 
 Section SREta.
-
-(* FORECAST-ONLY: the one class of the block above; delete it when copy 18b lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (* The [pcuic] hint for the E lemma [isType_is_open_termE], which base's SR finds through the
    [pcuic] database: its one E home is the landed [PCUICClosedTypEta.isType_is_open_termE]
@@ -586,18 +376,11 @@ Proof.
   now exists t.
 Qed.
 
-(** Base [on_constructor_closed_indices] ([:1138]). *)
-Lemma on_constructor_closed_indicesE {cf} {Σ} {wfΣ : wfE Σ} :
-  forall {i mdecl idecl cdecl},
-  declared_constructor Σ.1 i mdecl idecl cdecl ->
-  All (is_open_term (arities_context (ind_bodies mdecl) ,,, ind_params mdecl ,,, cstr_args cdecl)) (cstr_indices cdecl).
-Proof.
-  intros.
-  pose proof (on_declared_constructorE H) as [[onmind oib] [cs [hnth onc]]].
-  pose proof (onc.(on_cindices)).
-  eapply ctx_inst_impl in X. 2: intros ??; apply unlift_TermTyp.
-  now eapply ctx_inst_open_termsE in X.
-Qed.
+(* Base [on_constructor_closed_indices] ([:1138]) is [PCUICInductiveInversionEtaB]'s
+   [on_constructor_closed_indicesE] (copy 18b, the twin of base's second declaration of that name,
+   [PCUICInductiveInversion.v:3111]). The E copy of [:1138] that stood here was deleted after a
+   compiled-form identity check: the same type (syntactically, [constr_eq_strict]) and the same
+   [Arguments {cf Σ wfΣ i mdecl idecl cdecl} _]. *)
 
 (** Base [on_constructor_wf_arities_pars_args] ([:1150]). *)
 Lemma on_constructor_wf_arities_pars_argsE {cf} {Σ} {wfΣ : wfE Σ} {i mdecl idecl cdecl} :
@@ -2725,7 +2508,7 @@ Proof.
     match goal with H : is_true (forallb (test_def _ _) mfix) |- _ => rename H into H2 end.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : conv_context (@JoinE cf) Σ (Γ ,,, fix_context mfix) (Γ ,,, fix_context mfix1)).
-    { clear -wf wfΓ X X4 H2 fixl F18.
+    { clear -wf wfΓ X X4 H2 fixl.
       eapply All2_fold_app => //.
       reflexivity.
       eapply All2_fold_impl.
@@ -2875,7 +2658,7 @@ Proof.
     match goal with H : is_true (forallb (test_def _ _) mfix) |- _ => rename H into H2 end.
     assert(fixl :#|fix_context mfix| = #|fix_context mfix1|) by now (rewrite !fix_context_length; apply (OnOne2_length X4)).
     assert(convctx : conv_context (@JoinE cf) Σ (Γ ,,, fix_context mfix) (Γ ,,, fix_context mfix1)).
-    { clear -wf wfΓ X X4 H2 fixl F18.
+    { clear -wf wfΓ X X4 H2 fixl.
       eapply All2_fold_app => //; trea.
       eapply All2_fold_impl.
       eapply (conv_decls_fix_contextE (Γ := Γ)) => //.
@@ -3400,7 +3183,7 @@ Qed.
 
   The fields of [T1_facts] and [T2a_facts] of the checker's [safechecker/theories/
   PCUICTypingEtaHyps.v] ([wip/etak-k7-2026-10-29] @ [0bbee83d]), verbatim, each inhabited by its
-  lemma here. The [T1] fits are this file's theorems (under the forecast block); the [T2a] fits
+  lemma here. The [T1] fits are this file's theorems; the [T2a] fits
   are T2a's proved [validityE] and [inversion_mkAppsE] ([PCUICValidityEta]), as this file uses
   them. *)
 

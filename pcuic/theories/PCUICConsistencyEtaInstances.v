@@ -10,7 +10,7 @@
   for [si_Σ0] are reused. [cs_False_typed] shows that the type of the theorem's typing premise,
   [tInd cs_ind []], is a well-typed type ([: Prop]) in [cs_Σ], so the premise is not ill-formed.
 
-  **Section variables.** The forecast classes of [PCUICConsistencyEta] (those of
+  **Section variables.** The forecast class of [PCUICConsistencyEta] ([CanonForecastCopy20], that of
   [PCUICCanonicityEta]) and base's normalization premise [NormalizationInE cs_Σ]: unprovable by
   design (strong normalization, [PCUICSNEta]'s header), a premise of base's [pcuic_consistent]
   too, never discharged.
@@ -107,12 +107,12 @@ Proof. split; [left; reflexivity|reflexivity]. Qed.
 Lemma cs_False_typed : cs_Σ ;;; [] |-E tInd cs_ind [] : tSort sProp.
 Proof. exact (typeE_Ind _ _ cs_ind [] False_mib False_oib localenv_nil cs_declared_False eq_refl). Qed.
 
-(** ** The theorem, applied in a section that holds the classes *)
+(** ** The theorem, applied in a section that holds the class *)
 
 Section ConsistencyEtaInstances.
 
-(* FORECAST-ONLY: the classes of [PCUICConsistencyEta]; delete each when its copy lands. *)
-Context {F18 : SRForecastCopy18} {N20 : CanonForecastCopy20}.
+(* FORECAST-ONLY: the class of [PCUICConsistencyEta]; delete it when copy 20 lands. *)
+Context {N20 : CanonForecastCopy20}.
 
 (* Base's normalization premise (by design, never discharged). *)
 Context {nor : normalizing_flags} {nin : NormalizationInE cs_Σ}.

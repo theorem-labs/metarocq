@@ -47,18 +47,21 @@
     [arity_spine_it_mkProd_or_LetIn], three copy lemmas. Here it is copy 16's
     [isType_mkApps_IndE] ([PCUICInductivesEta], twin of [PCUICInductives.v] [isType_mkApps_Ind])
     on the spine [ctx_inst_spine_substE] (copy 15, [PCUICSpineEta]) builds.
-  - Base's [Proof using wfΣ] is [Proof.]: the forecast classes are section variables too.
+  - Base's [Proof using wfΣ] is [Proof.]: the forecast classes were section variables too.
 
-  ** The forecast block
+  ** No forecast class
 
-  The lemmas take T1's forecast class [SRForecastCopy18] ([PCUICSREta], copy 18b) as a section
-  [Context]; it is imported, never redefined (copies 10, 12, 14, 15, 16 and 18a have landed and
-  are imported). Base [ctx_inst_app_weak] ([PCUICInductiveInversion.v:3794]) is copy 18a's
+  The lemmas took T1's forecast class [SRForecastCopy18] ([PCUICSREta], copy 18b) as a section
+  [Context] until copy 18b landed (frac/eta 3e6b422d); it was deleted after a compiled-form
+  identity check of each field, and its two fields used here are
+  [PCUICInductiveInversionEtaB.wf_case_predicate_contextE] and
+  [PCUICInductiveInversionEtaB.wf_case_branches_types'E], written qualified. Base
+  [ctx_inst_app_weak] ([PCUICInductiveInversion.v:3794]) is copy 18a's
   [PCUICInductiveInversionEta.ctx_inst_app_weakE] ([PCUICInductiveInversionEta.v:1492]), written
   qualified; the class [BDForecastCopy18] that forecast it was deleted after a compiled-form
   identity check (same type both ways, same implicit status; its [checker_flags] binder was
-  named [cf], the landed one's [H] as base's, and the stream lead ruled for [H]).
-  [Print Assumptions] in [BDToPCUICEtaInstances] shows the class as an argument.
+  named [cf], the landed one's [H] as base's, and the stream lead ruled for [H]). No lemma takes
+  a class.
 
   ** The checker's facts
 
@@ -78,16 +81,13 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
      PCUICEtaI5 PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
      PCUICInversionEta PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta
      PCUICInductivesEta PCUICValidityEta PCUICSREta BDTypingEta.
-From MetaRocq.PCUIC Require PCUICInductiveInversionEta.
+From MetaRocq.PCUIC Require PCUICInductiveInversionEta PCUICInductiveInversionEtaB.
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
 From Equations.Prop Require Import DepElim.
 
 Section BDToPCUICEta.
-
-(* FORECAST-ONLY: T1's class ([PCUICSREta], copy 18b); delete it when its copy lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** Base [wf_local_rel_subst1] ([BDToPCUIC.v:33]). *)
 Lemma wf_local_rel_subst1E `{checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} Δ Γ na b t Γ' :
@@ -372,7 +372,7 @@ Section BDToPCUICTypingE.
       pose proof (has_sort_isTypeE _ hty) as histy.
 
       assert (wfpred : wf_localE Σ (Γ ,,, predctx)).
-      { exact (wf_case_predicate_contextE (wfΣ := wfΣ) isdecl histy hwfp). }
+      { exact (PCUICInductiveInversionEtaB.wf_case_predicate_contextE (wfΣ := wfΣ) isdecl histy hwfp). }
 
       eapply typeE_Case.
       + exact isdecl.
@@ -383,7 +383,7 @@ Section BDToPCUICTypingE.
       + econstructor; [exact hwfbrs|].
         eapply All2i_impl.
         1:{ apply All2i_prod ; [exact hbrs|].
-            exact (wf_case_branches_types'E (wfΣ := wfΣ) ps (skipn (ci_npar ci) args) brs isdecl histy
+            exact (PCUICInductiveInversionEtaB.wf_case_branches_types'E (wfΣ := wfΣ) ps (skipn (ci_npar ci) args) brs isdecl histy
                      hwfp (IHret wfpred) hwfbrs heqctx).
         }
         intros i cdecl br ((heq & _ & _ & _ & IHbody) & [_ _ _ hwfbr hsort]).

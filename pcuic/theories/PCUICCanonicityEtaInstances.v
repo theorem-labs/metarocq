@@ -2,8 +2,8 @@
 
 (** * Satisfying instance of [PCUICCanonicityEta.pcuic_canonicityE] (row T6)
 
-  **Section variables.** The forecast classes of [PCUICCanonicityEta] (the four of
-  [PCUICClassificationEta] and [CanonForecastCopy20], base [wh_normalization] over E) and the
+  **Section variables.** The forecast class of [PCUICCanonicityEta] ([CanonForecastCopy20], base
+  [wh_normalization] over E; T1's [SRForecastCopy18] was deleted when copy 18b landed) and the
   normalization hypothesis [NormalizationInE si_Σ]. [NormalizationInE] is base's
   [NormalizationIn] over [welltypedE] ([PCUICSNEta]): a premise unprovable by design (strong
   normalization), inherited from base's [pcuic_canonicity], which takes [NormalizationIn Σ]; it
@@ -25,8 +25,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICSN PC
 
 Section CanonicityEtaInstances.
 
-(* FORECAST-ONLY: the classes of [PCUICCanonicityEta]; delete each when its copy lands. *)
-Context {F18 : SRForecastCopy18} {N20 : CanonForecastCopy20}.
+(* FORECAST-ONLY: the class of [PCUICCanonicityEta]; delete it when copy 20 lands. *)
+Context {N20 : CanonForecastCopy20}.
 
 (* Base's normalization premise (by design, never discharged). *)
 Context {nor : normalizing_flags} {nin : NormalizationInE si_Σ}.

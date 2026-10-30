@@ -11,10 +11,11 @@
 
   ** The forecast block
 
-  Section premises: the class of [PCUICClassificationEta] (T1's [SRForecastCopy18], copy 18b),
-  imported, and one new class,
-  [CanonForecastCopy20]: base [wh_normalization] ([PCUICNormalization.v:24]), whose E copy is
-  copy 20 ([PCUICNormalizationEta], ArityLane), built on [PCUICProgressEta]. *)
+  Section premise: one class, [CanonForecastCopy20]: base [wh_normalization]
+  ([PCUICNormalization.v:24]), whose E copy is copy 20 ([PCUICNormalizationEta], ArityLane),
+  built on [PCUICProgressEta]. T1's [SRForecastCopy18] (the class of [PCUICClassificationEta])
+  was a second one until copy 18b landed (frac/eta 3e6b422d); it was deleted after a
+  compiled-form identity check of each field. *)
 
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
@@ -48,9 +49,8 @@ Local Set Warnings "unexpected-implicit-declaration".
 
 Section CanonicityEta.
 
-(* FORECAST-ONLY: the classes of [PCUICClassificationEta] and this file's one; delete each when
-   its copy lands. *)
-Context {F18 : SRForecastCopy18} {N20 : CanonForecastCopy20}.
+(* FORECAST-ONLY: this file's class; delete it when copy 20 lands. *)
+Context {N20 : CanonForecastCopy20}.
 
 (** Base [pcuic_canonicity] ([:20]). *)
 Lemma pcuic_canonicityE {cf:checker_flags} {nor : normalizing_flags} Σ {normalization_in: NormalizationInE Σ} t i u args :

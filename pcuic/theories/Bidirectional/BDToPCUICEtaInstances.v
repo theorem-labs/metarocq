@@ -2,14 +2,12 @@
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDToPCUICEta] (row T6)
 
-  **The forecast class is a section variable.** Every lemma of [BDToPCUICEta] that uses a
-  forecast fact takes T1's [SRForecastCopy18] ([PCUICSREta], copy 18b) as a premise; copies 10,
-  12, 14, 15, 16 and 18a have landed and their classes are gone. No instance of a class exists
-  before its copy lands, so the instances below live in section [BDToPCUICEtaInstances], whose
-  [Context] holds the class, and APPLY the lemmas there.
-  Everything else each instance needs (the environment, its [wfE], every typing and
-  bidirectional derivation) is proved here, in [PCUICInversionEtaInstances] or in
-  [BDTypingEtaInstances], with no class.
+  **No forecast class.** The lemmas of [BDToPCUICEta] that used a forecast fact took T1's
+  [SRForecastCopy18] ([PCUICSREta], copy 18b) as a premise until copy 18b landed (frac/eta
+  3e6b422d); the class is deleted (copies 10, 12, 14, 15, 16 and 18a landed earlier). The
+  instances below, in section [BDToPCUICEtaInstances] (which held the class), apply the lemmas.
+  Everything each instance needs (the environment, its [wfE], every typing and bidirectional
+  derivation) is proved here, in [PCUICInversionEtaInstances] or in [BDTypingEtaInstances].
 
   **The environment** is [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]):
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]. The local contexts are those of
@@ -39,7 +37,7 @@
     variable that the declaration above it mentions.
 
   **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
-  their E copies: the same set, and the forecast classes are arguments ([About]), not axioms. *)
+  their E copies: the same set, and no forecast class is an argument ([About]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -184,9 +182,6 @@ Proof.
 Qed.
 
 Section BDToPCUICEtaInstances.
-
-(* FORECAST-ONLY: the class of [BDToPCUICEta]; delete it when its copy lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** ** The prelude lemmas *)
 

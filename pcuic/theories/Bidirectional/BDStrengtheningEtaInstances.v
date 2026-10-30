@@ -12,10 +12,10 @@
   [P] the scope of the source context ([shiftnP #|Γ| xpred0]), so the free-variable premises are
   the real ones.
 
-  **Lemmas without a forecast class** are applied here; the four that use soundness,
-  completeness, validity or subject reduction ([on_free_vars_typeE], [typing_renaming_cond_PE],
+  **Every lemma** is applied here with no class: the four that use soundness, completeness,
+  validity or subject reduction ([on_free_vars_typeE], [typing_renaming_cond_PE],
   [strengtheningE], [strengthening_typeE]) are applied in section [BDStrengtheningClassInstances],
-  whose [Context] holds the two classes, as [BDToPCUICEtaInstances] does.
+  whose [Context] held T1's forecast class until copy 18b landed (frac/eta 3e6b422d).
 
   **Non-degeneracy.**
   - [eta1_rename_inst], [RE_renameP_inst], [JoinE_renameP_inst], [cumul_renamePE_inst],
@@ -150,11 +150,9 @@ Proof.
   exact (fst (snd (snd (snd (bidirectional_renamingE si_Σ si_wfE)))) _ _ _ bd_GF_check).
 Qed.
 
-(** ** The lemmas with a forecast class, in a section that holds the classes *)
+(** ** The lemmas that took a forecast class until copy 18b landed *)
 
 Section BDStrengtheningClassInstances.
-
-  Context {F18 : SRForecastCopy18}.
 
   (** The η-typed [x : G F] in [bd_Γη]. *)
   Definition bs_eta_typed : si_Σ ;;; bd_Γη |-E tRel 0 : tApp (tRel 2) (tRel 1) :=

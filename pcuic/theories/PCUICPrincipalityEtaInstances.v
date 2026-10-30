@@ -2,7 +2,8 @@
 
 (** * Satisfying instances of the lemmas of [PCUICPrincipalityEta] (row T2b)
 
-  The forecast classes are section variables (no instance exists before their rows land).
+  No forecast class: T1's [SRForecastCopy18], a section variable here until copy 18b landed
+  (frac/eta 3e6b422d), is deleted.
   Non-degeneracy: [common_typingE_eta_inst] (two types of one variable related by η);
   T8 sites at types that are NOT head forms: [Sort_r] (a let-in, ζ), [Prod_r] and [Prod_l] (the
   let-bound variable [z], δ; [Prod_l] on [λP. x P], the η-expansion of [x]), [Ind_r] (the
@@ -227,9 +228,6 @@ Lemma isWfArity_sortE_inst : isWfArityE si_Σ iv_Γ1 (tSort sProp).
 Proof. exact (isWfArity_sortE si_Σ iv_Γ1 sProp iv_wf_Γ1 I). Qed.
 
 Section PrincipalityEtaInstances.
-
-(* FORECAST-ONLY: the class of [PCUICPrincipalityEta]; delete it when its row lands. *)
-Context {F18 : SRForecastCopy18}.
 
 (** [Prod_l] at the variable [z], which reduces to [∀P:Prop. P] by unfolding the let. *)
 Lemma T8_Prod_l_plug_inst :

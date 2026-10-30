@@ -2,13 +2,14 @@
 
 (** * Satisfying instances of the lemmas of [PCUICSREta] (row T1)
 
-  **The forecast class is a section variable.** Every lemma of [PCUICSREta] that uses a forecast
-  fact takes its forecast class [SRForecastCopy18] (copy 18b) as a premise; copies 10, 12, 14, 15,
-  16 and 18a have landed and their classes are gone. No instance of a class exists before its copy
-  lands, so the instances below live in section [SRInstances], whose [Context] holds the class,
-  and APPLY the lemmas there.
-  Everything else each instance needs (the environment, its [wfE], every typing derivation, every
-  reduction step) is proved here or in [PCUICInversionEtaInstances], with no class. The instances
+  **No forecast class.** The lemmas of [PCUICSREta] that used a forecast fact took its forecast
+  class [SRForecastCopy18] (copy 18b) as a premise until copy 18b landed (frac/eta 3e6b422d); the
+  class is deleted (copies 10, 12, 14, 15, 16 and 18a landed earlier). The instances below, in
+  section [SRInstances] (which held the class), apply the lemmas. Everything each instance needs
+  (the environment, its [wfE], every typing derivation, every reduction step) is proved here or
+  in [PCUICInversionEtaInstances]. The instance of [on_constructor_closed_indicesE], whose E copy
+  of [PCUICSR.v:1138] was deleted for copy 18b's identical one, is copy 18b's
+  ([PCUICTypingEtaCopy18bInstances.on_constructor_closed_indicesE_inst]). The instances
   of [subsletE_open_terms] and of the [subsletE] substitution lemma, which left this file, are in
   [PCUICTypingEtaCopies2Instances] and [PCUICTypingEtaCopy15Instances]
   ([substitution_ws_cumul_pbE_typed_inst]).
@@ -249,9 +250,6 @@ Proof. exists po_int_kn, po_int_body. split; [reflexivity|exact iv_po_declared_i
 
 Section SRInstances.
 
-  (** The forecast classes: section variables (see the header). *)
-  Context {F18 : SRForecastCopy18}.
-
   (** *** [sr_red1E] and its corollaries *)
 
   (** [sr_red1E] (through [env_propE_typing]) at β, with [typing_closed_red1E] for the step. *)
@@ -401,9 +399,6 @@ Section SRInstances.
 
   Definition on_constructor_wf_argsE_inst :=
     PCUICSREta.on_constructor_wf_argsE (Σ := si_Σ) (wfΣ := si_wfE) (u := []) si_declared_constructor eq_refl.
-
-  Definition on_constructor_closed_indicesE_inst :=
-    on_constructor_closed_indicesE (Σ := si_Σ) (wfΣ := si_wfE) si_declared_constructor.
 
   Definition on_constructor_wf_arities_pars_argsE_inst :=
     on_constructor_wf_arities_pars_argsE (Σ := si_Σ) (wfΣ := si_wfE) si_declared_constructor.
