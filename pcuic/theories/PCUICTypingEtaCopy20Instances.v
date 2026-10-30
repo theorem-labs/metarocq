@@ -66,7 +66,7 @@ From Equations.Type Require Import Relation.
 
 (** [λx:Prop. x] is [red1]-normal, as [∀P:Prop. P] is ([pgi_False_normal]): its domain is a
     sort and its body is [tRel 0] under one assumption. *)
-Lemma c20_id_normal Σ Γ v : red1 Σ Γ iv_id v -> False.
+Lemma c20_id_normal Σ Γ v : MetaRocq.PCUIC.PCUICReduction.red1 Σ Γ iv_id v -> False.
 Proof.
   unfold iv_id. intros H. inv_red H.
   - eapply red_normal_Sort; eassumption.
@@ -74,7 +74,7 @@ Proof.
 Qed.
 
 (** [sri_A = (λx:Prop. x) (∀P:Prop. P)] steps only to [∀P:Prop. P]. *)
-Lemma c20_sri_A_red1 v : red1 si_Σ [] sri_A v -> v = iv_False.
+Lemma c20_sri_A_red1 v : MetaRocq.PCUIC.PCUICReduction.red1 si_Σ [] sri_A v -> v = iv_False.
 Proof.
   unfold sri_A. intros H. inv_red H.
   - reflexivity.
@@ -84,7 +84,7 @@ Qed.
 
 (** A [red1]-normal term is accessible for [cored]. *)
 Lemma c20_acc_nf (Σ : global_env) t :
-  (forall v, red1 Σ [] t v -> False) -> Acc (cored Σ []) t.
+  (forall v, MetaRocq.PCUIC.PCUICReduction.red1 Σ [] t v -> False) -> Acc (cored Σ []) t.
 Proof.
   intros h. constructor. intros y Hy. exfalso.
   induction Hy; eauto.
@@ -99,7 +99,7 @@ Proof.
   intros Hy. remember sri_A as t0 eqn:Et0. revert Et0.
   induction Hy; intros Et0; subst.
   - now apply c20_sri_A_red1.
-  - exfalso. specialize (IHHy eq_refl). subst v.
+  - exfalso. specialize (IHHy Corelib.Init.Logic.eq_refl). subst v.
     eapply pgi_False_normal; eassumption.
 Qed.
 
@@ -125,7 +125,7 @@ Proof. exact (red1_red _ _ _ _ (sri_beta [])). Qed.
 
 Lemma c20_closed_red_A_False : closed_red si_Σ [] c20_wsA c20_wsF.
 Proof.
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := sri_A) eq_refl eq_refl c20_red_A_False).
+  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := sri_A) Corelib.Init.Logic.eq_refl Corelib.Init.Logic.eq_refl c20_red_A_False).
 Qed.
 
 Lemma c20_False_irred : ¬ { t' & si_Σ ;;; [] |- iv_False ⇝ t'}.
@@ -148,23 +148,23 @@ Proof. reflexivity. Qed.
 Lemma c20_fo_let_typed : fo_Σ ;;; [] |-E c20_fo_let : fo_N.
 Proof.
   have hN := fo_N_typed [] localenv_nil.
-  have hdef : lift_typing typingE fo_Σ [] (j_vdef fo_na fo_sz fo_N) :=
-    iv_vdef fo_Σ [] fo_na fo_sz fo_N _ fo_sz_typed hN eq_refl.
+  have hdef : MetaRocq.PCUIC.PCUICTyping.lift_typing typingE fo_Σ [] (j_vdef fo_na fo_sz fo_N) :=
+    iv_vdef fo_Σ [] fo_na fo_sz fo_N _ fo_sz_typed hN Corelib.Init.Logic.eq_refl.
   have hΓ' : wf_localE fo_Σ ([] ,, vdef fo_na fo_sz fo_N)
     by (apply localenv_cons_def; [exact localenv_nil|exact hdef]).
   have hlet : fo_Σ ;;; [] |-E c20_fo_let : tLetIn fo_na fo_sz fo_N fo_N :=
     typeE_LetIn _ _ fo_na fo_sz fo_N (tRel 0) fo_N hdef
-      (typeE_Rel _ _ 0 (vdef fo_na fo_sz fo_N) hΓ' eq_refl).
+      (typeE_Rel _ _ 0 (vdef fo_na fo_sz fo_N) hΓ' Corelib.Init.Logic.eq_refl).
   eapply (type_ws_cumul_pbE (Σ := fo_Σ) (cbΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE))
             (pb := Cumul) _ hlet).
   - exact (fo_N_isType [] localenv_nil).
   - eapply (red_ws_cumul_pbE (Σ := fo_Σ) (wfΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE))).
     constructor; [reflexivity|exact (type_is_open_termE (Σ := fo_Σ) (wfΣ := fo_wfE) hlet)|].
-    apply rt_step. apply red_zeta.
+    apply Equations.Type.Relation.rt_step. apply MetaRocq.PCUIC.PCUICReduction.red_zeta.
 Qed.
 
-Lemma c20_fo_let_red1 : red1 fo_Σ [] c20_fo_let fo_sz.
-Proof. exact (red_zeta fo_Σ [] fo_na fo_sz fo_N (tRel 0)). Qed.
+Lemma c20_fo_let_red1 : MetaRocq.PCUIC.PCUICReduction.red1 fo_Σ [] c20_fo_let fo_sz.
+Proof. exact (MetaRocq.PCUIC.PCUICReduction.red_zeta fo_Σ [] fo_na fo_sz fo_N (tRel 0)). Qed.
 
 Lemma c20_fo_let_red : red fo_Σ [] c20_fo_let fo_sz.
 Proof. exact (red1_red _ _ _ _ c20_fo_let_red1). Qed.
@@ -182,7 +182,7 @@ Definition c20_ws_fo_sz : ws_term (fun _ => false) :=
 
 Lemma c20_closed_red_fo : closed_red fo_Σ [] c20_ws_fo_let c20_ws_fo_sz.
 Proof.
-  exact (closed_red_of (Σ := fo_Σ) (Γ := []) (t := c20_fo_let) eq_refl eq_refl c20_fo_let_red).
+  exact (closed_red_of (Σ := fo_Σ) (Γ := []) (t := c20_fo_let) Corelib.Init.Logic.eq_refl Corelib.Init.Logic.eq_refl c20_fo_let_red).
 Qed.
 
 Section NormalizationEtaInstances.
@@ -201,7 +201,7 @@ Proof.
   intros [t' H]. eapply firstorder_value_irredE; [exact fo_sz_value|exact H].
 Qed.
 
-Definition firstorder_value_irredE_inst : forall t', red1 fo_Σ [] fo_sz t' -> False :=
+Definition firstorder_value_irredE_inst : forall t', MetaRocq.PCUIC.PCUICReduction.red1 fo_Σ [] fo_sz t' -> False :=
   fun t' H => firstorder_value_irredE fo_Σ fo_sz t' fo_sz_value H.
 
 Definition c20_A_typed : {A & si_Σ ;;; [] |-E sri_A : A} :=
@@ -212,31 +212,31 @@ Definition wh_normalizationE_inst :
   PCUICNormalizationEta.wh_normalizationE (Σ := si_Σ) (t := sri_A) si_wfE cli_axiom_free
     c20_A_typed.
 
-Definition SN_to_WNE_inst : { v & eval si_Σ sri_A v} :=
+Definition SN_to_WNE_inst : { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ sri_A v} :=
   SN_to_WNE (Σ := si_Σ) (A := si_P) (t := sri_A) si_wfE cli_axiom_free c20_acc_sri_A
     (iv_app_typed si_Σ [] localenv_nil).
 
-Definition wcbv_normalizationE_inst : { v & eval si_Σ sri_A v} :=
+Definition wcbv_normalizationE_inst : { v & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ sri_A v} :=
   wcbv_normalizationE (Σ := si_Σ) (A := si_P) (t := sri_A) si_wfE cli_axiom_free
     (iv_app_typed si_Σ [] localenv_nil).
 
 Definition ws_wcbv_standardizationE_inst :
-  {v' & eval si_Σ sri_A v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
+  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ sri_A v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
   ws_wcbv_standardizationE (Σ := si_Σ) (T := si_P) (t := c20_wsA) (v := c20_wsF)
     si_wfE cli_axiom_free (iv_app_typed si_Σ [] localenv_nil) c20_closed_red_A_False
     c20_False_irred.
 
 Definition wcbv_standardizationE_inst :
-  {v' & eval si_Σ sri_A v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
+  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ sri_A v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
   wcbv_standardizationE (Σ := si_Σ) (T := si_P) (t := sri_A) (v := iv_False)
     si_wfE cli_axiom_free (iv_app_typed si_Σ [] localenv_nil) (sri_beta []) c20_False_irred.
 
-Definition ws_wcbv_standardization_fstE_inst : eval fo_Σ c20_fo_let fo_sz :=
+Definition ws_wcbv_standardization_fstE_inst : MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_let fo_sz :=
   ws_wcbv_standardization_fstE (Σ := fo_Σ) (i := fo_ind) (u := []) (args := []) (mind := fo_mdecl)
     (t := c20_ws_fo_let) (v := c20_ws_fo_sz) fo_wfE c20_fo_axiom_free c20_fo_let_typed
     c20_fo_lookup fo_firstorder c20_closed_red_fo c20_fo_sz_irred.
 
-Definition wcbv_standardization_fstE_inst : eval fo_Σ c20_fo_let fo_sz :=
+Definition wcbv_standardization_fstE_inst : MetaRocq.PCUIC.PCUICWcbvEval.eval fo_Σ c20_fo_let fo_sz :=
   wcbv_standardization_fstE (Σ := fo_Σ) (i := fo_ind) (u := []) (args := []) (mind := fo_mdecl)
     (t := c20_fo_let) (v := fo_sz) fo_wfE c20_fo_axiom_free c20_fo_let_typed c20_fo_lookup
     fo_firstorder c20_fo_let_red c20_fo_sz_irred.

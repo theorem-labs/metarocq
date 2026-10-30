@@ -87,7 +87,7 @@ From MetaRocq.PCUIC Require PCUICPrincipalityEta.
     same script runs with [wfE]. The statement is base's with [wf] → [wfE]. *)
 Lemma wcbv_red1_evalE {cf : checker_flags} {Σ : global_env_ext} t t' v : wfE Σ ->
   closed t ->
-  Σ ⊢ t ⇝ᵥ t' -> eval Σ t' v -> eval Σ t v.
+  Σ ⊢ t ⇝ᵥ t' -> MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t' v -> MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v.
 Proof.
   intros wfΣ Hty Hred Heval.
   induction Hred in Heval, v, Hty |- *; eauto with wcbv.
@@ -101,9 +101,9 @@ Proof.
   - inversion Heval; subst. all:cbn in Hty; solve_all. all: try now econstructor; eauto with wcbv.
   - eapply eval_iota. eapply eval_mkApps_Construct; tea.
     unshelve eapply declared_constructor_to_gen; eauto.
-    now econstructor. unfold cstr_arity. rewrite e0.
-    rewrite (declared_minductive_ind_nparsE (proj1 (proj1 d))).
-    now rewrite -(declared_minductive_ind_nparsE (proj1 (proj1 d))) /cstr_arity.
+    now econstructor. unfold MetaRocq.PCUIC.PCUICWcbvEval.cstr_arity. rewrite e0.
+    rewrite (declared_minductive_ind_nparsE (MetaRocq.Utils.MRProd.proj1 (MetaRocq.Utils.MRProd.proj1 d))).
+    now rewrite -(declared_minductive_ind_nparsE (MetaRocq.Utils.MRProd.proj1 (MetaRocq.Utils.MRProd.proj1 d))) /MetaRocq.PCUIC.PCUICWcbvEval.cstr_arity.
     all:tea. eapply All_All2_refl. solve_all. now eapply value_final.
     unshelve eapply declared_constructor_to_gen; eauto.
   - inversion Heval; subst; clear Heval. all:cbn in Hty; solve_all. all: now econstructor; eauto with wcbv.
@@ -113,10 +113,10 @@ Proof.
   - eapply eval_fix; eauto.
     + eapply value_final. eapply value_app; auto. econstructor.
       rewrite <- closed_unfold_fix_cunfold_eq, e. reflexivity. 2:eauto.
-      cbn in Hty. rewrite closedn_mkApps in Hty. solve_all.
+      cbn in Hty. rewrite MetaRocq.PCUIC.PCUICClassification.closedn_mkApps in Hty. solve_all.
     + eapply value_final; eauto.
     + rewrite <- closed_unfold_fix_cunfold_eq, e. reflexivity.
-      cbn in Hty. rewrite closedn_mkApps in Hty. solve_all.
+      cbn in Hty. rewrite MetaRocq.PCUIC.PCUICClassification.closedn_mkApps in Hty. solve_all.
       Unshelve. all: now econstructor.
   - destruct p as [[] ?]. eapply eval_cofix_proj; tea.
     eapply value_final, value_app. now constructor. auto.
@@ -154,7 +154,7 @@ assert (welltypedE Σ [] t) as Hwt. { econstructor; eauto. }
 eapply PCUICSNEta.normalization_inE in Hwt as HSN; eauto. clear Hwt.
 induction HSN as [t H IH].
 edestruct progress_env_propE as [_ [_ [[t' Ht'] | Hval]]]; eauto.
-- eapply wcbv_red1_red1 in Ht' as Hred. 2:{ change 0 with (#|@nil context_decl|). eapply subject_closedE. eauto. }
+- eapply wcbv_red1_red1 in Ht' as Hred. 2:{ change 0 with (#|@Corelib.Init.Datatypes.nil MetaRocq.PCUIC.PCUICAst.PCUICEnvironment.context_decl|). eapply subject_closedE. eauto. }
   edestruct IH as [v Hv]. econstructor. eauto.
   eapply subject_reductionE; eauto.
   exists v. sq. destruct Hv. split; eauto. eapply red_step; eauto.
@@ -164,11 +164,11 @@ Defined.
 
 (** Base [SN_to_WN] ([:40]). *)
 Lemma SN_to_WNE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {A t} : wfE Σ -> axiom_free Σ ->
-  Acc (cored Σ []) t -> Σ ;;; [] |-E t : A -> { v & eval Σ t v}.
+  Acc (cored Σ []) t -> Σ ;;; [] |-E t : A -> { v & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v}.
   intros Hwf Hax HSN HA.
   induction HSN as [t H IH].
   edestruct progress_env_propE as [_ [_ [[t' Ht'] | Hval]]]; eauto.
-  - eapply wcbv_red1_red1 in Ht' as Hred. 2:{ change 0 with (#|@nil context_decl|). eapply subject_closedE. eauto. }
+  - eapply wcbv_red1_red1 in Ht' as Hred. 2:{ change 0 with (#|@Corelib.Init.Datatypes.nil MetaRocq.PCUIC.PCUICAst.PCUICEnvironment.context_decl|). eapply subject_closedE. eauto. }
     edestruct IH as [v Hv]. econstructor. eauto.
     eapply subject_reductionE; eauto.
     exists v. sq. eapply (wcbv_red1_evalE t t' v Hwf); eauto.
@@ -178,7 +178,7 @@ Qed.
 
 (** Base [wcbv_normalization] ([:53]). *)
 Lemma wcbv_normalizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {A t} : wfE Σ -> axiom_free Σ ->
-  Σ ;;; [] |-E t : A -> { v & eval Σ t v}.
+  Σ ;;; [] |-E t : A -> { v & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v}.
 Proof.
   intros Hwf Hax HA.
   assert (welltypedE Σ [] t) as Hwt. { econstructor; eauto. }
@@ -207,7 +207,7 @@ Lemma ws_wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {n
   Σ ;;; [] |-E t : T ->
   closed_red Σ [] t v ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
-  {v' & eval Σ t v' * (Σ ;;; [] ⊢ v' ⇝ v)}.
+  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v' * (Σ ;;; [] ⊢ v' ⇝ v)}.
 Proof.
   intros Hwf Hax Hty Hred Hirred.
   destruct (@wcbv_normalizationE _ no Σ normalization T t) as (v' & Hv'); eauto.
@@ -228,7 +228,7 @@ Lemma ws_wcbv_standardization_fstE {cf:checker_flags} {no:normalizing_flags} {Σ
   @firstorder_ind Σ (firstorder_env Σ) i ->
   closed_red Σ [] t v ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
-  eval Σ t v.
+  MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v.
 Proof.
   intros Hwf Hax Hty Hdecl Hfo Hred Hirred.
   destruct (ws_wcbv_standardizationE Hwf Hax Hty Hred Hirred) as [v' [H H']].
@@ -249,7 +249,7 @@ Lemma wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {norm
   Σ ;;; [] |-E t : T ->
   Σ ;;; [] |- t ⇝ v ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
-  {v' & eval Σ t v' * (Σ ;;; [] ⊢ v' ⇝ v)}.
+  {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v' * (Σ ;;; [] ⊢ v' ⇝ v)}.
 Proof.
   intros Hwf Hax Hty Hred Hirred.
   unshelve eapply @ws_wcbv_standardizationE with (T := T) (t := (exist t _)) (v := (exist v _)).
@@ -271,7 +271,7 @@ Lemma wcbv_standardization_fstE {cf:checker_flags} {no:normalizing_flags} {Σ} {
   @firstorder_ind Σ (firstorder_env Σ) i ->
   red Σ [] t v ->
   ¬ { t' & Σ ;;; [] |- v ⇝ t'} ->
-  eval Σ t v.
+  MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v.
 Proof.
   intros Hwf Hax Hty Hdecl Hfo Hred Hirred.
   unshelve eapply @ws_wcbv_standardization_fstE with (t := (exist t _)) (v := (exist v _)).
