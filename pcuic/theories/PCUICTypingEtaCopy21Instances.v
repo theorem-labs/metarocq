@@ -21,7 +21,23 @@
   - [iv_Σ] ([PCUICInversionEtaInstances]) with copy 18a's telescope [c18_tel], whose last entry
     is typed only through the η step, for the weakening lemmas.
 
-  No instance is WEAK: every one of the fifteen carries a real η step in a premise. *)
+  No instance is WEAK: every one of the fifteen carries a real η step in a premise.
+
+  **Own-name shadowing declared (C6).** This file's [isType_liftE_inst] has the name of
+  [PCUICTypingEtaCopies1Instances.isType_liftE_inst], which is in its import closure (through
+  [PCUICInversionEtaInstances]); the two have DIFFERENT types (that one instantiates
+  [Typing.PCUICWeakeningTypEta.isType_liftE], this one [PCUICCasesHelperEta.isType_liftE]).
+  Every reference here to either name is written qualified.
+
+  **Degenerate parts, tagged (not built, with their cost).** The witnesses carry the η step in
+  a premise, but some parts of the statements are instantiated trivially:
+  [isType_liftE_inst] at [n = 0], [Δ = []]; [wf_local_expand_lets0E_inst] at [Γ = []] and a
+  [Δ] with no let; [AritiesToGeneration_typing_spineE_inst] at the empty spine; the branch-type
+  and [type_Case_*] instances at [Γ = []], a constructor with no argument and no index, and
+  [puinst = []] throughout. Building a non-degenerate form of each needs a new environment with
+  an indexed inductive and a let-bearing telescope (the cost: one environment kit per family,
+  in the order of copy 18a's). [weakening_type_local_ctxE_inst] WAS degenerate ([Δ = Δ' = []],
+  conclusion by [exact I]) and is now built non-degenerately (below). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -69,13 +85,26 @@ Definition weakening0E_inst :=
   @weakening0E _ iv_Σ c18b_Γ iv_False si_P iv_wfE c18b_wf
     (iv_False_typed iv_Σ [] localenv_nil).
 
-(** ** [weakening_type_local_ctxE]: the same η context *)
+(** ** [weakening_type_local_ctxE]: the same η context, weakening a NON-EMPTY [Δ']
 
-Lemma c21_tlc : type_local_ctx (PCUICTyping.lift_typing typingE) iv_Σ c18b_Γ [] sProp.
-Proof. exact I. Qed.
+  [Δ := [w : h y; h : Π x : k (λx:Prop. g x). Prop]] (copy 18a's telescope, whose
+  well-formedness holds the η step) and [Δ' := [_ : ∀ P : Prop, P]], so the conclusion is a
+  real lift, not the [Δ = Δ' = []] identity. *)
+
+Lemma c21_wf_Γk : wf_localE iv_Σ iv_Γk.
+Proof. exact (c18_tel_wf_Γk [] localenv_nil). Qed.
+
+Lemma c21_tlc_eta :
+  type_local_ctx (PCUICTyping.lift_typing typingE) iv_Σ iv_Γk [vass si_na iv_False] sProp.
+Proof.
+  split; [exact I|].
+  exact (iv_vass_s iv_Σ iv_Γk si_na iv_False sProp
+           (iv_False_typed iv_Σ iv_Γk c21_wf_Γk) Logic.eq_refl).
+Qed.
 
 Definition weakening_type_local_ctxE_inst :=
-  weakening_type_local_ctxE iv_Σ c18b_Γ [] [] sProp iv_wfE c18b_wf c21_tlc.
+  weakening_type_local_ctxE iv_Σ iv_Γk [vass si_na c18_tel_hy; vass si_na c18_tel_hty]
+    [vass si_na iv_False] sProp iv_wfE (c18_tel_wf [] localenv_nil) c21_tlc_eta.
 
 (** ** [wf_local_expand_lets0E]: the η telescope, split at its end *)
 
@@ -107,10 +136,12 @@ Definition isType_liftE_inst :=
 
 (** ** [pre_case_predicate_context_gen_indpred_ctxE]
 
-  The parameter context of [I] is [A : Prop], so no η step can appear in the subslet itself
-  (a type η-related to [tSort sProp] IS [tSort sProp]: no η rule produces a sort). The step is
-  in the spine substitution's domain context [c18b_sΓ], whose [wf_localE] field types [z := y]
-  at [k (λx:Prop. g x)] through the η step. *)
+  The η step is in the spine substitution's domain context [c18b_sΓ], whose [wf_localE] field
+  types [z := y] at [k (λx:Prop. g x)] through the η step. The subslet below carries no η step
+  of its own, but one IS possible in a subslet of this shape: with [h : Π x : k (λx. g x). Prop]
+  the parameter [h y] is typed at [Prop] only through the η retyping of [y]
+  (copy 18a's [c18_tel_hy_typed]), and [cumul_eta_l] does relate [λ_:Prop. Prop #0] to [Prop],
+  so neither "no η step can appear here" nor "no η rule produces a sort" is true. *)
 
 Definition c21_par : term := lift0 1 iv_keta.
 
@@ -141,9 +172,11 @@ Definition pre_case_predicate_context_gen_indpred_ctxE_inst :=
 
 (** ** The three branch-type lemmas, in [c17_Σ]
 
-  Their only non-syntactic premise is the environment, so the η step is the one [wfE c17_env]
-  itself holds: the constant of [c17_env] has the closed type [c17_P'], which is typed only
-  through the η step of copy 15's kit. *)
+  The η step of these three is the one [wfE c17_env] itself holds: the constant of [c17_env]
+  has the closed type [c17_P'], which is typed only through the η step of copy 15's kit.
+  [case_branch_type_betaE] and [case_branch_type_conv_betaE] have no other non-syntactic
+  premise; [case_branch_type_beta_typedE] also takes [isTypeE] and [wf_localE] premises, which
+  are proved below in the same environment. *)
 
 Definition c21_predctx : context := [vass si_na si_P].
 

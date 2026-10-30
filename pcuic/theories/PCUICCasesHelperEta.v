@@ -70,7 +70,13 @@ From Equations Require Import Equations.
     ([ctx_inst_spine_substE]), and [substitutionE] types the contractum at the substituted type.
     [type_betasE] needs no subject reduction and no new axiom, and it gives the SAME sort as the
     redex, which base's route also gives. The reductions and the conversions of both proofs are
-    base's ([red_betas_cb], [conv_betasE]). *)
+    base's ([red_betas_cb], [conv_betasE]).
+
+  **Own-name shadowing declared (C6).** [isType_liftE] below has the name of
+  [MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.isType_liftE], which this file imports directly.
+  The two have DIFFERENT types (that one is the twin of [PCUICWeakeningTyp.isType_lift], this
+  one of [PCUICCasesHelper.isType_lift]; base shadows the same pair of names in the same way).
+  Every reference to either name outside this file is written qualified. *)
 
 Lemma weakening0E {cf : checker_flags} Σ Γ t T :
   wfE Σ.1 -> wf_localE Σ Γ ->
