@@ -152,7 +152,7 @@ Lemma c18b_open_Rkg : is_open_term iv_Γk (iv_R iv_kg). Proof. reflexivity. Qed.
     [R (k (λx:Prop. g x)) ≤ R (k g)]. *)
 Definition typing_spine_it_mkProd_Ind_invE_inst :=
   typing_spine_it_mkProd_Ind_invE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk)
-    (type_spine_nilE _ _ (iv_R iv_keta) (iv_R iv_kg) c18_isT_Rketa c18b_isT_Rkg c18_R_η)
+    (MetaRocq.PCUIC.PCUICAritiesEta.type_spine_nilE _ _ (iv_R iv_keta) (iv_R iv_kg) c18_isT_Rketa c18b_isT_Rkg c18_R_η)
     [] iv_ind [] [iv_keta] iv_ind [] [iv_kg]
     (ws_cumul_pbE_refl (Σ := iv_Σ) (pb := Cumul) c18b_closed_Γk c18b_open_Rketa) Logic.eq_refl.
 
@@ -289,7 +289,7 @@ Definition on_constructor_inst_pars_indicesE_inst :=
 Definition mkApps_ind_typing_spineE_inst :=
   mkApps_ind_typing_spineE iv_Σ iv_Γk [] iv_ind [] [] iv_ind [] [iv_keta] [iv_kg]
     iv_wfE c18_wf_Γk c18_isT_Rketa
-    (type_spine_nilE _ _ (iv_R iv_keta) (iv_R iv_kg) c18_isT_Rketa c18b_isT_Rkg c18_R_η).
+    (MetaRocq.PCUIC.PCUICAritiesEta.type_spine_nilE _ _ (iv_R iv_keta) (iv_R iv_kg) c18_isT_Rketa c18b_isT_Rkg c18_R_η).
 
 (** ** A cofixpoint declaration whose type is the η side [R (k (λx:Prop. g x))] *)
 
@@ -308,7 +308,7 @@ Definition wf_cofixpoint_typing_spineE_inst :=
   wf_cofixpoint_typing_spineE iv_Σ iv_Γk iv_ind [] c18b_emfix 0
     {| dname := si_na; dtype := iv_R iv_keta; dbody := tRel 0; rarg := 0 |} [] [iv_kg]
     iv_wfE c18_wf_Γk c18b_wf_ecofix Logic.eq_refl c18_isT_Rketa
-    (type_spine_nilE _ _ (iv_R iv_keta) (iv_R iv_kg) c18_isT_Rketa c18b_isT_Rkg c18_R_η).
+    (MetaRocq.PCUIC.PCUICAritiesEta.type_spine_nilE _ _ (iv_R iv_keta) (iv_R iv_kg) c18_isT_Rketa c18b_isT_Rkg c18_R_η).
 
 (** ** The constructor application [mkR (k (λx:Prop. g x)) y]
 
@@ -713,7 +713,7 @@ Definition WfArity_build_case_predicate_typeE_inst :=
    terms. An η step relates two DIFFERENT terms ([cumul_eta_l] rewrites [t] to
    [λx. t x]), so a premise that forces the two sides to be the same term admits none. *)
 Definition arity_spine_eqE_inst :=
-  arity_spine_eqE (Σ := iv_Σ) (Γ := c18b_Γ) (T := si_P) (T' := si_P) Logic.eq_refl.
+  MetaRocq.PCUIC.PCUICInductiveInversionEtaB.arity_spine_eqE (Σ := iv_Σ) (Γ := c18b_Γ) (T := si_P) (T' := si_P) Logic.eq_refl.
 
 Definition arity_spine_to_extended_listE_inst :=
   arity_spine_to_extended_listE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) (Δ := c18b_Δ) si_P
@@ -733,7 +733,7 @@ Definition arity_spine_to_extended_list_appE_inst :=
 
 Lemma c18b_spine_P : PCUICAritiesEta.typing_spineE iv_Σ c18b_Γ si_P [] si_P.
 Proof.
-  exact (type_spine_nilE _ _ si_P si_P c18b_isT_P c18b_isT_P
+  exact (MetaRocq.PCUIC.PCUICAritiesEta.type_spine_nilE _ _ si_P si_P c18b_isT_P c18b_isT_P
            (ws_cumul_pbE_refl (Σ := iv_Σ) (pb := Cumul) c18b_closed_Γ c18b_open_P)).
 Qed.
 
