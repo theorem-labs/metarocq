@@ -32,6 +32,17 @@ From MetaRocq.SafeChecker Require Import PCUICWfReductionEta PCUICSafeReduceEta 
 (* The six proved fields of [ReduceTypedFacts] at [welltypedE] (qualified names; nothing imported). *)
 From MetaRocq.SafeChecker Require PCUICEtaTypedFactsProved.
 
+(* INVARIANT (C6, lanes/eta/cross-lane-commitments.md), the MIRROR of K4's: in this file every
+   reference to a name shared by [Syntax.PCUICPosition] and [PCUICPositionEta] means BASE's
+   object and is written QUALIFIED [PCUICPosition....]. Reason: this file instantiates
+   [PCUICSafeReduceEta.ReduceTypedFacts], whose fields ([rtf_context] and the rest) are stated
+   over base's [stack] — the machine keeps base [PCUICPosition] (rev 14 B3) — so an η object
+   there would not typecheck. [PCUICPositionEta] is only REQUIRED here, never imported, so such
+   a name resolves to base even written bare; the qualification states the intent and keeps
+   ArityLane's reference pass (class A, [lanes/eta/impl/eta-samename-tree.py]) at 0 for this
+   file. Five sites (the [rtf_context_inst] statement: [zip], [stack_entry] x3,
+   [stack_context]) were bare until 2026-10-30; ANY IMPORT CHANGE MUST PRESERVE THIS. *)
+
 (** ** The boundary invariant: every stack crossing the boundary is [App_l]-only *)
 
 Definition app_only (π : PCUICPosition.stack) : Prop :=
@@ -430,9 +441,11 @@ Section FracInstancesE.
 
   (** [rtf_context] (T6), on the empty stack. *)
   Lemma rtf_context_inst :
-    wf_extE SI.si_Σ × welltypedE SI.si_Σ [] (zip (SI.si_P, @nil stack_entry)) ×
-    welltypedE SI.si_Σ ([] ,,, stack_context (snd (SI.si_P, @nil stack_entry)))
-      (fst (SI.si_P, @nil stack_entry)).
+    wf_extE SI.si_Σ × welltypedE SI.si_Σ []
+      (PCUICPosition.zip (SI.si_P, @nil PCUICPosition.stack_entry)) ×
+    welltypedE SI.si_Σ
+      ([] ,,, PCUICPosition.stack_context (snd (SI.si_P, @nil PCUICPosition.stack_entry)))
+      (fst (SI.si_P, @nil PCUICPosition.stack_entry)).
   Proof.
     split; [exact si_wf_extE|]. split; exact si_P_wtE.
   Qed.
