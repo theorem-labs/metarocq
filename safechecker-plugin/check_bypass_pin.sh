@@ -37,9 +37,9 @@ fi
 prog=$(cat <<'AWK'
 function fail(msg) { print "check_bypass_pin: " msg; bad = 1 }
 # The line with comments and string literals blanked (OCaml lexing: nested
-# comments, strings inside comments, and character literals such as '"', so
-# that a quote character does not open a string).  [depth] and [instr] carry
-# over from line to line.
+# comments, strings and quoted strings {id|...|id} inside comments too, and
+# character literals such as '"', so that a quote character does not open a
+# string).  [depth], [instr], [inq] and [qid] carry over from line to line.
 function strip(line,    out, i, n, c, c2, j) {
   out = ""; n = length(line); i = 1
   while (i <= n) {
@@ -49,12 +49,21 @@ function strip(line,    out, i, n, c, c2, j) {
       if (c == "\"") instr = 0
       out = out " "; i++; continue
     }
+    if (inq) {
+      j = index(substr(line, i), "|" qid "}")
+      if (j == 0) { out = out sprintf("%" (n - i + 1) "s", ""); i = n + 1; continue }
+      out = out sprintf("%" (j + length(qid) + 1) "s", ""); i += j + length(qid) + 1; inq = 0; continue
+    }
     if (c == "'") {
       if (substr(line, i + 2, 1) == "'") { out = out "   "; i += 3; continue }
       if (substr(line, i + 1, 1) == "\\") {
         j = index(substr(line, i + 2), "'")
         if (j > 0) { out = out sprintf("%" (j + 2) "s", ""); i += j + 2; continue }
       }
+    }
+    if (c == "{" && match(substr(line, i), /^[{][a-z_]*[|]/)) {
+      qid = substr(line, i + 1, RLENGTH - 2); inq = 1
+      out = out sprintf("%" RLENGTH "s", ""); i += RLENGTH; continue
     }
     if (c2 == "(*") { depth++; out = out "  "; i += 2; continue }
     if (depth > 0 && c2 == "*)") { depth--; out = out "  "; i += 2; continue }
@@ -64,7 +73,7 @@ function strip(line,    out, i, n, c, c2, j) {
   return out
 }
 function endfile() {
-  if (depth > 0 || instr)
+  if (depth > 0 || instr || inq)
     fail(curfile ": unterminated comment or string literal; the check cannot read this file")
 }
 BEGIN {
@@ -78,7 +87,7 @@ BEGIN {
 }
 FNR == 1 {
   if (NR > 1) endfile()
-  curfile = FILENAME; depth = 0; instr = 0; inwrap = 0; qtr_in_wrap = 0
+  curfile = FILENAME; depth = 0; instr = 0; inq = 0; qid = ""; inwrap = 0; qtr_in_wrap = 0
 }
 {
   s = strip($0)
