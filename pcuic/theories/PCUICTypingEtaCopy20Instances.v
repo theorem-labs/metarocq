@@ -604,9 +604,11 @@ Proof.
 Qed.
 
 (* INSTANCE NONDEGEN MetaRocq.PCUIC.PCUICTypingEtaCopy20Instances.wcbv_red1_evalE_inst_nondeg
-   The only typed premise of this lemma is [wfE Σ]. The environment
-   [PCUICTypingEtaCopy17Instances.c17_Σ] declares a constant whose type is typed only through
-   the η step of the lemma above, so that step is inside this instance's [wfE] premise. *)
+   The only typed premise of this lemma is [wfE Σ], so this instance runs in an environment
+   whose well-formedness proof is itself typed through an η step: [c17_wfE] types its constant's
+   type through [PCUICTypingEtaCopies2Instances.c2_wc_spec]. The lemma named above states the η
+   step of a variable against its expansion, which holds in any environment; it is the SHAPE of
+   that step, not the derivation [c17_wfE] carries. *)
 Definition wcbv_red1_evalE_inst :
   MetaRocq.PCUIC.PCUICWcbvEval.eval PCUICTypingEtaCopy17Instances.c17_Σ
     (tApp iv_id iv_False) iv_False :=
@@ -636,11 +638,11 @@ Qed.
    [mkApps (tConstruct i n ui) args] at [mkApps (tInd i u) pandi] with every argument again a
    first-order value. In [fo_Σ] every constructor argument has type [N], so no argument position
    can hold a function, and the only way to put [cumul_eta_l] into such a derivation is a detour
-   on a type convertible to itself, which carries no η content. A non-vacuous witness therefore
-   costs a NEW environment whose first-order values are typed through η while
-   [firstorder_ind] still holds of its inductive: a declaration literal, its [on_inductive]
-   obligations, a [wf] proof in the shape of [fo_wf], and the retyping of this instance on it.
-   Not built here. *)
+   between two types that are already related without it, which adds no η content to what is
+   proved. A non-vacuous witness therefore costs a NEW environment whose first-order values are
+   typed through η and whose inductive still satisfies [firstorder_ind], the premise these two
+   lemmas take: a declaration literal, its [on_inductive] obligations, a [wf] proof in the shape
+   of [fo_wf], and the retyping of this instance on it. Not built here. *)
 Definition firstorder_value_irredE_inst :
   forall t', MetaRocq.PCUIC.PCUICReduction.red1 fo_Σ [] fo_sz t' -> False :=
   fun t' H => firstorder_value_irredE fo_Σ fo_sz t' fo_sz_value H.

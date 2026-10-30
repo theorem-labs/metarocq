@@ -63,6 +63,17 @@ From Equations Require Import Equations.
   [ws_cumul_pb_Sort_r_inv] and [invert_red_letin]; [typing_spine_prodE] closes the
   head comparison by [isType_ws_cumul_pbE_refl].
 
+  Own names that shadow a DIFFERENT object of the same name in this file's import
+  closure: the canonical [typing_spineE] and its constructors [type_spine_nilE] and
+  [type_spine_consE], with the four schemes [typing_spineE_rect], [typing_spineE_ind],
+  [typing_spineE_rec] and [typing_spineE_sind]. The other object of each name is
+  [PCUICGenerationEta]'s (the twin of [PCUICGeneration.typing_spine], which omits the
+  [isTypeE] of the head), as in base, where [PCUICArities.typing_spine] shadows
+  [PCUICGeneration.typing_spine]. The two inductives have the same arity and different
+  constructors, so no ascription relates them. [PCUICGenerationEta] is required and never
+  imported here, so every name of it is written qualified, and every reference to one of
+  these seven names in a file that has both in scope is written qualified too.
+
   Not copied here: [invert_cumul_arity_l]; [isArity_it_mkProd_or_LetIn],
   [sort_of_products], [leq_sort_sort_of_products_mon] and
   [subst_telescope_subst_instance], which mention none of the relations and are

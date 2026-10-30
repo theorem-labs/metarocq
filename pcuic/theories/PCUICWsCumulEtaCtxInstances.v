@@ -29,7 +29,19 @@
   [rf_f_normal], [ws_cumul_pbE_red_false] and [ws_cumul_pbE_alt_closed_false]
   conclude [False]: each states that its premises are jointly unsatisfiable, so
   none has an instance. [rf_premise], [rf_wf_sort], [rf_wf_Γ], [rf_f_typed],
-  [rf_t_typed] and [rf_witness_typed] are closed facts. *)
+  [rf_t_typed] and [rf_witness_typed] are closed facts.
+
+  [WS_trans] is [PCUICEtaA6]'s; [PCUICWsCumulEtaCtx] carried a second copy of the identical
+  compiled statement, which is gone, so the transitivity instances below name
+  [PCUICEtaA6.WS_trans].
+
+  One own name SHADOWS a DIFFERENT statement of the same name in this file's import closure:
+  [WS_trans_inst], also carried by [PCUICEtaA6Instances]. The two are instances of the one
+  [WS_trans] at different chains: [PCUICEtaA6Instances]' is the β-redex against [Prop]
+  ([fi_beta] to [fi_P]), this one is the β-redex against the η-redex ([fi_beta] to
+  [fi_eta]), through the same middle term. No ascription relates them. Both are kept: each is
+  the measured witness its own file's table reads. Every reference to the name in a file that
+  has both objects in scope is written qualified. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Equations Require Import Equations.
@@ -190,7 +202,7 @@ Qed.
     both ends. *)
 Lemma ci_WS_Rel0_eta_d2 : WS Conv ci_Γd2 (tRel 0) fi_eta.
 Proof.
-  apply (PCUICWsCumulEtaCtx.WS_trans (Σ := si_Σ) (wfΣ := si_cb) (u := fi_P)); [exact (ci_Rel0_d2 Conv)|].
+  apply (PCUICEtaA6.WS_trans (Σ := si_Σ) (wfΣ := si_cb) (u := fi_P)); [exact (ci_Rel0_d2 Conv)|].
   exact (weaken_ws_cumul_pbE (Γ := []) ci_Γd2 eq_refl (ci_WS_eta_r Conv)).
 Qed.
 Lemma ci_WS_eta_d2 : WS Conv ci_Γd2 fi_eta fi_P.
@@ -230,7 +242,7 @@ Qed.
 
 (** A β-redex, then an η-redex, through [Prop]. *)
 Lemma WS_trans_inst : WS Conv [] fi_beta fi_eta.
-Proof. exact (PCUICWsCumulEtaCtx.WS_trans (Σ := si_Σ) (wfΣ := si_cb) (fi_WS_beta Conv) (ci_WS_eta_r Conv)). Qed.
+Proof. exact (PCUICEtaA6.WS_trans (Σ := si_Σ) (wfΣ := si_cb) (fi_WS_beta Conv) (ci_WS_eta_r Conv)). Qed.
 Lemma ws_cumul_pbE_subst1_conv_inst : WS Conv [] ((tRel 0) {0 := fi_beta}) ((tRel 0) {0 := fi_P}).
 Proof. apply (ws_cumul_pbE_subst1_conv (Γ := []) (c := tRel 0)); [reflexivity|exact (fi_WS_beta Conv)]. Qed.
 Lemma ws_cumul_pbE_subst0_conv_inst : WS Conv [] (subst0 [fi_beta] (tRel 0)) (subst0 [fi_P] (tRel 0)).

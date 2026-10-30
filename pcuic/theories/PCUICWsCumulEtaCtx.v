@@ -39,7 +39,12 @@
   ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); every [ws_cumul_pbE],
   [ws_cumul_ctx_pbE] and [JoinE] premise by reflexivity; the scoping premises by
   any scoped context and terms; [untyped_subslet] by an empty substitution or a
-  single assumption. Instances: [PCUICWsCumulEtaCtxInstances]. *)
+  single assumption. Instances: [PCUICWsCumulEtaCtxInstances].
+
+  Transitivity of [ws_cumul_pbE] under the section's premises is
+  [PCUICEtaA6.WS_trans]. This file declared a second lemma of that name, with the identical
+  compiled statement and the identical proof; it is gone, and the uses in [Section SubstConv]
+  name [PCUICEtaA6.WS_trans]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -403,9 +408,6 @@ Section SubstConv.
 
   Local Notation WS pb Γ := (ws_cumul_pbE pb Σ Γ).
 
-  Lemma WS_trans {pb Γ t u v} : WS pb Γ t u -> WS pb Γ u v -> WS pb Γ t v.
-  Proof. exact (fun h1 h2 => ws_cumul_pbE_trans (Σ := Σ) (wfΣ := wfΣ) _ _ _ h1 h2). Qed.
-
   (** One term, at depth 0: [c{0 := t} ≡ (λ_. c) t ≡ (λ_. c) t' ≡ c{0 := t'}]. *)
   Lemma ws_cumul_pbE_subst1_conv {Γ t t' c} :
     on_free_vars (shiftnP 1 (shiftnP #|Γ| xpred0)) c ->
@@ -418,8 +420,8 @@ Section SubstConv.
     { split; [exact hΓ| |apply red1_red; apply red_beta]. rewrite /= hc (wsE_left h). reflexivity. }
     have r2 : Σ ;;; Γ ⊢ tApp (tLambda (mkBindAnn nAnon Relevant) (tSort sProp) c) t' ⇝ c {0 := t'}.
     { split; [exact hΓ| |apply red1_red; apply red_beta]. rewrite /= hc (wsE_right h). reflexivity. }
-    eapply SubstConv.WS_trans; [exact (red_ws_cumul_pbE_inv r1)|].
-    eapply SubstConv.WS_trans; [exact (ws_cumul_pbE_App_r hf h)|].
+    eapply (PCUICEtaA6.WS_trans (Σ := Σ) (wfΣ := wfΣ)); [exact (red_ws_cumul_pbE_inv r1)|].
+    eapply (PCUICEtaA6.WS_trans (Σ := Σ) (wfΣ := wfΣ)); [exact (ws_cumul_pbE_App_r hf h)|].
     exact (red_ws_cumul_pbE r2).
   Qed.
 
@@ -452,7 +454,8 @@ Section SubstConv.
         - rewrite (on_free_vars_ext _ _ c (shiftnP_add 1 #|s| _)). exact hc. }
       have e3 : subst0 (a' :: s) c = subst0 s (subst [lift0 #|s| a'] 0 c) by rewrite subst0_cons_lift.
       have e4 : subst0 (a' :: s') c = subst0 s' (subst [lift0 #|s| a'] 0 c) by rewrite hlen subst0_cons_lift.
-      rewrite (subst0_cons s a c). eapply SubstConv.WS_trans; [exact (ws_cumul_pbE_subst1_conv hsc ha)|].
+      rewrite (subst0_cons s a c).
+      eapply (PCUICEtaA6.WS_trans (Σ := Σ) (wfΣ := wfΣ)); [exact (ws_cumul_pbE_subst1_conv hsc ha)|].
       rewrite -(subst0_cons s a' c) e3 e4.
       exact (IH _ hc2).
   Qed.
@@ -481,7 +484,9 @@ Section SubstConv.
     have h4 : WS Conv Γ (Y {0 := b'}) (Y {0 := b}) := ws_cumul_pbE_subst1_conv hY (ws_cumul_pbE_sym _ _ hb).
     have h4' := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := Conv) (Γ := Γ) (Γ' := [])
                  (Γ'' := [vdef na b A]) h4 hΓ1.
-    exact (SubstConv.WS_trans h1 (SubstConv.WS_trans h3 (SubstConv.WS_trans (ws_cumul_eq_pbE h4') h5))).
+    exact (PCUICEtaA6.WS_trans (Σ := Σ) (wfΣ := wfΣ) h1
+             (PCUICEtaA6.WS_trans (Σ := Σ) (wfΣ := wfΣ) h3
+                (PCUICEtaA6.WS_trans (Σ := Σ) (wfΣ := wfΣ) (ws_cumul_eq_pbE h4') h5))).
   Qed.
 
   (** Under a context: abstract it, convert by [ws_cumul_pbE_subst0_conv], and peel
@@ -544,7 +549,7 @@ Section SubstConv.
     move=> subss subss' eqsub cl eqty.
     have clctx := wsE_ctx eqty.
     have clU := wsE_right eqty.
-    eapply SubstConv.WS_trans.
+    eapply (PCUICEtaA6.WS_trans (Σ := Σ) (wfΣ := wfΣ)).
     - eapply untyped_substitution_ws_cumul_pbE; tea. exact (WT_open_left eqsub).
     - eapply ws_cumul_eq_pbE.
       eapply (untyped_substitution_ws_cumul_pbE_subst_conv (Δ := Γ0) (Δ' := Γ1)); tea.

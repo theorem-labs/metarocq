@@ -62,6 +62,22 @@ From Stdlib Require Import ssreflect ssrbool.
   reduction under [ClosedBodies]
   ([weakening_red_cb]); [ws_cumul_pb_terms_ws_cumul_ctxE] uses [ws_cumul_pbE_ws_cumul_ctx_pb].
 
+  Own names that shadow a DIFFERENT statement of the same name in this file's import closure,
+  each mirroring base, where [PCUICSpine] declares its own version beside the one it imports:
+  - [subst_type_local_ctxE] and [subst_sorts_local_ctxE], also carried by [PCUICContextsEta]
+    (the twins of [PCUICContexts]'s, which substitute in a context [Γ ,,, Δ] with no inner
+    [Γ'] and take [wfE] explicitly, where this file's are stated at the section's [wfΣ] and
+    substitute under an inner [Γ']);
+  - [weaken_subsletE], also carried by [PCUICAritiesEta] (the twin of
+    [PCUICArities.weaken_subslet], which weakens a substitution of the EMPTY context, where
+    this file's weakens one of an arbitrary [Γ']);
+  - [type_mkAppsE], also carried by [PCUICGenerationEta] (the twin of
+    [PCUICGeneration.type_mkApps], at [PCUICGenerationEta.typing_spineE] and with no
+    environment premise, where this file's is at [PCUICAritiesEta.typing_spineE] and adds
+    [ClosedBodies Σ]).
+  No ascription relates either member of any of these four pairs. Every reference to one of
+  these names in a file that has both objects in scope is written qualified.
+
   Not copied: [red_expand_let] (its E twin [red_expand_letE] is [PCUICSREtaConv]'s), the
   declarations that mention none of the relations (used from base, which this file imports),
   and base's global [Hint Rewrite all_rels_length : len] and [Derive Signature for ctx_inst],

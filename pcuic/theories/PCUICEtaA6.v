@@ -20,7 +20,11 @@
 
   **The hypotheses are satisfiable:** [ClosedBodies Σ] by any well-formed
   environment ([wf_ClosedBodies]; [wfE_ClosedBodies] for [wfE]); every [ws_cumul_pbE] premise by
-  reflexivity; the reductions by [rt_refl]. Instances: [PCUICEtaA6Instances]. *)
+  reflexivity; the reductions by [rt_refl]. Instances: [PCUICEtaA6Instances].
+
+  [eq_binder_annot_canon_na] is [PCUICEtaCanon]'s. This file declared a second lemma of that
+  name, with the identical compiled statement and the identical proof; it is gone, and the
+  uses name [PCUICEtaCanon.eq_binder_annot_canon_na]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From Stdlib Require Import CRelationClasses.
@@ -35,9 +39,6 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICEq
      PCUICEtaFInstEquiv PCUICEtaI5 PCUICEtaI5Trans PCUICEtaI5A2 PCUICEtaC1b
      PCUICWellScopedCumulativityEta PCUICConversionEtaCongr PCUICWsCumulEtaSubst PCUICClosedBodies.
 From MetaRocq.PCUIC Require PCUICEtaC3BR.
-
-Lemma eq_binder_annot_canon_na na : eq_binder_annot na (canon_na na).
-Proof. reflexivity. Qed.
 
 Lemma eq_binder_annot_trans {A B C} (a : binder_annot A) (b : binder_annot B) (c : binder_annot C) :
   eq_binder_annot a b -> eq_binder_annot b c -> eq_binder_annot a c.
@@ -107,13 +108,13 @@ Section A6.
         * destruct (IH (canon_na na) (canon A0) (canon B) eq_refl) as (na' & A' & B' & [-> hna hA hB]).
           exists na', A', B'. split.
           -- reflexivity.
-          -- exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na) hna).
+          -- exact (eq_binder_annot_trans _ _ _ (PCUICEtaCanon.eq_binder_annot_canon_na na) hna).
           -- eapply rt_trans; [apply BE_red1; exact hA0|]. eapply rt_trans; [apply BE_to_canon|exact hA].
           -- eapply rt_trans; [apply BE_to_canon|]. exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na _ A) hB).
         * destruct (IH (canon_na na) (canon A) (canon B0) eq_refl) as (na' & A' & B' & [-> hna hA hB]).
           exists na', A', B'. split.
           -- reflexivity.
-          -- exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na) hna).
+          -- exact (eq_binder_annot_trans _ _ _ (PCUICEtaCanon.eq_binder_annot_canon_na na) hna).
           -- eapply rt_trans; [apply BE_to_canon|exact hA].
           -- eapply rt_trans; [apply BE_red1; exact hB0|]. eapply rt_trans; [apply BE_to_canon|].
              exact (BE_ctx Σ _ _ _ _ (bodies_vass Γ _ na _ A) hB).
@@ -226,7 +227,7 @@ Section A6.
     destruct (open_Prod_inv Γ na2 A2 B2 ho) as [hA2 hB2].
     exists na2, A2, B2. split.
     - exact hv'.
-    - exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na) (eq_binder_annot_trans _ _ _ hna1 hna2)).
+    - exact (eq_binder_annot_trans _ _ _ (PCUICEtaCanon.eq_binder_annot_canon_na na) (eq_binder_annot_trans _ _ _ hna1 hna2)).
     - constructor; [exact hΓ|exact hdom|exact hA2|].
       apply (BE_JoinE Σ Γ Conv dom A2 A1 A2).
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
@@ -255,7 +256,7 @@ Section A6.
     - exact hv.
     - apply eq_binder_annot_sym.
       exact (eq_binder_annot_trans _ _ _ hna2 (eq_binder_annot_sym _ _
-               (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na) hna1))).
+               (eq_binder_annot_trans _ _ _ (PCUICEtaCanon.eq_binder_annot_canon_na na) hna1))).
     - constructor; [exact hΓ|exact hA2|exact hdom|].
       apply (BE_JoinE Σ Γ Conv A2 dom A2 A1).
       + apply rt_refl.
@@ -282,11 +283,11 @@ Section A6.
     destruct (finst_Prod_l _ _ _ _ _ _ e) as (na3 & A3 & B3 & [E hna3 e2 e3]).
     injection E as <- <- <-.
     split.
-    - apply (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na)).
+    - apply (eq_binder_annot_trans _ _ _ (PCUICEtaCanon.eq_binder_annot_canon_na na)).
       apply (eq_binder_annot_trans _ _ _ hna1).
       apply (eq_binder_annot_trans _ _ _ hna3).
       apply eq_binder_annot_sym.
-      exact (eq_binder_annot_trans _ _ _ (PCUICEtaA6.eq_binder_annot_canon_na na') hna2).
+      exact (eq_binder_annot_trans _ _ _ (PCUICEtaCanon.eq_binder_annot_canon_na na') hna2).
     - constructor; [exact hΓ|exact hdom|exact hdom'|].
       apply (BE_JoinE Σ Γ Conv dom dom' A1 A2).
       + eapply rt_trans; [apply BE_to_canon|exact hA1].
