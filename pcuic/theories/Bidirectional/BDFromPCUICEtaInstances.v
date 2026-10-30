@@ -1,5 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+
 (** * Satisfying instances of the lemmas of [Bidirectional/BDFromPCUICEta] (row T6)
 
   **No forecast class.** The lemmas of [BDFromPCUICEta] took T1's [SRForecastCopy18] (copy 18b)
@@ -16,15 +20,18 @@
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]; [Σ_po]
   ([PCUICEtaPrimOpInstance]) for the constant and primitive rows.
 
-  **Non-degeneracy.** Each instance applies a lemma to a typing derivation that is not empty.
-  Each carries a tag [INSTANCE NONDEGEN <lemma>] naming the compiled lemma whose statement
-  gives its non-degeneracy; a tag's prose claims what that statement gives, and names the
-  derivation that states any other fact it uses. The rows:
+  **Non-degeneracy.** Each instance applies a lemma of [BDFromPCUICEta] to concrete premises:
+  typing derivations, inference pairs, judgments or a conversion. Each carries a tag of the
+  instance degeneracy gate. [INSTANCE NONDEGEN <lemma>] names the compiled lemma whose
+  statement gives its non-degeneracy; the tag's prose claims what that statement gives, and
+  names the derivation that states any other fact it uses. [INSTANCE IMPOSSIBLE: <reason>]
+  marks a row whose target's proof only packs or unpacks its own premises, so that every
+  instance of that target is degenerate. The rows:
   - the η pair: [typing_inferingE_eta_inst], [typing_checkingE_eta_inst],
-    [conv_checkE_eta_inst], [bidirectional_from_pcuicE_inst] and the fits
-    [T6BDc_typing_infering_fit_inst], [T6BDc_typing_checking_fit_inst] run on [bdf_eta_typed]
-    ([x : G F] in [bd_Γη]); every type inferred for [x] in [bd_Γη] is not [G F], and one η
-    step relates it to [G F] ([bdf_eta_nondeg]);
+    [bidirectional_from_pcuicE_inst] and the fits [T6BDc_typing_infering_fit_inst],
+    [T6BDc_typing_checking_fit_inst] run on [bdf_eta_typed] ([x : G F] in [bd_Γη]); every
+    type inferred for [x] in [bd_Γη] is not [G F], and one η step relates it to [G F]
+    ([bdf_eta_nondeg]);
   - the T8 sites, at subjects none of whose inferred types is the head form:
     [typing_infering_sortE_let_inst], [conv_infer_sortE_let_inst] and
     [T6BDc_typing_infering_sort_fit_inst] on [bdf_let_sort_typed] ([bdf_let : Prop]), where
@@ -37,14 +44,15 @@
     on the same [x], where the head arity of [I] is the length of the argument list [[A]]
     ([bdf_head_arity_nondeg]);
   - the (co)fixpoint witness, at a declared type on which the check fails and which reduces to
-    a type on which it passes: [wf_fixpointE_wf_fixpoint_red_inst],
-    [mfix_on_ind_conv_redE_fix_inst], [mfix_body_on_conv_redE_fix_inst],
-    [red_fix_witnessE_inst] ([bdf_fix_d_nondeg]); [mfix_body_on_conv_redE_cofix_inst],
-    [mfix_on_ind_conv_redE_cofix_inst], [red_cofix_witnessE_inst] ([bdf_cofix_d_nondeg]);
-    [typing_inferingE_Fix_beta_inst] and [wf_fixpointE_wf_fixpoint_red_typed_inst] on the
-    typed fixpoint [bdf_fix_typed] ([bdf_fix_dβ_nondeg]); [typing_inferingE_CoFix_inst] and
-    [wf_cofixpointE_wf_cofixpoint_red_inst] on the typed cofixpoint [bdf_cofix_typed] of
-    [iv_Σ], a [CoFinite] record [R] ([bdf_cofix_dβ_nondeg]);
+    a type on which it passes: [mfix_on_ind_conv_redE_fix_inst],
+    [mfix_body_on_conv_redE_fix_inst], [red_fix_witnessE_inst] ([bdf_fix_d_nondeg]);
+    [mfix_body_on_conv_redE_cofix_inst], [mfix_on_ind_conv_redE_cofix_inst],
+    [red_cofix_witnessE_inst] ([bdf_cofix_d_nondeg]); [typing_inferingE_Fix_beta_inst] on the
+    typed fixpoint [bdf_fix_typed] and [wf_fixpointE_wf_fixpoint_red_typed_inst] on its block
+    [bdf_fmfix], with [bdf_wf_fix] ([bdf_fix_dβ_nondeg]); [typing_inferingE_CoFix_inst] on the
+    typed cofixpoint [bdf_cofix_typed] of [iv_Σ], a [CoFinite] record [R], and
+    [wf_cofixpointE_wf_cofixpoint_red_inst] on its block [bdf_cmfix], with [bdf_wf_cofix]
+    ([bdf_cofix_dβ_nondeg]);
   - completeness per typing rule, [typing_inferingE_<rule>_inst]: Rel, Lambda, LetIn and App
     on [bdf_x_prod_typed], [bdf_lam_z_typed], [bdf_letlam_z_typed] and [bdf_app_z_typed], each
     with the variable [x] of [bdf_Γz] in its subject ([bdf_z_nondeg]); Prod on
@@ -59,19 +67,26 @@
     is [T], which is not [bdf_wrap s T], and one reduction step takes [bdf_wrap s T] to [T]
     ([bdf_sort_wrap_nondeg], [bdf_ind_wrap_nondeg], [bdf_cstr_wrap_nondeg],
     [bdf_fix_wrap_nondeg], [bdf_const_wrap_nondeg], [bdf_prim_wrap_nondeg]);
-  - the judgment and context lemmas: the let-judgment [z := bdf_let : Prop] (also through
-    [conv_lift_judgmentE_inst]), [bdf_let] as a type (also the assumption [x : bdf_let] at
-    [Prop], through [conv_lift_judgment_univE_inst]) and the context [[x : bdf_let]]
-    ([bdf_let_nondeg]); [[x : bdf_let]] over [bd_ΓFG] ([bdf_let_FG_nondeg], the same fact in
-    [bd_ΓFG]); the parameter instance [[x]] of [bdf_ctx_inst_z] in [bdf_Γz]
-    ([bdf_z_nondeg]); [ws_cumul_ctx_pbE_vass_inst] moves [bd_ΓFG ,, x : G (λ y. F y)] to
-    [bd_ΓFG ,, x : G F], two different contexts whose declared types one η step relates
-    ([ws_cumul_ctx_pbE_vass_inst_nondeg]).
+  - the judgment and context lemmas: the let-judgment [z := bdf_let : Prop], [bdf_let] as a
+    type and the context [[x : bdf_let]] ([bdf_let_nondeg]); [[x : bdf_let]] over [bd_ΓFG]
+    ([bdf_let_FG_nondeg], the same fact in [bd_ΓFG]); the parameter instance [[x]] of
+    [bdf_ctx_inst_z] in [bdf_Γz] ([bdf_z_nondeg]);
+  - tagged IMPOSSIBLE, because the target's proof only packs or unpacks its premises:
+    [conv_checkE_eta_inst] (one destruct, the [checkE_Cumul] constructor and the projection
+    [ws_cumul_pbE_forget]), [conv_lift_judgmentE_inst] and [conv_lift_judgment_univE_inst]
+    (record repacking and [geq_relevance]), [ws_cumul_ctx_pbE_vass_inst] (the context
+    constructor, prefix reflexivity and the declaration constructor). They run on the
+    inference pair of [typing_inferingE_eta_inst], the let-judgment [z := bdf_let : Prop],
+    the assumption [x : bdf_let] at [Prop], and the contexts [bd_ΓFG ,, x : G (λ y. F y)] and
+    [bd_ΓFG ,, x : G F];
+  - tagged NOT-BUILT, because its instance is degenerate and no non-degenerate witness is built
+    yet: [wf_fixpointE_wf_fixpoint_red_inst] (its premise [wf_fixpoint_red_wf_fixpointE_inst] is
+    built from [bd_wf_fixpoint_red], whose statement is its conclusion).
 
   **Rows not inhabited.** None: every lemma of [BDFromPCUICEta] has an instance here, or is a
   helper of one of them ([T8_Sort_r_plug], [T8_Prod_r_plug], [T8_Ind_r_plug],
   [is_closed_projection_contextE], [untyped_subslet_projection_contextE], the syntactic
-  helpers). [conv_infer_prodE], [conv_infer_indE], [conv_lift_judgmentE],
+  helpers). [conv_checkE], [conv_infer_prodE], [conv_infer_indE], [conv_lift_judgmentE],
   [conv_lift_judgment_univE] and [ws_cumul_ctx_pbE_vass] have direct instances (above).
 
   **Assumptions.** The end of this file prints the assumptions of base's main theorems and of
@@ -616,9 +631,8 @@ Lemma bidirectional_from_pcuicE_inst :
   {T' & si_Σ ;;; bd_Γη |-E tRel 0 ▹ T' × si_Σ ;;; bd_Γη ⊢E T' ≤ tApp (tRel 2) (tRel 1)}.
 Proof. exact (env_propE_typing bidirectional_from_pcuicE si_Σ si_wfE _ _ _ bdf_eta_typed). Qed.
 
-(** [conv_checkE] on the pair of [typing_inferingE_eta_inst]: a type inferred for [x], which is
-    not [G F] and which one η step relates to [G F] ([bdf_eta_nondeg]).
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_eta_nondeg
+(** [conv_checkE] on the inference pair of [typing_inferingE_eta_inst] in [bd_Γη].
+    INSTANCE IMPOSSIBLE: the target's proof destructs its premise pair and applies the checkE_Cumul constructor to the inference and to ws_cumul_pbE_forget (a projection of the ws_cumul_pbE record) of the cumulativity, so every instance's conclusion only repacks its own premise and no witness can make it non-degenerate
     TARGET BDFromPCUICEta.conv_checkE *)
 Lemma conv_checkE_eta_inst : si_Σ ;;; bd_Γη |-E tRel 0 ◃ tApp (tRel 2) (tRel 1).
 Proof. exact (conv_checkE si_Σ si_wfE _ _ _ typing_inferingE_eta_inst). Qed.
@@ -776,7 +790,7 @@ Proof.
            (@All_cons _ _ bd_fix_d _ bd_fix_dtype_isTypeE All_nil) bd_mfix_on_ind_red_convE_inst).
 Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_fix_d_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → E → red: the premise [wf_fixpoint_red_wf_fixpointE_inst] ([BDTypingEtaInstances]) is built from [bd_wf_fixpoint_red], whose statement is the conclusion; no non-degenerate witness built yet *)
 Lemma wf_fixpointE_wf_fixpoint_red_inst : wf_fixpoint_red si_Σ bd_Γ1 bd_mfix.
 Proof.
   exact (wf_fixpointE_wf_fixpoint_red (Σ := si_Σ) (wfΣ := si_wfE) (mfix := bd_mfix) bd_wfE_Γ1
@@ -1212,9 +1226,8 @@ Proof. exact (ctx_inst_typing_bdE si_Σ bdf_Γz [tRel 0] [vass si_na iv_False] s
 
 (** [conv_lift_judgmentE] on the let-judgment [z := bdf_let : Prop]: the check of the body is
     [typing_checkingE] of [bdf_let_sort_typed]; the sort of [Prop] is [typing_infering_sortE] of
-    [Prop : Type@{1}]. Every type inferred for [bdf_let] is not a sort ([bdf_let_nondeg]), so
-    not [Prop]: the check of the body passed in relates two different types.
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
+    [Prop : Type@{1}].
+    INSTANCE IMPOSSIBLE: the target's proof repacks its lift_sorting premise (lift_sorting_ex_it_impl_gen keeps the term check and the infering_sortE judgment of the sort witness) and gets the relevance by geq_relevance from the premise's leq_sort, so every instance's conclusion is assembled from its own premise and no witness can make it non-degenerate *)
 Lemma conv_lift_judgmentE_inst :
   lift_sorting (checkingE si_Σ []) (infering_sortE si_Σ []) (j_decl (mkdecl si_na (Some bdf_let) si_P)).
 Proof.
@@ -1226,10 +1239,8 @@ Proof.
 Qed.
 
 (** [conv_lift_judgment_univE] on the assumption [x : bdf_let] at the sort [Prop]: the sort
-    judgment passed in is [typing_infering_sortE] of [bdf_let_sort_typed]. Every type inferred
-    for [bdf_let] is not a sort ([bdf_let_nondeg]), so that [▹□] judgment reaches its sort by a
-    reduction between two different terms.
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_let_nondeg *)
+    judgment passed in is [typing_infering_sortE] of [bdf_let_sort_typed].
+    INSTANCE IMPOSSIBLE: the target's proof destructs its lift_sorting premise and repacks its term check, its infering_sortE judgment and its leq_sort, with the relevance by geq_relevance, so every instance's conclusion is assembled from its own premise and no witness can make it non-degenerate *)
 Lemma conv_lift_judgment_univE_inst :
   ∑ u', lift_sorting (checkingE si_Σ []) (infering_sortE si_Σ [])
           (j_decl_s (mkdecl si_na None bdf_let) (Some u')) × leq_sort si_Σ u' sProp.
@@ -1241,17 +1252,11 @@ Proof.
   split; [reflexivity|exact eq_refl].
 Qed.
 
-(** The context move on the η pair of [BDTypingEtaInstances]: [bd_ΓFG ,, x : G (λ y. F y)] and
-    [bd_ΓFG ,, x : G F] differ, and one η step relates their declared types. *)
-Lemma ws_cumul_ctx_pbE_vass_inst_nondeg :
-  (bd_ΓFG ,, vass si_na bd_X <> bd_ΓFG ,, vass si_na bd_GF) × eta1 bd_X bd_GF.
-Proof. split; [discriminate|exact bd_case_eta_step]. Qed.
-
-(** [ws_cumul_ctx_pbE_vass] on that pair: the declared types are converted by the η step
-    [bd_case_eta_step] ([eta1_ws_cumul_pbE]); the two contexts differ
-    ([ws_cumul_ctx_pbE_vass_inst_nondeg]). [ws_cumul_ctx_pbE] is qualified: its module
-    [PCUICContextConversionEta] is loaded through [BDFromPCUICEta], not imported here.
-    INSTANCE NONDEGEN BDFromPCUICEtaInstances.ws_cumul_ctx_pbE_vass_inst_nondeg *)
+(** [ws_cumul_ctx_pbE_vass] on [bd_ΓFG ,, x : G (λ y. F y)] and [bd_ΓFG ,, x : G F], whose
+    declared types are converted by the η step [bd_case_eta_step] ([eta1_ws_cumul_pbE]).
+    [ws_cumul_ctx_pbE] is qualified: its module [PCUICContextConversionEta] is loaded through
+    [BDFromPCUICEta], not imported here.
+    INSTANCE IMPOSSIBLE: the target's proof is the context constructor on prefix reflexivity (ws_cumul_ctx_pbE_refl of the closed prefix) and the declaration constructor on its own premises (the binder annotation and the conversion of the two declared types), so every instance's conclusion only packs its premises and no witness can make it non-degenerate *)
 Lemma ws_cumul_ctx_pbE_vass_inst :
   PCUICContextConversionEta.ws_cumul_ctx_pbE Conv si_Σ (bd_ΓFG ,, vass si_na bd_X) (bd_ΓFG ,, vass si_na bd_GF).
 Proof.

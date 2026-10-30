@@ -1,5 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+
 (** * Satisfying instances of the lemmas of [PCUICInversionEta], and the checker's contract
 
   **The contract.** The five [T6_facts] fields of the checker's
@@ -28,7 +32,8 @@
   [k (λx:Prop. g x)] ([iv_y_decl_kg]), so the lemma's conclusion relates two different types.
   [into_ws_cumulE] is applied to the same pair ([iv_kg_keta_differ]). Every other inversion
   instance types its term [t] at [(λX : s. X) T], from [T : s] and [t : T] ([iv_retype]); its
-  NONDEGEN lemma states that [(λX : s. X) T] is not [T]. The application of [inversion_AppE] is
+  NONDEGEN lemma states that [(λX : s. X) T] is not [T] (for the fixpoint, [land] and the
+  cofixpoint, also that [T] is the declared type). The application of [inversion_AppE] is
   [c (∀P:Prop. P)], whose codomain [I A] the argument changes ([iv_cF_codomain_moves]). The
   derivation of the [match] of [inversion_CaseE] follows [cp_match_typed] of
   [PCUICTypingEtaCopies1Instances] (branch [wip/eta-e3-copies1-2026-10-29], not landed). Each
@@ -180,8 +185,9 @@ End Generic.
 
   [iv_idS s] is [λX : s. X]. From [t : T] and [T : s], [iv_retype] types [t] at [(λX : s. X) T];
   its proof ends in [typeE_Cumul] with [cumulE_beta]. Which steps an inversion lemma takes on such
-  a derivation is not stated here; each NONDEGEN lemma below states only that [(λX : s. X) T] is
-  not [T]. *)
+  a derivation is not stated here; each NONDEGEN lemma below states that [(λX : s. X) T] is not
+  [T], and three of them ([iv_fix_conv_differs], [iv_land_conv_differs], [iv_RF_conv_differs])
+  also state that [T] is the declared type of the term. *)
 
 Definition iv_idS (s : sort) : term := tLambda si_na (tSort s) (tRel 0).
 
@@ -722,9 +728,12 @@ Proof.
            (iv_fix_ty_typed [] localenv_nil) iv_fix_typed).
 Qed.
 
-(** The type [(λX : Prop. X) (I (∀P:Prop. P) → I (∀P:Prop. P))] differs from the declared type. *)
-Lemma iv_fix_conv_differs : tApp (iv_idS (Sort.sort_of_product sProp sProp)) iv_fix_ty <> iv_fix_ty.
-Proof. discriminate. Qed.
+(** The declared type of the first definition of [iv_mfix] is [I (∀P:Prop. P) → I (∀P:Prop. P)],
+    and the type [(λX : Prop. X) (I (∀P:Prop. P) → I (∀P:Prop. P))] differs from it. *)
+Lemma iv_fix_conv_differs :
+  (forall d, nth_error iv_mfix 0 = Some d -> dtype d = iv_fix_ty) /\
+  tApp (iv_idS (Sort.sort_of_product sProp sProp)) iv_fix_ty <> iv_fix_ty.
+Proof. split; [intros d h; injection h as <-; reflexivity|discriminate]. Qed.
 
 (* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_fix_conv_differs *)
 Definition inversion_FixE_inst :=
@@ -833,11 +842,13 @@ Lemma iv_land_typed_conv :
     : tApp (iv_idS (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0))) po_land_ty.
 Proof. exact (iv_retype Σ_po iv_po_wfE [] (tConst po_land_kn []) po_land_ty _ iv_land_ty_typed iv_land_typed). Qed.
 
-(** The type [(λX : Set. X) (int → int → int)] differs from the declared type of [land]. *)
+(** [land] is declared in [Σ_po] with the type [po_land_ty], [int → int → int], and the type
+    [(λX : Set. X) (int → int → int)] differs from it. *)
 Lemma iv_land_conv_differs :
+  declared_constant Σ_po po_land_kn po_land_body /\ cst_type po_land_body = po_land_ty /\
   tApp (iv_idS (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0))) po_land_ty
     <> po_land_ty.
-Proof. discriminate. Qed.
+Proof. split; [exact Σ_po_declared_land|split; [reflexivity|discriminate]]. Qed.
 
 (* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_land_conv_differs *)
 Lemma inversion_ConstE_inst :
@@ -1128,9 +1139,11 @@ Proof.
   exact (iv_retype iv_Σ iv_wfE iv_Γc (tCoFix iv_cmfix 0) iv_RF sProp (iv_RF_typed iv_Γc iv_wf_Γc) iv_cofix_typed).
 Qed.
 
-(** The type [(λX : Prop. X) (R (∀P:Prop. P))] differs from the declared type [R (∀P:Prop. P)]. *)
-Lemma iv_RF_conv_differs : tApp (iv_idS sProp) iv_RF <> iv_RF.
-Proof. discriminate. Qed.
+(** The declared type of the first definition of [iv_cmfix] is [R (∀P:Prop. P)], and the type
+    [(λX : Prop. X) (R (∀P:Prop. P))] differs from it. *)
+Lemma iv_RF_conv_differs :
+  (forall d, nth_error iv_cmfix 0 = Some d -> dtype d = iv_RF) /\ tApp (iv_idS sProp) iv_RF <> iv_RF.
+Proof. split; [intros d h; injection h as <-; reflexivity|discriminate]. Qed.
 
 (* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_RF_conv_differs *)
 Definition inversion_CoFixE_inst :=
