@@ -553,7 +553,7 @@ Proof.
 Qed.
 
 (** [conv_context] over [JoinE] is reflexive (the proof of [conv_context_reflE],
-    [PCUICSREta.v:576], which this file does not import). *)
+    [PCUICSREta.v:283], which this file does not import). *)
 Local Lemma cpE_conv_context_refl {cf : checker_flags} Σ Γ : All2_fold (conv_decls (@JoinE cf) Σ) Γ Γ.
 Proof.
   induction Γ as [|[na [b|] ty] x IH]; constructor; auto; constructor; auto; apply JoinE_refl.
