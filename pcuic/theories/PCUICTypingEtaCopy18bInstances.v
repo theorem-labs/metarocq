@@ -744,3 +744,169 @@ Definition typing_spine_to_extended_list_appE_inst :=
 Definition typing_spine_to_extended_list_k_appE_inst :=
   typing_spine_to_extended_list_k_appE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) (Δ := c18b_Δ)
     (Δ' := []) (T := si_P) (s := []) (T' := si_P) c18b_isT_P_app c18b_spine_P.
+
+(** ** The case predicate and the case branches of [R] over the η telescope *)
+
+Definition wf_case_predicate_contextE_inst :=
+  wf_case_predicate_contextE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := c18b_Γ) (ci := c18b_ci)
+    (p := c18b_pF) (args := []) iv_declared_inductive c18b_isT_RF c18b_wf_pF.
+
+Definition case_predicate_context_alphaE_inst :=
+  case_predicate_context_alphaE (Σ := iv_Σ) (wfΣ := iv_wfE) (ind := iv_ind) (p := c18b_pF)
+    (Γ := c18b_Γ) iv_declared_inductive c18_cu
+    (c18b_sp c18b_Γ iv_False c18b_wf c18b_False_typed)
+    ltac:(constructor; [reflexivity|constructor]).
+
+Lemma c18b_alpha_p :
+  eq_context_upto_names (pcontext c18b_pF) (ind_predicate_context c18b_ci.(ci_ind) iv_mdecl iv_idecl).
+Proof. exact (alpha_eq_reflexive (pcontext c18b_pF)). Qed.
+
+(* WEAK, IMPOSSIBLE (every premise). The only premise is [eq_context_upto_names], the
+   syntactic alpha equality of two contexts: it compares the declarations up to binder
+   names only, so two declarations whose types differ by an η step do not satisfy it. No
+   premise of this lemma is a conversion. *)
+Definition inst_case_predicate_context_alpha_eqE_inst :=
+  inst_case_predicate_context_alpha_eqE (Σ := iv_Σ) (wfΣ := iv_wfE) (mdecl := iv_mdecl)
+    (idecl := iv_idecl) (ci := c18b_ci) (p := c18b_pF) c18b_alpha_p.
+
+Lemma c18b_si_cu : consistent_instance_ext si_Σ (ind_universes si_mdecl) [].
+Proof. reflexivity. Qed.
+
+(* WEAK, IMPOSSIBLE (every premise). The premises are [declared_inductive] and
+   [consistent_instance_ext], a lookup and a universe statement, and [wf_branch_gen], an
+   [All2] on binder names. None of them relates two terms. *)
+Definition pre_case_branch_context_eqE_inst :=
+  pre_case_branch_context_eqE (Σ := si_Σ) (wfΣ := si_wfE) (ind := si_ind) (mdecl := si_mdecl)
+    (idecl := si_idecl) (params := [si_P]) (puinst := []) (bctx := []) (cdecl := si_cdecl)
+    si_declared_inductive c18b_si_cu ltac:(constructor).
+
+Definition c18b_br2 : branch term :=
+  {| bcontext := cstr_args iv_cdecl; bbody := iv_False |}.
+
+Lemma c18b_wf_branch2 : wf_branch iv_cdecl c18b_br2.
+Proof. constructor; [reflexivity|constructor]. Qed.
+
+Lemma c18b_wf_branches2 : wf_branches iv_idecl [c18b_br2].
+Proof. constructor; [exact c18b_wf_branch2|constructor]. Qed.
+
+Lemma c18b_predctx_wf :
+  wf_localE iv_Σ (c18b_Γ ,,, case_predicate_context c18b_ci iv_mdecl iv_idecl c18b_pF).
+Proof. exact wf_case_predicate_contextE_inst. Qed.
+
+Lemma c18b_pret_typed2 :
+  iv_Σ ;;; c18b_Γ ,,, case_predicate_context c18b_ci iv_mdecl iv_idecl c18b_pF
+    |-E preturn c18b_pF : tSort (Sort.super sProp).
+Proof. exact (iv_P_typed iv_Σ _ c18b_predctx_wf). Qed.
+
+Lemma c18b_instpredctx_wf :
+  wf_localE iv_Σ (c18b_Γ ,,, PCUICCases.inst_case_predicate_context c18b_pF).
+Proof. exact c18b_predctx_wf. Qed.
+
+Lemma c18b_pret_typed3 :
+  iv_Σ ;;; c18b_Γ ,,, PCUICCases.inst_case_predicate_context c18b_pF
+    |-E preturn c18b_pF : tSort (Sort.super sProp).
+Proof. exact (iv_P_typed iv_Σ _ c18b_instpredctx_wf). Qed.
+
+(** Every typing is taken in the η telescope. *)
+Definition wf_case_branch_typeE_inst :=
+  wf_case_branch_typeE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := c18b_Γ) (ci := c18b_ci)
+    (p := c18b_pF) (Sort.super sProp) [] iv_declared_inductive c18b_isT_RF c18b_wf_pF
+    c18b_pret_typed2 c18b_alpha_p 0 iv_cdecl c18b_br2 iv_declared_constructor c18b_wf_branch2.
+
+Definition wf_case_branch_type'E_inst :=
+  wf_case_branch_type'E (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := c18b_Γ) (ci := c18b_ci)
+    (p := c18b_pF) (Sort.super sProp) [] iv_declared_inductive c18b_isT_RF c18b_wf_pF
+    c18b_pret_typed3 c18b_alpha_p 0 iv_cdecl c18b_br2 iv_declared_constructor c18b_wf_branch2.
+
+Definition wf_case_branches_typesE_inst :=
+  wf_case_branches_typesE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := c18b_Γ) (ci := c18b_ci)
+    (p := c18b_pF) (Sort.super sProp) [] [c18b_br2] iv_declared_inductive c18b_isT_RF
+    c18b_wf_pF c18b_pret_typed3 c18b_wf_branches2 c18b_alpha_p.
+
+Definition wf_case_branches_types'E_inst :=
+  wf_case_branches_types'E (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := c18b_Γ) (ci := c18b_ci)
+    (p := c18b_pF) (Sort.super sProp) [] [c18b_br2] iv_declared_inductive c18b_isT_RF
+    c18b_wf_pF c18b_pret_typed2 c18b_wf_branches2 c18b_alpha_p.
+
+(** ** The β redex over a telescope whose instance is typed through the η step *)
+
+Lemma c18b_wf_Γy : wf_localE iv_Σ (iv_Γk ,, vass si_na iv_keta).
+Proof.
+  exact (iv_wf_vass iv_Σ iv_Γk si_na iv_keta sProp c18_wf_Γk c18_keta_typed Logic.eq_refl).
+Qed.
+
+Lemma c18b_isT_P_y : isTypeE iv_Σ (iv_Γk ,, vass si_na iv_keta) si_P.
+Proof. exact (has_sort_isTypeE _ (iv_P_typed iv_Σ _ c18b_wf_Γy)). Qed.
+
+(** The instance [y] of the telescope [[_ : k (λx:Prop. g x)]] is declared at [k g]. *)
+Lemma c18b_ctx_inst_y : ctx_instE iv_Σ iv_Γk [tRel 0] (List.rev [vass si_na iv_keta]).
+Proof. econstructor; [exact (c18_tel_y_eta [] localenv_nil)|constructor]. Qed.
+
+Definition conv_betas_typedE_inst :=
+  conv_betas_typedE iv_Σ iv_wfE iv_Γk [vass si_na iv_keta] [tRel 0] si_P c18b_isT_P_y
+    c18b_ctx_inst_y.
+
+(** ** Two declarations whose arity and constructor type hold the η telescope *)
+
+Definition c18b_idecl : one_inductive_body :=
+  {| ind_name := "A"; ind_indices := []; ind_sort := sProp; ind_type := tSort sProp;
+     ind_kelim := IntoAny; ind_ctors := []; ind_projs := []; ind_relevance := Relevant |}.
+
+Definition c18b_mdecl : mutual_inductive_body :=
+  {| ind_finite := Finite; ind_npars := 5; ind_params := c18_tel; ind_bodies := [c18b_idecl];
+     ind_universes := Monomorphic_ctx; ind_variance := None |}.
+
+Lemma c18b_isT_sort : isTypeE iv_Σ c18b_Γ (tSort sProp).
+Proof. exact c18b_isT_P. Qed.
+
+(** The arity binds the telescope, so its typing holds the η step of [w : h y]. *)
+Lemma c18b_isT_arity :
+  isTypeE iv_Σ []
+    (it_mkProd_or_LetIn (ind_params c18b_mdecl)
+       (it_mkProd_or_LetIn (ind_indices c18b_idecl) (tSort (ind_sort c18b_idecl)))).
+Proof.
+  exact (PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE (Σ := iv_Σ) (Γ := [])
+           (Δ := c18_tel) (T := tSort sProp) iv_wfE c18b_isT_sort).
+Qed.
+
+Definition ind_arity_relevantE_inst :=
+  ind_arity_relevantE iv_Σ c18b_mdecl c18b_idecl iv_wfE c18b_isT_arity.
+
+(** The constructor's arguments are the telescope: its type's typing holds the η step. *)
+Definition c18b_mdecl2 : mutual_inductive_body :=
+  {| ind_finite := Finite; ind_npars := 0; ind_params := []; ind_bodies := [c18b_idecl];
+     ind_universes := Monomorphic_ctx; ind_variance := None |}.
+
+Definition c18b_cdecl : constructor_body :=
+  {| cstr_name := "c"; cstr_args := c18_tel; cstr_indices := [];
+     cstr_type := it_mkProd_or_LetIn c18_tel (tRel 5); cstr_arity := 5 |}.
+
+Definition c18b_ar : context := arities_context (ind_bodies c18b_mdecl2).
+
+Lemma c18b_wf_ar : wf_localE iv_Σ c18b_ar.
+Proof.
+  apply localenv_cons_abs; [exact localenv_nil|].
+  apply (iv_vass iv_Σ [] _ (tSort sProp) (Sort.super sProp));
+    [exact (iv_P_typed iv_Σ [] localenv_nil)|reflexivity].
+Qed.
+
+Lemma c18b_wf_ar_tel : wf_localE iv_Σ (c18b_ar ,,, c18_tel).
+Proof. exact (c18_tel_wf c18b_ar c18b_wf_ar). Qed.
+
+Lemma c18b_isT_rel5 : isTypeE iv_Σ (c18b_ar ,,, c18_tel) (tRel 5).
+Proof.
+  exact (has_sort_isTypeE _ (typeE_Rel _ _ 5 (vass (mkBindAnn (nNamed "A") Relevant) (tSort sProp))
+                               c18b_wf_ar_tel Logic.eq_refl)).
+Qed.
+
+Lemma c18b_isT_cstr_type : isTypeE iv_Σ c18b_ar (cstr_type c18b_cdecl).
+Proof.
+  exact (PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE (Σ := iv_Σ) (Γ := c18b_ar)
+           (Δ := c18_tel) (T := tRel 5) iv_wfE c18b_isT_rel5).
+Qed.
+
+Definition isTypeRel_cstr_typeE_inst :=
+  isTypeRel_cstr_typeE iv_Σ c18b_mdecl2 c18b_idecl c18b_cdecl 0 iv_wfE Logic.eq_refl
+    Logic.eq_refl (has_sort_isTypeE _ (iv_P_typed iv_Σ [] localenv_nil))
+    ltac:(reflexivity) (has_sort_isTypeE _ (iv_P_typed iv_Σ [] localenv_nil)) Logic.eq_refl
+    (ctx_inst_nil _ _) c18b_isT_cstr_type.
