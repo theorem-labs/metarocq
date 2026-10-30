@@ -7,9 +7,12 @@ Merge `5af3e8e8` (ETAK gate 9) brought in EtaMetaLane's LAND6 **candidate** `984
 (`wip/eta-meta-degen-2026-10-30`). It was NOT landed on `frac/eta`. Two reviews in
 `lanes/eta/meta/land6-review.md` found **45 instances on this line whose NONDEGEN tags are false**:
 the 18 of the second re-review (14:45Z, C1-C3) and 27 more found by the final review (17:40Z, B1-B2),
-which were unchanged from `984ba326` to `ff20a493` and so are on this line too. Until a fixed, reviewed
-LAND6 head lands on `frac/eta` and is merged over this line, do NOT call any LAND6 instance on this
-line reviewed, and do NOT take LAND6 from this line into `frac/ship` or any other ship branch.
+which were unchanged from `984ba326` to `ff20a493` and so are on this line too. **The 45 are what
+review has FOUND, not what the line contains**: three full passes found 16, 17, then 27, so more may
+exist. A NONDEGEN tag is a reader judgment, and the measured reader miss rate is in
+`lanes/eta/meta/reader-catch-rate.tsv`. Until a fixed LAND6 head lands on `frac/eta` and is merged
+over this line, do NOT call any LAND6 instance on this line reviewed, and do NOT take LAND6 from this
+line into `frac/ship` or any other ship branch.
 
 ## Second re-review (14:45Z), 18 rows (all closed at `ff20a493` per the 17:45Z row-by-row verdict; still OPEN on this line)
 
@@ -36,7 +39,13 @@ of `ff20a493` (`lanes/eta/etak/gate-land6fix-ff20a493.md`).
 A push to this line runs `lanes/eta/bin/etak-k7-merge-check.sh` (pre-push hook of the metarocq
 repo): the line takes other lanes' work only from `frac/eta`.
 
-DELETION RULE (lead 2026-10-30 17:42Z): delete this file in the K7 merge of a LAND6 head that has
-landed on `frac/eta`, ONLY if that head's passing review names EVERY row above CLOSED (rebuilt rows)
-or TRUE (IMPOSSIBLE retags), with the row table in the merge body. Any row not closed stays here,
-in an amended marker.
+DELETION RULE (lead 2026-10-30 17:45Z; the same condition LAND6 lands on): delete this file in the K7
+merge of a LAND6 head that has landed on `frac/eta`, ONLY if (1) that head's FOCUSED review (every
+changed instance, plus a seeded sample of n = 60 unchanged instances) names each of the 45 rows above
+CLOSED (rebuilt) or TRUE (IMPOSSIBLE retag), (2) the sample gate passes, and (3) the landed head's tag
+convention says NONDEGEN is a reader judgment with the miss rate in `reader-catch-rate.tsv`, so the
+finite strength of the tags travels with the tags, on `frac/eta` and `frac/ship` too. The merge body
+carries the 45-row table and states that the 45 are what review found, and that the sample bounds the
+residual rate (about ≤5% for 0 misses in 60), not at zero. If (1) or (2) fails, amend this file to
+the rows that remain; if only (3) fails, keep this file in reduced form (no rows, only the miss-rate
+pointer).
