@@ -67,7 +67,11 @@ From MetaRocq.SafeChecker Require PCUICEtaWhneTyped PCUICSafeReduceEtaBridge.
     [ReduceTypedFacts welltypedE wf_extE] through the existing builders ([reduce_typed_facts_discharged]).
   - The two section hypotheses of EtaPosK4 ([PCUICPositionEtaTyping], section [EtaTypingE]) have no
     constant; the [_fits_EtaTypingE] definitions apply a lemma of that section to the [_proved] lemma.
-  No root binder is removed here: no existing file imports this one, and no statement elsewhere changes.
+  This file removes no root binder itself; on the ship branch (wip/etak-ship-2026-10-30) the root binders
+  are replaced by these instances: [PCUICTypeCheckerEta] and [PCUICSafeCheckerEta] declare
+  [reduce_typed_facts_discharged] and [EtaFacts_discharged] their sections' instances, and
+  [SafeTemplateCheckerEtaConv.eta_conv_oracle] is built from [ReduceTypedFactsCoreE_discharged],
+  [EtaFacts_discharged], [WelltypedEContextE_discharged] and [closed_context_conversionE_squashed].
   No hypothesis (no [Context], no class field). *)
 
 (** ** [T0_facts]: the eight fields proved on the K7 line, the four proved by copy 18b, and the class *)

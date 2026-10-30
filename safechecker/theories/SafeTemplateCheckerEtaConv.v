@@ -18,7 +18,7 @@ From MetaRocq.SafeChecker Require PCUICTypingEtaDischarge.
   section [Conversion] of [PCUICSafeConversionEta] at [fork/wip/etak-conv-skel-2026-10-29] @ [d38d5b9f]:
   [isconv_term] / [isconv_term_sound], soundness concluding [conv_cumE leq Σ Γ t1 t2 =
   ∥ ws_cumul_pbE leq Σ Γ t1 t2 ∥]. This is the only file that names EtaConv's conversion; a change of that
-  contract is a fix here only. It builds once [PCUICSafeConversionEta] builds on this branch.
+  contract is a fix here only.
 
   Section parameters of [Conversion]: the Prop classes [ReduceTypedFactsE] and [ConvTypedFactsE] (implicit),
   the SQUASHED [closed_context_conversionE], and [welltypedE_context] (a Prop: it concludes [welltypedE]).

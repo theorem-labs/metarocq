@@ -398,8 +398,8 @@ Definition refuse_or {A} (b : bool) (e : type_error) (k : is_true b -> check_res
   [isconv_term_sound] ([PCUICSafeConversion.v:6583]) with [ws_cumul_pbE] in place of [conv_cum]. A [Some e]
   answer carries no proof (G7); an error that carries [ConvNotEnoughFuel] ([conv_error_fuel]) is the
   conversion's empty fuel ([PCUICFuelEta]) and is reported as a refusal for lack of fuel ([convert]).
-  [SafeTemplateCheckerEta] builds the oracle from EtaConv's [PCUICSafeConversionEta.isconv_term] and
-  [isconv_term_sound] (K6). *)
+  [SafeTemplateCheckerEtaConv.eta_conv_oracle] is the oracle, closed, from EtaConv's
+  [PCUICSafeConversionEta.isconv_term] and [isconv_term_sound] (K6). *)
 Record conv_oracle {cf : checker_flags} {nor : normalizing_flags} := {
   oracle_conv : forall (X_type : abstract_env_impl) (X : X_type.π2.π1)
     (Γ : context) (pb : conv_pb)
