@@ -33,7 +33,13 @@
   - [wcbv_red1_evalE_inst] has no typing premise: its only typed premise is [wfE Σ], so it runs
     in [PCUICTypingEtaCopy17Instances.c17_Σ], whose environment declares a constant whose type
     is typed only through an η step ([F ≡ λy:Prop. F y] under a variable [F]).
-  - [firstorder_value_irredE_inst] is NOT BUILT for η; its tag carries the cost. *)
+  - [firstorder_value_irredE_inst] is NOT BUILT for η; its tag carries the cost.
+
+  Every declaration of this file that is not an instance is a helper or a witness of one, and
+  carries the [c20_] prefix, except the per-instance nondegeneracy lemmas, each named after its
+  instance:
+
+  WITNESSES: c20_* *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
