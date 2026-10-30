@@ -598,3 +598,149 @@ Definition weaken_wf_subsletE_inst :=
 Definition subslet_projsE_inst :=
   subslet_projsE (Σ := iv_Σ) (wfΣ := iv_wfE) (args := [iv_keta]) iv_declared_inductive c18_onps
     iv_Γk (mkApps (tConstruct iv_ind 0 []) [iv_keta; tRel 0]) [] c18b_mkR_app_typed.
+
+(* WEAK, IMPOSSIBLE (every premise). The only premise is [declared_constructor], a lookup in
+   the environment; the conclusion is a closedness statement. No premise is a relation
+   between terms, and [cumul_eta_l] relates terms, so no η step can appear. *)
+Definition positive_cstr_closed_indicesE_inst :=
+  positive_cstr_closed_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor.
+
+(** ** The η pair [G (λy:Prop. F y)] / [G F] of [rf_Σ] *)
+
+Lemma c18b_wc_closed : is_closed_context wc_Γ. Proof. reflexivity. Qed.
+
+Lemma c18b_closed_T : closedn #|wc_Γ| wc_T. Proof. reflexivity. Qed.
+Lemma c18b_closed_U : closedn #|wc_Γ| wc_U. Proof. reflexivity. Qed.
+
+(** The conversion premise is the η step itself; the substitutions are empty. *)
+Definition subst_conv_closedE_inst :=
+  subst_conv_closedE (Σ := rf_Σ) (wfΣ := wc_wfE) (le := Cumul) (Γ := []) (Γ0 := []) (Γ1 := [])
+    (Δ := wc_Γ) (s := []) (s' := []) (emptysletE _ _) (emptysletE _ _) Logic.eq_refl
+    c18b_closed_T c18b_closed_U (c18_wc_ws rf_Σ Cumul).
+
+(** The two declarations differ by the η step alone. *)
+Lemma c18b_cumul_ctx_join :
+  cumul_ctx_rel (@JoinE _) rf_Σ wc_Γ [vass si_na wc_T] [vass si_na wc_U].
+Proof.
+  constructor; [constructor|].
+  constructor; [reflexivity|]. exact (wsE_join (c18_wc_ws rf_Σ Cumul)).
+Qed.
+
+Definition into_ws_cumul_ctx_pb_relE_inst :=
+  into_ws_cumul_ctx_pb_relE (Σ := rf_Σ) (wfΣ := wc_wfE) c18b_cumul_ctx_join Logic.eq_refl
+    Logic.eq_refl.
+
+Lemma c18b_all2_spec : All2 (convSpecE rf_Σ wc_Γ) [wc_T] [wc_U].
+Proof. constructor; [|constructor]. exact (c18_wc_spec rf_Σ Conv wc_Γ). Qed.
+
+Definition into_ws_cumul_pb_termsE_inst :=
+  into_ws_cumul_pb_termsE (Σ := rf_Σ) (wfΣ := wc_wfE) c18b_all2_spec Logic.eq_refl
+    Logic.eq_refl Logic.eq_refl.
+
+(* WEAK, IMPOSSIBLE (every premise), as [positive_cstr_closed_indicesE_inst]: the only
+   premise is the environment lookup [declared_constructor]. *)
+Definition on_constructor_closed_indicesE_inst :=
+  on_constructor_closed_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor.
+
+(* WEAK, IMPOSSIBLE (every premise), as above. *)
+Definition positive_cstr_closed_indices'E_inst :=
+  positive_cstr_closed_indices'E (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_constructor.
+
+(** ** The η telescope read as [Γ ,,, Δ] *)
+
+Definition c18b_Δ : context := [vass si_na c18_tel_hy; vass si_na c18_tel_hty].
+
+Lemma c18b_wf_app : wf_localE iv_Σ (iv_Γk ,,, c18b_Δ).
+Proof. exact c18b_wf. Qed.
+
+Lemma c18b_isT_P_app : isTypeE iv_Σ (iv_Γk ,,, c18b_Δ) si_P.
+Proof. exact c18b_isT_P. Qed.
+
+Lemma c18b_closed_Γ : is_closed_context c18b_Γ. Proof. reflexivity. Qed.
+Lemma c18b_open_P : is_open_term c18b_Γ si_P. Proof. reflexivity. Qed.
+
+Lemma c18b_ctx_refl_iv : ws_cumul_ctx_pbE Conv iv_Σ iv_Γk iv_Γk.
+Proof. apply ws_cumul_ctx_pbE_refl_pb. reflexivity. Qed.
+
+(** The [wf_localE] of the telescope holds the η step of [w : h y]. *)
+Definition ws_cumul_ctx_pb_wf_localE_inst :=
+  ws_cumul_ctx_pb_wf_localE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_Γk iv_Γk c18b_Δ c18b_wf_app
+    c18_wf_Γk c18b_ctx_refl_iv.
+
+(** The compared parameters are the two sides of the η step. *)
+Definition constructor_cumulative_indicesE_inst :=
+  constructor_cumulative_indicesE (Σ := iv_Σ) (wfΣ := iv_wfE) (napp := 1)
+    iv_declared_constructor c18_cu c18_cu (c18_cmp_ind 1) iv_Γk [iv_keta] [iv_kg] [iv_keta]
+    [iv_kg] (c18_sp iv_keta c18_keta_typed) (c18_sp iv_kg c18_kg_typed) c18_terms.
+
+(* WEAK, IMPOSSIBLE (every premise). The premises are [declared_inductive], a lookup, and
+   [consistent_instance_ext], a statement about universe levels; the conclusion is an
+   equality of contexts. No premise relates two terms. *)
+Definition subst_inds_smash_paramsE_inst :=
+  subst_inds_smash_paramsE (Σ := iv_Σ) (wfΣ := iv_wfE) iv_declared_inductive c18_cu.
+
+(** The type is taken in the η telescope, read as [Γ ,,, Δ]. *)
+Definition isType_it_mkProd_or_LetInE_inst :=
+  PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE (Σ := iv_Σ) (Γ := iv_Γk)
+    (Δ := c18b_Δ) (T := si_P) iv_wfE c18b_isT_P_app.
+
+Lemma c18b_nas : All2 (fun x y => eq_binder_annot x y.(decl_name)) [si_na; si_na] c18b_Δ.
+Proof. constructor; [reflexivity|]. constructor; [reflexivity|constructor]. Qed.
+
+Definition wf_set_binder_nameE_inst :=
+  wf_set_binder_nameE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) c18b_nas c18b_wf_app.
+
+(** ** The case predicate of [R] over the η telescope *)
+
+Definition c18b_ci : case_info :=
+  {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant |}.
+
+Definition c18b_pF : predicate term :=
+  {| pparams := [iv_False]; puinst := [];
+     pcontext := ind_predicate_context iv_ind iv_mdecl iv_idecl; preturn := si_P |}.
+
+Lemma c18b_wf_pF : wf_predicate iv_mdecl iv_idecl c18b_pF.
+Proof. split; [reflexivity|]. constructor; [reflexivity|constructor]. Qed.
+
+Lemma c18b_wf_sort_P : wf_sort iv_Σ sProp. Proof. exact I. Qed.
+
+Definition WfArity_build_case_predicate_typeE_inst :=
+  WfArity_build_case_predicate_typeE (Σ := iv_Σ) (Γ := c18b_Γ) (ci := c18b_ci) (args := [])
+    (p := c18b_pF) (ps := sProp) iv_wfE iv_declared_inductive c18b_isT_RF c18b_wf_sort_P
+    c18b_wf_pF.
+
+(* WEAK, IMPOSSIBLE (every premise). The only premise is [T = T'], Leibniz equality of
+   terms. An η step relates two DIFFERENT terms ([cumul_eta_l] rewrites [t] to
+   [λx. t x]), so a premise that forces the two sides to be the same term admits none. *)
+Definition arity_spine_eqE_inst :=
+  arity_spine_eqE (Σ := iv_Σ) (Γ := c18b_Γ) (T := si_P) (T' := si_P) Logic.eq_refl.
+
+Definition arity_spine_to_extended_listE_inst :=
+  arity_spine_to_extended_listE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) (Δ := c18b_Δ) si_P
+    c18b_wf_app c18b_isT_P_app.
+
+Definition isType_subst_all_relsE_inst :=
+  isType_subst_all_relsE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) (Δ := c18b_Δ) (T := si_P)
+    c18b_isT_P_app.
+
+Definition isType_all_rels_subst_liftE_inst :=
+  isType_all_rels_subst_liftE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) (Δ := c18b_Δ)
+    (T := si_P) c18b_isT_P_app.
+
+Definition arity_spine_to_extended_list_appE_inst :=
+  arity_spine_to_extended_list_appE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) (Δ := c18b_Δ)
+    (T := si_P) (s := []) (T' := si_P) c18b_wf_app c18b_isT_P_app (arity_spine_nilE _ _ si_P).
+
+Lemma c18b_spine_P : PCUICAritiesEta.typing_spineE iv_Σ c18b_Γ si_P [] si_P.
+Proof.
+  exact (type_spine_nilE _ _ si_P si_P c18b_isT_P c18b_isT_P
+           (ws_cumul_pbE_refl (Σ := iv_Σ) (pb := Cumul) c18b_closed_Γ c18b_open_P)).
+Qed.
+
+Definition typing_spine_to_extended_list_appE_inst :=
+  typing_spine_to_extended_list_appE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) (Δ := c18b_Δ)
+    (T := si_P) (s := []) (T' := si_P) c18b_spine_P.
+
+Definition typing_spine_to_extended_list_k_appE_inst :=
+  typing_spine_to_extended_list_k_appE (Σ := iv_Σ) (wfΣ := iv_wfE) (Γ := iv_Γk) (Δ := c18b_Δ)
+    (Δ' := []) (T := si_P) (s := []) (T' := si_P) c18b_isT_P_app c18b_spine_P.
