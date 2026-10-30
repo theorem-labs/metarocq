@@ -1659,11 +1659,9 @@ Qed.
     [Typing/PCUICClosedTyp]'s) and registers it [Hint Immediate] on [pcuic]. The landed
     [Typing/PCUICClosedTypEta.isType_is_open_termE] has the IDENTICAL compiled type (each stands
     for the other under an ascription, both ways); only the implicit status of [Γ] and [T]
-    differs, which is not part of the type. So no second E constant is declared: the landed one
-    is registered on [pcuic], which is what base's second declaration adds. *)
-(* REMOVED AT THE MERGE of fork/frac/eta >= 3953e0f5, which adds this same registration at the
-   end of PCUICInductiveInversionEta.v; two registrations of one hint must not land. *)
-#[global] Hint Immediate PCUICClosedTypEta.isType_is_open_termE : pcuic.
+    differs, which is not part of the type. So no second E constant is declared here, and the
+    [pcuic] registration that base's second declaration adds is the one at the end of
+    [PCUICInductiveInversionEta.v], which this file imports. *)
 
 Lemma arity_spine_to_extended_listE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ} T :
   wf_localE Σ (Γ ,,, Δ) ->
