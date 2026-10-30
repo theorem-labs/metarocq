@@ -6,7 +6,7 @@ From MetaRocq.TemplatePCUIC Require Import TemplateToPCUICShared.
 From MetaRocq.SafeCheckerPlugin Require Import SafeTemplateChecker.
 (* FORECAST tree only (EtaK7, 2026-10-29): the E checker behind the same command (see below). *)
 From MetaRocq.SafeChecker Require PCUICWfEnvImplEta PCUICSafeReduceEta PCUICSafeConversionEta
-  PCUICSafeConversionEtaFacts PCUICSafeReduceEtaBridge PCUICTypingEtaHyps PCUICCallByNeedSoundEta
+  PCUICSafeConversionEtaFacts PCUICSafeReduceEtaBridge PCUICTypingEtaHyps
   PCUICSafeCheckerEta PCUICEtaFactsCompose.
 From MetaRocq.SafeCheckerPlugin Require SafeTemplateCheckerEta SafeTemplateCheckerEtaConv.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping.
@@ -68,7 +68,6 @@ Set Extraction Output Directory "src".
 Check (forall cf, @PCUICEtaFactsCompose.ReduceTypedFactsCoreE cf : Prop).
 Check (forall cf, @PCUICEtaFactsCompose.WelltypedEContextE cf : Prop).
 Check (forall cf, @PCUICTypingEtaHyps.EtaFacts cf : Prop).
-Check (forall cf, @PCUICCallByNeedSoundEta.CbnConvSoundE cf : Prop).
 Definition infer_and_print_template_program_with_guard {cf} {nor}
   (* EtaK7 dedup (lane lead, 2026-10-29): the six REDUCE facts that nothing else states and EtaPosK4's
      [welltypedE_context]; the conversion's [ReduceTypedFactsE], [ConvTypedFactsE] and
@@ -76,8 +75,7 @@ Definition infer_and_print_template_program_with_guard {cf} {nor}
      ([PCUICEtaFactsCompose]), so each fact is a binder of this definition once *)
   {reduce_coreE : @PCUICEtaFactsCompose.ReduceTypedFactsCoreE cf}
   {wt_contextE : @PCUICEtaFactsCompose.WelltypedEContextE cf}
-  {EtaF : @PCUICTypingEtaHyps.EtaFacts cf}
-  {cbnE : @PCUICCallByNeedSoundEta.CbnConvSoundE cf} :=
+  {EtaF : @PCUICTypingEtaHyps.EtaFacts cf} :=
   SafeTemplateCheckerEta.infer_and_print_template_program (cf := cf) (nor := nor)
     (guard := PCUICWfEnvImplEta.real_guard_impl)
     (* the machine's full [ReduceTypedFacts welltypedE wf_extE], built from the small class, itself built

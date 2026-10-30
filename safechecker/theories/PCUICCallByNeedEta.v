@@ -21,10 +21,10 @@ Import CanonicalTries.
   from base's, so base [cbn_conv] cannot be applied there; behaviour is unchanged: the same
   machine, the same answers.
 
-  Its soundness over [welltypedE] is the named hypothesis [PCUICCallByNeedSoundEta.cbn_conv_soundE]
-  (with its base instance there), until the E statement of
-  [PCUICCallByNeedSoundHookProof.convert_cbn_sound] over [welltypedE] is proved.  Check that this
-  file is still the copy: lanes/check-time/eta-recopy/eta-recopy-check.sh. *)
+  Its soundness over [welltypedE] is [PCUICCallByNeedSoundEta.cbn_conv_soundE_proved], from the η
+  copies of base's proof files ([PCUICCallByNeedEtaSoundHookProof.convert_cbn_sound]).  Check that
+  this file is still the copy: lanes/check-time/eta-recopy/eta-recopy-check.sh; the proof copies:
+  their header (ETA-COPY) and [PCUICCallByNeedEtaSoundHookProof]'s list of what they change. *)
 
 (** * Call-by-need conversion fast path
 

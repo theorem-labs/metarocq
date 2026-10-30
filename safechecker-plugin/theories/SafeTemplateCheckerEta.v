@@ -8,8 +8,6 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICProgr
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICWfEnvImplEta
   PCUICSafeReduceEta
   PCUICTypingEtaDefs PCUICTypeCheckerEta PCUICSafeCheckerEta PCUICTypingEtaHyps.
-(* FORECAST-ONLY (fc/etak-forecast1, FO2): the call-by-need fast path's named hypothesis. *)
-From MetaRocq.SafeChecker Require PCUICCallByNeedSoundEta.
 
 Import MonadNotation.
 
@@ -38,7 +36,8 @@ From MetaRocq.TemplatePCUIC Require Import TemplateToPCUIC TemplateToPCUICShared
     translated program, so [infer_and_print_template_program] computes the translation once, as in
     integ-all7.  [frac/eta] has no [TemplateToPCUICShared]; reconciled when F0 lands integ-all7's
     [SafeTemplateChecker.v] text on the E plugin, with [trans_program_unshared_eq] rechecked there.
-    The premise [cbnE] (FO2) is the call-by-need fast path's named hypothesis. *)
+    The call-by-need fast path's soundness is no premise of these entries: [PCUICTypeCheckerEta.convert]
+    uses the proved instance [PCUICCallByNeedSoundEta.cbn_conv_soundE_proved]. *)
 
 Definition trans_program_unshared (p : Ast.Env.program) : program :=
   let Σ' := trans_global_env p.1 in
@@ -66,7 +65,6 @@ Local Instance Monad_EnvCheck_wf_env_ext {cf:checker_flags} {guard : abstract_gu
     program has no use after it. *)
 Program Definition infer_translated_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
   {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
-  {cbnE : PCUICCallByNeedSoundEta.CbnConvSoundE}
   (p' : program) φ
   {normalization_in
     : forall (g : global_decl) (Hdecls' : nat) (X : X_env_type optimized_abstract_env_impl),
@@ -96,7 +94,6 @@ Qed.
 
 Program Definition infer_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
   {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
-  {cbnE : PCUICCallByNeedSoundEta.CbnConvSoundE}
   (p : Ast.Env.program) φ
   {normalization_in
     : forall (g : global_decl) (Hdecls' : nat) (X : X_env_type optimized_abstract_env_impl),
@@ -123,7 +120,6 @@ Program Definition infer_template_program {cf : checker_flags} {nor : normalizin
 
 Program Definition infer_and_print_template_program {cf : checker_flags} {nor : normalizing_flags} {guard : abstract_guard_impl}
   {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
-  {cbnE : PCUICCallByNeedSoundEta.CbnConvSoundE}
   (p : Ast.Env.program) φ
   {normalization_in
     : forall (g : global_decl) (Hdecls' : nat) (X : X_env_type optimized_abstract_env_impl),

@@ -55,9 +55,23 @@ theories/PCUICSafeCheckerEta.v
 theories/PCUICTypingEtaHypsProved.v
 # EtaIntegrate9: the proved fields of ReduceTypedFacts/ConvTypedFacts at welltypedE (moved from PCUICTypingEtaHypsProved)
 theories/PCUICEtaTypedFactsProved.v
-# FORECAST-ONLY (fc/etak-forecast1): the call-by-need fast path over the eta environment, and its
-# soundness over welltypedE as a named hypothesis with its base instance
+# The call-by-need fast path over the eta environment (the copy of integ-all8 1a92b56c's machine), the eta copies
+# of its soundness proof (EtaCbnEPort: premises threaded as wfE / ClosedBodies / typingE, conclusion ws_cumul_pbE),
+# and the statement CbnConvSoundE with its proved instance cbn_conv_soundE_proved
 theories/PCUICCallByNeedEta.v
+theories/PCUICCallByNeedEtaSound.v
+theories/PCUICCallByNeedEtaSoundGC.v
+theories/PCUICCallByNeedEtaSoundCtx.v
+theories/PCUICCallByNeedEtaSoundCong.v
+theories/PCUICCallByNeedEtaSoundMemo.v
+theories/PCUICCallByNeedEtaSoundHook.v
+theories/PCUICCallByNeedEtaSoundEval.v
+theories/PCUICCallByNeedEtaSoundHeapWf.v
+theories/PCUICCallByNeedEtaSoundLevel.v
+theories/PCUICCallByNeedEtaSoundReadBack.v
+theories/PCUICCallByNeedEtaSoundConv.v
+theories/PCUICCallByNeedEtaSoundHookFrame.v
+theories/PCUICCallByNeedEtaSoundHookProof.v
 theories/PCUICCallByNeedSoundEta.v
 # EtaK7: the composition's E hypotheses without the five repeats (builders from EtaFacts, the 6-field core,
 # welltypedE_context; EtaHypProve's hyp_dup_* lemmas)

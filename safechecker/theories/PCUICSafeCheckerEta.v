@@ -28,8 +28,6 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICPositivityCheck PCUICErrorsEta PCUICWfEnvEta
   PCUICWfReductionEta PCUICSafeReduceEta PCUICSafeReduceEtaBridge
   PCUICTypingEtaDefs PCUICTypeCheckerEta PCUICTypingEtaHyps.
-(* FORECAST-ONLY (fc/etak-forecast1, FO2): the call-by-need fast path's named hypothesis. *)
-From MetaRocq.SafeChecker Require PCUICCallByNeedSoundEta.
 
 From Equations Require Import Equations.
 From Stdlib Require Import ssreflect ssrbool.
@@ -366,11 +364,10 @@ Section CheckEnv.
 
   Context (X_impl : abstract_env_impl).
 
-  (** The η conversion, EtaReduce's hypothesis and the η typing facts (see [PCUICTypeCheckerEta]).
-      FORECAST-ONLY (fc/etak-forecast1, FO2): [cbnE], the call-by-need fast path's soundness over
-      [welltypedE] (named hypothesis [PCUICCallByNeedSoundEta.cbn_conv_soundE]). *)
-  Context {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}
-    {cbnE : PCUICCallByNeedSoundEta.CbnConvSoundE}.
+  (** The η conversion, EtaReduce's hypothesis and the η typing facts (see [PCUICTypeCheckerEta]). The
+      call-by-need fast path's soundness is no premise: [PCUICTypeCheckerEta.convert] uses the proved
+      instance [PCUICCallByNeedSoundEta.cbn_conv_soundE_proved]. *)
+  Context {CO : conv_oracle} {reduce_factsE : ReduceTypedFacts welltypedE wf_extE} {EtaF : EtaFacts}.
 
 
   Definition X_env_ext_type := X_impl.π2.π1.
