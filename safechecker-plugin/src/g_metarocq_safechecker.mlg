@@ -419,10 +419,14 @@ let test_cache_typing_flags env evm c =
     CErrors.user_err
       (str "Cache reused a quotation across changed typing flags.")
 
-(* Regression tests for the three fixes that keep the translation memo
-   consistent between commands (test-suite/trans_memo_publication.v,
-   trans_memo_reset.v, trans_memo_rejects.v).  Each fails when its fix is
-   undone:
+(* ORPHANED by the removal of the two [Extract Constant] directives from
+   safechecker-plugin/theories/Extraction.v.  These three commands served
+   test-suite/trans_memo_{publication,reset,rejects}.v, which are deleted with
+   the memo they tested: the checker's translation no longer goes through
+   [Trans_memo], so (a) and (b) tested OCaml nothing calls and (c) could no
+   longer fire at all.  They stay only because removing them belongs with
+   removing trans_memo.ml itself, which is a separate, unbuilt change.  Their
+   subject, when it was live:
    (a) the table is published once, after both arrays exist;
    (b) [with_trans_memo_reset] empties the table on entry;
    (c) [MetaRocq Test SafeCheck Rejects] runs inside [with_trans_memo_reset]. *)
