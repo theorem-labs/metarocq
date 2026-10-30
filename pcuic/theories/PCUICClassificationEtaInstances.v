@@ -30,6 +30,9 @@
     typed at [R (∀P. P)] by conversion.
   - The spine lemmas run on [∀P:Prop. P] applied to [∀P:Prop. P], and the smash lemmas on the
     let-in [let z := ∀P. P in z].
+  - [arity_spine_len_subst_inst] substitutes [∀P. P] for the free variable of the arity
+    [let z := x : Prop in Π _ : x. Prop] ([cli_open_arity]), which changes the let body and the
+    product domain ([cli_open_arity_subst_differs]).
   - Evaluation: [cli_eval] is the β-step [(λx:Prop. x) (∀P. P) ⇓ ∀P. P];
     [eval_classificationE_inst] evaluates [c (∀P. P)] by [eval_construct].
   - BET-339 (F0 forecast): the disjunct [stuck_cofix_case] that [whnf_classification'E],
@@ -297,8 +300,18 @@ Definition isArity_typing_spineE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T :=
   isArity_typing_spineE (Σ := si_Σ) (wfΣ := si_wfE) cli_wf_Γz
     (PCUICAritiesEta.type_spine_nilE _ _ iv_PP cli_T cli_PP_isType cli_T_isType cli_ws_l) cli_PP_conv.
 
-Definition arity_spine_len_subst_inst : arity_spine_len (subst [iv_False] 0 iv_PP) = arity_spine_len iv_PP :=
-  arity_spine_len_subst [iv_False] 0 iv_PP eq_refl.
+(** [let z := x : Prop in Π _ : x. Prop], with [x] free (de Bruijn index 0 outside the let):
+    an arity whose let body and product domain mention [x]. The substitution [x := ∀P. P]
+    changes the term ([cli_open_arity_subst_differs]); the lemma's induction runs its [tLetIn]
+    and [tProd] cases, at the lifted indices 0 and 1. *)
+Definition cli_open_arity : term := tLetIn si_na (tRel 0) si_P (tProd si_na (tRel 1) (tSort sProp)).
+
+Lemma cli_open_arity_subst_differs : subst [iv_False] 0 cli_open_arity <> cli_open_arity.
+Proof. discriminate. Qed.
+
+Definition arity_spine_len_subst_inst :
+  arity_spine_len (subst [iv_False] 0 cli_open_arity) = arity_spine_len cli_open_arity :=
+  arity_spine_len_subst [iv_False] 0 cli_open_arity eq_refl.
 
 (** ** The (co)fixpoint witness, at declared types on which the check fails *)
 

@@ -16,8 +16,10 @@
     [typing_value_headE_inst] find the β-step of [(λx:Prop. x) (∀P. P)].
   - [eval_tCaseE_inst]: the closed [match c (∀P. P) with c x => c x end] ([pgi_match]), which
     evaluates by ι.
-  - [whnf_progressE_inst]: the normal form [∀P. P]. [classificationE]: NOT BUILT (its
-    statement is fixed to [extraction_checker_flags], as base's; reason at the end of the file).
+  - [whnf_progressE_inst]: the normal form [∀P. P]. [classificationE_inst]: the normal
+    constructor application [c (∀P. P)], at [extraction_checker_flags], the flags its statement
+    is fixed to (as base's), in [si_Σ] proved [wfE] at those flags (section
+    [ClassificationFlags]).
   - BET-339 (F0 forecast): [progressE] and [progress_env_propE] gained the disjunct
     [wcbv_stuck]; the instances here land in the step disjunct, and [PCUICEtaF0Land3Instances]
     runs [progressE] on a closed case blocked on a cofixpoint ([progressE_stuck_inst]). The new
@@ -47,6 +49,199 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICClassification PCUICClassificationEta PCUICClassificationEtaInstances
      PCUICProgress PCUICProgressEta.
 From Equations.Type Require Import Relation.
+
+(** ** [si_env] and [c (∀P. P)] at [config.extraction_checker_flags], for [classificationE]
+
+  [classificationE] binds no [checker_flags]: like base [PCUICProgress.classification], it is
+  stated at [PCUICProgressEta]'s [Local Existing Instance config.extraction_checker_flags]. The
+  landed [si_wf] and the typings of the instance files are at [default_checker_flags]. The two
+  configurations differ in [prop_sub_type] and [lets_in_constructor_types] (both [true] in
+  [default_checker_flags], both [false] in [extraction_checker_flags]), so [wf] does not carry
+  over: configuration weakening ([config.impl]) goes from [false] to [true], not back. So the
+  declaration of [Inductive I (A : Prop) : Prop := c : I A] is checked again here, at
+  [extraction_checker_flags], by the steps of [si_wf]
+  ([PCUICCumulativitySpecEtaClosureInstances]). No step uses [prop_sub_type] (no cumulativity
+  step), and [on_lets_in_type] holds because [c] has no argument. The section's instance ends
+  with the section, before the file's [default_checker_flags]. *)
+Section ClassificationFlags.
+
+  #[local] Existing Instance config.extraction_checker_flags.
+
+  Lemma pgx_vass (Γ : context) (na : aname) A s :
+    si_Σ0 ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) ->
+    lift_typing typing si_Σ0 Γ (j_vass na A).
+  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [exact I|exact r]. Qed.
+
+  Lemma pgx_vass_s (Γ : context) (na : aname) A s :
+    si_Σ0 ;;; Γ |- A : tSort s -> isSortRel s na.(binder_relevance) ->
+    lift_typing typing si_Σ0 Γ (j_vass_s na A s).
+  Proof. intros h r. split; [exact tt|]. exists s. split; [exact h|]. split; [reflexivity|exact r]. Qed.
+
+  Lemma pgx_P_typed (Γ : context) : wf_local si_Σ0 Γ -> si_Σ0 ;;; Γ |- si_P : tSort (Sort.super sProp).
+  Proof. intros h. apply type_Sort; [exact h|cbn; trivial]. Qed.
+
+  Lemma pgx_wf_P (Γ : context) : wf_local si_Σ0 Γ -> wf_local si_Σ0 (Γ ,, vass si_na si_P).
+  Proof.
+    intros h. apply localenv_cons_abs; [exact h|].
+    exact (pgx_vass _ si_na _ _ (pgx_P_typed Γ h) eq_refl).
+  Qed.
+
+  Lemma pgx_arity_typed (Γ : context) : wf_local si_Σ0 Γ ->
+    si_Σ0 ;;; Γ |- si_arity : tSort (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)).
+  Proof.
+    intros h. apply type_Prod.
+    - exact (pgx_vass_s _ si_na _ _ (pgx_P_typed Γ h) eq_refl).
+    - apply type_Sort; [exact (pgx_wf_P Γ h)|cbn; trivial].
+  Qed.
+
+  Lemma pgx_wf_Γi : wf_local si_Σ0 si_Γi.
+  Proof.
+    apply localenv_cons_abs; [constructor|].
+    exact (pgx_vass _ (mkBindAnn (nNamed "I") rel_of_Type) _ _ (pgx_arity_typed [] localenv_nil) eq_refl).
+  Qed.
+
+  Lemma pgx_ctype_typed :
+    si_Σ0 ;;; si_Γi |- cstr_type si_cdecl : tSort (Sort.sort_of_product (Sort.super sProp) sProp).
+  Proof.
+    have w2 := pgx_wf_P si_Γi pgx_wf_Γi.
+    apply type_Prod.
+    - exact (pgx_vass_s _ si_na _ _ (pgx_P_typed si_Γi pgx_wf_Γi) eq_refl).
+    - refine (type_App _ _ (tRel 1) si_na si_P (tSort sProp)
+                (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) (tRel 0) _ _ _).
+      + exact (pgx_arity_typed _ w2).
+      + exact (type_Rel _ _ 1 (vass (mkBindAnn (nNamed "I") rel_of_Type) si_arity) w2 eq_refl).
+      + exact (type_Rel _ _ 0 (vass si_na si_P) w2 eq_refl).
+  Qed.
+
+  Lemma pgx_on_constructor :
+    on_constructor cumulSpec0 (lift_typing typing) si_Σ0 si_mdecl 0 si_idecl [] si_cdecl [].
+  Proof.
+    unshelve econstructor.
+    - reflexivity.
+    - reflexivity.
+    - exact (pgx_vass _ (mkBindAnn nAnon Relevant) _ _ pgx_ctype_typed eq_refl).
+    - exact tt.
+    - constructor.
+    - cbn. eapply pos_ass.
+      + apply pos_arg_closed. reflexivity.
+      + exact (pos_concl _ _ _ [vass si_na si_P] [tRel 0] (All_cons (x := tRel 0) (eq_refl : is_true (closedn 1 (tRel 0))) All_nil)).
+    - intros v e. discriminate e.
+    - (* [lets_in_constructor_types] is [false] here: [c] has no argument, so no let *)
+      reflexivity.
+  Qed.
+
+  Lemma pgx_on_ind_body :
+    on_ind_body cumulSpec0 (lift_typing typing) si_Σ0 si_kn si_mdecl 0 si_idecl.
+  Proof.
+    unshelve econstructor.
+    - exact [[]].
+    - exists (tSort sProp). split; [reflexivity|].
+      apply PCUICArityRed.arity_red_sort. apply PCUICArityRed.whd_stop. reflexivity.
+    - exact (pgx_vass _ (mkBindAnn nAnon rel_of_Type) _ _ (pgx_arity_typed [] localenv_nil) eq_refl).
+    - exact (pgx_vass _ (mkBindAnn nAnon rel_of_Type) _ _ (pgx_arity_typed [] localenv_nil) eq_refl).
+    - constructor; [exact pgx_on_constructor|constructor].
+    - exact I.
+    - reflexivity.
+    - reflexivity.
+    - exact I.
+  Qed.
+
+  Lemma pgx_on_inductive : on_inductive cumulSpec0 (lift_typing typing) si_Σ0 si_kn si_mdecl.
+  Proof.
+    constructor.
+    - constructor; [exact pgx_on_ind_body|constructor].
+    - exact (pgx_wf_P [] localenv_nil).
+    - reflexivity.
+    - reflexivity.
+  Qed.
+
+  (** [si_env] is well formed at [extraction_checker_flags] ([si_on_udecl] binds no flags). *)
+  Lemma pgx_wf : @wf config.extraction_checker_flags si_env.
+  Proof.
+    split.
+    - split; [|split].
+      + intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+      + intros x Hx.
+        change (LevelSet.In x (LevelSet.union (ContextSet.levels ContextSet.empty)
+                                              (LevelSet.singleton Level.lzero))) in Hx.
+        apply LevelSet.union_spec in Hx as [Hx|Hx].
+        * exfalso. eapply LevelSet.empty_spec. exact Hx.
+        * apply LevelSet.singleton_spec in Hx. hnf in Hx. subst x. reflexivity.
+      + exists si_val. intros x Hx. exfalso. eapply ConstraintSet.empty_spec. exact Hx.
+    - split.
+      { constructor; cbn; [constructor|intros c []|repeat split; intros c h; discriminate h
+                          |intros i h; discriminate h]. }
+      apply globenv_decl; [constructor|].
+      constructor.
+      + constructor.
+      + exact si_on_udecl.
+      + exact pgx_on_inductive.
+      + cbn. intros i h; discriminate h.
+  Qed.
+
+  Definition pgx_wfE : @wfE config.extraction_checker_flags si_env := wf_incl_E pgx_wf.
+
+  (** [c (∀P. P) : I (∀P. P)] over [typingE] in [si_Σ], at [extraction_checker_flags]. *)
+  Lemma pgx_P_typedE (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E si_P : tSort (Sort.super sProp).
+  Proof. intros h. apply typeE_Sort; [exact h|cbn; trivial]. Qed.
+
+  Lemma pgx_vassE (Γ : context) : wf_localE si_Σ Γ -> lift_typing typingE si_Σ Γ (j_vass si_na si_P).
+  Proof.
+    intros h. split; [exact tt|]. exists (Sort.super sProp).
+    split; [exact (pgx_P_typedE Γ h)|]. split; [exact I|reflexivity].
+  Qed.
+
+  Lemma pgx_vassE_s (Γ : context) :
+    wf_localE si_Σ Γ -> lift_typing typingE si_Σ Γ (j_vass_s si_na si_P (Sort.super sProp)).
+  Proof.
+    intros h. split; [exact tt|]. exists (Sort.super sProp).
+    split; [exact (pgx_P_typedE Γ h)|]. split; reflexivity.
+  Qed.
+
+  Lemma pgx_wf_PE (Γ : context) : wf_localE si_Σ Γ -> wf_localE si_Σ (Γ ,, vass si_na si_P).
+  Proof. intros h. apply localenv_cons_abs; [exact h|exact (pgx_vassE Γ h)]. Qed.
+
+  Lemma pgx_PP_typedE (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E iv_PP : tSort iv_sPP.
+  Proof.
+    intros h. unfold iv_PP, iv_sPP. apply typeE_Prod; [exact (pgx_vassE_s Γ h)|].
+    exact (pgx_P_typedE _ (pgx_wf_PE Γ h)).
+  Qed.
+
+  Lemma pgx_False_typedE (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E iv_False : si_P.
+  Proof.
+    intros h. unfold iv_False.
+    exact (typeE_Prod _ _ si_na si_P (tRel 0) (Sort.super sProp) sProp (pgx_vassE_s Γ h)
+             (typeE_Rel _ _ 0 (vass si_na si_P) (pgx_wf_PE Γ h) eq_refl)).
+  Qed.
+
+  Lemma pgx_ind_typedE (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E tInd si_ind [] : si_arity.
+  Proof. intros h. exact (typeE_Ind _ _ si_ind [] si_mdecl si_idecl h si_declared_inductive eq_refl). Qed.
+
+  Lemma pgx_cstr_typedE (Γ : context) : wf_localE si_Σ Γ ->
+    si_Σ ;;; Γ |-E tConstruct si_ind 0 [] : tProd si_na si_P (tApp (tInd si_ind []) (tRel 0)).
+  Proof.
+    intros h.
+    exact (typeE_Construct _ _ si_ind 0 [] si_mdecl si_idecl si_cdecl h si_declared_constructor eq_refl).
+  Qed.
+
+  Lemma pgx_cstr_prod_typedE (Γ : context) : wf_localE si_Σ Γ ->
+    si_Σ ;;; Γ |-E tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))
+      : tSort (Sort.sort_of_product (Sort.super sProp) sProp).
+  Proof.
+    intros h. apply typeE_Prod; [exact (pgx_vassE_s Γ h)|].
+    have w := pgx_wf_PE Γ h.
+    exact (typeE_App _ _ (tInd si_ind []) si_na si_P si_P _ (tRel 0) (pgx_PP_typedE _ w)
+             (pgx_ind_typedE _ w) (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl)).
+  Qed.
+
+  Lemma pgx_cF_typedE : @typingE config.extraction_checker_flags si_Σ [] sri_cF iv_IF.
+  Proof.
+    exact (typeE_App _ _ (tConstruct si_ind 0 []) si_na si_P (tApp (tInd si_ind []) (tRel 0)) _ iv_False
+             (pgx_cstr_prod_typedE [] localenv_nil) (pgx_cstr_typedE [] localenv_nil)
+             (pgx_False_typedE [] localenv_nil)).
+  Qed.
+
+End ClassificationFlags.
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
@@ -207,10 +402,13 @@ Definition whnf_progressE_inst :=
   whnf_progressE si_Σ iv_False si_P cli_axiom_free si_wfE (iv_False_typed si_Σ [] localenv_nil)
     (fun h => let (t', r) := h in pgi_False_normal _ _ _ r).
 
-(* [classificationE]: NOT BUILT. Its statement, like base [PCUICProgress.classification], binds
-   no [checker_flags] and so is fixed to [config.extraction_checker_flags] (the file's
-   [Local Existing Instance], as base's); [wfE si_Σ] is proved under [default_checker_flags]
-   only. Its proof is [whnf_classificationE] after [whnf_progressE], both with instances here
-   and in [PCUICClassificationEtaInstances]. *)
+(** [classificationE], at its statement's flags [config.extraction_checker_flags] (as base's):
+    the constructor application [c (∀P. P)], [red1]-normal ([pgi_cF_normal]), typed at
+    [I (∀P. P)] over [typingE] ([pgx_cF_typedE]) in [si_Σ], which is proved [wfE] at those flags
+    ([pgx_wfE], section [ClassificationFlags]). [whnf_progressE] turns the normality into [whnf],
+    and [whnf_classificationE] reads the head [c] off the typed normal form. *)
+Definition classificationE_inst :=
+  classificationE si_Σ sri_cF si_ind [] [iv_False] cli_axiom_free pgx_wfE
+    (fun h => let (t', r) := h in pgi_cF_normal _ _ _ r) pgx_cF_typedE.
 
 End ProgressEtaInstances.
