@@ -234,6 +234,13 @@ Proof. destruct d as [na [b|] ty]; constructor; try reflexivity; apply JoinE_ref
 Instance cumul_decls_reflE_Reflexive {cf:checker_flags} Σ Γ Γ' : Reflexive (cumul_decls (@JoinE cf) Σ Γ Γ') :=
   cumul_decls_reflE Σ Γ Γ'.
 
+(** Base's instance [conv_decls_refl] ([PCUICCumulativity]) over [JoinE]. Base
+    derives it from its [pb]-general declaration instance; here it is proved as
+    [cumul_decls_reflE] is. *)
+#[global]
+Instance conv_decls_reflE {cf:checker_flags} Σ Γ Γ' : Reflexive (conv_decls (@JoinE cf) Σ Γ Γ').
+Proof. intros d. destruct d as [na [b|] ty]; constructor; try reflexivity; apply JoinE_refl. Qed.
+
 (** Base [context_cumulativity_wf_app], over [typingE] and [JoinE]. No premise, as
     in base. *)
 Lemma context_cumulativity_wf_appE {cf : checker_flags} Σ Γ Γ' Δ :

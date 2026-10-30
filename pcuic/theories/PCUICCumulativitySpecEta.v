@@ -186,6 +186,49 @@ Definition cumulSpecE `{checker_flags} (Σ : global_env_ext) Γ := cumulSpecE0 �
 Instance cumul_specE_refl {cf:checker_flags} Σ Γ pb : Reflexive (cumulSpecE0 Σ Γ pb).
 Proof. intro; apply cumulE_Refl. Qed.
 
+(** The reflexivity instances base states for the specification relation
+    ([PCUICCumulativitySpec]) at the term, declaration and context level, over
+    [cumulSpecE0]. Base's names are kept for the algorithmic relation and for
+    [JoinE], so each name here carries [specE] where base's relation word sits:
+    [cumul_specE_refl] above is base's [cumul_spec_refl], and the seven below are
+    base's [conv_refl'], [cumul_pb_decls_refl], [conv_decls_refl],
+    [cumul_decls_refl], [cumul_pb_ctx_refl], [conv_ctx_refl] and [cumul_ctx_refl].
+    Each is registered as base registers it, so that [reflexivity] and typeclass
+    resolution close a goal of the E relation where they close base's. *)
+
+#[global]
+Instance conv_specE_refl' {cf:checker_flags} Σ Γ : Reflexive (convSpecE Σ Γ) := _.
+
+#[global]
+Instance cumul_pb_decls_specE_refl {cf:checker_flags} pb Σ Γ Γ' :
+  Reflexive (cumul_pb_decls cumulSpecE0 pb Σ Γ Γ').
+Proof.
+  intros x. destruct x as [na [b|] ty]; constructor; auto.
+  all:constructor; reflexivity.
+Qed.
+
+#[global]
+Instance conv_decls_specE_refl {cf:checker_flags} Σ Γ Γ' :
+  Reflexive (conv_decls cumulSpecE0 Σ Γ Γ') := _.
+#[global]
+Instance cumul_decls_specE_refl {cf:checker_flags} Σ Γ Γ' :
+  Reflexive (cumul_decls cumulSpecE0 Σ Γ Γ') := _.
+
+Section ContextConversionE.
+  Context {cf : checker_flags}.
+  Context (Σ : global_env_ext).
+
+  Global Instance cumul_pb_ctx_specE_refl pb : Reflexive (cumul_pb_context cumulSpecE0 pb Σ).
+  Proof using Type.
+    intro Γ; induction Γ; try econstructor; auto.
+    all:reflexivity.
+  Qed.
+
+  Global Instance conv_ctx_specE_refl : Reflexive (conv_context cumulSpecE0 Σ) := _.
+  Global Instance cumul_ctx_specE_refl : Reflexive (cumul_context cumulSpecE0 Σ) := _.
+
+End ContextConversionE.
+
 (** * Eliminator (S2): a copy of [cumulSpec0_rect] with one more hypothesis, for [cumul_eta_l]. *)
 
 Lemma cumulSpecE0_rect :
