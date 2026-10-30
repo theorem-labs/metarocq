@@ -775,7 +775,6 @@ Proof.
       now eapply subslet_indsE; eauto.
       rewrite closed_ctx_subst ?closedn_subst_instance_context. auto.
       apply spars.
-      unshelve eapply declared_inductive_to_gen in decli; eauto.
     * move: (All2_firstn  _ _ _ _ _ mdecl.(ind_npars) Hargs).
       move: (All2_skipn  _ _ _ _ _ mdecl.(ind_npars) Hargs).
       clear Hargs.
@@ -857,7 +856,8 @@ Lemma Construct_Ind_ind_eq'E {cf:checker_flags} {Σ} (wfΣ : wfE Σ.1):
       (skipn mdecl.(ind_npars) args') ].
 Proof.
   intros Γ n i args u i' args' u' X.
-  eapply inversion_mkApps_directE in X as X'. destruct X' as (? & X' & _).
+  eapply (inversion_mkApps_directE (isTypeE_typingE_mkApps_tConstruct_ctor X)) in X as X'.
+  destruct X' as (? & ? & X' & _ & _).
   eapply inversion_ConstructE in X' as (mdecl & idecl & cdecl & ? & ? & ? & ?); eauto.
   exists mdecl, idecl, cdecl. split; eauto.
   eapply Construct_Ind_ind_eqE; eauto.
@@ -927,8 +927,9 @@ Proof.
     as [mdecl [idecl [isdecl [indices [cinv cum]]]]].
   destruct cinv.
   pose proof scrut_ty as typec.
-  eapply inversion_mkApps_directE in typec as [A' [tyc tyargs]]; auto.
-  eapply inversion_ConstructE in tyc as [mdecl' [idecl' [cdecl' [wfl [declc [Hu tyc]]]]]].
+  eapply (inversion_mkApps_directE (isTypeE_typingE_mkApps_tConstruct_ctor typec)) in typec
+    as [A' [? [tyc [_ tyargs]]]]; auto.
+  eapply (inversion_ConstructE _ wΣ) in tyc as [mdecl' [idecl' [cdecl' [wfl [declc [Hu tyc]]]]]].
   epose proof (Construct_Ind_ind_eqE _ scrut_ty declc); eauto.
   simpl in *.
   intuition auto.
@@ -961,8 +962,9 @@ Proof.
   apply inversion_ProjE in h ; auto.
   destruct h as [uni [mdecl [idecl [pdecl [args' [? [declp [hc [? ?]]]]]]]]].
   pose proof hc as typec.
-  eapply inversion_mkApps_directE in typec as [A' [tyc tyargs]]; auto.
-  eapply inversion_ConstructE in tyc as [mdecl' [idecl' [cdecl' [wfl [declc [Hu tyc]]]]]].
+  eapply (inversion_mkApps_directE (isTypeE_typingE_mkApps_tConstruct_ctor typec)) in typec
+    as [A' [? [tyc [_ tyargs]]]]; auto.
+  eapply (inversion_ConstructE _ wΣ) in tyc as [mdecl' [idecl' [cdecl' [wfl [declc [Hu tyc]]]]]].
   epose proof (Construct_Ind_ind_eqE _ hc declc); eauto.
   intuition auto.
 Qed.
@@ -979,8 +981,9 @@ Proof.
   apply inversion_ProjE in h ; auto.
   destruct h as [uni [mdecl [idecl [pdecl [args' [? [declp [hc [? ?]]]]]]]]].
   pose proof hc as typec.
-  eapply inversion_mkApps_directE in typec as [A' [tyc tyargs]]; auto.
-  eapply inversion_ConstructE in tyc as [mdecl' [idecl' [cdecl' [wfl [declc [Hu tyc]]]]]].
+  eapply (inversion_mkApps_directE (isTypeE_typingE_mkApps_tConstruct_ctor typec)) in typec
+    as [A' [? [tyc [_ tyargs]]]]; auto.
+  eapply (inversion_ConstructE _ wΣ) in tyc as [mdecl' [idecl' [cdecl' [wfl [declc [Hu tyc]]]]]].
   unshelve epose proof (declp' := declared_projection_to_gen declp) ; eauto.
   unshelve epose proof (declc' := declared_constructor_to_gen declc); eauto.
   pose proof (declared_inductive_unique_sig declp'.p1.p1 declc'.p1) as H; noconf H.
@@ -1562,8 +1565,10 @@ Proof.
         2:now symmetry.
         apply (on_minductive_wf_paramsE declc cu'). }
       eapply (ws_cumul_pb_expand_lets_ws_cumul_ctxE (pb:=Conv)) => //.
-      apply into_ws_cumul_pbE.
-      { constructor.
+      (* base builds the algorithmic comparison with [constructor]; the E join is built
+         from the same syntactic comparison through the specification *)
+      apply into_ws_cumul_pbE_spec.
+      { apply eq_term_upto_univ_cumulSpecE.
         eapply eq_term_upto_univ_subst_instance; eauto; typeclasses eauto. }
       { eauto with fvs. }
       { rewrite /argctx.
