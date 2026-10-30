@@ -71,7 +71,7 @@ Proof.
   eapply subject_reduction; eauto.
 Qed.
 
-(* Show that taking head normal forms and then the subterm relation is well-founded *)
+(* The subterm relation (under binders, with the context it extends), for [redp_subterm_rel] below *)
 
 Inductive term_direct_subterm : term -> term -> Type :=
 | term_direct_subterm_4_1 : forall (na : aname) (A B : term),

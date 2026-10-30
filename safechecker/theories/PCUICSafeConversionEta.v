@@ -200,11 +200,12 @@ Section Conversion.
     (h : forall Σ, abstract_env_ext_rel X Σ -> welltypedE Σ Γ t) : option term :=
     PCUICSafeReduceEta.reduce_term (wt := welltypedE) (wfP := wf_extE) flags X_type X Γ t h.
   (* PERMANENT GUARD (BET-64 FUEL). A conversion of [reduce_termE …] against the machine's
-     [reduce_term …] must unfold [reduce_termE] first. Unfolding [reduce_term] first reaches the
-     fuel recursion on [default_fuel] ([PCUICFuelEta]): the kernel or the unifier then compares the
-     machine's fuel continuations step by step, and the build grows to 44-50 GB (measured: FuelConv's
-     dev builds c4/c5, 2026-10-30). The guard changes only the unfolding order of this file's
-     conversion checks, not any term, statement or extracted code. *)
+     [reduce_term …] must unfold [reduce_termE] first. Without this guard the kernel or the unifier
+     unfolds [reduce_term] first, reaches the fuel recursion on [default_fuel] ([PCUICFuelEta]) and
+     walks the machine's fuel step by step: the build grows to 44-50 GB and does not finish (measured:
+     FuelConv's dev builds c4/c5, 2026-10-30). The guard sets the unfolding order of this file's
+     conversion checks only; extraction does not read it (fuel-build.md: the extraction of the guarded
+     definitions is the same with and without the guard settings). *)
   #[local] Strategy expand [reduce_termE].
 
   Set Equations Transparent.
@@ -3066,8 +3067,9 @@ Equations (noeqns) isconv_array_values_aux
   (* PERMANENT GUARD (BET-64 FUEL): [reduce_termE], like [reduce_args_E], is opaque to the
      elaboration and the obligations of the definitions below (made transparent again at the end of
      the section). Without it, a conversion check unfolds it down to the machine's fuel recursion on
-     [default_fuel] and walks the fuel step by step: the build grows to 44-50 GB (FuelConv's dev
-     builds c4/c5). [Opaque] changes only what tactics and the elaborator unfold, not any term. *)
+     [default_fuel], and the kernel or the unifier walks the machine's fuel step by step: the build
+     grows to 44-50 GB and does not finish (FuelConv's dev builds c4/c5). [Opaque] sets what tactics
+     and the elaborator may unfold; extraction does not read it (fuel-build.md). *)
   Opaque reduce_args_E.
   Opaque reduce_termE.
   Equations(noeqns) _isconv_prog (Γ : context) (leq : conv_pb)
