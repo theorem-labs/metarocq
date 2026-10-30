@@ -173,7 +173,9 @@ destruct (@red1_progressE _ Σ Hwf Hax t A HA) as [[t' Ht'] | Hwnf].
 - exists t. split; eauto.
 Defined.
 
-(** Base [SN_to_WN] ([:40]). *)
+(** Base [SN_to_WN] ([:40]).
+    A caller must handle both branches: the conclusion is a sum, and a closed term may reduce to
+    a stuck cofixpoint case instead of to a value. *)
 Lemma SN_to_WNE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {A t} : wfE Σ -> axiom_free Σ ->
   Acc (cored Σ []) t -> Σ ;;; [] |-E t : A ->
   { v & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v} + reduces_to_wcbv_stuck Σ t.
@@ -192,7 +194,9 @@ Proof.
   - right. exists t. split; eauto.
 Qed.
 
-(** Base [wcbv_normalization] ([:58]). *)
+(** Base [wcbv_normalization] ([:58]).
+    A caller must handle both branches: the conclusion is a sum, and a closed term may reduce to
+    a stuck cofixpoint case instead of to a value. *)
 Lemma wcbv_normalizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {A t} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : A ->
   { v & MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v} + reduces_to_wcbv_stuck Σ t.
@@ -221,7 +225,8 @@ Qed.
 
 (** Base [ws_wcbv_standardization] ([:112], base's comment [:110-111]). Base's value premise:
     a well-typed closed term need not have a value, so the caller supplies one; the lemma turns
-    head reduction to an irreducible term into the machine's evaluation. *)
+    head reduction to an irreducible term into the machine's evaluation.
+    A caller must supply the value premise [∑ v0, eval Σ t v0]. *)
 Lemma ws_wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {T} {t v : ws_term (fun _ => false)} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : T ->
   (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v0) ->
@@ -240,7 +245,9 @@ Proof.
   exists v'; split; eauto.
 Qed.
 
-(** Base [ws_wcbv_standardization_fst] ([:128]). *)
+(** Base [ws_wcbv_standardization_fst] ([:128]).
+    A caller must supply the value premise [∑ v0, eval Σ t v0]; for the [_fst] forms that premise
+    determines the conclusion's value, by determinism of [eval]. *)
 Lemma ws_wcbv_standardization_fstE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {i u args mind} {t v : ws_term (fun _ => false)} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : mkApps (tInd i u) args ->
   (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v0) ->
@@ -264,7 +271,8 @@ Proof.
   Unshelve.
 Qed.
 
-(** Base [wcbv_standardization] ([:150]). *)
+(** Base [wcbv_standardization] ([:150]).
+    A caller must supply the value premise [∑ v0, eval Σ t v0]. *)
 Lemma wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {T t v : term} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : T ->
   (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v0) ->
@@ -285,7 +293,9 @@ Proof.
     eapply subject_reductionE; eauto.
 Qed.
 
-(** Base [wcbv_standardization_fst] ([:170]). *)
+(** Base [wcbv_standardization_fst] ([:170]).
+    A caller must supply the value premise [∑ v0, eval Σ t v0]; for the [_fst] forms that premise
+    determines the conclusion's value, by determinism of [eval]. *)
 Lemma wcbv_standardization_fstE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {i u args mind} {t v : term} : wfE Σ -> axiom_free Σ ->
   Σ ;;; [] |-E t : mkApps (tInd i u) args ->
   (∑ v0, MetaRocq.PCUIC.PCUICWcbvEval.eval Σ t v0) ->
