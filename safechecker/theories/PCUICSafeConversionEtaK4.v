@@ -34,6 +34,13 @@
    here because they read [abstract_env_ext_rel]; their Σ-level content is
    [PCUICPositionEtaTyping.ws_cumul_ctx_pbE_eta_step].
 
+   Names this file declares that also exist elsewhere in the tree (deliberate; ArityLane's
+   own-name sweep, lanes/eta/c18bfix-ownname-sweep.md, 2026-10-30): [state] (also
+   [PCUICGuardChecker.FixGuard.state]), [eq_term_valid_pos] (also the [PCUICPositionEta] and
+   base [PCUICPosition] lemmas; its uses here are qualified, see the PositionEta import note) and
+   [R] (also [Stdlib.Vectors.Fin.R]). The other two are different types, so a mix-up does not
+   typecheck; references to them here resolve to this file's definitions.
+
    Section hypothesis: [normalization_in] (the E normalization premise of every E
    section, ENV contract). It has no satisfying instance, and none is possible: it is
    strong normalization of PCUIC with η, an assumption exactly as base [NormalizationIn]
