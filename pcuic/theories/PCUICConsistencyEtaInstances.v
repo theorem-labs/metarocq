@@ -1,5 +1,9 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+
 (** * Satisfying instance of [PCUICConsistencyEta.pcuic_consistentE] (row T9)
 
   **The environment** [cs_Σ] declares base's [False_mib] ([Inductive False : Prop :=], no
@@ -17,9 +21,8 @@
 
   **Non-degeneracy.** [pcuic_consistentE_inst] discharges every premise of the theorem on the
   concrete [cs_Σ] except two: the normalization premise (above) and the typing premise
-  [cs_Σ ;;; [] |-E t : tInd cs_ind []], which is IMPOSSIBLE by the statement (its conclusion is
-  [False]: no closed term has type [False]); the instance is the resulting refutation, for every
-  [t]. *)
+  [cs_Σ ;;; [] |-E t : tInd cs_ind []]. Its tag records why the instance is IMPOSSIBLE to make
+  non-degenerate: the theorem's conclusion is [False]. *)
 
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
@@ -28,6 +31,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICArity
      PCUICClassification PCUICConsistency PCUICTypingEta PCUICCumulativitySpecEtaClosureInstances
      PCUICSNEta PCUICValidityEta PCUICSREta PCUICClassificationEta PCUICCanonicityEta
      PCUICConsistencyEta.
+
+(* The environment and its derivations, used by the instance below.
+   WITNESSES: cs_* *)
 
 #[local] Existing Instance default_checker_flags.
 
@@ -123,6 +129,8 @@ Section ConsistencyEtaInstances.
 (* Base's normalization premise (by design, never discharged). *)
 Context {nor : normalizing_flags} {nin : NormalizationInE cs_Σ}.
 
+(** The theorem refutes the typing premise for every [t].
+    INSTANCE IMPOSSIBLE: the conclusion of pcuic_consistentE is False (no closed term has type tInd cs_ind [], the False_mib of the axiom-free cs_Σ); the instance applies it to every t, its typing premise cs_Σ ;;; [] |-E t : tInd cs_ind [] left as a hypothesis. *)
 Definition pcuic_consistentE_inst : forall t, cs_Σ ;;; [] |-E t : tInd cs_ind [] -> False :=
   fun t => pcuic_consistentE cs_Σ t cs_ind cs_declared_False cs_wfext cs_axiom_free cs_no_stuck.
 
