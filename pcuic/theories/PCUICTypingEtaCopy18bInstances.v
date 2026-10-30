@@ -751,7 +751,7 @@ Definition wf_set_binder_nameE_inst :=
 (** ** The case predicate of [R] over the η telescope *)
 
 Definition c18b_ci : case_info :=
-  {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant |}.
+  {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 
 Definition c18b_pF : predicate term :=
   {| pparams := [iv_False]; puinst := [];

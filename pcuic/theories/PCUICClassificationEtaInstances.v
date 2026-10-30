@@ -32,12 +32,19 @@
     let-in [let z := ∀P. P in z].
   - Evaluation: [cli_eval] is the β-step [(λx:Prop. x) (∀P. P) ⇓ ∀P. P];
     [eval_classificationE_inst] evaluates [c (∀P. P)] by [eval_construct].
+  - BET-339 (F0 forecast): the disjunct [stuck_cofix_case] that [whnf_classification'E],
+    [whnf_classificationE], [ind_whnf_classification'E], [ind_whnf_classificationE] and
+    [fix_app_is_constructorE] gained is reached by [PCUICEtaF0Land3Instances]
+    ([g_whnf_classification_stuck], on a closed case blocked on a cofixpoint); the instances
+    here land in the constructor disjunct.
 
   **Rows without an instance, with the reason.**
   - IMPOSSIBLE (the conclusion is [False]: the lemma states that its premises cannot hold
     together; as in base): [Is_conv_to_Arity_indE], [typing_spine_arity_mkApps_IndE],
     [typing_spine_more_invE], [typing_varE], [typing_evarE], [invert_ind_indE],
-    [invert_fix_indE], [wh_neutral_empty_genE], [wh_neutral_emptyE].
+    [invert_fix_indE]. [wh_neutral_empty_genE] and [wh_neutral_emptyE] were in this row until
+    BET-339; they now conclude [stuck_cofix_case t], and their non-degenerate instances are in
+    [PCUICEtaF0Land3Instances] ([wh_neutral_empty_genE_inst], [wh_neutral_emptyE_inst]).
   - Refutations ([invert_cumul_arity_lE_untyped_false], [invert_cumul_arity_rE_untyped_false]):
     theorems, not hypotheses; no instance applies.
   - Helpers run by the instances above: [T8_Sort_l_plug], [PCUICPrincipalityEta.T8_Prod_l_plug]

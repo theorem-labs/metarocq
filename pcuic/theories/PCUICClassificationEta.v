@@ -86,7 +86,25 @@
   forms) was a section premise until copy 18b landed (frac/eta 3e6b422d); it was deleted after a
   compiled-form identity check of each field. Copy 16 landed earlier (frac/eta 0fb43f10): T2a's
   [ValForecastCopy16], T1's [SRForecastCopy16] and this file's [ClassifForecastCopy16] were
-  deleted the same way, and [PCUICInductivesEta] is imported. No lemma takes a class. *)
+  deleted the same way, and [PCUICInductivesEta] is imported. No lemma takes a class.
+
+  ** BET-339 (integ-all8 [1a92b56c]; F0 forecast [wip/eta-meta-f0-land3-2026-10-30])
+
+  BET-339 adds [ci_cofix_nondep] to [case_info]; a cofixpoint does not unfold under a case whose
+  flag is unset, and base [whne] gains [whne_case_cofix_dep]. A closed well-typed neutral term
+  can then be a case blocked on a cofixpoint, so base integ-all8 restates seven lemmas with the
+  syntactic [stuck_cofix_case] (base [PCUICClassification]); this file restates its twins the
+  same way, only the relation renamed: [wh_neutral_empty_genE], [wh_neutral_emptyE] (conclusion
+  [False] → [stuck_cofix_case t]), [whnf_classification'E], [whnf_classificationE] (+
+  [stuck_cofix_case t]), [ind_whnf_classification'E], [ind_whnf_classificationE] (+
+  [stuck_cofix_case t]), [fix_app_is_constructorE] (its [Some] branch: +
+  [stuck_cofix_case a]). Proof changes, as base's: [wcbveval_redE] (the [eval_cofix_case] flag),
+  [value_classificationE], [eval_classificationE] (a value is not blocked:
+  [value_not_stuck_cofix_case]). The old forms are false on integ-all8: the blocked case of
+  [PCUICEtaF0Land3Instances] ([g_t]) is a closed typed neutral term. Base integ-all8 also moves
+  [typing_cofix_coind], [check_recursivity_kind_inj], [wt_closed_red_refl], [invert_ind_ind],
+  [invert_fix_ind] and the [Arities]/[Spines] sections to [PCUICSafeLemmata]; the [[:N]]
+  references above are to base [PCUICClassification] before that move. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -896,27 +914,30 @@ Section classificationE.
     now eapply invert_cumul_prod_indE in cum.
   Qed.
 
-  (** Base [wh_neutral_empty_gen] ([:688]). *)
+  (** Base [wh_neutral_empty_gen] (integ-all8 [:492]). A closed well-typed neutral term is
+      blocked by a case on a cofixpoint ([stuck_cofix_case], base's, syntactic): every other
+      way of being neutral is refuted by typing in the empty context. *)
   Lemma wh_neutral_empty_genE Γ free t ty :
     axiom_free_value Σ free t ->
     wh_neutral Σ [] t ->
     Σ ;;; Γ |-E t : ty ->
     Γ = [] ->
-    False.
+    stuck_cofix_case t.
   Proof using Type*.
     intros axfree ne typed.
     induction ne in free, t, ty, axfree, ne, typed |- *; intros ->; simpl in *; try discriminate.
-    - apply inversion_RelE in typed as (?&?&?&?); auto.
+    - exfalso. apply inversion_RelE in typed as (?&?&?&?); auto.
       rewrite nth_error_nil in e0; discriminate.
-    - now eapply typing_varE in typed.
-    - now eapply typing_evarE in typed.
-    - apply inversion_ConstE in typed as [decl' [wfd [declc [cu cum]]]]; eauto.
+    - exfalso. now eapply typing_varE in typed.
+    - exfalso. now eapply typing_evarE in typed.
+    - exfalso. apply inversion_ConstE in typed as [decl' [wfd [declc [cu cum]]]]; eauto.
       unshelve eapply declared_constant_to_gen in declc; eauto.
       red in declc. rewrite declc in e, axfree.
       noconf e.
       destruct decl; cbn in *.
       rewrite e0 in axfree; congruence.
     - eapply inversion_AppE in typed as [na [A [B [Hf _]]]]; eauto.
+      eapply stuck_cofix_case_app; eauto.
     - eapply inversion_mkAppsE in typed as (? & ? & ?); eauto.
       eapply inversion_FixE in t as (? & ? & ? & ? & ? & ? & ?); auto.
       eapply nth_error_all in a; eauto. apply isTypeRelE_isTypeE in a.
@@ -931,9 +952,13 @@ Section classificationE.
            apply nth_error_Some_length in e0; auto. }
       rewrite nth_error_map e0 in axfree.
       cbn in axfree.
+      eapply stuck_cofix_case_fix; [exact e1|exact e0|].
       eauto.
     - eapply inversion_CaseE in typed as (? & ? & ? & ? & [] & ?); tas; eauto.
+      eapply stuck_cofix_case_case; eauto.
+    - now eapply stuck_cofix_case_scrut.
     - eapply inversion_ProjE in typed as (? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
+      eapply stuck_cofix_case_proj; eauto.
     (* whne_primapp_stuck / whne_primapp_inert: the head is a bodiless
        registered constant, which [axiom_free_value] sends to [false]. *)
     - rewrite axiom_free_value_mkApps in axfree; cbn in axfree.
@@ -944,38 +969,38 @@ Section classificationE.
       match goal with H : cst_body ?d = None |- _ => destruct d; cbn in *; subst; discriminate axfree end.
   Qed.
 
-  (** Base [wh_neutral_empty] ([:735]). *)
+  (** Base [wh_neutral_empty] (integ-all8 [:544]). *)
   Lemma wh_neutral_emptyE t ty :
     axiom_free_value Σ [] t ->
     wh_neutral Σ [] t ->
     Σ ;;; [] |-E t : ty ->
-    False.
+    stuck_cofix_case t.
   Proof using Type*. eauto using wh_neutral_empty_genE. Qed.
 
-  (** Base [whnf_classification'] ([:742]). *)
+  (** Base [whnf_classification'] (integ-all8 [:551]). *)
   Lemma whnf_classification'E t i u args :
     axiom_free_value Σ [] t ->
     wh_normal Σ [] t ->
     Σ ;;; [] |-E t : mkApps (tInd i u) args ->
-    construct_cofix_discr (head t).
+    construct_cofix_discr (head t) + stuck_cofix_case t.
   Proof using Type*.
     intros axfree ne typed.
     have cbΣ : ClosedBodies Σ := wfE_ClosedBodies Σ (wfΣ := wfΣ).
     pose proof (subject_closedE typed) as cl.
     depelim ne; simpl in *.
-    - exfalso. eauto using wh_neutral_emptyE.
+    - right. eauto using wh_neutral_emptyE.
     - eapply inversion_SortE in typed as (? & ? & e); auto.
       now eapply invert_cumul_sort_indE in e.
     - eapply inversion_ProdE in typed as (? & ? & ? & ? & e); auto.
       now eapply invert_cumul_sort_indE in e.
     - eapply inversion_LambdaE in typed as (? & ? & ? & e); auto.
       now eapply invert_cumul_prod_indE in e.
-    - now rewrite head_mkApps /= /head /=.
+    - left. now rewrite head_mkApps /= /head /=.
     - exfalso; eapply invert_ind_indE; eauto.
     - exfalso; eapply invert_fix_indE; eauto.
       unfold unfold_fix. destruct nth_error; [|easy].
       destruct o as [[? [? ?]]|]; [|easy]. inversion H; eauto.
-    - now rewrite head_mkApps /head /=.
+    - left. now rewrite head_mkApps /head /=.
     - eapply inversion_PrimE in typed as [prim_ty [cdecl [? hpc ? ? hp]]]; eauto.
       (* The guard on the axiom inversions: prim_ty is a registered primitive
          TYPE constant, which §4.2(a)1 keeps out of the operation table. *)
@@ -995,27 +1020,28 @@ Section classificationE.
       match goal with H : cst_body ?d = None |- _ => destruct d; cbn in *; subst; discriminate axfree end.
   Qed.
 
-  (** Base [whnf_classification] ([:783]). *)
+  (** Base [whnf_classification] (integ-all8 [:592]). *)
   Lemma whnf_classificationE t i u args :
     axiom_free Σ ->
     wh_normal Σ [] t ->
     Σ ;;; [] |-E t : mkApps (tInd i u) args ->
-    construct_cofix_discr (head t).
+    construct_cofix_discr (head t) + stuck_cofix_case t.
   Proof using Type*.
     intros axfree; eapply axiom_free_axiom_free_value in axfree.
     intros; eapply whnf_classification'E; eauto.
   Qed.
 
-  (** Base [ind_whnf_classification'] ([:796]). *)
+  (** Base [ind_whnf_classification'] (integ-all8 [:605]). *)
   Lemma ind_whnf_classification'E t ind u indargs :
     axiom_free_value Σ [] t -> notCoInductive Σ ind ->
     Σ ;;; [] |-E t : mkApps (tInd ind u) indargs ->
     wh_normal Σ [] t ->
-    isConstruct_app t.
+    isConstruct_app t + stuck_cofix_case t.
   Proof using Type*.
     intros axfree ck typed whnf.
-    rewrite /isConstruct_app.
     eapply whnf_classification'E in whnf; eauto.
+    destruct whnf as [whnf|st]; [|now right].
+    left. rewrite /isConstruct_app.
     rewrite /head in whnf.
     destruct (decompose_app t) as [hd tl] eqn:da; simpl in *.
     destruct hd eqn:eqh => //. subst hd.
@@ -1024,23 +1050,23 @@ Section classificationE.
     congruence.
   Qed.
 
-  (** Base [ind_whnf_classification] ([:813]). *)
+  (** Base [ind_whnf_classification] (integ-all8 [:623]). *)
   Lemma ind_whnf_classificationE t ind u indargs :
     axiom_free Σ -> notCoInductive Σ ind ->
     Σ ;;; [] |-E t : mkApps (tInd ind u) indargs ->
     wh_normal Σ [] t ->
-    isConstruct_app t.
+    isConstruct_app t + stuck_cofix_case t.
   Proof using Type*.
     intros axfree; eapply axiom_free_axiom_free_value in axfree.
     intros; eapply ind_whnf_classification'E; eauto.
   Qed.
 
-  (** Base [fix_app_is_constructor] ([:823]). *)
+  (** Base [fix_app_is_constructor] (integ-all8 [:633]). *)
   Lemma fix_app_is_constructorE {mfix idx args ty narg fn} :
     Σ;;; [] |-E mkApps (tFix mfix idx) args : ty ->
     unfold_fix mfix idx = Some (narg, fn) ->
     match nth_error args narg return Type with
-    | Some a => axiom_free_value Σ [] a -> wh_normal Σ [] a -> isConstruct_app a
+    | Some a => axiom_free_value Σ [] a -> wh_normal Σ [] a -> isConstruct_app a + stuck_cofix_case a
     | None => ∑ na dom codom, Σ ;;; [] ⊢E tProd na dom codom ≤ ty
     end.
   Proof using Type*.
@@ -1188,8 +1214,11 @@ Section classificationE.
           now eapply eval_to_value in He2. }
         solve_all.
         eapply nth_error_all in X3; eauto. simpl in X3.
-        destruct X3 as [cl val]. eapply X1, value_whnfE; auto.
-        now eapply value_axiom_free. }
+        destruct X3 as [cl val].
+        forward X1. { now eapply value_axiom_free. }
+        forward X1. { eapply value_whnfE; auto. }
+        destruct X1 as [hc|st]; [exact hc|].
+        exfalso. eapply value_not_stuck_cofix_case; eauto. }
       redt _; eauto.
 
     - apply inversion_AppE in Ht; auto; destruct_sigma Ht.
@@ -1206,7 +1235,7 @@ Section classificationE.
       etransitivity. eapply red_case_c. eapply IHHe1; eauto.
       rewrite closedn_mkApps in H. move/andP: H => [clcofix clargs].
       assert (red Σ [] (tCase ip p (mkApps (tCoFix mfix idx) args) brs) (tCase ip p (mkApps fn args) brs)).
-      { eapply red1_red. eapply red_cofix_case.
+      { eapply red1_red. eapply red_cofix_case; [assumption|].
         rewrite -closed_unfold_cofix_cunfold_eq in e; eauto. }
       redt _; eauto.
       eapply IHHe2.
@@ -1252,7 +1281,8 @@ Section classificationE.
     eapply wcbveval_redE in Hred; eauto. eapply subject_reductionE; eauto.
   Qed.
 
-  (** Base [value_classification] ([:1062]). *)
+  (** Base [value_classification] (integ-all8 [:877]). A value is never blocked by a case on
+      a cofixpoint, so classification keeps its shape on values. *)
   Lemma value_classificationE {t i u args} :
     Σ ;;; [] |-E t : mkApps (tInd i u) args ->
     value Σ t ->
@@ -1260,25 +1290,28 @@ Section classificationE.
   Proof using Type*.
     intros Ht Hvalue.
     eapply value_axiom_free in Hvalue as H.
-    eapply whnf_classification'E; eauto.
-    eapply eval_whneE.
-    2: eapply value_final; eauto.
-    eapply @subject_closedE with (Γ := []); eauto.
+    assert (hnorm : wh_normal Σ [] t).
+    { eapply eval_whneE.
+      2: eapply value_final; eauto.
+      eapply @subject_closedE with (Γ := []); eauto. }
+    eapply whnf_classification'E in hnorm as [hd|st]; eauto.
+    exfalso. eapply value_not_stuck_cofix_case; eauto.
   Qed.
 
-  (** Base [eval_classification] ([:1075]). *)
+  (** Base [eval_classification] (integ-all8 [:892]). *)
   Lemma eval_classificationE {t i u args} :
     Σ ;;; [] |-E t : mkApps (tInd i u) args ->
     forall t', eval Σ t t' ->
     construct_cofix_discr (head t').
   Proof using Type*.
-    intros Ht t' eval.
+    intros Ht t' ev.
     pose proof (subject_closedE Ht).
+    assert (hval : value Σ t') by (eapply eval_to_value; eauto).
     eapply subject_reductionE in Ht. 3:eapply wcbveval_redE; eauto. 2:auto.
-    eapply eval_to_value in eval as axfree.
-    eapply value_axiom_free in axfree.
-    eapply eval_whneE in eval; auto.
-    eapply whnf_classification'E; eauto.
+    eapply value_axiom_free in hval as axfree.
+    eapply eval_whneE in ev; auto.
+    eapply whnf_classification'E in ev as [hd|st]; eauto.
+    exfalso. eapply value_not_stuck_cofix_case; eauto.
   Qed.
 
 End classificationE.

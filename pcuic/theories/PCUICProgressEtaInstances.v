@@ -18,6 +18,11 @@
     evaluates by ι.
   - [whnf_progressE_inst]: the normal form [∀P. P]. [classificationE]: NOT BUILT (its
     statement is fixed to [extraction_checker_flags], as base's; reason at the end of the file).
+  - BET-339 (F0 forecast): [progressE] and [progress_env_propE] gained the disjunct
+    [wcbv_stuck]; the instances here land in the step disjunct, and [PCUICEtaF0Land3Instances]
+    runs [progressE] on a closed case blocked on a cofixpoint ([progressE_stuck_inst]). The new
+    copy [red1_progressE] (base's new [red1_progress]) has its instance there
+    ([red1_progressE_inst]).
   - The constructor-arity lemmas run on [c (∀P. P) : I (∀P. P)].
   - [typing_spine_lengthE_inst]: the spine of [c] applied to [∀P. P].
 

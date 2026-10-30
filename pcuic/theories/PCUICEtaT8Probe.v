@@ -654,19 +654,22 @@ Section Roots.
   Qed.
 
   (** Cofix-case. NEEDS-INVARIANT for the λ scrutinee only; other sub-cases CLOSED
-      (η in the cofixpoint bodies is read back through [unfold_cofix_back]). *)
+      (η in the cofixpoint bodies is read back through [unfold_cofix_back]). The premise
+      [ip.(ci_cofix_nondep)] is BET-339's premise of [red_cofix_case]: every step below
+      unfolds the cofixpoint under the same case. *)
   Lemma pp_cofix_case Γ t ip p mfix idx args narg fn brs :
+    ip.(ci_cofix_nondep) ->
     unfold_cofix mfix idx = Some (narg, fn) ->
     on_free_vars xpredT t -> eta_safe Σ t ->
     eta1 t (tCase ip p (mkApps (tCoFix mfix idx) args) brs) ->
     PP Σ Γ t (tCase ip p (mkApps fn args) brs).
   Proof.
-    intros hu ho hs he.
+    intros hnd hu ho hs he.
     have hc := hs. depelim he.
     - apply (pp_root cb); [exact ho|now eapply red_cofix_case].
-    - eexists. split; [apply t_step; eapply red_cofix_case; exact hu|].
+    - eexists. split; [apply t_step; eapply red_cofix_case; [exact hnd|exact hu]|].
       apply rt_step. now apply case_eta_param.
-    - eexists. split; [apply t_step; eapply red_cofix_case; exact hu|].
+    - eexists. split; [apply t_step; eapply red_cofix_case; [exact hnd|exact hu]|].
       apply rt_step. now apply case_eta_return.
     - apply eta_safe_case_scrut in hc.
       match goal with H : eta1 _ (mkApps _ args) |- _ =>
@@ -679,16 +682,16 @@ Section Roots.
              eapply t_trans; [apply t_step; apply case_red_discr; exact hr|].
              apply t_step. now eapply red_cofix_case.
         * destruct (unfold_cofix_back _ _ _ _ _ hm hu) as (fn0 & hu0 & hp).
-          eexists. split; [apply t_step; eapply red_cofix_case; exact hu0|].
+          eexists. split; [apply t_step; eapply red_cofix_case; [exact hnd|exact hu0]|].
           apply eta_Case_discr. apply eta_mkApps_head. now apply C3R.peta_to_eta.
-      + eexists. split; [apply t_step; eapply red_cofix_case; exact hu|].
+      + eexists. split; [apply t_step; eapply red_cofix_case; [exact hnd|exact hu]|].
         apply rt_step. apply case_eta_discr. now apply eta1_mkApps_args.
       + split_head Σ Γ.
         * cbn in hc. discriminate hc.
         * eexists. split; [|apply rt_refl].
           eapply t_trans; [apply t_step; apply case_red_discr; exact hr|].
           apply t_step. rewrite -mkApps_app. now eapply red_cofix_case.
-    - eexists. split; [apply t_step; eapply red_cofix_case; exact hu|].
+    - eexists. split; [apply t_step; eapply red_cofix_case; [exact hnd|exact hu]|].
       apply rt_step. now apply case_eta_brs.
   Qed.
 
@@ -2861,7 +2864,7 @@ Qed.
 
 (** **The parallel cofix-case root case: CLOSED, under [hnl]** (same shape as
     [pe_iota_root]; the scrutinee's cofixpoint is unfolded through
-    [pe_unfold_cofix_back]). *)
+    [pe_unfold_cofix_back]). The last premise is BET-339's premise of [red_cofix_case]. *)
 Lemma pe_cofix_case_root Σ Γ ip p0 c0 brs0 p mfix idx args narg fn brs :
   (* PREMISE hnl: (i) typed_eta_safe (proved, no SR) + (ii) E subject reduction (row T1). *)
   (forall c', red Σ Γ c0 c' -> notLam c') ->
@@ -2870,9 +2873,10 @@ Lemma pe_cofix_case_root Σ Γ ip p0 c0 brs0 p mfix idx args narg fn brs :
   pe c0 (mkApps (tCoFix mfix idx) args) ->
   All2 (fun x y => bcontext x = bcontext y × pe (bbody x) (bbody y)) brs0 brs ->
   unfold_cofix mfix idx = Some (narg, fn) ->
+  ip.(ci_cofix_nondep) ->
   ∑ w, trans_clos (red1 Σ Γ) (tCase ip p0 c0 brs0) w × pe w (tCase ip p (mkApps fn args) brs).
 Proof.
-  intros hnl hpar hu hctx hret hc hbrs hunf.
+  intros hnl hpar hu hctx hret hc hbrs hunf hnd.
   destruct (pe_rigid_spine Σ Γ c0 hnl _ (tCoFix mfix idx) args hc eq_refl eq_refl)
     as (h0 & args0 & hred & hnlh & hph & hargs).
   depelim hph; [cbn in hnlh; discriminate hnlh|].
@@ -2880,7 +2884,7 @@ Proof.
     destruct (pe_unfold_cofix_back m mfix idx narg fn H hunf) as (fn0 & hu0 & hfn) end.
   exists (tCase ip p0 (mkApps fn0 args0) brs0). split.
   - eapply rt_trans_clos; [apply red_case_c; exact hred|].
-    apply t_step. eapply red_cofix_case. exact hu0.
+    apply t_step. eapply red_cofix_case; [exact hnd|exact hu0].
   - apply pe_Case; [exact hpar|exact hu|exact hctx|exact hret|apply pe_mkApps; [exact hfn|exact hargs]|exact hbrs].
 Qed.
 
@@ -3966,10 +3970,10 @@ Section Assembly.
       have hnl := Good_case_hnl Σ Γ ci p c brs (fst hg).
       cbn in hofv. move/and5P: hofv => [hopar horet _ hoc hobrs].
       destruct (C3R.red1_tCase_inv hr) as
-        [[[[[(k & uu & args & br & -> & hnth & hlen & ->)|(mfix & idx & args & narg & fn & -> & hu & ->)]
+        [[[[[(k & uu & args & br & -> & hnth & hlen & ->)|(mfix & idx & args & narg & fn & -> & hu & hnd & ->)]
            |(par1 & -> & hop)]|(r & -> & hrr)]|(c1 & -> & hrc)]|(brs1 & -> & hob)].
       + exact (pe_iota_root Σ Γ ci p c brs p' k uu args brs' br hnl apar0 eu pc abrs0 hnth hlen).
-      + exact (pe_cofix_case_root Σ Γ ci p c brs p' mfix idx args narg fn brs' hnl apar0 eu ectx pret pc abrs0 hu).
+      + exact (pe_cofix_case_root Σ Γ ci p c brs p' mfix idx args narg fn brs' hnl apar0 eu ectx pret pc abrs0 hu hnd).
       + (* a parameter *)
         have hT : All (fun y => is_true (on_free_vars xpredT y)) (pparams p') by now apply forallb_All.
         destruct (OnOne2_postpone pe (red1 Σ Γ') (red1 Σ Γ) (GoodC Γ) (fun y => is_true (on_free_vars xpredT y))
@@ -4789,7 +4793,7 @@ Definition bd_fix : term := tFix [mkdef term bd_na bd_bad si_P 0] 0.
 Definition bd_cofix : term := tCoFix [mkdef term bd_na bd_bad si_P 0] 0.
 Definition bd_ctx : context := [vdef bd_na si_P bd_bad].
 Definition bd_case : term :=
-  tCase {| ci_ind := si_ind; ci_npar := 0; ci_relevance := Relevant |}
+  tCase {| ci_ind := si_ind; ci_npar := 0; ci_relevance := Relevant; ci_cofix_nondep := true |}
     {| pparams := []; puinst := []; pcontext := bd_ctx; preturn := si_P |}
     (tRel 0) [{| bcontext := bd_ctx; bbody := si_P |}].
 

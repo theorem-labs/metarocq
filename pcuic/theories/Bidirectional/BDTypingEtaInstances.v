@@ -404,7 +404,7 @@ Qed.
 Definition bd_GF : term := tApp (tRel 1) (tRel 0).
 Definition bd_IGF : term := tApp (tInd si_ind []) bd_GF.
 Definition bd_zna : aname := {| binder_name := nNamed (ind_name si_idecl); binder_relevance := Relevant |}.
-Definition bd_case_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition bd_case_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition bd_case_p : predicate term :=
   {| pparams := [bd_GF]; puinst := []; pcontext := ind_predicate_context si_ind si_mdecl si_idecl;
      preturn := si_P |}.

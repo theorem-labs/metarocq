@@ -469,7 +469,7 @@ Lemma type_Case_helperE
   Σ ;;; Γ |-E make_case ind mib oib pparams puinst discr rettyp brs : subst_rettyp.
 Proof.
   move=> wfΣ inddecl pparamslen discrtyp p predctx ptyp pselimok Her isfinite brslen ptm brstyp srettyp.
-  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib |}.
+  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib ; ci_cofix_nondep := true |}.
 
   have wfΣ1 := (fst wfΣ : wfE Σ.1).
   have Γwf : wf_localE Σ Γ by apply: (typingE_wf_local discrtyp).
@@ -586,7 +586,7 @@ Lemma type_Case_subst_helperE
 Proof.
   move=> wfΣ inddecl pparamslen discrtyp p predctx predWty elimok Her finok brslen brsok substrettyp.
 
-  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib |}.
+  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib ; ci_cofix_nondep := true |}.
 
   have wfΣ1 := (fst wfΣ : wfE Σ.1).
   have Γwf : wf_localE Σ Γ by apply: (typingE_wf_local discrtyp).
@@ -745,7 +745,7 @@ Lemma type_Case_simple_subst_helperE
 Proof.
   move=> wfΣ inddecl pparamslen discrtyp rettyp' p predctx predWty elimok Her brslen brsok.
 
-  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib |}.
+  set ci := {| ci_ind := ind ; ci_npar := ind_npars mib ; ci_relevance := ind_relevance oib ; ci_cofix_nondep := true |}.
 
   have wfΣ1 := (fst wfΣ : wfE Σ.1).
   have Γwf : wf_localE Σ Γ by apply: (typingE_wf_local discrtyp).
