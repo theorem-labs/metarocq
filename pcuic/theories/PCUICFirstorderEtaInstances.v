@@ -14,26 +14,28 @@
   [instantiated_typing_spine_firstorder_spineE] took T1's [SRForecastCopy18] until copy 18b
   landed (frac/eta 3e6b422d); the class is deleted, as in [PCUICClassificationEtaInstances].
 
-  **Non-degeneracy.**
-  - [firstorder_value_specE_inst]: the value [s z] (an application with an argument) of type
-    [N]; the theorem gives it as a first-order value, through [firstorder_argsE] on the spine of
-    [s]'s type. [firstorder_argsE_inst] and [typing_spine_arity_spineE_inst] run on that spine
-    ([fo_s_spine]: [Π _ : N. N] applied to [z]); [instantiated_typing_spine_firstorder_spineE_inst]
-    on its arity spine.
+  **Non-degeneracy.** Each instance carries its tag: NONDEGEN with the lemma that states why it
+  is more than a trivial case, or IMPOSSIBLE with the property of the statement.
+  - [firstorder_value_specE_inst]: the value [s z] (an application with an argument,
+    [fo_sz_nondeg]) of type [N]; the theorem gives it as a first-order value, through
+    [firstorder_argsE] on the spine of [s]'s type. [firstorder_argsE_inst] and
+    [typing_spine_arity_spineE_inst] run on that spine ([fo_s_spine]: [Π _ : N. N] applied to
+    [z]); [instantiated_typing_spine_firstorder_spineE_inst] on its arity spine.
   - [firstorder_value_indsE_inst]: the induction principle on the value [s z], built directly
-    ([fo_sz_value]), with the predicate "is a constructor application".
+    ([fo_sz_value]), with the predicate "is closed": the step uses the induction hypothesis on
+    the arguments ([fo_closed_step]), here on [z].
   - [firstorder_spine_letE_inst]: the type [let X := N : Type1 in X], whose body is the bound
     variable; the spine is the empty one at [N].
-  - [isType_context_conversionE_inst]: the contexts [x : let X := N in X] and [x : N], which
-    differ by a zeta step.
+  - [isType_context_conversionE_inst]: the type [X], a variable, in the contexts
+    [X : let _ := N : Type1 in Type1] and [X : Type1], which differ by a zeta step.
   - [plookup_env_extendsE_inst], [firstorder_mutind_extE_inst]: [fo_env] ⊂ [fo_env2], strict.
-  - [firstorder_ind_propositionalE_inst]: [N] is first order and not propositional.
+  - [firstorder_ind_propositionalE_inst]: [N] is first order, with a constructor that takes an
+    argument ([s]), and not propositional.
 
-  **Rows without a non-reflexive instance, with the reason.**
-  - [PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (used by the main theorem in place
-    of a copy): IMPOSSIBLE, recorded in [PCUICEtaA6Instances] (the conclusion is [False]).
-  - [firstorder_value_alphaE]: IMPOSSIBLE to make non-reflexive, by the statement: its
-    conclusion is [t = t'], so every instance has [t' = t]; the instance runs on [s z]. *)
+  **Rows without a non-reflexive instance** are tagged IMPOSSIBLE at their declaration, with the
+  reason: [firstorder_value_alphaE_inst], and [fo_invert_cumul_Sort_IndE_inst] for
+  [PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (used by the main theorem in place
+  of a copy; also recorded in [PCUICEtaA6Instances]). *)
 
 From Stdlib Require Import ssreflect ssrbool List Lia.
 From MetaRocq.Utils Require Import utils.
@@ -46,10 +48,15 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICInversionEtaInstances PCUICWellScopedCumulativityEta PCUICContextConversionEta
      PCUICWsCumulEtaCtxTyp PCUICAritiesEta PCUICSpineEta PCUICValidityEta PCUICSREta
      PCUICClassificationEta PCUICFirstorderEta.
-From MetaRocq.PCUIC Require PCUICWcbvEval.
+From MetaRocq.PCUIC Require PCUICWcbvEval PCUICEtaA6More.
+From MetaRocq.PCUIC.Syntax Require PCUICClosed.
 From Equations.Type Require Import Relation.
 
 #[local] Existing Instance default_checker_flags.
+
+(** The declarations of this file that are neither instances nor nondegeneracy lemmas: the
+    environment [fo_Σ] and its typing derivations.
+    WITNESSES: fo_* *)
 
 (** ** The environment *)
 
@@ -318,6 +325,11 @@ Proof.
   - econstructor; [exact (fo_N_isType [] localenv_nil)|exact (fo_N_isType [] localenv_nil)|exact (fo_N_refl Cumul)].
 Qed.
 
+(** The spine consumes one product: the type [Π _ : N. N] is not its result [N], and the argument
+    list [[z]] is not empty. *)
+Lemma fo_s_spine_nondeg : tProd fo_na fo_N fo_N <> fo_N /\ [tConstruct fo_ind 0 []] <> [].
+Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+
 (** The value [s z], built directly. *)
 Lemma fo_z_value : firstorder_valueE fo_Σ [] (tConstruct fo_ind 0 []).
 Proof.
@@ -328,6 +340,19 @@ Lemma fo_sz_value : firstorder_valueE fo_Σ [] fo_sz.
 Proof.
   exact (firstorder_value_CE fo_Σ [] fo_ind 1 [] [] [tConstruct fo_ind 0 []] [] fo_sz_typed
            (@Forall_cons _ _ _ _ fo_z_value (@Forall_nil _ _)) fo_not_prop).
+Qed.
+
+(** The value [s z] has an argument: it is not a bare constructor. *)
+Lemma fo_sz_nondeg : (decompose_app fo_sz).2 <> [].
+Proof. intros h; vm_compute in h; discriminate h. Qed.
+
+(** The step of "is closed": a constructor applied to closed arguments is closed. *)
+Lemma fo_closed_step i n ui (args : list term) :
+  Forall (fun t => is_true (closedn 0 t)) args -> is_true (closedn 0 (mkApps (tConstruct i n ui) args)).
+Proof.
+  intros h. rewrite PCUICClosed.closedn_mkApps /=.
+  induction h as [|x l hx _ IH]; [reflexivity|].
+  cbn in hx |- *. rewrite hx. exact IH.
 Qed.
 
 (** [let X := N : Type1 in X] is the type [N]. *)
@@ -351,61 +376,147 @@ Proof.
     apply rt_step. apply red_zeta.
 Qed.
 
+(** [let X := N : Type1 in X] is not [N]: one zeta step. *)
+Lemma fo_letN_nondeg : fo_letN <> fo_N.
+Proof. intros h; vm_compute in h; discriminate h. Qed.
+
+(** [let _ := N : Type1 in Type1] is the sort [Type1] behind a let. *)
+Definition fo_letT : term := tLetIn fo_na fo_N fo_T fo_T.
+
+Lemma fo_T1_typedE (Γ : context) : wf_localE fo_Σ Γ ->
+  fo_Σ ;;; Γ |-E tSort (Sort.super Sort.type1) : tSort (Sort.super (Sort.super Sort.type1)).
+Proof. intros h. apply typeE_Sort; [exact h|apply wf_sort_super, wf_sort_type1]. Qed.
+
+Lemma fo_letT_typed (Γ : context) : wf_localE fo_Σ Γ ->
+  fo_Σ ;;; Γ |-E fo_letT : tSort (Sort.super Sort.type1).
+Proof.
+  intros h.
+  have hdef : lift_typing typingE fo_Σ Γ (j_vdef fo_na fo_N fo_T) :=
+    iv_vdef fo_Σ Γ fo_na fo_N fo_T _ (fo_N_typed Γ h) (fo_T_typedE Γ h) eq_refl.
+  have hΓ' : wf_localE fo_Σ (Γ ,, vdef fo_na fo_N fo_T) by (apply localenv_cons_def; [exact h|exact hdef]).
+  have hlet : fo_Σ ;;; Γ |-E fo_letT : tLetIn fo_na fo_N fo_T (tSort (Sort.super Sort.type1)) :=
+    typeE_LetIn _ _ fo_na fo_N fo_T fo_T (tSort (Sort.super Sort.type1)) hdef (fo_T_typedE _ hΓ').
+  have hcl : is_closed_context Γ := wf_local_closed_contextE (Σ := fo_Σ) (wfΣ := fo_wfE) h.
+  eapply (type_ws_cumul_pbE (Σ := fo_Σ) (cbΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE)) (pb := Cumul) _ hlet).
+  - exact (has_sort_isTypeE _ (fo_T1_typedE Γ h)).
+  - eapply (red_ws_cumul_pbE (Σ := fo_Σ) (wfΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE))).
+    constructor; [exact hcl|exact (type_is_open_termE (Σ := fo_Σ) (wfΣ := fo_wfE) hlet)|].
+    apply rt_step. apply red_zeta.
+Qed.
+
+(** The variable [X : let _ := N : Type1 in Type1] is a type, of sort [Type1]. *)
+Lemma fo_wf_letT : wf_localE fo_Σ [vass fo_na fo_letT].
+Proof.
+  exact (iv_wf_vass fo_Σ [] fo_na fo_letT (Sort.super Sort.type1) localenv_nil
+           (fo_letT_typed [] localenv_nil) eq_refl).
+Qed.
+
+Lemma fo_X_typed : fo_Σ ;;; [vass fo_na fo_letT] |-E tRel 0 : fo_T.
+Proof.
+  have hrel : fo_Σ ;;; [vass fo_na fo_letT] |-E tRel 0 : fo_letT :=
+    typeE_Rel _ _ 0 (vass fo_na fo_letT) fo_wf_letT eq_refl.
+  eapply (type_ws_cumul_pbE (Σ := fo_Σ) (cbΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE)) (pb := Cumul) _ hrel).
+  - exact (has_sort_isTypeE _ (fo_T_typedE _ fo_wf_letT)).
+  - eapply (red_ws_cumul_pbE (Σ := fo_Σ) (wfΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE))).
+    constructor; [exact (wf_local_closed_contextE (Σ := fo_Σ) (wfΣ := fo_wfE) fo_wf_letT)
+                 |exact (type_is_open_termE (Σ := fo_Σ) (wfΣ := fo_wfE) hrel)|].
+    apply rt_step. apply red_zeta.
+Qed.
+
+(** The two contexts of [X] differ (by a zeta step). *)
+Lemma fo_ctx_nondeg : [vass fo_na fo_letT] <> [vass fo_na fo_T].
+Proof. intros h; vm_compute in h; discriminate h. Qed.
+
 (** ** The lemmas that never took a class *)
 
-Definition firstorder_value_indsE_inst :
-  exists i n ui args, fo_sz = mkApps (tConstruct i n ui) args :=
-  firstorder_value_indsE fo_Σ [] (fun t => exists i n ui args, t = mkApps (tConstruct i n ui) args)
-    (fun i n ui _ args _ _ _ _ _ => ex_intro _ i (ex_intro _ n (ex_intro _ ui (ex_intro _ args eq_refl))))
+(** The induction principle on the value [s z], with the predicate "is closed": the step uses the
+    induction hypothesis on the arguments ([fo_closed_step]), here on [z].
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_sz_nondeg *)
+Definition firstorder_value_indsE_inst : is_true (closedn 0 fo_sz) :=
+  firstorder_value_indsE fo_Σ [] (fun t => is_true (closedn 0 t))
+    (fun i n ui _ args _ _ _ hP _ => fo_closed_step i n ui args hP)
     fo_sz fo_sz_value.
 
+(** [N] has a constructor that takes an argument ([s : N → N]): the first-order check of the
+    premise examines a constructor argument. *)
+Lemma fo_idecl_nondeg : In fo_cs (ind_ctors fo_idecl) /\ cstr_args fo_cs <> [].
+Proof. split; [cbn; right; left; reflexivity|intros h; vm_compute in h; discriminate h]. Qed.
+
+(** [N] is first order, hence not propositional.
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_idecl_nondeg *)
 Definition firstorder_ind_propositionalE_inst : ~~ isPropositional fo_Σ fo_ind :=
   firstorder_ind_propositionalE (Σ := fo_Σ) (wfΣ := fo_wfE) fo_ind fo_mdecl fo_idecl fo_declared fo_firstorder.
 
+(** The typing spine of [Π _ : N. N] on [[z]], as an arity spine.
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_s_spine_nondeg *)
 Definition typing_spine_arity_spineE_inst :
   PCUICSpineEta.arity_spineE fo_Σ [] (tProd fo_na fo_N fo_N) [tConstruct fo_ind 0 []] fo_N :=
   typing_spine_arity_spineE (Σ := fo_Σ) (wfΣ := fo_wfE) [] [vass fo_na fo_N] _ _ fo_ind [] [] fo_s_spine.
 
+(** The empty spine at [N], moved to the let-type [let X := N : Type1 in X].
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_letN_nondeg *)
 Definition firstorder_spine_letE_inst : firstorder_spineE fo_Σ [] fo_letN [] fo_N :=
   firstorder_spine_letE (Σ := fo_Σ) (wfΣ := fo_wfE) (na := fo_na) (a := fo_N) (A := fo_T) (B := tRel 0)
     (firstorder_spine_nilE fo_Σ [] fo_N fo_N (fo_N_isType [] localenv_nil) (fo_N_isType [] localenv_nil)
        (fo_N_refl Cumul))
     (has_sort_isTypeE _ (fo_letN_typed [] localenv_nil)).
 
-Lemma fo_ctx_conv : ws_cumul_ctx_pbE Conv fo_Σ [vass fo_na fo_letN] [vass fo_na fo_N].
+Lemma fo_ctxT_conv : ws_cumul_ctx_pbE Conv fo_Σ [vass fo_na fo_letT] [vass fo_na fo_T].
 Proof.
   constructor; [constructor|]. unfold ws_cumul_declsE. constructor; [reflexivity|].
   eapply (red_ws_cumul_pbE (Σ := fo_Σ) (wfΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE))).
-  constructor; [reflexivity|exact (subject_is_open_termE (Σ := fo_Σ) (wfΣ := fo_wfE) (fo_letN_typed [] localenv_nil))|].
+  constructor; [reflexivity|exact (subject_is_open_termE (Σ := fo_Σ) (wfΣ := fo_wfE) (fo_letT_typed [] localenv_nil))|].
   apply rt_step. apply red_zeta.
 Qed.
 
-Definition isType_context_conversionE_inst : isTypeE fo_Σ [vass fo_na fo_N] fo_T :=
-  isType_context_conversionE (Σ := fo_Σ) (wfΣ := fo_wfE)
-    (has_sort_isTypeE _ (fo_T_typedE _ (iv_wf_vass fo_Σ [] fo_na fo_letN Sort.type1 localenv_nil
-                                          (fo_letN_typed [] localenv_nil) eq_refl)))
-    fo_ctx_conv
-    (iv_wf_vass fo_Σ [] fo_na fo_N Sort.type1 localenv_nil (fo_N_typed [] localenv_nil) eq_refl).
+(** The variable [X] is a type in [X : let _ := N : Type1 in Type1], hence in [X : Type1]: the
+    typing of [X] reads the declaration that the conversion changes.
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_ctx_nondeg *)
+Definition isType_context_conversionE_inst : isTypeE fo_Σ [vass fo_na fo_T] (tRel 0) :=
+  isType_context_conversionE (Σ := fo_Σ) (wfΣ := fo_wfE) (Γ := [vass fo_na fo_letT])
+    (Δ := [vass fo_na fo_T]) (T := tRel 0) (has_sort_isTypeE _ fo_X_typed) fo_ctxT_conv
+    (iv_wf_vass fo_Σ [] fo_na fo_T (Sort.super Sort.type1) localenv_nil (fo_T_typedE [] localenv_nil) eq_refl).
 
 Lemma fo_ext : strictly_extends_decls fo_env fo_env2.
 Proof. split; [reflexivity| |reflexivity]. exists [(fo_kn2, InductiveDecl fo_mdecl)]. reflexivity. Qed.
 
+(** The extension is strict, and its new name is not [N]'s: a lookup of [N] passes it. *)
+Lemma fo_ext_nondeg : declarations fo_Σ2.1 <> declarations fo_Σ.1 /\ fo_kn2 <> fo_kn.
+Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+
+(** The lookup of [N] in [fo_env], read in its strict extension [fo_env2].
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_ext_nondeg *)
 Definition plookup_env_extendsE_inst :
   plookup_env (firstorder_env' (declarations fo_env2)) fo_kn = Some true :=
   plookup_env_extendsE (Σ := fo_env2) (Σ' := fo_env) fo_kn true fo_ext fo_wfE2 eq_refl.
 
+(** [N]'s declaration is first order in [fo_Σ], hence in its strict extension [fo_Σ2].
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_ext_nondeg *)
 Definition firstorder_mutind_extE_inst :
   @firstorder_mutind (firstorder_env fo_Σ2) fo_mdecl :=
   firstorder_mutind_extE (Σ := fo_Σ2) (Σ' := fo_Σ) fo_mdecl fo_ext fo_wfE2 eq_refl.
 
-(** IMPOSSIBLE to make non-reflexive (see the header). *)
+(** [s z] against itself.
+    INSTANCE IMPOSSIBLE: the conclusion is t = t', so every instance has t' = t (and a first-order value has no binders, so t ≡α t' is already t = t') *)
 Definition firstorder_value_alphaE_inst : fo_sz = fo_sz :=
   firstorder_value_alphaE fo_Σ fo_sz fo_sz (upto_names_ref fo_sz) fo_sz_value.
+
+(** The inversion that the main theorem uses in place of a copy, at [fo_Σ]: the arity
+    [Π _ : N. Type1] is never related to [N], at any [pb].
+    INSTANCE IMPOSSIBLE: the conclusion is False: an arity that ends in a sort is never related to an inductive type, so no premise of the lemma holds
+    TARGET PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE *)
+Definition fo_invert_cumul_Sort_IndE_inst :
+  forall pb, ws_cumul_pbE pb fo_Σ [] (it_mkProd_or_LetIn [vass fo_na fo_N] (tSort Sort.type1))
+                          (mkApps (tInd fo_ind []) []) -> False :=
+  fun pb h => PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE
+                (Σ := fo_Σ) (wfΣ := wfE_ClosedBodies fo_Σ (wfΣ := fo_wfE)) h.
 
 (** ** The lemmas that took T1's forecast class until copy 18b landed *)
 
 Section FirstorderEtaInstances.
 
+(** The arity spine of [Π _ : N. N] on [[z]], as a first-order spine.
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_s_spine_nondeg *)
 Definition instantiated_typing_spine_firstorder_spineE_inst :
   firstorder_spineE fo_Σ [] (tProd fo_na fo_N fo_N) [tConstruct fo_ind 0 []] fo_N :=
   instantiated_typing_spine_firstorder_spineE (Σ := fo_Σ) (wfΣ := fo_wfE) [] _ _ _
@@ -414,11 +525,16 @@ Definition instantiated_typing_spine_firstorder_spineE_inst :
     typing_spine_arity_spineE_inst
     (has_sort_isTypeE _ (fo_NN_typed [] localenv_nil)).
 
+(** The spine of [s]'s type on [[z]].
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_s_spine_nondeg *)
 Definition firstorder_argsE_inst :
   firstorder_spineE fo_Σ [] (type_of_constructor fo_mdecl fo_cs (fo_ind, 1) [])
     [tConstruct fo_ind 0 []] (mkApps (tInd fo_ind []) []) :=
-  firstorder_argsE (Σ := fo_Σ) (wfΣ := fo_wfE) fo_declared_cs fo_s_spine fo_firstorder.
+  firstorder_argsE (Σ := fo_Σ) (wfΣ := fo_wfE) (args := [tConstruct fo_ind 0 []]) fo_declared_cs
+    fo_s_spine fo_firstorder.
 
+(** The main theorem on the value [s z].
+    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_sz_nondeg *)
 Definition firstorder_value_specE_inst : firstorder_valueE fo_Σ [] fo_sz :=
   firstorder_value_specE fo_Σ fo_sz fo_ind [] [] fo_wfE localenv_nil fo_sz_typed fo_sz_wcbv_value
     fo_firstorder.

@@ -12,22 +12,25 @@
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]).
 
   **Non-degeneracy.** The uniqueness lemmas compare two derivations of one term. Inference is
-  syntax-directed, so two derivations differ only where [▹Π], [▹□] or [▹{}] picks a reduct:
+  syntax-directed, so two derivations differ only where [▹Π], [▹□] or [▹{}] picks a reduct.
+  The comment above each instance carries its tag of the instance degeneracy gate; the
+  declarations that are not instances are registered on the witness line after the imports.
   - in [bu_ΓQ = [f : Π P : Prop. (λ x : Prop. x) P]], [f ▹Π] has two derivations, one keeping the
-    β-redex in the codomain and one contracting it ([bu_f_prod1], [bu_f_prod2]), so [f (∀P.P)]
-    infers the two different types [(λ x. x) (∀P.P)] and [∀P.P] ([bu_app_infer1],
-    [bu_app_infer2], [bu_app_types_differ]); the main theorem, [infering_uniqueE],
-    [infering_unique'E], [infering_prod_prodE], [infering_prod_prod'E] and
+    β-redex in the codomain and one contracting it ([bu_f_prod1], [bu_f_prod2],
+    [bu_f_prods_differ]), so [f (∀P.P)] infers the two different types [(λ x. x) (∀P.P)] and
+    [∀P.P] ([bu_app_infer1], [bu_app_infer2], [bu_app_types_differ]); the main theorem,
+    [infering_uniqueE], [infering_unique'E], [infering_prod_prodE], [infering_prod_prod'E] and
     [infering_prod_inferingE] are applied to them;
   - [c ((λ x. x) (∀P.P)) ▹{I}] has the argument lists [[(λ x. x) (∀P.P)]] and [[∀P.P]]
-    ([bu_disc_ind1], [bu_disc_ind2]) for the three [▹{}] lemmas;
+    ([bu_disc_ind1], [bu_disc_ind2], [bu_disc_args_differ]) for the three [▹{}] lemmas;
   - in [bu_Γd = [y : d; d := Prop : Type]], [y ▹ d] and [y ▹□ Prop] through the δ-step of the let
-    ([bu_y_sort]), for [infering_sort_inferingE];
+    ([bu_y_sort], [infering_sort_inferingE_inst_nondeg]), for [infering_sort_inferingE];
   - [infering_checkingE] is applied to the check [x ◃ G F] of [checkingE_eta_inst], whose
-    [JoinE] premise is one η step.
-  IMPOSSIBLE to make non-reflexive, by the statement: [infering_sort_sortE] and
-  [isTypeRel_uniqueE] conclude an equality of sorts or relevances; their instances run through a
-  let-reduction ([bu_y_sort]) or a real derivation. The two reduction facts the proofs use,
+    [JoinE] premise is one η step, and [BDUniqueEta.principal_typeE] to the typing [x : G F]
+    that soundness gives from that check ([checking_typingE_eta_inst]), whose principal type
+    [G (λ y. F y)] is not [G F] ([bd_eta_pair_differ]).
+  The two rows whose every instance is degenerate by the statement, [infering_sort_sortE] and
+  [isTypeRel_uniqueE], are tagged at their instance. The two reduction facts the proofs use,
   [PCUICPrincipalityEta.closed_red_confluence_cb] and [invert_red_sort_cb], have their instances
   in [PCUICPrincipalityEtaInstances]. *)
 
@@ -46,6 +49,10 @@ From Equations.Type Require Import Relation.
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
+
+(** The declarations that are not instances: the contexts, derivations and non-degeneracy
+    facts the instances are built from or name.
+    WITNESSES: bu_* *)
 
 (** ** Derivations, without any class *)
 
@@ -84,6 +91,11 @@ Proof.
   econstructor; [exact bu_f_infer|].
   apply rt_step. unfold bu_Q. apply prod_red_r. unfold iv_id. apply red_beta.
 Qed.
+
+(** The two products differ: the codomain [(λ x. x) P] is a β-redex, not [P], so [Q] is not
+    [Π P. P]. *)
+Lemma bu_f_prods_differ : tApp iv_id (tRel 0) <> tRel 0 /\ bu_Q <> tProd si_na si_P (tRel 0).
+Proof. unfold bu_Q. split; discriminate. Qed.
 
 (** [∀P:Prop. P ◃ Prop], in any context. *)
 Lemma bu_False_check (Γ : context) : si_Σ ;;; Γ |-E iv_False ◃ si_P.
@@ -136,6 +148,10 @@ Proof.
   apply rt_step. apply app_red_r. unfold bu_idF, iv_id. apply red_beta.
 Qed.
 
+(** The two argument lists differ: [(λ x. x) (∀P.P)] is not [∀P.P]. *)
+Lemma bu_disc_args_differ : bu_idF <> iv_False.
+Proof. unfold bu_idF, iv_False. discriminate. Qed.
+
 (** [d := Prop : Type, y : d]: [y ▹ d], and [y ▹□ Prop] by the δ-step of the let. *)
 Definition bu_Γd : context := [vass si_na (tRel 0); vdef si_na si_P (tSort (Sort.super sProp))].
 
@@ -159,59 +175,97 @@ Proof.
   apply rt_step. exact (red_rel si_Σ bu_Γd 1 si_P eq_refl).
 Qed.
 
+(** The type [inferE_Rel] gives [y] in [bu_Γd] is the variable [d], not a sort: [▹□] reaches
+    [Prop] only by the δ-step of the let. *)
+Lemma infering_sort_inferingE_inst_nondeg :
+  forall d u, nth_error bu_Γd 0 = Some d -> lift0 1 (decl_type d) <> tSort u.
+Proof. intros d u h. injection h as <-. discriminate. Qed.
+
 (** ** The lemmas, applied (they took a forecast class until copy 18b landed) *)
 
 Section BDUniqueClassInstances.
 
-  (** The main theorem's inference component, on the two types of [f (∀P.P)]. *)
+  (** The main theorem's inference component, on the two types of [f (∀P.P)], which differ
+      ([bu_app_types_differ]).
+      INSTANCE NONDEGEN BDUniqueEtaInstances.bu_app_types_differ *)
   Definition bidirectional_uniqueE_inst :
     ∑ T'', si_Σ ;;; bu_ΓQ ⊢ tApp iv_id iv_False ⇝ T'' × si_Σ ;;; bu_ΓQ ⊢ iv_False ⇝ T'' :=
-    fst (snd (snd (snd (snd (bidirectional_uniqueE si_Σ si_wfE))))) bu_ΓQ _ _ bu_app_infer1
-      bu_wf_ΓQ _ bu_app_infer2.
+    fst (snd (snd (snd (snd (bidirectional_uniqueE si_Σ si_wfE))))) bu_ΓQ (tApp (tRel 0) iv_False)
+      (tApp iv_id iv_False) bu_app_infer1 bu_wf_ΓQ iv_False bu_app_infer2.
 
+  (** INSTANCE NONDEGEN BDUniqueEtaInstances.bu_app_types_differ *)
   Definition infering_uniqueE_inst :
     ∑ T'', si_Σ ;;; bu_ΓQ ⊢ tApp iv_id iv_False ⇝ T'' × si_Σ ;;; bu_ΓQ ⊢ iv_False ⇝ T'' :=
-    infering_uniqueE (Σ := si_Σ) si_wfE bu_wf_ΓQ bu_app_infer1 bu_app_infer2.
+    infering_uniqueE (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp iv_id iv_False) (T' := iv_False)
+      bu_app_infer1 bu_app_infer2.
 
+  (** INSTANCE NONDEGEN BDUniqueEtaInstances.bu_app_types_differ *)
   Definition infering_unique'E_inst : si_Σ ;;; bu_ΓQ ⊢E tApp iv_id iv_False = iv_False :=
-    infering_unique'E (Σ := si_Σ) si_wfE bu_wf_ΓQ bu_app_infer1 bu_app_infer2.
+    infering_unique'E (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp iv_id iv_False) (T' := iv_False)
+      bu_app_infer1 bu_app_infer2.
 
-  (** [x ◃ G F] by one η step; the comparison concluded is the η pair. *)
+  (** [x ◃ G F] by one η step; the comparison concluded is the η pair, whose two sides
+      differ ([bd_eta_pair_differ]).
+      INSTANCE NONDEGEN BDTypingEtaInstances.bd_eta_pair_differ *)
   Definition infering_checkingE_inst : si_Σ ;;; bd_Γη ⊢E lift0 1 bd_X ≤ tApp (tRel 2) (tRel 1) :=
     infering_checkingE (Σ := si_Σ) si_wfE bdi_wfη (T' := tApp (tRel 2) (tRel 1)) eq_refl
       (inferE_Rel _ bd_Γη 0 (vass si_na bd_X) eq_refl)
       checkingE_eta_inst.
 
+  (** INSTANCE IMPOSSIBLE: the conclusion [u = u'] equates the sorts of two [▹□] derivations of one term; inference is syntax-directed and a sort has no reduct, so in every environment and context, whatever its [wfE], the two sides are the same sort (here [sProp = sProp], through the δ-step of [bu_y_sort]). *)
   Definition infering_sort_sortE_inst : sProp = sProp :=
     infering_sort_sortE (Σ := si_Σ) si_wfE bu_wf_Γd bu_y_sort bu_y_sort.
 
+  (** [y ▹ d] and [y ▹□ Prop]: [d] reaches [Prop] by the δ-step of the let
+      ([infering_sort_inferingE_inst_nondeg]).
+      INSTANCE NONDEGEN BDUniqueEtaInstances.infering_sort_inferingE_inst_nondeg *)
   Definition infering_sort_inferingE_inst : si_Σ ;;; bu_Γd ⊢ tRel 1 ⇝ tSort sProp :=
-    infering_sort_inferingE (Σ := si_Σ) si_wfE (wfΓ := bu_wf_Γd) bu_y_sort bu_y_infer.
+    infering_sort_inferingE (Σ := si_Σ) si_wfE (Γ := bu_Γd) (wfΓ := bu_wf_Γd) bu_y_sort bu_y_infer.
 
+  (** The two products of [f], [Π P. (λ x. x) P] and [Π P. P] ([bu_f_prods_differ]).
+      INSTANCE NONDEGEN BDUniqueEtaInstances.bu_f_prods_differ *)
   Definition infering_prod_prodE_inst :=
-    infering_prod_prodE (Σ := si_Σ) si_wfE bu_wf_ΓQ bu_f_prod1 bu_f_prod2.
+    infering_prod_prodE (Σ := si_Σ) si_wfE bu_wf_ΓQ (B := tApp iv_id (tRel 0)) (B' := tRel 0)
+      bu_f_prod1 bu_f_prod2.
 
+  (** INSTANCE NONDEGEN BDUniqueEtaInstances.bu_f_prods_differ *)
   Definition infering_prod_prod'E_inst :
     [× si_na = si_na, si_Σ ;;; bu_ΓQ ⊢E si_P = si_P &
        si_Σ ;;; bu_ΓQ ,, vass si_na si_P ⊢E tApp iv_id (tRel 0) = tRel 0] :=
-    infering_prod_prod'E (Σ := si_Σ) si_wfE bu_wf_ΓQ bu_f_prod1 bu_f_prod2.
+    infering_prod_prod'E (Σ := si_Σ) si_wfE bu_wf_ΓQ (B := tApp iv_id (tRel 0)) (B' := tRel 0)
+      bu_f_prod1 bu_f_prod2.
 
+  (** [f ▹ Q] and [f ▹Π] with the codomain contracted, [Q ≠ Π P. P] ([bu_f_prods_differ]).
+      INSTANCE NONDEGEN BDUniqueEtaInstances.bu_f_prods_differ *)
   Definition infering_prod_inferingE_inst :=
-    infering_prod_inferingE (Σ := si_Σ) si_wfE bu_wf_ΓQ bu_f_prod2 bu_f_infer.
+    infering_prod_inferingE (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := bu_Q) bu_f_prod2 bu_f_infer.
 
+  (** The two argument lists [[(λ x. x) (∀P.P)]] and [[∀P.P]] ([bu_disc_args_differ]).
+      INSTANCE NONDEGEN BDUniqueEtaInstances.bu_disc_args_differ *)
   Definition infering_ind_indE_inst :=
-    infering_ind_indE (Σ := si_Σ) si_wfE localenv_nil bu_disc_ind1 bu_disc_ind2.
+    infering_ind_indE (Σ := si_Σ) si_wfE localenv_nil (args := [bu_idF]) (args' := [iv_False])
+      bu_disc_ind1 bu_disc_ind2.
 
+  (** INSTANCE NONDEGEN BDUniqueEtaInstances.bu_disc_args_differ *)
   Definition infering_ind_ind'E_inst :
     [× si_ind = si_ind, ([] : Instance.t) = [] & ws_cumul_pbE_terms si_Σ [] [bu_idF] [iv_False]] :=
-    infering_ind_ind'E (Σ := si_Σ) si_wfE localenv_nil bu_disc_ind1 bu_disc_ind2.
+    infering_ind_ind'E (Σ := si_Σ) si_wfE localenv_nil (args := [bu_idF]) (args' := [iv_False])
+      bu_disc_ind1 bu_disc_ind2.
 
+  (** [c ((λ x. x) (∀P.P)) ▹ I ((λ x. x) (∀P.P))] and [▹{I}] with the argument contracted
+      ([bu_disc_args_differ]).
+      INSTANCE NONDEGEN BDUniqueEtaInstances.bu_disc_args_differ *)
   Definition infering_ind_inferingE_inst :=
-    infering_ind_inferingE (Σ := si_Σ) si_wfE localenv_nil bu_disc_ind2 bu_disc_infer.
+    infering_ind_inferingE (Σ := si_Σ) si_wfE localenv_nil (T := tApp (tInd si_ind []) bu_idF)
+      bu_disc_ind2 bu_disc_infer.
 
+  (** The typing [x : G F] in [bd_Γη], which soundness gives from the η check: the principal
+      type of [x] is [G (λ y. F y)], not [G F] ([bd_eta_pair_differ]).
+      INSTANCE NONDEGEN BDTypingEtaInstances.bd_eta_pair_differ *)
   Definition principal_typeE_inst :=
-    BDUniqueEta.principal_typeE (Σ := si_Σ) si_wfE (iv_app_typed si_Σ [] localenv_nil).
+    BDUniqueEta.principal_typeE (Σ := si_Σ) si_wfE (Γ := bd_Γη) checking_typingE_eta_inst.
 
+  (** INSTANCE IMPOSSIBLE: the conclusion [rel = rel'] equates the relevances of two [isTypeRelE] judgments of one type; each is the relevance of the type's sort, and that sort is unique, so in every environment and context, whatever its [wfE], the two sides are equal (here [Relevant = Relevant]). *)
   Definition isTypeRel_uniqueE_inst : Relevant = Relevant :=
     isTypeRel_uniqueE (Σ := si_Σ) si_wfE (Γ := []) (T := iv_PP)
       (iv_vass si_Σ [] si_na iv_PP _ (iv_PP_typed si_Σ [] localenv_nil) eq_refl)

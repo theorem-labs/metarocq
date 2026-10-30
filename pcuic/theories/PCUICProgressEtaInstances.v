@@ -14,8 +14,9 @@
   - [progressE_inst] (through [progress_env_propE] and the induction principle
     [typing_ind_envE], [typing_ind_env_app_sizeE]) and [typing_value_head_nappE_inst] /
     [typing_value_headE_inst] find the β-step of [(λx:Prop. x) (∀P. P)].
-  - [eval_tCaseE_inst]: the closed [match c (∀P. P) with c x => c x end] ([pgi_match]), which
-    evaluates by ι.
+  - [eval_tCaseE_inst]: the closed [match (let y := ∀P. P in c y) with c x => c x end]
+    ([pgi_match_let]): its scrutinee is a let-in, not a constructor application, so it evaluates
+    by ζ, then ι.
   - [whnf_progressE_inst]: the normal form [∀P. P]. [classificationE_inst]: the normal
     constructor application [c (∀P. P)], at [extraction_checker_flags], the flags its statement
     is fixed to (as base's), in [si_Σ] proved [wfE] at those flags (section
@@ -23,9 +24,9 @@
   - The constructor-arity lemmas run on [c (∀P. P) : I (∀P. P)].
   - [typing_spine_lengthE_inst]: the spine of [c] applied to [∀P. P].
 
-  **Conclusions that force an empty spine.** [typing_spine_sortE], [typing_spine_axiomE] and
-  [typing_spine_prim_typeE] conclude [args = []]: an instance can only have an empty spine
-  (IMPOSSIBLE otherwise, which is what each proves). Their instances have it.
+  **Rows degenerate by the statement** ([typing_spine_sortE], [typing_spine_axiomE],
+  [typing_spine_prim_typeE]): tagged IMPOSSIBLE at each instance. Each instance is tagged for the
+  instance gate (its non-degeneracy lemma, or the reason) in the comment directly above it.
 
   **Helpers run by the instances above:** [typing_ind_envE], [typing_ind_env_app_sizeE] (by
   [progressE_inst]), [declared_constructor_ind_declE] (also its own instance). *)
@@ -44,6 +45,9 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICClassification PCUICClassificationEta PCUICClassificationEtaInstances
      PCUICProgress PCUICProgressEta.
 From Equations.Type Require Import Relation.
+
+(** Declarations of this file that are neither instances nor non-degeneracy lemmas (instance gate):
+    WITNESSES: pgx_* pgi_* *)
 
 (** ** [si_env] and [c (∀P. P)] at [config.extraction_checker_flags], for [classificationE]
 
@@ -305,17 +309,72 @@ Proof.
   econstructor; [exact h|exact h|exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] _ h)].
 Qed.
 
-(** The closed [match c (∀P. P) as z in I x return I x with c => c x end]. *)
-Definition pgi_match : term := Eval cbn in iv_match {0 := iv_False}.
-Definition pgi_match_ty : term := Eval cbn in iv_match_ty {0 := iv_False}.
+(** The closed [match (let y := ∀P. P in c y) as z in I x return I x with c => c x end]
+    ([pgi_match_let]). Its scrutinee is a let-in, not a constructor application: it reaches
+    [c (∀P. P)] by a ζ step, then the match takes its branch by ι. [pgi_match_let] is
+    [pgi_match_let_open] at [x := ∀P. P]: the [match] [iv_match] of [PCUICInversionEtaInstances],
+    in [iv_Γ1 = [x : Prop]], with the scrutinee [let y := x in c y] in place of [c x]. That
+    scrutinee has, by the LetIn rule, the let-in type [let y := x in I y] ([pgi_disc_let_ty]),
+    which reduces to [I x] by ζ ([PCUICPrincipalityEtaInstances.principal_typeE_case_inst] runs
+    T8 [Ind_r] on it). *)
+Definition pgi_disc_let : term := tLetIn si_na (tRel 0) si_P (tApp (tConstruct si_ind 0 []) (tRel 0)).
+Definition pgi_disc_let_ty : term := tLetIn si_na (tRel 0) si_P (iv_Ix 0).
 
-Lemma pgi_match_typed : si_Σ ;;; [] |-E pgi_match : pgi_match_ty.
-Proof. exact (substitution0E (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) iv_match_typed (iv_False_typed si_Σ [] localenv_nil)). Qed.
-
-Lemma pgi_match_eval : eval si_Σ pgi_match sri_cF.
+Lemma pgi_disc_let_letin_typed : si_Σ ;;; iv_Γ1 |-E pgi_disc_let : pgi_disc_let_ty.
 Proof.
-  eapply (eval_iota _ iv_ci sri_cF 0 si_mdecl si_idecl si_cdecl [] [iv_False]).
-  - exact cli_cF_eval.
+  have hd := iv_vdef si_Σ iv_Γ1 si_na (tRel 0) si_P _ iv_x_typed (iv_P_typed si_Σ iv_Γ1 iv_wf_Γ1) eq_refl.
+  have w : wf_localE si_Σ (iv_Γ1 ,, vdef si_na (tRel 0) si_P) := localenv_cons_def iv_wf_Γ1 hd.
+  unfold pgi_disc_let, pgi_disc_let_ty. apply typeE_LetIn; [exact hd|].
+  exact (typeE_App _ _ (tConstruct si_ind 0 []) si_na si_P (tApp (tInd si_ind []) (tRel 0)) _ (tRel 0)
+           (iv_cstr_prod_typed _ w) (iv_cstr_typed _ w)
+           (typeE_Rel _ _ 0 (vdef si_na (tRel 0) si_P) w eq_refl)).
+Qed.
+
+Lemma pgi_disc_let_typed : si_Σ ;;; iv_Γ1 |-E pgi_disc_let : iv_Ix 0.
+Proof.
+  refine (typeE_Cumul _ _ pgi_disc_let pgi_disc_let_ty (iv_Ix 0) sProp pgi_disc_let_letin_typed
+            iv_Ix0_typed _).
+  apply (ws_cumul_pbE_forget_spec (pb := Cumul)).
+  apply (red_ws_cumul_pbE (Σ := si_Σ)).
+  exact (closed_red_of (Σ := si_Σ) (Γ := iv_Γ1) (t := pgi_disc_let_ty) eq_refl eq_refl
+           (red1_red _ _ _ _ (PCUICReduction.red_zeta _ _ si_na (tRel 0) si_P (iv_Ix 0)))).
+Qed.
+
+Definition pgi_match_let_open : term := tCase iv_ci iv_mp pgi_disc_let [iv_br].
+Definition pgi_match_let_open_ty : term :=
+  mkApps (it_mkLambda_or_LetIn (case_predicate_context si_ind si_mdecl si_idecl iv_mp) (preturn iv_mp))
+    ([] ++ [pgi_disc_let]).
+
+Lemma pgi_match_let_open_typed : si_Σ ;;; iv_Γ1 |-E pgi_match_let_open : pgi_match_let_open_ty.
+Proof.
+  eapply (typeE_Case _ _ iv_ci iv_mp pgi_disc_let [iv_br] [] sProp si_mdecl si_idecl).
+  - exact si_declared_inductive.
+  - exact iv_pret_typed.
+  - exact pgi_disc_let_typed.
+  - exact iv_case_side.
+  - exact iv_case_brs.
+Qed.
+
+Definition pgi_match_let : term := Eval cbn in pgi_match_let_open {0 := iv_False}.
+Definition pgi_match_let_ty : term := Eval cbn in pgi_match_let_open_ty {0 := iv_False}.
+
+Lemma pgi_match_let_typed : si_Σ ;;; [] |-E pgi_match_let : pgi_match_let_ty.
+Proof.
+  exact (substitution0E (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) pgi_match_let_open_typed
+           (iv_False_typed si_Σ [] localenv_nil)).
+Qed.
+
+(** [let y := ∀P. P in c y] evaluates to [c (∀P. P)] by ζ. *)
+Lemma pgi_disc_let_eval : eval si_Σ (pgi_disc_let {0 := iv_False}) sri_cF.
+Proof.
+  change (eval si_Σ (tLetIn si_na iv_False si_P (tApp (tConstruct si_ind 0 []) (tRel 0))) sri_cF).
+  eapply eval_zeta; [eapply eval_atom; reflexivity|exact cli_cF_eval].
+Qed.
+
+Lemma pgi_match_let_eval : eval si_Σ pgi_match_let sri_cF.
+Proof.
+  eapply (eval_iota _ iv_ci _ 0 si_mdecl si_idecl si_cdecl [] [iv_False]).
+  - exact pgi_disc_let_eval.
   - reflexivity.
   - exact (declared_constructor_to_gen (wfΣ := si_wf) si_declared_constructor).
   - reflexivity.
@@ -329,29 +388,77 @@ Qed.
 
 Section ProgressEtaInstances.
 
-Definition eval_tCaseE_inst := eval_tCaseE (Σ := si_Σ) _ _ _ _ _ _ si_wfE pgi_match_typed pgi_match_eval.
+(** The scrutinee of [pgi_match_let] is a let-in, not a constructor application. *)
+Lemma eval_tCaseE_inst_nondeg : isConstruct_app (pgi_disc_let {0 := iv_False}) = false.
+Proof. reflexivity. Qed.
 
+(** [eval_tCaseE] on [pgi_match_let]: its scrutinee is not a constructor application
+    ([eval_tCaseE_inst_nondeg]), so the reduction the lemma returns, to the match on
+    [c (∀P. P)], is not reflexive (ζ).
+    INSTANCE NONDEGEN PCUICProgressEtaInstances.eval_tCaseE_inst_nondeg *)
+Definition eval_tCaseE_inst :=
+  eval_tCaseE (Σ := si_Σ) _ _ (pgi_disc_let {0 := iv_False}) _ _ _ si_wfE pgi_match_let_typed
+    pgi_match_let_eval.
+
+(** The type the spine is moved to, [(λx:Prop. x) (∀P. P)] ([sri_A]), is not [∀P. P]. *)
+Lemma typing_spine_pred_strengthenE_inst_nondeg : sri_A <> iv_False.
+Proof. discriminate. Qed.
+
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.typing_spine_pred_strengthenE_inst_nondeg *)
 Definition typing_spine_pred_strengthenE_inst :=
   typing_spine_pred_strengthenE (Σ := si_Σ) (wfΣ := si_wfE) pgi_sp_pred (cli_False_isType [] localenv_nil)
     sri_A sri_A_isType pgi_A_ws.
 
+(** [(λx:Prop. x) (∀P. P)] is a β-redex: its head [iv_id] is an abstraction and its spine is
+    not empty. The sized inversion runs its non-empty-spine case on it; it is not a value, so
+    progress and the value-head lemmas find its β step. *)
+Lemma pgi_beta_redex_nondeg : isLambda iv_id /\ [iv_False] <> [].
+Proof. split; [reflexivity|discriminate]. Qed.
+
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
 Definition inversion_mkAppsE_inst :=
   PCUICProgressEta.inversion_mkAppsE (Σ := si_Σ) (wfΣ := si_wfE) (f := iv_id) (u := [iv_False])
     (Sort.super sProp) (iv_app_typed si_Σ [] localenv_nil) (iv_P_typed si_Σ [] localenv_nil).
 
+(** The spine of [c] is not empty and reaches the bound: one argument, one assumption. *)
+Lemma typing_spine_lengthE_inst_nondeg :
+  0 < #|[iv_False]| /\ #|[iv_False]| = context_assumptions [vass si_na si_P].
+Proof. split; [exact (le_n 1)|reflexivity]. Qed.
+
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.typing_spine_lengthE_inst_nondeg *)
 Definition typing_spine_lengthE_inst : #|[iv_False]| <= context_assumptions [vass si_na si_P] :=
   typing_spine_lengthE (Σ := si_Σ) (wfΣ := si_wfE) [] [vass si_na si_P] si_ind [] [tRel 0] [iv_False] iv_IF pgi_sp_cstr.
 
-Definition declared_constructor_ind_declE_inst :=
-  declared_constructor_ind_declE (Σ := si_Σ) (wfΣ := si_wfE) si_declared_constructor.
+(** [I] is the last (only) body of its block: the bound [inductive_ind ind < #|ind_bodies|] is
+    reached. *)
+Lemma declared_constructor_ind_declE_inst_nondeg :
+  S (inductive_ind si_ind) = #|ind_bodies si_mdecl|.
+Proof. reflexivity. Qed.
 
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.declared_constructor_ind_declE_inst_nondeg *)
+Definition declared_constructor_ind_declE_inst :=
+  declared_constructor_ind_declE (Σ := si_Σ) (wfΣ := si_wfE) (ind := si_ind) (mdecl := si_mdecl)
+    si_declared_constructor.
+
+(** [c] is applied to one argument: the equation is [1 = 1], not [0 = 0]. *)
+Lemma typing_constructor_arity_exactE_inst_nondeg : 0 < #|[iv_False]|.
+Proof. exact (le_n 1). Qed.
+
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.typing_constructor_arity_exactE_inst_nondeg *)
 Definition typing_constructor_arity_exactE_inst : #|[iv_False]| = cstr_arity si_mdecl si_cdecl :=
   typing_constructor_arity_exactE (Σ := si_Σ) (wfΣ := si_wfE) (args := [iv_False]) (indices := [iv_False])
     si_declared_constructor sri_cF_typed.
 
+(** [c] is applied to one argument, its full arity: the bound is reached. *)
+Lemma typing_constructor_arityE_inst_nondeg :
+  0 < #|[iv_False]| /\ #|[iv_False]| = cstr_arity si_mdecl si_cdecl.
+Proof. split; [exact (le_n 1)|reflexivity]. Qed.
+
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.typing_constructor_arityE_inst_nondeg *)
 Definition typing_constructor_arityE_inst : #|[iv_False]| <= cstr_arity si_mdecl si_cdecl :=
   typing_constructor_arityE (Σ := si_Σ) (wfΣ := si_wfE) (args := [iv_False]) si_declared_constructor sri_cF_typed.
 
+(** INSTANCE IMPOSSIBLE: the conclusion is [args = []]: a sort is never convertible to a product, so in every environment a spine on [tSort s] has no argument and every instance concludes [[] = []]. *)
 Definition typing_spine_sortE_inst : @nil term = [] :=
   typing_spine_sortE (Σ := si_Σ) (wfΣ := si_wfE) [] sProp [] (tSort sProp) pgi_sp_sort.
 
@@ -364,10 +471,12 @@ Proof.
   exact (isType_ws_cumul_pbE_refl (Σ := Σ_po) [] _ pgi_int_isType).
 Qed.
 
+(** INSTANCE IMPOSSIBLE: the conclusion is [args = []]: a primitive type [prim_type prim prim_ty] is an application of the bodiless, non-operation constant [prim_ty], never convertible to a product, so in every environment its spine has no argument and every instance concludes [[] = []]. *)
 Definition typing_spine_prim_typeE_inst : @nil term = [] :=
   typing_spine_prim_typeE (Σ := Σ_po) (wfΣ := iv_po_wfE) [] iv_one po_int_kn po_int_body [] _
     ltac:(reflexivity) iv_po_declared_int ltac:(split; reflexivity) pgi_sp_int.
 
+(** INSTANCE IMPOSSIBLE: the conclusion is [args' = []]: an application of a constant with no body that is no primitive operation is never convertible to a product, so in every environment its spine has no argument and every instance concludes [[] = []]. *)
 Definition typing_spine_axiomE_inst : @nil term = [] :=
   typing_spine_axiomE (Σ := Σ_po) (wfΣ := iv_po_wfE) [] po_int_kn [] po_int_body [] [] _
     iv_po_declared_int ltac:(reflexivity) ltac:(vm_compute; reflexivity) pgi_sp_int.
@@ -378,30 +487,43 @@ Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 Lemma pgi_id_value : value si_Σ (mkApps iv_id []).
 Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
 Definition typing_value_head_nappE_inst :=
   typing_value_head_nappE (Σ := si_Σ) (wfΣ := si_wfE) iv_id [] iv_False si_P eq_refl
     (iv_app_typed si_Σ [] localenv_nil) pgi_False_value eq_refl pgi_id_value.
 
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
 Definition typing_value_headE_inst :=
   typing_value_headE (Σ := si_Σ) (wfΣ := si_wfE) iv_id [] iv_False si_P
     (iv_app_typed si_Σ [] localenv_nil) pgi_False_value eq_refl pgi_id_value.
 
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
 Definition progress_env_propE_inst :=
-  env_propE_typing progress_env_propE si_Σ si_wfE [] _ _ (iv_app_typed si_Σ [] localenv_nil)
-    cli_axiom_free eq_refl (iv_app_typed si_Σ [] localenv_nil).
+  env_propE_typing progress_env_propE si_Σ si_wfE [] (tApp iv_id iv_False) si_P
+    (iv_app_typed si_Σ [] localenv_nil) cli_axiom_free eq_refl (iv_app_typed si_Σ [] localenv_nil).
 
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg *)
 Definition progressE_inst :=
   progressE si_Σ (tApp iv_id iv_False) si_P cli_axiom_free si_wfE (iv_app_typed si_Σ [] localenv_nil).
 
+(** [whnf_progressE] on the normal form [∀P. P]: its normality ([pgi_False_normal], every
+    [red1] step from it is refuted by inversion through its domain and codomain) is the premise
+    the lemma turns into [whnf].
+    INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_False_normal *)
 Definition whnf_progressE_inst :=
   whnf_progressE si_Σ iv_False si_P cli_axiom_free si_wfE (iv_False_typed si_Σ [] localenv_nil)
     (fun h => let (t', r) := h in pgi_False_normal _ _ _ r).
+
+(** The head of [c (∀P. P)] is read off an application: it is [c], not the term itself. *)
+Lemma classificationE_inst_nondeg : PCUICAstUtils.head sri_cF <> sri_cF.
+Proof. discriminate. Qed.
 
 (** [classificationE], at its statement's flags [config.extraction_checker_flags] (as base's):
     the constructor application [c (∀P. P)], [red1]-normal ([pgi_cF_normal]), typed at
     [I (∀P. P)] over [typingE] ([pgx_cF_typedE]) in [si_Σ], which is proved [wfE] at those flags
     ([pgx_wfE], section [ClassificationFlags]). [whnf_progressE] turns the normality into [whnf],
-    and [whnf_classificationE] reads the head [c] off the typed normal form. *)
+    and [whnf_classificationE] reads the head [c] off the typed normal form.
+    INSTANCE NONDEGEN PCUICProgressEtaInstances.classificationE_inst_nondeg *)
 Definition classificationE_inst :=
   classificationE si_Σ sri_cF si_ind [] [iv_False] cli_axiom_free pgx_wfE
     (fun h => let (t', r) := h in pgi_cF_normal _ _ _ r) pgx_cF_typedE.

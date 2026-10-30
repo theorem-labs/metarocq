@@ -33,7 +33,8 @@ Section CanonicityEtaInstances.
 Context {nor : normalizing_flags} {nin : NormalizationInE si_Σ}.
 
 (** [t] is a fixpoint application, not a constructor application, so [t' ≠ t]
-    ([pcuic_canonicityE_inst_moves]). *)
+    ([pcuic_canonicityE_inst_moves]).
+    INSTANCE NONDEGEN PCUICCanonicityEtaInstances.pcuic_canonicityE_inst_moves *)
 Definition pcuic_canonicityE_inst :=
   pcuic_canonicityE si_Σ (mkApps (tFix iv_mfix 0) [sri_cF]) si_ind [] [iv_False] cli_axiom_free
     si_wfE sri_fix_app_typed.
