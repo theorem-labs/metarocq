@@ -1,4 +1,4 @@
-.PHONY: all bugd clean mrproper plugin-demo
+.PHONY: all bugd clean mrproper plugin-demo opaque-unreadable
 
 all: bugs plugin-demo
 
@@ -11,6 +11,11 @@ bugs: Makefile.rocq
 	bash check_assumptions.sh prim_ops_instance.v
 	bash check_fail_messages.sh coind_case.v
 	bash check_fail_messages.sh eta_f1.v
+	bash check_opaque_unreadable.sh
+
+# SafeCheck aborts on an unreadable opaque body (also run by `bugs`).
+opaque-unreadable: _RocqProject
+	bash check_opaque_unreadable.sh
 
 Makefile.rocq: Makefile _RocqProject
 	rocq makefile -f _RocqProject -o Makefile.rocq
@@ -21,6 +26,7 @@ _RocqProject: _RocqProject.in metarocq-config
 
 clean: Makefile.rocq
 	$(MAKE) -f Makefile.rocq clean
+	rm -f opaque_unreadable_lib.vos opaque_unreadable.vok
 
 mrproper:
 	rm -f Makefile.rocq
@@ -41,6 +47,8 @@ TEST_SUITE_BLACKLIST := \
 	self_erasure.v \
 	primitive.v \
 	plugin-demo/.*.v \
+	opaque_unreadable.v \
+	opaque_unreadable_lib.v \
 	#
 
 space := $(subst ,, )

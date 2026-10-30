@@ -86,3 +86,8 @@ eta_f1.v
 
 # BET-64 FUEL (EtaFuel): the out-of-fuel outcome of the E checker and its printed message
 eta_fuel.v
+
+# BET-64 bypass pin: compiled by check_opaque_unreadable.sh (the library with -vos, the test
+# with -vok), never to .vo
+# opaque_unreadable.v
+# opaque_unreadable_lib.v
