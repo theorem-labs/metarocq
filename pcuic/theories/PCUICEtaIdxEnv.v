@@ -568,7 +568,8 @@ Proof. exact (has_sort_isType _ (ji_ctype_ty ji_Σp ji_hsp)). Qed.
 
 (** *** A case on [J A X]: predicate [λ (X' : Type@{Set}) (j : J A X'). X'], branch of [jc] *)
 
-Definition ji_ci : case_info := {| ci_ind := ji_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition ji_ci : case_info :=
+  {| ci_ind := ji_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 Definition ji_p : predicate term :=
   {| pparams := [tRel 1]; puinst := ji_u0; pcontext := ind_predicate_context ji_ind ji_mdecl ji_idecl;
      preturn := tRel 1 |}.

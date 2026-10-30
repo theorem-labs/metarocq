@@ -619,7 +619,8 @@ Definition spine_subst_expand_letsE_inst :=
   @spine_subst_expand_letsE _ iv_Σ iv_wfE iv_Γk c16_Δz [] [tRel 1] [tRel 1] c16_Δx1 c16_sp_z.
 
 (** Case predicates on [R]. *)
-Definition c16_ci : case_info := {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant |}.
+Definition c16_ci : case_info :=
+  {| ci_ind := iv_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
 
 (* The context is [Γz], whose let-in body is typed through the η step; the predicate context is
    that of [R]. The universe part is built at [J] ([wf_ind_predicateE_jinst]). *)
