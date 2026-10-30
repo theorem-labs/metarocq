@@ -456,7 +456,10 @@ Proof.
 Qed.
 
 (** Base [conv_refl'] ([:384]): base's algorithmic [Σ ;;; Γ |- x = y] is [JoinE Σ Γ Conv x y]
-    (stream lead's ruling, 2026-10-29 09:26Z); base's [wf Σ] is not used. *)
+    (stream lead's ruling, 2026-10-29 09:26Z); base's [wf Σ] is not used. Base has a second
+    [conv_refl'], the instance [PCUICCumulativity.conv_refl'] ([Reflexive (convAlgo Σ Γ)]), whose
+    twin is the landed instance [PCUICWsCumulEtaCtxTyp.conv_refl'E]: two statements, one name, so
+    references to this one are written [PCUICSREta.conv_refl'E] (same-name rule). *)
 Lemma conv_refl'E {cf} {Σ} {Γ x y} :
   x = y ->
   JoinE Σ Γ Conv x y.

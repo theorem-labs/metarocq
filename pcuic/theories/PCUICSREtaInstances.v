@@ -438,7 +438,7 @@ Section SRInstances.
   Qed.
 
   Definition conv_refl'E_inst : JoinE si_Σ [] Conv iv_False iv_False :=
-    conv_refl'E (Σ := si_Σ) (Γ := []) eq_refl.
+    PCUICSREta.conv_refl'E (Σ := si_Σ) (Γ := []) eq_refl.
 
   Definition conv_context_reflE_inst := conv_context_reflE si_Σ sri_Γz.
 
