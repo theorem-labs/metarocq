@@ -235,8 +235,10 @@ Proof.
   exact (iv_vass_s si_Σ [] si_na si_P (Sort.super sProp) (iv_P_typed si_Σ [] localenv_nil) eq_refl).
 Qed.
 
-(** The relative context [k : (Prop → Prop) → Prop, y : k g] is not closed: [k g] refers to [g] of
-    [iv_Γg]. *)
+(** The relative context [k : (Prop → Prop) → Prop, y : k g] is not closed: [closed_ctx] is [false]
+    on it, because the [g] of [k g], [tRel 1] under the one declaration [k], is free in it. It is
+    the part of [iv_Γk] above [iv_Γg] (by the definitions of [iv_Γk] and [iv_Γg]); in [iv_Γk], that
+    [tRel 1] is the declaration [g : Prop → Prop] of [iv_Γg]. *)
 Lemma vi_rel_ctx_open : closed_ctx [vass si_na (tApp (tRel 0) (tRel 1)); vass si_na iv_K] = false.
 Proof. reflexivity. Qed.
 
