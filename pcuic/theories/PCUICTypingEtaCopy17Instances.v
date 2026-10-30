@@ -31,18 +31,26 @@
   | [shape_check_eq_term_uptoE] | WEAK, IMPOSSIBLE (below) |
 
   The two WEAK instances are tagged IMPOSSIBLE because of the RULE SETS of the relations in
-  their premises, which contain no η rule:
+  their premises, which contain no η rule. Neither lemma carries [wfE Σ] (the premise that
+  WOULD hold every declaration's typing derivation, and so could carry an η step); their
+  environment premise is checked below in each case, so the tag covers EVERY premise:
   - [mfix_body_on_red_convE]: its premises are [ClosedBodies Σ] (closedness of constant bodies
     and freshness of names), [is_closed_context Γ] and [is_open_term Γ (dtype d)] (booleans of
     [on_free_vars]), and [mfix_body_on check (red Σ Γ) mind d] (an equation on [check] and a
     [red] derivation). [red] is the reflexive-transitive closure of [red1], whose 32
     constructors ([PCUICReduction.v]: 10 head rules [red_beta], [red_zeta], [red_rel],
     [red_iota], [red_fix], [red_cofix_case], [red_cofix_proj], [red_delta], [red_prim_op],
-    [red_proj], and 22 congruences) contain no η rule. The instance runs in [c17_env] (its
-    [ClosedBodies] comes from [c17_wfE]) on the declared type above.
+    [red_proj], and 22 congruences) contain no η rule. [ClosedBodies Σ] is the ENVIRONMENT
+    premise here, and it is a closedness and freshness statement about the declarations, not a
+    typing derivation: it holds no derivation at all, so it can carry no η step, whatever the
+    environment is typed through. The instance runs in [c17_env] (its [ClosedBodies] comes from
+    [c17_wfE]) on the declared type above.
   - [shape_check_eq_term_uptoE]: its premise is [eq_term_upto_univ], whose 16 constructors
     ([PCUICEquality.v], [eq_Rel] … [eq_Prim]) each relate two terms with the same head
-    constructor; none is an η rule. The instance relates two terms that differ in a binder name.
+    constructor; none is an η rule. Its [Σ] is only the global environment that
+    [eq_term_upto_univ] compares universes in: the field reads no typing of it and takes no
+    [wfE], so the lemma has no environment premise that could hold an η step. The instance
+    relates two terms that differ in a binder name.
   The Coq lemmas [c17_red_no_eta_contraction] and [c17_eq_term_no_eta] below are spot checks of
   that property, not proofs of the tags: each proves one shape, in one direction, at the top
   level only (a [red] derivation never contracts [λx:A. f x] to [f] when [f] is not a λ; the
