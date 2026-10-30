@@ -288,6 +288,12 @@ theories/PCUICClassificationEtaInstances.v
 # Progress over typingE (row T6, the E copy of PCUICProgress), and its satisfying instances
 theories/PCUICProgressEta.v
 theories/PCUICProgressEtaInstances.v
+# Canonicity over typingE (row T6, the E copy of PCUICCanonicity), and its satisfying instances
+theories/PCUICCanonicityEta.v
+theories/PCUICCanonicityEtaInstances.v
+# Consistency over typingE (row T9, the E copy of PCUICConsistency), and its satisfying instance
+theories/PCUICConsistencyEta.v
+theories/PCUICConsistencyEtaInstances.v
 # First-order values over typingE (row T6, the E copy of PCUICFirstorder), and its satisfying instances
 theories/PCUICFirstorderEta.v
 theories/PCUICFirstorderEtaInstances.v
