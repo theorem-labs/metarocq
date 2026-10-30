@@ -4,19 +4,31 @@
 
   **The contracts.** The two fields of the checker's [T2a_facts]
   ([safechecker/theories/PCUICTypingEtaHyps.v], branch [wip/etak-k7-2026-10-29] @ [0bbee83d]) and
-  the two fields of [SRForecastT2a] ([PCUICSREta.v]) are copied here verbatim and inhabited by
-  [validityE] and [inversion_mkAppsE]: [T2a_inversion_mkApps_fit], [T2a_validity_fit],
-  [SR_T2a_validityE_fit], [SR_T2a_inversion_mkAppsE_fit].
+  the two fields of [SRForecastT2a], the class [PCUICSREta.v] declared before it imported this
+  lemma file (be252347 removed the class; [PCUICSREta.v] now uses [validityE] and
+  [inversion_mkAppsE] directly), are copied here and inhabited by [validityE] and
+  [inversion_mkAppsE]: [T2a_inversion_mkApps_fit], [T2a_validity_fit], [SR_T2a_validityE_fit],
+  [SR_T2a_inversion_mkAppsE_fit]. Each copy is its text with one change: [typing_spineE] is written
+  [PCUICAritiesEta.typing_spineE], the [PCUICArities] spine the texts mean ([PCUICGenerationEta]
+  declares another [typing_spineE]).
 
   **The instances.** Each lemma family of [PCUICValidityEta] with a premise has an instance below,
-  in [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]: [Inductive I (A : Prop) : Prop := c : I A])
-  or [iv_Σ] ([PCUICInversionEtaInstances]: a coinductive record with one projection), using the
-  derivations of [PCUICInversionEtaInstances]:
-  - a lemma that needs no forecast class is APPLIED to concrete premises, each proved;
+  in [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]: [Inductive I (A : Prop) : Prop := c : I A]),
+  in [iv_Σ] ([PCUICInversionEtaInstances]: a coinductive record with one projection), or in the
+  environments of [PCUICTypingEtaCopies2Instances]: the empty [e0_env] and [up_env], which holds one
+  universe-polymorphic axiom [T@{l0} : Type@{l0}] (universe context [up_univs]). They use the
+  derivations of [PCUICInversionEtaInstances] and [PCUICTypingEtaCopies2Instances]:
+  - a lemma that never needed a forecast class is APPLIED to concrete premises, each proved;
   - a lemma that needed a forecast class before copy 16 landed (frac/eta 0fb43f10:
     [validity_envE], [validityE], [inversion_mkAppsE], [type_App'E], [type_mkApps_arityE],
     [declared_projection_typeE], now copy 16's) has an instance that states the premises AND the
     conclusion at concrete arguments, each proved without the lemma and without any class.
+  The universe and environment lemmas are applied where they do work: [isType_weaken_fullE] and
+  [isType_extendsE] go from [e0_env] to [up_env], an extension that adds a declaration;
+  [isType_Sort_invE] concludes [wf_sort] at [Type@{l0}], which needs [l0] to be a level of the
+  environment ([up_s0_not_wf_mono]: it fails in [(up_env, Monomorphic_ctx)]);
+  [isWfArity_subst_instance_declE] instantiates the universe context of [T] at [l0 := Set], which
+  changes both the context and the arity.
   The copy lemmas of copies 10, 12, 14 and 16 that [PCUICValidityEta] proved before those copies
   landed are gone from it; their instances are in [PCUICTypingEtaCopies2Instances] and
   [PCUICTypingEtaCopy16Instances].
@@ -34,11 +46,12 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances
      PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICInductivesEta
      PCUICValidityEta.
+From MetaRocq.PCUIC Require PCUICTypingEtaCopies2Instances.
 
 Local Notation " Σ ;;; Γ ⊢E t ≤ u " := (ws_cumul_pbE Cumul Σ Γ t u) (at level 50, Γ, t, u at next level,
   format "Σ  ;;;  Γ  ⊢E  t  ≤  u") : type_scope.
 
-(** ** The T2a contracts, verbatim, inhabited by the E lemmas *)
+(** ** The T2a contracts, inhabited by the E lemmas *)
 
 Section ContractFit.
 
@@ -55,7 +68,7 @@ Section ContractFit.
       := fun Σ wfΣ Γ t T h => validityE (wfΣ := wfΣ) h.
   End Checker.
 
-  (** [SRForecastT2a] of [PCUICSREta.v]: the text of its two fields. *)
+  (** The two fields of [SRForecastT2a], the class [PCUICSREta.v] declared before be252347. *)
   Definition SR_T2a_validityE_fit :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ t T},
     Σ ;;; Γ |-E t : T -> isTypeE Σ Γ T
@@ -72,31 +85,73 @@ End ContractFit.
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
 
-(** ** Lemmas without a forecast premise, applied *)
+(** ** Lemmas applied to concrete premises *)
 
 Definition iv_keta_isType : isTypeE si_Σ iv_Γk iv_keta := has_sort_isTypeE _ iv_keta_typed.
 Definition iv_P_isType (Γ : context) (h : wf_localE si_Σ Γ) : isTypeE si_Σ Γ si_P :=
   has_sort_isTypeE _ (iv_P_typed si_Σ Γ h).
 Definition iv_PP_isType : isTypeE si_Σ [] iv_PP := has_sort_isTypeE _ (iv_PP_typed si_Σ [] localenv_nil).
 
-(** [isType_weaken_fullE], [isType_extendsE]: [si_env] extends itself. *)
-Definition isType_weaken_fullE_inst : isTypeE (si_env, si_Σ.2) iv_Γk iv_keta :=
-  isType_weaken_fullE si_Σ si_env si_wfE si_wfE (extends_refl si_env) iv_Γk (tRel 0) iv_keta iv_keta_isType.
+(** [isType_weaken_fullE], [isType_extendsE]: [up_env] extends the empty [e0_env] by the declaration
+    of [T] ([PCUICTypingEtaCopies2Instances.e0_up_extends]). The premise types [Type@{l0}], at the
+    bound level [l0] of [up_univs], over [e0_env]; the conclusion is that judgment over [up_env]. *)
+Lemma up_s0_typed_e0 :
+  PCUICTypingEtaCopies2Instances.up_Σ0 ;;; [] |-E tSort PCUICTypingEtaCopies2Instances.up_s0
+    : tSort (Sort.super PCUICTypingEtaCopies2Instances.up_s0).
+Proof. apply typeE_Sort; [constructor|exact PCUICTypingEtaCopies2Instances.up_wf_sort0]. Qed.
 
-Definition isType_extendsE_inst : isTypeE (si_env, Monomorphic_ctx) iv_Γk iv_keta :=
-  isType_extendsE si_env si_env Monomorphic_ctx si_wfE si_wfE (extends_refl si_env) iv_Γk iv_keta iv_keta_isType.
+Definition up_s0_isType_e0 :
+  isTypeE PCUICTypingEtaCopies2Instances.up_Σ0 [] (tSort PCUICTypingEtaCopies2Instances.up_s0) :=
+  has_sort_isTypeE _ up_s0_typed_e0.
 
-Definition isType_Sort_invE_inst : wf_sort si_Σ sProp :=
-  isType_Sort_invE (Σ := si_Σ) si_wfE (iv_P_isType iv_Γk iv_wf_Γk).
+Definition isType_weaken_fullE_inst :
+  isTypeE (PCUICTypingEtaCopies2Instances.up_env, PCUICTypingEtaCopies2Instances.up_univs) []
+    (tSort PCUICTypingEtaCopies2Instances.up_s0) :=
+  isType_weaken_fullE PCUICTypingEtaCopies2Instances.up_Σ0 PCUICTypingEtaCopies2Instances.up_env
+    PCUICTypingEtaCopies2Instances.e0_wfE PCUICTypingEtaCopies2Instances.up_wfE
+    PCUICTypingEtaCopies2Instances.e0_up_extends [] (tSort PCUICTypingEtaCopies2Instances.up_s0)
+    (tSort PCUICTypingEtaCopies2Instances.up_s0) up_s0_isType_e0.
 
-(** [Prop → Prop] is a well-formed arity at the declaration [I]. *)
-Lemma isWfArity_subst_instance_declE_inst :
-  isWfArityE si_Σ (subst_instance [] []) (subst_instance [] si_arity).
+Definition isType_extendsE_inst :
+  isTypeE (PCUICTypingEtaCopies2Instances.up_env, PCUICTypingEtaCopies2Instances.up_univs) []
+    (tSort PCUICTypingEtaCopies2Instances.up_s0) :=
+  isType_extendsE PCUICTypingEtaCopies2Instances.e0_env PCUICTypingEtaCopies2Instances.up_env
+    PCUICTypingEtaCopies2Instances.up_univs PCUICTypingEtaCopies2Instances.e0_wfE
+    PCUICTypingEtaCopies2Instances.up_wfE PCUICTypingEtaCopies2Instances.e0_up_extends []
+    (tSort PCUICTypingEtaCopies2Instances.up_s0) up_s0_isType_e0.
+
+(** [isType_Sort_invE] at [Type@{l0}] in [(up_env, up_univs)]. Its conclusion needs [l0] to be a
+    level of the environment: in [(up_env, Monomorphic_ctx)] the same [wf_sort] is false. *)
+Definition isType_Sort_invE_inst :
+  wf_sort PCUICTypingEtaCopies2Instances.up_Σp PCUICTypingEtaCopies2Instances.up_s0 :=
+  isType_Sort_invE (Σ := PCUICTypingEtaCopies2Instances.up_Σp) PCUICTypingEtaCopies2Instances.up_wfE
+    (has_sort_isTypeE _ PCUICTypingEtaCopies2Instances.up_s0_typed).
+
+Lemma up_s0_not_wf_mono :
+  ~ wf_sort PCUICTypingEtaCopies2Instances.up_Σm PCUICTypingEtaCopies2Instances.up_s0.
 Proof.
-  refine (isWfArity_subst_instance_declE (Σ := si_Σ) (Γ := []) (T := si_arity) (c := si_kn)
-            (decl := InductiveDecl si_mdecl) (u := []) si_wfE eq_refl _ eq_refl).
-  split; [exact iv_PP_isType|].
-  exists [vass si_na si_P], sProp. reflexivity.
+  move/(PCUICWfUniverses.wf_sort_reflect PCUICTypingEtaCopies2Instances.up_Σm) => h. discriminate h.
+Qed.
+
+(** [isWfArity_subst_instance_declE] at the universe-polymorphic axiom [T] of [up_env]: the arity
+    [Type@{l0}] in the context [x : Type@{l0}], instantiated at [l0 := Set]
+    ([PCUICTypingEtaCopies2Instances.up_cu]), which changes both the context and the arity. *)
+Lemma isWfArity_subst_instance_declE_inst :
+  isWfArityE PCUICTypingEtaCopies2Instances.up_Σm
+    (subst_instance [Level.lzero] PCUICTypingEtaCopies2Instances.up_Γ)
+    (subst_instance [Level.lzero] (tSort PCUICTypingEtaCopies2Instances.up_s0)).
+Proof.
+  refine (isWfArity_subst_instance_declE (Σ := PCUICTypingEtaCopies2Instances.up_Σm)
+            (Γ := PCUICTypingEtaCopies2Instances.up_Γ) (T := tSort PCUICTypingEtaCopies2Instances.up_s0)
+            (c := PCUICTypingEtaCopies2Instances.up_kn)
+            (decl := ConstantDecl PCUICTypingEtaCopies2Instances.up_cb) (u := [Level.lzero])
+            PCUICTypingEtaCopies2Instances.up_wfE PCUICTypingEtaCopies2Instances.up_lookup _
+            PCUICTypingEtaCopies2Instances.up_cu).
+  split.
+  - apply (has_sort_isTypeE (Sort.super PCUICTypingEtaCopies2Instances.up_s0)).
+    apply typeE_Sort; [exact PCUICTypingEtaCopies2Instances.up_wf_Γ
+                      |exact PCUICTypingEtaCopies2Instances.up_wf_sort_p].
+  - exists [], PCUICTypingEtaCopies2Instances.up_s0. reflexivity.
 Qed.
 
 Definition isType_weakeningE_inst : isTypeE si_Σ iv_Γk si_P :=
@@ -118,7 +173,7 @@ Definition wf_local_validityE_inst :=
   wf_local_validityE (Σ := si_Σ) (wfΣ := si_wfE) iv_Γg [vass si_na (tApp (tRel 0) (tRel 1)); vass si_na iv_K]
     iv_wf_Γk.
 
-(** ** Lemmas with a forecast premise: premises and conclusion at concrete arguments *)
+(** ** Lemmas stated at concrete arguments: premises and conclusion, each proved without the lemma *)
 
 (** [validity_envE]'s first component holds in every [wfE] environment, by the sort part of each
     judgment (no validity needed). *)

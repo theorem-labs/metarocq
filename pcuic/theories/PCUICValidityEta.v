@@ -24,10 +24,11 @@
   [wf_local_validityE]; the notation [validity_term] → [validity_termE]; [inversion_mkApps] →
   [inversion_mkAppsE]; [type_App'] → [type_App'E]; [type_mkApps_arity] → [type_mkApps_arityE].
 
-  [validityE] and [inversion_mkAppsE] are the two fields of [SRForecastT2a]
-  ([PCUICSREta.v]) and of the checker's [T2a_facts]
-  ([safechecker/theories/PCUICTypingEtaHyps.v], branch [wip/etak-k7-2026-10-29]):
-  [PCUICValidityEtaInstances] type-checks both lemmas against both texts.
+  [validityE] and [inversion_mkAppsE] are the two fields of the checker's [T2a_facts]
+  ([safechecker/theories/PCUICTypingEtaHyps.v], branch [wip/etak-k7-2026-10-29]) and were the two
+  fields of [SRForecastT2a] ([PCUICSREta.v]; be252347 removed that class, and [PCUICSREta.v] now
+  imports this file and uses the two lemmas directly). [PCUICValidityEtaInstances] type-checks both
+  lemmas against both texts.
 
   **No forecast.** Copies 10, 12 and 14 (frac/eta 59eb717d), copy 15 (frac/eta d49d1c19) and
   copy 16 (frac/eta 0fb43f10) have landed: the forecast classes of this file, the definitions
