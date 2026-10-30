@@ -1433,7 +1433,7 @@ Section SkMachine.
   Proof.
     intros he. unfold cbn_bind in he. destruct x as [a0|vals n o c].
     - injection he as <- <- <-. reflexivity.
-    - destruct (cbn_once_body body s) as [b s1]. destruct b.
+    - destruct (cbn_once_body body s) as [b s1]. destruct (b && negb (cbn_slots_has_inl vals)).
       + injection he as <- <- <-. reflexivity.
       + cbn_dcall he em a1 rs1 s2. injection he as <- <- <-.
         exact (cbn_materialize_skel _ _ _ _ _ _ em).

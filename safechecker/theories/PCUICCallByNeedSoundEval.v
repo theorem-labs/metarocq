@@ -2349,7 +2349,7 @@ Section Eval.
         rewrite hs1. destruct (cbn_gk_memo _ _ _ hok) as (_ & _ & h3 & _).
         exact (cbn_mok_once_body _ body e s (cbn_gk_memo _ _ _ hok) (h3 _ _ hge) hci). }
       clear hs1.
-      destruct b.
+      destruct (b && negb (cbn_slots_has_inl vals)).
       + inversion he; subst. clear he.
         exists lo, G. split; [apply cbn_gren_refl|]. split; [exact hok1|exact hx].
       + destruct (cbn_materialize X_type X (CbnSInl vals n o c) rs s1)
