@@ -71,7 +71,7 @@ Definition weakening0E_inst :=
 
 (** ** [weakening_type_local_ctxE]: the same η context *)
 
-Lemma c21_tlc : type_local_ctx (lift_typing typingE) iv_Σ c18b_Γ [] sProp.
+Lemma c21_tlc : type_local_ctx (PCUICTyping.lift_typing typingE) iv_Σ c18b_Γ [] sProp.
 Proof. exact I. Qed.
 
 Definition weakening_type_local_ctxE_inst :=
@@ -94,7 +94,7 @@ Lemma c21_isT_keta : isTypeE si_Σ iv_Γk iv_keta.
 Proof. exact (has_sort_isTypeE _ iv_keta_typed). Qed.
 
 Definition c21_spine_eta : PCUICAritiesEta.typing_spineE si_Σ iv_Γk iv_kg [] iv_keta :=
-  type_spine_nilE _ _ iv_kg iv_keta c21_isT_kg c21_isT_keta (c18b_ws_eta si_Σ Cumul).
+  PCUICAritiesEta.type_spine_nilE _ _ iv_kg iv_keta c21_isT_kg c21_isT_keta (c18b_ws_eta si_Σ Cumul).
 
 Definition AritiesToGeneration_typing_spineE_inst :=
   AritiesToGeneration_typing_spineE si_Σ iv_Γk iv_kg [] iv_keta c21_spine_eta.
@@ -211,7 +211,7 @@ Definition isType_mkApps_Ind_inv_spineE_inst :=
   [I (k (λx:Prop. g x))] only through the η step ([c18b_disc_typed]). *)
 
 Definition c21_rettyp : term := lift0 1 c18b_Ieta.
-Definition c21_p : predicate term :=
+Definition c21_p : PCUICAst.predicate term :=
   make_case_pred si_ind si_mdecl si_idecl [iv_keta] [] c21_rettyp.
 Definition c21_pctx : context := case_predicate_context si_ind si_mdecl si_idecl c21_p.
 Definition c21_ptm : term := it_mkLambda_or_LetIn c21_pctx (preturn c21_p).
@@ -226,7 +226,7 @@ Proof. move=> _. exact c18b_pret_typed. Qed.
 Lemma c21_elim : is_allowed_elimination si_Σ (ind_kelim si_idecl) sProp.
 Proof. cbn; trivial. Qed.
 
-Lemma c21_relevance : isSortRel (sProp : sort) (ind_relevance si_idecl).
+Lemma c21_relevance : isSortRel (sProp : Universes.sort) (ind_relevance si_idecl).
 Proof. reflexivity. Qed.
 
 Lemma c21_fin :
@@ -277,7 +277,7 @@ Lemma c21_brs_subst :
   All2i
     (fun (i : nat) (cdecl : constructor_body) (brt : term) =>
       let br := make_br si_ind si_mdecl cdecl brt in
-      let brctx := case_branch_context si_ind si_mdecl c21_p br cdecl in
+      let brctx := PCUICCasesHelper.case_branch_context si_ind si_mdecl c21_p br cdecl in
       let brty := case_branch_type_subst si_ind si_mdecl c21_p c21_pctx c21_rettyp i cdecl in
       wf_localE si_Σ (iv_Γk ,,, brctx) ->
       typingE si_Σ (iv_Γk ,,, brctx) brty (tSort sProp) ->
@@ -294,7 +294,7 @@ Lemma c21_brs_simple :
   All2i
     (fun (i : nat) (cdecl : constructor_body) (brt : term) =>
       let br := make_br si_ind si_mdecl cdecl brt in
-      let brctx := case_branch_context si_ind si_mdecl c21_p br cdecl in
+      let brctx := PCUICCasesHelper.case_branch_context si_ind si_mdecl c21_p br cdecl in
       let brty := lift0 #|brctx| c18b_Ieta in
       wf_localE si_Σ (iv_Γk ,,, brctx) ->
       typingE si_Σ (iv_Γk ,,, brctx) brty (tSort sProp) ->
