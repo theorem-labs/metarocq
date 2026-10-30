@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [PCUICValidityEta], and the two T2a contracts
 
   **The contracts.** The two fields of the checker's [T2a_facts]
@@ -26,9 +29,10 @@
   The universe and environment lemmas are applied where they do work: [isType_weaken_fullE] and
   [isType_extendsE] go from [e0_env] to [up_env], an extension
   ([PCUICTypingEtaCopies2Instances.e0_up_extends]) whose declarations differ from those of
-  [e0_env] ([vi_up_adds_decl]); [isType_Sort_invE] concludes [wf_sort] at [Type@{l0}], which
-  needs [l0] to be a level of the environment ([up_s0_not_wf_mono]: it fails in
-  [(up_env, Monomorphic_ctx)]); [isWfArity_subst_instance_declE] instantiates the universe
+  [e0_env] ([vi_up_adds_decl]); [isType_Sort_invE] concludes [wf_sort] at [Type@{l0}] from a
+  typing of [Type@{l0}] whose last rule is [typeE_Cumul], over a cumulativity from [Type@{l0+1}]
+  to [Type@{l0+2}], and that [wf_sort] fails in [(up_env, Monomorphic_ctx)]
+  ([isType_Sort_invE_inst_nondeg]); [isWfArity_subst_instance_declE] instantiates the universe
   context of [T] at [l0 := Set], which changes both the context and the arity
   ([vi_up_inst_changes_ctx]).
   The copy lemmas of copies 10, 12, 14 and 16 that [PCUICValidityEta] proved before those copies
@@ -42,9 +46,9 @@
   that type is not [I (∀P:Prop. P)] ([vi_mkApps_spine_nondeg]). Each instance carries its tag
   (instance-gate grammar).
 
-  WITNESSES: T2a_* SR_T2a_* vi_IF_isType0 up_s0_typed_e0 up_s0_isType_e0
+  WITNESSES: T2a_* SR_T2a_* vi_IF_isType0 up_s0_typed_e0 up_s0_isType_e0 up_s0_not_wf_mono vi_s2_typed vi_s1_cumul_s2 vi_s0_cumul_typed
   ([T2a_*], [SR_T2a_*]: the contract fits above, generic in [Σ], not instances; the others: typing
-  pieces the instances use) *)
+  pieces the instances use, and [up_s0_not_wf_mono], a fact [isType_Sort_invE_inst_nondeg] uses) *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -138,14 +142,71 @@ Proof.
   move/(PCUICWfUniverses.wf_sort_reflect PCUICTypingEtaCopies2Instances.up_Σm) => h. discriminate h.
 Qed.
 
-(** [isType_Sort_invE] at [Type@{l0}] in [(up_env, up_univs)]. Its conclusion needs [l0] to be a
-    level of the environment: in [(up_env, Monomorphic_ctx)] the same [wf_sort] is false.
-    INSTANCE NONDEGEN PCUICValidityEtaInstances.up_s0_not_wf_mono *)
+(** [Type@{l0+2} : Type@{l0+3}] in [(up_env, up_univs)]. *)
+Lemma vi_s2_typed :
+  PCUICTypingEtaCopies2Instances.up_Σp ;;; []
+    |-E tSort (Sort.super (Sort.super PCUICTypingEtaCopies2Instances.up_s0))
+    : tSort (Sort.super (Sort.super (Sort.super PCUICTypingEtaCopies2Instances.up_s0))).
+Proof.
+  apply typeE_Sort; [constructor|].
+  exact (PCUICWfUniverses.wf_sort_super
+           (PCUICWfUniverses.wf_sort_super PCUICTypingEtaCopies2Instances.up_wf_sort_p)).
+Qed.
+
+(** [Type@{l0+1} ≤ Type@{l0+2}] in [(up_env, up_univs)]. *)
+Lemma vi_s1_cumul_s2 :
+  cumulSpecE PCUICTypingEtaCopies2Instances.up_Σp []
+    (tSort (Sort.super PCUICTypingEtaCopies2Instances.up_s0))
+    (tSort (Sort.super (Sort.super PCUICTypingEtaCopies2Instances.up_s0))).
+Proof.
+  apply cumulE_Sort.
+  change (leq0_universe_n 0 (global_ext_constraints PCUICTypingEtaCopies2Instances.up_Σp)
+            (Universe.succ (Universe.make' (Level.lvar 0)))
+            (Universe.succ (Universe.succ (Universe.make' (Level.lvar 0))))).
+  intros v _. rewrite !val_map_succ. lia.
+Qed.
+
+(** [Type@{l0} : Type@{l0+2}], by [typeE_Cumul] from [up_s0_typed] ([Type@{l0} : Type@{l0+1}]). *)
+Definition vi_s0_cumul_typed :
+  PCUICTypingEtaCopies2Instances.up_Σp ;;; [] |-E tSort PCUICTypingEtaCopies2Instances.up_s0
+    : tSort (Sort.super (Sort.super PCUICTypingEtaCopies2Instances.up_s0)) :=
+  typeE_Cumul _ _ (tSort PCUICTypingEtaCopies2Instances.up_s0)
+    (tSort (Sort.super PCUICTypingEtaCopies2Instances.up_s0))
+    (tSort (Sort.super (Sort.super PCUICTypingEtaCopies2Instances.up_s0)))
+    (Sort.super (Sort.super (Sort.super PCUICTypingEtaCopies2Instances.up_s0)))
+    PCUICTypingEtaCopies2Instances.up_s0_typed vi_s2_typed vi_s1_cumul_s2.
+
+(** The typing [vi_s0_cumul_typed] of [Type@{l0}] ends in [typeE_Cumul] over [up_s0_typed]; its
+    cumulativity goes from [Type@{l0+1}] to [Type@{l0+2}], and the universe [l0+1] is strictly below
+    [l0+2] in every valuation; and [wf_sort] at [Type@{l0}] is false in
+    [(up_env, Monomorphic_ctx)]. *)
+Lemma isType_Sort_invE_inst_nondeg :
+  [/\ vi_s0_cumul_typed =
+        typeE_Cumul _ _ (tSort PCUICTypingEtaCopies2Instances.up_s0)
+          (tSort (Sort.super PCUICTypingEtaCopies2Instances.up_s0))
+          (tSort (Sort.super (Sort.super PCUICTypingEtaCopies2Instances.up_s0)))
+          (Sort.super (Sort.super (Sort.super PCUICTypingEtaCopies2Instances.up_s0)))
+          PCUICTypingEtaCopies2Instances.up_s0_typed vi_s2_typed vi_s1_cumul_s2,
+      (forall v, val v (Universe.succ (Universe.make' (Level.lvar 0)))
+                 < val v (Universe.succ (Universe.succ (Universe.make' (Level.lvar 0))))) &
+      ~ wf_sort PCUICTypingEtaCopies2Instances.up_Σm PCUICTypingEtaCopies2Instances.up_s0].
+Proof.
+  split.
+  - reflexivity.
+  - intros v. rewrite !val_map_succ. lia.
+  - exact up_s0_not_wf_mono.
+Qed.
+
+(** [isType_Sort_invE] at [Type@{l0}] in [(up_env, up_univs)], on the typing [vi_s0_cumul_typed],
+    whose last rule is [typeE_Cumul] over a cumulativity from [Type@{l0+1}] to [Type@{l0+2}]; the
+    concluded [wf_sort] is false in [(up_env, Monomorphic_ctx)]
+    ([isType_Sort_invE_inst_nondeg]).
+    INSTANCE NONDEGEN PCUICValidityEtaInstances.isType_Sort_invE_inst_nondeg *)
 Definition isType_Sort_invE_inst :
   wf_sort PCUICTypingEtaCopies2Instances.up_Σp PCUICTypingEtaCopies2Instances.up_s0 :=
   isType_Sort_invE (Σ := PCUICTypingEtaCopies2Instances.up_Σp) (s := PCUICTypingEtaCopies2Instances.up_s0)
     PCUICTypingEtaCopies2Instances.up_wfE
-    (has_sort_isTypeE _ PCUICTypingEtaCopies2Instances.up_s0_typed).
+    (has_sort_isTypeE _ vi_s0_cumul_typed).
 
 (** The instantiation [l0 := Set] changes the context [x : Type@{l0}] and the arity
     [Type@{l0}]. *)
@@ -194,11 +255,8 @@ Proof. split; [discriminate|intros s; discriminate]. Qed.
 Definition isType_weakeningE_inst : isTypeE si_Σ iv_Γk iv_IF :=
   isType_weakeningE (Σ := si_Σ) (Γ := iv_Γk) (T := iv_IF) si_wfE iv_wf_Γk vi_IF_isType0.
 
-(** The context [x : Prop] is not empty: for the empty context the premise is the conclusion. *)
-Lemma type_ctx_wf_univE_inst_nondeg : [vass si_na si_P] <> [].
-Proof. discriminate. Qed.
-
-(* INSTANCE NONDEGEN PCUICValidityEtaInstances.type_ctx_wf_univE_inst_nondeg *)
+(** [type_ctx_wf_univE] on the one-declaration context [x : Prop] at [Type₁].
+    INSTANCE IMPOSSIBLE: the proof of [type_ctx_wf_univE] is an induction on [Δ] that only takes the first component of its premise at each declaration ([intros [h _]; auto]) until the empty context, where [type_local_ctx] is [wf_sort Σ s] itself; so in every instance and environment the conclusion is a piece of the premise, unpacked. *)
 Lemma type_ctx_wf_univE_inst : wf_sort si_Σ (Sort.super sProp).
 Proof.
   apply (type_ctx_wf_univE si_Σ [] [vass si_na si_P] (Sort.super sProp)).

@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [PCUICSREta] (row T1)
 
   **No forecast class.** The lemmas of [PCUICSREta] that used a forecast fact took its forecast
@@ -24,18 +27,23 @@
     integers on [int], with [iv_po_wfE].
 
   **Non-degeneracy.** Each subject-reduction instance takes a real reduction step of a term with a
-  real typing derivation. The steps: β ([sr_red1E_beta_inst]), ζ ([subject_reduction1E_zeta_inst]),
+  real typing derivation. The steps: β on [(λx:Prop. x → x) (∀P:Prop. P)], whose body uses its
+  variable, so the reduct [(∀P:Prop. P) → ∀P:Prop. P] is a new product ([sr_red1E_beta_inst], its
+  corollaries, [isType_red1E_inst], [isType_redE_inst], the context step of [wf_local_red1E_inst]
+  and [wf_local_redE_inst], the type step of a let in [lift_judgment_SRE_inst]; [sri_xx_nondeg]),
+  ζ ([subject_reduction1E_zeta_inst]),
   ι on a [match] ([subject_reduction1E_iota_inst]), fixpoint unfolding
   ([subject_reduction1E_fix_inst]), a β step in a declaration of the context
-  ([subject_reduction_ctxE_inst]), β in a type ([type_reductionE_inst], [isType_redE_inst]) and
+  ([subject_reduction_ctxE_inst]), β in a type ([type_reductionE_inst]) and
   in the domain of an arity ([isWfArity_red1E_inst]). [subject_reduction1E_eta_inst] reduces a term
   whose typing derivation goes through an η step: in [g : Prop → Prop, k : (Prop → Prop) → Prop,
-  y : k g], the redex [(λz:Prop. y) (∀P:Prop. P)] is typed at [k (λx:Prop. g x)] because [y] is
-  ([iv_rel_typed], a [typeE_Cumul] whose conversion is [cumul_eta_l]).
+  y : k g], the redex [(λz : k g. (λw : k g. w) z) y], whose body uses [z] as an argument, has type
+  [k g] and is typed at [k (λx:Prop. g x)] by a [typeE_Cumul] whose conversion is [cumul_eta_l]
+  ([sri_eta_redex_typed]); its reduct is [(λw : k g. w) y].
 
   The helpers of [sr_red1E] that relate two objects relate two different ones:
   [substitution_ws_cumul_pb_subst_convE_inst] substitutes the two lists [[(λx:Prop. x) (∀P:Prop. P)]]
-  and [[∀P:Prop. P]] (one β step apart) into [(λy:Prop. y) x] and [x] (one β step apart);
+  and [[∀P:Prop. P]] (one β step apart) into [(λy:Prop. y) (x → x)] and [x → x] (one β step apart);
   [conv_context_smash_endE_inst] smashes [w : z, z := (λx:Prop. x) (∀P:Prop. P)] and
   [w : z, z := ∀P:Prop. P] (one β step apart, in the body of the let, which the smash substitutes
   into [w]); [ctx_inst_merge'E_inst] steps the argument [(λx:Prop. x) (∀P:Prop. P)] of a telescope.
@@ -43,16 +51,18 @@
   universe instances only through its premise.) The
   lemmas about a constructor run on [jc] (an argument that the universe instance moves, an index
   that is not closed), those about a branch on a branch of [jc] whose binder name differs from
-  [jc]'s, the four [spine_subst_inst_subst*E] on a spine with a let (so [s] is not [List.rev inst]
-  and [expand_lets] moves [Δ']), [weakening_closed_red1_cb] on an open step (so the lift moves it),
+  [jc]'s, the four [spine_subst_inst_subst*E] on a spine with a let (so [s] is not [List.rev inst])
+  and a [Δ'] that uses both the let and the assumption ([y → x]), [weakening_closed_red1_cb] on an
+  open step (so the lift moves it),
   [prim_op_head_typeE] and [typing_spine_prim_arg_typesE] on a type that is a β-redex (so the
   comparison is not reflexive).
 
   **Tags.** Each instance carries its tag in the comment directly above it: NONDEGEN with the
   compiled lemma that states what makes it non-degenerate, or IMPOSSIBLE with the property of
-  the statement that makes every instance degenerate (five rows:
+  the statement that makes every instance degenerate (six rows:
   [declared_projection_declared_constructorE], [declared_projection_indicesE],
-  [cmp_global_instance_cstr_irrelevantE], [PCUICSREta.conv_refl'E] and [conv_context_reflE]).
+  [cmp_global_instance_cstr_irrelevantE], [isType_prim_tag_constantE], [PCUICSREta.conv_refl'E]
+  and [conv_context_reflE]).
 
   **Helpers with an instance of their own**, each also run inside another instance here:
   - [ctx_inst_mergeE_inst]: the telescope [x : Prop, f : x → x], whose first argument
@@ -60,18 +70,21 @@
     [ctx_inst_merge'E_inst] runs [ctx_inst_mergeE] through [ctx_inst_merge'E], its one caller
     (inside [sr_red1E], [sr_red1E_Case] calls [ctx_inst_merge'E] for a step in the parameters of
     a [match]);
-  - [lift_judgment_SRE_inst]: the step of the declaration [z : (λx:Prop. x) (∀P:Prop. P)], the
-    one in the domain of [Π z : (λx:Prop. x) (∀P:Prop. P). Prop] that [isWfArity_red1E_inst]
-    takes through [isType_red1E], [subject_reduction1E] and [sr_red1E_Prod] (it is also called
-    by [sr_red1E_ctx], [sr_red1E_Lambda] and [sr_red1E_LetIn]);
+  - [lift_judgment_SRE_inst]: the let [y := z : (λx:Prop. x → x) (∀P:Prop. P)] in
+    [z : (λx:Prop. x → x) (∀P:Prop. P)], whose type steps to [(∀P:Prop. P) → ∀P:Prop. P] while its
+    body [z] stays. [isWfArity_red1E_inst] also runs [lift_judgment_SRE], on the step in the
+    domain of [Π z : (λx:Prop. x) (∀P:Prop. P). Prop], through [isType_red1E],
+    [subject_reduction1E] and [sr_red1E_Prod] (it is also called by [sr_red1E_ctx],
+    [sr_red1E_Lambda] and [sr_red1E_LetIn]);
   - [typing_spine_prim_argsE_inst]: the spine [1] of the partial application [land 1] in
     [Σ_po] (one argument of two, so neither part of the conclusion is vacuous).
     [prim_app_typing_invE_inst] runs it through [prim_app_typing_invE] on the spine [1 3] of
     [land 1 3];
   - [typing_closed_red1E_inst] and [typing_closed_redE_inst]: the β step [sri_beta] of the typed
     [(λx:Prop. x) (∀P:Prop. P)], in [[]] and in [z : (λx:Prop. x) (∀P:Prop. P)]
-    ([sr_red1E_beta_inst], [subject_reduction1_closedE_inst], [subject_reduction_closedE_inst]
-    and [type_reduction_closedE_inst] also run them). *)
+    ([type_reduction_closedE_inst] also runs [typing_closed_redE] on that step;
+    [sr_red1E_beta_inst], [subject_reduction1_closedE_inst] and [subject_reduction_closedE_inst]
+    run the two lemmas on the β step [sri_xx_beta] of [(λx:Prop. x → x) (∀P:Prop. P)]). *)
 
 From Stdlib Require Import ssreflect ssrbool PrimInt63.
 From MetaRocq.Utils Require Import utils.
@@ -130,21 +143,54 @@ Proof. constructor. split; [reflexivity|exact (sri_beta [])]. Qed.
 Lemma sri_ctx_nondeg : sri_Γz <> [vass si_na iv_False].
 Proof. intros h; vm_compute in h; discriminate h. Qed.
 
-(** The η-typed redex [(λz:Prop. y) (∀P:Prop. P)] in [iv_Γk], at [k (λx:Prop. g x)]. *)
-Definition sri_eta_redex : term := tApp (tLambda si_na si_P (tRel 1)) iv_False.
+(** The η-typed redex [(λz : k g. (λw : k g. w) z) y] in [iv_Γk]. Its body [(λw : k g. w) z]
+    ([sri_eta_body], where [k g] is [tApp (tRel 2) (tRel 3)]) uses [z] as an argument; its reduct is
+    [(λw : k g. w) y]. *)
+Definition sri_eta_body : term := tApp (tLambda si_na (lift0 1 iv_kg) (tRel 0)) (tRel 0).
+Definition sri_eta_redex : term := tApp (tLambda si_na iv_kg sri_eta_body) (tRel 0).
+Definition sri_eta_reduct : term := tApp (tLambda si_na iv_kg (tRel 0)) (tRel 0).
 
+Lemma sri_eta_step : red1 si_Σ iv_Γk sri_eta_redex sri_eta_reduct.
+Proof. exact (red_beta si_Σ iv_Γk si_na iv_kg sri_eta_body (tRel 0)). Qed.
+
+(** The redex has type [k g], and [typeE_Cumul] with [iv_spec_eta] (whose conversion is
+    [cumul_eta_l]) types it at [k (λx:Prop. g x)]. *)
 Lemma sri_eta_redex_typed : si_Σ ;;; iv_Γk |-E sri_eta_redex : iv_keta.
 Proof.
-  have w := iv_wf_P si_Σ iv_Γk iv_wf_Γk.
-  have hy : si_Σ ;;; iv_Γk ,, vass si_na si_P |-E tRel 1 : lift0 1 iv_keta.
-  { exact (weakeningE si_Σ iv_Γk [vass si_na si_P] (tRel 0) iv_keta si_wfE w iv_rel_typed). }
-  have hk : si_Σ ;;; iv_Γk ,, vass si_na si_P |-E lift0 1 iv_keta : tSort sProp.
-  { exact (weakeningE si_Σ iv_Γk [vass si_na si_P] iv_keta si_P si_wfE w iv_keta_typed). }
-  have hP := iv_P_typed si_Σ iv_Γk iv_wf_Γk.
-  exact (typeE_App _ _ (tLambda si_na si_P (tRel 1)) si_na si_P (lift0 1 iv_keta) _ iv_False
-           (typeE_Prod _ _ si_na si_P (lift0 1 iv_keta) _ sProp (iv_vass_s si_Σ iv_Γk si_na si_P _ hP eq_refl) hk)
-           (typeE_Lambda _ _ si_na si_P (tRel 1) (lift0 1 iv_keta) (iv_vass si_Σ iv_Γk si_na si_P _ hP eq_refl) hy)
-           (iv_False_typed si_Σ iv_Γk iv_wf_Γk)).
+  have hkg : si_Σ ;;; iv_Γk |-E iv_kg : tSort sProp.
+  { exact (typeE_App _ _ (tRel 1) si_na iv_PP si_P _ (tRel 2) (iv_K_typed iv_Γk iv_wf_Γk)
+             (typeE_Rel _ _ 1 (vass si_na iv_K) iv_wf_Γk eq_refl)
+             (typeE_Rel _ _ 2 (vass si_na iv_PP) iv_wf_Γk eq_refl)). }
+  have w1 := iv_wf_vass si_Σ iv_Γk si_na iv_kg sProp iv_wf_Γk hkg eq_refl.
+  have hkg1 : si_Σ ;;; iv_Γk ,, vass si_na iv_kg |-E lift0 1 iv_kg : tSort sProp.
+  { exact (typeE_App _ _ (tRel 2) si_na iv_PP si_P _ (tRel 3) (iv_K_typed _ w1)
+             (typeE_Rel _ _ 2 (vass si_na iv_K) w1 eq_refl)
+             (typeE_Rel _ _ 3 (vass si_na iv_PP) w1 eq_refl)). }
+  have w2 := iv_wf_vass si_Σ _ si_na (lift0 1 iv_kg) sProp w1 hkg1 eq_refl.
+  have hkg2 : si_Σ ;;; iv_Γk ,, vass si_na iv_kg ,, vass si_na (lift0 1 iv_kg) |-E lift0 2 iv_kg : tSort sProp.
+  { exact (typeE_App _ _ (tRel 3) si_na iv_PP si_P _ (tRel 4) (iv_K_typed _ w2)
+             (typeE_Rel _ _ 3 (vass si_na iv_K) w2 eq_refl)
+             (typeE_Rel _ _ 4 (vass si_na iv_PP) w2 eq_refl)). }
+  have hP1 : si_Σ ;;; iv_Γk ,, vass si_na iv_kg |-E tProd si_na (lift0 1 iv_kg) (lift0 2 iv_kg)
+               : tSort (Sort.sort_of_product sProp sProp).
+  { exact (typeE_Prod _ _ si_na (lift0 1 iv_kg) (lift0 2 iv_kg) sProp sProp
+             (iv_vass_s si_Σ _ si_na (lift0 1 iv_kg) sProp hkg1 eq_refl) hkg2). }
+  have hbody : si_Σ ;;; iv_Γk ,, vass si_na iv_kg |-E sri_eta_body : lift0 1 iv_kg.
+  { exact (typeE_App _ _ (tLambda si_na (lift0 1 iv_kg) (tRel 0)) si_na (lift0 1 iv_kg) (lift0 2 iv_kg) _ (tRel 0)
+             hP1
+             (typeE_Lambda _ _ si_na (lift0 1 iv_kg) (tRel 0) (lift0 2 iv_kg)
+                (iv_vass si_Σ _ si_na (lift0 1 iv_kg) sProp hkg1 eq_refl)
+                (typeE_Rel _ _ 0 (vass si_na (lift0 1 iv_kg)) w2 eq_refl))
+             (typeE_Rel _ _ 0 (vass si_na iv_kg) w1 eq_refl)). }
+  have hP0 : si_Σ ;;; iv_Γk |-E tProd si_na iv_kg (lift0 1 iv_kg) : tSort (Sort.sort_of_product sProp sProp).
+  { exact (typeE_Prod _ _ si_na iv_kg (lift0 1 iv_kg) sProp sProp (iv_vass_s si_Σ _ si_na iv_kg sProp hkg eq_refl)
+             hkg1). }
+  have hredex : si_Σ ;;; iv_Γk |-E sri_eta_redex : iv_kg.
+  { exact (typeE_App _ _ (tLambda si_na iv_kg sri_eta_body) si_na iv_kg (lift0 1 iv_kg) _ (tRel 0) hP0
+             (typeE_Lambda _ _ si_na iv_kg sri_eta_body (lift0 1 iv_kg)
+                (iv_vass si_Σ _ si_na iv_kg sProp hkg eq_refl) hbody)
+             iv_y_typed). }
+  exact (typeE_Cumul _ _ sri_eta_redex iv_kg iv_keta sProp hredex iv_keta_typed iv_spec_eta).
 Qed.
 
 (** [c (∀P:Prop. P) : I (∀P:Prop. P)], the argument of the fixpoint. *)
@@ -215,6 +261,10 @@ Proof. split; [exact (iv_wf_P si_Σ [] localenv_nil)|exact sri_subslet]. Qed.
 Definition sri_ΔL : context := [vdef si_na (tRel 0) si_P; vass si_na si_P].
 Definition sri_sL : list term := [iv_False; iv_False].
 
+(** [y → x] in [y := x : Prop, x : Prop] ([sri_ΔL]): the let [y] is [tRel 0] in the domain and the
+    assumption [x] is [tRel 2] under the binder. *)
+Definition sri_y_to_x : term := tProd si_na (tRel 0) (tRel 2).
+
 Lemma sri_wf_ΔL : wf_localE si_Σ sri_ΔL.
 Proof.
   have w := iv_wf_P si_Σ [] localenv_nil.
@@ -254,14 +304,8 @@ Proof. apply red_ws_cumul_pbE. split; [exact cl|reflexivity|exact (red1_red _ _ 
 Lemma sri_terms_beta : ws_cumul_pbE_terms si_Σ [] [sri_A] [iv_False].
 Proof. constructor; [exact (sri_ws_beta Conv [] eq_refl)|constructor]. Qed.
 
-(** [x : Prop ⊢ (λy:Prop. y) x ≤ x], by β. *)
+(** [(λy:Prop. y) x] in [x : Prop]. *)
 Definition sri_id_x : term := tApp iv_id (tRel 0).
-
-Lemma sri_ws_id_x : ws_cumul_pbE Cumul si_Σ [vass si_na si_P] sri_id_x (tRel 0).
-Proof.
-  apply red_ws_cumul_pbE. split; [reflexivity|reflexivity|].
-  exact (red1_red _ _ _ _ (red_beta si_Σ [vass si_na si_P] si_na si_P (tRel 0) (tRel 0))).
-Qed.
 
 (** [x : Prop ⊢ (λy:Prop. y) x ⇝1 x], a closed step between two open terms. *)
 Lemma sri_cr1_id_x : closed_red1 si_Σ [vass si_na si_P] sri_id_x (tRel 0).
@@ -321,6 +365,83 @@ Qed.
 (** [x → x] in [x : Prop]: the variable [x] occurs in the domain and under the binder. *)
 Definition sri_x_to_x : term := tProd si_na (tRel 0) (tRel 1).
 
+(** [x : Prop ⊢ (λy:Prop. y) (x → x) ≤ x → x], by β. *)
+Definition sri_id_x_to_x : term := tApp iv_id sri_x_to_x.
+
+Lemma sri_ws_id_x_to_x : ws_cumul_pbE Cumul si_Σ [vass si_na si_P] sri_id_x_to_x sri_x_to_x.
+Proof.
+  apply red_ws_cumul_pbE. split; [reflexivity|reflexivity|].
+  exact (red1_red _ _ _ _ (red_beta si_Σ [vass si_na si_P] si_na si_P (tRel 0) sri_x_to_x)).
+Qed.
+
+(** The redex [(λx:Prop. x → x) (∀P:Prop. P)] ([sri_xx_redex]): its body [x → x] ([sri_x_to_x])
+    uses [x]; its reduct is [(∀P:Prop. P) → ∀P:Prop. P] ([sri_xx_reduct]). *)
+Definition sri_xx_lam : term := tLambda si_na si_P sri_x_to_x.
+Definition sri_xx_redex : term := tApp sri_xx_lam iv_False.
+Definition sri_xx_reduct : term := tProd si_na iv_False iv_False.
+
+Lemma sri_xx_body_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ ,, vass si_na si_P |-E sri_x_to_x : si_P.
+Proof.
+  intros h.
+  have w := iv_wf_P si_Σ Γ h.
+  have hx : si_Σ ;;; Γ ,, vass si_na si_P |-E tRel 0 : tSort sProp.
+  { exact (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl). }
+  have wx := iv_wf_vass si_Σ _ si_na (tRel 0) sProp w hx eq_refl.
+  exact (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp (iv_vass_s si_Σ _ si_na (tRel 0) sProp hx eq_refl)
+           (typeE_Rel _ _ 1 (vass si_na si_P) wx eq_refl)).
+Qed.
+
+Lemma sri_xx_lam_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E sri_xx_lam : iv_PP.
+Proof.
+  intros h.
+  exact (typeE_Lambda _ _ si_na si_P sri_x_to_x si_P (iv_vass si_Σ Γ si_na si_P _ (iv_P_typed si_Σ Γ h) eq_refl)
+           (sri_xx_body_typed Γ h)).
+Qed.
+
+Lemma sri_xx_redex_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E sri_xx_redex : si_P.
+Proof.
+  intros h.
+  exact (typeE_App _ _ sri_xx_lam si_na si_P si_P _ iv_False (iv_PP_typed si_Σ Γ h) (sri_xx_lam_typed Γ h)
+           (iv_False_typed si_Σ Γ h)).
+Qed.
+
+Lemma sri_xx_redex_isType : isTypeE si_Σ [] sri_xx_redex.
+Proof. exact (has_sort_isTypeE sProp (sri_xx_redex_typed [] localenv_nil)). Qed.
+
+Lemma sri_xx_beta (Γ : context) : red1 si_Σ Γ sri_xx_redex sri_xx_reduct.
+Proof. exact (red_beta si_Σ Γ si_na si_P sri_x_to_x iv_False). Qed.
+
+Lemma sri_xx_cr1 (Γ : context) (cl : is_closed_context Γ) : closed_red1 si_Σ Γ sri_xx_redex sri_xx_reduct.
+Proof. split; [exact cl|reflexivity|exact (sri_xx_beta Γ)]. Qed.
+
+(** The context [z : (λx:Prop. x → x) (∀P:Prop. P)] and its step to [z : (∀P:Prop. P) → ∀P:Prop. P]. *)
+Definition sri_Γxx : context := [vass si_na sri_xx_redex].
+
+Lemma sri_wf_Γxx : wf_localE si_Σ sri_Γxx.
+Proof. exact (iv_wf_vass si_Σ [] si_na sri_xx_redex sProp localenv_nil (sri_xx_redex_typed [] localenv_nil) eq_refl). Qed.
+
+Lemma sri_zxx_typed : si_Σ ;;; sri_Γxx |-E tRel 0 : sri_xx_redex.
+Proof. exact (typeE_Rel _ _ 0 (vass si_na sri_xx_redex) sri_wf_Γxx eq_refl). Qed.
+
+Lemma sri_red_ctx_xx : red1_ctx si_Σ sri_Γxx [vass si_na sri_xx_reduct].
+Proof. constructor. split; [reflexivity|exact (sri_xx_beta [])]. Qed.
+
+(** The body [x → x] of the redex uses its variable [x] and is not the bare variable; the reduct is
+    the body with [∀P:Prop. P] for [x], and it is neither the argument [∀P:Prop. P], nor the body,
+    nor the redex. *)
+Lemma sri_xx_nondeg :
+  noccur_between 0 1 sri_x_to_x = false /\ sri_x_to_x <> tRel 0 /\
+  subst1 iv_False 0 sri_x_to_x = sri_xx_reduct /\
+  sri_xx_reduct <> iv_False /\ sri_xx_reduct <> sri_x_to_x /\ sri_xx_reduct <> sri_xx_redex.
+Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
+
+(** The context step moves the declaration; the body [x → x] of the redex uses its variable, and the
+    new declaration type is neither the argument [∀P:Prop. P] nor the body. *)
+Lemma sri_ctx_xx_nondeg :
+  sri_Γxx <> [vass si_na sri_xx_reduct] /\ noccur_between 0 1 sri_x_to_x = false /\
+  sri_xx_reduct <> iv_False /\ sri_xx_reduct <> sri_x_to_x.
+Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
+
 (** [z := ∀P:Prop. P : Prop, w : z → z] ([sri_x_to_x] at [x := z]): the let's variable [z]
     occurs in the domain and under the binder of [w]'s type. *)
 Lemma sri_wf_let_x_to_x : wf_localE si_Σ ([] ,, vdef si_na iv_False si_P ,, vass si_na sri_x_to_x).
@@ -335,17 +456,14 @@ Proof.
   exact (iv_wf_vass si_Σ _ si_na _ _ wd hT eq_refl).
 Qed.
 
-(** [z → z] in [z := ∀P:Prop. P : Prop, w : z]: [z] is [tRel 1] in the domain and [tRel 2] under
-    the binder. *)
+(** [z → z] in [z := ∀P:Prop. P : Prop, w : z → z]: [z] is [tRel 1] in the domain and [tRel 2]
+    under the binder. *)
 Definition sri_z_to_z : term := tProd si_na (tRel 1) (tRel 2).
 
-Lemma sri_z_to_z_isType : isTypeE si_Σ ([vdef si_na iv_False si_P] ,,, [vass si_na (tRel 0)]) sri_z_to_z.
+Lemma sri_z_to_z_isType : isTypeE si_Σ ([vdef si_na iv_False si_P] ,,, [vass si_na sri_x_to_x]) sri_z_to_z.
 Proof.
-  have wd := iv_wf_vdef si_Σ [] localenv_nil.
-  have hz : si_Σ ;;; [] ,, vdef si_na iv_False si_P |-E tRel 0 : tSort sProp.
-  { exact (typeE_Rel _ _ 0 (vdef si_na iv_False si_P) wd eq_refl). }
-  have ww := iv_wf_vass si_Σ _ si_na (tRel 0) sProp wd hz eq_refl.
-  have hz1 : si_Σ ;;; [] ,, vdef si_na iv_False si_P ,, vass si_na (tRel 0) |-E tRel 1 : tSort sProp.
+  have ww := sri_wf_let_x_to_x.
+  have hz1 : si_Σ ;;; [] ,, vdef si_na iv_False si_P ,, vass si_na sri_x_to_x |-E tRel 1 : tSort sProp.
   { exact (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) ww eq_refl). }
   have wz := iv_wf_vass si_Σ _ si_na (tRel 1) sProp ww hz1 eq_refl.
   apply (has_sort_isTypeE (Sort.sort_of_product sProp sProp)).
@@ -531,29 +649,36 @@ Section SRInstances.
 
   (** *** [sr_red1E] and its corollaries *)
 
-  (** [sr_red1E] (through [env_propE_typing]) at β, with [typing_closed_red1E] for the step.
+  (** [sr_red1E] (through [env_propE_typing]) at β on [(λx:Prop. x → x) (∀P:Prop. P)]
+      ([sri_xx_redex_typed]), with [typing_closed_red1E] for the step [sri_xx_beta].
       TARGET PCUICSREta.sr_red1E
-      INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
-  Lemma sr_red1E_beta_inst : si_Σ ;;; [] |-E iv_False : si_P.
+      INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
+  Lemma sr_red1E_beta_inst : si_Σ ;;; [] |-E sri_xx_reduct : si_P.
   Proof.
-    have ht := iv_app_typed si_Σ [] localenv_nil.
+    have ht := sri_xx_redex_typed [] localenv_nil.
     pose proof (env_propE_typing sr_red1E si_Σ si_wfE [] _ _ ht) as h.
     unfold SR_red1E in h.
-    exact (h iv_False (typing_closed_red1E (Σ := si_Σ) (wfΣ := si_wfE) ht (sri_beta []))).
+    exact (h sri_xx_reduct (typing_closed_red1E (Σ := si_Σ) (wfΣ := si_wfE) ht (sri_xx_beta []))).
   Qed.
 
-  (** The β step moves the term, and the type [k (λx:Prop. g x)] it is typed at is the η-expanded
-      one, not [k g], the declared type of [y]. *)
-  Lemma subject_reduction1E_eta_inst_nondeg : sri_eta_redex <> tRel 0 /\ iv_kg <> iv_keta.
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+  (** The body of the redex uses its variable: substituting [∀P:Prop. P] or [y] for [z] in
+      [sri_eta_body] gives two different terms. The reduct is neither the redex nor the bare
+      variable [tRel 0]. [k g] is the declared type of [y] ([tRel 0] of [iv_Γk]), lifted by one,
+      and the type [k (λx:Prop. g x)] the redex is typed at is not [k g]. *)
+  Lemma subject_reduction1E_eta_inst_nondeg :
+    subst1 iv_False 0 sri_eta_body <> subst1 (tRel 0) 0 sri_eta_body /\
+    sri_eta_reduct <> sri_eta_redex /\ sri_eta_reduct <> tRel 0 /\
+    option_map (fun d => lift0 1 (decl_type d)) (nth_error iv_Γk 0) = Some iv_kg /\ iv_kg <> iv_keta.
+  Proof. split; [|split; [|split; [|split]]]; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
 
-  (** β on a term typed through η.
+  (** β on the redex [sri_eta_redex], whose body uses its variable, typed at [k (λx:Prop. g x)]
+      through η ([sri_eta_redex_typed]).
       TARGET PCUICSREta.subject_reduction1E
       INSTANCE NONDEGEN PCUICSREtaInstances.subject_reduction1E_eta_inst_nondeg *)
-  Lemma subject_reduction1E_eta_inst : si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta.
+  Lemma subject_reduction1E_eta_inst : si_Σ ;;; iv_Γk |-E sri_eta_reduct : iv_keta.
   Proof.
     exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_eta_redex) (T := iv_keta)
-             sri_eta_redex_typed (red_beta si_Σ iv_Γk si_na si_P (tRel 1) iv_False)).
+             sri_eta_redex_typed sri_eta_step).
   Qed.
 
   (** The ζ step moves the term. *)
@@ -597,27 +722,27 @@ Section SRInstances.
              sri_fix_app_typed sri_fix_red).
   Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
-  Lemma subject_reductionE_inst : si_Σ ;;; [] |-E iv_False : si_P.
+  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
+  Lemma subject_reductionE_inst : si_Σ ;;; [] |-E sri_xx_reduct : si_P.
   Proof.
-    exact (subject_reductionE si_Σ [] sri_A iv_False si_P si_wfE (iv_app_typed si_Σ [] localenv_nil)
-             (red1_red _ _ _ _ (sri_beta []))).
+    exact (subject_reductionE si_Σ [] sri_xx_redex sri_xx_reduct si_P si_wfE (sri_xx_redex_typed [] localenv_nil)
+             (red1_red _ _ _ _ (sri_xx_beta []))).
   Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
-  Lemma subject_reduction1_closedE_inst : si_Σ ;;; [] |-E iv_False : si_P.
+  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
+  Lemma subject_reduction1_closedE_inst : si_Σ ;;; [] |-E sri_xx_reduct : si_P.
   Proof.
-    have ht := iv_app_typed si_Σ [] localenv_nil.
-    exact (subject_reduction1_closedE si_Σ [] sri_A iv_False si_P si_wfE ht
-             (typing_closed_red1E (Σ := si_Σ) (wfΣ := si_wfE) ht (sri_beta []))).
+    have ht := sri_xx_redex_typed [] localenv_nil.
+    exact (subject_reduction1_closedE si_Σ [] sri_xx_redex sri_xx_reduct si_P si_wfE ht
+             (typing_closed_red1E (Σ := si_Σ) (wfΣ := si_wfE) ht (sri_xx_beta []))).
   Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
-  Lemma subject_reduction_closedE_inst : si_Σ ;;; [] |-E iv_False : si_P.
+  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
+  Lemma subject_reduction_closedE_inst : si_Σ ;;; [] |-E sri_xx_reduct : si_P.
   Proof.
-    have ht := iv_app_typed si_Σ [] localenv_nil.
-    exact (subject_reduction_closedE si_Σ [] sri_A iv_False si_P si_wfE ht
-             (typing_closed_redE (Σ := si_Σ) (wfΣ := si_wfE) ht (red1_red _ _ _ _ (sri_beta [])))).
+    have ht := sri_xx_redex_typed [] localenv_nil.
+    exact (subject_reduction_closedE si_Σ [] sri_xx_redex sri_xx_reduct si_P si_wfE ht
+             (typing_closed_redE (Σ := si_Σ) (wfΣ := si_wfE) ht (red1_red _ _ _ _ (sri_xx_beta [])))).
   Qed.
 
   (** The β step [sri_beta] of the typed redex [(λx:Prop. x) (∀P:Prop. P)], in the empty context.
@@ -654,14 +779,17 @@ Section SRInstances.
 
   (** *** Section [SRContextE] *)
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
-  Lemma isType_red1E_inst : isTypeE si_Σ [] iv_False.
-  Proof. exact (isType_red1E (Σ := si_Σ) (wfΣ := si_wfE) (A := sri_A) sri_A_isType (sri_beta [])). Qed.
-
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
-  Lemma isType_redE_inst : isTypeE si_Σ [] iv_False.
+  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
+  Lemma isType_red1E_inst : isTypeE si_Σ [] sri_xx_reduct.
   Proof.
-    exact (isType_redE (Σ := si_Σ) (wfΣ := si_wfE) sri_A_isType (red1_red _ _ sri_A iv_False (sri_beta []))).
+    exact (isType_red1E (Σ := si_Σ) (wfΣ := si_wfE) (A := sri_xx_redex) sri_xx_redex_isType (sri_xx_beta [])).
+  Qed.
+
+  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
+  Lemma isType_redE_inst : isTypeE si_Σ [] sri_xx_reduct.
+  Proof.
+    exact (isType_redE (Σ := si_Σ) (wfΣ := si_wfE) sri_xx_redex_isType
+             (red1_red _ _ sri_xx_redex sri_xx_reduct (sri_xx_beta []))).
   Qed.
 
   (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_arity_nondeg *)
@@ -675,18 +803,34 @@ Section SRInstances.
              (red1_red _ _ sri_arity (tProd si_na iv_False si_P) sri_arity_red)).
   Qed.
 
-  (** The declaration [z : (λx:Prop. x) (∀P:Prop. P)] of sort [Prop] and its closed step
-      [sri_cr1] to [z : ∀P:Prop. P]. The declared types before and after the step differ
-      ([sri_beta_nondeg]).
-      INSTANCE NONDEGEN PCUICSREtaInstances.sri_beta_nondeg *)
-  Lemma lift_judgment_SRE_inst : lift_typing typingE si_Σ [] (j_vass_s si_na iv_False sProp).
+  (** The body [z] of the let is declared at the redex [(λx:Prop. x → x) (∀P:Prop. P)] in
+      [sri_Γxx], and the redex is not its reduct [(∀P:Prop. P) → ∀P:Prop. P], the new type of the
+      let; the body of the redex uses its variable, and the reduct is neither the argument nor the
+      body. *)
+  Lemma lift_judgment_SRE_inst_nondeg :
+    option_map (fun d => lift0 1 (decl_type d)) (nth_error sri_Γxx 0) = Some sri_xx_redex /\
+    sri_xx_redex <> sri_xx_reduct /\ noccur_between 0 1 sri_x_to_x = false /\
+    sri_xx_reduct <> iv_False /\ sri_xx_reduct <> sri_x_to_x.
+  Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
+
+  (** The let [y := z : (λx:Prop. x → x) (∀P:Prop. P)] in [sri_Γxx], of sort [Prop], and the
+      closed step [sri_xx_cr1] of its type to [(∀P:Prop. P) → ∀P:Prop. P], the body [z] kept (the
+      left case of [on_one_decl], a step of the type).
+      INSTANCE NONDEGEN PCUICSREtaInstances.lift_judgment_SRE_inst_nondeg *)
+  Lemma lift_judgment_SRE_inst :
+    lift_typing typingE si_Σ sri_Γxx (j_decl_s (mkdecl si_na (Some (tRel 0)) sri_xx_reduct) (Some sProp)).
   Proof.
-    have ha := iv_app_typed si_Σ [] localenv_nil.
-    apply (lift_judgment_SRE (Σ := si_Σ) (wfΣ := si_wfE) [] si_na si_na None None sri_A iv_False (Some sProp)).
-    - split; [exact tt|]. exists sProp. split; [|split; exact eq_refl].
-      split; [exact ha|].
-      intros u r. exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) ha (closed_red1_red1 r)).
-    - split; [reflexivity|exact (sri_cr1 [] eq_refl)].
+    have hz := sri_zxx_typed.
+    have hB := sri_xx_redex_typed sri_Γxx sri_wf_Γxx.
+    apply (lift_judgment_SRE (Σ := si_Σ) (wfΣ := si_wfE) sri_Γxx si_na si_na (Some (tRel 0)) (Some (tRel 0))
+             sri_xx_redex sri_xx_reduct (Some sProp)).
+    - split.
+      + split; [exact hz|].
+        intros u r. exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) hz (closed_red1_red1 r)).
+      + exists sProp. split; [|split; exact eq_refl].
+        split; [exact hB|].
+        intros u r. exact (subject_reduction1E (Σ := si_Σ) (wfΣ := si_wfE) hB (closed_red1_red1 r)).
+    - split; [reflexivity|]. left. split; [exact (sri_xx_cr1 sri_Γxx eq_refl)|reflexivity].
   Qed.
 
   (** A β step in the declaration of the variable that the term is.
@@ -697,15 +841,16 @@ Section SRInstances.
              sri_red_ctx sri_z_typed).
   Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_ctx_nondeg *)
-  Lemma wf_local_red1E_inst : wf_localE si_Σ [vass si_na iv_False].
-  Proof. exact (wf_local_red1E (Σ := si_Σ) (wfΣ := si_wfE) (Γ := sri_Γz) sri_red_ctx sri_wf_Γz). Qed.
+  (** The context step [z : (λx:Prop. x → x) (∀P:Prop. P)] ⇝ [z : (∀P:Prop. P) → ∀P:Prop. P].
+      INSTANCE NONDEGEN PCUICSREtaInstances.sri_ctx_xx_nondeg *)
+  Lemma wf_local_red1E_inst : wf_localE si_Σ [vass si_na sri_xx_reduct].
+  Proof. exact (wf_local_red1E (Σ := si_Σ) (wfΣ := si_wfE) (Γ := sri_Γxx) sri_red_ctx_xx sri_wf_Γxx). Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_ctx_nondeg *)
-  Lemma wf_local_redE_inst : wf_localE si_Σ [vass si_na iv_False].
+  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_ctx_xx_nondeg *)
+  Lemma wf_local_redE_inst : wf_localE si_Σ [vass si_na sri_xx_reduct].
   Proof.
-    exact (wf_local_redE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := sri_Γz) (PCUICSR.red1_red_ctx si_Σ _ _ sri_red_ctx)
-             sri_wf_Γz).
+    exact (wf_local_redE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := sri_Γxx) (PCUICSR.red1_red_ctx si_Σ _ _ sri_red_ctx_xx)
+             sri_wf_Γxx).
   Qed.
 
   (** Substituting the let's value [∀P:Prop. P] for [z] in [w : z → z] moves [w]'s type, and the
@@ -724,11 +869,13 @@ Section SRInstances.
              sri_wf_let_x_to_x).
   Qed.
 
-  (** The declaration [y : k g] has an open type ([k g] is [tApp (tRel 0) (tRel 1)]), so the lift
-      by one moves it. *)
+  (** [iv_Γk] is the declaration [tApp (tRel 0) (tRel 1)] (the [y : k g] of the header) on top of
+      [[vass si_na iv_K; vass si_na iv_PP]] ([k : (Prop → Prop) → Prop], [g : Prop → Prop]). The
+      type of that head declaration is open, so the lift by one moves it. *)
   Lemma wf_local_isType_nthE_inst_nondeg :
+    iv_Γk = vass si_na (tApp (tRel 0) (tRel 1)) :: [vass si_na iv_K; vass si_na iv_PP] /\
     lift0 1 (decl_type (vass si_na (tApp (tRel 0) (tRel 1)))) <> decl_type (vass si_na (tApp (tRel 0) (tRel 1))).
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  Proof. split; [reflexivity|intros h; vm_compute in h; discriminate h]. Qed.
 
   (** INSTANCE NONDEGEN PCUICSREtaInstances.wf_local_isType_nthE_inst_nondeg *)
   Lemma wf_local_isType_nthE_inst :
@@ -877,39 +1024,55 @@ Section SRInstances.
 
   (** *** Helpers of [sr_red1E]: spines and substitutions *)
 
-  (** The spine has a let, so its substitution is not the reversed instance, and [expand_lets]
-      moves [Δ'] (its [tRel 1] is [x], below the let [y]). *)
+  (** The spine has a let, so its substitution is not the reversed instance; [Δ'] ([y → x]) uses
+      both the let [y] and the assumption [x]; [expand_lets] moves [Δ']; and the substituted
+      declaration is not [∀P:Prop. P], the entry of [sri_sL]. *)
   Lemma spine_subst_inst_substE_inst_nondeg :
-    sri_sL <> List.rev [iv_False] /\ expand_lets_ctx sri_ΔL [vass si_na (tRel 1)] <> [vass si_na (tRel 1)].
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+    sri_sL <> List.rev [iv_False] /\
+    noccur_between 0 1 sri_y_to_x = false /\ noccur_between 1 1 sri_y_to_x = false /\
+    expand_lets_ctx sri_ΔL [vass si_na sri_y_to_x] <> [vass si_na sri_y_to_x] /\
+    subst_context sri_sL 0 [vass si_na sri_y_to_x] <> [vass si_na iv_False].
+  Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
 
   (** INSTANCE NONDEGEN PCUICSREtaInstances.spine_subst_inst_substE_inst_nondeg *)
   Definition spine_subst_inst_substE_inst :=
-    spine_subst_inst_substE (Δ := sri_ΔL) (Δ' := [vass si_na (tRel 1)]) sri_spineL.
+    spine_subst_inst_substE (Δ := sri_ΔL) (Δ' := [vass si_na sri_y_to_x]) sri_spineL.
 
+  (** As above, for the term [y → x]. *)
   Lemma spine_subst_inst_subst_termE_inst_nondeg :
-    sri_sL <> List.rev [iv_False] /\ expand_lets sri_ΔL (tRel 1) <> tRel 1.
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+    sri_sL <> List.rev [iv_False] /\
+    noccur_between 0 1 sri_y_to_x = false /\ noccur_between 1 1 sri_y_to_x = false /\
+    expand_lets sri_ΔL sri_y_to_x <> sri_y_to_x /\ subst sri_sL 0 sri_y_to_x <> iv_False.
+  Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
 
   (** INSTANCE NONDEGEN PCUICSREtaInstances.spine_subst_inst_subst_termE_inst_nondeg *)
   Definition spine_subst_inst_subst_termE_inst :=
-    spine_subst_inst_subst_termE (Δ := sri_ΔL) (Δ' := tRel 1) sri_spineL.
+    spine_subst_inst_subst_termE (Δ := sri_ΔL) (Δ' := sri_y_to_x) sri_spineL.
 
+  (** As above, below one more binder ([k = 1]): [y] is [tRel 1] and [x] is [tRel 3] in
+      [lift0 1 sri_y_to_x]. *)
   Lemma spine_subst_inst_subst_kE_inst_nondeg :
-    sri_sL <> List.rev [iv_False] /\ expand_lets_k_ctx sri_ΔL 1 [vass si_na (tRel 2)] <> [vass si_na (tRel 2)].
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+    sri_sL <> List.rev [iv_False] /\
+    noccur_between 1 1 (lift0 1 sri_y_to_x) = false /\ noccur_between 2 1 (lift0 1 sri_y_to_x) = false /\
+    expand_lets_k_ctx sri_ΔL 1 [vass si_na (lift0 1 sri_y_to_x)] <> [vass si_na (lift0 1 sri_y_to_x)] /\
+    subst_context sri_sL 1 [vass si_na (lift0 1 sri_y_to_x)] <> [vass si_na iv_False].
+  Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
 
   (** INSTANCE NONDEGEN PCUICSREtaInstances.spine_subst_inst_subst_kE_inst_nondeg *)
   Definition spine_subst_inst_subst_kE_inst :=
-    spine_subst_inst_subst_kE (Δ := sri_ΔL) (k := 1) (Δ' := [vass si_na (tRel 2)]) sri_spineL.
+    spine_subst_inst_subst_kE (Δ := sri_ΔL) (k := 1) (Δ' := [vass si_na (lift0 1 sri_y_to_x)]) sri_spineL.
 
+  (** As above, for the term [lift0 1 sri_y_to_x] at [k = 1]. *)
   Lemma spine_subst_inst_subst_term_kE_inst_nondeg :
-    sri_sL <> List.rev [iv_False] /\ expand_lets_k sri_ΔL 1 (tRel 2) <> tRel 2.
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+    sri_sL <> List.rev [iv_False] /\
+    noccur_between 1 1 (lift0 1 sri_y_to_x) = false /\ noccur_between 2 1 (lift0 1 sri_y_to_x) = false /\
+    expand_lets_k sri_ΔL 1 (lift0 1 sri_y_to_x) <> lift0 1 sri_y_to_x /\
+    subst sri_sL 1 (lift0 1 sri_y_to_x) <> iv_False.
+  Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
 
   (** INSTANCE NONDEGEN PCUICSREtaInstances.spine_subst_inst_subst_term_kE_inst_nondeg *)
   Definition spine_subst_inst_subst_term_kE_inst :=
-    spine_subst_inst_subst_term_kE (Δ := sri_ΔL) (k := 1) (Δ' := tRel 2) sri_spineL.
+    spine_subst_inst_subst_term_kE (Δ := sri_ΔL) (k := 1) (Δ' := lift0 1 sri_y_to_x) sri_spineL.
 
   (** The instance is not empty: the conclusion types a term. *)
   Lemma spine_subst_wt_termsE_inst_nondeg : [iv_False] <> [].
@@ -918,27 +1081,37 @@ Section SRInstances.
   (** INSTANCE NONDEGEN PCUICSREtaInstances.spine_subst_wt_termsE_inst_nondeg *)
   Definition spine_subst_wt_termsE_inst := spine_subst_wt_termsE (inst := [iv_False]) sri_spineL.
 
-  (** Skipping one entry drops the let and keeps the assumption: neither all nor nothing. *)
-  Lemma wf_subslet_skipnE_inst_nondeg : skipn 1 sri_sL <> sri_sL /\ skipn 1 sri_sL <> [].
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+  (** Skipping one entry drops the let [y := x] of [sri_ΔL] and keeps the assumption [x : Prop]; of
+      the substitution [sri_sL] it keeps neither all nor nothing. *)
+  Lemma wf_subslet_skipnE_inst_nondeg :
+    skipn 1 sri_sL <> sri_sL /\ skipn 1 sri_sL <> [] /\
+    firstn 1 sri_ΔL = [vdef si_na (tRel 0) si_P] /\ skipn 1 sri_ΔL = [vass si_na si_P].
+  Proof. split; [|split; [|split]]; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
 
   (** INSTANCE NONDEGEN PCUICSREtaInstances.wf_subslet_skipnE_inst_nondeg *)
   Definition wf_subslet_skipnE_inst := wf_subslet_skipnE (s := sri_sL) (Δ := sri_ΔL) (n := 1) sri_wf_subsletL.
 
-  (** The two substitutions differ, and so do the two compared terms. *)
-  Lemma substitution_ws_cumul_pb_subst_convE_inst_nondeg : [sri_A] <> [iv_False] /\ sri_id_x <> tRel 0.
-  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
+  (** The two substitutions differ, and so do the two compared terms [T] and [U]. Each substituted
+      result is not the substituted term ([T{0 := (λx:Prop. x) (∀P:Prop. P)}] is not
+      [(λx:Prop. x) (∀P:Prop. P)], [U{0 := ∀P:Prop. P}] is not [∀P:Prop. P]), and [U] moves when
+      [s] is replaced by [s']. *)
+  Lemma substitution_ws_cumul_pb_subst_convE_inst_nondeg :
+    [sri_A] <> [iv_False] /\ sri_id_x_to_x <> sri_x_to_x /\
+    subst0 [sri_A] sri_id_x_to_x <> sri_A /\ subst0 [iv_False] sri_x_to_x <> iv_False /\
+    subst0 [sri_A] sri_x_to_x <> subst0 [iv_False] sri_x_to_x.
+  Proof. repeat split; intros h; vm_compute in h; discriminate h. Qed.
 
   (** [s = [(λx:Prop. x) (∀P:Prop. P)]] and [s' = [∀P:Prop. P]], one β step apart
-      ([sri_terms_beta]); [T = (λy:Prop. y) x] and [U = x], one β step apart in [x : Prop]
-      ([sri_ws_id_x]). The conclusion relates [(λy:Prop. y) ((λx:Prop. x) (∀P:Prop. P))] and
-      [∀P:Prop. P].
+      ([sri_terms_beta]); [T = (λy:Prop. y) (x → x)] ([sri_id_x_to_x]) and [U = x → x]
+      ([sri_x_to_x]), one β step apart in [x : Prop] ([sri_ws_id_x_to_x]). The conclusion relates
+      [T{0 := (λx:Prop. x) (∀P:Prop. P)}] and [U{0 := ∀P:Prop. P}].
       INSTANCE NONDEGEN PCUICSREtaInstances.substitution_ws_cumul_pb_subst_convE_inst_nondeg *)
-  Lemma substitution_ws_cumul_pb_subst_convE_inst : si_Σ ;;; [] ⊢E tApp iv_id sri_A ≤ iv_False.
+  Lemma substitution_ws_cumul_pb_subst_convE_inst :
+    si_Σ ;;; [] ⊢E subst0 [sri_A] sri_id_x_to_x ≤ subst0 [iv_False] sri_x_to_x.
   Proof.
     exact (substitution_ws_cumul_pb_subst_convE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Δ := [])
-             (s := [sri_A]) (s' := [iv_False]) (T := sri_id_x) (U := tRel 0)
-             sri_subslet_A sri_wf_subslet sri_terms_beta sri_ws_id_x).
+             (s := [sri_A]) (s' := [iv_False]) (T := sri_id_x_to_x) (U := sri_x_to_x)
+             sri_subslet_A sri_wf_subslet sri_terms_beta sri_ws_id_x_to_x).
   Qed.
 
   (** *** Helpers of [sr_red1E]: contexts and types *)
@@ -953,35 +1126,39 @@ Section SRInstances.
     PCUICSREta.isType_weakenE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Δ := [vdef si_na iv_False si_P])
       (iv_wf_vdef si_Σ [] localenv_nil) sri_A_isType.
 
-  (** Expanding the let [z := ∀P:Prop. P] below [w : z] moves [z → z] ([sri_z_to_z]), and the result
-      is not the let's value [∀P:Prop. P]; it also moves [w : z]. *)
+  (** Expanding the let [z := ∀P:Prop. P] below [w : z → z] moves [z → z] ([sri_z_to_z]) and
+      [w]'s type [z → z] ([sri_x_to_x]), and neither result is the let's value [∀P:Prop. P]. *)
   Lemma isType_expand_letsE_inst_nondeg :
-    expand_lets_k [vdef si_na iv_False si_P] #|[vass si_na (tRel 0)]| sri_z_to_z <> sri_z_to_z /\
-    expand_lets_k [vdef si_na iv_False si_P] #|[vass si_na (tRel 0)]| sri_z_to_z <> iv_False /\
-    expand_lets_ctx [vdef si_na iv_False si_P] [vass si_na (tRel 0)] <> [vass si_na (tRel 0)].
-  Proof. split; [|split]; intros h; vm_compute in h; discriminate h. Qed.
+    expand_lets_k [vdef si_na iv_False si_P] #|[vass si_na sri_x_to_x]| sri_z_to_z <> sri_z_to_z /\
+    expand_lets_k [vdef si_na iv_False si_P] #|[vass si_na sri_x_to_x]| sri_z_to_z <> iv_False /\
+    expand_lets_ctx [vdef si_na iv_False si_P] [vass si_na sri_x_to_x] <> [vass si_na sri_x_to_x] /\
+    expand_lets_ctx [vdef si_na iv_False si_P] [vass si_na sri_x_to_x] <> [vass si_na iv_False].
+  Proof. repeat split; intros h; vm_compute in h; discriminate h. Qed.
 
-  (** Expanding the let [z := ∀P:Prop. P] in [z → z] ([sri_z_to_z_isType]), below [w : z].
+  (** Expanding the let [z := ∀P:Prop. P] in [z → z] ([sri_z_to_z_isType]), below [w : z → z].
       INSTANCE NONDEGEN PCUICSREtaInstances.isType_expand_letsE_inst_nondeg *)
   Definition isType_expand_letsE_inst :=
-    isType_expand_letsE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := [vdef si_na iv_False si_P]) (Δ := [vass si_na (tRel 0)])
-      (T := sri_z_to_z) sri_z_to_z_isType.
+    isType_expand_letsE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := [vdef si_na iv_False si_P])
+      (Δ := [vass si_na sri_x_to_x]) (T := sri_z_to_z) sri_z_to_z_isType.
 
-  (** The extended substitution of the let [z := ∀P:Prop. P], at depth one below [w : z], moves
-      [z → z] ([sri_z_to_z]), and the result is not the let's value [∀P:Prop. P]; it also moves
-      [w : z]. *)
+  (** The extended substitution of the let [z := ∀P:Prop. P], at depth one below [w : z → z],
+      moves [z → z] ([sri_z_to_z]) and [w]'s type [z → z] ([sri_x_to_x]), and neither result is the
+      let's value [∀P:Prop. P]. *)
   Lemma isType_subst_extended_substE_inst_nondeg :
-    subst (extended_subst [vdef si_na iv_False si_P] 0) #|[vass si_na (tRel 0)]| sri_z_to_z <> sri_z_to_z /\
-    subst (extended_subst [vdef si_na iv_False si_P] 0) #|[vass si_na (tRel 0)]| sri_z_to_z <> iv_False /\
-    subst_context (extended_subst [vdef si_na iv_False si_P] 0) 0 [vass si_na (tRel 0)] <> [vass si_na (tRel 0)].
-  Proof. split; [|split]; intros h; vm_compute in h; discriminate h. Qed.
+    subst (extended_subst [vdef si_na iv_False si_P] 0) #|[vass si_na sri_x_to_x]| sri_z_to_z <> sri_z_to_z /\
+    subst (extended_subst [vdef si_na iv_False si_P] 0) #|[vass si_na sri_x_to_x]| sri_z_to_z <> iv_False /\
+    subst_context (extended_subst [vdef si_na iv_False si_P] 0) 0 [vass si_na sri_x_to_x] <>
+      [vass si_na sri_x_to_x] /\
+    subst_context (extended_subst [vdef si_na iv_False si_P] 0) 0 [vass si_na sri_x_to_x] <>
+      [vass si_na iv_False].
+  Proof. repeat split; intros h; vm_compute in h; discriminate h. Qed.
 
   (** The extended substitution of the let [z := ∀P:Prop. P] in [z → z] ([sri_z_to_z_isType]),
-      below [w : z].
+      below [w : z → z].
       INSTANCE NONDEGEN PCUICSREtaInstances.isType_subst_extended_substE_inst_nondeg *)
   Definition isType_subst_extended_substE_inst :=
     isType_subst_extended_substE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := [vdef si_na iv_False si_P])
-      (Δ := [vass si_na (tRel 0)]) (T := sri_z_to_z) sri_z_to_z_isType.
+      (Δ := [vass si_na sri_x_to_x]) (T := sri_z_to_z) sri_z_to_z_isType.
 
   (** The substitution of the inductive for the arity variable moves [X (∀P:Prop. P)]. *)
   Lemma isType_subst_aritiesE_inst_nondeg :
@@ -1069,9 +1246,9 @@ Section SRInstances.
   Definition closed_red1_mkApps_left_cb_inst :=
     closed_red1_mkApps_left_cb (Σ := si_Σ) (t := sri_A) (ts := [iv_False]) (sri_cr1 [] eq_refl) eq_refl.
 
-  (** The step is between open terms, so the lift moves them. *)
-  Lemma weakening_closed_red1_cb_inst_nondeg : lift 1 0 sri_id_x <> sri_id_x.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** The step is between open terms, so the lift moves both its source and its target. *)
+  Lemma weakening_closed_red1_cb_inst_nondeg : lift 1 0 sri_id_x <> sri_id_x /\ lift 1 0 (tRel 0) <> tRel 0.
+  Proof. split; intros h; vm_compute in h; discriminate h. Qed.
 
   (** [x : Prop ⊢ (λy:Prop. y) x ⇝1 x], weakened by [y : Prop] below it: [y : Prop, x : Prop ⊢
       (λy:Prop. y) y' ⇝1 y'] with [y'] the lifted variable.
@@ -1222,7 +1399,8 @@ Section SRInstances.
              sri_po_on_result).
   Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_po_int_nondeg *)
+  (** At the primitive type [int] of [Σ_po].
+      INSTANCE IMPOSSIBLE: the target's proof only unpacks and repacks its own premises (PCUICSREta.v:857-867): a case split on the tag t, the premise t <> primArray to discard primArray, the three fields of the premise primitive_invariants t d (the declared type is Set, d has no body, d is monomorphic), and the typing constructor typeE_Const on the premises wf_localE Σ Γ and declared_constant Σ kn d; so in every environment and context the conclusion isTypeE Σ Γ (tConst kn []) is the premises put together by one constructor, and no instance exercises more than its own premises *)
   Lemma isType_prim_tag_constantE_inst : isTypeE Σ_po [] sri_int.
   Proof.
     apply (isType_prim_tag_constantE (Σ := Σ_po) (wfΣ := iv_po_wfE) (t := primInt) (kn := po_int_kn)
@@ -1230,9 +1408,15 @@ Section SRInstances.
       [discriminate|exact iv_po_declared_int|split; reflexivity].
   Qed.
 
-  (** The argument types build a product: [int → int → int] is not the result type [int]. *)
-  Lemma isType_prim_arg_typesE_inst_nondeg : po_land_ty <> sri_int.
-  Proof. intros h; vm_compute in h; discriminate h. Qed.
+  (** [land] is declared in [Σ_po] with the type [po_land_ty], which is [int → int → int]: the
+      argument types build a product, which is not the result type [int]. *)
+  Lemma isType_prim_arg_typesE_inst_nondeg :
+    declared_constant Σ_po po_land_kn po_land_body /\ cst_type po_land_body = po_land_ty /\
+    po_land_ty = tImpl sri_int (tImpl sri_int sri_int) /\ po_land_ty <> sri_int.
+  Proof.
+    split; [exact Σ_po_declared_land|split; [reflexivity|split; [reflexivity|]]].
+    intros h; vm_compute in h; discriminate h.
+  Qed.
 
   (** [int -> int -> int], the type of [land], from [int].
       INSTANCE NONDEGEN PCUICSREtaInstances.isType_prim_arg_typesE_inst_nondeg *)

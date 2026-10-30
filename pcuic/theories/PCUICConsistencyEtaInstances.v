@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instance of [PCUICConsistencyEta.pcuic_consistentE] (row T9)
 
   **The environment** [cs_Σ] declares base's [False_mib] ([Inductive False : Prop :=], no

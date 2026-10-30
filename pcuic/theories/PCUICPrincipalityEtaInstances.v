@@ -1,11 +1,15 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [PCUICPrincipalityEta] (row T2b)
 
   No forecast class: T1's [SRForecastCopy18], a section variable here until copy 18b landed
   (frac/eta 3e6b422d), is deleted.
   Non-degeneracy: each instance is tagged for the instance gate in the comment directly above it
-  (its non-degeneracy lemma, or the reason its row is degenerate by the statement).
+  (its non-degeneracy lemma, or the reason its row is degenerate by the statement;
+  [isWfArity_sortE_inst] and [invert_red_sort_cb_inst] are tagged IMPOSSIBLE).
   [common_typingE_eta_inst] and [principal_typeE_eta_inst]: two types of one variable, its
   declared type and the type it η-contracts to ([pr_eta_types_nondeg]). Inputs chosen for T8
   sites, at types that are NOT head forms; each lemma states the type and its one step to a head
@@ -265,12 +269,8 @@ Proof. constructor; [reflexivity|constructor; reflexivity|constructor]. Qed.
 
 (** ** The lemmas of [PCUICPrincipalityEta], at concrete arguments *)
 
-(** [isWfArity_sortE] at [Set], in the non-empty context [iv_Γ1 = [A : Prop]]; [Set] is not a
-    propositional sort. *)
-Lemma isWfArity_sortE_inst_nondeg : iv_Γ1 <> [] /\ Sort.is_propositional Sort.type0 = false.
-Proof. split; [discriminate|reflexivity]. Qed.
-
-(** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.isWfArity_sortE_inst_nondeg *)
+(** [isWfArity_sortE] at [Set], in the non-empty context [iv_Γ1 = [A : Prop]].
+    INSTANCE IMPOSSIBLE: the target's proof only packs its own premises: it applies the sort constructor typeE_Sort to the premises wf_sort Σ u and wf_localE Σ Γ (through isType_SortE, PCUICAritiesEta.v:86-94) and gives the arity witness ([], u), whose equation destArity [] (tSort u) = Some ([], u) holds by computation (PCUICPrincipalityEta.v:186-193), so in every environment, context and sort the conclusion isWfArityE Σ Γ (tSort u) is assembled from the instance's own premises, and no instance exercises more. *)
 Lemma isWfArity_sortE_inst : isWfArityE si_Σ iv_Γ1 (tSort Sort.type0).
 Proof.
   apply (isWfArity_sortE si_Σ iv_Γ1 Sort.type0 iv_wf_Γ1).

@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [Bidirectional/BDToPCUICEta] (row T6)
 
   **No forecast class.** The lemmas of [BDToPCUICEta] that used a forecast fact took T1's
@@ -362,8 +365,8 @@ Qed.
 Lemma wf_rel_weakE_inst : wf_local_relE si_Σ bd_ΓFG [vass si_na si_P].
 Proof. exact (wf_rel_weakE si_Σ si_wfE bd_ΓFG bdi_wfFG [vass si_na si_P] (iv_wf_P si_Σ [] localenv_nil)). Qed.
 
-(** [bd_Γη = bd_ΓFG ,,, [x : G (λ y. F y)]], both parts not empty.
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_ctxs_nonempty *)
+(** [bd_Γη = bd_ΓFG ,,, [x : G (λ y. F y)]], split into its two parts.
+    INSTANCE IMPOSSIBLE: the proof of [wf_local_local_relE] is the second projection of [All_local_env_app_inv] applied to its premise, the split of a [wf_localE] of [Γ ,,, Γ'] into its two parts; so in every instance and environment the conclusion is the second part of its own premise, unpacked. *)
 Lemma wf_local_local_relE_inst : wf_local_relE si_Σ bd_ΓFG [vass si_na bd_X].
 Proof. exact (wf_local_local_relE si_Σ bd_ΓFG [vass si_na bd_X] bdi_wfη). Qed.
 
