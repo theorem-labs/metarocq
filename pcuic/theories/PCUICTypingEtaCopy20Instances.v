@@ -31,9 +31,10 @@
     [c20_eta_u = (λx:Prop. x) (∀_ : c20_eta_t. ∀P:Prop. P)]: its machine value [c20_eta_q], its
     subject and its irreducible reduct [c20_eta_qv] are three different terms, so the
     conclusion's [c20_eta_q ⇝* c20_eta_qv] is in none of its arguments.
-    [wcbv_standardizationE_inst] runs on [c20_eta_p = ∀_ : c20_eta_t. Prop]; its reduction
-    premise is a SINGLE step, which forces the conclusion's value to be the subject or the
-    reduct, so it is tagged NOT-BUILT with that argument and the cost of settling it. On the
+    [wcbv_standardizationE_inst] runs on [c20_eta_p = ∀_ : c20_eta_t. Prop] and IS degenerate:
+    its conclusion is built from its own arguments. It is tagged NOT-BUILT, with the argument
+    that a one-step reduction premise leaves the conclusion's value to be the subject or the
+    reduct — an argument, not a proof — and with the cost of settling it. On the
     β-redex [c20_eta_t] itself both conclusions follow from the value premise alone
     ([c20_eta_old_nonfst_degenerate]).
   - The two first-order standardization instances run on the same η shape in [fo_Σ]
@@ -899,19 +900,23 @@ Definition ws_wcbv_standardizationE_inst :
     c20_eta_qv_irred.
 
 (* INSTANCE NOT-BUILT: no instance of this lemma is built here that carries content its own
-   arguments do not, and the cost of one is named. The reduction premise is a SINGLE [red1] step
-   from the subject [t] to an irreducible [v], so the conclusion's value [v'] is forced to be
-   [t] or [v]: if [t] is a value the conclusion is [t] with the given step closed under [red],
-   and otherwise the one step is also the machine's, so [v' = v] and the reduction is
-   reflexivity. The instance below is the first case, on [c20_eta_p]: its conclusion is
-   [c20_eta_p_eval] paired with [c20_eta_p_red1] under [closed_red]'s constructor and
-   [rt_step], with two [reflexivity] closedness checks, and no step of the lemma is used.
-   A non-degenerate instance would need a subject whose machine value is neither [t] nor the
-   one-step reduct, which the argument above says cannot exist; proving that costs a standalone
-   lemma relating [red1] and [eval] on closed terms (every closed [t] with a value either IS a
-   value or takes its first [red1] step to its machine value), which this file does not have and
-   which is not a copy of any base lemma. The η content of the subject stays recorded by
-   [c20_eta_core]: [c20_eta_p]'s domain is [c20_eta_t], typed through the η step. *)
+   arguments do not, and the cost of one is named. The instance below is degenerate: its
+   conclusion is [c20_eta_p_eval] paired with its own reduction argument [c20_eta_p_red1] under
+   [closed_red]'s constructor and [rt_step], with two [reflexivity] closedness checks, and no
+   step of the lemma is used. A non-degenerate instance would need a subject whose machine value
+   is neither the subject [t] nor the one-step reduct [v], since for those two the conclusion is
+   the value premise with the given step closed under [red], or with reflexivity.
+   Whether such a subject exists is NOT settled here. The reduction premise is a SINGLE [red1]
+   step from [t] to an irreducible [v], and the residual argument — the contracted redex erases
+   every other redex of [t], or a residual would survive in [v], so what the machine evaluates
+   lies inside the erased parts or is that redex itself — gives [v' = t] or [v' = v]; it is an
+   argument, not a proof, and this file proves no part of it. The lemma that would settle it
+   relates [red1] and [eval] on closed terms WITH the hypothesis that the step's target is
+   irreducible: without that hypothesis the statement is false, since [(λx:Prop. x) ((λx:Prop. x)
+   (∀P:Prop. P))] is closed, has a value and is not a value, yet no single [red1] step of it
+   reaches that value. Such a lemma is in no base file, so it is new work, and it is the cost.
+   The η content of the subject stays recorded by [c20_eta_core]: [c20_eta_p]'s domain is
+   [c20_eta_t], typed through the η step. *)
 Definition wcbv_standardizationE_inst :
   {v' & MetaRocq.PCUIC.PCUICWcbvEval.eval si_Σ c20_eta_p v' * (si_Σ ;;; [] ⊢ v' ⇝ c20_eta_pv)} :=
   wcbv_standardizationE (Σ := si_Σ) (T := tSort (Sort.sort_of_product sProp (Sort.super sProp)))
