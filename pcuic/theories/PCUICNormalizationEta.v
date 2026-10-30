@@ -75,6 +75,69 @@ From Equations Require Import Equations.
 
 From MetaRocq.PCUIC Require Import PCUICSN PCUICFirstorder.
 
+(* The route lemma below takes no forecast class, so it stands before the section. *)
+
+
+From MetaRocq.PCUIC Require PCUICPrincipalityEta.
+
+(** Route lemma, no base twin in [PCUICNormalization]: base
+    [PCUICWcbvEval.wcbv_red1_eval] ([:1399]) takes [wf Σ], which no η environment has. Base
+    reads [wf] only through [declared_constant_to_gen], [declared_constructor_to_gen] and
+    [declared_minductive_ind_npars], all three stated for an arbitrary [on_global_env], so the
+    same script runs with [wfE]. The statement is base's with [wf] → [wfE]. *)
+Lemma wcbv_red1_evalE {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} t t' v :
+  closed t ->
+  Σ ⊢ t ⇝ᵥ t' -> eval Σ t' v -> eval Σ t v.
+Proof.
+  intros Hty Hred Heval.
+  induction Hred in Heval, v, Hty |- *; eauto with wcbv.
+  - inversion Heval; subst; clear Heval. all:cbn in Hty; solve_all. 1-3,6:now econstructor; eauto with wcbv.
+    eapply eval_construct; tea. eauto. eapply eval_app_cong; eauto with wcbv.
+  - inversion Heval; subst; clear Heval. all:cbn in Hty; solve_all. 1-3,6: now econstructor; eauto with wcbv.
+    eapply eval_construct; tea. eauto. eapply eval_app_cong; eauto with wcbv.
+  - inversion Heval; subst; clear Heval. all:cbn in Hty; solve_all. all: now econstructor; eauto with wcbv.
+  - unshelve eapply declared_constant_to_gen in isdecl; eauto.
+    inversion Heval; subst. all:cbn in Hty; solve_all. all: try now econstructor; eauto with wcbv.
+  - inversion Heval; subst. all:cbn in Hty; solve_all. all: try now econstructor; eauto with wcbv.
+  - eapply eval_iota. eapply eval_mkApps_Construct; tea.
+    unshelve eapply declared_constructor_to_gen; eauto.
+    now econstructor. unfold cstr_arity. rewrite e0.
+    rewrite (declared_minductive_ind_nparsE (proj1 (proj1 d))).
+    now rewrite -(declared_minductive_ind_nparsE (proj1 (proj1 d))) /cstr_arity.
+    all:tea. eapply All_All2_refl. solve_all. now eapply value_final.
+    unshelve eapply declared_constructor_to_gen; eauto.
+  - inversion Heval; subst; clear Heval. all:cbn in Hty; solve_all. all: now econstructor; eauto with wcbv.
+  - all:cbn in Hty; solve_all. eapply eval_proj; tea.
+    eapply value_final. eapply value_app; auto. econstructor; tea. eapply d.
+    rewrite e; lia.
+  - eapply eval_fix; eauto.
+    + eapply value_final. eapply value_app; auto. econstructor.
+      rewrite <- closed_unfold_fix_cunfold_eq, e. reflexivity. 2:eauto.
+      cbn in Hty. rewrite closedn_mkApps in Hty. solve_all.
+    + eapply value_final; eauto.
+    + rewrite <- closed_unfold_fix_cunfold_eq, e. reflexivity.
+      cbn in Hty. rewrite closedn_mkApps in Hty. solve_all.
+      Unshelve. all: now econstructor.
+  - destruct p as [[] ?]. eapply eval_cofix_proj; tea.
+    eapply value_final, value_app. now constructor. auto.
+  - eapply eval_cofix_case; tea.
+    eapply value_final, value_app. now constructor. auto.
+  - cbn in Hty. rtoProp; intuition auto.
+    depelim Heval; eapply eval_prim.
+    depelim e.
+    + subst a0 a'; cbn in *. destruct a; eapply evalPrimArray; cbn in *; eauto.
+    + destruct a; eapply evalPrimArray; cbn in *; eauto.
+  - cbn in Hty. rtoProp; intuition auto.
+    depelim Heval; eapply eval_prim.
+    depelim e0.
+    + subst a1 a'; cbn in *. destruct a; eapply evalPrimArray; cbn in *; eauto.
+      eapply All2_app_inv_l in ev as [r1 [r2 [? []]]]. subst v'0.
+      depelim a1. specialize (IHHred y). forward IHHred. toAll. eapply All_nth_error in H; tea; eauto.
+      rewrite -(firstn_skipn n array_value). eapply All2_app; eauto.
+      move: (skipn_nth_error array_value n). rewrite e => ->.
+      constructor; eauto.
+    + now cbn in i.
+Qed.
 Section NormalizationEta.
 
 (* FORECAST-ONLY: one premise per class of the files this one uses; delete each when its copy
@@ -108,8 +171,8 @@ Lemma SN_to_WNE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:No
   - eapply wcbv_red1_red1 in Ht' as Hred. 2:{ change 0 with (#|@nil context_decl|). eapply subject_closedE. eauto. }
     edestruct IH as [v Hv]. econstructor. eauto.
     eapply subject_reductionE; eauto.
-    exists v. sq. eapply wcbv_red1_eval; eauto.
-    now eapply subject_closedE in HA.
+    exists v. sq. eapply (wcbv_red1_evalE (wfΣ := Hwf)); eauto.
+    exact (@subject_closedE _ _ _ [] _ _ HA).
   - exists t. sq. eapply value_final; eauto.
 Qed.
 
@@ -148,8 +211,10 @@ Lemma ws_wcbv_standardizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {n
 Proof.
   intros Hwf Hax Hty Hred Hirred.
   destruct (@wcbv_normalizationE _ no Σ normalization T t) as (v' & Hv'); eauto.
-  assert (Σ;;; [] |- t ⇝* v') as Hred' by now eapply wcbveval_red.
-  eapply closed_red_confluence in Hred as Hred_. destruct Hred_ as (v'' & H1 & H2).
+  assert (Σ;;; [] |- t ⇝* v') as Hred' by now eapply (wcbveval_redE _ T).
+  eapply (PCUICPrincipalityEta.closed_red_confluence_cb
+            (cbΣ := wfE_ClosedBodies Σ (wfΣ := Hwf))) in Hred as Hred_.
+  destruct Hred_ as (v'' & H1 & H2).
   2:{ econstructor; eauto. eapply subject_is_open_termE. eauto. }
   destruct v as [v Hv].
   assert (v = v'') as <- by (eapply irred_equal; eauto).
@@ -168,9 +233,10 @@ Proof.
   intros Hwf Hax Hty Hdecl Hfo Hred Hirred.
   destruct (ws_wcbv_standardizationE Hwf Hax Hty Hred Hirred) as [v' [H H']].
   assert (firstorder_valueE Σ [] v'). {
-    eapply firstorder_value_specE; eauto. exact localenv_nil.
-    eapply subject_reduction_evalE; eauto.
-    eapply eval_to_value. eauto.
+    eapply (firstorder_value_specE Σ v' i u args Hwf localenv_nil).
+    - eapply subject_reduction_evalE; eauto.
+    - eapply eval_to_value. eauto.
+    - exact Hfo.
   }
   enough (v' = v) as -> by eauto.
   eapply irred_equal. eauto.

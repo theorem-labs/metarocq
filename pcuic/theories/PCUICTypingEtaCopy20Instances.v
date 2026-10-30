@@ -48,13 +48,15 @@ From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOnFreeVars
      PCUICTyping PCUICReduction PCUICConfluence PCUICWcbvEval PCUICNormal PCUICSafeLemmata
-     PCUICSN PCUICClassification PCUICWellScopedCumulativity PCUICFirstorder
+     PCUICSN PCUICClassification PCUICWellScopedCumulativity PCUICFirstorder PCUICProgress
      PCUICCumulativitySpecEta PCUICTypingEta PCUICTypingEtaNotions PCUICClosedBodies
      PCUICClosedTypEta PCUICWellScopedCumulativityEta PCUICEtaA6
      PCUICCumulativitySpecEtaClosureInstances PCUICInversionEtaInstances PCUICSREtaInstances
+     PCUICEtaC1b PCUICAritiesEta
      PCUICSNEta PCUICValidityEta PCUICSREta PCUICClassificationEta
      PCUICClassificationEtaInstances PCUICProgressEta PCUICProgressEtaInstances
      PCUICFirstorderEta PCUICFirstorderEtaInstances PCUICCanonicityEta PCUICNormalizationEta.
+From Equations.Type Require Import Relation.
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
@@ -62,11 +64,21 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
 
 (** ** The β-redex witness and its reduction behaviour, without any class *)
 
+(** [λx:Prop. x] is [red1]-normal, as [∀P:Prop. P] is ([pgi_False_normal]): its domain is a
+    sort and its body is [tRel 0] under one assumption. *)
+Lemma c20_id_normal Σ Γ v : red1 Σ Γ iv_id v -> False.
+Proof.
+  unfold iv_id. intros H. inv_red H.
+  - eapply red_normal_Sort; eassumption.
+  - eapply red_normal_Rel0; eassumption.
+Qed.
+
 (** [sri_A = (λx:Prop. x) (∀P:Prop. P)] steps only to [∀P:Prop. P]. *)
 Lemma c20_sri_A_red1 v : red1 si_Σ [] sri_A v -> v = iv_False.
 Proof.
-  unfold sri_A, iv_id. intros H. inv_red H.
+  unfold sri_A. intros H. inv_red H.
   - reflexivity.
+  - exfalso. eapply c20_id_normal; eassumption.
   - exfalso. eapply pgi_False_normal; eassumption.
 Qed.
 
@@ -84,9 +96,11 @@ Proof. apply c20_acc_nf. intros v H. eapply pgi_False_normal; eassumption. Qed.
 (** Everything [sri_A] reaches in one or more steps is [∀P:Prop. P]. *)
 Lemma c20_cored_sri_A y : cored si_Σ [] y sri_A -> y = iv_False.
 Proof.
-  intros Hy. induction Hy.
+  intros Hy. remember sri_A as t0 eqn:Et0. revert Et0.
+  induction Hy; intros Et0; subst.
   - now apply c20_sri_A_red1.
-  - exfalso. subst. eapply pgi_False_normal; eassumption.
+  - exfalso. specialize (IHHy eq_refl). subst v.
+    eapply pgi_False_normal; eassumption.
 Qed.
 
 Lemma c20_acc_sri_A : Acc (cored si_Σ []) sri_A.
@@ -101,8 +115,10 @@ Proof. reflexivity. Qed.
 Lemma c20_False_closed : on_free_vars (fun _ => false) iv_False.
 Proof. reflexivity. Qed.
 
-Definition c20_wsA : ws_term (fun _ => false) := exist _ sri_A c20_sri_A_closed.
-Definition c20_wsF : ws_term (fun _ => false) := exist _ iv_False c20_False_closed.
+Definition c20_wsA : ws_term (fun _ => false) :=
+  @exist term (on_free_vars (fun _ => false)) sri_A c20_sri_A_closed.
+Definition c20_wsF : ws_term (fun _ => false) :=
+  @exist term (on_free_vars (fun _ => false)) iv_False c20_False_closed.
 
 Lemma c20_red_A_False : red si_Σ [] sri_A iv_False.
 Proof. exact (red1_red _ _ _ _ (sri_beta [])). Qed.
@@ -122,7 +138,7 @@ Definition c20_fo_let : term := tLetIn fo_na fo_sz fo_N (tRel 0).
 Lemma c20_fo_axiom_free : axiom_free fo_Σ.
 Proof.
   intros c decl h. exfalso. red in h. cbn in h.
-  destruct h as [h|[h|h]]; [discriminate h|discriminate h|exact h].
+  destruct h as [h|h]; [discriminate h|exact h].
 Qed.
 
 Lemma c20_fo_lookup :
@@ -159,8 +175,10 @@ Proof. reflexivity. Qed.
 Lemma c20_fo_sz_closed : on_free_vars (fun _ => false) fo_sz.
 Proof. reflexivity. Qed.
 
-Definition c20_ws_fo_let : ws_term (fun _ => false) := exist _ c20_fo_let c20_fo_let_closed.
-Definition c20_ws_fo_sz : ws_term (fun _ => false) := exist _ fo_sz c20_fo_sz_closed.
+Definition c20_ws_fo_let : ws_term (fun _ => false) :=
+  @exist term (on_free_vars (fun _ => false)) c20_fo_let c20_fo_let_closed.
+Definition c20_ws_fo_sz : ws_term (fun _ => false) :=
+  @exist term (on_free_vars (fun _ => false)) fo_sz c20_fo_sz_closed.
 
 Lemma c20_closed_red_fo : closed_red fo_Σ [] c20_ws_fo_let c20_ws_fo_sz.
 Proof.
@@ -171,6 +189,11 @@ Section NormalizationEtaInstances.
 
 (* FORECAST-ONLY: the two classes the copy's section takes; delete each when its copy lands. *)
 Context {F18 : SRForecastCopy18} {P18 : ProgForecastCopy18}.
+
+(* Base's normalization premise, one per environment these instances use (by design, never
+   discharged: it is strong normalization, as base's [NormalizationIn] is). *)
+Context {nor : normalizing_flags} {nin_si : NormalizationInE si_Σ}
+        {nin_fo : NormalizationInE fo_Σ}.
 
 (** [s z] is [red1]-normal, by the copy's own [firstorder_value_irredE] on [fo_sz_value]. *)
 Lemma c20_fo_sz_irred : ¬ { t' & fo_Σ ;;; [] |- fo_sz ⇝ t'}.
@@ -206,7 +229,7 @@ Definition ws_wcbv_standardizationE_inst :
 Definition wcbv_standardizationE_inst :
   {v' & eval si_Σ sri_A v' * (si_Σ ;;; [] ⊢ v' ⇝ iv_False)} :=
   wcbv_standardizationE (Σ := si_Σ) (T := si_P) (t := sri_A) (v := iv_False)
-    si_wfE cli_axiom_free (iv_app_typed si_Σ [] localenv_nil) c20_red_A_False c20_False_irred.
+    si_wfE cli_axiom_free (iv_app_typed si_Σ [] localenv_nil) (sri_beta []) c20_False_irred.
 
 Definition ws_wcbv_standardization_fstE_inst : eval fo_Σ c20_fo_let fo_sz :=
   ws_wcbv_standardization_fstE (Σ := fo_Σ) (i := fo_ind) (u := []) (args := []) (mind := fo_mdecl)
