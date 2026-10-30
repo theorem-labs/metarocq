@@ -12,9 +12,11 @@
   [PCUICEtaPrimOpInstance]).
 
   **Non-degeneracy.**
-  - [typing_spine_pred_strengthenE_inst] moves a spine of [∀X:Prop. Type₀] (head step
-    [Type₀ ≤ Type₁]) to [Prop → Prop] ([Prop ≤ Type₀]); the returned head step [Prop ≤ Type₁]
-    relates two products that no premise relates.
+  - [typing_spine_pred_strengthenE_inst] applies the lemma to the spine [pgi_sp_T0] of
+    [∀X:Prop. Type₀] (built with the head step [pgi_PT0_PT1], [Type₀ ≤ Type₁] in the codomain)
+    and to [Prop → Prop] with [Prop ≤ Type₀] in the codomain ([pgi_PP_PT0]); it returns a spine of
+    [Prop → Prop]. The three products [Prop → Prop], [∀X:Prop. Type₀] and [∀X:Prop. Type₁] are
+    pairwise distinct ([typing_spine_pred_strengthenE_inst_nondeg]).
   - [inversion_mkAppsE_inst] (the sized inversion) runs on the β-redex [(λx:Prop. x) (∀P. P)],
     whose spine [[∀P. P]] is not empty.
   - [progressE_inst] (through [progress_env_propE] and the induction principle [typing_ind_envE],
