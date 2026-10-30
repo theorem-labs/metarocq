@@ -197,7 +197,7 @@ Proof.
   apply context_subst_subst_extended_subst. apply sp.
 Qed.
 
-(** Base [isType_weaken] ([:337]). *)
+(** Base [isType_weaken] ([:337]). Shadows [PCUICAritiesEta.isType_weakenE] (another statement, context [[]] there, as base [PCUICArities.isType_weaken]); written qualified. *)
 Lemma isType_weakenE {cf} {Σ Γ Δ T} {wfΣ : wfE Σ} :
   wf_localE Σ Δ ->
   isTypeE Σ Γ T ->
