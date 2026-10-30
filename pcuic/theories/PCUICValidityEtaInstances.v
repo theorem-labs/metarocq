@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the lemmas of [PCUICValidityEta], and the two T2a contracts
 
@@ -239,7 +240,7 @@ Qed.
 Lemma vi_rel_ctx_open : closed_ctx [vass si_na (tApp (tRel 0) (tRel 1)); vass si_na iv_K] = false.
 Proof. reflexivity. Qed.
 
-(* INSTANCE NONDEGEN PCUICValidityEtaInstances.vi_rel_ctx_open *)
+(* INSTANCE IMPOSSIBLE: the proof of [validity_wf_localE] is an induction on its [All_local_rel] premise that, at each assumption, takes the sort the premise's own judgment stores ([lift_sorting_extract], a record repack that copies that sort into the judgment) and conses it onto the list, and at each let reuses the premise's judgment; so in every instance and environment the sort list and each judgment of the conclusion are the premise's own fields, repacked. *)
 Definition validity_wf_localE_inst :=
   validity_wf_localE (Σ := si_Σ) iv_Γg [vass si_na (tApp (tRel 0) (tRel 1)); vass si_na iv_K]
     (All_local_env_app_inv (Γ := iv_Γg) (Γ' := [vass si_na (tApp (tRel 0) (tRel 1)); vass si_na iv_K])

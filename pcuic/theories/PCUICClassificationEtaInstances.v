@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the lemmas of [PCUICClassificationEta] (row T6)
 
@@ -471,9 +472,9 @@ Qed.
 
 (** [typing_spine_nth_error_NoneE] on [cli_dep_sp_let]: the returned left side, the substituted
     remaining telescope, computes to [Π y : I (∀P. P). I (∀P. P)] ([iv_fix_ty]), which is not the
-    unsubstituted telescope and not [cli_dep_let]. The spine's cons product [cli_dep_ty_id] is not
-    [cli_dep_ty] and β-reduces to it in one step, and the spine's tail type [cli_fixty_id] is not
-    [iv_fix_ty] and β-reduces to it in one step. *)
+    unsubstituted telescope and not [cli_dep_let]. The cons product of [cli_dep_sp_let],
+    [cli_dep_ty_id], is not [cli_dep_ty] and β-reduces to it in one step, and the tail type of
+    [cli_dep_sp_let], [cli_fixty_id], is not [iv_fix_ty] and β-reduces to it in one step. *)
 Lemma cli_dep_none_differs :
   subst0 (List.rev [iv_IF]) (it_mkProd_or_LetIn (firstn (#|cli_dep_Δ| - #|[iv_IF]|) cli_dep_Δ) (tRel 1)) <>
     it_mkProd_or_LetIn (firstn (#|cli_dep_Δ| - #|[iv_IF]|) cli_dep_Δ) (tRel 1) /\
@@ -816,9 +817,10 @@ Definition typing_spine_all_invE_inst :=
     cli_let_arrow cli_let_arrow_sp_nil eq_refl.
 
 (** The partial spine [Π x : Prop. Π y : x. x] applied to [I (∀P. P)] only, at [cli_dep_let]. The
-    spine's cons product [cli_dep_ty_id] is not [cli_dep_ty] and β-reduces to it; its tail type
-    [cli_fixty_id] is not the returned left side [Π y : I (∀P. P). I (∀P. P)] and β-reduces to it
-    ([cli_dep_none_differs]).
+    spine [cli_dep_sp_let] takes its cons step at the product [cli_dep_ty_id] and starts its tail at
+    [cli_fixty_id] ([cli_dep_sp_let]). [cli_dep_ty_id] is not [cli_dep_ty] and β-reduces to it;
+    [cli_fixty_id] is not the substituted remaining telescope [Π y : I (∀P. P). I (∀P. P)] and
+    β-reduces to it ([cli_dep_none_differs]).
     INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_dep_none_differs *)
 Definition typing_spine_nth_error_NoneE_inst :=
   typing_spine_nth_error_NoneE (Σ := si_Σ) si_wfE [] cli_dep_Δ (tRel 1) [iv_IF] cli_dep_let

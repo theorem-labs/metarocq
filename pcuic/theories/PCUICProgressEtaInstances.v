@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the lemmas of [PCUICProgressEta] (row T6)
 
@@ -874,8 +875,7 @@ Definition eval_tCaseE_inst :=
 (** The three products [Prop → Prop] ([iv_PP]), [∀X:Prop. Type₀] and [∀X:Prop. Type₁] are pairwise
     distinct, and so are their codomain sorts. The premise [pgi_PP_PT0] steps from the first to the
     second ([Prop ≤ Type₀]), the input spine's head step [pgi_PT0_PT1] from the second to the third
-    ([Type₀ ≤ Type₁]); the spine the instance returns starts with their composite, from the first to
-    the third, which neither relates. No term involved is a β-redex. *)
+    ([Type₀ ≤ Type₁]). No term involved is a β-redex. *)
 Lemma typing_spine_pred_strengthenE_inst_nondeg :
   [× iv_PP <> pgi_PT0, pgi_PT0 <> pgi_PT1, iv_PP <> pgi_PT1,
      sProp <> Sort.type0, Sort.type0 <> Sort.type1 & sProp <> Sort.type1].

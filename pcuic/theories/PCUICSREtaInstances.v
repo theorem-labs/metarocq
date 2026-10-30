@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the lemmas of [PCUICSREta] (row T1)
 
@@ -35,9 +36,8 @@
   [type_reduction_closedE_inst]) and in the domain of an arity ([isWfArity_red1E_inst],
   [isWfArity_redE_inst]); [sri_xx_nondeg]),
   ζ on [let z : Prop := ∀P:Prop. P in z → z], whose body uses [z], to the same product
-  ([subject_reduction1E_zeta_inst]; [subject_reduction1E_zeta_inst_nondeg]),
-  ι on a [match] ([subject_reduction1E_iota_inst]) and fixpoint unfolding
-  ([subject_reduction1E_fix_inst]). [subject_reduction1E_eta_inst] reduces a term
+  ([subject_reduction1E_zeta_inst]; [subject_reduction1E_zeta_inst_nondeg]) and fixpoint
+  unfolding ([subject_reduction1E_fix_inst]). [subject_reduction1E_eta_inst] reduces a term
   whose typing derivation goes through an η step: in [g : Prop → Prop, k : (Prop → Prop) → Prop,
   y : k g], the redex [(λz : k g. (λw : k g. w) z) y], whose body uses [z] as an argument, has type
   [k g] and is typed at [k (λx:Prop. g x)] by a [typeE_Cumul] whose conversion is [cumul_eta_l]
@@ -65,7 +65,9 @@
   the statement that makes every instance degenerate (seven rows:
   [declared_projection_declared_constructorE], [declared_projection_indicesE],
   [cmp_global_instance_cstr_irrelevantE], [isType_prim_tag_constantE], [spine_subst_wt_termsE],
-  [PCUICSREta.conv_refl'E] and [conv_context_reflE]).
+  [PCUICSREta.conv_refl'E] and [conv_context_reflE]), or NOT-BUILT for a degenerate instance
+  with no non-degenerate witness built yet (one row: the ι instance
+  [subject_reduction1E_iota_inst]).
 
   **Helpers with an instance of their own**, each also run inside another instance here:
   - [ctx_inst_mergeE_inst]: the telescope [x : Prop, f : x → x], whose first argument
@@ -108,7 +110,7 @@ From MetaRocq.PCUIC Require PCUICSR PCUICEtaIdxEnv.
 #[local] Existing Instance si_cb.
 
 (* The pieces the instances are built from (terms, contexts, typing derivations, steps):
-   WITNESSES: sri_* *)
+   WITNESSES: sri_* subject_reduction1E_iota_inst_nondeg *)
 
 (** ** Pieces, without any class *)
 
@@ -724,7 +726,7 @@ Section SRInstances.
 
   (** ι on the [match] of [PCUICInversionEtaInstances].
       TARGET PCUICSREta.subject_reduction1E
-      INSTANCE NONDEGEN PCUICSREtaInstances.subject_reduction1E_iota_inst_nondeg *)
+      INSTANCE NOT-BUILT: degenerate, the branch [iv_br] has an empty [bcontext] and body [iv_disc], the scrutinee itself, so the ι step substitutes nothing and the conclusion [iv_disc : iv_match_ty] is the branch premise [iv_br_typed] of the input [iv_match_typed]; no non-degenerate witness built yet *)
   Lemma subject_reduction1E_iota_inst : si_Σ ;;; iv_Γ1 |-E iv_disc : iv_match_ty.
   Proof.
     rewrite -sri_iota_reduct.
@@ -786,8 +788,8 @@ Section SRInstances.
 
   (** *** Reduction of the type *)
 
-  (** The type [(λx:Prop. x → x) (∀P:Prop. P)] of [z] in [sri_Γxx] steps to the new product
-      [(∀P:Prop. P) → ∀P:Prop. P] ([sri_xx_nondeg]).
+  (** The type [(λx:Prop. x → x) (∀P:Prop. P)] of [z] in [sri_Γxx] ([sri_zxx_typed]) steps to the
+      new product [(∀P:Prop. P) → ∀P:Prop. P] ([sri_xx_nondeg]).
       INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
   Lemma type_reductionE_inst : si_Σ ;;; sri_Γxx |-E tRel 0 : sri_xx_reduct.
   Proof.
@@ -1357,10 +1359,9 @@ Section SRInstances.
     split; [reflexivity|reflexivity|exact (red1_red _ _ _ _ (sri_beta []))].
   Qed.
 
-  (** The step is in the outer declaration [z] of the two declarations [z : X, w : z], so the
-      lemma's recursive case runs and carries [w : z] under the stepped binder; [X] is the redex
-      [sri_xx_redex], whose body uses its variable, and its reduct is neither the argument nor the
-      body. The two abstractions differ. *)
+  (** The step is in the outer declaration [z] of the two declarations [z : X, w : z]; [X] is the
+      redex [sri_xx_redex], whose body uses its variable, and its reduct is neither the argument nor
+      the body. The two abstractions differ. *)
   Lemma red1_it_mkLambda_or_LetIn_ctx_cb_inst_nondeg :
     it_mkLambda_or_LetIn [vass si_na (tRel 0); vass si_na sri_xx_redex] (tRel 1) <>
       it_mkLambda_or_LetIn [vass si_na (tRel 0); vass si_na sri_xx_reduct] (tRel 1) /\
@@ -1411,8 +1412,8 @@ Section SRInstances.
              (r := RInt 1%uint63) sri_land_app_typed Σ_po_registers Σ_po_declared_land po_land_1_3 eq_refl).
   Qed.
 
-  (** The spine [[1; 3]] is not empty, so the per-argument part of the lemma's conclusion is not
-      vacuous. *)
+  (** The spine [[1; 3]] is not empty. This is all the lemma states: it does not state the tags of
+      [land] at those indices. *)
   Lemma prim_app_typing_invE_inst_nondeg : map term_of_lit [LInt 1%uint63; LInt 3%uint63] <> [].
   Proof. intros h; vm_compute in h; discriminate h. Qed.
 

@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the lemmas of [PCUICCumulPropEta] (row T6)
 
@@ -618,7 +619,7 @@ Section DefaultFlags.
   Lemma cpi_subslet : subsletE rf_Σ [] [cpi_id] rf_Γ.
   Proof. apply cons_let_assE; [constructor|exact cpi_id_typed]. Qed.
 
-  (** [id], typed at [Prop → Prop], substituted for [f] in the η pair.
+  (** [id], typed at [Prop → Prop] ([cpi_id_typed]), substituted for [f] in the η pair.
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_id_subst_nondeg *)
   Definition substitution_cumul_propE_inst :=
     @substitution_cumul_propE default_checker_flags rf_Σ [] rf_Γ [] [cpi_id] rf_t (tRel 0) cpi_wfE cpi_subslet cpi_eta_cp.

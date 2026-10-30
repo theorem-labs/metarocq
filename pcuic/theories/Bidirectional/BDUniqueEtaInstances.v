@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDUniqueEta] (row T6)
 
@@ -52,9 +53,13 @@
     [checking_typingE_eta_inst]; every type inferred for [x] in [bd_Γη] is [G (λ y. F y)], which
     is not [G F] and η-contracts to it in one step ([BDToPCUICEtaInstances.bdi_eta_pair]).
   The two rows whose every instance is degenerate by the statement, [infering_sort_sortE] and
-  [isTypeRel_uniqueE], are tagged at their instance. The two reduction facts the proofs use,
-  [PCUICPrincipalityEta.closed_red_confluence_cb] and [invert_red_sort_cb], have their instances
-  in [PCUICPrincipalityEtaInstances]. *)
+  [isTypeRel_uniqueE], are tagged at their instance. The reduction facts the proofs use:
+  [PCUICPrincipalityEta.closed_red_confluence_cb] and [invert_red_sort_cb], with their instances
+  in [PCUICPrincipalityEtaInstances]; [PCUICSREta.closed_red_red_subst0_cb], with its instance in
+  [PCUICSREtaInstances]; and [invert_red_prod_cb], [invert_red_mkApps_tInd_cb],
+  [closed_red_untyped_substitution_cb] ([PCUICConversion]) and [red_red_ctx_inv'_cb]
+  ([PCUICContextConversion]), [ClosedBodies] lemmas of base files, with no instance in the lane's
+  instance files. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.

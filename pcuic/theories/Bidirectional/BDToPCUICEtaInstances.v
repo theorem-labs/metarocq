@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDToPCUICEta] (row T6)
 
@@ -21,10 +22,12 @@
 
   **Non-degeneracy.** Each instance applies its lemma to concrete derivations. The comment above
   each instance carries its tag of the instance degeneracy gate: for a NONDEGEN tag, the lemma that
-  states its non-degeneracy; for the one IMPOSSIBLE tag, [wf_local_local_relE_inst], the reason
-  why every instance of [wf_local_local_relE] is degenerate (its proof is the second projection of
-  [All_local_env_app_inv] on its premise). The declarations that are not instances are registered
-  on the witness line after the imports.
+  states its non-degeneracy; for the three IMPOSSIBLE tags, the reason why every instance of the
+  target is degenerate: [wf_local_local_relE_inst] (the proof of [wf_local_local_relE] is the
+  second projection of [All_local_env_app_inv] on its premise), [bd_wf_localE_inst] and
+  [bd_wf_local_relE_inst] (the proofs of [bd_wf_localE] and [bd_wf_local_relE] rebuild the
+  context from the premise's own typing fields). The declarations that are not instances are
+  registered on the witness line after the imports.
   - [checking_typingE_eta_inst]: soundness on the check [x ◃ G F] of [checkingE_eta_inst].
     Every type inferred for [x] in [bd_Γη] is [G (λ y. F y)], which is not [G F] and
     η-contracts to it in one step ([bdi_eta_pair]).
@@ -42,11 +45,12 @@
     [bdi_Γβ_beta]). Their contexts are typed here ([bdi_wf_Γδ], [bdi_wf_Γβπ], [bdi_wf_Γβ]).
   - [lift_sorting_lift_typingE_inst] and [bidirectional_to_pcuicE_inst] carry a let-judgment
     [G F : Prop] that has a term ([bdi_vdef_term]); [ctx_inst_bd_typingE_inst] and
-    [ctx_inst_implE_inst] instantiate the parameter of [I] with the list [[G F]], which is not
-    empty ([bdi_args_nonempty]); the context lemmas run on contexts that are not empty
-    ([bdi_ctxs_nonempty], [bd_ctxs_nonempty]): with a let ([bd_wf_localE_inst],
-    [bd_wf_local_relE_inst]), with three declarations ([wf_local_bd_typingE_inst]), or across a
-    real weakening ([wf_rel_weakE_inst]); [wf_local_rel_subst1E_inst] substitutes [∀P:Prop. P]
+    [ctx_inst_implE_inst] instantiate the parameter of [I] ([si_declared_inductive]) with the
+    list [[G F]], which is not empty ([bdi_args_nonempty]); the context lemmas run on contexts
+    that are not empty ([bd_ctxs_nonempty]): with three declarations
+    ([wf_local_bd_typingE_inst]), or across a real weakening ([wf_rel_weakE_inst]);
+    [bd_wf_localE_inst] and [bd_wf_local_relE_inst], tagged IMPOSSIBLE, run on contexts with a
+    let ([bdi_ctxs_nonempty]); [wf_local_rel_subst1E_inst] substitutes [∀P:Prop. P]
     for the let-bound [z] in [x : z → z], where [z] is not the whole type; the result
     [(∀P:Prop. P) → ∀P:Prop. P] is not the substituted term ([wf_local_rel_subst1E_inst_nondeg]).
 
@@ -70,7 +74,7 @@ From Equations.Type Require Import Relation.
 
 (** The declarations that are not instances: the contexts, derivations and non-degeneracy
     facts the instances are built from or name.
-    WITNESSES: bdi_* *)
+    WITNESSES: bdi_* bdi_ctxs_nonempty *)
 
 (** ** Pieces in [si_Σ], without any class *)
 
@@ -263,7 +267,8 @@ Proof. split; [intros k; discriminate|reflexivity|discriminate|discriminate]. Qe
 Lemma bdi_ctxs_nonempty : bdi_Γd <> [] /\ [vdef si_na (tRel 0) si_P] <> [].
 Proof. unfold bdi_Γd. split; discriminate. Qed.
 
-(** The parameter list that instantiates the telescope [[A : Prop]] of [I] is not empty. *)
+(** The parameter list [[bd_GF]] is not empty (it instantiates the telescope [[A : Prop]] of [I],
+    [si_declared_inductive]). *)
 Lemma bdi_args_nonempty : [bd_GF] <> [].
 Proof. discriminate. Qed.
 
@@ -375,18 +380,19 @@ Proof. exact (wf_local_local_relE si_Σ bd_ΓFG [vass si_na bd_X] bdi_wfη). Qed
 (** ** The section lemmas *)
 
 (** The context [x := A : Prop, A : Prop], with a let.
-    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_ctxs_nonempty *)
+    INSTANCE IMPOSSIBLE: the proof of [bd_wf_localE] is an induction on its [All_local_env_over_sorting] premise that applies the context constructors to the premise's own [Pcheck] and [Psort] fields (the typing of each body and each type, from the context built so far), through the generic [lift_sorting_it_impl] and the repack [has_sort_isTypeE]; so in every instance and environment the conclusion only rebuilds [wf_localE] from the premise's own fields. *)
 Lemma bd_wf_localE_inst : wf_localE si_Σ bdi_Γd.
 Proof. exact (bd_wf_localE si_Σ bdi_Γd bdi_wfbd_Γd bdi_over_Γd). Qed.
 
 (** The extension [[x := A : Prop]] of [bd_Γ1], a let.
-    INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_ctxs_nonempty *)
+    INSTANCE IMPOSSIBLE: the proof of [bd_wf_local_relE] is an induction on its [All_local_env_over_sorting] premise that applies the context constructors to the premise's own [Pcheck] and [Psort] fields (the typing of each body and each type, from the context built so far, joined to [Γ] by [All_local_env_app] with the premise [wf_localE Σ Γ]), through the generic [lift_sorting_it_impl] and the repack [has_sort_isTypeE]; so in every instance and environment the conclusion only rebuilds [wf_local_relE] from the premise's own fields. *)
 Lemma bd_wf_local_relE_inst : wf_local_relE si_Σ bd_Γ1 [vdef si_na (tRel 0) si_P].
 Proof.
   exact (bd_wf_local_relE si_Σ bd_Γ1 bd_wfE_Γ1 [vdef si_na (tRel 0) si_P] bdi_wfbd_rel bdi_over_rel).
 Qed.
 
-(** The parameter of [I] instantiated with [G F] ([bdi_args_nonempty]).
+(** The parameter telescope [[vass si_na si_P]] of [I] ([si_declared_inductive]) instantiated with
+    the list [[bd_GF]], which is not empty ([bdi_args_nonempty]).
     INSTANCE NONDEGEN BDToPCUICEtaInstances.bdi_args_nonempty *)
 Lemma ctx_inst_implE_inst : ctx_instE si_Σ bd_ΓFG [bd_GF] [vass si_na si_P].
 Proof.

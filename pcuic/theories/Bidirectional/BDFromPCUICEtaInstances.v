@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDFromPCUICEta] (row T6)
 
@@ -43,14 +44,15 @@
     on the same [x], where the head arity of [I] is the length of the argument list [[A]]
     ([bdf_head_arity_nondeg]);
   - the (co)fixpoint witness, at a declared type on which the check fails and which reduces to
-    a type on which it passes: [wf_fixpointE_wf_fixpoint_red_inst],
-    [mfix_on_ind_conv_redE_fix_inst], [mfix_body_on_conv_redE_fix_inst],
-    [red_fix_witnessE_inst] ([bdf_fix_d_nondeg]); [mfix_body_on_conv_redE_cofix_inst],
-    [mfix_on_ind_conv_redE_cofix_inst], [red_cofix_witnessE_inst] ([bdf_cofix_d_nondeg]);
-    [typing_inferingE_Fix_beta_inst] and [wf_fixpointE_wf_fixpoint_red_typed_inst] on the
-    typed fixpoint [bdf_fix_typed] ([bdf_fix_dβ_nondeg]); [typing_inferingE_CoFix_inst] and
-    [wf_cofixpointE_wf_cofixpoint_red_inst] on the typed cofixpoint [bdf_cofix_typed] of
-    [iv_Σ], a [CoFinite] record [R] ([bdf_cofix_dβ_nondeg]);
+    a type on which it passes: [mfix_on_ind_conv_redE_fix_inst],
+    [mfix_body_on_conv_redE_fix_inst], [red_fix_witnessE_inst] ([bdf_fix_d_nondeg]);
+    [mfix_body_on_conv_redE_cofix_inst], [mfix_on_ind_conv_redE_cofix_inst],
+    [red_cofix_witnessE_inst] ([bdf_cofix_d_nondeg]); [typing_inferingE_Fix_beta_inst] on the
+    typed fixpoint [bdf_fix_typed] and [wf_fixpointE_wf_fixpoint_red_typed_inst] on its block
+    [bdf_fmfix], with [bdf_wf_fix] ([bdf_fix_dβ_nondeg]); [typing_inferingE_CoFix_inst] on the
+    typed cofixpoint [bdf_cofix_typed] of [iv_Σ], a [CoFinite] record [R], and
+    [wf_cofixpointE_wf_cofixpoint_red_inst] on its block [bdf_cmfix], with [bdf_wf_cofix]
+    ([bdf_cofix_dβ_nondeg]);
   - completeness per typing rule, [typing_inferingE_<rule>_inst]: Rel, Lambda, LetIn and App
     on [bdf_x_prod_typed], [bdf_lam_z_typed], [bdf_letlam_z_typed] and [bdf_app_z_typed], each
     with the variable [x] of [bdf_Γz] in its subject ([bdf_z_nondeg]); Prod on
@@ -76,7 +78,10 @@
     constructor, prefix reflexivity and the declaration constructor). They run on the
     inference pair of [typing_inferingE_eta_inst], the let-judgment [z := bdf_let : Prop],
     the assumption [x : bdf_let] at [Prop], and the contexts [bd_ΓFG ,, x : G (λ y. F y)] and
-    [bd_ΓFG ,, x : G F].
+    [bd_ΓFG ,, x : G F];
+  - tagged NOT-BUILT, because its instance is degenerate and no non-degenerate witness is built
+    yet: [wf_fixpointE_wf_fixpoint_red_inst] (its premise [wf_fixpoint_red_wf_fixpointE_inst] is
+    built from [bd_wf_fixpoint_red], whose statement is its conclusion).
 
   **Rows not inhabited.** None: every lemma of [BDFromPCUICEta] has an instance here, or is a
   helper of one of them ([T8_Sort_r_plug], [T8_Prod_r_plug], [T8_Ind_r_plug],
@@ -785,7 +790,7 @@ Proof.
            (@All_cons _ _ bd_fix_d _ bd_fix_dtype_isTypeE All_nil) bd_mfix_on_ind_red_convE_inst).
 Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_fix_d_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → E → red: the premise [wf_fixpoint_red_wf_fixpointE_inst] ([BDTypingEtaInstances]) is built from [bd_wf_fixpoint_red], whose statement is the conclusion; no non-degenerate witness built yet *)
 Lemma wf_fixpointE_wf_fixpoint_red_inst : wf_fixpoint_red si_Σ bd_Γ1 bd_mfix.
 Proof.
   exact (wf_fixpointE_wf_fixpoint_red (Σ := si_Σ) (wfΣ := si_wfE) (mfix := bd_mfix) bd_wfE_Γ1

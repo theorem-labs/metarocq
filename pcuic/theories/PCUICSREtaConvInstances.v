@@ -1,7 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma, not a mechanical guarantee. *)
+   lemma, not a mechanical guarantee.
+   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
 
 (** * Satisfying instances of the hypotheses of [PCUICSREtaConv]
 
@@ -18,8 +19,12 @@
   [Prop], two contexts that differ in a let-body, in an assumption type or in a binder name, two
   types [(λy:Prop. y) x] and [x]. Each instance carries its tag (the instance-gate grammar); the
   lemmas that are degenerate by their statement are tagged IMPOSSIBLE at their instance.
-  [conv_context_rel_relnE] and [conv_context_rel_to_extended_listE] run on two contexts with a
-  let above an assumption, whose [reln] output is not empty ([sc_Γm_reln_nondeg]).
+  Among them are [conv_context_rel_relnE] and [conv_context_rel_to_extended_listE]: the premise
+  forces the assumption/let shape that [reln] reads, so every instance only recomputes [reln] on
+  that shape; their instances run on two contexts with a let above an assumption
+  ([sc_Γm_reln_nondeg]). Three instances are degenerate and tagged NOT-BUILT, as no
+  non-degenerate witness is built yet: [mfix_body_on_red_typeE_inst],
+  [mfix_on_ind_red1_typeE_inst] and [red_it_mkProd_or_LetIn_smash_cb_inst].
   [declared_inductive_closed_params_instE] has no relation in it; its instance has a non-empty
   parameter context. [ws_cumul_ctx_pbE_cons_inv] inverts one constructor of [All2_fold], so its
   instance is tagged IMPOSSIBLE; it runs on the mixed pair of [sc_ctx_m], whose tails and heads
@@ -27,12 +32,13 @@
   [(∀P:Prop. P) → ∀P:Prop. P], whose body uses its variable ([sc_xx_redex], [sc_xx_reduct]):
   as one step ([closed_red1_ws_cumul_pbE]), as a reduction moved into a context
   ([closed_red_from_empty_cb]), as a step of an assumption type (the four one-declaration
-  context rows) and in the domain of a product ([red_it_mkProd_or_LetIn_smash_cb]);
+  context rows) and, in a NOT-BUILT row, in the domain of a product
+  ([red_it_mkProd_or_LetIn_smash_cb]);
   [red_has_rec_arg_cb] is applied to the reduction of [Π x:(λy:Prop. y) Prop. Prop] to
   [Π x:Prop. Prop]; [red_expand_let_cb] and [red_expand_letE] to the unfolding of the
   let-bound [z] in [z → z], where [z] is not the whole term ([sc_let_unfolds]).
 
-  WITNESSES: sc_*
+  WITNESSES: sc_* sc_d_retyped_differs sc_Γm_reln_nondeg red_it_mkProd_or_LetIn_smash_cb_inst_nondeg
   (the concrete contexts, definitions and derivations [sc_*] that the instances use; the NONDEGEN
   lemmas among them are classified by their tags) *)
 
@@ -194,12 +200,12 @@ Proof.
   exact (ws_cumul_pbE_forget_spec (ws_cumul_pbE_trans _ _ _ (fi_WS_beta Conv) (ci_WS_eta_r Conv))).
 Qed.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_d_retyped_differs *)
+(* INSTANCE NOT-BUILT: degenerate, a round trip: the premise [sc_body_on] proves [fi_beta ~ fi_eta] as [fi_beta ~ fi_P] ([fi_WS_beta]) then [fi_P ~ fi_eta] ([ci_WS_eta_r]), the target prepends the inverse of [fi_beta ⇝ fi_P] to it, so the result [fi_P ~ fi_eta] is a round trip around [ci_WS_eta_r], a sub-derivation of the premise, and [fi_beta] is the identity redex [(λy:Prop. y) Prop]; no non-degenerate witness built yet *)
 Lemma mfix_body_on_red_typeE_inst :
   mfix_body_on sc_check (conv_witnessE si_Σ []) si_kn (def_with_type sc_d fi_P).
 Proof. exact (mfix_body_on_red_typeE (d := sc_d) fi_closed_red_beta sc_body_on). Qed.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_d_retyped_differs *)
+(* INSTANCE NOT-BUILT: degenerate, the same round trip as [mfix_body_on_red_typeE_inst]: the target applies [mfix_body_on_red_typeE] to the premise [sc_body_on], which proves [fi_beta ~ fi_eta] as [fi_beta ~ fi_P] ([fi_WS_beta]) then [fi_P ~ fi_eta] ([ci_WS_eta_r]), so the result [fi_P ~ fi_eta] is a round trip around [ci_WS_eta_r], a sub-derivation of the premise, and [fi_beta] is the identity redex [(λy:Prop. y) Prop]; no non-degenerate witness built yet *)
 Lemma mfix_on_ind_red1_typeE_inst :
   mfix_on_ind sc_check (conv_witnessE si_Σ []) (fun _ => true) [def_with_type sc_d fi_P].
 Proof.
@@ -209,14 +215,13 @@ Proof.
     constructor; [exact sc_body_on|constructor].
 Qed.
 
-(** [reln] on the mixed contexts related by [sc_rel_m]: the output is [tRel (n + 1) :: acc], not
-    empty, and the two contexts differ ([sc_Γm_reln_nondeg]).
-    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γm_reln_nondeg *)
+(** [reln] on the mixed contexts related by [sc_rel_m] ([sc_Γm_reln_nondeg]).
+    INSTANCE IMPOSSIBLE: the proof of [conv_context_rel_relnE] takes the [All2_fold] component of its premise and runs an induction on it with [auto]: [reln] reads only whether each declaration is an assumption or a let, and [All2_fold] of the declaration relation forces each pair of declarations to have the same shape; so in every instance and environment the equation follows from the shape the premise forces, and the relation of the types is never used. *)
 Lemma conv_context_rel_relnE_inst : forall acc n, reln acc n sc_Γm1 = reln acc n sc_Γm2.
 Proof. exact (conv_context_rel_relnE [] sc_Γm1 sc_Γm2 sc_rel_m). Qed.
 
-(** [to_extended_list] on the same contexts: the output is [[tRel 1]] ([sc_Γm_reln_nondeg]).
-    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γm_reln_nondeg *)
+(** [to_extended_list] on the same contexts ([sc_Γm_reln_nondeg]).
+    INSTANCE IMPOSSIBLE: the proof of [conv_context_rel_to_extended_listE] unfolds [to_extended_list] to [reln [] 0] and applies [conv_context_rel_relnE], an induction on the [All2_fold] component of its premise with [auto] (the premise forces each pair of declarations to have the same assumption/let shape, which is all [reln] reads); so in every instance and environment the equation follows from the shape the premise forces, and the relation of the types is never used. *)
 Lemma conv_context_rel_to_extended_listE_inst : to_extended_list sc_Γm1 = to_extended_list sc_Γm2.
 Proof. exact (conv_context_rel_to_extended_listE (Δ := sc_Γm1) (Δ' := sc_Γm2) sc_rel_m). Qed.
 
@@ -498,7 +503,7 @@ Lemma red_it_mkProd_or_LetIn_smash_cb_inst_nondeg :
   [/\ (forall k, sc_x_to_x <> tRel k), sc_xx_reduct <> ci_False & sc_xx_reduct <> sc_x_to_x].
 Proof. split; [discriminate|split; [intros k; discriminate|discriminate|discriminate]]. Qed.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.red_it_mkProd_or_LetIn_smash_cb_inst_nondeg *)
+(* INSTANCE NOT-BUILT: degenerate, with [n = 0] and the one-assumption [sc_Γxx], the conclusion [[] ⊢ sc_xx_redex ⇝ sc_xx_reduct] is the domain step inside the input [sc_red_prod_xx] ([prod_red_l (sc_xx_red1 [])]): the target inverts the congruence that built its input, and the [skipn] prefix is empty; no non-degenerate witness built yet *)
 Lemma red_it_mkProd_or_LetIn_smash_cb_inst :
   ∑ ctx' t' d,
     [× decompose_prod_assum [] (tProd si_na sc_xx_reduct fi_P) = (ctx', t'),
