@@ -9,8 +9,11 @@
   [on_type (lift_typing typingE) Σ Γ T], base's [isType] over [typingE].
 
   - [wt_cumul_pbE]: base's [wt_cumul_pb] record, two types and their join
-    [JoinE] (base: [cumulAlgo_gen]); [wt_cumul_pbE_ws_cumul_pbE] scopes it.
+    [JoinE] (base: [cumulAlgo_gen]); [wt_cumul_pbE_ws_cumul_pbE] scopes it and
+    [wt_cumul_pbE_trans] composes it.
   - [isType_ws_cumul_pbE_refl].
+  - [cumulSpec_typed_cumulAlgoE]: the specification between two typed terms as a
+    [ws_cumul_pbE], base's [cumulSpec_typed_cumulAlgo].
   - [subst_instance_ws_cumul_ctx_pbE]: a well-formed context at two equal
     universe instances.
   - Iterated β-reduction: [red_betas0_cb], [red_betas_cb] (base's [red_betas0],
@@ -83,6 +86,36 @@ Section Typed.
     exact (into_ws_cumul_pbE equiv hΓ hT hU).
   Qed.
 
+  (** Base [wt_cumul_pb_trans], under [wfE Σ] in place of [wf Σ]: the join of the two
+      composed relations is transitivity of [ws_cumul_pbE], and the two types are the
+      domain of the first and the codomain of the second. *)
+  Lemma wt_cumul_pbE_trans pb Γ :
+    Transitive (wt_cumul_pbE pb Σ Γ).
+  Proof.
+    intros x y z cum cum'.
+    have wscum := (wt_cumul_pbE_ws_cumul_pbE cum).
+    have wscum' := (wt_cumul_pbE_ws_cumul_pbE cum').
+    generalize (transitivity wscum wscum'). clear wscum wscum'.
+    destruct cum, cum'; split => //.
+    exact (ws_cumul_pbE_forget X).
+  Qed.
+
+  (** Base [cumulSpec_typed_cumulAlgo] ([PCUICConversion.v:4148]), with the three
+      relations renamed: [typing] to [typingE], the specification [≤s] to [≤sE]
+      ([cumulSpecE]) and the scoped algorithmic relation to [ws_cumul_pbE]. Base reads
+      the scoping of the two sides off the two typing premises through [fvs]; here the
+      same three facts are named. *)
+  Lemma cumulSpec_typed_cumulAlgoE {Γ : context} {t A B s} :
+    Σ ;;; Γ |-E t : A ->
+    Σ ;;; Γ |-E B : tSort s ->
+    cumulSpecE Σ Γ A B ->
+    ws_cumul_pbE Cumul Σ Γ A B.
+  Proof.
+    intros ta tb cum.
+    exact (into_ws_cumul_pbE_spec cum (typing_closed_contextE ta)
+             (type_is_open_termE ta) (subject_is_open_termE tb)).
+  Qed.
+
   (** Base [subst_instance_ws_cumul_ctx_pb], under [wfE Σ] in place of [wf Σ]. *)
   Lemma subst_instance_ws_cumul_ctx_pbE {Δ u u'} pb :
     wf_localE Σ (subst_instance u Δ) ->
@@ -117,6 +150,9 @@ End Typed.
 
 (** The E twin of base's registration [PCUICWellScopedCumulativity.v:289]. *)
 #[global] Hint Immediate isType_ws_cumul_pbE_refl : pcuic.
+
+(** The E twin of base's registration [PCUICConversion.v:4156]. *)
+#[global] Hint Immediate cumulSpec_typed_cumulAlgoE : pcuic.
 
 Set Warnings "-uniform-inheritance".
 Coercion wt_cumul_pbE_ws_cumul_pbE : wt_cumul_pbE >-> ws_cumul_pbE.
