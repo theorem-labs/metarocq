@@ -22,23 +22,27 @@
   Among them are [conv_context_rel_relnE] and [conv_context_rel_to_extended_listE]: the premise
   forces the assumption/let shape that [reln] reads, so every instance only recomputes [reln] on
   that shape; their instances run on two contexts with a let above an assumption
-  ([sc_Γm_reln_nondeg]). Three instances are degenerate and tagged NOT-BUILT, as no
-  non-degenerate witness is built yet: [mfix_body_on_red_typeE_inst],
-  [mfix_on_ind_red1_typeE_inst] and [red_it_mkProd_or_LetIn_smash_cb_inst].
+  ([sc_Γm_reln_nondeg]). The fixpoint-witness rows ([mfix_body_on_red_typeE],
+  [mfix_on_ind_red1_typeE]) run on [check_one_fix] and a declared type on which it finds no block,
+  reduced to [sc_ty] ([sc_red_A]); the witness [sc_tw] of the premise is a one-step reduct of that
+  type ([sc_closed_red1_tw]), and neither of [sc_ty], [sc_tw] reduces to the other
+  ([sc_fix_peak_nondeg]).
   [declared_inductive_closed_params_instE] has no relation in it; its instance has a non-empty
   parameter context. [ws_cumul_ctx_pbE_cons_inv] inverts one constructor of [All2_fold], so its
   instance is tagged IMPOSSIBLE; it runs on the mixed pair of [sc_ctx_m], whose tails and heads
   differ. The reduction lemmas are applied to the β step [(λx:Prop. x → x) (∀P:Prop. P)] ⇝
   [(∀P:Prop. P) → ∀P:Prop. P], whose body uses its variable ([sc_xx_redex], [sc_xx_reduct]):
   as one step ([closed_red1_ws_cumul_pbE]), as a reduction moved into a context
-  ([closed_red_from_empty_cb]), as a step of an assumption type (the four one-declaration
-  context rows) and, in a NOT-BUILT row, in the domain of a product
-  ([red_it_mkProd_or_LetIn_smash_cb]);
+  ([closed_red_from_empty_cb]) and as a step of an assumption type (the four one-declaration
+  context rows); [red_it_mkProd_or_LetIn_smash_cb] is applied to a reduction of
+  [Π w:Prop. let z := (λX:Prop. X → X) w : Prop in Π x:z → z. Prop] that changes only the let body
+  ([sc_red_let_prod]), which [smash_context] substitutes into the type of [x]
+  ([red_it_mkProd_or_LetIn_smash_cb_inst_nondeg]);
   [red_has_rec_arg_cb] is applied to the reduction of [Π x:(λy:Prop. y) Prop. Prop] to
   [Π x:Prop. Prop]; [red_expand_let_cb] and [red_expand_letE] to the unfolding of the
   let-bound [z] in [z → z], where [z] is not the whole term ([sc_let_unfolds]).
 
-  WITNESSES: sc_* sc_d_retyped_differs sc_Γm_reln_nondeg red_it_mkProd_or_LetIn_smash_cb_inst_nondeg
+  WITNESSES: sc_* sc_Γm_reln_nondeg
   (the concrete contexts, definitions and derivations [sc_*] that the instances use; the NONDEGEN
   lemmas among them are classified by their tags) *)
 
@@ -183,36 +187,92 @@ Proof.
   constructor; [constructor|]. constructor; [reflexivity|exact (ci_eq_lam Cumul)].
 Qed.
 
+(** The β-redex [(λx:Prop. x → x) (∀P:Prop. P)] (the body [sc_x_to_x] under [λx:Prop]) and its
+    contractum [(∀P:Prop. P) → ∀P:Prop. P]. *)
+Definition sc_xx_redex : term := tApp (tLambda si_na fi_P sc_x_to_x) ci_False.
+Definition sc_xx_reduct : term := tProd si_na ci_False ci_False.
+
+Lemma sc_xx_red1 (Γ : context) : red1 si_Σ Γ sc_xx_redex sc_xx_reduct.
+Proof. exact (red_beta si_Σ Γ si_na fi_P sc_x_to_x ci_False). Qed.
+
 (** ** Item 3 *)
 
-(** The fixpoint witness: a declared type [fi_beta], witness [fi_eta], reduct [fi_P]. *)
-Definition sc_check : def term -> option kername := fun _ => Some si_kn.
-Definition sc_d : def term := {| dname := si_na; dtype := fi_beta; dbody := fi_P; rarg := 0 |}.
+(** The fixpoint witness, on the check [check_one_fix] that [wf_fixpointE] uses. The declared type
+    [sc_A := Π y:(λX:Prop. I X) (∀P.P). (λx:Prop. x → x) (∀P.P)] hides the inductive [I] behind a
+    β-redex in its domain ([sc_IX]); its codomain is the β-redex [sc_xx_redex]. Two different
+    one-step reducts of [sc_A]: [sc_ty] contracts the codomain (the reduction given to the lemmas,
+    [sc_red_A]); [sc_tw] contracts the domain to [I (∀P.P)] ([sc_I]), the conversion witness
+    ([sc_closed_red1_tw]). *)
+Definition sc_IX : term := tApp (tLambda si_na fi_P (tApp (tInd si_ind []) (tRel 0))) ci_False.
+Definition sc_I : term := tApp (tInd si_ind []) ci_False.
+Definition sc_A : term := tProd si_na sc_IX sc_xx_redex.
+Definition sc_ty : term := tProd si_na sc_IX sc_xx_reduct.
+Definition sc_tw : term := tProd si_na sc_I sc_xx_redex.
+Definition sc_d : def term := {| dname := si_na; dtype := sc_A; dbody := fi_P; rarg := 0 |}.
 
-(** Retyping [sc_d], whose declared type is [(λy:Prop. y) Prop], at [Prop] changes the
-    definition. *)
-Lemma sc_d_retyped_differs : def_with_type sc_d fi_P <> sc_d.
-Proof. discriminate. Qed.
+(** The β step of the codomain of [sc_A]. *)
+Lemma sc_red_A : si_Σ ;;; [] ⊢ sc_A ⇝ sc_ty.
+Proof. split; [reflexivity|reflexivity|]. apply rt_step. apply prod_red_r. exact (sc_xx_red1 _). Qed.
 
-Lemma sc_body_on : mfix_body_on sc_check (conv_witnessE si_Σ []) si_kn sc_d.
+(** The β step of the domain of [sc_A]. *)
+Lemma sc_closed_red1_tw : closed_red1 si_Σ [] sc_A sc_tw.
 Proof.
-  exists fi_eta. split; [reflexivity|]. split; [reflexivity|].
-  exact (ws_cumul_pbE_forget_spec (ws_cumul_pbE_trans _ _ _ (fi_WS_beta Conv) (ci_WS_eta_r Conv))).
+  split; [reflexivity|reflexivity|]. apply prod_red_l.
+  exact (red_beta si_Σ [] si_na fi_P (tApp (tInd si_ind []) (tRel 0)) ci_False).
 Qed.
 
-(* INSTANCE NOT-BUILT: degenerate, a round trip: the premise [sc_body_on] proves [fi_beta ~ fi_eta] as [fi_beta ~ fi_P] ([fi_WS_beta]) then [fi_P ~ fi_eta] ([ci_WS_eta_r]), the target prepends the inverse of [fi_beta ⇝ fi_P] to it, so the result [fi_P ~ fi_eta] is a round trip around [ci_WS_eta_r], a sub-derivation of the premise, and [fi_beta] is the identity redex [(λy:Prop. y) Prop]; no non-degenerate witness built yet *)
-Lemma mfix_body_on_red_typeE_inst :
-  mfix_body_on sc_check (conv_witnessE si_Σ []) si_kn (def_with_type sc_d fi_P).
-Proof. exact (mfix_body_on_red_typeE (d := sc_d) fi_closed_red_beta sc_body_on). Qed.
-
-(* INSTANCE NOT-BUILT: degenerate, the same round trip as [mfix_body_on_red_typeE_inst]: the target applies [mfix_body_on_red_typeE] to the premise [sc_body_on], which proves [fi_beta ~ fi_eta] as [fi_beta ~ fi_P] ([fi_WS_beta]) then [fi_P ~ fi_eta] ([ci_WS_eta_r]), so the result [fi_P ~ fi_eta] is a round trip around [ci_WS_eta_r], a sub-derivation of the premise, and [fi_beta] is the identity redex [(λy:Prop. y) Prop]; no non-degenerate witness built yet *)
-Lemma mfix_on_ind_red1_typeE_inst :
-  mfix_on_ind sc_check (conv_witnessE si_Σ []) (fun _ => true) [def_with_type sc_d fi_P].
+(** The witness [sc_tw] of [sc_d], converted to [sc_A] by the domain step [sc_closed_red1_tw]. *)
+Lemma sc_body_on : mfix_body_on check_one_fix (conv_witnessE si_Σ []) si_kn sc_d.
 Proof.
-  apply (mfix_on_ind_red1_typeE [] [sc_d]).
-  - constructor. split; [exact fi_closed_red_beta|reflexivity].
+  exists sc_tw. split; [reflexivity|]. split; [reflexivity|].
+  exact (ws_cumul_pbE_forget_spec (closed_red1_ws_cumul_pbE sc_closed_red1_tw)).
+Qed.
+
+(** [check_one_fix] finds no block on the declared type [sc_A] nor on its reduct [sc_ty], so a
+    witness for [def_with_type sc_d sc_ty] cannot be [sc_ty] itself; it finds [I] on the witness
+    [sc_tw]. Neither of [sc_ty], [sc_tw] reduces to the other, so a conversion between them is
+    neither a reduction nor the inverse of one, and no reduction from [sc_A] to [sc_tw] passes
+    through [sc_ty]; both differ from [sc_A]. *)
+Lemma sc_fix_peak_nondeg :
+  [/\ check_one_fix sc_d = None /\ check_one_fix (def_with_type sc_d sc_ty) = None,
+      check_one_fix (def_with_type sc_d sc_tw) = Some si_kn,
+      (si_Σ ;;; [] ⊢ sc_ty ⇝ sc_tw) -> False,
+      (si_Σ ;;; [] ⊢ sc_tw ⇝ sc_ty) -> False &
+      sc_ty <> dtype sc_d /\ sc_tw <> dtype sc_d].
+Proof.
+  split; [split; reflexivity|reflexivity| | |split; discriminate].
+  - intros r. destruct (invert_red_prod_cb r) as [dom' [codom' [e _ rc]]].
+    unfold sc_tw in e. injection e. intros; subst.
+    destruct (invert_red_prod_cb rc) as [d2 [c2 [e2 _ _]]]. discriminate e2.
+  - intros r. destruct (invert_red_prod_cb r) as [dom' [codom' [e rd _]]].
+    unfold sc_ty in e. injection e. intros; subst.
+    destruct (invert_red_mkApps_tInd_cb (ind := si_ind) (u := []) [ci_False] _ rd) as [args' [e2 _ _]].
+    apply (f_equal decompose_app) in e2.
+    rewrite (decompose_app_mkApps (tInd si_ind []) args' eq_refl) in e2.
+    discriminate e2.
+Qed.
+
+(** The reduct [sc_ty] ([sc_red_A]) of the declared type [sc_A] gets a witness that
+    [check_one_fix] accepts. [check_one_fix] finds no block on [sc_ty]; the witness [sc_tw] of the
+    premise is a one-step reduct of [sc_A] ([sc_closed_red1_tw]); neither of [sc_ty], [sc_tw]
+    reduces to the other ([sc_fix_peak_nondeg]).
+    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_fix_peak_nondeg *)
+Lemma mfix_body_on_red_typeE_inst :
+  mfix_body_on check_one_fix (conv_witnessE si_Σ []) si_kn (def_with_type sc_d sc_ty).
+Proof. exact (mfix_body_on_red_typeE (d := sc_d) sc_red_A sc_body_on). Qed.
+
+(** A block of two bodies, with the recursivity check of [wf_fixpointE]: the type of the second
+    body takes the reduction [sc_red_A], the first is unchanged; [sc_ty] and the witness [sc_tw] of
+    the premise are as in [mfix_body_on_red_typeE_inst] ([sc_fix_peak_nondeg]).
+    INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_fix_peak_nondeg *)
+Lemma mfix_on_ind_red1_typeE_inst :
+  mfix_on_ind check_one_fix (conv_witnessE si_Σ [])
+    (fun mind => check_recursivity_kind (lookup_env si_Σ) mind Finite) [sc_d; def_with_type sc_d sc_ty].
+Proof.
+  apply (mfix_on_ind_red1_typeE [] [sc_d; sc_d]).
+  - apply OnOne2_tl. constructor. split; [exact sc_red_A|reflexivity].
   - exists si_kn. split; [discriminate|]. split; [|reflexivity].
-    constructor; [exact sc_body_on|constructor].
+    constructor; [exact sc_body_on|constructor; [exact sc_body_on|constructor]].
 Qed.
 
 (** [reln] on the mixed contexts related by [sc_rel_m] ([sc_Γm_reln_nondeg]).
@@ -248,14 +308,6 @@ Proof.
   apply (conv_ctx_set_binder_nameE [] sc_Γd1 sc_Γd2 sc_nas);
     [repeat constructor|repeat constructor|exact sc_rel_d].
 Qed.
-
-(** The β-redex [(λx:Prop. x → x) (∀P:Prop. P)] (the body [sc_x_to_x] under [λx:Prop]) and its
-    contractum [(∀P:Prop. P) → ∀P:Prop. P]. *)
-Definition sc_xx_redex : term := tApp (tLambda si_na fi_P sc_x_to_x) ci_False.
-Definition sc_xx_reduct : term := tProd si_na ci_False ci_False.
-
-Lemma sc_xx_red1 (Γ : context) : red1 si_Σ Γ sc_xx_redex sc_xx_reduct.
-Proof. exact (red_beta si_Σ Γ si_na fi_P sc_x_to_x ci_False). Qed.
 
 (** One-assumption contexts with the types [(λx:Prop. x → x) (∀P.P)] and [(∀P.P) → ∀P.P]. *)
 Definition sc_Γxx : context := [vass si_na sc_xx_redex].
@@ -488,31 +540,53 @@ Proof.
   exact (red_beta si_Σ [] si_na fi_P (tRel 0) fi_P).
 Qed.
 
-(** [Π x:(λx:Prop. x → x) (∀P.P). Prop] reduces to [Π x:(∀P.P) → ∀P.P. Prop] in its domain. *)
-Lemma sc_red_prod_xx : si_Σ ;;; [] ⊢ it_mkProd_or_LetIn sc_Γxx fi_P ⇝ tProd si_na sc_xx_reduct fi_P.
+(** The telescope [Π w:Prop. let z := (λX:Prop. X → X) w : Prop in Π x:z → z. Prop]: a let between
+    two assumptions, whose body [sc_wb] uses [w], and the assumption type [z → z] ([sc_x_to_x]
+    under [w], [z]), which uses [z] twice. [sc_Γzw'] is the same telescope with the let body
+    contracted to [w → w] ([sc_x_to_x] under [w]). *)
+Definition sc_wb : term := tApp (tLambda si_na fi_P sc_x_to_x) (tRel 0).
+Definition sc_Γzw : context := [vass si_na sc_x_to_x; vdef si_na sc_wb fi_P; vass si_na fi_P].
+Definition sc_Γzw' : context := [vass si_na sc_x_to_x; vdef si_na sc_x_to_x fi_P; vass si_na fi_P].
+Definition sc_u : term := it_mkProd_or_LetIn sc_Γzw' fi_P.
+
+(** The β step of the let body, under [w : Prop]. *)
+Lemma sc_red_let_prod : si_Σ ;;; [] ⊢ it_mkProd_or_LetIn sc_Γzw fi_P ⇝ sc_u.
 Proof.
-  split; [reflexivity|reflexivity|]. apply rt_step. cbn. apply prod_red_l.
-  exact (sc_xx_red1 []).
+  split; [reflexivity|reflexivity|]. apply rt_step. cbn. apply prod_red_r. apply letin_red_def.
+  exact (red_beta si_Σ _ si_na fi_P sc_x_to_x (tRel 0)).
 Qed.
 
-(** The two products differ (in their domain); the domain step is the β step of
-    [(λx:Prop. x → x) (∀P.P)], whose body is not a bare variable and whose contractum is neither
-    the argument nor the body. *)
+(** [smash_context] substitutes the let body into the type [z → z] of [x]: in the input telescope
+    the smashed type of [x] (index 1, after [w]) is [z → z] with [sc_wb] substituted, in the
+    reduct's telescope it is [z → z] with the contracted body substituted, and the two differ. The
+    type [z → z] is not a bare variable, so neither smashed type is the let body it substitutes.
+    The prefix of the conclusion's context is [w : Prop], not empty. *)
 Lemma red_it_mkProd_or_LetIn_smash_cb_inst_nondeg :
-  it_mkProd_or_LetIn sc_Γxx fi_P <> tProd si_na sc_xx_reduct fi_P /\
-  [/\ (forall k, sc_x_to_x <> tRel k), sc_xx_reduct <> ci_False & sc_xx_reduct <> sc_x_to_x].
-Proof. split; [discriminate|split; [intros k; discriminate|discriminate|discriminate]]. Qed.
+  [/\ smash_context [] sc_Γzw = [vass si_na (subst [sc_wb] 0 sc_x_to_x); vass si_na fi_P],
+      decompose_prod_assum [] sc_u = (sc_Γzw', fi_P) /\
+        smash_context [] sc_Γzw' = [vass si_na (subst [sc_x_to_x] 0 sc_x_to_x); vass si_na fi_P],
+      subst [sc_wb] 0 sc_x_to_x <> subst [sc_x_to_x] 0 sc_x_to_x,
+      (forall k, sc_x_to_x <> tRel k) /\ subst [sc_wb] 0 sc_x_to_x <> sc_wb /\
+        subst [sc_x_to_x] 0 sc_x_to_x <> sc_x_to_x &
+      skipn (#|smash_context [] sc_Γzw| - 1) (smash_context [] sc_Γzw) = [vass si_na fi_P]].
+Proof.
+  split; [reflexivity|split; reflexivity|discriminate|
+          split; [intros k; discriminate|split; discriminate]|reflexivity].
+Qed.
 
-(* INSTANCE NOT-BUILT: degenerate, with [n = 0] and the one-assumption [sc_Γxx], the conclusion [[] ⊢ sc_xx_redex ⇝ sc_xx_reduct] is the domain step inside the input [sc_red_prod_xx] ([prod_red_l (sc_xx_red1 [])]): the target inverts the congruence that built its input, and the [skipn] prefix is empty; no non-degenerate witness built yet *)
+(** The argument at index 1 of the smashed telescope is [x], whose smashed type is [z → z] with the
+    let body substituted; the input reduction goes from [sc_Γzw] to [sc_Γzw'], which differ only in
+    the let body ([sc_red_let_prod]; [red_it_mkProd_or_LetIn_smash_cb_inst_nondeg]).
+    INSTANCE NONDEGEN PCUICSREtaConvInstances.red_it_mkProd_or_LetIn_smash_cb_inst_nondeg *)
 Lemma red_it_mkProd_or_LetIn_smash_cb_inst :
   ∑ ctx' t' d,
-    [× decompose_prod_assum [] (tProd si_na sc_xx_reduct fi_P) = (ctx', t'),
-       nth_error (List.rev (smash_context [] ctx')) 0 = Some d &
-       si_Σ ;;; [] ,,, skipn (#|smash_context [] sc_Γxx| - 0) (smash_context [] sc_Γxx)
-         ⊢ decl_type (vass si_na sc_xx_redex) ⇝ decl_type d].
+    [× decompose_prod_assum [] sc_u = (ctx', t'),
+       nth_error (List.rev (smash_context [] ctx')) 1 = Some d &
+       si_Σ ;;; [] ,,, skipn (#|smash_context [] sc_Γzw| - 1) (smash_context [] sc_Γzw)
+         ⊢ decl_type (vass si_na (subst [sc_wb] 0 sc_x_to_x)) ⇝ decl_type d].
 Proof.
-  exact (red_it_mkProd_or_LetIn_smash_cb [] sc_Γxx fi_P (tProd si_na sc_xx_reduct fi_P) 0
-           (vass si_na sc_xx_redex) sc_red_prod_xx eq_refl).
+  exact (red_it_mkProd_or_LetIn_smash_cb [] sc_Γzw fi_P sc_u 1
+           (vass si_na (subst [sc_wb] 0 sc_x_to_x)) sc_red_let_prod eq_refl).
 Qed.
 
 Definition sc_dp : def term :=
