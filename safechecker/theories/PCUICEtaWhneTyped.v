@@ -17,10 +17,13 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTactics PCUICUtil
      PCUICParallelReduction PCUICSpine PCUICInductives PCUICFixWitness PCUICInductiveInversion
      PCUICSigmaCalculus PCUICPrimitiveRed PCUICOnFreeVars PCUICContextReduction
      PCUICSR.
-(* Base [PCUICClassification], for its untyped helpers ([assumption_context_assumptions],
-   [assumption_context_firstn]: their compiled forms take no environment premise), as
-   [PCUICClassificationEta] does; the E copies imported below come later and are the ones named. *)
+(* Base [PCUICClassification], as [PCUICClassificationEta] does; the E copies imported below come later
+   and are the ones named. Its untyped helpers [assumption_context_assumptions] and
+   [assumption_context_firstn] (compiled forms take no environment premise) are in base
+   [PCUICSafeLemmata] on integ-all8 (1a92b56c moved them there from [PCUICClassification]; base
+   integ-all8 [PCUICPrimCanonical.v:156/:204] uses them from there); Required only, named qualified. *)
 From MetaRocq.PCUIC Require Import PCUICClassification.
+From MetaRocq.PCUIC Require PCUICSafeLemmata.
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICCumulativitySpecEtaClosure
      PCUICTypingEta PCUICTypingEtaInd PCUICTypingEtaNotions PCUICClosedBodies
      PCUICClosedTypEta PCUICWeakeningEnvTypEta PCUICWeakeningTypEta PCUICCasesWfTypEta
@@ -216,7 +219,7 @@ Proof.
     destruct (Nat.lt_total #|v| (context_assumptions Δ)) as [lt|[eq|gt]].
     + destruct (nth_error (List.rev Δ) #|v|) as [dl|] eqn:hn.
       2:{ apply nth_error_None in hn. rewrite ?List.length_rev ?rev_length in hn.
-          rewrite (assumption_context_assumptions assΔ) in lt. lia. }
+          rewrite (PCUICSafeLemmata.assumption_context_assumptions assΔ) in lt. lia. }
       eapply (typing_spine_nth_error_None_prodE _ _ _ _ _ _ #|v| dl) in hs
         as (na & dom & codom & cum); eauto.
       * exact (prod_not_below_axiomE hd hb hnop cum).
@@ -264,7 +267,7 @@ Proof.
     + rewrite subst_it_mkProd_or_LetIn; len.
       set (ctx := subst_context _ _ _).
       assert (assumption_context ctx).
-      eapply assumption_context_fold, assumption_context_firstn, smash_context_assumption_context; constructor.
+      eapply assumption_context_fold, PCUICSafeLemmata.assumption_context_firstn, smash_context_assumption_context; constructor.
       assert (#|ctx| > 0).
       { rewrite /ctx; len; rewrite firstn_length_le. len; lia. lia. }
       destruct ctx as [|ctx [na [b|] ty]] using rev_case. simpl in H0; lia.

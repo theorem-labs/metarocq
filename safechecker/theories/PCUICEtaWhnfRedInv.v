@@ -41,6 +41,12 @@ Local Abbreviation wfE_ClosedBodies := PCUICClosedTypEta.wfE_ClosedBodies.
     [red_context_app_right_cb] ([PCUICContextReduction.v:191], [:320]), at
     [wfE_ClosedBodies] ([Typing/PCUICClosedTypEta.v:581]).
   - Calls to the copied lemmas name their E twins.
+  - BET-339 (ship lineage, base integ-all8 [1a92b56c]; the line numbers above are frac/eta's base):
+    base [whne] gains [whne_case_cofix_dep] (a case with [ci_cofix_nondep] unset on a cofixpoint is
+    neutral). Base integ-all8 restates [whne_red1_ind] with the hypothesis [Hcase_cofix_dep] and adds
+    its case to the proofs of [whne_red1_ind], [whne_pres1] and [whne_red1_inv]; the E twins take the
+    same hypothesis and base integ-all8's case scripts, verbatim. These are internal lemmas; the
+    statement of [whnf_red_invE] (the field) is unchanged.
   The lemmas of the block that take no [wf] ([whnf_red_refl], [whnf_red_mkApps], [OnOne2_primapp_split],
   [red1_mkApps_tFix_inv], ...) are base's, used unchanged. No hypothesis (no [Context], no class field). *)
 
@@ -198,6 +204,10 @@ Lemma whne_red1_indE {cf:checker_flags} {wfΣ : wfE Σ}
           RedFlags.iota flags = false ->
           red1 Σ Γ (tCase i p c brs) t' ->
           P (tCase i p c brs) t')
+      (Hcase_cofix_dep : forall t' i p mfix idx args brs,
+          i.(ci_cofix_nondep) = false ->
+          red1 Σ Γ (tCase i p (mkApps (tCoFix mfix idx) args) brs) t' ->
+          P (tCase i p (mkApps (tCoFix mfix idx) args) brs) t')
       (Hproj : forall p c c',
           whne flags Σ Γ c ->
           red1 Σ Γ c c' ->
@@ -327,6 +337,7 @@ Proof using Type.
         try reflexivity; try discriminate.
       all: depelim w; help.
   - eauto.
+  - eapply Hcase_cofix_dep; eauto.
   - depelim r; eauto. all: try solve [help].
     + try solve_discr.
       all: eapply whne_mkApps_inv in wh as [[w|(? & ? & ? & ? & e3 & _)]|(? & ? & ? & ? & e3 & _)];
@@ -374,6 +385,25 @@ Proof.
     + eapply whne_fixapp; eauto.
     + eapply whne_fixapp; eauto.
       now inv e0.
+  - match goal with
+    | h : red1 _ _ (tCase _ _ (mkApps (tCoFix _ _) _) _) _ |- _ => depelim h
+    end.
+    + solve_discr.
+    + solve_discr.
+    + congruence.
+    + (* red_prim_op: its left side is an application of a constant, not a case *)
+      match goal with x : mkApps (tConst _ _) ?l = tCase _ _ _ _ |- _ =>
+        let l' := fresh "l" in remember l as l' eqn:Hl; clear Hl;
+        destruct l' as [|? l' _] using MRList.rev_ind;
+          [discriminate x|rewrite mkApps_app in x; discriminate x]
+      end.
+    + now apply whne_case_cofix_dep.
+    + now apply whne_case_cofix_dep.
+    + match goal with
+      | h : red1 _ _ (mkApps (tCoFix _ _) _) _ |- _ =>
+        eapply red1_mkApps_tCoFix_inv in h as [[(?&->&?)|(?&->&?)]|(?&->&?)]
+      end; now apply whne_case_cofix_dep.
+    + now apply whne_case_cofix_dep.
   - (* Hprimapp_stuck: a stuck primitive application steps inside an argument *)
     clear r wh.
     rename c into c0, u into u0, decl into decl0, op into op0,
@@ -814,6 +844,31 @@ Proof.
     * eapply OnOne2_All2; eauto.
       cbn. intros ? ? [? <-].
       intuition eauto; try reflexivity.
+  - match goal with
+    | h : red1 _ _ (tCase _ _ (mkApps (tCoFix _ _) _) _) _ |- _ => depelim h
+    end.
+    + solve_discr.
+    + solve_discr.
+    + congruence.
+    + (* red_prim_op: its left side is an application of a constant, not a case *)
+      match goal with x : mkApps (tConst _ _) ?l = tCase _ _ _ _ |- _ =>
+        let l' := fresh "l" in remember l as l' eqn:Hl; clear Hl;
+        destruct l' as [|? l' _] using MRList.rev_ind;
+          [discriminate x|rewrite mkApps_app in x; discriminate x]
+      end.
+    + constructor; auto.
+      * eapply OnOne2_All2; eauto.
+      * eapply All2_same; intuition auto.
+    + econstructor; auto. apply All2_same; auto.
+      eapply All2_same; intuition auto.
+    + destruct p; econstructor; eauto; simpl.
+      * eapply All2_same; auto.
+      * eapply All2_same; intuition auto.
+    + destruct p; econstructor; eauto; simpl.
+      * eapply All2_same; reflexivity.
+      * eapply OnOne2_All2; eauto.
+        cbn. intros ? ? [? <-].
+        intuition eauto; try reflexivity.
   - (* Hprimapp_stuck: the step is inside an argument; the head stays *)
     rename c into c0, u into u0, decl into decl0, op into op0,
            ls into ls0, a into a0, rest into rest0.
