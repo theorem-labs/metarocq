@@ -135,7 +135,7 @@ Qed.
 
 Lemma typing_spine_it_mkProd_Ind_invE {cf:checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ}
   {Γ T l U} :
-  typing_spineE Σ Γ T l U ->
+  MetaRocq.PCUIC.PCUICAritiesEta.typing_spineE Σ Γ T l U ->
   forall ctx ind u args ind' u' args',
   Σ ;;; Γ ⊢E it_mkProd_or_LetIn ctx (mkApps (tInd ind u) args) ≤ T ->
   U = mkApps (tInd ind' u') args' ->
@@ -185,19 +185,19 @@ Proof.
            guard is a concrete instance rather than an axiom. *)
         match goal with
         | H : fix_guard _ _ _ |- _ => rename H into hguard
-        | H : guard_cl Fix _ _ _ |- _ => rename H into hguard
+        | H : guard_cl MetaRocq.PCUIC.PCUICGuardResult.Fix _ _ _ |- _ => rename H into hguard
         end.
         match goal with H : wf_fixpointE _ _ _ |- _ => rename H into hwffix end.
         clear -a a0 a1 hguard hwffix.
         pose proof a1 as a1'. apply All_rev in a1'.
         unfold fix_subst, fix_context. simpl.
         revert a1'. rewrite <- (@List.length_rev _ mfix).
-        rewrite rev_mapi. unfold mapi.
+        rewrite rev_mapi. unfold MetaRocq.Utils.MRList.mapi.
         assert (#|mfix| >= #|List.rev mfix|) by (rewrite List.length_rev; lia).
         assert (He :0 = #|mfix| - #|List.rev mfix|) by (rewrite List.length_rev; auto with arith).
         rewrite {2}He. clear He. revert H.
-        assert (forall i, i < #|List.rev mfix| -> nth_error (List.rev mfix) i = nth_error mfix (#|List.rev mfix| - S i)).
-        { intros. rewrite nth_error_rev. 1: auto.
+        assert (forall i, i < #|List.rev mfix| -> nth_error (List.rev mfix) i = nth_error mfix (#|List.rev mfix| - Corelib.Init.Datatypes.S i)).
+        { intros. rewrite MetaRocq.Utils.MRList.nth_error_rev. 1: auto.
           now rewrite List.length_rev List.rev_involutive. }
         revert H.
         generalize (List.rev mfix).
@@ -205,13 +205,13 @@ Proof.
         induction H.
         ++ simpl. constructor.
         ++ simpl. constructor.
-          ** unfold mapi in IHAll.
-              simpl in Hlen. replace (S (#|mfix| - S #|l|)) with (#|mfix| - #|l|) by lia.
+          ** unfold MetaRocq.Utils.MRList.mapi in IHAll.
+              simpl in Hlen. replace (Corelib.Init.Datatypes.S (#|mfix| - Corelib.Init.Datatypes.S #|l|)) with (#|mfix| - #|l|) by lia.
               apply IHAll.
-              --- intros. simpl in Hi. specialize (Hi (S i)). apply Hi. lia.
+              --- intros. simpl in Hi. specialize (Hi (Corelib.Init.Datatypes.S i)). apply Hi. lia.
               --- lia.
           ** clear IHAll.
-              simpl in Hlen. assert ((Nat.pred #|mfix| - (#|mfix| - S #|l|)) = #|l|) by lia.
+              simpl in Hlen. assert ((Nat.pred #|mfix| - (#|mfix| - Corelib.Init.Datatypes.S #|l|)) = #|l|) by lia.
               rewrite H0. rewrite simpl_subst_k.
               --- clear. induction l; simpl; auto with arith.
               --- eapply typeE_Fix; auto.
@@ -234,20 +234,20 @@ Qed.
 Lemma subslet_cofixE {cf:checker_flags} (Σ : global_env_ext) Γ mfix :
   wf_localE Σ Γ ->
   cofix_guard Σ Γ mfix ->
-  All (on_def_type (lift_typing typingE Σ) Γ) mfix ->
-  All (on_def_body (lift_typing typingE Σ) (fix_context mfix) Γ) mfix ->
+  All (on_def_type (MetaRocq.PCUIC.PCUICTyping.lift_typing typingE Σ) Γ) mfix ->
+  All (on_def_body (MetaRocq.PCUIC.PCUICTyping.lift_typing typingE Σ) (fix_context mfix) Γ) mfix ->
   wf_cofixpointE Σ Γ mfix -> subsletE Σ Γ (cofix_subst mfix) (fix_context mfix).
 Proof.
   intros wfΓ hguard types bodies wfcofix.
   pose proof bodies as X1. apply All_rev in X1.
   unfold cofix_subst, fix_context. simpl.
   revert X1. rewrite <- (@List.length_rev _ mfix).
-  rewrite rev_mapi. unfold mapi.
+  rewrite rev_mapi. unfold MetaRocq.Utils.MRList.mapi.
   assert (#|mfix| >= #|List.rev mfix|) by (rewrite List.length_rev; lia).
   assert (He :0 = #|mfix| - #|List.rev mfix|) by (rewrite List.length_rev; auto with arith).
   rewrite {2}He. clear He. revert H.
-  assert (forall i, i < #|List.rev mfix| -> nth_error (List.rev mfix) i = nth_error mfix (#|List.rev mfix| - S i)).
-  { intros. rewrite nth_error_rev. 1: auto.
+  assert (forall i, i < #|List.rev mfix| -> nth_error (List.rev mfix) i = nth_error mfix (#|List.rev mfix| - Corelib.Init.Datatypes.S i)).
+  { intros. rewrite MetaRocq.Utils.MRList.nth_error_rev. 1: auto.
     now rewrite List.length_rev List.rev_involutive. }
   revert H.
   generalize (List.rev mfix).
@@ -255,13 +255,13 @@ Proof.
   induction H.
   ++ simpl. constructor.
   ++ simpl. constructor.
-    ** unfold mapi in IHAll.
-        simpl in Hlen. replace (S (#|mfix| - S #|l|)) with (#|mfix| - #|l|) by lia.
+    ** unfold MetaRocq.Utils.MRList.mapi in IHAll.
+        simpl in Hlen. replace (Corelib.Init.Datatypes.S (#|mfix| - Corelib.Init.Datatypes.S #|l|)) with (#|mfix| - #|l|) by lia.
         apply IHAll.
-        --- intros. simpl in Hi. specialize (Hi (S i)). apply Hi. lia.
+        --- intros. simpl in Hi. specialize (Hi (Corelib.Init.Datatypes.S i)). apply Hi. lia.
         --- lia.
     ** clear IHAll.
-        simpl in Hlen. assert ((Nat.pred #|mfix| - (#|mfix| - S #|l|)) = #|l|) by lia.
+        simpl in Hlen. assert ((Nat.pred #|mfix| - (#|mfix| - Corelib.Init.Datatypes.S #|l|)) = #|l|) by lia.
         rewrite H0. rewrite simpl_subst_k.
         --- clear. induction l; simpl; auto with arith.
         --- eapply typeE_CoFix; auto.
@@ -311,7 +311,7 @@ Section OnConstructorExtB.
       2:{ eapply (declared_inductive_wf_global_extE Σ.1 _ _ _ declc). }
       cbn in X. rewrite app_context_nil_l in X.
       rewrite subst_context_app Nat.add_0_r in X.
-      rewrite closed_ctx_subst in X.
+      rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst in X.
       rewrite closedn_subst_instance_context.
       eapply (declared_inductive_closed_paramsE declc).
       now len in X.
@@ -331,9 +331,9 @@ Lemma on_constructor_inst_pars_indicesE {cf:checker_flags} {Σ ind u mdecl idecl
   spine_substE Σ
           (Γ ,,, subst_context parsubst 0 (subst_context (ind_subst mdecl ind.1 u) #|ind_params mdecl|
             (subst_instance u (cstr_args cdecl))))
-          (map (subst parsubst #|cstr_args cdecl|)
-            (map (subst (ind_subst mdecl ind.1 u) (#|cstr_args cdecl| + #|ind_params mdecl|))
-              (map (subst_instance u) (cstr_indices cdecl))))
+          (Corelib.Lists.ListDef.map (subst parsubst #|cstr_args cdecl|)
+            (Corelib.Lists.ListDef.map (subst (ind_subst mdecl ind.1 u) (#|cstr_args cdecl| + #|ind_params mdecl|))
+              (Corelib.Lists.ListDef.map (subst_instance u) (cstr_indices cdecl))))
           inst
           (lift_context #|cstr_args cdecl| 0
           (subst_context parsubst 0 (subst_instance u (ind_indices idecl)))).
@@ -363,13 +363,13 @@ Proof.
   assert (closedn_ctx (#|ind_params mdecl| + #|cstr_args cdecl|) (subst_instance u (ind_indices idecl)))
     as clinds'.
   { eapply closedn_ctx_upwards; eauto. lia. }
-  rewrite closed_ctx_subst // in spr.
-  rewrite (closed_ctx_subst (inds (inductive_mind ind.1) u (ind_bodies mdecl)) _ (subst_context (List.rev _) _ _)) in spr.
+  rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst // in spr.
+  rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (inds (inductive_mind ind.1) u (ind_bodies mdecl)) _ (subst_context (List.rev _) _ _)) in spr.
   { len.
     rewrite -(Nat.add_0_r (#|cstr_args cdecl| + #|ind_params mdecl|)).
     eapply closedn_ctx_subst. len.
     rewrite -(context_assumptions_subst_instance u).
-    eapply closedn_ctx_expand_lets. eapply closedn_ctx_upwards; eauto. lia.
+    eapply MetaRocq.PCUIC.Syntax.PCUICClosed.closedn_ctx_expand_lets. eapply closedn_ctx_upwards; eauto. lia.
     len. eapply closedn_ctx_upwards; eauto. lia.
     rewrite forallb_rev.
     rewrite PCUICLiftSubst.map_subst_instance_to_extended_list_k.
@@ -389,18 +389,18 @@ Proof.
   rewrite subst_extended_lift // in spr.
   rewrite lift_extended_subst in spr.
   rewrite (map_map_compose _ _ _ _ (subst (List.rev pars) _)) in spr.
-  assert (map
+  assert (Corelib.Lists.ListDef.map
               (fun x : term =>
                subst (List.rev pars) #|cstr_args cdecl|
                  (lift0 #|cstr_args cdecl| x))
               (extended_subst (subst_instance u (ind_params mdecl)) 0) =
-              (map
+              (Corelib.Lists.ListDef.map
               (fun x : term =>
               (lift0 #|cstr_args cdecl|
                 (subst (List.rev pars) 0 x)))
               (extended_subst (subst_instance u (ind_params mdecl)) 0))
               ).
-  eapply map_ext => x.
+  eapply MetaRocq.Utils.MRList.map_ext => x.
   now rewrite -(commut_lift_subst_rec _ _ _ 0).
   rewrite H in spr. clear H.
   rewrite -(map_map_compose  _ _  _ _ (lift0 #|cstr_args cdecl|)) in spr.
@@ -408,8 +408,8 @@ Proof.
   rewrite subst_map_lift_lift_context in spr.
   rewrite -(context_subst_length sp).
   len.
-  rewrite closed_ctx_subst //.
-  rewrite (closed_ctx_subst (List.rev pars)) // in spr.
+  rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst //.
+  rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (List.rev pars)) // in spr.
   eexists. eauto.
 Qed.
 
@@ -418,12 +418,12 @@ Lemma mkApps_ind_typing_spineE {cf:checker_flags} Σ Γ Γ' ind i
   wfE Σ.1 ->
   wf_localE Σ Γ ->
   isTypeE Σ Γ (it_mkProd_or_LetIn Γ' (mkApps (tInd ind i) args)) ->
-  typing_spineE Σ Γ (it_mkProd_or_LetIn Γ' (mkApps (tInd ind i) args)) inst
+  MetaRocq.PCUIC.PCUICAritiesEta.typing_spineE Σ Γ (it_mkProd_or_LetIn Γ' (mkApps (tInd ind i) args)) inst
     (mkApps (tInd ind' i') args') ->
   ∑ instsubst,
   [× make_context_subst (List.rev Γ') inst [] = Some instsubst,
     #|inst| = context_assumptions Γ', ind = ind', cmp_ind_universes Σ ind #|args| i i',
-    All2 (fun par par' => Σ ;;; Γ ⊢E par = par') (map (subst0 instsubst) args) args' &
+    All2 (fun par par' => Σ ;;; Γ ⊢E par = par') (Corelib.Lists.ListDef.map (subst0 instsubst) args) args' &
     subsletE Σ Γ instsubst Γ'].
 Proof.
   intros wfΣ wfΓ; revert args args' ind i ind' i' inst.
@@ -450,14 +450,14 @@ Proof.
       have hlen : #|args| = #|firstn (ind_npars mdecl) args| + #|skipn (ind_npars mdecl) args|
         by rewrite -length_app firstn_skipn.
       rewrite (head_arity_ind _ _ _ _ declg) context_assumptions_app
-        -(declared_minductive_ind_nparsE (proj1 decli)) hlen hpar hind. lia. }
+        -(declared_minductive_ind_nparsE (MetaRocq.Utils.MRProd.proj1 decli)) hlen hpar hind. lia. }
     exists [].
     split.
     + reflexivity.
     + reflexivity.
     + reflexivity.
     + eapply finst_ind_glue_full; [exact hle|exact hfinst].
-    + relativize (map (subst0 []) args); [exact hargs|rewrite subst_empty_eq map_id //].
+    + relativize (Corelib.Lists.ListDef.map (subst0 []) args); [exact hargs|rewrite subst_empty_eq Stdlib.Lists.List.map_id //].
     + constructor.
   - intros d Γ' IH args args' ind i ind' i' inst wat Hsp.
     rewrite it_mkProd_or_LetIn_app in Hsp.
@@ -468,13 +468,13 @@ Proof.
       specialize (IH (subst_context [b] 0 Γ')).
       forward IH by rewrite subst_context_length; lia.
       rewrite subst_mkApps Nat.add_0_r in Hsp.
-      specialize (IH (map (subst [b] #|Γ'|) args) args' ind i ind' i' inst).
+      specialize (IH (Corelib.Lists.ListDef.map (subst [b] #|Γ'|) args) args' ind i ind' i' inst).
       forward IH. {
         move: wat; rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= => wat.
         eapply isType_tLetIn_redE in wat; auto.
         now rewrite /subst1 subst_it_mkProd_or_LetIn subst_mkApps Nat.add_0_r
         in wat. }
-      rewrite context_assumptions_subst in IH.
+      rewrite MetaRocq.PCUIC.PCUICSpine.context_assumptions_subst in IH.
       intuition auto.
       destruct X as [isub [Hisub Hinst Hind Hi Hargs Hs]].
       eexists. split; auto.
@@ -487,8 +487,8 @@ Proof.
       now rewrite List.rev_involutive in Hisub.
       now len in Hi.
       rewrite map_map_compose in Hargs.
-      assert (map (subst0 isub ∘ subst [b] #|Γ'|) args = map (subst0 (isub ++ [b])) args) as <-.
-      { eapply map_ext => x. simpl.
+      assert (Corelib.Lists.ListDef.map (subst0 isub ∘ subst [b] #|Γ'|) args = Corelib.Lists.ListDef.map (subst0 (isub ++ [b])) args) as <-.
+      { eapply MetaRocq.Utils.MRList.map_ext => x. simpl.
         assert(#|Γ'| = #|isub|).
         { apply make_context_subst_spec in Hisub.
           apply context_subst_length in Hisub.
@@ -513,10 +513,10 @@ Proof.
       rewrite /subst1 subst_it_mkProd_or_LetIn /= in cumulB.
       specialize (IH (subst_context [hd] 0 Γ')).
       forward IH by rewrite subst_context_length; lia.
-      specialize (IH (map (subst [hd] #|Γ'|) args) args' ind i ind' i' tl). all:auto.
+      specialize (IH (Corelib.Lists.ListDef.map (subst [hd] #|Γ'|) args) args' ind i ind' i' tl). all:auto.
       have isTypes: isTypeE Σ Γ
       (it_mkProd_or_LetIn (subst_context [hd] 0 Γ')
-          (mkApps (tInd ind i) (map (subst [hd] #|Γ'|) args))). {
+          (mkApps (tInd ind i) (Corelib.Lists.ListDef.map (subst [hd] #|Γ'|) args))). {
         move: wat; rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= => wat.
         eapply isType_tProdE in wat as [isty wat].
         apply isTypeRelE_isTypeE in isty.
@@ -524,7 +524,7 @@ Proof.
         now rewrite subst_it_mkProd_or_LetIn Nat.add_0_r subst_mkApps in wat.
         eapply subslet_ass_tipE. eapply type_ws_cumul_pbE; tea. now symmetry. }
       rewrite subst_mkApps Nat.add_0_r in cumulB. simpl in *.
-      rewrite context_assumptions_subst in IH.
+      rewrite MetaRocq.PCUIC.PCUICSpine.context_assumptions_subst in IH.
       eapply typing_spine_strengthenE in Hsp; [|exact isTypes|exact cumulB].
       intuition auto.
       destruct X1 as [isub [Hisub Htl Hind Hu Hargs Hs]].
@@ -539,8 +539,8 @@ Proof.
       * lia.
       * exact Hind.
       * exact Hu.
-      * assert (map (subst0 isub ∘ subst [hd] #|Γ'|) args = map (subst0 (isub ++ [hd])) args) as <-.
-      { eapply map_ext => x. simpl.
+      * assert (Corelib.Lists.ListDef.map (subst0 isub ∘ subst [hd] #|Γ'|) args = Corelib.Lists.ListDef.map (subst0 (isub ++ [hd])) args) as <-.
+      { eapply MetaRocq.Utils.MRList.map_ext => x. simpl.
         assert(#|Γ'| = #|isub|).
         { apply make_context_subst_spec in Hisub.
           apply context_subst_length in Hisub.
@@ -564,7 +564,7 @@ Lemma wf_cofixpoint_typing_spineE {cf:checker_flags} (Σ : global_env_ext) Γ in
   wf_cofixpointE Σ Γ mfix ->
   nth_error mfix idx = Some d ->
   isTypeE Σ Γ (dtype d) ->
-  typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
+  MetaRocq.PCUIC.PCUICAritiesEta.typing_spineE Σ Γ (dtype d) args (mkApps (tInd ind u) args') ->
   check_recursivity_kind (lookup_env Σ) (inductive_mind ind) CoFinite.
 Proof.
   intros wfΣ wfΓ wfcofix Hnth wat sp.
@@ -630,7 +630,7 @@ Lemma isTypeE_typingE_mkApps_tConstruct_ctor {cf:checker_flags} {Σ : global_env
   {wfΣ : wfE Σ} {Γ ind n u args T} :
   Σ ;;; Γ |-E mkApps (tConstruct ind n u) args : T -> isTypeE Σ Γ T.
 Proof.
-  induction args using rev_ind.
+  induction args using MetaRocq.Utils.MRList.rev_ind.
   - exact isTypeE_typingE_tConstruct_ctor.
   - rewrite mkApps_app /=. exact isTypeE_typingE_tApp_ctor.
 Qed.
@@ -661,13 +661,13 @@ Lemma Construct_Ind_ind_eqE {cf:checker_flags} {Σ} (wfΣ : wfE Σ.1):
     spine_substE Σ Γ (skipn (ind_npars mdecl) args) argsubst argctx,
     spine_substE Σ Γ (skipn (ind_npars mdecl) args')  argsubst' argctx' &
     ∑ s,
-      sorts_local_ctx (lift_typing typingE) Σ Γ argctx2 s ×
+      sorts_local_ctx (MetaRocq.PCUIC.PCUICTyping.lift_typing typingE) Σ Γ argctx2 s ×
       (** Parameters match *)
       ws_cumul_pbE_terms Σ Γ (firstn mdecl.(ind_npars) args) (firstn mdecl.(ind_npars) args') ×
 
     (** Indices match *)
     ws_cumul_pbE_terms Σ Γ
-      (map (subst0 (argsubst ++ parsubst) ∘
+      (Corelib.Lists.ListDef.map (subst0 (argsubst ++ parsubst) ∘
       subst (inds (inductive_mind i) u mdecl.(ind_bodies)) (#|cdecl.(cstr_args)| + #|ind_params mdecl|)
       ∘ (subst_instance u))
         cdecl.(cstr_indices))
@@ -712,7 +712,7 @@ Proof.
   split=> //. split=> //.
   split; auto. split => //.
   now len in Hu.
-  now rewrite Hargslen context_assumptions_app !context_assumptions_subst !context_assumptions_subst_instance; lia.
+  now rewrite Hargslen context_assumptions_app !MetaRocq.PCUIC.PCUICSpine.context_assumptions_subst !context_assumptions_subst_instance; lia.
 
   exists (skipn #|cdecl.(cstr_args)| isubst), (firstn #|cdecl.(cstr_args)| isubst).
   apply make_context_subst_spec in Hisubst.
@@ -720,20 +720,20 @@ Proof.
   rewrite List.rev_involutive.
   move/context_subst_app.
   rewrite !subst_context_length !subst_instance_length.
-  rewrite context_assumptions_subst context_assumptions_subst_instance -H.
+  rewrite MetaRocq.PCUIC.PCUICSpine.context_assumptions_subst context_assumptions_subst_instance -H.
   move=>  [argsub parsub].
-  rewrite closed_ctx_subst in parsub.
+  rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst in parsub.
   now rewrite closedn_subst_instance_context.
   eapply subslet_app_invE in Hs.
   move: Hs. len. intuition auto.
-  rewrite closed_ctx_subst in a0 => //.
+  rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst in a0 => //.
   now rewrite closedn_subst_instance_context.
 
   (*rewrite -Heqp in spars sargs. simpl in *. clear Heqp. *)
   exists parsubst, argsubst.
   assert(wfar : wf_localE Σ
   (Γ ,,, subst_instance u' (arities_context (ind_bodies mdecl)))).
-  { eapply weaken_wf_localE => //.
+  { eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
     unshelve epose proof (declared_inductive_to_gen decli); eauto.
     eapply wf_local_instantiateE => //; destruct decli; eauto.
     eapply wf_arities_contextE => //; eauto. }
@@ -741,39 +741,39 @@ Proof.
     { eapply on_minductive_wf_paramsE => //; eauto. destruct decli; eauto. }
 
   split; auto; try split; auto.
-  - apply weaken_wf_localE => //.
+  - apply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
   - pose proof (subslet_lengthE a0). rewrite subst_instance_length in H1.
     rewrite -H1 -subst_app_context.
     eapply (substitution_wf_localE (Γ' := subst_instance u (arities_context (ind_bodies mdecl) ,,, ind_params mdecl))); eauto.
     rewrite subst_instance_app; eapply subslet_appE; eauto.
-    now rewrite closed_ctx_subst ?closedn_subst_instance_context.
-    eapply (weaken_subsletE (Γ' := [])) => //.
+    now rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst ?closedn_subst_instance_context.
+    eapply (MetaRocq.PCUIC.PCUICSpineEta.weaken_subsletE (Γ' := [])) => //.
     now eapply subslet_indsE; eauto.
     rewrite -app_context_assoc.
-    eapply weaken_wf_localE => //.
+    eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
     rewrite -subst_instance_app_ctx.
     apply a.
-  - exists (map (subst_instance_sort u') x). split.
+  - exists (Corelib.Lists.ListDef.map (subst_instance_sort u') x). split.
     * move/onParams: onmind. rewrite /on_context.
       pose proof (@wf_local_instantiateE _ Σ (InductiveDecl mdecl) (ind_params mdecl) u').
       move=> H'. eapply X in H'; eauto.
       clear -wfar wfpars wfΣ hΓ cons decli t cargs sargs H0 H' a spars a0.
-      eapply (subst_sorts_local_ctxE (Γ' := [])
+      eapply (MetaRocq.PCUIC.PCUICSpineEta.subst_sorts_local_ctxE (Γ' := [])
       (Δ := subst_context (inds (inductive_mind i) u' (ind_bodies mdecl)) 0
         (subst_instance u' (ind_params mdecl)))) => //.
-      simpl. eapply weaken_wf_localE => //.
-      rewrite closed_ctx_subst => //.
+      simpl. eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
+      rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst => //.
       now rewrite closedn_subst_instance_context.
       simpl. rewrite -(subst_instance_length u' (ind_params mdecl)).
-      eapply (subst_sorts_local_ctxE (Δ := subst_instance u' (arities_context (ind_bodies mdecl)))) => //.
-      eapply weaken_wf_localE => //.
+      eapply (MetaRocq.PCUIC.PCUICSpineEta.subst_sorts_local_ctxE (Δ := subst_instance u' (arities_context (ind_bodies mdecl)))) => //.
+      eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
       rewrite -app_context_assoc.
       eapply weaken_sorts_local_ctxE => //.
       rewrite -subst_instance_app_ctx.
       eapply sorts_local_ctx_instantiateE => //; destruct decli; eauto.
-      eapply (weaken_subsletE (Γ' := [])) => //.
+      eapply (MetaRocq.PCUIC.PCUICSpineEta.weaken_subsletE (Γ' := [])) => //.
       now eapply subslet_indsE; eauto.
-      rewrite closed_ctx_subst ?closedn_subst_instance_context. auto.
+      rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst ?closedn_subst_instance_context. auto.
       apply spars.
     * move: (All2_firstn  _ _ _ _ _ mdecl.(ind_npars) Hargs).
       move: (All2_skipn  _ _ _ _ _ mdecl.(ind_npars) Hargs).
@@ -790,11 +790,11 @@ Proof.
       now apply firstn_length_le_inv.
 
       rewrite -(firstn_skipn #|cdecl.(cstr_args)| isubst).
-      rewrite -[map _ (to_extended_list_k _ _)]
+      rewrite -[Corelib.Lists.ListDef.map _ (to_extended_list_k _ _)]
                 (map_map_compose _ _ _ (subst_instance u)
                                 (fun x => subst _ _ (subst _ _ x))).
       rewrite subst_instance_to_extended_list_k.
-      rewrite -[map _ (to_extended_list_k _ _)]map_map_compose.
+      rewrite -[Corelib.Lists.ListDef.map _ (to_extended_list_k _ _)]map_map_compose.
       rewrite -to_extended_list_k_map_subst.
       rewrite subst_instance_length. lia.
       rewrite map_subst_app_to_extended_list_k.
@@ -843,13 +843,13 @@ Lemma Construct_Ind_ind_eq'E {cf:checker_flags} {Σ} (wfΣ : wfE Σ.1):
     spine_substE Σ Γ (skipn (ind_npars mdecl) args) argsubst argctx,
     spine_substE Σ Γ (skipn (ind_npars mdecl) args')  argsubst' argctx' &
     ∑ s,
-      sorts_local_ctx (lift_typing typingE) Σ Γ argctx2 s ×
+      sorts_local_ctx (MetaRocq.PCUIC.PCUICTyping.lift_typing typingE) Σ Γ argctx2 s ×
       (** Parameters match *)
       ws_cumul_pbE_terms Σ Γ (firstn mdecl.(ind_npars) args) (firstn mdecl.(ind_npars) args') ×
 
     (** Indices match *)
     ws_cumul_pbE_terms Σ Γ
-      (map (subst0 (argsubst ++ parsubst) ∘
+      (Corelib.Lists.ListDef.map (subst0 (argsubst ++ parsubst) ∘
       subst (inds (inductive_mind i) u mdecl.(ind_bodies)) (#|cdecl.(cstr_args)| + #|ind_params mdecl|)
       ∘ (subst_instance u))
         cdecl.(cstr_indices))
@@ -1002,7 +1002,7 @@ Proof.
   rewrite e0 in H0.
   destruct c; simpl in H0 => //; noconf H0.
   intuition auto.
-  2:{ rewrite nth_error_nil in H0. noconf H0. }
+  2:{ rewrite MetaRocq.Utils.MRList.nth_error_nil in H0. noconf H0. }
   rewrite b0.
   destruct declp as [decli [nthp parseq]].
   simpl in *. rewrite parseq. lia.
@@ -1039,7 +1039,7 @@ Proof.
   assert (context_assumptions (ind_indices idecl) = #|List.rev args|) by (len; lia).
   rewrite H skipn_all_app in sppars, spargs.
   split => //. split => //.
-  rewrite -(Nat.add_0_r #|List.rev args|) firstn_app_2 firstn_0 // app_nil_r in spargs.
+  rewrite -(Nat.add_0_r #|List.rev args|) firstn_app_2 MetaRocq.Utils.MRList.firstn_0 // app_nil_r in spargs.
   rewrite (smash_context_subst []).
   rewrite -(expand_lets_smash_context _ []).
   exact spargs.
@@ -1076,7 +1076,7 @@ Qed.
 Lemma substitution_subsletE {cf:checker_flags} {Σ} {wfΣ : wfE Σ} {Γ Γ' Δ s s' Δ'} :
   subsletE Σ Γ s Δ ->
   wf_subsletE Σ (Γ ,,, Δ ,,, Γ') s' Δ' ->
-  wf_subsletE Σ (Γ ,,, subst_context s 0 Γ') (map (subst s #|Γ'|) s') (subst_context s #|Γ'| Δ').
+  wf_subsletE Σ (Γ ,,, subst_context s 0 Γ') (Corelib.Lists.ListDef.map (subst s #|Γ'|) s') (subst_context s #|Γ'| Δ').
 Proof.
   intros subl [wf subs].
   split.
@@ -1109,8 +1109,8 @@ Lemma weaken_wf_subsletE {cf Σ} {wfΣ : wfE Σ} s (Δ Γ Γ' : context) :
 Proof.
   intros wfΓ [wf subs]. split.
   rewrite -app_context_assoc.
-  eapply weaken_wf_localE => //.
-  eapply weaken_subsletE; tea.
+  eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
+  eapply MetaRocq.PCUIC.PCUICSpineEta.weaken_subsletE; tea.
   now eapply All_local_env_app_inv in wf.
 Qed.
 
@@ -1124,7 +1124,7 @@ Lemma positive_cstr_closed_indicesE {cf} {Σ} {wfΣ : wfE Σ} :
   forall {i mdecl idecl cdecl},
   declared_constructor Σ.1 i mdecl idecl cdecl ->
   All (closedn (context_assumptions (cstr_args cdecl) + #|ind_params mdecl|))
-    (map (expand_lets (cstr_args cdecl)) (cstr_indices cdecl)).
+    (Corelib.Lists.ListDef.map (expand_lets (cstr_args cdecl)) (cstr_indices cdecl)).
 Proof.
   intros.
   pose proof (on_declared_constructorE H) as [[onmind oib] [cs [hnth onc]]].
@@ -1135,7 +1135,7 @@ Proof.
   rewrite app_context_nil_l in hpos.
   rewrite expand_lets_mkApps in hpos.
   unfold cstr_concl_head in hpos.
-  have subsrel := expand_lets_tRel (#|ind_bodies mdecl| - S (inductive_ind i.1))
+  have subsrel := expand_lets_tRel (#|ind_bodies mdecl| - Corelib.Init.Datatypes.S (inductive_ind i.1))
     (ind_params mdecl ,,, cstr_args cdecl). len in subsrel.
   rewrite (Nat.add_comm #|cstr_args cdecl|) Nat.add_assoc in subsrel.
   rewrite {}subsrel in hpos.
@@ -1222,7 +1222,7 @@ Lemma positive_cstr_closed_indices'E {cf} {Σ} {wfΣ : wfE Σ} :
   forall {i mdecl idecl cdecl},
   declared_constructor Σ.1 i mdecl idecl cdecl ->
   All (closedn (context_assumptions (cstr_args cdecl) + context_assumptions (ind_params mdecl)))
-    (map (expand_lets (ind_params mdecl ,,, cstr_args cdecl)) (cstr_indices cdecl)).
+    (Corelib.Lists.ListDef.map (expand_lets (ind_params mdecl ,,, cstr_args cdecl)) (cstr_indices cdecl)).
 Proof.
   intros.
   pose proof (on_declared_constructorE H) as [[onmind oib] [cs [hnth onc]]].
@@ -1233,7 +1233,7 @@ Proof.
   rewrite app_context_nil_l in hpos.
   rewrite expand_lets_mkApps in hpos.
   unfold cstr_concl_head in hpos.
-  have subsrel := expand_lets_tRel (#|ind_bodies mdecl| - S (inductive_ind i.1))
+  have subsrel := expand_lets_tRel (#|ind_bodies mdecl| - Corelib.Init.Datatypes.S (inductive_ind i.1))
     (ind_params mdecl ,,, cstr_args cdecl). len in subsrel.
   rewrite (Nat.add_comm #|cstr_args cdecl|) Nat.add_assoc in subsrel.
   rewrite {}subsrel in hpos.
@@ -1254,7 +1254,7 @@ Proof.
   eapply All_local_env_app_inv in wf as [].
   eapply All_local_env_impl_ind; eauto.
   intros.
-  rewrite -/(All_local_rel (lift_typing1 (typingE Σ)) Γ' Γ0) /= in X, X0.
+  rewrite -/(All_local_rel (MetaRocq.PCUIC.PCUICTyping.lift_typing1 (typingE Σ)) Γ' Γ0) /= in X, X0.
   apply lift_typing_impl with (1 := X0); intros ?? Hs.
   eapply closed_context_cumulativityE; tea.
   eapply All_local_env_app=> //.
@@ -1283,17 +1283,17 @@ Lemma constructor_cumulative_indicesE {cf} {Σ} {wfΣ : wfE Σ} :
   let pargctx' := subst_context parsubst' 0 argctx' in
   ws_cumul_ctx_pbE_rel Cumul Σ Γ (smash_context [] pargctx) (smash_context [] pargctx') *
   ws_cumul_pbE_terms Σ (Γ ,,, smash_context [] pargctx)
-    (map (subst parsubst (context_assumptions (cstr_args cdecl)))
-      (map (expand_lets argctx) (map (subst_instance u) (cstr_indices cdecl))))
-    (map (subst parsubst' (context_assumptions (cstr_args cdecl)))
-      (map (expand_lets argctx') (map (subst_instance u') (cstr_indices cdecl)))).
+    (Corelib.Lists.ListDef.map (subst parsubst (context_assumptions (cstr_args cdecl)))
+      (Corelib.Lists.ListDef.map (expand_lets argctx) (Corelib.Lists.ListDef.map (subst_instance u) (cstr_indices cdecl))))
+    (Corelib.Lists.ListDef.map (subst parsubst' (context_assumptions (cstr_args cdecl)))
+      (Corelib.Lists.ListDef.map (expand_lets argctx') (Corelib.Lists.ListDef.map (subst_instance u') (cstr_indices cdecl)))).
 Proof.
   intros * declc.
   destruct (on_declared_constructorE declc) as [[onmind oib] [cs [hnth onc]]].
   intros cu cu' Ru Γ * spu spu' cpars *.
   unshelve epose proof (declc' := declared_constructor_to_gen declc); eauto.
   assert (onu : on_udecl_prop Σ (ind_universes mdecl)).
-  { eapply (weaken_lookup_on_global_env' _ _ _ wfΣ (proj1 (proj1 declc'))). }
+  { eapply (weaken_lookup_on_global_env' _ _ _ wfΣ (MetaRocq.Utils.MRProd.proj1 (MetaRocq.Utils.MRProd.proj1 declc'))). }
   have clΓ : is_closed_context Γ.
   { apply spine_dom_wfE in spu; eauto with fvs. }
   assert (closed_ctx
@@ -1334,7 +1334,7 @@ Proof.
     { pose proof (on_constructor_wf_argsE declc).
       eapply (wf_local_subst_instanceE _ _ _ u) in X; tea.
       2:{ apply (declared_inductive_wf_global_extE _ _ _ _ declc). }
-      rewrite subst_instance_expand_lets_ctx.
+      rewrite MetaRocq.PCUIC.PCUICInductiveInversion.subst_instance_expand_lets_ctx.
       rewrite -(expand_lets_smash_context _ []).
       rewrite -app_context_assoc -(smash_context_app_expand []).
       eapply wf_local_smash_endE.
@@ -1369,16 +1369,16 @@ Proof.
       move: args.
       rewrite subst_context_nil /= - !smash_context_subst /= subst_context_nil; len.
       rewrite !subst_instance_subst_context.
-      rewrite !subst_instance_extended_subst.
+      rewrite !MetaRocq.PCUIC.Conversion.PCUICUnivSubstitutionConv.subst_instance_extended_subst.
       rewrite (subst_context_subst_context (inds  _ u _)); len.
       rewrite (subst_context_subst_context (inds  _ u' _)); len.
       rewrite -(context_assumptions_subst_instance u).
-      rewrite -(subst_extended_subst).
-      rewrite (closed_ctx_subst (inds _ _ _)) //.
+      rewrite -(MetaRocq.PCUIC.PCUICSpine.subst_extended_subst).
+      rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (inds _ _ _)) //.
       rewrite (context_assumptions_subst_instance u).
       rewrite -(context_assumptions_subst_instance u').
-      rewrite -(subst_extended_subst).
-      rewrite (closed_ctx_subst (inds _ u' _)) //.
+      rewrite -(MetaRocq.PCUIC.PCUICSpine.subst_extended_subst).
+      rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (inds _ u' _)) //.
       rewrite (context_assumptions_subst_instance u').
       rewrite (subst_context_subst_context (List.rev pars)) /=; len.
       rewrite -(spine_subst_extended_substE spu).
@@ -1483,9 +1483,9 @@ Proof.
         now len in clx. }
       rewrite !subst_instance_app_ctx in cxy.
       rewrite !subst_context_app in cxy. len in cxy.
-      rewrite (closed_ctx_subst (inds _ _ _ )) // in cxy.
-      rewrite (closed_ctx_subst (inds _ _ _ ) _ (subst_instance u (ind_params mdecl))) // in cxy.
-      rewrite (closed_ctx_subst (inds _ _ _ ) _ (subst_instance u' (ind_params mdecl))) // in cxy.
+      rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (inds _ _ _ )) // in cxy.
+      rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (inds _ _ _ ) _ (subst_instance u (ind_params mdecl))) // in cxy.
+      rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (inds _ _ _ ) _ (subst_instance u' (ind_params mdecl))) // in cxy.
       move: cxy.
       rewrite -/argctx -/argctx'.
       rewrite ![expand_lets _ _]expand_lets_k_app /= //.
@@ -1493,7 +1493,7 @@ Proof.
       rewrite -/(expand_lets_k_ctx (ind_params mdecl) _ _).
       rewrite -/(expand_lets_ctx _ _).
       rewrite !subst_instance_subst_context !subst_instance_lift_context subst_instance_smash /=.
-      rewrite subst_instance_extended_subst.
+      rewrite MetaRocq.PCUIC.Conversion.PCUICUnivSubstitutionConv.subst_instance_extended_subst.
       rewrite -(context_assumptions_subst_instance u).
       rewrite -(subst_instance_length u).
       rewrite -/(expand_lets_k_ctx (ind_params mdecl)@[u] 0 (smash_context [] (cstr_args cdecl)@[u])).
@@ -1508,18 +1508,18 @@ Proof.
       rewrite !(smash_context_subst []).
       unshelve eapply (substitution_ws_cumul_ctx_pbE_subst_conv (Γ'' := []) _ _ spu spu') => //.
       2:{ eapply spine_subst_convE; eauto.
-          eapply subst_instance_ws_cumul_ctx_pbE_rel; eauto with fvs.
+          eapply MetaRocq.PCUIC.PCUICWsCumulEtaCtx.subst_instance_ws_cumul_ctx_pbE_rel; eauto with fvs.
           move: clΓparsu. now rewrite is_closed_context_subst_instance. }
       simpl.
       assert (subst_context (ind_subst mdecl c.1 u) 0 (subst_instance u (ind_params mdecl)) =
         (subst_instance u (ind_params mdecl))) as ispars.
-      { rewrite closed_ctx_subst; eauto. }
+      { rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst; eauto. }
       rewrite -ispars.
       rewrite -(subst_instance_length u (ind_params mdecl)).
       eapply (substitution_ws_cumul_ctx_pbE_subst_conv (Γ := Γ)).
-      3:{ eapply subslet_untyped_subsletE, (weaken_subsletE (Γ' := [])); eauto. eapply subslet_indsE; eauto.
+      3:{ eapply subslet_untyped_subsletE, (MetaRocq.PCUIC.PCUICSpineEta.weaken_subsletE (Γ' := [])); eauto. eapply subslet_indsE; eauto.
           eapply declc.p1. }
-      3:{ eapply subslet_untyped_subsletE, (weaken_subsletE (Γ' := [])); eauto. eapply subslet_indsE; eauto.
+      3:{ eapply subslet_untyped_subsletE, (MetaRocq.PCUIC.PCUICSpineEta.weaken_subsletE (Γ' := [])); eauto. eapply subslet_indsE; eauto.
           eapply declc.p1. }
       3:{ simpl.
         rewrite !subst_instance_app_ctx in wfargs.
@@ -1530,7 +1530,7 @@ Proof.
         now rewrite !is_closed_subst_inst. }
       2:now eapply conv_indsE.
       rewrite - !(subst_instance_smash _ _ []).
-      eapply subst_instance_ws_cumul_ctx_pbE_rel => //.
+      eapply MetaRocq.PCUIC.PCUICWsCumulEtaCtx.subst_instance_ws_cumul_ctx_pbE_rel => //.
       rewrite - !app_context_assoc. eapply is_closed_context_weaken; auto.
       rewrite !app_context_assoc. apply is_closed_context_smash_end.
       rewrite -(is_closed_context_subst_instance _ (cstr_args cdecl) u).
@@ -1541,7 +1541,7 @@ Proof.
       replace (context_assumptions (cstr_args cdecl)) with i. subst i.
       unshelve eapply (ws_cumul_pbE_terms_subst _ spu spu'); eauto.
       eapply spine_subst_convE; eauto.
-      eapply subst_instance_ws_cumul_ctx_pbE_rel; eauto with fvs.
+      eapply MetaRocq.PCUIC.PCUICWsCumulEtaCtx.subst_instance_ws_cumul_ctx_pbE_rel; eauto with fvs.
       move: clΓparsu. now rewrite is_closed_context_subst_instance.
       2:subst i; len; rewrite /argctx; len; reflexivity.
       rewrite /expand_lets /expand_lets_k.
@@ -1552,11 +1552,11 @@ Proof.
       cbn. intros.
       rewrite - !/(expand_lets_k _ _ _).
       have wfargctx :wf_localE Σ (Γ,,, (ind_params mdecl)@[u],,, argctx).
-      { rewrite -app_context_assoc. eapply weaken_wf_localE => //.
+      { rewrite -app_context_assoc. eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
         rewrite /argctx.
         exact (on_constructor_inst_wf_argsE declc _ cu). }
       have wfargctx' : wf_localE Σ (Γ,,, (ind_params mdecl)@[u],,, argctx').
-      { rewrite -app_context_assoc. eapply weaken_wf_localE => //.
+      { rewrite -app_context_assoc. eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
         rewrite /argctx'.
         epose proof (on_constructor_inst_wf_argsE declc _ cu').
         eapply ws_cumul_ctx_pb_wf_localE; tea.
@@ -1587,7 +1587,7 @@ Proof.
       rewrite -(instantiate_indsE declc cu).
       rewrite -(instantiate_indsE declc cu').
       rewrite - !subst_instance_subst_context.
-      eapply subst_instance_ws_cumul_ctx_pbE_rel => //.
+      eapply MetaRocq.PCUIC.PCUICWsCumulEtaCtx.subst_instance_ws_cumul_ctx_pbE_rel => //.
       epose proof (on_constructor_inst_wf_argsE declc _ cu).
       rewrite /ind_subst -(instantiate_indsE declc cu) in X0.
       eapply wf_local_closed_contextE in X0; tea.
@@ -1604,7 +1604,7 @@ Lemma subst_inds_smash_paramsE {cf} {Σ} {wfΣ : wfE Σ} {mdecl ind idecl u} :
     (subst_instance u (smash_context [] (PCUICEnvironment.ind_params mdecl))).
 Proof.
   intros decli cu.
-  rewrite closed_ctx_subst //.
+  rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst //.
   eapply closed_wf_localE; eauto.
   rewrite subst_instance_smash /= //.
   eapply wf_local_smash_contextE; auto.
@@ -1644,7 +1644,7 @@ Qed.
 Lemma wf_set_binder_nameE {cf} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ} {nas Δ} :
   All2 (fun x y => eq_binder_annot x y.(decl_name)) nas Δ ->
   wf_localE Σ (Γ ,,, Δ) ->
-  wf_localE Σ (Γ ,,, map2 set_binder_name nas Δ).
+  wf_localE Σ (Γ ,,, MetaRocq.Utils.MRList.map2 set_binder_name nas Δ).
 Proof.
   intros ha wf.
   apply All_local_env_app_inv in wf as [wfΓ wfΔ].
@@ -1710,7 +1710,7 @@ Lemma arity_spine_to_extended_listE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ} T :
     T.
 Proof.
   intros hty wf.
-  rewrite lift_it_mkProd_or_LetIn Nat.add_0_r.
+  rewrite MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn Nat.add_0_r.
   pose proof (@all_rels_subst_liftE _ _ _ Δ Γ [] T hty (wf_local_closed_contextE hty)).
   rewrite lift0_id in X. simpl in X.
   rewrite Nat.add_0_r in X.
@@ -1724,7 +1724,7 @@ Qed.
 
 Lemma isType_subst_all_relsE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ} {T} :
   isTypeE Σ (Γ ,,, Δ) T ->
-  isTypeE Σ (Γ ,,, Δ) (subst0 (all_rels Δ 0 #|Δ|) (lift #|Δ| #|Δ| T)).
+  isTypeE Σ (Γ ,,, Δ) (subst0 (all_rels Δ 0 #|Δ|) (MetaRocq.PCUIC.PCUICAst.lift #|Δ| #|Δ| T)).
 Proof.
   intros Hty.
   apply lift_sorting_it_impl_gen with Hty => // Hs.
@@ -1737,7 +1737,7 @@ Qed.
 
 Lemma isType_all_rels_subst_liftE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ} {T} :
   isTypeE Σ (Γ ,,, Δ) T ->
-  Σ ;;; Γ,,, Δ  ⊢E T = subst0 (all_rels Δ 0 #|Δ|) (lift #|Δ| #|Δ| T).
+  Σ ;;; Γ,,, Δ  ⊢E T = subst0 (all_rels Δ 0 #|Δ|) (MetaRocq.PCUIC.PCUICAst.lift #|Δ| #|Δ| T).
 Proof.
   intros isty.
   have wf := (isType_wf_localE isty).
@@ -1749,11 +1749,11 @@ Qed.
 Lemma arity_spine_to_extended_list_appE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ} {T s T'} :
   wf_localE Σ (Γ ,,, Δ) ->
   isTypeE Σ (Γ ,,, Δ) T ->
-  arity_spineE Σ (Γ ,,, Δ) (subst0 (all_rels Δ 0 #|Δ|) (lift #|Δ| #|Δ| T)) s T' ->
+  arity_spineE Σ (Γ ,,, Δ) (subst0 (all_rels Δ 0 #|Δ|) (MetaRocq.PCUIC.PCUICAst.lift #|Δ| #|Δ| T)) s T' ->
   arity_spineE Σ (Γ ,,, Δ) (lift0 #|Δ| (it_mkProd_or_LetIn Δ T)) (to_extended_list Δ ++ s) T'.
 Proof.
   intros isty wf.
-  rewrite lift_it_mkProd_or_LetIn Nat.add_0_r.
+  rewrite MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn Nat.add_0_r.
   pose proof (isType_all_rels_subst_liftE wf).
   intros sp.
   eapply arity_spine_it_mkProd_or_LetInE; tea.
@@ -1762,10 +1762,10 @@ Proof.
 Qed.
 
 Lemma typing_spine_to_extended_list_appE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ} {T s T'} :
-  typing_spineE Σ (Γ ,,, Δ) T s T' ->
-  typing_spineE Σ (Γ ,,, Δ) (lift0 #|Δ| (it_mkProd_or_LetIn Δ T)) (to_extended_list Δ ++ s) T'.
+  MetaRocq.PCUIC.PCUICAritiesEta.typing_spineE Σ (Γ ,,, Δ) T s T' ->
+  MetaRocq.PCUIC.PCUICAritiesEta.typing_spineE Σ (Γ ,,, Δ) (lift0 #|Δ| (it_mkProd_or_LetIn Δ T)) (to_extended_list Δ ++ s) T'.
 Proof.
-  rewrite lift_it_mkProd_or_LetIn Nat.add_0_r.
+  rewrite MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn Nat.add_0_r.
   intros sp.
   have isty := (typing_spine_isType_domE sp).
   eapply typing_spine_it_mkProd_or_LetIn'E; tea.
@@ -1776,23 +1776,23 @@ Proof.
   now eapply isType_subst_all_relsE.
   eapply ws_cumul_pbE_eq_le. symmetry.
   exact (isType_all_rels_subst_liftE isty).
-  rewrite -[X in lift _ X _](Nat.add_0_r #|Δ|).
-  rewrite -lift_it_mkProd_or_LetIn.
+  rewrite -[X in MetaRocq.PCUIC.PCUICAst.lift _ X _](Nat.add_0_r #|Δ|).
+  rewrite -MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn.
   eapply isType_liftE; tea. now len.
   pcuic.
-  rewrite skipn_app List.skipn_all /= Nat.sub_diag skipn_0.
+  rewrite skipn_app List.skipn_all /= Nat.sub_diag MetaRocq.Utils.MRList.skipn_0.
   now eapply PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE.
 Qed.
 
 Lemma typing_spine_to_extended_list_k_appE {cf} {Σ} {wfΣ : wfE Σ} {Γ Δ Δ'} {T s T'} :
   isTypeE Σ (Γ ,,, Δ) T ->
-  typing_spineE Σ (Γ ,,, Δ ,,, Δ') (lift0 #|Δ'| T) s T' ->
-  typing_spineE Σ (Γ ,,, Δ ,,, Δ') (lift0 (#|Δ| + #|Δ'|) (it_mkProd_or_LetIn Δ T))
+  MetaRocq.PCUIC.PCUICAritiesEta.typing_spineE Σ (Γ ,,, Δ ,,, Δ') (lift0 #|Δ'| T) s T' ->
+  MetaRocq.PCUIC.PCUICAritiesEta.typing_spineE Σ (Γ ,,, Δ ,,, Δ') (lift0 (#|Δ| + #|Δ'|) (it_mkProd_or_LetIn Δ T))
     (to_extended_list_k Δ #|Δ'| ++ s) T'.
 Proof.
   intros isty sp.
   have wf := (typing_spine_wf_localE sp).
-  rewrite !lift_it_mkProd_or_LetIn Nat.add_0_r.
+  rewrite !MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn Nat.add_0_r.
   eapply typing_spine_it_mkProd_or_LetIn'E; tea.
   rewrite /to_extended_list /to_extended_list_k.
   rewrite -{1}(Nat.add_0_r #|Δ'|) reln_lift.
@@ -1817,13 +1817,13 @@ Proof.
   rewrite all_rels_length in Hs.
   rewrite simpl_lift in Hs; try lia.
   now rewrite Nat.add_comm.
-  rewrite -(Nat.add_0_r #|Δ|) -lift_it_mkProd_or_LetIn Nat.add_0_r.
+  rewrite -(Nat.add_0_r #|Δ|) -MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn Nat.add_0_r.
   rewrite -length_app.
   replace #|Δ ++ Δ'| with (#|Δ ,,, Δ'|).
   2:now len.
   eapply isType_liftE; tea. now len.
   rewrite -app_context_assoc.
-  rewrite skipn_app List.skipn_all /= Nat.sub_diag skipn_0.
+  rewrite skipn_app List.skipn_all /= Nat.sub_diag MetaRocq.Utils.MRList.skipn_0.
   now eapply PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE.
 Qed.
 
@@ -1886,7 +1886,7 @@ Proof.
   eapply All2_symP. intros ? ? []; constructor; auto; now symmetry.
   eapply All2_map2_left_All3.
   simpl in H. noconf H.
-  revert a. move: (map _ l0) => l a.
+  revert a. move: (Corelib.Lists.ListDef.map _ l0) => l a.
   induction a. constructor.
   rewrite /expand_lets_ctx /expand_lets_k_ctx.
   rewrite !lift_context_snoc /=.
@@ -1899,7 +1899,7 @@ Lemma inst_case_predicate_context_alpha_eqE {cf : checker_flags}	{Σ : global_en
   {mdecl idecl ci p} :
   eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ->
   eq_context_upto_names
-    (map2 set_binder_name (forget_types (pcontext p))
+    (MetaRocq.Utils.MRList.map2 set_binder_name (forget_types (pcontext p))
       (inst_case_context (pparams p) (puinst p)
           (ind_predicate_context ci mdecl idecl)))
     (subst_context (List.rev (pparams p)) 0 (pcontext p)@[puinst p]).
@@ -1932,7 +1932,7 @@ Proof.
   now eapply All2_eq_binder_subst_context.
   rewrite /pre_case_branch_context_gen /inst_case_context /cstr_branch_context.
   eapply alpha_eq_subst_context.
-  rewrite subst_instance_expand_lets_ctx subst_instance_subst_context.
+  rewrite MetaRocq.PCUIC.PCUICInductiveInversion.subst_instance_expand_lets_ctx subst_instance_subst_context.
   now rewrite (instantiate_indsE decli cu) //.
 Qed.
 
@@ -1949,7 +1949,7 @@ Lemma wf_case_branch_typeE {cf : checker_flags}	{Σ : global_env_ext} {wfΣ : wf
     declared_constructor Σ (ci.(ci_ind), i) mdecl idecl cdecl ->
     wf_branch cdecl br ->
     let cstr_br_ctx := case_branch_context_nopars ci mdecl p.(puinst) cdecl in
-    let brctx' := map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in
+    let brctx' := MetaRocq.Utils.MRList.map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in
     let brctxty := case_branch_type ci.(ci_ind) mdecl idecl p br ptm i cdecl in
     [× wf_branch cdecl br,
        (* The branch context before substitution of parameters *)
@@ -1985,14 +1985,14 @@ Proof.
   assert (wfargs : wf_localE (Σ.1, ind_universes mdecl)
   (arities_context (ind_bodies mdecl),,, ind_params mdecl,,, cstr_args cdecl)).
   { destruct onc. apply sorts_local_ctx_All_local_env in on_cargs => //.
-    eapply weaken_wf_localE => //.
+    eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
     eapply (wf_arities_context'E onind) => //.
     apply onind.(onParams). }
   assert (wfparscd : wf_localE Σ
   (Γ,,, subst_instance (puinst p) (ind_params mdecl),,,
    case_branch_context_nopars ci mdecl (puinst p) cdecl)). {
     rewrite -app_context_assoc.
-    eapply weaken_wf_localE; tea.
+    eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE; tea.
     eapply (@wf_local_instantiateE _ _ (InductiveDecl mdecl) _ p.(puinst)) in wfargs; tea.
     2:eapply isdecl'.
     rewrite !subst_instance_app in wfargs.
@@ -2001,7 +2001,7 @@ Proof.
     eapply substitution_wf_localE in wfargs; tea.
     2:eapply subslet_indsE; tea.
     rewrite app_context_nil_l subst_context_app in wfargs.
-    rewrite closed_ctx_subst in wfargs => //.
+    rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst in wfargs => //.
     rewrite /case_branch_context_nopars.
     now rewrite subst_instance_length Nat.add_0_r in wfargs. }
   assert (wf_localE Σ (Γ ,,, case_branch_context ci mdecl p (forget_types (bcontext br)) cdecl)).
@@ -2010,7 +2010,7 @@ Proof.
     { eapply wf_pre_case_branch_context_gen; tea. }
     eapply substitution_wf_localE; tea. eapply sppars.
     rewrite /cstr_branch_context.
-    rewrite subst_instance_expand_lets_ctx.
+    rewrite MetaRocq.PCUIC.PCUICInductiveInversion.subst_instance_expand_lets_ctx.
     eapply wf_local_expand_letsE => //.
     rewrite subst_instance_subst_context.
     rewrite (instantiate_indsE nth cu) //. }
@@ -2024,7 +2024,7 @@ Proof.
       subst_context (inds (inductive_mind ci) (puinst p) (ind_bodies mdecl))
         #|ind_params mdecl| (subst_instance (puinst p) (cstr_args cdecl)))). {
     rewrite -app_context_assoc.
-    eapply weaken_wf_localE; tea.
+    eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE; tea.
     eapply (@wf_local_instantiateE _ _ (InductiveDecl mdecl) _ p.(puinst)) in wfargs; tea.
     2:eapply isdecl'.
     rewrite !subst_instance_app in wfargs.
@@ -2033,13 +2033,13 @@ Proof.
     eapply substitution_wf_localE in wfargs; tea.
     2:eapply subslet_indsE; tea.
     rewrite app_context_nil_l subst_context_app in wfargs.
-    rewrite closed_ctx_subst in wfargs => //.
+    rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst in wfargs => //.
     now rewrite subst_instance_length Nat.add_0_r in wfargs. }
   assert (wfbrctx : wf_localE Σ (Γ ,,, pre_case_branch_context ci mdecl p.(pparams) p.(puinst) cdecl)).
   { rewrite /case_branch_context /case_branch_context_gen.
     eapply substitution_wf_localE; tea. eapply sppars.
     eapply wf_local_expand_letsE => //. }
-  eapply type_mkAppsE.
+  eapply MetaRocq.PCUIC.PCUICSpineEta.type_mkAppsE.
   relativize #|cstr_args cdecl|.
   eapply weakeningE; tea. rewrite /ptm.
   eapply PCUICGenerationEta.type_it_mkLambda_or_LetInE. tea.
@@ -2050,7 +2050,7 @@ Proof.
   { apply isType_liftE => //. rewrite length_app; lia.
     rewrite skipn_all_app //. }
   rewrite /bc.
-  rewrite lift_it_mkProd_or_LetIn /=.
+  rewrite MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn /=.
   rewrite -(app_nil_r (_ ++ [_])).
   eapply arity_spine_it_mkProd_or_LetIn_smashE => //.
   2:constructor.
@@ -2061,14 +2061,14 @@ Proof.
       (case_predicate_context' ci mdecl idecl p))).
     apply alpha_eq_smash_context, alpha_eq_lift_context.
     epose proof (wf_pre_case_predicate_context_gen (ci:=ci) wfp).
-    rewrite /inst_case_predicate_context.
+    rewrite /MetaRocq.PCUIC.Syntax.PCUICCases.inst_case_predicate_context.
     eapply All2_trans. tc.
     eapply case_predicate_context_alphaE; tea.
     destruct wfp. apply Forall2_All2 in H0. tea.
     now eapply inst_case_predicate_context_eq in wfpctx. }
   rewrite map_map_compose.
   fold (subst_let_expand_k (List.rev (pparams p)) (subst_instance (puinst p) (ind_params mdecl)) #|cstr_args cdecl|).
-  set (indices := map (subst (inds _ _ _) _) _).
+  set (indices := Corelib.Lists.ListDef.map (subst (inds _ _ _) _) _).
   rewrite /case_predicate_context' lift_context_snoc.
   rewrite subst_context_length subst_instance_length expand_lets_ctx_length.
   rewrite (smash_context_app_expand _ _ [_]).
@@ -2085,19 +2085,19 @@ Proof.
   assert (spindices :
   spine_substE Σ
   (Γ,,, pre_case_branch_context ci mdecl (pparams p) (puinst p) cdecl)
-  (map (subst (List.rev (pparams p)) #|cstr_args cdecl|)
-     (map
+  (Corelib.Lists.ListDef.map (subst (List.rev (pparams p)) #|cstr_args cdecl|)
+     (Corelib.Lists.ListDef.map
         (expand_lets_k (subst_instance (puinst p) (ind_params mdecl))
            #|cstr_args cdecl|) indices))
-  (map (subst (List.rev (pparams p)) #|cstr_args cdecl|)
-     (map
+  (Corelib.Lists.ListDef.map (subst (List.rev (pparams p)) #|cstr_args cdecl|)
+     (Corelib.Lists.ListDef.map
         (expand_lets_k (subst_instance (puinst p) (ind_params mdecl))
            #|cstr_args cdecl|)
-        (map
+        (Corelib.Lists.ListDef.map
            (subst
               (inds (inductive_mind ci) (puinst p) (ind_bodies mdecl))
               (#|ind_params mdecl| + #|cstr_args cdecl|))
-           (map (subst_instance (puinst p)) (ctx_inst_subE X0)))))
+           (Corelib.Lists.ListDef.map (subst_instance (puinst p)) (ctx_inst_subE X0)))))
   (subst_context (List.rev (pparams p)) #|cstr_args cdecl|
      (expand_lets_k_ctx (subst_instance (puinst p) (ind_params mdecl))
         #|cstr_args cdecl|
@@ -2105,7 +2105,7 @@ Proof.
            (lift_context #|cstr_args cdecl| 0 (ind_indices idecl)))))).
   { unshelve epose proof (ctx_inst_spine_substE _ X0) as sp.
     { eapply weakening_wf_localE => //.
-      rewrite -app_context_assoc. apply weaken_wf_localE => //.
+      rewrite -app_context_assoc. apply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
       eapply (wf_arities_contextE isdecl).
       apply (on_minductive_wf_params_indicesE isdecl). }
     eapply spine_subst_instE in sp; tea.
@@ -2116,7 +2116,7 @@ Proof.
     2:eapply subslet_indsE; tea.
     rewrite app_context_length !subst_instance_length in sp.
     rewrite subst_context_app subst_instance_length /= Nat.add_0_r in sp.
-    rewrite closed_ctx_subst // in sp.
+    rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst // in sp.
     eapply spine_subst_weakenE in sp. 2:eapply wfΓ. all:tea.
     rewrite app_context_assoc in sp.
     rewrite Nat.add_comm in sp; fold indices in sp.
@@ -2126,7 +2126,7 @@ Proof.
     2:exact sppars.
     rewrite expand_lets_ctx_length subst_context_length subst_instance_length in sp.
     rewrite /subst_context_let_expand.
-    rewrite (closed_ctx_subst (inds _ _ _) (#|ind_params mdecl| + _)) in sp.
+    rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (inds _ _ _) (#|ind_params mdecl| + _)) in sp.
     { rewrite closedn_subst_instance_context.
       rewrite Nat.add_comm; apply closedn_ctx_lift.
       pose proof (declared_inductive_closed_pars_indicesE isdecl).
@@ -2137,7 +2137,7 @@ Proof.
   - rewrite case_branch_context_length_args //.
     rewrite /indices.
     eapply spine_subst_smashE in spindices; tea.
-    rewrite subst_instance_expand_lets_ctx.
+    rewrite MetaRocq.PCUIC.PCUICInductiveInversion.subst_instance_expand_lets_ctx.
     rewrite lift_context_subst_context lift_context_expand_lets_ctx
       -subst_instance_lift_context.
     eapply inst_subsletE in spindices.
@@ -2150,7 +2150,7 @@ Proof.
     rewrite map_subst_let_expand_k.
     rewrite case_branch_context_length_args //.
     eapply meta_convE.
-    { eapply type_mkAppsE.
+    { eapply MetaRocq.PCUIC.PCUICSpineEta.type_mkAppsE.
       { econstructor; tea. }
       eapply wf_arity_spine_typing_spineE; tea.
       split. { eapply declared_constructor_valid_tyE; tea. }
@@ -2161,30 +2161,30 @@ Proof.
       rewrite onc.(cstr_eq).
       simpl.
       rewrite subst_instance_it_mkProd_or_LetIn subst_it_mkProd_or_LetIn.
-      rewrite lift_it_mkProd_or_LetIn.
-      rewrite closed_ctx_lift.
-      { rewrite closed_ctx_subst //. }
+      rewrite MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn.
+      rewrite MetaRocq.PCUIC.Syntax.PCUICClosed.closed_ctx_lift.
+      { rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst //. }
       eapply arity_spine_it_mkProd_or_LetIn_smashE; tea.
-      + rewrite closed_ctx_subst.
+      + rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst.
         rewrite closedn_subst_instance_context.
         eapply (declared_inductive_closed_paramsE isdecl).
-        rewrite -[smash_context [] _](closed_ctx_lift #|cstr_args cdecl| 0).
+        rewrite -[smash_context [] _](MetaRocq.PCUIC.Syntax.PCUICClosed.closed_ctx_lift #|cstr_args cdecl| 0).
         { now apply closedn_smash_context. }
-        rewrite -map_rev.
+        rewrite -Stdlib.Lists.List.map_rev.
         relativize #|cstr_args cdecl|.
         eapply subslet_liftE; tea. eapply sppars.
         now apply pre_case_branch_context_length_args.
       + rewrite subst_context_length Nat.add_0_r.
         rewrite subst_instance_it_mkProd_or_LetIn subst_it_mkProd_or_LetIn.
-        rewrite -map_rev.
+        rewrite -Stdlib.Lists.List.map_rev.
         relativize #|subst_instance (puinst p) (ind_params mdecl)|.
         erewrite subst_let_expand_closed_ctx_lift.
         2:{ now rewrite List.length_rev context_assumptions_subst_context. }
         3:now rewrite subst_context_length.
-        2:{ rewrite closed_ctx_subst => //. }
-        rewrite subst_let_expand_it_mkProd_or_LetIn.
+        2:{ rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst => //. }
+        rewrite MetaRocq.PCUIC.PCUICInductives.subst_let_expand_it_mkProd_or_LetIn.
         rewrite !subst_context_length !subst_instance_length.
-        rewrite closed_ctx_subst //.
+        rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst //.
         set (cstr_ctx := subst_context_let_expand _ _ _).
         change cstr_ctx with
           (pre_case_branch_context ci mdecl (pparams p) (puinst p) cdecl).
@@ -2209,7 +2209,7 @@ Proof.
         rewrite -/(to_extended_list_k _ _).
         rewrite subst_cstr_concl_head.
         destruct isdecl. now eapply nth_error_Some_length in H0.
-        eapply type_mkAppsE.
+        eapply MetaRocq.PCUIC.PCUICSpineEta.type_mkAppsE.
         econstructor; tea.
         eapply (typing_spine_ind_typeE isdecl); tea.
         rewrite -[subst_instance _ (it_mkProd_or_LetIn _ _)](lift_closed (#|ind_params mdecl| + #|cstr_args cdecl|) 0).
@@ -2223,7 +2223,7 @@ Proof.
             (Γ,,, subst_instance (puinst p) (ind_params mdecl),,,
               subst_instance (puinst p) (ind_indices idecl)).
         { rewrite -app_context_assoc -subst_instance_app_ctx.
-          eapply weaken_wf_localE; tea.
+          eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE; tea.
           eapply (on_minductive_wf_params_indices_instE isdecl _ cu). }
         relativize (#|ind_params mdecl| + #|cstr_args cdecl|).
         relativize (to_extended_list_k _ #|cstr_args cdecl|).
@@ -2232,7 +2232,7 @@ Proof.
         eapply isType_SortE; tea.
         2:{ len. now rewrite PCUICLiftSubst.map_subst_instance_to_extended_list_k. }
         2:{ now len. }
-        rewrite subst_context_length subst_instance_length lift_it_mkProd_or_LetIn /=.
+        rewrite subst_context_length subst_instance_length MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn /=.
         eapply typing_spine_it_mkProd_or_LetIn_closeE; tea.
         3:{ reflexivity. }
         2:{ eapply PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE; tea.
@@ -2243,7 +2243,7 @@ Proof.
         clear spindices.
         unshelve epose proof (ctx_inst_spine_substE _ X0) as sp.
         { eapply weakening_wf_localE => //.
-          rewrite -app_context_assoc. apply weaken_wf_localE => //.
+          rewrite -app_context_assoc. apply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
           eapply (wf_arities_contextE isdecl).
           apply (on_minductive_wf_params_indicesE isdecl). }
         eapply spine_subst_instE in sp; tea.
@@ -2254,12 +2254,12 @@ Proof.
         2:eapply subslet_indsE; tea.
         rewrite app_context_length !subst_instance_length in sp.
         rewrite subst_context_app subst_instance_length /= Nat.add_0_r in sp.
-        rewrite closed_ctx_subst // in sp.
+        rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst // in sp.
         eapply spine_subst_weakenE in sp. 2:eapply wfΓ. all:tea.
         rewrite app_context_assoc in sp.
         rewrite Nat.add_comm in sp |- *; fold indices in sp |- *.
         rewrite subst_instance_lift_context in sp.
-        rewrite (closed_ctx_subst _ _ (lift_context #|cstr_args cdecl| _ _)) in sp.
+        rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst _ _ (lift_context #|cstr_args cdecl| _ _)) in sp.
         rewrite Nat.add_comm; eapply closedn_ctx_lift => //.
         epose proof (declared_inductive_closed_pars_indicesE isdecl).
         rewrite closedn_ctx_app in H. move/andb_and: H => [].
@@ -2274,7 +2274,7 @@ Proof.
         erewrite map_subst_let_expand_k_to_extended_list_liftE.
         2:{ eapply sppars. }
         rewrite !map_map_compose.
-        apply map_ext => t.
+        apply MetaRocq.Utils.MRList.map_ext => t.
         rewrite simpl_lift; try lia.
         rewrite (Nat.add_comm #|cstr_args cdecl|).
         rewrite subst_let_expand_k_lift //.
@@ -2293,7 +2293,7 @@ Proof.
               PCUICLiftSubst.map_subst_instance_to_extended_list_k
               !to_extended_list_k_subst to_extended_list_k_lift_context //. }
         2:{ eapply spine_subst_smashE; tea.
-            rewrite subst_instance_expand_lets_ctx.
+            rewrite MetaRocq.PCUIC.PCUICInductiveInversion.subst_instance_expand_lets_ctx.
             rewrite lift_context_subst_context lift_context_expand_lets_ctx
               -subst_instance_lift_context.
             rewrite /subst_let_expand_k -map_map_compose.
@@ -2311,7 +2311,7 @@ Lemma wf_case_branch_type'E {cf : checker_flags}	{Σ : global_env_ext} {wfΣ : w
   declared_inductive Σ ci mdecl idecl ->
   isTypeE Σ Γ (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ args)) ->
   wf_predicate mdecl idecl p ->
-  let predctx := inst_case_predicate_context p in
+  let predctx := MetaRocq.PCUIC.Syntax.PCUICCases.inst_case_predicate_context p in
   Σ;;; Γ ,,, predctx |-E p.(preturn) : tSort ps ->
   let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
   eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ->
@@ -2349,14 +2349,14 @@ Proof.
   assert (wfargs : wf_localE (Σ.1, ind_universes mdecl)
   (arities_context (ind_bodies mdecl),,, ind_params mdecl,,, cstr_args cdecl)).
   { destruct onc. apply sorts_local_ctx_All_local_env in on_cargs => //.
-    eapply weaken_wf_localE => //.
+    eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
     eapply (wf_arities_context'E onind) => //.
     apply onind.(onParams). }
   assert (wfparscd : wf_localE Σ
   (Γ,,, subst_instance (puinst p) (ind_params mdecl),,,
    case_branch_context_nopars ci mdecl (puinst p) cdecl)). {
     rewrite -app_context_assoc.
-    eapply weaken_wf_localE; tea.
+    eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE; tea.
     eapply (@wf_local_instantiateE _ _ (InductiveDecl mdecl) _ p.(puinst)) in wfargs; tea.
     2:eapply isdecl'.
     rewrite !subst_instance_app in wfargs.
@@ -2365,7 +2365,7 @@ Proof.
     eapply substitution_wf_localE in wfargs; tea.
     2:eapply subslet_indsE; tea.
     rewrite app_context_nil_l subst_context_app in wfargs.
-    rewrite closed_ctx_subst in wfargs => //.
+    rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst in wfargs => //.
     rewrite /case_branch_context_nopars.
     now rewrite subst_instance_length Nat.add_0_r in wfargs. }
   assert (wf_localE Σ (Γ ,,, case_branch_context ci mdecl p (forget_types (bcontext br)) cdecl)).
@@ -2374,7 +2374,7 @@ Proof.
     { eapply wf_pre_case_branch_context_gen; tea. }
     eapply substitution_wf_localE; tea. eapply sppars.
     rewrite /cstr_branch_context.
-    rewrite subst_instance_expand_lets_ctx.
+    rewrite MetaRocq.PCUIC.PCUICInductiveInversion.subst_instance_expand_lets_ctx.
     eapply wf_local_expand_letsE => //.
     rewrite subst_instance_subst_context.
     rewrite (instantiate_indsE nth cu) //. }
@@ -2384,7 +2384,7 @@ Proof.
       subst_context (inds (inductive_mind ci) (puinst p) (ind_bodies mdecl))
         #|ind_params mdecl| (subst_instance (puinst p) (cstr_args cdecl)))). {
     rewrite -app_context_assoc.
-    eapply weaken_wf_localE; tea.
+    eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE; tea.
     eapply (@wf_local_instantiateE _ _ (InductiveDecl mdecl) _ p.(puinst)) in wfargs; tea.
     2:eapply isdecl'.
     rewrite !subst_instance_app in wfargs.
@@ -2393,13 +2393,13 @@ Proof.
     eapply substitution_wf_localE in wfargs; tea.
     2:eapply subslet_indsE; tea.
     rewrite app_context_nil_l subst_context_app in wfargs.
-    rewrite closed_ctx_subst in wfargs => //.
+    rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst in wfargs => //.
     now rewrite subst_instance_length Nat.add_0_r in wfargs. }
   assert (wfbrctx : wf_localE Σ (Γ ,,, pre_case_branch_context ci mdecl p.(pparams) p.(puinst) cdecl)).
   { rewrite /case_branch_context /case_branch_context_gen.
     eapply substitution_wf_localE; tea. eapply sppars.
     eapply wf_local_expand_letsE => //. }
-  eapply type_mkAppsE.
+  eapply MetaRocq.PCUIC.PCUICSpineEta.type_mkAppsE.
   relativize #|cstr_args cdecl|.
   eapply weakeningE; tea. rewrite /ptm.
   eapply PCUICGenerationEta.type_it_mkLambda_or_LetInE. tea.
@@ -2412,7 +2412,7 @@ Proof.
     eapply PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE; tea.
     rewrite /bc. pcuic. }
   rewrite /bc.
-  rewrite lift_it_mkProd_or_LetIn /=.
+  rewrite MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn /=.
   rewrite -(app_nil_r (_ ++ [_])).
   eapply arity_spine_it_mkProd_or_LetIn_smashE => //.
   2:constructor.
@@ -2423,14 +2423,14 @@ Proof.
       (case_predicate_context' ci mdecl idecl p))).
     apply alpha_eq_smash_context, alpha_eq_lift_context.
     epose proof (wf_pre_case_predicate_context_gen (ci:=ci) wfp).
-    rewrite /inst_case_predicate_context.
+    rewrite /MetaRocq.PCUIC.Syntax.PCUICCases.inst_case_predicate_context.
     eapply All2_trans. tc.
     eapply case_predicate_context_alphaE; tea.
     destruct wfp. apply Forall2_All2 in H0. tea.
     now eapply inst_case_predicate_context_alpha_eqE in wfpctx. }
   rewrite map_map_compose.
   fold (subst_let_expand_k (List.rev (pparams p)) (subst_instance (puinst p) (ind_params mdecl)) #|cstr_args cdecl|).
-  set (indices := map (subst (inds _ _ _) _) _).
+  set (indices := Corelib.Lists.ListDef.map (subst (inds _ _ _) _) _).
   rewrite /case_predicate_context' lift_context_snoc.
   rewrite subst_context_length subst_instance_length expand_lets_ctx_length.
   rewrite (smash_context_app_expand _ _ [_]).
@@ -2447,19 +2447,19 @@ Proof.
   assert (spindices :
   spine_substE Σ
   (Γ,,, pre_case_branch_context ci mdecl (pparams p) (puinst p) cdecl)
-  (map (subst (List.rev (pparams p)) #|cstr_args cdecl|)
-     (map
+  (Corelib.Lists.ListDef.map (subst (List.rev (pparams p)) #|cstr_args cdecl|)
+     (Corelib.Lists.ListDef.map
         (expand_lets_k (subst_instance (puinst p) (ind_params mdecl))
            #|cstr_args cdecl|) indices))
-  (map (subst (List.rev (pparams p)) #|cstr_args cdecl|)
-     (map
+  (Corelib.Lists.ListDef.map (subst (List.rev (pparams p)) #|cstr_args cdecl|)
+     (Corelib.Lists.ListDef.map
         (expand_lets_k (subst_instance (puinst p) (ind_params mdecl))
            #|cstr_args cdecl|)
-        (map
+        (Corelib.Lists.ListDef.map
            (subst
               (inds (inductive_mind ci) (puinst p) (ind_bodies mdecl))
               (#|ind_params mdecl| + #|cstr_args cdecl|))
-           (map (subst_instance (puinst p)) (ctx_inst_subE X0)))))
+           (Corelib.Lists.ListDef.map (subst_instance (puinst p)) (ctx_inst_subE X0)))))
   (subst_context (List.rev (pparams p)) #|cstr_args cdecl|
      (expand_lets_k_ctx (subst_instance (puinst p) (ind_params mdecl))
         #|cstr_args cdecl|
@@ -2467,7 +2467,7 @@ Proof.
            (lift_context #|cstr_args cdecl| 0 (ind_indices idecl)))))).
   { unshelve epose proof (ctx_inst_spine_substE _ X0) as sp.
     { eapply weakening_wf_localE => //.
-      rewrite -app_context_assoc. apply weaken_wf_localE => //.
+      rewrite -app_context_assoc. apply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
       eapply (wf_arities_contextE isdecl).
       apply (on_minductive_wf_params_indicesE isdecl). }
     eapply spine_subst_instE in sp; tea.
@@ -2478,7 +2478,7 @@ Proof.
     2:eapply subslet_indsE; tea.
     rewrite app_context_length !subst_instance_length in sp.
     rewrite subst_context_app subst_instance_length /= Nat.add_0_r in sp.
-    rewrite closed_ctx_subst // in sp.
+    rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst // in sp.
     eapply spine_subst_weakenE in sp. 2:eapply wfΓ. all:tea.
     rewrite app_context_assoc in sp.
     rewrite Nat.add_comm in sp; fold indices in sp.
@@ -2488,7 +2488,7 @@ Proof.
     2:exact sppars.
     rewrite expand_lets_ctx_length subst_context_length subst_instance_length in sp.
     rewrite /subst_context_let_expand.
-    rewrite (closed_ctx_subst (inds _ _ _) (#|ind_params mdecl| + _)) in sp.
+    rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst (inds _ _ _) (#|ind_params mdecl| + _)) in sp.
     { rewrite closedn_subst_instance_context.
       rewrite Nat.add_comm; apply closedn_ctx_lift.
       pose proof (declared_inductive_closed_pars_indicesE isdecl).
@@ -2499,7 +2499,7 @@ Proof.
   - rewrite case_branch_context_length_args //.
     rewrite /indices.
     eapply spine_subst_smashE in spindices; tea.
-    rewrite subst_instance_expand_lets_ctx.
+    rewrite MetaRocq.PCUIC.PCUICInductiveInversion.subst_instance_expand_lets_ctx.
     rewrite lift_context_subst_context lift_context_expand_lets_ctx
       -subst_instance_lift_context.
     eapply inst_subsletE in spindices.
@@ -2512,7 +2512,7 @@ Proof.
     rewrite map_subst_let_expand_k.
     rewrite case_branch_context_length_args //.
     eapply meta_convE.
-    { eapply type_mkAppsE.
+    { eapply MetaRocq.PCUIC.PCUICSpineEta.type_mkAppsE.
       { econstructor; tea. }
       eapply wf_arity_spine_typing_spineE; tea.
       (* base's [validity] on the constructor's typing; [isType_of_constructorE] gives the
@@ -2525,30 +2525,30 @@ Proof.
       rewrite onc.(cstr_eq).
       simpl.
       rewrite subst_instance_it_mkProd_or_LetIn subst_it_mkProd_or_LetIn.
-      rewrite lift_it_mkProd_or_LetIn.
-      rewrite closed_ctx_lift.
-      { rewrite closed_ctx_subst //. }
+      rewrite MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn.
+      rewrite MetaRocq.PCUIC.Syntax.PCUICClosed.closed_ctx_lift.
+      { rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst //. }
       eapply arity_spine_it_mkProd_or_LetIn_smashE; tea.
-      + rewrite closed_ctx_subst.
+      + rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst.
         rewrite closedn_subst_instance_context.
         eapply (declared_inductive_closed_paramsE isdecl).
-        rewrite -[smash_context [] _](closed_ctx_lift #|cstr_args cdecl| 0).
+        rewrite -[smash_context [] _](MetaRocq.PCUIC.Syntax.PCUICClosed.closed_ctx_lift #|cstr_args cdecl| 0).
         { now apply closedn_smash_context. }
-        rewrite -map_rev.
+        rewrite -Stdlib.Lists.List.map_rev.
         relativize #|cstr_args cdecl|.
         eapply subslet_liftE; tea. eapply sppars.
         now apply pre_case_branch_context_length_args.
       + rewrite subst_context_length Nat.add_0_r.
         rewrite subst_instance_it_mkProd_or_LetIn subst_it_mkProd_or_LetIn.
-        rewrite -map_rev.
+        rewrite -Stdlib.Lists.List.map_rev.
         relativize #|subst_instance (puinst p) (ind_params mdecl)|.
         erewrite subst_let_expand_closed_ctx_lift.
         2:{ now rewrite List.length_rev context_assumptions_subst_context. }
         3:now rewrite subst_context_length.
-        2:{ rewrite closed_ctx_subst => //. }
-        rewrite subst_let_expand_it_mkProd_or_LetIn.
+        2:{ rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst => //. }
+        rewrite MetaRocq.PCUIC.PCUICInductives.subst_let_expand_it_mkProd_or_LetIn.
         rewrite !subst_context_length !subst_instance_length.
-        rewrite closed_ctx_subst //.
+        rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst //.
         set (cstr_ctx := subst_context_let_expand _ _ _).
         change cstr_ctx with
           (pre_case_branch_context ci mdecl (pparams p) (puinst p) cdecl).
@@ -2573,7 +2573,7 @@ Proof.
         rewrite -/(to_extended_list_k _ _).
         rewrite subst_cstr_concl_head.
         destruct isdecl. now eapply nth_error_Some_length in H0.
-        eapply type_mkAppsE.
+        eapply MetaRocq.PCUIC.PCUICSpineEta.type_mkAppsE.
         econstructor; tea.
         eapply (typing_spine_ind_typeE isdecl); tea.
         rewrite -[subst_instance _ (it_mkProd_or_LetIn _ _)](lift_closed (#|ind_params mdecl| + #|cstr_args cdecl|) 0).
@@ -2587,7 +2587,7 @@ Proof.
             (Γ,,, subst_instance (puinst p) (ind_params mdecl),,,
               subst_instance (puinst p) (ind_indices idecl)).
         { rewrite -app_context_assoc -subst_instance_app_ctx.
-          eapply weaken_wf_localE; tea.
+          eapply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE; tea.
           eapply (on_minductive_wf_params_indices_instE isdecl _ cu). }
         relativize (#|ind_params mdecl| + #|cstr_args cdecl|).
         relativize (to_extended_list_k _ #|cstr_args cdecl|).
@@ -2596,7 +2596,7 @@ Proof.
         eapply isType_SortE; tea.
         2:{ len. now rewrite PCUICLiftSubst.map_subst_instance_to_extended_list_k. }
         2:{ now len. }
-        rewrite subst_context_length subst_instance_length lift_it_mkProd_or_LetIn /=.
+        rewrite subst_context_length subst_instance_length MetaRocq.PCUIC.Conversion.PCUICWeakeningConv.lift_it_mkProd_or_LetIn /=.
         eapply typing_spine_it_mkProd_or_LetIn_closeE; tea.
         3:{ reflexivity. }
         2:{ eapply PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE; tea.
@@ -2607,7 +2607,7 @@ Proof.
         clear spindices.
         unshelve epose proof (ctx_inst_spine_substE _ X0) as sp.
         { eapply weakening_wf_localE => //.
-          rewrite -app_context_assoc. apply weaken_wf_localE => //.
+          rewrite -app_context_assoc. apply MetaRocq.PCUIC.Typing.PCUICWeakeningTypEta.weaken_wf_localE => //.
           eapply (wf_arities_contextE isdecl).
           apply (on_minductive_wf_params_indicesE isdecl). }
         eapply spine_subst_instE in sp; tea.
@@ -2618,12 +2618,12 @@ Proof.
         2:eapply subslet_indsE; tea.
         rewrite app_context_length !subst_instance_length in sp.
         rewrite subst_context_app subst_instance_length /= Nat.add_0_r in sp.
-        rewrite closed_ctx_subst // in sp.
+        rewrite MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst // in sp.
         eapply spine_subst_weakenE in sp. 2:eapply wfΓ. all:tea.
         rewrite app_context_assoc in sp.
         rewrite Nat.add_comm in sp |- *; fold indices in sp |- *.
         rewrite subst_instance_lift_context in sp.
-        rewrite (closed_ctx_subst _ _ (lift_context #|cstr_args cdecl| _ _)) in sp.
+        rewrite (MetaRocq.PCUIC.PCUICSpine.closed_ctx_subst _ _ (lift_context #|cstr_args cdecl| _ _)) in sp.
         rewrite Nat.add_comm; eapply closedn_ctx_lift => //.
         epose proof (declared_inductive_closed_pars_indicesE isdecl).
         rewrite closedn_ctx_app in H. move/andb_and: H => [].
@@ -2638,7 +2638,7 @@ Proof.
         erewrite map_subst_let_expand_k_to_extended_list_liftE.
         2:{ eapply sppars. }
         rewrite !map_map_compose.
-        apply map_ext => t.
+        apply MetaRocq.Utils.MRList.map_ext => t.
         rewrite simpl_lift; try lia.
         rewrite (Nat.add_comm #|cstr_args cdecl|).
         rewrite subst_let_expand_k_lift //.
@@ -2657,7 +2657,7 @@ Proof.
               PCUICLiftSubst.map_subst_instance_to_extended_list_k
               !to_extended_list_k_subst to_extended_list_k_lift_context //. }
         2:{ eapply spine_subst_smashE; tea.
-            rewrite subst_instance_expand_lets_ctx.
+            rewrite MetaRocq.PCUIC.PCUICInductiveInversion.subst_instance_expand_lets_ctx.
             rewrite lift_context_subst_context lift_context_expand_lets_ctx
               -subst_instance_lift_context.
             rewrite /subst_let_expand_k -map_map_compose.
@@ -2675,7 +2675,7 @@ Lemma wf_case_branches_typesE {cf : checker_flags}	{Σ : global_env_ext} {wfΣ :
   declared_inductive Σ ci mdecl idecl ->
   isTypeE Σ Γ (mkApps (tInd ci.(ci_ind) p.(puinst)) (p.(pparams) ++ args)) ->
   wf_predicate mdecl idecl p ->
-  let predctx := inst_case_predicate_context p in
+  let predctx := MetaRocq.PCUIC.Syntax.PCUICCases.inst_case_predicate_context p in
   Σ;;; Γ ,,, predctx |-E p.(preturn) : tSort ps ->
   let ptm := it_mkLambda_or_LetIn predctx p.(preturn) in
   wf_branches idecl brs ->
@@ -2688,7 +2688,7 @@ Lemma wf_case_branches_typesE {cf : checker_flags}	{Σ : global_env_ext} {wfΣ :
 Proof.
   intros isdecl Hc wfp bc Hp ptm wfbrs conv.
   eapply forall_nth_error_All2i.
-  now rewrite (Forall2_length wfbrs).
+  now rewrite (MetaRocq.Utils.All_Forall.Forall2_length wfbrs).
   intros n cdecl br nth nth'.
   eapply wf_case_branch_type'E; tea.
   * split; auto.
@@ -2708,7 +2708,7 @@ Lemma wf_case_branches_types'E {cf : checker_flags}	{Σ : global_env_ext} {wfΣ 
   eq_context_upto_names p.(pcontext) (ind_predicate_context ci.(ci_ind) mdecl idecl) ->
   All2i (fun i cdecl br =>
     let cstr_br_ctx := case_branch_context_nopars ci mdecl p.(puinst) cdecl in
-    let brctx' := map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in
+    let brctx' := MetaRocq.Utils.MRList.map2 set_binder_name (forget_types (bcontext br)) cstr_br_ctx in
     let brctxty := case_branch_type ci.(ci_ind) mdecl idecl p br ptm i cdecl in
     [× wf_branch cdecl br, (* The branch context before substitution of parameters *)
       wf_localE Σ (Γ ,,, (ind_params mdecl)@[puinst p] ,,, cstr_br_ctx),
@@ -2731,7 +2731,7 @@ Proof.
   { len. rewrite (wf_predicate_length_pars wfp) //.
     apply (declared_minductive_ind_nparsE isdecl). }
   eapply forall_nth_error_All2i.
-  now rewrite (Forall2_length wfbrs).
+  now rewrite (MetaRocq.Utils.All_Forall.Forall2_length wfbrs).
   intros n cdecl br nth nth'.
   red in wfbrs. eapply Forall2_All2 in wfbrs.
   eapply All2_nth_error in wfbrs; tea.
@@ -2756,7 +2756,7 @@ Proof.
   constructor.
   + have?: Σ ;;; Γ |-E it_mkLambda_or_LetIn Δ t : it_mkProd_or_LetIn Δ (tSort ps)
     by apply: PCUICGenerationEta.type_it_mkLambda_or_LetInE; eassumption.
-    apply has_sort_isTypeE with (s := ps); apply: type_mkAppsE; first eassumption.
+    apply has_sort_isTypeE with (s := ps); apply: MetaRocq.PCUIC.PCUICSpineEta.type_mkAppsE; first eassumption.
     apply: typing_spine_it_mkProd_or_LetIn_closeE=> //=; first eassumption.
     apply: PCUICInductiveInversionEtaB.isType_it_mkProd_or_LetInE.
     (* base's [validity] on a SORT typing: [isType_SortE] of the sort it gives *)
@@ -2791,7 +2791,7 @@ Lemma isTypeRel_cstr_typeE {cf : checker_flags} Σ mdecl idecl cdecl n :
   (cstr_type cdecl =
         it_mkProd_or_LetIn
           (mdecl.(ind_params) ,,, cdecl.(cstr_args))
-          (mkApps (tRel (#|mdecl.(ind_params) ,,, cdecl.(cstr_args)| + (#|ind_bodies mdecl| - S n)))
+          (mkApps (tRel (#|mdecl.(ind_params) ,,, cdecl.(cstr_args)| + (#|ind_bodies mdecl| - Corelib.Init.Datatypes.S n)))
             (to_extended_list_k mdecl.(ind_params) #|cdecl.(cstr_args)| ++
             cdecl.(cstr_indices)))) ->
     isTypeE Σ [] idecl.(ind_type) ->
@@ -2818,8 +2818,8 @@ Proof.
   apply inversion_RelE in Happ as (decl & wfΓ & hnth & cum); tas.
   eapply All_local_env_nth_error_weakenE in wfΓ as Hty; tea.
   rewrite nth_error_app_ge in hnth. lia.
-  replace (#|ind_params mdecl,,, cstr_args cdecl| + (#|ind_bodies mdecl| - S n) - #|ind_params mdecl,,, cstr_args cdecl|) with (#|ind_bodies mdecl| - S n) in hnth by lia.
-  pose proof (nth_error_Some_length H) as hlen. rewrite nth_error_rev // in H.
+  replace (#|ind_params mdecl,,, cstr_args cdecl| + (#|ind_bodies mdecl| - Corelib.Init.Datatypes.S n) - #|ind_params mdecl,,, cstr_args cdecl|) with (#|ind_bodies mdecl| - Corelib.Init.Datatypes.S n) in hnth by lia.
+  pose proof (nth_error_Some_length H) as hlen. rewrite MetaRocq.Utils.MRList.nth_error_rev // in H.
   eapply nth_error_arities_context in H. rewrite hnth in H.
   (* base's [tea] picks the cumulativity; here the [isTypeE] of the sort would be taken
      first, so the cumulativity is named *)
