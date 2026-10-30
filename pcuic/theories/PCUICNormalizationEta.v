@@ -1,14 +1,13 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * Weak-head and weak call-by-value normalization over [typingE] (row T6): the E copy of
+(** * Weak-head and weak call-by-value normalization over [typingE]: the E copy of
       [PCUICNormalization]
 
   The E twin of every declaration of base [PCUICNormalization] whose statement mentions typing:
   [typing] → [typingE], [wf] → [wfE], [welltyped] → [welltypedE] ([PCUICTypingEta]),
   [NormalizationIn] → [NormalizationInE] ([PCUICSNEta]). [eval], [value], [red], [whnf],
   [closed_red], [ws_term], [axiom_free], [firstorder_ind] and [Acc (cored Σ [])] are unchanged:
-  they are untyped, and the E side uses base's. Each name takes the suffix [E] (plan
-  [t0-plan.md] §2, D1).
+  they are untyped, and the E side uses base's. Each name takes the suffix [E].
 
   Map, base → E: [wh_normalization] → [wh_normalizationE]; [SN_to_WN] → [SN_to_WNE];
   [wcbv_normalization] → [wcbv_normalizationE]; [firstorder_value_irred] →
@@ -30,11 +29,19 @@
     [welltyped] → [PCUICSNEta.normalization_inE] on [welltypedE]. Both conclude the SAME
     [Acc (cored Σ [])], so the induction that follows is base's.
   - [progress_env_prop] → [PCUICProgressEta.progress_env_propE]; [subject_reduction] →
-    [PCUICSREta.subject_reductionE]; [subject_closed] → [PCUICClosedTypEta.subject_closedE];
-    [subject_is_open_term] → [PCUICClosedTypEta.subject_is_open_termE];
-    [PCUICClassification.value_whnf] → [PCUICClassificationEta.value_whnfE].
-  - [wcbv_red1_red1], [wcbv_red1_eval], [value_final], [closed_red_confluence] and
-    [irred_equal] are base's: their statements are untyped.
+    [PCUICSREta.subject_reductionE]; [subject_reduction_eval] →
+    [PCUICClassificationEta.subject_reduction_evalE]; [subject_closed] →
+    [PCUICClosedTypEta.subject_closedE]; [subject_is_open_term] →
+    [PCUICClosedTypEta.subject_is_open_termE]; [PCUICClassification.value_whnf] →
+    [PCUICClassificationEta.value_whnfE]; [PCUICClassification.wcbveval_red] →
+    [PCUICClassificationEta.wcbveval_redE]; [PCUICFirstorder.firstorder_value_spec] →
+    [firstorder_value_specE]; [PCUICFirstorder.firstorder_value_inds] →
+    [firstorder_value_indsE]; [PCUICContextConversion.closed_red_confluence] →
+    [PCUICPrincipalityEta.closed_red_confluence_cb].
+  - [PCUICWcbvEval.wcbv_red1_eval] takes base [wf Σ], which no η environment has, so this file
+    proves [wcbv_red1_evalE] instead: base's statement with [wf] → [wfE], and base's script.
+  - [wcbv_red1_red1], [value_final], [red1_mkApps_tConstruct_inv] and [irred_equal] are base's:
+    their statements are untyped.
 
   ** No forecast hypothesis
 
@@ -42,9 +49,9 @@
   [PCUICClassificationEta], [PCUICProgressEta], [PCUICFirstorderEta]) states its lemmas with no
   forecast premise, so these statements have none either.
 
-  [PCUICCanonicityEta.v] carries [wh_normalizationE] as the single field of its forecast class
-  [CanonForecastCopy20]; the lemma proved here is that field's statement, so that file's class
-  and section premise are discharged by it. *)
+  The single field [wh_normalizationE] of the forecast class [CanonForecastCopy20] of the E
+  copy of [PCUICCanonicity] is this file's [wh_normalizationE]: the two types accept each
+  other, so that class is discharged by this lemma when that copy lands. *)
 
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils.
@@ -71,8 +78,6 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
 From Equations Require Import Equations.
 
 From MetaRocq.PCUIC Require Import PCUICSN PCUICFirstorder.
-
-(* The route lemma below takes no forecast class, so it stands before the section. *)
 
 
 From MetaRocq.PCUIC Require PCUICPrincipalityEta.
@@ -135,10 +140,9 @@ Proof.
       constructor; eauto.
     + now cbn in i.
 Qed.
-Section NormalizationEta.
 
-(** Base [wh_normalization] ([:24]). The statement is the field [wh_normalizationE] of
-    [PCUICCanonicityEta.CanonForecastCopy20]. *)
+(** Base [wh_normalization] ([:24]). This is the statement of the field [wh_normalizationE] of
+    the forecast class [CanonForecastCopy20] of the E copy of [PCUICCanonicity]. *)
 Lemma wh_normalizationE {cf:checker_flags} {no:normalizing_flags} {Σ} {normalization:NormalizationInE Σ} {t} : wfE Σ -> axiom_free Σ ->
 {A & Σ ;;; [] |-E t : A}  -> { v & whnf RedFlags.default Σ [] v * red Σ [] t v}.
 Proof.
@@ -279,4 +283,3 @@ Proof.
     eapply subject_reductionE; eauto.
 Qed.
 
-End NormalizationEta.
