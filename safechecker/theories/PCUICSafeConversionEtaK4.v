@@ -52,7 +52,13 @@ From MetaRocq.SafeChecker Require Import PCUICErrors.
    load base PCUICWfEnv *)
 From MetaRocq.SafeChecker Require Import PCUICWfEnvEta.
 
-(* LAST, so that the eta stack shadows the base one for the unqualified names. *)
+(* INVARIANT (C6, lanes/eta/cross-lane-commitments.md): every unqualified reference in this
+   file to a name shared with Syntax.PCUICPosition resolves to the PCUICPositionEta object
+   or to this file's own definition of that name (measured at 18d63896: 88 references, 86 to
+   PCUICPositionEta, 2 to K4's own eq_term_valid_pos). It holds because PCUICPositionEta is
+   imported after every module exporting such a name; ANY IMPORT CHANGE MUST PRESERVE IT; a
+   diff of this file's .glob reference targets detects a violation (an About-all diff only
+   where a type changes). *)
 From MetaRocq.PCUIC Require Import PCUICPositionEta.
 
 From Equations.Prop Require Import DepElim.

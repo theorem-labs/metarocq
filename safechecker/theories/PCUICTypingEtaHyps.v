@@ -58,15 +58,18 @@ From MetaRocq.SafeChecker Require Import PCUICTypingEtaDefs.
     "Instances" of this file (one lemma [<field>_inst] per field, proved without any class field; written
     by EtaK7Inst). Per class, fields = instances: T0_facts 12, U_facts 1, T1_facts 4, T2a_facts 2,
     T6_facts 1, T6BD_facts 9, T6BDu_facts 9, T6BDc_facts 6. Each instance carries a tag
-    [(* non-degenerate *)] or [(* degenerate: NOT BUILT — <why> *)]; 37 are non-degenerate (three of them
+    [(* non-degenerate *)] or [(* degenerate: NOT BUILT — <why> *)]; 42 are non-degenerate (three of them
     type through an η step: [validity], [checking_typing], [infering_checking], via [cumul_eta_l]), 0 are
-    IMPOSSIBLE and 7 are NOT BUILT ([inductive_cumulative_indices], [isTypeRel_cstr_type],
-    [isType_mkApps_Ind_inv], [typing_spine_ind_type_inv], [wf_case_branch_type], [wf_case_predicate_context],
-    [wf_case_branches_types']: each needs a new inductive declaration, an indexed family or one with a redex
-    in its arity; list and reasons at the top of the section "Instances"). Non-degenerate instances show
+    IMPOSSIBLE and 2 are NOT BUILT ([wf_case_predicate_context], [wf_case_branches_types']: to be
+    discharged by import of copy 18, the E twin of [PCUICInductiveInversion]). Five
+    ([inductive_cumulative_indices], [isTypeRel_cstr_type], [isType_mkApps_Ind_inv],
+    [typing_spine_ind_type_inv], [wf_case_branch_type]) are at the indexed, cumulative,
+    universe-polymorphic family [J] of [PCUICEtaIdxEnv], whose user arity has a redex; each of the five has
+    a compiled non-degeneracy lemma [<field>_inst_nondeg]. Non-degenerate instances show
     satisfiability on ordinary typed terms; outside the three η rows none exercises an eta pair;
     the eta-case truth of these hypotheses is established by T6, not by the instance. The
-    environment is [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances], or, for the primitive-operation
+    environment is [si_Σ] of [PCUICCumulativitySpecEtaClosureInstances], [ji_Σ] (or [ji_Σp]) of
+    [PCUICEtaIdxEnv] for those five fields, or, for the primitive-operation
     field of T1, [Σ_po] of [PCUICEtaPrimOpInstance] (convention of [PCUICEtaFracInstances]). An instance
     shows only that the field's premises can hold at a real environment, and does NOT discharge the field
     at [typingE]: subject reduction over [typingE] (row T1), validity (T2a), the inversions and the
@@ -1739,7 +1742,7 @@ Proof.
   destruct sp as [ty ty' isty isty' c'|ty hd tl na A B B' isty isP c' hhd sp]; intros T' isT' c.
   - exact (type_spine_nilE Σ Γ T' ty' isT' isty'
       (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ c c')).
-  - exact (type_spine_consE Σ Γ T' hd tl na A B B' isT' isP
+  - exact (@type_spine_consE _ Σ Γ T' hd tl na A B B' isT' isP
       (@ws_cumul_pbE_trans _ Σ (wfE_ClosedBodies Σ) Cumul Γ _ _ _ c c') hhd sp).
 Qed.
 
@@ -1882,7 +1885,7 @@ Proof.
   intros Hsp. remember (tLetIn na b B T) as L eqn:eL. revert eL.
   destruct Hsp as [ty ty' isty isty' c|ty hd tl na' A B0 B' isty isP c hhd sp]; intros ->.
   - exact (type_spine_nilE Σ Γ _ ty' (sbs_isType_tLetIn_red isty) isty' (ws_cumul_pbE_LetIn_l_inv c)).
-  - exact (type_spine_consE Σ Γ _ hd tl na' A B0 B' (sbs_isType_tLetIn_red isty) isP
+  - exact (@type_spine_consE _ Σ Γ _ hd tl na' A B0 B' (sbs_isType_tLetIn_red isty) isP
       (ws_cumul_pbE_LetIn_l_inv c) hhd sp).
 Qed.
 
@@ -2528,14 +2531,17 @@ End DerivedThree.
   ([T0_facts], [U_facts], [T1_facts], [T2a_facts], [T6_facts], [T6BD_facts], [T6BDu_facts], [T6BDc_facts]),
   in the class order.
   Convention of [PCUICEtaFracInstances]: the environment is [si_Σ] of
-  [PCUICCumulativitySpecEtaClosureInstances] ([Inductive I (A : Prop) : Prop := c : I A]), or, where the
-  field needs a registered primitive type, [Σ_po] of [PCUICEtaPrimOpInstance] (registers [int]); the terms
-  are closed.
+  [PCUICCumulativitySpecEtaClosureInstances] ([Inductive I (A : Prop) : Prop := c : I A]); for five
+  fields about indexed inductives, [ji_Σ] of [PCUICEtaIdxEnv] (the indexed, cumulative,
+  universe-polymorphic family [J@{i} (A : Prop) : Π (X : Type@{i}), (λ Z. Z) Prop] with constructor
+  [jc : Π (X : Type@{i}), J A X]), or [ji_Σp], its extension by the universe context of [J]; where the
+  field needs a registered primitive type, [Σ_po] of [PCUICEtaPrimOpInstance] (registers [int]).
 
   Each instance states the field's premises and its conclusion at the chosen arguments, as one product.
-  The premise [wfE Σ] (named binder or arrow) holds by [si_wfE] or [ti_po_wfE]. Every typed premise is a
-  base derivation lifted to E with [typing_incl_E] (and its consequences [ti_*] below: local environments,
-  [isType], spines, substitutions, cumulativity through [ws_cumul_pb_incl_E]); the bidirectional E premises
+  The premise [wfE Σ] (named binder or arrow) holds by [si_wfE], [ji_wfE] or [ti_po_wfE]. Every typed
+  premise is a base derivation lifted to E with [typing_incl_E] (and its consequences [ti_*] below: local
+  environments, [isType], spines, substitutions, cumulativity through [ws_cumul_pb_incl_E]); the
+  bidirectional E premises
   are built with the constructors of the canonical judgments of [BDTypingEta] (re-exported by
   [PCUICTypingEtaDefs]). The conclusion is the base lemma of the same
   name (qualified) applied at that point and lifted to E; the equivalences, the bidirectional conclusions
@@ -2546,11 +2552,14 @@ End DerivedThree.
   objects that are equal (T = U, a reflexive reduction or comparison), [(* degenerate: IMPOSSIBLE — … *)]
   (no non-degenerate instance exists, by the head or shape and the rule set, or by a premise with no
   other inhabitant) or [(* degenerate: NOT BUILT — … *)] (one exists and is not built here). Counts:
-  37 non-degenerate; 0 IMPOSSIBLE; 7 NOT BUILT ([inductive_cumulative_indices], [isTypeRel_cstr_type],
-  [isType_mkApps_Ind_inv], [wf_case_branch_type], [wf_case_predicate_context] and
-  [wf_case_branches_types'] need an indexed inductive family; [typing_spine_ind_type_inv] needs an
-  inductive whose user arity reduces non-trivially to the built one, which [on_ind_body]'s [ind_arity_red]
-  allows). Three instances are typed through an η step:
+  42 non-degenerate; 0 IMPOSSIBLE; 2 NOT BUILT ([wf_case_predicate_context] and [wf_case_branches_types']:
+  to be discharged by import of copy 18, the E twin of [PCUICInductiveInversion]; a non-degenerate point at
+  [J] was built in commit 3102d23b and withdrawn). The five instances at [J] ([inductive_cumulative_indices],
+  [isTypeRel_cstr_type], [isType_mkApps_Ind_inv], [typing_spine_ind_type_inv], [wf_case_branch_type]) each
+  have a lemma [<field>_inst_nondeg] right after them that proves, by computation, the property that makes
+  the point non-degenerate (a non-empty index context, constructor argument list, context or argument list;
+  two different instances; a user arity that is not the built arity and steps to it). Three instances are
+  typed through an η step:
   [validity], [checking_typing] and [infering_checking] use the variable [y : k g] of
   [PCUICInversionEtaInstances], typed at [k (λ x : Prop. g x)] by [cumul_eta_l]; their conclusions are
   built in E directly, since base typing has no η and the base lemma cannot reach that point. (The
@@ -2561,7 +2570,7 @@ End DerivedThree.
   T2a, T6; T6BDc also needs T8; U is untyped plumbing over [wfE_ClosedBodies]). *)
 
 From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEtaClosureInstances PCUICEtaFracInstances
-     PCUICEtaPrimOpInstance PCUICInversionEtaInstances.
+     PCUICEtaPrimOpInstance PCUICInversionEtaInstances PCUICEtaIdxEnv.
 From MetaRocq.PCUIC Require PCUICValidity PCUICSR PCUICArities PCUICContexts PCUICSubstitution
      PCUICWeakeningTyp PCUICContextConversion PCUICClassification PCUICClosedTyp.
 
@@ -2633,6 +2642,30 @@ Definition siTS {Γ T args U} (h : PCUICArities.typing_spine si_Σ Γ T args U) 
   ti_tspine si_Σ si_wf h.
 Definition siCI {Γ args Δ} (h : ctx_inst si_Σ Γ args Δ) : ctx_instE si_Σ Γ args Δ :=
   ti_ctxi si_Σ si_wf h.
+
+(** The well-scoped comparison of two context extensions, lifted to E. *)
+Lemma ti_wscr (Σ : global_env_ext) (wfΣ : wf Σ) {pb Γ Δ Δ'} :
+  PCUICConversion.ws_cumul_ctx_pb_rel pb Σ Γ Δ Δ' -> ws_cumul_ctx_pbE_rel pb Σ Γ Δ Δ'.
+Proof.
+  intros [hc h]. split; [exact hc|].
+  eapply All2_fold_impl; [exact h|]. intros Γ' Δ'' d d' hd. destruct hd.
+  - constructor; [exact eqna|exact (ti_wsc Σ wfΣ eqt)].
+  - constructor; [exact eqna|exact (ti_wsc Σ wfΣ eqb)|exact (ti_wsc Σ wfΣ eqt)].
+Qed.
+
+(** At [ji_env] of [PCUICEtaIdxEnv] (the indexed family [J]): in the monomorphic extension [ji_Σ], and in
+    the extension [ji_Σp] by the universe context of [J]. *)
+Definition jiT {Γ t T} (h : ji_Σ ;;; Γ |- t : T) : ji_Σ ;;; Γ |-E t : T := typing_incl_E (Σ := ji_Σ) ji_wf h.
+Definition jiW {Γ} (h : wf_local ji_Σ Γ) : wf_localE ji_Σ Γ := ti_wfl ji_Σ ji_wf h.
+Definition jiI {Γ T} (h : isType ji_Σ Γ T) : isTypeE ji_Σ Γ T := ti_isType ji_Σ ji_wf h.
+Definition jiS {Γ inst s Δ} (h : PCUICSpine.spine_subst ji_Σ Γ inst s Δ) : spine_substE ji_Σ Γ inst s Δ :=
+  ti_spine ji_Σ ji_wf h.
+Definition jiTS {Γ T args U} (h : PCUICArities.typing_spine ji_Σ Γ T args U) : typing_spineE ji_Σ Γ T args U :=
+  ti_tspine ji_Σ ji_wf h.
+Definition jiC {pb Γ t u} (h : ji_Σ ;;; Γ ⊢ t ≤[pb] u) : ji_Σ ;;; Γ ⊢E t ≤[pb] u := ti_wsc ji_Σ ji_wf h.
+Definition jipI {Γ T} (h : isType ji_Σp Γ T) : isTypeE ji_Σp Γ T := ti_isType ji_Σp ji_wf h.
+Definition jipIR {Γ T r} (h : isTypeRel ji_Σp Γ T r) : isTypeRelE ji_Σp Γ T r := ti_isTypeRel ji_Σp ji_wf h.
+Definition jipCI {Γ args Δ} (h : ctx_inst ji_Σp Γ args Δ) : ctx_instE ji_Σp Γ args Δ := ti_ctxi ji_Σp ji_wf h.
 
 (** *** Closed terms and base derivations in [si_Σ] *)
 
@@ -2706,42 +2739,6 @@ Proof. intros h. exact (ti_wf_cons Γ si_na ti_IF sProp h (ti_IF_ty Γ h) eq_ref
 Lemma ti_wf_ΓI : wf_local si_Σ ti_ΓI.
 Proof. exact (ti_wf_I [] ti_wf_nil). Qed.
 
-(** The arities context of [I] and the type of its constructor, in [si_Σ]. *)
-Lemma ti_wf_Γi : wf_local si_Σ si_Γi.
-Proof.
-  apply localenv_cons_abs; [constructor|].
-  exact (ti_vass _ (mkBindAnn (nNamed "I") rel_of_Type) _ _ (ti_arity_ty [] ti_wf_nil) eq_refl).
-Qed.
-
-Lemma ti_ctype_ty :
-  si_Σ ;;; si_Γi |- cstr_type si_cdecl : tSort (Sort.sort_of_product (Sort.super sProp) sProp).
-Proof.
-  have w2 := ti_wf_P si_Γi ti_wf_Γi.
-  apply type_Prod.
-  - exact (ti_vass_s _ si_na _ _ (ti_P_ty si_Γi ti_wf_Γi) eq_refl).
-  - refine (type_App _ _ (tRel 1) si_na si_P (tSort sProp)
-              (Sort.sort_of_product (Sort.super sProp) (Sort.super sProp)) (tRel 0) _ _ _).
-    + exact (ti_arity_ty _ w2).
-    + exact (type_Rel _ _ 1 (vass (mkBindAnn (nNamed "I") rel_of_Type) si_arity) w2 eq_refl).
-    + exact (type_Rel _ _ 0 (vass si_na si_P) w2 eq_refl).
-Qed.
-
-(** The parameter instance [ti_F] of [I], as a base spine substitution. *)
-Lemma ti_subslet_F : PCUICSubstitution.subslet si_Σ [] [ti_F] ti_ΓP.
-Proof.
-  exact (PCUICSubstitution.cons_let_ass si_Σ [] [] [] si_na ti_F si_P
-           (PCUICSubstitution.emptyslet si_Σ []) (ti_F_ty [] ti_wf_nil)).
-Qed.
-
-Lemma ti_spine_F : PCUICSpine.spine_subst si_Σ [] [ti_F] [ti_F] ti_ΓP.
-Proof.
-  split.
-  - exact ti_wf_nil.
-  - exact ti_wf_ΓP.
-  - exact (context_subst_ass [] [] [] si_na si_P ti_F context_subst_nil).
-  - exact ti_subslet_F.
-Qed.
-
 (** A fixpoint body whose declared type is [Π _ : I ti_F. Prop], recursive on its argument. *)
 Definition ti_d : def term := {| dname := si_na; dtype := tProd si_na ti_IF si_P; dbody := si_P; rarg := 0 |}.
 
@@ -2779,16 +2776,6 @@ Proof.
   exact (type_LetIn _ _ si_na ti_F si_P (tRel 0) si_P ti_def_j
            (type_Rel _ _ 0 (vdef si_na ti_F si_P) ti_wf_def eq_refl)).
 Qed.
-
-(** The spine of [I ti_F]. *)
-Lemma ti_tspine_IF : PCUICArities.typing_spine si_Σ [] (ind_type si_idecl)@[[]] [ti_F] (tSort sProp).
-Proof.
-  exact (fst (PCUICInductives.invert_type_mkApps_ind si_Σ [] si_ind [] [ti_F] (tSort sProp) si_mdecl si_idecl
-                si_wf si_declared_inductive (ti_IF_ty [] ti_wf_nil))).
-Qed.
-
-Lemma ti_spine_nil : PCUICSpine.spine_subst si_Σ [] [] [] [].
-Proof. split; [exact ti_wf_nil|exact ti_wf_nil|constructor|constructor]. Qed.
 
 (** Base reflexive comparisons. *)
 Lemma ti_ws_refl {pb} (Γ : context) (t : term) :
@@ -2923,17 +2910,11 @@ Proof. exists po_int_kn, po_int_body; split; [reflexivity|exact ti_po_int_declar
 
 (** *** Helpers of the upgraded instances
 
-  In [ti_ΓP = [A : Prop]]: the spine of [I A] and the substitution of [A] for the parameter of [I]; the
+  In [ti_ΓP = [A : Prop]]: the substitution of [A] for the parameter of [I]; the
   β-redex [(λ X : Prop. X) A] ([ti_idA]) and its reduct [A]; [I A] at [Type] by cumulativity; the context
   [x : I ((λ X : Prop. X) A)] ([ti_ΓX]); [f : Π _ : (λ X : Prop. X) A. (λ X : Prop. X) A] ([ti_Γf]) and
   [a : A] after it ([ti_Γfa]); the telescope [(X : Prop) (Y := X)] with a let-in ([ti_Δlet]). In [Σ_po]:
   the context [x : int] ([ti_Γint]). *)
-
-Lemma ti_tspine_IA : PCUICArities.typing_spine si_Σ ti_ΓP (ind_type si_idecl)@[[]] [tRel 0] (tSort sProp).
-Proof.
-  exact (fst (PCUICInductives.invert_type_mkApps_ind si_Σ ti_ΓP si_ind [] [tRel 0] (tSort sProp) si_mdecl si_idecl
-                si_wf si_declared_inductive ti_IA_ty)).
-Qed.
 
 Lemma ti_spine_A : PCUICSpine.spine_subst si_Σ ti_ΓP [tRel 0] [tRel 0] ti_ΓP.
 Proof.
@@ -3101,7 +3082,8 @@ Qed.
 (** ** Instances of [T0_facts]
 
   Each lemma [<field>_inst] below states the premises and the conclusion of the field [<field>] of
-  [T0_facts] at concrete arguments in [si_Σ] (the premise [wfE] holds there by [si_wfE]), builds each
+  [T0_facts] at concrete arguments in [si_Σ], or, for five fields about indexed inductives, in [ji_Σ]
+  or [ji_Σp] of [PCUICEtaIdxEnv] (the premise [wfE] holds there by [si_wfE] and [ji_wfE]), builds each
   typed premise from a base derivation lifted with [typing_incl_E], and proves the conclusion from the base
   lemma of the same name. (1) This instance shows that the hypothesis is consistent and about something
   real. (2) It does NOT discharge the hypothesis at [typingE]: the field remains a hypothesis until plan
@@ -3125,33 +3107,40 @@ Proof.
                 (pb := Cumul) (Γ' := ti_ΓF) ht ti_wf_ΓF hctx)).
 Qed.
 
-(* degenerate: NOT BUILT — I has no indices, so the conclusion compares two empty index contexts (also Γ = [], u = u', pars = pars'); a real point needs an indexed family, and u ≠ u' a cumulative universe-polymorphic one; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
+(* non-degenerate *)
+(** At [J@{Set}] and [J@{a}], two different instances compared at the covariant variance of [J] ([napp = 2]
+    is its full application), in [ji_Γ = (A : Prop) (X : Type@{Set})], with the parameter lists [A] and
+    [(λ Y : Prop. Y) A]: the compared index contexts are [X : Type@{Set}] and [X : Type@{a}]
+    ([inductive_cumulative_indices_inst_nondeg]). *)
 Lemma inductive_cumulative_indices_inst :
-  [× declared_inductive si_Σ si_ind si_mdecl si_idecl,
-     consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
-     consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
-     PCUICEquality.cmp_ind_universes si_Σ si_ind 0 [] [],
-     spine_substE si_Σ [] [ti_F] [ti_F] (ind_params si_mdecl)@[[]],
-     spine_substE si_Σ [] [ti_F] [ti_F] (ind_params si_mdecl)@[[]],
-     ws_cumul_pbE_terms si_Σ [] [ti_F] [ti_F] &
-     let indctx := (ind_indices si_idecl)@[[]] in
-     let indctx' := (ind_indices si_idecl)@[[]] in
-     let pindctx := subst_context [ti_F] 0 indctx in
-     let pindctx' := subst_context [ti_F] 0 indctx' in
-     ws_cumul_ctx_pbE_rel Cumul si_Σ [] (smash_context [] pindctx) (smash_context [] pindctx')].
+  [× declared_inductive ji_Σ ji_ind ji_mdecl ji_idecl,
+     consistent_instance_ext ji_Σ (ind_universes ji_mdecl) ji_u0,
+     consistent_instance_ext ji_Σ (ind_universes ji_mdecl) ji_u1,
+     PCUICEquality.cmp_ind_universes ji_Σ ji_ind 2 ji_u0 ji_u1,
+     spine_substE ji_Σ ji_Γ [tRel 1] [tRel 1] (ind_params ji_mdecl)@[ji_u0],
+     spine_substE ji_Σ ji_Γ [ji_idA] [ji_idA] (ind_params ji_mdecl)@[ji_u1],
+     ws_cumul_pbE_terms ji_Σ ji_Γ [tRel 1] [ji_idA] &
+     let indctx := (ind_indices ji_idecl)@[ji_u0] in
+     let indctx' := (ind_indices ji_idecl)@[ji_u1] in
+     let pindctx := subst_context [tRel 1] 0 indctx in
+     let pindctx' := subst_context [ji_idA] 0 indctx' in
+     ws_cumul_ctx_pbE_rel Cumul ji_Σ ji_Γ (smash_context [] pindctx) (smash_context [] pindctx')].
 Proof.
-  have hcmp : PCUICEquality.cmp_ind_universes si_Σ si_ind 0 [] [].
-  { unfold PCUICEquality.cmp_ind_universes. apply cmp_global_instance_refl; tc. }
-  pose proof (ti_spine_F : PCUICSpine.spine_subst si_Σ [] [ti_F] [ti_F] (ind_params si_mdecl)@[[]]) as hs.
-  have hw : All2 (ws_cumul_pb Conv si_Σ []) [ti_F] [ti_F] := All2_cons (ti_ws_refl [] ti_F eq_refl eq_refl) All2_nil.
-  have hb := PCUICInductiveInversion.inductive_cumulative_indices (Σ := si_Σ) (wfΣ := si_wf)
-    si_declared_inductive ti_cons ti_cons hcmp [] [ti_F] [ti_F] [ti_F] [ti_F] hs hs hw.
-  split; [exact si_declared_inductive|exact ti_cons|exact ti_cons|exact hcmp|exact (siS hs)|exact (siS hs)
-         |exact (All2_cons (fi_ws Conv [] ti_F eq_refl eq_refl) All2_nil)|].
-  (* the base conclusion gives the scoping of the context; the indices of [I] are empty, so the
-     comparison of the two (empty) smashed index contexts is the empty one *)
-  cbv zeta in hb |- *. destruct hb as [hc _]. split; [exact hc|cbn; constructor].
+  have hb := PCUICInductiveInversion.inductive_cumulative_indices (Σ := ji_Σ) (wfΣ := ji_wf)
+    ji_declared_inductive ji_cons0 ji_cons1 ji_cmp ji_Γ [tRel 1] [ji_idA] [tRel 1] [ji_idA]
+    (ji_spine_A ji_u0) (ji_spine_idA ji_u1) ji_pars_conv.
+  split; [exact ji_declared_inductive|exact ji_cons0|exact ji_cons1|exact ji_cmp|exact (jiS (ji_spine_A ji_u0))
+         |exact (jiS (ji_spine_idA ji_u1))|exact (All2_impl ji_pars_conv (fun x y h => jiC h))|].
+  cbv zeta in hb |- *. exact (ti_wscr ji_Σ ji_wf hb).
 Qed.
+
+(** Non-degeneracy: an index, two different instances, two different parameter lists, a non-empty
+    context, and two different compared contexts. *)
+Lemma inductive_cumulative_indices_inst_nondeg :
+  [× ind_indices ji_idecl <> [], ji_u0 <> ji_u1, [tRel 1] <> [ji_idA], ji_Γ <> [] &
+     smash_context [] (subst_context [tRel 1] 0 (ind_indices ji_idecl)@[ji_u0]) <>
+     smash_context [] (subst_context [ji_idA] 0 (ind_indices ji_idecl)@[ji_u1])].
+Proof. split; intros e; vm_compute in e; congruence. Qed.
 
 (* non-degenerate *)
 Lemma invert_type_mkApps_ind_inst :
@@ -3166,40 +3155,46 @@ Proof.
   split; [exact si_wfE|exact si_declared_inductive|exact (siT h)|split; [exact (siTS hs)|exact hc]].
 Qed.
 
-(* degenerate: NOT BUILT — c has no arguments and I has no indices, so the ctx_inst premise is over empty lists, and the user arity of I is already the built arity (the red premise is reflexive); a real point needs an indexed family; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
+(* non-degenerate *)
+(** At [J] in [ji_Σp] (the field types the uninstantiated user arity, so the extension declares the level
+    [i]): the user arity has a β-redex and steps to the built arity, and the constructor [jc] has the
+    argument [X] and the index [X] ([isTypeRel_cstr_type_inst_nondeg]). *)
 Lemma isTypeRel_cstr_type_inst :
-  [× wfE si_Σ.1,
-     nth_error (ind_bodies si_mdecl) 0 = Some si_idecl,
-     cstr_type si_cdecl =
-       it_mkProd_or_LetIn (ind_params si_mdecl ,,, cstr_args si_cdecl)
-         (mkApps (tRel (#|ind_params si_mdecl ,,, cstr_args si_cdecl| + (#|ind_bodies si_mdecl| - S 0)))
-            (to_extended_list_k (ind_params si_mdecl) #|cstr_args si_cdecl| ++ cstr_indices si_cdecl)),
-     isTypeE si_Σ [] (ind_type si_idecl),
-     PCUICReduction.red si_Σ.1 [] (ind_type si_idecl)
-       (it_mkProd_or_LetIn (ind_params si_mdecl) (it_mkProd_or_LetIn (ind_indices si_idecl) (tSort (ind_sort si_idecl)))),
-     isTypeE si_Σ [] (it_mkProd_or_LetIn (ind_params si_mdecl)
-                       (it_mkProd_or_LetIn (ind_indices si_idecl) (tSort (ind_sort si_idecl)))),
-     isSortRel (ind_sort si_idecl) (ind_relevance si_idecl),
-     ctx_instE si_Σ (arities_context (ind_bodies si_mdecl) ,,, ind_params si_mdecl ,,, cstr_args si_cdecl)
-       (cstr_indices si_cdecl) (List.rev (lift_context #|cstr_args si_cdecl| 0 (ind_indices si_idecl))),
-     isTypeE si_Σ (arities_context (ind_bodies si_mdecl)) (cstr_type si_cdecl) &
-     isTypeRelE si_Σ (arities_context (ind_bodies si_mdecl)) (cstr_type si_cdecl) (ind_relevance si_idecl)].
+  [× wfE ji_Σp.1,
+     nth_error (ind_bodies ji_mdecl) 0 = Some ji_idecl,
+     cstr_type ji_cdecl =
+       it_mkProd_or_LetIn (ind_params ji_mdecl ,,, cstr_args ji_cdecl)
+         (mkApps (tRel (#|ind_params ji_mdecl ,,, cstr_args ji_cdecl| + (#|ind_bodies ji_mdecl| - S 0)))
+            (to_extended_list_k (ind_params ji_mdecl) #|cstr_args ji_cdecl| ++ cstr_indices ji_cdecl)),
+     isTypeE ji_Σp [] (ind_type ji_idecl),
+     PCUICReduction.red ji_Σp.1 [] (ind_type ji_idecl)
+       (it_mkProd_or_LetIn (ind_params ji_mdecl) (it_mkProd_or_LetIn (ind_indices ji_idecl) (tSort (ind_sort ji_idecl)))),
+     isTypeE ji_Σp [] (it_mkProd_or_LetIn (ind_params ji_mdecl)
+                        (it_mkProd_or_LetIn (ind_indices ji_idecl) (tSort (ind_sort ji_idecl)))),
+     isSortRel (ind_sort ji_idecl) (ind_relevance ji_idecl),
+     ctx_instE ji_Σp (arities_context (ind_bodies ji_mdecl) ,,, ind_params ji_mdecl ,,, cstr_args ji_cdecl)
+       (cstr_indices ji_cdecl) (List.rev (lift_context #|cstr_args ji_cdecl| 0 (ind_indices ji_idecl))),
+     isTypeE ji_Σp (arities_context (ind_bodies ji_mdecl)) (cstr_type ji_cdecl) &
+     isTypeRelE ji_Σp (arities_context (ind_bodies ji_mdecl)) (cstr_type ji_cdecl) (ind_relevance ji_idecl)].
 Proof.
-  have hT : isType si_Σ [] (ind_type si_idecl) := has_sort_isType _ (ti_arity_ty [] ti_wf_nil).
-  have hT' : isType si_Σ [] (it_mkProd_or_LetIn (ind_params si_mdecl)
-                (it_mkProd_or_LetIn (ind_indices si_idecl) (tSort (ind_sort si_idecl)))) := hT.
-  have hr : PCUICReduction.red si_Σ.1 [] (ind_type si_idecl)
-              (it_mkProd_or_LetIn (ind_params si_mdecl) (it_mkProd_or_LetIn (ind_indices si_idecl)
-                 (tSort (ind_sort si_idecl)))) by apply rt_refl.
-  have hci : ctx_inst si_Σ (arities_context (ind_bodies si_mdecl) ,,, ind_params si_mdecl ,,, cstr_args si_cdecl)
-               (cstr_indices si_cdecl) (List.rev (lift_context #|cstr_args si_cdecl| 0 (ind_indices si_idecl)))
-    by (cbn; constructor).
-  have hC : isType si_Σ (arities_context (ind_bodies si_mdecl)) (cstr_type si_cdecl) :=
-    has_sort_isType _ ti_ctype_ty.
-  split; [exact si_wfE|reflexivity|reflexivity|exact (siI hT)|exact hr|exact (siI hT')|reflexivity
-         |exact (siCI hci)|exact (siI hC)|].
-  exact (siIR (PCUICInductiveInversion.isTypeRel_cstr_type si_Σ si_mdecl si_idecl si_cdecl 0 si_wf
-                 eq_refl eq_refl hT hr hT' eq_refl hci hC)).
+  split; [exact ji_wfE|reflexivity|reflexivity|exact (jipI ji_isT_arity)|exact ji_red_arity
+         |exact (jipI ji_isT_built)|reflexivity|exact (jipCI ji_ci_cindices)|exact (jipI ji_isT_ctype)|].
+  exact (jipIR (PCUICInductiveInversion.isTypeRel_cstr_type ji_Σp ji_mdecl ji_idecl ji_cdecl 0 ji_wf
+                  eq_refl eq_refl ji_isT_arity ji_red_arity ji_isT_built eq_refl ji_ci_cindices ji_isT_ctype)).
+Qed.
+
+(** Non-degeneracy: the user arity is not the built arity and steps to it; the constructor has an argument
+    and an index; the inductive has an index. *)
+Lemma isTypeRel_cstr_type_inst_nondeg :
+  [× ind_type ji_idecl <> it_mkProd_or_LetIn (ind_params ji_mdecl)
+                            (it_mkProd_or_LetIn (ind_indices ji_idecl) (tSort (ind_sort ji_idecl))),
+     red1 ji_Σp.1 [] (ind_type ji_idecl)
+       (it_mkProd_or_LetIn (ind_params ji_mdecl) (it_mkProd_or_LetIn (ind_indices ji_idecl) (tSort (ind_sort ji_idecl)))),
+     cstr_args ji_cdecl <> [], cstr_indices ji_cdecl <> [] & ind_indices ji_idecl <> []].
+Proof.
+  split; [intros e; vm_compute in e; congruence|exact ji_red1_arity
+         |intros e; vm_compute in e; congruence|intros e; vm_compute in e; congruence
+         |intros e; vm_compute in e; congruence].
 Qed.
 
 (* non-degenerate *)
@@ -3216,27 +3211,35 @@ Proof.
                 ti_cons hs)).
 Qed.
 
-(* degenerate: NOT BUILT — I has no indices, so the index half of the split (skipn ind_npars args, argsubst) is empty; a real point needs an indexed family (Γ = [A : Prop] and the parameter A are real); COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
+(* non-degenerate *)
+(** At [J A X] in [ji_Γ]: the arguments split into the parameter [A] and the index [X], both halves
+    non-empty ([isType_mkApps_Ind_inv_inst_nondeg]). *)
 Lemma isType_mkApps_Ind_inv_inst :
-  [× wfE si_Σ.1, declared_inductive si_Σ.1 si_ind si_mdecl si_idecl, wf_localE si_Σ ti_ΓP,
-     isTypeE si_Σ ti_ΓP (mkApps (tInd si_ind []) [tRel 0]) &
+  [× wfE ji_Σ.1, declared_inductive ji_Σ.1 ji_ind ji_mdecl ji_idecl, wf_localE ji_Σ ji_Γ,
+     isTypeE ji_Σ ji_Γ (mkApps (tInd ji_ind ji_u0) ji_pargs) &
      ∑ parsubst argsubst : list term,
-       let parctx := (ind_params si_mdecl)@[[]] in
-       let argctx := subst_context parsubst 0 (ind_indices si_idecl)@[[]] in
-       [× spine_substE si_Σ ti_ΓP (firstn (ind_npars si_mdecl) [tRel 0]) parsubst parctx,
-          spine_substE si_Σ ti_ΓP (skipn (ind_npars si_mdecl) [tRel 0]) argsubst argctx,
-          #|firstn (ind_npars si_mdecl) [tRel 0]| = ind_npars si_mdecl,
-          #|skipn (ind_npars si_mdecl) [tRel 0]| = context_assumptions (ind_indices si_idecl) &
-          consistent_instance_ext si_Σ (ind_universes si_mdecl) []]].
+       let parctx := (ind_params ji_mdecl)@[ji_u0] in
+       let argctx := subst_context parsubst 0 (ind_indices ji_idecl)@[ji_u0] in
+       [× spine_substE ji_Σ ji_Γ (firstn (ind_npars ji_mdecl) ji_pargs) parsubst parctx,
+          spine_substE ji_Σ ji_Γ (skipn (ind_npars ji_mdecl) ji_pargs) argsubst argctx,
+          #|firstn (ind_npars ji_mdecl) ji_pargs| = ind_npars ji_mdecl,
+          #|skipn (ind_npars ji_mdecl) ji_pargs| = context_assumptions (ind_indices ji_idecl) &
+          consistent_instance_ext ji_Σ (ind_universes ji_mdecl) ji_u0]].
 Proof.
-  have hI : isType si_Σ ti_ΓP (mkApps (tInd si_ind []) [tRel 0]) := has_sort_isType _ ti_IA_ty.
-  destruct (PCUICInductives.isType_mkApps_Ind_inv (Σ := si_Σ) (Γ := ti_ΓP) si_wf si_declared_inductive ti_wf_ΓP hI)
+  have hI : isType ji_Σ ji_Γ (mkApps (tInd ji_ind ji_u0) ji_pargs) := has_sort_isType _ ji_JAX_ty.
+  destruct (PCUICInductives.isType_mkApps_Ind_inv (Σ := ji_Σ) (Γ := ji_Γ) ji_wf ji_declared_inductive ji_wf_Γ hI)
     as [ps [as' h]].
   cbv zeta in h. destruct h as [h1 h2 h3 h4 h5].
-  split; [exact si_wfE|exact si_declared_inductive|exact (siW ti_wf_ΓP)|exact (siI hI)|].
+  split; [exact ji_wfE|exact ji_declared_inductive|exact (jiW ji_wf_Γ)|exact (jiI hI)|].
   exists ps, as'. cbv zeta.
-  split; [exact (siS h1)|exact (siS h2)|exact h3|exact h4|exact h5].
+  split; [exact (jiS h1)|exact (jiS h2)|exact h3|exact h4|exact h5].
 Qed.
+
+(** Non-degeneracy: a non-empty context, a non-empty parameter half and a non-empty index half. *)
+Lemma isType_mkApps_Ind_inv_inst_nondeg :
+  [× ji_Γ <> [], firstn (ind_npars ji_mdecl) ji_pargs <> [], skipn (ind_npars ji_mdecl) ji_pargs <> [] &
+     ind_indices ji_idecl <> []].
+Proof. split; intros e; vm_compute in e; congruence. Qed.
 
 (* non-degenerate *)
 Lemma on_minductive_wf_params_inst :
@@ -3257,23 +3260,74 @@ Proof.
                 si_declared_inductive [] ti_cons)).
 Qed.
 
-
-Lemma ti_Rel0_ty : si_Σ ;;; [] ,,, ti_ΓP ,,, [] |- tRel 0 : si_P.
-Proof. exact (type_Rel _ _ 0 (vass si_na si_P) ti_wf_ΓP eq_refl). Qed.
-
-(* degenerate: NOT BUILT — the user arity of I is already the built arity, so the premise's and the conclusion's spines are over the same type; on_ind_body's ind_arity_red only asks the user arity to REDUCE to the built one, so an inductive declared with a redex in its arity gives a real point (Γ = [A : Prop] and the argument A are real); COST: a new inductive declared with a redex in its user arity, in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing and its ind_arity_red reduction, constructor typing, positivity, universe constraints), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
+(* non-degenerate *)
+(** The spine of [J A X] over the user arity of [J], which has a β-redex ([ji_tspine_JAX]); the conclusion
+    is the spine over the built arity. The two types differ, and the first steps to the second
+    ([typing_spine_ind_type_inv_inst_nondeg]). *)
 Lemma typing_spine_ind_type_inv_inst :
-  [× declared_inductive si_Σ si_ind si_mdecl si_idecl, wf_localE si_Σ ti_ΓP,
-     consistent_instance_ext si_Σ (ind_universes si_mdecl) [],
-     typing_spineE si_Σ ti_ΓP (ind_type si_idecl)@[[]] [tRel 0] (tSort sProp) &
-     typing_spineE si_Σ ti_ΓP
-       (it_mkProd_or_LetIn (ind_params si_mdecl ,,, ind_indices si_idecl) (tSort (ind_sort si_idecl)))@[[]]
-       [tRel 0] (tSort sProp)].
+  [× declared_inductive ji_Σ ji_ind ji_mdecl ji_idecl, wf_localE ji_Σ ji_Γ,
+     consistent_instance_ext ji_Σ (ind_universes ji_mdecl) ji_u0,
+     typing_spineE ji_Σ ji_Γ (ind_type ji_idecl)@[ji_u0] ji_pargs (tSort sProp) &
+     typing_spineE ji_Σ ji_Γ
+       (it_mkProd_or_LetIn (ind_params ji_mdecl ,,, ind_indices ji_idecl) (tSort (ind_sort ji_idecl)))@[ji_u0]
+       ji_pargs (tSort sProp)].
 Proof.
-  split; [exact si_declared_inductive|exact (siW ti_wf_ΓP)|exact ti_cons|exact (siTS ti_tspine_IA)|].
-  exact (siTS (PCUICInductives.typing_spine_ind_type_inv (Σ := si_Σ) (wfΣ := si_wf) si_declared_inductive
-                 ti_ΓP [] [tRel 0] (tSort sProp) ti_wf_ΓP ti_cons ti_tspine_IA)).
+  split; [exact ji_declared_inductive|exact (jiW ji_wf_Γ)|exact ji_cons0|exact (jiTS ji_tspine_JAX)|].
+  exact (jiTS (PCUICInductives.typing_spine_ind_type_inv (Σ := ji_Σ) (wfΣ := ji_wf) ji_declared_inductive
+                 ji_Γ ji_u0 ji_pargs (tSort sProp) ji_wf_Γ ji_cons0 ji_tspine_JAX)).
 Qed.
+
+(** Non-degeneracy: the instantiated user arity is not the instantiated built arity and steps to it; a
+    non-empty context and argument list. *)
+Lemma typing_spine_ind_type_inv_inst_nondeg :
+  [× (ind_type ji_idecl)@[ji_u0] <>
+       (it_mkProd_or_LetIn (ind_params ji_mdecl ,,, ind_indices ji_idecl) (tSort (ind_sort ji_idecl)))@[ji_u0],
+     red1 ji_Σ.1 ji_Γ (ind_type ji_idecl)@[ji_u0]
+       (it_mkProd_or_LetIn (ind_params ji_mdecl ,,, ind_indices ji_idecl) (tSort (ind_sort ji_idecl)))@[ji_u0],
+     ji_Γ <> [] & ji_pargs <> []].
+Proof.
+  split; [intros e; vm_compute in e; congruence|exact (ji_red1_arity_u0 ji_Γ)
+         |intros e; vm_compute in e; congruence|intros e; vm_compute in e; congruence].
+Qed.
+
+(* non-degenerate *)
+(** The case on [J A X] in [ji_Γ], with predicate [λ (X' : Type@{Set}) (j : J A X'). X'] (the return type
+    is the predicate's own index, of sort [Type@{Set}]) and the branch of [jc], whose context [X] is not
+    empty ([wf_case_branch_type_inst_nondeg]). *)
+Lemma wf_case_branch_type_inst :
+  [× declared_inductive ji_Σ ji_ci ji_mdecl ji_idecl,
+     isTypeE ji_Σ ji_Γ (mkApps (tInd ji_ci (puinst ji_p)) (pparams ji_p ++ ji_iargs)),
+     wf_predicate ji_mdecl ji_idecl ji_p,
+     ji_Σ ;;; ji_Γ ,,, case_predicate_context ji_ci ji_mdecl ji_idecl ji_p |-E preturn ji_p : tSort Sort.type0,
+     All2 PCUICEquality.eq_decl_upto_names (pcontext ji_p) (ind_predicate_context ji_ci ji_mdecl ji_idecl),
+     declared_constructor ji_Σ (ji_ci, 0) ji_mdecl ji_idecl ji_cdecl,
+     wf_branch ji_cdecl ji_br &
+     let predctx := case_predicate_context ji_ci ji_mdecl ji_idecl ji_p in
+     let ptm := it_mkLambda_or_LetIn predctx (preturn ji_p) in
+     let cstr_br_ctx := case_branch_context_nopars ji_ci ji_mdecl (puinst ji_p) ji_cdecl in
+     let brctx' := map2 set_binder_name (forget_types (bcontext ji_br)) cstr_br_ctx in
+     let brctxty := case_branch_type ji_ci ji_mdecl ji_idecl ji_p ji_br ptm 0 ji_cdecl in
+     [× wf_branch ji_cdecl ji_br,
+        wf_localE ji_Σ (ji_Γ ,,, (ind_params ji_mdecl)@[puinst ji_p] ,,, cstr_br_ctx),
+        wf_localE ji_Σ (ji_Γ ,,, (ind_params ji_mdecl)@[puinst ji_p] ,,, brctx'),
+        wf_localE ji_Σ (ji_Γ ,,, brctxty.1) &
+        ji_Σ ;;; ji_Γ ,,, brctxty.1 |-E brctxty.2 : tSort Sort.type0]].
+Proof.
+  have hb := PCUICInductiveInversion.wf_case_branch_type (Σ := ji_Σ) (wfΣ := ji_wf) (Γ := ji_Γ) (ci := ji_ci)
+    (p := ji_p) Sort.type0 ji_iargs ji_declared_inductive ji_isT_case ji_wfpred ji_ret_ty ji_eqctx
+    0 ji_cdecl ji_br ji_declared_constructor ji_wfbr.
+  cbv zeta in hb. destruct hb as [b1 b2 b3 b4 b5].
+  split; [exact ji_declared_inductive|exact (jiI ji_isT_case)|exact ji_wfpred|exact (jiT ji_ret_ty)
+         |exact ji_eqctx|exact ji_declared_constructor|exact ji_wfbr|].
+  cbv zeta. split; [exact b1|exact (jiW b2)|exact (jiW b3)|exact (jiW b4)|exact (jiT b5)].
+Qed.
+
+(** Non-degeneracy: a non-empty context, index argument list, index context, constructor argument list and
+    branch context; a return type that is not [Prop], of sort [Type@{Set}]. *)
+Lemma wf_case_branch_type_inst_nondeg :
+  [× ji_Γ <> [], ji_iargs <> [], ind_indices ji_idecl <> [], cstr_args ji_cdecl <> [], bcontext ji_br <> [],
+     preturn ji_p <> tSort sProp & Sort.type0 <> sProp].
+Proof. split; intros e; vm_compute in e; congruence. Qed.
 
 (** A case on [I ti_F]: the predicate [fun (_ : I ti_F) => Prop] and the branch of [c]. *)
 Definition ti_ci : case_info := {| ci_ind := si_ind; ci_npar := 1; ci_relevance := Relevant; ci_cofix_nondep := true |}.
@@ -3308,36 +3362,7 @@ Lemma ti_ret_ty :
   si_Σ ;;; [] ,,, case_predicate_context ti_ci si_mdecl si_idecl ti_p |- preturn ti_p : tSort (Sort.super sProp).
 Proof. exact (ti_P_ty _ ti_wf_predctx). Qed.
 
-(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
-Lemma wf_case_branch_type_inst :
-  [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
-     isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
-     wf_predicate si_mdecl si_idecl ti_p,
-     si_Σ ;;; [] ,,, case_predicate_context ti_ci si_mdecl si_idecl ti_p |-E preturn ti_p : tSort (Sort.super sProp),
-     All2 PCUICEquality.eq_decl_upto_names (pcontext ti_p) (ind_predicate_context ti_ci si_mdecl si_idecl),
-     declared_constructor si_Σ (ti_ci, 0) si_mdecl si_idecl si_cdecl,
-     wf_branch si_cdecl ti_br &
-     let predctx := case_predicate_context ti_ci si_mdecl si_idecl ti_p in
-     let ptm := it_mkLambda_or_LetIn predctx (preturn ti_p) in
-     let cstr_br_ctx := case_branch_context_nopars ti_ci si_mdecl (puinst ti_p) si_cdecl in
-     let brctx' := map2 set_binder_name (forget_types (bcontext ti_br)) cstr_br_ctx in
-     let brctxty := case_branch_type ti_ci si_mdecl si_idecl ti_p ti_br ptm 0 si_cdecl in
-     [× wf_branch si_cdecl ti_br,
-        wf_localE si_Σ ([] ,,, (ind_params si_mdecl)@[puinst ti_p] ,,, cstr_br_ctx),
-        wf_localE si_Σ ([] ,,, (ind_params si_mdecl)@[puinst ti_p] ,,, brctx'),
-        wf_localE si_Σ ([] ,,, brctxty.1) &
-        si_Σ ;;; [] ,,, brctxty.1 |-E brctxty.2 : tSort (Sort.super sProp)]].
-Proof.
-  have hb := PCUICInductiveInversion.wf_case_branch_type (Σ := si_Σ) (wfΣ := si_wf) (Γ := []) (ci := ti_ci)
-    (p := ti_p) (Sort.super sProp) [] si_declared_inductive ti_isT_case ti_wfpred ti_ret_ty ti_eqctx
-    0 si_cdecl ti_br si_declared_constructor ti_wfbr.
-  cbv zeta in hb. destruct hb as [b1 b2 b3 b4 b5].
-  split; [exact si_declared_inductive|exact (siI ti_isT_case)|exact ti_wfpred|exact (siT ti_ret_ty)
-         |exact ti_eqctx|exact si_declared_constructor|exact ti_wfbr|].
-  cbv zeta. split; [exact b1|exact (siW b2)|exact (siW b3)|exact (siW b4)|exact (siT b5)].
-Qed.
-
-(* degenerate: NOT BUILT — args = [] because I has no indices, and Γ = []; a real point needs an indexed family; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, and Γ = []; a real point needs an indexed family; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it; a non-degenerate point at the family [J] of [PCUICEtaIdxEnv] was built (commit 3102d23b) and withdrawn: to be discharged by import of copy 18 (PCUICInductiveInversion E twin) *)
 Lemma wf_case_predicate_context_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),
@@ -3348,7 +3373,7 @@ Proof.
   cbv zeta. exact (siW ti_wf_predctx).
 Qed.
 
-(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it *)
+(* degenerate: NOT BUILT — args = [] because I has no indices, c has no arguments (empty branch context), Γ = [] and the return type is Prop; a real point needs an indexed family whose constructor takes arguments; COST: a new indexed inductive family (e.g. an equality-like [J : Prop -> Prop] with a constructor taking arguments) declared in a new environment, with its whole on_global_env proof (on_inductive / on_ind_body: arity typing, constructor typing, positivity, universe constraints, ind_arity_red), none of which si_Σ's helpers provide; stream lead 2026-10-29: stays NOT BUILT unless FRAC needs it; a non-degenerate point at the family [J] of [PCUICEtaIdxEnv] was built (commit 3102d23b) and withdrawn: to be discharged by import of copy 18 (PCUICInductiveInversion E twin) *)
 Lemma wf_case_branches_types'_inst :
   [× declared_inductive si_Σ ti_ci si_mdecl si_idecl,
      isTypeE si_Σ [] (mkApps (tInd ti_ci (puinst ti_p)) (pparams ti_p ++ [])),

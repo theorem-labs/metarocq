@@ -188,6 +188,10 @@ Section NoPremise.
 
 End NoPremise.
 
+(** The E twins of base's registrations [PCUICWellScopedCumulativity.v:146] and [:523]. *)
+#[global] Hint Resolve ws_cumul_pbE_is_closed_context ws_cumul_pbE_is_open_term_left ws_cumul_pbE_is_open_term_right : fvs.
+#[global] Hint Resolve ws_cumul_ctx_pbE_closed_left : fvs.
+
 (** The unscoped context relations over [JoinE]. Base's twins are stated over
     [cumulAlgo_gen]; like them, these need no premise. *)
 
@@ -382,6 +386,15 @@ Section ContextCumulativity.
 
 End ContextCumulativity.
 
+(** Base's instance [ws_cumul_decls_trans] ([PCUICWellScopedCumulativity.v:466]) in its
+    class form over [ws_cumul_declsE]. Base's instance name is taken by the lemma
+    [ws_cumul_declsE_trans], so the instance is a new constant whose body is that
+    lemma. Base's [wf Σ] is [ClosedBodies Σ] here, as for [ws_cumul_declsE_trans]. *)
+#[global]
+Instance ws_cumul_declsE_Transitive {cf : checker_flags} {pb} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}
+  {Γ : context} : Transitive (ws_cumul_declsE pb Σ Γ).
+Proof. exact (fun _ _ _ => ws_cumul_declsE_trans). Qed.
+
 (** ** Substitution of convertible terms *)
 
 Section SubstConv.
@@ -405,8 +418,8 @@ Section SubstConv.
     { split; [exact hΓ| |apply red1_red; apply red_beta]. rewrite /= hc (wsE_left h). reflexivity. }
     have r2 : Σ ;;; Γ ⊢ tApp (tLambda (mkBindAnn nAnon Relevant) (tSort sProp) c) t' ⇝ c {0 := t'}.
     { split; [exact hΓ| |apply red1_red; apply red_beta]. rewrite /= hc (wsE_right h). reflexivity. }
-    eapply WS_trans; [exact (red_ws_cumul_pbE_inv r1)|].
-    eapply WS_trans; [exact (ws_cumul_pbE_App_r hf h)|].
+    eapply SubstConv.WS_trans; [exact (red_ws_cumul_pbE_inv r1)|].
+    eapply SubstConv.WS_trans; [exact (ws_cumul_pbE_App_r hf h)|].
     exact (red_ws_cumul_pbE r2).
   Qed.
 
@@ -439,7 +452,7 @@ Section SubstConv.
         - rewrite (on_free_vars_ext _ _ c (shiftnP_add 1 #|s| _)). exact hc. }
       have e3 : subst0 (a' :: s) c = subst0 s (subst [lift0 #|s| a'] 0 c) by rewrite subst0_cons_lift.
       have e4 : subst0 (a' :: s') c = subst0 s' (subst [lift0 #|s| a'] 0 c) by rewrite hlen subst0_cons_lift.
-      rewrite (subst0_cons s a c). eapply WS_trans; [exact (ws_cumul_pbE_subst1_conv hsc ha)|].
+      rewrite (subst0_cons s a c). eapply SubstConv.WS_trans; [exact (ws_cumul_pbE_subst1_conv hsc ha)|].
       rewrite -(subst0_cons s a' c) e3 e4.
       exact (IH _ hc2).
   Qed.
@@ -468,7 +481,7 @@ Section SubstConv.
     have h4 : WS Conv Γ (Y {0 := b'}) (Y {0 := b}) := ws_cumul_pbE_subst1_conv hY (ws_cumul_pbE_sym _ _ hb).
     have h4' := weakening_ws_cumul_pbE (Σ := Σ) (wfΣ := wfΣ) (pb := Conv) (Γ := Γ) (Γ' := [])
                  (Γ'' := [vdef na b A]) h4 hΓ1.
-    exact (WS_trans h1 (WS_trans h3 (WS_trans (ws_cumul_eq_pbE h4') h5))).
+    exact (SubstConv.WS_trans h1 (SubstConv.WS_trans h3 (SubstConv.WS_trans (ws_cumul_eq_pbE h4') h5))).
   Qed.
 
   (** Under a context: abstract it, convert by [ws_cumul_pbE_subst0_conv], and peel
@@ -531,7 +544,7 @@ Section SubstConv.
     move=> subss subss' eqsub cl eqty.
     have clctx := wsE_ctx eqty.
     have clU := wsE_right eqty.
-    eapply WS_trans.
+    eapply SubstConv.WS_trans.
     - eapply untyped_substitution_ws_cumul_pbE; tea. exact (WT_open_left eqsub).
     - eapply ws_cumul_eq_pbE.
       eapply (untyped_substitution_ws_cumul_pbE_subst_conv (Δ := Γ0) (Δ' := Γ1)); tea.
@@ -946,3 +959,36 @@ Corollary ws_cumul_pbE_alt_closed_false :
      ∑ v v', [× closed_red Σ Γ t v, closed_red Σ Γ u v' &
        compare_term Σ (global_ext_constraints Σ) pb v v']) -> False.
 Proof. exact ws_cumul_pbE_red_false. Qed.
+
+(** ** Scoping and symmetry of a declaration comparison
+
+  Base's [ws_cumul_decls_wf_decl_left], [_right] and [ws_cumul_decls_sym]
+  ([PCUICWellScopedCumulativity]) over [ws_cumul_declsE], registered where base
+  registers them. Base takes [wf Σ]; here the section premise is [ClosedBodies Σ],
+  and no proof reads it, so each compiled statement carries none. *)
+
+Section DeclScopingE.
+
+  Context {cf : checker_flags} {Σ : global_env_ext} {wfΣ : ClosedBodies Σ}.
+
+  Lemma ws_cumul_declsE_wf_decl_left {pb Γ d d'} :
+    ws_cumul_declsE pb Σ Γ d d' -> ws_decl Γ d.
+  Proof using Type.
+    intros []; cbn; eauto with fvs.
+  Qed.
+
+  Lemma ws_cumul_declsE_wf_decl_right {pb Γ d d'} :
+    ws_cumul_declsE pb Σ Γ d d' -> ws_decl Γ d'.
+  Proof using Type.
+    intros []; cbn; eauto with fvs.
+  Qed.
+
+  #[global] Instance ws_cumul_declsE_sym Γ : Symmetric (ws_cumul_declsE Conv Σ Γ).
+  Proof using Type.
+    move=> x y [na na' T T' eqan cv|na na' b b' T T' eqna eqb eqT];
+    constructor; now symmetry.
+  Qed.
+
+End DeclScopingE.
+
+#[global] Hint Immediate ws_cumul_declsE_wf_decl_left ws_cumul_declsE_wf_decl_right : fvs.

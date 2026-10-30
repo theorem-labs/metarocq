@@ -1,9 +1,11 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Common Require Import config.
+(* Same-name rule (C6): neither [PCUICPosition] nor [PCUICPositionEta] is imported here; no name of either is
+   used (the η stack's [welltypedE_context] is the field of [WelltypedEContextE], [PCUICEtaFactsCompose]). *)
 From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICTyping PCUICOnFreeVars PCUICEquality
-     PCUICPosition PCUICSN PCUICTypingEta PCUICSNEta PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
-     PCUICContextConversionEta PCUICPositionEta.
+     PCUICSN PCUICTypingEta PCUICSNEta PCUICWellScopedCumulativityEta PCUICConversionEtaCongr
+     PCUICContextConversionEta.
 From MetaRocq.SafeChecker Require Import PCUICErrorsEta PCUICWfEnvEta PCUICSafeReduceEta
   PCUICSafeConversionEtaFacts PCUICSafeConversionEta PCUICTypeCheckerEta PCUICTypingEtaHyps PCUICEtaFactsCompose.
 
