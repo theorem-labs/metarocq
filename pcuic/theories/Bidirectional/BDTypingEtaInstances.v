@@ -8,22 +8,22 @@
   every premise proved, so the premises are shown to be jointly satisfiable. The environment is
   [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]: one
   inductive [I (A : Prop) : Prop] with one constructor [c : I A]). Each instance carries its
-  tag of the instance degeneracy gate in the comment above it (the lemma that states why it is
-  not degenerate, and its target where the name does not give it); the declarations that are
-  not instances are registered on the witness line after the imports.
+  tag of the instance degeneracy gate in the comment above it (for a NONDEGEN tag, the lemma
+  that states why it is not degenerate; for an IMPOSSIBLE tag, why no instance of the target
+  can be non-degenerate; and its target where the name does not give it); the declarations
+  that are not instances are registered on the witness line after the imports.
 
   - the judgments ([The judgments, by a real step]): in [infering_sortE_inst] the type
     [inferE_Rel] gives [y] is not a sort ([bd_Γδ_not_sort]); in [infering_prodE_inst],
     [infering_induE_inst] and [checkingE_inst] the type [inferE_Rel] gives [x] is not the
     product, the application of [I] or the checked type that they reach ([bd_Γβπ_not_prod],
     [bd_Γβ_not_ind]); [inferingE_inst] infers an application whose argument check is
-    [checkingE_eta_inst], on the pair of [bd_eta_pair_differ], and [inferingE_size_pos_inst]
-    measures that derivation, which is
-    not a leaf ([inferingE_size_pos_inst_nondeg]); [infering_sortE_size_pos_inst],
-    [infering_prodE_size_pos_inst], [infering_induE_size_pos_inst] and
-    [checkingE_size_pos_inst] measure the [▹□], [▹Π], [▹{}] and [◃] derivations above, each
-    of whose inference gives a type that is not the form the judgment reaches (one
-    [_size_pos_inst_nondeg] lemma each, for every type inferred for that subject);
+    [checkingE_eta_inst], on the pair of [bd_eta_pair_differ];
+  - the size lemmas, tagged IMPOSSIBLE ([The size lemmas on the five judgments]):
+    [inferingE_size_pos_inst], [infering_sortE_size_pos_inst], [infering_prodE_size_pos_inst],
+    [infering_induE_size_pos_inst] and [checkingE_size_pos_inst] apply their lemmas to the
+    five derivations above, but the conclusion [size d > 0] holds of every derivation, so no
+    witness can make these rows non-degenerate; they stay as the rows of these lemmas;
   - the context judgments [wf_local_bdE_inst], [wf_local_bdE_eta_inst] and
     [wf_local_bd_relE_inst], on contexts that are not empty ([bd_ctxs_nonempty]);
   - [checkingE_eta_inst]: a check whose conversion premise is [JoinE_eta1_l] of the η step
@@ -529,101 +529,44 @@ Qed.
 
 (** [(λ z : G F. z) x ▹ G F] in [bd_Γη]: the argument [x] is checked against [G F] by the η
     step of [checkingE_eta_inst], between types that are not syntactically equal
-    ([bd_eta_pair_differ]). Transparent, so that [inferingE_size_pos_inst_nondeg] reads its
-    last rule.
+    ([bd_eta_pair_differ]).
     INSTANCE NONDEGEN BDTypingEtaInstances.bd_eta_pair_differ *)
 Definition inferingE_inst :
   si_Σ ;;; bd_Γη |-E tApp (tLambda si_na (tApp (tRel 2) (tRel 1)) (tRel 0)) (tRel 0)
     ▹ tApp (tRel 2) (tRel 1) :=
   inferE_App si_Σ bd_Γη _ _ _ _ _ bd_idGFη_prod checkingE_eta_inst.
 
-(** [inferingE_inst] is not a leaf: its last rule [inferE_App] has two sub-derivations, so
-    its size is more than 1. *)
-Lemma inferingE_size_pos_inst_nondeg : 1 < inferingE_size inferingE_inst.
-Proof.
-  cbn. apply -> Nat.succ_lt_mono.
-  eapply Nat.lt_le_trans; [exact (infering_prodE_size_pos bd_idGFη_prod)|apply Nat.le_max_l].
-Qed.
+(** ** The size lemmas on the five judgments
 
-(** The size lemma on [inferingE_inst], a derivation with sub-derivations
-    ([inferingE_size_pos_inst_nondeg]).
-    INSTANCE NONDEGEN BDTypingEtaInstances.inferingE_size_pos_inst_nondeg *)
+  [inferingE_size_pos], [infering_sortE_size_pos], [infering_prodE_size_pos],
+  [infering_induE_size_pos] and [checkingE_size_pos] ([BDTypingEta]) conclude [size d > 0],
+  which holds of every derivation [d] ([destruct d; cbn; lia]: every rule adds one to the
+  size). So no instance of them can be non-degenerate. Each instance below applies its lemma
+  to one derivation above ([inferingE_inst], [infering_sortE_inst], [infering_prodE_inst],
+  [infering_induE_inst], [checkingE_inst]) and is tagged IMPOSSIBLE. *)
+
+(** The size lemma on [inferingE_inst].
+    INSTANCE IMPOSSIBLE: the target's conclusion inferingE_size d > 0 holds of every derivation d (BDTypingEta proves it by destruct d; cbn; lia, every rule adds one to the size), so every instance concludes a fact true of all derivations and no witness can make it non-degenerate *)
 Lemma inferingE_size_pos_inst : inferingE_size inferingE_inst > 0.
 Proof. exact (inferingE_size_pos inferingE_inst). Qed.
 
-(** ** The size lemmas on the [▹□], [▹Π], [▹{}] and [◃] derivations above
-
-  Each of these four judgments has one rule, over an inference, so every derivation has size
-  at least 2 and its size bound holds by that rule; a size statement cannot tell two such
-  derivations apart. Each instance below measures the derivation of the same judgment above
-  ([infering_sortE_inst], [infering_prodE_inst], [infering_induE_inst], [checkingE_inst]),
-  with its context named, and its non-degeneracy lemma states, for every type inferred for
-  that subject in that context, that it is not the form the judgment reaches. *)
-
-(** Every type inferred for [y] in [bd_Γδ] is not a sort. *)
-Lemma infering_sortE_size_pos_inst_nondeg :
-  forall T, si_Σ ;;; bd_Γδ |-E tRel 0 ▹ T -> forall u, T <> tSort u.
-Proof.
-  intros T h u. inversion h; subst.
-  match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
-  discriminate.
-Qed.
-
-(** The size lemma on [infering_sortE_inst] ([y ▹□ Prop] in [bd_Γδ]): the type its inference
-    gives [y] is not a sort ([infering_sortE_size_pos_inst_nondeg]), so its reduction premise
-    to [Prop] relates two different terms.
-    INSTANCE NONDEGEN BDTypingEtaInstances.infering_sortE_size_pos_inst_nondeg *)
+(** The size lemma on [infering_sortE_inst] ([y ▹□ Prop] in [bd_Γδ]).
+    INSTANCE IMPOSSIBLE: the target's conclusion infering_sortE_size d > 0 holds of every derivation d (BDTypingEta proves it by destruct d; cbn; lia, every rule adds one to the size), so every instance concludes a fact true of all derivations and no witness can make it non-degenerate *)
 Lemma infering_sortE_size_pos_inst : infering_sortE_size infering_sortE_inst > 0.
 Proof. exact (infering_sortE_size_pos (Σ := si_Σ) (Γ := bd_Γδ) infering_sortE_inst). Qed.
 
-(** Every type inferred for [x] in [bd_Γβπ] is not the product [Π _ : I A. Prop]. *)
-Lemma infering_prodE_size_pos_inst_nondeg :
-  forall T, si_Σ ;;; bd_Γβπ |-E tRel 0 ▹ T -> T <> tProd si_na (tApp (tInd si_ind []) (tRel 1)) si_P.
-Proof.
-  intros T h. inversion h; subst.
-  match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
-  discriminate.
-Qed.
-
-(** The size lemma on [infering_prodE_inst] ([x ▹Π (_ : I A, Prop)] in [bd_Γβπ]): the type its
-    inference gives [x] is not that product ([infering_prodE_size_pos_inst_nondeg]), so its
-    reduction premise relates two different terms.
-    INSTANCE NONDEGEN BDTypingEtaInstances.infering_prodE_size_pos_inst_nondeg *)
+(** The size lemma on [infering_prodE_inst] ([x ▹Π (_ : I A, Prop)] in [bd_Γβπ]).
+    INSTANCE IMPOSSIBLE: the target's conclusion infering_prodE_size d > 0 holds of every derivation d (BDTypingEta proves it by destruct d; cbn; lia, every rule adds one to the size), so every instance concludes a fact true of all derivations and no witness can make it non-degenerate *)
 Lemma infering_prodE_size_pos_inst : infering_prodE_size infering_prodE_inst > 0.
 Proof. exact (infering_prodE_size_pos (Σ := si_Σ) (Γ := bd_Γβπ) infering_prodE_inst). Qed.
 
-(** Every type inferred for [x] in [bd_Γβ] is not an application of an inductive type. *)
-Lemma infering_induE_size_pos_inst_nondeg :
-  forall T, si_Σ ;;; bd_Γβ |-E tRel 0 ▹ T -> forall ind u args, T <> mkApps (tInd ind u) args.
-Proof.
-  intros T h ind u args. inversion h; subst.
-  match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
-  intros e.
-  have hdec : decompose_app (mkApps (tInd ind u) args) = (tInd ind u, args) by apply decompose_app_mkApps.
-  rewrite -e in hdec. vm_compute in hdec. discriminate hdec.
-Qed.
-
-(** The size lemma on [infering_induE_inst] ([x ▹{I} ([], [A])] in [bd_Γβ]): the type its
-    inference gives [x] is not an application of an inductive type
-    ([infering_induE_size_pos_inst_nondeg]), so its reduction premise relates two different
-    terms.
-    INSTANCE NONDEGEN BDTypingEtaInstances.infering_induE_size_pos_inst_nondeg *)
+(** The size lemma on [infering_induE_inst] ([x ▹{I} ([], [A])] in [bd_Γβ]).
+    INSTANCE IMPOSSIBLE: the target's conclusion infering_induE_size d > 0 holds of every derivation d (BDTypingEta proves it by destruct d; cbn; lia, every rule adds one to the size), so every instance concludes a fact true of all derivations and no witness can make it non-degenerate *)
 Lemma infering_induE_size_pos_inst : infering_induE_size infering_induE_inst > 0.
 Proof. exact (infering_induE_size_pos (Σ := si_Σ) (Γ := bd_Γβ) infering_induE_inst). Qed.
 
-(** Every type inferred for [x] in [bd_Γβ] is not the checked type [I A]. *)
-Lemma checkingE_size_pos_inst_nondeg :
-  forall T, si_Σ ;;; bd_Γβ |-E tRel 0 ▹ T -> T <> tApp (tInd si_ind []) (tRel 1).
-Proof.
-  intros T h. inversion h; subst.
-  match goal with hn : nth_error _ _ = Some _ |- _ => vm_compute in hn; injection hn as hd; subst end.
-  discriminate.
-Qed.
-
-(** The size lemma on [checkingE_inst] ([x ◃ I A] in [bd_Γβ]): the type its inference gives
-    [x] is not [I A] ([checkingE_size_pos_inst_nondeg]), so its cumulativity premise relates
-    two different types.
-    INSTANCE NONDEGEN BDTypingEtaInstances.checkingE_size_pos_inst_nondeg *)
+(** The size lemma on [checkingE_inst] ([x ◃ I A] in [bd_Γβ]).
+    INSTANCE IMPOSSIBLE: the target's conclusion checkingE_size d > 0 holds of every derivation d (BDTypingEta proves it by destruct d; cbn; lia, every rule adds one to the size), so every instance concludes a fact true of all derivations and no witness can make it non-degenerate *)
 Lemma checkingE_size_pos_inst : checkingE_size checkingE_inst > 0.
 Proof. exact (checkingE_size_pos (Σ := si_Σ) (Γ := bd_Γβ) checkingE_inst). Qed.
 

@@ -6,13 +6,17 @@
   each proved. NON-DEGENERATE: every instance tagged NONDEGEN rests on a non-trivial premise: an
   η step ([λx:Prop. f x] and [f] in the context [f : Prop → Prop], [cpi_eta]; [G (λy:Prop. F y)]
   and [G F] for the two [typing_leq_term_prop] rows), a β step ([cpi_beta], [cpi_redex]), two
-  universe levels of one family, two upper sorts, or two universe instances. The substitution
-  rows substitute into a term in which the variable is not the whole term ([λx:Prop. f x], or
-  [∀y:Prop. g y], [cpi_subst_body]); their NONDEGEN lemmas state that the results differ from the
-  substituted terms. The chains (transitivity and the two [cumul_pb] lemmas) pass through three
-  pairwise distinct terms: [λx:Prop. f x], [f] and the β-redex [(λg. g) f] ([cpi_redex]). The
-  rows that are degenerate by their statement are tagged IMPOSSIBLE at each instance, with the
-  property of the statement that forces them: forced to [Prop]/[SProp] on both sides, or
+  universe levels of one family, two different upper sorts of one term ([Prop] and [Type₀] in
+  [cumul_sort_confluenceE_inst]), or two universe instances. The substitution rows: the three
+  [cpi_id] rows substitute [id] for [f] in [λx:Prop. f x] and in [f] itself, whose result is
+  [id]; [cpi_id_subst_nondeg] states that the result on [λx:Prop. f x] differs from
+  [λx:Prop. f x] and from the result on [f]. The other three substitute into [∀y:Prop. g y]
+  ([cpi_subst_body]) on both sides; their NONDEGEN lemmas state that each result differs from the
+  substituted terms, and the two results from each other. The chains (transitivity and the two
+  [cumul_pb] lemmas) pass through three pairwise distinct terms: [λx:Prop. f x], [f] and the
+  β-redex [(λg. g) f] ([cpi_redex]). The rows that are degenerate by their statement are tagged
+  IMPOSSIBLE at each instance, with the property of the statement that forces them: forced to
+  [Prop]/[SProp] on both sides (the [cumul_*props*], [*_sort_eqE] and three [*_bottomE] rows), or
   compared by the constant relation [fun _ _ => True] (the two [cmp_True_*] rows).
 
   **[typing_leq_term_propE] and [typing_leq_term_prop_genE] are applied**, with no class (the
@@ -261,14 +265,8 @@ Section Generic.
     split; [reflexivity|reflexivity|]. apply red1_red. constructor.
   Qed.
 
-  (** The β-redex [(λx:Type. x) SProp] is not the sort [SProp], and reduces to it in one [red1]
-      step. *)
-  Lemma cpi_betaS_nondeg : (cpi_betaS <> tSort sSProp) × red1 rf_Σ [] cpi_betaS (tSort sSProp).
-  Proof. split; [intros h; vm_compute in h; discriminate h|constructor]. Qed.
-
-  (** [(λx:Type. x) SProp] below [SProp] twice. The statement forces [s' = s = SProp]; the
-      content of the instance is the β step in [T].
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_betaS_nondeg *)
+  (** [(λx:Type. x) SProp] below [SProp], one bound derivation passed twice.
+      INSTANCE IMPOSSIBLE: the statement forces s' = s = SProp (the two bounds share a sort below both, cumul_sort_confluenceE, and only SProp is below SProp, and SProp is below no other sort), so the conclusion is_sprop s' is the premise is_sprop s in every instance and environment *)
   Definition is_sprop_bottomE_inst : Sort.is_sprop sSProp :=
     is_sprop_bottomE (T := cpi_betaS) cpi_wf_extE cpi_betaS_cumul_SProp cpi_betaS_cumul_SProp eq_refl.
 
@@ -574,15 +572,14 @@ Section NoPropSub.
   Definition cumul_prop_propsE_inst : Sort.is_prop sProp :=
     @cumul_prop_propsE cpr_flags eq_refl rf_Σ [] sProp sProp cpi_wfE eq_refl cpi_Prop_cp.
 
-  (** [(λx:Type. x) Prop] below [Prop] twice. The statement forces [s' = s] ([prop_sub_type =
-      false]); the content of the instance is the β step in [T].
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_beta_nondeg *)
+  (** [(λx:Type. x) Prop] below [Prop], one bound derivation passed twice.
+      INSTANCE IMPOSSIBLE: under the section premise Hcf : prop_sub_type = false, the statement forces s' = s (the two bounds share a sort below both, cumul_sort_confluenceE, and with Hcf a propositional sort is below and above only itself), so the conclusion is_propositional s' is the premise is_propositional s in every instance and environment *)
   Definition is_propositional_bottomE_inst : Sort.is_propositional sProp :=
     @is_propositional_bottomE cpr_flags eq_refl rf_Σ [] cpi_beta sProp sProp cpi_wf_extE
       cpi_beta_cumul_Prop cpi_beta_cumul_Prop eq_refl.
 
   (** The same, for [Sort.is_prop].
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_beta_nondeg *)
+      INSTANCE IMPOSSIBLE: under the section premise Hcf : prop_sub_type = false, the statement forces s' = s (the two bounds share a sort below both, cumul_sort_confluenceE, and with Hcf Prop is below and above only itself), so the conclusion is_prop s' is the premise is_prop s in every instance and environment *)
   Definition is_prop_bottomE_inst : Sort.is_prop sProp :=
     @is_prop_bottomE cpr_flags eq_refl rf_Σ [] cpi_beta sProp sProp cpi_wf_extE
       cpi_beta_cumul_Prop cpi_beta_cumul_Prop eq_refl.

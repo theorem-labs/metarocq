@@ -219,13 +219,8 @@ Proof. exact (conv_context_rel_relnE [] sc_Γm1 sc_Γm2 sc_rel_m). Qed.
 Lemma conv_context_rel_to_extended_listE_inst : to_extended_list sc_Γm1 = to_extended_list sc_Γm2.
 Proof. exact (conv_context_rel_to_extended_listE (Δ := sc_Γm1) (Δ' := sc_Γm2) sc_rel_m). Qed.
 
-(** The two contexts differ (in a binder name). *)
-Lemma eq_context_alpha_convE_inst_nondeg :
-  [vass si_na fi_P] <> [vass (mkBindAnn (nNamed "x") Relevant) fi_P].
-Proof. discriminate. Qed.
-
 (** Two contexts that differ only in a binder name.
-    INSTANCE NONDEGEN PCUICSREtaConvInstances.eq_context_alpha_convE_inst_nondeg *)
+    INSTANCE IMPOSSIBLE: the premise [eq_context_upto_names Δ Δ'] forces each pair of declarations to have identical types (and bodies), only the binder names may differ ([eq_decl_upto_names]), and the proof of [eq_context_alpha_convE] relates each type (and body) to itself by [ws_cumul_pbE_refl]; so in every instance and environment every declaration comparison of the conclusion is reflexive. *)
 Lemma eq_context_alpha_convE_inst :
   ws_cumul_ctx_pbE_rel Conv si_Σ [] [vass si_na fi_P] [vass (mkBindAnn (nNamed "x") Relevant) fi_P].
 Proof.
