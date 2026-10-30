@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [PCUICAlphaEta] (row T6)
 
   **The environment** is [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]:
@@ -22,14 +25,14 @@
   [AlphaClassInstances], whose [Context] held T1's forecast class until copy 18b landed
   (frac/eta 3e6b422d); the class is deleted and no lemma takes one.
 
-  **Non-degeneracy.** Every instance except [cmp_global_instance_empty_eq_inst] relates two
-  syntactically different terms, contexts or fixpoints (for [inst_case_predicate_context_eqE_inst],
-  the two contexts of its premise); the tag at each instance names the lemma that states the
-  difference, or the reason. [eq_context_conversionE_inst] and [typing_alpha_propE_inst] move the
-  typing [iv_rel_typed] into the renamed context; [al_Γk_eta_nondeg] states that its type
-  [k (λ_:Prop. g _)] is not [y]'s declared type [k g] and η-contracts to it in one step.
-  [type_Cumul'E_inst] retypes [y : k g] at [k (λ_:Prop. g _)]; [al_kg_keta_differ] states that
-  the two types differ and that the second η-contracts to the first in one step.
+  **Non-degeneracy.** Every instance except [cmp_global_instance_empty_eq_inst] and
+  [type_Cumul'E_inst] relates two syntactically different terms, contexts or fixpoints (for
+  [inst_case_predicate_context_eqE_inst], the two contexts of its premise); the tag at each
+  instance names the lemma that states the difference, or the reason. [eq_context_conversionE_inst]
+  and [typing_alpha_propE_inst] move the typing [iv_rel_typed] into the renamed context;
+  [al_Γk_eta_nondeg] states that its type [k (λ_:Prop. g _)] is not [y]'s declared type [k g] and
+  η-contracts to it in one step. [type_Cumul'E_inst] is tagged IMPOSSIBLE: its target only repacks
+  its own premises with the conversion rule.
   [eq_context_upto_conv_context_relE_inst] and [upto_names_conv_contextE_inst] relate
   [[_ : Prop → Prop]] and [[x : Π x : Prop. Prop]], whose declared types are themselves different
   α-variants ([al_ΓPP_differs]).
@@ -87,14 +90,6 @@ Proof. split; discriminate. Qed.
 
 Lemma al_Γk_keta_differ : iv_Γk <> al_Γk /\ iv_keta <> al_keta.
 Proof. split; discriminate. Qed.
-
-(** The two types of [type_Cumul'E_inst], [k g] and [k (λ_:Prop. g _)], differ, and the second
-    η-contracts to the first in one step. *)
-Lemma al_kg_keta_differ : iv_kg <> iv_keta /\ ∥ PCUICEtaDefs.eta1 iv_keta iv_kg ∥.
-Proof.
-  split; [discriminate|]. constructor.
-  exact (PCUICEtaDefs.app_eta_r _ _ (tRel 1) (PCUICEtaDefs.eta_red si_na (tRel 2) si_P)).
-Qed.
 
 (** The typing [y : k (λ_:Prop. g _)] ([iv_rel_typed]) that [eq_context_conversionE_inst] and
     [typing_alpha_propE_inst] move: [al_Γk] differs from [iv_Γk]; in both, [y] ([tRel 0]) is
@@ -280,9 +275,8 @@ Proof.
   - exact al_PP_alpha.
 Qed.
 
-(** [y : k g] retyped at [k (λ_:Prop. g _)] through the cumulativity premise [iv_spec_eta]; the two
-    types differ and the second η-contracts to the first in one step ([al_kg_keta_differ]).
-    INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_kg_keta_differ *)
+(** [y : k g] retyped at [k (λ_:Prop. g _)] through the cumulativity premise [iv_spec_eta].
+    INSTANCE IMPOSSIBLE: the target's proof only unpacks and repacks its own premises: it projects the sort s out of the isTypeE premise and applies the conversion constructor typeE_Cumul to the typing premise, that sort derivation and the cumulativity premise (PCUICAlphaEta.v:171-178), so in every environment, context and instance the conclusion t : T' is assembled from the instance's own premises by one constructor, and no instance exercises more. *)
 Definition type_Cumul'E_inst : si_Σ ;;; iv_Γk |-E tRel 0 : iv_keta :=
   PCUICAlphaEta.type_Cumul'E iv_kg iv_y_typed al_keta_isType iv_spec_eta.
 

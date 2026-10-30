@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [PCUICCumulPropEta] (row T6)
 
   Each lemma family of [PCUICCumulPropEta] with a premise is applied here to concrete premises,
@@ -14,10 +17,15 @@
   ([cpi_subst_body]) on both sides; their NONDEGEN lemmas state that each result differs from the
   substituted terms, and the two results from each other. The chains (transitivity and the two
   [cumul_pb] lemmas) pass through three pairwise distinct terms: [λx:Prop. f x], [f] and the
-  β-redex [(λg. g) f] ([cpi_redex]). The rows that are degenerate by their statement are tagged
-  IMPOSSIBLE at each instance, with the property of the statement that forces them: forced to
-  [Prop]/[SProp] on both sides (the [cumul_*props*], [*_sort_eqE] and three [*_bottomE] rows), or
-  compared by the constant relation [fun _ _ => True] (the two [cmp_True_*] rows).
+  β-redex [(λg. g) f] ([cpi_redex]); in the two [cumul_pb] rows one premise is the β step, the
+  other the η step, and the conclusion relates [λx:Prop. f x] and [(λg. g) f], which neither
+  premise relates. [cumul_prop_prod_invE_inst] inverts a relation of two products that is built
+  from an η step under the binder, not from a relation of the codomains. The rows that are
+  degenerate by their statement are tagged IMPOSSIBLE at each instance, with the property of the
+  statement that forces them: forced to [Prop]/[SProp] on both sides (the [cumul_*props*],
+  [*_sort_eqE] and three [*_bottomE] rows), compared by the constant relation [fun _ _ => True]
+  (the two [cmp_True_*] rows), or read off the fields of the premise record
+  ([cumul_prop_is_openE_inst]).
 
   **[typing_leq_term_propE] and [typing_leq_term_prop_genE] are applied**, with no class (the
   forecast class [ValForecastCopy16] they took was deleted when copy 16 landed, frac/eta
@@ -140,9 +148,6 @@ Section Generic.
   Definition cpi_redex_cp : rf_Σ ;;; rf_Γ |-E tRel 0 ~~ cpi_redex :=
     cpE_of_ws (red_ws_cumul_pbE_inv (wfΣ := cpi_cb) (pb := Conv) cpi_redex_red).
 
-  Definition cpi_eta_redex_cp : rf_Σ ;;; rf_Γ |-E rf_t ~~ cpi_redex :=
-    cpE_trans (wfΣ := cpi_cb) cpi_eta_cp cpi_redex_cp.
-
   (** The chain [λx:Prop. f x], [f], [(λg. g) f]: three pairwise distinct terms; the first
       contracts to [f] in one η step ([eta1]), and the β-redex [(λg. g) f] reduces to [f] in one
       [red1] step. *)
@@ -185,15 +190,44 @@ Section Generic.
   Definition cumul_prop_sym'E_inst : rf_Σ ;;; rf_Γ |-E tRel 0 ~~ rf_t :=
     @cumul_prop_sym'E cf rf_Σ rf_Γ cpi_wfE rf_t (tRel 0) cpi_eta_cp.
 
-  (** The scoping of the η pair.
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_eta_nondeg *)
+  (** The scoping of the η pair: the three scoping fields of [cpi_eta_cp].
+      INSTANCE IMPOSSIBLE: the target's proof is three projections of its premise record (cumul_propE carries is_closed_context Γ, is_open_term Γ T and is_open_term Γ U as fields), so in every environment the conclusion of every instance is unpacked from that instance's own premise *)
   Definition cumul_prop_is_openE_inst := cumul_prop_is_openE (T := rf_t) (U := tRel 0) cpi_eta_cp.
 
-  (** [λx:Prop. f x ~~ (λg. g) f] and [λx:Prop. f x ≤ f] give [f ~~ (λg. g) f].
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_chain_nondeg *)
-  Definition cumul_prop_cumul_pb_lE_inst : rf_Σ ;;; rf_Γ |-E tRel 0 ~~ cpi_redex :=
-    cumul_prop_cumul_pb_lE (wfΣ := cpi_wf_extE) (A := rf_t) (T := cpi_redex) (B := tRel 0)
-      cpi_eta_redex_cp (cpi_eta Cumul).
+  (** [f ≤ λx:Prop. f x], at [Cumul], from the η step that contracts [λx:Prop. f x] to [f]. *)
+  Definition cpi_eta_exp : ws_cumul_pbE Cumul rf_Σ rf_Γ (tRel 0) rf_t :=
+    eta1_ws_cumul_pbE_inv (Σ := rf_Σ) (pb := Cumul) (Γ := rf_Γ) (t := rf_t) eq_refl eq_refl
+      (eta_red c1b_na (tRel 0) (tSort sProp)).
+
+  (** The terms [f], [(λg. g) f] and [λx:Prop. f x] are pairwise distinct; [(λg. g) f] reduces to
+      [f] in one [red1] step, and [λx:Prop. f x] contracts to [f] in one η step ([eta1]). The
+      premise [cpi_redex_cp] (relating [f] and [(λg. g) f]) is built from the reduction
+      [cpi_redex_red] alone, and the premise [cpi_eta_exp] (relating [f] and [λx:Prop. f x]) from
+      that η step alone (the two equations). *)
+  Lemma cumul_prop_cumul_pb_lE_inst_nondeg :
+    [× tRel 0 <> cpi_redex, tRel 0 <> rf_t, rf_t <> cpi_redex,
+       red1 rf_Σ rf_Γ cpi_redex (tRel 0), eta1 rf_t (tRel 0),
+       cpi_redex_cp = cpE_of_ws (red_ws_cumul_pbE_inv (wfΣ := cpi_cb) (pb := Conv) cpi_redex_red)
+     & cpi_eta_exp = eta1_ws_cumul_pbE_inv (Σ := rf_Σ) (pb := Cumul) (Γ := rf_Γ) (t := rf_t) eq_refl eq_refl
+                       (eta_red c1b_na (tRel 0) (tSort sProp))].
+  Proof.
+    split.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - constructor.
+    - exact (eta_red c1b_na (tRel 0) (tSort sProp)).
+    - reflexivity.
+    - reflexivity.
+  Qed.
+
+  (** [f ~~ (λg. g) f] ([cpi_redex_cp], the β step) and [f ≤ λx:Prop. f x] ([cpi_eta_exp], the η
+      step) give [λx:Prop. f x ~~ (λg. g) f]. Each premise is built from its own step only, and the
+      three terms are pairwise distinct ([cumul_prop_cumul_pb_lE_inst_nondeg]).
+      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cumul_prop_cumul_pb_lE_inst_nondeg *)
+  Definition cumul_prop_cumul_pb_lE_inst : rf_Σ ;;; rf_Γ |-E rf_t ~~ cpi_redex :=
+    cumul_prop_cumul_pb_lE (wfΣ := cpi_wf_extE) (A := tRel 0) (T := cpi_redex) (B := rf_t)
+      cpi_redex_cp cpi_eta_exp.
 
   (** [f ~~ (λg. g) f] and [λx:Prop. f x ≤ f] give [λx:Prop. f x ~~ (λg. g) f].
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_chain_nondeg *)
@@ -313,10 +347,47 @@ Section Generic.
     cumul_prop_tProdE (wfΣ := cpi_wf_extE) (ty := cpi_lam) (ty' := tRel 1) eq_refl ltac:(reflexivity)
       cpi_codom_cp.
 
-  (** The η pair, recovered from the products.
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_lam_nondeg *)
+  (** The η step under a product binder: [∀x:Prop. λy:Prop. f y] contracts to [∀x:Prop. f]. *)
+  Definition cpi_prod_eta :
+    eta1 (tProd cpi_na (tSort sProp) cpi_lam) (tProd cpi_na (tSort sProp) (tRel 1)) :=
+    prod_eta_r cpi_na cpi_lam (tRel 1) (tSort sProp) (eta_red cpi_na (tRel 1) (tSort sProp)).
+
+  (** The two products, related through that η step alone. *)
+  Definition cpi_prod_cp :
+    rf_Σ ;;; rf_Γ |-E tProd cpi_na (tSort sProp) cpi_lam ~~ tProd cpi_na (tSort sProp) (tRel 1) :=
+    cumul_pb_cumul_propE rf_Σ rf_Γ Conv (tProd cpi_na (tSort sProp) cpi_lam)
+      (tProd cpi_na (tSort sProp) (tRel 1))
+      (eta1_ws_cumul_pbE (Σ := rf_Σ) (pb := Conv) (Γ := rf_Γ) (t := tProd cpi_na (tSort sProp) cpi_lam)
+         eq_refl eq_refl cpi_prod_eta).
+
+  (** The codomains [λy:Prop. f y] and [f] differ and are one η step apart ([eta1]); the two
+      products differ. The relation of the products [cpi_prod_cp] is built from the η step under
+      the product binder ([cpi_prod_eta]) through [eta1_ws_cumul_pbE] alone (the two equations):
+      not from a [cumul_propE] of the two codomains, and not by the product rule
+      [cumul_prop_tProdE]. *)
+  Lemma cumul_prop_prod_invE_inst_nondeg :
+    [× cpi_lam <> tRel 1, eta1 cpi_lam (tRel 1),
+       tProd cpi_na (tSort sProp) cpi_lam <> tProd cpi_na (tSort sProp) (tRel 1),
+       cpi_prod_eta = prod_eta_r cpi_na cpi_lam (tRel 1) (tSort sProp) (eta_red cpi_na (tRel 1) (tSort sProp))
+     & cpi_prod_cp = cumul_pb_cumul_propE rf_Σ rf_Γ Conv (tProd cpi_na (tSort sProp) cpi_lam)
+                       (tProd cpi_na (tSort sProp) (tRel 1))
+                       (eta1_ws_cumul_pbE (Σ := rf_Σ) (pb := Conv) (Γ := rf_Γ)
+                          (t := tProd cpi_na (tSort sProp) cpi_lam) eq_refl eq_refl cpi_prod_eta)].
+  Proof.
+    split.
+    - intros h; vm_compute in h; discriminate h.
+    - exact (eta_red cpi_na (tRel 1) (tSort sProp)).
+    - intros h; vm_compute in h; discriminate h.
+    - reflexivity.
+    - reflexivity.
+  Qed.
+
+  (** The η pair of the codomains, recovered from the relation of the two products
+      [cpi_prod_cp], which is built from the η step under the binder, not from a relation of the
+      codomains ([cumul_prop_prod_invE_inst_nondeg]).
+      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cumul_prop_prod_invE_inst_nondeg *)
   Definition cumul_prop_prod_invE_inst : rf_Σ ;;; cpi_ctx_vass |-E cpi_lam ~~ tRel 1 :=
-    cumul_prop_prod_invE (wfΣ := cpi_wfE) (B := cpi_lam) (B' := tRel 1) cumul_prop_tProdE_inst.
+    cumul_prop_prod_invE (wfΣ := cpi_wfE) (B := cpi_lam) (B' := tRel 1) cpi_prod_cp.
 
   (** The η pair in the body of a let.
       INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_lam_nondeg *)

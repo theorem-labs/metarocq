@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [Bidirectional/BDStrengtheningEta] (row T6)
 
   **The environment** is [si_Σ] ([PCUICCumulativitySpecEtaClosureInstances]:

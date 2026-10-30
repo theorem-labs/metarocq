@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [Bidirectional/BDUniqueEta] (row T6)
 
   **No forecast class.** Every lemma of [BDUniqueEta] uses soundness, validity or
@@ -12,10 +15,12 @@
   [Inductive I (A : Prop) : Prop := c : I A], with [si_wfE]).
 
   **Non-degeneracy.** The uniqueness lemmas compare two derivations of one term. Each instance
-  below passes two different derivations about one term, and the conclusion relates what they
-  give: two different types, or two different products or argument lists reached from one type.
-  The comment above each instance carries its tag of the instance degeneracy gate; the
-  declarations that are not instances are registered on the witness line after the imports.
+  tagged NONDEGEN below that takes two derivations takes two different ones, and the conclusion
+  relates what they give: two different types, or two different products or argument lists
+  reached from one type; [BDUniqueEta.principal_typeE] takes one typing. The two instances
+  tagged IMPOSSIBLE pass one derivation twice. The comment above each instance carries its tag
+  of the instance degeneracy gate; the declarations that are not instances are registered on the
+  witness line after the imports.
   - in [bu_ΓQ = [f : Π P : Prop. (λ x : Prop. x) P]], [f ▹Π] keeps the codomain [(λ x. x) P] or
     contracts it ([bu_f_prod1], [bu_f_prod2]), so [f (∀P.P)] infers the two different types
     [(λ x. x) (∀P.P)] and [∀P.P] ([bu_app_infer1], [bu_app_infer2], [bu_app_types_differ]), for

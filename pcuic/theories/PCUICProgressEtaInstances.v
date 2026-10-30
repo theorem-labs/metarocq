@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [PCUICProgressEta] (row T6)
 
   **No forecast class.** The class of [PCUICClassificationEta] and [ProgForecastCopy18] were
@@ -31,9 +34,11 @@
     principles with predicates that are not [unit] (the subject, the judgment and the context are
     scoped), every case proved in general (section [ClosednInduction]).
 
-  **Rows degenerate by the statement** ([typing_spine_sortE], [typing_spine_axiomE],
-  [typing_spine_prim_typeE]): tagged IMPOSSIBLE at each instance. Each instance is tagged for the
-  instance gate (its non-degeneracy lemma, or the reason) in the comment directly above it.
+  **Rows degenerate by the statement**, tagged IMPOSSIBLE at each instance: [typing_spine_sortE],
+  [typing_spine_axiomE], [typing_spine_prim_typeE] (the conclusion is forced), and
+  [declared_constructor_ind_declE] (its proof reads the conclusion off its own premise). Each
+  instance is tagged for the instance gate (its non-degeneracy lemma, or the reason) in the
+  comment directly above it.
 
   **Helpers run by the instances above:** [typing_ind_envE], [typing_ind_env_app_sizeE] (also by
   [progressE_inst]), [declared_constructor_ind_declE] (also its own instance). *)
@@ -872,13 +877,8 @@ Proof. split; [exact (le_n 1)|reflexivity]. Qed.
 Definition typing_spine_lengthE_inst : #|[iv_False]| <= context_assumptions [vass si_na si_P] :=
   typing_spine_lengthE (Σ := si_Σ) (wfΣ := si_wfE) [] [vass si_na si_P] si_ind [] [tRel 0] [iv_False] iv_IF pgi_sp_cstr.
 
-(** [I] is the last (only) body of its block: the bound [inductive_ind ind < #|ind_bodies|] is
-    reached. *)
-Lemma declared_constructor_ind_declE_inst_nondeg :
-  S (inductive_ind si_ind) = #|ind_bodies si_mdecl|.
-Proof. reflexivity. Qed.
-
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.declared_constructor_ind_declE_inst_nondeg *)
+(** [declared_constructor_ind_declE] on the declared constructor [c] of [I] ([si_declared_constructor]).
+    INSTANCE IMPOSSIBLE: the target's proof is one destruct of its declared_constructor premise and nth_error_Some_length on the nth_error inside it, so in every environment the bound inductive_ind ind < #|ind_bodies mdecl| of every instance is read off that instance's own premise *)
 Definition declared_constructor_ind_declE_inst :=
   declared_constructor_ind_declE (Σ := si_Σ) (wfΣ := si_wfE) (ind := si_ind) (mdecl := si_mdecl)
     si_declared_constructor.

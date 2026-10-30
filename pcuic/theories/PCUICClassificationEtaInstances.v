@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances of the lemmas of [PCUICClassificationEta] (row T6)
 
   **No forecast class.** The lemmas of [PCUICClassificationEta] took T1's [SRForecastCopy18]
@@ -54,10 +57,12 @@
     [let z := x : Prop in Π _ : x. Prop] ([cli_open_arity]), which changes the term
     ([cli_open_arity_subst_differs]); [x] occurs in the let body and in the product domain.
   - Evaluation: [cli_eval] evaluates the β-redex [(λx:Prop. x) (∀P. P)] to [∀P. P], a different
-    term ([cli_eval_moves]); [eval_classificationE_inst] evaluates the fixpoint application
-    [mkApps (tFix iv_mfix 0) [c (∀P. P)]], not a canonical form ([cli_fix_app_not_canonical]),
-    to [c (∀P. P)] ([cli_fix_eval], whose proof makes one unfolding, one β step and
-    [eval_construct]).
+    term ([cli_eval_moves]); [subject_reduction_evalE_inst] runs on [cli_eval_xx], the evaluation
+    of [(λx:Prop. x → x) (∀P. P)] to [(∀P. P) → (∀P. P)], whose body uses its variable
+    ([PCUICSREtaInstances.sri_xx_nondeg]); [eval_classificationE_inst] evaluates the fixpoint
+    application [mkApps (tFix iv_mfix 0) [c (∀P. P)]], not a canonical form
+    ([cli_fix_app_not_canonical]), to [c (∀P. P)] ([cli_fix_eval], whose proof makes one
+    unfolding, one β step and [eval_construct]).
   - The whnf and value lemmas run on the application [c (∀P. P)], whose head is not the term
     itself ([cli_cF_head_differs]); the conclusion of [fix_app_is_constructorE_inst] is its
     branch for a present recursive argument ([cli_fix_rarg_present]).
@@ -602,6 +607,14 @@ Qed.
 Lemma cli_eval_moves : tApp iv_id iv_False <> iv_False.
 Proof. discriminate. Qed.
 
+(** Evaluation: [(λx:Prop. x → x) (∀P:Prop. P) ⇓ (∀P:Prop. P) → (∀P:Prop. P)]
+    ([PCUICSREtaInstances.sri_xx_redex], [PCUICSREtaInstances.sri_xx_reduct]). *)
+Lemma cli_eval_xx : eval si_Σ sri_xx_redex sri_xx_reduct.
+Proof.
+  eapply eval_beta; [apply eval_atom; reflexivity|apply eval_atom; reflexivity|].
+  apply eval_atom; reflexivity.
+Qed.
+
 (** [c (∀P:Prop. P)] is a value, and evaluates to itself. *)
 Lemma cli_cF_value : value si_Σ sri_cF.
 Proof.
@@ -887,10 +900,12 @@ Definition wcbveval_redE_inst : red si_Σ [] (tApp iv_id iv_False) iv_False :=
   wcbveval_redE (Σ := si_Σ) (wfΣ := si_wfE) (tApp iv_id iv_False) si_P iv_False
     (iv_app_typed si_Σ [] localenv_nil) cli_eval.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_eval_moves *)
-Definition subject_reduction_evalE_inst : si_Σ ;;; [] |-E iv_False : si_P :=
-  subject_reduction_evalE (Σ := si_Σ) (wfΣ := si_wfE) (t := tApp iv_id iv_False) (u := iv_False)
-    (iv_app_typed si_Σ [] localenv_nil) cli_eval.
+(** The evaluation [cli_eval_xx] of [(λx:Prop. x → x) (∀P:Prop. P)], typed by
+    [sri_xx_redex_typed].
+    INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
+Definition subject_reduction_evalE_inst : si_Σ ;;; [] |-E sri_xx_reduct : si_P :=
+  subject_reduction_evalE (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_xx_redex) (u := sri_xx_reduct)
+    (sri_xx_redex_typed [] localenv_nil) cli_eval_xx.
 
 (** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cF_head_differs *)
 Definition value_classificationE_inst :=

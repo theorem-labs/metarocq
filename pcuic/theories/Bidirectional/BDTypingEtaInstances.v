@@ -1,5 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 
+(* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
+   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+
 (** * Satisfying instances for [Bidirectional/BDTypingEta]
 
   Each of the five judgments of [BDTypingEta] is inhabited by a concrete derivation whose own
@@ -38,14 +41,17 @@
     η step relates ([bd_case_eta_step]);
   - [bidir_ind_envE_closedn_inst]: the induction principle with predicates that are not
     [unit]: in any [Σ] with [wfE Σ], the subject of every E judgment is scoped by its
-    context ([closedn]), every [lift_sorting1] judgment has its term and type scoped, and
-    every checked context is closed. Every case of the principle is proved in general.
-    [inferingE_Case_inst_closedn] applies it to [inferingE_Case_inst]. With [unit]
-    predicates every case hypothesis would hold trivially, so the principle has no such
-    instance;
+    context ([closedn]), every [lift_sorting1] judgment has its term and type scoped, every
+    checked context is closed, and every checked extension is scoped by its base. Each of
+    the eight predicates is false on some input ([bdc_nondegenerate]). Every case of the
+    principle is proved in general. [inferingE_Case_inst_closedn] applies it to
+    [inferingE_Case_inst];
   - the bridges to the checker's forecast form, [checkE_Cumul_ws_inst],
-    [All2_ws_cumul_pbE_JoinE_inst], [JoinE_ws_cumul_pbE_inst], on the pair of
-    [bd_eta_pair_differ], two different types that the η step [bd_eta_step] relates;
+    [All2_ws_cumul_pbE_JoinE_inst] and [JoinE_ws_cumul_pbE_inst], tagged IMPOSSIBLE: each
+    target only packs or unpacks its own premises ([checkE_Cumul] and the projection
+    [ws_cumul_pbE_forget]; [All2_impl] of that projection; the record constructor
+    [into_ws_cumul_pbE]), so every instance's conclusion is assembled from its premises. They
+    run on the η pair of [checkingE_eta_inst] and stay as the rows of these lemmas;
   - the (co)fixpoint witness bridges, [wf_fixpoint_red_wf_fixpointE_inst],
     [wf_cofixpoint_red_wf_cofixpointE_inst], and [bd_mfix_on_ind_red_convE_inst] (copy 17's
     [PCUICFixWitnessEta.mfix_on_ind_red_convE], the typed form [BDTypingEta] stated until
@@ -149,9 +155,10 @@ Proof. split; [reflexivity|]. unfold bd_X, bd_lam. discriminate. Qed.
 
 (** The contexts of the context instances are not empty: [bd_Γ1] and [bd_Γη] (of
     [wf_local_bdE_inst], [wf_local_bdE_eta_inst], [wf_local_bd_typingE_inst]), the base
-    [bd_ΓFG] (of [wf_rel_weakE_inst], [wf_local_local_relE_inst]), and the extensions
-    [[x : G (λ y : Prop. F y)]] and [[x : G (λ y : Prop. F y); F : Prop → Prop]] (of
-    [wf_local_local_relE_inst], [wf_local_bd_relE_inst], [wf_local_bd_rel_typingE_inst]). *)
+    [bd_ΓFG] (of [wf_rel_weakE_inst]), and the extension
+    [[x : G (λ y : Prop. F y); F : Prop → Prop]] (of [wf_local_bd_relE_inst],
+    [wf_local_bd_rel_typingE_inst]). The one-declaration extension [[x : G (λ y : Prop. F y)]]
+    is no longer used by an instance tagged with this lemma. *)
 Lemma bd_ctxs_nonempty :
   bd_Γ1 <> [] /\ bd_Γη <> [] /\ bd_ΓFG <> [] /\ [vass si_na bd_X] <> [] /\
   [vass si_na bd_X; vass si_na bd_FP] <> [].
@@ -231,14 +238,16 @@ Qed.
 
 (** ** The bridges to the forecast form, on the η pair *)
 
-(** INSTANCE NONDEGEN BDTypingEtaInstances.bd_eta_pair_differ *)
+(** [checkE_Cumul_ws] on the inference of [x] in [bd_Γη] and the η cumulativity to [G F].
+    INSTANCE IMPOSSIBLE: the target's proof is the checkE_Cumul constructor on its inference premise and on ws_cumul_pbE_forget (a projection of the ws_cumul_pbE record) of its cumulativity premise, so every instance's conclusion only repacks its own premises and no witness can make it non-degenerate *)
 Lemma checkE_Cumul_ws_inst : si_Σ ;;; bd_Γη |-E tRel 0 ◃ tApp (tRel 2) (tRel 1).
 Proof.
   eapply checkE_Cumul_ws; [exact (inferE_Rel _ bd_Γη 0 (vass si_na bd_X) eq_refl)|].
   apply (eta1_ws_cumul_pbE (Σ := si_Σ)); [reflexivity|reflexivity|exact bd_eta_step].
 Qed.
 
-(** INSTANCE NONDEGEN BDTypingEtaInstances.bd_eta_pair_differ *)
+(** [All2_ws_cumul_pbE_JoinE] on the one-entry list of the η pair in [bd_Γη].
+    INSTANCE IMPOSSIBLE: the target's proof is All2_impl of ws_cumul_pbE_forget (a projection of the ws_cumul_pbE record) on its premise, so every instance's conclusion is its premise with each entry projected and no witness can make it non-degenerate *)
 Lemma All2_ws_cumul_pbE_JoinE_inst :
   All2 (JoinE si_Σ bd_Γη Conv) [lift0 1 bd_X] [tApp (tRel 2) (tRel 1)].
 Proof.
@@ -246,7 +255,8 @@ Proof.
   apply (eta1_ws_cumul_pbE (Σ := si_Σ)); [reflexivity|reflexivity|exact bd_eta_step].
 Qed.
 
-(** INSTANCE NONDEGEN BDTypingEtaInstances.bd_eta_pair_differ *)
+(** [JoinE_ws_cumul_pbE] on the η pair in [bd_Γη].
+    INSTANCE IMPOSSIBLE: the target's proof is into_ws_cumul_pbE, the ws_cumul_pbE record constructor applied to its four premises (the closed context, the two scoping facts and the JoinE), so every instance's conclusion only packs its own premises and no witness can make it non-degenerate *)
 Lemma JoinE_ws_cumul_pbE_inst :
   ws_cumul_pbE Cumul si_Σ bd_Γη (lift0 1 bd_X) (tApp (tRel 2) (tRel 1)).
 Proof.
@@ -718,17 +728,23 @@ Qed.
   Every case of the principle is proved in general. It is the bidirectional twin of the
   subject half of [typecheck_closedE] ([Typing/PCUICClosedTypEta]): it gives the scoping of
   a term from its E derivation, without going through soundness.
-  The predicates are not degenerate: each is false on some input, so no case holds
-  trivially; [bdc_nondegenerate] gives the two base forms ([tRel 0] is not scoped in [[]],
-  and the context [[_ : tRel 0]] is not closed). The binder cases ([tProd], [tLambda],
+  The predicates are not degenerate: each of the eight is false on some input
+  ([bdc_nondegenerate]): [tRel 0] is not scoped in [[]], which falsifies the five subject
+  predicates; the judgment [_ : tRel 0] is not scoped in [[]]; the context [[_ : tRel 0]] is
+  not closed; and the extension [[_ : tRel 0]] of [[]] is not scoped. Some cases still hold
+  for every input: the [tSort], [tConst], [tInd] and [tConstruct] subjects are closed terms.
+  The binder cases ([tProd], [tLambda],
   [tLetIn], the (co)fixpoints, the [tCase] predicate and branches) move the scope by the
   bound context; the [tCase] case uses [wfE Σ] for the closedness of the inductive's
   predicate and branch contexts ([declared_minductive_closedE]); the [tPrim] case reads
   the array hypotheses. *)
 
 Lemma bdc_nondegenerate :
-  closedn #|([] : context)| (tRel 0) = false /\ closed_ctx [vass si_na (tRel 0)] = false.
-Proof. split; reflexivity. Qed.
+  closedn #|([] : context)| (tRel 0) = false /\
+  lift_wfb_term (closedn #|([] : context)|) (j_vass si_na (tRel 0)) = false /\
+  closed_ctx [vass si_na (tRel 0)] = false /\
+  closedn_ctx #|([] : context)| [vass si_na (tRel 0)] = false.
+Proof. repeat split; reflexivity. Qed.
 
 Lemma bdc_ctx_inst_closedn {P : context -> term -> term -> Type} {Γ inst Δ} :
   ctx_inst P Γ inst Δ -> (forall t T, P Γ t T -> is_true (closedn #|Γ| t)) ->
@@ -741,7 +757,7 @@ Proof.
   - exact IH.
 Qed.
 
-(** The principle, with the scoping predicates, false on some input ([bdc_nondegenerate]).
+(** The principle, with the scoping predicates, each false on some input ([bdc_nondegenerate]).
     INSTANCE NONDEGEN BDTypingEtaInstances.bdc_nondegenerate
     TARGET BDTypingEta.bidir_ind_envE *)
 Lemma bidir_ind_envE_closedn_inst {cf : checker_flags} (Σ : global_env_ext) (wfΣ : @wfE cf Σ) :
