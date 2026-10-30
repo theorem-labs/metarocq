@@ -241,6 +241,9 @@ theories/PCUICFixWitnessEta.v
 theories/PCUICTypingEtaCopy17Instances.v
 # Validity over typingE (row T2a, the E copy of PCUICValidity)
 theories/PCUICValidityEta.v
+# Case-construction helpers over typingE (E copy of PCUICCasesHelper), and its satisfying instances
+theories/PCUICCasesHelperEta.v
+theories/PCUICTypingEtaCopy21Instances.v
 # Subject reduction over typingE (row T1, the E copy of PCUICSR), and its satisfying instances
 theories/PCUICSREta.v
 # Refutations of the eta statements that are false
