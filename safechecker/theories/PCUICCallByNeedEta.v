@@ -2,28 +2,29 @@
 From Stdlib Require Import BinPos BinNat.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require String2pos CanonicalTries ByteCompare.
-From MetaRocq.Common Require Import config Kernames.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICWfUniverses.
+From MetaRocq.Common Require Import config Kernames PrimitiveOps.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICWfUniverses PCUICPrimitiveRed.
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICWfEnvEta.
 
 Import CanonicalTries.
 
-(** * FORECAST-ONLY (fc/etak-forecast1): the η environment's copy of [PCUICCallByNeed]
+(** * ETA-COPY (wip/etak-port1-ship-2026-10-30): the η environment's copy of [PCUICCallByNeed]
 
-  Byte-for-byte the text of integ-all7's [safechecker/theories/PCUICCallByNeed.v] (8d96afc9),
+  Byte-for-byte the text of integ-all8's [safechecker/theories/PCUICCallByNeed.v] (1a92b56c),
   except the import line above: [PCUICWfEnvEta] in place of [PCUICWfEnv].  The machine uses
   only the computational operations of the abstract environment ([abstract_env_lookup],
   [abstract_env_compare_universe], [abstract_env_compare_sort],
-  [abstract_env_ext_wf_universeb], [abstract_env_ext_wf_sortb]), which [PCUICWfEnvEta] defines
-  with the same names and the same text over its own class.  The copy exists because
+  [abstract_env_ext_wf_universeb], [abstract_env_ext_wf_sortb], and for the primitive-operation
+  rule [abstract_prim_op_of] and [abstract_primitive_bool]), which [PCUICWfEnvEta] defines with
+  the same names and the same text over its own class.  The copy exists because
   [PCUICTypeCheckerEta.convert] runs over a [PCUICWfEnvEta.abstract_env_impl], a different type
   from base's, so base [cbn_conv] cannot be applied there; behaviour is unchanged: the same
   machine, the same answers.
 
   Its soundness over [welltypedE] is the named hypothesis [PCUICCallByNeedSoundEta.cbn_conv_soundE]
-  (with its base instance there).  Forecast-only: [frac/eta] has no call-by-need fast path
-  (BET-298 is in integ-all7 only).  Reconciled at the landing of [convert_cbn_soundE] (the E
-  statement of [PCUICCallByNeedSoundHookProof.convert_cbn_sound], over [welltypedE]). *)
+  (with its base instance there), until the E statement of
+  [PCUICCallByNeedSoundHookProof.convert_cbn_sound] over [welltypedE] is proved.  Check that this
+  file is still the copy: lanes/check-time/eta-recopy/eta-recopy-check.sh. *)
 
 (** * Call-by-need conversion fast path
 
@@ -70,6 +71,12 @@ Import CanonicalTries.
     takes one unit of an [N] step budget. Out of budget means "don't know".
   - Delta: constant bodies are looked up once per [cbn_conv] call and memoised by kername;
     one code entry per (constant, syntactic instance).
+  - Primitive operations: a bodiless constant that the environment registers as an operation,
+    applied to at least its arity of arguments, evaluates those arguments one at a time (each
+    put in the heap, forced, and the constant evaluated again) until each is a literal; the
+    operation's result ([prim_op_denote], read back as [PCUICPrimitiveRed.readback] does) is
+    then a new code entry, evaluated against the rest of the stack, as [red_prim_op] reduces.
+    An argument that is not a literal once evaluated leaves a neutral constant.
 
   The soundness theorem of [cbn_conv] is
   [PCUICCallByNeedSoundHookProof.convert_cbn_sound]. *)
@@ -1849,6 +1856,51 @@ Fixpoint cbn_list_set {A} (l : list A) (n : nat) (x : A) : list A :=
   | y :: l, S n => y :: cbn_list_set l n x
   end.
 
+(** *** Primitive literals in slots *)
+
+(** The literal a slot holds without evaluation: an inline literal code, or a cell whose value
+  is a literal code. *)
+Definition cbn_slot_lit (x : cbn_slot) (s : cbn_state) : option prim_lit :=
+  match x with
+  | CbnSInl _ _ _ c => lit_of_term c.(cbn_c_term)
+  | CbnSAddr a =>
+    match cbn_heap_get a s with
+    | Some (CbnCDone (CbnVOpen _ c)) => lit_of_term c.(cbn_c_term)
+    | _ => None
+    end
+  end.
+
+(** [inl ls]: every slot of [l] holds a literal, the literals [ls]. [inr (i, x)]: [x], at
+  position [i], is the first slot of [l] that does not. *)
+Fixpoint cbn_slot_lits (l : list cbn_slot) (s : cbn_state) : list prim_lit + (nat * cbn_slot) :=
+  match l with
+  | [] => inl []
+  | x :: l =>
+    match cbn_slot_lit x s with
+    | Some lt =>
+      match cbn_slot_lits l s with
+      | inl ls => inl (lt :: ls)
+      | inr (i, y) => inr (S i, y)
+      end
+    | None => inr (0, x)
+    end
+  end.
+
+(** A value that is a literal. *)
+Definition cbn_value_is_lit (v : cbn_value) : bool :=
+  match v with
+  | CbnVOpen _ c => match lit_of_term c.(cbn_c_term) with Some _ => true | None => false end
+  | _ => false
+  end.
+
+(** What the primitive-operation rule does with a bodiless constant applied to a stack: no
+  rule (a neutral constant); the operation's reduct, applied to the rest of the stack; or
+  argument [i], the slot [x], is evaluated first. *)
+Inductive cbn_prim_step :=
+| CbnPStuck
+| CbnPFire (t : term) (rest : list cbn_slot)
+| CbnPForce (i : nat) (x : cbn_slot).
+
 Section CallByNeed.
   Context {cf : checker_flags} (X_type : abstract_env_impl) (X : X_type.π2.π1).
   Context (Γ : context) (nctx : nat). (* nctx = #|Γ| *)
@@ -1988,6 +2040,45 @@ Section CallByNeed.
         end
       | _ => CbnCFail CbnWDelta
       end
+    end.
+
+  (** *** Primitive operations *)
+
+  (** [PCUICPrimitiveRed.readback] at the abstract environment: the booleans are the inductive
+    it registers. *)
+  Definition cbn_readback (sh : prim_shape) (r : prim_result) : option term :=
+    match sh, r with
+    | SInt, RInt i => Some (tPrim (prim_int i))
+    | SBool, RBool b =>
+      match abstract_primitive_bool X with
+      | Some ind => Some (tConstruct ind (if b then 0 else 1) [])
+      | None => None
+      end
+    | SInt, RBool _ | SBool, RInt _ => None
+    end.
+
+  (** The rule for the bodiless constant [kn] applied to [stk]: it fires when [kn] is a
+    registered operation, the stack holds its arity of arguments, each of them a literal,
+    and the operation computes a result on them. *)
+  Definition cbn_prim_step_of (kn : kername) (stk : list cbn_slot) (s : cbn_state)
+    : cbn_prim_step :=
+    match abstract_prim_op_of X kn with
+    | None => CbnPStuck
+    | Some p =>
+      if Nat.leb (arity p) #|stk| then
+        match cbn_slot_lits (firstn (arity p) stk) s with
+        | inl ls =>
+          match prim_op_denote p ls with
+          | Some r =>
+            match cbn_readback (po_shape (info p)) r with
+            | Some t => CbnPFire t (skipn (arity p) stk)
+            | None => CbnPStuck
+            end
+          | None => CbnPStuck
+          end
+        | inr (i, x) => CbnPForce i x
+        end
+      else CbnPStuck
     end.
 
   (** *** Context entries: one cell per entry of [Γ], made on first use *)
@@ -2219,8 +2310,31 @@ Section CallByNeed.
         match r with
         | Some c' => cbn_whnf d cbn_env_empty c' stk rs s
         | None =>
-          cbnlet (sp, rs, s) := cbn_mat_all d stk rs s in CbnCOk
-            (CbnVNeu (CbnNConst c.(cbn_c_term)) sp, rs, s)
+          match cbn_prim_step_of kn stk s with
+          | CbnPFire t rest =>
+            (* [red_prim_op]: the reduct is a new closed code *)
+            let (c', s) := cbn_new_entry t [] s in cbn_whnf d cbn_env_empty c' rest rs s
+          | CbnPForce i x =>
+            (* evaluate argument [i] in a cell of the stack, then the constant again *)
+            cbnlet (a, rs, s) := cbn_materialize x (CbnRSk stk :: rs) s in
+            match rs with
+            | CbnRSk stk :: rs =>
+              let stk := cbn_list_set stk i (CbnSAddr a) in
+              cbnlet (v, rs, s) := cbn_force d a (CbnRSk stk :: rs) s in
+              match rs with
+              | CbnRSk stk :: rs =>
+                if cbn_value_is_lit v then cbn_whnf d cbn_env_empty c stk rs s
+                else
+                  cbnlet (sp, rs, s) := cbn_mat_all d stk rs s in CbnCOk
+                    (CbnVNeu (CbnNConst c.(cbn_c_term)) sp, rs, s)
+              | _ => CbnCFail CbnWRoots
+              end
+            | _ => CbnCFail CbnWRoots
+            end
+          | CbnPStuck =>
+            cbnlet (sp, rs, s) := cbn_mat_all d stk rs s in CbnCOk
+              (CbnVNeu (CbnNConst c.(cbn_c_term)) sp, rs, s)
+          end
         end
       | tConstruct _ _ _ | tInd _ _ =>
         cbnlet (sp, rs, s) := cbn_mat_all d stk rs s in CbnCOk (CbnVCon c.(cbn_c_term) sp, rs, s)
