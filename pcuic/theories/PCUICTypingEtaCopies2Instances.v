@@ -17,10 +17,10 @@
     [F : Prop → Prop] and [G : (Prop → Prop) → Prop, F : Prop → Prop], in which
     [G (λy:Prop. F y)] and [G F] are related by one η step.
   Universe instances map the bound levels to [Set], so the instantiation changes the
-  term ([Type@{l0}] becomes [Type@{Set}]), except in the instances marked NOT BUILT:
-  those on the monomorphic inductive [I] (their missing witness, and what it costs, are
-  written where they start) and the weakening instances, whose two environments have the
-  same level set. The two rows that reached the same weakness through their DATA rather
+  term ([Type@{l0}] becomes [Type@{Set}]), except on the monomorphic inductive [I], whose
+  only instance is the empty one, and in the weakening instances, whose two environments
+  have the same level set. Every row of the first kind is built again at the polymorphic
+  [J] of [PCUICEtaIdxEnv], in the last section. The two rows that reached that weakness
   than through [I] are built here instead: the branch-type equation takes a predicate
   returning [Type@{l0}] ([c2_mp_u]) and the instantiated block is at that level
   ([c2_block_u]), so instantiating changes both sides of each. The typing spine
@@ -41,7 +41,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICWellScopedCumulativityEta PCUICContextConversionEta PCUICEtaA6 PCUICEtaJoinSpec
      PCUICWsCumulEtaCtx PCUICWsCumulEtaCtxTyp PCUICInstDefEta PCUICInstTypEta PCUICEtaC1b
      PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICEtaI5.
-From MetaRocq.PCUIC Require PCUICInstDef.
+From MetaRocq.PCUIC Require PCUICInstDef PCUICEtaIdxEnv.
 From Equations.Prop Require Import DepElim.
 
 #[local] Existing Instance default_checker_flags.
@@ -405,32 +405,32 @@ Definition subst_instance_case_branch_typeE_inst :=
 Lemma si_declared_minductive : declared_minductive si_env si_kn si_mdecl.
 Proof. left; reflexivity. Qed.
 
-(** ** NOT BUILT: the instances that need a universe-polymorphic inductive
+(** ** The instances over the monomorphic inductive, and the witness at a polymorphic one
 
-  Every row below marked [NOT BUILT (polymorphic inductive)] is applied to [I], which is
-  monomorphic: its universe context is empty, its abstract instance is the empty one, and
-  the only universe instance that can be applied to it maps every part of the declaration
-  to itself. Each such row therefore shows its lemma's premises jointly satisfiable, and
-  nothing about what the lemma does to a universe.
+  Every row below applied to [I] is applied to a MONOMORPHIC inductive: its universe
+  context is empty, its abstract instance is the empty one, and the only universe instance
+  that can be applied to it maps every part of the declaration to itself. Each such row
+  therefore shows its lemma's premises jointly satisfiable, and nothing about what the
+  lemma does to a universe.
 
-  The missing witness is one object: a universe-polymorphic inductive declaration with its
-  [wf] and [wfE] proofs, after which these rows move to it unchanged. Its cost, measured on
-  the monomorphic declaration this file uses: the data and the well-formedness of [I]
-  ([si_cdecl] to [si_wf] of [PCUICCumulativitySpecEtaClosureInstances]) are about 155
-  lines, which a polymorphic declaration repeats over a polymorphic [global_env_ext]; on
-  top of that comes the polymorphic [on_udecl] (the [up_on_udecl] pattern of this file, 14
-  lines, where the monomorphic one is [si_on_udecl]). The [on_variance] obligation adds
-  nothing: with [ind_variance := None] it is [unit] over a polymorphic context too, and
-  [tt] discharges it. The η content of this file does not depend on it: the
-  η steps are in the terms, not in the universes. *)
-(* NOT BUILT (polymorphic inductive): proves satisfiability only; the inductive [I] is
-   monomorphic, so its universe context is empty and [wf_ext_wkE] holds with nothing to
-   check. *)
+  The missing object was a universe-polymorphic inductive declaration with its [wf] and
+  [wfE] proofs. [PCUICEtaIdxEnv] now declares one, [J@{i}], and the section "Universe
+  witnesses at the polymorphic inductive [J]" at the end of this file carries the instance
+  of each row below at [J], where the universe context has one bound level, the index type
+  [Type@{i}] mentions it, and the instance [[a]] moves the declared type. A row that [J]
+  does not reach keeps its mark and says why, in its own terms rather than by naming a
+  missing declaration: [J]'s [ind_sort] is [sProp] and its one parameter is [A : Prop], so
+  neither is moved by any instance. The η content of this file does not depend on any of
+  it: the η steps are in the terms, not in the universes, and no instance below [J] or
+  beside it changes. *)
+(* The universe content of this row is built at [J]
+   ([declared_inductive_wf_ext_wkE_jinst]): here [I] is monomorphic, so its universe
+   context is empty and [wf_ext_wkE] holds with nothing to check. *)
 Definition declared_inductive_wf_ext_wkE_inst :=
   declared_inductive_wf_ext_wkE si_env si_mdecl si_kn si_wfE si_declared_minductive.
-(* NOT BUILT (polymorphic inductive): proves satisfiability only; the inductive [I] is
-   monomorphic, so its universe context is empty and [wf_global_extE] holds with nothing
-   to check. *)
+(* The universe content of this row is built at [J]
+   ([declared_inductive_wf_global_extE_jinst]): here [I] is monomorphic, so its universe
+   context is empty and [wf_global_extE] holds with nothing to check. *)
 Definition declared_inductive_wf_global_extE_inst :=
   declared_inductive_wf_global_extE si_env si_mdecl si_kn si_wfE si_declared_minductive.
 
@@ -568,12 +568,12 @@ Definition isTypeRel_subst_instance_idE_inst :=
 Definition isType_subst_instance_idE_inst :=
   isType_subst_instance_idE up_Σp [] (tSort up_s0) up_wk up_isTypeRel_s0.
 
-(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, its
-   abstract instance is empty, so the identity it states is trivial on [ind_sort]. *)
+(* NOT BUILT (an inductive whose [ind_sort] mentions a bound level): [I] is monomorphic and
+   [J]'s [ind_sort] is [sProp], so in both the substitution leaves [ind_sort] alone. *)
 Definition subst_instance_ind_sort_idE_inst :=
   subst_instance_ind_sort_idE si_env si_mdecl si_ind si_idecl si_wfE si_declared_inductive.
-(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, its
-   abstract instance is empty, so the identity it states is trivial on [ind_type]. *)
+(* The universe content of this row is built at [J] ([subst_instance_ind_type_idE_jinst]),
+   whose [ind_type] mentions the bound level; [I]'s abstract instance is empty. *)
 Definition subst_instance_ind_type_idE_inst :=
   subst_instance_ind_type_idE si_env si_mdecl si_ind si_idecl si_wfE si_declared_inductive.
 
@@ -679,13 +679,13 @@ Proof. reflexivity. Qed.
 Lemma si_closedu_indices : test_context (closedu #|polymorphic_instance (ind_universes si_mdecl)|) (ind_indices si_idecl).
 Proof. reflexivity. Qed.
 
-(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, so
-   the bound [#|abstract_instance| = 0] is reached by a context with no universe at all. *)
+(* The universe content of this row is built at [J]
+   ([closed_ind_predicate_contextE_jinst]), whose index [X : Type@{i}] needs the bound 1. *)
 Definition closed_ind_predicate_contextE_inst :=
   @closed_ind_predicate_contextE _ si_env si_ind si_mdecl si_idecl si_wfE si_declared_inductive
     si_closedu_params si_closedu_indices.
-(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, so
-   [inds] carries the empty instance and is universe-closed trivially. *)
+(* The universe content of this row is built at [J] ([closedu_indsE_jinst]), whose abstract
+   instance is [[lvar 0]]; here [inds] carries the empty instance. *)
 Definition closedu_indsE_inst := @closedu_indsE _ si_env si_kn si_mdecl si_wfE.
 
 (** The judgement [x : Type@{l0} ⊢ x : Type@{l0}] has well-formed universes. *)
@@ -965,9 +965,9 @@ Definition conv_context_smashE_inst :=
   conv_context_smashE ci_Σu [] [ci_d] [ci_d'] ltac:(repeat constructor) c2_conv_ctx_d.
 Definition type_local_ctx_wf_localE_inst := type_local_ctx_wf_localE si_Σ fi_Γ1 _ _ ci_wf_Γ1 c2_tlc.
 Definition sorts_local_ctx_wf_localE_inst := sorts_local_ctx_wf_localE si_Σ fi_Γ1 _ _ ci_wf_Γ1 c2_slc.
-(* NOT BUILT (polymorphic inductive), this and the two [*_local_ctx_instantiateE_inst]:
-   proves satisfiability only; [I] is monomorphic, so its only instance is the empty one,
-   which changes nothing. *)
+(* The universe content of these three rows is built at [J]
+   ([instantiate_minductiveE_jinst] and the two [*_local_ctx_instantiateE_jinst]); here [I]
+   is monomorphic, so its only instance is the empty one, which changes nothing. *)
 Definition instantiate_minductiveE_inst :=
   instantiate_minductiveE si_Σ si_kn si_mdecl [] fi_Γ1 (tRel 0) fi_P si_wfE si_declared_minductive' eq_refl
     ci_x_typed.
@@ -1057,8 +1057,8 @@ Definition isType_SortE_inst := @isType_SortE _ si_Σ fi_Γ1 sProp ci_wf_sort_P 
 Definition wf_typing_spineE_inst : @wf_typing_spineE _ si_Σ [] (tProd si_na si_P (cp_Ix 0)) [g_A] g_T :=
   (g_cstr_isType, typing_spineE_inst).
 Definition typing_spine_isType_codomE_inst := @typing_spine_isType_codomE _ si_Σ si_wfE _ _ _ _ c2_sp.
-(* NOT BUILT (polymorphic inductive): proves satisfiability only; [I] is monomorphic, so
-   its abstract instance is empty and the substitution is the plain one. *)
+(* The universe content of this row is built at [J] ([subslet_inds_genE_jinst]), whose
+   abstract instance is [[lvar 0]]; here it is empty and the substitution is the plain one. *)
 Definition subslet_inds_genE_inst := @subslet_inds_genE _ si_env si_wfE si_ind si_mdecl si_idecl si_declared_inductive.
 
 Definition consistent_instance_ext_abstract_instanceE_inst :=
@@ -1129,10 +1129,10 @@ Definition subslet_app_closedE_inst :=
   @subslet_app_closedE _ si_Σ [] [ci_False] [ci_False] c2_x c2_x c2_sub c2_sub eq_refl.
 Definition subslet_app_invE_inst :=
   @subslet_app_invE _ si_Σ [] c2_x c2_x [ci_False; ci_False] subslet_app_closedE_inst.
-(* NOT BUILT (polymorphic inductive), this and [on_minductive_wf_paramsE_inst]: proves
-   satisfiability only; [I] is monomorphic, so its only instance is the empty one. See
-   "NOT BUILT: the instances that need a universe-polymorphic inductive" above for the
-   witness that is missing and what it costs. *)
+(* The universe content of [subslet_indsE_inst] is built at [J] ([subslet_indsE_jinst]);
+   here [I]'s only instance is the empty one. [on_minductive_wf_paramsE_inst] stays NOT
+   BUILT (an inductive one of whose PARAMETERS mentions a bound level): [J]'s one parameter
+   is [A : Prop], which no instance moves. *)
 Definition subslet_indsE_inst := @subslet_indsE _ si_Σ si_wfE si_ind [] si_mdecl si_idecl si_declared_inductive eq_refl.
 Definition weaken_subsletE_inst := @weaken_subsletE _ si_Σ si_wfE [ci_False] c2_x fi_Γ1 ci_wf_Γ1 c2_sub.
 Definition isType_substitution_it_mkProd_or_LetInE_inst :=
@@ -1160,3 +1160,111 @@ Definition isTypeE_welltypedE_inst := isTypeE_welltypedE c2_isT_I_A.
 Definition isTypeRelE_welltypedE_inst := isTypeRelE_welltypedE up_isTypeRel_s0.
 Definition has_sort_isTypeE_inst := has_sort_isTypeE _ c2_I_A_typed.
 Definition has_sort_isTypeRelE_inst := has_sort_isTypeRelE (Sort.super up_s0) Relevant eq_refl up_s0_typed.
+
+(** ** Universe witnesses at the polymorphic inductive [J]
+
+  [PCUICEtaIdxEnv] declares
+  [Polymorphic Cumulative Inductive J@{i} (A : Prop) : forall (X : Type@{i}), (fun Z => Z) Prop],
+  with one bound level [i], one index [X : Type@{i}] that mentions it, a constructor [jc]
+  whose only argument is that index, the covariant variance, and a user arity carrying a
+  β-redex. Its instances are [[Set]] and [[a]]. The file is required and not imported: it
+  declares no notation and registers no hint or instance, so nothing above this point sees
+  it, and every name of it is written qualified here.
+
+  Each row below is the instance, at [J], of a lemma whose row above is applied to the
+  monomorphic [I]. The two it does not reach are named with the reason. *)
+
+(** The abstract instance of [J] is [[lvar 0]] and its index type mentions that level, so
+    the closedness bounds of the two [closedu] rows are not reached at bound 0. *)
+Lemma j2_indices_bound :
+  test_context (closedu 0) (ind_indices PCUICEtaIdxEnv.ji_idecl) = false.
+Proof. reflexivity. Qed.
+Lemma j2_inds_bound :
+  forallb (closedu 0)
+    (inds PCUICEtaIdxEnv.ji_kn (abstract_instance (ind_universes PCUICEtaIdxEnv.ji_mdecl))
+       (ind_bodies PCUICEtaIdxEnv.ji_mdecl)) = false.
+Proof. reflexivity. Qed.
+
+(** The instance [[a]] moves the declared type of [J], which [[]] cannot do for [I]. *)
+Lemma j2_ind_type_moves :
+  eqb (subst_instance PCUICEtaIdxEnv.ji_u1 (ind_type PCUICEtaIdxEnv.ji_idecl))
+      (ind_type PCUICEtaIdxEnv.ji_idecl) = false.
+Proof. reflexivity. Qed.
+
+(** [wf_ext_wkE] and [wf_global_extE] over the one-level universe context of [J]. *)
+Definition declared_inductive_wf_ext_wkE_jinst :=
+  declared_inductive_wf_ext_wkE PCUICEtaIdxEnv.ji_env PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_kn PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_declared_minductive.
+Definition declared_inductive_wf_global_extE_jinst :=
+  declared_inductive_wf_global_extE PCUICEtaIdxEnv.ji_env PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_kn PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_declared_minductive.
+
+(** The abstract instance [[lvar 0]] is the identity on a declared type that mentions it. *)
+Definition subst_instance_ind_type_idE_jinst :=
+  subst_instance_ind_type_idE PCUICEtaIdxEnv.ji_env PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_ind PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_wfE
+    PCUICEtaIdxEnv.ji_declared_inductive.
+
+Definition closed_ind_predicate_contextE_jinst :=
+  @closed_ind_predicate_contextE _ PCUICEtaIdxEnv.ji_env PCUICEtaIdxEnv.ji_ind
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_wfE
+    PCUICEtaIdxEnv.ji_declared_inductive ltac:(reflexivity) ltac:(reflexivity).
+Definition closedu_indsE_jinst :=
+  @closedu_indsE _ PCUICEtaIdxEnv.ji_env PCUICEtaIdxEnv.ji_kn PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_wfE.
+
+(** The three instantiation rows, at the instance [[a]] of [J]: the index type
+    [Type@{i}] becomes [Type@{a}], so the substitution moves the term, the telescope and
+    the sorts. *)
+Lemma j2_T_typedE : PCUICEtaIdxEnv.ji_Σp ;;; [] |-E PCUICEtaIdxEnv.ji_T
+  : tSort (Sort.super PCUICEtaIdxEnv.ji_s).
+Proof.
+  exact (typing_incl_E (Σ := PCUICEtaIdxEnv.ji_Σp) PCUICEtaIdxEnv.ji_wf
+           (PCUICEtaIdxEnv.ji_T_ty PCUICEtaIdxEnv.ji_Σp PCUICEtaIdxEnv.ji_hsp [] localenv_nil)).
+Qed.
+
+Lemma j2_wf_sort_super : wf_sort PCUICEtaIdxEnv.ji_Σp (Sort.super PCUICEtaIdxEnv.ji_s).
+Proof.
+  intros l hin%LevelExprSet.singleton_spec. subst l. exact PCUICEtaIdxEnv.ji_levels_Σp.
+Qed.
+
+Lemma j2_jX : lift_typing typingE PCUICEtaIdxEnv.ji_Σp []
+  (j_vass_s PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_T (Sort.super PCUICEtaIdxEnv.ji_s)).
+Proof.
+  split; [exact tt|]. exists (Sort.super PCUICEtaIdxEnv.ji_s).
+  split; [exact j2_T_typedE|]. split; [reflexivity|reflexivity].
+Qed.
+
+Lemma j2_tlc : type_local_ctx (lift_typing typingE) PCUICEtaIdxEnv.ji_Σp []
+  [vass PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_T] (Sort.super PCUICEtaIdxEnv.ji_s).
+Proof. split; [exact j2_wf_sort_super|exact j2_jX]. Qed.
+
+Lemma j2_slc : sorts_local_ctx (lift_typing typingE) PCUICEtaIdxEnv.ji_Σp []
+  [vass PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_T] [Sort.super PCUICEtaIdxEnv.ji_s].
+Proof. split; [exact tt|exact j2_jX]. Qed.
+
+Definition instantiate_minductiveE_jinst :=
+  instantiate_minductiveE PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_kn PCUICEtaIdxEnv.ji_mdecl
+    PCUICEtaIdxEnv.ji_u1 [] PCUICEtaIdxEnv.ji_T (tSort (Sort.super PCUICEtaIdxEnv.ji_s))
+    PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_declared_minductive PCUICEtaIdxEnv.ji_cons1
+    j2_T_typedE.
+Definition type_local_ctx_instantiateE_jinst :=
+  type_local_ctx_instantiateE PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_kn PCUICEtaIdxEnv.ji_mdecl
+    [] [vass PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_T] PCUICEtaIdxEnv.ji_u1
+    (Sort.super PCUICEtaIdxEnv.ji_s) PCUICEtaIdxEnv.ji_wfE
+    PCUICEtaIdxEnv.ji_declared_minductive j2_tlc PCUICEtaIdxEnv.ji_cons1.
+Definition sorts_local_ctx_instantiateE_jinst :=
+  sorts_local_ctx_instantiateE PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_kn PCUICEtaIdxEnv.ji_mdecl
+    [] [vass PCUICEtaIdxEnv.ji_naX PCUICEtaIdxEnv.ji_T] PCUICEtaIdxEnv.ji_u1
+    [Sort.super PCUICEtaIdxEnv.ji_s] PCUICEtaIdxEnv.ji_wfE
+    PCUICEtaIdxEnv.ji_declared_minductive j2_slc PCUICEtaIdxEnv.ji_cons1.
+
+(** The two substitutions of the inductives: at the abstract instance [[lvar 0]] and at
+    [[a]], both over an arities context whose only entry mentions the bound level. *)
+Definition subslet_inds_genE_jinst :=
+  @subslet_inds_genE _ PCUICEtaIdxEnv.ji_env PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_ind
+    PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_idecl PCUICEtaIdxEnv.ji_declared_inductive.
+Definition subslet_indsE_jinst :=
+  @subslet_indsE _ PCUICEtaIdxEnv.ji_Σ PCUICEtaIdxEnv.ji_wfE PCUICEtaIdxEnv.ji_ind
+    PCUICEtaIdxEnv.ji_u1 PCUICEtaIdxEnv.ji_mdecl PCUICEtaIdxEnv.ji_idecl
+    PCUICEtaIdxEnv.ji_declared_inductive PCUICEtaIdxEnv.ji_cons1.
