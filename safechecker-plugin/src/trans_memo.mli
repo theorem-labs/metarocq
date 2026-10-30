@@ -43,3 +43,7 @@ val test_state : unit -> [ `Empty | `Consistent | `Torn ]
 
 (* Store one case-free entry ([tRel 0] for [tRel 0]) through the memo. *)
 val test_populate : unit -> unit
+
+(* The slot a key lands in; [MetaRocq Test Memo Contract] searches with it for two
+   distinct keys in one slot. *)
+val test_slot : Ast0.term -> int

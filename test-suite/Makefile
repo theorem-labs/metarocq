@@ -3,6 +3,7 @@
 all: bugs plugin-demo
 
 bugs: Makefile.rocq
+	bash check_extraction_directives.sh
 	$(MAKE) -f Makefile.rocq TIMED=$(TIMED)
 	bash check_fail_messages.sh nested_positivity.v
 	bash check_fail_messages.sh positivity_red.v

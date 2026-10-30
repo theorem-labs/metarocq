@@ -149,3 +149,8 @@ let test_state () =
 (* One case-free entry: [tRel 0] translates to [tRel 0] under every environment. *)
 let test_populate () =
   ignore (memo_core (Ast0.Coq_tRel Datatypes.O) (fun () -> PCUICAst.Coq_tRel Datatypes.O))
+
+(* The slot a key lands in.  [MetaRocq Test Memo Contract] uses it to find two distinct
+   keys that share a slot, so that it can check that a hit is decided by the key and not
+   by the slot.  It reads nothing and changes nothing. *)
+let test_slot (t : Ast0.term) = Hashtbl.hash t land (size - 1)

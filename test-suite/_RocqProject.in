@@ -65,6 +65,7 @@ tmFreshName.v
 tmInferInstance.v
 tmQuoteModule.v
 tmVariable.v
+trans_memo_contract.v
 trans_memo_publication.v
 trans_memo_reset.v
 trans_memo_rejects.v

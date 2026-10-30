@@ -550,6 +550,113 @@ let test_memo_rejects_leak ~opaque_access env evm c =
       CErrors.user_err
         (str "Memo rejects-leak test failed: a " ++ str (memo_state_name state)
          ++ str " table outlived MetaRocq Test SafeCheck Rejects (fix (c), that command wrapped in with_trans_memo_reset).")
+
+(* The CONTRACT of the two trusted extraction directives of
+   safechecker-plugin/theories/Extraction.v:
+     [Trans_memo.memo s t k] returns [k ()] and [Trans_memo.release p] returns [p].
+   [Print Assumptions] cannot see an extraction directive -- the Rocq constant it replaces
+   stays closed under the global context -- so the axiom check says nothing about either,
+   and this command is what checks them.  test-suite/trans_memo_contract.v runs it.
+
+   Four parts, each of which FAILS against a wrong memo, and none of which can pass
+   vacuously: (1) a miss returns the continuation's own value, physically; (2) a hit on the
+   physically same key returns [k ()], and the hit is confirmed by the hit counter; (3) a
+   key that shares a SLOT with a stored, physically different key gets its own [k ()], not
+   the stored value -- the two keys are searched for, not assumed, and the search failing
+   fails the test; (4) [release p] returns [p] itself, physically, which is stronger than
+   the structural comparison [MetaRocq Test Trans Sharing] makes. *)
+let nat_of_int n =
+  let rec go n acc = if n <= 0 then acc else go (n - 1) (Datatypes.S acc) in
+  go n Datatypes.O
+
+let memo_contract_failed what =
+  CErrors.user_err (str "Memo contract test failed: " ++ what)
+
+(* Two distinct Template terms in one table slot.  [Hashtbl.hash] reads only the first few
+   nodes of a value, so two [tRel] of different depth collide; the pair is SEARCHED FOR
+   with [Trans_memo.test_slot] rather than assumed, so no property of [Hashtbl.hash] is
+   taken on faith.  The nat is built by one [S] per step, so the search is linear. *)
+let memo_colliding_keys () =
+  let seen = Hashtbl.create 4096 in
+  let rec go i n =
+    if i > 20000 then None
+    else
+      let t = Ast0.Coq_tRel n in
+      match Hashtbl.find_opt seen (Trans_memo.test_slot t) with
+      | Some (j, tj) -> Some (j, tj, i, t)
+      | None ->
+        Hashtbl.add seen (Trans_memo.test_slot t) (i, t);
+        go (i + 1) (Datatypes.S n)
+  in
+  go 0 Datatypes.O
+
+let test_memo_contract ~opaque_access env evm poly c =
+  with_trans_memo_reset @@ fun () ->
+  let env = safecheck_env env evm poly in
+  let term = EConstr.to_constr evm c in
+  let prog = quote_safecheck_program ~opaque_access env evm term in
+  (* A real environment, so a memo that reads its first argument is tested with one. *)
+  let genv = TemplateToPCUICShared.trans_global_env_shared (fst prog) in
+
+  (* (1) On a miss, [memo] returns exactly the value its continuation returned. *)
+  Trans_memo.reset ();
+  let t1 = Ast0.Coq_tRel (nat_of_int 1) in
+  let produced = ref None in
+  let r1 = Trans_memo.memo genv t1 (fun () ->
+    let v = PCUICAst.Coq_tRel (nat_of_int 1) in produced := Some v; v)
+  in
+  let v1 =
+    match !produced with
+    | Some v -> v
+    | None -> memo_contract_failed (str "on a miss, memo did not call its continuation.")
+  in
+  if not (r1 == v1) then
+    memo_contract_failed
+      (str "on a miss, memo returned a value other than the one its continuation returned.");
+
+  (* (2) On a hit on the physically same key, [memo] still returns [k ()].  The hit counter
+     confirms the hit path ran, so this part cannot pass by missing again. *)
+  let hits_before = Trans_memo.hits () in
+  let r2 = Trans_memo.memo genv t1 (fun () -> PCUICAst.Coq_tRel (nat_of_int 1)) in
+  if Trans_memo.hits () - hits_before <> 1 then
+    memo_contract_failed
+      (str "the second call on the physically same key was not a hit, so the hit path is untested.");
+  if Stdlib.compare r2 (PCUICAst.Coq_tRel (nat_of_int 1)) <> 0 then
+    memo_contract_failed (str "on a hit, memo returned a value other than [k ()].");
+
+  (* (3) A key in the slot of a stored, physically different key gets its own [k ()]. *)
+  Trans_memo.reset ();
+  let i, ti, j, tj =
+    match memo_colliding_keys () with
+    | Some x -> x
+    | None ->
+      memo_contract_failed
+        (str "no two of 20,001 keys shared a slot, so the slot part of the test did not run.")
+  in
+  if ti == tj then
+    memo_contract_failed (str "the two keys of the slot part are the same value.");
+  let vi = PCUICAst.Coq_tRel (nat_of_int i) and vj = PCUICAst.Coq_tRel (nat_of_int j) in
+  ignore (Trans_memo.memo genv ti (fun () -> vi));
+  let r3 = Trans_memo.memo genv tj (fun () -> vj) in
+  if Stdlib.compare r3 vj <> 0 then
+    memo_contract_failed
+      (str "a key in the slot of a stored, physically different key got that key's value,"
+       ++ spc () ++ str "not [k ()]: memo must compare the key, not only the slot."
+       ++ spc () ++ str "The two keys are tRel " ++ Pp.int i ++ str " and tRel " ++ Pp.int j
+       ++ str ", both in slot " ++ Pp.int (Trans_memo.test_slot ti) ++ str ".");
+
+  (* (4) [release p] returns [p] itself. *)
+  let p = SafeTemplateChecker.trans_program_unshared prog in
+  let r4 = Trans_memo.release p in
+  if not (r4 == p) then
+    memo_contract_failed (str "release returned a value other than its argument.");
+
+  Trans_memo.reset ();
+  Feedback.msg_info
+    (str "Memo contract test passed: a miss returns the continuation's own value, a hit on"
+     ++ spc () ++ str "the same key returns [k ()], tRel " ++ Pp.int i ++ str " and tRel "
+     ++ Pp.int j ++ str " share slot " ++ Pp.int (Trans_memo.test_slot ti)
+     ++ str " and the second still gets [k ()], and release returns its argument.")
 }
 
 
@@ -628,6 +735,15 @@ VERNAC COMMAND EXTEND MetaRocqTestMemoRejectsLeak CLASSIFIED AS SIDEFF STATE opa
     let evm = Evd.from_env env in
     let c, _ = Constrintern.interp_constr env evm c in
     test_memo_rejects_leak env evm c
+  }
+END
+
+VERNAC COMMAND EXTEND MetaRocqTestMemoContract CLASSIFIED AS SIDEFF STATE opaque_access
+| #[ poly = polymorphic ] [ "MetaRocq" "Test" "Memo" "Contract" constr(c) ] -> {
+    let env = Global.env () in
+    let evm = Evd.from_env env in
+    let c, _ = Constrintern.interp_constr env evm c in
+    test_memo_contract env evm poly c
   }
 END
 
