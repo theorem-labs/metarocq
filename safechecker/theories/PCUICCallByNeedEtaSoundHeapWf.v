@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 (** ETA-COPY (wip/etak-cbne-2026-10-30) of integ-all8's [PCUICCallByNeedSoundHeapWf] (1a92b56c) over the η environment
     ([PCUICWfEnvEta], [PCUICCallByNeedEta]): see [PCUICCallByNeedEtaSoundHookProof] for what differs. *)
-(** Declared shadow: this file declares [cbn_bh_scan_nil], and so does [PCUICCallByNeedEta] (a [Local Lemma], the same statement), as in base; the references to this file's lemma are written fully qualified. *)
+(** Declared shadow: this file declares [cbn_bh_scan_nil], and so does [PCUICCallByNeedEta] (a [Local Lemma], the same statement), as in base; the references to this file's lemma are written fully qualified (inside the open section HeapCons its full name carries the section). *)
 From Stdlib Require Import BinPos BinNat Lia.
 From MetaRocq.Utils Require Import utils.
 From MetaRocq.Utils Require CanonicalTries.
@@ -97,7 +97,7 @@ Section HeapCons.
   Proof.
     intros hz. revert p acc cand.
     induction hz as [|d zs hd hz ih]; intros p acc cand;
-      [apply MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.cbn_bh_scan_nil|].
+      [apply MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.HeapCons.cbn_bh_scan_nil|].
     subst d. destruct p as [p|p|]; cbn.
     - apply ih.
     - apply ih.
@@ -109,7 +109,7 @@ Section HeapCons.
   Proof.
     intros hz. revert p acc cand. induction h as [|d h ih]; intros p acc cand.
     - cbn [app]. rewrite (cbn_bh_scan_zeros p zs acc cand hz). symmetry.
-      apply MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.cbn_bh_scan_nil.
+      apply MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.HeapCons.cbn_bh_scan_nil.
     - destruct p as [p|p|], d as [|t]; cbn [app cbn_bh_scan]; try apply ih;
         apply cbn_bh_top_app_zeros; exact hz.
   Qed.
@@ -155,7 +155,7 @@ Section HeapCons.
   Proof.
     destruct a as [p]. unfold cbn_bh_get, cbn_bh_find. cbn [cbn_ha_p].
     destruct p as [p|p|]; cbn [cbn_bh_scan cbn_bh_top];
-      rewrite ?MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.cbn_bh_scan_nil; reflexivity.
+      rewrite ?MetaRocq.SafeChecker.PCUICCallByNeedEtaSoundHeapWf.HeapCons.cbn_bh_scan_nil; reflexivity.
   Qed.
 
   (** A cell [cbn_bh_get] finds after [cbn_bh_cons] is the new cell or one it found before. *)
