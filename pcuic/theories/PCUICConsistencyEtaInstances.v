@@ -107,6 +107,15 @@ Proof. split; [left; reflexivity|reflexivity]. Qed.
 Lemma cs_False_typed : cs_Σ ;;; [] |-E tInd cs_ind [] : tSort sProp.
 Proof. exact (typeE_Ind _ _ cs_ind [] False_mib False_oib localenv_nil cs_declared_False eq_refl). Qed.
 
+(** BET-339's premise of [pcuic_consistentE] holds in [cs_Σ]: it has no coinductive block
+    ([no_closed_stuck_cofix_case_at_no_cofiniteE], as base's [Σ_False] instance). *)
+Lemma cs_no_stuck : no_closed_stuck_cofix_case_atE cs_Σ cs_ind.
+Proof.
+  apply no_closed_stuck_cofix_case_at_no_cofiniteE.
+  intros mind. unfold check_recursivity_kind, lookup_env, cs_Σ, cs_env; cbn.
+  repeat match goal with |- context [if ?c then _ else _] => destruct c end; reflexivity.
+Qed.
+
 (** ** The theorem, applied in a section that holds the normalization premise *)
 
 Section ConsistencyEtaInstances.
@@ -115,6 +124,6 @@ Section ConsistencyEtaInstances.
 Context {nor : normalizing_flags} {nin : NormalizationInE cs_Σ}.
 
 Definition pcuic_consistentE_inst : forall t, cs_Σ ;;; [] |-E t : tInd cs_ind [] -> False :=
-  fun t => pcuic_consistentE cs_Σ t cs_ind cs_declared_False cs_wfext cs_axiom_free.
+  fun t => pcuic_consistentE cs_Σ t cs_ind cs_declared_False cs_wfext cs_axiom_free cs_no_stuck.
 
 End ConsistencyEtaInstances.
