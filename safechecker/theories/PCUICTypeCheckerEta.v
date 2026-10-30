@@ -31,7 +31,8 @@ From MetaRocq.PCUIC Require Import PCUICCumulativitySpecEta PCUICTypingEta PCUIC
 From MetaRocq.SafeChecker Require Import PCUICEqualityDec PCUICErrorsEta PCUICWfEnvEta
   PCUICWfReductionEta PCUICSafeReduceEta PCUICSafeReduceEtaBridge
   PCUICTypingEtaDefs PCUICTypingEtaHyps.
-(* FORECAST-ONLY (fc/etak-forecast1, FO2): integ-all7's call-by-need fast path, over the η environment. *)
+(* The call-by-need fast path (BET-298) over the η environment: [PCUICCallByNeedEta] is the copy of integ-all8's
+   (1a92b56c) machine; [PCUICCallByNeedSoundEta] holds the named hypothesis that accepts its [true]. *)
 From MetaRocq.SafeChecker Require PCUICCallByNeedEta PCUICCallByNeedSoundEta.
 
 From Equations Require Import Equations.
@@ -69,8 +70,9 @@ Set Equations Transparent.
   - [convert]: success from [oracle_conv_sound]; a conversion failure is [Refused_c (NotCumulSmaller …)]
     (G7: no completeness), and the callers of [convert] bind it with the refusal bind [x <-? c ;; k], so the
     base failure obligations that needed conversion completeness are deleted (as the guard lane did,
-    [GuardLane/REPORT.md:988-990]). The forecast tree's fast path ([cbn_conv], integ-all7) goes in as one
-    more branch of [convert]'s [with] before the oracle call.
+    [GuardLane/REPORT.md:988-990]). The call-by-need fast path ([cbn_conv], BET-298; integ-all8 1a92b56c's
+    machine, copied in [PCUICCallByNeedEta]) goes in as one more branch of [convert]'s [with] before the oracle
+    call.
   - The failures of [reduce_to_sort]/[reduce_to_prod]/[reduce_to_ind] are [Refused_c]: plan row T8 taken
     as [Refused_c] (stream lead 2026-10-29, FRAC-approved). Each such site carries the required comment.
   - Every other failure keeps [TypeError_c] with its base proof, over the η facts. *)
@@ -515,10 +517,10 @@ Section Typecheck.
   (** The η typing facts ([PCUICTypingEtaHyps]): one implicit Prop premise; [sq] opens it. *)
   Context {EtaF : EtaFacts}.
 
-  (** FORECAST-ONLY (fc/etak-forecast1, FO2): the soundness of the call-by-need fast path over
-      [welltypedE], the named hypothesis [PCUICCallByNeedSoundEta.cbn_conv_soundE] (a Prop class, erased
-      by extraction; its base instance and the two sentences are in [PCUICCallByNeedSoundEta]).
-      Reconciled at the landing of [convert_cbn_soundE]. *)
+  (** The soundness of the call-by-need fast path over [welltypedE]: the named hypothesis
+      [PCUICCallByNeedSoundEta.cbn_conv_soundE] (a Prop class, erased by extraction; its base instance is in
+      [PCUICCallByNeedSoundEta]). It is still OPEN: FRAC (2026-10-30 04:20Z) ships this tree only once a proved
+      instance replaces the premise. *)
   Context {cbnE : PCUICCallByNeedSoundEta.CbnConvSoundE}.
 
   Local Notation reduce_to_sort := (reduce_to_sort (wt := welltypedE) (wfP := wf_extE) (X_type := X_type) (X := X) (normalization_in := normalization_in)).
@@ -589,9 +591,9 @@ Section Typecheck.
   (* replaces convert and convert_leq *)
   (** K7: success from [oracle_conv_sound]; a failure is a refusal (G7: the η conversion's failure carries
       no proof), so base's failure obligation, which used [isconv_term_complete], is deleted.
-      FORECAST-ONLY (fc/etak-forecast1, FO2): integ-all7's call-by-need fast path ([cbn_conv], BET-298) runs
-      before the oracle, as it runs before [isconv_term] in integ-all7's [PCUICTypeChecker.convert]; its
-      [true] is accepted with the named hypothesis [cbn_conv_soundE]. *)
+      The call-by-need fast path ([cbn_conv], BET-298; integ-all8 1a92b56c's machine, copied in
+      [PCUICCallByNeedEta]) runs before the oracle, as it runs before [isconv_term] in base
+      [PCUICTypeChecker.convert]; its [true] is accepted with the named hypothesis [cbn_conv_soundE]. *)
   Equations convert (le : conv_pb) Γ t u
           (ht : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ t)
           (hu : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltypedE Σ Γ u)
@@ -626,7 +628,7 @@ Section Typecheck.
     - exact (subject_is_open_termE (wfΣ := wf_extE_wfE Σ heΣ) hu).
   Qed.
   Next Obligation.
-    (* FORECAST-ONLY (FO2): the call-by-need fast path's [true], by the named hypothesis
+    (* The call-by-need fast path's [true], by the named hypothesis
        [PCUICCallByNeedSoundEta.cbn_conv_soundE] (base: [PCUICCallByNeedSoundHookProof.convert_cbn_sound]). *)
     exact (PCUICCallByNeedSoundEta.cbn_conv_soundE X_type X le Γ t u ht hu Hcbn Σ wfΣ).
   Qed.
@@ -2488,7 +2490,7 @@ Section Typecheck.
   (** A case on a coinductive type whose [ci_cofix_nondep] flag is set, the flag a
       cofixpoint scrutinee unfolds under, is allowed only when its return type does
       not mention the scrutinee, variable 0 of the predicate context.
-      (Re-synced from integ-all7's [PCUICTypeChecker], BET-339.) *)
+      (Re-synced from integ-all7's [PCUICTypeChecker], BET-339; integ-all8 1a92b56c has the same file.) *)
   Definition check_nondep_cofinite (ci : case_info) (mdecl : mutual_inductive_body)
     (p : predicate term)
     : typing_result_comp
