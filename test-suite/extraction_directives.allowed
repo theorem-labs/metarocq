@@ -29,8 +29,6 @@ erasure-plugin/theories/Extraction.v	IMPORT	ExtrOCamlInt63	-	inherited
 erasure-plugin/theories/Extraction.v	IMPORT	ExtrOcamlBasic	-	inherited	
 safechecker-plugin/theories/Extraction.v	EXTRACT_CONSTANT	Equations.Init.pr1	"fst"	repr-proj	
 safechecker-plugin/theories/Extraction.v	EXTRACT_CONSTANT	Equations.Init.pr2	"snd"	repr-proj	
-safechecker-plugin/theories/Extraction.v	EXTRACT_CONSTANT	TemplateToPCUICShared.memo_trans	"Trans_memo.memo"	trusted	[Trans_memo.memo s t k] returns [k ()]. With a test hook armed it instead raises the user error "trans_memo test"; it never returns another value. Checked by test-suite/trans_memo_contract.v.
-safechecker-plugin/theories/Extraction.v	EXTRACT_CONSTANT	TemplateToPCUICShared.trans_memo_release	"Trans_memo.release"	trusted	[Trans_memo.release p] returns [p]; its only other effect is to empty the memo table. Checked by test-suite/trans_memo_contract.v.
 safechecker-plugin/theories/Extraction.v	EXTRACT_INDUCTIVE	Equations.Init.sigma	"( * )" ["(,)"]	repr	
 safechecker-plugin/theories/Extraction.v	IMPORT	ExtrOCamlFloats	-	inherited	
 safechecker-plugin/theories/Extraction.v	IMPORT	ExtrOCamlInt63	-	inherited	

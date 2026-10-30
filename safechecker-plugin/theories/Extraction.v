@@ -33,18 +33,15 @@ Extraction Inline Equations.Prop.Logic.True_rect_dep Equations.Prop.Logic.False_
 (** This Inline is because of a problem of weak type variables (partial application?) *)
 Extraction Inline PCUICPrimitive.prim_val_reflect_eq.
 
-(** The Template-to-PCUIC translation keeps the quoter's sharing: [memo_trans]
-    is the identity in Rocq ([TemplateToPCUICShared.trans_shared_eq]) and the
-    trusted memo on physical equality of [trans_memo.ml] at extraction.  These
-    are the first safechecker extraction directives that replace a computation
-    inside the checker; [Print Assumptions] cannot show them.  The shipped
-    checker is correct only if [Trans_memo.memo Σ t k] returns [k ()] and
-    [Trans_memo.release p] returns [p].  With one of [trans_memo.ml]'s test
-    hooks armed, [Trans_memo.memo] raises the user error "trans_memo test"
-    instead; it never returns another value, and the hooks are inert unless a
-    [MetaRocq Test Memo …] command arms one for its own duration. *)
-Extract Constant TemplateToPCUICShared.memo_trans => "Trans_memo.memo".
-Extract Constant TemplateToPCUICShared.trans_memo_release => "Trans_memo.release".
+(** [memo_trans] and [trans_memo_release] are the Rocq identities
+    ([TemplateToPCUICShared.v], [trans_shared_eq]), and they are extracted as
+    they are written.  The two [Extract Constant] directives that replaced them
+    by the memo of [trans_memo.ml] are gone: they put 7,206 bytes of
+    hand-written OCaml inside the checker that [Print Assumptions] could not
+    show -- the root report is the same 377 lines and 36 axioms with them and
+    without them -- and they were measured to cost rather than save
+    (LemmaPin_3: 1,452.99 s and 9.99 GiB without, 1,459.54 s and 11.00 GiB
+    with, one concurrent pair, same box, 2 CPUs and 24 GiB each). *)
 
 Set Extraction Output Directory "src".
 (** The extracted checker runs the real, executable guard check
