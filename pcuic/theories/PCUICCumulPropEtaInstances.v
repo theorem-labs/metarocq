@@ -1,16 +1,18 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+   lemma, not a mechanical guarantee. *)
 
 (** * Satisfying instances of the lemmas of [PCUICCumulPropEta] (row T6)
 
   Each lemma family of [PCUICCumulPropEta] with a premise is applied here to concrete premises,
   each proved. NON-DEGENERATE: every instance tagged NONDEGEN rests on a non-trivial premise: an
   η step ([λx:Prop. f x] and [f] in the context [f : Prop → Prop], [cpi_eta]; [G (λy:Prop. F y)]
-  and [G F] for the two [typing_leq_term_prop] rows), a β step ([cpi_beta], [cpi_redex]), two
-  universe levels of one family, two different upper sorts of one term ([Prop] and [Type₀] in
-  [cumul_sort_confluenceE_inst]), or two universe instances. The substitution rows: the three
+  and [G F] for the two [typing_leq_term_prop] rows), a β step ([cpi_beta], [cpi_redex]; the three
+  rows that turn a reduction into [cumul_propE] use [cpi_xx], whose redex body uses its variable
+  inside a product), two universe levels of one family, two different upper sorts of one term
+  ([Prop] and [Type₀] in [cumul_sort_confluenceE_inst]), or two universe instances. The
+  substitution rows: the three
   [cpi_id] rows substitute [id] for [f] in [λx:Prop. f x] and in [f] itself, whose result is
   [id]; [cpi_id_subst_nondeg] states that the result on [λx:Prop. f x] differs from
   [λx:Prop. f x] and from the result on [f]. The other three substitute into [∀y:Prop. g y]
@@ -139,6 +141,36 @@ Section Generic.
   Lemma cpi_beta_nondeg : (cpi_beta <> tSort sProp) × red1 rf_Σ [] cpi_beta (tSort sProp).
   Proof. split; [intros h; vm_compute in h; discriminate h|constructor]. Qed.
 
+  (** β on a redex whose body uses its variable inside a term: [(λx:Type. x → x) Prop ⇝ Prop → Prop]. *)
+  Definition cpi_xx_body : term := tProd cpi_na (tRel 0) (tRel 1).
+  Definition cpi_xx : term := tApp (tLambda cpi_na (tSort (Sort.super sProp)) cpi_xx_body) (tSort sProp).
+  Definition cpi_xx_reduct : term := tProd cpi_na (tSort sProp) (tSort sProp).
+
+  Lemma cpi_xx_red Γ : is_closed_context Γ -> rf_Σ ;;; Γ ⊢ cpi_xx ⇝ cpi_xx_reduct.
+  Proof.
+    intros hΓ. split; [exact hΓ|reflexivity|]. apply red1_red.
+    exact (red_beta _ _ cpi_na (tSort (Sort.super sProp)) cpi_xx_body (tSort sProp)).
+  Qed.
+
+  (** The body [x → x] of the redex [(λx:Type. x → x) Prop] is not the bare variable, and the
+      variable occurs in it; substituting [Prop] gives the reduct [Prop → Prop], which is neither the
+      argument [Prop], nor the body, nor the redex; the redex reduces to it in one [red1] step. *)
+  Lemma cpi_xx_nondeg :
+    [× cpi_xx_body <> tRel 0, noccur_between 0 1 cpi_xx_body = false,
+       subst1 (tSort sProp) 0 cpi_xx_body = cpi_xx_reduct, cpi_xx_reduct <> tSort sProp,
+       cpi_xx_reduct <> cpi_xx_body, cpi_xx_reduct <> cpi_xx
+     & red1 rf_Σ [] cpi_xx cpi_xx_reduct].
+  Proof.
+    split.
+    - intros h; vm_compute in h; discriminate h.
+    - reflexivity.
+    - reflexivity.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - intros h; vm_compute in h; discriminate h.
+    - exact (red_beta _ _ cpi_na (tSort (Sort.super sProp)) cpi_xx_body (tSort sProp)).
+  Qed.
+
   (** A third term, one β step from [f]: [(λg:Prop → Prop. g) f]. *)
   Definition cpi_redex : term := tApp (tLambda cpi_na rf_F (tRel 0)) (tRel 0).
 
@@ -235,34 +267,30 @@ Section Generic.
     cumul_prop_cum_pb_rE (wfΣ := cpi_wf_extE) (A := tRel 0) (T := cpi_redex) (B := rf_t)
       cpi_redex_cp (cpi_eta Cumul).
 
-  Lemma cpi_Prop_red_refl : rf_Σ ;;; [] ⊢ tSort sProp ⇝ tSort sProp.
-  Proof. split; [reflexivity|reflexivity|]. apply rt_refl. Qed.
-
-  Lemma cpi_Prop_eq : eq_term_prop rf_Σ 0 (tSort sProp) (tSort sProp).
-  Proof. constructor. reflexivity. Qed.
-
-  Lemma cpi_beta_reducts : ∑ nf nf', [× rf_Σ ;;; [] ⊢ cpi_beta ⇝ nf, rf_Σ ;;; [] ⊢ tSort sProp ⇝ nf'
-                                        & eq_term_prop rf_Σ 0 nf nf'].
+  Lemma cpi_xx_reducts : ∑ nf nf', [× rf_Σ ;;; [] ⊢ cpi_xx ⇝ nf, rf_Σ ;;; [] ⊢ cpi_xx_reduct ⇝ nf'
+                                      & eq_term_prop rf_Σ 0 nf nf'].
   Proof.
-    exists (tSort sProp), (tSort sProp).
-    split; [exact (cpi_beta_red [] eq_refl)|exact cpi_Prop_red_refl|exact cpi_Prop_eq].
+    exists cpi_xx_reduct, cpi_xx_reduct.
+    split; [exact (cpi_xx_red [] eq_refl)| |].
+    - split; [reflexivity|reflexivity|]. apply rt_refl.
+    - repeat first [reflexivity | constructor].
   Qed.
 
-  (** β: [(λx:Type. x) Prop ~~ Prop], from reducts of the two sides related by [eq_term_prop]
-      ([cpi_beta_reducts]).
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_beta_nondeg *)
-  Definition into_cumul_propE_red_inst : rf_Σ ;;; [] |-E cpi_beta ~~ tSort sProp :=
-    into_cumul_propE_red (T := cpi_beta) (U := tSort sProp) cpi_beta_reducts.
+  (** β: [(λx:Type. x → x) Prop ~~ Prop → Prop], from reducts of the two sides related by
+      [eq_term_prop] ([cpi_xx_reducts]).
+      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_xx_nondeg *)
+  Definition into_cumul_propE_red_inst : rf_Σ ;;; [] |-E cpi_xx ~~ cpi_xx_reduct :=
+    into_cumul_propE_red (T := cpi_xx) (U := cpi_xx_reduct) cpi_xx_reducts.
 
-  (** β, from the reduction.
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_beta_nondeg *)
-  Definition red_cumul_propE_inst : rf_Σ ;;; [] |-E cpi_beta ~~ tSort sProp :=
-    red_cumul_propE (wfΣ := cpi_wfE) cpi_beta (tSort sProp) (cpi_beta_red [] eq_refl).
+  (** β, from the reduction [(λx:Type. x → x) Prop ⇝ Prop → Prop].
+      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_xx_nondeg *)
+  Definition red_cumul_propE_inst : rf_Σ ;;; [] |-E cpi_xx ~~ cpi_xx_reduct :=
+    red_cumul_propE (wfΣ := cpi_wfE) cpi_xx cpi_xx_reduct (cpi_xx_red [] eq_refl).
 
-  (** β, from the reduction, under [wf_extE].
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_beta_nondeg *)
-  Definition red_conv_propE_inst : rf_Σ ;;; [] |-E cpi_beta ~~ tSort sProp :=
-    red_conv_propE (wfΣ := cpi_wf_extE) (T := cpi_beta) (U := tSort sProp) (cpi_beta_red [] eq_refl).
+  (** β, from the same reduction, under [wf_extE].
+      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_xx_nondeg *)
+  Definition red_conv_propE_inst : rf_Σ ;;; [] |-E cpi_xx ~~ cpi_xx_reduct :=
+    red_conv_propE (wfΣ := cpi_wf_extE) (T := cpi_xx) (U := cpi_xx_reduct) (cpi_xx_red [] eq_refl).
 
   (** ** Sorts *)
 

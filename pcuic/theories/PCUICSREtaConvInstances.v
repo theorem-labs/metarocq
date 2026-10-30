@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+   lemma, not a mechanical guarantee. *)
 
 (** * Satisfying instances of the hypotheses of [PCUICSREtaConv]
 
@@ -23,11 +23,14 @@
   [declared_inductive_closed_params_instE] has no relation in it; its instance has a non-empty
   parameter context. [ws_cumul_ctx_pbE_cons_inv] inverts one constructor of [All2_fold], so its
   instance is tagged IMPOSSIBLE; it runs on the mixed pair of [sc_ctx_m], whose tails and heads
-  differ. The reduction lemmas are applied to the reduction of [Π x:(λy:Prop. y) Prop. Prop] to
-  [Π x:Prop. Prop] ([red_it_mkProd_or_LetIn_smash_cb], [red_has_rec_arg_cb]), to that of
-  [(λy:Prop. y) Prop] to [Prop] ([closed_red_from_empty_cb]), and to the unfolding of the
-  let-bound [z] in [z → z], where [z] is not the whole term ([red_expand_let_cb],
-  [red_expand_letE]; [sc_let_unfolds]).
+  differ. The reduction lemmas are applied to the β step [(λx:Prop. x → x) (∀P:Prop. P)] ⇝
+  [(∀P:Prop. P) → ∀P:Prop. P], whose body uses its variable ([sc_xx_redex], [sc_xx_reduct]):
+  as one step ([closed_red1_ws_cumul_pbE]), as a reduction moved into a context
+  ([closed_red_from_empty_cb]), as a step of an assumption type (the four one-declaration
+  context rows) and in the domain of a product ([red_it_mkProd_or_LetIn_smash_cb]);
+  [red_has_rec_arg_cb] is applied to the reduction of [Π x:(λy:Prop. y) Prop. Prop] to
+  [Π x:Prop. Prop]; [red_expand_let_cb] and [red_expand_letE] to the unfolding of the
+  let-bound [z] in [z → z], where [z] is not the whole term ([sc_let_unfolds]).
 
   WITNESSES: sc_*
   (the concrete contexts, definitions and derivations [sc_*] that the instances use; the NONDEGEN
@@ -60,10 +63,6 @@ Definition sc_Γb : context := [vass si_na fi_beta].
 
 Lemma sc_ctx_beta : ws_cumul_ctx_pbE Conv si_Σ ([] ,,, sc_Γb) ([] ,,, fi_Γ1).
 Proof. constructor; [constructor|]. constructor; [reflexivity|exact (fi_WS_beta Conv)]. Qed.
-
-(** The contexts [x : (λy:Prop. y) Prop] and [x : Prop] differ. *)
-Lemma sc_Γb_differs : sc_Γb <> fi_Γ1.
-Proof. discriminate. Qed.
 
 (** One-let contexts whose bodies are [λx:Prop. Prop x] and [Prop], at [Conv]. *)
 Definition sc_Γd1 : context := [vdef si_na fi_eta fi_P].
@@ -108,13 +107,6 @@ Lemma sc_Γm_reln_nondeg :
       to_extended_list sc_Γm1 = [tRel 1] &
       sc_Γm1 <> sc_Γm2].
 Proof. split; [intros acc n; reflexivity|reflexivity|discriminate]. Qed.
-
-(** One step of context reduction: the type [fi_beta] reduces to [fi_P]. *)
-Lemma sc_one : OnOne2_local_env (fun Δ : context => on_one_decl (red1 si_Σ ([] ,,, Δ))) sc_Γb fi_Γ1.
-Proof.
-  apply onone2_localenv_cons_abs. cbn. split; [reflexivity|].
-  exact (red_beta si_Σ _ si_na fi_P (tRel 0) fi_P).
-Qed.
 
 (** ** Items 1-2 *)
 
@@ -252,21 +244,49 @@ Proof.
     [repeat constructor|repeat constructor|exact sc_rel_d].
 Qed.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γb_differs *)
-Lemma red_one_decl_red_ctx_cb_inst : red_ctx si_Σ ([] ,,, sc_Γb) ([] ,,, fi_Γ1).
-Proof. exact (red_one_decl_red_ctx_cb (Γ := []) (Δ := sc_Γb) (Δ' := fi_Γ1) eq_refl sc_one). Qed.
+(** The β-redex [(λx:Prop. x → x) (∀P:Prop. P)] (the body [sc_x_to_x] under [λx:Prop]) and its
+    contractum [(∀P:Prop. P) → ∀P:Prop. P]. *)
+Definition sc_xx_redex : term := tApp (tLambda si_na fi_P sc_x_to_x) ci_False.
+Definition sc_xx_reduct : term := tProd si_na ci_False ci_False.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γb_differs *)
-Lemma into_closed_red_ctx_cb_inst : closed_red_ctx si_Σ ([] ,,, sc_Γb) ([] ,,, fi_Γ1).
-Proof. exact (into_closed_red_ctx_cb (Γ := [] ,,, sc_Γb) (Δ := [] ,,, fi_Γ1) eq_refl red_one_decl_red_ctx_cb_inst). Qed.
+Lemma sc_xx_red1 (Γ : context) : red1 si_Σ Γ sc_xx_redex sc_xx_reduct.
+Proof. exact (red_beta si_Σ Γ si_na fi_P sc_x_to_x ci_False). Qed.
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γb_differs *)
-Lemma red_one_decl_red_context_cb_inst : closed_red_ctx si_Σ ([] ,,, sc_Γb) ([] ,,, fi_Γ1).
-Proof. exact (red_one_decl_red_context_cb (Γ := []) (Δ := sc_Γb) (Δ' := fi_Γ1) eq_refl sc_one). Qed.
+(** One-assumption contexts with the types [(λx:Prop. x → x) (∀P.P)] and [(∀P.P) → ∀P.P]. *)
+Definition sc_Γxx : context := [vass si_na sc_xx_redex].
+Definition sc_Γxx' : context := [vass si_na sc_xx_reduct].
 
-(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γb_differs *)
-Lemma red_one_decl_ws_cumul_ctx_pbE_inst : ws_cumul_ctx_pbE Conv si_Σ ([] ,,, sc_Γb) ([] ,,, fi_Γ1).
-Proof. exact (red_one_decl_ws_cumul_ctx_pbE (Γ := []) (Δ := sc_Γb) (Δ' := fi_Γ1) eq_refl sc_one). Qed.
+(** One step of context reduction: the type [sc_xx_redex] reduces to [sc_xx_reduct]. *)
+Lemma sc_one_xx :
+  OnOne2_local_env (fun Δ : context => on_one_decl (red1 si_Σ ([] ,,, Δ))) sc_Γxx sc_Γxx'.
+Proof.
+  apply onone2_localenv_cons_abs. cbn. split; [reflexivity|].
+  exact (sc_xx_red1 []).
+Qed.
+
+(** The β step of the assumption type runs through a body that uses its variable ([x → x] is
+    not a bare variable); its contractum is neither the argument [∀P.P] nor the body, and the two
+    contexts differ. *)
+Lemma sc_Γxx_nondeg :
+  [/\ (forall k, sc_x_to_x <> tRel k), sc_xx_reduct <> ci_False, sc_xx_reduct <> sc_x_to_x &
+      sc_Γxx <> sc_Γxx'].
+Proof. split; [intros k; discriminate|discriminate|discriminate|discriminate]. Qed.
+
+(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γxx_nondeg *)
+Lemma red_one_decl_red_ctx_cb_inst : red_ctx si_Σ ([] ,,, sc_Γxx) ([] ,,, sc_Γxx').
+Proof. exact (red_one_decl_red_ctx_cb (Γ := []) (Δ := sc_Γxx) (Δ' := sc_Γxx') eq_refl sc_one_xx). Qed.
+
+(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γxx_nondeg *)
+Lemma into_closed_red_ctx_cb_inst : closed_red_ctx si_Σ ([] ,,, sc_Γxx) ([] ,,, sc_Γxx').
+Proof. exact (into_closed_red_ctx_cb (Γ := [] ,,, sc_Γxx) (Δ := [] ,,, sc_Γxx') eq_refl red_one_decl_red_ctx_cb_inst). Qed.
+
+(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γxx_nondeg *)
+Lemma red_one_decl_red_context_cb_inst : closed_red_ctx si_Σ ([] ,,, sc_Γxx) ([] ,,, sc_Γxx').
+Proof. exact (red_one_decl_red_context_cb (Γ := []) (Δ := sc_Γxx) (Δ' := sc_Γxx') eq_refl sc_one_xx). Qed.
+
+(* INSTANCE NONDEGEN PCUICSREtaConvInstances.sc_Γxx_nondeg *)
+Lemma red_one_decl_ws_cumul_ctx_pbE_inst : ws_cumul_ctx_pbE Conv si_Σ ([] ,,, sc_Γxx) ([] ,,, sc_Γxx').
+Proof. exact (red_one_decl_ws_cumul_ctx_pbE (Γ := []) (Δ := sc_Γxx) (Δ' := sc_Γxx') eq_refl sc_one_xx). Qed.
 
 (* INSTANCE IMPOSSIBLE: the premise T = U makes both sides of the conclusion the same term, in every instance and environment *)
 Lemma ws_cumul_pbE_meta_refl_inst : WS Conv [] fi_P fi_P.
@@ -326,16 +346,20 @@ Proof.
   exact (ws_cumul_ctx_pbE_refl_pb (Γ := fi_Γ1 ,,, fi_Γ1) eq_refl).
 Qed.
 
-Lemma sc_closed_red1_beta : closed_red1 si_Σ [] fi_beta fi_P.
-Proof. split; [reflexivity|reflexivity|exact (red_beta si_Σ [] si_na fi_P (tRel 0) fi_P)]. Qed.
+Lemma sc_closed_red1_xx : closed_red1 si_Σ [] sc_xx_redex sc_xx_reduct.
+Proof. split; [reflexivity|reflexivity|exact (sc_xx_red1 [])]. Qed.
 
-(** The two related terms differ: [(λy:Prop. y) Prop] and [Prop]. *)
-Lemma closed_red1_ws_cumul_pbE_inst_nondeg : fi_beta <> fi_P.
-Proof. discriminate. Qed.
+(** The two related terms are the β-redex [(λx:Prop. x → x) (∀P.P)] and its contractum
+    [(∀P.P) → ∀P.P]: they differ, the body [x → x] is not a bare variable, and the contractum is
+    neither the argument [∀P.P] nor the body. *)
+Lemma closed_red1_ws_cumul_pbE_inst_nondeg :
+  [/\ sc_xx_redex <> sc_xx_reduct, (forall k, sc_x_to_x <> tRel k), sc_xx_reduct <> ci_False &
+      sc_xx_reduct <> sc_x_to_x].
+Proof. split; [discriminate|intros k; discriminate|discriminate|discriminate]. Qed.
 
 (* INSTANCE NONDEGEN PCUICSREtaConvInstances.closed_red1_ws_cumul_pbE_inst_nondeg *)
-Lemma closed_red1_ws_cumul_pbE_inst : WS Conv [] fi_beta fi_P.
-Proof. exact (closed_red1_ws_cumul_pbE (t := fi_beta) (u := fi_P) sc_closed_red1_beta). Qed.
+Lemma closed_red1_ws_cumul_pbE_inst : WS Conv [] sc_xx_redex sc_xx_reduct.
+Proof. exact (closed_red1_ws_cumul_pbE (t := sc_xx_redex) (u := sc_xx_reduct) sc_closed_red1_xx). Qed.
 
 (** *** The typed lemmas *)
 
@@ -432,16 +456,24 @@ Proof.
            (t := sc_x_to_x) sc_wf_let eq_refl).
 Qed.
 
-(** The target context [x : Prop] is not the empty context the reduction starts in, and the two
-    terms of the reduction, [(λy:Prop. y) Prop] and [Prop], differ. *)
-Lemma closed_red_from_empty_cb_inst_nondeg : fi_Γ1 <> [] /\ fi_beta <> fi_P.
-Proof. split; discriminate. Qed.
+(** The target context [x : Prop] is not the empty context the reduction starts in; the
+    reduction is the β step of [(λx:Prop. x → x) (∀P.P)], whose body is not a bare variable, and
+    its contractum [(∀P.P) → ∀P.P] is neither the redex, the argument nor the body. *)
+Lemma closed_red_from_empty_cb_inst_nondeg :
+  fi_Γ1 <> [] /\
+  [/\ (forall k, sc_x_to_x <> tRel k), sc_xx_redex <> sc_xx_reduct, sc_xx_reduct <> ci_False &
+      sc_xx_reduct <> sc_x_to_x].
+Proof. split; [discriminate|split; [intros k; discriminate|discriminate|discriminate|discriminate]]. Qed.
 
-(** The reduction [fi_beta ⇝ fi_P] in the empty context, moved into [x : Prop].
+Lemma sc_red_xx : red si_Σ [] sc_xx_redex sc_xx_reduct.
+Proof. apply rt_step. exact (sc_xx_red1 []). Qed.
+
+(** The reduction [sc_xx_redex ⇝ sc_xx_reduct] in the empty context, moved into [x : Prop].
     INSTANCE NONDEGEN PCUICSREtaConvInstances.closed_red_from_empty_cb_inst_nondeg *)
-Lemma closed_red_from_empty_cb_inst : si_Σ ;;; fi_Γ1 ⊢ fi_beta ⇝ fi_P.
+Lemma closed_red_from_empty_cb_inst : si_Σ ;;; fi_Γ1 ⊢ sc_xx_redex ⇝ sc_xx_reduct.
 Proof.
-  exact (closed_red_from_empty_cb (Σ := si_Σ) (Γ := fi_Γ1) (M := fi_beta) (N := fi_P) eq_refl eq_refl fi_red_beta).
+  exact (closed_red_from_empty_cb (Σ := si_Σ) (Γ := fi_Γ1) (M := sc_xx_redex) (N := sc_xx_reduct)
+           eq_refl eq_refl sc_red_xx).
 Qed.
 
 (** [Π x:(λy:Prop. y) Prop. Prop] reduces to [Π x:Prop. Prop] in its domain. *)
@@ -451,21 +483,31 @@ Proof.
   exact (red_beta si_Σ [] si_na fi_P (tRel 0) fi_P).
 Qed.
 
-(** The two products [Π x:(λy:Prop. y) Prop. Prop] and [Π x:Prop. Prop] differ (in their
-    domain). *)
-Lemma red_it_mkProd_or_LetIn_smash_cb_inst_nondeg : it_mkProd_or_LetIn sc_Γb fi_P <> tProd si_na fi_P fi_P.
-Proof. discriminate. Qed.
+(** [Π x:(λx:Prop. x → x) (∀P.P). Prop] reduces to [Π x:(∀P.P) → ∀P.P. Prop] in its domain. *)
+Lemma sc_red_prod_xx : si_Σ ;;; [] ⊢ it_mkProd_or_LetIn sc_Γxx fi_P ⇝ tProd si_na sc_xx_reduct fi_P.
+Proof.
+  split; [reflexivity|reflexivity|]. apply rt_step. cbn. apply prod_red_l.
+  exact (sc_xx_red1 []).
+Qed.
+
+(** The two products differ (in their domain); the domain step is the β step of
+    [(λx:Prop. x → x) (∀P.P)], whose body is not a bare variable and whose contractum is neither
+    the argument nor the body. *)
+Lemma red_it_mkProd_or_LetIn_smash_cb_inst_nondeg :
+  it_mkProd_or_LetIn sc_Γxx fi_P <> tProd si_na sc_xx_reduct fi_P /\
+  [/\ (forall k, sc_x_to_x <> tRel k), sc_xx_reduct <> ci_False & sc_xx_reduct <> sc_x_to_x].
+Proof. split; [discriminate|split; [intros k; discriminate|discriminate|discriminate]]. Qed.
 
 (* INSTANCE NONDEGEN PCUICSREtaConvInstances.red_it_mkProd_or_LetIn_smash_cb_inst_nondeg *)
 Lemma red_it_mkProd_or_LetIn_smash_cb_inst :
   ∑ ctx' t' d,
-    [× decompose_prod_assum [] (tProd si_na fi_P fi_P) = (ctx', t'),
+    [× decompose_prod_assum [] (tProd si_na sc_xx_reduct fi_P) = (ctx', t'),
        nth_error (List.rev (smash_context [] ctx')) 0 = Some d &
-       si_Σ ;;; [] ,,, skipn (#|smash_context [] sc_Γb| - 0) (smash_context [] sc_Γb)
-         ⊢ decl_type (vass si_na fi_beta) ⇝ decl_type d].
+       si_Σ ;;; [] ,,, skipn (#|smash_context [] sc_Γxx| - 0) (smash_context [] sc_Γxx)
+         ⊢ decl_type (vass si_na sc_xx_redex) ⇝ decl_type d].
 Proof.
-  exact (red_it_mkProd_or_LetIn_smash_cb [] sc_Γb fi_P (tProd si_na fi_P fi_P) 0 (vass si_na fi_beta)
-           sc_red_prod eq_refl).
+  exact (red_it_mkProd_or_LetIn_smash_cb [] sc_Γxx fi_P (tProd si_na sc_xx_reduct fi_P) 0
+           (vass si_na sc_xx_redex) sc_red_prod_xx eq_refl).
 Qed.
 
 Definition sc_dp : def term :=

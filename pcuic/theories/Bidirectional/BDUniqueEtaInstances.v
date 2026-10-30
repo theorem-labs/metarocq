@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+   lemma, not a mechanical guarantee. *)
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDUniqueEta] (row T6)
 
@@ -21,11 +21,13 @@
   tagged IMPOSSIBLE pass one derivation twice. The comment above each instance carries its tag
   of the instance degeneracy gate; the declarations that are not instances are registered on the
   witness line after the imports.
-  - in [bu_ΓQ = [f : Π P : Prop. (λ x : Prop. x) P]], [f ▹Π] keeps the codomain [(λ x. x) P] or
-    contracts it ([bu_f_prod1], [bu_f_prod2]), so [f (∀P.P)] infers the two different types
-    [(λ x. x) (∀P.P)] and [∀P.P] ([bu_app_infer1], [bu_app_infer2], [bu_app_types_differ]), for
-    the main theorem, [infering_uniqueE] and [infering_unique'E]. [infering_checkingE] takes the
-    first inference and the check of [f (∀P.P)] at [∀P.P] built on the second ([bu_app_check2]);
+  - in [bu_ΓQ = [f : Π P : Prop. bu_dup P]], with [bu_dup := λ x : Prop. x → x], [f ▹Π] keeps
+    the codomain [bu_dup P] or contracts it to [P → P] ([bu_f_prod1], [bu_f_prod2]), so
+    [f (∀P.P)] infers the two different types [bu_dup (∀P.P)] and [(∀P.P) → (∀P.P)]
+    ([bu_app_infer1], [bu_app_infer2], [bu_app_types_differ]: the body of [bu_dup] uses its
+    variable, and the contractum is neither the argument nor the body), for the main theorem,
+    [infering_uniqueE] and [infering_unique'E]. [infering_checkingE] takes the first inference
+    and the check of [f (∀P.P)] at [(∀P.P) → (∀P.P)] built on the second ([bu_app_check2]);
     [infering_prod_inferingE] takes the first inference and the [▹Π] built on the second
     ([bu_app_prod2]); the first type is not a product ([infering_prod_inferingE_inst_nondeg]);
   - [X := (λ x : Prop. x → x) ((λ y : Prop. y) (∀P.P))] reduces in one step to
@@ -37,10 +39,10 @@
     [infering_ind_ind'E]. Every type inferred for [f] is [X → X], every type inferred for [g] is
     [I X], and [X], [X1], [X2] are pairwise different ([infering_prod_prodE_inst_nondeg],
     [infering_ind_indE_inst_nondeg]);
-  - in [bu_ΓI = [g : Π P : Prop. (λ x : Prop. x) (I P)]], [g (∀P.P)] infers
-    [(λ x. x) (I (∀P.P))] and [I (∀P.P)] ([bu_gF_infer1], [bu_gF_infer2]);
-    [infering_ind_inferingE] takes the first inference and the [▹{I}] built on the second
-    ([bu_gF_ind2]); the first type is not an application of an inductive type
+  - in [bu_ΓI = [g : Π P : Prop. bu_dupI P]], with [bu_dupI := λ x : Prop. I (x → x)],
+    [g (∀P.P)] infers [bu_dupI (∀P.P)] and [I ((∀P.P) → (∀P.P))] ([bu_gF_infer1],
+    [bu_gF_infer2]); [infering_ind_inferingE] takes the first inference and the [▹{I}] built on
+    the second ([bu_gF_ind2]); the first type is not an application of an inductive type
     ([infering_ind_inferingE_inst_nondeg]);
   - in [bu_Γf = [h : Π _ : Prop. d; d := Prop : Type]], [h (∀P.P)] infers [d] and [Prop]
     ([bu_hF_infer1], [bu_hF_infer2]); [infering_sort_inferingE] takes the first inference and the
@@ -76,88 +78,8 @@ From Equations.Type Require Import Relation.
 
 (** ** Derivations, without any class *)
 
-(** [Q := Π P : Prop. (λ x : Prop. x) P] and the context [f : Q]. *)
-Definition bu_Q : term := tProd si_na si_P (tApp iv_id (tRel 0)).
-Definition bu_ΓQ : context := [vass si_na bu_Q].
-
-Lemma bu_idP_typed (Γ : context) : wf_localE si_Σ Γ ->
-  si_Σ ;;; Γ ,, vass si_na si_P |-E tApp iv_id (tRel 0) : si_P.
-Proof.
-  intros h. have w := iv_wf_P si_Σ Γ h.
-  exact (typeE_App _ _ iv_id si_na si_P si_P _ (tRel 0) (iv_PP_typed si_Σ _ w) (iv_id_typed si_Σ _ w)
-           (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl)).
-Qed.
-
-Lemma bu_Q_typed (Γ : context) : wf_localE si_Σ Γ ->
-  si_Σ ;;; Γ |-E bu_Q : tSort (Sort.sort_of_product (Sort.super sProp) sProp).
-Proof.
-  intros h. unfold bu_Q. apply typeE_Prod.
-  - exact (iv_vass_s si_Σ Γ si_na si_P _ (iv_P_typed si_Σ Γ h) eq_refl).
-  - exact (bu_idP_typed Γ h).
-Qed.
-
-Lemma bu_wf_ΓQ : wf_localE si_Σ bu_ΓQ.
-Proof. exact (iv_wf_vass si_Σ [] si_na bu_Q _ localenv_nil (bu_Q_typed [] localenv_nil) eq_refl). Qed.
-
-Lemma bu_f_infer : si_Σ ;;; bu_ΓQ |-E tRel 0 ▹ bu_Q.
-Proof. exact (inferE_Rel _ bu_ΓQ 0 (vass si_na bu_Q) eq_refl). Qed.
-
-(** [f ▹Π] keeping the β-redex of the codomain, and contracting it. *)
-Lemma bu_f_prod1 : si_Σ ;;; bu_ΓQ |-E tRel 0 ▹Π (si_na, si_P, tApp iv_id (tRel 0)).
-Proof. econstructor; [exact bu_f_infer|apply rt_refl]. Qed.
-
-Lemma bu_f_prod2 : si_Σ ;;; bu_ΓQ |-E tRel 0 ▹Π (si_na, si_P, tRel 0).
-Proof.
-  econstructor; [exact bu_f_infer|].
-  apply rt_step. unfold bu_Q. apply prod_red_r. unfold iv_id. apply red_beta.
-Qed.
-
-(** [∀P:Prop. P ◃ Prop], in any context. *)
-Lemma bu_False_check (Γ : context) : si_Σ ;;; Γ |-E iv_False ◃ si_P.
-Proof.
-  eapply checkE_Cumul.
-  - unfold iv_False. apply inferE_Prod.
-    + exact (bd_vass_s Γ si_na si_P _ (bd_P_sort Γ) eq_refl).
-    + econstructor; [exact (inferE_Rel _ (Γ ,, vass si_na si_P) 0 (vass si_na si_P) eq_refl)|apply rt_refl].
-  - apply JoinE_refl.
-Qed.
-
-Lemma bu_app_infer1 : si_Σ ;;; bu_ΓQ |-E tApp (tRel 0) iv_False ▹ tApp iv_id iv_False.
-Proof. exact (inferE_App _ _ _ _ _ _ _ bu_f_prod1 (bu_False_check _)). Qed.
-
-Lemma bu_app_infer2 : si_Σ ;;; bu_ΓQ |-E tApp (tRel 0) iv_False ▹ iv_False.
-Proof. exact (inferE_App _ _ _ _ _ _ _ bu_f_prod2 (bu_False_check _)). Qed.
-
-Lemma bu_app_types_differ : tApp iv_id iv_False <> iv_False.
-Proof. discriminate. Qed.
-
-(** [f (∀P.P) ◃ ∀P.P], on the inference [bu_app_infer2], with a reflexive join. *)
-Lemma bu_app_check2 : si_Σ ;;; bu_ΓQ |-E tApp (tRel 0) iv_False ◃ iv_False.
-Proof. eapply checkE_Cumul; [exact bu_app_infer2|apply JoinE_refl]. Qed.
-
-(** [f (∀P.P) ▹Π (_ : Prop, _)], on the inference [bu_app_infer2]: [∀P.P] is a product. *)
-Lemma bu_app_prod2 : si_Σ ;;; bu_ΓQ |-E tApp (tRel 0) iv_False ▹Π (si_na, si_P, tRel 0).
-Proof. econstructor; [exact bu_app_infer2|apply rt_refl]. Qed.
-
-(** The type [(λ x. x) (∀P.P)] of [bu_app_infer1] is not a product. *)
-Lemma infering_prod_inferingE_inst_nondeg : forall na A B, tApp iv_id iv_False <> tProd na A B.
-Proof. intros na A B. discriminate. Qed.
-
-Definition bu_idF : term := tApp iv_id iv_False.
-
-(** [bu_dup] is [λ x : Prop. x → x]; [X := bu_dup ((λ y : Prop. y) (∀P.P))], and the two terms
-    [X1 := (λ y. y) (∀P.P) → (λ y. y) (∀P.P)] and [X2 := bu_dup (∀P.P)] that [bu_X_red1] and
-    [bu_X_red2] reduce it to. *)
+(** [bu_dup := λ x : Prop. x → x]: its body uses its variable twice. *)
 Definition bu_dup : term := tLambda si_na si_P (tProd si_na (tRel 0) (tRel 1)).
-Definition bu_X : term := tApp bu_dup bu_idF.
-Definition bu_X1 : term := tProd si_na bu_idF bu_idF.
-Definition bu_X2 : term := tApp bu_dup iv_False.
-
-Lemma bu_X_red1 (Γ : context) : red1 si_Σ Γ bu_X bu_X1.
-Proof. exact (red_beta si_Σ Γ si_na si_P (tProd si_na (tRel 0) (tRel 1)) bu_idF). Qed.
-
-Lemma bu_X_red2 (Γ : context) : red1 si_Σ Γ bu_X bu_X2.
-Proof. exact (app_red_r si_Σ Γ bu_idF iv_False bu_dup (red_beta si_Σ Γ si_na si_P (tRel 0) iv_False)). Qed.
 
 Lemma bu_dup_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E bu_dup : iv_PP.
 Proof.
@@ -172,6 +94,108 @@ Proof.
            (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp
               (iv_vass_s si_Σ _ si_na (tRel 0) sProp hx eq_refl) hx2)).
 Qed.
+
+(** [Q := Π P : Prop. bu_dup P] and the context [f : Q]. *)
+Definition bu_Q : term := tProd si_na si_P (tApp bu_dup (tRel 0)).
+Definition bu_ΓQ : context := [vass si_na bu_Q].
+
+Lemma bu_dupP_typed (Γ : context) : wf_localE si_Σ Γ ->
+  si_Σ ;;; Γ ,, vass si_na si_P |-E tApp bu_dup (tRel 0) : si_P.
+Proof.
+  intros h. have w := iv_wf_P si_Σ Γ h.
+  exact (typeE_App _ _ bu_dup si_na si_P si_P _ (tRel 0) (iv_PP_typed si_Σ _ w) (bu_dup_typed _ w)
+           (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl)).
+Qed.
+
+Lemma bu_Q_typed (Γ : context) : wf_localE si_Σ Γ ->
+  si_Σ ;;; Γ |-E bu_Q : tSort (Sort.sort_of_product (Sort.super sProp) sProp).
+Proof.
+  intros h. unfold bu_Q. apply typeE_Prod.
+  - exact (iv_vass_s si_Σ Γ si_na si_P _ (iv_P_typed si_Σ Γ h) eq_refl).
+  - exact (bu_dupP_typed Γ h).
+Qed.
+
+Lemma bu_wf_ΓQ : wf_localE si_Σ bu_ΓQ.
+Proof. exact (iv_wf_vass si_Σ [] si_na bu_Q _ localenv_nil (bu_Q_typed [] localenv_nil) eq_refl). Qed.
+
+Lemma bu_f_infer : si_Σ ;;; bu_ΓQ |-E tRel 0 ▹ bu_Q.
+Proof. exact (inferE_Rel _ bu_ΓQ 0 (vass si_na bu_Q) eq_refl). Qed.
+
+(** [f ▹Π] keeping the β-redex [bu_dup P] of the codomain, and contracting it to [P → P]. *)
+Lemma bu_f_prod1 : si_Σ ;;; bu_ΓQ |-E tRel 0 ▹Π (si_na, si_P, tApp bu_dup (tRel 0)).
+Proof. econstructor; [exact bu_f_infer|apply rt_refl]. Qed.
+
+Lemma bu_f_prod2 : si_Σ ;;; bu_ΓQ |-E tRel 0 ▹Π (si_na, si_P, tProd si_na (tRel 0) (tRel 1)).
+Proof.
+  econstructor; [exact bu_f_infer|].
+  apply rt_step. unfold bu_Q. apply prod_red_r.
+  exact (red_beta si_Σ _ si_na si_P (tProd si_na (tRel 0) (tRel 1)) (tRel 0)).
+Qed.
+
+(** [∀P:Prop. P ◃ Prop], in any context. *)
+Lemma bu_False_check (Γ : context) : si_Σ ;;; Γ |-E iv_False ◃ si_P.
+Proof.
+  eapply checkE_Cumul.
+  - unfold iv_False. apply inferE_Prod.
+    + exact (bd_vass_s Γ si_na si_P _ (bd_P_sort Γ) eq_refl).
+    + econstructor; [exact (inferE_Rel _ (Γ ,, vass si_na si_P) 0 (vass si_na si_P) eq_refl)|apply rt_refl].
+  - apply JoinE_refl.
+Qed.
+
+Lemma bu_app_infer1 : si_Σ ;;; bu_ΓQ |-E tApp (tRel 0) iv_False ▹ tApp bu_dup iv_False.
+Proof. exact (inferE_App _ _ _ _ _ _ _ bu_f_prod1 (bu_False_check _)). Qed.
+
+(** [F → F], with [F := ∀P:Prop. P]: the contractum of [bu_dup F]. *)
+Definition bu_FF : term := tProd si_na iv_False iv_False.
+
+Lemma bu_app_infer2 : si_Σ ;;; bu_ΓQ |-E tApp (tRel 0) iv_False ▹ bu_FF.
+Proof. exact (inferE_App _ _ _ _ _ _ _ bu_f_prod2 (bu_False_check _)). Qed.
+
+(** The two types [bu_dup F] and [F → F] differ; the body [x → x] of [bu_dup] is not a bare
+    variable, and its contractum [F → F] is neither the argument [F] nor the body. *)
+Lemma bu_app_types_differ :
+  [/\ (forall k, tProd si_na (tRel 0) (tRel 1) <> tRel k), tApp bu_dup iv_False <> bu_FF,
+      bu_FF <> iv_False & bu_FF <> tProd si_na (tRel 0) (tRel 1)].
+Proof.
+  split; [intros k; discriminate| | |].
+  - intros e. vm_compute in e. discriminate e.
+  - intros e. vm_compute in e. discriminate e.
+  - intros e. vm_compute in e. discriminate e.
+Qed.
+
+(** [f (∀P.P) ◃ F → F], on the inference [bu_app_infer2], with a reflexive join. *)
+Lemma bu_app_check2 : si_Σ ;;; bu_ΓQ |-E tApp (tRel 0) iv_False ◃ bu_FF.
+Proof. eapply checkE_Cumul; [exact bu_app_infer2|apply JoinE_refl]. Qed.
+
+(** [f (∀P.P) ▹Π (_ : F, F)], on the inference [bu_app_infer2]: [F → F] is a product. *)
+Lemma bu_app_prod2 : si_Σ ;;; bu_ΓQ |-E tApp (tRel 0) iv_False ▹Π (si_na, iv_False, iv_False).
+Proof. econstructor; [exact bu_app_infer2|apply rt_refl]. Qed.
+
+(** The type [bu_dup F] of [bu_app_infer1] is not a product; the body [x → x] of [bu_dup] is not a
+    bare variable, and the product [F → F] it contracts to is not the argument [F]. *)
+Lemma infering_prod_inferingE_inst_nondeg :
+  [/\ (forall na A B, tApp bu_dup iv_False <> tProd na A B),
+      (forall k, tProd si_na (tRel 0) (tRel 1) <> tRel k) &
+      bu_FF <> iv_False].
+Proof.
+  split; [intros na A B; discriminate|intros k; discriminate|].
+  intros e. vm_compute in e. discriminate e.
+Qed.
+
+Definition bu_idF : term := tApp iv_id iv_False.
+
+(** [X := bu_dup ((λ y : Prop. y) (∀P.P))], and the two terms
+    [X1 := (λ y. y) (∀P.P) → (λ y. y) (∀P.P)] and [X2 := bu_dup (∀P.P)] that [bu_X_red1] and
+    [bu_X_red2] reduce it to. *)
+Definition bu_X : term := tApp bu_dup bu_idF.
+Definition bu_X1 : term := tProd si_na bu_idF bu_idF.
+Definition bu_X2 : term := tApp bu_dup iv_False.
+
+Lemma bu_X_red1 (Γ : context) : red1 si_Σ Γ bu_X bu_X1.
+Proof. exact (red_beta si_Σ Γ si_na si_P (tProd si_na (tRel 0) (tRel 1)) bu_idF). Qed.
+
+Lemma bu_X_red2 (Γ : context) : red1 si_Σ Γ bu_X bu_X2.
+Proof. exact (app_red_r si_Σ Γ bu_idF iv_False bu_dup (red_beta si_Σ Γ si_na si_P (tRel 0) iv_False)). Qed.
 
 Lemma bu_X_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E bu_X : si_P.
 Proof.
@@ -265,17 +289,35 @@ Proof.
   - intros e. vm_compute in e. discriminate e.
 Qed.
 
-(** [QI := Π P : Prop. (λ x : Prop. x) (I P)] and the context [g : QI]. *)
-Definition bu_QI : term := tProd si_na si_P (tApp iv_id (tApp (tInd si_ind []) (tRel 0))).
+(** [bu_dupI := λ x : Prop. I (x → x)]: its body uses its variable inside the argument of [I];
+    [QI := Π P : Prop. bu_dupI P] and the context [g : QI]. *)
+Definition bu_dupI : term := tLambda si_na si_P (tApp (tInd si_ind []) (tProd si_na (tRel 0) (tRel 1))).
+Definition bu_QI : term := tProd si_na si_P (tApp bu_dupI (tRel 0)).
 Definition bu_ΓI : context := [vass si_na bu_QI].
+
+Lemma bu_dupI_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E bu_dupI : iv_PP.
+Proof.
+  intros h. have w := iv_wf_P si_Σ Γ h.
+  have hx : si_Σ ;;; Γ ,, vass si_na si_P |-E tRel 0 : tSort sProp :=
+    typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl.
+  have w2 := iv_wf_vass si_Σ _ si_na (tRel 0) sProp w hx eq_refl.
+  have hx2 : si_Σ ;;; Γ ,, vass si_na si_P ,, vass si_na (tRel 0) |-E tRel 1 : tSort sProp :=
+    typeE_Rel _ _ 1 (vass si_na si_P) w2 eq_refl.
+  have hxx : si_Σ ;;; Γ ,, vass si_na si_P |-E tProd si_na (tRel 0) (tRel 1) : si_P :=
+    typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp
+      (iv_vass_s si_Σ _ si_na (tRel 0) sProp hx eq_refl) hx2.
+  exact (typeE_Lambda _ _ si_na si_P (tApp (tInd si_ind []) (tProd si_na (tRel 0) (tRel 1))) si_P
+           (iv_vass si_Σ Γ si_na si_P _ (iv_P_typed si_Σ Γ h) eq_refl)
+           (iv_IX_typed _ (tProd si_na (tRel 0) (tRel 1)) w hxx)).
+Qed.
 
 Lemma bu_QI_typed (Γ : context) : wf_localE si_Σ Γ ->
   si_Σ ;;; Γ |-E bu_QI : tSort (Sort.sort_of_product (Sort.super sProp) sProp).
 Proof.
   intros h. have w := iv_wf_P si_Σ Γ h. unfold bu_QI. apply typeE_Prod.
   - exact (iv_vass_s si_Σ Γ si_na si_P _ (iv_P_typed si_Σ Γ h) eq_refl).
-  - exact (typeE_App _ _ iv_id si_na si_P si_P _ (tApp (tInd si_ind []) (tRel 0)) (iv_PP_typed si_Σ _ w)
-             (iv_id_typed si_Σ _ w) (iv_IX_typed _ (tRel 0) w (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl))).
+  - exact (typeE_App _ _ bu_dupI si_na si_P si_P _ (tRel 0) (iv_PP_typed si_Σ _ w)
+             (bu_dupI_typed _ w) (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl)).
 Qed.
 
 Lemma bu_wf_ΓI : wf_localE si_Σ bu_ΓI.
@@ -284,34 +326,44 @@ Proof. exact (iv_wf_vass si_Σ [] si_na bu_QI _ localenv_nil (bu_QI_typed [] loc
 Lemma bu_g_infer : si_Σ ;;; bu_ΓI |-E tRel 0 ▹ bu_QI.
 Proof. exact (inferE_Rel _ bu_ΓI 0 (vass si_na bu_QI) eq_refl). Qed.
 
-(** [g ▹Π] keeping the β-redex of the codomain, and contracting it. *)
-Lemma bu_g_prod1 : si_Σ ;;; bu_ΓI |-E tRel 0 ▹Π (si_na, si_P, tApp iv_id (tApp (tInd si_ind []) (tRel 0))).
+(** [g ▹Π] keeping the β-redex [bu_dupI P] of the codomain, and contracting it to [I (P → P)]. *)
+Lemma bu_g_prod1 : si_Σ ;;; bu_ΓI |-E tRel 0 ▹Π (si_na, si_P, tApp bu_dupI (tRel 0)).
 Proof. econstructor; [exact bu_g_infer|apply rt_refl]. Qed.
 
-Lemma bu_g_prod2 : si_Σ ;;; bu_ΓI |-E tRel 0 ▹Π (si_na, si_P, tApp (tInd si_ind []) (tRel 0)).
+Lemma bu_g_prod2 :
+  si_Σ ;;; bu_ΓI |-E tRel 0 ▹Π (si_na, si_P, tApp (tInd si_ind []) (tProd si_na (tRel 0) (tRel 1))).
 Proof.
   econstructor; [exact bu_g_infer|].
-  apply rt_step. unfold bu_QI. apply prod_red_r. unfold iv_id. apply red_beta.
+  apply rt_step. unfold bu_QI. apply prod_red_r.
+  exact (red_beta si_Σ _ si_na si_P (tApp (tInd si_ind []) (tProd si_na (tRel 0) (tRel 1))) (tRel 0)).
 Qed.
 
-(** [g (∀P.P)] infers [(λ x. x) (I (∀P.P))] and [I (∀P.P)]; on the second, [▹{I} ([], [∀P.P])]. *)
-Lemma bu_gF_infer1 : si_Σ ;;; bu_ΓI |-E tApp (tRel 0) iv_False ▹ tApp iv_id (tApp (tInd si_ind []) iv_False).
+(** [g (∀P.P)] infers [bu_dupI (∀P.P)] and [I (F → F)]; on the second, [▹{I} ([], [F → F])]. *)
+Lemma bu_gF_infer1 : si_Σ ;;; bu_ΓI |-E tApp (tRel 0) iv_False ▹ tApp bu_dupI iv_False.
 Proof. exact (inferE_App _ _ _ _ _ _ _ bu_g_prod1 (bu_False_check _)). Qed.
 
-Lemma bu_gF_infer2 : si_Σ ;;; bu_ΓI |-E tApp (tRel 0) iv_False ▹ tApp (tInd si_ind []) iv_False.
+Lemma bu_gF_infer2 : si_Σ ;;; bu_ΓI |-E tApp (tRel 0) iv_False ▹ tApp (tInd si_ind []) bu_FF.
 Proof. exact (inferE_App _ _ _ _ _ _ _ bu_g_prod2 (bu_False_check _)). Qed.
 
-Lemma bu_gF_ind2 : si_Σ ;;; bu_ΓI |-E tApp (tRel 0) iv_False ▹{si_ind} ([], [iv_False]).
+Lemma bu_gF_ind2 : si_Σ ;;; bu_ΓI |-E tApp (tRel 0) iv_False ▹{si_ind} ([], [bu_FF]).
 Proof. econstructor; [exact bu_gF_infer2|apply rt_refl]. Qed.
 
-(** The type [(λ x. x) (I (∀P.P))] of [bu_gF_infer1] is not an application of an inductive type
-    (its head is a λ). *)
+(** The type [bu_dupI F] of [bu_gF_infer1] is not an application of an inductive type (its head
+    is a λ); the body [I (x → x)] of [bu_dupI] is not a bare variable, and the term [I (F → F)] it
+    contracts to is neither the argument [F] nor the body. *)
 Lemma infering_ind_inferingE_inst_nondeg :
-  forall ind u args, tApp iv_id (tApp (tInd si_ind []) iv_False) <> mkApps (tInd ind u) args.
+  [/\ (forall ind u args, tApp bu_dupI iv_False <> mkApps (tInd ind u) args),
+      (forall k, tApp (tInd si_ind []) (tProd si_na (tRel 0) (tRel 1)) <> tRel k),
+      tApp (tInd si_ind []) bu_FF <> iv_False &
+      tApp (tInd si_ind []) bu_FF <> tApp (tInd si_ind []) (tProd si_na (tRel 0) (tRel 1))].
 Proof.
-  intros ind u args e.
-  have hdec : decompose_app (mkApps (tInd ind u) args) = (tInd ind u, args) by apply decompose_app_mkApps.
-  rewrite -e in hdec. vm_compute in hdec. discriminate hdec.
+  split.
+  - intros ind u args e.
+    have hdec : decompose_app (mkApps (tInd ind u) args) = (tInd ind u, args) by apply decompose_app_mkApps.
+    rewrite -e in hdec. vm_compute in hdec. discriminate hdec.
+  - intros k. discriminate.
+  - intros e. vm_compute in e. discriminate e.
+  - intros e. vm_compute in e. discriminate e.
 Qed.
 
 (** [d := Prop : Type, y : d]: [y ▹ d] ([bu_y_infer]) and [y ▹□ Prop] ([bu_y_sort]). *)
@@ -394,30 +446,32 @@ Qed.
 
 Section BDUniqueClassInstances.
 
-  (** The main theorem's inference component; the two types it relates, [(λ x. x) (∀P.P)] and
-      [∀P.P], differ ([bu_app_types_differ]).
+  (** The main theorem's inference component; the two types it relates, [bu_dup (∀P.P)] and
+      [(∀P.P) → (∀P.P)], differ, and the second is the contractum of the first through a body
+      that uses its variable ([bu_app_types_differ]).
       INSTANCE NONDEGEN BDUniqueEtaInstances.bu_app_types_differ *)
   Definition bidirectional_uniqueE_inst :
-    ∑ T'', si_Σ ;;; bu_ΓQ ⊢ tApp iv_id iv_False ⇝ T'' × si_Σ ;;; bu_ΓQ ⊢ iv_False ⇝ T'' :=
+    ∑ T'', si_Σ ;;; bu_ΓQ ⊢ tApp bu_dup iv_False ⇝ T'' × si_Σ ;;; bu_ΓQ ⊢ bu_FF ⇝ T'' :=
     fst (snd (snd (snd (snd (bidirectional_uniqueE si_Σ si_wfE))))) bu_ΓQ (tApp (tRel 0) iv_False)
-      (tApp iv_id iv_False) bu_app_infer1 bu_wf_ΓQ iv_False bu_app_infer2.
+      (tApp bu_dup iv_False) bu_app_infer1 bu_wf_ΓQ bu_FF bu_app_infer2.
 
   (** INSTANCE NONDEGEN BDUniqueEtaInstances.bu_app_types_differ *)
   Definition infering_uniqueE_inst :
-    ∑ T'', si_Σ ;;; bu_ΓQ ⊢ tApp iv_id iv_False ⇝ T'' × si_Σ ;;; bu_ΓQ ⊢ iv_False ⇝ T'' :=
-    infering_uniqueE (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp iv_id iv_False) (T' := iv_False)
+    ∑ T'', si_Σ ;;; bu_ΓQ ⊢ tApp bu_dup iv_False ⇝ T'' × si_Σ ;;; bu_ΓQ ⊢ bu_FF ⇝ T'' :=
+    infering_uniqueE (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp bu_dup iv_False) (T' := bu_FF)
       bu_app_infer1 bu_app_infer2.
 
   (** INSTANCE NONDEGEN BDUniqueEtaInstances.bu_app_types_differ *)
-  Definition infering_unique'E_inst : si_Σ ;;; bu_ΓQ ⊢E tApp iv_id iv_False = iv_False :=
-    infering_unique'E (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp iv_id iv_False) (T' := iv_False)
+  Definition infering_unique'E_inst : si_Σ ;;; bu_ΓQ ⊢E tApp bu_dup iv_False = bu_FF :=
+    infering_unique'E (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp bu_dup iv_False) (T' := bu_FF)
       bu_app_infer1 bu_app_infer2.
 
-  (** The comparison concluded is [(λ x. x) (∀P.P) ≤ ∀P.P]: the type of [bu_app_infer1] against
-      the type [bu_app_check2] checks [f (∀P.P)] at; the two differ ([bu_app_types_differ]).
+  (** The comparison concluded is [bu_dup (∀P.P) ≤ (∀P.P) → (∀P.P)]: the type of [bu_app_infer1]
+      against the type [bu_app_check2] checks [f (∀P.P)] at; the two differ
+      ([bu_app_types_differ]).
       INSTANCE NONDEGEN BDUniqueEtaInstances.bu_app_types_differ *)
-  Definition infering_checkingE_inst : si_Σ ;;; bu_ΓQ ⊢E tApp iv_id iv_False ≤ iv_False :=
-    infering_checkingE (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp iv_id iv_False) (T' := iv_False) eq_refl
+  Definition infering_checkingE_inst : si_Σ ;;; bu_ΓQ ⊢E tApp bu_dup iv_False ≤ bu_FF :=
+    infering_checkingE (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp bu_dup iv_False) (T' := bu_FF) eq_refl
       bu_app_infer1 bu_app_check2.
 
   (** INSTANCE IMPOSSIBLE: the conclusion [u = u'] equates the sorts of two [▹□] derivations of one term; the two inferred types have a common reduct ([bidirectional_uniqueE], as in the proof of [infering_sort_sortE]), so by confluence the two sorts [tSort u] and [tSort u'] have one, and a sort has no reduct; so in every environment and context, whatever its [wfE], [u = u'] (here [sProp = sProp], for [bu_y_sort] twice). *)
@@ -447,12 +501,12 @@ Section BDUniqueClassInstances.
     infering_prod_prod'E (Σ := si_Σ) si_wfE bu_wf_ΓX (A := bu_X1) (A' := bu_X2) (B := bu_X1) (B' := bu_X2)
       bu_fX_prod1 bu_fX_prod2.
 
-  (** [f (∀P.P) ▹ (λ x. x) (∀P.P)] ([bu_app_infer1]) and [f (∀P.P) ▹Π (_ : Prop, _)]
-      ([bu_app_prod2]): [(λ x. x) (∀P.P)] is not a product
+  (** [f (∀P.P) ▹ bu_dup (∀P.P)] ([bu_app_infer1]) and [f (∀P.P) ▹Π (_ : F, F)]
+      ([bu_app_prod2]): [bu_dup (∀P.P)] is not a product
       ([infering_prod_inferingE_inst_nondeg]).
       INSTANCE NONDEGEN BDUniqueEtaInstances.infering_prod_inferingE_inst_nondeg *)
   Definition infering_prod_inferingE_inst :=
-    infering_prod_inferingE (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp iv_id iv_False) bu_app_prod2 bu_app_infer1.
+    infering_prod_inferingE (Σ := si_Σ) si_wfE bu_wf_ΓQ (T := tApp bu_dup iv_False) bu_app_prod2 bu_app_infer1.
 
   (** The two [▹{I}] derivations of [g] in [bu_Γg] ([bu_gX_ind1], [bu_gX_ind2]): every type
       inferred for [g] is [I X], whose argument is neither [X1] nor [X2], and the argument lists
@@ -468,12 +522,12 @@ Section BDUniqueClassInstances.
     [× si_ind = si_ind, ([] : Instance.t) = [] & ws_cumul_pbE_terms si_Σ bu_Γg [bu_X1] [bu_X2]] :=
     infering_ind_ind'E (Σ := si_Σ) si_wfE bu_wf_Γg (args := [bu_X1]) (args' := [bu_X2]) bu_gX_ind1 bu_gX_ind2.
 
-  (** [g (∀P.P) ▹ (λ x. x) (I (∀P.P))] ([bu_gF_infer1]) and [g (∀P.P) ▹{I} ([], [∀P.P])]
-      ([bu_gF_ind2]): [(λ x. x) (I (∀P.P))] is not an application of an inductive type
+  (** [g (∀P.P) ▹ bu_dupI (∀P.P)] ([bu_gF_infer1]) and [g (∀P.P) ▹{I} ([], [F → F])]
+      ([bu_gF_ind2]): [bu_dupI (∀P.P)] is not an application of an inductive type
       ([infering_ind_inferingE_inst_nondeg]).
       INSTANCE NONDEGEN BDUniqueEtaInstances.infering_ind_inferingE_inst_nondeg *)
   Definition infering_ind_inferingE_inst :=
-    infering_ind_inferingE (Σ := si_Σ) si_wfE bu_wf_ΓI (T := tApp iv_id (tApp (tInd si_ind []) iv_False))
+    infering_ind_inferingE (Σ := si_Σ) si_wfE bu_wf_ΓI (T := tApp bu_dupI iv_False)
       bu_gF_ind2 bu_gF_infer1.
 
   (** The typing [x : G F] in [bd_Γη] ([checking_typingE_eta_inst]): every type inferred for [x]

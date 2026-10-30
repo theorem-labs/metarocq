@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+   lemma, not a mechanical guarantee. *)
 
 (** * Satisfying instances of the lemmas of [PCUICClassificationEta] (row T6)
 
@@ -56,13 +56,13 @@
   - [arity_spine_len_subst_inst] substitutes [∀P. P] for the free variable [x] of the arity
     [let z := x : Prop in Π _ : x. Prop] ([cli_open_arity]), which changes the term
     ([cli_open_arity_subst_differs]); [x] occurs in the let body and in the product domain.
-  - Evaluation: [cli_eval] evaluates the β-redex [(λx:Prop. x) (∀P. P)] to [∀P. P], a different
-    term ([cli_eval_moves]); [subject_reduction_evalE_inst] runs on [cli_eval_xx], the evaluation
-    of [(λx:Prop. x → x) (∀P. P)] to [(∀P. P) → (∀P. P)], whose body uses its variable
-    ([PCUICSREtaInstances.sri_xx_nondeg]); [eval_classificationE_inst] evaluates the fixpoint
-    application [mkApps (tFix iv_mfix 0) [c (∀P. P)]], not a canonical form
-    ([cli_fix_app_not_canonical]), to [c (∀P. P)] ([cli_fix_eval], whose proof makes one
-    unfolding, one β step and [eval_construct]).
+  - Evaluation: [subject_reduction_evalE_inst], [eval_closed_cb_inst], [eval_whneE_inst] and
+    [wcbveval_redE_inst] run on [cli_eval_xx], the evaluation of [(λx:Prop. x → x) (∀P. P)] to
+    [(∀P. P) → (∀P. P)], whose body uses its variable ([PCUICSREtaInstances.sri_xx_nondeg],
+    [cli_eval_xx_nondeg]);
+    [eval_classificationE_inst] evaluates the application [(λx:Prop. c x) (∀P. P)], not a
+    canonical form, to [c (∀P. P)] ([cli_lam_c_eval]: one β step that builds the value from the
+    body [c x], then [eval_construct]; [cli_lam_c_nondeg]).
   - The whnf and value lemmas run on the application [c (∀P. P)], whose head is not the term
     itself ([cli_cF_head_differs]); the conclusion of [fix_app_is_constructorE_inst] is its
     branch for a present recursive argument ([cli_fix_rarg_present]).
@@ -597,16 +597,6 @@ Proof.
   constructor. exact (red_beta _ _ si_na si_P (iv_R (tRel 0)) iv_False).
 Qed.
 
-(** Evaluation: [(λx:Prop. x) (∀P:Prop. P) ⇓ ∀P:Prop. P]. *)
-Lemma cli_eval : eval si_Σ (tApp iv_id iv_False) iv_False.
-Proof.
-  eapply eval_beta; [apply eval_atom; reflexivity|apply eval_atom; reflexivity|].
-  apply eval_atom; reflexivity.
-Qed.
-
-Lemma cli_eval_moves : tApp iv_id iv_False <> iv_False.
-Proof. discriminate. Qed.
-
 (** Evaluation: [(λx:Prop. x → x) (∀P:Prop. P) ⇓ (∀P:Prop. P) → (∀P:Prop. P)]
     ([PCUICSREtaInstances.sri_xx_redex], [PCUICSREtaInstances.sri_xx_reduct]). *)
 Lemma cli_eval_xx : eval si_Σ sri_xx_redex sri_xx_reduct.
@@ -614,6 +604,19 @@ Proof.
   eapply eval_beta; [apply eval_atom; reflexivity|apply eval_atom; reflexivity|].
   apply eval_atom; reflexivity.
 Qed.
+
+(** The value [(∀P:Prop. P) → (∀P:Prop. P)] of [cli_eval_xx] is not a subterm of the argument
+    [∀P:Prop. P] (whose subterms are itself, [Prop] and [tRel 0]), nor the function
+    [λx:Prop. x → x], nor the redex. The closedness of the redex is the closedness of the function
+    and of the argument; the value is the body [x → x] with the argument for [x], and that body is
+    not closed. *)
+Lemma cli_eval_xx_nondeg :
+  sri_xx_redex = tApp sri_xx_lam iv_False /\ sri_xx_lam = tLambda si_na si_P sri_x_to_x /\
+  closedn 0 sri_xx_redex = closedn 0 sri_xx_lam && closedn 0 iv_False /\
+  sri_xx_reduct <> iv_False /\ sri_xx_reduct <> si_P /\ sri_xx_reduct <> tRel 0 /\
+  sri_xx_reduct <> sri_xx_lam /\ sri_xx_reduct <> sri_xx_redex /\
+  closedn 0 sri_x_to_x = false /\ subst1 iv_False 0 sri_x_to_x = sri_xx_reduct.
+Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
 
 (** [c (∀P:Prop. P)] is a value, and evaluates to itself. *)
 Lemma cli_cF_value : value si_Σ sri_cF.
@@ -648,22 +651,41 @@ Proof. intros h. vm_compute in h. discriminate h. Qed.
 Lemma cli_cF_head_differs : head sri_cF <> sri_cF.
 Proof. vm_compute. discriminate. Qed.
 
-(** The fixpoint application [fix f (x : I (∀P. P)) : I (∀P. P) := x] applied to [c (∀P. P)]
-    evaluates to [c (∀P. P)]: one unfolding, one β step. It is not itself a canonical form. *)
-Lemma cli_fix_eval : eval si_Σ (mkApps (tFix iv_mfix 0) [sri_cF]) sri_cF.
+(** [λx:Prop. c x] applied to [∀P:Prop. P], at [I (∀P:Prop. P)]: the body [c x] uses its variable,
+    so the β step builds the value [c (∀P:Prop. P)]. *)
+Definition cli_lam_c : term := tLambda si_na si_P (tApp (tConstruct si_ind 0 []) (tRel 0)).
+Definition cli_lam_c_app : term := tApp cli_lam_c iv_False.
+
+Lemma cli_lam_c_typed : si_Σ ;;; [] |-E cli_lam_c : tProd si_na si_P (tApp (tInd si_ind []) (tRel 0)).
 Proof.
-  change (eval si_Σ (tApp (tFix iv_mfix 0) sri_cF) sri_cF).
-  eapply eval_fix with (mfix := iv_mfix) (idx := 0) (argsv := []) (av := sri_cF)
-    (fn := tLambda si_na iv_IF (tRel 0)).
-  - apply eval_atom; reflexivity.
-  - exact cli_cF_eval.
-  - reflexivity.
-  - cbn [mkApps]. eapply eval_beta; [apply eval_atom; reflexivity|exact cli_cF_eval|exact cli_cF_eval].
+  have w := iv_wf_P si_Σ [] localenv_nil.
+  exact (typeE_Lambda _ _ si_na si_P (tApp (tConstruct si_ind 0 []) (tRel 0)) (tApp (tInd si_ind []) (tRel 0))
+           (iv_vass si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl)
+           (typeE_App _ _ (tConstruct si_ind 0 []) si_na si_P (tApp (tInd si_ind []) (tRel 0)) _ (tRel 0)
+              (iv_cstr_prod_typed _ w) (iv_cstr_typed _ w) (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl))).
 Qed.
 
-Lemma cli_fix_app_not_canonical :
-  PCUICViews.construct_cofix_discr (head (mkApps (tFix iv_mfix 0) [sri_cF])) = false.
-Proof. vm_compute. reflexivity. Qed.
+Lemma cli_lam_c_app_typed : si_Σ ;;; [] |-E cli_lam_c_app : iv_IF.
+Proof.
+  exact (typeE_App _ _ cli_lam_c si_na si_P (tApp (tInd si_ind []) (tRel 0)) _ iv_False
+           (iv_cstr_prod_typed [] localenv_nil) cli_lam_c_typed (iv_False_typed si_Σ [] localenv_nil)).
+Qed.
+
+(** [(λx:Prop. c x) (∀P:Prop. P) ⇓ c (∀P:Prop. P)]: one β step, then [eval_construct]. *)
+Lemma cli_lam_c_eval : eval si_Σ cli_lam_c_app sri_cF.
+Proof.
+  eapply eval_beta; [apply eval_atom; reflexivity|apply eval_atom; reflexivity|exact cli_cF_eval].
+Qed.
+
+(** The application [(λx:Prop. c x) (∀P:Prop. P)] is not a canonical form (its head is an
+    abstraction). Its value [c (∀P:Prop. P)] is the body [c x], which uses [x], with the argument
+    for [x]; it is neither the argument, nor the function, nor the application. *)
+Lemma cli_lam_c_nondeg :
+  PCUICViews.construct_cofix_discr (head cli_lam_c_app) = false /\
+  noccur_between 0 1 (tApp (tConstruct si_ind 0 []) (tRel 0)) = false /\
+  subst1 iv_False 0 (tApp (tConstruct si_ind 0 []) (tRel 0)) = sri_cF /\
+  sri_cF <> iv_False /\ sri_cF <> cli_lam_c /\ sri_cF <> cli_lam_c_app.
+Proof. repeat split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
 
 (** The recursive argument of [tFix iv_mfix 0] is present in [[c (∀P. P)]]. *)
 Lemma cli_fix_rarg_present :
@@ -858,13 +880,18 @@ Definition wh_neutral_emptyE_inst : forall ty, si_Σ ;;; [] |-E mkApps (tFix iv_
 (** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cF_head_differs *)
 Definition value_whnfE_inst := value_whnfE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF eq_refl cli_cF_value.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_eval_moves *)
+(** The value [(∀P:Prop. P) → (∀P:Prop. P)] of [cli_eval_xx], the evaluation of the closed redex
+    [(λx:Prop. x → x) (∀P:Prop. P)], is weak-head normal; that value is the body [x → x] with the
+    argument for [x], neither the argument, nor the function, nor the redex.
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_eval_xx_nondeg *)
 Definition eval_whneE_inst :=
-  eval_whneE (Σ := si_Σ) (wfΣ := si_wfE) (tApp iv_id iv_False) iv_False eq_refl cli_eval.
+  eval_whneE (Σ := si_Σ) (wfΣ := si_wfE) sri_xx_redex sri_xx_reduct eq_refl cli_eval_xx.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_eval_moves *)
-Definition eval_closed_cb_inst : closed iv_False :=
-  eval_closed_cb si_Σ (tApp iv_id iv_False) iv_False eq_refl cli_eval.
+(** The closedness of the value [(∀P:Prop. P) → (∀P:Prop. P)] of [cli_eval_xx], from the
+    closedness of the redex [(λx:Prop. x → x) (∀P:Prop. P)].
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_eval_xx_nondeg *)
+Definition eval_closed_cb_inst : closed sri_xx_reduct :=
+  eval_closed_cb si_Σ sri_xx_redex sri_xx_reduct eq_refl cli_eval_xx.
 
 (** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cF_head_differs *)
 Definition whnf_classification'E_inst :=
@@ -895,10 +922,12 @@ Definition fix_app_is_constructorE_inst :=
   fix_app_is_constructorE (Σ := si_Σ) (wfΣ := si_wfE) (mfix := iv_mfix) (idx := 0) (args := [sri_cF])
     sri_fix_app_typed eq_refl.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_eval_moves *)
-Definition wcbveval_redE_inst : red si_Σ [] (tApp iv_id iv_False) iv_False :=
-  wcbveval_redE (Σ := si_Σ) (wfΣ := si_wfE) (tApp iv_id iv_False) si_P iv_False
-    (iv_app_typed si_Σ [] localenv_nil) cli_eval.
+(** The evaluation [cli_eval_xx] of [(λx:Prop. x → x) (∀P:Prop. P)], typed by
+    [sri_xx_redex_typed], as a reduction to [(∀P:Prop. P) → (∀P:Prop. P)].
+    INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
+Definition wcbveval_redE_inst : red si_Σ [] sri_xx_redex sri_xx_reduct :=
+  wcbveval_redE (Σ := si_Σ) (wfΣ := si_wfE) sri_xx_redex si_P sri_xx_reduct
+    (sri_xx_redex_typed [] localenv_nil) cli_eval_xx.
 
 (** The evaluation [cli_eval_xx] of [(λx:Prop. x → x) (∀P:Prop. P)], typed by
     [sri_xx_redex_typed].
@@ -912,10 +941,11 @@ Definition value_classificationE_inst :=
   value_classificationE (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_cF) (i := si_ind) (u := []) (args := [iv_False])
     sri_cF_typed cli_cF_value.
 
-(** The fixpoint application, not a canonical form, evaluated to [c (∀P. P)].
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_fix_app_not_canonical *)
+(** The application [(λx:Prop. c x) (∀P:Prop. P)], not a canonical form, evaluated to
+    [c (∀P:Prop. P)] by a β step that builds the value from the body [c x].
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_lam_c_nondeg *)
 Definition eval_classificationE_inst :=
   eval_classificationE (Σ := si_Σ) (wfΣ := si_wfE) (i := si_ind) (u := []) (args := [iv_False])
-    sri_fix_app_typed sri_cF cli_fix_eval.
+    cli_lam_c_app_typed sri_cF cli_lam_c_eval.
 
 End ClassificationEtaInstances.

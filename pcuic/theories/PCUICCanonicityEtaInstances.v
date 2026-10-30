@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+   lemma, not a mechanical guarantee. *)
 
 (** * Satisfying instance of [PCUICCanonicityEta.pcuic_canonicityE] (row T6)
 
@@ -12,14 +12,14 @@
   [CanonForecastCopy20] was a second section variable until copy 20 (bfe54de2) and the class was
   deleted; T1's [SRForecastCopy18] was deleted when copy 18b landed.)
 
-  **Non-degeneracy.** The instance runs on the fixpoint application
-  [t = mkApps (tFix iv_mfix 0) [c (∀P:Prop. P)] : I (∀P:Prop. P)] in [si_Σ]
-  ([PCUICSREtaInstances.sri_fix_app_typed]), with [axiom_free si_Σ] ([cli_axiom_free]) and
-  [wfE si_Σ] proved. [t] is not a canonical form: its head is a [tFix], neither a constructor nor
-  a cofixpoint. The lemma returns a [t'] convertible to [t] whose head is a constructor or a
-  cofixpoint; [pcuic_canonicityE_inst_moves] proves that this [t'] is not [t]. (One fixpoint
-  unfolding reduces [t] to the β-redex [(λx. x) (c (∀P:Prop. P))],
-  [PCUICSREtaInstances.sri_fix_red].) The normalization that the lemma rests on is the section
+  **Non-degeneracy.** The instance runs on the application
+  [t = (λx:Prop. c x) (∀P:Prop. P) : I (∀P:Prop. P)] in [si_Σ]
+  ([PCUICClassificationEtaInstances.cli_lam_c_app_typed]), with [axiom_free si_Σ]
+  ([cli_axiom_free]) and [wfE si_Σ] proved. Neither [t] (its head is an abstraction) nor its
+  argument [∀P:Prop. P] (a product) is a canonical form; the β step builds [c (∀P:Prop. P)], the
+  body [c x], which uses [x], with the argument for [x]. The lemma returns a [t'] convertible to
+  [t] whose head is a constructor or a cofixpoint; [pcuic_canonicityE_inst_moves] proves that this
+  [t'] is neither [t] nor the argument. The normalization that the lemma rests on is the section
   variable above. *)
 
 From MetaRocq.Utils Require Import utils.
@@ -36,20 +36,29 @@ Section CanonicityEtaInstances.
 (* Base's normalization premise (by design, never discharged). *)
 Context {nor : normalizing_flags} {nin : NormalizationInE si_Σ}.
 
-(** [t] is a fixpoint application, not a constructor application, so [t' ≠ t]
-    ([pcuic_canonicityE_inst_moves]).
+(** [t] is the application [(λx:Prop. c x) (∀P:Prop. P)]: neither [t] nor its argument is a
+    canonical form, so [t'] is neither ([pcuic_canonicityE_inst_moves]).
     INSTANCE NONDEGEN PCUICCanonicityEtaInstances.pcuic_canonicityE_inst_moves *)
 Definition pcuic_canonicityE_inst :=
-  pcuic_canonicityE si_Σ (mkApps (tFix iv_mfix 0) [sri_cF]) si_ind [] [iv_False] cli_axiom_free
-    si_wfE sri_fix_app_typed.
+  pcuic_canonicityE si_Σ cli_lam_c_app si_ind [] [iv_False] cli_axiom_free si_wfE cli_lam_c_app_typed.
 
-(** The canonical form returned differs from [t]: its head is a constructor or a cofixpoint,
-    and [t]'s head is [tFix iv_mfix 0]. *)
+(** [t = (λx:Prop. c x) (∀P:Prop. P)]: its body [c x] uses [x], and the β step substitutes the
+    argument for [x], giving the canonical form [c (∀P:Prop. P)]. Neither [t] (head: an
+    abstraction) nor the argument [∀P:Prop. P] (head: a product) is canonical, so the canonical
+    form [t'] returned is neither [t] nor the argument. *)
 Lemma pcuic_canonicityE_inst_moves :
-  projT1 pcuic_canonicityE_inst <> mkApps (tFix iv_mfix 0) [sri_cF].
+  cli_lam_c_app = tApp (tLambda si_na si_P (tApp (tConstruct si_ind 0 []) (tRel 0))) iv_False /\
+  noccur_between 0 1 (tApp (tConstruct si_ind 0 []) (tRel 0)) = false /\
+  subst1 iv_False 0 (tApp (tConstruct si_ind 0 []) (tRel 0)) = sri_cF /\
+  PCUICViews.construct_cofix_discr (head cli_lam_c_app) = false /\
+  PCUICViews.construct_cofix_discr (head iv_False) = false /\
+  PCUICViews.construct_cofix_discr (head sri_cF) = true /\
+  projT1 pcuic_canonicityE_inst <> cli_lam_c_app /\
+  projT1 pcuic_canonicityE_inst <> iv_False.
 Proof.
+  do 6 (split; [reflexivity|]).
   destruct pcuic_canonicityE_inst as [t' [[ty conv] hd]]; cbn [projT1]; clear ty conv.
-  intros ->. vm_compute in hd. discriminate hd.
+  split; intros ->; vm_compute in hd; discriminate hd.
 Qed.
 
 End CanonicityEtaInstances.

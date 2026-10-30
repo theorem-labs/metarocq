@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+   lemma, not a mechanical guarantee. *)
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDToPCUICEta] (row T6)
 
@@ -20,9 +20,11 @@
   the lemmas under test ([bdi_wfFG], [bdi_wfη], [bdi_wf_Γδ], [bdi_wf_Γβ], [bdi_wf_Γβπ]).
 
   **Non-degeneracy.** Each instance applies its lemma to concrete derivations. The comment above
-  each instance carries its tag of the instance degeneracy gate, with the lemma that states its
-  non-degeneracy; the declarations that are not instances are registered on the witness line
-  after the imports.
+  each instance carries its tag of the instance degeneracy gate: for a NONDEGEN tag, the lemma that
+  states its non-degeneracy; for the one IMPOSSIBLE tag, [wf_local_local_relE_inst], the reason
+  why every instance of [wf_local_local_relE] is degenerate (its proof is the second projection of
+  [All_local_env_app_inv] on its premise). The declarations that are not instances are registered
+  on the witness line after the imports.
   - [checking_typingE_eta_inst]: soundness on the check [x ◃ G F] of [checkingE_eta_inst].
     Every type inferred for [x] in [bd_Γη] is [G (λ y. F y)], which is not [G F] and
     η-contracts to it in one step ([bdi_eta_pair]).

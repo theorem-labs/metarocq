@@ -1,7 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
-   lemma; the measured reader miss rate is recorded in lanes/eta/meta/reader-catch-rate.tsv. *)
+   lemma, not a mechanical guarantee. *)
 
 (** * Satisfying instances of the lemmas of [PCUICPrincipalityEta] (row T2b)
 
@@ -19,7 +19,8 @@
   [principal_type_indE_inst], whose two argument lists differ; the let-in type
   [let y := x in I y] of the scrutinee of [PCUICProgressEtaInstances.pgi_match_let_open], Case
   case, ζ); [closed_red_confluence_cb_inst] (two different one-step reducts);
-  [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step); [typing_leq_termE_inst] ([Prop ≤ Set]
+  [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step on [(λx:Prop. x → x) (∀P. P)], whose body
+  uses its variable); [typing_leq_termE_inst] ([Prop ≤ Set]
   in a codomain); [typing_eq_termE_inst] (two binder names). The rule-coverage instances apply
   [principal_typeE] to terms of twelve different head formers and compare the returned principal
   type with a β-wrapped type that differs from the type of the derivation it was built from
@@ -102,27 +103,45 @@ Proof.
            (closed_red_of (Σ := si_Σ) (Γ := []) (t := tSort sProp) Logic.eq_refl Logic.eq_refl (Equations.Type.Relation.rt_refl _ _))).
 Qed.
 
-(** A chain of one [R_c] step (β) from [canon ((λx:Prop. x) A)], in [A : Prop], to [A]. *)
-Lemma pr_chain : Equations.Type.Relation.clos_refl_trans (Equations.Type.Relation.union (R_c si_Σ bd_Γ1) eta1) (canon (tApp iv_id (tRel 0))) (tRel 0).
+(** A chain of one [R_c] step (β) from [canon ((λx:Prop. x → x) (∀P:Prop. P))], the redex itself
+    ([PCUICSREtaInstances.sri_xx_redex]), to [(∀P:Prop. P) → (∀P:Prop. P)]
+    ([PCUICSREtaInstances.sri_xx_reduct]). *)
+Lemma pr_chain :
+  Equations.Type.Relation.clos_refl_trans (Equations.Type.Relation.union (R_c si_Σ []) eta1)
+    (canon PCUICSREtaInstances.sri_xx_redex) PCUICSREtaInstances.sri_xx_reduct.
 Proof.
-  have e : canon (tApp iv_id (tRel 0)) = tApp iv_id (tRel 0) by reflexivity.
-  rewrite e. apply Equations.Type.Relation.rt_step. left. exists (tRel 0). split; [|reflexivity].
-  exact (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) (tRel 0)).
+  have e : canon PCUICSREtaInstances.sri_xx_redex = PCUICSREtaInstances.sri_xx_redex by reflexivity.
+  rewrite e. apply Equations.Type.Relation.rt_step. left. exists PCUICSREtaInstances.sri_xx_reduct.
+  split; [|reflexivity].
+  exact (PCUICSREtaInstances.sri_xx_beta []).
 Qed.
 
-(** [T ≠ H]; [canon T] is [T] itself, the β-redex [(λx:Prop. x) A], which reduces to [H = A] in
-    one β step: the chain from [canon T] to [H] is not empty. *)
+(** [T] is the redex [(λx:Prop. x → x) (∀P:Prop. P)], whose body [x → x] uses [x]; [canon T] is
+    [T], and its one β step reaches [H = (∀P:Prop. P) → (∀P:Prop. P)], the body with the argument
+    for [x], which is canonical. [H] is neither [T], nor the argument, nor the body: the chain is
+    not empty and its end, whose scoping and canonical form the lemma derives, is built by the
+    substitution. *)
 Lemma chain_ws_cumul_pbE_Conv_inst_nondeg :
-  tApp iv_id (tRel 0) <> tRel 0 /\ canon (tApp iv_id (tRel 0)) = tApp iv_id (tRel 0) /\
-  ∥ red1 si_Σ bd_Γ1 (tApp iv_id (tRel 0)) (tRel 0) ∥.
+  ∥ red1 si_Σ [] PCUICSREtaInstances.sri_xx_redex PCUICSREtaInstances.sri_xx_reduct ∥ /\
+  noccur_between 0 1 PCUICSREtaInstances.sri_x_to_x = false /\
+  subst1 iv_False 0 PCUICSREtaInstances.sri_x_to_x = PCUICSREtaInstances.sri_xx_reduct /\
+  canon PCUICSREtaInstances.sri_xx_redex = PCUICSREtaInstances.sri_xx_redex /\
+  canon PCUICSREtaInstances.sri_xx_reduct = PCUICSREtaInstances.sri_xx_reduct /\
+  PCUICSREtaInstances.sri_xx_reduct <> PCUICSREtaInstances.sri_xx_redex /\
+  PCUICSREtaInstances.sri_xx_reduct <> iv_False /\
+  PCUICSREtaInstances.sri_xx_reduct <> PCUICSREtaInstances.sri_x_to_x.
 Proof.
-  split; [discriminate|]. split; [reflexivity|]. constructor.
-  exact (PCUICReduction.red_beta _ _ si_na si_P (tRel 0) (tRel 0)).
+  split; [constructor; exact (PCUICSREtaInstances.sri_xx_beta [])|].
+  repeat split; try reflexivity; intros h; vm_compute in h; discriminate h.
 Qed.
 
 (** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.chain_ws_cumul_pbE_Conv_inst_nondeg *)
-Lemma chain_ws_cumul_pbE_Conv_inst : ws_cumul_pbE Conv si_Σ bd_Γ1 (tApp iv_id (tRel 0)) (tRel 0).
-Proof. exact (chain_ws_cumul_pbE_Conv (Σ := si_Σ) bd_Γ1 (tApp iv_id (tRel 0)) (tRel 0) Logic.eq_refl Logic.eq_refl pr_chain). Qed.
+Lemma chain_ws_cumul_pbE_Conv_inst :
+  ws_cumul_pbE Conv si_Σ [] PCUICSREtaInstances.sri_xx_redex PCUICSREtaInstances.sri_xx_reduct.
+Proof.
+  exact (chain_ws_cumul_pbE_Conv (Σ := si_Σ) [] PCUICSREtaInstances.sri_xx_redex
+           PCUICSREtaInstances.sri_xx_reduct Logic.eq_refl Logic.eq_refl pr_chain).
+Qed.
 
 (** ** Typing derivations, without any class *)
 
