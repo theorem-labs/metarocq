@@ -39,13 +39,16 @@
   The copy lemmas of copies 10, 12, 14 and 16 that [PCUICValidityEta] proved before those copies
   landed are gone from it; their instances are in [PCUICTypingEtaCopies2Instances] and
   [PCUICTypingEtaCopy16Instances].
-  [validityE] and [validity_envE] run on [c (∀P:Prop. P) : (I A){0 := ∀P:Prop. P}]
+  [validity_envE] runs on [c (∀P:Prop. P) : (I A){0 := ∀P:Prop. P}]
   ([PCUICInversionEtaInstances.iv_cF_typed]), whose type the substitution changes
   ([PCUICInversionEtaInstances.iv_cF_codomain_moves]); [type_App'E] builds that judgment.
-  [inversion_mkAppsE] runs on the same application typed at [(λX : Prop. X) (I (∀P:Prop. P))]
-  ([PCUICInversionEtaInstances.iv_cF_typed_conv]): its spine [[∀P:Prop. P]] is not empty, and
-  that type is not [I (∀P:Prop. P)] ([vi_mkApps_spine_nondeg]). Each instance carries its tag
-  (instance-gate grammar).
+  [validityE] runs on [c (z → z) : (I A){0 := z → z}] in [iv_Γz = [z := ∀P:Prop. P : Prop]]
+  ([PCUICInversionEtaInstances.iv_czz_typed]): the argument uses the let [z] of the context and
+  the substitution changes the codomain ([PCUICInversionEtaInstances.iv_czz_codomain_moves]).
+  [inversion_mkAppsE] runs on the same application typed at [I ((∀P:Prop. P) → z)], one δ step
+  of [z] away ([PCUICInversionEtaInstances.iv_czz_typed_IFz]): its spine [[z → z]] is not empty
+  and uses [z], and that type is not [I (z → z)] ([vi_mkApps_spine_nondeg]). Each instance
+  carries its tag (instance-gate grammar).
 
   WITNESSES: T2a_* SR_T2a_* vi_IF_isType0 up_s0_typed_e0 up_s0_isType_e0 vi_s2_typed vi_s1_cumul_s2 vi_s0_cumul_typed
   ([T2a_*], [SR_T2a_*]: the contract fits above, generic in [Σ], not instances; the others: typing
@@ -256,14 +259,14 @@ Definition wf_local_validityE_inst :=
 
 (** ** The six lemmas of copy 16, applied *)
 
-(** [validityE] at [c (∀P:Prop. P) : (I A){0 := ∀P:Prop. P}].
-    INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_cF_codomain_moves *)
+(** [validityE] at [c (z → z) : (I A){0 := z → z}] in [iv_Γz = [z := ∀P:Prop. P : Prop]].
+    INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_czz_codomain_moves *)
 Lemma validityE_inst :
-  [× wfE si_Σ, si_Σ ;;; [] |-E iv_cF : (iv_Ix 0) {0 := iv_False} &
-     isTypeE si_Σ [] ((iv_Ix 0) {0 := iv_False})].
+  [× wfE si_Σ, si_Σ ;;; iv_Γz |-E iv_czz : (iv_Ix 0) {0 := iv_zz} &
+     isTypeE si_Σ iv_Γz ((iv_Ix 0) {0 := iv_zz})].
 Proof.
-  split; [exact si_wfE|exact (iv_cF_typed [] localenv_nil)|].
-  exact (validityE (Σ := si_Σ) (wfΣ := si_wfE) (T := (iv_Ix 0) {0 := iv_False}) (iv_cF_typed [] localenv_nil)).
+  split; [exact si_wfE|exact iv_czz_typed|].
+  exact (validityE (Σ := si_Σ) (wfΣ := si_wfE) (T := (iv_Ix 0) {0 := iv_zz}) iv_czz_typed).
 Qed.
 
 (** [validity_envE] at the same application, in the context [x : Prop].
@@ -274,25 +277,24 @@ Definition validity_envE_inst :
   (wf_localE si_Σ iv_Γ1 * isTypeE si_Σ iv_Γ1 ((iv_Ix 0) {0 := iv_False})) :=
   validity_envE si_Σ si_wfE iv_Γ1 iv_cF ((iv_Ix 0) {0 := iv_False}) (iv_cF_typed iv_Γ1 iv_wf_Γ1).
 
-(** The spine [[∀P:Prop. P]] is not empty: [c (∀P:Prop. P)] is not its head [c]; and the type
-    [(λX : Prop. X) (I (∀P:Prop. P))] is not [I (∀P:Prop. P)]. *)
+(** The spine [[z → z]] is not empty and uses the context's let [z]: [c (z → z)] is not its head
+    [c]; and the type [I ((∀P:Prop. P) → z)] is not the substituted codomain [I (z → z)]. *)
 Lemma vi_mkApps_spine_nondeg :
-  [/\ [iv_False] <> [],
-      mkApps (tConstruct si_ind 0 []) [iv_False] <> tConstruct si_ind 0 [] &
-      tApp (iv_idS sProp) iv_IF <> iv_IF].
-Proof. split; discriminate. Qed.
+  [/\ [iv_zz] <> [], mkApps (tConstruct si_ind 0 []) [iv_zz] <> tConstruct si_ind 0 [],
+      noccur_between 0 1 iv_zz = false & iv_IFz <> (iv_Ix 0) {0 := iv_zz}].
+Proof. split; [discriminate|discriminate|reflexivity|discriminate]. Qed.
 
-(** [inversion_mkAppsE] at [c (∀P:Prop. P) : (λX : Prop. X) (I (∀P:Prop. P))]: the spine
-    [[∀P:Prop. P]] is not empty, and the type is not [I (∀P:Prop. P)] ([vi_mkApps_spine_nondeg]).
+(** [inversion_mkAppsE] at [c (z → z) : I ((∀P:Prop. P) → z)] in [iv_Γz]: the spine [[z → z]] is
+    not empty and uses [z], and the type is not [I (z → z)] ([vi_mkApps_spine_nondeg]).
     INSTANCE NONDEGEN PCUICValidityEtaInstances.vi_mkApps_spine_nondeg
     TARGET PCUICValidityEta.inversion_mkAppsE *)
 Definition inversion_mkAppsE_inst :
-  (si_Σ ;;; [] |-E mkApps (tConstruct si_ind 0 []) [iv_False] : tApp (iv_idS sProp) iv_IF) ×
-  ∑ A, si_Σ ;;; [] |-E tConstruct si_ind 0 [] : A ×
-    PCUICAritiesEta.typing_spineE si_Σ [] A [iv_False] (tApp (iv_idS sProp) iv_IF) :=
-  (iv_cF_typed_conv,
-   inversion_mkAppsE (Σ := si_Σ) (wfΣ := si_wfE) (f := tConstruct si_ind 0 []) (u := [iv_False])
-     (T := tApp (iv_idS sProp) iv_IF) iv_cF_typed_conv).
+  (si_Σ ;;; iv_Γz |-E mkApps (tConstruct si_ind 0 []) [iv_zz] : iv_IFz) ×
+  ∑ A, si_Σ ;;; iv_Γz |-E tConstruct si_ind 0 [] : A ×
+    PCUICAritiesEta.typing_spineE si_Σ iv_Γz A [iv_zz] iv_IFz :=
+  (iv_czz_typed_IFz,
+   inversion_mkAppsE (Σ := si_Σ) (wfΣ := si_wfE) (f := tConstruct si_ind 0 []) (u := [iv_zz])
+     (T := iv_IFz) iv_czz_typed_IFz).
 
 (** [type_App'E] at [c : Π A : Prop. I A] and [∀P:Prop. P : Prop]: the codomain [I A] is
     instantiated at the argument.
