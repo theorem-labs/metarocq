@@ -963,20 +963,14 @@ Definition subject_reduction_evalE_inst : si_Σ ;;; [] |-E sri_xx_reduct : si_P 
   subject_reduction_evalE (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_xx_redex) (u := sri_xx_reduct)
     (sri_xx_redex_typed [] localenv_nil) cli_eval_xx.
 
-(** Ship text pending root confirmation: the root's 06:24Z reason (land6-review.md, section
-    EtaMetaLand13 suspects) verbatim, plus the final clause, from on ship on, for the refutation
-    ship's value_classificationE adds (value_not_stuck_cofix_case, PCUICClassificationEta.v:1298).
-    INSTANCE IMPOSSIBLE: on every instance whose premises hold, construct_cofix_discr (head t) is computed from the head of the instance's own value: the proof turns it into wh_normal (value_final then eval_to_value, a round trip; value_whnfE, constructor by constructor), and whnf_classification'E reads the head at whnf_cstrapp or whnf_cofixapp; every other branch, a stuck fixpoint included, is refuted from the typing at an inductive type, so reaching one needs a False conclusion (as wh_neutral_emptyE); on ship the neutral branch is not refuted there: whnf_classification'E returns its stuck_cofix_case disjunct (wh_neutral_emptyE), which the proof refutes by value_not_stuck_cofix_case, a value being no case blocked on a cofixpoint *)
+(** INSTANCE IMPOSSIBLE: on every instance whose premises hold, construct_cofix_discr (head t) is computed from the head of the instance's own value: the proof turns it into wh_normal (value_final then eval_to_value, a round trip; value_whnfE, constructor by constructor), and whnf_classification'E reads the head at whnf_cstrapp or whnf_cofixapp; at whnf_ne it returns its stuck_cofix_case disjunct (wh_neutral_emptyE), which the proof refutes by value_not_stuck_cofix_case, a value being no case blocked on a cofixpoint, and every other branch, a stuck fixpoint included, is refuted from the typing at an inductive type; so reaching any branch but the head's needs an uninhabited conclusion *)
 Definition value_classificationE_inst :=
   value_classificationE (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_cF) (i := si_ind) (u := []) (args := [iv_False])
     sri_cF_typed cli_cF_value.
 
 (** The application [(λx:Prop. c x) (∀P:Prop. P)], not a canonical form, evaluated to
-    [c (∀P:Prop. P)] by a β step that builds the value from the body [c x]. Ship text pending
-    root confirmation: the root's 06:24Z reason verbatim, plus the final clause, from on ship on,
-    for the refutation ship's eval_classificationE adds (value_not_stuck_cofix_case,
-    PCUICClassificationEta.v:1314).
-    INSTANCE IMPOSSIBLE: on every instance whose premises hold, construct_cofix_discr (head t') is computed from the head of the instance's own evaluation result t': the typing of t' by subject reduction along the evaluation is used only by whnf_classification'E to refute the heads other than a constructor or a cofixpoint, and at whnf_cstrapp and whnf_cofixapp the head is read by computation; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE); on ship the neutral branch is not refuted there: whnf_classification'E returns its stuck_cofix_case disjunct (wh_neutral_emptyE), which the proof refutes by value_not_stuck_cofix_case, t' being a value (eval_to_value) and so no case blocked on a cofixpoint *)
+    [c (∀P:Prop. P)] by a β step that builds the value from the body [c x].
+    INSTANCE IMPOSSIBLE: on every instance whose premises hold, construct_cofix_discr (head t') is computed from the head of the instance's own evaluation result t': the typing of t' by subject reduction along the evaluation is used only by whnf_classification'E to refute the heads other than a constructor or a cofixpoint, and at whnf_cstrapp and whnf_cofixapp the head is read by computation; at whnf_ne whnf_classification'E returns its stuck_cofix_case disjunct (wh_neutral_emptyE), which the proof refutes by value_not_stuck_cofix_case, t' being a value (eval_to_value); so reaching any branch but the head's needs an uninhabited conclusion *)
 Definition eval_classificationE_inst :=
   eval_classificationE (Σ := si_Σ) (wfΣ := si_wfE) (i := si_ind) (u := []) (args := [iv_False])
     cli_lam_c_app_typed sri_cF cli_lam_c_eval.
