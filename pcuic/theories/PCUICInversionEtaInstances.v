@@ -7,9 +7,9 @@
 
 (** * Satisfying instances of the lemmas of [PCUICInversionEta], and the checker's contract
 
-  **The contract.** The five [T6_facts] fields of the checker's
-  [safechecker/theories/PCUICTypingEtaHyps.v] (branch [wip/etak-k7-2026-10-29]) that are rows
-  of [PCUICInversion] are copied here verbatim, under the checker's notation
+  **The contract.** Five fields that the class [T6_facts] of the checker's
+  [safechecker/theories/PCUICTypingEtaHyps.v] held, the ones that are rows of [PCUICInversion],
+  are copied here verbatim, under the checker's notation
   [Σ ;;; Γ ⊢E t ≤ u] ([ws_cumul_pbE Cumul Σ Γ t u]), and each is inhabited by its E lemma:
   [T6_inversion_Const_fit], [T6_inversion_LetIn_fit], [T6_inversion_Prod_fit],
   [T6_inversion_Rel_fit], [T6_inversion_Sort_fit].
@@ -47,8 +47,7 @@
   from [T : s] and [t : T] ([iv_retype]); its NONDEGEN lemma states that [(λX : s. X) T] is not
   [T] (for the fixpoint and the cofixpoint, also that [T] is the declared type). The derivation
   of the [match] of [inversion_CaseE] follows [cp_match_typed] of
-  [PCUICTypingEtaCopies1Instances] (branch [wip/eta-e3-copies1-2026-10-29], not landed). Each
-  instance carries its tag (instance-gate grammar).
+  [PCUICTypingEtaCopies1Instances]. Each instance carries its tag (instance-gate grammar).
 
   WITNESSES: iv_* T6_* iv_ctx_inst iv_kg_keta_differ
   ([iv_*]: the typing pieces, environments and derivations the instances use; [T6_*]: the
