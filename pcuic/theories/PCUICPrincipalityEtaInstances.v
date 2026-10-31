@@ -28,7 +28,9 @@
   [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step on [(λx:Prop. x → x) (∀P. P)], whose body
   uses its variable); [typing_eq_termE_inst] (two binder names). [typing_leq_termE_inst]
   ([Prop ≤ Set] in a codomain) is tagged NOT-BUILT: the two sorts it relates compute to the same
-  sort, so its conclusion is its own premise. The rule-coverage instances apply
+  sort, so its conclusion is its own premise. [T8_Prod_l_plug_inst] and [T8_Prod_l_of_r_inst]
+  (the [Prod_l] site at [z]) are tagged NOT-BUILT too: the cumulativity they are given is the δ
+  step of [z] forgotten, and the reduction they return is that step. The rule-coverage instances apply
   [principal_typeE] to terms of twelve different head formers and compare the returned principal
   type with a β-wrapped type that differs from the type of the derivation it was built from
   ([principal_typeE_rules_nondeg]). *)
@@ -325,7 +327,7 @@ Qed.
 
 (** [Prod_l] at the variable [z], which is not a product and unfolds (δ) to [∀P:Prop. P] in one
     step ([pr_z_delta_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_z_delta_nondeg *)
+    INSTANCE NOT-BUILT: degenerate, a round trip red → cumul → red: the input [pr_False_le_z] is [red_ws_cumul_pbE_inv pr_z_red], the δ step [tRel 1 ⇝ iv_False] forgotten to a cumulativity, and the conclusion's reduction [tRel 1 ⇝ tProd na' dom' codom'] is inhabited by that step; [iv_False = tProd si_na si_P (tRel 0)] and [tRel 1] has no other product reduct, so the binder, domain and codomain fields relate identical pairs; a cumulativity [tProd na dom codom ≤ T] that is not a forgotten reduction of [T] (e.g. with [dom] a redex whose reduct is the reduct's domain) would make [T8_Prod_l_plug] run; no non-degenerate witness built yet *)
 Lemma T8_Prod_l_plug_inst :
   ∑ na' dom' codom',
     [× si_Σ ;;; bdf_Γz ⊢ tRel 1 ⇝ tProd na' dom' codom', eq_binder_annot si_na na',
@@ -333,7 +335,7 @@ Lemma T8_Prod_l_plug_inst :
        ws_cumul_pbE Cumul si_Σ (bdf_Γz ,, vass si_na si_P) (tRel 0) codom'].
 Proof. exact (T8_Prod_l_plug _ si_Σ bdf_Γz Cumul (tRel 1) si_na si_P (tRel 0) sProp si_wfE pr_z_typed pr_False_le_z). Qed.
 
-(** INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_z_delta_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, the input and conclusion of [T8_Prod_l_plug_inst]: [PCUICPrincipalityEta.T8_Prod_l_plug] is defined as [T8_Prod_l_of_r Σ (T8_Prod_r_plug cf Σ)], and the input [pr_False_le_z] is [red_ws_cumul_pbE_inv pr_z_red], the δ step [tRel 1 ⇝ iv_False] forgotten, which inhabits the conclusion's reduction (a round trip); the binder, domain and codomain fields relate identical pairs; a cumulativity [tProd na dom codom ≤ T] that is not a forgotten reduction of [T] would make [T8_Prod_l_of_r] run; no non-degenerate witness built yet *)
 Lemma T8_Prod_l_of_r_inst :
   ∑ na' dom' codom',
     [× si_Σ ;;; bdf_Γz ⊢ tRel 1 ⇝ tProd na' dom' codom', eq_binder_annot si_na na',

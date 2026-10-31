@@ -44,16 +44,10 @@
     application of an inductive type ([bdf_beta_nondeg]); [isTypeE_mkApps_Ind_head_arity_inst]
     on the same [x], where the head arity of [I] is the length of the argument list [[A]]
     ([bdf_head_arity_nondeg]);
-  - the (co)fixpoint witness, at a declared type on which the check fails and which reduces to
-    a type on which it passes: [mfix_body_on_conv_redE_fix_inst], [red_fix_witnessE_inst]
-    ([bdf_fix_d_nondeg]);
-    [mfix_body_on_conv_redE_cofix_inst], [mfix_on_ind_conv_redE_cofix_inst],
-    [red_cofix_witnessE_inst] ([bdf_cofix_d_nondeg]); [typing_inferingE_Fix_beta_inst] on the
-    typed fixpoint [bdf_fix_typed] and [wf_fixpointE_wf_fixpoint_red_typed_inst] on its block
-    [bdf_fmfix], with [bdf_wf_fix] ([bdf_fix_dβ_nondeg]); [typing_inferingE_CoFix_inst] on the
-    typed cofixpoint [bdf_cofix_typed] of [iv_Σ], a [CoFinite] record [R], and
-    [wf_cofixpointE_wf_cofixpoint_red_inst] on its block [bdf_cmfix], with [bdf_wf_cofix]
-    ([bdf_cofix_dβ_nondeg]);
+  - the (co)fixpoint typing, at a declared type on which the check fails and which reduces to a
+    type on which it passes: [typing_inferingE_Fix_beta_inst] on the typed fixpoint
+    [bdf_fix_typed] ([bdf_fix_dβ_nondeg]); [typing_inferingE_CoFix_inst] on the typed cofixpoint
+    [bdf_cofix_typed] of [iv_Σ], a [CoFinite] record [R] ([bdf_cofix_dβ_nondeg]);
   - completeness per typing rule, [typing_inferingE_<rule>_inst]: Rel, Lambda, LetIn and App
     on [bdf_x_prod_typed], [bdf_lam_z_typed], [bdf_letlam_z_typed] and [bdf_app_z_typed], each
     with the variable [x] of [bdf_Γz] in its subject ([bdf_z_nondeg]); Prod on
@@ -82,9 +76,16 @@
     [bd_ΓFG ,, x : G F];
   - tagged NOT-BUILT, because its instance is degenerate and no non-degenerate witness is built
     yet: [wf_fixpointE_wf_fixpoint_red_inst] (its premise [wf_fixpoint_red_wf_fixpointE_inst] is
-    built from [bd_wf_fixpoint_red], whose statement is its conclusion) and
+    built from [bd_wf_fixpoint_red], whose statement is its conclusion),
     [mfix_on_ind_conv_redE_fix_inst] (its premise [bd_mfix_on_ind_red_convE_inst] is built from a
-    projection of [bd_wf_fixpoint_red], whose statement is its conclusion).
+    projection of [bd_wf_fixpoint_red], whose statement is its conclusion), and the seven
+    conv → red instances [red_fix_witnessE_inst], [mfix_body_on_conv_redE_fix_inst],
+    [red_cofix_witnessE_inst], [mfix_body_on_conv_redE_cofix_inst],
+    [mfix_on_ind_conv_redE_cofix_inst], [wf_fixpointE_wf_fixpoint_red_typed_inst] and
+    [wf_cofixpointE_wf_cofixpoint_red_inst]: the conversion each is given ([bdf_fix_dtype_ws],
+    [bdf_fix_witness], [bdf_cofix_dom_ws], [bdf_cofix_witness], [bdf_wf_fix], [bdf_wf_cofix]) is
+    a reduction of the same declared type, forgotten, so the reduction each returns is that one
+    (a round trip).
 
   **Rows not inhabited.** None: every lemma of [BDFromPCUICEta] has an instance here, or is a
   helper of one of them ([T8_Sort_r_plug], [T8_Prod_r_plug], [T8_Ind_r_plug],
@@ -766,7 +767,7 @@ Lemma bdf_fix_d_nondeg :
      red si_Σ bd_Γ1 bd_fix_dtype bd_fix_ty].
 Proof. split; [reflexivity|reflexivity|exact bd_fix_dtype_red]. Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_fix_d_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → conv → red: the conversion [bdf_fix_dtype_ws] is [red_ws_cumul_pbE] of the reduction [bd_fix_dtype_red] of the same declared type [bd_fix_dtype], so the conclusion is inhabited by [bd_fix_dtype_red] with [Δ = []]; a conversion that is not a forgotten reduction of the declared type (two types with a common reduct, neither reducing to the other) would make [red_fix_witnessE] find a reduction; no non-degenerate witness built yet *)
 Lemma red_fix_witnessE_inst :
   ∑ Δ na u' l' B,
     [× red si_Σ bd_Γ1 bd_fix_dtype (it_mkProd_or_LetIn (vass na (mkApps (tInd si_ind u') l') :: Δ) B),
@@ -777,7 +778,7 @@ Proof.
            bd_fix_dtype_isTypeE bdf_fix_dtype_ws eq_refl eq_refl).
 Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_fix_d_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → conv → red: the premise [bdf_fix_witness] gives the type [bd_fix_ty] with the conversion [ws_cumul_pbE_forget_spec bdf_fix_dtype_ws], the forgotten reduction [bd_fix_dtype_red] of the declared type, so the conclusion is inhabited by [bd_fix_ty], the check and [bd_fix_dtype_red]; a conversion that is not a forgotten reduction of the declared type would make [mfix_body_on_conv_redE_fix] find a reduction; no non-degenerate witness built yet *)
 Lemma mfix_body_on_conv_redE_fix_inst : mfix_body_on check_one_fix (red si_Σ bd_Γ1) si_kn bd_fix_d.
 Proof.
   exact (mfix_body_on_conv_redE_fix (Σ := si_Σ) (wfΣ := si_wfE) (d := bd_fix_d) bd_wfE_Γ1 bd_fix_dtype_isTypeE
@@ -808,7 +809,7 @@ Lemma bdf_cofix_d_nondeg :
      red si_Σ bd_Γ1 bd_fix_dom (mkApps (tInd si_ind []) [tRel 0])].
 Proof. split; [reflexivity|reflexivity|exact bdf_cofix_dom_red]. Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_cofix_d_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → conv → red: the conversion [bdf_cofix_dom_ws] is [red_ws_cumul_pbE] of the reduction [bdf_cofix_dom_red] of the same declared type [bd_fix_dom], so the conclusion is inhabited by [bdf_cofix_dom_red] with [Δ = []]; a conversion that is not a forgotten reduction of the declared type would make [red_cofix_witnessE] find a reduction; no non-degenerate witness built yet *)
 Lemma red_cofix_witnessE_inst :
   ∑ Δ u' l', red si_Σ bd_Γ1 bd_fix_dom (it_mkProd_or_LetIn Δ (mkApps (tInd si_ind u') l')).
 Proof.
@@ -816,7 +817,7 @@ Proof.
            (has_sort_isTypeE _ bd_fix_dom_typedE) bdf_cofix_dom_ws).
 Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_cofix_d_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → conv → red: the premise [bdf_cofix_witness] gives the type [I A] with the conversion [ws_cumul_pbE_forget_spec bdf_cofix_dom_ws], the forgotten reduction [bdf_cofix_dom_red] of the declared type [bd_fix_dom], so the conclusion is inhabited by [I A], the check and [bdf_cofix_dom_red]; a conversion that is not a forgotten reduction of the declared type would make [mfix_body_on_conv_redE_cofix] find a reduction; no non-degenerate witness built yet *)
 Lemma mfix_body_on_conv_redE_cofix_inst :
   mfix_body_on check_one_cofix (red si_Σ bd_Γ1) si_kn bdf_cofix_d.
 Proof.
@@ -824,7 +825,7 @@ Proof.
            (has_sort_isTypeE _ bd_fix_dom_typedE) bdf_cofix_witness).
 Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_cofix_d_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → conv → red: the proof builds the premise from [All_cons bdf_cofix_witness All_nil], whose conversion is the forgotten reduction [bdf_cofix_dom_red] of the declared type [bd_fix_dom], so the conclusion's reduction is [bdf_cofix_dom_red] and its other fields are carried over from the premise; a conversion that is not a forgotten reduction of the declared type would make [mfix_on_ind_conv_redE_cofix] find a reduction; no non-degenerate witness built yet *)
 Lemma mfix_on_ind_conv_redE_cofix_inst :
   mfix_on_ind check_one_cofix (red si_Σ bd_Γ1) (fun _ => true) [bdf_cofix_d].
 Proof.
@@ -1058,7 +1059,7 @@ Qed.
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_Fix_beta_inst := typing_inferingE (Σ := si_Σ) (wfΣ := si_wfE) bdf_fix_typed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_fix_dβ_nondeg
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → conv → red: the premise [bdf_wf_fix] builds its conversion as [red_ws_cumul_pbE] of the β step [rt_step (prod_red_l (red_beta …))] of the declared type [bdf_fxty 0], so the conclusion's reduction is that step and its other fields (the block, the check, non-emptiness, [ok]) are carried over from [bdf_wf_fix]; a conversion that is not a forgotten reduction of the declared type would make [wf_fixpointE_wf_fixpoint_red] find a reduction; no non-degenerate witness built yet
     TARGET BDFromPCUICEta.wf_fixpointE_wf_fixpoint_red *)
 Lemma wf_fixpointE_wf_fixpoint_red_typed_inst : wf_fixpoint_red si_Σ bd_Γ1 bdf_fmfix.
 Proof.
@@ -1166,7 +1167,7 @@ Proof. split; [reflexivity|reflexivity|exact (bdf_RFβ_red iv_Γc)]. Qed.
     TARGET BDFromPCUICEta.typing_inferingE *)
 Definition typing_inferingE_CoFix_inst := typing_inferingE (Σ := iv_Σ) (wfΣ := iv_wfE) bdf_cofix_typed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_cofix_dβ_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → conv → red: the premise [bdf_wf_cofix] builds its conversion as [red_ws_cumul_pbE] of [bdf_RFβ_red iv_Γc], the reduction of the declared type [bdf_RFβ] to [iv_RF], so the conclusion is inhabited by [iv_kn], non-emptiness, [All_cons (iv_RF; check; bdf_RFβ_red iv_Γc)] and [ok], each carried over from [bdf_wf_cofix]; a conversion that is not a forgotten reduction of the declared type would make [wf_cofixpointE_wf_cofixpoint_red] find a reduction; no non-degenerate witness built yet *)
 Lemma wf_cofixpointE_wf_cofixpoint_red_inst : wf_cofixpoint_red iv_Σ iv_Γc bdf_cmfix.
 Proof.
   exact (wf_cofixpointE_wf_cofixpoint_red (Σ := iv_Σ) (wfΣ := iv_wfE) (mfix := bdf_cmfix) iv_wf_Γc
