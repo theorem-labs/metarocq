@@ -19,7 +19,7 @@
     lies exactly in the region FO4 admits; [fo_new_premise_holds]: the new one holds.
   The return predicate [P z] is not a β-redex: the dependency on the scrutinee is real.
 
-  Forecast-only: reconciled with FO1/FO4 when F0 lands BET-339 on [frac/eta]. *)
+  Forecast-only: in a tree whose [BDTypingEta.inferE_Case] still has the old side condition this file is a forecast; it is reconciled with the forecasts FO1 and FO4 when that premise takes BET-339's form. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.

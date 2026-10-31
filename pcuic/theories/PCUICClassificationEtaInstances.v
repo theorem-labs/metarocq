@@ -105,7 +105,7 @@
     they conclude [stuck_cofix_case t]; their instances are in
     [PCUICEtaF0Land3Instances] (reason at the place their instances stood).
 
-  - BET-339 (F0 forecast): the disjunct [stuck_cofix_case] that [whnf_classification'E],
+  - BET-339: the disjunct [stuck_cofix_case] that [whnf_classification'E],
     [whnf_classificationE], [ind_whnf_classification'E], [ind_whnf_classificationE] and
     [fix_app_is_constructorE] gained is reached by [PCUICEtaF0Land3Instances]
     ([g_whnf_classification_stuck], on a closed case blocked on a cofixpoint); the instances
@@ -1169,7 +1169,7 @@ Definition invert_fix_indE_inst :
   si_Σ ;;; [] |-E mkApps (tFix iv_mfix 0) [] : mkApps (tInd si_ind []) [iv_False] -> False :=
   invert_fix_indE (Σ := si_Σ) [] iv_mfix 0 [] si_ind [] [iv_False] eq_refl.
 
-(* [wh_neutral_empty_genE] and [wh_neutral_emptyE]: no instance in this file since BET-339 (F0).
+(* [wh_neutral_empty_genE] and [wh_neutral_emptyE]: no instance in this file since BET-339.
    They conclude [stuck_cofix_case t], not [False], and the former instance here (on
    an open term typed in the empty context) has no derivation of its premise. On every instance
    whose premises hold, the conclusion is the instance's own [whne] derivation translated into

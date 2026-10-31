@@ -36,7 +36,7 @@
     [c (∀P. P)], an application whose head [c] is not the term itself; [classificationE_inst] at
     [extraction_checker_flags], the flags its statement is fixed to (as base's), in [si_Σ] proved
     [wfE] at those flags (section [ClassificationFlags]).
-  - BET-339 (F0 forecast): [progressE] and [progress_env_propE] gained the disjunct
+  - BET-339: [progressE] and [progress_env_propE] gained the disjunct
     [wcbv_stuck]; the instances here land in the step disjunct ([sri_xx_redex] is no
     [wcbv_stuck] term: [PCUICEtaF0Land3Instances.l6_xx_redex_not_stuck]), and [PCUICEtaF0Land3Instances]
     runs [progressE] on a closed case blocked on a cofixpoint ([progressE_stuck_inst]). The new
