@@ -52,14 +52,23 @@
     [(∀P. P) → (∀P. P)], which is neither the substituted [∀P. P], nor the body, nor the compared
     let-in ([cli_all_inv_let_nondeg]).
     [typing_spine_nth_errorE_inst] reads the type of the second argument [c (∀P. P)] of
-    [Π x : Prop. Π y : I x. I x] ([cli_depI_ty]) applied to [∀P. P];
-    [typing_spine_nth_error_NoneE_inst] and [typing_spine_nth_error_None_prodE_inst] read the
-    remaining telescope of the dependent type [Π x : Prop. Π y : x. x] ([cli_dep_ty]) applied to
-    [I (∀P. P)] only, at the let-in [let z := I (∀P. P) in Π y : z. z] ([cli_dep_let]), not a
-    product ([cli_dep_let_not_prod]). All three are tagged NOT-BUILT: a β step that their spine
-    ([cli_depI_sp_two], [cli_dep_sp_let]) takes backwards is taken forward again, so each
-    conclusion states what a sub-derivation of the input spine states (the reasons are in the
-    tags); no non-degenerate witness is built yet.
+    [Π x : Prop. Π y : I x. I x] ([cli_depI_ty]) applied to [(λx:Prop. x) (∀P. P)]: its declared
+    type [I x] at that [x] is [I ((λx:Prop. x) (∀P. P))], while the spine ([cli_depI_sp_fwd])
+    types [c (∀P. P)] only at its own type [I (∀P. P)] and reduces the type it reaches there
+    forward to the product [Π y : I (∀P. P). I (∀P. P)]; the lemma applies that conversion,
+    turned around, to the argument ([cli_depI_nth_fwd_nondeg]). The two [None] spine lemmas end
+    at the let-in [let z := I (∀P. P) in Π y : z. z] ([cli_dep_let]), not a product, after one
+    argument [I (∀P. P)]. [typing_spine_nth_error_NoneE_inst] runs on
+    [Π x : Prop. Π y : x. (λw:Prop. w) x] ([cli_dep_ty_id]); its spine ([cli_dep_id_sp_let]) reduces
+    [cli_dep_ty_id] forward to [Π x : Prop. Π y : x. x] ([cli_dep_ty]) and relates its tail
+    [Π y : I (∀P. P). I (∀P. P)] to [cli_dep_let] by the ζ step; the lemma composes the two steps
+    into [Π y : I (∀P. P). (λw:Prop. w) (I (∀P. P)) ≤ cli_dep_let], which no premise states
+    ([cli_dep_id_none_nondeg]). [typing_spine_nth_error_None_prodE_inst] runs on
+    [Π x : Prop. Π y : (λw:Prop. w) x. (λw:Prop. w) ((λw:Prop. w) x)] ([cli_idx_ty]), whose spine
+    ([cli_idx_sp_let]) relates no product to [cli_dep_let]: its tail starts at the let-in
+    [let z := (λw:Prop. w) (I (∀P. P)) : Prop in Π y : z. z] and reaches [cli_dep_let] by the β step
+    in the definiens; the product the lemma returns below [cli_dep_let] comes only from its
+    composition with the cons step ([cli_idx_prod_nondeg]).
     [typing_spine_smashE_inst] runs on the empty spine of [cli_dep_let] at
     itself: smashing drops the let and substitutes [z := I (∀P. P)] into [Π y : z. z], giving
     [Π y : I (∀P. P). I (∀P. P)], neither the substituted term, nor the body, nor [cli_dep_let]
@@ -122,11 +131,11 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICInversionEtaInstances PCUICWcbvEval PCUICNormal PCUICConversion PCUICContextConversion
      PCUICSubstitutionEta PCUICContextsEta PCUICAritiesEta PCUICSpineEta PCUICValidityEta PCUICSREta
      PCUICSREtaInstances BDTypingEtaInstances BDFromPCUICEtaInstances PCUICClassification PCUICClassificationEta.
-From MetaRocq.PCUIC Require PCUICWfUniverses.
+From MetaRocq.PCUIC Require PCUICWfUniverses PCUICEtaI5A2.
 From Equations.Type Require Import Relation.
 
 (* The derivations the instances use, and the facts their tags name.
-   WITNESSES: cli_* cli_depI_nth_subst_nondeg cli_dep_none_differs cli_dep_let_not_prod *)
+   WITNESSES: cli_* *)
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
@@ -317,77 +326,93 @@ Proof. exact (iv_IX_typed [] (tApp iv_id iv_False) localenv_nil (iv_app_typed si
 Lemma cli_IidF_red1 : red1 si_Σ [] cli_IidF iv_IF.
 Proof. exact (app_red_r _ _ _ _ _ (red_beta _ _ si_na si_P (tRel 0) iv_False)). Qed.
 
-(** [c (∀P. P) : I ((λx:Prop. x) (∀P. P))], through the β step backwards. *)
-Lemma cli_cF_IidF_typed : si_Σ ;;; [] |-E sri_cF : cli_IidF.
-Proof.
-  refine (typeE_Cumul _ _ sri_cF iv_IF cli_IidF sProp sri_cF_typed cli_IidF_typed _).
-  apply (ws_cumul_pbE_forget_spec (pb := Cumul)).
-  apply (red_ws_cumul_pbE_inv (Σ := si_Σ)).
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := cli_IidF) eq_refl eq_refl (red1_red _ _ _ _ cli_IidF_red1)).
-Qed.
+(** [Π y : I ((λx:Prop. x) (∀P. P)). I ((λx:Prop. x) (∀P. P))]: [Π y : I x. I x] at
+    [x := (λx:Prop. x) (∀P. P)], the type [cli_depI_ty] reaches after its first argument. *)
+Definition cli_IidF_arr : term := tProd si_na cli_IidF cli_IidF.
 
-(** [Π y : I ((λx:Prop. x) (∀P. P)). I (∀P. P)]: [iv_fix_ty] with its domain under a β-redex. *)
-Lemma cli_IidF_ty_isType : isTypeE si_Σ [] (tProd si_na cli_IidF iv_IF).
+Lemma cli_IidF_arr_isType : isTypeE si_Σ [] cli_IidF_arr.
 Proof.
+  have w := iv_wf_vass si_Σ [] si_na cli_IidF sProp localenv_nil cli_IidF_typed eq_refl.
   apply has_sort_isTypeE with (s := Sort.sort_of_product sProp sProp).
   apply typeE_Prod.
   - exact (iv_vass_s si_Σ [] si_na cli_IidF sProp cli_IidF_typed eq_refl).
-  - exact (iv_IF_typed _ (iv_wf_vass si_Σ [] si_na cli_IidF sProp localenv_nil cli_IidF_typed eq_refl)).
+  - exact (iv_IX_typed _ (tApp iv_id iv_False) w (iv_app_typed si_Σ _ w)).
 Qed.
 
-Lemma cli_IidF_ty_red1 : red1 si_Σ [] (tProd si_na cli_IidF iv_IF) iv_fix_ty.
-Proof. unfold iv_fix_ty. apply prod_red_l. exact cli_IidF_red1. Qed.
-
-(** [Π y : I (∀P. P). I (∀P. P) ≤ Π y : I ((λx:Prop. x) (∀P. P)). I (∀P. P)]: one β step backwards
-    in the domain, not a reflexive cumulativity. *)
-Lemma cli_fixty_IidF_ws : ws_cumul_pbE Cumul si_Σ [] iv_fix_ty (tProd si_na cli_IidF iv_IF).
+(** [cli_IidF_arr] reduces FORWARD to [Π y : I (∀P. P). I (∀P. P)] ([iv_fix_ty]): the β step
+    [cli_IidF_red1] in the domain, then the same β-redex in the codomain. *)
+Lemma cli_IidF_arr_red : red si_Σ [] cli_IidF_arr iv_fix_ty.
 Proof.
-  apply (red_ws_cumul_pbE_inv (Σ := si_Σ)).
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := tProd si_na cli_IidF iv_IF) eq_refl eq_refl
-           (red1_red _ _ _ _ cli_IidF_ty_red1)).
+  unfold cli_IidF_arr, iv_fix_ty.
+  apply (red_trans _ _ _ (tProd si_na iv_IF cli_IidF)); apply red1_red.
+  - apply prod_red_l. exact cli_IidF_red1.
+  - apply prod_red_r. exact (app_red_r _ _ _ _ _ (red_beta _ _ si_na si_P (tRel 0) iv_False)).
 Qed.
 
-(** [cli_depI_ty] applied to [∀P. P] and [c (∀P. P)]. At the second argument the spine relates
-    [Π y : I (∀P. P). I (∀P. P)] to the product [Π y : I ((λx:Prop. x) (∀P. P)). I (∀P. P)] by
-    [cli_fixty_IidF_ws] (not reflexive), and takes [c (∀P. P)] at that product's domain
-    ([cli_cF_IidF_typed]). *)
-Lemma cli_depI_sp_two : PCUICAritiesEta.typing_spineE si_Σ [] cli_depI_ty [iv_False; sri_cF] iv_IF.
+(** [cli_IidF_arr ≤ iv_fix_ty], from the forward reduction [cli_IidF_arr_red]: not reflexive, and
+    no step taken backwards. *)
+Lemma cli_IidF_arr_ws : ws_cumul_pbE Cumul si_Σ [] cli_IidF_arr iv_fix_ty.
 Proof.
-  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ cli_depI_ty iv_False [sri_cF] si_na si_P
+  apply (red_ws_cumul_pbE (Σ := si_Σ)).
+  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := cli_IidF_arr) eq_refl eq_refl cli_IidF_arr_red).
+Qed.
+
+(** [cli_depI_ty] applied to [(λx:Prop. x) (∀P. P)] and [c (∀P. P)]. At the second argument the
+    spine reaches [cli_IidF_arr], reduces it forward to the product [iv_fix_ty] ([cli_IidF_arr_ws]),
+    and takes [c (∀P. P)] at that product's domain [I (∀P. P)] by [sri_cF_typed], the typing of
+    [c] applied to [∀P. P], with no cumulativity. *)
+Lemma cli_depI_sp_fwd :
+  PCUICAritiesEta.typing_spineE si_Σ [] cli_depI_ty [tApp iv_id iv_False; sri_cF] iv_IF.
+Proof.
+  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ cli_depI_ty (tApp iv_id iv_False) [sri_cF] si_na si_P
             (tProd si_na (iv_Ix 0) (iv_Ix 1)) iv_IF).
   - exact cli_depI_isType.
   - exact cli_depI_isType.
   - exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] cli_depI_ty cli_depI_isType).
-  - exact (iv_False_typed si_Σ [] localenv_nil).
-  - eapply (@PCUICAritiesEta.type_spine_consE _ _ _ iv_fix_ty sri_cF [] si_na cli_IidF iv_IF iv_IF).
+  - exact (iv_app_typed si_Σ [] localenv_nil).
+  - eapply (@PCUICAritiesEta.type_spine_consE _ _ _ cli_IidF_arr sri_cF [] si_na iv_IF iv_IF iv_IF).
+    + exact cli_IidF_arr_isType.
     + exact cli_fixty_isType.
-    + exact cli_IidF_ty_isType.
-    + exact cli_fixty_IidF_ws.
-    + exact cli_cF_IidF_typed.
+    + exact cli_IidF_arr_ws.
+    + exact sri_cF_typed.
     + econstructor; [exact cli_IF_isType|exact cli_IF_isType|].
       exact (isType_ws_cumul_pbE_refl (Σ := si_Σ) [] iv_IF cli_IF_isType).
 Qed.
 
-(** [typing_spine_nth_errorE] at the second argument [c (∀P. P)] of [cli_depI_ty]: its declared
-    type [I x], with [x := ∀P. P] substituted, is [I (∀P. P)], which is not the substituted
-    [∀P. P] and not the declared type [I x]. The domain [I ((λx:Prop. x) (∀P. P))] at which the
-    spine [cli_depI_sp_two] takes the argument is not [I (∀P. P)] and β-reduces to it in one
-    step, and the product with that domain is not [Π y : I (∀P. P). I (∀P. P)] and β-reduces to it
-    in one step. *)
-Lemma cli_depI_nth_subst_nondeg :
+(** [typing_spine_nth_errorE] at the second argument [c (∀P. P)] of [cli_depI_ty] applied to
+    [(λx:Prop. x) (∀P. P)]. The lemma concludes [c (∀P. P) : I ((λx:Prop. x) (∀P. P))]: the declared
+    type [I x] at [x := (λx:Prop. x) (∀P. P)] ([cli_IidF]). The spine [cli_depI_sp_fwd] types
+    [c (∀P. P)] only at [I (∀P. P)] ([sri_cF_typed]: the codomain [I A] of the type of [c] at
+    [A := ∀P. P]), which is not [cli_IidF] and does not reduce to it: the concluded typing is in
+    no premise, at any depth, and no reduction of a premise's type gives it.
+    At that argument the spine reaches [Π y : I x. I x] at the same [x] ([cli_IidF_arr]) and its
+    cumulativity reduces that type FORWARD to the product [iv_fix_ty] whose domain types the
+    argument: no step of the spine is taken backwards. The lemma inverts that product cumulativity
+    and applies the domain conversion, turned around, to [sri_cF_typed]: a β-expansion of a typing
+    that was not built from the conclusion, so the composition does not cancel. *)
+Lemma cli_depI_nth_fwd_nondeg :
   nth_error (List.rev cli_depI_Δ) 1 = Some (vass si_na (iv_Ix 0)) /\
-  subst (List.rev (firstn 1 [iv_False; sri_cF])) 0 (iv_Ix 0) = iv_IF /\
-  iv_IF <> iv_False /\ iv_IF <> iv_Ix 0 /\
-  cli_IidF <> iv_IF /\ ∥ red1 si_Σ [] cli_IidF iv_IF ∥ /\
-  tProd si_na cli_IidF iv_IF <> iv_fix_ty /\ ∥ red1 si_Σ [] (tProd si_na cli_IidF iv_IF) iv_fix_ty ∥.
+  subst (List.rev (firstn 1 [tApp iv_id iv_False; sri_cF])) 0 (iv_Ix 0) = cli_IidF /\
+  subst10 iv_False (iv_Ix 0) = iv_IF /\
+  cli_IidF <> iv_IF /\ ((si_Σ ;;; [] ⊢ iv_IF ⇝ cli_IidF) -> False) /\
+  subst10 (tApp iv_id iv_False) (tProd si_na (iv_Ix 0) (iv_Ix 1)) = cli_IidF_arr /\
+  cli_IidF_arr <> iv_fix_ty /\ ∥ red si_Σ [] cli_IidF_arr iv_fix_ty ∥.
 Proof.
   split; [reflexivity|]. split; [vm_compute; reflexivity|].
+  split; [vm_compute; reflexivity|].
   split; [intros h; vm_compute in h; discriminate h|].
+  split.
+  { intros r.
+    destruct (invert_red_mkApps_tInd_cb (ind := si_ind) (u := []) [iv_False] _ r) as [args' [e _ a]].
+    apply (f_equal decompose_app) in e.
+    rewrite (decompose_app_mkApps (tInd si_ind []) args' eq_refl) in e.
+    vm_compute in e. injection e. intros; subst.
+    inversion a; subst.
+    match goal with c : closed_red _ _ _ _ |- _ =>
+      destruct (invert_red_prod_cb c) as [d [cd [e2 _ _]]]; discriminate e2 end. }
+  split; [vm_compute; reflexivity|].
   split; [intros h; vm_compute in h; discriminate h|].
-  split; [intros h; vm_compute in h; discriminate h|].
-  split; [constructor; exact cli_IidF_red1|].
-  split; [intros h; vm_compute in h; discriminate h|].
-  constructor; exact cli_IidF_ty_red1.
+  constructor; exact cli_IidF_arr_red.
 Qed.
 
 (** [let z := I (∀P. P) : Prop in Π y : z. z]: it ζ-reduces to [Π y : I (∀P. P). I (∀P. P)]
@@ -453,10 +478,11 @@ Proof.
   exact (red_beta _ _ si_na si_P (tRel 0) (tRel 1)).
 Qed.
 
-(** [cli_dep_ty ≤ cli_dep_ty_id]: one β step backwards in the codomain, not reflexive. *)
-Lemma cli_dep_ty_ws : ws_cumul_pbE Cumul si_Σ [] cli_dep_ty cli_dep_ty_id.
+(** [cli_dep_ty_id ≤ cli_dep_ty]: the β step [cli_dep_ty_id_red1] in the codomain, FORWARD; not
+    reflexive. *)
+Lemma cli_dep_ty_id_ws : ws_cumul_pbE Cumul si_Σ [] cli_dep_ty_id cli_dep_ty.
 Proof.
-  apply (red_ws_cumul_pbE_inv (Σ := si_Σ)).
+  apply (red_ws_cumul_pbE (Σ := si_Σ)).
   exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := cli_dep_ty_id) eq_refl eq_refl
            (red1_red _ _ _ _ cli_dep_ty_id_red1)).
 Qed.
@@ -464,67 +490,302 @@ Qed.
 (** [Π y : I (∀P. P). (λw:Prop. w) (I (∀P. P))]: the codomain of [cli_dep_ty_id] at [x := I (∀P. P)]. *)
 Definition cli_fixty_id : term := tProd si_na iv_IF (tApp iv_id iv_IF).
 
-Lemma cli_fixty_id_isType : isTypeE si_Σ [] cli_fixty_id.
+(** [cli_dep_ty_id] ([it_mkProd_or_LetIn cli_dep_Δ ((λw:Prop. w) x)]) applied to [I (∀P. P)] only,
+    at [cli_dep_let]. The cons step reduces [cli_dep_ty_id] forward to the product [cli_dep_ty]
+    ([cli_dep_ty_id_ws]); the empty tail starts at [Π y : I (∀P. P). I (∀P. P)] ([iv_fix_ty]) and
+    relates it to [cli_dep_let] by the ζ step of [cli_dep_let] ([cli_dep_let_ws]). *)
+Lemma cli_dep_id_sp_let : PCUICAritiesEta.typing_spineE si_Σ [] cli_dep_ty_id [iv_IF] cli_dep_let.
 Proof.
-  have w := iv_wf_IF [] localenv_nil.
-  apply has_sort_isTypeE with (s := Sort.sort_of_product sProp sProp).
-  apply typeE_Prod.
-  - exact (iv_vass_s si_Σ [] si_na iv_IF sProp (iv_IF_typed [] localenv_nil) eq_refl).
-  - exact (typeE_App _ _ iv_id si_na si_P si_P _ iv_IF (iv_PP_typed si_Σ _ w) (iv_id_typed si_Σ _ w)
-             (iv_IF_typed _ w)).
-Qed.
-
-Lemma cli_fixty_id_red1 : red1 si_Σ [] cli_fixty_id iv_fix_ty.
-Proof. unfold cli_fixty_id, iv_fix_ty. apply prod_red_r. exact (red_beta _ _ si_na si_P (tRel 0) iv_IF). Qed.
-
-(** [cli_fixty_id ≤ cli_dep_let]: a β step in the codomain, then [cli_dep_let_ws]. *)
-Lemma cli_fixty_id_ws : ws_cumul_pbE Cumul si_Σ [] cli_fixty_id cli_dep_let.
-Proof.
-  refine (ws_cumul_pbE_trans (Σ := si_Σ) _ _ _ _ cli_dep_let_ws).
-  apply (red_ws_cumul_pbE (Σ := si_Σ)).
-  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := cli_fixty_id) eq_refl eq_refl
-           (red1_red _ _ _ _ cli_fixty_id_red1)).
-Qed.
-
-(** [cli_dep_ty] applied to [I (∀P. P)] only, at [cli_dep_let]. The cons step relates [cli_dep_ty]
-    to the product [cli_dep_ty_id] by [cli_dep_ty_ws] (not reflexive); the empty tail starts at
-    [cli_fixty_id], not at [Π y : I (∀P. P). I (∀P. P)]. *)
-Lemma cli_dep_sp_let : PCUICAritiesEta.typing_spineE si_Σ [] cli_dep_ty [iv_IF] cli_dep_let.
-Proof.
-  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ cli_dep_ty iv_IF [] si_na si_P
-            (tProd si_na (tRel 0) (tApp iv_id (tRel 1))) cli_dep_let).
-  - exact cli_dep_isType.
+  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ cli_dep_ty_id iv_IF [] si_na si_P
+            (tProd si_na (tRel 0) (tRel 1)) cli_dep_let).
   - exact cli_dep_ty_id_isType.
-  - exact cli_dep_ty_ws.
+  - exact cli_dep_isType.
+  - exact cli_dep_ty_id_ws.
   - exact (iv_IF_typed [] localenv_nil).
-  - econstructor; [exact cli_fixty_id_isType|exact cli_dep_let_isType|exact cli_fixty_id_ws].
+  - econstructor; [exact cli_fixty_isType|exact cli_dep_let_isType|exact cli_dep_let_ws].
 Qed.
 
-(** [typing_spine_nth_error_NoneE] on [cli_dep_sp_let]: the returned left side, the substituted
-    remaining telescope, computes to [Π y : I (∀P. P). I (∀P. P)] ([iv_fix_ty]), which is not the
-    unsubstituted telescope and not [cli_dep_let]. The cons product of [cli_dep_sp_let],
-    [cli_dep_ty_id], is not [cli_dep_ty] and β-reduces to it in one step, and the tail type of
-    [cli_dep_sp_let], [cli_fixty_id], is not [iv_fix_ty] and β-reduces to it in one step. *)
-Lemma cli_dep_none_differs :
-  subst0 (List.rev [iv_IF]) (it_mkProd_or_LetIn (firstn (#|cli_dep_Δ| - #|[iv_IF]|) cli_dep_Δ) (tRel 1)) <>
-    it_mkProd_or_LetIn (firstn (#|cli_dep_Δ| - #|[iv_IF]|) cli_dep_Δ) (tRel 1) /\
-  subst0 (List.rev [iv_IF]) (it_mkProd_or_LetIn (firstn (#|cli_dep_Δ| - #|[iv_IF]|) cli_dep_Δ) (tRel 1)) <>
-    cli_dep_let /\
-  subst0 (List.rev [iv_IF]) (it_mkProd_or_LetIn (firstn (#|cli_dep_Δ| - #|[iv_IF]|) cli_dep_Δ) (tRel 1)) =
-    iv_fix_ty /\
-  cli_dep_ty_id <> cli_dep_ty /\ ∥ red1 si_Σ [] cli_dep_ty_id cli_dep_ty ∥ /\
-  cli_fixty_id <> iv_fix_ty /\ ∥ red1 si_Σ [] cli_fixty_id iv_fix_ty ∥.
+(** [typing_spine_nth_error_NoneE] on [cli_dep_id_sp_let]. The returned left side, the remaining
+    telescope [Π y : x. (λw:Prop. w) x] at [x := I (∀P. P)], computes to [cli_fixty_id], and the
+    conclusion is [cli_fixty_id ≤ cli_dep_let]. [cli_fixty_id] is none of the four types the spine
+    relates (the telescope [cli_dep_ty_id], the cons product [cli_dep_ty], the start [iv_fix_ty] of
+    the empty tail, the end [cli_dep_let]), so the conclusion is in no premise, at any depth; and
+    neither side of it reduces to the other, so it is no single step, forward or backward, of any
+    premise. The lemma builds it from two different steps: the cons step, a β step of
+    [(λw:Prop. w) x] taken FORWARD from the telescope to the product, which the lemma inverts and
+    substitutes; and the tail, the ζ step of [cli_dep_let], which no step of the cons undoes. *)
+Lemma cli_dep_id_none_nondeg :
+  subst0 (List.rev [iv_IF])
+    (it_mkProd_or_LetIn (firstn (#|cli_dep_Δ| - #|[iv_IF]|) cli_dep_Δ) (tApp iv_id (tRel 1))) =
+    cli_fixty_id /\
+  subst10 iv_IF (tProd si_na (tRel 0) (tRel 1)) = iv_fix_ty /\
+  cli_fixty_id <> cli_dep_ty_id /\ cli_fixty_id <> cli_dep_ty /\
+  cli_fixty_id <> iv_fix_ty /\ cli_fixty_id <> cli_dep_let /\
+  ((si_Σ ;;; [] ⊢ cli_fixty_id ⇝ cli_dep_let) -> False) /\
+  ((si_Σ ;;; [] ⊢ cli_dep_let ⇝ cli_fixty_id) -> False) /\
+  ∥ red1 si_Σ [] cli_dep_ty_id cli_dep_ty ∥ /\ ∥ red1 si_Σ [] cli_dep_let iv_fix_ty ∥.
 Proof.
-  split; [vm_compute; discriminate|]. split; [vm_compute; discriminate|].
+  split; [vm_compute; reflexivity|].
   split; [vm_compute; reflexivity|].
   split; [intros h; vm_compute in h; discriminate h|].
-  split; [constructor; exact cli_dep_ty_id_red1|].
   split; [intros h; vm_compute in h; discriminate h|].
-  constructor; exact cli_fixty_id_red1.
+  split; [intros h; vm_compute in h; discriminate h|].
+  split; [intros h; vm_compute in h; discriminate h|].
+  split.
+  { intros r. destruct (invert_red_prod_cb r) as [d [cd [e _ _]]].
+    unfold cli_dep_let in e. discriminate e. }
+  split.
+  { intros r. destruct (invert_red_letin_cb r) as [[d' [ty' [b' [e _ _ _]]]]|r'].
+    - unfold cli_fixty_id in e. discriminate e.
+    - destruct (invert_red_prod_cb r') as [d [cd [e _ rc]]].
+      vm_compute in e. injection e. intros; subst.
+      destruct (invert_red_mkApps_tInd_cb (ind := si_ind) (u := []) [iv_False] _ rc) as [args' [e2 _ _]].
+      apply (f_equal decompose_app) in e2.
+      rewrite (decompose_app_mkApps (tInd si_ind []) args' eq_refl) in e2.
+      vm_compute in e2. discriminate e2. }
+  split; [constructor; exact cli_dep_ty_id_red1|].
+  constructor; exact (red_zeta _ _ si_na iv_IF si_P (tProd si_na (tRel 0) (tRel 1))).
 Qed.
 
-Lemma cli_dep_let_not_prod : forall na dom codom, cli_dep_let <> tProd na dom codom.
-Proof. intros na dom codom h. unfold cli_dep_let in h. discriminate h. Qed.
+(** [(λw:Prop. w) x] in the context [x : Prop]. *)
+Definition cli_idx : term := tApp iv_id (tRel 0).
+
+Lemma cli_idx_typed : si_Σ ;;; [vass si_na si_P] |-E cli_idx : si_P.
+Proof.
+  have w := iv_wf_P si_Σ [] localenv_nil.
+  exact (typeE_App _ _ iv_id si_na si_P si_P _ (tRel 0) (iv_PP_typed si_Σ _ w) (iv_id_typed si_Σ _ w)
+           cli_dep_x_typed).
+Qed.
+
+(** The telescope [Π x : Prop. Π y : (λw:Prop. w) x. (λw:Prop. w) ((λw:Prop. w) x)]
+    ([it_mkProd_or_LetIn cli_idx_Δ cli_idx_body]). *)
+Definition cli_idx_Δ : context := [vass si_na cli_idx; vass si_na si_P].
+Definition cli_idx_body : term := tApp iv_id (tApp iv_id (tRel 1)).
+Definition cli_idx_ty : term := tProd si_na si_P (tProd si_na cli_idx cli_idx_body).
+
+Lemma cli_wf_idx : wf_localE si_Σ cli_idx_Δ.
+Proof.
+  exact (iv_wf_vass si_Σ [vass si_na si_P] si_na cli_idx sProp (iv_wf_P si_Σ [] localenv_nil) cli_idx_typed
+           eq_refl).
+Qed.
+
+Lemma cli_idx_ass : assumption_context cli_idx_Δ.
+Proof. repeat constructor. Qed.
+
+Lemma cli_idx_ty_typed : si_Σ ;;; [] |-E cli_idx_ty : si_P.
+Proof.
+  have hx := typeE_Rel _ _ 1 (vass si_na si_P) cli_wf_idx eq_refl.
+  have hidx := typeE_App _ _ iv_id si_na si_P si_P _ (tRel 1) (iv_PP_typed si_Σ _ cli_wf_idx)
+                 (iv_id_typed si_Σ _ cli_wf_idx) hx.
+  exact (typeE_Prod _ _ si_na si_P (tProd si_na cli_idx cli_idx_body) (Sort.super sProp) sProp
+           (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl)
+           (typeE_Prod _ _ si_na cli_idx cli_idx_body sProp sProp
+              (iv_vass_s si_Σ [vass si_na si_P] si_na cli_idx sProp cli_idx_typed eq_refl)
+              (typeE_App _ _ iv_id si_na si_P si_P _ (tApp iv_id (tRel 1)) (iv_PP_typed si_Σ _ cli_wf_idx)
+                 (iv_id_typed si_Σ _ cli_wf_idx) hidx))).
+Qed.
+
+Lemma cli_idx_isType : isTypeE si_Σ [] cli_idx_ty.
+Proof. exact (has_sort_isTypeE _ cli_idx_ty_typed). Qed.
+
+(** [let z := (λw:Prop. w) x : Prop in Π y : z. z] in the context [x : Prop]: the codomain of the
+    cons product of [cli_idx_sp_let]. It is a let-in, not a product. *)
+Definition cli_idx_let : term := tLetIn si_na cli_idx si_P (tProd si_na (tRel 0) (tRel 1)).
+
+Lemma cli_wf_idx_z : wf_localE si_Σ [vdef si_na cli_idx si_P; vass si_na si_P].
+Proof.
+  have w := iv_wf_P si_Σ [] localenv_nil.
+  apply localenv_cons_def; [exact w|].
+  exact (iv_vdef si_Σ [vass si_na si_P] si_na cli_idx si_P _ cli_idx_typed (iv_P_typed si_Σ _ w) eq_refl).
+Qed.
+
+Lemma cli_idx_z_typed : si_Σ ;;; [vdef si_na cli_idx si_P; vass si_na si_P] |-E tRel 0 : si_P.
+Proof. exact (typeE_Rel _ _ 0 (vdef si_na cli_idx si_P) cli_wf_idx_z eq_refl). Qed.
+
+Lemma cli_wf_idx_zy : wf_localE si_Σ [vass si_na (tRel 0); vdef si_na cli_idx si_P; vass si_na si_P].
+Proof. exact (iv_wf_vass si_Σ _ si_na (tRel 0) sProp cli_wf_idx_z cli_idx_z_typed eq_refl). Qed.
+
+Lemma cli_idx_let_typed : si_Σ ;;; [vass si_na si_P] |-E cli_idx_let : tSort sProp.
+Proof.
+  have w := iv_wf_P si_Σ [] localenv_nil.
+  eapply (typeE_Cumul _ _ cli_idx_let (tLetIn si_na cli_idx si_P si_P) si_P (Sort.super sProp)).
+  - apply typeE_LetIn.
+    + exact (iv_vdef si_Σ [vass si_na si_P] si_na cli_idx si_P _ cli_idx_typed (iv_P_typed si_Σ _ w) eq_refl).
+    + exact (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp
+               (iv_vass_s si_Σ _ si_na (tRel 0) sProp cli_idx_z_typed eq_refl)
+               (typeE_Rel _ _ 1 (vdef si_na cli_idx si_P) cli_wf_idx_zy eq_refl)).
+  - exact (iv_P_typed si_Σ _ w).
+  - apply (ws_cumul_pbE_forget_spec (pb := Cumul)).
+    apply (red_ws_cumul_pbE (Σ := si_Σ)).
+    exact (closed_red_of (Σ := si_Σ) (Γ := [vass si_na si_P]) (t := tLetIn si_na cli_idx si_P si_P) eq_refl
+             eq_refl (red1_red _ _ _ _ (red_zeta _ _ si_na cli_idx si_P si_P))).
+Qed.
+
+Lemma cli_idx_let_prod_isType : isTypeE si_Σ [] (tProd si_na si_P cli_idx_let).
+Proof.
+  apply has_sort_isTypeE with (s := Sort.sort_of_product (Sort.super sProp) sProp).
+  apply typeE_Prod.
+  - exact (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+  - exact cli_idx_let_typed.
+Qed.
+
+(** [Π y : (λw:Prop. w) x. (λw:Prop. w) x] in the context [x : Prop]: the valley of the cons step
+    of [cli_idx_sp_let]. *)
+Definition cli_idx_arr : term := tProd si_na cli_idx (tApp iv_id (tRel 1)).
+
+(** The telescope reaches the valley by the OUTER β step of its codomain
+    [(λw:Prop. w) ((λw:Prop. w) x)]. *)
+Lemma cli_idx_ty_red1 : red1 si_Σ [] cli_idx_ty (tProd si_na si_P cli_idx_arr).
+Proof.
+  unfold cli_idx_ty, cli_idx_arr, cli_idx_body. apply prod_red_r. apply prod_red_r.
+  exact (red_beta _ _ si_na si_P (tRel 0) (tApp iv_id (tRel 1))).
+Qed.
+
+(** The cons product reaches the valley by the ζ step of [cli_idx_let]. *)
+Lemma cli_idx_let_prod_red1 : red1 si_Σ [] (tProd si_na si_P cli_idx_let) (tProd si_na si_P cli_idx_arr).
+Proof.
+  unfold cli_idx_let, cli_idx_arr. apply prod_red_r.
+  exact (red_zeta _ _ si_na cli_idx si_P (tProd si_na (tRel 0) (tRel 1))).
+Qed.
+
+(** [cli_idx_ty ≤ Π x : Prop. cli_idx_let]: ONE join of the two different steps above at the valley
+    [Π x : Prop. cli_idx_arr]; no transitivity, and neither step is the inverse of the other. *)
+Lemma cli_idx_ws : ws_cumul_pbE Cumul si_Σ [] cli_idx_ty (tProd si_na si_P cli_idx_let).
+Proof.
+  apply (into_ws_cumul_pbE (Σ := si_Σ)); [|reflexivity|reflexivity|reflexivity].
+  apply (PCUICEtaI5A2.BE_JoinE si_Σ [] Cumul cli_idx_ty (tProd si_na si_P cli_idx_let)
+           (tProd si_na si_P cli_idx_arr) (tProd si_na si_P cli_idx_arr)).
+  - apply BE_red. apply red1_red. exact cli_idx_ty_red1.
+  - apply BE_red. apply red1_red. exact cli_idx_let_prod_red1.
+  - apply PCUICEtaI5A2.RF_refl.
+Qed.
+
+(** [(λw:Prop. w) (I (∀P. P))], and [let z := (λw:Prop. w) (I (∀P. P)) : Prop in Π y : z. z], the
+    start of the empty tail of [cli_idx_sp_let] ([cli_idx_let] at [x := I (∀P. P)]). *)
+Definition cli_idIF : term := tApp iv_id iv_IF.
+Definition cli_idIF_let : term := tLetIn si_na cli_idIF si_P (tProd si_na (tRel 0) (tRel 1)).
+
+Lemma cli_idIF_typed : si_Σ ;;; [] |-E cli_idIF : si_P.
+Proof.
+  exact (typeE_App _ _ iv_id si_na si_P si_P _ iv_IF (iv_PP_typed si_Σ _ localenv_nil)
+           (iv_id_typed si_Σ _ localenv_nil) (iv_IF_typed [] localenv_nil)).
+Qed.
+
+Lemma cli_wf_idIF_z : wf_localE si_Σ [vdef si_na cli_idIF si_P].
+Proof.
+  apply localenv_cons_def; [constructor|].
+  exact (iv_vdef si_Σ [] si_na cli_idIF si_P _ cli_idIF_typed (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+Qed.
+
+Lemma cli_idIF_z_typed : si_Σ ;;; [vdef si_na cli_idIF si_P] |-E tRel 0 : si_P.
+Proof. exact (typeE_Rel _ _ 0 (vdef si_na cli_idIF si_P) cli_wf_idIF_z eq_refl). Qed.
+
+Lemma cli_wf_idIF_zy : wf_localE si_Σ [vass si_na (tRel 0); vdef si_na cli_idIF si_P].
+Proof. exact (iv_wf_vass si_Σ _ si_na (tRel 0) sProp cli_wf_idIF_z cli_idIF_z_typed eq_refl). Qed.
+
+Lemma cli_idIF_let_typed : si_Σ ;;; [] |-E cli_idIF_let : tSort sProp.
+Proof.
+  eapply (typeE_Cumul _ _ cli_idIF_let (tLetIn si_na cli_idIF si_P si_P) si_P (Sort.super sProp)).
+  - apply typeE_LetIn.
+    + exact (iv_vdef si_Σ [] si_na cli_idIF si_P _ cli_idIF_typed (iv_P_typed si_Σ [] localenv_nil) eq_refl).
+    + exact (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp
+               (iv_vass_s si_Σ _ si_na (tRel 0) sProp cli_idIF_z_typed eq_refl)
+               (typeE_Rel _ _ 1 (vdef si_na cli_idIF si_P) cli_wf_idIF_zy eq_refl)).
+  - exact (iv_P_typed si_Σ [] localenv_nil).
+  - apply (ws_cumul_pbE_forget_spec (pb := Cumul)).
+    apply (red_ws_cumul_pbE (Σ := si_Σ)).
+    exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := tLetIn si_na cli_idIF si_P si_P) eq_refl eq_refl
+             (red1_red _ _ _ _ (red_zeta _ _ si_na cli_idIF si_P si_P))).
+Qed.
+
+Lemma cli_idIF_let_isType : isTypeE si_Σ [] cli_idIF_let.
+Proof. exact (has_sort_isTypeE _ cli_idIF_let_typed). Qed.
+
+(** The tail start reduces FORWARD to [cli_dep_let] by the β step in the let's definiens. *)
+Lemma cli_idIF_let_red1 : red1 si_Σ [] cli_idIF_let cli_dep_let.
+Proof.
+  unfold cli_idIF_let, cli_dep_let, cli_idIF. apply letin_red_def.
+  exact (red_beta _ _ si_na si_P (tRel 0) iv_IF).
+Qed.
+
+Lemma cli_idIF_let_ws : ws_cumul_pbE Cumul si_Σ [] cli_idIF_let cli_dep_let.
+Proof.
+  apply (red_ws_cumul_pbE (Σ := si_Σ)).
+  exact (closed_red_of (Σ := si_Σ) (Γ := []) (t := cli_idIF_let) eq_refl eq_refl
+           (red1_red _ _ _ _ cli_idIF_let_red1)).
+Qed.
+
+(** [cli_idx_ty] applied to [I (∀P. P)] only, at [cli_dep_let]. The cons step is the join
+    [cli_idx_ws] at the valley [Π x : Prop. cli_idx_arr]; the empty tail starts at the let-in
+    [cli_idIF_let] and reaches [cli_dep_let] by one forward β step ([cli_idIF_let_ws]). *)
+Lemma cli_idx_sp_let : PCUICAritiesEta.typing_spineE si_Σ [] cli_idx_ty [iv_IF] cli_dep_let.
+Proof.
+  eapply (@PCUICAritiesEta.type_spine_consE _ _ _ cli_idx_ty iv_IF [] si_na si_P cli_idx_let cli_dep_let).
+  - exact cli_idx_isType.
+  - exact cli_idx_let_prod_isType.
+  - exact cli_idx_ws.
+  - exact (iv_IF_typed [] localenv_nil).
+  - econstructor; [exact cli_idIF_let_isType|exact cli_dep_let_isType|exact cli_idIF_let_ws].
+Qed.
+
+(** [Π y : (λw:Prop. w) (I (∀P. P)). (λw:Prop. w) ((λw:Prop. w) (I (∀P. P)))]: the remaining
+    telescope of [cli_idx_ty] at [x := I (∀P. P)], the product [typing_spine_nth_error_None_prodE]
+    returns on [cli_idx_sp_let]. *)
+Definition cli_idIF_arr : term := tProd si_na cli_idIF (tApp iv_id cli_idIF).
+
+(** [typing_spine_nth_error_None_prodE] on [cli_idx_sp_let] returns a product below [cli_dep_let],
+    and NO INPUT HAS A PRODUCT BELOW [cli_dep_let]:
+    - [cli_dep_let] is not a product, and the only type the spine relates to it, the start
+      [cli_idIF_let] of the empty tail ([cli_idx_let] at [x := I (∀P. P)]), is not a product
+      either; the cons step relates the telescope to [Π x : Prop. cli_idx_let], not to
+      [cli_dep_let];
+    - that relation is one forward β step from [cli_idIF_let] to [cli_dep_let], so no input reduces
+      [cli_dep_let] at all.
+    The product the lemma returns is [cli_idIF_arr] ([cli_idx_body] substituted), found only through
+    the composition [cli_idIF_arr ≤ cli_idIF_let ≤ cli_dep_let] that the lemma builds (through
+    [typing_spine_nth_error_NoneE]): it is none of the types the spine relates, not the ζ step of
+    [cli_idIF_let], and neither it nor [cli_dep_let] reduces to the other. Nothing in that
+    composition cancels: the cons step is a join of two different steps (the outer β of the
+    telescope's codomain, the ζ of [cli_idx_let]), neither of them reflexive, and the tail is a
+    third (the β in the let's definiens); none is the inverse of another. *)
+Lemma cli_idx_prod_nondeg :
+  subst0 (List.rev [iv_IF])
+    (it_mkProd_or_LetIn (firstn (#|cli_idx_Δ| - #|[iv_IF]|) cli_idx_Δ) cli_idx_body) = cli_idIF_arr /\
+  (forall na dom codom, cli_dep_let <> tProd na dom codom) /\
+  subst10 iv_IF cli_idx_let = cli_idIF_let /\
+  (forall na dom codom, cli_idIF_let <> tProd na dom codom) /\
+  tProd si_na si_P cli_idx_let <> cli_dep_let /\
+  ∥ red1 si_Σ [] cli_idIF_let cli_dep_let ∥ /\
+  ∥ red1 si_Σ [] cli_idx_ty (tProd si_na si_P cli_idx_arr) ∥ /\
+  ∥ red1 si_Σ [] (tProd si_na si_P cli_idx_let) (tProd si_na si_P cli_idx_arr) ∥ /\
+  cli_idx_ty <> tProd si_na si_P cli_idx_arr /\ tProd si_na si_P cli_idx_let <> tProd si_na si_P cli_idx_arr /\
+  cli_idIF_arr <> cli_idx_ty /\ cli_idIF_arr <> tProd si_na si_P cli_idx_let /\
+  cli_idIF_arr <> cli_idIF_let /\ cli_idIF_arr <> cli_dep_let /\
+  cli_idIF_arr <> subst10 cli_idIF (tProd si_na (tRel 0) (tRel 1)) /\
+  ((si_Σ ;;; [] ⊢ cli_idIF_arr ⇝ cli_dep_let) -> False) /\
+  ((si_Σ ;;; [] ⊢ cli_dep_let ⇝ cli_idIF_arr) -> False).
+Proof.
+  split; [vm_compute; reflexivity|].
+  split; [intros na dom codom h; unfold cli_dep_let in h; discriminate h|].
+  split; [vm_compute; reflexivity|].
+  split; [intros na dom codom h; unfold cli_idIF_let in h; discriminate h|].
+  split; [intros h; vm_compute in h; discriminate h|].
+  split; [constructor; exact cli_idIF_let_red1|].
+  split; [constructor; exact cli_idx_ty_red1|].
+  split; [constructor; exact cli_idx_let_prod_red1|].
+  do 7 (split; [intros h; vm_compute in h; discriminate h|]).
+  split.
+  { intros r. destruct (invert_red_prod_cb r) as [d [cd [e _ _]]].
+    unfold cli_dep_let in e. discriminate e. }
+  intros r. destruct (invert_red_letin_cb r) as [[d' [ty' [b' [e _ _ _]]]]|r'].
+  - unfold cli_idIF_arr in e. discriminate e.
+  - destruct (invert_red_prod_cb r') as [d [cd [e rd _]]].
+    vm_compute in e. injection e. intros; subst.
+    destruct (invert_red_mkApps_tInd_cb (ind := si_ind) (u := []) [iv_False] _ rd) as [args' [e2 _ _]].
+    apply (f_equal decompose_app) in e2.
+    rewrite (decompose_app_mkApps (tInd si_ind []) args' eq_refl) in e2.
+    vm_compute in e2. discriminate e2.
+Qed.
 
 (** The empty spine of [cli_dep_let] at itself (reflexive: it holds no ζ step). *)
 Lemma cli_dep_let_sp_nil : PCUICAritiesEta.typing_spineE si_Σ [] cli_dep_let [] cli_dep_let.
@@ -828,13 +1089,18 @@ Definition typing_spine_smashE_inst :=
     cli_dep_let cli_dep_let_sp_nil.
 
 (** The second argument [c (∀P. P)] of [Π x : Prop. Π y : I x. I x] ([cli_depI_ty]) applied to
-    [∀P. P], at its declared type [I x] instantiated by the first argument: [I (∀P. P)].
-    INSTANCE NOT-BUILT: degenerate, a composition that cancels: the spine [cli_depI_sp_two] takes [c (∀P. P)] by [cli_cF_IidF_typed], which wraps the instance's own input [sri_cF_typed] (its first premise) in the β step [cli_IidF_red1] taken backwards, and the proof of the target (through [PCUICSpineEta.typing_spine_nth_errorE]) inverts the product cumulativity [cli_fixty_IidF_ws], built from that same step, and re-applies its domain conversion, so the conclusion [sri_cF : iv_IF] is the judgment of [sri_cF_typed], a piece of an input; no non-degenerate witness built yet
+    [(λx:Prop. x) (∀P. P)], at its declared type [I x] instantiated by the first argument:
+    [I ((λx:Prop. x) (∀P. P))] ([cli_IidF]). The spine [cli_depI_sp_fwd] types the argument only
+    at its own type [I (∀P. P)] ([sri_cF_typed]) and reduces the type it reaches there forward to
+    the product [Π y : I (∀P. P). I (∀P. P)]; the lemma inverts that product cumulativity and
+    applies the domain conversion to the argument, so the concluded typing is in no premise
+    ([cli_depI_nth_fwd_nondeg]).
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_depI_nth_fwd_nondeg
     TARGET PCUICClassificationEta.typing_spine_nth_errorE *)
 Definition typing_spine_nth_errorE_inst :=
   PCUICClassificationEta.typing_spine_nth_errorE (Σ := si_Σ) si_wfE [] cli_depI_Δ (iv_Ix 1)
-    [iv_False; sri_cF] iv_IF 1 sri_cF (vass si_na (iv_Ix 0)) cli_depI_ass cli_wf_depI cli_depI_sp_two
-    eq_refl eq_refl.
+    [tApp iv_id iv_False; sri_cF] iv_IF 1 sri_cF (vass si_na (iv_Ix 0)) cli_depI_ass cli_wf_depI
+    cli_depI_sp_fwd eq_refl eq_refl.
 
 (** The empty spine of [let z := ∀P. P in z → z] ([cli_let_arrow]) at itself: the substituted
     codomain [(∀P. P) → (∀P. P)] is neither the substituted [∀P. P], nor the body [z → z], nor the
@@ -844,19 +1110,27 @@ Definition typing_spine_all_invE_inst :=
   typing_spine_all_invE (Σ := si_Σ) si_wfE [] [vdef si_na iv_False si_P] (tProd si_na (tRel 0) (tRel 1)) []
     cli_let_arrow cli_let_arrow_sp_nil eq_refl.
 
-(** The partial spine [Π x : Prop. Π y : x. x] applied to [I (∀P. P)] only, at [cli_dep_let]
-    ([cli_dep_sp_let]).
-    INSTANCE NOT-BUILT: degenerate, a composition that cancels: the conclusion [iv_fix_ty ≤ cli_dep_let] (the substituted remaining telescope computes to [iv_fix_ty], [cli_dep_none_differs]) is the statement of [cli_dep_let_ws], the second argument of the transitivity that builds the tail step [cli_fixty_id_ws] of [cli_dep_sp_let], and the β step of [(λw:Prop. w) x] goes back in the cons step [cli_dep_ty_ws] and, at [x := I (∀P. P)], forward in [cli_fixty_id_ws] ([cli_fixty_id_red1]); no non-degenerate witness built yet *)
+(** The partial spine [Π x : Prop. Π y : x. (λw:Prop. w) x] ([cli_dep_ty_id]) applied to
+    [I (∀P. P)] only, at [cli_dep_let] ([cli_dep_id_sp_let]): its cons step reduces the telescope
+    forward to [cli_dep_ty] and its tail is the ζ step of [cli_dep_let]. The lemma composes the
+    substituted cons step with the tail into [Π y : I (∀P. P). (λw:Prop. w) (I (∀P. P))
+    ≤ cli_dep_let], which no premise states ([cli_dep_id_none_nondeg]).
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_dep_id_none_nondeg *)
 Definition typing_spine_nth_error_NoneE_inst :=
-  typing_spine_nth_error_NoneE (Σ := si_Σ) si_wfE [] cli_dep_Δ (tRel 1) [iv_IF] cli_dep_let
-    cli_dep_ass cli_wf_dep cli_dep_sp_let eq_refl.
+  typing_spine_nth_error_NoneE (Σ := si_Σ) si_wfE [] cli_dep_Δ (tApp iv_id (tRel 1)) [iv_IF] cli_dep_let
+    cli_dep_ass cli_wf_dep cli_dep_id_sp_let eq_refl.
 
-(** The same partial spine [cli_dep_sp_let], at its type [cli_dep_let], a let-in and not a product
-    ([cli_dep_let_not_prod]).
-    INSTANCE NOT-BUILT: degenerate, a composition that cancels: the proof of the target calls [typing_spine_nth_error_NoneE] on the same spine [cli_dep_sp_let] and returns that cumulativity unchanged as its ∑ witness (the product is the substituted remaining telescope, [iv_fix_ty] by [cli_dep_none_differs]), the β step of [(λw:Prop. w) x] goes back in the cons step [cli_dep_ty_ws] and, at [x := I (∀P. P)], forward in [cli_fixty_id_ws] ([cli_fixty_id_red1]), and [cli_dep_let_ws], already in the input spine, proves the conclusion; no non-degenerate witness built yet *)
+(** The partial spine [Π x : Prop. Π y : (λw:Prop. w) x. (λw:Prop. w) ((λw:Prop. w) x)]
+    ([cli_idx_ty]) applied to [I (∀P. P)] only, at the let-in [cli_dep_let] ([cli_idx_sp_let]). No
+    input relates a product to [cli_dep_let]: the only type the spine relates to it is the let-in
+    [let z := (λw:Prop. w) (I (∀P. P)) : Prop in Π y : z. z], by one forward β step. The lemma finds
+    the product [Π y : (λw:Prop. w) (I (∀P. P)). (λw:Prop. w) ((λw:Prop. w) (I (∀P. P)))] below
+    [cli_dep_let] only by composing the cons step, a join of two different steps, with that β step
+    ([cli_idx_prod_nondeg]).
+    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_idx_prod_nondeg *)
 Definition typing_spine_nth_error_None_prodE_inst :=
-  typing_spine_nth_error_None_prodE (Σ := si_Σ) si_wfE [] cli_dep_Δ (tRel 1) [iv_IF] cli_dep_let 1
-    (vass si_na (tRel 0)) cli_dep_ass cli_wf_dep cli_dep_sp_let eq_refl eq_refl.
+  typing_spine_nth_error_None_prodE (Σ := si_Σ) si_wfE [] cli_idx_Δ cli_idx_body [iv_IF] cli_dep_let 1
+    (vass si_na cli_idx) cli_idx_ass cli_wf_idx cli_idx_sp_let eq_refl eq_refl.
 
 (** INSTANCE IMPOSSIBLE: the conclusion is False: a spine of Π Δ. I args never takes more arguments than Δ has assumptions; here Π A : Prop. I A (the type of c) applied to two arguments, the spine left as a hypothesis. *)
 Definition typing_spine_more_invE_inst :

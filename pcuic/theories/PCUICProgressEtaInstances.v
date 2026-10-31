@@ -18,8 +18,10 @@
     and to [Prop → Prop] with [Prop ≤ Type₀] in the codomain ([pgi_PP_PT0]); it returns a spine of
     [Prop → Prop]. The three products [Prop → Prop], [∀X:Prop. Type₀] and [∀X:Prop. Type₁] are
     pairwise distinct ([typing_spine_pred_strengthenE_inst_nondeg]).
-  - [inversion_mkAppsE_inst] (the sized inversion) runs on the β-redex [(λx:Prop. x) (∀P. P)],
-    whose spine [[∀P. P]] is not empty.
+  - [inversion_mkAppsE_inst] (the sized inversion) runs on [c (z → z)] in
+    [iv_Γz = [z := ∀P:Prop. P : Prop]], typed at [I ((∀P:Prop. P) → z)] by [typeE_Cumul] through
+    the δ-step of [z] ([PCUICInversionEtaInstances.iv_czz_typed_IFz]): the derivation ends in a
+    conversion, its spine [[z → z]] is not empty and uses [z] ([pgi_czz_nondeg]).
   - [progressE_inst] (through [progress_env_propE] and the induction principle [typing_ind_envE],
     [typing_ind_env_app_sizeE]), [progress_env_propE_inst], [typing_value_head_nappE_inst] and
     [typing_value_headE_inst] run on [(λx:Prop. x → x) (∀P. P)] ([sri_xx_redex]), whose redex body
@@ -980,28 +982,19 @@ Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 Lemma pgi_xx_lam_value : value si_Σ (mkApps sri_xx_lam []).
 Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 
-(** [(λx:Prop. x) (∀P. P)]: its head [iv_id] is an abstraction and its spine [[∀P. P]] is not
-    empty; it is not a value; it takes a WCBV step to [∀P. P]. *)
-Lemma pgi_beta_redex_nondeg :
-  [× isLambda iv_id, [iv_False] <> [],
-     (PCUICWcbvEval.value si_Σ (tApp iv_id iv_False) -> False)
-   & si_Σ ⊢ tApp iv_id iv_False ⇝ᵥ iv_False].
-Proof.
-  split.
-  - reflexivity.
-  - discriminate.
-  - intros hv.
-    destruct (PCUICWcbvEval.value_mkApps_inv si_Σ iv_id [iv_False] eq_refl hv) as [[e _]|[_ hh _]].
-    + discriminate e.
-    + have h := PCUICWcbvEval.value_head_spec si_Σ _ _ hh. cbn in h. discriminate h.
-  - apply PCUICWcbvEval.wcbv_red_beta. exact pgi_False_value.
-Qed.
+(** [c (z → z)] in [iv_Γz = [z := ∀P:Prop. P : Prop]]: its spine [[z → z]] is not empty and uses the
+    let [z] of the context, and the type [I ((∀P:Prop. P) → z)] it is typed at is not its own type
+    [I (z → z)]: the derivation [iv_czz_typed_IFz] ends in [typeE_Cumul] (the δ-step of [z]). *)
+Lemma pgi_czz_nondeg :
+  [/\ [iv_zz] <> [], noccur_between 0 1 iv_zz = false,
+      nth_error iv_Γz 0 = Some (vdef si_na iv_False si_P) & iv_IFz <> (iv_Ix 0) {0 := iv_zz}].
+Proof. split; [discriminate|reflexivity|reflexivity|discriminate]. Qed.
 
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_czz_nondeg
     TARGET PCUICProgressEta.inversion_mkAppsE *)
 Definition inversion_mkAppsE_inst :=
-  PCUICProgressEta.inversion_mkAppsE (Σ := si_Σ) (wfΣ := si_wfE) (f := iv_id) (u := [iv_False])
-    (Sort.super sProp) (iv_app_typed si_Σ [] localenv_nil) (iv_P_typed si_Σ [] localenv_nil).
+  PCUICProgressEta.inversion_mkAppsE (Σ := si_Σ) (wfΣ := si_wfE) (f := tConstruct si_ind 0 []) (u := [iv_zz])
+    sProp iv_czz_typed_IFz iv_IFz_typed.
 
 (** The spine of [c] is not empty and reaches the bound: one argument, one assumption. *)
 Lemma typing_spine_lengthE_inst_nondeg :

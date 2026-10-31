@@ -31,8 +31,9 @@
   **Non-degeneracy.** Each subject-reduction instance takes a real reduction step of a term with a
   real typing derivation. The steps: β on [(λx:Prop. x → x) (∀P:Prop. P)], whose body uses its
   variable, so the reduct [(∀P:Prop. P) → ∀P:Prop. P] is a new product ([sr_red1E_beta_inst], its
-  corollaries, [isType_red1E_inst], [isType_redE_inst], the context step of [wf_local_red1E_inst]
-  and [wf_local_redE_inst], the type step of a let in [lift_judgment_SRE_inst], a step in a
+  corollaries other than [subject_reductionE_inst], [isType_red1E_inst], [isType_redE_inst], the
+  context step of [wf_local_red1E_inst] and [wf_local_redE_inst], the type step of a let in
+  [lift_judgment_SRE_inst], a step in a
   declaration of the context ([subject_reduction_ctxE_inst]), β in a type ([type_reductionE_inst],
   [type_reduction_closedE_inst]) and in the domain of an arity ([isWfArity_red1E_inst],
   [isWfArity_redE_inst]); [sri_xx_nondeg]),
@@ -42,7 +43,9 @@
   whose typing derivation goes through an η step: in [g : Prop → Prop, k : (Prop → Prop) → Prop,
   y : k g], the redex [(λz : k g. (λw : k g. w) z) y], whose body uses [z] as an argument, has type
   [k g] and is typed at [k (λx:Prop. g x)] by a [typeE_Cumul] whose conversion is [cumul_eta_l]
-  ([sri_eta_redex_typed]); its reduct is [(λw : k g. w) y].
+  ([sri_eta_redex_typed]); its reduct is [(λw : k g. w) y]. [subject_reductionE_inst] takes β on
+  the open redex [(λx:Prop. x → x) (y → y)] in [iv_Γ1 = [y : Prop]], whose argument uses the
+  context variable [y], to [(y → y) → y → y] ([sri_xx_open_nondeg]).
 
   The helpers of [sr_red1E] that relate two objects relate two different ones:
   [substitution_ws_cumul_pb_subst_convE_inst] substitutes the two lists [[(λx:Prop. x) (∀P:Prop. P)]]
@@ -417,6 +420,21 @@ Definition sri_xx_open_reduct : term := subst1 sri_x_to_x 0 sri_x_to_x.
 Lemma sri_xx_open_cr1 : closed_red1 si_Σ [vass si_na si_P] sri_xx_open_redex sri_xx_open_reduct.
 Proof. split; [reflexivity|reflexivity|exact (red_beta si_Σ [vass si_na si_P] si_na si_P sri_x_to_x sri_x_to_x)]. Qed.
 
+(** [y : Prop ⊢ (λx:Prop. x → x) (y → y) : Prop], in [iv_Γ1 = [y : Prop]]. *)
+Lemma sri_xx_open_redex_typed : si_Σ ;;; iv_Γ1 |-E sri_xx_open_redex : si_P.
+Proof.
+  exact (typeE_App _ _ sri_xx_lam si_na si_P si_P _ sri_x_to_x (iv_PP_typed si_Σ iv_Γ1 iv_wf_Γ1)
+           (sri_xx_lam_typed iv_Γ1 iv_wf_Γ1) (sri_xx_body_typed [] localenv_nil)).
+Qed.
+
+(** The open redex uses the context variable [y] (its argument is [y → y]), the body [x → x] of
+    its λ uses its variable, and the reduct [(y → y) → y → y] is neither the redex nor the
+    argument. *)
+Lemma sri_xx_open_nondeg :
+  [/\ noccur_between 0 1 sri_xx_open_redex = false, noccur_between 0 1 sri_x_to_x = false,
+      sri_xx_open_reduct <> sri_xx_open_redex & sri_xx_open_reduct <> sri_x_to_x].
+Proof. split; try reflexivity; intros h; vm_compute in h; discriminate h. Qed.
+
 (** [(λx:Prop. x → x) (∀P:Prop. P) = (∀P:Prop. P) → ∀P:Prop. P], by the β step [sri_xx_beta]. *)
 Lemma sri_xx_ws_beta : ws_cumul_pbE Conv si_Σ [] sri_xx_redex sri_xx_reduct.
 Proof. apply red_ws_cumul_pbE. split; [reflexivity|reflexivity|exact (red1_red _ _ _ _ (sri_xx_beta []))]. Qed.
@@ -754,11 +772,13 @@ Section SRInstances.
              sri_fix_app_typed sri_fix_red).
   Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)
-  Lemma subject_reductionE_inst : si_Σ ;;; [] |-E sri_xx_reduct : si_P.
+  (** β on the open redex [(λx:Prop. x → x) (y → y)] in [iv_Γ1 = [y : Prop]]: the reduct
+      [(y → y) → y → y] keeps the type [Prop] ([sri_xx_open_nondeg]).
+      INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_open_nondeg *)
+  Lemma subject_reductionE_inst : si_Σ ;;; iv_Γ1 |-E sri_xx_open_reduct : si_P.
   Proof.
-    exact (subject_reductionE si_Σ [] sri_xx_redex sri_xx_reduct si_P si_wfE (sri_xx_redex_typed [] localenv_nil)
-             (red1_red _ _ _ _ (sri_xx_beta []))).
+    exact (subject_reductionE si_Σ iv_Γ1 sri_xx_open_redex sri_xx_open_reduct si_P si_wfE
+             sri_xx_open_redex_typed (red1_red _ _ _ _ (red_beta si_Σ iv_Γ1 si_na si_P sri_x_to_x sri_x_to_x))).
   Qed.
 
   (** INSTANCE NONDEGEN PCUICSREtaInstances.sri_xx_nondeg *)

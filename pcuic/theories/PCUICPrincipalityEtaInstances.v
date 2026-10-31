@@ -31,14 +31,17 @@
   [let y := x in I y] of the scrutinee of [PCUICProgressEtaInstances.pgi_match_let_open], Case
   case, ζ); [closed_red_confluence_cb_inst] (two different one-step reducts);
   [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step on [(λx:Prop. x → x) (∀P. P)], whose body
-  uses its variable); [typing_eq_termE_inst] (two binder names). [typing_leq_termE_inst]
-  ([Prop ≤ Set] in a codomain) is tagged NOT-BUILT: the two sorts it relates compute to the same
-  sort, so its conclusion is its own premise. [T8_Prod_l_plug_inst] and [T8_Prod_l_of_r_inst]
-  (the [Prod_l] site at [z]) are tagged NOT-BUILT too: the cumulativity they are given is the δ
-  step of [z] forgotten, and the reduction they return is that step. The rule-coverage instances apply
-  [principal_typeE] to terms of twelve different head formers and compare the returned principal
-  type with a β-wrapped type that differs from the type of the derivation it was built from
-  ([principal_typeE_rules_nondeg]). *)
+  uses its variable); [typing_leq_termE_inst] ([∀_:y. Set ≤ ∀_:y. Type₁] in [iv_Γ1 = [y : Prop]]:
+  [Set ≤ Type₁] in a codomain, so [∀_:y. Set] moves from Type₁ to Type₂; the context does no work,
+  the comparison relates the domain [y] only with itself); [typing_eq_termE_inst]
+  ([∀_:y. Type@{l1}] gets the type Type@{l0+1} of [∀_:y. Type@{l0}] in [ci_Σu], whose constraint
+  [l0 = l1] is the only reason the two terms are [eq_term]; the context does no work either).
+  [T8_Prod_l_plug_inst] and [T8_Prod_l_of_r_inst] (the [Prod_l] site at [z]) are tagged
+  NOT-BUILT: the cumulativity they are given is the δ step of [z] forgotten, and the reduction
+  they return is that step. The
+  rule-coverage instances apply [principal_typeE] to terms of twelve different head formers and
+  compare the returned principal type with a β-wrapped type that differs from the type of the
+  derivation it was built from ([principal_typeE_rules_nondeg]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -52,7 +55,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICValidityEta PCUICSREta BDTyping BDTypingEta BDTypingEtaInstances BDToPCUICEta
      BDToPCUICEtaInstances BDFromPCUICEta BDFromPCUICEtaInstances PCUICPrincipalityEta.
 From MetaRocq.PCUIC Require PCUICPrincipality PCUICContextConversion PCUICConversion PCUICEtaT8Probe
-     PCUICProgressEtaInstances.
+     PCUICProgressEtaInstances PCUICWsCumulEtaCtxInstances.
+Import PCUICWsCumulEtaCtxInstances (ci_Σu, ci_cstr, ci_eq_univ).
 From Equations.Type Require Import Relation Relation_Properties.
 
 #[local] Existing Instance default_checker_flags.
@@ -60,7 +64,7 @@ From Equations.Type Require Import Relation Relation_Properties.
 
 (** Declarations of this file that are neither instances nor non-degeneracy lemmas named by a tag
     (instance gate):
-    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg typing_leq_termE_inst_nondeg *)
+    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg *)
 
 (** ** The environments: [wf_extE] *)
 
@@ -272,34 +276,91 @@ Proof.
            iv_declared_projection pr_r_RF_typed Logic.eq_refl).
 Qed.
 
-(** [∀_:Prop. Set], a type of the sort [pr_sPS]; [∀_:Prop. Prop] is below it up to universes. *)
-Definition pr_PS : term := tProd si_na si_P (tSort Sort.type0).
-Definition pr_sPS : Universes.sort := Sort.sort_of_product (Sort.super sProp) (Sort.super Sort.type0).
+(** In [iv_Γ1 = [y : Prop]]: [∀_:y. Set], of the sort [pr_syS] (Type₁), and [∀_:y. Type₁], of the
+    sort [pr_syT1] (Type₂), with [∀_:y. Set ≤ ∀_:y. Type₁] up to universes ([Set ≤ Type₁] in the
+    codomain). The domain of both is the context variable [y], which the comparison only relates
+    with itself: the context does no work in the step. (Prop and Set have the same type Type₁, so a
+    codomain [Prop ≤ Set] would leave the type unchanged.) *)
+Definition pr_yS : term := tProd si_na (tRel 0) (tSort Sort.type0).
+Definition pr_yT1 : term := tProd si_na (tRel 0) (tSort (Sort.super Sort.type0)).
+Definition pr_syS : Universes.sort := Sort.sort_of_product sProp (Sort.super Sort.type0).
+Definition pr_syT1 : Universes.sort := Sort.sort_of_product sProp (Sort.super (Sort.super Sort.type0)).
 
-Lemma pr_PS_typed : si_Σ ;;; [] |-E pr_PS : tSort pr_sPS.
+Lemma pr_wf_Γ1y : wf_localE si_Σ (iv_Γ1 ,, vass si_na (tRel 0)).
+Proof. exact (iv_wf_vass si_Σ iv_Γ1 si_na (tRel 0) sProp iv_wf_Γ1 iv_x_typed Logic.eq_refl). Qed.
+
+Lemma pr_yS_typed : si_Σ ;;; iv_Γ1 |-E pr_yS : tSort pr_syS.
 Proof.
-  apply typeE_Prod.
-  - exact (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl).
-  - apply typeE_Sort; [exact (iv_wf_P si_Σ [] localenv_nil)|apply/(PCUICWfUniverses.wf_sort_reflect si_Σ); reflexivity].
+  apply typeE_Prod; [exact (iv_vass_s si_Σ iv_Γ1 si_na (tRel 0) sProp iv_x_typed Logic.eq_refl)|].
+  apply typeE_Sort; [exact pr_wf_Γ1y|apply/(PCUICWfUniverses.wf_sort_reflect si_Σ); reflexivity].
 Qed.
 
-Lemma pr_PP_leq_PS : leq_term empty_global_env si_Σ iv_PP pr_PS.
-Proof. constructor; [reflexivity|constructor; reflexivity|constructor; cbn; trivial]. Qed.
-
-(** [λx:Prop. x] with the binder name [x] instead of the anonymous one. *)
-Definition pr_nx : aname := mkBindAnn (nNamed "x") Relevant.
-Definition pr_lam' : term := tLambda pr_nx si_P (tRel 0).
-
-Lemma pr_lam'_typed : si_Σ ;;; [] |-E pr_lam' : tProd pr_nx si_P si_P.
+Lemma pr_yT1_typed : si_Σ ;;; iv_Γ1 |-E pr_yT1 : tSort pr_syT1.
 Proof.
-  have w := iv_wf_vass si_Σ [] pr_nx si_P _ localenv_nil (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl.
-  apply typeE_Lambda.
-  - exact (iv_vass si_Σ [] pr_nx si_P _ (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl).
-  - exact (typeE_Rel _ _ 0 (vass pr_nx si_P) w Logic.eq_refl).
+  apply typeE_Prod; [exact (iv_vass_s si_Σ iv_Γ1 si_na (tRel 0) sProp iv_x_typed Logic.eq_refl)|].
+  apply typeE_Sort; [exact pr_wf_Γ1y|apply/(PCUICWfUniverses.wf_sort_reflect si_Σ); reflexivity].
 Qed.
 
-Lemma pr_id_eq_lam' : eq_term empty_global_env si_Σ iv_id pr_lam'.
-Proof. constructor; [reflexivity|constructor; reflexivity|constructor]. Qed.
+Lemma pr_yS_leq_yT1 : leq_term empty_global_env si_Σ pr_yS pr_yT1.
+Proof.
+  constructor; [reflexivity|constructor|constructor; cbn].
+  (* [Set ≤ Type₁]: for every valuation, Set has the value 0 and Type₁ the value 1. *)
+  intros v _. cbn. lia.
+Qed.
+
+(** [ci_Σu] ([PCUICWsCumulEtaCtxInstances]): [si_env] with two bound universe levels [l0], [l1] and the
+    constraint [l0 = l1]. Its universe context is well formed for [si_env] ([pr_ci_on_udecl]): the
+    levels are fresh, the constraint names only them, and the valuation that sends both to [0]
+    satisfies it. In [iv_Γ1 = [y : Prop]], [∀_:y. Type@{l0}] and [∀_:y. Type@{l1}] ([pr_yL 0],
+    [pr_yL 1]) are [eq_term] only through that constraint ([pr_yL_eq], [ci_eq_univ]). *)
+Lemma pr_ci_on_udecl : on_udecl (universes si_env) ci_Σu.2.
+Proof.
+  split; [|split; [|split]].
+  - intros x Hx H.
+    change (LevelSet.In x (LevelSet.union (ContextSet.levels ContextSet.empty) (LevelSet.singleton Level.lzero))) in H.
+    apply LevelSet.union_spec in H as [H|H].
+    + eapply LevelSet.empty_spec. exact H.
+    + apply LevelSet.singleton_spec in H. hnf in H. subst x.
+      apply LevelSet.mem_spec in Hx. vm_compute in Hx. discriminate Hx.
+  - intros c hc. apply ConstraintSet.singleton_spec in hc. subst c.
+    split; apply LevelSet.mem_spec; reflexivity.
+  - exists si_val. intros c hc.
+    apply ConstraintSet.union_spec in hc as [hc|hc].
+    + apply ConstraintSet.singleton_spec in hc. subst c. constructor. reflexivity.
+    + exfalso. eapply ConstraintSet.empty_spec. exact hc.
+  - intros v _. exists {| valuation_mono := valuation_mono v; valuation_poly := fun _ => 0 |}. split.
+    + intros c hc. apply ConstraintSet.singleton_spec in hc. subst c. constructor. reflexivity.
+    + intros x Hx. exfalso. eapply LevelSet.empty_spec. exact Hx.
+Qed.
+
+Definition pr_ci_wfext : wf_extE ci_Σu := (si_wfE, pr_ci_on_udecl).
+
+Definition pr_sl (n : nat) : Universes.sort := sType (Universe.make' (Level.lvar n)).
+Definition pr_yL (n : nat) : term := tProd si_na (tRel 0) (tSort (pr_sl n)).
+
+Lemma pr_ci_wf_Γ1 : wf_localE ci_Σu iv_Γ1.
+Proof. exact (iv_wf_P ci_Σu [] localenv_nil). Qed.
+
+Lemma pr_ci_x_typed : ci_Σu ;;; iv_Γ1 |-E tRel 0 : si_P.
+Proof. exact (typeE_Rel _ _ 0 (vass si_na si_P) pr_ci_wf_Γ1 Logic.eq_refl). Qed.
+
+Lemma pr_ci_wf_Γ1y : wf_localE ci_Σu (iv_Γ1 ,, vass si_na (tRel 0)).
+Proof. exact (iv_wf_vass ci_Σu iv_Γ1 si_na (tRel 0) sProp pr_ci_wf_Γ1 pr_ci_x_typed Logic.eq_refl). Qed.
+
+Lemma pr_yL_typed (n : nat) : n < 2 ->
+  ci_Σu ;;; iv_Γ1 |-E pr_yL n : tSort (Sort.sort_of_product sProp (Sort.super (pr_sl n))).
+Proof.
+  intros hn. apply typeE_Prod; [exact (iv_vass_s ci_Σu iv_Γ1 si_na (tRel 0) sProp pr_ci_x_typed Logic.eq_refl)|].
+  apply typeE_Sort; [exact pr_ci_wf_Γ1y|].
+  apply/(PCUICWfUniverses.wf_sort_reflect ci_Σu).
+  destruct n as [|[|n]]; [reflexivity|reflexivity|lia].
+Qed.
+
+Lemma pr_yL_eq : eq_term empty_global_env ci_Σu (pr_yL 0) (pr_yL 1).
+Proof.
+  constructor; [reflexivity|constructor|].
+  constructor. cbn. exact ci_eq_univ.
+Qed.
 
 (** ** The lemmas of [PCUICPrincipalityEta], at concrete arguments *)
 
@@ -692,31 +753,52 @@ Proof.
            pr_r_RF_typed pr_r_RidF_typed).
 Qed.
 
-(** [∀_:Prop. Prop] and [∀_:Prop. Set] differ (their codomains, [Prop] and [Set]). *)
-Lemma typing_leq_termE_inst_nondeg : iv_PP <> pr_PS.
-Proof. discriminate. Qed.
+(** [∀_:y. Set] and [∀_:y. Type₁] differ (their codomains, [Set] and [Type₁]); [∀_:y. Set] mentions
+    the context variable [y] of [iv_Γ1] (only as the domain, compared with itself); and the sort the
+    instance gives it, Type₂ ([pr_syT1]), is not its own sort Type₁ ([pr_syS], the type in its
+    premise [pr_yS_typed]). *)
+Lemma typing_leq_termE_inst_nondeg :
+  [/\ pr_yS <> pr_yT1, noccur_between 0 1 pr_yS = false & tSort pr_syT1 <> tSort pr_syS].
+Proof. split; [discriminate|reflexivity|intros h; vm_compute in h; discriminate h]. Qed.
 
-(** [typing_leq_termE]: [∀_:Prop. Prop ≤ ∀_:Prop. Set] up to universes ([pr_PP_leq_PS]; the
-    codomain at [Cumul], [Prop ≤ Set]): the term [∀_:Prop. Prop] gets the type of [∀_:Prop. Set];
-    the two terms differ ([typing_leq_termE_inst_nondeg]).
-    INSTANCE NOT-BUILT: degenerate, the conclusion is the instance's own premise: [typing_leq_termE] moves [t' = iv_PP] from its type [tSort iv_sPP] to the type [tSort pr_sPS] of [t = pr_PS], but [pr_sPS = sort_of_product (super sProp) (super type0)] and [iv_sPP = sort_of_product (super sProp) (super sProp)] compute to the same sort ([Sort.super] maps both [sProp] and [type0] to [type1]), so the conclusion [iv_PP : tSort pr_sPS] is the premise [iv_PP_typed] and the move to a different type never runs; a [t] of a larger sort would need the cumulativity; no non-degenerate witness built yet *)
-Lemma typing_leq_termE_inst : si_Σ ;;; [] |-E iv_PP : tSort pr_sPS.
+(** [typing_leq_termE] in [iv_Γ1 = [y : Prop]]: [∀_:y. Set ≤ ∀_:y. Type₁] up to universes
+    ([pr_yS_leq_yT1]; the codomain at [Cumul], [Set ≤ Type₁]): the term [∀_:y. Set], of type Type₁,
+    gets the type Type₂ of [∀_:y. Type₁] ([typing_leq_termE_inst_nondeg]). The context does no work:
+    the comparison relates the domain [y] only with itself.
+    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_leq_termE_inst_nondeg *)
+Lemma typing_leq_termE_inst : si_Σ ;;; iv_Γ1 |-E pr_yS : tSort pr_syT1.
 Proof.
-  exact (typing_leq_termE si_Σ [] pr_PS iv_PP (tSort pr_sPS) (tSort iv_sPP) si_wfE si_on_udecl
-           pr_PS_typed (iv_PP_typed si_Σ [] localenv_nil) pr_PP_leq_PS).
+  exact (typing_leq_termE si_Σ iv_Γ1 pr_yT1 pr_yS (tSort pr_syT1) _ si_wfE si_on_udecl
+           pr_yT1_typed pr_yS_typed pr_yS_leq_yT1).
 Qed.
 
-(** [λx:Prop. x] with the anonymous binder and with the binder [x] differ. *)
-Lemma typing_eq_termE_inst_nondeg : iv_id <> pr_lam'.
-Proof. discriminate. Qed.
-
-(** [typing_eq_termE]: [λx:Prop. x] with two binder names; the second term gets the type of
-    the first.
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_eq_termE_inst_nondeg *)
-Lemma typing_eq_termE_inst : si_Σ ;;; [] |-E pr_lam' : iv_PP.
+(** [∀_:y. Type@{l0}] and [∀_:y. Type@{l1}] differ: their levels [l0] and [l1] are different
+    variables, equal only by the constraint [l0 = l1] of [ci_Σu]; the type the instance gives
+    [∀_:y. Type@{l1}], Type@{l0+1}, is not its own type Type@{l1+1}; and the term mentions the context
+    variable [y] (only as the domain, which the comparison relates with itself). *)
+Lemma typing_eq_termE_inst_nondeg :
+  [/\ pr_yL 0 <> pr_yL 1, Level.lvar 0 <> Level.lvar 1,
+      ConstraintSet.In ci_cstr (constraints_of_udecl ci_Σu.2),
+      tSort (Sort.sort_of_product sProp (Sort.super (pr_sl 0)))
+        <> tSort (Sort.sort_of_product sProp (Sort.super (pr_sl 1))) &
+      noccur_between 0 1 (pr_yL 1) = false].
 Proof.
-  exact (typing_eq_termE si_Σ [] iv_id pr_lam' iv_PP (tProd pr_nx si_P si_P) pr_si_wfext
-           (iv_id_typed si_Σ [] localenv_nil) pr_lam'_typed pr_id_eq_lam').
+  split; [discriminate|discriminate| |intros h; vm_compute in h; discriminate h|reflexivity].
+  apply ConstraintSet.singleton_spec. reflexivity.
+Qed.
+
+(** [typing_eq_termE] in [ci_Σu], context [iv_Γ1 = [y : Prop]]: [∀_:y. Type@{l1}], of type
+    Type@{l1+1} ([pr_yL_typed 1]), gets the type Type@{l0+1} of [∀_:y. Type@{l0}]
+    ([pr_yL_typed 0]). The two terms are [eq_term] only through the constraint [l0 = l1]
+    ([pr_yL_eq]); the Sort case of [typing_leq_termE] turns it into Type@{l1+1} ≤ Type@{l0+1} (the
+    cumulativity of the two sorts). The context does no work: the comparison relates the domain [y]
+    only with itself ([typing_eq_termE_inst_nondeg]).
+    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_eq_termE_inst_nondeg *)
+Lemma typing_eq_termE_inst :
+  ci_Σu ;;; iv_Γ1 |-E pr_yL 1 : tSort (Sort.sort_of_product sProp (Sort.super (pr_sl 0))).
+Proof.
+  exact (typing_eq_termE ci_Σu iv_Γ1 (pr_yL 0) (pr_yL 1) _ _ pr_ci_wfext
+           (pr_yL_typed 0 ltac:(lia)) (pr_yL_typed 1 ltac:(lia)) pr_yL_eq).
 Qed.
 
 End PrincipalityEtaInstances.
