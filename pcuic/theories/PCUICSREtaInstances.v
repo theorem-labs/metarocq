@@ -2,7 +2,7 @@
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
    lemma, not a mechanical guarantee.
-   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+   Measured reader miss rate: at least 17 of 60 sampled instances (28.3%, 95% upper bound 39.4%), seed 202610301905: the union of the verdicts held by two independent reviews (Opus 5: 10 of 60; Opus 5.5: 15 of 60, 6 of its verdicts borderline at confidence 0.5-0.6). The 17 sampled misses are corrected at this head, but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected. *)
 
 (** * Satisfying instances of the lemmas of [PCUICSREta] (row T1)
 
@@ -54,20 +54,23 @@
   universe instances only through its premise.) The
   lemmas about a constructor run on [jc] (an argument that the universe instance moves, an index
   that is not closed), those about a branch on a branch of [jc] whose binder name differs from
-  [jc]'s, the four [spine_subst_inst_subst*E] on a spine with a let (so [s] is not [List.rev inst])
-  and a [Δ'] that uses both the let and the assumption ([y → x]), [weakening_closed_red1_cb] on the
+  [jc]'s (but [wf_pre_case_branch_contextE_inst] is tagged IMPOSSIBLE: for every branch, its two
+  contexts differ only in binder names), the four [spine_subst_inst_subst*E] on a spine with a
+  let (so [s] is not [List.rev inst]) and a [Δ'] that uses both the let and the assumption
+  ([y → x]), [weakening_closed_red1_cb] on the
   open step [(λx:Prop. x → x) (y → y) ⇝1 (y → y) → y → y] (so the lift moves it),
   [prim_op_head_typeE] and [typing_spine_prim_arg_typesE] on a type that is a β-redex (so the
   comparison is not reflexive).
 
   **Tags.** Each instance carries its tag in the comment directly above it: NONDEGEN with the
   compiled lemma that states what makes it non-degenerate, or IMPOSSIBLE with the property of
-  the statement that makes every instance degenerate (seven rows:
+  the statement that makes every instance degenerate (eight rows:
   [declared_projection_declared_constructorE], [declared_projection_indicesE],
   [cmp_global_instance_cstr_irrelevantE], [isType_prim_tag_constantE], [spine_subst_wt_termsE],
-  [PCUICSREta.conv_refl'E] and [conv_context_reflE]), or NOT-BUILT for a degenerate instance
-  with no non-degenerate witness built yet (one row: the ι instance
-  [subject_reduction1E_iota_inst]).
+  [wf_pre_case_branch_contextE], [PCUICSREta.conv_refl'E] and [conv_context_reflE]), or NOT-BUILT
+  for a degenerate instance with no non-degenerate witness built yet (three rows: the ι instance
+  [subject_reduction1E_iota_inst], and the two primitive-operation instances
+  [prim_app_typing_invE_inst] and [sr_prim_opE_inst]).
 
   **Helpers with an instance of their own**, each also run inside another instance here:
   - [ctx_inst_mergeE_inst]: the telescope [x : Prop, f : x → x], whose first argument
@@ -84,7 +87,7 @@
   - [typing_spine_prim_argsE_inst]: the spine [1] of the partial application [land 1] in
     [Σ_po] (one argument of two, so neither part of the conclusion is vacuous).
     [prim_app_typing_invE_inst] runs it through [prim_app_typing_invE] on the spine [1 3] of
-    [land 1 3];
+    [land 1 3] (that instance is tagged NOT-BUILT);
   - [typing_closed_red1E_inst] and [typing_closed_redE_inst]: the β step [sri_xx_beta] of the typed
     [(λx:Prop. x → x) (∀P:Prop. P)], in [[]] and in [z : (λx:Prop. x → x) (∀P:Prop. P)]
     ([type_reduction_closedE_inst] also runs [typing_closed_redE] on that step;
@@ -110,7 +113,7 @@ From MetaRocq.PCUIC Require PCUICSR PCUICEtaIdxEnv.
 #[local] Existing Instance si_cb.
 
 (* The pieces the instances are built from (terms, contexts, typing derivations, steps):
-   WITNESSES: sri_* subject_reduction1E_iota_inst_nondeg *)
+   WITNESSES: sri_* subject_reduction1E_iota_inst_nondeg wf_pre_case_branch_contextE_inst_nondeg sr_prim_opE_inst_nondeg prim_app_typing_invE_inst_nondeg *)
 
 (** ** Pieces, without any class *)
 
@@ -1022,7 +1025,7 @@ Section SRInstances.
   Proof. intros h; apply (f_equal (map decl_name)) in h; vm_compute in h; discriminate h. Qed.
 
   (** The branch [sri_jbr] of [jc] in a [match] on [J@{Set} A] in [ji_Γ].
-      INSTANCE NONDEGEN PCUICSREtaInstances.wf_pre_case_branch_contextE_inst_nondeg *)
+      INSTANCE IMPOSSIBLE: [case_branch_context] is [map2 set_binder_name] over [pre_case_branch_context] ([PCUICCases.case_branch_context_gen]), and the premise [wf_branch_gen] makes the two lengths equal, so in every instance the premise's context and the conclusion's context differ only in binder names, with the same types and bodies ([pre_case_branch_context_eqE]); the proof of [wf_pre_case_branch_contextE] transports the premise along that renaming by [wf_local_alphaE], every per-declaration step reflexive, so the conclusion is the premise's own typings under the constructor's binder names (the class of [PCUICSREtaConvInstances.eq_context_alpha_convE_inst]) *)
   Definition wf_pre_case_branch_contextE_inst :=
     wf_pre_case_branch_contextE (Σ := PCUICEtaIdxEnv.ji_Σ) (wfΣ := PCUICEtaIdxEnv.ji_wfE) (Γ := PCUICEtaIdxEnv.ji_Γ)
       (p := PCUICEtaIdxEnv.ji_p) (br := sri_jbr) (cdecl := PCUICEtaIdxEnv.ji_cdecl)
@@ -1405,7 +1408,7 @@ Section SRInstances.
     mkApps (tConst po_land_kn []) (map term_of_lit [LInt 1%uint63; LInt 3%uint63]) <> tPrim (prim_int 1%uint63).
   Proof. intros h; vm_compute in h; discriminate h. Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.sr_prim_opE_inst_nondeg *)
+  (** INSTANCE NOT-BUILT: degenerate, the reduct is an argument: [land 1 3] denotes [1] ([po_land_1_3]), its first argument, so the conclusion [tPrim 1 : sri_int] is [sri_prim_typed 1], the argument typing inside the input [sri_land_app_typed]; no non-degenerate witness built yet *)
   Lemma sr_prim_opE_inst : Σ_po ;;; [] |-E tPrim (prim_int 1%uint63) : sri_int.
   Proof.
     exact (sr_prim_opE (Σ := Σ_po) (wfΣ := iv_po_wfE) (c := po_land_kn) (ls := [LInt 1%uint63; LInt 3%uint63])
@@ -1417,7 +1420,7 @@ Section SRInstances.
   Lemma prim_app_typing_invE_inst_nondeg : map term_of_lit [LInt 1%uint63; LInt 3%uint63] <> [].
   Proof. intros h; vm_compute in h; discriminate h. Qed.
 
-  (** INSTANCE NONDEGEN PCUICSREtaInstances.prim_app_typing_invE_inst_nondeg *)
+  (** INSTANCE NOT-BUILT: degenerate, the proof of [prim_app_typing_invE] inverts the [typeE_App] / [typeE_Const] chain that builds the input [sri_land_app_typed], in which no step is a conversion, so each per-argument output [a : tConst kn []] is the input's own argument typing [sri_prim_typed] (at [sri_int]) behind a reflexive cumulativity; the second conjunct is vacuous, because the spine [1 3] has as many arguments as the tags [[primInt; primInt]] of [land] ([typing_spine_prim_argsE_inst_nondeg]); no non-degenerate witness built yet *)
   Definition prim_app_typing_invE_inst :=
     prim_app_typing_invE (Σ := Σ_po) (wfΣ := iv_po_wfE) (args := map term_of_lit [LInt 1%uint63; LInt 3%uint63])
       Σ_po_registers sri_land_app_typed ltac:(cbn; lia).

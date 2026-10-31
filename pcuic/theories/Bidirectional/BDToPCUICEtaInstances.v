@@ -2,7 +2,7 @@
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
    lemma, not a mechanical guarantee.
-   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+   Measured reader miss rate: at least 17 of 60 sampled instances (28.3%, 95% upper bound 39.4%), seed 202610301905: the union of the verdicts held by two independent reviews (Opus 5: 10 of 60; Opus 5.5: 15 of 60, 6 of its verdicts borderline at confidence 0.5-0.6). The 17 sampled misses are corrected at this head, but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected. *)
 
 (** * Satisfying instances of the lemmas of [Bidirectional/BDToPCUICEta] (row T6)
 
@@ -26,8 +26,10 @@
   target is degenerate: [wf_local_local_relE_inst] (the proof of [wf_local_local_relE] is the
   second projection of [All_local_env_app_inv] on its premise), [bd_wf_localE_inst] and
   [bd_wf_local_relE_inst] (the proofs of [bd_wf_localE] and [bd_wf_local_relE] rebuild the
-  context from the premise's own typing fields). The declarations that are not instances are
-  registered on the witness line after the imports.
+  context from the premise's own typing fields); for the one NOT-BUILT tag, the reason why this
+  instance is degenerate: [wf_rel_weakE_inst] (it weakens only the closed assumption [x : Prop],
+  so the only derivation it weakens is a sort typing). The declarations that are not instances
+  are registered on the witness line after the imports.
   - [checking_typingE_eta_inst]: soundness on the check [x ◃ G F] of [checkingE_eta_inst].
     Every type inferred for [x] in [bd_Γη] is [G (λ y. F y)], which is not [G F] and
     η-contracts to it in one step ([bdi_eta_pair]).
@@ -47,9 +49,9 @@
     [G F : Prop] that has a term ([bdi_vdef_term]); [ctx_inst_bd_typingE_inst] and
     [ctx_inst_implE_inst] instantiate the parameter of [I] ([si_declared_inductive]) with the
     list [[G F]], which is not empty ([bdi_args_nonempty]); the context lemmas run on contexts
-    that are not empty ([bd_ctxs_nonempty]): with three declarations
-    ([wf_local_bd_typingE_inst]), or as the target of a weakening ([wf_rel_weakE_inst], which
-    weakens the one closed assumption [x : Prop], well formed in [[]] ([iv_wf_P]), to [bd_ΓFG]);
+    that are not empty ([bd_ctxs_nonempty]), with three declarations
+    ([wf_local_bd_typingE_inst]); [wf_rel_weakE_inst], tagged NOT-BUILT, weakens the one closed
+    assumption [x : Prop], well formed in [[]] ([iv_wf_P]), to [bd_ΓFG];
     [bd_wf_localE_inst] and [bd_wf_local_relE_inst], tagged IMPOSSIBLE, run on contexts with a
     let ([bdi_ctxs_nonempty]); [wf_local_rel_subst1E_inst] substitutes [∀P:Prop. P]
     for the let-bound [z] in [x : z → z], where [z] is not the whole type; the result
@@ -369,7 +371,7 @@ Proof.
 Qed.
 
 (** A weakening from [[]] to [bd_ΓFG], which is not empty.
-    INSTANCE NONDEGEN BDTypingEtaInstances.bd_ctxs_nonempty *)
+    INSTANCE NOT-BUILT: degenerate, the weakened context [[x : Prop]] has one closed assumption, so the only derivation that [wf_rel_weakE] weakens (by [weaken_ctxE]) is the sort typing of [Prop] ([iv_P_typed], one [typeE_Sort]), and the conclusion is the relative part of the instance's own context-generic witness [iv_wf_P] taken at [bd_ΓFG] ([iv_wf_P bd_ΓFG bdi_wfFG]); no non-degenerate witness built yet *)
 Lemma wf_rel_weakE_inst : wf_local_relE si_Σ bd_ΓFG [vass si_na si_P].
 Proof. exact (wf_rel_weakE si_Σ si_wfE bd_ΓFG bdi_wfFG [vass si_na si_P] (iv_wf_P si_Σ [] localenv_nil)). Qed.
 

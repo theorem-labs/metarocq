@@ -2,7 +2,7 @@
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
    lemma, not a mechanical guarantee.
-   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+   Measured reader miss rate: at least 17 of 60 sampled instances (28.3%, 95% upper bound 39.4%), seed 202610301905: the union of the verdicts held by two independent reviews (Opus 5: 10 of 60; Opus 5.5: 15 of 60, 6 of its verdicts borderline at confidence 0.5-0.6). The 17 sampled misses are corrected at this head, but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected. *)
 
 (** * Satisfying instances of the lemmas of [PCUICPrincipalityEta] (row T2b)
 
@@ -10,7 +10,10 @@
   (frac/eta 3e6b422d), is deleted.
   Non-degeneracy: each instance is tagged for the instance gate in the comment directly above it
   (its non-degeneracy lemma, or the reason its row is degenerate by the statement;
-  [isWfArity_sortE_inst] and [invert_red_sort_cb_inst] are tagged IMPOSSIBLE).
+  [isWfArity_sortE_inst] and [invert_red_sort_cb_inst] are tagged IMPOSSIBLE). The [Sort_r] and
+  [Prod_r] instances below, [principal_typeE_sort_r_inst] and [principal_typeE_prod_r_inst], are
+  tagged NOT-BUILT: each passes the one derivation it was built from to the principal-type
+  function, so its conclusion holds by that input with reflexivity.
   [common_typingE_eta_inst] and [principal_typeE_eta_inst]: two types of one variable, its
   declared type and the type it η-contracts to ([pr_eta_types_nondeg]). Inputs chosen for T8
   sites, at types that are NOT head forms; each lemma states the type and its one step to a head
@@ -45,8 +48,9 @@ From Equations.Type Require Import Relation Relation_Properties.
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
 
-(** Declarations of this file that are neither instances nor non-degeneracy lemmas (instance gate):
-    WITNESSES: pr_* *)
+(** Declarations of this file that are neither instances nor non-degeneracy lemmas named by a tag
+    (instance gate):
+    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg *)
 
 (** ** The environments: [wf_extE] *)
 
@@ -388,7 +392,7 @@ Qed.
 (** Chosen for T8 [Sort_r]: the product [pr_prod_let], whose domain [let z := ∀P. P in z] has the
     inferred type [let z := ∀P. P in Prop] (every type inferred for it is that let-in), which is
     not a sort and ζ-reduces to [Prop] in one step ([principal_typeE_sort_r_inst_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_sort_r_inst_nondeg
+    INSTANCE NOT-BUILT: degenerate, the same derivation passed twice: the proof applies the function [HC] that [principal_typeE] returns for [pr_prod_let_typed] to [pr_prod_let_typed] itself, so the conclusion [∑ C, C ≤ T × pr_prod_let : C] is inhabited by the input's own type [T] with reflexivity and the input, and the T8 [Sort_r] work inside the target carries nothing into it; no non-degenerate witness built yet
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_sort_r_inst :
   ∑ C, si_Σ ;;; [] ⊢E C ≤ tSort (Sort.sort_of_product sProp (Sort.super sProp)) ×
@@ -401,7 +405,7 @@ Qed.
 (** Chosen for T8 [Prod_r]: the application [x (∀P. P)], whose function [x] has the inferred type
     [z] (every type inferred for [x] is [z]), which is not a product and unfolds (δ) in one step to
     the product [∀P:Prop. P] ([pr_z_delta_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_z_delta_nondeg
+    INSTANCE NOT-BUILT: degenerate, the same derivation passed twice: the proof applies the function [HC] that [principal_typeE] returns for [pr_app_z_typed] to [pr_app_z_typed] itself, so the conclusion [∑ C, C ≤ T × x (∀P. P) : C] is inhabited by the input's own type [T] with reflexivity and the input, and the T8 [Prod_r] work inside the target carries nothing into it; no non-degenerate witness built yet
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_prod_r_inst :
   ∑ C, si_Σ ;;; bdf_Γz ⊢E C ≤ (tRel 0) {0 := iv_False} × si_Σ ;;; bdf_Γz |-E tApp (tRel 0) iv_False : C.
