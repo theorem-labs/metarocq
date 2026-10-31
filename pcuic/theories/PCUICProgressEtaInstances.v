@@ -41,15 +41,16 @@
     copy [red1_progressE] (base's new [red1_progress]) has its instance there
     ([red1_progressE_inst]).
 
-  - The constructor-arity lemmas run on [c (∀P. P) : I (∀P. P)].
-  - [typing_spine_lengthE_inst]: the spine of [c] applied to [∀P. P].
+  - [typing_constructor_arity_exactE_inst] runs on [c (∀P. P) : I (∀P. P)].
   - [typing_ind_envE_closedn_inst], [typing_ind_env_app_sizeE_closedn_inst]: the two induction
     principles with predicates that are not [unit] (the subject, the judgment and the context are
     scoped), every case proved in general (section [ClosednInduction]).
 
   **Rows degenerate by the statement**, tagged IMPOSSIBLE at each instance: [typing_spine_sortE],
-  [typing_spine_axiomE], [typing_spine_prim_typeE] (the conclusion is forced), and
-  [declared_constructor_ind_declE] (its proof reads the conclusion off its own premise). Each
+  [typing_spine_axiomE], [typing_spine_prim_typeE] (the conclusion is forced),
+  [declared_constructor_ind_declE] (its proof reads the conclusion off its own premise), and
+  [typing_spine_lengthE] and [typing_constructor_arityE] (the bound is decided by computation,
+  and the typing only refutes the case where it fails). Each
   instance is tagged for the instance gate (its non-degeneracy lemma, or the reason) in the
   comment directly above it.
 
@@ -72,7 +73,7 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
 From Equations.Type Require Import Relation.
 
 (** Declarations of this file that are neither instances nor non-degeneracy lemmas (instance gate):
-    WITNESSES: pgx_* pgi_* *)
+    WITNESSES: pgx_* pgi_* typing_spine_lengthE_inst_nondeg typing_constructor_arityE_inst_nondeg *)
 
 (** ** [si_env] and [c (∀P. P)] at [config.extraction_checker_flags], for [classificationE]
 
@@ -1007,7 +1008,7 @@ Lemma typing_spine_lengthE_inst_nondeg :
   0 < #|[iv_False]| /\ #|[iv_False]| = context_assumptions [vass si_na si_P].
 Proof. split; [exact (le_n 1)|reflexivity]. Qed.
 
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.typing_spine_lengthE_inst_nondeg *)
+(** INSTANCE IMPOSSIBLE: the proof decides #|args'| ≤ context_assumptions Δ by computation (le_dec) and uses typing_spine_more_invE only to refute the other case, so on every instance whose premises hold the conclusion is a computed numeral comparison; reaching the refuted case needs a False conclusion *)
 Definition typing_spine_lengthE_inst : #|[iv_False]| <= context_assumptions [vass si_na si_P] :=
   typing_spine_lengthE (Σ := si_Σ) (wfΣ := si_wfE) [] [vass si_na si_P] si_ind [] [tRel 0] [iv_False] iv_IF pgi_sp_cstr.
 
@@ -1031,7 +1032,7 @@ Lemma typing_constructor_arityE_inst_nondeg :
   0 < #|[iv_False]| /\ #|[iv_False]| = cstr_arity si_mdecl si_cdecl.
 Proof. split; [exact (le_n 1)|reflexivity]. Qed.
 
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.typing_constructor_arityE_inst_nondeg *)
+(** INSTANCE IMPOSSIBLE: the proof inverts the typing to a spine at the constructor's type and ends in typing_spine_lengthE, which decides the bound by computation and uses the spine only to refute the case where it fails; so on every instance whose premises hold the conclusion is a computed numeral comparison, and the inversions only feed that refutation; reaching it needs a False conclusion *)
 Definition typing_constructor_arityE_inst : #|[iv_False]| <= cstr_arity si_mdecl si_cdecl :=
   typing_constructor_arityE (Σ := si_Σ) (wfΣ := si_wfE) (args := [iv_False]) si_declared_constructor sri_cF_typed.
 

@@ -40,8 +40,10 @@
     [G (λ y. F y)] ([bs_case_moves]). [rename_mfix_on_ind_redE_inst] on the reduction witness of
     the fixpoint [bd_mfix], whose declared type fails [check_one_fix] and which the weakening
     moves ([bs_mfix_moves]).
-  - [typing_renaming_cond_PE_inst] and [on_free_vars_typeE_inst] on the typing [x : G F] in
-    [bd_Γη], at a type that no inference gives [x] there ([bs_eta_typed_nondeg]).
+  - [typing_renaming_cond_PE_inst] on the typing [x : G F] in [bd_Γη], at a type that no
+    inference gives [x] there ([bs_eta_typed_nondeg]). [on_free_vars_typeE_inst], on the same
+    typing, is tagged NOT-BUILT: its [P] scopes the given type [G F], so the input typing
+    inhabits the conclusion.
   - [strengtheningE_inst] and [strengthening_typeE_inst] remove the unused assumption [x : Prop]
     from [y : d; d := Prop : Type] for [y]: the term really is lifted, and no type inferred for
     the lifted [y] is a sort ([bs_strengthening_nondeg]). *)
@@ -271,7 +273,7 @@ Section BDStrengtheningClassInstances.
     discriminate.
   Qed.
 
-  (** INSTANCE NONDEGEN BDStrengtheningEtaInstances.bs_eta_typed_nondeg *)
+  (** INSTANCE NOT-BUILT: degenerate, an input inhabits the conclusion: with P = shiftnP #|bd_Γη| xpred0 the given type G F is scoped by P (on_free_vars computes to true), so (G F, eq_refl, bs_eta_typed) proves ∑ T', on_free_vars P T' × typing; a P excluding a variable that the given type mentions but t, the context entries under P and the inferred type do not would make on_free_vars_typeE run; no non-degenerate witness built yet *)
   Definition on_free_vars_typeE_inst :=
     on_free_vars_typeE (shiftnP #|bd_Γη| xpred0) si_Σ si_wfE bd_Γη (tRel 0) _ eq_refl eq_refl bs_eta_typed.
 

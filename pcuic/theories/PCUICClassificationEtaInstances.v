@@ -78,9 +78,10 @@
     constructor by constructor; only a stuck fixpoint application uses the closedness premise),
     and [value_classificationE_inst] and [eval_classificationE_inst] are tagged IMPOSSIBLE (the
     conclusion is computed from the head of the instance's own value or evaluation result;
-    everything else in their proofs refutes). The conclusion of
-    [fix_app_is_constructorE_inst] is its branch for a present recursive argument
-    ([cli_fix_rarg_present]). The four whnf classification rows on the same term
+    everything else in their proofs refutes). [fix_app_is_constructorE_inst] is tagged NOT-BUILT:
+    its recursive argument is present ([cli_fix_rarg_present]), so its conclusion is the branch
+    whose left disjunct [isConstruct_app (c (∀P. P))] computes to [true]. The four whnf
+    classification rows on the same term
     ([whnf_classificationE_inst], [whnf_classification'E_inst], [ind_whnf_classificationE_inst],
     [ind_whnf_classification'E_inst]) are tagged IMPOSSIBLE: on every instance whose premises
     hold, the conclusion is read off the instance's own [wh_normal] derivation: the head by
@@ -944,7 +945,7 @@ Definition ind_whnf_classificationE_inst :=
     ([cli_fix_rarg_present]), so the conclusion is the branch for a present argument (an
     axiom-free normal value there is a constructor application or, since BET-339, a case blocked
     on a cofixpoint), not the product of the absent case.
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_fix_rarg_present *)
+    INSTANCE NOT-BUILT: degenerate, the statement holds without the lemma: with the recursive argument present ([cli_fix_rarg_present]) the instance's type is the branch [axiom_free_value sri_cF → wh_normal sri_cF → isConstruct_app sri_cF + stuck_cofix_case sri_cF], whose left disjunct [isConstruct_app (c (∀P. P))] computes to [true], [c (∀P. P)] being a constructor application; the proof of [fix_app_is_constructorE] runs [wf_fixpoint_spineE] and then [ind_whnf_classification'E] (IMPOSSIBLE) on that argument, which reaches the constructor branch and computes the left disjunct (its right disjunct is reached only by a case blocked on a cofixpoint, where it is the argument's own whne derivation translated), so neither part shows anything in the instance's type; an instance whose recursive argument is absent would conclude the other branch, a product below the type, which [fix_app_is_constructorE] must find through [wf_fixpoint_spineE], on a spine whose tail does not already relate a product to the type; no non-degenerate witness built yet *)
 Definition fix_app_is_constructorE_inst :=
   fix_app_is_constructorE (Σ := si_Σ) (wfΣ := si_wfE) (mfix := iv_mfix) (idx := 0) (args := [sri_cF])
     sri_fix_app_typed eq_refl.
