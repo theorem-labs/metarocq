@@ -12,7 +12,8 @@
   η step ([λx:Prop. f x] and [f] in the context [f : Prop → Prop], [cpi_eta]; [G (λy:Prop. F y)]
   and [G F] for the two [typing_leq_term_prop] rows), a β step ([cpi_beta], [cpi_redex]; the three
   rows that turn a reduction into [cumul_propE] use [cpi_xx], whose redex body uses its variable
-  inside a product), two different upper sorts of one term
+  inside a product), two universe levels of one family ([Type₀] and [Type₁], [cpi_type01_eq], in
+  [substitution_untyped_cumul_prop_equivE_inst]), two different upper sorts of one term
   ([Prop] and [Type₀] in [cumul_sort_confluenceE_inst]), or two universe instances. The
   substitution rows: the three
   [cpi_id] rows substitute [id] for [f] in [λx:Prop. f x] and in [f] itself, whose result is
