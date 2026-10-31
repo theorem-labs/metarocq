@@ -1,3 +1,12 @@
+(** WARNING: do not [Require] this file. Its directive for [Pos.compare_cont] ignores the
+    accumulator: when [x = y] the extracted function returns [Eq], but [Pos.compare_cont c x y]
+    is [c] in that case, so extracted code that calls [Pos.compare_cont] on two equal numbers
+    with an accumulator other than [Eq] gets [Eq] instead of the accumulator. Its extraction
+    directives take effect in every file that loads it, directly or through another file's
+    [Require], even without [Import]. The Rocq Stdlib's [ExtrOcamlZInt] returns [c] there.
+    Independently, this file maps [positive], [N] and [Z] to OCaml's native [int] (63 bits on
+    64-bit platforms), so any intermediate value outside that range wraps around without an
+    error. No file of this development requires this file. *)
 
 From Stdlib Require Import Extraction NArith ZArith.
 
