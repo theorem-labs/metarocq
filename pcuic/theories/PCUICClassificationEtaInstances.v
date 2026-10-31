@@ -34,10 +34,11 @@
     (the β-redex [(λ B. R B) (∀P. P)], [bdf_check_cofix_dtypeβ]); the typed-reduct route
     finds the reduct on which it passes. [wf_fixpoint_spineE_inst] and
     [wf_cofixpoint_spineE_inst] are tagged NOT-BUILT: the conversions of [bdf_wf_fix] and
-    [bdf_wf_cofix] are reductions of the declared types, forgotten, so the reduct each returns is
-    that reduction (a round trip), and the rest of each conclusion is carried from the input (the
-    argument [cli_cA], typed at the β-redex domain by a forgotten β step from [I A], is typed back
-    at [I A]; the cofixpoint's spine is empty).
+    [bdf_wf_cofix] are reductions of the declared types, forgotten, so the reduct each obtains is
+    that reduction (inside the proof, for wf_fixpoint_spineE_inst) (a round trip), and the rest
+    of each conclusion is carried from the input (the argument [cli_cA], typed at the β-redex
+    domain by a forgotten β step from [I A], is typed back at [I A]; the cofixpoint's spine is
+    empty).
   - [typing_cofix_coindE_inst], tagged NOT-BUILT: a cofixpoint whose declared type is the
     β-redex [bdf_RFβ], typed at [R (∀P. P)] by a forgotten reduction ([cli_cofix_typed_R]); its
     [wf_cofixpointE] is [bdf_wf_cofix], built from the same reduction, so the cumulativity the
@@ -770,7 +771,7 @@ Definition mfix_on_ind_spine_witnessE_cofix_inst :=
     (ok := fun mind => check_recursivity_kind (lookup_env iv_Σ) mind CoFinite)
     iv_Γc bdf_cmfix 0 bdf_cofix_dβ [] bdf_RFβ bdf_wf_cofix eq_refl cli_RFβ_isType cli_cofix_sp_nil.
 
-(** INSTANCE NOT-BUILT: degenerate, a round trip and a cancelling composition: the conversion of [bdf_wf_fix] is [red_ws_cumul_pbE] of a β step of the declared type [bdf_fxty 0], so the reduct the target returns is that step; the spine [cli_fix_sp_cA] types [cli_cA] at the β-redex domain [bdf_Dk 0] through [cli_cA_typed], which is [typeE_Cumul] over [cli_cA_typed_I] by a forgotten β step, and the conclusion types [cli_cA] back at [I A], the type of [cli_cA_typed_I]; the [Finite] check is carried from the input; an argument typed directly at the redex domain and a conversion that is not a forgotten reduction would make [wf_fixpoint_spineE] run; no non-degenerate witness built yet *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip and a cancelling composition: the conversion of [bdf_wf_fix] is [red_ws_cumul_pbE] of a β step of the declared type [bdf_fxty 0], so the reduct its proof obtains through mfix_on_ind_spine_witnessE_fix is that step; the spine [cli_fix_sp_cA] types [cli_cA] at the β-redex domain [bdf_Dk 0] through [cli_cA_typed], which is [typeE_Cumul] over [cli_cA_typed_I] by a forgotten β step, and the conclusion types [cli_cA] back at [I A], the type of [cli_cA_typed_I]; the [Finite] check is carried from the input; an argument typed directly at the redex domain and a conversion that is not a forgotten reduction would make [wf_fixpoint_spineE] run; no non-degenerate witness built yet *)
 Definition wf_fixpoint_spineE_inst :=
   wf_fixpoint_spineE (Σ := si_Σ) si_wfE bd_Γ1 bdf_fmfix 0 bdf_fix_dβ [cli_cA] _
     bdf_wf_fix eq_refl cli_fxty_isType cli_fix_sp_cA.
@@ -912,12 +913,12 @@ Definition whnf_classificationE_inst :=
   whnf_classificationE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] cli_axiom_free
     (whnf_cstrapp _ _ _ _ _ _ [iv_False]) sri_cF_typed.
 
-(** INSTANCE IMPOSSIBLE: the proof splits on wh_normal; every branch but whnf_cstrapp and whnf_cofixapp is refuted from the typing and axiom_free premises, and there the conclusion is read off the head by computation, without the typing or Σ; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE) *)
+(** INSTANCE IMPOSSIBLE: the proof calls whnf_classification'E, whose every branch but whnf_cstrapp and whnf_cofixapp is refuted from the typing and axiom_free premises; the cofixpoint head is then refuted by typing_cofix_coindE against notCoInductive, and at whnf_cstrapp isConstruct_app t is computed from the head, without the typing or Σ; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE) *)
 Definition ind_whnf_classification'E_inst :=
   ind_whnf_classification'E (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] eq_refl
     cli_notCoInductive sri_cF_typed (whnf_cstrapp _ _ _ _ _ _ [iv_False]).
 
-(** INSTANCE IMPOSSIBLE: the proof splits on wh_normal; every branch but whnf_cstrapp and whnf_cofixapp is refuted from the typing and axiom_free premises, and there the conclusion is read off the head by computation, without the typing or Σ; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE) *)
+(** INSTANCE IMPOSSIBLE: the proof calls whnf_classification'E, whose every branch but whnf_cstrapp and whnf_cofixapp is refuted from the typing and axiom_free premises; the cofixpoint head is then refuted by typing_cofix_coindE against notCoInductive, and at whnf_cstrapp isConstruct_app t is computed from the head, without the typing or Σ; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE) *)
 Definition ind_whnf_classificationE_inst :=
   ind_whnf_classificationE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] cli_axiom_free
     cli_notCoInductive sri_cF_typed (whnf_cstrapp _ _ _ _ _ _ [iv_False]).
