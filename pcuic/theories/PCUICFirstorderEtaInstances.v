@@ -37,14 +37,14 @@
   - [isType_context_conversionE_inst]: the type [X], a variable, in the contexts
     [X : let _ := N : Type1 in Type1] and [X : Type1], which differ; the first declared type
     ζ-reduces to the second in one step ([fo_ctx_nondeg]).
-  - [plookup_env_extendsE_inst], [firstorder_mutind_extE_inst]: [fo_env] ⊂ [fo_env2], strict.
-  - [firstorder_ind_propositionalE_inst]: [N] is first order, with a constructor that takes an
-    argument ([s]), and not propositional.
 
   **Rows without a non-reflexive instance** are tagged IMPOSSIBLE at their declaration, with the
   reason: [firstorder_value_alphaE_inst], and [fo_invert_cumul_Sort_IndE_inst] for
   [PCUICEtaA6More.invert_cumul_it_mkProd_or_LetIn_Sort_IndE] (used by the main theorem in place
-  of a copy; also recorded in [PCUICEtaA6Instances]). *)
+  of a copy; also recorded in [PCUICEtaA6Instances]). [firstorder_ind_propositionalE_inst] (on
+  [N], first order, with a constructor that takes an argument), [plookup_env_extendsE_inst] and
+  [firstorder_mutind_extE_inst] (on the strict extension [fo_env] ⊂ [fo_env2]) are tagged
+  IMPOSSIBLE too: in every environment each conclusion is read off the instance's own premise. *)
 
 From Stdlib Require Import ssreflect ssrbool List Lia.
 From MetaRocq.Utils Require Import utils.
@@ -474,7 +474,7 @@ Lemma fo_idecl_nondeg : In fo_cs (ind_ctors fo_idecl) /\ cstr_args fo_cs <> [].
 Proof. split; [cbn; right; left; reflexivity|intros h; vm_compute in h; discriminate h]. Qed.
 
 (** [N] is first order, hence not propositional.
-    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_idecl_nondeg *)
+    INSTANCE IMPOSSIBLE: the proof unfolds firstorder_ind and isPropositional to the same lookup and reads the conclusion off the conjunct negb (Sort.is_level (ind_sort)) of firstorder_oneind by a case split on the sort, so in every environment it is a conjunct of the instance's own firstorder_ind premise *)
 Definition firstorder_ind_propositionalE_inst : ~~ isPropositional fo_Σ fo_ind :=
   firstorder_ind_propositionalE (Σ := fo_Σ) (wfΣ := fo_wfE) fo_ind fo_mdecl fo_idecl fo_declared fo_firstorder.
 
@@ -514,13 +514,13 @@ Proof.
 Qed.
 
 (** The lookup of [N] in [fo_env], read in its strict extension [fo_env2].
-    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_ext_nondeg *)
+    INSTANCE IMPOSSIBLE: for wfE Σ every added name is fresh, so the lookup of a name found in Σ' skips each added declaration by computation and returns Σ''s entry, which firstorder_env' computes from the same suffix; the only other branch is refuted from freshness, so every conclusion is the premise's lookup *)
 Definition plookup_env_extendsE_inst :
   plookup_env (firstorder_env' (declarations fo_env2)) fo_kn = Some true :=
   plookup_env_extendsE (Σ := fo_env2) (Σ' := fo_env) fo_kn true fo_ext fo_wfE2 eq_refl.
 
 (** [N]'s declaration is first order in [fo_Σ], hence in its strict extension [fo_Σ2].
-    INSTANCE NONDEGEN PCUICFirstorderEtaInstances.fo_ext_nondeg *)
+    INSTANCE IMPOSSIBLE: the proof maps the premise firstorder_mutind pointwise (forallb_impl, alli_impl, case splits) and moves each inductive lookup by plookup_env_extendsE, which in every instance returns the premise's lookup, so the conclusion recomputes the premise's booleans unchanged *)
 Definition firstorder_mutind_extE_inst :
   @firstorder_mutind (firstorder_env fo_Σ2) fo_mdecl :=
   firstorder_mutind_extE (Σ := fo_Σ2) (Σ' := fo_Σ) fo_mdecl fo_ext fo_wfE2 eq_refl.

@@ -38,9 +38,10 @@
     that reduction (a round trip), and the rest of each conclusion is carried from the input (the
     argument [cli_cA], typed at the β-redex domain by a forgotten β step from [I A], is typed back
     at [I A]; the cofixpoint's spine is empty).
-  - [typing_cofix_coindE_inst]: a cofixpoint whose declared type is the β-redex [bdf_RFβ],
-    typed at [R (∀P. P)], which is not that declared type and is its one-step β-reduct
-    ([cli_cofix_dtype_nondeg]).
+  - [typing_cofix_coindE_inst], tagged NOT-BUILT: a cofixpoint whose declared type is the
+    β-redex [bdf_RFβ], typed at [R (∀P. P)] by a forgotten reduction ([cli_cofix_typed_R]); its
+    [wf_cofixpointE] is [bdf_wf_cofix], built from the same reduction, so the cumulativity the
+    target inverts cancels and its conclusion is the [ok] field of [bdf_wf_cofix].
   - [typing_spine_all_invE_inst] runs on the empty spine of [let z := ∀P:Prop. P in z → z]
     ([cli_let_arrow]) at itself: the substitution [z := ∀P. P] into [z → z] gives
     [(∀P. P) → (∀P. P)], which is neither the substituted [∀P. P], nor the body, nor the compared
@@ -782,7 +783,7 @@ Definition wf_cofixpoint_spineE_inst :=
 (** The cofixpoint [[bdf_cofix_dβ]] ([bdf_cmfix]), typed at [R (∀P. P)]: [check_one_cofix] fails
     on it, and its declared type, the β-redex [bdf_RFβ], is not [R (∀P. P)] and β-reduces to it
     in one step ([cli_cofix_dtype_nondeg]).
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cofix_dtype_nondeg *)
+    INSTANCE NOT-BUILT: degenerate, the S36 round trip: the witness [cli_cofix_typed_R] types the cofixpoint at [R (∀P. P)] by [typeE_Cumul] over [bdf_cofix_typed] with [red_ws_cumul_pbE] of [bdf_RFβ_red], and its [wf_cofixpointE] is [bdf_wf_cofix], built from the same [bdf_RFβ_red]; so the cumulativity [typing_cofix_coindE] inverts is [R F ≤ bdf_RFβ ≤ R F], a composition that cancels between identical terms, the witness type and the typed type are both [iv_RF], and the conclusion is the [ok] field of [bdf_wf_cofix]; a conversion witness that is not a forgotten reduction, with the cofixpoint typed at a different application of [R] (e.g. [R ((λx. x) F)]), would make [invert_cumul_ind_indE] compare different terms; no non-degenerate witness built yet *)
 Definition typing_cofix_coindE_inst :
   check_recursivity_kind (lookup_env iv_Σ) (inductive_mind iv_ind) CoFinite :=
   typing_cofix_coindE (Σ := iv_Σ) (wfΣ := iv_wfE) (mfix := [bdf_cofix_dβ]) cli_cofix_typed_R.
