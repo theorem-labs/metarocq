@@ -67,12 +67,14 @@
   - Evaluation: [subject_reduction_evalE_inst], [eval_closed_cb_inst], [eval_whneE_inst] and
     [wcbveval_redE_inst] run on [cli_eval_xx], the evaluation of [(λx:Prop. x → x) (∀P. P)] to
     [(∀P. P) → (∀P. P)], whose body uses its variable ([PCUICSREtaInstances.sri_xx_nondeg],
-    [cli_eval_xx_nondeg]);
-    [eval_classificationE_inst] evaluates the application [(λx:Prop. c x) (∀P. P)], not a
-    canonical form, to [c (∀P. P)] ([cli_lam_c_eval]: one β step that builds the value from the
-    body [c x], then [eval_construct]; [cli_lam_c_nondeg]).
-  - [value_whnfE_inst] and [value_classificationE_inst] run on the application [c (∀P. P)],
-    whose head is not the term itself ([cli_cF_head_differs]); the conclusion of
+    [cli_eval_xx_nondeg]). [eval_whneE_inst] is tagged NOT-BUILT: the value of that result is a
+    product, so [value_whnfE] takes its atom branch and the closedness from [eval_closed_cb] is
+    unused.
+  - [value_whnfE_inst] is tagged NOT-BUILT (on [c (∀P. P)] the value derivation is translated
+    constructor by constructor; only a stuck fixpoint application uses the closedness premise),
+    and [value_classificationE_inst] and [eval_classificationE_inst] are tagged IMPOSSIBLE (the
+    conclusion is computed from the head of the instance's own value or evaluation result;
+    everything else in their proofs refutes). The conclusion of
     [fix_app_is_constructorE_inst] is its branch for a present recursive argument
     ([cli_fix_rarg_present]). The four whnf classification rows on the same term
     ([whnf_classificationE_inst], [whnf_classification'E_inst], [ind_whnf_classificationE_inst],
@@ -898,13 +900,13 @@ Definition invert_fix_indE_inst :
    [PCUICEtaF0Land3Instances.wh_neutral_empty_genE_inst] and
    [PCUICEtaF0Land3Instances.wh_neutral_emptyE_inst], in [iv_Σ] (coinductive [R]). *)
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cF_head_differs *)
+(** INSTANCE NOT-BUILT: degenerate, the instance's own derivation translated: value_whnfE is an induction on the value derivation, and on c (∀P. P) it maps value_app_nonnil with value_head_cstr to whnf_cstrapp, as for every value whose head is not a fixpoint, without the closedness premise; only a stuck fixpoint application (value_head_fix) makes it run, where closedness turns cunfold_fix into unfold_fix (closed_unfold_fix_cunfold_eq); a closed fixpoint with recursive argument index at least 1 applied to fewer arguments would; no non-degenerate witness built yet *)
 Definition value_whnfE_inst := value_whnfE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF eq_refl cli_cF_value.
 
-(** The value [(∀P:Prop. P) → (∀P:Prop. P)] of [cli_eval_xx], the evaluation of the closed redex
-    [(λx:Prop. x → x) (∀P:Prop. P)], is weak-head normal; that value is the body [x → x] with the
-    argument for [x], neither the argument, nor the function, nor the redex.
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_eval_xx_nondeg *)
+(** Applied by identity, root to confirm: the root's 06:57Z ruling on af1fa399 (land6-review.md,
+    section EtaMetaLand13 suspects, eval_whneE), verbatim; eval_whneE, eval_closed_cb, value_whnfE,
+    eval_to_value, cli_eval_xx and this block's code are identical on ship.
+    INSTANCE NOT-BUILT: degenerate, the evaluation result's value translated: eval_whneE runs eval_closed_cb, eval_to_value and value_whnfE; on cli_eval_xx the value of (∀P. P) → (∀P. P) is read off the last premise eval_atom, and value_whnfE takes its atom branch (whnf of a product), so the closedness from eval_closed_cb is never used; only a closed stuck fixpoint application as the result (value_head_fix, a fixpoint with recursive argument index at least 1) consumes it; no non-degenerate witness built yet *)
 Definition eval_whneE_inst :=
   eval_whneE (Σ := si_Σ) (wfΣ := si_wfE) sri_xx_redex sri_xx_reduct eq_refl cli_eval_xx.
 
@@ -957,14 +959,20 @@ Definition subject_reduction_evalE_inst : si_Σ ;;; [] |-E sri_xx_reduct : si_P 
   subject_reduction_evalE (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_xx_redex) (u := sri_xx_reduct)
     (sri_xx_redex_typed [] localenv_nil) cli_eval_xx.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cF_head_differs *)
+(** Ship text pending root confirmation: the root's 06:24Z reason (land6-review.md, section
+    EtaMetaLand13 suspects) verbatim, plus the final clause, from on ship on, for the refutation
+    ship's value_classificationE adds (value_not_stuck_cofix_case, PCUICClassificationEta.v:1298).
+    INSTANCE IMPOSSIBLE: on every instance whose premises hold, construct_cofix_discr (head t) is computed from the head of the instance's own value: the proof turns it into wh_normal (value_final then eval_to_value, a round trip; value_whnfE, constructor by constructor), and whnf_classification'E reads the head at whnf_cstrapp or whnf_cofixapp; every other branch, a stuck fixpoint included, is refuted from the typing at an inductive type, so reaching one needs a False conclusion (as wh_neutral_emptyE); on ship the neutral branch is not refuted there: whnf_classification'E returns its stuck_cofix_case disjunct (wh_neutral_emptyE), which the proof refutes by value_not_stuck_cofix_case, a value being no case blocked on a cofixpoint *)
 Definition value_classificationE_inst :=
   value_classificationE (Σ := si_Σ) (wfΣ := si_wfE) (t := sri_cF) (i := si_ind) (u := []) (args := [iv_False])
     sri_cF_typed cli_cF_value.
 
 (** The application [(λx:Prop. c x) (∀P:Prop. P)], not a canonical form, evaluated to
-    [c (∀P:Prop. P)] by a β step that builds the value from the body [c x].
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_lam_c_nondeg *)
+    [c (∀P:Prop. P)] by a β step that builds the value from the body [c x]. Ship text pending
+    root confirmation: the root's 06:24Z reason verbatim, plus the final clause, from on ship on,
+    for the refutation ship's eval_classificationE adds (value_not_stuck_cofix_case,
+    PCUICClassificationEta.v:1314).
+    INSTANCE IMPOSSIBLE: on every instance whose premises hold, construct_cofix_discr (head t') is computed from the head of the instance's own evaluation result t': the typing of t' by subject reduction along the evaluation is used only by whnf_classification'E to refute the heads other than a constructor or a cofixpoint, and at whnf_cstrapp and whnf_cofixapp the head is read by computation; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE); on ship the neutral branch is not refuted there: whnf_classification'E returns its stuck_cofix_case disjunct (wh_neutral_emptyE), which the proof refutes by value_not_stuck_cofix_case, t' being a value (eval_to_value) and so no case blocked on a cofixpoint *)
 Definition eval_classificationE_inst :=
   eval_classificationE (Σ := si_Σ) (wfΣ := si_wfE) (i := si_ind) (u := []) (args := [iv_False])
     cli_lam_c_app_typed sri_cF cli_lam_c_eval.
