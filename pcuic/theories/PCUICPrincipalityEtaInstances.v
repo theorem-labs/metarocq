@@ -2,7 +2,8 @@
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
    lemma, not a mechanical guarantee.
-   Measured reader miss rate: at least 17 of 60 sampled instances (28.3%, 95% upper bound 39.4%), seed 202610301905: the union of the verdicts held by two independent reviews (Opus 5: 10 of 60; Opus 5.5: 15 of 60, 6 of its verdicts borderline at confidence 0.5-0.6). The 17 sampled misses are corrected at this head, but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected. *)
+   Measured reader miss rate: at least 19 of 60 instances sampled (seed 202610301905) from the 323 that an earlier focused review had not covered (31.7%, 95% upper bound 42.9%, one-sided Clopper-Pearson): 17 from the union of the verdicts held by two independent reviews (Opus 5: 10; Opus 5.5: 15, 6 of its verdicts borderline at confidence 0.5-0.6), plus two further rows that both reviews had passed and later root rulings reclassified under the same standard (S12, S36). 18 of the 19 sampled misses are corrected at this head (S36 is not yet), but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected.
+   P4 at this head: 313 lemmas with a base twin are accounted for: 229 demonstrated (at least one NONDEGEN instance; this count still includes 2 targets whose only NONDEGEN instance is already judged false and not yet corrected: PCUICClassificationEta.wf_fixpoint_spineE and wf_cofixpoint_spineE), 70 undemonstrable by their own statements (IMPOSSIBLE-only), and 14 with no working instance (NOT-BUILT-only): BDToPCUICEta.wf_rel_weakE; PCUICAlphaEta.eq_context_conversionE, isType_eq_context_conversionE, typing_alpha_propE, wf_local_alphaE; PCUICClassificationEta.typing_spine_nth_errorE, typing_spine_nth_error_NoneE, typing_spine_nth_error_None_prodE (non-degenerate instances of these 3 are built and under review, not yet landed); PCUICInversionEta.into_ws_cumulE; PCUICPrincipalityEta.typing_leq_termE; PCUICSREta.prim_app_typing_invE, sr_prim_opE, typing_spine_prim_arg_typesE, typing_spine_prim_argsE. The demonstrated count rests on NONDEGEN tags with the measured miss rate above. As of 2026-10-31T02:35Z, 11 NONDEGEN tags are judged false and not yet corrected, all conv → red cases whose input conversion was built from a reduction (for wf_fixpoint_spineE_inst the conv → red step sits inside its target's proof): 7 in BDFromPCUICEtaInstances (red_fix_witnessE_inst, mfix_body_on_conv_redE_fix_inst, red_cofix_witnessE_inst, mfix_body_on_conv_redE_cofix_inst, mfix_on_ind_conv_redE_cofix_inst, wf_fixpointE_wf_fixpoint_red_typed_inst, and sampled row S36 = wf_cofixpointE_wf_cofixpoint_red_inst) and PCUICPrincipalityEtaInstances.T8_Prod_l_plug_inst and T8_Prod_l_of_r_inst, whose targets are outside P4's input set, and PCUICClassificationEtaInstances.wf_fixpoint_spineE_inst and wf_cofixpoint_spineE_inst, whose targets are the 2 above. Context of the demonstrations (context = a judgment argument of type list (context_decl term), empty or not by computing its length, not the lemma's Γ parameter): 79 use a non-empty context; 23 have the context as their subject; 20 have a non-empty context that no term or type mentions; 4 undecided; 70 work only at the empty context (10 forced by the statement, 60 by the instance's choice; up to 89 under stricter readings); 33 have no context argument, which is not the same as the empty context. A mechanical sweep flagged at least 31 of the 338 NONDEGEN instances at 0bf9899a, before the later retags, whose conclusion is convertible to an input sub-derivation (3 of the 31 match the instance itself or its helper rather than an input); of its 9 non-equation flags, 9 were judged bad, with the kind-label correct in 6 of 9; it cannot see a cancellation inside the target lemma's own proof or a conclusion that is one part of a pair, and it does not discriminate the 22 closed equations. Prose overclaims were not mechanically enumerated, because that detector failed its controls. Later root rulings reclassified two sampled rows that both reviews had passed, S36 (the red → conv → red class) and S12 (its conclusion is the input's own cumulativity), raising the sampled rate from at least 17 to at least 19 of 60; the 45-row marker census stayed at 2 reopened. *)
 
 (** * Satisfying instances of the lemmas of [PCUICPrincipalityEta] (row T2b)
 
@@ -25,8 +26,9 @@
   [let y := x in I y] of the scrutinee of [PCUICProgressEtaInstances.pgi_match_let_open], Case
   case, ζ); [closed_red_confluence_cb_inst] (two different one-step reducts);
   [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step on [(λx:Prop. x → x) (∀P. P)], whose body
-  uses its variable); [typing_leq_termE_inst] ([Prop ≤ Set]
-  in a codomain); [typing_eq_termE_inst] (two binder names). The rule-coverage instances apply
+  uses its variable); [typing_eq_termE_inst] (two binder names). [typing_leq_termE_inst]
+  ([Prop ≤ Set] in a codomain) is tagged NOT-BUILT: the two sorts it relates compute to the same
+  sort, so its conclusion is its own premise. The rule-coverage instances apply
   [principal_typeE] to terms of twelve different head formers and compare the returned principal
   type with a β-wrapped type that differs from the type of the derivation it was built from
   ([principal_typeE_rules_nondeg]). *)
@@ -51,7 +53,7 @@ From Equations.Type Require Import Relation Relation_Properties.
 
 (** Declarations of this file that are neither instances nor non-degeneracy lemmas named by a tag
     (instance gate):
-    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg *)
+    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg typing_leq_termE_inst_nondeg *)
 
 (** ** The environments: [wf_extE] *)
 
@@ -690,7 +692,7 @@ Proof. discriminate. Qed.
 (** [typing_leq_termE]: [∀_:Prop. Prop ≤ ∀_:Prop. Set] up to universes ([pr_PP_leq_PS]; the
     codomain at [Cumul], [Prop ≤ Set]): the term [∀_:Prop. Prop] gets the type of [∀_:Prop. Set];
     the two terms differ ([typing_leq_termE_inst_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_leq_termE_inst_nondeg *)
+    INSTANCE NOT-BUILT: degenerate, the conclusion is the instance's own premise: [typing_leq_termE] moves [t' = iv_PP] from its type [tSort iv_sPP] to the type [tSort pr_sPS] of [t = pr_PS], but [pr_sPS = sort_of_product (super sProp) (super type0)] and [iv_sPP = sort_of_product (super sProp) (super sProp)] compute to the same sort ([Sort.super] maps both [sProp] and [type0] to [type1]), so the conclusion [iv_PP : tSort pr_sPS] is the premise [iv_PP_typed] and the move to a different type never runs; a [t] of a larger sort would need the cumulativity; no non-degenerate witness built yet *)
 Lemma typing_leq_termE_inst : si_Σ ;;; [] |-E iv_PP : tSort pr_sPS.
 Proof.
   exact (typing_leq_termE si_Σ [] pr_PS iv_PP (tSort pr_sPS) (tSort iv_sPP) si_wfE si_on_udecl
