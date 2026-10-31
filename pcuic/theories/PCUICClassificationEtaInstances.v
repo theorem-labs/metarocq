@@ -17,7 +17,8 @@
   [CoFinite] record [R]).
 
   **Non-degeneracy.** The tag at each instance names the lemma that states why it is more than
-  a trivial case, or the reason it cannot be.
+  a trivial case, the reason it cannot be (IMPOSSIBLE), or why the instance is degenerate while no
+  non-degenerate witness is built yet (NOT-BUILT).
   - The arity corollaries (Class A' rows) and [isArity_typing_spineE] run on the type
     [cli_T := Π _ : Prop. z] in the context [z := Prop : Type] ([cli_Γz]): [cli_T] is not an
     arity ([cli_T_not_arity]; its codomain is the variable [z]), and unfolding [z] reduces it in
@@ -40,15 +41,14 @@
     [(∀P. P) → (∀P. P)], which is neither the substituted [∀P. P], nor the body, nor the compared
     let-in ([cli_all_inv_let_nondeg]).
     [typing_spine_nth_errorE_inst] reads the type of the second argument [c (∀P. P)] of
-    [Π x : Prop. Π y : I x. I x] ([cli_depI_ty]) applied to [∀P. P]: its declared type [I x] with
-    [x := ∀P. P] is [I (∀P. P)], neither the substituted [∀P. P] nor [I x]; the spine
-    ([cli_depI_sp_two]) takes [c (∀P. P)] at the domain [I ((λx:Prop. x) (∀P. P))], which is not
-    [I (∀P. P)] and β-reduces to it ([cli_depI_nth_subst_nondeg]). The two [None] spine lemmas run
-    on the dependent type [Π x : Prop. Π y : x. x] ([cli_dep_ty]) applied to [I (∀P. P)] only,
-    which ends at the let-in [let z := I (∀P. P) in Π y : z. z] ([cli_dep_let]), not a product
-    ([cli_dep_none_differs], [cli_dep_let_not_prod]); the spine ([cli_dep_sp_let]) relates
-    [cli_dep_ty] to the product [Π x : Prop. Π y : x. (λw:Prop. w) x] ([cli_dep_ty_id]), which is
-    not [cli_dep_ty] and β-reduces to it ([cli_dep_none_differs]).
+    [Π x : Prop. Π y : I x. I x] ([cli_depI_ty]) applied to [∀P. P];
+    [typing_spine_nth_error_NoneE_inst] and [typing_spine_nth_error_None_prodE_inst] read the
+    remaining telescope of the dependent type [Π x : Prop. Π y : x. x] ([cli_dep_ty]) applied to
+    [I (∀P. P)] only, at the let-in [let z := I (∀P. P) in Π y : z. z] ([cli_dep_let]), not a
+    product ([cli_dep_let_not_prod]). All three are tagged NOT-BUILT: a β step that their spine
+    ([cli_depI_sp_two], [cli_dep_sp_let]) takes backwards is taken forward again, so each
+    conclusion states what a sub-derivation of the input spine states (the reasons are in the
+    tags); no non-degenerate witness is built yet.
     [typing_spine_smashE_inst] runs on the empty spine of [cli_dep_let] at
     itself: smashing drops the let and substitutes [z := I (∀P. P)] into [Π y : z. z], giving
     [Π y : I (∀P. P). I (∀P. P)], neither the substituted term, nor the body, nor [cli_dep_let]
@@ -96,7 +96,7 @@ From MetaRocq.PCUIC Require PCUICWfUniverses.
 From Equations.Type Require Import Relation.
 
 (* The derivations the instances use, and the facts their tags name.
-   WITNESSES: cli_* *)
+   WITNESSES: cli_* cli_depI_nth_subst_nondeg cli_dep_none_differs cli_dep_let_not_prod *)
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
@@ -798,10 +798,8 @@ Definition typing_spine_smashE_inst :=
     cli_dep_let cli_dep_let_sp_nil.
 
 (** The second argument [c (∀P. P)] of [Π x : Prop. Π y : I x. I x] ([cli_depI_ty]) applied to
-    [∀P. P], at its declared type [I x] instantiated by the first argument: [I (∀P. P)], neither
-    the substituted [∀P. P] nor [I x]. The spine [cli_depI_sp_two] takes the argument at the domain
-    [I ((λx:Prop. x) (∀P. P))], not [I (∀P. P)], which β-reduces to it ([cli_depI_nth_subst_nondeg]).
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_depI_nth_subst_nondeg
+    [∀P. P], at its declared type [I x] instantiated by the first argument: [I (∀P. P)].
+    INSTANCE NOT-BUILT: degenerate, a composition that cancels: the spine [cli_depI_sp_two] takes [c (∀P. P)] by [cli_cF_IidF_typed], which wraps the instance's own input [sri_cF_typed] (its first premise) in the β step [cli_IidF_red1] taken backwards, and the proof of the target (through [PCUICSpineEta.typing_spine_nth_errorE]) inverts the product cumulativity [cli_fixty_IidF_ws], built from that same step, and re-applies its domain conversion, so the conclusion [sri_cF : iv_IF] is the judgment of [sri_cF_typed], a piece of an input; no non-degenerate witness built yet
     TARGET PCUICClassificationEta.typing_spine_nth_errorE *)
 Definition typing_spine_nth_errorE_inst :=
   PCUICClassificationEta.typing_spine_nth_errorE (Σ := si_Σ) si_wfE [] cli_depI_Δ (iv_Ix 1)
@@ -816,18 +814,16 @@ Definition typing_spine_all_invE_inst :=
   typing_spine_all_invE (Σ := si_Σ) si_wfE [] [vdef si_na iv_False si_P] (tProd si_na (tRel 0) (tRel 1)) []
     cli_let_arrow cli_let_arrow_sp_nil eq_refl.
 
-(** The partial spine [Π x : Prop. Π y : x. x] applied to [I (∀P. P)] only, at [cli_dep_let]. The
-    spine [cli_dep_sp_let] takes its cons step at the product [cli_dep_ty_id] and starts its tail at
-    [cli_fixty_id] ([cli_dep_sp_let]). [cli_dep_ty_id] is not [cli_dep_ty] and β-reduces to it;
-    [cli_fixty_id] is not the substituted remaining telescope [Π y : I (∀P. P). I (∀P. P)] and
-    β-reduces to it ([cli_dep_none_differs]).
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_dep_none_differs *)
+(** The partial spine [Π x : Prop. Π y : x. x] applied to [I (∀P. P)] only, at [cli_dep_let]
+    ([cli_dep_sp_let]).
+    INSTANCE NOT-BUILT: degenerate, a composition that cancels: the conclusion [iv_fix_ty ≤ cli_dep_let] (the substituted remaining telescope computes to [iv_fix_ty], [cli_dep_none_differs]) is the statement of [cli_dep_let_ws], the second argument of the transitivity that builds the tail step [cli_fixty_id_ws] of [cli_dep_sp_let], and the β step of [(λw:Prop. w) x] goes back in the cons step [cli_dep_ty_ws] and, at [x := I (∀P. P)], forward in [cli_fixty_id_ws] ([cli_fixty_id_red1]); no non-degenerate witness built yet *)
 Definition typing_spine_nth_error_NoneE_inst :=
   typing_spine_nth_error_NoneE (Σ := si_Σ) si_wfE [] cli_dep_Δ (tRel 1) [iv_IF] cli_dep_let
     cli_dep_ass cli_wf_dep cli_dep_sp_let eq_refl.
 
-(** The same partial spine: its type [cli_dep_let] is a let-in, the product is found by conversion.
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_dep_let_not_prod *)
+(** The same partial spine [cli_dep_sp_let], at its type [cli_dep_let], a let-in and not a product
+    ([cli_dep_let_not_prod]).
+    INSTANCE NOT-BUILT: degenerate, a composition that cancels: the proof of the target calls [typing_spine_nth_error_NoneE] on the same spine [cli_dep_sp_let] and returns that cumulativity unchanged as its ∑ witness (the product is the substituted remaining telescope, [iv_fix_ty] by [cli_dep_none_differs]), the β step of [(λw:Prop. w) x] goes back in the cons step [cli_dep_ty_ws] and, at [x := I (∀P. P)], forward in [cli_fixty_id_ws] ([cli_fixty_id_red1]), and [cli_dep_let_ws], already in the input spine, proves the conclusion; no non-degenerate witness built yet *)
 Definition typing_spine_nth_error_None_prodE_inst :=
   typing_spine_nth_error_None_prodE (Σ := si_Σ) si_wfE [] cli_dep_Δ (tRel 1) [iv_IF] cli_dep_let 1
     (vass si_na (tRel 0)) cli_dep_ass cli_wf_dep cli_dep_sp_let eq_refl eq_refl.
