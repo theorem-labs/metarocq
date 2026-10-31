@@ -23,12 +23,16 @@
   - The arity corollaries (Class A' rows) and [isArity_typing_spineE] run on the type
     [cli_T := Π _ : Prop. z] in the context [z := Prop : Type] ([cli_Γz]): [cli_T] is not an
     arity ([cli_T_not_arity]; its codomain is the variable [z]), and unfolding [z] reduces it in
-    one step to the arity [Prop → Prop] ([cli_T_red]). i20 ([invert_cumul_arity_rE_inst]) and
-    i21 ([invert_cumul_arity_lE_inst]) take [cli_T] with a cumulativity to or from
-    [Prop → Prop] ([cli_ws_r], [cli_ws_l]); x2, x3 and [isArity_typing_spineE] take it the same
-    way. The input is chosen for the T8 sites of i20's proof ([Prod_r] on [cli_T], [Sort_r] on
-    [z]) and of i21's ([PCUICPrincipalityEta.T8_Prod_l_plug], [T8_Sort_l_plug], the [_l] forms
-    derived from the proved [_r] ones); no lemma here states which site a run reaches.
+    one step to the arity [Prop → Prop] ([cli_T_red], [cli_T_closed_red]). i20
+    ([invert_cumul_arity_rE_inst]) and i21 ([invert_cumul_arity_lE_inst]) take [cli_T] with a
+    cumulativity to or from [Prop → Prop] ([cli_ws_r], [cli_ws_l]); x2, x3 and
+    [isArity_typing_spineE] take it the same way. All five are tagged NOT-BUILT: [cli_ws_r] and
+    [cli_ws_l] are the reduction [cli_T_closed_red] forgotten, so each conclusion
+    [Is_conv_to_Arity si_Σ cli_Γz cli_T] is inhabited by [Prop → Prop] with that reduction (a
+    round trip red → cumul → red, under the squash), and the T8 sites of i20's proof ([Prod_r]
+    on [cli_T], [Sort_r] on [z]) and of i21's ([PCUICPrincipalityEta.T8_Prod_l_plug],
+    [T8_Sort_l_plug], the [_l] forms derived from the proved [_r] ones) only recover the δ step
+    of [z] that the input was built from; no non-degenerate witness is built yet.
   - The (co)fixpoint witness lemmas run on declared types on which the check FAILS:
     [bdf_fxty 0] (domain the β-redex [(λ B. I B) A], [bdf_check_fix_dtypeβ]) and [bdf_RFβ]
     (the β-redex [(λ B. R B) (∀P. P)], [bdf_check_cofix_dtypeβ]); the typed-reduct route
@@ -725,23 +729,23 @@ Section ClassificationEtaInstances.
 
 (** ** The arity corollaries, Class A' *)
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_T_not_arity *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → cumul → red hidden under the squash: the conclusion [Is_conv_to_Arity si_Σ cli_Γz cli_T] is inhabited by [iv_PP] (Prop → Prop) with [sq cli_T_closed_red] and [eq_refl], and [cli_T_closed_red] is the δ step of [z] that the input [cli_ws_r] is built from ([red_ws_cumul_pbE]), a sub-derivation of it at depth 1; the proof of [invert_cumul_arity_rE] applies T8 [Prod_r] to [cli_T] and T8 [Sort_r] to [z ≤ Prop], which only recover that step; a cumulativity from [cli_T] to an arity whose derivation contains an expansion (a peak, as [PCUICSREtaConvInstances.sc_A] reduces to both [sc_ty] and [sc_tw]), so that the T8 sites need confluence, would make [invert_cumul_arity_rE] run; no non-degenerate witness built yet *)
 Definition invert_cumul_arity_rE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T :=
   invert_cumul_arity_rE (Σ := si_Σ) (wfΣ := si_wfE) cli_Γz cli_T iv_PP eq_refl cli_ws_r cli_T_isType.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_T_not_arity *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → cumul → red hidden under the squash: the conclusion [Is_conv_to_Arity si_Σ cli_Γz cli_T] is inhabited by [iv_PP] (Prop → Prop) with [sq cli_T_closed_red] and [eq_refl], and [cli_T_closed_red] is the δ step of [z] that the input [cli_ws_l] is built from ([red_ws_cumul_pbE_inv]), a sub-derivation of it at depth 1; the proof of [invert_cumul_arity_lE] applies [PCUICPrincipalityEta.T8_Prod_l_plug] to [cli_T] and [T8_Sort_l_plug] to [Prop ≤ z], which only recover that step; a cumulativity from an arity to [cli_T] whose derivation contains an expansion (a peak, as [PCUICSREtaConvInstances.sc_A] reduces to both [sc_ty] and [sc_tw]), so that the T8 sites need confluence, would make [invert_cumul_arity_lE] run; no non-degenerate witness built yet *)
 Definition invert_cumul_arity_lE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T :=
   invert_cumul_arity_lE (Σ := si_Σ) (wfΣ := si_wfE) cli_Γz iv_PP cli_T eq_refl cli_ws_l cli_T_isType.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_T_not_arity *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → cumul → red hidden under the squash: the conclusion [Is_conv_to_Arity si_Σ cli_Γz cli_T] is inhabited by [iv_PP] (Prop → Prop) with [sq cli_T_closed_red] and [eq_refl], and [cli_T_closed_red] is the δ step of [z] that the input [cli_ws_l] is built from ([red_ws_cumul_pbE_inv]); [cli_PP_conv] is reflexive, so [ws_cumul_pbE_red_l_inv] leaves [cli_ws_l] as it is and the proof is [invert_cumul_arity_lE] on [cli_ws_l], whose T8 sites only recover that step; a cumulativity from an arity to [cli_T] whose derivation contains an expansion (a peak, as [PCUICSREtaConvInstances.sc_A] reduces to both [sc_ty] and [sc_tw]), so that the T8 sites need confluence, would make [invert_cumul_arity_l_genE] run; no non-degenerate witness built yet *)
 Definition invert_cumul_arity_l_genE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T :=
   invert_cumul_arity_l_genE (Σ := si_Σ) (wfΣ := si_wfE) cli_Γz iv_PP cli_T cli_PP_conv cli_ws_l cli_T_isType.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_T_not_arity *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → cumul → red hidden under the squash: the conclusion [Is_conv_to_Arity si_Σ cli_Γz cli_T] is inhabited by [iv_PP] (Prop → Prop) with [sq cli_T_closed_red] and [eq_refl], and [cli_T_closed_red] is the δ step of [z] that the input [cli_ws_r] is built from ([red_ws_cumul_pbE]); [cli_PP_conv] is reflexive, so [ws_cumul_pbE_red_r_inv] leaves [cli_ws_r] as it is and the proof is [invert_cumul_arity_rE] on [cli_ws_r], whose T8 sites only recover that step; a cumulativity from [cli_T] to an arity whose derivation contains an expansion (a peak, as [PCUICSREtaConvInstances.sc_A] reduces to both [sc_ty] and [sc_tw]), so that the T8 sites need confluence, would make [invert_cumul_arity_r_genE] run; no non-degenerate witness built yet *)
 Definition invert_cumul_arity_r_genE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T :=
   invert_cumul_arity_r_genE (Σ := si_Σ) (wfΣ := si_wfE) cli_Γz iv_PP cli_T cli_PP_conv cli_ws_r cli_T_isType.
 
-(** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_T_not_arity *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → cumul → red hidden under the squash: the conclusion [Is_conv_to_Arity si_Σ cli_Γz cli_T] is inhabited by [iv_PP] (Prop → Prop) with [sq cli_T_closed_red] and [eq_refl], and [cli_T_closed_red] is the δ step of [z] that [cli_ws_l] is built from ([red_ws_cumul_pbE_inv]); the spine is [type_spine_nilE] with the nil step [cli_ws_l], and [cli_PP_conv] is reflexive, so the cumulativity [w'] of the proof is the transitivity of the reflexive one with [cli_ws_l] and the proof is [invert_cumul_arity_lE] on it, whose T8 sites only recover that step; a nil step from an arity to [cli_T] whose derivation contains an expansion (a peak, as [PCUICSREtaConvInstances.sc_A] reduces to both [sc_ty] and [sc_tw]), so that the T8 sites need confluence, would make [isArity_typing_spineE] run; no non-degenerate witness built yet *)
 Definition isArity_typing_spineE_inst : Is_conv_to_Arity si_Σ cli_Γz cli_T :=
   isArity_typing_spineE (Σ := si_Σ) (wfΣ := si_wfE) cli_wf_Γz
     (PCUICAritiesEta.type_spine_nilE _ _ iv_PP cli_T cli_PP_isType cli_T_isType cli_ws_l) cli_PP_conv.
