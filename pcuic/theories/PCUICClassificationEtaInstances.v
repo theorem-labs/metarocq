@@ -80,7 +80,9 @@
   - Evaluation: [subject_reduction_evalE_inst], [eval_closed_cb_inst], [eval_whneE_inst] and
     [wcbveval_redE_inst] run on [cli_eval_xx], the evaluation of [(λx:Prop. x → x) (∀P. P)] to
     [(∀P. P) → (∀P. P)], whose body uses its variable ([PCUICSREtaInstances.sri_xx_nondeg],
-    [cli_eval_xx_nondeg]). [eval_classificationE_inst] evaluates the application
+    [cli_eval_xx_nondeg]). [eval_whneE_inst] is tagged NOT-BUILT: the value of that result is a
+    product, so [value_whnfE] takes its atom branch and the closedness from [eval_closed_cb] is
+    unused. [eval_classificationE_inst] evaluates the application
     [(λx:Prop. c x) (∀P. P)] to [c (∀P. P)] ([cli_lam_c_eval]: one β step, then
     [eval_construct]).
   - [value_whnfE_inst] is tagged NOT-BUILT (on [c (∀P. P)] the value derivation is translated
@@ -1174,7 +1176,7 @@ Definition value_whnfE_inst := value_whnfE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF
 (** The value [(∀P:Prop. P) → (∀P:Prop. P)] of [cli_eval_xx], the evaluation of the closed redex
     [(λx:Prop. x → x) (∀P:Prop. P)], is weak-head normal; that value is the body [x → x] with the
     argument for [x], neither the argument, nor the function, nor the redex.
-    INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_eval_xx_nondeg *)
+    INSTANCE NOT-BUILT: degenerate, the evaluation result's value translated: eval_whneE runs eval_closed_cb, eval_to_value and value_whnfE; on cli_eval_xx the value of (∀P. P) → (∀P. P) is read off the last premise eval_atom, and value_whnfE takes its atom branch (whnf of a product), so the closedness from eval_closed_cb is never used; only a closed stuck fixpoint application as the result (value_head_fix, a fixpoint with recursive argument index at least 1) consumes it; no non-degenerate witness built yet *)
 Definition eval_whneE_inst :=
   eval_whneE (Σ := si_Σ) (wfΣ := si_wfE) sri_xx_redex sri_xx_reduct eq_refl cli_eval_xx.
 
