@@ -27,9 +27,10 @@
   case, ζ); [closed_red_confluence_cb_inst] (two different one-step reducts);
   [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step on [(λx:Prop. x → x) (∀P. P)], whose body
   uses its variable); [typing_leq_termE_inst] ([∀_:y. Set ≤ ∀_:y. Type₁] in [iv_Γ1 = [y : Prop]]:
-  [Set ≤ Type₁] in a codomain, the domain the context variable [y]; [∀_:y. Set] moves from Type₁
-  to Type₂); [typing_eq_termE_inst]
-  ([λx:Prop. g x] under two binder names, in [iv_Γk], [g] a variable of the context).
+  [Set ≤ Type₁] in a codomain, so [∀_:y. Set] moves from Type₁ to Type₂; the context does no work,
+  the comparison relates the domain [y] only with itself); [typing_eq_termE_inst] ([c (z →ₓ z)],
+  [c (z → z)] with one binder renamed, gets the type [I ((∀P:Prop. P) → z)] of [c (z → z)] in
+  [z := ∀P:Prop. P : Prop], one δ-step of [z] away from its own type).
   [T8_Prod_l_plug_inst] and [T8_Prod_l_of_r_inst] (the [Prod_l] site at [z]) are tagged
   NOT-BUILT: the cumulativity they are given is the δ step of [z] forgotten, and the reduction
   they return is that step. The
@@ -271,8 +272,9 @@ Qed.
 
 (** In [iv_Γ1 = [y : Prop]]: [∀_:y. Set], of the sort [pr_syS] (Type₁), and [∀_:y. Type₁], of the
     sort [pr_syT1] (Type₂), with [∀_:y. Set ≤ ∀_:y. Type₁] up to universes ([Set ≤ Type₁] in the
-    codomain). The domain of both is the context variable [y]. (Prop and Set have the same type
-    Type₁, so a codomain [Prop ≤ Set] would leave the type unchanged.) *)
+    codomain). The domain of both is the context variable [y], which the comparison only relates
+    with itself: the context does no work in the step. (Prop and Set have the same type Type₁, so a
+    codomain [Prop ≤ Set] would leave the type unchanged.) *)
 Definition pr_yS : term := tProd si_na (tRel 0) (tSort Sort.type0).
 Definition pr_yT1 : term := tProd si_na (tRel 0) (tSort (Sort.super Sort.type0)).
 Definition pr_syS : Universes.sort := Sort.sort_of_product sProp (Sort.super Sort.type0).
@@ -300,24 +302,35 @@ Proof.
   intros v _. cbn. lia.
 Qed.
 
-(** In [iv_Γk = [y : k g; k : (Prop → Prop) → Prop; g : Prop → Prop]]: [λx:Prop. g x] with the
-    binder name [x] instead of the anonymous one of [iv_eta_g]. *)
+(** In [iv_Γz = [z := ∀P:Prop. P : Prop]]: [c (z →ₓ z)], the term [iv_czz] = [c (z → z)] with the
+    binder of its argument named [x], at its own type [I (z →ₓ z)]. [iv_czz] itself is typed at
+    [I ((∀P:Prop. P) → z)] ([iv_czz_typed_IFz]), one δ-step of the let [z] away from [I (z → z)]. *)
 Definition pr_nx : aname := mkBindAnn (nNamed "x") Relevant.
-Definition pr_eta_g' : term := tLambda pr_nx si_P (tApp (tRel 3) (tRel 0)).
+Definition pr_zz' : term := tProd pr_nx (tRel 0) (tRel 1).
+Definition pr_czz' : term := tApp (tConstruct si_ind 0 []) pr_zz'.
 
-Lemma pr_eta_g'_typed : si_Σ ;;; iv_Γk |-E pr_eta_g' : tProd pr_nx si_P si_P.
+Lemma pr_zz'_typed : si_Σ ;;; iv_Γz |-E pr_zz' : si_P.
 Proof.
-  have w : wf_localE si_Σ (iv_Γk ,, vass pr_nx si_P) :=
-    iv_wf_vass si_Σ iv_Γk pr_nx si_P _ iv_wf_Γk (iv_P_typed si_Σ iv_Γk iv_wf_Γk) Logic.eq_refl.
-  apply typeE_Lambda.
-  - exact (iv_vass si_Σ iv_Γk pr_nx si_P _ (iv_P_typed si_Σ iv_Γk iv_wf_Γk) Logic.eq_refl).
-  - exact (typeE_App _ _ (tRel 3) si_na si_P si_P _ (tRel 0) (iv_PP_typed si_Σ _ w)
-             (typeE_Rel _ _ 3 (vass si_na iv_PP) w Logic.eq_refl)
-             (typeE_Rel _ _ 0 (vass pr_nx si_P) w Logic.eq_refl)).
+  have hz : si_Σ ;;; iv_Γz |-E tRel 0 : si_P :=
+    typeE_Rel _ _ 0 (vdef si_na iv_False si_P) iv_wf_Γz Logic.eq_refl.
+  have w := iv_wf_vass si_Σ iv_Γz pr_nx (tRel 0) sProp iv_wf_Γz hz Logic.eq_refl.
+  exact (typeE_Prod _ _ pr_nx (tRel 0) (tRel 1) sProp sProp
+           (iv_vass_s si_Σ iv_Γz pr_nx (tRel 0) sProp hz Logic.eq_refl)
+           (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) w Logic.eq_refl)).
 Qed.
 
-Lemma pr_eta_g_eq : eq_term empty_global_env si_Σ iv_eta_g pr_eta_g'.
-Proof. constructor; [reflexivity|constructor; reflexivity|repeat constructor]. Qed.
+Lemma pr_czz'_typed : si_Σ ;;; iv_Γz |-E pr_czz' : (iv_Ix 0) {0 := pr_zz'}.
+Proof.
+  exact (typeE_App _ _ (tConstruct si_ind 0 []) si_na si_P (iv_Ix 0) _ pr_zz'
+           (iv_cstr_prod_typed iv_Γz iv_wf_Γz) (iv_cstr_typed iv_Γz iv_wf_Γz) pr_zz'_typed).
+Qed.
+
+Lemma pr_czz_eq : eq_term empty_global_env si_Σ iv_czz pr_czz'.
+Proof.
+  unfold iv_czz, pr_czz', iv_zz, pr_zz'.
+  constructor; [constructor; reflexivity|].
+  constructor; [reflexivity| |]; constructor; reflexivity.
+Qed.
 
 (** ** The lemmas of [PCUICPrincipalityEta], at concrete arguments *)
 
@@ -711,15 +724,17 @@ Proof.
 Qed.
 
 (** [∀_:y. Set] and [∀_:y. Type₁] differ (their codomains, [Set] and [Type₁]); [∀_:y. Set] mentions
-    the context variable [y] of [iv_Γ1]; and the sort the instance gives it, Type₂ ([pr_syT1]), is
-    not its own sort Type₁ ([pr_syS], the type in its premise [pr_yS_typed]). *)
+    the context variable [y] of [iv_Γ1] (only as the domain, compared with itself); and the sort the
+    instance gives it, Type₂ ([pr_syT1]), is not its own sort Type₁ ([pr_syS], the type in its
+    premise [pr_yS_typed]). *)
 Lemma typing_leq_termE_inst_nondeg :
   [/\ pr_yS <> pr_yT1, noccur_between 0 1 pr_yS = false & tSort pr_syT1 <> tSort pr_syS].
 Proof. split; [discriminate|reflexivity|intros h; vm_compute in h; discriminate h]. Qed.
 
 (** [typing_leq_termE] in [iv_Γ1 = [y : Prop]]: [∀_:y. Set ≤ ∀_:y. Type₁] up to universes
     ([pr_yS_leq_yT1]; the codomain at [Cumul], [Set ≤ Type₁]): the term [∀_:y. Set], of type Type₁,
-    gets the type Type₂ of [∀_:y. Type₁] ([typing_leq_termE_inst_nondeg]).
+    gets the type Type₂ of [∀_:y. Type₁] ([typing_leq_termE_inst_nondeg]). The context does no work:
+    the comparison relates the domain [y] only with itself.
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_leq_termE_inst_nondeg *)
 Lemma typing_leq_termE_inst : si_Σ ;;; iv_Γ1 |-E pr_yS : tSort pr_syT1.
 Proof.
@@ -727,18 +742,29 @@ Proof.
            pr_yT1_typed pr_yS_typed pr_yS_leq_yT1).
 Qed.
 
-(** [λx:Prop. g x] with the anonymous binder and with the binder [x] differ, and the body uses
-    [g], the third variable of [iv_Γk]. *)
-Lemma typing_eq_termE_inst_nondeg : iv_eta_g <> pr_eta_g' /\ noccur_between 0 3 pr_eta_g' = false.
-Proof. split; [discriminate|reflexivity]. Qed.
+(** [c (z → z)] and [c (z →ₓ z)] differ (in a binder name only, as [eq_term] allows); the type
+    [I (z →ₓ z)] of [c (z →ₓ z)] is [I (z → z)] up to that name; [I (z → z)] is not
+    [I ((∀P:Prop. P) → z)], the type of [c (z → z)], which differs from it by the δ-step of the let
+    [z] of [iv_Γz]; and the term uses [z]. *)
+Lemma typing_eq_termE_inst_nondeg :
+  [/\ iv_czz <> pr_czz',
+      (iv_Ix 0) {0 := pr_zz'} = tApp (tInd si_ind []) (tProd pr_nx (tRel 0) (tRel 1)),
+      (iv_Ix 0) {0 := iv_zz} <> iv_IFz,
+      nth_error iv_Γz 0 = Some (vdef si_na iv_False si_P) &
+      noccur_between 0 1 pr_czz' = false].
+Proof. split; [discriminate|reflexivity|discriminate|reflexivity|reflexivity]. Qed.
 
-(** [typing_eq_termE] in [iv_Γk]: [λx:Prop. g x] with two binder names; the second term gets the
-    type [iv_PP] of the first ([iv_eta_g_typed]) instead of its own [Π x : Prop. Prop].
+(** [typing_eq_termE] in [iv_Γz = [z := ∀P:Prop. P : Prop]]: [c (z →ₓ z)], typed at its own
+    [I (z →ₓ z)] ([pr_czz'_typed]), gets the type [I ((∀P:Prop. P) → z)] of [c (z → z)]
+    ([iv_czz_typed_IFz], a [typeE_Cumul] through the δ-step of [z]): a type that is not its own up to
+    binder names ([typing_eq_termE_inst_nondeg]). The conclusion is the judgment of
+    [iv_czz_typed_IFz] with its term renamed, as for every instance of [typing_eq_termE] (its two
+    terms are [eq_term]).
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_eq_termE_inst_nondeg *)
-Lemma typing_eq_termE_inst : si_Σ ;;; iv_Γk |-E pr_eta_g' : iv_PP.
+Lemma typing_eq_termE_inst : si_Σ ;;; iv_Γz |-E pr_czz' : iv_IFz.
 Proof.
-  exact (typing_eq_termE si_Σ iv_Γk iv_eta_g pr_eta_g' iv_PP (tProd pr_nx si_P si_P) pr_si_wfext
-           iv_eta_g_typed pr_eta_g'_typed pr_eta_g_eq).
+  exact (typing_eq_termE si_Σ iv_Γz iv_czz pr_czz' iv_IFz _ pr_si_wfext
+           iv_czz_typed_IFz pr_czz'_typed pr_czz_eq).
 Qed.
 
 End PrincipalityEtaInstances.
