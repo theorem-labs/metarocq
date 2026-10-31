@@ -2,7 +2,8 @@
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
    lemma, not a mechanical guarantee.
-   Measured reader miss rate: at least 17 of 60 sampled instances (28.3%, 95% upper bound 39.4%), seed 202610301905: the union of the verdicts held by two independent reviews (Opus 5: 10 of 60; Opus 5.5: 15 of 60, 6 of its verdicts borderline at confidence 0.5-0.6). The 17 sampled misses are corrected at this head, but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected. *)
+   Measured reader miss rate: at least 20 of 60 instances sampled (seed 202610301905) from the 323 that the focused review of 11092806 had not covered (33.3%, 95% upper bound 44.6%, one-sided Clopper-Pearson): 17 from the union of the verdicts held by two independent reviews (Opus 5: 10; Opus 5.5: 15, 6 of its verdicts borderline at confidence 0.5-0.6), plus three further rows that both reviews had passed and root rulings made by 2026-10-31T03:30Z reclassified under the same standard (S12, S31, S36). 18 of the 20 sampled misses are corrected at frac/eta c825ec02 (S31 and S36 are not), but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected.
+   P4 at frac/eta c825ec02: 313 lemmas with a base twin are accounted for: 229 demonstrated (at least one NONDEGEN instance; this count includes 6 targets whose only NONDEGEN instance is judged false (as of 2026-10-31T03:30Z) and uncorrected at frac/eta c825ec02: PCUICClassificationEta.wf_fixpoint_spineE, wf_cofixpoint_spineE, whnf_classificationE, whnf_classification'E, ind_whnf_classificationE and ind_whnf_classification'E), 70 undemonstrable by their own statements (IMPOSSIBLE-only), and 14 with no working instance (NOT-BUILT-only): BDToPCUICEta.wf_rel_weakE; PCUICAlphaEta.eq_context_conversionE, isType_eq_context_conversionE, typing_alpha_propE, wf_local_alphaE; PCUICClassificationEta.typing_spine_nth_errorE, typing_spine_nth_error_NoneE, typing_spine_nth_error_None_prodE (non-degenerate instances for these 3 were built, unlanded and unreviewed as of 2026-10-31T03:30Z); PCUICInversionEta.into_ws_cumulE; PCUICPrincipalityEta.typing_leq_termE; PCUICSREta.prim_app_typing_invE, sr_prim_opE, typing_spine_prim_arg_typesE, typing_spine_prim_argsE. The demonstrated count rests on NONDEGEN tags with the measured miss rate above. As of 2026-10-31T03:30Z, 15 NONDEGEN tags are judged false, and at frac/eta c825ec02 they are uncorrected. 11 are conv → red cases whose input conversion was built from a reduction (for wf_fixpoint_spineE_inst the conv → red step sits inside its target's proof): 7 in BDFromPCUICEtaInstances (red_fix_witnessE_inst, mfix_body_on_conv_redE_fix_inst, red_cofix_witnessE_inst, mfix_body_on_conv_redE_cofix_inst, mfix_on_ind_conv_redE_cofix_inst, wf_fixpointE_wf_fixpoint_red_typed_inst, and sampled row S36 = wf_cofixpointE_wf_cofixpoint_red_inst) and PCUICPrincipalityEtaInstances.T8_Prod_l_plug_inst and T8_Prod_l_of_r_inst, whose targets are outside P4's input set, and PCUICClassificationEtaInstances.wf_fixpoint_spineE_inst and wf_cofixpoint_spineE_inst, whose targets are 2 of the 6 above. 4 are undemonstrable by their own statements (the conclusion is read off the head of the instance's own weak-head-normal witness): PCUICClassificationEtaInstances.whnf_classificationE_inst (sampled row S31), whnf_classification'E_inst, ind_whnf_classificationE_inst and ind_whnf_classification'E_inst, whose targets are the other 4 of the 6. Context of the demonstrations (context = a judgment argument of type list (context_decl term), empty or not by computing its length, not the lemma's Γ parameter): 79 use a non-empty context; 23 have the context as their subject; 20 have a non-empty context that no term or type mentions; 4 undecided; 70 work only at the empty context (10 forced by the statement, 60 by the instance's choice; up to 89 under stricter readings); 33 have no context argument, which is not the same as the empty context. A mechanical sweep flagged at least 31 of the 338 NONDEGEN instances at 0bf9899a, before the retags of LAND8a (eede40b7, 86d983ce), LAND9 (016ec167, 727d49e9) and LAND11-A (6568a017), whose conclusion is convertible to an input sub-derivation (3 of the 31 match the instance itself or its helper rather than an input); of its 9 non-equation flags, 9 were judged bad by 2026-10-31T03:30Z, with the kind-label correct in 6 of 9; it cannot see a cancellation inside the target lemma's own proof or a conclusion that is one part of a pair, and it does not discriminate the 22 closed equations (of the 3 sampled ones judged, S29 is weak only, S44 is not degenerate, and S31 is undemonstrable by its statement). Prose overclaims were not mechanically enumerated, because that detector failed its controls. Root rulings made by 2026-10-31T03:30Z reclassified three sampled rows that both reviews had passed, S36 (the red → conv → red class), S12 (its conclusion is the input's own cumulativity) and S31 (undemonstrable by its statement), raising the sampled rate from at least 17 to at least 20 of 60; the 45-row marker census had 2 reopened as of 2026-10-31T03:30Z. *)
 
 (** * Satisfying instances of the lemmas of [PCUICSREta] (row T1)
 
@@ -59,8 +60,9 @@
   let (so [s] is not [List.rev inst]) and a [Δ'] that uses both the let and the assumption
   ([y → x]), [weakening_closed_red1_cb] on the
   open step [(λx:Prop. x → x) (y → y) ⇝1 (y → y) → y → y] (so the lift moves it),
-  [prim_op_head_typeE] and [typing_spine_prim_arg_typesE] on a type that is a β-redex (so the
-  comparison is not reflexive).
+  [prim_op_head_typeE] on a type that is a β-redex (so the comparison is not reflexive).
+  [typing_spine_prim_arg_typesE_inst] also runs on a type that is a β-redex, but it is tagged
+  NOT-BUILT: the cumulativity it returns is the input's own.
 
   **Tags.** Each instance carries its tag in the comment directly above it: NONDEGEN with the
   compiled lemma that states what makes it non-degenerate, or IMPOSSIBLE with the property of
@@ -68,9 +70,10 @@
   [declared_projection_declared_constructorE], [declared_projection_indicesE],
   [cmp_global_instance_cstr_irrelevantE], [isType_prim_tag_constantE], [spine_subst_wt_termsE],
   [wf_pre_case_branch_contextE], [PCUICSREta.conv_refl'E] and [conv_context_reflE]), or NOT-BUILT
-  for a degenerate instance with no non-degenerate witness built yet (three rows: the ι instance
-  [subject_reduction1E_iota_inst], and the two primitive-operation instances
-  [prim_app_typing_invE_inst] and [sr_prim_opE_inst]).
+  for a degenerate instance with no non-degenerate witness built yet (five rows: the ι instance
+  [subject_reduction1E_iota_inst], and the four primitive-operation instances
+  [prim_app_typing_invE_inst], [sr_prim_opE_inst], [typing_spine_prim_argsE_inst] and
+  [typing_spine_prim_arg_typesE_inst]).
 
   **Helpers with an instance of their own**, each also run inside another instance here:
   - [ctx_inst_mergeE_inst]: the telescope [x : Prop, f : x → x], whose first argument
@@ -85,9 +88,9 @@
     [subject_reduction1E] and [sr_red1E_Prod] (it is also called by [sr_red1E_ctx],
     [sr_red1E_Lambda] and [sr_red1E_LetIn]);
   - [typing_spine_prim_argsE_inst]: the spine [1] of the partial application [land 1] in
-    [Σ_po] (one argument of two, so neither part of the conclusion is vacuous).
-    [prim_app_typing_invE_inst] runs it through [prim_app_typing_invE] on the spine [1 3] of
-    [land 1 3] (that instance is tagged NOT-BUILT);
+    [Σ_po] (one argument of two). [prim_app_typing_invE_inst] runs it through
+    [prim_app_typing_invE] on the spine [1 3] of [land 1 3]. Both instances are tagged
+    NOT-BUILT: every step of their spines is reflexive;
   - [typing_closed_red1E_inst] and [typing_closed_redE_inst]: the β step [sri_xx_beta] of the typed
     [(λx:Prop. x → x) (∀P:Prop. P)], in [[]] and in [z : (λx:Prop. x → x) (∀P:Prop. P)]
     ([type_reduction_closedE_inst] also runs [typing_closed_redE] on that step;
@@ -113,7 +116,7 @@ From MetaRocq.PCUIC Require PCUICSR PCUICEtaIdxEnv.
 #[local] Existing Instance si_cb.
 
 (* The pieces the instances are built from (terms, contexts, typing derivations, steps):
-   WITNESSES: sri_* subject_reduction1E_iota_inst_nondeg wf_pre_case_branch_contextE_inst_nondeg sr_prim_opE_inst_nondeg prim_app_typing_invE_inst_nondeg *)
+   WITNESSES: sri_* subject_reduction1E_iota_inst_nondeg wf_pre_case_branch_contextE_inst_nondeg sr_prim_opE_inst_nondeg prim_app_typing_invE_inst_nondeg typing_spine_prim_argsE_inst_nondeg typing_spine_prim_arg_typesE_inst_nondeg *)
 
 (** ** Pieces, without any class *)
 
@@ -1434,7 +1437,7 @@ Section SRInstances.
   (** The spine [[1]] of the partial application [land 1 : int → int] ([sri_land_1_typed]), from
       [inversion_mkAppsE] and [inversion_ConstE]. The spine is not empty and shorter than the
       tags ([typing_spine_prim_argsE_inst_nondeg]).
-      INSTANCE NONDEGEN PCUICSREtaInstances.typing_spine_prim_argsE_inst_nondeg *)
+      INSTANCE NOT-BUILT: degenerate, every spine step is reflexive: the spine comes from [inversion_mkAppsE] of [sri_land_1_typed], which is [typeE_App] over [iv_land_typed] and [sri_prim_typed 1] with no conversion, so its cons step is reflexive by construction and [hle] (from [inversion_ConstE]) is reflexive; the target returns, for [i = 0], the input's argument typing [sri_prim_typed 1] with the reflexive equation [int = int], and the second conjunct is a composition of reflexive steps ending in the reflexive nil step at [tImpl int int] (the class of [prim_app_typing_invE_inst]); [land] typed through a conversion (e.g. at [sri_land_ty_beta]) would make [hle] and the domain conversion real; no non-degenerate witness built yet *)
   Lemma typing_spine_prim_argsE_inst :
     (forall i a t, nth_error (map term_of_lit [LInt 1%uint63]) i = Some a -> nth_error [primInt; primInt] i = Some t ->
        ∑ A ty_a, [× PCUICPrimOpType.prim_tag_type po_retro t = Some ty_a,
@@ -1513,7 +1516,7 @@ Section SRInstances.
 
   (** The spine of [land 1 3] typed at [(λT:Set. T) int] ([sri_land_app_typed_beta]), from
       [inversion_mkAppsE] and [inversion_ConstE]: [int ≤ (λT:Set. T) int].
-      INSTANCE NONDEGEN PCUICSREtaInstances.typing_spine_prim_arg_typesE_inst_nondeg *)
+      INSTANCE NOT-BUILT: degenerate, the conclusion is the input's own cumulativity: the spine comes from [inversion_mkAppsE] of [sri_land_app_typed_beta], which is [typeE_Cumul] over [sri_land_app_typed] with [sri_int_beta_cumul]; the cons steps are reflexive by construction and [hle] is reflexive, and at the nil case the target composes them with the spine's last step, which is that outer cumulativity as collected by [inversion_AppE], so the conclusion [sri_int ≤ sri_int_beta] states what [sri_int_beta_cumul] states; [land] typed through a conversion ([sri_land_ty_beta]) would make the target compose a real product cumulativity; no non-degenerate witness built yet *)
   Lemma typing_spine_prim_arg_typesE_inst : Σ_po ;;; [] ⊢E sri_int ≤ sri_int_beta.
   Proof.
     destruct (inversion_mkAppsE (Σ := Σ_po) (wfΣ := iv_po_wfE) sri_land_app_typed_beta) as [A [hA sp]].

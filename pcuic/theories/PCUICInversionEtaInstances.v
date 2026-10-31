@@ -2,7 +2,8 @@
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
    lemma, not a mechanical guarantee.
-   Measured reader miss rate: at least 17 of 60 sampled instances (28.3%, 95% upper bound 39.4%), seed 202610301905: the union of the verdicts held by two independent reviews (Opus 5: 10 of 60; Opus 5.5: 15 of 60, 6 of its verdicts borderline at confidence 0.5-0.6). The 17 sampled misses are corrected at this head, but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected. *)
+   Measured reader miss rate: at least 20 of 60 instances sampled (seed 202610301905) from the 323 that the focused review of 11092806 had not covered (33.3%, 95% upper bound 44.6%, one-sided Clopper-Pearson): 17 from the union of the verdicts held by two independent reviews (Opus 5: 10; Opus 5.5: 15, 6 of its verdicts borderline at confidence 0.5-0.6), plus three further rows that both reviews had passed and root rulings made by 2026-10-31T03:30Z reclassified under the same standard (S12, S31, S36). 18 of the 20 sampled misses are corrected at frac/eta c825ec02 (S31 and S36 are not), but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected.
+   P4 at frac/eta c825ec02: 313 lemmas with a base twin are accounted for: 229 demonstrated (at least one NONDEGEN instance; this count includes 6 targets whose only NONDEGEN instance is judged false (as of 2026-10-31T03:30Z) and uncorrected at frac/eta c825ec02: PCUICClassificationEta.wf_fixpoint_spineE, wf_cofixpoint_spineE, whnf_classificationE, whnf_classification'E, ind_whnf_classificationE and ind_whnf_classification'E), 70 undemonstrable by their own statements (IMPOSSIBLE-only), and 14 with no working instance (NOT-BUILT-only): BDToPCUICEta.wf_rel_weakE; PCUICAlphaEta.eq_context_conversionE, isType_eq_context_conversionE, typing_alpha_propE, wf_local_alphaE; PCUICClassificationEta.typing_spine_nth_errorE, typing_spine_nth_error_NoneE, typing_spine_nth_error_None_prodE (non-degenerate instances for these 3 were built, unlanded and unreviewed as of 2026-10-31T03:30Z); PCUICInversionEta.into_ws_cumulE; PCUICPrincipalityEta.typing_leq_termE; PCUICSREta.prim_app_typing_invE, sr_prim_opE, typing_spine_prim_arg_typesE, typing_spine_prim_argsE. The demonstrated count rests on NONDEGEN tags with the measured miss rate above. As of 2026-10-31T03:30Z, 15 NONDEGEN tags are judged false, and at frac/eta c825ec02 they are uncorrected. 11 are conv → red cases whose input conversion was built from a reduction (for wf_fixpoint_spineE_inst the conv → red step sits inside its target's proof): 7 in BDFromPCUICEtaInstances (red_fix_witnessE_inst, mfix_body_on_conv_redE_fix_inst, red_cofix_witnessE_inst, mfix_body_on_conv_redE_cofix_inst, mfix_on_ind_conv_redE_cofix_inst, wf_fixpointE_wf_fixpoint_red_typed_inst, and sampled row S36 = wf_cofixpointE_wf_cofixpoint_red_inst) and PCUICPrincipalityEtaInstances.T8_Prod_l_plug_inst and T8_Prod_l_of_r_inst, whose targets are outside P4's input set, and PCUICClassificationEtaInstances.wf_fixpoint_spineE_inst and wf_cofixpoint_spineE_inst, whose targets are 2 of the 6 above. 4 are undemonstrable by their own statements (the conclusion is read off the head of the instance's own weak-head-normal witness): PCUICClassificationEtaInstances.whnf_classificationE_inst (sampled row S31), whnf_classification'E_inst, ind_whnf_classificationE_inst and ind_whnf_classification'E_inst, whose targets are the other 4 of the 6. Context of the demonstrations (context = a judgment argument of type list (context_decl term), empty or not by computing its length, not the lemma's Γ parameter): 79 use a non-empty context; 23 have the context as their subject; 20 have a non-empty context that no term or type mentions; 4 undecided; 70 work only at the empty context (10 forced by the statement, 60 by the instance's choice; up to 89 under stricter readings); 33 have no context argument, which is not the same as the empty context. A mechanical sweep flagged at least 31 of the 338 NONDEGEN instances at 0bf9899a, before the retags of LAND8a (eede40b7, 86d983ce), LAND9 (016ec167, 727d49e9) and LAND11-A (6568a017), whose conclusion is convertible to an input sub-derivation (3 of the 31 match the instance itself or its helper rather than an input); of its 9 non-equation flags, 9 were judged bad by 2026-10-31T03:30Z, with the kind-label correct in 6 of 9; it cannot see a cancellation inside the target lemma's own proof or a conclusion that is one part of a pair, and it does not discriminate the 22 closed equations (of the 3 sampled ones judged, S29 is weak only, S44 is not degenerate, and S31 is undemonstrable by its statement). Prose overclaims were not mechanically enumerated, because that detector failed its controls. Root rulings made by 2026-10-31T03:30Z reclassified three sampled rows that both reviews had passed, S36 (the red → conv → red class), S12 (its conclusion is the input's own cumulativity) and S31 (undemonstrable by its statement), raising the sampled rate from at least 17 to at least 20 of 60; the 45-row marker census had 2 reopened as of 2026-10-31T03:30Z. *)
 
 (** * Satisfying instances of the lemmas of [PCUICInversionEta], and the checker's contract
 
@@ -30,7 +31,9 @@
   [g : Prop → Prop, k : (Prop → Prop) → Prop, y : k g], the variable [y] is typed at
   [k (λx:Prop. g x)] ([iv_rel_typed]); the declared type of [y], lifted, is [k g], which is not
   [k (λx:Prop. g x)] ([iv_y_decl_kg]), so the lemma's conclusion relates two different types.
-  [into_ws_cumulE] is applied to the same pair ([iv_kg_keta_differ]). Every other inversion
+  [into_ws_cumulE] is applied to the same pair ([iv_kg_keta_differ]), but its instance is tagged
+  NOT-BUILT: its JoinE premise [iv_join_eta] is projected from the [ws_cumul_pbE] it rebuilds.
+  Every other inversion
   instance types its term [t] at [(λX : s. X) T], from [T : s] and [t : T] ([iv_retype]); its
   NONDEGEN lemma states that [(λX : s. X) T] is not [T] (for the fixpoint, [land] and the
   cofixpoint, also that [T] is the declared type). The application of [inversion_AppE] is
@@ -39,7 +42,7 @@
   [PCUICTypingEtaCopies1Instances] (branch [wip/eta-e3-copies1-2026-10-29], not landed). Each
   instance carries its tag (instance-gate grammar).
 
-  WITNESSES: iv_* T6_* iv_ctx_inst
+  WITNESSES: iv_* T6_* iv_ctx_inst iv_kg_keta_differ
   ([iv_*]: the typing pieces, environments and derivations the instances use; [T6_*]: the
   checker contract fits above, generic in [Σ], not instances; [iv_ctx_inst]: a [ctx_inst]
   derivation of the [match], not an instance) *)
@@ -303,7 +306,7 @@ Proof. exact (wsE_join (into_ws_cumul_pbE_spec (Σ := si_Σ) iv_spec_eta eq_refl
 Lemma iv_kg_keta_differ : iv_kg <> iv_keta.
 Proof. discriminate. Qed.
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_kg_keta_differ *)
+(* INSTANCE NOT-BUILT: degenerate, a round trip: the premise [iv_join_eta] is [wsE_join (into_ws_cumul_pbE_spec iv_spec_eta …)], the JoinE projection of a [ws_cumul_pbE] whose statement is the conclusion [iv_Γk ⊢E iv_kg ≤ iv_keta], and [into_ws_cumulE] rebuilds that [ws_cumul_pbE] from the projected JoinE; a JoinE built directly from a step (e.g. [JoinE_eta1_l]), not a forgotten [ws_cumul_pbE], would make the target's closedness from typing run; no non-degenerate witness built yet *)
 Lemma into_ws_cumulE_inst : si_Σ ;;; iv_Γk ⊢E iv_kg ≤ iv_keta.
 Proof. exact (into_ws_cumulE si_Σ si_wfE (T := iv_kg) (U := iv_keta) iv_y_typed iv_keta_typed iv_join_eta). Qed.
 
