@@ -77,8 +77,9 @@
     ([cli_fix_rarg_present]). The four whnf classification rows on the same term
     ([whnf_classificationE_inst], [whnf_classification'E_inst], [ind_whnf_classificationE_inst],
     [ind_whnf_classification'E_inst]) are tagged IMPOSSIBLE: on every instance whose premises
-    hold, the conclusion is read off the head of the instance's own [wh_normal] derivation by
-    computation.
+    hold, the conclusion is read off the instance's own [wh_normal] derivation: the head by
+    computation, or, for a neutral term, its [whne] derivation translated into [stuck_cofix_case]
+    ([wh_neutral_emptyE]).
   - The rows whose conclusion is [False] (the lemma states that its premises cannot hold
     together; as in base) and the rows whose conclusion relates a term to itself
     ([check_recursivity_kind_injE]: [rk = rk']; [wt_closed_red_reflE]: [Σ ;;; Γ ⊢ t ⇝ t], whose
@@ -888,12 +889,13 @@ Definition invert_fix_indE_inst :
   invert_fix_indE (Σ := si_Σ) [] iv_mfix 0 [] si_ind [] [iv_False] eq_refl.
 
 (* [wh_neutral_empty_genE] and [wh_neutral_emptyE]: no instance in this file since BET-339 (F0).
-   On integ-all8 they conclude [stuck_cofix_case t], not [False]. Their premises hold together on
-   a closed case blocked on a cofixpoint, so the former IMPOSSIBLE tag (on an open term typed in
-   the empty context) no longer describes the lemma, and that open-term premise has no
-   derivation. A non-degenerate instance needs a closed typed blocked case, hence a coinductive
-   block, which [si_Σ] does not have ([PCUICEtaF0Land3Instances.l6_si_no_stuck]). The instances
-   are [PCUICEtaF0Land3Instances.wh_neutral_empty_genE_inst] and
+   On integ-all8 they conclude [stuck_cofix_case t], not [False], and the former instance here (on
+   an open term typed in the empty context) has no derivation of its premise. On every instance
+   whose premises hold, the conclusion is the instance's own [whne] derivation translated into
+   [stuck_cofix_case] (root ruling, land6-review.md "Ship lineage (F0 + LAND12)"); a typed blocked
+   case needs a coinductive block, which [si_Σ] does not have
+   ([PCUICEtaF0Land3Instances.l6_si_no_stuck]). Their instances, tagged IMPOSSIBLE, are
+   [PCUICEtaF0Land3Instances.wh_neutral_empty_genE_inst] and
    [PCUICEtaF0Land3Instances.wh_neutral_emptyE_inst], in [iv_Σ] (coinductive [R]). *)
 
 (** INSTANCE NONDEGEN PCUICClassificationEtaInstances.cli_cF_head_differs *)
@@ -912,22 +914,22 @@ Definition eval_whneE_inst :=
 Definition eval_closed_cb_inst : closed sri_xx_reduct :=
   eval_closed_cb si_Σ sri_xx_redex sri_xx_reduct eq_refl cli_eval_xx.
 
-(** INSTANCE IMPOSSIBLE: the proof splits on wh_normal; every branch but whnf_cstrapp and whnf_cofixapp is refuted from the typing and axiom_free premises, and there the conclusion is read off the head by computation, without the typing or Σ; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE) *)
+(** INSTANCE IMPOSSIBLE: the proof splits on wh_normal; at whnf_cstrapp and whnf_cofixapp the left disjunct is computed from the head, and at whnf_ne the right disjunct stuck_cofix_case t is the instance's own whne derivation translated constructor by constructor (wh_neutral_emptyE); every other branch, and every neutral leaf but a case on a cofixpoint, is refuted from the typing and axiom_free premises, so reaching one needs an uninhabited conclusion *)
 Definition whnf_classification'E_inst :=
   whnf_classification'E (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] eq_refl
     (whnf_cstrapp _ _ _ _ _ _ [iv_False]) sri_cF_typed.
 
-(** INSTANCE IMPOSSIBLE: the proof splits on wh_normal; every branch but whnf_cstrapp and whnf_cofixapp is refuted from the typing and axiom_free premises, and there the conclusion is read off the head by computation, without the typing or Σ; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE) *)
+(** INSTANCE IMPOSSIBLE: the proof splits on wh_normal; at whnf_cstrapp and whnf_cofixapp the left disjunct is computed from the head, and at whnf_ne the right disjunct stuck_cofix_case t is the instance's own whne derivation translated constructor by constructor (wh_neutral_emptyE); every other branch, and every neutral leaf but a case on a cofixpoint, is refuted from the typing and axiom_free premises, so reaching one needs an uninhabited conclusion *)
 Definition whnf_classificationE_inst :=
   whnf_classificationE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] cli_axiom_free
     (whnf_cstrapp _ _ _ _ _ _ [iv_False]) sri_cF_typed.
 
-(** INSTANCE IMPOSSIBLE: the proof calls whnf_classification'E, whose every branch but whnf_cstrapp and whnf_cofixapp is refuted from the typing and axiom_free premises; the cofixpoint head is then refuted by typing_cofix_coindE against notCoInductive, and at whnf_cstrapp isConstruct_app t is computed from the head, without the typing or Σ; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE) *)
+(** INSTANCE IMPOSSIBLE: the proof calls whnf_classification'E, whose satisfiable branches read the conclusion off the instance's own wh_normal derivation (the head by computation, or the whne derivation translated into stuck_cofix_case, passed through as the right disjunct, CE:1043); the cofixpoint head is refuted by typing_cofix_coindE against notCoInductive; reaching a refuted branch needs an uninhabited conclusion *)
 Definition ind_whnf_classification'E_inst :=
   ind_whnf_classification'E (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] eq_refl
     cli_notCoInductive sri_cF_typed (whnf_cstrapp _ _ _ _ _ _ [iv_False]).
 
-(** INSTANCE IMPOSSIBLE: the proof calls whnf_classification'E, whose every branch but whnf_cstrapp and whnf_cofixapp is refuted from the typing and axiom_free premises; the cofixpoint head is then refuted by typing_cofix_coindE against notCoInductive, and at whnf_cstrapp isConstruct_app t is computed from the head, without the typing or Σ; reaching a refuted branch needs a False conclusion (as wh_neutral_emptyE) *)
+(** INSTANCE IMPOSSIBLE: the proof calls whnf_classification'E, whose satisfiable branches read the conclusion off the instance's own wh_normal derivation (the head by computation, or the whne derivation translated into stuck_cofix_case, passed through as the right disjunct, CE:1043); the cofixpoint head is refuted by typing_cofix_coindE against notCoInductive; reaching a refuted branch needs an uninhabited conclusion *)
 Definition ind_whnf_classificationE_inst :=
   ind_whnf_classificationE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF si_ind [] [iv_False] cli_axiom_free
     cli_notCoInductive sri_cF_typed (whnf_cstrapp _ _ _ _ _ _ [iv_False]).

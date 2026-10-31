@@ -34,10 +34,13 @@
      ([g_no_eval], base [wcbv_stuck_no_eval]).
      - [wh_neutral_empty_genE], [wh_neutral_emptyE]: before BET-339 they concluded [False]
        (IMPOSSIBLE rows of [PCUICClassificationEtaInstances]); now they conclude
-       [stuck_cofix_case t] and [g_t] is a non-degenerate instance.
+       [stuck_cofix_case t]. Their instances at [g_t] are tagged IMPOSSIBLE (root ruling,
+       land6-review.md "Ship lineage (F0 + LAND12)"): on every instance whose premises hold, the
+       conclusion is the instance's own [whne] derivation translated into [stuck_cofix_case].
      - [whnf_classification'E], [whnf_classificationE]: instances at [g_t]; the head of [g_t]
        is neither a constructor nor a cofixpoint ([g_head_not_discr]), so they land in the
-       disjunct BET-339 added ([g_whnf_classification_stuck]).
+       disjunct BET-339 added ([g_whnf_classification_stuck]). Tagged IMPOSSIBLE for the same
+       reason: the conclusion is read off the instance's own [wh_normal] derivation.
      - [progressE] at [g_t]: [g_t] is [wcbv_stuck] ([g_wcbv_stuck]).
      - [red1_progressE] (new copy of base [red1_progress]): instance at [g_t].
 
@@ -47,8 +50,11 @@
      mkR _ _ => Prop end] (flag set). The return predicate mentions the scrutinee (as the
      scrutinee of the inner case, stuck on a variable [z]); at [mkR F x.(f)] it computes to
      [Prop], so [t8_T : Prop] ([t8_T_sort]). [t8_T] reaches [R F] only by ι
-     ([t8_T_conv]). [t8_Ind_r_inst] applies the proved [T8_Ind_r] to it.
-     Non-degeneracy: [t8_old_premise_fails], [t8_flag_unset]; [t8_T] is a case, not a head form.
+     ([t8_T_conv]). [t8_Ind_r_inst] applies the proved [T8_Ind_r] to it. Tagged NOT-BUILT
+     (root ruling): degenerate, [t8_T_conv] is one root ι step given as a cumulativity and
+     [T8_Ind_r] returns that step; a conversion whose derivation contains an expansion (a peak),
+     so that [T8_Ind_r] must use confluence, would make it run. [t8_old_premise_fails] and
+     [t8_flag_unset] say only that [t8_T] is in the region.
 
   4. LAND4/5 under BET-339 (branch [wip/eta-meta-f0-land45-2026-10-30]): canonicity on the
      closed blocked case [g_t], the E twins of base's consistency helpers that BET-339 adds, and
@@ -70,7 +76,7 @@
   Tags: the instance grammar of [lanes/eta/meta/instance-gate.md] (one [INSTANCE NONDEGEN],
   [INSTANCE IMPOSSIBLE:] or [INSTANCE NOT-BUILT:] line directly above each instance, with
   [TARGET] lines). Declarations that are neither instances nor NONDEGEN lemmas:
-  WITNESSES: f3_* g_* t8_* l45_* l6_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false
+  WITNESSES: f3_* g_* t8_* l45_* l6_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false wh_neutral_empty_genE_inst_nondeg wh_neutral_emptyE_inst_nondeg whnf_classification'E_stuck_inst_nondeg whnf_classificationE_stuck_inst_nondeg t8_Ind_r_inst_nondeg typing_tApp_invE_inst_nondeg typing_tCase_scrutE_inst_nondeg typing_tProj_argE_inst_nondeg typing_tCoFix_cofiniteE_inst_nondeg typing_mkApps_argE_inst_nondeg typing_mkApps_headE_inst_nondeg typing_stuck_cofix_case_cofiniteE_inst_nondeg
 
   Forecast evidence for the cutover F0 (it rests on the ship branch's
   [PCUICEtaFO4Instances], which is itself forecast-only). *)
@@ -534,25 +540,22 @@ Qed.
 Lemma l45_g_t_closed : on_free_vars (fun _ => false) g_t.
 Proof. reflexivity. Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.wh_neutral_empty_genE_inst_nondeg
-   TARGET PCUICClassificationEta.wh_neutral_empty_genE
-   IMPOSSIBLE before BET-339 (the conclusion was [False]); now it concludes
-   [stuck_cofix_case t], and [g_t] is a closed typed blocked case. *)
+(* INSTANCE IMPOSSIBLE: the proof is an induction on the whne derivation; every leaf but whne_case_cofix_dep is refuted from the typing and axiom_free_value premises, and each remaining step maps its whne constructor to the matching stuck_cofix_case constructor (app, case, proj, fixapp; case_cofix_dep to scrut), so the conclusion is the instance's own whne derivation translated; reaching a refuted leaf needs an uninhabited conclusion
+   TARGET PCUICClassificationEta.wh_neutral_empty_genE *)
 Definition wh_neutral_empty_genE_inst : stuck_cofix_case g_t :=
   wh_neutral_empty_genE (Σ := iv_Σ) (wfΣ := iv_wfE) [] [] g_t g_RA g_afv g_whne g_t_typed_RA eq_refl.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.wh_neutral_emptyE_inst_nondeg
+(* INSTANCE IMPOSSIBLE: the proof is an induction on the whne derivation; every leaf but whne_case_cofix_dep is refuted from the typing and axiom_free_value premises, and each remaining step maps its whne constructor to the matching stuck_cofix_case constructor (app, case, proj, fixapp; case_cofix_dep to scrut), so the conclusion is the instance's own whne derivation translated; reaching a refuted leaf needs an uninhabited conclusion
    TARGET PCUICClassificationEta.wh_neutral_emptyE *)
 Definition wh_neutral_emptyE_inst : stuck_cofix_case g_t :=
   wh_neutral_emptyE (Σ := iv_Σ) (wfΣ := iv_wfE) g_t g_RA g_afv g_whne g_t_typed_RA.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.whnf_classification'E_stuck_inst_nondeg
-   TARGET PCUICClassificationEta.whnf_classification'E
-   The constructor/cofixpoint disjunct is false at [g_t]; the instance lands in the new one. *)
+(* INSTANCE IMPOSSIBLE: the proof splits on wh_normal; at whnf_cstrapp and whnf_cofixapp the left disjunct is computed from the head, and at whnf_ne the right disjunct stuck_cofix_case t is the instance's own whne derivation translated constructor by constructor (wh_neutral_emptyE); every other branch, and every neutral leaf but a case on a cofixpoint, is refuted from the typing and axiom_free premises, so reaching one needs an uninhabited conclusion
+   TARGET PCUICClassificationEta.whnf_classification'E *)
 Definition whnf_classification'E_stuck_inst :=
   whnf_classification'E (Σ := iv_Σ) (wfΣ := iv_wfE) g_t iv_ind [] [g_A] g_afv g_whnf g_t_typed_RA.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.whnf_classificationE_stuck_inst_nondeg
+(* INSTANCE IMPOSSIBLE: the proof splits on wh_normal; at whnf_cstrapp and whnf_cofixapp the left disjunct is computed from the head, and at whnf_ne the right disjunct stuck_cofix_case t is the instance's own whne derivation translated constructor by constructor (wh_neutral_emptyE); every other branch, and every neutral leaf but a case on a cofixpoint, is refuted from the typing and axiom_free premises, so reaching one needs an uninhabited conclusion
    TARGET PCUICClassificationEta.whnf_classificationE *)
 Definition whnf_classificationE_stuck_inst :=
   whnf_classificationE (Σ := iv_Σ) (wfΣ := iv_wfE) g_t iv_ind [] [g_A] g_axiom_free g_whnf g_t_typed_RA.
@@ -879,10 +882,8 @@ Proof.
            eq_refl eq_refl).
 Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.t8_Ind_r_inst_nondeg
-   TARGET PCUICEtaT8Probe.T8_Ind_r
-   The proved T8 theorem on [t8_T], a case of the region (flag unset, predicate on the
-   scrutinee) that reaches [R F] only by ι. *)
+(* INSTANCE NOT-BUILT: degenerate, a single step given as a cumulativity and returned: the input t8_T_conv is into_ws_cumul_pbE_spec of one root cumulE_iota step from t8_T to R F, and T8_Ind_r returns t8_T ⇝ R F, that step, with its universe and argument fields relating [] to [] and [iv_False] to [iv_False]; a cumulativity whose derivation contains an expansion, so that T8_Ind_r needs confluence, at an inductive application with a different argument (e.g. R ((λx. x) F)), would make it run; no non-degenerate witness built yet
+   TARGET PCUICEtaT8Probe.T8_Ind_r *)
 Definition t8_Ind_r_inst :=
   PCUICEtaT8Probe.T8_Ind_r (Σ := iv_Σ) iv_wfE iv_Γr Cumul t8_T iv_ind [] [iv_False] sProp iv_wfE
     t8_T_sort t8_T_conv.
@@ -903,7 +904,12 @@ Proof. reflexivity. Qed.
 (** ** NONDEGEN lemmas of the instances of sections 1-3
 
   Each names the witness the instance passes and states why the run is in the region BET-339
-  admits: a flag-unset case, a blocked shape, an empty old disjunct. *)
+  admits: a flag-unset case, a blocked shape, an empty old disjunct. Since the root ruling on the
+  ship lineage (land6-review.md "Ship lineage (F0 + LAND12)"), no tag names
+  [wh_neutral_empty_genE_inst_nondeg], [wh_neutral_emptyE_inst_nondeg],
+  [whnf_classification'E_stuck_inst_nondeg], [whnf_classificationE_stuck_inst_nondeg] or
+  [t8_Ind_r_inst_nondeg]: their instances are tagged IMPOSSIBLE or NOT-BUILT, and they stay as
+  witnesses (WITNESSES line of the header). *)
 
 Lemma f3_sr_nondeg :
   (red1 iv_Σ fo_Γ f3_t0 f3_t1 × stuck_cofix_case f3_t1 × (fo_ci.(ci_cofix_nondep) = false) ×
@@ -965,7 +971,10 @@ Proof. exact (eq_refl, (eq_refl, eq_refl)). Qed.
   *Consistency.* The instance of [pcuic_consistentE] stays in [PCUICConsistencyEtaInstances]
   ([cs_Σ], no coinductive block, where the new premise is proved by
   [no_closed_stuck_cofix_case_at_no_cofiniteE]: [cs_no_stuck]). The E twins of base's new helpers
-  run here on the region's terms. *)
+  run here on the region's terms. The instances of the five typing inversions and of the two
+  cofiniteness lemmas are tagged IMPOSSIBLE (root ruling): in every instance the conclusion is a
+  piece or a field of the instance's own typing premise; their former NONDEGEN lemmas stay as
+  witnesses. The two [no_closed_stuck_cofix_case_at] instances keep their NONDEGEN tags. *)
 
 Section CanonicityStuck.
 
@@ -992,7 +1001,7 @@ Proof. exact (g_stuck, (g_head_not_discr, (g_no_eval, l45_g_t_normal))). Qed.
 Lemma l45_scrut_red : red1 iv_Σ fo_Γ f3_scrut f3_cofix.
 Proof. exact (red_beta _ _ si_na iv_RF (tRel 0) f3_cofix). Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_tApp_invE_inst_nondeg
+(* INSTANCE IMPOSSIBLE: the proof inverts the typing derivation (dependent induction; a typeE_Cumul step passes the induction hypothesis through) and returns a sub-derivation of it, so in every environment and instance the conclusion is a piece of the instance's own typing premise
    TARGET PCUICConsistencyEta.typing_tApp_invE *)
 Definition typing_tApp_invE_inst :=
   PCUICConsistencyEta.typing_tApp_invE (Σ := iv_Σ) (Γ := fo_Γ) (f := f3_idRF) (a := f3_cofix)
@@ -1001,9 +1010,8 @@ Definition typing_tApp_invE_inst :=
 Lemma typing_tApp_invE_inst_nondeg : red1 iv_Σ fo_Γ (tApp f3_idRF f3_cofix) f3_cofix.
 Proof. exact l45_scrut_red. Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_tCase_scrutE_inst_nondeg
-   TARGET PCUICConsistencyEta.typing_tCase_scrutE
-   The scrutinee is a cofixpoint under a flag-unset case: the blocked shape. *)
+(* INSTANCE IMPOSSIBLE: the proof inverts the typing derivation (dependent induction; a typeE_Cumul step passes the induction hypothesis through) and returns a sub-derivation of it, so in every environment and instance the conclusion is a piece of the instance's own typing premise
+   TARGET PCUICConsistencyEta.typing_tCase_scrutE *)
 Definition typing_tCase_scrutE_inst :=
   PCUICConsistencyEta.typing_tCase_scrutE (Σ := iv_Σ) (Γ := []) (ci := g_ci) (p := g_p)
     (c := g_cofix) (brs := [g_br]) g_t_typed.
@@ -1011,9 +1019,8 @@ Definition typing_tCase_scrutE_inst :=
 Lemma typing_tCase_scrutE_inst_nondeg : stuck_cofix_case (tCase g_ci g_p g_cofix [g_br]).
 Proof. exact g_stuck. Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_tProj_argE_inst_nondeg
-   TARGET PCUICConsistencyEta.typing_tProj_argE
-   A projection of the coinductive record [R]. *)
+(* INSTANCE IMPOSSIBLE: the proof inverts the typing derivation (dependent induction; a typeE_Cumul step passes the induction hypothesis through) and returns a sub-derivation of it, so in every environment and instance the conclusion is a piece of the instance's own typing premise
+   TARGET PCUICConsistencyEta.typing_tProj_argE *)
 Definition typing_tProj_argE_inst :=
   PCUICConsistencyEta.typing_tProj_argE (Σ := iv_Σ) (Γ := iv_Γr) (pr := iv_proj) (c := tRel 0)
     iv_proj_typed.
@@ -1022,9 +1029,8 @@ Lemma typing_tProj_argE_inst_nondeg :
   check_recursivity_kind (lookup_env iv_Σ) (inductive_mind iv_proj.(proj_ind)) CoFinite.
 Proof. reflexivity. Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_tCoFix_cofiniteE_inst_nondeg
-   TARGET PCUICConsistencyEta.typing_tCoFix_cofiniteE
-   The cofixpoint of [g_t]; its declared type is the coinductive [R A]. *)
+(* INSTANCE IMPOSSIBLE: the proof inverts the typing derivation of tCoFix (a typeE_Cumul step passes the induction hypothesis through) down to its typeE_CoFix node and returns the ok field of its wf_cofixpointE premise, so in every instance the conclusion is a field of the instance's own typing premise
+   TARGET PCUICConsistencyEta.typing_tCoFix_cofiniteE *)
 Definition typing_tCoFix_cofiniteE_inst :=
   PCUICConsistencyEta.typing_tCoFix_cofiniteE (Σ := iv_Σ) (Γ := []) (mfix := g_cmfix) (idx := 0)
     g_cofix_typed.
@@ -1034,7 +1040,7 @@ Lemma typing_tCoFix_cofiniteE_inst_nondeg :
    check_recursivity_kind (lookup_env iv_Σ) iv_kn CoFinite)%type.
 Proof. split; reflexivity. Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_mkApps_argE_inst_nondeg
+(* INSTANCE IMPOSSIBLE: the proof recurses on the argument list through typing_tApp_invE, which returns sub-derivations of the typing, so in every environment and instance the conclusion is a piece of the instance's own typing premise
    TARGET PCUICConsistencyEta.typing_mkApps_argE *)
 Definition typing_mkApps_argE_inst :=
   PCUICConsistencyEta.typing_mkApps_argE (Σ := iv_Σ) (Γ := fo_Γ) (f := f3_idRF) (args := [f3_cofix])
@@ -1043,7 +1049,7 @@ Definition typing_mkApps_argE_inst :=
 Lemma typing_mkApps_argE_inst_nondeg : red1 iv_Σ fo_Γ (mkApps f3_idRF [f3_cofix]) f3_cofix.
 Proof. exact l45_scrut_red. Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_mkApps_headE_inst_nondeg
+(* INSTANCE IMPOSSIBLE: the proof recurses on the argument list through typing_tApp_invE, which returns sub-derivations of the typing, so in every environment and instance the conclusion is a piece of the instance's own typing premise
    TARGET PCUICConsistencyEta.typing_mkApps_headE *)
 Definition typing_mkApps_headE_inst :=
   PCUICConsistencyEta.typing_mkApps_headE (Σ := iv_Σ) (Γ := fo_Γ) (f := f3_idRF) (args := [f3_cofix])
@@ -1052,9 +1058,8 @@ Definition typing_mkApps_headE_inst :=
 Lemma typing_mkApps_headE_inst_nondeg : red1 iv_Σ fo_Γ (mkApps f3_idRF [f3_cofix]) f3_cofix.
 Proof. exact l45_scrut_red. Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.typing_stuck_cofix_case_cofiniteE_inst_nondeg
-   TARGET PCUICConsistencyEta.typing_stuck_cofix_case_cofiniteE
-   A closed typed blocked case: the shape the new consistency premise excludes at [False]. *)
+(* INSTANCE IMPOSSIBLE: the proof follows the stuck_cofix_case derivation through typing_tCase_scrutE, typing_tApp_invE, typing_tProj_argE, typing_mkApps_argE and typing_mkApps_headE to the cofixpoint's typing and returns the ok field of its wf_cofixpointE premise (typing_tCoFix_cofiniteE), so in every instance the conclusion is a field of the instance's own typing premise
+   TARGET PCUICConsistencyEta.typing_stuck_cofix_case_cofiniteE *)
 Definition typing_stuck_cofix_case_cofiniteE_inst :=
   PCUICConsistencyEta.typing_stuck_cofix_case_cofiniteE (Σ := iv_Σ) (Γ := []) (t := g_t) (T := g_RA)
     g_stuck g_t_typed_RA.
