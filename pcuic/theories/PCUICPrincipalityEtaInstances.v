@@ -25,8 +25,9 @@
   [let y := x in I y] of the scrutinee of [PCUICProgressEtaInstances.pgi_match_let_open], Case
   case, ζ); [closed_red_confluence_cb_inst] (two different one-step reducts);
   [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step on [(λx:Prop. x → x) (∀P. P)], whose body
-  uses its variable); [typing_leq_termE_inst] ([Prop ≤ Set]
-  in a codomain); [typing_eq_termE_inst] (two binder names). The rule-coverage instances apply
+  uses its variable); [typing_eq_termE_inst] (two binder names). [typing_leq_termE_inst]
+  ([Prop ≤ Set] in a codomain) is tagged NOT-BUILT: the two sorts it relates compute to the same
+  sort, so its conclusion is its own premise. The rule-coverage instances apply
   [principal_typeE] to terms of twelve different head formers and compare the returned principal
   type with a β-wrapped type that differs from the type of the derivation it was built from
   ([principal_typeE_rules_nondeg]). *)
@@ -51,7 +52,7 @@ From Equations.Type Require Import Relation Relation_Properties.
 
 (** Declarations of this file that are neither instances nor non-degeneracy lemmas named by a tag
     (instance gate):
-    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg *)
+    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg typing_leq_termE_inst_nondeg *)
 
 (** ** The environments: [wf_extE] *)
 
@@ -690,7 +691,7 @@ Proof. discriminate. Qed.
 (** [typing_leq_termE]: [∀_:Prop. Prop ≤ ∀_:Prop. Set] up to universes ([pr_PP_leq_PS]; the
     codomain at [Cumul], [Prop ≤ Set]): the term [∀_:Prop. Prop] gets the type of [∀_:Prop. Set];
     the two terms differ ([typing_leq_termE_inst_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_leq_termE_inst_nondeg *)
+    INSTANCE NOT-BUILT: degenerate, the conclusion is the instance's own premise: [typing_leq_termE] moves [t' = iv_PP] from its type [tSort iv_sPP] to the type [tSort pr_sPS] of [t = pr_PS], but [pr_sPS = sort_of_product (super sProp) (super type0)] and [iv_sPP = sort_of_product (super sProp) (super sProp)] compute to the same sort ([Sort.super] maps both [sProp] and [type0] to [type1]), so the conclusion [iv_PP : tSort pr_sPS] is the premise [iv_PP_typed] and the move to a different type never runs; a [t] of a larger sort would need the cumulativity; no non-degenerate witness built yet *)
 Lemma typing_leq_termE_inst : si_Σ ;;; [] |-E iv_PP : tSort pr_sPS.
 Proof.
   exact (typing_leq_termE si_Σ [] pr_PS iv_PP (tSort pr_sPS) (tSort iv_sPP) si_wfE si_on_udecl

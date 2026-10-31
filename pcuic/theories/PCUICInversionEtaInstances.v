@@ -30,7 +30,9 @@
   [g : Prop → Prop, k : (Prop → Prop) → Prop, y : k g], the variable [y] is typed at
   [k (λx:Prop. g x)] ([iv_rel_typed]); the declared type of [y], lifted, is [k g], which is not
   [k (λx:Prop. g x)] ([iv_y_decl_kg]), so the lemma's conclusion relates two different types.
-  [into_ws_cumulE] is applied to the same pair ([iv_kg_keta_differ]). Every other inversion
+  [into_ws_cumulE] is applied to the same pair ([iv_kg_keta_differ]), but its instance is tagged
+  NOT-BUILT: its JoinE premise [iv_join_eta] is projected from the [ws_cumul_pbE] it rebuilds.
+  Every other inversion
   instance types its term [t] at [(λX : s. X) T], from [T : s] and [t : T] ([iv_retype]); its
   NONDEGEN lemma states that [(λX : s. X) T] is not [T] (for the fixpoint, [land] and the
   cofixpoint, also that [T] is the declared type). The application of [inversion_AppE] is
@@ -39,7 +41,7 @@
   [PCUICTypingEtaCopies1Instances] (branch [wip/eta-e3-copies1-2026-10-29], not landed). Each
   instance carries its tag (instance-gate grammar).
 
-  WITNESSES: iv_* T6_* iv_ctx_inst
+  WITNESSES: iv_* T6_* iv_ctx_inst iv_kg_keta_differ
   ([iv_*]: the typing pieces, environments and derivations the instances use; [T6_*]: the
   checker contract fits above, generic in [Σ], not instances; [iv_ctx_inst]: a [ctx_inst]
   derivation of the [match], not an instance) *)
@@ -303,7 +305,7 @@ Proof. exact (wsE_join (into_ws_cumul_pbE_spec (Σ := si_Σ) iv_spec_eta eq_refl
 Lemma iv_kg_keta_differ : iv_kg <> iv_keta.
 Proof. discriminate. Qed.
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_kg_keta_differ *)
+(* INSTANCE NOT-BUILT: degenerate, a round trip: the premise [iv_join_eta] is [wsE_join (into_ws_cumul_pbE_spec iv_spec_eta …)], the JoinE projection of a [ws_cumul_pbE] whose statement is the conclusion [iv_Γk ⊢E iv_kg ≤ iv_keta], and [into_ws_cumulE] rebuilds that [ws_cumul_pbE] from the projected JoinE; a JoinE built directly from a step (e.g. [JoinE_eta1_l]), not a forgotten [ws_cumul_pbE], would make the target's closedness from typing run; no non-degenerate witness built yet *)
 Lemma into_ws_cumulE_inst : si_Σ ;;; iv_Γk ⊢E iv_kg ≤ iv_keta.
 Proof. exact (into_ws_cumulE si_Σ si_wfE (T := iv_kg) (U := iv_keta) iv_y_typed iv_keta_typed iv_join_eta). Qed.
 

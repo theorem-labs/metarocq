@@ -44,8 +44,8 @@
     on the same [x], where the head arity of [I] is the length of the argument list [[A]]
     ([bdf_head_arity_nondeg]);
   - the (co)fixpoint witness, at a declared type on which the check fails and which reduces to
-    a type on which it passes: [mfix_on_ind_conv_redE_fix_inst],
-    [mfix_body_on_conv_redE_fix_inst], [red_fix_witnessE_inst] ([bdf_fix_d_nondeg]);
+    a type on which it passes: [mfix_body_on_conv_redE_fix_inst], [red_fix_witnessE_inst]
+    ([bdf_fix_d_nondeg]);
     [mfix_body_on_conv_redE_cofix_inst], [mfix_on_ind_conv_redE_cofix_inst],
     [red_cofix_witnessE_inst] ([bdf_cofix_d_nondeg]); [typing_inferingE_Fix_beta_inst] on the
     typed fixpoint [bdf_fix_typed] and [wf_fixpointE_wf_fixpoint_red_typed_inst] on its block
@@ -81,7 +81,9 @@
     [bd_ΓFG ,, x : G F];
   - tagged NOT-BUILT, because its instance is degenerate and no non-degenerate witness is built
     yet: [wf_fixpointE_wf_fixpoint_red_inst] (its premise [wf_fixpoint_red_wf_fixpointE_inst] is
-    built from [bd_wf_fixpoint_red], whose statement is its conclusion).
+    built from [bd_wf_fixpoint_red], whose statement is its conclusion) and
+    [mfix_on_ind_conv_redE_fix_inst] (its premise [bd_mfix_on_ind_red_convE_inst] is built from a
+    projection of [bd_wf_fixpoint_red], whose statement is its conclusion).
 
   **Rows not inhabited.** None: every lemma of [BDFromPCUICEta] has an instance here, or is a
   helper of one of them ([T8_Sort_r_plug], [T8_Prod_r_plug], [T8_Ind_r_plug],
@@ -781,7 +783,7 @@ Proof.
            bdf_fix_witness).
 Qed.
 
-(** INSTANCE NONDEGEN BDFromPCUICEtaInstances.bdf_fix_d_nondeg *)
+(** INSTANCE NOT-BUILT: degenerate, a round trip red → conv → red: the premise [bd_mfix_on_ind_red_convE_inst] ([BDTypingEtaInstances]) is [mfix_on_ind_red_convE] applied to [snd (snd bd_wf_fixpoint_red)], whose statement is the conclusion [mfix_on_ind check_one_fix (red si_Σ bd_Γ1) … bd_mfix] (the class of [wf_fixpointE_wf_fixpoint_red_inst]); a conversion witness not built from a reduction witness would make [red_fix_witnessE] run; no non-degenerate witness built yet *)
 Lemma mfix_on_ind_conv_redE_fix_inst :
   mfix_on_ind check_one_fix (red si_Σ bd_Γ1)
     (fun mind => check_recursivity_kind (lookup_env si_Σ) mind Finite) bd_mfix.

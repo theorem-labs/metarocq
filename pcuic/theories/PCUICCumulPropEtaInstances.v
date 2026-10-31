@@ -28,7 +28,9 @@
   statement that forces them: forced to [Prop]/[SProp] on both sides (the [cumul_*props*],
   [*_sort_eqE] and three [*_bottomE] rows), compared by the constant relation [fun _ _ => True]
   (the two [cmp_True_*] rows), or read off the fields of the premise record
-  ([cumul_prop_is_openE_inst]).
+  ([cumul_prop_is_openE_inst]); [cumul_pb_cumul_propE_inst] is tagged IMPOSSIBLE too, though its
+  η pair is real: every instance of [cumul_pb_cumul_propE] repacks the fields of its premise
+  through a relation inclusion.
 
   **[typing_leq_term_propE] and [typing_leq_term_prop_genE] are applied**, with no class (the
   forecast class [ValForecastCopy16] they took was deleted when copy 16 landed, frac/eta
@@ -199,7 +201,7 @@ Section Generic.
   (** ** Basic structure *)
 
   (** η: [λx:Prop. f x ~~ f], built by [cpi_eta_cp] from [cpi_eta].
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_eta_nondeg
+      INSTANCE IMPOSSIBLE: [cumul_pb_cumul_propE] is [cpE_of_ws], whose proof destructs the [ws_cumul_pbE] premise, reuses its three scoping fields as the fields of [cumul_propE] and maps its JoinE through [JoinPropE_of_JoinE], which reuses both reduction chains and applies the relation inclusion [finstP_of_compare] to the final comparison; so in every instance and environment the conclusion is the premise's four fields repacked through an inclusion (the class of [BDTypingEtaInstances.checkE_Cumul_ws_inst]), and the η pair of [cpi_eta] is carried through untouched
       HELPER PCUICCumulPropEtaInstances.cpi_eta_cp *)
   Definition cumul_pb_cumul_propE_inst := cpi_eta_cp.
 

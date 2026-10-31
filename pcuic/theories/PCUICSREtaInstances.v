@@ -59,8 +59,9 @@
   let (so [s] is not [List.rev inst]) and a [Δ'] that uses both the let and the assumption
   ([y → x]), [weakening_closed_red1_cb] on the
   open step [(λx:Prop. x → x) (y → y) ⇝1 (y → y) → y → y] (so the lift moves it),
-  [prim_op_head_typeE] and [typing_spine_prim_arg_typesE] on a type that is a β-redex (so the
-  comparison is not reflexive).
+  [prim_op_head_typeE] on a type that is a β-redex (so the comparison is not reflexive).
+  [typing_spine_prim_arg_typesE_inst] also runs on a type that is a β-redex, but it is tagged
+  NOT-BUILT: the cumulativity it returns is the input's own.
 
   **Tags.** Each instance carries its tag in the comment directly above it: NONDEGEN with the
   compiled lemma that states what makes it non-degenerate, or IMPOSSIBLE with the property of
@@ -68,9 +69,10 @@
   [declared_projection_declared_constructorE], [declared_projection_indicesE],
   [cmp_global_instance_cstr_irrelevantE], [isType_prim_tag_constantE], [spine_subst_wt_termsE],
   [wf_pre_case_branch_contextE], [PCUICSREta.conv_refl'E] and [conv_context_reflE]), or NOT-BUILT
-  for a degenerate instance with no non-degenerate witness built yet (three rows: the ι instance
-  [subject_reduction1E_iota_inst], and the two primitive-operation instances
-  [prim_app_typing_invE_inst] and [sr_prim_opE_inst]).
+  for a degenerate instance with no non-degenerate witness built yet (five rows: the ι instance
+  [subject_reduction1E_iota_inst], and the four primitive-operation instances
+  [prim_app_typing_invE_inst], [sr_prim_opE_inst], [typing_spine_prim_argsE_inst] and
+  [typing_spine_prim_arg_typesE_inst]).
 
   **Helpers with an instance of their own**, each also run inside another instance here:
   - [ctx_inst_mergeE_inst]: the telescope [x : Prop, f : x → x], whose first argument
@@ -85,9 +87,9 @@
     [subject_reduction1E] and [sr_red1E_Prod] (it is also called by [sr_red1E_ctx],
     [sr_red1E_Lambda] and [sr_red1E_LetIn]);
   - [typing_spine_prim_argsE_inst]: the spine [1] of the partial application [land 1] in
-    [Σ_po] (one argument of two, so neither part of the conclusion is vacuous).
-    [prim_app_typing_invE_inst] runs it through [prim_app_typing_invE] on the spine [1 3] of
-    [land 1 3] (that instance is tagged NOT-BUILT);
+    [Σ_po] (one argument of two). [prim_app_typing_invE_inst] runs it through
+    [prim_app_typing_invE] on the spine [1 3] of [land 1 3]. Both instances are tagged
+    NOT-BUILT: every step of their spines is reflexive;
   - [typing_closed_red1E_inst] and [typing_closed_redE_inst]: the β step [sri_xx_beta] of the typed
     [(λx:Prop. x → x) (∀P:Prop. P)], in [[]] and in [z : (λx:Prop. x → x) (∀P:Prop. P)]
     ([type_reduction_closedE_inst] also runs [typing_closed_redE] on that step;
@@ -113,7 +115,7 @@ From MetaRocq.PCUIC Require PCUICSR PCUICEtaIdxEnv.
 #[local] Existing Instance si_cb.
 
 (* The pieces the instances are built from (terms, contexts, typing derivations, steps):
-   WITNESSES: sri_* subject_reduction1E_iota_inst_nondeg wf_pre_case_branch_contextE_inst_nondeg sr_prim_opE_inst_nondeg prim_app_typing_invE_inst_nondeg *)
+   WITNESSES: sri_* subject_reduction1E_iota_inst_nondeg wf_pre_case_branch_contextE_inst_nondeg sr_prim_opE_inst_nondeg prim_app_typing_invE_inst_nondeg typing_spine_prim_argsE_inst_nondeg typing_spine_prim_arg_typesE_inst_nondeg *)
 
 (** ** Pieces, without any class *)
 
@@ -1434,7 +1436,7 @@ Section SRInstances.
   (** The spine [[1]] of the partial application [land 1 : int → int] ([sri_land_1_typed]), from
       [inversion_mkAppsE] and [inversion_ConstE]. The spine is not empty and shorter than the
       tags ([typing_spine_prim_argsE_inst_nondeg]).
-      INSTANCE NONDEGEN PCUICSREtaInstances.typing_spine_prim_argsE_inst_nondeg *)
+      INSTANCE NOT-BUILT: degenerate, every spine step is reflexive: the spine comes from [inversion_mkAppsE] of [sri_land_1_typed], which is [typeE_App] over [iv_land_typed] and [sri_prim_typed 1] with no conversion, so its cons step is reflexive by construction and [hle] (from [inversion_ConstE]) is reflexive; the target returns, for [i = 0], the input's argument typing [sri_prim_typed 1] with the reflexive equation [int = int], and the second conjunct is a composition of reflexive steps ending in the reflexive nil step at [tImpl int int] (the class of [prim_app_typing_invE_inst]); [land] typed through a conversion (e.g. at [sri_land_ty_beta]) would make [hle] and the domain conversion real; no non-degenerate witness built yet *)
   Lemma typing_spine_prim_argsE_inst :
     (forall i a t, nth_error (map term_of_lit [LInt 1%uint63]) i = Some a -> nth_error [primInt; primInt] i = Some t ->
        ∑ A ty_a, [× PCUICPrimOpType.prim_tag_type po_retro t = Some ty_a,
@@ -1513,7 +1515,7 @@ Section SRInstances.
 
   (** The spine of [land 1 3] typed at [(λT:Set. T) int] ([sri_land_app_typed_beta]), from
       [inversion_mkAppsE] and [inversion_ConstE]: [int ≤ (λT:Set. T) int].
-      INSTANCE NONDEGEN PCUICSREtaInstances.typing_spine_prim_arg_typesE_inst_nondeg *)
+      INSTANCE NOT-BUILT: degenerate, the conclusion is the input's own cumulativity: the spine comes from [inversion_mkAppsE] of [sri_land_app_typed_beta], which is [typeE_Cumul] over [sri_land_app_typed] with [sri_int_beta_cumul]; the cons steps are reflexive by construction and [hle] is reflexive, and at the nil case the target composes them with the spine's last step, which is that outer cumulativity as collected by [inversion_AppE], so the conclusion [sri_int ≤ sri_int_beta] states what [sri_int_beta_cumul] states; [land] typed through a conversion ([sri_land_ty_beta]) would make the target compose a real product cumulativity; no non-degenerate witness built yet *)
   Lemma typing_spine_prim_arg_typesE_inst : Σ_po ;;; [] ⊢E sri_int ≤ sri_int_beta.
   Proof.
     destruct (inversion_mkAppsE (Σ := Σ_po) (wfΣ := iv_po_wfE) sri_land_app_typed_beta) as [A [hA sp]].
