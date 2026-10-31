@@ -8,9 +8,9 @@
 (** * Satisfying instances of the lemmas of [PCUICValidityEta], and the two T2a contracts
 
   **The contracts.** The two fields of the checker's [T2a_facts]
-  ([safechecker/theories/PCUICTypingEtaHyps.v], branch [wip/etak-k7-2026-10-29] @ [0bbee83d]) and
+  ([safechecker/theories/PCUICTypingEtaHyps.v]) and
   the two fields of [SRForecastT2a], the class [PCUICSREta.v] declared before it imported this
-  lemma file (be252347 removed the class; [PCUICSREta.v] now uses [validityE] and
+  lemma file (the class is removed; [PCUICSREta.v] uses [validityE] and
   [inversion_mkAppsE] directly), are copied here and inhabited by [validityE] and
   [inversion_mkAppsE]: [T2a_inversion_mkApps_fit], [T2a_validity_fit], [SR_T2a_validityE_fit],
   [SR_T2a_inversion_mkAppsE_fit]. Each copy is its text with one change: [typing_spineE] is written
@@ -24,9 +24,9 @@
   universe-polymorphic axiom [T@{l0} : Type@{l0}] (universe context [up_univs]). Every instance
   APPLIES its lemma to concrete premises, each proved, using the derivations of
   [PCUICInversionEtaInstances] and [PCUICTypingEtaCopies2Instances]. The six lemmas that needed a
-  forecast class before copy 16 landed (frac/eta 0fb43f10: [validity_envE], [validityE],
-  [inversion_mkAppsE], [type_App'E], [type_mkApps_arityE], [declared_projection_typeE], now copy
-  16's) keep the statement shape of their instance: the premises and the conclusion at concrete
+  forecast class ([validity_envE], [validityE], [inversion_mkAppsE], [type_App'E] and
+  [type_mkApps_arityE] of [PCUICValidityEta], and [PCUICInductivesEta.declared_projection_typeE])
+  keep the statement shape of their instance: the premises and the conclusion at concrete
   arguments, the conclusion now given by the lemma.
   The universe and environment lemmas are applied where they do work: [isType_weaken_fullE] and
   [isType_extendsE] go from [e0_env] to [up_env], an extension
@@ -36,8 +36,8 @@
   ([vi_up_inst_changes_ctx]). [isType_Sort_invE] is tagged IMPOSSIBLE at its instance: every
   derivation of [Γ ⊢E tSort s : T] stores [wf_sort Σ s], and the lemma returns it. Its instance
   runs on [vi_s0_cumul_typed], a typing of [Type@{l0}] built by [typeE_Cumul] over [up_s0_typed].
-  The copy lemmas of copies 10, 12, 14 and 16 that [PCUICValidityEta] proved before those copies
-  landed are gone from it; their instances are in [PCUICTypingEtaCopies2Instances] and
+  The E copies of other base files' lemmas that [PCUICValidityEta] once proved are gone from it;
+  their instances are in [PCUICTypingEtaCopies2Instances] and
   [PCUICTypingEtaCopy16Instances].
   [validity_envE] runs on [c (∀P:Prop. P) : (I A){0 := ∀P:Prop. P}]
   ([PCUICInversionEtaInstances.iv_cF_typed]), whose type the substitution changes
@@ -86,7 +86,7 @@ Section ContractFit.
       := fun Σ wfΣ Γ t T h => validityE (wfΣ := wfΣ) h.
   End Checker.
 
-  (** The two fields of [SRForecastT2a], the class [PCUICSREta.v] declared before be252347. *)
+  (** The two fields of [SRForecastT2a], a former class of [PCUICSREta.v]. *)
   Definition SR_T2a_validityE_fit :
     forall {cf : checker_flags} {Σ : global_env_ext} {wfΣ : wfE Σ} {Γ t T},
     Σ ;;; Γ |-E t : T -> isTypeE Σ Γ T
@@ -257,7 +257,7 @@ Definition wf_local_validityE_inst :=
   wf_local_validityE (Σ := si_Σ) (wfΣ := si_wfE) iv_Γg [vass si_na (tApp (tRel 0) (tRel 1)); vass si_na iv_K]
     iv_wf_Γk.
 
-(** ** The six lemmas of copy 16, applied *)
+(** ** The six lemmas that needed a forecast class, applied *)
 
 (** [validityE] at [c (z → z) : (I A){0 := z → z}] in [iv_Γz = [z := ∀P:Prop. P : Prop]].
     INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_czz_codomain_moves *)

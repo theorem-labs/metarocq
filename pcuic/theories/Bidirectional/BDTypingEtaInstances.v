@@ -55,9 +55,9 @@
     [into_ws_cumul_pbE]), so every instance's conclusion is assembled from its premises. They
     run on the η pair of [checkingE_eta_inst] and stay as the rows of these lemmas;
   - the (co)fixpoint witness bridges, [wf_fixpoint_red_wf_fixpointE_inst],
-    [wf_cofixpoint_red_wf_cofixpointE_inst], and [bd_mfix_on_ind_red_convE_inst] (copy 17's
-    [PCUICFixWitnessEta.mfix_on_ind_red_convE], the typed form [BDTypingEta] stated until
-    cross-lane commitment C4), at a declared type on which the check fails
+    [wf_cofixpoint_red_wf_cofixpointE_inst], and [bd_mfix_on_ind_red_convE_inst]
+    ([PCUICFixWitnessEta.mfix_on_ind_red_convE], the typed form: its premises include [wfE Σ],
+    [wf_localE] and a typing of each declared type), at a declared type on which the check fails
     ([bd_mfix_check_fails], [bd_check_cofix_dtype]) and which reduces to a witness type
     ([bd_wf_fixpoint_red], [bd_wf_cofixpoint_red]). The cofixpoint uses [bd_coenv],
     [si_env] with the block declared [CoFinite]; [bd_cocb] gives its [ClosedBodies]. The
@@ -418,8 +418,8 @@ Proof.
     exact (localenv_cons_abs bd_wfE_Γ1 hdom).
 Qed.
 
-(** [bd_] keeps this name apart from copy 17's own [mfix_on_ind_red_convE_inst]
-    ([PCUICTypingEtaCopy17Instances], at [c17_d]). [check_one_fix] fails on the declared type
+(** [bd_] keeps this name apart from the [mfix_on_ind_red_convE_inst] of
+    [PCUICTypingEtaCopy17Instances] (at [c17_d]). [check_one_fix] fails on the declared type
     of the one definition of [bd_mfix] ([bd_mfix_check_fails]); that declared type reduces to
     [bd_fix_ty] ([bd_fix_dtype_red]).
     INSTANCE NONDEGEN BDTypingEtaInstances.bd_mfix_check_fails
