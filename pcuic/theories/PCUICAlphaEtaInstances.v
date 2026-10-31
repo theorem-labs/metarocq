@@ -27,10 +27,10 @@
   [AlphaClassInstances], whose [Context] held T1's forecast class until copy 18b landed
   (frac/eta 3e6b422d); the class is deleted and no lemma takes one.
 
-  **Non-degeneracy.** Every instance except [cmp_global_instance_empty_eq_inst] and
-  [type_Cumul'E_inst] relates two syntactically different terms, contexts or fixpoints (for
-  [inst_case_predicate_context_eqE_inst], the two contexts of its premise); the tag at each
-  instance names the lemma that states the difference, or the reason. [eq_context_conversionE_inst]
+  **Non-degeneracy.** Every instance except [cmp_global_instance_empty_eq_inst],
+  [type_Cumul'E_inst] and [inst_case_predicate_context_eqE_inst] relates two syntactically
+  different terms, contexts or fixpoints; the tag at each instance names the lemma that states
+  the difference, or the reason. [eq_context_conversionE_inst]
   and [typing_alpha_propE_inst] move the typing [iv_rel_typed] into the renamed context
   ([al_Γk_eta_nondeg] states that its type [k (λ_:Prop. g _)] is not [y]'s declared type [k g] and
   η-contracts to it in one step); they, [isType_eq_context_conversionE_inst] and
@@ -44,10 +44,10 @@
   [eq_context_upto_conv_context_relE_inst] and [upto_names_conv_contextE_inst] relate
   [[_ : Prop → Prop]] and [[x : Π x : Prop. Prop]], whose declared types are themselves different
   α-variants ([al_ΓPP_differs]).
-  [inst_case_predicate_context_eqE_inst] relates the two different constructions
-  [case_predicate_context] and [inst_case_predicate_context] of the predicate [al_mp], whose
-  context is an α-variant of [ind_predicate_context] (the lemma's premise), not the context
-  itself ([al_mp_differs]). *)
+  [inst_case_predicate_context_eqE_inst] is tagged IMPOSSIBLE: the premise lets only the binder
+  names of [pcontext al_mp] and [ind_predicate_context] differ, so [case_predicate_context] and
+  [inst_case_predicate_context] compute to the same context and its conclusion is reflexive in
+  every instance ([al_mp_differs] states a name difference that the conclusion does not see). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -208,7 +208,7 @@ Definition eq_context_upto_conv_context_relE_inst :
     eq_refl eq_refl al_ΓPP_alpha.
 
 (** The predicate context [x : I A] of [al_mp] against the context [I : I A] of the inductive.
-    INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_mp_differs *)
+    INSTANCE IMPOSSIBLE: the conclusion is reflexive in every instance: eq_context_upto_names lets only the binder names differ, so the premise makes the types of ind_predicate_context and pcontext p syntactically equal; case_predicate_context takes pcontext's names and the inductive's types, inst_case_predicate_context takes pcontext's names and types, and both apply the same substitution and instance, so the two sides are the same context *)
 Definition inst_case_predicate_context_eqE_inst :
   eq_context_upto_names (case_predicate_context si_ind si_mdecl si_idecl al_mp) (inst_case_predicate_context al_mp) :=
   inst_case_predicate_context_eqE (Σ := si_Σ) (wfΣ := si_wfE) (ind := si_ind) (mdecl := si_mdecl)
