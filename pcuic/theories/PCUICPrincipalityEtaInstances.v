@@ -16,8 +16,13 @@
   [principal_typeE_sort_r_inst], [principal_typeE_prod_r_inst], [principal_typeE_proj_inst] and
   [principal_typeE_case_inst], are tagged NOT-BUILT: each passes the one derivation it was built
   from to the principal-type function, so its conclusion holds by that input with reflexivity.
-  [common_typingE_eta_inst] and [principal_typeE_eta_inst]: two types of one variable, its
-  declared type and the type it η-contracts to ([pr_eta_types_nondeg]). Inputs chosen for T8
+  [principal_typeE_prod_l_inst], the [Prod_l] instance, is tagged NOT-BUILT too: the derivation
+  [pr_eta_x_typed] it compares with is [typeE_Cumul] over its input with the δ step of [z]
+  forgotten, so an input inhabits its conclusion.
+  [common_typingE_eta_inst]: two types of one variable, its declared type and the type it
+  η-contracts to ([pr_eta_types_nondeg]). [principal_typeE_eta_inst], on the same variable, is
+  tagged NOT-BUILT: [bdf_eta_typed] is [typeE_Cumul] over its input with the η step, so an input
+  inhabits its conclusion. Inputs chosen for T8
   sites, at types that are NOT head forms; each lemma states the type and its one step to a head
   form, and no lemma here states which site a run of the proof reaches: [Sort_r] (a let-in type,
   ζ), [Prod_r] and [Prod_l] (the let-bound variable [z], δ; [Prod_l] on [λP. x P], the
@@ -427,7 +432,7 @@ Qed.
 
 (** The principal type of [x], from its declared typing [x : G (λy:Prop. F y)], is below [G F],
     to which the declared type η-contracts in one step ([pr_eta_types_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_eta_types_nondeg
+    INSTANCE NOT-BUILT: degenerate, an input inhabits the conclusion: bdf_eta_typed is typeE_Cumul over typeE_Rel with ws_cumul_pbE_forget_spec JoinE_ws_cumul_pbE_inst, so (lift0 1 bd_X, JoinE_ws_cumul_pbE_inst, typeE_Rel) proves ∑ C, C ≤ G F × x : C; principal_typeE returns the declared type, and HC inverts bdf_eta_typed back to its own cumulativity; a second typing reached through two conversion steps would make it run; no non-degenerate witness built yet
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_eta_inst :
   ∑ C, si_Σ ;;; bd_Γη ⊢E C ≤ tApp (tRel 2) (tRel 1) × si_Σ ;;; bd_Γη |-E tRel 0 : C.
@@ -482,7 +487,7 @@ Qed.
 
 (** Chosen for T8 [Prod_l]: [λP:Prop. x P] at the type [z], which is not a product and unfolds (δ)
     in one step to the product [∀P:Prop. P] ([pr_z_delta_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.pr_z_delta_nondeg
+    INSTANCE NOT-BUILT: degenerate, an input inhabits the conclusion (the T8 Prod_l class): pr_eta_x_typed is typeE_Cumul over pr_eta_x_False_typed with ws_cumul_pbE_forget_spec pr_False_le_z, the δ step of z forgotten, so (iv_False, pr_False_le_z, pr_eta_x_False_typed) proves ∑ C, C ≤ z × λP. x P : C; a conversion to z containing an expansion, so that the T8 Prod_l site needs confluence, would make it run; no non-degenerate witness built yet
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_prod_l_inst :
   ∑ C, si_Σ ;;; bdf_Γz ⊢E C ≤ tRel 1 × si_Σ ;;; bdf_Γz |-E pr_eta_x : C.
