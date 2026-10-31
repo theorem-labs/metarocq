@@ -26,14 +26,16 @@
   [let y := x in I y] of the scrutinee of [PCUICProgressEtaInstances.pgi_match_let_open], Case
   case, ζ); [closed_red_confluence_cb_inst] (two different one-step reducts);
   [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step on [(λx:Prop. x → x) (∀P. P)], whose body
-  uses its variable); [typing_eq_termE_inst] (two binder names). [typing_leq_termE_inst]
-  ([Prop ≤ Set] in a codomain) is tagged NOT-BUILT: the two sorts it relates compute to the same
-  sort, so its conclusion is its own premise. [T8_Prod_l_plug_inst] and [T8_Prod_l_of_r_inst]
-  (the [Prod_l] site at [z]) are tagged NOT-BUILT too: the cumulativity they are given is the δ
-  step of [z] forgotten, and the reduction they return is that step. The rule-coverage instances apply
-  [principal_typeE] to terms of twelve different head formers and compare the returned principal
-  type with a β-wrapped type that differs from the type of the derivation it was built from
-  ([principal_typeE_rules_nondeg]). *)
+  uses its variable); [typing_leq_termE_inst] ([∀_:y. Set ≤ ∀_:y. Type₁] in [iv_Γ1 = [y : Prop]]:
+  [Set ≤ Type₁] in a codomain, the domain the context variable [y]; [∀_:y. Set] moves from Type₁
+  to Type₂); [typing_eq_termE_inst]
+  ([λx:Prop. g x] under two binder names, in [iv_Γk], [g] a variable of the context).
+  [T8_Prod_l_plug_inst] and [T8_Prod_l_of_r_inst] (the [Prod_l] site at [z]) are tagged
+  NOT-BUILT: the cumulativity they are given is the δ step of [z] forgotten, and the reduction
+  they return is that step. The
+  rule-coverage instances apply [principal_typeE] to terms of twelve different head formers and
+  compare the returned principal type with a β-wrapped type that differs from the type of the
+  derivation it was built from ([principal_typeE_rules_nondeg]). *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
@@ -55,7 +57,7 @@ From Equations.Type Require Import Relation Relation_Properties.
 
 (** Declarations of this file that are neither instances nor non-degeneracy lemmas named by a tag
     (instance gate):
-    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg typing_leq_termE_inst_nondeg *)
+    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg *)
 
 (** ** The environments: [wf_extE] *)
 
@@ -267,34 +269,55 @@ Proof.
            iv_declared_projection pr_r_RF_typed Logic.eq_refl).
 Qed.
 
-(** [∀_:Prop. Set], a type of the sort [pr_sPS]; [∀_:Prop. Prop] is below it up to universes. *)
-Definition pr_PS : term := tProd si_na si_P (tSort Sort.type0).
-Definition pr_sPS : Universes.sort := Sort.sort_of_product (Sort.super sProp) (Sort.super Sort.type0).
+(** In [iv_Γ1 = [y : Prop]]: [∀_:y. Set], of the sort [pr_syS] (Type₁), and [∀_:y. Type₁], of the
+    sort [pr_syT1] (Type₂), with [∀_:y. Set ≤ ∀_:y. Type₁] up to universes ([Set ≤ Type₁] in the
+    codomain). The domain of both is the context variable [y]. (Prop and Set have the same type
+    Type₁, so a codomain [Prop ≤ Set] would leave the type unchanged.) *)
+Definition pr_yS : term := tProd si_na (tRel 0) (tSort Sort.type0).
+Definition pr_yT1 : term := tProd si_na (tRel 0) (tSort (Sort.super Sort.type0)).
+Definition pr_syS : Universes.sort := Sort.sort_of_product sProp (Sort.super Sort.type0).
+Definition pr_syT1 : Universes.sort := Sort.sort_of_product sProp (Sort.super (Sort.super Sort.type0)).
 
-Lemma pr_PS_typed : si_Σ ;;; [] |-E pr_PS : tSort pr_sPS.
+Lemma pr_wf_Γ1y : wf_localE si_Σ (iv_Γ1 ,, vass si_na (tRel 0)).
+Proof. exact (iv_wf_vass si_Σ iv_Γ1 si_na (tRel 0) sProp iv_wf_Γ1 iv_x_typed Logic.eq_refl). Qed.
+
+Lemma pr_yS_typed : si_Σ ;;; iv_Γ1 |-E pr_yS : tSort pr_syS.
 Proof.
-  apply typeE_Prod.
-  - exact (iv_vass_s si_Σ [] si_na si_P _ (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl).
-  - apply typeE_Sort; [exact (iv_wf_P si_Σ [] localenv_nil)|apply/(PCUICWfUniverses.wf_sort_reflect si_Σ); reflexivity].
+  apply typeE_Prod; [exact (iv_vass_s si_Σ iv_Γ1 si_na (tRel 0) sProp iv_x_typed Logic.eq_refl)|].
+  apply typeE_Sort; [exact pr_wf_Γ1y|apply/(PCUICWfUniverses.wf_sort_reflect si_Σ); reflexivity].
 Qed.
 
-Lemma pr_PP_leq_PS : leq_term empty_global_env si_Σ iv_PP pr_PS.
-Proof. constructor; [reflexivity|constructor; reflexivity|constructor; cbn; trivial]. Qed.
+Lemma pr_yT1_typed : si_Σ ;;; iv_Γ1 |-E pr_yT1 : tSort pr_syT1.
+Proof.
+  apply typeE_Prod; [exact (iv_vass_s si_Σ iv_Γ1 si_na (tRel 0) sProp iv_x_typed Logic.eq_refl)|].
+  apply typeE_Sort; [exact pr_wf_Γ1y|apply/(PCUICWfUniverses.wf_sort_reflect si_Σ); reflexivity].
+Qed.
 
-(** [λx:Prop. x] with the binder name [x] instead of the anonymous one. *)
+Lemma pr_yS_leq_yT1 : leq_term empty_global_env si_Σ pr_yS pr_yT1.
+Proof.
+  constructor; [reflexivity|constructor|constructor; cbn].
+  (* [Set ≤ Type₁]: for every valuation, Set has the value 0 and Type₁ the value 1. *)
+  intros v _. cbn. lia.
+Qed.
+
+(** In [iv_Γk = [y : k g; k : (Prop → Prop) → Prop; g : Prop → Prop]]: [λx:Prop. g x] with the
+    binder name [x] instead of the anonymous one of [iv_eta_g]. *)
 Definition pr_nx : aname := mkBindAnn (nNamed "x") Relevant.
-Definition pr_lam' : term := tLambda pr_nx si_P (tRel 0).
+Definition pr_eta_g' : term := tLambda pr_nx si_P (tApp (tRel 3) (tRel 0)).
 
-Lemma pr_lam'_typed : si_Σ ;;; [] |-E pr_lam' : tProd pr_nx si_P si_P.
+Lemma pr_eta_g'_typed : si_Σ ;;; iv_Γk |-E pr_eta_g' : tProd pr_nx si_P si_P.
 Proof.
-  have w := iv_wf_vass si_Σ [] pr_nx si_P _ localenv_nil (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl.
+  have w : wf_localE si_Σ (iv_Γk ,, vass pr_nx si_P) :=
+    iv_wf_vass si_Σ iv_Γk pr_nx si_P _ iv_wf_Γk (iv_P_typed si_Σ iv_Γk iv_wf_Γk) Logic.eq_refl.
   apply typeE_Lambda.
-  - exact (iv_vass si_Σ [] pr_nx si_P _ (iv_P_typed si_Σ [] localenv_nil) Logic.eq_refl).
-  - exact (typeE_Rel _ _ 0 (vass pr_nx si_P) w Logic.eq_refl).
+  - exact (iv_vass si_Σ iv_Γk pr_nx si_P _ (iv_P_typed si_Σ iv_Γk iv_wf_Γk) Logic.eq_refl).
+  - exact (typeE_App _ _ (tRel 3) si_na si_P si_P _ (tRel 0) (iv_PP_typed si_Σ _ w)
+             (typeE_Rel _ _ 3 (vass si_na iv_PP) w Logic.eq_refl)
+             (typeE_Rel _ _ 0 (vass pr_nx si_P) w Logic.eq_refl)).
 Qed.
 
-Lemma pr_id_eq_lam' : eq_term empty_global_env si_Σ iv_id pr_lam'.
-Proof. constructor; [reflexivity|constructor; reflexivity|constructor]. Qed.
+Lemma pr_eta_g_eq : eq_term empty_global_env si_Σ iv_eta_g pr_eta_g'.
+Proof. constructor; [reflexivity|constructor; reflexivity|repeat constructor]. Qed.
 
 (** ** The lemmas of [PCUICPrincipalityEta], at concrete arguments *)
 
@@ -687,31 +710,35 @@ Proof.
            pr_r_RF_typed pr_r_RidF_typed).
 Qed.
 
-(** [∀_:Prop. Prop] and [∀_:Prop. Set] differ (their codomains, [Prop] and [Set]). *)
-Lemma typing_leq_termE_inst_nondeg : iv_PP <> pr_PS.
-Proof. discriminate. Qed.
+(** [∀_:y. Set] and [∀_:y. Type₁] differ (their codomains, [Set] and [Type₁]); [∀_:y. Set] mentions
+    the context variable [y] of [iv_Γ1]; and the sort the instance gives it, Type₂ ([pr_syT1]), is
+    not its own sort Type₁ ([pr_syS], the type in its premise [pr_yS_typed]). *)
+Lemma typing_leq_termE_inst_nondeg :
+  [/\ pr_yS <> pr_yT1, noccur_between 0 1 pr_yS = false & tSort pr_syT1 <> tSort pr_syS].
+Proof. split; [discriminate|reflexivity|intros h; vm_compute in h; discriminate h]. Qed.
 
-(** [typing_leq_termE]: [∀_:Prop. Prop ≤ ∀_:Prop. Set] up to universes ([pr_PP_leq_PS]; the
-    codomain at [Cumul], [Prop ≤ Set]): the term [∀_:Prop. Prop] gets the type of [∀_:Prop. Set];
-    the two terms differ ([typing_leq_termE_inst_nondeg]).
-    INSTANCE NOT-BUILT: degenerate, the conclusion is the instance's own premise: [typing_leq_termE] moves [t' = iv_PP] from its type [tSort iv_sPP] to the type [tSort pr_sPS] of [t = pr_PS], but [pr_sPS = sort_of_product (super sProp) (super type0)] and [iv_sPP = sort_of_product (super sProp) (super sProp)] compute to the same sort ([Sort.super] maps both [sProp] and [type0] to [type1]), so the conclusion [iv_PP : tSort pr_sPS] is the premise [iv_PP_typed] and the move to a different type never runs; a [t] of a larger sort would need the cumulativity; no non-degenerate witness built yet *)
-Lemma typing_leq_termE_inst : si_Σ ;;; [] |-E iv_PP : tSort pr_sPS.
+(** [typing_leq_termE] in [iv_Γ1 = [y : Prop]]: [∀_:y. Set ≤ ∀_:y. Type₁] up to universes
+    ([pr_yS_leq_yT1]; the codomain at [Cumul], [Set ≤ Type₁]): the term [∀_:y. Set], of type Type₁,
+    gets the type Type₂ of [∀_:y. Type₁] ([typing_leq_termE_inst_nondeg]).
+    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_leq_termE_inst_nondeg *)
+Lemma typing_leq_termE_inst : si_Σ ;;; iv_Γ1 |-E pr_yS : tSort pr_syT1.
 Proof.
-  exact (typing_leq_termE si_Σ [] pr_PS iv_PP (tSort pr_sPS) (tSort iv_sPP) si_wfE si_on_udecl
-           pr_PS_typed (iv_PP_typed si_Σ [] localenv_nil) pr_PP_leq_PS).
+  exact (typing_leq_termE si_Σ iv_Γ1 pr_yT1 pr_yS (tSort pr_syT1) _ si_wfE si_on_udecl
+           pr_yT1_typed pr_yS_typed pr_yS_leq_yT1).
 Qed.
 
-(** [λx:Prop. x] with the anonymous binder and with the binder [x] differ. *)
-Lemma typing_eq_termE_inst_nondeg : iv_id <> pr_lam'.
-Proof. discriminate. Qed.
+(** [λx:Prop. g x] with the anonymous binder and with the binder [x] differ, and the body uses
+    [g], the third variable of [iv_Γk]. *)
+Lemma typing_eq_termE_inst_nondeg : iv_eta_g <> pr_eta_g' /\ noccur_between 0 3 pr_eta_g' = false.
+Proof. split; [discriminate|reflexivity]. Qed.
 
-(** [typing_eq_termE]: [λx:Prop. x] with two binder names; the second term gets the type of
-    the first.
+(** [typing_eq_termE] in [iv_Γk]: [λx:Prop. g x] with two binder names; the second term gets the
+    type [iv_PP] of the first ([iv_eta_g_typed]) instead of its own [Π x : Prop. Prop].
     INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_eq_termE_inst_nondeg *)
-Lemma typing_eq_termE_inst : si_Σ ;;; [] |-E pr_lam' : iv_PP.
+Lemma typing_eq_termE_inst : si_Σ ;;; iv_Γk |-E pr_eta_g' : iv_PP.
 Proof.
-  exact (typing_eq_termE si_Σ [] iv_id pr_lam' iv_PP (tProd pr_nx si_P si_P) pr_si_wfext
-           (iv_id_typed si_Σ [] localenv_nil) pr_lam'_typed pr_id_eq_lam').
+  exact (typing_eq_termE si_Σ iv_Γk iv_eta_g pr_eta_g' iv_PP (tProd pr_nx si_P si_P) pr_si_wfext
+           iv_eta_g_typed pr_eta_g'_typed pr_eta_g_eq).
 Qed.
 
 End PrincipalityEtaInstances.

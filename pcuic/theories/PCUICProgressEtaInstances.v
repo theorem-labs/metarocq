@@ -18,8 +18,10 @@
     and to [Prop → Prop] with [Prop ≤ Type₀] in the codomain ([pgi_PP_PT0]); it returns a spine of
     [Prop → Prop]. The three products [Prop → Prop], [∀X:Prop. Type₀] and [∀X:Prop. Type₁] are
     pairwise distinct ([typing_spine_pred_strengthenE_inst_nondeg]).
-  - [inversion_mkAppsE_inst] (the sized inversion) runs on the β-redex [(λx:Prop. x) (∀P. P)],
-    whose spine [[∀P. P]] is not empty.
+  - [inversion_mkAppsE_inst] (the sized inversion) runs on the open β-redex
+    [(λx:Prop. x → x) (y → y)] in [iv_Γ1 = [y : Prop]] ([sri_xx_open_redex]): its head is an
+    abstraction whose body uses its variable, its spine [[y → y]] is not empty and uses the
+    context variable [y] ([pgi_open_redex_nondeg]).
   - [progressE_inst] (through [progress_env_propE] and the induction principle [typing_ind_envE],
     [typing_ind_env_app_sizeE]), [progress_env_propE_inst], [typing_value_head_nappE_inst] and
     [typing_value_headE_inst] run on [(λx:Prop. x → x) (∀P. P)] ([sri_xx_redex]), whose redex body
@@ -895,28 +897,19 @@ Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 Lemma pgi_xx_lam_value : value si_Σ (mkApps sri_xx_lam []).
 Proof. apply value_atomic, atomic_atom. reflexivity. Qed.
 
-(** [(λx:Prop. x) (∀P. P)]: its head [iv_id] is an abstraction and its spine [[∀P. P]] is not
-    empty; it is not a value; it takes a WCBV step to [∀P. P]. *)
-Lemma pgi_beta_redex_nondeg :
-  [× isLambda iv_id, [iv_False] <> [],
-     (PCUICWcbvEval.value si_Σ (tApp iv_id iv_False) -> False)
-   & si_Σ ⊢ tApp iv_id iv_False ⇝ᵥ iv_False].
-Proof.
-  split.
-  - reflexivity.
-  - discriminate.
-  - intros hv.
-    destruct (PCUICWcbvEval.value_mkApps_inv si_Σ iv_id [iv_False] eq_refl hv) as [[e _]|[_ hh _]].
-    + discriminate e.
-    + have h := PCUICWcbvEval.value_head_spec si_Σ _ _ hh. cbn in h. discriminate h.
-  - apply PCUICWcbvEval.wcbv_red_beta. exact pgi_False_value.
-Qed.
+(** [(λx:Prop. x → x) (y → y)] in [iv_Γ1 = [y : Prop]]: its head [sri_xx_lam] is an abstraction
+    whose body [x → x] uses its variable, its spine [[y → y]] is not empty, and the spine uses the
+    context variable [y]. *)
+Lemma pgi_open_redex_nondeg :
+  [/\ isLambda sri_xx_lam, [sri_x_to_x] <> [], noccur_between 0 1 sri_x_to_x = false &
+      noccur_between 0 1 sri_xx_open_redex = false].
+Proof. split; [reflexivity|discriminate|reflexivity|reflexivity]. Qed.
 
-(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_beta_redex_nondeg
+(** INSTANCE NONDEGEN PCUICProgressEtaInstances.pgi_open_redex_nondeg
     TARGET PCUICProgressEta.inversion_mkAppsE *)
 Definition inversion_mkAppsE_inst :=
-  PCUICProgressEta.inversion_mkAppsE (Σ := si_Σ) (wfΣ := si_wfE) (f := iv_id) (u := [iv_False])
-    (Sort.super sProp) (iv_app_typed si_Σ [] localenv_nil) (iv_P_typed si_Σ [] localenv_nil).
+  PCUICProgressEta.inversion_mkAppsE (Σ := si_Σ) (wfΣ := si_wfE) (f := sri_xx_lam) (u := [sri_x_to_x])
+    (Sort.super sProp) sri_xx_open_redex_typed (iv_P_typed si_Σ iv_Γ1 iv_wf_Γ1).
 
 (** The spine of [c] is not empty and reaches the bound: one argument, one assumption. *)
 Lemma typing_spine_lengthE_inst_nondeg :

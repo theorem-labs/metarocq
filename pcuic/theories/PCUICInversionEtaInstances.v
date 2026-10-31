@@ -33,12 +33,20 @@
   [k (λx:Prop. g x)] ([iv_y_decl_kg]), so the lemma's conclusion relates two different types.
   [into_ws_cumulE] is applied to the same pair ([iv_kg_keta_differ]), but its instance is tagged
   NOT-BUILT: its JoinE premise [iv_join_eta] is projected from the [ws_cumul_pbE] it rebuilds.
-  Every other inversion
-  instance types its term [t] at [(λX : s. X) T], from [T : s] and [t : T] ([iv_retype]); its
-  NONDEGEN lemma states that [(λX : s. X) T] is not [T] (for the fixpoint, [land] and the
-  cofixpoint, also that [T] is the declared type). The application of [inversion_AppE] is
-  [c (∀P:Prop. P)], whose codomain [I A] the argument changes ([iv_cF_codomain_moves]). The
-  derivation of the [match] of [inversion_CaseE] follows [cp_match_typed] of
+  The instances of
+  [inversion_SortE], [inversion_IndE], [inversion_ConstructE], [inversion_ConstE] and
+  [inversion_PrimE] type their closed term at a type that reaches its canonical type only through
+  a let of the context: [U := Type₁ : Type₂ ⊢ Prop : U], [Z := Prop : Type₁ ⊢ I : Z → Prop],
+  [J := I : Prop → Prop ⊢ c : Π A : Prop. J A], [N := int : Set ⊢ land : N → int → int] and
+  [N := int : Set ⊢ 1 : N]; each derivation ends in [typeE_Cumul] with the δ-step of the
+  let-bound variable ([cumulE_rel]), and each NONDEGEN lemma states the let and that the type is
+  not the canonical one. The instances of [inversion_AppE] and [inversion_App_sizeE] run on
+  [c (z → z)] in [z := ∀P:Prop. P : Prop], typed at [I ((∀P:Prop. P) → z)]: the argument uses
+  [z], the codomain [I A] moves to [I (z → z)], and the type is one δ-step of [z] away from it
+  ([iv_czz_IFz_nondeg]). Every other inversion instance types its term [t] at [(λX : s. X) T],
+  from [T : s] and [t : T] ([iv_retype]); its NONDEGEN lemma states that [(λX : s. X) T] is not
+  [T] (for the fixpoint and the cofixpoint, also that [T] is the declared type). The derivation
+  of the [match] of [inversion_CaseE] follows [cp_match_typed] of
   [PCUICTypingEtaCopies1Instances] (branch [wip/eta-e3-copies1-2026-10-29], not landed). Each
   instance carries its tag (instance-gate grammar).
 
@@ -188,9 +196,10 @@ End Generic.
 
   [iv_idS s] is [λX : s. X]. From [t : T] and [T : s], [iv_retype] types [t] at [(λX : s. X) T];
   its proof ends in [typeE_Cumul] with [cumulE_beta]. Which steps an inversion lemma takes on such
-  a derivation is not stated here; each NONDEGEN lemma below states that [(λX : s. X) T] is not
-  [T], and three of them ([iv_fix_conv_differs], [iv_land_conv_differs], [iv_RF_conv_differs])
-  also state that [T] is the declared type of the term. *)
+  a derivation is not stated here; each NONDEGEN lemma of an instance that uses it states that
+  [(λX : s. X) T] is not [T], and two of them ([iv_fix_conv_differs], [iv_RF_conv_differs]) also
+  state that [T] is the declared type of the term. The rule-coverage instances of
+  [PCUICPrincipalityEtaInstances] also use the retyped derivations below. *)
 
 Definition iv_idS (s : sort) : term := tLambda si_na (tSort s) (tRel 0).
 
@@ -357,20 +366,53 @@ Proof.
   exact (PCUICWfUniversesEta.typing_wf_sortE (Σ := si_Σ) si_wfE (iv_P_typed si_Σ [] localenv_nil)).
 Qed.
 
-(** The type [(λX : Type₂. X) Type₁] is not [Type₁]. *)
-Lemma iv_Type1_conv_differs :
-  tApp (iv_idS (Sort.super (Sort.super sProp))) (tSort (Sort.super sProp)) <> tSort (Sort.super sProp).
-Proof. discriminate. Qed.
+(** **** A sort typed at a let-bound variable of the context
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_Type1_conv_differs *)
-Lemma inversion_SortE_inst :
-  wf_localE si_Σ [] × wf_sort si_Σ sProp ×
-    si_Σ ;;; [] ⊢E tSort (Sort.super sProp)
-      ≤ tApp (iv_idS (Sort.super (Sort.super sProp))) (tSort (Sort.super sProp)).
+  [U := Type₁ : Type₂ ⊢ Prop : U]: the derivation ends in [typeE_Cumul] whose conversion
+  [Type₁ ≤ U] is the δ-step of [U] ([cumulE_rel]); the conclusion of the inversion relates
+  [Type₁] with the context variable [U]. *)
+
+Definition iv_sT1 : sort := Sort.super sProp.
+Definition iv_sT2 : sort := Sort.super iv_sT1.
+
+Lemma iv_T1_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E tSort iv_sT1 : tSort iv_sT2.
 Proof.
-  exact (inversion_SortE si_Σ si_wfE
-           (T := tApp (iv_idS (Sort.super (Sort.super sProp))) (tSort (Sort.super sProp))) iv_P_typed_conv).
+  intros h. apply typeE_Sort; [exact h|].
+  exact (PCUICWfUniversesEta.typing_wf_sortE (Σ := si_Σ) si_wfE (iv_P_typed si_Σ [] localenv_nil)).
 Qed.
+
+Lemma iv_T2_typed (Γ : context) : wf_localE si_Σ Γ -> si_Σ ;;; Γ |-E tSort iv_sT2 : tSort (Sort.super iv_sT2).
+Proof.
+  intros h. apply typeE_Sort; [exact h|].
+  exact (PCUICWfUniversesEta.typing_wf_sortE (Σ := si_Σ) si_wfE (iv_T1_typed [] localenv_nil)).
+Qed.
+
+Definition iv_ΓU : context := [vdef si_na (tSort iv_sT1) (tSort iv_sT2)].
+
+Lemma iv_wf_ΓU : wf_localE si_Σ iv_ΓU.
+Proof.
+  apply localenv_cons_def; [constructor|].
+  exact (iv_vdef si_Σ [] si_na _ _ _ (iv_T1_typed [] localenv_nil) (iv_T2_typed [] localenv_nil) eq_refl).
+Qed.
+
+Lemma iv_P_typed_U : si_Σ ;;; iv_ΓU |-E si_P : tRel 0.
+Proof.
+  refine (typeE_Cumul _ _ si_P (tSort iv_sT1) (tRel 0) iv_sT2 (iv_P_typed si_Σ iv_ΓU iv_wf_ΓU) _ _).
+  - exact (typeE_Rel _ _ 0 (vdef si_na (tSort iv_sT1) (tSort iv_sT2)) iv_wf_ΓU eq_refl).
+  - apply cumulE_Sym. exact (cumulE_rel si_Σ iv_ΓU Conv 0 (tSort iv_sT1) eq_refl).
+Qed.
+
+(** The type [U] of [Prop] is the variable of [iv_ΓU], let-bound to [Type₁], and is not [Type₁]
+    itself: the inversion relates [Type₁] with [U] only through the let of the context. *)
+Lemma iv_U_delta_nondeg :
+  nth_error iv_ΓU 0 = Some (vdef si_na (tSort (Sort.super sProp)) (tSort iv_sT2)) /\
+  tRel 0 <> tSort (Sort.super sProp).
+Proof. split; [reflexivity|discriminate]. Qed.
+
+(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_U_delta_nondeg *)
+Lemma inversion_SortE_inst :
+  wf_localE si_Σ iv_ΓU × wf_sort si_Σ sProp × si_Σ ;;; iv_ΓU ⊢E tSort (Sort.super sProp) ≤ tRel 0.
+Proof. exact (inversion_SortE si_Σ si_wfE (Γ := iv_ΓU) (T := tRel 0) iv_P_typed_U). Qed.
 
 (** [∀P:Prop. P : (λX : Type₁. X) Prop]. *)
 Lemma iv_False_typed_conv : si_Σ ;;; [] |-E iv_False : tApp (iv_idS (Sort.super sProp)) si_P.
@@ -500,16 +542,49 @@ Proof.
            (iv_ind_typed [] localenv_nil)).
 Qed.
 
-(** The type [(λX : s. X) (Prop → Prop)] differs from the arity [Prop → Prop] of [I]. *)
-Lemma iv_arity_conv_differs : tApp (iv_idS iv_sPP) si_arity <> si_arity.
-Proof. discriminate. Qed.
+(** **** An inductive type typed through a let-bound variable of the context
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_arity_conv_differs *)
+  [Z := Prop : Type₁ ⊢ I : Z → Prop]: the conversion [Prop → Prop ≤ Z → Prop] is the δ-step of
+  [Z] in the domain. *)
+
+Definition iv_ΓZ : context := [vdef si_na si_P (tSort iv_sT1)].
+
+Lemma iv_wf_ΓZ : wf_localE si_Σ iv_ΓZ.
+Proof.
+  apply localenv_cons_def; [constructor|].
+  exact (iv_vdef si_Σ [] si_na _ _ _ (iv_P_typed si_Σ [] localenv_nil) (iv_T1_typed [] localenv_nil) eq_refl).
+Qed.
+
+Definition iv_ZP : term := tProd si_na (tRel 0) si_P.
+
+Lemma iv_ZP_typed : si_Σ ;;; iv_ΓZ |-E iv_ZP : tSort (Sort.sort_of_product iv_sT1 iv_sT1).
+Proof.
+  have hZ : si_Σ ;;; iv_ΓZ |-E tRel 0 : tSort iv_sT1 :=
+    typeE_Rel _ _ 0 (vdef si_na si_P (tSort iv_sT1)) iv_wf_ΓZ eq_refl.
+  apply typeE_Prod.
+  - exact (iv_vass_s si_Σ iv_ΓZ si_na (tRel 0) _ hZ eq_refl).
+  - exact (iv_P_typed si_Σ _ (iv_wf_vass si_Σ iv_ΓZ si_na (tRel 0) _ iv_wf_ΓZ hZ eq_refl)).
+Qed.
+
+Lemma iv_ind_typed_Z : si_Σ ;;; iv_ΓZ |-E tInd si_ind [] : iv_ZP.
+Proof.
+  refine (typeE_Cumul _ _ _ si_arity iv_ZP _ (iv_ind_typed iv_ΓZ iv_wf_ΓZ) iv_ZP_typed _).
+  unfold iv_ZP, si_arity. apply cumulE_Prod; [reflexivity| |apply cumulE_Refl].
+  apply cumulE_Sym. exact (cumulE_rel si_Σ iv_ΓZ Conv 0 si_P eq_refl).
+Qed.
+
+(** The domain of the type [Z → Prop] of [I] is the variable of [iv_ΓZ], let-bound to [Prop], and
+    [Z → Prop] is not the arity [Prop → Prop] of [I]. *)
+Lemma iv_Z_delta_nondeg :
+  nth_error iv_ΓZ 0 = Some (vdef si_na si_P (tSort iv_sT1)) /\ iv_ZP <> si_arity.
+Proof. split; [reflexivity|discriminate]. Qed.
+
+(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_Z_delta_nondeg *)
 Lemma inversion_IndE_inst :
-  ∑ mdecl idecl, wf_localE si_Σ [] × declared_inductive si_Σ si_ind mdecl idecl ×
+  ∑ mdecl idecl, wf_localE si_Σ iv_ΓZ × declared_inductive si_Σ si_ind mdecl idecl ×
     consistent_instance_ext si_Σ (ind_universes mdecl) [] ×
-    si_Σ ;;; [] ⊢E subst_instance [] idecl.(ind_type) ≤ tApp (iv_idS iv_sPP) si_arity.
-Proof. exact (inversion_IndE si_Σ si_wfE (T := tApp (iv_idS iv_sPP) si_arity) iv_ind_typed_conv). Qed.
+    si_Σ ;;; iv_ΓZ ⊢E subst_instance [] idecl.(ind_type) ≤ iv_ZP.
+Proof. exact (inversion_IndE si_Σ si_wfE (T := iv_ZP) iv_ind_typed_Z). Qed.
 
 (** [c : (λX : Prop. X) (Π A : Prop. I A)]. *)
 Lemma iv_cstr_typed_conv :
@@ -521,24 +596,53 @@ Proof.
            (iv_cstr_typed [] localenv_nil)).
 Qed.
 
-(** The type [(λX : Prop. X) (Π A : Prop. I A)] differs from the constructor type [Π A : Prop. I A]. *)
-Lemma iv_cstr_conv_differs :
-  tApp (iv_idS (Sort.sort_of_product (Sort.super sProp) sProp)) (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0)))
-    <> tProd si_na si_P (tApp (tInd si_ind []) (tRel 0)).
-Proof. discriminate. Qed.
+(** **** A constructor typed through a let-bound variable of the context
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_cstr_conv_differs *)
-Lemma inversion_ConstructE_inst :
-  ∑ mdecl idecl cdecl, wf_localE si_Σ [] × declared_constructor si_Σ.1 (si_ind, 0) mdecl idecl cdecl ×
-    consistent_instance_ext si_Σ (ind_universes mdecl) [] ×
-    si_Σ ;;; [] ⊢E type_of_constructor mdecl cdecl (si_ind, 0) [] ≤
-      tApp (iv_idS (Sort.sort_of_product (Sort.super sProp) sProp)) (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))).
+  [J := I : Prop → Prop ⊢ c : Π A : Prop. J A]: the conversion [Π A. I A ≤ Π A. J A] is the
+  δ-step of [J] in the head of the codomain. *)
+
+Definition iv_ΓJ : context := [vdef si_na (tInd si_ind []) si_arity].
+
+Lemma iv_wf_ΓJ : wf_localE si_Σ iv_ΓJ.
 Proof.
-  exact (inversion_ConstructE si_Σ si_wfE
-           (T := tApp (iv_idS (Sort.sort_of_product (Sort.super sProp) sProp))
-                   (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))))
-           iv_cstr_typed_conv).
+  apply localenv_cons_def; [constructor|].
+  exact (iv_vdef si_Σ [] si_na _ _ _ (iv_ind_typed [] localenv_nil) (iv_PP_typed si_Σ [] localenv_nil) eq_refl).
 Qed.
+
+Definition iv_PiJ : term := tProd si_na si_P (tApp (tRel 1) (tRel 0)).
+
+Lemma iv_PiJ_typed : si_Σ ;;; iv_ΓJ |-E iv_PiJ : tSort (Sort.sort_of_product iv_sT1 sProp).
+Proof.
+  have w := iv_wf_P si_Σ iv_ΓJ iv_wf_ΓJ.
+  apply typeE_Prod.
+  - exact (iv_vass_s si_Σ iv_ΓJ si_na si_P _ (iv_P_typed si_Σ iv_ΓJ iv_wf_ΓJ) eq_refl).
+  - exact (typeE_App _ _ (tRel 1) si_na si_P si_P _ (tRel 0) (iv_PP_typed si_Σ _ w)
+             (typeE_Rel _ _ 1 (vdef si_na (tInd si_ind []) si_arity) w eq_refl)
+             (typeE_Rel _ _ 0 (vass si_na si_P) w eq_refl)).
+Qed.
+
+Lemma iv_cstr_typed_J : si_Σ ;;; iv_ΓJ |-E tConstruct si_ind 0 [] : iv_PiJ.
+Proof.
+  refine (typeE_Cumul _ _ _ (tProd si_na si_P (tApp (tInd si_ind []) (tRel 0))) iv_PiJ _
+            (iv_cstr_typed iv_ΓJ iv_wf_ΓJ) iv_PiJ_typed _).
+  unfold iv_PiJ. apply cumulE_Prod; [reflexivity|apply cumulE_Refl|].
+  apply cumulE_App; [|apply cumulE_Refl].
+  apply cumulE_Sym. exact (cumulE_rel si_Σ (iv_ΓJ ,, vass si_na si_P) Conv 1 (tInd si_ind []) eq_refl).
+Qed.
+
+(** The head of the codomain of [Π A : Prop. J A] is the variable of [iv_ΓJ], let-bound to [I],
+    and [Π A : Prop. J A] is not the constructor type [Π A : Prop. I A]. *)
+Lemma iv_J_delta_nondeg :
+  nth_error iv_ΓJ 0 = Some (vdef si_na (tInd si_ind []) si_arity) /\
+  iv_PiJ <> tProd si_na si_P (tApp (tInd si_ind []) (tRel 0)).
+Proof. split; [reflexivity|discriminate]. Qed.
+
+(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_J_delta_nondeg *)
+Lemma inversion_ConstructE_inst :
+  ∑ mdecl idecl cdecl, wf_localE si_Σ iv_ΓJ × declared_constructor si_Σ.1 (si_ind, 0) mdecl idecl cdecl ×
+    consistent_instance_ext si_Σ (ind_universes mdecl) [] ×
+    si_Σ ;;; iv_ΓJ ⊢E type_of_constructor mdecl cdecl (si_ind, 0) [] ≤ iv_PiJ.
+Proof. exact (inversion_ConstructE si_Σ si_wfE (T := iv_PiJ) iv_cstr_typed_J). Qed.
 
 (** *** A [match]
 
@@ -760,25 +864,76 @@ Qed.
 Lemma iv_cF_codomain_moves : (iv_Ix 0) {0 := iv_False} <> iv_Ix 0.
 Proof. discriminate. Qed.
 
-(** [c (∀P:Prop. P) : (λX : Prop. X) (I (∀P:Prop. P))]. *)
-Lemma iv_cF_typed_conv : si_Σ ;;; [] |-E iv_cF : tApp (iv_idS sProp) iv_IF.
+(** **** The application [c (z → z)] in the context [z := ∀P:Prop. P : Prop]
+
+  The argument [z → z] uses the let [z] of [iv_Γz]; the application has the type
+  [(I A){0 := z → z}] = [I (z → z)], and it is typed at [I ((∀P:Prop. P) → z)] by [typeE_Cumul],
+  whose conversion is the δ-step of the first [z] ([iv_spec_zz]). *)
+
+Definition iv_Γz : context := [vdef si_na iv_False si_P].
+
+Lemma iv_wf_Γz : wf_localE si_Σ iv_Γz.
+Proof. exact (iv_wf_vdef si_Σ [] localenv_nil). Qed.
+
+Definition iv_zz : term := tProd si_na (tRel 0) (tRel 1).
+Definition iv_czz : term := tApp (tConstruct si_ind 0 []) iv_zz.
+Definition iv_IFz : term := tApp (tInd si_ind []) (tProd si_na iv_False (tRel 1)).
+
+Lemma iv_zz_typed : si_Σ ;;; iv_Γz |-E iv_zz : si_P.
 Proof.
-  exact (iv_retype si_Σ si_wfE [] iv_cF iv_IF sProp (iv_IF_typed [] localenv_nil) (iv_cF_typed [] localenv_nil)).
+  have hz : si_Σ ;;; iv_Γz |-E tRel 0 : si_P := typeE_Rel _ _ 0 (vdef si_na iv_False si_P) iv_wf_Γz eq_refl.
+  have w := iv_wf_vass si_Σ iv_Γz si_na (tRel 0) sProp iv_wf_Γz hz eq_refl.
+  exact (typeE_Prod _ _ si_na (tRel 0) (tRel 1) sProp sProp (iv_vass_s si_Σ iv_Γz si_na (tRel 0) sProp hz eq_refl)
+           (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) w eq_refl)).
 Qed.
 
-(** The type [(λX : Prop. X) (I (∀P:Prop. P))] is not [I (∀P:Prop. P)]. *)
-Lemma iv_IF_conv_differs : tApp (iv_idS sProp) iv_IF <> iv_IF.
-Proof. discriminate. Qed.
+Lemma iv_czz_typed : si_Σ ;;; iv_Γz |-E iv_czz : (iv_Ix 0) {0 := iv_zz}.
+Proof.
+  exact (typeE_App _ _ (tConstruct si_ind 0 []) si_na si_P (iv_Ix 0) _ iv_zz (iv_cstr_prod_typed iv_Γz iv_wf_Γz)
+           (iv_cstr_typed iv_Γz iv_wf_Γz) iv_zz_typed).
+Qed.
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_IF_conv_differs *)
+Lemma iv_IFz_typed : si_Σ ;;; iv_Γz |-E iv_IFz : si_P.
+Proof.
+  have hF := iv_False_typed si_Σ iv_Γz iv_wf_Γz.
+  have w := iv_wf_vass si_Σ iv_Γz si_na iv_False sProp iv_wf_Γz hF eq_refl.
+  exact (iv_IX_typed iv_Γz _ iv_wf_Γz
+           (typeE_Prod _ _ si_na iv_False (tRel 1) sProp sProp (iv_vass_s si_Σ iv_Γz si_na iv_False sProp hF eq_refl)
+              (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) w eq_refl))).
+Qed.
+
+(** [I (z → z) ≤ I ((∀P:Prop. P) → z)]: congruence, and the δ-step of [z] in the domain. *)
+Lemma iv_spec_zz : cumulSpecE si_Σ iv_Γz (tApp (tInd si_ind []) iv_zz) iv_IFz.
+Proof.
+  unfold cumulSpecE, iv_zz, iv_IFz. apply cumulE_App; [apply cumulE_Refl|].
+  apply cumulE_Prod; [reflexivity| |apply cumulE_Refl].
+  exact (cumulE_rel si_Σ iv_Γz Conv 0 iv_False eq_refl).
+Qed.
+
+Lemma iv_czz_typed_IFz : si_Σ ;;; iv_Γz |-E iv_czz : iv_IFz.
+Proof. exact (typeE_Cumul _ _ iv_czz _ iv_IFz sProp iv_czz_typed iv_IFz_typed iv_spec_zz). Qed.
+
+(** The substitution changes the codomain ([I A] becomes [I (z → z)]), and the argument [z → z]
+    uses the variable of the context. *)
+Lemma iv_czz_codomain_moves : (iv_Ix 0) {0 := iv_zz} <> iv_Ix 0 /\ noccur_between 0 1 iv_zz = false.
+Proof. split; [discriminate|reflexivity]. Qed.
+
+(** The codomain moves, the argument uses [z], [z] is let-bound to [∀P:Prop. P] in [iv_Γz], and
+    the type [I ((∀P:Prop. P) → z)] the application is typed at is not [I (z → z)]. *)
+Lemma iv_czz_IFz_nondeg :
+  [/\ (iv_Ix 0) {0 := iv_zz} <> iv_Ix 0, noccur_between 0 1 iv_zz = false,
+      nth_error iv_Γz 0 = Some (vdef si_na iv_False si_P) & iv_IFz <> (iv_Ix 0) {0 := iv_zz}].
+Proof. split; [discriminate|reflexivity|reflexivity|discriminate]. Qed.
+
+(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_czz_IFz_nondeg *)
 Lemma inversion_AppE_inst :
-  ∑ na A B, si_Σ ;;; [] |-E tConstruct si_ind 0 [] : tProd na A B × si_Σ ;;; [] |-E iv_False : A ×
-    si_Σ ;;; [] ⊢E B{0 := iv_False} ≤ tApp (iv_idS sProp) iv_IF.
-Proof. exact (inversion_AppE si_Σ si_wfE (T := tApp (iv_idS sProp) iv_IF) iv_cF_typed_conv). Qed.
+  ∑ na A B, si_Σ ;;; iv_Γz |-E tConstruct si_ind 0 [] : tProd na A B × si_Σ ;;; iv_Γz |-E iv_zz : A ×
+    si_Σ ;;; iv_Γz ⊢E B{0 := iv_zz} ≤ iv_IFz.
+Proof. exact (inversion_AppE si_Σ si_wfE (T := iv_IFz) iv_czz_typed_IFz). Qed.
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_IF_conv_differs *)
+(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_czz_IFz_nondeg *)
 Definition inversion_App_sizeE_inst :=
-  inversion_App_sizeE si_Σ si_wfE (T := tApp (iv_idS sProp) iv_IF) iv_cF_typed_conv.
+  inversion_App_sizeE si_Σ si_wfE (T := iv_IFz) iv_czz_typed_IFz.
 
 (** ** Instances in [Σ_po]: a constant and a primitive integer *)
 
@@ -845,26 +1000,58 @@ Lemma iv_land_typed_conv :
     : tApp (iv_idS (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0))) po_land_ty.
 Proof. exact (iv_retype Σ_po iv_po_wfE [] (tConst po_land_kn []) po_land_ty _ iv_land_ty_typed iv_land_typed). Qed.
 
-(** [land] is declared in [Σ_po] with the type [po_land_ty], [int → int → int], and the type
-    [(λX : Set. X) (int → int → int)] differs from it. *)
-Lemma iv_land_conv_differs :
-  declared_constant Σ_po po_land_kn po_land_body /\ cst_type po_land_body = po_land_ty /\
-  tApp (iv_idS (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0))) po_land_ty
-    <> po_land_ty.
-Proof. split; [exact Σ_po_declared_land|split; [reflexivity|discriminate]]. Qed.
+(** **** [land] and the literal [1] typed through a let-bound variable of the context
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_land_conv_differs *)
-Lemma inversion_ConstE_inst :
-  ∑ decl, wf_localE Σ_po [] × declared_constant Σ_po po_land_kn decl ×
-    consistent_instance_ext Σ_po (cst_universes decl) [] ×
-    Σ_po ;;; [] ⊢E subst_instance [] (cst_type decl)
-      ≤ tApp (iv_idS (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0))) po_land_ty.
+  [N := int : Set ⊢ land : N → int → int] and [N := int : Set ⊢ 1 : N]: each derivation ends in
+  [typeE_Cumul], whose conversion is the δ-step of [N] (in the first domain for [land]). *)
+
+Definition iv_ΓN : context := [vdef si_na (tConst po_int_kn []) (tSort Sort.type0)].
+
+Lemma iv_wf_ΓN : wf_localE Σ_po iv_ΓN.
 Proof.
-  exact (inversion_ConstE Σ_po iv_po_wfE
-           (T := tApp (iv_idS (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)))
-                   po_land_ty)
-           iv_land_typed_conv).
+  apply localenv_cons_def; [constructor|].
+  refine (iv_vdef Σ_po [] si_na _ _ (Sort.super Sort.type0) (iv_int_typed [] localenv_nil) _ eq_refl).
+  apply typeE_Sort; [constructor|].
+  exact (PCUICWfUniversesEta.typing_wf_sortE (Σ := Σ_po) iv_po_wfE (iv_int_typed [] localenv_nil)).
 Qed.
+
+Definition iv_iA : aname := mkBindAnn nAnon rel_of_Type.
+Definition iv_NT : term := tProd iv_iA (tRel 0) (tImpl (tConst po_int_kn []) (tConst po_int_kn [])).
+
+Lemma iv_NT_typed :
+  Σ_po ;;; iv_ΓN |-E iv_NT : tSort (Sort.sort_of_product Sort.type0 (Sort.sort_of_product Sort.type0 Sort.type0)).
+Proof.
+  have hN : Σ_po ;;; iv_ΓN |-E tRel 0 : tSort Sort.type0 :=
+    typeE_Rel _ _ 0 (vdef si_na (tConst po_int_kn []) (tSort Sort.type0)) iv_wf_ΓN eq_refl.
+  have w1 := iv_wf_vass Σ_po iv_ΓN iv_iA (tRel 0) Sort.type0 iv_wf_ΓN hN eq_refl.
+  have w2 := iv_wf_vass Σ_po _ iv_iA (tConst po_int_kn []) Sort.type0 w1 (iv_int_typed _ w1) eq_refl.
+  unfold iv_NT, tImpl. apply typeE_Prod; [exact (iv_vass_s Σ_po iv_ΓN iv_iA (tRel 0) Sort.type0 hN eq_refl)|].
+  apply typeE_Prod; [exact (iv_vass_s Σ_po _ iv_iA (tConst po_int_kn []) Sort.type0 (iv_int_typed _ w1) eq_refl)|].
+  exact (iv_int_typed _ w2).
+Qed.
+
+Lemma iv_land_typed_N : Σ_po ;;; iv_ΓN |-E tConst po_land_kn [] : iv_NT.
+Proof.
+  refine (typeE_Cumul _ _ _ po_land_ty iv_NT _
+            (typeE_Const _ _ po_land_kn [] po_land_body iv_wf_ΓN Σ_po_declared_land eq_refl) iv_NT_typed _).
+  unfold po_land_ty, iv_NT, tImpl. apply cumulE_Prod; [reflexivity| |apply cumulE_Refl].
+  apply cumulE_Sym. exact (cumulE_rel Σ_po iv_ΓN Conv 0 (tConst po_int_kn []) eq_refl).
+Qed.
+
+(** [land] is declared in [Σ_po] with the type [po_land_ty], [int → int → int]; the first domain
+    of [N → int → int] is the variable of [iv_ΓN], let-bound to [int], and [N → int → int] is not
+    [po_land_ty]. *)
+Lemma iv_N_land_nondeg :
+  nth_error iv_ΓN 0 = Some (vdef si_na (tConst po_int_kn []) (tSort Sort.type0)) /\
+  declared_constant Σ_po po_land_kn po_land_body /\ cst_type po_land_body = po_land_ty /\ iv_NT <> po_land_ty.
+Proof. split; [reflexivity|split; [exact Σ_po_declared_land|split; [reflexivity|discriminate]]]. Qed.
+
+(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_N_land_nondeg *)
+Lemma inversion_ConstE_inst :
+  ∑ decl, wf_localE Σ_po iv_ΓN × declared_constant Σ_po po_land_kn decl ×
+    consistent_instance_ext Σ_po (cst_universes decl) [] ×
+    Σ_po ;;; iv_ΓN ⊢E subst_instance [] (cst_type decl) ≤ iv_NT.
+Proof. exact (inversion_ConstE Σ_po iv_po_wfE (T := iv_NT) iv_land_typed_N). Qed.
 
 (** The literal [1] of the primitive integers. *)
 Definition iv_one : PCUICAst.prim_val := prim_int 1%uint63.
@@ -885,23 +1072,32 @@ Proof.
            (iv_int_typed [] localenv_nil) iv_prim_typed).
 Qed.
 
-(** The type [(λX : Set. X) int] differs from the primitive type [int]. *)
-Lemma iv_int_conv_differs : tApp (iv_idS Sort.type0) (prim_type iv_one po_int_kn) <> prim_type iv_one po_int_kn.
-Proof. discriminate. Qed.
+Lemma iv_prim_typed_N : Σ_po ;;; iv_ΓN |-E tPrim iv_one : tRel 0.
+Proof.
+  refine (typeE_Cumul _ _ _ (prim_type iv_one po_int_kn) (tRel 0) Sort.type0 _
+            (typeE_Rel _ _ 0 (vdef si_na (tConst po_int_kn []) (tSort Sort.type0)) iv_wf_ΓN eq_refl) _).
+  - refine (typeE_Prim Σ_po iv_ΓN iv_one po_int_kn po_int_body iv_wf_ΓN eq_refl iv_po_declared_int _ _);
+      [split; reflexivity|constructor].
+  - apply cumulE_Sym. exact (cumulE_rel Σ_po iv_ΓN Conv 0 (tConst po_int_kn []) eq_refl).
+Qed.
 
-(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_int_conv_differs *)
+(** The type [N] of [1] is the variable of [iv_ΓN], let-bound to [int], and is not the primitive
+    type [int] itself. *)
+Lemma iv_N_prim_nondeg :
+  nth_error iv_ΓN 0 = Some (vdef si_na (tConst po_int_kn []) (tSort Sort.type0)) /\
+  tRel 0 <> prim_type iv_one po_int_kn.
+Proof. split; [reflexivity|discriminate]. Qed.
+
+(* INSTANCE NONDEGEN PCUICInversionEtaInstances.iv_N_prim_nondeg *)
 Lemma inversion_PrimE_inst :
   ∑ prim_ty cdecl,
-    [× wf_localE Σ_po [],
+    [× wf_localE Σ_po iv_ΓN,
       primitive_constant Σ_po (prim_val_tag iv_one) = Some prim_ty,
       declared_constant Σ_po prim_ty cdecl,
       primitive_invariants (prim_val_tag iv_one) cdecl,
-      primitive_typing_hyps (typingE Σ_po) Σ_po [] iv_one &
-      Σ_po ;;; [] ⊢E prim_type iv_one prim_ty ≤ tApp (iv_idS Sort.type0) (prim_type iv_one po_int_kn)].
-Proof.
-  exact (inversion_PrimE Σ_po iv_po_wfE (T := tApp (iv_idS Sort.type0) (prim_type iv_one po_int_kn))
-           iv_prim_typed_conv).
-Qed.
+      primitive_typing_hyps (typingE Σ_po) Σ_po iv_ΓN iv_one &
+      Σ_po ;;; iv_ΓN ⊢E prim_type iv_one prim_ty ≤ tRel 0].
+Proof. exact (inversion_PrimE Σ_po iv_po_wfE (Γ := iv_ΓN) (T := tRel 0) iv_prim_typed_N). Qed.
 
 (** ** The environment [iv_env]: [CoInductive R (A : Prop) : Prop := mkR { f : A }] *)
 
