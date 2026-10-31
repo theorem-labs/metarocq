@@ -10,10 +10,11 @@
   (frac/eta 3e6b422d), is deleted.
   Non-degeneracy: each instance is tagged for the instance gate in the comment directly above it
   (its non-degeneracy lemma, or the reason its row is degenerate by the statement;
-  [isWfArity_sortE_inst] and [invert_red_sort_cb_inst] are tagged IMPOSSIBLE). The [Sort_r] and
-  [Prod_r] instances below, [principal_typeE_sort_r_inst] and [principal_typeE_prod_r_inst], are
-  tagged NOT-BUILT: each passes the one derivation it was built from to the principal-type
-  function, so its conclusion holds by that input with reflexivity.
+  [isWfArity_sortE_inst] and [invert_red_sort_cb_inst] are tagged IMPOSSIBLE). The [Sort_r],
+  [Prod_r], [Ind_r] Proj case and [Ind_r] Case case instances below,
+  [principal_typeE_sort_r_inst], [principal_typeE_prod_r_inst], [principal_typeE_proj_inst] and
+  [principal_typeE_case_inst], are tagged NOT-BUILT: each passes the one derivation it was built
+  from to the principal-type function, so its conclusion holds by that input with reflexivity.
   [common_typingE_eta_inst] and [principal_typeE_eta_inst]: two types of one variable, its
   declared type and the type it η-contracts to ([pr_eta_types_nondeg]). Inputs chosen for T8
   sites, at types that are NOT head forms; each lemma states the type and its one step to a head
@@ -50,7 +51,7 @@ From Equations.Type Require Import Relation Relation_Properties.
 
 (** Declarations of this file that are neither instances nor non-degeneracy lemmas named by a tag
     (instance gate):
-    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg *)
+    WITNESSES: pr_* principal_typeE_sort_r_inst_nondeg principal_typeE_proj_inst_nondeg principal_typeE_case_inst_nondeg *)
 
 (** ** The environments: [wf_extE] *)
 
@@ -438,7 +439,7 @@ Qed.
 (** Chosen for T8 [Ind_r], Proj case: the projection [f r], where [r] is declared at the β-redex
     [(λB:Prop. R B) (∀P. P)] ([bdf_RFβ]), whose head is an abstraction, not an inductive, and
     which β-reduces to [R (∀P. P)] in one step ([principal_typeE_proj_inst_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_proj_inst_nondeg
+    INSTANCE NOT-BUILT: degenerate, the same derivation passed twice: the proof applies the function [HC] that [principal_typeE] returns for [pr_proj_typed] to [pr_proj_typed] itself, so the conclusion [∑ C, C ≤ A × u : C] is inhabited by the input's own type [A] with reflexivity and the input; non-degenerate instances exist ([HC] on a second, β-wrapped retyping, as the rule-coverage rows do); no non-degenerate witness built yet
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_proj_inst :
   ∑ C, iv_Σ ;;; pr_Γr ⊢E C ≤ iv_False × iv_Σ ;;; pr_Γr |-E tProj iv_proj (tRel 0) : C.
@@ -472,7 +473,7 @@ Qed.
     with the scrutinee [let y := x in c y]); the scrutinee has the type [let y := x in I y], which
     is not an applied inductive and ζ-reduces to [I x] in one step, and every type inferred for the
     scrutinee is a let-in ([principal_typeE_case_inst_nondeg]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.principal_typeE_case_inst_nondeg
+    INSTANCE NOT-BUILT: degenerate, the same derivation passed twice: the proof applies the function [HC] that [principal_typeE] returns for [PCUICProgressEtaInstances.pgi_match_let_open_typed] to that derivation itself, so the conclusion [∑ C, C ≤ A × u : C] is inhabited by the input's own type [A] with reflexivity and the input; non-degenerate instances exist ([HC] on a second, β-wrapped retyping, as the rule-coverage rows do); no non-degenerate witness built yet
     TARGET PCUICPrincipalityEta.principal_typeE *)
 Lemma principal_typeE_case_inst :
   ∑ C, si_Σ ;;; iv_Γ1 ⊢E C ≤ PCUICProgressEtaInstances.pgi_match_let_open_ty ×
