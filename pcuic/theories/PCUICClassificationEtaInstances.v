@@ -101,8 +101,8 @@
     ([check_recursivity_kind_injE]: [rk = rk']; [wt_closed_red_reflE]: [Σ ;;; Γ ⊢ t ⇝ t], whose
     closedness side conditions compute on any concrete context and term and are not a
     non-degeneracy) have instances tagged IMPOSSIBLE, with the reason in the tag.
-    [wh_neutral_empty_genE] and [wh_neutral_emptyE] are no longer in that row: on integ-all8
-    (BET-339) they conclude [stuck_cofix_case t]; their instances are in
+    [wh_neutral_empty_genE] and [wh_neutral_emptyE] are no longer in that row: since BET-339
+    they conclude [stuck_cofix_case t]; their instances are in
     [PCUICEtaF0Land3Instances] (reason at the place their instances stood).
 
   - BET-339 (F0 forecast): the disjunct [stuck_cofix_case] that [whnf_classification'E],
@@ -1170,10 +1170,10 @@ Definition invert_fix_indE_inst :
   invert_fix_indE (Σ := si_Σ) [] iv_mfix 0 [] si_ind [] [iv_False] eq_refl.
 
 (* [wh_neutral_empty_genE] and [wh_neutral_emptyE]: no instance in this file since BET-339 (F0).
-   On integ-all8 they conclude [stuck_cofix_case t], not [False], and the former instance here (on
+   They conclude [stuck_cofix_case t], not [False], and the former instance here (on
    an open term typed in the empty context) has no derivation of its premise. On every instance
    whose premises hold, the conclusion is the instance's own [whne] derivation translated into
-   [stuck_cofix_case] (root ruling, land6-review.md "Ship lineage (F0 + LAND12)"); a typed blocked
+   [stuck_cofix_case]; a typed blocked
    case needs a coinductive block, which [si_Σ] does not have
    ([PCUICEtaF0Land3Instances.l6_si_no_stuck]). Their instances, tagged IMPOSSIBLE, are
    [PCUICEtaF0Land3Instances.wh_neutral_empty_genE_inst] and
@@ -1182,9 +1182,9 @@ Definition invert_fix_indE_inst :
 (** INSTANCE NOT-BUILT: degenerate, the instance's own derivation translated: value_whnfE is an induction on the value derivation, and on c (∀P. P) it maps value_app_nonnil with value_head_cstr to whnf_cstrapp, as for every value whose head is not a fixpoint, without the closedness premise; only a stuck fixpoint application (value_head_fix) makes it run, where closedness turns cunfold_fix into unfold_fix (closed_unfold_fix_cunfold_eq); a closed fixpoint with recursive argument index at least 1 applied to fewer arguments would; no non-degenerate witness built yet *)
 Definition value_whnfE_inst := value_whnfE (Σ := si_Σ) (wfΣ := si_wfE) sri_cF eq_refl cli_cF_value.
 
-(** Applied by identity, root to confirm: the root's 06:57Z ruling on af1fa399 (land6-review.md,
-    section EtaMetaLand13 suspects, eval_whneE), verbatim; eval_whneE, eval_closed_cb, value_whnfE,
-    eval_to_value, cli_eval_xx and this block's code are identical on ship.
+(** The value [(∀P:Prop. P) → (∀P:Prop. P)] of [cli_eval_xx], the evaluation of the closed redex
+    [(λx:Prop. x → x) (∀P:Prop. P)], is weak-head normal; that value is the body [x → x] with the
+    argument for [x], neither the argument, nor the function, nor the redex.
     INSTANCE NOT-BUILT: degenerate, the evaluation result's value translated: eval_whneE runs eval_closed_cb, eval_to_value and value_whnfE; on cli_eval_xx the value of (∀P. P) → (∀P. P) is read off the last premise eval_atom, and value_whnfE takes its atom branch (whnf of a product), so the closedness from eval_closed_cb is never used; only a closed stuck fixpoint application as the result (value_head_fix, a fixpoint with recursive argument index at least 1) consumes it; no non-degenerate witness built yet *)
 Definition eval_whneE_inst :=
   eval_whneE (Σ := si_Σ) (wfΣ := si_wfE) sri_xx_redex sri_xx_reduct eq_refl cli_eval_xx.

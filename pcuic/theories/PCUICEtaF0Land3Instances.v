@@ -1,13 +1,13 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * F0 forecast of LAND3: non-degenerate instances in the region BET-339 admits
+(** * F0 forecast: non-degenerate instances in the region BET-339 admits
 
-  BET-339 (integ-all8) adds [ci_cofix_nondep] to [case_info]: [red_cofix_case] requires it,
+  BET-339 adds [ci_cofix_nondep] to [case_info]: [red_cofix_case] requires it,
   and the coinductive case side condition becomes
   [isCoFinite ==> (ci_cofix_nondep ==> on_free_vars (strengthenP 0 1 xpredT) preturn)].
   It admits a case on a coinductive whose flag is unset and whose return predicate mentions
   the scrutinee, and no cofixpoint unfolds under such a case. This file runs cases of that
-  region through the LAND3 theorems. Environment: [iv_Σ] of [PCUICInversionEtaInstances]
+  region through the theorems of items 1-3. Environment: [iv_Σ] of [PCUICInversionEtaInstances]
   ([CoInductive R (A : Prop) : Prop := mkR { f : A }], well formed: [iv_wf], [iv_wfE]).
   The case [fo_case] of the region and its typing pieces ([fo_case_side], [fo_case_brs],
   [fo_pret_typed]) are [PCUICEtaFO4Instances]'s, in the context
@@ -34,8 +34,8 @@
      ([g_no_eval], base [wcbv_stuck_no_eval]).
      - [wh_neutral_empty_genE], [wh_neutral_emptyE]: before BET-339 they concluded [False]
        (IMPOSSIBLE rows of [PCUICClassificationEtaInstances]); now they conclude
-       [stuck_cofix_case t]. Their instances at [g_t] are tagged IMPOSSIBLE (root ruling,
-       land6-review.md "Ship lineage (F0 + LAND12)"): on every instance whose premises hold, the
+       [stuck_cofix_case t]. Their instances at [g_t] are tagged IMPOSSIBLE: on every instance
+       whose premises hold, the
        conclusion is the instance's own [whne] derivation translated into [stuck_cofix_case].
      - [whnf_classification'E], [whnf_classificationE]: instances at [g_t]; the head of [g_t]
        is neither a constructor nor a cofixpoint ([g_head_not_discr]), so they land in the
@@ -50,13 +50,13 @@
      mkR _ _ => Prop end] (flag set). The return predicate mentions the scrutinee (as the
      scrutinee of the inner case, stuck on a variable [z]); at [mkR F x.(f)] it computes to
      [Prop], so [t8_T : Prop] ([t8_T_sort]). [t8_T] reaches [R F] only by ι
-     ([t8_T_conv]). [t8_Ind_r_inst] applies the proved [T8_Ind_r] to it. Tagged NOT-BUILT
-     (root ruling): degenerate, [t8_T_conv] is one root ι step given as a cumulativity and
+     ([t8_T_conv]). [t8_Ind_r_inst] applies the proved [T8_Ind_r] to it. Tagged NOT-BUILT:
+     degenerate, [t8_T_conv] is one root ι step given as a cumulativity and
      [T8_Ind_r] returns that step; a conversion whose derivation contains an expansion (a peak),
      so that [T8_Ind_r] must use confluence, would make it run. [t8_old_premise_fails] and
      [t8_flag_unset] say only that [t8_T] is in the region.
 
-  4. LAND4/5 under BET-339 (branch [wip/eta-meta-f0-land45-2026-10-30]): canonicity on the
+  4. Under BET-339: canonicity on the
      closed blocked case [g_t], the E twins of base's consistency helpers that BET-339 adds, and
      refutations of the pre-BET-339 forms of copy 20's [SN_to_WNE] and [wcbv_normalizationE]
      (each under base's normalization premise for [iv_Σ], which no one proves). Details in the
@@ -67,18 +67,18 @@
      restated premise: a typed case on [R] with a predicate on the scrutinee has its flag unset.
      Details in the section.
 
-  6. LAND6 under BET-339 (branch [wip/eta-meta-f0-land6-2026-10-30]): [l6_si_no_stuck] (no typed
+  6. Under BET-339: [l6_si_no_stuck] (no typed
      blocked case in [si_Σ], so [wh_neutral_empty(_gen)E] have no instance in
      [PCUICClassificationEtaInstances]), [l6_cF_not_stuck] and [l6_xx_redex_not_stuck] (the
-     LAND6 instances on [c (∀P. P)] and [(λx:Prop. x → x) (∀P. P)] land in the old disjunct of
+     instances on [c (∀P. P)] and [(λx:Prop. x → x) (∀P. P)] land in the old disjunct of
      the restated sums). In section 4.
 
-  Tags: the instance grammar of [lanes/eta/meta/instance-gate.md] (one [INSTANCE NONDEGEN],
+  Tags: the instance gate's grammar (one [INSTANCE NONDEGEN],
   [INSTANCE IMPOSSIBLE:] or [INSTANCE NOT-BUILT:] line directly above each instance, with
   [TARGET] lines). Declarations that are neither instances nor NONDEGEN lemmas:
   WITNESSES: f3_* g_* t8_* l45_* l6_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false wh_neutral_empty_genE_inst_nondeg wh_neutral_emptyE_inst_nondeg whnf_classification'E_stuck_inst_nondeg whnf_classificationE_stuck_inst_nondeg t8_Ind_r_inst_nondeg typing_tApp_invE_inst_nondeg typing_tCase_scrutE_inst_nondeg typing_tProj_argE_inst_nondeg typing_tCoFix_cofiniteE_inst_nondeg typing_mkApps_argE_inst_nondeg typing_mkApps_headE_inst_nondeg typing_stuck_cofix_case_cofiniteE_inst_nondeg pcuic_canonicityE_stuck_inst_nondeg no_closed_stuck_cofix_case_at_no_cofiniteE_inst_nondeg no_closed_stuck_cofix_case_at_Σ_FalseE_inst_nondeg
 
-  Forecast evidence for the cutover F0 (it rests on the ship branch's
+  Forecast evidence for the cutover F0 (it rests on
   [PCUICEtaFO4Instances], which is itself forecast-only). *)
 
 From Stdlib Require Import ssreflect ssrbool.
@@ -578,7 +578,7 @@ Definition progressE_stuck_inst :=
 Definition red1_progressE_inst :=
   red1_progressE (Σ := iv_Σ) (wfΣ := iv_wfE) g_axiom_free g_t g_RA g_t_typed_RA.
 
-(** The pre-BET-339 forms of the restated rows are FALSE on integ-all8: [g_t] refutes them.
+(** The pre-BET-339 forms of the restated rows are FALSE under BET-339: [g_t] refutes them.
     These are why [PCUICClassificationEta] and [PCUICProgressEta] restate them as base does. *)
 Lemma wh_neutral_emptyE_old_false :
   (forall (Σ : global_env_ext) (wfΣ : wfE Σ) t ty,
@@ -904,8 +904,7 @@ Proof. reflexivity. Qed.
 (** ** NONDEGEN lemmas of the instances of sections 1-3
 
   Each names the witness the instance passes and states why the run is in the region BET-339
-  admits: a flag-unset case, a blocked shape, an empty old disjunct. Since the root ruling on the
-  ship lineage (land6-review.md "Ship lineage (F0 + LAND12)"), no tag names
+  admits: a flag-unset case, a blocked shape, an empty old disjunct. No tag names
   [wh_neutral_empty_genE_inst_nondeg], [wh_neutral_emptyE_inst_nondeg],
   [whnf_classification'E_stuck_inst_nondeg], [whnf_classificationE_stuck_inst_nondeg] or
   [t8_Ind_r_inst_nondeg]: their instances are tagged IMPOSSIBLE or NOT-BUILT, and they stay as
@@ -953,14 +952,13 @@ Lemma t8_Ind_r_inst_nondeg :
    (t8_T = tCase t8_oci t8_op t8_scrut [t8_obr]))%type.
 Proof. exact (eq_refl, (eq_refl, eq_refl)). Qed.
 
-(** ** 4. LAND4/5 under BET-339
+(** ** 4. Canonicity and consistency under BET-339
 
-  *Canonicity.* [pcuic_canonicityE] (restated as base integ-all8: [+ stuck_cofix_case t']) on
+  *Canonicity.* [pcuic_canonicityE] (restated as base under BET-339: [+ stuck_cofix_case t']) on
   the closed blocked case [g_t : R A] of section 2, under base's normalization premise for [iv_Σ]
   (a section variable, never discharged, as in [PCUICCanonicityEtaInstances]). [g_t]'s own head
   is neither a constructor nor a cofixpoint, it is blocked, and it has no value
-  ([pcuic_canonicityE_stuck_inst_nondeg], now a witness). Tagged NOT-BUILT (root ruling,
-  land6-review.md "Ship lineage: the 9 remaining F0 rows", 05:59Z): an identical pair, since
+  ([pcuic_canonicityE_stuck_inst_nondeg], now a witness). Tagged NOT-BUILT: an identical pair, since
   [g_t] is [red1]-normal; a closed term that reduces to a blocked case without being one would
   make the target run.
 
@@ -975,10 +973,10 @@ Proof. exact (eq_refl, (eq_refl, eq_refl)). Qed.
   ([cs_Σ], no coinductive block, where the new premise is proved by
   [no_closed_stuck_cofix_case_at_no_cofiniteE]: [cs_no_stuck]). The E twins of base's new helpers
   run here on the region's terms. The instances of the five typing inversions and of the two
-  cofiniteness lemmas are tagged IMPOSSIBLE (root ruling): in every instance the conclusion is a
+  cofiniteness lemmas are tagged IMPOSSIBLE: in every instance the conclusion is a
   piece or a field of the instance's own typing premise; their former NONDEGEN lemmas stay as
-  witnesses. The two [no_closed_stuck_cofix_case_at] instances are tagged IMPOSSIBLE too (root
-  ruling 05:59Z): each concludes [False] under a typing premise left as a hypothesis. *)
+  witnesses. The two [no_closed_stuck_cofix_case_at] instances are tagged IMPOSSIBLE too:
+  each concludes [False] under a typing premise left as a hypothesis. *)
 
 Section CanonicityStuck.
 
@@ -1114,7 +1112,7 @@ Proof.
 Qed.
 
 (** Evidence for the BET-339 lines of [PCUICClassificationEtaInstances] and
-    [PCUICProgressEtaInstances] (LAND6): their instances on [c (∀P. P)] land in the
+    [PCUICProgressEtaInstances]: their instances on [c (∀P. P)] land in the
     constructor-head disjunct, since [c (∀P. P)] is no case blocked on a cofixpoint (a blocked term
     has no constructor head); their progress instances on [(λx:Prop. x → x) (∀P. P)] land in the
     step disjunct, since that term evaluates, so it is no [wcbv_stuck] term. *)
@@ -1132,14 +1130,14 @@ Qed.
 (* [pcuic_consistentE] in an environment with a coinductive block: not a separate case. The
    theorem concludes [False] in every environment, and its instance
    ([PCUICConsistencyEtaInstances.pcuic_consistentE_inst]) is tagged accordingly; a coinductive
-   block would only change how the premise [no_closed_stuck_cofix_case_atE] is discharged (root
-   ruling 05:59Z). No such environment is built: none of the lane's instance environments
+   block would only change how the premise [no_closed_stuck_cofix_case_atE] is discharged.
+   No such environment is built: none of the instance environments
    declares both base's [False_mib] and a coinductive, and a two-declaration environment needs
    its own [wf] proof, whose second declaration's [on_inductive] obligations are checked in the
    non-empty environment holding the first. *)
 
-(** The pre-BET-339 forms of copy 20's [SN_to_WNE] and [wcbv_normalizationE] (ArityLane's
-    statements before the forecast commit) are FALSE in [iv_Σ] under base's normalization premise
+(** The pre-BET-339 forms of copy 20's [SN_to_WNE] and [wcbv_normalizationE] are FALSE in [iv_Σ]
+    under base's normalization premise
     for [iv_Σ]: [g_t] is closed, typed and accessible, and has no value. *)
 Lemma wcbv_normalizationE_old_false {nor : normalizing_flags} :
   (forall (Σ : global_env_ext) (nin : PCUICSNEta.NormalizationInE Σ) A t,

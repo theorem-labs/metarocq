@@ -1,6 +1,6 @@
 (* Distributed under the terms of the MIT license. *)
 
-(** * FORECAST-ONLY (fc/etak-forecast1, FO4): a non-degenerate instance in the region FO4 admits
+(** * FORECAST-ONLY (FO4): a non-degenerate instance in the region FO4 admits
 
   FO4 mirrors BET-339's coinductive case side condition into the E copies: the premise of
   [BDTypingEta.inferE_Case] and [case_inversion_dataE]'s [nondep_cofinite] change from
@@ -19,8 +19,7 @@
     lies exactly in the region FO4 admits; [fo_new_premise_holds]: the new one holds.
   The return predicate [P z] is not a β-redex: the dependency on the scrutinee is real.
 
-  Forecast-only: reconciled with FO1/FO4 when F0 lands BET-339 on [frac/eta]
-  ([lanes/eta/etak/f0-plan.md], "INTEGRATION DEBT: BET-339 meets frac/eta"). *)
+  Forecast-only: reconciled with FO1/FO4 when F0 lands BET-339 on [frac/eta]. *)
 
 From Stdlib Require Import ssreflect ssrbool.
 From MetaRocq.Utils Require Import utils.
