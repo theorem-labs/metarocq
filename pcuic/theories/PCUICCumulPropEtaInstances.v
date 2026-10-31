@@ -12,7 +12,7 @@
   η step ([λx:Prop. f x] and [f] in the context [f : Prop → Prop], [cpi_eta]; [G (λy:Prop. F y)]
   and [G F] for the two [typing_leq_term_prop] rows), a β step ([cpi_beta], [cpi_redex]; the three
   rows that turn a reduction into [cumul_propE] use [cpi_xx], whose redex body uses its variable
-  inside a product), two universe levels of one family, two different upper sorts of one term
+  inside a product), two different upper sorts of one term
   ([Prop] and [Type₀] in [cumul_sort_confluenceE_inst]), or two universe instances. The
   substitution rows: the three
   [cpi_id] rows substitute [id] for [f] in [λx:Prop. f x] and in [f] itself, whose result is
@@ -28,8 +28,9 @@
   degenerate by their statement are tagged IMPOSSIBLE at each instance, with the property of the
   statement that forces them: forced to [Prop]/[SProp] on both sides (the [cumul_*props*],
   [*_sort_eqE] and three [*_bottomE] rows), compared by the constant relation [fun _ _ => True]
-  (the two [cmp_True_*] rows), or read off the fields of the premise record
-  ([cumul_prop_is_openE_inst]); [cumul_pb_cumul_propE_inst] is tagged IMPOSSIBLE too, though its
+  (the two [cmp_True_*] rows), or read off the premise ([cumul_prop_is_openE_inst], the fields
+  of the premise record; [cumul_prop_sortE_inst], the [finstP] comparison of two sorts, whose
+  chains are trivial); [cumul_pb_cumul_propE_inst] is tagged IMPOSSIBLE too, though its
   η pair is real: every instance of [cumul_pb_cumul_propE] repacks the fields of its premise
   through a relation inclusion.
 
@@ -307,7 +308,7 @@ Section Generic.
   Proof. intros h; vm_compute in h; discriminate h. Qed.
 
   (** [Type₀ ~~ Type₁] gives their family comparison.
-      INSTANCE NONDEGEN PCUICCumulPropEtaInstances.cpi_type01_nondeg *)
+      INSTANCE IMPOSSIBLE: the proof destructs the cumul_prop derivation; a chain from a sort stays at that sort (chain_Sort), so the two canonical forms are the sorts themselves and the conclusion is the finstP comparison of the input read back by finstP_Sort_inv; in every instance the conclusion is a field of the instance's own premise *)
   Definition cumul_prop_sortE_inst : eq_univ_prop Sort.type0 (Sort.super Sort.type0) :=
     cumul_prop_sortE (wfΣ := cpi_wfE) (s := Sort.type0) (s' := Sort.super Sort.type0) cpi_type01.
 
