@@ -2,7 +2,7 @@
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
    lemma, not a mechanical guarantee.
-   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+   Measured reader miss rate: at least 17 of 60 sampled instances (28.3%, 95% upper bound 39.4%), seed 202610301905: the union of the verdicts held by two independent reviews (Opus 5: 10 of 60; Opus 5.5: 15 of 60, 6 of its verdicts borderline at confidence 0.5-0.6). The 17 sampled misses are corrected at this head, but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected. *)
 
 (** * Satisfying instances for [Bidirectional/BDTypingEta]
 
@@ -155,11 +155,11 @@ Lemma bd_eta_pair_differ :
 Proof. split; [reflexivity|]. unfold bd_X, bd_lam. discriminate. Qed.
 
 (** The contexts of the context instances are not empty: [bd_Γ1] and [bd_Γη] (of
-    [wf_local_bdE_inst], [wf_local_bdE_eta_inst], [wf_local_bd_typingE_inst]), the base
-    [bd_ΓFG] (of [wf_rel_weakE_inst]), and the extension
+    [wf_local_bdE_inst], [wf_local_bdE_eta_inst], [wf_local_bd_typingE_inst]) and the extension
     [[x : G (λ y : Prop. F y); F : Prop → Prop]] (of [wf_local_bd_relE_inst],
-    [wf_local_bd_rel_typingE_inst]). The one-declaration extension [[x : G (λ y : Prop. F y)]]
-    is no longer used by an instance tagged with this lemma. *)
+    [wf_local_bd_rel_typingE_inst]). The base [bd_ΓFG] (of [wf_rel_weakE_inst], tagged NOT-BUILT)
+    and the one-declaration extension [[x : G (λ y : Prop. F y)]] are no longer used by an
+    instance tagged with this lemma. *)
 Lemma bd_ctxs_nonempty :
   bd_Γ1 <> [] /\ bd_Γη <> [] /\ bd_ΓFG <> [] /\ [vass si_na bd_X] <> [] /\
   [vass si_na bd_X; vass si_na bd_FP] <> [].

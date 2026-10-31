@@ -2,7 +2,7 @@
 
 (* NONDEGEN tags: an INSTANCE NONDEGEN tag is a reader judgment backed by a compiled nontriviality
    lemma, not a mechanical guarantee.
-   Measured reader miss rate: 10 of 60 sampled instances (residual 16.7%, 95% upper bound 26.6%), seed 202610301905, measured on the pre-retag head; H' additionally corrects 10 tags and 7 prose rows that review found false, so the figure is conservative here. *)
+   Measured reader miss rate: at least 17 of 60 sampled instances (28.3%, 95% upper bound 39.4%), seed 202610301905: the union of the verdicts held by two independent reviews (Opus 5: 10 of 60; Opus 5.5: 15 of 60, 6 of its verdicts borderline at confidence 0.5-0.6). The 17 sampled misses are corrected at this head, but the sample estimates the rate over ALL instance tags: a comparable share of the unsampled instances is expected to be wrong and is NOT corrected. *)
 
 (** * Satisfying instances of the lemmas of [PCUICAlphaEta] (row T6)
 
@@ -30,10 +30,16 @@
   [type_Cumul'E_inst] relates two syntactically different terms, contexts or fixpoints (for
   [inst_case_predicate_context_eqE_inst], the two contexts of its premise); the tag at each
   instance names the lemma that states the difference, or the reason. [eq_context_conversionE_inst]
-  and [typing_alpha_propE_inst] move the typing [iv_rel_typed] into the renamed context;
-  [al_Γk_eta_nondeg] states that its type [k (λ_:Prop. g _)] is not [y]'s declared type [k g] and
-  η-contracts to it in one step. [type_Cumul'E_inst] is tagged IMPOSSIBLE: its target only repacks
-  its own premises with the conversion rule.
+  and [typing_alpha_propE_inst] move the typing [iv_rel_typed] into the renamed context
+  ([al_Γk_eta_nondeg] states that its type [k (λ_:Prop. g _)] is not [y]'s declared type [k g] and
+  η-contracts to it in one step); they, [isType_eq_context_conversionE_inst] and
+  [wf_local_alphaE_inst] are tagged NOT-BUILT: [iv_Γk] and [al_Γk] differ only in a binder name,
+  with identical declaration types, so each runs only reflexive per-declaration conversions.
+  [type_Cumul'E_inst] is tagged IMPOSSIBLE: its target only repacks
+  its own premises with the conversion rule. [wf_local_eq_context_upto_namesE_inst] and
+  [lift_judgment_alphaE_inst] relate two different contexts or judgments but are tagged
+  IMPOSSIBLE too: the premise of [wf_local_eq_context_upto_namesE] lets only the binder names
+  differ, and the premise of [lift_judgment_alphaE] already types every α-variant.
   [eq_context_upto_conv_context_relE_inst] and [upto_names_conv_contextE_inst] relate
   [[_ : Prop → Prop]] and [[x : Π x : Prop. Prop]], whose declared types are themselves different
   α-variants ([al_ΓPP_differs]).
@@ -57,7 +63,7 @@ From Equations.Prop Require Import DepElim.
 
 (* The α-variants and the derivations the instances use ([al_univ_inst] is a universe
    instance, not an instance of a lemma).
-   WITNESSES: al_* al_univ_inst *)
+   WITNESSES: al_* al_univ_inst al_id_PP_differ al_Γk_differs al_Γk_eta_nondeg *)
 
 #[local] Existing Instance default_checker_flags.
 #[local] Existing Instance si_cb.
@@ -207,7 +213,7 @@ Definition inst_case_predicate_context_eqE_inst :
   inst_case_predicate_context_eqE (Σ := si_Σ) (wfΣ := si_wfE) (ind := si_ind) (mdecl := si_mdecl)
     (idecl := si_idecl) (p := al_mp) al_wf_mp al_mp_names.
 
-(** INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs *)
+(** INSTANCE IMPOSSIBLE: the premise [eq_context_upto_names Δ' Δ] ([All2] of [eq_decl_upto_names], [PCUICEquality]) gives each declaration of [Δ'] the type and body of the matching declaration of [Δ], and only the binder name may differ; so in every instance and environment the proof of [wf_local_eq_context_upto_namesE] transports the premise's typings along a context conversion ([eq_context_upto_conv_context_relE]) whose every per-declaration step is reflexive, and the conclusion is the premise's own typings under renamed binders (the class of [PCUICSREtaConvInstances.eq_context_alpha_convE_inst]) *)
 Definition wf_local_eq_context_upto_namesE_inst : wf_localE si_Σ ([] ,,, al_Γk) :=
   wf_local_eq_context_upto_namesE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := []) (Δ := iv_Γk) iv_wf_Γk al_Γk_names.
 
@@ -216,7 +222,7 @@ Definition al_wf_Γk : wf_localE si_Σ al_Γk := wf_local_eq_context_upto_namesE
 (** The typing [y : k (λ_:Prop. g _)] ([iv_rel_typed]) moved into the renamed context [al_Γk]:
     [y] is declared at [k g] in both contexts, and [k (λ_:Prop. g _)] is not [k g] and
     η-contracts to it in one step ([al_Γk_eta_nondeg]).
-    INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_eta_nondeg *)
+    INSTANCE NOT-BUILT: degenerate, runs on [iv_Γk ≡Γ al_Γk], two contexts that differ only in the first binder name with identical declaration types ([al_Γk_alpha] proves each type part by reflexivity), so every per-declaration conversion of [eq_context_conversionE] relates a type to itself and the conclusion is the input typing [iv_rel_typed] re-indexed by a renaming; non-degenerate instances exist on contexts with α-different declaration types (as [al_ΓPP_differs]); no non-degenerate witness built yet *)
 Definition eq_context_conversionE_inst : si_Σ ;;; al_Γk |-E tRel 0 : iv_keta :=
   eq_context_conversionE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := iv_Γk) (Δ := al_Γk) iv_rel_typed al_Γk_alpha al_wf_Γk.
 
@@ -227,7 +233,7 @@ Definition upto_names_conv_contextE_inst : conv_context (@JoinE _) si_Σ [vass s
 
 Definition al_keta_isType : isTypeE si_Σ iv_Γk iv_keta := has_sort_isTypeE _ iv_keta_typed.
 
-(** INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs *)
+(** INSTANCE NOT-BUILT: degenerate, runs on [iv_Γk ≡Γ al_Γk], two contexts that differ only in the first binder name with identical declaration types ([al_Γk_alpha] proves each type part by reflexivity), so every per-declaration conversion of [isType_eq_context_conversionE] relates a type to itself and the conclusion is the input [al_keta_isType] re-indexed by a renaming; non-degenerate instances exist on contexts with α-different declaration types (as [al_ΓPP_differs]); no non-degenerate witness built yet *)
 Definition isType_eq_context_conversionE_inst : isTypeE si_Σ al_Γk iv_keta :=
   isType_eq_context_conversionE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := iv_Γk) (Δ := al_Γk) al_keta_isType al_Γk_alpha
     al_wf_Γk.
@@ -266,7 +272,7 @@ Proof.
 Qed.
 
 (** The judgment [λ_:Prop. _ : Prop → Prop] moved to its α-variant [λx:Prop. _ : Π x : Prop. Prop].
-    INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_id_PP_differ *)
+    INSTANCE IMPOSSIBLE: the premise already types every α-variant (its functions take each [u] with [upto_names' t u] to a typing of [u]); the proof of [lift_judgment_alphaE] applies them at [tm'] and [t'] through the generic [lift_sorting_it_impl_gen], then moves the term's type from [t] to its α-variant [t'] by [type_Cumul'E] (tagged IMPOSSIBLE in this file) and the α-to-cumulativity embedding [eq_term_upto_univ_cumulSpecE]; so in every instance and environment the conclusion is the premise instantiated at [tm'] and [t'] and repacked *)
 Lemma lift_judgment_alphaE_inst : lift_typing typingE si_Σ [] (Judge (Some al_id) al_PP None None).
 Proof.
   eapply (lift_judgment_alphaE (tm := Some iv_id) (t := iv_PP)).
@@ -293,7 +299,7 @@ Section AlphaClassInstances.
 
   (** The same typing as [eq_context_conversionE_inst], through the main theorem's typing
       component, into the renamed context ([al_Γk_eta_nondeg]).
-      INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_eta_nondeg *)
+      INSTANCE NOT-BUILT: degenerate, runs on [iv_Γk ≡Γ al_Γk], two contexts that differ only in the first binder name with identical declaration types ([al_Γk_alpha] proves each type part by reflexivity), and the term is unchanged ([u = v = tRel 0]), so every per-declaration conversion relates a type to itself and the conclusion is the input typing [iv_rel_typed] re-indexed by a renaming; non-degenerate instances exist on contexts with α-different declaration types (as [al_ΓPP_differs]); no non-degenerate witness built yet *)
   Definition typing_alpha_propE_inst : si_Σ ;;; al_Γk |-E tRel 0 : iv_keta :=
     (typing_alpha_propE si_Σ si_wfE iv_Γk (tRel 0) iv_keta iv_rel_typed).2.2 al_Γk (tRel 0)
       ltac:(reflexivity) al_Γk_alpha.
@@ -302,7 +308,7 @@ Section AlphaClassInstances.
   Definition typing_alphaE_inst : si_Σ ;;; iv_Γk |-E al_keta : si_P :=
     typing_alphaE (Σ := si_Σ) (wfΣ := si_wfE) (u := iv_keta) (v := al_keta) iv_keta_typed al_keta_alpha.
 
-  (** INSTANCE NONDEGEN PCUICAlphaEtaInstances.al_Γk_differs
+  (** INSTANCE NOT-BUILT: degenerate, runs on [iv_Γk ≡Γ al_Γk], two contexts that differ only in the first binder name with identical declaration types ([al_Γk_alpha] proves each type part by reflexivity), so every per-declaration conversion of [PCUICAlphaEta.wf_local_alphaE] relates a type to itself and the conclusion is the input [iv_wf_Γk] re-indexed by a renaming; non-degenerate instances exist on contexts with α-different declaration types (as [al_ΓPP_differs]); no non-degenerate witness built yet
       TARGET PCUICAlphaEta.wf_local_alphaE *)
   Definition wf_local_alphaE_inst : wf_localE si_Σ al_Γk :=
     PCUICAlphaEta.wf_local_alphaE (Σ := si_Σ) (wfΣ := si_wfE) (Γ := iv_Γk) (Γ' := al_Γk) iv_wf_Γk al_Γk_alpha.
