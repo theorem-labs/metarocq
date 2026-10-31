@@ -76,7 +76,7 @@
   Tags: the instance grammar of [lanes/eta/meta/instance-gate.md] (one [INSTANCE NONDEGEN],
   [INSTANCE IMPOSSIBLE:] or [INSTANCE NOT-BUILT:] line directly above each instance, with
   [TARGET] lines). Declarations that are neither instances nor NONDEGEN lemmas:
-  WITNESSES: f3_* g_* t8_* l45_* l6_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false wh_neutral_empty_genE_inst_nondeg wh_neutral_emptyE_inst_nondeg whnf_classification'E_stuck_inst_nondeg whnf_classificationE_stuck_inst_nondeg t8_Ind_r_inst_nondeg typing_tApp_invE_inst_nondeg typing_tCase_scrutE_inst_nondeg typing_tProj_argE_inst_nondeg typing_tCoFix_cofiniteE_inst_nondeg typing_mkApps_argE_inst_nondeg typing_mkApps_headE_inst_nondeg typing_stuck_cofix_case_cofiniteE_inst_nondeg
+  WITNESSES: f3_* g_* t8_* l45_* l6_* pgf_* g_ctx_inst t8_ctx_inst wh_neutral_emptyE_old_false whnf_classification'E_old_false progressE_old_false SN_to_WNE_old_false wcbv_normalizationE_old_false ws_wcbv_standardizationE_old_false wh_neutral_empty_genE_inst_nondeg wh_neutral_emptyE_inst_nondeg whnf_classification'E_stuck_inst_nondeg whnf_classificationE_stuck_inst_nondeg t8_Ind_r_inst_nondeg typing_tApp_invE_inst_nondeg typing_tCase_scrutE_inst_nondeg typing_tProj_argE_inst_nondeg typing_tCoFix_cofiniteE_inst_nondeg typing_mkApps_argE_inst_nondeg typing_mkApps_headE_inst_nondeg typing_stuck_cofix_case_cofiniteE_inst_nondeg pcuic_canonicityE_stuck_inst_nondeg no_closed_stuck_cofix_case_at_no_cofiniteE_inst_nondeg no_closed_stuck_cofix_case_at_Σ_FalseE_inst_nondeg
 
   Forecast evidence for the cutover F0 (it rests on the ship branch's
   [PCUICEtaFO4Instances], which is itself forecast-only). *)
@@ -959,7 +959,10 @@ Proof. exact (eq_refl, (eq_refl, eq_refl)). Qed.
   the closed blocked case [g_t : R A] of section 2, under base's normalization premise for [iv_Σ]
   (a section variable, never discharged, as in [PCUICCanonicityEtaInstances]). [g_t]'s own head
   is neither a constructor nor a cofixpoint, it is blocked, and it has no value
-  ([pcuic_canonicityE_stuck_inst_nondeg]).
+  ([pcuic_canonicityE_stuck_inst_nondeg], now a witness). Tagged NOT-BUILT (root ruling,
+  land6-review.md "Ship lineage: the 9 remaining F0 rows", 05:59Z): an identical pair, since
+  [g_t] is [red1]-normal; a closed term that reduces to a blocked case without being one would
+  make the target run.
 
   Refutation of the pre-BET-339 [pcuic_canonicityE]: NOT BUILT. Obstacle, exactly: from the old
   conclusion at [g_t] one gets a [t'] whose head is a constructor or a cofixpoint with
@@ -974,16 +977,16 @@ Proof. exact (eq_refl, (eq_refl, eq_refl)). Qed.
   run here on the region's terms. The instances of the five typing inversions and of the two
   cofiniteness lemmas are tagged IMPOSSIBLE (root ruling): in every instance the conclusion is a
   piece or a field of the instance's own typing premise; their former NONDEGEN lemmas stay as
-  witnesses. The two [no_closed_stuck_cofix_case_at] instances keep their NONDEGEN tags. *)
+  witnesses. The two [no_closed_stuck_cofix_case_at] instances are tagged IMPOSSIBLE too (root
+  ruling 05:59Z): each concludes [False] under a typing premise left as a hypothesis. *)
 
 Section CanonicityStuck.
 
 (* Base's normalization premise (by design, never discharged). *)
 Context {nor : normalizing_flags} {nin_iv : PCUICSNEta.NormalizationInE iv_Σ}.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.pcuic_canonicityE_stuck_inst_nondeg
-   TARGET PCUICCanonicityEta.pcuic_canonicityE
-   Canonicity on a closed term of a coinductive type that is a case blocked on a cofixpoint. *)
+(* INSTANCE NOT-BUILT: degenerate, an identical pair: g_t is weak-head normal and red1-normal (l45_g_t_normal), so the target's normalization and its SR transport are the identity here and the conclusion is inhabited by (g_t, the input typing g_t_typed_RA, reflexivity, the stuck disjunct read off g_t); a closed term that reduces to a blocked case without being one (e.g. the case on a β-redex scrutinee) would make it run; no non-degenerate witness built yet
+   TARGET PCUICCanonicityEta.pcuic_canonicityE *)
 Definition pcuic_canonicityE_stuck_inst :=
   PCUICCanonicityEta.pcuic_canonicityE iv_Σ g_t iv_ind [] [g_A] g_axiom_free iv_wfE g_t_typed_RA.
 
@@ -1078,9 +1081,8 @@ Proof.
   repeat match goal with |- context [if ?c then _ else _] => destruct c end; reflexivity.
 Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.no_closed_stuck_cofix_case_at_no_cofiniteE_inst_nondeg
-   TARGET PCUICConsistencyEta.no_closed_stuck_cofix_case_at_no_cofiniteE
-   [cs_Σ] declares an inductive (base's [False], [BiFinite]), not a coinductive. *)
+(* INSTANCE IMPOSSIBLE: the conclusion no_closed_stuck_cofix_case_atE is False under a stuck and a typing premise left as hypotheses (as pcuic_consistentE_inst); the proof reads the CoFinite check off that typing (typing_stuck_cofix_case_cofiniteE) and rewrites it with the no-cofinite premise, so no instance can supply a typed stuck term
+   TARGET PCUICConsistencyEta.no_closed_stuck_cofix_case_at_no_cofiniteE *)
 Definition no_closed_stuck_cofix_case_at_no_cofiniteE_inst :=
   PCUICConsistencyEta.no_closed_stuck_cofix_case_at_no_cofiniteE PCUICConsistencyEtaInstances.cs_Σ
     PCUICConsistencyEtaInstances.cs_ind l45_cs_no_cofinite.
@@ -1090,9 +1092,8 @@ Lemma no_closed_stuck_cofix_case_at_no_cofiniteE_inst_nondeg :
     PCUICConsistencyEtaInstances.cs_kn BiFinite.
 Proof. reflexivity. Qed.
 
-(* INSTANCE NONDEGEN PCUICEtaF0Land3Instances.no_closed_stuck_cofix_case_at_Σ_FalseE_inst_nondeg
-   TARGET PCUICConsistencyEta.no_closed_stuck_cofix_case_at_Σ_FalseE
-   Applied to the closed blocked case [g_t]. *)
+(* INSTANCE IMPOSSIBLE: the target has no parameters (no_closed_stuck_cofix_case_at_no_cofiniteE at Σ_False, the lookup computed), and the instance's conclusion is False under its typing premise left as a hypothesis (as pcuic_consistentE_inst); g_t is not typable in Σ_False
+   TARGET PCUICConsistencyEta.no_closed_stuck_cofix_case_at_Σ_FalseE *)
 Definition no_closed_stuck_cofix_case_at_Σ_FalseE_inst :
   PCUICConsistency.Σ_False ;;; [] |-E g_t : tInd (mkInd PCUICConsistency.False_kn 0) [] -> False :=
   PCUICConsistencyEta.no_closed_stuck_cofix_case_at_Σ_FalseE g_t g_stuck.
@@ -1128,14 +1129,14 @@ Proof.
   exact (wcbv_stuck_no_eval st _ PCUICClassificationEtaInstances.cli_eval_xx).
 Qed.
 
-(* INSTANCE NOT-BUILT: [pcuic_consistentE] in an environment WITH a coinductive block (where the
-   premise [no_closed_stuck_cofix_case_atE] is not proved by
-   [no_closed_stuck_cofix_case_at_no_cofiniteE]). Obstacle, exactly: no environment of the lane's
-   instance files declares both base's [False_mib] and a coinductive; a new two-declaration
-   environment needs its own [wf] proof, whose second declaration's [on_inductive] obligations are
-   checked in the non-empty environment holding the first (the [iv_]/[cs_] typing lemmas are
-   proved in the empty one), i.e. the environment weakening of those lemmas.
-   TARGET PCUICConsistencyEta.pcuic_consistentE *)
+(* [pcuic_consistentE] in an environment with a coinductive block: not a separate case. The
+   theorem concludes [False] in every environment, and its instance
+   ([PCUICConsistencyEtaInstances.pcuic_consistentE_inst]) is tagged accordingly; a coinductive
+   block would only change how the premise [no_closed_stuck_cofix_case_atE] is discharged (root
+   ruling 05:59Z). No such environment is built: none of the lane's instance environments
+   declares both base's [False_mib] and a coinductive, and a two-declaration environment needs
+   its own [wf] proof, whose second declaration's [on_inductive] obligations are checked in the
+   non-empty environment holding the first. *)
 
 (** The pre-BET-339 forms of copy 20's [SN_to_WNE] and [wcbv_normalizationE] (ArityLane's
     statements before the forecast commit) are FALSE in [iv_Σ] under base's normalization premise
@@ -1198,7 +1199,8 @@ Qed.
     every declaration of [Γ] (the context hypothesis passes it straight on).
   Each instance is the principle's whole conclusion [env_propE pgf_P pgf_Pj pgf_PΓ], at
   [default_checker_flags]: every term typed under [typingE], in every environment, satisfies
-  [pgf_P]. It is not provable without an induction over typing derivations.
+  [pgf_P]. It needs an induction over typing derivations (here only to pass through cumulativity
+  steps).
   Non-degeneracy ([pgf_nondeg]): each of the three predicates is false on some input (the case
   [pgf_bad], which is [f3_t0] with its flag SET); on the typed term [f3_t0] of section 1 (the region
   BET-339 admits: the old premise is false there) every premise of [pgf_P] holds, so the
