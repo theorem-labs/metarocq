@@ -28,9 +28,9 @@
   [chain_ws_cumul_pbE_Conv_inst] ([T ≠ H], one β step on [(λx:Prop. x → x) (∀P. P)], whose body
   uses its variable); [typing_leq_termE_inst] ([∀_:y. Set ≤ ∀_:y. Type₁] in [iv_Γ1 = [y : Prop]]:
   [Set ≤ Type₁] in a codomain, so [∀_:y. Set] moves from Type₁ to Type₂; the context does no work,
-  the comparison relates the domain [y] only with itself); [typing_eq_termE_inst] ([c (z →ₓ z)],
-  [c (z → z)] with one binder renamed, gets the type [I ((∀P:Prop. P) → z)] of [c (z → z)] in
-  [z := ∀P:Prop. P : Prop], one δ-step of [z] away from its own type).
+  the comparison relates the domain [y] only with itself); [typing_eq_termE_inst]
+  ([∀_:y. Type@{l1}] gets the type Type@{l0+1} of [∀_:y. Type@{l0}] in [ci_Σu], whose constraint
+  [l0 = l1] is the only reason the two terms are [eq_term]; the context does no work either).
   [T8_Prod_l_plug_inst] and [T8_Prod_l_of_r_inst] (the [Prod_l] site at [z]) are tagged
   NOT-BUILT: the cumulativity they are given is the δ step of [z] forgotten, and the reduction
   they return is that step. The
@@ -50,7 +50,8 @@ From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICOn
      PCUICValidityEta PCUICSREta BDTyping BDTypingEta BDTypingEtaInstances BDToPCUICEta
      BDToPCUICEtaInstances BDFromPCUICEta BDFromPCUICEtaInstances PCUICPrincipalityEta.
 From MetaRocq.PCUIC Require PCUICPrincipality PCUICContextConversion PCUICConversion PCUICEtaT8Probe
-     PCUICProgressEtaInstances.
+     PCUICProgressEtaInstances PCUICWsCumulEtaCtxInstances.
+Import PCUICWsCumulEtaCtxInstances (ci_Σu, ci_cstr, ci_eq_univ).
 From Equations.Type Require Import Relation Relation_Properties.
 
 #[local] Existing Instance default_checker_flags.
@@ -302,34 +303,58 @@ Proof.
   intros v _. cbn. lia.
 Qed.
 
-(** In [iv_Γz = [z := ∀P:Prop. P : Prop]]: [c (z →ₓ z)], the term [iv_czz] = [c (z → z)] with the
-    binder of its argument named [x], at its own type [I (z →ₓ z)]. [iv_czz] itself is typed at
-    [I ((∀P:Prop. P) → z)] ([iv_czz_typed_IFz]), one δ-step of the let [z] away from [I (z → z)]. *)
-Definition pr_nx : aname := mkBindAnn (nNamed "x") Relevant.
-Definition pr_zz' : term := tProd pr_nx (tRel 0) (tRel 1).
-Definition pr_czz' : term := tApp (tConstruct si_ind 0 []) pr_zz'.
-
-Lemma pr_zz'_typed : si_Σ ;;; iv_Γz |-E pr_zz' : si_P.
+(** [ci_Σu] ([PCUICWsCumulEtaCtxInstances]): [si_env] with two bound universe levels [l0], [l1] and the
+    constraint [l0 = l1]. Its universe context is well formed for [si_env] ([pr_ci_on_udecl]): the
+    levels are fresh, the constraint names only them, and the valuation that sends both to [0]
+    satisfies it. In [iv_Γ1 = [y : Prop]], [∀_:y. Type@{l0}] and [∀_:y. Type@{l1}] ([pr_yL 0],
+    [pr_yL 1]) are [eq_term] only through that constraint ([pr_yL_eq], [ci_eq_univ]). *)
+Lemma pr_ci_on_udecl : on_udecl (universes si_env) ci_Σu.2.
 Proof.
-  have hz : si_Σ ;;; iv_Γz |-E tRel 0 : si_P :=
-    typeE_Rel _ _ 0 (vdef si_na iv_False si_P) iv_wf_Γz Logic.eq_refl.
-  have w := iv_wf_vass si_Σ iv_Γz pr_nx (tRel 0) sProp iv_wf_Γz hz Logic.eq_refl.
-  exact (typeE_Prod _ _ pr_nx (tRel 0) (tRel 1) sProp sProp
-           (iv_vass_s si_Σ iv_Γz pr_nx (tRel 0) sProp hz Logic.eq_refl)
-           (typeE_Rel _ _ 1 (vdef si_na iv_False si_P) w Logic.eq_refl)).
+  split; [|split; [|split]].
+  - intros x Hx H.
+    change (LevelSet.In x (LevelSet.union (ContextSet.levels ContextSet.empty) (LevelSet.singleton Level.lzero))) in H.
+    apply LevelSet.union_spec in H as [H|H].
+    + eapply LevelSet.empty_spec. exact H.
+    + apply LevelSet.singleton_spec in H. hnf in H. subst x.
+      apply LevelSet.mem_spec in Hx. vm_compute in Hx. discriminate Hx.
+  - intros c hc. apply ConstraintSet.singleton_spec in hc. subst c.
+    split; apply LevelSet.mem_spec; reflexivity.
+  - exists si_val. intros c hc.
+    apply ConstraintSet.union_spec in hc as [hc|hc].
+    + apply ConstraintSet.singleton_spec in hc. subst c. constructor. reflexivity.
+    + exfalso. eapply ConstraintSet.empty_spec. exact hc.
+  - intros v _. exists {| valuation_mono := valuation_mono v; valuation_poly := fun _ => 0 |}. split.
+    + intros c hc. apply ConstraintSet.singleton_spec in hc. subst c. constructor. reflexivity.
+    + intros x Hx. exfalso. eapply LevelSet.empty_spec. exact Hx.
 Qed.
 
-Lemma pr_czz'_typed : si_Σ ;;; iv_Γz |-E pr_czz' : (iv_Ix 0) {0 := pr_zz'}.
+Definition pr_ci_wfext : wf_extE ci_Σu := (si_wfE, pr_ci_on_udecl).
+
+Definition pr_sl (n : nat) : Universes.sort := sType (Universe.make' (Level.lvar n)).
+Definition pr_yL (n : nat) : term := tProd si_na (tRel 0) (tSort (pr_sl n)).
+
+Lemma pr_ci_wf_Γ1 : wf_localE ci_Σu iv_Γ1.
+Proof. exact (iv_wf_P ci_Σu [] localenv_nil). Qed.
+
+Lemma pr_ci_x_typed : ci_Σu ;;; iv_Γ1 |-E tRel 0 : si_P.
+Proof. exact (typeE_Rel _ _ 0 (vass si_na si_P) pr_ci_wf_Γ1 Logic.eq_refl). Qed.
+
+Lemma pr_ci_wf_Γ1y : wf_localE ci_Σu (iv_Γ1 ,, vass si_na (tRel 0)).
+Proof. exact (iv_wf_vass ci_Σu iv_Γ1 si_na (tRel 0) sProp pr_ci_wf_Γ1 pr_ci_x_typed Logic.eq_refl). Qed.
+
+Lemma pr_yL_typed (n : nat) : n < 2 ->
+  ci_Σu ;;; iv_Γ1 |-E pr_yL n : tSort (Sort.sort_of_product sProp (Sort.super (pr_sl n))).
 Proof.
-  exact (typeE_App _ _ (tConstruct si_ind 0 []) si_na si_P (iv_Ix 0) _ pr_zz'
-           (iv_cstr_prod_typed iv_Γz iv_wf_Γz) (iv_cstr_typed iv_Γz iv_wf_Γz) pr_zz'_typed).
+  intros hn. apply typeE_Prod; [exact (iv_vass_s ci_Σu iv_Γ1 si_na (tRel 0) sProp pr_ci_x_typed Logic.eq_refl)|].
+  apply typeE_Sort; [exact pr_ci_wf_Γ1y|].
+  apply/(PCUICWfUniverses.wf_sort_reflect ci_Σu).
+  destruct n as [|[|n]]; [reflexivity|reflexivity|lia].
 Qed.
 
-Lemma pr_czz_eq : eq_term empty_global_env si_Σ iv_czz pr_czz'.
+Lemma pr_yL_eq : eq_term empty_global_env ci_Σu (pr_yL 0) (pr_yL 1).
 Proof.
-  unfold iv_czz, pr_czz', iv_zz, pr_zz'.
-  constructor; [constructor; reflexivity|].
-  constructor; [reflexivity| |]; constructor; reflexivity.
+  constructor; [reflexivity|constructor|].
+  constructor. cbn. exact ci_eq_univ.
 Qed.
 
 (** ** The lemmas of [PCUICPrincipalityEta], at concrete arguments *)
@@ -742,29 +767,33 @@ Proof.
            pr_yT1_typed pr_yS_typed pr_yS_leq_yT1).
 Qed.
 
-(** [c (z → z)] and [c (z →ₓ z)] differ (in a binder name only, as [eq_term] allows); the type
-    [I (z →ₓ z)] of [c (z →ₓ z)] is [I (z → z)] up to that name; [I (z → z)] is not
-    [I ((∀P:Prop. P) → z)], the type of [c (z → z)], which differs from it by the δ-step of the let
-    [z] of [iv_Γz]; and the term uses [z]. *)
+(** [∀_:y. Type@{l0}] and [∀_:y. Type@{l1}] differ: their levels [l0] and [l1] are different
+    variables, equal only by the constraint [l0 = l1] of [ci_Σu]; the type the instance gives
+    [∀_:y. Type@{l1}], Type@{l0+1}, is not its own type Type@{l1+1}; and the term mentions the context
+    variable [y] (only as the domain, which the comparison relates with itself). *)
 Lemma typing_eq_termE_inst_nondeg :
-  [/\ iv_czz <> pr_czz',
-      (iv_Ix 0) {0 := pr_zz'} = tApp (tInd si_ind []) (tProd pr_nx (tRel 0) (tRel 1)),
-      (iv_Ix 0) {0 := iv_zz} <> iv_IFz,
-      nth_error iv_Γz 0 = Some (vdef si_na iv_False si_P) &
-      noccur_between 0 1 pr_czz' = false].
-Proof. split; [discriminate|reflexivity|discriminate|reflexivity|reflexivity]. Qed.
-
-(** [typing_eq_termE] in [iv_Γz = [z := ∀P:Prop. P : Prop]]: [c (z →ₓ z)], typed at its own
-    [I (z →ₓ z)] ([pr_czz'_typed]), gets the type [I ((∀P:Prop. P) → z)] of [c (z → z)]
-    ([iv_czz_typed_IFz], a [typeE_Cumul] through the δ-step of [z]): a type that is not its own up to
-    binder names ([typing_eq_termE_inst_nondeg]). The conclusion is the judgment of
-    [iv_czz_typed_IFz] with its term renamed, as for every instance of [typing_eq_termE] (its two
-    terms are [eq_term]).
-    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_eq_termE_inst_nondeg *)
-Lemma typing_eq_termE_inst : si_Σ ;;; iv_Γz |-E pr_czz' : iv_IFz.
+  [/\ pr_yL 0 <> pr_yL 1, Level.lvar 0 <> Level.lvar 1,
+      ConstraintSet.In ci_cstr (constraints_of_udecl ci_Σu.2),
+      tSort (Sort.sort_of_product sProp (Sort.super (pr_sl 0)))
+        <> tSort (Sort.sort_of_product sProp (Sort.super (pr_sl 1))) &
+      noccur_between 0 1 (pr_yL 1) = false].
 Proof.
-  exact (typing_eq_termE si_Σ iv_Γz iv_czz pr_czz' iv_IFz _ pr_si_wfext
-           iv_czz_typed_IFz pr_czz'_typed pr_czz_eq).
+  split; [discriminate|discriminate| |intros h; vm_compute in h; discriminate h|reflexivity].
+  apply ConstraintSet.singleton_spec. reflexivity.
+Qed.
+
+(** [typing_eq_termE] in [ci_Σu], context [iv_Γ1 = [y : Prop]]: [∀_:y. Type@{l1}], of type
+    Type@{l1+1} ([pr_yL_typed 1]), gets the type Type@{l0+1} of [∀_:y. Type@{l0}]
+    ([pr_yL_typed 0]). The two terms are [eq_term] only through the constraint [l0 = l1]
+    ([pr_yL_eq]); the Sort case of [typing_leq_termE] turns it into Type@{l1+1} ≤ Type@{l0+1} (the
+    cumulativity of the two sorts). The context does no work: the comparison relates the domain [y]
+    only with itself ([typing_eq_termE_inst_nondeg]).
+    INSTANCE NONDEGEN PCUICPrincipalityEtaInstances.typing_eq_termE_inst_nondeg *)
+Lemma typing_eq_termE_inst :
+  ci_Σu ;;; iv_Γ1 |-E pr_yL 1 : tSort (Sort.sort_of_product sProp (Sort.super (pr_sl 0))).
+Proof.
+  exact (typing_eq_termE ci_Σu iv_Γ1 (pr_yL 0) (pr_yL 1) _ _ pr_ci_wfext
+           (pr_yL_typed 0 ltac:(lia)) (pr_yL_typed 1 ltac:(lia)) pr_yL_eq).
 Qed.
 
 End PrincipalityEtaInstances.
