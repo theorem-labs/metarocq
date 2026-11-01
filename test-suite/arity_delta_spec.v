@@ -22,7 +22,7 @@
 From Stdlib Require Import ssreflect.
 From MetaRocq.Utils Require Import utils bytestring.
 From MetaRocq.Common Require Import config.
-From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICArityRed.
+From MetaRocq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICLiftSubst PCUICUnivSubst PCUICArityRed.
 Local Open Scope bs_scope.
 
 (** * The environment *)
@@ -100,8 +100,14 @@ Definition let_idx : context := [vdef (nm "x") (tConstruct ad_natI 0 []) tnat].
 
 (** * Positive derivations *)
 
+(** [whd_delta] unfolds a constant to [subst_instance u body].  Since the
+    [LevelExpr]/[Universe.t] universe API, [cbn] no longer reduces
+    [subst_instance [] (tSort Sort.type1)] back to [tSort Sort.type1], so the
+    instance is removed with [closedu_subst_instance]: every body here is
+    universe-closed. *)
 Ltac ad_delta :=
-  eapply whd_delta; [first [reflexivity | cbv; reflexivity] | reflexivity | cbn].
+  eapply whd_delta; [first [reflexivity | cbv; reflexivity] | reflexivity |
+    rewrite closedu_subst_instance; first [reflexivity | cbn]].
 Ltac ad_stop := apply whd_stop; reflexivity.
 
 (** B1: the alias [ad_right] against [_ : nat], sort [Prop]. *)
